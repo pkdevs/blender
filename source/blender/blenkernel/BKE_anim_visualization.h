@@ -18,6 +18,8 @@ struct bAnimVizSettings;
 struct bMotionPath;
 struct bPoseChannel;
 
+namespace bke {
+
 /* ---------------------------------------------------- */
 /* Animation Visualization */
 
@@ -42,20 +44,21 @@ void animviz_free_motionpath_cache(struct bMotionPath *mpath);
 void animviz_free_motionpath(struct bMotionPath *mpath);
 
 /**
- * Setup motion paths for the given data.
- * \note Only used when explicitly calculating paths on bones which may/may not be consider already
+ * Esnures that a motion path exists for the given data and that the settings correctly adhere to
+ * the animviz settings.
  *
  * \param scene: Current scene (for frame ranges, etc.)
  * \param ob: Object to add paths for (must be provided)
  * \param pchan: Pose-channel to add paths for
  * (optional; if not provided, object-paths are assumed).
  */
-struct bMotionPath *animviz_verify_motionpaths(struct ReportList *reports,
-                                               struct Scene *scene,
-                                               struct Object *ob,
-                                               struct bPoseChannel *pchan);
+struct bMotionPath *animviz_ensure_motionpath(struct ReportList *reports,
+                                              struct Scene *scene,
+                                              struct Object *ob,
+                                              struct bPoseChannel *pchan);
 
 void animviz_motionpath_blend_write(struct BlendWriter *writer, struct bMotionPath *mpath);
 void animviz_motionpath_blend_read_data(struct BlendDataReader *reader, struct bMotionPath *mpath);
 
+}  // namespace bke
 }  // namespace blender

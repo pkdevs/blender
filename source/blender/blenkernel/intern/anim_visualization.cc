@@ -19,19 +19,18 @@
 
 #include "BLO_read_write.hh"
 
-namespace blender {
+namespace blender::bke {
 
 /* ******************************************************************** */
 /* Animation Visualization */
 
 void animviz_settings_init(bAnimVizSettings *avs)
 {
-  /* sanity check */
   if (avs == nullptr) {
     return;
   }
 
-  /* path settings */
+  /* Path settings. */
   avs->path_bc = avs->path_ac = 10;
 
   avs->path_sf = 1;   /* XXX: Take from scene instead? */
@@ -48,12 +47,11 @@ void animviz_settings_init(bAnimVizSettings *avs)
 
 void animviz_free_motionpath_cache(bMotionPath *mpath)
 {
-  /* sanity check */
   if (mpath == nullptr) {
     return;
   }
 
-  /* free the path if necessary */
+  /* Free the path if necessary. */
   if (mpath->points) {
     MEM_delete(mpath->points);
   }
@@ -62,22 +60,18 @@ void animviz_free_motionpath_cache(bMotionPath *mpath)
   GPU_BATCH_DISCARD_SAFE(mpath->batch_line);
   GPU_BATCH_DISCARD_SAFE(mpath->batch_points);
 
-  /* reset the relevant parameters */
+  /* Reset the relevant parameters. */
   mpath->points = nullptr;
   mpath->length = 0;
 }
 
 void animviz_free_motionpath(bMotionPath *mpath)
 {
-  /* sanity check */
   if (mpath == nullptr) {
     return;
   }
 
-  /* free the cache first */
   animviz_free_motionpath_cache(mpath);
-
-  /* now the instance itself */
   MEM_delete(mpath);
 }
 
@@ -94,7 +88,7 @@ bMotionPath *animviz_copy_motionpath(const bMotionPath *mpath_src)
   mpath_dst = MEM_dupalloc(mpath_src);
   mpath_dst->points = MEM_dupalloc(mpath_src->points);
 
-  /* should get recreated on draw... */
+  /* Should get recreated on draw... */
   mpath_dst->points_vbo = nullptr;
   mpath_dst->batch_line = nullptr;
   mpath_dst->batch_points = nullptr;
@@ -104,27 +98,25 @@ bMotionPath *animviz_copy_motionpath(const bMotionPath *mpath_src)
 
 /* ------------------- */
 
-bMotionPath *animviz_verify_motionpaths(ReportList *reports,
-                                        Scene *scene,
-                                        Object *ob,
-                                        bPoseChannel *pchan)
+bMotionPath *animviz_ensure_motionpath(ReportList *reports,
+                                       Scene *scene,
+                                       Object *ob,
+                                       bPoseChannel *pchan)
 {
-  bAnimVizSettings *avs;
-  bMotionPath *mpath, **dst;
-
-  /* sanity checks */
   if (ELEM(nullptr, scene, ob)) {
     return nullptr;
   }
 
-  /* get destination data */
+  bAnimVizSettings *avs;
+  bMotionPath *mpath, **dst;
+  /* Get destination data. */
   if (pchan) {
     /* Paths for pose-channel - assume that pose-channel belongs to the object. */
     avs = &ob->pose->avs;
     dst = &pchan->mpath;
   }
   else {
-    /* paths for object */
+    /* Paths for object. */
     avs = &ob->avs;
     dst = &ob->mpath;
   }
@@ -214,26 +206,21 @@ bMotionPath *animviz_verify_motionpaths(ReportList *reports,
 
 void animviz_motionpath_blend_write(BlendWriter *writer, bMotionPath *mpath)
 {
-  /* sanity checks */
   if (mpath == nullptr) {
     return;
   }
 
-  /* firstly, just write the motionpath struct */
   writer->write_struct(mpath);
-
-  /* now write the array of data */
   writer->write_struct_array(mpath->length, mpath->points);
 }
 
 void animviz_motionpath_blend_read_data(BlendDataReader *reader, bMotionPath *mpath)
 {
-  /* sanity check */
   if (mpath == nullptr) {
     return;
   }
 
-  /* relink points cache */
+  /* Relink points cache. */
   BLO_read_array_and_validate_size(reader, &mpath->points, &mpath->length);
 
   mpath->points_vbo = nullptr;
@@ -241,4 +228,4 @@ void animviz_motionpath_blend_read_data(BlendDataReader *reader, bMotionPath *mp
   mpath->batch_points = nullptr;
 }
 
-}  // namespace blender
+}  // namespace blender::bke
