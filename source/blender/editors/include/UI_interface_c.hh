@@ -1071,14 +1071,6 @@ Block *block_begin(const bContext *C,
                    ARegion *region,
                    std::string name,
                    EmbossType emboss);
-
-/** Execute every block's after layout callback. */
-void block_post_layout_callbacks_exec(const bContext *C, ARegion *region, Block *block);
-
-/**
- * \param postpone_callbacks: After block layout callbacks are not executed, caller should execute
- * them with #block_post_layout_callbacks_exec.
- */
 void block_end_ex(const bContext *C,
                   Main *bmain,
                   wmWindow *window,
@@ -1087,9 +1079,8 @@ void block_end_ex(const bContext *C,
                   Depsgraph *depsgraph,
                   Block *block,
                   const int xy[2] = nullptr,
-                  int r_xy[2] = nullptr,
-                  bool postpone_callbacks = false);
-void block_end(const bContext *C, Block *block, bool postpone_callbacks = false);
+                  int r_xy[2] = nullptr);
+void block_end(const bContext *C, Block *block);
 /**
  * Uses local copy of style, to scale things down, and allow widgets to change stuff.
  */
@@ -2095,18 +2086,10 @@ void button_tooltip_refresh(bContext *C, Button *but);
  */
 void button_tooltip_timer_remove(bContext *C, Button *but);
 
-/**
- * Attempt to activate an button referencing an RNA property in the \a region.
- * \param block_name: targets a block in the \a region, if \a block_name is not set it will test
- * any block in the \a region.
- * \returns `true` if the button gets activated.
- */
 bool textbutton_activate_rna(const bContext *C,
                              ARegion *region,
                              const void *rna_poin_data,
-                             const char *rna_prop_id,
-                             std::optional<StringRefNull> block_name = std::nullopt);
-
+                             const char *rna_prop_id);
 bool textbutton_activate_but(const bContext *C, Button *actbut);
 
 /**
@@ -2900,13 +2883,6 @@ Block *region_block_find_mouse_over(const ARegion *region, const int xy[2], bool
  */
 ARegion *region_searchbox_region_get(const ARegion *button_region);
 
-/** #uiFontStyle.align */
-enum FontStyleAlign {
-  UI_STYLE_TEXT_LEFT = 0,
-  UI_STYLE_TEXT_CENTER = 1,
-  UI_STYLE_TEXT_RIGHT = 2,
-};
-
 struct FontStyleDrawParams {
   FontStyleAlign align;
   uint word_wrap : 1;
@@ -3172,5 +3148,28 @@ AbstractViewItem *region_views_find_active_item(const ARegion *region, const Abs
 Button *region_views_find_active_item_but(const ARegion *region);
 void region_views_clear_search_highlight(const ARegion *region);
 
+enum class ActivationButtonState : int8_t {
+  Highlight,
+  WaitKeyEvent,
+  NumEditing,
+  TextEditing,
+};
+
+/**
+ * Attempt to activate an button referencing an RNA property. If any other button in the screen is
+ * active, it will be deactivated.
+ * \param state: Activation state for the button. Some states are specific to certain button types;
+ * when an incompatible state is provided, the button will be activated with the
+ * #ActivationButtonState::Highlight state.
+ * \param index: Index of the button that references the RNA property.
+ * \return The center point of the button in window coordinates when successfully activated.
+ */
+std::optional<int2> try_activate_rna_button(bContext *C,
+                                            ARegion *region,
+                                            ActivationButtonState target_state,
+                                            PointerRNA *ptr,
+                                            PropertyRNA *prop,
+                                            bool warp_cursor_at_button = false,
+                                            int index = 0);
 }  // namespace ui
 }  // namespace blender

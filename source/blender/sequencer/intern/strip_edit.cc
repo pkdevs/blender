@@ -86,7 +86,9 @@ bool edit_strip_swap(Scene *scene, Strip *strip_a, Strip *strip_b, const char **
   std::swap(strip_a->next, strip_b->next);
   std::swap(strip_a->start, strip_b->start);
   std::swap(strip_a->startofs, strip_b->startofs);
-  std::swap(strip_a->endofs, strip_b->endofs);
+  const float tmp_offset = strip_a->end_offset();
+  strip_a->end_offset_set(strip_b->end_offset());
+  strip_b->end_offset_set(tmp_offset);
   std::swap(strip_a->channel, strip_b->channel);
   strip_time_effect_range_set(scene, strip_a);
   strip_time_effect_range_set(scene, strip_b);
@@ -138,45 +140,37 @@ void edit_update_muting(Editing *ed)
   }
 }
 
-static void sequencer_flag_users_for_removal(Scene *scene, ListBaseT<Strip> *seqbase, Strip *strip)
+void edit_flag_for_removal(Scene *scene, Strip *strip)
 {
-  for (Strip &user_strip : *seqbase) {
-    /* Look in meta-strips for usage of strip. */
-    if (user_strip.type == STRIP_TYPE_META) {
-      sequencer_flag_users_for_removal(scene, &user_strip.seqbase, strip);
-    }
-
-    /* Clear strip from modifiers. */
-    for (StripModifierData &smd : user_strip.modifiers) {
-      if (smd.mask_strip == strip) {
-        smd.mask_strip = nullptr;
-      }
-    }
-
-    /* Mark effects for removal that use the strip. */
-    if (relation_is_effect_of_strip(&user_strip, strip)) {
-      user_strip.runtime->flag |= StripRuntimeFlag::MarkForDelete;
-      /* Strips can be used as mask even if not in same seqbase. */
-      sequencer_flag_users_for_removal(scene, &scene->ed->seqbase, &user_strip);
-    }
-  }
-}
-
-void edit_flag_for_removal(Scene *scene, ListBaseT<Strip> *seqbase, Strip *strip)
-{
-  if (strip == nullptr || flag_is_set(strip->runtime->flag, StripRuntimeFlag::MarkForDelete)) {
+  Editing *ed = editing_get(scene);
+  if (strip == nullptr || ed == nullptr ||
+      flag_is_set(strip->runtime->flag, StripRuntimeFlag::MarkForDelete))
+  {
     return;
   }
 
-  /* Flag and remove meta children. */
-  if (strip->type == STRIP_TYPE_META) {
-    for (Strip &meta_child : strip->seqbase) {
-      edit_flag_for_removal(scene, &strip->seqbase, &meta_child);
-    }
+  VectorSet<Strip *> strips_to_delete;
+  strips_to_delete.add_new(strip);
+
+  /* Delete effects that use `strip` as an input (either directly or through another effect).
+   * Effect inputs are always in the same seqbase as the effect. */
+  iterator_set_expand(ed, strips_to_delete, query_strip_direct_effect_chain);
+  /* Delete meta strip contents. */
+  iterator_set_expand(ed, strips_to_delete, query_strip_recursive);
+
+  for (Strip *strip_to_mark : strips_to_delete) {
+    strip_to_mark->runtime->flag |= StripRuntimeFlag::MarkForDelete;
   }
 
-  strip->runtime->flag |= StripRuntimeFlag::MarkForDelete;
-  sequencer_flag_users_for_removal(scene, seqbase, strip);
+  /* Clear deleted strips from modifiers. The user strip can be in a different seqbase. */
+  foreach_strip(&ed->seqbase, [&](Strip *user_strip) {
+    for (StripModifierData &smd : user_strip->modifiers) {
+      if (strips_to_delete.contains(smd.mask_strip)) {
+        smd.mask_strip = nullptr;
+      }
+    }
+    return true;
+  });
 }
 
 void edit_remove_flagged_strips(Scene *scene, ListBaseT<Strip> *seqbase)
@@ -276,7 +270,7 @@ static void seq_split_set_right_hold_offset(Main *bmain,
   }
   /* Adjust within range of strip contents. */
   else if ((timeline_frame >= content_start) && (timeline_frame <= content_end)) {
-    strip->endofs = 0;
+    strip->end_offset_set(0);
     const float scene_fps = float(scene->r.frs_sec) / float(scene->r.frs_sec_base);
     const float speed_factor = strip->media_playback_rate_factor(scene_fps);
     strip->anim_endofs += round_fl_to_int((content_end - timeline_frame) * speed_factor);
@@ -307,7 +301,7 @@ static void seq_split_set_left_hold_offset(Main *bmain,
   else if (timeline_frame > content_end) {
     const float offset = timeline_frame - content_end + 1;
     strip->start += offset;
-    strip->endofs += offset;
+    strip->end_offset_set(strip->end_offset() + offset);
   }
 
   /* Needed only to set `strip->len`. */
@@ -466,16 +460,16 @@ Strip *edit_strip_split(Main *bmain,
    * strips to seqbase, for lookup cache to work correctly. */
   Strip *strip_rename = right_strip;
   for (; strip_rename; strip_rename = strip_rename->next) {
-    ensure_unique_name(strip_rename, scene);
+    ensure_unique_name(*bmain, strip_rename, scene);
   }
 
   /* Split strips. */
   while (left_strip && right_strip) {
     if (left_strip->left_handle() >= timeline_frame) {
-      edit_flag_for_removal(scene, seqbase, left_strip);
+      edit_flag_for_removal(scene, left_strip);
     }
     else if (right_strip->right_handle(scene) <= timeline_frame) {
-      edit_flag_for_removal(scene, seqbase, right_strip);
+      edit_flag_for_removal(scene, right_strip);
     }
     else if (return_strip == nullptr) {
       /* Store return value - pointer to strip that will not be removed. */
