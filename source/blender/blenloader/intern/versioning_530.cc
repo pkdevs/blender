@@ -97,7 +97,8 @@ void blo_do_versions_530(FileData * /*fd*/, Library * /*lib*/, Main *bmain)
 
   if (!MAIN_VERSION_FILE_ATLEAST(bmain, 503, 7)) {
     for (wmWindowManager &wm : bmain->wm) {
-      wm.xr.session_settings.show_head_ui = false;
+      wm.xr.session_settings.show_world_space_ui = false;
+      wm.xr.session_settings.show_controller_ui = true;
     }
   }
 

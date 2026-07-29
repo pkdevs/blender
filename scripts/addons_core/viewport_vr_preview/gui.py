@@ -105,6 +105,8 @@ class VIEW3D_PT_vr_session_view(VRButtonsPanel, Panel):
         col.prop(session_settings, "show_selection", text="Selection")
         col.prop(session_settings, "show_controllers", text="Controllers")
         col.prop(session_settings, "show_custom_overlays", text="Custom Overlays")
+        col.prop(session_settings, "show_world_space_ui", text="World Space UI")
+        col.prop(session_settings, "show_controller_ui", text="Controller UI")
         col.prop(session_settings, "show_object_extras", text="Object Extras")
 
         col = col.row(align=True, heading=" ")

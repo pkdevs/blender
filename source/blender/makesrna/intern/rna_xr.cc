@@ -2352,9 +2352,14 @@ static void rna_def_xr_session_settings(BlenderRNA *brna)
   RNA_def_property_ui_text(prop, "Show Custom Overlays", "Show custom VR overlays");
   RNA_def_property_update(prop, NC_WM | ND_XR_DATA_CHANGED, nullptr);
 
-  prop = RNA_def_property(srna, "show_head_ui", PROP_BOOLEAN, PROP_NONE);
-  RNA_def_property_boolean_sdna(prop, nullptr, "show_head_ui", 1);
-  RNA_def_property_ui_text(prop, "Show Head UI", "Show head-following VR UI panels");
+  prop = RNA_def_property(srna, "show_world_space_ui", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, nullptr, "show_world_space_ui", 1);
+  RNA_def_property_ui_text(prop, "Show World Space UI", "Show world-space VR UI panels");
+  RNA_def_property_update(prop, NC_WM | ND_XR_DATA_CHANGED, nullptr);
+
+  prop = RNA_def_property(srna, "show_controller_ui", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, nullptr, "show_controller_ui", 1);
+  RNA_def_property_ui_text(prop, "Show Controller UI", "Show controller-mounted VR UI panels");
   RNA_def_property_update(prop, NC_WM | ND_XR_DATA_CHANGED, nullptr);
 
   prop = RNA_def_property(srna, "show_object_extras", PROP_BOOLEAN, PROP_NONE);

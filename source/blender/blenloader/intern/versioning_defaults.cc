@@ -416,6 +416,8 @@ static void blo_update_defaults_windowmanager(wmWindowManager *wm)
 {
   wm->xr.session_settings.fly_speed = 3.0f;
   wm->xr.session_settings.view_scale = 1.0f;
+  wm->xr.session_settings.show_world_space_ui = true;
+  wm->xr.session_settings.show_controller_ui = true;
 }
 
 static void blo_update_defaults_scene(Main *bmain, Scene *scene)

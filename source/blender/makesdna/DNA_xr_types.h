@@ -146,8 +146,9 @@ struct XrSessionSettings {
   char viewfinder_enabled = 0;
   char viewfinder_crosshair_enabled = 0;
   char viewfinder_hand = 0; /* #eXrViewfinderHand */
-  char show_head_ui = 0;
-  char _pad2[2];
+  char show_world_space_ui = 0;
+  char show_controller_ui = 0;
+  char _pad2[1];
 
   float viewfinder_scale = 1.0f;
   float viewfinder_passepartout_overscan = 0.5f;

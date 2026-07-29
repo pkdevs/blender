@@ -727,6 +727,21 @@ static ARegionType *wm_xr_ui_region_region_type_get()
   return (space_type != nullptr) ? BKE_regiontype_from_id(space_type, RGN_TYPE_XR) : nullptr;
 }
 
+static bool wm_xr_ui_region_mount_point_visible(const wmXrData *xr,
+                                                const eWMXrUiRegionMountPoint mount_point)
+{
+  switch (mount_point) {
+    case XR_UI_REGION_MOUNT_LEFT_HAND:
+    case XR_UI_REGION_MOUNT_RIGHT_HAND:
+      return xr->session_settings.show_controller_ui;
+    case XR_UI_REGION_MOUNT_HEAD_FOLLOW:
+    case XR_UI_REGION_MOUNT_WORLD:
+      return xr->session_settings.show_world_space_ui;
+    default:
+      return false;
+  }
+}
+
 static int wm_xr_ui_region_mount_points_collect(const wmXrData *xr,
                                                 const ARegionType *region_type,
                                                 eWMXrUiRegionMountPoint r_mount_points[4])
@@ -734,8 +749,11 @@ static int wm_xr_ui_region_mount_points_collect(const wmXrData *xr,
   if (xr != nullptr && xr->runtime != nullptr &&
       xr->runtime->ui_region_mount_point != XR_UI_REGION_MOUNT_NONE)
   {
-    r_mount_points[0] = xr->runtime->ui_region_mount_point;
-    return 1;
+    if (wm_xr_ui_region_mount_point_visible(xr, xr->runtime->ui_region_mount_point)) {
+      r_mount_points[0] = xr->runtime->ui_region_mount_point;
+      return 1;
+    }
+    return 0;
   }
   if (region_type == nullptr) {
     CLOG_ERROR(&LOG, "XR mount collect: region_type=null");
@@ -749,7 +767,7 @@ static int wm_xr_ui_region_mount_points_collect(const wmXrData *xr,
     if (mount_point == XR_UI_REGION_MOUNT_NONE) {
       continue;
     }
-    if (mount_point == XR_UI_REGION_MOUNT_HEAD_FOLLOW && !xr->session_settings.show_head_ui) {
+    if (!wm_xr_ui_region_mount_point_visible(xr, mount_point)) {
       continue;
     }
     if (!ELEM(mount_point,
@@ -1956,21 +1974,6 @@ void wm_xr_surface_interaction_update(const bContext *C, wmXrData *xr)
     return;
   }
 
-  if ((xr->session_settings.draw_flags & V3D_OFSDRAW_XR_SHOW_CUSTOM_OVERLAYS) == 0) {
-    if (surface_data->active_ui_region != nullptr &&
-        !surface_data->active_ui_region->ui_region_pointer.pressed)
-    {
-      wm_xr_ui_region_pointer_clear(surface_data->active_ui_region);
-      surface_data->active_ui_region = nullptr;
-    }
-    for (wmXrUiRegion *ui_region : ListBaseWrapper<wmXrUiRegion>(surface_data->ui_regions)) {
-      ui_region->ui_region_hovered = false;
-      ui_region->ui_region_hover_region = nullptr;
-      ui_region->ui_region_cursor_visible = false;
-    }
-    return;
-  }
-
   char subaction_path[64] = "";
   const wmXrController *controller = wm_xr_surface_interaction_controller_find(
       &xr->runtime->session_state, subaction_path);
@@ -2154,10 +2157,6 @@ bool wm_xr_surface_interaction_owns_subaction(const wmXrData *xr,
     return false;
   }
 
-  if ((xr->session_settings.draw_flags & V3D_OFSDRAW_XR_SHOW_CUSTOM_OVERLAYS) == 0) {
-    return false;
-  }
-
   if (!ELEM(event_val, KM_PRESS, KM_RELEASE)) {
     return false;
   }
@@ -2271,11 +2270,6 @@ void wm_xr_draw_ui_regions_world_space(const bContext *C, ARegion * /*region*/, 
   BLI_assert(customdata != nullptr);
 
   wmXrData *xr = static_cast<wmXrData *>(customdata);
-  const XrSessionSettings *settings = &xr->session_settings;
-  if ((settings->draw_flags & V3D_OFSDRAW_XR_SHOW_CUSTOM_OVERLAYS) == 0) {
-    return;
-  }
-
   wmXrSurfaceData *surface_data = WM_xr_surface_data_get();
   if (!surface_data) {
     return;

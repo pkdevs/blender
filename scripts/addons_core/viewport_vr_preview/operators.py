@@ -663,12 +663,14 @@ class VIEW3D_OT_vr_location_scouting_viewfinder_swap_hands(Operator):
 class VIEW3D_OT_vr_ui_visibility_toggle(Operator):
     bl_idname = "view3d.vr_ui_visibility_toggle"
     bl_label = "Toggle VR UI Visibility"
-    bl_description = "Toggle visibility of head-following XR UI panels"
+    bl_description = "Toggle visibility of world-space and controller-mounted XR UI panels"
     bl_options = {'INTERNAL'}
 
     def execute(self, context):
         xr_settings = context.window_manager.xr_session_settings
-        xr_settings.show_head_ui = not xr_settings.show_head_ui
+        show_ui = not (xr_settings.show_world_space_ui or xr_settings.show_controller_ui)
+        xr_settings.show_world_space_ui = show_ui
+        xr_settings.show_controller_ui = show_ui
         return {'FINISHED'}
 
 
