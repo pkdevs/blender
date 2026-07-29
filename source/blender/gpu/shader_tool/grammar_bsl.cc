@@ -580,38 +580,15 @@ struct BSLParser {
   {
     NODE(TemplateInst);
     match(Template);
-    switch (peek()) {
-      case Class:
-      case Struct:
-      case Union:
-        struct_decl(true, false);
-        break;
-      case Word:
-        func_decl(true, false);
-        break;
-      default:
-        error("Unexpected token \"" + to_str(peek()) + "\", expected template instantiation");
-        return;
-    }
+    templated_declaration(true, false, "instantiation");
   }
 
   void template_specialization()
   {
     NODE(TemplateSpec);
     match(Template);
-    template_argument_list();
-    switch (peek()) {
-      case Class:
-      case Struct:
-        struct_decl(true, true);
-        break;
-      case Word:
-        func_decl(true, true);
-        break;
-      default:
-        error("Unexpected token \"" + to_str(peek()) + "\", expected template specialization");
-        return;
-    }
+    template_argument_list(); /* Should be empty. */
+    templated_declaration(true, true, "specialization");
   }
 
   void template_declaration()
@@ -619,17 +596,26 @@ struct BSLParser {
     NODE(TemplateDecl);
     match(Template);
     template_argument_list();
+    templated_declaration(false, true, "declaration");
+  }
+
+  void templated_declaration(bool expect_template_params,
+                             bool expect_body,
+                             const char *template_type_msg)
+  {
     switch (peek()) {
       case Class:
       case Struct:
-        struct_decl(false, true);
+      case Union:
+        struct_decl(expect_template_params, expect_body);
         break;
       case Static:
       case Word:
-        func_decl(false, true);
+        func_decl(expect_template_params, expect_body);
         break;
       default:
-        error("Unexpected token \"" + to_str(peek()) + "\", expected template declaration");
+        error("Unexpected token \"" + to_str(peek()) + "\", expected template " +
+              template_type_msg);
         return;
     }
   }

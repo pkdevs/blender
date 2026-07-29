@@ -812,21 +812,28 @@ struct CodegenContext : NodeErrorHandler {
     }
   }
 
+  string size_to_float_vec_type_str(size_t member_size)
+  {
+    if (member_size == 4) {
+      return "float";
+    }
+    if (member_size == 8) {
+      return "float2";
+    }
+    if (member_size == 12) {
+      return "float3";
+    }
+    if (member_size == 16) {
+      return "float4";
+    }
+    return "ERROR";
+  }
+
   void union_members_decl(SymbolClass &cls)
   {
     for (int i = 0; i < cls.size; i += 16) {
-      size_t member_size = cls.size - i;
-      const char *data_type = "float4";
-      if (member_size == 4) {
-        data_type = "float";
-      }
-      else if (member_size == 8) {
-        data_type = "float2";
-      }
-      else if (member_size == 12) {
-        data_type = "float3";
-      }
-      builder.ss << string(data_type) << " _" << to_string(i / 16) << "; ";
+      int member_size = min(16, cls.size - i);
+      builder.ss << size_to_float_vec_type_str(member_size) << " _" << to_string(i / 16) << "; ";
     }
   }
 
@@ -834,18 +841,8 @@ struct CodegenContext : NodeErrorHandler {
   {
     string members;
     for (int i = 0; i < cls.size; i += 16) {
-      size_t member_size = cls.size - i;
-      const char *data_type = "float4";
-      if (member_size == 4) {
-        data_type = "float";
-      }
-      else if (member_size == 8) {
-        data_type = "float2";
-      }
-      else if (member_size == 12) {
-        data_type = "float3";
-      }
-      SymbolClass *type = cls.root_scope()->lookup_class(data_type);
+      int member_size = min(16, cls.size - i);
+      SymbolClass *type = cls.root_scope()->lookup_class(size_to_float_vec_type_str(member_size));
       members += "r._" + to_string(i / 16) + "=" + default_value(*type) + ";";
     }
     return members;
