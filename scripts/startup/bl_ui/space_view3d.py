@@ -2466,6 +2466,7 @@ class VIEW3D_MT_mesh_add(Menu):
 
         layout.operator("mesh.primitive_grid_add", text="Grid", icon='MESH_GRID')
         layout.operator("mesh.primitive_monkey_add", text="Monkey", icon='MESH_MONKEY')
+        layout.operator("mesh.primitive_singlevertex_add", text="Single Vertex", icon='VERTEX_CREASE')
 
         layout.template_node_operator_asset_menu_items(catalog_path="Add")
 

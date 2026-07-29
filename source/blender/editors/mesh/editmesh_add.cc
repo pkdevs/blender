@@ -703,6 +703,73 @@ void MESH_OT_primitive_monkey_add(wmOperatorType *ot)
   ed::object::add_generic_props(ot, true);
 }
 
+static wmOperatorStatus add_primitive_singlevertex_exec(bContext *C, wmOperator *op)
+{
+  MakePrimitiveData creation_data;
+  Object *obedit;
+  float loc[3], rot[3];
+  float co[3] = {0.0f, 0.0f, 0.0f};
+  bool enter_editmode;
+  ushort local_view_bits;
+  bool ok;
+
+  WM_operator_view3d_unit_defaults(C, op);
+  ed::object::add_generic_get_opts(
+      C, op, 'Z', loc, rot, nullptr, &enter_editmode, &local_view_bits, nullptr);
+
+  obedit = make_prim_init(C,
+                          op,
+                          CTX_DATA_(BLT_I18NCONTEXT_ID_MESH, "Vertex"),
+                          loc,
+                          rot,
+                          nullptr,
+                          local_view_bits,
+                          &creation_data);
+
+  mul_v3_m4v3(co, creation_data.mat, co);
+
+  if (creation_data.original_mode == CTX_MODE_SCULPT) {
+    BMesh *bm = make_prim_init_sculpt();
+    ok = BMO_op_callf(bm, BMO_FLAG_DEFAULTS, "create_vert co=%v", co);
+    if (ok) {
+      make_prim_finish_sculpt(C, obedit, bm);
+    }
+    else {
+      make_prim_finish_sculpt_cancelled(bm);
+    }
+  }
+  else {
+    BMEditMesh *em = BKE_editmesh_from_object(obedit);
+    ok = EDBM_op_call_and_selectf(em, op, "vert.out", false, "create_vert co=%v", co);
+  }
+
+  if (!ok) {
+    return OPERATOR_CANCELLED;
+  }
+
+  make_prim_finish(C, obedit, &creation_data, enter_editmode);
+
+  return OPERATOR_FINISHED;
+}
+
+void MESH_OT_primitive_singlevertex_add(wmOperatorType *ot)
+{
+  /* identifiers */
+  ot->name = "Add Single Vertex";
+  ot->description = "Construct a single vertex";
+  ot->idname = "MESH_OT_primitive_singlevertex_add";
+
+  /* API callbacks */
+  ot->exec = add_primitive_singlevertex_exec;
+  ot->poll = ED_operator_scene_editable;
+
+  /* flags */
+  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
+
+  /* props */
+  ed::object::add_generic_props(ot, true);
+}
+
 static wmOperatorStatus add_primitive_uvsphere_exec(bContext *C, wmOperator *op)
 {
   MakePrimitiveData creation_data;

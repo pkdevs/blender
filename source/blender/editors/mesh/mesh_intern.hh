@@ -120,6 +120,7 @@ void MESH_OT_primitive_cylinder_add(wmOperatorType *ot);
 void MESH_OT_primitive_cone_add(wmOperatorType *ot);
 void MESH_OT_primitive_grid_add(wmOperatorType *ot);
 void MESH_OT_primitive_monkey_add(wmOperatorType *ot);
+void MESH_OT_primitive_singlevertex_add(wmOperatorType *ot);
 void MESH_OT_primitive_uv_sphere_add(wmOperatorType *ot);
 void MESH_OT_primitive_ico_sphere_add(wmOperatorType *ot);
 
