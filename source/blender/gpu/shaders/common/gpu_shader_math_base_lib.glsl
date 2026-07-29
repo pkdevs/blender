@@ -148,13 +148,7 @@ float cos_from_tan(float t)
  */
 int midpoint(int a, int b)
 {
-  int sign = 1;
-  uint smaller = uint(a);
-  uint larger = uint(b);
-  if (a > b) {
-    sign = -1;
-    smaller = uint(b);
-    larger = uint(a);
-  }
-  return a + sign * int((larger - smaller) / 2u);
+  uint smaller = uint(min(a, b));
+  uint larger = uint(max(a, b));
+  return a + sign(b - a) * int((larger - smaller) / 2u);
 }
