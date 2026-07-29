@@ -106,6 +106,7 @@ static bool execute_carver_on_drawing(const int /*layer_index*/,
   const IndexRange clipping_curves = IndexRange::from_single(src.curves_num());
 
   input_curves.fill_curve_types(clipping_curves, CURVE_TYPE_POLY);
+  input_curves.cyclic_for_write().last() = true;
 
   /* Initialize the rest of the attributes with default values. */
   bke::fill_attribute_range_default(
