@@ -391,8 +391,8 @@ set(CMAKE_FIND_FRAMEWORK FIRST)
 
 set(EXETYPE MACOSX_BUNDLE)
 
-set(CMAKE_C_FLAGS_RELEASE "-O3 -mdynamic-no-pic")
-set(CMAKE_CXX_FLAGS_RELEASE "-O3 -mdynamic-no-pic")
+string(APPEND CMAKE_C_FLAGS_RELEASE " -mdynamic-no-pic")
+string(APPEND CMAKE_CXX_FLAGS_RELEASE " -mdynamic-no-pic")
 
 if(CMAKE_OSX_ARCHITECTURES MATCHES "x86_64")
   string(APPEND CMAKE_CXX_FLAGS_RELEASE " -msse -msse2 -msse3 -mssse3")
