@@ -848,7 +848,7 @@ bool light_iter_should_skip(eevee::light::VisibleLightIterator &iter)
 #endif
 }
 
-#define LIGHT_ITER_BEGIN(light_index_) \
+#define LIGHT_ITER_BEGIN(light_index) \
   { \
     eevee::light::VisibleLightIterator iter; \
     light_iter_init(iter); \
@@ -856,14 +856,13 @@ bool light_iter_should_skip(eevee::light::VisibleLightIterator &iter)
       if (light_iter_should_skip(iter)) { \
         continue; \
       } \
-      light_index_ = iter.index; \
-      g_data.light_index = iter.index;
+      light_index = iter.index; \
 
 #define LIGHT_ITER_END() \
   } \
   }
 
-void node_light_info_impl(const int /*light_index*/,
+void node_light_info_impl(const int light_index,
                           float4 &color,
                           float &power,
                           float3 &position,
@@ -875,7 +874,7 @@ void node_light_info_impl(const int /*light_index*/,
   [[resource_table]] const eevee::LightRenderData &lrd = resource_table_get(eevee::LightRenderData);
   /* clang-format on */
 
-  LightData light = lrd.light_buf[g_data.light_index];
+  LightData light = lrd.light_buf[light_index];
   color = float4(light.color, 1.0f);
   power = eevee::light::power_get(light, LIGHT_VOLUME);
   position = light.object_to_world.location();
@@ -892,7 +891,7 @@ void node_light_accumulation_impl(
   /*TODO*/
 }
 
-void node_light_evaluation_impl(const int /*light_index*/,
+void node_light_evaluation_impl(const int light_index,
                                 float3 position,
                                 float3 normal,
                                 float roughness,
@@ -905,7 +904,7 @@ void node_light_evaluation_impl(const int /*light_index*/,
   /* clang-format on */
   [[resource_table]] UtilityTexture &util_tx = resource_table_get(UtilityTexture);
 
-  LightData light = lrd.light_buf[g_data.light_index];
+  LightData light = lrd.light_buf[light_index];
 
   const bool is_directional = (light.type == LIGHT_SUN) || (light.type == LIGHT_SUN_ORTHO);
   LightVector lv = light_vector_get(light, is_directional, position);
@@ -933,7 +932,7 @@ void node_light_evaluation_impl(const int /*light_index*/,
   energy_scale *= light_attenuation_facing(light, lv.L, lv.dist, normal, is_transmission);
 }
 
-void node_shadow_raycast_impl(const int /*light_index*/,
+void node_shadow_raycast_impl(const int light_index,
                               float3 position,
                               float softness,
                               float4 &color)
@@ -949,7 +948,7 @@ void node_shadow_raycast_impl(const int /*light_index*/,
 
 #if defined(GPU_FRAGMENT_SHADER)
 
-  LightData light = lrd.light_buf[g_data.light_index];
+  LightData light = lrd.light_buf[light_index];
 
   if (light.tilemap_index == LIGHT_NO_SHADOW) {
     return;
@@ -985,14 +984,14 @@ void node_shadow_raycast_impl(const int /*light_index*/,
 #endif
 }
 
-float4 node_attribute_light_impl(const int /*light_index*/, uint attr_hash)
+float4 node_attribute_light_impl(const int light_index, uint attr_hash)
 {
   /* clang-format off */ /* Multiline macros would break line count. */
   [[resource_table]] const eevee::LightRenderData &lrd = resource_table_get(eevee::LightRenderData);
   /* clang-format on */
   [[resource_table]] const draw::Infos &infos = resource_table_get(draw::Infos);
 
-  LightData light = lrd.light_buf[g_data.light_index];
+  LightData light = lrd.light_buf[light_index];
   ObjectInfos info = infos.get(light.resource_id);
 
   const auto &attrs_buf = buffer_get(draw_object_attributes, drw_attrs);
