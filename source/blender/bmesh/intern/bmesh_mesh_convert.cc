@@ -1619,7 +1619,7 @@ static void add_bm_cd_to_mesh(const BMesh &bm,
         continue;
       }
       CustomData_add_layer_named(&mesh_data, cd_type, CD_CONSTRUCT, domain_size, layer.name);
-      if (layer.type == CD_MDISPS && layer.flag == CD_FLAG_EXTERNAL) {
+      if (layer.type == CD_MDISPS && layer.flag & CD_FLAG_EXTERNAL) {
         const int new_layer_i = CustomData_get_layer_index(&mesh_data, layer.type);
         BLI_assert(new_layer_i != -1);
         CustomDataLayer &new_layer = mesh_data.layers[new_layer_i];
