@@ -155,7 +155,7 @@ ccl_device_inline void surface_shader_prepare_closures(KernelGlobals kg,
       if (filter_closures & FILTER_CLOSURE_DIRECT_LIGHT) {
         sd->flag &= ~SD_BSDF_HAS_EVAL;
       }
-
+      int invalid_closures = 0;
       for (int i = 0; i < sd->num_closure; i++) {
         ccl_private ShaderClosure *sc = &sd->closure[i];
 
@@ -170,6 +170,7 @@ ccl_device_inline void surface_shader_prepare_closures(KernelGlobals kg,
         {
           sc->type = CLOSURE_NONE_ID;
           sc->sample_weight = 0.0f;
+          invalid_closures++;
         }
         else if ((CLOSURE_IS_BSDF_TRANSPARENT(sc->type) &&
                   (filter_closures & FILTER_CLOSURE_TRANSPARENT)))
@@ -178,6 +179,10 @@ ccl_device_inline void surface_shader_prepare_closures(KernelGlobals kg,
           sc->sample_weight = 0.0f;
           sd->flag |= SD_HOLDOUT;
         }
+      }
+      if (invalid_closures == sd->num_closure) {
+        sd->flag &= ~SD_BSDF;
+        return;
       }
     }
   }
