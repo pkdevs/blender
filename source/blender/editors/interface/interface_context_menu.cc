@@ -12,8 +12,8 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "DNA_space_types.h"
 #include "DNA_screen_types.h"
+#include "DNA_space_types.h"
 
 #include "AS_asset_representation.hh"
 
@@ -1399,29 +1399,22 @@ void popup_context_menu_for_panel(bContext *C, ARegion *region, Panel *panel)
     layout.separator();
   }
 
-  if (panel && panel->type != nullptr && panel->type->space_type == SPACE_VIEW3D &&
-      panel->type->region_type == RGN_TYPE_UI)
+  if (panel && panel->type != nullptr &&
+      ((panel->type->space_type == SPACE_VIEW3D && panel->type->region_type == RGN_TYPE_UI) ||
+       (panel->type->space_type == SPACE_PROPERTIES &&
+        panel->type->region_type == RGN_TYPE_WINDOW)))
   {
-    char builtin_panel_idname[BKE_ST_MAXNAME];
-    panel_world_space_idname_with_suffix(panel->type, "_ws", builtin_panel_idname);
-    const bool has_builtin_world_space_clone = WM_paneltype_find(builtin_panel_idname, true) !=
-                                               nullptr;
-
-    char dynamic_panel_idname[BKE_ST_MAXNAME];
-    panel_world_space_idname_with_suffix(panel->type, "_ws_dyn", dynamic_panel_idname);
-    const bool has_dynamic_world_space_clone = WM_paneltype_find(dynamic_panel_idname, true) !=
-                                               nullptr;
+    char world_space_panel_idname[BKE_ST_MAXNAME];
+    panel_world_space_idname_with_suffix(panel->type, "_ws", world_space_panel_idname);
+    const bool has_world_space_clone = WM_paneltype_find(world_space_panel_idname, true) !=
+                                       nullptr;
 
     if (wmOperatorType *ot = WM_operatortype_find("VIEW3D_OT_xr_toggle_panel_clone", false)) {
       PointerRNA op_ptr = layout.op(ot,
-                                    has_builtin_world_space_clone ?
-                                        IFACE_("Disable Built-In World-Space Clone") :
-                                    has_dynamic_world_space_clone ?
-                                        IFACE_("Remove World-Space Clone") :
-                                        IFACE_("Add World-Space Clone"),
-                                    (has_builtin_world_space_clone || has_dynamic_world_space_clone) ?
-                                        ICON_CHECKBOX_HLT :
-                                        ICON_CHECKBOX_DEHLT,
+                                    has_world_space_clone ? IFACE_("Remove World-Space Clone") :
+                                                            IFACE_("Add World-Space Clone"),
+                                    has_world_space_clone ? ICON_CHECKBOX_HLT :
+                                                            ICON_CHECKBOX_DEHLT,
                                     wm::OpCallContext::InvokeDefault,
                                     UI_ITEM_NONE);
       RNA_string_set(&op_ptr, "panel_id", panel->type->idname);

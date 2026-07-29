@@ -400,13 +400,12 @@ def register():
     world_space_classes = tuple(
         world_space_cls
         for source_panel_cls in world_space_source_classes
-        for world_space_cls in xr_ui.register_builtin_world_space_panel(
+        for world_space_cls in xr_ui.register_default_world_space_panel(
             xr_ui.panel_idname(source_panel_cls),
             default_mount_point=XR_DEFAULT_MOUNT_POINT,
             mount_overrides=XR_MOUNT_POINT_OVERRIDES,
         )
     )
-    xr_ui.set_builtin_world_space_classes(world_space_source_classes, world_space_classes)
     xr_ui.schedule_xr_world_space_ui_refresh()
 
     # View3DShading is the only per 3D-View struct with custom property
@@ -433,8 +432,6 @@ def unregister():
     global world_space_source_classes
     global world_space_classes
     xr_ui.unregister()
-    for cls in reversed(world_space_classes):
-        bpy.utils.unregister_class(cls)
     for cls in reversed(classes):
         bpy.utils.unregister_class(cls)
     world_space_source_classes = ()
