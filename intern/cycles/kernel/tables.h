@@ -38,6 +38,12 @@ ccl_inline_constant float blackbody_table_b[][4] = {
  {6.72650283e-13f, -2.73078809e-08f, 4.24098264e-04f, -7.52335691e-01f}
 };
 
+/* CIE1931 visible wavelength range in um. */
+#define WAVELENGTH_CIE_MIN 0.38f
+#define WAVELENGTH_CIE_MAX 0.78f
+#define WAVELENGTH_DLAMBDA 0.005f
+#define WAVELENGTH_RESOLUTION 80 /* = (0.78 - 0.38) / 0.005 */
+
 /* CIE 1931 colour-matching functions, 2 degree observer
  * x, y, and z for wavelengths from 380 to 780 nm, 5 nm wavelength steps.
  * https://cie.co.at/datatable/cie-1931-colour-matching-functions-2-degree-observer

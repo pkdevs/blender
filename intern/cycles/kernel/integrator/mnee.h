@@ -1016,6 +1016,10 @@ ccl_device_inline ShaderEvalResult kernel_path_mnee_sample(KernelGlobals kg,
       /* Setup shader data on caustic caster and evaluate context. */
       shader_setup_from_ray(kg, sd_mnee, &probe_ray, &probe_isect);
 
+#ifdef __SPECTRAL__
+      shader_setup_wavelength(kg, sd_mnee, state);
+#endif
+
       /* Reject caster if smooth normals are not available: Manifold exploration assumes local
        * differential geometry can be created at any point on the surface which is not possible if
        * normals are not smooth. */

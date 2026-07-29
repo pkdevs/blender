@@ -273,13 +273,12 @@ ccl_device_inline float bsdf_glass_ior(ccl_private ShaderData *sd, float ior, co
   ior = backfacing ? 1.0f / ior : ior;
 
   /* Wavelengths of the Fraunhofer spectral lines in um. */
-  /* const float lambda_d = 0.5876f; */
-  /* const float lambda_C = 0.6563f; */
-  /* const float lambda_F = 0.4861f; */
-  /* const float fac = 1.0f / (1.0f / sqr(lambda_F) - 1.0f / sqr(lambda_C)); */
-  constexpr float fac = 0.52345371246337890625f;
-  /* const float inv_lambda_d_sq = 1.0f / sqr(lambda_d); */
-  constexpr float inv_lambda_d_sq = 2.89625263214111328125f;
+  constexpr float lambda_d = 0.5876f;
+  constexpr float lambda_C = 0.6563f;
+  constexpr float lambda_F = 0.4861f;
+
+  constexpr float fac = 1.0f / (1.0f / (lambda_F * lambda_F) - 1.0f / (lambda_C * lambda_C));
+  constexpr float inv_lambda_d_sq = 1.0f / (lambda_d * lambda_d);
 
   /* Cauchy empirical formula.
    * OpenPBR Surface specification v1.1.1, Eq. (56). */

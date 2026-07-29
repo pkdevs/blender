@@ -39,13 +39,7 @@ ccl_device_forceinline void integrate_surface_shader_setup(KernelGlobals kg,
   shader_setup_from_ray(kg, sd, &ray, &isect);
 
 #ifdef __SPECTRAL__
-  if (sd->shader_flag & SD_REQUIRES_WAVELENGTH) {
-    RNGState rng_state;
-    path_state_rng_load(state, &rng_state);
-    /* Same random number per path, irrelevant of the bounce. */
-    rng_state.rng_offset = PRNG_BOUNCE_NUM;
-    sd->rand_wavelength = path_state_rng_1D(kg, &rng_state, PRNG_WAVELENGTH);
-  }
+  shader_setup_wavelength(kg, sd, state);
 #endif
 }
 

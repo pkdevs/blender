@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0 */
 
 #include "node_fresnel.h"
+#include "node_math.h"
 #include "stdcycles.h"
 
 shader node_principled_bsdf(string distribution = "multi_ggx",
@@ -157,7 +158,7 @@ shader node_principled_bsdf(string distribution = "multi_ggx",
       color F90 = color(1.0);
       float dispersion_scale = clamp(TransmissionDispersionScale, 0.0, 1.0);
       float abbe_number = max(TransmissionDispersionAbbeNumber, 0.0);
-      float inv_abbe = dispersion_scale / abbe_number;
+      float inv_abbe = safe_divide(dispersion_scale, abbe_number);
       closure color TransmissionBSDF = generalized_schlick_bsdf(Normal,
                                                                 vector(0.0),
                                                                 color(1.0),
