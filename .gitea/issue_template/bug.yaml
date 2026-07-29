@@ -50,7 +50,7 @@ body:
                Worked: (Optional: Newest version of Blender that worked as expected)
       value: |
                Broken Version:
-               Worked Version:
+               Working Version:
     validations:
       required: true
 
