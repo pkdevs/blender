@@ -243,7 +243,7 @@ static void buffer_from_list_inputs_sort(ListBaseT<LinkData> *inputs)
       continue;
     }
 
-    first_links.add_new(input->type, &link);
+    first_links.add(input->type, &link);
     cur_type = input->type;
   }
 
