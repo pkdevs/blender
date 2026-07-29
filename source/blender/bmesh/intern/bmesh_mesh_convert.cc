@@ -2062,8 +2062,8 @@ void BM_mesh_bm_to_me_compact(BMesh &bm,
   if (add_mesh_attributes) {
     const CustomData_MeshMasks &mask_final = mask ? *mask : CD_MASK_DERIVEDMESH;
 
-    const CustomData &bm_data = get_bm_custom_data(*bm, AttrDomain::Corner);
-    CustomData &mesh_data = get_mesh_custom_data(*mesh, AttrDomain::Corner);
+    const CustomData &bm_data = get_bm_custom_data(bm, AttrDomain::Corner);
+    CustomData &mesh_data = get_mesh_custom_data(mesh, AttrDomain::Corner);
     if (bm_data.external) {
       mesh_data.external = MEM_dupalloc(bm_data.external);
     }
