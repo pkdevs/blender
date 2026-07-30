@@ -2714,13 +2714,6 @@ int handler_panel_region(bContext *C,
       continue;
     }
 
-    if (has_panel_header && event->type == RIGHTMOUSE) {
-      if (ELEM(mouse_state, PANEL_MOUSE_INSIDE_HEADER, PANEL_MOUSE_INSIDE_CONTENT)) {
-        retval = popup_context_menu_for_panel(C, region, block.panel);
-        break;
-      }
-    }
-
     if ((has_panel_header && mouse_state == PANEL_MOUSE_INSIDE_HEADER)) {
       /* All mouse clicks inside panel headers should return in break. */
       if (ELEM(event->type, EVT_RETKEY, EVT_PADENTER, LEFTMOUSE)) {
