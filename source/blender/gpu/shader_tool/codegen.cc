@@ -2169,16 +2169,13 @@ struct CodegenContext : NodeErrorHandler {
           vertex_in.emplace_back(parse_vertex_input(decl.attributes(), type_name, var_name));
           break;
         case ResourceTableType::VERTEX_OUT:
-          vertex_out.emplace_back(
-              parse_vertex_output(decl.attributes(), cls_id, type_name, var_name));
+          vertex_out.emplace_back(parse_vertex_output(decl.attributes(), type_name, var_name));
           break;
         case ResourceTableType::FRAGMENT_OUT:
-          fragment_out.emplace_back(
-              parse_fragment_output(decl.attributes(), cls_id, type_name, var_name));
+          fragment_out.emplace_back(parse_fragment_output(decl.attributes(), type_name, var_name));
           break;
         case ResourceTableType::FRAGMENT_IN:
-          fragment_in.emplace_back(
-              parse_fragment_input(decl.attributes(), cls_id, type_name, var_name));
+          fragment_in.emplace_back(parse_fragment_input(decl.attributes(), type_name, var_name));
           break;
         default:
           break;
@@ -2221,7 +2218,6 @@ struct CodegenContext : NodeErrorHandler {
   }
 
   metadata::ParsedAttribute parse_vertex_output(AttrList attributes,
-                                                const string &struct_name,
                                                 const string &type,
                                                 const string &name)
   {
@@ -2229,13 +2225,12 @@ struct CodegenContext : NodeErrorHandler {
     return {
         .line = 0,
         .var_type = type,
-        .var_name = struct_name + "_" + name,
+        .var_name = name,
         .interpolation_mode = string(attr.attr.str()),
     };
   }
 
   metadata::ParsedFragOuput parse_fragment_output(AttrList attributes,
-                                                  const string &struct_name,
                                                   const string &type,
                                                   const string &name)
   {
@@ -2243,7 +2238,7 @@ struct CodegenContext : NodeErrorHandler {
     return {
         .line = 0,
         .var_type = type,
-        .var_name = struct_name + "_" + name,
+        .var_name = name,
         .slot = string(attr.param1.str()),
         .dual_source = string(attr.param3.str()),
         .raster_order_group = string(attr.param2.str()),
@@ -2251,7 +2246,6 @@ struct CodegenContext : NodeErrorHandler {
   }
 
   metadata::ParsedFragInput parse_fragment_input(AttrList attributes,
-                                                 const string &struct_name,
                                                  const string &type,
                                                  const string &name)
   {
@@ -2259,7 +2253,7 @@ struct CodegenContext : NodeErrorHandler {
     return {
         .line = 0,
         .var_type = type,
-        .var_name = struct_name + "_" + name,
+        .var_name = name,
         .slot = string(attr.param1.str()),
         .image_type = string(attr.param2.str()),
         .raster_order_group = string(attr.param3.str()),
