@@ -703,7 +703,7 @@ void MESH_OT_primitive_monkey_add(wmOperatorType *ot)
   ed::object::add_generic_props(ot, true);
 }
 
-static wmOperatorStatus add_primitive_singlevertex_exec(bContext *C, wmOperator *op)
+static wmOperatorStatus add_primitive_single_vertex_exec(bContext *C, wmOperator *op)
 {
   MakePrimitiveData creation_data;
   Object *obedit;
@@ -752,7 +752,7 @@ static wmOperatorStatus add_primitive_singlevertex_exec(bContext *C, wmOperator 
   return OPERATOR_FINISHED;
 }
 
-void MESH_OT_primitive_singlevertex_add(wmOperatorType *ot)
+void MESH_OT_primitive_single_vertex_add(wmOperatorType *ot)
 {
   /* identifiers */
   ot->name = "Add Single Vertex";
@@ -760,7 +760,7 @@ void MESH_OT_primitive_singlevertex_add(wmOperatorType *ot)
   ot->idname = "MESH_OT_primitive_singlevertex_add";
 
   /* API callbacks */
-  ot->exec = add_primitive_singlevertex_exec;
+  ot->exec = add_primitive_single_vertex_exec;
   ot->poll = ED_operator_scene_editable;
 
   /* flags */
