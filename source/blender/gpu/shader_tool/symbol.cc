@@ -1616,7 +1616,7 @@ string SymbolVariable::value_str() const
 {
   assert(is_constexpr);
   if (type->identifier == "bool") {
-    return (!value) ? "true" : "false";
+    return (!!value) ? "true" : "false";
   }
   return to_string(value);
 }
