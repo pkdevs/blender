@@ -197,6 +197,7 @@ static bool make_prim_from_bmo_args(bContext *C,
                                     Object *obedit,
                                     const MakePrimitiveData *creation_data,
                                     const bool calc_uvs,
+                                    const char *select_slot_out,
                                     const char *fmt,
                                     ...)
 {
@@ -219,7 +220,7 @@ static bool make_prim_from_bmo_args(bContext *C,
     if (calc_uvs) {
       ED_mesh_uv_ensure(id_cast<Mesh *>(obedit->data), nullptr);
     }
-    ok = EDBM_op_vcall_and_selectf(em, op, "verts.out", false, fmt, list);
+    ok = EDBM_op_vcall_and_selectf(em, op, select_slot_out, false, fmt, list);
   }
 
   va_end(list);
@@ -252,6 +253,7 @@ static wmOperatorStatus add_primitive_plane_exec(bContext *C, wmOperator *op)
                                obedit,
                                &creation_data,
                                calc_uvs,
+                               "verts.out",
                                "create_grid x_segments=%i y_segments=%i size=%f matrix=%m4 "
                                "calc_uvs=%b",
                                0,
@@ -313,6 +315,7 @@ static wmOperatorStatus add_primitive_cube_exec(bContext *C, wmOperator *op)
                                obedit,
                                &creation_data,
                                calc_uvs,
+                               "verts.out",
                                "create_cube matrix=%m4 size=%f calc_uvs=%b",
                                creation_data.mat,
                                RNA_float_get(op->ptr, "size"),
@@ -384,6 +387,7 @@ static wmOperatorStatus add_primitive_circle_exec(bContext *C, wmOperator *op)
           obedit,
           &creation_data,
           calc_uvs,
+          "verts.out",
           "create_circle segments=%i radius=%f cap_ends=%b cap_tris=%b matrix=%m4 calc_uvs=%b",
           RNA_int_get(op->ptr, "vertices"),
           RNA_float_get(op->ptr, "radius"),
@@ -452,6 +456,7 @@ static wmOperatorStatus add_primitive_cylinder_exec(bContext *C, wmOperator *op)
                                obedit,
                                &creation_data,
                                calc_uvs,
+                               "verts.out",
                                "create_cone segments=%i radius1=%f radius2=%f cap_ends=%b "
                                "cap_tris=%b depth=%f matrix=%m4 calc_uvs=%b",
                                RNA_int_get(op->ptr, "vertices"),
@@ -525,6 +530,7 @@ static wmOperatorStatus add_primitive_cone_exec(bContext *C, wmOperator *op)
                                obedit,
                                &creation_data,
                                calc_uvs,
+                               "verts.out",
                                "create_cone segments=%i radius1=%f radius2=%f cap_ends=%b "
                                "cap_tris=%b depth=%f matrix=%m4 calc_uvs=%b",
                                RNA_int_get(op->ptr, "vertices"),
@@ -598,6 +604,7 @@ static wmOperatorStatus add_primitive_grid_exec(bContext *C, wmOperator *op)
                                obedit,
                                &creation_data,
                                calc_uvs,
+                               "verts.out",
                                "create_grid x_segments=%i y_segments=%i size=%f matrix=%m4 "
                                "calc_uvs=%b",
                                RNA_int_get(op->ptr, "x_subdivisions"),
@@ -671,6 +678,7 @@ static wmOperatorStatus add_primitive_monkey_exec(bContext *C, wmOperator *op)
                                obedit,
                                &creation_data,
                                calc_uvs,
+                               "verts.out",
                                "create_monkey matrix=%m4 calc_uvs=%b",
                                creation_data.mat,
                                calc_uvs))
@@ -730,6 +738,7 @@ static wmOperatorStatus add_primitive_uvsphere_exec(bContext *C, wmOperator *op)
           obedit,
           &creation_data,
           calc_uvs,
+          "verts.out",
           "create_uvsphere u_segments=%i v_segments=%i radius=%f matrix=%m4 calc_uvs=%b",
           RNA_int_get(op->ptr, "segments"),
           RNA_int_get(op->ptr, "ring_count"),
@@ -796,6 +805,7 @@ static wmOperatorStatus add_primitive_icosphere_exec(bContext *C, wmOperator *op
                                obedit,
                                &creation_data,
                                calc_uvs,
+                               "verts.out",
                                "create_icosphere subdivisions=%i radius=%f matrix=%m4 calc_uvs=%b",
                                RNA_int_get(op->ptr, "subdivisions"),
                                RNA_float_get(op->ptr, "radius"),
