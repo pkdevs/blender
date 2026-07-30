@@ -926,13 +926,17 @@ void bmo_create_quadsphere_exec(BMesh *bm, BMOperator *op)
     BM_ITER_MESH(v, &viter, bm, BM_VERTS_OF_MESH) {
       float co[3];
       copy_v3_v3(co, v->co);
-      // Nowell Sphere https://mathproofs.blogspot.com/2005/07/mapping-cube-to-sphere.html
+      // Source https://mathoverflow.net/questions/446657/mapping-a-cube-to-a-sphere
       float x = co[0];
       float y = co[1];
       float z = co[2];
-      co[0] = x * std::sqrt(1 - (y * y) / 2 - (z * z) / 2 + (y * y) * (z * z) / 3);
-      co[1] = y * std::sqrt(1 - (z * z) / 2 - (x * x) / 2 + (z * z) * (x * x) / 3);
-      co[2] = z * std::sqrt(1 - (x * x) / 2 - (y * y) / 2 + (x * x) * (y * y) / 3);
+      int p = 500;
+      float xc = std::sqrt(std::pow(x, p) + std::pow(y, 2) + std::pow(z, 2)) * std::tan(x * std::atan(1 / (std::sqrt(std::pow(x, p) + std::pow(y, 2) + std::pow(z, 2)))));
+      float yc = std::sqrt(std::pow(x, 2) + std::pow(y, p) + std::pow(z, 2)) * std::tan(y * std::atan(1 / (std::sqrt(std::pow(x, 2) + std::pow(y, p) + std::pow(z, 2)))));
+      float zc = std::sqrt(std::pow(x, 2) + std::pow(y, 2) + std::pow(z, p)) * std::tan(z * std::atan(1 / (std::sqrt(std::pow(x, 2) + std::pow(y, 2) + std::pow(z, p)))));
+      co[0] = xc / std::sqrt(std::pow(xc, 2) + std::pow(yc, 2) + std::pow(zc, 2));
+      co[1] = yc / std::sqrt(std::pow(xc, 2) + std::pow(yc, 2) + std::pow(zc, 2));
+      co[2] = zc / std::sqrt(std::pow(xc, 2) + std::pow(yc, 2) + std::pow(zc, 2));
       // Apply the radius
       co[0] = co[0] * rad;
       co[1] = co[1] * rad;
