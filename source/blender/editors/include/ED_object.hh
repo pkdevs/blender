@@ -387,17 +387,6 @@ void motion_paths_clear(bContext *C, bool only_selected);
  * armature objects.
  */
 void motion_paths_recalc(bContext *C, Scene *scene, const Span<Object *> objects);
-/**
- * Recalculate motion paths on all selected objects. This includes bones when recalculating
- * armature objects.
- */
-void motion_paths_recalc_selected(bContext *C, Scene *scene);
-
-/**
- * Recalculate motion paths on all visible objects. This includes bones when recalculating armature
- * objects.
- */
-void motion_paths_recalc_visible(bContext *C, Scene *scene);
 
 /* constraints */
 /**

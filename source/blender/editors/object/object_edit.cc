@@ -1315,28 +1315,6 @@ void motion_paths_recalc(bContext *C, Scene *scene, const Span<Object *> objects
   DEG_graph_free(depsgraph);
 }
 
-void motion_paths_recalc_selected(bContext *C, Scene *scene)
-{
-  Vector<Object *> selected_objects;
-  CTX_DATA_BEGIN (C, Object *, ob, selected_editable_objects) {
-    selected_objects.append(ob);
-  }
-  CTX_DATA_END;
-
-  motion_paths_recalc(C, scene, selected_objects);
-}
-
-void motion_paths_recalc_visible(bContext *C, Scene *scene)
-{
-  Vector<Object *> visible_objects;
-  CTX_DATA_BEGIN (C, Object *, ob, visible_objects) {
-    visible_objects.append(ob);
-  }
-  CTX_DATA_END;
-
-  motion_paths_recalc(C, scene, visible_objects);
-}
-
 /* show popup to determine settings */
 static wmOperatorStatus object_calculate_paths_invoke(bContext *C,
                                                       wmOperator *op,
@@ -1364,6 +1342,7 @@ static wmOperatorStatus object_calculate_paths_exec(bContext *C, wmOperator *op)
   eMotionPaths_Types path_type = eMotionPaths_Types(RNA_enum_get(op->ptr, "display_type"));
   eMotionPath_Ranges path_range = eMotionPath_Ranges(RNA_enum_get(op->ptr, "range"));
 
+  Vector<Object *> selected_objects;
   /* set up path data for objects being calculated */
   CTX_DATA_BEGIN (C, Object *, ob, selected_editable_objects) {
     bAnimVizSettings *avs = &ob->avs;
@@ -1374,11 +1353,15 @@ static wmOperatorStatus object_calculate_paths_exec(bContext *C, wmOperator *op)
 
     /* verify that the selected object has the appropriate settings */
     bke::motionpath::ensure(op->reports, scene, ob, nullptr);
+    if (ob->mpath) {
+      ed::motionpath::tag_for_recalc(*ob->mpath);
+      selected_objects.append(ob);
+    }
   }
   CTX_DATA_END;
 
   /* calculate the paths for objects that have them (and are tagged to get refreshed) */
-  motion_paths_recalc_selected(C, scene);
+  motion_paths_recalc(C, scene, selected_objects);
 
   /* notifiers for updates */
   WM_event_add_notifier(C, NC_OBJECT | ND_DRAW_ANIMVIZ, nullptr);
@@ -1442,15 +1425,20 @@ static wmOperatorStatus object_update_paths_exec(bContext *C, wmOperator *op)
   if (scene == nullptr) {
     return OPERATOR_CANCELLED;
   }
+  Vector<Object *> selected_objects;
   CTX_DATA_BEGIN (C, Object *, ob, selected_editable_objects) {
     animviz_motionpath_compute_range(ob, scene);
     /* verify that the selected object has the appropriate settings */
     bke::motionpath::ensure(op->reports, scene, ob, nullptr);
+    if (ob->mpath) {
+      ed::motionpath::tag_for_recalc(*ob->mpath);
+      selected_objects.append(ob);
+    }
   }
   CTX_DATA_END;
 
   /* calculate the paths for objects that have them (and are tagged to get refreshed) */
-  motion_paths_recalc_selected(C, scene);
+  motion_paths_recalc(C, scene, selected_objects);
 
   /* notifiers for updates */
   WM_event_add_notifier(C, NC_OBJECT | ND_DRAW_ANIMVIZ, nullptr);
@@ -1494,8 +1482,15 @@ static wmOperatorStatus object_update_all_paths_exec(bContext *C, wmOperator * /
   if (scene == nullptr) {
     return OPERATOR_CANCELLED;
   }
-
-  motion_paths_recalc_visible(C, scene);
+  Vector<Object *> visible_objects;
+  CTX_DATA_BEGIN (C, Object *, ob, visible_objects) {
+    if (ob->mpath) {
+      visible_objects.append(ob);
+      ed::motionpath::tag_for_recalc(*ob->mpath);
+    }
+  }
+  CTX_DATA_END;
+  motion_paths_recalc(C, scene, visible_objects);
 
   WM_event_add_notifier(C, NC_OBJECT | ND_POSE | ND_TRANSFORM, nullptr);
 
