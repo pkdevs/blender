@@ -1100,9 +1100,8 @@ struct ccl_align(16) ShaderData {
   /* LCG state for closures that require additional random numbers. */
   uint lcg_state;
 #ifdef __SPECTRAL__
-  /* Random number for sampling the wavelength. Initialize to a value that samples the Fraunhofer d
-   * spectral line, at which the IOR of the material is given. */
-  float rand_wavelength = 0.665381f;
+  /* Random number for sampling the wavelength. */
+  float rand_wavelength;
 #endif
 
   /* Closure weights summed directly, so we can evaluate

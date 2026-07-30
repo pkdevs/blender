@@ -936,10 +936,6 @@ ccl_device_inline ShaderEvalResult mnee_path_contribution(KernelGlobals kg,
     *throughput *= bsdf_contribution;
   }
 
-#ifdef __SPECTRAL__
-  update_path_throughput_for_dispersion(kg, state, sd_mnee);
-#endif
-
   /* Restore original state path bounce info. */
   INTEGRATOR_STATE_WRITE(state, path, transmission_bounce) = transmission_bounce;
   INTEGRATOR_STATE_WRITE(state, path, diffuse_bounce) = diffuse_bounce;
@@ -992,6 +988,7 @@ ccl_device_inline ShaderEvalResult kernel_path_mnee_sample(KernelGlobals kg,
   ManifoldVertex vertices[MNEE_MAX_CAUSTIC_CASTERS];
 
   int vertex_count = 0;
+  bool has_dispersion = false;
   for (int isect_count = 0; isect_count < MNEE_MAX_INTERSECTION_COUNT; isect_count++) {
     const bool hit = scene_intersect(kg, &probe_ray, PATH_RAY_VISIBILITY_TRANSMIT, &probe_isect);
     if (!hit) {
@@ -1067,6 +1064,9 @@ ccl_device_inline ShaderEvalResult kernel_path_mnee_sample(KernelGlobals kg,
       if (!found_refractive_microfacet_bsdf) {
         return SHADER_EVAL_EMPTY;
       }
+      if (sd_mnee->runtime_flag & SR_BSDF_HAS_DISPERSION) {
+        has_dispersion = true;
+      }
     }
 
     probe_ray.self.object = probe_isect.object;
@@ -1131,6 +1131,15 @@ ccl_device_inline ShaderEvalResult kernel_path_mnee_sample(KernelGlobals kg,
                                                      vertices,
                                                      throughput,
                                                      r_receiver_wo);
+
+#ifdef __SPECTRAL__
+    if (has_dispersion) {
+      /* Restore the flag in case it was reset by another non-dispersive vertex. */
+      sd_mnee->runtime_flag |= SR_BSDF_HAS_DISPERSION;
+      update_path_throughput_for_dispersion(kg, state, sd_mnee);
+    }
+#endif
+
     /* TODO: Cache misses are not handled correctly.
      * - PATH_MNEE_VALID flag is not handled properly
      * - AOVs and other passes have already been written at this point
