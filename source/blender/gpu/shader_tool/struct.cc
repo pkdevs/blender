@@ -545,4 +545,41 @@ void SourceProcessor::lower_structured_bindings(Parser &parser)
   parser.apply_mutations();
 }
 
+void SourceProcessor::lower_templated_forward_declaration(Parser &parser)
+{
+  for (Preprocessor directive : parser.root().children_of_type<Preprocessor>()) {
+    if (!directive.str().starts_with("#pragma member_forward_decl")) {
+      continue;
+    }
+    string_view cls_name = directive.back().str();
+    FuncForwardDecl fwd_decl = directive.next();
+    if (!fwd_decl.is_valid()) {
+      report_error(
+          directive.front(),
+          "Compiler error: expecting forward declaration after 'pragma member_forward_decl'");
+    }
+    /* Search for declaration. */
+    ClassDecl cls_decl = {};
+    for (ClassDecl decl : parser.root().children_of_type<ClassDecl>()) {
+      if (decl.identifier().str() == cls_name) {
+        cls_decl = decl;
+        break;
+      }
+    }
+    if (!cls_decl.is_valid()) {
+      report_error(fwd_decl.front(),
+                   "Compiler error: can't locate class instantiation of '" + string(cls_name) +
+                       "'");
+    }
+    /* Move the forward declaration. */
+    parser.insert_after(cls_decl.back(),
+                        "#ifndef GPU_METAL\n" + string(fwd_decl.str()) + "\n#endif\n");
+    parser.replace(directive.front(), fwd_decl.back(), "");
+  }
+  if (error_handler.err) {
+    throw ParserException();
+  }
+  parser.apply_mutations();
+}
+
 }  // namespace blender::gpu::shader

@@ -359,6 +359,12 @@ class SourceProcessor {
    * Expects formatted input and that function bodies are followed by newline.
    */
   void lower_function_default_arguments(Parser &parser);
+  /**
+   * Move the instantiated templated function forward declaration up to where their class were
+   * defined. Needed step in order to support proper intra class calls of templated method with
+   * arbitrary declaration order.
+   */
+  void lower_templated_forward_declaration(Parser &parser);
   /* Limited union implementation. Create getters and setters to a raw data struct. */
   void lower_unions(Parser &parser);
   /**

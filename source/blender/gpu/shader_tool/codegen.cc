@@ -1124,6 +1124,17 @@ struct CodegenContext : NodeErrorHandler {
       inst_fn = id_func_resolved_lookup(decl.identifier(), decl.arguments(), scope);
     }
 
+    if (inst_fn->fn_type == SymbolFunction::MEMBER && decl.is_template()) {
+      /* Leave a breadcrum for a mutation pass which will move the following forward declaration
+       * all the way up at the class declaration. This is needed to allow other member functions to
+       * call the templated function. */
+      builder.ss << "#pragma member_forward_decl " << inst_fn->parent_class()->identifier << "\n";
+      builder.ss << inst_fn->return_type->identifier << " " << inst_fn->identifier;
+      builder.curr = decl.arguments().front();
+      func_arg_list(decl.arguments(), *inst_fn, false);
+      builder.ss << ";\n";
+    }
+
     string cond = condition(inst_fn);
     if (!cond.empty()) {
       builder.ss << string("#if ") + cond + "\n";
