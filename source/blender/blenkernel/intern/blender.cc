@@ -377,7 +377,11 @@ void BKE_blender_userdef_data_free(UserDef *userdef, bool clear_fonts)
 
   userdef->autoexec_paths.free_no_destruct();
   userdef->script_directories.free_no_destruct();
-  userdef->asset_libraries.free_no_destruct();
+
+  for (bUserAssetLibrary &library_ref : userdef->asset_libraries.items_mutable()) {
+    MEM_SAFE_DELETE(library_ref.auth_token);
+    MEM_delete(&library_ref);
+  }
 
   for (bUserExtensionRepo &repo_ref : userdef->extension_repos.items_mutable()) {
     MEM_SAFE_DELETE(repo_ref.access_token);

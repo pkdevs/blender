@@ -26,7 +26,8 @@ class RemoteAssetLibrary : public AssetLibrary {
                      bool is_read_only,
                      StringRef remote_url,
                      StringRef name,
-                     StringRef root_path);
+                     StringRef root_path,
+                     StringRef auth_token = "");
   void force_remote_listing_download() const override;
 
   std::optional<eAssetImportMethod> import_method() const override;

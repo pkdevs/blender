@@ -78,6 +78,7 @@ static void filelist_start_job_essentials_asset_library(FileListReadJob *job_par
    * is enabled). */
   asset_system::RemoteLibraryDefinitionRef library{
       asset_system::online_essentials_url(),
+      "",
       asset_system::online_essentials_cache_directory_path()};
   remote_asset_library_request(job_params, library);
 }

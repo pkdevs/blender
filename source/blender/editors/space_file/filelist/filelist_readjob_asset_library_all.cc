@@ -111,6 +111,7 @@ static void filelist_start_job_all_asset_library(FileListReadJob *job_params)
   {
     asset_system::RemoteLibraryDefinitionRef online_essentials_library_def{
         asset_system::online_essentials_url(),
+        "",
         asset_system::online_essentials_cache_directory_path()};
     remote_asset_library_request(job_params, online_essentials_library_def);
   }

@@ -57,6 +57,8 @@ class AssetLibrary {
    * optimization is used). With thousands of assets this might make a reasonable difference. */
   std::shared_ptr<std::string> root_path_;
 
+  std::shared_ptr<std::string> auth_token_;
+
   /**
    * AssetStorage for assets (better said their representations) that are considered to be part of
    * this library. Assets are not automatically loaded into this when loading an asset library.
@@ -122,7 +124,8 @@ class AssetLibrary {
   AssetLibrary(eAssetLibraryType library_type,
                bool is_read_only,
                StringRef name = "",
-               StringRef root_path = "");
+               StringRef root_path = "",
+               StringRef auth_token = "");
   virtual ~AssetLibrary();
 
   /**
@@ -175,6 +178,8 @@ class AssetLibrary {
    * contain a mixture of remote and local assets.
    */
   virtual std::optional<StringRefNull> remote_url() const;
+
+  virtual std::optional<StringRefNull> auth_token() const;
 
   AssetCatalogService &catalog_service() const;
 

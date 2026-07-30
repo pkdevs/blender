@@ -28,11 +28,14 @@ namespace asset_system {
 
 struct RemoteLibraryDefinitionRef {
   StringRefNull remote_url;
+  StringRefNull auth_token;
   StringRefNull cache_dirpath;
 
   RemoteLibraryDefinitionRef(const bUserAssetLibrary &library_definition);
-  RemoteLibraryDefinitionRef(StringRefNull remote_url, StringRefNull cache_dirpath)
-      : remote_url(remote_url), cache_dirpath(cache_dirpath)
+  RemoteLibraryDefinitionRef(StringRefNull remote_url,
+                             StringRefNull auth_token,
+                             StringRefNull cache_dirpath)
+      : remote_url(remote_url), auth_token(auth_token), cache_dirpath(cache_dirpath)
   {
   }
 };
