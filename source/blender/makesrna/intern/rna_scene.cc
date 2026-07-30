@@ -9497,18 +9497,17 @@ void RNA_def_scene(BlenderRNA *brna)
   RNA_def_property_struct_type(prop, "NodeTree");
   RNA_def_property_flag(prop, PROP_EDITABLE | PROP_ID_REFCOUNT);
   RNA_def_property_override_flag(prop, PROPOVERRIDE_OVERRIDABLE_LIBRARY);
-  RNA_def_property_ui_text(prop, "Node Tree", "Compositor Nodes");
+  RNA_def_property_ui_text(prop,
+                           "Node Tree",
+                           "Returns and sets the node group of the active scene compositor "
+                           "effect. Creates a new effect if none exists");
   RNA_def_property_update(prop, 0, "rna_Scene_compositing_node_group_update");
   RNA_def_property_pointer_funcs(prop,
                                  "rna_Scene_compositing_node_group_get",
                                  "rna_Scene_compositing_node_group_set",
                                  nullptr,
                                  "rna_Scene_compositing_node_group_poll");
-  RNA_def_property_deprecated(prop,
-                              "Returns and sets the node group of the active scene compositor "
-                              "effect. Creates a new effect if none exists.",
-                              500,
-                              600);
+  RNA_def_property_deprecated(prop, "Use compositor_effects instead.", 500, 600);
 
   /* Todo(#140111): Remove in 6.0. */
   prop = RNA_def_property(srna, "use_nodes", PROP_BOOLEAN, PROP_NONE);

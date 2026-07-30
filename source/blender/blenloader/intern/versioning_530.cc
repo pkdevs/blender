@@ -84,18 +84,6 @@ static void compositing_node_group_to_effect(Main &main, Scene &scene)
   scene.compositing_node_group = nullptr;
 }
 
-/* The now deprecated compositing_node_group is always written on file writes for forward
- * compatibility, so we need to set it to nullptr after versioning is done. This happens on every
- * file load and needn't be in a version check.
- *
- * Todo(#140111): Forward compatibility support will be removed in 6.0. */
-static void compositing_node_group_forward_compatibility(Main &main)
-{
-  for (Scene &scene : main.scenes) {
-    scene.compositing_node_group = nullptr;
-  }
-}
-
 void do_versions_after_linking_530(FileData * /*fd*/, Main *bmain)
 {
   if (!MAIN_VERSION_FILE_ATLEAST(bmain, 503, 8)) {
@@ -103,14 +91,21 @@ void do_versions_after_linking_530(FileData * /*fd*/, Main *bmain)
         bmain, NTREE_GEOMETRY, "GeometryNodeSetGreasePencilColor", 5, 1, 6);
   }
 
-  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 503, 9)) {
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 503, 11)) {
     for (Scene &scene : bmain->scenes) {
       compositing_node_group_to_effect(*bmain, scene);
     }
   }
-
-  /* This should not have a version check, see the function description for more information. */
-  compositing_node_group_forward_compatibility(*bmain);
+  else {
+    /* The now deprecated compositing_node_group is always written on file writes for forward
+     * compatibility, so it has to be reset to nullptr if no versioning was needed.
+     *
+     * Todo(#140111): Forward compatibility support will be removed in 6.0, and this loop can then
+     * be placed behind a `MAIN_VERSION_FILE_OLDER(bmain, 600, xxx)` check . */
+    for (Scene &scene : bmain->scenes) {
+      scene.compositing_node_group = nullptr;
+    }
+  }
 
   /**
    * Always bump subversion in BKE_blender_version.h when adding versioning
