@@ -42,8 +42,14 @@ std::string ParsedResource::serialize() const
     ss << res_condition_lambda << ")";
   }
   else if (res_type == "image") {
+    bool is_digit_format = res_format.size() > 0 && std::isdigit(res_format.front());
     ss << ".image(" << res_slot;
-    ss << ", blender::gpu::TextureFormat::" << res_format;
+    if (is_digit_format) {
+      ss << ", blender::gpu::TextureFormat(" << res_format << ")";
+    }
+    else {
+      ss << ", blender::gpu::TextureFormat::" << res_format;
+    }
     ss << ", Qualifier::" << res_qualifier;
     ss << ", ImageReadWriteType::" << var_type;
     ss << ", \"" << var_name << "\"";

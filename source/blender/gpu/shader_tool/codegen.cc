@@ -2163,7 +2163,7 @@ struct CodegenContext : NodeErrorHandler {
       const string &var_name = var->identifier;
       switch (cls.srt_type) {
         case ResourceTableType::RESOURCE_TABLE:
-          srt.emplace_back(parse_resource(decl.attributes(), type_name, var_name, d.array()));
+          srt.emplace_back(parse_resource(decl.attributes(), type_name, var_name, d.array(), cls));
           break;
         case ResourceTableType::VERTEX_IN:
           vertex_in.emplace_back(parse_vertex_input(decl.attributes(), type_name, var_name));
@@ -2266,10 +2266,26 @@ struct CodegenContext : NodeErrorHandler {
     };
   }
 
+  string parse_image_format(SymbolClass &cls, Expr expr)
+  {
+    Node node = expr.child_first();
+    if (LocalVar var = node; var.is_valid()) {
+      SymbolVariable *sym = cls.lookup_variable(var.identifier());
+      if (sym->is_error) {
+        /* This could be a macro. Don't make an error. */
+        return string(expr.str());
+      }
+      return to_string(sym->value);
+    }
+    error(expr, "Expected image format");
+    return "0";
+  }
+
   metadata::ParsedResource parse_resource(AttrList attributes,
                                           const string &type,
                                           const string &name,
-                                          ArrayDecl array)
+                                          ArrayDecl array,
+                                          SymbolClass &cls)
   {
     auto attr = resource_type_from_attributes(attributes).unwrap(this);
     switch (attr.res_type) {
@@ -2328,7 +2344,7 @@ struct CodegenContext : NodeErrorHandler {
                 .res_type = string(attr.attr.identifier().str()),
                 .res_slot = string(attr.param1.str()),
                 .res_qualifier = string(attr.param2.str()),
-                .res_format = string(attr.param3.str()),
+                .res_format = parse_image_format(cls, attr.param3),
                 .res_condition = attr.parse_condition(),
                 .res_frequency = string(attr.frequency.str())};
         break;
