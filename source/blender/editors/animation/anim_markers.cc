@@ -103,7 +103,7 @@ ListBaseT<TimeMarker> *ED_scene_markers_get_from_area(const Main &bmain,
   return &scene->markers;
 }
 
-/* ............. */
+/* --------------------------------- */
 
 ListBaseT<TimeMarker> *ED_context_get_markers(const bContext *C)
 {
@@ -113,6 +113,44 @@ ListBaseT<TimeMarker> *ED_context_get_markers(const bContext *C)
 ListBaseT<TimeMarker> *ED_sequencer_context_get_markers(const bContext *C)
 {
   return ED_scene_markers_get(C, CTX_data_sequencer_scene(C));
+}
+
+TimeMarker *ED_markers_get_active(ListBaseT<TimeMarker> *markers)
+{
+  for (TimeMarker &marker : *markers) {
+    if (marker.flag & TIME_MARKER_ACTIVE) {
+      return &marker;
+    }
+  }
+  return nullptr;
+}
+
+void ED_markers_set_active(ListBaseT<TimeMarker> *markers, TimeMarker *active)
+{
+  for (TimeMarker &marker : *markers) {
+    SET_FLAG_FROM_TEST(marker.flag, &marker == active, TIME_MARKER_ACTIVE);
+  }
+}
+
+int ED_markers_get_active_index(const ListBaseT<TimeMarker> *markers)
+{
+  int i = 0;
+  TimeMarker *marker;
+  for (i = 0, marker = static_cast<TimeMarker *>(markers->first); marker; marker = marker->next) {
+    if (marker->flag & TIME_MARKER_ACTIVE) {
+      return i;
+    }
+  }
+  return -1;
+}
+
+void ED_markers_set_active_index(ListBaseT<TimeMarker> *markers, int active)
+{
+  int i = 0;
+  TimeMarker *marker;
+  for (i = 0, marker = static_cast<TimeMarker *>(markers->first); marker; marker = marker->next) {
+    SET_FLAG_FROM_TEST(marker->flag, i == active, TIME_MARKER_ACTIVE);
+  }
 }
 
 /* --------------------------------- */

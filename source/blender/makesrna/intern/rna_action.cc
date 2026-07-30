@@ -19,6 +19,8 @@
 #include "BKE_fcurve.hh"
 #include "BKE_report.hh"
 
+#include "ED_markers.hh"
+
 #include "RNA_access.hh"
 #include "RNA_define.hh"
 #include "RNA_enum_types.hh"
@@ -950,7 +952,7 @@ static PointerRNA rna_Action_active_pose_marker_get(PointerRNA *ptr)
 {
   bAction *act = static_cast<bAction *>(ptr->data);
   return RNA_pointer_create_with_parent(
-      *ptr, RNA_TimelineMarker, BLI_findlink(&act->markers, act->active_marker - 1));
+      *ptr, RNA_TimelineMarker, ED_action_markers_get_active(&act->markers));
 }
 
 static void rna_Action_active_pose_marker_set(PointerRNA *ptr,
@@ -958,19 +960,19 @@ static void rna_Action_active_pose_marker_set(PointerRNA *ptr,
                                               ReportList * /*reports*/)
 {
   bAction *act = static_cast<bAction *>(ptr->data);
-  act->active_marker = BLI_findindex(&act->markers, value.data) + 1;
+  ED_action_markers_set_active(&act->markers, static_cast<TimeMarker *>(value.data));
 }
 
 static int rna_Action_active_pose_marker_index_get(PointerRNA *ptr)
 {
   bAction *act = static_cast<bAction *>(ptr->data);
-  return std::max(act->active_marker - 1, 0);
+  return ED_action_markers_get_active_index(&act->markers);
 }
 
 static void rna_Action_active_pose_marker_index_set(PointerRNA *ptr, int value)
 {
   bAction *act = static_cast<bAction *>(ptr->data);
-  act->active_marker = value + 1;
+  ED_action_markers_set_active_index(&act->markers, value);
 }
 
 static void rna_Action_active_pose_marker_index_range(

@@ -1105,8 +1105,8 @@ struct bAction {
 
   /** Settings for this action. */
   eAction_Flags flag = {};
-  /** Index of the active marker. */
-  int active_marker = 0;
+  /** Index of the active marker. Deprecated, stored in TimeMarker.flag instead. */
+  DNA_DEPRECATED int active_marker = 0;
 
   /**
    * Type of ID-blocks that action can be assigned to

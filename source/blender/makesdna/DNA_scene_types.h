@@ -1085,6 +1085,10 @@ typedef enum TimeMarkerFlag : unsigned int {
 
   /* Temporarily tag markers as elevated within draw functions. Flag is cleared afterwards. */
   TIME_MARKER_ELEVATED_TEMP = (1 << 1),
+  /**
+   * This marker is the active marker. Only one marker in the markers list may have this flag set.
+   */
+  TIME_MARKER_ACTIVE = (1 << 2),
 } TimeMarkerFlag;
 
 /** \} */

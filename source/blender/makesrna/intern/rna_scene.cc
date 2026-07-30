@@ -25,6 +25,7 @@
 
 #include "BKE_paint.hh"
 
+#include "ED_markers.hh"
 #include "ED_object.hh"
 #include "ED_sequencer.hh"
 
@@ -2526,6 +2527,48 @@ static void rna_TimeLine_clear(Scene *scene)
   WM_main_add_notifier(NC_ANIMATION | ND_MARKERS, nullptr);
 }
 
+static PointerRNA rna_TimeLine_active_marker_get(PointerRNA *ptr)
+{
+  Scene *scene = static_cast<Scene *>(ptr->data);
+  return RNA_pointer_create_with_parent(
+      *ptr, RNA_TimelineMarker, ED_scene_markers_get_active(&scene->markers));
+}
+
+static void rna_TimeLine_active_marker_set(PointerRNA *ptr,
+                                           PointerRNA value,
+                                           ReportList * /*reports*/)
+{
+  Scene *scene = static_cast<Scene *>(ptr->data);
+  ED_scene_markers_set_active(&scene->markers, static_cast<TimeMarker *>(value.data));
+}
+
+static int rna_TimeLine_active_marker_index_get(PointerRNA *ptr)
+{
+  Scene *scene = static_cast<Scene *>(ptr->data);
+  return ED_scene_markers_get_active_index(&scene->markers);
+}
+
+static void rna_TimeLine_active_marker_index_set(PointerRNA *ptr, int value)
+{
+  Scene *scene = static_cast<Scene *>(ptr->data);
+  ED_scene_markers_set_active_index(&scene->markers, value);
+}
+
+static void rna_TimeLine_active_marker_index_range(
+    PointerRNA *ptr, int *min, int *max, int * /*softmin*/, int * /*softmax*/)
+{
+  Scene *scene = static_cast<Scene *>(ptr->data);
+
+  *min = 0;
+  *max = max_ii(0, scene->markers.count() - 1);
+}
+
+static void rna_TimelineMarkers_update(Main * /*bmain*/, Scene * /*scene*/, PointerRNA * /*ptr*/)
+{
+  WM_main_add_notifier(NC_SCENE | ND_MARKERS, nullptr);
+  WM_main_add_notifier(NC_ANIMATION | ND_MARKERS, nullptr);
+}
+
 static std::optional<std::string> rna_Scene_KeyingsSetsAll_path(const PointerRNA * /*ptr*/)
 {
   return "keying_sets_all";
@@ -3577,6 +3620,7 @@ static void rna_def_tool_settings(BlenderRNA *brna)
   RNA_def_property_boolean_sdna(prop, nullptr, "lock_markers", 0);
   RNA_def_property_flag(prop, PROP_DEG_SYNC_ONLY);
   RNA_def_property_ui_text(prop, "Lock Markers", "Prevent marker editing");
+  RNA_def_property_update(prop, 0, "rna_TimelineMarkers_update"); /* sidebar redraw */
 
   prop = RNA_def_property(srna, "proportional_edit_falloff", PROP_ENUM, PROP_NONE);
   RNA_def_property_enum_sdna(prop, nullptr, "prop_mode");
@@ -7908,6 +7952,7 @@ static void rna_def_scene_objects(BlenderRNA *brna, PropertyRNA *cprop)
 static void rna_def_timeline_markers(BlenderRNA *brna, PropertyRNA *cprop)
 {
   StructRNA *srna;
+  PropertyRNA *prop;
 
   FunctionRNA *func;
   PropertyRNA *parm;
@@ -7916,6 +7961,25 @@ static void rna_def_timeline_markers(BlenderRNA *brna, PropertyRNA *cprop)
   srna = RNA_def_struct(brna, "TimelineMarkers", nullptr);
   RNA_def_struct_sdna(srna, "Scene");
   RNA_def_struct_ui_text(srna, "Timeline Markers", "Collection of timeline markers");
+
+  /* Collection active property */
+  prop = RNA_def_property(srna, "active", PROP_POINTER, PROP_NONE);
+  RNA_def_property_struct_type(prop, "TimelineMarker");
+  RNA_def_property_flag(prop, PROP_EDITABLE | PROP_LIB_EXCEPTION);
+  RNA_def_property_pointer_funcs(
+      prop, "rna_TimeLine_active_marker_get", "rna_TimeLine_active_marker_set", nullptr, nullptr);
+  RNA_def_property_ui_text(
+      prop, "Active Timeline Marker", "Active timeline marker for this action");
+
+  prop = RNA_def_property(srna, "active_index", PROP_INT, PROP_UNSIGNED);
+  RNA_def_property_int_sdna(prop, nullptr, "active_marker");
+  RNA_def_property_flag(prop, PROP_LIB_EXCEPTION);
+  RNA_def_property_int_funcs(prop,
+                             "rna_TimeLine_active_marker_index_get",
+                             "rna_TimeLine_active_marker_index_set",
+                             "rna_TimeLine_active_marker_index_range");
+  RNA_def_property_ui_text(
+      prop, "Active Timeline Marker Index", "Index of active timeline marker");
 
   func = RNA_def_function(srna, "new", "rna_TimeLine_add");
   RNA_def_function_ui_description(func, "Add a timeline marker");

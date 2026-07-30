@@ -16,6 +16,7 @@ struct Main;
 struct Scene;
 struct ScrArea;
 struct TimeMarker;
+struct bAction;
 struct bAnimContext;
 struct bContext;
 struct wmKeyConfig;
@@ -61,6 +62,11 @@ ListBaseT<TimeMarker> *ED_scene_markers_get_from_area(const Main &bmain,
                                                       Scene *scene,
                                                       ViewLayer *view_layer,
                                                       const ScrArea *area);
+
+TimeMarker *ED_markers_get_active(ListBaseT<TimeMarker> *markers);
+void ED_markers_set_active(ListBaseT<TimeMarker> *markers, TimeMarker *active);
+int ED_markers_get_active_index(const ListBaseT<TimeMarker> *markers);
+void ED_markers_set_active_index(ListBaseT<TimeMarker> *markers, int active);
 
 /**
  * Apply some transformation to markers after the fact

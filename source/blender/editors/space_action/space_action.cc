@@ -1041,7 +1041,6 @@ void ED_spacetype_action()
   art->listener = action_region_listener;
   art->init = action_buttons_area_init;
   art->draw = action_buttons_area_draw;
-  art->poll = action_region_poll_hide_in_timeline;
 
   BLI_addhead(&st->regiontypes, art);
 
