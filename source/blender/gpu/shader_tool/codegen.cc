@@ -2282,14 +2282,14 @@ struct CodegenContext : NodeErrorHandler {
                 .var_type = type,
                 .var_name = name,
                 .var_array = string(array.str()),
-                .res_type = string(attr.attr.str()),
+                .res_type = string(attr.attr.identifier().str()),
                 .res_condition = attr.parse_condition()};
       case ResourceType::SPECIALIZATION_CONST:
         return {.line = 0,
                 .var_type = type,
                 .var_name = name,
                 .var_array = string(array.str()),
-                .res_type = string(attr.attr.str()),
+                .res_type = string(attr.attr.identifier().str()),
                 .res_value = string(attr.param1.str()),
                 .res_condition = attr.parse_condition()};
       case ResourceType::SAMPLER:
@@ -2297,7 +2297,7 @@ struct CodegenContext : NodeErrorHandler {
                 .var_type = type,
                 .var_name = name,
                 .var_array = string(array.str()),
-                .res_type = string(attr.attr.str()),
+                .res_type = string(attr.attr.identifier().str()),
                 .res_slot = string(attr.param1.str()),
                 .res_condition = attr.parse_condition(),
                 .res_frequency = string(attr.frequency.str())};
@@ -2306,7 +2306,7 @@ struct CodegenContext : NodeErrorHandler {
                 .var_type = type,
                 .var_name = name,
                 .var_array = string(array.str()),
-                .res_type = string(attr.attr.str()),
+                .res_type = string(attr.attr.identifier().str()),
                 .res_value = string(attr.param1.str()),
                 .res_condition = attr.parse_condition(),
                 .res_frequency = string(attr.frequency.str())};
@@ -2315,7 +2315,7 @@ struct CodegenContext : NodeErrorHandler {
                 .var_type = type,
                 .var_name = name,
                 .var_array = string(array.str()),
-                .res_type = string(attr.attr.str()),
+                .res_type = string(attr.attr.identifier().str()),
                 .res_slot = string(attr.param1.str()),
                 .res_qualifier = string(attr.param2.str()),
                 .res_condition = attr.parse_condition(),
@@ -2325,7 +2325,7 @@ struct CodegenContext : NodeErrorHandler {
                 .var_type = type,
                 .var_name = name,
                 .var_array = string(array.str()),
-                .res_type = string(attr.attr.str()),
+                .res_type = string(attr.attr.identifier().str()),
                 .res_slot = string(attr.param1.str()),
                 .res_qualifier = string(attr.param2.str()),
                 .res_format = string(attr.param3.str()),
