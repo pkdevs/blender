@@ -116,8 +116,12 @@ enum class OperationCode {
   POSE_INIT,
   /* Initialize IK solver related pose stuff. */
   POSE_INIT_IK,
+  /* Entry point for pose modifier stack. */
+  POSE_MODIFIERS_ENTRY,
+  /* Triggers pose evaluation before the modifier stack is applied. */
+  POSE_MODIFIERS_EVAL_INIT,
   /* Modifier evaluation. */
-  POSE_MODIFIERS,
+  POSE_MODIFIERS_EVAL,
   /* Pose is evaluated, and runtime data can be freed. */
   POSE_CLEANUP,
   /* Pose has been fully evaluated and ready to be used by others. */

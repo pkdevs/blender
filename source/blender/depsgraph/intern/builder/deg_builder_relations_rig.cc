@@ -198,8 +198,9 @@ void DepsgraphRelationBuilder::build_ik_pose(Object *object,
     }
     parchan = parchan->parent;
   }
-  OperationKey pose_modifiers_key(&object->id, NodeType::EVAL_POSE, OperationCode::POSE_MODIFIERS);
-  add_relation(solver_key, pose_modifiers_key, "PoseEval Result-Bone Link");
+  OperationKey pose_modifiers_eval_key(
+      &object->id, NodeType::EVAL_POSE, OperationCode::POSE_MODIFIERS_EVAL);
+  add_relation(solver_key, pose_modifiers_eval_key, "PoseEval Result-Bone Link");
 
   /* Add relation when the root of this IK chain is influenced by another IK chain. */
   build_inter_ik_chains(object, solver_key, rootchan, root_map);
@@ -254,8 +255,9 @@ void DepsgraphRelationBuilder::build_splineik_pose(Object *object,
     parchan->flag |= POSE_DONE;
     root_map->add_bone(parchan->name, rootchan->name);
   }
-  OperationKey pose_modifiers_key(&object->id, NodeType::EVAL_POSE, OperationCode::POSE_MODIFIERS);
-  add_relation(solver_key, pose_modifiers_key, "PoseEval Result-Bone Link");
+  OperationKey pose_modifiers_eval_key(
+      &object->id, NodeType::EVAL_POSE, OperationCode::POSE_MODIFIERS_EVAL);
+  add_relation(solver_key, pose_modifiers_eval_key, "PoseEval Result-Bone Link");
 
   /* Add relation when the root of this IK chain is influenced by another IK chain. */
   build_inter_ik_chains(object, solver_key, rootchan, root_map);
@@ -297,15 +299,18 @@ void DepsgraphRelationBuilder::build_object_data_armature(Object *object)
   const OperationKey pose_init_key(&object->id, NodeType::EVAL_POSE, OperationCode::POSE_INIT);
   const OperationKey pose_init_ik_key(
       &object->id, NodeType::EVAL_POSE, OperationCode::POSE_INIT_IK);
-  const OperationKey pose_modifiers_key(
-      &object->id, NodeType::EVAL_POSE, OperationCode::POSE_MODIFIERS);
+  const OperationKey pose_modifiers_eval_init_key(
+      &object->id, NodeType::EVAL_POSE, OperationCode::POSE_MODIFIERS_EVAL_INIT);
+  const OperationKey pose_modifiers_eval_key(
+      &object->id, NodeType::EVAL_POSE, OperationCode::POSE_MODIFIERS_EVAL);
   const OperationKey pose_cleanup_key(
       &object->id, NodeType::EVAL_POSE, OperationCode::POSE_CLEANUP);
   const OperationKey pose_done_key(&object->id, NodeType::EVAL_POSE, OperationCode::POSE_DONE);
   add_relation(local_transform, pose_init_key, "Local Transform -> Pose Init");
+  add_relation(pose_modifiers_eval_init_key, pose_init_key, "Modifiers -> Pose Init");
   add_relation(pose_init_key, pose_init_ik_key, "Pose Init -> Pose Init IK");
-  add_relation(pose_init_ik_key, pose_modifiers_key, "Pose Init IK -> Pose Modifiers");
-  add_relation(pose_modifiers_key, pose_done_key, "Post Modifiers -> Pose Done");
+  add_relation(pose_init_ik_key, pose_modifiers_eval_key, "Pose Init IK -> Pose Modifiers");
+  add_relation(pose_modifiers_eval_key, pose_done_key, "Post Modifiers -> Pose Done");
   /* Make sure pose is up-to-date with armature updates. */
   build_armature(armature);
   const OperationKey armature_key(&armature->id, NodeType::ARMATURE, OperationCode::ARMATURE_EVAL);
@@ -467,7 +472,7 @@ void DepsgraphRelationBuilder::build_object_data_armature(Object *object)
       }
       /* Pose requires the B-Bone shape. */
       add_relation(bone_segments_key,
-                   pose_modifiers_key,
+                   pose_modifiers_eval_key,
                    "PoseEval Result-Bone Link",
                    RELATION_FLAG_GODMODE);
       add_relation(bone_segments_key, pose_cleanup_key, "Cleanup dependency");
@@ -475,7 +480,7 @@ void DepsgraphRelationBuilder::build_object_data_armature(Object *object)
     else {
       /* Assume that all bones must be done for the pose to be ready
        * (for deformers). */
-      add_relation(bone_done_key, pose_modifiers_key, "PoseEval Result-Bone Link");
+      add_relation(bone_done_key, pose_modifiers_eval_key, "PoseEval Result-Bone Link");
 
       /* Bones must be traversed before cleanup. */
       add_relation(bone_done_key, pose_cleanup_key, "Done -> Cleanup");

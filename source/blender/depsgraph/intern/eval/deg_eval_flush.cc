@@ -222,9 +222,9 @@ void flush_editors_id_update(Depsgraph *graph, const DEGEditorUpdateContext *upd
     }
     DEG_DEBUG_PRINTF((blender::Depsgraph *)graph,
                      EVAL,
-                     "Accumulated recalc bits for %s: %u\n",
+                     "Accumulated recalc bits for %s: %s\n",
                      id_orig->name,
-                     uint(id_cow->recalc));
+                     DEG_stringify_recalc_flags(id_cow->recalc).c_str());
 
     /* Inform editors. Only if the data-block is being evaluated a second
      * time, to distinguish between user edits and initial evaluation when

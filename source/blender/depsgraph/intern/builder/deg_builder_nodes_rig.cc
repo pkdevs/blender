@@ -190,9 +190,16 @@ void DepsgraphNodeBuilder::build_rig(Object *object)
                                  BKE_pose_eval_init_ik(depsgraph, scene_cow, object_cow);
                                });
 
+  /* Note: Noop node at the start of the modifier stack like GEOMETRY_EVAL_INIT but has no
+   * operation, it just simplifies construction of the modifier stack and provides a known entry
+   * point. */
+  add_operation_node(&object->id, NodeType::EVAL_POSE, OperationCode::POSE_MODIFIERS_ENTRY);
+  /* Another noop node at the end of the modifier stack, which triggers pose and constraint
+   * evaluation before the pose modifiers are applied. */
+  add_operation_node(&object->id, NodeType::EVAL_POSE, OperationCode::POSE_MODIFIERS_EVAL_INIT);
   add_operation_node(&object->id,
                      NodeType::EVAL_POSE,
-                     OperationCode::POSE_MODIFIERS,
+                     OperationCode::POSE_MODIFIERS_EVAL,
                      [scene_cow, object_cow](blender::Depsgraph *depsgraph) {
                        BKE_pose_eval_modifiers(depsgraph, scene_cow, object_cow);
                      });
