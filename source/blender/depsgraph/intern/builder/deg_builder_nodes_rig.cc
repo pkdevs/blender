@@ -93,6 +93,12 @@ void DepsgraphNodeBuilder::build_splineik_pose(Object *object,
 {
   bSplineIKConstraint *data = static_cast<bSplineIKConstraint *>(con->data);
 
+  /* Clamp spline IK chain lengths to a value that will not crash older Blender versions,
+   * which may be encountered when opening future versions' .blend files */
+  if (data->chainlen > 255) {
+    data->chainlen = 255;
+  }
+
   /* Find the chain's root. */
   bPoseChannel *rootchan = BKE_armature_splineik_solver_find_root(pchan, data);
 
