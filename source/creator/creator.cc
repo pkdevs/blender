@@ -258,8 +258,6 @@ static void callback_main_atexit(void *user_data)
     BKE_blender_globals_clear();
     BKE_appdir_exit();
 
-    DNA_sdna_current_free();
-
     CLG_exit();
   }
 }
@@ -488,8 +486,6 @@ int main(int argc,
 
   BLI_threadapi_init();
 
-  DNA_sdna_current_init();
-
   BKE_blender_globals_init(); /* `blender.cc` */
 
   BKE_cpp_types_init();
@@ -552,6 +548,10 @@ int main(int argc,
   CCL_log_init();
   CCL_implicit_sharing_init();
 #endif
+
+  /* Set max open files to better handle production files that may use many
+   * open geometry or texture cache file handles. After logging since it's used .*/
+  BLI_system_max_open_files_ensure();
 
   /* Must be initialized after #BKE_appdir_init to account for color-management paths. */
   IMB_init();

@@ -637,13 +637,8 @@ Object *add_type_with_obdata(bContext *C,
   Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
 
-  {
-    BKE_view_layer_synced_ensure(*bmain, scene, view_layer);
-    Object *obedit = BKE_view_layer_edit_object_get(view_layer);
-    if (obedit != nullptr) {
-      editmode_exit_ex(bmain, scene, obedit, EM_FREEDATA);
-    }
-  }
+  /* Ensure we leave edit-mode for all objects (NOOP outside of edit-mode). */
+  editmode_exit_multi_ex(bmain, scene, view_layer, EM_FREEDATA);
 
   /* deselects all, sets active object */
   Object *ob;
@@ -2089,9 +2084,15 @@ static wmOperatorStatus collection_drop_exec(bContext *C, wmOperator *op)
   }
 
   if (RNA_boolean_get(op->ptr, "use_instance")) {
-    BKE_collection_child_remove(bmain, active_collection, add_info->collection);
-    DEG_id_tag_update(&active_collection->id, ID_RECALC_SYNC_TO_EVAL);
-    DEG_relations_tag_update(bmain);
+    /* In case no active editable collection is found, link/append code will have added imported
+     * collections/objects to a new collection (see code in
+     * `loose_data_instantiate_ensure_active_collection`). There is no easy way to retrieve these
+     * currently from here, so just leave the data in these for now - this is not a situation that
+     * should happen in 'normal expected use-cases' anyway. */
+    if (active_collection) {
+      BKE_collection_child_remove(bmain, active_collection, add_info->collection);
+      DEG_id_tag_update(&active_collection->id, ID_RECALC_SYNC_TO_EVAL);
+    }
 
     Object *ob = add_type(C,
                           OB_EMPTY,
@@ -2104,6 +2105,7 @@ static wmOperatorStatus collection_drop_exec(bContext *C, wmOperator *op)
     ob->empty_drawsize = U.collection_instance_empty_size;
     ob->transflag |= OB_DUPLICOLLECTION;
     id_us_plus(&add_info->collection->id);
+    DEG_relations_tag_update(bmain);
   }
   else if (ID_IS_EDITABLE(&add_info->collection->id)) {
     ViewLayer *view_layer = CTX_data_view_layer(C);
@@ -2369,7 +2371,7 @@ static NodesModifierData *add_essential_asset_modifier(bContext &C,
   id_us_plus(&node_group->id);
   nmd->flag |= NODES_MODIFIER_HIDE_DATABLOCK_SELECTOR;
   BKE_modifier_unique_name(&object.modifiers, &nmd->modifier);
-  MOD_nodes_update_interface(&object, nmd);
+  MOD_nodes_update_interface(bmain, &object, nmd);
   DEG_id_tag_update(&object.id, ID_RECALC_GEOMETRY);
   return nmd;
 }

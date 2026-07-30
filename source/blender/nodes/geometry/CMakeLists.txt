@@ -38,8 +38,8 @@ set(SRC
   nodes/node_geo_boolean.cc
   nodes/node_geo_bounding_box.cc
   nodes/node_geo_camera_info.cc
-  nodes/node_geo_closure_to_list.cc
   nodes/node_geo_closure.cc
+  nodes/node_geo_closure_to_list.cc
   nodes/node_geo_cluster_by_connected.cc
   nodes/node_geo_cluster_by_distance.cc
   nodes/node_geo_collection_children.cc
@@ -94,8 +94,8 @@ set(SRC
   nodes/node_geo_field_min_and_max.cc
   nodes/node_geo_field_to_grid.cc
   nodes/node_geo_field_to_list.cc
-  nodes/node_geo_filter_list.cc
   nodes/node_geo_field_variance.cc
+  nodes/node_geo_filter_list.cc
   nodes/node_geo_flip_faces.cc
   nodes/node_geo_foreach_geometry_element.cc
   nodes/node_geo_geometry_to_instance.cc
@@ -218,6 +218,8 @@ set(SRC
   nodes/node_geo_mesh_topology_offset_corner_in_face.cc
   nodes/node_geo_mesh_topology_vertex_of_corner.cc
   nodes/node_geo_mouse_position.cc
+  nodes/node_geo_nurbs_order.cc
+  nodes/node_geo_nurbs_weight.cc
   nodes/node_geo_object_info.cc
   nodes/node_geo_offset_point_in_curve.cc
   nodes/node_geo_points.cc
@@ -226,6 +228,7 @@ set(SRC
   nodes/node_geo_points_to_vertices.cc
   nodes/node_geo_points_to_volume.cc
   nodes/node_geo_proximity.cc
+  nodes/node_geo_rasterize_points.cc
   nodes/node_geo_raycast.cc
   nodes/node_geo_realize_instances.cc
   nodes/node_geo_remove_attribute.cc
@@ -293,9 +296,9 @@ set(SRC
   nodes/node_geo_tool_selection.cc
   nodes/node_geo_tool_set_face_set.cc
   nodes/node_geo_tool_set_selection.cc
+  nodes/node_geo_transfer_attributes.cc
   nodes/node_geo_transform_geometry.cc
   nodes/node_geo_translate_instances.cc
-  nodes/node_geo_transfer_attributes.cc
   nodes/node_geo_triangulate.cc
   nodes/node_geo_uv_pack_islands.cc
   nodes/node_geo_uv_tangent.cc

@@ -16,6 +16,8 @@
 #include <pxr/usd/usdShade/materialBindingAPI.h>
 #include <pxr/usd/usdSkel/bindingAPI.h>
 
+#include "IO_mesh_utils.hh"
+
 #include "BLI_array_utils.hh"
 #include "BLI_assert.hh"
 #include "BLI_math_vector_types.hh"
@@ -629,7 +631,8 @@ void USDGenericMeshWriter::assign_materials(const HierarchyContext &context,
                                             const pxr::UsdGeomMesh &usd_mesh,
                                             const MaterialFaceGroups &usd_face_groups)
 {
-  if (context.object->totcol == 0) {
+  const int totcol = BKE_object_material_count_eval(context.object);
+  if (totcol == 0) {
     return;
   }
 
@@ -639,8 +642,8 @@ void USDGenericMeshWriter::assign_materials(const HierarchyContext &context,
   bool mesh_material_bound = false;
   auto mesh_prim = usd_mesh.GetPrim();
   pxr::UsdShadeMaterialBindingAPI material_binding_api(mesh_prim);
-  for (int mat_num = 0; mat_num < context.object->totcol; mat_num++) {
-    Material *material = BKE_object_material_get(context.object, mat_num + 1);
+  for (int mat_num = 0; mat_num < totcol; mat_num++) {
+    Material *material = BKE_object_material_get_eval(context.object, mat_num + 1);
     if (material == nullptr) {
       continue;
     }
@@ -680,7 +683,7 @@ void USDGenericMeshWriter::assign_materials(const HierarchyContext &context,
     short material_number = face_group.key;
     const pxr::VtIntArray &face_indices = face_group.value;
 
-    Material *material = BKE_object_material_get(context.object, material_number + 1);
+    Material *material = BKE_object_material_get_eval(context.object, material_number + 1);
     if (material == nullptr) {
       continue;
     }
@@ -901,12 +904,16 @@ Mesh *USDMeshWriter::get_export_mesh(Object *object_eval, bool &r_needsfree)
   }
 
   if (write_skinned_mesh_) {
-    r_needsfree = false;
     /* We must export the skinned mesh in its rest pose.  We therefore
      * return the pre-modified mesh, so that the armature modifier isn't
-     * applied. */
-    /* TODO: Store the "needs free" mesh in a separate variable. */
-    return const_cast<Mesh *>(BKE_object_get_pre_modified_mesh(object_eval));
+     * applied. Objects without a pre-modified mesh of their own (curves,
+     * NURBS surfaces, ...) get one converted on demand. */
+    MeshCoerceForExport coerce;
+    const Mesh *mesh = mesh_coerce_for_export_setup(
+        coerce, usd_export_context_.depsgraph, object_eval, false);
+    r_needsfree = coerce.owned != nullptr;
+    coerce.owned = nullptr;
+    return const_cast<Mesh *>(mesh);
   }
 
   /* Return the fully evaluated mesh. */

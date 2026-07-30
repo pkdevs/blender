@@ -39,7 +39,7 @@
 #include "BLT_translation.hh"
 
 #include "BKE_anim_data.hh"
-#include "BKE_animsys.h"
+#include "BKE_animsys.hh"
 #include "BKE_armature.hh"
 #include "BKE_collection.hh"
 #include "BKE_constraint.h"
@@ -2183,7 +2183,7 @@ static bool outliner_liboverride_property_remove_do(bContext *C,
                 current_id->override_library->reference->lib ?
                     current_id->override_library->reference->lib->runtime->filepath_abs :
                     "<NONE>",
-                liboverride_property->rna_path);
+                override_elem.rna_path.c_str());
     return false;
   }
 
@@ -2214,7 +2214,7 @@ static bool outliner_liboverride_property_remove_do(bContext *C,
                   current_id->override_library->reference->lib ?
                       current_id->override_library->reference->lib->runtime->filepath_abs :
                       "<NONE>",
-                  liboverride_property->rna_path);
+                  override_elem.rna_path.c_str());
       return false;
     }
   }
@@ -3184,7 +3184,7 @@ static const EnumPropertyItem *outliner_id_operation_itemf(bContext *C,
       const SpaceOutliner *space_outliner = CTX_wm_space_outliner(C);
       const TreeElement *te = get_target_element(space_outliner);
       const TreeStoreElem *tselem = TREESTORE(te);
-      if (tselem && (GS(tselem->id->name) != ID_IM)) {
+      if (TSE_IS_REAL_ID(tselem) && tselem->id && (GS(tselem->id->name) != ID_IM)) {
         continue;
       }
     }
