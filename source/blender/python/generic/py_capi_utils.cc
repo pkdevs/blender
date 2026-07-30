@@ -609,7 +609,15 @@ int PyC_ParseOptionalBool(PyObject *o, void *p)
 int PyC_ParseRectI(PyObject *o, void *p)
 {
   rcti *rect = static_cast<rcti *>(p);
-  if (!PyArg_ParseTuple(o, "(ii)(ii)", &rect->xmin, &rect->ymin, &rect->xmax, &rect->ymax)) {
+  if (!PyArg_ParseTuple(o,
+                        "(ii)" /* `min` */
+                        "(ii)" /* `max` */
+                        ":rect",
+                        &rect->xmin,
+                        &rect->ymin,
+                        &rect->xmax,
+                        &rect->ymax))
+  {
     return 0;
   }
   return 1;
@@ -671,7 +679,12 @@ const char *PyC_StringEnum_FindIDFromValue(const PyC_StringEnumItems *items, con
 int PyC_CheckArgs_DeepCopy(PyObject *args)
 {
   PyObject *dummy_pydict;
-  return PyArg_ParseTuple(args, "|O!:__deepcopy__", &PyDict_Type, &dummy_pydict) != 0;
+  return PyArg_ParseTuple(args,
+                          "|"  /* Optional arguments. */
+                          "O!" /* `memo` */
+                          ":__deepcopy__",
+                          &PyDict_Type,
+                          &dummy_pydict) != 0;
 }
 
 /** \} */
@@ -1377,16 +1390,15 @@ void PyC_RunQuicky(const char *filepath, int n, ...)
     fclose(fp);
 
     if (py_result) {
+      /* don't use the result */
+      Py_DECREF(py_result);
+      py_result = nullptr;
 
       /* we could skip this but then only slice assignment would work
        * better not be so strict */
       values = PyDict_GetItemString(py_dict, "values");
 
       if (values && PyList_Check(values)) {
-
-        /* don't use the result */
-        Py_DECREF(py_result);
-        py_result = nullptr;
 
         /* now get the values back */
         va_start(vargs, n);
