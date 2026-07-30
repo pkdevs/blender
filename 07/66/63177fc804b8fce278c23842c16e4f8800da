@@ -1,3 +1,4 @@
 Referenced by commit 012afaf3189, Fix: Remove unused parameter from skip_strokes_with_locked_material
 Referenced by issue #133331, Fix: Remove unused parameter from skip_strokes_with_locked_material
 Referenced by pull request #161849, Fix #161754: Grease Pencil Erase Lasso/Box dont respect locked material
+Referenced by commit a8c54e38fc64eb0d9c94842cd86f4c5eb3e76dd2, Fix #161754: Grease Pencil Erase Lasso/Box dont respect locked material
