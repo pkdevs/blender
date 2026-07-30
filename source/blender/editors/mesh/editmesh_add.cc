@@ -757,7 +757,7 @@ void MESH_OT_primitive_single_vertex_add(wmOperatorType *ot)
   /* identifiers */
   ot->name = "Add Single Vertex";
   ot->description = "Construct a single vertex";
-  ot->idname = "MESH_OT_primitive_singlevertex_add";
+  ot->idname = "MESH_OT_primitive_single_vertex_add";
 
   /* API callbacks */
   ot->exec = add_primitive_single_vertex_exec;
