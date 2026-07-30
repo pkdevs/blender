@@ -96,7 +96,6 @@ Result<ParsedAttribute> resource_type_from_attributes(AttrList list)
       {"local_invocation_id",                     {ResourceTableType::ENTRY_POINT,    ResourceType::LOCAL_INVOCATION_ID,     0}},
       {"local_invocation_index",                  {ResourceTableType::ENTRY_POINT,    ResourceType::LOCAL_INVOCATION_INDEX,  0}},
       {"out",                                     {ResourceTableType::ENTRY_POINT,    ResourceType::OUT,                     0}},
-      {"num_work_groups",                         {ResourceTableType::ENTRY_POINT,    ResourceType::NONE,                    0}},
       {"point_coord",                             {ResourceTableType::ENTRY_POINT,    ResourceType::POINT_COORD,             0}},
       {"point_size",                              {ResourceTableType::ENTRY_POINT,    ResourceType::POINT_SIZE,              0}},
       {"position",                                {ResourceTableType::ENTRY_POINT,    ResourceType::POSITION,                0}},
@@ -821,7 +820,7 @@ struct SymbolParser : NodeErrorHandler {
           var->identifier = "gl_PointCoord";
           break;
         case ResourceType::LOCAL_INVOCATION_ID:
-          var->identifier = "gl_GlobalInvocationID";
+          var->identifier = "gl_LocalInvocationID";
           break;
         case ResourceType::LOCAL_INVOCATION_INDEX:
           var->identifier = "gl_LocalInvocationIndex";

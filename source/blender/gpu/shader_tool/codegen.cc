@@ -311,7 +311,7 @@ struct CodegenContext : NodeErrorHandler {
         error(frag_fn, "Expected fragment shader entry point function");
         return;
       }
-      /* Resolve vertex function. */
+      /* Resolve fragment function. */
       auto *fn2 = scope.lookup_function(LocalVar(frag_fn.child_first()).identifier()).unwrap(this);
       if (fn2->entry_point_type != SymbolFunction::EntryPointType::FRAG) {
         error(frag_fn, "Expected fragment shader entry point function");
@@ -329,7 +329,7 @@ struct CodegenContext : NodeErrorHandler {
         error(comp_fn, "Expected compute shader entry point function");
         return;
       }
-      /* Resolve vertex function. */
+      /* Resolve compute function. */
       auto *fn = scope.lookup_function(LocalVar(comp_fn.child_first()).identifier()).unwrap(this);
       if (fn->entry_point_type != SymbolFunction::EntryPointType::COMP) {
         error(comp_fn, "Expected compute shader entry point function");
