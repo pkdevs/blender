@@ -39,4 +39,4 @@ Referenced by issue #160029, Crash when lightmap unpack adds a UV layer after co
 Referenced by commit 601f4361d64cd5cbb19d092d376fc7a7877727fe, Fix #160029: Crash adding UV layer after converting attributes
 Referenced by pull request #161753, Fix #161697: Crash when texture painting mesh with single-value UV Map
 Referenced by commit cd1437318652cffe6784619ac1c78a37d0a99c4a, Fix #161697: Crash when texture painting mesh with single-value UV Map
-Referenced by pull request #162110, Fix #161905: External Multires data cleared when exiting Edit Mode
+Referenced by pull request #162110, WIP: Fix #161905: External Multires data cleared when exiting Edit Mode
