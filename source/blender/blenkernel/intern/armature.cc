@@ -509,6 +509,9 @@ static void read_bone_collections(BlendDataReader *reader, bArmature *arm)
  */
 static void fix_empty_bone_names(bArmature &armature)
 {
+  constexpr const char *name_prefix = "unnamed.";
+  constexpr const char *format_string = "unnamed.{:0>3}";
+
   Set<StringRefNull> potential_duplicates;
   Vector<Bone *> no_name_bones;
   BKE_armature_foreach_bone(armature, [&](const int /* bone_index */, const Bone &bone) {
@@ -516,7 +519,7 @@ static void fix_empty_bone_names(bArmature &armature)
       no_name_bones.append(const_cast<Bone *>(&bone));
     }
     else {
-      if (StringRefNull(bone.name).startswith("unnamed.")) {
+      if (StringRefNull(bone.name).startswith(name_prefix)) {
         potential_duplicates.add(bone.name);
       }
     }
@@ -525,7 +528,6 @@ static void fix_empty_bone_names(bArmature &armature)
    * hashmap already built. */
   int unique_index = 0;
   std::string bone_name;
-  constexpr const char *format_string = "unnamed.{:0>3}";
   for (Bone *bone : no_name_bones) {
     bone_name = fmt::format(format_string, unique_index);
     while (potential_duplicates.contains(bone_name)) {
