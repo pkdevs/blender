@@ -66,7 +66,11 @@
 
 #include "BLO_read_write.hh"
 
+#include "CLG_log.h"
+
 namespace blender {
+
+static CLG_LogRef LOG = {"bke.armature"};
 
 /* -------------------------------------------------------------------- */
 /** \name Prototypes
@@ -546,6 +550,7 @@ static void armature_blend_read_data(BlendDataReader *reader, ID *id)
     direct_link_bones(reader, &bone, &all_bones_are_named);
   }
   if (!all_bones_are_named) {
+    CLOG_WARN(&LOG, "Found bones with empty names. Fixing automatically.\n");
     fix_empty_bone_names(*arm);
   }
 
