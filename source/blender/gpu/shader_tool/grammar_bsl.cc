@@ -580,7 +580,7 @@ struct BSLParser {
   {
     NODE(TemplateInst);
     match(Template);
-    templated_declaration(true, false, "instantiation");
+    templated_declaration(true, false);
   }
 
   void template_specialization()
@@ -588,7 +588,7 @@ struct BSLParser {
     NODE(TemplateSpec);
     match(Template);
     template_argument_list(); /* Should be empty. */
-    templated_declaration(true, true, "specialization");
+    templated_declaration(true, true);
   }
 
   void template_declaration()
@@ -596,25 +596,17 @@ struct BSLParser {
     NODE(TemplateDecl);
     match(Template);
     template_argument_list();
-    templated_declaration(false, true, "declaration");
+    templated_declaration(false, true);
   }
 
-  void templated_declaration(bool expect_template_params,
-                             bool expect_body,
-                             const char *template_type_msg)
+  void templated_declaration(bool expect_template_params, bool expect_body)
   {
-    {
-      auto state = save_state();
-      if (struct_decl(expect_template_params, expect_body)) {
-        return;
-      }
-      restore_state(state);
-      if (func_decl(expect_template_params, expect_body)) {
-        return;
-      }
-      restore_state(state);
+    if (peek() == Union || peek() == Struct || peek() == Class) {
+      struct_decl(expect_template_params, expect_body);
     }
-    error("Unexpected token \"" + to_str(peek()) + "\", expected template " + template_type_msg);
+    else {
+      func_decl(expect_template_params, expect_body);
+    }
   }
 
   void template_argument_list()
