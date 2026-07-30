@@ -1,1 +1,2 @@
 Referenced by issue #140597, Manifold boolean's new faces get material from operand object
+Referenced by issue #162133, Geometry Nodes: Changing the boolean solver changes the way materials are handled
