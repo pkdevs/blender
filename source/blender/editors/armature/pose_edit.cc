@@ -226,6 +226,9 @@ static wmOperatorStatus pose_calculate_paths_exec(bContext *C, wmOperator *op)
   CTX_DATA_BEGIN (C, bPoseChannel *, pchan, selected_pose_bones_from_active_object) {
     /* verify makes sure that the selected bone has a bone with the appropriate settings */
     animviz_verify_motionpaths(op->reports, scene, ob, pchan);
+    if (pchan->mpath) {
+      ed::motionpath::tag_for_recalc(*pchan->mpath);
+    }
   }
   CTX_DATA_END;
 
@@ -309,6 +312,10 @@ static wmOperatorStatus pose_update_paths_exec(bContext *C, wmOperator *op)
   /* set up path data for bones being calculated */
   CTX_DATA_BEGIN (C, bPoseChannel *, pchan, selected_pose_bones_from_active_object) {
     animviz_verify_motionpaths(op->reports, scene, ob, pchan);
+    if (pchan->mpath) {
+      /* We enforce a full update since this is a direct user action. */
+      ed::motionpath::tag_for_recalc(*pchan->mpath);
+    }
   }
   CTX_DATA_END;
 

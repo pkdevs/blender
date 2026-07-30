@@ -1277,7 +1277,13 @@ void ED_drivers_editor_init(bContext *C, ScrArea *area);
 void ED_anim_ale_fcurve_delete(bAnimContext &ac, bAnimListElem &ale);
 
 /* ************************************************ */
-
+namespace ed::motionpath {
+/**
+ * Tag the motion path for a complete re-evaluation on the next call to `animviz_calc_motionpaths`.
+ * This is cheap to call since it only sets a flag.
+ */
+void tag_for_recalc(bMotionPath &motion_path);
+}  // namespace ed::motionpath
 /**
  * Build a partial depsgraph with only the IDs of the given `targets`.
  */

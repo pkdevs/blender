@@ -51,6 +51,20 @@ static CLG_LogRef LOG = {"anim.motion_paths"};
 
 /* ........ */
 
+namespace ed::motionpath {
+
+void tag_for_recalc(bMotionPath &motion_path)
+{
+  if (!motion_path.points) {
+    return;
+  }
+  for (int i = 0; i < motion_path.length; i++) {
+    motion_path.points[i].flag &= ~MOTIONPATH_VERT_EVALUATED;
+  }
+}
+
+}  // namespace ed::motionpath
+
 Depsgraph *animviz_depsgraph_build(Main *bmain,
                                    Scene *scene,
                                    ViewLayer *view_layer,
