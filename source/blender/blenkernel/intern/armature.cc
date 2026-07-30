@@ -407,8 +407,11 @@ static void armature_blend_write(BlendWriter *writer, ID *id, const void *id_add
   arm->runtime = runtime_backup;
 }
 
-static void direct_link_bones(BlendDataReader *reader, Bone *bone)
+static void direct_link_bones(BlendDataReader *reader, Bone *bone, bool *all_bones_are_named)
 {
+  if (bone->name[0] == '\0') {
+    *all_bones_are_named = false;
+  }
   BLO_read_struct(reader, Bone, &bone->parent);
 
   BLO_read_struct(reader, IDProperty, &bone->prop);
@@ -424,7 +427,7 @@ static void direct_link_bones(BlendDataReader *reader, Bone *bone)
   BLO_read_struct_list(reader, Bone, &bone->childbase);
 
   for (Bone &child : bone->childbase) {
-    direct_link_bones(reader, &child);
+    direct_link_bones(reader, &child, all_bones_are_named);
   }
 
   bone->runtime = Bone_Runtime{};
@@ -498,28 +501,30 @@ static void read_bone_collections(BlendDataReader *reader, bArmature *arm)
 
 /**
  * While not likely, it can happen that bones load with no name. This would crash Blender and
- * thus needs to be avoided. Sets "Bone.<some_number>" to any empty name. See #162046.
+ * thus needs to be avoided. Sets "unnamed.<some_number>" to any empty name. See #162046.
  */
 static void fix_empty_bone_names(bArmature &armature)
 {
-  Set<StringRefNull> bone_names;
+  Set<StringRefNull> potential_duplicates;
   Vector<Bone *> no_name_bones;
   BKE_armature_foreach_bone(armature, [&](const int /* bone_index */, const Bone &bone) {
     if (bone.name[0] == '\0') {
       no_name_bones.append(const_cast<Bone *>(&bone));
     }
     else {
-      bone_names.add(bone.name);
+      if (StringRefNull(bone.name).startswith("unnamed.")) {
+        potential_duplicates.add(bone.name);
+      }
     }
   });
   /* Custom unique bone name logic because the actual logic is editor code and relies on the
    * hashmap already built. */
   int unique_index = 0;
   std::string bone_name;
-  constexpr const char *format_string = "Bone.{:0>3}";
+  constexpr const char *format_string = "unnamed.{:0>3}";
   for (Bone *bone : no_name_bones) {
     bone_name = fmt::format(format_string, unique_index);
-    while (bone_names.contains(bone_name)) {
+    while (potential_duplicates.contains(bone_name)) {
       unique_index++;
       bone_name = fmt::format(format_string, unique_index);
     }
@@ -536,12 +541,13 @@ static void armature_blend_read_data(BlendDataReader *reader, ID *id)
   arm->edbo = nullptr;
   /* Must always be cleared (armatures don't have their own edit-data). */
   arm->needs_flush_to_id = 0;
-
+  bool all_bones_are_named = true;
   for (Bone &bone : arm->bonebase) {
-    direct_link_bones(reader, &bone);
+    direct_link_bones(reader, &bone, &all_bones_are_named);
   }
-
-  fix_empty_bone_names(*arm);
+  if (!all_bones_are_named) {
+    fix_empty_bone_names(*arm);
+  }
 
   read_bone_collections(reader, arm);
 
