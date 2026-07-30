@@ -726,6 +726,10 @@ static wmOperatorStatus add_primitive_single_vertex_exec(bContext *C, wmOperator
                           local_view_bits,
                           &creation_data);
 
+  /* create_vert uses "vert.out" instead of "verts.out" like other primitives,
+   * so it can't go through make_prim_from_bmo_args yet. I will post a new
+   * PR to add a slot-name param to make_prim_from_bmo_args to make it
+   * usable here. */
   mul_v3_m4v3(co, creation_data.mat, co);
 
   if (creation_data.original_mode == CTX_MODE_SCULPT) {
