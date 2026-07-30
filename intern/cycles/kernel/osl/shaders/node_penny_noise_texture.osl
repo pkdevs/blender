@@ -31,10 +31,26 @@ float penny_grad(int hash, float x, float y, float z, float w)
   int h = hash & 31;
   int sel = h >> 3;
   float a, b, c;
-  if (sel == 0)      { a = y; b = z; c = w; }
-  else if (sel == 1) { a = x; b = z; c = w; }
-  else if (sel == 2) { a = x; b = y; c = w; }
-  else               { a = x; b = y; c = z; }
+  if (sel == 0) {
+    a = y;
+    b = z;
+    c = w;
+  }
+  else if (sel == 1) {
+    a = x;
+    b = z;
+    c = w;
+  }
+  else if (sel == 2) {
+    a = x;
+    b = y;
+    c = w;
+  }
+  else {
+    a = x;
+    b = y;
+    c = z;
+  }
   float sa = (h & 4) ? a : -a;
   float sb = (h & 2) ? b : -b;
   float sc = (h & 1) ? c : -c;
@@ -74,23 +90,42 @@ int penny_hash_int4(int kx, int ky, int kz, int kw)
   c += kz;
 
   /* mix(a, b, c) */
-  a -= c; a ^= penny_rotl(c, 4);  c += b;
-  b -= a; b ^= penny_rotl(a, 6);  a += c;
-  c -= b; c ^= penny_rotl(b, 8);  b += a;
-  a -= c; a ^= penny_rotl(c, 16); c += b;
-  b -= a; b ^= penny_rotl(a, 19); a += c;
-  c -= b; c ^= penny_rotl(b, 4);  b += a;
+  a -= c;
+  a ^= penny_rotl(c, 4);
+  c += b;
+  b -= a;
+  b ^= penny_rotl(a, 6);
+  a += c;
+  c -= b;
+  c ^= penny_rotl(b, 8);
+  b += a;
+  a -= c;
+  a ^= penny_rotl(c, 16);
+  c += b;
+  b -= a;
+  b ^= penny_rotl(a, 19);
+  a += c;
+  c -= b;
+  c ^= penny_rotl(b, 4);
+  b += a;
 
   a += kw;
 
   /* final(a, b, c) */
-  c ^= b; c -= penny_rotl(b, 14);
-  a ^= c; a -= penny_rotl(c, 11);
-  b ^= a; b -= penny_rotl(a, 25);
-  c ^= b; c -= penny_rotl(b, 16);
-  a ^= c; a -= penny_rotl(c, 4);
-  b ^= a; b -= penny_rotl(a, 14);
-  c ^= b; c -= penny_rotl(b, 24);
+  c ^= b;
+  c -= penny_rotl(b, 14);
+  a ^= c;
+  a -= penny_rotl(c, 11);
+  b ^= a;
+  b -= penny_rotl(a, 25);
+  c ^= b;
+  c -= penny_rotl(b, 16);
+  a ^= c;
+  a -= penny_rotl(c, 4);
+  b ^= a;
+  b -= penny_rotl(a, 14);
+  c ^= b;
+  c -= penny_rotl(b, 24);
 
   return c;
 }
@@ -115,10 +150,18 @@ vector penny_perlin_4d_tile(vector4 vec, vector4 period)
   int pz = max((int)period.z, 1);
   int pw = max((int)period.w, 1);
 
-  int X = X_floor - (X_floor / px) * px; if (X < 0) X += px;
-  int Y = Y_floor - (Y_floor / py) * py; if (Y < 0) Y += py;
-  int Z = Z_floor - (Z_floor / pz) * pz; if (Z < 0) Z += pz;
-  int W = W_floor - (W_floor / pw) * pw; if (W < 0) W += pw;
+  int X = X_floor - (X_floor / px) * px;
+  if (X < 0)
+    X += px;
+  int Y = Y_floor - (Y_floor / py) * py;
+  if (Y < 0)
+    Y += py;
+  int Z = Z_floor - (Z_floor / pz) * pz;
+  if (Z < 0)
+    Z += pz;
+  int W = W_floor - (W_floor / pw) * pw;
+  if (W < 0)
+    W += pw;
 
   int X1 = (X + 1 == px) ? 0 : X + 1;
   int Y1 = (Y + 1 == py) ? 0 : Y + 1;
@@ -136,48 +179,48 @@ vector penny_perlin_4d_tile(vector4 vec, vector4 period)
   float fwm = fw - 1.0;
 
   /* 16 hashes (one per corner). */
-  int h0  = penny_hash_int4(X,  Y,  Z,  W );
-  int h1  = penny_hash_int4(X1, Y,  Z,  W );
-  int h2  = penny_hash_int4(X,  Y1, Z,  W );
-  int h3  = penny_hash_int4(X1, Y1, Z,  W );
-  int h4  = penny_hash_int4(X,  Y,  Z1, W );
-  int h5  = penny_hash_int4(X1, Y,  Z1, W );
-  int h6  = penny_hash_int4(X,  Y1, Z1, W );
-  int h7  = penny_hash_int4(X1, Y1, Z1, W );
-  int h8  = penny_hash_int4(X,  Y,  Z,  W1);
-  int h9  = penny_hash_int4(X1, Y,  Z,  W1);
-  int h10 = penny_hash_int4(X,  Y1, Z,  W1);
-  int h11 = penny_hash_int4(X1, Y1, Z,  W1);
-  int h12 = penny_hash_int4(X,  Y,  Z1, W1);
-  int h13 = penny_hash_int4(X1, Y,  Z1, W1);
-  int h14 = penny_hash_int4(X,  Y1, Z1, W1);
+  int h0 = penny_hash_int4(X, Y, Z, W);
+  int h1 = penny_hash_int4(X1, Y, Z, W);
+  int h2 = penny_hash_int4(X, Y1, Z, W);
+  int h3 = penny_hash_int4(X1, Y1, Z, W);
+  int h4 = penny_hash_int4(X, Y, Z1, W);
+  int h5 = penny_hash_int4(X1, Y, Z1, W);
+  int h6 = penny_hash_int4(X, Y1, Z1, W);
+  int h7 = penny_hash_int4(X1, Y1, Z1, W);
+  int h8 = penny_hash_int4(X, Y, Z, W1);
+  int h9 = penny_hash_int4(X1, Y, Z, W1);
+  int h10 = penny_hash_int4(X, Y1, Z, W1);
+  int h11 = penny_hash_int4(X1, Y1, Z, W1);
+  int h12 = penny_hash_int4(X, Y, Z1, W1);
+  int h13 = penny_hash_int4(X1, Y, Z1, W1);
+  int h14 = penny_hash_int4(X, Y1, Z1, W1);
   int h15 = penny_hash_int4(X1, Y1, Z1, W1);
 
   float ch[3];
   for (int c = 0; c < 3; c = c + 1) {
     int sh = c * 5;
-    float n0  = penny_grad(h0  >> sh, fx,  fy,  fz,  fw );
-    float n1  = penny_grad(h1  >> sh, fxm, fy,  fz,  fw );
-    float n2  = penny_grad(h2  >> sh, fx,  fym, fz,  fw );
-    float n3  = penny_grad(h3  >> sh, fxm, fym, fz,  fw );
-    float n4  = penny_grad(h4  >> sh, fx,  fy,  fzm, fw );
-    float n5  = penny_grad(h5  >> sh, fxm, fy,  fzm, fw );
-    float n6  = penny_grad(h6  >> sh, fx,  fym, fzm, fw );
-    float n7  = penny_grad(h7  >> sh, fxm, fym, fzm, fw );
-    float n8  = penny_grad(h8  >> sh, fx,  fy,  fz,  fwm);
-    float n9  = penny_grad(h9  >> sh, fxm, fy,  fz,  fwm);
-    float n10 = penny_grad(h10 >> sh, fx,  fym, fz,  fwm);
-    float n11 = penny_grad(h11 >> sh, fxm, fym, fz,  fwm);
-    float n12 = penny_grad(h12 >> sh, fx,  fy,  fzm, fwm);
-    float n13 = penny_grad(h13 >> sh, fxm, fy,  fzm, fwm);
-    float n14 = penny_grad(h14 >> sh, fx,  fym, fzm, fwm);
+    float n0 = penny_grad(h0 >> sh, fx, fy, fz, fw);
+    float n1 = penny_grad(h1 >> sh, fxm, fy, fz, fw);
+    float n2 = penny_grad(h2 >> sh, fx, fym, fz, fw);
+    float n3 = penny_grad(h3 >> sh, fxm, fym, fz, fw);
+    float n4 = penny_grad(h4 >> sh, fx, fy, fzm, fw);
+    float n5 = penny_grad(h5 >> sh, fxm, fy, fzm, fw);
+    float n6 = penny_grad(h6 >> sh, fx, fym, fzm, fw);
+    float n7 = penny_grad(h7 >> sh, fxm, fym, fzm, fw);
+    float n8 = penny_grad(h8 >> sh, fx, fy, fz, fwm);
+    float n9 = penny_grad(h9 >> sh, fxm, fy, fz, fwm);
+    float n10 = penny_grad(h10 >> sh, fx, fym, fz, fwm);
+    float n11 = penny_grad(h11 >> sh, fxm, fym, fz, fwm);
+    float n12 = penny_grad(h12 >> sh, fx, fy, fzm, fwm);
+    float n13 = penny_grad(h13 >> sh, fxm, fy, fzm, fwm);
+    float n14 = penny_grad(h14 >> sh, fx, fym, fzm, fwm);
     float n15 = penny_grad(h15 >> sh, fxm, fym, fzm, fwm);
 
-    float x00 = mix(n0,  n1,  u);
-    float x01 = mix(n2,  n3,  u);
-    float x10 = mix(n4,  n5,  u);
-    float x11 = mix(n6,  n7,  u);
-    float x20 = mix(n8,  n9,  u);
+    float x00 = mix(n0, n1, u);
+    float x01 = mix(n2, n3, u);
+    float x10 = mix(n4, n5, u);
+    float x11 = mix(n6, n7, u);
+    float x20 = mix(n8, n9, u);
     float x21 = mix(n10, n11, u);
     float x30 = mix(n12, n13, u);
     float x31 = mix(n14, n15, u);
@@ -196,80 +239,163 @@ vector penny_perlin_4d_tile(vector4 vec, vector4 period)
 /* ---- Blend modes (Photoshop-style, 24 modes) ----
  * Operate on [0,1] scalars per-channel. Mode 0 = Normal (passthrough).
  * Integer mode IDs must match penny.h, GLSL, and the RNA enum exactly. */
-float penny_blendReflect(float base, float blend) {
+float penny_blendReflect(float base, float blend)
+{
   return (blend == 1.0) ? blend : min(base * base / (1.0 - blend), 1.0);
 }
-float penny_blendAdd(float base, float blend)        { return base + blend; }
-float penny_blendMultiply(float base, float blend)   { return base * blend; }
-float penny_blendDifference(float base, float blend) { return abs(base - blend); }
-float penny_blendAverage(float base, float blend)    { return (base + blend) * 0.5; }
-float penny_blendColorBurn(float base, float blend)  {
+float penny_blendAdd(float base, float blend)
+{
+  return base + blend;
+}
+float penny_blendMultiply(float base, float blend)
+{
+  return base * blend;
+}
+float penny_blendDifference(float base, float blend)
+{
+  return abs(base - blend);
+}
+float penny_blendAverage(float base, float blend)
+{
+  return (base + blend) * 0.5;
+}
+float penny_blendColorBurn(float base, float blend)
+{
   return (blend == 0.0) ? blend : (1.0 - ((1.0 - base) / blend));
 }
-float penny_blendColorDodge(float base, float blend) {
+float penny_blendColorDodge(float base, float blend)
+{
   return (blend == 1.0) ? blend : base / (1.0 - blend);
 }
-float penny_blendDarken(float base, float blend)     { return min(blend, base); }
-float penny_blendLighten(float base, float blend)    { return max(blend, base); }
-float penny_blendExclusion(float base, float blend)  { return base + blend - 2.0 * base * blend; }
-float penny_blendGlow(float base, float blend)       { return penny_blendReflect(blend, base); }
-float penny_blendOverlay(float base, float blend)    {
+float penny_blendDarken(float base, float blend)
+{
+  return min(blend, base);
+}
+float penny_blendLighten(float base, float blend)
+{
+  return max(blend, base);
+}
+float penny_blendExclusion(float base, float blend)
+{
+  return base + blend - 2.0 * base * blend;
+}
+float penny_blendGlow(float base, float blend)
+{
+  return penny_blendReflect(blend, base);
+}
+float penny_blendOverlay(float base, float blend)
+{
   return (base < 0.5) ? (2.0 * base * blend) : (1.0 - 2.0 * (1.0 - base) * (1.0 - blend));
 }
-float penny_blendHardLight(float base, float blend)  { return penny_blendOverlay(blend, base); }
-float penny_blendVividLight(float base, float blend) {
-  return (blend < 0.5) ? penny_blendColorBurn(base, 2.0 * blend)
-                       : penny_blendColorDodge(base, 2.0 * (blend - 0.5));
+float penny_blendHardLight(float base, float blend)
+{
+  return penny_blendOverlay(blend, base);
 }
-float penny_blendHardMix(float base, float blend)    {
+float penny_blendVividLight(float base, float blend)
+{
+  return (blend < 0.5) ? penny_blendColorBurn(base, 2.0 * blend) :
+                         penny_blendColorDodge(base, 2.0 * (blend - 0.5));
+}
+float penny_blendHardMix(float base, float blend)
+{
   return (penny_blendVividLight(base, blend) < 0.5) ? 0.0 : 1.0;
 }
-float penny_blendLinearBurn(float base, float blend)  { return base + blend - 1.0; }
-float penny_blendLinearDodge(float base, float blend) { return base + blend; }
-float penny_blendLinearLight(float base, float blend) {
-  return (blend < 0.5) ? penny_blendLinearBurn(base, 2.0 * blend)
-                       : penny_blendLinearDodge(base, 2.0 * (blend - 0.5));
+float penny_blendLinearBurn(float base, float blend)
+{
+  return base + blend - 1.0;
 }
-float penny_blendNegation(float base, float blend)   { return 1.0 - abs(1.0 - base - blend); }
-float penny_blendNormal(float base, float blend)     { return blend; }
-float penny_blendPhoenix(float base, float blend)    { return min(base, blend) - max(base, blend) + 1.0; }
-float penny_blendPinLight(float base, float blend)   {
-  return (blend < 0.5) ? penny_blendDarken(base, 2.0 * blend)
-                       : penny_blendLighten(base, 2.0 * (blend - 0.5));
+float penny_blendLinearDodge(float base, float blend)
+{
+  return base + blend;
 }
-float penny_blendScreen(float base, float blend)     { return base + blend - base * blend; }
-float penny_blendSoftLight(float base, float blend)  {
-  return (blend < 0.5) ? (2.0 * base * blend + base * base * (1.0 - 2.0 * blend))
-                       : (sqrt(base) * (2.0 * blend - 1.0) + 2.0 * base * (1.0 - blend));
+float penny_blendLinearLight(float base, float blend)
+{
+  return (blend < 0.5) ? penny_blendLinearBurn(base, 2.0 * blend) :
+                         penny_blendLinearDodge(base, 2.0 * (blend - 0.5));
 }
-float penny_blendSubtract(float base, float blend)   { return base + blend - 1.0; }
+float penny_blendNegation(float base, float blend)
+{
+  return 1.0 - abs(1.0 - base - blend);
+}
+float penny_blendNormal(float base, float blend)
+{
+  return blend;
+}
+float penny_blendPhoenix(float base, float blend)
+{
+  return min(base, blend) - max(base, blend) + 1.0;
+}
+float penny_blendPinLight(float base, float blend)
+{
+  return (blend < 0.5) ? penny_blendDarken(base, 2.0 * blend) :
+                         penny_blendLighten(base, 2.0 * (blend - 0.5));
+}
+float penny_blendScreen(float base, float blend)
+{
+  return base + blend - base * blend;
+}
+float penny_blendSoftLight(float base, float blend)
+{
+  return (blend < 0.5) ? (2.0 * base * blend + base * base * (1.0 - 2.0 * blend)) :
+                         (sqrt(base) * (2.0 * blend - 1.0) + 2.0 * base * (1.0 - blend));
+}
+float penny_blendSubtract(float base, float blend)
+{
+  return base + blend - 1.0;
+}
 
-float penny_blend(int mode, float base, float blend) {
-  if (mode == 1)  return penny_blendAdd(base, blend);
-  else if (mode == 2)  return penny_blendMultiply(base, blend);
-  else if (mode == 3)  return penny_blendDifference(base, blend);
-  else if (mode == 4)  return penny_blendDarken(base, blend);
-  else if (mode == 5)  return penny_blendLighten(base, blend);
-  else if (mode == 6)  return penny_blendColorDodge(base, blend);
-  else if (mode == 7)  return penny_blendColorBurn(base, blend);
-  else if (mode == 8)  return penny_blendOverlay(base, blend);
-  else if (mode == 9)  return penny_blendAverage(base, blend);
-  else if (mode == 10) return penny_blendExclusion(base, blend);
-  else if (mode == 11) return penny_blendGlow(base, blend);
-  else if (mode == 12) return penny_blendHardLight(base, blend);
-  else if (mode == 13) return penny_blendHardMix(base, blend);
-  else if (mode == 14) return penny_blendLinearBurn(base, blend);
-  else if (mode == 15) return penny_blendLinearDodge(base, blend);
-  else if (mode == 16) return penny_blendLinearLight(base, blend);
-  else if (mode == 17) return penny_blendNegation(base, blend);
-  else if (mode == 18) return penny_blendPhoenix(base, blend);
-  else if (mode == 19) return penny_blendPinLight(base, blend);
-  else if (mode == 20) return penny_blendReflect(base, blend);
-  else if (mode == 21) return penny_blendScreen(base, blend);
-  else if (mode == 22) return penny_blendSoftLight(base, blend);
-  else if (mode == 23) return penny_blendSubtract(base, blend);
-  else if (mode == 24) return penny_blendVividLight(base, blend);
-  else return penny_blendNormal(base, blend);
+float penny_blend(int mode, float base, float blend)
+{
+  if (mode == 1)
+    return penny_blendAdd(base, blend);
+  else if (mode == 2)
+    return penny_blendMultiply(base, blend);
+  else if (mode == 3)
+    return penny_blendDifference(base, blend);
+  else if (mode == 4)
+    return penny_blendDarken(base, blend);
+  else if (mode == 5)
+    return penny_blendLighten(base, blend);
+  else if (mode == 6)
+    return penny_blendColorDodge(base, blend);
+  else if (mode == 7)
+    return penny_blendColorBurn(base, blend);
+  else if (mode == 8)
+    return penny_blendOverlay(base, blend);
+  else if (mode == 9)
+    return penny_blendAverage(base, blend);
+  else if (mode == 10)
+    return penny_blendExclusion(base, blend);
+  else if (mode == 11)
+    return penny_blendGlow(base, blend);
+  else if (mode == 12)
+    return penny_blendHardLight(base, blend);
+  else if (mode == 13)
+    return penny_blendHardMix(base, blend);
+  else if (mode == 14)
+    return penny_blendLinearBurn(base, blend);
+  else if (mode == 15)
+    return penny_blendLinearDodge(base, blend);
+  else if (mode == 16)
+    return penny_blendLinearLight(base, blend);
+  else if (mode == 17)
+    return penny_blendNegation(base, blend);
+  else if (mode == 18)
+    return penny_blendPhoenix(base, blend);
+  else if (mode == 19)
+    return penny_blendPinLight(base, blend);
+  else if (mode == 20)
+    return penny_blendReflect(base, blend);
+  else if (mode == 21)
+    return penny_blendScreen(base, blend);
+  else if (mode == 22)
+    return penny_blendSoftLight(base, blend);
+  else if (mode == 23)
+    return penny_blendSubtract(base, blend);
+  else if (mode == 24)
+    return penny_blendVividLight(base, blend);
+  else
+    return penny_blendNormal(base, blend);
 }
 
 /* ---- darf_* helpers — shaping primitives ----
@@ -290,14 +416,18 @@ float darf_boxstep(float a, float b, float x)
     return (x < a) ? 0.0 : 1.0;
   }
   float t = (x - a) / (b - a);
-  if (t < 0.0) return 0.0;
-  if (t > 1.0) return 1.0;
+  if (t < 0.0)
+    return 0.0;
+  if (t > 1.0)
+    return 1.0;
   return t;
 }
 float darf_smoothstep(float a, float b, float x)
 {
-  if (x < a) return 0.0;
-  if (x >= b) return 1.0;
+  if (x < a)
+    return 0.0;
+  if (x >= b)
+    return 1.0;
   float t = (x - a) / (b - a);
   return t * t * (3.0 - 2.0 * t);
 }
@@ -305,7 +435,8 @@ float darf_smoothstep(float a, float b, float x)
  * Extrapolation beyond [0,1] is intentional (Buya HDR recovery depends on it). */
 float darf_noxstep(float a, float b, float x)
 {
-  if (b == a) return 0.0;
+  if (b == a)
+    return 0.0;
   return (x - a) / (b - a);
 }
 float darf_bias(float b, float x)
@@ -354,7 +485,14 @@ float penny_oct_levels(float x, float low, float mid, float high)
  * penny_blist_turb, penny_luka_turb, etc.) are shared helpers. */
 
 /* fBm — fractal Brownian motion. */
-vector penny_fbm_tile(vector4 co, float detail, float roughness, vector4 period, int blend_mode, float lvl_lo, float lvl_mid, float lvl_hi)
+vector penny_fbm_tile(vector4 co,
+                      float detail,
+                      float roughness,
+                      vector4 period,
+                      int blend_mode,
+                      float lvl_lo,
+                      float lvl_mid,
+                      float lvl_hi)
 {
   int octaves = max((int)floor(detail), 1);
 
@@ -373,7 +511,9 @@ vector penny_fbm_tile(vector4 co, float detail, float roughness, vector4 period,
       oct_period = oct_period * 2.0;
     }
     vector _fac = (norm > 0.0) ? (sum / norm) * 0.5 + 0.5 : vector(0.5, 0.5, 0.5);
-    return vector(penny_oct_levels(_fac[0], lvl_lo, lvl_mid, lvl_hi), penny_oct_levels(_fac[1], lvl_lo, lvl_mid, lvl_hi), penny_oct_levels(_fac[2], lvl_lo, lvl_mid, lvl_hi));
+    return vector(penny_oct_levels(_fac[0], lvl_lo, lvl_mid, lvl_hi),
+                  penny_oct_levels(_fac[1], lvl_lo, lvl_mid, lvl_hi),
+                  penny_oct_levels(_fac[2], lvl_lo, lvl_mid, lvl_hi));
   }
 
   /* Blend-mode path: full-strength blend, roughness damps octave amplitude. */
@@ -399,7 +539,9 @@ vector penny_fbm_tile(vector4 co, float detail, float roughness, vector4 period,
     oct_period = oct_period * 2.0;
   }
 
-  return vector(penny_oct_levels(accum[0], lvl_lo, lvl_mid, lvl_hi), penny_oct_levels(accum[1], lvl_lo, lvl_mid, lvl_hi), penny_oct_levels(accum[2], lvl_lo, lvl_mid, lvl_hi));
+  return vector(penny_oct_levels(accum[0], lvl_lo, lvl_mid, lvl_hi),
+                penny_oct_levels(accum[1], lvl_lo, lvl_mid, lvl_hi),
+                penny_oct_levels(accum[2], lvl_lo, lvl_mid, lvl_hi));
 }
 
 /* Additive Turbulence building block — RGB, tileable. Matches GLSL penny_turb_additive. */
@@ -427,22 +569,36 @@ vector penny_turb_additive(vector4 co, int octaves, float roughness, vector4 per
 }
 
 /* Penny Turbulence — RGB, tileable. Self-blend for rich blend modes. Matches GLSL. */
-vector penny_turbulence_tile(vector4 co, float detail, float roughness, vector4 period, int blend_mode, float lvl_lo, float lvl_mid, float lvl_hi)
+vector penny_turbulence_tile(vector4 co,
+                             float detail,
+                             float roughness,
+                             vector4 period,
+                             int blend_mode,
+                             float lvl_lo,
+                             float lvl_mid,
+                             float lvl_hi)
 {
   int octaves = max((int)floor(detail), 1);
 
   vector base = penny_turb_additive(co, octaves, roughness, period);
   if (blend_mode == 0) {
-    return vector(penny_oct_levels(base[0], lvl_lo, lvl_mid, lvl_hi), penny_oct_levels(base[1], lvl_lo, lvl_mid, lvl_hi), penny_oct_levels(base[2], lvl_lo, lvl_mid, lvl_hi));
+    return vector(penny_oct_levels(base[0], lvl_lo, lvl_mid, lvl_hi),
+                  penny_oct_levels(base[1], lvl_lo, lvl_mid, lvl_hi),
+                  penny_oct_levels(base[2], lvl_lo, lvl_mid, lvl_hi));
   }
   /* Self-blend: same additive Turbulence at +0.5 shifted coord. */
   vector4 co2 = vector4(co.x + 0.5, co.y + 0.5, co.z + 0.5, co.w);
   vector base2 = penny_turb_additive(co2, octaves, roughness, period);
   vector _tb = vector(
-      clamp(penny_blend(blend_mode, clamp(base[0], 0.0, 1.0), clamp(base2[0], 0.0, 1.0)), 0.0, 1.0),
-      clamp(penny_blend(blend_mode, clamp(base[1], 0.0, 1.0), clamp(base2[1], 0.0, 1.0)), 0.0, 1.0),
-      clamp(penny_blend(blend_mode, clamp(base[2], 0.0, 1.0), clamp(base2[2], 0.0, 1.0)), 0.0, 1.0));
-  return vector(penny_oct_levels(_tb[0], lvl_lo, lvl_mid, lvl_hi), penny_oct_levels(_tb[1], lvl_lo, lvl_mid, lvl_hi), penny_oct_levels(_tb[2], lvl_lo, lvl_mid, lvl_hi));
+      clamp(
+          penny_blend(blend_mode, clamp(base[0], 0.0, 1.0), clamp(base2[0], 0.0, 1.0)), 0.0, 1.0),
+      clamp(
+          penny_blend(blend_mode, clamp(base[1], 0.0, 1.0), clamp(base2[1], 0.0, 1.0)), 0.0, 1.0),
+      clamp(
+          penny_blend(blend_mode, clamp(base[2], 0.0, 1.0), clamp(base2[2], 0.0, 1.0)), 0.0, 1.0));
+  return vector(penny_oct_levels(_tb[0], lvl_lo, lvl_mid, lvl_hi),
+                penny_oct_levels(_tb[1], lvl_lo, lvl_mid, lvl_hi),
+                penny_oct_levels(_tb[2], lvl_lo, lvl_mid, lvl_hi));
 }
 
 /* Maxon Stupl helper: abs-turbulence. Per channel sum += abs(2*p01-1)*amp
@@ -454,11 +610,11 @@ vector penny_abs_turb2(vector4 co, int octaves, float roughness, vector4 period)
   vector4 oct_period = period;
   for (int i = 0; i < octaves; i = i + 1) {
     float off = (scale - 1.0) * 1000.0;
-    vector4 sc = vector4(co.x * scale + off, co.y * scale + off, co.z * scale + off, co.w * scale + off);
+    vector4 sc = vector4(
+        co.x * scale + off, co.y * scale + off, co.z * scale + off, co.w * scale + off);
     vector p01 = penny_perlin_4d_tile(sc, oct_period) * 0.5 + 0.5;
-    sum = sum + vector(abs(2.0 * p01[0] - 1.0),
-                       abs(2.0 * p01[1] - 1.0),
-                       abs(2.0 * p01[2] - 1.0)) * amp;
+    sum = sum +
+          vector(abs(2.0 * p01[0] - 1.0), abs(2.0 * p01[1] - 1.0), abs(2.0 * p01[2] - 1.0)) * amp;
     norm += amp;
     scale *= 2.0;
     oct_period = oct_period * 2.0;
@@ -476,11 +632,10 @@ vector penny_reg_turb2(vector4 co, int octaves, float roughness, vector4 period)
   vector4 oct_period = period;
   for (int i = 0; i < octaves; i = i + 1) {
     float off = (scale - 1.0) * 1000.0;
-    vector4 sc = vector4(co.x * scale + off, co.y * scale + off, co.z * scale + off, co.w * scale + off);
+    vector4 sc = vector4(
+        co.x * scale + off, co.y * scale + off, co.z * scale + off, co.w * scale + off);
     vector p01 = penny_perlin_4d_tile(sc, oct_period) * 0.5 + 0.5;
-    sum = sum + vector(2.0 * p01[0] - 1.0,
-                       2.0 * p01[1] - 1.0,
-                       2.0 * p01[2] - 1.0) * amp;
+    sum = sum + vector(2.0 * p01[0] - 1.0, 2.0 * p01[1] - 1.0, 2.0 * p01[2] - 1.0) * amp;
     norm += amp;
     scale *= 2.0;
     oct_period = oct_period * 2.0;
@@ -501,11 +656,10 @@ vector penny_reg_turb2_signed(vector4 co, int octaves, float roughness, vector4 
   vector4 oct_period = period;
   for (int i = 0; i < octaves; i = i + 1) {
     float off = (scale - 1.0) * 1000.0;
-    vector4 sc = vector4(co.x * scale + off, co.y * scale + off, co.z * scale + off, co.w * scale + off);
+    vector4 sc = vector4(
+        co.x * scale + off, co.y * scale + off, co.z * scale + off, co.w * scale + off);
     vector p01 = penny_perlin_4d_tile(sc, oct_period) * 0.5 + 0.5;
-    sum = sum + vector(2.0 * p01[0] - 1.0,
-                       2.0 * p01[1] - 1.0,
-                       2.0 * p01[2] - 1.0) * amp;
+    sum = sum + vector(2.0 * p01[0] - 1.0, 2.0 * p01[1] - 1.0, 2.0 * p01[2] - 1.0) * amp;
     norm += amp;
     scale *= 2.0;
     oct_period = oct_period * 2.0;
@@ -515,7 +669,14 @@ vector penny_reg_turb2_signed(vector4 co, int octaves, float roughness, vector4 
 }
 
 /* Maxon Stupl: per-channel domain-warped turbulence. Matches GLSL penny_stupl_tile. */
-vector penny_stupl_tile(vector4 co, float detail, float roughness, vector4 period, int blend_mode, float lvl_lo, float lvl_mid, float lvl_hi)
+vector penny_stupl_tile(vector4 co,
+                        float detail,
+                        float roughness,
+                        vector4 period,
+                        int blend_mode,
+                        float lvl_lo,
+                        float lvl_mid,
+                        float lvl_hi)
 {
   int octaves = max((int)floor(detail), 1);
 
@@ -526,7 +687,8 @@ vector penny_stupl_tile(vector4 co, float detail, float roughness, vector4 perio
   for (int c = 0; c < 3; c = c + 1) {
     float d = disp3[c];
     vector4 warped = vector4(co.x - d, co.y + d, co.z + d, co.w);
-    vector inner3 = vector(1.0, 1.0, 1.0) - 2.0 * penny_reg_turb2(warped, octaves, roughness, period);
+    vector inner3 = vector(1.0, 1.0, 1.0) -
+                    2.0 * penny_reg_turb2(warped, octaves, roughness, period);
     float inner = inner3[c];
     float v = darf_noxstep(-2.45, 2.5, inner);
     v = darf_noxstep(0.5 - turb[c], 0.5 + turb[c], v);
@@ -539,12 +701,13 @@ vector penny_stupl_tile(vector4 co, float detail, float roughness, vector4 perio
     }
     else {
       vector4 warped2 = vector4(co.x - d + 0.5, co.y + d + 0.5, co.z + d + 0.5, co.w);
-      vector inner3b = vector(1.0, 1.0, 1.0) - 2.0 * penny_reg_turb2(warped2, octaves, roughness, period);
+      vector inner3b = vector(1.0, 1.0, 1.0) -
+                       2.0 * penny_reg_turb2(warped2, octaves, roughness, period);
       float v2 = darf_noxstep(-2.45, 2.5, inner3b[c]);
       v2 = darf_noxstep(0.5 - turb[c], 0.5 + turb[c], v2);
       v2 = darf_smoothstep(0.0, 1.0, v2);
       v2 = darf_bias(0.45, v2);
-    v2 = penny_oct_levels(v2, lvl_lo, lvl_mid, lvl_hi);
+      v2 = penny_oct_levels(v2, lvl_lo, lvl_mid, lvl_hi);
       res[c] = clamp(penny_blend(blend_mode, clamp(v, 0.0, 1.0), clamp(v2, 0.0, 1.0)), 0.0, 1.0);
     }
   }
@@ -560,7 +723,8 @@ vector penny_luka_turb(vector4 co, int octaves, float roughness, vector4 period)
   vector4 oct_period = period;
   for (int i = 0; i < octaves; i = i + 1) {
     float off = (scale - 1.0) * 1000.0;
-    vector4 sc = vector4(co.x * scale + off, co.y * scale + off, co.z * scale + off, co.w * scale + off);
+    vector4 sc = vector4(
+        co.x * scale + off, co.y * scale + off, co.z * scale + off, co.w * scale + off);
     vector n = penny_perlin_4d_tile(sc, oct_period);
     sum = sum + vector(abs(n[0] * 0.73), abs(n[1] * 0.73), abs(n[2] * 0.73)) * amp;
     norm += amp;
@@ -601,7 +765,14 @@ vector penny_blist_turb(vector4 co, int octaves, float roughness, vector4 period
 }
 
 /* Penny Blistered Turbulence — adaptive contrast window. Self-blend for modes. */
-vector penny_blistered_tile(vector4 co, float detail, float roughness, vector4 period, int blend_mode, float lvl_lo, float lvl_mid, float lvl_hi)
+vector penny_blistered_tile(vector4 co,
+                            float detail,
+                            float roughness,
+                            vector4 period,
+                            int blend_mode,
+                            float lvl_lo,
+                            float lvl_mid,
+                            float lvl_hi)
 {
   int octaves = max((int)floor(detail), 1);
 
@@ -631,7 +802,7 @@ vector penny_blistered_tile(vector4 co, float detail, float roughness, vector4 p
     else {
       float sb = darf_boxstep(-1.0, 1.0, innerb[c]);
       float v2 = darf_boxstep(0.5 - tch[c], 0.5 + tch[c], sb);
-    v2 = penny_oct_levels(v2, lvl_lo, lvl_mid, lvl_hi);
+      v2 = penny_oct_levels(v2, lvl_lo, lvl_mid, lvl_hi);
       res[c] = clamp(penny_blend(blend_mode, clamp(v, 0.0, 1.0), clamp(v2, 0.0, 1.0)), 0.0, 1.0);
     }
   }
@@ -650,7 +821,14 @@ vector penny_mod_sample(vector4 p, vector4 period)
 
 /* Penny Mod noise — summed snapped-Perlin octaves (blocky). Centered roughness
  * (0.5 = original). Final: 2*sum - octaves + 0.5. Self-blend, RGB. */
-vector penny_mod_tile(vector4 co, float detail, float roughness, vector4 period, int blend_mode, float lvl_lo, float lvl_mid, float lvl_hi)
+vector penny_mod_tile(vector4 co,
+                      float detail,
+                      float roughness,
+                      vector4 period,
+                      int blend_mode,
+                      float lvl_lo,
+                      float lvl_mid,
+                      float lvl_hi)
 {
   int octaves = max((int)floor(detail), 1);
   vector4 c = vector4(co.x + 1.11, co.y + 1.54, co.z + 1.82, co.w);
@@ -662,7 +840,8 @@ vector penny_mod_tile(vector4 co, float detail, float roughness, vector4 period,
   float ampsum = 0.0;
   for (int i = 0; i < octaves; i = i + 1) {
     float off = (scale - 1.0) * 1000.0;
-    vector4 p = vector4(c.x * scale + off, c.y * scale + off, c.z * scale + off, c.w * scale + off);
+    vector4 p = vector4(
+        c.x * scale + off, c.y * scale + off, c.z * scale + off, c.w * scale + off);
     vector4 oct_period = period * scale;
     value = value + penny_mod_sample(p, oct_period) * amp;
     ampsum += amp;
@@ -672,7 +851,9 @@ vector penny_mod_tile(vector4 co, float detail, float roughness, vector4 period,
   vector base = vector(clamp(2.0 * (value[0] / max(ampsum, 1e-6)) - 0.5, 0.0, 1.0),
                        clamp(2.0 * (value[1] / max(ampsum, 1e-6)) - 0.5, 0.0, 1.0),
                        clamp(2.0 * (value[2] / max(ampsum, 1e-6)) - 0.5, 0.0, 1.0));
-  base = vector(penny_oct_levels(base[0], lvl_lo, lvl_mid, lvl_hi), penny_oct_levels(base[1], lvl_lo, lvl_mid, lvl_hi), penny_oct_levels(base[2], lvl_lo, lvl_mid, lvl_hi));
+  base = vector(penny_oct_levels(base[0], lvl_lo, lvl_mid, lvl_hi),
+                penny_oct_levels(base[1], lvl_lo, lvl_mid, lvl_hi),
+                penny_oct_levels(base[2], lvl_lo, lvl_mid, lvl_hi));
   if (blend_mode == 0) {
     return base;
   }
@@ -684,7 +865,8 @@ vector penny_mod_tile(vector4 co, float detail, float roughness, vector4 period,
   float ampsum2 = 0.0;
   for (int i = 0; i < octaves; i = i + 1) {
     float off = (scale - 1.0) * 1000.0;
-    vector4 p = vector4(c2.x * scale + off, c2.y * scale + off, c2.z * scale + off, c2.w * scale + off);
+    vector4 p = vector4(
+        c2.x * scale + off, c2.y * scale + off, c2.z * scale + off, c2.w * scale + off);
     vector4 oct_period = period * scale;
     value2 = value2 + penny_mod_sample(p, oct_period) * amp;
     ampsum2 += amp;
@@ -694,11 +876,16 @@ vector penny_mod_tile(vector4 co, float detail, float roughness, vector4 period,
   vector base2 = vector(clamp(2.0 * (value2[0] / max(ampsum2, 1e-6)) - 0.5, 0.0, 1.0),
                         clamp(2.0 * (value2[1] / max(ampsum2, 1e-6)) - 0.5, 0.0, 1.0),
                         clamp(2.0 * (value2[2] / max(ampsum2, 1e-6)) - 0.5, 0.0, 1.0));
-  base2 = vector(penny_oct_levels(base2[0], lvl_lo, lvl_mid, lvl_hi), penny_oct_levels(base2[1], lvl_lo, lvl_mid, lvl_hi), penny_oct_levels(base2[2], lvl_lo, lvl_mid, lvl_hi));
+  base2 = vector(penny_oct_levels(base2[0], lvl_lo, lvl_mid, lvl_hi),
+                 penny_oct_levels(base2[1], lvl_lo, lvl_mid, lvl_hi),
+                 penny_oct_levels(base2[2], lvl_lo, lvl_mid, lvl_hi));
   return vector(
-      clamp(penny_blend(blend_mode, clamp(base[0], 0.0, 1.0), clamp(base2[0], 0.0, 1.0)), 0.0, 1.0),
-      clamp(penny_blend(blend_mode, clamp(base[1], 0.0, 1.0), clamp(base2[1], 0.0, 1.0)), 0.0, 1.0),
-      clamp(penny_blend(blend_mode, clamp(base[2], 0.0, 1.0), clamp(base2[2], 0.0, 1.0)), 0.0, 1.0));
+      clamp(
+          penny_blend(blend_mode, clamp(base[0], 0.0, 1.0), clamp(base2[0], 0.0, 1.0)), 0.0, 1.0),
+      clamp(
+          penny_blend(blend_mode, clamp(base[1], 0.0, 1.0), clamp(base2[1], 0.0, 1.0)), 0.0, 1.0),
+      clamp(
+          penny_blend(blend_mode, clamp(base[2], 0.0, 1.0), clamp(base2[2], 0.0, 1.0)), 0.0, 1.0));
 }
 
 /* Penny box_Noise — domain distortion via axis-sliced Perlin offsets.
@@ -714,7 +901,9 @@ vector penny_box_noise(vector4 co, vector4 period, float distortion)
     float offx = ox[c] * distortion;
     float offy = oy[c] * distortion;
     /* the_Point = position + offset; final sample uses warped x,y but ORIGINAL z. */
-    vector fin = penny_perlin_4d_tile(vector4(co.x + offx, co.y + offy, co.z, co.w), period) * 0.5 + 0.5;
+    vector fin = penny_perlin_4d_tile(vector4(co.x + offx, co.y + offy, co.z, co.w), period) *
+                     0.5 +
+                 0.5;
     res[c] = fin[c];
   }
   return vector(res[0], res[1], res[2]);
@@ -722,7 +911,14 @@ vector penny_box_noise(vector4 co, vector4 period, float distortion)
 
 /* Penny Box noise — octave sum, signed /f (roughness-driven), boxstep(-1.05,1).
  * Self-blend for modes. Tileable, RGB. */
-vector penny_box_tile(vector4 co, float detail, float roughness, vector4 period, int blend_mode, float lvl_lo, float lvl_mid, float lvl_hi)
+vector penny_box_tile(vector4 co,
+                      float detail,
+                      float roughness,
+                      vector4 period,
+                      int blend_mode,
+                      float lvl_lo,
+                      float lvl_mid,
+                      float lvl_hi)
 {
   int octaves = max((int)floor(detail), 1);
 
@@ -741,7 +937,9 @@ vector penny_box_tile(vector4 co, float detail, float roughness, vector4 period,
   vector base = vector(darf_boxstep(-1.05, 1.0, value[0]),
                        darf_boxstep(-1.05, 1.0, value[1]),
                        darf_boxstep(-1.05, 1.0, value[2]));
-  base = vector(penny_oct_levels(base[0], lvl_lo, lvl_mid, lvl_hi), penny_oct_levels(base[1], lvl_lo, lvl_mid, lvl_hi), penny_oct_levels(base[2], lvl_lo, lvl_mid, lvl_hi));
+  base = vector(penny_oct_levels(base[0], lvl_lo, lvl_mid, lvl_hi),
+                penny_oct_levels(base[1], lvl_lo, lvl_mid, lvl_hi),
+                penny_oct_levels(base[2], lvl_lo, lvl_mid, lvl_hi));
   if (blend_mode == 0) {
     return base;
   }
@@ -751,7 +949,8 @@ vector penny_box_tile(vector4 co, float detail, float roughness, vector4 period,
   amp = 1.0;
   for (int i = 0; i < octaves; i = i + 1) {
     float off = (f - 1.0) * 1000.0;
-    vector4 sample_co = vector4((co.x + 0.5) * f + off, (co.y + 0.5) * f + off, (co.z + 0.5) * f + off, co.w * f + off);
+    vector4 sample_co = vector4(
+        (co.x + 0.5) * f + off, (co.y + 0.5) * f + off, (co.z + 0.5) * f + off, co.w * f + off);
     vector4 oct_period = period * f;
     vector b = penny_box_noise(sample_co, oct_period, 4.0);
     value2 = value2 + (2.0 * b - 1.0) * amp;
@@ -761,16 +960,28 @@ vector penny_box_tile(vector4 co, float detail, float roughness, vector4 period,
   vector base2 = vector(darf_boxstep(-1.05, 1.0, value2[0]),
                         darf_boxstep(-1.05, 1.0, value2[1]),
                         darf_boxstep(-1.05, 1.0, value2[2]));
-  base2 = vector(penny_oct_levels(base2[0], lvl_lo, lvl_mid, lvl_hi), penny_oct_levels(base2[1], lvl_lo, lvl_mid, lvl_hi), penny_oct_levels(base2[2], lvl_lo, lvl_mid, lvl_hi));
+  base2 = vector(penny_oct_levels(base2[0], lvl_lo, lvl_mid, lvl_hi),
+                 penny_oct_levels(base2[1], lvl_lo, lvl_mid, lvl_hi),
+                 penny_oct_levels(base2[2], lvl_lo, lvl_mid, lvl_hi));
   return vector(
-      clamp(penny_blend(blend_mode, clamp(base[0], 0.0, 1.0), clamp(base2[0], 0.0, 1.0)), 0.0, 1.0),
-      clamp(penny_blend(blend_mode, clamp(base[1], 0.0, 1.0), clamp(base2[1], 0.0, 1.0)), 0.0, 1.0),
-      clamp(penny_blend(blend_mode, clamp(base[2], 0.0, 1.0), clamp(base2[2], 0.0, 1.0)), 0.0, 1.0));
+      clamp(
+          penny_blend(blend_mode, clamp(base[0], 0.0, 1.0), clamp(base2[0], 0.0, 1.0)), 0.0, 1.0),
+      clamp(
+          penny_blend(blend_mode, clamp(base[1], 0.0, 1.0), clamp(base2[1], 0.0, 1.0)), 0.0, 1.0),
+      clamp(
+          penny_blend(blend_mode, clamp(base[2], 0.0, 1.0), clamp(base2[2], 0.0, 1.0)), 0.0, 1.0));
 }
 
 /* Penny Nutous — domain-warped abs-turbulence, tight Noxstep window, squared,
  * baked midtone gamma (== Level Mid 0.691616). Reuses penny_blist_turb. RGB. */
-vector penny_nutous_tile(vector4 co, float detail, float roughness, vector4 period, int blend_mode, float lvl_lo, float lvl_mid, float lvl_hi)
+vector penny_nutous_tile(vector4 co,
+                         float detail,
+                         float roughness,
+                         vector4 period,
+                         int blend_mode,
+                         float lvl_lo,
+                         float lvl_mid,
+                         float lvl_hi)
 {
   int octaves = max((int)floor(detail), 1);
 
@@ -784,7 +995,7 @@ vector penny_nutous_tile(vector4 co, float detail, float roughness, vector4 peri
     vector inner = penny_blist_turb(wco, octaves, roughness, period);
     float v = darf_noxstep(-0.01, 0.4, abs(inner[c]) * 0.5);
     v = v * v;
-    v = pow(v, 0.5316);  /* baked midtone (== Level Mid 0.691616) */
+    v = pow(v, 0.5316); /* baked midtone (== Level Mid 0.691616) */
     v = penny_oct_levels(v, lvl_lo, lvl_mid, lvl_hi);
 
     if (blend_mode == 0) {
@@ -810,7 +1021,14 @@ vector penny_nutous_tile(vector4 co, float detail, float roughness, vector4 peri
 /* Penny Cranal — x-shifted ridged biased turbulence average.
  * Inner turbulence hardcoded to 1 octave; outer detail = # x-shifted samples.
  * Baked 300% scale (coord/3), roughness drives bias (0.5==0.80), Mid 0.25 gamma. RGB. */
-vector penny_cranal_tile(vector4 co, float detail, float roughness, vector4 period, int blend_mode, float lvl_lo, float lvl_mid, float lvl_hi)
+vector penny_cranal_tile(vector4 co,
+                         float detail,
+                         float roughness,
+                         vector4 period,
+                         int blend_mode,
+                         float lvl_lo,
+                         float lvl_mid,
+                         float lvl_hi)
 {
   int octaves = max((int)floor(detail), 1);
 
@@ -847,8 +1065,8 @@ vector penny_cranal_tile(vector4 co, float detail, float roughness, vector4 peri
       x1 = x1 + 3.0;
     }
     val = val / (float)(octaves + 1);
-    val = darf_noxstep(0.75, 0.96, val);  /* contrast: black point + white */
-    val = (val + 1.5) / 2.5;  /* baked black-point lift (was user Min -1.5) */
+    val = darf_noxstep(0.75, 0.96, val); /* contrast: black point + white */
+    val = (val + 1.5) / 2.5;             /* baked black-point lift (was user Min -1.5) */
     val = penny_oct_levels(val, lvl_lo, lvl_mid, lvl_hi);
 
     if (blend_mode == 0) {
@@ -871,8 +1089,8 @@ vector penny_cranal_tile(vector4 co, float detail, float roughness, vector4 peri
         x1b = x1b + 3.0;
       }
       val2 = val2 / (float)(octaves + 1);
-      val2 = darf_noxstep(0.75, 0.96, val2);  /* contrast */
-      val2 = (val2 + 1.5) / 2.5;  /* baked black-point lift */
+      val2 = darf_noxstep(0.75, 0.96, val2); /* contrast */
+      val2 = (val2 + 1.5) / 2.5;             /* baked black-point lift */
       val2 = penny_oct_levels(val2, lvl_lo, lvl_mid, lvl_hi);
       res[c] = clamp(penny_blend(blend_mode, val, val2), 0.0, 1.0);
     }
@@ -884,13 +1102,27 @@ vector penny_cranal_tile(vector4 co, float detail, float roughness, vector4 peri
  * pfBm: H=0.2 spectral weights, weight-sum normalized. RGB. Self-blend. No clamps, no pf remap. */
 float buya_octave_levels(int oc, float x)
 {
-  if (oc == 1) { return penny_levels(x, 0.85, 0.5, 1.75); }
-  else if (oc == 2) { return penny_levels(x, 0.90, 0.5, 1.80); }
-  else if (oc == 3) { return penny_levels(x, 0.85, 0.5, 2.00); }
-  else if (oc == 4) { return penny_levels(x, 0.95, 0.5, 1.75); }
-  else if (oc == 5) { return penny_levels(x, 1.00, 0.5, 1.26); }
-  else if (oc == 6) { return penny_levels(x, 1.00, 0.5, 1.20); }
-  else { return penny_levels(x, 0.5, 0.5, 1.5); }
+  if (oc == 1) {
+    return penny_levels(x, 0.85, 0.5, 1.75);
+  }
+  else if (oc == 2) {
+    return penny_levels(x, 0.90, 0.5, 1.80);
+  }
+  else if (oc == 3) {
+    return penny_levels(x, 0.85, 0.5, 2.00);
+  }
+  else if (oc == 4) {
+    return penny_levels(x, 0.95, 0.5, 1.75);
+  }
+  else if (oc == 5) {
+    return penny_levels(x, 1.00, 0.5, 1.26);
+  }
+  else if (oc == 6) {
+    return penny_levels(x, 1.00, 0.5, 1.20);
+  }
+  else {
+    return penny_levels(x, 0.5, 0.5, 1.5);
+  }
 }
 
 float buya_pfbm_channel(vector4 co, int ch, int octaves, vector4 period, float roughness)
@@ -900,11 +1132,12 @@ float buya_pfbm_channel(vector4 co, int ch, int octaves, vector4 period, float r
   float wsum = 0.0;
   for (int i = 0; i < octaves; i = i + 1) {
     float off = (scale - 1.0) * 1000.0;
-    vector4 c = vector4(co.x * scale + off, co.y * scale + off, co.z * scale + off, co.w * scale + off);
+    vector4 c = vector4(
+        co.x * scale + off, co.y * scale + off, co.z * scale + off, co.w * scale + off);
     vector4 op = vector4(period.x * scale, period.y * scale, period.z * scale, period.w * scale);
     vector p = penny_perlin_4d_tile(c, op);
     float toy = p[ch] * 0.5 + 0.5;
-    float h = (1.0 - roughness) * 0.4;  /* inverted; 0.5 -> H 0.2 (faithful) */
+    float h = (1.0 - roughness) * 0.4; /* inverted; 0.5 -> H 0.2 (faithful) */
     float weight = pow(2.0, -h * (float)i);
     value = value + (2.0 * darf_noxstep(-1.0, 1.0, toy) - 1.0) * weight;
     wsum = wsum + weight;
@@ -913,7 +1146,14 @@ float buya_pfbm_channel(vector4 co, int ch, int octaves, vector4 period, float r
   return value / max(wsum, 1e-6);
 }
 
-vector penny_buya_tile(vector4 co, float detail, float roughness, vector4 period, int blend_mode, float lvl_lo, float lvl_mid, float lvl_hi)
+vector penny_buya_tile(vector4 co,
+                       float detail,
+                       float roughness,
+                       vector4 period,
+                       int blend_mode,
+                       float lvl_lo,
+                       float lvl_mid,
+                       float lvl_hi)
 {
   int octaves = max((int)floor(detail), 1);
   float res[3];
@@ -942,9 +1182,18 @@ vector penny_buya_tile(vector4 co, float detail, float roughness, vector4 period
  * Z continuous. RGB. Self-blend. */
 float cell_sample(float px, float py, float pz, float w, vector4 per, int ch)
 {
-  float cx = px; if (cx < 0.0) { cx = cx + 100.0; }
-  float cy = py; if (cy < 0.0) { cy = cy + 100.0; }
-  float cz = pz; if (cz < 0.0) { cz = cz + 100.0; }
+  float cx = px;
+  if (cx < 0.0) {
+    cx = cx + 100.0;
+  }
+  float cy = py;
+  if (cy < 0.0) {
+    cy = cy + 100.0;
+  }
+  float cz = pz;
+  if (cz < 0.0) {
+    cz = cz + 100.0;
+  }
   float qx = floor(cx);
   float qy = floor(cy);
   float qz = floor(cz);
@@ -952,7 +1201,8 @@ float cell_sample(float px, float py, float pz, float w, vector4 per, int ch)
   return p[ch] * 0.5 + 0.5;
 }
 
-float cell_octaves(float bx, float by, float bz, float w, vector4 period, int octaves, float roughness, int ch)
+float cell_octaves(
+    float bx, float by, float bz, float w, vector4 period, int octaves, float roughness, int ch)
 {
   float sum = 0.0;
   float amp = 1.0;
@@ -968,21 +1218,36 @@ float cell_octaves(float bx, float by, float bz, float w, vector4 period, int oc
   return clamp(sum / max(ampsum, 1e-6), 0.0, 1.0);
 }
 
-vector penny_cell_tile(vector4 co, float detail, float roughness, vector4 period, int blend_mode, float lvl_lo, float lvl_mid, float lvl_hi)
+vector penny_cell_tile(vector4 co,
+                       float detail,
+                       float roughness,
+                       vector4 period,
+                       int blend_mode,
+                       float lvl_lo,
+                       float lvl_mid,
+                       float lvl_hi)
 {
   int octaves = max((int)floor(detail), 1);
   float res[3];
   for (int ch = 0; ch < 3; ch = ch + 1) {
     float dch = (float)ch * 1000.0;
-    float v = cell_octaves(co.x + dch, co.y + dch, co.z + dch, co.w, period, octaves, roughness, ch);
+    float v = cell_octaves(
+        co.x + dch, co.y + dch, co.z + dch, co.w, period, octaves, roughness, ch);
     v = penny_oct_levels(v, lvl_lo, lvl_mid, lvl_hi);
 
     if (blend_mode == 0) {
       res[ch] = v;
     }
     else {
-      float v2 = cell_octaves(co.x + dch + 0.5, co.y + dch + 0.5, co.z + dch + 0.5, co.w, period, octaves, roughness, ch);
-    v2 = penny_oct_levels(v2, lvl_lo, lvl_mid, lvl_hi);
+      float v2 = cell_octaves(co.x + dch + 0.5,
+                              co.y + dch + 0.5,
+                              co.z + dch + 0.5,
+                              co.w,
+                              period,
+                              octaves,
+                              roughness,
+                              ch);
+      v2 = penny_oct_levels(v2, lvl_lo, lvl_mid, lvl_hi);
       res[ch] = clamp(penny_blend(blend_mode, v, v2), 0.0, 1.0);
     }
   }
@@ -990,43 +1255,82 @@ vector penny_cell_tile(vector4 co, float detail, float roughness, vector4 period
 }
 
 /* Penny Displaced Turbulence - x-shifted sum of displacement-warped abs-turbulence.
- * displace from 2-octave turb, temp from 1-octave turb. noxstep(0.05*oct, 0.75*oct) output. RGB. */
+ * displace from 2-octave turb, temp from 1-octave turb. noxstep(0.05*oct, 0.75*oct) output. RGB.
+ */
 /* Measured percentiles of raw disturb sum vs octave (p50, p98). Bit-identical to EEVEE/kernel. */
 void disturb_pctl(int oc, output float p50, output float p98)
 {
-  if      (oc <= 1) { p50 = 0.235; p98 = 0.784; }
-  else if (oc <  4) { float t = (oc -  1) / 3.0; p50 = mix(0.235, 1.176, t); p98 = mix(0.784, 1.961, t); }
-  else if (oc <  7) { float t = (oc -  4) / 3.0; p50 = mix(1.176, 1.882, t); p98 = mix(1.961, 2.980, t); }
-  else if (oc < 10) { float t = (oc -  7) / 3.0; p50 = mix(1.882, 2.510, t); p98 = mix(2.980, 3.843, t); }
-  else if (oc < 15) { float t = (oc - 10) / 5.0; p50 = mix(2.510, 3.843, t); p98 = mix(3.843, 5.098, t); }
-  else              { float e = oc - 15;         p50 = 3.843 + 0.267 * e;    p98 = 5.098 + 0.251 * e; }
+  if (oc <= 1) {
+    p50 = 0.235;
+    p98 = 0.784;
+  }
+  else if (oc < 4) {
+    float t = (oc - 1) / 3.0;
+    p50 = mix(0.235, 1.176, t);
+    p98 = mix(0.784, 1.961, t);
+  }
+  else if (oc < 7) {
+    float t = (oc - 4) / 3.0;
+    p50 = mix(1.176, 1.882, t);
+    p98 = mix(1.961, 2.980, t);
+  }
+  else if (oc < 10) {
+    float t = (oc - 7) / 3.0;
+    p50 = mix(1.882, 2.510, t);
+    p98 = mix(2.980, 3.843, t);
+  }
+  else if (oc < 15) {
+    float t = (oc - 10) / 5.0;
+    p50 = mix(2.510, 3.843, t);
+    p98 = mix(3.843, 5.098, t);
+  }
+  else {
+    float e = oc - 15;
+    p50 = 3.843 + 0.267 * e;
+    p98 = 5.098 + 0.251 * e;
+  }
 }
 
 /* Measured bottom-2% of raw sum vs octave (sum units), for the black-point floor. */
 float disturb_p02(int oc)
 {
-  if      (oc <= 1) { return 0.000; }
-  else if (oc <  4) { return mix(0.000, 0.314, (oc -  1) / 3.0); }
-  else if (oc <  7) { return mix(0.314, 0.784, (oc -  4) / 3.0); }
-  else if (oc < 10) { return mix(0.784, 1.412, (oc -  7) / 3.0); }
-  else if (oc < 15) { return mix(1.412, 2.353, (oc - 10) / 5.0); }
-  else              { return 2.353 + 0.188 * (oc - 15); }
+  if (oc <= 1) {
+    return 0.000;
+  }
+  else if (oc < 4) {
+    return mix(0.000, 0.314, (oc - 1) / 3.0);
+  }
+  else if (oc < 7) {
+    return mix(0.314, 0.784, (oc - 4) / 3.0);
+  }
+  else if (oc < 10) {
+    return mix(0.784, 1.412, (oc - 7) / 3.0);
+  }
+  else if (oc < 15) {
+    return mix(1.412, 2.353, (oc - 10) / 5.0);
+  }
+  else {
+    return 2.353 + 0.188 * (oc - 15);
+  }
 }
 
-/* Octave-aware tone window: percentile placement + low-tail floor + uniform shadow lift (LIFT=0.2). */
+/* Octave-aware tone window: percentile placement + low-tail floor + uniform shadow lift
+ * (LIFT=0.2). */
 float disturb_window(int oc, float sum)
 {
   float TMID = 0.313, THI = 0.537, FLOORMARGIN = 0.35, LIFT = 0.2;
-  float p50, p98; disturb_pctl(oc, p50, p98);
+  float p50, p98;
+  disturb_pctl(oc, p50, p98);
   float span = (p98 - p50) / max(THI - TMID, 1e-4);
-  float lo   = p50 - TMID * span;
-  float hi   = lo + span;
+  float lo = p50 - TMID * span;
+  float hi = lo + span;
   lo = min(lo, disturb_p02(oc) - FLOORMARGIN);
   float t = darf_noxstep(lo, hi, sum);
   return t + LIFT * (1.0 - t) * (1.0 - t);
 }
 
-float disturb_accum(float bx, float by, float bz, float w, vector4 period, int octaves, float roughness, int ch)
+float disturb_accum(
+    float bx, float by, float bz, float w, vector4 period, int octaves, float roughness, int ch)
 {
   /* roughness -> fBm-style amplitude falloff across x-shifted samples; inner turb fixed
    * at 0.5 so distortion stays constant. Centered: 0.5 -> ramp 1.0 = original. Renormalized
@@ -1042,7 +1346,8 @@ float disturb_accum(float bx, float by, float bz, float w, vector4 period, int o
     float oz = (float)i * 11.219;
     vector d = penny_abs_turb2(vector4(x1, by + oy, bz + oz, w), 2, 0.5, period);
     float displace = 1.0 - 2.0 * d[ch] * 0.8;
-    vector tt = penny_abs_turb2(vector4(x1 - displace, by + displace + oy, bz + displace + oz, w), 1, 0.5, period);
+    vector tt = penny_abs_turb2(
+        vector4(x1 - displace, by + displace + oy, bz + displace + oz, w), 1, 0.5, period);
     sum = sum + tt[ch] * amp;
     ampsum = ampsum + amp;
     amp = amp * ramp;
@@ -1071,7 +1376,14 @@ float penny_hama(vector4 co, int octaves, float roughness, vector4 period, int c
   return the_value;
 }
 
-vector penny_hama_tile(vector4 co, float detail, float roughness, vector4 period, int blend_mode, float lvl_lo, float lvl_mid, float lvl_hi)
+vector penny_hama_tile(vector4 co,
+                       float detail,
+                       float roughness,
+                       vector4 period,
+                       int blend_mode,
+                       float lvl_lo,
+                       float lvl_mid,
+                       float lvl_hi)
 {
   int octaves = max((int)floor(detail), 1);
   vector result = vector(0.0, 0.0, 0.0);
@@ -1081,11 +1393,13 @@ vector penny_hama_tile(vector4 co, float detail, float roughness, vector4 period
     float v = penny_hama(c, octaves, roughness, period, ch);
     v = penny_oct_levels(v, lvl_lo, lvl_mid, lvl_hi);
     float r;
-    if (blend_mode == 0) { r = v; }  /* HDR passthrough (match EEVEE + other noises) */
+    if (blend_mode == 0) {
+      r = v;
+    } /* HDR passthrough (match EEVEE + other noises) */
     else {
       vector4 c2 = vector4(c.x + 0.5, c.y + 0.5, c.z + 0.5, c.w);
       float v2 = penny_hama(c2, octaves, roughness, period, ch);
-    v2 = penny_oct_levels(v2, lvl_lo, lvl_mid, lvl_hi);
+      v2 = penny_oct_levels(v2, lvl_lo, lvl_mid, lvl_hi);
       r = clamp(penny_blend(blend_mode, clamp(v, 0.0, 1.0), clamp(v2, 0.0, 1.0)), 0.0, 1.0);
     }
     result[ch] = r;
@@ -1108,7 +1422,14 @@ float penny_naki(vector4 co, int octaves, float roughness, vector4 period, int c
   return darf_noxstep(0.45, 1.0, (turb + bias) * 0.5);
 }
 
-vector penny_naki_tile(vector4 co, float detail, float roughness, vector4 period, int blend_mode, float lvl_lo, float lvl_mid, float lvl_hi)
+vector penny_naki_tile(vector4 co,
+                       float detail,
+                       float roughness,
+                       vector4 period,
+                       int blend_mode,
+                       float lvl_lo,
+                       float lvl_mid,
+                       float lvl_hi)
 {
   int octaves = max((int)floor(detail), 1);
   vector result = vector(0.0, 0.0, 0.0);
@@ -1118,11 +1439,13 @@ vector penny_naki_tile(vector4 co, float detail, float roughness, vector4 period
     float v = penny_naki(c, octaves, roughness, period, ch);
     v = penny_oct_levels(v, lvl_lo, lvl_mid, lvl_hi);
     float r;
-    if (blend_mode == 0) { r = v; }  /* HDR passthrough (match EEVEE + other noises) */
+    if (blend_mode == 0) {
+      r = v;
+    } /* HDR passthrough (match EEVEE + other noises) */
     else {
       vector4 c2 = vector4(c.x + 0.5, c.y + 0.5, c.z + 0.5, c.w);
       float v2 = penny_naki(c2, octaves, roughness, period, ch);
-    v2 = penny_oct_levels(v2, lvl_lo, lvl_mid, lvl_hi);
+      v2 = penny_oct_levels(v2, lvl_lo, lvl_mid, lvl_hi);
       r = clamp(penny_blend(blend_mode, clamp(v, 0.0, 1.0), clamp(v2, 0.0, 1.0)), 0.0, 1.0);
     }
     result[ch] = r;
@@ -1139,12 +1462,14 @@ float penny_poxo_absturb(vector4 co, int octaves, float dampening, vector4 perio
   vector s = penny_perlin_4d_tile(co, period);
   float value = abs(s[ch] * 0.73) * scale;
   vector4 c = vector4(co.x + co.x, co.y + co.y, co.z + co.z, co.w);
-  scale_sum += scale; scale *= dampening;
+  scale_sum += scale;
+  scale *= dampening;
   for (int i = 0; i < octaves; i = i + 1) {
     vector si = penny_perlin_4d_tile(c, period);
     value += abs(si[ch] * 0.73) * scale;
     c = vector4(c.x + c.x, c.y + c.y, c.z + c.z, c.w);
-    scale_sum += scale; scale *= dampening;
+    scale_sum += scale;
+    scale *= dampening;
   }
   return (scale_sum != 0.0) ? (value / scale_sum) : 0.0;
 }
@@ -1152,7 +1477,7 @@ float penny_poxo_absturb(vector4 co, int octaves, float dampening, vector4 perio
 /* Penny Poxo - recursive abs-turb running-blend, fractional octaves, roughness = -dampening. */
 float penny_poxo(vector4 co, float detail, float roughness, vector4 period, int ch)
 {
-  float scalar = -roughness;  /* rough 0.5 -> -0.5 = Penny default */
+  float scalar = -roughness; /* rough 0.5 -> -0.5 = Penny default */
   float size = 1.0, value = 0.0;
   int ioct = (int)floor(detail);
   for (int i = 0; i < ioct; i = i + 1) {
@@ -1164,7 +1489,8 @@ float penny_poxo(vector4 co, float detail, float roughness, vector4 period, int 
   vector4 sc2 = vector4(co.x * size, co.y * size, co.z * size, co.w);
   float vt = penny_poxo_absturb(sc2, 4, scalar, period, ch);
   value += abs(vt - value) * 0.5 * (detail - floor(detail));
-  if (detail != 0.0) value = value / detail;
+  if (detail != 0.0)
+    value = value / detail;
   value = clamp(pow(value, 0.7369656), 0.0, 1.0);
   value = value * value * 2.0;
   value = darf_noxstep(0.0, 0.5, value);
@@ -1173,7 +1499,14 @@ float penny_poxo(vector4 co, float detail, float roughness, vector4 period, int 
   return value;
 }
 
-vector penny_poxo_tile(vector4 co, float detail, float roughness, vector4 period, int blend_mode, float lvl_lo, float lvl_mid, float lvl_hi)
+vector penny_poxo_tile(vector4 co,
+                       float detail,
+                       float roughness,
+                       vector4 period,
+                       int blend_mode,
+                       float lvl_lo,
+                       float lvl_mid,
+                       float lvl_hi)
 {
   float d = max(detail, 1.0);
   vector result = vector(0.0, 0.0, 0.0);
@@ -1183,11 +1516,13 @@ vector penny_poxo_tile(vector4 co, float detail, float roughness, vector4 period
     float v = penny_poxo(c, d, roughness, period, ch);
     v = penny_oct_levels(v, lvl_lo, lvl_mid, lvl_hi);
     float r;
-    if (blend_mode == 0) { r = v; }  /* HDR passthrough (match EEVEE + other noises) */
+    if (blend_mode == 0) {
+      r = v;
+    } /* HDR passthrough (match EEVEE + other noises) */
     else {
       vector4 c2 = vector4(c.x + 0.5, c.y + 0.5, c.z + 0.5, c.w);
       float v2 = penny_poxo(c2, d, roughness, period, ch);
-    v2 = penny_oct_levels(v2, lvl_lo, lvl_mid, lvl_hi);
+      v2 = penny_oct_levels(v2, lvl_lo, lvl_mid, lvl_hi);
       r = clamp(penny_blend(blend_mode, clamp(v, 0.0, 1.0), clamp(v2, 0.0, 1.0)), 0.0, 1.0);
     }
     result[ch] = r;
@@ -1202,11 +1537,13 @@ float penny_pezo_absturb2(vector4 co, int octaves, vector4 period, int ch)
   vector4 op = period;
   for (int i = 0; i < octaves; i = i + 1) {
     float off = (scale - 1.0) * 1000.0;
-    vector4 sc = vector4(co.x * scale + off, co.y * scale + off, co.z * scale + off, co.w * scale + off);
+    vector4 sc = vector4(
+        co.x * scale + off, co.y * scale + off, co.z * scale + off, co.w * scale + off);
     vector pv = penny_perlin_4d_tile(sc, op);
     float p01 = pv[ch] * 0.5 + 0.5;
     value += abs(2.0 * p01 - 1.0) / scale;
-    scale *= 2.0; op = op * 2.0;
+    scale *= 2.0;
+    op = op * 2.0;
   }
   return value;
 }
@@ -1222,7 +1559,8 @@ float penny_pezo_turb3(vector4 co, int octaves, vector4 period, int ch)
     vector sv = penny_perlin_4d_tile(sc, op);
     float s = sv[ch];
     value += s / f;
-    f *= 2.0; op = op * 2.0;
+    f *= 2.0;
+    op = op * 2.0;
   }
   return darf_noxstep(-1.0, 1.0, value);
 }
@@ -1236,7 +1574,8 @@ float penny_pezo(vector4 co, int octaves, vector4 period, int ch, float roughnes
   float value = 1.0;
   for (int i = 0; i < octaves; i = i + 1) {
     float fi = i;
-    vector4 c = vector4(co.x * 0.5 + fi * 19.55, co.y * 0.5 + fi * 20.612, co.z * 0.5 + fi * 21.175, co.w);
+    vector4 c = vector4(
+        co.x * 0.5 + fi * 19.55, co.y * 0.5 + fi * 20.612, co.z * 0.5 + fi * 21.175, co.w);
     float t = penny_pezo_turb3(c, 1, period, ch);
     float temp = 1.0 - abs(1.0 - 2.0 * t);
     value *= darf_smoothstep(gate_lo, 1.0, temp);
@@ -1249,7 +1588,14 @@ float penny_pezo(vector4 co, int octaves, vector4 period, int ch, float roughnes
   return value;
 }
 
-vector penny_pezo_tile(vector4 co, float detail, float roughness, vector4 period, int blend_mode, float lvl_lo, float lvl_mid, float lvl_hi)
+vector penny_pezo_tile(vector4 co,
+                       float detail,
+                       float roughness,
+                       vector4 period,
+                       int blend_mode,
+                       float lvl_lo,
+                       float lvl_mid,
+                       float lvl_hi)
 {
   int octaves = max((int)floor(detail), 1);
   vector result = vector(0.0, 0.0, 0.0);
@@ -1259,11 +1605,13 @@ vector penny_pezo_tile(vector4 co, float detail, float roughness, vector4 period
     float v = penny_pezo(c, octaves, period, ch, roughness);
     v = penny_oct_levels(v, lvl_lo, lvl_mid, lvl_hi);
     float r;
-    if (blend_mode == 0) { r = v; }  /* HDR passthrough (match EEVEE + other noises) */
+    if (blend_mode == 0) {
+      r = v;
+    } /* HDR passthrough (match EEVEE + other noises) */
     else {
       vector4 c2 = vector4(c.x + 0.5, c.y + 0.5, c.z + 0.5, c.w);
       float v2 = penny_pezo(c2, octaves, period, ch, roughness);
-    v2 = penny_oct_levels(v2, lvl_lo, lvl_mid, lvl_hi);
+      v2 = penny_oct_levels(v2, lvl_lo, lvl_mid, lvl_hi);
       r = clamp(penny_blend(blend_mode, clamp(v, 0.0, 1.0), clamp(v2, 0.0, 1.0)), 0.0, 1.0);
     }
     result[ch] = r;
@@ -1305,7 +1653,14 @@ float penny_dents(vector4 co, float detail, vector4 period, int ch, float roughn
   return the_value;
 }
 
-vector penny_dents_tile(vector4 co, float detail, float roughness, vector4 period, int blend_mode, float lvl_lo, float lvl_mid, float lvl_hi)
+vector penny_dents_tile(vector4 co,
+                        float detail,
+                        float roughness,
+                        vector4 period,
+                        int blend_mode,
+                        float lvl_lo,
+                        float lvl_mid,
+                        float lvl_hi)
 {
   float d = max(detail, 1.0);
   vector result = vector(0.0, 0.0, 0.0);
@@ -1315,11 +1670,13 @@ vector penny_dents_tile(vector4 co, float detail, float roughness, vector4 perio
     float v = penny_dents(c, d, period, ch, roughness);
     v = penny_oct_levels(v, lvl_lo, lvl_mid, lvl_hi);
     float r;
-    if (blend_mode == 0) { r = v; }  /* HDR passthrough (match EEVEE + other noises) */
+    if (blend_mode == 0) {
+      r = v;
+    } /* HDR passthrough (match EEVEE + other noises) */
     else {
       vector4 c2 = vector4(c.x + 0.5, c.y + 0.5, c.z + 0.5, c.w);
       float v2 = penny_dents(c2, d, period, ch, roughness);
-    v2 = penny_oct_levels(v2, lvl_lo, lvl_mid, lvl_hi);
+      v2 = penny_oct_levels(v2, lvl_lo, lvl_mid, lvl_hi);
       r = clamp(penny_blend(blend_mode, clamp(v, 0.0, 1.0), clamp(v2, 0.0, 1.0)), 0.0, 1.0);
     }
     result[ch] = r;
@@ -1350,7 +1707,14 @@ float penny_sema(vector4 co, int octaves, vector4 period, int ch, float roughnes
   return the_value;
 }
 
-vector penny_sema_tile(vector4 co, float detail, float roughness, vector4 period, int blend_mode, float lvl_lo, float lvl_mid, float lvl_hi)
+vector penny_sema_tile(vector4 co,
+                       float detail,
+                       float roughness,
+                       vector4 period,
+                       int blend_mode,
+                       float lvl_lo,
+                       float lvl_mid,
+                       float lvl_hi)
 {
   int octaves = max((int)floor(detail), 1);
   vector result = vector(0.0, 0.0, 0.0);
@@ -1360,11 +1724,13 @@ vector penny_sema_tile(vector4 co, float detail, float roughness, vector4 period
     float v = penny_sema(c, octaves, period, ch, roughness);
     v = penny_oct_levels(v, lvl_lo, lvl_mid, lvl_hi);
     float r;
-    if (blend_mode == 0) { r = v; }  /* HDR passthrough (match EEVEE + other noises) */
+    if (blend_mode == 0) {
+      r = v;
+    } /* HDR passthrough (match EEVEE + other noises) */
     else {
       vector4 c2 = vector4(c.x + 0.5, c.y + 0.5, c.z + 0.5, c.w);
       float v2 = penny_sema(c2, octaves, period, ch, roughness);
-    v2 = penny_oct_levels(v2, lvl_lo, lvl_mid, lvl_hi);
+      v2 = penny_oct_levels(v2, lvl_lo, lvl_mid, lvl_hi);
       r = clamp(penny_blend(blend_mode, clamp(v, 0.0, 1.0), clamp(v2, 0.0, 1.0)), 0.0, 1.0);
     }
     result[ch] = r;
@@ -1391,7 +1757,7 @@ float penny_vl_noise(vector4 p, float distortion, vector4 period, int ch)
  * (widened from Penny's -0.65 to remove clipping). distortion=1.0. Per-channel. */
 float penny_vl(vector4 co, int octaves, vector4 period, int ch, float roughness)
 {
-  float the_value = 0.0, scale = 1.0, amp = 1.0;  /* roughness drives falloff; 0.5 == /scale */
+  float the_value = 0.0, scale = 1.0, amp = 1.0; /* roughness drives falloff; 0.5 == /scale */
   for (int i = 0; i < octaves; i = i + 1) {
     float off = (scale - 1.0) * 1000.0;
     vector4 sc = vector4(co.x * scale + off, co.y * scale + off, co.z * scale + off, co.w);
@@ -1403,7 +1769,14 @@ float penny_vl(vector4 co, int octaves, vector4 period, int ch, float roughness)
   return darf_noxstep(-1.0, 1.0, the_value);
 }
 
-vector penny_vl_tile(vector4 co, float detail, float roughness, vector4 period, int blend_mode, float lvl_lo, float lvl_mid, float lvl_hi)
+vector penny_vl_tile(vector4 co,
+                     float detail,
+                     float roughness,
+                     vector4 period,
+                     int blend_mode,
+                     float lvl_lo,
+                     float lvl_mid,
+                     float lvl_hi)
 {
   int octaves = max((int)floor(detail), 1);
   vector result = vector(0.0, 0.0, 0.0);
@@ -1413,11 +1786,13 @@ vector penny_vl_tile(vector4 co, float detail, float roughness, vector4 period, 
     float v = penny_vl(c, octaves, period, ch, roughness);
     v = penny_oct_levels(v, lvl_lo, lvl_mid, lvl_hi);
     float r;
-    if (blend_mode == 0) { r = v; }  /* HDR passthrough (match EEVEE + other noises) */
+    if (blend_mode == 0) {
+      r = v;
+    } /* HDR passthrough (match EEVEE + other noises) */
     else {
       vector4 c2 = vector4(c.x + 0.5, c.y + 0.5, c.z + 0.5, c.w);
       float v2 = penny_vl(c2, octaves, period, ch, roughness);
-    v2 = penny_oct_levels(v2, lvl_lo, lvl_mid, lvl_hi);
+      v2 = penny_oct_levels(v2, lvl_lo, lvl_mid, lvl_hi);
       r = clamp(penny_blend(blend_mode, clamp(v, 0.0, 1.0), clamp(v2, 0.0, 1.0)), 0.0, 1.0);
     }
     result[ch] = r;
@@ -1425,28 +1800,50 @@ vector penny_vl_tile(vector4 co, float detail, float roughness, vector4 period, 
   return result;
 }
 
-vector penny_disturb_tile(vector4 co, float detail, float roughness, vector4 period, int blend_mode, float lvl_lo, float lvl_mid, float lvl_hi)
+vector penny_disturb_tile(vector4 co,
+                          float detail,
+                          float roughness,
+                          vector4 period,
+                          int blend_mode,
+                          float lvl_lo,
+                          float lvl_mid,
+                          float lvl_hi)
 {
   int octaves = max((int)floor(detail), 1);
   float res[3];
   for (int ch = 0; ch < 3; ch = ch + 1) {
     float dch = (float)ch * 1000.0;
-    float v = disturb_accum(co.x + dch, co.y + dch, co.z + dch, co.w, period, octaves, roughness, ch);
+    float v = disturb_accum(
+        co.x + dch, co.y + dch, co.z + dch, co.w, period, octaves, roughness, ch);
     v = penny_oct_levels(v, lvl_lo, lvl_mid, lvl_hi);
 
     if (blend_mode == 0) {
-      res[ch] = v;  /* HDR passthrough (match EEVEE + other noises) */
+      res[ch] = v; /* HDR passthrough (match EEVEE + other noises) */
     }
     else {
-      float v2 = disturb_accum(co.x + dch + 0.5, co.y + dch + 0.5, co.z + dch + 0.5, co.w, period, octaves, roughness, ch);
-    v2 = penny_oct_levels(v2, lvl_lo, lvl_mid, lvl_hi);
+      float v2 = disturb_accum(co.x + dch + 0.5,
+                               co.y + dch + 0.5,
+                               co.z + dch + 0.5,
+                               co.w,
+                               period,
+                               octaves,
+                               roughness,
+                               ch);
+      v2 = penny_oct_levels(v2, lvl_lo, lvl_mid, lvl_hi);
       res[ch] = clamp(penny_blend(blend_mode, clamp(v, 0.0, 1.0), clamp(v2, 0.0, 1.0)), 0.0, 1.0);
     }
   }
   return vector(res[0], res[1], res[2]);
 }
 
-vector penny_luka_tile(vector4 co, float detail, float roughness, vector4 period, int blend_mode, float lvl_lo, float lvl_mid, float lvl_hi)
+vector penny_luka_tile(vector4 co,
+                       float detail,
+                       float roughness,
+                       vector4 period,
+                       int blend_mode,
+                       float lvl_lo,
+                       float lvl_mid,
+                       float lvl_hi)
 {
   int octaves = max((int)floor(detail), 1);
 
@@ -1483,7 +1880,7 @@ vector penny_luka_tile(vector4 co, float detail, float roughness, vector4 period
       float v2 = darf_noxstep(-2.0, 2.0, inner3b[ch]);
       v2 = darf_noxstep(0.47 - temp[ch], 0.525 + temp[ch], v2);
       v2 = darf_noxstep(0.5, 0.78, v2);
-    v2 = penny_oct_levels(v2, lvl_lo, lvl_mid, lvl_hi);
+      v2 = penny_oct_levels(v2, lvl_lo, lvl_mid, lvl_hi);
       res[ch] = clamp(penny_blend(blend_mode, clamp(v, 0.0, 1.0), clamp(v2, 0.0, 1.0)), 0.0, 1.0);
     }
   }
@@ -1492,11 +1889,18 @@ vector penny_luka_tile(vector4 co, float detail, float roughness, vector4 period
 
 /* Helper: evaluate Penny noise at a single position, returning Factor (.x channel).
  * Used by the gradient central-difference computation. */
-vector penny_eval_rgb(vector4 p, float detail, float roughness, vector4 period, int nt, int bm,
-                     float lvl_lo, float lvl_mid, float lvl_hi)
+vector penny_eval_rgb(vector4 p,
+                      float detail,
+                      float roughness,
+                      vector4 period,
+                      int nt,
+                      int bm,
+                      float lvl_lo,
+                      float lvl_mid,
+                      float lvl_hi)
 {
   vector rgb;
-#if   PENNY_TYPE == 1
+#if PENNY_TYPE == 1
   rgb = penny_turbulence_tile(p, detail, roughness, period, bm, lvl_lo, lvl_mid, lvl_hi);
 #elif PENNY_TYPE == 2
   rgb = penny_stupl_tile(p, detail, roughness, period, bm, lvl_lo, lvl_mid, lvl_hi);
@@ -1538,8 +1942,15 @@ vector penny_eval_rgb(vector4 p, float detail, float roughness, vector4 period, 
   return rgb;
 }
 
-float penny_eval_fac(vector4 p, float detail, float roughness, vector4 period, int nt, int bm,
-                    float lvl_lo, float lvl_mid, float lvl_hi)
+float penny_eval_fac(vector4 p,
+                     float detail,
+                     float roughness,
+                     vector4 period,
+                     int nt,
+                     int bm,
+                     float lvl_lo,
+                     float lvl_mid,
+                     float lvl_hi)
 {
   vector r = penny_eval_rgb(p, detail, roughness, period, nt, bm, lvl_lo, lvl_mid, lvl_hi);
   return r[0];
@@ -1551,33 +1962,30 @@ float penny_eval_fac(vector4 p, float detail, float roughness, vector4 period, i
  * dispatches to the appropriate penny_*_tile(), and writes Fac and Color.
  * When Coordinate is unconnected, defaults to object-space position. */
 shader PENNY_SHADER(int use_mapping = 0,
-                                matrix mapping = matrix(0, 0, 0, 0,
-                                                         0, 0, 0, 0,
-                                                         0, 0, 0, 0,
-                                                         0, 0, 0, 0),
-				point Coordinate = point(0, 0, 0),
-                                float W = 0.0,
-                                float Scale = 100.0,
-                                float ScaleX = 100.0,
-                                float ScaleY = 100.0,
-                                float ScaleZ = 100.0,
-                                float ScaleW = 100.0,
-                                float Octaves = 7.0,
-                                float Roughness = 0.5,
-                                float LevelMin = 0.0,
-                                float LevelMid = 0.5,
-                                float LevelMax = 1.0,
-                                float PeriodX = 8.0,
-                                float PeriodY = 8.0,
-                                float PeriodZ = 8.0,
-                                float PeriodW = 8.0,
-                                string dimensions = "4D",
-                                int blend_mode = 0,
-                                int noise_type = 0,
-                                int tileable = 1,
-                                output float Fac = 0.0,
-                                output color Color = 0.0,
-                                output vector Gradient = 0.0)
+                    matrix mapping = matrix(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0),
+                    point Coordinate = point(0, 0, 0),
+                    float W = 0.0,
+                    float Scale = 100.0,
+                    float ScaleX = 100.0,
+                    float ScaleY = 100.0,
+                    float ScaleZ = 100.0,
+                    float ScaleW = 100.0,
+                    float Octaves = 7.0,
+                    float Roughness = 0.5,
+                    float LevelMin = 0.0,
+                    float LevelMid = 0.5,
+                    float LevelMax = 1.0,
+                    float PeriodX = 8.0,
+                    float PeriodY = 8.0,
+                    float PeriodZ = 8.0,
+                    float PeriodW = 8.0,
+                    string dimensions = "4D",
+                    int blend_mode = 0,
+                    int noise_type = 0,
+                    int tileable = 1,
+                    output float Fac = 0.0,
+                    output color Color = 0.0,
+                    output vector Gradient = 0.0)
 {
   /* Coordinate defaults to the generated texture coordinate (auto-connected when
    * unlinked), matching the other texture nodes. */
@@ -1593,7 +2001,7 @@ shader PENNY_SHADER(int use_mapping = 0,
   float py = p[1];
   float pz = p[2];
 
-  float detail_f  = clamp(Octaves, 0.0, 15.0);
+  float detail_f = clamp(Octaves, 0.0, 15.0);
   float roughness = max(Roughness, 0.0);
 
   float global_factor = Scale * 0.01;
@@ -1645,7 +2053,8 @@ shader PENNY_SHADER(int use_mapping = 0,
     input_p = vector4(qx, qy, qz, qw);
   }
 
-  vector rgb = penny_eval_rgb(input_p, detail_f, roughness, period, noise_type, blend_mode, LevelMin, LevelMid, LevelMax);
+  vector rgb = penny_eval_rgb(
+      input_p, detail_f, roughness, period, noise_type, blend_mode, LevelMin, LevelMid, LevelMax);
   /* final Levels removed - LevelMin/Mid/Max now drive per-octave/output Levels in tiles. */
   Fac = rgb[0];
   Color = color(rgb[0], rgb[1], rgb[2]);
@@ -1660,17 +2069,59 @@ shader PENNY_SHADER(int use_mapping = 0,
     float delta = 0.01;
     float inv_2d = 1.0 / (2.0 * delta);
     float gx = penny_eval_fac(vector4(input_p.x + delta, input_p.y, input_p.z, input_p.w),
-                               detail_f, roughness, period, noise_type, blend_mode, 0.0, 0.5, 1.0)
-             - penny_eval_fac(vector4(input_p.x - delta, input_p.y, input_p.z, input_p.w),
-                               detail_f, roughness, period, noise_type, blend_mode, 0.0, 0.5, 1.0);
+                              detail_f,
+                              roughness,
+                              period,
+                              noise_type,
+                              blend_mode,
+                              0.0,
+                              0.5,
+                              1.0) -
+               penny_eval_fac(vector4(input_p.x - delta, input_p.y, input_p.z, input_p.w),
+                              detail_f,
+                              roughness,
+                              period,
+                              noise_type,
+                              blend_mode,
+                              0.0,
+                              0.5,
+                              1.0);
     float gy = penny_eval_fac(vector4(input_p.x, input_p.y + delta, input_p.z, input_p.w),
-                               detail_f, roughness, period, noise_type, blend_mode, 0.0, 0.5, 1.0)
-             - penny_eval_fac(vector4(input_p.x, input_p.y - delta, input_p.z, input_p.w),
-                               detail_f, roughness, period, noise_type, blend_mode, 0.0, 0.5, 1.0);
+                              detail_f,
+                              roughness,
+                              period,
+                              noise_type,
+                              blend_mode,
+                              0.0,
+                              0.5,
+                              1.0) -
+               penny_eval_fac(vector4(input_p.x, input_p.y - delta, input_p.z, input_p.w),
+                              detail_f,
+                              roughness,
+                              period,
+                              noise_type,
+                              blend_mode,
+                              0.0,
+                              0.5,
+                              1.0);
     float gz = penny_eval_fac(vector4(input_p.x, input_p.y, input_p.z + delta, input_p.w),
-                               detail_f, roughness, period, noise_type, blend_mode, 0.0, 0.5, 1.0)
-             - penny_eval_fac(vector4(input_p.x, input_p.y, input_p.z - delta, input_p.w),
-                               detail_f, roughness, period, noise_type, blend_mode, 0.0, 0.5, 1.0);
+                              detail_f,
+                              roughness,
+                              period,
+                              noise_type,
+                              blend_mode,
+                              0.0,
+                              0.5,
+                              1.0) -
+               penny_eval_fac(vector4(input_p.x, input_p.y, input_p.z - delta, input_p.w),
+                              detail_f,
+                              roughness,
+                              period,
+                              noise_type,
+                              blend_mode,
+                              0.0,
+                              0.5,
+                              1.0);
     Gradient = vector(gx / fx_scale, gy / fy_scale, gz / fz_scale) * inv_2d;
   }
 }

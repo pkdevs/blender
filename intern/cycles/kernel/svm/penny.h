@@ -613,7 +613,8 @@ ccl_device_inline float3 penny_abs_turb2(const float x,
   int4 op = period;
   for (int i = 0; i < octaves; ++i) {
     float off = (scale - 1.0f) * 1000.0f;
-    float3 p01 = penny_perlin_4d_tile(x * scale + off, y * scale + off, z * scale + off, w * scale + off, op) *
+    float3 p01 = penny_perlin_4d_tile(
+                     x * scale + off, y * scale + off, z * scale + off, w * scale + off, op) *
                      0.5f +
                  make_float3(0.5f, 0.5f, 0.5f);
     sum = sum + make_float3(fabsf(2.0f * p01.x - 1.0f),
@@ -646,7 +647,8 @@ ccl_device_inline float3 penny_reg_turb2(const float x,
   int4 op = period;
   for (int i = 0; i < octaves; ++i) {
     float off = (scale - 1.0f) * 1000.0f;
-    float3 p01 = penny_perlin_4d_tile(x * scale + off, y * scale + off, z * scale + off, w * scale + off, op) *
+    float3 p01 = penny_perlin_4d_tile(
+                     x * scale + off, y * scale + off, z * scale + off, w * scale + off, op) *
                      0.5f +
                  make_float3(0.5f, 0.5f, 0.5f);
     sum = sum + make_float3(2.0f * p01.x - 1.0f, 2.0f * p01.y - 1.0f, 2.0f * p01.z - 1.0f) * amp;
@@ -679,7 +681,8 @@ ccl_device_inline float3 penny_reg_turb2_signed(const float x,
   int4 op = period;
   for (int i = 0; i < octaves; ++i) {
     float off = (scale - 1.0f) * 1000.0f;
-    float3 p01 = penny_perlin_4d_tile(x * scale + off, y * scale + off, z * scale + off, w * scale + off, op) *
+    float3 p01 = penny_perlin_4d_tile(
+                     x * scale + off, y * scale + off, z * scale + off, w * scale + off, op) *
                      0.5f +
                  make_float3(0.5f, 0.5f, 0.5f);
     sum = sum + make_float3(2.0f * p01.x - 1.0f, 2.0f * p01.y - 1.0f, 2.0f * p01.z - 1.0f) * amp;
@@ -776,7 +779,8 @@ ccl_device_inline float3 penny_luka_turb(const float x,
   int4 op = period;
   for (int i = 0; i < octaves; ++i) {
     float off = (scale - 1.0f) * 1000.0f;
-    float3 n = penny_perlin_4d_tile(x * scale + off, y * scale + off, z * scale + off, w * scale + off, op);
+    float3 n = penny_perlin_4d_tile(
+        x * scale + off, y * scale + off, z * scale + off, w * scale + off, op);
     sum = sum + make_float3(fabsf(n.x * 0.73f), fabsf(n.y * 0.73f), fabsf(n.z * 0.73f)) * amp;
     norm += amp;
     scale *= 2.0f;
@@ -924,7 +928,9 @@ ccl_device_noinline float3 penny_mod_tile(const float x,
                         (int)(period.z * scale),
                         (int)(period.w * scale));
     value = value +
-            penny_mod_sample(cx * scale + off, cy * scale + off, cz * scale + off, w * scale + off, op) * amp;
+            penny_mod_sample(
+                cx * scale + off, cy * scale + off, cz * scale + off, w * scale + off, op) *
+                amp;
     ampsum += amp;
     scale *= 2.0f;
     amp *= ramp;
@@ -958,7 +964,8 @@ ccl_device_noinline float3 penny_mod_tile(const float x,
                         (int)(period.z * scale),
                         (int)(period.w * scale));
     value2 = value2 +
-             penny_mod_sample(c2x * scale + off, c2y * scale + off, c2z * scale + off, w * scale + off, op) *
+             penny_mod_sample(
+                 c2x * scale + off, c2y * scale + off, c2z * scale + off, w * scale + off, op) *
                  amp;
     ampsum2 += amp;
     scale *= 2.0f;
@@ -1305,7 +1312,8 @@ ccl_device_inline float buya_pfbm_channel(const float x,
                         (int)(period.y * scale),
                         (int)(period.z * scale),
                         (int)(period.w * scale));
-    float3 p = penny_perlin_4d_tile(x * scale + off, y * scale + off, z * scale + off, w * scale + off, op);
+    float3 p = penny_perlin_4d_tile(
+        x * scale + off, y * scale + off, z * scale + off, w * scale + off, op);
     float pch[3];
     pch[0] = p.x;
     pch[1] = p.y;
@@ -1790,7 +1798,8 @@ ccl_device_inline float penny_pezo_absturb2(
   int4 op = period;
   for (int i = 0; i < octaves; ++i) {
     float off = (scale - 1.0f) * 1000.0f;
-    float3 p = penny_perlin_4d_tile(x * scale + off, y * scale + off, z * scale + off, w * scale + off, op) *
+    float3 p = penny_perlin_4d_tile(
+                   x * scale + off, y * scale + off, z * scale + off, w * scale + off, op) *
                    0.5f +
                make_float3(0.5f, 0.5f, 0.5f);
     float p01 = (ch == 0) ? p.x : ((ch == 1) ? p.y : p.z);
@@ -2431,17 +2440,57 @@ ccl_device_noinline void svm_node_tex_penny(ccl_private float *ccl_restrict stac
     const float ky = (float)Ly / (float)Py;
     const float kz = (float)Lz / (float)Pz;
     const float kw = (float)Lw / (float)Pw;
-    if (dimensions == 1) { w_scaled = w_in * kw; vector.x = 0.0f; vector.y = 0.0f; vector.z = 0.0f; }
-    else if (dimensions == 2) { vector.x *= kx; vector.y *= ky; vector.z = 0.0f; w_scaled = 0.0f; }
-    else if (dimensions == 3) { vector.x *= kx; vector.y *= ky; vector.z *= kz; w_scaled = 0.0f; }
-    else { vector.x *= kx; vector.y *= ky; vector.z *= kz; w_scaled = w_in * kw; }
+    if (dimensions == 1) {
+      w_scaled = w_in * kw;
+      vector.x = 0.0f;
+      vector.y = 0.0f;
+      vector.z = 0.0f;
+    }
+    else if (dimensions == 2) {
+      vector.x *= kx;
+      vector.y *= ky;
+      vector.z = 0.0f;
+      w_scaled = 0.0f;
+    }
+    else if (dimensions == 3) {
+      vector.x *= kx;
+      vector.y *= ky;
+      vector.z *= kz;
+      w_scaled = 0.0f;
+    }
+    else {
+      vector.x *= kx;
+      vector.y *= ky;
+      vector.z *= kz;
+      w_scaled = w_in * kw;
+    }
     period = make_int4(Lx, Ly, Lz, Lw);
   }
   else {
-    if (dimensions == 1) { w_scaled = w_in / fw_scale; vector.x = 0.0f; vector.y = 0.0f; vector.z = 0.0f; }
-    else if (dimensions == 2) { vector.x /= fx_scale; vector.y /= fy_scale; vector.z = 0.0f; w_scaled = 0.0f; }
-    else if (dimensions == 3) { vector.x /= fx_scale; vector.y /= fy_scale; vector.z /= fz_scale; w_scaled = 0.0f; }
-    else { vector.x /= fx_scale; vector.y /= fy_scale; vector.z /= fz_scale; w_scaled = w_in / fw_scale; }
+    if (dimensions == 1) {
+      w_scaled = w_in / fw_scale;
+      vector.x = 0.0f;
+      vector.y = 0.0f;
+      vector.z = 0.0f;
+    }
+    else if (dimensions == 2) {
+      vector.x /= fx_scale;
+      vector.y /= fy_scale;
+      vector.z = 0.0f;
+      w_scaled = 0.0f;
+    }
+    else if (dimensions == 3) {
+      vector.x /= fx_scale;
+      vector.y /= fy_scale;
+      vector.z /= fz_scale;
+      w_scaled = 0.0f;
+    }
+    else {
+      vector.x /= fx_scale;
+      vector.y /= fy_scale;
+      vector.z /= fz_scale;
+      w_scaled = w_in / fw_scale;
+    }
     period = make_int4(256, 256, 256, 256);
   }
 
