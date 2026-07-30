@@ -1,1 +1,2 @@
 Referenced by pull request #162139, Fix #162135: Anim: node socket versioning error with embedded node trees
+Referenced by issue #162135, Anim: node socket versioning code incorrectly deals with embedded node trees
