@@ -359,7 +359,7 @@ void animviz_calc_motionpaths(Depsgraph *depsgraph,
   /* We need this extra loop for the edge case when the ranges of the motion paths don't overlap.
    * We need to touch at least one frame of each motion path to ensure it has the
    * `MOTIONPATH_VERT_EVALUATED` flag. In practice this will almost always be the case and this
-   * loop will trigger the `continue` immeditaly below. */
+   * loop will trigger the `continue` immediately below. */
   for (MPathTarget &mpt : targets) {
     if (evaluated_range.contains(mpt.mpath->start_frame) ||
         evaluated_range.contains(mpt.mpath->end_frame))
@@ -375,7 +375,9 @@ void animviz_calc_motionpaths(Depsgraph *depsgraph,
     /* Counts how many times the result of `motionpaths_calc_bake_target` hasn't changed existing
      * data. */
     int stable_result_counter = 0;
-    /* Using 2 so in case interpolation changed through a key we don't stop too early. */
+    /* At least 2 frames need to return a result different from the currently buffered values. This
+     * is because FCURVE_SMOOTH can affect the interpolation beyond a key, but on said key it will
+     * be on the exact value of the key. */
     constexpr int stable_result_threshold = 2;
 
     while (!finished_left || !finished_right) {
