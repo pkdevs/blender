@@ -41,6 +41,7 @@
 #include "NOD_geometry_nodes_lazy_function.hh"
 #include "NOD_geometry_nodes_srna.hh"
 #include "NOD_node_declaration.hh"
+#include "NOD_shader.h"
 #include "NOD_socket.hh"
 #include "NOD_socket_declarations.hh"
 #include "NOD_sync_sockets.hh"
@@ -353,6 +354,14 @@ struct NodeTreeRelations {
     return *all_trees_;
   }
 };
+
+enum class ShaderNodeAncestorFlags {
+  None = 0u,
+  ShaderMaterialOutput = 1u << 1,
+  ShaderToRGB = 1u << 2,
+  LightAccumulation = 1u << 3,
+};
+ENUM_OPERATORS(ShaderNodeAncestorFlags);
 
 struct TreeUpdateResult {
   bool interface_changed = false;
@@ -1458,6 +1467,86 @@ class NodeTreeMainUpdater {
     }
   }
 
+  void shader_tree_tag_by_ancestor(bNodeTree &ntree)
+  {
+    for (bNode &node : ntree.nodes) {
+      node.runtime->tmp_flag = 0;
+    }
+
+    bNode *output_node = ntreeShaderOutputNode(&ntree, SHD_OUTPUT_EEVEE);
+    if (!output_node) {
+      return;
+    }
+
+    printf(">>>>>>>>>>> %s\n", ntree.id.name);
+
+    for (const bNodeSocket *socket :
+         output_node->input_by_identifier("Surface"_ustr)->logically_linked_sockets())
+    {
+      socket->owner_node().runtime->tmp_flag |= short(
+          ShaderNodeAncestorFlags::ShaderMaterialOutput);
+    }
+
+    auto tag_by_ancestor = [](bNode *node, bNode * /*to_node*/, void *userdata) -> bool {
+      for (const bNodeSocket *socket : node->output_sockets()) {
+        for (const bNodeSocket *linked_socket : socket->logically_linked_sockets()) {
+          node->runtime->tmp_flag |= linked_socket->owner_node().runtime->tmp_flag;
+        }
+      }
+
+      if (node->type_legacy == SH_NODE_SHADERTORGB) {
+        node->runtime->tmp_flag |= short(ShaderNodeAncestorFlags::ShaderToRGB);
+      }
+      else if (node->type_legacy == SH_NODE_LIGHT_ACCUMULATION) {
+        node->runtime->tmp_flag |= short(ShaderNodeAncestorFlags::LightAccumulation);
+      }
+
+      ShaderNodeAncestorFlags flags = ShaderNodeAncestorFlags(node->runtime->tmp_flag);
+      printf("%s | Output: %d | ShaderToRGB: %d | LightAccumulation: %d\n",
+             node->label_or_name().c_str(),
+             bool(flags & ShaderNodeAncestorFlags::ShaderMaterialOutput),
+             bool(flags & ShaderNodeAncestorFlags::ShaderToRGB),
+             bool(flags & ShaderNodeAncestorFlags::LightAccumulation));
+
+      return true;
+    };
+
+    bke::node_chain_iterator_backwards(&ntree, output_node, tag_by_ancestor, nullptr, 0);
+  }
+
+  const char *shader_tree_link_error(bNodeLink &link)
+  {
+    bNode &node = *link.fromnode;
+    ShaderNodeAncestorFlags flags = ShaderNodeAncestorFlags(link.tonode->runtime->tmp_flag);
+    switch (node.type_legacy) {
+      case SH_NODE_LIGHT_ACCUMULATION: {
+        if (bool(flags & ShaderNodeAncestorFlags::ShaderToRGB)) {
+          return TIP_("Shader To RGB can't evaluate Light Accumulation nodes");
+        }
+        break;
+      }
+      case SH_NODE_ATTRIBUTE: {
+        if (static_cast<NodeShaderAttribute *>(node.storage)->type != SHD_ATTRIBUTE_LIGHT) {
+          break;
+        }
+      }
+      case SH_NODE_LIGHT_INFO:
+      case SH_NODE_LIGHT_EVALUATION:
+      case SH_NODE_SHADOW_RAYCAST: {
+        if (bool(flags & ShaderNodeAncestorFlags::ShaderMaterialOutput) &&
+            !bool(flags & ShaderNodeAncestorFlags::LightAccumulation))
+        {
+          return TIP_(
+              "Lighting nodes must be connected to a Light Accumulation node before reaching the "
+              "Material Output");
+        }
+        break;
+      }
+    }
+
+    return nullptr;
+  }
+
   void update_link_validation(bNodeTree &ntree)
   {
     const bNodeTreeZones *fallback_zones = nullptr;
@@ -1465,6 +1554,10 @@ class NodeTreeMainUpdater {
         ntree.runtime->last_valid_zones)
     {
       fallback_zones = ntree.runtime->last_valid_zones.get();
+    }
+
+    if (ntree.type == NTREE_SHADER) {
+      this->shader_tree_tag_by_ancestor(ntree);
     }
 
     for (bNodeLink &link : ntree.links) {
@@ -1529,6 +1622,13 @@ class NodeTreeMainUpdater {
         link.flag &= ~NODE_LINK_VALID;
         ntree.runtime->link_errors.add(NodeLinkKey{link}, NodeLinkError{error});
         continue;
+      }
+      if (ntree.type == NTREE_SHADER) {
+        if (const char *error = this->shader_tree_link_error(link)) {
+          link.flag &= ~NODE_LINK_VALID;
+          ntree.runtime->link_errors.add(NodeLinkKey{link}, NodeLinkError{error});
+          continue;
+        }
       }
     }
   }
