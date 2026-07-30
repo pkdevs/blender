@@ -2555,7 +2555,7 @@ IDNewNameResult BKE_id_rename(Main &bmain, ID &id, StringRefNull name, const IDN
   const IDNewNameResult result = BKE_libblock_rename(bmain, id, name, mode);
 
   auto deg_tag_id = [](ID &id) -> void {
-    DEG_id_tag_update(&id, ID_RECALC_NTREE_OUTPUT | ID_RECALC_SYNC_TO_EVAL | ID_RECALC_PARAMETERS);
+    DEG_id_tag_update(&id, ID_RECALC_SYNC_TO_EVAL | ID_RECALC_PARAMETERS);
     switch (GS(id.name)) {
       case ID_OB: {
         Object &ob = reinterpret_cast<Object &>(id);
