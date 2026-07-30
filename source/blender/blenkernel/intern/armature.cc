@@ -496,6 +496,38 @@ static void read_bone_collections(BlendDataReader *reader, bArmature *arm)
   }
 }
 
+/**
+ * While not likely, it can happen that bones load with no name. This would crash Blender and
+ * thus needs to be avoided. Sets "Bone.<some_number>" to any empty name. See #162046.
+ */
+static void fix_empty_bone_names(bArmature &armature)
+{
+  /* Custom unique bone name logic because the actual logic is editor code and relies on the
+   * hashmap already built. */
+  Set<StringRefNull> bone_names;
+  Vector<Bone *> no_name_bones;
+  BKE_armature_foreach_bone(armature, [&](const int /* bone_index */, const Bone &bone) {
+    if (bone.name[0] == '\0') {
+      no_name_bones.append(const_cast<Bone *>(&bone));
+    }
+    else {
+      bone_names.add(bone.name);
+    }
+  });
+  int unique_index = 0;
+  std::string bone_name;
+  // constexpr const std::string format_string("Bone.{3:d}");
+  for (Bone *bone : no_name_bones) {
+    bone_name = fmt::format("Bone.{:0>3}", unique_index);
+    while (bone_names.contains(bone_name)) {
+      unique_index++;
+      bone_name = fmt::format("Bone.{:0>3}", unique_index);
+    }
+    STRNCPY_UTF8(bone->name, bone_name.c_str());
+    unique_index++;
+  }
+}
+
 static void armature_blend_read_data(BlendDataReader *reader, ID *id)
 {
   bArmature *arm = id_cast<bArmature *>(id);
@@ -508,6 +540,8 @@ static void armature_blend_read_data(BlendDataReader *reader, ID *id)
   for (Bone &bone : arm->bonebase) {
     direct_link_bones(reader, &bone);
   }
+
+  fix_empty_bone_names(*arm);
 
   read_bone_collections(reader, arm);
 
