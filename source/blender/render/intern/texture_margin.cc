@@ -28,74 +28,79 @@
 
 #include <algorithm>
 #include <cmath>
+#include <ctime>
 
 namespace blender {
-
-namespace render::texturemargin {
 
 /**
  * The map class contains both a pixel map which maps out face indices for all UV-polygons and
  * adjacency tables.
  */
 class TextureMarginMap {
-  static const int directions[8][2];
-  static const int distances[8];
+  static const int directions[4][2];
+  static const int distances[4];
 
-  /** Maps UV-edges to their corresponding UV-edge. */
-  Vector<int> loop_adjacency_map_;
-  /** Maps UV-edges to their corresponding face. */
-  Array<int> loop_to_face_map_;
-
+  /* Mesh, UV and djkstra data shared between different methods. */
   int w_, h_;
   float uv_offset_[2];
-  Vector<uint32_t> pixel_data_;
-  ZSpan zspan_;
-  uint32_t value_to_store_;
-  bool write_mask_;
-  char *mask_;
 
   OffsetIndices<int> faces_;
   Span<int> corner_edges_;
+  Span<int> corner_verts_;
   Span<float2> uv_map_;
-  int totedge_;
+  Span<bool> uv_seams_;
+
+  Vector<uint32_t> pixel_data_;
+  char *mask_;
+
+  /* Rasterization arguments. */
+  uint32_t value_to_store_;
+  bool write_mask_;
+
+  /* Tables for pixel lookup. */
+  /* Maps face corners to other face corners with shared edge. */
+  Vector<int> corner_adjacency_;
+  /* Maps corners to their corresponding face. */
+  Array<int> corner_to_face_;
+  /* Is edge connected in UV space with its shared edge. */
+  Vector<bool> edge_uv_connectivity_;
+  /* Face winding in UV space. */
+  Vector<bool> face_uv_winding_;
+
+#define WINDING_CW false
+#define WINDING_CCW true
 
  public:
-  TextureMarginMap(size_t w,
-                   size_t h,
+  TextureMarginMap(const size_t w,
+                   const size_t h,
                    const float uv_offset[2],
-                   const int totedge,
                    const OffsetIndices<int> faces,
                    const Span<int> corner_edges,
-                   const Span<float2> uv_map)
+                   const Span<int> corner_verts,
+                   const Span<float2> uv_map,
+                   const Span<bool> uv_seams)
       : w_(w),
         h_(h),
         faces_(faces),
         corner_edges_(corner_edges),
+        corner_verts_(corner_verts),
         uv_map_(uv_map),
-        totedge_(totedge)
+        uv_seams_(uv_seams)
   {
     copy_v2_v2(uv_offset_, uv_offset);
-
-    pixel_data_.resize(w_ * h_, 0xFFFFFFFF);
-
-    zbuf_alloc_span(&zspan_, w_, h_);
-
-    build_tables();
   }
 
-  ~TextureMarginMap()
-  {
-    zbuf_free_span(&zspan_);
-  }
+  ~TextureMarginMap() {}
 
-  void set_pixel(int x, int y, uint32_t value)
+  void set_pixel(const int x, const int y, const uint32_t value)
   {
-    BLI_assert(x < w_);
-    BLI_assert(x >= 0);
+    BLI_assert(x >= 0 && x < w_);
+    BLI_assert(y >= 0 && y < h_);
+
     pixel_data_[y * w_ + x] = value;
   }
 
-  uint32_t get_pixel(int x, int y) const
+  uint32_t get_pixel(const int x, const int y) const
   {
     if (x < 0 || y < 0 || x >= w_ || y >= h_) {
       return 0xFFFFFFFF;
@@ -104,48 +109,73 @@ class TextureMarginMap {
     return pixel_data_[y * w_ + x];
   }
 
-  void rasterize_tri(
-      float *v1, float *v2, float *v3, uint32_t value, char *mask, bool writemask, bool fill)
-  {
-    /* NOTE: This is not thread safe, because the value to be written by the rasterizer is
-     * a class member. If this is ever made multi-threaded each thread needs to get its own. */
-    value_to_store_ = value;
-    mask_ = mask;
-    write_mask_ = writemask;
-
-    if (fill) {
-      zspan_rasterize_triangle(
-          &zspan_, this, &(v1[0]), &(v2[0]), &(v3[0]), TextureMarginMap::zscan_store_pixel);
-    }
-    else {
-      zspan_rasterize_conservative_wireframe(
-          &zspan_, this, &(v1[0]), &(v2[0]), &(v3[0]), TextureMarginMap::zscan_store_pixel);
-    }
-  }
-
   static void zscan_store_pixel(
       void *map, int x, int y, [[maybe_unused]] float u, [[maybe_unused]] float v)
   {
-    /* NOTE: Not thread safe, see comment above. */
     TextureMarginMap *m = static_cast<TextureMarginMap *>(map);
-    if (m->mask_) {
-      if (m->write_mask_) {
-        /* if there is a mask and write_mask_ is true, write to the mask */
-        m->mask_[y * m->w_ + x] = 1;
+
+    if (m->write_mask_) {
+      /* if there is a mask and write_mask_ is true, write to the mask */
+      m->mask_[y * m->w_ + x] = 1;
+      m->set_pixel(x, y, m->value_to_store_);
+    }
+    else {
+      /* if there is a mask and write_mask_ is false, read the mask
+       * to decide if the map needs to be written
+       */
+      if (m->mask_[y * m->w_ + x] != 0) {
         m->set_pixel(x, y, m->value_to_store_);
       }
-      else {
-        /* if there is a mask and write_mask_ is false, read the mask
-         * to decide if the map needs to be written
-         */
-        if (m->mask_[y * m->w_ + x] != 0) {
-          m->set_pixel(x, y, m->value_to_store_);
+    }
+  }
+
+  void rasterize_tris(char *mask,
+                      const bool draw_new_mask,
+                      const Span<float3> vert_positions,
+                      const bool conservative)
+  {
+    ZSpan zspan;
+    zbuf_alloc_span(&zspan, w_, h_);
+
+    pixel_data_.resize(w_ * h_, 0xFFFFFFFF);
+
+    Array<int3> corner_tris(poly_to_tri_count(faces_.size(), corner_edges_.size()));
+    bke::mesh::corner_tris_calc(vert_positions, faces_, corner_verts_, corner_tris);
+
+    Array<int> tri_faces(corner_tris.size());
+    bke::mesh::corner_tris_calc_face_indices(faces_, tri_faces);
+
+    mask_ = mask;
+    write_mask_ = draw_new_mask;
+
+    for (int fill = conservative ? 0 : 1; fill < 2; fill++) {
+      for (const int i : corner_tris.index_range()) {
+        const int3 tri = corner_tris[i];
+        float vec[3][2];
+
+        for (int a = 0; a < 3; a++) {
+          const float *uv = uv_map_[tri[a]];
+          vec[a][0] = (uv[0] - uv_offset_[0]) * float(w_);
+          vec[a][1] = (uv[1] - uv_offset_[1]) * float(h_);
+        }
+
+        /* NOTE: we need the top bit for the dijkstra distance map. */
+        BLI_assert(tri_faces[i] < 0x80000000);
+
+        value_to_store_ = tri_faces[i];
+
+        if (fill) {
+          zspan_rasterize_triangle(
+              &zspan, this, vec[0], vec[1], vec[2], TextureMarginMap::zscan_store_pixel);
+        }
+        else {
+          zspan_rasterize_conservative_wireframe(
+              &zspan, this, vec[0], vec[1], vec[2], TextureMarginMap::zscan_store_pixel);
         }
       }
     }
-    else {
-      m->set_pixel(x, y, m->value_to_store_);
-    }
+
+    zbuf_free_span(&zspan);
   }
 
 /* The map contains 2 kinds of pixels: DijkstraPixels and face indices. The top bit determines
@@ -179,13 +209,15 @@ class TextureMarginMap {
     for (int y = 0; y < h_; y++) {
       for (int x = 0; x < w_; x++) {
         if (DijkstraPixelIsUnset(get_pixel(x, y))) {
-          for (int i = 0; i < 8; i++) {
+          for (int i = 0; i < 4; i++) {
             int xx = x - directions[i][0];
             int yy = y - directions[i][1];
 
-            if (xx >= 0 && xx < w_ && yy >= 0 && yy < w_ && !IsDijkstraPixel(get_pixel(xx, yy))) {
+            if (xx >= 0 && xx < w_ && yy >= 0 && yy < h_ && !IsDijkstraPixel(get_pixel(xx, yy))) {
               set_pixel(x, y, PackDijkstraPixel(distances[i], i));
               active_pixels.append(DijkstraActivePixel(distances[i], x, y));
+
+              /* All distances are the same so we can pick any valid direction. */
               break;
             }
           }
@@ -193,54 +225,132 @@ class TextureMarginMap {
       }
     }
 
-    /* Not strictly needed because at this point it already is a heap. */
-#if 0
-    std::make_heap(active_pixels.begin(), active_pixels.end(), cmp_dijkstrapixel_fun);
-#endif
+    /* Not needed because all distances are the same. */
+    // std::make_heap(active_pixels.begin(), active_pixels.end(), cmp_dijkstrapixel_fun);
 
     while (active_pixels.size()) {
       std::pop_heap(active_pixels.begin(), active_pixels.end(), cmp_dijkstrapixel_fun);
       DijkstraActivePixel p = active_pixels.pop_last();
 
-      int dist = p.distance;
+      const int dist = p.distance;
 
-      if (dist < 2 * (margin + 1)) {
-        for (int i = 0; i < 8; i++) {
-          int x = p.x + directions[i][0];
-          int y = p.y + directions[i][1];
-          if (x >= 0 && x < w_ && y >= 0 && y < h_) {
-            uint32_t dp = get_pixel(x, y);
-            if (IsDijkstraPixel(dp) && (DijkstraPixelGetDistance(dp) > dist + distances[i])) {
-              BLI_assert(DijkstraPixelGetDirection(dp) != i);
-              set_pixel(x, y, PackDijkstraPixel(dist + distances[i], i));
-              active_pixels.append(DijkstraActivePixel(dist + distances[i], x, y));
-              std::push_heap(active_pixels.begin(), active_pixels.end(), cmp_dijkstrapixel_fun);
-            }
+      if (dist >= margin) {
+        continue;
+      }
+
+      for (int i = 0; i < 4; i++) {
+        const int new_distance = dist + distances[i];
+
+        if (new_distance > margin) {
+          continue;
+        }
+
+        const int x = p.x + directions[i][0];
+        const int y = p.y + directions[i][1];
+
+        if (x >= 0 && x < w_ && y >= 0 && y < h_) {
+          uint32_t dp = get_pixel(x, y);
+
+          if (IsDijkstraPixel(dp) && (DijkstraPixelGetDistance(dp) > new_distance)) {
+            BLI_assert(DijkstraPixelGetDirection(dp) != i);
+            set_pixel(x, y, PackDijkstraPixel(new_distance, i));
+            active_pixels.append(DijkstraActivePixel(new_distance, x, y));
+            std::push_heap(active_pixels.begin(), active_pixels.end(), cmp_dijkstrapixel_fun);
           }
         }
       }
     }
   }
 
+  void build_tables(const size_t edges_num)
+  {
+    corner_to_face_ = bke::mesh::build_corner_to_face_map(faces_);
+
+    corner_adjacency_.resize(corner_to_face_.size(), -1);
+    edge_uv_connectivity_.resize(edges_num, false);
+    face_uv_winding_.resize(faces_.size());
+
+    /* Temporary buffer to find connected corners. */
+    Vector<int> edge_to_corner;
+    edge_to_corner.resize(edges_num * 2, -1);
+
+    for (const int64_t face_a : faces_.index_range()) {
+      /* Use shoelace signed area formula to determine face winding. */
+      float signed_area = 0;
+
+      for (const int corner_a1 : faces_[face_a]) {
+        const int corner_a2 = face_next_corner(face_a, corner_a1);
+        const int edge = corner_edges_[corner_a1];
+
+        const float2 uv_a1 = corner_uv(corner_a1);
+        const float2 uv_a2 = corner_uv(corner_a2);
+
+        signed_area += math::cross(uv_a1, uv_a2);
+
+        /* Only faces with different winding (where a1 equals b2)
+         * should be considered adjacent.
+         * Use vertex indices order to find face with different winding.*/
+        const int edge_verts_order = corner_verts_[corner_a1] <= corner_verts_[corner_a2] ? 0 : 1;
+        const int edge_lookup_idx_a = edge * 2 + edge_verts_order;
+        const int edge_lookup_idx_b = edge * 2 + (1 - edge_verts_order);
+
+        const int prev_corner_a = edge_to_corner[edge_lookup_idx_a];
+        edge_to_corner[edge_lookup_idx_a] = corner_a1;
+
+        const int corner_b1 = edge_to_corner[edge_lookup_idx_b];
+
+        if (corner_b1 >= 0) {
+          const int face_b = corner_to_face_[corner_b1];
+          const int corner_b2 = face_next_corner(face_b, corner_b1);
+
+          if (prev_corner_a >= 0) {
+            corner_adjacency_[prev_corner_a] = -1;
+          }
+          
+          corner_adjacency_[corner_a1] = corner_b1;
+          corner_adjacency_[corner_b1] = corner_a1;
+
+          const float2 uv_b1 = corner_uv(corner_b1);
+          const float2 uv_b2 = corner_uv(corner_b2);
+
+          const bool uv_connected = (math::length_squared(uv_a1 - uv_b2) <= FLT_EPSILON) &&
+                                    (math::length_squared(uv_a2 - uv_b1) <= FLT_EPSILON);
+
+          edge_uv_connectivity_[edge] = uv_connected;
+          edge_uv_connectivity_[corner_edges_[corner_b1]] = uv_connected;
+        }
+      }
+
+      face_uv_winding_[face_a] = (signed_area >= 0) ? WINDING_CCW : WINDING_CW;
+    }
+  }
+
   /**
    * Walk over the map and for margin pixels follow the direction stored in the bottom 3
-   * bits back to the face.
-   * Then look up the pixel from the next face.
+   * bits back to the face. Then look up the pixel from the next face.
    */
-  void lookup_pixels(ImBuf *ibuf, char *mask, int maxPolygonSteps)
+  void lookup_pixels(ImBuf *ibuf, ImBuf *im_read, int maxFaceSteps)
   {
     float4 *ibuf_ptr_fl = reinterpret_cast<float4 *>(ibuf->float_data_for_write());
     uchar4 *ibuf_ptr_ch = reinterpret_cast<uchar4 *>(ibuf->byte_data_for_write());
+
     size_t pixel_index = 0;
+
     for (int y = 0; y < h_; y++) {
-      for (int x = 0; x < w_; x++) {
+      for (int x = 0; x < w_; x++, pixel_index++) {
         uint32_t dp = pixel_data_[pixel_index];
-        if (IsDijkstraPixel(dp) && !DijkstraPixelIsUnset(dp)) {
+
+        int xx = x, yy = y;
+        bool inside_face = false;
+
+        if (IsDijkstraPixel(dp)) {
+          /* Margin pixel */
+          if (DijkstraPixelIsUnset(dp)) {
+            continue;
+          }
+
           int dist = DijkstraPixelGetDistance(dp);
           int direction = DijkstraPixelGetDirection(dp);
-
-          int xx = x;
-          int yy = y;
 
           /* Follow the dijkstra directions to find the face this margin pixels belongs to. */
           while (dist > 0) {
@@ -252,329 +362,283 @@ class TextureMarginMap {
             direction = DijkstraPixelGetDirection(dp);
           }
 
-          uint32_t face = get_pixel(xx, yy);
+          BLI_assert(!IsDijkstraPixel(start_poly));
+        }
+        else {
+          /* Face pixel */
+          /* Process face pixels only close to empty pixels to improve performance a bit. */
+          bool found_empty = false;
 
-          BLI_assert(!IsDijkstraPixel(face));
+          for (int step_y = -2; step_y <= 2; step_y++) {
+            for (int step_x = -2; step_x <= 2; step_x++) {
+              if (step_x == 0 && step_y == 0) {
+                continue;
+              }
 
-          float destX, destY;
+              const int tmp_x = x + step_x;
+              const int tmp_y = y + step_y;
 
-          int other_poly;
-          bool found_pixel_in_polygon = false;
-          if (lookup_pixel_polygon_neighborhood(x, y, &face, &destX, &destY, &other_poly)) {
+              if (tmp_x < 0 || tmp_x >= w_ || tmp_y < 0 || tmp_y >= h_) {
+                continue;
+              }
 
-            for (int i = 0; i < maxPolygonSteps; i++) {
-              /* Force to pixel grid. */
-              int nx = int(round(destX));
-              int ny = int(round(destY));
-              uint32_t polygon_from_map = get_pixel(nx, ny);
-              if (other_poly == polygon_from_map) {
-                found_pixel_in_polygon = true;
+              if (IsDijkstraPixel(get_pixel(x + step_x, y + step_y))) {
+                found_empty = true;
                 break;
               }
-
-              float dist_to_edge;
-              /* Look up again, but starting from the face we were expected to land in. */
-              if (!lookup_pixel(nx, ny, other_poly, &destX, &destY, &other_poly, &dist_to_edge)) {
-                found_pixel_in_polygon = false;
-                break;
-              }
-            }
-
-            if (found_pixel_in_polygon) {
-              if (ibuf_ptr_fl) {
-                ibuf_ptr_fl[pixel_index] = imbuf::interpolate_bilinear_border_fl(
-                    ibuf, destX, destY);
-              }
-              if (ibuf_ptr_ch) {
-                ibuf_ptr_ch[pixel_index] = imbuf::interpolate_bilinear_border_byte(
-                    ibuf, destX, destY);
-              }
-              /* Add our new pixels to the assigned pixel map. */
-              mask[pixel_index] = 1;
             }
           }
+
+          if (!found_empty) {
+            continue;
+          }
+
+          inside_face = true;
         }
-        else if (DijkstraPixelIsUnset(dp) || !IsDijkstraPixel(dp)) {
-          /* These are not margin pixels, make sure the extend filter which is run after this step
-           * leaves them alone.
-           */
-          mask[pixel_index] = 1;
+
+        const uint32_t start_face = get_pixel(xx, yy);
+        float2 src_point = float2(x, y) + 0.5f;
+
+        int prev_face = -1;
+        int dst_face;
+        float src_edge_perp_signed_dist;
+        float2 dst_point;
+        float2 point_on_src_edge, point_on_dst_edge;
+
+        bool found_edge = lookup_pixel(src_point,
+                                       prev_face,
+                                       start_face,
+                                       &dst_point,
+                                       &dst_face,
+                                       &src_edge_perp_signed_dist,
+                                       &point_on_src_edge,
+                                       &point_on_dst_edge);
+
+        if (!found_edge) {
+          continue;
         }
-        pixel_index++;
+
+        /* Project source or destination point on an edge based on edge signed distance. */
+        if (src_edge_perp_signed_dist > 0) {
+          src_point = point_on_src_edge;
+        }
+        else {
+          dst_point = point_on_dst_edge;
+        }
+
+        bool found_pixel_in_polygon = true;
+
+        for (int i = 0; i < maxFaceSteps; i++) {
+          /* If at least one pixel in interpolation range contains target face
+           * then it's safe to sample interpolated data from this point.
+           * A better solution is to analytically check if point is inside
+           * target face, but this is fine enough heuristic considering
+           * we may have some complex concave face here. */
+          const int nx = std::clamp(int(floor(dst_point.x - 0.5f)), -1, w_ - 1);
+          const int ny = std::clamp(int(floor(dst_point.y - 0.5f)), -1, h_ - 1);
+
+          if (get_pixel(nx, ny) == dst_face || get_pixel(nx + 1, ny) == dst_face ||
+              get_pixel(nx, ny + 1) == dst_face || get_pixel(nx + 1, ny + 1) == dst_face)
+          {
+            break;
+          }
+
+          /* Look up again, but starting from the face we were expected to land in. */
+          prev_face = dst_face;
+          float tmp_edge_sd;
+
+          found_edge = lookup_pixel(dst_point,
+                                    prev_face,
+                                    dst_face,
+                                    &dst_point,
+                                    &dst_face,
+                                    &tmp_edge_sd,
+                                    &point_on_src_edge,
+                                    &point_on_dst_edge);
+
+          /* Selected edge does not have adjacent face, so clamp
+           * destination point inside previous face. */
+          if (!found_edge) {
+            found_pixel_in_polygon = false;
+            // dst_point = point_on_dst_edge;
+            break;
+          }
+        }
+
+        if (!found_pixel_in_polygon) {
+          continue;
+        }
+
+        float w = std::clamp(src_edge_perp_signed_dist + 0.5f, 0.0f, 1.0f);
+
+        if (ibuf_ptr_fl) {
+          float4 inside_col = imbuf::interpolate_bilinear_fl(
+              im_read, src_point.x - 0.5f, src_point.y - 0.5f);
+          float4 outside_col = imbuf::interpolate_bilinear_fl(
+              im_read, dst_point.x - 0.5f, dst_point.y - 0.5f);
+
+          ibuf_ptr_fl[pixel_index] = math::interpolate(inside_col, outside_col, w);
+        }
+
+        if (ibuf_ptr_ch) {
+          uchar4 inside_col = imbuf::interpolate_bilinear_byte(
+              im_read, src_point.x - 0.5f, src_point.y - 0.5f);
+          uchar4 outside_col = imbuf::interpolate_bilinear_byte(
+              im_read, dst_point.x - 0.5f, dst_point.y - 0.5f);
+
+          ibuf_ptr_ch[pixel_index] = math::interpolate(inside_col, outside_col, w);
+        }
+
+        /* Add our new pixels to the assigned pixel map. */
+        mask_[pixel_index] = 1;
       }
     }
   }
 
  private:
-  float2 uv_to_xy(const float2 &uv_map) const
+  float2 corner_uv(const int corner) const
   {
-    float2 ret;
-    ret.x = (((uv_map[0] - uv_offset_[0]) * w_) - (0.5f + 0.001f));
-    ret.y = (((uv_map[1] - uv_offset_[1]) * h_) - (0.5f + 0.001f));
-    return ret;
+    return (uv_map_[corner] - float2(uv_offset_[0], uv_offset_[1])) * float2(w_, h_);
   }
 
-  void build_tables()
+  int face_next_corner(const int face, const int corner) const
   {
-    loop_to_face_map_ = bke::mesh::build_corner_to_face_map(faces_);
+    int next_corner = corner + 1;
 
-    loop_adjacency_map_.resize(corner_edges_.size(), -1);
-
-    Vector<int> tmpmap;
-    tmpmap.resize(totedge_, -1);
-
-    for (const int64_t i : corner_edges_.index_range()) {
-      int edge = corner_edges_[i];
-      if (tmpmap[edge] == -1) {
-        loop_adjacency_map_[i] = -1;
-        tmpmap[edge] = i;
-      }
-      else {
-        BLI_assert(tmpmap[edge] >= 0);
-        loop_adjacency_map_[i] = tmpmap[edge];
-        loop_adjacency_map_[tmpmap[edge]] = i;
-      }
+    if (next_corner >= faces_[face].one_after_last()) {
+      next_corner = faces_[face].start();
     }
+
+    return next_corner;
   }
 
   /**
-   * Call lookup_pixel for the start_poly. If that fails, try the adjacent polygons as well.
-   * Because the Dijkstra is not very exact in determining which face is the closest, the
-   * face we need can be the one next to the one the Dijkstra map provides. To prevent missing
-   * pixels also check the neighboring polygons.
+   * Find which edge of src_face is closest to x,y. Look up its adjacent UV-edge and face.
+   * Returns the location of the equivalent pixel in the other face and other information.
+   * Returns true if a nearest edge has an adjacent face, false if it doesn't, which can happen if
+   * the shared edge is invalid, or if the UV-edge doesn't have an adjacent face.
    */
-  bool lookup_pixel_polygon_neighborhood(
-      float x, float y, uint32_t *r_start_poly, float *r_destx, float *r_desty, int *r_other_poly)
+  bool lookup_pixel(const float2 point,
+                    const int prev_face,
+                    const int src_face,
+
+                    float2 *r_dst_point,
+                    int *r_other_face,
+                    float *r_src_edge_perp_signed_dist,
+                    float2 *r_point_on_src_edge,
+                    float2 *r_point_on_dsr_edge) const
   {
-    float found_dist;
-    if (lookup_pixel(x, y, *r_start_poly, r_destx, r_desty, r_other_poly, &found_dist)) {
-      return true;
-    }
+    const bool src_face_winding = face_uv_winding_[src_face];
 
-    int loopstart = faces_[*r_start_poly].start();
-    int totloop = faces_[*r_start_poly].size();
+    int found_corner = -1;
+    float min_dist = FLT_MAX;
 
-    float destx, desty;
-    int foundpoly;
+    bool found_valid;
+    float found_perp_signed_dist;
+    float found_t;
+    float found_ablen;
+    float2 found_point_on_edge;
 
-    float mindist = -1.0f;
+    /* Find the closest edge on which the point x,y can be projected. */
+    for (const int corner_1 : faces_[src_face]) {
+      bool is_valid = true;
 
-    /* Loop over all adjacent polygons and determine which edge is closest.
-     * This could be optimized by only inspecting neighbors which are on the edge of an island.
-     * But it seems fast enough for now and that would add a lot of complexity. */
-    for (int i = 0; i < totloop; i++) {
-      int otherloop = loop_adjacency_map_[i + loopstart];
+      const bool has_adjacent_face = corner_adjacency_[corner_1] >= 0;
+      is_valid &= has_adjacent_face;
 
-      if (otherloop < 0) {
+      /* Only non-seam edges disconnected in UV space should be
+       * considered for the first iteration. */
+      if (has_adjacent_face && prev_face == -1) {
+        const int edge = corner_edges_[corner_1];
+        is_valid &= !uv_seams_[edge];
+        is_valid &= !edge_uv_connectivity_[edge];
+      }
+
+      /* Consider selecting only valid edges for the first iteration. */
+      if (!is_valid && prev_face == -1) {
         continue;
       }
 
-      uint32_t face = loop_to_face_map_[otherloop];
+      const int corner_2 = face_next_corner(src_face, corner_1);
 
-      if (lookup_pixel(x, y, face, &destx, &desty, &foundpoly, &found_dist)) {
-        if (mindist < 0.0f || found_dist < mindist) {
-          mindist = found_dist;
-          *r_other_poly = foundpoly;
-          *r_destx = destx;
-          *r_desty = desty;
-          *r_start_poly = face;
-        }
-      }
-    }
+      const float2 uv_1 = corner_uv(corner_1);
+      const float2 uv_2 = corner_uv(corner_2);
 
-    return mindist >= 0.0f;
-  }
-
-  /**
-   * Find which edge of the src_poly is closest to x,y. Look up its adjacent UV-edge and face.
-   * Then return the location of the equivalent pixel in the other face.
-   * Returns true if a new pixel location was found, false if it wasn't, which can happen if the
-   * margin pixel is on a corner, or the UV-edge doesn't have an adjacent face.
-   */
-  bool lookup_pixel(float x,
-                    float y,
-                    int src_poly,
-                    float *r_destx,
-                    float *r_desty,
-                    int *r_other_poly,
-                    float *r_dist_to_edge)
-  {
-    float2 point(x, y);
-
-    *r_destx = *r_desty = 0;
-
-    int found_edge = -1;
-    float found_dist = -1;
-    float found_t = 0;
-
-    /* Find the closest edge on which the point x,y can be projected.
-     */
-    for (size_t i = 0; i < faces_[src_poly].size(); i++) {
-      int l1 = faces_[src_poly].start() + i;
-      int l2 = l1 + 1;
-      if (l2 >= faces_[src_poly].start() + faces_[src_poly].size()) {
-        l2 = faces_[src_poly].start();
-      }
-      /* edge points */
-      float2 edgepoint1 = uv_to_xy(uv_map_[l1]);
-      float2 edgepoint2 = uv_to_xy(uv_map_[l2]);
       /* Vector AB is the vector from the first edge point to the second edge point.
        * Vector AP is the vector from the first edge point to our point under investigation. */
-      float2 ab = edgepoint2 - edgepoint1;
-      float2 ap = point - edgepoint1;
+      const float2 ab = uv_2 - uv_1;
+      const float2 ap = point - uv_1;
+
+      const float ablensq = math::length_squared(ab);
+      const float ablen = sqrtf(ablensq);
 
       /* Project ap onto ab. */
-      float dotv = math::dot(ab, ap);
+      const float dotv = math::dot(ab, ap);
+      const float t = dotv / ablensq;
+      const float t_clamped = std::clamp(t, 0.0f, 1.0f);
 
-      float ablensq = math::length_squared(ab);
+      /* Works both for the insides and outsides of convex and concave faces. */
+      const float distance = math::length(uv_1 + (t_clamped * ab) - point) +
+                             fabs(t_clamped - t) * ablen;
 
-      float t = dotv / ablensq;
+      if (distance < min_dist) {
+        /* Store the info of the closest edge so far. */
+        float2 perpendicular_ab = float2(ab.y, -ab.x);
+        perpendicular_ab *= (src_face_winding == WINDING_CW) ? -1 : 1;
 
-      if (t >= 0.0 && t <= 1.0) {
+        const float signed_dist = math::dot(perpendicular_ab, ap) / ablen;
 
-        /* Find the point on the edge closest to P */
-        float2 reflect_point = edgepoint1 + (t * ab);
-        /* This is the vector to P, so 90 degrees out from the edge. */
-        float2 reflect_vec = reflect_point - point;
+        found_corner = corner_1;
+        min_dist = distance;
 
-        float reflectLen = sqrt(reflect_vec[0] * reflect_vec[0] + reflect_vec[1] * reflect_vec[1]);
-        float cross = ab[0] * reflect_vec[1] - ab[1] * reflect_vec[0];
-        /* Only if P is on the outside of the edge, which means the cross product is positive,
-         * we consider this edge.
-         */
-        bool valid = (cross > 0.0);
-
-        if (valid && (found_dist < 0 || reflectLen < found_dist)) {
-          /* Stother_ab the info of the closest edge so far. */
-          found_dist = reflectLen;
-          found_t = t;
-          found_edge = i + faces_[src_poly].start();
-        }
+        found_valid = is_valid;
+        found_perp_signed_dist = signed_dist;
+        found_t = t;
+        found_ablen = ablen;
+        found_point_on_edge = uv_1 + t * ab;
       }
     }
 
-    if (found_edge < 0) {
+    if (found_corner < 0 || !found_valid) {
       return false;
     }
 
-    *r_dist_to_edge = found_dist;
+    /* Get the 'other' corner. I.E. the UV corner from the neighbor face. */
+    const int other_corner_1 = corner_adjacency_[found_corner];
 
-    /* Get the 'other' edge. I.E. the UV edge from the neighbor face. */
-    int other_edge = loop_adjacency_map_[found_edge];
+    const int dst_face = corner_to_face_[other_corner_1];
+    bool dst_face_winding = face_uv_winding_[dst_face];
 
-    if (other_edge < 0) {
-      return false;
-    }
+    const int other_corner_2 = face_next_corner(dst_face, other_corner_1);
 
-    int dst_poly = loop_to_face_map_[other_edge];
+    const float2 other_uv_1 = corner_uv(other_corner_1);
+    const float2 other_uv_2 = corner_uv(other_corner_2);
 
-    if (r_other_poly) {
-      *r_other_poly = dst_poly;
-    }
+    /* Calculate the vector from the other edge second point to its first point.
+     * Edge vertex order is inverted for valid connected faces. */
+    const float2 other_ab = other_uv_1 - other_uv_2;
+    const float2 projected_point = other_uv_2 + (found_t * other_ab);
 
-    int other_edge2 = other_edge + 1;
-    if (other_edge2 >= faces_[dst_poly].start() + faces_[dst_poly].size()) {
-      other_edge2 = faces_[dst_poly].start();
-    }
+    float2 perpendicular_other_ab = float2(other_ab.y, -other_ab.x);
+    perpendicular_other_ab *= (dst_face_winding == WINDING_CW) ? -1 : 1;
 
-    float2 other_edgepoint1 = uv_to_xy(uv_map_[other_edge]);
-    float2 other_edgepoint2 = uv_to_xy(uv_map_[other_edge2]);
+    /* The new point is `found_sd * length(other_ab) / length(ab)` units
+     * away from projected_point at a 90 degree angle to other_ab */
+    const float2 new_point = projected_point +
+                             (found_perp_signed_dist / found_ablen) * perpendicular_other_ab;
 
-    /* Calculate the vector from the order edges last point to its first point. */
-    float2 other_ab = other_edgepoint1 - other_edgepoint2;
-    float2 other_reflect_point = other_edgepoint2 + (found_t * other_ab);
-    float2 perpendicular_other_ab;
-    perpendicular_other_ab.x = other_ab.y;
-    perpendicular_other_ab.y = -other_ab.x;
-
-    /* The new point is dound_dist distance from other_reflect_point at a 90 degree angle to
-     * other_ab */
-    float2 new_point = other_reflect_point + (found_dist / math::length(perpendicular_other_ab)) *
-                                                 perpendicular_other_ab;
-
-    *r_destx = new_point.x;
-    *r_desty = new_point.y;
+    *r_dst_point = new_point;
+    *r_src_edge_perp_signed_dist = found_perp_signed_dist;
+    *r_other_face = dst_face;
+    *r_point_on_src_edge = found_point_on_edge;
+    *r_point_on_dsr_edge = projected_point;
 
     return true;
   }
 };  // class TextureMarginMap
 
-const int TextureMarginMap::directions[8][2] = {
-    {-1, 0}, {-1, -1}, {0, -1}, {1, -1}, {1, 0}, {1, 1}, {0, 1}, {-1, 1}};
-const int TextureMarginMap::distances[8] = {2, 3, 2, 3, 2, 3, 2, 3};
-
-static void generate_margin(ImBuf *ibuf,
-                            char *mask,
-                            const int margin,
-                            const Span<float3> vert_positions,
-                            const int edges_num,
-                            const OffsetIndices<int> faces,
-                            const Span<int> corner_edges,
-                            const Span<int> corner_verts,
-                            const Span<float2> uv_map,
-                            const float uv_offset[2],
-                            const bool conservative)
-{
-  Array<int3> corner_tris(poly_to_tri_count(faces.size(), corner_edges.size()));
-  bke::mesh::corner_tris_calc(vert_positions, faces, corner_verts, corner_tris);
-
-  Array<int> tri_faces(corner_tris.size());
-  bke::mesh::corner_tris_calc_face_indices(faces, tri_faces);
-
-  TextureMarginMap map(ibuf->x, ibuf->y, uv_offset, edges_num, faces, corner_edges, uv_map);
-
-  bool draw_new_mask = false;
-  /* Now the map contains 3 sorts of values: 0xFFFFFFFF for empty pixels, `0x80000000 + polyindex`
-   * for margin pixels, just `polyindex` for face pixels. */
-  if (mask) {
-    mask = MEM_dupalloc(mask);
-  }
-  else {
-    mask = MEM_new_array_zeroed<char>(size_t(ibuf->x) * size_t(ibuf->y), __func__);
-    draw_new_mask = true;
-  }
-
-  for (int fill = conservative ? 0 : 1; fill < 2; fill++) {
-    for (const int i : corner_tris.index_range()) {
-      const int3 tri = corner_tris[i];
-      float vec[3][2];
-
-      for (int a = 0; a < 3; a++) {
-        const float *uv = uv_map[tri[a]];
-
-        vec[a][0] = (uv[0] - uv_offset[0]) * float(ibuf->x);
-        vec[a][1] = (uv[1] - uv_offset[1]) * float(ibuf->y);
-      }
-
-      /* NOTE: we need the top bit for the dijkstra distance map. */
-      BLI_assert(tri_faces[i] < 0x80000000);
-
-      map.rasterize_tri(vec[0], vec[1], vec[2], tri_faces[i], mask, draw_new_mask, fill);
-    }
-  }
-
-  char *tmpmask = MEM_dupalloc(mask);
-  /* Extend (with averaging) by 2 pixels. Those will be overwritten, but it
-   * helps linear interpolations on the edges of polygons. */
-  IMB_filter_extend(ibuf, tmpmask, 2);
-  MEM_delete(tmpmask);
-
-  map.grow_dijkstra(margin);
-
-  /* Looking further than 3 polygons away leads to so much cumulative rounding
-   * that it isn't worth it. So hard-code it to 3. */
-  map.lookup_pixels(ibuf, mask, 3);
-
-  /* Use the extend filter to fill in the missing pixels at the corners, not strictly correct, but
-   * the visual difference seems very minimal. This also catches pixels we missed because of very
-   * narrow polygons.
-   */
-  IMB_filter_extend(ibuf, mask, margin);
-
-  MEM_delete(mask);
-}
-
-}  // namespace render::texturemargin
+const int TextureMarginMap::directions[4][2] = {{-1, 0}, {1, 0}, {0, -1}, {0, 1}};
+const int TextureMarginMap::distances[4] = {1, 1, 1, 1};
 
 void RE_generate_texturemargin_adjacentfaces(ImBuf *ibuf,
                                              char *mask,
@@ -584,21 +648,94 @@ void RE_generate_texturemargin_adjacentfaces(ImBuf *ibuf,
                                              const float uv_offset[2],
                                              const bool conservative)
 {
+  clock_t start = clock();
+  /* Initialize TextureMarginMap with all necessary mesh attributes. */
   const StringRef name = uv_layer.is_empty() ? mesh->active_uv_map_name() : uv_layer;
   const bke::AttributeAccessor attributes = mesh->attributes();
-  const VArraySpan<float2> uv_map = *attributes.lookup<float2>(name, bke::AttrDomain::Corner);
 
-  render::texturemargin::generate_margin(ibuf,
-                                         mask,
-                                         margin,
-                                         mesh->vert_positions(),
-                                         mesh->edges_num,
-                                         mesh->faces(),
-                                         mesh->corner_edges(),
-                                         mesh->corner_verts(),
-                                         uv_map,
-                                         uv_offset,
-                                         conservative);
+  const VArraySpan<float2> uv_map = *attributes.lookup<float2>(name, bke::AttrDomain::Corner);
+  const VArraySpan<bool> uv_seams = *attributes.lookup_or_default<bool>(
+      "uv_seam", bke::AttrDomain::Edge, false);
+
+  TextureMarginMap map(ibuf->x,
+                       ibuf->y,
+                       uv_offset,
+                       mesh->faces(),
+                       mesh->corner_edges(),
+                       mesh->corner_verts(),
+                       uv_map,
+                       uv_seams);
+
+  bool draw_new_mask = false;
+
+  if (mask) {
+    mask = MEM_dupalloc(mask);
+  }
+  else {
+    mask = MEM_new_array_zeroed<char>(size_t(ibuf->x) * size_t(ibuf->y), __func__);
+    draw_new_mask = true;
+  }
+  
+  clock_t raster_start = clock();
+
+  map.rasterize_tris(mask, draw_new_mask, mesh->vert_positions(), conservative);
+  clock_t dijkstra_start = clock();
+  map.grow_dijkstra(margin);
+
+  /* Extend (with averaging). Those will be partially overwritten, but it
+   * helps linear interpolations on the edges of faces during pixel lookup.
+   * Produced mask is used to preserve original colors outside of expected margin. */
+  clock_t extend_start = clock();
+  char *tmpmask = MEM_dupalloc(mask);
+  IMB_filter_extend(ibuf, tmpmask, margin);
+  ImBuf *im_read = IMB_dupImBuf(ibuf);
+
+  /* Looking further than 3 faces is usually not worth it for texture margin. */
+  clock_t tables_build_start = clock();
+  map.build_tables(mesh->edges_num);
+  clock_t lookup_start = clock();
+  map.lookup_pixels(ibuf, im_read, 3);
+  clock_t finalize_start = clock();
+
+  /* Extend around original pixels and pixels blended with adjacent faces. */
+  IMB_filter_extend(ibuf, mask, margin);
+
+  /* Restore original pixels outside expected margin. */
+  const float4 *readbuf_ptr_fl = reinterpret_cast<const float4 *>(im_read->float_data());
+  const uchar4 *readbuf_ptr_ch = reinterpret_cast<const uchar4 *>(im_read->byte_data());
+
+  float4 *ibuf_ptr_fl = reinterpret_cast<float4 *>(ibuf->float_data_for_write());
+  uchar4 *ibuf_ptr_ch = reinterpret_cast<uchar4 *>(ibuf->byte_data_for_write());
+
+  size_t pixels_num = size_t(ibuf->x) * size_t(ibuf->y);
+
+  for (size_t i = 0; i < pixels_num; i++) {
+    if (tmpmask[i] != FILTER_MASK_NULL) {
+      continue;
+    }
+
+    if (ibuf_ptr_fl) {
+      ibuf_ptr_fl[i] = readbuf_ptr_fl[i];
+    }
+    if (ibuf_ptr_ch) {
+      ibuf_ptr_ch[i] = readbuf_ptr_ch[i];
+    }
+  }
+
+  IMB_freeImBuf(im_read);
+  MEM_delete(mask);
+  MEM_delete(tmpmask);
+  
+  clock_t end_time = clock();
+
+  printf("INIT  Time: %f sec\n", float(raster_start - start) / CLOCKS_PER_SEC);
+  printf("RASRT Time: %f sec\n", float(dijkstra_start - raster_start) / CLOCKS_PER_SEC);
+  printf("DIJKS Time: %f sec\n", float(extend_start - dijkstra_start) / CLOCKS_PER_SEC);
+  printf("EXTEN Time: %f sec\n", float(tables_build_start - extend_start) / CLOCKS_PER_SEC);
+  printf("BTABL Time: %f sec\n", float(lookup_start - tables_build_start) / CLOCKS_PER_SEC);
+  printf("LOOKU Time: %f sec\n", float(finalize_start - lookup_start) / CLOCKS_PER_SEC);
+  printf("FINAL Time: %f sec\n", float(end_time - finalize_start) / CLOCKS_PER_SEC);
+  printf("\nFULL  Time: %f sec\n", float(end_time - start) / CLOCKS_PER_SEC);
 }
 
 }  // namespace blender
