@@ -325,7 +325,6 @@ template<typename T> struct SymbolTemplate {
   /* Definition. */
   TemplateDecl decl;
 
-  /* TODO(fclem): This is a bit stupid. */
   unordered_map<string, T *> instances;
 
   /* For argument dependent lookup. Maps a template argument to a function argument. */

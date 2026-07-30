@@ -787,7 +787,6 @@ struct BSLParser {
         case Xor: {
           NODE(Op);
           next();
-          /* TODO Complete expression parsing. */
           break;
         }
         case Comma: {
