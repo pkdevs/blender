@@ -40,11 +40,29 @@ static const EnumPropertyItem scale_mode_items[] = {
     {0, nullptr, 0, nullptr, nullptr},
 };
 
+static const EnumPropertyItem domain_items[] = {
+    {int(AttrDomain::Face),
+      "FACE",
+      ICON_NONE,
+      "Face",
+      "Scale individual faces or neighboring face islands"},
+    {int(AttrDomain::Edge),
+      "EDGE",
+      ICON_NONE,
+      "Edge",
+      "Scale individual edges or neighboring edge islands"},
+    {0, nullptr, 0, nullptr, nullptr},
+};
+
 static void node_declare(NodeDeclarationBuilder &b)
 {
   b.use_custom_socket_order();
   b.allow_any_socket_order();
-  b.add_default_layout();
+  b.add_input<decl::Menu>("Domain"_ustr)
+    .default_value(AttrDomain::Face)
+    .static_items(domain_items)
+    .description("Element type to transform")
+    .optional_label();
   b.add_input<decl::Geometry>("Geometry"_ustr)
       .supported_type(GeometryComponent::Type::Mesh)
       .description("Geometry to scale elements of");
@@ -73,18 +91,8 @@ static void node_declare(NodeDeclarationBuilder &b)
       .default_value({1.0f, 0.0f, 0.0f})
       .evaluated_geometry_field()
       .description("Direction in which to scale the element")
-      .usage_by_single_menu(GEO_NODE_SCALE_ELEMENTS_SINGLE_AXIS);
+      .usage_by_menu("Scale Mode"_ustr, GEO_NODE_SCALE_ELEMENTS_SINGLE_AXIS);
 };
-
-static void node_layout(ui::Layout &layout, bContext * /*C*/, PointerRNA *ptr)
-{
-  layout.prop(ptr, "domain", UI_ITEM_NONE, "", ICON_NONE);
-}
-
-static void node_init(bNodeTree * /*tree*/, bNode *node)
-{
-  node->custom1 = int16_t(AttrDomain::Face);
-}
 
 static Span<int> front_indices_to_same_value(const Span<int> indices, const Span<int> values)
 {
@@ -464,8 +472,7 @@ static void gather_edge_islands(const Mesh &mesh,
 
 static void node_geo_exec(GeoNodeExecParams params)
 {
-  const bNode &node = params.node();
-  const AttrDomain domain = AttrDomain(node.custom1);
+  const AttrDomain domain = params.get_input<AttrDomain>("Domain"_ustr);
   const auto scale_mode = params.get_input<GeometryNodeScaleElementsMode>("Scale Mode"_ustr);
 
   GeometrySet geometry = params.extract_input<GeometrySet>("Geometry"_ustr);
@@ -531,31 +538,6 @@ static void node_geo_exec(GeoNodeExecParams params)
   params.set_output("Geometry"_ustr, std::move(geometry));
 }
 
-static void node_rna(StructRNA *srna)
-{
-  static const EnumPropertyItem domain_items[] = {
-      {int(AttrDomain::Face),
-       "FACE",
-       ICON_NONE,
-       "Face",
-       "Scale individual faces or neighboring face islands"},
-      {int(AttrDomain::Edge),
-       "EDGE",
-       ICON_NONE,
-       "Edge",
-       "Scale individual edges or neighboring edge islands"},
-      {0, nullptr, 0, nullptr, nullptr},
-  };
-
-  RNA_def_node_enum(srna,
-                    "domain",
-                    "Domain",
-                    "Element type to transform",
-                    domain_items,
-                    NOD_inline_enum_accessors(custom1),
-                    int(AttrDomain::Face));
-}
-
 static void node_register()
 {
   static bke::bNodeType ntype;
@@ -567,11 +549,7 @@ static void node_register()
   ntype.nclass = NODE_CLASS_GEOMETRY;
   ntype.geometry_node_execute = node_geo_exec;
   ntype.declare = node_declare;
-  ntype.draw_buttons = node_layout;
-  ntype.initfunc = node_init;
   bke::node_register_type(ntype);
-
-  node_rna(ntype.rna_ext.srna);
 }
 NOD_REGISTER_NODE(node_register)
 

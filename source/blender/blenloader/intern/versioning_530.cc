@@ -31,6 +31,23 @@ namespace blender {
 
 // static CLG_LogRef LOG = {"blend.doversion"};
 
+static void blo_do_domain_sockets_530(Main *bmain)
+{
+  #define ASSIGN_MENU_VALUE_FROM_RNA_ENUM(type_idname, input_identifier, node_var) \
+    for (bNode *node : node_tree.nodes_by_type(type_idname)) { \
+      if (bNodeSocket *node_socket = node->input_by_identifier(input_identifier)) { \
+        node_socket->default_value_typed<bNodeSocketValueMenu>()->value = node->node_var; \
+      } \
+    }
+
+  for (bNodeTree& node_tree : bmain->nodetrees) {
+    node_tree.ensure_topology_cache();
+    ASSIGN_MENU_VALUE_FROM_RNA_ENUM("GeometryNodeScaleElements"_ustr, "Domain"_ustr, custom1);
+  }
+
+  #undef ASSIGN_MENU_VALUE_FROM_RNA_ENUM
+}
+
 static void do_version_set_grease_pencil_colors_options_to_inputs(bNodeTree &ntree, bNode &node)
 {
   if (blender::bke::node_find_socket(node, SOCK_IN, "Mode"_ustr)) {
@@ -72,6 +89,9 @@ void do_versions_after_linking_530(FileData * /*fd*/, Main *bmain)
         bmain, NTREE_GEOMETRY, "GeometryNodeSetGreasePencilColor", 5, 1, 6);
   }
 
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 503, 11)) {
+    blo_do_domain_sockets_530(bmain);
+  }
   /**
    * Always bump subversion in BKE_blender_version.h when adding versioning
    * code here, and wrap it inside a MAIN_VERSION_FILE_ATLEAST check.
