@@ -2,4 +2,4 @@ Referenced by commit 3b1e2a4f565, Fix T62241: Repeat last translate, wrong direc
 Referenced by issue #84200, Rotating a paintcurve [all paintmodes] doesn’t work correctly
 Referenced by issue #62015, Duplicating object, rotating, pivot point not used
 Referenced by issue #158332, Rotating paintcurve elements is wrong (not happening in view space)
-Referenced by pull request #158346, Fix #158332: Rotating paintcurve elements is wrong (not in screen space)
+Referenced by pull request #158346, WIP: Fix #158332: Rotating paintcurve elements is wrong (not in screen space)
