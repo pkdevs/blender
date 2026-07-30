@@ -1,4 +1,4 @@
 Referenced by issue #88478, Camera zoom not working with G+MMB
 Referenced by issue #87947, Regression: Move: keyboard input uses view orientation instead selected
 Referenced by issue #158332, Rotating paintcurve elements is wrong (not happening in view space)
-Referenced by pull request #158346, Fix #158332: Rotating paintcurve elements is wrong (not in screen space)
+Referenced by pull request #158346, WIP: Fix #158332: Rotating paintcurve elements is wrong (not in screen space)
