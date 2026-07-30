@@ -361,6 +361,10 @@ void animviz_calc_motionpaths(Depsgraph *depsgraph,
    * `MOTIONPATH_VERT_EVALUATED` flag. In practice this will almost always be the case and this
    * loop will trigger the `continue` immediately below. */
   for (MPathTarget &mpt : targets) {
+    /* We can safely skip the target if either the start or end frame of it's range was already
+     * visited. That is because if we had visited it, and it would need recalculation,
+     * `motionpaths_calc_bake_target` would return true meaning the inner loop would continue to
+     * run. */
     if (evaluated_range.contains(mpt.mpath->start_frame) ||
         evaluated_range.contains(mpt.mpath->end_frame))
     {
