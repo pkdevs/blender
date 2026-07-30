@@ -456,7 +456,7 @@ ccl_device_inline void volume_medium_eval(ConstIntegratorState state,
         sd, sizeof(HenyeyGreensteinVolume), sigma_s);
     if (volume) {
       volume->g = INTEGRATOR_STATE(state, medium, anisotropy);
-      sd->flag |= volume_henyey_greenstein_setup(volume);
+      sd->runtime_flag |= volume_henyey_greenstein_setup(volume);
     }
   }
 

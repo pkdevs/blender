@@ -362,7 +362,7 @@ ccl_device_inline Spectrum openpbr_bsdf_emission(KernelGlobals kg,
       const int fuzz_flag = bsdf_sheen_setup(kg, sd, bsdf);
 
       if (fuzz_flag) {
-        sd->flag |= fuzz_flag;
+        sd->runtime_flag |= fuzz_flag;
 
         /* Attenuate lower layers */
         const Spectrum albedo = bsdf_albedo(
@@ -380,7 +380,7 @@ ccl_device_inline Spectrum openpbr_bsdf_emission(KernelGlobals kg,
     /* FIXME(OpenPBR): simply invert ior is incorrect, probably should do the same as thin film?
      * Didn't find in the spec how to address backface. Principled BSDF uses original coat IOR
      * without modification. */
-    ior = (sd->flag & SD_BACKFACING) ? 1.0f / ior : ior;
+    ior = (sd->runtime_flag & SR_BACKFACING) ? 1.0f / ior : ior;
     if (reflective_caustics) {
       MicrofacetBsdf coat;
       ccl_private MicrofacetBsdf *bsdf = bsdf_alloc_maybe_emission(
@@ -401,7 +401,7 @@ ccl_device_inline Spectrum openpbr_bsdf_emission(KernelGlobals kg,
         bsdf->alpha_y = coat_alpha.y;
 
         /* setup bsdf */
-        sd->flag |= bsdf_microfacet_ggx_setup(bsdf);
+        sd->runtime_flag |= bsdf_microfacet_ggx_setup(bsdf);
         bsdf_microfacet_setup_fresnel_dielectric(kg, bsdf, sd->wi);
 
         /* Attenuate lower layers */
@@ -801,7 +801,7 @@ ccl_device
       const float coat_roughness = saturatef(stack_load(stack, data.coat_roughness));
       float coat_ior = stack_load(stack, data.coat_ior);
       const bool thin_wall = stack_load(stack, data.geometry_thin_walled);
-      const bool backfacing = (sd->flag & SD_BACKFACING) && !thin_wall;
+      const bool backfacing = (sd->runtime_flag & SR_BACKFACING) && !thin_wall;
       /* FIXME(OpenPBR): simply invert ior is incorrect, probably should do the same as thin film?
        * Didn't find in the spec how to address backface. Principled BSDF uses original coat IOR
        * without modification. */
@@ -857,7 +857,7 @@ ccl_device
             fresnel->thin_film.ior = thin_film_ior;
 
             /* setup bsdf */
-            sd->flag |= bsdf_microfacet_ggx_setup(bsdf);
+            sd->runtime_flag |= bsdf_microfacet_ggx_setup(bsdf);
             bsdf_microfacet_setup_fresnel_f82_tint(kg, bsdf, sd->wi, fresnel, f82, is_multiggx);
           }
         }
@@ -938,13 +938,13 @@ ccl_device
                 fresnel->thin_film = thinfilm;
                 fresnel->anisotropy = clamp(
                     stack_load(stack, data.transmission_scatter_anisotropy), -1.0f, 1.0f);
-                sd->flag |= bsdf_volumetric_setup(kg,
-                                                  bsdf,
-                                                  sd->wi,
-                                                  fresnel,
-                                                  transmission_scatter,
-                                                  transmission_color,
-                                                  transmission_depth);
+                sd->runtime_flag |= bsdf_volumetric_setup(kg,
+                                                          bsdf,
+                                                          sd->wi,
+                                                          fresnel,
+                                                          transmission_scatter,
+                                                          transmission_color,
+                                                          transmission_depth);
               }
             }
           }
@@ -1082,7 +1082,7 @@ ccl_device
             bssrdf->anisotropy = sss_anisotropy;
 
             /* setup bsdf */
-            sd->flag |= bssrdf_setup(sd, bssrdf, path_flag, subsurface_method);
+            sd->runtime_flag |= bssrdf_setup(sd, bssrdf, path_flag, subsurface_method);
           }
         }
       }
