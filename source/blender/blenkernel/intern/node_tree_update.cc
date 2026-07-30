@@ -1478,8 +1478,6 @@ class NodeTreeMainUpdater {
       return;
     }
 
-    printf(">>>>>>>>>>> %s\n", ntree.id.name);
-
     for (const bNodeSocket *socket :
          output_node->input_by_identifier("Surface"_ustr)->logically_linked_sockets())
     {
@@ -1500,13 +1498,6 @@ class NodeTreeMainUpdater {
       else if (node->type_legacy == SH_NODE_LIGHT_ACCUMULATION) {
         node->runtime->tmp_flag |= short(ShaderNodeAncestorFlags::LightAccumulation);
       }
-
-      ShaderNodeAncestorFlags flags = ShaderNodeAncestorFlags(node->runtime->tmp_flag);
-      printf("%s | Output: %d | ShaderToRGB: %d | LightAccumulation: %d\n",
-             node->label_or_name().c_str(),
-             bool(flags & ShaderNodeAncestorFlags::ShaderMaterialOutput),
-             bool(flags & ShaderNodeAncestorFlags::ShaderToRGB),
-             bool(flags & ShaderNodeAncestorFlags::LightAccumulation));
 
       return true;
     };
