@@ -263,11 +263,11 @@ ccl_device_forceinline float3 microfacet_ggx_sample_vndf(const float3 wi,
 ccl_device_inline float bsdf_glass_ior(ccl_private ShaderData *sd, float ior, const float inv_abbe)
 {
 #ifdef __SPECTRAL__
-  const bool backfacing = sd->runtime_flag & SR_BACKFACING;
-
-  if (inv_abbe == 0.0f) {
+  if (!(sd->shader_flag & SD_REQUIRES_WAVELENGTH) || (inv_abbe == 0.0f)) {
     return ior;
   }
+
+  const bool backfacing = sd->runtime_flag & SR_BACKFACING;
 
   sd->runtime_flag |= SR_BSDF_HAS_DISPERSION;
   ior = backfacing ? 1.0f / ior : ior;

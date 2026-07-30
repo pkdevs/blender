@@ -1139,10 +1139,6 @@ ccl_device_inline ShaderEvalResult kernel_path_mnee_sample(KernelGlobals kg,
       return result;
     }
 
-#ifdef __SPECTRAL__
-    update_path_throughput_for_dispersion(kg, state, sd_mnee);
-#endif
-
     r_vertex_count = vertex_count;
     return SHADER_EVAL_OK;
   }
