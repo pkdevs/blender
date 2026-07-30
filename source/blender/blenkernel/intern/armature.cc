@@ -502,8 +502,6 @@ static void read_bone_collections(BlendDataReader *reader, bArmature *arm)
  */
 static void fix_empty_bone_names(bArmature &armature)
 {
-  /* Custom unique bone name logic because the actual logic is editor code and relies on the
-   * hashmap already built. */
   Set<StringRefNull> bone_names;
   Vector<Bone *> no_name_bones;
   BKE_armature_foreach_bone(armature, [&](const int /* bone_index */, const Bone &bone) {
@@ -514,14 +512,16 @@ static void fix_empty_bone_names(bArmature &armature)
       bone_names.add(bone.name);
     }
   });
+  /* Custom unique bone name logic because the actual logic is editor code and relies on the
+   * hashmap already built. */
   int unique_index = 0;
   std::string bone_name;
-  // constexpr const std::string format_string("Bone.{3:d}");
+  constexpr const char *format_string = "Bone.{:0>3}";
   for (Bone *bone : no_name_bones) {
-    bone_name = fmt::format("Bone.{:0>3}", unique_index);
+    bone_name = fmt::format(format_string, unique_index);
     while (bone_names.contains(bone_name)) {
       unique_index++;
-      bone_name = fmt::format("Bone.{:0>3}", unique_index);
+      bone_name = fmt::format(format_string, unique_index);
     }
     STRNCPY_UTF8(bone->name, bone_name.c_str());
     unique_index++;
