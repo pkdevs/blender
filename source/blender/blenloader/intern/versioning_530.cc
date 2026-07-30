@@ -51,7 +51,10 @@ static void blo_do_domain_sockets_530(Main *bmain)
         "GeometryNodeDistributePointsInGrid"_ustr, "Distribution Method"_ustr, custom1)
     ASSIGN_MENU_VALUE_FROM_INLINE_RNA_ENUM(
         "GeometryNodeDistributePointsOnFaces"_ustr, "Distribution Method"_ustr, custom1)
-    // ASSIGN_MENU_VALUE_FROM_RNA_ENUM("GeometryNodeWarning"_ustr, "Warning Type"_ustr, custom1)
+
+    ASSIGN_MENU_VALUE_FROM_INLINE_RNA_ENUM(
+        "GeometryNodeMeshBoolean"_ustr, "Operation"_ustr, custom1)
+    ASSIGN_MENU_VALUE_FROM_INLINE_RNA_ENUM("GeometryNodeMeshBoolean"_ustr, "Solver"_ustr, custom2)
   }
 
 #undef ASSIGN_MENU_VALUE_FROM_RNA_ENUM

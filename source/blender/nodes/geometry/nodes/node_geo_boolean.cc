@@ -21,80 +21,97 @@
 
 namespace blender::nodes::node_geo_boolean_cc {
 
+static const EnumPropertyItem rna_node_geometry_boolean_method_items[] = {
+    {int(geometry::boolean::Operation::Intersect),
+     "INTERSECT",
+     0,
+     "Intersect",
+     "Keep the part of the mesh that is common between all operands"},
+    {int(geometry::boolean::Operation::Union),
+     "UNION",
+     0,
+     "Union",
+     "Combine meshes in an additive way"},
+    {int(geometry::boolean::Operation::Difference),
+     "DIFFERENCE",
+     0,
+     "Difference",
+     "Combine meshes in a subtractive way"},
+    {0, nullptr, 0, nullptr, nullptr},
+};
+
+static const EnumPropertyItem rna_geometry_boolean_solver_items[] = {
+    {int(geometry::boolean::Solver::MeshArr),
+     "EXACT",
+     0,
+     "Exact",
+     "Slower solver with the best results for coplanar faces"},
+    {int(geometry::boolean::Solver::Float),
+     "FLOAT",
+     0,
+     "Float",
+     "Simple solver with good performance, without support for overlapping geometry"},
+    {int(geometry::boolean::Solver::Manifold),
+     "MANIFOLD",
+     0,
+     "Manifold",
+     "Fastest solver that works only on manifold meshes but gives better results"},
+    {0, nullptr, 0, nullptr, nullptr},
+};
+
 static void node_declare(NodeDeclarationBuilder &b)
 {
-  const bNode *node = b.node_or_null();
+  b.add_input<decl::Menu>("Operation"_ustr)
+      .static_items(rna_node_geometry_boolean_method_items)
+      .default_value(geometry::boolean::Operation::Difference)
+      .optional_label();
+  b.add_input<decl::Menu>("Solver"_ustr)
+      .static_items(rna_geometry_boolean_solver_items)
+      .default_value(geometry::boolean::Solver::Float)
+      .optional_label();
 
-  auto &first_geometry = b.add_input<decl::Geometry>("Mesh 1"_ustr)
-                             .only_realized_data()
-                             .supported_type(GeometryComponent::Type::Mesh)
-                             .description("Base mesh to subtract geometry from");
+  b.add_input<decl::Geometry>("Mesh 1"_ustr)
+      .only_realized_data()
+      .supported_type(GeometryComponent::Type::Mesh)
+      .description("Base mesh to subtract geometry from")
+      .usage_by_menu("Operation"_ustr, int(geometry::boolean::Operation::Difference));
 
-  if (node != nullptr) {
-    switch (geometry::boolean::Operation(node->custom1)) {
-      case geometry::boolean::Operation::Intersect:
-      case geometry::boolean::Operation::Union:
-        b.add_input<decl::Geometry>("Mesh"_ustr, "Mesh 2"_ustr)
-            .supported_type(GeometryComponent::Type::Mesh)
-            .multi_input()
-            .description("Meshes to union or intersect");
-        break;
-      case geometry::boolean::Operation::Difference:
-        b.add_input<decl::Geometry>("Mesh 2"_ustr)
-            .supported_type(GeometryComponent::Type::Mesh)
-            .multi_input()
-            .description("Mesh that is subtracted from the first mesh");
-        break;
-    }
-  }
+  b.add_input<decl::Geometry>("Mesh"_ustr, "Mesh 2"_ustr)
+      .supported_type(GeometryComponent::Type::Mesh)
+      .multi_input()
+      .description("Meshes to union or intersect")
+      .usage_by_menu("Operation"_ustr,
+                     {int(geometry::boolean::Operation::Intersect),
+                      int(geometry::boolean::Operation::Union)});
+
+  b.add_input<decl::Geometry>("Mesh 2"_ustr)
+      .supported_type(GeometryComponent::Type::Mesh)
+      .multi_input()
+      .description("Mesh that is subtracted from the first mesh")
+      .usage_by_menu("Operation"_ustr, int(geometry::boolean::Operation::Difference));
 
   auto make_mesh_arr = [](bNode &node) {
-    node.custom2 = int16_t(geometry::boolean::Solver::MeshArr);
+    node.input_by_identifier("Solver"_ustr)->default_value_typed<bNodeSocketValueMenu>()->value =
+        int(geometry::boolean::Solver::MeshArr);
   };
-  auto &self_intersect =
-      b.add_input<decl::Bool>("Self Intersection"_ustr).make_available(make_mesh_arr);
-  auto &hole_tolerant =
-      b.add_input<decl::Bool>("Hole Tolerant"_ustr).make_available(make_mesh_arr);
+  b.add_input<decl::Bool>("Self Intersection"_ustr)
+      .make_available(make_mesh_arr)
+      .usage_by_menu("Solver"_ustr, int(geometry::boolean::Solver::MeshArr));
+  b.add_input<decl::Bool>("Hole Tolerant"_ustr)
+      .make_available(make_mesh_arr)
+      .usage_by_menu("Solver"_ustr, int(geometry::boolean::Solver::MeshArr));
   b.add_output<decl::Geometry>("Mesh"_ustr).propagate_all_geometry();
-  auto &output_edges = b.add_output<decl::Bool>("Intersecting Edges"_ustr)
-                           .anonymous_attribute_output()
-                           .make_available(make_mesh_arr);
-
-  if (node != nullptr) {
-    const auto operation = geometry::boolean::Operation(node->custom1);
-    const auto solver = geometry::boolean::Solver(node->custom2);
-
-    output_edges.available(
-        ELEM(solver, geometry::boolean::Solver::MeshArr, geometry::boolean::Solver::Manifold));
-    self_intersect.available(solver == geometry::boolean::Solver::MeshArr);
-    hole_tolerant.available(solver == geometry::boolean::Solver::MeshArr);
-
-    switch (operation) {
-      case geometry::boolean::Operation::Intersect:
-      case geometry::boolean::Operation::Union:
-        first_geometry.available(false);
-        break;
-      case geometry::boolean::Operation::Difference:
-        break;
-    }
-  }
-}
-
-static void node_layout(ui::Layout &layout, bContext * /*C*/, PointerRNA *ptr)
-{
-  layout.prop(ptr, "operation", UI_ITEM_NONE, "", ICON_NONE);
-  layout.prop(ptr, "solver", UI_ITEM_NONE, "", ICON_NONE);
+  b.add_output<decl::Bool>("Intersecting Edges"_ustr)
+      .usage_by_menu(
+          "Solver"_ustr,
+          {int(geometry::boolean::Solver::MeshArr), int(geometry::boolean::Solver::Manifold)})
+      .anonymous_attribute_output()
+      .make_available(make_mesh_arr);
 }
 
 struct AttributeOutputs {
   std::optional<std::string> intersecting_edges_id;
 };
-
-static void node_init(bNodeTree * /*tree*/, bNode *node)
-{
-  node->custom1 = int16_t(geometry::boolean::Operation::Difference);
-  node->custom2 = int16_t(geometry::boolean::Solver::Float);
-}
 
 static Array<short> calc_mesh_material_map(const Mesh &mesh, VectorSet<Material *> &all_materials)
 {
@@ -108,8 +125,10 @@ static Array<short> calc_mesh_material_map(const Mesh &mesh, VectorSet<Material 
 
 static void node_geo_exec(GeoNodeExecParams params)
 {
-  geometry::boolean::Operation operation = geometry::boolean::Operation(params.node().custom1);
-  geometry::boolean::Solver solver = geometry::boolean::Solver(params.node().custom2);
+  const geometry::boolean::Operation operation =
+      params.extract_input<geometry::boolean::Operation>("Operation"_ustr);
+  const geometry::boolean::Solver solver = params.extract_input<geometry::boolean::Solver>(
+      "Solver"_ustr);
   bool use_self = false;
   bool hole_tolerant = false;
   if (solver == geometry::boolean::Solver::MeshArr) {
@@ -273,62 +292,6 @@ static void node_geo_exec(GeoNodeExecParams params)
   params.set_output("Mesh"_ustr, std::move(result_geometry));
 }
 
-static void node_rna(StructRNA *srna)
-{
-  static const EnumPropertyItem rna_node_geometry_boolean_method_items[] = {
-      {int(geometry::boolean::Operation::Intersect),
-       "INTERSECT",
-       0,
-       "Intersect",
-       "Keep the part of the mesh that is common between all operands"},
-      {int(geometry::boolean::Operation::Union),
-       "UNION",
-       0,
-       "Union",
-       "Combine meshes in an additive way"},
-      {int(geometry::boolean::Operation::Difference),
-       "DIFFERENCE",
-       0,
-       "Difference",
-       "Combine meshes in a subtractive way"},
-      {0, nullptr, 0, nullptr, nullptr},
-  };
-  static const EnumPropertyItem rna_geometry_boolean_solver_items[] = {
-      {int(geometry::boolean::Solver::MeshArr),
-       "EXACT",
-       0,
-       "Exact",
-       "Slower solver with the best results for coplanar faces"},
-      {int(geometry::boolean::Solver::Float),
-       "FLOAT",
-       0,
-       "Float",
-       "Simple solver with good performance, without support for overlapping geometry"},
-      {int(geometry::boolean::Solver::Manifold),
-       "MANIFOLD",
-       0,
-       "Manifold",
-       "Fastest solver that works only on manifold meshes but gives better results"},
-      {0, nullptr, 0, nullptr, nullptr},
-  };
-
-  RNA_def_node_enum(srna,
-                    "operation",
-                    "Operation",
-                    "",
-                    rna_node_geometry_boolean_method_items,
-                    NOD_inline_enum_accessors(custom1),
-                    int(geometry::boolean::Operation::Intersect));
-
-  RNA_def_node_enum(srna,
-                    "solver",
-                    "Solver",
-                    "",
-                    rna_geometry_boolean_solver_items,
-                    NOD_inline_enum_accessors(custom2),
-                    int(geometry::boolean::Solver::Float));
-}
-
 static void node_register()
 {
   static bke::bNodeType ntype;
@@ -338,12 +301,8 @@ static void node_register()
   ntype.enum_name_legacy = "MESH_BOOLEAN";
   ntype.nclass = NODE_CLASS_GEOMETRY;
   ntype.declare = node_declare;
-  ntype.draw_buttons = node_layout;
-  ntype.initfunc = node_init;
   ntype.geometry_node_execute = node_geo_exec;
   bke::node_register_type(ntype);
-
-  node_rna(ntype.rna_ext.srna);
 }
 NOD_REGISTER_NODE(node_register)
 
