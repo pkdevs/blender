@@ -2269,7 +2269,9 @@ struct CodegenContext : NodeErrorHandler {
         /* This could be a macro. Don't make an error. */
         return string(expr.str());
       }
-      return to_string(sym->value);
+      if (auto it = symbols.image_formats.find(sym->value); it != symbols.image_formats.end()) {
+        return it->second;
+      }
     }
     error(expr, "Expected image format");
     return "0";

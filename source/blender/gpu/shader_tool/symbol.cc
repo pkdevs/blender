@@ -2508,6 +2508,22 @@ void SymbolTable::register_builtins(LocalScope node)
     sym->identifier = fn.id;
   }
 
+  image_formats = {
+      {0, "SNORM_8"},           {1, "SNORM_8_8"},        {2, "SNORM_8_8_8_8"},
+      {3, "SNORM_16"},          {4, "SNORM_16_16"},      {5, "SNORM_16_16_16_16"},
+      {6, "UNORM_8"},           {7, "UNORM_8_8"},        {8, "UNORM_8_8_8_8"},
+      {9, "UNORM_16"},          {10, "UNORM_16_16"},     {11, "UNORM_16_16_16_16"},
+      {12, "SINT_8"},           {13, "SINT_8_8"},        {14, "SINT_8_8_8_8"},
+      {15, "SINT_16"},          {16, "SINT_16_16"},      {17, "SINT_16_16_16_16"},
+      {18, "SINT_32"},          {19, "SINT_32_32"},      {20, "SINT_32_32_32_32"},
+      {21, "UINT_8"},           {22, "UINT_8_8"},        {23, "UINT_8_8_8_8"},
+      {24, "UINT_16"},          {25, "UINT_16_16"},      {26, "UINT_16_16_16_16"},
+      {27, "UINT_32"},          {28, "UINT_32_32"},      {29, "UINT_32_32_32_32"},
+      {30, "SFLOAT_16"},        {31, "SFLOAT_16_16"},    {32, "SFLOAT_16_16_16_16"},
+      {33, "SFLOAT_32"},        {34, "SFLOAT_32_32"},    {35, "SFLOAT_32_32_32_32"},
+      {36, "UNORM_10_10_10_2"}, {37, "UINT_10_10_10_2"}, {38, "UFLOAT_11_11_10"},
+  };
+
   struct BuiltinConst {
     string id;
     string type;
@@ -2515,53 +2531,18 @@ void SymbolTable::register_builtins(LocalScope node)
     int value;
   };
 
-  const std::vector<BuiltinConst> consts = {
+  std::vector<BuiltinConst> consts = {
       /* Error variable symbol. */
       {err_symbol, err_symbol, false, 1},
 
       {"true", "bool", true, 1},
       {"false", "bool", true, 0},
-
-      {"SNORM_8", "int", true, 0}, /* TODO real values of the enum. */
-      {"SNORM_8_8", "int", true, 1},
-      {"SNORM_8_8_8_8", "int", true, 2},
-      {"SNORM_16", "int", true, 3},
-      {"SNORM_16_16", "int", true, 4},
-      {"SNORM_16_16_16_16", "int", true, 5},
-      {"UNORM_8", "int", true, 6},
-      {"UNORM_8_8", "int", true, 7},
-      {"UNORM_8_8_8_8", "int", true, 8},
-      {"UNORM_16", "int", true, 9},
-      {"UNORM_16_16", "int", true, 10},
-      {"UNORM_16_16_16_16", "int", true, 11},
-      {"SINT_8", "int", true, 12},
-      {"SINT_8_8", "int", true, 13},
-      {"SINT_8_8_8_8", "int", true, 14},
-      {"SINT_16", "int", true, 15},
-      {"SINT_16_16", "int", true, 16},
-      {"SINT_16_16_16_16", "int", true, 17},
-      {"SINT_32", "int", true, 18},
-      {"SINT_32_32", "int", true, 19},
-      {"SINT_32_32_32_32", "int", true, 20},
-      {"UINT_8", "int", true, 21},
-      {"UINT_8_8", "int", true, 22},
-      {"UINT_8_8_8_8", "int", true, 23},
-      {"UINT_16", "int", true, 24},
-      {"UINT_16_16", "int", true, 25},
-      {"UINT_16_16_16_16", "int", true, 26},
-      {"UINT_32", "int", true, 27},
-      {"UINT_32_32", "int", true, 28},
-      {"UINT_32_32_32_32", "int", true, 29},
-      {"SFLOAT_16", "int", true, 30},
-      {"SFLOAT_16_16", "int", true, 31},
-      {"SFLOAT_16_16_16_16", "int", true, 32},
-      {"SFLOAT_32", "int", true, 33},
-      {"SFLOAT_32_32", "int", true, 34},
-      {"SFLOAT_32_32_32_32", "int", true, 35},
-      {"UNORM_10_10_10_2", "int", true, 36},
-      {"UINT_10_10_10_2", "int", true, 37},
-      {"UFLOAT_11_11_10", "int", true, 38},
   };
+
+  for (auto [value, name] : image_formats) {
+    consts.emplace_back(name, "int", true, value);
+  }
+
   /* Boolean constants. */
   for (auto c : consts) {
     SymbolVariable *sym = var_arena.alloc(root, root->lookup_class(c.type), tok, string(c.id));
