@@ -550,12 +550,11 @@ static void edge_slide_clone_fan_calc(BMVert *v,
       f_next = l ? l->radial_next->f : nullptr;
     }
     if (!f_next) {
-      /* The fan ends at the chain end, at a mesh boundary or at non-manifold geometry. */
+      /* The fan ends at the chain end. */
       r_side->bound_verts.append(BM_edge_other_vert(e_curr, v));
       return;
     }
     if (r_side->faces.contains(f_next)) {
-      /* Wrapped the whole disk, so there is nothing bounding the fan. */
       break;
     }
     r_side->rung_verts.append(BM_edge_other_vert(e_curr, v));
@@ -569,7 +568,7 @@ static void edge_slide_clone_fan_calc(BMVert *v,
 }
 
 /**
- * Which of the faces at chain edge #e sits on either side of the slide at v.
+ * Which of the faces at chain edge e sits on either side of the slide at v.
  */
 static void edge_slide_clone_edge_side_faces(
     BMVert *v, BMEdge *e, const float3 &dir0, const float3 &dir1, BMFace *r_f_side[2])
