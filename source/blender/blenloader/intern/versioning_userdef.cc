@@ -1794,10 +1794,6 @@ void blo_do_versions_userdef(UserDef *userdef)
   }
 #endif
 
-  if (!USER_VERSION_ATLEAST(503, 11)) {
-    userdef->sequencer_editor_flag |= USER_SEQ_ED_CLAMP_STRIPS_BY_DEFAULT;
-  }
-
   /**
    * Always bump subversion in BKE_blender_version.h when adding versioning
    * code here, and wrap it inside a USER_VERSION_ATLEAST check.
