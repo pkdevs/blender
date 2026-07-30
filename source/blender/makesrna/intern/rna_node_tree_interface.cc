@@ -1168,12 +1168,10 @@ static bool rna_NodeTreeInterface_items_lookup_string(PointerRNA *ptr,
 
 static PointerRNA rna_NodeTreeInterface_root_panel_get(PointerRNA *ptr)
 {
-  bNodeTree *ntree = reinterpret_cast<bNodeTree *>(ptr->owner_id);
-  const bNodeTreeInterface *interface = static_cast<const bNodeTreeInterface *>(ptr->data);
-
-  const bNodeTreeInterfacePanel *root_panel = &interface->root_panel;
+  bNodeTree *ntree = id_cast<bNodeTree *>(ptr->owner_id);
+  bNodeTreeInterface *interface = static_cast<bNodeTreeInterface *>(ptr->data);
   PointerRNA result = RNA_pointer_create_discrete(
-      &ntree->id, RNA_NodeTreeInterfacePanel, const_cast<bNodeTreeInterfacePanel *>(root_panel));
+      &ntree->id, RNA_NodeTreeInterfacePanel, &interface->root_panel);
   return result;
 }
 
@@ -1659,7 +1657,10 @@ static void rna_def_node_tree_interface(BlenderRNA *brna)
   RNA_def_property_pointer_funcs(
       prop, "rna_NodeTreeInterface_root_panel_get", nullptr, nullptr, nullptr);
   RNA_def_property_clear_flag(prop, PROP_EDITABLE);
-  RNA_def_property_ui_text(prop, "Root Panel", "Root Panel");
+  RNA_def_property_ui_text(
+      prop,
+      "Root Panel",
+      "Root panel containing all items not directly parented to another panel");
 
   rna_def_node_tree_interface_items_api(srna);
 }
