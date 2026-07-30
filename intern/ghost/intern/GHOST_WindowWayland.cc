@@ -2436,7 +2436,6 @@ GHOST_Context *GHOST_WindowWayland::newDrawingContext(GHOST_TDrawingContextType 
                                                      window_->wl.surface,
                                                      system_->wl_display_get(),
                                                      window_->backend.vulkan_window_info,
-                                                     nullptr,
                                                      1,
                                                      2,
                                                      preferred_device_,
