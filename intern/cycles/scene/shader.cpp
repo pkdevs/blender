@@ -566,6 +566,7 @@ void ShaderManager::device_update_pre(Device * /*device*/,
       shader->has_volume_attribute_dependency = false;
       shader->has_displacement = output->input("Displacement")->link != nullptr;
       shader->has_bump_from_surface = false;
+      shader->has_dispersion = false;
 
       /* Determine both properties. */
       shader->has_light_path_node = false;
