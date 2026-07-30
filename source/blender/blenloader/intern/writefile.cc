@@ -1779,6 +1779,7 @@ static void prepare_stable_data_block_ids(WriteData &wd, Main &bmain)
  */
 static bool write_file_handle(Main *mainvar,
                               WriteWrap *ww,
+                              StringRefNull filepath,
                               MemFile *compare,
                               MemFile *current,
                               const int write_flags,
@@ -1790,6 +1791,7 @@ static bool write_file_handle(Main *mainvar,
 
   wd = mywrite_begin(ww, compare, current);
   wd->debug_dst = debug_dst;
+  wd->filepath = filepath;
   BlendWriter writer = {wd};
 
   BKE_main_view_layers_synced_ensure(mainvar);
@@ -2100,7 +2102,7 @@ static bool BLO_write_file_impl(Main *mainvar,
 
   /* Actual file writing. */
   const bool err = write_file_handle(
-      mainvar, &ww, nullptr, nullptr, write_flags, use_userdef, thumb, debug_dst);
+      mainvar, &ww, filepath, nullptr, nullptr, write_flags, use_userdef, thumb, debug_dst);
 
   const bool close_error = !ww.close();
 
@@ -2171,7 +2173,7 @@ bool BLO_write_file_mem(Main *mainvar, MemFile *compare, MemFile *current, const
   bool use_userdef = false;
 
   const bool err = write_file_handle(
-      mainvar, nullptr, compare, current, write_flags, use_userdef, nullptr, nullptr);
+      mainvar, nullptr, "", compare, current, write_flags, use_userdef, nullptr, nullptr);
 
   return (err == 0);
 }
