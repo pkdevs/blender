@@ -86,7 +86,15 @@ ccl_device void svm_node_vector_component(ccl_private float *ccl_restrict stack,
       }
     }
     else {
-      stack_store(stack, node.out_offset, vector[index]);
+      if (index == 0) {
+        stack_store(stack, node.out_offset, vector.x);
+      }
+      else if (index == 1) {
+        stack_store(stack, node.out_offset, vector.y);
+      }
+      else {
+        stack_store(stack, node.out_offset, vector.z);
+      }
     }
   }
 }
