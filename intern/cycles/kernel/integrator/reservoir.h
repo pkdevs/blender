@@ -75,15 +75,18 @@ ccl_device_inline float reservoir_compute_luminance(
   return dot(spectrum_to_rgb(sample_radiance.sum), reservoir->rgb_to_y);
 }
 
-ccl_device_inline bool reservoir_finalize(ccl_private Reservoir *reservoir)
+ccl_device_inline bool reservoir_finalize(ccl_private Reservoir *reservoir,
+                                          const bool require_valid_reference)
 {
-  if (reservoir_is_empty(reservoir) || !reservoir_has_valid_reference(reservoir) ||
+  if (reservoir_is_empty(reservoir) ||
+      (require_valid_reference && !reservoir_has_valid_reference(reservoir)) ||
       !(isfinite(reservoir->luminance) && reservoir->luminance > 0.0f))
   {
     reservoir_clear(reservoir);
     return false;
   }
 
+  // !!!: Causing DI Darkness?
   /* Apply unbiased contribution weight. */
   reservoir->total_weight /= reservoir->luminance; // !!!
 
@@ -147,18 +150,18 @@ ccl_device_inline void reservoir_add_sample(
     const ccl_private ReSTIRLightSampleReference &candidate_reference,
     const ccl_private BsdfEval &candidate_radiance,
     const float mis_weight,
-    const float rand)
+    const float rand,
+    const bool require_valid_reference)
 {
   const float candidate_luminance = reservoir_compute_luminance(reservoir, candidate_radiance);
   const float weight = candidate_luminance * mis_weight;
 
-  if (!restir_light_reference_is_valid(&candidate_reference) ||
+  if ((require_valid_reference && !restir_light_reference_is_valid(&candidate_reference)) ||
       !(isfinite(candidate_luminance) && candidate_luminance > 0.0f) ||
       !(isfinite(weight) && weight > 0.0f))
   {
     return;
   }
-
   reservoir->total_weight += weight;
 
   if (!(isfinite(reservoir->total_weight) && reservoir->total_weight > 0.0f)) {
@@ -181,7 +184,8 @@ ccl_device_inline void reservoir_add_light_sample(
     const ccl_private ReSTIRLightSampleReference &candidate_reference,
     const ccl_private BsdfEval &candidate_radiance,
     const float bsdf_pdf,
-    const float rand)
+    const float rand,
+    const bool require_valid_reference)
 {
   if (!(isfinite(ls.pdf) && ls.pdf > 0.0f)) {
     return;
@@ -207,7 +211,8 @@ ccl_device_inline void reservoir_add_light_sample(
                        candidate_reference,
                        candidate_radiance,
                        mis_weight / light_pdf_in_area,
-                       rand);
+                       rand,
+                       require_valid_reference);
 }
 
 ccl_device_inline void reservoir_add_bsdf_sample(
@@ -216,7 +221,8 @@ ccl_device_inline void reservoir_add_bsdf_sample(
     const ccl_private ReSTIRLightSampleReference &candidate_reference,
     const ccl_private BsdfEval &candidate_radiance,
     const float bsdf_pdf,
-    const float rand)
+    const float rand,
+    const bool require_valid_reference)
 {
   if (!(isfinite(bsdf_pdf) && bsdf_pdf > 0.0f)) {
     return;
@@ -242,7 +248,8 @@ ccl_device_inline void reservoir_add_bsdf_sample(
                        candidate_reference,
                        candidate_radiance,
                        mis_weight / bsdf_pdf_in_area,
-                       rand);
+                       rand,
+                       require_valid_reference);
 }
 
 /**
@@ -251,7 +258,8 @@ ccl_device_inline void reservoir_add_bsdf_sample(
 */
 ccl_device_inline void reservoir_add_reservoir(ccl_private Reservoir *reservoir,
                                                const ccl_private Reservoir &other,
-                                               const float rand)
+                                               const float rand,
+                                               const bool require_valid_reference)
 {
   // !!!: DI only
   if (reservoir_is_empty(&other) || !reservoir_has_valid_reference(&other)) {
@@ -259,7 +267,7 @@ ccl_device_inline void reservoir_add_reservoir(ccl_private Reservoir *reservoir,
   }
 
   reservoir_add_sample(
-      reservoir, other.light, other.reference, other.radiance, other.total_weight, rand);
+      reservoir, other.light, other.reference, other.radiance, other.total_weight, rand, require_valid_reference);
 }
 
 // TODO: Cleaner to inspect reservoir.reference?
@@ -331,7 +339,8 @@ struct SpatialReservoir {
 };
 
 ccl_device_inline void spatial_reservoir_init(KernelGlobals kg,
-                                              ccl_private SpatialReservoir *spatial_reservoir)
+                                              ccl_private SpatialReservoir *spatial_reservoir,
+                                              const bool require_valid_reference)
 {
   reservoir_init(kg, &spatial_reservoir->reservoir);
   spatial_reservoir->path_flag = 0;
@@ -348,11 +357,13 @@ ccl_device_inline bool spatial_reservoir_is_empty(
 ccl_device_inline void spatial_reservoir_add_reservoir(
     ccl_private SpatialReservoir *spatial_reservoir,
     const ccl_private SpatialReservoir &other,
-    const float rand)
+    const float rand,
+    const bool require_valid_reference)
 {
-  reservoir_add_reservoir(&spatial_reservoir->reservoir, other.reservoir, rand);
+  reservoir_add_reservoir(&spatial_reservoir->reservoir, other.reservoir, rand, require_valid_reference);
 }
 
+// TODO: Debug
 // !!!: Deserialize the persistent reference, not write identity and parameters into LightSample
 // !!!: Unpacking must produce a fully valid ReSTIRLightSampleReference
 ccl_device_inline bool restir_unpack_reservoir(KernelGlobals kg, // !!!: lamp

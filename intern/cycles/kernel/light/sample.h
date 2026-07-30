@@ -21,7 +21,7 @@
 CCL_NAMESPACE_BEGIN
 
 /* Evaluate constant factors for a direct light sample. */
-ccl_device bool light_sample_shader_eval_nee_constant(KernelGlobals kg,
+ccl_device bool light_sample_shader_eval_nee_constant(KernelGlobals kg, // !!!
                                                       const int shader_id,
                                                       const int prim,
                                                       const bool is_light,
@@ -42,7 +42,7 @@ ccl_device bool light_sample_shader_eval_nee_constant(KernelGlobals kg,
 /* Evaluate shader on light. Not supported for background and triangle lights, that happens
  * in shade_surface and shader_background. */
 ccl_device_noinline_cpu ShaderEvalResult
-light_sample_shader_eval_forward(KernelGlobals kg,
+light_sample_shader_eval_forward(KernelGlobals kg, // !!!
                                  IntegratorState state,
                                  const int light_id,
                                  const float3 ray_P,
@@ -67,6 +67,7 @@ light_sample_shader_eval_forward(KernelGlobals kg,
     const float3 P = (t == FLT_MAX) ? -ray_D : ray_P + ray_D * t;
     float3 Ng = zero_float3();
     float2 uv = zero_float2();
+    // !!!: nonconstant light evaluator’s coordinate reconstruction
     light_normal_uv_from_position(kg, klight, P, ray_D, Ng, uv);
 
     shader_setup_from_sample(kg,
@@ -322,42 +323,208 @@ ccl_device_inline void light_sample_to_volume_shadow_ray(
   shadow_ray_setup(sd, ls, P, ray, false);
 }
 
-// !!!
-// TODO: Ensure Correctness
-/* Evaluate shader on a ReSTIR light sample candidate.
- * Unlike the forward path, this version supports evaluating all light types 
- * (including triangle meshes and background) and supports optional inline 
- * visibility checks. */
+// // TODO: Ensure Correctness
+// /* Evaluate shader on a ReSTIR light sample candidate.
+//  * Unlike the forward path, this version supports evaluating all light types 
+//  * (including triangle meshes and background) and supports optional inline 
+//  * visibility checks. */
+// template<typename ConstIntegratorGenericState>
+// ccl_device Spectrum
+// light_sample_shader_eval(KernelGlobals kg,
+//                          ConstIntegratorGenericState state,
+//                          ccl_private ShaderData *ccl_restrict emission_sd,
+//                          ccl_private LightSample *ccl_restrict ls,
+//                          float time,
+//                          ccl_private const ShaderData *ccl_restrict sd = nullptr,
+//                          ccl_private const ReSTIRLightSampleReference *ccl_restrict reference = nullptr,
+//                          bool check_visibility = false)
+// {
+//   /* Setup shading at the emitter. */
+//   Spectrum eval = zero_spectrum();
+
+//   if (surface_shader_constant_emission(kg, ls->shader, &eval)) {
+//     if ((ls->prim != PRIM_NONE) && dot(ls->Ng, ls->D) > 0.0f) {
+//       ls->Ng = -ls->Ng;
+//     }
+//   }
+//   else {
+//     /* Setup shader data and call surface_shader_eval once, which is
+//      * better for GPU coherence and compile times. */
+//     PROFILING_INIT_FOR_SHADER(kg, PROFILING_SHADE_LIGHT_SETUP);
+//     if (ls->type == LIGHT_BACKGROUND) {
+//       shader_setup_from_background(kg, emission_sd, ls->P, ls->D, 0.0f, time); // !!!
+//     }
+//     else {
+//       /* !!!: WRONG: reference parameters ≠ LightSample shader UV
+//         */ 
+//       const float u = (reference) ? reference->param.x : 0.0f;
+//       const float v = (reference) ? reference->param.y : 0.0f;
+//       const bool is_lamp = (ls->type != LIGHT_TRIANGLE);
+
+//       shader_setup_from_sample(kg,
+//                                emission_sd,
+//                                ls->P,
+//                                ls->Ng,
+//                                -ls->D,
+//                                ls->shader,
+//                                ls->object,
+//                                ls->prim,
+//                                u,
+//                                v,
+//                                ls->t,
+//                                time,
+//                                false,
+//                                is_lamp);
+
+//       ls->Ng = emission_sd->Ng;
+//     }
+
+//     PROFILING_SHADER(emission_sd->object, emission_sd->shader);
+//     PROFILING_EVENT(PROFILING_SHADE_LIGHT_EVAL);
+
+//     /* Note: We use PATH_RAY_VISIBILITY_NONE to match modern Cycles surface_shader_eval signature. */
+//     surface_shader_eval<KERNEL_FEATURE_NODE_MASK_SURFACE_LIGHT>(
+//         kg, state, emission_sd, nullptr, PATH_RAY_VISIBILITY_NONE, PATH_RAY_EMISSION);
+
+//     /* Evaluate closures. */
+//     if (ls->type == LIGHT_BACKGROUND) {
+//       eval = surface_shader_background(emission_sd);
+//     }
+//     else {
+//       eval = surface_shader_emission(emission_sd);
+//     }
+//   }
+
+//   eval *= ls->eval_fac;
+
+//   if (ls->type != LIGHT_TRIANGLE && ls->prim != LAMP_NONE) {
+//     ccl_global const KernelLight *klight = &kernel_data_fetch(lights, ls->prim);
+//     eval *= rgb_to_spectrum(
+//         make_float3(klight->strength[0], klight->strength[1], klight->strength[2]));
+//   }
+
+//   if (check_visibility) {
+//     kernel_assert(sd != nullptr);
+//     Ray ray ccl_optional_struct_init;
+//     light_sample_to_surface_shadow_ray(kg, sd, ls, &ray);
+
+//     /* TODO(weizhen): this is opque visibility, only works for surface. */
+//     /* Opaque visibility check. */
+//     Intersection isect;
+//     if (scene_intersect(kg, &ray, PATH_RAY_VISIBILITY_SHADOW_OPAQUE, &isect)) {
+//       return zero_spectrum();
+//     }
+//   }
+
+//   return eval;
+// }
+
+/* Evaluate the shader of a ReSTIR light sample candidate.
+ *
+ * Analytic lights use the modern Cycles light-evaluation contract:
+ *
+ *   - light_sample_shader_eval_nee_constant() for constant emission.
+ *   - light_sample_shader_eval_forward() for non-constant emission.
+ *
+ * Triangle lights still require their persistent barycentric coordinates,
+ * stored in ReSTIRLightSampleReference::param.
+ *
+ * Background evaluation is handled explicitly because
+ * light_sample_shader_eval_forward() does not support background shaders.
+ *
+ * On success, r_eval contains the emitted radiance multiplied by
+ * LightSample::eval_fac. Analytic-light strength is applied by the modern
+ * light shader evaluation helpers and must not be applied again here.
+ */
 template<typename ConstIntegratorGenericState>
-ccl_device Spectrum
-light_sample_shader_eval(KernelGlobals kg,
-                         ConstIntegratorGenericState state,
-                         ccl_private ShaderData *ccl_restrict emission_sd,
-                         ccl_private LightSample *ccl_restrict ls,
-                         float time,
-                         ccl_private const ShaderData *ccl_restrict sd = nullptr,
-                         ccl_private const ReSTIRLightSampleReference *ccl_restrict reference = nullptr,
-                         bool check_visibility = false)
+ccl_device ShaderEvalResult light_sample_shader_eval(
+    KernelGlobals kg,
+    ConstIntegratorGenericState state,
+    ccl_private ShaderData *ccl_restrict emission_sd,
+    ccl_private LightSample *ccl_restrict ls,
+    const float time,
+    ccl_private Spectrum &r_eval,
+    ccl_private const ShaderData *ccl_restrict sd = nullptr,
+    ccl_private const ReSTIRLightSampleReference *ccl_restrict reference = nullptr, // Only required by the triangle path // ???: Maybe background as well
+    const bool check_visibility = false)
 {
   /* Setup shading at the emitter. */
   Spectrum eval = zero_spectrum();
 
-  if (surface_shader_constant_emission(kg, ls->shader, &eval)) {
-    if ((ls->prim != PRIM_NONE) && dot(ls->Ng, ls->D) > 0.0f) {
-      ls->Ng = -ls->Ng;
+  /*
+   * Evaluate analytic lights through the modern Cycles contract.
+   *
+   * light_sample_shader_eval_forward() supports analytic lights, but not
+   * triangle or background emitters.
+   */
+  // const bool is_analytic_light = !ELEM(ls->type, LIGHT_TRIANGLE, LIGHT_BACKGROUND);
+  const bool is_analytic_light = !(ls->type == LIGHT_TRIANGLE || ls->type == LIGHT_BACKGROUND);
+
+  if (is_analytic_light) {
+    /*
+     * This applies:
+     *   - constant shader emission;
+     *   - KernelLight::strength.
+     *
+     * Therefore neither of those factors may be applied again below.
+     */
+    const bool is_constant = light_sample_shader_eval_nee_constant(
+        kg, ls->shader, ls->prim, true, eval);
+
+    if (!is_constant) {
+      /*
+       * Reconstruct a ray origin from the target-dependent LightSample.
+       *
+       * For finite analytic lights:
+       *   ls->P = ray_P + ls->D * ls->t
+       *
+       * For distant lights, light_sample_shader_eval_forward() ignores ray_P
+       * when t == FLT_MAX and uses P = -ray_D instead.
+       */
+      const float3 ray_P = (ls->t == FLT_MAX) ?
+                              zero_float3() : ls->P - ls->D * ls->t;
+
+      const ShaderEvalResult result = light_sample_shader_eval_forward(
+          kg,
+          state,
+          ls->prim,
+          ray_P,
+          ls->D,
+          ls->t,
+          time,
+          eval);
+
+      if (result != SHADER_EVAL_OK) {
+        r_eval = zero_spectrum();
+        return result;
+      }
     }
   }
-  else {
-    /* Setup shader data and call surface_shader_eval once, which is
-     * better for GPU coherence and compile times. */
-    PROFILING_INIT_FOR_SHADER(kg, PROFILING_SHADE_LIGHT_SETUP);
-    if (ls->type == LIGHT_BACKGROUND) {
-      shader_setup_from_background(kg, emission_sd, ls->P, ls->D, 0.0f, time); // !!!
+  else if (ls->type == LIGHT_TRIANGLE) {
+    /*
+     * For triangle emitters, reference->param stores the persistent
+     * barycentric coordinates corresponding to the former LightSample::u/v.
+     */
+    kernel_assert(reference != nullptr);
+    kernel_assert(reference->type == LIGHT_TRIANGLE);
+    kernel_assert(reference->object == ls->object);
+    kernel_assert(reference->prim == ls->prim);
+
+    const float u = reference->param.x;
+    const float v = reference->param.y;
+
+    if (surface_shader_constant_emission(kg, ls->shader, &eval)) {
+      /*
+       * Preserve the legacy normal orientation correction. This affects the
+       * reconstructed sample normal used by later geometric computations,
+       * even though the constant shader itself does not need ShaderData.
+       */
+      if ((ls->prim != PRIM_NONE) && dot(ls->Ng, ls->D) > 0.0f) {
+        ls->Ng = -ls->Ng;
+      }
     }
     else {
-      const float u = (reference) ? reference->param.x : 0.0f;
-      const float v = (reference) ? reference->param.y : 0.0f;
-      const bool is_lamp = (ls->type != LIGHT_TRIANGLE);
+      PROFILING_INIT_FOR_SHADER(kg, PROFILING_SHADE_LIGHT_SETUP);
 
       shader_setup_from_sample(kg,
                                emission_sd,
@@ -372,49 +539,101 @@ light_sample_shader_eval(KernelGlobals kg,
                                ls->t,
                                time,
                                false,
-                               is_lamp);
+                               false);
 
+      /*
+       * Keep LightSample::Ng synchronized with the normal actually used for
+       * shader evaluation, matching the behavior of the previous evaluator.
+       */
       ls->Ng = emission_sd->Ng;
-    }
 
-    PROFILING_SHADER(emission_sd->object, emission_sd->shader);
-    PROFILING_EVENT(PROFILING_SHADE_LIGHT_EVAL);
+      PROFILING_SHADER(emission_sd->object, emission_sd->shader);
+      PROFILING_EVENT(PROFILING_SHADE_LIGHT_EVAL);
 
-    /* Note: We use PATH_RAY_VISIBILITY_NONE to match modern Cycles surface_shader_eval signature. */
-    surface_shader_eval<KERNEL_FEATURE_NODE_MASK_SURFACE_LIGHT>(
-        kg, state, emission_sd, nullptr, PATH_RAY_VISIBILITY_NONE, PATH_RAY_EMISSION);
+      surface_shader_eval<KERNEL_FEATURE_NODE_MASK_SURFACE_LIGHT>(
+          kg,
+          state,
+          emission_sd,
+          nullptr,
+          PATH_RAY_VISIBILITY_NONE,
+          PATH_RAY_EMISSION);
 
-    /* Evaluate closures. */
-    if (ls->type == LIGHT_BACKGROUND) {
-      eval = surface_shader_background(emission_sd);
-    }
-    else {
+      if (emission_sd->flag & SD_CACHE_MISS) {
+        r_eval = zero_spectrum();
+        return SHADER_EVAL_CACHE_MISS;
+      }
+
       eval = surface_shader_emission(emission_sd);
     }
   }
+  else {
+    kernel_assert(ls->type == LIGHT_BACKGROUND);
 
-  eval *= ls->eval_fac;
+    /*
+     * Background emission is not supported by
+     * light_sample_shader_eval_forward(), so evaluate it explicitly.
+     */
+    if (!surface_shader_constant_emission(kg, ls->shader, &eval)) {
+      PROFILING_INIT_FOR_SHADER(kg, PROFILING_SHADE_LIGHT_SETUP);
 
-  if (ls->type != LIGHT_TRIANGLE && ls->prim != LAMP_NONE) {
-    ccl_global const KernelLight *klight = &kernel_data_fetch(lights, ls->prim);
-    eval *= rgb_to_spectrum(
-        make_float3(klight->strength[0], klight->strength[1], klight->strength[2]));
+      shader_setup_from_background(
+          kg, emission_sd, ls->P, ls->D, 0.0f, time);
+
+      PROFILING_SHADER(emission_sd->object, emission_sd->shader);
+      PROFILING_EVENT(PROFILING_SHADE_LIGHT_EVAL);
+
+      surface_shader_eval<KERNEL_FEATURE_NODE_MASK_SURFACE_LIGHT>(
+          kg,
+          state,
+          emission_sd,
+          nullptr,
+          PATH_RAY_VISIBILITY_NONE,
+          PATH_RAY_EMISSION);
+
+      if (emission_sd->flag & SD_CACHE_MISS) {
+        r_eval = zero_spectrum();
+        return SHADER_EVAL_CACHE_MISS;
+      }
+
+      eval = surface_shader_background(emission_sd);
+    }
+
+    /*
+     * IMPORTANT:
+     *
+     * Do not blindly multiply KernelLight::strength here until the current
+     * background-light contract has been verified. Modern background
+     * evaluation may apply its strength elsewhere.
+     *
+     * If sampled background LightSample::prim identifies a KernelLight and
+     * the ordinary background NEE path applies its strength here, mirror that
+     * exact code. Do not infer it only from the analytic-light path.
+     */
   }
+
+  /*
+   * eval_fac is a LightSample sampling/evaluation factor. Neither
+   * light_sample_shader_eval_nee_constant() nor
+   * light_sample_shader_eval_forward() applies it.
+   */
+  eval *= ls->eval_fac;
 
   if (check_visibility) {
     kernel_assert(sd != nullptr);
+
     Ray ray ccl_optional_struct_init;
     light_sample_to_surface_shadow_ray(kg, sd, ls, &ray);
 
-    /* TODO(weizhen): this is opque visibility, only works for surface. */
-    /* Opaque visibility check. */
+    /* Opaque inline visibility currently supports surface candidates only. */
     Intersection isect;
-    if (scene_intersect(kg, &ray, PATH_RAY_VISIBILITY_SHADOW_OPAQUE, &isect)) {
-      return zero_spectrum();
+    if (scene_intersect(kg, &ray, PATH_RAY_VISIBILITY_SHADOW_OPAQUE, &isect))
+    {
+      eval = zero_spectrum();
     }
   }
 
-  return eval;
+  r_eval = eval;
+  return SHADER_EVAL_OK;
 }
 
 /* Multiple importance sampling weights. */

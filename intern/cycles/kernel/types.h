@@ -532,7 +532,7 @@ enum EmissionSampling {
 
 enum LightType {
   LIGHT_POINT,
-  LIGHT_SUN, // !!!
+  LIGHT_SUN,
   LIGHT_BACKGROUND,
   LIGHT_AREA,
   LIGHT_SPOT,
@@ -619,24 +619,37 @@ struct ReSTIRLightSampleReference {
   int object;
   int prim;
 
-/** @short Emitter-specific canonical parameters.
-  *
-  * LIGHT_TRIANGLE:
-  *   triangle barycentric coordinates corresponding to the former
-  *   LightSample::u and LightSample::v fields.
-  *
-  * LIGHT_POINT sphere:
-  *   encoded light-local surface normal.
-  *
-  * LIGHT_POINT delta:
-  *   unused.
-  *
-  * LIGHT_SUN:
-  *   encoded light-local sampled sun normal/direction, corresponding to ls->Ng.
-  *
-  * LIGHT_AREA:
-  *   canonical emitter uv recovered from sampled world-space position ls->P.
-  */
+  /**
+   * Emitter-specific canonical sample parameters.
+   *
+   * LIGHT_TRIANGLE:
+   *   Triangle barycentric coordinates. These also correspond to the u/v
+   *   parameters required by shader_setup_from_sample().
+   *
+   * LIGHT_POINT sphere:
+   *   Encoded light-local sphere-surface normal.
+   *
+   * LIGHT_POINT delta:
+   *   Unused.
+   *
+   * LIGHT_SPOT:
+   *   Unused for delta-position spot lights.
+   *
+   * LIGHT_SUN finite angle:
+   *   Encoded selected light-local direction.
+   *
+   * LIGHT_SUN delta:
+   *   Unused.
+   *
+   * LIGHT_AREA:
+   *   Canonical emitter-local position.
+   *
+   * LIGHT_BACKGROUND:
+   *   Canonical sampled environment direction, if not represented elsewhere.
+   *
+   * Except for LIGHT_TRIANGLE, these parameters must not be passed directly
+   * to shader_setup_from_sample() as shader UV coordinates.
+   */
   float2 param;
 };
 
@@ -1851,6 +1864,11 @@ struct KernelWorkTile {
   /* Precalculated parameters used by init_from_camera kernel on GPU. */
   int path_index_offset;
   int work_size;
+
+  // int min_x;
+  // int max_x;
+  // int min_y;
+  // int max_y;
 };
 
 /* Shader Evaluation.
@@ -1914,11 +1932,9 @@ enum DeviceKernel : int {
   DEVICE_KERNEL_INTEGRATOR_SHADE_DEDICATED_LIGHT,
   DEVICE_KERNEL_INTEGRATOR_SHADOW_PATH_MNEE_PENDING,
 
-  // TODO(Tri)
-  // DEVICE_KERNEL_INTEGRATOR_RESTIR_CANDIDATE,
-  // DEVICE_KERNEL_INTEGRATOR_RESTIR_TEMPORAL,
-  // DEVICE_KERNEL_INTEGRATOR_RESTIR_SPATIAL,
-  // DEVICE_KERNEL_INTEGRATOR_RESTIR_REPLAY,
+	// DEVICE_KERNEL_INTEGRATOR_RESTIR,
+  // DEVICE_KERNEL_INTEGRATOR_FINAL_EVALUATION,
+  // DEVICE_KERNEL_INTEGRATOR_RESTIR_PT_EVALUATION,
 
   DEVICE_KERNEL_INTEGRATOR_MEGAKERNEL,
 

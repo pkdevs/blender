@@ -499,7 +499,8 @@ ccl_device_inline void film_add_reservoir_pt(KernelGlobals kg,
                                              ccl_global float *ccl_restrict buffer,
                                              const bool write_prev = false)
 {
-  kernel_assert(kernel_data.integrator.use_restir);
+  const bool use_restir = kernel_data.integrator.use_restir;
+  kernel_assert(use_restir);
 
   ccl_global float *ptr = buffer + (write_prev ?
                                         kernel_data.film.pass_restir_pt_previous_reservoir :
@@ -800,7 +801,9 @@ ccl_device_inline void integrator_finalize_reservoir(KernelGlobals kg,
                                                      IntegratorState state,
                                                      ccl_global float *ccl_restrict render_buffer)
 {
-  if (!kernel_data.integrator.use_restir) {
+  const bool use_restir = kernel_data.integrator.use_restir;
+
+  if (!use_restir) {
     return;
   }
 
@@ -811,11 +814,12 @@ ccl_device_inline void integrator_finalize_reservoir(KernelGlobals kg,
   Reservoir reservoir;
   reservoir_init(kg, &reservoir);
 
+  // !!!: Necessary?
   if (!restir_unpack_reservoir(kg, &reservoir, buffer)) {
     return;
   }
 
-  reservoir_finalize(&reservoir);
+  reservoir_finalize(&reservoir, use_restir);
   film_write_pass_reservoir(kg, state, &reservoir, render_buffer);
 
   /* buffer[4] = safe_divide(buffer[4], buffer[5]); */
@@ -873,6 +877,8 @@ ccl_device_inline void film_add_reservoir_di(
     ccl_private const RNGState *rng_state,
     ccl_global float *ccl_restrict render_buffer)
 {
+  const bool use_restir = kernel_data.integrator.use_restir;
+
   /* TODO(weizhen): This might not work correctly with path guiding because
    * the value was assigned using `mis_pdf` instead of `bsdf_pdf`. */
   const float bsdf_pdf = INTEGRATOR_STATE(state, path, mis_ray_pdf);
@@ -910,7 +916,7 @@ ccl_device_inline void film_add_reservoir_di(
       kg, rng_state, reservoir.num_light_samples, reservoir.max_samples, PRNG_PICK);
 
   reservoir_add_bsdf_sample(
-      &reservoir, ls, candidate_reference, radiance, bsdf_pdf, rand_pick);
+      &reservoir, ls, candidate_reference, radiance, bsdf_pdf, rand_pick, use_restir);
 
 /**
  * because film_write_pass_reservoir() writes only the serialized reference, weight, and luminance, 

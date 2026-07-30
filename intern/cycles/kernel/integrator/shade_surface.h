@@ -249,8 +249,42 @@ ccl_device_forceinline float radiance_eval(KernelGlobals kg,
   ccl_private ShaderData *emission_sd = AS_SHADER_DATA(&emission_sd_storage);
 
   PROFILING_INIT(kg, PROFILING_RESTIR_LIGHT_EVAL);
-  const Spectrum light_eval = light_sample_shader_eval( // !!!: Ensure Correctness of light_sample_shader_eval()
-      kg, state, emission_sd, ls, sd->time, sd, reference, check_visibility);
+  /* Evaluate *non-constant* part of light shader. */
+  // const Spectrum light_eval = light_sample_shader_eval( // !!!: Ensure Correctness of light_sample_shader_eval()
+  //     kg, state, emission_sd, ls, sd->time, sd, reference, check_visibility);
+  
+  Spectrum light_eval = zero_spectrum();
+  /* !!!: light_sample_shader_eval() only handle non-constant lights and all the constant lights 
+   * darkness issues are unrelated to this and caused elsewhere... 
+   * Fixing analytic UV reconstruction was only a latent correctness fix for nonconstant shaders.
+   */
+  const ShaderEvalResult shader_result = light_sample_shader_eval(
+      kg, state, emission_sd, ls, sd->time, light_eval, sd, reference, check_visibility);
+
+    // if (shader_result == SHADER_EVAL_CACHE_MISS) {
+    //   /* TODO: Propagate or reschedule the cache miss according to the kernel containing
+    //    * this ReSTIR candidate evaluation.
+    //    */
+    //   // return SHADER_EVAL_CACHE_MISS;
+    //   return 0.0f; // !!!
+    // }
+  if (shader_result != SHADER_EVAL_OK) {
+#if !defined(__KERNEL_GPU__) && defined(RESTIR_DI_DEBUG)
+    printf("RESTIR SHADER FAIL: result=%d type=%d object=%d prim=%d shader=%d "
+           "light_pdf=%g\n",
+           (int)shader_result,
+           (int)ls->type,
+           ls->object,
+           ls->prim,
+           ls->shader,
+           (double)ls->pdf);
+#endif
+
+    bsdf_eval_init(radiance, zero_spectrum());
+    return 0.0f;
+  }
+
+
 
   PROFILING_EVENT(PROFILING_RESTIR_BSDF_EVAL);
   const float bsdf_pdf = surface_shader_bsdf_eval(kg, state, sd, ls->D, radiance, ls->shader);
@@ -264,7 +298,7 @@ if (kernel_data.integrator.use_restir) {
   const bool zero_bsdf = bsdf_eval_is_zero(radiance);
 
   if (zero_light || zero_geom || zero_bsdf || !(bsdf_pdf > 0.0f)) {
-    printf("radiance_eval(); reject/suspicious: type=%d object=%d prim=%d shader=%d "
+    printf("radiance_eval() 1; reject/suspicious: type=%d object=%d prim=%d shader=%d "
            "pdf=%g bsdf_pdf=%g eval_fac=%g t=%g geom=%g "
            "P=(%g,%g,%g) Ng=(%g,%g,%g) D=(%g,%g,%g) "
            "ref=(type=%d object=%d prim=%d param=%g,%g) "
@@ -294,6 +328,35 @@ if (kernel_data.integrator.use_restir) {
 #endif
 
   bsdf_eval_mul(radiance, light_eval * geometry_term);
+
+#if !defined(__KERNEL_GPU__) && defined(RESTIR_DI_DEBUG)
+  if (kernel_data.integrator.use_restir) {
+    const bool invalid_light_pdf = !(isfinite(ls->pdf) && ls->pdf > 0.0f);
+    const bool invalid_bsdf_pdf = !(isfinite(bsdf_pdf) && bsdf_pdf > 0.0f);
+    const bool invalid_geometry = !(isfinite(geometry_term) && geometry_term > 0.0f);
+    const bool zero_final_radiance = bsdf_eval_is_zero(radiance);
+
+    if (invalid_light_pdf || invalid_bsdf_pdf || invalid_geometry || zero_final_radiance) {
+      printf("radiance_eval() 2; RESTIR RADIANCE FINAL INVALID: "
+             "type=%d object=%d prim=%d shader=%d "
+             "light_pdf=%g bsdf_pdf=%g eval_fac=%g geom=%g "
+             "zero_final=%d invalid_light_pdf=%d "
+             "invalid_bsdf_pdf=%d invalid_geom=%d\n",
+             (int)ls->type,
+             ls->object,
+             ls->prim,
+             ls->shader,
+             (double)ls->pdf,
+             (double)bsdf_pdf,
+             (double)ls->eval_fac,
+             (double)geometry_term,
+             (int)zero_final_radiance,
+             (int)invalid_light_pdf,
+             (int)invalid_bsdf_pdf,
+             (int)invalid_geometry);
+    }
+  }
+#endif
 
   return bsdf_pdf;
 }
@@ -443,9 +506,6 @@ integrate_direct_light_shadow_init_common(KernelGlobals kg, // !!!: integrate_di
   // }
   // INTEGRATOR_STATE_WRITE(shadow_state, shadow_path, flag) = shadow_flag;
 
-  // /* Write Light-group, +1 as light-group is int but we need to encode into a uint8_t. */
-  // INTEGRATOR_STATE_WRITE(shadow_state, shadow_path, lightgroup) = light_group + 1;
-
 
   /* Write Light-group, +1 as light-group is int but we need to encode into a uint8_t. */
   INTEGRATOR_STATE_WRITE(shadow_state, shadow_path, lightgroup) = light_group + 1;
@@ -510,7 +570,13 @@ ccl_device_inline void integrate_write_pass_diffuse_glossy(
 }
 
 // !!!: Must preserve the modern MNEE-ray behavior when mnee_vertex_count > 0
-/* Owns ray creation, shadow initialization, visibility, flags, and pass weights. */
+/* Create and initialize an ordinary surface direct-light shadow path.
+ * In addition to common shadow-state initialization, this helper owns
+ * direct-light visibility, flags, pass weights, and transmission volume handling.
+ *
+ * Specialized callers such as shadow_linking_shade() call the common initializer
+ * directly and must initialize their specialized shadow-path fields themselves.
+ */
 template<bool is_direct_light>
 ccl_device_inline void integrate_direct_light_create_shadow_path(
     KernelGlobals kg,
@@ -535,8 +601,9 @@ ccl_device_inline void integrate_direct_light_create_shadow_path(
     ray.P = integrate_surface_ray_offset(kg, sd, ray.P, ray.D);
   }
 
-  /* The light shader has already been evaluated into `radiance`. */
-  constexpr bool constant_light_shader = true; // !!!
+  /* The light shader has already been evaluated into `radiance`.
+   * Not to queue SHADE_LIGHT_NEE; the full emission is already included in the shadow throughput. */
+  constexpr bool light_shader_fully_evaluated = true; // !!!: constant_light_shader could be appropriate
 
   /* Branch off shadow kernel. */
   IntegratorShadowState shadow_state = integrate_direct_light_shadow_init_common(
@@ -546,7 +613,7 @@ ccl_device_inline void integrate_direct_light_create_shadow_path(
       bsdf_eval_sum(radiance),
       ls->group,
       mnee_vertex_count,
-      constant_light_shader);
+      light_shader_fully_evaluated);
 
   const bool is_transmission = dot(ls->D, sd->N) < 0.0f;
   if (is_transmission) {
@@ -745,7 +812,7 @@ ccl_device_inline void integrate_direct_light_create_shadow_path(
 //   }
 
 //   INTEGRATOR_STATE_WRITE(shadow_state, shadow_path, visibility) = INTEGRATOR_STATE(
-//       state, path, visibility);
+//       state, path, visibility); // !!!
 //   INTEGRATOR_STATE_WRITE(shadow_state, shadow_path, flag) = shadow_flag; // !!!
 
 //   return SHADER_EVAL_OK;
@@ -831,6 +898,7 @@ ccl_device
     }
 
     Spectrum light_shader_eval ccl_optional_struct_init;
+    /* Evaluate constant part of light shader, rest will optionally be done in another kernel. */
     light_sample_shader_eval_nee_constant(
         kg, ls.shader, ls.prim, ls.type != LIGHT_TRIANGLE, light_shader_eval);
 
@@ -925,18 +993,21 @@ ccl_device
     ReSTIRLightSampleReference reference;
     reference = restir_light_reference_empty();
 
-    /* Construct the reference from the light sample in ordinary NEE. */
-    // !!!: One contributor of the darkness in DI (not all types are supported; current support might have issues)
-    // !!!: restir_light_reference_from_sample() may have problem populating reference
-    if (!restir_light_reference_from_sample(kg, &ls, &reference)) {
-      continue;
+    if (use_restir) {
+      /* Construct the reference from the light sample in ordinary NEE. */
+      // !!!: One contributor of the darkness in DI (not all types are supported; current support might have issues)
+      // !!!: restir_light_reference_from_sample() may have problem populating reference
+      if (!restir_light_reference_from_sample(kg, &ls, &reference)) { // Even though `radiance_eval` calls light_sample_shader_eval(), if this isn't called, we'll get total darkness for constant lights
+        continue;
+      }
     }
 
-    // !!!: DEBUG ONLY
-    if (!restir_light_reference_is_valid(&reference)) {
-      kernel_assert(false);
-      continue;
-    }
+    kernel_assert(restir_light_reference_is_valid(&reference));
+    // // !!!: DEBUG ONLY
+    // if (!restir_light_reference_is_valid(&reference)) {
+    //   kernel_assert(false);
+    //   continue;
+    // }
 
     /* Evaluate light shader. */
     const bool check_visibility = use_restir && kernel_data.integrator.restir_unbiased;
@@ -950,10 +1021,26 @@ ccl_device
     // if (!(bsdf_pdf > 0.0f) || bsdf_eval_is_zero(&radiance)) {
     //   continue;
     // }
+    if (!(isfinite(bsdf_pdf) && bsdf_pdf > 0.0f) || bsdf_eval_is_zero(&radiance))
+    {
+#if !defined(__KERNEL_GPU__) && defined(RESTIR_DI_DEBUG)
+      if (use_restir_di) {
+        printf("integrate_surface_direct_light() 3; RESTIR A REJECT: candidate=%d/%d "
+               "bsdf_pdf=%g zero_radiance=%d\n",
+               i,
+               reservoir.num_light_samples,
+               (double)bsdf_pdf,
+               (int)bsdf_eval_is_zero(&radiance));
+      }
+#endif
+      continue;
+    }
+
 
     PROFILING_EVENT(PROFILING_RESTIR_RESERVOIR);
+
     /* Compute the NEE MIS weight and divide by the light PDF in the appropriate measure. */
-    reservoir_add_light_sample(&reservoir, ls, reference, radiance, bsdf_pdf, rand_pick);
+    reservoir_add_light_sample(&reservoir, ls, reference, radiance, bsdf_pdf, rand_pick, use_restir); // !!!
   }
 
   if (reservoir_is_empty(&reservoir)) {
@@ -962,6 +1049,7 @@ ccl_device
 
   /* TODO(weizhen): write reconnection vertex. Treat as rough if at least one closure is rough. */
 
+  // !!!: when use_restir_di == true, the function does not create a shadow path.
   /*
    * The selected light and reference remain paired inside Reservoir.
    * Persistent ReSTIR DI paths store the reservoir and trace it later.
@@ -969,10 +1057,10 @@ ccl_device
   if (use_restir_di) {
     PROFILING_INIT(kg, PROFILING_RESTIR_RESERVOIR_PASSES);
     /* Write to reservoir and trace shadow ray later. */
-    film_write_pass_reservoir(kg, state, &reservoir, render_buffer);
+    film_write_pass_reservoir(kg, state, &reservoir, render_buffer); // !!!
   }
   else {
-    reservoir_finalize(&reservoir);
+    reservoir_finalize(&reservoir, use_restir);
     bsdf_eval_mul(&reservoir.radiance, reservoir.total_weight);
 
     // if (bsdf_eval_is_zero(&reservoir.radiance)) {
@@ -1242,7 +1330,7 @@ ccl_device_forceinline void integrate_surface_ao(KernelGlobals kg,
   INTEGRATOR_STATE_WRITE(shadow_state, shadow_path, sample) = INTEGRATOR_STATE(
       state, path, sample);
   INTEGRATOR_STATE_WRITE(shadow_state, shadow_path, visibility) = INTEGRATOR_STATE(
-      state, path, visibility);
+      state, path, visibility); // !!!
   INTEGRATOR_STATE_WRITE(shadow_state, shadow_path, flag) = shadow_flag; // !!!
   INTEGRATOR_STATE_WRITE(shadow_state, shadow_path, bounce) = bounce;
   INTEGRATOR_STATE_WRITE(shadow_state, shadow_path, transparent_bounce) = transparent_bounce;
