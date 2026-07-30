@@ -60,7 +60,7 @@ a <<= b;
 a >>= b;
 )";
     string expect = R"(
-tYBAz;tYAYzz;tYz;tAY1,1z;AwA;AWA;AGA;AEA;ALA;A5A;A6A;)";
+t<BA>;t<A<>>;t<>;tA<1,1>;AwA;AWA;AGA;AEA;ALA;A5A;A6A;)";
     EXPECT_EQ(Lexer(input, err_handler).token_types_str(), expect);
   }
   {

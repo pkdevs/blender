@@ -919,6 +919,11 @@ static void lex_comment(const std::string_view str,
   cursor--;
 }
 
+static bool is_whitespace(char c)
+{
+  return (c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '\v' || c == '\f');
+}
+
 static void lex_angle(const std::string_view str,
                       const TokenType *types,
                       const uint32_t *offsets,
@@ -937,16 +942,15 @@ static void lex_angle(const std::string_view str,
   bool preceded_by_space = false;
   const uint32_t start = offsets[cursor];
   if (start > 0) {
-    const char c = str[start - 1];
-    if (c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '\v' || c == '\f') {
-      preceded_by_space = true;
-    }
+    preceded_by_space = is_whitespace(str[start - 1]);
   }
 
   /* Mimic the template token identification logic. */
   if (out_type == LThan) {
-    if ((!preceded_by_space && prev != AngleOpen) || prev == Template) {
-      out_type = TemplateOpen;
+    if (!preceded_by_space && prev != AngleOpen) {
+      /* TODO(fclem): Can't mutate them here because the whole legacy compiler depends on template
+       * token being AngleOpen. */
+      // out_type = TemplateOpen;
       return;
     }
     /* Merge back split multi-tokens. */
@@ -964,9 +968,26 @@ static void lex_angle(const std::string_view str,
     }
   }
   else if (out_type == GThan) {
-    if (!preceded_by_space && prev != AngleClose && prev != Minus) {
-      out_type = TemplateClose;
-      return;
+    if (!preceded_by_space && prev != Minus
+        /* && prev != AngleClose // Only possible if we tag as TemplateClose. See below. */)
+    {
+      /* TODO(fclem): Can't mutate them here because the whole legacy compiler depends on template
+       * token being AngleClose. */
+      // out_type = TemplateClose;
+      if (prev != AngleClose) {
+        return;
+      }
+      /* WORKAROUND: Because the previous token cannot have been tagged as TemplateClose, we have
+       * to backtrack to check them. */
+      uint32_t curr = offsets[cursor];
+      while (--curr) {
+        if (str[curr] != '>') {
+          if (!is_whitespace(str[curr])) {
+            return; /* This is a TemplateClose. */
+          }
+          break;
+        }
+      }
     }
     /* Merge back split multi-tokens. */
     {
@@ -978,7 +999,7 @@ static void lex_angle(const std::string_view str,
     {
       const bool not_followed_by_whitespace = offsets_end[cursor] == offsets[cursor + 1];
       if (types[cursor + 1] == Assign && not_followed_by_whitespace) {
-        cursor += 1; /* `<<=` or `<=` */
+        cursor += 1; /* `>>=` or `>=` */
       }
     }
   }

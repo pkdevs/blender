@@ -35,6 +35,10 @@ struct LexerBase : lexit::TokenBuffer {
 
   /* Change words into keyword (ex: `if`, `struct`, `template`). */
   void identify_keywords();
+  /* Change angle bracket tokens into template tokens if they match template condition. */
+  void identify_template_tokens();
+  /* Undo the changes from identify_template_tokens. */
+  void reset_template_tokens();
 };
 
 /**

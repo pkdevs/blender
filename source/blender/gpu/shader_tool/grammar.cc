@@ -861,6 +861,8 @@ struct ScopeParser {
         case Equal:      /* Needed for some macros. */
         case LThan:      /* Needed for some macros. */
         case GThan:      /* Needed for some macros. */
+        case LEqual:     /* Needed for some macros. */
+        case GEqual:     /* Needed for some macros. */
         case LogicalOr:  /* Needed for some macros. */
         case LogicalAnd: /* Needed for some macros. */
         case Dot:        /* Needed for some macros. */
@@ -1244,6 +1246,8 @@ void ParserBase::build_scope_tree(ErrorHandler &err_handler)
 {
   LexerBase &lex = *this;
 
+  lex.identify_template_tokens();
+
   scope_types.clear();
   scope_ranges.clear();
   scope_links.clear();
@@ -1255,6 +1259,8 @@ void ParserBase::build_scope_tree(ErrorHandler &err_handler)
 
   ScopeParser p(*this, lex[0], err_handler);
   p.translation_unit();
+
+  lex.reset_template_tokens();
 
   update_string_view();
 }

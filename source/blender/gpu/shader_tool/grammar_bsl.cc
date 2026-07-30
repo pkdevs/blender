@@ -1310,6 +1310,8 @@ void ParserBase::parse_bsl(ErrorHandler &err_handler)
 {
   LexerBase &lex = *this;
 
+  lex.identify_template_tokens();
+
   BSLParser p(*this, lex[0], err_handler);
   p.translation_unit();
 
@@ -1320,6 +1322,8 @@ void ParserBase::parse_bsl(ErrorHandler &err_handler)
   if (err_handler.err.has_value()) {
     // print_ast();
   }
+
+  lex.reset_template_tokens();
 }
 
 void ParserBase::print_ast() const
