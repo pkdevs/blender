@@ -2281,6 +2281,11 @@ struct CodegenContext : NodeErrorHandler {
     return "0";
   }
 
+  string parse_frequency(Expr frequency)
+  {
+    return frequency.is_valid() ? string(frequency.str()) : string("PASS");
+  }
+
   metadata::ParsedResource parse_resource(AttrList attributes,
                                           const string &type,
                                           const string &name,
@@ -2316,7 +2321,7 @@ struct CodegenContext : NodeErrorHandler {
                 .res_type = string(attr.attr.identifier().str()),
                 .res_slot = string(attr.param1.str()),
                 .res_condition = attr.parse_condition(),
-                .res_frequency = string(attr.frequency.str())};
+                .res_frequency = parse_frequency(attr.frequency)};
       case ResourceType::UNIFORM_BUF:
         return {.line = 0,
                 .var_type = type,
@@ -2325,7 +2330,7 @@ struct CodegenContext : NodeErrorHandler {
                 .res_type = string(attr.attr.identifier().str()),
                 .res_value = string(attr.param1.str()),
                 .res_condition = attr.parse_condition(),
-                .res_frequency = string(attr.frequency.str())};
+                .res_frequency = parse_frequency(attr.frequency)};
       case ResourceType::STORAGE_BUF:
         return {.line = 0,
                 .var_type = type,
@@ -2335,7 +2340,7 @@ struct CodegenContext : NodeErrorHandler {
                 .res_slot = string(attr.param1.str()),
                 .res_qualifier = string(attr.param2.str()),
                 .res_condition = attr.parse_condition(),
-                .res_frequency = string(attr.frequency.str())};
+                .res_frequency = parse_frequency(attr.frequency)};
       case ResourceType::IMAGE:
         return {.line = 0,
                 .var_type = type,
@@ -2346,7 +2351,7 @@ struct CodegenContext : NodeErrorHandler {
                 .res_qualifier = string(attr.param2.str()),
                 .res_format = parse_image_format(cls, attr.param3),
                 .res_condition = attr.parse_condition(),
-                .res_frequency = string(attr.frequency.str())};
+                .res_frequency = parse_frequency(attr.frequency)};
         break;
       default:
         assert(0);
