@@ -10355,7 +10355,7 @@ static void rna_def_composite_nodetree(BlenderRNA *brna)
   prop = RNA_def_property(srna, "allow_usage_in_scene_compositor_effect", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
   RNA_def_property_ui_text(
-      prop, "Scene Compositor Effect", "The node group can be used as a scene compositor effect");
+      prop, "Scene Effect", "The node group can be used as a scene compositor effect");
   RNA_def_property_boolean_funcs(
       prop,
       "rna_CompositorNodeTree_allow_usage_in_scene_compositor_effect_get",

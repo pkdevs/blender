@@ -174,17 +174,28 @@ void ED_buttons_visible_tabs_menu(bContext *C, ui::Layout *layout, void * /*arg*
 
   /* These can be reordered freely. */
   constexpr std::array<StringRefNull, BCONTEXT_TOT> filter_items = {
-      "show_properties_tool",        "show_properties_render",
-      "show_properties_output",      "show_properties_view_layer",
-      "show_properties_scene",       "show_properties_world",
-      "show_properties_collection",  "show_properties_object",
-      "show_properties_modifiers",   "show_properties_effects",
-      "show_properties_particles",   "show_properties_physics",
-      "show_properties_constraints", "show_properties_data",
-      "show_properties_bone",        "show_properties_bone_constraints",
-      "show_properties_material",    "show_properties_texture",
-      "show_properties_strip",       "show_properties_strip_modifier",
-      "show_properties_compositor"};
+      "show_properties_tool",
+      "show_properties_render",
+      "show_properties_output",
+      "show_properties_view_layer",
+      "show_properties_scene",
+      "show_properties_compositor",
+      "show_properties_world",
+      "show_properties_collection",
+      "show_properties_object",
+      "show_properties_modifiers",
+      "show_properties_effects",
+      "show_properties_particles",
+      "show_properties_physics",
+      "show_properties_constraints",
+      "show_properties_data",
+      "show_properties_bone",
+      "show_properties_bone_constraints",
+      "show_properties_material",
+      "show_properties_texture",
+      "show_properties_strip",
+      "show_properties_strip_modifier",
+  };
 
   for (StringRefNull item : filter_items) {
     layout->prop(&ptr, item, ui::ITEM_R_TOGGLE, std::nullopt, ICON_NONE);

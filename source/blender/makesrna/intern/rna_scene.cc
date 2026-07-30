@@ -1288,7 +1288,7 @@ static void rna_Scene_compositing_node_group_set(PointerRNA *scene_ptr,
 
   SceneCompositorEffect *effect = bke::compositor::get_active_effect(*scene);
   if (!effect) {
-    effect = &bke::compositor::new_effect(*scene, "Scene Compositor Effect");
+    effect = &bke::compositor::new_effect(*scene, "Effect");
   }
 
   if (effect->node_group) {
@@ -9031,6 +9031,7 @@ static void rna_def_compositor_effect(BlenderRNA *brna)
   srna = RNA_def_struct(brna, "SceneCompositorEffect", nullptr);
   RNA_def_struct_sdna(srna, "SceneCompositorEffect");
   RNA_def_struct_ui_text(srna, "Scene Compositor Effect", "Compositor effect for scene");
+  RNA_def_struct_ui_icon(srna, ICON_NODE_COMPOSITING);
   RNA_def_struct_path_func(srna, "rna_SceneCompositorEffect_path");
 
   prop = RNA_def_property(srna, "name", PROP_STRING, PROP_NONE);

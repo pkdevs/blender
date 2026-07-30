@@ -74,7 +74,7 @@ static void compositing_node_group_to_effect(Main &main, Scene &scene)
     return;
   }
 
-  SceneCompositorEffect &effect = bke::compositor::new_effect(scene, "Scene Compositor Effect");
+  SceneCompositorEffect &effect = bke::compositor::new_effect(scene, "Effect");
   effect.node_group = node_group;
   if (!node_group->compositor_node_asset_traits) {
     node_group->compositor_node_asset_traits = MEM_new<CompositorNodeAssetTraits>(__func__);

@@ -60,7 +60,7 @@ namespace blender {
 static wmOperatorStatus add_compositor_effect_exec(bContext *C, wmOperator * /*op*/)
 {
   Scene *scene = CTX_data_scene(C);
-  bke::compositor::new_effect(*scene, "Scene Compositor Effect");
+  bke::compositor::new_effect(*scene, "Effect");
 
   WM_event_add_notifier(C, NC_SCENE | ND_COMPO_RESULT, scene);
 
@@ -281,8 +281,7 @@ static void SCENE_OT_set_active_compositor_effect(wmOperatorType *ot)
 static wmOperatorStatus new_compositor_effect_node_group_exec(bContext *C, wmOperator * /*op*/)
 {
   Main *bmain = CTX_data_main(C);
-  bNodeTree *node_group = bke::node_tree_add_tree(
-      bmain, "Scene Compositor Effect", "CompositorNodeTree");
+  bNodeTree *node_group = bke::node_tree_add_tree(bmain, "Scene Compositor", "CompositorNodeTree");
   nodes::node_tree_composit_default_init(C, node_group);
 
   if (!node_group->compositor_node_asset_traits) {
@@ -294,7 +293,7 @@ static wmOperatorStatus new_compositor_effect_node_group_exec(bContext *C, wmOpe
   Scene *scene = CTX_data_scene(C);
   SceneCompositorEffect *active_effect = bke::compositor::get_active_effect(*scene);
   if (!active_effect) {
-    SceneCompositorEffect &effect = bke::compositor::new_effect(*scene, "Scene Compositor Effect");
+    SceneCompositorEffect &effect = bke::compositor::new_effect(*scene, "Effect");
     active_effect = &effect;
   }
 

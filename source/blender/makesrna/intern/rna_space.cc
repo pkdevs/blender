@@ -633,8 +633,8 @@ const EnumPropertyItem buttons_context_items[] = {
     {BCONTEXT_COMPOSITOR,
      "COMPOSITOR",
      ICON_NODE_COMPOSITING,
-     "Compositor",
-     "Compositor Properties"},
+     "Compositor & Effects",
+     "Procedural scene post-processing"},
     {0, nullptr, 0, nullptr, nullptr},
 };
 
