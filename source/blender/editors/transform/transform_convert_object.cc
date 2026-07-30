@@ -923,13 +923,13 @@ static void special_aftertrans_update__object(bContext *C, TransInfo *t)
     ANIM_deselect_keys_in_animation_editors(C);
   }
 
-  Vector<Object *> modified_objects;
+  VectorSet<Object *> modified_objects;
   for (int i = 0; i < tc->data_len; i++) {
     TransData *td = tc->data + i;
     TransDataExtension *td_ext = tc->data_ext + i;
     ListBaseT<PTCacheID> pidlist;
     ob = static_cast<Object *>(td->extra);
-    modified_objects.append(ob);
+    modified_objects.add(ob);
 
     if (td->flag & TD_SKIP) {
       continue;
