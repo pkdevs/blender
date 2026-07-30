@@ -540,6 +540,8 @@ static bool create_non_transition_clamp_data(TransInfo *t, const Scene *scene, S
   return false;
 }
 
+/* Clamp same channel transitions to strip / content area. Clamping overlap of adjacent transitions
+ * is done separately in #create_adjacent_transition_clamp_data. */
 static void create_transition_clamp_data(TransInfo *t, const Scene *scene, Strip *strip)
 {
   TransSeq *ts = static_cast<TransSeq *>(TRANS_DATA_CONTAINER_FIRST_SINGLE(t)->custom.type.data);
@@ -547,8 +549,8 @@ static void create_transition_clamp_data(TransInfo *t, const Scene *scene, Strip
   bool left_sel = (strip->flag & SEQ_LEFTSEL);
   bool right_sel = (strip->flag & SEQ_RIGHTSEL);
 
-  Strip *left_input = effect_input_get(strip, SEQ_INPUT_LEFT);
-  Strip *right_input = effect_input_get(strip, SEQ_INPUT_RIGHT);
+  Strip *left_input = strip->input1;
+  Strip *right_input = strip->input2;
 
   left_input->runtime->flag |= seq::StripRuntimeFlag::ShowOffsets;
   right_input->runtime->flag |= seq::StripRuntimeFlag::ShowOffsets;
@@ -589,11 +591,72 @@ static void create_transition_clamp_data(TransInfo *t, const Scene *scene, Strip
   }
 }
 
+static void create_adjacent_transition_clamp_data(
+    TransSeq *ts, const Scene *scene, VectorSet<std::pair<Strip *, Strip *>> &adjacent_pairs)
+{
+  for (auto [left_strip, right_strip] : adjacent_pairs) {
+    const bool left_strip_left_sel = left_strip->flag & SEQ_LEFTSEL;
+    const bool left_strip_right_sel = left_strip->flag & SEQ_RIGHTSEL;
+    const bool right_strip_left_sel = right_strip->flag & SEQ_LEFTSEL;
+    const bool right_strip_right_sel = right_strip->flag & SEQ_RIGHTSEL;
+
+    const int offset = right_strip->left_handle() - left_strip->right_handle(scene);
+    /* When both transitions are being scaled toward each other. Uneven distances are truncated
+     * toward zero, leaving a one frame gap to prevent overlap. */
+    const int symmetric_offset = offset / 2;
+
+    /* Moving the right handle of the left transition: clamp to right transition bounds. */
+    if (left_strip_right_sel && !right_strip_left_sel) {
+      ts->hard_clamp.xmax = min_ii(ts->hard_clamp.xmax, offset);
+      if (right_strip_right_sel) {
+        ts->symmetric_hard_clamp_max = min_ii(ts->symmetric_hard_clamp_max, symmetric_offset);
+      }
+    }
+    /* Moving the left handle of the left transition: clamp to right transition bounds if
+     * symmetric transitions are enabled. */
+    if ((left_strip_left_sel && !left_strip_right_sel) && !right_strip_right_sel) {
+      ts->symmetric_hard_clamp_min = max_ii(ts->symmetric_hard_clamp_min, -offset);
+    }
+
+    /* Moving the left handle of the right transition: clamp to left transition bounds. */
+    if (!left_strip_right_sel && right_strip_left_sel) {
+      ts->hard_clamp.xmin = max_ii(ts->hard_clamp.xmin, -offset);
+      if (left_strip_left_sel) {
+        ts->symmetric_hard_clamp_min = max_ii(ts->symmetric_hard_clamp_min, -symmetric_offset);
+      }
+    }
+    /* Moving the right handle of the right transition: clamp to left transition bounds if
+     * symmetric transitions are enabled. */
+    if (!left_strip_left_sel && (!right_strip_left_sel && right_strip_right_sel)) {
+      ts->symmetric_hard_clamp_max = min_ii(ts->symmetric_hard_clamp_max, offset);
+    }
+  }
+}
+
+/* (left, right) adjacent transition pairs to clamp transitions from overlapping each other. */
+static void get_transition_pairs(Editing *ed,
+                                 Strip *transition,
+                                 VectorSet<std::pair<Strip *, Strip *>> &r_adjacent_pairs)
+{
+  /* Adjacent transition to the left. */
+  transitions_for_each(ed, transition->input1, [&](Strip *adjacent_transition) {
+    if (adjacent_transition->input2 == transition->input1) {
+      r_adjacent_pairs.add({adjacent_transition, transition});
+    }
+  });
+  /* Adjacent transition to the right. */
+  transitions_for_each(ed, transition->input2, [&](Strip *adjacent_transition) {
+    if (adjacent_transition->input1 == transition->input2) {
+      r_adjacent_pairs.add({transition, adjacent_transition});
+    }
+  });
+}
+
 static void create_trans_seq_clamp_data(TransInfo *t, const Scene *scene)
 {
   TransDataContainer *tc = TRANS_DATA_CONTAINER_FIRST_SINGLE(t);
   TransSeq *ts = static_cast<TransSeq *>(tc->custom.type.data);
-  const Editing *ed = seq::editing_get(scene);
+  Editing *ed = seq::editing_get(scene);
 
   /* Prevent snaps and change in `values` past `hard_clamp` for all selected strips. */
   BLI_rcti_init(&ts->hard_clamp, INT_MIN, INT_MAX, -seq::MAX_CHANNELS, seq::MAX_CHANNELS);
@@ -608,6 +671,8 @@ static void create_trans_seq_clamp_data(TransInfo *t, const Scene *scene)
 
   bool has_transition_handles = false;
   bool has_non_transition = false;
+
+  VectorSet<std::pair<Strip *, Strip *>> adjacent_transition_pairs;
 
   for (Strip *strip : strips) {
     /* Early break if both x and y are hard clamped to 0. */
@@ -631,6 +696,7 @@ static void create_trans_seq_clamp_data(TransInfo *t, const Scene *scene)
         valid_transition_input_selection = false;
         break;
       }
+      get_transition_pairs(ed, strip, adjacent_transition_pairs);
       create_transition_clamp_data(t, scene, strip);
     }
     else if (strip->is_effect_with_inputs()) {
@@ -669,6 +735,10 @@ static void create_trans_seq_clamp_data(TransInfo *t, const Scene *scene)
   if (only_handles_selected || invalid_selection) {
     ts->hard_clamp.ymin = 0;
     ts->hard_clamp.ymax = 0;
+  }
+
+  if (!invalid_selection) {
+    create_adjacent_transition_clamp_data(ts, scene, adjacent_transition_pairs);
   }
 }
 
