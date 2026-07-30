@@ -592,6 +592,13 @@ static bool transform_poll_property(const bContext *C, wmOperator *op, const Pro
     return mode != TFM_ALIGN;
   }
 
+  /* Clamp. Clone always clamps the slide, so the toggle would not describe the
+   * result; see #edge_slide_use_clamp. */
+  if (STREQ(prop_id, "use_clamp")) {
+    PropertyRNA *prop_clone = RNA_struct_find_property(op->ptr, "use_clone");
+    return !(prop_clone && RNA_property_boolean_get(op->ptr, prop_clone));
+  }
+
   /* Proportional Editing. */
   if (STRPREFIX(prop_id, "proportional") || STRPREFIX(prop_id, "use_proportional")) {
     ScrArea *area = CTX_wm_area(C);
