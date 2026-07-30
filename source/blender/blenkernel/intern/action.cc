@@ -41,7 +41,7 @@
 #include "BKE_action.hh"
 #include "BKE_anim_data.hh"
 #include "BKE_anim_visualization.h"
-#include "BKE_animsys.h"
+#include "BKE_animsys.hh"
 #include "BKE_armature.hh"
 #include "BKE_asset.hh"
 #include "BKE_constraint.h"
@@ -744,7 +744,7 @@ IDTypeInfo IDType_ID_AC = {
     .main_listbase_index = INDEX_ID_AC,
     .struct_size = sizeof(bAction),
     .name = "Action",
-    .name_plural = "actions",
+    .name_plural = N_("actions"),
     .translation_context = BLT_I18NCONTEXT_ID_ACTION,
     .flags = IDTYPE_FLAGS_NO_ANIMDATA,
     .asset_type_info = &bke::AssetType_AC,
@@ -1112,7 +1112,7 @@ void BKE_pose_copy_data_ex(bPose **dst,
 
       /* XXX: This is needed for motionpath drawing to work.
        * Dunno why it was setting to null before... */
-      pchan.mpath = animviz_copy_motionpath(pchan.mpath);
+      pchan.mpath = bke::motionpath::copy(pchan.mpath);
     }
 
     if (pchan.prop) {
@@ -1340,7 +1340,7 @@ void BKE_pose_channel_free_ex(bPoseChannel *pchan, bool do_id_user)
   }
 
   if (pchan->mpath) {
-    animviz_free_motionpath(pchan->mpath);
+    bke::motionpath::free(pchan->mpath);
     pchan->mpath = nullptr;
   }
 
@@ -1868,7 +1868,7 @@ void BKE_pose_check_uids_unique_and_report(const bPose *pose)
 
   for (bPoseChannel &pchan : pose->chanbase) {
     const SessionUID *session_uid = &pchan.runtime.session_uid;
-    if (!BLI_session_uid_is_generated(session_uid)) {
+    if (!session_uid->is_generated()) {
       printf("Pose channel %s does not have UID generated.\n", pchan.name);
       continue;
     }
@@ -1899,7 +1899,7 @@ void BKE_pose_blend_write(BlendWriter *writer, bPose *pose)
 
     BKE_constraint_blend_write(writer, &chan.constraints);
 
-    animviz_motionpath_blend_write(writer, chan.mpath);
+    bke::motionpath::blend_write(writer, chan.mpath);
 
     writer->write_struct(&chan);
   }
@@ -1953,7 +1953,7 @@ void BKE_pose_blend_read_data(BlendDataReader *reader, ID *id_owner, bPose *pose
 
     BLO_read_struct(reader, bMotionPath, &pchan.mpath);
     if (pchan.mpath) {
-      animviz_motionpath_blend_read_data(reader, pchan.mpath);
+      bke::motionpath::blend_read_data(reader, pchan.mpath);
     }
 
     pchan.iktree.clear_no_delete();
