@@ -233,6 +233,15 @@ PointCloud *read_spz_ngsp_file(FILE *file, ReportList *reports)
   CLOG_DEBUG(&LOG, "SPZ header num_streams: %d", int(header.num_streams));
   CLOG_DEBUG(&LOG, "SPZ header toc_byte_offset: %u", int(header.toc_byte_offset));
 
+  if (header.flags & SPZ_HEADER_ANTIALIASED) {
+    // TODO(sergey): Support antialiased data.
+    CLOG_WARN(&LOG, "SPZ data was trained with antialiasing which is not fully supported");
+  }
+  if (header.flags & SPZ_HEADER_HAS_EXTENSIONS) {
+    // TODO(sergey): Support extensions.
+    CLOG_WARN(&LOG, "SPZ file contains extensions that are not yet supported");
+  }
+
   if (header.toc_byte_offset < sizeof(NgspFileHeader)) {
     BKE_report(
         reports, RPT_ERROR, "SPZ Read: TOC byte offset is less than the size of the header");
@@ -343,17 +352,20 @@ PointCloud *read_spz_ngsp_file(FILE *file, ReportList *reports)
     }
   }
 
-  accessor.finish();
+  if (!ok) {
+    accessor.finish();
+    BKE_id_free(nullptr, &point_cloud->id);
+    return nullptr;
+  }
 
   point_cloud->render_as = PT_RENDER_AS_SPLATS;
   point_cloud->spherical_harmonics_degree = header.sh_degree;
 
-  if (!ok) {
-    BKE_id_free(nullptr, &point_cloud->id);
-    point_cloud = nullptr;
-  }
+  // TODO(sergey): Handle extensions.
 
-  // TODO(sergey): Handle extensions?
+  convert_axis_to_blender(accessor);
+
+  accessor.finish();
 
   return point_cloud;
 }

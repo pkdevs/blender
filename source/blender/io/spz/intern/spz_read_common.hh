@@ -10,12 +10,27 @@
 
 #include <cmath>
 
+#include "BLI_array.hh"
+#include "BLI_color_types.hh"
 #include "BLI_math_constants.hh"
+#include "BLI_math_quaternion_types.hh"
+#include "BLI_math_vector.hh"
 #include "BLI_math_vector_types.hh"
 #include "BLI_span.hh"
 #include "BLI_unroll.hh"
 
-namespace blender ::io::spz {
+namespace blender::io {
+
+namespace gsplat {
+class GsplatMutableAttributeAccessor;
+}
+
+namespace spz {
+
+enum HeaderFLag {
+  SPZ_HEADER_ANTIALIASED = 0x01,
+  SPZ_HEADER_HAS_EXTENSIONS = 0x02,
+};
 
 namespace internal {
 
@@ -218,4 +233,7 @@ template<class ReaderType> bool read_sh(ReaderType &reader, const Span<MutableSp
   return true;
 }
 
-}  // namespace blender::io::spz
+void convert_axis_to_blender(gsplat::GsplatMutableAttributeAccessor &accessor);
+
+}  // namespace spz
+}  // namespace blender::io

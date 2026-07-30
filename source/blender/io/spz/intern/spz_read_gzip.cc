@@ -162,6 +162,15 @@ PointCloud *read_spz_gzip_compressed_file(FILE *file, ReportList *reports)
   CLOG_DEBUG(&LOG, "SPZ header fractional_bits: %d", int(header.fractional_bits));
   CLOG_DEBUG(&LOG, "SPZ header flags: %d", header.flags);
 
+  if (header.flags & SPZ_HEADER_ANTIALIASED) {
+    // TODO(sergey): Support antialiased data.
+    CLOG_WARN(&LOG, "SPZ data was trained with antialiasing which is not fully supported");
+  }
+  if (header.flags & SPZ_HEADER_HAS_EXTENSIONS) {
+    // TODO(sergey): Support extensions.
+    CLOG_WARN(&LOG, "SPZ file contains extensions that are not yet supported");
+  }
+
   PointCloud *point_cloud = BKE_pointcloud_new_nomain(header.num_points);
   gsplat::GsplatMutableAttributeAccessor accessor(*point_cloud, header.sh_degree);
 
@@ -174,18 +183,17 @@ PointCloud *read_spz_gzip_compressed_file(FILE *file, ReportList *reports)
   {
     accessor.finish();
     BKE_id_free(nullptr, &point_cloud->id);
-    point_cloud = nullptr;
-  }
-  else {
-    accessor.finish();
+    return nullptr;
   }
 
-  if (point_cloud) {
-    point_cloud->render_as = PT_RENDER_AS_SPLATS;
-    point_cloud->spherical_harmonics_degree = header.sh_degree;
-  }
+  point_cloud->render_as = PT_RENDER_AS_SPLATS;
+  point_cloud->spherical_harmonics_degree = header.sh_degree;
 
-  // TODO(sergey): Handle extensions?
+  // TODO(sergey): Handle extensions.
+
+  convert_axis_to_blender(accessor);
+
+  accessor.finish();
 
   return point_cloud;
 }
