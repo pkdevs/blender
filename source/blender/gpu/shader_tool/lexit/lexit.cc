@@ -922,6 +922,7 @@ static void lex_comment(const std::string_view str,
 static void lex_angle(const std::string_view str,
                       const TokenType *types,
                       const uint32_t *offsets,
+                      const uint32_t *offsets_end,
                       uint32_t &cursor,
                       TokenType &out_type)
 {
@@ -949,11 +950,17 @@ static void lex_angle(const std::string_view str,
       return;
     }
     /* Merge back split multi-tokens. */
-    if (types[cursor + 1] == LThan) {
-      cursor += 1; /* `<<` */
+    {
+      const bool not_followed_by_whitespace = offsets_end[cursor] == offsets[cursor + 1];
+      if (types[cursor + 1] == LThan && not_followed_by_whitespace) {
+        cursor += 1; /* `<<` */
+      }
     }
-    if (types[cursor + 1] == Assign) {
-      cursor += 1; /* `<<=` or `<=` */
+    {
+      const bool not_followed_by_whitespace = offsets_end[cursor] == offsets[cursor + 1];
+      if (types[cursor + 1] == Assign && not_followed_by_whitespace) {
+        cursor += 1; /* `<<=` or `<=` */
+      }
     }
   }
   else if (out_type == GThan) {
@@ -962,11 +969,17 @@ static void lex_angle(const std::string_view str,
       return;
     }
     /* Merge back split multi-tokens. */
-    if (types[cursor + 1] == GThan) {
-      cursor += 1; /* `>>` */
+    {
+      const bool not_followed_by_whitespace = offsets_end[cursor] == offsets[cursor + 1];
+      if (types[cursor + 1] == GThan && not_followed_by_whitespace) {
+        cursor += 1; /* `>>` */
+      }
     }
-    if (types[cursor + 1] == Assign) {
-      cursor += 1; /* `<<=` or `<=` */
+    {
+      const bool not_followed_by_whitespace = offsets_end[cursor] == offsets[cursor + 1];
+      if (types[cursor + 1] == Assign && not_followed_by_whitespace) {
+        cursor += 1; /* `<<=` or `<=` */
+      }
     }
   }
 }
@@ -1003,7 +1016,7 @@ void TokenBuffer::merge_complex_literals(bool bsl_template_angle_bracket_lexing)
       case GThan:
       case LThan:
         if (bsl_template_angle_bracket_lexing) {
-          lex_angle(str_, in_types, in_offsets, i, *out_type);
+          lex_angle(str_, in_types, in_offsets, in_offset_end, i, *out_type);
         }
         break;
       default:
