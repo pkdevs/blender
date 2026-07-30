@@ -225,7 +225,7 @@ static wmOperatorStatus pose_calculate_paths_exec(bContext *C, wmOperator *op)
   /* set up path data for bones being calculated */
   CTX_DATA_BEGIN (C, bPoseChannel *, pchan, selected_pose_bones_from_active_object) {
     /* verify makes sure that the selected bone has a bone with the appropriate settings */
-    animviz_verify_motionpaths(op->reports, scene, ob, pchan);
+    bke::motionpath::ensure(op->reports, scene, ob, pchan);
     if (pchan->mpath) {
       ed::motionpath::tag_for_recalc(*pchan->mpath);
     }
@@ -311,7 +311,7 @@ static wmOperatorStatus pose_update_paths_exec(bContext *C, wmOperator *op)
 
   /* set up path data for bones being calculated */
   CTX_DATA_BEGIN (C, bPoseChannel *, pchan, selected_pose_bones_from_active_object) {
-    animviz_verify_motionpaths(op->reports, scene, ob, pchan);
+    bke::motionpath::ensure(op->reports, scene, ob, pchan);
     if (pchan->mpath) {
       /* We enforce a full update since this is a direct user action. */
       ed::motionpath::tag_for_recalc(*pchan->mpath);
@@ -359,7 +359,7 @@ static void pose_clear_paths(Object *ob, bool only_selected)
   for (bPoseChannel &pchan : ob->pose->chanbase) {
     if (pchan.mpath) {
       if ((only_selected == false) || (pchan.flag & POSE_SELECTED)) {
-        animviz_free_motionpath(pchan.mpath);
+        bke::motionpath::free(pchan.mpath);
         pchan.mpath = nullptr;
       }
       else {
