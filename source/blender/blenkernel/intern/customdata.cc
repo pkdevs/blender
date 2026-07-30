@@ -4880,7 +4880,7 @@ void CustomData_blend_write(BlendWriter *writer,
 {
   /* write external customdata (not for undo) */
   if (data->external && !BLO_write_is_undo(writer)) {
-    CustomData_external_write(data, writer->wd->filepath, id, cddata_mask, count, 0);
+    CustomData_external_write(data, BLO_write_filepath(writer), id, cddata_mask, count, 0);
   }
 
   for (const CustomDataLayer &layer : layers_to_write) {

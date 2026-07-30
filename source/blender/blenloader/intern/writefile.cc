@@ -2353,6 +2353,11 @@ void BLO_write_generated_pointer_tag(BlendWriter *writer, const void *data)
   writer->wd->stable_address_ids.pointer_map.add(data, address_id);
 }
 
+StringRefNull BLO_write_filepath(const BlendWriter *writer)
+{
+  return writer->wd->filepath;
+}
+
 void BLO_write_shared(BlendWriter *writer,
                       const void *data,
                       const size_t approximate_size_in_bytes,
