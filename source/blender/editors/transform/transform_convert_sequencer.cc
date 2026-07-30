@@ -556,15 +556,18 @@ static void create_transition_clamp_data(TransInfo *t, const Scene *scene, Strip
   right_input->runtime->flag |= seq::StripRuntimeFlag::ShowOffsets;
 
   /* If the transition is already past the content start/end, disable clamping. */
-  if (strip->left_handle() < right_input->content_start() ||
-      strip->right_handle(scene) > left_input->content_end(scene))
+  if ((!right_input->is_effect() && strip->left_handle() < right_input->content_start()) ||
+      (!left_input->is_effect() && strip->right_handle(scene) > left_input->content_end(scene)))
   {
     t->modifiers &= ~MOD_STRIP_CLAMP_HOLDS;
   }
 
   const int left_edge_offset = left_input->left_handle() - strip->left_handle();
   const int left_cutpoint_offset = (right_input->left_handle() - 1) - strip->left_handle();
-  const int left_content_offset = right_input->content_start() - strip->left_handle();
+  const int left_content_offset = right_input->is_effect() ?
+                                      (INT_MIN + 1) :
+                                      int(ceil(right_input->content_start()) -
+                                          strip->left_handle());
   if (left_sel) {
     ts->hard_clamp.xmin = max_ii(ts->hard_clamp.xmin, left_edge_offset);
     ts->hard_clamp.xmax = min_ii(ts->hard_clamp.xmax, left_cutpoint_offset);
@@ -578,7 +581,10 @@ static void create_transition_clamp_data(TransInfo *t, const Scene *scene, Strip
 
   const int right_edge_offset = right_input->right_handle(scene) - strip->right_handle(scene);
   const int right_cutpoint_offset = (right_input->left_handle() + 1) - strip->right_handle(scene);
-  const int right_content_offset = left_input->content_end(scene) - strip->right_handle(scene);
+  const int right_content_offset = left_input->is_effect() ?
+                                       INT_MAX :
+                                       int(floor(left_input->content_end(scene)) -
+                                           strip->right_handle(scene));
   if (right_sel) {
     ts->hard_clamp.xmax = min_ii(ts->hard_clamp.xmax, right_edge_offset);
     ts->hard_clamp.xmin = max_ii(ts->hard_clamp.xmin, right_cutpoint_offset);
