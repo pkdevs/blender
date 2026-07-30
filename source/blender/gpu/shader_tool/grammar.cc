@@ -47,6 +47,10 @@ std::string to_str(TokenType type)
       return "!=";
     case Equal:
       return "==";
+    case LShift:
+      return "<<";
+    case RShift:
+      return ">>";
     case For:
       return "for";
     case While:
@@ -145,6 +149,8 @@ std::string to_str(TokenType type)
   case Or: \
   case Plus: \
   case Question: \
+  case RShift: \
+  case LShift: \
   case AssignAdd: \
   case AssignSub: \
   case AssignMul: \
@@ -1236,8 +1242,6 @@ void ParserBase::build_scope_tree(ErrorHandler &err_handler)
 {
   LexerBase &lex = *this;
 
-  lex.identify_template_tokens();
-
   scope_types.clear();
   scope_ranges.clear();
   scope_links.clear();
@@ -1249,8 +1253,6 @@ void ParserBase::build_scope_tree(ErrorHandler &err_handler)
 
   ScopeParser p(*this, lex[0], err_handler);
   p.translation_unit();
-
-  lex.reset_template_tokens();
 
   update_string_view();
 }

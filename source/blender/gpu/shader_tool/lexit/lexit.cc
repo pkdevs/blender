@@ -2,8 +2,8 @@
  *
  * SPDX-License-Identifier: MIT */
 
-#include "lexit.hh"
 #include "identifier.hh"
+#include "lexit.hh"
 #include "simd.hh"
 
 #include <algorithm>
@@ -919,9 +919,61 @@ static void lex_comment(const std::string_view str,
   cursor--;
 }
 
+static void lex_angle(const std::string_view str,
+                      const TokenType *types,
+                      const uint32_t *offsets,
+                      uint32_t &cursor,
+                      TokenType &out_type)
+{
+  /* If this is the very first token, it cannot be preceded by anything. */
+  if (static_cast<const TokenType *>(&out_type) == types) {
+    return;
+  }
+  /* Extract the previously processed token type directly from the output stream. */
+  const TokenType prev = *(&out_type - 1);
+
+  /* Detect if preceded by whitespace by checking the literal char right before this token. */
+  bool preceded_by_space = false;
+  const uint32_t start = offsets[cursor];
+  if (start > 0) {
+    const char c = str[start - 1];
+    if (c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '\v' || c == '\f') {
+      preceded_by_space = true;
+    }
+  }
+
+  /* Mimic the template token identification logic. */
+  if (out_type == LThan) {
+    if ((!preceded_by_space && prev != AngleOpen) || prev == Template) {
+      out_type = TemplateOpen;
+      return;
+    }
+    /* Merge back split multi-tokens. */
+    if (types[cursor + 1] == LThan) {
+      cursor += 1; /* `<<` */
+    }
+    if (types[cursor + 1] == Assign) {
+      cursor += 1; /* `<<=` or `<=` */
+    }
+  }
+  else if (out_type == GThan) {
+    if (!preceded_by_space && prev != AngleClose && prev != Minus) {
+      out_type = TemplateClose;
+      return;
+    }
+    /* Merge back split multi-tokens. */
+    if (types[cursor + 1] == GThan) {
+      cursor += 1; /* `>>` */
+    }
+    if (types[cursor + 1] == Assign) {
+      cursor += 1; /* `<<=` or `<=` */
+    }
+  }
+}
+
 /* Ideally this should not be needed and the `tokenize` step should just parse them correctly.
  * But this would much harder to implement. */
-void TokenBuffer::merge_complex_literals()
+void TokenBuffer::merge_complex_literals(bool bsl_template_angle_bracket_lexing)
 {
   const TokenType *in_types = types_.get();
   TokenType *out_type = types_.get();
@@ -947,6 +999,12 @@ void TokenBuffer::merge_complex_literals()
         break;
       case Slash:
         lex_comment(str_, in_types, in_offsets, i, *out_type);
+        break;
+      case GThan:
+      case LThan:
+        if (bsl_template_angle_bracket_lexing) {
+          lex_angle(str_, in_types, in_offsets, i, *out_type);
+        }
         break;
       default:
         continue;

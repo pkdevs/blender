@@ -35,10 +35,6 @@ struct LexerBase : lexit::TokenBuffer {
 
   /* Change words into keyword (ex: `if`, `struct`, `template`). */
   void identify_keywords();
-  /* Change angle bracket tokens into template tokens if they match template condition. */
-  void identify_template_tokens();
-  /* Undo the changes from identify_template_tokens. */
-  void reset_template_tokens();
 };
 
 /**
@@ -58,7 +54,7 @@ struct FullLexer {
   static void lexical_analysis(LexerBase &lex, std::string_view input)
   {
     lex.process(input, LexerBase::bsl_char_class_table.data());
-    lex.merge_complex_literals();
+    lex.merge_complex_literals(true);
     lex.identify_keywords();
   }
 };

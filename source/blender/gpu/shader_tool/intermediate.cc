@@ -323,46 +323,6 @@ void LexerBase::identify_keywords()
   }
 }
 
-void LexerBase::identify_template_tokens()
-{
-  for (int i = 1; i < size(); ++i) {
-    TokenMut tok = (*this)[i];
-    TokenType type = tok.type();
-    if (type == '<' || type == '>') {
-      Token prev = (*this)[i - 1];
-      const bool preceded_by_space = prev.followed_by_whitespace();
-      /* Rely on the fact that template are formatted without spaces but comparison isn't. */
-      if (type == '<') {
-        if ((!preceded_by_space && prev != AngleOpen) || prev == Template) {
-          tok.type() = TemplateOpen;
-        }
-      }
-      else {
-        if (!preceded_by_space && (prev != AngleClose) && (prev != Minus)) {
-          tok.type() = TemplateClose;
-        }
-      }
-    }
-  }
-}
-
-void LexerBase::reset_template_tokens()
-{
-  for (int i = 1; i < size(); ++i) {
-    TokenMut tok = (*this)[i];
-    switch (tok.type()) {
-      case TemplateOpen:
-        tok.type() = lexit::AngleOpen;
-        break;
-      case TemplateClose:
-        tok.type() = lexit::AngleClose;
-        break;
-      default:
-        break;
-    }
-  }
-}
-
 struct ScopeStack {
   struct Item {
     ScopeType type;
