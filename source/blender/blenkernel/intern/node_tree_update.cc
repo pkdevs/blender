@@ -1510,20 +1510,19 @@ class NodeTreeMainUpdater {
     bNode &node = *link.fromnode;
     ShaderNodeAncestorFlags flags = ShaderNodeAncestorFlags(link.tonode->runtime->tmp_flag);
     switch (node.type_legacy) {
-      case SH_NODE_LIGHT_ACCUMULATION: {
+      case SH_NODE_LIGHT_ACCUMULATION:
         if (bool(flags & ShaderNodeAncestorFlags::ShaderToRGB)) {
           return TIP_("Shader To RGB can't evaluate Light Accumulation nodes");
         }
         break;
-      }
-      case SH_NODE_ATTRIBUTE: {
+      case SH_NODE_ATTRIBUTE:
         if (static_cast<NodeShaderAttribute *>(node.storage)->type != SHD_ATTRIBUTE_LIGHT) {
           break;
         }
-      }
+        ATTR_FALLTHROUGH;
       case SH_NODE_LIGHT_INFO:
       case SH_NODE_LIGHT_EVALUATION:
-      case SH_NODE_SHADOW_RAYCAST: {
+      case SH_NODE_SHADOW_RAYCAST:
         if (bool(flags & ShaderNodeAncestorFlags::ShaderMaterialOutput) &&
             !bool(flags & ShaderNodeAncestorFlags::LightAccumulation))
         {
@@ -1532,7 +1531,8 @@ class NodeTreeMainUpdater {
               "Material Output");
         }
         break;
-      }
+      default:
+        break;
     }
 
     return nullptr;
