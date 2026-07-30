@@ -183,7 +183,9 @@ int main(int argc, char **argv)
 
   if (language == Language::BSL) {
     /* Until the new BSL compiler is fully working, use the legacy one. */
-    if (!filename.ends_with("gpu_shader_2D_widget_base.bsl.hh")) {
+    if (!filename.ends_with("gpu_shader_2D_widget_base.bsl.hh") &&
+        !filename.ends_with("gpu_shader_2D_update_mipmaps.bsl.hh"))
+    {
       language = Language::BLENDER_GLSL;
     }
   }

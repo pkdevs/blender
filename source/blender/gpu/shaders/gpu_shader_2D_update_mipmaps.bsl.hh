@@ -171,7 +171,7 @@ struct Resources {
   [[image(0, read, format), condition(is_layered)]] image2DArray mip_array_in;
   [[image(1, write, format), condition(is_layered)]] image2DArray mip_array_out1;
   [[image(2, write, format), condition(is_layered)]] image2DArray mip_array_out2;
-  [[resource_table]] srt_t<SharedStorage> shared_storage;
+  [[resource_table]] SharedStorage shared_storage;
 
   /** Store sample result into an output mip image. */
   void store_sample(int2 dst_coord, int dst_level, InnerType color)
@@ -289,10 +289,10 @@ struct Resources {
         switch (kernel_size.y) {
           case 3:
             v2 = load_sample(src_coord + int2(2, 2), load_from_shared);
-            ATTR_FALLTHROUGH;
+            [[fallthrough]];
           case 2:
             v1 = load_sample(src_coord + int2(2, 1), load_from_shared);
-            ATTR_FALLTHROUGH;
+            [[fallthrough]];
           case 1:
             v0 = load_sample(src_coord + int2(2, 0), load_from_shared);
             break;
@@ -308,15 +308,15 @@ struct Resources {
             h2 = v0;
             break;
         }
-        ATTR_FALLTHROUGH;
+        [[fallthrough]];
       case 2:
         switch (kernel_size.y) {
           case 3:
             v2 = load_sample(src_coord + int2(1, 2), load_from_shared);
-            ATTR_FALLTHROUGH;
+            [[fallthrough]];
           case 2:
             v1 = load_sample(src_coord + int2(1, 1), load_from_shared);
-            ATTR_FALLTHROUGH;
+            [[fallthrough]];
           case 1:
             v0 = load_sample(src_coord + int2(1, 0), load_from_shared);
             break;
@@ -332,15 +332,15 @@ struct Resources {
             h1 = v0;
             break;
         }
-        ATTR_FALLTHROUGH;
+        [[fallthrough]];
       case 1:
         switch (kernel_size.y) {
           case 3:
             v2 = load_sample(src_coord + int2(0, 2), load_from_shared);
-            ATTR_FALLTHROUGH;
+            [[fallthrough]];
           case 2:
             v1 = load_sample(src_coord + int2(0, 1), load_from_shared);
-            ATTR_FALLTHROUGH;
+            [[fallthrough]];
           case 1:
             v0 = load_sample(src_coord + int2(0, 0), load_from_shared);
             break;
@@ -527,7 +527,7 @@ void update_mipmaps([[global_invocation_id]] const uint3 global_id,
                     [[local_invocation_id]] const uint3 local_index,
                     [[resource_table]] Resources<format, SharedStorage, InnerType> &srt)
 {
-  if (srt.num_levels == 1u) {
+  if (srt.num_levels == 1) {
     int2 kernel_size = kernel_size_from_input_size(srt.level_size(INPUT_LEVEL));
     int2 dst_image_size = srt.level_size(INPUT_LEVEL + 1);
     int2 dst_coord = int2(int(global_id.x) % dst_image_size.x,
