@@ -747,6 +747,20 @@ struct VecBase : public vec_struct_base<T, Size, std::is_trivial_v<T>> {
   }
 };
 
+/**
+ * This is a specialization of #value_is_zero for VecBase. It allows using calloc for container
+ * construction in some cases.
+ */
+template<typename T, int Size> constexpr bool value_is_zero(const VecBase<T, Size> &v)
+{
+  for (int i = 0; i < Size; i++) {
+    if (!value_is_zero(v[i])) {
+      return false;
+    }
+  }
+  return true;
+}
+
 namespace math {
 
 template<typename T> struct AssertUnitEpsilon {
