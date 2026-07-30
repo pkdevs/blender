@@ -63,11 +63,11 @@ struct ExpressionTypeParser {
     SymbolClass *cls = expr(0);
 
     if (array_dim > 0) {
-      error(start, "Expression result is of array type");
+      error(start, Diag::ArrayTypeTemporary);
     }
 
     if (peek().is_valid() && !err) {
-      error(peek(), "Trailing input");
+      error(peek(), Diag::ParserTrailingInput);
     }
     return {cls, err};
   }
@@ -124,7 +124,7 @@ struct ExpressionTypeParser {
         return cls;
       }
       default:
-        error(node.is_valid() ? node : start, "Invalid expression in type checker");
+        error(node.is_valid() ? node : start, Diag::InvalidExprTypeChecker);
         this->node = Node(start.p, -1);
         return err_cls;
     }
@@ -146,16 +146,16 @@ struct ExpressionTypeParser {
         check_subscript(node);
         return left->operator_subscript->return_type;
       }
-      error(node, "Subscripted value is not an array or vector");
+      error(node, Diag::InvalidSubscript);
       return left;
     }
 
     if (array_dim > 0) {
-      error(node, "Invalid operand of array type");
+      error(node, Diag::ArrayTypeOperand);
     }
 
     if (node.type() != NodeType::Op) {
-      error(node, "Invalid operator for type '" + left->identifier + "'");
+      error(node, Diag::TypeInvalidOperator, left->identifier);
     }
 
     /* Member access operator. */
@@ -192,7 +192,7 @@ struct ExpressionTypeParser {
     SymbolClass *fval = expr(left_binding_power(Question) - 1);
 
     if (tval != fval) {
-      error(node, "Incompatible operand types");
+      error(node, Diag::TypeInvalidTernary);
     }
     /* Operand types match. We can return either. */
     return fval;
@@ -254,7 +254,7 @@ struct ExpressionTypeParser {
       default:
         break;
     }
-    error(peek(), "Invalid operator token '" + to_str(type) + "'");
+    error(peek(), Diag::TokenInvalidOperator, to_str(type));
     return -1;
   }
 
@@ -278,8 +278,10 @@ struct ExpressionTypeParser {
       return it->second->return_type;
     }
     error(operator_type,
-          "Invalid operands to binary expression ('" + left_type->identifier + "' " +
-              to_str(tok_type) + " '" + right_type->identifier + "')");
+          Diag::InvalidBinaryOperands,
+          left_type->identifier,
+          to_str(tok_type),
+          right_type->identifier);
     return err_cls;
   }
 
@@ -296,8 +298,10 @@ struct ExpressionTypeParser {
       return it->second->return_type;
     }
     error(operator_type,
-          "Invalid argument type '" + right_type->identifier + "' to unary expression (" +
-              to_str(tok_type) + "'" + right_type->identifier + "')");
+          Diag::InvalidUnaryArgumentType,
+          right_type->identifier,
+          to_str(tok_type),
+          right_type->identifier);
     return err_cls;
   }
 
@@ -317,7 +321,7 @@ struct ExpressionTypeParser {
         LocalVar var = member;
         SymbolVariable *sym = left->lookup_variable(var.identifier());
         if (!sym) {
-          error(node, "Unknown member '" + string(var.identifier().str()) + "'");
+          error(node, Diag::UnknownMember, string(var.identifier().str()));
           return err_cls;
         }
         if (sym->array_dimensions) {
@@ -326,7 +330,7 @@ struct ExpressionTypeParser {
         return sym->type;
       }
       default:
-        error(node.is_valid() ? node : start, "Invalid expression in type checker");
+        error(node.is_valid() ? node : start, Diag::TypeCheckerInvalidExpression);
         this->node = Node{};
         return err_cls;
     }
@@ -349,23 +353,23 @@ struct ExpressionTypeParser {
        * This is to help the porting process and should be phased out at some point. */
       FuncParamList params = call.parameters();
       if (params.child_count() != 1) {
-        error(params, "Expecting one argument");
+        error(params, Diag::ExpectedOneArgument);
         return err_cls;
       }
       Expr expr(params.child_first());
       if (params.child_count() != 1) {
-        error(params, "Expecting one typename");
+        error(params, Diag::ExpectedOneTypename);
         return err_cls;
       }
       LocalVar var(expr.child_first());
       if (params.child_count() != 1) {
-        error(params, "Expecting one typename");
+        error(params, Diag::ExpectedOneTypename);
         return err_cls;
       }
       auto [type, err] = scope->lookup_class(var.identifier());
       error(err);
       if (!type->is_srt()) {
-        error(params, "Expecting a resource table typename");
+        error(params, Diag::ExpectedResourceTableTypename);
         return err_cls;
       }
       return type;
@@ -383,7 +387,7 @@ struct ExpressionTypeParser {
   {
     SymbolVariable *sym = scope->lookup_variable(var.identifier());
     if (!sym) {
-      error(var, "Unknown identifier '" + string(var.identifier().str()) + "'");
+      error(var, Diag::UnknownIdentifier, string(var.identifier().str()));
       return err_cls;
     }
     if (!sym->is_const && is_subscript_expr && !first_non_const_var_in_subscript.is_valid()) {
@@ -418,11 +422,15 @@ struct ExpressionTypeParser {
   }
 
  private:
-  void error(ast::Node node, const string &msg)
+  void error(ast::Node node,
+             Diag diag,
+             const string &msg = "",
+             const string &msg2 = "",
+             const string &msg3 = "")
   {
     /* Only log the first error. */
     if (!err) {
-      err = {node, msg};
+      err = {node, diag, msg, msg2, msg3};
     }
   }
 
@@ -430,7 +438,7 @@ struct ExpressionTypeParser {
   void error(std::optional<AstNodeException> &err)
   {
     if (err) {
-      error(err->node, err->msg);
+      error(err->node, err->diag, err->param1, err->param2);
     }
   }
 
@@ -441,7 +449,7 @@ struct ExpressionTypeParser {
     auto [type, err] = ctx.eval();
     error(err);
     if (type != int_cls && type != uint_cls) {
-      error(node, "Array subscript is not an integer");
+      error(node, Diag::SubscriptNotInt);
     }
     /* Discard checking for temporary. It is allowed to have temporary inside subscript
      * expressions as long as we can be sure they are constant. */

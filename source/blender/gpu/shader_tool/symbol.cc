@@ -132,17 +132,18 @@ Result<ParsedAttribute> resource_type_from_attributes(AttrList list)
       if (expected_param_count >= 0) {
         if (param_count != expected_param_count) {
           result.err = AstNodeException(params,
-                                        "Expected " + to_string(expected_param_count) +
-                                            " parameter(s) for attribute '" + attr_str + "'");
+                                        Diag::ExpectedNParametersForAttribute,
+                                        to_string(expected_param_count),
+                                        attr_str);
           continue;
         }
       }
       else {
         if (param_count != expected_param_count) {
           result.err = AstNodeException(params,
-                                        "Expected between 1 and " +
-                                            to_string(expected_param_count) +
-                                            " parameter(s) for attribute '" + attr_str + "'");
+                                        Diag::ExpectedRangeParametersForAttribute,
+                                        to_string(expected_param_count),
+                                        attr_str);
           continue;
         }
       }
@@ -180,12 +181,12 @@ Result<ParsedAttribute> resource_type_from_attributes(AttrList list)
         }
         else {
           result.err = AstNodeException(
-              attr, "Declaration is already of type '" + to_str(result.value.res_type) + "'");
+              attr, Diag::DeclarationAlreadyOfType, to_str(result.value.res_type));
         }
       }
     }
     else {
-      result.err = AstNodeException(attr, "Unknown attribute '" + attr_str + "'");
+      result.err = AstNodeException(attr, Diag::UnknownAttribute, attr_str);
     }
   }
   return result;
@@ -215,14 +216,10 @@ Result<SymbolClass *> SymbolTable::resolve_auto_type(SymbolScope &scope, Declara
   if (list.is_valid()) {
     Initializer init(list.child_first());
     if (init.child_first().type() == NodeType::InitializerList) {
-      err = {init.child_first(),
-             "Cannot deduce type for variable '" + string(decl.identifier().str()) +
-                 "' with type 'auto' from nested initializer list"};
+      err = {init.child_first(), Diag::AutoTypeNestedInitializer, string(decl.identifier().str())};
     }
     else if (init.next().is_valid()) {
-      err = {init.next(),
-             "Initializer for variable '" + string(decl.identifier().str()) +
-                 "' with type 'auto' contains multiple expressions"};
+      err = {init.next(), Diag::AutoTypeMultipleExpressions, string(decl.identifier().str())};
     }
     else {
       return expr_type_analysis(scope, Expr(init.child_first()));
@@ -250,13 +247,11 @@ Result<StringPair> SymbolTable::mangle_identifier(TemplateArgList args,
   for (TemplateArg arg : args.children_range()) {
     assert(arg.is_valid());
     if (!param.is_valid()) {
-      err = AstNodeException(
-          list, "Missing argument for template parameter '" + string(arg.type().str()) + "'");
+      err = AstNodeException(list, Diag::TemplateMissingArgument, string(arg.type().str()));
     }
     else if (arg.front() == Typename) {
       if (param.child_count() != 1 || param.child_first().type() != NodeType::LocalVar) {
-        err = AstNodeException(
-            param, "Invalid argument for template parameter '" + string(arg.type().str()) + "'");
+        err = AstNodeException(param, Diag::TemplateInvalidArg, string(arg.type().str()));
       }
       else {
         IdQualified type_id(LocalVar(param.child_first()).identifier());
@@ -265,7 +260,7 @@ Result<StringPair> SymbolTable::mangle_identifier(TemplateArgList args,
           TemplateParamList list_nested = type_id.template_params();
           if (!list_nested.is_valid()) {
             err = AstNodeException(
-                type_id, "Missing template parameters for '" + string(type_id.str()) + "'");
+                type_id, Diag::TemplateMissingParametersForType, string(type_id.str()));
           }
           else {
             /* Recursive. */
@@ -277,8 +272,7 @@ Result<StringPair> SymbolTable::mangle_identifier(TemplateArgList args,
           }
         }
         if (type->is_error) {
-          err = AstNodeException(param,
-                                 "Use of undeclared identifier '" + string(type_id.str()) + "'");
+          err = AstNodeException(param, Diag::UndeclaredIdentifier, string(type_id.str()));
         }
         else {
           result.str += "T" + type->identifier;
@@ -310,7 +304,7 @@ ResultPair<T *, string> SymbolTemplate<T>::lookup_inst(TemplateParamList list,
   string full_id = string(id().str()) + "<" + args_debug.substr(2) + ">";
 
   if (it == instances.end() && !err) {
-    err = {list, "Missing explicit instantiation of template '" + full_id + "'"};
+    err = {list, Diag::TemplateMissingInstantiation, full_id};
   }
 
   if (err) {
@@ -389,20 +383,20 @@ Result<T *> SymbolTemplate<T>::lookup_adl(const SymbolTable &symbols,
 {
   if constexpr (is_same_v<T, SymbolClass>) {
     return {scope.root_scope()->lookup_class(SymbolTable::err_symbol),
-            AstNodeException(list, "Cannot use ADL on types")};
+            AstNodeException(list, Diag::ADLOnTypesNotAllowed)};
   }
   else {
     if (!is_adl_possible()) {
       return {scope.root_scope()->lookup_function(SymbolTable::err_symbol),
-              AstNodeException(list.prev(), "Missing explicit template arguments")};
+              AstNodeException(list.prev(), Diag::MissingExplicitTemplateArguments)};
     }
     auto [mangled, err] = symbols.mangle_identifier(*this, list, scope);
     auto [args, args_debug] = mangled;
     auto it = instances.find(args);
     if (it == instances.end() && !err) {
       err = {list,
-             "Missing explicit instantiation of template '" + string(id().str()) + "<" +
-                 args_debug.substr(2) + ">'"};
+             Diag::TemplateMissingInstantiation,
+             string(id().str()) + "<" + args_debug.substr(2) + ">'"};
     }
 
     if (err) {
@@ -442,9 +436,8 @@ void SymbolClass::ensure_size_and_align(NodeErrorHandler *err_handler, bool chec
     SymbolClass &cls = *var->type;
 
     if (err_handler && !cls.is_enum) {
-      auto scope = err_handler->note(var->loc.tok,
-                                     "In declaration of '" + var->identifier + "' of type '" +
-                                         cls.identifier + "'");
+      auto scope = err_handler->note(
+          var->loc.tok, Diag::NoteInDeclarationOfVariable, var->identifier, cls.identifier);
       cls.ensure_size_and_align(err_handler, check_st430);
     }
     else {
@@ -460,7 +453,7 @@ void SymbolClass::ensure_size_and_align(NodeErrorHandler *err_handler, bool chec
       is_std140_compatible = false;
       is_std430_compatible = false;
       if (err_handler) {
-        err_handler->error(var->loc.tok, "Array size is not a constant expression");
+        err_handler->error(var->loc.tok, Diag::ArraySizeNotConstantExpression);
       }
     }
     else {
@@ -468,19 +461,15 @@ void SymbolClass::ensure_size_and_align(NodeErrorHandler *err_handler, bool chec
         /* Arrays of float3 padded to 16 bytes for each element for std430. */
         is_std140_compatible = false;
         if (err_handler) {
-          err_handler->error(var->loc.tok,
-                             "Implicit padding of 4 bytes per array element, do not use 12 bytes "
-                             "types in arrays");
+          err_handler->error(var->loc.tok, Diag::ImplicitPadding12BytesArrayElement);
         }
       }
       else if (cls.size % 16 != 0) {
         /* Arrays are padded to 16 bytes for each element for std140. */
         is_std140_compatible = false;
         if (err_handler && !check_st430) {
-          err_handler->error(var->loc.tok,
-                             "Implicit padding of " + to_string(16 - (cls.size % 16)) +
-                                 " bytes per array element, use a 16 bytes type or use "
-                                 "a storage buffer");
+          err_handler->error(
+              var->loc.tok, Diag::ImplicitPaddingArrayElementStd140, 16 - (cls.size % 16));
         }
       }
       member_size *= var->array_elements;
@@ -513,13 +502,13 @@ void SymbolClass::ensure_size_and_align(NodeErrorHandler *err_handler, bool chec
 
       if (!is_std140_compatible && !check_st430) {
         err_handler->error(var->loc.tok,
-                           "Type '" + var->type->original +
-                               "' is not allowed in uniform and storage buffer" + hint);
+                           Diag::TypeNotAllowedInUniformAndStorageBuffer,
+                           var->type->original,
+                           hint);
       }
       else if (!is_std430_compatible) {
-        err_handler->error(var->loc.tok,
-                           "Type '" + var->type->original + "' is not allowed in storage buffer" +
-                               hint);
+        err_handler->error(
+            var->loc.tok, Diag::TypeNotAllowedInStorageBuffer, var->type->original, hint);
       }
     }
 
@@ -535,9 +524,8 @@ void SymbolClass::ensure_size_and_align(NodeErrorHandler *err_handler, bool chec
       is_std140_compatible &= padded == size;
       is_std430_compatible &= padded == size;
       if (err_handler && padded != size) {
-        err_handler->error(var->loc.tok,
-                           "Implicit " + to_string(padded - size) + " bytes padding before '" +
-                               var->original + "', add manual padding");
+        err_handler->error(
+            var->loc.tok, Diag::ImplicitPaddingBeforeMember, padded - size, var->original);
       }
       size = padded;
       /* Add member size. */
@@ -550,9 +538,7 @@ void SymbolClass::ensure_size_and_align(NodeErrorHandler *err_handler, bool chec
       is_std140_compatible = false;
       if (err_handler && !check_st430) {
         err_handler->error(
-            var->loc.tok,
-            "Type '" + var->type->original +
-                "' is not allowed in uniform buffer because it contains implicit padding");
+            var->loc.tok, Diag::TypeNotAllowedInUniformBufferImplicitPadding, var->type->original);
       }
     }
   }
@@ -565,10 +551,8 @@ void SymbolClass::ensure_size_and_align(NodeErrorHandler *err_handler, bool chec
       is_std140_compatible = false;
       is_std430_compatible = false;
       if (err_handler) {
-        err_handler->error(loc.tok,
-                           "Implicit " + to_string(padded - size) +
-                               " bytes padding at the end of '" + this->original +
-                               "', add manual padding");
+        err_handler->error(
+            loc.tok, Diag::ImplicitPaddingAtEndOfStruct, padded - size, this->original);
       }
     }
     size = padded;
@@ -583,7 +567,7 @@ void SymbolClass::ensure_size_and_align(NodeErrorHandler *err_handler, bool chec
     is_std430_compatible = false;
 
     if (err_handler) {
-      err_handler->error(loc.tok, "Empty classes are not supported in storage or uniform buffers");
+      err_handler->error(loc.tok, Diag::EmptyClassNotSupportedInBuffer);
     }
   }
   /* The overall size and alignment of a struct in std140 must be rounded up to the base alignment
@@ -592,10 +576,8 @@ void SymbolClass::ensure_size_and_align(NodeErrorHandler *err_handler, bool chec
     is_std140_compatible = false;
 
     if (err_handler && !check_st430) {
-      err_handler->error(loc.tok,
-                         "Implicit " + to_string(16 - (size % 16)) +
-                             " bytes padding at the end of '" + this->original +
-                             "', add manual padding");
+      err_handler->error(
+          loc.tok, Diag::ImplicitPaddingAtEndOfStruct, 16 - (size % 16), this->original);
     }
   }
 }
@@ -837,59 +819,63 @@ struct SymbolParser : NodeErrorHandler {
         case ResourceType::RESOURCE_TABLE:
           if (type->srt_type != ResourceTableType::RESOURCE_TABLE) {
             error(arg.type(),
-                  "Expected resource of type '" + to_str(ResourceTableType::RESOURCE_TABLE) +
-                      "' but got '" + to_str(type->srt_type) + "'");
+                  Diag::ExpectedResourceOfType,
+                  to_str(ResourceTableType::RESOURCE_TABLE),
+                  to_str(type->srt_type));
           }
           break;
         case ResourceType::OUT:
           switch (entry_point_type) {
             case SymbolFunction::EntryPointType::COMP:
-              error(arg.type(), "'out' attribute is only allowed in vertex and fragment shaders");
+              error(arg.type(), Diag::OutAttributeOnlyAllowedInVertFrag);
               break;
             case SymbolFunction::EntryPointType::FRAG:
               if (type->srt_type != ResourceTableType::FRAGMENT_OUT) {
                 error(arg.type().id(),
-                      "Expected resource of type '" + to_str(ResourceTableType::FRAGMENT_OUT) +
-                          "' but got '" + to_str(type->srt_type) + "'");
+                      Diag::ExpectedResourceOfType,
+                      to_str(ResourceTableType::FRAGMENT_OUT),
+                      to_str(type->srt_type));
               }
               break;
             case SymbolFunction::EntryPointType::VERT:
               if (type->srt_type != ResourceTableType::VERTEX_OUT) {
                 error(arg.type().id(),
-                      "Expected resource of type '" + to_str(ResourceTableType::VERTEX_IN) +
-                          "' but got '" + to_str(type->srt_type) + "'");
+                      Diag::ExpectedResourceOfType,
+                      to_str(ResourceTableType::VERTEX_IN),
+                      to_str(type->srt_type));
               }
               break;
             case SymbolFunction::EntryPointType::NONE:
-              error(arg.type().id(), "Only entry points can use 'out' attribute");
+              error(arg.type().id(), Diag::OnlyEntryPointsCanUseOutAttribute);
               break;
           }
           break;
         case ResourceType::IN:
           switch (entry_point_type) {
             case SymbolFunction::EntryPointType::COMP:
-              error(arg.type().id(),
-                    "'in' attribute is only allowed in vertex and fragment shaders");
+              error(arg.type().id(), Diag::InAttributeOnlyAllowedInVertFrag);
               break;
             case SymbolFunction::EntryPointType::FRAG:
               if (type->srt_type != ResourceTableType::FRAGMENT_IN &&
                   type->srt_type != ResourceTableType::VERTEX_OUT)
               {
                 error(arg.type().id(),
-                      "Expected resource of type '" + to_str(ResourceTableType::FRAGMENT_IN) +
-                          "' or '" + to_str(ResourceTableType::VERTEX_OUT) + "' but got '" +
-                          to_str(type->srt_type) + "'");
+                      Diag::ExpectedResourceOfEitherType,
+                      to_str(ResourceTableType::FRAGMENT_IN),
+                      to_str(ResourceTableType::VERTEX_OUT),
+                      to_str(type->srt_type));
               }
               break;
             case SymbolFunction::EntryPointType::VERT:
               if (type->srt_type != ResourceTableType::VERTEX_IN) {
                 error(arg.type().id(),
-                      "Expected resource of type '" + to_str(ResourceTableType::VERTEX_IN) +
-                          "' but got '" + to_str(type->srt_type) + "'");
+                      Diag::ExpectedResourceOfType,
+                      to_str(ResourceTableType::VERTEX_IN),
+                      to_str(type->srt_type));
               }
               break;
             case SymbolFunction::EntryPointType::NONE:
-              error(arg.type().id(), "Only entry points can use 'in' attribute");
+              error(arg.type().id(), Diag::OnlyEntryPointsCanUseInAttribute);
               break;
           }
           break;
@@ -900,13 +886,12 @@ struct SymbolParser : NodeErrorHandler {
       if (is_entry_point && attr.srt_type != ResourceTableType::ENTRY_POINT &&
           attr.res_type != ResourceType::RESOURCE_TABLE)
       {
-        error(arg,
-              "Expected entry point resource attribute but got '" + to_str(attr.srt_type) + "'");
+        error(arg, Diag::ExpectedEntryPointResourceAttribute, to_str(attr.srt_type));
       }
       else if (!is_entry_point && attr.srt_type != ResourceTableType::NONE &&
                attr.res_type != ResourceType::RESOURCE_TABLE)
       {
-        error(arg, "Resource attributes are only supported on entry point arguments");
+        error(arg, Diag::ResourceAttributesOnlyOnEntryPointArgs);
       }
     }
 
@@ -996,7 +981,7 @@ struct SymbolParser : NodeErrorHandler {
   void parse_using_stmt(SymbolScope &scope, UsingStmt stmt)
   {
     if (stmt.is_namespace()) {
-      error(stmt, "Using namespace statement are not supported");
+      error(stmt, Diag::UsingNamespaceNotSupported);
     }
     else {
       IdQualified aliased(stmt.aliased());
@@ -1004,7 +989,7 @@ struct SymbolParser : NodeErrorHandler {
       auto [type, err] = scope.lookup_class(aliased);
       error(err);
       if (type->is_error) {
-        error(aliased, "Unknown Type");
+        error(aliased, Diag::UnknownTypeAlias);
         return;
       }
       string identifier(name.name().str());
@@ -1061,7 +1046,7 @@ struct SymbolParser : NodeErrorHandler {
     scope.scopes.emplace(cls->identifier, cls);
 
     if (cls->is_anonymous && anonymous_scope_prefix(cls).non_anonymous_parent == nullptr) {
-      error(decl, "Anonymous unions at namespace or global scope are not supported");
+      error(decl, Diag::AnonymousUnionNotSupportedAtNamespaceScope);
       return scope.root_scope()->lookup_class(SymbolTable::err_symbol);
     }
 
@@ -1111,8 +1096,7 @@ struct SymbolParser : NodeErrorHandler {
     SymbolFunction *fn = table.fun_arena.alloc(&scope, func, suffix);
     bool is_overload = scope.function_emplace(fn);
     if (is_overload && fn->is_entry_point()) {
-      error(func.identifier(),
-            "Redefinition of entry point function '" + string(func.identifier().str()) + "'");
+      error(func.identifier(), Diag::RedefinitionOfEntryPointFunction, func.identifier().str());
     }
 
     parse_scope(*fn, func.body(), prefix + fn->identifier + ns_sep, temp);
@@ -1155,16 +1139,16 @@ struct SymbolParser : NodeErrorHandler {
                                        const SymbolT &sym)
   {
     if (sym.is_error) {
-      error(decl.identifier(), "Missing template definition");
+      error(decl.identifier(), Diag::MissingTemplateDefinition);
       return {};
     }
     if (sym.template_data == nullptr) {
-      error(decl.identifier(), "Function is not a template");
+      error(decl.identifier(), Diag::FunctionIsNotATemplate);
       return {};
     }
     TemplateDecl temp_decl = sym.template_data->decl;
     if (temp_decl.arguments().child_count() != temp_params.child_count()) {
-      error(temp_params, "Template parameter count must match declaration argument count");
+      error(temp_params, Diag::TemplateParameterCountMismatch);
       return {};
     }
     return temp_decl;
@@ -1194,23 +1178,19 @@ struct SymbolParser : NodeErrorHandler {
           if (auto [parent_cls, err_cls] = scope.lookup_class(start, last); parent_cls) {
             error(err_cls);
             if (parent_cls->template_data && !last.template_params().is_valid()) {
-              error(last, "Missing template parameters");
+              error(last, Diag::MissingTemplateParameters);
             }
             parent = parent_cls;
           }
 
           if (parent == nullptr) {
-            error(id,
-                  "Missing instantiation of parent class for instantiation of '" +
-                      string(id.str()) + "'");
+            error(id, Diag::MissingParentClassInstantiation, id.str());
             return;
           }
         }
 
         string full_id = string(decl.identifier().str()) + "<" + mangled.str_debug.substr(2) + ">";
-        NOTE(decl.identifier(),
-             "In instantiation of function template specialization '" + full_id +
-                 "' requested here");
+        NOTE(decl.identifier(), Diag::NoteInstantiationFuncTemplateRequested, full_id);
         SymbolFunction *fn_inst = parse_func_decl(
             *parent, temp_decl.decl(), prefix, mangled.str, temp);
         fn->template_data->instances.emplace(mangled.str, fn_inst);
@@ -1227,8 +1207,7 @@ struct SymbolParser : NodeErrorHandler {
               err] = SymbolTable::mangle_identifier(temp_decl.arguments(), tmp_params, scope);
         error(err);
         string full_id = string(decl.identifier().str()) + "<" + mangled.str_debug.substr(2) + ">";
-        NOTE(decl.identifier(),
-             "In instantiation of class template specialization '" + full_id + "' requested here");
+        NOTE(decl.identifier(), Diag::NoteInstantiationClassTemplateRequested, full_id);
         int unused_offset = 0;
         parse_class_decl(scope,
                          temp_decl.decl(),
@@ -1257,9 +1236,7 @@ struct SymbolParser : NodeErrorHandler {
               err] = SymbolTable::mangle_identifier(temp_decl.arguments(), temp_params, scope);
         error(err);
         string full_id = string(decl.identifier().str()) + "<" + mangled.str_debug.substr(2) + ">";
-        NOTE(decl.identifier(),
-             "In instantiation of function template specialization '" + full_id +
-                 "' requested here");
+        NOTE(decl.identifier(), Diag::NoteInstantiationFuncTemplateRequested, full_id);
         SymbolFunction *spec = parse_func_decl(scope, decl, prefix, mangled.str);
         fn->template_data->instances.emplace(mangled.str, spec);
       }
@@ -1275,8 +1252,7 @@ struct SymbolParser : NodeErrorHandler {
               err] = SymbolTable::mangle_identifier(temp_decl.arguments(), temp_params, scope);
         error(err);
         string full_id = string(decl.identifier().str()) + "<" + mangled.str_debug.substr(2) + ">";
-        NOTE(decl.identifier(),
-             "In instantiation of class template specialization '" + full_id + "' requested here");
+        NOTE(decl.identifier(), Diag::NoteInstantiationClassTemplateRequested, full_id);
         int unused_offset = 0;
         SymbolClass *spec = parse_class_decl(
             scope, decl, Node{}, unused_offset, prefix, mangled.str);
@@ -1301,14 +1277,14 @@ struct SymbolParser : NodeErrorHandler {
     AssignStmt assign = decl.assign();
     Expr expr = assign.expr();
     if (!expr.is_valid()) {
-      error(decl, "Cannot deduce actual type for variable '' with type 'auto'");
+      error(decl, Diag::CannotDeduceAutoType);
       return;
     }
 
     auto [cls, err] = table.expr_type_analysis(scope, expr);
     error(err);
     if (cls->is_error) {
-      error(decl, "Cannot deduce actual type for variable '' with type 'auto'");
+      error(decl, Diag::CannotDeduceAutoType);
       return;
     }
 
@@ -1320,7 +1296,7 @@ struct SymbolParser : NodeErrorHandler {
 
     for (SymbolVariable *var : cls->non_static_variables_in_declaration_order()) {
       if (!id.is_valid()) {
-        error(decl, "Not enough names in structure binding");
+        error(decl, Diag::NotEnoughNamesInStructuredBinding);
         return;
       }
       /* Make copy of the variable in local scope. */
@@ -1334,7 +1310,7 @@ struct SymbolParser : NodeErrorHandler {
       id = id.next();
     }
     if (id.is_valid()) {
-      error(decl, "Too many names in structure binding");
+      error(decl, Diag::TooManyNamesInStructuredBinding);
       return;
     }
   }
@@ -1353,7 +1329,7 @@ struct SymbolParser : NodeErrorHandler {
                             .unwrap(this);
 
     if (type->is_error) {
-      error(var, "Unknown type name '" + string(type_id_str) + "'");
+      error(var, Diag::UnknownTypeNameWithArg, type_id_str);
       return;
     }
 
@@ -1362,41 +1338,40 @@ struct SymbolParser : NodeErrorHandler {
     auto attr = resource_type_from_attributes(var.attributes()).unwrap(this);
 
     if (attr.res_type == ResourceType::UNIFORM_BUF && !type->is_std140_compatible) {
-      NOTE(type_id, "In this uniform buffer declaration");
+      NOTE(type_id, Diag::NoteInUniformBufferDeclaration, type->original);
       type->ensure_size_and_align(this);
     }
     else if (attr.res_type == ResourceType::STORAGE_BUF && !type->is_std430_compatible) {
-      NOTE(type_id, "In this storage buffer declaration");
+      NOTE(type_id, Diag::NoteInStorageBufferDeclaration, type->original);
       type->ensure_size_and_align(this, true);
     }
 
     if (cls) {
       if (cls->srt_type == ResourceTableType::NONE && attr.srt_type != ResourceTableType::NONE) {
         if (cls->is_anonymous) {
-          error(var, "Resources cannot be declared in an anonymous struct");
+          error(var, Diag::ResourcesNotAllowedInAnonymousStruct);
         }
         if (attr.srt_type != ResourceTableType::VERTEX_IN &&
             attr.srt_type != ResourceTableType::VERTEX_OUT &&
             attr.srt_type != ResourceTableType::FRAGMENT_OUT &&
             attr.srt_type != ResourceTableType::RESOURCE_TABLE)
         {
-          error(var,
-                "Invalid resource of type '" + to_str(cls->srt_type) +
-                    "' for resource table class");
+          error(var, Diag::InvalidResourceTypeForResourceTableClass, to_str(cls->srt_type));
         }
         cls->srt_type = attr.srt_type;
       }
       else if (cls->srt_type != attr.srt_type) {
         error(var,
-              "Expected resource definition of type '" + to_str(cls->srt_type) + "' but got '" +
-                  to_str(attr.srt_type) + "'");
+              Diag::ExpectedResourceDefinitionOfType,
+              to_str(cls->srt_type),
+              to_str(attr.srt_type));
       }
     }
     else if (attr.res_type == ResourceType::RESOURCE_TABLE) {
       /* Currently supported as noop for legacy resource table reference getter. */
     }
     else if (attr.res_type != ResourceType::NONE) {
-      error(var, "Out of class resource declaration");
+      error(var, Diag::OutOfClassResourceDeclaration);
     }
 
     const bool is_srt_local_ref = type->is_srt() && cls == nullptr;
@@ -1412,7 +1387,7 @@ struct SymbolParser : NodeErrorHandler {
     const bool is_ref = var.is_reference();
     for (Declarator decl : var.children_of_type<Declarator>()) {
       if (is_ref != decl.is_reference()) {
-        error(decl, "Variable declaration must declare either no reference or only reference");
+        error(decl, Diag::VarDeclMixedReference);
         continue;
       }
 
@@ -1422,7 +1397,7 @@ struct SymbolParser : NodeErrorHandler {
       scope.variables.emplace(sym->identifier, sym);
 
       if (is_srt_local_ref && !is_ref) {
-        error(decl, "Resource table must be declared as reference");
+        error(decl, Diag::ResourceTableMustBeReference);
       }
 
       /* Local References. */
@@ -1435,34 +1410,27 @@ struct SymbolParser : NodeErrorHandler {
           SymbolClass *expr_cls = parser.eval().unwrap(this);
 
           if (parser.first_temporary.is_valid()) {
-            error(parser.first_temporary, "Reference cannot bind to a temporary");
+            error(parser.first_temporary, Diag::ReferenceCannotBindTemporary);
           }
           else if (parser.first_side_effect_op.is_valid()) {
-            error(parser.first_side_effect_op,
-                  "Reference cannot bind to an expression with side effect");
+            error(parser.first_side_effect_op, Diag::ReferenceCannotBindSideEffect);
           }
           else if (parser.first_function_call.is_valid()) {
-            error(parser.first_function_call,
-                  "Function calls are not allowed in reference definition");
+            error(parser.first_function_call, Diag::FunctionCallNotAllowedInReferenceDefinition);
           }
           else if (parser.first_non_const_var_in_subscript.is_valid()) {
             error(parser.first_non_const_var_in_subscript,
-                  "Reference cannot bind to non-const subscript because '" +
-                      string(parser.first_non_const_var_in_subscript.str()) +
-                      "' is not defined as 'const'");
+                  Diag::ReferenceCannotBindNonConstSubscript,
+                  parser.first_non_const_var_in_subscript.str());
           }
           else if (type != expr_cls) {
-            error(decl,
-                  "Reference to type '" + type->identifier +
-                      "' cannot bind to a value of unrelated type '" + expr_cls->identifier + "'");
+            error(decl, Diag::ReferenceTypeMismatch, type->identifier, expr_cls->identifier);
           }
 
           sym->reference_value = stmt.expr();
         }
         else {
-          error(decl,
-                "Declaration of reference variable '" + string(decl.identifier().str()) +
-                    "' requires an initializer");
+          error(decl, Diag::ReferenceVariableRequiresInitializer, decl.identifier().str());
         }
       }
 
@@ -1481,9 +1449,10 @@ struct SymbolParser : NodeErrorHandler {
 
           if (sym->is_static) {
             error(var,
-                  "Static data member '" + string(decl.identifier().str()) + "' not allowed in " +
-                      (cls->is_anonymous ? "anonymous " : "local ") +
-                      (cls->is_union ? "union" : "struct"));
+                  Diag::StaticDataMemberNotAllowed,
+                  decl.identifier().str(),
+                  (cls->is_anonymous ? "anonymous" : "local"),
+                  (cls->is_union ? "union" : "struct"));
           }
         }
       }
@@ -1501,7 +1470,7 @@ struct SymbolParser : NodeErrorHandler {
           sym->value = initialize_constexpr(scope, sym->type, decl);
         }
         else {
-          error(var.type(), "Constexpr declaration must also be static");
+          error(var.type(), Diag::ConstexprDeclMustBeStatic);
         }
       }
     }
@@ -1513,7 +1482,7 @@ struct SymbolParser : NodeErrorHandler {
       return 0;
     }
     if (list.child_count() != 1) {
-      error(list, "Excess elements in scalar initializer");
+      error(list, Diag::ExcessElementsInScalarInitializer);
       return 0;
     }
     if (Initializer init = list.child_first(); init.is_valid()) {
@@ -1529,7 +1498,7 @@ struct SymbolParser : NodeErrorHandler {
   int64_t initialize_constexpr(const SymbolScope &scope, SymbolClass *cls, Declarator decl)
   {
     if (cls->identifier != "int" && cls->identifier != "uint") {
-      error(decl, "Constexpr variable must be of type int or uint");
+      error(decl, Diag::ConstexprVarMustBeIntOrUint);
       return 0;
     }
     if (AssignStmt assign = decl.initial_value(); assign.is_valid()) {
@@ -1541,9 +1510,7 @@ struct SymbolParser : NodeErrorHandler {
     if (InitializerList list = decl.initializer_list(); list.is_valid()) {
       return eval_scalar_initializer_list(scope, list);
     }
-    error(decl,
-          "Constexpr variable '" + string(decl.identifier().str()) +
-              "' must be initialized by a constant expression");
+    error(decl, Diag::ConstexprVarMustBeInitializedByConstantExpr, decl.identifier().str());
     return 0;
   }
 
@@ -1644,19 +1611,20 @@ Result<string> SymbolTable::expr_to_string(const SymbolScope &scope,
             var = var->type->lookup_variable(LocalVar(child).identifier());
           }
           else if (child.type() == NodeType::FuncCall) {
-            return {"0",
-                    AstNodeException(child, string(expr_type) + " cannot contain function calls")};
+            return {
+                "0",
+                AstNodeException(child, Diag::ExprCannotContainFunctionCalls, string(expr_type))};
           }
           else {
-            return {"0",
-                    AstNodeException(child,
-                                     "Unsupported symbol '" + string(child.str()) + "' inside " +
-                                         string(expr_type))};
+            return {
+                "0",
+                AstNodeException(
+                    child, Diag::UnsupportedSymbolInExpr, string(child.str()), string(expr_type))};
           }
         }
 
         if (var->is_error) {
-          return {"0", AstNodeException(child, "Unknown variable '" + string(child.str()) + "'")};
+          return {"0", AstNodeException(child, Diag::UnknownVariable, string(child.str()))};
         }
 
         if (allow_compilation_constant && var->is_compilation_const) {
@@ -1664,10 +1632,7 @@ Result<string> SymbolTable::expr_to_string(const SymbolScope &scope,
           expr_str += "SRT_CONSTANT_" + var->identifier;
         }
         else if (!var->is_constexpr) {
-          return {"0",
-                  AstNodeException(child,
-                                   "Read of non-const variable is not allowed in a " +
-                                       string(expr_type))};
+          return {"0", AstNodeException(child, Diag::NonConstVariableInExpr, string(expr_type))};
         }
         else {
           expr_str += to_string(var->value);
@@ -1677,7 +1642,7 @@ Result<string> SymbolTable::expr_to_string(const SymbolScope &scope,
       }
       case NodeType::FuncCall:
         return {"0",
-                AstNodeException(child, string(expr_type) + " cannot contain function calls")};
+                AstNodeException(child, Diag::ExprCannotContainFunctionCalls, string(expr_type))};
       case NodeType::ExprSub: {
         auto [str, err] = expr_to_string(scope, ExprSub(child).expr().child_first(), node_count);
         expr_str += '(';
@@ -1696,9 +1661,8 @@ Result<string> SymbolTable::expr_to_string(const SymbolScope &scope,
         break;
       default:
         return {"0",
-                AstNodeException(child,
-                                 "Unsupported symbol '" + string(child.str()) + "' inside " +
-                                     string(expr_type))};
+                AstNodeException(
+                    child, Diag::UnsupportedSymbolInExpr, string(child.str()), string(expr_type))};
     }
   }
   return {expr_str, error};
@@ -1719,7 +1683,7 @@ Result<int64_t> SymbolTable::evaluate_constexpr(const SymbolScope &scope, Node s
       return {stoll(expr_str), {}};
     }
     catch (...) {
-      return {0, AstNodeException(start, "Error parsing integer literal")};
+      return {0, AstNodeException(start, Diag::ErrorParsingIntegerLiteral)};
     }
   }
 
@@ -1730,8 +1694,7 @@ Result<int64_t> SymbolTable::evaluate_constexpr(const SymbolScope &scope, Node s
     return {expression_parser.eval(), {}};
   }
   catch (const std::exception &e) {
-    return {0,
-            AstNodeException(start, "Failed to evaluate expanded expression '" + expr_str + "'")};
+    return {0, AstNodeException(start, Diag::FailedToEvaluateExpandedExpr, expr_str)};
   }
 }
 
@@ -1827,9 +1790,7 @@ Result<SymbolFunction *> SymbolScope::lookup_function(IdQualified id,
         parameters += ", '" + cls->identifier + "'";
       }
       if (!err) {
-        err = {id,
-               "No matching function for call to '" + func->identifier + "' for parameters " +
-                   parameters.substr(2)};
+        err = {id, Diag::NoMatchingOverload, func->identifier, parameters.substr(2)};
       }
     }
     func = overload;
@@ -1841,7 +1802,7 @@ Result<SymbolFunction *> SymbolScope::lookup_function(IdQualified id,
       err = {};
     }
     else {
-      err = {id, "Unknown function name"};
+      err = {id, Diag::UnknownFunction};
     }
   }
   return {func, err};

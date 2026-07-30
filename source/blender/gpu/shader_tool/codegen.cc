@@ -448,27 +448,26 @@ struct CodegenContext : NodeErrorHandler {
     }
     /* Check if only a single var is declared. */
     if (decl.next(NodeType::Declarator).is_valid()) {
-      error(init_stmt.type(), "Multiple variable declared in unrolled loop");
+      error(init_stmt.type(), Diag::UnrolledLoopMultipleVars);
       return;
     }
     /* Check if loop variable is of integer type. */
     SymbolClass *cls = var->type;
     if (cls->identifier != "int" && cls->identifier != "uint") {
-      error(init_stmt.type(), "Loop variable needs to be an integer type for unrolled loops");
+      error(init_stmt.type(), Diag::UnrolledLoopNonIntVar);
       return;
     }
     /* Check if loop variable is init by constexpr. */
     Expr init_expr = decl.initial_value().expr();
     if (!init_expr.is_valid()) {
-      error(decl,
-            "Loop variable needs to be assigned a value (using assignment) for unrolled loops");
+      error(decl, Diag::UnrolledLoopMissingAssignment);
       return;
     }
     int64_t val = SymbolTable::evaluate_constexpr(scope, init_expr.child_first()).unwrap(this);
     /* Check if loop statement assign to and only to the loop variable. */
     for (Node node : end_expr.children_range()) {
       if (node.type() == NodeType::Op && node.front() == ',') {
-        error(end_stmt, "Comma operator is not allowed in unrolled loop statement");
+        error(end_stmt, Diag::UnrolledLoopCommaOperator);
       }
     }
     if (this->err_handler.err) {
@@ -489,20 +488,18 @@ struct CodegenContext : NodeErrorHandler {
       }
       /* Break if too many iterations. */
       if (i >= 64) {
-        error(stmt, "Loop unrolling generates too many iterations (over 64)");
+        error(stmt, Diag::UnrolledLoopTooManyIterations);
         break;
       }
       /* Generate the loop body. */
       jump_to(stmt.body().front());
       local_scope(stmt.body(), scope);
 
-      auto [loop_val, err_val] = eval_constexpr_with_side_effects(var, end_expr, scope);
-      if (err_val) {
-        error(err_val->node, err_val->msg);
+      /* Evaluate the loop statement. */
+      var->value = eval_constexpr_with_side_effects(var, end_expr, scope).unwrap(this);
+      if (err_handler.err) {
         break;
       }
-      /* Evaluate the loop statement. */
-      var->value = loop_val;
     }
 
     /* Restore. */
@@ -522,10 +519,7 @@ struct CodegenContext : NodeErrorHandler {
         LocalVar local_var = expr.child_first();
         if (local_var.is_valid()) {
           if (scope.lookup_variable(local_var.identifier()) != var) {
-            return {0,
-                    AstNodeException(expr,
-                                     "Unrolled loop expression must assign to '" +
-                                         var->identifier + "'")};
+            return {0, AstNodeException(expr, Diag::UnrolledLoopMustAssignToVar, var->identifier)};
           }
           if (expr.back() == Decrement) {
             return {var->value - 1, {}};
@@ -539,10 +533,7 @@ struct CodegenContext : NodeErrorHandler {
         LocalVar local_var = expr.child_last();
         if (local_var.is_valid()) {
           if (scope.lookup_variable(local_var.identifier()) != var) {
-            return {0,
-                    AstNodeException(expr,
-                                     "Unrolled loop expression must assign to '" +
-                                         var->identifier + "'")};
+            return {0, AstNodeException(expr, Diag::UnrolledLoopMustAssignToVar, var->identifier)};
           }
           if (expr.front() == Decrement) {
             return {var->value - 1, {}};
@@ -559,9 +550,7 @@ struct CodegenContext : NodeErrorHandler {
       LocalVar local_var = expr.child_first();
       if (local_var.is_valid()) {
         if (scope.lookup_variable(local_var.identifier()) != var) {
-          return {0,
-                  AstNodeException(
-                      expr, "Unrolled loop expression must assign to '" + var->identifier + "'")};
+          return {0, AstNodeException(expr, Diag::UnrolledLoopMustAssignToVar, var->identifier)};
         }
         Node op = local_var.next();
         if (op.type() == NodeType::Op) {
@@ -581,9 +570,7 @@ struct CodegenContext : NodeErrorHandler {
             case AssignDiv:
               if (loop_val == 0) {
                 return {var->value / loop_val,
-                        err_val ?
-                            err_val :
-                            AstNodeException(op, "Division by zero during constexpr evaluation")};
+                        err_val ? err_val : AstNodeException(op, Diag::ConstexprDivisionByZero)};
               }
               return {var->value / loop_val, err_val};
             default:
@@ -592,13 +579,7 @@ struct CodegenContext : NodeErrorHandler {
         }
       }
     }
-    string id = var->identifier;
-    return {0,
-            AstNodeException(expr,
-                             "Expected '++" + id + "', '--" + id + "', '" + id + "++', '" + id +
-                                 "--' or '" + id + " = expr', '" + id + " += expr', '" + id +
-                                 " -= expr', '" + id + " /= expr', '" + id +
-                                 " *= expr' for unrolled loop expression")};
+    return {0, AstNodeException(expr, Diag::UnrolledLoopInvalidExpression, var->identifier)};
   }
 
   void for_loop(ForLoop stmt, SymbolScope &scope)
@@ -742,8 +723,7 @@ struct CodegenContext : NodeErrorHandler {
 
     if (cls.is_union) {
       builder.ss << "\n";
-      NOTE(decl,
-           "In declaration of union '" + string(decl.identifier().str()) + "' requested here");
+      NOTE(decl, Diag::NoteDeclarationUnionRequested, string(decl.identifier().str()));
 
       /* Emit getter and setters. */
       for (SymbolVariable *var : cls.non_static_variables_in_declaration_order()) {
@@ -1031,8 +1011,7 @@ struct CodegenContext : NodeErrorHandler {
     string fn_body = "{\n";
     if (member_type.is_builtin) {
       if (member.array_dimensions > 0) {
-        error(member.loc.tok,
-              "Unsupported array at union base scope; wrap it inside a named struct");
+        error(member.loc.tok, Diag::UnionArrayUnsupported);
       }
       string access = "this_." +
                       union_data_access(member.offset, member_type.size, union_type.size);
@@ -1063,8 +1042,7 @@ struct CodegenContext : NodeErrorHandler {
     string fn_body = "{\n";
     if (member_type.is_builtin) {
       if (member.array_dimensions > 0) {
-        error(member.loc.tok,
-              "Unsupported array at union base scope; wrap the array inside a named struct");
+        error(member.loc.tok, Diag::UnionArrayUnsupportedAlt);
       }
       string to_var = "this_." +
                       union_data_access(member.offset, member_type.size, union_type.size);
@@ -1143,7 +1121,7 @@ struct CodegenContext : NodeErrorHandler {
         builder.ss << ";\n";
       }
       else {
-        error(decl, "Compiler error: member function has no class");
+        error(decl, Diag::CompilerErrorMemberFuncNoClass);
       }
     }
 
@@ -1302,7 +1280,7 @@ struct CodegenContext : NodeErrorHandler {
     for (Attr attr : attributes.children_of_type<Attr>()) {
       if (attr.identifier().str() == "condition") {
         if (!cond.empty()) {
-          error(attr.identifier(), "Only one condition attribute is allowed.");
+          error(attr.identifier(), Diag::MultipleConditionAttributes);
           break;
         }
         for (LocalVar var : attributes.children_of_type<LocalVar>()) {
@@ -1374,8 +1352,7 @@ struct CodegenContext : NodeErrorHandler {
       /* Instantiation should have been checked already. */
       auto [temp_cls, full_id, _] = base_cls->template_data->lookup_inst(temp_decl.parameters(),
                                                                          scope);
-      NOTE(decl.identifier(),
-           "In instantiation of class template specialization '" + full_id + "' requested here");
+      NOTE(decl.identifier(), Diag::NoteInstantiationClassTemplateRequested, full_id);
       Node decl_tmp = base_cls->template_data->decl.decl();
       class_decl(decl_tmp, scope, 0, temp_cls);
     }
@@ -1385,9 +1362,7 @@ struct CodegenContext : NodeErrorHandler {
       /* Instantiation should have been checked already. */
       auto [temp_fn, full_id, _] = base_fn->template_data->lookup_inst(temp_decl.parameters(),
                                                                        scope);
-      NOTE(decl.identifier(),
-           "In instantiation of function template specialization '" + full_id +
-               "' requested here");
+      NOTE(decl.identifier(), Diag::NoteInstantiationFuncTemplateRequested, full_id);
       Node decl_tmp = base_fn->template_data->decl.decl();
       func_decl(decl_tmp, *temp_fn->parent, temp_fn);
     }
@@ -1401,8 +1376,7 @@ struct CodegenContext : NodeErrorHandler {
       /* Instantiation should have been checked already. */
       auto [temp_cls, full_id, _] = base_cls->template_data->lookup_inst(temp_spec.parameters(),
                                                                          scope);
-      NOTE(decl.identifier(),
-           "In instantiation of class template specialization '" + full_id + "' requested here");
+      NOTE(decl.identifier(), Diag::NoteInstantiationClassTemplateRequested, full_id);
       class_decl(decl, scope, 0, temp_cls);
     }
     else {
@@ -1411,9 +1385,7 @@ struct CodegenContext : NodeErrorHandler {
       /* Instantiation should have been checked already. */
       auto [temp_fn, full_id, _] = base_fn->template_data->lookup_inst(temp_spec.parameters(),
                                                                        scope);
-      NOTE(decl.identifier(),
-           "In instantiation of function template specialization '" + full_id +
-               "' requested here");
+      NOTE(decl.identifier(), Diag::NoteInstantiationFuncTemplateRequested, full_id);
       func_decl(decl, *temp_fn->parent, temp_fn);
     }
   }
@@ -1516,10 +1488,10 @@ struct CodegenContext : NodeErrorHandler {
 
     if (cond.is_valid()) {
       if (!cond.attributes().contains_attr("static_branch")) {
-        error(decl, "statement must be tagged as 'static_branch' because previous statement is");
+        error(decl, Diag::StaticBranchRequiredByPrevious);
       }
       if (cond.front().prev() == Constexpr) {
-        error(decl, "'if' statement cannot be 'constexpr' inside a static branch");
+        error(decl, Diag::StaticBranchConstexprIfNotAllowed);
       }
       LocalStmt stmt(cond.child_first());
       int unused_count = 0;
