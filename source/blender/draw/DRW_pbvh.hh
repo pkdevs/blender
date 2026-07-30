@@ -55,6 +55,30 @@ struct ViewportRequest {
   uint64_t hash() const;
 };
 
+/**
+ * \brief Information on where each node stores its data in the vertex/index buffers.
+ */
+struct NodeInfo {
+  struct BufferRange {
+    /** \brief Does this node already have space inside GPU buffers. */
+    bool is_space_assigned = false;
+    int offset = -1;
+    int len = -1;
+    IndexRange index_range() const
+    {
+      return IndexRange::from_begin_size(offset, len);
+    }
+  };
+
+  bool is_dirty = true;
+
+  BufferRange vbo;
+  BufferRange ibo_lines;
+  BufferRange ibo_lines_coarse;
+  BufferRange ibo_tris;
+  BufferRange ibo_tris_coarse;
+};
+
 class DrawCache : public bke::pbvh::DrawCache {
  public:
   ~DrawCache() override = default;
@@ -78,6 +102,16 @@ class DrawCache : public bke::pbvh::DrawCache {
    * index, as ensured by the BVH building process).
    */
   virtual Span<int> ensure_material_indices(const Object &object) = 0;
+
+  /**
+   * \brief Return the node info of each node.
+   *
+   * After invoking each node will have a space inside the vertex buffers/index buffers.
+   *
+   * \note Should be called before requesting other information.
+   */
+  virtual Span<NodeInfo> ensure_node_infos(const Object &object,
+                                           const IndexMask &nodes_to_update) = 0;
 };
 
 DrawCache &ensure_draw_data(std::unique_ptr<bke::pbvh::DrawCache> &ptr);

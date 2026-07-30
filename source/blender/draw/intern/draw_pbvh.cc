@@ -9,10 +9,12 @@
  * Embeds GPU meshes inside of bke::pbvh::Tree nodes, used by mesh sculpt mode.
  */
 
+#include "BLI_assert.hh"
 #include "BLI_enumerable_thread_specific.hh"
 #include "BLI_map.hh"
 #include "BLI_math_geom_c.hh"
 #include "BLI_math_vector_types.hh"
+#include "BLI_span.hh"
 #include "BLI_utildefines.hh"
 #include "BLI_vector.hh"
 
@@ -31,12 +33,14 @@
 #include "DEG_depsgraph_query.hh"
 
 #include "GPU_batch.hh"
+#include "GPU_vertex_buffer.hh"
 
 #include "DRW_engine.hh"
 #include "DRW_pbvh.hh"
 #include "DRW_render.hh"
 
 #include "PRF_profile.hh"
+#include "draw_sculpt.hh"
 
 #include "attribute_convert.hh"
 #include "bmesh.hh"
@@ -89,14 +93,135 @@ struct OrigMeshData {
   }
 };
 
+class GPUBufferSpace {
+  uint64_t size_ = 0;
+  Vector<IndexRange> unassigned_;
+
+ public:
+  bool is_empty() const
+  {
+    return size_ == 0;
+  }
+  int64_t size() const
+  {
+    return size_;
+  }
+
+  void assign(NodeInfo::BufferRange &buffer_info)
+  {
+    BLI_assert(!buffer_info.is_space_assigned);
+    if (buffer_info.len <= 0) {
+      return;
+    }
+    /* Check for space inside existing unassigned space. */
+    for (int64_t space_index : unassigned_.index_range()) {
+      IndexRange &unassigned_index_range = unassigned_[space_index];
+      if (unassigned_index_range.size() >= buffer_info.len) {
+        buffer_info.offset = unassigned_index_range.start();
+        unassigned_index_range = unassigned_index_range.drop_front(buffer_info.len);
+        if (unassigned_index_range.is_empty()) {
+          unassigned_.remove(space_index);
+        }
+        buffer_info.is_space_assigned = true;
+        break;
+      }
+    }
+
+    /* If not found we need to grow space. This would invalidate all existing VBO's. */
+    if (!buffer_info.is_space_assigned) {
+      buffer_info.offset = size_;
+      size_ += buffer_info.len;
+      buffer_info.is_space_assigned = true;
+    }
+  }
+
+  void unassign(NodeInfo::BufferRange &buffer_info)
+  {
+    BLI_assert(buffer_info.is_space_assigned);
+    const IndexRange range = buffer_info.index_range();
+    buffer_info.is_space_assigned = false;
+    buffer_info.len = -1;
+    buffer_info.offset = -1;
+
+    if (range.is_empty()) {
+      return;
+    }
+    unassigned_.append(range);
+  }
+
+  void optimize()
+  {
+    this->optimize(unassigned_);
+#ifndef NDEBUG
+    this->validate();
+#endif
+  }
+
+ private:
+  void optimize(Vector<IndexRange> &space)
+  {
+    this->optimize_sort(space);
+    this->optimize_merge(space);
+    this->optimize_remove_empty(space);
+  }
+  void optimize_sort(Vector<IndexRange> &space)
+  {
+    std::ranges::sort(
+        space, [](const IndexRange &a, const IndexRange &b) { return a.begin() < b.begin(); });
+  }
+  void optimize_merge(Vector<IndexRange> &space)
+  {
+    int last = -2;
+    int last_index = -1;
+    for (int index : space.index_range()) {
+      IndexRange &range = space[index];
+      if (range.is_empty()) {
+        continue;
+      }
+      if (range.first() == last + 1) {
+        /* Merge with previous */
+        IndexRange &prev_range = space[last_index];
+        range = IndexRange::from_begin_size(prev_range.first(), prev_range.size() + range.size());
+        prev_range = IndexRange::from_begin_size(prev_range.first(), 0);
+      }
+      last = range.last();
+      last_index = index;
+    }
+  }
+  void optimize_remove_empty(Vector<IndexRange> &space)
+  {
+    space.remove_if([](const IndexRange &space) { return space.is_empty(); });
+  }
+#ifndef NDEBUG
+  void validate() const
+  {
+    this->validate(unassigned_);
+  }
+  void validate(Span<IndexRange> space) const
+  {
+    int last_index = -2;
+    for (const IndexRange &range : space) {
+      BLI_assert_msg(range.start() != last_index + 1, "Found two ranges that has to be merged.");
+      BLI_assert_msg(range.start() > last_index, "Ranges are unordered");
+      BLI_assert_msg(!range.is_empty(), "Found empty range");
+      last_index = range.last();
+    }
+  }
+#endif
+};
+
 /**
  * Stores the data necessary to draw the PBVH geometry. A separate `*Impl` class is used to hide
  * implementation details from the public header.
  */
 class DrawCacheImpl : public DrawCache {
+ public:
   struct AttributeData {
-    /** A vertex buffer for each BVH node. If null, the draw data for the node must be created. */
-    Vector<gpu::VertBufPtr> vbos;
+    /**
+     * \brief A vertex buffer containing data for all BVH nodes.
+     */
+    gpu::VertBufPtr vbo;
+
     /**
      * A separate "dirty" bit per node. We track the dirty value separately from deleting the VBO
      * for a node in order to avoid recreating batches with new VBOs. It's also a necessary
@@ -110,37 +235,107 @@ class DrawCacheImpl : public DrawCache {
      * the values will be extracted again.
      */
     void tag_dirty(const IndexMask &node_mask);
+    void ensure_nodes_capacity(int64_t nodes_len);
+    void ensure_buffer_capacity(const GPUVertFormat &format, uint64_t vertex_len);
+    void update(const NodeInfo &node_info);
   };
 
-  /** Used to determine whether to use indexed VBO layouts for multires grids. */
+ private:
+  /**
+   * \brief Used to determine whether to use indexed VBO layouts for multires grids.
+   *
+   * Bit for each node. `false` means that the node contains smooth shaded vertex data (elements
+   * are shared between faces). `true` means that the node is "flat shaded" (elements are stored
+   * per face corner).
+   */
   BitVector<> use_flat_layout_;
-  /** The material index for each node. */
+  /**
+   * \brief The material index for each node.
+   *
+   * Is used during drawing to place the node in the correct material bucket.
+   */
   Array<int> material_indices_;
 
-  /** Index buffers for wireframe geometry for each node. */
-  Vector<gpu::IndexBufPtr> lines_ibos_;
-  /** Index buffers for coarse "fast navigate" wireframe geometry for each node. */
-  Vector<gpu::IndexBufPtr> lines_ibos_coarse_;
-  /** Index buffers for triangles for each node, only used for grids. */
-  Vector<gpu::IndexBufPtr> tris_ibos_;
-  /** Index buffers for coarse "fast navigate" triangles for each node, only used for grids. */
-  Vector<gpu::IndexBufPtr> tris_ibos_coarse_;
+  /**
+   * \brief Shared index buffer with space bookkeeping and the per-node subranges.
+   */
+  struct IBOFamily {
+    GPUBufferSpace space;
+    /**
+     * \brief Increasing counter whenever space is grown.
+     *
+     * Used to detect when batches need rebuilding. When an index buffer is reallocated all sub
+     * index buffers and batches needs to be rebuilt to refer to the new reallocated data.
+     */
+    uint64_t generation = 0;
+    /**
+     * \brief Max size for index buffers.
+     *
+     * Only when space grows past this, the generation is incremented. Prevents unnecessary
+     * generation bumps when space doesn't change.
+     */
+    uint64_t space_limit = 0;
+    /** \brief Index buffer containing all indices. */
+    gpu::IndexBufPtr ibo;
+    /** \brief Per node a sub-range of ibo. */
+    Vector<gpu::IndexBufPtr> ibos;
+
+    /**
+     * \brief Ensure the shared index buffer is large enough to hold the assigned space.
+     *
+     * When this requires growing (or creating) the buffer, all per-node subranges are released
+     * (they get rebuilt into the new buffer by the next #ensure_*_indices pass).
+     */
+    void ensure_capacity();
+  };
+  IBOFamily ibo_lines_;
+  IBOFamily ibo_lines_coarse_;
+  IBOFamily ibo_tris_;
+  IBOFamily ibo_tris_coarse_;
+
+  /** \brief Info per node where it is located in the buffers. */
+  Vector<NodeInfo> node_infos_;
+  GPUBufferSpace vbo_space_;
+
+  /**
+   * \brief Incremented whenever the shared vertex buffer space grows.
+   *
+   * Growing the buffer space is the event that swaps (resizes) all attribute VBOs, invalidating
+   * any cached batches that reference them. The generation is checked against the one recorded on
+   * each #BatchCache to decide whether the cached batches need to be rebuilt.
+   */
+  uint64_t vbo_generation_ = 0;
+  /** High-water mark of the vertex buffer space, used to detect growth. */
+  uint64_t vbo_space_limit_ = 0;
+
   /**
    * GPU data and per-node dirty status for all requested attributes.
    * \note Currently we do not remove "stale" attributes that haven't been requested in a while.
    */
   Map<AttributeRequest, AttributeData> attribute_vbos_;
 
+  /**
+   * \brief Cached batches for a given setup, together with the generation of the vertex buffers
+   * they were built for.
+   *
+   * Batches hold raw pointers to the shared attribute VBOs. When the VBOs are resized (swapped),
+   * the cached batches are invalidated so they can be rebuilt with the new pointers.
+   */
+  struct BatchCache {
+    Vector<gpu::Batch *> batches;
+    uint64_t generation = 0;
+  };
+
   /** Batches for drawing wireframe geometry. */
-  Vector<gpu::Batch *> lines_batches_;
+  BatchCache lines_batches_;
   /** Batches for drawing coarse "fast navigate" wireframe geometry. */
-  Vector<gpu::Batch *> lines_batches_coarse_;
+  BatchCache lines_batches_coarse_;
   /**
    * Batches for drawing triangles, stored separately for each combination of attributes and
    * coarse-ness. Different viewports might request different sets of attributes, and we don't want
    * to recreate the batches on every redraw.
    */
-  Map<ViewportRequest, Vector<gpu::Batch *>> tris_batches_;
+  Map<ViewportRequest, BatchCache> tris_batches_;
 
   /**
    * Which nodes (might) have a different number of visible faces.
@@ -171,6 +366,16 @@ class DrawCacheImpl : public DrawCache {
                                           const IndexMask &nodes_to_update) override;
 
   Span<int> ensure_material_indices(const Object &object) override;
+  Span<NodeInfo> ensure_node_infos(const Object &object,
+                                   const IndexMask &nodes_to_update) override;
+  Span<NodeInfo> get_node_infos() const
+  {
+    return node_infos_;
+  }
+  uint64_t get_vert_len() const
+  {
+    return vbo_space_.size();
+  }
 
  private:
   /**
@@ -181,10 +386,10 @@ class DrawCacheImpl : public DrawCache {
 
   BitSpan ensure_use_flat_layout(const Object &object, const OrigMeshData &orig_mesh_data);
 
-  Span<gpu::VertBufPtr> ensure_attribute_data(const Object &object,
-                                              const OrigMeshData &orig_mesh_data,
-                                              const AttributeRequest &attr,
-                                              const IndexMask &node_mask);
+  AttributeData &ensure_attribute_data(const Object &object,
+                                       const OrigMeshData &orig_mesh_data,
+                                       const AttributeRequest &attr,
+                                       const IndexMask &node_mask);
 
   Span<gpu::IndexBufPtr> ensure_tri_indices(const Object &object,
                                             const OrigMeshData &orig_mesh_data,
@@ -217,6 +422,9 @@ void DrawCacheImpl::tag_visibility_changed(const IndexMask &node_mask)
 {
   dirty_topology_.resize(std::max(dirty_topology_.size(), node_mask.min_array_size()), false);
   node_mask.set_bits(dirty_topology_);
+  const int64_t size = std::max(node_infos_.size(), node_mask.min_array_size());
+  node_infos_.resize(size, NodeInfo{});
+  node_mask.foreach_index([&](const int i) { node_infos_[i].is_dirty = true; });
 }
 
 void DrawCacheImpl::tag_topology_changed(const IndexMask &node_mask)
@@ -267,20 +475,11 @@ BLI_NOINLINE static void free_ibos(const MutableSpan<gpu::IndexBufPtr> ibos,
   mask.foreach_index([&](const int i) { ibos[i].reset(); });
 }
 
-BLI_NOINLINE static void free_vbos(const MutableSpan<gpu::VertBufPtr> vbos,
-                                   const IndexMask &node_mask)
+BLI_NOINLINE static void free_batches(const MutableSpan<gpu::Batch *> batches)
 {
-  IndexMaskMemory memory;
-  const IndexMask mask = IndexMask::from_intersection(node_mask, vbos.index_range(), memory);
-  mask.foreach_index([&](const int i) { vbos[i].reset(); });
-}
-
-BLI_NOINLINE static void free_batches(const MutableSpan<gpu::Batch *> batches,
-                                      const IndexMask &node_mask)
-{
-  IndexMaskMemory memory;
-  const IndexMask mask = IndexMask::from_intersection(node_mask, batches.index_range(), memory);
-  mask.foreach_index([&](const int i) { GPU_BATCH_DISCARD_SAFE(batches[i]); });
+  for (gpu::Batch *&batch : batches) {
+    GPU_BATCH_DISCARD_SAFE(batch);
+  }
 }
 
 static const GPUVertFormat &position_format()
@@ -347,55 +546,70 @@ void extract_data_vert_mesh(const OffsetIndices<int> faces,
                             const Span<int> corner_verts,
                             const Span<T> attribute,
                             const Span<int> face_indices,
-                            gpu::VertBuf &vbo)
+                            gpu::VertBuf &vbo,
+                            const NodeInfo &node_info)
 {
   PRF_scope(ProfileCategory::Draw);
   using Converter = AttributeConverter<T>;
   using VBOType = typename Converter::VBOType;
-  VBOType *data = vbo.data<VBOType>().data();
+  VBOType *data = vbo.data<VBOType>().data() + node_info.vbo.offset;
+  VBOType *data_start = data;
   for (const int face : face_indices) {
     for (const int vert : corner_verts.slice(faces[face])) {
       *data = Converter::convert(attribute[vert]);
       data++;
     }
   }
+  UNUSED_VARS_NDEBUG(data_start);
+  BLI_assert_msg(data == data_start + node_info.vbo.len,
+                 "Node VBO data extraction did not fill the expected amount");
 }
 
 template<typename T>
 void extract_data_face_mesh(const OffsetIndices<int> faces,
                             const Span<T> attribute,
                             const Span<int> face_indices,
-                            gpu::VertBuf &vbo)
+                            gpu::VertBuf &vbo,
+                            const NodeInfo &node_info)
 {
   PRF_scope(ProfileCategory::Draw);
   using Converter = AttributeConverter<T>;
   using VBOType = typename Converter::VBOType;
 
-  VBOType *data = vbo.data<VBOType>().data();
+  VBOType *data = vbo.data<VBOType>().data() + node_info.vbo.offset;
+  VBOType *data_start = data;
   for (const int face : face_indices) {
     const int face_size = faces[face].size();
     std::fill_n(data, face_size, Converter::convert(attribute[face]));
     data += face_size;
   }
+  UNUSED_VARS_NDEBUG(data_start);
+  BLI_assert_msg(data == data_start + node_info.vbo.len,
+                 "Node VBO data extraction did not fill the expected amount");
 }
 
 template<typename T>
 void extract_data_corner_mesh(const OffsetIndices<int> faces,
                               const Span<T> attribute,
                               const Span<int> face_indices,
-                              gpu::VertBuf &vbo)
+                              gpu::VertBuf &vbo,
+                              const NodeInfo &node_info)
 {
   PRF_scope(ProfileCategory::Draw);
   using Converter = AttributeConverter<T>;
   using VBOType = typename Converter::VBOType;
 
-  VBOType *data = vbo.data<VBOType>().data();
+  VBOType *data = vbo.data<VBOType>().data() + node_info.vbo.offset;
+  VBOType *data_start = data;
   for (const int face : face_indices) {
     for (const int corner : faces[face]) {
       *data = Converter::convert(attribute[corner]);
       data++;
     }
   }
+  UNUSED_VARS_NDEBUG(data_start);
+  BLI_assert_msg(data == data_start + node_info.vbo.len,
+                 "Node VBO data extraction did not fill the expected amount");
 }
 
 template<typename T> const T &bmesh_cd_vert_get(const BMVert &vert, const int offset)
@@ -414,12 +628,16 @@ template<typename T> const T &bmesh_cd_face_get(const BMFace &face, const int of
 }
 
 template<typename T>
-void extract_data_vert_bmesh(const Set<BMFace *, 0> &faces, const int cd_offset, gpu::VertBuf &vbo)
+void extract_data_vert_bmesh(const Set<BMFace *, 0> &faces,
+                             const int cd_offset,
+                             gpu::VertBuf &vbo,
+                             const NodeInfo &node_info)
 {
   PRF_scope(ProfileCategory::Draw);
   using Converter = AttributeConverter<T>;
   using VBOType = typename Converter::VBOType;
-  VBOType *data = vbo.data<VBOType>().data();
+  VBOType *data = vbo.data<VBOType>().data() + node_info.vbo.offset;
+  VBOType *data_start = data;
 
   for (const BMFace *face : faces) {
     if (BM_elem_flag_test(face, BM_ELEM_HIDDEN)) {
@@ -433,15 +651,22 @@ void extract_data_vert_bmesh(const Set<BMFace *, 0> &faces, const int cd_offset,
     *data = Converter::convert(bmesh_cd_vert_get<T>(*l->next->v, cd_offset));
     data++;
   }
+  UNUSED_VARS_NDEBUG(data_start);
+  BLI_assert_msg(data == data_start + node_info.vbo.len,
+                 "Node VBO data extraction did not fill the expected amount");
 }
 
 template<typename T>
-void extract_data_face_bmesh(const Set<BMFace *, 0> &faces, const int cd_offset, gpu::VertBuf &vbo)
+void extract_data_face_bmesh(const Set<BMFace *, 0> &faces,
+                             const int cd_offset,
+                             gpu::VertBuf &vbo,
+                             const NodeInfo &node_info)
 {
   PRF_scope(ProfileCategory::Draw);
   using Converter = AttributeConverter<T>;
   using VBOType = typename Converter::VBOType;
-  VBOType *data = vbo.data<VBOType>().data();
+  VBOType *data = vbo.data<VBOType>().data() + node_info.vbo.offset;
+  VBOType *data_start = data;
 
   for (const BMFace *face : faces) {
     if (BM_elem_flag_test(face, BM_ELEM_HIDDEN)) {
@@ -450,17 +675,22 @@ void extract_data_face_bmesh(const Set<BMFace *, 0> &faces, const int cd_offset,
     std::fill_n(data, 3, Converter::convert(bmesh_cd_face_get<T>(*face, cd_offset)));
     data += 3;
   }
+  UNUSED_VARS_NDEBUG(data_start);
+  BLI_assert_msg(data == data_start + node_info.vbo.len,
+                 "Node VBO data extraction did not fill the expected amount");
 }
 
 template<typename T>
 void extract_data_corner_bmesh(const Set<BMFace *, 0> &faces,
                                const int cd_offset,
-                               gpu::VertBuf &vbo)
+                               gpu::VertBuf &vbo,
+                               const NodeInfo &node_info)
 {
   PRF_scope(ProfileCategory::Draw);
   using Converter = AttributeConverter<T>;
   using VBOType = typename Converter::VBOType;
-  VBOType *data = vbo.data<VBOType>().data();
+  VBOType *data = vbo.data<VBOType>().data() + node_info.vbo.offset;
+  VBOType *data_start = data;
 
   for (const BMFace *face : faces) {
     if (BM_elem_flag_test(face, BM_ELEM_HIDDEN)) {
@@ -474,7 +704,20 @@ void extract_data_corner_bmesh(const Set<BMFace *, 0> &faces,
     *data = Converter::convert(bmesh_cd_loop_get<T>(*l->next, cd_offset));
     data++;
   }
+  UNUSED_VARS_NDEBUG(data_start);
+  BLI_assert_msg(data == data_start + node_info.vbo.len,
+                 "Node VBO data extraction did not fill the expected amount");
 }
+
+/**
+ * \brief Number of indices per index buffer family that a node requires.
+ */
+struct NodeIndexCounts {
+  int64_t lines = 0;
+  int64_t lines_coarse = 0;
+  int64_t tris = 0;
+  int64_t tris_coarse = 0;
+};
 
 static int count_visible_tris_bmesh(const Set<BMFace *, 0> &faces)
 {
@@ -483,12 +726,90 @@ static int count_visible_tris_bmesh(const Set<BMFace *, 0> &faces)
   });
 }
 
+/**
+ * \brief Compute the number of indices of all index buffer families for a single node.
+ *
+ * Each node might have a different number of indices per family, as visibility changes are
+ * accounted for by the index buffers (hidden faces are not indexed). The counts are
+ * used to determine the space each node requires inside the shared index buffers.
+ *
+ * \note The counts of the coarse families are equal to their full-resolution counterpart for
+ * meshes and BMesh, as only grids have a separate coarse "fast navigate" level.
+ */
+static NodeIndexCounts count_node_indices(const Object &object,
+                                          const bke::pbvh::Tree &pbvh,
+                                          const OrigMeshData &orig_mesh_data,
+                                          const int node_index)
+{
+  NodeIndexCounts counts;
+  switch (pbvh.type()) {
+    case bke::pbvh::Type::Mesh: {
+      const bke::pbvh::MeshNode &node = pbvh.nodes<bke::pbvh::MeshNode>()[node_index];
+      const Mesh &mesh = DRW_object_get_data_for_drawing<Mesh>(object);
+      const OffsetIndices<int> faces = mesh.faces();
+      const Span<int> face_indices = node.faces();
+      const bke::AttributeAccessor attributes = orig_mesh_data.attributes;
+      const VArraySpan hide_poly = *attributes.lookup<bool>(".hide_poly", bke::AttrDomain::Face);
+      int visible_corners_num = 0;
+      int visible_tris_num = 0;
+      if (hide_poly.is_empty()) {
+        visible_corners_num = node.corners_num();
+        visible_tris_num = poly_to_tri_count(face_indices.size(), node.corners_num());
+      }
+      else {
+        for (const int face : face_indices) {
+          if (hide_poly[face]) {
+            continue;
+          }
+          const int face_size = faces[face].size();
+          visible_corners_num += face_size;
+          visible_tris_num += bke::mesh::face_triangles_num(face_size);
+        }
+      }
+      counts.lines = counts.lines_coarse = visible_corners_num * 2;
+      counts.tris = counts.tris_coarse = visible_tris_num * 3;
+      break;
+    }
+    case bke::pbvh::Type::Grids: {
+      const bke::pbvh::GridsNode &node = pbvh.nodes<bke::pbvh::GridsNode>()[node_index];
+      const SubdivCCG &subdiv_ccg = *object.runtime->sculpt_session->subdiv_ccg;
+      const CCGKey key = BKE_subdiv_ccg_key_top_level(subdiv_ccg);
+      const int gridsize = key.grid_size;
+      const int totgrid = node.grids().size();
+
+      /* Full resolution. */
+      const int quads_per_axis = gridsize - 1;
+      counts.lines = 4 * totgrid * quads_per_axis * (quads_per_axis + 1);
+      counts.tris = bke::pbvh::count_grid_quads(
+                        subdiv_ccg.grid_hidden, node.grids(), gridsize, gridsize) *
+                    6;
+
+      /* Coarse "fast navigate" level (level 0). */
+      const int skip = gridsize > 2 ? 1 << (key.level - 1) : 1;
+      const int coarse_quads_per_axis = (gridsize - 1) / skip;
+      counts.lines_coarse = 4 * totgrid * coarse_quads_per_axis * (coarse_quads_per_axis + 1);
+      counts.tris_coarse = bke::pbvh::count_grid_quads(
+                               subdiv_ccg.grid_hidden, node.grids(), gridsize, 2) *
+                           6;
+      break;
+    }
+    case bke::pbvh::Type::BMesh: {
+      const bke::pbvh::BMeshNode &node = pbvh.nodes<bke::pbvh::BMeshNode>()[node_index];
+      const int visible_tris_num = count_visible_tris_bmesh(node.bm_faces_);
+      counts.lines = counts.lines_coarse = visible_tris_num * 3 * 2;
+      counts.tris = counts.tris_coarse = visible_tris_num * 3;
+      break;
+    }
+  }
+  return counts;
+}
+
 DrawCacheImpl::~DrawCacheImpl()
 {
-  free_batches(lines_batches_, lines_batches_.index_range());
-  free_batches(lines_batches_coarse_, lines_batches_coarse_.index_range());
-  for (MutableSpan<gpu::Batch *> batches : tris_batches_.values()) {
-    free_batches(batches, batches.index_range());
+  free_batches(lines_batches_.batches);
+  free_batches(lines_batches_coarse_.batches);
+  for (BatchCache &batch_cache : tris_batches_.values()) {
+    free_batches(batch_cache.batches);
   }
 }
 
@@ -506,92 +827,63 @@ void DrawCacheImpl::free_nodes_with_changed_topology(const bke::pbvh::Tree &pbvh
 
   dirty_topology_.clear_and_shrink();
 
-  free_ibos(lines_ibos_, nodes_to_free);
-  free_ibos(lines_ibos_coarse_, nodes_to_free);
-  free_ibos(tris_ibos_, nodes_to_free);
-  free_ibos(tris_ibos_coarse_, nodes_to_free);
+  free_ibos(ibo_lines_.ibos, nodes_to_free);
+  free_ibos(ibo_lines_coarse_.ibos, nodes_to_free);
+  free_ibos(ibo_tris_.ibos, nodes_to_free);
+  free_ibos(ibo_tris_coarse_.ibos, nodes_to_free);
+
   if (pbvh.type() == bke::pbvh::Type::BMesh) {
-    /* For BMesh, VBOs are only filled with data for visible triangles, and topology can also
-     * completely change due to dynamic topology, so VBOs must be rebuilt from scratch. For other
-     * types, actual topology doesn't change, and visibility changes are accounted for by the index
-     * buffers. */
+    /* For BMesh, the VBOs are filled with data for all visible triangles, and the topology can
+     * also completely change due to dynamic topology, so the attribute data must be rebuilt from
+     * scratch. For other types, actual topology doesn't change, and visibility changes are
+     * accounted for by the index buffers. */
     for (AttributeData &data : attribute_vbos_.values()) {
-      free_vbos(data.vbos, nodes_to_free);
+      data.tag_dirty(nodes_to_free);
     }
   }
+}
 
-  free_batches(lines_batches_, nodes_to_free);
-  free_batches(lines_batches_coarse_, nodes_to_free);
-  for (MutableSpan<gpu::Batch *> batches : tris_batches_.values()) {
-    free_batches(batches, nodes_to_free);
+void DrawCacheImpl::AttributeData::ensure_nodes_capacity(const int64_t nodes_len)
+{
+  this->dirty_nodes.resize(nodes_len, true);
+}
+void DrawCacheImpl::AttributeData::ensure_buffer_capacity(const GPUVertFormat &format,
+                                                          const uint64_t needed_vertex_len)
+{
+  /* Check if existing VBO needs to be resized. */
+  if (vbo) {
+    if (vbo->vertex_len < needed_vertex_len) {
+      gpu::VertBufPtr new_vbo = gpu::VertBufPtr(
+          GPU_vertbuf_create_with_format_ex(format, GPU_USAGE_DYNAMIC));
+      new_vbo->allocate(uint32_t(needed_vertex_len));
+      new_vbo->upload();
+      /* Preserve the data of the existing vertices by copying the used vertex data to the new
+       * buffer. The source buffer is guaranteed to be uploaded by the caller. */
+      new_vbo->copy_sub(*vbo, 0, 0, vbo->vertex_len);
+      vbo.swap(new_vbo);
+    }
+  }
+  else {
+    /* No VBO allocated yet. */
+    vbo = gpu::VertBufPtr(GPU_vertbuf_create_with_format_ex(format, GPU_USAGE_DYNAMIC));
+    vbo->allocate(needed_vertex_len);
+    vbo->upload();
   }
 }
 
-BLI_NOINLINE static void ensure_vbos_allocated_mesh(const Object &object,
-                                                    const GPUVertFormat &format,
-                                                    const IndexMask &node_mask,
-                                                    const MutableSpan<gpu::VertBufPtr> vbos)
+void DrawCacheImpl::AttributeData::update(const NodeInfo &node_info)
 {
-  PRF_scope(ProfileCategory::Draw);
-  const bke::pbvh::Tree &pbvh = *bke::object::pbvh_get(object);
-  const Span<bke::pbvh::MeshNode> nodes = pbvh.nodes<bke::pbvh::MeshNode>();
-  node_mask.foreach_index(
-      [&](const int i) {
-        if (!vbos[i]) {
-          vbos[i] = gpu::VertBufPtr(GPU_vertbuf_create_with_format(format));
-        }
-        GPU_vertbuf_data_alloc(*vbos[i], nodes[i].corners_num());
-      },
-      exec_mode::grain_size(64));
-}
-
-BLI_NOINLINE static void ensure_vbos_allocated_grids(const Object &object,
-                                                     const GPUVertFormat &format,
-                                                     const BitSpan use_flat_layout,
-                                                     const IndexMask &node_mask,
-                                                     const MutableSpan<gpu::VertBufPtr> vbos)
-{
-  PRF_scope(ProfileCategory::Draw);
-  const bke::pbvh::Tree &pbvh = *bke::object::pbvh_get(object);
-  const Span<bke::pbvh::GridsNode> nodes = pbvh.nodes<bke::pbvh::GridsNode>();
-  const SubdivCCG &subdiv_ccg = *object.runtime->sculpt_session->subdiv_ccg;
-  node_mask.foreach_index(
-      [&](const int i) {
-        if (!vbos[i]) {
-          vbos[i] = gpu::VertBufPtr(GPU_vertbuf_create_with_format(format));
-        }
-        const int verts_per_grid = use_flat_layout[i] ? square_i(subdiv_ccg.grid_size - 1) * 4 :
-                                                        square_i(subdiv_ccg.grid_size);
-        const int verts_num = nodes[i].grids().size() * verts_per_grid;
-        GPU_vertbuf_data_alloc(*vbos[i], verts_num);
-      },
-      exec_mode::grain_size(64));
-}
-
-BLI_NOINLINE static void ensure_vbos_allocated_bmesh(const Object &object,
-                                                     const GPUVertFormat &format,
-                                                     const IndexMask &node_mask,
-                                                     const MutableSpan<gpu::VertBufPtr> vbos)
-{
-  PRF_scope(ProfileCategory::Draw);
-  const bke::pbvh::Tree &pbvh = *bke::object::pbvh_get(object);
-  const Span<bke::pbvh::BMeshNode> nodes = pbvh.nodes<bke::pbvh::BMeshNode>();
-  node_mask.foreach_index(
-      [&](const int i) {
-        if (!vbos[i]) {
-          vbos[i] = gpu::VertBufPtr(GPU_vertbuf_create_with_format(format));
-        }
-        const Set<BMFace *, 0> &faces = BKE_pbvh_bmesh_node_faces(
-            &const_cast<bke::pbvh::BMeshNode &>(nodes[i]));
-        const int verts_num = count_visible_tris_bmesh(faces) * 3;
-        GPU_vertbuf_data_alloc(*vbos[i], verts_num);
-      },
-      exec_mode::grain_size(64));
+  GPU_vertbuf_use(vbo.get());
+  uint8_t *data = vbo->data<uint8_t>().data();
+  data += node_info.vbo.offset * vbo->format.stride;
+  vbo->update_sub(
+      node_info.vbo.offset * vbo->format.stride, node_info.vbo.len * vbo->format.stride, data);
 }
 
 static void update_positions_mesh(const Object &object,
-                                  const IndexMask &node_mask,
-                                  MutableSpan<gpu::VertBufPtr> vbos)
+                                  const DrawCacheImpl &draw_cache,
+                                  DrawCacheImpl::AttributeData &attr_vbo,
+                                  const IndexMask &node_mask)
 {
   PRF_scope(ProfileCategory::Draw);
   const bke::pbvh::Tree &pbvh = *bke::object::pbvh_get(object);
@@ -600,18 +892,24 @@ static void update_positions_mesh(const Object &object,
   const OffsetIndices<int> faces = mesh.faces();
   const Span<int> corner_verts = mesh.corner_verts();
   const Span<float3> vert_positions = bke::pbvh::vert_positions_eval_from_eval(object);
-  ensure_vbos_allocated_mesh(object, position_format(), node_mask, vbos);
+  attr_vbo.ensure_buffer_capacity(position_format(), draw_cache.get_vert_len());
   node_mask.foreach_index(
       [&](const int i) {
+        const NodeInfo &node_info = draw_cache.get_node_infos()[i];
         extract_data_vert_mesh<float3>(
-            faces, corner_verts, vert_positions, nodes[i].faces(), *vbos[i]);
+            faces, corner_verts, vert_positions, nodes[i].faces(), *attr_vbo.vbo, node_info);
       },
       exec_mode::grain_size(1));
+  node_mask.foreach_index([&](const int i) {
+    const NodeInfo &node_info = draw_cache.get_node_infos()[i];
+    attr_vbo.update(node_info);
+  });
 }
 
 static void update_normals_mesh(const Object &object,
-                                const IndexMask &node_mask,
-                                MutableSpan<gpu::VertBufPtr> vbos)
+                                const DrawCacheImpl &draw_cache,
+                                DrawCacheImpl::AttributeData &attr_vbo,
+                                const IndexMask &node_mask)
 {
   PRF_scope(ProfileCategory::Draw);
   const bke::pbvh::Tree &pbvh = *bke::object::pbvh_get(object);
@@ -623,10 +921,12 @@ static void update_normals_mesh(const Object &object,
   const Span<float3> face_normals = bke::pbvh::face_normals_eval_from_eval(object);
   const bke::AttributeAccessor attributes = mesh.attributes();
   const VArraySpan sharp_faces = *attributes.lookup<bool>("sharp_face", bke::AttrDomain::Face);
-  ensure_vbos_allocated_mesh(object, normal_format(), node_mask, vbos);
+  attr_vbo.ensure_buffer_capacity(normal_format(), draw_cache.get_vert_len());
   node_mask.foreach_index(
       [&](const int i) {
-        short4 *data = vbos[i]->data<short4>().data();
+        const NodeInfo &node_info = draw_cache.get_node_infos()[i];
+        short4 *data = attr_vbo.vbo->data<short4>().data() + node_info.vbo.offset;
+        short4 *data_start = data;
 
         for (const int face : nodes[i].faces()) {
           if (!sharp_faces.is_empty() && sharp_faces[face]) {
@@ -641,14 +941,18 @@ static void update_normals_mesh(const Object &object,
             }
           }
         }
+        UNUSED_VARS_NDEBUG(data_start);
+        BLI_assert_msg(data == data_start + node_info.vbo.len,
+                       "Node VBO data extraction did not fill the expected amount");
       },
       exec_mode::grain_size(1));
 }
 
 BLI_NOINLINE static void update_masks_mesh(const Object &object,
                                            const OrigMeshData &orig_mesh_data,
-                                           const IndexMask &node_mask,
-                                           MutableSpan<gpu::VertBufPtr> vbos)
+                                           const DrawCacheImpl &draw_cache,
+                                           DrawCacheImpl::AttributeData &attr_vbo,
+                                           const IndexMask &node_mask)
 {
   PRF_scope(ProfileCategory::Draw);
   const bke::pbvh::Tree &pbvh = *bke::object::pbvh_get(object);
@@ -658,30 +962,40 @@ BLI_NOINLINE static void update_masks_mesh(const Object &object,
   const Span<int> corner_verts = mesh.corner_verts();
   const VArraySpan mask = *orig_mesh_data.attributes.lookup<float>(".sculpt_mask",
                                                                    bke::AttrDomain::Point);
-  ensure_vbos_allocated_mesh(object, mask_format(), node_mask, vbos);
+  attr_vbo.ensure_buffer_capacity(mask_format(), draw_cache.get_vert_len());
   if (!mask.is_empty()) {
     node_mask.foreach_index(
         [&](const int i) {
-          float *data = vbos[i]->data<float>().data();
+          const NodeInfo &node_info = draw_cache.get_node_infos()[i];
+          float *data = attr_vbo.vbo->data<float>().data() + node_info.vbo.offset;
+          float *data_start = data;
           for (const int face : nodes[i].faces()) {
             for (const int vert : corner_verts.slice(faces[face])) {
               *data = mask[vert];
               data++;
             }
           }
+          UNUSED_VARS_NDEBUG(data_start);
+          BLI_assert_msg(data == data_start + node_info.vbo.len,
+                         "Node VBO data extraction did not fill the expected amount");
         },
         exec_mode::grain_size(1));
   }
   else {
-    node_mask.foreach_index([&](const int i) { vbos[i]->data<float>().fill(0.0f); },
-                            exec_mode::grain_size(64));
+    node_mask.foreach_index(
+        [&](const int i) {
+          const NodeInfo &node_info = draw_cache.get_node_infos()[i];
+          attr_vbo.vbo->data<float>().slice(node_info.vbo.index_range()).fill(0.0f);
+        },
+        exec_mode::grain_size(64));
   }
 }
 
 BLI_NOINLINE static void update_face_sets_mesh(const Object &object,
                                                const OrigMeshData &orig_mesh_data,
-                                               const IndexMask &node_mask,
-                                               MutableSpan<gpu::VertBufPtr> vbos)
+                                               const DrawCacheImpl &draw_cache,
+                                               DrawCacheImpl::AttributeData &attr_vbo,
+                                               const IndexMask &node_mask)
 {
   PRF_scope(ProfileCategory::Draw);
   const bke::pbvh::Tree &pbvh = *bke::object::pbvh_get(object);
@@ -692,11 +1006,13 @@ BLI_NOINLINE static void update_face_sets_mesh(const Object &object,
   const int color_seed = orig_mesh_data.face_set_seed;
   const VArraySpan face_sets = *orig_mesh_data.attributes.lookup<int>(".sculpt_face_set",
                                                                       bke::AttrDomain::Face);
-  ensure_vbos_allocated_mesh(object, face_set_format(), node_mask, vbos);
+  attr_vbo.ensure_buffer_capacity(face_set_format(), draw_cache.get_vert_len());
   if (!face_sets.is_empty()) {
     node_mask.foreach_index(
         [&](const int i) {
-          uchar4 *data = vbos[i]->data<uchar4>().data();
+          const NodeInfo &node_info = draw_cache.get_node_infos()[i];
+          uchar4 *data = attr_vbo.vbo->data<uchar4>().data() + node_info.vbo.offset;
+          uchar4 *data_start = data;
           for (const int face : nodes[i].faces()) {
             const int id = face_sets[face];
 
@@ -713,20 +1029,28 @@ BLI_NOINLINE static void update_face_sets_mesh(const Object &object,
             std::fill_n(data, face_size, fset_color);
             data += face_size;
           }
+          UNUSED_VARS_NDEBUG(data_start);
+          BLI_assert_msg(data == data_start + node_info.vbo.len,
+                         "Node VBO data extraction did not fill the expected amount");
         },
         exec_mode::grain_size(1));
   }
   else {
-    node_mask.foreach_index([&](const int i) { vbos[i]->data<uchar4>().fill(uchar4(255)); },
-                            exec_mode::grain_size(64));
+    node_mask.foreach_index(
+        [&](const int i) {
+          const NodeInfo &node_info = draw_cache.get_node_infos()[i];
+          attr_vbo.vbo->data<uchar4>().slice(node_info.vbo.index_range()).fill(uchar4(255));
+        },
+        exec_mode::grain_size(64));
   }
 }
 
 BLI_NOINLINE static void update_generic_attribute_mesh(const Object &object,
                                                        const OrigMeshData &orig_mesh_data,
-                                                       const IndexMask &node_mask,
+                                                       const DrawCacheImpl &draw_cache,
+                                                       DrawCacheImpl::AttributeData &attr_vbo,
                                                        const StringRef name,
-                                                       MutableSpan<gpu::VertBufPtr> vbos)
+                                                       const IndexMask &node_mask)
 {
   PRF_scope(ProfileCategory::Draw);
   const bke::pbvh::Tree &pbvh = *bke::object::pbvh_get(object);
@@ -740,22 +1064,25 @@ BLI_NOINLINE static void update_generic_attribute_mesh(const Object &object,
     return;
   }
   const bke::AttrType data_type = bke::cpp_type_to_attribute_type(attr.varray.type());
-  ensure_vbos_allocated_mesh(
-      object, attribute_format(orig_mesh_data, name, data_type), node_mask, vbos);
+  attr_vbo.ensure_buffer_capacity(attribute_format(orig_mesh_data, name, data_type),
+                                  draw_cache.get_vert_len());
   node_mask.foreach_index(
       [&](const int i) {
+        const NodeInfo &node_info = draw_cache.get_node_infos()[i];
         bke::attribute_math::to_static_type(attr.varray.type(), [&]<typename T>() {
           if constexpr (!std::is_void_v<typename AttributeConverter<T>::VBOType>) {
             const VArraySpan<T> src = attr.varray.typed<T>();
             switch (attr.domain) {
               case bke::AttrDomain::Point:
-                extract_data_vert_mesh<T>(faces, corner_verts, src, nodes[i].faces(), *vbos[i]);
+                extract_data_vert_mesh<T>(
+                    faces, corner_verts, src, nodes[i].faces(), *attr_vbo.vbo, node_info);
                 break;
               case bke::AttrDomain::Face:
-                extract_data_face_mesh<T>(faces, src, nodes[i].faces(), *vbos[i]);
+                extract_data_face_mesh<T>(faces, src, nodes[i].faces(), *attr_vbo.vbo, node_info);
                 break;
               case bke::AttrDomain::Corner:
-                extract_data_corner_mesh<T>(faces, src, nodes[i].faces(), *vbos[i]);
+                extract_data_corner_mesh<T>(
+                    faces, src, nodes[i].faces(), *attr_vbo.vbo, node_info);
                 break;
               default:
                 BLI_assert_unreachable();
@@ -766,10 +1093,11 @@ BLI_NOINLINE static void update_generic_attribute_mesh(const Object &object,
       exec_mode::grain_size(1));
 }
 
-BLI_NOINLINE static void fill_positions_grids(const Object &object,
-                                              const BitSpan use_flat_layout,
-                                              const IndexMask &node_mask,
-                                              const MutableSpan<gpu::VertBufPtr> vbos)
+BLI_NOINLINE static void update_positions_grids(const Object &object,
+                                                const DrawCacheImpl &draw_cache,
+                                                DrawCacheImpl::AttributeData &attr_vbo,
+                                                const BitSpan use_flat_layout,
+                                                const IndexMask &node_mask)
 {
   PRF_scope(ProfileCategory::Draw);
   const bke::pbvh::Tree &pbvh = *bke::object::pbvh_get(object);
@@ -777,10 +1105,12 @@ BLI_NOINLINE static void fill_positions_grids(const Object &object,
   const SubdivCCG &subdiv_ccg = *object.runtime->sculpt_session->subdiv_ccg;
   const Span<float3> positions = subdiv_ccg.positions;
   const CCGKey key = BKE_subdiv_ccg_key_top_level(subdiv_ccg);
-  ensure_vbos_allocated_grids(object, position_format(), use_flat_layout, node_mask, vbos);
+  attr_vbo.ensure_buffer_capacity(position_format(), draw_cache.get_vert_len());
   node_mask.foreach_index(
       [&](const int i) {
-        float3 *data = vbos[i]->data<float3>().data();
+        const NodeInfo &node_info = draw_cache.get_node_infos()[i];
+        float3 *data = attr_vbo.vbo->data<float3>().data() + node_info.vbo.offset;
+        float3 *data_start = data;
         if (use_flat_layout[i]) {
           const int grid_size_1 = key.grid_size - 1;
           for (const int grid : nodes[i].grids()) {
@@ -806,15 +1136,19 @@ BLI_NOINLINE static void fill_positions_grids(const Object &object,
             data += grid_positions.size();
           }
         }
+        UNUSED_VARS_NDEBUG(data_start);
+        BLI_assert_msg(data == data_start + node_info.vbo.len,
+                       "Node VBO data extraction did not fill the expected amount");
       },
       exec_mode::grain_size(1));
 }
 
-BLI_NOINLINE static void fill_normals_grids(const Object &object,
-                                            const OrigMeshData &orig_mesh_data,
-                                            const BitSpan use_flat_layout,
-                                            const IndexMask &node_mask,
-                                            const MutableSpan<gpu::VertBufPtr> vbos)
+BLI_NOINLINE static void update_normals_grids(const Object &object,
+                                              const OrigMeshData &orig_mesh_data,
+                                              const DrawCacheImpl &draw_cache,
+                                              DrawCacheImpl::AttributeData &attr_vbo,
+                                              const BitSpan use_flat_layout,
+                                              const IndexMask &node_mask)
 {
   PRF_scope(ProfileCategory::Draw);
   const bke::pbvh::Tree &pbvh = *bke::object::pbvh_get(object);
@@ -826,10 +1160,12 @@ BLI_NOINLINE static void fill_normals_grids(const Object &object,
   const Span<int> grid_to_face_map = subdiv_ccg.grid_to_face_map;
   const bke::AttributeAccessor attributes = orig_mesh_data.attributes;
   const VArraySpan sharp_faces = *attributes.lookup<bool>("sharp_face", bke::AttrDomain::Face);
-  ensure_vbos_allocated_grids(object, normal_format(), use_flat_layout, node_mask, vbos);
+  attr_vbo.ensure_buffer_capacity(normal_format(), draw_cache.get_vert_len());
   node_mask.foreach_index(
       [&](const int i) {
-        short4 *data = vbos[i]->data<short4>().data();
+        const NodeInfo &node_info = draw_cache.get_node_infos()[i];
+        short4 *data = attr_vbo.vbo->data<short4>().data() + node_info.vbo.offset;
+        short4 *data_start = data;
 
         if (use_flat_layout[i]) {
           const int grid_size_1 = key.grid_size - 1;
@@ -872,14 +1208,18 @@ BLI_NOINLINE static void fill_normals_grids(const Object &object,
             }
           }
         }
+        UNUSED_VARS_NDEBUG(data_start);
+        BLI_assert_msg(data == data_start + node_info.vbo.len,
+                       "Node VBO data extraction did not fill the expected amount");
       },
       exec_mode::grain_size(1));
 }
 
-BLI_NOINLINE static void fill_masks_grids(const Object &object,
-                                          const BitSpan use_flat_layout,
-                                          const IndexMask &node_mask,
-                                          const MutableSpan<gpu::VertBufPtr> vbos)
+BLI_NOINLINE static void update_masks_grids(const Object &object,
+                                            const DrawCacheImpl &draw_cache,
+                                            DrawCacheImpl::AttributeData &attr_vbo,
+                                            const BitSpan use_flat_layout,
+                                            const IndexMask &node_mask)
 {
   PRF_scope(ProfileCategory::Draw);
   const bke::pbvh::Tree &pbvh = *bke::object::pbvh_get(object);
@@ -887,11 +1227,13 @@ BLI_NOINLINE static void fill_masks_grids(const Object &object,
   const SubdivCCG &subdiv_ccg = *object.runtime->sculpt_session->subdiv_ccg;
   const CCGKey key = BKE_subdiv_ccg_key_top_level(subdiv_ccg);
   const Span<float> masks = subdiv_ccg.masks;
-  ensure_vbos_allocated_grids(object, mask_format(), use_flat_layout, node_mask, vbos);
+  attr_vbo.ensure_buffer_capacity(mask_format(), draw_cache.get_vert_len());
   if (!masks.is_empty()) {
     node_mask.foreach_index(
         [&](const int i) {
-          float *data = vbos[i]->data<float>().data();
+          const NodeInfo &node_info = draw_cache.get_node_infos()[i];
+          float *data = attr_vbo.vbo->data<float>().data() + node_info.vbo.offset;
+          float *data_start = data;
           if (use_flat_layout[i]) {
             const int grid_size_1 = key.grid_size - 1;
             for (const int grid : nodes[i].grids()) {
@@ -917,20 +1259,28 @@ BLI_NOINLINE static void fill_masks_grids(const Object &object,
               data += grid_masks.size();
             }
           }
+          UNUSED_VARS_NDEBUG(data_start);
+          BLI_assert_msg(data == data_start + node_info.vbo.len,
+                         "Node VBO data extraction did not fill the expected amount");
         },
         exec_mode::grain_size(1));
   }
   else {
-    node_mask.foreach_index([&](const int i) { vbos[i]->data<float>().fill(0.0f); },
-                            exec_mode::grain_size(64));
+    node_mask.foreach_index(
+        [&](const int i) {
+          const NodeInfo &node_info = draw_cache.get_node_infos()[i];
+          attr_vbo.vbo->data<float>().slice(node_info.vbo.index_range()).fill(0.0f);
+        },
+        exec_mode::grain_size(64));
   }
 }
 
-BLI_NOINLINE static void fill_face_sets_grids(const Object &object,
-                                              const OrigMeshData &orig_mesh_data,
-                                              const BitSpan use_flat_layout,
-                                              const IndexMask &node_mask,
-                                              const MutableSpan<gpu::VertBufPtr> vbos)
+BLI_NOINLINE static void update_face_sets_grids(const Object &object,
+                                                const OrigMeshData &orig_mesh_data,
+                                                const DrawCacheImpl &draw_cache,
+                                                DrawCacheImpl::AttributeData &attr_vbo,
+                                                const BitSpan use_flat_layout,
+                                                const IndexMask &node_mask)
 {
   PRF_scope(ProfileCategory::Draw);
   const bke::pbvh::Tree &pbvh = *bke::object::pbvh_get(object);
@@ -941,20 +1291,22 @@ BLI_NOINLINE static void fill_face_sets_grids(const Object &object,
   const int color_seed = orig_mesh_data.face_set_seed;
   const Span<int> grid_to_face_map = subdiv_ccg.grid_to_face_map;
   const bke::AttributeAccessor attributes = orig_mesh_data.attributes;
-  ensure_vbos_allocated_grids(object, face_set_format(), use_flat_layout, node_mask, vbos);
+  attr_vbo.ensure_buffer_capacity(face_set_format(), draw_cache.get_vert_len());
   if (const VArray<int> face_sets = *attributes.lookup<int>(".sculpt_face_set",
                                                             bke::AttrDomain::Face))
   {
     const VArraySpan<int> face_sets_span(face_sets);
     node_mask.foreach_index(
         [&](const int i) {
+          const NodeInfo &node_info = draw_cache.get_node_infos()[i];
           const Span<int> grids = nodes[i].grids();
           const int verts_per_grid = use_flat_layout[i] ? square_i(key.grid_size - 1) * 4 :
                                                           square_i(key.grid_size);
-          uchar4 *data = vbos[i]->data<uchar4>().data();
-          for (const int i : grids.index_range()) {
+          uchar4 *data = attr_vbo.vbo->data<uchar4>().data() + node_info.vbo.offset;
+          uchar4 *data_start = data;
+          for (const int j : grids.index_range()) {
             uchar4 color{UCHAR_MAX};
-            const int fset = face_sets[grid_to_face_map[grids[i]]];
+            const int fset = face_sets[grid_to_face_map[grids[j]]];
             if (fset != color_default) {
               BKE_paint_face_set_overlay_color_get(fset, color_seed, color);
             }
@@ -962,12 +1314,19 @@ BLI_NOINLINE static void fill_face_sets_grids(const Object &object,
             std::fill_n(data, verts_per_grid, color);
             data += verts_per_grid;
           }
+          UNUSED_VARS_NDEBUG(data_start);
+          BLI_assert_msg(data == data_start + node_info.vbo.len,
+                         "Node VBO data extraction did not fill the expected amount");
         },
         exec_mode::grain_size(1));
   }
   else {
-    node_mask.foreach_index([&](const int i) { vbos[i]->data<uchar4>().fill(uchar4{UCHAR_MAX}); },
-                            exec_mode::grain_size(1));
+    node_mask.foreach_index(
+        [&](const int i) {
+          const NodeInfo &node_info = draw_cache.get_node_infos()[i];
+          attr_vbo.vbo->data<uchar4>().slice(node_info.vbo.index_range()).fill(uchar4{UCHAR_MAX});
+        },
+        exec_mode::grain_size(1));
   }
 }
 
@@ -1187,36 +1546,35 @@ static void calc_node_uvs(const SubdivCCG &subdiv_ccg,
 
 BLI_NOINLINE static void fill_uvs_grids(const Object &object,
                                         const OrigMeshData &orig_mesh_data,
+                                        const DrawCacheImpl &draw_cache,
+                                        DrawCacheImpl::AttributeData &attr_vbo,
                                         const BitSpan use_flat_layout,
                                         const IndexMask &node_mask,
-                                        const StringRef name,
-                                        const MutableSpan<gpu::VertBufPtr> vbos)
+                                        const StringRef name)
 {
   PRF_scope(ProfileCategory::Draw);
   const bke::pbvh::Tree &pbvh = *bke::object::pbvh_get(object);
   const Span<bke::pbvh::GridsNode> nodes = pbvh.nodes<bke::pbvh::GridsNode>();
   const SubdivCCG &subdiv_ccg = *object.runtime->sculpt_session->subdiv_ccg;
-  ensure_vbos_allocated_grids(object,
-                              attribute_format(orig_mesh_data, name, bke::AttrType::Float2),
-                              use_flat_layout,
-                              node_mask,
-                              vbos);
+  attr_vbo.ensure_buffer_capacity(attribute_format(orig_mesh_data, name, bke::AttrType::Float2),
+                                  draw_cache.get_vert_len());
   node_mask.foreach_index(
       [&](const int i) {
-        float2 *data = vbos[i]->data<float2>().data();
+        const NodeInfo &node_info = draw_cache.get_node_infos()[i];
+        float2 *data = attr_vbo.vbo->data<float2>().data() + node_info.vbo.offset;
 
         const int uv_channel = orig_mesh_data.uv_map_names.index_of_try(name);
         if (uv_channel == -1) [[unlikely]] {
           BLI_assert_msg(uv_channel != -1,
                          "Unable to find appropriate FVar channel for given UV map");
-          std::fill_n(data, vbos[i]->data<float2>().size(), float2(0));
+          std::fill_n(data, node_info.vbo.len, float2(0));
         }
         else {
           calc_node_uvs(subdiv_ccg,
                         uv_channel,
                         nodes[i],
                         use_flat_layout[i],
-                        {data, vbos[i]->data<float2>().size()});
+                        {data, node_info.vbo.len});
         }
       },
       exec_mode::grain_size(1));
@@ -1654,80 +2012,50 @@ BLI_NOINLINE static void fill_generic_face_attribute_grids(const Object &object,
 
 BLI_NOINLINE static void update_generic_attribute_grids(const Object &object,
                                                         const OrigMeshData &orig_mesh_data,
-                                                        const BitSpan use_flat_layout,
-                                                        const IndexMask &node_mask,
+                                                        const DrawCacheImpl &draw_cache,
+                                                        DrawCacheImpl::AttributeData &attr_vbo,
                                                         const StringRef name,
-                                                        const MutableSpan<gpu::VertBufPtr> vbos)
+                                                        const BitSpan use_flat_layout,
+                                                        const IndexMask &node_mask)
 {
   PRF_scope(ProfileCategory::Draw);
   const bke::AttributeAccessor attributes = orig_mesh_data.attributes;
   const bke::GAttributeReader attr = attributes.lookup(name);
-  if (attr.domain == bke::AttrDomain::Edge) {
-    return;
-  }
-
-  if (!attr) {
-    ensure_vbos_allocated_grids(object,
-                                attribute_format(orig_mesh_data, "Dummy", bke::AttrType::Float3),
-                                use_flat_layout,
-                                node_mask,
-                                vbos);
-    node_mask.foreach_index([&](const int i) { vbos[i]->data<float3>().fill(float3(0.0f)); },
-                            exec_mode::grain_size(1));
+  if (!attr || attr.domain == bke::AttrDomain::Edge) {
     return;
   }
 
   const bke::AttrType data_type = bke::cpp_type_to_attribute_type(attr.varray.type());
 
   if (attr.domain == bke::AttrDomain::Corner && data_type == bke::AttrType::Float2) {
-    fill_uvs_grids(object, orig_mesh_data, use_flat_layout, node_mask, name, vbos);
+    fill_uvs_grids(object, orig_mesh_data, draw_cache, attr_vbo, use_flat_layout, node_mask, name);
     return;
   }
 
-  switch (attr.domain) {
-    case bke::AttrDomain::Point:
-      ensure_vbos_allocated_grids(object,
-                                  attribute_format(orig_mesh_data, name, data_type),
-                                  use_flat_layout,
-                                  node_mask,
-                                  vbos);
-      calc_generic_vert_attribute_grids(
-          object, orig_mesh_data, use_flat_layout, node_mask, name, vbos);
-      break;
-    case bke::AttrDomain::Corner:
-      ensure_vbos_allocated_grids(object,
-                                  attribute_format(orig_mesh_data, name, data_type),
-                                  use_flat_layout,
-                                  node_mask,
-                                  vbos);
-      calc_generic_corner_attribute_grids(
-          object, orig_mesh_data, use_flat_layout, node_mask, name, vbos);
-      break;
-    case bke::AttrDomain::Face:
-      ensure_vbos_allocated_grids(object,
-                                  attribute_format(orig_mesh_data, name, data_type),
-                                  use_flat_layout,
-                                  node_mask,
-                                  vbos);
-      fill_generic_face_attribute_grids(
-          object, orig_mesh_data, use_flat_layout, node_mask, name, vbos);
-      break;
-    default:
-      BLI_assert_unreachable();
-  }
+  attr_vbo.ensure_buffer_capacity(attribute_format(orig_mesh_data, "Dummy", bke::AttrType::Float3),
+                                  draw_cache.get_vert_len());
+  node_mask.foreach_index(
+      [&](const int i) {
+        const NodeInfo &node_info = draw_cache.get_node_infos()[i];
+        attr_vbo.vbo->data<float3>().slice(node_info.vbo.index_range()).fill(float3(0.0f));
+      },
+      exec_mode::grain_size(1));
 }
 
 BLI_NOINLINE static void update_positions_bmesh(const Object &object,
-                                                const IndexMask &node_mask,
-                                                const MutableSpan<gpu::VertBufPtr> vbos)
+                                                const DrawCacheImpl &draw_cache,
+                                                DrawCacheImpl::AttributeData &attr_vbo,
+                                                const IndexMask &node_mask)
 {
   PRF_scope(ProfileCategory::Draw);
   const bke::pbvh::Tree &pbvh = *bke::object::pbvh_get(object);
   const Span<bke::pbvh::BMeshNode> nodes = pbvh.nodes<bke::pbvh::BMeshNode>();
-  ensure_vbos_allocated_bmesh(object, position_format(), node_mask, vbos);
+  attr_vbo.ensure_buffer_capacity(position_format(), draw_cache.get_vert_len());
   node_mask.foreach_index(
       [&](const int i) {
-        float3 *data = vbos[i]->data<float3>().data();
+        const NodeInfo &node_info = draw_cache.get_node_infos()[i];
+        float3 *data = attr_vbo.vbo->data<float3>().data() + node_info.vbo.offset;
+        float3 *data_start = data;
         for (const BMFace *face :
              BKE_pbvh_bmesh_node_faces(&const_cast<bke::pbvh::BMeshNode &>(nodes[i])))
         {
@@ -1742,21 +2070,27 @@ BLI_NOINLINE static void update_positions_bmesh(const Object &object,
           *data = l->next->v->co;
           data++;
         }
+        UNUSED_VARS_NDEBUG(data_start);
+        BLI_assert_msg(data == data_start + node_info.vbo.len,
+                       "Node VBO data extraction did not fill the expected amount");
       },
       exec_mode::grain_size(1));
 }
 
 BLI_NOINLINE static void update_normals_bmesh(const Object &object,
-                                              const IndexMask &node_mask,
-                                              const MutableSpan<gpu::VertBufPtr> vbos)
+                                              const DrawCacheImpl &draw_cache,
+                                              DrawCacheImpl::AttributeData &attr_vbo,
+                                              const IndexMask &node_mask)
 {
   PRF_scope(ProfileCategory::Draw);
   const bke::pbvh::Tree &pbvh = *bke::object::pbvh_get(object);
   const Span<bke::pbvh::BMeshNode> nodes = pbvh.nodes<bke::pbvh::BMeshNode>();
-  ensure_vbos_allocated_bmesh(object, normal_format(), node_mask, vbos);
+  attr_vbo.ensure_buffer_capacity(normal_format(), draw_cache.get_vert_len());
   node_mask.foreach_index(
       [&](const int i) {
-        short4 *data = vbos[i]->data<short4>().data();
+        const NodeInfo &node_info = draw_cache.get_node_infos()[i];
+        short4 *data = attr_vbo.vbo->data<short4>().data() + node_info.vbo.offset;
+        short4 *data_start = data;
         for (const BMFace *face :
              BKE_pbvh_bmesh_node_faces(&const_cast<bke::pbvh::BMeshNode &>(nodes[i])))
         {
@@ -1777,24 +2111,30 @@ BLI_NOINLINE static void update_normals_bmesh(const Object &object,
             data += 3;
           }
         }
+        UNUSED_VARS_NDEBUG(data_start);
+        BLI_assert_msg(data == data_start + node_info.vbo.len,
+                       "Node VBO data extraction did not fill the expected amount");
       },
       exec_mode::grain_size(1));
 }
 
 BLI_NOINLINE static void update_masks_bmesh(const Object &object,
-                                            const IndexMask &node_mask,
-                                            const MutableSpan<gpu::VertBufPtr> vbos)
+                                            const DrawCacheImpl &draw_cache,
+                                            DrawCacheImpl::AttributeData &attr_vbo,
+                                            const IndexMask &node_mask)
 {
   PRF_scope(ProfileCategory::Draw);
   const bke::pbvh::Tree &pbvh = *bke::object::pbvh_get(object);
   const Span<bke::pbvh::BMeshNode> nodes = pbvh.nodes<bke::pbvh::BMeshNode>();
   const BMesh &bm = *object.runtime->sculpt_session->bm;
   const int cd_offset = CustomData_get_offset_named(&bm.vdata, CD_PROP_FLOAT, ".sculpt_mask");
-  ensure_vbos_allocated_bmesh(object, mask_format(), node_mask, vbos);
+  attr_vbo.ensure_buffer_capacity(mask_format(), draw_cache.get_vert_len());
   if (cd_offset != -1) {
     node_mask.foreach_index(
         [&](const int i) {
-          float *data = vbos[i]->data<float>().data();
+          const NodeInfo &node_info = draw_cache.get_node_infos()[i];
+          float *data = attr_vbo.vbo->data<float>().data() + node_info.vbo.offset;
+          float *data_start = data;
           for (const BMFace *face :
                BKE_pbvh_bmesh_node_faces(&const_cast<bke::pbvh::BMeshNode &>(nodes[i])))
           {
@@ -1809,19 +2149,27 @@ BLI_NOINLINE static void update_masks_bmesh(const Object &object,
             *data = bmesh_cd_vert_get<float>(*l->next->v, cd_offset);
             data++;
           }
+          UNUSED_VARS_NDEBUG(data_start);
+          BLI_assert_msg(data == data_start + node_info.vbo.len,
+                         "Node VBO data extraction did not fill the expected amount");
         },
         exec_mode::grain_size(1));
   }
   else {
-    node_mask.foreach_index([&](const int i) { vbos[i]->data<float>().fill(0.0f); },
-                            exec_mode::grain_size(64));
+    node_mask.foreach_index(
+        [&](const int i) {
+          const NodeInfo &node_info = draw_cache.get_node_infos()[i];
+          attr_vbo.vbo->data<float>().slice(node_info.vbo.index_range()).fill(0.0f);
+        },
+        exec_mode::grain_size(64));
   }
 }
 
 BLI_NOINLINE static void update_face_sets_bmesh(const Object &object,
                                                 const OrigMeshData &orig_mesh_data,
-                                                const IndexMask &node_mask,
-                                                const MutableSpan<gpu::VertBufPtr> vbos)
+                                                const DrawCacheImpl &draw_cache,
+                                                DrawCacheImpl::AttributeData &attr_vbo,
+                                                const IndexMask &node_mask)
 {
   PRF_scope(ProfileCategory::Draw);
   const bke::pbvh::Tree &pbvh = *bke::object::pbvh_get(object);
@@ -1830,11 +2178,13 @@ BLI_NOINLINE static void update_face_sets_bmesh(const Object &object,
   const int color_default = orig_mesh_data.face_set_default;
   const int color_seed = orig_mesh_data.face_set_seed;
   const int offset = CustomData_get_offset_named(&bm.pdata, CD_PROP_INT32, ".sculpt_face_set");
-  ensure_vbos_allocated_bmesh(object, face_set_format(), node_mask, vbos);
+  attr_vbo.ensure_buffer_capacity(face_set_format(), draw_cache.get_vert_len());
   if (offset != -1) {
     node_mask.foreach_index(
         [&](const int i) {
-          uchar4 *data = vbos[i]->data<uchar4>().data();
+          const NodeInfo &node_info = draw_cache.get_node_infos()[i];
+          uchar4 *data = attr_vbo.vbo->data<uchar4>().data() + node_info.vbo.offset;
+          uchar4 *data_start = data;
           for (const BMFace *face :
                BKE_pbvh_bmesh_node_faces(&const_cast<bke::pbvh::BMeshNode &>(nodes[i])))
           {
@@ -1849,20 +2199,28 @@ BLI_NOINLINE static void update_face_sets_bmesh(const Object &object,
             std::fill_n(data, 3, color);
             data += 3;
           }
+          UNUSED_VARS_NDEBUG(data_start);
+          BLI_assert_msg(data == data_start + node_info.vbo.len,
+                         "Node VBO data extraction did not fill the expected amount");
         },
         exec_mode::grain_size(1));
   }
   else {
-    node_mask.foreach_index([&](const int i) { vbos[i]->data<uchar4>().fill(uchar4(255)); },
-                            exec_mode::grain_size(64));
+    node_mask.foreach_index(
+        [&](const int i) {
+          const NodeInfo &node_info = draw_cache.get_node_infos()[i];
+          attr_vbo.vbo->data<uchar4>().slice(node_info.vbo.index_range()).fill(uchar4(255));
+        },
+        exec_mode::grain_size(64));
   }
 }
 
 BLI_NOINLINE static void update_generic_attribute_bmesh(const Object &object,
                                                         const OrigMeshData &orig_mesh_data,
-                                                        const IndexMask &node_mask,
+                                                        const DrawCacheImpl &draw_cache,
+                                                        DrawCacheImpl::AttributeData &attr_vbo,
                                                         const StringRef name,
-                                                        const MutableSpan<gpu::VertBufPtr> vbos)
+                                                        const IndexMask &node_mask)
 {
   PRF_scope(ProfileCategory::Draw);
   const bke::pbvh::Tree &pbvh = *bke::object::pbvh_get(object);
@@ -1874,30 +2232,35 @@ BLI_NOINLINE static void update_generic_attribute_bmesh(const Object &object,
   }
 
   if (!attr) {
-    ensure_vbos_allocated_bmesh(
-        object, attribute_format(orig_mesh_data, name, bke::AttrType::Float3), node_mask, vbos);
-    node_mask.foreach_index([&](const int i) { vbos[i]->data<float3>().fill(float3(0.0f)); },
-                            exec_mode::grain_size(1));
+    attr_vbo.ensure_buffer_capacity(attribute_format(orig_mesh_data, name, bke::AttrType::Float3),
+                                    draw_cache.get_vert_len());
+    node_mask.foreach_index(
+        [&](const int i) {
+          const NodeInfo &node_info = draw_cache.get_node_infos()[i];
+          attr_vbo.vbo->data<float3>().slice(node_info.vbo.index_range()).fill(float3(0.0f));
+        },
+        exec_mode::grain_size(1));
     return;
   }
 
-  ensure_vbos_allocated_bmesh(
-      object, attribute_format(orig_mesh_data, name, attr.type), node_mask, vbos);
+  attr_vbo.ensure_buffer_capacity(attribute_format(orig_mesh_data, name, attr.type),
+                                  draw_cache.get_vert_len());
   node_mask.foreach_index(
       [&](const int i) {
+        const NodeInfo &node_info = draw_cache.get_node_infos()[i];
         bke::attribute_math::to_static_type(attr.type, [&]<typename T>() {
           const auto &faces = BKE_pbvh_bmesh_node_faces(
               &const_cast<bke::pbvh::BMeshNode &>(nodes[i]));
           if constexpr (!std::is_void_v<typename AttributeConverter<T>::VBOType>) {
             switch (attr.domain) {
               case bke::AttrDomain::Point:
-                extract_data_vert_bmesh<T>(faces, attr.offset, *vbos[i]);
+                extract_data_vert_bmesh<T>(faces, attr.offset, *attr_vbo.vbo, node_info);
                 break;
               case bke::AttrDomain::Face:
-                extract_data_face_bmesh<T>(faces, attr.offset, *vbos[i]);
+                extract_data_face_bmesh<T>(faces, attr.offset, *attr_vbo.vbo, node_info);
                 break;
               case bke::AttrDomain::Corner:
-                extract_data_corner_bmesh<T>(faces, attr.offset, *vbos[i]);
+                extract_data_corner_bmesh<T>(faces, attr.offset, *attr_vbo.vbo, node_info);
                 break;
               default:
                 BLI_assert_unreachable();
@@ -1908,9 +2271,12 @@ BLI_NOINLINE static void update_generic_attribute_bmesh(const Object &object,
       exec_mode::grain_size(1));
 }
 
-static gpu::IndexBufPtr create_lines_index_faces(const OffsetIndices<int> faces,
-                                                 const Span<bool> hide_poly,
-                                                 const Span<int> face_indices)
+static void create_lines_index_faces(const OffsetIndices<int> faces,
+                                     const Span<bool> hide_poly,
+                                     const Span<int> face_indices,
+                                     const NodeInfo &node_info,
+                                     const NodeInfo::BufferRange &ibo_info,
+                                     uint32_t *host_data)
 {
   int corners_count = 0;
   for (const int face : face_indices) {
@@ -1919,10 +2285,9 @@ static gpu::IndexBufPtr create_lines_index_faces(const OffsetIndices<int> faces,
     }
     corners_count += faces[face].size();
   }
+  BLI_assert(uint(ibo_info.len) == 2 * corners_count);
 
-  GPUIndexBufBuilder builder;
-  GPU_indexbuf_init(&builder, GPU_PRIM_LINES, corners_count, INT_MAX);
-  MutableSpan<uint2> data = GPU_indexbuf_get_data(&builder).cast<uint2>();
+  MutableSpan<uint2> data = MutableSpan<uint32_t>(host_data, ibo_info.len).cast<uint2>();
 
   int node_corner_offset = 0;
   int line_index = 0;
@@ -1934,26 +2299,49 @@ static gpu::IndexBufPtr create_lines_index_faces(const OffsetIndices<int> faces,
     }
     for (const int i : IndexRange(face_size)) {
       const int next = (i == face_size - 1) ? 0 : i + 1;
-      data[line_index] = uint2(i, next) + node_corner_offset;
+      data[line_index] = uint2(i, next) + node_corner_offset + node_info.vbo.offset;
       line_index++;
     }
 
     node_corner_offset += face_size;
   }
-
-  return gpu::IndexBufPtr(GPU_indexbuf_build_ex(&builder, 0, node_corner_offset, false));
 }
 
-static gpu::IndexBufPtr create_lines_index_bmesh(const Set<BMFace *, 0> &faces,
-                                                 const int visible_faces_num)
+/* NOTE: This is a temporary solution. The index buffers are only needed to offset the vertices
+ * into the shared (per-object) vertex buffers. Once multi draw indirect is used (each draw can
+ * specify its own base vertex) these index buffers can be removed. */
+static void create_tri_index_bmesh(const Set<BMFace *, 0> &faces,
+                                   const NodeInfo &node_info,
+                                   const NodeInfo::BufferRange &ibo_info,
+                                   uint32_t *host_data)
 {
-  GPUIndexBufBuilder builder;
-  GPU_indexbuf_init(&builder, GPU_PRIM_LINES, visible_faces_num * 3, INT_MAX);
+  MutableSpan<uint3> data = MutableSpan<uint32_t>(host_data, ibo_info.len).cast<uint3>();
 
-  MutableSpan<uint2> data = GPU_indexbuf_get_data(&builder).cast<uint2>();
+  int tri_index = 0;
+  int vert_index = node_info.vbo.offset;
+
+  for (const BMFace *face : faces) {
+    if (BM_elem_flag_test(face, BM_ELEM_HIDDEN)) {
+      continue;
+    }
+
+    data[tri_index] = uint3(vert_index, vert_index + 1, vert_index + 2);
+    tri_index++;
+
+    vert_index += 3;
+  }
+}
+
+/* NOTE: Temporary solution, see the note on #create_tri_index_bmesh. */
+static void create_lines_index_bmesh(const Set<BMFace *, 0> &faces,
+                                     const NodeInfo &node_info,
+                                     const NodeInfo::BufferRange &ibo_info,
+                                     uint32_t *host_data)
+{
+  MutableSpan<uint2> data = MutableSpan<uint32_t>(host_data, ibo_info.len).cast<uint2>();
 
   int line_index = 0;
-  int vert_index = 0;
+  int vert_index = node_info.vbo.offset;
 
   for (const BMFace *face : faces) {
     if (BM_elem_flag_test(face, BM_ELEM_HIDDEN)) {
@@ -1969,8 +2357,6 @@ static gpu::IndexBufPtr create_lines_index_bmesh(const Set<BMFace *, 0> &faces,
 
     vert_index += 3;
   }
-
-  return gpu::IndexBufPtr(GPU_indexbuf_build_ex(&builder, 0, visible_faces_num * 3, false));
 }
 
 static int create_tri_index_grids(const Span<int> grid_indices,
@@ -1978,10 +2364,11 @@ static int create_tri_index_grids(const Span<int> grid_indices,
                                   const int gridsize,
                                   const int skip,
                                   const int totgrid,
+                                  const NodeInfo &node_info,
                                   MutableSpan<uint3> data)
 {
   int tri_index = 0;
-  int offset = 0;
+  int offset = node_info.vbo.offset;
   const int grid_vert_len = gridsize * gridsize;
   for (int i = 0; i < totgrid; i++, offset += grid_vert_len) {
     uint v0, v1, v2, v3;
@@ -2017,10 +2404,11 @@ static int create_tri_index_grids_flat_layout(const Span<int> grid_indices,
                                               const int gridsize,
                                               const int skip,
                                               const int totgrid,
+                                              const NodeInfo &node_info,
                                               MutableSpan<uint3> data)
 {
   int tri_index = 0;
-  int offset = 0;
+  int offset = node_info.vbo.offset;
   const int grid_vert_len = square_uint(gridsize - 1) * 4;
   for (int i = 0; i < totgrid; i++, offset += grid_vert_len) {
     const BoundedBitSpan gh = grid_hidden.is_empty() ? BoundedBitSpan() :
@@ -2070,10 +2458,11 @@ static void create_lines_index_grids(const Span<int> grid_indices,
                                      const int gridsize,
                                      const int skip,
                                      const int totgrid,
+                                     const NodeInfo &node_info,
                                      MutableSpan<uint2> data)
 {
   int line_index = 0;
-  int offset = 0;
+  int offset = node_info.vbo.offset;
   const int grid_vert_len = gridsize * gridsize;
   for (int i = 0; i < totgrid; i++, offset += grid_vert_len) {
     uint v0, v1, v2, v3;
@@ -2120,10 +2509,11 @@ static void create_lines_index_grids_flat_layout(const Span<int> grid_indices,
                                                  const int gridsize,
                                                  const int skip,
                                                  const int totgrid,
+                                                 const NodeInfo &node_info,
                                                  MutableSpan<uint2> data)
 {
   int line_index = 0;
-  int offset = 0;
+  int offset = node_info.vbo.offset;
   const int grid_vert_len = square_uint(gridsize - 1) * 4;
   for (int i = 0; i < totgrid; i++, offset += grid_vert_len) {
     bool grid_visible = false;
@@ -2276,10 +2666,46 @@ static BitVector<> calc_use_flat_layout(const Object &object, const OrigMeshData
   return {};
 }
 
-static gpu::IndexBufPtr create_tri_index_mesh(const OffsetIndices<int> faces,
-                                              const Span<int3> corner_tris,
-                                              const Span<bool> hide_poly,
-                                              const bke::pbvh::MeshNode &node)
+/**
+ * \brief Return the number of vertices that a node needs to store in a GPU buffer.
+ */
+static int calc_gpu_vertex_count(const Object &object,
+                                 const bke::pbvh::Tree &pbvh,
+                                 int node_index,
+                                 const BitSpan &use_flat_layout)
+{
+  switch (pbvh.type()) {
+    case bke::pbvh::Type::Mesh: {
+      const bke::pbvh::MeshNode &node = pbvh.nodes<bke::pbvh::MeshNode>()[node_index];
+      return node.corners_num();
+    }
+    case bke::pbvh::Type::Grids: {
+      const bke::pbvh::GridsNode &node = pbvh.nodes<bke::pbvh::GridsNode>()[node_index];
+      const SculptSession &ss = *object.runtime->sculpt_session;
+      const SubdivCCG &subdiv_ccg = *ss.subdiv_ccg;
+      const int verts_per_grid = use_flat_layout[node_index] ?
+                                     square_i(subdiv_ccg.grid_size - 1) * 4 :
+                                     square_i(subdiv_ccg.grid_size);
+      const int verts_num = node.grids().size() * verts_per_grid;
+      return verts_num;
+    }
+    case bke::pbvh::Type::BMesh: {
+      const bke::pbvh::BMeshNode &node = pbvh.nodes<bke::pbvh::BMeshNode>()[node_index];
+      return count_visible_tris_bmesh(node.bm_faces_) * 3;
+    }
+  }
+
+  BLI_assert_unreachable();
+  return 0;
+}
+
+static void create_tri_index_mesh(const OffsetIndices<int> faces,
+                                  const Span<int3> corner_tris,
+                                  const Span<bool> hide_poly,
+                                  const bke::pbvh::MeshNode &node,
+                                  const NodeInfo &node_info,
+                                  const NodeInfo::BufferRange &ibo_info,
+                                  uint32_t *host_data)
 {
   const Span<int> face_indices = node.faces();
   int tris_num = 0;
@@ -2294,10 +2720,9 @@ static gpu::IndexBufPtr create_tri_index_mesh(const OffsetIndices<int> faces,
       tris_num += bke::mesh::face_triangles_num(faces[face].size());
     }
   }
+  BLI_assert(uint(ibo_info.len) == 3 * tris_num);
 
-  GPUIndexBufBuilder builder;
-  GPU_indexbuf_init(&builder, GPU_PRIM_TRIS, tris_num, INT_MAX);
-  MutableSpan<uint3> data = GPU_indexbuf_get_data(&builder).cast<uint3>();
+  MutableSpan<uint3> data = MutableSpan<uint32_t>(host_data, ibo_info.len).cast<uint3>();
 
   int tri_index = 0;
   int node_corner_offset = 0;
@@ -2311,21 +2736,22 @@ static gpu::IndexBufPtr create_tri_index_mesh(const OffsetIndices<int> faces,
       for (int i : IndexRange(3)) {
         const int corner = tri[i];
         const int index_in_face = corner - face.first();
-        data[tri_index][i] = node_corner_offset + index_in_face;
+        data[tri_index][i] = node_corner_offset + index_in_face + node_info.vbo.offset;
       }
       tri_index++;
     }
     node_corner_offset += face.size();
   }
-
-  return gpu::IndexBufPtr(GPU_indexbuf_build_ex(&builder, 0, node_corner_offset, false));
 }
 
-static gpu::IndexBufPtr create_tri_index_grids(const CCGKey &key,
-                                               const BitGroupVector<> &grid_hidden,
-                                               const bool do_coarse,
-                                               const Span<int> grid_indices,
-                                               const bool use_flat_layout)
+static void create_tri_index_grids(const CCGKey &key,
+                                   const BitGroupVector<> &grid_hidden,
+                                   const bool do_coarse,
+                                   const Span<int> grid_indices,
+                                   const bool use_flat_layout,
+                                   const NodeInfo &node_info,
+                                   const NodeInfo::BufferRange &ibo_info,
+                                   uint32_t *host_data)
 {
   int gridsize = key.grid_size;
   int display_gridsize = gridsize;
@@ -2341,35 +2767,32 @@ static gpu::IndexBufPtr create_tri_index_grids(const CCGKey &key,
 
   uint visible_quad_len = bke::pbvh::count_grid_quads(
       grid_hidden, grid_indices, key.grid_size, display_gridsize);
+  UNUSED_VARS_NDEBUG(visible_quad_len);
+  BLI_assert(uint(ibo_info.len) == 2 * visible_quad_len * 3);
 
-  GPUIndexBufBuilder builder;
-  GPU_indexbuf_init(&builder, GPU_PRIM_TRIS, 2 * visible_quad_len, INT_MAX);
-
-  MutableSpan<uint3> data = GPU_indexbuf_get_data(&builder).cast<uint3>();
+  MutableSpan<uint3> data = MutableSpan<uint32_t>(host_data, ibo_info.len).cast<uint3>();
 
   int tri_count;
   if (use_flat_layout) {
     tri_count = create_tri_index_grids_flat_layout(
-        grid_indices, grid_hidden, gridsize, skip, totgrid, data);
+        grid_indices, grid_hidden, gridsize, skip, totgrid, node_info, data);
   }
   else {
-    tri_count = create_tri_index_grids(grid_indices, grid_hidden, gridsize, skip, totgrid, data);
+    tri_count = create_tri_index_grids(
+        grid_indices, grid_hidden, gridsize, skip, totgrid, node_info, data);
   }
-
-  builder.index_len = tri_count * 3;
-  builder.index_min = 0;
-  builder.index_max = 6 * visible_quad_len;
-  builder.uses_restart_indices = false;
-  gpu::IndexBufPtr result = gpu::IndexBufPtr(GPU_indexbuf_calloc());
-  GPU_indexbuf_build_in_place(&builder, result.get());
-  return result;
+  BLI_assert(tri_count * 3 <= uint(ibo_info.len));
+  UNUSED_VARS(tri_count);
 }
 
-static gpu::IndexBufPtr create_lines_index_grids(const CCGKey &key,
-                                                 const BitGroupVector<> &grid_hidden,
-                                                 const bool do_coarse,
-                                                 const Span<int> grid_indices,
-                                                 const bool use_flat_layout)
+static void create_lines_index_grids(const CCGKey &key,
+                                     const BitGroupVector<> &grid_hidden,
+                                     const bool do_coarse,
+                                     const Span<int> grid_indices,
+                                     const bool use_flat_layout,
+                                     const NodeInfo &node_info,
+                                     const NodeInfo::BufferRange &ibo_info,
+                                     uint32_t *host_data)
 {
   int gridsize = key.grid_size;
   int display_gridsize = gridsize;
@@ -2383,11 +2806,12 @@ static gpu::IndexBufPtr create_lines_index_grids(const CCGKey &key,
     skip = 1 << (key.level - display_level - 1);
   }
 
-  GPUIndexBufBuilder builder;
-  GPU_indexbuf_init(
-      &builder, GPU_PRIM_LINES, 2 * totgrid * display_gridsize * (display_gridsize - 1), INT_MAX);
-
-  MutableSpan<uint2> data = GPU_indexbuf_get_data(&builder).cast<uint2>();
+  /* TODO: this needs to be fixed in main as well. there was an under allocation that could lead to
+   * artifacts. */
+  const int quads_per_axis = (gridsize - 1) / skip;
+  UNUSED_VARS_NDEBUG(quads_per_axis);
+  BLI_assert(uint(ibo_info.len) == 4 * totgrid * quads_per_axis * (quads_per_axis + 1));
+  MutableSpan<uint2> data = MutableSpan<uint32_t>(host_data, ibo_info.len).cast<uint2>();
   /* The buffer might contain hidden elements which are not initialized but still accounted. We
    * don't count them to skip from allocation, so must fill that gaps by 0 to hide redundant edges.
    */
@@ -2395,15 +2819,12 @@ static gpu::IndexBufPtr create_lines_index_grids(const CCGKey &key,
 
   if (use_flat_layout) {
     create_lines_index_grids_flat_layout(
-        grid_indices, display_gridsize, grid_hidden, gridsize, skip, totgrid, data);
+        grid_indices, display_gridsize, grid_hidden, gridsize, skip, totgrid, node_info, data);
   }
   else {
     create_lines_index_grids(
-        grid_indices, display_gridsize, grid_hidden, gridsize, skip, totgrid, data);
+        grid_indices, display_gridsize, grid_hidden, gridsize, skip, totgrid, node_info, data);
   }
-
-  return gpu::IndexBufPtr(GPU_indexbuf_build_ex(
-      &builder, 0, 2 * totgrid * display_gridsize * (display_gridsize - 1), false));
 }
 
 Span<gpu::IndexBufPtr> DrawCacheImpl::ensure_lines_indices(const Object &object,
@@ -2412,12 +2833,30 @@ Span<gpu::IndexBufPtr> DrawCacheImpl::ensure_lines_indices(const Object &object,
                                                            const bool coarse)
 {
   const bke::pbvh::Tree &pbvh = *bke::object::pbvh_get(object);
-  Vector<gpu::IndexBufPtr> &ibos = coarse ? lines_ibos_coarse_ : lines_ibos_;
+  IBOFamily &ibo_family = coarse ? ibo_lines_coarse_ : ibo_lines_;
+  Vector<gpu::IndexBufPtr> &ibos = ibo_family.ibos;
+  gpu::IndexBuf &ibo_shared = *ibo_family.ibo;
   ibos.resize(pbvh.nodes_num());
 
   IndexMaskMemory memory;
   const IndexMask nodes_to_calculate = IndexMask::from_predicate(
-      node_mask, memory, [&](const int i) { return !ibos[i]; });
+      node_mask, memory, [&](const int i) {
+        return !ibos[i] && (coarse ? node_infos_[i].ibo_lines_coarse : node_infos_[i].ibo_lines)
+                               .is_space_assigned;
+      });
+
+  /* Build offsets for only the nodes being calculated, so the scratch buffer is sized
+   * to just the sum of the needed lengths. */
+  Array<int64_t> scratch_offsets(nodes_to_calculate.size());
+  int64_t offset = 0;
+  nodes_to_calculate.foreach_index([&](const int i, const int64_t pos) {
+    const NodeInfo::BufferRange &src = coarse ? node_infos_[i].ibo_lines_coarse :
+                                                node_infos_[i].ibo_lines;
+    scratch_offsets[pos] = offset;
+    offset += src.len;
+  });
+
+  Array<uint32_t> scratch_buffer(offset);
 
   switch (pbvh.type()) {
     case bke::pbvh::Type::Mesh: {
@@ -2427,34 +2866,78 @@ Span<gpu::IndexBufPtr> DrawCacheImpl::ensure_lines_indices(const Object &object,
       const bke::AttributeAccessor attributes = orig_mesh_data.attributes;
       const VArraySpan hide_poly = *attributes.lookup<bool>(".hide_poly", bke::AttrDomain::Face);
       nodes_to_calculate.foreach_index(
-          [&](const int i) {
-            ibos[i] = create_lines_index_faces(faces, hide_poly, nodes[i].faces());
+          [&](const int i, const int64_t pos) {
+            const NodeInfo::BufferRange ibo_info{false, 0, node_infos_[i].ibo_lines.len};
+            create_lines_index_faces(faces,
+                                     hide_poly,
+                                     nodes[i].faces(),
+                                     node_infos_[i],
+                                     ibo_info,
+                                     scratch_buffer.data() + scratch_offsets[pos]);
           },
           exec_mode::grain_size(1));
+      nodes_to_calculate.foreach_index([&](const int i, const int64_t pos) {
+        const int64_t ibo_len = node_infos_[i].ibo_lines.len;
+        GPU_indexbuf_update_sub(&ibo_shared,
+                                uint(node_infos_[i].ibo_lines.offset) * sizeof(uint32_t),
+                                uint(ibo_len) * sizeof(uint32_t),
+                                scratch_buffer.data() + scratch_offsets[pos]);
+        ibos[i] = gpu::IndexBufPtr(GPU_indexbuf_create_subrange(
+            &ibo_shared, uint(node_infos_[i].ibo_lines.offset), uint(ibo_len)));
+      });
       break;
     }
     case bke::pbvh::Type::Grids: {
       const Span<bke::pbvh::GridsNode> nodes = pbvh.nodes<bke::pbvh::GridsNode>();
       nodes_to_calculate.foreach_index(
-          [&](const int i) {
+          [&](const int i, const int64_t pos) {
             const SubdivCCG &subdiv_ccg = *object.runtime->sculpt_session->subdiv_ccg;
             const CCGKey key = BKE_subdiv_ccg_key_top_level(subdiv_ccg);
-            ibos[i] = create_lines_index_grids(
-                key, subdiv_ccg.grid_hidden, coarse, nodes[i].grids(), use_flat_layout_[i]);
+            const NodeInfo::BufferRange &src = coarse ? node_infos_[i].ibo_lines_coarse :
+                                                        node_infos_[i].ibo_lines;
+            const NodeInfo::BufferRange ibo_info{false, 0, src.len};
+            create_lines_index_grids(key,
+                                     subdiv_ccg.grid_hidden,
+                                     coarse,
+                                     nodes[i].grids(),
+                                     use_flat_layout_[i],
+                                     node_infos_[i],
+                                     ibo_info,
+                                     scratch_buffer.data() + scratch_offsets[pos]);
           },
           exec_mode::grain_size(1));
+      nodes_to_calculate.foreach_index([&](const int i, const int64_t pos) {
+        const NodeInfo::BufferRange &src = coarse ? node_infos_[i].ibo_lines_coarse :
+                                                    node_infos_[i].ibo_lines;
+        GPU_indexbuf_update_sub(&ibo_shared,
+                                uint(src.offset) * sizeof(uint32_t),
+                                uint(src.len) * sizeof(uint32_t),
+                                scratch_buffer.data() + scratch_offsets[pos]);
+        ibos[i] = gpu::IndexBufPtr(
+            GPU_indexbuf_create_subrange(&ibo_shared, uint(src.offset), uint(src.len)));
+      });
       break;
     }
     case bke::pbvh::Type::BMesh: {
       const Span<bke::pbvh::BMeshNode> nodes = pbvh.nodes<bke::pbvh::BMeshNode>();
       nodes_to_calculate.foreach_index(
-          [&](const int i) {
+          [&](const int i, const int64_t pos) {
             const Set<BMFace *, 0> &faces = BKE_pbvh_bmesh_node_faces(
                 &const_cast<bke::pbvh::BMeshNode &>(nodes[i]));
-            const int visible_faces_num = count_visible_tris_bmesh(faces);
-            ibos[i] = create_lines_index_bmesh(faces, visible_faces_num);
+            const NodeInfo::BufferRange ibo_info{false, 0, node_infos_[i].ibo_lines.len};
+            create_lines_index_bmesh(
+                faces, node_infos_[i], ibo_info, scratch_buffer.data() + scratch_offsets[pos]);
           },
           exec_mode::grain_size(1));
+      nodes_to_calculate.foreach_index([&](const int i, const int64_t pos) {
+        const int64_t ibo_len = node_infos_[i].ibo_lines.len;
+        GPU_indexbuf_update_sub(&ibo_shared,
+                                uint(node_infos_[i].ibo_lines.offset) * sizeof(uint32_t),
+                                uint(ibo_len) * sizeof(uint32_t),
+                                scratch_buffer.data() + scratch_offsets[pos]);
+        ibos[i] = gpu::IndexBufPtr(GPU_indexbuf_create_subrange(
+            &ibo_shared, uint(node_infos_[i].ibo_lines.offset), uint(ibo_len)));
+      });
       break;
     }
   }
@@ -2473,58 +2956,54 @@ BitSpan DrawCacheImpl::ensure_use_flat_layout(const Object &object,
   return use_flat_layout_;
 }
 
-BLI_NOINLINE static void flush_vbo_data(const Span<gpu::VertBufPtr> vbos,
+BLI_NOINLINE static void flush_vbo_data(const DrawCacheImpl &draw_cache,
+                                        DrawCacheImpl::AttributeData &attr_vbo,
                                         const IndexMask &node_mask)
 {
   PRF_scope(ProfileCategory::Draw);
-  node_mask.foreach_index([&](const int i) { GPU_vertbuf_use(vbos[i].get()); });
+  node_mask.foreach_index([&](const int i) {
+    const NodeInfo &node_info = draw_cache.get_node_infos()[i];
+    attr_vbo.update(node_info);
+  });
 }
 
-Span<gpu::VertBufPtr> DrawCacheImpl::ensure_attribute_data(const Object &object,
-                                                           const OrigMeshData &orig_mesh_data,
-                                                           const AttributeRequest &attr,
-                                                           const IndexMask &node_mask)
+DrawCacheImpl::AttributeData &DrawCacheImpl::ensure_attribute_data(
+    const Object &object,
+    const OrigMeshData &orig_mesh_data,
+    const AttributeRequest &attr,
+    const IndexMask &node_mask)
 {
   PRF_scope(ProfileCategory::Draw);
   const bke::pbvh::Tree &pbvh = *bke::object::pbvh_get(object);
-  AttributeData &data = attribute_vbos_.lookup_or_add_default(attr);
-  Vector<gpu::VertBufPtr> &vbos = data.vbos;
-  vbos.resize(pbvh.nodes_num());
+  AttributeData &attr_vbo = attribute_vbos_.lookup_or_add_default(attr);
+  attr_vbo.ensure_nodes_capacity(pbvh.nodes_num() + 1);
 
-  /* The nodes we recompute here are a combination of:
-   *   1. null VBOs, which correspond to nodes that either haven't been drawn before, or have been
-   *      cleared completely by #free_nodes_with_changed_topology.
-   *   2. Nodes that have been tagged dirty as their values are changed.
-   * We also only process a subset of the nodes referenced by the caller, for example to only
-   * recompute visible nodes. */
+  /* Compute mask that needs to be recomputed. */
   IndexMaskMemory memory;
-  const IndexMask empty_mask = IndexMask::from_predicate(
-      node_mask, memory, [&](const int i) { return !vbos[i]; });
   const IndexMask dirty_mask = IndexMask::from_bits(
-      node_mask.slice_content(data.dirty_nodes.index_range()), data.dirty_nodes, memory);
-  const IndexMask mask = IndexMask::from_union(empty_mask, dirty_mask, memory);
+      node_mask.slice_content(attr_vbo.dirty_nodes.index_range()), attr_vbo.dirty_nodes, memory);
 
   switch (pbvh.type()) {
     case bke::pbvh::Type::Mesh: {
       if (const CustomRequest *request_type = std::get_if<CustomRequest>(&attr)) {
         switch (*request_type) {
           case CustomRequest::Position:
-            update_positions_mesh(object, mask, vbos);
+            update_positions_mesh(object, *this, attr_vbo, dirty_mask);
             break;
           case CustomRequest::Normal:
-            update_normals_mesh(object, mask, vbos);
+            update_normals_mesh(object, *this, attr_vbo, dirty_mask);
             break;
           case CustomRequest::Mask:
-            update_masks_mesh(object, orig_mesh_data, mask, vbos);
+            update_masks_mesh(object, orig_mesh_data, *this, attr_vbo, dirty_mask);
             break;
           case CustomRequest::FaceSet:
-            update_face_sets_mesh(object, orig_mesh_data, mask, vbos);
+            update_face_sets_mesh(object, orig_mesh_data, *this, attr_vbo, dirty_mask);
             break;
         }
       }
       else {
         update_generic_attribute_mesh(
-            object, orig_mesh_data, mask, std::get<GenericRequest>(attr), vbos);
+            object, orig_mesh_data, *this, attr_vbo, std::get<GenericRequest>(attr), dirty_mask);
       }
       break;
     }
@@ -2532,22 +3011,29 @@ Span<gpu::VertBufPtr> DrawCacheImpl::ensure_attribute_data(const Object &object,
       if (const CustomRequest *request_type = std::get_if<CustomRequest>(&attr)) {
         switch (*request_type) {
           case CustomRequest::Position:
-            fill_positions_grids(object, use_flat_layout_, mask, vbos);
+            update_positions_grids(object, *this, attr_vbo, use_flat_layout_, dirty_mask);
             break;
           case CustomRequest::Normal:
-            fill_normals_grids(object, orig_mesh_data, use_flat_layout_, mask, vbos);
+            update_normals_grids(
+                object, orig_mesh_data, *this, attr_vbo, use_flat_layout_, dirty_mask);
             break;
           case CustomRequest::Mask:
-            fill_masks_grids(object, use_flat_layout_, mask, vbos);
+            update_masks_grids(object, *this, attr_vbo, use_flat_layout_, dirty_mask);
             break;
           case CustomRequest::FaceSet:
-            fill_face_sets_grids(object, orig_mesh_data, use_flat_layout_, mask, vbos);
+            update_face_sets_grids(
+                object, orig_mesh_data, *this, attr_vbo, use_flat_layout_, dirty_mask);
             break;
         }
       }
       else {
-        update_generic_attribute_grids(
-            object, orig_mesh_data, use_flat_layout_, mask, std::get<GenericRequest>(attr), vbos);
+        update_generic_attribute_grids(object,
+                                       orig_mesh_data,
+                                       *this,
+                                       attr_vbo,
+                                       std::get<GenericRequest>(attr),
+                                       use_flat_layout_,
+                                       dirty_mask);
       }
       break;
     }
@@ -2555,22 +3041,22 @@ Span<gpu::VertBufPtr> DrawCacheImpl::ensure_attribute_data(const Object &object,
       if (const CustomRequest *request_type = std::get_if<CustomRequest>(&attr)) {
         switch (*request_type) {
           case CustomRequest::Position:
-            update_positions_bmesh(object, mask, vbos);
+            update_positions_bmesh(object, *this, attr_vbo, dirty_mask);
             break;
           case CustomRequest::Normal:
-            update_normals_bmesh(object, mask, vbos);
+            update_normals_bmesh(object, *this, attr_vbo, dirty_mask);
             break;
           case CustomRequest::Mask:
-            update_masks_bmesh(object, mask, vbos);
+            update_masks_bmesh(object, *this, attr_vbo, dirty_mask);
             break;
           case CustomRequest::FaceSet:
-            update_face_sets_bmesh(object, orig_mesh_data, mask, vbos);
+            update_face_sets_bmesh(object, orig_mesh_data, *this, attr_vbo, dirty_mask);
             break;
         }
       }
       else {
         update_generic_attribute_bmesh(
-            object, orig_mesh_data, mask, std::get<GenericRequest>(attr), vbos);
+            object, orig_mesh_data, *this, attr_vbo, std::get<GenericRequest>(attr), dirty_mask);
       }
       break;
     }
@@ -2578,11 +3064,11 @@ Span<gpu::VertBufPtr> DrawCacheImpl::ensure_attribute_data(const Object &object,
 
   /* TODO: It would be good to deallocate the bit vector if all of the bits have been reset to
    * avoid unnecessary processing in subsequent redraws. */
-  dirty_mask.foreach_index_optimized<int>([&](const int i) { data.dirty_nodes[i].reset(); });
+  dirty_mask.foreach_index_optimized<int>([&](const int i) { attr_vbo.dirty_nodes[i].reset(); });
 
-  flush_vbo_data(vbos, mask);
+  flush_vbo_data(*this, attr_vbo, dirty_mask);
 
-  return vbos;
+  return attr_vbo;
 }
 
 Span<gpu::IndexBufPtr> DrawCacheImpl::ensure_tri_indices(const Object &object,
@@ -2596,7 +3082,8 @@ Span<gpu::IndexBufPtr> DrawCacheImpl::ensure_tri_indices(const Object &object,
     case bke::pbvh::Type::Mesh: {
       const Span<bke::pbvh::MeshNode> nodes = pbvh.nodes<bke::pbvh::MeshNode>();
 
-      Vector<gpu::IndexBufPtr> &ibos = tris_ibos_;
+      Vector<gpu::IndexBufPtr> &ibos = ibo_tris_.ibos;
+      gpu::IndexBuf &ibo_shared = *ibo_tris_.ibo;
       ibos.resize(nodes.size());
 
       /* Whenever a node's visible triangle count has changed the index buffers are freed, so we
@@ -2604,7 +3091,20 @@ Span<gpu::IndexBufPtr> DrawCacheImpl::ensure_tri_indices(const Object &object,
        * distribution between threads. */
       IndexMaskMemory memory;
       const IndexMask nodes_to_calculate = IndexMask::from_predicate(
-          node_mask, memory, [&](const int i) { return !ibos[i]; });
+          node_mask, memory, [&](const int i) {
+            return !ibos[i] && node_infos_[i].ibo_tris.is_space_assigned;
+          });
+
+      /* Build offsets for only the nodes being calculated, so the scratch buffer is sized
+       * to just the sum of the needed lengths. */
+      Array<int64_t> scratch_offsets(nodes_to_calculate.size());
+      int64_t offset = 0;
+      nodes_to_calculate.foreach_index([&](const int i, const int64_t pos) {
+        scratch_offsets[pos] = offset;
+        offset += node_infos_[i].ibo_tris.len;
+      });
+
+      Array<uint32_t> scratch_buffer(offset);
 
       const Mesh &mesh = DRW_object_get_data_for_drawing<Mesh>(object);
       const OffsetIndices<int> faces = mesh.faces();
@@ -2612,10 +3112,27 @@ Span<gpu::IndexBufPtr> DrawCacheImpl::ensure_tri_indices(const Object &object,
       const bke::AttributeAccessor attributes = orig_mesh_data.attributes;
       const VArraySpan hide_poly = *attributes.lookup<bool>(".hide_poly", bke::AttrDomain::Face);
       nodes_to_calculate.foreach_index(
-          [&](const int i) {
-            ibos[i] = create_tri_index_mesh(faces, corner_tris, hide_poly, nodes[i]);
+          [&](const int i, const int64_t pos) {
+            const NodeInfo &node_info = node_infos_[i];
+            const NodeInfo::BufferRange ibo_info{false, 0, node_infos_[i].ibo_tris.len};
+            create_tri_index_mesh(faces,
+                                  corner_tris,
+                                  hide_poly,
+                                  nodes[i],
+                                  node_info,
+                                  ibo_info,
+                                  scratch_buffer.data() + scratch_offsets[pos]);
           },
           exec_mode::grain_size(1));
+      nodes_to_calculate.foreach_index([&](const int i, const int64_t pos) {
+        const int64_t ibo_len = node_infos_[i].ibo_tris.len;
+        GPU_indexbuf_update_sub(&ibo_shared,
+                                uint(node_infos_[i].ibo_tris.offset) * sizeof(uint32_t),
+                                uint(ibo_len) * sizeof(uint32_t),
+                                scratch_buffer.data() + scratch_offsets[pos]);
+        ibos[i] = gpu::IndexBufPtr(GPU_indexbuf_create_subrange(
+            &ibo_shared, uint(node_infos_[i].ibo_tris.offset), uint(ibo_len)));
+      });
       return ibos;
     }
     case bke::pbvh::Type::Grids: {
@@ -2628,7 +3145,9 @@ Span<gpu::IndexBufPtr> DrawCacheImpl::ensure_tri_indices(const Object &object,
        * should avoid creating them in that case. */
       const Span<bke::pbvh::GridsNode> nodes = pbvh.nodes<bke::pbvh::GridsNode>();
 
-      Vector<gpu::IndexBufPtr> &ibos = coarse ? tris_ibos_coarse_ : tris_ibos_;
+      IBOFamily &ibo_family = coarse ? ibo_tris_coarse_ : ibo_tris_;
+      Vector<gpu::IndexBufPtr> &ibos = ibo_family.ibos;
+      gpu::IndexBuf &ibo_shared = *ibo_family.ibo;
       ibos.resize(nodes.size());
 
       /* Whenever a node's visible triangle count has changed the index buffers are freed, so we
@@ -2636,24 +3155,127 @@ Span<gpu::IndexBufPtr> DrawCacheImpl::ensure_tri_indices(const Object &object,
        * distribution between threads. */
       IndexMaskMemory memory;
       const IndexMask nodes_to_calculate = IndexMask::from_predicate(
-          node_mask, memory, [&](const int i) { return !ibos[i]; });
+          node_mask, memory, [&](const int i) {
+            return !ibos[i] && (coarse ? node_infos_[i].ibo_tris_coarse : node_infos_[i].ibo_tris)
+                                   .is_space_assigned;
+          });
+
+      /* Build offsets for only the nodes being calculated, so the scratch buffer is sized
+       * to just the sum of the needed lengths. */
+      Array<int64_t> scratch_offsets(nodes_to_calculate.size());
+      int64_t offset = 0;
+      nodes_to_calculate.foreach_index([&](const int i, const int64_t pos) {
+        const NodeInfo::BufferRange &src = coarse ? node_infos_[i].ibo_tris_coarse :
+                                                    node_infos_[i].ibo_tris;
+        scratch_offsets[pos] = offset;
+        offset += src.len;
+      });
+
+      Array<uint32_t> scratch_buffer(offset);
 
       const SubdivCCG &subdiv_ccg = *object.runtime->sculpt_session->subdiv_ccg;
       const CCGKey key = BKE_subdiv_ccg_key_top_level(subdiv_ccg);
 
       nodes_to_calculate.foreach_index(
-          [&](const int i) {
-            ibos[i] = create_tri_index_grids(
-                key, subdiv_ccg.grid_hidden, coarse, nodes[i].grids(), use_flat_layout_[i]);
+          [&](const int i, const int64_t pos) {
+            const NodeInfo::BufferRange &src = coarse ? node_infos_[i].ibo_tris_coarse :
+                                                        node_infos_[i].ibo_tris;
+            const NodeInfo::BufferRange ibo_info{false, 0, src.len};
+            create_tri_index_grids(key,
+                                   subdiv_ccg.grid_hidden,
+                                   coarse,
+                                   nodes[i].grids(),
+                                   use_flat_layout_[i],
+                                   node_infos_[i],
+                                   ibo_info,
+                                   scratch_buffer.data() + scratch_offsets[pos]);
           },
           exec_mode::grain_size(1));
+      nodes_to_calculate.foreach_index([&](const int i, const int64_t pos) {
+        const NodeInfo::BufferRange &src = coarse ? node_infos_[i].ibo_tris_coarse :
+                                                    node_infos_[i].ibo_tris;
+        GPU_indexbuf_update_sub(&ibo_shared,
+                                uint(src.offset) * sizeof(uint32_t),
+                                uint(src.len) * sizeof(uint32_t),
+                                scratch_buffer.data() + scratch_offsets[pos]);
+        ibos[i] = gpu::IndexBufPtr(
+            GPU_indexbuf_create_subrange(&ibo_shared, uint(src.offset), uint(src.len)));
+      });
       return ibos;
     }
-    case bke::pbvh::Type::BMesh:
-      return {};
+    case bke::pbvh::Type::BMesh: {
+      const Span<bke::pbvh::BMeshNode> nodes = pbvh.nodes<bke::pbvh::BMeshNode>();
+
+      Vector<gpu::IndexBufPtr> &ibos = ibo_tris_.ibos;
+      gpu::IndexBuf &ibo_shared = *ibo_tris_.ibo;
+      ibos.resize(nodes.size());
+
+      /* Whenever a node's visible triangle count has changed the index buffers are freed, so we
+       * only recalculate null IBOs here. A new mask is recalculated for more even task
+       * distribution between threads. */
+      IndexMaskMemory memory;
+      const IndexMask nodes_to_calculate = IndexMask::from_predicate(
+          node_mask, memory, [&](const int i) {
+            return !ibos[i] && node_infos_[i].ibo_tris.is_space_assigned;
+          });
+
+      /* Build offsets for only the nodes being calculated, so the scratch buffer is sized
+       * to just the sum of the needed lengths. */
+      Array<int64_t> scratch_offsets(nodes_to_calculate.size());
+      int64_t offset = 0;
+      nodes_to_calculate.foreach_index([&](const int i, const int64_t pos) {
+        scratch_offsets[pos] = offset;
+        offset += node_infos_[i].ibo_tris.len;
+      });
+
+      Array<uint32_t> scratch_buffer(offset);
+
+      nodes_to_calculate.foreach_index(
+          [&](const int i, const int64_t pos) {
+            const Set<BMFace *, 0> &faces = BKE_pbvh_bmesh_node_faces(
+                &const_cast<bke::pbvh::BMeshNode &>(nodes[i]));
+            const NodeInfo::BufferRange ibo_info{false, 0, node_infos_[i].ibo_tris.len};
+            create_tri_index_bmesh(
+                faces, node_infos_[i], ibo_info, scratch_buffer.data() + scratch_offsets[pos]);
+          },
+          exec_mode::grain_size(1));
+      nodes_to_calculate.foreach_index([&](const int i, const int64_t pos) {
+        const int64_t ibo_len = node_infos_[i].ibo_tris.len;
+        GPU_indexbuf_update_sub(&ibo_shared,
+                                uint(node_infos_[i].ibo_tris.offset) * sizeof(uint32_t),
+                                uint(ibo_len) * sizeof(uint32_t),
+                                scratch_buffer.data() + scratch_offsets[pos]);
+        ibos[i] = gpu::IndexBufPtr(GPU_indexbuf_create_subrange(
+            &ibo_shared, uint(node_infos_[i].ibo_tris.offset), uint(ibo_len)));
+      });
+      return ibos;
+    }
   }
   BLI_assert_unreachable();
   return {};
+}
+
+void DrawCacheImpl::IBOFamily::ensure_capacity()
+{
+  const uint32_t needed_len = uint32_t(space.size());
+  if (ibo && ibo->index_len_get() >= needed_len) {
+    return;
+  }
+  /* Release all subranges. The old shared buffer is freed once its last subrange is released and
+   * the cached batches are reconfigured in place to the new subranges (see #ensure_tris_batches).
+   * They are only reconfigured before any of the passes that reference them are submitted, so
+   * these subranges can be released right away. */
+  /* TODO: Index buffer regeneration can be reduced by implementing IndexBuf::copy_sub. Similar to
+   * what we've done for vertex buffers. This seems a missing part in this PR and results in
+   * recalculating each index buffer when index buffers don't fit anymore. Would only effect bmesh.
+   */
+  for (gpu::IndexBufPtr &ibo_sub : ibos) {
+    ibo_sub.reset();
+  }
+  ibo = gpu::IndexBufPtr(GPU_indexbuf_build_on_device(std::max(needed_len, 1u)));
+  /* Device memory must exist before any subrange data is uploaded with #GPU_indexbuf_update_sub.
+   */
+  GPU_indexbuf_use(ibo.get());
 }
 
 Span<gpu::Batch *> DrawCacheImpl::ensure_tris_batches(const Object &object,
@@ -2665,8 +3287,10 @@ Span<gpu::Batch *> DrawCacheImpl::ensure_tris_batches(const Object &object,
   const OrigMeshData orig_mesh_data{*id_cast<const Mesh *>(object_orig.data)};
   const bke::pbvh::Tree &pbvh = *bke::object::pbvh_get(object);
 
-  this->ensure_use_flat_layout(object, orig_mesh_data);
   this->free_nodes_with_changed_topology(pbvh);
+
+  const bool coarse = request.use_coarse_grids;
+  (coarse ? ibo_tris_coarse_ : ibo_tris_).ensure_capacity();
 
   const Span<gpu::IndexBufPtr> ibos = this->ensure_tri_indices(
       object, orig_mesh_data, nodes_to_update, request.use_coarse_grids);
@@ -2677,28 +3301,38 @@ Span<gpu::Batch *> DrawCacheImpl::ensure_tris_batches(const Object &object,
 
   /* Collect VBO spans in a different loop because #ensure_attribute_data invalidates the allocated
    * arrays when its map is changed. */
-  Vector<Span<gpu::VertBufPtr>> attr_vbos;
+  Vector<gpu::VertBuf *> attr_vbos;
   for (const AttributeRequest &attr : request.attributes) {
     if (const AttributeData *attr_data = attribute_vbos_.lookup_ptr(attr)) {
-      attr_vbos.append(attr_data->vbos);
+      attr_vbos.append(attr_data->vbo.get());
     }
   }
 
   /* Except for the first iteration of the draw loop, we only need to rebuild batches for nodes
-   * with changed topology (visible triangle count). */
-  Vector<gpu::Batch *> &batches = tris_batches_.lookup_or_add_default(request);
+   * with changed topology (visible triangle count). Rebuilds reconfigure the batch in place (the
+   * passes that draw them cache the raw batch pointers until submit, so freeing them mid-frame
+   * would leave those passes with dangling pointers). */
+  BatchCache &batch_cache = tris_batches_.lookup_or_add_default(request);
+  Vector<gpu::Batch *> &batches = batch_cache.batches;
   batches.resize(pbvh.nodes_num(), nullptr);
   nodes_to_update.foreach_index(
       [&](const int i) {
-        if (!batches[i]) {
-          batches[i] = GPU_batch_create(
-              GPU_PRIM_TRIS, nullptr, ibos.is_empty() ? nullptr : ibos[i].get());
-          for (const Span<gpu::VertBufPtr> vbos : attr_vbos) {
-            GPU_batch_vertbuf_add(batches[i], vbos[i].get(), false);
+        if (!batches[i] || batch_cache.generation != vbo_generation_ ||
+            batches[i]->elem_() != (ibos.is_empty() ? nullptr : ibos[i].get()))
+        {
+          if (!batches[i]) {
+            batches[i] = GPU_batch_calloc();
+          }
+          GPU_batch_clear(batches[i]);
+          GPU_batch_init(
+              batches[i], GPU_PRIM_TRIS, nullptr, ibos.is_empty() ? nullptr : ibos[i].get());
+          for (gpu::VertBuf *vbo : attr_vbos) {
+            GPU_batch_vertbuf_add(batches[i], vbo, false);
           }
         }
       },
       exec_mode::grain_size(64));
+  batch_cache.generation = vbo_generation_;
 
   return batches;
 }
@@ -2712,27 +3346,35 @@ Span<gpu::Batch *> DrawCacheImpl::ensure_lines_batches(const Object &object,
   const OrigMeshData orig_mesh_data(*id_cast<const Mesh *>(object_orig.data));
   const bke::pbvh::Tree &pbvh = *bke::object::pbvh_get(object);
 
-  this->ensure_use_flat_layout(object, orig_mesh_data);
   this->free_nodes_with_changed_topology(pbvh);
 
-  const Span<gpu::VertBufPtr> position = this->ensure_attribute_data(
+  const bool coarse = request.use_coarse_grids;
+  (coarse ? ibo_lines_coarse_ : ibo_lines_).ensure_capacity();
+
+  const AttributeData &position = this->ensure_attribute_data(
       object, orig_mesh_data, CustomRequest::Position, nodes_to_update);
   const Span<gpu::IndexBufPtr> lines = this->ensure_lines_indices(
       object, orig_mesh_data, nodes_to_update, request.use_coarse_grids);
 
-  /* Except for the first iteration of the draw loop, we only need to rebuild batches for nodes
-   * with changed topology (visible triangle count). */
-  Vector<gpu::Batch *> &batches = request.use_coarse_grids ? lines_batches_coarse_ :
-                                                             lines_batches_;
+  /* See the note on #ensure_tris_batches for why the batches are reconfigured in place. */
+  BatchCache &batch_cache = request.use_coarse_grids ? lines_batches_coarse_ : lines_batches_;
+  Vector<gpu::Batch *> &batches = batch_cache.batches;
   batches.resize(pbvh.nodes_num(), nullptr);
   nodes_to_update.foreach_index(
       [&](const int i) {
-        if (!batches[i]) {
-          batches[i] = GPU_batch_create(GPU_PRIM_LINES, nullptr, lines[i].get());
-          GPU_batch_vertbuf_add(batches[i], position[i].get(), false);
+        if (!batches[i] || batch_cache.generation != vbo_generation_ ||
+            batches[i]->elem_() != lines[i].get())
+        {
+          if (!batches[i]) {
+            batches[i] = GPU_batch_calloc();
+          }
+          GPU_batch_clear(batches[i]);
+          GPU_batch_init(batches[i], GPU_PRIM_LINES, nullptr, lines[i].get());
+          GPU_batch_vertbuf_add(batches[i], position.vbo.get(), false);
         }
       },
       exec_mode::grain_size(64));
+  batch_cache.generation = vbo_generation_;
 
   return batches;
 }
@@ -2748,6 +3390,153 @@ Span<int> DrawCacheImpl::ensure_material_indices(const Object &object)
     material_indices_ = calc_material_indices(object, orig_mesh_data);
   }
   return material_indices_;
+}
+
+static bool update_node_buffer_range(NodeInfo::BufferRange &range,
+                                     GPUBufferSpace &space,
+                                     const int64_t new_len)
+{
+  bool changed = false;
+  if (range.len != new_len) {
+    if (range.is_space_assigned) {
+      space.unassign(range);
+      changed = true;
+    }
+    range.offset = -1;
+    range.len = new_len;
+    range.is_space_assigned = false;
+  }
+  return changed;
+}
+
+static bool update_node_buffer_space(NodeInfo &node_info,
+                                     const int64_t vert_len,
+                                     GPUBufferSpace &vbo_space,
+                                     const NodeIndexCounts &counts,
+                                     GPUBufferSpace &ibo_lines_space,
+                                     GPUBufferSpace &ibo_lines_coarse_space,
+                                     GPUBufferSpace &ibo_tris_space,
+                                     GPUBufferSpace &ibo_tris_coarse_space)
+{
+  bool changed = false;
+  changed |= update_node_buffer_range(node_info.vbo, vbo_space, vert_len);
+  changed |= update_node_buffer_range(node_info.ibo_lines, ibo_lines_space, counts.lines);
+  changed |= update_node_buffer_range(
+      node_info.ibo_lines_coarse, ibo_lines_coarse_space, counts.lines_coarse);
+  changed |= update_node_buffer_range(node_info.ibo_tris, ibo_tris_space, counts.tris);
+  changed |= update_node_buffer_range(
+      node_info.ibo_tris_coarse, ibo_tris_coarse_space, counts.tris_coarse);
+  return changed;
+}
+
+Span<NodeInfo> DrawCacheImpl::ensure_node_infos(const Object &object,
+                                                const IndexMask &nodes_to_update)
+{
+  PRF_scope(ProfileCategory::Draw);
+  if (nodes_to_update.is_empty()) {
+    return node_infos_;
+  }
+
+  /* Ensure that the layout is known for each node. */
+  const Object &object_orig = *DEG_get_original(&object);
+  const OrigMeshData orig_mesh_data{*id_cast<const Mesh *>(object_orig.data)};
+  const bke::pbvh::Tree &pbvh = *bke::object::pbvh_get(object);
+  const int64_t nodes_num = pbvh.nodes_num();
+  BitSpan use_flat_layout = this->ensure_use_flat_layout(object, orig_mesh_data);
+
+  /* Make sure that all the given nodes have a valid location. */
+  /* - Ensure enough space to store max node index. */
+  if (node_infos_.size() < nodes_num) {
+    node_infos_.resize(nodes_num);
+  }
+
+  /* - Free nodes that require different space inside the GPU buffers. */
+  dirty_topology_.resize(nodes_num);
+  nodes_to_update.foreach_index([&](const int node_index) {
+    NodeInfo &node_info = node_infos_[node_index];
+
+    if (!node_info.is_dirty) {
+      return;
+    }
+    node_info.is_dirty = false;
+
+    const NodeIndexCounts counts = count_node_indices(object, pbvh, orig_mesh_data, node_index);
+    const int64_t vert_len = (pbvh.type() == bke::pbvh::Type::BMesh) ?
+                                 int64_t(counts.tris) :
+                                 calc_gpu_vertex_count(object, pbvh, node_index, use_flat_layout);
+
+    if (update_node_buffer_space(node_info,
+                                 vert_len,
+                                 vbo_space_,
+                                 counts,
+                                 ibo_lines_.space,
+                                 ibo_lines_coarse_.space,
+                                 ibo_tris_.space,
+                                 ibo_tris_coarse_.space))
+    {
+      dirty_topology_[node_index].set();
+    }
+  });
+
+  vbo_space_.optimize();
+  ibo_lines_.space.optimize();
+  ibo_lines_coarse_.space.optimize();
+  ibo_tris_.space.optimize();
+  ibo_tris_coarse_.space.optimize();
+
+  /* Assign space for nodes that don't have any assigned space. */
+  nodes_to_update.foreach_index([&](const int node_index) {
+    NodeInfo &node_info = node_infos_[node_index];
+    if (!node_info.vbo.is_space_assigned && node_info.vbo.len > 0) {
+      vbo_space_.assign(node_info.vbo);
+    }
+    if (!node_info.ibo_lines.is_space_assigned && node_info.ibo_lines.len > 0) {
+      ibo_lines_.space.assign(node_info.ibo_lines);
+    }
+    if (!node_info.ibo_lines_coarse.is_space_assigned && node_info.ibo_lines_coarse.len > 0) {
+      ibo_lines_coarse_.space.assign(node_info.ibo_lines_coarse);
+    }
+    if (!node_info.ibo_tris.is_space_assigned && node_info.ibo_tris.len > 0) {
+      ibo_tris_.space.assign(node_info.ibo_tris);
+    }
+    if (!node_info.ibo_tris_coarse.is_space_assigned && node_info.ibo_tris_coarse.len > 0) {
+      ibo_tris_coarse_.space.assign(node_info.ibo_tris_coarse);
+    }
+  });
+
+  vbo_space_.optimize();
+  ibo_lines_.space.optimize();
+  ibo_lines_coarse_.space.optimize();
+  ibo_tris_.space.optimize();
+  ibo_tris_coarse_.space.optimize();
+
+  /* Growing the buffer space swaps all attribute VBOs, invalidating any cached batches. */
+  if (uint64_t(vbo_space_.size()) > vbo_space_limit_) {
+    vbo_space_limit_ = vbo_space_.size();
+    vbo_generation_++;
+  }
+  /* Index buffer family spaces aren't consumed by batches yet (future: shared index buffers), but
+   * track their growth so the generation can be used to invalidate batches when they are. */
+  if (uint64_t(ibo_lines_.space.size()) > ibo_lines_.space_limit) {
+    ibo_lines_.space_limit = ibo_lines_.space.size();
+    ibo_lines_.generation++;
+  }
+  if (uint64_t(ibo_lines_coarse_.space.size()) > ibo_lines_coarse_.space_limit) {
+    ibo_lines_coarse_.space_limit = ibo_lines_coarse_.space.size();
+    ibo_lines_coarse_.generation++;
+  }
+  if (uint64_t(ibo_tris_.space.size()) > ibo_tris_.space_limit) {
+    ibo_tris_.space_limit = ibo_tris_.space.size();
+    ibo_tris_.generation++;
+  }
+  if (uint64_t(ibo_tris_coarse_.space.size()) > ibo_tris_coarse_.space_limit) {
+    ibo_tris_coarse_.space_limit = ibo_tris_coarse_.space.size();
+    ibo_tris_coarse_.generation++;
+  }
+
+  /* Return all nodes (not only the nodes that are being updated) to keep the indices alligned
+   * with PBVH data structure. */
+  return node_infos_;
 }
 
 }  // namespace draw::pbvh
