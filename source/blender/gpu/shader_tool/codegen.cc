@@ -293,13 +293,13 @@ struct CodegenContext : NodeErrorHandler {
     if (is_graphic) {
       Expr vert_fn = params.child_first();
       if (!vert_fn.is_valid() || vert_fn.child_count() != 1) {
-        error(params, "Expected vertex shader entry point function");
+        error(params, Diag::ExpectedVertexShaderEntryPoint);
         return;
       }
       /* Resolve vertex function. */
       auto *fn = scope.lookup_function(LocalVar(vert_fn.child_first()).identifier()).unwrap(this);
       if (fn->entry_point_type != SymbolFunction::EntryPointType::VERT) {
-        error(vert_fn, "Expected vertex shader entry point function");
+        error(vert_fn, Diag::ExpectedVertexShaderEntryPoint);
         return;
       }
       builder << fn->identifier;
@@ -308,13 +308,13 @@ struct CodegenContext : NodeErrorHandler {
 
       Expr frag_fn = vert_fn.next();
       if (!frag_fn.is_valid() || frag_fn.child_count() != 1) {
-        error(frag_fn, "Expected fragment shader entry point function");
+        error(frag_fn, Diag::ExpectedFragmentShaderEntryPoint);
         return;
       }
       /* Resolve fragment function. */
       auto *fn2 = scope.lookup_function(LocalVar(frag_fn.child_first()).identifier()).unwrap(this);
       if (fn2->entry_point_type != SymbolFunction::EntryPointType::FRAG) {
-        error(frag_fn, "Expected fragment shader entry point function");
+        error(frag_fn, Diag::ExpectedFragmentShaderEntryPoint);
         return;
       }
       builder << fn2->identifier;
@@ -326,13 +326,13 @@ struct CodegenContext : NodeErrorHandler {
     else {
       Expr comp_fn = params.child_first();
       if (!comp_fn.is_valid() || comp_fn.child_count() != 1) {
-        error(comp_fn, "Expected compute shader entry point function");
+        error(comp_fn, Diag::ExpectedComputeShaderEntryPoint);
         return;
       }
       /* Resolve compute function. */
       auto *fn = scope.lookup_function(LocalVar(comp_fn.child_first()).identifier()).unwrap(this);
       if (fn->entry_point_type != SymbolFunction::EntryPointType::COMP) {
-        error(comp_fn, "Expected compute shader entry point function");
+        error(comp_fn, Diag::ExpectedComputeShaderEntryPoint);
         return;
       }
       builder << fn->identifier;
@@ -349,7 +349,7 @@ struct CodegenContext : NodeErrorHandler {
         builder << ctor.initializer_list();
       }
       else {
-        error(constants_init, "Expected resource table initializer");
+        error(constants_init, Diag::ExpectedResourceTableInitializer);
       }
       constants_init = constants_init.next();
     }
@@ -367,7 +367,7 @@ struct CodegenContext : NodeErrorHandler {
       match_if(';');
     }
     else {
-      error(stmt, "Return statement outside of a function");
+      error(stmt, Diag::ReturnOutsideFunction);
     }
   }
 
@@ -437,13 +437,13 @@ struct CodegenContext : NodeErrorHandler {
     Expr cond_expr = cond_stmt.expr();
     Expr end_expr = end_stmt.expr();
     if (!init_stmt.is_valid()) {
-      error(stmt, "Init statement needs to define the loop variable for unrolled loops");
+      error(stmt, Diag::UnrolledLoopMissingInit);
       return;
     }
     Declarator decl = init_stmt.child_first(NodeType::Declarator);
     SymbolVariable *var = scope.lookup_variable(decl.identifier());
     if (var->is_error) {
-      error(decl.identifier(), "Unknown variable '" + string(decl.identifier().str()) + "'");
+      error(decl.identifier(), Diag::UnknownVariable, decl.identifier().str());
       return;
     }
     /* Check if only a single var is declared. */
@@ -1829,7 +1829,7 @@ struct CodegenContext : NodeErrorHandler {
         expr(sym->arg_defaults[param_count], *sym);
       }
       else {
-        error(list, "Missing parameter for call to '" + sym->identifier + "'");
+        error(list, Diag::MissingParameterForCall, sym->identifier);
       }
       builder.curr = list.back();
     }
@@ -1941,9 +1941,7 @@ struct CodegenContext : NodeErrorHandler {
   {
     auto *cls = scope.lookup_class(construct.id()).unwrap(this);
     if (cls->is_srt()) {
-      error(construct,
-            "Calling resource table constructor '" + cls->identifier +
-                "' is not allowed; use 'resource_table_get(" + cls->identifier + ")' instead");
+      error(construct, Diag::ResourceTableConstructorNotAllowed, cls->identifier);
     }
 
     initializer_list(construct.initializer_list(), scope, cls);

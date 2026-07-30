@@ -9,6 +9,7 @@
 #pragma once
 
 #include "ast.hh"
+#include "diagnostic.hh"
 #include "metadata.hh"
 #include "token.hh"
 #include <unordered_map>
@@ -160,112 +161,6 @@ static inline string to_str(ResourceTableType type)
 struct StringPair {
   string str;
   string str_debug;
-};
-
-struct AstNodeException {
-  Node node;
-  string msg;
-
-  AstNodeException(Node node, const string &msg) : node(node), msg(msg) {}
-};
-
-struct TokenException {
-  Token tok;
-  string msg;
-
-  TokenException(Token tok, const string &msg) : tok(tok), msg(msg) {}
-};
-
-struct NodeErrorHandler {
-  ErrorHandler &err_handler;
-
-  NodeErrorHandler(ErrorHandler &handler) : err_handler(handler) {}
-
-  void error(Token tok, const string &msg)
-  {
-    if (err_handler.err) {
-      return;
-    }
-    vector<pair<Token, string>> errors;
-    errors.emplace_back(tok, msg);
-
-    for (auto it = note_stack.rbegin(); it != note_stack.rend(); ++it) {
-      auto [note_node, note_msg] = *it;
-      errors.emplace_back(note_node, note_msg);
-    }
-    err_handler.report(errors);
-  }
-
-  void error(ast::Node node, const string &msg)
-  {
-    error(node.front(), msg);
-  }
-
-  /* Pipe error if existing. */
-  void error(std::optional<AstNodeException> &err)
-  {
-    if (err) {
-      error(err->node, err->msg);
-    }
-  }
-  void error(std::optional<TokenException> &err)
-  {
-    if (err) {
-      error(err->tok, err->msg);
-    }
-  }
-
-  /* Stack of notes to add to the error. */
-  vector<pair<Token, string>> note_stack = {};
-
-  struct ScopedNote {
-    vector<pair<Token, string>> &note_stack;
-
-    ScopedNote(Token tok, const string &msg, vector<pair<Token, string>> &note_stack)
-        : note_stack(note_stack)
-    {
-      note_stack.emplace_back(tok, msg);
-    }
-
-    ~ScopedNote()
-    {
-      note_stack.pop_back();
-    }
-  };
-
-  [[nodiscard]] ScopedNote note(Token tok, const string &msg)
-  {
-    return ScopedNote(tok, msg, note_stack);
-  }
-  [[nodiscard]] ScopedNote note(Node node, const string &msg)
-  {
-    return ScopedNote(node.front(), msg, note_stack);
-  }
-
-#define NOTE(node, msg) auto n = note(node, msg)
-};
-
-template<typename T, typename ExceptionT = AstNodeException> struct Result {
-  T value;
-  std::optional<ExceptionT> err;
-
-  T unwrap(NodeErrorHandler *handler)
-  {
-    handler->error(err);
-    return value;
-  }
-};
-
-template<typename T, typename U, typename ExceptionT = AstNodeException> struct ResultPair {
-  T first;
-  U second;
-  std::optional<ExceptionT> err;
-
-  pair<T, U> unwrap(NodeErrorHandler *handler)
-  {
-    handler->error(err);
-    return {first, second};
-  }
 };
 
 struct ParsedAttribute {

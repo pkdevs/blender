@@ -723,7 +723,7 @@ struct SymbolParser : NodeErrorHandler {
         IdQualified arg_id = arg.type();
         string id(arg_id.str());
         if (param.child_count() != 1 || param.child_first().type() != NodeType::LocalVar) {
-          error(param, "Invalid argument for template parameter '" + id + "'");
+          error(param, Diag::TemplateInvalidArg, id);
           return;
         }
         IdQualified type_id(LocalVar(param.child_first()).identifier());
@@ -752,7 +752,7 @@ struct SymbolParser : NodeErrorHandler {
     fn_sym->return_type = type;
 
     if (fn_sym->is_entry_point() && type->identifier != "void") {
-      error(decl.return_type(), "Entry point functions must return 'void'");
+      error(decl.return_type(), Diag::EntryPointVoidReturn);
     }
   }
 
