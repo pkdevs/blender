@@ -1,3 +1,3 @@
 Referenced by issue #84200, Rotating a paintcurve [all paintmodes] doesn’t work correctly
 Referenced by issue #158332, Rotating paintcurve elements is wrong (not happening in view space)
-Referenced by pull request #158346, Fix #158332: Rotating paintcurve elements is wrong (not in screen space)
+Referenced by pull request #158346, WIP: Fix #158332: Rotating paintcurve elements is wrong (not in screen space)
