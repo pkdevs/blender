@@ -16,8 +16,10 @@ uint hash_value_vec3_to_uint(float3 vec)
 
 uint hash_value_vec4_to_uint(float4 vec)
 {
-  return hash_uint4(
-      floatBitsToUint(vec.x), floatBitsToUint(vec.y), floatBitsToUint(vec.z), floatBitsToUint(vec.w));
+  return hash_uint4(floatBitsToUint(vec.x),
+                    floatBitsToUint(vec.y),
+                    floatBitsToUint(vec.z),
+                    floatBitsToUint(vec.w));
 }
 
 uint hash_value_mat4_to_uint(float4x4 mat)
