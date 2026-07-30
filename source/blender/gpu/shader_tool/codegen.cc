@@ -658,7 +658,7 @@ struct CodegenContext : NodeErrorHandler {
           max(int64_t(1), int64_t(val.front().char_number()) - int64_t(type_str.size())), ' ');
 
       SymbolVariable *var = id_var_decl_resolved(val.identifier(), body_scope);
-      builder << string(" = ") + to_string(var->value);
+      builder << " = " + var->value_str();
       builder << string(";");
     }
   }
@@ -1879,7 +1879,7 @@ struct CodegenContext : NodeErrorHandler {
 
     if (!var->is_error && var->is_constexpr) {
       builder.curr = decl.back();
-      builder << "= " + to_string(var->value);
+      builder << "= " + var->value_str();
       return;
     }
 
@@ -2085,7 +2085,7 @@ struct CodegenContext : NodeErrorHandler {
     }
 
     if (var->is_constexpr) {
-      builder.ss << to_string(var->value) + trivia(id);
+      builder.ss << var->value_str() + trivia(id);
       return var;
     }
 

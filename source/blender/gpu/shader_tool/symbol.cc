@@ -734,12 +734,10 @@ struct SymbolParser : NodeErrorHandler {
       else {
         IdQualified type = arg.type();
         string id(arg.id().str());
-        auto [cls, err] = inst_scope.lookup_class(type);
-        error(err);
+        SymbolClass *cls = inst_scope.lookup_class(type).unwrap(this);
         SymbolVariable *var = table.var_arena.alloc(&scope, cls, arg.id().front(), id);
         var->is_constexpr = true;
-        auto [val, err_expr] = SymbolTable::evaluate_constexpr(scope, param.child_first());
-        error(err_expr);
+        int64_t val = SymbolTable::evaluate_constexpr(scope, param.child_first()).unwrap(this);
         var->value = val;
         scope.variables.emplace(id, var);
       }
@@ -1612,6 +1610,15 @@ void SymbolVariable::set_offset(bool is_union, int &offset)
     offset = this->offset;
     offset += this->type->size;
   }
+}
+
+string SymbolVariable::value_str() const
+{
+  assert(is_constexpr);
+  if (type->identifier == "bool") {
+    return (!value) ? "true" : "false";
+  }
+  return to_string(value);
 }
 
 Result<string> SymbolTable::expr_to_string(const SymbolScope &scope,

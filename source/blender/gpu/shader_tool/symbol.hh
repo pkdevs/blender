@@ -602,6 +602,8 @@ struct SymbolVariable : Symbol {
   {
     return this->parent->as_class();
   }
+
+  string value_str() const;
 };
 
 inline SymbolClass *SymbolScope::as_class()
