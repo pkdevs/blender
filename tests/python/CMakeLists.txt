@@ -369,6 +369,11 @@ add_blender_test(
 )
 
 add_blender_test(
+  geometry_nodes_modifier_layer_selection
+  --python ${CMAKE_CURRENT_LIST_DIR}/bl_geometry_nodes_modifier.py
+)
+
+add_blender_test(
   script_pyapi_annotations
   --python ${CMAKE_CURRENT_LIST_DIR}/bl_pyapi_annotations.py
 )

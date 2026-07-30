@@ -1322,7 +1322,9 @@ static bke::bNodeSocketType *make_socket_type_bool()
     make_common_type_prop(srna,
                           socket,
                           nodes::geometry_nodes_input_type_items_value_or_attribute_or_layer,
-                          nodes::GeometryNodesInputType::Value,
+                          socket.flag & NODE_INTERFACE_SOCKET_LAYER_SELECTION ?
+                              nodes::GeometryNodesInputType::Layer :
+                              nodes::GeometryNodesInputType::Value,
                           r_generated);
     make_common_attribute_name_prop(srna, socket, r_generated);
     prop = RNA_def_string(

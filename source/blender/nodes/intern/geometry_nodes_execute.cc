@@ -116,7 +116,13 @@ static GeometryNodesInputType get_effective_input_type(PointerRNA *input_props_p
   const int input_index = ntree.interface_input_index(io_socket);
   if (PropertyRNA *prop = RNA_struct_find_property(input_props_ptr, "type")) {
     if (nodes::input_has_attribute_toggle(ntree, input_index)) {
-      return GeometryNodesInputType(RNA_property_enum_get(input_props_ptr, prop));
+      if (is_layer_selection_field(io_socket)) {
+        return GeometryNodesInputType::Layer;
+      }
+      const GeometryNodesInputType type = GeometryNodesInputType(
+          RNA_property_enum_get(input_props_ptr, prop));
+      /* The layer selection flag can change without resetting the stored input type. */
+      return type == GeometryNodesInputType::Layer ? GeometryNodesInputType::Value : type;
     }
     return GeometryNodesInputType::Value;
   }
