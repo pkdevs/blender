@@ -4,10 +4,11 @@
 
 if "bpy" in locals():
     import importlib
+    importlib.reload(preferences)
     importlib.reload(properties)
     importlib.reload(xr_ui)
 else:
-    from . import properties, xr_ui
+    from . import preferences, properties, xr_ui
 
 import bpy
 from bpy.app.translations import (
@@ -52,7 +53,10 @@ def build_world_space_classes():
         xr_ui.panel_idname(cls) not in XR_PANEL_EXCLUDE and
         not getattr(cls, "bl_parent_id", None)
     )
-    return source_panel_classes
+    extra_source_panel_classes = (
+        preferences.USERPREF_PT_vr_navigation,
+    )
+    return source_panel_classes + extra_source_panel_classes
 
 
 # Session.

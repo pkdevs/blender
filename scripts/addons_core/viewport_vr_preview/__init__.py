@@ -38,10 +38,10 @@ def register():
         return
 
     action_map.register()
+    preferences.register()
     gui.register()
     operators.register()
     properties.register()
-    preferences.register()
 
 
 def unregister():
@@ -50,7 +50,7 @@ def unregister():
         return
 
     action_map.unregister()
+    preferences.unregister()
     gui.unregister()
     operators.unregister()
     properties.unregister()
-    preferences.unregister()

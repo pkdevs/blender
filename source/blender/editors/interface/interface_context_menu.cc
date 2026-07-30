@@ -580,6 +580,9 @@ static void set_layout_context_from_button(bContext *C, Layout &layout, Button *
   CTX_store_set(C, layout.context_store());
 }
 
+static bool panel_supports_xr_world_space_clone(const PanelType *panel_type);
+static void add_xr_world_space_clone_menu(Layout &layout, PanelType *panel_type);
+
 bool popup_context_menu_for_button(bContext *C, Button *but, const wmEvent *event)
 {
   /* but_is_interactive() may let some buttons through that should not get a context menu - it
@@ -1353,6 +1356,10 @@ bool popup_context_menu_for_button(bContext *C, Button *but, const wmEvent *even
     menutype_draw(C, mt, &layout.column(false));
   }
 
+  if (Panel *panel = panel_under_mouse(C, event->xy[0], event->xy[1])) {
+    add_xr_world_space_clone_menu(layout, panel->type);
+  }
+
   if (but->context) {
     CTX_store_set(C, previous_ctx);
   }
@@ -1366,11 +1373,50 @@ bool popup_context_menu_for_button(bContext *C, Button *but, const wmEvent *even
 /** \name Panel Context Menu
  * \{ */
 
+static wmOperatorType *xr_world_space_clone_operator_type()
+{
+  return WM_operatortype_find("VIEW3D_OT_xr_toggle_panel_clone", false);
+}
+
+static bool panel_supports_xr_world_space_clone(const PanelType *panel_type)
+{
+  return xr_world_space_clone_operator_type() && panel_type &&
+         ((panel_type->space_type == SPACE_VIEW3D && panel_type->region_type == RGN_TYPE_UI) ||
+          (panel_type->space_type == SPACE_PROPERTIES &&
+           panel_type->region_type == RGN_TYPE_WINDOW) ||
+          (panel_type->space_type == SPACE_USERPREF &&
+           panel_type->region_type == RGN_TYPE_WINDOW));
+}
+
+static void add_xr_world_space_clone_menu(Layout &layout, PanelType *panel_type)
+{
+  if (!panel_supports_xr_world_space_clone(panel_type)) {
+    return;
+  }
+
+  char world_space_panel_idname[BKE_ST_MAXNAME];
+  panel_world_space_idname_with_suffix(panel_type, "_ws", world_space_panel_idname);
+  const bool has_world_space_clone = WM_paneltype_find(world_space_panel_idname, true) != nullptr;
+
+  if (wmOperatorType *ot = xr_world_space_clone_operator_type()) {
+    PointerRNA op_ptr = layout.op(ot,
+                                  has_world_space_clone ? IFACE_("Remove World Space Clone") :
+                                                          IFACE_("Add World Space Clone"),
+                                  has_world_space_clone ? ICON_CHECKBOX_HLT : ICON_CHECKBOX_DEHLT,
+                                  wm::OpCallContext::InvokeDefault,
+                                  UI_ITEM_NONE);
+    RNA_string_set(&op_ptr, "panel_id", panel_type->idname);
+    layout.separator();
+  }
+}
+
 void popup_context_menu_for_panel(bContext *C, ARegion *region, Panel *panel)
 {
   bScreen *screen = CTX_wm_screen(C);
   const bool has_panel_category = panel_category_tabs_is_visible(region);
-  const bool any_item_visible = has_panel_category;
+  const bool has_xr_world_space_clone = panel_supports_xr_world_space_clone(panel ? panel->type :
+                                                                                    nullptr);
+  const bool any_item_visible = has_panel_category || has_xr_world_space_clone;
 
   if (!any_item_visible) {
     return;
@@ -1380,8 +1426,13 @@ void popup_context_menu_for_panel(bContext *C, ARegion *region, Panel *panel)
   }
 
   PointerRNA ptr = RNA_pointer_create_discrete(&screen->id, RNA_Panel, panel);
+  const ScrArea *area = CTX_wm_area(C);
+  const char *menu_title = IFACE_("Panel");
+  if (area != nullptr) {
+    menu_title = IFACE_(ED_area_name(area).c_str());
+  }
 
-  PopupMenu *pup = popup_menu_begin(C, IFACE_("Sidebar"), ICON_NONE);
+  PopupMenu *pup = popup_menu_begin(C, menu_title, ICON_NONE);
   Layout &layout = *popup_menu_layout(pup);
 
   if (has_panel_category && panel && panel_can_be_pinned(panel)) {
@@ -1399,28 +1450,13 @@ void popup_context_menu_for_panel(bContext *C, ARegion *region, Panel *panel)
     layout.separator();
   }
 
-  if (panel && panel->type != nullptr) {
-    char world_space_panel_idname[BKE_ST_MAXNAME];
-    panel_world_space_idname_with_suffix(panel->type, "_ws", world_space_panel_idname);
-    const bool has_world_space_clone = WM_paneltype_find(world_space_panel_idname, true) !=
-                                       nullptr;
+  add_xr_world_space_clone_menu(layout, panel ? panel->type : nullptr);
 
-    if (wmOperatorType *ot = WM_operatortype_find("VIEW3D_OT_xr_toggle_panel_clone", false)) {
-      PointerRNA op_ptr = layout.op(ot,
-                                    has_world_space_clone ? IFACE_("Remove World-Space Clone") :
-                                                            IFACE_("Add World-Space Clone"),
-                                    has_world_space_clone ? ICON_CHECKBOX_HLT :
-                                                            ICON_CHECKBOX_DEHLT,
-                                    wm::OpCallContext::InvokeDefault,
-                                    UI_ITEM_NONE);
-      RNA_string_set(&op_ptr, "panel_id", panel->type->idname);
-      layout.separator();
-    }
+  if (has_panel_category) {
+    PointerRNA prefs_ptr = RNA_pointer_create_discrete(nullptr, RNA_PreferencesSystem, &U);
+    layout.prop(
+        &prefs_ptr, "show_panel_tabs_compact", UI_ITEM_NONE, IFACE_("Compact Tabs"), ICON_NONE);
   }
-
-  PointerRNA prefs_ptr = RNA_pointer_create_discrete(nullptr, RNA_PreferencesSystem, &U);
-  layout.prop(
-      &prefs_ptr, "show_panel_tabs_compact", UI_ITEM_NONE, IFACE_("Compact Tabs"), ICON_NONE);
 
   popup_menu_end(C, pup);
 }

@@ -663,7 +663,7 @@ class VIEW3D_OT_vr_location_scouting_viewfinder_swap_hands(Operator):
 class VIEW3D_OT_vr_ui_visibility_toggle(Operator):
     bl_idname = "view3d.vr_ui_visibility_toggle"
     bl_label = "Toggle VR UI Visibility"
-    bl_description = "Toggle visibility of world-space and controller-mounted XR UI panels"
+    bl_description = "Toggle visibility of world space and controller-mounted XR UI panels"
     bl_options = {'INTERNAL'}
 
     def execute(self, context):

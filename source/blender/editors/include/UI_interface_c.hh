@@ -2260,6 +2260,7 @@ void panel_stop_animation(const bContext *C, Panel *panel);
 
 /* Panel custom data. */
 PointerRNA *panel_custom_data_get(const Panel *panel);
+Panel *panel_under_mouse(const bContext *C, int mx, int my);
 PointerRNA *region_panel_custom_data_under_cursor(const bContext *C, const wmEvent *event);
 void panel_custom_data_set(Panel *panel, PointerRNA *custom_data);
 

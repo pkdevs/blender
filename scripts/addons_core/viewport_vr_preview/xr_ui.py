@@ -43,6 +43,68 @@ def adapt_panel_clone_attrs(panel_cls, world_space_attrs):
     return world_space_attrs
 
 
+# Copies an existing panel class and adapts its context to work in XR.
+# This allows for arbitrary world space panels to be generated from a desktop panel class.
+class _XRCloneContextProxy:
+    def __init__(self, context, panel_cls):
+        self._context = context
+        self._panel_cls = panel_cls
+
+    def _properties_space_data(self):
+        window_manager = getattr(self._context, "window_manager", None)
+        windows = getattr(window_manager, "windows", ())
+        for window in windows:
+            screen = getattr(window, "screen", None)
+            areas = getattr(screen, "areas", ())
+            for area in areas:
+                if area.type == 'PROPERTIES':
+                    spaces = getattr(area, "spaces", None)
+                    active = getattr(spaces, "active", None) if spaces is not None else None
+                    if active is not None:
+                        return active
+        return None
+
+    def _properties_pinned_id(self):
+        space_data = self._properties_space_data()
+        if space_data is None or not getattr(space_data, "use_pin_id", False):
+            return None
+        return getattr(space_data, "pin_id", None)
+
+    def _properties_active_object(self):
+        pinned_id = self._properties_pinned_id()
+        if isinstance(pinned_id, bpy.types.Object):
+            return pinned_id
+        view_layer = getattr(self._context, "view_layer", None)
+        objects = getattr(view_layer, "objects", None)
+        if objects is not None:
+            return getattr(objects, "active", None)
+        return None
+
+    def __getattr__(self, name):
+        if name == "space_data":
+            space_data = self._properties_space_data()
+            if space_data is not None:
+                return space_data
+        try:
+            return getattr(self._context, name)
+        except AttributeError:
+            if name in {"object", "active_object"}:
+                return self._properties_active_object()
+            if name == "material":
+                obj = self._properties_active_object()
+                return getattr(obj, "active_material", None) if obj is not None else None
+            if name == "world":
+                scene = getattr(self._context, "scene", None)
+                return getattr(scene, "world", None) if scene is not None else None
+            raise
+
+
+def adapt_panel_clone_context(panel_cls, context):
+    if getattr(panel_cls, "bl_space_type", None) == 'PROPERTIES':
+        return _XRCloneContextProxy(context, panel_cls)
+    return context
+
+
 def mirror_panel_to_xr(panel_cls, *, class_name=None, **attrs):
     if class_name is None:
         class_name = vr_world_space_panel_id(panel_cls.__name__)
@@ -92,6 +154,26 @@ def mirror_panel_to_xr(panel_cls, *, class_name=None, **attrs):
                 continue
             if callable(attr_value) or isinstance(attr_value, (classmethod, staticmethod)):
                 world_space_attrs[attr_name] = attr_value
+    def draw(self, context):
+        return panel_cls.draw(self, adapt_panel_clone_context(panel_cls, context))
+
+    world_space_attrs["draw"] = draw
+    if hasattr(panel_cls, "poll"):
+        @classmethod
+        def poll(cls, context):
+            return panel_cls.poll(adapt_panel_clone_context(panel_cls, context))
+
+        world_space_attrs["poll"] = poll
+    if hasattr(panel_cls, "draw_header"):
+        def draw_header(self, context):
+            return panel_cls.draw_header(self, adapt_panel_clone_context(panel_cls, context))
+
+        world_space_attrs["draw_header"] = draw_header
+    if hasattr(panel_cls, "draw_header_preset"):
+        def draw_header_preset(self, context):
+            return panel_cls.draw_header_preset(self, adapt_panel_clone_context(panel_cls, context))
+
+        world_space_attrs["draw_header_preset"] = draw_header_preset
     world_space_attrs.update(attrs)
     return type(class_name, (VIEW3D_PT_vr_world_space_panel, Panel), world_space_attrs)
 
@@ -107,8 +189,42 @@ def panel_idname(panel_cls):
     return getattr(panel_cls, "bl_idname", panel_cls.__name__)
 
 
+def resolve_panel_clone_root_class(panel_cls):
+    panel_classes = {panel_idname(cls): cls for cls in iter_panel_subclasses()}
+    current_cls = panel_cls
+    while True:
+        parent_id = getattr(current_cls, "bl_parent_id", None)
+        if not parent_id:
+            return current_cls
+        parent_cls = panel_classes.get(parent_id)
+        if parent_cls is None:
+            return current_cls
+        if getattr(parent_cls, "bl_space_type", None) != getattr(panel_cls, "bl_space_type", None):
+            return current_cls
+        if getattr(parent_cls, "bl_region_type", None) != getattr(panel_cls, "bl_region_type", None):
+            return current_cls
+        current_cls = parent_cls
+
+
+def supported_source_panel(panel_id):
+    panel_cls = bpy.types.Panel.bl_rna_get_subclass_py(panel_id)
+    if panel_cls is None:
+        return None, None
+
+    panel_cls = resolve_panel_clone_root_class(panel_cls)
+    panel_id = panel_idname(panel_cls)
+    if not is_supported_source_panel_type(getattr(panel_cls, "bl_space_type", None),
+                                          getattr(panel_cls, "bl_region_type", None)):
+        return None, None
+    return panel_id, panel_cls
+
+
 def is_supported_source_panel_type(space_type, region_type):
-    return True
+    return (
+        (space_type == 'VIEW_3D' and region_type == 'UI') or
+        (space_type == 'PROPERTIES' and region_type == 'WINDOW') or
+        (space_type == 'PREFERENCES' and region_type == 'WINDOW')
+    )
 
 
 def xr_panel_mirror_source_ids():
@@ -161,7 +277,7 @@ def world_space_classes_from_panel(panel_cls, *, default_mount_point='HEAD_FOLLO
 
 
 def register_default_world_space_panel(panel_id, *, default_mount_point='HEAD_FOLLOW', mount_overrides=None):
-    panel_cls = bpy.types.Panel.bl_rna_get_subclass_py(panel_id)
+    panel_id, panel_cls = supported_source_panel(panel_id)
     if panel_cls is None:
         raise KeyError(panel_id)
 
@@ -176,10 +292,11 @@ def register_default_world_space_panel(panel_id, *, default_mount_point='HEAD_FO
     return world_space_classes
 
 
-def dynamic_world_space_toggle(panel_id):
-    panel_cls = bpy.types.Panel.bl_rna_get_subclass_py(panel_id)
+def dynamic_world_space_toggle(panel_id, panel_cls=None):
     if panel_cls is None:
-        raise LookupError(panel_id)
+        panel_id, panel_cls = supported_source_panel(panel_id)
+        if panel_cls is None:
+            raise LookupError(panel_id)
 
     if panel_id in _world_space_panel_classes:
         return toggle_tracked_world_space_panel(panel_id)
@@ -239,25 +356,18 @@ def refresh_xr_world_space_ui():
             region = next((candidate for candidate in area.regions if candidate.type == 'WINDOW'),
                           None)
 
-        override = {"window": window, "screen": screen}
+        override = {"window": window}
         if area is not None:
             override["area"] = area
         if region is not None:
             override["region"] = region
 
-        try:
-            with bpy.context.temp_override(**override):
-                xr_refresh()
-            return True
-        except RuntimeError:
-            continue
-
-    try:
-        xr_refresh()
+        with bpy.context.temp_override(**override):
+            xr_refresh()
         return True
-    except RuntimeError:
-        return False
 
+    xr_refresh()
+    return True
 
 def schedule_xr_world_space_ui_refresh():
     attempts_remaining = 20
@@ -274,8 +384,8 @@ def schedule_xr_world_space_ui_refresh():
 
 class VIEW3D_OT_xr_toggle_panel_clone(Operator):
     bl_idname = "view3d.xr_toggle_panel_clone"
-    bl_label = "Toggle World-Space Clone"
-    bl_description = "Toggle a world-space XR clone of this desktop panel"
+    bl_label = "Toggle World Space Clone"
+    bl_description = "Toggle a world space XR clone of this desktop panel"
 
     panel_id: bpy.props.StringProperty(options={'HIDDEN'})
 
@@ -289,29 +399,18 @@ class VIEW3D_OT_xr_toggle_panel_clone(Operator):
         )
 
     def execute(self, context):
-        panel_cls = bpy.types.Panel.bl_rna_get_subclass_py(self.panel_id)
+        source_panel_id, panel_cls = supported_source_panel(self.panel_id)
         if panel_cls is None:
             self.report(
                 {'ERROR'},
                 f"Unsupported panel: {self.panel_id} (panel is not available as a Python bpy.types class)",
             )
             return {'CANCELLED'}
-        if not is_supported_source_panel_type(getattr(panel_cls, "bl_space_type", None),
-                                              getattr(panel_cls, "bl_region_type", None)):
-            self.report({'ERROR'}, "Only VIEW_3D sidebar and Properties panels can be cloned to XR")
-            return {'CANCELLED'}
-        try:
-            enabled = dynamic_world_space_toggle(self.panel_id)
-        except LookupError:
-            self.report(
-                {'ERROR'},
-                f"Unsupported panel: {self.panel_id} (panel is not available as a Python bpy.types class)",
-            )
-            return {'CANCELLED'}
+        enabled = dynamic_world_space_toggle(source_panel_id, panel_cls)
         tag_redraw_panel_sources(context)
         refresh_xr_world_space_ui()
         message = "Enabled" if enabled else "Disabled"
-        self.report({'INFO'}, f"{message} world-space clone for {self.panel_id}")
+        self.report({'INFO'}, f"{message} world space clone for {source_panel_id}")
         return {'FINISHED'}
 
 

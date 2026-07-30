@@ -2845,7 +2845,7 @@ PointerRNA *panel_custom_data_get(const Panel *panel)
   return panel->runtime->custom_data_ptr;
 }
 
-PointerRNA *region_panel_custom_data_under_cursor(const bContext *C, const wmEvent *event)
+Panel *panel_under_mouse(const bContext *C, int mx, int my)
 {
   ARegion *region = CTX_wm_region(C);
   if (region) {
@@ -2855,17 +2855,23 @@ PointerRNA *region_panel_custom_data_under_cursor(const bContext *C, const wmEve
         continue;
       }
 
-      int mx = event->xy[0];
-      int my = event->xy[1];
-      window_to_block(region, &block, &mx, &my);
-      const int mouse_state = panel_mouse_state_get(&block, panel, mx, my);
+      int block_mx = mx;
+      int block_my = my;
+      window_to_block(region, &block, &block_mx, &block_my);
+      const int mouse_state = panel_mouse_state_get(&block, panel, block_mx, block_my);
       if (ELEM(mouse_state, PANEL_MOUSE_INSIDE_CONTENT, PANEL_MOUSE_INSIDE_HEADER)) {
-        return panel_custom_data_get(panel);
+        return panel;
       }
     }
   }
 
   return nullptr;
+}
+
+PointerRNA *region_panel_custom_data_under_cursor(const bContext *C, const wmEvent *event)
+{
+  Panel *panel = panel_under_mouse(C, event->xy[0], event->xy[1]);
+  return panel ? panel_custom_data_get(panel) : nullptr;
 }
 
 bool panel_can_be_pinned(const Panel *panel)
