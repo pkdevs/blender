@@ -191,6 +191,46 @@ void surf_hybrid([[resource_table]] PipelineConstants &pipe,
     cryptomatte.store(out_texel, nt.crypto_hash, resource_id);
     render_passes.store_color(
         out_texel, uni.uniform_buf.render_pass.emission_id, float4(g_emission, 1.0f));
+
+    if (g_light_accumulation_count > 0) {
+      g_diffuse_color /= float(g_light_accumulation_count);
+      g_specular_color /= float(g_light_accumulation_count);
+    }
+    // TODO: Write as fragment output?
+    // TODO: What if only one is enabled?
+    // TODO: Writing it to renderpasses makes it invisible to GI.
+    if (uni.uniform_buf.render_pass.diffuse_light_id >= 0 &&
+        uni.uniform_buf.render_pass.diffuse_color_id >= 0)
+    {
+      render_passes.store_color(
+          out_texel, uni.uniform_buf.render_pass.diffuse_light_id, float4(g_diffuse_light, 1.0f));
+      render_passes.store_color(
+          out_texel, uni.uniform_buf.render_pass.diffuse_color_id, float4(g_diffuse_color, 1.0f));
+    }
+    else {
+      g_emission += g_diffuse_color * g_diffuse_light;
+    }
+
+    if (uni.uniform_buf.render_pass.specular_light_id >= 0 &&
+        uni.uniform_buf.render_pass.specular_color_id >= 0)
+    {
+      render_passes.store_color(out_texel,
+                                uni.uniform_buf.render_pass.specular_light_id,
+                                float4(g_specular_light, 1.0f));
+      render_passes.store_color(out_texel,
+                                uni.uniform_buf.render_pass.specular_color_id,
+                                float4(g_specular_color, 1.0f));
+    }
+    else {
+      g_emission += g_specular_color * g_specular_light;
+    }
+#if 0
+      //TODO: ???
+    render_passes.store_color(
+        out_texel, uni.uniform_buf.render_pass.emission_id, float4(g_transmission_light, 1.0f));
+    render_passes.store_color(
+        out_texel, uni.uniform_buf.render_pass.emission_id, float4(g_transmission_color, 1.0f));
+#endif
   }
 
   /* ----- GBuffer output ----- */

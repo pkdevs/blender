@@ -13,10 +13,23 @@ static void node_declare(NodeDeclarationBuilder &b)
   const bNodeTree *ntree = b.tree_or_null();
   const bool is_gpu_internal = ntree && (ntree->flag & NTREE_IS_GPU_SHADER_INTERNAL);
 
-  b.add_input<decl::Color>("Diffuse"_ustr).default_value({0.0f, 0.0f, 0.0f, 1.0f}).hide_value();
-  b.add_input<decl::Color>("Glossy"_ustr).default_value({0.0f, 0.0f, 0.0f, 1.0f}).hide_value();
-  b.add_input<decl::Color>("Transmission"_ustr)
+  b.add_input<decl::Color>("Diffuse Light"_ustr)
       .default_value({0.0f, 0.0f, 0.0f, 1.0f})
+      .hide_value();
+  b.add_input<decl::Color>("Diffuse Color"_ustr)
+      .default_value({1.0f, 1.0f, 1.0f, 1.0f})
+      .hide_value();
+  b.add_input<decl::Color>("Glossy Light"_ustr)
+      .default_value({0.0f, 0.0f, 0.0f, 1.0f})
+      .hide_value();
+  b.add_input<decl::Color>("Glossy Color"_ustr)
+      .default_value({1.0f, 1.0f, 1.0f, 1.0f})
+      .hide_value();
+  b.add_input<decl::Color>("Transmission Light"_ustr)
+      .default_value({0.0f, 0.0f, 0.0f, 1.0f})
+      .hide_value();
+  b.add_input<decl::Color>("Transmission Color"_ustr)
+      .default_value({1.0f, 1.0f, 1.0f, 1.0f})
       .hide_value();
   b.add_input<decl::Float>("Weight"_ustr).available(is_gpu_internal);
   b.add_output<decl::Shader>("Shader"_ustr);

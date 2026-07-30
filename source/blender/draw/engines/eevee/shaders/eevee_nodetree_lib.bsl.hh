@@ -856,7 +856,7 @@ bool light_iter_should_skip(eevee::light::VisibleLightIterator &iter)
       if (light_iter_should_skip(iter)) { \
         continue; \
       } \
-      light_index = iter.index; \
+      light_index = iter.index;
 
 #define LIGHT_ITER_END() \
   } \
@@ -885,10 +885,24 @@ void node_light_info_impl(const int light_index,
   mask = light_attenuation_surface(light, is_directional, lv);
 }
 
-void node_light_accumulation_impl(
-    float4 diffuse, float4 glossy, float4 transmission, float weight, Closure &result)
+void node_light_accumulation_impl(float4 diffuse_light,
+                                  float4 diffuse_color,
+                                  float4 glossy_light,
+                                  float4 glossy_color,
+                                  float4 transmission_light,
+                                  float4 transmission_color,
+                                  float weight,
+                                  Closure &result)
 {
-  /*TODO*/
+  g_diffuse_light += diffuse_light.rgb * weight;
+  g_diffuse_color += diffuse_color.rgb * weight;
+  g_specular_light += glossy_light.rgb * weight;
+  g_specular_color += glossy_color.rgb * weight;
+  g_transmission_light += transmission_light.rgb * weight;
+  g_transmission_color += transmission_color.rgb * weight;
+  g_light_accumulation_count++;
+
+  result = Closure(0);
 }
 
 void node_light_evaluation_impl(const int light_index,
