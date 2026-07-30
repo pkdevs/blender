@@ -579,6 +579,12 @@ struct CodegenContext : NodeErrorHandler {
             case AssignMul:
               return {var->value * loop_val, err_val};
             case AssignDiv:
+              if (loop_val == 0) {
+                return {var->value / loop_val,
+                        err_val ?
+                            err_val :
+                            AstNodeException(op, "Division by zero during constexpr evaluation")};
+              }
               return {var->value / loop_val, err_val};
             default:
               break;
