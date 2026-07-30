@@ -111,11 +111,6 @@ def cast_value(source, target):
 class NodeSetting(PropertyGroup):
     __slots__ = ()
 
-    name: StringProperty(
-        name="Name",
-        description="Identifier of the property"
-    )
-
     value: StringProperty(
         name="Value",
         description="Python expression to be evaluated "
