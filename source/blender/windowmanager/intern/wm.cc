@@ -451,7 +451,7 @@ void WM_keyconfig_init(bContext *C)
     if (!(wm->runtime->defaultconf->flag & KEYCONF_INIT_DEFAULT)) {
       wm_window_keymap(wm->runtime->defaultconf);
       ED_spacetypes_keymap(wm->runtime->defaultconf);
-
+      U.runtime.keymap_reset = true;
       WM_keyconfig_reload(C);
 
       wm->runtime->defaultconf->flag |= KEYCONF_INIT_DEFAULT;

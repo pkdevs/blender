@@ -766,17 +766,17 @@ static wmKeyMap *wm_keymap_patch_update(ListBaseT<wmKeyMap> *lb,
   /* Get previous keymap in list, we will update it in place to keep iterators valid. */
   wmKeyMap *km = WM_keymap_list_find(
       lb, defaultmap->idname, defaultmap->spaceid, defaultmap->regionid);
-  bool is_new = false;
+  bool reset = usermap || (km && (km->flag & KEYMAP_RESET)) || U.runtime.keymap_reset;
   if (km) {
     expanded = (km->flag & (KEYMAP_EXPANDED | KEYMAP_CHILDREN_EXPANDED));
-    if (usermap || (km->flag & KEYMAP_RESET)) {
+    if (reset) {
       WM_keymap_clear(km);
     }
   }
   else {
     km = MEM_new<wmKeyMap>(__func__);
     BLI_addtail(lb, km);
-    is_new = true;
+    reset = true;
   }
 
   /* Copy new keymap from an existing one. */
@@ -802,7 +802,7 @@ static wmKeyMap *wm_keymap_patch_update(ListBaseT<wmKeyMap> *lb,
 
     km->flag |= KEYMAP_UPDATE; /* Update again to create diff. */
   }
-  else if (usermap || is_new || (km->flag & KEYMAP_RESET)) {
+  else if (reset) {
     km->flag &= ~KEYMAP_RESET;
     wm_keymap_copy_data(km, defaultmap);
   }
@@ -2009,6 +2009,7 @@ void WM_keyconfig_update_ex(wmWindowManager *wm, bool keep_properties)
     wm_keymap_update_flag &= ~WM_KEYMAP_UPDATE_RECONFIGURE;
   }
 
+  U.runtime.keymap_reset = false;
   BLI_assert(wm_keymap_update_flag == 0);
 
   if (compat_update) {

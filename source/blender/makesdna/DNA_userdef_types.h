@@ -759,7 +759,8 @@ struct XrNavigation {
 struct UserDef_Runtime {
   /** Mark as changed so the preferences are saved on exit. */
   char is_dirty = 0;
-  char _pad0[7] = {};
+  char keymap_reset = 0;
+  char _pad0[6] = {};
 };
 
 /* Toggles for unfinished 2.8 UserPref design. */
