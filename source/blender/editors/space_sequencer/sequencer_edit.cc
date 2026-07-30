@@ -3423,6 +3423,14 @@ static wmOperatorStatus sequencer_rendersize_exec(bContext *C, wmOperator * /*op
         needs_free = true;
       }
       break;
+    case STRIP_TYPE_COLOR: {
+      se = MEM_new<StripElem>("stripelem_tmp_for_colorstrip");
+      const SolidColorVars *cv = static_cast<const SolidColorVars *>(active_strip->effectdata);
+      se->orig_width = cv->width;
+      se->orig_height = cv->height;
+      needs_free = true;
+      break;
+    }
     default:
       return OPERATOR_CANCELLED;
   }
