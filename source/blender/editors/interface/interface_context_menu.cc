@@ -1399,11 +1399,7 @@ void popup_context_menu_for_panel(bContext *C, ARegion *region, Panel *panel)
     layout.separator();
   }
 
-  if (panel && panel->type != nullptr &&
-      ((panel->type->space_type == SPACE_VIEW3D && panel->type->region_type == RGN_TYPE_UI) ||
-       (panel->type->space_type == SPACE_PROPERTIES &&
-        panel->type->region_type == RGN_TYPE_WINDOW)))
-  {
+  if (panel && panel->type != nullptr) {
     char world_space_panel_idname[BKE_ST_MAXNAME];
     panel_world_space_idname_with_suffix(panel->type, "_ws", world_space_panel_idname);
     const bool has_world_space_clone = WM_paneltype_find(world_space_panel_idname, true) !=
