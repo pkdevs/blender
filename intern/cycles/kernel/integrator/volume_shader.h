@@ -410,8 +410,8 @@ ccl_device_inline void volume_shader_motion_blur(KernelGlobals kg,
    */
 
   /* Always use linear interpolation for velocity. */
-  const int cubic_flag = sd->flag & SD_VOLUME_CUBIC;
-  sd->flag &= ~SD_VOLUME_CUBIC;
+  const int cubic_flag = sd->shader_flag & SD_VOLUME_CUBIC;
+  sd->shader_flag &= ~SD_VOLUME_CUBIC;
 
   /* Find velocity. */
   float3 velocity = primitive_volume_attribute<float3>(kg, sd, v_desc, false);
@@ -428,7 +428,7 @@ ccl_device_inline void volume_shader_motion_blur(KernelGlobals kg,
   sd->P = P - (time - time_offset) * velocity_scale * velocity;
 
   /* Restore flag. */
-  sd->flag |= cubic_flag;
+  sd->shader_flag |= cubic_flag;
 }
 #  endif
 
@@ -451,8 +451,7 @@ ccl_device_inline bool volume_shader_eval_entry(KernelGlobals kg,
   sd->object = entry.object;
   sd->shader = entry.shader;
 
-  sd->flag &= ~SD_SHADER_FLAGS;
-  sd->flag |= kernel_data_fetch(shaders, (sd->shader & SHADER_MASK)).flags;
+  sd->shader_flag = kernel_data_fetch(shaders, (sd->shader & SHADER_MASK)).flags;
   sd->object_flag &= ~SD_OBJECT_FLAGS;
 
   if (sd->object != OBJECT_NONE) {
@@ -499,12 +498,12 @@ ccl_device_inline void volume_shader_eval(KernelGlobals kg,
                                           const PathRayVisibility path_visibility,
                                           const uint32_t path_flag)
 {
-  /* If path is being terminated, we are tracing a shadow ray or evaluating
-   * emission, then we don't need to store closures. The emission and shadow
-   * shader data also do not have a closure array to save GPU memory. */
+  /* If path is being terminated, we are tracing a shadow ray or evaluating emission, then we don't
+   * need to store closures. The emission, extinction and shadow shader data also do not have a
+   * closure array to save GPU memory. */
   int max_closures;
   if ((path_visibility & PATH_RAY_VISIBILITY_SHADOW) ||
-      (path_flag & (PATH_RAY_TERMINATE | PATH_RAY_EMISSION)))
+      (path_flag & (PATH_RAY_TERMINATE | PATH_RAY_EMISSION | PATH_RAY_EXTINCTION)))
   {
     max_closures = 0;
   }
@@ -516,7 +515,8 @@ ccl_device_inline void volume_shader_eval(KernelGlobals kg,
    * for all volumes in the stack into a single array of closures */
   sd->num_closure = 0;
   sd->num_closure_left = max_closures;
-  sd->flag = SD_IS_VOLUME_SHADER_EVAL | (sd->flag & SD_CACHE_MISS);
+  sd->shader_flag = 0;
+  sd->runtime_flag = SR_IS_VOLUME_SHADER_EVAL | (sd->runtime_flag & ~SR_CLOSURE_FLAG);
   sd->object_flag = 0;
 
   for (int i = 0;; i++) {
