@@ -8,6 +8,8 @@
 
 #include "kernel/sample/pattern.h"
 
+#include "kernel/util/colorspace.h"
+
 CCL_NAMESPACE_BEGIN
 
 /* Initialize queues, so that this path is considered terminated.
@@ -427,5 +429,29 @@ ccl_device_inline float path_state_rng_light_termination(KernelGlobals kg,
   }
   return 0.0f;
 }
+
+#ifdef __SPECTRAL__
+ccl_device_inline void update_path_throughput_for_dispersion(KernelGlobals kg,
+                                                             IntegratorState state,
+                                                             ccl_private ShaderData *sd)
+{
+  if (!(sd->runtime_flag & SR_BSDF_HAS_DISPERSION)) {
+    return;
+  }
+
+  const uint32_t path_flag = INTEGRATOR_STATE(state, path, flag);
+  if (path_flag & PATH_RAY_SPECTRAL) {
+    /* Throughput is already updated. */
+    return;
+  }
+
+  float prob;
+  const float wavelength = sample_wavelength(sd->rand_wavelength, &prob);
+
+  /* Update throughput since the path is now monochromatic. */
+  INTEGRATOR_STATE_WRITE(state, path, throughput) *= wavelength_to_rgb_d65(kg, wavelength) / prob;
+  INTEGRATOR_STATE_WRITE(state, path, flag) |= PATH_RAY_SPECTRAL;
+}
+#endif
 
 CCL_NAMESPACE_END

@@ -105,6 +105,7 @@ Shader::Shader() : Node(get_node_type())
   has_light_path_node = false;
   has_aov_output_node = false;
   has_time_dependency = false;
+  has_dispersion = false;
 
   emission_estimate = zero_float3();
   emission_sampling = EMISSION_SAMPLING_NONE;
@@ -694,6 +695,9 @@ void ShaderManager::device_update_common(Device * /*device*/,
 
     if (shader->has_light_path_node) {
       flag |= SD_HAS_LIGHT_PATH_NODE;
+    }
+    if (shader->has_dispersion) {
+      flag |= SD_REQUIRES_WAVELENGTH;
     }
 
     const uint32_t cryptomatte_id = util_murmur_hash3(

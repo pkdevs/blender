@@ -17,6 +17,7 @@
 
 #include "BKE_main.hh"
 #include "BKE_node.hh"
+#include "BKE_node_legacy_types.hh"
 #include "BKE_node_runtime.hh"
 #include "BKE_paint.hh"
 #include "BKE_paint_types.hh"
@@ -70,6 +71,11 @@ void do_versions_after_linking_530(FileData * /*fd*/, Main *bmain)
   if (!MAIN_VERSION_FILE_ATLEAST(bmain, 503, 8)) {
     version_node_socket_index_animdata(
         bmain, NTREE_GEOMETRY, "GeometryNodeSetGreasePencilColor", 5, 1, 6);
+  }
+
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 503, 11)) {
+    /* Shift animation data to accommodate the new dispersion inputs. */
+    version_node_socket_index_animdata(bmain, NTREE_SHADER, SH_NODE_BSDF_PRINCIPLED, 20, 2, 33);
   }
 
   /**
@@ -199,6 +205,7 @@ void blo_do_versions_530(FileData * /*fd*/, Library * /*lib*/, Main *bmain)
       }
     }
   }
+
   /**
    * Always bump subversion in BKE_blender_version.h when adding versioning
    * code here, and wrap it inside a MAIN_VERSION_FILE_ATLEAST check.
