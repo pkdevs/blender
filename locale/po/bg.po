@@ -1,9 +1,9 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 5.2.0 Alpha (b'8bc0d293b105')\n"
+"Project-Id-Version: Blender 5.3.0 Alpha (b'bf67fb078da0')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-04-28 08:59+0000\n"
+"POT-Creation-Date: 2026-07-27 09:52+0000\n"
 "PO-Revision-Date: 2025-07-23 15:34+0000\n"
 "Last-Translator: Just Adam <adam.abbas2009@gmail.com>\n"
 "Language-Team: Bulgarian <https://translate.blender.org/projects/blender-ui/ui/bg/>\n"
@@ -152,12 +152,24 @@ msgid "Node Editor"
 msgstr "Възлов Редактор"
 
 
+msgid "Custom"
+msgstr "Потребителски"
+
+
 msgid "Author"
 msgstr "Автор"
 
 
-msgid "Custom"
-msgstr "Потребителски"
+msgid "Link"
+msgstr "Връзка"
+
+
+msgid "Append"
+msgstr "Добави"
+
+
+msgid "Pack"
+msgstr "Пакетирай"
 
 
 msgid "Space Type"
@@ -812,18 +824,6 @@ msgid "Sort"
 msgstr "Сортирай"
 
 
-msgid "Link"
-msgstr "Връзка"
-
-
-msgid "Append"
-msgstr "Добави"
-
-
-msgid "Pack"
-msgstr "Пакетирай"
-
-
 msgid "End"
 msgstr "Край"
 
@@ -888,6 +888,10 @@ msgid "Grid"
 msgstr "Мрежа"
 
 
+msgid "Dynamic"
+msgstr "Динамика"
+
+
 msgid "Region Type"
 msgstr "Тип на Региона"
 
@@ -906,10 +910,6 @@ msgstr "Слоеве"
 
 msgid "Box"
 msgstr "Кутия"
-
-
-msgid "Dynamic"
-msgstr "Динамика"
 
 
 msgid "Draw"
@@ -1148,10 +1148,6 @@ msgid "ID Type"
 msgstr "ID тип"
 
 
-msgid "In-Betweens"
-msgstr "Междинни Кадри"
-
-
 msgid "Apply"
 msgstr "Прилагане"
 
@@ -1182,6 +1178,10 @@ msgstr "Направи с Единствен Потребител"
 
 msgid "Hooks"
 msgstr "Куки"
+
+
+msgid "In-Betweens"
+msgstr "Междинни Кадри"
 
 
 msgid "Cache"
@@ -1830,6 +1830,10 @@ msgid "Copy"
 msgstr "Копиране"
 
 
+msgid "Movie"
+msgstr "Преместване"
+
+
 msgctxt "Operator"
 msgid "Add Surface Circle"
 msgstr "Добави Повърхностен Кръг"
@@ -2135,6 +2139,10 @@ msgid "Shaded"
 msgstr "Светлосенки"
 
 
+msgid "Passepartout"
+msgstr "Зона на видимост"
+
+
 msgid "Sub"
 msgstr "Изв"
 
@@ -2227,6 +2235,15 @@ msgid "Animated"
 msgstr "Анимирани"
 
 
+msgid "Cancel"
+msgstr "Отказ"
+
+
+msgctxt "Operator"
+msgid "Clear"
+msgstr "Изчистване"
+
+
 msgid "Author:"
 msgstr "Автор:"
 
@@ -2237,15 +2254,6 @@ msgstr "Тороид"
 
 msgid "Python API Reference"
 msgstr "Python API Справка"
-
-
-msgid "Passepartout"
-msgstr "Зона на видимост"
-
-
-msgctxt "Operator"
-msgid "Clear"
-msgstr "Изчистване"
 
 
 msgid "Date"
@@ -2276,10 +2284,6 @@ msgid "Missing script files"
 msgstr "Липсват скриптови файлове"
 
 
-msgid "Cancel"
-msgstr "Отказ"
-
-
 msgid "%d items"
 msgstr "%d артикули"
 
@@ -2290,10 +2294,6 @@ msgstr "Запълненост:"
 
 msgid "OK"
 msgstr "ОК"
-
-
-msgid "Movie"
-msgstr "Преместване"
 
 
 msgid "Stop this job"

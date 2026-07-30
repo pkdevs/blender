@@ -83,9 +83,9 @@ class RENDER_PT_color_management(RenderButtonsPanel, Panel):
             row.label()
 
             if gpu.platform.backend_type_get() == 'OPENGL':
-                row.label(text="HDR not supported with OpenGL backend", icon='INFO')
+                row.label(text="HDR not supported with OpenGL backend", icon='STATUS_INFO')
             else:
-                row.label(text="HDR display not supported", icon='INFO')
+                row.label(text="HDR display not supported", icon='STATUS_INFO')
 
         col = flow.column()
         col.prop(view, "exposure")
@@ -425,8 +425,7 @@ class RENDER_PT_eevee_screen_trace(RenderButtonsPanel, Panel):
 
     @classmethod
     def poll(cls, context):
-        use_screen_trace = (context.scene.eevee.ray_tracing_method == 'SCREEN')
-        return (context.engine in cls.COMPAT_ENGINES) and use_screen_trace
+        return (context.engine in cls.COMPAT_ENGINES)
 
     def draw(self, context):
         scene = context.scene
@@ -439,9 +438,22 @@ class RENDER_PT_eevee_screen_trace(RenderButtonsPanel, Panel):
 
         props = context.scene.eevee.ray_tracing_options
 
+        use_screen_trace = (context.scene.eevee.ray_tracing_method == 'SCREEN')
+
         col = layout.column()
-        col.prop(props, "screen_trace_quality", text="Precision")
-        col.prop(props, "screen_trace_thickness", text="Thickness")
+        sub = col.column(align=False)
+        sub.active = use_screen_trace
+        sub.prop(props, "screen_trace_quality", text="Precision")
+        sub.prop(props, "screen_trace_thickness", text="Thickness")
+
+        col = col.column(align=False, heading="Backface")
+        row = col.row(align=True)
+        sub = row.row(align=True)
+        sub.active = use_screen_trace or context.scene.eevee.use_fast_gi
+        sub.prop(props, "use_backface_hit", text="")
+        sub = sub.row(align=True)
+        sub.active = props.use_backface_hit
+        sub.prop(props, "backface_radiance_scale", text="")
 
 
 class RENDER_PT_eevee_gi_approximation(RenderButtonsPanel, Panel):
@@ -486,8 +498,7 @@ class RENDER_PT_eevee_gi_approximation(RenderButtonsPanel, Panel):
 
         sub = col.column(align=True)
         sub.prop(props, "fast_gi_distance")
-        sub.prop(props, "fast_gi_thickness_near", text="Thickness Near")
-        sub.prop(props, "fast_gi_thickness_far", text="Far")
+        sub.prop(props, "fast_gi_thickness_near")
 
         col.prop(props, "fast_gi_bias", text="Bias")
 
@@ -517,17 +528,19 @@ class RENDER_PT_eevee_denoise(RenderButtonsPanel, Panel):
         layout.use_property_decorate = False
         props = context.scene.eevee.ray_tracing_options
 
-        col = layout.column()
-        col.active = props.use_denoise
-        col.prop(props, "denoise_spatial")
+        col = layout.column(align=True)
 
-        col = layout.column()
-        col.active = props.use_denoise and props.denoise_spatial
-        col.prop(props, "denoise_temporal")
+        row = col.row()
+        row.active = props.use_denoise
+        row.prop(props, "denoise_spatial")
 
-        col = layout.column()
-        col.active = props.use_denoise and props.denoise_spatial and props.denoise_temporal
-        col.prop(props, "denoise_bilateral")
+        row = col.row()
+        row.active = props.use_denoise and props.denoise_spatial
+        row.prop(props, "denoise_temporal")
+
+        row = col.row()
+        row.active = props.use_denoise and props.denoise_spatial and props.denoise_temporal
+        row.prop(props, "denoise_bilateral")
 
 
 class RENDER_PT_eevee_light_paths(RenderButtonsPanel, Panel):

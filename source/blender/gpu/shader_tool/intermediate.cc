@@ -145,7 +145,7 @@ void ErrorHandler::report(Token tok, std::string_view message)
   if (tok.is_valid()) {
     full_report += "\n";
     full_report += tok.line_str() + "\n";
-    if (tok.str().size() > 0) {
+    if (!tok.str().empty()) {
       full_report += std::string(tok.char_number(), ' ') + "^" +
                      std::string(tok.str().size() - 1, '~');
     }
@@ -220,7 +220,7 @@ static always_inline TokenType multi_tok_lookup(TokenType input, std::string_vie
 
 constexpr always_inline uint8_t perfect_hash(std::string_view s)
 {
-  return s.size() * (s[0] - s.back() * 2);
+  return s.size() * (s[0] - s.back() * 3);
 }
 
 static always_inline TokenType type_lookup(std::string_view s)
@@ -264,6 +264,8 @@ static always_inline TokenType type_lookup(std::string_view s)
       return (s == "struct") ? Struct : Word;
     case perfect_hash("switch"):
       return (s == "switch") ? Switch : Word;
+    case perfect_hash("default"):
+      return (s == "default") ? Default : Word;
     case perfect_hash("private"):
       return (s == "private") ? Private : Word;
     case perfect_hash("continue"):
@@ -388,7 +390,7 @@ struct ScopeStack {
 void ParserBase::build_token_to_scope_map()
 {
   token_scope.clear();
-  token_scope.resize(scope_ranges[0].size);
+  token_scope.resize(this->size() + 1);
 
   int scope_id = 0;
   for (const IndexRange &range : scope_ranges) {
@@ -409,7 +411,7 @@ Token ParserBase::operator[](int i) const
 void ParserBase::update_string_view()
 {
   assert(this->scope_types.data() != nullptr);
-  assert(this->scope_types.size() > 0);
+  assert(!this->scope_types.empty());
   this->scope_types_str = std::string_view(reinterpret_cast<char *>(this->scope_types.data()),
                                            this->scope_types.size());
 }

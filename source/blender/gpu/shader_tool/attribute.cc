@@ -13,12 +13,11 @@
 namespace blender::gpu::shader {
 using namespace std;
 using namespace shader::parser;
+using namespace shader::parser::ast;
 using namespace metadata;
 
 void SourceProcessor::lower_maybe_unused(Parser &parser)
 {
-  using namespace metadata;
-
   parser().foreach_token(SquareOpen, [&](Token par_open) {
     if (par_open.next() != '[') {
       return;
@@ -60,29 +59,30 @@ void SourceProcessor::lint_attributes(Parser &parser)
           attr_str == "instance_index" || attr_str == "layer" ||
           attr_str == "local_invocation_id" || attr_str == "local_invocation_index" ||
           attr_str == "no_perspective" || attr_str == "num_work_groups" || attr_str == "out" ||
-          attr_str == "point_coord" || attr_str == "point_size" || attr_str == "position" ||
-          attr_str == "push_constant" || attr_str == "resource_table" || attr_str == "smooth" ||
-          attr_str == "vertex_id" || attr_str == "legacy_info" || attr_str == "vertex" ||
-          attr_str == "viewport_index" || attr_str == "work_group_id" ||
+          attr_str == "subpass_in" || attr_str == "point_coord" || attr_str == "point_size" ||
+          attr_str == "position" || attr_str == "push_constant" || attr_str == "resource_table" ||
+          attr_str == "smooth" || attr_str == "vertex_id" || attr_str == "legacy_info" ||
+          attr_str == "vertex" || attr_str == "viewport_index" || attr_str == "work_group_id" ||
           attr_str == "maybe_unused" || attr_str == "fallthrough" || attr_str == "nodiscard" ||
-          attr_str == "node")
+          attr_str == "node" || attr_str == "clip_control" || attr_str == "texture_atomic")
       {
         if (attr_scope.is_valid()) {
           report_error(attr, "This attribute requires no argument");
           invalid = true;
         }
       }
-      else if (attr_str == "attribute" || attr_str == "index" || attr_str == "frag_color" ||
-               attr_str == "frag_depth" || attr_str == "uniform" || attr_str == "condition" ||
-               attr_str == "frequency" || attr_str == "sampler" ||
-               attr_str == "specialization_constant")
+      else if (attr_str == "acceleration_structure" || attr_str == "attribute" ||
+               attr_str == "index" || attr_str == "frag_color" || attr_str == "frag_depth" ||
+               attr_str == "uniform" || attr_str == "condition" ||
+               attr_str == "raster_order_group" || attr_str == "frequency" ||
+               attr_str == "sampler" || attr_str == "specialization_constant")
       {
         if (attr_scope.is_invalid()) {
           report_error(attr, "This attribute requires 1 argument");
           invalid = true;
         }
       }
-      else if (attr_str == "storage") {
+      else if (attr_str == "storage" || attr_str == "subpass_input") {
         if (attr_scope.is_invalid()) {
           report_error(attr, "This attribute requires 2 arguments");
           invalid = true;
@@ -177,6 +177,17 @@ void SourceProcessor::lower_attribute_sequences(Parser &parser)
       parser.erase(toks[4], toks[7]);
     });
   } while (parser.apply_mutations());
+}
+
+void SourceProcessor::lower_attribute_sequences_ast(Parser &parser)
+{
+  parser.root().foreach_recursive<AttrList>([&](AttrList list) {
+    if (list.parent().type() == NodeType::AttrList) {
+      Token front = list.front().prev(2);
+      parser.replace(front, ",");
+      parser.erase(front.next(1), front.next(3));
+    }
+  });
 }
 
 }  // namespace blender::gpu::shader

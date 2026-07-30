@@ -63,10 +63,8 @@ MaskSpline *BKE_mask_spline_copy(const MaskSpline *spline);
 void BKE_mask_point_free(MaskSplinePoint *point);
 
 void BKE_mask_layer_unique_name(Mask *mask, MaskLayer *masklay);
-void BKE_mask_layer_rename(Mask *mask,
-                           MaskLayer *masklay,
-                           const char *oldname,
-                           const char *newname);
+void BKE_mask_layer_rename(
+    Main &bmain, Mask *mask, MaskLayer *masklay, const char *oldname, const char *newname);
 
 MaskLayer *BKE_mask_layer_copy(const MaskLayer *masklay);
 void BKE_mask_layer_copy_list(ListBaseT<MaskLayer> *masklayers_new,
@@ -160,16 +158,16 @@ inline bool BKE_mask_point_is_handle_selected(const MaskSplinePoint *point,
 
 inline void BKE_mask_point_select_handles(MaskSplinePoint *p)
 {
-  p->bezt.f1 |= SELECT;
-  p->bezt.f2 |= SELECT;
-  p->bezt.f3 |= SELECT;
+  p->bezt.f1 |= BEZT_FLAG_SELECT;
+  p->bezt.f2 |= BEZT_FLAG_SELECT;
+  p->bezt.f3 |= BEZT_FLAG_SELECT;
 }
 
 inline void BKE_mask_point_deselect_handles(MaskSplinePoint *p)
 {
-  p->bezt.f1 &= ~SELECT;
-  p->bezt.f2 &= ~SELECT;
-  p->bezt.f3 &= ~SELECT;
+  p->bezt.f1 &= ~BEZT_FLAG_SELECT;
+  p->bezt.f2 &= ~BEZT_FLAG_SELECT;
+  p->bezt.f3 &= ~BEZT_FLAG_SELECT;
 }
 
 /** \} */

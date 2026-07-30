@@ -590,7 +590,7 @@ void insert_selected_values(Object *object,
                             const MutableDrawingInfo &info,
                             const bke::AttrDomain domain,
                             const StringRef name,
-                            const int handle_display,
+                            const eHandleDisplay handle_display,
                             Set<T> &r_value_set)
 {
   T default_value;
@@ -641,7 +641,7 @@ static void select_similar_by_value(Scene *scene,
                                     GreasePencil &grease_pencil,
                                     const bke::AttrDomain selection_domain,
                                     const StringRef name,
-                                    const int handle_display,
+                                    const eHandleDisplay handle_display,
                                     float threshold,
                                     DistanceFn distance_fn)
 {
@@ -735,7 +735,7 @@ static wmOperatorStatus select_similar_exec(bContext *C, wmOperator *op)
   GreasePencil &grease_pencil = *id_cast<GreasePencil *>(object->data);
   bke::AttrDomain selection_domain = ED_grease_pencil_selection_domain_get(scene->toolsettings,
                                                                            object);
-  const int handle_display = v3d->overlay.handle_display;
+  const eHandleDisplay handle_display = ed::greasepencil::view3d_handle_type_or_default(v3d);
 
   switch (mode) {
     case SelectSimilarMode::LAYER:
@@ -1078,15 +1078,15 @@ static wmOperatorStatus select_set_mode_exec(bContext *C, wmOperator *op)
   bool changed = false;
   if (BKE_object_is_mode_compat(ob, OB_MODE_EDIT)) {
     changed = (mode_new != ts->gpencil_selectmode_edit);
-    ts->gpencil_selectmode_edit = mode_new;
+    ts->gpencil_selectmode_edit = eGPencil_Selectmode_types(mode_new);
   }
   else if (BKE_object_is_mode_compat(ob, OB_MODE_SCULPT_GREASE_PENCIL)) {
     changed = (mode_new != ts->gpencil_selectmode_sculpt);
-    ts->gpencil_selectmode_sculpt = mode_new;
+    ts->gpencil_selectmode_sculpt = eGP_Sculpt_SelectMaskFlag(mode_new);
   }
   else if (BKE_object_is_mode_compat(ob, OB_MODE_VERTEX_GREASE_PENCIL)) {
     changed = (mode_new != ts->gpencil_selectmode_vertex);
-    ts->gpencil_selectmode_vertex = mode_new;
+    ts->gpencil_selectmode_vertex = eGP_Vertex_SelectMaskFlag(mode_new);
   }
 
   changed |= ensure_selection_domain(ts, ob);

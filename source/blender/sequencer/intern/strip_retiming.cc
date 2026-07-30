@@ -14,10 +14,10 @@
 #include "DNA_sequence_types.h"
 
 #include "BLI_bounds.hh"
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 #include "BLI_map.hh"
-#include "BLI_math_geom.h"
-#include "BLI_math_vector.h"
+#include "BLI_math_geom_c.hh"
+#include "BLI_math_vector_c.hh"
 #include "BLI_math_vector_types.hh"
 #include "BLI_span.hh"
 #include "BLI_vector.hh"
@@ -38,7 +38,7 @@
 
 namespace blender::seq {
 
-/*-------------------------------------------------------------------- */
+/* -------------------------------------------------------------------- */
 /** \name Retiming Get
  * \{ */
 
@@ -154,7 +154,7 @@ bool retiming_keys_are_selected(const Scene *scene)
 bool retiming_is_allowed(const Strip *strip)
 {
   /* Note that this disallows non-sequence image strips. */
-  if (strip->len <= 1) {
+  if (strip->content_length() <= 1) {
     return false;
   }
 
@@ -209,7 +209,7 @@ float retiming_key_speed_get(const Strip *strip, const SeqRetimingKey *key)
 
   BLI_assert(retiming_key_index_get(strip, key) > 0);
   const SeqRetimingKey *key_prev = key - 1;
-  const int frame_index_max = strip->len;
+  const int frame_index_max = strip->content_length();
   const float frame_index_start = round_fl_to_int(key_prev->retiming_factor * frame_index_max);
   const float frame_index_end = round_fl_to_int(key->retiming_factor * frame_index_max);
   const float segment_content_frame_count = frame_index_end - frame_index_start;
@@ -229,7 +229,7 @@ static std::optional<float> retiming_key_new_frame_from_speed_get(const Scene *s
 
   const SeqRetimingKey *key_prev = key - 1;
 
-  const int frame_index_max = strip->len;
+  const int frame_index_max = strip->content_length();
   const float frame_index_prev = round_fl_to_int(key_prev->retiming_factor * frame_index_max);
   const float frame_index = round_fl_to_int(key->retiming_factor * frame_index_max);
 
@@ -257,7 +257,7 @@ void retiming_key_speed_set(const Scene *scene,
 
 /** \} */
 
-/*-------------------------------------------------------------------- */
+/* -------------------------------------------------------------------- */
 /** \name Retiming Freeze Frame
  * \{ */
 
@@ -344,7 +344,7 @@ static void strip_retiming_cleanup_freeze_frame(SeqRetimingKey *key)
 
 /** \} */
 
-/*-------------------------------------------------------------------- */
+/* -------------------------------------------------------------------- */
 /** \name Retiming Edit
  * \{ */
 
@@ -360,7 +360,7 @@ void retiming_data_ensure(Strip *strip)
 
   strip->retiming_keys = MEM_new_array<SeqRetimingKey>(2, __func__);
   SeqRetimingKey *key = strip->retiming_keys + 1;
-  key->strip_frame_index = strip->len;
+  key->strip_frame_index = strip->content_length();
   key->retiming_factor = 1.0f;
   strip->retiming_keys_num = 2;
 }
@@ -405,7 +405,7 @@ static void retiming_key_overlap(Scene *scene, Strip *strip)
   VectorSet<Strip *> strips;
   VectorSet<Strip *> dependant;
   dependant.add(strip);
-  iterator_set_expand(seqbase, dependant, query_strip_effect_chain);
+  iterator_set_expand(seq::editing_get(scene), dependant, query_strip_effect_chain);
   strips.add_multiple(dependant);
   dependant.remove(strip);
   transform_handle_overlap(scene, seqbase, strips, dependant, true);
@@ -419,7 +419,7 @@ void retiming_reset(Scene *scene, Strip *strip)
 
   retiming_data_clear(strip);
 
-  Span<Strip *> effects = SEQ_lookup_effects_by_strip(scene->ed, strip);
+  Span<Strip *> effects = lookup_effects_by_strip(scene->ed, strip);
   strip_time_update_effects_strip_range(scene, effects);
   time_update_meta_strip_range(scene, lookup_meta_by_strip(scene->ed, strip));
 
@@ -619,7 +619,7 @@ void retiming_remove_key(Strip *strip, SeqRetimingKey *key)
 
 /** \} */
 
-/*-------------------------------------------------------------------- */
+/* -------------------------------------------------------------------- */
 /** \name Retiming Transition
  * \{ */
 
@@ -908,7 +908,7 @@ static void strip_retiming_key_offset(const Scene *scene,
 
 /** \} */
 
-/*-------------------------------------------------------------------- */
+/* -------------------------------------------------------------------- */
 /** \name Retiming Set
  * \{ */
 
@@ -974,14 +974,14 @@ void retiming_key_frame_set(const Scene *scene, Strip *strip, SeqRetimingKey *ke
         scene, strip, key, strip_retiming_clamp_offset(scene, strip, key, offset));
   }
 
-  Span<Strip *> effects = SEQ_lookup_effects_by_strip(scene->ed, strip);
+  Span<Strip *> effects = lookup_effects_by_strip(scene->ed, strip);
   strip_time_update_effects_strip_range(scene, effects);
   time_update_meta_strip_range(scene, lookup_meta_by_strip(scene->ed, strip));
 }
 
 /** \} */
 
-/*-------------------------------------------------------------------- */
+/* -------------------------------------------------------------------- */
 /** \name Retiming Range
  * \{ */
 
@@ -1094,7 +1094,7 @@ class RetimingRange {
   {
     for (int frame = start; frame <= end; frame++) {
       /* We need number actual number of frames here. */
-      const double normal_step = 1 / double(strip->len - 1);
+      const double normal_step = 1 / double(strip->content_length() - 1);
 
       const int frame_index = frame - strip->content_start();
       /* Who needs calculus, when you can have slow code? */
@@ -1225,7 +1225,7 @@ void retiming_sound_animation_data_set(const Scene *scene, const Strip *strip)
   if (correct_pitch) {
     sound_handle = BKE_sound_ensure_time_stretch_effect(strip, scene_fps);
     BKE_sound_set_scene_sound_pitch_constant_range(
-        strip->runtime->scene_sound, 0, strip->start + strip->len, 1.0f);
+        strip->runtime->scene_sound, 0, strip->start + strip->content_length(), 1.0f);
   }
   else {
     strip->runtime->clear_sound_time_stretch();
@@ -1278,7 +1278,7 @@ void retiming_sound_animation_data_set(const Scene *scene, const Strip *strip)
 
 /** \} */
 
-/*-------------------------------------------------------------------- */
+/* -------------------------------------------------------------------- */
 /** \name Retiming Selection
  * \{ */
 

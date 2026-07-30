@@ -4,6 +4,7 @@
 
 #include <algorithm>
 
+#include "BLI_index_range.hh"
 #include "BLI_map.hh"
 #include "BLI_set.hh"
 #include "BLI_stack.hh"
@@ -16,11 +17,46 @@
 #include "BKE_node.hh"
 #include "BKE_node_runtime.hh"
 
+#include "NOD_geo_index_switch.hh"
+#include "NOD_geo_menu_switch.hh"
+
 #include "COM_context.hh"
 #include "COM_scheduler.hh"
 #include "COM_utilities.hh"
 
 namespace blender::compositor {
+
+bool has_viewer_node(const bNodeTree &node_group,
+                     const ComputeContext &compute_context,
+                     const ComputeContextHash &active_compute_context_hash)
+{
+  node_group.ensure_topology_cache();
+
+  /* If this is the active node group, check if a viewer node exists.  */
+  if (compute_context.hash() == active_compute_context_hash) {
+    for (const bNode *node : node_group.nodes_by_type("CompositorNodeViewer"_ustr)) {
+      if (node->flag & NODE_DO_OUTPUT && !node->is_muted()) {
+        return true;
+      }
+    }
+  }
+
+  /* Otherwise, we have to check node groups recursively. */
+  for (const bNode *group_node : node_group.group_nodes()) {
+    if (group_node->is_muted() || !group_node->id) {
+      continue;
+    }
+
+    const bNodeTree &child_node_group = *reinterpret_cast<const bNodeTree *>(group_node->id);
+    const bke::GroupNodeComputeContext node_compute_context(
+        &compute_context, group_node->identifier, &group_node->owner_tree());
+    if (has_viewer_node(child_node_group, node_compute_context, active_compute_context_hash)) {
+      return true;
+    }
+  }
+
+  return false;
+}
 
 /* Checks if the node group has a File Output node in it or in one of its descendants. */
 static bool has_file_output_recursive(const bNodeTree &node_group)
@@ -43,56 +79,17 @@ static bool has_file_output_recursive(const bNodeTree &node_group)
   return false;
 }
 
-/* Checks if the node group with the given instance key has a Viewer node in it or in one of its
- * descendants. Only nodes of node groups whose instance key match that of the given active node
- * group instance key are considered active. */
-static bool has_viewer_recursive(const bNodeTree &node_group,
-                                 const bNodeInstanceKey instance_key,
-                                 const bNodeInstanceKey active_node_group_instance_key)
-{
-  node_group.ensure_topology_cache();
-
-  /* If this is the active node group, check if a viewer node exists.  */
-  if (active_node_group_instance_key == instance_key) {
-    for (const bNode *node : node_group.nodes_by_type("CompositorNodeViewer"_ustr)) {
-      if (node->flag & NODE_DO_OUTPUT && !node->is_muted()) {
-        return true;
-      }
-    }
-  }
-
-  /* Otherwise, we have to check node groups recursively. */
-  for (const bNode *group_node : node_group.group_nodes()) {
-    if (group_node->is_muted() || !group_node->id) {
-      continue;
-    }
-
-    const bNodeTree &child_node_group = *reinterpret_cast<const bNodeTree *>(group_node->id);
-    const bNodeInstanceKey child_instance_key = bke::node_instance_key(
-        instance_key, &node_group, group_node);
-    if (has_viewer_recursive(child_node_group, child_instance_key, active_node_group_instance_key))
-    {
-      return true;
-    }
-  }
-
-  return false;
-}
-
 /* Add the output nodes whose result should be computed to the given stack. This includes File
  * Output, Group Output, and Viewer nodes. This might also include group nodes that contain File
  * Output or Viewer nodes. */
-static void add_output_nodes(const Context &context,
-                             const bNodeTree &node_group,
-                             NodeGroupOutputTypes needed_outputs_types,
-                             const Set<StringRef> &needed_outputs,
-                             const bNodeInstanceKey instance_key,
-                             const bNodeInstanceKey active_node_group_instance_key,
+static void add_output_nodes(NodeGroupOperation &node_group_operation,
                              Stack<const bNode *> &node_stack)
 {
+  const bNodeTree &node_group = node_group_operation.node_group();
+  const NodeGroupOutputTypes needed_output_types = node_group_operation.needed_output_types();
   node_group.ensure_topology_cache();
 
-  bool viewer_exists = false;
+  bool viewer_exists_in_descendant_node_group = false;
   /* Add group nodes that contain File Output and Viewer nodes. */
   for (const bNode *group_node : node_group.group_nodes()) {
     if (group_node->is_muted() || !group_node->id) {
@@ -100,25 +97,36 @@ static void add_output_nodes(const Context &context,
     }
 
     const bNodeTree &child_tree = *reinterpret_cast<const bNodeTree *>(group_node->id);
-    const bNodeInstanceKey child_instance_key = bke::node_instance_key(
-        instance_key, &node_group, group_node);
-    if (flag_is_set(needed_outputs_types, NodeGroupOutputTypes::ViewerNode) &&
-        has_viewer_recursive(child_tree, child_instance_key, active_node_group_instance_key))
+    const bke::GroupNodeComputeContext node_compute_context(
+        &node_group_operation.compute_context(),
+        group_node->identifier,
+        &group_node->owner_tree());
+    if (flag_is_set(needed_output_types, NodeGroupOutputTypes::ViewerNode) &&
+        has_viewer_node(child_tree,
+                        node_compute_context,
+                        node_group_operation.context().get_active_compute_context_hash()))
     {
       node_stack.push(group_node);
-      viewer_exists = true;
+      viewer_exists_in_descendant_node_group = true;
       continue;
     }
 
-    if (flag_is_set(needed_outputs_types, NodeGroupOutputTypes::FileOutputNode) &&
+    if (flag_is_set(needed_output_types, NodeGroupOutputTypes::FileOutputNode) &&
         has_file_output_recursive(child_tree))
     {
       node_stack.push(group_node);
     }
   }
 
+  /* Add Warning nodes. */
+  for (const bNode *node : node_group.nodes_by_type("GeometryNodeWarning"_ustr)) {
+    if (!node->is_muted()) {
+      node_stack.push(node);
+    }
+  }
+
   /* Add File Output nodes. */
-  if (flag_is_set(needed_outputs_types, NodeGroupOutputTypes::FileOutputNode)) {
+  if (flag_is_set(needed_output_types, NodeGroupOutputTypes::FileOutputNode)) {
     for (const bNode *node : node_group.nodes_by_type("CompositorNodeOutputFile"_ustr)) {
       if (!node->is_muted()) {
         node_stack.push(node);
@@ -126,39 +134,166 @@ static void add_output_nodes(const Context &context,
     }
   }
 
-  /* Add Viewer node. Only add the node if the node group is active or is a root node group and no
+  /* Identify if the node group is the base context or the active context. */
+  const bke::DataBlockComputeContext base_compute_context(
+      nullptr, node_group_operation.context().get_scene().id);
+  const bool is_base_node_group = node_group_operation.compute_context().hash() ==
+                                  base_compute_context.hash();
+  const bool is_active_node_group =
+      node_group_operation.compute_context().hash() ==
+      node_group_operation.context().get_active_compute_context_hash();
+
+  /* Add Viewer node. Only add the node if the node group is active or is a base node group and no
    * viewer node exists in descendants node groups. */
-  const bool is_active_node_group = active_node_group_instance_key == instance_key;
-  const bool is_root_node_group = instance_key == bke::NODE_INSTANCE_KEY_BASE;
-  const bool should_add_viewer = is_active_node_group || (is_root_node_group && !viewer_exists);
-  if (flag_is_set(needed_outputs_types, NodeGroupOutputTypes::ViewerNode) && should_add_viewer) {
+  const bool consider_base_viewer = !viewer_exists_in_descendant_node_group;
+  const bool should_add_base_viewer = is_base_node_group && consider_base_viewer;
+  const bool should_add_viewer = is_active_node_group || should_add_base_viewer;
+  if (flag_is_set(needed_output_types, NodeGroupOutputTypes::ViewerNode) && should_add_viewer) {
     for (const bNode *node : node_group.nodes_by_type("CompositorNodeViewer"_ustr)) {
       if (node->flag & NODE_DO_OUTPUT && !node->is_muted()) {
         node_stack.push(node);
-        viewer_exists = true;
         break;
       }
     }
   }
 
-  /* None of the node groups outputs are needed, so no need to add the Group Output node. */
-  if (needed_outputs.is_empty()) {
-    return;
+  bool is_any_group_output_needed = false;
+  for (const bNodeTreeInterfaceSocket *output : node_group.interface_outputs()) {
+    if (node_group_operation.get_result(output->identifier).should_compute()) {
+      is_any_group_output_needed = true;
+      break;
+    }
   }
 
-  /* Add Group Output node. None root node groups should always had a group output node. If the
-   * context is treating viewer nodes as group outputs, then the group output should be ignored
-   * even if needed. */
-  const bool context_ignores_output = context.treat_viewer_as_group_output() && viewer_exists;
-  if (!is_root_node_group ||
-      (flag_is_set(needed_outputs_types, NodeGroupOutputTypes::GroupOutputNode) &&
-       !context_ignores_output))
-  {
+  /* Add Group Output node if any of its outputs are needed. */
+  if (is_any_group_output_needed) {
     const bNode *output_node = node_group.group_output_node();
     if (output_node && !output_node->is_muted()) {
       node_stack.push(output_node);
     }
   }
+}
+
+/* Returns the value of input of the node with the given identifier in the given node group
+ * operation. If the value can not be determined statically, a nullopt is returned. The value is
+ * only known statically if the input is not connected or directly connected to a group input node
+ * with the same socket type. */
+template<typename T, typename SocketT>
+static std::optional<T> get_input_socket_value(const bNode &node,
+                                               const UString &identifier,
+                                               NodeGroupOperation &node_group_operation)
+{
+  const bNodeSocket &input = *node.input_by_identifier(identifier);
+  if (!input.is_logically_linked()) {
+    return T(input.default_value_typed<SocketT>()->value);
+  }
+
+  const bNodeSocket *linked_output = input.logically_linked_sockets()[0];
+  if (!linked_output->owner_node().is_group_input()) {
+    return std::nullopt;
+  }
+
+  if (linked_output->type != input.type) {
+    return std::nullopt;
+  }
+
+  return node_group_operation.get_input(linked_output->identifier).get_single_value_default<T>();
+}
+
+/* Returns true if the given input of the given Switch node in the given node group operation is
+ * needed by the node. */
+static bool is_switch_node_input_needed(const bNode &node,
+                                        const bNodeSocket &input,
+                                        NodeGroupOperation &node_group_operation)
+{
+  const UString condition_identifier = "Switch"_ustr;
+  if (input.identifier_ustr() == condition_identifier) {
+    return true;
+  }
+
+  const std::optional<bool> condition = get_input_socket_value<bool, bNodeSocketValueBoolean>(
+      node, condition_identifier, node_group_operation);
+  if (!condition.has_value()) {
+    return true;
+  }
+
+  return (input.identifier_ustr() == "True"_ustr) == condition.value();
+}
+
+/* returns true if the given input of the given menu switch node in the given node group operation
+ * is needed by the node. */
+static bool is_menu_switch_node_input_needed(const bNode &node,
+                                             const bNodeSocket &input,
+                                             NodeGroupOperation &node_group_operation)
+{
+  const UString menu_identifier = "Menu"_ustr;
+  if (input.identifier_ustr() == menu_identifier) {
+    return true;
+  }
+
+  const std::optional<nodes::MenuValue> menu =
+      get_input_socket_value<nodes::MenuValue, bNodeSocketValueMenu>(
+          node, menu_identifier, node_group_operation);
+  if (!menu.has_value()) {
+    return true;
+  }
+
+  const NodeEnumItem menu_item = NodeEnumItem{nullptr, nullptr, menu.value().value};
+  const std::string identifier = nodes::MenuSwitchItemsAccessor::socket_identifier_for_item(
+      menu_item);
+  return input.identifier == identifier;
+}
+
+/* Returns true if the given input of the given Index node in the given node group operation is
+ * needed by the node. */
+static bool is_index_switch_node_input_needed(const bNode &node,
+                                              const bNodeSocket &input,
+                                              NodeGroupOperation &node_group_operation)
+{
+  const UString index_identifier = "Index"_ustr;
+  if (input.identifier_ustr() == index_identifier) {
+    return true;
+  }
+
+  const std::optional<int> index = get_input_socket_value<int, bNodeSocketValueInt>(
+      node, index_identifier, node_group_operation);
+  if (!index.has_value()) {
+    return true;
+  }
+
+  const NodeIndexSwitch &storage = *static_cast<const NodeIndexSwitch *>(node.storage);
+  if (!IndexRange(storage.items_num).contains(index.value())) {
+    return false;
+  }
+
+  const std::string identifier = nodes::IndexSwitchItemsAccessor::socket_identifier_for_item(
+      storage.items[index.value()]);
+  return input.identifier == identifier;
+}
+
+/* Returns true if the given input of the given node in the given node group operation is needed by
+ * the compositor. */
+static bool is_input_needed(const bNode &node,
+                            const bNodeSocket &input,
+                            NodeGroupOperation &node_group_operation)
+{
+  if (node.is_group_output()) {
+    return node_group_operation.get_result(input.identifier).should_compute();
+  }
+
+  if (node.is_type("GeometryNodeSwitch"_ustr)) {
+    return is_switch_node_input_needed(node, input, node_group_operation);
+  }
+
+  if (node.is_type("GeometryNodeMenuSwitch"_ustr)) {
+    return is_menu_switch_node_input_needed(node, input, node_group_operation);
+  }
+
+  if (node.is_type("GeometryNodeIndexSwitch"_ustr)) {
+    return is_index_switch_node_input_needed(node, input, node_group_operation);
+  }
+
+  return true;
 }
 
 /* A type representing a mapping that associates each node with a heuristic estimation of the
@@ -216,7 +351,7 @@ using NeededBuffers = Map<const bNode *, int>;
  * - The compiler may decide to compiler the schedule differently depending on runtime information
  *   which we can merely speculate at scheduling-time as described above. */
 static NeededBuffers compute_number_of_needed_buffers(Stack<const bNode *> &output_nodes,
-                                                      const Set<StringRef> &needed_outputs)
+                                                      NodeGroupOperation &node_group_operation)
 {
   NeededBuffers needed_buffers;
 
@@ -242,7 +377,7 @@ static NeededBuffers compute_number_of_needed_buffers(Stack<const bNode *> &outp
         continue;
       }
 
-      if (node.is_group_output() && !needed_outputs.contains(input->identifier)) {
+      if (!is_input_needed(node, *input, node_group_operation)) {
         continue;
       }
 
@@ -284,7 +419,7 @@ static NeededBuffers compute_number_of_needed_buffers(Stack<const bNode *> &outp
         continue;
       }
 
-      if (node.is_group_output() && !needed_outputs.contains(input->identifier)) {
+      if (!is_input_needed(node, *input, node_group_operation)) {
         continue;
       }
 
@@ -323,7 +458,11 @@ static NeededBuffers compute_number_of_needed_buffers(Stack<const bNode *> &outp
 
       /* If any of the links is not between two pixel nodes, it means that the node outputs
        * a buffer through this output and so we increment the number of output buffers. */
-      if (!is_output_linked_to_node_conditioned(*output, is_pixel_node) || !is_pixel_node(node)) {
+      if (!is_pixel_node(node) ||
+          is_output_linked_to_input_conditioned(*output, [&](const bNodeSocket &input) {
+            return !is_pixel_node(input.owner_node());
+          }))
+      {
         number_of_output_buffers++;
       }
     }
@@ -354,19 +493,14 @@ static NeededBuffers compute_number_of_needed_buffers(Stack<const bNode *> &outp
  * doesn't always guarantee an optimal evaluation order, as the optimal evaluation order is very
  * difficult to compute, however, this method works well in most cases. Moreover it assumes that
  * all buffers will have roughly the same size, which may not always be the case. */
-Schedule compute_schedule(const Context &context,
-                          const bNodeTree &node_group,
-                          NodeGroupOutputTypes needed_outputs_types,
-                          const Set<StringRef> &needed_outputs,
-                          const bNodeInstanceKey instance_key,
-                          const bNodeInstanceKey active_node_group_instance_key)
+Schedule compute_schedule(NodeGroupOperation &node_group_operation)
 {
   Schedule schedule;
 
   /* Validate node group. */
-  node_group.ensure_topology_cache();
-  if (node_group.has_available_link_cycle()) {
-    context.set_info_message("Compositor node group has cyclic links.");
+  node_group_operation.node_group().ensure_topology_cache();
+  if (node_group_operation.node_group().has_available_link_cycle()) {
+    node_group_operation.context().set_info_message("Compositor node group has cyclic links.");
     return schedule;
   }
 
@@ -374,13 +508,7 @@ Schedule compute_schedule(const Context &context,
   Stack<const bNode *> node_stack;
 
   /* Add the output nodes whose result should be computed to the stack. */
-  add_output_nodes(context,
-                   node_group,
-                   needed_outputs_types,
-                   needed_outputs,
-                   instance_key,
-                   active_node_group_instance_key,
-                   node_stack);
+  add_output_nodes(node_group_operation, node_stack);
 
   /* No output nodes, the node group has no effect, return an empty schedule. */
   if (node_stack.is_empty()) {
@@ -389,7 +517,7 @@ Schedule compute_schedule(const Context &context,
 
   /* Compute the number of buffers needed by each node connected to the outputs. */
   const NeededBuffers needed_buffers = compute_number_of_needed_buffers(node_stack,
-                                                                        needed_outputs);
+                                                                        node_group_operation);
 
   /* Traverse the node group in a post order depth first manner, scheduling the nodes in an order
    * informed by the number of buffers needed by each node. Post order traversal guarantee that all
@@ -411,7 +539,7 @@ Schedule compute_schedule(const Context &context,
         continue;
       }
 
-      if (node.is_group_output() && !needed_outputs.contains(input->identifier)) {
+      if (!is_input_needed(node, *input, node_group_operation)) {
         schedule.unneeded_inputs.add(input);
         continue;
       }

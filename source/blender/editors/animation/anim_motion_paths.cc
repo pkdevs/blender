@@ -11,11 +11,12 @@
 #include <cstdlib>
 
 #include "BLI_bounds.hh"
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 #include "BLI_listbase_wrapper.hh"
-#include "BLI_math_matrix.h"
 #include "BLI_math_matrix.hh"
-#include "BLI_math_vector.h"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_vector_c.hh"
+#include "BLI_string.hh"
 
 #include "DNA_anim_types.h"
 #include "DNA_armature_types.h"
@@ -23,6 +24,7 @@
 
 #include "BKE_action.hh"
 #include "BKE_anim_data.hh"
+#include "BKE_camera.h"
 #include "BKE_main.hh"
 #include "BKE_scene.hh"
 
@@ -47,33 +49,12 @@ namespace blender {
 
 static CLG_LogRef LOG = {"anim.motion_paths"};
 
-/* Motion path needing to be baked (mpt). */
-struct MPathTarget {
-  bMotionPath *mpath; /* Motion path in question. */
-
-  AnimKeylist *keylist; /* Temp, to know where the keyframes are. */
-
-  /* Original (Source Objects) */
-  Object *ob;          /* Source Object */
-  bPoseChannel *pchan; /* Source pose-channel (if applicable). */
-
-  /* "Evaluated" Copies (these come from the background evaluated copy
-   * that provide all the coordinates we want to save off). */
-  Object *ob_eval; /* Evaluated Object. */
-};
-
 /* ........ */
-
-/* Update scene for current frame. */
-static void motionpaths_calc_update_scene(Depsgraph *depsgraph)
-{
-  BKE_scene_graph_update_for_newframe(depsgraph);
-}
 
 Depsgraph *animviz_depsgraph_build(Main *bmain,
                                    Scene *scene,
                                    ViewLayer *view_layer,
-                                   const Span<MPathTarget *> targets)
+                                   const Span<MPathTarget> targets)
 {
   /* Allocate dependency graph. */
   Depsgraph *depsgraph = DEG_graph_new(bmain, scene, view_layer, DAG_EVAL_VIEWPORT);
@@ -81,30 +62,26 @@ Depsgraph *animviz_depsgraph_build(Main *bmain,
   /* Make a flat array of IDs for the DEG API. */
   Array<ID *> ids(targets.size());
   int current_id_index = 0;
-  for (const MPathTarget *mpt : targets) {
-    ids[current_id_index++] = &mpt->ob->id;
+  for (const MPathTarget &mpt : targets) {
+    ids[current_id_index++] = &mpt.ob->id;
   }
 
   /* Build graph from all requested IDs. */
   DEG_graph_build_from_ids(depsgraph, ids);
 
-  /* Update once so we can access pointers of evaluated animation data. */
-  motionpaths_calc_update_scene(depsgraph);
   return depsgraph;
 }
 
-void animviz_build_motionpath_targets(Object *ob, Vector<MPathTarget *> &r_targets)
+void animviz_build_motionpath_targets(Object *ob, Vector<MPathTarget> &r_targets)
 {
   /* TODO: it would be nice in future to be able to update objects dependent on these bones too? */
-
-  MPathTarget *mpt;
 
   /* Object itself first. */
   if ((ob->avs.recalc & ANIMVIZ_RECALC_PATHS) && (ob->mpath)) {
     /* New target for object. */
-    mpt = MEM_new_zeroed<MPathTarget>("MPathTarget Ob");
-    mpt->mpath = ob->mpath;
-    mpt->ob = ob;
+    MPathTarget mpt;
+    mpt.mpath = ob->mpath;
+    mpt.ob = ob;
 
     r_targets.append(mpt);
   }
@@ -113,153 +90,165 @@ void animviz_build_motionpath_targets(Object *ob, Vector<MPathTarget *> &r_targe
   if ((ob->pose) && (ob->pose->avs.recalc & ANIMVIZ_RECALC_PATHS)) {
     bArmature *arm = id_cast<bArmature *>(ob->data);
     for (bPoseChannel &pchan : ob->pose->chanbase) {
-      if ((pchan.bone) && ANIM_bonecoll_is_visible_pchan(arm, &pchan) && (pchan.mpath)) {
-        /* New target for bone. */
-        mpt = MEM_new_zeroed<MPathTarget>("MPathTarget PoseBone");
-        mpt->mpath = pchan.mpath;
-        mpt->ob = ob;
-        mpt->pchan = &pchan;
-        r_targets.append(mpt);
+      if (!pchan.mpath) {
+        continue;
       }
+      Bone *bone = pchan.bone_get(*ob);
+      if (!bone || !ANIM_bone_in_visible_collection(arm, bone)) {
+        continue;
+      }
+      /* New target for bone. */
+      MPathTarget mpt;
+      mpt.mpath = pchan.mpath;
+      mpt.ob = ob;
+      mpt.pchan = &pchan;
+      r_targets.append(mpt);
     }
   }
-}
-
-void animviz_free_motionpath_targets(Vector<MPathTarget *> &targets)
-{
-  for (MPathTarget *mpt : targets) {
-    MEM_delete(mpt);
-  }
-  targets.clear_and_shrink();
 }
 
 /* ........ */
 
+/* Converts the given point into NDC space. */
+static void transform_mpath_point_to_camera(Depsgraph &depsgraph,
+                                            Object &camera,
+                                            bMotionPathVert &mpv)
+{
+  Object *cam_eval = DEG_get_evaluated(&depsgraph, &camera);
+  /* Aka projection matrix. */
+  float4x4 window_matrix;
+  Scene *scene = DEG_get_input_scene(&depsgraph);
+  BKE_camera_multiview_window_matrix(&scene->r, cam_eval, nullptr, window_matrix.ptr());
+  /* World to Object is the view matrix. */
+  float4x4 perspective_matrix = window_matrix * cam_eval->world_to_object();
+  const float4 co_clip_space = perspective_matrix * float4(mpv.co[0], mpv.co[1], mpv.co[2], 1.0);
+  /* Storing the verts in NDC space which contains lens effects like sensor offset. See
+   * `overlay_motion_path.hh/motion_path_sync`. Negative w values are behind the camera, thus
+   * can't be correctly projected into the scene. Using abs(w) is consistent with
+   * `project_point` in shader code. */
+  const float3 co_ndc_space = float3(co_clip_space) /
+                              math::max(math::abs(co_clip_space.w), 0.0001f);
+  copy_v3_v3(mpv.co, co_ndc_space);
+}
+
 /* Perform baking for the targets on the current frame. */
-static void motionpaths_calc_bake_targets(const Span<MPathTarget *> targets,
-                                          const int cframe,
-                                          Depsgraph *depsgraph,
-                                          Object *camera)
+static void motionpaths_calc_bake_target(const MPathTarget &mpt,
+                                         const int cframe,
+                                         Depsgraph *depsgraph,
+                                         Object *camera)
 {
   /* For each target, check if it can be baked on the current frame. */
-  for (const MPathTarget *mpt : targets) {
-    bMotionPath *mpath = mpt->mpath;
+  bMotionPath *mpath = mpt.mpath;
 
-    /* Current frame must be within the range the cache works for.
-     * - is inclusive of the first frame, but not the last otherwise we get buffer overruns.
-     */
-    if ((cframe < mpath->start_frame) || (cframe >= mpath->end_frame)) {
-      continue;
-    }
+  /* Current frame must be within the range the cache works for.
+   * - is inclusive of the first frame, but not the last otherwise we get buffer overruns.
+   */
+  if ((cframe < mpath->start_frame) || (cframe >= mpath->end_frame)) {
+    return;
+  }
 
-    /* Get the relevant cache vert to write to. */
-    bMotionPathVert *mpv = mpath->points + (cframe - mpath->start_frame);
+  /* Get the relevant cache vert to write to. */
+  bMotionPathVert &mpv = mpath->points[cframe - mpath->start_frame];
 
-    Object *ob_eval = mpt->ob_eval;
+  Object *ob_eval = DEG_get_evaluated(depsgraph, mpt.ob);
 
-    /* Lookup evaluated pose channel, here because the depsgraph
-     * evaluation can change them so they are not cached in mpt. */
-    bPoseChannel *pchan_eval = nullptr;
-    if (mpt->pchan) {
-      pchan_eval = BKE_pose_channel_find_name(ob_eval->pose, mpt->pchan->name);
-    }
+  /* Lookup evaluated pose channel, here because the depsgraph
+   * evaluation can change them so they are not cached in mpt. */
+  bPoseChannel *pchan_eval = nullptr;
+  if (mpt.pchan) {
+    pchan_eval = BKE_pose_channel_find_name(ob_eval->pose, mpt.pchan->name);
+  }
 
-    /* Pose-channel or object path baking? */
-    if (pchan_eval) {
-      /* Heads or tails. */
-      if (mpath->flag & MOTIONPATH_FLAG_BHEAD) {
-        copy_v3_v3(mpv->co, pchan_eval->pose_head);
-      }
-      else {
-        copy_v3_v3(mpv->co, pchan_eval->pose_tail);
-      }
-
-      /* Result must be in world-space. */
-      mul_m4_v3(ob_eval->object_to_world().ptr(), mpv->co);
+  /* Pose-channel or object path baking? */
+  if (pchan_eval) {
+    /* Heads or tails. */
+    if (mpath->flag & MOTIONPATH_FLAG_BHEAD) {
+      copy_v3_v3(mpv.co, pchan_eval->pose_head);
     }
     else {
-      /* World-space object location. */
-      copy_v3_v3(mpv->co, ob_eval->object_to_world().location());
+      copy_v3_v3(mpv.co, pchan_eval->pose_tail);
     }
 
-    if (mpath->flag & MOTIONPATH_FLAG_BAKE_CAMERA && camera) {
-      Object *cam_eval = DEG_get_evaluated(depsgraph, camera);
-      /* Convert point to camera space. */
-      float3 co_camera_space = math::transform_point(cam_eval->world_to_object(), float3(mpv->co));
-      copy_v3_v3(mpv->co, co_camera_space);
-    }
+    /* Result must be in world-space. */
+    mul_m4_v3(ob_eval->object_to_world().ptr(), mpv.co);
+  }
+  else {
+    /* World-space object location. */
+    copy_v3_v3(mpv.co, ob_eval->object_to_world().location());
+  }
 
-    float mframe = float(cframe);
+  if (mpath->flag & MOTIONPATH_FLAG_BAKE_CAMERA && camera) {
+    transform_mpath_point_to_camera(*depsgraph, *camera, mpv);
+  }
 
-    /* Tag if it's a keyframe. */
-    if (ED_keylist_find_exact(mpt->keylist, mframe)) {
-      mpv->flag |= MOTIONPATH_VERT_KEY;
-    }
-    else {
-      mpv->flag &= ~MOTIONPATH_VERT_KEY;
-    }
+  /* Tag if it's a keyframe. */
+  if (ED_keylist_find_exact(mpt.keylist, cframe)) {
+    mpv.flag |= MOTIONPATH_VERT_KEY;
+  }
+  else {
+    mpv.flag &= ~MOTIONPATH_VERT_KEY;
+  }
 
-    /* Incremental update on evaluated object if possible, for fast updating
-     * while dragging in transform. */
-    bMotionPath *mpath_eval = nullptr;
-    if (mpt->pchan) {
-      mpath_eval = (pchan_eval) ? pchan_eval->mpath : nullptr;
-    }
-    else {
-      mpath_eval = ob_eval->mpath;
-    }
+  /* Incremental update on evaluated object if possible, for fast updating
+   * while dragging in transform. */
+  bMotionPath *mpath_eval = nullptr;
+  if (mpt.pchan) {
+    mpath_eval = (pchan_eval) ? pchan_eval->mpath : nullptr;
+  }
+  else {
+    mpath_eval = ob_eval->mpath;
+  }
 
-    if (mpath_eval && mpath_eval->length == mpath->length) {
-      bMotionPathVert *mpv_eval = mpath_eval->points + (cframe - mpath_eval->start_frame);
-      *mpv_eval = *mpv;
+  if (mpath_eval && mpath_eval->length == mpath->length) {
+    bMotionPathVert &mpv_eval = mpath_eval->points[cframe - mpath_eval->start_frame];
+    mpv_eval = mpv;
 
-      GPU_VERTBUF_DISCARD_SAFE(mpath_eval->points_vbo);
-      GPU_BATCH_DISCARD_SAFE(mpath_eval->batch_line);
-      GPU_BATCH_DISCARD_SAFE(mpath_eval->batch_points);
-    }
+    GPU_VERTBUF_DISCARD_SAFE(mpath_eval->points_vbo);
+    GPU_BATCH_DISCARD_SAFE(mpath_eval->batch_line);
+    GPU_BATCH_DISCARD_SAFE(mpath_eval->batch_points);
   }
 }
 
 /* Get pointer to animviz settings for the given target. */
-static bAnimVizSettings *animviz_target_settings_get(const MPathTarget *mpt)
+static bAnimVizSettings *animviz_target_settings_get(const MPathTarget &mpt)
 {
-  if (mpt->pchan != nullptr) {
-    return &mpt->ob->pose->avs;
+  if (mpt.pchan != nullptr) {
+    return &mpt.ob->pose->avs;
   }
-  return &mpt->ob->avs;
+  return &mpt.ob->avs;
 }
 
 /* Returns the combined range of all `MPathTarget` start and end frames. */
-static Bounds<int> motionpath_get_global_framerange(const Span<MPathTarget *> targets)
+static Bounds<int> motionpath_get_global_framerange(const Span<MPathTarget> targets)
 {
   Bounds<int> frame_range = {INT_MAX, INT_MIN};
-  for (const MPathTarget *mpt : targets) {
-    frame_range.min = min_ii(frame_range.min, mpt->mpath->start_frame);
-    frame_range.max = max_ii(frame_range.max, mpt->mpath->end_frame);
+  for (const MPathTarget &mpt : targets) {
+    frame_range.min = min_ii(frame_range.min, mpt.mpath->start_frame);
+    frame_range.max = max_ii(frame_range.max, mpt.mpath->end_frame);
   }
   return frame_range;
 }
 
-static int motionpath_get_prev_keyframe(MPathTarget *mpt,
+static int motionpath_get_prev_keyframe(MPathTarget &mpt,
                                         AnimKeylist *keylist,
                                         const int current_frame)
 {
   /* TODO(jbakker): Remove complexity, key-lists are ordered. */
 
-  if (current_frame <= mpt->mpath->start_frame) {
-    return mpt->mpath->start_frame;
+  if (current_frame <= mpt.mpath->start_frame) {
+    return mpt.mpath->start_frame;
   }
 
   float current_frame_float = current_frame;
   const ActKeyColumn *ak = ED_keylist_find_prev(keylist, current_frame_float);
   if (ak == nullptr) {
-    return mpt->mpath->start_frame;
+    return mpt.mpath->start_frame;
   }
 
   return ak->cfra;
 }
 
-static int motionpath_get_prev_prev_keyframe(MPathTarget *mpt,
+static int motionpath_get_prev_prev_keyframe(MPathTarget &mpt,
                                              AnimKeylist *keylist,
                                              const int current_frame)
 {
@@ -267,24 +256,24 @@ static int motionpath_get_prev_prev_keyframe(MPathTarget *mpt,
   return motionpath_get_prev_keyframe(mpt, keylist, frame);
 }
 
-static int motionpath_get_next_keyframe(MPathTarget *mpt,
+static int motionpath_get_next_keyframe(MPathTarget &mpt,
                                         AnimKeylist *keylist,
                                         const int current_frame)
 {
-  if (current_frame >= mpt->mpath->end_frame) {
-    return mpt->mpath->end_frame;
+  if (current_frame >= mpt.mpath->end_frame) {
+    return mpt.mpath->end_frame;
   }
 
   float current_frame_float = current_frame;
   const ActKeyColumn *ak = ED_keylist_find_next(keylist, current_frame_float);
   if (ak == nullptr) {
-    return mpt->mpath->end_frame;
+    return mpt.mpath->end_frame;
   }
 
   return ak->cfra;
 }
 
-static int motionpath_get_next_next_keyframe(MPathTarget *mpt,
+static int motionpath_get_next_next_keyframe(MPathTarget &mpt,
                                              AnimKeylist *keylist,
                                              const int current_frame)
 {
@@ -292,9 +281,7 @@ static int motionpath_get_next_next_keyframe(MPathTarget *mpt,
   return motionpath_get_next_keyframe(mpt, keylist, frame);
 }
 
-static bool motionpath_check_can_use_keyframe_range(MPathTarget * /*mpt*/,
-                                                    AnimData *adt,
-                                                    const Span<FCurve *> fcurves)
+static bool motionpath_check_can_use_keyframe_range(AnimData *adt, const Span<FCurve *> fcurves)
 {
   if (adt == nullptr || fcurves.is_empty()) {
     return false;
@@ -304,21 +291,21 @@ static bool motionpath_check_can_use_keyframe_range(MPathTarget * /*mpt*/,
   return true;
 }
 
-static Bounds<int> motionpath_calculate_update_range(MPathTarget *mpt,
+static Bounds<int> motionpath_calculate_update_range(MPathTarget &mpt,
                                                      AnimData *adt,
                                                      const Span<FCurve *> fcurves,
                                                      const int current_frame)
 {
   /* If the current frame is outside of the configured motion path range we ignore update of this
    * motion path by using invalid frame range where start frame is above the end frame. */
-  if (current_frame < mpt->mpath->start_frame || current_frame > mpt->mpath->end_frame) {
+  if (current_frame < mpt.mpath->start_frame || current_frame > mpt.mpath->end_frame) {
     return {INT_MAX, INT_MIN};
   }
 
   /* Similar to the case when there is only a single keyframe: need to update en entire range to
    * a constant value. */
-  if (!motionpath_check_can_use_keyframe_range(mpt, adt, fcurves)) {
-    return {mpt->mpath->start_frame, mpt->mpath->end_frame};
+  if (!motionpath_check_can_use_keyframe_range(adt, fcurves)) {
+    return {mpt.mpath->start_frame, mpt.mpath->end_frame};
   }
 
   Bounds<int> frame_range = {INT_MAX, INT_MIN};
@@ -351,10 +338,10 @@ static Bounds<int> motionpath_calculate_update_range(MPathTarget *mpt,
   return frame_range;
 }
 
-static void motionpath_free_free_tree_data(MutableSpan<MPathTarget *> targets)
+static void motionpath_free_free_tree_data(MutableSpan<MPathTarget> targets)
 {
-  for (MPathTarget *mpt : targets) {
-    ED_keylist_free(mpt->keylist);
+  for (MPathTarget &mpt : targets) {
+    ED_keylist_free(mpt.keylist);
   }
 }
 
@@ -404,33 +391,38 @@ void animviz_motionpath_compute_range(Object *ob, Scene *scene)
   ED_keylist_free(keylist);
 }
 
+static void build_keylist_for_target(MPathTarget &target, AnimKeylist &keylist)
+{
+  /* For object level motion paths this is a nullptr in which case the filtering is ignored. */
+  bPoseChannel *pose_bone = target.pchan;
+  for (FCurve *fcu : animrig::fcurves_for_assigned_action(target.ob->adt)) {
+    if (pose_bone &&
+        !animrig::fcurve_matches_collection_path(*fcu, "pose.bones[", pose_bone->name))
+    {
+      continue;
+    }
+    /* When only updating a subset of the motion path we could pass a range here to improve
+     * performance. */
+    fcurve_to_keylist(target.ob->adt, fcu, &keylist, 0, {-FLT_MAX, FLT_MAX}, true);
+  }
+}
+
 void animviz_calc_motionpaths(Depsgraph *depsgraph,
-                              Main *bmain,
                               Scene *scene,
-                              MutableSpan<MPathTarget *> targets,
-                              eAnimvizCalcRange range,
-                              bool restore)
+                              MutableSpan<MPathTarget> targets,
+                              eAnimvizCalcRange range)
 {
   using namespace blender::animrig;
+  BLI_assert_msg(!DEG_is_active(depsgraph),
+                 "Motion path calculation should always happen with a minimal depsgraph.");
 
   if (targets.is_empty()) {
     return;
   }
 
-  const int cfra = scene->r.cfra;
   /* The frame range to calculate. Inclusive/Exclusive. */
   Bounds<int> frame_range = {INT_MAX, INT_MIN};
   switch (range) {
-    case ANIMVIZ_CALC_RANGE_CURRENT_FRAME:
-      frame_range = motionpath_get_global_framerange(targets);
-      if (frame_range.is_empty()) {
-        return;
-      }
-      if (!frame_range.contains(cfra)) {
-        return;
-      }
-      frame_range = {cfra, cfra + 1};
-      break;
     case ANIMVIZ_CALC_RANGE_CHANGED:
       /* Nothing to do here, will be handled later when iterating through the targets. */
       break;
@@ -442,61 +434,40 @@ void animviz_calc_motionpaths(Depsgraph *depsgraph,
       break;
   }
 
-  /* Get copies of objects/bones to get the calculated results from
-   * (for copy-on-evaluation), so that we actually get some results.
-   */
+  for (MPathTarget &mpt : targets) {
 
-  /* TODO: Create a copy of background depsgraph that only contain these entities,
-   * and only evaluates them.
-   *
-   * For until that is done we force dependency graph to not be active, so we don't lose unkeyed
-   * changes during updating the motion path.
-   * This still doesn't include unkeyed changes to the path itself, but allows to have updates in
-   * an environment when auto-keying and pose paste is used. */
-
-  const bool is_active_depsgraph = DEG_is_active(depsgraph);
-  if (is_active_depsgraph) {
-    DEG_make_inactive(depsgraph);
-  }
-
-  for (MPathTarget *mpt : targets) {
-    mpt->ob_eval = DEG_get_evaluated(depsgraph, mpt->ob);
-
-    AnimData *adt = BKE_animdata_from_id(&mpt->ob_eval->id);
+    AnimData *adt = BKE_animdata_from_id(&mpt.ob->id);
 
     /* Build list of all keyframes in active action for object or pchan. */
-    mpt->keylist = ED_keylist_create();
+    mpt.keylist = ED_keylist_create();
 
     Vector<FCurve *> fcurves;
     if (adt && adt->action) {
       /* Get pointer to animviz settings for each target. */
       bAnimVizSettings *avs = animviz_target_settings_get(mpt);
 
-      /* It is assumed that keyframes for bones are all grouped in a single group
-       * unless an option is set to always use the whole action.
-       */
-      if ((mpt->pchan) && (avs->path_viewflag & MOTIONPATH_VIEW_KFACT) == 0) {
+      /* For bones it is likely that all FCurves belong to a group named after the bone. Only
+       * checking FCurves of a given group can improve performance when building the keylist. */
+      if ((mpt.pchan) && (avs->path_viewflag & MOTIONPATH_VIEW_KFACT) == 0) {
         Action &action = adt->action->wrap();
         bActionGroup *agrp = nullptr;
         Channelbag *cbag = channelbag_for_action_slot(action, adt->slot_handle);
-        agrp = cbag ? cbag->channel_group_find(mpt->pchan->name) : nullptr;
+        agrp = cbag ? cbag->channel_group_find(mpt.pchan->name) : nullptr;
 
         if (agrp) {
           fcurves = listbase_to_vector<FCurve>(agrp->channels);
-          action_group_to_keylist(adt, agrp, mpt->keylist, 0, {-FLT_MAX, FLT_MAX});
+          action_group_to_keylist(adt, agrp, mpt.keylist, 0, {-FLT_MAX, FLT_MAX});
         }
       }
       else {
-        Action &action = adt->action->wrap();
-        fcurves = Vector<FCurve *>(
-            channelbag_for_action_slot(action, adt->slot_handle)->fcurves());
-        action_to_keylist(adt, adt->action, mpt->keylist, 0, {-FLT_MAX, FLT_MAX});
+        build_keylist_for_target(mpt, *mpt.keylist);
       }
     }
-    ED_keylist_prepare_for_direct_access(mpt->keylist);
+    ED_keylist_prepare_for_direct_access(mpt.keylist);
 
     if (range == ANIMVIZ_CALC_RANGE_CHANGED) {
-      const Bounds<int> target_bounds = motionpath_calculate_update_range(mpt, adt, fcurves, cfra);
+      const Bounds<int> target_bounds = motionpath_calculate_update_range(
+          mpt, adt, fcurves, scene->r.cfra);
       if (!target_bounds.is_empty()) {
         frame_range.min = min_ii(frame_range.min, target_bounds.min);
         frame_range.max = max_ii(frame_range.max, target_bounds.max);
@@ -516,36 +487,19 @@ void animviz_calc_motionpaths(Depsgraph *depsgraph,
             frame_range.max,
             frame_range.max - frame_range.min + 1);
 
-  for (scene->r.cfra = frame_range.min; scene->r.cfra < frame_range.max; scene->r.cfra++) {
-    if (range == ANIMVIZ_CALC_RANGE_CURRENT_FRAME) {
-      /* For current frame, only update tagged. */
-      BKE_scene_graph_update_tagged(depsgraph, bmain);
-    }
-    else {
-      /* Update relevant data for new frame. */
-      motionpaths_calc_update_scene(depsgraph);
-    }
+  for (int frame = frame_range.min; frame < frame_range.max; frame++) {
+    /* Update relevant data for new frame. */
+    DEG_evaluate_on_framechange(depsgraph, frame);
 
     /* Perform baking for targets. */
-    motionpaths_calc_bake_targets(targets, scene->r.cfra, depsgraph, scene->camera);
-  }
-
-  /* Reset original environment. */
-  /* NOTE: We don't always need to reevaluate the main scene, as the depsgraph
-   * may be a temporary one that works on a subset of the data.
-   * We always have to restore the current frame though. */
-  scene->r.cfra = cfra;
-  if (range != ANIMVIZ_CALC_RANGE_CURRENT_FRAME && restore) {
-    motionpaths_calc_update_scene(depsgraph);
-  }
-
-  if (is_active_depsgraph) {
-    DEG_make_active(depsgraph);
+    for (const MPathTarget &target : targets) {
+      motionpaths_calc_bake_target(target, frame, depsgraph, scene->camera);
+    }
   }
 
   /* Clear recalc flags from targets. */
-  for (MPathTarget *mpt : targets) {
-    bMotionPath *mpath = mpt->mpath;
+  for (MPathTarget &mpt : targets) {
+    bMotionPath *mpath = mpt.mpath;
 
     /* Get pointer to animviz settings for each target. */
     bAnimVizSettings *avs = animviz_target_settings_get(mpt);
@@ -554,7 +508,7 @@ void animviz_calc_motionpaths(Depsgraph *depsgraph,
     avs->recalc &= ~ANIMVIZ_RECALC_PATHS;
 
     /* Clean temp data. */
-    ED_keylist_free(mpt->keylist);
+    ED_keylist_free(mpt.keylist);
 
     /* Free previous batches to force update. */
     GPU_VERTBUF_DISCARD_SAFE(mpath->points_vbo);

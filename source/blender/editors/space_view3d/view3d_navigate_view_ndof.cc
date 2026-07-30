@@ -6,11 +6,11 @@
  * \ingroup spview3d
  */
 #include "BLI_bounds.hh"
-#include "BLI_math_geom.h"
+#include "BLI_math_geom_c.hh"
 #include "BLI_math_matrix.hh"
-#include "BLI_math_rotation.h"
-#include "BLI_math_vector.h"
-#include "BLI_rect.h"
+#include "BLI_math_rotation_c.hh"
+#include "BLI_math_vector_c.hh"
+#include "BLI_rect.hh"
 
 #include "BKE_layer.hh"
 
@@ -1109,7 +1109,7 @@ static wmOperatorStatus ndof_all_invoke_impl(bContext *C,
   wmOperatorStatus ret;
 
   /* weak!, but it works */
-  const uint8_t ndof_navigation_mode_backup = U.ndof_navigation_mode;
+  const eNdof_Navigation_Mode ndof_navigation_mode_backup = U.ndof_navigation_mode;
   U.ndof_navigation_mode = NDOF_NAVIGATION_MODE_FLY;
 
   ret = ndof_orbit_zoom_invoke_impl(C, vod, event, nullptr);

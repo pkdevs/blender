@@ -11,28 +11,32 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 #include "BLI_math_base.hh"
-#include "BLI_rect.h"
-#include "BLI_string_utf8.h"
+#include "BLI_string_utf8.hh"
 #include "BLI_string_utils.hh"
-#include "BLI_time.h"
-#include "BLI_timecode.h"
-#include "BLI_utildefines.h"
+#include "BLI_time.hh"
+#include "BLI_timecode.hh"
+#include "BLI_utildefines.hh"
 
 #include "BLT_translation.hh"
 
 #include "DNA_object_types.h"
 #include "DNA_scene_types.h"
+#include "DNA_screen_types.h"
+#include "DNA_space_types.h"
 #include "DNA_userdef_types.h"
 #include "DNA_view3d_types.h"
+#include "DNA_windowmanager_types.h"
 
+#include "BKE_callbacks.hh"
 #include "BKE_colortools.hh"
 #include "BKE_compositor.hh"
 #include "BKE_context.hh"
 #include "BKE_global.hh"
 #include "BKE_image.hh"
 #include "BKE_image_format.hh"
+#include "BKE_image_gpu.hh"
 #include "BKE_layer.hh"
 #include "BKE_lib_id.hh"
 #include "BKE_main.hh"
@@ -41,8 +45,6 @@
 #include "BKE_report.hh"
 #include "BKE_scene.hh"
 #include "BKE_screen.hh"
-
-#include "NOD_composite.hh"
 
 #include "DEG_depsgraph.hh"
 
@@ -53,14 +55,12 @@
 #include "ED_screen.hh"
 #include "ED_util.hh"
 
-#include "BIF_glutil.hh"
-
 #include "RE_engine.h"
 #include "RE_pipeline.h"
 
-#include "IMB_colormanagement.hh"
 #include "IMB_imbuf.hh"
 #include "IMB_imbuf_types.hh"
+#include "IMB_partial_update.hh"
 
 #include "RNA_access.hh"
 #include "RNA_define.hh"
@@ -99,166 +99,6 @@ struct RenderJob : public RenderJobBase {
   int frame_start;
   int frame_end;
 };
-
-/* called inside thread! */
-static bool image_buffer_calc_tile_rect(const RenderResult *rr,
-                                        const ImBuf *ibuf,
-                                        rcti *renrect,
-                                        rcti *r_ibuf_rect,
-                                        int *r_offset_x,
-                                        int *r_offset_y)
-{
-  int tile_y, tile_height, tile_x, tile_width;
-
-  /* When `renrect` argument is not nullptr, we only refresh scan-lines. */
-  if (renrect) {
-    /* `if (tile_height == recty)`, rendering of layer is ready,
-     * we should not draw, other things happen... */
-    if (rr->renlay == nullptr || renrect->ymax >= rr->recty) {
-      return false;
-    }
-
-    /* `tile_x` here is first sub-rectangle x coord, tile_width defines sub-rectangle width. */
-    tile_x = renrect->xmin;
-    tile_width = renrect->xmax - tile_x;
-    if (tile_width < 2) {
-      return false;
-    }
-
-    tile_y = renrect->ymin;
-    tile_height = renrect->ymax - tile_y;
-    if (tile_height < 2) {
-      return false;
-    }
-    renrect->ymin = renrect->ymax;
-  }
-  else {
-    tile_x = tile_y = 0;
-    tile_width = rr->rectx;
-    tile_height = rr->recty;
-  }
-
-  /* tile_x tile_y is in tile coords. transform to ibuf */
-  int offset_x = rr->tilerect.xmin;
-  if (offset_x >= ibuf->x) {
-    return false;
-  }
-  int offset_y = rr->tilerect.ymin;
-  if (offset_y >= ibuf->y) {
-    return false;
-  }
-
-  if (offset_x + tile_width > ibuf->x) {
-    tile_width = ibuf->x - offset_x;
-  }
-  if (offset_y + tile_height > ibuf->y) {
-    tile_height = ibuf->y - offset_y;
-  }
-
-  if (tile_width < 1 || tile_height < 1) {
-    return false;
-  }
-
-  r_ibuf_rect->xmax = tile_x + tile_width;
-  r_ibuf_rect->ymax = tile_y + tile_height;
-  r_ibuf_rect->xmin = tile_x;
-  r_ibuf_rect->ymin = tile_y;
-  *r_offset_x = offset_x;
-  *r_offset_y = offset_y;
-  return true;
-}
-
-static void image_buffer_rect_update(RenderJob *rj,
-                                     RenderResult *rr,
-                                     ImBuf *ibuf,
-                                     ImageUser *iuser,
-                                     const rcti *tile_rect,
-                                     int offset_x,
-                                     int offset_y,
-                                     const char *viewname)
-{
-  Scene *scene = rj->scene;
-  const float *rectf = nullptr;
-  int linear_stride, linear_offset_x, linear_offset_y;
-  const ColorManagedViewSettings *view_settings;
-  const ColorManagedDisplaySettings *display_settings;
-
-  if (ibuf->userflags & IB_DISPLAY_BUFFER_INVALID) {
-    /* The whole image buffer is to be color managed again anyway. */
-    return;
-  }
-
-  /* The thing here is, the logic below (which was default behavior
-   * of how rectf is acquiring since forever) gives float buffer for
-   * composite output only. This buffer can not be used for other
-   * passes obviously.
-   *
-   * We might try finding corresponding for pass buffer in render result
-   * (which is actually missing when rendering with Cycles, who only
-   * writes all the passes when the tile is finished) or use float
-   * buffer from image buffer as reference, which is easier to use and
-   * contains all the data we need anyway.
-   *                                              - sergey -
-   */
-  /* TODO(sergey): Need to check has_combined here? */
-  if (iuser->pass == 0) {
-    const int view_id = BKE_scene_multiview_view_id_get(&scene->r, viewname);
-    const RenderView *rv = RE_RenderViewGetById(rr, view_id);
-
-    if (rv->ibuf == nullptr) {
-      return;
-    }
-
-    /* find current float rect for display, first case is after composite... still weak */
-    if (rv->ibuf->float_data()) {
-      rectf = rv->ibuf->float_data();
-    }
-    else {
-      if (rv->ibuf->byte_data()) {
-        /* special case, currently only happens with sequencer rendering,
-         * which updates the whole frame, so we can only mark display buffer
-         * as invalid here (sergey)
-         */
-        ibuf->userflags |= IB_DISPLAY_BUFFER_INVALID;
-        return;
-      }
-      if (rr->renlay == nullptr) {
-        return;
-      }
-      rectf = RE_RenderLayerGetPass(rr->renlay, RE_PASSNAME_COMBINED, viewname);
-    }
-    if (rectf == nullptr) {
-      return;
-    }
-
-    rectf += 4 * (rr->rectx * tile_rect->ymin + tile_rect->xmin);
-    linear_stride = rr->rectx;
-    linear_offset_x = offset_x;
-    linear_offset_y = offset_y;
-  }
-  else {
-    rectf = ibuf->float_data();
-    linear_stride = ibuf->x;
-    linear_offset_x = 0;
-    linear_offset_y = 0;
-  }
-
-  view_settings = &scene->view_settings;
-  display_settings = &scene->display_settings;
-
-  IMB_partial_display_buffer_update(ibuf,
-                                    rectf,
-                                    nullptr,
-                                    linear_stride,
-                                    linear_offset_x,
-                                    linear_offset_y,
-                                    view_settings,
-                                    display_settings,
-                                    offset_x,
-                                    offset_y,
-                                    offset_x + BLI_rcti_size_x(tile_rect),
-                                    offset_y + BLI_rcti_size_y(tile_rect));
-}
 
 /* ****************************** render invoking ***************** */
 
@@ -328,37 +168,6 @@ static void get_render_operator_frame_range(wmOperator *render_operator,
   }
 }
 
-/* When rendering an animation, saving files is required, either through scene saving or through
- * a compositor File Output node. */
-static bool disable_save_output_allowed(const bool is_animation, Scene &scene, ReportList *reports)
-{
-  const bool save_output = (scene.r.mode & R_SAVE_OUTPUT) != 0;
-  const bool do_compositing = (scene.r.scemode & R_DOCOMP) != 0;
-  const bool do_sequencer = RE_seq_render_active(&scene, &scene.r);
-
-  if (is_animation && do_sequencer && !save_output) {
-    BKE_report(reports, RPT_ERROR, "Render output disabled in Output properties");
-    return false;
-  }
-
-  if (is_animation && !save_output && !do_compositing) {
-    BKE_report(reports, RPT_ERROR, "Render output and compositing disabled in Output properties");
-    return false;
-  }
-
-  if (is_animation && !save_output && do_compositing) {
-    if (!bke::compositor::node_tree_has_linked_file_output(scene.compositing_node_group)) {
-      BKE_report(reports,
-                 RPT_ERROR,
-                 "Render output disabled in Output properties and no active compositing File "
-                 "Output nodes");
-      return false;
-    }
-  }
-
-  return true;
-}
-
 /* executes blocking render */
 static wmOperatorStatus screen_render_exec(bContext *C, wmOperator *op)
 {
@@ -417,7 +226,7 @@ static wmOperatorStatus screen_render_exec(bContext *C, wmOperator *op)
     return OPERATOR_CANCELLED;
   }
 
-  if (!disable_save_output_allowed(is_animation, *scene, op->reports)) {
+  if (!RE_disable_save_output_allowed(is_animation, *scene, op->reports)) {
     return OPERATOR_CANCELLED;
   }
 
@@ -625,6 +434,10 @@ static void image_renderinfo_cb(void *rjv, RenderStats *rs)
 
   RE_ReleaseResult(rj->re);
 
+  if (rs->infostr != nullptr) {
+    BKE_callback_exec_string(G_MAIN, rs->infostr, BKE_CB_EVT_RENDER_STATS);
+  }
+
   /* make jobs timer to send notifier */
   *(rj->do_update) = true;
 }
@@ -704,13 +517,10 @@ static void render_image_update_pass_and_layer(RenderJob *rj, RenderResult *rr, 
   }
 }
 
-static void image_rect_update(void *rjv, RenderResult *rr, rcti *renrect)
+static void image_rect_update(void *rjv, RenderResult *rr)
 {
   RenderJob *rj = static_cast<RenderJob *>(rjv);
   Image *ima = rj->image;
-  ImBuf *ibuf;
-  void *lock;
-  const char *viewname = RE_GetActiveRenderView(rj->re);
 
   /* only update if we are displaying the slot being rendered */
   if (ima->render_slot != ima->last_render_slot) {
@@ -721,7 +531,8 @@ static void image_rect_update(void *rjv, RenderResult *rr, rcti *renrect)
     /* Free all render buffer caches when switching slots, with lock to ensure main
      * thread is not drawing the buffer at the same time. */
     rj->image_outdated = false;
-    ibuf = BKE_image_acquire_ibuf(ima, &rj->iuser, &lock);
+    void *lock;
+    ImBuf *ibuf = BKE_image_acquire_ibuf(ima, &rj->iuser, &lock);
     BKE_image_free_buffers(ima);
     BKE_image_release_ibuf(ima, ibuf, lock);
     *(rj->do_update) = true;
@@ -732,52 +543,14 @@ static void image_rect_update(void *rjv, RenderResult *rr, rcti *renrect)
     return;
   }
 
-  /* update part of render */
+  /* Update layer and pass to be displayed, and tag update to redraw. */
   render_image_update_pass_and_layer(rj, rr, &rj->iuser);
-  rcti tile_rect;
-  int offset_x;
-  int offset_y;
-  ibuf = BKE_image_acquire_ibuf(ima, &rj->iuser, &lock);
-  if (ibuf) {
-    if (!image_buffer_calc_tile_rect(rr, ibuf, renrect, &tile_rect, &offset_x, &offset_y)) {
-      BKE_image_release_ibuf(ima, ibuf, lock);
-      return;
-    }
-
-    /* Don't waste time on CPU side color management if
-     * image will be displayed using GLSL.
-     *
-     * Need to update rect if Save Buffers enabled because in
-     * this case GLSL doesn't have original float buffer to
-     * operate with.
-     */
-    if (ibuf->channels == 1 || ED_draw_imbuf_method(ibuf) != IMAGE_DRAW_METHOD_GLSL) {
-      image_buffer_rect_update(rj, rr, ibuf, &rj->iuser, &tile_rect, offset_x, offset_y, viewname);
-    }
-    ImageTile *image_tile = BKE_image_get_tile(ima, 0);
-    BKE_image_update_gputexture_delayed(ima,
-                                        image_tile,
-                                        ibuf,
-                                        offset_x,
-                                        offset_y,
-                                        BLI_rcti_size_x(&tile_rect),
-                                        BLI_rcti_size_y(&tile_rect));
-
-    /* make jobs timer to send notifier */
-    *(rj->do_update) = true;
-  }
-  BKE_image_release_ibuf(ima, ibuf, lock);
+  *(rj->do_update) = true;
 }
 
 static void current_scene_update(void *rjv, Scene *scene)
 {
   RenderJob *rj = static_cast<RenderJob *>(rjv);
-
-  if (rj->current_scene != scene) {
-    /* Image must be updated when rendered scene changes. */
-    BKE_image_partial_update_mark_full_update(rj->image);
-  }
-
   rj->current_scene = scene;
   rj->iuser.scene = scene;
 }
@@ -901,35 +674,6 @@ static void render_endjob(void *rjv)
   G.is_rendering = false;
   WM_main_add_notifier(NC_SCENE | ND_RENDER_RESULT, nullptr);
 
-  /* Partial render result will always update display buffer
-   * for first render layer only. This is nice because you'll
-   * see render progress during rendering, but it ends up in
-   * wrong display buffer shown after rendering.
-   *
-   * The code below will mark display buffer as invalid after
-   * rendering in case multiple layers were rendered, which
-   * ensures display buffer matches render layer after
-   * rendering.
-   *
-   * Perhaps proper way would be to toggle active render
-   * layer in image editor and job, so we always display
-   * layer being currently rendered. But this is not so much
-   * trivial at this moment, especially because of external
-   * engine API, so lets use simple and robust way for now
-   *                                          - sergey -
-   */
-  if (rj->scene->view_layers.first != rj->scene->view_layers.last || rj->image_outdated) {
-    void *lock;
-    Image *ima = rj->image;
-    ImBuf *ibuf = BKE_image_acquire_ibuf(ima, &rj->iuser, &lock);
-
-    if (ibuf) {
-      ibuf->userflags |= IB_DISPLAY_BUFFER_INVALID;
-    }
-
-    BKE_image_release_ibuf(ima, ibuf, lock);
-  }
-
   /* Finally unlock the user interface (if it was locked). */
   if (rj->interface_locked) {
     /* Interface was locked, so window manager couldn't have been changed
@@ -939,6 +683,9 @@ static void render_endjob(void *rjv)
     WM_locked_interface_set(static_cast<wmWindowManager *>(G_MAIN->wm.first), false);
     DEG_tag_on_visible_update(G_MAIN, false);
   }
+
+  /* Resume viewport render engines now that the final render is complete. */
+  ED_render_view3d_pause_resume(G_MAIN, false);
 }
 
 /* called by render, check job 'stop' value or the global */
@@ -1109,7 +856,7 @@ static wmOperatorStatus screen_render_invoke(bContext *C, wmOperator *op, const 
     return OPERATOR_CANCELLED;
   }
 
-  if (!disable_save_output_allowed(is_animation, *scene, op->reports)) {
+  if (!RE_disable_save_output_allowed(is_animation, *scene, op->reports)) {
     return OPERATOR_CANCELLED;
   }
 
@@ -1141,7 +888,7 @@ static wmOperatorStatus screen_render_invoke(bContext *C, wmOperator *op, const 
   WM_cursor_wait(true);
 
   /* flush sculpt and editmode changes */
-  ED_editors_flush_edits_ex(bmain, true, false);
+  ED_editors_flush_edits(bmain);
 
   /* store spare
    * get view3d layer, local layer, make this nice API call to render
@@ -1249,6 +996,9 @@ static wmOperatorStatus screen_render_invoke(bContext *C, wmOperator *op, const 
    * the reason of this is that active scene could change when rendering
    * several layers from compositor #31800. */
   op->customdata = scene;
+
+  /* Pause viewport render engines for the duration of the final render. */
+  ED_render_view3d_pause_resume(bmain, true);
 
   WM_jobs_start(CTX_wm_manager(C), wm_job);
 
@@ -1398,7 +1148,7 @@ static wmOperatorStatus render_shutter_curve_preset_exec(bContext *C, wmOperator
   Scene *scene = CTX_data_scene(C);
   CurveMapping *mblur_shutter_curve = &scene->r.mblur_shutter_curve;
   CurveMap *cm = mblur_shutter_curve->cm;
-  int preset = RNA_enum_get(op->ptr, "shape");
+  eCurveMappingPreset preset = eCurveMappingPreset(RNA_enum_get(op->ptr, "shape"));
 
   mblur_shutter_curve->flag &= ~CUMA_EXTEND_EXTRAPOLATE;
   mblur_shutter_curve->preset = preset;

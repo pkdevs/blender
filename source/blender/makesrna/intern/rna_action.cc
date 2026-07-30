@@ -90,10 +90,10 @@ const EnumPropertyItem default_ActionSlot_target_id_type_items[] = {
 
 #  include <algorithm>
 
-#  include "BLI_listbase.h"
-#  include "BLI_math_base.h"
-#  include "BLI_string.h"
-#  include "BLI_string_utf8.h"
+#  include "BLI_listbase.hh"
+#  include "BLI_math_base_c.hh"
+#  include "BLI_string.hh"
+#  include "BLI_string_utf8.hh"
 
 #  include "BKE_fcurve.hh"
 #  include "BKE_main.hh"
@@ -979,7 +979,7 @@ static void rna_Action_active_pose_marker_index_range(
   bAction *act = static_cast<bAction *>(ptr->data);
 
   *min = 0;
-  *max = max_ii(0, BLI_listbase_count(&act->markers) - 1);
+  *max = max_ii(0, act->markers.count() - 1);
 }
 
 static bool rna_Action_is_empty_get(PointerRNA *ptr)
@@ -995,7 +995,7 @@ static bool rna_Action_is_action_legacy_get(PointerRNA *ptr)
 }
 static bool rna_Action_is_action_layered_get(PointerRNA * /* ptr */)
 {
-  /*All actions are layered through versioning. */
+  /* All actions are layered through versioning. */
   return true;
 }
 
@@ -1358,7 +1358,7 @@ static void rna_def_dopesheet(BlenderRNA *brna)
   RNA_def_property_ui_text(prop,
                            "Only Show Errors",
                            "Only include F-Curves and drivers that are disabled or have errors");
-  RNA_def_property_ui_icon(prop, ICON_ERROR, 0);
+  RNA_def_property_ui_icon(prop, ICON_STATUS_ERROR, 0);
   RNA_def_property_flag(prop, PROP_CONTEXT_UPDATE);
   RNA_def_property_update(
       prop, NC_ANIMATION | ND_ANIMCHAN | NA_EDITED, "rna_Action_show_errors_update");
@@ -1584,7 +1584,7 @@ static void rna_def_dopesheet(BlenderRNA *brna)
   prop = RNA_def_property(srna, "show_lightprobes", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_negative_sdna(prop, nullptr, "filterflag2", ADS_FILTER_NOLIGHTPROBE);
   RNA_def_property_ui_text(
-      prop, "Display Light Probe", "Include visualization of lightprobe related animation data");
+      prop, "Display Light Probe", "Include visualization of light probe related animation data");
   RNA_def_property_ui_icon(prop, ICON_OUTLINER_OB_LIGHTPROBE, 0);
   RNA_def_property_update(prop, NC_ANIMATION | ND_ANIMCHAN | NA_EDITED, nullptr);
 
@@ -2325,7 +2325,7 @@ static void rna_def_action_group(BlenderRNA *brna)
 
   prop = RNA_def_property(srna, "use_pin", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_flag(prop, PROP_NO_DEG_UPDATE);
-  RNA_def_property_boolean_sdna(prop, nullptr, "flag", ADT_CURVES_ALWAYS_VISIBLE);
+  RNA_def_property_boolean_sdna(prop, nullptr, "flag", AGRP_CURVES_ALWAYS_VISIBLE);
   RNA_def_property_ui_text(prop, "Pin in Graph Editor", "");
   RNA_def_property_update(prop, NC_ANIMATION | ND_ANIMCHAN | NA_EDITED, nullptr);
 

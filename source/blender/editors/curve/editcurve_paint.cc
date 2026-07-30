@@ -11,11 +11,11 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_listbase.h"
-#include "BLI_math_matrix.h"
-#include "BLI_math_rotation.h"
-#include "BLI_math_vector.h"
-#include "BLI_mempool.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_rotation_c.hh"
+#include "BLI_math_vector_c.hh"
+#include "BLI_mempool.hh"
 
 #include "BLT_translation.hh"
 
@@ -939,7 +939,7 @@ static wmOperatorStatus curve_draw_exec(bContext *C, wmOperator *op)
         }
 
         bezt->h1 = bezt->h2 = HD_ALIGN; /* will set to free in second pass */
-        bezt->f1 = bezt->f2 = bezt->f3 = SELECT;
+        bezt->f1 = bezt->f2 = bezt->f3 = BEZT_FLAG_SELECT;
       }
 
       if (corners_index) {

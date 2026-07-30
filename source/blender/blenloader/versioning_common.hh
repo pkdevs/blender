@@ -126,7 +126,7 @@ bNode &version_node_add_empty(bNodeTree &ntree, const char *idname);
  * See also #bNodeType for more details.
  */
 bNode &version_node_add_unknown(bNodeTree &ntree,
-                                bke::bNodeType &node_type,
+                                bke::bNodeType &ntype,
                                 const char *idname,
                                 const int16_t legacy_type,
                                 const std::string &ui_name,
@@ -187,6 +187,13 @@ void version_node_socket_index_animdata(
     int socket_index_offset,
     int total_number_of_sockets);
 
+void version_node_socket_index_animdata(Main *bmain,
+                                        const int node_tree_type,
+                                        const char *node_idname,
+                                        const int socket_index_orig,
+                                        const int socket_index_offset,
+                                        const int total_number_of_sockets);
+
 /**
  * Replace the ID name of all nodes in the tree with the given type with the new name.
  */
@@ -208,6 +215,15 @@ bNodeSocket *version_node_add_socket_if_not_exist(bNodeTree *ntree,
                                                   const char *name);
 
 void version_node_tree_clear_interface(bNodeTree &ntree);
+
+/**
+ * Change socket identifiers so that everything after the separator is removed for available
+ * sockets.
+ */
+void version_socket_identifier_suffixes_for_dynamic_types(
+    const ListBaseT<bNodeSocket> &sockets,
+    const char *separator,
+    const std::optional<int> total = std::nullopt);
 
 /**
  * The versioning code generally expects `SOCK_IS_LINKED` to be set correctly. This function

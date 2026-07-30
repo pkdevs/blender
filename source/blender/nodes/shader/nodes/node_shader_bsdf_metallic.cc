@@ -133,13 +133,13 @@ static void node_shader_update_metallic(bNodeTree *ntree, bNode *node)
   const bool is_physical = (node->custom2 == SHD_PHYSICAL_CONDUCTOR);
 
   bke::node_set_socket_availability(
-      *ntree, *bke::node_find_socket(*node, SOCK_IN, "Base Color"), !is_physical);
+      *ntree, *bke::node_find_socket(*node, SOCK_IN, "Base Color"_ustr), !is_physical);
   bke::node_set_socket_availability(
-      *ntree, *bke::node_find_socket(*node, SOCK_IN, "Edge Tint"), !is_physical);
+      *ntree, *bke::node_find_socket(*node, SOCK_IN, "Edge Tint"_ustr), !is_physical);
   bke::node_set_socket_availability(
-      *ntree, *bke::node_find_socket(*node, SOCK_IN, "IOR"), is_physical);
+      *ntree, *bke::node_find_socket(*node, SOCK_IN, "IOR"_ustr), is_physical);
   bke::node_set_socket_availability(
-      *ntree, *bke::node_find_socket(*node, SOCK_IN, "Extinction"), is_physical);
+      *ntree, *bke::node_find_socket(*node, SOCK_IN, "Extinction"_ustr), is_physical);
 }
 
 NODE_SHADER_MATERIALX_BEGIN
@@ -202,7 +202,7 @@ void register_node_type_sh_bsdf_metallic()
   ntype.gather_link_search_ops = search_link_ops_for_shader_bsdf_node;
   ntype.add_ui_poll = object_shader_nodes_poll;
   ntype.draw_buttons = file_ns::node_shader_buts_metallic;
-  bke::node_type_size_preset(ntype, bke::eNodeSizePreset::Large);
+  ntype.default_width = bke::NodeWidth::_240;
   ntype.initfunc = file_ns::node_shader_init_metallic;
   ntype.gpu_fn = file_ns::node_shader_gpu_bsdf_metallic;
   ntype.updatefunc = file_ns::node_shader_update_metallic;

@@ -1,9 +1,9 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 5.2.0 Alpha (b'8bc0d293b105')\n"
+"Project-Id-Version: Blender 5.3.0 Alpha (b'bf67fb078da0')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-04-28 08:59+0000\n"
+"POT-Creation-Date: 2026-07-27 09:52+0000\n"
 "PO-Revision-Date: 2026-04-22 14:12+0000\n"
 "Last-Translator: Karlo Pavicic <soulcreature@hotmail.com>\n"
 "Language-Team: Croatian <https://translate.blender.org/projects/blender-ui/ui/hr/>\n"
@@ -2498,8 +2498,4 @@ msgstr "ID krivulje"
 
 msgid "ID of each curve"
 msgstr "ID svake kriulje"
-
-
-msgid "Index of each Curve"
-msgstr "Indeks svake krivulje"
 

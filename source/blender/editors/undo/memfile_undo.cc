@@ -8,10 +8,10 @@
  * Wrapper between `ED_undo.hh` and `BKE_undo_system.hh` API's.
  */
 
-#include "BLI_sys_types.h"
+#include "BLI_sys_types.hh"
 
-#include "BLI_ghash.h"
-#include "BLI_listbase.h"
+#include "BLI_ghash.hh"
+#include "BLI_listbase.hh"
 
 #include "DNA_ID.h"
 #include "DNA_collection_types.h"
@@ -78,7 +78,7 @@ static bool memfile_undosys_step_encode(bContext * /*C*/, Main *bmain, UndoStep 
   UndoStack *ustack = ED_undo_stack_get();
 
   if (bmain->is_memfile_undo_flush_needed) {
-    ED_editors_flush_edits_ex(bmain, false, true);
+    ED_editors_flush_edits_ex(bmain, true);
   }
 
   /* can be null, use when set. */
@@ -297,22 +297,6 @@ static void memfile_undosys_step_decode(
           scene->master_collection->id.recalc_after_undo_push = 0;
         }
       }
-      else if (GS(id->name) == ID_OB) {
-        /* In some cases when using memfile undo in sculpt mode, the object but not the
-         * corresponding mesh will be tagged for an update, leading to invalid data and crashes.
-         *
-         * This is a band-aid mitigation for the 5.1 release, not a proper fix of the underlying
-         * problem.
-         *
-         * See #152087 for more details. */
-        Object *object = reinterpret_cast<Object *>(id);
-        if (object->type == OB_MESH) {
-          Mesh *mesh = id_cast<Mesh *>(object->data);
-          if (object->mode == OB_MODE_SCULPT && mesh) {
-            DEG_id_tag_update_ex(bmain, &mesh->id, ID_RECALC_GEOMETRY);
-          }
-        }
-      }
     }
     FOREACH_MAIN_ID_END;
   }
@@ -338,7 +322,7 @@ static void memfile_undosys_step_free(UndoStep *us_p)
 
 void ED_memfile_undosys_type(UndoType *ut)
 {
-  ut->name = "Global Undo";
+  ut->identifier = "GLOBAL_UNDO";
   ut->poll = memfile_undosys_poll;
   ut->step_encode = memfile_undosys_step_encode;
   ut->step_decode = memfile_undosys_step_decode;
@@ -354,26 +338,13 @@ void ED_memfile_undosys_type(UndoType *ut)
 /* -------------------------------------------------------------------- */
 /** \name Utilities
  * \{ */
-
-/**
- * Ideally we wouldn't need to export global undo internals,
- * there are some cases where it's needed though.
- */
-static MemFile *ed_undosys_step_get_memfile(UndoStep *us_p)
-{
-  MemFileUndoStep *us = reinterpret_cast<MemFileUndoStep *>(us_p);
-  return &us->data->memfile;
-}
-
-MemFile *ED_undosys_stack_memfile_get_if_active(UndoStack *ustack)
+bool ED_undosys_autosave_compatible(UndoStack *ustack)
 {
   if (!ustack->step_active) {
-    return nullptr;
+    return false;
   }
-  if (ustack->step_active->type != BKE_UNDOSYS_TYPE_MEMFILE) {
-    return nullptr;
-  }
-  return ed_undosys_step_get_memfile(ustack->step_active);
+
+  return ELEM(ustack->step_active->type, BKE_UNDOSYS_TYPE_MEMFILE, BKE_UNDOSYS_TYPE_IMAGE);
 }
 
 void ED_undosys_stack_memfile_id_changed_tag(UndoStack *ustack, ID *id)

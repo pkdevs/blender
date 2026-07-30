@@ -390,7 +390,7 @@ void object_sculpt_mode_enter(Main &bmain,
                               const bool force_dyntopo,
                               ReportList *reports)
 {
-  const int mode_flag = OB_MODE_SCULPT;
+  const eObjectMode mode_flag = OB_MODE_SCULPT;
   Mesh *mesh = BKE_mesh_from_object(&ob);
 
   /* Re-triangulating the mesh for position changes in sculpt mode isn't worth the performance
@@ -496,7 +496,7 @@ void object_sculpt_mode_enter(bContext *C, Depsgraph &depsgraph, ReportList *rep
 
 void object_sculpt_mode_exit(Main &bmain, Depsgraph &depsgraph, Scene &scene, Object &ob)
 {
-  const int mode_flag = OB_MODE_SCULPT;
+  const eObjectMode mode_flag = OB_MODE_SCULPT;
   Mesh *mesh = BKE_mesh_from_object(&ob);
 
   mesh->runtime->corner_tris_cache.unfreeze();
@@ -560,7 +560,7 @@ static wmOperatorStatus sculpt_mode_toggle_exec(bContext *C, wmOperator *op)
   ViewLayer &view_layer = *CTX_data_view_layer(C);
   BKE_view_layer_synced_ensure(bmain, &scene, &view_layer);
   Object &ob = *BKE_view_layer_active_object_get(&view_layer);
-  const int mode_flag = OB_MODE_SCULPT;
+  const eObjectMode mode_flag = OB_MODE_SCULPT;
   const bool is_mode_set = (ob.mode & mode_flag) != 0;
 
   if (!is_mode_set) {
@@ -610,7 +610,7 @@ static void SCULPT_OT_sculptmode_toggle(wmOperatorType *ot)
   ot->description = "Toggle sculpt mode in 3D view";
 
   ot->exec = sculpt_mode_toggle_exec;
-  ot->poll = ED_operator_object_active_editable_mesh;
+  ot->poll = ED_operator_object_active_editable_mesh_from_view_layer;
 
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 }
@@ -775,8 +775,7 @@ static wmOperatorStatus mask_by_color(bContext *C, wmOperator *op, const float2 
 
   /* Tools that are not brushes do not have the brush gizmo to update the vertex as the mouse move,
    * so it needs to be updated here. */
-  CursorGeometryInfo cgi;
-  cursor_geometry_info_update(C, &cgi, region_location, false);
+  cursor_geometry_info_update(C, region_location, false);
 
   if (std::holds_alternative<std::monostate>(ss.active_vert())) {
     return OPERATOR_CANCELLED;
@@ -1348,6 +1347,10 @@ static wmOperatorStatus mask_from_boundary_exec(bContext *C, wmOperator *op)
 
   /* Set up automasking settings. */
   Paint scene_copy = dna::shallow_copy(sd.paint);
+  /* We don't do a deep copy of the automasking settings, we simply need a new one so that the
+   * canonical pointer isn't overwritten. */
+  MeshAutomaskingSettings automasking_settings;
+  scene_copy.mesh_automasking_settings = &automasking_settings;
 
   MaskSettingsSource src = MaskSettingsSource(RNA_enum_get(op->ptr, "settings_source"));
   switch (src) {

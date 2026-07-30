@@ -23,17 +23,17 @@
 #include "DNA_space_types.h"
 #include "DNA_world_types.h"
 
-#include "BLI_listbase.h"
-#include "BLI_math_vector.h"
+#include "BLI_array_utils.hh"
+#include "BLI_listbase.hh"
+#include "BLI_math_vector_c.hh"
 #include "BLI_path_utils.hh"
-#include "BLI_string.h"
 #include "BLI_string_utils.hh"
-#include "BLI_utildefines.h"
+#include "BLI_utildefines.hh"
 
 #include "BLT_translation.hh"
 
 #include "BKE_anim_data.hh"
-#include "BKE_animsys.h"
+#include "BKE_animsys.hh"
 #include "BKE_appdir.hh"
 #include "BKE_blender_copybuffer.hh"
 #include "BKE_blendfile.hh"
@@ -78,6 +78,7 @@
 #endif
 
 #include "RNA_access.hh"
+#include "RNA_path.hh"
 
 #include "WM_api.hh"
 #include "WM_types.hh"
@@ -456,14 +457,14 @@ static wmOperatorStatus material_slot_de_select(bContext *C, bool select)
                 if (bezt->hide == 0) {
                   changed = true;
                   if (select) {
-                    bezt->f1 |= SELECT;
-                    bezt->f2 |= SELECT;
-                    bezt->f3 |= SELECT;
+                    bezt->f1 |= BEZT_FLAG_SELECT;
+                    bezt->f2 |= BEZT_FLAG_SELECT;
+                    bezt->f3 |= BEZT_FLAG_SELECT;
                   }
                   else {
-                    bezt->f1 &= ~SELECT;
-                    bezt->f2 &= ~SELECT;
-                    bezt->f3 &= ~SELECT;
+                    bezt->f1 &= ~BEZT_FLAG_SELECT;
+                    bezt->f2 &= ~BEZT_FLAG_SELECT;
+                    bezt->f3 &= ~BEZT_FLAG_SELECT;
                   }
                 }
                 bezt++;
@@ -648,7 +649,7 @@ static wmOperatorStatus material_slot_move_exec(bContext *C, wmOperator *op)
 
   slot_remap = MEM_new_array_uninitialized<uint>(ob->totcol, __func__);
 
-  range_vn_u(slot_remap, ob->totcol, 0);
+  array_utils::fill_index_range<uint>({slot_remap, ob->totcol});
 
   slot_remap[index_pair[0]] = index_pair[1];
   slot_remap[index_pair[1]] = index_pair[0];
@@ -705,21 +706,7 @@ static wmOperatorStatus material_slot_remove_unused_exec(bContext *C, wmOperator
 
   Vector<Object *> objects = object_array_for_shading_edit_mode_disabled(C);
   for (Object *ob : objects) {
-    int actcol = ob->actcol;
-    for (int slot = 1; slot <= ob->totcol; slot++) {
-      while (slot <= ob->totcol && !BKE_object_material_slot_used(ob, slot)) {
-        ob->actcol = slot;
-        BKE_object_material_slot_remove(bmain, ob);
-
-        if (actcol >= slot) {
-          actcol--;
-        }
-
-        removed++;
-      }
-    }
-    ob->actcol = actcol;
-
+    removed += BKE_object_material_remove_unused(bmain, ob);
     DEG_id_tag_update(&ob->id, ID_RECALC_GEOMETRY);
   }
 
@@ -767,21 +754,7 @@ static wmOperatorStatus material_slot_remove_all_exec(bContext *C, wmOperator *o
 
   Vector<Object *> objects = object_array_for_shading_edit_mode_disabled(C);
   for (Object *ob : objects) {
-    int actcol = ob->actcol;
-    for (int slot = 1; slot <= ob->totcol; slot++) {
-      while (slot <= ob->totcol) {
-        ob->actcol = slot;
-        BKE_object_material_slot_remove(bmain, ob);
-
-        if (actcol >= slot) {
-          actcol--;
-        }
-
-        removed++;
-      }
-    }
-    ob->actcol = actcol;
-
+    removed += BKE_object_material_remove_all(bmain, ob);
     DEG_id_tag_update(&ob->id, ID_RECALC_GEOMETRY);
   }
 
@@ -1032,6 +1005,13 @@ static wmOperatorStatus view_layer_add_exec(bContext *C, wmOperator *op)
   wmWindow *win = CTX_wm_window(C);
   const Main *bmain = CTX_data_main(C);
   Scene *scene = CTX_data_scene(C);
+
+  /* Only make the view layer active if the windows scene matches the context. */
+  if (win) {
+    if (scene != WM_window_get_active_scene(win)) {
+      win = nullptr;
+    }
+  }
 
   ViewLayer *view_layer_current = win ? WM_window_get_active_view_layer(win) : nullptr;
   int type = RNA_enum_get(op->ptr, "type");
@@ -1496,9 +1476,10 @@ static Vector<Object *> lightprobe_cache_irradiance_volume_subset_get(bContext *
       break;
     }
     case LIGHTCACHE_SUBSET_ACTIVE: {
-      Object *active_ob = CTX_data_active_object(C);
-      if (is_irradiance_volume(active_ob)) {
-        irradiance_volume_setup(active_ob);
+      if (Object *active_ob = CTX_data_active_object(C)) {
+        if (is_irradiance_volume(active_ob)) {
+          irradiance_volume_setup(active_ob);
+        }
       }
       break;
     }
@@ -1748,7 +1729,7 @@ static wmOperatorStatus render_view_add_exec(bContext *C, wmOperator * /*op*/)
   Scene *scene = CTX_data_scene(C);
 
   BKE_scene_add_render_view(scene, nullptr);
-  scene->r.actview = BLI_listbase_count(&scene->r.views) - 1;
+  scene->r.actview = scene->r.views.count() - 1;
 
   WM_event_add_notifier(C, NC_SCENE | ND_RENDER_OPTIONS, scene);
 
@@ -2212,7 +2193,9 @@ static wmOperatorStatus freestyle_color_modifier_add_exec(bContext *C, wmOperato
     return OPERATOR_CANCELLED;
   }
 
-  if (BKE_linestyle_color_modifier_add(lineset->linestyle, nullptr, type) == nullptr) {
+  if (BKE_linestyle_color_modifier_add(
+          lineset->linestyle, nullptr, eLineStyleModifier_Type(type)) == nullptr)
+  {
     BKE_report(op->reports, RPT_ERROR, "Unknown line color modifier type");
     return OPERATOR_CANCELLED;
   }
@@ -2259,7 +2242,9 @@ static wmOperatorStatus freestyle_alpha_modifier_add_exec(bContext *C, wmOperato
     return OPERATOR_CANCELLED;
   }
 
-  if (BKE_linestyle_alpha_modifier_add(lineset->linestyle, nullptr, type) == nullptr) {
+  if (BKE_linestyle_alpha_modifier_add(
+          lineset->linestyle, nullptr, eLineStyleModifier_Type(type)) == nullptr)
+  {
     BKE_report(op->reports, RPT_ERROR, "Unknown alpha transparency modifier type");
     return OPERATOR_CANCELLED;
   }
@@ -2306,7 +2291,9 @@ static wmOperatorStatus freestyle_thickness_modifier_add_exec(bContext *C, wmOpe
     return OPERATOR_CANCELLED;
   }
 
-  if (BKE_linestyle_thickness_modifier_add(lineset->linestyle, nullptr, type) == nullptr) {
+  if (BKE_linestyle_thickness_modifier_add(
+          lineset->linestyle, nullptr, eLineStyleModifier_Type(type)) == nullptr)
+  {
     BKE_report(op->reports, RPT_ERROR, "Unknown line thickness modifier type");
     return OPERATOR_CANCELLED;
   }
@@ -2353,7 +2340,9 @@ static wmOperatorStatus freestyle_geometry_modifier_add_exec(bContext *C, wmOper
     return OPERATOR_CANCELLED;
   }
 
-  if (BKE_linestyle_geometry_modifier_add(lineset->linestyle, nullptr, type) == nullptr) {
+  if (BKE_linestyle_geometry_modifier_add(
+          lineset->linestyle, nullptr, eLineStyleModifier_Type(type)) == nullptr)
+  {
     BKE_report(op->reports, RPT_ERROR, "Unknown stroke geometry modifier type");
     return OPERATOR_CANCELLED;
   }
@@ -2635,12 +2624,11 @@ void SCENE_OT_freestyle_stroke_material_create(wmOperatorType *ot)
 static wmOperatorStatus texture_slot_move_exec(bContext *C, wmOperator *op)
 {
   ID *id = CTX_data_pointer_get_type(C, "texture_slot", RNA_TextureSlot).owner_id;
-
   if (id) {
+    const DriverMap driver_map = BKE_animdata_build_driver_target_map(*CTX_data_main(C));
     MTex **mtex_ar, *mtexswap;
     short act;
     int type = RNA_enum_get(op->ptr, "type");
-    AnimData *adt = BKE_animdata_from_id(id);
 
     give_active_mtex(id, &mtex_ar, &act);
 
@@ -2650,36 +2638,24 @@ static wmOperatorStatus texture_slot_move_exec(bContext *C, wmOperator *op)
         mtex_ar[act] = mtex_ar[act - 1];
         mtex_ar[act - 1] = mtexswap;
 
-        BKE_animdata_fix_paths_rename(id,
-                                      adt,
-                                      nullptr,
-                                      "texture_slots",
-                                      nullptr,
-                                      nullptr,
-                                      act - 1,
-                                      -1,
-                                      /*verify_paths=*/false,
-                                      /*infix_is_name=*/true);
-        BKE_animdata_fix_paths_rename(id,
-                                      adt,
-                                      nullptr,
-                                      "texture_slots",
-                                      nullptr,
-                                      nullptr,
-                                      act,
-                                      act - 1,
-                                      /*verify_paths=*/false,
-                                      /*infix_is_name=*/true);
-        BKE_animdata_fix_paths_rename(id,
-                                      adt,
-                                      nullptr,
-                                      "texture_slots",
-                                      nullptr,
-                                      nullptr,
-                                      -1,
-                                      act,
-                                      /*verify_paths=*/false,
-                                      /*infix_is_name=*/true);
+        BKE_animdata_fix_paths(*id,
+                               "texture_slots",
+                               RNA_path_number_to_infix(act - 1),
+                               RNA_path_number_to_infix(-1),
+                               /*verify_paths=*/false,
+                               driver_map);
+        BKE_animdata_fix_paths(*id,
+                               "texture_slots",
+                               RNA_path_number_to_infix(act),
+                               RNA_path_number_to_infix(act - 1),
+                               /*verify_paths=*/false,
+                               driver_map);
+        BKE_animdata_fix_paths(*id,
+                               "texture_slots",
+                               RNA_path_number_to_infix(-1),
+                               RNA_path_number_to_infix(act),
+                               /*verify_paths=*/false,
+                               driver_map);
 
         set_active_mtex(id, act - 1);
       }
@@ -2690,36 +2666,24 @@ static wmOperatorStatus texture_slot_move_exec(bContext *C, wmOperator *op)
         mtex_ar[act] = mtex_ar[act + 1];
         mtex_ar[act + 1] = mtexswap;
 
-        BKE_animdata_fix_paths_rename(id,
-                                      adt,
-                                      nullptr,
-                                      "texture_slots",
-                                      nullptr,
-                                      nullptr,
-                                      act + 1,
-                                      -1,
-                                      /*verify_paths=*/false,
-                                      /*infix_is_name=*/true);
-        BKE_animdata_fix_paths_rename(id,
-                                      adt,
-                                      nullptr,
-                                      "texture_slots",
-                                      nullptr,
-                                      nullptr,
-                                      act,
-                                      act + 1,
-                                      /*verify_paths=*/false,
-                                      /*infix_is_name=*/true);
-        BKE_animdata_fix_paths_rename(id,
-                                      adt,
-                                      nullptr,
-                                      "texture_slots",
-                                      nullptr,
-                                      nullptr,
-                                      -1,
-                                      act,
-                                      /*verify_paths=*/false,
-                                      /*infix_is_name=*/true);
+        BKE_animdata_fix_paths(*id,
+                               "texture_slots",
+                               RNA_path_number_to_infix(act + 1),
+                               RNA_path_number_to_infix(-1),
+                               /*verify_paths=*/false,
+                               driver_map);
+        BKE_animdata_fix_paths(*id,
+                               "texture_slots",
+                               RNA_path_number_to_infix(act),
+                               RNA_path_number_to_infix(act + 1),
+                               /*verify_paths=*/false,
+                               driver_map);
+        BKE_animdata_fix_paths(*id,
+                               "texture_slots",
+                               RNA_path_number_to_infix(-1),
+                               RNA_path_number_to_infix(act),
+                               /*verify_paths=*/false,
+                               driver_map);
 
         set_active_mtex(id, act + 1);
       }
@@ -2789,7 +2753,7 @@ static wmOperatorStatus copy_material_exec(bContext *C, wmOperator *op)
 
   char filepath[FILE_MAX];
   material_copybuffer_filepath_get(filepath, sizeof(filepath));
-  copybuffer.write(filepath, *op->reports);
+  copybuffer.write_as_copypaste_buffer(filepath, *op->reports);
 
   /* We are all done! */
   BKE_report(op->reports, RPT_INFO, "Copied material to internal clipboard");
@@ -2870,10 +2834,6 @@ static wmOperatorStatus paste_material_exec(bContext *C, wmOperator *op)
 
   /* Read copy buffer .blend file. */
   char filepath[FILE_MAX];
-  Main *temp_bmain = BKE_main_new();
-
-  STRNCPY(temp_bmain->filepath, BKE_main_blendfile_path_from_global());
-
   material_copybuffer_filepath_get(filepath, sizeof(filepath));
 
   /* NOTE(@ideasman42) The node tree might reference different kinds of ID types.
@@ -2893,9 +2853,9 @@ static wmOperatorStatus paste_material_exec(bContext *C, wmOperator *op)
        * Note that object data is *not* included. */
       FILTER_ID_OB);
 
-  if (!BKE_copybuffer_read(temp_bmain, filepath, op->reports, ntree_filter)) {
+  Main *temp_bmain = BKE_copybuffer_read(*bmain, filepath, op->reports, ntree_filter);
+  if (!temp_bmain) {
     BKE_report(op->reports, RPT_ERROR, "Internal clipboard is empty");
-    BKE_main_free(temp_bmain);
     return OPERATOR_CANCELLED;
   }
 

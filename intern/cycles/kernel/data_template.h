@@ -34,6 +34,8 @@ KERNEL_STRUCT_MEMBER(background, float, map_weight)
 KERNEL_STRUCT_MEMBER(background, float, portal_weight)
 KERNEL_STRUCT_MEMBER(background, int, map_res_x)
 KERNEL_STRUCT_MEMBER(background, int, map_res_y)
+/* Ray differential used for generating the importance map. */
+KERNEL_STRUCT_MEMBER(background, float, map_dD)
 /* Multiple importance sampling. */
 KERNEL_STRUCT_MEMBER(background, int, use_mis)
 /* Light-group. */
@@ -42,7 +44,6 @@ KERNEL_STRUCT_MEMBER(background, int, lightgroup)
 KERNEL_STRUCT_MEMBER(background, int, object_index)
 /* Padding. */
 KERNEL_STRUCT_MEMBER(background, int, pad1)
-KERNEL_STRUCT_MEMBER(background, int, pad2)
 KERNEL_STRUCT_END(KernelBackground)
 
 /* BVH: own BVH2 if no native device acceleration struct used. */
@@ -77,6 +78,7 @@ KERNEL_STRUCT_MEMBER(film, int, is_rec709)
 KERNEL_STRUCT_MEMBER(film, float, exposure)
 /* Passed used. */
 KERNEL_STRUCT_MEMBER(film, int, pass_flag)
+KERNEL_STRUCT_MEMBER(film, int, denoising_pass_flag)
 KERNEL_STRUCT_MEMBER(film, int, light_pass_flag)
 /* Pass offsets. */
 KERNEL_STRUCT_MEMBER(film, int, pass_stride)
@@ -133,6 +135,9 @@ KERNEL_STRUCT_MEMBER(film, int, pass_denoising_specular_albedo)
 KERNEL_STRUCT_MEMBER(film, int, pass_denoising_normal)
 KERNEL_STRUCT_MEMBER(film, int, pass_denoising_roughness)
 KERNEL_STRUCT_MEMBER(film, int, pass_denoising_depth)
+KERNEL_STRUCT_MEMBER(film, int, pass_denoising_backward_motion)
+KERNEL_STRUCT_MEMBER(film, int, pass_denoising_specular_motion)
+KERNEL_STRUCT_MEMBER(film, int, denoising_pass_options_flag)
 /* AOVs. */
 KERNEL_STRUCT_MEMBER(film, int, pass_aov_color)
 KERNEL_STRUCT_MEMBER(film, int, pass_aov_value)
@@ -148,6 +153,8 @@ KERNEL_STRUCT_MEMBER(film, int, use_approximate_shadow_catcher)
 KERNEL_STRUCT_MEMBER(film, int, pass_guiding_color)
 KERNEL_STRUCT_MEMBER(film, int, pass_guiding_probability)
 KERNEL_STRUCT_MEMBER(film, int, pass_guiding_avg_roughness)
+/* Padding. */
+KERNEL_STRUCT_MEMBER(film, int, pad1)
 KERNEL_STRUCT_END(KernelFilm)
 
 /* Integrator. */

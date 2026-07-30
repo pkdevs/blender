@@ -14,7 +14,7 @@
 
 #include <Alembic/Abc/OTypedArrayProperty.h>
 
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 
 #include "BKE_idprop.hh"
 #include "DNA_ID.h"
@@ -80,6 +80,10 @@ void CustomPropertiesExporter::write(const IDProperty *id_property)
     case IDP_IDPARRAY:
       write_idparray(id_property);
       break;
+    case IDP_GROUP:
+    case IDP_ID:
+      /* Not supported. */
+      break;
   }
 }
 
@@ -141,6 +145,9 @@ void CustomPropertiesExporter::write_idparray(const IDProperty *idp_array)
       break;
     case IDP_ARRAY:
       write_idparray_of_numbers(idp_array);
+      break;
+    default:
+      /* Other types not supported. */
       break;
   }
 }

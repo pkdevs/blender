@@ -2,7 +2,7 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#include "BLI_math_base_safe.h"
+#include "BLI_math_base_safe.hh"
 #include "BLI_math_vector.hh"
 
 #include "FN_init.hh"
@@ -668,7 +668,7 @@ static void register_common_functions_impl()
 
 void register_common_functions()
 {
-  /* Make sure the functions are only registered once even if called multiple times.*/
+  /* Make sure the functions are only registered once even if called multiple times. */
   [[maybe_unused]] static bool registered = []() {
     register_common_functions_impl();
     return true;

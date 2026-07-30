@@ -10,9 +10,9 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_listbase.h"
-#include "BLI_math_matrix.h"
-#include "BLI_math_vector.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_vector_c.hh"
 
 #include "BKE_context.hh"
 #include "BKE_movieclip.hh"
@@ -418,9 +418,9 @@ static void cancelTransTracking(TransInfo *t)
 
       BLI_assert(marker != nullptr);
 
-      marker->flag = tdt->flag;
+      marker->flag = TrackingMarkerFlag(tdt->flag);
 
-      if (track->flag & SELECT) {
+      if (track->flag & TRACK_SELECT) {
         i++;
       }
 
@@ -439,7 +439,7 @@ static void cancelTransTracking(TransInfo *t)
 
       BLI_assert(plane_marker != nullptr);
 
-      plane_marker->flag = tdt->flag;
+      plane_marker->flag = TrackingPlaneMarkerFlag(tdt->flag);
       i += 3;
     }
 

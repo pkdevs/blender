@@ -23,7 +23,7 @@
 #include "draw_shader_shared.hh"
 
 /* random */
-#include "BLI_hash.h"
+#include "BLI_hash_c.hh"
 
 /* find_rgba_attribute */
 #include "GPU_material.hh"
@@ -440,6 +440,8 @@ class ObjectRef {
           return ctx_mode == CTX_MODE_EDIT_GREASE_PENCIL;
         case OB_VOLUME:
           /* No edit mode yet. */
+          return false;
+        default:
           return false;
       }
     }

@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "BLI_assert.h"
+#include "BLI_assert.hh"
 #include "BLI_map.hh"
 #include "GPU_texture.hh"
 #include "MEM_guardedalloc.h"
@@ -175,7 +175,7 @@ struct MTLSamplerState {
   }
 };
 
-const MTLSamplerState DEFAULT_SAMPLER_STATE = {GPUSamplerState::default_sampler() /*, 0, 9999 */};
+const MTLSamplerState DEFAULT_SAMPLER_STATE = {GPUSamplerState::default_sampler() /* , 0, 9999 */};
 
 class MTLTexture : public Texture {
   friend class MTLContext;

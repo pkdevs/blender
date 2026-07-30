@@ -90,10 +90,10 @@ int sample_surface_points_spherical(RandomNumberGenerator &rng,
  * overhead and is not always possible. If an exact number of points is required, that has to be
  * implemented at a higher level.
  *
- * \param region_position_to_ray: Function that converts a 2D position into a 3D ray that is used
- *   to find positions on the mesh.
  * \param mesh_bvhtree: BVH tree of the triangles in the mesh. Passed in so that it does not have
  *   to be retrieved again.
+ * \param region_position_to_ray: Function that converts a 2D position into a 3D ray that is used
+ *   to find positions on the mesh.
  * \param tries_num: Number of 2d positions that are sampled. The maximum
  *   number of new samples.
  * \return The number of added points.
@@ -185,11 +185,13 @@ class BaryWeightSampleFn : public mf::MultiFunction {
   fn::GField src_field_;
 
   mutable CacheMutex mutex_;
+  mutable Span<int> corner_verts_;
   mutable Span<int3> corner_tris_;
+  mutable Span<int> tri_faces_;
   mutable std::optional<bke::MeshFieldContext> source_context_;
   mutable std::unique_ptr<fn::FieldEvaluator> source_evaluator_;
   mutable const GVArray *source_data_;
-  mutable AttrDomain domain_;
+  mutable AttrDomain src_domain_;
 
  public:
   BaryWeightSampleFn(GeometrySet geometry, fn::GField src_field);

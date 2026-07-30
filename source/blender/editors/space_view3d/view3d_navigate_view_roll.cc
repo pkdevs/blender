@@ -6,10 +6,10 @@
  * \ingroup spview3d
  */
 
-#include "BLI_dial_2d.h"
-#include "BLI_math_rotation.h"
-#include "BLI_math_vector.h"
-#include "BLI_rect.h"
+#include "BLI_dial_2d.hh"
+#include "BLI_math_rotation_c.hh"
+#include "BLI_math_vector_c.hh"
+#include "BLI_rect.hh"
 
 #include "BKE_context.hh"
 
@@ -68,6 +68,14 @@ static void viewroll_apply(ViewOpsData *vod, int x, int y)
   if (angle != 0.0f) {
     view_roll_angle(
         vod->region, vod->rv3d->viewquat, vod->init.quat, vod->init.mousevec, angle, false);
+
+    if (vod->rv3d->persp == RV3D_CAMOB) {
+      const bool is_camera_lock = ED_view3d_camera_lock_check(vod->v3d, vod->rv3d);
+      if (!is_camera_lock) {
+        /* Wrap to prevent poor precision at large values. */
+        vod->rv3d->camroll = angle_wrap_rad(vod->init.camroll - angle);
+      }
+    }
   }
 
   if (vod->use_dyn_ofs) {
@@ -188,13 +196,6 @@ static wmOperatorStatus viewroll_exec(bContext *C, wmOperator *op)
 
   ED_view3d_smooth_view_force_finish(C, vod->v3d, vod->region);
 
-  const bool is_camera_lock = ED_view3d_camera_lock_check(vod->v3d, vod->rv3d);
-  if (vod->rv3d->persp == RV3D_CAMOB && !is_camera_lock) {
-    viewops_data_free(C, vod);
-    op->customdata = nullptr;
-    return OPERATOR_CANCELLED;
-  }
-
   if (vod->depsgraph == nullptr) {
     vod->depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
     vod->init_navigation(C, nullptr, &ViewOpsType_roll);
@@ -214,6 +215,14 @@ static wmOperatorStatus viewroll_exec(bContext *C, wmOperator *op)
   normalize_v3_v3(mousevec, vod->rv3d->viewinv[2]);
   negate_v3(mousevec);
   view_roll_angle(vod->region, quat_new, vod->rv3d->viewquat, mousevec, angle, true);
+
+  if (vod->rv3d->persp == RV3D_CAMOB) {
+    const bool is_camera_lock = ED_view3d_camera_lock_check(vod->v3d, vod->rv3d);
+    if (!is_camera_lock) {
+      /* Wrap to prevent poor precision at large values. */
+      vod->rv3d->camroll = angle_wrap_rad(vod->init.camroll - angle);
+    }
+  }
 
   V3D_SmoothParams sview_params = {};
   sview_params.quat = quat_new;

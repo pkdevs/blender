@@ -4,7 +4,7 @@
 
 #include "BLI_math_base.hh"
 #include "BLI_math_vector_types.hh"
-#include "BLI_string_utf8.h"
+#include "BLI_string_utf8.hh"
 
 #include "DNA_movieclip_types.h"
 #include "DNA_node_types.h"
@@ -68,7 +68,7 @@ static void node_draw_buttons(ui::Layout &layout, bContext *C, PointerRNA *ptr)
 {
   bNode *node = static_cast<bNode *>(ptr->data);
 
-  template_id(&layout, C, ptr, "clip", nullptr, nullptr, nullptr);
+  template_id(&layout, C, ptr, "clip", nullptr, "CLIP_OT_open", nullptr);
 
   if (node->id) {
     MovieClip *clip = id_cast<MovieClip *>(node->id);

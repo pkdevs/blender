@@ -15,16 +15,17 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_ghash.h"
-#include "BLI_listbase.h"
+#include "BLI_ghash.hh"
+#include "BLI_listbase.hh"
 #include "BLI_map.hh"
-#include "BLI_mempool.h"
+#include "BLI_mempool.hh"
 #include "BLI_path_utils.hh"
-#include "BLI_string.h"
-#include "BLI_threads.h"
+#include "BLI_string.hh"
+#include "BLI_threads.hh"
 #include "BLI_vector.hh"
 
 #include "DNA_ID.h"
+#include "DNA_collection_types.h"
 
 #include "BKE_bpath.hh"
 #include "BKE_global.hh"
@@ -36,6 +37,7 @@
 #include "BKE_main.hh"
 #include "BKE_main_idmap.hh"
 #include "BKE_main_namemap.hh"
+#include "BKE_node.hh"
 #include "BKE_report.hh"
 
 #include "IMB_colormanagement.hh"
@@ -93,6 +95,12 @@ Main *BKE_main_new()
   Main *bmain = MEM_new<Main>(__func__);
   IMB_colormanagement_working_space_init_default(bmain);
   return bmain;
+}
+
+void BKE_main_init_from_reference(Main &bmain, const Main &reference)
+{
+  STRNCPY(bmain.filepath, reference.filepath);
+  bmain.colorspace = reference.colorspace;
 }
 
 void BKE_main_clear(Main &bmain)
@@ -175,7 +183,7 @@ void BKE_main_clear(Main &bmain)
 
 #endif
     }
-    BLI_listbase_clear(lb);
+    lb->clear_no_delete();
   }
 
   if (bmain.relations) {
@@ -351,7 +359,10 @@ static void main_merge_add_id_to_move(Main *bmain_dst,
   }
 }
 
-void BKE_main_merge(Main *bmain_dst, Main **r_bmain_src, MainMergeReport &reports)
+void BKE_main_merge(Main *bmain_dst,
+                    Set<ID *> *force_merge_src_ids,
+                    Main **r_bmain_src,
+                    MainMergeReport &reports)
 {
   Main *bmain_src = *r_bmain_src;
   /* NOTE: Dedicated mapping type is needed here, to handle properly the library cases. */
@@ -436,25 +447,30 @@ void BKE_main_merge(Main *bmain_dst, Main **r_bmain_src, MainMergeReport &report
       }
 
       bool src_has_match_in_dst = false;
-      for (ID *id_iter_dst : ids_dst) {
-        if (are_ids_from_different_mains_matching(bmain_dst, id_iter_dst, bmain_src, id_iter_src))
-        {
-          /* There should only ever be one potential match, never more. */
-          BLI_assert(!src_has_match_in_dst);
-          if (!src_has_match_in_dst) {
-            if (is_library) {
-              id_remapper_libraries.add(id_iter_src, id_iter_dst);
-              reports.num_remapped_libraries++;
+      /* Never try to find a matching ID in destination Main if the source ID is forced to be
+       * merged. */
+      if (!force_merge_src_ids || !force_merge_src_ids->contains(id_iter_src)) {
+        for (ID *id_iter_dst : ids_dst) {
+          if (are_ids_from_different_mains_matching(
+                  bmain_dst, id_iter_dst, bmain_src, id_iter_src))
+          {
+            /* There should only ever be one potential match, never more. */
+            BLI_assert(!src_has_match_in_dst);
+            if (!src_has_match_in_dst) {
+              if (is_library) {
+                id_remapper_libraries.add(id_iter_src, id_iter_dst);
+                reports.num_remapped_libraries++;
+              }
+              else {
+                id_remapper.add(id_iter_src, id_iter_dst);
+                reports.num_remapped_ids++;
+              }
+              src_has_match_in_dst = true;
             }
-            else {
-              id_remapper.add(id_iter_src, id_iter_dst);
-              reports.num_remapped_ids++;
-            }
-            src_has_match_in_dst = true;
-          }
 #ifdef NDEBUG /* In DEBUG builds, keep looping to ensure there is only one match. */
-          break;
+            break;
 #endif
+          }
         }
       }
       if (!src_has_match_in_dst) {
@@ -551,6 +567,68 @@ void BKE_main_merge(Main *bmain_dst, Main **r_bmain_src, MainMergeReport &report
   *r_bmain_src = nullptr;
 }
 
+void BKE_main_merge(Main *bmain_dst, Main **r_bmain_src, MainMergeReport &reports)
+{
+  BKE_main_merge(bmain_dst, nullptr, r_bmain_src, reports);
+}
+
+void BKE_main_merge_as_archive_library(Main &bmain_dst,
+                                       Main *&r_bmain_src,
+                                       Library &dst_external_library,
+                                       MainMergeReport &reports)
+{
+  BLI_assert(dst_external_library.flag & LIBRARY_FLAG_IS_ARCHIVE);
+  BLI_assert(dst_external_library.flag & LIBRARY_FLAG_IS_EXTERNAL);
+
+  Main &bmain_src = *r_bmain_src;
+  Vector<ID *> ids_to_move;
+
+  /* Collect all non-Library IDs from the source Main. Library IDs are dropped: the destination
+   * already has the authoritative external_library representing this import source. */
+  for (ID &id_iter : MainAllIDsIterator(bmain_src)) {
+    if (GS(id_iter.name) == ID_LI) {
+      BLI_assert_msg(false,
+                     "Unexpected Library ID in source Main when merging as archive library");
+      continue;
+    }
+    ids_to_move.append(&id_iter);
+  }
+
+  reports.num_merged_ids = int(ids_to_move.size());
+
+  /* Remove IDs from the source Main and assign them to the external library namespace. */
+  for (ID *id : ids_to_move) {
+    BKE_libblock_management_main_remove(&bmain_src, id);
+    id->lib = &dst_external_library;
+
+    /* Consider these IDs as linked and packed. */
+    id->flag |= ID_FLAG_LINKED_AND_PACKED;
+
+    /* Need to tag embedded IDs as well. */
+    bNodeTree *ntree = bke::node_tree_from_id(id);
+    if (ntree != nullptr) {
+      ntree->id.flag |= ID_FLAG_LINKED_AND_PACKED;
+    }
+    if (GS(id->name) == ID_SCE) {
+      Collection *master_collection = (id_cast<Scene *>(id))->master_collection;
+      if (master_collection != nullptr) {
+        master_collection->id.flag |= ID_FLAG_LINKED_AND_PACKED;
+      }
+    }
+  }
+
+  /* Add all IDs into the destination Main under the external library. */
+  for (ID *id : ids_to_move) {
+    BLI_assert((id->tag & ID_TAG_NO_MAIN) != 0);
+    BKE_libblock_management_main_add(&bmain_dst, id);
+  }
+
+  BLI_assert(BKE_main_namemap_validate(bmain_dst));
+
+  BKE_main_free(&bmain_src);
+  r_bmain_src = nullptr;
+}
+
 bool BKE_main_is_empty(Main *bmain)
 {
   bool result = true;
@@ -598,7 +676,8 @@ static int main_relations_create_idlink_cb(LibraryIDLinkCallbackData *cb_data)
     {
       MainIDRelationsEntry *entry = bmain_relations->relations_from_pointers->lookup_or_add_cb(
           self_id, [&]() {
-            auto *entry = MEM_new_zeroed<MainIDRelationsEntry>(__func__);
+            auto *entry = MEM_new_zeroed<MainIDRelationsEntry>(
+                "main_relations_create_idlink_cb entry");
             entry->session_uid = self_id->session_uid;
             return entry;
           });
@@ -617,7 +696,8 @@ static int main_relations_create_idlink_cb(LibraryIDLinkCallbackData *cb_data)
     if (*id_pointer != nullptr) {
       MainIDRelationsEntry *entry = bmain_relations->relations_from_pointers->lookup_or_add_cb(
           *id_pointer, [&]() {
-            auto *entry = MEM_new_zeroed<MainIDRelationsEntry>(__func__);
+            auto *entry = MEM_new_zeroed<MainIDRelationsEntry>(
+                "main_relations_create_idlink_cb entry");
             entry->session_uid = (*id_pointer)->session_uid;
             return entry;
           });
@@ -659,7 +739,7 @@ void BKE_main_relations_create(Main *bmain, const short flag)
     /* Ensure all IDs do have an entry, even if they are not connected to any other. */
     MainIDRelationsEntry *entry = bmain->relations->relations_from_pointers->lookup_or_add_cb(
         id, [&]() {
-          auto *entry = MEM_new_zeroed<MainIDRelationsEntry>(__func__);
+          auto *entry = MEM_new_zeroed<MainIDRelationsEntry>("BKE_main_relations_create entry");
           entry->session_uid = id->session_uid;
           return entry;
         });
@@ -1156,7 +1236,7 @@ MainAllIDsIterator &MainAllIDsIterator::operator++()
     /* Listbase pointers from lbarray_ can be nullptr when no data was provided (default
      * constructor case). */
     ListBaseT<ID> *lb_ids = lbarray_[size_t(curr_lbarray_index_)];
-    if (lb_ids && !BLI_listbase_is_empty(lb_ids)) {
+    if (lb_ids && !lb_ids->is_empty()) {
       curr_id_ = static_cast<ID *>(lb_ids->first);
       return *this;
     }
@@ -1188,7 +1268,7 @@ MainAllIDsIterator &MainAllIDsIterator::operator--()
     /* Listbase pointers from lbarray_ can be nullptr when no data was provided (default
      * constructor case). */
     ListBaseT<ID> *lb_ids = lbarray_[size_t(curr_lbarray_index_)];
-    if (lb_ids && !BLI_listbase_is_empty(lb_ids)) {
+    if (lb_ids && !lb_ids->is_empty()) {
       curr_id_ = static_cast<ID *>(lb_ids->last);
       return *this;
     }
@@ -1206,7 +1286,7 @@ int64_t MainAllIDsIterator::size() const
     if (!lb_ids) {
       continue;
     }
-    size += BLI_listbase_count(lb_ids);
+    size += lb_ids->count();
   }
   return size;
 }

@@ -4,7 +4,8 @@
 
 #include <string>
 
-#include "BLI_assert.h"
+#include "BLI_assert.hh"
+#include "BLI_math_euler.hh"
 #include "BLI_math_vector_types.hh"
 
 #include "DNA_node_types.h"
@@ -25,8 +26,7 @@ SingleValueNodeInputOperation::SingleValueNodeInputOperation(Context &context,
                                                              const bNodeSocket &input_socket)
     : Operation(context), input_socket_(input_socket)
 {
-  const ResultType result_type = get_node_socket_result_type(&input_socket);
-  this->populate_result(context.create_result(result_type));
+  this->populate_result(get_node_socket_result_type(&input_socket));
 }
 
 void SingleValueNodeInputOperation::execute()
@@ -110,6 +110,14 @@ void SingleValueNodeInputOperation::execute()
       result.set_single_value(value);
       break;
     }
+    case SOCK_ROTATION: {
+      const bNodeSocketValueRotation *rotation =
+          input_socket_.default_value_typed<bNodeSocketValueRotation>();
+      const math::EulerXYZ euler(float3(rotation->value_euler));
+      const math::Quaternion value = math::to_quaternion(euler);
+      result.set_single_value(value);
+      break;
+    }
     case SOCK_OBJECT: {
       Object *value = input_socket_.default_value_typed<bNodeSocketValueObject>()->value;
       result.set_single_value(value);
@@ -140,6 +148,9 @@ void SingleValueNodeInputOperation::execute()
       result.set_single_value(value);
       break;
     }
+    case SOCK_CUSTOM:
+      /* An undefined socket, its value does not matter. */
+      break;
     default:
       BLI_assert_unreachable();
       break;
@@ -151,9 +162,9 @@ Result &SingleValueNodeInputOperation::get_result()
   return Operation::get_result(output_identifier_);
 }
 
-void SingleValueNodeInputOperation::populate_result(Result result)
+void SingleValueNodeInputOperation::populate_result(const ResultType type)
 {
-  Operation::populate_result(output_identifier_, result);
+  Operation::populate_result(output_identifier_, type);
 }
 
 }  // namespace blender::compositor

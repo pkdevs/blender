@@ -41,8 +41,8 @@
 
 #  include "NOD_composite.hh"
 
-#  include "BLI_listbase.h"
-#  include "BLI_string.h"
+#  include "BLI_listbase.hh"
+#  include "BLI_string.hh"
 
 #  include "DEG_depsgraph_build.hh"
 #  include "DEG_depsgraph_query.hh"
@@ -292,7 +292,9 @@ int rna_LayerCollection_name_length(PointerRNA *ptr)
   return strlen(id->name + 2);
 }
 
-static void rna_LayerCollection_flag_set(PointerRNA *ptr, const bool value, const int flag)
+static void rna_LayerCollection_flag_set(PointerRNA *ptr,
+                                         const bool value,
+                                         const eLayerCollection_Flag flag)
 {
   LayerCollection *layer_collection = static_cast<LayerCollection *>(ptr->data);
   Collection *collection = layer_collection->collection;
