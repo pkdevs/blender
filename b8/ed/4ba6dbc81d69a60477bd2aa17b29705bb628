@@ -1,3 +1,4 @@
 Referenced by issue #149112, Difference boolean using exact solver crashes if resulting mesh is empty
 Referenced by commit e5dab9f3b42af65ecce89218e3ca7ce5625f666c, Fix #149112: Exact boolean crash with empty result mesh
 Referenced by issue #151809, Crash switching to edit mode on specific mesh
+Referenced by issue #162133, Geometry Nodes: Changing the boolean solver changes the way materials are handled
