@@ -249,6 +249,22 @@ void blo_do_versions_530(FileData * /*fd*/, Library * /*lib*/, Main *bmain)
   }
 
   if (!MAIN_VERSION_FILE_ATLEAST(bmain, 503, 9)) {
+    for (Brush &brush : bmain->brushes) {
+      if (brush.curve_hardness == nullptr) {
+        brush.curve_hardness = brush.paint_flags & BRUSH_PAINT_HARDNESS_PRESSURE_INVERT ?
+                                   BKE_paint_default_curve_inverted() :
+                                   BKE_paint_default_curve();
+      }
+      if (brush.curve_auto_smooth == nullptr) {
+        brush.curve_auto_smooth = BKE_paint_default_curve_inverted();
+      }
+      if (brush.curve_spacing == nullptr) {
+        brush.curve_spacing = BKE_paint_default_curve();
+      }
+    }
+  }
+
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 503, 11)) {
     for (bNodeTree &node_group : bmain->nodetrees) {
       if (node_group.type != NTREE_COMPOSIT) {
         continue;
