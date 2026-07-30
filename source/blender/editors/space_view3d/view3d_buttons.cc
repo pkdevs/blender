@@ -1402,7 +1402,7 @@ static void v3d_editvertex_buts(
     }
   }
   else {
-    /* We get here (via #do_view3d_region_buttons()) if the above buttons return
+    /* Getting here (via #do_view3d_region_buttons()) if the above buttons return
      * B_TRANSFORM_PANEL_MEDIAN, so either when multiple elements are selected or no RNA buttons
      * are used. Either way, we are now setting values directly (not via RNA buttons) and thus lack
      * automatic RNA updates. We could run the actual RNA updates (creating a PointerRNA, finding
