@@ -248,7 +248,6 @@ bool BKE_attribute_rename(AttributeOwner &owner,
   if (owner.type() == AttributeOwnerType::Mesh) {
     Mesh *mesh = owner.get_mesh();
     if (BMEditMesh *em = mesh->runtime->edit_mesh.get()) {
-      BLI_assert(em->bm);
       /* NOTE: Checking if the new name matches the old name only makes sense when the name
        * is clamped to its maximum length, otherwise assigning an over-long name multiple times
        * will add `.001` suffix unnecessarily. */
@@ -475,7 +474,6 @@ bool BKE_attribute_remove(AttributeOwner &owner, const StringRef name, ReportLis
   if (owner.type() == AttributeOwnerType::Mesh) {
     Mesh *mesh = owner.get_mesh();
     if (BMEditMesh *em = mesh->runtime->edit_mesh.get()) {
-      BLI_assert(em->bm);
       const std::array<DomainInfo, ATTR_DOMAIN_NUM> info = get_domains(em->bm);
       for (const int domain : IndexRange(ATTR_DOMAIN_NUM)) {
         if (CustomData *data = info[domain].customdata) {
@@ -592,7 +590,6 @@ int BKE_attributes_length(const AttributeOwner &owner,
   if (owner.type() == AttributeOwnerType::Mesh) {
     const Mesh &mesh = *owner.get_mesh();
     if (BMEditMesh *em = mesh.runtime->edit_mesh.get()) {
-      BLI_assert(em->bm);
       const std::array<DomainInfo, ATTR_DOMAIN_NUM> info = get_domains(em->bm);
       int length = 0;
       for (const int domain : IndexRange(ATTR_DOMAIN_NUM)) {
@@ -659,7 +656,6 @@ int BKE_attribute_domain_size(const AttributeOwner &owner, const int domain)
   if (owner.type() == AttributeOwnerType::Mesh) {
     const Mesh &mesh = *owner.get_mesh();
     if (BMEditMesh *em = mesh.runtime->edit_mesh.get()) {
-      BLI_assert(em->bm);
       const BMesh &bm = *em->bm;
       const std::array<DomainInfo, ATTR_DOMAIN_NUM> info = get_domains(&const_cast<BMesh &>(bm));
       return info[domain].length;
@@ -696,7 +692,6 @@ std::optional<StringRefNull> BKE_attributes_active_name_get(AttributeOwner &owne
   if (owner.type() == AttributeOwnerType::Mesh) {
     const Mesh *mesh = owner.get_mesh();
     if (BMEditMesh *em = mesh->runtime->edit_mesh.get()) {
-      BLI_assert(em->bm);
       if (active_index > BKE_attributes_length(owner, ATTR_DOMAIN_MASK_ALL, CD_MASK_PROP_ALL)) {
         active_index = 0;
       }
@@ -834,7 +829,6 @@ std::optional<StringRef> BKE_attribute_from_index(AttributeOwner &owner,
   if (owner.type() == AttributeOwnerType::Mesh) {
     const Mesh &mesh = *owner.get_mesh();
     if (BMEditMesh *em = mesh.runtime->edit_mesh.get()) {
-      BLI_assert(em->bm);
       const BMesh &bm = *em->bm;
       const std::array<DomainInfo, ATTR_DOMAIN_NUM> info = get_domains(&const_cast<BMesh &>(bm));
 
@@ -893,7 +887,6 @@ int BKE_attribute_to_index(const AttributeOwner &owner,
   if (owner.type() == AttributeOwnerType::Mesh) {
     const Mesh &mesh = *owner.get_mesh();
     if (BMEditMesh *em = mesh.runtime->edit_mesh.get()) {
-      BLI_assert(em->bm);
       const std::array<DomainInfo, ATTR_DOMAIN_NUM> info = get_domains(em->bm);
       int index = 0;
       for (const int domain : IndexRange(ATTR_DOMAIN_NUM)) {

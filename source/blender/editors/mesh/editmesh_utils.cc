@@ -308,15 +308,6 @@ void EDBM_mesh_make_from_mesh(Object *ob,
   /* Clamp the index, so the behavior of enter & exit edit-mode matches, see #43998. */
   const int shapenr = object_shapenr_basis_index_ensured(ob);
 
-  /* A geometry nodes tool temporarily unloads the edit-mesh: it flushes the #BMesh back into the
-   * mesh and frees it, but keeps the #BMEditMesh wrapper alive with a null `bm`. Drop that stale
-   * wrapper now, so the active attribute below is resolved from the mesh storage (where the data
-   * lives after the flush) rather than through the missing #BMesh. */
-  if (mesh->runtime->edit_mesh && !mesh->runtime->edit_mesh->bm) {
-    EDBM_mesh_free_data(mesh->runtime->edit_mesh.get());
-    mesh->runtime->edit_mesh.reset();
-  }
-
   AttributeOwner owner = AttributeOwner::from_id(const_cast<ID *>(&mesh->id));
   const std::string attributes_active_name = BKE_attributes_active_name_get(owner).value_or("");
 
