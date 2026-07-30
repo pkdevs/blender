@@ -2559,9 +2559,7 @@ IDNewNameResult BKE_id_rename(Main &bmain, ID &id, StringRefNull name, const IDN
     switch (GS(id.name)) {
       case ID_OB: {
         Object &ob = reinterpret_cast<Object &>(id);
-        if (ob.type == OB_MBALL) {
-          DEG_id_tag_update(&ob.id, ID_RECALC_GEOMETRY);
-        }
+        DEG_id_tag_update(&ob.id, ID_RECALC_GEOMETRY);
         break;
       }
       default:
