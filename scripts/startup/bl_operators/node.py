@@ -1459,6 +1459,61 @@ class NODE_OT_interface_item_unlink_panel_toggle(NodeInterfaceOperator, Operator
         return {'FINISHED'}
 
 
+class NODE_OT_interface_item_swap_io_type(NodeInterfaceOperator, Operator):
+    '''Swap the input/output type of active item to the opposite type'''
+    bl_idname = "node.interface_item_swap_io_type"
+    bl_label = "Swap Input/Output Type"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    props = (
+            "name", 
+            "description", 
+            "hide_value", 
+            "subtype",
+            "default_attribute_name",
+            "default_value",
+            "min_value",
+            "max_value",
+            )
+
+    @classmethod
+    def poll(cls, context):
+        if not super().poll(context):
+            return False
+        
+        tree = context.space_data.edit_tree
+        active_item = tree.interface.active
+
+        if active_item.item_type != "SOCKET":
+            cls.poll_message_set("Active item is not a socket")
+            return False
+            
+        return True
+
+    def execute(self, context):
+        tree = context.space_data.edit_tree
+        interface = tree.interface
+        old_item = interface.active
+
+        if old_item.in_out == "INPUT":
+            new_item = interface.new_socket("Socket", socket_type=old_item.socket_type, in_out="OUTPUT", parent=old_item.parent)
+        else:
+            new_item = interface.new_socket("Socket", socket_type=old_item.socket_type, in_out="INPUT", parent=old_item.parent)
+        
+        for prop in self.props:
+            if hasattr(new_item, prop):
+                setattr(new_item, prop, getattr(old_item, prop))
+
+        # Clear multi-selection
+        for item in interface.items_tree:
+            item.select = False
+
+        interface.remove(old_item)
+        interface.active = new_item
+
+        return {'FINISHED'}
+
+
 class NODE_OT_viewer_shortcut_set(Operator):
     """Create a viewer shortcut for the selected node by pressing ctrl+1,2,..9"""
     bl_idname = "node.viewer_shortcut_set"
@@ -1607,6 +1662,7 @@ classes = (
     NODE_OT_interface_item_remove,
     NODE_OT_interface_item_make_panel_toggle,
     NODE_OT_interface_item_unlink_panel_toggle,
+    NODE_OT_interface_item_swap_io_type,
     NODE_OT_tree_path_parent,
     NODE_OT_viewer_shortcut_get,
     NODE_OT_viewer_shortcut_set,
