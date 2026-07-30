@@ -342,9 +342,14 @@ static void draw_import_controls(bContext *C, Layout &layout, const std::string 
 {
   layout.label(label, ICON_NONE);
   if (valid) {
-    Layout &row = layout.row(false);
+    Layout &col = layout.column(false);
+
+    Layout &row = col.row(false);
     row.emboss_set(EmbossType::None);
     row.popover(C, "WM_PT_operator_presets", "", ICON_PRESET);
+
+    Layout &col2 = layout.column(false);
+    col2.menu("COLLECTION_MT_importer_control", "", ICON_DOWNARROW_HLT);
   }
 }
 

@@ -625,8 +625,8 @@ static wmOperatorStatus collection_importer_add_invoke(bContext *C,
   if (!collection) {
     return OPERATOR_CANCELLED;
   }
-  CollectionImport *collection_importer = collection->importer;
-  BLI_assert(collection_importer);
+
+  BLI_assert(collection->importer);
   BLI_assert(fh);
   UNUSED_VARS_NDEBUG(collection_importer);
 
@@ -910,6 +910,120 @@ static void COLLECTION_OT_importer_import(wmOperatorType *ot)
   ot->exec = collection_importer_import_exec;
   ot->poll = collection_importer_import_poll;
 
+  /* flags */
+  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
+}
+
+static void collection_importer_clear_ids(Main *bmain, const Library *external_archive_lib)
+{
+  Set<ID *> ids_to_delete;
+  for (ID &id_iter : MainAllIDsIterator(*bmain)) {
+    if (id_iter.lib == external_archive_lib) {
+      ids_to_delete.add(&id_iter);
+    }
+  }
+  BKE_id_multi_delete(bmain, ids_to_delete);
+}
+
+static wmOperatorStatus collection_importer_clear_exec(bContext *C, wmOperator * /*op*/)
+{
+  Main *bmain = CTX_data_main(C);
+  const Collection *collection = CTX_data_collection(C);
+  CollectionImport *data = collection->importer;
+  if (!data) {
+    return OPERATOR_CANCELLED;
+  }
+
+  const Library *external_archive_lib = data->runtime->archive_library;
+  if (!external_archive_lib) {
+    /* It is ok to clear a collection which hasn't been imported yet. */
+    return OPERATOR_FINISHED;
+  }
+
+  /* Clear all imported data from the external archive library and remove it from its parent
+   * library. */
+  collection_importer_clear_ids(bmain, external_archive_lib);
+
+  Library *external_library = external_archive_lib->archive_parent_library;
+  external_library->runtime->archived_libraries.remove_if(
+      [&](const Library *lib) { return lib == external_archive_lib; });
+
+  data->runtime->archive_library = nullptr;
+
+  WM_event_add_notifier(C, NC_SPACE | ND_SPACE_VIEW3D, nullptr);
+
+  return OPERATOR_FINISHED;
+}
+
+static void COLLECTION_OT_importer_clear(wmOperatorType *ot)
+{
+  /* identifiers */
+  ot->name = "Clear Importer";
+  ot->description = "Clear the importer data";
+  ot->idname = "COLLECTION_OT_importer_clear";
+
+  /* api callbacks */
+  ot->exec = collection_importer_clear_exec;
+  ot->poll = collection_importer_remove_poll;
+
+  /* flags */
+  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
+}
+
+static wmOperatorStatus collection_importer_make_local_exec(bContext *C, wmOperator * /*op*/)
+{
+  Main *bmain = CTX_data_main(C);
+  Collection *collection = CTX_data_collection(C);
+  CollectionImport *data = collection->importer;
+  if (!data) {
+    return OPERATOR_CANCELLED;
+  }
+
+  Library *external_archive_lib = data->runtime->archive_library;
+  if (!external_archive_lib) {
+    /* It is ok to clear a collection which hasn't been imported yet. */
+    return OPERATOR_FINISHED;
+  }
+
+  /* Make each ID associated with the external archive library */
+  for (ID &id_iter : MainAllIDsIterator(*bmain)) {
+    if (id_iter.lib == external_archive_lib) {
+      BKE_lib_id_make_local(bmain, &id_iter, LIB_ID_MAKELOCAL_FORCE_LOCAL);
+    }
+  }
+
+  /* Remove external archive library from its parent. */
+  Library *external_library = external_archive_lib->archive_parent_library;
+  external_library->runtime->archived_libraries.remove_if(
+      [&](const Library *lib) { return lib == external_archive_lib; });
+  BKE_id_delete(bmain, external_archive_lib);
+
+  /* Remove the external library itself if it is now empty. */
+  if (external_library->runtime->archived_libraries.is_empty()) {
+    BKE_id_delete(bmain, external_library);
+  }
+  BKE_collection_importer_free_data(data);
+  MEM_delete(data);
+
+  collection->importer = nullptr;
+
+  BKE_view_layer_need_resync_tag(CTX_data_view_layer(C));
+  DEG_id_tag_update(&collection->id, ID_RECALC_SYNC_TO_EVAL);
+  WM_event_add_notifier(C, NC_SPACE | ND_SPACE_PROPERTIES, nullptr);
+  WM_event_add_notifier(C, NC_SPACE | ND_SPACE_OUTLINER, nullptr);
+
+  return OPERATOR_FINISHED;
+}
+
+static void COLLECTION_OT_importer_make_local(wmOperatorType *ot)
+{
+  /* identifiers */
+  ot->name = "Make Importer Local";
+  ot->description = "Make the importer data local";
+  ot->idname = "COLLECTION_OT_importer_make_local";
+  /* api callbacks */
+  ot->exec = collection_importer_make_local_exec;
+  ot->poll = collection_importer_import_poll;
   /* flags */
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 }
@@ -1320,6 +1434,14 @@ static void collection_importer_menu_draw(const bContext * /*C*/, Menu *menu)
   }
 }
 
+static void collection_importer_control_menu_draw(const bContext * /*C*/, Menu *menu)
+{
+  ui::Layout &layout = *menu->layout;
+  layout.op("COLLECTION_OT_importer_reload", "Reload", ICON_NONE);
+  layout.op("COLLECTION_OT_importer_clear", "Clear", ICON_NONE);
+  layout.op("COLLECTION_OT_importer_make_local", "Make Local", ICON_NONE);
+}
+
 static void collection_exporter_menu_draw(const bContext * /*C*/, Menu *menu)
 {
   ui::Layout &layout = *menu->layout;
@@ -1346,11 +1468,29 @@ void collection_importer_register()
   STRNCPY_UTF8(mt->idname, "COLLECTION_MT_importer_add");
   STRNCPY_UTF8(mt->label, N_("Add Importer"));
   mt->draw = collection_importer_menu_draw;
-
   WM_menutype_add(mt);
+
+  mt = MEM_new_zeroed<MenuType>(__func__);
+  STRNCPY_UTF8(mt->idname, "COLLECTION_MT_importer_control");
+  STRNCPY_UTF8(mt->label, N_("Add Control"));
+  mt->draw = collection_importer_control_menu_draw;
+  WM_menutype_add(mt);
+
   WM_operatortype_append(COLLECTION_OT_importer_add);
   WM_operatortype_append(COLLECTION_OT_importer_remove);
   WM_operatortype_append(COLLECTION_OT_importer_import);
+  WM_operatortype_append(COLLECTION_OT_importer_clear);
+  WM_operatortype_append(COLLECTION_OT_importer_make_local);
+}
+
+void collection_importer_macros_register()
+{
+  wmOperatorType *ot = WM_operatortype_append_macro("COLLECTION_OT_importer_reload",
+                                                    "Reload Importer",
+                                                    "Clear and reload the importer data",
+                                                    OPTYPE_REGISTER | OPTYPE_UNDO);
+  WM_operatortype_macro_define(ot, "COLLECTION_OT_importer_clear");
+  WM_operatortype_macro_define(ot, "COLLECTION_OT_importer_import");
 }
 
 void collection_exporter_register()
