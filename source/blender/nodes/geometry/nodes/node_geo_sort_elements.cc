@@ -27,7 +27,17 @@ static void node_declare(NodeDeclarationBuilder &b)
 {
   b.use_custom_socket_order();
   b.allow_any_socket_order();
-  b.add_default_layout();
+  b.add_input<decl::Menu>("Domain"_ustr)
+      .static_items(rna_enum_attribute_domain_items,
+                    [](const EnumPropertyItem &item) {
+                      return ELEM(item.value,
+                                  int(bke::AttrDomain::Point),
+                                  int(bke::AttrDomain::Edge),
+                                  int(bke::AttrDomain::Face),
+                                  int(bke::AttrDomain::Curve),
+                                  int(bke::AttrDomain::Instance));
+                    })
+      .optional_label();
   b.add_input<decl::Geometry>("Geometry"_ustr).description("Geometry to sort the elements of");
   b.add_output<decl::Geometry>("Geometry"_ustr).propagate_all_geometry().align_with_previous();
   b.add_input<decl::Bool>("Selection"_ustr)
@@ -36,16 +46,6 @@ static void node_declare(NodeDeclarationBuilder &b)
       .hide_value();
   b.add_input<decl::Int>("Group ID"_ustr).evaluated_geometry_field().hide_value();
   b.add_input<decl::Float>("Sort Weight"_ustr).evaluated_geometry_field().hide_value();
-}
-
-static void node_layout(ui::Layout &layout, bContext * /*C*/, PointerRNA *ptr)
-{
-  layout.prop(ptr, "domain", UI_ITEM_NONE, "", ICON_NONE);
-}
-
-static void node_init(bNodeTree * /*tree*/, bNode *node)
-{
-  node->custom1 = int(bke::AttrDomain::Point);
 }
 
 static std::optional<Array<int>> sorted_indices(const fn::FieldContext &field_context,
@@ -76,7 +76,8 @@ static void node_geo_exec(GeoNodeExecParams params)
   const Field<bool> selection_field = params.extract_input<Field<bool>>("Selection"_ustr);
   const Field<int> group_id_field = params.extract_input<Field<int>>("Group ID"_ustr);
   const Field<float> weight_field = params.extract_input<Field<float>>("Sort Weight"_ustr);
-  const bke::AttrDomain domain = bke::AttrDomain(params.node().custom1);
+  const bke::AttrDomain domain = bke::AttrDomain(
+      params.extract_input<bke::AttrDomain>("Domain"_ustr));
 
   const NodeAttributeFilter attribute_filter = params.get_attribute_filter("Geometry"_ustr);
 
@@ -151,25 +152,6 @@ static Vector<EnumPropertyItem> items_value_in(const Span<T> values,
   return items;
 }
 
-static void node_rna(StructRNA *srna)
-{
-  static const Vector<EnumPropertyItem> supported_items = items_value_in<bke::AttrDomain>(
-      {bke::AttrDomain::Point,
-       bke::AttrDomain::Edge,
-       bke::AttrDomain::Face,
-       bke::AttrDomain::Curve,
-       bke::AttrDomain::Instance},
-      rna_enum_attribute_domain_items);
-
-  RNA_def_node_enum(srna,
-                    "domain",
-                    "Domain",
-                    "",
-                    supported_items.data(),
-                    NOD_inline_enum_accessors(custom1),
-                    int(bke::AttrDomain::Point));
-}
-
 static void node_register()
 {
   static bke::bNodeType ntype;
@@ -180,12 +162,8 @@ static void node_register()
   ntype.enum_name_legacy = "SORT_ELEMENTS";
   ntype.nclass = NODE_CLASS_GEOMETRY;
   ntype.declare = node_declare;
-  ntype.initfunc = node_init;
   ntype.geometry_node_execute = node_geo_exec;
-  ntype.draw_buttons = node_layout;
   bke::node_register_type(ntype);
-
-  node_rna(ntype.rna_ext.srna);
 }
 NOD_REGISTER_NODE(node_register)
 

@@ -33,19 +33,28 @@ namespace blender {
 
 static void blo_do_domain_sockets_530(Main *bmain)
 {
-  #define ASSIGN_MENU_VALUE_FROM_RNA_ENUM(type_idname, input_identifier, node_var) \
-    for (bNode *node : node_tree.nodes_by_type(type_idname)) { \
-      if (bNodeSocket *node_socket = node->input_by_identifier(input_identifier)) { \
-        node_socket->default_value_typed<bNodeSocketValueMenu>()->value = node->node_var; \
-      } \
-    }
-
-  for (bNodeTree& node_tree : bmain->nodetrees) {
-    node_tree.ensure_topology_cache();
-    ASSIGN_MENU_VALUE_FROM_RNA_ENUM("GeometryNodeScaleElements"_ustr, "Domain"_ustr, custom1);
+#define ASSIGN_MENU_VALUE_FROM_INLINE_RNA_ENUM(type_idname, input_identifier, node_var) \
+  for (bNode *node : node_tree.nodes_by_type(type_idname)) { \
+    if (bNodeSocket *node_socket = node->input_by_identifier(input_identifier)) { \
+      node_socket->default_value_typed<bNodeSocketValueMenu>()->value = node->node_var; \
+    } \
   }
 
-  #undef ASSIGN_MENU_VALUE_FROM_RNA_ENUM
+  for (bNodeTree &node_tree : bmain->nodetrees) {
+    node_tree.ensure_topology_cache();
+    ASSIGN_MENU_VALUE_FROM_INLINE_RNA_ENUM(
+        "GeometryNodeScaleElements"_ustr, "Domain"_ustr, custom1)
+    ASSIGN_MENU_VALUE_FROM_INLINE_RNA_ENUM("GeometryNodeSortElements"_ustr, "Domain"_ustr, custom1)
+    ASSIGN_MENU_VALUE_FROM_INLINE_RNA_ENUM(
+        "GeometryNodeAttributeStatistic"_ustr, "Domain"_ustr, custom2)
+    ASSIGN_MENU_VALUE_FROM_INLINE_RNA_ENUM(
+        "GeometryNodeDistributePointsInGrid"_ustr, "Distribution Method"_ustr, custom1)
+    ASSIGN_MENU_VALUE_FROM_INLINE_RNA_ENUM(
+        "GeometryNodeDistributePointsOnFaces"_ustr, "Distribution Method"_ustr, custom1)
+    // ASSIGN_MENU_VALUE_FROM_RNA_ENUM("GeometryNodeWarning"_ustr, "Warning Type"_ustr, custom1)
+  }
+
+#undef ASSIGN_MENU_VALUE_FROM_RNA_ENUM
 }
 
 static void do_version_set_grease_pencil_colors_options_to_inputs(bNodeTree &ntree, bNode &node)

@@ -32,59 +32,55 @@ enum class DistributeMode {
   Grid = 1,
 };
 
+static const EnumPropertyItem mode_items[] = {
+    {int(DistributeMode::Random),
+     "DENSITY_RANDOM",
+     0,
+     "Random",
+     "Distribute points randomly inside of the volume"},
+    {int(DistributeMode::Grid),
+     "DENSITY_GRID",
+     0,
+     "Grid",
+     "Distribute the points in a grid pattern inside of the volume"},
+    {0, nullptr, 0, nullptr, nullptr},
+};
+
 static void node_declare(NodeDeclarationBuilder &b)
 {
+  b.add_input<decl::Menu>("Distribution Method"_ustr)
+      .static_items(mode_items)
+      .default_value(DistributeMode::Random)
+      .description("Method to use for scattering points")
+      .optional_label();
   b.add_input<decl::Float>("Grid"_ustr).hide_value().structure_type(StructureType::Grid);
-  auto &density = b.add_input<decl::Float>("Density"_ustr)
-                      .default_value(1.0f)
-                      .min(0.0f)
-                      .max(100000.0f)
-                      .subtype(PROP_NONE)
-                      .description(
-                          "When combined with each voxel's value, determines the number of points "
-                          "to sample per unit volume")
-                      .make_available(
-                          [](bNode &node) { node.custom1 = int16_t(DistributeMode::Random); });
-  auto &seed =
-      b.add_input<decl::Int>("Seed"_ustr)
-          .min(-10000)
-          .max(10000)
-          .description("Seed used by the random number generator to generate random points")
-          .make_available([](bNode &node) { node.custom1 = int16_t(DistributeMode::Random); });
-  auto &spacing = b.add_input<decl::Vector>("Spacing"_ustr)
-                      .default_value({0.3, 0.3, 0.3})
-                      .min(0.0001f)
-                      .subtype(PROP_XYZ)
-                      .description("Spacing between grid points")
-                      .make_available(
-                          [](bNode &node) { node.custom1 = int16_t(DistributeMode::Grid); });
-  auto &threshold = b.add_input<decl::Float>("Threshold"_ustr)
-                        .default_value(0.1f)
-                        .min(0.0f)
-                        .max(FLT_MAX)
-                        .description("Minimum density of a voxel to contain a grid point")
-                        .make_available(
-                            [](bNode &node) { node.custom1 = int16_t(DistributeMode::Grid); });
+  b.add_input<decl::Float>("Density"_ustr)
+      .default_value(1.0f)
+      .min(0.0f)
+      .max(100000.0f)
+      .subtype(PROP_NONE)
+      .description(
+          "When combined with each voxel's value, determines the number of points "
+          "to sample per unit volume")
+      .usage_by_menu("Distribution Method"_ustr, int(DistributeMode::Random));
+  b.add_input<decl::Int>("Seed"_ustr)
+      .min(-10000)
+      .max(10000)
+      .description("Seed used by the random number generator to generate random points")
+      .usage_by_menu("Distribution Method"_ustr, int(DistributeMode::Random));
+  b.add_input<decl::Vector>("Spacing"_ustr)
+      .default_value({0.3, 0.3, 0.3})
+      .min(0.0001f)
+      .subtype(PROP_XYZ)
+      .description("Spacing between grid points")
+      .usage_by_menu("Distribution Method"_ustr, int(DistributeMode::Grid));
+  b.add_input<decl::Float>("Threshold"_ustr)
+      .default_value(0.1f)
+      .min(0.0f)
+      .max(FLT_MAX)
+      .description("Minimum density of a voxel to contain a grid point")
+      .usage_by_menu("Distribution Method"_ustr, int(DistributeMode::Grid));
   b.add_output<decl::Geometry>("Points"_ustr).propagate_all_geometry();
-
-  const bNode *node = b.node_or_null();
-  if (node != nullptr) {
-    const auto mode = DistributeMode(node->custom1);
-    density.available(mode == DistributeMode::Random);
-    seed.available(mode == DistributeMode::Random);
-    spacing.available(mode == DistributeMode::Grid);
-    threshold.available(mode == DistributeMode::Grid);
-  }
-}
-
-static void node_layout(ui::Layout &layout, bContext * /*C*/, PointerRNA *ptr)
-{
-  layout.prop(ptr, "mode", UI_ITEM_NONE, "", ICON_NONE);
-}
-
-static void node_init(bNodeTree * /*tree*/, bNode *node)
-{
-  node->custom1 = int16_t(DistributeMode::Random);
 }
 
 #ifdef WITH_OPENVDB
@@ -191,7 +187,7 @@ static void node_geo_exec(GeoNodeExecParams params)
   }
   const openvdb::FloatGrid &grid = static_cast<const openvdb::FloatGrid &>(base_grid);
 
-  const DistributeMode mode = DistributeMode(params.node().custom1);
+  const DistributeMode mode = params.extract_input<DistributeMode>("Distribution Method"_ustr);
 
   float density;
   int seed;
@@ -227,31 +223,6 @@ static void node_geo_exec(GeoNodeExecParams params)
 #endif
 }
 
-static void node_rna(StructRNA *srna)
-{
-  static const EnumPropertyItem mode_items[] = {
-      {int(DistributeMode::Random),
-       "DENSITY_RANDOM",
-       0,
-       "Random",
-       "Distribute points randomly inside of the volume"},
-      {int(DistributeMode::Grid),
-       "DENSITY_GRID",
-       0,
-       "Grid",
-       "Distribute the points in a grid pattern inside of the volume"},
-      {0, nullptr, 0, nullptr, nullptr},
-  };
-
-  RNA_def_node_enum(srna,
-                    "mode",
-                    "Distribution Method",
-                    "Method to use for scattering points",
-                    mode_items,
-                    NOD_inline_enum_accessors(custom1),
-                    int(DistributeMode::Random));
-}
-
 static void node_register()
 {
   static bke::bNodeType ntype;
@@ -261,14 +232,10 @@ static void node_register()
   ntype.ui_description = "Generate points inside a volume grid";
   ntype.enum_name_legacy = "DISTRIBUTE_POINTS_IN_GRID";
   ntype.nclass = NODE_CLASS_GEOMETRY;
-  ntype.initfunc = node_init;
   ntype.default_width = bke::NodeWidth::_180;
   ntype.declare = node_declare;
   ntype.geometry_node_execute = node_geo_exec;
-  ntype.draw_buttons = node_layout;
   bke::node_register_type(ntype);
-
-  node_rna(ntype.rna_ext.srna);
 }
 NOD_REGISTER_NODE(node_register)
 

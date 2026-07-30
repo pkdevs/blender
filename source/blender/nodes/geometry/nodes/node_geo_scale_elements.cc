@@ -42,15 +42,15 @@ static const EnumPropertyItem scale_mode_items[] = {
 
 static const EnumPropertyItem domain_items[] = {
     {int(AttrDomain::Face),
-      "FACE",
-      ICON_NONE,
-      "Face",
-      "Scale individual faces or neighboring face islands"},
+     "FACE",
+     ICON_NONE,
+     "Face",
+     "Scale individual faces or neighboring face islands"},
     {int(AttrDomain::Edge),
-      "EDGE",
-      ICON_NONE,
-      "Edge",
-      "Scale individual edges or neighboring edge islands"},
+     "EDGE",
+     ICON_NONE,
+     "Edge",
+     "Scale individual edges or neighboring edge islands"},
     {0, nullptr, 0, nullptr, nullptr},
 };
 
@@ -59,10 +59,10 @@ static void node_declare(NodeDeclarationBuilder &b)
   b.use_custom_socket_order();
   b.allow_any_socket_order();
   b.add_input<decl::Menu>("Domain"_ustr)
-    .default_value(AttrDomain::Face)
-    .static_items(domain_items)
-    .description("Element type to transform")
-    .optional_label();
+      .default_value(AttrDomain::Face)
+      .static_items(domain_items)
+      .description("Element type to transform")
+      .optional_label();
   b.add_input<decl::Geometry>("Geometry"_ustr)
       .supported_type(GeometryComponent::Type::Mesh)
       .description("Geometry to scale elements of");

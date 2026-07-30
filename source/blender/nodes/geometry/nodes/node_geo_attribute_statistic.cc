@@ -24,6 +24,11 @@ static void node_declare(NodeDeclarationBuilder &b)
 {
   const bNode *node = b.node_or_null();
 
+  b.add_input<decl::Menu>("Domain"_ustr)
+      .static_items(rna_enum_attribute_domain_items)
+      .default_value(AttrDomain::Point)
+      .description("Which domain to read the data from")
+      .optional_label();
   b.add_input<decl::Geometry>("Geometry"_ustr).description("Geometry to get the statistics from");
   b.add_input<decl::Bool>("Selection"_ustr)
       .default_value(true)
@@ -49,13 +54,11 @@ static void node_declare(NodeDeclarationBuilder &b)
 static void node_layout(ui::Layout &layout, bContext * /*C*/, PointerRNA *ptr)
 {
   layout.prop(ptr, "data_type", UI_ITEM_NONE, "", ICON_NONE);
-  layout.prop(ptr, "domain", UI_ITEM_NONE, "", ICON_NONE);
 }
 
 static void node_init(bNodeTree * /*tree*/, bNode *node)
 {
   node->custom1 = CD_PROP_FLOAT;
-  node->custom2 = int16_t(AttrDomain::Point);
 }
 
 static std::optional<eCustomDataType> node_type_from_other_socket(const bNodeSocket &socket)
@@ -146,7 +149,7 @@ static void node_geo_exec(GeoNodeExecParams params)
   GeometrySet geometry_set = params.extract_input<GeometrySet>("Geometry"_ustr);
   const bNode &node = params.node();
   const eCustomDataType data_type = eCustomDataType(node.custom1);
-  const AttrDomain domain = AttrDomain(node.custom2);
+  const AttrDomain domain = params.extract_input<AttrDomain>("Domain"_ustr);
   Vector<const GeometryComponent *> components = geometry_set.get_components();
 
   const Field<bool> selection_field = params.extract_input<Field<bool>>("Selection"_ustr);
@@ -351,16 +354,6 @@ static void node_rna(StructRNA *srna)
           return ELEM(item.value, CD_PROP_FLOAT, CD_PROP_FLOAT3);
         });
       });
-
-  RNA_def_node_enum(srna,
-                    "domain",
-                    "Domain",
-                    "Which domain to read the data from",
-                    rna_enum_attribute_domain_items,
-                    NOD_inline_enum_accessors(custom2),
-                    int(AttrDomain::Point),
-                    nullptr,
-                    true);
 }
 
 static void node_register()

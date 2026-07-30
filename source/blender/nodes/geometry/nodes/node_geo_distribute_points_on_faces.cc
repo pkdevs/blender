@@ -29,15 +29,28 @@
 
 namespace blender::nodes::node_geo_distribute_points_on_faces_cc {
 
+static const EnumPropertyItem mode_items[] = {
+    {GEO_NODE_POINT_DISTRIBUTE_POINTS_ON_FACES_RANDOM,
+     "RANDOM",
+     0,
+     "Random",
+     "Distribute points randomly on the surface"},
+    {GEO_NODE_POINT_DISTRIBUTE_POINTS_ON_FACES_POISSON,
+     "POISSON",
+     0,
+     "Poisson Disk",
+     "Distribute the points randomly on the surface while taking a minimum distance between "
+     "points into account"},
+    {0, nullptr, 0, nullptr, nullptr},
+};
+
 static void node_declare(NodeDeclarationBuilder &b)
 {
-  auto enable_random = [](bNode &node) {
-    node.custom1 = GEO_NODE_POINT_DISTRIBUTE_POINTS_ON_FACES_RANDOM;
-  };
-  auto enable_poisson = [](bNode &node) {
-    node.custom1 = GEO_NODE_POINT_DISTRIBUTE_POINTS_ON_FACES_POISSON;
-  };
-
+  b.add_input<decl::Menu>("Distribution Method"_ustr)
+      .static_items(mode_items)
+      .default_value(GEO_NODE_POINT_DISTRIBUTE_POINTS_ON_FACES_RANDOM)
+      .description("Method to use for scattering points")
+      .optional_label();
   b.add_input<decl::Geometry>("Mesh"_ustr)
       .supported_type(GeometryComponent::Type::Mesh)
       .description("Mesh on whose faces to distribute points on");
@@ -45,54 +58,34 @@ static void node_declare(NodeDeclarationBuilder &b)
       .default_value(true)
       .hide_value()
       .evaluated_geometry_field();
-  auto &distance_min = b.add_input<decl::Float>("Distance Min"_ustr)
-                           .min(0.0f)
-                           .subtype(PROP_DISTANCE)
-                           .make_available(enable_poisson)
-                           .available(false);
-  auto &density_max = b.add_input<decl::Float>("Density Max"_ustr)
-                          .default_value(10.0f)
-                          .min(0.0f)
-                          .make_available(enable_poisson)
-                          .available(false);
-  auto &density = b.add_input<decl::Float>("Density"_ustr)
-                      .default_value(10.0f)
-                      .min(0.0f)
-                      .evaluated_geometry_field()
-                      .make_available(enable_random)
-                      .available(false);
-  auto &density_factor = b.add_input<decl::Float>("Density Factor"_ustr)
-                             .default_value(1.0f)
-                             .min(0.0f)
-                             .max(1.0f)
-                             .subtype(PROP_FACTOR)
-                             .evaluated_geometry_field()
-                             .make_available(enable_poisson)
-                             .available(false);
+  b.add_input<decl::Float>("Distance Min"_ustr)
+      .min(0.0f)
+      .subtype(PROP_DISTANCE)
+      .usage_by_menu("Distribution Method"_ustr,
+                     GEO_NODE_POINT_DISTRIBUTE_POINTS_ON_FACES_POISSON);
+  b.add_input<decl::Float>("Density Max"_ustr)
+      .default_value(10.0f)
+      .min(0.0f)
+      .usage_by_menu("Distribution Method"_ustr,
+                     GEO_NODE_POINT_DISTRIBUTE_POINTS_ON_FACES_POISSON);
+  b.add_input<decl::Float>("Density"_ustr)
+      .default_value(10.0f)
+      .min(0.0f)
+      .evaluated_geometry_field()
+      .usage_by_menu("Distribution Method"_ustr, GEO_NODE_POINT_DISTRIBUTE_POINTS_ON_FACES_RANDOM);
+  b.add_input<decl::Float>("Density Factor"_ustr)
+      .default_value(1.0f)
+      .min(0.0f)
+      .max(1.0f)
+      .subtype(PROP_FACTOR)
+      .evaluated_geometry_field()
+      .usage_by_menu("Distribution Method"_ustr,
+                     GEO_NODE_POINT_DISTRIBUTE_POINTS_ON_FACES_POISSON);
   b.add_input<decl::Int>("Seed"_ustr);
 
   b.add_output<decl::Geometry>("Points"_ustr).propagate_all_geometry();
   b.add_output<decl::Vector>("Normal"_ustr).anonymous_attribute_output();
   b.add_output<decl::Rotation>("Rotation"_ustr).anonymous_attribute_output();
-
-  const bNode *node = b.node_or_null();
-  if (node != nullptr) {
-    switch (node->custom1) {
-      case GEO_NODE_POINT_DISTRIBUTE_POINTS_ON_FACES_POISSON:
-        distance_min.available(true);
-        density_max.available(true);
-        density_factor.available(true);
-        break;
-      case GEO_NODE_POINT_DISTRIBUTE_POINTS_ON_FACES_RANDOM:
-        density.available(true);
-        break;
-    }
-  }
-}
-
-static void node_layout(ui::Layout &layout, bContext * /*C*/, PointerRNA *ptr)
-{
-  layout.prop(ptr, "distribute_method", UI_ITEM_NONE, "", ICON_NONE);
 }
 
 static void node_layout_ex(ui::Layout &layout, bContext * /*C*/, PointerRNA *ptr)
@@ -647,7 +640,10 @@ static void node_geo_exec(GeoNodeExecParams params)
 
   lazy_threading::send_hint();
 
-  switch (GeometryNodeDistributePointsOnFacesMode(params.node().custom1)) {
+  const auto mode = params.extract_input<GeometryNodeDistributePointsOnFacesMode>(
+      "Distribution Method"_ustr);
+
+  switch (mode) {
     case GEO_NODE_POINT_DISTRIBUTE_POINTS_ON_FACES_RANDOM: {
       const Field<float> density = extract_non_negative_density(params, "Density"_ustr);
       geometry::foreach_real_geometry(geometry_set, [&](GeometrySet &geometry_set) {
@@ -706,7 +702,6 @@ static void node_register()
   ntype.default_width = bke::NodeWidth::_180;
   ntype.declare = node_declare;
   ntype.geometry_node_execute = node_geo_exec;
-  ntype.draw_buttons = node_layout;
   ntype.draw_buttons_ex = node_layout_ex;
   bke::node_register_type(ntype);
 }
