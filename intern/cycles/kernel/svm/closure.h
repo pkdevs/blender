@@ -269,8 +269,8 @@ ccl_device
     return svm_node_closure_bsdf_skip(offset, type);
   }
 
-#define white one_spectrum()
-#define black zero_spectrum()
+  const Spectrum black = zero_spectrum();
+  const Spectrum white = one_spectrum();
   switch (type) {
     case CLOSURE_BSDF_PRINCIPLED_ID: {
       const ccl_global SVMNodePrincipledBsdfData &data = svm_node_get<SVMNodePrincipledBsdfData>(
@@ -291,7 +291,7 @@ ccl_device
 
       const Spectrum base_color = rgb_to_spectrum(
           max(stack_load(stack, data.base_color), zero_float3()));
-      const Spectrum clamped_base_color = min(base_color, one_spectrum());
+      const Spectrum clamped_base_color = min(base_color, white);
       const float ior = fmaxf(stack_load(stack, data.ior), 1e-5f);
       const float roughness = saturatef(stack_load(stack, data.roughness));
       const float3 valid_reflection_N = maybe_ensure_valid_specular_reflection(sd, N);
@@ -338,7 +338,7 @@ ccl_device
             bsdf->alpha_y = alpha_y;
 
             fresnel->f0 = clamped_base_color;
-            const Spectrum f82 = min(specular_tint, one_spectrum());
+            const Spectrum f82 = min(specular_tint, white);
 
             fresnel->thin_film.thickness = thinfilm_thickness;
             fresnel->thin_film.ior = thinfilm_ior;
@@ -448,7 +448,7 @@ ccl_device
           bsdf->alpha_y = alpha_y;
 
           fresnel->f0 = f0 * specular_tint;
-          fresnel->f90 = one_spectrum();
+          fresnel->f90 = white;
           fresnel->exponent = -eta;
           fresnel->tint = {white, black};
           fresnel->thin_film = {thinfilm_thickness, thinfilm_ior};
@@ -721,8 +721,7 @@ ccl_device
       else {
         sd->runtime_flag |= bsdf_microfacet_ggx_setup(bsdf);
         if (type == CLOSURE_BSDF_MICROFACET_MULTI_GGX_ID) {
-          const Spectrum color = max(rgb_to_spectrum(stack_load(stack, bsdf_data.color)),
-                                     zero_spectrum());
+          const Spectrum color = max(rgb_to_spectrum(stack_load(stack, bsdf_data.color)), black);
           bsdf_microfacet_setup_fresnel_constant(kg, bsdf, sd->wi, color);
         }
       }
@@ -812,7 +811,7 @@ ccl_device
         bsdf->alpha_x = bsdf->alpha_y = sqr(saturatef(stack_load(stack, bsdf_data.roughness)));
 
         fresnel->f0 = make_float3(F0_from_ior(ior));
-        fresnel->f90 = one_spectrum();
+        fresnel->f90 = white;
         fresnel->exponent = -ior;
         const Spectrum color = max(rgb_to_spectrum(stack_load(stack, bsdf_data.color)), black);
         fresnel->tint = {float(reflective_caustics) * color, float(refractive_caustics) * color};
@@ -1109,8 +1108,7 @@ ccl_device
 
       if (bssrdf) {
         const float scale = stack_load(stack, bsdf_data.scale);
-        bssrdf->radius = max(rgb_to_spectrum(stack_load(stack, bsdf_data.radius) * scale),
-                             zero_spectrum());
+        bssrdf->radius = max(rgb_to_spectrum(stack_load(stack, bsdf_data.radius) * scale), black);
         bssrdf->albedo = closure_weight;
         bssrdf->N = maybe_ensure_valid_specular_reflection(sd, N);
         bssrdf->ior = stack_load(stack, bsdf_data.ior);
@@ -1128,8 +1126,6 @@ ccl_device
       svm_node_get<SVMNodeSimpleBsdfData>(kg, &offset);
       break;
   }
-#undef white
-#undef black
 
   return offset;
 }
