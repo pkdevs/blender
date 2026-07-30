@@ -761,6 +761,8 @@ struct BSLParser {
         case AssignSub:
         case AssignMul:
         case AssignDiv:
+        case AssignLShift:
+        case AssignRShift:
         case Ampersand:
         case BitwiseNot:
         case Decrement:

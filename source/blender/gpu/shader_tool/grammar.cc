@@ -155,6 +155,8 @@ std::string to_str(TokenType type)
   case AssignSub: \
   case AssignMul: \
   case AssignDiv: \
+  case AssignLShift: \
+  case AssignRShift: \
   case Xor
 
 /*

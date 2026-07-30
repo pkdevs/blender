@@ -47,6 +47,24 @@ TEST(shader_tool, Parser)
   }
   {
     string input = R"(
+template<typename F>;
+template<test<>>;
+template<>;
+template test<1, 2>;
+a << b;
+a >> b;
+a >= b;
+a == b;
+a <= b;
+a <<= b;
+a >>= b;
+)";
+    string expect = R"(
+tYBAz;tYAYzz;tYz;tAY1,1z;AwA;AWA;AGA;AEA;ALA;A5A;A6A;)";
+    EXPECT_EQ(Lexer(input, err_handler).token_types_str(), expect);
+  }
+  {
+    string input = R"(
 struct T {
     int t = 1;
 };

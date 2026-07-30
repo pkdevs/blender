@@ -236,6 +236,15 @@ static always_inline TokenType multi_tok_lookup(TokenType input, std::string_vie
         default:
           return input;
       }
+    case 3:
+      switch (s[0]) {
+        case '<':
+          return (s[1] == '<' && s[2] == '=') ? AssignLShift : input;
+        case '>':
+          return (s[1] == '>' && s[2] == '=') ? AssignRShift : input;
+        default:
+          return input;
+      }
     default:
       return input;
   }
