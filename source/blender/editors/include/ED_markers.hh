@@ -12,6 +12,7 @@
 
 namespace blender {
 
+struct ID;
 struct Main;
 struct Scene;
 struct ScrArea;
@@ -49,6 +50,7 @@ void ED_markers_draw(const bContext *C, int flag);
  * \return A #TimeMarker list.
  */
 ListBaseT<TimeMarker> *ED_scene_markers_get(const bContext *C, Scene *scene);
+ID *ED_scene_markers_get_owner_id(const bContext *C, Scene *scene);
 
 /**
  * Public API for getting markers from context.

@@ -78,6 +78,25 @@ ListBaseT<TimeMarker> *ED_scene_markers_get(const bContext *C, Scene *scene)
   return ac.markers;
 }
 
+ID *ED_scene_markers_get_owner_id(const bContext *C, Scene *scene)
+{
+  if (!scene) {
+    return nullptr;
+  }
+
+  bAnimContext ac;
+  if (!ANIM_animdata_get_context(C, &ac)) {
+    return &scene->id;
+  }
+  if (ac.datatype == ANIMCONT_ACTION || ac.datatype == ANIMCONT_SHAPEKEY) {
+    const SpaceAction *saction = static_cast<SpaceAction *>(ac.area->spacedata.first);
+    if (saction->flag & SACTION_POSEMARKERS_SHOW) {
+      return &ac.active_action->id;
+    }
+  }
+  return &scene->id;
+}
+
 ListBaseT<TimeMarker> *ED_scene_markers_get_from_area(const Main &bmain,
                                                       Scene *scene,
                                                       ViewLayer *view_layer,
