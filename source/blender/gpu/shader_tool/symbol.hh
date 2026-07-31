@@ -674,6 +674,7 @@ struct SymbolTable {
   SymbolClass *str_cls;
   SymbolClass *err_cls;
   SymbolClass *bool_cls;
+  SymbolClass *void_cls;
 
   OperatorMap operators;
 

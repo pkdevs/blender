@@ -1284,9 +1284,8 @@ struct SymbolParser : NodeErrorHandler {
 
   void parse_pipeline_decl(SymbolScope &scope, PipelineDecl decl, const std::string &prefix)
   {
-    SymbolClass *type = scope.lookup_class("void");
     SymbolVariable *sym = table.var_arena.alloc(
-        &scope, type, decl.front(), string(decl.identifier().str()));
+        &scope, table.void_cls, decl.front(), string(decl.identifier().str()));
     sym->is_static = true;
     scope.variables.emplace(sym->identifier, sym);
     /* Set resolved identifier. */
@@ -2581,6 +2580,7 @@ void SymbolTable::register_builtins(LocalScope node)
   this->str_cls = root->lookup_class("string_t");
   this->err_cls = root->lookup_class(SymbolTable::err_symbol);
   this->bool_cls = root->lookup_class("bool");
+  this->void_cls = root->lookup_class("void");
 }
 
 SymbolClass *SymbolTable::get_literal_type(string_view lit) const

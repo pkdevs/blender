@@ -766,6 +766,7 @@ vector<SymbolTable::BuiltinFunc> SymbolTable::generate_all_builtin_functions()
 
   functions.push_back({"void", "gpu_discard_fragment", {}});
   functions.push_back({"void", "barrier", {}});
+  functions.push_back({"void", "assert", {"bool"}});
 
   const vector<pair<string, string>> image_types = {{"uint4", "u"}, {"int4", "i"}, {"float4", ""}};
 
@@ -780,21 +781,28 @@ vector<SymbolTable::BuiltinFunc> SymbolTable::generate_all_builtin_functions()
 
     for (size_t i = 0; i < samplers.size(); ++i) {
       string coord_type = f_types[i < 4 ? i : (i == 4 ? 1 : (i == 5 ? 2 : 3))];
+      string icoord_type = i_types[i < 4 ? i : (i == 4 ? 1 : (i == 5 ? 2 : 3))];
       functions.push_back({type, "texture", {samplers[i], coord_type}});
       functions.push_back({type, "textureLod", {samplers[i], coord_type, "float"}});
       functions.push_back({"int3", "textureSize", {samplers[i], "int"}});
+      functions.push_back({type, "texelFetch", {samplers[i], icoord_type, "int"}});
     }
 
-    const vector<string> images = {"image2D", "image2DArray"};
+    const vector<string> images = {
+        prefix + "image2D",
+        prefix + "image2DArray",
+        prefix + "image3D",
+    };
 
     for (size_t i = 0; i < images.size(); ++i) {
-      string coord_type = f_types[i == 0 ? 1 : 2];
+      string coord_type = i_types[i == 0 ? 1 : 2];
       functions.push_back({type, "imageLoad", {images[i], coord_type}});
       functions.push_back({type, "imageLoadFast", {images[i], coord_type}});
       functions.push_back({"void", "imageStore", {images[i], coord_type, type}});
       functions.push_back({"void", "imageStoreFast", {images[i], coord_type, type}});
       /* TODO atomics */
       functions.push_back({"int3", "imageSize", {images[i]}});
+      functions.push_back({"void", "imageFence", {images[i]}});
     }
   }
 
