@@ -678,8 +678,8 @@ class SmoothStrokePanel(BrushPanel):
         col.prop(brush, "smooth_stroke_factor", text="Factor", slider=True)
 
 
-class TipPanel(BrushPanel):
-    bl_label = "Tip"
+class ShapePanel(BrushPanel):
+    bl_label = "Shape"
     bl_options = {'DEFAULT_CLOSED'}
 
     @classmethod
