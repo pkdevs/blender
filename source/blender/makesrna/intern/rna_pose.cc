@@ -444,11 +444,11 @@ static void rna_PoseChannel_constraints_remove_all(ID *id, bPoseChannel *pchan, 
 }
 
 static void rna_PoseChannel_constraints_remove_constraints(ID *id,
-                                                    bPoseChannel *pchan,
-                                                    Main *bmain,
-                                                    ReportList *reports,
-                                                    const int *indices_ptr,
-                                                    const int indices_num)
+                                                           bPoseChannel *pchan,
+                                                           Main *bmain,
+                                                           ReportList *reports,
+                                                           const int *indices_ptr,
+                                                           const int indices_num)
 {
   bool is_any_ik = false;
   Object *ob = id_cast<Object *>(id);
@@ -475,6 +475,9 @@ static void rna_PoseChannel_constraints_remove_constraints(ID *id,
   /* Construct a list of constraints to remove, visiting each constraint only once. */
   Vector<bConstraint *> to_be_removed;
   for (const auto &[index, constraint] : pchan->constraints.enumerate()) {
+    if (indices.is_empty()) {
+      break;
+    }
     if (index != indices[0]) {
       continue;
     }
@@ -881,12 +884,12 @@ static void rna_def_pose_channel_constraints(BlenderRNA *brna, PropertyRNA *cpro
   RNA_def_parameter_flags(parm, PROP_NEVER_NULL, PARM_REQUIRED | PARM_RNAPTR);
   RNA_def_parameter_clear_flags(parm, PROP_THICK_WRAP, ParameterFlag(0));
 
-  func = RNA_def_function(srna, "remove_constraints", "rna_PoseChannel_constraints_remove_constraints");
+  func = RNA_def_function(
+      srna, "remove_constraints", "rna_PoseChannel_constraints_remove_constraints");
   RNA_def_function_ui_description(func,
                                   "Remove multiple constraints from this object specified by "
                                   "indices. If no indices are provided, remove all constraints.");
-  RNA_def_function_flag(
-      func, FUNC_USE_SELF_ID | FUNC_USE_MAIN | FUNC_USE_REPORTS);
+  RNA_def_function_flag(func, FUNC_USE_SELF_ID | FUNC_USE_MAIN | FUNC_USE_REPORTS);
   parm = RNA_def_int_array(func,
                            "indices",
                            1,

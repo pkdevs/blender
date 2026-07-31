@@ -1634,10 +1634,10 @@ static void rna_Object_constraints_remove_all(Object *object, Main *bmain)
 }
 
 static void rna_Object_constraints_remove_constraints(Object *object,
-                                               Main *bmain,
-                                               ReportList *reports,
-                                               const int *indices_ptr,
-                                               const int indices_num)
+                                                      Main *bmain,
+                                                      ReportList *reports,
+                                                      const int *indices_ptr,
+                                                      const int indices_num)
 {
   if (!indices_ptr) {
     rna_Object_constraints_remove_all(object, bmain);
@@ -1661,6 +1661,9 @@ static void rna_Object_constraints_remove_constraints(Object *object,
   /* Construct a list of constraints to remove, visiting each constraint only once. */
   Vector<bConstraint *> to_be_removed;
   for (const auto &[index, constraint] : object->constraints.enumerate()) {
+    if (indices.is_empty()) {
+      break;
+    }
     if (index != indices[0]) {
       continue;
     }
