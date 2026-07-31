@@ -975,9 +975,9 @@ struct SymbolParser : NodeErrorHandler {
     /* Walk nested identifier */
     SymbolScope *ns_scope = &scope;
     for (Id id : ns.children_of_type<Id>()) {
+      /* In case the namespace doesn't exist, create it. */
       SymbolScope *sym = table.scp_arena.alloc(ns_scope, id, SymbolScope::NAMESPACE);
-      ns_scope->scopes.emplace(sym->identifier, sym);
-      ns_scope = sym;
+      ns_scope = ns_scope->scopes.try_emplace(sym->identifier, sym).first->second;
       ns_prefix = ns_prefix + sym->identifier + ns_sep;
     }
     parse_scope(*ns_scope, decl.body(), ns_prefix);
