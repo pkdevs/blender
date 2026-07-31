@@ -438,7 +438,7 @@ struct SymbolFunction : SymbolScope {
   SymbolFunction *lookup_overload(const vector<SymbolClass *> &arg_types);
 
   /* Return true if the given argument types are compatible */
-  bool argument_matches(const vector<SymbolClass *> &arg_types) const;
+  bool argument_matches(const vector<SymbolClass *> &param_types) const;
 
   static Result<vector<SymbolClass *>> to_arg_types(const SymbolTable &table,
                                                     const SymbolScope &scope,

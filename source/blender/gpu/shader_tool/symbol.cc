@@ -1757,10 +1757,40 @@ SymbolFunction *SymbolFunction::lookup_overload(const vector<SymbolClass *> &arg
   return root_scope()->lookup_function(SymbolTable::err_symbol);
 }
 
-bool SymbolFunction::argument_matches(const vector<SymbolClass *> &arg_types) const
+bool SymbolFunction::argument_matches(const vector<SymbolClass *> &param_types) const
 {
-  /* Use GLSL strict matching for now, no implicit conversion. */
-  return this->arg_types == arg_types;
+  /* First fast filter. */
+  if (this->arg_types == param_types) {
+    return true;
+  }
+
+  if (this->arg_types.size() == param_types.size()) {
+    return false;
+  }
+
+  for (int i = 0; i < arg_types.size(); ++i) {
+    if (arg_types[i] != param_types[i]) {
+      /* Check 'packed_floatX' to 'floatX' promotion. */
+      if (arg_types[i]->identifier == "float3" && param_types[i]->identifier == "packed_float3") {
+        /* Continue matching. */
+      }
+      else if (arg_types[i]->identifier == "float4" &&
+               param_types[i]->identifier == "packed_float4")
+      {
+        /* Continue matching. */
+      }
+      else if (arg_types[i]->identifier == "float2" &&
+               param_types[i]->identifier == "packed_float2")
+      {
+        /* Continue matching. */
+      }
+      else {
+        return false;
+      }
+    }
+  }
+
+  return true;
 }
 
 template<typename T, typename AstNodeT>
