@@ -593,7 +593,7 @@ vector<SymbolTable::BuiltinFunc> SymbolTable::generate_all_builtin_functions()
   auto add_vec_vec_scalar_ternary = [&](const string &name, const vector<string> &types) {
     const string &scalar = types[0];
     for (size_t i = 1; i < types.size(); ++i) {
-      functions.push_back({types[i], name, {types[i], scalar, scalar}});
+      functions.push_back({types[i], name, {types[i], types[i], scalar}});
     }
   };
 
