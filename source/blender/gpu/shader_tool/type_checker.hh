@@ -410,7 +410,7 @@ struct ExpressionTypeParser {
   void error(std::optional<AstNodeException> &err)
   {
     if (err) {
-      error(err->node, err->diag, err->param1, err->param2);
+      error(err->node, err->diag, err->param1, err->param2, err->param3);
     }
   }
 
