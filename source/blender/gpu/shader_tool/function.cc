@@ -584,7 +584,13 @@ vector<SymbolTable::BuiltinFunc> SymbolTable::generate_all_builtin_functions()
     }
   };
 
-  auto add_vec_scalar_ternary = [&](const string &name, const vector<string> &types) {
+  auto add_vec_scalar_scalar_ternary = [&](const string &name, const vector<string> &types) {
+    const string &scalar = types[0];
+    for (size_t i = 1; i < types.size(); ++i) {
+      functions.push_back({types[i], name, {types[i], scalar, scalar}});
+    }
+  };
+  auto add_vec_vec_scalar_ternary = [&](const string &name, const vector<string> &types) {
     const string &scalar = types[0];
     for (size_t i = 1; i < types.size(); ++i) {
       functions.push_back({types[i], name, {types[i], scalar, scalar}});
@@ -640,11 +646,11 @@ vector<SymbolTable::BuiltinFunc> SymbolTable::generate_all_builtin_functions()
     add_binary("max", tlist);
     add_vec_scalar_binary("max", tlist);
     add_ternary("clamp", tlist);
-    add_vec_scalar_ternary("clamp", tlist);
+    add_vec_scalar_scalar_ternary("clamp", tlist);
   }
 
   add_ternary("mix", f_types);
-  add_vec_scalar_ternary("mix", f_types);
+  add_vec_vec_scalar_ternary("mix", f_types);
   for (size_t i = 0; i < f_types.size(); ++i) {
     functions.push_back({f_types[i], "mix", {f_types[i], f_types[i], b_types[i]}});
   }
@@ -652,7 +658,7 @@ vector<SymbolTable::BuiltinFunc> SymbolTable::generate_all_builtin_functions()
   add_binary("step", f_types);
   add_vec_scalar_binary("step", f_types);
   add_ternary("smoothstep", f_types);
-  add_vec_scalar_ternary("smoothstep", f_types);
+  add_vec_vec_scalar_ternary("smoothstep", f_types);
 
   add_ternary("fma", f_types);
 
