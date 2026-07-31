@@ -613,7 +613,7 @@ bool BKE_paint_use_unified_size(const Paint *paint)
     return false;
   }
 
-  return paint->brush->flag2 & BRUSH_USE_UNIFIED_PAINT_SIZE;
+  return paint->brush->unified_paint_flags & BRUSH_USE_UNIFIED_PAINT_SIZE;
 }
 
 bool BKE_paint_use_unified_strength(const Paint *paint)
@@ -623,7 +623,7 @@ bool BKE_paint_use_unified_strength(const Paint *paint)
     return false;
   }
 
-  return paint->brush->flag2 & BRUSH_USE_UNIFIED_PAINT_ALPHA;
+  return paint->brush->unified_paint_flags & BRUSH_USE_UNIFIED_PAINT_ALPHA;
 }
 
 bool BKE_paint_use_unified_color(const Paint *paint)
@@ -633,7 +633,7 @@ bool BKE_paint_use_unified_color(const Paint *paint)
     return false;
   }
 
-  return paint->brush->flag2 & BRUSH_USE_UNIFIED_PAINT_COLOR;
+  return paint->brush->unified_paint_flags & BRUSH_USE_UNIFIED_PAINT_COLOR;
 }
 
 /**

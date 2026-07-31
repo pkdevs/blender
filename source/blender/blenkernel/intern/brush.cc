@@ -1338,7 +1338,7 @@ bool BKE_brush_use_locked_size(const Paint *paint, const Brush *brush)
 {
   const short us_flag = paint->unified_paint_settings.flag;
 
-  return (brush->flag2 & BRUSH_USE_UNIFIED_PAINT_SIZE) ?
+  return (brush->unified_paint_flags & BRUSH_USE_UNIFIED_PAINT_SIZE) ?
              (us_flag & UNIFIED_PAINT_BRUSH_LOCK_SIZE) != 0 :
              (brush->flag & BRUSH_LOCK_SIZE) != 0;
 }
@@ -1431,14 +1431,14 @@ float BKE_brush_weight_get(const Paint *paint, const Brush *brush)
 {
   const UnifiedPaintSettings *ups = &paint->unified_paint_settings;
 
-  return (brush->flag2 & BRUSH_USE_UNIFIED_PAINT_WEIGHT) ? ups->weight : brush->weight;
+  return (brush->unified_paint_flags & BRUSH_USE_UNIFIED_PAINT_WEIGHT) ? ups->weight : brush->weight;
 }
 
 void BKE_brush_weight_set(Paint *paint, Brush *brush, float value)
 {
   UnifiedPaintSettings *ups = &paint->unified_paint_settings;
 
-  if (brush->flag2 & BRUSH_USE_UNIFIED_PAINT_WEIGHT) {
+  if (brush->unified_paint_flags & BRUSH_USE_UNIFIED_PAINT_WEIGHT) {
     ups->weight = value;
   }
   else {
@@ -1451,7 +1451,7 @@ int BKE_brush_input_samples_get(const Paint *paint, const Brush *brush)
 {
   const UnifiedPaintSettings *ups = &paint->unified_paint_settings;
 
-  return (brush->flag2 & BRUSH_USE_UNIFIED_PAINT_INPUT_SAMPLES) ? ups->input_samples :
+  return (brush->unified_paint_flags & BRUSH_USE_UNIFIED_PAINT_INPUT_SAMPLES) ? ups->input_samples :
                                                                   brush->input_samples;
 }
 
@@ -1459,7 +1459,7 @@ void BKE_brush_input_samples_set(Paint *paint, Brush *brush, int value)
 {
   UnifiedPaintSettings *ups = &paint->unified_paint_settings;
 
-  if (brush->flag2 & BRUSH_USE_UNIFIED_PAINT_INPUT_SAMPLES) {
+  if (brush->unified_paint_flags & BRUSH_USE_UNIFIED_PAINT_INPUT_SAMPLES) {
     ups->input_samples = value;
   }
   else {

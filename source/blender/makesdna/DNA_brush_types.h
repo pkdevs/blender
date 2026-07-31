@@ -204,8 +204,7 @@ struct Brush {
   int size = 70; /* diameter of the brush in pixels */
   /** General purpose flags. */
   eBrushFlags flag = BRUSH_ALPHA_PRESSURE | BRUSH_SPACE_ATTEN;
-  eBrushFlags2 flag2 = BRUSH_USE_UNIFIED_PAINT_SIZE | BRUSH_USE_UNIFIED_PAINT_COLOR |
-                       BRUSH_USE_UNIFIED_PAINT_WEIGHT;
+  eBrushFlags2 flag2 = {};
   eBrushSamplingFlags sampling_flag = BRUSH_PAINT_ANTIALIASING;
 
   /**
@@ -453,6 +452,10 @@ struct Brush {
 
   DNA_DEPRECATED struct CurveMapping *automasking_cavity_curve = nullptr;
   struct MeshAutomaskingSettings *mesh_automasking_settings = nullptr;
+  eBrushUnifiedPaintFlags unified_paint_flags = BRUSH_USE_UNIFIED_PAINT_SIZE |
+                                                BRUSH_USE_UNIFIED_PAINT_COLOR |
+                                                BRUSH_USE_UNIFIED_PAINT_WEIGHT;
+  float _pad3 = {};
 };
 
 struct PaletteColor {
