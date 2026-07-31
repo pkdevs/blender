@@ -582,7 +582,7 @@ class _draw_tool_settings_context_mode:
 
         if curves_tool == 'COMB':
             layout.prop(brush, "falloff_shape", expand=True)
-            layout.popover("VIEW3D_PT_tools_brush_shape", text="Brush Tip")
+            layout.popover("VIEW3D_PT_tools_brush_shape", text="Shape")
             layout.popover("VIEW3D_PT_curves_sculpt_parameter_falloff", text="Curve Falloff")
         elif curves_tool == 'ADD':
             layout.prop(brush, "falloff_shape", expand=True)

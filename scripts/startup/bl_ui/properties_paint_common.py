@@ -740,10 +740,9 @@ class ShapePanel(BrushPanel):
             if has_content:
                 layout.separator()
             row = layout.row(align=True)
-            row.prop(brush, "tip_roundness")
+            layout.prop(brush, "tip_roundness")
 
-            row = layout.row(align=True)
-            row.prop(brush, "tip_scale_x")
+            layout.prop(brush, "tip_scale_x")
             has_content = True
 
         if has_content:
@@ -904,7 +903,7 @@ def brush_settings(layout, context, brush, popover=False):
         if capabilities.has_auto_smooth:
             pressure_name = "use_smooth_pressure" if capabilities.has_auto_smooth_pressure else None
             unified_row = UnifiedPaintPanel.prop_unified(
-                layout
+                layout,
                 context,
                 brush,
                 "auto_smooth_factor",

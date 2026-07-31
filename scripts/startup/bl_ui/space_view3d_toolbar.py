@@ -879,7 +879,7 @@ class VIEW3D_PT_tools_weight_gradient(Panel, View3DPaintPanel):
 class VIEW3D_PT_tools_brush_shape(Panel, View3DPaintPanel, ShapePanel):
     bl_context = ".paint_common"  # dot on purpose (access from topbar)
     bl_parent_id = "VIEW3D_PT_tools_brush_settings"
-    bl_label = "Brush Tip"
+    bl_label = "Shape"
     bl_options = {'DEFAULT_CLOSED'}
 
 
