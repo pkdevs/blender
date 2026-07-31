@@ -407,7 +407,7 @@ enum eBrushFlags2 : int {
   BRUSH_USE_COLOR_AS_DISPLACEMENT = (1 << 9),
   BRUSH_JITTER_COLOR = (1 << 10),
   BRUSH_PROJECT_USE_BIDIRECTIONAL = (1 << 11),
-  };
+};
 ENUM_OPERATORS(eBrushFlags2)
 
 /** #Brush.unified_paint_flags */

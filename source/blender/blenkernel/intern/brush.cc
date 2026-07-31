@@ -1431,7 +1431,8 @@ float BKE_brush_weight_get(const Paint *paint, const Brush *brush)
 {
   const UnifiedPaintSettings *ups = &paint->unified_paint_settings;
 
-  return (brush->unified_paint_flags & BRUSH_USE_UNIFIED_PAINT_WEIGHT) ? ups->weight : brush->weight;
+  return (brush->unified_paint_flags & BRUSH_USE_UNIFIED_PAINT_WEIGHT) ? ups->weight :
+                                                                         brush->weight;
 }
 
 void BKE_brush_weight_set(Paint *paint, Brush *brush, float value)
@@ -1451,8 +1452,9 @@ int BKE_brush_input_samples_get(const Paint *paint, const Brush *brush)
 {
   const UnifiedPaintSettings *ups = &paint->unified_paint_settings;
 
-  return (brush->unified_paint_flags & BRUSH_USE_UNIFIED_PAINT_INPUT_SAMPLES) ? ups->input_samples :
-                                                                  brush->input_samples;
+  return (brush->unified_paint_flags & BRUSH_USE_UNIFIED_PAINT_INPUT_SAMPLES) ?
+             ups->input_samples :
+             brush->input_samples;
 }
 
 void BKE_brush_input_samples_set(Paint *paint, Brush *brush, int value)

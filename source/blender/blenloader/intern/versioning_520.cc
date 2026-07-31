@@ -603,7 +603,8 @@ void blo_do_versions_520(FileData * /*fd*/, Library * /*lib*/, Main *bmain)
       if (scene.toolsettings->gp_paint) {
         UnifiedPaintSettings &settings =
             scene.toolsettings->gp_paint->paint.unified_paint_settings;
-        settings.flag &= ~(UNIFIED_PAINT_SIZE_DEPRECATED | UNIFIED_PAINT_ALPHA_DEPRECATED | UNIFIED_PAINT_COLOR_DEPRECATED);
+        settings.flag &= ~(UNIFIED_PAINT_SIZE_DEPRECATED | UNIFIED_PAINT_ALPHA_DEPRECATED |
+                           UNIFIED_PAINT_COLOR_DEPRECATED);
       }
     }
   }
