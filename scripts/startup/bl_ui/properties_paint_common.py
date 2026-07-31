@@ -705,7 +705,7 @@ class ShapePanel(BrushPanel):
                 brush.sculpt_capabilities.has_hardness or brush.sculpt_capabilities.has_tip_roundness):
             return True
 
-        if not (settings and brush and brush.curve_distance_falloff):
+        if not (brush and brush.curve_distance_falloff):
             return False
 
         if cls.get_brush_mode(context) == 'SCULPT_CURVES':
@@ -748,7 +748,7 @@ class ShapePanel(BrushPanel):
         if mode == 'SCULPT' and brush.sculpt_brush_type in {'CLAY_STRIPS', 'PAINT'}:
             if has_content:
                 layout.separator()
-            row = layout.row(align=True)
+            layout.row(align=True)
             layout.prop(brush, "tip_roundness")
 
             layout.prop(brush, "tip_scale_x")
@@ -1376,31 +1376,6 @@ def draw_color_jitter_panel(layout, context, brush):
         row.prop(prop_owner, "value_jitter", slider=True, text="Value", text_ctxt=i18n_contexts.color)
         row.prop(prop_owner, "use_stroke_random_val", text="", icon='GP_SELECT_STROKES')
         row.prop(prop_owner, "use_random_press_val", text="", icon='STYLUS_PRESSURE')
-
-
-def brush_has_tip_settings(context, brush):
-    mode = UnifiedPaintPanel.get_brush_mode(context)
-
-    if mode in {'SCULPT', 'PAINT_TEXTURE', 'PAINT_2D', 'PAINT_VERTEX', 'PAINT_WEIGHT'}:
-        if brush.curve_distance_falloff:
-            return True
-
-    if mode == 'SCULPT':
-        return brush.sculpt_capabilities.has_hardness or brush.sculpt_brush_type in {'CLAY_STRIPS', 'PAINT'}
-
-    return False
-
-
-def brush_has_falloff_settings(context, brush):
-    mode = UnifiedPaintPanel.get_brush_mode(context)
-
-    if mode == 'SCULPT_CURVES':
-        return brush.curve_distance_falloff and brush.curves_sculpt_brush_type not in {'ADD', 'DELETE'}
-    if mode == 'PAINT_TEXTURE':
-        return context.image_paint_object and brush.curve_distance_falloff
-    if mode in {'PAINT_VERTEX', 'PAINT_WEIGHT'}:
-        return brush.curve_distance_falloff
-    return False
 
 
 def brush_settings_advanced(layout, context, settings, brush, popover=False):

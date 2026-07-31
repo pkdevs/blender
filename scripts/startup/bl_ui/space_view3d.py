@@ -93,8 +93,6 @@ class VIEW3D_HT_tool_header(Header):
 
         def draw_3d_brush_settings(layout, tool_mode):
             layout.popover("VIEW3D_PT_tools_brush_settings_advanced", text="Brush")
-            settings = UnifiedPaintPanel.paint_settings_from_active_tool(context)
-            brush = getattr(settings, "brush", None)
 
             if tool_mode != 'PAINT_WEIGHT':
                 layout.popover("VIEW3D_PT_tools_brush_texture")
