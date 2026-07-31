@@ -14,7 +14,7 @@ namespace blender::gpu::shader::parser {
 vector<SymbolTable::BuiltinType> SymbolTable::generate_builtin_types()
 {
   vector<BuiltinType> types;
-  vector<string> bases = {"int", "uint", "float", "bool"};
+  vector<string> bases = {"char", "uchar", "short", "ushort", "int", "uint", "float", "bool"};
   for (const auto &base : bases) {
     types.emplace_back(base, base, 1);  // Scalar
     for (int size = 2; size <= 4; ++size) {
@@ -31,22 +31,31 @@ static bool is_numeric(const string &base)
 
 static bool is_integer(const string &base)
 {
-  return base == "int" || base == "uint";
+  return base != "float";
 }
 
 static int get_rank(const string &base)
 {
-  if (base == "int") {
+  if (base == "char") {
     return 1;
   }
-  if (base == "uint") {
+  if (base == "uchar") {
     return 2;
   }
-  if (base == "float") {
+  if (base == "short") {
     return 3;
   }
-  if (base == "double") {
+  if (base == "ushort") {
     return 4;
+  }
+  if (base == "int") {
+    return 5;
+  }
+  if (base == "uint") {
+    return 6;
+  }
+  if (base == "float") {
+    return 7;
   }
   return 0;
 }

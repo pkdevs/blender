@@ -624,12 +624,22 @@ vector<SymbolTable::BuiltinFunc> SymbolTable::generate_all_builtin_functions()
   add_binary("pow", f_types);
 
   const vector<string> common_float_unary = {
-      "floor", "trunc", "round", "roundEven", "ceil", "fract", "isnan", "isinf"};
+      "floor",
+      "trunc",
+      "round",
+      "roundEven",
+      "ceil",
+      "fract",
+      "saturate",
+  };
   for (const auto &name : common_float_unary) {
     add_unary(name, f_types);
   }
 
-  add_unary("saturate", f_types);
+  for (size_t i = 0; i < f_types.size(); ++i) {
+    functions.push_back({b_types[i], "isnan", {f_types[i]}});
+    functions.push_back({b_types[i], "isinf", {f_types[i]}});
+  }
 
   add_unary("abs", f_types);
   add_unary("abs", i_types);
@@ -784,7 +794,7 @@ vector<SymbolTable::BuiltinFunc> SymbolTable::generate_all_builtin_functions()
       string icoord_type = i_types[i < 4 ? i : (i == 4 ? 1 : (i == 5 ? 2 : 3))];
       functions.push_back({type, "texture", {samplers[i], coord_type}});
       functions.push_back({type, "textureLod", {samplers[i], coord_type, "float"}});
-      functions.push_back({"int3", "textureSize", {samplers[i], "int"}});
+      functions.push_back({icoord_type, "textureSize", {samplers[i], "int"}});
       functions.push_back({type, "texelFetch", {samplers[i], icoord_type, "int"}});
     }
 

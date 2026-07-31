@@ -340,7 +340,7 @@ static inline std::string_view diagnostic_message_get(Diag diag)
     case Diag::TokenInvalidOperator:
       return "Invalid operator token '{}'";
     case Diag::TypeInvalidTernary:
-      return "Incompatible operand types";
+      return "Incompatible operand types ('{}' and '{}')";
     case Diag::InvalidBinaryOperands:
       return "Invalid operands to binary expression ('{}' {} '{}')";
     case Diag::InvalidUnaryArgumentType:

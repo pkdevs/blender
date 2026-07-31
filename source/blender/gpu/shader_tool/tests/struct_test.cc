@@ -833,7 +833,9 @@ U U_ctor_() {U r;r._pad=0;return r;}
        void U_fn();
 #endif
 #line 5
-         void U_fn() {}
+         void U_fn() {
+#line 5
+                    }
 )";
     auto [output, _, error] = process_test_string(input, Language::BSL);
     EXPECT_EQ(output, expect);
@@ -1106,14 +1108,30 @@ struct T{
                  };
 #line 2
 T T_ctor_() {T r;r.a=0;r.b=0;return r;}
-T fn1() { return _ctor(T)1, 2 _rotc(); }
-T fn2() { return _ctor(T)1, 2   _rotc(); }
-T fn3() { return _ctor(T)1, 2 _rotc(); }
-T fn4() { return _ctor(T)1, 2   _rotc(); }
-T fn5() { return _ctor(T)1, 2 _rotc(); }
-T fn6() { return _ctor(T)1, 2   _rotc(); }
-T fn7() { return _ctor(T)1, 2 _rotc(); }
-T fn8() { return _ctor(T)1, 2   _rotc(); }
+T fn1() { return _ctor(T)1, 2 _rotc();
+#line 3
+                          }
+T fn2() { return _ctor(T)1, 2   _rotc();
+#line 4
+                            }
+T fn3() { return _ctor(T)1, 2 _rotc();
+#line 5
+                                }
+T fn4() { return _ctor(T)1, 2   _rotc();
+#line 6
+                                  }
+T fn5() { return _ctor(T)1, 2 _rotc();
+#line 7
+                         }
+T fn6() { return _ctor(T)1, 2   _rotc();
+#line 8
+                           }
+T fn7() { return _ctor(T)1, 2 _rotc();
+#line 9
+                               }
+T fn8() { return _ctor(T)1, 2   _rotc();
+#line 10
+                                 }
 void fn() {
   T t0=T_ctor_();
   T t1=_ctor(T)1, 2 _rotc();

@@ -762,6 +762,7 @@ void f(Res res)
     2;
   }
   #endif
+#line 21
 }
 #endif
 )";
@@ -792,7 +793,9 @@ TEST(shader_tool, BoolCast)
     string input = R"(
 uint i; if (i) {})";
     string expect = R"(
-uint i; if (i!=0u) {})";
+uint i; if (i!=0u) {
+#line 2
+                })";
     auto [output, _, error] = process_test_local(input, Language::BSL);
     EXPECT_EQ(output, expect);
     EXPECT_EQ(error, "");
@@ -801,7 +804,9 @@ uint i; if (i!=0u) {})";
     string input = R"(
 int i; if (i) {})";
     string expect = R"(
-int i; if (i!=0) {})";
+int i; if (i!=0) {
+#line 2
+               })";
     auto [output, _, error] = process_test_local(input, Language::BSL);
     EXPECT_EQ(output, expect);
     EXPECT_EQ(error, "");

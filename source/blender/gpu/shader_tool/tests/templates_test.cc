@@ -37,7 +37,9 @@ template void func<float>();
 
 void funcTfloat() {
 #line 3
-              float a; }
+              float a;
+#line 3
+                   }
 )";
     auto [output, _, error] = process_test_string(input, Language::BSL);
     EXPECT_EQ(output, expect);
@@ -119,7 +121,7 @@ void f(float a, int b, uint c)
                                      a; }
 
 
-           void fooTuint(uint a) {}
+           void fooTuint(uint a) { }
 
 void f(float a, int b, uint c)
 {
@@ -174,7 +176,9 @@ const char      E_A = 0;
 const char         E_B  = 1;
                                int fooT17T2T_3() {
 #line 3
-                                           return int(17 + 2 + -3); }
+                                           return int(17 + 2 + -3);
+#line 3
+                                                                  }
 
                            E fT1T2() {
 #line 5

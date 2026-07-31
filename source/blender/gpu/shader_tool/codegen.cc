@@ -261,10 +261,10 @@ struct CodegenContext : NodeErrorHandler {
 
     if (!cond.empty()) {
       builder.ss << string("\n#endif\n");
-      jump_to(builder.curr);
     }
 
     if (symbol.parent != nullptr) {
+      jump_to(node.back());
       if (symbol.type == SymbolScope::NAMESPACE) {
         skip_if('}');
       }
@@ -1409,6 +1409,8 @@ struct CodegenContext : NodeErrorHandler {
   {
     SymbolScope &scope = *parent_scope.scopes[to_string(local_scope_id++)];
 
+    jump_to(decl.front());
+
     Condition cond(decl.child_first());
 
     bool is_constexpr = cond.is_valid() && cond.front().prev() == Constexpr;
@@ -1474,8 +1476,6 @@ struct CodegenContext : NodeErrorHandler {
       builder << node;
       node = node.next();
     }
-
-    jump_to(body.back().next());
 
     Node next = decl.next();
     if (next.type() == NodeType::ElseIfStmt || next.type() == NodeType::ElseStmt) {

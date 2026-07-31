@@ -474,25 +474,22 @@ void SourceProcessor::lower_union_accessor_templates(Parser &parser)
 void SourceProcessor::lower_union_accessor_templates_ast(Parser &parser)
 {
   for (ClassDecl decl : parser.root().descendants_of_type<ClassDecl>()) {
-    if (decl.front() != Union) {
-      return;
-    }
-    for (VarDecl var : decl.children_of_type<VarDecl>()) {
-      IdType type = var.type();
-      Id name = type.id().name();
+    if (decl.is_union()) {
+      for (VarDecl var : decl.body().children_of_type<VarDecl>()) {
+        IdType type = var.type();
+        Id name = type.id().name();
 
-      if (name.str() != "union_t") {
-        report_error(
-            name, "All union members must have their type wrapped using the union_t<T> template.");
-        return;
-      }
+        if (type.id().name().str() != "union_t") {
+          continue;
+        }
 
-      /* Remove the template but not the wrapped type. */
-      parser.erase(name);
-      TemplateParamList param = type.id().template_params();
-      if (param.is_valid()) {
-        parser.erase(param.front());
-        parser.erase(param.back());
+        /* Remove the template but not the wrapped type. */
+        parser.erase(name);
+        TemplateParamList param = type.id().template_params();
+        if (param.is_valid()) {
+          parser.erase(param.front());
+          parser.erase(param.back());
+        }
       }
     }
   }

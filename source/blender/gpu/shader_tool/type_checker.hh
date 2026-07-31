@@ -181,7 +181,7 @@ struct ExpressionTypeParser {
     SymbolClass *fval = expr(left_binding_power(Question) - 1);
 
     if (tval != fval) {
-      error(node, Diag::TypeInvalidTernary);
+      error(node, Diag::TypeInvalidTernary, tval->original, fval->original);
     }
     /* Operand types match. We can return either. */
     return fval;

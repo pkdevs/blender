@@ -729,11 +729,9 @@ struct SymbolParser : NodeErrorHandler {
   void parse_function_return_type(SymbolScope &scope, FuncDecl decl)
   {
     SymbolFunction *fn_sym = static_cast<SymbolFunction *>(&scope);
-    auto [type, err] = fn_sym->lookup_class(decl.return_type().id());
-    error(err);
-    fn_sym->return_type = type;
+    fn_sym->return_type = fn_sym->lookup_class(decl.return_type().id()).unwrap(this);
 
-    if (fn_sym->is_entry_point() && type->identifier != "void") {
+    if (fn_sym->is_entry_point() && fn_sym->return_type != table.void_cls) {
       error(decl.return_type(), Diag::EntryPointVoidReturn);
     }
   }
@@ -911,8 +909,7 @@ struct SymbolParser : NodeErrorHandler {
   void parse_loop_arguments(SymbolScope &scope, ForLoop loop)
   {
     for (VarDecl var : loop.condition().descendants_of_type<VarDecl>()) {
-      auto [type, err] = scope.lookup_class(var.type().id());
-      error(err);
+      SymbolClass *type = scope.lookup_class(var.type().id()).unwrap(this);
       for (Declarator decl : var.children_of_type<Declarator>()) {
         SymbolVariable sym(&scope, type, decl);
         sym.type = type;
@@ -989,8 +986,7 @@ struct SymbolParser : NodeErrorHandler {
     else {
       IdQualified aliased(stmt.aliased());
       IdQualified name(stmt.id());
-      auto [type, err] = scope.lookup_class(aliased);
-      error(err);
+      SymbolClass *type = scope.lookup_class(aliased).unwrap(this);
       if (type->is_error) {
         error(aliased, Diag::UnknownTypeAlias);
         return;
@@ -1017,9 +1013,8 @@ struct SymbolParser : NodeErrorHandler {
       if (InitializerList list = assign.initializer_list(); list.is_valid()) {
         sym->value = eval_scalar_initializer_list(scope, list);
       }
-      auto [val, err] = SymbolTable::evaluate_constexpr(scope, assign.expr().child_first());
-      error(err);
-      sym->value = val;
+      sym->value =
+          SymbolTable::evaluate_constexpr(scope, assign.expr().child_first()).unwrap(this);
     }
     else {
       sym->value = enum_cls->enum_last_val + 1;
@@ -1067,8 +1062,7 @@ struct SymbolParser : NodeErrorHandler {
     cls->identifier = prefix + cls->identifier;
 
     if (cls->is_enum) {
-      auto [underlying_type, err] = scope.lookup_class(decl.parent_class());
-      error(err);
+      SymbolClass *underlying_type = scope.lookup_class(decl.parent_class()).unwrap(this);
       cls->size = underlying_type->size;
       cls->align = underlying_type->align;
       cls->is_std140_compatible = cls->size == 4;
@@ -1185,9 +1179,8 @@ struct SymbolParser : NodeErrorHandler {
       if (TemplateDecl temp_decl = check_template_instance(tmp_params, decl, *fn);
           temp_decl.is_valid())
       {
-        auto [mangled,
-              err] = SymbolTable::mangle_identifier(temp_decl.arguments(), tmp_params, scope);
-        error(err);
+        auto mangled =
+            SymbolTable::mangle_identifier(temp_decl.arguments(), tmp_params, scope).unwrap(this);
 
         SymbolScope *parent = &scope;
         if (fn->fn_type == SymbolFunction::MEMBER) {
@@ -1208,7 +1201,8 @@ struct SymbolParser : NodeErrorHandler {
           }
         }
 
-        string full_id = string(decl.identifier().str()) + "<" + mangled.str_debug.substr(2) + ">";
+        string full_id = string(decl.identifier().name().str()) + "<" +
+                         mangled.str_debug.substr(2) + ">";
         NOTE(decl.identifier(), Diag::NoteInstantiationFuncTemplateRequested, full_id);
         SymbolFunction *fn_inst = parse_func_decl(
             *parent, temp_decl.decl(), prefix, mangled.str, temp);
@@ -1222,10 +1216,10 @@ struct SymbolParser : NodeErrorHandler {
       if (TemplateDecl temp_decl = check_template_instance(tmp_params, decl, *cls);
           temp_decl.is_valid())
       {
-        auto [mangled,
-              err] = SymbolTable::mangle_identifier(temp_decl.arguments(), tmp_params, scope);
-        error(err);
-        string full_id = string(decl.identifier().str()) + "<" + mangled.str_debug.substr(2) + ">";
+        auto mangled =
+            SymbolTable::mangle_identifier(temp_decl.arguments(), tmp_params, scope).unwrap(this);
+        string full_id = string(decl.identifier().name().str()) + "<" +
+                         mangled.str_debug.substr(2) + ">";
         NOTE(decl.identifier(), Diag::NoteInstantiationClassTemplateRequested, full_id);
         int unused_offset = 0;
         parse_class_decl(scope,
@@ -1251,9 +1245,8 @@ struct SymbolParser : NodeErrorHandler {
       if (TemplateDecl temp_decl = check_template_instance(temp_params, decl, *fn);
           temp_decl.is_valid())
       {
-        auto [mangled,
-              err] = SymbolTable::mangle_identifier(temp_decl.arguments(), temp_params, scope);
-        error(err);
+        auto mangled =
+            SymbolTable::mangle_identifier(temp_decl.arguments(), temp_params, scope).unwrap(this);
         string full_id = string(decl.identifier().str()) + "<" + mangled.str_debug.substr(2) + ">";
         NOTE(decl.identifier(), Diag::NoteInstantiationFuncTemplateRequested, full_id);
         SymbolFunction *spec = parse_func_decl(scope, decl, prefix, mangled.str);
@@ -1267,9 +1260,8 @@ struct SymbolParser : NodeErrorHandler {
       if (TemplateDecl temp_decl = check_template_instance(temp_params, decl, *cls);
           temp_decl.is_valid())
       {
-        auto [mangled,
-              err] = SymbolTable::mangle_identifier(temp_decl.arguments(), temp_params, scope);
-        error(err);
+        auto mangled =
+            SymbolTable::mangle_identifier(temp_decl.arguments(), temp_params, scope).unwrap(this);
         string full_id = string(decl.identifier().str()) + "<" + mangled.str_debug.substr(2) + ">";
         NOTE(decl.identifier(), Diag::NoteInstantiationClassTemplateRequested, full_id);
         int unused_offset = 0;
@@ -1299,8 +1291,7 @@ struct SymbolParser : NodeErrorHandler {
       return;
     }
 
-    auto [cls, err] = table.expr_type_analysis(scope, expr);
-    error(err);
+    SymbolClass *cls = table.expr_type_analysis(scope, expr).unwrap(this);
     if (cls->is_error) {
       error(decl, Diag::CannotDeduceAutoType);
       return;
@@ -2384,6 +2375,21 @@ void SymbolTable::register_builtins(LocalScope node)
       {"float4x2", "float2", 4, 16},
       {"float4x3", "float3", 4, 16},
       {"float4x4", "float4", 4, 16},
+      {"char2", "char", 2, 2},
+      {"char3", "char", 3, 3},
+      {"char4", "char", 4, 4},
+      {"uchar2", "uchar", 2, 2},
+      {"uchar3", "uchar", 3, 3},
+      {"uchar4", "uchar", 4, 4},
+      {"short2", "short", 2, 4},
+      {"short3", "short", 3, 6},
+      {"short4", "short", 4, 8},
+      {"ushort2", "ushort", 2, 4},
+      {"ushort3", "ushort", 3, 6},
+      {"ushort4", "ushort", 4, 8},
+      {"int2", "int", 2, 8},
+      {"int3", "int", 3, 16},
+      {"int4", "int", 4, 16},
       {"int2", "int", 2, 8},
       {"int3", "int", 3, 16},
       {"int4", "int", 4, 16},
@@ -2410,8 +2416,9 @@ void SymbolTable::register_builtins(LocalScope node)
     root->classes.emplace(t.id, cls);
     root->scopes.emplace(t.id, cls);
 
-    cls->is_std140_compatible = t.align >= 8 && t.id != "float3" && t.base != "float3";
-    cls->is_std430_compatible = t.align >= 8 && t.id != "float3" && t.base != "float3";
+    cls->is_std140_compatible = t.align >= 8 && t.id != "float3" && t.base != "float3" &&
+                                t.base != "short" && t.base != "ushort";
+    cls->is_std430_compatible = cls->is_std140_compatible;
 
     SymbolFunction *sub_op = fun_arena.alloc(
         cls, tok, subscript_operator_id, SymbolFunction::MEMBER);
@@ -2475,10 +2482,7 @@ void SymbolTable::register_builtins(LocalScope node)
     for (auto arg : fn.arg_types) {
       sym->arg_types.emplace_back(root->lookup_class(arg));
     }
-    root->function_emplace(sym);
-    /* function_emplace will mutate the identifier if this is an overload.
-     * Fix that. */
-    sym->identifier = fn.id;
+    root->function_emplace(sym, true);
   };
 
   const vector<BuiltinFunc> functions = generate_all_builtin_functions();
@@ -2567,6 +2571,9 @@ void SymbolTable::register_builtins(LocalScope node)
 
       {"true", "bool", true, 1},
       {"false", "bool", true, 0},
+
+      /* WORKAROUND: Should become an entry point argument. */
+      {"gl_FragStencilRefARB", "uint", false, 0},
   };
 
   for (auto [value, name] : image_formats) {
@@ -2609,6 +2616,9 @@ SymbolClass *SymbolTable::get_literal_type(string_view lit) const
   }
   if (str.back() == 'u') {
     return uint_cls;
+  }
+  if (str == "true" || str == "false") {
+    return bool_cls;
   }
   return int_cls;
 }
