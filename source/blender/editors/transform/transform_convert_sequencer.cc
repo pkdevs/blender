@@ -474,8 +474,6 @@ static void create_trans_seq_clamp_data(TransInfo *t, const Scene *scene)
     }
   }
 
-  /* Try to clamp handles by default. */
-  t->modifiers |= MOD_STRIP_CLAMP_HOLDS;
   ts->hold_clamp_min = INT_MIN;
   ts->hold_clamp_max = INT_MAX;
   for (Strip *strip : strips) {
@@ -485,13 +483,6 @@ static void create_trans_seq_clamp_data(TransInfo *t, const Scene *scene)
 
     bool left_sel = (strip->flag & SEQ_LEFTSEL);
     bool right_sel = (strip->flag & SEQ_RIGHTSEL);
-
-    /* If any strips start out with hold offsets visible, disable handle clamping on init. */
-    if ((strip->startofs < 0 || strip->end_offset() < 0) &&
-        !seq::transform_single_image_check(strip))
-    {
-      t->modifiers &= ~MOD_STRIP_CLAMP_HOLDS;
-    }
 
     /* If both handles are selected, there must be enough underlying content to clamp holds. */
     bool can_clamp_holds = !(left_sel && right_sel) ||

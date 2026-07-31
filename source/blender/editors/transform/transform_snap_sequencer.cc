@@ -255,6 +255,7 @@ static void build_sources_preview(const Scene *scene,
 static void build_targets_timeline(const Scene *scene,
                                    const short snap_mode,
                                    TransSeqSnapData *snap_data,
+                                   const Span<Strip *> strip_sources,
                                    const Span<Strip *> strip_targets)
 {
   if (snap_mode & SEQ_SNAP_TO_CURRENT_FRAME) {
@@ -304,6 +305,18 @@ static void build_targets_timeline(const Scene *scene,
           snap_data->targets.append(float2(key_frame, channel));
         }
       }
+    }
+  }
+
+  /* Add content start and end of source strips as targets. */
+  for (Strip *strip : strip_sources) {
+    const int channel = strip->channel;
+    /* Same as above: Effects and strips with a single static image do not have holds. */
+    if (snap_mode & SEQ_SNAP_TO_STRIP_HOLD && !strip->is_effect() &&
+        !seq::transform_single_image_check(strip))
+    {
+      snap_data->targets.append(float2(strip->content_start(), channel));
+      snap_data->targets.append(float2(strip->content_end(scene), channel));
     }
   }
 
@@ -375,7 +388,7 @@ static void build_snap_data_timeline(const TransInfo *t, TransSeqSnapData *snap_
   else { /* &TransConvertType_SequencerRetiming */
     build_sources_timeline_retiming(scene, snap_data);
   }
-  build_targets_timeline(scene, snap_mode, snap_data, strip_targets);
+  build_targets_timeline(scene, snap_mode, snap_data, strip_sources, strip_targets);
 }
 
 static void build_snap_data_preview(const TransInfo *t, TransSeqSnapData *snap_data)
@@ -577,7 +590,7 @@ static int snap_sequencer_calc_drag_drop_impl(TransInfo *t,
 
   /* Build arrays of snap target frames. */
   const short snap_mode = t->tsnap.mode;
-  build_targets_timeline(scene, snap_mode, snap_data, strip_targets);
+  build_targets_timeline(scene, snap_mode, snap_data, {}, strip_targets);
 
   t->tsnap.seq_context = snap_data;
   bool snap_success = snap_sequencer_calc(t);
