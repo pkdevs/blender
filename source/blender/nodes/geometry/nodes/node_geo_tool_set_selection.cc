@@ -30,35 +30,44 @@ enum class SelectionType {
   Float = 1,
 };
 
+static EnumPropertyItem mode_items[] = {
+    {int(SelectionType::Boolean),
+     "BOOLEAN",
+     0,
+     "Boolean",
+     "Store true or false selection values in edit mode"},
+    {int(SelectionType::Float),
+     "FLOAT",
+     0,
+     "Float",
+     "Store floating point selection values. For mesh geometry, stored inverted as the sculpt "
+     "mode mask"},
+    {0, nullptr, 0, nullptr, nullptr},
+};
+
 static void node_declare(NodeDeclarationBuilder &b)
 {
   b.use_custom_socket_order();
   b.allow_any_socket_order();
-  b.add_default_layout();
+  b.add_input<decl::Menu>("Domain"_ustr)
+      .static_items(rna_enum_attribute_domain_point_edge_face_curve_items)
+      .default_value(AttrDomain::Point)
+      .optional_label();
+  b.add_input<decl::Menu>("Selection Type"_ustr)
+      .static_items(mode_items)
+      .default_value(SelectionType::Boolean)
+      .optional_label();
   b.add_input<decl::Geometry>("Geometry"_ustr).description("Geometry to update the selection of");
   b.add_output<decl::Geometry>("Geometry"_ustr).align_with_previous();
-  if (const bNode *node = b.node_or_null()) {
-    switch (SelectionType(node->custom2)) {
-      case SelectionType::Boolean:
-        b.add_input<decl::Bool>("Selection"_ustr).default_value(true).evaluated_geometry_field();
-        break;
-      case SelectionType::Float:
-        b.add_input<decl::Float>("Selection"_ustr).default_value(1.0f).evaluated_geometry_field();
-        break;
-    }
-  }
-}
-
-static void node_layout(ui::Layout &layout, bContext * /*C*/, PointerRNA *ptr)
-{
-  layout.prop(ptr, "domain", UI_ITEM_NONE, "", ICON_NONE);
-  layout.prop(ptr, "selection_type", UI_ITEM_NONE, "", ICON_NONE);
-}
-
-static void node_init(bNodeTree * /*tree*/, bNode *node)
-{
-  node->custom1 = int16_t(AttrDomain::Point);
-  node->custom2 = int16_t(SelectionType::Boolean);
+  
+  b.add_input<decl::Bool>("Selection"_ustr)
+      .default_value(true)
+      .evaluated_geometry_field()
+      .usage_by_menu("Selection Type"_ustr, int(SelectionType::Boolean));
+  b.add_input<decl::Float>("Selection"_ustr)
+      .default_value(1.0f)
+      .evaluated_geometry_field()
+      .usage_by_menu("Selection Type"_ustr, int(SelectionType::Float));
 }
 
 static GField clamp_selection(const GField &selection)
@@ -114,7 +123,7 @@ static void node_geo_exec(GeoNodeExecParams params)
   }
 
   const GField selection = params.extract_input<GField>("Selection"_ustr);
-  const AttrDomain domain = AttrDomain(params.node().custom1);
+  const AttrDomain domain = params.extract_input<AttrDomain>("Domain"_ustr);
   const bke::DataTypeConversions &conversions = bke::get_implicit_type_conversions();
   geometry::foreach_real_geometry(geometry, [&](GeometrySet &geometry) {
     if (Mesh *mesh = geometry.get_mesh_for_write()) {
@@ -198,38 +207,6 @@ static void node_geo_exec(GeoNodeExecParams params)
   params.set_output("Geometry"_ustr, std::move(geometry));
 }
 
-static void node_rna(StructRNA *srna)
-{
-  RNA_def_node_enum(srna,
-                    "domain",
-                    "Domain",
-                    "",
-                    rna_enum_attribute_domain_point_edge_face_curve_items,
-                    NOD_inline_enum_accessors(custom1),
-                    int(AttrDomain::Point));
-  static EnumPropertyItem mode_items[] = {
-      {int(SelectionType::Boolean),
-       "BOOLEAN",
-       0,
-       "Boolean",
-       "Store true or false selection values in edit mode"},
-      {int(SelectionType::Float),
-       "FLOAT",
-       0,
-       "Float",
-       "Store floating point selection values. For mesh geometry, stored inverted as the sculpt "
-       "mode mask"},
-      {0, nullptr, 0, nullptr, nullptr},
-  };
-  RNA_def_node_enum(srna,
-                    "selection_type",
-                    "Selection Type",
-                    "",
-                    mode_items,
-                    NOD_inline_enum_accessors(custom2),
-                    int(SelectionType::Boolean));
-}
-
 static void node_register()
 {
   static bke::bNodeType ntype;
@@ -239,13 +216,9 @@ static void node_register()
   ntype.enum_name_legacy = "TOOL_SELECTION_SET";
   ntype.nclass = NODE_CLASS_GEOMETRY;
   ntype.declare = node_declare;
-  ntype.initfunc = node_init;
   ntype.geometry_node_execute = node_geo_exec;
-  ntype.draw_buttons = node_layout;
   ntype.gather_link_search_ops = search_link_ops_for_tool_node;
   bke::node_register_type(ntype);
-
-  node_rna(ntype.rna_ext.srna);
 }
 NOD_REGISTER_NODE(node_register)
 
