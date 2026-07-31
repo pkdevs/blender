@@ -55,6 +55,9 @@ class FallbackConfig : public Config {
   /* Working space API. */
   void set_scene_linear_role(StringRefNull name) override;
 
+  /* Config switching API. */
+  bool switch_to_from_environment() override;
+
   /* Display API. */
   const Display *get_default_display() const override;
   const Display *get_display_by_name(StringRefNull name) const override;

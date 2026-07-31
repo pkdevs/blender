@@ -284,6 +284,26 @@ static void colormanage_free_config()
   g_all_view_names().clear();
 }
 
+static void colormanage_set_ocio_env(const char *filepath,
+                                     std::optional<std::string> &r_old_ocio_env)
+{
+  /* OpenColorIO has issues with "$" in paths, as it uses that for variable expansion
+   * and there appears to be no way to escape the symbol.
+   *
+   * Work around it by setting the environment variable, which may also be useful for
+   * plug-ins to inherit the Blender OCIO config. */
+  if (const char *ocio_env = BLI_getenv("OCIO")) {
+    r_old_ocio_env = ocio_env;
+  }
+
+  BLI_setenv("OCIO", filepath);
+}
+
+static void colormanage_restore_ocio_env(const std::optional<std::string> &old_ocio_env)
+{
+  BLI_setenv("OCIO", old_ocio_env.has_value() ? old_ocio_env->c_str() : nullptr);
+}
+
 void colormanagement_init()
 {
   /* Handle Blender specific override. */
@@ -320,16 +340,8 @@ void colormanagement_init()
       char configfile[FILE_MAX];
       BLI_path_join(configfile, sizeof(configfile), configdir->c_str(), BCM_CONFIG_FILE);
 
-      /* OpenColorIO has issues with "$" in paths, as it uses that for variable expansion
-       * and there appears to be no way to escape the symbol.
-       *
-       * Work around it by setting the environment variable, which may also be useful for
-       * plug-ins to inherit the Blender OCIO config. */
       std::optional<std::string> old_ocio_env;
-      if (ocio_env) {
-        old_ocio_env = ocio_env;
-      }
-      BLI_setenv("OCIO", configfile);
+      colormanage_set_ocio_env(configfile, old_ocio_env);
       g_config() = ocio::Config::create_from_environment();
 
       bool ok = false;
@@ -342,7 +354,7 @@ void colormanagement_init()
       }
 
       if (!ok) {
-        BLI_setenv("OCIO", old_ocio_env.has_value() ? old_ocio_env->c_str() : nullptr);
+        colormanage_restore_ocio_env(old_ocio_env);
       }
     }
   }
@@ -363,6 +375,38 @@ void colormanagement_exit()
   global_color_picking_state = GlobalColorPickingState();
 
   colormanage_free_config();
+}
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Runtime configuration switching
+ * \{ */
+
+bool IMB_colormanagement_switch_config(const char *filepath)
+{
+  std::optional<std::string> old_ocio_env;
+  colormanage_set_ocio_env(filepath, old_ocio_env);
+
+  /* Switch in place.*/
+  if (!g_config()->switch_to_from_environment()) {
+    CLOG_ERROR(&LOG, "Failed to load OpenColorIO config from '%s'", filepath);
+    colormanage_restore_ocio_env(old_ocio_env);
+    return false;
+  }
+
+  /* Reset cached state that depends on the configuration. */
+  global_color_picking_state = GlobalColorPickingState();
+  g_all_view_names().clear();
+
+  /* Reload roles, matrices and view names from the new configuration. */
+  if (!colormanage_load_config(*g_config())) {
+    CLOG_ERROR(&LOG, "Incomplete OpenColorIO config '%s'", filepath);
+    return false;
+  }
+
+  CLOG_INFO_NOCHECK(&LOG, "Switched OpenColorIO config to '%s'", filepath);
+  return true;
 }
 
 /** \} */

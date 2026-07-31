@@ -129,6 +129,17 @@ void FallbackConfig::set_scene_linear_role(StringRefNull /*name*/) {}
 /** \} */
 
 /* -------------------------------------------------------------------- */
+/** \name Config switching API
+ * \{ */
+
+bool FallbackConfig::switch_to_from_environment()
+{
+  return false;
+}
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
 /** \name Display API
  * \{ */
 

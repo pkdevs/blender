@@ -12,6 +12,7 @@
 #include "BLI_array.hh"
 #include "BLI_assert.hh"
 #include "BLI_index_range.hh"
+#include "BLI_map.hh"
 #include "BLI_math_matrix.hh"
 
 #include "OCIO_matrix.hh"
@@ -46,8 +47,50 @@ std::unique_ptr<Config> LibOCIOConfig::create_from_environment()
   return nullptr;
 }
 
+bool LibOCIOConfig::switch_to_from_environment()
+{
+  try {
+    OCIO_NAMESPACE::ConstConfigRcPtr ocio_config = OCIO_NAMESPACE::Config::CreateFromEnv();
+    if (!ocio_config) {
+      return false;
+    }
+
+    reinitialize(ocio_config);
+    return true;
+  }
+  catch (OCIO_NAMESPACE::Exception &exception) {
+    report_exception(exception);
+  }
+
+  return false;
+}
+
 /* Note there is no CreateFromFile based method here, as it has issues with paths
  * containing "$" due to the variable expansion feature. */
+
+/* Old config color spaces that will be either reused for the new config or retained. */
+struct LibOCIOConfig::ColorSpacesRetained {
+  Vector<std::unique_ptr<LibOCIOColorSpace>> color_spaces;
+  Map<std::string, int> index_by_name;
+
+  void add(Vector<std::unique_ptr<LibOCIOColorSpace>> &other_color_spaces)
+  {
+    for (std::unique_ptr<LibOCIOColorSpace> &color_space : other_color_spaces) {
+      index_by_name.add(std::string(color_space->name()), color_spaces.size());
+      color_spaces.append(std::move(color_space));
+    }
+    other_color_spaces.clear();
+  }
+
+  std::unique_ptr<LibOCIOColorSpace> reuse(const StringRefNull name)
+  {
+    const int *reuse_index = index_by_name.lookup_ptr(name);
+    if (reuse_index && color_spaces[*reuse_index]) {
+      return std::move(color_spaces[*reuse_index]);
+    }
+    return nullptr;
+  }
+};
 
 LibOCIOConfig::LibOCIOConfig(const OCIO_NAMESPACE::ConstConfigRcPtr &ocio_config)
 {
@@ -61,16 +104,17 @@ LibOCIOConfig::LibOCIOConfig(const OCIO_NAMESPACE::ConstConfigRcPtr &ocio_config
   OCIO_NAMESPACE::SetCurrentConfig(ocio_config);
   ocio_config_ = OCIO_NAMESPACE::GetCurrentConfig();
 
-  initialize_active_color_spaces();
-  initialize_inactive_color_spaces();
-  initialize_hdr_color_spaces();
+  ColorSpacesRetained retained;
+  initialize_active_color_spaces(retained);
+  initialize_inactive_color_spaces(retained);
+  initialize_hdr_color_spaces(retained);
   initialize_looks();
   initialize_displays();
 }
 
 LibOCIOConfig::~LibOCIOConfig() = default;
 
-void LibOCIOConfig::initialize_active_color_spaces()
+void LibOCIOConfig::initialize_active_color_spaces(ColorSpacesRetained &retained)
 {
   OCIO_NAMESPACE::ColorSpaceSetRcPtr ocio_color_spaces;
 
@@ -99,18 +143,96 @@ void LibOCIOConfig::initialize_active_color_spaces()
   for (const int i : IndexRange(num_color_spaces)) {
     const OCIO_NAMESPACE::ConstColorSpaceRcPtr ocio_color_space =
         ocio_color_spaces->getColorSpaceByIndex(i);
-    color_spaces_.append_as(i, ocio_config_, ocio_color_space);
+    color_spaces_.append(create_color_space(i, ocio_color_space, retained));
   }
 
   /* Create index array for access to the color space in alphabetic order. */
   sorted_color_space_index_.resize(num_color_spaces);
   std::iota(sorted_color_space_index_.begin(), sorted_color_space_index_.end(), 0);
   std::ranges::sort(sorted_color_space_index_, [&](int a, int b) {
-    return color_spaces_[a].name() < color_spaces_[b].name();
+    return color_spaces_[a]->name() < color_spaces_[b]->name();
   });
 }
 
-void LibOCIOConfig::initialize_inactive_color_spaces()
+bool LibOCIOConfig::has_color_space_name(const char *name) const
+{
+  /* Only match the color space name itself, not aliases or roles like #getColorSpace does. */
+  try {
+    const OCIO_NAMESPACE::ConstColorSpaceRcPtr ocio_color_space = ocio_config_->getColorSpace(
+        name);
+    return ocio_color_space && StringRef(ocio_color_space->getName()) == name;
+  }
+  catch (OCIO_NAMESPACE::Exception &exception) {
+    report_exception(exception);
+  }
+
+  return false;
+}
+
+std::unique_ptr<LibOCIOColorSpace> LibOCIOConfig::create_color_space(
+    const int index,
+    const OCIO_NAMESPACE::ConstColorSpaceRcPtr &ocio_color_space,
+    ColorSpacesRetained &retained)
+{
+  /* Try to reuse a color space from the previous config if possible. */
+  std::unique_ptr<LibOCIOColorSpace> existing = retained.reuse(ocio_color_space->getName());
+  if (!existing) {
+    /* Match by alias, to also reuse color spaces that were renamed. Skip aliases
+     * that are the name of another color space in the new config. */
+    const int num_aliases = ocio_color_space->getNumAliases();
+    for (int i = 0; i < num_aliases && !existing; i++) {
+      const char *alias = ocio_color_space->getAlias(i);
+      if (!has_color_space_name(alias)) {
+        existing = retained.reuse(alias);
+      }
+    }
+  }
+
+  if (existing) {
+    /* Update the colorspace in-place so pointers to it are still valid. */
+    *existing = LibOCIOColorSpace(index, ocio_config_, ocio_color_space);
+    return existing;
+  }
+
+  /* Create a new colorspace. */
+  return std::make_unique<LibOCIOColorSpace>(index, ocio_config_, ocio_color_space);
+}
+
+void LibOCIOConfig::reinitialize(const OCIO_NAMESPACE::ConstConfigRcPtr &new_ocio_config)
+{
+  OCIO_NAMESPACE::SetCurrentConfig(new_ocio_config);
+  ocio_config_ = OCIO_NAMESPACE::GetCurrentConfig();
+
+  /* Retain color spaces from the old config. */
+  ColorSpacesRetained retained;
+  retained.add(color_spaces_);
+  retained.add(inactive_color_spaces_);
+  retained.add(retained_color_spaces_);
+
+  /* Clear data. */
+  sorted_color_space_index_.clear();
+  looks_.clear();
+  displays_.clear();
+  gpu_shader_binder_.clear_caches();
+
+  /* Add new color spaces and displays. */
+  initialize_active_color_spaces(retained);
+  initialize_inactive_color_spaces(retained);
+  initialize_hdr_color_spaces(retained);
+  initialize_looks();
+  initialize_displays();
+
+  /* Retain any color spaces that were not reused. */
+  for (std::unique_ptr<LibOCIOColorSpace> &color_space : retained.color_spaces) {
+    if (color_space) {
+      color_space->index = -1;
+      color_space->switch_scene_linear_config(ocio_config_);
+      retained_color_spaces_.append(std::move(color_space));
+    }
+  }
+}
+
+void LibOCIOConfig::initialize_inactive_color_spaces(ColorSpacesRetained &retained)
 {
   const int num_inactive_color_spaces = ocio_config_->getNumColorSpaces(
       OCIO_NAMESPACE::SEARCH_REFERENCE_SPACE_ALL, OCIO_NAMESPACE::COLORSPACE_INACTIVE);
@@ -134,7 +256,7 @@ void LibOCIOConfig::initialize_inactive_color_spaces()
       continue;
     }
 
-    inactive_color_spaces_.append_as(i, ocio_config_, ocio_color_space);
+    inactive_color_spaces_.append(create_color_space(i, ocio_color_space, retained));
   }
 }
 
@@ -286,17 +408,17 @@ const ColorSpace *LibOCIOConfig::get_color_space(const StringRefNull name) const
   /* TODO(sergey): Is there faster way to lookup Blender-side color space?
    * It does not seem that pointer in ConstColorSpaceRcPtr is unique enough to use for
    * comparison. */
-  for (const LibOCIOColorSpace &color_space : color_spaces_) {
-    if (color_space.name() == ocio_color_space->getName()) {
-      return &color_space;
+  for (const std::unique_ptr<LibOCIOColorSpace> &color_space : color_spaces_) {
+    if (color_space->name() == ocio_color_space->getName()) {
+      return color_space.get();
     }
   }
 
   /* Also lookup in the inactive color space, as the requested space might be coming from the
    * display and marked as inactive to prevent it from showing up in the application menu. */
-  for (const LibOCIOColorSpace &color_space : inactive_color_spaces_) {
-    if (color_space.name() == ocio_color_space->getName()) {
-      return &color_space;
+  for (const std::unique_ptr<LibOCIOColorSpace> &color_space : inactive_color_spaces_) {
+    if (color_space->name() == ocio_color_space->getName()) {
+      return color_space.get();
     }
   }
 
@@ -319,7 +441,7 @@ const ColorSpace *LibOCIOConfig::get_color_space_by_index(int const index) const
   if (index < 0 || index >= color_spaces_.size()) {
     return nullptr;
   }
-  return &color_spaces_[index];
+  return color_spaces_[index].get();
 }
 
 const ColorSpace *LibOCIOConfig::get_sorted_color_space_by_index(const int index) const
@@ -333,15 +455,15 @@ const ColorSpace *LibOCIOConfig::get_sorted_color_space_by_index(const int index
 
 const ColorSpace *LibOCIOConfig::get_color_space_by_interop_id(StringRefNull interop_id) const
 {
-  for (const LibOCIOColorSpace &color_space : color_spaces_) {
-    if (color_space.interop_id() == interop_id && color_space.is_primary_interop_id()) {
-      return &color_space;
+  for (const std::unique_ptr<LibOCIOColorSpace> &color_space : color_spaces_) {
+    if (color_space->interop_id() == interop_id && color_space->is_primary_interop_id()) {
+      return color_space.get();
     }
   }
 
-  for (const LibOCIOColorSpace &color_space : inactive_color_spaces_) {
-    if (color_space.interop_id() == interop_id && color_space.is_primary_interop_id()) {
-      return &color_space;
+  for (const std::unique_ptr<LibOCIOColorSpace> &color_space : inactive_color_spaces_) {
+    if (color_space->interop_id() == interop_id && color_space->is_primary_interop_id()) {
+      return color_space.get();
     }
   }
 
@@ -372,7 +494,7 @@ const ColorSpace *LibOCIOConfig::get_color_space_for_hdr_image(StringRefNull nam
   return nullptr;
 }
 
-void LibOCIOConfig::initialize_hdr_color_spaces()
+void LibOCIOConfig::initialize_hdr_color_spaces(ColorSpacesRetained &retained)
 {
   for (StringRefNull interop_id : {"pq_rec2020_display", "hlg_rec2020_display"}) {
     const auto *colorspace = static_cast<const LibOCIOColorSpace *>(
@@ -404,7 +526,8 @@ void LibOCIOConfig::initialize_hdr_color_spaces()
         ocio_config_.get());
     mutable_ocio_config->addColorSpace(hdr_colorspace);
 
-    inactive_color_spaces_.append_as(inactive_color_spaces_.size(), ocio_config_, hdr_colorspace);
+    inactive_color_spaces_.append(
+        create_color_space(inactive_color_spaces_.size(), hdr_colorspace, retained));
   }
 }
 
@@ -426,11 +549,14 @@ void LibOCIOConfig::set_scene_linear_role(StringRefNull name)
       ocio_config_.get());
   mutable_ocio_config->setRole(OCIO_NAMESPACE::ROLE_SCENE_LINEAR, name.c_str());
 
-  for (LibOCIOColorSpace &color_space : color_spaces_) {
-    color_space.clear_caches();
+  for (std::unique_ptr<LibOCIOColorSpace> &color_space : color_spaces_) {
+    color_space->clear_caches();
   }
-  for (LibOCIOColorSpace &color_space : inactive_color_spaces_) {
-    color_space.clear_caches();
+  for (std::unique_ptr<LibOCIOColorSpace> &color_space : inactive_color_spaces_) {
+    color_space->clear_caches();
+  }
+  for (std::unique_ptr<LibOCIOColorSpace> &color_space : retained_color_spaces_) {
+    color_space->clear_caches();
   }
   for (LibOCIODisplay &display : displays_) {
     display.clear_caches();

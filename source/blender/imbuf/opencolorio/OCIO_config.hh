@@ -71,6 +71,19 @@ class Config {
    */
   static std::unique_ptr<Config> create_fallback();
 
+  /**
+   * Switch this configuration in-place to the configuration from the environment variable,
+   * for runtime configuration switching.
+   *
+   * Color spaces that exist in both configurations are updated in-place, and color spaces
+   * that no longer exist in the new config are retained in memory but are no longer part of
+   * the config.
+   *
+   * Returns false if the configuration could not be created, or switching is not supported by
+   * this implementation, in which case this configuration is left unchanged.
+   */
+  virtual bool switch_to_from_environment() = 0;
+
   /** \} */
 
   /* -------------------------------------------------------------------- */

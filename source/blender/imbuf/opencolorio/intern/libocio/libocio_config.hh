@@ -4,6 +4,8 @@
 
 #pragma once
 
+#include <memory>
+
 #include "MEM_guardedalloc.h"
 
 #include "BLI_vector.hh"
@@ -29,11 +31,18 @@ class LibOCIOConfig : public Config {
   /* Storage of for Blender-side representation of OpenColorIO configuration.
    * Note that the color spaces correspond to color spaces from OpenColorIO configuration: this
    * array does not contain aliases or roles. If role or alias is to be resolved OpenColorIO is to
-   * be used first to provide color space name which then can be looked up in this array. */
-  Vector<LibOCIOColorSpace> color_spaces_;
-  Vector<LibOCIOColorSpace> inactive_color_spaces_;
+   * be used first to provide color space name which then can be looked up in this array.
+   *
+   * Color spaces are stored through unique pointers so their addresses are stable after
+   * switching configs and reusing color spaces. */
+  Vector<std::unique_ptr<LibOCIOColorSpace>> color_spaces_;
+  Vector<std::unique_ptr<LibOCIOColorSpace>> inactive_color_spaces_;
   Vector<LibOCIOLook> looks_;
   Vector<LibOCIODisplay> displays_;
+
+  /* Color spaces that existed in a previous configuration but no longer exist
+   * in the current config. */
+  Vector<std::unique_ptr<LibOCIOColorSpace>> retained_color_spaces_;
 
   /* Array with indices into color_spaces_.
    * color_spaces_[sorted_color_space_index_[i]] provides alphabetically sorted access. */
@@ -61,6 +70,9 @@ class LibOCIOConfig : public Config {
 
   /* Working space API. */
   void set_scene_linear_role(StringRefNull name) override;
+
+  /* Config switching API. */
+  bool switch_to_from_environment() override;
 
   /* Display API. */
   const Display *get_default_display() const override;
@@ -95,15 +107,26 @@ class LibOCIOConfig : public Config {
   MEM_CXX_CLASS_ALLOC_FUNCS("LibOCIOConfig");
 
  private:
+  struct ColorSpacesRetained;
+
   explicit LibOCIOConfig(const OCIO_NAMESPACE::ConstConfigRcPtr &ocio_config);
+
+  void reinitialize(const OCIO_NAMESPACE::ConstConfigRcPtr &new_ocio_config);
 
   /* Initialize BLender-side representation of color spaces, displays, etc. from the current
    * OpenColorIO configuration. */
-  void initialize_active_color_spaces();
-  void initialize_inactive_color_spaces();
-  void initialize_hdr_color_spaces();
+  void initialize_active_color_spaces(ColorSpacesRetained &retained);
+  void initialize_inactive_color_spaces(ColorSpacesRetained &retained);
+  void initialize_hdr_color_spaces(ColorSpacesRetained &retained);
   void initialize_looks();
   void initialize_displays();
+
+  std::unique_ptr<LibOCIOColorSpace> create_color_space(
+      int index,
+      const OCIO_NAMESPACE::ConstColorSpaceRcPtr &ocio_color_space,
+      ColorSpacesRetained &retained);
+
+  bool has_color_space_name(const char *name) const;
 };
 
 }  // namespace blender::ocio
