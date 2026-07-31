@@ -32,11 +32,11 @@ static int node_shader_gpu_light_evaluation(GPUMaterial *mat,
   // TODO: Use a different flag.
   GPU_material_flag_set(mat, GPU_MATFLAG_SHADER_TO_RGBA);
 
-  if (!in[0].link) {
-    GPU_link(mat, "world_position_get", &in[0].link);
-  }
   if (!in[1].link) {
-    GPU_link(mat, "world_normals_get", &in[1].link);
+    GPU_link(mat, "world_position_get", &in[1].link);
+  }
+  if (!in[2].link) {
+    GPU_link(mat, "world_normals_get", &in[2].link);
   }
   return GPU_stack_link(mat, node, "node_light_evaluation", in, out);
 }
