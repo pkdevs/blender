@@ -23,9 +23,9 @@
 
 #include "BLT_translation.hh"
 
-#include "BLI_listbase.h"
-#include "BLI_string_utf8.h"
-#include "BLI_utildefines.h"
+#include "BLI_listbase.hh"
+#include "BLI_string_utf8.hh"
+#include "BLI_utildefines.hh"
 
 #include "BKE_context.hh"
 #include "BKE_fcurve.hh"
@@ -481,7 +481,7 @@ static void cycles_panel_draw(const bContext *C, Panel *panel)
   layout.use_property_decorate_set(false);
 
   if (fcm->flag & FMODIFIER_FLAG_DISABLED) {
-    layout.label("Modifier must be first in the stack.", ICON_ERROR);
+    layout.label("Modifier must be first in the stack.", ICON_STATUS_ERROR);
   }
 
   /* Before. */
@@ -869,7 +869,7 @@ static void smooth_panel_draw(const bContext *C, Panel *panel)
   layout.use_property_decorate_set(false);
 
   if (fcm->flag & FMODIFIER_FLAG_DISABLED) {
-    layout.label("Modifier must be first in the stack.", ICON_ERROR);
+    layout.label("Modifier must be first in the stack.", ICON_STATUS_ERROR);
   }
 
   ui::Layout &col = layout.column(false);

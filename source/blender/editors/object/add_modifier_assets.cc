@@ -7,9 +7,9 @@
 #include "AS_asset_library.hh"
 #include "AS_asset_representation.hh"
 
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 #include "BLI_multi_value_map.hh"
-#include "BLI_string_utf8.h"
+#include "BLI_string_utf8.hh"
 
 #include "DNA_modifier_types.h"
 #include "DNA_screen_types.h"
@@ -109,7 +109,6 @@ static void catalog_assets_draw(const bContext *C, Menu *menu)
     }
   };
 
-  wmOperatorType *ot = WM_operatortype_find("OBJECT_OT_modifier_add_node_group", true);
   for (const asset_system::AssetRepresentation *asset : assets) {
     if (skip_essentials) {
       if (ELEM(asset->owner_asset_library().library_reference()->type,
@@ -120,9 +119,8 @@ static void catalog_assets_draw(const bContext *C, Menu *menu)
       }
     }
     ensure_separator();
-    PointerRNA props_ptr = layout.op(
-        ot, IFACE_(asset->get_name()), ICON_NONE, wm::OpCallContext::InvokeDefault, UI_ITEM_NONE);
-    asset::operator_asset_reference_props_set(*asset, props_ptr);
+
+    asset::draw_asset_menu_item(asset, "OBJECT_OT_modifier_add_node_group", layout);
   }
 
   catalog_item->foreach_child([&](const asset_system::AssetCatalogTreeItem &item) {
@@ -155,9 +153,7 @@ static void unassigned_assets_draw(const bContext *C, Menu *menu)
   ui::Layout &layout = *menu->layout;
   wmOperatorType *ot = WM_operatortype_find("OBJECT_OT_modifier_add_node_group", true);
   for (const asset_system::AssetRepresentation *asset : tree.unassigned_assets) {
-    PointerRNA props_ptr = layout.op(
-        ot, IFACE_(asset->get_name()), ICON_NONE, wm::OpCallContext::InvokeDefault, UI_ITEM_NONE);
-    asset::operator_asset_reference_props_set(*asset, props_ptr);
+    asset::draw_asset_menu_item(asset, ot->idname, layout);
   }
 
   bool first = true;
@@ -207,7 +203,7 @@ static void root_catalogs_draw(const bContext *C, Menu *menu)
   layout.separator();
 
   if (!loading_finished) {
-    layout.label(IFACE_("Loading Asset Libraries"), ICON_INFO);
+    layout.label(IFACE_("Loading Asset Libraries"), ICON_STATUS_INFO);
   }
 
   Set<std::string> all_builtin_menus = [&]() {
@@ -310,7 +306,7 @@ static wmOperatorStatus modifier_add_asset_exec(bContext *C, wmOperator *op)
     changed = true;
     nmd->node_group = node_group;
     id_us_plus(&node_group->id);
-    MOD_nodes_update_interface(object, nmd);
+    MOD_nodes_update_interface(*bmain, object, nmd);
 
     /* Don't show the data-block selector since it's not usually necessary for assets. */
     nmd->flag |= NODES_MODIFIER_HIDE_DATABLOCK_SELECTOR;

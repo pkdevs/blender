@@ -15,10 +15,10 @@
 #include "BLI_array_utils.hh"
 #include "BLI_function_ref.hh"
 #include "BLI_kdtree.hh"
-#include "BLI_linklist_stack.h"
-#include "BLI_listbase.h"
-#include "BLI_math_matrix.h"
-#include "BLI_math_vector.h"
+#include "BLI_linklist_stack.hh"
+#include "BLI_listbase.hh"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_vector_c.hh"
 
 #include "BKE_action.hh"
 #include "BKE_anim_data.hh"
@@ -1095,6 +1095,9 @@ void create_trans_data(bContext *C, TransInfo *t)
       t->num.flag |= NUM_NO_FRACTION;
     }
     else if (t->data_type == &TransConvertType_SequencerImage) {
+      t->obedit_type = -1;
+    }
+    else if (t->data_type == &TransConvertType_NLA) {
       t->obedit_type = -1;
     }
     t->data_type->create_trans_data(C, t);

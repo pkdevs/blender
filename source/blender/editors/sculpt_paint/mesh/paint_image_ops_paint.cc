@@ -11,8 +11,8 @@
 #include "DNA_scene_types.h"
 #include "DNA_space_types.h"
 
-#include "BLI_math_color.h"
-#include "BLI_math_vector.h"
+#include "BLI_math_color_c.hh"
+#include "BLI_math_vector_c.hh"
 
 #include "BKE_brush.hh"
 #include "BKE_colortools.hh"
@@ -352,8 +352,7 @@ static std::unique_ptr<PaintOperation> texture_paint_init(bContext *C,
 }
 
 struct ImagePaintStroke final : public PaintStroke {
-  ImagePaintStroke(bContext *C, wmOperator *op, const int event_type)
-      : PaintStroke(C, op, event_type)
+  ImagePaintStroke(bContext *C, wmOperator *op, const wmEvent *event) : PaintStroke(C, op, event)
   {
   }
 
@@ -519,7 +518,7 @@ bool ImagePaintStroke::test_start(wmOperator *op, const float mouse[2])
 
 static wmOperatorStatus paint_invoke(bContext *C, wmOperator *op, const wmEvent *event)
 {
-  ImagePaintStroke *stroke = MEM_new<ImagePaintStroke>(__func__, C, op, event->type);
+  ImagePaintStroke *stroke = MEM_new<ImagePaintStroke>(__func__, C, op, event);
   op->customdata = stroke;
 
   const wmOperatorStatus retval = op->type->modal(C, op, event);
@@ -567,7 +566,7 @@ static wmOperatorStatus paint_exec(bContext *C, wmOperator *op)
 
   RNA_float_get_array(&firstpoint, "mouse", mouse);
 
-  ImagePaintStroke *stroke = MEM_new<ImagePaintStroke>(__func__, C, op, 0);
+  ImagePaintStroke *stroke = MEM_new<ImagePaintStroke>(__func__, C, op, nullptr);
   op->customdata = stroke;
 
   /* Make sure we have proper coordinates for sampling (mask) textures -- these get stored in

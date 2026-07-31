@@ -17,9 +17,9 @@
 #include "BKE_paint_types.hh"
 
 #include "BLI_math_axis_angle.hh"
-#include "BLI_math_matrix.h"
 #include "BLI_math_matrix.hh"
-#include "BLI_math_vector.h"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_vector_c.hh"
 
 #include "ED_view3d.hh"
 
@@ -297,7 +297,7 @@ void mesh_cursor_active_draw(PaintCursorContext &pcontext)
       if (brush.cloth_force_falloff_type == BRUSH_CLOTH_FORCE_FALLOFF_PLANE) {
         /* By definition, the 'Plane Falloff' mode does not have drawable limits. */
         cloth::plane_falloff_preview_draw(
-            pcontext.pos, ss, pcontext.outline_col, pcontext.outline_alpha);
+            pcontext.pos, brush, ss, pcontext.outline_col, pcontext.outline_alpha);
       }
       else if (brush.cloth_force_falloff_type == BRUSH_CLOTH_FORCE_FALLOFF_RADIAL &&
                brush.cloth_simulation_area_type == BRUSH_CLOTH_SIMULATION_AREA_LOCAL)

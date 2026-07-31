@@ -13,8 +13,8 @@
 #include "DNA_defs.h"
 #include "DNA_listBase.h"
 
-#include "BLI_assert.h"
-#include "BLI_compiler_typecheck.h"
+#include "BLI_assert.hh"
+#include "BLI_compiler_typecheck.hh"
 
 #include <cstring>
 #include <type_traits>
@@ -738,10 +738,11 @@ struct PreviewImage {
  * type. ID_IP was removed in Blender 5.0. */
 #define ID_TYPE_IS_DEPRECATED(id_type) false
 
-#ifdef GS
-#  undef GS
-#endif
-#define GS(a) (CHECK_TYPE_ANY(a, char *, const char *), (ID_Type)(*((const short *)(a))))
+/** Return the #ID_Type encoded in the first two bytes of #ID::name. */
+inline ID_Type GS(const char *name)
+{
+  return ID_Type(*reinterpret_cast<const short *>(name));
+}
 
 #define ID_NEW_SET(_id, _idn) \
   (((id_cast<ID *>)(_id))->newid = (id_cast<ID *>)(_idn), \
@@ -987,16 +988,6 @@ enum eID_Tag : int {
    * of physics *shared* pointers.
    */
   ID_TAG_COPIED_ON_EVAL = 1 << 23,
-  /**
-   * ID is not the original evaluated ID created by the depsgraph, but has been re-allocated during
-   * the evaluation process of another ID.
-   *
-   * RESET_NEVER
-   *
-   * Typical example is object data, when evaluating the object's modifier stack the final obdata
-   * can be different than the evaluated initial obdata ID.
-   */
-  ID_TAG_COPIED_ON_EVAL_FINAL_RESULT = 1 << 24,
 
   /**
    * ID management status tags related to non-standard BMain IDs.
@@ -1116,8 +1107,8 @@ enum IDRecalcFlag {
    */
   ID_RECALC_SYNC_TO_EVAL = (1 << 13),
 
-  /* Sequences in the sequencer did change.
-   * Use this tag with a scene ID which owns the sequences. */
+  /* Strips in the sequencer changed.
+   * Use this tag with a scene ID which owns the strips. */
   ID_RECALC_SEQUENCER_STRIPS = (1 << 14),
 
   /* Runs on frame-change (used for seeking audio too). */
@@ -1156,11 +1147,13 @@ enum IDRecalcFlag {
   /* Hierarchy of collection and object within collection changed. */
   ID_RECALC_HIERARCHY = (1 << 26),
 
+  /* The scene has changed in a way that affects the compositor. */
+  ID_RECALC_COMPOSITOR = (1 << 27),
+
   /* Provisioned flags.
    *
    * Not for actual use. The idea of them is to have all bits of the `IDRecalcFlag` defined to a
    * known value, silencing sanitizer warnings when checking bits of the ID_RECALC_ALL. */
-  ID_RECALC_PROVISION_27 = (1 << 27),
   ID_RECALC_PROVISION_28 = (1 << 28),
   ID_RECALC_PROVISION_29 = (1 << 29),
   ID_RECALC_PROVISION_30 = (1 << 30),

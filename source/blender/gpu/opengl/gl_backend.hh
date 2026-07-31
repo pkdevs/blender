@@ -13,7 +13,7 @@
 
 #include "gpu_backend.hh"
 
-#include "BLI_threads.h"
+#include "BLI_threads.hh"
 #include "BLI_vector.hh"
 
 #include "gpu_capabilities_private.hh"
@@ -165,6 +165,19 @@ class GLBackend : public GPUBackend {
   {
     return new GLVertBuf();
   };
+
+  TopLevelAS *tlas_alloc(const char * /*name*/) override
+  {
+    /* OpenGL doesn't support Ray Queries. */
+    BLI_assert_unreachable();
+    return nullptr;
+  }
+  BottomLevelAS *blas_alloc(const char * /*name*/) override
+  {
+    /* OpenGL doesn't support Ray Queries. */
+    BLI_assert_unreachable();
+    return nullptr;
+  }
 
   GLSharedOrphanLists &shared_orphan_list_get()
   {

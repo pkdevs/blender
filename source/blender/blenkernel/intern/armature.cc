@@ -14,19 +14,19 @@
 #include <limits>
 #include <optional>
 
-#include "BLI_alloca.h"
-#include "BLI_assert.h"
+#include "BLI_alloca.hh"
+#include "BLI_assert.hh"
 #include "BLI_bounds.hh"
-#include "BLI_ghash.h"
-#include "BLI_listbase.h"
-#include "BLI_math_geom.h"
-#include "BLI_math_matrix.h"
+#include "BLI_ghash.hh"
+#include "BLI_listbase.hh"
+#include "BLI_math_geom_c.hh"
 #include "BLI_math_matrix.hh"
-#include "BLI_math_rotation.h"
-#include "BLI_math_vector.h"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_rotation_c.hh"
+#include "BLI_math_vector_c.hh"
 #include "BLI_span.hh"
-#include "BLI_string_utf8.h"
-#include "BLI_utildefines.h"
+#include "BLI_string_utf8.hh"
+#include "BLI_utildefines.hh"
 #include "BLT_translation.hh"
 
 #include "DNA_action_types.h"
@@ -41,7 +41,7 @@
 #include "BKE_action.hh"
 #include "BKE_anim_data.hh"
 #include "BKE_anim_visualization.h"
-#include "BKE_animsys.h"
+#include "BKE_animsys.hh"
 #include "BKE_armature.hh"
 #include "BKE_constraint.h"
 #include "BKE_curve.hh"
@@ -2598,16 +2598,16 @@ void BKE_pchan_protected_scale_set(bPoseChannel *pchan, const float scale[3])
 
 void BKE_pchan_protected_rotation_quaternion_set(bPoseChannel *pchan, const float quat[4])
 {
-  if ((pchan->protectflag & OB_LOCK_ROTX) == 0) {
+  if ((pchan->protectflag & OB_LOCK_ROTW) == 0) {
     pchan->quat[0] = quat[0];
   }
-  if ((pchan->protectflag & OB_LOCK_ROTY) == 0) {
+  if ((pchan->protectflag & OB_LOCK_ROTX) == 0) {
     pchan->quat[1] = quat[1];
   }
-  if ((pchan->protectflag & OB_LOCK_ROTZ) == 0) {
+  if ((pchan->protectflag & OB_LOCK_ROTY) == 0) {
     pchan->quat[2] = quat[2];
   }
-  if ((pchan->protectflag & OB_LOCK_ROTW) == 0) {
+  if ((pchan->protectflag & OB_LOCK_ROTZ) == 0) {
     pchan->quat[3] = quat[3];
   }
 }
@@ -2973,7 +2973,7 @@ void BKE_pose_rebuild(Main *bmain, Object *ob, bArmature *arm, const bool do_id_
     ob->pose = MEM_new<bPose>("new pose");
 
     /* set default settings for animviz */
-    animviz_settings_init(&ob->pose->avs);
+    bke::animviz::settings_init(&ob->pose->avs);
   }
   pose = ob->pose;
 

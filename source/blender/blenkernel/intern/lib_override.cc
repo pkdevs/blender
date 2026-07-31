@@ -29,6 +29,7 @@
 #include "DNA_modifier_types.h"
 #include "DNA_object_types.h"
 #include "DNA_scene_types.h"
+#include "DNA_shader_fx_types.h"
 #include "DNA_userdef_types.h"
 
 #include "DEG_depsgraph.hh"
@@ -56,15 +57,15 @@
 
 #include "BLO_readfile.hh"
 
-#include "BLI_linklist.h"
-#include "BLI_listbase.h"
+#include "BLI_linklist.hh"
+#include "BLI_listbase.hh"
 #include "BLI_map.hh"
-#include "BLI_memarena.h"
+#include "BLI_memarena.hh"
 #include "BLI_set.hh"
-#include "BLI_string.h"
-#include "BLI_task.h"
-#include "BLI_time.h"
-#include "BLI_utildefines.h"
+#include "BLI_string.hh"
+#include "BLI_task_c.hh"
+#include "BLI_time.hh"
+#include "BLI_utildefines.hh"
 #include "BLI_vector.hh"
 #include "BLI_vector_set.hh"
 
@@ -82,7 +83,7 @@ namespace blender {
 // #define DEBUG_OVERRIDE_TIMEIT
 
 #ifdef DEBUG_OVERRIDE_TIMEIT
-#  include "BLI_time_utildefines.h"
+#  include "BLI_time_utildefines.hh"
 #endif
 
 using namespace blender::bke;
@@ -2880,7 +2881,12 @@ static bool lib_override_library_resync(Main *bmain,
   /* Cleanup, many pointers in this Map are already invalid now. */
   linkedref_to_old_override.clear();
 
-  BKE_id_multi_tagged_delete(bmain, {.prevent_liboverride_hierarchy_root_ensure = true});
+  /* Prevent any expansive update process, as this is a in-progress cleanup,
+   * #lib_override_cleanup_after_resync will ensure that this is called properly at the end of the
+   * whole resync process. */
+  BKE_id_multi_tagged_delete(
+      bmain,
+      {.prevent_liboverride_hierarchy_root_ensure = true, .prevent_invariants_update = true});
 
   /* At this point, `id_root` may have been resynced, therefore deleted. In that case we need to
    * update it to its new version.
@@ -2983,6 +2989,7 @@ static void lib_override_cleanup_after_resync(Main *bmain)
                parameters.num_total[INDEX_ID_NULL],
                parameters.num_local[INDEX_ID_NULL]);
   }
+  /* Do ensure invariants after deletion here, as this is a final cleanup call. */
   BKE_id_multi_tagged_delete(bmain, {.prevent_liboverride_hierarchy_root_ensure = true});
 }
 
@@ -3776,8 +3783,14 @@ static bool lib_override_library_main_resync_on_library_indirect_level(
   }
   FOREACH_MAIN_ID_END;
 
-  /* Delete 'isolated from root' remaining IDs tagged in above check loop. */
-  BKE_id_multi_tagged_delete(bmain, {.prevent_liboverride_hierarchy_root_ensure = true});
+  /* Delete 'isolated from root' remaining IDs tagged in above check loop.
+   *
+   * Prevent any expansive update process, as this is a in-progress cleanup,
+   * #lib_override_cleanup_after_resync will ensure that this is called properly at the end of the
+   * whole resync process. */
+  BKE_id_multi_tagged_delete(
+      bmain,
+      {.prevent_liboverride_hierarchy_root_ensure = true, .prevent_invariants_update = true});
   BKE_main_id_tag_all(bmain, ID_TAG_DOIT, false);
 
   for (LinkNodePair *pair : id_roots.values()) {
@@ -3988,7 +4001,9 @@ void BKE_lib_override_library_main_resync(
       break;
     }
     if (new_scene) {
-      view_layer = BKE_view_layer_find(new_scene, view_layer->name);
+      if (view_layer) {
+        view_layer = BKE_view_layer_find(new_scene, view_layer->name);
+      }
       if (!view_layer) {
         view_layer = static_cast<ViewLayer *>(new_scene->view_layers.first);
       }
@@ -4180,12 +4195,22 @@ void BKE_lib_override_flag_subdata_local(ID &id)
       for (bConstraint &constraint : ob.constraints) {
         constraint.flag |= CONSTRAINT_OVERRIDE_LIBRARY_LOCAL;
       }
+      for (ShaderFxData &fx : ob.shader_fx) {
+        fx.flag |= eShaderFxFlag_OverrideLibrary_Local;
+      }
       if (ob.pose) {
         for (bPoseChannel &pose_bone : ob.pose->chanbase) {
           for (bConstraint &constraint : pose_bone.constraints) {
             constraint.flag |= CONSTRAINT_OVERRIDE_LIBRARY_LOCAL;
           }
         }
+      }
+      break;
+    }
+    case ID_AR: {
+      bArmature &arm = id_cast<bArmature &>(id);
+      for (BoneCollection *bcoll : arm.collections_span()) {
+        bcoll->flags |= BONE_COLLECTION_OVERRIDE_LIBRARY_LOCAL;
       }
       break;
     }
@@ -5484,10 +5509,16 @@ void BKE_lib_override_library_update(Main *bmain, ID *local)
    * Not impossible to do, but would rather see first if extra useless usual user handling
    * is actually a (performances) issue here. */
 
+  /* Note: do not add duplicated object to rigid body collections, as we swap it with its 'local'
+   * liboverride orig version, which should already be in these RB collections if needed.
+   * Otherwise, the temp id gets also added to these RB collections, which will then crash on
+   * freeing it at the end of this function, since it is assumed that this temp id is not used by
+   * anything. */
   ID *tmp_id = BKE_id_copy_ex(bmain,
                               local->override_library->reference,
                               nullptr,
-                              LIB_ID_COPY_DEFAULT | LIB_ID_COPY_NO_LIB_OVERRIDE_LOCAL_DATA_FLAG);
+                              LIB_ID_COPY_DEFAULT | LIB_ID_COPY_NO_LIB_OVERRIDE_LOCAL_DATA_FLAG |
+                                  LIB_ID_COPY_RIGID_BODY_NO_COLLECTION_HANDLING);
 
   if (tmp_id == nullptr) {
     return;

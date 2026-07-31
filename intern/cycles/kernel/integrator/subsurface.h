@@ -123,7 +123,7 @@ ccl_device int subsurface_bounce(KernelGlobals kg,
     INTEGRATOR_STATE_WRITE(state, subsurface, N) = sd->N;
   }
 
-  if (sd->flag & SD_BACKFACING) {
+  if (sd->runtime_flag & SR_BACKFACING) {
     path_flag |= PATH_RAY_SUBSURFACE_BACKFACING;
   }
 
@@ -156,12 +156,12 @@ ccl_device void subsurface_shader_data_setup(KernelGlobals kg, ccl_private Shade
 {
   /* Get bump mapped normal from shader evaluation at exit point. */
   float3 N = sd->N;
-  if (sd->flag & SD_HAS_BSSRDF_BUMP) {
+  if (sd->shader_flag & SD_HAS_BSSRDF_BUMP) {
     N = surface_shader_bssrdf_normal(sd);
   }
 
   /* Setup diffuse BSDF at the exit point. This replaces shader_eval_surface. */
-  sd->flag &= ~SD_CLOSURE_FLAGS;
+  sd->runtime_flag &= ~SR_CLOSURE_FLAG;
   sd->num_closure = 0;
   sd->num_closure_left = kernel_data.max_closures;
 
@@ -218,7 +218,7 @@ ccl_device_inline bool subsurface_scatter(KernelGlobals kg, IntegratorState stat
   const int shader_flags = kernel_data_fetch(shaders, shader).flags;
   const uint object_flags = intersection_get_object_flags(kg, &ss_isect.hits[0]);
   const bool use_caustics = kernel_data.integrator.use_caustics &&
-                            (object_flags & SD_OBJECT_CAUSTICS);
+                            (object_flags & SD_OBJECT_CAUSTICS_RECEIVER);
   const bool use_raytrace_kernel = (shader_flags & SD_HAS_RAYTRACE);
 
   if (use_caustics) {

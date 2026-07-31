@@ -13,11 +13,11 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_fileops.h"
-#include "BLI_listbase.h"
-#include "BLI_string.h"
-#include "BLI_string_utf8.h"
-#include "BLI_utildefines.h"
+#include "BLI_fileops.hh"
+#include "BLI_listbase.hh"
+#include "BLI_string.hh"
+#include "BLI_string_utf8.hh"
+#include "BLI_utildefines.hh"
 
 #include "BKE_idprop.hh"
 
@@ -606,6 +606,10 @@ ImBuf *imb_thumbnail_jpeg(const char *filepath,
 /** \name Save JPG Image
  * \{ */
 
+/* `libjpeg` has a maximum comment/marker length of 65533, however it does not provide a definition
+ * for that, so we hard-code it ourselves. */
+#define MAX_LIBJPEG_MARKER_LENGTH 65533
+
 static void write_jpeg(jpeg_compress_struct *cinfo, ImBuf *ibuf)
 {
   JSAMPLE *buffer = nullptr;
@@ -657,6 +661,14 @@ static void write_jpeg(jpeg_compress_struct *cinfo, ImBuf *ibuf)
          */
         text_len = BLI_snprintf_utf8_rlen(
             text, text_size, "Blender:%s:%s", prop.name, IDP_string_get(&prop));
+        /* Truncate the data if it does not fit in a single marker, as giving a buffer to `libjpeg`
+         * bigger that #MAX_LIBJPEG_MARKER_LENGTH will result in the JPEG file not being written.
+         * See #158751.
+         */
+        if (text_len > MAX_LIBJPEG_MARKER_LENGTH) {
+          CLOG_WARN(&LOG, "Writing truncated data for \"%s\"", prop.name);
+          text_len = MAX_LIBJPEG_MARKER_LENGTH;
+        }
         /* Don't write the null byte (not expected by the JPEG format). */
         jpeg_write_marker(cinfo, JPEG_COM, reinterpret_cast<JOCTET *>(text), uint(text_len));
 

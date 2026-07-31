@@ -20,10 +20,10 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_listbase.h"
-#include "BLI_string.h"
-#include "BLI_system.h" /* For #BLI_system_backtrace stub. */
-#include "BLI_utildefines.h"
+#include "BLI_listbase.hh"
+#include "BLI_string.hh"
+#include "BLI_system.hh" /* For #BLI_system_backtrace stub. */
+#include "BLI_utildefines.hh"
 #include "BLI_vector_set.hh"
 
 #include "RNA_define.hh"
@@ -3544,7 +3544,8 @@ static void rna_generate_property(FILE *f, StructRNA *srna, const char *nest, Pr
   fprintf(f, "\t\t%d, ", prop->magic);
   rna_print_c_string(f, prop->identifier);
   fprintf(f,
-          ", %d, %d, %d, %d, %d, ",
+          ", PropertyFlag(%u), PropertyOverrideFlag(%d), ParameterFlag(%d), "
+          "PropertyFlagIntern(%d), %d, ",
           prop->flag,
           prop->flag_override,
           prop->flag_parameter,
@@ -3779,11 +3780,12 @@ static void rna_generate_property(FILE *f, StructRNA *srna, const char *nest, Pr
     case PROP_POINTER: {
       PointerPropertyRNA *pprop = reinterpret_cast<PointerPropertyRNA *>(prop);
       fprintf(f,
-              "\t\t%s, %s, %s, %s,",
+              "\t\t%s, %s, %s, %s, %d,",
               rna_function_string(pprop->get),
               rna_function_string(pprop->set),
               rna_function_string(pprop->type_fn),
-              rna_function_string(pprop->poll));
+              rna_function_string(pprop->poll),
+              0);
       if (pprop->pointer_type) {
         fprintf(f, "RNA_%s\n", reinterpret_cast<const char *>(pprop->pointer_type));
       }
@@ -3879,7 +3881,7 @@ static void rna_generate_struct_register_func(BlenderRNA * /*brna*/, StructRNA *
   rna_print_c_string(f, srna->identifier);
   fprintf(f,
           ";\n"
-          "\tsrna->flag = %d;\n",
+          "\tsrna->flag = StructFlag(%d);\n",
           srna->flag);
   fprintf(f, "\tsrna->name = ");
   rna_print_c_string(f, srna->name);
@@ -3970,7 +3972,7 @@ static void rna_generate_struct_register_func(BlenderRNA * /*brna*/, StructRNA *
     rna_print_c_string(f, func->identifier);
     fprintf(f, ";\n");
     if (func->flag != 0) {
-      fprintf(f, "\t\tfunc->flag = %d;\n", func->flag);
+      fprintf(f, "\t\tfunc->flag = FunctionFlag(%d);\n", func->flag);
     }
     fprintf(f, "\t\tfunc->description = ");
     rna_print_c_string(f, func->description);
@@ -4076,6 +4078,7 @@ static RNAProcessItem PROCESS_ITEMS[] = {
     {"rna_volume.cc", nullptr, RNA_def_volume},
     {"rna_wm.cc", "rna_wm_api.cc", RNA_def_wm},
     {"rna_wm_gizmo.cc", "rna_wm_gizmo_api.cc", RNA_def_wm_gizmo},
+    {"rna_wm_undo.cc", nullptr, RNA_def_undo},
     {"rna_workspace.cc", "rna_workspace_api.cc", RNA_def_workspace},
     {"rna_world.cc", nullptr, RNA_def_world},
     {"rna_movieclip.cc", nullptr, RNA_def_movieclip},
@@ -4109,13 +4112,13 @@ static void rna_generate(BlenderRNA *brna, FILE *f, const char *filename, const 
   fprintf(f, "#include \"DNA_scene_types.h\"\n");
   fprintf(f, "#include \"DNA_node_types.h\"\n");
 
-  fprintf(f, "#include \"BLI_fileops.h\"\n\n");
-  fprintf(f, "#include \"BLI_listbase.h\"\n\n");
+  fprintf(f, "#include \"BLI_fileops.hh\"\n\n");
+  fprintf(f, "#include \"BLI_listbase.hh\"\n\n");
   fprintf(f, "#include \"BLI_path_utils.hh\"\n\n");
-  fprintf(f, "#include \"BLI_rect.h\"\n\n");
-  fprintf(f, "#include \"BLI_string.h\"\n\n");
-  fprintf(f, "#include \"BLI_string_utf8.h\"\n\n");
-  fprintf(f, "#include \"BLI_utildefines.h\"\n\n");
+  fprintf(f, "#include \"BLI_rect.hh\"\n\n");
+  fprintf(f, "#include \"BLI_string.hh\"\n\n");
+  fprintf(f, "#include \"BLI_string_utf8.hh\"\n\n");
+  fprintf(f, "#include \"BLI_utildefines.hh\"\n\n");
 
   fprintf(f, "#include \"BKE_context.hh\"\n");
   fprintf(f, "#include \"BKE_lib_id.hh\"\n");

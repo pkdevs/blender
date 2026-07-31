@@ -23,15 +23,15 @@
 #include "DNA_space_types.h"
 #include "DNA_windowmanager_types.h"
 
-#include "BLI_fileops.h"
+#include "BLI_fileops.hh"
 #include "BLI_function_ref.hh"
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 #include "BLI_path_utils.hh"
-#include "BLI_string.h"
-#include "BLI_string_utf8.h"
-#include "BLI_system.h"
-#include "BLI_time.h"
-#include "BLI_utildefines.h"
+#include "BLI_string.hh"
+#include "BLI_string_utf8.hh"
+#include "BLI_system.hh"
+#include "BLI_time.hh"
+#include "BLI_utildefines.hh"
 #include "BLI_vector.hh"
 #include "BLI_vector_set.hh"
 
@@ -1783,10 +1783,7 @@ namespace bke::blendfile {
 PartialWriteContext::PartialWriteContext(Main &reference_main)
     : reference_root_filepath_(BKE_main_blendfile_path(&reference_main))
 {
-  if (!reference_root_filepath_.empty()) {
-    STRNCPY(this->bmain.filepath, reference_root_filepath_.c_str());
-  }
-  this->bmain.colorspace = reference_main.colorspace;
+  BKE_main_init_from_reference(this->bmain, reference_main);
   /* Only for IDs matching existing data in current G_MAIN. */
   matching_uid_map_ = BKE_main_idmap_create(&this->bmain, false, nullptr, MAIN_IDMAP_TYPE_UID);
   /* For all IDs existing in the context. */

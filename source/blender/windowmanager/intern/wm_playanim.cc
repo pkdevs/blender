@@ -31,15 +31,15 @@
 #include "CLG_log.h"
 
 #include "BLI_enum_flags.hh"
-#include "BLI_fileops.h"
-#include "BLI_listbase.h"
+#include "BLI_fileops.hh"
+#include "BLI_listbase.hh"
 #include "BLI_math_vector_types.hh"
 #include "BLI_path_utils.hh"
-#include "BLI_rect.h"
-#include "BLI_string.h"
-#include "BLI_string_utf8.h"
-#include "BLI_system.h"
-#include "BLI_time.h"
+#include "BLI_rect.hh"
+#include "BLI_string.hh"
+#include "BLI_string_utf8.hh"
+#include "BLI_system.hh"
+#include "BLI_time.hh"
 
 #include "IMB_colormanagement.hh"
 #include "IMB_imbuf.hh"
@@ -377,6 +377,7 @@ static void playanim_window_csd_params_update(GhostData &ghost_data)
 
       /*cursor_drag_threshold*/ 6 /* NOTE: `U.drag_threshold_mouse` isn't initialized. */,
       /*cursor_double_click_ms*/ 350 /* NOTE: `U.dbl_click_time` isn't initialized. */,
+      /*resize_margin_size*/ WM_WINDOW_CSD_RESIZE_MARGIN_SIZE,
   };
   ghost_data.system->setWindowCSD(csd_params);
 }

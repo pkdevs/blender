@@ -14,15 +14,15 @@
 
 #include "CLG_log.h"
 
-#include "BLI_listbase.h"
-#include "BLI_mempool.h"
-#include "BLI_string.h"
-#include "BLI_string_utf8.h"
+#include "BLI_listbase.hh"
+#include "BLI_mempool.hh"
+#include "BLI_string.hh"
+#include "BLI_string_utf8.hh"
 #include "BLI_string_utils.hh"
-#include "BLI_threads.h"
+#include "BLI_threads.hh"
 #include "BLT_translation.hh"
 
-#include "BKE_animsys.h"
+#include "BKE_animsys.hh"
 #include "BKE_collection.hh"
 #include "BKE_freestyle.h"
 #include "BKE_idprop.hh"
@@ -45,6 +45,8 @@
 #include "DNA_view3d_types.h"
 #include "DNA_windowmanager_types.h"
 #include "DNA_world_types.h"
+
+#include "RNA_path.hh"
 
 #include "DEG_depsgraph.hh"
 #include "DEG_depsgraph_debug.hh"
@@ -590,7 +592,12 @@ void BKE_view_layer_rename(Main *bmain, Scene *scene, ViewLayer *view_layer, con
   }
 
   /* Fix all the animation data and windows which may link to this. */
-  BKE_animdata_fix_paths_rename_all(nullptr, "view_layers", oldname, view_layer->name);
+  BKE_animdata_fix_paths(scene->id,
+                         "view_layers",
+                         RNA_path_name_to_infix(oldname),
+                         RNA_path_name_to_infix(view_layer->name),
+                         /*verify_paths=*/true,
+                         *bmain);
 
   /* WM can be missing on startup. */
   wmWindowManager *wm = static_cast<wmWindowManager *>(bmain->wm.first);

@@ -10,7 +10,7 @@
 
 #include <optional>
 
-#include "BLI_compiler_compat.h"
+#include "BLI_compiler_compat.hh"
 #include "BLI_span.hh"
 
 #include "BKE_node_socket_value_fwd.hh"
@@ -902,7 +902,7 @@ void node_type_storage(bNodeType &ntype,
  * FOREACH_NODETREE_BEGIN(bmain, nodetree, id) {
  *     if (nodetree->idname == "ShaderNodeTree")
  *         printf("This is a shader node tree");
- *     if (GS(id) == ID_MA)
+ *     if (GS(id->name) == ID_MA)
  *         printf(" and it's owned by a material");
  * } FOREACH_NODETREE_END;
  * \endcode

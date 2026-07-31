@@ -191,9 +191,9 @@ static const EnumPropertyItem rna_enum_driver_target_context_property_items[] = 
 
 #  include "DNA_scene_types.h"
 
-#  include "BLI_listbase.h"
-#  include "BLI_string.h"
-#  include "BLI_string_utf8.h"
+#  include "BLI_listbase.hh"
+#  include "BLI_string.hh"
+#  include "BLI_string_utf8.hh"
 
 #  include "ANIM_action.hh"
 #  include "ANIM_fcurve.hh"
@@ -1369,7 +1369,7 @@ static void rna_def_fmodifier_function_generator(BlenderRNA *brna)
   prop = RNA_def_property(srna, "phase_multiplier", PROP_FLOAT, PROP_NONE);
   RNA_def_property_override_flag(prop, PROPOVERRIDE_OVERRIDABLE_LIBRARY);
   RNA_def_property_ui_text(
-      prop, "Phase Multiple", "Scale factor determining the 'speed' of the function");
+      prop, "Phase Multiplier", "Scale factor determining the 'speed' of the function");
   RNA_def_property_update(prop, NC_ANIMATION | ND_KEYFRAME | NA_EDITED, "rna_FModifier_update");
   RNA_def_property_float_default(prop, 1.0);
 

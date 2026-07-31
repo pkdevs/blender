@@ -15,17 +15,17 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_array_utils.h"
-#include "BLI_ghash.h"
+#include "BLI_array_utils_c.hh"
+#include "BLI_ghash.hh"
 #include "BLI_listbase_wrapper.hh"
-#include "BLI_math_geom.h"
-#include "BLI_math_matrix.h"
-#include "BLI_math_rotation.h"
-#include "BLI_math_vector.h"
+#include "BLI_math_geom_c.hh"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_rotation_c.hh"
+#include "BLI_math_vector_c.hh"
 #include "BLI_set.hh"
 #include "BLI_span.hh"
-#include "BLI_string.h"
-#include "BLI_string_utf8.h"
+#include "BLI_string.hh"
+#include "BLI_string_utf8.hh"
 
 #include "BLT_translation.hh"
 
@@ -595,6 +595,12 @@ static void calc_keyHandles(ListBaseT<Nurb> *nurb, float *key)
 
   for (Nurb &nu : *nurb) {
     if (nu.bezt) {
+      if (nu.pntsu < 2) {
+        /* Single point, no need to calculat handles, proceed to th next Nurb. */
+        fp += nu.pntsu * KEYELEM_FLOAT_LEN_BEZTRIPLE;
+        continue;
+      }
+
       BezTriple *prevp, *nextp;
       BezTriple cur, prev, next;
       float *startfp, *prevfp, *nextfp;
@@ -612,14 +618,8 @@ static void calc_keyHandles(ListBaseT<Nurb> *nurb, float *key)
         prevfp = nullptr;
       }
 
-      if (nu.pntsu > 1) {
-        nextp = bezt + 1;
-        nextfp = fp + KEYELEM_FLOAT_LEN_BEZTRIPLE;
-      }
-      else {
-        nextp = nullptr;
-        nextfp = nullptr;
-      }
+      nextp = bezt + 1;
+      nextfp = fp + KEYELEM_FLOAT_LEN_BEZTRIPLE;
 
       while (a--) {
         key_to_bezt(fp, bezt, &cur);

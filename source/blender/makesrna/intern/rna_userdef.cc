@@ -13,11 +13,11 @@
 #include "DNA_sequence_types.h"
 #include "DNA_userdef_types.h"
 
-#include "BLI_math_base.h"
-#include "BLI_math_rotation.h"
-#include "BLI_string_utf8_symbols.h"
+#include "BLI_math_base_c.hh"
+#include "BLI_math_rotation_c.hh"
+#include "BLI_string_utf8_symbols.hh"
 #ifdef WIN32
-#  include "BLI_winstuff.h"
+#  include "BLI_winstuff.hh"
 #endif
 
 #include "BLT_date_string.hh"
@@ -32,6 +32,8 @@
 #include "GPU_platform.hh"
 
 #include "rna_internal.hh"
+
+#include "UI_interface_c.hh"
 
 #include "WM_api.hh"
 #include "WM_keymap.hh"
@@ -234,11 +236,11 @@ static const EnumPropertyItem rna_enum_preferences_extension_repo_source_type_it
 
 #  include "AS_remote_library.hh"
 
-#  include "BLI_listbase.h"
-#  include "BLI_math_vector.h"
+#  include "BLI_listbase.hh"
+#  include "BLI_math_vector_c.hh"
 #  include "BLI_memory_cache.hh"
-#  include "BLI_string.h"
-#  include "BLI_string_utf8.h"
+#  include "BLI_string.hh"
+#  include "BLI_string_utf8.hh"
 #  include "BLI_string_utils.hh"
 
 #  include "DNA_object_types.h"
@@ -252,6 +254,7 @@ static const EnumPropertyItem rna_enum_preferences_extension_repo_source_type_it
 #  include "BKE_global.hh"
 #  include "BKE_idprop.hh"
 #  include "BKE_image.hh"
+#  include "BKE_image_gpu.hh"
 #  include "BKE_main.hh"
 #  include "BKE_mesh_runtime.hh"
 #  include "BKE_object.hh"
@@ -320,6 +323,19 @@ static void rna_userdef_update(Main * /*bmain*/, Scene * /*scene*/, PointerRNA *
 {
   WM_main_add_notifier(NC_WINDOW, nullptr);
   USERDEF_TAG_DIRTY;
+}
+
+static void rna_userdef_update_compact_tabs(Main *bmain, Scene *scene, PointerRNA *ptr)
+{
+  rna_userdef_update(bmain, scene, ptr);
+  auto *wm = static_cast<wmWindowManager *>(bmain->wm.first);
+  if (!wm) {
+    return;
+  }
+  for (wmWindow &win : wm->windows) {
+    /* Notify regions so they can update its category tab width when showing only tabs. */
+    WM_event_add_notifier_ex(wm, &win, NC_SCREEN | NA_EDITED, nullptr);
+  }
 }
 
 static void rna_userdef_theme_update(Main *bmain, Scene *scene, PointerRNA *ptr)
@@ -801,7 +817,7 @@ static void rna_userdef_window_csd_params_update(Main *bmain, Scene *scene, Poin
 
 static void rna_userdef_gl_texture_limit_update(Main *bmain, Scene *scene, PointerRNA *ptr)
 {
-  BKE_image_free_all_gputextures(bmain);
+  BKE_image_free_all_gpu_texture_caches(bmain);
   rna_userdef_update(bmain, scene, ptr);
 }
 
@@ -921,39 +937,7 @@ static const EnumPropertyItem *rna_UseDef_active_section_itemf(bContext * /*C*/,
                                                                bool *r_free)
 {
   UserDef *userdef = static_cast<UserDef *>(ptr->data);
-
-  const bool use_developer_ui = (userdef->flag & USER_DEVELOPER_UI) != 0;
-  const bool is_alpha = BKE_blender_version_is_alpha();
-
-  if (use_developer_ui && is_alpha) {
-    *r_free = false;
-    return rna_enum_preference_section_items;
-  }
-
-  EnumPropertyItem *items = nullptr;
-  int totitem = 0;
-
-  for (const EnumPropertyItem *it = rna_enum_preference_section_items; it->identifier != nullptr;
-       it++)
-  {
-    if (it->value == USER_SECTION_EXPERIMENTAL) {
-      if (is_alpha == false) {
-        continue;
-      }
-    }
-    else if (it->value == USER_SECTION_DEVELOPER_TOOLS) {
-      if (use_developer_ui == false) {
-        continue;
-      }
-    }
-
-    RNA_enum_item_add(&items, &totitem, it);
-  }
-
-  RNA_enum_item_end(&items, &totitem);
-
-  *r_free = true;
-  return items;
+  return BKE_preferences_active_section_itemf(userdef, r_free);
 }
 
 static PointerRNA rna_UserDef_view_get(PointerRNA *ptr)
@@ -1283,14 +1267,14 @@ static PointerRNA rna_Addon_preferences_get(PointerRNA *ptr)
   }
 }
 
-static bool rna_AddonPref_unregister(Main * /*bmain*/, StructRNA *type)
+static bool rna_AddonPref_unregister(Main *bmain, StructRNA *type)
 {
   bAddonPrefType *apt = static_cast<bAddonPrefType *>(RNA_struct_blender_type_get(type));
 
   if (!apt) {
     return false;
   }
-
+  ui::refresh_for_srna_unregister(bmain, type);
   RNA_struct_free_extension(type, &apt->rna_ext);
   RNA_struct_free(&RNA_blender_rna_get(), type);
 
@@ -2746,10 +2730,11 @@ static void rna_def_userdef_theme_space_common(StructRNA *srna)
 {
   PropertyRNA *prop;
 
-  prop = RNA_def_property(srna, "title", PROP_FLOAT, PROP_COLOR_GAMMA);
-  RNA_def_property_array(prop, 3);
-  RNA_def_property_ui_text(prop, "Title", "");
-  RNA_def_property_update(prop, 0, "rna_userdef_theme_update");
+  /* header */
+  prop = RNA_def_property(srna, "header", PROP_FLOAT, PROP_COLOR_GAMMA);
+  RNA_def_property_array(prop, 4);
+  RNA_def_property_ui_text(prop, "Header", "");
+  RNA_def_property_update(prop, 0, "rna_userdef_gpu_update");
 
   prop = RNA_def_property(srna, "text", PROP_FLOAT, PROP_COLOR_GAMMA);
   RNA_def_property_array(prop, 3);
@@ -2759,22 +2744,6 @@ static void rna_def_userdef_theme_space_common(StructRNA *srna)
   prop = RNA_def_property(srna, "text_hi", PROP_FLOAT, PROP_COLOR_GAMMA);
   RNA_def_property_array(prop, 3);
   RNA_def_property_ui_text(prop, "Text Highlight", "");
-  RNA_def_property_update(prop, 0, "rna_userdef_theme_update");
-
-  /* header */
-  prop = RNA_def_property(srna, "header", PROP_FLOAT, PROP_COLOR_GAMMA);
-  RNA_def_property_array(prop, 4);
-  RNA_def_property_ui_text(prop, "Header", "");
-  RNA_def_property_update(prop, 0, "rna_userdef_gpu_update");
-
-  prop = RNA_def_property(srna, "header_text", PROP_FLOAT, PROP_COLOR_GAMMA);
-  RNA_def_property_array(prop, 3);
-  RNA_def_property_ui_text(prop, "Header Text", "");
-  RNA_def_property_update(prop, 0, "rna_userdef_theme_update");
-
-  prop = RNA_def_property(srna, "header_text_hi", PROP_FLOAT, PROP_COLOR_GAMMA);
-  RNA_def_property_array(prop, 3);
-  RNA_def_property_ui_text(prop, "Header Text Highlight", "");
   RNA_def_property_update(prop, 0, "rna_userdef_theme_update");
 }
 
@@ -2967,7 +2936,7 @@ static void rna_def_userdef_theme_space_view3d(BlenderRNA *brna)
   RNA_def_property_ui_text(prop, "Major Grid Lines", "");
   RNA_def_property_update(prop, 0, "rna_userdef_theme_update");
 
-  prop = RNA_def_property(srna, "grid_axis_brightness", PROP_FLOAT, PROP_NONE);
+  prop = RNA_def_property(srna, "grid_axis_brightness", PROP_FLOAT, PROP_FACTOR);
   RNA_def_property_float_sdna(prop, nullptr, "grid_axis_brightness");
   RNA_def_property_float_default(prop, 0.46);
   RNA_def_property_ui_text(prop, "Grid Axis Brightness", "Brightness of the grid axis lines");
@@ -3275,12 +3244,6 @@ static void rna_def_userdef_theme_space_file(BlenderRNA *brna)
   RNA_def_struct_ui_text(srna, "Theme File Browser", "Theme settings for the File Browser");
 
   rna_def_userdef_theme_spaces_main(srna);
-
-  prop = RNA_def_property(srna, "selected_file", PROP_FLOAT, PROP_COLOR_GAMMA);
-  RNA_def_property_float_sdna(prop, nullptr, "hilite");
-  RNA_def_property_array(prop, 3);
-  RNA_def_property_ui_text(prop, "Selected File", "");
-  RNA_def_property_update(prop, 0, "rna_userdef_theme_update");
 
   prop = RNA_def_property(srna, "row_alternate", PROP_FLOAT, PROP_COLOR_GAMMA);
   RNA_def_property_array(prop, 4);
@@ -6191,16 +6154,17 @@ static void rna_def_userdef_system(BlenderRNA *brna)
   RNA_def_property_ui_text(prop, "Memory Cache Limit", "Memory cache limit (in megabytes)");
   RNA_def_property_update(prop, 0, "rna_Userdef_memcache_update");
 
-  /* Geometry Nodes. */
+  /* Nodes. */
 
-  prop = RNA_def_property(srna, "geometry_nodes_stack_limit", PROP_INT, PROP_NONE);
+  prop = RNA_def_property(srna, "nodes_stack_limit", PROP_INT, PROP_NONE);
   RNA_def_property_range(prop, 1, INT32_MAX);
-  RNA_def_property_ui_text(prop,
-                           "Geometry Nodes Stack Limit",
-                           "Approximate maximum size of the call stack used by Geometry Nodes. "
-                           "For example, this corresponds to the number of allowed nested node "
-                           "groups. Setting this too high can result in crashes caused by "
-                           "running out of stack memory.");
+  RNA_def_property_ui_text(
+      prop,
+      "Nodes Stack Limit",
+      "Approximate maximum size of the call stack used by node group evaluation. "
+      "For example, this corresponds to the number of allowed nested node "
+      "groups. Setting this too high can result in crashes caused by "
+      "running out of stack memory.");
   RNA_def_property_update(prop, 0, "rna_userdef_update");
 
   /* Sequencer proxy setup */
@@ -6234,6 +6198,14 @@ static void rna_def_userdef_system(BlenderRNA *brna)
       "Enable edit mode edge smoothing, reducing aliasing (requires restart)");
   RNA_def_property_update(prop, 0, "rna_userdef_gpu_update");
 
+  prop = RNA_def_property(srna, "use_rt_shadows", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, nullptr, "gpu_flag", USER_GPU_FLAG_WORKBENCH_RT_SHADOWS);
+  RNA_def_property_ui_text(
+      prop,
+      "Raytraced Shadows",
+      "Enable raytraced shadows. Requires Vulkan and a GPU with hardware raytracing support");
+  RNA_def_property_update(prop, 0, "rna_userdef_gpu_update");
+
   prop = RNA_def_property(srna, "use_region_overlap", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, nullptr, "uiflag2", USER_REGION_OVERLAP);
   RNA_def_property_ui_text(
@@ -6246,7 +6218,7 @@ static void rna_def_userdef_system(BlenderRNA *brna)
       prop,
       "Compact Sidebar Tabs",
       "Display sidebar tabs in a compact size that shows icons when available");
-  RNA_def_property_update(prop, 0, "rna_userdef_update");
+  RNA_def_property_update(prop, 0, "rna_userdef_update_compact_tabs");
 
   prop = RNA_def_property(srna, "viewport_aa", PROP_ENUM, PROP_NONE);
   RNA_def_property_enum_items(prop, rna_enum_userdef_viewport_aa_items);

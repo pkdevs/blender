@@ -22,9 +22,9 @@
 /* Minimal requirements for SHGetSpecialFolderPath on MINGW MSVC has this defined already. */
 #    define _WIN32_IE 0x0400
 #  endif
-/* For #SHGetSpecialFolderPath, has to be done before `BLI_winstuff.h`
+/* For #SHGetSpecialFolderPath, has to be done before `BLI_winstuff.hh`
  * because 'near' is disabled through `BLI_windstuff.h`. */
-#  include "BLI_winstuff.h"
+#  include "BLI_winstuff.hh"
 #  include <shlobj.h>
 #endif
 
@@ -33,20 +33,20 @@
 #include "MEM_CacheLimiterC-Api.h"
 #include "MEM_guardedalloc.h"
 
-#include "BLI_fileops.h"
-#include "BLI_filereader.h"
-#include "BLI_linklist.h"
-#include "BLI_listbase.h"
-#include "BLI_math_base.h"
-#include "BLI_math_time.h"
+#include "BLI_fileops.hh"
+#include "BLI_filereader.hh"
+#include "BLI_linklist.hh"
+#include "BLI_listbase.hh"
+#include "BLI_math_base_c.hh"
+#include "BLI_math_time.hh"
 #include "BLI_memory_cache.hh"
-#include "BLI_string.h"
-#include "BLI_string_utf8.h"
-#include "BLI_system.h"
-#include "BLI_threads.h"
-#include "BLI_time.h"
-#include "BLI_timer.h"
-#include "BLI_utildefines.h"
+#include "BLI_string.hh"
+#include "BLI_string_utf8.hh"
+#include "BLI_system.hh"
+#include "BLI_threads.hh"
+#include "BLI_time.hh"
+#include "BLI_timer.hh"
+#include "BLI_utildefines.hh"
 #include BLI_SYSTEM_PID_H
 
 #include "BLO_core_blend_header.hh"
@@ -559,7 +559,6 @@ static void wm_init_userdef(Main *bmain)
   BLO_sanitize_experimental_features_userpref_blend(&U);
 
   wm_gpu_backend_override_from_userdef();
-  GPU_backend_type_selection_detect();
 }
 
 /* Return codes. */
@@ -3312,9 +3311,9 @@ static std::string wm_open_mainfile_get_description(bContext * /*C*/,
   }
 
   /* Date. */
-  const tm mod_time = *localtime(&stats.st_mtime);
+  const tm mod_time = date_string::localtime_safe(stats.st_mtime);
   const time_t ts_now = time(nullptr);
-  const tm now_tm = *localtime(&ts_now);
+  const tm now_tm = date_string::localtime_safe(ts_now);
   const char *lang = BLT_lang_get();
   std::string modified_s = blender::date_string::datetime(mod_time,
                                                           lang,
@@ -3784,8 +3783,8 @@ static ui::Block *block_create_save_modified_images_dialog(bContext *C, ARegion 
   wm_block_image_save_errors(layout, reports);
 
   /* Modified Images Checkbox. */
-  char message[64];
-  SNPRINTF(message, RPT_("Save %u modified image(s)"), modified_images_count);
+  std::string message = fmt::format(fmt::runtime(RPT_("Save {} modified image(s)")),
+                                    modified_images_count);
   layout.separator();
   uiDefButV(block,
             ui::ButtonType::Checkbox,
@@ -5076,8 +5075,8 @@ static ui::Block *block_create__close_file_dialog(bContext *C, ARegion *region, 
 
   /* Modified Images Checkbox. */
   if (modified_images_count > 0) {
-    char message[64];
-    SNPRINTF(message, RPT_("Save %u modified image(s)"), modified_images_count);
+    std::string message = fmt::format(fmt::runtime(RPT_("Save {} modified image(s)")),
+                                      modified_images_count);
     /* Only the first checkbox should get extra separation. */
     if (!has_extra_checkboxes) {
       layout.separator();

@@ -44,7 +44,7 @@ class VIEW3D_MT_brush_context_menu(Menu):
 
         # skip if no active brush
         if not brush:
-            layout.label(text="No brush selected", icon='INFO')
+            layout.label(text="No brush selected", icon='STATUS_INFO')
             return
 
         if brush.library and brush.library.is_editable:
@@ -514,7 +514,7 @@ class SelectPaintSlotHelper:
         if settings.missing_uvs:
             layout.separator()
             split = layout.split()
-            split.label(text="UV Map Needed", icon='INFO')
+            split.label(text="UV Map Needed", icon='STATUS_INFO')
             split.operator("paint.add_simple_uvs", icon='ADD', text="Add Simple UVs")
         elif have_image:
             layout.separator()
@@ -1043,6 +1043,11 @@ class VIEW3D_PT_sculpt_options(Panel, View3DPaintPanel):
 
         tool_settings = context.tool_settings
         sculpt = tool_settings.sculpt
+
+        col = layout.column(heading="Transform Only", align=True)
+        col.prop(tool_settings, "use_transform_data_pivot", text="Pivot")
+
+        layout.separator()
 
         col = layout.column(heading="Display", align=True)
         col.prop(sculpt, "show_low_resolution")

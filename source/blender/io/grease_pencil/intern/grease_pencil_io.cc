@@ -4,10 +4,10 @@
 
 #include "BLI_bounds.hh"
 #include "BLI_color_types.hh"
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 #include "BLI_math_matrix.hh"
-#include "BLI_math_vector.h"
 #include "BLI_math_vector.hh"
+#include "BLI_math_vector_c.hh"
 
 #include "BKE_attribute.hh"
 #include "BKE_camera.h"
@@ -251,6 +251,7 @@ void GreasePencilExporter::prepare_render_params(Scene &scene, const int frame_n
                                  context_.region,
                                  context_.v3d,
                                  context_.rv3d,
+                                 true,
                                  true,
                                  &camera_rect);
     screen_rect_ = {{camera_rect.xmin, camera_rect.ymin}, {camera_rect.xmax, camera_rect.ymax}};

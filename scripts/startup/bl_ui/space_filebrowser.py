@@ -674,6 +674,7 @@ class ASSETBROWSER_MT_editor_menus(AssetBrowserMenu, Menu):
         layout.menu("ASSETBROWSER_MT_select")
         layout.menu("ASSETBROWSER_MT_library")
         layout.menu("ASSETBROWSER_MT_catalog")
+        layout.menu("ASSETBROWSER_MT_asset")
 
 
 class ASSETBROWSER_MT_view(AssetBrowserMenu, Menu):
@@ -736,6 +737,23 @@ class ASSETBROWSER_MT_catalog(AssetBrowserMenu, Menu):
         layout.operator("asset.catalog_new").parent_path = ""
 
 
+class ASSETBROWSER_MT_asset(Menu):
+    bl_label = "Asset"
+
+    def draw(self, _context) -> None:
+        layout = self.layout
+
+        col = layout.column()
+        col.operator_context = 'EXEC_DEFAULT'
+        col.operator("asset.clear", text="Clear Asset").set_fake_user = False
+        col.operator("asset.clear", text="Clear Asset (Set Fake User)").set_fake_user = True
+
+        layout.separator()
+
+        layout.operator("asset.open_containing_blend_file", icon='FILE_BLEND')
+        layout.operator("asset.browse_containing_blend_file")
+
+
 class ASSETBROWSER_PT_import_settings(asset_utils.AssetBrowserPanel, Panel):
     bl_idname = "ASSETBROWSER_PT_import_settings"
     bl_region_type = 'HEADER'
@@ -769,7 +787,16 @@ class ASSETBROWSER_PT_metadata(asset_utils.AssetBrowserPanel, Panel):
         asset is in the current file). Empty, non-editable fields are not really useful.
         """
         if getattr(asset_metadata, propname) or not asset_metadata.is_property_readonly(propname):
-            layout.prop(asset_metadata, propname)
+            split = layout.split(factor=0.4)
+            ui_name = asset_metadata.rna_type.properties[propname].name
+            sub = split.row()
+            sub.alignment = 'RIGHT'
+            sub.label(text=ui_name)
+            if asset_metadata.is_property_readonly(propname):
+                split.label_multiline(
+                    text=getattr(asset_metadata, propname))
+            else:
+                split.textbox(asset_metadata, propname, placeholder=ui_name)
 
     def draw(self, context):
         layout = self.layout
@@ -777,7 +804,7 @@ class ASSETBROWSER_PT_metadata(asset_utils.AssetBrowserPanel, Panel):
         asset = context.asset
 
         if asset is None:
-            layout.label(text="No active asset", icon='INFO')
+            layout.label(text="No active asset", icon='STATUS_INFO')
             return
 
         prefs = context.preferences
@@ -974,6 +1001,7 @@ classes = (
     ASSETBROWSER_MT_select,
     ASSETBROWSER_MT_library,
     ASSETBROWSER_MT_catalog,
+    ASSETBROWSER_MT_asset,
     ASSETBROWSER_PT_import_settings,
     ASSETBROWSER_MT_metadata_preview_menu,
     ASSETBROWSER_PT_metadata,

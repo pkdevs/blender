@@ -15,8 +15,8 @@
 
 #include "BKE_global.hh"
 
-#include "BLI_assert.h"
-#include "BLI_threads.h"
+#include "BLI_assert.hh"
+#include "BLI_threads.hh"
 #include "BLI_vector_set.hh"
 
 #include "DNA_userdef_types.h"
@@ -478,6 +478,13 @@ void GPU_vulkan_supported_devices_print(FILE *fp)
 
 bool GPU_backend_type_selection_detect()
 {
+  /* Only detect once, can't switch backend until Blender restart. */
+  static bool backend_type_detected = false;
+  if (backend_type_detected) {
+    return GPU_backend_type_selection_get() != GPU_BACKEND_NONE;
+  }
+  backend_type_detected = true;
+
   VectorSet<GPUBackendType> backends_to_check;
   if (g_backend_type_override.has_value()) {
     backends_to_check.add(*g_backend_type_override);

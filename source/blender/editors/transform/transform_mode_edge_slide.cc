@@ -8,13 +8,14 @@
 
 #include <algorithm>
 
-#include "BLI_math_geom.h"
-#include "BLI_math_matrix.h"
+#include "BLI_math_geom_c.hh"
 #include "BLI_math_matrix.hh"
-#include "BLI_string_utf8.h"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_string_utf8.hh"
 
 #include "BKE_editmesh.hh"
 #include "BKE_editmesh_bvh.hh"
+#include "BKE_report.hh"
 #include "BKE_unit.hh"
 
 #include "GPU_immediate.hh"
@@ -890,6 +891,12 @@ static void initEdgeSlide_ex(TransInfo *t,
 {
   EdgeSlideData *sld;
   bool ok = false;
+
+  if ((t->flag & T_EDIT) == 0 || (t->obedit_type != OB_MESH)) {
+    BKE_report(t->reports, RPT_ERROR, "'Edge Slide' is only supported in mesh edit mode");
+    t->state = TRANS_CANCEL;
+    return;
+  }
 
   t->mode = TFM_EDGE_SLIDE;
 

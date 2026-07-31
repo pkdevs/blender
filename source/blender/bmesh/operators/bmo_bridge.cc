@@ -8,9 +8,9 @@
  * Connect verts across faces (splits faces) and bridge tool.
  */
 
-#include "BLI_listbase.h"
-#include "BLI_math_vector.h"
-#include "BLI_utildefines.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_vector_c.hh"
+#include "BLI_utildefines.hh"
 
 #include "bmesh.hh"
 
@@ -126,11 +126,6 @@ static void bm_face_edges_tag_out(BMesh *bm, BMFace *f)
   do {
     BMO_edge_flag_enable(bm, l_iter->e, EDGE_OUT);
   } while ((l_iter = l_iter->next) != l_first);
-}
-
-static bool bm_edge_test_cb(BMEdge *e, void *bm_v)
-{
-  return BMO_edge_flag_test((BMesh *)bm_v, e, EDGE_MARK);
 }
 
 static void bridge_loop_pair(BMesh *bm,
@@ -591,7 +586,8 @@ void bmo_bridge_loops_exec(BMesh *bm, BMOperator *op)
 
   BMO_slot_buffer_flag_enable(bm, op->slots_in, "edges", BM_EDGE, EDGE_MARK);
 
-  count = BM_mesh_edgeloops_find(bm, &eloops, bm_edge_test_cb, bm);
+  count = BM_mesh_edgeloops_find(
+      bm, &eloops, [&](BMEdge *e) { return BMO_edge_flag_test(bm, e, EDGE_MARK); });
 
   BM_mesh_edgeloops_calc_center(bm, &eloops);
 

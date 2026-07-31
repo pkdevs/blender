@@ -8,7 +8,7 @@
 
 #include "BKE_global.hh"
 
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 #include "BLT_translation.hh"
 
 #include "DNA_screen_types.h"
@@ -122,7 +122,7 @@ struct AssetLibraryListItem : public ui::AbstractTreeViewItem {
     if (library.user_library && library.user_library->is_enabled() && is_remote_library &&
         !library.user_library->remote_url[0])
     {
-      row.label("", ICON_ERROR);
+      row.label("", ICON_STATUS_ERROR);
     }
 
     if (library.user_library) {

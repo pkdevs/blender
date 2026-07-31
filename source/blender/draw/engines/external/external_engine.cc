@@ -13,7 +13,7 @@
 #include "DRW_engine.hh"
 #include "DRW_render.hh"
 
-#include "BLI_string.h"
+#include "BLI_string.hh"
 
 #include "BLT_translation.hh"
 
@@ -443,6 +443,8 @@ RenderEngineType DRW_engine_viewport_external_type = {
     /*bake*/ nullptr,
     /*view_update*/ nullptr,
     /*view_draw*/ nullptr,
+    /*view_pause*/ nullptr,
+    /*view_resume*/ nullptr,
     /*update_script_node*/ nullptr,
     /*update_render_passes*/ nullptr,
     /*update_custom_camera*/ nullptr,

@@ -7,11 +7,12 @@
 
 #include "BKE_attribute_math.hh"
 #include "BLI_array.hh"
+#include "BLI_array_utils.hh"
 #include "BLI_bit_vector.hh"
 #include "BLI_index_mask.hh"
 #include "BLI_kdtree.hh"
-#include "BLI_listbase.h"
-#include "BLI_math_vector.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_vector_c.hh"
 #include "BLI_offset_indices.hh"
 #include "BLI_vector.hh"
 
@@ -1846,7 +1847,7 @@ std::optional<Mesh *> mesh_merge_by_distance_connected(const Mesh &mesh,
   }
   const float merge_dist_sq = square_f(merge_distance);
 
-  range_vn_i(vert_dest_map.data(), mesh.verts_num, 0);
+  array_utils::fill_index_range(vert_dest_map.as_mutable_span());
 
   /* Collapse Edges that are shorter than the threshold. */
 

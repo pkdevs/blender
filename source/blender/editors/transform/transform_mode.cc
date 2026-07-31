@@ -13,12 +13,12 @@
 #include "DNA_space_types.h"
 #include "DNA_windowmanager_types.h"
 
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 #include "BLI_math_base.hh"
-#include "BLI_math_matrix.h"
-#include "BLI_math_rotation.h"
-#include "BLI_math_vector.h"
-#include "BLI_string_utf8.h"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_rotation_c.hh"
+#include "BLI_math_vector_c.hh"
+#include "BLI_string_utf8.hh"
 
 #include "BKE_constraint.h"
 #include "BKE_context.hh"
@@ -49,10 +49,6 @@ eTfmMode transform_mode_really_used(bContext *C, eTfmMode mode)
     BLI_assert(ob);
     if (ob->type != OB_ARMATURE) {
       return TFM_RESIZE;
-    }
-    bArmature *arm = id_cast<bArmature *>(ob->data);
-    if (arm->drawtype == ARM_DRAW_TYPE_ENVELOPE) {
-      return TFM_BONE_ENVELOPE_DIST;
     }
   }
 
@@ -1281,10 +1277,10 @@ void transform_mode_rotation_axis_get(const TransInfo *t, float3 &r_axis)
   }
   else {
     r_axis = t->spacemtx[t->orient_axis];
-    /* For unconstrained rotation in the 3D viewport, flip the axis so the rotation direction
-     * matches the mouse movement in view space. */
+    /* For unconstrained rotation in the 3D viewport and UV editor, flip the axis so the rotation
+     * direction matches the mouse movement in view space. */
     if ((t->mode == TFM_ROTATION) && (t->con.mode & CON_APPLY) == 0 &&
-        (t->spacetype == SPACE_VIEW3D))
+        ELEM(t->spacetype, SPACE_VIEW3D, SPACE_IMAGE))
     {
       r_axis = -r_axis;
     }
