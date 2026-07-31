@@ -136,9 +136,8 @@ vector<SymbolTable::BuiltinOp> SymbolTable::generate_all_operators(
       /* L can be scalar/vector, R can be scalar or matching size vector. */
       if (is_integer(t1.base) && is_integer(t2.base)) {
         if (t2.size == 1 || t2.size == t1.size) {
-          /* TODO */
-          // ops.emplace_back(t1.name, LeftShift, t2.name, t1.name);
-          // ops.emplace_back(t1.name, RightShift, t2.name, t1.name);
+          ops.emplace_back(t1.name, LShift, t2.name, t1.name);
+          ops.emplace_back(t1.name, RShift, t2.name, t1.name);
         }
       }
 
