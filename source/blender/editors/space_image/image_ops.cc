@@ -3472,6 +3472,11 @@ static bool image_pack_test(Image *ima, const char **r_error_message)
     return false;
   }
 
+  if (!BKE_image_is_dirty(ima) && ima->source == IMA_SRC_GENERATED) {
+    *r_error_message = N_("Image is not edited yet");
+    return false;
+  }
+
   if (ELEM(ima->source, IMA_SRC_SEQUENCE, IMA_SRC_MOVIE)) {
     *r_error_message = N_("Movies or image sequences do not support packing");
     return false;
@@ -3502,6 +3507,7 @@ static bool image_pack_poll(bContext *C)
 
 static wmOperatorStatus image_pack_exec(bContext *C, wmOperator *op)
 {
+  Main *bmain = CTX_data_main(C);
   Image *ima = image_from_context(C);
 
   const char *error_message = nullptr;
@@ -3512,12 +3518,11 @@ static wmOperatorStatus image_pack_exec(bContext *C, wmOperator *op)
     return OPERATOR_CANCELLED;
   }
 
-  if (BKE_image_is_dirty(ima) || ima->source == IMA_SRC_FILE) {
+  if (BKE_image_is_dirty(ima)) {
     BKE_image_memorypack(ima);
   }
   else {
-    BKE_report(op->reports, RPT_WARNING, "Image is not edited yet");
-    return OPERATOR_CANCELLED;
+    BKE_image_packfiles(op->reports, ima, ID_BLEND_PATH(bmain, &ima->id));
   }
 
   WM_event_add_notifier(C, NC_IMAGE | NA_EDITED, ima);
