@@ -1062,12 +1062,16 @@ struct SymbolParser : NodeErrorHandler {
                                 SymbolClassTemplate *cls_template = nullptr)
   {
     SymbolClass *cls = table.cls_arena.alloc(&scope, decl, suffix);
-    scope.classes.emplace(cls->identifier, cls);
+    if (!scope.classes.try_emplace(cls->identifier, cls).second) {
+      error(decl, Diag::Redefinition, cls->identifier);
+      return table.err_cls;
+    }
+
     scope.scopes.emplace(cls->identifier, cls);
 
     if (cls->is_anonymous && anonymous_scope_prefix(cls).non_anonymous_parent == nullptr) {
       error(decl, Diag::AnonymousUnionNotSupportedAtNamespaceScope);
-      return scope.root_scope()->lookup_class(SymbolTable::err_symbol);
+      return table.err_cls;
     }
 
     if (cls_template) {
@@ -1158,13 +1162,19 @@ struct SymbolParser : NodeErrorHandler {
       SymbolFunctionTemplate *temp = table.tmp_fun_arena.alloc(decl);
       SymbolFunction *fn = table.fun_arena.alloc(&scope, decl.decl());
       fn->template_data = temp;
-      scope.functions.emplace(fn->identifier, fn);
+      if (!scope.functions.try_emplace(fn->identifier, fn).second) {
+        FuncDecl fn_decl(decl.decl());
+        error(fn_decl.identifier(), Diag::Redefinition, fn_decl.identifier().str());
+      }
     }
     else {
       SymbolClassTemplate *temp = table.tmp_cls_arena.alloc(decl);
       SymbolClass *cls = table.cls_arena.alloc(&scope, decl.decl());
       cls->template_data = temp;
-      scope.classes.emplace(cls->identifier, cls);
+      if (!scope.classes.try_emplace(cls->identifier, cls).second) {
+        ClassDecl cls_decl(decl.decl());
+        error(cls_decl.identifier(), Diag::Redefinition, cls_decl.identifier().str());
+      }
     }
   }
 
