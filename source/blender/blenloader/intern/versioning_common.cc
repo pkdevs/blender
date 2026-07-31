@@ -8,7 +8,6 @@
 /* allow readfile to use deprecated functionality */
 #define DNA_DEPRECATED_ALLOW
 
-#include <cstdint>
 #include <cstring>
 
 #include "DNA_layer_types.h"
@@ -19,7 +18,6 @@
 
 #include "RNA_path.hh"
 
-#include "BLI_assert.hh"
 #include "BLI_function_ref.hh"
 #include "BLI_listbase.hh"
 #include "BLI_map.hh"
