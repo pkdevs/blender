@@ -1377,7 +1377,7 @@ int popup_context_menu_for_panel(bContext *C, ARegion *region, Panel *panel)
     return WM_UI_HANDLER_CONTINUE;
   }
 
-  if (!BKE_regiontype_uses_category_tabs(region->regiontype)) {
+  if (!BKE_regiontype_uses_category_tabs(region->runtime->type)) {
     return WM_UI_HANDLER_CONTINUE;
   }
 
