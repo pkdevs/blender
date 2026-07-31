@@ -876,7 +876,7 @@ class VIEW3D_PT_tools_weight_gradient(Panel, View3DPaintPanel):
             )
 
 
-class VIEW3D_PT_tools_brush_tip(Panel, View3DPaintPanel, ShapePanel):
+class VIEW3D_PT_tools_brush_shape(Panel, View3DPaintPanel, ShapePanel):
     bl_context = ".paint_common"  # dot on purpose (access from topbar)
     bl_parent_id = "VIEW3D_PT_tools_brush_settings"
     bl_label = "Brush Tip"
@@ -886,7 +886,7 @@ class VIEW3D_PT_tools_brush_tip(Panel, View3DPaintPanel, ShapePanel):
 class VIEW3D_PT_tools_brush_falloff_frontface(View3DPaintPanel, Panel):
     bl_context = ".imagepaint"  # dot on purpose (access from topbar)
     bl_label = "Front-Face Falloff"
-    bl_parent_id = "VIEW3D_PT_tools_brush_tip"
+    bl_parent_id = "VIEW3D_PT_tools_brush_shape"
     bl_options = {'DEFAULT_CLOSED'}
 
     @classmethod
@@ -916,7 +916,7 @@ class VIEW3D_PT_tools_brush_falloff_frontface(View3DPaintPanel, Panel):
 class VIEW3D_PT_tools_brush_falloff_normal(View3DPaintPanel, Panel):
     bl_context = ".imagepaint"  # dot on purpose (access from topbar)
     bl_label = "Normal Falloff"
-    bl_parent_id = "VIEW3D_PT_tools_brush_tip"
+    bl_parent_id = "VIEW3D_PT_tools_brush_shape"
     bl_options = {'DEFAULT_CLOSED'}
 
     @classmethod
@@ -2369,7 +2369,7 @@ classes = (
     VIEW3D_PT_tools_mask_texture,
     VIEW3D_PT_tools_brush_stroke,
     VIEW3D_PT_tools_brush_stroke_smooth_stroke,
-    VIEW3D_PT_tools_brush_tip,
+    VIEW3D_PT_tools_brush_shape,
     VIEW3D_PT_tools_brush_falloff_frontface,
     VIEW3D_PT_tools_brush_falloff_normal,
     VIEW3D_PT_tools_brush_display,

@@ -101,7 +101,7 @@ class VIEW3D_HT_tool_header(Header):
             if tool_mode == 'PAINT_TEXTURE':
                 layout.popover("VIEW3D_PT_tools_mask_texture")
             layout.popover("VIEW3D_PT_tools_brush_stroke")
-            layout.popover("VIEW3D_PT_tools_brush_tip")
+            layout.popover("VIEW3D_PT_tools_brush_shape")
             layout.popover("VIEW3D_PT_tools_brush_display")
 
         # NOTE: general mode options should be added to `draw_mode_settings`.
@@ -458,7 +458,7 @@ class _draw_tool_settings_context_mode:
             layout.row().prop(brush, "direction", expand=True, text="")
 
         # Brush tip
-        layout.popover("VIEW3D_PT_tools_brush_tip")
+        layout.popover("VIEW3D_PT_tools_brush_shape")
 
         return True
 
@@ -582,7 +582,7 @@ class _draw_tool_settings_context_mode:
 
         if curves_tool == 'COMB':
             layout.prop(brush, "falloff_shape", expand=True)
-            layout.popover("VIEW3D_PT_tools_brush_tip", text="Brush Tip")
+            layout.popover("VIEW3D_PT_tools_brush_shape", text="Brush Tip")
             layout.popover("VIEW3D_PT_curves_sculpt_parameter_falloff", text="Curve Falloff")
         elif curves_tool == 'ADD':
             layout.prop(brush, "falloff_shape", expand=True)
@@ -593,26 +593,26 @@ class _draw_tool_settings_context_mode:
             layout.prop(brush, "direction", expand=True, text="")
             layout.prop(brush, "falloff_shape", expand=True)
             layout.popover("VIEW3D_PT_curves_sculpt_grow_shrink_scaling", text="Scaling")
-            layout.popover("VIEW3D_PT_tools_brush_tip")
+            layout.popover("VIEW3D_PT_tools_brush_shape")
         elif curves_tool == 'SNAKE_HOOK':
             layout.prop(brush, "falloff_shape", expand=True)
-            layout.popover("VIEW3D_PT_tools_brush_tip")
+            layout.popover("VIEW3D_PT_tools_brush_shape")
         elif curves_tool == 'DELETE':
             layout.prop(brush, "falloff_shape", expand=True)
         elif curves_tool == 'SELECTION_PAINT':
             layout.prop(brush, "direction", expand=True, text="")
             layout.prop(brush, "falloff_shape", expand=True)
-            layout.popover("VIEW3D_PT_tools_brush_tip")
+            layout.popover("VIEW3D_PT_tools_brush_shape")
         elif curves_tool == 'PINCH':
             layout.prop(brush, "direction", expand=True, text="")
             layout.prop(brush, "falloff_shape", expand=True)
-            layout.popover("VIEW3D_PT_tools_brush_tip")
+            layout.popover("VIEW3D_PT_tools_brush_shape")
         elif curves_tool == 'SMOOTH':
             layout.prop(brush, "falloff_shape", expand=True)
-            layout.popover("VIEW3D_PT_tools_brush_tip")
+            layout.popover("VIEW3D_PT_tools_brush_shape")
         elif curves_tool == 'PUFF':
             layout.prop(brush, "falloff_shape", expand=True)
-            layout.popover("VIEW3D_PT_tools_brush_tip")
+            layout.popover("VIEW3D_PT_tools_brush_shape")
         elif curves_tool == 'DENSITY':
             layout.prop(brush, "falloff_shape", expand=True)
             row = layout.row(align=True)
@@ -624,10 +624,10 @@ class _draw_tool_settings_context_mode:
             row = layout.row(align=True)
             row.enabled = brush.curves_sculpt_settings.density_mode != 'REMOVE'
             row.prop(brush.curves_sculpt_settings, "density_add_attempts", text="Count Max")
-            layout.popover("VIEW3D_PT_tools_brush_tip")
+            layout.popover("VIEW3D_PT_tools_brush_shape")
             layout.popover("VIEW3D_PT_curves_sculpt_add_shape", text="Curve Shape")
         elif curves_tool == 'SLIDE':
-            layout.popover("VIEW3D_PT_tools_brush_tip")
+            layout.popover("VIEW3D_PT_tools_brush_shape")
         elif curves_tool == 'CUT':
             layout.prop(brush, "falloff_shape", expand=True)
 

@@ -1981,7 +1981,7 @@ def brush_basic_grease_pencil_paint_settings(layout, context, brush, props, *, c
         else:
             layout.prop(gp_settings, "vertex_mode", text="Stroke Mode")
 
-        layout.popover("VIEW3D_PT_tools_brush_tip")
+        layout.popover("VIEW3D_PT_tools_brush_shape")
         layout.prop(gp_settings, "use_active_layer_only")
 
 
