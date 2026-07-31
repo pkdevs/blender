@@ -2,3 +2,4 @@ Referenced by commit 9be3c42271b0b75eca0bad3abd2e743b203f8765, Fix: Accidental c
 Referenced by issue #157328, Grease Pencil Strokes Visible behind Mesh Objects
 Referenced by pull request #160193, Fix #91467: Grease Pencil: Update dot rotation tooltip
 Referenced by commit 25b27ba981d6ae8739d47d865ce606cc02a2405d, Fix #91467: Grease Pencil: Update dot rotation tooltip
+Referenced by issue #162167, Grease Pencil brush aspect does not work with 5.2 material placement settings
