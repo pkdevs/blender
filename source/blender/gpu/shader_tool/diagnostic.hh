@@ -225,6 +225,7 @@ enum class Diag {
   FailedToEvaluateExpandedExpr,
   UnknownClassInstantiation,
   Redefinition,
+  RedefinitionTemplate,
 };
 
 static inline std::string_view diagnostic_message_get(Diag diag)
@@ -494,6 +495,8 @@ static inline std::string_view diagnostic_message_get(Diag diag)
       return "Failed to evaluate expanded expression '{}'";
     case Diag::UnknownClassInstantiation:
       return "Compiler error: Can't find class symbol";
+    case Diag::RedefinitionTemplate:
+      return "Redefinition of template '{}'";
     case Diag::Redefinition:
       return "Redefinition of '{}'";
   }

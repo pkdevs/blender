@@ -1159,12 +1159,15 @@ struct SymbolParser : NodeErrorHandler {
   {
     /* Do not parse. Only keep the symbol definition. The instantiation will do the parsing. */
     if (decl.is_function()) {
-      SymbolFunctionTemplate *temp = table.tmp_fun_arena.alloc(decl);
       SymbolFunction *fn = table.fun_arena.alloc(&scope, decl.decl());
-      fn->template_data = temp;
-      if (!scope.functions.try_emplace(fn->identifier, fn).second) {
-        FuncDecl fn_decl(decl.decl());
-        error(fn_decl.identifier(), Diag::Redefinition, fn_decl.identifier().str());
+      if (auto [it, inserted] = scope.functions.try_emplace(fn->identifier, fn); inserted) {
+        SymbolFunction *fn = it->second;
+        if (fn->template_data) {
+          FuncDecl fn_decl(decl.decl());
+          error(fn_decl.identifier(), Diag::RedefinitionTemplate, fn_decl.identifier().str());
+          return;
+        }
+        fn->template_data = table.tmp_fun_arena.alloc(decl);
       }
     }
     else {
