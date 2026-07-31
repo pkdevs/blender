@@ -25,6 +25,7 @@
 #include "BLO_read_write.hh"
 
 #include "BKE_node_socket_value.hh"
+#include "BKE_node_tree_reference_lifetimes.hh"
 
 #include "COM_node_operation.hh"
 #include "COM_result.hh"
