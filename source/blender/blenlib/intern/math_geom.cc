@@ -743,7 +743,7 @@ float dist_squared_ray_to_aabb_v3(const DistRayAABB_Precalc *data,
   float rtmin, rtmax;
   int main_axis;
 
-  /* Find the first far plane that the ray exists. */
+  /* Find the first far plane that the ray exits. */
   if ((tmax[0] <= tmax[1]) && (tmax[0] <= tmax[2])) {
     rtmax = tmax[0];
     va[0] = vb[0] = local_bvmax[0];
@@ -763,7 +763,7 @@ float dist_squared_ray_to_aabb_v3(const DistRayAABB_Precalc *data,
     // r_axis_closest[2] = neasrest_precalc->ray_direction[2] < 0.0f;
   }
 
-  /* Find last near plane that the ray enters. */
+  /* Find the last near plane that the ray enters. */
   if ((tmin[0] >= tmin[1]) && (tmin[0] >= tmin[2])) {
     rtmin = tmin[0];
     va[0] = vb[0] = local_bvmin[0];
@@ -786,9 +786,9 @@ float dist_squared_ray_to_aabb_v3(const DistRayAABB_Precalc *data,
     main_axis += 3;
   }
 
-  /* If rtmin <= rtmax, ray intersect AABB. Ohterwise, there is no moment where the ray has entered
-   * through all three near plane but has not exited from any far plane, meaning the ray does not
-   * intersect the AABB. */
+  /* If rtmin <= rtmax, the ray intersects the AABB. Otherwise, there is no moment where the ray
+   * has entered through all three near planes but has not exited from any far plane, meaning the
+   * ray does not intersect the AABB. */
   if (rtmin <= rtmax) {
     float dvec[3];
     copy_v3_v3(r_point, local_bvmax);
@@ -2164,7 +2164,7 @@ bool isect_ray_line_v3(const float ray_origin[3],
     return false;
   }
 
-  /* The following lines uses a math trick to do the same thing as:
+  /* The following lines use a math trick to do the same thing as:
 
     const float numerator = dot_v3v3(t, ray_direction) * dot_v3v3(a, ray_direction) -
                           dot_v3v3(t, a) * len_squared_v3(ray_direction);
