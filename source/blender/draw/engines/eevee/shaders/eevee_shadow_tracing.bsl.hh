@@ -242,9 +242,7 @@ ShadowRayPunctual shadow_ray_generate_punctual(LightData light, float2 random_2d
 
   float3 point_on_light_shape;
   if (is_area_light(light.type)) {
-    random_2d *= light.area().size * light.area().shadow_scale;
-
-    point_on_light_shape = float3(random_2d, 0.0f);
+    point_on_light_shape = light.local().local.shadow_position;
   }
   else {
     float dist;
@@ -279,7 +277,7 @@ ShadowRayPunctual shadow_ray_generate_punctual(LightData light, float2 random_2d
   ShadowRayPunctual ray;
   /* Transform to shadow local space. */
   ray.origin = lP - shadow_position;
-  ray.direction = direction + shadow_position;
+  ray.direction = direction;
   ray.light_tilemap_index = light.tilemap_index;
   ray.local_ray_up = safe_normalize(cross(cross(ray.origin, ray.direction), ray.direction));
   ray.light = light;
