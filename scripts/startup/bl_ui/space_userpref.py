@@ -1407,13 +1407,17 @@ class USERPREF_PT_theme_bone_color_sets(ThemePanel, CenterAlignMixIn, Panel):
     def draw_centered(self, context, layout):
         theme = context.preferences.themes[0]
 
-        row = layout.row(align=True)
+        row = layout.row()
 
-        color_set_col = self.create_column(row, width=13)
+        color_set_col = self.create_column(row)
+        color_set_col.alignment = 'RIGHT'
+
+        row.separator()
+
         normal_col = self.create_column(row, heading="Normal")
         selected_col = self.create_column(row, heading="Selected")
         active_col = self.create_column(row, heading="Active")
-        constraints_col = self.create_column(row, heading="Colored Constraints", width=15)
+        constraints_col = self.create_column(row, heading="Colored Constraints", width=10)
 
         for i, ui in enumerate(theme.bone_color_sets, 1):
             color_set_col.label(text=iface_("Color Set {:d}").format(i), translate=False)
