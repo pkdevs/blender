@@ -49,6 +49,7 @@ void ARMATURE_OT_parent_set(wmOperatorType *ot);
 void ARMATURE_OT_parent_clear(wmOperatorType *ot);
 
 void ARMATURE_OT_select_all(wmOperatorType *ot);
+void ARMATURE_OT_select_deform(wmOperatorType *ot);
 void ARMATURE_OT_select_mirror(wmOperatorType *ot);
 void ARMATURE_OT_select_more(wmOperatorType *ot);
 void ARMATURE_OT_select_less(wmOperatorType *ot);

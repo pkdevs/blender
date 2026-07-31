@@ -2210,6 +2210,8 @@ class VIEW3D_MT_select_edit_armature(Menu):
         props.extend = True
         props.direction = 'CHILD'
 
+        layout.operator("armature.select_deform", text="Deform")
+
 
 class VIEW3D_MT_select_edit_grease_pencil(Menu):
     bl_label = "Select"

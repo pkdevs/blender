@@ -1449,6 +1449,78 @@ void ARMATURE_OT_select_all(wmOperatorType *ot)
 }
 
 /** \} */
+/* -------------------------------------------------------------------- */
+/** \name Select Deform Operator
+ * \{ */
+
+enum class BoneDeform { DEFORM = 0, NO_DEFORM = 1 };
+
+static wmOperatorStatus armature_select_deform_exec(bContext *C, wmOperator *op)
+{
+  const Main *bmain = CTX_data_main(C);
+  const Scene *scene = CTX_data_scene(C);
+  ViewLayer *view_layer = CTX_data_view_layer(C);
+  Vector<Object *> objects = BKE_view_layer_array_from_objects_in_edit_mode_unique_data(
+      *bmain, scene, view_layer, CTX_wm_view3d(C));
+
+  const BoneDeform mode = BoneDeform(RNA_enum_get(op->ptr, "deform"));
+
+  for (Object *ob : objects) {
+    bArmature *arm = id_cast<bArmature *>(ob->data);
+
+    ED_armature_edit_deselect_all_visible(ob);
+
+    for (EditBone &ebone : *arm->edbo) {
+      if (!animrig::bone_is_visible(arm, &ebone)) {
+        continue;
+      }
+
+      const bool is_deform = !(ebone.flag & BONE_NO_DEFORM);
+      bool select = (mode == BoneDeform::DEFORM) ? is_deform : !is_deform;
+      if (select) {
+        ED_armature_ebone_select_set(&ebone, true);
+      }
+    }
+  }
+
+  for (Object *ob : objects) {
+    WM_event_add_notifier(C, NC_OBJECT | ND_BONE_SELECT, ob);
+    DEG_id_tag_update(&ob->id, ID_RECALC_SYNC_TO_EVAL);
+  }
+  return OPERATOR_FINISHED;
+}
+
+void ARMATURE_OT_select_deform(wmOperatorType *ot)
+{
+  /* identifiers */
+  ot->name = "Select Deform Bones";
+  ot->idname = "ARMATURE_OT_select_deform";
+  ot->description = "Select bones the have the deform option enabled (or disabled)";
+
+  /* API callbacks. */
+  ot->exec = armature_select_deform_exec;
+  ot->poll = ED_operator_editarmature;
+
+  /* flags */
+  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
+
+  static const EnumPropertyItem deform_items[] = {
+      {int(BoneDeform::DEFORM),
+       "DEFORM",
+       0,
+       "Enabled",
+       "Select bones that have the 'deform' option enabled"},
+      {int(BoneDeform::NO_DEFORM),
+       "NO_DEFORM",
+       0,
+       "Disabled",
+       "Select bones that have the 'deform' option disabled"},
+      {0, nullptr, 0, nullptr, nullptr}};
+
+  RNA_def_enum(ot->srna, "deform", deform_items, int(BoneDeform::DEFORM), "Deform", "");
+}
+
+/** \} */
 
 /* -------------------------------------------------------------------- */
 /** \name Select More/Less Implementation

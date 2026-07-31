@@ -37,6 +37,7 @@ void ED_operatortypes_armature()
   WM_operatortype_append(ARMATURE_OT_parent_clear);
 
   WM_operatortype_append(ARMATURE_OT_select_all);
+  WM_operatortype_append(ARMATURE_OT_select_deform);
   WM_operatortype_append(ARMATURE_OT_select_mirror);
   WM_operatortype_append(ARMATURE_OT_select_more);
   WM_operatortype_append(ARMATURE_OT_select_less);
