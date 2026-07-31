@@ -51,9 +51,11 @@ static void node_declare(NodeDeclarationBuilder &b)
     }
   }
 
+  const bool is_compositor = b.tree_or_null() && b.tree_or_null()->type == NTREE_COMPOSIT;
   b.add_input<decl::Int>("ID"_ustr)
       .structure_type(StructureType::Dynamic)
-      .default_input_type(NODE_DEFAULT_INPUT_ID_INDEX_FIELD);
+      .default_input_type(is_compositor ? NODE_DEFAULT_INPUT_VALUE :
+                                          NODE_DEFAULT_INPUT_ID_INDEX_FIELD);
   b.add_input<decl::Int>("Seed"_ustr);
 
   if (node != nullptr) {

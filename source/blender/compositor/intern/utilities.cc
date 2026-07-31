@@ -173,13 +173,13 @@ static std::optional<ImplicitInputType> get_implicit_input(
 {
   switch (node_default_input_type) {
     case NodeDefaultInputType::NODE_DEFAULT_INPUT_VALUE:
-    case NodeDefaultInputType::NODE_DEFAULT_INPUT_ID_INDEX_FIELD:
       return std::nullopt;
     case NodeDefaultInputType::NODE_DEFAULT_INPUT_UNIFORM_IMAGE_COORDINATES:
       return ImplicitInputType::UniformImageCoordinates;
     case NodeDefaultInputType::NODE_DEFAULT_INPUT_SCENE_FRAME:
       return ImplicitInputType::SceneFrame;
     case NodeDefaultInputType::NODE_DEFAULT_INPUT_INDEX_FIELD:
+    case NodeDefaultInputType::NODE_DEFAULT_INPUT_ID_INDEX_FIELD:
     case NodeDefaultInputType::NODE_DEFAULT_INPUT_NORMAL_FIELD:
     case NodeDefaultInputType::NODE_DEFAULT_INPUT_POSITION_FIELD:
     case NodeDefaultInputType::NODE_DEFAULT_INPUT_INSTANCE_TRANSFORM_FIELD:
