@@ -257,14 +257,6 @@ void SourceProcessor::lower_pre_template(Parser &parser)
   lower_template_specialization(parser);
 }
 
-void SourceProcessor::lower_pre_template_ast(Parser &parser, SymbolTable &symbols)
-{
-  /* Lint and remove C++ accessor templates before lowering template. */
-  lower_srt_accessor_templates_ast(parser);   /* Legacy. To remove. */
-  lower_union_accessor_templates_ast(parser); /* Legacy. To remove. */
-  lower_namespaces_ast(parser, symbols);
-}
-
 /* Mangle template parameter into the symbol name. */
 void SourceProcessor::lower_template_calls(Parser &parser)
 {

@@ -86,23 +86,19 @@ void SourceProcessor::lower_srt_accessor_templates(Parser &parser)
 void SourceProcessor::lower_srt_accessor_templates_ast(Parser &parser)
 {
   for (ClassDecl decl : parser.root().children_of_type<ClassDecl>()) {
-    for (VarDecl var : decl.children_of_type<VarDecl>()) {
+    for (VarDecl var : decl.body().children_of_type<VarDecl>()) {
       IdType type = var.type();
-      bool is_resource_table = decl.attributes().contains_attr("resource_table");
+      bool is_resource_table = var.attributes().contains_attr("resource_table");
       bool is_srt = type.id().name().str() == "srt_t";
+      if (!is_srt) {
+        continue;
+      }
 
-      if (!is_resource_table && is_srt) {
+      if (!is_resource_table) {
         report_error(var,
                      "The srt_t<T> template is only to be used with members declared with the "
                      "[[resource_table]] attribute.");
-        return;
-      }
-
-      if (is_resource_table && !is_srt) {
-        report_error(var,
-                     "Members declared with the [[resource_table]] attribute must wrap their type "
-                     "with the srt_t<T> template.");
-        return;
+        continue;
       }
 
       for (Declarator decl : var.children_of_type<Declarator>()) {

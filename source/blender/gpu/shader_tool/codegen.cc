@@ -2363,7 +2363,7 @@ struct CodegenContext : NodeErrorHandler {
 };
 
 /* Lower namespaces by adding namespace prefix to all the contained structs and functions. */
-void SourceProcessor::lower_namespaces_ast(Parser &parser, SymbolTable &symbols)
+void SourceProcessor::lower_bsl_to_il(Parser &parser, SymbolTable &symbols)
 {
   CodegenContext ctx(parser, symbols, metadata_, error_handler);
   string str = ctx.process(*symbols.root, LocalScope(Node(&parser, 0)));

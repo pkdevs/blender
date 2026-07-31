@@ -298,10 +298,12 @@ SourceProcessor::Result SourceProcessor::convert_bsl()
     lint_reserved_tokens(parser);
     lint_attributes_ast(parser);
 
+    lower_srt_accessor_templates_ast(parser);   /* Legacy. To remove. */
+    lower_union_accessor_templates_ast(parser); /* Legacy. To remove. */
+
     symbols.parse(parser.root(), error_handler);
 
-    /* All mutations that needs to also be applied on template definitions. */
-    lower_pre_template_ast(parser, symbols);
+    lower_bsl_to_il(parser, symbols);
     /* Lower SRT and Interfaces. */
     lower_pipeline_definition(parser, filename);
     /* Lower class methods. */
@@ -533,6 +535,9 @@ metadata::Source SourceProcessor::parse_include_and_symbols(SourceManager &sourc
     scan_external_symbols(sources, symbols, visited_files);
 
     parser.include_id = sources.include_id_get();
+
+    lower_srt_accessor_templates_ast(parser);   /* Legacy. To remove. */
+    lower_union_accessor_templates_ast(parser); /* Legacy. To remove. */
 
     symbols.parse(parser.root(), error_handler);
   }

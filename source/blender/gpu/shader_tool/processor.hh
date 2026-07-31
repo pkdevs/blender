@@ -247,7 +247,7 @@ class SourceProcessor {
   void lower_static_branch(Parser &parser);
   /* Lower namespaces by adding namespace prefix to all the contained structs and functions. */
   void lower_namespaces(Parser &parser);
-  void lower_namespaces_ast(Parser &parser, parser::SymbolTable &symbols);
+  void lower_bsl_to_il(Parser &parser, parser::SymbolTable &symbols);
   /* Lower namespaces by adding namespace prefix to all the contained structs and functions.
    * Also mangle template parameters. */
   void lower_namespaces_and_explicit_templates(Parser &parser);
@@ -435,7 +435,6 @@ class SourceProcessor {
                                  const Token method_end);
 
   void lower_pre_template(Parser &parser);
-  void lower_pre_template_ast(Parser &parser, parser::SymbolTable &symbols);
 
   void instantiate_recursive(Parser &parser,
                              parser::SymbolScope &current_scope,
