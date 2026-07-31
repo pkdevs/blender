@@ -20,7 +20,6 @@
 #include "NOD_node_declaration.hh"
 #include "NOD_node_in_compute_context.hh"
 #include "NOD_shader_nodes_inline.hh"
-#include "NOD_socket.hh"
 
 namespace blender::nodes {
 namespace {
