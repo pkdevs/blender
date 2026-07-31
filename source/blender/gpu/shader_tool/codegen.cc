@@ -415,6 +415,7 @@ struct CodegenContext : NodeErrorHandler {
             else {
               builder << val;
             }
+            builder.curr = val.back().next();
           }
           match_if(Colon);
           local_scope(switch_case.body(), *scope.scopes[to_string(local_scope_id++)]);
