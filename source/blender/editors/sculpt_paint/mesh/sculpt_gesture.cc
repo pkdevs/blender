@@ -414,6 +414,13 @@ static bool is_affected_lasso(const GestureData &gesture_data, const float3 &pos
 
 bool is_affected(const GestureData &gesture_data, const float3 &position, const float3 &normal)
 {
+  const View3D *v3d = gesture_data.vc.v3d;
+  const RegionView3D *rv3d = gesture_data.vc.rv3d;
+  if (RV3D_CLIPPING_ENABLED(v3d, rv3d)) {
+    if (ED_view3d_clipping_test(rv3d, position, true)) {
+      return false;
+    }
+  }
   const float dot = math::dot(gesture_data.view_normal, normal);
   const bool is_affected_front_face = !(gesture_data.front_faces_only && dot < 0.0f);
 
