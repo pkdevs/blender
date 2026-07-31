@@ -28,6 +28,9 @@
 #include "RNA_access.hh"
 #include "RNA_define.hh"
 
+#include "UI_interface_layout.hh"
+#include "UI_resources.hh"
+
 #include "WM_api.hh"
 #include "WM_types.hh"
 
@@ -2055,6 +2058,18 @@ static wmOperatorStatus armature_select_similar_exec(bContext *C, wmOperator *op
   return OPERATOR_FINISHED;
 }
 
+static void select_similar_ui(bContext * /*C*/, wmOperator *op)
+{
+  ui::Layout &layout = *op->layout;
+  layout.use_property_split_set(true);
+
+  const int type = RNA_enum_get(op->ptr, "type");
+  layout.prop(op->ptr, "type", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+  if ((type == SIMEDBONE_LENGTH) || (type == SIMEDBONE_DIRECTION)) {
+    layout.prop(op->ptr, "threshold", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+  }
+}
+
 void ARMATURE_OT_select_similar(wmOperatorType *ot)
 {
   /* identifiers */
@@ -2065,6 +2080,7 @@ void ARMATURE_OT_select_similar(wmOperatorType *ot)
   ot->invoke = WM_menu_invoke;
   ot->exec = armature_select_similar_exec;
   ot->poll = ED_operator_editarmature;
+  ot->ui = select_similar_ui;
   ot->description = "Select similar bones by property types";
 
   /* flags */
