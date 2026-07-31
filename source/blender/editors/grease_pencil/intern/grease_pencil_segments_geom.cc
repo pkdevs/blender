@@ -2321,6 +2321,11 @@ static Array<bool> calculate_unchanged_curves(const Span<Segment> segments,
   return unchanged_curves;
 }
 
+/**
+ * Separate disjoint fill islands.
+ *
+ * Note: Nested islands of 3 or more curves will not be split.
+ */
 static void separate_fill_islands(bke::CurvesGeometry &dst, const Span<bool> unchanged_curves)
 {
   bke::MutableAttributeAccessor attributes = dst.attributes_for_write();
