@@ -782,7 +782,7 @@ float dist_squared_ray_to_aabb_v3(const DistRayAABB_Precalc *data,
     main_axis += 3;
   }
 
-/* if rtmin <= rtmax, ray intersect `AABB` */
+  /* if rtmin <= rtmax, ray intersect `AABB` */
   if (rtmin <= rtmax) {
     float dvec[3];
     copy_v3_v3(r_point, local_bvmax);
