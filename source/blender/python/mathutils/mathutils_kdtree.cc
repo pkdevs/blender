@@ -5,8 +5,8 @@
 /** \file
  * \ingroup mathutils
  *
- * This file defines the `mathutils.kdtree` module, a general purpose module to access
- * `BLI_kdtree` for 2D/3D spatial lookups.
+ * This file defines the 'mathutils.kdtree' module, a general purpose module to access
+ * blenders kdtree for 2D/3D spatial lookups.
  */
 
 #include <Python.h>
@@ -39,6 +39,16 @@ struct PyKDTree {
 /* -------------------------------------------------------------------- */
 /** \name Utility helper functions
  * \{ */
+
+/**
+ * Access the tree, callers must pass a `CoordT` matching #PyKDTree::dimensions.
+ */
+template<typename CoordT> static KDTree<CoordT> *pykdtree_tree_get(PyKDTree *self)
+{
+  /* Null when `__init__` never ran or raised an error, `dimensions` is unset in that case. */
+  BLI_assert(self->obj == nullptr || CoordT::type_length == self->dimensions);
+  return reinterpret_cast<KDTree<CoordT> *>(self->obj);
+}
 
 template<typename CoordT>
 static void kdtree_nearest_to_py_tuple(const KDTreeNearest<CoordT> *nearest, PyObject *py_retval)
@@ -90,7 +100,11 @@ static int PyKDTree__tp_init(PyKDTree *self, PyObject *args, PyObject *kwargs)
 {
   uint maxsize;
   int dimensions = 3;
-  const char *keywords[] = {"size", "dimensions", nullptr};
+  const char *keywords[] = {
+      "size",
+      "dimensions",
+      nullptr,
+  };
 
   if (!PyArg_ParseTupleAndKeywords(args,
                                    kwargs,
@@ -110,16 +124,15 @@ static int PyKDTree__tp_init(PyKDTree *self, PyObject *args, PyObject *kwargs)
     return -1;
   }
 
-  if (!ELEM(dimensions, 2, 3)) {
-    PyErr_SetString(PyExc_ValueError, "dimensions must be 2 or 3");
-    return -1;
-  }
-
   if (dimensions == 2) {
     self->obj = kdtree_new<float2>(maxsize);
   }
-  else {
+  else if (dimensions == 3) {
     self->obj = kdtree_new<float3>(maxsize);
+  }
+  else {
+    PyErr_SetString(PyExc_ValueError, "dimensions must be 2 or 3");
+    return -1;
   }
 
   self->maxsize = maxsize;
@@ -134,10 +147,10 @@ static int PyKDTree__tp_init(PyKDTree *self, PyObject *args, PyObject *kwargs)
 static void PyKDTree__tp_dealloc(PyKDTree *self)
 {
   if (self->dimensions == 2) {
-    kdtree_free<float2>(reinterpret_cast<KDTree<float2> *>(self->obj));
+    kdtree_free<float2>(pykdtree_tree_get<float2>(self));
   }
   else {
-    kdtree_free<float3>(reinterpret_cast<KDTree<float3> *>(self->obj));
+    kdtree_free<float3>(pykdtree_tree_get<float3>(self));
   }
 
   Py_TYPE(self)->tp_free(reinterpret_cast<PyObject *>(self));
@@ -196,10 +209,10 @@ static PyObject *py_kdtree_insert(PyKDTree *self, PyObject *args, PyObject *kwar
   }
 
   if (self->dimensions == 2) {
-    kdtree_insert<float2>(reinterpret_cast<KDTree<float2> *>(self->obj), index, co);
+    kdtree_insert<float2>(pykdtree_tree_get<float2>(self), index, co);
   }
   else {
-    kdtree_insert<float3>(reinterpret_cast<KDTree<float3> *>(self->obj), index, co);
+    kdtree_insert<float3>(pykdtree_tree_get<float3>(self), index, co);
   }
   self->count++;
 
@@ -225,10 +238,10 @@ PyDoc_STRVAR(
 static PyObject *py_kdtree_balance(PyKDTree *self)
 {
   if (self->dimensions == 2) {
-    kdtree_balance<float2>(reinterpret_cast<KDTree<float2> *>(self->obj));
+    kdtree_balance<float2>(pykdtree_tree_get<float2>(self));
   }
   else {
-    kdtree_balance<float3>(reinterpret_cast<KDTree<float3> *>(self->obj));
+    kdtree_balance<float3>(pykdtree_tree_get<float3>(self));
   }
 
   self->count_balance = self->count;
@@ -266,6 +279,32 @@ static int py_find_nearest_cb(void *user_data, int index)
 
   data->is_error = true;
   return -1;
+}
+
+template<typename CoordT>
+static PyObject *py_kdtree_find_impl(PyKDTree *self, const float *co, PyObject *py_filter)
+{
+  KDTree<CoordT> *tree = pykdtree_tree_get<CoordT>(self);
+  KDTreeNearest<CoordT> nearest;
+  nearest.index = -1;
+
+  if (py_filter == Py_None) {
+    kdtree_find_nearest<CoordT>(tree, co, &nearest);
+  }
+  else {
+    PyKDTree_NearestData data{py_filter, false};
+
+    kdtree_find_nearest_cb<CoordT>(
+        tree, co, &nearest, [&](int index, const CoordT & /*co_nearest*/, float /*dist_sq*/) {
+          return py_find_nearest_cb(&data, index);
+        });
+
+    if (data.is_error) {
+      return nullptr;
+    }
+  }
+
+  return kdtree_nearest_to_py_and_check<CoordT>(&nearest);
 }
 
 PyDoc_STRVAR(
@@ -314,56 +353,9 @@ static PyObject *py_kdtree_find(PyKDTree *self, PyObject *args, PyObject *kwargs
   }
 
   if (self->dimensions == 2) {
-    KDTree<float2> *kdtree2d = reinterpret_cast<KDTree<float2> *>(self->obj);
-    KDTreeNearest<float2> nearest;
-    nearest.index = -1;
-
-    if (py_filter == Py_None) {
-      kdtree_find_nearest<float2>(kdtree2d, co, &nearest);
-    }
-    else {
-      PyKDTree_NearestData data{py_filter, false};
-
-      kdtree_find_nearest_cb<float2>(
-          kdtree2d,
-          co,
-          &nearest,
-          [&](int index, const float2 & /*co_nearest*/, float /*dist_sq*/) {
-            return py_find_nearest_cb(&data, index);
-          });
-
-      if (data.is_error) {
-        return nullptr;
-      }
-    }
-    return kdtree_nearest_to_py_and_check<float2>(&nearest);
+    return py_kdtree_find_impl<float2>(self, co, py_filter);
   }
-  else {
-    KDTree<float3> *kdtree3d = reinterpret_cast<KDTree<float3> *>(self->obj);
-    KDTreeNearest<float3> nearest;
-    nearest.index = -1;
-
-    if (py_filter == Py_None) {
-      kdtree_find_nearest<float3>(kdtree3d, co, &nearest);
-    }
-    else {
-      PyKDTree_NearestData data{py_filter, false};
-
-      kdtree_find_nearest_cb<float3>(
-          kdtree3d,
-          co,
-          &nearest,
-          [&](int index, const float3 & /*co_nearest*/, float /*dist_sq*/) {
-            return py_find_nearest_cb(&data, index);
-          });
-
-      if (data.is_error) {
-        return nullptr;
-      }
-    }
-
-    return kdtree_nearest_to_py_and_check<float3>(&nearest);
-  }
+  return py_kdtree_find_impl<float3>(self, co, py_filter);
 }
 
 /** \} */
@@ -371,6 +363,24 @@ static PyObject *py_kdtree_find(PyKDTree *self, PyObject *args, PyObject *kwargs
 /* -------------------------------------------------------------------- */
 /** \name KDTree Methods: Find N
  * \{ */
+
+template<typename CoordT>
+static PyObject *py_kdtree_find_n_impl(PyKDTree *self, const float *co, uint n)
+{
+  KDTreeNearest<CoordT> *nearest = MEM_new_array_uninitialized<KDTreeNearest<CoordT>>(n, __func__);
+
+  const int found = kdtree_find_nearest_n<CoordT>(pykdtree_tree_get<CoordT>(self), co, nearest, n);
+
+  PyObject *py_list = PyList_New(found);
+
+  for (int i = 0; i < found; i++) {
+    PyList_SET_ITEM(py_list, i, kdtree_nearest_to_py<CoordT>(&nearest[i]));
+  }
+
+  MEM_delete(nearest);
+
+  return py_list;
+}
 
 PyDoc_STRVAR(
     /* Wrap. */
@@ -420,38 +430,10 @@ static PyObject *py_kdtree_find_n(PyKDTree *self, PyObject *args, PyObject *kwar
     return nullptr;
   }
 
-  PyObject *ret_coords;
   if (self->dimensions == 2) {
-    KDTreeNearest<float2> *nearest = MEM_new_array_uninitialized<KDTreeNearest<float2>>(n,
-                                                                                        __func__);
-
-    int found = kdtree_find_nearest_n<float2>(
-        reinterpret_cast<KDTree<float2> *>(self->obj), co, nearest, n);
-
-    ret_coords = PyList_New(found);
-
-    for (int i = 0; i < found; i++) {
-      PyList_SET_ITEM(ret_coords, i, kdtree_nearest_to_py<float2>(&nearest[i]));
-    }
-
-    MEM_delete(nearest);
+    return py_kdtree_find_n_impl<float2>(self, co, n);
   }
-  else {
-    KDTreeNearest<float3> *nearest = MEM_new_array_uninitialized<KDTreeNearest<float3>>(n,
-                                                                                        __func__);
-
-    int found = kdtree_find_nearest_n<float3>(
-        reinterpret_cast<KDTree<float3> *>(self->obj), co, nearest, n);
-
-    ret_coords = PyList_New(found);
-
-    for (int i = 0; i < found; i++) {
-      PyList_SET_ITEM(ret_coords, i, kdtree_nearest_to_py<float3>(&nearest[i]));
-    }
-
-    MEM_delete(nearest);
-  }
-  return ret_coords;
+  return py_kdtree_find_n_impl<float3>(self, co, n);
 }
 
 /** \} */
@@ -459,6 +441,26 @@ static PyObject *py_kdtree_find_n(PyKDTree *self, PyObject *args, PyObject *kwar
 /* -------------------------------------------------------------------- */
 /** \name KDTree Methods: Find Range
  * \{ */
+
+template<typename CoordT>
+static PyObject *py_kdtree_find_range_impl(PyKDTree *self, const float *co, float radius)
+{
+  KDTreeNearest<CoordT> *nearest = nullptr;
+  const int found = kdtree_range_search<CoordT>(
+      pykdtree_tree_get<CoordT>(self), co, &nearest, radius);
+
+  PyObject *py_list = PyList_New(found);
+
+  for (int i = 0; i < found; i++) {
+    PyList_SET_ITEM(py_list, i, kdtree_nearest_to_py<CoordT>(&nearest[i]));
+  }
+
+  if (nearest) {
+    MEM_delete(nearest);
+  }
+
+  return py_list;
+}
 
 PyDoc_STRVAR(
     /* Wrap. */
@@ -509,39 +511,10 @@ static PyObject *py_kdtree_find_range(PyKDTree *self, PyObject *args, PyObject *
     return nullptr;
   }
 
-  PyObject *ret_coords;
   if (self->dimensions == 2) {
-    KDTreeNearest<float2> *nearest = nullptr;
-    int found = kdtree_range_search<float2>(
-        reinterpret_cast<KDTree<float2> *>(self->obj), co, &nearest, radius);
-
-    ret_coords = PyList_New(found);
-
-    for (int i = 0; i < found; i++) {
-      PyList_SET_ITEM(ret_coords, i, kdtree_nearest_to_py<float2>(&nearest[i]));
-    }
-
-    if (nearest) {
-      MEM_delete(nearest);
-    }
+    return py_kdtree_find_range_impl<float2>(self, co, radius);
   }
-  else {
-    KDTreeNearest<float3> *nearest = nullptr;
-    int found = kdtree_range_search<float3>(
-        reinterpret_cast<KDTree<float3> *>(self->obj), co, &nearest, radius);
-
-    ret_coords = PyList_New(found);
-
-    for (int i = 0; i < found; i++) {
-      PyList_SET_ITEM(ret_coords, i, kdtree_nearest_to_py<float3>(&nearest[i]));
-    }
-
-    if (nearest) {
-      MEM_delete(nearest);
-    }
-  }
-
-  return ret_coords;
+  return py_kdtree_find_range_impl<float3>(self, co, radius);
 }
 
 /** \} */
