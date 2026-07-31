@@ -672,6 +672,10 @@ struct CodegenContext : NodeErrorHandler {
       }
     }
     SymbolClass &cls = *cls_ptr;
+    if (cls.is_error) {
+      error(decl, Diag::UnknownClassInstantiation);
+      return;
+    }
 
     LocalScope body = decl.body();
 
@@ -1064,15 +1068,20 @@ struct CodegenContext : NodeErrorHandler {
 
   void func_forward_decl(FuncDecl decl, SymbolScope &scope)
   {
-    SymbolScope &body_scope = *scope.functions[string(decl.identifier().str())];
-
-    // jump_to(decl.front()); /* Adds too many directives. */
-    builder.curr = decl.front();
-    skip_node(decl.attributes());
-    id_type(decl.return_type(), scope);
-    id_func_resolved(decl.identifier(), decl.arguments(), scope);
-    func_arg_list(decl.arguments(), body_scope, false);
-    builder << string(";\n");
+    string id(decl.identifier().str());
+    if (auto it = scope.functions.find(id); it != scope.functions.end()) {
+      SymbolScope &body_scope = *it->second;
+      // jump_to(decl.front()); /* Adds too many directives. */
+      builder.curr = decl.front();
+      skip_node(decl.attributes());
+      id_type(decl.return_type(), scope);
+      id_func_resolved(decl.identifier(), decl.arguments(), scope);
+      func_arg_list(decl.arguments(), body_scope, false);
+      builder << string(";\n");
+    }
+    else {
+      assert(0);
+    }
   }
 
   string condition(SymbolScope *scope)

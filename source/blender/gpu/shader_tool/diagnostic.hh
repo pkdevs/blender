@@ -222,6 +222,7 @@ enum class Diag {
   NonConstVariableInExpr,
   ErrorParsingIntegerLiteral,
   FailedToEvaluateExpandedExpr,
+  UnknownClassInstantiation,
 };
 
 static inline std::string_view diagnostic_message_get(Diag diag)
@@ -487,6 +488,8 @@ static inline std::string_view diagnostic_message_get(Diag diag)
       return "Error parsing integer literal";
     case Diag::FailedToEvaluateExpandedExpr:
       return "Failed to evaluate expanded expression '{}'";
+    case Diag::UnknownClassInstantiation:
+      return "Compiler error: Can't find class symbol";
   }
   return "Compiler error: Invalid diagnostic value";
 }
