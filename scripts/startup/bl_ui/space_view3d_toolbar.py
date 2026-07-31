@@ -881,6 +881,7 @@ class VIEW3D_PT_tools_brush_shape(Panel, View3DPaintPanel, ShapePanel):
     bl_parent_id = "VIEW3D_PT_tools_brush_settings"
     bl_label = "Shape"
     bl_options = {'DEFAULT_CLOSED'}
+    bl_ui_units_x = 12
 
 
 class VIEW3D_PT_tools_brush_falloff_frontface(View3DPaintPanel, Panel):
