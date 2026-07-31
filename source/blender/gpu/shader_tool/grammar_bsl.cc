@@ -798,6 +798,9 @@ struct BSLParser {
           match(',');
           break;
         }
+        case Struct: /* Legacy BSL `union_t<struct A>` syntax. Support for now. */
+          next();
+          break;
         case BracketClose:
         case SquareClose:
         case TemplateClose:

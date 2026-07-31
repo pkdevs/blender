@@ -663,6 +663,7 @@ vector<SymbolTable::BuiltinFunc> SymbolTable::generate_all_builtin_functions()
   add_vec_vec_scalar_ternary("mix", f_types);
   for (size_t i = 0; i < f_types.size(); ++i) {
     functions.push_back({f_types[i], "mix", {f_types[i], f_types[i], b_types[i]}});
+    functions.push_back({f_types[i], "select", {f_types[i], f_types[i], b_types[i]}});
   }
 
   add_binary("step", f_types);

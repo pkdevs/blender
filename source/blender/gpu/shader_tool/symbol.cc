@@ -952,9 +952,31 @@ struct SymbolParser : NodeErrorHandler {
       }
       else {
         SymbolClass *type = table.int_cls;
-        if (directive.back() == value && value == Number) {
-          /* Value is a single token try to guess its type. */
-          type = table.get_literal_type(value.str());
+        if (directive.back() == value) {
+          if (value == Number) {
+            /* Value is a single token try to guess its type. */
+            type = table.get_literal_type(value.str());
+          }
+          else if (value == Word) {
+            /* Try to match type. Workaround for legacy type alias. */
+            SymbolClass *cls = nullptr;
+            if (value.str() == "int") {
+              cls = table.int_cls;
+            }
+            else if (value.str() == "uint") {
+              cls = table.uint_cls;
+            }
+            else if (value.str() == "float") {
+              cls = table.float_cls;
+            }
+            else if (value.str() == "bool") {
+              cls = table.bool_cls;
+            }
+            if (cls) {
+              /* TODO: Make a warning/error if this just defines a type alias. */
+              root->classes.try_emplace(string(name.str()), cls);
+            }
+          }
         }
         SymbolVariable *var = table.var_arena.alloc(root, type, name, string(name.str()));
         root->variables.try_emplace(var->identifier, var);
@@ -1042,10 +1064,6 @@ struct SymbolParser : NodeErrorHandler {
     SymbolClass *cls = table.cls_arena.alloc(&scope, decl, suffix);
     scope.classes.emplace(cls->identifier, cls);
     scope.scopes.emplace(cls->identifier, cls);
-
-    if (decl.identifier().name().str() == "LightCullingData") {
-      std::cout << "HERE " << std::endl;
-    }
 
     if (cls->is_anonymous && anonymous_scope_prefix(cls).non_anonymous_parent == nullptr) {
       error(decl, Diag::AnonymousUnionNotSupportedAtNamespaceScope);
