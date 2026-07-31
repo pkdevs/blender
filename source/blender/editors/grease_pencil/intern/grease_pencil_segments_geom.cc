@@ -22,6 +22,7 @@
 #include "BLI_vector.hh"
 
 #include "BKE_curves.hh"
+#include "BKE_grease_pencil_fills.hh"
 
 #include "ED_grease_pencil.hh"
 #include "ED_view3d.hh"
@@ -2312,6 +2313,74 @@ static float4 transform_plane(const float4x4 &mat, const float4 &plane)
   return float4(normal, -math::dot(normal, point));
 }
 
+static void separate_fill_islands(bke::CurvesGeometry &dst)
+{
+  bke::MutableAttributeAccessor attributes = dst.attributes_for_write();
+  bke::SpanAttributeWriter<int> fill_ids = attributes.lookup_for_write_span<int>("fill_id");
+  const VArray<float2> dst_positions_2d_attribute = *attributes.lookup<float2>(
+      ".positions_2d", bke::AttrDomain::Point);
+
+  BLI_assert(dst_positions_2d_attribute.is_span());
+  const Span<float2> dst_positions_2d = dst_positions_2d_attribute.get_internal_span();
+
+  const OffsetIndices<int> points_by_curve = dst.points_by_curve();
+
+  auto is_curve_i_in_j = [&](const int curve_i, const int curve_j) {
+    const IndexRange points_i = points_by_curve[curve_i];
+    const IndexRange points_j = points_by_curve[curve_j];
+
+    const Span<float2> poly_i = dst_positions_2d.slice(points_i);
+    const Span<float2> poly_j = dst_positions_2d.slice(points_j);
+
+    const int winding = point_in_polygon_winding_int(poly_i.first(), poly_j);
+
+    return winding % 2 != 0;
+  };
+
+  Array<bool> is_curve_child(points_by_curve.size(), false);
+  Array<Vector<int>> curve_children(points_by_curve.size());
+
+  for (const int curve_i : points_by_curve.index_range()) {
+    if (fill_ids.span[curve_i] == 0) {
+      continue;
+    }
+
+    for (const int curve_j : points_by_curve.index_range()) {
+      if (fill_ids.span[curve_j] != fill_ids.span[curve_i]) {
+        continue;
+      }
+
+      if (is_curve_i_in_j(curve_i, curve_j)) {
+        is_curve_child[curve_j] = true;
+        curve_children[curve_i].append(curve_j);
+      }
+    }
+  }
+
+  int new_fill_id = bke::greasepencil::get_next_available_fill_id(fill_ids.span.varray());
+
+  for (const int curve_i : points_by_curve.index_range()) {
+    if (is_curve_child[curve_i]) {
+      continue;
+    }
+
+    if (fill_ids.span[curve_i] == 0) {
+      continue;
+    }
+
+    fill_ids.span[curve_i] = new_fill_id;
+
+    const Span<int> curve_i_children = curve_children[curve_i];
+    for (const int curve_j : curve_i_children) {
+      fill_ids.span[curve_j] = new_fill_id;
+    }
+
+    new_fill_id++;
+  }
+
+  fill_ids.finish();
+}
+
 bke::CurvesGeometry curve_boolean(const CurveBooleanOpParameters op_params,
                                   const bke::CurvesGeometry &curves,
                                   const GroupedSpan<int> shapes,
@@ -2387,6 +2456,10 @@ bke::CurvesGeometry curve_boolean(const CurveBooleanOpParameters op_params,
              result.segment_reversed,
              result.cyclic,
              dst_segments_by_curve);
+  }
+
+  if (op_params.separate_islands) {
+    separate_fill_islands(dst_curves);
   }
 
   return dst_curves;
@@ -2493,6 +2566,10 @@ bke::CurvesGeometry curve_boolean_with_planes(const CurveBooleanOpParameters op_
              result.segment_reversed,
              result.cyclic,
              dst_segments_by_curve);
+  }
+
+  if (op_params.separate_islands) {
+    separate_fill_islands(dst_curves);
   }
 
   return dst_curves;

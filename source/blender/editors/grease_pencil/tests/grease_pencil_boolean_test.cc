@@ -427,6 +427,7 @@ static bke::CurvesGeometry test_curve_boolean(const ed::greasepencil::carver::Op
   op_params.boolean_mode = opt;
   op_params.keep_caps = true;
   op_params.skip_clipping_attributes = false;
+  op_params.separate_islands = false;
 
   auto [shape_map, shape_offsets] = shapes_from_fill_ids(VArray<int>::from_span(fill_ids),
                                                          src_curves.curves_num());

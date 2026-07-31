@@ -993,6 +993,7 @@ struct CurveBooleanOpParameters {
   Operation boolean_mode;
   bool keep_caps;
   bool skip_clipping_attributes;
+  bool separate_islands;
 };
 
 bke::CurvesGeometry curve_boolean(const CurveBooleanOpParameters op_params,
