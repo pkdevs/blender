@@ -1396,24 +1396,24 @@ class USERPREF_PT_theme_bone_color_sets(ThemePanel, CenterAlignMixIn, Panel):
     def create_column(layout, heading="", width=None):
         col = layout.column(align=True)
         if width is not None:
-            col.ui_units_x = width    
-        
+            col.ui_units_x = width
+
         row = col.row()
         row.alignment = 'CENTER'
         row.label(text=heading)
-        
+
         return col
-            
+
     def draw_centered(self, context, layout):
         theme = context.preferences.themes[0]
-        
+
         row = layout.row(align=True)
-        
+
         color_set_col = self.create_column(row, width=13)
         normal_col = self.create_column(row, heading="Normal")
         selected_col = self.create_column(row, heading="Selected")
         active_col = self.create_column(row, heading="Active")
-        constraints_col = self.create_column(row, heading="Colored Constraints", width=15)        
+        constraints_col = self.create_column(row, heading="Colored Constraints", width=15)
 
         for i, ui in enumerate(theme.bone_color_sets, 1):
             color_set_col.label(text=iface_("Color Set {:d}").format(i), translate=False)
