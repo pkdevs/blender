@@ -648,6 +648,7 @@ vector<SymbolTable::BuiltinFunc> SymbolTable::generate_all_builtin_functions()
   add_unary("sign", i_types);
 
   add_binary("mod", f_types);
+  add_binary("modf", f_types);
   add_vec_scalar_binary("mod", f_types);
 
   for (const auto &tlist : {f_types, i_types, u_types}) {
@@ -791,23 +792,31 @@ vector<SymbolTable::BuiltinFunc> SymbolTable::generate_all_builtin_functions()
   };
 
   for (auto [type, prefix] : image_types) {
-    const vector<string> samplers = {
-        prefix + "sampler1D",
-        prefix + "sampler2D",
-        prefix + "sampler3D",
-        prefix + "samplerCube",
-        prefix + "sampler1DArray",
-        prefix + "sampler2DArray",
-        prefix + "samplerCubeArray",
+    vector<pair<string, int>> samplers = {
+        /* Name, Coordinate Dimensions. */
+        {prefix + "sampler1D", 1},
+        {prefix + "sampler2D", 2},
+        {prefix + "sampler3D", 3},
+        {prefix + "samplerCube", 3},
+        {prefix + "sampler1DArray", 2},
+        {prefix + "sampler2DArray", 3},
+        {prefix + "samplerCubeArray", 4},
     };
 
-    for (size_t i = 0; i < samplers.size(); ++i) {
-      string coord_type = f_types[i < 4 ? i : (i == 4 ? 1 : (i == 5 ? 2 : 3))];
-      string icoord_type = i_types[i < 4 ? i : (i == 4 ? 1 : (i == 5 ? 2 : 3))];
-      functions.push_back({type, "texture", {samplers[i], coord_type}});
-      functions.push_back({type, "textureLod", {samplers[i], coord_type, "float"}});
-      functions.push_back({icoord_type, "textureSize", {samplers[i], "int"}});
-      functions.push_back({type, "texelFetch", {samplers[i], icoord_type, "int"}});
+    if (prefix.empty()) {
+      samplers.emplace_back(prefix + "sampler2DDepth", 2);
+      samplers.emplace_back(prefix + "samplerCubeDepth", 3);
+      samplers.emplace_back(prefix + "sampler2DArrayDepth", 3);
+      samplers.emplace_back(prefix + "samplerCubeArrayDepth", 4);
+    }
+
+    for (auto [sampler, dim] : samplers) {
+      string coord_type = f_types[dim - 1];
+      string icoord_type = i_types[dim - 1];
+      functions.push_back({type, "texture", {sampler, coord_type}});
+      functions.push_back({type, "textureLod", {sampler, coord_type, "float"}});
+      functions.push_back({icoord_type, "textureSize", {sampler, "int"}});
+      functions.push_back({type, "texelFetch", {sampler, icoord_type, "int"}});
     }
 
     const vector<string> images = {
@@ -822,8 +831,19 @@ vector<SymbolTable::BuiltinFunc> SymbolTable::generate_all_builtin_functions()
       functions.push_back({type, "imageLoadFast", {images[i], coord_type}});
       functions.push_back({"void", "imageStore", {images[i], coord_type, type}});
       functions.push_back({"void", "imageStoreFast", {images[i], coord_type, type}});
-      /* TODO atomics */
-      functions.push_back({"int3", "imageSize", {images[i]}});
+
+      if (!prefix.empty()) {
+        functions.push_back({type, "imageAtomicAdd", {images[i], coord_type, type}});
+        functions.push_back({type, "imageAtomicMin", {images[i], coord_type, type}});
+        functions.push_back({type, "imageAtomicMax", {images[i], coord_type, type}});
+        functions.push_back({type, "imageAtomicAnd", {images[i], coord_type, type}});
+        functions.push_back({type, "imageAtomicOr", {images[i], coord_type, type}});
+        functions.push_back({type, "imageAtomicXor", {images[i], coord_type, type}});
+        functions.push_back({type, "imageAtomicExchange", {images[i], coord_type, type}});
+        functions.push_back({type, "imageAtomicCompSwap", {images[i], coord_type, type, type}});
+      }
+
+      functions.push_back({coord_type, "imageSize", {images[i]}});
       functions.push_back({"void", "imageFence", {images[i]}});
     }
   }

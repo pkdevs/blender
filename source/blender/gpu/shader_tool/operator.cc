@@ -90,10 +90,10 @@ vector<SymbolTable::BuiltinOp> SymbolTable::generate_all_operators(
     if (is_integer(t.base)) {
       ops.emplace_back("", BitwiseNot, t.name, t.name);
     }
-    if (t.name == "bool") {
-      ops.emplace_back("", Not, "bool", "bool");
-    }
   }
+
+  ops.emplace_back("", Not, "bool", "bool");
+  ops.emplace_back("", Not, "bool32_t", "bool");
 
   /* Binary Operators */
   for (const auto &t1 : types) {

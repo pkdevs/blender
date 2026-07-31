@@ -2615,6 +2615,18 @@ void SymbolTable::register_builtins(LocalScope node)
 
       /* WORKAROUND: Should become an entry point argument. */
       {"gl_FragStencilRefARB", "uint", false, 0},
+
+      {"FLT_MAX", "float", false, 0},
+      {"FLT_MIN", "float", false, 0},
+      {"FLT_EPSILON", "float", false, 0},
+      {"SHRT_MAX", "float", false, 0},
+      {"INT_MAX", "float", false, 0},
+      {"USHRT_MAX", "float", false, 0},
+      {"UINT_MAX", "float", false, 0},
+      {"NAN_FLT", "float", false, 0},
+      {"FLT_11_MAX", "float", false, 0},
+      {"FLT_10_MAX", "float", false, 0},
+      {"FLT_11_11_10_MAX", "float3", false, 0},
   };
 
   for (auto [value, name] : image_formats) {
