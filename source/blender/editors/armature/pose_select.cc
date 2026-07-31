@@ -943,6 +943,81 @@ void POSE_OT_select_constraint_target(wmOperatorType *ot)
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 }
 
+/** \} */
+/* -------------------------------------------------------------------- */
+/** \name Select Deform Operator
+ * \{ */
+
+enum class BoneDeform { DEFORM = 0, NO_DEFORM = 1 };
+
+static wmOperatorStatus armature_select_deform_exec(bContext *C, wmOperator *op)
+{
+  const Main *bmain = CTX_data_main(C);
+  const Scene *scene = CTX_data_scene(C);
+  ViewLayer *view_layer = CTX_data_view_layer(C);
+  Vector<Object *> objects = BKE_object_pose_array_get_unique(
+      *bmain, scene, view_layer, CTX_wm_view3d(C));
+
+  const BoneDeform mode = BoneDeform(RNA_enum_get(op->ptr, "deform"));
+
+  for (Object *pose_object : objects) {
+    bArmature *arm = id_cast<bArmature *>(pose_object->data);
+    BLI_assert(arm);
+
+    ED_pose_deselect_all(pose_object, SEL_DESELECT, false);
+
+    for (bPoseChannel &pchan : pose_object->pose->chanbase) {
+      Bone *bone = pchan.bone_get(*pose_object);
+      if (!bone) {
+        continue;
+      }
+
+      if (!animrig::bone_is_selectable(arm, &pchan)) {
+        continue;
+      }
+
+      const bool is_deform = !(bone->flag & BONE_NO_DEFORM);
+      bool select = (mode == BoneDeform::DEFORM) ? is_deform : !is_deform;
+      if (select) {
+        pose_do_bone_select({&pchan, bone}, SEL_SELECT);
+      }
+    }
+    ED_pose_bone_select_tag_update(pose_object);
+  }
+
+  return OPERATOR_FINISHED;
+}
+
+void POSE_OT_select_deform(wmOperatorType *ot)
+{
+  /* identifiers */
+  ot->name = "Select Deform Bones";
+  ot->idname = "POSE_OT_select_deform";
+  ot->description = "Select bones the have the deform option enabled (or disabled)";
+
+  /* API callbacks. */
+  ot->exec = armature_select_deform_exec;
+  ot->poll = ED_operator_posemode;
+
+  /* flags */
+  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
+
+  static const EnumPropertyItem deform_items[] = {
+      {int(BoneDeform::DEFORM),
+       "DEFORM",
+       0,
+       "Enabled",
+       "Select bones that have the 'deform' option enabled"},
+      {int(BoneDeform::NO_DEFORM),
+       "NO_DEFORM",
+       0,
+       "Disabled",
+       "Select bones that have the 'deform' option disabled"},
+      {0, nullptr, 0, nullptr, nullptr}};
+
+  RNA_def_enum(ot->srna, "deform", deform_items, int(BoneDeform::DEFORM), "Deform", "");
+}
+
 /* -------------------------------------- */
 
 /* No need to convert to multi-objects. Just like we keep the non-active bones
