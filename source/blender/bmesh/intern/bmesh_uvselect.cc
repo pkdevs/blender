@@ -1429,18 +1429,40 @@ void BM_mesh_uvselect_mode_flush_update(BMesh *bm,
 
   if (highest_order_bit_s(selectmode_old) >= highest_order_bit_s(selectmode_new)) {
 
+    bool update_faces = false;
+
     if ((selectmode_old & SCE_SELECT_VERTEX) == 0 && (selectmode_new & SCE_SELECT_VERTEX)) {
       /* When changing from edge/face to vertex selection,
        * new edges/faces may be selected based on the vertex selection. */
       BM_mesh_uvselect_flush_from_loop_verts(bm);
+      update_faces = true;
     }
     else if ((selectmode_old & SCE_SELECT_EDGE) == 0 && (selectmode_new & SCE_SELECT_EDGE)) {
       /* When changing from face to edge selection,
        * new faces may be selected based on the edge selection. */
       BM_mesh_uvselect_flush_from_loop_edges(bm, false);
+      update_faces = true;
     }
 
-    /* Pass, no need to do anything when moving from edge to vertex mode (for e.g.). */
+    if (update_faces) {
+      BMIter iter;
+      BMFace *f;
+
+      /* Mesh selection may have expanded: flushing from verts/edges can select faces that were not
+       * selected in face mode (e.g. selecting the top and bottom of a cube selects every
+       * vertex, so every face becomes selected). UV selection must reflect those newly selected
+       * mesh faces, otherwise UV sync shows a partial selection in the UV editor while the whole
+       * mesh is selected. See #161665 */
+      BM_ITER_MESH (f, &iter, bm, BM_FACES_OF_MESH) {
+        if (BM_elem_flag_test(f, BM_ELEM_HIDDEN)) {
+          continue;
+        }
+        if (BM_elem_flag_test(f, BM_ELEM_SELECT) && !BM_elem_flag_test(f, BM_ELEM_SELECT_UV)) {
+          BM_face_uvselect_set(bm, f, true);
+        }
+      }
+    }
+
     return;
   }
 
