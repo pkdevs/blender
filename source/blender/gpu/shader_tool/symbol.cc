@@ -1075,6 +1075,22 @@ struct SymbolParser : NodeErrorHandler {
       cls->align = underlying_type->align;
       cls->is_std140_compatible = cls->size == 4;
       cls->is_std430_compatible = cls->size == 4;
+      /* Define comparison operators. */
+      for (TokenType op : {Equal, NotEqual, LThan, GThan, LEqual, GEqual}) {
+        string id(table.binary_type_to_id.find(op)->second);
+        {
+          SymbolFunction *sym = table.fun_arena.alloc(
+              table.root, decl.front(), id, SymbolFunction::GLOBAL);
+          sym->return_type = table.bool_cls;
+          table.operators.emplace(OperatorKey(underlying_type, op, cls), sym);
+        }
+        {
+          SymbolFunction *sym = table.fun_arena.alloc(
+              table.root, decl.front(), id, SymbolFunction::GLOBAL);
+          sym->return_type = table.bool_cls;
+          table.operators.emplace(OperatorKey(cls, op, underlying_type), sym);
+        }
+      }
     }
     else {
       cls->ensure_size_and_align();
@@ -2433,7 +2449,7 @@ void SymbolTable::register_builtins(LocalScope node)
 
   /* Builtin operators. */
 
-  const unordered_map<TokenType, const char *> unary_type_to_id = {
+  unary_type_to_id = {
       {Increment, "inc_op_"},
       {Decrement, "dec_op_"},
       {Plus, "pos_op_"},
@@ -2442,7 +2458,7 @@ void SymbolTable::register_builtins(LocalScope node)
       {Not, "not_op_"},
   };
 
-  const unordered_map<TokenType, const char *> binary_type_to_id = {
+  binary_type_to_id = {
       {Plus, "add_op_"},
       {Minus, "sub_op_"},
       {Multiply, "mul_op_"},
@@ -2532,6 +2548,7 @@ void SymbolTable::register_builtins(LocalScope node)
   this->uint_cls = root->lookup_class("uint");
   this->str_cls = root->lookup_class("string_t");
   this->err_cls = root->lookup_class(SymbolTable::err_symbol);
+  this->bool_cls = root->lookup_class("bool");
 }
 
 SymbolClass *SymbolTable::get_literal_type(string_view lit) const

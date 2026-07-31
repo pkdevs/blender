@@ -673,10 +673,14 @@ struct SymbolTable {
   SymbolClass *uint_cls;
   SymbolClass *str_cls;
   SymbolClass *err_cls;
+  SymbolClass *bool_cls;
 
   OperatorMap operators;
 
   unordered_map<int, string> image_formats;
+
+  unordered_map<TokenType, const char *> unary_type_to_id;
+  unordered_map<TokenType, const char *> binary_type_to_id;
 
   template<typename SymbolT> SymbolT *alloc(SymbolT &&sym);
 
