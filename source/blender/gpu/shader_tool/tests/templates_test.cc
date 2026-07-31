@@ -106,8 +106,8 @@ void f(float a, int b, uint c)
   foo(a);
   foo(b);
   foo(c);
-  foo<int>(a);
-  foo<float>(b);
+  foo<float>(a);
+  foo<int>(b);
   foo<uint>(c);
 }
 )";
@@ -128,8 +128,8 @@ void f(float a, int b, uint c)
   fooTfloat(a);
   fooTint(b);
   fooTuint(c);
-  fooTint(a);
-  fooTfloat(b);
+  fooTfloat(a);
+  fooTint(b);
   fooTuint(c);
 }
 )";

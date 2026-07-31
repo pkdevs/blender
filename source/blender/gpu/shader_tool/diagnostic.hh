@@ -180,7 +180,6 @@ enum class Diag {
   MissingTemplateDefinition,
   AnonymousUnionNotSupportedAtNamespaceScope,
   RedefinitionOfEntryPointFunction,
-  FunctionIsNotATemplate,
   TemplateParameterCountMismatch,
   MissingTemplateParameters,
   MissingParentClassInstantiation,
@@ -407,8 +406,6 @@ static inline std::string_view diagnostic_message_get(Diag diag)
       return "Anonymous unions at namespace or global scope are not supported";
     case Diag::RedefinitionOfEntryPointFunction:
       return "Redefinition of entry point function '{}'";
-    case Diag::FunctionIsNotATemplate:
-      return "Function is not a template";
     case Diag::TemplateParameterCountMismatch:
       return "Template parameter count must match declaration argument count";
     case Diag::MissingTemplateParameters:

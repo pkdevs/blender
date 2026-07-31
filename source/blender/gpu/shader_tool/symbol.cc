@@ -1159,16 +1159,15 @@ struct SymbolParser : NodeErrorHandler {
   {
     /* Do not parse. Only keep the symbol definition. The instantiation will do the parsing. */
     if (decl.is_function()) {
-      SymbolFunction *fn = table.fun_arena.alloc(&scope, decl.decl());
-      if (auto [it, inserted] = scope.functions.try_emplace(fn->identifier, fn); inserted) {
-        SymbolFunction *fn = it->second;
-        if (fn->template_data) {
-          FuncDecl fn_decl(decl.decl());
-          error(fn_decl.identifier(), Diag::RedefinitionTemplate, fn_decl.identifier().str());
-          return;
-        }
-        fn->template_data = table.tmp_fun_arena.alloc(decl);
+      FuncDecl fn_decl(decl.decl());
+      SymbolFunction *fn = table.fun_arena.alloc(&scope, fn_decl);
+      fn->is_complete = false;
+      fn = scope.functions.try_emplace(fn->identifier, fn).first->second;
+      if (fn->template_data) {
+        error(fn_decl.identifier(), Diag::RedefinitionTemplate, fn_decl.identifier().str());
+        return;
       }
+      fn->template_data = table.tmp_fun_arena.alloc(decl);
     }
     else {
       SymbolClassTemplate *temp = table.tmp_cls_arena.alloc(decl);
@@ -1186,12 +1185,8 @@ struct SymbolParser : NodeErrorHandler {
                                        DeclAst &decl,
                                        const SymbolT &sym)
   {
-    if (sym.is_error) {
-      error(decl.identifier(), Diag::MissingTemplateDefinition);
-      return {};
-    }
     if (sym.template_data == nullptr) {
-      error(decl.identifier(), Diag::FunctionIsNotATemplate);
+      error(decl.identifier(), Diag::MissingTemplateDefinition);
       return {};
     }
     TemplateDecl temp_decl = sym.template_data->decl;
@@ -1242,6 +1237,7 @@ struct SymbolParser : NodeErrorHandler {
         SymbolFunction *fn_inst = parse_func_decl(
             *parent, temp_decl.decl(), prefix, mangled.str, temp);
         fn->template_data->instances.emplace(mangled.str, fn_inst);
+        fn->add_overload(fn_inst);
       }
     }
     else {
@@ -1286,6 +1282,7 @@ struct SymbolParser : NodeErrorHandler {
         NOTE(decl.identifier(), Diag::NoteInstantiationFuncTemplateRequested, full_id);
         SymbolFunction *spec = parse_func_decl(scope, decl, prefix, mangled.str);
         fn->template_data->instances.emplace(mangled.str, spec);
+        fn->add_overload(spec);
       }
     }
     else {
@@ -1794,33 +1791,42 @@ Result<SymbolFunction *> SymbolFunction::lookup_overload(IdQualified id,
                                                          const vector<SymbolClass *> &arg_types)
 {
   for (SymbolFunction *fn = this; fn; fn = fn->overload_next) {
-    if (fn->argument_matches(arg_types)) {
+    if (fn->is_complete && fn->argument_matches(arg_types)) {
       return {fn, {}};
     }
   }
   /* List all candidates inside the error message. */
   string candidates;
   for (const SymbolFunction *fn = this; fn; fn = fn->overload_next) {
-    candidates += "\n::: Candidate '" + fn->return_type->original + "' " + fn->original + "(" +
-                  to_str(fn->arg_types) + ")";
+    if (fn->is_complete) {
+      candidates += "\n::: Candidate '" + fn->return_type->original + "' " + fn->original + "(" +
+                    to_str(fn->arg_types) + ")";
+    }
   }
 
   return {root_scope()->lookup_function(SymbolTable::err_symbol),
           AstNodeException(id, Diag::NoMatchingOverload, original, to_str(arg_types), candidates)};
 }
 
+void SymbolFunction::add_overload(SymbolFunction *fn)
+{
+  fn->overload_next = this->overload_next;
+  this->overload_next = fn;
+}
+
 bool SymbolFunction::argument_matches(const vector<SymbolClass *> &param_types) const
 {
   /* First fast filter. */
-  if (this->arg_types == param_types) {
+  if (arg_types == param_types) {
     return true;
   }
 
-  if (this->arg_types.size() != param_types.size()) {
+  /* Early out if there is more parameters than arguments. */
+  if (param_types.size() > arg_types.size()) {
     return false;
   }
 
-  for (int i = 0; i < arg_types.size(); ++i) {
+  for (int i = 0; i < param_types.size(); ++i) {
     if (arg_types[i] != param_types[i]) {
       /* Check 'packed_floatX' to 'floatX' promotion. */
       if (arg_types[i]->identifier == "float3" && param_types[i]->identifier == "packed_float3") {
@@ -1839,6 +1845,13 @@ bool SymbolFunction::argument_matches(const vector<SymbolClass *> &param_types) 
       else {
         return false;
       }
+    }
+  }
+
+  /* Check if remaining parameters are optional. */
+  for (int i = param_types.size(); i < arg_types.size(); ++i) {
+    if (!arg_defaults[i].is_valid()) {
+      return false;
     }
   }
 
@@ -1878,20 +1891,16 @@ Result<SymbolFunction *> SymbolScope::lookup_function(IdQualified id,
                                                       const SymbolTable &table) const
 {
   auto [func, err] = lookup_function(id);
-  if (func->template_data && !id.template_params().is_valid()) {
-    func = func->template_data->lookup_adl(table, params, *this).unwrap(err);
-  }
-  else if (func->overload_next) {
-    auto arg_types = SymbolFunction::to_arg_types(table, *this, params).unwrap(err);
-    func = func->lookup_overload(id, arg_types).unwrap(err);
-  }
-  else if (func->is_error) {
+  if (func->is_error) {
     /* Try to resolve type constructors (only for builtins for now). */
     if (auto [cls, err_cls] = lookup_class(id); !cls->is_error && cls && cls->is_builtin) {
       return {root_scope()->lookup_function(cls->identifier), {}};
     }
-    err = {id, Diag::UnknownFunction};
+    return {func, err ? err : AstNodeException{id, Diag::UnknownFunction}};
   }
+
+  auto arg_types = SymbolFunction::to_arg_types(table, *this, params).unwrap(err);
+  func = func->lookup_overload(id, arg_types).unwrap(err);
   return {func, err};
 }
 

@@ -389,6 +389,8 @@ struct SymbolFunction : SymbolScope {
   vector<Expr> arg_defaults;
 
   bool is_error = false;
+  /* False if this is a template root and is not a symbol to match on. */
+  bool is_complete = true;
 
   enum Type { STATIC, MEMBER, GLOBAL } fn_type;
   enum class EntryPointType { FRAG, VERT, COMP, NONE } entry_point_type;
@@ -436,6 +438,8 @@ struct SymbolFunction : SymbolScope {
 
   /* To be called on the first registered overload. */
   Result<SymbolFunction *> lookup_overload(IdQualified id, const vector<SymbolClass *> &arg_types);
+
+  void add_overload(SymbolFunction *fn);
 
   /* Return true if the given argument types are compatible */
   bool argument_matches(const vector<SymbolClass *> &param_types) const;
@@ -524,8 +528,7 @@ inline bool SymbolScope::function_emplace(SymbolFunction *fn, bool builtin)
   bool result = false;
   if (auto it = functions.try_emplace(fn->identifier, fn); !it.second) {
     /* If function already exists, insert overload in the linked list. */
-    fn->overload_next = it.first->second->overload_next;
-    it.first->second->overload_next = fn;
+    it.first->second->add_overload(fn);
     if (!builtin) {
       /* Add suffix to the function identifier to reduce chance of hitting an overload at runtime.
        * This way, the dead code eliminator can discard more functions.
