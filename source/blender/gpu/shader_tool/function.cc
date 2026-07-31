@@ -779,16 +779,27 @@ vector<SymbolTable::BuiltinFunc> SymbolTable::generate_all_builtin_functions()
   functions.push_back({"void", "barrier", {}});
   functions.push_back({"void", "assert", {"bool"}});
 
-  const vector<pair<string, string>> image_types = {{"uint4", "u"}, {"int4", "i"}, {"float4", ""}};
+  functions.push_back({"float4", "texture", {"sampler2DDepth", "float2"}});
+  functions.push_back({"float4", "textureLod", {"sampler2DDepth", "float2", "float"}});
+  functions.push_back({"int2", "textureSize", {"sampler2DDepth", "int"}});
+  functions.push_back({"float4", "texelFetch", {"sampler2DDepth", "int2", "int"}});
+
+  const vector<pair<string, string>> image_types = {
+      {"uint4", "u"},
+      {"int4", "i"},
+      {"float4", ""},
+  };
 
   for (auto [type, prefix] : image_types) {
-    const vector<string> samplers = {prefix + "sampler1D",
-                                     prefix + "sampler2D",
-                                     prefix + "sampler3D",
-                                     prefix + "samplerCube",
-                                     prefix + "sampler1DArray",
-                                     prefix + "sampler2DArray",
-                                     prefix + "samplerCubeArray"};
+    const vector<string> samplers = {
+        prefix + "sampler1D",
+        prefix + "sampler2D",
+        prefix + "sampler3D",
+        prefix + "samplerCube",
+        prefix + "sampler1DArray",
+        prefix + "sampler2DArray",
+        prefix + "samplerCubeArray",
+    };
 
     for (size_t i = 0; i < samplers.size(); ++i) {
       string coord_type = f_types[i < 4 ? i : (i == 4 ? 1 : (i == 5 ? 2 : 3))];
