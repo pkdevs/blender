@@ -2089,30 +2089,10 @@ static bke::CurvesGeometry create_curves_from_segments(const bke::CurvesGeometry
                                                        const Span<bool> is_segments_clipping,
                                                        const Span<int> dst_to_src_curves,
                                                        const OffsetIndices<int> segment_offsets,
+                                                       const Span<bool> unchanged_curves,
                                                        const bool skip_clipping_attributes,
                                                        Vector<bool> &is_point_clipping)
 {
-  Array<bool> unchanged_curves(segment_offsets.size(), false);
-
-  for (const int dst_curve_i : segment_offsets.index_range()) {
-    const IndexRange segment_range = segment_offsets[dst_curve_i];
-    if (segment_range.size() != 1) {
-      continue;
-    }
-
-    const int segment_i = segment_range.first();
-    const Segment &segment = segments[segment_i];
-    if (segment.has_intersection(Side::Start) || segment.has_intersection(Side::End)) {
-      continue;
-    }
-
-    if (is_segments_clipping[segment_i]) {
-      continue;
-    }
-
-    unchanged_curves[dst_curve_i] = true;
-  }
-
   IndexMaskMemory memory;
   const IndexMask unchanged_curves_mask = IndexMask::from_bools(unchanged_curves, memory);
 
@@ -2313,7 +2293,35 @@ static float4 transform_plane(const float4x4 &mat, const float4 &plane)
   return float4(normal, -math::dot(normal, point));
 }
 
-static void separate_fill_islands(bke::CurvesGeometry &dst)
+static Array<bool> calculate_unchanged_curves(const Span<Segment> segments,
+                                              const Span<bool> is_segments_clipping,
+                                              const OffsetIndices<int> segment_offsets)
+{
+  Array<bool> unchanged_curves(segment_offsets.size(), false);
+
+  for (const int dst_curve_i : segment_offsets.index_range()) {
+    const IndexRange segment_range = segment_offsets[dst_curve_i];
+    if (segment_range.size() != 1) {
+      continue;
+    }
+
+    const int segment_i = segment_range.first();
+    const Segment &segment = segments[segment_i];
+    if (segment.has_intersection(Side::Start) || segment.has_intersection(Side::End)) {
+      continue;
+    }
+
+    if (is_segments_clipping[segment_i]) {
+      continue;
+    }
+
+    unchanged_curves[dst_curve_i] = true;
+  }
+
+  return unchanged_curves;
+}
+
+static void separate_fill_islands(bke::CurvesGeometry &dst, const Span<bool> unchanged_curves)
 {
   bke::MutableAttributeAccessor attributes = dst.attributes_for_write();
   bke::SpanAttributeWriter<int> fill_ids = attributes.lookup_for_write_span<int>("fill_id");
@@ -2341,7 +2349,7 @@ static void separate_fill_islands(bke::CurvesGeometry &dst)
   Array<Vector<int>> curve_children(points_by_curve.size());
 
   for (const int curve_i : points_by_curve.index_range()) {
-    if (fill_ids.span[curve_i] == 0) {
+    if (fill_ids.span[curve_i] == 0 || unchanged_curves[curve_i]) {
       continue;
     }
 
@@ -2364,7 +2372,7 @@ static void separate_fill_islands(bke::CurvesGeometry &dst)
       continue;
     }
 
-    if (fill_ids.span[curve_i] == 0) {
+    if (fill_ids.span[curve_i] == 0 || unchanged_curves[curve_i]) {
       continue;
     }
 
@@ -2439,6 +2447,9 @@ bke::CurvesGeometry curve_boolean(const CurveBooleanOpParameters op_params,
     }
   }
 
+  const Array<bool> unchanged_curves = calculate_unchanged_curves(
+      result.segments, is_segments_clipping, dst_segments_by_curve);
+
   Vector<bool> is_point_clipping;
   bke::CurvesGeometry dst_curves = create_curves_from_segments(curves,
                                                                result.segments,
@@ -2447,6 +2458,7 @@ bke::CurvesGeometry curve_boolean(const CurveBooleanOpParameters op_params,
                                                                is_segments_clipping,
                                                                dst_to_src_curves,
                                                                dst_segments_by_curve,
+                                                               unchanged_curves,
                                                                op_params.skip_clipping_attributes,
                                                                is_point_clipping);
 
@@ -2459,7 +2471,7 @@ bke::CurvesGeometry curve_boolean(const CurveBooleanOpParameters op_params,
   }
 
   if (op_params.separate_islands) {
-    separate_fill_islands(dst_curves);
+    separate_fill_islands(dst_curves, unchanged_curves);
   }
 
   return dst_curves;
@@ -2526,6 +2538,9 @@ bke::CurvesGeometry curve_boolean_with_planes(const CurveBooleanOpParameters op_
     }
   }
 
+  const Array<bool> unchanged_curves = calculate_unchanged_curves(
+      result.segments, is_segments_clipping, dst_segments_by_curve);
+
   Vector<bool> is_point_clipping;
   bke::CurvesGeometry dst_curves = create_curves_from_segments(curves,
                                                                result.segments,
@@ -2534,6 +2549,7 @@ bke::CurvesGeometry curve_boolean_with_planes(const CurveBooleanOpParameters op_
                                                                is_segments_clipping,
                                                                dst_to_src_curves,
                                                                dst_segments_by_curve,
+                                                               unchanged_curves,
                                                                op_params.skip_clipping_attributes,
                                                                is_point_clipping);
 
@@ -2569,7 +2585,7 @@ bke::CurvesGeometry curve_boolean_with_planes(const CurveBooleanOpParameters op_
   }
 
   if (op_params.separate_islands) {
-    separate_fill_islands(dst_curves);
+    separate_fill_islands(dst_curves, unchanged_curves);
   }
 
   return dst_curves;
