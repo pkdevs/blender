@@ -2407,13 +2407,23 @@ void SymbolTable::register_builtins(LocalScope node)
     }
   }
 
-  const std::vector<BuiltinFunc> functions = generate_all_builtin_functions();
+  auto builtin_function_decl = [&](const BuiltinFunc &fn) {
+    SymbolFunction *sym = fun_arena.alloc(root, tok, fn.id, SymbolFunction::GLOBAL);
+    sym->is_error = fn.id == err_symbol;
+    sym->return_type = root->lookup_class(fn.return_type);
+    for (auto arg : fn.arg_types) {
+      sym->arg_types.emplace_back(root->lookup_class(arg));
+    }
+    root->function_emplace(sym);
+    /* function_emplace will mutate the identifier if this is an overload.
+     * Fix that. */
+    sym->identifier = fn.id;
+  };
+
+  const vector<BuiltinFunc> functions = generate_all_builtin_functions();
   /* Builtin functions. */
-  for (auto f : functions) {
-    SymbolFunction *sym = fun_arena.alloc(root, tok, string(f.id), SymbolFunction::GLOBAL);
-    sym->is_error = f.id == err_symbol;
-    sym->return_type = root->lookup_class(f.return_type);
-    root->functions.emplace(sym->identifier, sym);
+  for (const auto &f : functions) {
+    builtin_function_decl(f);
   }
 
   /* Builtin operators. */
@@ -2464,15 +2474,7 @@ void SymbolTable::register_builtins(LocalScope node)
 
   const vector<BuiltinFunc> builtin_constructors = generate_all_constructors(builtin_types);
   for (const auto &fn : builtin_constructors) {
-    SymbolFunction *sym = fun_arena.alloc(root, tok, fn.id, SymbolFunction::GLOBAL);
-    sym->return_type = root->lookup_class(fn.return_type);
-    for (auto arg : fn.arg_types) {
-      sym->arg_types.emplace_back(root->lookup_class(arg));
-    }
-    root->function_emplace(sym);
-    /* function_emplace will mutate the identifier if this is an overload.
-     * Fix that. */
-    sym->identifier = fn.id;
+    builtin_function_decl(fn);
   }
 
   image_formats = {
