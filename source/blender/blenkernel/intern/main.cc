@@ -1223,14 +1223,15 @@ MainAllIDsIterator &MainAllIDsIterator::operator++()
   }
 
   BLI_assert(curr_id_ == nullptr);
-  BLI_assert(curr_lbarray_index_ >= -1 && curr_lbarray_index_ <= int64_t(lbarray_.size()));
+  BLI_assert(lbarray_index_is_valid());
 
-  if (curr_lbarray_index_ >= int64_t(lbarray_.size())) {
+  if (curr_lbarray_index_ == lbarray_index_upper_bound()) {
     return *this;
   }
   while (true) {
-    curr_lbarray_index_++;
-    if (curr_lbarray_index_ == int64_t(lbarray_.size())) {
+    lbarray_index_increase();
+    BLI_assert(lbarray_index_is_valid());
+    if (curr_lbarray_index_ == lbarray_index_upper_bound()) {
       return *this;
     }
     /* Listbase pointers from lbarray_ can be nullptr when no data was provided (default
@@ -1255,14 +1256,15 @@ MainAllIDsIterator &MainAllIDsIterator::operator--()
     }
   }
   BLI_assert(curr_id_ == nullptr);
-  BLI_assert(curr_lbarray_index_ >= -1 && curr_lbarray_index_ <= int64_t(lbarray_.size()));
+  BLI_assert(lbarray_index_is_valid());
 
-  if (this->curr_lbarray_index_ <= -1) {
+  if (curr_lbarray_index_ == lbarray_index_lower_bound()) {
     return *this;
   }
   while (true) {
-    curr_lbarray_index_--;
-    if (curr_lbarray_index_ == -1) {
+    lbarray_index_decrease();
+    BLI_assert(lbarray_index_is_valid());
+    if (curr_lbarray_index_ == lbarray_index_lower_bound()) {
       return *this;
     }
     /* Listbase pointers from lbarray_ can be nullptr when no data was provided (default

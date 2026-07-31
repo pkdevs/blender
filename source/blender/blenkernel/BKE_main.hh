@@ -804,15 +804,19 @@ MainListsArray BKE_main_lists_get(Main &bmain);
  * An iterator over all IDs in the given Main.
  *
  * As with the historic C-based APIs, order is defined by these rules:
- *   - ID types are iterated based on their #eID_Index, from lowest value to highest by default
- *     (starting with libraries).
+ *   - ID types are iterated based on their #eID_Index, based on the type of iterator specified at
+ *     construction (see also the documentation of #eID_Index):
+ *     - Type::USER_FIRST goes from highest #eID_Index value to lowest (starting with
+ * WindowManager), i.e. from user ID types to dependency ID types.
+ *     - Type::DEPENDENCY_FIRST goes from lowest #eID_Index value to highest (starting with
+ * Library), i.e. from dependency ID types to user ID types.
  *   - Within a same type, IDs are iterated based on their libraries (local IDs always iterated
  *     first) and names (alphanumeric sorting).
  *
  * This iterator will remain stable if the underlying Main is modified, as long as the current ID
  * pointed at by the iterator is not modified.
- *   - Renaming the current ID may shift it position in the underlying main, making the iterator no
- *     more stable (some items may be skipped, or iterated over several times).
+ *   - Renaming the current ID may shift its position in the underlying main, making the iterator
+ * no more stable (some items may be skipped, or iterated over several times).
  *   - Deleting the current ID will fully invalidate the iterator, attempt to use it in any way
  *     afterwards will result in invalid memory accesses.
  */
@@ -824,32 +828,90 @@ class MainAllIDsIterator {
   using pointer = ID *;
   using reference = ID &;
 
+  enum class Type {
+    /**
+     * Forward iteration will first return ID of 'higher level' types, which are generally using
+     * other dependency IDs. See also the documentation of #eID_Index.
+     */
+    USER_FIRST = 0,
+    /**
+     * Forward iteration will first return ID of 'lower level' types, which are generally being
+     * used by other IDs. See also the documentation of #eID_Index.
+     */
+    DEPENDENCY_FIRST = 1,
+  };
+
  private:
+  Type type_;
   MainListsArray lbarray_;
-  int64_t curr_lbarray_index_ = -1;
+  int64_t curr_lbarray_index_;
   ID *curr_id_ = nullptr;
 
  public:
   /* Note: default constructor is a requirement to make the iterator usable with std::ranges. */
-  MainAllIDsIterator() : lbarray_{}
+  MainAllIDsIterator() : type_(Type::USER_FIRST), lbarray_{}
   {
+    curr_lbarray_index_ = lbarray_index_lower_bound();
     ++(*this);
   }
 
-  explicit MainAllIDsIterator(MainListsArray &lbarray) : lbarray_(lbarray)
+  explicit MainAllIDsIterator(MainListsArray &lbarray,
+                              MainAllIDsIterator::Type type = MainAllIDsIterator::Type::USER_FIRST)
+      : type_(type), lbarray_(lbarray)
   {
+    curr_lbarray_index_ = lbarray_index_lower_bound();
     ++(*this);
   }
 
-  explicit MainAllIDsIterator(Main &bmain) : lbarray_(BKE_main_lists_get(bmain))
+  explicit MainAllIDsIterator(Main &bmain,
+                              MainAllIDsIterator::Type type = MainAllIDsIterator::Type::USER_FIRST)
+      : type_(type), lbarray_(BKE_main_lists_get(bmain))
   {
+    curr_lbarray_index_ = lbarray_index_lower_bound();
     ++(*this);
   }
 
+ private:
+  int64_t lbarray_index_lower_bound() const
+  {
+    return (type_ == Type::USER_FIRST) ? int64_t(lbarray_.size()) : -1;
+  }
+
+  int64_t lbarray_index_upper_bound() const
+  {
+    return (type_ == Type::USER_FIRST) ? -1 : int64_t(lbarray_.size());
+  }
+
+  bool lbarray_index_is_valid() const
+  {
+    return (curr_lbarray_index_ >= -1 && curr_lbarray_index_ <= int64_t(lbarray_.size()));
+  }
+
+  void lbarray_index_increase()
+  {
+    if (type_ == Type::USER_FIRST) {
+      curr_lbarray_index_--;
+    }
+    else {
+      curr_lbarray_index_++;
+    }
+  }
+
+  void lbarray_index_decrease()
+  {
+    if (type_ == Type::USER_FIRST) {
+      curr_lbarray_index_++;
+    }
+    else {
+      curr_lbarray_index_--;
+    }
+  }
+
+ public:
   MainAllIDsIterator begin() const
   {
     MainAllIDsIterator tmp = *this;
-    tmp.curr_lbarray_index_ = -1;
+    tmp.curr_lbarray_index_ = tmp.lbarray_index_lower_bound();
     tmp.curr_id_ = nullptr;
     return ++tmp;
   }
@@ -857,7 +919,7 @@ class MainAllIDsIterator {
   MainAllIDsIterator end() const
   {
     MainAllIDsIterator tmp = *this;
-    tmp.curr_lbarray_index_ = tmp.lbarray_.size();
+    tmp.curr_lbarray_index_ = tmp.lbarray_index_upper_bound();
     tmp.curr_id_ = nullptr;
     return tmp;
   }
