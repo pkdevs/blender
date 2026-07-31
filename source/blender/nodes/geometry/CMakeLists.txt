@@ -199,6 +199,7 @@ set(SRC
   nodes/node_geo_mesh_primitive_cone.cc
   nodes/node_geo_mesh_primitive_cube.cc
   nodes/node_geo_mesh_primitive_cylinder.cc
+  nodes/node_geo_mesh_primitive_quad_sphere.cc
   nodes/node_geo_mesh_primitive_grid.cc
   nodes/node_geo_mesh_primitive_ico_sphere.cc
   nodes/node_geo_mesh_primitive_line.cc
