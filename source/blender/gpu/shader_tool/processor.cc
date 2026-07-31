@@ -914,6 +914,35 @@ void SourceProcessor::disabled_code_mutation(Parser &parser)
     }
   };
 
+  auto process_enabled_scope = [&](Token start_tok) {
+    /* Search for endif with the same indentation. Assume formatted input. */
+    string end_str = string(start_tok.str_with_whitespace()) + "endif";
+    size_t scope_end = parser.str().find(end_str, start_tok.str_index_start());
+    if (scope_end == string::npos) {
+      report_error(start_tok, "Couldn't find end of enabled scope.");
+      return;
+    }
+
+    /* Find where the #if 1 line ends to start keeping content */
+    size_t code_start = start_tok.line_end() + 1;
+
+    /* Search for else/elif with the same indentation. */
+    string else_str = string(start_tok.str_with_whitespace()) + "el";
+    size_t scope_else = parser.str().find(else_str, start_tok.str_index_start());
+
+    /* Erase the initial #if 1 directive line */
+    parser.erase(start_tok.str_index_start(), code_start - 1);
+
+    if (scope_else != string::npos && scope_else < scope_end) {
+      /* Erase the disabled #else/#elif block up to the end of #endif */
+      parser.erase(scope_else, scope_end + end_str.size());
+    }
+    else {
+      /* If there's no #else branch, erase just the #endif directive line */
+      parser.erase(scope_end, scope_end + end_str.size());
+    }
+  };
+
   parser().foreach_match<true>("#AA", [&](const vector<Token> &tokens) {
     if (tokens[1].str() == "ifndef" && tokens[2].str() == "GPU_SHADER") {
       process_disabled_scope(tokens[0]);
@@ -926,8 +955,13 @@ void SourceProcessor::disabled_code_mutation(Parser &parser)
     }
   });
   parser().foreach_match<true>("#i1", [&](const vector<Token> &tokens) {
-    if (tokens[1].str() == "if" && tokens[2].str() == "0") {
-      process_disabled_scope(tokens[0]);
+    if (tokens[1].str() == "if") {
+      if (tokens[2].str() == "0") {
+        process_disabled_scope(tokens[0]);
+      }
+      else if (tokens[2].str() == "1") {
+        process_enabled_scope(tokens[0]);
+      }
     }
   });
 
