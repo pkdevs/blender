@@ -1136,12 +1136,51 @@ class ShaderNodesInliner {
       return;
     }
 
+    /* If the index is not a constant value, we immitate the index switch node using a chain of
+     * mix nodes. This allows renderers using the Index Switch node with rendering backends which
+     * don't support it natively. */
+    eNodeSocketDatatype mix_node_type;
+    switch (storage.data_type) {
+      case SOCK_FLOAT:
+      case SOCK_INT:
+      case SOCK_BOOLEAN:
+        mix_node_type = SOCK_FLOAT;
+        break;
+      case SOCK_VECTOR:
+        mix_node_type = SOCK_VECTOR;
+        break;
+      case SOCK_RGBA:
+        mix_node_type = SOCK_RGBA;
+        break;
+      default:
+        params_.r_error_messages.append(
+            {node.node, TIP_("Index must be a constant value for this data type")});
+        this->store_socket_value_fallback(socket);
+        return;
+    }
+
     const EnsureInputsResult ensured_inputs = this->ensure_node_inputs(node);
     if (ensured_inputs.has_missing_inputs) {
       /* Wait until all inputs values are available. */
       return;
     }
 
+    /* The ShaderNodeMix node uses different socket identifiers based on the data type, so find the
+     * correct socket based on the name instead. */
+    auto find_socket_by_name =
+        [](bNode &node, const eNodeSocketInOut in_out, const StringRef name) -> bNodeSocket * {
+      for (bNodeSocket &socket : in_out == SOCK_IN ? node.inputs : node.outputs) {
+        if (socket.is_available()) {
+          if (socket.name == name) {
+            return &socket;
+          }
+        }
+      }
+      BLI_assert_unreachable();
+      return nullptr;
+    };
+
+    /* Use a truncate node to turn the input value into an int. */
     bNode &truncate_math_node = *this->add_node("ShaderNodeMath"_ustr);
     truncate_math_node.custom1 = NODE_MATH_TRUNC;
     bNodeSocket &truncate_input = *static_cast<bNodeSocket *>(truncate_math_node.inputs.first);
@@ -1151,6 +1190,7 @@ class ShaderNodesInliner {
     bNode *prev_mix = nullptr;
     bNodeSocket *prev_mix_output = nullptr;
     for (const int i : IndexRange(storage.items_num + 1)) {
+      /* Use a math node to turn the index into a factor for the mix node.*/
       bNode &add_math_node = *this->add_node("ShaderNodeMath"_ustr);
       add_math_node.custom1 = NODE_MATH_ADD;
       bNodeSocket &add_in_1 = *static_cast<bNodeSocket *>(add_math_node.inputs.first);
@@ -1161,17 +1201,15 @@ class ShaderNodesInliner {
 
       bNode &mix_node = *this->add_node("ShaderNodeMix"_ustr);
       auto &mix_storage = *static_cast<NodeShaderMix *>(mix_node.storage);
-      mix_storage.data_type = SOCK_RGBA;  // TODO
+      mix_storage.data_type = mix_node_type;
       mix_storage.clamp_result = false;
       mix_storage.clamp_factor = true;
-      update_node_declaration_and_sockets(dst_tree_, mix_node, nullptr);
-      bNodeSocket &mix_factor_input = *bke::node_find_socket(
-          mix_node, SOCK_IN, "Factor_Float"_ustr);
-      bNodeSocket &mix_input_1 = *bke::node_find_socket(
-          mix_node, SOCK_IN, "A_Color"_ustr);  // TODO
-      bNodeSocket &mix_input_2 = *bke::node_find_socket(
-          mix_node, SOCK_IN, "B_Color"_ustr);  // TODO
-      bNodeSocket &mix_out = *bke::node_find_socket(mix_node, SOCK_OUT, "Result_Color"_ustr);
+      /* This makes the right sockets for the given data type available. */
+      mix_node.typeinfo->updatefunc(&dst_tree_, &mix_node);
+      bNodeSocket &mix_factor_input = *find_socket_by_name(mix_node, SOCK_IN, "Factor");
+      bNodeSocket &mix_input_1 = *find_socket_by_name(mix_node, SOCK_IN, "A");
+      bNodeSocket &mix_input_2 = *find_socket_by_name(mix_node, SOCK_IN, "B");
+      bNodeSocket &mix_out = *find_socket_by_name(mix_node, SOCK_OUT, "Result");
       bke::node_add_link(dst_tree_, add_math_node, add_out, mix_node, mix_factor_input);
       if (i == 0) {
         this->set_input_socket_value(*node, mix_node, mix_input_1, {FallbackValue{}});
@@ -1180,8 +1218,11 @@ class ShaderNodesInliner {
         bke::node_add_link(dst_tree_, *prev_mix, *prev_mix_output, mix_node, mix_input_1);
       }
       if (i < storage.items_num) {
-        this->set_input_socket_value(
-            *node, mix_node, mix_input_2, value_by_socket_.lookup(node.input_socket(i + 1)));
+        const SocketInContext input_socket = node.input_socket(i + 1);
+        const SocketValue &input_value = value_by_socket_.lookup(input_socket);
+        const SocketValue converted_value = this->handle_implicit_conversion(
+            input_value, *input_socket->typeinfo, *mix_input_2.typeinfo);
+        this->set_input_socket_value(*node, mix_node, mix_input_2, converted_value);
       }
       else {
         this->set_input_socket_value(*node, mix_node, mix_input_2, {FallbackValue{}});
