@@ -62,7 +62,7 @@ Result<ParsedAttribute> resource_type_from_attributes(AttrList list)
       {"frag_color",                              {ResourceTableType::FRAGMENT_OUT,   ResourceType::FRAG_OUT,                1}},
       {"frag_stencil_ref",                        {ResourceTableType::FRAGMENT_OUT,   ResourceType::FRAG_OUT,                0}},
       /* Fragment inputs. */
-      {"subpass_input",                           {ResourceTableType::NONE,           ResourceType::FRAG_IN,                 0}},
+      {"subpass_input",                           {ResourceTableType::FRAGMENT_IN,    ResourceType::FRAG_IN,                 2}},
       /* Entry point type. */
       {"vertex",                                  {ResourceTableType::NONE,           ResourceType::NONE,                    0}},
       {"fragment",                                {ResourceTableType::NONE,           ResourceType::NONE,                    0}},
@@ -1371,6 +1371,7 @@ struct SymbolParser : NodeErrorHandler {
         }
         if (attr.srt_type != ResourceTableType::VERTEX_IN &&
             attr.srt_type != ResourceTableType::VERTEX_OUT &&
+            attr.srt_type != ResourceTableType::FRAGMENT_IN &&
             attr.srt_type != ResourceTableType::FRAGMENT_OUT &&
             attr.srt_type != ResourceTableType::RESOURCE_TABLE)
         {
