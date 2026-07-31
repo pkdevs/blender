@@ -749,10 +749,8 @@ struct SymbolParser : NodeErrorHandler {
     for (FuncArg arg : decl.arguments().children_of_type<FuncArg>()) {
       auto attr = resource_type_from_attributes(arg.attributes()).unwrap(this);
 
-      auto [type, err] = scope.lookup_class(arg.type().id());
-      error(err);
+      SymbolClass *type = scope.lookup_class(arg.type().id()).unwrap(this);
       SymbolVariable *var = table.var_arena.alloc(&scope, type, arg.declarator());
-      var->type = type;
       scope.variables.emplace(var->identifier, var);
       /* Register argument type for argument resolution. */
       fn_sym->arg_types.emplace_back(type);

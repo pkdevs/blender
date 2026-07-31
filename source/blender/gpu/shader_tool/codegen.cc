@@ -1735,7 +1735,7 @@ struct CodegenContext : NodeErrorHandler {
         member_access(expr_scope, node, fn->return_type);
       }
       else {
-        member_access(expr_scope, node, var->type);
+        member_access(expr_scope, node.prev(), var->type);
       }
     }
   }
