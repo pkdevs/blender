@@ -1764,7 +1764,7 @@ bool SymbolFunction::argument_matches(const vector<SymbolClass *> &param_types) 
     return true;
   }
 
-  if (this->arg_types.size() == param_types.size()) {
+  if (this->arg_types.size() != param_types.size()) {
     return false;
   }
 
