@@ -35,11 +35,6 @@ struct ExpressionTypeParser {
   const SymbolScope *scope;
   Node start;
   Node node;
-  SymbolClass *float_cls;
-  SymbolClass *int_cls;
-  SymbolClass *uint_cls;
-  SymbolClass *str_cls;
-  SymbolClass *err_cls;
 
   /* Array dimension of the current symbol. */
   int array_dim = 0;
@@ -50,12 +45,6 @@ struct ExpressionTypeParser {
   ExpressionTypeParser(const SymbolTable *table, const SymbolScope *scope, Node expr_first_child)
       : table(table), scope(scope), start(expr_first_child), node(expr_first_child)
   {
-    const SymbolScope &root = *scope->root_scope();
-    float_cls = root.lookup_class("float");
-    int_cls = root.lookup_class("int");
-    uint_cls = root.lookup_class("uint");
-    str_cls = root.lookup_class("string_t");
-    err_cls = root.lookup_class(SymbolTable::err_symbol);
   }
 
   Result<SymbolClass *> eval()
@@ -99,7 +88,7 @@ struct ExpressionTypeParser {
       case NodeType::Constructor:
         return constructor(node);
       case NodeType::StringConst:
-        return str_cls;
+        return table->str_cls;
       case NodeType::LocalVar:
         return local_var(node);
       case NodeType::NumConst:
@@ -126,7 +115,7 @@ struct ExpressionTypeParser {
       default:
         error(node.is_valid() ? node : start, Diag::InvalidExprTypeChecker);
         this->node = Node(start.p, -1);
-        return err_cls;
+        return table->err_cls;
     }
   }
 
@@ -282,7 +271,7 @@ struct ExpressionTypeParser {
           left_type->identifier,
           to_str(tok_type),
           right_type->identifier);
-    return err_cls;
+    return table->err_cls;
   }
 
   SymbolClass *op(Node operator_type, SymbolClass *right_type)
@@ -302,7 +291,7 @@ struct ExpressionTypeParser {
           right_type->identifier,
           to_str(tok_type),
           right_type->identifier);
-    return err_cls;
+    return table->err_cls;
   }
 
   SymbolClass *member_access(SymbolClass *left, ast::Node member)
@@ -322,7 +311,7 @@ struct ExpressionTypeParser {
         SymbolVariable *sym = left->lookup_variable(var.identifier());
         if (!sym) {
           error(node, Diag::UnknownMember, string(var.identifier().str()));
-          return err_cls;
+          return table->err_cls;
         }
         if (sym->array_dimensions) {
           array_dim = sym->array_dimensions;
@@ -332,7 +321,7 @@ struct ExpressionTypeParser {
       default:
         error(node.is_valid() ? node : start, Diag::TypeCheckerInvalidExpression);
         this->node = Node{};
-        return err_cls;
+        return table->err_cls;
     }
   }
 
@@ -354,23 +343,23 @@ struct ExpressionTypeParser {
       FuncParamList params = call.parameters();
       if (params.child_count() != 1) {
         error(params, Diag::ExpectedOneArgument);
-        return err_cls;
+        return table->err_cls;
       }
       Expr expr(params.child_first());
       if (params.child_count() != 1) {
         error(params, Diag::ExpectedOneTypename);
-        return err_cls;
+        return table->err_cls;
       }
       LocalVar var(expr.child_first());
       if (params.child_count() != 1) {
         error(params, Diag::ExpectedOneTypename);
-        return err_cls;
+        return table->err_cls;
       }
       auto [type, err] = scope->lookup_class(var.identifier());
       error(err);
       if (!type->is_srt()) {
         error(params, Diag::ExpectedResourceTableTypename);
-        return err_cls;
+        return table->err_cls;
       }
       return type;
     }
@@ -388,7 +377,7 @@ struct ExpressionTypeParser {
     SymbolVariable *sym = scope->lookup_variable(var.identifier());
     if (!sym) {
       error(var, Diag::UnknownIdentifier, string(var.identifier().str()));
-      return err_cls;
+      return table->err_cls;
     }
     if (!sym->is_const && is_subscript_expr && !first_non_const_var_in_subscript.is_valid()) {
       first_non_const_var_in_subscript = var;
@@ -401,24 +390,7 @@ struct ExpressionTypeParser {
 
   SymbolClass *num_const(NumConst num)
   {
-    string_view lit = num.str();
-    /* Convert to lowercase helper for easier suffix matching */
-    string str;
-    str.reserve(lit.size());
-    for (char c : lit) {
-      str.push_back(tolower(static_cast<unsigned char>(c)));
-    }
-
-    bool has_decimal = (str.find('.') != string_view::npos);
-    bool has_exponent = !str.starts_with("0x") && (str.find('e') != string_view::npos);
-
-    if (has_decimal || has_exponent || str.back() == 'f') {
-      return float_cls;
-    }
-    if (str.back() == 'u') {
-      return uint_cls;
-    }
-    return int_cls;
+    return table->get_literal_type(num.str());
   }
 
  private:
@@ -448,7 +420,7 @@ struct ExpressionTypeParser {
     ctx.is_subscript_expr = true;
     auto [type, err] = ctx.eval();
     error(err);
-    if (type != int_cls && type != uint_cls) {
+    if (type != table->int_cls && type != table->uint_cls) {
       error(node, Diag::SubscriptNotInt);
     }
     /* Discard checking for temporary. It is allowed to have temporary inside subscript

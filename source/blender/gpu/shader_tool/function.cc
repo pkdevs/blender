@@ -623,6 +623,8 @@ vector<SymbolTable::BuiltinFunc> SymbolTable::generate_all_builtin_functions()
     add_unary(name, f_types);
   }
 
+  add_unary("saturate", f_types);
+
   add_unary("abs", f_types);
   add_unary("abs", i_types);
 

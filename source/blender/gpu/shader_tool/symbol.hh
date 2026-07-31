@@ -668,6 +668,12 @@ struct SymbolTable {
   Allocator<SymbolClassTemplate> tmp_cls_arena;
   Allocator<SymbolFunctionTemplate> tmp_fun_arena;
 
+  SymbolClass *float_cls;
+  SymbolClass *int_cls;
+  SymbolClass *uint_cls;
+  SymbolClass *str_cls;
+  SymbolClass *err_cls;
+
   OperatorMap operators;
 
   unordered_map<int, string> image_formats;
@@ -697,6 +703,8 @@ struct SymbolTable {
                                        Node start,
                                        int &node_count,
                                        bool allow_compilation_constant = false);
+
+  SymbolClass *get_literal_type(string_view lit) const;
 
  private:
   struct BuiltinType {

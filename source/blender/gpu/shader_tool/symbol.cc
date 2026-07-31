@@ -923,7 +923,7 @@ struct SymbolParser : NodeErrorHandler {
     }
   }
 
-  void parse_preprocessor(SymbolScope &scope, Preprocessor directive)
+  void parse_preprocessor(SymbolScope & /*scope*/, Preprocessor directive)
   {
     /* Keep track of all defines with value to make sure to not hit an undefined symbol error. */
     Token type = directive.front().next();
@@ -946,17 +946,22 @@ struct SymbolParser : NodeErrorHandler {
         value = value.next();
       }
 
-      SymbolScope *root = scope.root_scope();
+      SymbolScope *root = table.root;
       /* Macro is not empty and defines something. Assume it is a int constant. */
-      SymbolClass *int_cls = root->lookup_class("int");
       if (is_func) {
         SymbolFunction *fn = table.fun_arena.alloc(
             root, name, string(name.str()), SymbolFunction::GLOBAL);
-        fn->return_type = int_cls;
+        fn->return_type = table.int_cls;
+
         root->functions.try_emplace(fn->identifier, fn);
       }
       else {
-        SymbolVariable *var = table.var_arena.alloc(root, int_cls, name, string(name.str()));
+        SymbolClass *type = table.int_cls;
+        if (directive.back() == value && value == Number) {
+          /* Value is a single token try to guess its type. */
+          type = table.get_literal_type(value.str());
+        }
+        SymbolVariable *var = table.var_arena.alloc(root, type, name, string(name.str()));
         root->variables.try_emplace(var->identifier, var);
       }
       /* TODO: Make a warning/error if this just defines a constant in global space without #if
@@ -2521,6 +2526,33 @@ void SymbolTable::register_builtins(LocalScope node)
     sym->value = c.value;
     root->variables.emplace(sym->identifier, sym);
   }
+
+  this->float_cls = root->lookup_class("float");
+  this->int_cls = root->lookup_class("int");
+  this->uint_cls = root->lookup_class("uint");
+  this->str_cls = root->lookup_class("string_t");
+  this->err_cls = root->lookup_class(SymbolTable::err_symbol);
+}
+
+SymbolClass *SymbolTable::get_literal_type(string_view lit) const
+{
+  /* Convert to lowercase helper for easier suffix matching */
+  string str;
+  str.reserve(lit.size());
+  for (char c : lit) {
+    str.push_back(tolower(static_cast<unsigned char>(c)));
+  }
+
+  bool has_decimal = (str.find('.') != string_view::npos);
+  bool has_exponent = !str.starts_with("0x") && (str.find('e') != string_view::npos);
+
+  if (has_decimal || has_exponent || str.back() == 'f') {
+    return float_cls;
+  }
+  if (str.back() == 'u') {
+    return uint_cls;
+  }
+  return int_cls;
 }
 
 }  // namespace blender::gpu::shader::parser
