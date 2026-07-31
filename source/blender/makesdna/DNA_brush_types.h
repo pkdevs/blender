@@ -455,7 +455,7 @@ struct Brush {
   eBrushUnifiedPaintFlags unified_paint_flags = BRUSH_USE_UNIFIED_PAINT_SIZE |
                                                 BRUSH_USE_UNIFIED_PAINT_COLOR |
                                                 BRUSH_USE_UNIFIED_PAINT_WEIGHT;
-  char _pad3 = {};
+  char _pad3[4] = {};
 };
 
 struct PaletteColor {
