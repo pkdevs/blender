@@ -904,6 +904,7 @@ def brush_settings(layout, context, brush, popover=False):
         if capabilities.has_auto_smooth:
             pressure_name = "use_smooth_pressure" if capabilities.has_auto_smooth_pressure else None
             unified_row = UnifiedPaintPanel.prop_unified(
+                layout
                 context,
                 brush,
                 "auto_smooth_factor",
