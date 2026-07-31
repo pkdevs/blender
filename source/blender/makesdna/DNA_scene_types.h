@@ -1126,7 +1126,7 @@ struct UnifiedPaintSettings {
   /** Unified brush stroke input samples. */
   int input_samples = 1;
 
-  eUnifiedPaintSettingsFlags flag;
+  eUnifiedPaintSettingsFlags flag = {};
 };
 
 /** \} */
