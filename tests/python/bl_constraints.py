@@ -541,6 +541,40 @@ class GeometryAttributeConstraintTest(AbstractConstraintTests):
         )
 
 
+class PoseBonesConstratintTest(AbstractConstraintTests):
+    layer_collection = 'Pose Bones'
+
+    def test_remove_constraints(self):
+        context_override = self.bone_constraint_context('Pose Bones')
+        with bpy.context.temp_override(**context_override):
+            bpy.context.active_pose_bone.constraints.remove_constraints(indices=(2, 0))
+            self.assertEqual(len(bpy.context.active_pose_bone.constraints), 1)
+            self.assertEqual(bpy.context.active_pose_bone.constraints.keys(), ['Copy Location.001'])
+
+    def test_remove_all_constraints(self):
+        context_override = self.bone_constraint_context('Pose Bones')
+        with bpy.context.temp_override(**context_override):
+            bpy.context.active_pose_bone.constraints.remove_constraints(indices=())
+            self.assertEqual(len(bpy.context.active_pose_bone.constraints), 0)
+
+
+class ObjectConstratintTest(AbstractConstraintTests):
+    layer_collection = 'Object'
+
+    def test_remove_constraints(self):
+        context_override = self.constraint_context('Object')
+        with bpy.context.temp_override(**context_override):
+            bpy.context.object.constraints.remove_constraints(indices=(2, 0))
+            self.assertEqual(len(bpy.context.object.constraints), 1)
+            self.assertEqual(bpy.context.object.constraints.keys(), ['Copy Location.001'])
+
+    def test_remove_all_constraints(self):
+        context_override = self.constraint_context('Object')
+        with bpy.context.temp_override(**context_override):
+            bpy.context.object.constraints.remove_constraints(indices=())
+            self.assertEqual(len(bpy.context.object.constraints), 0)
+
+
 def main():
     global args
     import argparse
