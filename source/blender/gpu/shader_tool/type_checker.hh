@@ -284,11 +284,7 @@ struct ExpressionTypeParser {
     if (auto it = table->operators.find(key); it != table->operators.end()) {
       return it->second->return_type;
     }
-    error(operator_type,
-          Diag::InvalidUnaryArgumentType,
-          right_type->identifier,
-          to_str(tok_type),
-          right_type->identifier);
+    error(operator_type, Diag::InvalidUnaryArgumentType, to_str(tok_type), right_type->identifier);
     return table->err_cls;
   }
 

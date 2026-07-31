@@ -1780,9 +1780,9 @@ static string to_str(const vector<SymbolClass *> &types)
 {
   string parameters = types.empty() ? ", " : "";
   for (SymbolClass *cls : types) {
-    parameters += ", '" + cls->identifier + "'";
+    parameters += ", " + cls->identifier + "";
   }
-  return parameters.substr(2);
+  return "(" + parameters.substr(2) + ")";
 }
 
 Result<SymbolFunction *> SymbolFunction::lookup_overload(IdQualified id,
@@ -1798,8 +1798,8 @@ Result<SymbolFunction *> SymbolFunction::lookup_overload(IdQualified id,
   string candidates;
   for (const SymbolFunction *fn = this; fn; fn = fn->overload_next) {
     if (fn->is_complete) {
-      candidates += "\n::: Candidate '" + fn->return_type->original + "' " + fn->original + "(" +
-                    to_str(fn->arg_types) + ")";
+      candidates += "\ncandidate: " + fn->return_type->original + " " + fn->original +
+                    to_str(fn->arg_types);
     }
   }
 
