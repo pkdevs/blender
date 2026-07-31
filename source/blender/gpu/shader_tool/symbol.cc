@@ -1488,7 +1488,17 @@ struct SymbolParser : NodeErrorHandler {
           sym->value = initialize_constexpr(scope, sym->type, decl);
         }
         else {
-          error(var.type(), Diag::ConstexprDeclMustBeStatic);
+          if (sym->parent->parent_function()) {
+            error(var.type(), Diag::NonStaticConstexprMember);
+          }
+          else if (sym->parent->parent_function()) {
+            /* Only case where its fine. */
+          }
+          else {
+            /* Could be allowed if compiler can make them also static.
+             * This is required for MSL where we have a wrapper class. */
+            error(var.type(), Diag::NonStaticConstexprGlobal);
+          }
         }
       }
     }

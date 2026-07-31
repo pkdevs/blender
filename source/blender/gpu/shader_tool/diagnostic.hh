@@ -202,7 +202,8 @@ enum class Diag {
   ReferenceTypeMismatch,
   ReferenceVariableRequiresInitializer,
   StaticDataMemberNotAllowed,
-  ConstexprDeclMustBeStatic,
+  NonStaticConstexprMember,
+  NonStaticConstexprGlobal,
   ExcessElementsInScalarInitializer,
   ConstexprVarMustBeIntOrUint,
   NoteInStorageBufferDeclaration,
@@ -448,8 +449,10 @@ static inline std::string_view diagnostic_message_get(Diag diag)
       return "Declaration of reference variable '{}' requires an initializer";
     case Diag::StaticDataMemberNotAllowed:
       return "Static data member '{}' not allowed in {} {}";
-    case Diag::ConstexprDeclMustBeStatic:
-      return "Constexpr declaration must also be static";
+    case Diag::NonStaticConstexprMember:
+      return "Non-static data member cannot be constexpr; did you intend to make it static?";
+    case Diag::NonStaticConstexprGlobal:
+      return "Non-static global variable cannot be constexpr; did you intend to make it static?";
     case Diag::ExcessElementsInScalarInitializer:
       return "Excess elements in scalar initializer";
     case Diag::ConstexprVarMustBeIntOrUint:
