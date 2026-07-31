@@ -461,7 +461,7 @@ static inline std::string_view diagnostic_message_get(Diag diag)
     case Diag::UnknownFunction:
       return "Unknown function name";
     case Diag::NoMatchingOverload:
-      return "No matching function for call to '{}' for parameters {}";
+      return "No matching function for call to '{}' for parameters {} {}";
     case Diag::DeclarationAlreadyOfType:
       return "Declaration is already of type '{}'";
     case Diag::UnknownAttribute:
@@ -623,6 +623,15 @@ template<typename T, typename ExceptionT = AstNodeException> struct Result {
     handler->error(err);
     return value;
   }
+
+  /* Transfer error if not yet set. */
+  T unwrap(std::optional<AstNodeException> &other_err)
+  {
+    if (!other_err) {
+      other_err = err;
+    }
+    return value;
+  }
 };
 
 template<typename T, typename U, typename ExceptionT = AstNodeException> struct ResultPair {
@@ -633,6 +642,15 @@ template<typename T, typename U, typename ExceptionT = AstNodeException> struct 
   pair<T, U> unwrap(NodeErrorHandler *handler)
   {
     handler->error(err);
+    return {first, second};
+  }
+
+  /* Transfer error if not yet set. */
+  pair<T, U> unwrap(std::optional<AstNodeException> &other_err)
+  {
+    if (!other_err) {
+      other_err = err;
+    }
     return {first, second};
   }
 };

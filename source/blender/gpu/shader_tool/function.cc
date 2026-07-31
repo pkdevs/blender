@@ -790,7 +790,9 @@ vector<SymbolTable::BuiltinFunc> SymbolTable::generate_all_builtin_functions()
     for (size_t i = 0; i < images.size(); ++i) {
       string coord_type = f_types[i == 0 ? 1 : 2];
       functions.push_back({type, "imageLoad", {images[i], coord_type}});
+      functions.push_back({type, "imageLoadFast", {images[i], coord_type}});
       functions.push_back({"void", "imageStore", {images[i], coord_type, type}});
+      functions.push_back({"void", "imageStoreFast", {images[i], coord_type, type}});
       /* TODO atomics */
       functions.push_back({"int3", "imageSize", {images[i]}});
     }

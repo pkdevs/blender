@@ -435,7 +435,7 @@ struct SymbolFunction : SymbolScope {
   }
 
   /* To be called on the first registered overload. */
-  SymbolFunction *lookup_overload(const vector<SymbolClass *> &arg_types);
+  Result<SymbolFunction *> lookup_overload(IdQualified id, const vector<SymbolClass *> &arg_types);
 
   /* Return true if the given argument types are compatible */
   bool argument_matches(const vector<SymbolClass *> &param_types) const;

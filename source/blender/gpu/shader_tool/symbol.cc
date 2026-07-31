@@ -1747,14 +1747,32 @@ Result<vector<SymbolClass *>> SymbolFunction::to_arg_types(const SymbolTable & /
   return {arg_types, std::nullopt};
 }
 
-SymbolFunction *SymbolFunction::lookup_overload(const vector<SymbolClass *> &arg_types)
+static string to_str(const vector<SymbolClass *> &types)
+{
+  string parameters = types.empty() ? ", " : "";
+  for (SymbolClass *cls : types) {
+    parameters += ", '" + cls->identifier + "'";
+  }
+  return parameters.substr(2);
+}
+
+Result<SymbolFunction *> SymbolFunction::lookup_overload(IdQualified id,
+                                                         const vector<SymbolClass *> &arg_types)
 {
   for (SymbolFunction *fn = this; fn; fn = fn->overload_next) {
     if (fn->argument_matches(arg_types)) {
-      return fn;
+      return {fn, {}};
     }
   }
-  return root_scope()->lookup_function(SymbolTable::err_symbol);
+  /* List all candidates inside the error message. */
+  string candidates;
+  for (const SymbolFunction *fn = this; fn; fn = fn->overload_next) {
+    candidates += "\n::: Candidate '" + fn->return_type->original + "' " + fn->original + "(" +
+                  to_str(fn->arg_types) + ")";
+  }
+
+  return {root_scope()->lookup_function(SymbolTable::err_symbol),
+          AstNodeException(id, Diag::NoMatchingOverload, original, to_str(arg_types), candidates)};
 }
 
 bool SymbolFunction::argument_matches(const vector<SymbolClass *> &param_types) const
@@ -1827,34 +1845,18 @@ Result<SymbolFunction *> SymbolScope::lookup_function(IdQualified id,
 {
   auto [func, err] = lookup_function(id);
   if (func->template_data && !id.template_params().is_valid()) {
-    auto [func_, err_adl] = func->template_data->lookup_adl(table, params, *this);
-    err = err ? err : err_adl;
-    func = func_;
+    func = func->template_data->lookup_adl(table, params, *this).unwrap(err);
   }
   else if (func->overload_next) {
-    auto [arg_types, err_args] = SymbolFunction::to_arg_types(table, *this, params);
-    err = err ? err : err_args;
-    SymbolFunction *overload = func->lookup_overload(arg_types);
-    if (overload->is_error) {
-      string parameters = arg_types.empty() ? ", " : "";
-      for (SymbolClass *cls : arg_types) {
-        parameters += ", '" + cls->identifier + "'";
-      }
-      if (!err) {
-        err = {id, Diag::NoMatchingOverload, func->identifier, parameters.substr(2)};
-      }
-    }
-    func = overload;
+    auto arg_types = SymbolFunction::to_arg_types(table, *this, params).unwrap(err);
+    func = func->lookup_overload(id, arg_types).unwrap(err);
   }
   else if (func->is_error) {
     /* Try to resolve type constructors (only for builtins for now). */
     if (auto [cls, err_cls] = lookup_class(id); !cls->is_error && cls && cls->is_builtin) {
-      func = root_scope()->lookup_function(cls->identifier);
-      err = {};
+      return {root_scope()->lookup_function(cls->identifier), {}};
     }
-    else {
-      err = {id, Diag::UnknownFunction};
-    }
+    err = {id, Diag::UnknownFunction};
   }
   return {func, err};
 }
