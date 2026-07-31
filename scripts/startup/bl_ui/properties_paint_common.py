@@ -707,7 +707,6 @@ class ShapePanel(BrushPanel):
 
         if not (brush and brush.curve_distance_falloff):
             return False
-
         if cls.get_brush_mode(context) == 'SCULPT_CURVES':
             brush = settings.brush
             if brush.curves_sculpt_brush_type in {'ADD', 'DELETE', 'CUT'}:
@@ -757,8 +756,8 @@ class ShapePanel(BrushPanel):
         if has_content:
             layout.separator()
 
+        layout.use_property_split = False
         col = layout.column(align=True)
-        col.use_property_split = False
         if context.region.type == 'TOOL_HEADER':
             col.prop(brush, "curve_distance_falloff_preset", expand=True)
         else:
