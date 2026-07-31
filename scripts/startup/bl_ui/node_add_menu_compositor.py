@@ -160,8 +160,8 @@ class NODE_MT_compositor_node_filter_base(node_add_menu.NodeMenu):
         self.node_operator(layout, "CompositorNodeDespeckle")
         layout.separator()
         self.node_operator(layout, "CompositorNodeDilateErode")
-        self.node_operator(layout, "CompositorNodeMaskToSDF")
         self.node_operator(layout, "CompositorNodeInpaint")
+        self.node_operator(layout, "CompositorNodeMaskToSDF")
         layout.separator()
         self.node_operator_with_searchable_enum_socket(
             context, layout, "CompositorNodeFilter", "Type", [
@@ -290,19 +290,21 @@ class NODE_MT_compositor_node_utilities_base(node_add_menu.NodeMenu):
         del context
         layout = self.layout
         self.draw_menu(layout, path="Utilities/Math")
+        self.draw_menu(layout, path="Utilities/Text")
         self.draw_menu(layout, path="Utilities/Vector")
+        layout.separator()
         self.draw_menu(layout, path="Utilities/Matrix")
         self.draw_menu(layout, path="Utilities/Rotation")
-        self.draw_menu(layout, path="Utilities/Text")
         layout.separator()
+        self.node_operator(layout, "NodeImplicitConversion")
         self.node_operator(layout, "CompositorNodeLevels")
         self.node_operator(layout, "CompositorNodeNormalize")
         layout.separator()
-        self.node_operator(layout, "NodeImplicitConversion")
-        self.node_operator(layout, "CompositorNodeSplit")
-        self.node_operator(layout, "GeometryNodeSwitch")
         self.node_operator(layout, "GeometryNodeIndexSwitch")
         self.node_operator(layout, "GeometryNodeMenuSwitch")
+        self.node_operator(layout, "GeometryNodeSwitch")
+        layout.separator()
+        self.node_operator(layout, "CompositorNodeSplit")
         self.node_operator(
             layout, "CompositorNodeSwitchView",
             label="Switch Stereo View")
@@ -353,6 +355,12 @@ class NODE_MT_compositor_node_math_base(node_add_menu.NodeMenu):
         self.node_operator_with_searchable_enum(context, layout, "FunctionNodeBooleanMath", "operation")
         self.node_operator(layout, "ShaderNodeClamp")
         self.node_operator(layout, "FunctionNodeCompare")
+        self.node_operator_with_searchable_enum(
+            context,
+            layout,
+            "FunctionNodeIntegerMath",
+            "operation",
+            defaults_callback=node_add_menu.set_int_math_node_default_props)
         self.node_operator_with_searchable_enum(context, layout, "FunctionNodeFloatToInt", "rounding_mode")
         self.node_operator(layout, "ShaderNodeFloatCurve")
         self.node_operator(layout, "ShaderNodeMapRange")
@@ -400,12 +408,14 @@ class NODE_MT_compositor_utilities_matrix_base(node_add_menu.NodeMenu):
     def draw(self, _context):
         layout = self.layout
         self.node_operator(layout, "FunctionNodeCombineMatrix")
+        self.node_operator(layout, "FunctionNodeCombineTransform")
         self.node_operator(layout, "FunctionNodeMatrixDeterminant", label="Determinant")
         self.node_operator(layout, "FunctionNodeInvertMatrix")
         self.node_operator(layout, "FunctionNodeMatrixMultiply")
         self.node_operator(layout, "FunctionNodeMatrixSVD")
         self.node_operator(layout, "FunctionNodeProjectPoint")
         self.node_operator(layout, "FunctionNodeSeparateMatrix")
+        self.node_operator(layout, "FunctionNodeSeparateTransform")
         self.node_operator(layout, "FunctionNodeTransformDirection")
         self.node_operator(layout, "FunctionNodeTransformPoint")
         self.node_operator(layout, "FunctionNodeTransposeMatrix")

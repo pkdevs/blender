@@ -625,6 +625,8 @@ class _draw_tool_settings_context_mode:
             layout.popover("VIEW3D_PT_curves_sculpt_add_shape", text="Curve Shape")
         elif curves_tool == 'SLIDE':
             layout.popover("VIEW3D_PT_tools_brush_falloff")
+        elif curves_tool == 'CUT':
+            layout.prop(brush, "falloff_shape", expand=True)
 
         return True
 
@@ -1305,6 +1307,7 @@ class VIEW3D_MT_transform(VIEW3D_MT_transform_base, Menu):
             layout.operator("mesh.flatten", text="Flatten")
             layout.operator("transform.shrink_fatten", text="Shrink/Fatten")
             layout.operator("mesh.space_edge_loops_evenly", text="Space Edge Loops Evenly")
+            layout.operator("mesh.relax_edge_loops", text="Relax Edge Loops")
             layout.operator("transform.skin_resize")
         elif context.mode in {'EDIT_CURVE', 'EDIT_GREASE_PENCIL', 'EDIT_CURVES', 'EDIT_POINTCLOUD'}:
             layout.operator("transform.transform", text="Radius").mode = 'CURVE_SHRINKFATTEN'
@@ -2240,6 +2243,7 @@ class VIEW3D_MT_select_edit_grease_pencil(Menu):
         layout.operator_menu_enum("grease_pencil.select_similar", "mode")
         layout.operator("grease_pencil.select_fill")
         layout.operator("grease_pencil.select_linked")
+        layout.operator("grease_pencil.select_linked", text="Deselect Linked").deselect = True
 
         layout.separator()
 
@@ -2925,6 +2929,11 @@ class VIEW3D_MT_object_animation(Menu):
         layout.operator("grease_pencil.bake_grease_pencil_animation", text="Bake Object Transform to Grease Pencil...")
         layout.operator("anim.replace_action")
         layout.operator("anim.replace_action_new")
+        layout.operator("anim.replace_action_duplicate")
+
+        layout.separator()
+
+        layout.operator("anim.rotation_mode_convert")
 
 
 class VIEW3D_MT_object_rigid_body(Menu):
