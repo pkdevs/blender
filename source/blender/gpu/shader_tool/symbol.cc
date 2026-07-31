@@ -1489,7 +1489,7 @@ struct SymbolParser : NodeErrorHandler {
           sym->value = initialize_constexpr(scope, sym->type, decl);
         }
         else {
-          if (sym->parent->parent_function()) {
+          if (sym->parent_class()) {
             error(var.type(), Diag::NonStaticConstexprMember);
           }
           else if (sym->parent->parent_function()) {
