@@ -322,8 +322,12 @@ static void image_gpu_texture_partial_update_changes_available(
   }
 
   const int eye = 0;
-  gpu::Texture *tex = image->runtime->gputexture[TEXTARGET_2D][eye];
-  GPU_texture_update_mipmap_chain(tex);
+  if (gpu::Texture *tex = image->runtime->gputexture[TEXTARGET_2D][eye]) {
+    GPU_texture_update_mipmap_chain(tex);
+  }
+  if (gpu::Texture *tex = image->runtime->gputexture[TEXTARGET_2D_ARRAY][eye]) {
+    GPU_texture_update_mipmap_chain(tex);
+  }
   image->runtime->gpuflag |= IMA_GPU_MIPMAP_COMPLETE;
 }
 
