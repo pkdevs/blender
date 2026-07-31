@@ -1043,6 +1043,10 @@ struct SymbolParser : NodeErrorHandler {
     scope.classes.emplace(cls->identifier, cls);
     scope.scopes.emplace(cls->identifier, cls);
 
+    if (decl.identifier().name().str() == "LightCullingData") {
+      std::cout << "HERE " << std::endl;
+    }
+
     if (cls->is_anonymous && anonymous_scope_prefix(cls).non_anonymous_parent == nullptr) {
       error(decl, Diag::AnonymousUnionNotSupportedAtNamespaceScope);
       return scope.root_scope()->lookup_class(SymbolTable::err_symbol);

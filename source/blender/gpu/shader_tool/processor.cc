@@ -484,6 +484,12 @@ void SourceProcessor::scan_external_symbols(SourceManager &sources,
         SourceProcessor processor(buffer.str(), file, language, file_list_);
         /* Recursive. */
         processor.parse_include_and_symbols(sources, symbols, visited_files);
+
+        /* If an error occur, cancel everything and let the error bubble up. */
+        if (processor.error_handler.err) {
+          this->error_handler.err = processor.error_handler.err;
+          throw ParserException();
+        }
       }
     }
   }
