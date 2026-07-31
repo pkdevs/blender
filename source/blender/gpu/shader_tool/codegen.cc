@@ -1564,10 +1564,8 @@ struct CodegenContext : NodeErrorHandler {
           else if (type->identifier == "uint") {
             builder.ss << "!=0u";
           }
-          else if (type->identifier != "bool") {
-            error(child,
-                  "Value of type '" + type->identifier +
-                      "' is not contextually convertible to 'bool'");
+          else if (type->identifier != "bool" && type->identifier != "bool32_t") {
+            error(child, Diag::TypeNotConvertibleToBool, type->identifier);
           }
         }
       }
