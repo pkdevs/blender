@@ -5,8 +5,8 @@
 /** \file
  * \ingroup mathutils
  *
- * This file defines the 'mathutils.kdtree' module, a general purpose module to access
- * blenders kdtree for 3d spatial lookups.
+ * This file defines the `mathutils.kdtree` module, a general purpose module to access
+ * `BLI_kdtree` for 2D/3D spatial lookups.
  */
 
 #include <Python.h>
@@ -208,6 +208,7 @@ static PyObject *py_kdtree_insert(PyKDTree *self, PyObject *args, PyObject *kwar
 
 /** \} */
 
+/* -------------------------------------------------------------------- */
 /** \name KDTree Methods: Balance
  * \{ */
 
@@ -236,6 +237,7 @@ static PyObject *py_kdtree_balance(PyKDTree *self)
 
 /** \} */
 
+/* -------------------------------------------------------------------- */
 /** \name KDTree Methods: Find
  * \{ */
 
@@ -366,7 +368,8 @@ static PyObject *py_kdtree_find(PyKDTree *self, PyObject *args, PyObject *kwargs
 
 /** \} */
 
-/** \name KDTree Methods: Find_n
+/* -------------------------------------------------------------------- */
+/** \name KDTree Methods: Find N
  * \{ */
 
 PyDoc_STRVAR(
@@ -453,7 +456,8 @@ static PyObject *py_kdtree_find_n(PyKDTree *self, PyObject *args, PyObject *kwar
 
 /** \} */
 
-/** \name KDTree Methods: Find_range
+/* -------------------------------------------------------------------- */
+/** \name KDTree Methods: Find Range
  * \{ */
 
 PyDoc_STRVAR(
@@ -557,6 +561,7 @@ static PyObject *py_kdtree_dimensions_get(PyKDTree *self, void * /*closure*/)
 {
   return PyLong_FromLong(self->dimensions);
 }
+
 /** \} */
 
 /* -------------------------------------------------------------------- */
