@@ -275,7 +275,7 @@ static Block *menu_add_shortcut(bContext *C, ARegion *region, void *arg)
    * than being found on adding later... */
   wmKeyMap *km = WM_keymap_guess_opname(C, idname);
   KeyMapItem_Params params{};
-  params.type = EVT_AKEY;
+  params.type = EVENT_NONE;
   params.value = KM_PRESS;
   params.modifier = 0;
   params.direction = KM_ANY;
