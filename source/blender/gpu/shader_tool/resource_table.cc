@@ -85,7 +85,7 @@ void SourceProcessor::lower_srt_accessor_templates(Parser &parser)
  */
 void SourceProcessor::lower_srt_accessor_templates_ast(Parser &parser)
 {
-  for (ClassDecl decl : parser.root().children_of_type<ClassDecl>()) {
+  for (ClassDecl decl : parser.root().descendants_of_type<ClassDecl>()) {
     for (VarDecl var : decl.body().children_of_type<VarDecl>()) {
       IdType type = var.type();
       bool is_resource_table = var.attributes().contains_attr("resource_table");

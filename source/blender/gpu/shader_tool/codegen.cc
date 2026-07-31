@@ -406,6 +406,7 @@ struct CodegenContext : NodeErrorHandler {
           break;
         case NodeType::SwitchCase: {
           SwitchCase switch_case(node);
+          jump_to(switch_case.front());
           match_if(Case, Default);
           if (!switch_case.is_default_case()) {
             Node val = switch_case.value();
@@ -427,6 +428,7 @@ struct CodegenContext : NodeErrorHandler {
           assert(0);
       }
     }
+    jump_to(stmt.back());
     match_if('}');
   }
 
@@ -1075,7 +1077,7 @@ struct CodegenContext : NodeErrorHandler {
       builder.curr = decl.front();
       skip_node(decl.attributes());
       id_type(decl.return_type(), scope);
-      id_func_resolved(decl.identifier(), decl.arguments(), scope);
+      id_func_resolved(decl.identifier(), decl.arguments(), scope, scope);
       func_arg_list(decl.arguments(), body_scope, false);
       builder << string(";\n");
     }
@@ -1115,7 +1117,7 @@ struct CodegenContext : NodeErrorHandler {
     LocalScope body = decl.body();
 
     if (inst_fn == nullptr) {
-      inst_fn = id_func_resolved_lookup(decl.identifier(), decl.arguments(), scope);
+      inst_fn = id_func_resolved_lookup(decl.identifier(), decl.arguments(), scope, scope);
     }
 
     if (inst_fn->fn_type == SymbolFunction::MEMBER && decl.is_template()) {
@@ -1770,7 +1772,8 @@ struct CodegenContext : NodeErrorHandler {
       return;
     }
 
-    SymbolFunction *sym = id_func_resolved(call.identifier(), call.parameters(), scope);
+    SymbolFunction *sym = id_func_resolved(
+        call.identifier(), call.parameters(), scope, expr_scope);
     func_param_list(call.parameters(), expr_scope, sym);
 
     member_access(expr_scope, call, sym->return_type);
@@ -2059,16 +2062,20 @@ struct CodegenContext : NodeErrorHandler {
   template<typename ArgOrParamList>
   SymbolFunction *id_func_resolved_lookup(IdQualified id,
                                           ArgOrParamList params,
-                                          const SymbolScope &scope)
+                                          const SymbolScope &scope,
+                                          const SymbolScope &param_scope)
   {
     assert(id.is_valid());
-    return scope.lookup_function(id, params, symbols).unwrap(this);
+    return scope.lookup_function(id, params, symbols, param_scope).unwrap(this);
   }
 
   template<typename ArgOrParamList>
-  SymbolFunction *id_func_resolved(IdQualified id, ArgOrParamList params, const SymbolScope &scope)
+  SymbolFunction *id_func_resolved(IdQualified id,
+                                   ArgOrParamList params,
+                                   const SymbolScope &scope,
+                                   const SymbolScope &param_scope)
   {
-    SymbolFunction *func = id_func_resolved_lookup(id, params, scope);
+    SymbolFunction *func = id_func_resolved_lookup(id, params, scope, param_scope);
     builder.curr = id.back();
     builder << func->identifier + trivia(id);
     return func;

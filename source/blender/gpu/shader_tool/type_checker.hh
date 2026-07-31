@@ -99,16 +99,14 @@ struct ExpressionTypeParser {
       case NodeType::Expr: {
         ExpressionTypeParser ctx(table, scope, Expr(node).child_first());
         ctx.is_subscript_expr = this->is_subscript_expr;
-        auto [cls, err] = ctx.eval();
-        error(err);
+        SymbolClass *cls = ctx.eval().unwrap(err);
         merge_errors(ctx, false);
         return cls;
       }
       case NodeType::ExprSub: {
         ExpressionTypeParser ctx(table, scope, ExprSub(node).expr().child_first());
         ctx.is_subscript_expr = this->is_subscript_expr;
-        auto [cls, err] = ctx.eval();
-        error(err);
+        SymbolClass *cls = ctx.eval().unwrap(err);
         merge_errors(ctx, false);
         return cls;
       }
@@ -298,12 +296,13 @@ struct ExpressionTypeParser {
   {
     switch (member.type()) {
       case NodeType::FuncCall: {
-        FuncCall fun = member;
+        FuncCall call = member;
         if (!first_function_call.is_valid()) {
-          first_function_call = fun;
+          first_function_call = call;
         }
-        auto [sym, err] = left->lookup_function(fun.identifier());
-        error(err);
+        SymbolFunction *sym = left->lookup_function(
+                                      call.identifier(), call.parameters(), *table, *scope)
+                                  .unwrap(err);
         return sym->return_type;
       }
       case NodeType::LocalVar: {
@@ -330,9 +329,7 @@ struct ExpressionTypeParser {
     if (!first_temporary.is_valid()) {
       this->first_temporary = ctor;
     }
-    auto [cls, err] = scope->lookup_class(ctor.id());
-    error(err);
-    return cls;
+    return scope->lookup_class(ctor.id()).unwrap(err);
   }
 
   SymbolClass *fun_call(FuncCall call)
@@ -355,8 +352,7 @@ struct ExpressionTypeParser {
         error(params, Diag::ExpectedOneTypename);
         return table->err_cls;
       }
-      auto [type, err] = scope->lookup_class(var.identifier());
-      error(err);
+      SymbolClass *type = scope->lookup_class(var.identifier()).unwrap(err);
       if (!type->is_srt()) {
         error(params, Diag::ExpectedResourceTableTypename);
         return table->err_cls;
@@ -367,8 +363,8 @@ struct ExpressionTypeParser {
     if (!first_function_call.is_valid()) {
       first_function_call = call;
     }
-    auto [fn, err_fn] = scope->lookup_function(call.identifier(), call.parameters(), *table);
-    error(err_fn);
+    SymbolFunction *fn =
+        scope->lookup_function(call.identifier(), call.parameters(), *table, *scope).unwrap(err);
     return fn->return_type;
   }
 
@@ -418,8 +414,7 @@ struct ExpressionTypeParser {
   {
     ExpressionTypeParser ctx(table, scope, Subscript(node).expr().child_first());
     ctx.is_subscript_expr = true;
-    auto [type, err] = ctx.eval();
-    error(err);
+    SymbolClass *type = ctx.eval().unwrap(err);
     if (type != table->int_cls && type != table->uint_cls) {
       error(node, Diag::SubscriptNotInt);
     }

@@ -290,7 +290,8 @@ struct SymbolScope : Symbol {
   template<typename ArgOrParamList>
   Result<SymbolFunction *> lookup_function(IdQualified id,
                                            ArgOrParamList params,
-                                           const SymbolTable &table) const;
+                                           const SymbolTable &table,
+                                           const SymbolScope &arguments_scope) const;
   Result<SymbolClass *> lookup_class(IdQualified id) const;
 
   Result<SymbolClass *> lookup_class(Id id, Id last) const;
@@ -395,9 +396,13 @@ struct SymbolFunction : SymbolScope {
   enum Type { STATIC, MEMBER, GLOBAL } fn_type;
   enum class EntryPointType { FRAG, VERT, COMP, NONE } entry_point_type;
 
-  SymbolFunction(SymbolScope *parent, FuncDecl decl, const string &suffix = "")
+  SymbolFunction(SymbolScope *parent,
+                 SymbolClass *return_type,
+                 FuncDecl decl,
+                 const string &suffix = "")
       : SymbolScope(
             parent, decl.front(), string(decl.identifier().name().str()) + suffix, FUNCTION),
+        return_type(return_type),
         fn_type(decl.is_method() ? (decl.is_static() ? STATIC : MEMBER) : GLOBAL),
         entry_point_type(EntryPointType::NONE)
   {
@@ -418,8 +423,10 @@ struct SymbolFunction : SymbolScope {
     }
   }
 
-  SymbolFunction(SymbolScope *parent, Token tok, const string &id, Type fn_type)
+  SymbolFunction(
+      SymbolScope *parent, Token tok, SymbolClass *return_type, const string &id, Type fn_type)
       : SymbolScope(parent, tok, id, FUNCTION),
+        return_type(return_type),
         fn_type(fn_type),
         entry_point_type(EntryPointType::NONE)
   {
@@ -437,12 +444,15 @@ struct SymbolFunction : SymbolScope {
   }
 
   /* To be called on the first registered overload. */
-  Result<SymbolFunction *> lookup_overload(IdQualified id, const vector<SymbolClass *> &arg_types);
+  Result<SymbolFunction *> lookup_overload(IdQualified id,
+                                           const SymbolTable &table,
+                                           const vector<SymbolClass *> &arg_types);
 
   void add_overload(SymbolFunction *fn);
+  void add_argument(SymbolClass *type, Expr default_value = {});
 
   /* Return true if the given argument types are compatible */
-  bool argument_matches(const vector<SymbolClass *> &param_types) const;
+  bool argument_matches(const SymbolTable &table, const vector<SymbolClass *> &param_types) const;
 
   static Result<vector<SymbolClass *>> to_arg_types(const SymbolTable &table,
                                                     const SymbolScope &scope,
@@ -684,6 +694,12 @@ struct SymbolTable {
   SymbolClass *err_cls;
   SymbolClass *bool_cls;
   SymbolClass *void_cls;
+  SymbolClass *float2_cls;
+  SymbolClass *float3_cls;
+  SymbolClass *float4_cls;
+  SymbolClass *packed_float2_cls;
+  SymbolClass *packed_float3_cls;
+  SymbolClass *packed_float4_cls;
 
   OperatorMap operators;
 
@@ -719,6 +735,7 @@ struct SymbolTable {
                                        bool allow_compilation_constant = false);
 
   SymbolClass *get_literal_type(string_view lit) const;
+  bool is_convertible(const SymbolClass *from, const SymbolClass *to) const;
 
  private:
   struct BuiltinType {

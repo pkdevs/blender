@@ -183,6 +183,10 @@ vector<SymbolTable::BuiltinOp> SymbolTable::generate_all_operators(
   ops.emplace_back("bool", LogicalAnd, "bool", "bool");
   ops.emplace_back("bool", LogicalOr, "bool", "bool");
 
+  /* Add packed_float3 operators in order to support most auto casts. */
+  ops.emplace_back("", Plus, "packed_float3", "packed_float3");
+  ops.emplace_back("", Minus, "packed_float3", "packed_float3");
+
   return ops;
 }
 

@@ -751,8 +751,7 @@ struct SymbolParser : NodeErrorHandler {
       SymbolVariable *var = table.var_arena.alloc(&scope, type, arg.declarator());
       scope.variables.emplace(var->identifier, var);
       /* Register argument type for argument resolution. */
-      fn_sym->arg_types.emplace_back(type);
-      fn_sym->arg_defaults.emplace_back(arg.declarator().initial_value().expr());
+      fn_sym->add_argument(type, arg.declarator().initial_value().expr());
 
       switch (attr.res_type) {
         case ResourceType::BASE_INSTANCE:
@@ -945,8 +944,7 @@ struct SymbolParser : NodeErrorHandler {
       /* Macro is not empty and defines something. Assume it is a int constant. */
       if (is_func) {
         SymbolFunction *fn = table.fun_arena.alloc(
-            root, name, string(name.str()), SymbolFunction::GLOBAL);
-        fn->return_type = table.int_cls;
+            root, name, table.int_cls, string(name.str()), SymbolFunction::GLOBAL);
 
         root->functions.try_emplace(fn->identifier, fn);
       }
@@ -1098,14 +1096,12 @@ struct SymbolParser : NodeErrorHandler {
         string id(table.binary_type_to_id.find(op)->second);
         {
           SymbolFunction *sym = table.fun_arena.alloc(
-              table.root, decl.front(), id, SymbolFunction::GLOBAL);
-          sym->return_type = table.bool_cls;
+              table.root, decl.front(), table.bool_cls, id, SymbolFunction::GLOBAL);
           table.operators.emplace(OperatorKey(underlying_type, op, cls), sym);
         }
         {
           SymbolFunction *sym = table.fun_arena.alloc(
-              table.root, decl.front(), id, SymbolFunction::GLOBAL);
-          sym->return_type = table.bool_cls;
+              table.root, decl.front(), table.bool_cls, id, SymbolFunction::GLOBAL);
           table.operators.emplace(OperatorKey(cls, op, underlying_type), sym);
         }
       }
@@ -1132,7 +1128,9 @@ struct SymbolParser : NodeErrorHandler {
                                   const std::string &suffix = "",
                                   TemplateInst temp = {})
   {
-    SymbolFunction *fn = table.fun_arena.alloc(&scope, func, suffix);
+    /* Set return type to error type since we need to parse it after template argument
+     * instantiation. */
+    SymbolFunction *fn = table.fun_arena.alloc(&scope, table.err_cls, func, suffix);
     bool is_overload = scope.function_emplace(fn);
     if (is_overload && fn->is_entry_point()) {
       error(func.identifier(), Diag::RedefinitionOfEntryPointFunction, func.identifier().str());
@@ -1160,14 +1158,17 @@ struct SymbolParser : NodeErrorHandler {
     /* Do not parse. Only keep the symbol definition. The instantiation will do the parsing. */
     if (decl.is_function()) {
       FuncDecl fn_decl(decl.decl());
-      SymbolFunction *fn = table.fun_arena.alloc(&scope, fn_decl);
+      /* Set return type to error type since we need to parse it after template argument
+       * instantiation. */
+      SymbolFunction *fn = table.fun_arena.alloc(&scope, table.err_cls, fn_decl);
       fn->is_complete = false;
       fn = scope.functions.try_emplace(fn->identifier, fn).first->second;
       if (fn->template_data) {
         error(fn_decl.identifier(), Diag::RedefinitionTemplate, fn_decl.identifier().str());
-        return;
       }
-      fn->template_data = table.tmp_fun_arena.alloc(decl);
+      else {
+        fn->template_data = table.tmp_fun_arena.alloc(decl);
+      }
     }
     else {
       SymbolClassTemplate *temp = table.tmp_cls_arena.alloc(decl);
@@ -1757,11 +1758,7 @@ Result<vector<SymbolClass *>> SymbolFunction::to_arg_types(const SymbolTable &ta
   std::optional<AstNodeException> error;
   vector<SymbolClass *> arg_types;
   for (Expr expr : list.children_of_type<Expr>()) {
-    auto [cls, err] = table.expr_type_analysis(scope, expr);
-    arg_types.emplace_back(cls);
-    if (err && !error) {
-      error = err;
-    }
+    arg_types.emplace_back(table.expr_type_analysis(scope, expr).unwrap(error));
   }
   return {arg_types, error};
 }
@@ -1788,10 +1785,11 @@ static string to_str(const vector<SymbolClass *> &types)
 }
 
 Result<SymbolFunction *> SymbolFunction::lookup_overload(IdQualified id,
+                                                         const SymbolTable &table,
                                                          const vector<SymbolClass *> &arg_types)
 {
   for (SymbolFunction *fn = this; fn; fn = fn->overload_next) {
-    if (fn->is_complete && fn->argument_matches(arg_types)) {
+    if (fn->is_complete && fn->argument_matches(table, arg_types)) {
       return {fn, {}};
     }
   }
@@ -1814,7 +1812,14 @@ void SymbolFunction::add_overload(SymbolFunction *fn)
   this->overload_next = fn;
 }
 
-bool SymbolFunction::argument_matches(const vector<SymbolClass *> &param_types) const
+void SymbolFunction::add_argument(SymbolClass *type, Expr default_value)
+{
+  this->arg_types.emplace_back(type);
+  this->arg_defaults.emplace_back(default_value);
+}
+
+bool SymbolFunction::argument_matches(const SymbolTable &table,
+                                      const vector<SymbolClass *> &param_types) const
 {
   /* First fast filter. */
   if (arg_types == param_types) {
@@ -1827,24 +1832,8 @@ bool SymbolFunction::argument_matches(const vector<SymbolClass *> &param_types) 
   }
 
   for (int i = 0; i < param_types.size(); ++i) {
-    if (arg_types[i] != param_types[i]) {
-      /* Check 'packed_floatX' to 'floatX' promotion. */
-      if (arg_types[i]->identifier == "float3" && param_types[i]->identifier == "packed_float3") {
-        /* Continue matching. */
-      }
-      else if (arg_types[i]->identifier == "float4" &&
-               param_types[i]->identifier == "packed_float4")
-      {
-        /* Continue matching. */
-      }
-      else if (arg_types[i]->identifier == "float2" &&
-               param_types[i]->identifier == "packed_float2")
-      {
-        /* Continue matching. */
-      }
-      else {
-        return false;
-      }
+    if (arg_types[i] != param_types[i] && !table.is_convertible(param_types[i], arg_types[i])) {
+      return false;
     }
   }
 
@@ -1888,7 +1877,8 @@ Result<SymbolFunction *> SymbolScope::lookup_function(IdQualified id) const
 template<typename ArgOrParamList>
 Result<SymbolFunction *> SymbolScope::lookup_function(IdQualified id,
                                                       ArgOrParamList params,
-                                                      const SymbolTable &table) const
+                                                      const SymbolTable &table,
+                                                      const SymbolScope &arguments_scope) const
 {
   auto [func, err] = lookup_function(id);
   if (func->is_error) {
@@ -1899,17 +1889,21 @@ Result<SymbolFunction *> SymbolScope::lookup_function(IdQualified id,
     return {func, err ? err : AstNodeException{id, Diag::UnknownFunction}};
   }
 
-  auto arg_types = SymbolFunction::to_arg_types(table, *this, params).unwrap(err);
-  func = func->lookup_overload(id, arg_types).unwrap(err);
+  auto arg_types = SymbolFunction::to_arg_types(table, arguments_scope, params).unwrap(err);
+  func = func->lookup_overload(id, table, arg_types).unwrap(err);
   return {func, err};
 }
 
-template Result<SymbolFunction *> SymbolScope::lookup_function(IdQualified id,
-                                                               FuncParamList params,
-                                                               const SymbolTable &table) const;
-template Result<SymbolFunction *> SymbolScope::lookup_function(IdQualified id,
-                                                               FuncArgList params,
-                                                               const SymbolTable &table) const;
+template Result<SymbolFunction *> SymbolScope::lookup_function(
+    IdQualified id,
+    FuncParamList params,
+    const SymbolTable &table,
+    const SymbolScope &arguments_scope) const;
+template Result<SymbolFunction *> SymbolScope::lookup_function(
+    IdQualified id,
+    FuncArgList params,
+    const SymbolTable &table,
+    const SymbolScope &arguments_scope) const;
 
 Result<SymbolClass *> SymbolScope::lookup_class(IdQualified id) const
 {
@@ -2322,8 +2316,6 @@ void SymbolTable::register_builtins(LocalScope node)
       {"half", 2, 2},
       {"float", 4, 4},
       {"bool", 1, 1},
-      {"int32_t", 4, 4},
-      {"uint32_t", 4, 4},
       {"bool32_t", 4, 4},
 
       {"string_t", 4, 4},
@@ -2465,8 +2457,7 @@ void SymbolTable::register_builtins(LocalScope node)
     cls->is_std430_compatible = cls->is_std140_compatible;
 
     SymbolFunction *sub_op = fun_arena.alloc(
-        cls, tok, subscript_operator_id, SymbolFunction::MEMBER);
-    sub_op->return_type = root->classes[t.base];
+        cls, tok, root->classes[t.base], subscript_operator_id, SymbolFunction::MEMBER);
 
     cls->operator_subscript = sub_op;
     cls->functions.emplace(subscript_operator_id, sub_op);
@@ -2484,6 +2475,10 @@ void SymbolTable::register_builtins(LocalScope node)
       }
     }
   }
+
+  /* Aliases. */
+  root->classes.emplace("int32_t", root->classes["int"]);
+  root->classes.emplace("uint32_t", root->classes["uint"]);
 
   /* Swizzle Generation */
   /* We do this in a separate loop because a swizzle on a float2 (like .xxxx)
@@ -2520,11 +2515,11 @@ void SymbolTable::register_builtins(LocalScope node)
   }
 
   auto builtin_function_decl = [&](const BuiltinFunc &fn) {
-    SymbolFunction *sym = fun_arena.alloc(root, tok, fn.id, SymbolFunction::GLOBAL);
+    SymbolClass *ret_type = root->lookup_class(fn.return_type);
+    SymbolFunction *sym = fun_arena.alloc(root, tok, ret_type, fn.id, SymbolFunction::GLOBAL);
     sym->is_error = fn.id == err_symbol;
-    sym->return_type = root->lookup_class(fn.return_type);
     for (auto arg : fn.arg_types) {
-      sym->arg_types.emplace_back(root->lookup_class(arg));
+      sym->add_argument(root->lookup_class(arg));
     }
     root->function_emplace(sym, true);
   };
@@ -2571,9 +2566,9 @@ void SymbolTable::register_builtins(LocalScope node)
 
   const vector<BuiltinOp> operators_desc = generate_all_operators(builtin_types);
   for (const auto &op : operators_desc) {
+    SymbolClass *ret_type = root->lookup_class(op.result);
     string id((op.left.empty() ? unary_type_to_id : binary_type_to_id).find(op.op)->second);
-    SymbolFunction *sym = fun_arena.alloc(root, tok, id, SymbolFunction::GLOBAL);
-    sym->return_type = root->lookup_class(op.result);
+    SymbolFunction *sym = fun_arena.alloc(root, tok, ret_type, id, SymbolFunction::GLOBAL);
     SymbolClass *left = op.left.empty() ? nullptr : root->lookup_class(op.left);
     SymbolClass *right = root->lookup_class(op.right);
 
@@ -2634,6 +2629,7 @@ void SymbolTable::register_builtins(LocalScope node)
     root->variables.emplace(sym->identifier, sym);
   }
 
+  /* Fast lookup cache. */
   this->float_cls = root->lookup_class("float");
   this->int_cls = root->lookup_class("int");
   this->uint_cls = root->lookup_class("uint");
@@ -2641,6 +2637,12 @@ void SymbolTable::register_builtins(LocalScope node)
   this->err_cls = root->lookup_class(SymbolTable::err_symbol);
   this->bool_cls = root->lookup_class("bool");
   this->void_cls = root->lookup_class("void");
+  this->float2_cls = root->lookup_class("float2");
+  this->float3_cls = root->lookup_class("float3");
+  this->float4_cls = root->lookup_class("float4");
+  this->packed_float2_cls = root->lookup_class("packed_float2");
+  this->packed_float3_cls = root->lookup_class("packed_float3");
+  this->packed_float4_cls = root->lookup_class("packed_float4");
 }
 
 SymbolClass *SymbolTable::get_literal_type(string_view lit) const
@@ -2665,6 +2667,24 @@ SymbolClass *SymbolTable::get_literal_type(string_view lit) const
     return bool_cls;
   }
   return int_cls;
+}
+
+bool SymbolTable::is_convertible(const SymbolClass *from, const SymbolClass *to) const
+{
+  /* Check 'packed_floatX' to 'floatX' promotion. */
+  if (from == packed_float3_cls && to == float3_cls) {
+    return true;
+  }
+  if (from == packed_float2_cls && to == float2_cls) {
+    return true;
+  }
+  if (from == packed_float4_cls && to == float4_cls) {
+    return true;
+  }
+  if (from == int_cls && to == uint_cls) {
+    return true;
+  }
+  return false;
 }
 
 }  // namespace blender::gpu::shader::parser
