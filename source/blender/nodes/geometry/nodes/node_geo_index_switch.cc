@@ -5,6 +5,7 @@
 #include <fmt/format.h>
 
 #include "node_geometry_util.hh"
+#include "shader/node_shader_util.hh"
 
 #include "UI_interface_c.hh"
 #include "UI_interface_layout.hh"
@@ -24,7 +25,6 @@
 #include "BLO_read_write.hh"
 
 #include "BKE_node_socket_value.hh"
-#include "BKE_node_tree_reference_lifetimes.hh"
 
 #include "COM_node_operation.hh"
 #include "COM_result.hh"
@@ -505,7 +505,7 @@ static void register_node()
 {
   static bke::bNodeType ntype;
 
-  geo_cmp_node_type_base(&ntype, "GeometryNodeIndexSwitch"_ustr, GEO_NODE_INDEX_SWITCH);
+  common_node_type_base(&ntype, "GeometryNodeIndexSwitch"_ustr, GEO_NODE_INDEX_SWITCH);
   ntype.ui_name = "Index Switch";
   ntype.ui_description = "Choose between an arbitrary number of values with an index";
   ntype.enum_name_legacy = "INDEX_SWITCH";

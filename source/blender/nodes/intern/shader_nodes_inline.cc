@@ -20,6 +20,7 @@
 #include "NOD_node_declaration.hh"
 #include "NOD_node_in_compute_context.hh"
 #include "NOD_shader_nodes_inline.hh"
+#include "NOD_socket.hh"
 
 namespace blender::nodes {
 namespace {
@@ -567,6 +568,10 @@ class ShaderNodesInliner {
       this->handle_output_socket__menu_switch(socket);
       return;
     }
+    if (node->is_type("GeometryNodeIndexSwitch"_ustr)) {
+      this->handle_output_socket__index_switch(socket);
+      return;
+    }
     if (node->is_type("FunctionNodeInputMenu"_ustr)) {
       this->handle_output_socket__input_menu(socket);
       return;
@@ -1097,6 +1102,96 @@ class ShaderNodesInliner {
     /* Set the value of the mask output. */
     const bool is_selected = selected_index == socket->index() - 1;
     this->store_socket_value(socket, {PrimitiveSocketValue{is_selected}});
+  }
+
+  void handle_output_socket__index_switch(const SocketInContext &socket)
+  {
+    const NodeInContext node = socket.owner_node();
+    const auto &storage = *static_cast<const NodeIndexSwitch *>(node->storage);
+
+    if (storage.items_num == 0) {
+      this->store_socket_value_fallback(socket);
+      return;
+    }
+
+    const SocketInContext index_input = node.input_socket(0);
+    const SocketValue *index_input_value = value_by_socket_.lookup_ptr(index_input);
+    if (!index_input_value) {
+      /* The index is not known yet, so schedule it for now. */
+      this->schedule_socket(index_input);
+      return;
+    }
+
+    if (const std::optional<PrimitiveSocketValue> primitive_index_value_opt =
+            index_input_value->to_primitive(*index_input->typeinfo))
+    {
+      const int index = std::get<int>(primitive_index_value_opt->value);
+      if (index < 0 || index >= storage.items_num) {
+        this->store_socket_value_fallback(socket);
+        params_.r_error_messages.append(
+            {node.node, fmt::format("{}: {}", TIP_("Index out of range"), index)});
+        return;
+      }
+      this->forward_value_or_schedule(socket, node.input_socket(index + 1));
+      return;
+    }
+
+    const EnsureInputsResult ensured_inputs = this->ensure_node_inputs(node);
+    if (ensured_inputs.has_missing_inputs) {
+      /* Wait until all inputs values are available. */
+      return;
+    }
+
+    bNode &truncate_math_node = *this->add_node("ShaderNodeMath"_ustr);
+    truncate_math_node.custom1 = NODE_MATH_TRUNC;
+    bNodeSocket &truncate_input = *static_cast<bNodeSocket *>(truncate_math_node.inputs.first);
+    bNodeSocket &truncate_output = *static_cast<bNodeSocket *>(truncate_math_node.outputs.first);
+    this->set_input_socket_value(*node, truncate_math_node, truncate_input, *index_input_value);
+
+    bNode *prev_mix = nullptr;
+    bNodeSocket *prev_mix_output = nullptr;
+    for (const int i : IndexRange(storage.items_num + 1)) {
+      bNode &add_math_node = *this->add_node("ShaderNodeMath"_ustr);
+      add_math_node.custom1 = NODE_MATH_ADD;
+      bNodeSocket &add_in_1 = *static_cast<bNodeSocket *>(add_math_node.inputs.first);
+      bNodeSocket &add_in_2 = *add_in_1.next;
+      bNodeSocket &add_out = *static_cast<bNodeSocket *>(add_math_node.outputs.first);
+      bke::node_add_link(dst_tree_, truncate_math_node, truncate_output, add_math_node, add_in_1);
+      static_cast<bNodeSocketValueFloat *>(add_in_2.default_value)->value = 1 - i;
+
+      bNode &mix_node = *this->add_node("ShaderNodeMix"_ustr);
+      auto &mix_storage = *static_cast<NodeShaderMix *>(mix_node.storage);
+      mix_storage.data_type = SOCK_RGBA;  // TODO
+      mix_storage.clamp_result = false;
+      mix_storage.clamp_factor = true;
+      update_node_declaration_and_sockets(dst_tree_, mix_node, nullptr);
+      bNodeSocket &mix_factor_input = *bke::node_find_socket(
+          mix_node, SOCK_IN, "Factor_Float"_ustr);
+      bNodeSocket &mix_input_1 = *bke::node_find_socket(
+          mix_node, SOCK_IN, "A_Color"_ustr);  // TODO
+      bNodeSocket &mix_input_2 = *bke::node_find_socket(
+          mix_node, SOCK_IN, "B_Color"_ustr);  // TODO
+      bNodeSocket &mix_out = *bke::node_find_socket(mix_node, SOCK_OUT, "Result_Color"_ustr);
+      bke::node_add_link(dst_tree_, add_math_node, add_out, mix_node, mix_factor_input);
+      if (i == 0) {
+        this->set_input_socket_value(*node, mix_node, mix_input_1, {FallbackValue{}});
+      }
+      else {
+        bke::node_add_link(dst_tree_, *prev_mix, *prev_mix_output, mix_node, mix_input_1);
+      }
+      if (i < storage.items_num) {
+        this->set_input_socket_value(
+            *node, mix_node, mix_input_2, value_by_socket_.lookup(node.input_socket(i + 1)));
+      }
+      else {
+        this->set_input_socket_value(*node, mix_node, mix_input_2, {FallbackValue{}});
+      }
+
+      prev_mix = &mix_node;
+      prev_mix_output = &mix_out;
+    }
+
+    this->store_socket_value(socket, {LinkedSocketValue{prev_mix, prev_mix_output}});
   }
 
   void handle_output_socket__input_menu(const SocketInContext &socket)
