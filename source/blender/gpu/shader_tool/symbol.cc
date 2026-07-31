@@ -710,7 +710,8 @@ struct SymbolParser : NodeErrorHandler {
         }
         IdQualified type_id(LocalVar(param.child_first()).identifier());
         SymbolClass *resolved = inst_scope.lookup_class(type_id).unwrap(this);
-        scope.classes.emplace(id, resolved);
+        /* IMPORTANT: Instantiate at argument declaration. Allow correct lookup. */
+        scope.classes.emplace(id, resolved, arg.id().front());
       }
       else {
         IdQualified type = arg.type();
@@ -894,7 +895,7 @@ struct SymbolParser : NodeErrorHandler {
       /* Add `this_` to the var declarations. */
       auto &fns = scope.parent->functions;
       if (auto it = fns.find(scope.identifier); it != fns.end()) {
-        SymbolFunction *fn = it->second;
+        SymbolFunction *fn = it->second.second;
         if (fn->fn_type == SymbolFunction::MEMBER) {
           SymbolVariable *var = table.var_arena.alloc(
               &scope, fn->parent_class(), decl.front(), "this_");
@@ -946,7 +947,7 @@ struct SymbolParser : NodeErrorHandler {
         SymbolFunction *fn = table.fun_arena.alloc(
             root, name, table.int_cls, string(name.str()), SymbolFunction::GLOBAL);
 
-        root->functions.try_emplace(fn->identifier, fn);
+        root->functions.emplace(fn);
       }
       else {
         SymbolClass *type = table.int_cls;
@@ -972,12 +973,12 @@ struct SymbolParser : NodeErrorHandler {
             }
             if (cls) {
               /* TODO: Make a warning/error if this just defines a type alias. */
-              root->classes.try_emplace(string(name.str()), cls);
+              root->classes.emplace(string(name.str()), cls);
             }
           }
         }
         SymbolVariable *var = table.var_arena.alloc(root, type, name, string(name.str()));
-        root->variables.try_emplace(var->identifier, var);
+        root->variables.emplace(var->identifier, var);
       }
       /* TODO: Make a warning/error if this just defines a constant in global space without #if
        * directives. */
@@ -1013,7 +1014,7 @@ struct SymbolParser : NodeErrorHandler {
       }
       string identifier(name.name().str());
       if (type) {
-        scope.classes.emplace(identifier, type);
+        scope.classes.emplace(identifier, type, stmt.id().front());
         return;
       }
     }
@@ -1060,7 +1061,7 @@ struct SymbolParser : NodeErrorHandler {
                                 SymbolClassTemplate *cls_template = nullptr)
   {
     SymbolClass *cls = table.cls_arena.alloc(&scope, decl, suffix);
-    if (!scope.classes.try_emplace(cls->identifier, cls).second) {
+    if (!scope.classes.emplace(cls).second) {
       error(decl, Diag::Redefinition, cls->identifier);
       return table.err_cls;
     }
@@ -1162,7 +1163,7 @@ struct SymbolParser : NodeErrorHandler {
        * instantiation. */
       SymbolFunction *fn = table.fun_arena.alloc(&scope, table.err_cls, fn_decl);
       fn->is_complete = false;
-      fn = scope.functions.try_emplace(fn->identifier, fn).first->second;
+      fn = scope.functions.emplace(fn).first;
       if (fn->template_data) {
         error(fn_decl.identifier(), Diag::RedefinitionTemplate, fn_decl.identifier().str());
       }
@@ -1174,7 +1175,7 @@ struct SymbolParser : NodeErrorHandler {
       SymbolClassTemplate *temp = table.tmp_cls_arena.alloc(decl);
       SymbolClass *cls = table.cls_arena.alloc(&scope, decl.decl());
       cls->template_data = temp;
-      if (!scope.classes.try_emplace(cls->identifier, cls).second) {
+      if (!scope.classes.emplace(cls).second) {
         ClassDecl cls_decl(decl.decl());
         error(cls_decl.identifier(), Diag::Redefinition, cls_decl.identifier().str());
       }
@@ -2014,17 +2015,17 @@ T *SymbolScope::lookup_generic(IdQualified id, const SourceLocation &loc) const
 
   if constexpr (is_same_v<T, SymbolFunction>) {
     if (auto it = functions.find(SymbolTable::err_symbol); it != functions.end()) {
-      return it->second;
+      return it->second.second;
     }
   }
   else if constexpr (is_same_v<T, SymbolClass>) {
     if (auto it = classes.find(SymbolTable::err_symbol); it != classes.end()) {
-      return it->second;
+      return it->second.second;
     }
   }
   else if constexpr (is_same_v<T, SymbolVariable>) {
     if (auto it = variables.find(SymbolTable::err_symbol); it != variables.end()) {
-      return it->second;
+      return it->second.second;
     }
   }
   else {
@@ -2057,7 +2058,7 @@ T *SymbolScope::lookup_generic_nested(Id id, Id last, const SourceLocation &loc)
     if (TemplateParamList list = id.template_params(); list.is_valid()) {
       LOOKUP_LOG("[Nested] Segment '" << id.str() << "' has template params. Checking classes.\n")
       if (auto it = classes.find(string(id.str())); it != classes.end()) {
-        if (SymbolClass *cls = it->second->as_class(); cls && cls->template_data) {
+        if (SymbolClass *cls = it->second.second->as_class(); cls && cls->template_data) {
           if (auto [tmp, _, err] = cls->template_data->lookup_inst(list, *this); !tmp->is_error) {
             LOOKUP_LOG("[Nested] Found template instance scope '" << tmp->identifier << "'.\n")
             return tmp->lookup_generic_nested<T>(id.next_id(), last, loc);
@@ -2079,9 +2080,9 @@ T *SymbolScope::lookup_generic_nested(Id id, Id last, const SourceLocation &loc)
 
   if constexpr (is_same_v<T, SymbolFunction>) {
     if (auto it = functions.find(string(id.str())); it != functions.end()) {
-      if (it->second->loc <= loc) {
-        LOOKUP_LOG("[Nested] Found function match: " << it->second->identifier << "\n")
-        return it->second;
+      if (it->second.first <= loc) {
+        LOOKUP_LOG("[Nested] Found function match: " << it->second.second->identifier << "\n")
+        return it->second.second;
       }
       LOOKUP_LOG(
           "[Nested] Found function, but declared AFTER current source location "
@@ -2090,9 +2091,9 @@ T *SymbolScope::lookup_generic_nested(Id id, Id last, const SourceLocation &loc)
   }
   else if constexpr (is_same_v<T, SymbolClass>) {
     if (auto it = classes.find(string(id.str())); it != classes.end()) {
-      if (it->second->loc <= loc) {
-        LOOKUP_LOG("[Nested] Found class match: " << it->second->identifier << "\n")
-        return it->second;
+      if (it->second.first <= loc) {
+        LOOKUP_LOG("[Nested] Found class match: " << it->second.second->identifier << "\n")
+        return it->second.second;
       }
       LOOKUP_LOG(
           "[Nested] Found class, but declared AFTER current source location "
@@ -2101,14 +2102,14 @@ T *SymbolScope::lookup_generic_nested(Id id, Id last, const SourceLocation &loc)
   }
   else if constexpr (is_same_v<T, SymbolVariable>) {
     if (auto it = variables.find(string(id.str())); it != variables.end()) {
-      if (it->second->loc <= loc) {
+      if (it->second.first <= loc) {
         if (TemplateParamList list = id.template_params(); list.is_valid()) {
           LOOKUP_LOG(
               "[Nested] Found variable match, but rejected: Variables cannot be templated.\n")
           return nullptr;
         }
-        LOOKUP_LOG("[Nested] Found variable match: " << it->second->identifier << "\n")
-        return it->second;
+        LOOKUP_LOG("[Nested] Found variable match: " << it->second.second->identifier << "\n")
+        return it->second.second;
       }
       LOOKUP_LOG(
           "[Nested] Found variable, but declared AFTER current source location "
@@ -2123,17 +2124,17 @@ T *SymbolScope::lookup_generic_nested(Id id, Id last, const SourceLocation &loc)
 
 SymbolClass *SymbolScope::lookup_class(string id) const
 {
-  return classes.find(id)->second;
+  return classes.find(id)->second.second;
 }
 
 SymbolFunction *SymbolScope::lookup_function(string id) const
 {
-  return functions.find(id)->second;
+  return functions.find(id)->second.second;
 }
 
 SymbolVariable *SymbolScope::lookup_variable(string id) const
 {
-  return variables.find(id)->second;
+  return variables.find(id)->second.second;
 }
 
 void SymbolScope::print() const
@@ -2233,13 +2234,14 @@ void SymbolScope::print() const
     vector<Child> children;
     /* Gather children based on the current node type. */
     for (const auto &[name, var] : node->variables) {
-      children.emplace_back(SymbolType::Variable, var->identifier, var, var->type);
+      children.emplace_back(
+          SymbolType::Variable, var.second->identifier, var.second, var.second->type);
     }
     for (const auto &[name, func] : node->functions) {
-      children.emplace_back(SymbolType::Function, func->identifier, func, nullptr);
+      children.emplace_back(SymbolType::Function, func.second->identifier, func.second, nullptr);
     }
     for (const auto &[name, cls] : node->classes) {
-      children.emplace_back(SymbolType::Class, name, cls, nullptr);
+      children.emplace_back(SymbolType::Class, name, cls.second, nullptr);
     }
     for (const auto &[name, scope_ptr] : node->scopes) {
       children.emplace_back(SymbolType::Scope, scope_ptr->identifier, nullptr, nullptr);
@@ -2477,8 +2479,8 @@ void SymbolTable::register_builtins(LocalScope node)
   }
 
   /* Aliases. */
-  root->classes.emplace("int32_t", root->classes["int"]);
-  root->classes.emplace("uint32_t", root->classes["uint"]);
+  root->classes.emplace(string("int32_t"), root->classes["int"]);
+  root->classes.emplace(string("uint32_t"), root->classes["uint"]);
 
   /* Swizzle Generation */
   /* We do this in a separate loop because a swizzle on a float2 (like .xxxx)

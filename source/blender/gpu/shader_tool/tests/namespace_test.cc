@@ -407,4 +407,26 @@ NS_B NS_fn() { return NS_B_C(); }
   }
 }
 
+TEST(shader_tool, Using)
+{
+  {
+    string input = R"(
+struct T {};
+
+namespace A { struct T {}; }
+
+namespace B {
+
+void b(T f) {}
+
+using T = A::T;
+
+void c(T f) {}
+}
+)";
+    auto [output, _, error] = process_test_string(input, Language::BSL);
+    EXPECT_EQ(error, "");
+  }
+}
+
 }  // namespace blender::gpu::tests

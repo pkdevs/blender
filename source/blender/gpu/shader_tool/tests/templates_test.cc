@@ -29,6 +29,15 @@ void funcTA() { A_fn(); }
   }
   {
     string input = R"(
+template<typename T> void f(T a) {}
+struct A {};
+template void f<A>(A);
+)";
+    auto [output, _, error] = process_test_string(input);
+    EXPECT_EQ(error, "");
+  }
+  {
+    string input = R"(
 template<typename T>
 void func() { T a; }
 template void func<float>();

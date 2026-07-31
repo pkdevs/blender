@@ -255,15 +255,43 @@ template<typename T> struct SymbolTemplate {
 using SymbolClassTemplate = SymbolTemplate<SymbolClass>;
 using SymbolFunctionTemplate = SymbolTemplate<SymbolFunction>;
 
+template<typename SymbolT>
+struct SymbolMap : unordered_map<string, pair<SourceLocation, SymbolT *>> {
+  pair<SymbolT *, bool> emplace(SymbolT *sym)
+  {
+    auto [it, success] = this->try_emplace(sym->identifier,
+                                           pair<SourceLocation, SymbolT *>(sym->loc, sym));
+    return pair<SymbolT *, bool>(it->second.second, success);
+  }
+
+  pair<SymbolT *, bool> emplace(const string &id, SymbolT *sym)
+  {
+    auto [it, success] = this->try_emplace(id, pair<SourceLocation, SymbolT *>(sym->loc, sym));
+    return pair<SymbolT *, bool>(it->second.second, success);
+  }
+
+  pair<SymbolT *, bool> emplace(const string &id, SymbolT *sym, SourceLocation loc)
+  {
+    auto [it, success] = this->try_emplace(id, pair<SourceLocation, SymbolT *>(loc, sym));
+    return pair<SymbolT *, bool>(it->second.second, success);
+  }
+
+  SymbolT *operator[](const string &k)
+  {
+
+    return this->find(k)->second.second;
+  }
+};
+
 struct SymbolScope : Symbol {
   friend SymbolParser;
 
   /* Namespaces or nested blocks. */
   unordered_map<string, SymbolScope *> scopes;
 
-  unordered_map<string, SymbolVariable *> variables;
-  unordered_map<string, SymbolFunction *> functions;
-  unordered_map<string, SymbolClass *> classes;
+  SymbolMap<SymbolVariable> variables;
+  SymbolMap<SymbolFunction> functions;
+  SymbolMap<SymbolClass> classes;
 
   /* Function scope act as anonymous scopes but still have identifier. */
   enum Type { FUNCTION, CLASS, NAMESPACE, LOCAL, ROOT } type = ROOT;
@@ -536,9 +564,9 @@ inline SymbolFunction *SymbolScope::parent_function()
 inline bool SymbolScope::function_emplace(SymbolFunction *fn, bool builtin)
 {
   bool result = false;
-  if (auto it = functions.try_emplace(fn->identifier, fn); !it.second) {
+  if (auto it = functions.emplace(fn); !it.second) {
     /* If function already exists, insert overload in the linked list. */
-    it.first->second->add_overload(fn);
+    it.first->add_overload(fn);
     if (!builtin) {
       /* Add suffix to the function identifier to reduce chance of hitting an overload at runtime.
        * This way, the dead code eliminator can discard more functions.
@@ -562,7 +590,7 @@ inline vector<SymbolVariable *> SymbolScope::non_static_variables_in_declaration
   assert(this->type == CLASS);
   vector<SymbolVariable *> members;
   for (const auto &[k, v] : variables) {
-    members.emplace_back(v);
+    members.emplace_back(v.second);
   }
 
   /* Sort elements to guarantee deterministic order. */

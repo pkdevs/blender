@@ -1072,7 +1072,7 @@ struct CodegenContext : NodeErrorHandler {
   {
     string id(decl.identifier().str());
     if (auto it = scope.functions.find(id); it != scope.functions.end()) {
-      SymbolScope &body_scope = *it->second;
+      SymbolScope &body_scope = *it->second.second;
       // jump_to(decl.front()); /* Adds too many directives. */
       builder.curr = decl.front();
       skip_node(decl.attributes());
@@ -1090,8 +1090,10 @@ struct CodegenContext : NodeErrorHandler {
   {
     string str;
     for (auto &[k, var] : scope->variables) {
-      if (var->type->is_srt() && var->type->srt_type != ResourceTableType::VERTEX_OUT) {
-        str += " && defined(CREATE_INFO_" + var->type->identifier + ")";
+      if (var.second->type->is_srt() &&
+          var.second->type->srt_type != ResourceTableType::VERTEX_OUT)
+      {
+        str += " && defined(CREATE_INFO_" + var.second->type->identifier + ")";
       }
     }
     return str.empty() ? str : str.substr(4);
@@ -2054,7 +2056,7 @@ struct CodegenContext : NodeErrorHandler {
   SymbolClass *id_type_resolved(string id, const SymbolScope &scope)
   {
     auto it = scope.classes.find(id);
-    SymbolClass *cls = it->second;
+    SymbolClass *cls = it->second.second;
     builder.ss << cls->identifier;
     return cls;
   }
