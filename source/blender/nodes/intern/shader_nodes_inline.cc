@@ -1191,13 +1191,27 @@ class ShaderNodesInliner {
     bNodeSocket *prev_mix_output = nullptr;
     for (const int i : IndexRange(storage.items_num + 1)) {
       /* Use a math node to turn the index into a factor for the mix node.*/
-      bNode &add_math_node = *this->add_node("ShaderNodeMath"_ustr);
-      add_math_node.custom1 = NODE_MATH_ADD;
-      bNodeSocket &add_in_1 = *static_cast<bNodeSocket *>(add_math_node.inputs.first);
-      bNodeSocket &add_in_2 = *add_in_1.next;
-      bNodeSocket &add_out = *static_cast<bNodeSocket *>(add_math_node.outputs.first);
-      bke::node_add_link(dst_tree_, truncate_math_node, truncate_output, add_math_node, add_in_1);
-      static_cast<bNodeSocketValueFloat *>(add_in_2.default_value)->value = 1 - i;
+      const int index_to_factor_offset = 1 - i;
+
+      bNode *factor_node = nullptr;
+      bNodeSocket *factor_out = nullptr;
+      if (index_to_factor_offset == 0) {
+        /* No need to add an extra math node here that just computes +0. */
+        factor_node = &truncate_math_node;
+        factor_out = &truncate_output;
+      }
+      else {
+        bNode &add_math_node = *this->add_node("ShaderNodeMath"_ustr);
+        add_math_node.custom1 = NODE_MATH_ADD;
+        bNodeSocket &add_in_1 = *static_cast<bNodeSocket *>(add_math_node.inputs.first);
+        bNodeSocket &add_in_2 = *add_in_1.next;
+        bke::node_add_link(
+            dst_tree_, truncate_math_node, truncate_output, add_math_node, add_in_1);
+        static_cast<bNodeSocketValueFloat *>(add_in_2.default_value)->value =
+            index_to_factor_offset;
+        factor_node = &add_math_node;
+        factor_out = static_cast<bNodeSocket *>(add_math_node.outputs.first);
+      }
 
       bNode &mix_node = *this->add_node("ShaderNodeMix"_ustr);
       auto &mix_storage = *static_cast<NodeShaderMix *>(mix_node.storage);
@@ -1210,7 +1224,7 @@ class ShaderNodesInliner {
       bNodeSocket &mix_input_1 = *find_socket_by_name(mix_node, SOCK_IN, "A");
       bNodeSocket &mix_input_2 = *find_socket_by_name(mix_node, SOCK_IN, "B");
       bNodeSocket &mix_out = *find_socket_by_name(mix_node, SOCK_OUT, "Result");
-      bke::node_add_link(dst_tree_, add_math_node, add_out, mix_node, mix_factor_input);
+      bke::node_add_link(dst_tree_, *factor_node, *factor_out, mix_node, mix_factor_input);
       if (i == 0) {
         this->set_input_socket_value(*node, mix_node, mix_input_1, {FallbackValue{}});
       }
