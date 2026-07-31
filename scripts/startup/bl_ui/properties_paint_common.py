@@ -732,8 +732,17 @@ class ShapePanel(BrushPanel):
             row = layout.row(align=True)
             row.prop(brush, "hardness", slider=True)
             if brush.sculpt_capabilities.has_hardness_pressure:
-                row.prop(brush, "invert_hardness_pressure", text="")
                 row.prop(brush, "use_hardness_pressure", text="")
+                if not self.is_popover:
+                    UnifiedPaintPanel.prop_custom_pressure(
+                        layout,
+                        context,
+                        row,
+                        brush,
+                        pressure_name="use_hardness_pressure",
+                        curve_visibility_name="show_hardness_curve",
+                        custom_curve_name="curve_hardness",
+                    )
             has_content = True
 
         if mode == 'SCULPT' and brush.sculpt_brush_type in {'CLAY_STRIPS', 'PAINT'}:
@@ -881,23 +890,6 @@ def brush_settings(layout, context, brush, popover=False):
 
         if capabilities.has_tilt:
             layout.prop(brush, "tilt_strength_factor", slider=True)
-
-        row = layout.row(align=True)
-        row.prop(brush, "use_hardness_pressure", text="")
-        if not popover:
-            UnifiedPaintPanel.prop_custom_pressure(
-                layout,
-                context,
-                row,
-                brush,
-                pressure_name="use_hardness_pressure",
-                curve_visibility_name="show_hardness_curve",
-                custom_curve_name="curve_hardness",
-            )
-
-        if capabilities.has_tip_roundness:
-            layout.prop(brush, "tip_roundness", slider=True)
-            layout.prop(brush, "tip_scale_x", slider=True)
 
         # auto_smooth_factor and use_smooth_pressure
         if capabilities.has_auto_smooth:
