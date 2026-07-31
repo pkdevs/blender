@@ -1,2 +1,3 @@
 Referenced by commit 0dbbcaf1e6b, Fix: Fix potential memory leak in BLI_getenv
 Referenced by issue #74510, Various Addons using filesystem properties (PROP_FILEPATH etc): UnicodeDecodeError: 'utf-8' codec can't decode byte 0xe0 in position 24: invalid continuation byte
+Referenced by pull request #162170, Fix: memory leak in every BLI_getenv call on WIN32
