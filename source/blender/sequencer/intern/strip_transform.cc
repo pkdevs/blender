@@ -355,8 +355,10 @@ static VectorSet<Strip *> query_overwrite_targets(const Scene *scene,
   return targets;
 }
 
-static void strip_transform_handle_overwrite_trim(
-    Scene *scene, const Strip *source, Strip *target, bool covers_left)
+static void strip_transform_handle_overwrite_trim(Scene *scene,
+                                                  const Strip *source,
+                                                  Strip *target,
+                                                  bool covers_left)
 {
   Editing *ed = seq::editing_get(scene);
   VectorSet targets = query_by_reference(target, ed, query_strip_effect_chain);
