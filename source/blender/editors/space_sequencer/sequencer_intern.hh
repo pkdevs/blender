@@ -54,6 +54,10 @@ namespace ed::asset {
 struct AssetItemTree;
 }
 
+namespace seq {
+enum class Side : int;
+}
+
 namespace ed::vse {
 
 class SeqQuadsBatch;
@@ -275,7 +279,7 @@ void SEQUENCER_OT_scene_frame_range_update(wmOperatorType *ot);
  */
 rcti strip_int_bounds_get(const Scene *scene, const Strip *strip);
 
-Strip *find_neighboring_strip(const Scene *scene, const Strip *test, const int lr, int sel);
+Strip *find_neighboring_strip(const Scene *scene, const Strip *test, const seq::Side lr, int sel);
 
 void SEQUENCER_OT_select_all(wmOperatorType *ot);
 void SEQUENCER_OT_select(wmOperatorType *ot);
