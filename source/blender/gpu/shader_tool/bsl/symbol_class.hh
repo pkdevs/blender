@@ -20,6 +20,15 @@ struct SymbolClass : SymbolScope {
   SymbolFunction *operator_subscript = nullptr;
   SymbolClassTemplate *template_data = nullptr;
 
+  /* For enums, the value of the last declaration. */
+  int enum_last_val = -1;
+
+  int size = -1;  /* -1 is for not computed yet. */
+  int align = -1; /* -1 is for not computed yet. */
+
+  /* For builtin types, number of components. */
+  char comp_len = 0;
+
   bool is_builtin = false;
   bool is_anonymous = false;
   bool is_union = false;
@@ -27,12 +36,6 @@ struct SymbolClass : SymbolScope {
   bool is_std140_compatible = false;
   bool is_std430_compatible = false;
   bool is_error = false;
-
-  /* For enums, the value of the last declaration. */
-  int enum_last_val = -1;
-
-  int size = -1;  /* -1 is for not computed yet. */
-  int align = -1; /* -1 is for not computed yet. */
 
   SymbolClass(SymbolScope *parent, ast::ClassDecl decl, const string &suffix = "");
 
@@ -42,9 +45,9 @@ struct SymbolClass : SymbolScope {
               int size_in_bytes = 1,
               int align_in_bytes = 1)
       : SymbolScope(parent, tok, builtin_id, CLASS),
-        is_builtin(true),
         size(size_in_bytes),
-        align(align_in_bytes)
+        align(align_in_bytes),
+        is_builtin(true)
   {
   }
 

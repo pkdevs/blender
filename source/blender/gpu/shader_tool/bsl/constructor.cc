@@ -19,149 +19,113 @@ vector<SymbolTable::BuiltinFunc> SymbolTable::generate_all_constructors(
 {
   vector<BuiltinFunc> funcs;
 
-  /* Isolate types by size for component-wise and mixed constructors. */
-  vector<BuiltinType> scalars;
-  vector<BuiltinType> vec2s;
-  vector<BuiltinType> vec3s;
+  /* Group types by their base scalar/component type (e.g., float, int, bool) and dimension. */
+  struct TypeFamily {
+    const BuiltinType *scalar = nullptr; /* size 1 (e.g., float) */
+    const BuiltinType *vec2 = nullptr;   /* size 2 (e.g., float2) */
+    const BuiltinType *vec3 = nullptr;   /* size 3 (e.g., float3) */
+    const BuiltinType *vec4 = nullptr;   /* size 4 (e.g., float4) */
+  };
+
+  unordered_map<string, TypeFamily> families;
   for (const auto &t : types) {
     if (t.size == 1) {
-      scalars.push_back(t);
+      families[t.base].scalar = &t;
     }
     else if (t.size == 2) {
-      vec2s.push_back(t);
+      families[t.base].vec2 = &t;
     }
     else if (t.size == 3) {
-      vec3s.push_back(t);
-    }
-  }
-
-  /* Vector and Scalar Constructors. */
-  for (const auto &t : types) {
-    /* Single-Argument Constructors. */
-    for (const auto &u : types) {
-      if (t.size == u.size) {
-        /* Cast or Copy (e.g., float3(int3), int(float), float(float)) */
-        funcs.push_back({t.name, t.name, {u.name}});
-      }
-      else if (t.size > 1 && u.size == 1) {
-        /* Scalar-to-Vector Broadcast (e.g., float4(float), int3(bool)) */
-        funcs.push_back({t.name, t.name, {u.name}});
-      }
-    }
-
-    /* Component-wise Constructors.
-     * Generates all scalar permutations matching the vector's size.
-     * e.g., float3(int, float, bool). */
-    if (t.size == 2) {
-      for (const auto &s1 : scalars) {
-        for (const auto &s2 : scalars) {
-          funcs.push_back({t.name, t.name, {s1.name, s2.name}});
-        }
-      }
-    }
-    else if (t.size == 3) {
-      /* 1 + 1 + 1 (e.g., float3(int, float, bool)). */
-      for (const auto &s1 : scalars) {
-        for (const auto &s2 : scalars) {
-          for (const auto &s3 : scalars) {
-            funcs.push_back({t.name, t.name, {s1.name, s2.name, s3.name}});
-          }
-        }
-      }
-      /* 1 + 2 (e.g., float3(float, int2)). */
-      for (const auto &s : scalars) {
-        for (const auto &v2 : vec2s) {
-          funcs.push_back({t.name, t.name, {s.name, v2.name}});
-        }
-      }
-      /* 2 + 1 (e.g., float3(int2, float)). */
-      for (const auto &v2 : vec2s) {
-        for (const auto &s : scalars) {
-          funcs.push_back({t.name, t.name, {v2.name, s.name}});
-        }
-      }
+      families[t.base].vec3 = &t;
     }
     else if (t.size == 4) {
-      /* 1 + 1 + 1 + 1 (e.g., float4(int, float, bool, int)) */
-      for (const auto &s1 : scalars) {
-        for (const auto &s2 : scalars) {
-          for (const auto &s3 : scalars) {
-            for (const auto &s4 : scalars) {
-              funcs.push_back({t.name, t.name, {s1.name, s2.name, s3.name, s4.name}});
-            }
-          }
-        }
+      families[t.base].vec4 = &t;
+    }
+  }
+
+  /* Vector and Scalar Constructors (restricted to matching component types). */
+  for (const auto &[base_name, family] : families) {
+    const auto *s = family.scalar;
+    const auto *v2 = family.vec2;
+    const auto *v3 = family.vec3;
+    const auto *v4 = family.vec4;
+
+    /* Scalar Copy: float(float) */
+    if (s) {
+      funcs.push_back({s->name, s->name, {s->name}});
+    }
+
+    /* Vec2 Constructors */
+    if (v2) {
+      /* Copy: float2(float2) */
+      funcs.push_back({v2->name, v2->name, {v2->name}});
+      if (s) {
+        /* Broadcast: float2(float) */
+        funcs.push_back({v2->name, v2->name, {s->name}});
+        /* Component-wise (1+1): float2(float, float) */
+        funcs.push_back({v2->name, v2->name, {s->name, s->name}});
       }
-      /* 1 + 3 (e.g., float4(float, int3)) */
-      for (const auto &s : scalars) {
-        for (const auto &v3 : vec3s) {
-          funcs.push_back({t.name, t.name, {s.name, v3.name}});
-        }
+    }
+
+    /* Vec3 Constructors */
+    if (v3) {
+      /* Copy: float3(float3) */
+      funcs.push_back({v3->name, v3->name, {v3->name}});
+      if (s) {
+        /* Broadcast: float3(float) */
+        funcs.push_back({v3->name, v3->name, {s->name}});
+        /* 1 + 1 + 1: float3(float, float, float) */
+        funcs.push_back({v3->name, v3->name, {s->name, s->name, s->name}});
       }
-      /* 3 + 1 (e.g., float4(int3, float)) */
-      for (const auto &v3 : vec3s) {
-        for (const auto &s : scalars) {
-          funcs.push_back({t.name, t.name, {v3.name, s.name}});
-        }
+      if (s && v2) {
+        /* 1 + 2: float3(float, float2) */
+        funcs.push_back({v3->name, v3->name, {s->name, v2->name}});
+        /* 2 + 1: float3(float2, float) */
+        funcs.push_back({v3->name, v3->name, {v2->name, s->name}});
       }
-      /* 2 + 2 (e.g., float4(float2, int2)) */
-      for (const auto &v2a : vec2s) {
-        for (const auto &v2b : vec2s) {
-          funcs.push_back({t.name, t.name, {v2a.name, v2b.name}});
-        }
+    }
+
+    /* Vec4 Constructors */
+    if (v4) {
+      /* Copy: float4(float4) */
+      funcs.push_back({v4->name, v4->name, {v4->name}});
+      if (s) {
+        /* Broadcast: float4(float) */
+        funcs.push_back({v4->name, v4->name, {s->name}});
+        /* 1 + 1 + 1 + 1: float4(float, float, float, float) */
+        funcs.push_back({v4->name, v4->name, {s->name, s->name, s->name, s->name}});
       }
-      /* 2 + 1 + 1 (e.g., float4(float2, int, int)) */
-      for (const auto &v2 : vec2s) {
-        for (const auto &s1 : scalars) {
-          for (const auto &s2 : scalars) {
-            funcs.push_back({t.name, t.name, {v2.name, s1.name, s2.name}});
-          }
-        }
+      if (s && v3) {
+        /* 1 + 3: float4(float, float3) */
+        funcs.push_back({v4->name, v4->name, {s->name, v3->name}});
+        /* 3 + 1: float4(float3, float) */
+        funcs.push_back({v4->name, v4->name, {v3->name, s->name}});
       }
-      /* 1 + 2 + 1 (e.g., float4(int, float2, int)) */
-      for (const auto &s1 : scalars) {
-        for (const auto &v2 : vec2s) {
-          for (const auto &s2 : scalars) {
-            funcs.push_back({t.name, t.name, {s1.name, v2.name, s2.name}});
-          }
-        }
+      if (v2) {
+        /* 2 + 2: float4(float2, float2) */
+        funcs.push_back({v4->name, v4->name, {v2->name, v2->name}});
       }
-      /* 1 + 1 + 2 (e.g., float4(int, int, float2)) */
-      for (const auto &s1 : scalars) {
-        for (const auto &s2 : scalars) {
-          for (const auto &v2 : vec2s) {
-            funcs.push_back({t.name, t.name, {s1.name, s2.name, v2.name}});
-          }
-        }
+      if (s && v2) {
+        /* 2 + 1 + 1: float4(float2, float, float) */
+        funcs.push_back({v4->name, v4->name, {v2->name, s->name, s->name}});
+        /* 1 + 2 + 1: float4(float, float2, float) */
+        funcs.push_back({v4->name, v4->name, {s->name, v2->name, s->name}});
+        /* 1 + 1 + 2: float4(float, float, float2) */
+        funcs.push_back({v4->name, v4->name, {s->name, s->name, v2->name}});
       }
     }
   }
 
-  /* Generates matrices across all base scalar types. */
+  /* Matrix Constructors (restricted to matching "float" component type). */
   for (int n = 2; n <= 4; ++n) {
     for (int m = 2; m <= 4; ++m) {
-      /* Construct the matrix type name (e.g., float3x3). */
       string mat_name = "float" + to_string(n) + "x" + to_string(m);
-
-      /* Broadcast Constructor: Matrix initialized by a single scalar.
-       * e.g., float3x3(float). */
-      for (const auto &s : scalars) {
-        funcs.push_back({mat_name, mat_name, {s.name}});
-      }
-
-      /* All-Scalar Constructor: Matrix initialized by N*N scalars.
-       * Uses uniform scalar types to avoid combinatorial memory explosion.
-       * e.g., float2x2(float, float, float, float) */
-      for (const auto &s : scalars) {
-        vector<string> args(n * n, s.name);
-        funcs.push_back({mat_name, mat_name, args});
-      }
-
-      /* All-Vector Constructor: Matrix initialized by N column/row vectors.
-       * Requires vectors matching the dimension N.
-       * e.g., float3x3(float3, float3, float3), float4x4(int4, int4, int4, int4) */
-      vector<string> args(n, "float" + to_string(n));
-      funcs.push_back({mat_name, mat_name, args});
+      /* Broadcast: float3x3(float) */
+      funcs.push_back({mat_name, mat_name, {"float"}});
+      /* All-Scalar: float3x3(float, float, ...) [N*N scalars] */
+      funcs.push_back({mat_name, mat_name, vector<string>(n * n, "float")});
+      /* All-Vector: float3x3(float3, float3, float3) [N vectors] */
+      funcs.push_back({mat_name, mat_name, vector<string>(n, "float" + to_string(n))});
     }
   }
 

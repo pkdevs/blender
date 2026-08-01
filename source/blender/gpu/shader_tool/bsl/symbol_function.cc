@@ -94,7 +94,9 @@ bool SymbolFunction::argument_matches(const SymbolTable &table,
   }
 
   for (int i = 0; i < param_types.size(); ++i) {
-    if (arg_types[i] != param_types[i] && !table.is_convertible(param_types[i], arg_types[i])) {
+    if (arg_types[i] != param_types[i] &&
+        !table.is_convertible(param_types[i], arg_types[i], is_builtin_ctor))
+    {
       return false;
     }
   }

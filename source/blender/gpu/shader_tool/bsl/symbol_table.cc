@@ -236,7 +236,31 @@ void SymbolTable::register_builtins(LocalScope node)
     size_t align;
   };
 
-  const vector<BuiltinBasicType> types = {
+  const vector<BuiltinBasicType> basic_types = {
+      {err_symbol, 1, 1},
+
+      {"char", 1, 1},
+      {"short", 2, 2},
+      {"int", 4, 4},
+      {"uchar", 1, 1},
+      {"ushort", 2, 2},
+      {"uint", 4, 4},
+      {"half", 2, 2},
+      {"float", 4, 4},
+      {"bool", 1, 1},
+      {"bool32_t", 4, 4},
+  };
+
+  for (const auto &t : basic_types) {
+    SymbolClass *cls = cls_arena.alloc(root, tok, t.id, t.size, t.align);
+    cls->is_std140_compatible = t.align == 4;
+    cls->is_std430_compatible = t.align == 4;
+    cls->comp_len = 1;
+    cls->is_error = t.id == err_symbol;
+    root->classes.emplace(t.id, cls);
+  }
+
+  const vector<BuiltinBasicType> special_types = {
       {err_symbol, 1, 1},
 
       {"void", 1, 1}, /* Only for function return type. */
@@ -315,13 +339,9 @@ void SymbolTable::register_builtins(LocalScope node)
       {"ShaderCreateInfo", 1, 1}, /* Only for compatibility. To be removed. */
   };
 
-  for (const auto &t : types) {
-    SymbolClass cls(root, tok, t.id, t.size, t.align);
-    cls.is_std140_compatible = t.align == 4;
-    cls.is_std430_compatible = t.align == 4;
-    cls.is_error = t.id == err_symbol;
-
-    SymbolClass *sym = cls_arena.alloc(cls);
+  for (const auto &t : special_types) {
+    SymbolClass *sym = cls_arena.alloc(root, tok, t.id, t.size, t.align);
+    sym->is_error = t.id == err_symbol;
     root->classes.emplace(t.id, sym);
   }
 
@@ -381,20 +401,21 @@ void SymbolTable::register_builtins(LocalScope node)
   const char *swizzle_rgba[4] = {"r", "g", "b", "a"};
 
   for (const auto &t : vectors) {
-    SymbolClass *cls = cls_arena.alloc(
-        root, tok, t.id, t.comp * root->classes[t.base]->size, t.align);
+    SymbolClass *base = root->classes[t.base];
+    SymbolClass *cls = cls_arena.alloc(root, tok, t.id, t.comp * base->size, t.align);
     root->classes.emplace(t.id, cls);
     root->scopes.emplace(t.id, cls);
 
     cls->is_std140_compatible = t.align >= 8 && t.id != "float3" && t.base != "float3" &&
-                                t.base != "short" && t.base != "ushort";
+                                base->is_std140_compatible;
     cls->is_std430_compatible = cls->is_std140_compatible;
 
     SymbolFunction *sub_op = fun_arena.alloc(
-        cls, tok, root->classes[t.base], subscript_operator_id, SymbolFunction::MEMBER);
+        cls, tok, base, subscript_operator_id, SymbolFunction::MEMBER);
 
     cls->operator_subscript = sub_op;
     cls->functions.emplace(subscript_operator_id, sub_op);
+    cls->comp_len = t.comp * base->comp_len;
 
     for (int i = 0; i < t.comp; i++) {
       {
@@ -452,6 +473,7 @@ void SymbolTable::register_builtins(LocalScope node)
     SymbolClass *ret_type = root->lookup_class(fn.return_type);
     SymbolFunction *sym = fun_arena.alloc(root, tok, ret_type, fn.id, SymbolFunction::GLOBAL);
     sym->is_error = fn.id == err_symbol;
+    sym->is_builtin_ctor = true;
     for (auto arg : fn.arg_types) {
       sym->add_argument(root->lookup_class(arg));
     }
@@ -615,7 +637,9 @@ SymbolClass *SymbolTable::get_literal_type(string_view lit) const
   return int_cls;
 }
 
-bool SymbolTable::is_convertible(const SymbolClass *from, const SymbolClass *to) const
+bool SymbolTable::is_convertible(const SymbolClass *from,
+                                 const SymbolClass *to,
+                                 bool allow_vector_promotion) const
 {
   /* Check 'packed_floatX' to 'floatX' promotion. */
   if (from == packed_float3_cls && to == float3_cls) {
@@ -627,7 +651,11 @@ bool SymbolTable::is_convertible(const SymbolClass *from, const SymbolClass *to)
   if (from == packed_float4_cls && to == float4_cls) {
     return true;
   }
-  if (from == int_cls && to == uint_cls) {
+  /* Promote scalar. */
+  if (from->comp_len == 1 && from->comp_len == to->comp_len) {
+    return true;
+  }
+  if (allow_vector_promotion && from->comp_len != 0 && from->comp_len == to->comp_len) {
     return true;
   }
   return false;

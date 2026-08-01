@@ -26,6 +26,8 @@ struct SymbolFunction : SymbolScope {
   bool is_error = false;
   /* False if this is a template root and is not a symbol to match on. */
   bool is_complete = true;
+  /* If true, will allow vector type casting. */
+  bool is_builtin_ctor = false;
 
   enum Type { STATIC, MEMBER, GLOBAL } fn_type;
   enum class EntryPointType { FRAG, VERT, COMP, NONE } entry_point_type;

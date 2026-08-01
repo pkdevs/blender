@@ -121,7 +121,9 @@ struct SymbolTable {
                                        bool allow_compilation_constant = false);
 
   SymbolClass *get_literal_type(string_view lit) const;
-  bool is_convertible(const SymbolClass *from, const SymbolClass *to) const;
+  bool is_convertible(const SymbolClass *from,
+                      const SymbolClass *to,
+                      bool allow_vector_promotion) const;
 
  private:
   struct BuiltinType {
