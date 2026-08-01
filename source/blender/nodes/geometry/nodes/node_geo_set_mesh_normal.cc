@@ -23,46 +23,56 @@ enum class Mode {
   CornerFanSpace = 2,
 };
 
+static const EnumPropertyItem mode_items[] = {
+    {int(Mode::Sharpness),
+      "SHARPNESS",
+      0,
+      "Sharpness",
+      "Store the sharpness of each face or edge. Similar to the \"Shade Smooth\" and \"Shade "
+      "Flat\" operators."},
+    {int(Mode::Free),
+      "FREE",
+      0,
+      "Free",
+      "Store custom normals as simple vectors in the local space of the mesh. Values are not "
+      "necessarily updated automatically later on as the mesh is deformed."},
+    {int(Mode::CornerFanSpace),
+      "TANGENT_SPACE",
+      0,
+      "Tangent Space",
+      "Store normals in a deformation dependent custom transformation space. This method is "
+      "slower, but can be better when subsequent operations change the mesh without handling "
+      "normals specifically."},
+    {0, nullptr, 0, nullptr, nullptr},
+};
+
 static void node_declare(NodeDeclarationBuilder &b)
 {
   b.use_custom_socket_order();
   b.allow_any_socket_order();
-  b.add_default_layout();
+  b.add_input<decl::Menu>("Mode"_ustr)
+    .static_items(mode_items)
+    .default_value(Mode::Sharpness)
+    .description("Storage mode for custom normal data")
+    .optional_label();
+  b.add_input<decl::Menu>("Domain"_ustr)
+    .static_items(rna_enum_attribute_domain_only_mesh_no_edge_items)
+    .default_value(bke::AttrDomain::Point)
+    .description("Attribute domain to store free custom normals")
+    .optional_label()
+    .usage_by_menu("Mode"_ustr, int(Mode::Free));
   b.add_input<decl::Geometry>("Mesh"_ustr)
       .supported_type(GeometryComponent::Type::Mesh)
       .description("Mesh to set the custom normals on");
   b.add_output<decl::Geometry>("Mesh"_ustr).propagate_all_geometry().align_with_previous();
-  if (const bNode *node = b.node_or_null()) {
-    switch (Mode(node->custom1)) {
-      case Mode::Sharpness:
-        b.add_input<decl::Bool>("Remove Custom"_ustr).default_value(true);
-        b.add_input<decl::Bool>("Edge Sharpness"_ustr).evaluated_geometry_field();
-        b.add_input<decl::Bool>("Face Sharpness"_ustr).evaluated_geometry_field();
-        break;
-      case Mode::Free:
-      case Mode::CornerFanSpace:
-        b.add_input<decl::Vector>("Custom Normal"_ustr)
-            .subtype(PROP_XYZ)
-            .evaluated_geometry_field()
-            .default_input_type(NODE_DEFAULT_INPUT_NORMAL_FIELD);
-        break;
-    }
-  }
-}
-
-static void node_layout(ui::Layout &layout, bContext * /*C*/, PointerRNA *ptr)
-{
-  const bNode &node = *static_cast<const bNode *>(ptr->data);
-  layout.prop(ptr, "mode", UI_ITEM_NONE, "", ICON_NONE);
-  if (Mode(node.custom1) == Mode::Free) {
-    layout.prop(ptr, "domain", UI_ITEM_NONE, "", ICON_NONE);
-  }
-}
-
-static void node_init(bNodeTree * /*tree*/, bNode *node)
-{
-  node->custom1 = int16_t(Mode::Sharpness);
-  node->custom2 = int16_t(bke::AttrDomain::Point);
+  b.add_input<decl::Bool>("Remove Custom"_ustr).default_value(true).usage_by_menu("Mode"_ustr, int(Mode::Sharpness));
+  b.add_input<decl::Bool>("Edge Sharpness"_ustr).evaluated_geometry_field().usage_by_menu("Mode"_ustr, int(Mode::Sharpness));
+  b.add_input<decl::Bool>("Face Sharpness"_ustr).evaluated_geometry_field().usage_by_menu("Mode"_ustr, int(Mode::Sharpness));
+  b.add_input<decl::Vector>("Custom Normal"_ustr)
+      .subtype(PROP_XYZ)
+      .usage_by_menu("Mode"_ustr, {int(Mode::Free), int(Mode::CornerFanSpace)})
+      .evaluated_geometry_field()
+      .default_input_type(NODE_DEFAULT_INPUT_NORMAL_FIELD);
 }
 
 static void node_geo_exec(GeoNodeExecParams params)
@@ -182,45 +192,6 @@ static void node_geo_exec(GeoNodeExecParams params)
   params.set_output("Mesh"_ustr, std::move(geometry_set));
 }
 
-static void node_rna(StructRNA *srna)
-{
-  static const EnumPropertyItem mode_items[] = {
-      {int(Mode::Sharpness),
-       "SHARPNESS",
-       0,
-       "Sharpness",
-       "Store the sharpness of each face or edge. Similar to the \"Shade Smooth\" and \"Shade "
-       "Flat\" operators."},
-      {int(Mode::Free),
-       "FREE",
-       0,
-       "Free",
-       "Store custom normals as simple vectors in the local space of the mesh. Values are not "
-       "necessarily updated automatically later on as the mesh is deformed."},
-      {int(Mode::CornerFanSpace),
-       "TANGENT_SPACE",
-       0,
-       "Tangent Space",
-       "Store normals in a deformation dependent custom transformation space. This method is "
-       "slower, but can be better when subsequent operations change the mesh without handling "
-       "normals specifically."},
-      {0, nullptr, 0, nullptr, nullptr},
-  };
-
-  RNA_def_node_enum(srna,
-                    "mode",
-                    "Mode",
-                    "Storage mode for custom normal data",
-                    mode_items,
-                    NOD_inline_enum_accessors(custom1));
-  RNA_def_node_enum(srna,
-                    "domain",
-                    "Domain",
-                    "Attribute domain to store free custom normals",
-                    rna_enum_attribute_domain_only_mesh_no_edge_items,
-                    NOD_inline_enum_accessors(custom2));
-}
-
 static void node_register()
 {
   static bke::bNodeType ntype;
@@ -230,12 +201,8 @@ static void node_register()
   ntype.nclass = NODE_CLASS_GEOMETRY;
   ntype.declare = node_declare;
   ntype.geometry_node_execute = node_geo_exec;
-  ntype.initfunc = node_init;
-  ntype.draw_buttons = node_layout;
 
   bke::node_register_type(ntype);
-
-  node_rna(ntype.rna_ext.srna);
 }
 NOD_REGISTER_NODE(node_register)
 
