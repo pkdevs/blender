@@ -250,7 +250,7 @@ SourceProcessor::Result SourceProcessor::convert_bsl()
   builtin_parser.set_str("#line 1 \"builtin\"\n#error This should not be emitted\n");
   builtin_parser.include_id = sources.include_id_get();
   /* Init symbol table and add builtin symbols. */
-  SymbolTable symbols(builtin_parser);
+  bsl::SymbolTable symbols(builtin_parser);
 
   Parser &parser = sources.new_source(error_handler);
   try {
@@ -453,7 +453,7 @@ metadata::Source SourceProcessor::parse_include_and_symbols()
 }
 
 void SourceProcessor::scan_external_symbols(SourceManager &sources,
-                                            SymbolTable &symbols,
+                                            bsl::SymbolTable &symbols,
                                             vector<string> &visited_files)
 {
   for (const auto &dep : metadata_.dependencies) {
@@ -496,7 +496,7 @@ void SourceProcessor::scan_external_symbols(SourceManager &sources,
 }
 
 metadata::Source SourceProcessor::parse_include_and_symbols(SourceManager &sources,
-                                                            SymbolTable &symbols,
+                                                            bsl::SymbolTable &symbols,
                                                             vector<string> &visited_files)
 {
   string str = remove_comments(this->source_);

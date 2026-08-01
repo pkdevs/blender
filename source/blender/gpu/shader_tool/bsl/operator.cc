@@ -8,7 +8,7 @@
 
 #include "symbol.hh"
 
-namespace blender::gpu::shader::parser {
+namespace bsl {
 
 /* Generates all scalar and vector types (e.g. int, int2, int3, int4). */
 vector<SymbolTable::BuiltinType> SymbolTable::generate_builtin_types()
@@ -190,4 +190,4 @@ vector<SymbolTable::BuiltinOp> SymbolTable::generate_all_operators(
   return ops;
 }
 
-}  // namespace blender::gpu::shader::parser
+}  // namespace bsl

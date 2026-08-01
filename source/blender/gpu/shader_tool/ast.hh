@@ -16,12 +16,6 @@ using namespace lexit;
 
 struct ParserBase;
 struct Token;
-struct SymbolVariable;
-struct SymbolFunction;
-struct SymbolClass;
-struct SymbolScope;
-
-std::string to_str(TokenType type);
 
 namespace ast {
 

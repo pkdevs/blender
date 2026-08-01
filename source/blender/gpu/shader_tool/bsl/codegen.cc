@@ -6,16 +6,18 @@
  * \ingroup shader_tool
  */
 
-#include <sstream>
-
+#include "diagnostic.hh"
+#include "metadata.hh"
 #include "processor.hh"
 #include "symbol.hh"
 
-namespace blender::gpu::shader {
+#include <sstream>
+
+namespace bsl {
 using namespace std;
-using namespace shader::parser;
-using namespace shader::parser::ast;
-using namespace metadata;
+using namespace blender::gpu::shader;
+using namespace blender::gpu::shader::parser;
+using namespace blender::gpu::shader::parser::ast;
 
 static string to_uppercase(string str)
 {
@@ -26,7 +28,6 @@ static string to_uppercase(string str)
 }
 
 struct CodegenContext : NodeErrorHandler {
-  SourceProcessor::Parser &parser;
   SymbolTable &symbols;
   metadata::Source &metadata;
 
@@ -75,7 +76,6 @@ struct CodegenContext : NodeErrorHandler {
                  metadata::Source &metadata,
                  SourceProcessor::ErrorHandler &error_handler)
       : NodeErrorHandler(error_handler),
-        parser(parser),
         symbols(symbols),
         metadata(metadata),
         builder(Token::invalid(&parser))
@@ -116,7 +116,8 @@ struct CodegenContext : NodeErrorHandler {
   void skip_node(Node node)
   {
     if (node.is_valid()) {
-      string_view str = parser.substr(node.front(), node.back(), true);
+      const TokenBuffer *buf = node.front().buf_;
+      string_view str = buf->substr(node.front(), node.back(), true);
       builder.ss << as_whitespace(str);
       builder.curr = node.back().next();
     }
@@ -191,7 +192,7 @@ struct CodegenContext : NodeErrorHandler {
           builder << node;
           break;
         case NodeType::Namespace:
-          namespace_decl(Namespace(node), symbol);
+          namespace_decl(ast::Namespace(node), symbol);
           break;
         case NodeType::VarDecl:
           var_decl(VarDecl(node), symbol);
@@ -619,7 +620,7 @@ struct CodegenContext : NodeErrorHandler {
     match_if(';');
   }
 
-  void namespace_decl(Namespace ns, SymbolScope &scope)
+  void namespace_decl(ast::Namespace ns, SymbolScope &scope)
   {
     SymbolScope *sym = &scope;
     for (Id id : ns.identifier().children_of_type<Id>()) {
@@ -2369,11 +2370,16 @@ struct CodegenContext : NodeErrorHandler {
   /** \} */
 };
 
+}  // namespace bsl
+
+namespace blender::gpu::shader {
+
 /* Lower namespaces by adding namespace prefix to all the contained structs and functions. */
-void SourceProcessor::lower_bsl_to_il(Parser &parser, SymbolTable &symbols)
+void SourceProcessor::lower_bsl_to_il(Parser &parser, bsl::SymbolTable &symbols)
 {
-  CodegenContext ctx(parser, symbols, metadata_, error_handler);
-  string str = ctx.process(*symbols.root, LocalScope(Node(&parser, 0)));
+  using namespace parser;
+  bsl::CodegenContext ctx(parser, symbols, metadata_, error_handler);
+  std::string str = ctx.process(*symbols.root, parser.root());
 
   if (error_handler.err.has_value()) {
     throw ParserException();
@@ -2381,5 +2387,4 @@ void SourceProcessor::lower_bsl_to_il(Parser &parser, SymbolTable &symbols)
 
   parser.set_str(str);
 }
-
 }  // namespace blender::gpu::shader

@@ -96,6 +96,15 @@ struct ParserBase : LexerBase {
   /** Index of bottom most scope per token. */
   std::vector<int> token_scope;
 
+  /* --- Abstract Syntax Tree. --- */
+
+  /**
+   * Flat array of nodes (nodes pointers are indices to this array).
+   *
+   * Nodes are stored in source order (not in logical execution order).
+   * This allow to have range based iterators follow the source order.
+   * Expressions need to use a parser to use logical execution order with operator precedence.
+   */
   std::vector<ast::NodeData> ast_nodes;
 
   /* Return the i'th token. */

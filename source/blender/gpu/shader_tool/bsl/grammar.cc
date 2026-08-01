@@ -10,11 +10,13 @@
  * language.
  */
 
-#include "scope.hh"
+#include "ast.hh"
 #include "token.hh"
 #include "token_stream.hh"
 
-namespace blender::gpu::shader::parser {
+namespace bsl {
+using namespace std;
+using namespace blender::gpu::shader::parser;
 
 /*
  * Simple Recursive Descent Parser that creates AST nodes.
@@ -22,11 +24,13 @@ namespace blender::gpu::shader::parser {
  * Follows the Blender Shading Language Specification.
  */
 struct BSLParser {
+  using Token = blender::gpu::shader::parser::Token;
   using NodeType = ast::NodeType;
   using Nodes = ast::Nodes;
   using Node = ast::NodeData;
   using TokenID = ast::TokenID;
   using NodeID = ast::NodeID;
+  using ParserBase = ParserBase;
 
   Token curr;
 
@@ -1308,22 +1312,22 @@ struct BSLParser {
   }
 };
 
+}  // namespace bsl
+
+namespace blender::gpu::shader::parser {
+
 void ParserBase::parse_bsl(ErrorHandler &err_handler)
 {
   LexerBase &lex = *this;
 
   lex.identify_template_tokens();
 
-  BSLParser p(*this, lex[0], err_handler);
+  bsl::BSLParser p(*this, lex[0], err_handler);
   p.translation_unit();
 
   this->ast_nodes = std::move(p.nodes);
   /* Add a trailing Node to ease iterator implementations. */
   this->ast_nodes.emplace_back();
-
-  if (err_handler.err.has_value()) {
-    // print_ast();
-  }
 
   lex.reset_template_tokens();
 }

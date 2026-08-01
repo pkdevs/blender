@@ -11,13 +11,14 @@
 #include "symbol.hh"
 #include "type_checker.hh"
 
-namespace blender::gpu::shader::parser {
+namespace bsl {
 
-using namespace ast;
+using namespace blender::gpu::shader::parser;
 using namespace std;
+using Token = blender::gpu::shader::parser::Token;
 
 static const char *subscript_operator_id = "arr_op_";
-static const char *ns_sep = SourceProcessor::namespace_separator;
+static const char *ns_sep = blender::gpu::shader::SourceProcessor::namespace_separator;
 
 string ParsedAttribute::parse_condition() const
 {
@@ -985,7 +986,7 @@ struct SymbolParser : NodeErrorHandler {
     }
   }
 
-  void parse_namespace(SymbolScope &scope, Namespace decl, string ns_prefix)
+  void parse_namespace(SymbolScope &scope, ast::Namespace decl, string ns_prefix)
   {
     IdQualified ns = decl.identifier();
     /* Walk nested identifier */
@@ -1597,7 +1598,7 @@ SymbolVariable::SymbolVariable(SymbolScope *parent, SymbolClass *type, Declarato
       is_static(decl.type().is_static()),
       is_compilation_const(AttrList(decl.type().prev()).contains_attr("compilation_constant"))
 {
-  if (Const constant = decl.type().constant(); constant.is_valid()) {
+  if (ast::Const constant = decl.type().constant(); constant.is_valid()) {
     is_constexpr = constant.front() == Constexpr;
     is_const = true;
   }
@@ -2701,4 +2702,316 @@ bool SymbolTable::is_convertible(const SymbolClass *from, const SymbolClass *to)
   return false;
 }
 
-}  // namespace blender::gpu::shader::parser
+/* Generates every single legal BSL builtin function dynamically. */
+vector<SymbolTable::BuiltinFunc> SymbolTable::generate_all_builtin_functions()
+{
+  /* Start with the error symbol. */
+  vector<BuiltinFunc> functions = {{"void", err_symbol, {}}};
+
+  /* Special functions */
+  functions.push_back({"void", "printf", {"string_t"}});
+
+  /* Type definition vectors for vectorized generation */
+  const vector<string> f_types = {"float", "float2", "float3", "float4"};
+  const vector<string> i_types = {"int", "int2", "int3", "int4"};
+  const vector<string> u_types = {"uint", "uint2", "uint3", "uint4"};
+  const vector<string> b_types = {"bool", "bool2", "bool3", "bool4"};
+
+  /* 1-argument component-wise functions (e.g. sin, cos, abs). */
+  auto add_unary = [&](const string &name, const vector<string> &types) {
+    for (const auto &t : types) {
+      functions.push_back({t, name, {t}});
+    }
+  };
+
+  /* 2-argument component-wise functions (e.g. pow, min, max). */
+  auto add_binary = [&](const string &name, const vector<string> &types) {
+    for (const auto &t : types) {
+      functions.push_back({t, name, {t, t}});
+    }
+  };
+
+  /* 3-argument component-wise functions (e.g. clamp, mix, fma). */
+  auto add_ternary = [&](const string &name, const vector<string> &types) {
+    for (const auto &t : types) {
+      functions.push_back({t, name, {t, t, t}});
+    }
+  };
+
+  /* Functions with vector-scalar variants (e.g. min(float3, float), clamp(float3, float, float)).
+   */
+  auto add_vec_scalar_binary = [&](const string &name, const vector<string> &types) {
+    const string &scalar = types[0];
+    for (size_t i = 1; i < types.size(); ++i) {
+      functions.push_back({types[i], name, {types[i], scalar}});
+    }
+  };
+
+  auto add_vec_scalar_scalar_ternary = [&](const string &name, const vector<string> &types) {
+    const string &scalar = types[0];
+    for (size_t i = 1; i < types.size(); ++i) {
+      functions.push_back({types[i], name, {types[i], scalar, scalar}});
+    }
+  };
+  auto add_vec_vec_scalar_ternary = [&](const string &name, const vector<string> &types) {
+    const string &scalar = types[0];
+    for (size_t i = 1; i < types.size(); ++i) {
+      functions.push_back({types[i], name, {types[i], types[i], scalar}});
+    }
+  };
+
+  const vector<string> trig_unary = {"radians",
+                                     "degrees",
+                                     "sin",
+                                     "cos",
+                                     "tan",
+                                     "asin",
+                                     "acos",
+                                     "atan",
+                                     "sinh",
+                                     "cosh",
+                                     "tanh",
+                                     "asinh",
+                                     "acosh",
+                                     "atanh"};
+  for (const auto &name : trig_unary) {
+    add_unary(name, f_types);
+  }
+  /* 2-argument atan(y, x). */
+  add_binary("atan", f_types);
+
+  const vector<string> exp_unary = {"exp", "log", "exp2", "log2", "sqrt", "inversesqrt"};
+  for (const auto &name : exp_unary) {
+    add_unary(name, f_types);
+  }
+  add_binary("pow", f_types);
+
+  const vector<string> common_float_unary = {
+      "floor",
+      "trunc",
+      "round",
+      "roundEven",
+      "ceil",
+      "fract",
+      "saturate",
+  };
+  for (const auto &name : common_float_unary) {
+    add_unary(name, f_types);
+  }
+
+  for (size_t i = 0; i < f_types.size(); ++i) {
+    functions.push_back({b_types[i], "isnan", {f_types[i]}});
+    functions.push_back({b_types[i], "isinf", {f_types[i]}});
+  }
+
+  add_unary("abs", f_types);
+  add_unary("abs", i_types);
+
+  add_unary("sign", f_types);
+  add_unary("sign", i_types);
+
+  add_binary("mod", f_types);
+  add_binary("modf", f_types);
+  add_vec_scalar_binary("mod", f_types);
+
+  for (const auto &tlist : {f_types, i_types, u_types}) {
+    add_binary("min", tlist);
+    add_vec_scalar_binary("min", tlist);
+    add_binary("max", tlist);
+    add_vec_scalar_binary("max", tlist);
+    add_ternary("clamp", tlist);
+    add_vec_scalar_scalar_ternary("clamp", tlist);
+  }
+
+  add_ternary("mix", f_types);
+  add_vec_vec_scalar_ternary("mix", f_types);
+  for (size_t i = 0; i < f_types.size(); ++i) {
+    functions.push_back({f_types[i], "mix", {f_types[i], f_types[i], b_types[i]}});
+    functions.push_back({f_types[i], "select", {f_types[i], f_types[i], b_types[i]}});
+  }
+
+  add_binary("step", f_types);
+  add_vec_scalar_binary("step", f_types);
+  add_ternary("smoothstep", f_types);
+  add_vec_vec_scalar_ternary("smoothstep", f_types);
+
+  add_ternary("fma", f_types);
+
+  // Bit-reinterpretation conversions
+  for (size_t i = 0; i < f_types.size(); ++i) {
+    functions.push_back({i_types[i], "floatBitsToInt", {f_types[i]}});
+    functions.push_back({u_types[i], "floatBitsToUint", {f_types[i]}});
+    functions.push_back({f_types[i], "intBitsToFloat", {i_types[i]}});
+    functions.push_back({f_types[i], "uintBitsToFloat", {u_types[i]}});
+  }
+
+  functions.push_back({"uint", "packUnorm2x16", {"float2"}});
+  functions.push_back({"uint", "packSnorm2x16", {"float2"}});
+  functions.push_back({"uint", "packUnorm4x8", {"float4"}});
+  functions.push_back({"uint", "packSnorm4x8", {"float4"}});
+  functions.push_back({"uint", "packHalf2x16", {"float2"}});
+
+  functions.push_back({"float2", "unpackUnorm2x16", {"uint"}});
+  functions.push_back({"float2", "unpackSnorm2x16", {"uint"}});
+  functions.push_back({"float4", "unpackUnorm4x8", {"uint"}});
+  functions.push_back({"float4", "unpackSnorm4x8", {"uint"}});
+  functions.push_back({"float2", "unpackHalf2x16", {"uint"}});
+
+  for (size_t i = 0; i < f_types.size(); ++i) {
+    functions.push_back({"float", "length", {f_types[i]}});
+    functions.push_back({"float", "distance", {f_types[i], f_types[i]}});
+    functions.push_back({"float", "dot", {f_types[i], f_types[i]}});
+    functions.push_back({f_types[i], "normalize", {f_types[i]}});
+    functions.push_back({f_types[i], "faceforward", {f_types[i], f_types[i], f_types[i]}});
+    functions.push_back({f_types[i], "reflect", {f_types[i], f_types[i]}});
+    functions.push_back({f_types[i], "refract", {f_types[i], f_types[i], "float"}});
+  }
+  functions.push_back({"float3", "cross", {"float3", "float3"}});
+
+  const vector<string> square_mats = {"float2x2", "float3x3", "float4x4"};
+  const vector<string> all_mats = {"float2x2",
+                                   "float3x3",
+                                   "float4x4",
+                                   "float2x3",
+                                   "float2x4",
+                                   "float3x2",
+                                   "float3x4",
+                                   "float4x2",
+                                   "float4x3"};
+
+  for (const auto &m : all_mats) {
+    functions.push_back({m, "transpose", {m}});
+  }
+
+  for (const auto &m : square_mats) {
+    functions.push_back({"float", "determinant", {m}});
+    functions.push_back({m, "inverse", {m}});
+  }
+
+  const vector<string> rel_ops = {
+      "lessThan", "lessThanEqual", "greaterThan", "greaterThanEqual", "equal", "notEqual"};
+
+  for (const auto &op : rel_ops) {
+    for (size_t i = 1; i < f_types.size(); ++i) {
+      functions.push_back({b_types[i], op, {f_types[i], f_types[i]}});
+      functions.push_back({b_types[i], op, {i_types[i], i_types[i]}});
+      functions.push_back({b_types[i], op, {u_types[i], u_types[i]}});
+    }
+  }
+
+  for (size_t i = 1; i < b_types.size(); ++i) {
+    functions.push_back({"bool", "any", {b_types[i]}});
+    functions.push_back({"bool", "all", {b_types[i]}});
+    functions.push_back({b_types[i], "not", {b_types[i]}});
+  }
+
+  const vector<string> bit_unary = {"bitfieldReverse", "bitCount", "findLSB", "findMSB"};
+  for (const auto &op : bit_unary) {
+    add_unary(op, i_types);
+    add_unary(op, u_types);
+  }
+
+  for (const auto &tlist : {i_types, u_types}) {
+    for (const auto &t : tlist) {
+      functions.push_back({t, "bitfieldExtract", {t, "int", "int"}});
+      functions.push_back({t, "bitfieldInsert", {t, t, "int", "int"}});
+    }
+  }
+
+  const vector<string> atomic_2arg = {"atomicAdd",
+                                      "atomicMin",
+                                      "atomicMax",
+                                      "atomicAnd",
+                                      "atomicOr",
+                                      "atomicXor",
+                                      "atomicExchange"};
+
+  for (const auto &op : atomic_2arg) {
+    functions.push_back({"int", op, {"int", "int"}});
+    functions.push_back({"uint", op, {"uint", "uint"}});
+  }
+  functions.push_back({"int", "atomicCompSwap", {"int", "int", "int"}});
+  functions.push_back({"uint", "atomicCompSwap", {"uint", "uint", "uint"}});
+
+  const vector<string> deriv_funcs = {"gpu_dfdx", "gpu_dfdy", "gpu_fwidth"};
+
+  for (const auto &op : deriv_funcs) {
+    add_unary(op, f_types);
+  }
+
+  functions.push_back({"void", "gpu_discard_fragment", {}});
+  functions.push_back({"void", "barrier", {}});
+  functions.push_back({"void", "assert", {"bool"}});
+
+  functions.push_back({"float4", "texture", {"sampler2DDepth", "float2"}});
+  functions.push_back({"float4", "textureLod", {"sampler2DDepth", "float2", "float"}});
+  functions.push_back({"int2", "textureSize", {"sampler2DDepth", "int"}});
+  functions.push_back({"float4", "texelFetch", {"sampler2DDepth", "int2", "int"}});
+
+  const vector<pair<string, string>> image_types = {
+      {"uint4", "u"},
+      {"int4", "i"},
+      {"float4", ""},
+  };
+
+  for (auto [type, prefix] : image_types) {
+    vector<pair<string, int>> samplers = {
+        /* Name, Coordinate Dimensions. */
+        {prefix + "sampler1D", 1},
+        {prefix + "sampler2D", 2},
+        {prefix + "sampler3D", 3},
+        {prefix + "samplerCube", 3},
+        {prefix + "sampler1DArray", 2},
+        {prefix + "sampler2DArray", 3},
+        {prefix + "samplerCubeArray", 4},
+    };
+
+    if (prefix.empty()) {
+      samplers.emplace_back(prefix + "sampler2DDepth", 2);
+      samplers.emplace_back(prefix + "samplerCubeDepth", 3);
+      samplers.emplace_back(prefix + "sampler2DArrayDepth", 3);
+      samplers.emplace_back(prefix + "samplerCubeArrayDepth", 4);
+    }
+
+    for (auto [sampler, dim] : samplers) {
+      string coord_type = f_types[dim - 1];
+      string icoord_type = i_types[dim - 1];
+      functions.push_back({type, "texture", {sampler, coord_type}});
+      functions.push_back({type, "textureLod", {sampler, coord_type, "float"}});
+      functions.push_back({icoord_type, "textureSize", {sampler, "int"}});
+      functions.push_back({type, "texelFetch", {sampler, icoord_type, "int"}});
+    }
+
+    const vector<string> images = {
+        prefix + "image2D",
+        prefix + "image2DArray",
+        prefix + "image3D",
+    };
+
+    for (size_t i = 0; i < images.size(); ++i) {
+      string coord_type = i_types[i == 0 ? 1 : 2];
+      functions.push_back({type, "imageLoad", {images[i], coord_type}});
+      functions.push_back({type, "imageLoadFast", {images[i], coord_type}});
+      functions.push_back({"void", "imageStore", {images[i], coord_type, type}});
+      functions.push_back({"void", "imageStoreFast", {images[i], coord_type, type}});
+
+      if (!prefix.empty()) {
+        functions.push_back({type, "imageAtomicAdd", {images[i], coord_type, type}});
+        functions.push_back({type, "imageAtomicMin", {images[i], coord_type, type}});
+        functions.push_back({type, "imageAtomicMax", {images[i], coord_type, type}});
+        functions.push_back({type, "imageAtomicAnd", {images[i], coord_type, type}});
+        functions.push_back({type, "imageAtomicOr", {images[i], coord_type, type}});
+        functions.push_back({type, "imageAtomicXor", {images[i], coord_type, type}});
+        functions.push_back({type, "imageAtomicExchange", {images[i], coord_type, type}});
+        functions.push_back({type, "imageAtomicCompSwap", {images[i], coord_type, type, type}});
+      }
+
+      functions.push_back({coord_type, "imageSize", {images[i]}});
+      functions.push_back({"void", "imageFence", {images[i]}});
+    }
+  }
+
+  return functions;
+}
+
+}  // namespace bsl

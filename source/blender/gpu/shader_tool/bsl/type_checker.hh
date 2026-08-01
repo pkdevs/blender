@@ -13,7 +13,9 @@
 
 #include "symbol.hh"
 
-namespace blender::gpu::shader::parser {
+namespace bsl {
+
+using namespace blender::gpu::shader::parser;
 
 /**
  * Type resolution parser.
@@ -21,20 +23,20 @@ namespace blender::gpu::shader::parser {
  */
 struct ExpressionTypeParser {
   /* First temporary inducing operator. */
-  Node first_temporary = {};
+  ast::Node first_temporary = {};
   /* First variable not declared const. */
-  Node first_non_const_var_in_subscript = {};
+  ast::Node first_non_const_var_in_subscript = {};
   /* First operator creating side effect. */
-  Node first_side_effect_op = {};
+  ast::Node first_side_effect_op = {};
   /* First function call. */
-  Node first_function_call = {};
+  ast::Node first_function_call = {};
 
  private:
   std::optional<AstNodeException> err;
   const SymbolTable *table;
   const SymbolScope *scope;
-  Node start;
-  Node node;
+  ast::Node start;
+  ast::Node node;
 
   /* Array dimension of the current symbol. */
   int array_dim = 0;
@@ -42,7 +44,9 @@ struct ExpressionTypeParser {
   bool is_subscript_expr = false;
 
  public:
-  ExpressionTypeParser(const SymbolTable *table, const SymbolScope *scope, Node expr_first_child)
+  ExpressionTypeParser(const SymbolTable *table,
+                       const SymbolScope *scope,
+                       ast::Node expr_first_child)
       : table(table), scope(scope), start(expr_first_child), node(expr_first_child)
   {
   }
@@ -83,28 +87,28 @@ struct ExpressionTypeParser {
 
     switch (node.type()) {
       // case NodeType::TemplateExplicit: /* Should have already been removed. */
-      case NodeType::FuncCall:
+      case ast::NodeType::FuncCall:
         return fun_call(node);
-      case NodeType::Constructor:
+      case ast::NodeType::Constructor:
         return constructor(node);
-      case NodeType::StringConst:
+      case ast::NodeType::StringConst:
         return table->str_cls;
-      case NodeType::LocalVar:
+      case ast::NodeType::LocalVar:
         return local_var(node);
-      case NodeType::NumConst:
+      case ast::NodeType::NumConst:
         return num_const(node);
         return expr(unary_binding_power);
-      case NodeType::Op:
+      case ast::NodeType::Op:
         return op(node, expr(unary_binding_power));
-      case NodeType::Expr: {
-        ExpressionTypeParser ctx(table, scope, Expr(node).child_first());
+      case ast::NodeType::Expr: {
+        ExpressionTypeParser ctx(table, scope, ast::Expr(node).child_first());
         ctx.is_subscript_expr = this->is_subscript_expr;
         SymbolClass *cls = ctx.eval().unwrap(err);
         merge_errors(ctx, false);
         return cls;
       }
-      case NodeType::ExprSub: {
-        ExpressionTypeParser ctx(table, scope, ExprSub(node).expr().child_first());
+      case ast::NodeType::ExprSub: {
+        ExpressionTypeParser ctx(table, scope, ast::ExprSub(node).expr().child_first());
         ctx.is_subscript_expr = this->is_subscript_expr;
         SymbolClass *cls = ctx.eval().unwrap(err);
         merge_errors(ctx, false);
@@ -112,17 +116,17 @@ struct ExpressionTypeParser {
       }
       default:
         error(node.is_valid() ? node : start, Diag::InvalidExprTypeChecker);
-        this->node = Node(start.p, -1);
+        this->node = ast::Node(start.p, -1);
         return table->err_cls;
     }
   }
 
   /* How a token evaluates from left-to-right, on two operands.
    * Also known as Left-Denotation or LED. */
-  SymbolClass *led(SymbolClass *left, Node node)
+  SymbolClass *led(SymbolClass *left, ast::Node node)
   {
     /* Subscript operator. */
-    if (node.type() == NodeType::Subscript) {
+    if (node.type() == ast::NodeType::Subscript) {
       if (array_dim > 0) {
         array_dim -= 1;
         check_subscript(node);
@@ -141,7 +145,7 @@ struct ExpressionTypeParser {
       error(node, Diag::ArrayTypeOperand);
     }
 
-    if (node.type() != NodeType::Op) {
+    if (node.type() != ast::NodeType::Op) {
       error(node, Diag::TypeInvalidOperator, left->identifier);
     }
 
@@ -185,7 +189,7 @@ struct ExpressionTypeParser {
     return fval;
   }
 
-  int left_binding_power(Node node)
+  int left_binding_power(ast::Node node)
   {
     return left_binding_power(node.front().type());
   }
@@ -245,19 +249,19 @@ struct ExpressionTypeParser {
     return -1;
   }
 
-  Node peek() const
+  ast::Node peek() const
   {
     return node;
   }
 
-  Node consume()
+  ast::Node consume()
   {
-    Node n = node;
+    ast::Node n = node;
     node = node.next();
     return n;
   }
 
-  SymbolClass *op(Node operator_type, SymbolClass *left_type, SymbolClass *right_type)
+  SymbolClass *op(ast::Node operator_type, SymbolClass *left_type, SymbolClass *right_type)
   {
     TokenType tok_type = operator_type.front().type();
     OperatorKey key{left_type, tok_type, right_type};
@@ -272,7 +276,7 @@ struct ExpressionTypeParser {
     return table->err_cls;
   }
 
-  SymbolClass *op(Node operator_type, SymbolClass *right_type)
+  SymbolClass *op(ast::Node operator_type, SymbolClass *right_type)
   {
     TokenType tok_type = operator_type.front().type();
     if (tok_type == Increment || tok_type == Decrement) {
@@ -291,8 +295,8 @@ struct ExpressionTypeParser {
   SymbolClass *member_access(SymbolClass *left, ast::Node member)
   {
     switch (member.type()) {
-      case NodeType::FuncCall: {
-        FuncCall call = member;
+      case ast::NodeType::FuncCall: {
+        ast::FuncCall call = member;
         if (!first_function_call.is_valid()) {
           first_function_call = call;
         }
@@ -301,8 +305,8 @@ struct ExpressionTypeParser {
                                   .unwrap(err);
         return sym->return_type;
       }
-      case NodeType::LocalVar: {
-        LocalVar var = member;
+      case ast::NodeType::LocalVar: {
+        ast::LocalVar var = member;
         SymbolVariable *sym = left->lookup_variable(var.identifier());
         if (!sym) {
           error(node, Diag::UnknownMember, string(var.identifier().str()));
@@ -315,12 +319,12 @@ struct ExpressionTypeParser {
       }
       default:
         error(node.is_valid() ? node : start, Diag::TypeCheckerInvalidExpression);
-        this->node = Node{};
+        this->node = ast::Node{};
         return table->err_cls;
     }
   }
 
-  SymbolClass *constructor(Constructor ctor)
+  SymbolClass *constructor(ast::Constructor ctor)
   {
     if (!first_temporary.is_valid()) {
       this->first_temporary = ctor;
@@ -328,22 +332,22 @@ struct ExpressionTypeParser {
     return scope->lookup_class(ctor.id()).unwrap(err);
   }
 
-  SymbolClass *fun_call(FuncCall call)
+  SymbolClass *fun_call(ast::FuncCall call)
   {
     if (call.identifier().str() == "resource_table_get") {
       /* Special getter that creates a resource table link to the function.
        * This is to help the porting process and should be phased out at some point. */
-      FuncParamList params = call.parameters();
+      ast::FuncParamList params = call.parameters();
       if (params.child_count() != 1) {
         error(params, Diag::ExpectedOneArgument);
         return table->err_cls;
       }
-      Expr expr(params.child_first());
+      ast::Expr expr(params.child_first());
       if (params.child_count() != 1) {
         error(params, Diag::ExpectedOneTypename);
         return table->err_cls;
       }
-      LocalVar var(expr.child_first());
+      ast::LocalVar var(expr.child_first());
       if (params.child_count() != 1) {
         error(params, Diag::ExpectedOneTypename);
         return table->err_cls;
@@ -364,7 +368,7 @@ struct ExpressionTypeParser {
     return fn->return_type;
   }
 
-  SymbolClass *local_var(LocalVar var)
+  SymbolClass *local_var(ast::LocalVar var)
   {
     SymbolVariable *sym = scope->lookup_variable(var.identifier());
     if (!sym) {
@@ -380,7 +384,7 @@ struct ExpressionTypeParser {
     return sym->type;
   }
 
-  SymbolClass *num_const(NumConst num)
+  SymbolClass *num_const(ast::NumConst num)
   {
     return table->get_literal_type(num.str());
   }
@@ -406,9 +410,9 @@ struct ExpressionTypeParser {
     }
   }
 
-  void check_subscript(Node node)
+  void check_subscript(ast::Node node)
   {
-    ExpressionTypeParser ctx(table, scope, Subscript(node).expr().child_first());
+    ExpressionTypeParser ctx(table, scope, ast::Subscript(node).expr().child_first());
     ctx.is_subscript_expr = true;
     SymbolClass *type = ctx.eval().unwrap(err);
     if (type != table->int_cls && type != table->uint_cls) {
@@ -436,4 +440,4 @@ struct ExpressionTypeParser {
   }
 };
 
-}  // namespace blender::gpu::shader::parser
+}  // namespace bsl

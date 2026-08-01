@@ -11,11 +11,14 @@
 #include "ast.hh"
 #include "token.hh"
 
-#include <format>
 #include <sstream>
-#include <unordered_map>
 
-namespace blender::gpu::shader::parser {
+namespace bsl {
+
+using Token = blender::gpu::shader::parser::Token;
+
+using namespace blender::gpu::shader::parser;
+using namespace std;
 
 /* TODO using fmt directly.
  * Using std::format is not possible on macos because of our minimum target. */
@@ -89,9 +92,6 @@ template<typename... Args> std::string format(const std::string &fmt, Args &&...
 }
 
 }  // namespace mini_fmt
-
-using namespace ast;
-using namespace std;
 
 enum class Diag {
   ExpectedVertexShaderEntryPoint,
@@ -501,13 +501,13 @@ static inline std::string_view diagnostic_message_get(Diag diag)
 }
 
 struct AstNodeException {
-  Node node;
+  ast::Node node;
   Diag diag;
   string param1;
   string param2;
   string param3;
 
-  AstNodeException(Node node,
+  AstNodeException(ast::Node node,
                    Diag diag,
                    const string &param1 = "",
                    const string &param2 = "",
@@ -661,4 +661,4 @@ template<typename T, typename U, typename ExceptionT = AstNodeException> struct 
   }
 };
 
-}  // namespace blender::gpu::shader::parser
+}  // namespace bsl

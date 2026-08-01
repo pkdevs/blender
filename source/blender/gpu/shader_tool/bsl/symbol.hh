@@ -10,14 +10,13 @@
 
 #include "ast.hh"
 #include "diagnostic.hh"
-#include "metadata.hh"
-#include "token.hh"
+
 #include <unordered_map>
 
-namespace blender::gpu::shader::parser {
-
-using namespace ast;
+namespace bsl {
 using namespace std;
+using namespace blender::gpu::shader::parser;
+using namespace blender::gpu::shader::parser::ast;
 
 struct SymbolParser;
 struct SymbolTable;
@@ -166,17 +165,17 @@ struct StringPair {
 struct ParsedAttribute {
   ResourceType res_type = ResourceType::NONE;
   ResourceTableType srt_type = ResourceTableType::NONE;
-  Expr param1, param2, param3;
-  Attr attr;
-  Expr condition;
-  Expr frequency;
-  Expr dual_source_index;
-  Expr raster_order_group;
+  ast::Expr param1, param2, param3;
+  ast::Attr attr;
+  ast::Expr condition;
+  ast::Expr frequency;
+  ast::Expr dual_source_index;
+  ast::Expr raster_order_group;
 
   string parse_condition() const;
 };
 
-Result<ParsedAttribute> resource_type_from_attributes(AttrList list);
+Result<ParsedAttribute> resource_type_from_attributes(ast::AttrList list);
 
 struct SourceLocation {
   Token tok;
@@ -208,6 +207,11 @@ struct SourceLocation {
   }
 };
 
+struct SymbolVariable;
+struct SymbolFunction;
+struct SymbolClass;
+struct SymbolScope;
+
 struct Symbol {
   string identifier;
   /* Unresolved identifier */
@@ -218,14 +222,14 @@ struct Symbol {
 
 template<typename T> struct SymbolTemplate {
   /* Definition. */
-  TemplateDecl decl;
+  ast::TemplateDecl decl;
 
   unordered_map<string, T *> instances;
 
   /* For argument dependent lookup. Maps a template argument to a function argument. */
   vector<int> temp_arg_index_in_fn_arg;
 
-  SymbolTemplate(TemplateDecl temp) : decl(temp)
+  SymbolTemplate(ast::TemplateDecl temp) : decl(temp)
   {
     init_adl();
   }
@@ -235,15 +239,15 @@ template<typename T> struct SymbolTemplate {
     return !temp_arg_index_in_fn_arg.empty();
   }
 
-  ResultPair<T *, string> lookup_inst(TemplateParamList list, const SymbolScope &scope) const;
+  ResultPair<T *, string> lookup_inst(ast::TemplateParamList list, const SymbolScope &scope) const;
   Result<T *> lookup_adl(const SymbolTable &symbols,
-                         FuncParamList list,
+                         ast::FuncParamList list,
                          const SymbolScope &scope) const;
 
   void init_adl();
 
  private:
-  IdQualified id() const
+  ast::IdQualified id() const
   {
     if (decl.is_class()) {
       return ClassDecl(decl.decl()).identifier();
@@ -296,41 +300,41 @@ struct SymbolScope : Symbol {
   /* Function scope act as anonymous scopes but still have identifier. */
   enum Type { FUNCTION, CLASS, NAMESPACE, LOCAL, ROOT } type = ROOT;
 
-  SymbolScope(LocalScope decl) : Symbol("" /* Root */, "", decl.back(), nullptr) {}
+  SymbolScope(ast::LocalScope decl) : Symbol("" /* Root */, "", decl.back(), nullptr) {}
 
   SymbolScope(SymbolScope *parent, Token tok, const string &id, Type type)
       : Symbol(id, id, tok, parent), type(type)
   {
   }
 
-  SymbolScope(SymbolScope *parent, LocalScope decl)
+  SymbolScope(SymbolScope *parent, ast::LocalScope decl)
       : SymbolScope(parent, decl.front(), parent->unique_id(), LOCAL)
   {
   }
 
-  SymbolScope(SymbolScope *parent, Id id, Type type)
+  SymbolScope(SymbolScope *parent, ast::Id id, Type type)
       : SymbolScope(parent, id.front(), string(id.str()), type)
   {
   }
 
-  SymbolVariable *lookup_variable(IdQualified id) const;
-  Result<SymbolFunction *> lookup_function(IdQualified id) const;
+  SymbolVariable *lookup_variable(ast::IdQualified id) const;
+  Result<SymbolFunction *> lookup_function(ast::IdQualified id) const;
   template<typename ArgOrParamList>
-  Result<SymbolFunction *> lookup_function(IdQualified id,
+  Result<SymbolFunction *> lookup_function(ast::IdQualified id,
                                            ArgOrParamList params,
                                            const SymbolTable &table,
                                            const SymbolScope &arguments_scope) const;
-  Result<SymbolClass *> lookup_class(IdQualified id) const;
+  Result<SymbolClass *> lookup_class(ast::IdQualified id) const;
 
-  Result<SymbolClass *> lookup_class(Id id, Id last) const;
+  Result<SymbolClass *> lookup_class(ast::Id id, ast::Id last) const;
 
   SymbolVariable *lookup_variable(string id) const;
   SymbolFunction *lookup_function(string id) const;
   SymbolClass *lookup_class(string id) const;
 
   /* Doesn't match last template in identifier. */
-  SymbolFunction *lookup_function_base(IdQualified id) const;
-  SymbolClass *lookup_class_base(IdQualified id) const;
+  SymbolFunction *lookup_function_base(ast::IdQualified id) const;
+  SymbolClass *lookup_class_base(ast::IdQualified id) const;
 
   void print() const;
 
@@ -352,8 +356,9 @@ struct SymbolScope : Symbol {
   vector<SymbolVariable *> non_static_variables_in_declaration_order() const;
 
  private:
-  template<typename T> T *lookup_generic(IdQualified id, const SourceLocation &loc) const;
-  template<typename T> T *lookup_generic_nested(Id id, Id last, const SourceLocation &loc) const;
+  template<typename T> T *lookup_generic(ast::IdQualified id, const SourceLocation &loc) const;
+  template<typename T>
+  T *lookup_generic_nested(ast::Id id, ast::Id last, const SourceLocation &loc) const;
 
   int id = 0;
   /* Create a unique, non-reachable key.
@@ -385,7 +390,7 @@ struct SymbolClass : SymbolScope {
   int size = -1;  /* -1 is for not computed yet. */
   int align = -1; /* -1 is for not computed yet. */
 
-  SymbolClass(SymbolScope *parent, ClassDecl decl, const string &suffix = "");
+  SymbolClass(SymbolScope *parent, ast::ClassDecl decl, const string &suffix = "");
 
   SymbolClass(SymbolScope *parent,
               Token tok,
@@ -415,7 +420,7 @@ struct SymbolFunction : SymbolScope {
   SymbolClass *return_type = nullptr;
 
   vector<SymbolClass *> arg_types;
-  vector<Expr> arg_defaults;
+  vector<ast::Expr> arg_defaults;
 
   bool is_error = false;
   /* False if this is a template root and is not a symbol to match on. */
@@ -426,7 +431,7 @@ struct SymbolFunction : SymbolScope {
 
   SymbolFunction(SymbolScope *parent,
                  SymbolClass *return_type,
-                 FuncDecl decl,
+                 ast::FuncDecl decl,
                  const string &suffix = "")
       : SymbolScope(
             parent, decl.front(), string(decl.identifier().name().str()) + suffix, FUNCTION),
@@ -435,9 +440,9 @@ struct SymbolFunction : SymbolScope {
         entry_point_type(EntryPointType::NONE)
   {
     if (decl.is_method()) {
-      loc = decl.parent(NodeType::ClassDecl).front();
+      loc = decl.parent(ast::NodeType::ClassDecl).front();
     }
-    for (Attr attr : decl.attributes().children_of_type<Attr>()) {
+    for (ast::Attr attr : decl.attributes().children_of_type<ast::Attr>()) {
       string_view id = attr.identifier().str();
       if (id == "vertex") {
         entry_point_type = EntryPointType::VERT;
@@ -472,22 +477,22 @@ struct SymbolFunction : SymbolScope {
   }
 
   /* To be called on the first registered overload. */
-  Result<SymbolFunction *> lookup_overload(IdQualified id,
+  Result<SymbolFunction *> lookup_overload(ast::IdQualified id,
                                            const SymbolTable &table,
                                            const vector<SymbolClass *> &arg_types);
 
   void add_overload(SymbolFunction *fn);
-  void add_argument(SymbolClass *type, Expr default_value = {});
+  void add_argument(SymbolClass *type, ast::Expr default_value = {});
 
   /* Return true if the given argument types are compatible */
   bool argument_matches(const SymbolTable &table, const vector<SymbolClass *> &param_types) const;
 
   static Result<vector<SymbolClass *>> to_arg_types(const SymbolTable &table,
                                                     const SymbolScope &scope,
-                                                    FuncParamList list);
+                                                    ast::FuncParamList list);
   static Result<vector<SymbolClass *>> to_arg_types(const SymbolTable &table,
                                                     const SymbolScope &scope,
-                                                    FuncArgList list);
+                                                    ast::FuncArgList list);
 };
 
 struct SymbolVariable : Symbol {
@@ -512,11 +517,11 @@ struct SymbolVariable : Symbol {
   bool is_compilation_const = false;
   /* Valid if the variable is a local reference.
    * The variable will be substituted to this statement. */
-  Expr reference_value = {};
+  ast::Expr reference_value = {};
 
-  SymbolVariable(SymbolScope *parent, SymbolClass *type, Declarator decl);
+  SymbolVariable(SymbolScope *parent, SymbolClass *type, ast::Declarator decl);
 
-  SymbolVariable(SymbolScope *parent, SymbolClass *type, EnumValue decl)
+  SymbolVariable(SymbolScope *parent, SymbolClass *type, ast::EnumValue decl)
       : Symbol(string(decl.identifier().str()),
                string(decl.identifier().str()),
                decl.front(),
@@ -742,23 +747,23 @@ struct SymbolTable {
 
   SymbolTable(ParserBase &builtin_parser);
 
-  void parse(LocalScope node, ErrorHandler &err_handler);
+  void parse(ast::LocalScope node, ErrorHandler &err_handler);
 
-  static Result<StringPair> mangle_identifier(TemplateArgList args,
-                                              TemplateParamList list,
+  static Result<StringPair> mangle_identifier(ast::TemplateArgList args,
+                                              ast::TemplateParamList list,
                                               const SymbolScope &scope);
   Result<StringPair> mangle_identifier(const SymbolFunctionTemplate &tmp,
-                                       FuncParamList list,
+                                       ast::FuncParamList list,
                                        const SymbolScope &scope) const;
 
-  Result<SymbolClass *> expr_type_analysis(const SymbolScope &scope, Expr expr) const;
+  Result<SymbolClass *> expr_type_analysis(const SymbolScope &scope, ast::Expr expr) const;
 
-  Result<SymbolClass *> resolve_auto_type(SymbolScope &scope, Declarator decl) const;
+  Result<SymbolClass *> resolve_auto_type(SymbolScope &scope, ast::Declarator decl) const;
 
-  static Result<int64_t> evaluate_constexpr(const SymbolScope &scope, Node start);
+  static Result<int64_t> evaluate_constexpr(const SymbolScope &scope, ast::Node start);
 
   static Result<string> expr_to_string(const SymbolScope &scope,
-                                       Node start,
+                                       ast::Node start,
                                        int &node_count,
                                        bool allow_compilation_constant = false);
 
@@ -788,11 +793,11 @@ struct SymbolTable {
     vector<string> arg_types;
   };
 
-  void register_builtins(LocalScope node);
+  void register_builtins(ast::LocalScope node);
   static vector<BuiltinType> generate_builtin_types();
   static vector<BuiltinOp> generate_all_operators(const vector<BuiltinType> &types);
   static vector<BuiltinFunc> generate_all_constructors(const vector<BuiltinType> &types);
   static vector<BuiltinFunc> generate_all_builtin_functions();
 };
 
-}  // namespace blender::gpu::shader::parser
+}  // namespace bsl

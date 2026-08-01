@@ -8,7 +8,10 @@
 
 #include "symbol.hh"
 
-namespace blender::gpu::shader::parser {
+namespace bsl {
+using namespace std;
+using namespace blender::gpu::shader::parser;
+using namespace blender::gpu::shader::parser::ast;
 
 /* Generates every single legal BSL constructor dynamically. */
 vector<SymbolTable::BuiltinFunc> SymbolTable::generate_all_constructors(
@@ -165,4 +168,4 @@ vector<SymbolTable::BuiltinFunc> SymbolTable::generate_all_constructors(
   return funcs;
 }
 
-}  // namespace blender::gpu::shader::parser
+}  // namespace bsl
