@@ -3473,7 +3473,7 @@ static bool image_pack_test(Image *ima, const char **r_error_message)
   }
 
   if (!BKE_image_is_dirty(ima) && ima->source == IMA_SRC_GENERATED) {
-    *r_error_message = N_("Image is not edited yet");
+    *r_error_message = N_("Unedited generated images do not support packing");
     return false;
   }
 
