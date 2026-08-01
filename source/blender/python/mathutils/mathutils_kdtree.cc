@@ -159,6 +159,93 @@ static void PyKDTree__tp_dealloc(PyKDTree *self)
 /** \} */
 
 /* -------------------------------------------------------------------- */
+/** \name KDTree Class Methods
+ * \{ */
+
+/** From_coords constructor: `mathutils.kdtree.KDTree.from_coords()`. */
+
+template<typename CoordT> static PyObject *C_kdtree_from_coords_impl(PyObject *py_seq)
+{
+  float *coords;
+  int coords_len;
+
+  if ((coords_len = mathutils_array_parse_alloc_v(
+           &coords, CoordT::type_length, py_seq, "from_coords")) == -1)
+  {
+    return nullptr;
+  }
+
+  KDTree<CoordT> *kdtree = kdtree_new<CoordT>(coords_len);
+  for (int i = 0; i < coords_len; i++) {
+    kdtree_insert<CoordT>(kdtree, i, reinterpret_cast<CoordT *>(coords)[i]);
+  }
+  kdtree_balance<CoordT>(kdtree);
+
+  if (coords_len) {
+    PyMem_Free(coords);
+  }
+
+  PyKDTree *py_kdtree = PyObject_New(PyKDTree, &PyKDTree_Type);
+  py_kdtree->obj = kdtree;
+  py_kdtree->maxsize = coords_len;
+  py_kdtree->count = coords_len;
+  py_kdtree->count_balance = coords_len;
+  py_kdtree->dimensions = CoordT::type_length;
+
+  return reinterpret_cast<PyObject *>(py_kdtree);
+}
+
+PyDoc_STRVAR(
+    /* Wrap. */
+    C_kdtree_from_coords_doc,
+    ".. classmethod:: from_coords(coords, dimensions=3, /)\n"
+    "\n"
+    "   Create a balanced KDTree from sequence.\n"
+    "\n"
+    "   :param coords: Sequence of 2D or 3D coords.\n"
+    "   :type coords: Sequence[Sequence[float]]\n"
+    "   :param dimensions: The dimensions of the tree (2 or 3).\n"
+    "   :type dimensions: int\n"
+    "   :return: A new balanced KDTree.\n"
+    "   :rtype: :class:`KDTree`\n");
+static PyObject *C_kdtree_from_coords(PyObject * /*cls*/, PyObject *args, PyObject *kwargs)
+{
+  PyObject *py_seq;
+  int dimensions = 3;
+  const char *keywords[] = {
+      "coords",
+      "dimensions",
+      nullptr,
+  };
+
+  if (!PyArg_ParseTupleAndKeywords(args,
+                                   kwargs,
+                                   "O"  /* `coords` */
+                                   "|$" /* Optional, keyword only arguments. */
+                                   "i"  /* `dimensions` */
+                                   ":KDTree.from_coords",
+                                   const_cast<char **>(keywords),
+                                   &py_seq,
+                                   &dimensions))
+  {
+    return nullptr;
+  }
+
+  if (dimensions == 2) {
+    return C_kdtree_from_coords_impl<float2>(py_seq);
+  }
+  else if (dimensions == 3) {
+    return C_kdtree_from_coords_impl<float3>(py_seq);
+  }
+  else {
+    PyErr_SetString(PyExc_RuntimeError, "dimensions must be 2 or 3");
+    return nullptr;
+  }
+}
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
 /** \name KDTree Methods: Insert
  * \{ */
 
@@ -602,6 +689,12 @@ static PyMethodDef PyKDTree_methods[] = {
      reinterpret_cast<PyCFunction>(py_kdtree_find_range),
      METH_VARARGS | METH_KEYWORDS,
      py_kdtree_find_range_doc},
+
+    /* Class methods. */
+    {"from_coords",
+     reinterpret_cast<PyCFunction>(C_kdtree_from_coords),
+     METH_VARARGS | METH_KEYWORDS | METH_CLASS,
+     C_kdtree_from_coords_doc},
     {nullptr, nullptr, 0, nullptr},
 };
 

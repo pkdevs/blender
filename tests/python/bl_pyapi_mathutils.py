@@ -1012,14 +1012,19 @@ class KDTreeTesting(unittest.TestCase):
             yield tuple(axis * mul for axis in co), index
 
     @staticmethod
-    def kdtree_create_grid(tot, dimensions, *, filter_fn=None):
-        k = kdtree.KDTree(tot ** dimensions, dimensions=dimensions)
-        for co, index in KDTreeTesting.kdtree_create_grid_data(tot, dimensions):
-            if (filter_fn is not None) and (not filter_fn(co, index)):
-                continue
-            k.insert(co, index)
-        k.balance()
-        return k
+    def kdtree_create_grid(tot, dimensions, *, filter_fn=None, is_from_coords=False):
+        if is_from_coords:
+            assert filter_fn is None
+            coords = tuple(data[0] for data in KDTreeTesting.kdtree_create_grid_data(tot, dimensions))
+            return kdtree.KDTree.from_coords(coords, dimensions=dimensions)
+        else:
+            k = kdtree.KDTree(tot ** dimensions, dimensions=dimensions)
+            for co, index in KDTreeTesting.kdtree_create_grid_data(tot, dimensions):
+                if (filter_fn is not None) and (not filter_fn(co, index)):
+                    continue
+                k.insert(co, index)
+            k.balance()
+            return k
 
     def assertAlmostEqualVector(self, first, second, places=7, msg=None, delta=None):
         self.assertAlmostEqual(first[0], second[0], places=places, msg=msg, delta=delta)
@@ -1048,11 +1053,14 @@ class KDTreeTesting(unittest.TestCase):
     def test_kdtree_single_3d(self):
         self._test_kdtree_single_test_impl(dimensions=3)
 
-    def _test_kdtree_empty_test_impl(self, dimensions):
+    def _test_kdtree_empty_test_impl(self, dimensions, *, is_from_coords=False):
         co = (0,) * dimensions
 
-        k = kdtree.KDTree(0, dimensions=dimensions)
-        k.balance()
+        if is_from_coords:
+            k = kdtree.KDTree.from_coords((), dimensions=dimensions)
+        else:
+            k = kdtree.KDTree(0, dimensions=dimensions)
+            k.balance()
 
         co_found, index_found, dist_found = k.find(co)
 
@@ -1066,15 +1074,25 @@ class KDTreeTesting(unittest.TestCase):
     def test_kdtree_empty_3d(self):
         self._test_kdtree_empty_test_impl(dimensions=3)
 
-    def _test_kdtree_line_test_impl(self, dimensions):
+    def test_kdtree_empty_from_coords_2d(self):
+        self._test_kdtree_empty_test_impl(dimensions=2, is_from_coords=True)
+
+    def test_kdtree_empty_from_coords_3d(self):
+        self._test_kdtree_empty_test_impl(dimensions=3, is_from_coords=True)
+
+    def _test_kdtree_line_test_impl(self, dimensions, *, is_from_coords=False):
         tot = 10
 
-        k = kdtree.KDTree(tot, dimensions=dimensions)
+        if is_from_coords:
+            coords = tuple((i,) * dimensions for i in range(tot))
+            k = kdtree.KDTree.from_coords(coords, dimensions=dimensions)
+        else:
+            k = kdtree.KDTree(tot, dimensions=dimensions)
 
-        for i in range(tot):
-            k.insert((i,) * dimensions, i)
+            for i in range(tot):
+                k.insert((i,) * dimensions, i)
 
-        k.balance()
+            k.balance()
 
         # The nearest point is one unit away on every axis.
         dist_expect = math.sqrt(dimensions)
@@ -1095,9 +1113,15 @@ class KDTreeTesting(unittest.TestCase):
     def test_kdtree_line_3d(self):
         self._test_kdtree_line_test_impl(dimensions=3)
 
-    def _test_kdtree_grid_test_impl(self, dimensions):
+    def test_kdtree_line_from_coords_2d(self):
+        self._test_kdtree_line_test_impl(dimensions=2, is_from_coords=True)
+
+    def test_kdtree_line_from_coords_3d(self):
+        self._test_kdtree_line_test_impl(dimensions=3, is_from_coords=True)
+
+    def _test_kdtree_grid_test_impl(self, dimensions, *, is_from_coords=False):
         size = 10
-        k = self.kdtree_create_grid(size, dimensions)
+        k = self.kdtree_create_grid(size, dimensions, is_from_coords=is_from_coords)
         self.assertEqual(k.dimensions, dimensions)
 
         # find_range
@@ -1135,9 +1159,15 @@ class KDTreeTesting(unittest.TestCase):
     def test_kdtree_grid_3d(self):
         self._test_kdtree_grid_test_impl(dimensions=3)
 
-    def _test_kdtree_grid_filter_simple_test_impl(self, dimensions):
+    def test_kdtree_grid_from_coords_2d(self):
+        self._test_kdtree_grid_test_impl(dimensions=2, is_from_coords=True)
+
+    def test_kdtree_grid_from_coords_3d(self):
+        self._test_kdtree_grid_test_impl(dimensions=3, is_from_coords=True)
+
+    def _test_kdtree_grid_filter_simple_test_impl(self, dimensions, *, is_from_coords=False):
         size = 10
-        k = self.kdtree_create_grid(size, dimensions)
+        k = self.kdtree_create_grid(size, dimensions, is_from_coords=is_from_coords)
 
         # filter exact index
         ret_regular = k.find((1.0,) * dimensions)
@@ -1151,6 +1181,12 @@ class KDTreeTesting(unittest.TestCase):
 
     def test_kdtree_grid_filter_simple_3d(self):
         self._test_kdtree_grid_filter_simple_test_impl(dimensions=3)
+
+    def test_kdtree_grid_filter_simple_from_coords_2d(self):
+        self._test_kdtree_grid_filter_simple_test_impl(dimensions=2, is_from_coords=True)
+
+    def test_kdtree_grid_filter_simple_from_coords_3d(self):
+        self._test_kdtree_grid_filter_simple_test_impl(dimensions=3, is_from_coords=True)
 
     def _test_kdtree_grid_filter_pairs_test_impl(self, dimensions):
         import itertools
