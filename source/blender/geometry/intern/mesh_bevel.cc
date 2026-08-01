@@ -4004,7 +4004,7 @@ static bool is_bad_uv_poly(const BevelState &state, BevVert *bv, const int frep)
  *   0. UV-connected-component id (`uv_layer_info.face_component`; 0 when no UV layers).
  *   1. Reserved for a future "face selected" attribute; always 0.0f for now.
  *   2. Material index (`material_index` face attribute; 0 when absent).
- *   3. Higher z-coordinate of face center (stored negated so "higher wins" = lower value).
+ *   3. Lower z-coordinate of face center.
  *   4. Lower x-coordinate of face center.
  *   5. Lower y-coordinate of face center.
  *
@@ -5150,15 +5150,17 @@ static void bevel_build_edge_polygons(BevelState &state, const int edge_index)
   const int odd = nseg % 2;
   const int mid = nseg / 2;
 
-  /* For odd nseg with a seam at e1, choose the winner once via #choose_rep_face.
-   * Also compute center_adj_k: the strip index adjacent to the center strip,
-   * on the other UV-island side.  This mirrors BMesh exactly. */
+  /* For odd nseg, choose the face-attribute source of the center strip once via
+   * #choose_rep_face: the strip straddles the original edge, so copying face attributes
+   * from an arbitrary side gives inconsistent results along a chain of beveled edges
+   * (see #142279).  For seam edges also compute center_adj_k: the strip index adjacent
+   * to the center strip, on the other UV-island side.  This mirrors BMesh exactly. */
   int f_choice = -1;
   int center_adj_k = -1;
-  if (odd && e1->is_seam) {
+  if (odd) {
     const int candidates[2] = {f1, f2};
     f_choice = choose_rep_face(state, Span<int>(candidates, 2));
-    if (nseg > 1) {
+    if (e1->is_seam && nseg > 1) {
       center_adj_k = (f_choice == f1) ? mid + 2 : mid;
     }
   }
@@ -5201,9 +5203,9 @@ static void bevel_build_edge_polygons(BevelState &state, const int edge_index)
         corner_reps[0] = corner_reps[1] = corner_reps[2] = corner_reps[3] = f_choice;
       }
       else {
-        /* Straddles but not a seam: interpolate left half in f1, right half in f2.
-         * f_choice is -1 here; face_rep uses f1 but per-corner reps override it. */
-        face_rep = f1;
+        /* Straddles but not a seam: face attributes come from f_choice, while the
+         * per-corner reps still interpolate the left half in f1 and the right in f2. */
+        face_rep = f_choice;
         corner_reps[0] = corner_reps[1] = f1;
         corner_reps[2] = corner_reps[3] = f2;
       }
