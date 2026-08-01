@@ -397,6 +397,25 @@ static void update_system_properties(Main &bmain, Object &object, NodesModifierD
   PointerRNA properties_ptr = RNA_pointer_create_discrete(
       &object.id, RNA_NodesModifierProperties, &nmd);
   RNA_ensure_and_sync_system_properties(bmain, properties_ptr, *nmd.modifier.system_properties);
+
+  /* Reset invalid layer input types on regular Boolean sockets. */
+  PointerRNA inputs_ptr = RNA_pointer_get(&properties_ptr, "inputs");
+  for (const bNodeTreeInterfaceSocket *socket : nmd.node_group->interface_inputs()) {
+    const bke::bNodeSocketType *socket_type = socket->socket_typeinfo();
+    if (!socket_type || socket_type->type != SOCK_BOOLEAN ||
+        (socket->flag & NODE_INTERFACE_SOCKET_LAYER_SELECTION))
+    {
+      continue;
+    }
+    PointerRNA input_ptr = RNA_pointer_get(&inputs_ptr, socket->identifier);
+    PropertyRNA *type_prop = RNA_struct_find_property(&input_ptr, "type");
+    if (!type_prop ||
+        RNA_property_enum_get(&input_ptr, type_prop) != int(nodes::GeometryNodesInputType::Layer))
+    {
+      continue;
+    }
+    RNA_property_enum_set(&input_ptr, type_prop, int(nodes::GeometryNodesInputType::Value));
+  }
 }
 
 void MOD_nodes_update_interface(Main &bmain, Object *object, NodesModifierData *nmd)
