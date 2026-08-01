@@ -10,6 +10,8 @@ Regression tests for View3D click selection across viewport shading modes.
 
 import modules.ui_test_utils as ui
 
+SHADING_TYPES = ('SOLID', 'WIREFRAME', 'MATERIAL', 'RENDERED')
+
 
 def _view3d_area_region(window):
     area = ui.largest_area(window.screen)
@@ -100,17 +102,6 @@ def _test_view3d_selection_in_shading(shading_type):
     _assert_only_object_selected(t, cube, sphere)
 
 
-def test_view3d_selection_solid():
-    yield from _test_view3d_selection_in_shading('SOLID')
-
-
-def test_view3d_selection_wireframe():
-    yield from _test_view3d_selection_in_shading('WIREFRAME')
-
-
-def test_view3d_selection_material():
-    yield from _test_view3d_selection_in_shading('MATERIAL')
-
-
-def test_view3d_selection_rendered():
-    yield from _test_view3d_selection_in_shading('RENDERED')
+def test_view3d_selection_all_shading_modes():
+    for shading_type in SHADING_TYPES:
+        yield from _test_view3d_selection_in_shading(shading_type)
