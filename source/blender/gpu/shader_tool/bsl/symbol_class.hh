@@ -27,7 +27,7 @@ struct SymbolClass : SymbolScope {
   int align = -1; /* -1 is for not computed yet. */
 
   /* For builtin types, number of components. */
-  char comp_len = 0;
+  int8_t comp_len = 0;
 
   bool is_builtin = false;
   bool is_anonymous = false;

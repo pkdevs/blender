@@ -19,113 +19,71 @@ vector<SymbolTable::BuiltinFunc> SymbolTable::generate_all_constructors(
 {
   vector<BuiltinFunc> funcs;
 
-  /* Group types by their base scalar/component type (e.g., float, int, bool) and dimension. */
-  struct TypeFamily {
-    const BuiltinType *scalar = nullptr; /* size 1 (e.g., float) */
-    const BuiltinType *vec2 = nullptr;   /* size 2 (e.g., float2) */
-    const BuiltinType *vec3 = nullptr;   /* size 3 (e.g., float3) */
-    const BuiltinType *vec4 = nullptr;   /* size 4 (e.g., float4) */
-  };
-
-  unordered_map<string, TypeFamily> families;
-  for (const auto &t : types) {
-    if (t.size == 1) {
-      families[t.base].scalar = &t;
-    }
-    else if (t.size == 2) {
-      families[t.base].vec2 = &t;
-    }
-    else if (t.size == 3) {
-      families[t.base].vec3 = &t;
-    }
-    else if (t.size == 4) {
-      families[t.base].vec4 = &t;
-    }
-  }
-
   /* Vector and Scalar Constructors (restricted to matching component types). */
-  for (const auto &[base_name, family] : families) {
-    const auto *s = family.scalar;
-    const auto *v2 = family.vec2;
-    const auto *v3 = family.vec3;
-    const auto *v4 = family.vec4;
+  for (const auto [type, base] : types) {
+    SymbolClass *s = base;
+    SymbolClass *v2 = make_type(base, 2);
+    SymbolClass *v3 = make_type(base, 3);
+    SymbolClass *v4 = make_type(base, 4);
 
-    /* Scalar Copy: float(float) */
-    if (s) {
-      funcs.push_back({s->name, s->name, {s->name}});
-    }
-
-    /* Vec2 Constructors */
-    if (v2) {
-      /* Copy: float2(float2) */
-      funcs.push_back({v2->name, v2->name, {v2->name}});
-      if (s) {
+    switch (type->comp_len) {
+      case 1:
+        /* Scalar Copy: float(float) */
+        funcs.push_back({s, s->identifier, {s}});
+        break;
+      case 2:
+        /* Copy: float2(float2) */
+        funcs.push_back({v2, v2->identifier, {v2}});
         /* Broadcast: float2(float) */
-        funcs.push_back({v2->name, v2->name, {s->name}});
+        funcs.push_back({v2, v2->identifier, {s}});
         /* Component-wise (1+1): float2(float, float) */
-        funcs.push_back({v2->name, v2->name, {s->name, s->name}});
-      }
-    }
-
-    /* Vec3 Constructors */
-    if (v3) {
-      /* Copy: float3(float3) */
-      funcs.push_back({v3->name, v3->name, {v3->name}});
-      if (s) {
+        funcs.push_back({v2, v2->identifier, {s, s}});
+        break;
+      case 3:
+        /* Copy: float3(float3) */
+        funcs.push_back({v3, v3->identifier, {v3}});
         /* Broadcast: float3(float) */
-        funcs.push_back({v3->name, v3->name, {s->name}});
+        funcs.push_back({v3, v3->identifier, {s}});
         /* 1 + 1 + 1: float3(float, float, float) */
-        funcs.push_back({v3->name, v3->name, {s->name, s->name, s->name}});
-      }
-      if (s && v2) {
+        funcs.push_back({v3, v3->identifier, {s, s, s}});
         /* 1 + 2: float3(float, float2) */
-        funcs.push_back({v3->name, v3->name, {s->name, v2->name}});
+        funcs.push_back({v3, v3->identifier, {s, v2}});
         /* 2 + 1: float3(float2, float) */
-        funcs.push_back({v3->name, v3->name, {v2->name, s->name}});
-      }
-    }
-
-    /* Vec4 Constructors */
-    if (v4) {
-      /* Copy: float4(float4) */
-      funcs.push_back({v4->name, v4->name, {v4->name}});
-      if (s) {
+        funcs.push_back({v3, v3->identifier, {v2, s}});
+        break;
+      case 4:
+        /* Copy: float4(float4) */
+        funcs.push_back({v4, v4->identifier, {v4}});
         /* Broadcast: float4(float) */
-        funcs.push_back({v4->name, v4->name, {s->name}});
+        funcs.push_back({v4, v4->identifier, {s}});
         /* 1 + 1 + 1 + 1: float4(float, float, float, float) */
-        funcs.push_back({v4->name, v4->name, {s->name, s->name, s->name, s->name}});
-      }
-      if (s && v3) {
+        funcs.push_back({v4, v4->identifier, {s, s, s, s}});
         /* 1 + 3: float4(float, float3) */
-        funcs.push_back({v4->name, v4->name, {s->name, v3->name}});
+        funcs.push_back({v4, v4->identifier, {s, v3}});
         /* 3 + 1: float4(float3, float) */
-        funcs.push_back({v4->name, v4->name, {v3->name, s->name}});
-      }
-      if (v2) {
+        funcs.push_back({v4, v4->identifier, {v3, s}});
         /* 2 + 2: float4(float2, float2) */
-        funcs.push_back({v4->name, v4->name, {v2->name, v2->name}});
-      }
-      if (s && v2) {
+        funcs.push_back({v4, v4->identifier, {v2, v2}});
         /* 2 + 1 + 1: float4(float2, float, float) */
-        funcs.push_back({v4->name, v4->name, {v2->name, s->name, s->name}});
+        funcs.push_back({v4, v4->identifier, {v2, s, s}});
         /* 1 + 2 + 1: float4(float, float2, float) */
-        funcs.push_back({v4->name, v4->name, {s->name, v2->name, s->name}});
+        funcs.push_back({v4, v4->identifier, {s, v2, s}});
         /* 1 + 1 + 2: float4(float, float, float2) */
-        funcs.push_back({v4->name, v4->name, {s->name, s->name, v2->name}});
-      }
+        funcs.push_back({v4, v4->identifier, {s, s, v2}});
+        break;
     }
   }
 
   /* Matrix Constructors (restricted to matching "float" component type). */
   for (int n = 2; n <= 4; ++n) {
     for (int m = 2; m <= 4; ++m) {
-      string mat_name = "float" + to_string(n) + "x" + to_string(m);
+      SymbolClass *mat = make_type(make_type(float_cls, m), n);
       /* Broadcast: float3x3(float) */
-      funcs.push_back({mat_name, mat_name, {"float"}});
+      funcs.push_back({mat, mat->identifier, {float_cls}});
       /* All-Scalar: float3x3(float, float, ...) [N*N scalars] */
-      funcs.push_back({mat_name, mat_name, vector<string>(n * n, "float")});
+      funcs.push_back({mat, mat->identifier, vector<SymbolClass *>(n * n, float_cls)});
       /* All-Vector: float3x3(float3, float3, float3) [N vectors] */
-      funcs.push_back({mat_name, mat_name, vector<string>(n, "float" + to_string(n))});
+      funcs.push_back({mat, mat->identifier, vector<SymbolClass *>(n, make_type(float_cls, n))});
     }
   }
 

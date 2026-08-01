@@ -27,7 +27,7 @@ struct SymbolFunction : SymbolScope {
   /* False if this is a template root and is not a symbol to match on. */
   bool is_complete = true;
   /* If true, will allow vector type casting. */
-  bool is_builtin_ctor = false;
+  bool is_builtin = false;
 
   enum Type { STATIC, MEMBER, GLOBAL } fn_type;
   enum class EntryPointType { FRAG, VERT, COMP, NONE } entry_point_type;
@@ -86,6 +86,8 @@ struct SymbolFunction : SymbolScope {
 
   void add_overload(SymbolFunction *fn);
   void add_argument(SymbolClass *type, ast::Expr default_value = {});
+
+  void reserve_arguments(int n);
 
   /* Return true if the given argument types are compatible */
   bool argument_matches(const SymbolTable &table, const vector<SymbolClass *> &param_types) const;

@@ -74,6 +74,12 @@ void SymbolFunction::add_overload(SymbolFunction *fn)
   this->overload_next = fn;
 }
 
+void SymbolFunction::reserve_arguments(int n)
+{
+  this->arg_types.reserve(n);
+  this->arg_defaults.reserve(n);
+}
+
 void SymbolFunction::add_argument(SymbolClass *type, Expr default_value)
 {
   this->arg_types.emplace_back(type);
@@ -95,7 +101,7 @@ bool SymbolFunction::argument_matches(const SymbolTable &table,
 
   for (int i = 0; i < param_types.size(); ++i) {
     if (arg_types[i] != param_types[i] &&
-        !table.is_convertible(param_types[i], arg_types[i], is_builtin_ctor))
+        !table.is_convertible(param_types[i], arg_types[i], is_builtin))
     {
       return false;
     }

@@ -73,19 +73,58 @@ struct SymbolTable {
   Allocator<SymbolClassTemplate> tmp_cls_arena;
   Allocator<SymbolFunctionTemplate> tmp_fun_arena;
 
-  SymbolClass *float_cls;
-  SymbolClass *int_cls;
-  SymbolClass *uint_cls;
-  SymbolClass *str_cls;
-  SymbolClass *err_cls;
-  SymbolClass *bool_cls;
-  SymbolClass *void_cls;
-  SymbolClass *float2_cls;
-  SymbolClass *float3_cls;
-  SymbolClass *float4_cls;
-  SymbolClass *packed_float2_cls;
-  SymbolClass *packed_float3_cls;
-  SymbolClass *packed_float4_cls;
+  SymbolClass *err_cls = nullptr;
+  SymbolClass *char_cls = nullptr;
+  SymbolClass *short_cls = nullptr;
+  SymbolClass *int_cls = nullptr;
+  SymbolClass *uchar_cls = nullptr;
+  SymbolClass *ushort_cls = nullptr;
+  SymbolClass *uint_cls = nullptr;
+  SymbolClass *half_cls = nullptr;
+  SymbolClass *float_cls = nullptr;
+  SymbolClass *void_cls = nullptr;
+  SymbolClass *str_cls = nullptr;
+  SymbolClass *char2_cls = nullptr;
+  SymbolClass *short2_cls = nullptr;
+  SymbolClass *int2_cls = nullptr;
+  SymbolClass *uchar2_cls = nullptr;
+  SymbolClass *ushort2_cls = nullptr;
+  SymbolClass *uint2_cls = nullptr;
+  SymbolClass *half2_cls = nullptr;
+  SymbolClass *char3_cls = nullptr;
+  SymbolClass *short3_cls = nullptr;
+  SymbolClass *int3_cls = nullptr;
+  SymbolClass *uchar3_cls = nullptr;
+  SymbolClass *ushort3_cls = nullptr;
+  SymbolClass *uint3_cls = nullptr;
+  SymbolClass *half3_cls = nullptr;
+  SymbolClass *char4_cls = nullptr;
+  SymbolClass *short4_cls = nullptr;
+  SymbolClass *int4_cls = nullptr;
+  SymbolClass *uchar4_cls = nullptr;
+  SymbolClass *ushort4_cls = nullptr;
+  SymbolClass *uint4_cls = nullptr;
+  SymbolClass *half4_cls = nullptr;
+  SymbolClass *float2_cls = nullptr;
+  SymbolClass *float3_cls = nullptr;
+  SymbolClass *float4_cls = nullptr;
+  SymbolClass *packed_float2_cls = nullptr;
+  SymbolClass *packed_float3_cls = nullptr;
+  SymbolClass *packed_float4_cls = nullptr;
+  SymbolClass *bool_cls = nullptr;
+  SymbolClass *bool2_cls = nullptr;
+  SymbolClass *bool3_cls = nullptr;
+  SymbolClass *bool4_cls = nullptr;
+  SymbolClass *float2x2_cls = nullptr;
+  SymbolClass *float3x3_cls = nullptr;
+  SymbolClass *float4x4_cls = nullptr;
+  SymbolClass *float2x3_cls = nullptr;
+  SymbolClass *float2x4_cls = nullptr;
+  SymbolClass *float3x2_cls = nullptr;
+  SymbolClass *float3x4_cls = nullptr;
+  SymbolClass *float4x2_cls = nullptr;
+  SymbolClass *float4x3_cls = nullptr;
+  SymbolClass *bool32_t_cls = nullptr;
 
   OperatorMap operators;
 
@@ -128,31 +167,39 @@ struct SymbolTable {
  private:
   struct BuiltinType {
     /* "int", "int2", ... */
-    string name;
+    SymbolClass *type;
     /* "int", "uint", "float", "bool", ... */
-    string base;
-    /* 1 (scalar), 2, 3, 4 */
-    int size;
+    SymbolClass *base;
   };
 
   struct BuiltinOp {
-    string left;
+    SymbolClass *left;
     TokenType op;
-    string right;
-    string result;
+    SymbolClass *right;
+    SymbolClass *result;
   };
 
   struct BuiltinFunc {
-    string return_type;
+    SymbolClass *return_type;
     string id;
-    vector<string> arg_types;
+    vector<SymbolClass *> arg_types;
   };
 
   void register_builtins(ast::LocalScope node);
-  static vector<BuiltinType> generate_builtin_types();
-  static vector<BuiltinOp> generate_all_operators(const vector<BuiltinType> &types);
-  static vector<BuiltinFunc> generate_all_constructors(const vector<BuiltinType> &types);
-  static vector<BuiltinFunc> generate_all_builtin_functions();
+  vector<BuiltinType> generate_builtin_types();
+  void generate_builtin_operators(SourceLocation loc, const vector<BuiltinType> &types);
+  vector<BuiltinFunc> generate_all_constructors(const vector<BuiltinType> &types);
+  vector<BuiltinFunc> generate_all_builtin_functions();
+
+  bool is_numeric(const SymbolClass *base);
+  bool is_integer(const SymbolClass *base);
+
+  int get_rank(const SymbolClass *base);
+  SymbolClass *get_promoted_base(SymbolClass *b1, SymbolClass *b2);
+  SymbolClass *make_type(SymbolClass *base, int size);
+
+  void add_operator(
+      SourceLocation loc, SymbolClass *left, TokenType op, SymbolClass *right, SymbolClass *ret);
 };
 
 }  // namespace bsl

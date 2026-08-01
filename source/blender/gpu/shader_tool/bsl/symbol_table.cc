@@ -260,21 +260,23 @@ void SymbolTable::register_builtins(LocalScope node)
     root->classes.emplace(t.id, cls);
   }
 
+  this->err_cls = root->lookup_class(SymbolTable::err_symbol);
+
+  this->char_cls = root->lookup_class("char");
+  this->short_cls = root->lookup_class("short");
+  this->int_cls = root->lookup_class("int");
+  this->uchar_cls = root->lookup_class("uchar");
+  this->ushort_cls = root->lookup_class("ushort");
+  this->uint_cls = root->lookup_class("uint");
+  this->half_cls = root->lookup_class("half");
+  this->float_cls = root->lookup_class("float");
+  this->bool_cls = root->lookup_class("bool");
+  this->bool32_t_cls = root->lookup_class("bool32_t");
+
   const vector<BuiltinBasicType> special_types = {
       {err_symbol, 1, 1},
 
       {"void", 1, 1}, /* Only for function return type. */
-
-      {"char", 1, 1},
-      {"short", 2, 2},
-      {"int", 4, 4},
-      {"uchar", 1, 1},
-      {"ushort", 2, 2},
-      {"uint", 4, 4},
-      {"half", 2, 2},
-      {"float", 4, 4},
-      {"bool", 1, 1},
-      {"bool32_t", 4, 4},
 
       {"string_t", 4, 4},
 
@@ -345,69 +347,26 @@ void SymbolTable::register_builtins(LocalScope node)
     root->classes.emplace(t.id, sym);
   }
 
+  this->str_cls = root->lookup_class("string_t");
+  this->void_cls = root->lookup_class("void");
+
   struct BuiltinVector {
     string id;
-    string base;
+    SymbolClass *base;
     int comp;
     int align;
-  };
-
-  const std::vector<BuiltinVector> vectors = {
-      {"float2", "float", 2, 8},
-      {"float3", "float", 3, 16},
-      {"float4", "float", 4, 16},
-      {"float2x2", "float2", 2, 16},
-      {"float2x3", "float3", 2, 16},
-      {"float2x4", "float4", 2, 16},
-      {"float3x2", "float2", 3, 16},
-      {"float3x3", "float3", 3, 16},
-      {"float3x4", "float4", 3, 16},
-      {"float4x2", "float2", 4, 16},
-      {"float4x3", "float3", 4, 16},
-      {"float4x4", "float4", 4, 16},
-      {"char2", "char", 2, 2},
-      {"char3", "char", 3, 3},
-      {"char4", "char", 4, 4},
-      {"uchar2", "uchar", 2, 2},
-      {"uchar3", "uchar", 3, 3},
-      {"uchar4", "uchar", 4, 4},
-      {"short2", "short", 2, 4},
-      {"short3", "short", 3, 6},
-      {"short4", "short", 4, 8},
-      {"ushort2", "ushort", 2, 4},
-      {"ushort3", "ushort", 3, 6},
-      {"ushort4", "ushort", 4, 8},
-      {"int2", "int", 2, 8},
-      {"int3", "int", 3, 16},
-      {"int4", "int", 4, 16},
-      {"int2", "int", 2, 8},
-      {"int3", "int", 3, 16},
-      {"int4", "int", 4, 16},
-      {"uint2", "uint", 2, 8},
-      {"uint3", "uint", 3, 16},
-      {"uint4", "uint", 4, 16},
-      {"bool2", "bool", 2, 2},
-      {"bool3", "bool", 3, 3},
-      {"bool4", "bool", 4, 4},
-      {"packed_float2", "float", 2, 8},
-      {"packed_float3", "float", 3, 16},
-      {"packed_float4", "float", 4, 16},
-      {"packed_int2", "float", 2, 8},
-      {"packed_int3", "float", 3, 16},
-      {"packed_int4", "float", 4, 16},
   };
 
   const char *swizzle_xyzw[4] = {"x", "y", "z", "w"};
   const char *swizzle_rgba[4] = {"r", "g", "b", "a"};
 
-  for (const auto &t : vectors) {
-    SymbolClass *base = root->classes[t.base];
+  auto generate_vector = [&](const BuiltinVector &t, const bool do_swizzle) {
+    SymbolClass *base = t.base;
     SymbolClass *cls = cls_arena.alloc(root, tok, t.id, t.comp * base->size, t.align);
     root->classes.emplace(t.id, cls);
     root->scopes.emplace(t.id, cls);
 
-    cls->is_std140_compatible = t.align >= 8 && t.id != "float3" && t.base != "float3" &&
-                                base->is_std140_compatible;
+    cls->is_std140_compatible = t.align >= 8 && t.id != "float3" && base->is_std140_compatible;
     cls->is_std430_compatible = cls->is_std140_compatible;
 
     SymbolFunction *sub_op = fun_arena.alloc(
@@ -417,19 +376,111 @@ void SymbolTable::register_builtins(LocalScope node)
     cls->functions.emplace(subscript_operator_id, sub_op);
     cls->comp_len = t.comp * base->comp_len;
 
-    for (int i = 0; i < t.comp; i++) {
-      {
-        string id(swizzle_xyzw[i]);
-        SymbolVariable *var = var_arena.alloc(cls, root->classes[t.base], tok, id);
-        cls->variables.emplace(id, var);
-      }
-      {
-        string id(swizzle_rgba[i]);
-        SymbolVariable *var = var_arena.alloc(cls, root->classes[t.base], tok, id);
-        cls->variables.emplace(id, var);
-      }
+    for (int i = 0; i < t.comp && do_swizzle; i++) {
+      string id_xyzw(swizzle_xyzw[i]);
+      cls->variables.emplace(id_xyzw, var_arena.alloc(cls, base, tok, id_xyzw));
+      string id_rgba(swizzle_rgba[i]);
+      cls->variables.emplace(id_rgba, var_arena.alloc(cls, base, tok, id_rgba));
     }
+  };
+
+  const std::vector<BuiltinVector> vectors = {
+      {"float2", float_cls, 2, 8},
+      {"float3", float_cls, 3, 16},
+      {"float4", float_cls, 4, 16},
+      {"half2", half_cls, 2, 4},
+      {"half3", half_cls, 3, 8},
+      {"half4", half_cls, 4, 8},
+      {"char2", char_cls, 2, 2},
+      {"char3", char_cls, 3, 3},
+      {"char4", char_cls, 4, 4},
+      {"uchar2", uchar_cls, 2, 2},
+      {"uchar3", uchar_cls, 3, 3},
+      {"uchar4", uchar_cls, 4, 4},
+      {"short2", short_cls, 2, 4},
+      {"short3", short_cls, 3, 6},
+      {"short4", short_cls, 4, 8},
+      {"ushort2", ushort_cls, 2, 4},
+      {"ushort3", ushort_cls, 3, 6},
+      {"ushort4", ushort_cls, 4, 8},
+      {"int2", int_cls, 2, 8},
+      {"int3", int_cls, 3, 16},
+      {"int4", int_cls, 4, 16},
+      {"uint2", uint_cls, 2, 8},
+      {"uint3", uint_cls, 3, 16},
+      {"uint4", uint_cls, 4, 16},
+      {"bool2", bool_cls, 2, 2},
+      {"bool3", bool_cls, 3, 3},
+      {"bool4", bool_cls, 4, 4},
+      {"packed_float2", float_cls, 2, 8},
+      {"packed_float3", float_cls, 3, 16},
+      {"packed_float4", float_cls, 4, 16},
+      {"packed_int2", float_cls, 2, 8},
+      {"packed_int3", float_cls, 3, 16},
+      {"packed_int4", float_cls, 4, 16},
+  };
+
+  for (const auto &t : vectors) {
+    generate_vector(t, true);
   }
+
+  /* Fast lookup cache. */
+  this->char2_cls = root->lookup_class("char2");
+  this->short2_cls = root->lookup_class("short2");
+  this->int2_cls = root->lookup_class("int2");
+  this->uchar2_cls = root->lookup_class("uchar2");
+  this->ushort2_cls = root->lookup_class("ushort2");
+  this->uint2_cls = root->lookup_class("uint2");
+  this->half2_cls = root->lookup_class("half2");
+  this->char3_cls = root->lookup_class("char3");
+  this->short3_cls = root->lookup_class("short3");
+  this->int3_cls = root->lookup_class("int3");
+  this->uchar3_cls = root->lookup_class("uchar3");
+  this->ushort3_cls = root->lookup_class("ushort3");
+  this->uint3_cls = root->lookup_class("uint3");
+  this->half3_cls = root->lookup_class("half3");
+  this->char4_cls = root->lookup_class("char4");
+  this->short4_cls = root->lookup_class("short4");
+  this->int4_cls = root->lookup_class("int4");
+  this->uchar4_cls = root->lookup_class("uchar4");
+  this->ushort4_cls = root->lookup_class("ushort4");
+  this->uint4_cls = root->lookup_class("uint4");
+  this->half4_cls = root->lookup_class("half4");
+  this->float2_cls = root->lookup_class("float2");
+  this->float3_cls = root->lookup_class("float3");
+  this->float4_cls = root->lookup_class("float4");
+  this->packed_float2_cls = root->lookup_class("packed_float2");
+  this->packed_float3_cls = root->lookup_class("packed_float3");
+  this->packed_float4_cls = root->lookup_class("packed_float4");
+  this->bool2_cls = root->lookup_class("bool2");
+  this->bool3_cls = root->lookup_class("bool3");
+  this->bool4_cls = root->lookup_class("bool4");
+
+  const std::vector<BuiltinVector> matrices = {
+      {"float2x2", float2_cls, 2, 16},
+      {"float2x3", float3_cls, 2, 16},
+      {"float2x4", float4_cls, 2, 16},
+      {"float3x2", float2_cls, 3, 16},
+      {"float3x3", float3_cls, 3, 16},
+      {"float3x4", float4_cls, 3, 16},
+      {"float4x2", float2_cls, 4, 16},
+      {"float4x3", float3_cls, 4, 16},
+      {"float4x4", float4_cls, 4, 16},
+  };
+
+  for (const auto &t : matrices) {
+    generate_vector(t, false);
+  }
+
+  this->float2x2_cls = root->lookup_class("float2x2");
+  this->float2x3_cls = root->lookup_class("float2x3");
+  this->float2x4_cls = root->lookup_class("float2x4");
+  this->float3x2_cls = root->lookup_class("float3x2");
+  this->float3x3_cls = root->lookup_class("float3x3");
+  this->float3x4_cls = root->lookup_class("float3x4");
+  this->float4x2_cls = root->lookup_class("float4x2");
+  this->float4x3_cls = root->lookup_class("float4x3");
+  this->float4x4_cls = root->lookup_class("float4x4");
 
   /* Aliases. */
   root->classes.emplace(string("int32_t"), root->classes["int"]);
@@ -438,27 +489,21 @@ void SymbolTable::register_builtins(LocalScope node)
   /* Swizzle Generation */
   /* We do this in a separate loop because a swizzle on a float2 (like .xxxx)
    * might require float4 to already be registered in root->classes. */
-  for (const auto &t : vectors) {
-    /* Matrices (e.g., float2x2 where t.base is "float2") do not have standard swizzles.  We only
-     * generate swizzles for vectors whose base components are scalars. */
-    if (t.base != "float" && t.base != "int" && t.base != "uint" && t.base != "bool") {
-      continue;
-    }
-    SymbolScope *scope = root->scopes[t.id];
-
+  for (const auto &[name, base, comp, __] : vectors) {
+    SymbolClass *type = root->classes[name];
     auto generate_swizzles =
         [&](auto &self, string current, int target_length, auto swizzle) -> void {
       if (current.length() == target_length) {
         /* e.g., "float" + "3" = "float3" */
-        string return_type_id = t.base + to_string(target_length);
+        string return_type_id = base->identifier + to_string(target_length);
 
-        SymbolVariable var(scope, root->classes[return_type_id], tok, current);
+        SymbolVariable var(type, root->classes[return_type_id], tok, current);
 
-        scope->variables.emplace(current, var_arena.alloc(var));
+        type->variables.emplace(current, var_arena.alloc(var));
         return;
       }
       /* Only allow swizzling components that actually exist on this vector type. */
-      for (int i = 0; i < t.comp; i++) {
+      for (int i = 0; i < comp; i++) {
         self(self, current + swizzle[i], target_length, swizzle);
       }
     };
@@ -470,12 +515,13 @@ void SymbolTable::register_builtins(LocalScope node)
   }
 
   auto builtin_function_decl = [&](const BuiltinFunc &fn) {
-    SymbolClass *ret_type = root->lookup_class(fn.return_type);
-    SymbolFunction *sym = fun_arena.alloc(root, tok, ret_type, fn.id, SymbolFunction::GLOBAL);
+    SymbolFunction *sym = fun_arena.alloc(
+        root, tok, fn.return_type, fn.id, SymbolFunction::GLOBAL);
     sym->is_error = fn.id == err_symbol;
-    sym->is_builtin_ctor = true;
-    for (auto arg : fn.arg_types) {
-      sym->add_argument(root->lookup_class(arg));
+    sym->is_builtin = true;
+    sym->reserve_arguments(fn.arg_types.size());
+    for (SymbolClass *arg : fn.arg_types) {
+      sym->add_argument(arg);
     }
     root->function_emplace(sym, true);
   };
@@ -484,6 +530,13 @@ void SymbolTable::register_builtins(LocalScope node)
   /* Builtin functions. */
   for (const auto &f : functions) {
     builtin_function_decl(f);
+  }
+
+  const vector<BuiltinType> builtin_types = generate_builtin_types();
+
+  const vector<BuiltinFunc> builtin_constructors = generate_all_constructors(builtin_types);
+  for (const auto &fn : builtin_constructors) {
+    builtin_function_decl(fn);
   }
 
   /* Builtin operators. */
@@ -518,24 +571,7 @@ void SymbolTable::register_builtins(LocalScope node)
       {LogicalOr, "or_op_"},
   };
 
-  const vector<BuiltinType> builtin_types = generate_builtin_types();
-
-  const vector<BuiltinOp> operators_desc = generate_all_operators(builtin_types);
-  for (const auto &op : operators_desc) {
-    SymbolClass *ret_type = root->lookup_class(op.result);
-    string id((op.left.empty() ? unary_type_to_id : binary_type_to_id).find(op.op)->second);
-    SymbolFunction *sym = fun_arena.alloc(root, tok, ret_type, id, SymbolFunction::GLOBAL);
-    SymbolClass *left = op.left.empty() ? nullptr : root->lookup_class(op.left);
-    SymbolClass *right = root->lookup_class(op.right);
-
-    OperatorKey key(left, op.op, right);
-    operators.emplace(key, sym);
-  }
-
-  const vector<BuiltinFunc> builtin_constructors = generate_all_constructors(builtin_types);
-  for (const auto &fn : builtin_constructors) {
-    builtin_function_decl(fn);
-  }
+  generate_builtin_operators(tok, builtin_types);
 
   image_formats = {
       {0, "SNORM_8"},           {1, "SNORM_8_8"},        {2, "SNORM_8_8_8_8"},
@@ -596,21 +632,6 @@ void SymbolTable::register_builtins(LocalScope node)
     sym->value = c.value;
     root->variables.emplace(sym->identifier, sym);
   }
-
-  /* Fast lookup cache. */
-  this->float_cls = root->lookup_class("float");
-  this->int_cls = root->lookup_class("int");
-  this->uint_cls = root->lookup_class("uint");
-  this->str_cls = root->lookup_class("string_t");
-  this->err_cls = root->lookup_class(SymbolTable::err_symbol);
-  this->bool_cls = root->lookup_class("bool");
-  this->void_cls = root->lookup_class("void");
-  this->float2_cls = root->lookup_class("float2");
-  this->float3_cls = root->lookup_class("float3");
-  this->float4_cls = root->lookup_class("float4");
-  this->packed_float2_cls = root->lookup_class("packed_float2");
-  this->packed_float3_cls = root->lookup_class("packed_float3");
-  this->packed_float4_cls = root->lookup_class("packed_float4");
 }
 
 SymbolClass *SymbolTable::get_literal_type(string_view lit) const
@@ -665,33 +686,33 @@ bool SymbolTable::is_convertible(const SymbolClass *from,
 vector<SymbolTable::BuiltinFunc> SymbolTable::generate_all_builtin_functions()
 {
   /* Start with the error symbol. */
-  vector<BuiltinFunc> functions = {{"void", err_symbol, {}}};
+  vector<BuiltinFunc> functions = {{err_cls, err_symbol, {}}};
 
   /* Special functions */
-  functions.push_back({"void", "printf", {"string_t"}});
+  functions.push_back({void_cls, "printf", {str_cls}});
 
   /* Type definition vectors for vectorized generation */
-  const vector<string> f_types = {"float", "float2", "float3", "float4"};
-  const vector<string> i_types = {"int", "int2", "int3", "int4"};
-  const vector<string> u_types = {"uint", "uint2", "uint3", "uint4"};
-  const vector<string> b_types = {"bool", "bool2", "bool3", "bool4"};
+  const vector<SymbolClass *> f_types = {float_cls, float2_cls, float3_cls, float4_cls};
+  const vector<SymbolClass *> i_types = {int_cls, int2_cls, int3_cls, int4_cls};
+  const vector<SymbolClass *> u_types = {uint_cls, uint2_cls, uint3_cls, uint4_cls};
+  const vector<SymbolClass *> b_types = {bool_cls, bool2_cls, bool3_cls, bool4_cls};
 
   /* 1-argument component-wise functions (e.g. sin, cos, abs). */
-  auto add_unary = [&](const string &name, const vector<string> &types) {
+  auto add_unary = [&](const string &name, const vector<SymbolClass *> &types) {
     for (const auto &t : types) {
       functions.push_back({t, name, {t}});
     }
   };
 
   /* 2-argument component-wise functions (e.g. pow, min, max). */
-  auto add_binary = [&](const string &name, const vector<string> &types) {
+  auto add_binary = [&](const string &name, const vector<SymbolClass *> &types) {
     for (const auto &t : types) {
       functions.push_back({t, name, {t, t}});
     }
   };
 
   /* 3-argument component-wise functions (e.g. clamp, mix, fma). */
-  auto add_ternary = [&](const string &name, const vector<string> &types) {
+  auto add_ternary = [&](const string &name, const vector<SymbolClass *> &types) {
     for (const auto &t : types) {
       functions.push_back({t, name, {t, t, t}});
     }
@@ -699,21 +720,23 @@ vector<SymbolTable::BuiltinFunc> SymbolTable::generate_all_builtin_functions()
 
   /* Functions with vector-scalar variants (e.g. min(float3, float), clamp(float3, float, float)).
    */
-  auto add_vec_scalar_binary = [&](const string &name, const vector<string> &types) {
-    const string &scalar = types[0];
+  auto add_vec_scalar_binary = [&](const string &name, const vector<SymbolClass *> &types) {
+    SymbolClass *scalar = types[0];
     for (size_t i = 1; i < types.size(); ++i) {
       functions.push_back({types[i], name, {types[i], scalar}});
     }
   };
 
-  auto add_vec_scalar_scalar_ternary = [&](const string &name, const vector<string> &types) {
-    const string &scalar = types[0];
+  auto add_vec_scalar_scalar_ternary = [&](const string &name,
+                                           const vector<SymbolClass *> &types) {
+    SymbolClass *scalar = types[0];
     for (size_t i = 1; i < types.size(); ++i) {
       functions.push_back({types[i], name, {types[i], scalar, scalar}});
     }
   };
-  auto add_vec_vec_scalar_ternary = [&](const string &name, const vector<string> &types) {
-    const string &scalar = types[0];
+
+  auto add_vec_vec_scalar_ternary = [&](const string &name, const vector<SymbolClass *> &types) {
+    SymbolClass *scalar = types[0];
     for (size_t i = 1; i < types.size(); ++i) {
       functions.push_back({types[i], name, {types[i], types[i], scalar}});
     }
@@ -804,46 +827,48 @@ vector<SymbolTable::BuiltinFunc> SymbolTable::generate_all_builtin_functions()
     functions.push_back({f_types[i], "uintBitsToFloat", {u_types[i]}});
   }
 
-  functions.push_back({"uint", "packUnorm2x16", {"float2"}});
-  functions.push_back({"uint", "packSnorm2x16", {"float2"}});
-  functions.push_back({"uint", "packUnorm4x8", {"float4"}});
-  functions.push_back({"uint", "packSnorm4x8", {"float4"}});
-  functions.push_back({"uint", "packHalf2x16", {"float2"}});
+  functions.push_back({uint_cls, "packUnorm2x16", {float2_cls}});
+  functions.push_back({uint_cls, "packSnorm2x16", {float2_cls}});
+  functions.push_back({uint_cls, "packUnorm4x8", {float4_cls}});
+  functions.push_back({uint_cls, "packSnorm4x8", {float4_cls}});
+  functions.push_back({uint_cls, "packHalf2x16", {float2_cls}});
 
-  functions.push_back({"float2", "unpackUnorm2x16", {"uint"}});
-  functions.push_back({"float2", "unpackSnorm2x16", {"uint"}});
-  functions.push_back({"float4", "unpackUnorm4x8", {"uint"}});
-  functions.push_back({"float4", "unpackSnorm4x8", {"uint"}});
-  functions.push_back({"float2", "unpackHalf2x16", {"uint"}});
+  functions.push_back({float2_cls, "unpackUnorm2x16", {uint_cls}});
+  functions.push_back({float2_cls, "unpackSnorm2x16", {uint_cls}});
+  functions.push_back({float4_cls, "unpackUnorm4x8", {uint_cls}});
+  functions.push_back({float4_cls, "unpackSnorm4x8", {uint_cls}});
+  functions.push_back({float2_cls, "unpackHalf2x16", {uint_cls}});
 
   for (size_t i = 0; i < f_types.size(); ++i) {
-    functions.push_back({"float", "length", {f_types[i]}});
-    functions.push_back({"float", "distance", {f_types[i], f_types[i]}});
-    functions.push_back({"float", "dot", {f_types[i], f_types[i]}});
+    functions.push_back({float_cls, "length", {f_types[i]}});
+    functions.push_back({float_cls, "distance", {f_types[i], f_types[i]}});
+    functions.push_back({float_cls, "dot", {f_types[i], f_types[i]}});
     functions.push_back({f_types[i], "normalize", {f_types[i]}});
     functions.push_back({f_types[i], "faceforward", {f_types[i], f_types[i], f_types[i]}});
     functions.push_back({f_types[i], "reflect", {f_types[i], f_types[i]}});
-    functions.push_back({f_types[i], "refract", {f_types[i], f_types[i], "float"}});
+    functions.push_back({f_types[i], "refract", {f_types[i], f_types[i], float_cls}});
   }
-  functions.push_back({"float3", "cross", {"float3", "float3"}});
+  functions.push_back({float3_cls, "cross", {float3_cls, float3_cls}});
 
-  const vector<string> square_mats = {"float2x2", "float3x3", "float4x4"};
-  const vector<string> all_mats = {"float2x2",
-                                   "float3x3",
-                                   "float4x4",
-                                   "float2x3",
-                                   "float2x4",
-                                   "float3x2",
-                                   "float3x4",
-                                   "float4x2",
-                                   "float4x3"};
+  const vector<SymbolClass *> square_mats = {float2x2_cls, float3x3_cls, float4x4_cls};
+  const vector<SymbolClass *> all_mats = {
+      float2x2_cls,
+      float3x3_cls,
+      float4x4_cls,
+      float2x3_cls,
+      float2x4_cls,
+      float3x2_cls,
+      float3x4_cls,
+      float4x2_cls,
+      float4x3_cls,
+  };
 
   for (const auto &m : all_mats) {
     functions.push_back({m, "transpose", {m}});
   }
 
   for (const auto &m : square_mats) {
-    functions.push_back({"float", "determinant", {m}});
+    functions.push_back({float_cls, "determinant", {m}});
     functions.push_back({m, "inverse", {m}});
   }
 
@@ -859,8 +884,8 @@ vector<SymbolTable::BuiltinFunc> SymbolTable::generate_all_builtin_functions()
   }
 
   for (size_t i = 1; i < b_types.size(); ++i) {
-    functions.push_back({"bool", "any", {b_types[i]}});
-    functions.push_back({"bool", "all", {b_types[i]}});
+    functions.push_back({bool_cls, "any", {b_types[i]}});
+    functions.push_back({bool_cls, "all", {b_types[i]}});
     functions.push_back({b_types[i], "not", {b_types[i]}});
   }
 
@@ -872,8 +897,8 @@ vector<SymbolTable::BuiltinFunc> SymbolTable::generate_all_builtin_functions()
 
   for (const auto &tlist : {i_types, u_types}) {
     for (const auto &t : tlist) {
-      functions.push_back({t, "bitfieldExtract", {t, "int", "int"}});
-      functions.push_back({t, "bitfieldInsert", {t, t, "int", "int"}});
+      functions.push_back({t, "bitfieldExtract", {t, int_cls, int_cls}});
+      functions.push_back({t, "bitfieldInsert", {t, t, int_cls, int_cls}});
     }
   }
 
@@ -886,11 +911,11 @@ vector<SymbolTable::BuiltinFunc> SymbolTable::generate_all_builtin_functions()
                                       "atomicExchange"};
 
   for (const auto &op : atomic_2arg) {
-    functions.push_back({"int", op, {"int", "int"}});
-    functions.push_back({"uint", op, {"uint", "uint"}});
+    functions.push_back({int_cls, op, {int_cls, int_cls}});
+    functions.push_back({uint_cls, op, {uint_cls, uint_cls}});
   }
-  functions.push_back({"int", "atomicCompSwap", {"int", "int", "int"}});
-  functions.push_back({"uint", "atomicCompSwap", {"uint", "uint", "uint"}});
+  functions.push_back({int_cls, "atomicCompSwap", {int_cls, int_cls, int_cls}});
+  functions.push_back({uint_cls, "atomicCompSwap", {uint_cls, uint_cls, uint_cls}});
 
   const vector<string> deriv_funcs = {"gpu_dfdx", "gpu_dfdy", "gpu_fwidth"};
 
@@ -898,61 +923,56 @@ vector<SymbolTable::BuiltinFunc> SymbolTable::generate_all_builtin_functions()
     add_unary(op, f_types);
   }
 
-  functions.push_back({"void", "gpu_discard_fragment", {}});
-  functions.push_back({"void", "barrier", {}});
-  functions.push_back({"void", "assert", {"bool"}});
+  functions.push_back({void_cls, "gpu_discard_fragment", {}});
+  functions.push_back({void_cls, "barrier", {}});
+  functions.push_back({void_cls, "assert", {bool_cls}});
 
-  functions.push_back({"float4", "texture", {"sampler2DDepth", "float2"}});
-  functions.push_back({"float4", "textureLod", {"sampler2DDepth", "float2", "float"}});
-  functions.push_back({"int2", "textureSize", {"sampler2DDepth", "int"}});
-  functions.push_back({"float4", "texelFetch", {"sampler2DDepth", "int2", "int"}});
-
-  const vector<pair<string, string>> image_types = {
-      {"uint4", "u"},
-      {"int4", "i"},
-      {"float4", ""},
+  const vector<pair<SymbolClass *, string>> image_types = {
+      {uint4_cls, "u"},
+      {int4_cls, "i"},
+      {float4_cls, ""},
   };
 
   for (auto [type, prefix] : image_types) {
-    vector<pair<string, int>> samplers = {
+    vector<pair<SymbolClass *, int>> samplers = {
         /* Name, Coordinate Dimensions. */
-        {prefix + "sampler1D", 1},
-        {prefix + "sampler2D", 2},
-        {prefix + "sampler3D", 3},
-        {prefix + "samplerCube", 3},
-        {prefix + "sampler1DArray", 2},
-        {prefix + "sampler2DArray", 3},
-        {prefix + "samplerCubeArray", 4},
+        {root->classes[prefix + "sampler1D"], 1},
+        {root->classes[prefix + "sampler2D"], 2},
+        {root->classes[prefix + "sampler3D"], 3},
+        {root->classes[prefix + "samplerCube"], 3},
+        {root->classes[prefix + "sampler1DArray"], 2},
+        {root->classes[prefix + "sampler2DArray"], 3},
+        {root->classes[prefix + "samplerCubeArray"], 4},
     };
 
     if (prefix.empty()) {
-      samplers.emplace_back(prefix + "sampler2DDepth", 2);
-      samplers.emplace_back(prefix + "samplerCubeDepth", 3);
-      samplers.emplace_back(prefix + "sampler2DArrayDepth", 3);
-      samplers.emplace_back(prefix + "samplerCubeArrayDepth", 4);
+      samplers.emplace_back(root->classes[prefix + "sampler2DDepth"], 2);
+      samplers.emplace_back(root->classes[prefix + "samplerCubeDepth"], 3);
+      samplers.emplace_back(root->classes[prefix + "sampler2DArrayDepth"], 3);
+      samplers.emplace_back(root->classes[prefix + "samplerCubeArrayDepth"], 4);
     }
 
     for (auto [sampler, dim] : samplers) {
-      string coord_type = f_types[dim - 1];
-      string icoord_type = i_types[dim - 1];
+      SymbolClass *coord_type = f_types[dim - 1];
+      SymbolClass *icoord_type = i_types[dim - 1];
       functions.push_back({type, "texture", {sampler, coord_type}});
-      functions.push_back({type, "textureLod", {sampler, coord_type, "float"}});
-      functions.push_back({icoord_type, "textureSize", {sampler, "int"}});
-      functions.push_back({type, "texelFetch", {sampler, icoord_type, "int"}});
+      functions.push_back({type, "textureLod", {sampler, coord_type, float_cls}});
+      functions.push_back({icoord_type, "textureSize", {sampler, int_cls}});
+      functions.push_back({type, "texelFetch", {sampler, icoord_type, int_cls}});
     }
 
-    const vector<string> images = {
-        prefix + "image2D",
-        prefix + "image2DArray",
-        prefix + "image3D",
+    const vector<SymbolClass *> images = {
+        root->classes[prefix + "image2D"],
+        root->classes[prefix + "image2DArray"],
+        root->classes[prefix + "image3D"],
     };
 
     for (size_t i = 0; i < images.size(); ++i) {
-      string coord_type = i_types[i == 0 ? 1 : 2];
+      SymbolClass *coord_type = i_types[i == 0 ? 1 : 2];
       functions.push_back({type, "imageLoad", {images[i], coord_type}});
       functions.push_back({type, "imageLoadFast", {images[i], coord_type}});
-      functions.push_back({"void", "imageStore", {images[i], coord_type, type}});
-      functions.push_back({"void", "imageStoreFast", {images[i], coord_type, type}});
+      functions.push_back({void_cls, "imageStore", {images[i], coord_type, type}});
+      functions.push_back({void_cls, "imageStoreFast", {images[i], coord_type, type}});
 
       if (!prefix.empty()) {
         functions.push_back({type, "imageAtomicAdd", {images[i], coord_type, type}});
@@ -966,7 +986,7 @@ vector<SymbolTable::BuiltinFunc> SymbolTable::generate_all_builtin_functions()
       }
 
       functions.push_back({coord_type, "imageSize", {images[i]}});
-      functions.push_back({"void", "imageFence", {images[i]}});
+      functions.push_back({void_cls, "imageFence", {images[i]}});
     }
   }
 
