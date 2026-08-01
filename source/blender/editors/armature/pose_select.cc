@@ -1022,12 +1022,14 @@ void POSE_OT_select_scaled(wmOperatorType *ot)
                                                    "NON_UNIFORM",
                                                    0,
                                                    "Non-Uniform",
-                                                   "Select bones that have non-uniform scale"},
+                                                   "Select bones that have non-uniform scale.\n"
+                                                   "(Checks the final matrix)"},
                                                   {int(BoneScale::NON_UNIT),
                                                    "NON_UNIT",
                                                    0,
                                                    "Non-Unit",
-                                                   "Select bones that have non-unit scale"},
+                                                   "Select bones that have non-unit scale.\n"
+                                                   "(Checks the final matrix)"},
                                                   {0, nullptr, 0, nullptr, nullptr}};
 
   RNA_def_enum(ot->srna, "scale", deform_items, int(BoneScale::NON_UNIFORM), "Scale", "");
@@ -1080,7 +1082,7 @@ static wmOperatorStatus armature_select_deform_exec(bContext *C, wmOperator *op)
 
 void POSE_OT_select_deform(wmOperatorType *ot)
 {
-  /* identifiers */
+  /* Identifiers. */
   ot->name = "Select Deform Bones";
   ot->idname = "POSE_OT_select_deform";
   ot->description = "Select bones the have the deform option enabled (or disabled)";
@@ -1089,9 +1091,10 @@ void POSE_OT_select_deform(wmOperatorType *ot)
   ot->exec = armature_select_deform_exec;
   ot->poll = ED_operator_posemode;
 
-  /* flags */
+  /* Flags. */
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 
+  /* Props. */
   static const EnumPropertyItem deform_items[] = {
       {int(BoneDeform::DEFORM),
        "DEFORM",
