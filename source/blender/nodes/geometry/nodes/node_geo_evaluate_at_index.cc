@@ -19,7 +19,17 @@ static void node_declare(NodeDeclarationBuilder &b)
 {
   b.use_custom_socket_order();
   b.allow_any_socket_order();
-  b.add_default_layout();
+  b.add_input<decl::Menu>("Domain"_ustr)
+      .static_items(rna_enum_attribute_domain_items)
+      .default_value(AttrDomain::Point)
+      .description("Domain the field is evaluated in")
+      .optional_label();
+  b.add_input<decl::Menu>("Data Type"_ustr)
+      .static_items(rna_enum_attribute_type_items)
+      .default_value(CD_PROP_FLOAT)
+      .description("Type of data the field evaluates")
+      .optional_label();
+
   const bNode *node = b.node_or_null();
   if (node != nullptr) {
     const eCustomDataType data_type = eCustomDataType(node->custom2);
@@ -30,18 +40,6 @@ static void node_declare(NodeDeclarationBuilder &b)
         .align_with_previous();
   }
   b.add_input<decl::Int>("Index"_ustr).min(0).structure_type(StructureType::Field);
-}
-
-static void node_layout(ui::Layout &layout, bContext * /*C*/, PointerRNA *ptr)
-{
-  layout.prop(ptr, "data_type", UI_ITEM_NONE, "", ICON_NONE);
-  layout.prop(ptr, "domain", UI_ITEM_NONE, "", ICON_NONE);
-}
-
-static void node_init(bNodeTree * /*tree*/, bNode *node)
-{
-  node->custom1 = int(AttrDomain::Point);
-  node->custom2 = CD_PROP_FLOAT;
 }
 
 static void node_gather_link_searches(GatherLinkSearchOpParams &params)
@@ -80,26 +78,6 @@ static void node_geo_exec(GeoNodeExecParams params)
   params.set_output<GField>("Value"_ustr, std::move(output_field));
 }
 
-static void node_rna(StructRNA *srna)
-{
-  RNA_def_node_enum(srna,
-                    "domain",
-                    "Domain",
-                    "Domain the field is evaluated in",
-                    rna_enum_attribute_domain_items,
-                    NOD_inline_enum_accessors(custom1),
-                    int(AttrDomain::Point));
-
-  RNA_def_node_enum(srna,
-                    "data_type",
-                    "Data Type",
-                    "",
-                    rna_enum_attribute_type_items,
-                    NOD_inline_enum_accessors(custom2),
-                    CD_PROP_FLOAT,
-                    enums::attribute_type_type_with_socket_fn);
-}
-
 static void node_register()
 {
   static bke::bNodeType ntype;
@@ -110,13 +88,9 @@ static void node_register()
   ntype.enum_name_legacy = "FIELD_AT_INDEX";
   ntype.nclass = NODE_CLASS_CONVERTER;
   ntype.geometry_node_execute = node_geo_exec;
-  ntype.draw_buttons = node_layout;
-  ntype.initfunc = node_init;
   ntype.declare = node_declare;
   ntype.gather_link_search_ops = node_gather_link_searches;
   bke::node_register_type(ntype);
-
-  node_rna(ntype.rna_ext.srna);
 }
 NOD_REGISTER_NODE(node_register)
 
