@@ -11,13 +11,9 @@
 
 #include "BKE_compute_contexts.hh"
 #include "BKE_gtest_setup.hh"
-#include "BKE_lib_id.hh"
-#include "BKE_main.hh"
 #include "BKE_modifier.hh"
-#include "BKE_node.hh"
 
 #include "DNA_modifier_types.h"
-#include "DNA_node_types.h"
 #include "DNA_object_types.h"
 
 #include "MOD_nodes.hh"
@@ -58,11 +54,7 @@ static Candidate candidate(const uint64_t context,
 static Vector<CandidatePresentation> fallback_presentations(const Span<Candidate> candidates,
                                                             const StringRef default_viewer_name)
 {
-  Main *bmain = BKE_main_new();
-  Vector<CandidatePresentation> presentations = candidate_presentations(
-      *bmain, candidates, default_viewer_name);
-  BKE_main_free(bmain);
-  return presentations;
+  return candidate_presentations(candidates, default_viewer_name);
 }
 
 TEST(GeometryNodesDebugView, MeaningfulViewerName)
@@ -482,49 +474,6 @@ class CandidateCollectionTest : public testing::Test {
     bke::gtest_teardown();
   }
 };
-
-TEST_F(CandidateCollectionTest, PresentationLabelsRefreshWithoutChangingIdentityOrState)
-{
-  Main *bmain = BKE_main_new();
-  bNodeTree &root = *bke::node_tree_add_tree(bmain, "Root", "GeometryNodeTree");
-  bNodeTree &nested = *bke::node_tree_add_tree(bmain, "Nested", "GeometryNodeTree");
-  bNode &group_node = *bke::node_add_node(nullptr, root, "GeometryNodeGroup"_ustr);
-  group_node.id = &nested.id;
-  id_us_plus(group_node.id);
-  bNode &viewer_node = *bke::node_add_node(nullptr, nested, "GeometryNodeViewer"_ustr);
-  STRNCPY(group_node.label, "Prepared Group");
-  STRNCPY(viewer_node.label, "Prepared Viewer");
-  Candidate candidate;
-  candidate.identifier = identifier(10, viewer_node.identifier);
-  const std::array<uint32_t, 2> lineage = {root.id.session_uid, nested.id.session_uid};
-  candidate.identifier.node_tree_lineage_hash = node_tree_lineage_hash(lineage);
-  candidate.tree_session_uids = {root.id.session_uid, nested.id.session_uid};
-  candidate.group_node_ids = {group_node.identifier};
-  candidate.context_names = {"Logged Group"};
-  candidate.viewer_name = "Logged Viewer";
-  const Vector<Candidate> candidates = {candidate};
-  State state;
-  state.initialized = true;
-  state.enabled.add(candidate.identifier);
-
-  Vector<CandidatePresentation> presentations = candidate_presentations(
-      *bmain, candidates, "Viewer");
-  EXPECT_EQ(presentations[0].full_name, "Prepared Group / Prepared Viewer");
-
-  STRNCPY(group_node.label, "Renamed Group");
-  STRNCPY(viewer_node.label, "Renamed Viewer");
-  presentations = candidate_presentations(*bmain, candidates, "Viewer");
-  EXPECT_EQ(presentations[0].full_name, "Renamed Group / Renamed Viewer");
-  EXPECT_TRUE(state.enabled.contains(candidate.identifier));
-  EXPECT_EQ(candidate.identifier, candidates[0].identifier);
-
-  group_node.label[0] = '\0';
-  BKE_id_rename(*bmain, nested.id, "Renamed Nested Tree");
-  presentations = candidate_presentations(*bmain, candidates, "Viewer");
-  EXPECT_EQ(presentations[0].full_name, "Renamed Nested Tree / Renamed Viewer");
-
-  BKE_main_free(bmain);
-}
 
 TEST_F(CandidateCollectionTest, ModifierAndObjectCopyPathCreatesFreshRuntimeState)
 {

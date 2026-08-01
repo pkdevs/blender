@@ -13,13 +13,6 @@
 #include "BLI_map.hh"
 #include "BLI_string_utils.hh"
 
-#include "DNA_node_types.h"
-
-#include "BKE_lib_id.hh"
-#include "BKE_main.hh"
-#include "BKE_node.hh"
-#include "BKE_node_legacy_types.hh"
-
 #include "NOD_geometry_nodes_debug_view.hh"
 
 namespace blender::nodes::debug_view {
@@ -80,51 +73,7 @@ static bool candidate_less(const Candidate &a, const Candidate &b)
   return a.identifier.viewer_node_id < b.identifier.viewer_node_id;
 }
 
-static std::string live_context_name(Main &bmain,
-                                     const Candidate &candidate,
-                                     const int context_index)
-{
-  if (candidate.tree_session_uids.index_range().contains(context_index) &&
-      candidate.group_node_ids.index_range().contains(context_index))
-  {
-    const auto *tree = id_cast<bNodeTree *>(
-        BKE_libblock_find_session_uid(&bmain, ID_NT, candidate.tree_session_uids[context_index]));
-    const bNode *group_node = tree ? tree->node_by_id(candidate.group_node_ids[context_index]) :
-                                     nullptr;
-    if (group_node && group_node->type_legacy == NODE_GROUP && group_node->id &&
-        candidate.tree_session_uids.index_range().contains(context_index + 1) &&
-        group_node->id->session_uid == candidate.tree_session_uids[context_index + 1])
-    {
-      if (group_node->label[0] != '\0') {
-        return group_node->label;
-      }
-      return BKE_id_name(*group_node->id);
-    }
-  }
-  return candidate.context_names.index_range().contains(context_index) ?
-             candidate.context_names[context_index] :
-             std::string();
-}
-
-static std::string live_viewer_name(Main &bmain,
-                                    const Candidate &candidate,
-                                    const StringRef default_viewer_name)
-{
-  if (!candidate.tree_session_uids.is_empty()) {
-    const auto *tree = id_cast<bNodeTree *>(
-        BKE_libblock_find_session_uid(&bmain, ID_NT, candidate.tree_session_uids.last()));
-    const bNode *viewer_node = tree ? tree->node_by_id(candidate.identifier.viewer_node_id) :
-                                      nullptr;
-    if (viewer_node && viewer_node->type_legacy == GEO_NODE_VIEWER) {
-      const std::string name = viewer_name_from_node(viewer_node->label, viewer_node->name);
-      return name.empty() ? std::string(default_viewer_name) : name;
-    }
-  }
-  return candidate.viewer_name.empty() ? std::string(default_viewer_name) : candidate.viewer_name;
-}
-
-Vector<CandidatePresentation> candidate_presentations(Main &bmain,
-                                                      const Span<Candidate> candidates,
+Vector<CandidatePresentation> candidate_presentations(const Span<Candidate> candidates,
                                                       const StringRef default_viewer_name)
 {
   Vector<std::string> viewer_names;
@@ -133,13 +82,12 @@ Vector<CandidatePresentation> candidate_presentations(Main &bmain,
   full_names.reserve(candidates.size());
   Map<std::string, int> viewer_name_counts;
   for (const Candidate &candidate : candidates) {
-    std::string viewer_name = live_viewer_name(bmain, candidate, default_viewer_name);
+    const std::string viewer_name = candidate.viewer_name.empty() ?
+                                        std::string(default_viewer_name) :
+                                        candidate.viewer_name;
     viewer_name_counts.lookup_or_add(viewer_name, 0)++;
     std::string full_name;
-    const int context_num = std::max(candidate.group_node_ids.size(),
-                                     candidate.context_names.size());
-    for (const int i : IndexRange(context_num)) {
-      const std::string context_name = live_context_name(bmain, candidate, i);
+    for (const std::string &context_name : candidate.context_names) {
       if (!context_name.empty()) {
         if (!full_name.empty()) {
           full_name += " / ";

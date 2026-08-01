@@ -259,57 +259,6 @@ class GeometryNodesDebugViewTest(unittest.TestCase):
             bpy.context.evaluated_depsgraph_get()).data.vertices), 8)
         self.assertEqual(self.warning_messages(modifier), warnings_before)
 
-    def test_label_changes_do_not_reevaluate_geometry(self):
-        group, viewer = self.create_node_group()
-        viewer.is_debug_view = True
-        nested = bpy.data.node_groups.new("Nested Geometry Nodes", "GeometryNodeTree")
-        nested.interface.new_socket(
-            name="Geometry", in_out='OUTPUT', socket_type="NodeSocketGeometry")
-        nested_output = nested.nodes.new("NodeGroupOutput")
-        nested_geometry = nested.nodes.new("GeometryNodeMeshCylinder")
-        nested.links.new(nested_geometry.outputs["Mesh"], nested_output.inputs["Geometry"])
-        nested_viewer = nested.nodes.new("GeometryNodeViewer")
-        nested_viewer.viewer_items.new('GEOMETRY', "Geometry")
-        nested_viewer.is_debug_view = True
-        nested.links.new(nested_geometry.outputs["Mesh"], nested_viewer.inputs["Geometry"])
-
-        group_node = group.nodes.new("GeometryNodeGroup")
-        group_node.node_tree = nested
-        group_node.label = "Nested Label"
-        outer_viewer = group.nodes.new("GeometryNodeViewer")
-        outer_viewer.viewer_items.new('GEOMETRY', "Geometry")
-        outer_viewer.is_debug_view = True
-        group.links.new(group_node.outputs["Geometry"], outer_viewer.inputs["Geometry"])
-
-        obj, modifier = self.create_object_with_modifier("Object", group)
-        modifier.show_debug_views = True
-        self.assertEqual(self.evaluate(obj), 8)
-        warnings_before = self.warning_messages(modifier)
-        geometry_updates = []
-
-        def record_geometry_updates(_scene, depsgraph):
-            geometry_updates.extend(
-                update for update in depsgraph.updates
-                if update.id == obj and update.is_updated_geometry)
-
-        bpy.app.handlers.depsgraph_update_post.append(record_geometry_updates)
-        try:
-            viewer.label = "Renamed Viewer"
-            bpy.context.view_layer.update()
-            group_node.label = "Renamed Nested Label"
-            bpy.context.view_layer.update()
-            group_node.label = ""
-            bpy.context.view_layer.update()
-            nested.name = "Renamed Nested Geometry Nodes"
-            bpy.context.view_layer.update()
-        finally:
-            bpy.app.handlers.depsgraph_update_post.remove(record_geometry_updates)
-
-        self.assertEqual(geometry_updates, [])
-        self.assertEqual(self.warning_messages(modifier), warnings_before)
-        self.assertEqual(len(obj.evaluated_get(
-            bpy.context.evaluated_depsgraph_get()).data.vertices), 8)
-
     def test_debug_view_operator_rejects_incomplete_and_stale_identities(self):
         group, viewer = self.create_node_group()
         viewer.is_debug_view = True

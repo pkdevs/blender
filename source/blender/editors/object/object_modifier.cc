@@ -3695,7 +3695,7 @@ static std::string geometry_nodes_debug_view_toggle_description(bContext *C,
     return {};
   }
   const Vector<nodes::debug_view::CandidatePresentation> presentations =
-      nodes::debug_view::candidate_presentations(*CTX_data_main(C), candidates, IFACE_("Viewer"));
+      nodes::debug_view::candidate_presentations(candidates, IFACE_("Viewer"));
   for (const int i : candidates.index_range()) {
     if (candidates[i].identifier == *identifier) {
       const bool is_enabled = nmd->runtime->debug_view_state.enabled.contains(*identifier);

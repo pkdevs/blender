@@ -911,7 +911,7 @@ static void draw_debug_view_toggles(const bContext &C,
   }
   debug_view::initialize_state(candidates, nmd.runtime->debug_view_state);
   const Vector<debug_view::CandidatePresentation> presentations =
-      debug_view::candidate_presentations(*CTX_data_main(&C), candidates, IFACE_("Viewer"));
+      debug_view::candidate_presentations(candidates, IFACE_("Viewer"));
 
   ui::Layout &split = layout.split(0.4f, false);
   ui::Layout &name_row = split.row(false);

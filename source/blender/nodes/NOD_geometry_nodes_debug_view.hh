@@ -12,10 +12,6 @@
 #include "BLI_string_ref.hh"
 #include "BLI_vector.hh"
 
-namespace blender {
-struct Main;
-}
-
 namespace blender::nodes {
 
 namespace eval_log {
@@ -65,7 +61,7 @@ struct Candidate {
   Vector<std::string> context_names;
   /** Empty for the standard Viewer name, which is translated only when presented in the UI. */
   std::string viewer_name;
-  /** Original node trees and group-node identifiers used to resolve presentation names live. */
+  /** Original node trees and group-node identifiers retained with the candidate. */
   Vector<uint32_t> tree_session_uids;
   Vector<int32_t> group_node_ids;
 };
@@ -85,11 +81,10 @@ struct State {
 void finalize_candidates(Vector<Candidate> &candidates);
 
 /**
- * Resolve labels from original node trees and disambiguate every candidate in one linear pass.
- * Logged names are retained only as a fallback when a tree or node no longer exists.
+ * Build presentation names from names captured during evaluation and disambiguate every candidate
+ * in one linear pass.
  */
-Vector<CandidatePresentation> candidate_presentations(Main &bmain,
-                                                      Span<Candidate> candidates,
+Vector<CandidatePresentation> candidate_presentations(Span<Candidate> candidates,
                                                       StringRef default_viewer_name);
 
 /** Enable the first available candidate once, without reinitializing an empty state later. */
