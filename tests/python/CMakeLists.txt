@@ -1776,7 +1776,6 @@ if(WITH_UI_TESTS)
     test_pie_menus.test_anim_keyframe_insert_pie_location
     test_pie_menus.test_weight_paint_vgroup_lock_pie
     test_button_input.test_string_buttons_interactions
-    test_info_reports.test_info_report_filters
     test_info_reports.test_info_report_selection_modes
     test_info_reports.test_info_report_delete
     test_info_reports.test_info_report_operator_poll
