@@ -7,13 +7,11 @@
  */
 
 #include <set>
-#include <unordered_map>
 #include <unordered_set>
 
 #include "intermediate.hh"
 #include "metadata.hh"
 #include "processor.hh"
-#include "symbol.hh"
 
 namespace blender::gpu::shader {
 using namespace std;

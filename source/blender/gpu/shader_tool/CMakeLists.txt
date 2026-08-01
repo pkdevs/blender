@@ -45,11 +45,23 @@ set(SRC
   bsl/constructor.cc
   bsl/grammar.cc
   bsl/operator.cc
+  bsl/resource.cc
   bsl/symbol.cc
+  bsl/symbol_class.cc
+  bsl/symbol_function.cc
+  bsl/symbol_scope.cc
+  bsl/symbol_table.cc
+  bsl/symbol_template.cc
+  bsl/symbol_variable.cc
+  bsl/type_checker.cc
 
   bsl/diagnostic.hh
   bsl/type_checker.hh
-  bsl/symbol.hh
+  bsl/symbol_class.hh
+  bsl/symbol_function.hh
+  bsl/symbol_scope.hh
+  bsl/symbol_template.hh
+  bsl/symbol_variable.hh
 
   lexit/lexit.cc
 

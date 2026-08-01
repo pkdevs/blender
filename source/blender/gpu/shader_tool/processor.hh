@@ -11,9 +11,7 @@
 #include "intermediate.hh"
 #include "metadata.hh"
 
-#include "symbol.hh"
-
-#include <map>
+#include "bsl/symbol_table.hh"
 
 namespace blender::gpu::shader {
 

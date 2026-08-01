@@ -6,7 +6,7 @@
  * \ingroup shader_tool
  */
 
-#include "symbol.hh"
+#include "symbol_table.hh"
 
 namespace bsl {
 

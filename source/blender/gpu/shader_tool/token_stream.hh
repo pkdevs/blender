@@ -79,7 +79,9 @@ struct ScopeLinks {
  * Also creates mapping table from token to scope to have bi-directional mapping.
  */
 struct ParserBase : LexerBase {
-  /* Used to order tokens from different included file. */
+  /* A monotonically increasing ID for each file included inside the compilation unit.
+   * A file is only assigned an ID before parsing symbols (after parsing includes).
+   * Used to order tokens from different included file. */
   int include_id = 0;
 
   /** Compact visualization of scope_types.  */

@@ -8,10 +8,7 @@
 
 #pragma once
 
-#include "token.hh"
-#include "token_stream.hh"
-
-#include "symbol.hh"
+#include "symbol_table.hh"
 
 namespace bsl {
 

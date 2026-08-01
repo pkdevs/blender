@@ -19,6 +19,8 @@
 #include "metadata.hh"
 #include "processor.hh"
 
+#include "bsl/symbol_table.hh"
+
 namespace blender::gpu::shader {
 using namespace std;
 using namespace shader::parser;

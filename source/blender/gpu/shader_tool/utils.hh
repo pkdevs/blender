@@ -131,4 +131,10 @@ std::string filename(const std::string_view &str, size_t pos);
 /** Returns a string of the line containing the character at the given position. */
 std::string line_str(const std::string_view &str, size_t pos);
 
+/* Return size padded to the given alignment. */
+static inline int pad(int size, int align)
+{
+  return ((size + align - 1) / align) * align;
+}
+
 }  // namespace blender::gpu::shader::parser

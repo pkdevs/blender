@@ -9,7 +9,7 @@
 #include "diagnostic.hh"
 #include "metadata.hh"
 #include "processor.hh"
-#include "symbol.hh"
+#include "symbol_table.hh"
 
 #include <sstream>
 
@@ -1028,7 +1028,7 @@ struct CodegenContext : NodeErrorHandler {
     else {
       /* Declare return variable of the same type as the accessed member. */
       fn_body += "  " + fn_type_id + " r;\n";
-      for (const auto &var : get_all_members_flat(&member_type).unwrap(this)) {
+      for (const auto &var : member_type.get_all_members_flat().unwrap(this)) {
         string to_var = "r." + var.path;
         string access = "this_." +
                         union_data_access(var.absolute_offset, var.type->size, union_type.size);
@@ -1058,7 +1058,7 @@ struct CodegenContext : NodeErrorHandler {
       fn_body += "  " + to_var + " = " + member_to_float(*member.type, access) + ";\n";
     }
     else {
-      for (const auto &var : get_all_members_flat(&member_type).unwrap(this)) {
+      for (const auto &var : member_type.get_all_members_flat().unwrap(this)) {
         string to_var = "this_." +
                         union_data_access(var.absolute_offset, var.type->size, union_type.size);
         string access = "v." + var.path;
