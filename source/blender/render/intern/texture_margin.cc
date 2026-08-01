@@ -58,11 +58,11 @@ class TextureMarginMap {
   bool write_mask_;
 
   /* Tables for pixel lookup. */
-  /* Maps face corners to other face corners with shared edge. */
+  /* Maps face corners to other face corners adjacent through an shared edge. */
   Vector<int> corner_adjacency_;
   /* Maps corners to their corresponding face. */
   Array<int> corner_to_face_;
-  /* Is edge connected in UV space with its shared edge. */
+  /* Is faces sharing this edge are connected in UV space. */
   Vector<bool> edge_uv_connectivity_;
   /* Face winding in UV space. */
   Vector<bool> face_uv_winding_;
@@ -115,14 +115,10 @@ class TextureMarginMap {
     TextureMarginMap *m = static_cast<TextureMarginMap *>(map);
 
     if (m->write_mask_) {
-      /* if there is a mask and write_mask_ is true, write to the mask */
       m->mask_[y * m->w_ + x] = 1;
       m->set_pixel(x, y, m->value_to_store_);
     }
     else {
-      /* if there is a mask and write_mask_ is false, read the mask
-       * to decide if the map needs to be written
-       */
       if (m->mask_[y * m->w_ + x] != 0) {
         m->set_pixel(x, y, m->value_to_store_);
       }
@@ -217,8 +213,8 @@ class TextureMarginMap {
               set_pixel(x, y, PackDijkstraPixel(distances[i], i));
               active_pixels.append(DijkstraActivePixel(distances[i], x, y));
 
-              /* All distances are the same so we can pick any valid direction.
-               * We can also skip `distance <= margin` test as all distances are 1. */
+              /* All distances are the same, so we can pick any valid direction.
+               * We can also skip the `distance <= margin` check as all distances are 1. */
               break;
             }
           }
@@ -276,7 +272,7 @@ class TextureMarginMap {
     edge_to_corner.resize(edges_num * 2, -1);
 
     for (const int64_t face_a : faces_.index_range()) {
-      /* Use shoelace signed area formula to determine face winding. */
+      /* Use the shoelace signed area formula to determine face winding. */
       float signed_area = 0;
 
       for (const int corner_a1 : faces_[face_a]) {
@@ -290,7 +286,7 @@ class TextureMarginMap {
 
         /* Only faces with different winding (where a1 equals b2)
          * should be considered adjacent.
-         * Use vertex indices order to find face with different winding.*/
+         * Use vertex index order to find the face with different winding.*/
         const int edge_verts_order = corner_verts_[corner_a1] <= corner_verts_[corner_a2] ? 0 : 1;
         const int edge_lookup_idx_a = edge * 2 + edge_verts_order;
         const int edge_lookup_idx_b = edge * 2 + (1 - edge_verts_order);
@@ -327,8 +323,7 @@ class TextureMarginMap {
   }
 
   /**
-   * Walk over the map and for margin pixels follow the direction stored in the bottom 3
-   * bits back to the face. Then look up the pixel from the next face.
+   * Walk over the map and look up the pixel from the adjacent face.
    */
   void lookup_pixels(ImBuf *ibuf, ImBuf *im_read, int maxFaceSteps)
   {
@@ -392,10 +387,11 @@ class TextureMarginMap {
         const float weight = std::clamp(src_edge_perp_signed_dist + 0.5f, 0.0f, 1.0f);
         
         if (weight <= 0 && inside_face) {
+          /* We can skip all subsequent calculations. */
           continue;
         }
 
-        /* Project source or destination point on an edge based on edge signed distance. */
+        /* Project source or destination point on the edge based on edge signed distance. */
         if (src_edge_perp_signed_dist > 0) {
           src_point = point_on_src_edge;
         }
@@ -406,11 +402,11 @@ class TextureMarginMap {
         bool found_pixel_in_face = false;
 
         for (int i = 0; i < maxFaceSteps; i++) {
-          /* If at least one pixel in interpolation range contains target face
-           * then it's safe to sample interpolated data from this point.
-           * A better solution is to analytically check if point is inside
-           * target face, but this is fine enough heuristic considering
-           * we may have some complex concave face here. */
+          /* If at least one pixel in the interpolation range contains the target
+           * face, then it's safe to sample interpolated data from this point.
+           * A better solution is to analytically check if point is inside the
+           * target face, but this is a fine enough heuristic considering
+           * we may have a complex concave face here. */
           const int nx = std::clamp(int(floor(dst_point.x - 0.5f)), -1, w_ - 1);
           const int ny = std::clamp(int(floor(dst_point.y - 0.5f)), -1, h_ - 1);
 
@@ -432,7 +428,7 @@ class TextureMarginMap {
                                     &point_on_src_edge,
                                     &point_on_dst_edge);
 
-          /* Selected edge does not have adjacent face. */
+          /* Selected edge does not have an adjacent face. */
           if (!found_edge) {
             break;
           }
@@ -442,7 +438,7 @@ class TextureMarginMap {
           continue;
         }
 
-        /* -0.5 offset is applied to sampling position to get 
+        /* -0.5 offset is applied to the sampling position to get 
          * texture interpolation between texel centers. */
         if (ibuf_ptr_fl) {
           float4 inside_col = imbuf::interpolate_bilinear_fl(
@@ -468,7 +464,9 @@ class TextureMarginMap {
     }
   }
   
-  /* Restores ibuf pixels outside the margin using pixels from the im_read. */
+  /**
+   * Restores ibuf pixels outside the margin using pixels from the im_read. 
+   */
   void restore_outside_pixels(ImBuf *ibuf, ImBuf *im_read) const
   {
     const float4 *readbuf_ptr_fl = reinterpret_cast<const float4 *>(im_read->float_data());
@@ -513,7 +511,7 @@ class TextureMarginMap {
   }
 
   /**
-   * Find which edge of src_face is closest to x,y. Look up its adjacent UV-edge and face.
+   * Find which edge of src_face is closest to a point. Look up its adjacent UV-edge and face.
    * Returns the location of the equivalent pixel in the other face and other information.
    * Returns true if a nearest edge has an adjacent face, false if it doesn't, which can happen if
    * the shared edge is invalid, or if the UV-edge doesn't have an adjacent face.
@@ -560,7 +558,7 @@ class TextureMarginMap {
         is_valid &= !edge_uv_connectivity_[edge];
       }
 
-      /* Consider selecting only valid edges for the first iteration. */
+      /* Only valid edges should be considered for selection for the first iteration. */
       if (!is_valid && prev_face == -1) {
         continue;
       }
@@ -580,7 +578,7 @@ class TextureMarginMap {
 
       /* Project ap onto ab. */
       const float dotv = math::dot(ab, ap);
-      const float t = dotv / ablensq;
+      const float t = math::safe_divide(dotv, ablensq);
       const float t_clamped = std::clamp(t, 0.0f, 1.0f);
 
       /* Works both for the insides and outsides of convex and concave faces. */
@@ -592,7 +590,7 @@ class TextureMarginMap {
         float2 perpendicular_ab = float2(ab.y, -ab.x);
         perpendicular_ab *= (src_face_winding == WINDING_CW) ? -1 : 1;
 
-        const float signed_dist = math::dot(perpendicular_ab, ap) / ablen;
+        const float signed_dist = math::safe_divide(math::dot(perpendicular_ab, ap), ablen);
 
         found_corner = corner_1;
         min_dist = distance;
@@ -609,7 +607,7 @@ class TextureMarginMap {
       return false;
     }
 
-    /* Get the 'other' corner. I.E. the UV corner from the neighbor face. */
+    /* Get the 'other' corner. I.E. the UV corner from the adjacent face. */
     const int other_corner_1 = corner_adjacency_[found_corner];
 
     const int dst_face = corner_to_face_[other_corner_1];
@@ -621,7 +619,7 @@ class TextureMarginMap {
     const float2 other_uv_2 = corner_uv(other_corner_2);
 
     /* Calculate the vector from the other edge second point to its first point.
-     * Edge vertex order is inverted for valid connected faces. */
+     * Edge vertex order is inverted for adjacent faces. */
     const float2 other_ab = other_uv_1 - other_uv_2;
     const float2 projected_point = other_uv_2 + (found_t * other_ab);
 
@@ -629,9 +627,10 @@ class TextureMarginMap {
     perpendicular_other_ab *= (dst_face_winding == WINDING_CW) ? -1 : 1;
 
     /* The new point is `found_sd * length(other_ab) / length(ab)` units
-     * away from projected_point at a 90 degree angle to other_ab */
+     * away from the `projected_point` at a 90 degree angle to other_ab */
     const float2 new_point = projected_point +
-                             (found_perp_signed_dist / found_ablen) * perpendicular_other_ab;
+                             math::safe_divide(found_perp_signed_dist, found_ablen) * 
+                             perpendicular_other_ab;
 
     *r_dst_point = new_point;
     *r_src_edge_perp_signed_dist = found_perp_signed_dist;
