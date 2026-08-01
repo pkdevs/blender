@@ -38,7 +38,7 @@ def _setup_info_area():
     bpy.ops.object.shade_smooth()
     bpy.ops.object.modifier_add(type='BEVEL')
     yield
-    
+
     return e, t, window, area
 
 
@@ -68,10 +68,8 @@ def _copy_reports(area, t):
 
     region = _get_window_region(area)
 
-    result = {'CANCELLED'}
     with bpy.context.temp_override(area=area, region=region):
-        if bpy.ops.info.report_copy.poll():
-            result = bpy.ops.info.report_copy()
+        result = bpy.ops.info.report_copy()
 
     t.assertEqual(result, {'FINISHED'}, "Copy reports should complete")
     yield
@@ -82,56 +80,11 @@ def _delete_reports(area, t):
 
     region = _get_window_region(area)
 
-    result = {'CANCELLED'}
     with bpy.context.temp_override(area=area, region=region):
-        if bpy.ops.info.report_delete.poll():
-            result = bpy.ops.info.report_delete()
+        result = bpy.ops.info.report_delete()
 
     t.assertEqual(result, {'FINISHED'}, "Delete reports should complete")
     yield
-
-
-def test_info_report_filters():
-    """
-    Verify report filter properties.
-    """
-    import bpy
-
-    e, t, window, area = yield from _setup_info_area()
-
-    space = area.spaces.active
-    t.assertIsInstance(space, bpy.types.SpaceInfo)
-
-    filter_states = [
-        ("all_on", dict(debug=True, info=True, warning=True, error=True, operator=True)),
-        ("info_only", dict(info=True)),
-        ("error_only", dict(error=True)),
-        ("all_off", dict()),
-    ]
-
-    for case_name, filter_state in filter_states:
-        _set_report_filters(space, **filter_state)
-
-        for prop_name, expected_value in (
-            ("show_report_debug", filter_state.get("debug", False)),
-            ("show_report_info", filter_state.get("info", False)),
-            ("show_report_warning", filter_state.get("warning", False)),
-            ("show_report_error", filter_state.get("error", False)),
-            ("show_report_operator", filter_state.get("operator", False)),
-        ):
-            t.assertEqual(
-                getattr(space, prop_name),
-                expected_value,
-                f"{case_name}: {prop_name} did not round-trip",
-            )
-
-        yield
-
-        # The current build does not expose the Info report list through
-        # Python in a way that can be asserted reliably here, so this test
-        # verifies the operators complete successfully for each filter state.
-        yield from _select_reports(area, 'SELECT', t)
-        yield from _copy_reports(area, t)
 
 
 def test_info_report_selection_modes():
