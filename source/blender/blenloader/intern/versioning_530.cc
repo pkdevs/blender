@@ -63,6 +63,7 @@ static void blo_do_domain_sockets_530(Main *bmain)
         "GeometryNodeSetMeshNormal"_ustr, "Domain"_ustr, custom2)
     ASSIGN_MENU_VALUE_FROM_INLINE_RNA_ENUM("GeometryNodeFieldAtIndex"_ustr, "Domain"_ustr, custom1)
     ASSIGN_MENU_VALUE_FROM_INLINE_RNA_ENUM("GeometryNodeFieldAtIndex"_ustr, "Data Type"_ustr, custom2)
+    ASSIGN_MENU_VALUE_FROM_INLINE_RNA_ENUM("GeometryNodeToolActiveElement"_ustr, "Domain"_ustr, custom1)
   }
 
 #undef ASSIGN_MENU_VALUE_FROM_RNA_ENUM

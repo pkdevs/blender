@@ -17,22 +17,22 @@ namespace blender::nodes::node_geo_tool_active_element_cc {
 
 static void node_declare(NodeDeclarationBuilder &b)
 {
+  static const EnumPropertyItem domain_items[] = {
+      {int(AttrDomain::Point), "POINT", 0, "Point", ""},
+      {int(AttrDomain::Edge), "EDGE", 0, "Edge", ""},
+      {int(AttrDomain::Face), "FACE", 0, "Face", ""},
+      {int(AttrDomain::Layer), "LAYER", 0, "Layer", ""},
+      {0, nullptr, 0, nullptr, nullptr},
+  };
+  b.add_input<decl::Menu>("Domain"_ustr)
+      .static_items(domain_items)
+      .default_value(AttrDomain::Point)
+      .description("Domain of the active element")
+      .optional_label();
   b.add_output<decl::Int>("Index"_ustr)
       .description("Index of the active element in the specified domain");
   b.add_output<decl::Bool>("Exists"_ustr)
       .description("True if an active element exists in the mesh, false otherwise");
-}
-
-static void node_init(bNodeTree * /*tree*/, bNode *node)
-{
-  node->custom1 = int16_t(AttrDomain::Point);
-}
-
-static void node_layout(ui::Layout &layout, bContext * /*C*/, PointerRNA *ptr)
-{
-  layout.use_property_split_set(true);
-  layout.use_property_decorate_set(false);
-  layout.prop(ptr, "domain", UI_ITEM_NONE, "", ICON_NONE);
 }
 
 static void node_exec(GeoNodeExecParams params)
@@ -42,7 +42,7 @@ static void node_exec(GeoNodeExecParams params)
   }
 
   const GeoNodesOperatorData *operator_data = params.user_data()->call_data->operator_data;
-  const AttrDomain domain = static_cast<AttrDomain>(params.node().custom1);
+  const AttrDomain domain = params.extract_input<AttrDomain>("Domain"_ustr);
 
   /* Active Point, Edge, and Face are only supported in Edit Mode. */
   if (operator_data->mode != OB_MODE_EDIT &&
@@ -76,25 +76,6 @@ static void node_exec(GeoNodeExecParams params)
   }
 }
 
-static void node_rna(StructRNA *srna)
-{
-  static const EnumPropertyItem rna_domain_items[] = {
-      {int(AttrDomain::Point), "POINT", 0, "Point", ""},
-      {int(AttrDomain::Edge), "EDGE", 0, "Edge", ""},
-      {int(AttrDomain::Face), "FACE", 0, "Face", ""},
-      {int(AttrDomain::Layer), "LAYER", 0, "Layer", ""},
-      {0, nullptr, 0, nullptr, nullptr},
-  };
-
-  RNA_def_node_enum(srna,
-                    "domain",
-                    "Domain",
-                    "",
-                    rna_domain_items,
-                    NOD_inline_enum_accessors(custom1),
-                    int(AttrDomain::Point));
-}
-
 static void node_register()
 {
   static bke::bNodeType ntype;
@@ -103,14 +84,10 @@ static void node_register()
   ntype.ui_description = "Active element indices of the edited geometry, for tool execution";
   ntype.enum_name_legacy = "TOOL_ACTIVE_ELEMENT";
   ntype.nclass = NODE_CLASS_INPUT;
-  ntype.initfunc = node_init;
   ntype.geometry_node_execute = node_exec;
   ntype.declare = node_declare;
   ntype.gather_link_search_ops = search_link_ops_for_tool_node;
-  ntype.draw_buttons = node_layout;
   bke::node_register_type(ntype);
-
-  node_rna(ntype.rna_ext.srna);
 }
 NOD_REGISTER_NODE(node_register)
 
