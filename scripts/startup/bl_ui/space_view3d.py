@@ -1823,6 +1823,7 @@ class VIEW3D_MT_select_pose(Menu):
         layout.separator()
 
         layout.operator("pose.select_deform", text="Deform")
+        layout.operator("pose.select_scaled", text="Scaled")
         layout.menu("POSE_MT_selection_sets_select", text="Bone Selection Set")
         layout.operator("pose.select_constraint_target", text="Constraint Target")
 
