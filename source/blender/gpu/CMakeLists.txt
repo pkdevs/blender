@@ -111,26 +111,27 @@ set(SRC
 
   shader_tool/ast.cc
   shader_tool/attribute.cc
-  shader_tool/codegen.cc
-  shader_tool/constructor.cc
   shader_tool/enum.cc
   shader_tool/flow_control.cc
   shader_tool/function.cc
   shader_tool/grammar.cc
-  shader_tool/grammar_bsl.cc
   shader_tool/intermediate.cc
   shader_tool/metadata.cc
   shader_tool/namespace.cc
-  shader_tool/operator.cc
   shader_tool/processor.cc
   shader_tool/resource_table.cc
   shader_tool/string.cc
   shader_tool/struct.cc
-  shader_tool/symbol.cc
   shader_tool/template.cc
   shader_tool/union.cc
 
   shader_tool/lexit/lexit.cc
+
+  shader_tool/bsl/symbol.cc
+  shader_tool/bsl/codegen.cc
+  shader_tool/bsl/grammar.cc
+  shader_tool/bsl/constructor.cc
+  shader_tool/bsl/operator.cc
 
   GPU_attribute_convert.hh
   GPU_batch.hh

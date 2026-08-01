@@ -10,6 +10,7 @@
 
 #include "intermediate.hh"
 #include "metadata.hh"
+
 #include "symbol.hh"
 
 #include <map>

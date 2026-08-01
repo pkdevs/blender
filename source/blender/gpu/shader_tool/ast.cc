@@ -7,7 +7,6 @@
  */
 
 #include "ast.hh"
-#include "symbol.hh"
 #include "token.hh"
 
 namespace blender::gpu::shader::parser::ast {
@@ -117,9 +116,9 @@ bool FuncParamList::is_empty() const
   return back().index_ - front().index_ == 1;
 }
 
-string StructuredBinding::tmp_id() const
+std::string StructuredBinding::tmp_id() const
 {
-  return "_" + to_string(front().index_ - parent().front().index_);
+  return "_" + std::to_string(front().index_ - parent().front().index_);
 }
 
 bool ClassDecl::is_enum() const
