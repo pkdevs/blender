@@ -176,7 +176,7 @@ class Rig(BaseRig, RelinkConstraintsMixin):
 
         cls.add_relink_constraints_ui(layout, params)
 
-        pbone = bpy.context.active_pose_bone
+        pbone = bpy.context.object.pose.bones[bpy.context.bone.name]
 
         if pbone and is_control_bone(pbone.name):
             layout_widget_dropdown(layout, params, "optional_widget_type")

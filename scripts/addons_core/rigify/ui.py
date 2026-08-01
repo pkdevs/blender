@@ -877,13 +877,13 @@ class BONE_PT_rigify_buttons(bpy.types.Panel):
 
     @classmethod
     def poll(cls, context):
-        return is_valid_metarig(context) and context.active_pose_bone
+        return is_valid_metarig(context) and context.bone
 
     def draw(self, context):
         C = context
         id_store = C.window_manager
-        bone = context.active_pose_bone
-        rig_name = get_rigify_type(bone)
+        pbone = C.object.pose.bones[C.bone.name]
+        rig_name = get_rigify_type(pbone)
 
         layout = self.layout
         rig_types = get_rigify_types(id_store)
@@ -896,7 +896,7 @@ class BONE_PT_rigify_buttons(bpy.types.Panel):
             row = layout.row()
             row.prop(context.object.data, "active_feature_set")
         row = layout.row()
-        row.prop_search(bone, "rigify_type", id_store, "rigify_types", text="Rig type")
+        row.prop_search(pbone, "rigify_type", id_store, "rigify_types", text="Rig type")
 
         # Rig type parameters / Rig type non-exist alert
         if rig_name != "":
@@ -928,7 +928,7 @@ class BONE_PT_rigify_buttons(bpy.types.Panel):
                     col = layout.column()
                     col.label(text="Options:")
                     box = layout.box()
-                    param_cb(box, get_rigify_params(bone))
+                    param_cb(box, get_rigify_params(pbone))
 
 
 # noinspection PyPep8Naming
@@ -1728,10 +1728,11 @@ class POSE_OT_rigify_collection_ref_add(bpy.types.Operator):
 
     @classmethod
     def poll(cls, context):
-        return is_valid_metarig(context) and context.active_pose_bone
+        return is_valid_metarig(context) and context.bone
 
     def execute(self, context):
-        params = get_rigify_params(context.active_pose_bone)
+        pbone = context.object.pose.bones[context.bone.name]
+        params = get_rigify_params(pbone)
         getattr(params, self.prop_name).add()
         return {'FINISHED'}
 
@@ -1748,10 +1749,11 @@ class POSE_OT_rigify_collection_ref_remove(bpy.types.Operator):
 
     @classmethod
     def poll(cls, context):
-        return is_valid_metarig(context) and context.active_pose_bone
+        return is_valid_metarig(context) and context.bone
 
     def execute(self, context):
-        params = get_rigify_params(context.active_pose_bone)
+        pbone = context.object.pose.bones[context.bone.name]
+        params = get_rigify_params(pbone)
         getattr(params, self.prop_name).remove(self.index)
         return {'FINISHED'}
 

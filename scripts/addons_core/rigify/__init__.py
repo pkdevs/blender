@@ -540,7 +540,7 @@ def update_callback(prop_name):
         if not in_update:
             try:
                 in_update = True
-                bone = context.active_pose_bone
+                bone = context.object.pose.bones[context.bone.name]
 
                 if bone and bone.rigify_parameters == params:
                     rig_info = rig_lists.rigs.get(get_rigify_type(bone), None)
