@@ -177,15 +177,6 @@ void time_update_meta_strip_range(const Scene *scene, Strip *strip_meta)
   time_update_meta_strip_range(scene, lookup_meta_by_strip(scene->ed, strip_meta));
 }
 
-static bool inputs_have_wrong_order(const Scene *scene, const Strip *input1, const Strip *input2)
-{
-  const int first_start = input1->left_handle();
-  const int second_start = input2->left_handle();
-  return (first_start > second_start) ||
-         (first_start == second_start &&
-          input1->right_handle(scene) > input2->right_handle(scene));
-}
-
 void strip_time_effect_range_set(const Scene *scene, Strip *strip)
 {
   if (strip->input1 == nullptr && strip->input2 == nullptr) {
@@ -197,8 +188,8 @@ void strip_time_effect_range_set(const Scene *scene, Strip *strip)
     strip->enddisp = min_ii(strip->input1->right_handle(scene),
                             strip->input2->right_handle(scene));
 
-    if (seq::effect_is_transition(strip->type) &&
-        inputs_have_wrong_order(scene, strip->input1, strip->input2))
+    if (effect_is_transition(strip->type) &&
+        transition_inputs_have_wrong_order(scene, strip->input1, strip->input2))
     {
       std::swap(strip->input1, strip->input2);
     }

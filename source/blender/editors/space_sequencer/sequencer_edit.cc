@@ -1702,14 +1702,21 @@ VectorSet<Strip *> strip_effect_get_new_inputs(const Scene *scene,
   if (inputs.size() == 2 && num_inputs == 2) {
     Strip *first = inputs[0];
     Strip *second = inputs[1];
-    if (seq::effect_is_transition(effect_type)) {
-      /* Transition input order is set by `strip_time_effect_range_set`. */
+    bool do_swap = false;
+    if (seq::effect_is_transition(effect_type) &&
+        seq::transition_inputs_have_wrong_order(scene, first, second))
+    {
+      /* Sort by timeline frame so 2-input transitions go "from" earlier "to" later. */
+      do_swap = true;
     }
     else if (first == seq::select_active_get(scene) ||
              (ignore_active && first->channel < second->channel))
     {
       /* Other 2-input effects (blend-modes) make the active strip the second input. If neither
        * strip is active (as in reassign inputs), make it the strip on the lower channel. */
+      do_swap = true;
+    }
+    if (do_swap) {
       inputs.clear();
       inputs.add(second);
       inputs.add(first);
