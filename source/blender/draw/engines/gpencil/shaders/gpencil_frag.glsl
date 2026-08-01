@@ -55,6 +55,10 @@ float3 gpencil_lighting()
 /* dx and dy are only needed for dots and squares. */
 float4 get_color(float2 uv, float2 dx, float2 dy)
 {
+  uv -= 0.5f;
+  uv *= gp_interp_flat.aspect.xy;
+  uv += 0.5f;
+
   float4 col;
   if (flag_test(gp_interp_flat.mat_flag, GP_STROKE_TEXTURE_USE)) {
     bool premul = flag_test(gp_interp_flat.mat_flag, GP_STROKE_TEXTURE_PREMUL);
