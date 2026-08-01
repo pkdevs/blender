@@ -2,12 +2,9 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#include "BKE_sound_reader.hh"
-#include "BKE_sound_sample.hh"
-
-#include "DNA_sound_types.h"
-
 #include "sound_reader_cache.hh"
+
+#include "BLI_index_range.hh"
 
 #include "testing/testing.h"
 
@@ -20,6 +17,7 @@
 #  include <memory>
 #  include <stdexcept>
 #  include <thread>
+#  include <utility>
 
 #  include "BLI_math_base.hh"
 #  include "BLI_math_constants.hh"
@@ -45,7 +43,6 @@ struct ReaderControl {
 
   std::atomic<int> readers_created = 0;
   std::atomic<int> live_readers = 0;
-  std::atomic<int> reads = 0;
   CreateMode create_mode = CreateMode::Normal;
   bool throw_on_read = false;
   bool throw_on_seek = false;
@@ -72,6 +69,7 @@ class ControlledReader : public aud::IReader {
   {
     return reader_->isSeekable();
   }
+
   void seek(const int position) override
   {
     reader_->seek(position);
@@ -79,22 +77,25 @@ class ControlledReader : public aud::IReader {
       throw TestReaderError();
     }
   }
+
   int getLength() const override
   {
     return reader_->getLength();
   }
+
   int getPosition() const override
   {
     return reader_->getPosition();
   }
+
   aud::Specs getSpecs() const override
   {
     return reader_->getSpecs();
   }
+
   void read(int &length, bool &eos, aud::sample_t *buffer) override
   {
     reader_->read(length, eos, buffer);
-    control_->reads.fetch_add(1, std::memory_order_relaxed);
     if (control_->throw_on_read) {
       throw TestReaderError();
     }
@@ -113,11 +114,11 @@ class CountingSound : public aud::ISound {
 
   std::shared_ptr<aud::IReader> createReader() override
   {
-    control->readers_created.fetch_add(1, std::memory_order_relaxed);
-    if (create_barrier) {
-      create_barrier->arrive_and_wait();
+    this->control->readers_created.fetch_add(1, std::memory_order_relaxed);
+    if (this->create_barrier) {
+      this->create_barrier->arrive_and_wait();
     }
-    switch (control->create_mode) {
+    switch (this->control->create_mode) {
       case ReaderControl::CreateMode::ReturnNull:
         return nullptr;
       case ReaderControl::CreateMode::Throw:
@@ -125,7 +126,7 @@ class CountingSound : public aud::ISound {
       case ReaderControl::CreateMode::Normal:
         break;
     }
-    return std::make_shared<ControlledReader>(sound_->createReader(), control);
+    return std::make_shared<ControlledReader>(sound_->createReader(), this->control);
   }
 };
 
@@ -145,52 +146,18 @@ static std::shared_ptr<CountingSound> create_test_sound()
   return std::make_shared<CountingSound>(std::move(stream));
 }
 
-static std::shared_ptr<SoundReaderCache> create_reader_cache(
-    const std::shared_ptr<CountingSound> &sound)
-{
-  return SoundReaderCache::create(sound);
-}
-
-static std::optional<SoundReaderLease> acquire_reader(
-    const std::shared_ptr<SoundReaderCache> &readers)
-{
-  return SoundReaderCacheTestAccess::acquire(readers);
-}
-
-class TestSoundWithReaderCache {
- public:
-  bSound sound{};
-
-  explicit TestSoundWithReaderCache(std::shared_ptr<aud::ISound> reader_sound)
-  {
-    SoundReaderCacheTestAccess::initialize_sound(sound, std::move(reader_sound));
-  }
-
-  ~TestSoundWithReaderCache()
-  {
-    if (sound.runtime) {
-      this->clear();
-    }
-  }
-
-  void clear()
-  {
-    SoundReaderCacheTestAccess::clear_sound(sound);
-  }
-};
-
-TEST(sound_reader, SequentialAcquisitionsReuseReaderAutomatically)
+TEST(sound_reader, SequentialAcquisitionsReuseReader)
 {
   const std::shared_ptr<CountingSound> sound = create_test_sound();
-  const std::shared_ptr<SoundReaderCache> readers = create_reader_cache(sound);
+  const SoundReaderCache readers(sound);
   aud::IReader *first_reader;
   {
-    std::optional<SoundReaderLease> lease = acquire_reader(readers);
+    std::optional<SoundReaderLease> lease = readers.acquire();
     ASSERT_TRUE(lease);
     first_reader = lease->operator->();
   }
   {
-    std::optional<SoundReaderLease> lease = acquire_reader(readers);
+    std::optional<SoundReaderLease> lease = readers.acquire();
     ASSERT_TRUE(lease);
     EXPECT_EQ(lease->operator->(), first_reader);
   }
@@ -198,21 +165,22 @@ TEST(sound_reader, SequentialAcquisitionsReuseReaderAutomatically)
   EXPECT_EQ(sound->control->live_readers.load(), 1);
 }
 
-TEST(sound_reader, ConcurrentEmptyCacheCreatesThreeAndRetainsTwo)
+TEST(sound_reader, ConcurrentAcquisitionsLimitIdleReaders)
 {
   const std::shared_ptr<CountingSound> sound = create_test_sound();
   std::barrier<> create_barrier{3};
   sound->create_barrier = &create_barrier;
-  const std::shared_ptr<SoundReaderCache> readers = create_reader_cache(sound);
+  const SoundReaderCache readers(sound);
   std::array<std::optional<SoundReaderLease>, 3> leases;
   std::array<std::thread, 3> threads;
   for (const int i : IndexRange(3)) {
-    threads[i] = std::thread([&, i]() { leases[i] = acquire_reader(readers); });
+    threads[i] = std::thread([&, i]() { leases[i] = readers.acquire(); });
   }
   for (std::thread &thread : threads) {
     thread.join();
   }
   sound->create_barrier = nullptr;
+
   EXPECT_EQ(sound->control->readers_created.load(), 3);
   std::array<aud::IReader *, 3> created_readers;
   for (const int i : IndexRange(3)) {
@@ -222,8 +190,8 @@ TEST(sound_reader, ConcurrentEmptyCacheCreatesThreeAndRetainsTwo)
   leases = {};
   EXPECT_EQ(sound->control->live_readers.load(), 2);
 
-  std::optional<SoundReaderLease> first = acquire_reader(readers);
-  std::optional<SoundReaderLease> second = acquire_reader(readers);
+  std::optional<SoundReaderLease> first = readers.acquire();
+  std::optional<SoundReaderLease> second = readers.acquire();
   ASSERT_TRUE(first);
   ASSERT_TRUE(second);
   EXPECT_NE(first->operator->(), second->operator->());
@@ -234,32 +202,31 @@ TEST(sound_reader, ConcurrentEmptyCacheCreatesThreeAndRetainsTwo)
   EXPECT_EQ(sound->control->readers_created.load(), 3);
 }
 
-TEST(sound_reader, ExplicitDiscardDestroysAndReplacesLazily)
+TEST(sound_reader, DiscardDestroysReader)
 {
   const std::shared_ptr<CountingSound> sound = create_test_sound();
-  const std::shared_ptr<SoundReaderCache> readers = create_reader_cache(sound);
+  const SoundReaderCache readers(sound);
   {
-    std::optional<SoundReaderLease> failed = acquire_reader(readers);
-    ASSERT_TRUE(failed);
-    failed->discard();
-    EXPECT_FALSE(*failed);
+    std::optional<SoundReaderLease> lease = readers.acquire();
+    ASSERT_TRUE(lease);
+    lease->discard();
+    EXPECT_FALSE(*lease);
   }
   EXPECT_EQ(sound->control->live_readers.load(), 0);
-  EXPECT_EQ(sound->control->readers_created.load(), 1);
 
-  std::optional<SoundReaderLease> replacement = acquire_reader(readers);
+  std::optional<SoundReaderLease> replacement = readers.acquire();
   ASSERT_TRUE(replacement);
   EXPECT_EQ(sound->control->readers_created.load(), 2);
 }
 
-TEST(sound_reader, FailedSeekAndReadAreDiscarded)
+TEST(sound_reader, FailedReaderOperationsRequireDiscard)
 {
   const std::shared_ptr<CountingSound> sound = create_test_sound();
-  const std::shared_ptr<SoundReaderCache> readers = create_reader_cache(sound);
+  const SoundReaderCache readers(sound);
 
   sound->control->throw_on_seek = true;
   {
-    std::optional<SoundReaderLease> lease = acquire_reader(readers);
+    std::optional<SoundReaderLease> lease = readers.acquire();
     ASSERT_TRUE(lease);
     try {
       (*lease)->seek(16);
@@ -274,7 +241,7 @@ TEST(sound_reader, FailedSeekAndReadAreDiscarded)
   sound->control->throw_on_seek = false;
   sound->control->throw_on_read = true;
   {
-    std::optional<SoundReaderLease> lease = acquire_reader(readers);
+    std::optional<SoundReaderLease> lease = readers.acquire();
     ASSERT_TRUE(lease);
     int length = 16;
     bool eos = false;
@@ -290,123 +257,63 @@ TEST(sound_reader, FailedSeekAndReadAreDiscarded)
   EXPECT_EQ(sound->control->live_readers.load(), 0);
 
   sound->control->throw_on_read = false;
-  std::optional<SoundReaderLease> replacement = acquire_reader(readers);
+  std::optional<SoundReaderLease> replacement = readers.acquire();
   ASSERT_TRUE(replacement);
   EXPECT_EQ(sound->control->readers_created.load(), 3);
 }
 
-TEST(sound_reader, NullAndThrowingCreationLeaveCacheUsable)
+TEST(sound_reader, ReaderCreationFailureDoesNotPoisonCache)
 {
   const std::shared_ptr<CountingSound> sound = create_test_sound();
-  const std::shared_ptr<SoundReaderCache> readers = create_reader_cache(sound);
+  const SoundReaderCache readers(sound);
   sound->control->create_mode = ReaderControl::CreateMode::ReturnNull;
-  EXPECT_FALSE(acquire_reader(readers));
+  EXPECT_FALSE(readers.acquire());
   sound->control->create_mode = ReaderControl::CreateMode::Throw;
-  EXPECT_THROW(acquire_reader(readers), TestReaderError);
+  EXPECT_THROW(readers.acquire(), TestReaderError);
+
   sound->control->create_mode = ReaderControl::CreateMode::Normal;
-  std::optional<SoundReaderLease> first = acquire_reader(readers);
-  std::optional<SoundReaderLease> second = acquire_reader(readers);
+  std::optional<SoundReaderLease> first = readers.acquire();
+  std::optional<SoundReaderLease> second = readers.acquire();
   ASSERT_TRUE(first);
   ASSERT_TRUE(second);
   EXPECT_EQ(sound->control->readers_created.load(), 4);
 }
 
-TEST(sound_reader, MoveConstructionAndAssignmentReleaseExactlyOnce)
+TEST(sound_reader, MoveOperationsReturnReaderOnce)
 {
   const std::shared_ptr<CountingSound> sound = create_test_sound();
-  const std::shared_ptr<SoundReaderCache> readers = create_reader_cache(sound);
-  std::optional<SoundReaderLease> first = acquire_reader(readers);
+  const SoundReaderCache readers(sound);
+  std::optional<SoundReaderLease> first = readers.acquire();
   ASSERT_TRUE(first);
   aud::IReader *first_reader = first->operator->();
   SoundReaderLease moved(std::move(*first));
   EXPECT_FALSE(*first);
   first.reset();
 
-  std::optional<SoundReaderLease> second = acquire_reader(readers);
+  std::optional<SoundReaderLease> second = readers.acquire();
   ASSERT_TRUE(second);
   moved = std::move(*second);
   EXPECT_FALSE(*second);
   second.reset();
 
-  std::optional<SoundReaderLease> reused = acquire_reader(readers);
+  std::optional<SoundReaderLease> reused = readers.acquire();
   ASSERT_TRUE(reused);
   EXPECT_EQ(reused->operator->(), first_reader);
   EXPECT_EQ(sound->control->readers_created.load(), 2);
 }
 
-TEST(sound_reader, LeaseKeepsOwnerAlive)
+TEST(sound_reader, LeaseKeepsReaderStateAlive)
 {
   const std::shared_ptr<CountingSound> sound = create_test_sound();
-  std::shared_ptr<SoundReaderCache> readers = create_reader_cache(sound);
-  const std::weak_ptr<SoundReaderCache> weak_readers = readers;
-  std::optional<SoundReaderLease> lease = acquire_reader(readers);
+  auto readers = std::make_shared<SoundReaderCache>(sound);
+  std::optional<SoundReaderLease> lease = readers->acquire();
   ASSERT_TRUE(lease);
   readers.reset();
-  EXPECT_FALSE(weak_readers.expired());
-  lease.reset();
-  EXPECT_TRUE(weak_readers.expired());
-}
-
-TEST(sound_reader, SoundAcquisitionsShareRuntimeCache)
-{
-  const std::shared_ptr<CountingSound> reader_sound = create_test_sound();
-  TestSoundWithReaderCache sound(reader_sound);
-
-  aud::IReader *first_reader;
-  {
-    std::optional<SoundReaderLease> lease = sound_reader_acquire(sound.sound);
-    ASSERT_TRUE(lease);
-    first_reader = lease->operator->();
-  }
-  {
-    std::optional<SoundReaderLease> lease = sound_reader_acquire(sound.sound);
-    ASSERT_TRUE(lease);
-    EXPECT_EQ(lease->operator->(), first_reader);
-  }
-  EXPECT_EQ(reader_sound->control->readers_created.load(), 1);
-}
-
-TEST(sound_reader, ActiveLeaseSurvivesSoundRuntimeInvalidation)
-{
-  const std::shared_ptr<CountingSound> reader_sound = create_test_sound();
-  TestSoundWithReaderCache sound(reader_sound);
-  std::optional<SoundReaderLease> lease = sound_reader_acquire(sound.sound);
-  ASSERT_TRUE(lease);
-
-  sound.clear();
   EXPECT_TRUE(*lease);
-  EXPECT_EQ(reader_sound->control->live_readers.load(), 1);
 
   lease.reset();
-  EXPECT_EQ(reader_sound->control->live_readers.load(), 0);
+  EXPECT_EQ(sound->control->live_readers.load(), 0);
 }
-
-#  if defined(WITH_FFTW3)
-
-static float sample_at_time(const bSoundFrequencySampler &sampler, const float time)
-{
-  return sampler.sample(time,
-                        300.0f,
-                        6000.0f,
-                        bSoundFrequencySampler::InterpolationMethod::CatmullRom,
-                        bSoundFrequencySampler::InterpolationMethod::CatmullRom);
-}
-
-TEST(sound_sample, FrequencySamplingUsesReusableSoundReader)
-{
-  const std::shared_ptr<CountingSound> sound = create_test_sound();
-  const bSoundFrequencySampler::Key key = {
-      bSoundFrequencySampler::WindowFunction::Hann, 4096, std::nullopt};
-  bSoundFrequencySampler sampler(sound, key);
-  const float first = sample_at_time(sampler, 0.5f);
-  const float second = sample_at_time(sampler, 1.5f);
-  EXPECT_GT(first, 0.0f);
-  EXPECT_GT(second, 0.0f);
-  EXPECT_EQ(sound->control->readers_created.load(), 2);
-  EXPECT_GT(sound->control->reads.load(), 2);
-}
-
-#  endif
 
 }  // namespace blender::bke::tests
 

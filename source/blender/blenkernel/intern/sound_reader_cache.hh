@@ -9,50 +9,63 @@
 #  include <memory>
 #  include <optional>
 
-#  include "BKE_sound_reader.hh"
+#  include "BLI_utility_mixins.hh"
 
 namespace aud {
+class IReader;
 class ISound;
-}
+}  // namespace aud
 
 namespace blender::bke {
 
-class bSoundFrequencySampler;
-struct SoundReaderCacheTestAccess;
+struct SoundReaderCacheState;
 
-/**
- * Runtime-only reusable reader state owned by a #bSound runtime.
- *
- * Active readers belong
- * to leases, not the idle-reader vector.
- */
-class SoundReaderCache {
+class SoundReaderCache;
+
+/** Exclusive access to a sound reader. The reader returns to its cache on destruction. */
+class SoundReaderLease : NonCopyable {
  private:
-  struct Impl;
-  std::unique_ptr<Impl> impl_;
+  std::shared_ptr<SoundReaderCacheState> state_;
+  std::shared_ptr<aud::IReader> reader_;
 
-  explicit SoundReaderCache(std::shared_ptr<aud::ISound> sound);
-  static std::optional<SoundReaderLease> acquire(const std::shared_ptr<SoundReaderCache> &cache);
-  void release(std::shared_ptr<aud::IReader> reader) noexcept;
+  SoundReaderLease(std::shared_ptr<SoundReaderCacheState> state,
+                   std::shared_ptr<aud::IReader> reader);
+  void release() noexcept;
 
-  friend bSoundFrequencySampler;
-  friend SoundReaderLease;
-  friend SoundReaderCacheTestAccess;
-  friend std::optional<SoundReaderLease> sound_reader_acquire(const bSound &sound);
+  friend SoundReaderCache;
 
  public:
-  static std::shared_ptr<SoundReaderCache> create(std::shared_ptr<aud::ISound> sound);
-  ~SoundReaderCache();
+  SoundReaderLease() = default;
+  ~SoundReaderLease();
 
-  SoundReaderCache(const SoundReaderCache &) = delete;
-  SoundReaderCache &operator=(const SoundReaderCache &) = delete;
+  SoundReaderLease(SoundReaderLease &&other) noexcept;
+  SoundReaderLease &operator=(SoundReaderLease &&other) noexcept;
+
+  explicit operator bool() const;
+  aud::IReader *operator->() const;
+
+  /**
+   * Destroy the reader instead of returning it to the cache.
+   *
+   * This is used when a failed reader operation may have left its state invalid.
+   */
+  void discard() noexcept;
 };
 
-/** Internal access for focused reader-cache tests. */
-struct SoundReaderCacheTestAccess {
-  static std::optional<SoundReaderLease> acquire(const std::shared_ptr<SoundReaderCache> &cache);
-  static void initialize_sound(bSound &sound, std::shared_ptr<aud::ISound> reader_sound);
-  static void clear_sound(bSound &sound);
+/**
+ * Runtime-only reusable reader state associated with a #bSound runtime.
+ *
+ * Active readers belong to leases, not the idle-reader vector.
+ */
+class SoundReaderCache : NonCopyable {
+ private:
+  std::shared_ptr<SoundReaderCacheState> state_;
+
+ public:
+  explicit SoundReaderCache(std::shared_ptr<aud::ISound> sound);
+  ~SoundReaderCache();
+
+  std::optional<SoundReaderLease> acquire() const;
 };
 
 }  // namespace blender::bke

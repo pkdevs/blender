@@ -115,120 +115,6 @@ static void sound_init_runtime(bSound *sound);
 namespace bke {
 struct SceneAudioRuntime;
 
-#ifdef WITH_AUDASPACE
-
-struct SoundReaderCache::Impl {
-  static constexpr int max_idle_readers = 2;
-  std::shared_ptr<aud::ISound> sound;
-  Mutex mutex;
-  Vector<std::shared_ptr<aud::IReader>, max_idle_readers> idle_readers;
-};
-
-SoundReaderLease::SoundReaderLease(std::shared_ptr<SoundReaderCache> owner,
-                                   std::shared_ptr<aud::IReader> reader)
-    : owner_(std::move(owner)), reader_(std::move(reader))
-{
-}
-
-SoundReaderLease::~SoundReaderLease()
-{
-  this->release();
-}
-
-SoundReaderLease::SoundReaderLease(SoundReaderLease &&other) noexcept
-    : owner_(std::move(other.owner_)), reader_(std::move(other.reader_))
-{
-}
-
-SoundReaderLease &SoundReaderLease::operator=(SoundReaderLease &&other) noexcept
-{
-  if (this != &other) {
-    this->release();
-    owner_ = std::move(other.owner_);
-    reader_ = std::move(other.reader_);
-  }
-  return *this;
-}
-
-SoundReaderLease::operator bool() const
-{
-  return bool(reader_);
-}
-
-aud::IReader *SoundReaderLease::operator->() const
-{
-  return reader_.get();
-}
-
-void SoundReaderLease::discard() noexcept
-{
-  reader_.reset();
-  owner_.reset();
-}
-
-void SoundReaderLease::release() noexcept
-{
-  if (owner_) {
-    owner_->release(std::move(reader_));
-  }
-  reader_.reset();
-  owner_.reset();
-}
-
-SoundReaderCache::SoundReaderCache(std::shared_ptr<aud::ISound> sound)
-    : impl_(std::make_unique<Impl>())
-{
-  impl_->sound = std::move(sound);
-}
-
-std::shared_ptr<SoundReaderCache> SoundReaderCache::create(std::shared_ptr<aud::ISound> sound)
-{
-  return std::shared_ptr<SoundReaderCache>(new SoundReaderCache(std::move(sound)));
-}
-
-SoundReaderCache::~SoundReaderCache() = default;
-
-std::optional<SoundReaderLease> SoundReaderCache::acquire(
-    const std::shared_ptr<SoundReaderCache> &cache)
-{
-  std::shared_ptr<aud::IReader> reader;
-  {
-    std::lock_guard lock{cache->impl_->mutex};
-    if (!cache->impl_->idle_readers.is_empty()) {
-      reader = cache->impl_->idle_readers.pop_last();
-    }
-  }
-
-  if (!reader) {
-    reader = cache->impl_->sound->createReader();
-  }
-  if (!reader) {
-    return std::nullopt;
-  }
-  return SoundReaderLease(cache, std::move(reader));
-}
-
-void SoundReaderCache::release(std::shared_ptr<aud::IReader> reader) noexcept
-{
-  if (!reader) {
-    return;
-  }
-  {
-    std::lock_guard lock{impl_->mutex};
-    if (impl_->idle_readers.size() < Impl::max_idle_readers) {
-      impl_->idle_readers.append(std::move(reader));
-    }
-  }
-}
-
-std::optional<SoundReaderLease> SoundReaderCacheTestAccess::acquire(
-    const std::shared_ptr<SoundReaderCache> &cache)
-{
-  return SoundReaderCache::acquire(cache);
-}
-
-#endif
-
 enum class SoundTags {
   None = 0,
   /* Do not free/reset waveform on sound load, only used by undo code. */
@@ -254,40 +140,13 @@ struct SoundRuntime {
   Vector<float> *waveform = nullptr;
   SoundTags tags = SoundTags::None;
 
-  /** Caches frequency samplers for this sound. */
-  std::unique_ptr<bSoundFrequencySamplerMap> samplers =
-      std::make_unique<bSoundFrequencySamplerMap>();
+  /* #ConcurrentMap has no clear operation, so reconstruct it when the sound is reloaded. */
+  std::optional<bSoundFrequencySamplerMap> samplers{std::in_place};
 #ifdef WITH_AUDASPACE
   /** Reusable readers shared by all consumers of this sound. */
   std::shared_ptr<SoundReaderCache> readers;
 #endif
 };
-
-#ifdef WITH_AUDASPACE
-std::optional<SoundReaderLease> sound_reader_acquire(const bSound &sound)
-{
-  if (!sound.runtime || !sound.runtime->readers) {
-    return std::nullopt;
-  }
-  return SoundReaderCache::acquire(sound.runtime->readers);
-}
-
-void SoundReaderCacheTestAccess::initialize_sound(bSound &sound,
-                                                  std::shared_ptr<aud::ISound> reader_sound)
-{
-  BLI_assert(!sound.runtime);
-  sound_init_runtime(&sound);
-  sound.runtime->readers = SoundReaderCache::create(std::move(reader_sound));
-}
-
-void SoundReaderCacheTestAccess::clear_sound(bSound &sound)
-{
-  BLI_assert(sound.runtime);
-  BLI_spin_end(&sound.runtime->spinlock);
-  MEM_delete(sound.runtime);
-  sound.runtime = nullptr;
-}
-#endif
 
 }  // namespace bke
 
@@ -515,7 +374,7 @@ static void sound_free_audio(bSound *sound)
 {
 #ifdef WITH_AUDASPACE
   bke::SoundRuntime *runtime = sound->runtime;
-  runtime->samplers = std::make_unique<bke::bSoundFrequencySamplerMap>();
+  runtime->samplers.emplace();
   runtime->readers.reset();
   runtime->handle.reset();
   runtime->playback_handle.reset();
@@ -843,7 +702,7 @@ void BKE_sound_refresh_callback_bmain(Main *bmain)
 static void sound_load_audio(Main *bmain, bSound *sound, bool free_waveform)
 {
   bke::SoundRuntime *runtime = sound->runtime;
-  runtime->samplers = std::make_unique<bke::bSoundFrequencySamplerMap>();
+  runtime->samplers.emplace();
   runtime->readers.reset();
   runtime->cache.reset();
   runtime->handle.reset();
@@ -879,7 +738,7 @@ static void sound_load_audio(Main *bmain, bSound *sound, bool free_waveform)
     runtime->handle = AUD_Sound(new aud::ChannelMapper(runtime->handle, specs));
   }
 
-  runtime->readers = bke::SoundReaderCache::create(runtime->handle);
+  runtime->readers = std::make_shared<bke::SoundReaderCache>(runtime->handle);
 
   if (sound->flags & SOUND_FLAGS_CACHING) {
     try {
@@ -2309,6 +2168,9 @@ const bSoundFrequencySampler *bSoundFrequencySampler::get_cached(const bSound &s
                                                                  const Key &key)
 {
 #ifdef WITH_AUDASPACE
+  if (!sound.runtime) {
+    return nullptr;
+  }
   {
     /* Fast common case when the sampler has been created already. */
     bSoundFrequencySamplerMap::ConstAccessor accessor;
@@ -2341,6 +2203,7 @@ const bSoundFrequencySampler *bSoundFrequencySampler::get_cached(const bSound &s
 #endif
 }
 
+#ifdef WITH_AUDASPACE
 static bSoundFrequencySampler::WindowWeights compute_window_function_weights(
     const bSoundFrequencySampler::WindowFunction window, const int size)
 {
@@ -2388,25 +2251,17 @@ static const bSoundFrequencySampler::WindowWeights &get_window_function_weights(
         compute_window_function_weights(window, size));
   });
 }
+#endif
 
-bSoundFrequencySampler::bSoundFrequencySampler(AUD_Sound sound, const Key &key)
 #ifdef WITH_AUDASPACE
-    : bSoundFrequencySampler(sound, SoundReaderCache::create(sound), key)
-{
-}
-
 bSoundFrequencySampler::bSoundFrequencySampler(AUD_Sound sound,
                                                std::shared_ptr<SoundReaderCache> readers,
                                                const Key &key)
-#endif
     : sound_(sound),
       key_(key),
-#ifdef WITH_AUDASPACE
       readers_(std::move(readers)),
-#endif
       window_weights_(get_window_function_weights(key.window_function, key.fft_size))
 {
-#ifdef WITH_AUDASPACE
   const SoundInfo info = bke::sound_info_get(sound_);
   samples_per_second_ = info.specs.samplerate;
   /* This could be a parameter but a single fixed value seems fine for now and makes caching much
@@ -2415,11 +2270,8 @@ bSoundFrequencySampler::bSoundFrequencySampler(AUD_Sound sound,
   const int window_caches_num = std::ceil(info.length * info.specs.samplerate /
                                           window_cache_stride_);
   window_caches_.reinitialize(window_caches_num);
-#else
-  UNUSED_VARS(sound, key);
-  BLI_assert_unreachable();
-#endif
 }
+#endif
 
 std::optional<Array<float>> bSoundFrequencySampler::compute_fft(const int start_sample) const
 {
@@ -2440,7 +2292,7 @@ std::optional<Array<float>> bSoundFrequencySampler::compute_fft(const int start_
     if (!readers_) {
       return std::nullopt;
     }
-    std::optional<SoundReaderLease> reader_lease = SoundReaderCache::acquire(readers_);
+    std::optional<SoundReaderLease> reader_lease = readers_->acquire();
     if (!reader_lease) {
       return std::nullopt;
     }

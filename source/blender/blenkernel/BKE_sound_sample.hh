@@ -15,7 +15,9 @@
 
 namespace blender::bke {
 
+#if defined(WITH_AUDASPACE)
 class SoundReaderCache;
+#endif
 
 /**
  * This class allows efficiently sampling an arbitrary frequency range at an arbitrary point in
@@ -98,17 +100,12 @@ class bSoundFrequencySampler {
   int window_cache_stride_;
   Array<WindowCache> window_caches_;
 
+#if defined(WITH_AUDASPACE)
   /** Cached weights of the selected window function. */
   const WindowWeights &window_weights_;
+#endif
 
  public:
-  /**
-   * Construct a standalone sampler with its own reusable reader cache.
-   * For a #bSound,
-   * prefer #get_cached so consumers share its runtime cache.
-   */
-  bSoundFrequencySampler(AUD_Sound sound, const Key &key);
-
   /** Access a reusable frequency sampler for the given sound.  */
   static const bSoundFrequencySampler *get_cached(const bSound &sound, const Key &key);
 
@@ -121,7 +118,7 @@ class bSoundFrequencySampler {
 
  private:
 #if defined(WITH_AUDASPACE)
-  /** Construct a cached sampler sharing the reader cache owned by its #bSound runtime. */
+  /** Construct a sampler sharing the reader cache owned by its #bSound runtime. */
   bSoundFrequencySampler(AUD_Sound sound,
                          std::shared_ptr<SoundReaderCache> readers,
                          const Key &key);
