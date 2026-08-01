@@ -28,7 +28,6 @@
 
 #include <algorithm>
 #include <cmath>
-#include <ctime>
 
 namespace blender {
 
@@ -208,7 +207,7 @@ class TextureMarginMap {
           for (int i = 0; i < 4; i++) {
             int xx = x - directions[i][0];
             int yy = y - directions[i][1];
-            
+
             if (xx >= 0 && xx < w_ && yy >= 0 && yy < h_ && !IsDijkstraPixel(get_pixel(xx, yy))) {
               set_pixel(x, y, PackDijkstraPixel(distances[i], i));
               active_pixels.append(DijkstraActivePixel(distances[i], x, y));
@@ -303,7 +302,7 @@ class TextureMarginMap {
           if (prev_corner_a >= 0) {
             corner_adjacency_[prev_corner_a] = -1;
           }
-          
+
           corner_adjacency_[corner_a1] = corner_b1;
           corner_adjacency_[corner_b1] = corner_a1;
 
@@ -358,7 +357,7 @@ class TextureMarginMap {
           }
 
           BLI_assert(!IsDijkstraPixel(start_face));
-          
+
           inside_face = false;
         }
 
@@ -385,7 +384,7 @@ class TextureMarginMap {
         }
 
         const float weight = std::clamp(src_edge_perp_signed_dist + 0.5f, 0.0f, 1.0f);
-        
+
         if (weight <= 0 && inside_face) {
           /* We can skip all subsequent calculations. */
           continue;
@@ -438,7 +437,7 @@ class TextureMarginMap {
           continue;
         }
 
-        /* -0.5 offset is applied to the sampling position to get 
+        /* -0.5 offset is applied to the sampling position to get
          * texture interpolation between texel centers. */
         if (ibuf_ptr_fl) {
           float4 inside_col = imbuf::interpolate_bilinear_fl(
@@ -463,9 +462,9 @@ class TextureMarginMap {
       }
     }
   }
-  
+
   /**
-   * Restores ibuf pixels outside the margin using pixels from the im_read. 
+   * Restores ibuf pixels outside the margin using pixels from the im_read.
    */
   void restore_outside_pixels(ImBuf *ibuf, ImBuf *im_read) const
   {
@@ -479,7 +478,7 @@ class TextureMarginMap {
 
     for (size_t pixel_index = 0; pixel_index < pixels_num; pixel_index++) {
       const uint32_t pixel = pixel_data_[pixel_index];
-      
+
       if (!DijkstraPixelIsUnset(pixel)) {
         continue;
       }
@@ -543,11 +542,11 @@ class TextureMarginMap {
 
       const int adjacent_corner = corner_adjacency_[corner_1];
       const bool has_adjacent_face = adjacent_corner >= 0;
-      
+
       if (has_adjacent_face && corner_to_face_[adjacent_corner] == prev_face) {
         continue;
       }
-      
+
       is_valid &= has_adjacent_face;
 
       /* Only non-seam edges disconnected in UV space should be
@@ -629,8 +628,8 @@ class TextureMarginMap {
     /* The new point is `found_sd * length(other_ab) / length(ab)` units
      * away from the `projected_point` at a 90 degree angle to other_ab */
     const float2 new_point = projected_point +
-                             math::safe_divide(found_perp_signed_dist, found_ablen) * 
-                             perpendicular_other_ab;
+                             math::safe_divide(found_perp_signed_dist, found_ablen) *
+                                 perpendicular_other_ab;
 
     *r_dst_point = new_point;
     *r_src_edge_perp_signed_dist = found_perp_signed_dist;
@@ -653,7 +652,6 @@ void RE_generate_texturemargin_adjacentfaces(ImBuf *ibuf,
                                              const float uv_offset[2],
                                              const bool conservative)
 {
-  clock_t start = clock();
   /* Initialize TextureMarginMap with all necessary mesh attributes. */
   const StringRef name = uv_layer.is_empty() ? mesh->active_uv_map_name() : uv_layer;
   const bke::AttributeAccessor attributes = mesh->attributes();
@@ -680,27 +678,20 @@ void RE_generate_texturemargin_adjacentfaces(ImBuf *ibuf,
     mask = MEM_new_array_zeroed<char>(size_t(ibuf->x) * size_t(ibuf->y), __func__);
     draw_new_mask = true;
   }
-  
-  clock_t raster_start = clock();
 
   map.rasterize_tris(mask, draw_new_mask, mesh->vert_positions(), conservative);
-  clock_t dijkstra_start = clock();
   map.grow_dijkstra(margin);
 
   /* Extend (with averaging). */
-  clock_t extend_start = clock();
   char *tmpmask = MEM_dupalloc(mask);
   IMB_filter_extend(ibuf, tmpmask, margin);
   MEM_delete(tmpmask);
-  
+
   ImBuf *im_read = IMB_dupImBuf(ibuf);
 
-  clock_t tables_build_start = clock();
   map.build_tables(mesh->edges_num);
-  clock_t lookup_start = clock();
   /* Looking further than 3 faces is usually not worth it for texture margin. */
   map.lookup_pixels(ibuf, im_read, 3);
-  clock_t finalize_start = clock();
 
   /* Extend around original pixels and pixels blended with adjacent faces. */
   IMB_filter_extend(ibuf, mask, margin);
@@ -710,17 +701,6 @@ void RE_generate_texturemargin_adjacentfaces(ImBuf *ibuf,
 
   IMB_freeImBuf(im_read);
   MEM_delete(mask);
-  
-  clock_t end_time = clock();
-
-  printf("INIT  Time: %f sec\n", float(raster_start - start) / CLOCKS_PER_SEC);
-  printf("RASRT Time: %f sec\n", float(dijkstra_start - raster_start) / CLOCKS_PER_SEC);
-  printf("DIJKS Time: %f sec\n", float(extend_start - dijkstra_start) / CLOCKS_PER_SEC);
-  printf("EXTEN Time: %f sec\n", float(tables_build_start - extend_start) / CLOCKS_PER_SEC);
-  printf("BTABL Time: %f sec\n", float(lookup_start - tables_build_start) / CLOCKS_PER_SEC);
-  printf("LOOKU Time: %f sec\n", float(finalize_start - lookup_start) / CLOCKS_PER_SEC);
-  printf("FINAL Time: %f sec\n", float(end_time - finalize_start) / CLOCKS_PER_SEC);
-  printf("\nFULL  Time: %f sec\n", float(end_time - start) / CLOCKS_PER_SEC);
 }
 
 }  // namespace blender
