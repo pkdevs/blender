@@ -2553,7 +2553,7 @@ static void rna_def_object_constraints(BlenderRNA *brna, PropertyRNA *cprop)
                            "indices",
                            1,
                            nullptr,
-                           0,
+                           INT_MIN,
                            INT_MAX,
                            "Indices",
                            "The indices of the constraints to remove",
