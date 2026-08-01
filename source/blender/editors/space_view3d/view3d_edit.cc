@@ -18,6 +18,7 @@
 #include "BLI_math_geom_c.hh"
 #include "BLI_math_matrix.hh"
 #include "BLI_math_matrix_c.hh"
+#include "BLI_math_quaternion.hh"
 #include "BLI_math_rotation_c.hh"
 #include "BLI_math_vector_c.hh"
 #include "BLI_rect.hh"
@@ -495,6 +496,89 @@ void VIEW3D_OT_zoom_camera_1_to_1(wmOperatorType *ot)
 
   /* flags */
   ot->flag = 0;
+}
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Set View Roll Operator
+ *
+ * Sets the roll of the view to an angle.
+ * \{ */
+
+static void view3d_set_view_angle(ARegion *region, View3D *v3d, const float angle)
+{
+  RegionView3D *rv3d = static_cast<RegionView3D *>(region->regiondata);
+
+  if (rv3d->persp == RV3D_CAMOB) {
+    const bool is_camera_lock = ED_view3d_camera_lock_check(v3d, rv3d);
+    if (!is_camera_lock) {
+      rv3d->camroll = angle_wrap_rad(angle);
+      return;
+    }
+  }
+
+  const float3 up_axis = float3(0.0f, 0.0f, 1.0f);
+  const float3 cam_up_axis = float3(rv3d->viewinv[1]);
+  const float3 cam_pivot_axis = float3(rv3d->viewinv[2]);
+
+  float3 alignment_vector = float3(0.0f, 0.0f, 1.0f);
+
+  /* Use the Positive Y-Axis when on the top view.*/
+  if (math::distance(cam_pivot_axis, alignment_vector) < 0.0001f) {
+    alignment_vector = float3(0.0f, 1.0f, 0.0f);
+  }
+
+  /* Use the negative Y-Axis when on the bottom view. */
+  if (math::distance(cam_pivot_axis, -alignment_vector) < 0.0001f) {
+    alignment_vector = float3(0.0f, -1.0f, 0.0f);
+  }
+
+  const float offset_angle = angle - angle_signed_on_axis_v3v3_v3(
+                                         alignment_vector, cam_up_axis, cam_pivot_axis);
+
+  const math::AxisAngle axis_angle = math::AxisAngle(up_axis, offset_angle);
+  copy_qt_qt(rv3d->viewquat, math::to_quaternion(axis_angle) * math::Quaternion(rv3d->viewquat));
+}
+
+static wmOperatorStatus view3d_set_roll_exec(bContext *C, wmOperator *op)
+{
+  View3D *v3d;
+  ARegion *region;
+
+  float angle = RNA_float_get(op->ptr, "angle");
+
+  /* no nullptr check is needed, poll checks */
+  ED_view3d_context_user_region(C, &v3d, &region);
+  ED_view3d_smooth_view_force_finish(C, v3d, region);
+
+  view3d_set_view_angle(region, v3d, angle);
+
+  WM_event_add_notifier(C, NC_SPACE | ND_SPACE_VIEW3D, v3d);
+
+  return OPERATOR_FINISHED;
+}
+
+void VIEW3D_OT_view_roll_set(wmOperatorType *ot)
+{
+  PropertyRNA *prop;
+
+  /* identifiers */
+  ot->name = "Set Roll";
+  ot->description = "Set the view roll angle";
+  ot->idname = "VIEW3D_OT_view_roll_set";
+
+  /* API callbacks. */
+  ot->exec = view3d_set_roll_exec;
+  ot->poll = ED_operator_rv3d_user_region_poll;
+
+  /* flags */
+  ot->flag = 0;
+
+  /* properties */
+  ot->prop = prop = RNA_def_float(
+      ot->srna, "angle", 0, -FLT_MAX, FLT_MAX, "Roll", "", -FLT_MAX, FLT_MAX);
+  RNA_def_property_flag(prop, PROP_SKIP_SAVE);
 }
 
 /** \} */
