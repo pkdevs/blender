@@ -117,7 +117,7 @@ static void freeSeqData(TransInfo *t, TransDataContainer *tc, TransCustomData *c
     transformed_strips.add(strip);
   }
 
-  seq::iterator_set_expand(ed, transformed_strips, seq::query_strip_direct_effect_chain);
+  seq::expand_strips(ed, transformed_strips, seq::StripRelation::Effects);
 
   VectorSet<Strip *> dependant;
   dependant.add_multiple(transformed_strips);
@@ -312,7 +312,7 @@ static void recalcData_sequencer_retiming(TransInfo *t)
   Editing *ed = seq::editing_get(t->scene);
   ListBaseT<Strip> *seqbase = seq::active_seqbase_get(ed);
 
-  seq::iterator_set_expand(ed, transformed_strips, seq::query_strip_direct_effect_chain);
+  seq::expand_strips(ed, transformed_strips, seq::StripRelation::Effects);
   seq::transform_set_overlap_flags(t->scene, seqbase, transformed_strips);
 }
 
