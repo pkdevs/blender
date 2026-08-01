@@ -423,14 +423,12 @@ class TextureMarginMap {
 
           /* Look up again, but starting from the face we were expected to land in. */
           prev_face = dst_face;
-          float tmp_edge_sd;
-
           found_edge = lookup_pixel(dst_point,
                                     prev_face,
                                     dst_face,
                                     &dst_point,
                                     &dst_face,
-                                    &tmp_edge_sd,
+                                    &src_edge_perp_signed_dist,
                                     &point_on_src_edge,
                                     &point_on_dst_edge);
 
@@ -545,7 +543,13 @@ class TextureMarginMap {
     for (const int corner_1 : faces_[src_face]) {
       bool is_valid = true;
 
-      const bool has_adjacent_face = corner_adjacency_[corner_1] >= 0;
+      const int adjacent_corner = corner_adjacency_[corner_1];
+      const bool has_adjacent_face = adjacent_corner >= 0;
+      
+      if (has_adjacent_face && corner_to_face_[adjacent_corner] == prev_face) {
+        continue;
+      }
+      
       is_valid &= has_adjacent_face;
 
       /* Only non-seam edges disconnected in UV space should be
