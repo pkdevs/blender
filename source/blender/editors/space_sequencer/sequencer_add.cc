@@ -1977,6 +1977,20 @@ static wmOperatorStatus sequencer_add_effect_strip_exec(bContext *C, wmOperator 
       BKE_report(op->reports, RPT_ERROR, "Cannot add transitions on other transitions");
       return OPERATOR_CANCELLED;
     }
+    const Strip *left_adjacent_transition = seq::get_transition_on_side(
+        ed, inputs[0], seq::Side::Left);
+    const Strip *right_adjacent_transition = seq::get_transition_on_side(
+        ed, inputs[1], seq::Side::Right);
+    const bool no_space_on_left = left_adjacent_transition &&
+                                  left_adjacent_transition->right_handle(scene) >
+                                      inputs[0]->right_handle(scene) - 1;
+    const bool no_space_on_right = right_adjacent_transition &&
+                                   right_adjacent_transition->left_handle() <
+                                       inputs[1]->left_handle() + 1;
+    if (no_space_on_left || no_space_on_right) {
+      BKE_report(op->reports, RPT_ERROR, "Not enough space for transition");
+      return OPERATOR_CANCELLED;
+    }
   }
 
   seq::LoadData load_data;

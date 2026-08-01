@@ -500,6 +500,7 @@ static Strip *rna_Strips_new_effect(ID *id,
                                     Strip *input2)
 {
   Scene *scene = id_cast<Scene *>(id);
+  Editing *ed = seq::editing_get(scene);
 
   const int min_inputs = blender::seq::effect_type_get_min_num_inputs(StripType(type));
   const bool compositor_with_inputs = type == STRIP_TYPE_COMPOSITOR && input1 != nullptr;
@@ -556,6 +557,20 @@ static Strip *rna_Strips_new_effect(ID *id,
     if (input1->is_same_channel_transition() || input2->is_same_channel_transition()) {
       BKE_report(
           reports, RPT_ERROR, "Strips.new_effect: cannot add transitions on other transitions");
+      return nullptr;
+    }
+    const Strip *left_adjacent_transition = seq::get_transition_on_side(
+        ed, input1, seq::Side::Left);
+    const Strip *right_adjacent_transition = seq::get_transition_on_side(
+        ed, input2, seq::Side::Right);
+    const bool no_space_on_left = left_adjacent_transition &&
+                                  left_adjacent_transition->right_handle(scene) >
+                                      input1->right_handle(scene) - 1;
+    const bool no_space_on_right = right_adjacent_transition &&
+                                   right_adjacent_transition->left_handle() <
+                                       input2->left_handle() + 1;
+    if (no_space_on_left || no_space_on_right) {
+      BKE_report(reports, RPT_ERROR, "Strips.new_effect: not enough space for transition");
       return nullptr;
     }
   }
