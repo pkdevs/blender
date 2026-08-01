@@ -461,6 +461,18 @@ static void query_time_dependent_strips_strips(TransInfo *t,
   });
 }
 
+static bool cutpoint_moves(Strip *left_strip, Strip *right_strip)
+{
+  auto valid_selection{[](const Strip *strip, eStripFlag valid_selection_side) -> bool {
+    const bool left = flag_is_set(strip->flag, SEQ_LEFTSEL);
+    const bool right = flag_is_set(strip->flag, SEQ_RIGHTSEL);
+    const bool select = flag_is_set(strip->flag, SEQ_SELECT);
+    const bool invalid_only_side = valid_selection_side == SEQ_LEFTSEL ? right : left;
+    return (left && right) || (select && !invalid_only_side);
+  }};
+  return valid_selection(left_strip, SEQ_RIGHTSEL) && valid_selection(right_strip, SEQ_LEFTSEL);
+}
+
 static bool create_non_transition_clamp_data(TransInfo *t, const Scene *scene, Strip *strip)
 {
   Editing *ed = seq::editing_get(scene);
@@ -502,10 +514,13 @@ static bool create_non_transition_clamp_data(TransInfo *t, const Scene *scene, S
         const int offset = strip->right_handle(scene) - left_transition->right_handle(scene);
         ts->soft_clamp_max = min_ii(ts->soft_clamp_max, offset);
 
-        /* Prevent the transition from overlapping the adjacent transition. */
+        /* Prevent the transition from overlapping the adjacent transition. Don't clamp if the
+         * adjacent transition is also moved. */
         Strip *left_adjacent_transition = seq::get_transition_on_side(
             ed, left_transition->input1, seq::Side::Left);
-        if (left_adjacent_transition) {
+        if (left_adjacent_transition &&
+            !cutpoint_moves(left_adjacent_transition->input1, left_adjacent_transition->input2))
+        {
           const int adjacent_offset = left_adjacent_transition->right_handle(scene) -
                                       left_transition->left_handle();
           ts->hard_clamp.xmin = max_ii(ts->hard_clamp.xmin, adjacent_offset);
@@ -530,10 +545,13 @@ static bool create_non_transition_clamp_data(TransInfo *t, const Scene *scene, S
         const int offset = strip->left_handle() - right_transition->left_handle();
         ts->soft_clamp_min = max_ii(ts->soft_clamp_min, offset);
 
-        /* Prevent the transition from overlapping the adjacent transition. */
+        /* Prevent the transition from overlapping the adjacent transition. Don't clamp if the
+         * adjacent transition is also moved. */
         Strip *right_adjacent_transition = seq::get_transition_on_side(
             ed, right_transition->input2, seq::Side::Right);
-        if (right_adjacent_transition) {
+        if (right_adjacent_transition &&
+            !cutpoint_moves(right_adjacent_transition->input1, right_adjacent_transition->input2))
+        {
           const int adjacent_offset = right_adjacent_transition->left_handle() -
                                       right_transition->right_handle(scene);
           ts->hard_clamp.xmax = min_ii(ts->hard_clamp.xmax, adjacent_offset);
@@ -952,24 +970,6 @@ static void flush_transition_transforms(TransInfo *t,
   }
 }
 
-static Strip *get_adjacent_selection_transition(Editing *ed, const Strip *strip)
-{
-  auto valid_selection{[](const Strip *strip, eStripFlag valid_selection_side) -> bool {
-    const bool left = flag_is_set(strip->flag, SEQ_LEFTSEL);
-    const bool right = flag_is_set(strip->flag, SEQ_RIGHTSEL);
-    const bool select = flag_is_set(strip->flag, SEQ_SELECT);
-    const bool invalid_only_side = valid_selection_side == SEQ_LEFTSEL ? right : left;
-    return (left && right) || (select && !invalid_only_side);
-  }};
-  Strip *right_transition = seq::get_transition_on_side(ed, strip, seq::Side::Right);
-  if (right_transition && (valid_selection(right_transition->input1, SEQ_RIGHTSEL) &&
-                           valid_selection(right_transition->input2, SEQ_LEFTSEL)))
-  {
-    return right_transition;
-  }
-  return nullptr;
-}
-
 /* Flushes the translation and channel updates. Possible updates to the handle locations are
  * returned and handled outside this function. This is to avoid unexpected handle clamping when
  * both handles are selected and the `new_frame` is right of the old one. See #126191. */
@@ -1021,12 +1021,13 @@ static void flush_strip_transforms(TransInfo *t,
     }
   }
 
-  /* Move attached transitions with the strips if both transition inputs are selected. */
+  /* Move attached transitions with the strips if both transition inputs are selected. Only do it
+   * for the right transition to avoid moving it twice. */
   Editing *ed = seq::editing_get(scene);
-  Strip *transition = get_adjacent_selection_transition(ed, strip);
-  if (transition) {
-    seq::transform_translate_strip(scene, transition, transition_delta_x);
-    transition->channel_set(new_channel);
+  Strip *right_transition = seq::get_transition_on_side(ed, strip, seq::Side::Right);
+  if (right_transition && cutpoint_moves(right_transition->input1, right_transition->input2)) {
+    seq::transform_translate_strip(scene, right_transition, transition_delta_x);
+    right_transition->channel_set(new_channel);
   }
 }
 
