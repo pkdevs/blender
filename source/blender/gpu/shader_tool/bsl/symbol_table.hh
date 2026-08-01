@@ -53,16 +53,15 @@ struct SymbolTable {
 
   static constexpr string err_symbol = "ERROR_SYMBOL";
 
-  /* TODO(fclem): Real memory arena. */
   template<typename T> struct Allocator {
    private:
-    vector<unique_ptr<T>> arena;
+    std::deque<T> arena;
 
    public:
     template<typename... Args> T *alloc(Args &&...args)
     {
-      arena.emplace_back(std::make_unique<T>(std::forward<Args>(args)...));
-      return arena.back().get();
+      arena.emplace_back(std::forward<Args>(args)...);
+      return &arena.back();
     }
   };
 
