@@ -575,35 +575,29 @@ class BONE_PT_custom_props(BoneButtonsPanel, rna_prop_ui.PropertyPanel, Panel):
 
     @classmethod
     def _get_context_path(self, context):
-        if context.mode == 'EDIT_ARMATURE':
-            # This also accounts for pinned armatures.
-            return "edit_bone"
-
         obj = context.object
         if not obj:
             # We have to return _something_. If there is some bone by some
             # miracle, just use it.
             return "bone"
 
+        if obj.type == 'ARMATURE' and obj.mode == 'EDIT':
+            # Test the object itself rather than context.mode: context.mode
+            # is derived from the view-layer edit object and ignores the
+            # pinned bone's object, while context.object follows the pin.
+            # context.edit_bone respects pin_bone_name and falls back to act_edbone when unpinned.
+            return "edit_bone"
+
         if obj.mode != 'POSE':
-            # Outside of pose mode, active_bone is the one to use. It's either a
-            # Bone or an EditBone, depending on the mode.
-            return "active_bone"
+            # context.bone respects pin_bone_name and falls back to act_bone when unpinned.
+            return "bone"
 
-        if context.active_pose_bone is not None:
-            # There is an active pose bone, so use it.
-            return "active_pose_bone"
-
-        # When the active bone is hidden, `context.active_pose_bone` is None, but
-        # `context.bone` still points to it. Use that to still get the pose bone.
-        if context.bone is None:
-            # If there is no active bone, let the rest of the code refer to the
-            # also-None active pose bone, as that's more appropriate given we're
-            # currently in pose mode.
-            return "active_pose_bone"
-
-        bone_path = obj.pose.bones[context.bone.name].path_from_id()
-        return "object." + bone_path
+        # In Pose Mode, use context.bone to find the PoseBone rather than
+        # context.pose_bone: the Bone tab's path only contains Bone/EditBone
+        # data, so context.pose_bone is always None here.
+        if context.bone is not None:
+            bone_path = obj.pose.bones[context.bone.name].path_from_id()
+            return "object." + bone_path
 
 
 classes = (
