@@ -45,6 +45,15 @@ struct TransDataSeq {
 
 }  // namespace
 
+static bool retiming_moves_handle(const Scene *scene, Strip *strip, seq::Side handle_side)
+{
+  const int frame = handle_side == seq::Side::Left ? strip->left_handle() :
+                                                     strip->right_handle(scene);
+  SeqRetimingKey *key = seq::retiming_key_get_by_frame(scene, strip, frame);
+  return key && flag_is_set(key->flag, SEQ_KEY_SELECTED) &&
+         !seq::retiming_key_is_transition_type(key);
+}
+
 static TransData *SeqToTransData(const Scene *scene,
                                  Strip *strip,
                                  const SeqRetimingKey *key,
@@ -74,15 +83,8 @@ static TransData *SeqToTransData(const Scene *scene,
   if (key_moves_right_handle) {
     Strip *transition = seq::get_transition_on_side(
         seq::editing_get(scene), strip, seq::Side::Right);
-    if (transition) {
-      SeqRetimingKey *right_input_key = seq::retiming_key_get_by_frame(
-          scene, transition->input2, tdseq->orig_timeline_frame);
-      const bool key_moves_left_handle = right_input_key &&
-                                         flag_is_set(right_input_key->flag, SEQ_KEY_SELECTED) &&
-                                         !seq::retiming_key_is_transition_type(right_input_key);
-      if (key_moves_left_handle) {
-        tdseq->attached_transition = transition;
-      }
+    if (transition && retiming_moves_handle(scene, transition->input2, seq::Side::Left)) {
+      tdseq->attached_transition = transition;
     }
   }
 
@@ -136,7 +138,7 @@ static void freeSeqData(TransInfo *t, TransDataContainer *tc, TransCustomData *c
 
 static void create_trans_seq_clamp_data(TransInfo *t, const Scene *scene)
 {
-  const Editing *ed = seq::editing_get(scene);
+  Editing *ed = seq::editing_get(scene);
 
   const TransDataContainer *tc = TRANS_DATA_CONTAINER_FIRST_SINGLE(t);
   TransSeq *ts = static_cast<TransSeq *>(tc->custom.type.data);
@@ -154,14 +156,41 @@ static void create_trans_seq_clamp_data(TransInfo *t, const Scene *scene)
     const MutableSpan keys = seq::retiming_keys_get(strip);
     SeqRetimingKey *key = &keys[tdseq->key_index];
 
-    /* Transitions are moved when retiming keys for the same frame are selected in adjacent strips.
-     * If this is the case, soft clamp the transition inside input strip bounds. */
+    /* Transitions are moved when retiming keys for the same frame are selected in adjacent strips
+     * (which causes the adjacent strip handles to move). If this is the case, soft clamp the
+     * transition inside input strip bounds. */
     const Strip *transition = tdseq->attached_transition;
     if (transition) {
-      int min_offset = transition->input1->left_handle() - transition->left_handle();
-      int max_offset = transition->input2->right_handle(scene) - transition->right_handle(scene);
+      const int min_offset = transition->input1->left_handle() - transition->left_handle();
+      const int max_offset = transition->input2->right_handle(scene) -
+                             transition->right_handle(scene);
       ts->soft_clamp_min = max_ii(ts->soft_clamp_min, min_offset);
       ts->soft_clamp_max = min_ii(ts->soft_clamp_max, max_offset);
+
+      /* Prevent the transition from overlapping adjacent transitions. Clamping is done as long as
+       * the adjacent transition isn't also moved. */
+      Strip *left_adjacent_transition = seq::get_transition_on_side(
+          ed, transition->input1, seq::Side::Left);
+      Strip *right_adjacent_transition = seq::get_transition_on_side(
+          ed, transition->input2, seq::Side::Right);
+      if (left_adjacent_transition) {
+        const int adjacent_offset = left_adjacent_transition->right_handle(scene) -
+                                    transition->left_handle();
+        if (!(retiming_moves_handle(scene, left_adjacent_transition->input1, seq::Side::Right) &&
+              retiming_moves_handle(scene, left_adjacent_transition->input2, seq::Side::Left)))
+        {
+          ts->hard_clamp.xmin = max_ii(ts->hard_clamp.xmin, adjacent_offset);
+        }
+      }
+      if (right_adjacent_transition) {
+        const int adjacent_offset = right_adjacent_transition->left_handle() -
+                                    transition->right_handle(scene);
+        if (!(retiming_moves_handle(scene, right_adjacent_transition->input1, seq::Side::Right) &&
+              retiming_moves_handle(scene, right_adjacent_transition->input2, seq::Side::Left)))
+        {
+          ts->hard_clamp.xmax = min_ii(ts->hard_clamp.xmax, adjacent_offset);
+        }
+      }
     }
 
     /* Transition retiming key. */
