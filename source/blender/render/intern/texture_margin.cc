@@ -33,7 +33,7 @@
 namespace blender {
 
 /**
- * The map class contains both a pixel map which maps out face indices for all UV-polygons and
+ * The map class contains both a pixel map which maps out face indices for all UV-faces and
  * adjacency tables.
  */
 class TextureMarginMap {
@@ -190,7 +190,7 @@ class TextureMarginMap {
 #define DijkstraPixelIsUnset(dp) ((dp) == 0xFFFFFFFF)
 
   /**
-   * Use dijkstra's algorithm to 'grow' a border around the polygons marked in the map.
+   * Use dijkstra's algorithm to 'grow' a border around the faces marked in the map.
    * For each pixel mark which direction is the shortest way to a face.
    */
   void grow_dijkstra(int margin)
@@ -212,12 +212,13 @@ class TextureMarginMap {
           for (int i = 0; i < 4; i++) {
             int xx = x - directions[i][0];
             int yy = y - directions[i][1];
-
+            
             if (xx >= 0 && xx < w_ && yy >= 0 && yy < h_ && !IsDijkstraPixel(get_pixel(xx, yy))) {
               set_pixel(x, y, PackDijkstraPixel(distances[i], i));
               active_pixels.append(DijkstraActivePixel(distances[i], x, y));
 
-              /* All distances are the same so we can pick any valid direction. */
+              /* All distances are the same so we can pick any valid direction.
+               * We can also skip `distance <= margin` test as all distances are 1. */
               break;
             }
           }
@@ -338,65 +339,35 @@ class TextureMarginMap {
 
     for (int y = 0; y < h_; y++) {
       for (int x = 0; x < w_; x++, pixel_index++) {
-        uint32_t dp = pixel_data_[pixel_index];
+        uint32_t start_face = pixel_data_[pixel_index];
+        bool inside_face = true;
 
-        int xx = x, yy = y;
-        bool inside_face = false;
-
-        if (IsDijkstraPixel(dp)) {
+        if (IsDijkstraPixel(start_face)) {
           /* Margin pixel */
-          if (DijkstraPixelIsUnset(dp)) {
+          if (DijkstraPixelIsUnset(start_face)) {
             continue;
           }
 
-          int dist = DijkstraPixelGetDistance(dp);
-          int direction = DijkstraPixelGetDirection(dp);
+          int xx = x, yy = y;
+          int dist = DijkstraPixelGetDistance(start_face);
+          int direction = DijkstraPixelGetDirection(start_face);
 
           /* Follow the dijkstra directions to find the face this margin pixels belongs to. */
           while (dist > 0) {
             xx -= directions[direction][0];
             yy -= directions[direction][1];
-            dp = get_pixel(xx, yy);
+            start_face = get_pixel(xx, yy);
             dist -= distances[direction];
-            BLI_assert(!dist || (dist == DijkstraPixelGetDistance(dp)));
-            direction = DijkstraPixelGetDirection(dp);
+            BLI_assert(!dist || (dist == DijkstraPixelGetDistance(start_face)));
+            direction = DijkstraPixelGetDirection(start_face);
           }
 
-          BLI_assert(!IsDijkstraPixel(start_poly));
-        }
-        else {
-          /* Face pixel */
-          /* Process face pixels only close to empty pixels to improve performance a bit. */
-          bool found_empty = false;
-
-          for (int step_y = -2; step_y <= 2; step_y++) {
-            for (int step_x = -2; step_x <= 2; step_x++) {
-              if (step_x == 0 && step_y == 0) {
-                continue;
-              }
-
-              const int tmp_x = x + step_x;
-              const int tmp_y = y + step_y;
-
-              if (tmp_x < 0 || tmp_x >= w_ || tmp_y < 0 || tmp_y >= h_) {
-                continue;
-              }
-
-              if (IsDijkstraPixel(get_pixel(x + step_x, y + step_y))) {
-                found_empty = true;
-                break;
-              }
-            }
-          }
-
-          if (!found_empty) {
-            continue;
-          }
-
-          inside_face = true;
+          BLI_assert(!IsDijkstraPixel(start_face));
+          
+          inside_face = false;
         }
 
-        const uint32_t start_face = get_pixel(xx, yy);
+        /* Use texel center as the source point. */
         float2 src_point = float2(x, y) + 0.5f;
 
         int prev_face = -1;
@@ -418,6 +389,12 @@ class TextureMarginMap {
           continue;
         }
 
+        const float weight = std::clamp(src_edge_perp_signed_dist + 0.5f, 0.0f, 1.0f);
+        
+        if (weight <= 0 && inside_face) {
+          continue;
+        }
+
         /* Project source or destination point on an edge based on edge signed distance. */
         if (src_edge_perp_signed_dist > 0) {
           src_point = point_on_src_edge;
@@ -426,7 +403,7 @@ class TextureMarginMap {
           dst_point = point_on_dst_edge;
         }
 
-        bool found_pixel_in_polygon = true;
+        bool found_pixel_in_face = false;
 
         for (int i = 0; i < maxFaceSteps; i++) {
           /* If at least one pixel in interpolation range contains target face
@@ -440,6 +417,7 @@ class TextureMarginMap {
           if (get_pixel(nx, ny) == dst_face || get_pixel(nx + 1, ny) == dst_face ||
               get_pixel(nx, ny + 1) == dst_face || get_pixel(nx + 1, ny + 1) == dst_face)
           {
+            found_pixel_in_face = true;
             break;
           }
 
@@ -456,28 +434,25 @@ class TextureMarginMap {
                                     &point_on_src_edge,
                                     &point_on_dst_edge);
 
-          /* Selected edge does not have adjacent face, so clamp
-           * destination point inside previous face. */
+          /* Selected edge does not have adjacent face. */
           if (!found_edge) {
-            found_pixel_in_polygon = false;
-            // dst_point = point_on_dst_edge;
             break;
           }
         }
 
-        if (!found_pixel_in_polygon) {
+        if (!found_pixel_in_face) {
           continue;
         }
 
-        float w = std::clamp(src_edge_perp_signed_dist + 0.5f, 0.0f, 1.0f);
-
+        /* -0.5 offset is applied to sampling position to get 
+         * texture interpolation between texel centers. */
         if (ibuf_ptr_fl) {
           float4 inside_col = imbuf::interpolate_bilinear_fl(
               im_read, src_point.x - 0.5f, src_point.y - 0.5f);
           float4 outside_col = imbuf::interpolate_bilinear_fl(
               im_read, dst_point.x - 0.5f, dst_point.y - 0.5f);
 
-          ibuf_ptr_fl[pixel_index] = math::interpolate(inside_col, outside_col, w);
+          ibuf_ptr_fl[pixel_index] = math::interpolate(inside_col, outside_col, weight);
         }
 
         if (ibuf_ptr_ch) {
@@ -486,11 +461,38 @@ class TextureMarginMap {
           uchar4 outside_col = imbuf::interpolate_bilinear_byte(
               im_read, dst_point.x - 0.5f, dst_point.y - 0.5f);
 
-          ibuf_ptr_ch[pixel_index] = math::interpolate(inside_col, outside_col, w);
+          ibuf_ptr_ch[pixel_index] = math::interpolate(inside_col, outside_col, weight);
         }
 
         /* Add our new pixels to the assigned pixel map. */
         mask_[pixel_index] = 1;
+      }
+    }
+  }
+  
+  /* Restores ibuf pixels outside the margin using pixels from the im_read. */
+  void restore_outside_pixels(ImBuf *ibuf, ImBuf *im_read) const
+  {
+    const float4 *readbuf_ptr_fl = reinterpret_cast<const float4 *>(im_read->float_data());
+    const uchar4 *readbuf_ptr_ch = reinterpret_cast<const uchar4 *>(im_read->byte_data());
+
+    float4 *ibuf_ptr_fl = reinterpret_cast<float4 *>(ibuf->float_data_for_write());
+    uchar4 *ibuf_ptr_ch = reinterpret_cast<uchar4 *>(ibuf->byte_data_for_write());
+
+    size_t pixels_num = size_t(w_) * size_t(h_);
+
+    for (size_t pixel_index = 0; pixel_index < pixels_num; pixel_index++) {
+      const uint32_t pixel = pixel_data_[pixel_index];
+      
+      if (!DijkstraPixelIsUnset(pixel)) {
+        continue;
+      }
+
+      if (ibuf_ptr_fl) {
+        ibuf_ptr_fl[pixel_index] = readbuf_ptr_fl[pixel_index];
+      }
+      if (ibuf_ptr_ch) {
+        ibuf_ptr_ch[pixel_index] = readbuf_ptr_ch[pixel_index];
       }
     }
   }
@@ -682,18 +684,18 @@ void RE_generate_texturemargin_adjacentfaces(ImBuf *ibuf,
   clock_t dijkstra_start = clock();
   map.grow_dijkstra(margin);
 
-  /* Extend (with averaging). Those will be partially overwritten, but it
-   * helps linear interpolations on the edges of faces during pixel lookup.
-   * Produced mask is used to preserve original colors outside of expected margin. */
+  /* Extend (with averaging). */
   clock_t extend_start = clock();
   char *tmpmask = MEM_dupalloc(mask);
   IMB_filter_extend(ibuf, tmpmask, margin);
+  MEM_delete(tmpmask);
+  
   ImBuf *im_read = IMB_dupImBuf(ibuf);
 
-  /* Looking further than 3 faces is usually not worth it for texture margin. */
   clock_t tables_build_start = clock();
   map.build_tables(mesh->edges_num);
   clock_t lookup_start = clock();
+  /* Looking further than 3 faces is usually not worth it for texture margin. */
   map.lookup_pixels(ibuf, im_read, 3);
   clock_t finalize_start = clock();
 
@@ -701,30 +703,10 @@ void RE_generate_texturemargin_adjacentfaces(ImBuf *ibuf,
   IMB_filter_extend(ibuf, mask, margin);
 
   /* Restore original pixels outside expected margin. */
-  const float4 *readbuf_ptr_fl = reinterpret_cast<const float4 *>(im_read->float_data());
-  const uchar4 *readbuf_ptr_ch = reinterpret_cast<const uchar4 *>(im_read->byte_data());
-
-  float4 *ibuf_ptr_fl = reinterpret_cast<float4 *>(ibuf->float_data_for_write());
-  uchar4 *ibuf_ptr_ch = reinterpret_cast<uchar4 *>(ibuf->byte_data_for_write());
-
-  size_t pixels_num = size_t(ibuf->x) * size_t(ibuf->y);
-
-  for (size_t i = 0; i < pixels_num; i++) {
-    if (tmpmask[i] != FILTER_MASK_NULL) {
-      continue;
-    }
-
-    if (ibuf_ptr_fl) {
-      ibuf_ptr_fl[i] = readbuf_ptr_fl[i];
-    }
-    if (ibuf_ptr_ch) {
-      ibuf_ptr_ch[i] = readbuf_ptr_ch[i];
-    }
-  }
+  map.restore_outside_pixels(ibuf, im_read);
 
   IMB_freeImBuf(im_read);
   MEM_delete(mask);
-  MEM_delete(tmpmask);
   
   clock_t end_time = clock();
 
