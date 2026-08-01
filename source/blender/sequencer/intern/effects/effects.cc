@@ -410,6 +410,17 @@ Strip *get_transition_on_side(Editing *ed, const Strip *strip, const seq::Side s
   return nullptr;
 }
 
+bool transition_inputs_have_wrong_order(const Scene *scene,
+                                        const Strip *input1,
+                                        const Strip *input2)
+{
+  const int first_start = input1->left_handle();
+  const int second_start = input2->left_handle();
+  return (first_start > second_start) ||
+         (first_start == second_start &&
+          input1->right_handle(scene) > input2->right_handle(scene));
+}
+
 }  // namespace seq
 
 bool Strip::is_same_channel_transition() const

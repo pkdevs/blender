@@ -347,7 +347,9 @@ static bool sequencer_swap_inputs_poll(bContext *C)
   }
   Scene *scene = CTX_data_sequencer_scene(C);
   Strip *active_strip = seq::select_active_get(scene);
-  if (active_strip && active_strip->effect_num_inputs_get() == 2) {
+  if (active_strip && active_strip->effect_num_inputs_get() == 2 &&
+      !seq::strip_type_can_be_transition(active_strip->type))
+  {
     return true;
   }
 
@@ -1718,13 +1720,11 @@ VectorSet<Strip *> strip_effect_get_new_inputs(const Scene *scene,
     Strip *first = inputs[0];
     Strip *second = inputs[1];
     bool do_swap = false;
-    if (seq::strip_type_can_be_transition(effect_type)) {
+    if (seq::strip_type_can_be_transition(effect_type) &&
+        seq::transition_inputs_have_wrong_order(scene, first, second))
+    {
       /* Sort by timeline frame so 2-input transitions go "from" earlier "to" later. */
-      const int first_start = first->left_handle();
-      const int second_start = second->left_handle();
-      do_swap = (first_start > second_start) ||
-                (first_start == second_start &&
-                 first->right_handle(scene) > second->right_handle(scene));
+      do_swap = true;
     }
     else if (first == seq::select_active_get(scene) ||
              (ignore_active && first->channel < second->channel))

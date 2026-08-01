@@ -25,6 +25,7 @@
 
 #include "SEQ_animation.hh"
 #include "SEQ_channels.hh"
+#include "SEQ_effects.hh"
 #include "SEQ_iterator.hh"
 #include "SEQ_render.hh"
 #include "SEQ_retiming.hh"
@@ -186,6 +187,10 @@ void strip_time_effect_range_set(const Scene *scene, Strip *strip)
     strip->startdisp = max_ii(strip->input1->left_handle(), strip->input2->left_handle());
     strip->enddisp = min_ii(strip->input1->right_handle(scene),
                             strip->input2->right_handle(scene));
+
+    if (transition_inputs_have_wrong_order(scene, strip->input1, strip->input2)) {
+      std::swap(strip->input1, strip->input2);
+    }
   }
   else if (strip->input1) { /* Single input effect. */
     strip->startdisp = strip->input1->right_handle(scene);

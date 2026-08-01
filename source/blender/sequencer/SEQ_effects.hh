@@ -43,6 +43,9 @@ bool strip_type_is_effect(StripType type);
 bool strip_type_can_be_transition(StripType type);
 Strip *get_transition_between(Scene *scene, Strip *input1, Strip *input2);
 Strip *get_transition_on_side(Editing *ed, const Strip *strip, const seq::Side side);
+bool transition_inputs_have_wrong_order(const Scene *scene,
+                                        const Strip *input1,
+                                        const Strip *input2);
 
 void effect_text_font_set(Strip *strip, VFont *font);
 bool effects_can_render_text(const Strip *strip);
