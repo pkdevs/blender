@@ -499,8 +499,17 @@ static bool create_non_transition_clamp_data(TransInfo *t, const Scene *scene, S
       /* Prevent transitions from going past strip bounds. */
       Strip *left_transition = seq::get_transition_on_side(ed, strip, seq::Side::Left);
       if (left_transition && !right_sel && (left_transition->input1->flag & SEQ_RIGHTSEL)) {
-        int offset = strip->right_handle(scene) - left_transition->right_handle(scene);
+        const int offset = strip->right_handle(scene) - left_transition->right_handle(scene);
         ts->soft_clamp_max = min_ii(ts->soft_clamp_max, offset);
+
+        /* Prevent the transition from overlapping the adjacent transition. */
+        Strip *left_adjacent_transition = seq::get_transition_on_side(
+            ed, left_transition->input1, seq::Side::Left);
+        if (left_adjacent_transition) {
+          const int adjacent_offset = left_adjacent_transition->right_handle(scene) -
+                                      left_transition->left_handle();
+          ts->hard_clamp.xmin = max_ii(ts->hard_clamp.xmin, adjacent_offset);
+        }
       }
     }
     if (right_sel) {
@@ -518,8 +527,17 @@ static bool create_non_transition_clamp_data(TransInfo *t, const Scene *scene, S
       /* Prevent transitions from going past strip bounds. */
       Strip *right_transition = seq::get_transition_on_side(ed, strip, seq::Side::Right);
       if (right_transition && !left_sel && (right_transition->input2->flag & SEQ_LEFTSEL)) {
-        int offset = strip->left_handle() - right_transition->left_handle();
+        const int offset = strip->left_handle() - right_transition->left_handle();
         ts->soft_clamp_min = max_ii(ts->soft_clamp_min, offset);
+
+        /* Prevent the transition from overlapping the adjacent transition. */
+        Strip *right_adjacent_transition = seq::get_transition_on_side(
+            ed, right_transition->input2, seq::Side::Right);
+        if (right_adjacent_transition) {
+          const int adjacent_offset = right_adjacent_transition->left_handle() -
+                                      right_transition->right_handle(scene);
+          ts->hard_clamp.xmax = min_ii(ts->hard_clamp.xmax, adjacent_offset);
+        }
       }
     }
     return true;
