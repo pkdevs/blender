@@ -26,6 +26,8 @@ namespace seq {
 
 struct RenderData;
 
+enum class Side : int;
+
 void effect_ensure_initialized(Strip *strip);
 void effect_free(Strip *strip);
 
@@ -40,6 +42,7 @@ bool strip_type_is_effect(StripType type);
  * this. */
 bool strip_type_can_be_transition(StripType type);
 Strip *get_transition_between(Scene *scene, Strip *input1, Strip *input2);
+Strip *get_transition_on_side(Editing *ed, const Strip *strip, const seq::Side side);
 
 void effect_text_font_set(Strip *strip, VFont *font);
 bool effects_can_render_text(const Strip *strip);

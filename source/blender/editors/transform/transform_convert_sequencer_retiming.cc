@@ -19,6 +19,7 @@
 #include "BKE_context.hh"
 
 #include "SEQ_edit.hh"
+#include "SEQ_effects.hh"
 #include "SEQ_iterator.hh"
 #include "SEQ_relations.hh"
 #include "SEQ_retiming.hh"
@@ -43,17 +44,6 @@ struct TransDataSeq {
 };
 
 }  // namespace
-
-static Strip *get_transition_of_left_input(Editing *ed, const Strip *strip)
-{
-  Span<Strip *> effect_strips = seq::lookup_effects_by_strip(ed, strip);
-  for (Strip *effect : effect_strips) {
-    if (effect->is_same_channel_transition() && effect->input1 == strip) {
-      return effect;
-    }
-  }
-  return nullptr;
-}
 
 static TransData *SeqToTransData(const Scene *scene,
                                  Strip *strip,
@@ -82,7 +72,8 @@ static TransData *SeqToTransData(const Scene *scene,
   const bool key_moves_right_handle = tdseq->orig_timeline_frame == strip->right_handle(scene) &&
                                       !seq::retiming_key_is_transition_type(key);
   if (key_moves_right_handle) {
-    Strip *transition = get_transition_of_left_input(seq::editing_get(scene), strip);
+    Strip *transition = seq::get_transition_on_side(
+        seq::editing_get(scene), strip, seq::Side::Right);
     if (transition) {
       SeqRetimingKey *right_input_key = seq::retiming_key_get_by_frame(
           scene, transition->input2, tdseq->orig_timeline_frame);

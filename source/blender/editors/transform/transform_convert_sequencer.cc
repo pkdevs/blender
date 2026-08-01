@@ -24,6 +24,7 @@
 #include "SEQ_animation.hh"
 #include "SEQ_channels.hh"
 #include "SEQ_edit.hh"
+#include "SEQ_effects.hh"
 #include "SEQ_iterator.hh"
 #include "SEQ_relations.hh"
 #include "SEQ_sequencer.hh"
@@ -460,20 +461,9 @@ static void query_time_dependent_strips_strips(TransInfo *t,
   });
 }
 
-static void transitions_for_each(Editing *ed,
-                                 const Strip *strip,
-                                 FunctionRef<void(Strip *)> callback)
-{
-  Span<Strip *> effects = seq::lookup_effects_by_strip(ed, strip);
-  for (Strip *effect_strip : effects) {
-    if (effect_strip->is_same_channel_transition()) {
-      callback(effect_strip);
-    }
-  }
-}
-
 static bool create_non_transition_clamp_data(TransInfo *t, const Scene *scene, Strip *strip)
 {
+  Editing *ed = seq::editing_get(scene);
   TransSeq *ts = static_cast<TransSeq *>(TRANS_DATA_CONTAINER_FIRST_SINGLE(t)->custom.type.data);
 
   bool left_sel = (strip->flag & SEQ_LEFTSEL);
@@ -507,13 +497,11 @@ static bool create_non_transition_clamp_data(TransInfo *t, const Scene *scene, S
       }
 
       /* Prevent transitions from going past strip bounds. */
-      transitions_for_each(seq::editing_get(scene), strip, [&](Strip *transition) {
-        if (!right_sel && transition->input2 == strip && (transition->input1->flag & SEQ_RIGHTSEL))
-        {
-          int offset = strip->right_handle(scene) - transition->right_handle(scene);
-          ts->soft_clamp_max = min_ii(ts->soft_clamp_max, offset);
-        }
-      });
+      Strip *left_transition = seq::get_transition_on_side(ed, strip, seq::Side::Left);
+      if (left_transition && !right_sel && (left_transition->input1->flag & SEQ_RIGHTSEL)) {
+        int offset = strip->right_handle(scene) - left_transition->right_handle(scene);
+        ts->soft_clamp_max = min_ii(ts->soft_clamp_max, offset);
+      }
     }
     if (right_sel) {
       if (!(left_sel && right_sel)) {
@@ -528,12 +516,11 @@ static bool create_non_transition_clamp_data(TransInfo *t, const Scene *scene, S
       }
 
       /* Prevent transitions from going past strip bounds. */
-      transitions_for_each(seq::editing_get(scene), strip, [&](Strip *transition) {
-        if (!left_sel && transition->input1 == strip && (transition->input2->flag & SEQ_LEFTSEL)) {
-          int offset = strip->left_handle() - transition->left_handle();
-          ts->soft_clamp_min = max_ii(ts->soft_clamp_min, offset);
-        }
-      });
+      Strip *right_transition = seq::get_transition_on_side(ed, strip, seq::Side::Right);
+      if (right_transition && !left_sel && (right_transition->input2->flag & SEQ_LEFTSEL)) {
+        int offset = strip->left_handle() - right_transition->left_handle();
+        ts->soft_clamp_min = max_ii(ts->soft_clamp_min, offset);
+      }
     }
     return true;
   }
@@ -641,21 +628,20 @@ static void create_adjacent_transition_clamp_data(
 
 /* (left, right) adjacent transition pairs to clamp transitions from overlapping each other. */
 static void get_transition_pairs(Editing *ed,
-                                 Strip *transition,
+                                 Strip *middle_transition,
                                  VectorSet<std::pair<Strip *, Strip *>> &r_adjacent_pairs)
 {
-  /* Adjacent transition to the left. */
-  transitions_for_each(ed, transition->input1, [&](Strip *adjacent_transition) {
-    if (adjacent_transition->input2 == transition->input1) {
-      r_adjacent_pairs.add({adjacent_transition, transition});
-    }
-  });
-  /* Adjacent transition to the right. */
-  transitions_for_each(ed, transition->input2, [&](Strip *adjacent_transition) {
-    if (adjacent_transition->input1 == transition->input2) {
-      r_adjacent_pairs.add({transition, adjacent_transition});
-    }
-  });
+  Strip *left_adjacent_transition = seq::get_transition_on_side(
+      ed, middle_transition->input1, seq::Side::Left);
+  Strip *right_adjacent_transition = seq::get_transition_on_side(
+      ed, middle_transition->input2, seq::Side::Right);
+
+  if (left_adjacent_transition) {
+    r_adjacent_pairs.add({left_adjacent_transition, middle_transition});
+  }
+  if (right_adjacent_transition) {
+    r_adjacent_pairs.add({middle_transition, right_adjacent_transition});
+  }
 }
 
 static void create_trans_seq_clamp_data(TransInfo *t, const Scene *scene)
@@ -933,7 +919,7 @@ static void flush_transition_transforms(TransInfo *t,
   const int x_offset = round_fl_to_int(offset_clamped[0]);
 
   int opposite_new = tdsq->opposite_handle;
-  if (!(t->modifiers & MOD_STRIP_ASYMMETRIC)) {
+  if (!flag_is_set(t->modifiers, MOD_STRIP_ASYMMETRIC)) {
     opposite_new -= x_offset;
   }
   switch (tdsq->sel_flag) {
@@ -948,23 +934,20 @@ static void flush_transition_transforms(TransInfo *t,
   }
 }
 
-static Strip *get_adjacent_selection_transition_for_left_input(Editing *ed, const Strip *strip)
+static Strip *get_adjacent_selection_transition(Editing *ed, const Strip *strip)
 {
-  auto valid_selection{[](const Strip *strip, eStripFlag valid_side) -> bool {
-    const bool left = (strip->flag & SEQ_LEFTSEL) != 0;
-    const bool right = (strip->flag & SEQ_RIGHTSEL) != 0;
-    const bool select = (strip->flag & SEQ_SELECT) != 0;
-    const bool invalid_only_side = valid_side == SEQ_LEFTSEL ? right : left;
+  auto valid_selection{[](const Strip *strip, eStripFlag valid_selection_side) -> bool {
+    const bool left = flag_is_set(strip->flag, SEQ_LEFTSEL);
+    const bool right = flag_is_set(strip->flag, SEQ_RIGHTSEL);
+    const bool select = flag_is_set(strip->flag, SEQ_SELECT);
+    const bool invalid_only_side = valid_selection_side == SEQ_LEFTSEL ? right : left;
     return (left && right) || (select && !invalid_only_side);
   }};
-  Span<Strip *> effect_strips = seq::lookup_effects_by_strip(ed, strip);
-  for (Strip *effect : effect_strips) {
-    if (effect->is_same_channel_transition() && effect->input1 == strip &&
-        valid_selection(effect->input1, SEQ_RIGHTSEL) &&
-        valid_selection(effect->input2, SEQ_LEFTSEL))
-    {
-      return effect;
-    }
+  Strip *right_transition = seq::get_transition_on_side(ed, strip, seq::Side::Right);
+  if (right_transition && (valid_selection(right_transition->input1, SEQ_RIGHTSEL) &&
+                           valid_selection(right_transition->input2, SEQ_LEFTSEL)))
+  {
+    return right_transition;
   }
   return nullptr;
 }
@@ -1022,7 +1005,7 @@ static void flush_strip_transforms(TransInfo *t,
 
   /* Move attached transitions with the strips if both transition inputs are selected. */
   Editing *ed = seq::editing_get(scene);
-  Strip *transition = get_adjacent_selection_transition_for_left_input(ed, strip);
+  Strip *transition = get_adjacent_selection_transition(ed, strip);
   if (transition) {
     seq::transform_translate_strip(scene, transition, transition_delta_x);
     transition->channel_set(new_channel);

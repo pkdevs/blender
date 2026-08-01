@@ -393,6 +393,23 @@ Strip *get_transition_between(Scene *scene, Strip *input1, Strip *input2)
   return nullptr;
 }
 
+Strip *get_transition_on_side(Editing *ed, const Strip *strip, const seq::Side side)
+{
+  Span<Strip *> effects = seq::lookup_effects_by_strip(ed, strip);
+  for (Strip *transition : effects) {
+    if (!transition->is_same_channel_transition()) {
+      continue;
+    }
+    if (side == seq::Side::Left && transition->input2 == strip) {
+      return transition;
+    }
+    if (side == seq::Side::Right && transition->input1 == strip) {
+      return transition;
+    }
+  }
+  return nullptr;
+}
+
 }  // namespace seq
 
 bool Strip::is_same_channel_transition() const
