@@ -188,7 +188,9 @@ void strip_time_effect_range_set(const Scene *scene, Strip *strip)
     strip->enddisp = min_ii(strip->input1->right_handle(scene),
                             strip->input2->right_handle(scene));
 
-    if (transition_inputs_have_wrong_order(scene, strip->input1, strip->input2)) {
+    if (strip_type_can_be_transition(strip->type) &&
+        transition_inputs_have_wrong_order(scene, strip->input1, strip->input2))
+    {
       std::swap(strip->input1, strip->input2);
     }
   }
