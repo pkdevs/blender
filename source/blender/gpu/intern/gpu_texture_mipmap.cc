@@ -89,11 +89,11 @@ static_assert(GPU_TEXTURE_MIPMAP_UPDATE_CHUNK_SIZE == MIPMAP_UPDATE_CHUNK_SIZE);
 static_assert((GPU_TEXTURE_MIPMAP_UPDATE_CHUNK_SIZE &
                (GPU_TEXTURE_MIPMAP_UPDATE_CHUNK_SIZE - 1)) == 0);
 
-static void update_mipmaps_layer(Texture &texture,
-                                 Shader &shader,
-                                 const int layer,
-                                 const TextureFormat view_format,
-                                 const BitSpan modified_chunks)
+static void update_mipmaps_layers(Texture &texture,
+                                  Shader &shader,
+                                  const IndexRange layers,
+                                  const TextureFormat view_format,
+                                  const BitSpan modified_chunks)
 {
   const int num_mipmaps = texture.mip_count();
   const int layer_count = texture.layer_count();
@@ -126,7 +126,14 @@ static void update_mipmaps_layer(Texture &texture,
                                                    __func__);
   GPU_storagebuf_bind(chunk_buf, GPU_shader_get_ssbo_binding(&shader, "chunk_list"));
 
-  GPU_shader_uniform_1i(&shader, "dst_layer", layer);
+  /* The views cover all layers, so only the destination layer of the dispatch varies. */
+  const auto compute_dispatch_layers =
+      [&](const int groups_x, const int groups_y, const int groups_z) {
+        for (const int64_t layer : layers) {
+          GPU_shader_uniform_1i(&shader, "dst_layer", int(layer));
+          GPU_compute_dispatch(&shader, groups_x, groups_y, groups_z);
+        }
+      };
 
   constexpr int max_levels_per_dispatch = 2;
 
@@ -148,7 +155,7 @@ static void update_mipmaps_layer(Texture &texture,
       const uint32_t samples = mip_size.x * mip_size.y;
       const uint32_t threads = warps * 32U;
       int group_len = divide_ceil_u(samples, threads);
-      GPU_compute_dispatch(&shader, group_len, 1, 1);
+      compute_dispatch_layers(group_len, 1, 1);
       continue;
     }
 
@@ -187,7 +194,7 @@ static void update_mipmaps_layer(Texture &texture,
         GPU_shader_uniform_1i(&shader, "partial_dst_level", dst_level);
         GPU_shader_uniform_1i(&shader, "margin_x", margin.x);
         GPU_shader_uniform_1i(&shader, "margin_y", margin.y);
-        GPU_compute_dispatch(&shader, sub_tiles.x, sub_tiles.y, chunks.size());
+        compute_dispatch_layers(sub_tiles.x, sub_tiles.y, chunks.size());
         continue;
       }
     }
@@ -196,7 +203,7 @@ static void update_mipmaps_layer(Texture &texture,
     GPU_shader_uniform_1i(&shader, "partial_dst_level", -1);
     GPU_shader_uniform_1i(&shader, "margin_x", 0);
     GPU_shader_uniform_1i(&shader, "margin_y", 0);
-    GPU_compute_dispatch(&shader, tile_count.x, tile_count.y, 1);
+    compute_dispatch_layers(tile_count.x, tile_count.y, 1);
   }
 
   for (Texture *view : views) {
@@ -256,13 +263,15 @@ static void update_mipmaps(Texture &texture,
     /* Full update of every layer. The temporary texture path does not currently
      * support partial updates, but this code path should not be encountered in
      * practice for painting after #IMB_gpu_texture_ensure_writable. */
-    for (int layer : IndexRange(layer_count)) {
-      update_mipmaps_layer(*texture_ptr, shader, layer, write_format, {});
-    }
+    update_mipmaps_layers(*texture_ptr, shader, IndexRange(layer_count), write_format, {});
   }
   else {
     /* Partial update of a single layer's changed chunks. */
-    update_mipmaps_layer(*texture_ptr, shader, partial_layer, write_format, modified_chunks);
+    update_mipmaps_layers(*texture_ptr,
+                          shader,
+                          IndexRange::from_single(partial_layer),
+                          write_format,
+                          modified_chunks);
   }
 
   if (use_temp_texture) {
