@@ -66,7 +66,6 @@ class SoundReaderCache : NonCopyable {
 
  public:
   explicit SoundReaderCache(std::shared_ptr<aud::ISound> sound);
-  ~SoundReaderCache();
 
   /** Acquire a reader. Returns an empty lease when reader creation returns null. */
   SoundReaderLease acquire();

@@ -96,8 +96,6 @@ SoundReaderCache::SoundReaderCache(std::shared_ptr<aud::ISound> sound)
 {
 }
 
-SoundReaderCache::~SoundReaderCache() = default;
-
 SoundReaderLease SoundReaderCache::acquire()
 {
   std::shared_ptr<SoundReaderCacheState> state = this->state_;

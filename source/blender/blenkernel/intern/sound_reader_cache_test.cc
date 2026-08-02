@@ -55,7 +55,7 @@ static std::shared_ptr<CountingSound> create_test_sound()
   return std::make_shared<CountingSound>(std::move(stream));
 }
 
-TEST(sound_reader, ReusesReaderAndLimitsIdleReaders)
+TEST(sound_reader_cache, ReusesReaderAndLimitsIdleReaders)
 {
   const std::shared_ptr<CountingSound> sound = create_test_sound();
   SoundReaderCache cache(sound);
@@ -90,7 +90,7 @@ TEST(sound_reader, ReusesReaderAndLimitsIdleReaders)
   EXPECT_EQ(sound->control->readers_created, 3);
 }
 
-TEST(sound_reader, DiscardDestroysReader)
+TEST(sound_reader_cache, DiscardDestroysReader)
 {
   const std::shared_ptr<CountingSound> sound = create_test_sound();
   SoundReaderCache cache(sound);
@@ -107,7 +107,7 @@ TEST(sound_reader, DiscardDestroysReader)
   EXPECT_EQ(sound->control->readers_created, 2);
 }
 
-TEST(sound_reader, MoveOperationsReturnEachReaderOnce)
+TEST(sound_reader_cache, MoveOperationsReturnEachReaderOnce)
 {
   const std::shared_ptr<CountingSound> sound = create_test_sound();
   SoundReaderCache cache(sound);
@@ -129,7 +129,7 @@ TEST(sound_reader, MoveOperationsReturnEachReaderOnce)
   EXPECT_EQ(sound->control->readers_created, 2);
 }
 
-TEST(sound_reader, LeaseOutlivesCache)
+TEST(sound_reader_cache, LeaseOutlivesCache)
 {
   const std::shared_ptr<CountingSound> sound = create_test_sound();
   auto cache = std::make_shared<SoundReaderCache>(sound);
