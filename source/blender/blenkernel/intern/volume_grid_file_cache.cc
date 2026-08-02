@@ -20,7 +20,7 @@ namespace blender::bke::volume_grid::file_cache {
  */
 struct GridCache {
   /**
-   * Grid returned by #readAllGridMetadata. This only contains a the meta-data and transform of
+   * Grid returned by #readAllGridMetadata. This only contains the meta-data and transform of
    * the grid, but not the tree.
    */
   openvdb::GridBase::Ptr meta_data_grid;
@@ -141,12 +141,13 @@ class GridReadKey : public GenericKey {
     return get_default_hash(this->file_path, this->grid_name, this->simplify_level);
   }
 
-  BLI_STRUCT_EQUALITY_OPERATORS_3(GridReadKey, file_path, grid_name, simplify_level)
-
   bool equal_to(const GenericKey &other) const override
   {
     if (const auto *other_typed = dynamic_cast<const GridReadKey *>(&other)) {
-      return *this == *other_typed;
+      const GridReadKey &a = *this;
+      const GridReadKey &b = *other_typed;
+      return a.file_path == b.file_path && a.grid_name == b.grid_name &&
+             a.simplify_level == b.simplify_level;
     }
     return false;
   }

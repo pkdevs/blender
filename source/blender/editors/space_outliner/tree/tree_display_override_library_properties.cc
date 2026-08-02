@@ -6,7 +6,7 @@
  * \ingroup spoutliner
  */
 
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 #include "BLI_listbase_wrapper.hh"
 
 #include "BKE_main.hh"
@@ -28,9 +28,10 @@ TreeDisplayOverrideLibraryProperties::TreeDisplayOverrideLibraryProperties(
 {
 }
 
-ListBase TreeDisplayOverrideLibraryProperties::build_tree(const TreeSourceData &source_data)
+ListBaseT<TreeElement> TreeDisplayOverrideLibraryProperties::build_tree(
+    const TreeSourceData &source_data)
 {
-  ListBase tree = add_library_contents(*source_data.bmain);
+  ListBaseT<TreeElement> tree = add_library_contents(*source_data.bmain);
 
   for (TreeElement *top_level_te : List<TreeElement>(tree)) {
     TreeStoreElem *tselem = TREESTORE(top_level_te);
@@ -42,13 +43,13 @@ ListBase TreeDisplayOverrideLibraryProperties::build_tree(const TreeSourceData &
   return tree;
 }
 
-ListBase TreeDisplayOverrideLibraryProperties::add_library_contents(Main &mainvar)
+ListBaseT<TreeElement> TreeDisplayOverrideLibraryProperties::add_library_contents(Main &mainvar)
 {
-  ListBase tree = {nullptr};
+  ListBaseT<TreeElement> tree = {nullptr};
 
   const short filter_id_type = id_filter_get();
 
-  Vector<ListBase *> lbarray;
+  Vector<ListBaseT<ID> *> lbarray;
   if (filter_id_type) {
     lbarray.append(which_libbase(&mainvar, space_outliner_.filter_id_type));
   }
@@ -77,7 +78,7 @@ ListBase TreeDisplayOverrideLibraryProperties::add_library_contents(Main &mainva
 
     /* Create data-block list parent element on demand. */
     TreeElement *id_base_te = nullptr;
-    ListBase *lb_to_expand = &tree;
+    ListBaseT<TreeElement> *lb_to_expand = &tree;
 
     if (!filter_id_type) {
       id_base_te = add_element(&tree, nullptr, lbarray[a], nullptr, TSE_ID_BASE, 0);
@@ -92,7 +93,7 @@ ListBase TreeDisplayOverrideLibraryProperties::add_library_contents(Main &mainva
         TreeElement *override_tree_element = add_element(
             lb_to_expand, id, nullptr, id_base_te, TSE_LIBRARY_OVERRIDE_BASE, 0);
 
-        if (BLI_listbase_is_empty(&override_tree_element->subtree)) {
+        if (override_tree_element->subtree.is_empty()) {
           outliner_free_tree_element(override_tree_element, lb_to_expand);
         }
       }
@@ -100,9 +101,9 @@ ListBase TreeDisplayOverrideLibraryProperties::add_library_contents(Main &mainva
   }
 
   /* Remove ID base elements that turn out to be empty. */
-  LISTBASE_FOREACH_MUTABLE (TreeElement *, te, &tree) {
-    if (BLI_listbase_is_empty(&te->subtree)) {
-      outliner_free_tree_element(te, &tree);
+  for (TreeElement &te : tree.items_mutable()) {
+    if (te.subtree.is_empty()) {
+      outliner_free_tree_element(&te, &tree);
     }
   }
 

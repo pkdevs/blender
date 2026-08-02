@@ -2,7 +2,7 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#include "infos/overlay_wireframe_info.hh"
+#include "infos/overlay_wireframe_infos.hh"
 
 FRAGMENT_SHADER_CREATE_INFO(overlay_wireframe_base)
 
@@ -33,14 +33,15 @@ void main()
   float3 rim_col = sqrt(final_color_inner.rgb);
   float3 wire_col = sqrt(final_color.rgb);
   float3 final_front_col = mix(rim_col, wire_col, 0.35f);
-  frag_color = float4(mix(final_front_col, rim_col, saturate(fac)), 1.0f);
-  frag_color *= frag_color;
+  float3 color = mix(final_front_col, rim_col, saturate(fac));
+  frag_color = float4(color * color, final_color.a);
 
 #elif !defined(SELECT_ENABLE)
   line_output = pack_line_data(gl_FragCoord.xy, edge_start, edge_pos);
   frag_color = final_color;
 
 #  if !defined(CURVES)
+  gl_FragDepth = gl_FragCoord.z;
   if (use_custom_depth_bias) {
     float2 dir = line_output.xy * 2.0f - 1.0f;
     bool dir_horiz = abs(dir.x) > abs(dir.y);
@@ -64,9 +65,6 @@ void main()
 #    ifndef SELECT_ENABLE
     if (gl_FragCoord.z < (depth_occluder + delta) && gl_FragCoord.z > depth_occluder) {
       gl_FragDepth = depth_occluder;
-    }
-    else {
-      gl_FragDepth = gl_FragCoord.z;
     }
 #    endif
   }

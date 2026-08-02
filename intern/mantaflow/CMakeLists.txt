@@ -11,14 +11,10 @@ else()
 endif()
 
 if(WIN32)
-  add_definitions(-D_USE_MATH_DEFINES)
-endif()
-
-if(WIN32)
   # Some files in `./extern` are being included which brings up a bunch of
   # "unreferenced formal parameter" warnings.
   # So restore warn C4100 (unreferenced formal parameter) back to w4
-  remove_cc_flag("/w34100")
+  remove_c_and_cxx_flag("/w34100")
 endif()
 
 
@@ -34,19 +30,7 @@ set(INC_SYS
   ../../extern/mantaflow/helper/util
   ../../extern/mantaflow/helper/pwrapper
   ../../extern/mantaflow/preprocessed
-  ${PYTHON_INCLUDE_DIRS}
-  ${ZLIB_INCLUDE_DIRS}
 )
-
-if(WITH_OPENVDB)
-  add_definitions(-DWITH_OPENVDB ${OPENVDB_DEFINITIONS})
-  list(APPEND INC_SYS
-    ${OPENVDB_INCLUDE_DIRS}
-  )
-  list(APPEND LIB
-    ${OPENVDB_LIBRARIES}
-  )
-endif()
 
 set(SRC
   intern/manta_python_API.cpp
@@ -65,12 +49,11 @@ set(LIB
   PRIVATE bf::blenlib
   PRIVATE bf::dna
   PRIVATE bf::intern::guardedalloc
+  PRIVATE bf::dependencies::optional::openvdb
   PRIVATE bf::dependencies::optional::tbb
   extern_mantaflow
-
-  ${PYTHON_LINKFLAGS}
-  ${PYTHON_LIBRARIES}
-  ${ZLIB_LIBRARIES}
+  PRIVATE bf::dependencies::optional::python
+  PRIVATE bf::dependencies::zlib
 )
 
 blender_add_lib(bf_intern_mantaflow "${SRC}" "${INC}" "${INC_SYS}" "${LIB}")

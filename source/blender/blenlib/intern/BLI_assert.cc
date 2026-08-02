@@ -5,13 +5,13 @@
 /** \file
  * \ingroup bli
  *
- * Helper functions for BLI_assert.h header.
+ * Helper functions for BLI_assert.hh header.
  */
 
-#include "BLI_assert.h" /* Own include. */
+#include "BLI_assert.hh" /* Own include. */
 
 #ifndef NDEBUG
-#  include "BLI_system.h"
+#  include "BLI_system.hh"
 #endif
 
 #include <cstdio>
@@ -36,7 +36,7 @@ void _BLI_assert_unreachable_print(const char *file, const int line, const char 
 void _BLI_assert_print_backtrace()
 {
 #ifndef NDEBUG
-  BLI_system_backtrace(stderr);
+  blender::BLI_system_backtrace(stderr);
 #endif
 }
 

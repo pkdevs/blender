@@ -10,8 +10,8 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_math_vector.h"
-#include "BLI_string_utf8.h"
+#include "BLI_math_vector_c.hh"
+#include "BLI_string_utf8.hh"
 
 #include "BKE_context.hh"
 #include "BKE_unit.hh"
@@ -118,7 +118,7 @@ struct SeqSlideParams {
 
 static void initSeqSlide(TransInfo *t, wmOperator *op)
 {
-  SeqSlideParams *ssp = MEM_callocN<SeqSlideParams>(__func__);
+  SeqSlideParams *ssp = MEM_new_zeroed<SeqSlideParams>(__func__);
   t->custom.mode.data = ssp;
   t->custom.mode.use_free = true;
   PropertyRNA *prop = RNA_struct_find_property(op->ptr, "use_restore_handle_selection");

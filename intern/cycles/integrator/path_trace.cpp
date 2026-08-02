@@ -20,6 +20,7 @@
 
 #include "util/log.h"
 #include "util/progress.h"
+#include "util/scoped_defer.h"
 #include "util/tbb.h"
 #include "util/time.h"
 
@@ -189,6 +190,7 @@ void PathTrace::render_pipeline(RenderWork render_work)
                                                   0);
 
   render_init_kernel_execution();
+  SCOPED_DEFER(render_deinit_kernel_execution());
 
   render_scheduler_.report_work_begin(render_work);
 
@@ -196,11 +198,21 @@ void PathTrace::render_pipeline(RenderWork render_work)
 
   rebalance(render_work);
 
+  /* Reset sample limit. */
+  render_scheduler_.set_limit_samples_per_update(0);
+
   /* Prepare all per-thread guiding structures before we start with the next rendering
    * iteration/progression. */
   const bool use_guiding = device_scene_->data.integrator.use_guiding;
   if (use_guiding) {
     guiding_prepare_structures();
+  }
+
+  const bool has_volume = device_scene_->data.integrator.use_volumes;
+  if (has_volume) {
+    const uint num_rendered_samples = render_scheduler_.get_num_rendered_samples();
+    const uint limit = next_power_of_two(num_rendered_samples) - num_rendered_samples;
+    render_scheduler_.set_limit_samples_per_update(limit);
   }
 
   path_trace(render_work);
@@ -230,6 +242,11 @@ void PathTrace::render_pipeline(RenderWork render_work)
     return;
   }
 
+  denoise_volume_guiding_buffers(render_work, has_volume);
+  if (render_cancel_.is_requested) {
+    return;
+  }
+
   write_tile_buffer(render_work);
   update_display(render_work);
 
@@ -242,6 +259,13 @@ void PathTrace::render_init_kernel_execution()
 {
   for (auto &&path_trace_work : path_trace_works_) {
     path_trace_work->init_execution();
+  }
+}
+
+void PathTrace::render_deinit_kernel_execution()
+{
+  for (auto &&path_trace_work : path_trace_works_) {
+    path_trace_work->deinit_execution();
   }
 }
 
@@ -305,22 +329,22 @@ void PathTrace::update_allocated_work_buffer_params()
                                });
 }
 
-static BufferParams scale_buffer_params(const BufferParams &params, const int resolution_divider)
+static BufferParams scale_buffer_params(const BufferParams &params, const float resolution_divider)
 {
   BufferParams scaled_params = params;
 
-  scaled_params.width = max(1, params.width / resolution_divider);
-  scaled_params.height = max(1, params.height / resolution_divider);
+  scaled_params.width = max(1, int(params.width / resolution_divider));
+  scaled_params.height = max(1, int(params.height / resolution_divider));
 
-  scaled_params.window_x = params.window_x / resolution_divider;
-  scaled_params.window_y = params.window_y / resolution_divider;
-  scaled_params.window_width = max(1, params.window_width / resolution_divider);
-  scaled_params.window_height = max(1, params.window_height / resolution_divider);
+  scaled_params.window_x = int(params.window_x / resolution_divider);
+  scaled_params.window_y = int(params.window_y / resolution_divider);
+  scaled_params.window_width = max(1, int(params.window_width / resolution_divider));
+  scaled_params.window_height = max(1, int(params.window_height / resolution_divider));
 
-  scaled_params.full_x = params.full_x / resolution_divider;
-  scaled_params.full_y = params.full_y / resolution_divider;
-  scaled_params.full_width = max(1, params.full_width / resolution_divider);
-  scaled_params.full_height = max(1, params.full_height / resolution_divider);
+  scaled_params.full_x = int(params.full_x / resolution_divider);
+  scaled_params.full_y = int(params.full_y / resolution_divider);
+  scaled_params.full_width = max(1, int(params.full_width / resolution_divider));
+  scaled_params.full_height = max(1, int(params.full_height / resolution_divider));
 
   scaled_params.update_offset_stride();
 
@@ -329,24 +353,32 @@ static BufferParams scale_buffer_params(const BufferParams &params, const int re
 
 void PathTrace::update_effective_work_buffer_params(const RenderWork &render_work)
 {
-  const int resolution_divider = render_work.resolution_divider;
+  const float denoised_resolution_divider = render_work.denoised_resolution_divider;
+  const float resolution_divider = render_work.resolution_divider / denoised_resolution_divider;
 
-  const BufferParams scaled_full_params = scale_buffer_params(full_params_, resolution_divider);
-  const BufferParams scaled_big_tile_params = scale_buffer_params(big_tile_params_,
+  const BufferParams denoised_big_tile_params = scale_buffer_params(big_tile_params_,
+                                                                    denoised_resolution_divider);
+  const BufferParams scaled_big_tile_params = scale_buffer_params(denoised_big_tile_params,
                                                                   resolution_divider);
 
   const int overscan = tile_manager_.get_tile_overscan();
 
-  foreach_sliced_buffer_params(path_trace_works_,
-                               work_balance_infos_,
-                               scaled_big_tile_params,
-                               overscan,
-                               [&](PathTraceWork *path_trace_work, const BufferParams params) {
-                                 path_trace_work->set_effective_buffer_params(
-                                     scaled_full_params, scaled_big_tile_params, params);
-                               });
+  foreach_sliced_buffer_params(
+      path_trace_works_,
+      work_balance_infos_,
+      denoised_big_tile_params,
+      overscan,
+      [&](PathTraceWork *path_trace_work, const BufferParams params) {
+        /* Scale down the sliced buffer parameters again that were scaled by denoising upscale
+         * factor above. This should match the values that would occur when slicing
+         * 'scaled_big_tile_params' directly. */
+        const BufferParams scaled_params = scale_buffer_params(params, resolution_divider);
+        path_trace_work->set_effective_buffer_params(
+            scaled_big_tile_params, scaled_params, denoised_big_tile_params, params);
+      });
 
   render_state_.effective_big_tile_params = scaled_big_tile_params;
+  render_state_.effective_denoised_big_tile_params = denoised_big_tile_params;
 }
 
 void PathTrace::update_work_buffer_params_if_needed(const RenderWork &render_work)
@@ -385,8 +417,8 @@ void PathTrace::path_trace(RenderWork &render_work)
     return;
   }
 
-  LOG_WORK << "Will path trace " << render_work.path_trace.num_samples
-           << " samples at the resolution divider " << render_work.resolution_divider;
+  LOG_DEBUG << "Will path trace " << render_work.path_trace.num_samples
+            << " samples at the resolution divider " << render_work.resolution_divider;
 
   const double start_time = time_dt();
 
@@ -440,10 +472,10 @@ void PathTrace::adaptive_sample(RenderWork &render_work)
   bool did_reschedule_on_idle = false;
 
   while (true) {
-    LOG_WORK << "Will filter adaptive stopping buffer, threshold "
-             << render_work.adaptive_sampling.threshold;
+    LOG_DEBUG << "Will filter adaptive stopping buffer, threshold "
+              << render_work.adaptive_sampling.threshold;
     if (render_work.adaptive_sampling.reset) {
-      LOG_WORK << "Will re-calculate convergency flag for currently converged pixels.";
+      LOG_DEBUG << "Will re-calculate convergency flag for currently converged pixels.";
     }
 
     const double start_time = time_dt();
@@ -462,11 +494,11 @@ void PathTrace::adaptive_sample(RenderWork &render_work)
         render_work, time_dt() - start_time, is_cancel_requested());
 
     if (num_active_pixels == 0) {
-      LOG_WORK << "All pixels converged.";
+      LOG_DEBUG << "All pixels converged.";
       if (!render_scheduler_.render_work_reschedule_on_converge(render_work)) {
         break;
       }
-      LOG_WORK << "Continuing with lower threshold.";
+      LOG_DEBUG << "Continuing with lower threshold.";
     }
     else if (did_reschedule_on_idle) {
       break;
@@ -478,10 +510,10 @@ void PathTrace::adaptive_sample(RenderWork &render_work)
        * A better heuristic is possible here: for example, use maximum of 128^2 and percentage of
        * the final resolution. */
       if (!render_scheduler_.render_work_reschedule_on_idle(render_work)) {
-        LOG_WORK << "Rescheduling is not possible: final threshold is reached.";
+        LOG_DEBUG << "Rescheduling is not possible: final threshold is reached.";
         break;
       }
-      LOG_WORK << "Rescheduling lower threshold.";
+      LOG_DEBUG << "Rescheduling lower threshold.";
       did_reschedule_on_idle = true;
     }
     else {
@@ -494,6 +526,7 @@ void PathTrace::set_denoiser_params(const DenoiseParams &params)
 {
   if (!params.use) {
     denoiser_.reset();
+    render_scheduler_.set_denoiser_params(params);
     return;
   }
 
@@ -575,7 +608,7 @@ void PathTrace::cryptomatte_postprocess(const RenderWork &render_work)
   if (!render_work.cryptomatte.postprocess) {
     return;
   }
-  LOG_WORK << "Perform cryptomatte work.";
+  LOG_DEBUG << "Perform cryptomatte work.";
 
   parallel_for_each(path_trace_works_, [&](unique_ptr<PathTraceWork> &path_trace_work) {
     path_trace_work->cryptomatte_postproces();
@@ -593,7 +626,7 @@ void PathTrace::denoise(const RenderWork &render_work)
     return;
   }
 
-  LOG_WORK << "Perform denoising work.";
+  LOG_DEBUG << "Perform denoising work.";
 
   const double start_time = time_dt();
 
@@ -606,12 +639,14 @@ void PathTrace::denoise(const RenderWork &render_work)
   }
 
   if (big_tile_denoise_work_) {
-    big_tile_denoise_work_->set_effective_buffer_params(render_state_.effective_big_tile_params,
-                                                        render_state_.effective_big_tile_params,
-                                                        render_state_.effective_big_tile_params);
+    big_tile_denoise_work_->set_effective_buffer_params(
+        render_state_.effective_big_tile_params,
+        render_state_.effective_big_tile_params,
+        render_state_.effective_denoised_big_tile_params,
+        render_state_.effective_denoised_big_tile_params);
 
     buffer_to_denoise = big_tile_denoise_work_->get_render_buffers();
-    buffer_to_denoise->reset(render_state_.effective_big_tile_params);
+    buffer_to_denoise->reset(render_state_.effective_denoised_big_tile_params);
 
     copy_to_render_buffers(buffer_to_denoise);
 
@@ -624,14 +659,36 @@ void PathTrace::denoise(const RenderWork &render_work)
   }
 
   if (denoiser_->denoise_buffer(render_state_.effective_big_tile_params,
+                                render_state_.effective_denoised_big_tile_params,
                                 buffer_to_denoise,
                                 get_num_samples_in_buffer(),
-                                allow_inplace_modification))
+                                allow_inplace_modification,
+                                device_scene_->data.integrator.pixel_jitter))
   {
     render_state_.has_denoised_result = true;
   }
 
   render_scheduler_.report_denoise_time(render_work, time_dt() - start_time);
+}
+
+void PathTrace::denoise_volume_guiding_buffers(const RenderWork &render_work,
+                                               const bool has_volume)
+{
+  if (!has_volume || !render_work.volume_guiding_denoise) {
+    return;
+  }
+
+  LOG_DEBUG << "Denoise volume guiding buffers.";
+
+  const double start_time = time_dt();
+
+  /* TODO: in the multi-GPU case, we can denoise on one device and copy to the rest, instead of
+   * denoising on each device separately. */
+  parallel_for_each(path_trace_works_, [&](unique_ptr<PathTraceWork> &path_trace_work) {
+    path_trace_work->denoise_volume_guiding_buffers();
+  });
+
+  render_scheduler_.report_volume_guiding_denoise_time(render_work, time_dt() - start_time);
 }
 
 void PathTrace::set_output_driver(unique_ptr<OutputDriver> driver)
@@ -686,38 +743,45 @@ void PathTrace::update_display(const RenderWork &render_work)
   }
 
   if (!display_ && !output_driver_) {
-    LOG_WORK << "Ignore display update.";
+    LOG_DEBUG << "Ignore display update.";
     return;
   }
 
   if (full_params_.width == 0 || full_params_.height == 0) {
-    LOG_WORK << "Skipping PathTraceDisplay update due to 0 size of the render buffer.";
+    LOG_DEBUG << "Skipping PathTraceDisplay update due to 0 size of the render buffer.";
     return;
   }
 
   const double start_time = time_dt();
 
   if (output_driver_) {
-    LOG_WORK << "Invoke buffer update callback.";
+    LOG_DEBUG << "Invoke buffer update callback.";
 
     const PathTraceTile tile(*this);
     output_driver_->update_render_tile(tile);
   }
 
   if (display_) {
-    LOG_WORK << "Perform copy to GPUDisplay work.";
+    LOG_DEBUG << "Perform copy to GPUDisplay work.";
 
-    const int texture_width = render_state_.effective_big_tile_params.window_width;
-    const int texture_height = render_state_.effective_big_tile_params.window_height;
+    const PassType pass_type = film_->get_display_pass();
+    const bool show_denoised =
+        ((render_work.display.use_denoised_result && has_denoised_result() &&
+          big_tile_params_.get_pass_offset(pass_type, PassMode::DENOISED) != PASS_UNUSED) ||
+         is_volume_guiding_pass(pass_type));
+
+    const int texture_width = show_denoised ?
+                                  render_state_.effective_denoised_big_tile_params.window_width :
+                                  render_state_.effective_big_tile_params.window_width;
+    const int texture_height = show_denoised ?
+                                   render_state_.effective_denoised_big_tile_params.window_height :
+                                   render_state_.effective_big_tile_params.window_height;
     if (!display_->update_begin(texture_width, texture_height)) {
       LOG_ERROR << "Error beginning GPUDisplay update.";
       return;
     }
 
-    const PassMode pass_mode = render_work.display.use_denoised_result &&
-                                       render_state_.has_denoised_result ?
-                                   PassMode::DENOISED :
-                                   PassMode::NOISY;
+    const PassMode pass_mode = show_denoised ? PassMode::DENOISED : PassMode::NOISY;
 
     /* TODO(sergey): When using multi-device rendering map the GPUDisplay once and copy data from
      * all works in parallel. */
@@ -746,33 +810,33 @@ void PathTrace::rebalance(const RenderWork &render_work)
   const int num_works = path_trace_works_.size();
 
   if (num_works == 1) {
-    LOG_WORK << "Ignoring rebalance work due to single device render.";
+    LOG_DEBUG << "Ignoring rebalance work due to single device render.";
     return;
   }
 
   const double start_time = time_dt();
 
-  if (LOG_IS_ON(LOG_LEVEL_WORK)) {
-    LOG_WORK << "Perform rebalance work.";
-    LOG_WORK << "Per-device path tracing time (seconds):";
+  if (LOG_IS_ON(LOG_LEVEL_DEBUG)) {
+    LOG_DEBUG << "Perform rebalance work.";
+    LOG_DEBUG << "Per-device path tracing time (seconds):";
     for (int i = 0; i < num_works; ++i) {
-      LOG_WORK << path_trace_works_[i]->get_device()->info.description << ": "
-               << work_balance_infos_[i].time_spent;
+      LOG_DEBUG << path_trace_works_[i]->get_device()->info.description << ": "
+                << work_balance_infos_[i].time_spent;
     }
   }
 
   const bool did_rebalance = work_balance_do_rebalance(work_balance_infos_);
 
-  if (LOG_IS_ON(LOG_LEVEL_WORK)) {
-    LOG_WORK << "Calculated per-device weights for works:";
+  if (LOG_IS_ON(LOG_LEVEL_DEBUG)) {
+    LOG_DEBUG << "Calculated per-device weights for works:";
     for (int i = 0; i < num_works; ++i) {
-      LOG_WORK << path_trace_works_[i]->get_device()->info.description << ": "
-               << work_balance_infos_[i].weight;
+      LOG_DEBUG << path_trace_works_[i]->get_device()->info.description << ": "
+                << work_balance_infos_[i].weight;
     }
   }
 
   if (!did_rebalance) {
-    LOG_WORK << "Balance in path trace works did not change.";
+    LOG_DEBUG << "Balance in path trace works did not change.";
     render_scheduler_.report_rebalance_time(render_work, time_dt() - start_time, false);
     return;
   }
@@ -796,7 +860,7 @@ void PathTrace::write_tile_buffer(const RenderWork &render_work)
     return;
   }
 
-  LOG_WORK << "Write tile result.";
+  LOG_DEBUG << "Write tile result.";
 
   render_state_.tile_written = true;
 
@@ -810,13 +874,13 @@ void PathTrace::write_tile_buffer(const RenderWork &render_work)
    *
    * Important thing is: tile should be written to the software via callback only once. */
   if (!has_multiple_tiles) {
-    LOG_WORK << "Write tile result via buffer write callback.";
+    LOG_DEBUG << "Write tile result via buffer write callback.";
     tile_buffer_write();
   }
   /* Write tile to disk, so that the render work's render buffer can be re-used for the next tile.
    */
   else {
-    LOG_WORK << "Write tile result to disk.";
+    LOG_DEBUG << "Write tile result to disk.";
     tile_buffer_write_to_disk();
   }
 }
@@ -827,10 +891,10 @@ void PathTrace::finalize_full_buffer_on_disk(const RenderWork &render_work)
     return;
   }
 
-  LOG_WORK << "Handle full-frame render buffer work.";
+  LOG_DEBUG << "Handle full-frame render buffer work.";
 
   if (!tile_manager_.has_written_tiles()) {
-    LOG_WORK << "No tiles on disk.";
+    LOG_DEBUG << "No tiles on disk.";
     return;
   }
 
@@ -1030,7 +1094,7 @@ static string get_layer_view_name(const RenderBuffers &buffers)
 
 void PathTrace::process_full_buffer_from_disk(string_view filename)
 {
-  LOG_WORK << "Processing full frame buffer file " << filename;
+  LOG_DEBUG << "Processing full frame buffer file " << filename;
 
   progress_set_status("Reading full buffer from disk");
 
@@ -1068,7 +1132,8 @@ void PathTrace::process_full_buffer_from_disk(string_view filename)
     set_denoiser_params(denoise_params);
 
     /* Number of samples doesn't matter too much, since the samples count pass will be used. */
-    denoiser_->denoise_buffer(full_frame_buffers.params, &full_frame_buffers, 0, false);
+    denoiser_->denoise_buffer(
+        full_frame_buffers.params, full_frame_buffers.params, &full_frame_buffers, 0, false);
 
     render_state_.has_denoised_result = true;
   }
@@ -1270,6 +1335,9 @@ static string device_info_list_report(const string &message, const DeviceInfo &d
 
   if (device_info.multi_devices.empty()) {
     result += full_device_info_description(device_info) + "\n";
+    result += pad +
+              "    Hardware Ray-Tracing: " + (device_info.use_hardware_raytracing ? "On" : "Off") +
+              "\n";
     return result;
   }
 
@@ -1280,6 +1348,8 @@ static string device_info_list_report(const string &message, const DeviceInfo &d
     }
 
     result += full_device_info_description(sub_device_info) + "\n";
+    result += pad + "    Hardware Ray-Tracing: " +
+              (sub_device_info.use_hardware_raytracing ? "On" : "Off") + "\n";
 
     is_first = false;
   }
@@ -1461,10 +1531,10 @@ void PathTrace::guiding_prepare_structures()
 void PathTrace::guiding_update_structures()
 {
 #if defined(WITH_PATH_GUIDING)
-  LOG_WORK << "Update path guiding structures";
+  LOG_DEBUG << "Update path guiding structures";
 
-  LOG_DEBUG << "Number of surface samples: " << guiding_sample_data_storage_->GetSizeSurface();
-  LOG_DEBUG << "Number of volume samples: " << guiding_sample_data_storage_->GetSizeVolume();
+  LOG_TRACE << "Number of surface samples: " << guiding_sample_data_storage_->GetSizeSurface();
+  LOG_TRACE << "Number of volume samples: " << guiding_sample_data_storage_->GetSizeVolume();
 
   const size_t num_valid_samples = guiding_sample_data_storage_->GetSizeSurface() +
                                    guiding_sample_data_storage_->GetSizeVolume();
@@ -1474,7 +1544,7 @@ void PathTrace::guiding_update_structures()
     guiding_field_->Update(*guiding_sample_data_storage_);
     guiding_update_count++;
 
-    LOG_DEBUG << "Path guiding field valid: " << guiding_field_->Validate();
+    LOG_TRACE << "Path guiding field valid: " << guiding_field_->Validate();
 
     guiding_sample_data_storage_->Clear();
   }

@@ -13,7 +13,6 @@ set(INC
 )
 
 set(INC_SYS
-  ../../../../extern/fmtlib/include
 )
 
 set(SRC
@@ -51,13 +50,16 @@ set(LIB
   PRIVATE bf::gpu
   PRIVATE bf::imbuf
   PRIVATE bf::intern::guardedalloc
-  PRIVATE bf::extern::fmtlib
   PRIVATE bf::sequencer
   PRIVATE bf::windowmanager
 )
 
 if(WITH_HEADLESS)
   add_definitions(-DWITH_HEADLESS)
+endif()
+
+if(WITH_INPUT_IME)
+  add_definitions(-DWITH_INPUT_IME)
 endif()
 
 blender_add_lib(bf_editor_screen "${SRC}" "${INC}" "${INC_SYS}" "${LIB}")

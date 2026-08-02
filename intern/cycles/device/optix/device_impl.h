@@ -20,45 +20,68 @@ struct KernelParamsOptiX;
 
 /* List of OptiX program groups. */
 enum {
+  /* Ray generation */
   PG_RGEN_INTERSECT_CLOSEST,
   PG_RGEN_INTERSECT_SHADOW,
   PG_RGEN_INTERSECT_SUBSURFACE,
   PG_RGEN_INTERSECT_VOLUME_STACK,
   PG_RGEN_INTERSECT_DEDICATED_LIGHT,
+  PG_RGEN_INTERSECT_MNEE,
   PG_RGEN_SHADE_BACKGROUND,
-  PG_RGEN_SHADE_LIGHT,
+  PG_RGEN_SHADE_LIGHT_NEE,
+  PG_RGEN_SHADE_LIGHT_FORWARD,
   PG_RGEN_SHADE_SURFACE,
   PG_RGEN_SHADE_SURFACE_RAYTRACE,
-  PG_RGEN_SHADE_SURFACE_MNEE,
   PG_RGEN_SHADE_VOLUME,
+  PG_RGEN_SHADE_VOLUME_RAY_MARCHING,
   PG_RGEN_SHADE_SHADOW,
   PG_RGEN_SHADE_DEDICATED_LIGHT,
   PG_RGEN_EVAL_DISPLACE,
   PG_RGEN_EVAL_BACKGROUND,
   PG_RGEN_EVAL_CURVE_SHADOW_TRANSPARENCY,
   PG_RGEN_INIT_FROM_CAMERA,
+  PG_RGEN_EVAL_VOLUME_DENSITY,
+
+  /* Miss */
   PG_MISS,
+
+  /* Hit */
   PG_HITD, /* Default hit group. */
   PG_HITS, /* __SHADOW_RECORD_ALL__ hit group. */
   PG_HITL, /* __BVH_LOCAL__ hit group (only used for triangles). */
   PG_HITV, /* __VOLUME__ hit group. */
   PG_HITD_MOTION,
   PG_HITS_MOTION,
+  PG_HITL_MOTION,
+  PG_HITV_MOTION,
   PG_HITD_CURVE_LINEAR,
   PG_HITS_CURVE_LINEAR,
+  PG_HITV_CURVE_LINEAR,
+  PG_HITL_CURVE_LINEAR,
   PG_HITD_CURVE_LINEAR_MOTION,
   PG_HITS_CURVE_LINEAR_MOTION,
+  PG_HITV_CURVE_LINEAR_MOTION,
+  PG_HITL_CURVE_LINEAR_MOTION,
+  PG_HITD_CURVE_RIBBON,
+  PG_HITS_CURVE_RIBBON,
+  PG_HITV_CURVE_RIBBON,
+  PG_HITL_CURVE_RIBBON,
   PG_HITD_POINTCLOUD,
   PG_HITS_POINTCLOUD,
+  PG_HITV_POINTCLOUD,
+  PG_HITL_POINTCLOUD,
+
+  /* Callable */
   PG_CALL_SVM_AO,
   PG_CALL_SVM_BEVEL,
+
   NUM_PROGRAM_GROUPS
 };
 
 static const int MISS_PROGRAM_GROUP_OFFSET = PG_MISS;
 static const int NUM_MISS_PROGRAM_GROUPS = 1;
 static const int HIT_PROGAM_GROUP_OFFSET = PG_HITD;
-static const int NUM_HIT_PROGRAM_GROUPS = 8;
+static const int NUM_HIT_PROGRAM_GROUPS = 24;
 static const int CALLABLE_PROGRAM_GROUPS_BASE = PG_CALL_SVM_AO;
 static const int NUM_CALLABLE_PROGRAM_GROUPS = 2;
 
@@ -74,7 +97,9 @@ class OptiXDevice : public CUDADevice {
  public:
   OptixDeviceContext context = nullptr;
 
-  OptixModule optix_module = nullptr; /* All necessary OptiX kernels are in one module. */
+  OptixModule optix_module = nullptr;
+  OptixModule mnee_module = nullptr;
+  OptixModule shader_raytrace_module = nullptr;
   OptixModule builtin_modules[4] = {};
   OptixPipeline pipelines[NUM_PIPELINES] = {};
   OptixProgramGroup groups[NUM_PROGRAM_GROUPS] = {};
@@ -85,6 +110,7 @@ class OptiXDevice : public CUDADevice {
   vector<OptixModule> osl_modules;
   vector<OptixProgramGroup> osl_groups;
   OptixModule osl_camera_module = nullptr;
+  OptixModule osl_volume_module = nullptr;
   device_vector<uint8_t> osl_colorsystem;
 #  endif
 

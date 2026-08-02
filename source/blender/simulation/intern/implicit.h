@@ -8,9 +8,11 @@
  * \ingroup sim
  */
 
-#include "BLI_compiler_compat.h"
+#include "BLI_compiler_compat.hh"
 
 #include <cstdio>
+
+namespace blender {
 
 // #define IMPLICIT_SOLVER_EIGEN
 #define IMPLICIT_SOLVER_BLENDER
@@ -273,3 +275,5 @@ void SIM_hair_volume_vertex_grid_forces(struct HairGrid *grid,
                                         float f[3],
                                         float dfdx[3][3],
                                         float dfdv[3][3]);
+
+}  // namespace blender

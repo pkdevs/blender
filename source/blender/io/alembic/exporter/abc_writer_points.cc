@@ -11,17 +11,20 @@
 #include "DNA_object_types.h"
 #include "DNA_particle_types.h"
 
-#include "BLI_math_matrix.h"
-#include "BLI_math_vector.h"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_vector_c.hh"
 
 #include "BKE_particle.h"
 
 #include "DEG_depsgraph_query.hh"
 
 #include "CLG_log.h"
+
+namespace blender {
+
 static CLG_LogRef LOG = {"io.alembic"};
 
-namespace blender::io::alembic {
+namespace io::alembic {
 
 using Alembic::AbcGeom::kVertexScope;
 using Alembic::AbcGeom::OPoints;
@@ -126,4 +129,5 @@ void ABCPointsWriter::do_write(HierarchyContext &context)
   abc_points_schema_.set(sample);
 }
 
-}  // namespace blender::io::alembic
+}  // namespace io::alembic
+}  // namespace blender

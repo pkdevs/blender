@@ -32,19 +32,20 @@ ccl_device_inline bool triangle_intersect(KernelGlobals kg,
                                           const int prim,
                                           const int prim_addr)
 {
+  const int position_offset = kernel_data_fetch(objects, object).position_offset;
   const uint3 tri_vindex = kernel_data_fetch(tri_vindex, prim);
-  const float3 tri_a = kernel_data_fetch(tri_verts, tri_vindex.x);
-  const float3 tri_b = kernel_data_fetch(tri_verts, tri_vindex.y);
-  const float3 tri_c = kernel_data_fetch(tri_verts, tri_vindex.z);
+  const float3 tri_a = kernel_data_fetch(tri_verts, position_offset + tri_vindex.x);
+  const float3 tri_b = kernel_data_fetch(tri_verts, position_offset + tri_vindex.y);
+  const float3 tri_c = kernel_data_fetch(tri_verts, position_offset + tri_vindex.z);
 
   float t;
   float u;
   float v;
   if (ray_triangle_intersect(P, dir, tmin, tmax, tri_a, tri_b, tri_c, &u, &v, &t)) {
-#ifdef __VISIBILITY_FLAG__
-    /* Visibility flag test. we do it here under the assumption
-     * that most triangles are culled by node flags.
-     */
+#if defined(__VISIBILITY_FLAG__) && !defined(__KERNEL_HIPRT__)
+    /* Visibility flag test. we do it here under the assumption that most triangles are culled by
+     * node flags.
+     * Note that HIP-RT performs visibility check on the instance level. */
     if (kernel_data_fetch(prim_visibility, prim_addr) & visibility)
 #endif
     {
@@ -78,10 +79,11 @@ ccl_device_inline bool triangle_intersect_local(KernelGlobals kg,
                                                 ccl_private uint *lcg_state,
                                                 const int max_hits)
 {
+  const int position_offset = kernel_data_fetch(objects, object).position_offset;
   const uint3 tri_vindex = kernel_data_fetch(tri_vindex, prim);
-  const float3 tri_a = kernel_data_fetch(tri_verts, tri_vindex.x);
-  const float3 tri_b = kernel_data_fetch(tri_verts, tri_vindex.y);
-  const float3 tri_c = kernel_data_fetch(tri_verts, tri_vindex.z);
+  const float3 tri_a = kernel_data_fetch(tri_verts, position_offset + tri_vindex.x);
+  const float3 tri_b = kernel_data_fetch(tri_verts, position_offset + tri_vindex.y);
+  const float3 tri_c = kernel_data_fetch(tri_verts, position_offset + tri_vindex.z);
 
   float t;
   float u;
@@ -125,13 +127,35 @@ ccl_device_inline float3 triangle_point_from_uv(KernelGlobals kg,
                                                 const float u,
                                                 const float v)
 {
+  const int position_offset = kernel_data_fetch(objects, sd->object).position_offset;
   const uint3 tri_vindex = kernel_data_fetch(tri_vindex, isect_prim);
-  const float3 tri_a = kernel_data_fetch(tri_verts, tri_vindex.x);
-  const float3 tri_b = kernel_data_fetch(tri_verts, tri_vindex.y);
-  const float3 tri_c = kernel_data_fetch(tri_verts, tri_vindex.z);
+  const float3 tri_a = kernel_data_fetch(tri_verts, position_offset + tri_vindex.x);
+  const float3 tri_b = kernel_data_fetch(tri_verts, position_offset + tri_vindex.y);
+  const float3 tri_c = kernel_data_fetch(tri_verts, position_offset + tri_vindex.z);
 
   /* This appears to give slightly better precision than interpolating with w = (1 - u - v). */
   float3 P = tri_a + u * (tri_b - tri_a) + v * (tri_c - tri_a);
+
+  if (!(sd->object_flag & SD_OBJECT_TRANSFORM_APPLIED)) {
+    const Transform tfm = object_get_transform(kg, sd);
+    P = transform_point(&tfm, P);
+  }
+
+  return P;
+}
+
+/**
+ * Use the barycentric coordinates to get the intersection location,
+ * but with vertex coordinates specified.
+ */
+ccl_device_inline float3 triangle_point_from_uv_and_verts(KernelGlobals kg,
+                                                          ccl_private ShaderData *sd,
+                                                          const float u,
+                                                          const float v,
+                                                          const float3 verts[3])
+{
+  /* This appears to give slightly better precision than interpolating with w = (1 - u - v). */
+  float3 P = verts[0] + u * (verts[1] - verts[0]) + v * (verts[2] - verts[0]);
 
   if (!(sd->object_flag & SD_OBJECT_TRANSFORM_APPLIED)) {
     const Transform tfm = object_get_transform(kg, sd);
@@ -154,12 +178,12 @@ ccl_device_inline void triangle_shader_setup(KernelGlobals kg, ccl_private Shade
 
   /* Smooth normal. */
   if (sd->shader & SHADER_SMOOTH_NORMAL) {
-    sd->N = triangle_smooth_normal(kg, Ng, sd->prim, sd->u, sd->v);
+    sd->N = triangle_smooth_normal(kg, Ng, sd->object, sd->object_flag, sd->prim, sd->u, sd->v);
   }
 
 #ifdef __DPDU__
   /* dPdu/dPdv */
-  triangle_dPdudv(kg, sd->prim, &sd->dPdu, &sd->dPdv);
+  triangle_dPdudv(kg, sd->object, sd->prim, &sd->dPdu, &sd->dPdv);
 #endif
 }
 

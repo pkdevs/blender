@@ -62,12 +62,11 @@ PyDoc_STRVAR(
     "\n"
     "   Must be overload by inherited classes.\n"
     "\n"
-    "   :arg it: The Interface0DIterator pointing onto the Interface0D at\n"
+    "   :param it: The Interface0DIterator pointing onto the Interface0D at\n"
     "      which we wish to evaluate the predicate.\n"
     "   :type it: :class:`Interface0DIterator`\n"
     "   :return: True if the condition is satisfied, false otherwise.\n"
     "   :rtype: bool\n");
-
 static int UnaryPredicate0D___init__(BPy_UnaryPredicate0D *self, PyObject *args, PyObject *kwds)
 {
   static const char *kwlist[] = {nullptr};
@@ -98,8 +97,13 @@ static PyObject *UnaryPredicate0D___call__(BPy_UnaryPredicate0D *self,
   static const char *kwlist[] = {"it", nullptr};
   PyObject *py_if0D_it;
 
-  if (!PyArg_ParseTupleAndKeywords(
-          args, kwds, "O!", (char **)kwlist, &Interface0DIterator_Type, &py_if0D_it))
+  if (!PyArg_ParseTupleAndKeywords(args,
+                                   kwds,
+                                   "O!" /* `it` */
+                                   ":__call__",
+                                   (char **)kwlist,
+                                   &Interface0DIterator_Type,
+                                   &py_if0D_it))
   {
     return nullptr;
   }
@@ -132,8 +136,7 @@ PyDoc_STRVAR(
     UnaryPredicate0D_name_doc,
     "The name of the unary 0D predicate.\n"
     "\n"
-    ":type: str");
-
+    ":type: str\n");
 static PyObject *UnaryPredicate0D_name_get(BPy_UnaryPredicate0D *self, void * /*closure*/)
 {
   return PyUnicode_FromString(Py_TYPE(self)->tp_name);

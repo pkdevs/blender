@@ -9,7 +9,7 @@
 #include "DNA_outliner_types.h"
 #include "DNA_sequence_types.h"
 
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 
 #include "BLT_translation.hh"
 
@@ -27,7 +27,7 @@ TreeElementStrip::TreeElementStrip(TreeElement &legacy_te, Strip &strip)
 
 bool TreeElementStrip::expand_poll(const SpaceOutliner & /*space_outliner*/) const
 {
-  return !(strip_.type & STRIP_TYPE_EFFECT);
+  return !strip_.is_effect();
 }
 
 void TreeElementStrip::expand(SpaceOutliner & /*space_outliner*/) const
@@ -39,8 +39,8 @@ void TreeElementStrip::expand(SpaceOutliner & /*space_outliner*/) const
    */
 
   if (strip_.type == STRIP_TYPE_META) {
-    LISTBASE_FOREACH (Strip *, child, &strip_.seqbase) {
-      add_element(&legacy_te_.subtree, nullptr, child, &legacy_te_, TSE_STRIP, 0);
+    for (Strip &child : strip_.seqbase) {
+      add_element(&legacy_te_.subtree, nullptr, &child, &legacy_te_, TSE_STRIP, 0);
     }
   }
   else {
@@ -53,9 +53,47 @@ Strip &TreeElementStrip::get_strip() const
   return strip_;
 }
 
-StripType TreeElementStrip::get_strip_type() const
+std::optional<BIFIconID> TreeElementStrip::get_icon() const
 {
-  return StripType(strip_.type);
+  switch (strip_.type) {
+    case STRIP_TYPE_SCENE:
+      return ICON_SCENE_DATA;
+    case STRIP_TYPE_MOVIECLIP:
+      return ICON_TRACKER;
+    case STRIP_TYPE_MASK:
+      return ICON_MOD_MASK;
+    case STRIP_TYPE_MOVIE:
+      return ICON_FILE_MOVIE;
+    case STRIP_TYPE_SOUND:
+      return ICON_SOUND;
+    case STRIP_TYPE_IMAGE:
+      return ICON_FILE_IMAGE;
+    case STRIP_TYPE_COLOR:
+    case STRIP_TYPE_ADJUSTMENT:
+      return ICON_COLOR;
+    case STRIP_TYPE_TEXT:
+      return ICON_FONT_DATA;
+    case STRIP_TYPE_ADD:
+    case STRIP_TYPE_SUB:
+    case STRIP_TYPE_MUL:
+    case STRIP_TYPE_ALPHAOVER:
+    case STRIP_TYPE_ALPHAUNDER:
+    case STRIP_TYPE_COLORMIX:
+    case STRIP_TYPE_MULTICAM:
+    case STRIP_TYPE_SPEED:
+    case STRIP_TYPE_GLOW:
+    case STRIP_TYPE_GAUSSIAN_BLUR:
+      return ICON_SHADERFX;
+    case STRIP_TYPE_CROSS:
+    case STRIP_TYPE_GAMCROSS:
+    case STRIP_TYPE_WIPE:
+    case STRIP_TYPE_COMPOSITOR:
+      return ICON_ARROW_LEFTRIGHT;
+    case STRIP_TYPE_META:
+      return ICON_SEQ_STRIP_META;
+    default:
+      return ICON_DOT;
+  }
 }
 
 /* -------------------------------------------------------------------- */

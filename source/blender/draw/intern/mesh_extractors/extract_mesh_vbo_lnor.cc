@@ -260,7 +260,7 @@ gpu::VertBufPtr extract_normals(const MeshRenderData &mr, const bool use_hq)
   }();
   gpu::VertBufPtr vbo = gpu::VertBufPtr(GPU_vertbuf_create_with_format(format));
   GPU_vertbuf_data_alloc(*vbo, size);
-  MutableSpan vbo_data = vbo->data<gpu::PackedNormal>();
+  MutableSpan vbo_data = vbo->data<int1010102_norm>();
   MutableSpan corners_data = vbo_data.take_front(mr.corners_num);
   MutableSpan loose_data = vbo_data.take_back(mr.loose_indices_num);
 
@@ -271,7 +271,7 @@ gpu::VertBufPtr extract_normals(const MeshRenderData &mr, const bool use_hq)
     extract_normals_bm(mr, corners_data);
   }
 
-  loose_data.fill(gpu::PackedNormal{});
+  loose_data.fill(int1010102_norm{});
   return vbo;
 }
 
@@ -299,11 +299,11 @@ static void update_loose_normals(const MeshRenderData &mr,
 
   /* Default to zeroed attribute. The overlay shader should expect this and render engines should
    * never draw loose geometry. */
-  const float4 default_normal(0.0f, 0.0f, 0.0f, 0.0f);
+  const float3 default_normal(0.0f, 0.0f, 0.0f);
   for (const int i : IndexRange::from_begin_end(loose_geom_start, vbo_size)) {
     /* TODO(fclem): This has HORRENDOUS performance. Prefer clearing the buffer on device with
      * something like glClearBufferSubData. */
-    GPU_vertbuf_update_sub(&lnor, i * sizeof(float4), sizeof(float4), &default_normal);
+    GPU_vertbuf_update_sub(&lnor, i * sizeof(float3), sizeof(float3), &default_normal);
   }
 }
 
@@ -315,6 +315,10 @@ gpu::VertBufPtr extract_normals_subdiv(const MeshRenderData &mr,
 
   gpu::VertBufPtr lnor = gpu::VertBufPtr(
       GPU_vertbuf_create_on_device(get_normals_format(), vbo_size));
+  if (subdiv_cache.num_subdiv_loops == 0) {
+    update_loose_normals(mr, subdiv_cache, *lnor);
+    return lnor;
+  }
 
   if (subdiv_cache.use_custom_loop_normals) {
     const Mesh *coarse_mesh = subdiv_cache.mesh;
@@ -340,8 +344,8 @@ gpu::VertBufPtr extract_normals_subdiv(const MeshRenderData &mr,
       GPU_vertbuf_create_on_device(vert_normals_format, subdiv_cache.num_subdiv_verts));
   draw_subdiv_accumulate_normals(subdiv_cache,
                                  &pos,
-                                 subdiv_cache.subdiv_vertex_face_adjacency_offsets,
-                                 subdiv_cache.subdiv_vertex_face_adjacency,
+                                 subdiv_cache.subdiv_vert_face_adjacency_offsets,
+                                 subdiv_cache.subdiv_vert_face_adjacency,
                                  subdiv_corner_verts.get(),
                                  vert_normals.get());
 

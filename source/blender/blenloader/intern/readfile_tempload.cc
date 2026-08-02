@@ -9,11 +9,11 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_string.h"
-
 #include "BKE_main.hh"
 
 #include "DNA_ID.h"
+
+namespace blender {
 
 TempLibraryContext *BLO_library_temp_load_id(Main *real_main,
                                              const char *blend_file_path,
@@ -21,12 +21,12 @@ TempLibraryContext *BLO_library_temp_load_id(Main *real_main,
                                              const char *idname,
                                              ReportList *reports)
 {
-  TempLibraryContext *temp_lib_ctx = MEM_callocN<TempLibraryContext>(__func__);
+  TempLibraryContext *temp_lib_ctx = MEM_new_zeroed<TempLibraryContext>(__func__);
   temp_lib_ctx->bmain_base = BKE_main_new();
   temp_lib_ctx->bf_reports.reports = reports;
 
-  /* Copy the file path so any path remapping is performed properly. */
-  STRNCPY(temp_lib_ctx->bmain_base->filepath, real_main->filepath);
+  /* Copy the file path and colorspace so any remapping is performed properly. */
+  BKE_main_init_from_reference(*temp_lib_ctx->bmain_base, *real_main);
 
   BlendHandle *blendhandle = BLO_blendhandle_from_file(blend_file_path, &temp_lib_ctx->bf_reports);
 
@@ -47,5 +47,7 @@ TempLibraryContext *BLO_library_temp_load_id(Main *real_main,
 void BLO_library_temp_free(TempLibraryContext *temp_lib_ctx)
 {
   BKE_main_free(temp_lib_ctx->bmain_base);
-  MEM_freeN(temp_lib_ctx);
+  MEM_delete(temp_lib_ctx);
 }
+
+}  // namespace blender

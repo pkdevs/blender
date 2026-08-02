@@ -6,6 +6,8 @@
 
 #include "bmesh_class.hh"
 
+namespace blender {
+
 /** \file
  * \ingroup bmesh
  */
@@ -58,8 +60,8 @@ bool BM_disk_dissolve(BMesh *bm, BMVert *v);
  * \param l_b: Second loop of an adjacent face pair that will be joined.
  * \param do_del: If true, remove the original faces, internal edges,
  * and internal verts such that they are replaced by the new face.
- * \param r_double: A pointer to a BMFace* that controls processing of doubled faces.
- * See #BM_faces_join_pair `r_double` argument for details.
+ * \param r_double: A pointer to a face that controls processing of doubled faces.
+ * See #BM_faces_join `r_double` argument for details.
  *
  * \return The combined face or NULL on failure.
  */
@@ -130,7 +132,7 @@ BMFace *BM_face_split_n(BMesh *bm,
  *
  * \param bm: The bmesh
  * \param e_kill: The edge to collapse
- * \param v_kill: The vertex  to collapse into the edge
+ * \param v_kill: The vertex to collapse into the edge
  * \param fac: The factor along the edge
  * \param join_faces: When true the faces around the vertex will be joined
  * otherwise collapse the vertex by merging the 2 edges this vert touches into one.
@@ -152,6 +154,9 @@ BMEdge *BM_vert_collapse_faces(BMesh *bm,
  * Collapses a vertex onto another vertex it shares an edge with.
  *
  * \return The New Edge
+ *
+ * \note To check if collapsing would create duplicate geometry,
+ * see: #BM_vert_collapse_check_double_face.
  */
 BMEdge *BM_vert_collapse_edge(BMesh *bm,
                               BMEdge *e_kill,
@@ -183,7 +188,7 @@ BMVert *BM_edge_collapse(
  * \param v: One of the vertices in \a e and defines the "from" end of the splitting operation,
  * the new vertex will be \a fac of the way from \a v to the other end.
  * \param r_e: The newly created edge.
- * \return  The new vertex.
+ * \return The new vertex.
  */
 BMVert *BM_edge_split(BMesh *bm, BMEdge *e, BMVert *v, BMEdge **r_e, float fac);
 
@@ -215,12 +220,18 @@ void BM_edge_verts_swap(BMEdge *e);
  *
  * \note #BM_edge_rotate_check must have already run.
  */
-void BM_edge_calc_rotate(BMEdge *e, bool ccw, BMLoop **r_l1, BMLoop **r_l2);
+[[nodiscard]] bool BM_edge_calc_rotate(BMEdge *e, bool ccw, BMLoop **r_l1, BMLoop **r_l2);
 /**
  * \brief Check if Rotate Edge is OK
  *
  * Quick check to see if we could rotate the edge,
  * use this to avoid calling exceptions on common cases.
+ *
+ * Take care, depending on the rotation direction its possible
+ * the adjacent faces share multiple edges on either side.
+ *
+ * Before executing the rotation it's important to check the rotated loops
+ * on both faces don't reference the same vertex.
  */
 bool BM_edge_rotate_check(BMEdge *e);
 /**
@@ -270,3 +281,5 @@ enum {
 BMVert *BM_face_loop_separate(BMesh *bm, BMLoop *l_sep);
 BMVert *BM_face_loop_separate_multi_isolated(BMesh *bm, BMLoop *l_sep);
 BMVert *BM_face_loop_separate_multi(BMesh *bm, BMLoop **larr, int larr_len);
+
+}  // namespace blender

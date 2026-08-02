@@ -8,12 +8,14 @@
 
 #include "BKE_camera.h"
 #include "BKE_layer.hh"
+#include "BKE_lib_id.hh"
+#include "BKE_library.hh"
 #include "BKE_light.h"
 #include "BKE_object.hh"
 #include "BKE_report.hh"
 
-#include "BLI_fileops.h"
-#include "BLI_math_rotation.h"
+#include "BLI_fileops.hh"
+#include "BLI_math_rotation_c.hh"
 #include "BLI_task.hh"
 
 #include "DEG_depsgraph.hh"
@@ -35,9 +37,12 @@
 #include "fbx_import_util.hh"
 
 #include "CLG_log.h"
+
+namespace blender {
+
 static CLG_LogRef LOG = {"io.fbx"};
 
-namespace blender::io::fbx {
+namespace io::fbx {
 
 struct FbxImportContext {
   Main *bmain;
@@ -98,9 +103,17 @@ void FbxImportContext::import_globals(Scene *scene) const
 void FbxImportContext::import_materials()
 {
   for (const ufbx_material *fmat : this->fbx.materials) {
-    Material *mat = io::fbx::import_material(this->bmain, this->base_dir, *fmat);
-    if (this->params.use_custom_props) {
-      read_custom_properties(fmat->props, mat->id, this->params.props_enum_as_string);
+    Material *mat = nullptr;
+    /* Check if a material with this name already exists in the main database */
+    if (this->params.mtl_name_collision_mode == eFBXMtlNameCollisionMode::ReferenceExisting) {
+      mat = (Material *)BKE_libblock_find_name(this->bmain, ID_MA, fmat->name.data);
+    }
+
+    if (mat == nullptr) {
+      mat = io::fbx::import_material(this->bmain, this->base_dir, *fmat);
+      if (this->params.use_custom_props) {
+        read_custom_properties(fmat->props, mat->id, this->params.props_enum_as_string);
+      }
     }
     this->mapping.mat_to_material.add(fmat, mat);
   }
@@ -171,7 +184,7 @@ void FbxImportContext::import_cameras()
     bcam->clip_end = fcam->far_plane * this->fbx.metadata.root_scale;
 
     Object *obj = BKE_object_add_only_object(this->bmain, OB_CAMERA, get_fbx_name(node->name));
-    obj->data = bcam;
+    obj->data = id_cast<ID *>(bcam);
     if (!node->visible) {
       obj->visibility_flag |= OB_HIDE_VIEWPORT;
     }
@@ -223,7 +236,7 @@ void FbxImportContext::import_lights()
     //@TODO: if hasattr(lamp, "cycles"): lamp.cycles.cast_shadow = lamp.use_shadow
 
     Object *obj = BKE_object_add_only_object(this->bmain, OB_LAMP, get_fbx_name(node->name));
-    obj->data = lamp;
+    obj->data = id_cast<ID *>(lamp);
     if (!node->visible) {
       obj->visibility_flag |= OB_HIDE_VIEWPORT;
     }
@@ -338,11 +351,7 @@ void importer_main(Main *bmain, Scene *scene, ViewLayer *view_layer, const FBXIm
   opts.clean_skin_weights = true;
   opts.use_blender_pbr_material = true;
 
-  /* Do geometry modifications for "geometric transforms" cases; when it cannot do that
-   * (e.g. instancing etc.), do not insert helper nodes to account for that. Helper nodes currently
-   * cause armatures/skins to not import correctly, when inserted in the middle of bone chain. */
-  opts.geometry_transform_handling = UFBX_GEOMETRY_TRANSFORM_HANDLING_MODIFY_GEOMETRY_NO_FALLBACK;
-
+  opts.geometry_transform_handling = UFBX_GEOMETRY_TRANSFORM_HANDLING_MODIFY_GEOMETRY;
   opts.pivot_handling = UFBX_PIVOT_HANDLING_ADJUST_TO_ROTATION_PIVOT;
 
   opts.space_conversion = UFBX_SPACE_CONVERSION_ADJUST_TRANSFORMS;
@@ -379,7 +388,13 @@ void importer_main(Main *bmain, Scene *scene, ViewLayer *view_layer, const FBXIm
     return;
   }
 
-  LayerCollection *lc = BKE_layer_collection_get_active(view_layer);
+  LayerCollection *lc = BKE_layer_collection_get_active_editable(view_layer);
+  if (!ID_IS_EDITABLE(lc->collection)) {
+    BKE_report(params.reports,
+               RPT_WARNING,
+               "Could not find an editable collection in current scene, imported data will not be "
+               "instantiated");
+  }
   //@TODO: do we need to sort objects by name? (faster to create within blender)
 
   FbxImportContext ctx(bmain, fbx, params);
@@ -395,7 +410,7 @@ void importer_main(Main *bmain, Scene *scene, ViewLayer *view_layer, const FBXIm
       }
       nodes.append(node);
     }
-    std::sort(nodes.begin(), nodes.end(), [](const ufbx_node *a, const ufbx_node *b) {
+    std::ranges::sort(nodes, [](const ufbx_node *a, const ufbx_node *b) {
       int ncmp = strcmp(a->name.data, b->name.data);
       if (ncmp != 0) {
         return ncmp < 0;
@@ -419,7 +434,7 @@ void importer_main(Main *bmain, Scene *scene, ViewLayer *view_layer, const FBXIm
   ctx.import_cameras();
   ctx.import_lights();
   ctx.import_empties();
-  ctx.import_animation(FPS);
+  ctx.import_animation(scene->frames_per_second());
   ctx.setup_hierarchy();
 
   ufbx_free_scene(fbx);
@@ -430,20 +445,34 @@ void importer_main(Main *bmain, Scene *scene, ViewLayer *view_layer, const FBXIm
   }
 
   /* Select objects, sync layers etc. */
-  BKE_view_layer_base_deselect_all(scene, view_layer);
-  BKE_view_layer_synced_ensure(scene, view_layer);
+  BKE_view_layer_base_deselect_all(*bmain, scene, view_layer);
+  BKE_view_layer_synced_ensure(*bmain, scene, view_layer);
+  bool has_instantiated_object = false;
+  bool has_uninstantiated_object = false;
   for (Object *obj : ctx.mapping.imported_objects) {
     Base *base = BKE_view_layer_base_find(view_layer, obj);
+    if (!base) {
+      /* Object not instantiated in current viewlayer. */
+      has_uninstantiated_object = true;
+      continue;
+    }
+    has_instantiated_object = true;
     BKE_view_layer_base_select_and_set_active(view_layer, base);
 
     int flags = ID_RECALC_TRANSFORM | ID_RECALC_GEOMETRY | ID_RECALC_ANIMATION |
                 ID_RECALC_BASE_FLAGS;
     DEG_id_tag_update_ex(bmain, &obj->id, flags);
   }
+
+  if (has_instantiated_object && has_uninstantiated_object) {
+    CLOG_ERROR(&LOG, "Some imported objects were not instantiated, while others were");
+  }
+
   DEG_id_tag_update(&lc->collection->id, ID_RECALC_SYNC_TO_EVAL);
 
   DEG_id_tag_update(&scene->id, ID_RECALC_BASE_FLAGS);
   DEG_relations_tag_update(bmain);
 }
 
-}  // namespace blender::io::fbx
+}  // namespace io::fbx
+}  // namespace blender

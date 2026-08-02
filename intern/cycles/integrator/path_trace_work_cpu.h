@@ -34,6 +34,7 @@ class PathTraceWorkCPU : public PathTraceWork {
                    const bool *cancel_requested_flag);
 
   void init_execution() override;
+  void deinit_execution() override;
 
   void render_samples(RenderStatistics &statistics,
                       const int start_sample,
@@ -51,6 +52,7 @@ class PathTraceWorkCPU : public PathTraceWork {
 
   int adaptive_sampling_converge_filter_count_active(const float threshold, bool reset) override;
   void cryptomatte_postproces() override;
+  void denoise_volume_guiding_buffers() override;
 
 #if defined(WITH_PATH_GUIDING)
   /* Initializes the per-thread guiding kernel data. The function sets the pointers to the
@@ -77,12 +79,9 @@ class PathTraceWorkCPU : public PathTraceWork {
   /* CPU kernels. */
   const CPUKernels &kernels_;
 
-  /* Copy of kernel globals which is suitable for concurrent access from multiple threads.
-   *
-   * More specifically, the `kernel_globals_` is local to each threads and nobody else is
-   * accessing it, but some "localization" is required to decouple from kernel globals stored
-   * on the device level. */
-  vector<ThreadKernelGlobalsCPU> kernel_thread_globals_;
+  /* Pointer to device-owned kernel globals which is suitable for concurrent access from multiple
+   * threads. This allows dynamic updates to image_info when textures are loaded on demand. */
+  vector<ThreadKernelGlobalsCPU> *kernel_thread_globals_ = nullptr;
 };
 
 CCL_NAMESPACE_END

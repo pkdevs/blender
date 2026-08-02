@@ -48,6 +48,7 @@ class PathTraceWorkGPU : public PathTraceWork {
 
   int adaptive_sampling_converge_filter_count_active(const float threshold, bool reset) override;
   void cryptomatte_postproces() override;
+  void denoise_volume_guiding_buffers() override;
 
  protected:
   void alloc_integrator_soa();
@@ -69,6 +70,8 @@ class PathTraceWorkGPU : public PathTraceWork {
 
   bool enqueue_path_iteration();
   void enqueue_path_iteration(DeviceKernel kernel, const int num_paths_limit = INT_MAX);
+
+  bool update_queue_counter_and_cache();
 
   void compute_queued_paths(DeviceKernel kernel, DeviceKernel queued_kernel);
   void compute_sorted_queued_paths(DeviceKernel queued_kernel, const int num_paths_limit);
@@ -134,7 +137,6 @@ class PathTraceWorkGPU : public PathTraceWork {
   /* Shader sorting. */
   device_vector<int> integrator_shader_sort_counter_;
   device_vector<int> integrator_shader_raytrace_sort_counter_;
-  device_vector<int> integrator_shader_mnee_sort_counter_;
   device_vector<int> integrator_shader_sort_prefix_sum_;
   device_vector<int> integrator_shader_sort_partition_key_offsets_;
   /* Path split. */

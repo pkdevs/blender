@@ -18,14 +18,16 @@
 #include "BKE_material.hh"
 #include "BKE_object.hh"
 
-#include "BLI_ghash.h"
-#include "BLI_hash.h"
-#include "BLI_link_utils.h"
-#include "BLI_math_color.h"
-#include "BLI_math_matrix.h"
-#include "BLI_math_vector.h"
+#include "BLI_ghash.hh"
+#include "BLI_hash_c.hh"
+#include "BLI_link_utils.hh"
+#include "BLI_math_color_c.hh"
+#include "BLI_math_matrix_c.hh"
 #include "BLI_math_vector.hh"
-#include "BLI_memblock.h"
+#include "BLI_math_vector_c.hh"
+#include "BLI_memblock.hh"
+
+#include "IMB_colormanagement.hh"
 
 #include "gpencil_engine_private.hh"
 
@@ -131,8 +133,8 @@ tObject *gpencil_object_cache_add(Instance *inst,
 
 static int gpencil_tobject_dist_sort(const void *a, const void *b)
 {
-  const tObject *ob_a = (const tObject *)a;
-  const tObject *ob_b = (const tObject *)b;
+  const tObject *ob_a = static_cast<const tObject *>(a);
+  const tObject *ob_b = static_cast<const tObject *>(b);
   /* Reminder, camera_z is negative in front of the camera. */
   if (ob_a->camera_z > ob_b->camera_z) {
     return 1;
@@ -233,14 +235,14 @@ static float4 grease_pencil_layer_final_tint_and_alpha_get(const Instance *inst,
       color_prev = float3(grease_pencil.onion_skinning_settings.color_before);
     }
     else {
-      UI_GetThemeColor3fv(TH_FRAME_AFTER, color_next);
-      UI_GetThemeColor3fv(TH_FRAME_BEFORE, color_prev);
+      ui::theme::get_color_3fv(TH_FRAME_AFTER, color_next);
+      ui::theme::get_color_3fv(TH_FRAME_BEFORE, color_prev);
     }
 
     const float4 onion_col_custom = use_next_col ? float4(color_next, 1.0f) :
                                                    float4(color_prev, 1.0f);
 
-    *r_alpha = use_onion_fade ? (1.0f / abs(onion_id)) : 0.5f;
+    *r_alpha = use_onion_fade ? (1.0f / abs(onion_id)) : 1.0f;
     *r_alpha *= onion_factor;
     *r_alpha = (onion_factor > 0.0f) ? clamp_f(*r_alpha, 0.1f, 1.0f) :
                                        clamp_f(*r_alpha, 0.01f, 1.0f);
@@ -274,6 +276,7 @@ static void grease_pencil_layer_random_color_get(const Object *ob,
   float hue = BLI_hash_int_01(ob_hash * gpl_hash);
   const float hsv[3] = {hue, hsv_saturation, hsv_value};
   hsv_to_rgb_v(hsv, r_color);
+  IMB_colormanagement_rec709_to_scene_linear(r_color, r_color);
 }
 
 tLayer *grease_pencil_layer_cache_get(tObject *tgp_ob, int layer_id, const bool skip_onion)
@@ -314,8 +317,7 @@ tLayer *grease_pencil_layer_cache_add(Instance *inst,
   const bool disable_masks_render = is_viewlayer_render &&
                                     (layer.base.flag &
                                      GP_LAYER_TREE_NODE_DISABLE_MASKS_IN_VIEWLAYER) != 0;
-  bool is_masked = !disable_masks_render && layer.use_masks() &&
-                   !BLI_listbase_is_empty(&layer.masks);
+  bool is_masked = !disable_masks_render && layer.use_masks() && !layer.masks.is_empty();
 
   const float vert_col_opacity = (override_vertcol) ?
                                      (is_vert_col_mode ? inst->vertex_paint_opacity : 0.0f) :
@@ -350,11 +352,11 @@ tLayer *grease_pencil_layer_cache_add(Instance *inst,
         BLI_memblock_alloc(inst->gp_maskbit_pool));
     BLI_bitmap_set_all(tgp_layer->mask_bits, false, GP_MAX_MASKBITS);
 
-    LISTBASE_FOREACH (GreasePencilLayerMask *, mask, &layer.masks) {
-      if (mask->flag & GP_LAYER_MASK_HIDE) {
+    for (GreasePencilLayerMask &mask : layer.masks) {
+      if (mask.flag & GP_LAYER_MASK_HIDE) {
         continue;
       }
-      const TreeNode *node = grease_pencil.find_node_by_name(mask->layer_name);
+      const TreeNode *node = grease_pencil.find_node_by_name(mask.layer_name);
       if (node == nullptr) {
         continue;
       }
@@ -364,7 +366,7 @@ tLayer *grease_pencil_layer_cache_add(Instance *inst,
       }
       const int index = *grease_pencil.get_layer_index(mask_layer);
       if (index < GP_MAX_MASKBITS) {
-        const bool invert = (mask->flag & GP_LAYER_MASK_INVERT) != 0;
+        const bool invert = (mask.flag & GP_LAYER_MASK_INVERT) != 0;
         BLI_BITMAP_SET(tgp_layer->mask_bits, index, true);
         BLI_BITMAP_SET(tgp_layer->mask_invert_bits, index, invert);
         valid_mask = true;

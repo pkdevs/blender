@@ -55,6 +55,8 @@ const char *nodeTypeAsString(NodeType type)
       return "GEOMETRY";
     case NodeType::SEQUENCER:
       return "SEQUENCER";
+    case NodeType::COMPOSITOR:
+      return "COMPOSITOR";
     case NodeType::LAYER_COLLECTIONS:
       return "LAYER_COLLECTIONS";
     case NodeType::COPY_ON_EVAL:
@@ -118,6 +120,8 @@ NodeType nodeTypeFromSceneComponent(eDepsSceneComponentType component)
       return NodeType::ANIMATION;
     case DEG_SCENE_COMP_SEQUENCER:
       return NodeType::SEQUENCER;
+    case DEG_SCENE_COMP_COMPOSITOR:
+      return NodeType::COMPOSITOR;
   }
   return NodeType::UNDEFINED;
 }
@@ -131,6 +135,8 @@ eDepsSceneComponentType nodeTypeToSceneComponent(NodeType type)
       return DEG_SCENE_COMP_ANIMATION;
     case NodeType::SEQUENCER:
       return DEG_SCENE_COMP_SEQUENCER;
+    case NodeType::COMPOSITOR:
+      return DEG_SCENE_COMP_COMPOSITOR;
 
     case NodeType::OPERATION:
     case NodeType::TIMESOURCE:
@@ -219,6 +225,7 @@ eDepsObjectComponentType nodeTypeToObjectComponent(NodeType type)
     case NodeType::TIMESOURCE:
     case NodeType::ID_REF:
     case NodeType::SEQUENCER:
+    case NodeType::COMPOSITOR:
     case NodeType::LAYER_COLLECTIONS:
     case NodeType::COPY_ON_EVAL:
     case NodeType::OBJECT_FROM_LAYER:
@@ -244,7 +251,7 @@ eDepsObjectComponentType nodeTypeToObjectComponent(NodeType type)
       BLI_assert_msg(0, "Visibility component is supposed to be only used internally.");
       return DEG_OB_COMP_PARAMETERS;
   }
-  BLI_assert_msg(0, "Unhandled node type, not suppsed to happen.");
+  BLI_assert_msg(0, "Unhandled node type, not supposed to happen.");
   return DEG_OB_COMP_PARAMETERS;
 }
 

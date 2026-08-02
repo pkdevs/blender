@@ -36,6 +36,8 @@ class WORKSPACE_PT_main(WorkSpaceButtonsPanel, Panel):
 
         layout.prop(workspace, "use_pin_scene")
         layout.prop(workspace, "object_mode", text="Mode")
+        layout.prop(workspace, "sequencer_scene")
+        layout.prop(workspace, "use_scene_time_sync")
 
 
 class WORKSPACE_PT_addons(WorkSpaceButtonsPanel, Panel):
@@ -55,7 +57,11 @@ class WORKSPACE_PT_addons(WorkSpaceButtonsPanel, Panel):
         prefs = context.preferences
 
         import addon_utils
-        WORKSPACE_PT_addons.addon_map = {mod.__name__: mod for mod in addon_utils.modules()}
+        WORKSPACE_PT_addons.addon_map = {
+            module_name: mod for mod in addon_utils.modules()
+            # These are excluded from filtering and should be ignored.
+            if (module_name := mod.__name__) not in addon_utils._addons_hidden_core
+        }
         WORKSPACE_PT_addons.owner_ids = {owner_id.name for owner_id in workspace.owner_ids}
         known_addons = set()
         for addon in prefs.addons:
@@ -73,7 +79,7 @@ class WORKSPACE_PT_addons(WorkSpaceButtonsPanel, Panel):
         )
         # Detect unused
         if unknown_addons:
-            layout.label(text="Unknown add-ons", icon='ERROR')
+            layout.label(text="Unknown add-ons", icon='STATUS_WARNING')
             col = layout.box().column(align=True)
             for addon_module_name in sorted(unknown_addons):
                 row = col.row()

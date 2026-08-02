@@ -8,31 +8,84 @@
 
 #pragma once
 
+#include "BLI_enum_flags.hh"
+
 #include "DNA_defs.h"
 #include "DNA_listBase.h"
 #include "DNA_uuid_types.h"
 
-#ifdef __cplusplus
-#  include <memory>
+#include <memory>
 
 namespace blender {
-class StringRef;
-}
-namespace blender::asset_system {
-class AssetLibrary;
-}  // namespace blender::asset_system
 
-#endif
+class StringRef;
+namespace asset_system {
+class AssetLibrary;
+}  // namespace asset_system
+
+enum eAssetLibraryType : short {
+  /** Display assets from the current session (current "Main"). */
+  ASSET_LIBRARY_LOCAL = 1,
+  ASSET_LIBRARY_ALL = 2,
+  /** Display assets bundled with Blender by default. */
+  ASSET_LIBRARY_ESSENTIALS = 3,
+  /** Additions to the essentials library that are stored online - displayed in the UI as part of
+   * the normal essentials library. */
+  ASSET_LIBRARY_ONLINE_ESSENTIALS = 4,
+
+  /** Display assets from custom asset libraries, as defined in the preferences
+   * (#bUserAssetLibrary). The name will be taken from #FileSelectParams.asset_library_ref.idname
+   * then.
+   * In RNA, we add the index of the custom library to this to identify it by index. So keep
+   * this last! */
+  ASSET_LIBRARY_CUSTOM = 100,
+};
+
+enum eAssetImportMethod : int {
+  /** Regular data-block linking. */
+  ASSET_IMPORT_LINK = 0,
+  /** Regular data-block appending (basically linking + "Make Local"). */
+  ASSET_IMPORT_APPEND = 1,
+  /** Append data-block with the #BLO_LIBLINK_APPEND_LOCAL_ID_REUSE flag enabled. Some typically
+   * heavy data dependencies (e.g. the image data-blocks of a material, the mesh of an object) may
+   * be reused from an earlier append. */
+  ASSET_IMPORT_APPEND_REUSE = 2,
+  /** Link data-block, but also pack it as read-only data. */
+  ASSET_IMPORT_PACK = 3,
+};
+
+enum eAssetLibrary_Flag : int {
+  ASSET_LIBRARY_RELATIVE_PATH = (1 << 0),
+  ASSET_LIBRARY_DISABLED = (1 << 1),
+  ASSET_LIBRARY_USE_REMOTE_URL = (1 << 2),
+};
+
+enum class AssetAccess : int8_t {
+  OnlineAndOffline = 0,
+  OnlyOnline = 1,
+  OnlyOffline = 2,
+};
 
 /**
  * \brief User defined tag.
  * Currently only used by assets, could be used more often at some point.
  * Maybe add a custom icon and color to these in future?
  */
-typedef struct AssetTag {
-  struct AssetTag *next, *prev;
-  char name[/*MAX_NAME*/ 64];
-} AssetTag;
+struct AssetTag {
+  struct AssetTag *next = nullptr, *prev = nullptr;
+  char name[/*MAX_NAME*/ 64] = "";
+};
+
+enum AssetMetaDataFlag : int {
+  /**
+   * When the import method is set to "Follow Asset or Preferences", use the asset's own import
+   * method instead of the one from the library. Not used often, but for some assets there's a
+   * specific preferred import method. For example, base mesh objects may always want to use
+   * appending, so they can be edited directly and independently from previous usages.
+   */
+  ASSETDATA_USE_OWN_IMPORT_METHOD = (1 << 0),
+};
+ENUM_OPERATORS(AssetMetaDataFlag);
 
 /**
  * \brief The meta-data of an asset.
@@ -42,12 +95,12 @@ typedef struct AssetTag {
  *       attached to! That way, asset information of a file can be read, without reading anything
  *       more than that from the file. So pointers to other IDs or ID data are strictly forbidden.
  */
-typedef struct AssetMetaData {
+struct AssetMetaData {
   /** Runtime type, to reference event callbacks. Only valid for local assets. */
-  struct AssetTypeInfo *local_type_info;
+  struct AssetTypeInfo *local_type_info = nullptr;
 
   /** Custom asset meta-data. Cannot store pointers to IDs (#STRUCT_NO_DATABLOCK_IDPROPERTIES)! */
-  struct IDProperty *properties;
+  struct IDProperty *properties = nullptr;
 
   /**
    * Asset Catalog identifier. Should not contain spaces.
@@ -60,76 +113,52 @@ typedef struct AssetMetaData {
    * reconstruction of asset catalogs in the unfortunate case that the mapping from catalog UUID to
    * catalog path is lost. The catalog's simple name is copied to #catalog_simple_name whenever
    * #catalog_id is updated. */
-  char catalog_simple_name[/*MAX_NAME*/ 64];
+  char catalog_simple_name[/*MAX_NAME*/ 64] = "";
 
   /** Optional name of the author for display in the UI. Dynamic length. */
-  char *author;
+  char *author = nullptr;
 
   /** Optional description of this asset for display in the UI. Dynamic length. */
-  char *description;
+  char *description = nullptr;
 
   /** Optional copyright of this asset for display in the UI. Dynamic length. */
-  char *copyright;
+  char *copyright = nullptr;
 
   /** Optional license of this asset for display in the UI. Dynamic length. */
-  char *license;
+  char *license = nullptr;
 
   /** User defined tags for this asset. The asset manager uses these for filtering, but how they
    * function exactly (e.g. how they are registered to provide a list of searchable available tags)
    * is up to the asset-engine. */
-  ListBase tags; /* AssetTag */
-  short active_tag;
+  ListBaseT<AssetTag> tags = {nullptr, nullptr};
+  short active_tag = 0;
   /** Store the number of tags to avoid continuous counting. Could be turned into runtime data, we
    * can always reliably reconstruct it from the list. */
-  short tot_tags;
+  short tot_tags = 0;
 
-  char _pad[4];
+  AssetMetaDataFlag flag = {};
 
-#ifdef __cplusplus
+  /** The import method to use when "Follow Asset or Preferences" is used and
+   * #AssetMetaDataFlag::ASSETDATA_USE_OWN_IMPORT_METHOD is set in the flags above. */
+  eAssetImportMethod preferred_import_method = ASSET_IMPORT_APPEND;
+
+  char _pad[4] = {};
+
+#if defined(__cplusplus) && !defined(DNA_NO_EXTERNAL_CONSTRUCTORS)
   AssetMetaData() = default;
   AssetMetaData(const AssetMetaData &other);
   AssetMetaData(AssetMetaData &&other);
   /** Enables use with `std::unique_ptr<AssetMetaData>`. */
   ~AssetMetaData();
 #endif
-} AssetMetaData;
-
-typedef enum eAssetLibraryType {
-  /** Display assets from the current session (current "Main"). */
-  ASSET_LIBRARY_LOCAL = 1,
-  ASSET_LIBRARY_ALL = 2,
-  /** Display assets bundled with Blender by default. */
-  ASSET_LIBRARY_ESSENTIALS = 3,
-
-  /** Display assets from custom asset libraries, as defined in the preferences
-   * (#bUserAssetLibrary). The name will be taken from #FileSelectParams.asset_library_ref.idname
-   * then.
-   * In RNA, we add the index of the custom library to this to identify it by index. So keep
-   * this last! */
-  ASSET_LIBRARY_CUSTOM = 100,
-} eAssetLibraryType;
-
-typedef enum eAssetImportMethod {
-  /** Regular data-block linking. */
-  ASSET_IMPORT_LINK = 0,
-  /** Regular data-block appending (basically linking + "Make Local"). */
-  ASSET_IMPORT_APPEND = 1,
-  /** Append data-block with the #BLO_LIBLINK_APPEND_LOCAL_ID_REUSE flag enabled. Some typically
-   * heavy data dependencies (e.g. the image data-blocks of a material, the mesh of an object) may
-   * be reused from an earlier append. */
-  ASSET_IMPORT_APPEND_REUSE = 2,
-} eAssetImportMethod;
+};
 
 #
 #
-typedef struct AssetImportSettings {
-  eAssetImportMethod method;
-  bool use_instance_collections;
-} AssetImportSettings;
-
-typedef enum eAssetLibrary_Flag {
-  ASSET_LIBRARY_RELATIVE_PATH = (1 << 0),
-} eAssetLibrary_Flag;
+struct AssetImportSettings {
+  eAssetImportMethod method = {};
+  bool use_instance_collections = false;
+};
 
 /**
  * Information to identify an asset library. May be either one of the predefined types (current
@@ -138,16 +167,16 @@ typedef enum eAssetLibrary_Flag {
  * If the type is set to #ASSET_LIBRARY_CUSTOM, `custom_library_index` must be set to identify the
  * custom library. Otherwise it is not used.
  */
-typedef struct AssetLibraryReference {
-  short type; /* eAssetLibraryType */
-  char _pad1[2];
+struct AssetLibraryReference {
+  eAssetLibraryType type = ASSET_LIBRARY_LOCAL;
+  char _pad1[2] = {};
   /**
    * If showing a custom asset library (#ASSET_LIBRARY_CUSTOM), this is the index of the
    * #bUserAssetLibrary within #UserDef.asset_libraries.
    * Should be ignored otherwise (but better set to -1 then, for sanity and debugging).
    */
-  int custom_library_index;
-} AssetLibraryReference;
+  int custom_library_index = -1;
+};
 
 /**
  * Information to refer to an asset (may be stored in files) on a "best effort" basis. It should
@@ -165,17 +194,17 @@ typedef struct AssetLibraryReference {
  * \note Needs freeing through the destructor, so either use a smart pointer or #MEM_delete() for
  *       explicit freeing.
  */
-typedef struct AssetWeakReference {
-  char _pad[6];
+struct AssetWeakReference {
+  char _pad[6] = {};
 
-  short asset_library_type; /* #eAssetLibraryType */
+  eAssetLibraryType asset_library_type = {};
   /** If #asset_library_type is not enough to identify the asset library, this string can provide
    * further location info (allocated string). Null otherwise. */
-  const char *asset_library_identifier;
+  const char *asset_library_identifier = nullptr;
 
-  const char *relative_asset_identifier;
+  const char *relative_asset_identifier = nullptr;
 
-#ifdef __cplusplus
+#if defined(__cplusplus) && !defined(DNA_NO_EXTERNAL_CONSTRUCTORS)
   AssetWeakReference();
   AssetWeakReference(const AssetWeakReference &);
   AssetWeakReference(AssetWeakReference &&);
@@ -192,12 +221,14 @@ typedef struct AssetWeakReference {
   /**
    * See AssetRepresentation::make_weak_reference().
    */
-  static AssetWeakReference make_reference(const blender::asset_system::AssetLibrary &library,
-                                           blender::StringRef library_relative_identifier);
+  static AssetWeakReference make_reference(const asset_system::AssetLibrary &library,
+                                           StringRef library_relative_identifier);
 #endif
-} AssetWeakReference;
+};
 
 struct AssetCatalogPathLink {
-  struct AssetCatalogPathLink *next, *prev;
-  char *path;
+  struct AssetCatalogPathLink *next = nullptr, *prev = nullptr;
+  char *path = nullptr;
 };
+
+}  // namespace blender

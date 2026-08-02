@@ -16,7 +16,7 @@
 #include "GHOST_IContext.hh"
 #include "GHOST_ITimerTask.hh"
 #include "GHOST_IWindow.hh"
-#include "GHOST_Types.h"
+#include "GHOST_Types.hh"
 
 class GHOST_IEventConsumer;
 
@@ -57,10 +57,11 @@ class GHOST_IEventConsumer;
  *
  * GHOST supports the following platforms:
  *
- * - OSX Cocoa.
- * - Windows.
- * - X11.
- * - SDL2 (experimental).
+ * - macOS Cocoa.
+ * - Microsoft Windows.
+ * - X11 (Linux).
+ * - Wayland (Linux).
+ * - SDL3.
  * - null (headless mode).
  *
  * \section Building GHOST
@@ -68,15 +69,7 @@ class GHOST_IEventConsumer;
  * GHOST is not build standalone however there are tests in intern/ghost/test
  *
  * \section interface Interface
- * GHOST has two programming interfaces:
- *
- * - The C-API. For programs written in C.
- * - The C++-API. For programs written in C++.
- *
- * GHOST itself is written in C++ and the C-API is a wrapper around the C++
- * API.
- *
- * \subsection cplusplus_api The C++ API consists of the following files:
+ * The GHOST C++ API consists of the following files:
  *
  * - GHOST_IEvent.hh
  * - GHOST_IEventConsumer.hh
@@ -84,18 +77,11 @@ class GHOST_IEventConsumer;
  * - GHOST_ITimerTask.hh
  * - GHOST_IWindow.hh
  * - GHOST_Rect.hh
- * - GHOST_Types.h
+ * - GHOST_Types.hh
+ * - GHOST_Xr-api.hh
  *
- * For an example of using the C++-API, have a look at the GHOST_C-Test.cpp
+ * For an example of using the GHOST API, have a look at the GHOST_Test.cpp
  * program in the ?/ghost/test/gears/ directory.
- *
- * \subsection c_api The C-API
- * To use GHOST in programs written in C, include the file GHOST_C-API.h in
- * your program. This file includes the GHOST_Types.h file for all GHOST types
- * and defines functions that give you access to the same functionality present
- * in the C++ API.<br>
- * For an example of using the C-API, have a look at the GHOST_C-Test.c program
- * in the ?/ghost/test/gears/ directory.
  *
  * \section work Work in progress
  * \todo write WIP section
@@ -123,7 +109,7 @@ class GHOST_ISystem {
    * \return An indication of success.
    */
 
-  static GHOST_TSuccess createSystem(bool verbose, bool background);
+  static GHOST_TSuccess createSystem(bool verbose = true, bool background = false);
   static GHOST_TSuccess createSystemBackground();
 
   /**
@@ -149,6 +135,9 @@ class GHOST_ISystem {
 
   static GHOST_TBacktraceFn getBacktraceFn();
   static void setBacktraceFn(GHOST_TBacktraceFn backtrace_fn);
+
+  static bool getUseWindowFrame();
+  static void setUseWindowFrame(bool use_window_frame);
 
  protected:
   /**
@@ -184,16 +173,16 @@ class GHOST_ISystem {
    * \note On most operating systems, messages need to be processed in order
    * for the timer callbacks to be invoked.
    *
-   * \param delay: The time to wait for the first call to the #timerProc (in milliseconds).
-   * \param interval: The interval between calls to the #timerProc.
-   * \param timerProc: The callback invoked when the interval expires.
-   * \param userData: Placeholder for user data.
+   * \param delay: The time to wait for the first call to the #timer_proc (in milliseconds).
+   * \param interval: The interval between calls to the #timer_proc.
+   * \param timer_proc: The callback invoked when the interval expires.
+   * \param user_data: Placeholder for user data.
    * \return A timer task (0 if timer task installation failed).
    */
   virtual GHOST_ITimerTask *installTimer(uint64_t delay,
                                          uint64_t interval,
-                                         GHOST_TimerProcPtr timerProc,
-                                         GHOST_TUserDataPtr userData = nullptr) = 0;
+                                         GHOST_TimerProcPtr timer_proc,
+                                         GHOST_TUserDataPtr user_data = nullptr) = 0;
 
   /**
    * Removes a timer.
@@ -235,10 +224,10 @@ class GHOST_ISystem {
    * \param width: The width the window.
    * \param height: The height the window.
    * \param state: The state of the window when opened.
-   * \param gpuSettings: Misc GPU settings.
+   * \param gpu_settings: Misc GPU settings.
    * \param exclusive: Use to show the window on top and ignore others (used full-screen).
    * \param is_dialog: Stay on top of parent window, no icon in taskbar, can't be minimized.
-   * \param parentWindow: Parent (embedder) window
+   * \param parent_window: Parent (embedder) window
    * \return The new window (or 0 if creation failed).
    */
   virtual GHOST_IWindow *createWindow(const char *title,
@@ -247,10 +236,10 @@ class GHOST_ISystem {
                                       uint32_t width,
                                       uint32_t height,
                                       GHOST_TWindowState state,
-                                      GHOST_GPUSettings gpuSettings,
+                                      GHOST_GPUSettings gpu_settings,
                                       const bool exclusive = false,
                                       const bool is_dialog = false,
-                                      const GHOST_IWindow *parentWindow = nullptr) = 0;
+                                      const GHOST_IWindow *parent_window = nullptr) = 0;
 
   /**
    * Dispose a window.
@@ -264,7 +253,7 @@ class GHOST_ISystem {
    * Never explicitly delete the context, use #disposeContext() instead.
    * \return The new context (or 0 if creation failed).
    */
-  virtual GHOST_IContext *createOffscreenContext(GHOST_GPUSettings gpuSettings) = 0;
+  virtual GHOST_IContext *createOffscreenContext(GHOST_GPUSettings gpu_settings) = 0;
 
   /**
    * Dispose of a context.
@@ -397,18 +386,18 @@ class GHOST_ISystem {
   /**
    * Returns the state of a modifier key (outside the message queue).
    * \param mask: The modifier key state to retrieve.
-   * \param isDown: The state of a modifier key (true == pressed).
+   * \param is_down: The state of a modifier key (true == pressed).
    * \return Indication of success.
    */
-  virtual GHOST_TSuccess getModifierKeyState(GHOST_TModifierKey mask, bool &isDown) const = 0;
+  virtual GHOST_TSuccess getModifierKeyState(GHOST_TModifierKey mask, bool &is_down) const = 0;
 
   /**
    * Returns the state of a mouse button (outside the message queue).
    * \param mask: The button state to retrieve.
-   * \param isDown: Button state.
+   * \param is_down: Button state.
    * \return Indication of success.
    */
-  virtual GHOST_TSuccess getButtonState(GHOST_TButton mask, bool &isDown) const = 0;
+  virtual GHOST_TSuccess getButtonState(GHOST_TButton mask, bool &is_down) const = 0;
 
   /**
    * Enable multi-touch gestures if supported.
@@ -486,6 +475,24 @@ class GHOST_ISystem {
   virtual GHOST_TSuccess putClipboardImage(uint *rgba, int width, int height) const = 0;
 
   /***************************************************************************************
+   * Window "Client Side Decorations" (CSD)
+   ***************************************************************************************/
+
+  virtual void setWindowCSD(const GHOST_CSD_Params &params) = 0;
+  virtual const GHOST_CSD_Layout &getWindowCSD_Layout() const = 0;
+
+  /***************************************************************************************
+   * Window Icon Generator.
+   ***************************************************************************************/
+
+  /**
+   * Set a callback used to generate window icons.
+   *
+   * Back-ends that support window icons will call this to fill pixel data.
+   */
+  virtual void setIconGenerator(const GHOST_IconGenerator *icon_generator) = 0;
+
+  /***************************************************************************************
    * System Message Box.
    ***************************************************************************************/
 
@@ -535,11 +542,16 @@ class GHOST_ISystem {
   virtual GHOST_TSuccess exit() = 0;
 
   /** The one and only system */
-  static GHOST_ISystem *m_system;
-  static const char *m_system_backend_id;
+  static GHOST_ISystem *system_;
+  static const char *system_backend_id_;
 
   /** Function to call that sets the back-trace. */
-  static GHOST_TBacktraceFn m_backtrace_fn;
+  static GHOST_TBacktraceFn backtrace_fn_;
+
+  /**
+   * When false, don't use window frame.
+   */
+  static bool use_window_frame_;
 
   MEM_CXX_CLASS_ALLOC_FUNCS("GHOST:GHOST_ISystem")
 };

@@ -21,10 +21,12 @@
 #include "WM_api.hh"
 #include "wm_window.hh"
 
+namespace blender {
+
 /* -------------------------------------------------------------------- */
 /** \name Submission critical section
  *
- * The usage of GPUShader objects is currently not thread safe. Since they are shared resources
+ * The usage of gpu::Shader objects is currently not thread safe. Since they are shared resources
  * between render engine instances, we cannot allow pass submissions in a concurrent manner.
  * \{ */
 
@@ -83,7 +85,7 @@ class ContextShared {
  public:
   TicketMutex *mutex_ = nullptr;
   /** Unique ghost context used by Viewports. */
-  void *system_gpu_context_ = nullptr;
+  GHOST_IContext *system_gpu_context_ = nullptr;
   /** GPUContext associated to the system_gpu_context. */
   GPUContext *blender_gpu_context_ = nullptr;
 
@@ -121,6 +123,11 @@ class ContextShared {
     WM_system_gpu_context_activate(system_gpu_context_);
     GPU_context_active_set(blender_gpu_context_);
     GPU_context_begin_frame(blender_gpu_context_);
+  }
+
+  bool is_enabled()
+  {
+    return blender_gpu_context_ == GPU_context_active_get();
   }
 
   /* Restore window drawable after disabling if restore is true. */
@@ -167,12 +174,7 @@ void DRW_gpu_context_create()
   viewport_context = MEM_new<ContextShared>(__func__);
   preview_context = MEM_new<ContextShared>(__func__);
 
-  /* Some part of the code assumes no context is left bound. */
-  GPU_context_active_set(nullptr);
-  WM_system_gpu_context_release(preview_context->system_gpu_context_);
-
-  /* Activate the window's context if any. */
-  wm_window_reset_drawable();
+  viewport_context->enable();
 }
 
 void DRW_gpu_context_destroy()
@@ -230,7 +232,7 @@ void DRW_gpu_context_enable()
   /* TODO: should be replace by a more elegant alternative. */
 
   if (G.background && viewport_context == nullptr) {
-    WM_init_gpu();
+    WM_init_gpu_offscreen();
   }
   DRW_gpu_context_enable_ex(true);
 }
@@ -244,12 +246,17 @@ bool DRW_gpu_context_try_enable()
   return true;
 }
 
+bool DRW_gpu_context_is_enabled()
+{
+  return viewport_context && viewport_context->is_enabled();
+}
+
 void DRW_gpu_context_disable()
 {
   DRW_gpu_context_disable_ex(true);
 }
 
-void DRW_system_gpu_render_context_enable(void *re_system_gpu_context)
+void DRW_system_gpu_render_context_enable(GHOST_IContext *re_system_gpu_context)
 {
   /* If thread is main you should use DRW_gpu_context_enable(). */
   BLI_assert(!BLI_thread_is_main());
@@ -258,7 +265,7 @@ void DRW_system_gpu_render_context_enable(void *re_system_gpu_context)
   WM_system_gpu_context_activate(re_system_gpu_context);
 }
 
-void DRW_system_gpu_render_context_disable(void *re_system_gpu_context)
+void DRW_system_gpu_render_context_disable(GHOST_IContext *re_system_gpu_context)
 {
   WM_system_gpu_context_release(re_system_gpu_context);
   DRW_lock_end();
@@ -281,7 +288,7 @@ void DRW_blender_gpu_render_context_disable(void * /*re_gpu_context*/)
 void DRW_render_context_enable(Render *render)
 {
   if (G.background && viewport_context == nullptr) {
-    WM_init_gpu();
+    WM_init_gpu_offscreen();
   }
 
   GPU_render_begin();
@@ -292,7 +299,7 @@ void DRW_render_context_enable(Render *render)
     return;
   }
 
-  void *re_viewport_system_gpu_context = RE_system_gpu_context_get(render);
+  GHOST_IContext *re_viewport_system_gpu_context = RE_system_gpu_context_get(render);
 
   /* Changing Context */
   if (re_viewport_system_gpu_context != nullptr) {
@@ -315,7 +322,7 @@ void DRW_render_context_disable(Render *render)
     return;
   }
 
-  void *re_viewport_system_gpu_context = RE_system_gpu_context_get(render);
+  GHOST_IContext *re_viewport_system_gpu_context = RE_system_gpu_context_get(render);
 
   if (re_viewport_system_gpu_context != nullptr) {
     void *re_viewport_context = RE_blender_gpu_context_ensure(render);
@@ -340,7 +347,7 @@ void DRW_render_context_disable(Render *render)
 
 #ifdef WITH_XR_OPENXR
 
-void *DRW_system_gpu_context_get()
+GHOST_IContext *DRW_system_gpu_context_get()
 {
   /* XXX: There should really be no such getter, but for VR we currently can't easily avoid it.
    * OpenXR needs some low level info for the GPU context that will be used for submitting the
@@ -444,3 +451,5 @@ void DRW_gpu_context_activate(bool drw_state)
 }
 
 /** \} */
+
+}  // namespace blender

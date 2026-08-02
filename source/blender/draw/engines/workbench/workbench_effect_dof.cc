@@ -227,28 +227,25 @@ void DofPass::draw(Manager &manager, View &view, SceneResources &resources, int2
   GPU_debug_group_begin("Depth Of Field");
 
   int2 half_res = {max_ii(resolution.x / 2, 1), max_ii(resolution.y / 2, 1)};
-  blur_tx_.acquire(half_res,
-                   gpu::TextureFormat::SFLOAT_16_16_16_16,
-                   GPU_TEXTURE_USAGE_SHADER_READ | GPU_TEXTURE_USAGE_ATTACHMENT);
-
-  source_tx_.ensure_mip_views();
-  coc_halfres_tx_.ensure_mip_views();
+  blur_tx_.acquire_2d(half_res,
+                      gpu::TextureFormat::SFLOAT_16_16_16_16,
+                      GPU_TEXTURE_USAGE_SHADER_READ | GPU_TEXTURE_USAGE_ATTACHMENT);
 
   downsample_fb_.ensure(GPU_ATTACHMENT_NONE,
-                        GPU_ATTACHMENT_TEXTURE(source_tx_.mip_view(0)),
-                        GPU_ATTACHMENT_TEXTURE(coc_halfres_tx_.mip_view(0)));
+                        GPU_ATTACHMENT_TEXTURE_MIP(source_tx_, 0),
+                        GPU_ATTACHMENT_TEXTURE_MIP(coc_halfres_tx_, 0));
   downsample_fb_.bind();
   manager.submit(down_ps_, view);
 
   downsample_fb_.ensure(GPU_ATTACHMENT_NONE,
-                        GPU_ATTACHMENT_TEXTURE(source_tx_.mip_view(1)),
-                        GPU_ATTACHMENT_TEXTURE(coc_halfres_tx_.mip_view(1)));
+                        GPU_ATTACHMENT_TEXTURE_MIP(source_tx_, 1),
+                        GPU_ATTACHMENT_TEXTURE_MIP(coc_halfres_tx_, 1));
   downsample_fb_.bind();
   manager.submit(down2_ps_, view);
 
   downsample_fb_.ensure(GPU_ATTACHMENT_NONE,
-                        GPU_ATTACHMENT_TEXTURE(source_tx_.mip_view(2)),
-                        GPU_ATTACHMENT_TEXTURE(coc_halfres_tx_.mip_view(2)));
+                        GPU_ATTACHMENT_TEXTURE_MIP(source_tx_, 2),
+                        GPU_ATTACHMENT_TEXTURE_MIP(coc_halfres_tx_, 2));
   downsample_fb_.bind();
   manager.submit(down3_ps_, view);
 

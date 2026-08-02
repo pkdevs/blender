@@ -32,6 +32,9 @@ set(LIB
   PRIVATE bf::blenlib
   PUBLIC  bf::imbuf
   PRIVATE bf::intern::guardedalloc
+  PRIVATE bf::intern::clog
+  PRIVATE bf::dependencies::optional::ffmpeg
+  PRIVATE bf::dependencies::optional::audaspace
 )
 
 if(WITH_CODEC_FFMPEG)
@@ -39,26 +42,6 @@ if(WITH_CODEC_FFMPEG)
     intern/ffmpeg_swscale.cc
     intern/ffmpeg_swscale.hh
   )
-  list(APPEND INC_SYS
-    ${FFMPEG_INCLUDE_DIRS}
-  )
-  list(APPEND LIB
-    ${FFMPEG_LIBRARIES}
-    ${OPENJPEG_LIBRARIES}
-  )
-  add_definitions(-DWITH_FFMPEG)
-endif()
-
-if(WITH_AUDASPACE)
-  list(APPEND INC_SYS
-    ${AUDASPACE_C_INCLUDE_DIRS}
-  )
-  if(WITH_SYSTEM_AUDASPACE)
-    list(APPEND LIB
-      ${AUDASPACE_C_LIBRARIES}
-    )
-  endif()
-  add_definitions(-DWITH_AUDASPACE)
 endif()
 
 blender_add_lib(bf_imbuf_movie "${SRC}" "${INC}" "${INC_SYS}" "${LIB}")
@@ -73,14 +56,12 @@ if(WITH_GTESTS AND WITH_CODEC_FFMPEG)
     intern
   )
   set(TEST_INC_SYS
-    ${FFMPEG_INCLUDE_DIRS}
   )
   set(TEST_LIB
-    ${FFMPEG_LIBRARIES}
+    ${LIB}
+    PRIVATE bf::dependencies::optional::ffmpeg
+    PRIVATE bf::dependencies::zlib
   )
-  if(WITH_IMAGE_OPENJPEG)
-    set(TEST_LIB ${TEST_LIB} ${OPENJPEG_LIBRARIES})
-  endif()
   blender_add_test_suite_lib(ffmpeg_libs "${TEST_SRC}" "${TEST_INC}" "${TEST_INC_SYS}" "${TEST_LIB}")
 
 endif()

@@ -19,7 +19,7 @@
 
 #include "BLI_fileops.hh"
 #include "BLI_path_utils.hh"
-#include "BLI_string.h"
+#include "BLI_string.hh"
 #include "BLI_string_utils.hh"
 
 #include "WM_api.hh"
@@ -85,7 +85,7 @@ static std::string get_asset_base_name(const std::string &src_path, ReportList *
 /* Copy an asset to a destination directory. */
 static std::string copy_asset_to_directory(const std::string &src_path,
                                            const char *dest_dir_path,
-                                           eUSDTexNameCollisionMode name_collision_mode,
+                                           TexNameCollisionMode name_collision_mode,
                                            ReportList *reports)
 {
   std::string base_name = get_asset_base_name(src_path, reports);
@@ -94,7 +94,7 @@ static std::string copy_asset_to_directory(const std::string &src_path,
   BLI_path_join(dest_file_path, sizeof(dest_file_path), dest_dir_path, base_name.c_str());
   BLI_path_normalize(dest_file_path);
 
-  if (name_collision_mode == USD_TEX_NAME_COLLISION_USE_EXISTING && BLI_is_file(dest_file_path)) {
+  if (name_collision_mode == TexNameCollisionMode::UseExisting && BLI_is_file(dest_file_path)) {
     return dest_file_path;
   }
 
@@ -113,7 +113,7 @@ static std::string copy_asset_to_directory(const std::string &src_path,
 
 static std::string copy_udim_asset_to_directory(const std::string &src_path,
                                                 const char *dest_dir_path,
-                                                eUSDTexNameCollisionMode name_collision_mode,
+                                                TexNameCollisionMode name_collision_mode,
                                                 ReportList *reports)
 {
   /* Get prefix and suffix from udim pattern. */
@@ -156,12 +156,12 @@ static std::string copy_udim_asset_to_directory(const std::string &src_path,
 
 bool copy_asset(const std::string &src,
                 const std::string &dst,
-                eUSDTexNameCollisionMode name_collision_mode,
+                TexNameCollisionMode name_collision_mode,
                 ReportList *reports)
 {
   const pxr::ArResolver &ar = pxr::ArGetResolver();
 
-  if (name_collision_mode != USD_TEX_NAME_COLLISION_OVERWRITE) {
+  if (name_collision_mode != TexNameCollisionMode::Overwrite) {
     if (!ar.Resolve(dst).IsEmpty()) {
       /* The asset exists, so this is a no-op. */
       BKE_reportf(
@@ -173,7 +173,7 @@ bool copy_asset(const std::string &src,
   pxr::ArResolvedPath src_path = ar.Resolve(src);
 
   if (src_path.IsEmpty()) {
-    BKE_reportf(reports, RPT_ERROR, "%s: Can't resolve path %s", __func__, src.c_str());
+    BKE_reportf(reports, RPT_ERROR, "%s: Cannot resolve path %s", __func__, src.c_str());
     return false;
   }
 
@@ -181,14 +181,14 @@ bool copy_asset(const std::string &src,
 
   if (dst_path.IsEmpty()) {
     BKE_reportf(
-        reports, RPT_ERROR, "%s: Can't resolve path %s for writing", __func__, dst.c_str());
+        reports, RPT_ERROR, "%s: Cannot resolve path %s for writing", __func__, dst.c_str());
     return false;
   }
 
   if (src_path == dst_path) {
     BKE_reportf(reports,
                 RPT_ERROR,
-                "%s: Can't copy %s. The source and destination paths are the same",
+                "%s: Cannot copy %s. The source and destination paths are the same",
                 __func__,
                 src_path.GetPathString().c_str());
     return false;
@@ -198,7 +198,7 @@ bool copy_asset(const std::string &src,
   if (!ar.CanWriteAssetToPath(dst_path, &why_not)) {
     BKE_reportf(reports,
                 RPT_ERROR,
-                "%s: Can't write to asset %s: %s",
+                "%s: Cannot write to asset %s: %s",
                 __func__,
                 dst_path.GetPathString().c_str(),
                 why_not.c_str());
@@ -209,7 +209,7 @@ bool copy_asset(const std::string &src,
   if (!src_asset) {
     BKE_reportf(reports,
                 RPT_ERROR,
-                "%s: Can't open source asset %s",
+                "%s: Cannot open source asset %s",
                 __func__,
                 src_path.GetPathString().c_str());
     return false;
@@ -242,7 +242,7 @@ bool copy_asset(const std::string &src,
   if (!dst_asset) {
     BKE_reportf(reports,
                 RPT_ERROR,
-                "%s: Can't open destination asset %s for writing",
+                "%s: Cannot open destination asset %s for writing",
                 __func__,
                 src_path.GetPathString().c_str());
     return false;
@@ -277,7 +277,7 @@ bool asset_exists(const std::string &path)
 
 std::string import_asset(const std::string &src,
                          const char *import_dir,
-                         eUSDTexNameCollisionMode name_collision_mode,
+                         TexNameCollisionMode name_collision_mode,
                          ReportList *reports)
 {
   if (import_dir[0] == '\0') {
@@ -301,7 +301,7 @@ std::string import_asset(const std::string &src,
                   "but the blend file path is empty. "
                   "Please save the blend file before importing the USD "
                   "or provide an absolute import directory path. "
-                  "Can't import %s",
+                  "Cannot import %s",
                   __func__,
                   src.c_str());
       return src;
@@ -355,15 +355,16 @@ std::string get_export_textures_dir(const pxr::UsdStageRefPtr stage)
   pxr::SdfLayerHandle layer = stage->GetRootLayer();
 
   if (layer->IsAnonymous()) {
-    WM_global_reportf(
-        RPT_WARNING, "%s: Can't generate a textures directory path for anonymous stage", __func__);
+    WM_global_reportf(RPT_WARNING,
+                      "%s: Cannot generate a textures directory path for anonymous stage",
+                      __func__);
     return "";
   }
 
   const pxr::ArResolvedPath &stage_path = layer->GetResolvedPath();
 
   if (stage_path.empty()) {
-    WM_global_reportf(RPT_WARNING, "%s: Can't get resolved path for stage", __func__);
+    WM_global_reportf(RPT_WARNING, "%s: Cannot get resolved path for stage", __func__);
     return "";
   }
 
@@ -436,7 +437,7 @@ bool write_to_path(const void *data, size_t size, const std::string &path, Repor
   pxr::ArResolvedPath resolved_path = ar.ResolveForNewAsset(path);
 
   if (resolved_path.IsEmpty()) {
-    BKE_reportf(reports, RPT_ERROR, "Can't resolve path %s for writing", path.c_str());
+    BKE_reportf(reports, RPT_ERROR, "Cannot resolve path %s for writing", path.c_str());
     return false;
   }
 
@@ -444,7 +445,7 @@ bool write_to_path(const void *data, size_t size, const std::string &path, Repor
   if (!ar.CanWriteAssetToPath(resolved_path, &why_not)) {
     BKE_reportf(reports,
                 RPT_ERROR,
-                "Can't write to asset %s:  %s",
+                "Cannot write to asset %s: %s",
                 resolved_path.GetPathString().c_str(),
                 why_not.c_str());
     return false;
@@ -455,7 +456,7 @@ bool write_to_path(const void *data, size_t size, const std::string &path, Repor
   if (!dst_asset) {
     BKE_reportf(reports,
                 RPT_ERROR,
-                "Can't open destination asset %s for writing",
+                "Cannot open destination asset %s for writing",
                 resolved_path.GetPathString().c_str());
     return false;
   }

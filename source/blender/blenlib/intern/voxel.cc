@@ -6,10 +6,12 @@
  * \ingroup bli
  */
 
-#include "BLI_utildefines.h"
-#include "BLI_voxel.h"
+#include "BLI_utildefines.hh"
+#include "BLI_voxel.hh"
 
-#include "BLI_strict_flags.h" /* IWYU pragma: keep. Keep last. */
+#include "BLI_strict_flags.hh" /* IWYU pragma: keep. Keep last. */
+
+namespace blender {
 
 BLI_INLINE float D(const float *data, const int res[3], int x, int y, int z)
 {
@@ -81,3 +83,5 @@ float BLI_voxel_sample_trilinear(const float *data, const int res[3], const floa
   }
   return 0.0f;
 }
+
+}  // namespace blender

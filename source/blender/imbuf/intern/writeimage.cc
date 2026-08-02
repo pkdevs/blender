@@ -7,7 +7,6 @@
  */
 
 #include <cerrno>
-#include <cstdio>
 #include <cstdlib>
 
 #include "BLI_path_utils.hh" /* For assertions. */
@@ -17,7 +16,28 @@
 #include "IMB_imbuf.hh"
 #include "IMB_imbuf_types.hh"
 
-bool IMB_save_image(ImBuf *ibuf, const char *filepath, const int flags)
+#include "CLG_log.h"
+
+namespace blender {
+
+static CLG_LogRef LOG = {"image.write"};
+
+static void ensure_byte_buffer(ImBuf *ibuf, const ImFileType *type)
+{
+  /* If writing byte image from float buffer, create a byte buffer for writing.
+   *
+   * For color managed image writing, IMB_colormanagement_imbuf_for_write should
+   * have already created this byte buffer. This is a basic fallback for other
+   * cases where we do not have a specific desired output colorspace. */
+  if (!(type->flag & IM_FTYPE_FLOAT)) {
+    if (ibuf->byte_data() == nullptr && ibuf->float_data()) {
+      ibuf->byte_buffer.colorspace = colormanage_colorspace_get_roled(COLOR_ROLE_DEFAULT_BYTE);
+      IMB_byte_from_float(ibuf);
+    }
+  }
+}
+
+bool IMB_save_image(ImBuf *ibuf, const char *filepath, ImBufFlags flags)
 {
   errno = 0;
 
@@ -30,21 +50,35 @@ bool IMB_save_image(ImBuf *ibuf, const char *filepath, const int flags)
 
   const ImFileType *type = IMB_file_type_from_ibuf(ibuf);
   if (type == nullptr || type->save == nullptr) {
-    fprintf(stderr, "Couldn't save picture.\n");
+    CLOG_ERROR(&LOG, "Couldn't save image to \"%s\"", filepath);
     return false;
   }
 
-  /* If writing byte image from float buffer, create a byte buffer for writing.
-   *
-   * For color managed image writing, IMB_colormanagement_imbuf_for_write should
-   * have already created this byte buffer. This is a basic fallback for other
-   * cases where we do not have a specific desired output colorspace. */
-  if (!(type->flag & IM_FTYPE_FLOAT)) {
-    if (ibuf->byte_buffer.data == nullptr && ibuf->float_buffer.data) {
-      ibuf->byte_buffer.colorspace = colormanage_colorspace_get_roled(COLOR_ROLE_DEFAULT_BYTE);
-      IMB_byte_from_float(ibuf);
-    }
-  }
+  BLI_assert((type->capability_write & eImFileTypeCapability::File) !=
+             eImFileTypeCapability::Zero);
 
+  ensure_byte_buffer(ibuf, type);
   return type->save(ibuf, filepath, flags);
 }
+
+Vector<uint8_t> IMB_save_image_to_buffer(ImBuf *ibuf, ImBufFlags flags)
+{
+  if (ibuf == nullptr) {
+    return {};
+  }
+  ibuf->flags = flags;
+
+  const ImFileType *type = IMB_file_type_from_ibuf(ibuf);
+  if (type == nullptr || type->save_buffer == nullptr) {
+    CLOG_ERROR(&LOG, "Couldn't save image to buffer");
+    return {};
+  }
+
+  BLI_assert((type->capability_write & eImFileTypeCapability::Memory) !=
+             eImFileTypeCapability::Zero);
+
+  ensure_byte_buffer(ibuf, type);
+  return type->save_buffer(ibuf, flags);
+}
+
+}  // namespace blender

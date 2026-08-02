@@ -20,15 +20,15 @@
 
 #include "atomic_ops.h"
 
-#include "BLI_utildefines.h"
+#include "BLI_utildefines.hh"
 
-#include "BLI_asan.h"
-#include "BLI_math_base.h"
-#include "BLI_mempool.h"         /* own include */
+#include "BLI_asan.hh"
+#include "BLI_math_base_c.hh"
+#include "BLI_mempool.hh"        /* own include */
 #include "BLI_mempool_private.h" /* own include */
 
 #ifdef WITH_ASAN
-#  include "BLI_threads.h"
+#  include "BLI_threads.hh"
 #endif
 
 #include "MEM_guardedalloc.h"
@@ -37,7 +37,9 @@
 #  include "valgrind/memcheck.h"
 #endif
 
-#include "BLI_strict_flags.h" /* IWYU pragma: keep. Keep last. */
+#include "BLI_strict_flags.hh" /* IWYU pragma: keep. Keep last. */
+
+namespace blender {
 
 #ifdef WITH_ASAN
 #  define POISON_REDZONE_SIZE 32
@@ -53,7 +55,7 @@
    int64_t(c) << 16 | int64_t(b) << 8 | (a))
 
 /**
- * Important that this value is an is _not_  aligned with `sizeof(void *)`.
+ * Important that this value is not aligned with `sizeof(void *)`.
  * So having a pointer to 2/4/8... aligned memory is enough to ensure
  * the `freeword` will never be used.
  * To be safe, use a word that's the same in both directions.
@@ -130,7 +132,7 @@ struct BLI_mempool {
   ((BLI_freenode *)(CHECK_TYPE_INLINE(chunk, BLI_mempool_chunk *), (void *)((chunk) + 1)))
 
 #define NODE_STEP_NEXT(node) ((BLI_freenode *)((char *)(node) + esize))
-#define NODE_STEP_PREV(node) ((BLI_freenode *)((char *)(node)-esize))
+#define NODE_STEP_PREV(node) ((BLI_freenode *)((char *)(node) - esize))
 
 /** Extra bytes implicitly used for every chunk alloc. */
 #define CHUNK_OVERHEAD uint(MEM_SIZE_OVERHEAD + sizeof(BLI_mempool_chunk))
@@ -175,7 +177,7 @@ BLI_INLINE uint mempool_maxchunks(const uint elem_num, const uint pchunk)
 static BLI_mempool_chunk *mempool_chunk_alloc(const BLI_mempool *pool)
 {
   return static_cast<BLI_mempool_chunk *>(
-      MEM_mallocN(sizeof(BLI_mempool_chunk) + size_t(pool->csize), "mempool chunk"));
+      MEM_new_uninitialized(sizeof(BLI_mempool_chunk) + size_t(pool->csize), "mempool chunk"));
 }
 
 /**
@@ -207,7 +209,7 @@ static BLI_freenode *mempool_chunk_add(BLI_mempool *pool,
   mpchunk->next = nullptr;
   pool->chunk_tail = mpchunk;
 
-  if (UNLIKELY(pool->free == nullptr)) {
+  if (pool->free == nullptr) [[unlikely]] {
     pool->free = curnode;
   }
 
@@ -300,7 +302,7 @@ static void mempool_chunk_free(BLI_mempool_chunk *mpchunk, BLI_mempool *pool)
 #ifdef WITH_MEM_VALGRIND
   VALGRIND_MAKE_MEM_DEFINED(mpchunk, sizeof(BLI_mempool_chunk) + pool->esize * pool->csize);
 #endif
-  MEM_freeN(mpchunk);
+  MEM_delete(mpchunk);
 }
 
 static void mempool_chunk_free_all(BLI_mempool_chunk *mpchunk, BLI_mempool *pool)
@@ -320,7 +322,7 @@ BLI_mempool *BLI_mempool_create(uint esize, uint elem_num, uint pchunk, uint fla
   uint i, maxchunks;
 
   /* allocate the pool structure */
-  pool = MEM_callocN<BLI_mempool>("memory pool");
+  pool = MEM_new_zeroed<BLI_mempool>("memory pool");
 
 #ifdef WITH_ASAN
   BLI_mutex_init(&pool->mutex);
@@ -354,8 +356,8 @@ BLI_mempool *BLI_mempool_create(uint esize, uint elem_num, uint pchunk, uint fla
   /* Ensure this is a power of 2, minus the rounding by element size. */
 #if defined(USE_CHUNK_POW2) && !defined(NDEBUG)
   {
-    uint final_size = (uint)MEM_SIZE_OVERHEAD + (uint)sizeof(BLI_mempool_chunk) + pool->csize;
-    BLI_assert(((uint)power_of_2_max_u(final_size) - final_size) < pool->esize);
+    uint final_size = uint(MEM_SIZE_OVERHEAD) + uint(sizeof(BLI_mempool_chunk)) + pool->csize;
+    BLI_assert((uint(power_of_2_max_u(final_size)) - final_size) < pool->esize);
   }
 #endif
 
@@ -384,7 +386,7 @@ void *BLI_mempool_alloc(BLI_mempool *pool)
 {
   BLI_freenode *free_pop;
 
-  if (UNLIKELY(pool->free == nullptr)) {
+  if (pool->free == nullptr) [[unlikely]] {
     /* Need to allocate a new chunk. */
     BLI_mempool_chunk *mpchunk = mempool_chunk_alloc(pool);
     mempool_chunk_add(pool, mpchunk, nullptr);
@@ -418,7 +420,7 @@ void *BLI_mempool_alloc(BLI_mempool *pool)
   VALGRIND_MAKE_MEM_UNDEFINED(free_pop, pool->esize - POISON_REDZONE_SIZE);
 #endif
 
-  return (void *)free_pop;
+  return static_cast<void *>(free_pop);
 }
 
 void *BLI_mempool_calloc(BLI_mempool *pool)
@@ -450,7 +452,7 @@ void BLI_mempool_free(BLI_mempool *pool, void *addr)
   }
 
   /* Enable for debugging. */
-  if (UNLIKELY(mempool_debug_memset)) {
+  if (mempool_debug_memset) [[unlikely]] {
     memset(addr, 255, pool->esize - POISON_REDZONE_SIZE);
   }
 #endif
@@ -569,7 +571,7 @@ void BLI_mempool_as_array(BLI_mempool *pool, void *data)
 void *BLI_mempool_as_arrayN(BLI_mempool *pool, const char *allocstr)
 {
   char *data = static_cast<char *>(
-      MEM_malloc_arrayN(size_t(pool->totused), pool->esize, allocstr));
+      MEM_new_array_uninitialized(size_t(pool->totused), pool->esize, allocstr));
   BLI_mempool_as_array(pool, data);
   return data;
 }
@@ -593,9 +595,9 @@ ParallelMempoolTaskData *mempool_iter_threadsafe_create(BLI_mempool *pool, const
 {
   BLI_assert(pool->flag & BLI_MEMPOOL_ALLOW_ITER);
 
-  ParallelMempoolTaskData *iter_arr = MEM_calloc_arrayN<ParallelMempoolTaskData>(iter_num,
-                                                                                 __func__);
-  BLI_mempool_chunk **curchunk_threaded_shared = MEM_callocN<BLI_mempool_chunk *>(__func__);
+  ParallelMempoolTaskData *iter_arr = MEM_new_array_zeroed<ParallelMempoolTaskData>(iter_num,
+                                                                                    __func__);
+  BLI_mempool_chunk **curchunk_threaded_shared = MEM_new_zeroed<BLI_mempool_chunk *>(__func__);
 
   mempool_threadsafe_iternew(pool, &iter_arr->ts_iter);
 
@@ -614,8 +616,8 @@ void mempool_iter_threadsafe_destroy(ParallelMempoolTaskData *iter_arr)
 {
   BLI_assert(iter_arr->ts_iter.curchunk_threaded_shared != nullptr);
 
-  MEM_freeN(iter_arr->ts_iter.curchunk_threaded_shared);
-  MEM_freeN(iter_arr);
+  MEM_delete(iter_arr->ts_iter.curchunk_threaded_shared);
+  MEM_delete(iter_arr);
 }
 
 #if 0
@@ -656,7 +658,7 @@ void *BLI_mempool_iterstep(BLI_mempool_iter *iter)
 
 void *BLI_mempool_iterstep(BLI_mempool_iter *iter)
 {
-  if (UNLIKELY(iter->curchunk == nullptr)) {
+  if (iter->curchunk == nullptr) [[unlikely]] {
     return nullptr;
   }
 
@@ -677,7 +679,7 @@ void *BLI_mempool_iterstep(BLI_mempool_iter *iter)
     else {
       iter->curindex = 0;
       iter->curchunk = iter->curchunk->next;
-      if (UNLIKELY(iter->curchunk == nullptr)) {
+      if (iter->curchunk == nullptr) [[unlikely]] {
         BLI_asan_unpoison(ret, iter->pool->esize - POISON_REDZONE_SIZE);
 #  ifdef WITH_MEM_VALGRIND
         VALGRIND_MAKE_MEM_DEFINED(ret, iter->pool->esize - POISON_REDZONE_SIZE);
@@ -703,7 +705,7 @@ void *BLI_mempool_iterstep(BLI_mempool_iter *iter)
 void *mempool_iter_threadsafe_step(BLI_mempool_threadsafe_iter *ts_iter)
 {
   BLI_mempool_iter *iter = &ts_iter->iter;
-  if (UNLIKELY(iter->curchunk == nullptr)) {
+  if (iter->curchunk == nullptr) [[unlikely]] {
     return nullptr;
   }
 
@@ -729,14 +731,14 @@ void *mempool_iter_threadsafe_step(BLI_mempool_threadsafe_iter *ts_iter)
       /* Begin unique to the `threadsafe` version of this function. */
       for (iter->curchunk = *ts_iter->curchunk_threaded_shared;
            (iter->curchunk != nullptr) &&
-           (atomic_cas_ptr((void **)ts_iter->curchunk_threaded_shared,
+           (atomic_cas_ptr(reinterpret_cast<void **>(ts_iter->curchunk_threaded_shared),
                            iter->curchunk,
                            iter->curchunk->next) != iter->curchunk);
            iter->curchunk = *ts_iter->curchunk_threaded_shared)
       {
         /* pass. */
       }
-      if (UNLIKELY(iter->curchunk == nullptr)) {
+      if (iter->curchunk == nullptr) [[unlikely]] {
         if (ret->freeword == FREEWORD) {
           BLI_asan_poison(ret, esize);
 #  ifdef WITH_MEM_VALGRIND
@@ -751,7 +753,7 @@ void *mempool_iter_threadsafe_step(BLI_mempool_threadsafe_iter *ts_iter)
       /* End `threadsafe` exception. */
 
       iter->curchunk = iter->curchunk->next;
-      if (UNLIKELY(iter->curchunk == nullptr)) {
+      if (iter->curchunk == nullptr) [[unlikely]] {
         if (ret->freeword == FREEWORD) {
           BLI_asan_poison(ret, iter->pool->esize);
 #  ifdef WITH_MEM_VALGRIND
@@ -845,7 +847,7 @@ void BLI_mempool_destroy(BLI_mempool *pool)
   VALGRIND_DESTROY_MEMPOOL(pool);
 #endif
 
-  MEM_freeN(pool);
+  MEM_delete(pool);
 }
 
 #ifndef NDEBUG
@@ -854,3 +856,5 @@ void BLI_mempool_set_memory_debug()
   mempool_debug_memset = true;
 }
 #endif
+
+}  // namespace blender

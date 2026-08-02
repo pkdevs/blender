@@ -19,45 +19,54 @@
 #include "BLO_read_write.hh"
 
 #include "UI_interface_layout.hh"
+#include "shader/node_shader_util.hh"
 
 #include <fmt/format.h>
 
-namespace blender::nodes::node_geo_separate_bundle_cc {
+namespace blender {
 
-NODE_STORAGE_FUNCS(NodeGeometrySeparateBundle);
+namespace nodes::node_geo_separate_bundle_cc {
+
+NODE_STORAGE_FUNCS(NodeSeparateBundle);
 
 static void node_declare(NodeDeclarationBuilder &b)
 {
-  b.add_input<decl::Bundle>("Bundle");
+  b.add_input<decl::Bundle>("Bundle"_ustr).structure_type(StructureType::Single);
   const bNodeTree *tree = b.tree_or_null();
   const bNode *node = b.node_or_null();
   if (tree && node) {
-    const NodeGeometrySeparateBundle &storage = node_storage(*node);
+    const NodeSeparateBundle &storage = node_storage(*node);
     for (const int i : IndexRange(storage.items_num)) {
-      const NodeGeometrySeparateBundleItem &item = storage.items[i];
-      const eNodeSocketDatatype socket_type = eNodeSocketDatatype(item.socket_type);
-      const StringRef name = item.name ? item.name : "";
-      const std::string identifier = SeparateBundleItemsAccessor::socket_identifier_for_item(item);
-      b.add_output(socket_type, name, identifier)
-          .socket_name_ptr(&tree->id, SeparateBundleItemsAccessor::item_srna, &item, "name")
-          .propagate_all()
-          .reference_pass_all()
-          .structure_type(StructureType::Dynamic);
+      const NodeSeparateBundleItem &item = storage.items[i];
+      const eNodeSocketDatatype socket_type = item.socket_type;
+      const UString name = item.name ? UString(item.name) : ""_ustr;
+      const UString identifier(SeparateBundleItemsAccessor::socket_identifier_for_item(item));
+      auto &decl = b.add_output(socket_type, name, identifier)
+                       .socket_name_ptr(
+                           &tree->id, *SeparateBundleItemsAccessor::item_srna, &item, "name")
+                       .propagate_all();
+      if (item.structure_type != NodeSocketInterfaceStructureType::Auto) {
+        decl.structure_type(StructureType(item.structure_type));
+      }
+      else {
+        decl.structure_type(StructureType::Dynamic);
+      }
     }
   }
-  b.add_output<decl::Extend>("", "__extend__");
+  b.add_output<decl::Extend>(""_ustr, "__extend__"_ustr)
+      .custom_draw(socket_items::ui::draw_extend_socket_fn<SeparateBundleItemsAccessor>());
 }
 
 static void node_init(bNodeTree * /*tree*/, bNode *node)
 {
-  auto *storage = MEM_callocN<NodeGeometrySeparateBundle>(__func__);
+  auto *storage = MEM_new<NodeSeparateBundle>(__func__);
   node->storage = storage;
 }
 
 static void node_copy_storage(bNodeTree * /*dst_tree*/, bNode *dst_node, const bNode *src_node)
 {
-  const NodeGeometrySeparateBundle &src_storage = node_storage(*src_node);
-  auto *dst_storage = MEM_dupallocN<NodeGeometrySeparateBundle>(__func__, src_storage);
+  const NodeSeparateBundle &src_storage = node_storage(*src_node);
+  auto *dst_storage = MEM_new<NodeSeparateBundle>(__func__, dna::shallow_copy(src_storage));
   dst_node->storage = dst_storage;
 
   socket_items::copy_array<SeparateBundleItemsAccessor>(*src_node, *dst_node);
@@ -66,14 +75,14 @@ static void node_copy_storage(bNodeTree * /*dst_tree*/, bNode *dst_node, const b
 static void node_free_storage(bNode *node)
 {
   socket_items::destruct_array<SeparateBundleItemsAccessor>(*node);
-  MEM_freeN(node->storage);
+  MEM_delete(static_cast<NodeSeparateBundle *>(node->storage));
 }
 
 static bool node_insert_link(bke::NodeInsertLinkParams &params)
 {
   if (params.C && params.link.tonode == &params.node && params.link.fromsock->type == SOCK_BUNDLE)
   {
-    const NodeGeometrySeparateBundle &storage = node_storage(params.node);
+    const NodeSeparateBundle &storage = node_storage(params.node);
     if (storage.items_num == 0) {
       SpaceNode *snode = CTX_wm_space_node(params.C);
       if (snode && snode->edittree == &params.ntree) {
@@ -86,18 +95,25 @@ static bool node_insert_link(bke::NodeInsertLinkParams &params)
       params.ntree, params.node, params.node, params.link);
 }
 
-static void node_layout_ex(uiLayout *layout, bContext *C, PointerRNA *node_ptr)
+static void node_layout_ex(ui::Layout &layout, bContext *C, PointerRNA *node_ptr)
 {
   bNodeTree &ntree = *reinterpret_cast<bNodeTree *>(node_ptr->owner_id);
   bNode &node = *static_cast<bNode *>(node_ptr->data);
 
-  layout->op("node.sockets_sync", "Sync", ICON_FILE_REFRESH);
-  if (uiLayout *panel = layout->panel(C, "bundle_items", false, TIP_("Bundle Items"))) {
+  layout.use_property_split_set(true);
+  layout.use_property_decorate_set(false);
+
+  layout.op("node.sockets_sync", IFACE_("Sync"), ICON_FILE_REFRESH);
+  layout.prop(node_ptr, "define_signature", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+  if (ui::Layout *panel = layout.panel(C, "bundle_items", false, IFACE_("Bundle Items"))) {
     socket_items::ui::draw_items_list_with_operators<SeparateBundleItemsAccessor>(
         C, panel, ntree, node);
     socket_items::ui::draw_active_item_props<SeparateBundleItemsAccessor>(
         ntree, node, [&](PointerRNA *item_ptr) {
-          panel->prop(item_ptr, "socket_type", UI_ITEM_NONE, "Type", ICON_NONE);
+          panel->use_property_split_set(true);
+          panel->use_property_decorate_set(false);
+          panel->prop(item_ptr, "socket_type", UI_ITEM_NONE, IFACE_("Type"), ICON_NONE);
+          panel->prop(item_ptr, "structure_type", UI_ITEM_NONE, IFACE_("Shape"), ICON_NONE);
         });
   }
 }
@@ -109,33 +125,29 @@ static void node_operators()
 
 static void node_geo_exec(GeoNodeExecParams params)
 {
-  if (!U.experimental.use_bundle_and_closure_nodes) {
-    params.set_default_remaining_outputs();
-    return;
-  }
-
-  nodes::BundlePtr bundle = params.extract_input<nodes::BundlePtr>("Bundle");
+  nodes::BundlePtr bundle = params.extract_input<nodes::BundlePtr>("Bundle"_ustr);
   if (!bundle) {
     params.set_default_remaining_outputs();
     return;
   }
 
   const bNode &node = params.node();
-  const NodeGeometrySeparateBundle &storage = node_storage(node);
+  const NodeSeparateBundle &storage = node_storage(node);
 
   lf::Params &lf_params = params.low_level_lazy_function_params();
 
   for (const int i : IndexRange(storage.items_num)) {
-    const NodeGeometrySeparateBundleItem &item = storage.items[i];
+    const NodeSeparateBundleItem &item = storage.items[i];
     const StringRef name = item.name;
-    if (name.is_empty()) {
+    std::optional<BundleKey> key = BundleKey::from_str(name);
+    if (!key) {
       continue;
     }
     const bke::bNodeSocketType *stype = bke::node_socket_type_find_static(item.socket_type);
-    if (!stype || !stype->geometry_nodes_cpp_type) {
+    if (!stype || !stype->geometry_nodes_default_value) {
       continue;
     }
-    const BundleItemValue *value = bundle->lookup(name);
+    const BundleItemValue *value = bundle->lookup(*key);
     if (!value) {
       params.error_message_add(
           NodeWarningType::Error,
@@ -149,14 +161,13 @@ static void node_geo_exec(GeoNodeExecParams params)
           fmt::format("{}: \"{}\"", TIP_("Cannot get internal value from bundle"), name));
       continue;
     }
-    void *output_ptr = lf_params.get_output_data_ptr(i);
-    if (socket_value->type->type == stype->type) {
-      socket_value->type->geometry_nodes_cpp_type->copy_construct(socket_value->value, output_ptr);
-    }
-    else {
-      if (implicitly_convert_socket_value(
-              *socket_value->type, socket_value->value, *stype, output_ptr))
+
+    SocketValueVariant output_value = std::move(socket_value->value);
+    if (socket_value->type->type != stype->type) {
+      if (std::optional<SocketValueVariant> converted_value = implicitly_convert_socket_value(
+              *socket_value->type, output_value, *stype))
       {
+        output_value = std::move(*converted_value);
         params.error_message_add(
             NodeWarningType::Info,
             fmt::format("{}: \"{}\" ({} " BLI_STR_UTF8_BLACK_RIGHT_POINTING_SMALL_TRIANGLE " {})",
@@ -173,10 +184,10 @@ static void node_geo_exec(GeoNodeExecParams params)
                         name,
                         TIP_(socket_value->type->label),
                         TIP_(stype->label)));
-        construct_socket_default_value(*stype, output_ptr);
+        output_value = *stype->geometry_nodes_default_value;
       }
     }
-    lf_params.output_set(i);
+    lf_params.set_output(i, std::move(output_value));
   }
 
   params.set_default_remaining_outputs();
@@ -185,20 +196,32 @@ static void node_geo_exec(GeoNodeExecParams params)
 static void node_gather_link_searches(GatherLinkSearchOpParams &params)
 {
   const bNodeSocket &other_socket = params.other_socket();
-  if (other_socket.type != SOCK_BUNDLE) {
-    return;
-  }
   if (other_socket.in_out == SOCK_IN) {
-    return;
+    if (!SeparateBundleItemsAccessor::supports_socket_type(other_socket.typeinfo->type,
+                                                           params.node_tree().type))
+    {
+      return;
+    }
+    params.add_item(IFACE_("Item"), [](LinkSearchOpParams &params) {
+      bNode &node = params.add_node("NodeSeparateBundle"_ustr);
+      const auto *item =
+          socket_items::add_item_with_socket_type_and_name<SeparateBundleItemsAccessor>(
+              params.node_tree, node, params.socket.typeinfo->type, params.socket.name);
+      params.update_and_connect_available_socket(node, UString(item->name));
+    });
   }
+  else {
+    if (other_socket.type != SOCK_BUNDLE) {
+      return;
+    }
+    params.add_item(IFACE_("Bundle"), [](LinkSearchOpParams &params) {
+      bNode &node = params.add_node("NodeSeparateBundle"_ustr);
+      params.connect_available_socket(node, "Bundle"_ustr);
 
-  params.add_item("Bundle", [](LinkSearchOpParams &params) {
-    bNode &node = params.add_node("GeometryNodeSeparateBundle");
-    params.connect_available_socket(node, "Bundle");
-
-    SpaceNode &snode = *CTX_wm_space_node(&params.C);
-    sync_sockets_separate_bundle(snode, node, nullptr);
-  });
+      SpaceNode &snode = *CTX_wm_space_node(&params.C);
+      sync_sockets_separate_bundle(snode, node, nullptr);
+    });
+  }
 }
 
 static void node_blend_write(const bNodeTree & /*tree*/, const bNode &node, BlendWriter &writer)
@@ -213,9 +236,9 @@ static void node_blend_read(bNodeTree & /*tree*/, bNode &node, BlendDataReader &
 
 static void node_register()
 {
-  static blender::bke::bNodeType ntype;
+  static bke::bNodeType ntype;
 
-  geo_node_type_base(&ntype, "GeometryNodeSeparateBundle", GEO_NODE_SEPARATE_BUNDLE);
+  sh_geo_node_type_base(&ntype, "NodeSeparateBundle"_ustr, NODE_SEPARATE_BUNDLE);
   ntype.ui_name = "Separate Bundle";
   ntype.ui_description = "Split a bundle into multiple sockets.";
   ntype.nclass = NODE_CLASS_CONVERTER;
@@ -228,21 +251,20 @@ static void node_register()
   ntype.register_operators = node_operators;
   ntype.blend_write_storage_content = node_blend_write;
   ntype.blend_data_read_storage_content = node_blend_read;
-  bke::node_type_storage(
-      ntype, "NodeGeometrySeparateBundle", node_free_storage, node_copy_storage);
-  blender::bke::node_register_type(ntype);
+  bke::node_type_storage(ntype, "NodeSeparateBundle", node_free_storage, node_copy_storage);
+  bke::node_register_type(ntype);
 }
 NOD_REGISTER_NODE(node_register)
 
-}  // namespace blender::nodes::node_geo_separate_bundle_cc
+}  // namespace nodes::node_geo_separate_bundle_cc
 
-namespace blender::nodes {
+namespace nodes {
 
-StructRNA *SeparateBundleItemsAccessor::item_srna = &RNA_NodeGeometrySeparateBundleItem;
+StructRNA **SeparateBundleItemsAccessor::item_srna = &RNA_NodeSeparateBundleItem;
 
 void SeparateBundleItemsAccessor::blend_write_item(BlendWriter *writer, const ItemT &item)
 {
-  BLO_write_string(writer, item.name);
+  writer->write_string(item.name);
 }
 
 void SeparateBundleItemsAccessor::blend_read_data_item(BlendDataReader *reader, ItemT &item)
@@ -250,4 +272,5 @@ void SeparateBundleItemsAccessor::blend_read_data_item(BlendDataReader *reader, 
   BLO_read_string(reader, &item.name);
 }
 
-}  // namespace blender::nodes
+}  // namespace nodes
+}  // namespace blender

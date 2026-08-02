@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: GPL-2.0-or-later */
 #include "usd_writer_light.hh"
 #include "usd_attribute_utils.hh"
+#include "usd_colorspace_utils.hh"
 #include "usd_hierarchy_iterator.hh"
 
 #include <pxr/usd/usdLux/diskLight.h>
@@ -11,10 +12,11 @@
 #include <pxr/usd/usdLux/shapingAPI.h>
 #include <pxr/usd/usdLux/sphereLight.h>
 
-#include "BLI_assert.h"
-#include "BLI_math_rotation.h"
+#include "BLI_assert.hh"
+#include "BLI_math_constants.hh"
 
 #include "DNA_light_types.h"
+#include "DNA_object_types.h"
 
 namespace blender::io::usd {
 
@@ -31,7 +33,7 @@ void USDLightWriter::do_write(HierarchyContext &context)
   const pxr::SdfPath &usd_path = usd_export_context_.usd_path;
   pxr::UsdTimeCode time = get_export_time_code();
 
-  const Light *light = static_cast<const Light *>(context.object->data);
+  const Light *light = id_cast<const Light *>(context.object->data);
   pxr::UsdLuxLightAPI usd_light_api;
 
   switch (light->type) {
@@ -149,9 +151,8 @@ void USDLightWriter::do_write(HierarchyContext &context)
                 pxr::GfVec3f(light->r, light->g, light->b),
                 time,
                 usd_value_writer_);
-  set_attribute(usd_light_api.CreateEnableColorTemperatureAttr(
-                    pxr::VtValue(), (light->mode & LA_USE_TEMPERATURE) != 0),
-                true,
+  set_attribute(usd_light_api.CreateEnableColorTemperatureAttr(pxr::VtValue(), true),
+                (light->mode & LA_USE_TEMPERATURE) != 0,
                 time,
                 usd_value_writer_);
   set_attribute(usd_light_api.CreateColorTemperatureAttr(pxr::VtValue(), true),
@@ -173,7 +174,9 @@ void USDLightWriter::do_write(HierarchyContext &context)
                 usd_value_writer_);
 
   pxr::UsdPrim prim = usd_light_api.GetPrim();
+  add_to_prim_map(prim.GetPath(), &light->id);
   write_id_properties(prim, light->id, time);
+  colorspace_apply_to_prim(prim);
 
   /* Only a subset of light types are "boundable". */
   if (auto boundable = pxr::UsdGeomBoundable(prim)) {

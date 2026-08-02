@@ -2,7 +2,7 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#include "BLI_rect.h"
+#include "BLI_rect.hh"
 
 #include "GPU_framebuffer.hh"
 
@@ -19,7 +19,9 @@
 
 #include "eevee_instance.hh"
 
-namespace blender::eevee {
+namespace blender {
+
+namespace eevee {
 
 DrawEngine *Engine::create_instance()
 {
@@ -31,7 +33,7 @@ void Engine::free_static()
   ShaderModule::module_free();
 }
 
-}  // namespace blender::eevee
+}  // namespace eevee
 
 using namespace blender::eevee;
 
@@ -45,6 +47,8 @@ static void eevee_render(RenderEngine *engine, Depsgraph *depsgraph)
     const char *viewname = RE_GetActiveRenderView(engine->re);
     int size[2] = {engine->resolution_x, engine->resolution_y};
 
+    /* Avoid leaking in the case of multiview. (see #145743) */
+    delete instance;
     /* WORKAROUND: Fails if created in the parent scope. Must be because of lack of active
      * `DRWContext`. To be revisited. */
     instance = new Instance();
@@ -85,6 +89,8 @@ RenderEngineType DRW_engine_viewport_eevee_type = {
     /*bake*/ nullptr,
     /*view_update*/ nullptr,
     /*view_draw*/ nullptr,
+    /*view_pause*/ nullptr,
+    /*view_resume*/ nullptr,
     /*update_script_node*/ nullptr,
     /*update_render_passes*/ &eevee_render_update_passes,
     /*update_custom_camera*/ nullptr,
@@ -96,3 +102,5 @@ RenderEngineType DRW_engine_viewport_eevee_type = {
         /*call*/ nullptr,
     },
 };
+
+}  // namespace blender

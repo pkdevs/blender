@@ -10,10 +10,6 @@
 
 #pragma once
 
-#ifndef __cplusplus
-#  error This is a C++ header.
-#endif
-
 #include "DNA_armature_types.h"
 
 #include "BLI_listbase_wrapper.hh"
@@ -27,9 +23,9 @@ namespace blender::animrig {
  * TODO: extend the callback with a `bool` return value to indicate whether the
  * loop should continue or stop.
  */
-template<typename CB> static void ANIM_armature_foreach_bone(ListBase /*Bone*/ *bones, CB callback)
+template<typename CB> static void ANIM_armature_foreach_bone(ListBaseT<Bone> *bones, CB callback)
 {
-  for (Bone *bone : blender::ListBaseWrapper<Bone>(bones)) {
+  for (Bone *bone : ListBaseWrapper<Bone>(bones)) {
     callback(bone);
     ANIM_armature_foreach_bone(&bone->childbase, callback);
   }
@@ -44,9 +40,9 @@ template<typename CB> static void ANIM_armature_foreach_bone(ListBase /*Bone*/ *
  * loop should continue or stop.
  */
 template<typename CB>
-static void ANIM_armature_foreach_bone(const ListBase /*Bone*/ *bones, CB callback)
+static void ANIM_armature_foreach_bone(const ListBaseT<Bone> *bones, CB callback)
 {
-  for (const Bone *bone : blender::ConstListBaseWrapper<Bone>(bones)) {
+  for (const Bone *bone : ConstListBaseWrapper<Bone>(bones)) {
     callback(bone);
     ANIM_armature_foreach_bone(&bone->childbase, callback);
   }

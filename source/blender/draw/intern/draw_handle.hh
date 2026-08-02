@@ -23,7 +23,7 @@
 #include "draw_shader_shared.hh"
 
 /* random */
-#include "BLI_hash.h"
+#include "BLI_hash_c.hh"
 
 /* find_rgba_attribute */
 #include "GPU_material.hh"
@@ -41,9 +41,11 @@
 /* ObjectKey */
 #include "DEG_depsgraph_query.hh"
 
+namespace blender {
+
 struct DupliCacheManager;
 
-namespace blender::draw {
+namespace draw {
 
 /**
  * Index for getting a specific resource from the Draw Manager resource arrays.
@@ -53,12 +55,12 @@ namespace blender::draw {
  * NOTE: From the draw_pass and draw_command perspective, the 0 index is still valid and points to
  * default initialized Manager resources. Valid ResourceHandles start at index 1.
  */
-struct ResourceIndex {
+struct ResourceID {
   uint32_t raw;
 
-  ResourceIndex() = default;
-  ResourceIndex(uint raw_) : raw(raw_){};
-  ResourceIndex(uint index, bool inverted_handedness)
+  ResourceID() = default;
+  ResourceID(uint raw_) : raw(raw_) {};
+  ResourceID(uint index, bool inverted_handedness)
   {
     raw = index;
     SET_FLAG_FROM_TEST(raw, inverted_handedness, 0x80000000u);
@@ -69,7 +71,7 @@ struct ResourceIndex {
     return (raw & 0x80000000u) != 0;
   }
 
-  uint resource_index() const
+  uint index() const
   {
     return (raw & 0x7FFFFFFFu);
   }
@@ -80,22 +82,22 @@ struct ResourceIndex {
  * Typically used to render instances of an object, but can represent a single instance too.
  * The associated objects must share handedness and state so they can be rendered together.
  */
-struct ResourceIndexRange {
+struct ResourceIDRange {
   /* First handle in the range. */
-  ResourceIndex first = 0;
+  ResourceID first = 0;
   /* Number of handles in the range. */
   uint32_t count = 1;
 
-  ResourceIndexRange() = default;
-  ResourceIndexRange(ResourceIndex index) : first(index), count(1) {}
-  ResourceIndexRange(ResourceIndex index, uint len) : first(index), count(len) {}
+  ResourceIDRange() = default;
+  ResourceIDRange(ResourceID id) : first(id) {}
+  ResourceIDRange(ResourceID first_id, uint len) : first(first_id), count(len) {}
 
   bool has_inverted_handedness() const
   {
     return first.has_inverted_handedness();
   }
 
-  IndexRange index_range() const
+  IndexRange id_range() const
   {
     BLI_assert(count > 0);
     BLI_assert(first.raw != 0 || count == 1);
@@ -104,102 +106,113 @@ struct ResourceIndexRange {
 };
 
 /**
- * Safety wrapper around ResourceIndex, meant to be used by engine code.
+ * Safety wrapper around ResourceID, meant to be used by engine code.
  * Valid handles can only be created by the Draw Manager.
  *
- * NOTE: This class is deprecated.
- * Some Draw Manager functions can't work with ranged synchronization and returns ResourceHandles
- * for clarity, but engine code should always use ResourceHandleRange.
+ * ResourceHandleRange is usually preferred over this class.
+ * ResourceHandle should only be used in paths where handling objects in batches is not possible.
  */
 class ResourceHandle {
   friend class Manager;
   friend class ResourceHandleRange;
 
-  ResourceIndex index_ = {};
+  ResourceID id_ = {};
 
-  ResourceHandle(uint raw) : index_(raw) {}
-  ResourceHandle(uint index, bool inverted_handedness) : index_(index, inverted_handedness) {}
+  ResourceHandle(uint raw) : id_(raw) {}
+  ResourceHandle(uint index, bool inverted_handedness) : id_(index, inverted_handedness) {}
 
  public:
   ResourceHandle() = default;
 
   bool is_valid() const
   {
-    return index_.raw != 0;
+    return id_.raw != 0;
   }
 
   bool has_inverted_handedness() const
   {
-    return index_.has_inverted_handedness();
+    return id_.has_inverted_handedness();
   }
 
-  uint resource_index() const
+  uint raw() const
   {
-    return index_.resource_index();
+    return id_.raw;
   }
 
-  operator ResourceIndex() const
+  uint index() const
+  {
+    return id_.index();
+  }
+
+  operator ResourceID() const
   {
     BLI_assert(is_valid());
-    return index_;
+    return id_;
   }
 };
 
 /**
- * Safety wrapper around ResourceIndexRange, meant to be used by engine code.
+ * Safety wrapper around ResourceIDRange, meant to be used by engine code.
  * Valid handles can only be created by the Draw Manager.
  */
 class ResourceHandleRange {
   friend class Manager;
+  friend class ResourceHandle;
 
-  ResourceIndexRange index_ = {};
+  ResourceIDRange id_ = {};
 
-  ResourceHandleRange(ResourceHandle handle, uint len) : index_(handle.index_, len) {}
+  ResourceHandleRange(ResourceHandle first_handle, uint len) : id_(first_handle.id_, len) {}
 
  public:
   ResourceHandleRange() = default;
-  ResourceHandleRange(ResourceHandle handle) : index_(handle.index_) {}
+  ResourceHandleRange(ResourceHandle handle) : id_(handle.id_) {}
 
   bool is_valid() const
   {
-    return index_.first.raw != 0;
+    return id_.first.raw != 0;
   }
 
   bool has_inverted_handedness() const
   {
-    return index_.has_inverted_handedness();
+    return id_.has_inverted_handedness();
   }
 
-  IndexRange index_range() const
+  IndexRange id_range() const
   {
-    return index_.index_range();
+    return id_.id_range();
   }
 
-  operator ResourceIndexRange() const
+  operator ResourceIDRange() const
   {
     BLI_assert(is_valid());
-    return index_;
+    return id_;
   }
 
-  /* These functions are to keep existing engine code to work.
-   * Should be used only for objects and code paths that don't support ranged synchronization. */
+  /* Returns a single handle within this range.
+   * May be required for passes that require per-instance setups,
+   * so their drawing can't be batched into a single draw call. */
+  ResourceHandle sub_handle(int index) const
+  {
+    BLI_assert(index < id_.count);
+    return ResourceHandle(id_.first.index() + index, id_.first.has_inverted_handedness());
+  }
 
   operator ResourceHandle() const
   {
-    BLI_assert(index_.count == 1);
-    return ResourceHandle(index_.first.raw);
+    BLI_assert(id_.count == 1);
+    return ResourceHandle(id_.first.raw);
   }
 
-  uint32_t raw() const
+  uint raw() const
   {
-    BLI_assert(index_.count == 1);
-    return index_.first.raw;
+    BLI_assert(id_.count == 1);
+    return id_.first.raw;
   }
 
-  uint resource_index() const
+  uint index() const
   {
-    BLI_assert(index_.count == 1);
-    return index_.first.resource_index();
+    BLI_assert(id_.count == 1);
+    return id_.first.index();
   }
 };
 
@@ -215,39 +228,95 @@ class ObjectRef {
   /** Object that created the dupli-list the current object is part of. */
   Object *const dupli_parent_ = nullptr;
 
+  /** List of (render-compatible) duplis when rendering a ranges. */
+  const VectorList<DupliObject *> *duplis_ = nullptr;
+
   /** Unique handle per object ref. */
   ResourceHandleRange handle_ = {};
   ResourceHandleRange sculpt_handle_ = {};
 
+  /* For ParticleSystems of the main object. */
+  uint sub_key_ = 0;
+
  public:
   Object *const object;
 
-  ObjectRef(DEGObjectIterData &iter_data, Object *ob);
-  explicit ObjectRef(Object *ob);
+  explicit ObjectRef(Object *ob,
+                     Object *dupli_parent = nullptr,
+                     DupliObject *dupli_object = nullptr);
+  explicit ObjectRef(Object &ob, Object *dupli_parent, const VectorList<DupliObject *> &duplis);
+  explicit ObjectRef(const ObjectRef &ob_ref, uint sub_key) : ObjectRef(ob_ref)
+  {
+    sub_key_ = sub_key;
+  };
 
   /* Is the object coming from a Dupli system. */
   bool is_dupli() const
   {
-    return dupli_object_ != nullptr;
+    return dupli_parent_ != nullptr;
   }
 
   bool is_active(const Object *active_object) const
   {
-    return (dupli_object_ ? dupli_parent_ : object) == active_object;
+    return (dupli_parent_ ? dupli_parent_ : object) == active_object;
   }
 
-  float random() const
+  bool is_range() const
   {
-    if (dupli_object_ == nullptr) {
+    return duplis_ != nullptr;
+  }
+
+  int instances_count() const
+  {
+    if (duplis_) {
+      return duplis_->size();
+    }
+    return 1;
+  }
+
+  float4x4 object_to_world(int instance_index) const
+  {
+    if (is_range()) {
+      return float4x4((*duplis_)[instance_index]->mat);
+    }
+    else {
+      BLI_assert(instance_index == 0);
+      return object->object_to_world();
+    }
+  }
+
+  float4x4 object_to_world() const
+  {
+    BLI_assert(!is_range());
+    return object_to_world(0);
+  }
+
+  float random(int instance_index) const
+  {
+    if (instance_index != 0) {
+      BLI_assert(is_range());
+      return (*duplis_)[instance_index]->random_id * (1.0f / float(0xFFFFFFFF));
+    }
+
+    if (dupli_parent_ == nullptr) {
       /* TODO(fclem): this is rather costly to do at draw time. Maybe we can
        * put it in ob->runtime and make depsgraph ensure it is up to date. */
-      return BLI_hash_int_2d(BLI_hash_string(object->id.name + 2), 0) * (1.0f / (float)0xFFFFFFFF);
+      return BLI_hash_int_2d(BLI_hash_string(object->id.name + 2), 0) * (1.0f / float(0xFFFFFFFF));
     }
-    return dupli_object_->random_id * (1.0f / (float)0xFFFFFFFF);
+    return dupli_object_->random_id * (1.0f / float(0xFFFFFFFF));
   }
 
-  bool find_rgba_attribute(const GPUUniformAttr &attr, float r_value[4]) const
+  bool find_rgba_attribute(const GPUUniformAttr &attr, int instance_index, float r_value[4]) const
   {
+    if (instance_index != 0) {
+      BLI_assert(is_range());
+      if (attr.use_dupli) {
+        /* If requesting instance data, check the parent particle system and object. */
+        return BKE_object_dupli_find_rgba_attribute(
+            object, (*duplis_)[instance_index], dupli_parent_, attr.name, r_value);
+      }
+    }
+
     /* If requesting instance data, check the parent particle system and object. */
     if (attr.use_dupli) {
       return BKE_object_dupli_find_rgba_attribute(
@@ -258,22 +327,21 @@ class ObjectRef {
 
   LightLinking *light_linking() const
   {
-    /* TODO: Could this be handled directly by deg_iterator_duplis_step?  */
     return dupli_parent_ ? dupli_parent_->light_linking : object->light_linking;
   }
 
-  int recalc_flags(uint64_t last_update) const
+  uint recalc_flags(uint64_t last_update) const
   {
     /* TODO: There should also be a way to get the min last_update for all objects in the range. */
-    auto get_flags = [&](const ObjectRuntimeHandle &runtime) {
-      int flags = 0;
+    auto get_flags = [&](const bke::ObjectRuntime &runtime) {
+      uint flags = 0;
       SET_FLAG_FROM_TEST(flags, runtime.last_update_transform > last_update, ID_RECALC_TRANSFORM);
       SET_FLAG_FROM_TEST(flags, runtime.last_update_geometry > last_update, ID_RECALC_GEOMETRY);
       SET_FLAG_FROM_TEST(flags, runtime.last_update_shading > last_update, ID_RECALC_SHADING);
       return flags;
     };
 
-    int flags = get_flags(*object->runtime);
+    uint flags = get_flags(*object->runtime);
     if (dupli_parent_) {
       flags |= get_flags(*dupli_parent_->runtime);
     }
@@ -285,6 +353,9 @@ class ObjectRef {
    * systems need to be offset appropriately. */
   float4x4 particles_matrix() const
   {
+    /* Objects with particles don't support instancing optimizations yet. */
+    BLI_assert(!is_range());
+
     /* TODO: Pass particle systems as a separate ObRef? */
     float4x4 dupli_mat = float4x4::identity();
     if (dupli_parent_ && dupli_object_) {
@@ -310,7 +381,7 @@ class ObjectRef {
     return -1;
   }
 
-  const blender::bke::GeometrySet *preview_base_geometry() const
+  const bke::GeometrySet *preview_base_geometry() const
   {
     if (dupli_object_) {
       return dupli_object_->preview_base_geometry;
@@ -334,7 +405,9 @@ class ObjectRef {
       return false;
     }
 
-    if (dupli_parent_->sculpt && (dupli_parent_->sculpt->mode_type == OB_MODE_SCULPT)) {
+    if (dupli_parent_->runtime->sculpt_session &&
+        (dupli_parent_->runtime->sculpt_session->mode_type == OB_MODE_SCULPT))
+    {
       return true;
     }
 
@@ -368,6 +441,8 @@ class ObjectRef {
         case OB_VOLUME:
           /* No edit mode yet. */
           return false;
+        default:
+          return false;
       }
     }
     return false;
@@ -396,12 +471,14 @@ class ObjectKey {
  public:
   ObjectKey() = default;
 
-  ObjectKey(const ObjectRef &ob_ref, int sub_key = 0)
+  ObjectKey(const ObjectRef &ob_ref, int instance_index)
   {
     ob_ = DEG_get_original(ob_ref.object);
     hash_value_ = get_default_hash(ob_);
 
-    if (DupliObject *dupli = ob_ref.dupli_object_) {
+    if (DupliObject *dupli = instance_index ? (*ob_ref.duplis_)[instance_index] :
+                                              ob_ref.dupli_object_)
+    {
       parent_ = ob_ref.dupli_parent_;
       hash_value_ = get_default_hash(hash_value_, get_default_hash(parent_));
       for (int i : IndexRange(MAX_DUPLI_RECUR)) {
@@ -413,10 +490,24 @@ class ObjectKey {
       }
     }
 
-    if (sub_key != 0) {
-      sub_key_ = sub_key;
+    if (ob_ref.sub_key_ != 0) {
+      sub_key_ = ob_ref.sub_key_;
       hash_value_ = get_default_hash(hash_value_, get_default_hash(sub_key_));
     }
+  }
+
+  ObjectKey(const ObjectRef &ob_ref) : ObjectKey(ob_ref, 0)
+  {
+    BLI_assert(!ob_ref.is_range());
+  }
+
+  /* Special handles that will have nullptr object.
+   * Used for inserting helper items inside the hash-maps without creating a dummy #Object. */
+  explicit ObjectKey(int key)
+  {
+    sub_key_ = key;
+    hash_value_ = get_default_hash(ob_);
+    hash_value_ = get_default_hash(hash_value_, get_default_hash(sub_key_));
   }
 
   uint64_t hash() const
@@ -454,4 +545,6 @@ class ObjectKey {
 
 /** \} */
 
-};  // namespace blender::draw
+};  // namespace draw
+
+}  // namespace blender

@@ -7,7 +7,7 @@
  */
 
 #include "BLI_array_utils.hh"
-#include "BLI_string.h"
+#include "BLI_string.hh"
 
 #include "BKE_attribute.hh"
 #include "BKE_attribute_legacy_convert.hh"
@@ -171,55 +171,11 @@ static void extract_data_bmesh_loop(const BMesh &bm, const int cd_offset, gpu::V
   }
 }
 
-struct BMeshAttributeLookup {
-  const int offset = -1;
-  bke::AttrDomain domain;
-  bke::AttrType type;
-  operator bool() const
-  {
-    return offset != -1;
-  }
-};
-
-static BMeshAttributeLookup lookup_bmesh_attribute(const BMesh &bm, const StringRef name)
-{
-  for (const CustomDataLayer &layer : Span(bm.vdata.layers, bm.vdata.totlayer)) {
-    if (layer.name == name) {
-      return {layer.offset,
-              bke::AttrDomain::Point,
-              *bke::custom_data_type_to_attr_type(eCustomDataType(layer.type))};
-    }
-  }
-  for (const CustomDataLayer &layer : Span(bm.edata.layers, bm.edata.totlayer)) {
-    if (layer.name == name) {
-      return {layer.offset,
-              bke::AttrDomain::Edge,
-              *bke::custom_data_type_to_attr_type(eCustomDataType(layer.type))};
-    }
-  }
-  for (const CustomDataLayer &layer : Span(bm.pdata.layers, bm.pdata.totlayer)) {
-    if (layer.name == name) {
-      return {layer.offset,
-              bke::AttrDomain::Face,
-              *bke::custom_data_type_to_attr_type(eCustomDataType(layer.type))};
-    }
-  }
-  for (const CustomDataLayer &layer : Span(bm.ldata.layers, bm.ldata.totlayer)) {
-    if (layer.name == name) {
-      return {layer.offset,
-              bke::AttrDomain::Corner,
-              *bke::custom_data_type_to_attr_type(eCustomDataType(layer.type))};
-    }
-  }
-  return {};
-}
-
 static void extract_attribute_data(const MeshRenderData &mr,
-                                   const BMeshAttributeLookup &attr,
+                                   const BMDataLayerLookup &attr,
                                    gpu::VertBuf &vbo)
 {
-  bke::attribute_math::convert_to_static_type(attr.type, [&](auto dummy) {
-    using T = decltype(dummy);
+  bke::attribute_math::to_static_type(attr.type, [&]<typename T>() {
     if constexpr (!std::is_void_v<typename AttributeConverter<T>::VBOType>) {
       switch (attr.domain) {
         case bke::AttrDomain::Point:
@@ -245,8 +201,19 @@ static void extract_attribute_data(const MeshRenderData &mr,
                                    const bke::GAttributeReader &attr,
                                    gpu::VertBuf &vbo)
 {
-  bke::attribute_math::convert_to_static_type(attr.varray.type(), [&](auto dummy) {
-    using T = decltype(dummy);
+  if (attr.varray.is_single()) {
+    bke::attribute_math::to_static_type(attr.varray.type(), [&]<typename T>() {
+      const VArray<T> &src = attr.varray.typed<T>();
+      if constexpr (!std::is_void_v<typename AttributeConverter<T>::VBOType>) {
+        using Converter = AttributeConverter<T>;
+        using VBOType = typename Converter::VBOType;
+        MutableSpan data = vbo.data<VBOType>();
+        data.fill(Converter::convert(src.get_internal_single()));
+      }
+    });
+    return;
+  }
+  bke::attribute_math::to_static_type(attr.varray.type(), [&]<typename T>() {
     if constexpr (!std::is_void_v<typename AttributeConverter<T>::VBOType>) {
       switch (attr.domain) {
         case bke::AttrDomain::Point:
@@ -272,7 +239,7 @@ gpu::VertBufPtr extract_attribute(const MeshRenderData &mr, const StringRef name
 {
   gpu::VertBuf *vbo = GPU_vertbuf_calloc();
   if (mr.extract_type == MeshExtractType::BMesh) {
-    const BMeshAttributeLookup attr = lookup_bmesh_attribute(*mr.bm, name);
+    const BMDataLayerLookup attr = BM_data_layer_lookup(*mr.bm, name);
     if (!attr) {
       return {};
     }
@@ -313,7 +280,7 @@ gpu::VertBufPtr extract_attribute_subdiv(const MeshRenderData &mr,
   gpu::VertBufPtr coarse_vbo;
   bke::AttrType type;
   if (mr.extract_type == MeshExtractType::BMesh) {
-    const BMeshAttributeLookup attr = lookup_bmesh_attribute(*mr.bm, name);
+    const BMDataLayerLookup attr = BM_data_layer_lookup(*mr.bm, name);
     if (!attr) {
       return {};
     }
@@ -337,8 +304,7 @@ gpu::VertBufPtr extract_attribute_subdiv(const MeshRenderData &mr,
 
   /* Ensure data is uploaded properly. */
   GPU_vertbuf_tag_dirty(coarse_vbo.get());
-  bke::attribute_math::convert_to_static_type(type, [&](auto dummy) {
-    using T = decltype(dummy);
+  bke::attribute_math::to_static_type(type, [&]<typename T>() {
     using Converter = AttributeConverter<T>;
     if constexpr (!std::is_void_v<typename Converter::VBOType>) {
       draw_subdiv_interp_custom_data(subdiv_cache,

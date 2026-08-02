@@ -10,11 +10,15 @@
 
 #pragma once
 
+namespace blender {
+
 struct ScrArea;
 struct bContext;
-struct uiBut;
 struct wmEvent;
 struct wmWindow;
+
+namespace ui {
+struct Button;
 
 /* `interface_eyedropper.cc` */
 void eyedropper_draw_cursor_text_region(const int xy[2], const char *name);
@@ -27,7 +31,7 @@ void eyedropper_draw_cursor_text_region(const int xy[2], const char *name);
  *
  * \return A button under the mouse which relates to some RNA Property, or NULL
  */
-uiBut *eyedropper_get_property_button_under_mouse(bContext *C, const wmEvent *event);
+Button *eyedropper_get_property_button_under_mouse(bContext *C, const wmEvent *event);
 void eyedropper_win_area_find(const bContext *C,
                               const int event_xy[2],
                               int r_event_xy[2],
@@ -35,6 +39,8 @@ void eyedropper_win_area_find(const bContext *C,
                               ScrArea **r_area);
 
 /* interface_eyedropper_color.c (expose for color-band picker) */
+
+struct Eyedropper;
 
 /**
  * \brief get the color from the screen.
@@ -45,7 +51,6 @@ void eyedropper_win_area_find(const bContext *C,
  *
  * \note Exposed by 'eyedropper_intern.hh' for use with color band picking.
  */
-struct Eyedropper;
 bool eyedropper_color_sample_fl(bContext *C,
                                 struct Eyedropper *eye,
                                 const int event_xy[2],
@@ -67,3 +72,6 @@ enum {
   EYE_MODAL_POINT_RESET,
   EYE_MODAL_POINT_REMOVE_LAST,
 };
+
+}  // namespace ui
+}  // namespace blender

@@ -4,9 +4,10 @@
 
 #include <gtest/gtest.h>
 
-#include "BLI_fileops.h"
+#include "BLI_fileops.hh"
 
 #include "BKE_appdir.hh"
+#include "BKE_gtest_base.hh"
 
 #include "CLG_log.h"
 
@@ -17,16 +18,8 @@
 
 namespace blender::io::obj {
 
-class OBJMTLParserTest : public testing::Test {
+class OBJMTLParserTest : public bke::BlenderGTestBase {
  public:
-  static void SetUpTestCase()
-  {
-    CLG_init();
-  }
-  static void TearDownTestCase()
-  {
-    CLG_exit();
-  }
   void check_string(const char *text, const MTLMaterial *expect, size_t expect_count)
   {
     BKE_tempdir_init(nullptr);
@@ -43,7 +36,7 @@ class OBJMTLParserTest : public testing::Test {
   }
   void check(const char *file, const MTLMaterial *expect, size_t expect_count)
   {
-    std::string obj_dir = blender::tests::flags_test_asset_dir() +
+    std::string obj_dir = tests::flags_test_asset_dir() +
                           (SEP_STR "io_tests" SEP_STR "obj" SEP_STR);
     check_impl(file, obj_dir, expect, expect_count);
   }

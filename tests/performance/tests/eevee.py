@@ -36,6 +36,7 @@ def frame_change_handler(scene):
     import bpy
 
     global record_stage
+    global frame_set_mode
     global start_time
     global start_record_time
     global start_warmup_time
@@ -47,6 +48,9 @@ def frame_change_handler(scene):
     if record_stage == RecordStage.INIT:
         screen = bpy.context.window_manager.windows[0].screen
         bpy.context.scene.sync_mode = 'NONE'
+        frame_set_mode = False
+        # Overwrite animation FPS limit set by .blend files.
+        bpy.context.scene.render.fps = 1000
 
         for area in screen.areas:
             if area.type == 'VIEW_3D':
@@ -71,6 +75,10 @@ def frame_change_handler(scene):
             record_stage = RecordStage.WARMUP
 
     elif record_stage == RecordStage.WARMUP:
+        if frame_set_mode:
+            # scene.frame_set results in a recursive call to frame_change_handler.
+            # Avoid running into a RecursionError.
+            return
         warmup_frame += 1
         # Check for two-stage shader compilation that can happen later than the first frame.
         if hasattr(bpy.app, 'is_job_running') and bpy.app.is_job_running("SHADER_COMPILATION"):
@@ -80,7 +88,9 @@ def frame_change_handler(scene):
             playback_iteration = 0
             num_frames = 0
             scene = bpy.context.scene
+            frame_set_mode = True
             scene.frame_set(scene.frame_start)
+            frame_set_mode = False
             record_stage = RecordStage.RECORD
 
     elif record_stage == RecordStage.RECORD:
@@ -99,7 +109,7 @@ def frame_change_handler(scene):
         elapsed_seconds = stop_record_time - start_record_time
         avg_frame_time = elapsed_seconds / num_frames
         fps = 1.0 / avg_frame_time
-        print(f"{LOG_KEY}{{'time': {avg_frame_time}, 'fps': {fps} }}")
+        print(f"{LOG_KEY}{{'fps': {fps} }}")
         bpy.app.handlers.frame_change_post.remove(frame_change_handler)
         bpy.ops.wm.quit_blender()
 
@@ -120,12 +130,24 @@ else:
         def category(self):
             return "eevee"
 
+        def use_device(self) -> bool:
+            return True
+
+        def supported_device_types(self):
+            return [
+                "METAL", "VULKAN", "OPENGL",
+            ]
+
         def use_background(self):
             return False
 
-        def run(self, env, device_id):
+        def run(self, env, device_id, gpu_backend):
             args = {}
-            _, log = env.run_in_blender(_run, args, [self.filepath], foreground=True)
+
+            blender_args = api.test.Test.blender_gpu_arguments(device_id, gpu_backend)
+            blender_args.append(self.filepath)
+
+            _, log = env.run_in_blender(_run, args, blender_args, foreground=True)
             for line in log:
                 if line.startswith(LOG_KEY):
                     result_str = line[len(LOG_KEY):]

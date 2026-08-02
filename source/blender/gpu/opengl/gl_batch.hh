@@ -18,8 +18,7 @@
 #include "gl_index_buffer.hh"
 #include "gl_vertex_buffer.hh"
 
-namespace blender {
-namespace gpu {
+namespace blender::gpu {
 
 class GLContext;
 class GLShaderInterface;
@@ -91,8 +90,8 @@ class GLBatch : public Batch {
 
  public:
   void draw(int v_first, int v_count, int i_first, int i_count) override;
-  void draw_indirect(GPUStorageBuf *indirect_buf, intptr_t offset) override;
-  void multi_draw_indirect(GPUStorageBuf *indirect_buf,
+  void draw_indirect(StorageBuf *indirect_buf, intptr_t offset) override;
+  void multi_draw_indirect(StorageBuf *indirect_buf,
                            int count,
                            intptr_t offset,
                            intptr_t stride) override;
@@ -108,13 +107,8 @@ class GLBatch : public Batch {
   {
     return static_cast<GLVertBuf *>(verts[index]);
   }
-  GLVertBuf *inst_(const int index) const
-  {
-    return static_cast<GLVertBuf *>(inst[index]);
-  }
 
   MEM_CXX_CLASS_ALLOC_FUNCS("GLBatch");
 };
 
-}  // namespace gpu
-}  // namespace blender
+}  // namespace blender::gpu

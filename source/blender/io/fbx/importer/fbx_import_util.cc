@@ -10,8 +10,8 @@
 #include "BKE_object.hh"
 #include "BKE_object_types.hh"
 
-#include "BLI_string.h"
-#include "BLI_string_utf8.h"
+#include "BLI_string.hh"
+#include "BLI_string_utf8.hh"
 
 #include "DNA_object_types.h"
 
@@ -265,8 +265,7 @@ void read_custom_properties(const ufbx_props &props, ID &id, bool enums_as_strin
 static IDProperty *pchan_EnsureProperties(bPoseChannel &pchan)
 {
   if (pchan.prop == nullptr) {
-    pchan.prop = MEM_callocN<IDProperty>("IDProperty");
-    pchan.prop->type = IDP_GROUP;
+    pchan.prop = bke::idprop::create_group("").release();
   }
   return pchan.prop;
 }

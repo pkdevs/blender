@@ -35,7 +35,7 @@ class ID {
   uint32_t value;
 
   /* Add type safety to selection ID. Only the select types should provide them. */
-  ID(uint32_t value) : value(value){};
+  ID(uint32_t value) : value(value) {};
 
   friend struct SelectBuf;
   friend struct SelectMap;
@@ -56,7 +56,7 @@ struct SelectBuf {
 
   StorageVectorBuffer<uint32_t> select_buf = {"select_buf"};
 
-  SelectBuf(const SelectionType selection_type) : selection_type(selection_type){};
+  SelectBuf(const SelectionType selection_type) : selection_type(selection_type) {};
 
   void select_clear()
   {
@@ -105,7 +105,7 @@ struct SelectMap {
   /** If clipping is enabled, this is the number of clip planes to enable. */
   int clipping_plane_count = 0;
 
-  SelectMap(const SelectionType selection_type) : selection_type(selection_type){};
+  SelectMap(const SelectionType selection_type) : selection_type(selection_type) {};
 
   /* TODO(fclem): The sub_object_id id should eventually become some enum or take a sub-object
    * reference directly. This would isolate the selection logic to this class. */
@@ -225,6 +225,7 @@ struct SelectMap {
       return;
     }
 
+    info_buf.radius = gpu_select_next_get_radius();
     switch (gpu_select_next_get_mode()) {
       /* Should not be used anymore for viewport selection. */
       case GPU_SELECT_NEAREST_FIRST_PASS:
@@ -234,23 +235,24 @@ struct SelectMap {
         break;
       case GPU_SELECT_ALL:
         info_buf.mode = SelectType::SELECT_ALL;
-        info_buf.cursor = int2(0);
+        info_buf.cursor = gpu_select_next_get_pick_area_center();
         /* This mode uses atomicOr and store result as a bitmap. Clear to 0 (no selection). */
         GPU_storagebuf_clear(select_output_buf, 0);
         break;
       case GPU_SELECT_PICK_ALL:
         info_buf.mode = SelectType::SELECT_PICK_ALL;
-        info_buf.cursor = int2(gpu_select_next_get_pick_area_center());
+        info_buf.cursor = gpu_select_next_get_pick_area_center();
         /* Mode uses atomicMin. Clear to UINT_MAX. */
         GPU_storagebuf_clear(select_output_buf, 0xFFFFFFFFu);
         break;
       case GPU_SELECT_PICK_NEAREST:
         info_buf.mode = SelectType::SELECT_PICK_NEAREST;
-        info_buf.cursor = int2(gpu_select_next_get_pick_area_center());
+        info_buf.cursor = gpu_select_next_get_pick_area_center();
         /* Mode uses atomicMin. Clear to UINT_MAX. */
         GPU_storagebuf_clear(select_output_buf, 0xFFFFFFFFu);
         break;
     }
+
     info_buf.push_update();
   }
 
@@ -312,10 +314,10 @@ struct SelectMap {
             hit_result.depth = select_output_buf[i];
             if (in_front_map[i]) {
               /* Divide "In Front" objects depth so they go first. */
-              const uint32_t depth_mask = 0x00FFFFFFu;
-              uint32_t offset_depth = (hit_result.depth & depth_mask) / 100;
+              const uint32_t depth_mask = 0x00FFFFFFu << 8u;
+              uint32_t offset_depth = ((hit_result.depth & depth_mask) >> 8u) / 100;
               hit_result.depth &= ~depth_mask;
-              hit_result.depth |= offset_depth;
+              hit_result.depth |= offset_depth << 8u;
             }
             if (hit_results.is_empty() || hit_result.depth < hit_results[0].depth) {
               hit_results = {hit_result};

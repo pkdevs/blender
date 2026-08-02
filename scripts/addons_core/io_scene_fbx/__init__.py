@@ -7,8 +7,8 @@ bl_info = {
     # This is now displayed as the maintainer, so show the foundation.
     # "author": "Campbell Barton, Bastien Montagne, Jens Restemeier, @Mysteryem", # Original Authors
     "author": "Blender Foundation",
-    "version": (5, 13, 0),
-    "blender": (4, 5, 0),
+    "version": (5, 15, 0),
+    "blender": (5, 0, 0),
     "location": "File > Import-Export",
     "description": "FBX IO meshes, UVs, vertex colors, materials, textures, cameras, lamps and actions",
     "warning": "",
@@ -198,6 +198,15 @@ class ImportFBX(bpy.types.Operator, ImportHelper):
         description="Use pre/post rotation from FBX transform (you may have to disable that in some cases)",
         default=True,
     )
+    mtl_name_collision_mode: EnumProperty(
+        name="Material Name Collision",
+        items=(("MAKE_UNIQUE", "Make Unique", "Import each FBX material as a unique Blender material"),
+               ("REFERENCE_EXISTING", "Reference Existing",
+               "If a material with the same name already exists, reference that instead of importing"),
+               ),
+        default='MAKE_UNIQUE',
+        description="Behavior when the name of an imported material conflicts with an existing material",
+    )
 
     def draw(self, context):
         layout = self.layout
@@ -206,6 +215,7 @@ class ImportFBX(bpy.types.Operator, ImportHelper):
 
         import_panel_include(layout, self)
         import_panel_transform(layout, self)
+        import_panel_materials(layout, self)
         import_panel_animation(layout, self)
         import_panel_armature(layout, self)
 
@@ -251,7 +261,7 @@ def import_panel_transform(layout, operator):
         body.prop(operator, "decal_offset")
         row = body.row()
         row.prop(operator, "bake_space_transform")
-        row.label(text="", icon='ERROR')
+        row.label(text="", icon='STATUS_ERROR')
         body.prop(operator, "use_prepost_rot")
 
         import_panel_transform_orientation(body, operator)
@@ -266,6 +276,13 @@ def import_panel_transform_orientation(layout, operator):
         body.enabled = operator.use_manual_orientation
         body.prop(operator, "axis_forward")
         body.prop(operator, "axis_up")
+
+
+def import_panel_materials(layout, operator):
+    header, body = layout.panel("FBX_import_material", default_closed=True)
+    header.label(text="Materials")
+    if body:
+        body.prop(operator, "mtl_name_collision_mode")
 
 
 def import_panel_animation(layout, operator):
@@ -333,7 +350,10 @@ class ExportFBX(bpy.types.Operator, ExportHelper):
     )
     apply_unit_scale: BoolProperty(
         name="Apply Unit",
-        description="Take into account current Blender units settings (if unset, raw Blender Units values are used as-is)",
+        description=(
+            "Take into account current Blender units settings "
+            "(if unset, raw Blender Units values are used as-is)"
+        ),
         default=True,
     )
     apply_scale_options: EnumProperty(
@@ -374,7 +394,7 @@ class ExportFBX(bpy.types.Operator, ExportHelper):
                ('LIGHT', "Lamp", ""),
                ('ARMATURE', "Armature", "WARNING: not supported in dupli/group instances"),
                ('MESH', "Mesh", ""),
-               ('OTHER', "Other", "Other geometry types, like curve, metaball, etc. (converted to meshes)"),
+               ('OTHER', "Other", "Other geometry types, like curve, meta-ball, etc. (converted to meshes)"),
                ),
         description="Which kind of object to export",
         default={'EMPTY', 'CAMERA', 'LIGHT', 'ARMATURE', 'MESH', 'OTHER'},
@@ -644,7 +664,7 @@ def export_panel_transform(layout, operator):
         body.prop(operator, "use_space_transform")
         row = body.row()
         row.prop(operator, "bake_space_transform")
-        row.label(text="", icon='ERROR')
+        row.label(text="", icon='STATUS_ERROR')
 
 
 def export_panel_geometry(layout, operator):
@@ -654,9 +674,9 @@ def export_panel_geometry(layout, operator):
         body.prop(operator, "mesh_smooth_type")
         body.prop(operator, "use_subsurf")
         body.prop(operator, "use_mesh_modifiers")
-        #sub = body.row()
+        # sub = body.row()
         # sub.enabled = operator.use_mesh_modifiers and False  # disabled in 2.8...
-        #sub.prop(operator, "use_mesh_modifiers_render")
+        # sub.prop(operator, "use_mesh_modifiers_render")
         body.prop(operator, "use_mesh_edges")
         body.prop(operator, "use_triangles")
         sub = body.row()

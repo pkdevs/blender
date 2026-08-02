@@ -11,7 +11,7 @@
 
 #include <Python.h>
 
-#include "BLI_dynstr.h"
+#include "BLI_dynstr.hh"
 
 #include "MEM_guardedalloc.h"
 
@@ -19,6 +19,8 @@
 
 #include "bmesh_py_ops.hh" /* own include */
 #include "bmesh_py_ops_call.hh"
+
+namespace blender {
 
 /* bmesh operator 'bmesh.ops.*' callable types
  * ******************************************* */
@@ -121,14 +123,18 @@ static PyObject *bpy_bmesh_op_doc_get(BPy_BMeshOpFunc *self, void * /*closure*/)
                              slot_in,
                              slot_out);
 
-  MEM_freeN(slot_in);
-  MEM_freeN(slot_out);
+  MEM_delete(slot_in);
+  MEM_delete(slot_out);
 
   return ret;
 }
 
 static PyGetSetDef bpy_bmesh_op_getseters[] = {
-    {"__doc__", (getter)bpy_bmesh_op_doc_get, (setter) nullptr, nullptr, nullptr},
+    {"__doc__",
+     reinterpret_cast<getter>(bpy_bmesh_op_doc_get),
+     static_cast<setter>(nullptr),
+     nullptr,
+     nullptr},
     {nullptr, nullptr, nullptr, nullptr, nullptr} /* Sentinel */
 };
 
@@ -145,12 +151,12 @@ static PyTypeObject bmesh_op_Type = {
     /*tp_getattr*/ nullptr,
     /*tp_setattr*/ nullptr,
     /*tp_as_async*/ nullptr,
-    /*tp_repr*/ (reprfunc)bpy_bmesh_op_repr,
+    /*tp_repr*/ reinterpret_cast<reprfunc>(bpy_bmesh_op_repr),
     /*tp_as_number*/ nullptr,
     /*tp_as_sequence*/ nullptr,
     /*tp_as_mapping*/ nullptr,
     /*tp_hash*/ nullptr,
-    /*tp_call*/ (ternaryfunc)BPy_BMO_call,
+    /*tp_call*/ reinterpret_cast<ternaryfunc>(BPy_BMO_call),
     /*tp_str*/ nullptr,
     /*tp_getattro*/ nullptr,
     /*tp_setattro*/ nullptr,
@@ -196,15 +202,17 @@ static PyObject *bpy_bmesh_op_CreatePyObject(const char *opname)
 
   self->opname = opname;
 
-  return (PyObject *)self;
+  return reinterpret_cast<PyObject *>(self);
 }
 
 static PyObject *bpy_bmesh_ops_module_getattro(PyObject * /*self*/, PyObject *pyname)
 {
   const char *opname = PyUnicode_AsUTF8(pyname);
 
-  if (BMO_opcode_from_opname(opname) != -1) {
-    return bpy_bmesh_op_CreatePyObject(opname);
+  const int opcode = BMO_opcode_from_opname(opname);
+  if (opcode != -1) {
+    /* Use the static name as `pyname` may be freed once this call returns. */
+    return bpy_bmesh_op_CreatePyObject(bmo_opdefines[opcode]->opname);
   }
 
   PyErr_Format(PyExc_AttributeError, "BMeshOpsModule: operator \"%.200s\" doesn't exist", opname);
@@ -237,8 +245,8 @@ static PyObject *bpy_bmesh_ops_module_dir(PyObject * /*self*/)
 #endif
 
 static PyMethodDef BPy_BM_ops_methods[] = {
-    {"__getattr__", (PyCFunction)bpy_bmesh_ops_module_getattro, METH_O, nullptr},
-    {"__dir__", (PyCFunction)bpy_bmesh_ops_module_dir, METH_NOARGS, nullptr},
+    {"__getattr__", static_cast<PyCFunction>(bpy_bmesh_ops_module_getattro), METH_O, nullptr},
+    {"__dir__", reinterpret_cast<PyCFunction>(bpy_bmesh_ops_module_dir), METH_NOARGS, nullptr},
     {nullptr, nullptr, 0, nullptr},
 };
 
@@ -253,7 +261,7 @@ static PyMethodDef BPy_BM_ops_methods[] = {
 PyDoc_STRVAR(
     /* Wrap. */
     BPy_BM_ops_doc,
-    "Access to BMesh operators");
+    "Access to BMesh operators.");
 static PyModuleDef BPy_BM_ops_module_def = {
     /*m_base*/ PyModuleDef_HEAD_INIT,
     /*m_name*/ "bmesh.ops",
@@ -268,11 +276,12 @@ static PyModuleDef BPy_BM_ops_module_def = {
 
 PyObject *BPyInit_bmesh_ops()
 {
-  PyObject *submodule = PyModule_Create(&BPy_BM_ops_module_def);
-
   if (PyType_Ready(&bmesh_op_Type) < 0) {
     return nullptr;
   }
 
+  PyObject *submodule = PyModule_Create(&BPy_BM_ops_module_def);
   return submodule;
 }
+
+}  // namespace blender

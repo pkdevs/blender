@@ -2,28 +2,23 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-import bpy
-
 import numpy as np
 from .....io.com.gltf2_io_extensions import Extension
 from ....com.conversion import get_anisotropy_rotation_blender_to_gltf
 from ...material import texture_info as gltf2_blender_gather_texture_info
-from ..search_node_tree import detect_anisotropy_nodes, get_socket, has_image_node_from_socket, get_factor_from_socket
+from ..search_node_tree import detect_anisotropy_nodes, has_image_node_from_socket, get_factor_from_socket
 from ..encode_image import TmpImageGuard, make_temp_image_copy, StoreImage, StoreData
 
 
-def export_anisotropy(blender_material, export_settings):
-
+def export_anisotropy(bmat, export_settings):
+    export_settings['current_texture_transform'] = {}
     anisotropy_extension = {}
     uvmap_infos = {}
     udim_infos = {}
 
-    anisotropy_socket = get_socket(blender_material.node_tree, blender_material.use_nodes, 'Anisotropic')
-    anisotropic_rotation_socket = get_socket(
-        blender_material.node_tree,
-        blender_material.use_nodes,
-        'Anisotropic Rotation')
-    anisotropy_tangent_socket = get_socket(blender_material.node_tree, blender_material.use_nodes, 'Tangent')
+    anisotropy_socket = bmat.get_socket('Anisotropic')
+    anisotropic_rotation_socket = bmat.get_socket('Anisotropic Rotation')
+    anisotropy_tangent_socket = bmat.get_socket('Tangent')
 
     if anisotropy_socket.socket is None or anisotropic_rotation_socket.socket is None or anisotropy_tangent_socket.socket is None:
         return None, {}, {}
@@ -69,7 +64,7 @@ def export_anisotropy(blender_material, export_settings):
 
     if not is_anisotropy:
         # Trying to export from grayscale textures
-        anisotropy_texture, uvmap_info = export_anisotropy_from_grayscale_textures(blender_material, export_settings)
+        anisotropy_texture, uvmap_info = export_anisotropy_from_grayscale_textures(bmat, export_settings)
         if anisotropy_texture is None:
             return None, {}, {}
 
@@ -143,22 +138,25 @@ def export_anisotropy(blender_material, export_settings):
             path_['path'] = export_settings['current_texture_transform'][k]['path'].replace(
                 "YYY", "extensions/KHR_materials_anisotropy/anisotropyTexture/extensions")
             path_['vector_type'] = export_settings['current_texture_transform'][k]['vector_type']
-            export_settings['current_paths'][k] = path_
+            if k in export_settings['current_paths']:
+                if 'additional' not in export_settings['current_paths'][k]:
+                    export_settings['current_paths'][k]['additional'] = []
+                if path_['path'] != export_settings['current_paths'][k]['path']:
+                    export_settings['current_paths'][k]['additional'].append(path_['path'])
+            else:
+                export_settings['current_paths'][k] = path_
 
     export_settings['current_texture_transform'] = {}
 
     return Extension('KHR_materials_anisotropy', anisotropy_extension, False), uvmap_infos, udim_infos
 
 
-def export_anisotropy_from_grayscale_textures(blender_material, export_settings):
+def export_anisotropy_from_grayscale_textures(bmat, export_settings):
     # There will be a texture, with a complex calculation (no direct channel mapping)
 
-    anisotropy_socket = get_socket(blender_material.node_tree, blender_material.use_nodes, 'Anisotropic')
-    anisotropic_rotation_socket = get_socket(
-        blender_material.node_tree,
-        blender_material.use_nodes,
-        'Anisotropic Rotation')
-    anisotropy_tangent_socket = get_socket(blender_material.node_tree, blender_material.use_nodes, 'Tangent')
+    anisotropy_socket = bmat.get_socket('Anisotropic')
+    anisotropic_rotation_socket = bmat.get_socket('Anisotropic Rotation')
+    anisotropy_tangent_socket = bmat.get_socket('Tangent')
 
     sockets = (anisotropy_socket, anisotropic_rotation_socket, anisotropy_tangent_socket)
 
@@ -183,7 +181,13 @@ def export_anisotropy_from_grayscale_textures(blender_material, export_settings)
             path_['path'] = export_settings['current_texture_transform'][k]['path'].replace(
                 "YYY", "extensions/KHR_materials_anisotropy/anisotropyTexture/extensions")
             path_['vector_type'] = export_settings['current_texture_transform'][k]['vector_type']
-            export_settings['current_paths'][k] = path_
+            if k in export_settings['current_paths']:
+                if 'additional' not in export_settings['current_paths'][k]:
+                    export_settings['current_paths'][k]['additional'] = []
+                if path_['path'] != export_settings['current_paths'][k]['path']:
+                    export_settings['current_paths'][k]['additional'].append(path_['path'])
+            else:
+                export_settings['current_paths'][k] = path_
 
     export_settings['current_texture_transform'] = {}
 

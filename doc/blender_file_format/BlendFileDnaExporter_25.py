@@ -425,7 +425,7 @@ def main():
 
         # deleting or not?
         if '--dna-keep-blend' in sys.argv:
-            # keep the blend, useful for studying hexdumps
+            # Keep the blend, useful for studying HEX-dumps.
             log.info("5: closing blend file:")
             log.info("   {0}".format(Path_Blend))
         else:
@@ -435,7 +435,7 @@ def main():
             os.remove(Path_Blend)
 
         # export dna to xhtml
-        log.info("6: export sdna to xhtml file: %r" % Path_HTML)
+        log.info("6: export sdna to xhtml file: {!r}".format(Path_HTML))
         handleHTML = open(Path_HTML, "w")
         catalog.WriteToHTML(handleHTML)
         handleHTML.close()

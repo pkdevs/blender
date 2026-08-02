@@ -13,20 +13,25 @@
 
 #include "BKE_idprop.hh"
 
+#include "NOD_socket_value_inference.hh"
+
+namespace blender {
+
 struct bNodeTree;
 struct bNodeTreeInterfaceSocket;
-namespace blender::bke {
+struct PointerRNA;
+namespace bke {
 struct GeometrySet;
 }
 struct IDProperty;
-namespace blender::nodes {
+namespace nodes {
 struct GeoNodesCallData;
-namespace geo_eval_log {
-class GeoNodesLog;
-}  // namespace geo_eval_log
-}  // namespace blender::nodes
+namespace eval_log {
+class NodesEvalLog;
+}  // namespace eval_log
+}  // namespace nodes
 
-namespace blender::nodes {
+namespace nodes {
 
 constexpr StringRef input_use_attribute_suffix = "_use_attribute";
 constexpr StringRef input_attribute_name_suffix = "_attribute_name";
@@ -39,16 +44,6 @@ struct IDPropNameGetter {
 };
 
 /**
- * Use a #VectorSet to store properties for constant time lookup, to avoid slowdown with many
- * inputs.
- */
-using PropertiesVectorSet = CustomIDVectorSet<IDProperty *, IDPropNameGetter, 16>;
-PropertiesVectorSet build_properties_vector_set(const IDProperty *properties);
-
-std::optional<StringRef> input_attribute_name_get(const PropertiesVectorSet &properties,
-                                                  const bNodeTreeInterfaceSocket &io_input);
-
-/**
  * \return Whether using an attribute to input values of this type is supported.
  */
 bool socket_type_has_attribute_toggle(eNodeSocketDatatype type);
@@ -59,39 +54,20 @@ bool socket_type_has_attribute_toggle(eNodeSocketDatatype type);
  */
 bool input_has_attribute_toggle(const bNodeTree &node_tree, const int socket_index);
 
-bool id_property_type_matches_socket(const bNodeTreeInterfaceSocket &socket,
-                                     const IDProperty &property,
-                                     bool use_name_for_ids = false);
-
-std::unique_ptr<IDProperty, bke::idprop::IDPropertyDeleter> id_property_create_from_socket(
-    const bNodeTreeInterfaceSocket &socket,
-    nodes::StructureType structure_type,
-    bool use_name_for_ids);
-
 bke::GeometrySet execute_geometry_nodes_on_geometry(const bNodeTree &btree,
-                                                    const PropertiesVectorSet &properties_set,
+                                                    const PointerRNA &properties_ptr,
                                                     const ComputeContext &base_compute_context,
                                                     GeoNodesCallData &call_data,
                                                     bke::GeometrySet input_geometry);
 
-void update_input_properties_from_node_tree(const bNodeTree &tree,
-                                            const IDProperty *old_properties,
-                                            IDProperty &properties,
-                                            bool use_name_for_ids = false);
-
-void update_output_properties_from_node_tree(const bNodeTree &tree,
-                                             const IDProperty *old_properties,
-                                             IDProperty &properties);
-
 /**
- * Get the "base" input values that are passed into geometry nodes. In this context, "base" means
- * that the retrieved input types are #bNodeSocketType::base_cpp_type (e.g. `float` for float
- * sockets). If the input value can't be represented as base value, null is returned instead (e.g.
- * for attribute inputs).
+ * Get input values for the node tree for static value/usage inferencing. Inferencing does not
+ * fully evaluate the node tree (would be way to slow), and does not support all socket types. So
+ * this function may return #InferenceValue::Unknown for some sockets.
  */
-void get_geometry_nodes_input_base_values(const bNodeTree &btree,
-                                          const PropertiesVectorSet &properties,
-                                          ResourceScope &scope,
-                                          MutableSpan<GPointer> r_values);
+Vector<InferenceValue> get_geometry_nodes_input_inference_values(const bNodeTree &btree,
+                                                                 const PointerRNA &properties_ptr,
+                                                                 ResourceScope &scope);
 
-}  // namespace blender::nodes
+}  // namespace nodes
+}  // namespace blender

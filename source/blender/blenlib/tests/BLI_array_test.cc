@@ -8,7 +8,7 @@
 #include "BLI_exception_safety_test_utils.hh"
 #include "BLI_vector.hh"
 
-#include "BLI_strict_flags.h" /* IWYU pragma: keep. Keep last. */
+#include "BLI_strict_flags.hh" /* IWYU pragma: keep. Keep last. */
 
 namespace blender::tests {
 
@@ -35,6 +35,31 @@ TEST(array, FillConstructor)
   EXPECT_EQ(array[2], 8);
   EXPECT_EQ(array[3], 8);
   EXPECT_EQ(array[4], 8);
+}
+
+TEST(array, FillConstructorZero)
+{
+  Array<int> array(5, 0);
+  EXPECT_EQ(array.size(), 5);
+  EXPECT_EQ(array[0], 0);
+  EXPECT_EQ(array[1], 0);
+  EXPECT_EQ(array[2], 0);
+  EXPECT_EQ(array[3], 0);
+  EXPECT_EQ(array[4], 0);
+}
+
+TEST(array, FillConstructorZeroAligned)
+{
+  struct alignas(512) LargeAlignedType {
+    std::array<int, 857> array = {};
+  };
+  Array<LargeAlignedType> array(5, LargeAlignedType());
+  EXPECT_EQ(array.size(), 5);
+  EXPECT_EQ(array[0].array[285], 0);
+  EXPECT_EQ(array[1].array[285], 0);
+  EXPECT_EQ(array[2].array[285], 0);
+  EXPECT_EQ(array[3].array[285], 0);
+  EXPECT_EQ(array[4].array[285], 0);
 }
 
 TEST(array, InitializerListConstructor)
@@ -120,7 +145,7 @@ TEST(array, MoveAssignment)
 TEST(array, TrivialTypeSizeConstructor)
 {
   Array<char, 1> *array = new Array<char, 1>(1);
-  char *ptr = &(*array)[0];
+  char *ptr = array->data();
   array->~Array();
 
   const char magic = 42;

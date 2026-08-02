@@ -14,6 +14,9 @@
 
 /* --- bpy build options --- */
 #include "intern/rna_internal_types.hh"
+
+namespace blender {
+
 #ifdef WITH_PYTHON_SAFETY
 
 /**
@@ -76,23 +79,23 @@ extern PyTypeObject pyrna_func_Type;
 #define BPy_PropertyRNA_CheckExact(v) (Py_TYPE(v) == &pyrna_prop_Type)
 
 #define PYRNA_STRUCT_CHECK_OBJ(obj) \
-  if (UNLIKELY(pyrna_struct_validity_check(obj) == -1)) { \
+  if (pyrna_struct_validity_check(obj) == -1) [[unlikely]] { \
     return NULL; \
   } \
   (void)0
 #define PYRNA_STRUCT_CHECK_INT(obj) \
-  if (UNLIKELY(pyrna_struct_validity_check(obj) == -1)) { \
+  if (pyrna_struct_validity_check(obj) == -1) [[unlikely]] { \
     return -1; \
   } \
   (void)0
 
 #define PYRNA_PROP_CHECK_OBJ(obj) \
-  if (UNLIKELY(pyrna_prop_validity_check(obj) == -1)) { \
+  if (pyrna_prop_validity_check(obj) == -1) [[unlikely]] { \
     return NULL; \
   } \
   (void)0
 #define PYRNA_PROP_CHECK_INT(obj) \
-  if (UNLIKELY(pyrna_prop_validity_check(obj) == -1)) { \
+  if (pyrna_prop_validity_check(obj) == -1) [[unlikely]] { \
     return -1; \
   } \
   (void)0
@@ -190,6 +193,11 @@ struct BPy_FunctionRNA {
 
   std::optional<PointerRNA> ptr;
   FunctionRNA *func;
+  /**
+   * Instance call only. This is *always* set to `pyrna_func_vectorcall`.
+   * Storing this value is required by the Python C-API (PEP 590).
+   */
+  vectorcallfunc vectorcall;
 };
 
 [[nodiscard]] StructRNA *srna_from_self(PyObject *self, const char *error_prefix);
@@ -203,6 +211,10 @@ void BPY_rna_exit();
 void BPY_update_rna_module();
 // PyObject *BPY_rna_doc();
 [[nodiscard]] PyObject *BPY_rna_types();
+/**
+ * Set the `_bpy_types.py` modules `__dict__`, needed for instancing RNA types.
+ */
+void BPY_rna_types_dict_set(PyObject *dict);
 void BPY_rna_types_finalize_external_types(PyObject *submodule);
 
 [[nodiscard]] PyObject *pyrna_struct_CreatePyObject_with_primitive_support(PointerRNA *ptr);
@@ -277,6 +289,8 @@ void pyrna_alloc_types();
 
 [[nodiscard]] bool pyrna_write_check();
 void pyrna_write_set(bool val);
+void pyrna_context_init(bContext *C);
+void pyrna_context_clear(bContext *C);
 
 void pyrna_invalidate(BPy_DummyPointerRNA *self);
 
@@ -295,3 +309,5 @@ extern PyMethodDef meth_bpy_owner_id_set;
 extern PyMethodDef meth_bpy_owner_id_get;
 
 extern BPy_StructRNA *bpy_context_module;
+
+}  // namespace blender

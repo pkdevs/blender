@@ -4,11 +4,15 @@
 
 #include "testing/testing.h"
 
+#include "BKE_ccg.hh"
+#include "BKE_gtest_base.hh"
 #include "BKE_subdiv_ccg.hh"
-#include "BKE_subsurf.hh"
 
 namespace blender::bke::tests {
-TEST(subdiv_ccg_coord, to_index)
+
+class SubdivCcgCoordTest : public BlenderGTestBase {};
+
+TEST_F(SubdivCcgCoordTest, to_index)
 {
   CCGKey key;
   key.level = 2;
@@ -20,7 +24,7 @@ TEST(subdiv_ccg_coord, to_index)
   key.normal_offset = -1;
   key.mask_offset = -1;
 
-  key.grid_size = BKE_ccg_gridsize(key.level);   /* 3 */
+  key.grid_size = CCG_grid_size(key.level);      /* 3 */
   key.grid_area = key.grid_size * key.grid_size; /* 9 */
   key.grid_bytes = key.grid_area * key.elem_size;
 
@@ -34,7 +38,7 @@ TEST(subdiv_ccg_coord, to_index)
   EXPECT_EQ(coord.to_index(key), 22);
 }
 
-TEST(subdiv_ccg_coord, constructor)
+TEST_F(SubdivCcgCoordTest, constructor)
 {
   CCGKey key;
   key.level = 2;
@@ -46,7 +50,7 @@ TEST(subdiv_ccg_coord, constructor)
   key.normal_offset = -1;
   key.mask_offset = -1;
 
-  key.grid_size = BKE_ccg_gridsize(key.level);   /* 3 */
+  key.grid_size = CCG_grid_size(key.level);      /* 3 */
   key.grid_area = key.grid_size * key.grid_size; /* 9 */
   key.grid_bytes = key.grid_area * key.elem_size;
 

@@ -11,10 +11,11 @@
 #include "DNA_scene_types.h"
 #include "DNA_sound_types.h"
 
+#include "BLI_math_base_c.hh"
 #include "BLI_path_utils.hh"
-#include "BLI_string.h"
+#include "BLI_string.hh"
 #include "BLI_string_ref.hh"
-#include "BLI_string_utf8.h"
+#include "BLI_string_utf8.hh"
 #include "BLI_string_utils.hh"
 
 #include "BKE_context.hh"
@@ -45,9 +46,10 @@
 
 /* For querying audio files. */
 #ifdef WITH_AUDASPACE
-#  include "BKE_sound.h"
-#  include <AUD_Sound.h>
-#  include <AUD_Special.h>
+#  include "BKE_sound.hh"
+#  include <Exception.h>
+#  include <file/File.h>
+#  include <file/FileManager.h>
 #endif
 
 /* Own include. */
@@ -58,13 +60,17 @@ namespace blender::ed::vse {
 
 struct SeqDropCoords {
   float start_frame, channel;
-  int strip_len, channel_len;
+  int num_channels;
+  int num_audio = 0;
   float playback_rate;
+  int strip_length;
+  float audio_length;
+  bool only_audio = false;
   bool in_use = false;
   bool has_read_mouse_pos = false;
   bool is_intersecting;
   bool use_snapping;
-  float snap_point_x;
+  float2 snap_point;
   uint8_t type;
 };
 
@@ -75,24 +81,27 @@ struct SeqDropCoords {
  */
 static SeqDropCoords g_drop_coords{};
 
-static void generic_poll_operations(const wmEvent *event, uint8_t type)
+static void generic_poll_operations(const bContext *C, const wmEvent *event, uint8_t type)
 {
+  const Scene *scene = CTX_data_scene(C);
+  const ToolSettings *ts = scene->toolsettings;
+
   g_drop_coords.type = type;
-  /* We purposely ignore the snapping tool setting here as currently other drag&drop operators only
-   * snaps when holding down Ctrl. */
-  g_drop_coords.use_snapping = event->modifier & KM_CTRL;
+  /* Ideally we would reuse the transform modal keymap for snapping, but drag and drop doesn't have
+   * access to transform engine, so just hard-code the invert key to a sane default. */
+  const bool do_invert = event->modifier & KM_CTRL;
+  g_drop_coords.use_snapping = do_invert ? (ts->snap_flag_seq & SCE_SNAP) == 0 :
+                                           (ts->snap_flag_seq & SCE_SNAP) != 0;
 }
 
 /* While drag-and-drop in the sequencer, the internal drop-box implementation allows to have a drop
  * preview of the file dragged. This checks when drag-and-drop is done with a single file, and when
  * only a expected `file_handler` can be used, so internal drop-box can be used instead of the
  * `file_handler`. */
-static bool test_single_file_handler_poll(const bContext *C,
-                                          wmDrag *drag,
-                                          blender::StringRef file_handler)
+static bool test_single_file_handler_poll(const bContext *C, wmDrag *drag, StringRef file_handler)
 {
   const auto paths = WM_drag_get_paths(drag);
-  auto file_handlers = blender::bke::file_handlers_poll_file_drop(C, paths);
+  auto file_handlers = bke::file_handlers_poll_file_drop(C, paths);
   return paths.size() == 1 && file_handlers.size() == 1 &&
          file_handler == file_handlers[0]->idname;
 }
@@ -104,13 +113,13 @@ static bool image_drop_poll(bContext *C, wmDrag *drag, const wmEvent *event)
     if (file_type == FILE_TYPE_IMAGE &&
         test_single_file_handler_poll(C, drag, "SEQUENCER_FH_image_strip"))
     {
-      generic_poll_operations(event, TH_SEQ_IMAGE);
+      generic_poll_operations(C, event, TH_SEQ_IMAGE);
       return true;
     }
   }
 
   if (WM_drag_is_ID_type(drag, ID_IM)) {
-    generic_poll_operations(event, TH_SEQ_IMAGE);
+    generic_poll_operations(C, event, TH_SEQ_IMAGE);
     return true;
   }
 
@@ -136,7 +145,7 @@ static bool movie_drop_poll(bContext *C, wmDrag *drag, const wmEvent *event)
   if (is_movie(drag) && (drag->type != WM_DRAG_PATH ||
                          test_single_file_handler_poll(C, drag, "SEQUENCER_FH_movie_strip")))
   {
-    generic_poll_operations(event, TH_SEQ_MOVIE);
+    generic_poll_operations(C, event, TH_SEQ_MOVIE);
     return true;
   }
 
@@ -162,7 +171,7 @@ static bool sound_drop_poll(bContext *C, wmDrag *drag, const wmEvent *event)
   if (is_sound(drag) && (drag->type != WM_DRAG_PATH ||
                          test_single_file_handler_poll(C, drag, "SEQUENCER_FH_sound_strip")))
   {
-    generic_poll_operations(event, TH_SEQ_AUDIO);
+    generic_poll_operations(C, event, TH_SEQ_AUDIO);
     return true;
   }
 
@@ -178,22 +187,27 @@ static float update_overlay_strip_position_data(bContext *C, const int mval[2])
 
   /* Update the position were we would place the strip if we complete the drag and drop action.
    */
-  UI_view2d_region_to_view(v2d, mval[0], mval[1], &coords->start_frame, &coords->channel);
+  ui::view2d_region_to_view(v2d, mval[0], mval[1], &coords->start_frame, &coords->channel);
   coords->start_frame = roundf(coords->start_frame);
   if (coords->channel < 1.0f) {
     coords->channel = 1;
   }
 
+  float channel = coords->channel;
   float start_frame = coords->start_frame;
   float end_frame;
   float strip_len;
 
   if (coords->playback_rate != 0.0f) {
     float scene_playback_rate = float(scene->r.frs_sec) / scene->r.frs_sec_base;
-    strip_len = coords->strip_len / (coords->playback_rate / scene_playback_rate);
+    strip_len = coords->strip_length / (coords->playback_rate / scene_playback_rate);
+  }
+  else if (coords->only_audio) {
+    float scene_playback_rate = float(scene->r.frs_sec) / scene->r.frs_sec_base;
+    strip_len = coords->audio_length * scene_playback_rate;
   }
   else {
-    strip_len = coords->strip_len;
+    strip_len = coords->strip_length;
   }
 
   end_frame = coords->start_frame + strip_len;
@@ -201,18 +215,17 @@ static float update_overlay_strip_position_data(bContext *C, const int mval[2])
   if (coords->use_snapping) {
     /* Do snapping via the existing transform code. */
     int snap_delta;
-    float snap_frame;
-    bool valid_snap;
+    float2 snap_point;
 
-    valid_snap = blender::ed::transform::snap_sequencer_to_closest_strip_calc(
-        scene, region, start_frame, end_frame, &snap_delta, &snap_frame);
+    const bool valid_snap = transform::snap_sequencer_calc_drag_drop(
+        scene, region, start_frame, end_frame, channel, &snap_delta, &snap_point);
 
     if (valid_snap) {
       /* We snapped onto something! */
       start_frame += snap_delta;
       coords->start_frame = start_frame;
       end_frame = start_frame + strip_len;
-      coords->snap_point_x = snap_frame;
+      coords->snap_point = snap_point;
     }
     else {
       /* Nothing was snapped to, disable snap drawing. */
@@ -223,17 +236,18 @@ static float update_overlay_strip_position_data(bContext *C, const int mval[2])
   /* Check if there is a strip that would intersect with the new strip(s). */
   coords->is_intersecting = false;
   Strip dummy_strip{};
-  seq::strip_channel_set(&dummy_strip, coords->channel);
+  dummy_strip.channel_set(coords->channel);
   dummy_strip.start = coords->start_frame;
-  dummy_strip.len = coords->strip_len;
+  dummy_strip.content_length_set(coords->strip_length);
   dummy_strip.speed_factor = 1.0f;
   dummy_strip.media_playback_rate = coords->playback_rate;
   dummy_strip.flag = SEQ_AUTO_PLAYBACK_RATE;
   Editing *ed = seq::editing_ensure(scene);
 
-  for (int i = 0; i < coords->channel_len && !coords->is_intersecting; i++) {
-    coords->is_intersecting = seq::transform_test_overlap(scene, ed->seqbasep, &dummy_strip);
-    seq::strip_channel_set(&dummy_strip, dummy_strip.channel + 1);
+  for (int i = 0; i < coords->num_channels && !coords->is_intersecting; i++) {
+    coords->is_intersecting = seq::transform_test_overlap(
+        scene, ed->current_strips(), &dummy_strip);
+    dummy_strip.channel_set(dummy_strip.channel + 1);
   }
 
   return strip_len;
@@ -246,8 +260,8 @@ static void sequencer_drop_copy(bContext *C, wmDrag *drag, wmDropBox *drop)
       /* We didn't read the mouse position, so we need to do it manually here. */
       int xy[2];
       wmWindow *win = CTX_wm_window(C);
-      xy[0] = win->eventstate->xy[0];
-      xy[1] = win->eventstate->xy[1];
+      xy[0] = win->runtime->eventstate->xy[0];
+      xy[1] = win->runtime->eventstate->xy[1];
 
       ARegion *region = CTX_wm_region(C);
       int mval[2];
@@ -268,11 +282,11 @@ static void sequencer_drop_copy(bContext *C, wmDrag *drag, wmDropBox *drop)
      * current displayed frame. */
     Scene *scene = CTX_data_sequencer_scene(C);
     Editing *ed = seq::editing_ensure(scene);
-    ListBase *seqbase = seq::active_seqbase_get(ed);
-    ListBase *channels = seq::channels_displayed_get(ed);
+    ListBaseT<Strip> *seqbase = seq::active_seqbase_get(ed);
+    ListBaseT<SeqTimelineChannel> *channels = seq::channels_displayed_get(ed);
     SpaceSeq *sseq = CTX_wm_space_seq(C);
 
-    blender::VectorSet strips = seq::query_rendered_strips(
+    VectorSet strips = seq::query_rendered_strips(
         scene, channels, seqbase, scene->r.cfra, sseq->chanshown);
 
     /* Get the top most strip channel that is in view. */
@@ -291,7 +305,7 @@ static void sequencer_drop_copy(bContext *C, wmDrag *drag, wmDropBox *drop)
   if (id != nullptr) {
     const ID_Type id_type = GS(id->name);
     if (id_type == ID_IM) {
-      Image *ima = (Image *)id;
+      Image *ima = id_cast<Image *>(id);
       PointerRNA itemptr;
       char dir[FILE_MAX], file[FILE_MAX];
       BLI_path_split_dir_file(ima->filepath, dir, sizeof(dir), file, sizeof(file));
@@ -301,12 +315,12 @@ static void sequencer_drop_copy(bContext *C, wmDrag *drag, wmDropBox *drop)
       RNA_string_set(&itemptr, "name", file);
     }
     else if (id_type == ID_MC) {
-      MovieClip *clip = (MovieClip *)id;
+      MovieClip *clip = id_cast<MovieClip *>(id);
       RNA_string_set(drop->ptr, "filepath", clip->filepath);
       RNA_struct_property_unset(drop->ptr, "name");
     }
     else if (id_type == ID_SO) {
-      bSound *sound = (bSound *)id;
+      bSound *sound = id_cast<bSound *>(id);
       RNA_string_set(drop->ptr, "filepath", sound->filepath);
       RNA_struct_property_unset(drop->ptr, "name");
     }
@@ -342,18 +356,18 @@ static void get_drag_path(const bContext *C, wmDrag *drag, char r_path[FILE_MAX]
   if (id != nullptr) {
     const ID_Type id_type = GS(id->name);
     if (id_type == ID_IM) {
-      Image *ima = (Image *)id;
+      Image *ima = id_cast<Image *>(id);
       BLI_strncpy(r_path, ima->filepath, FILE_MAX);
     }
     else if (id_type == ID_MC) {
-      MovieClip *clip = (MovieClip *)id;
+      MovieClip *clip = id_cast<MovieClip *>(id);
       BLI_strncpy(r_path, clip->filepath, FILE_MAX);
     }
     else if (id_type == ID_SO) {
-      bSound *sound = (bSound *)id;
+      bSound *sound = id_cast<bSound *>(id);
       BLI_strncpy(r_path, sound->filepath, FILE_MAX);
     }
-    BLI_path_abs(r_path, BKE_main_blendfile_path_from_global());
+    BLI_path_abs(r_path, ID_BLEND_PATH_FROM_GLOBAL(id));
   }
   else {
     BLI_strncpy(r_path, WM_drag_get_single_path(drag), FILE_MAX);
@@ -366,6 +380,9 @@ static void draw_strip_in_view(bContext *C, wmWindow * /*win*/, wmDrag *drag, co
   if (!coords->in_use) {
     return;
   }
+
+  /* Needed to get user's snap settings later on when calculating drag and drop snaps. */
+  Scene *scene = CTX_data_sequencer_scene(C);
 
   ARegion *region = CTX_wm_region(C);
   int mval[2];
@@ -380,12 +397,14 @@ static void draw_strip_in_view(bContext *C, wmWindow * /*win*/, wmDrag *drag, co
 
   /* Sometimes the active theme is not the sequencer theme, e.g. when an operator invokes the
    * file browser. This makes sure we get the right color values for the theme. */
-  bThemeState theme_state;
-  UI_Theme_Store(&theme_state);
-  UI_SetTheme(SPACE_SEQ, RGN_TYPE_WINDOW);
+  ui::theme::bThemeState theme_state;
+  ui::theme::theme_store(&theme_state);
+  ui::theme::theme_set(SPACE_SEQ, RGN_TYPE_WINDOW);
 
   if (coords->use_snapping) {
-    blender::ed::transform::sequencer_snap_point(region, coords->snap_point_x);
+    ui::view2d_view_ortho(&region->v2d);
+    transform::snap_sequencer_draw_drag_drop(scene, region, coords->snap_point);
+    ui::view2d_view_restore(C);
   }
 
   /* Init GPU drawing. */
@@ -402,19 +421,16 @@ static void draw_strip_in_view(bContext *C, wmWindow * /*win*/, wmDrag *drag, co
 
   StripsDrawBatch batch(&region->v2d);
 
-  for (int i = 0; i < coords->channel_len; i++) {
+  for (int i = 0; i < coords->num_channels; i++) {
     float y1 = floorf(coords->channel) + i + STRIP_OFSBOTTOM;
     float y2 = floorf(coords->channel) + i + STRIP_OFSTOP;
 
-    if (coords->type == TH_SEQ_MOVIE && i == 0 && coords->channel_len > 1) {
-      /* Assume only video strips occupies two channels.
-       * One for video and the other for audio.
-       * The audio channel is added first.
-       */
-      UI_GetThemeColor3ubv(TH_SEQ_AUDIO, strip_color);
+    /* Audio strips sit at the bottom, video strips sit above them. */
+    if (i < coords->num_audio) {
+      ui::theme::get_color_3ubv(TH_SEQ_AUDIO, strip_color);
     }
     else {
-      UI_GetThemeColor3ubv(coords->type, strip_color);
+      ui::theme::get_color_3ubv(coords->type, strip_color);
     }
 
     SeqStripDrawData &data = batch.add_strip(x1, x2, y2, y1, y2, x1, x2, 0, true);
@@ -426,14 +442,14 @@ static void draw_strip_in_view(bContext *C, wmWindow * /*win*/, wmDrag *drag, co
       strip_color[1] = strip_color[2] = 33;
     }
     else {
-      if (coords->channel_len - 1 == i) {
+      if (coords->num_channels - 1 == i) {
         text_color[0] = text_color[1] = text_color[2] = 255;
-        UI_GetThemeColor3ubv(TH_SEQ_ACTIVE, strip_color);
+        ui::theme::get_color_3ubv(TH_SEQ_ACTIVE, strip_color);
         data.flags |= GPU_SEQ_FLAG_ACTIVE;
       }
       else {
         text_color[0] = text_color[1] = text_color[2] = 10;
-        UI_GetThemeColor3ubv(TH_SEQ_SELECTED, strip_color);
+        ui::theme::get_color_3ubv(TH_SEQ_SELECTED, strip_color);
       }
     }
     strip_color[3] = 204;
@@ -493,17 +509,17 @@ static void draw_strip_in_view(bContext *C, wmWindow * /*win*/, wmDrag *drag, co
     const size_t text_display_len = BLI_string_join_array(
         text_display, FILE_MAX, text_array, len_text_arr);
 
-    UI_view2d_text_cache_add_rectf(
+    ui::view2d_text_cache_add_rectf(
         &region->v2d, &rect, text_display, text_display_len, text_color);
   }
   batch.flush_batch();
 
   /* Clean after drawing up. */
-  UI_Theme_Restore(&theme_state);
+  ui::theme::theme_restore(&theme_state);
   GPU_matrix_pop();
   GPU_blend(GPU_BLEND_NONE);
 
-  UI_view2d_text_cache_draw(region);
+  ui::view2d_text_cache_draw(region);
 }
 
 static bool generic_drop_draw_handling(wmDropBox *drop)
@@ -527,24 +543,34 @@ struct DropJobData {
    */
   char path[FILE_MAX];
   bool only_audio;
-  float scene_fps;
 };
 
 static void prefetch_data_fn(void *custom_data, wmJobWorkerStatus * /*worker_status*/)
 {
-  DropJobData *job_data = (DropJobData *)custom_data;
+  DropJobData *job_data = static_cast<DropJobData *>(custom_data);
 
   if (job_data->only_audio) {
 #ifdef WITH_AUDASPACE
     /* Get the sound file length */
-    AUD_Sound *sound = AUD_Sound_file(job_data->path);
+    AUD_Sound sound = AUD_Sound(new aud::File(job_data->path));
     if (sound != nullptr) {
 
-      AUD_SoundInfo info = AUD_getInfo(sound);
-      if ((eSoundChannels)info.specs.channels != SOUND_CHANNELS_INVALID) {
-        g_drop_coords.strip_len = max_ii(1, round((info.length) * job_data->scene_fps));
+      SoundInfo info = bke::sound_info_get(sound);
+      if (info.specs.channels != SOUND_CHANNELS_INVALID) {
+        g_drop_coords.audio_length = info.length;
       }
-      AUD_Sound_free(sound);
+      try {
+        const int audio_streams = int(aud::FileManager::queryStreams(job_data->path).size());
+        g_drop_coords.num_channels = audio_streams;
+        g_drop_coords.num_audio = g_drop_coords.num_channels;
+      }
+      catch (aud::Exception &ex) {
+        (void)ex;
+      }
+      /* The playback rate is defined by the scene. This will be computed later in
+       * #update_overlay_strip_position_data, when we know the scene from the context. So set it to
+       * 0 for now. */
+      g_drop_coords.playback_rate = 0.0f;
       return;
     }
 #endif
@@ -553,50 +579,51 @@ static void prefetch_data_fn(void *custom_data, wmJobWorkerStatus * /*worker_sta
   /* The movie reader is not used to access pixel data here, so avoid internal colorspace
    * conversions that ensures typical color pipeline in Blender as they might be expensive. */
   char colorspace[/*MAX_COLORSPACE_NAME*/ 64] = "\0";
-  MovieReader *anim = openanim(job_data->path, IB_byte_data, 0, true, colorspace);
+  MovieReader *anim = openanim(job_data->path, ImBufFlags::Zero, 0, true, colorspace);
 
   if (anim != nullptr) {
-    g_drop_coords.strip_len = MOV_get_duration_frames(anim, IMB_TC_NONE);
+    g_drop_coords.strip_length = MOV_get_duration_frames(anim);
     g_drop_coords.playback_rate = MOV_get_fps(anim);
-    MOV_close(anim);
-#ifdef WITH_AUDASPACE
-    /* Try to load sound and see if the video has a sound channel. */
-    AUD_Sound *sound = AUD_Sound_file(job_data->path);
-    if (sound != nullptr) {
+    const int video_streams = MOV_get_video_stream_count(anim);
+    int audio_streams = 0;
 
-      AUD_SoundInfo info = AUD_getInfo(sound);
-      if ((eSoundChannels)info.specs.channels != SOUND_CHANNELS_INVALID) {
-        g_drop_coords.channel_len = 2;
-      }
-      AUD_Sound_free(sound);
+    MOV_close(anim);
+
+#ifdef WITH_AUDASPACE
+    try {
+      audio_streams = int(aud::FileManager::queryStreams(job_data->path).size());
+    }
+    catch (aud::Exception &ex) {
+      (void)ex;
     }
 #endif
+    g_drop_coords.num_channels = video_streams + audio_streams;
+    g_drop_coords.num_audio = audio_streams;
   }
 }
 
 static void free_prefetch_data_fn(void *custom_data)
 {
-  DropJobData *job_data = (DropJobData *)custom_data;
-  MEM_freeN(job_data);
+  DropJobData *job_data = static_cast<DropJobData *>(custom_data);
+  MEM_delete(job_data);
 }
 
 static void start_audio_video_job(bContext *C, wmDrag *drag, bool only_audio)
 {
-  g_drop_coords.strip_len = 0;
-  g_drop_coords.channel_len = 1;
-
   wmWindowManager *wm = CTX_wm_manager(C);
-  wmWindow *win = CTX_wm_window(C);
-  Scene *scene = CTX_data_sequencer_scene(C);
 
-  wmJob *wm_job = WM_jobs_get(
-      wm, win, nullptr, "Loading previews...", eWM_JobFlag(0), WM_JOB_TYPE_SEQ_DRAG_DROP_PREVIEW);
+  wmJob *wm_job = WM_jobs_get(wm,
+                              nullptr,
+                              nullptr,
+                              "Loading previews...",
+                              eWM_JobFlag(0),
+                              WM_JOB_TYPE_SEQ_DRAG_DROP_PREVIEW);
 
-  DropJobData *job_data = MEM_mallocN<DropJobData>("SeqDragDropPreviewData");
+  DropJobData *job_data = MEM_new_uninitialized<DropJobData>("SeqDragDropPreviewData");
   get_drag_path(C, drag, job_data->path);
 
   job_data->only_audio = only_audio;
-  job_data->scene_fps = FPS;
+  g_drop_coords.only_audio = only_audio;
 
   WM_jobs_customdata_set(wm_job, job_data, free_prefetch_data_fn);
   WM_jobs_timer(wm_job, 0.1, NC_WINDOW, NC_WINDOW);
@@ -640,8 +667,8 @@ static void image_drop_on_enter(wmDropBox *drop, wmDrag * /*drag*/)
   }
 
   SeqDropCoords *coords = static_cast<SeqDropCoords *>(drop->draw_data);
-  coords->strip_len = DEFAULT_IMG_STRIP_LENGTH;
-  coords->channel_len = 1;
+  coords->strip_length = DEFAULT_IMG_STRIP_LENGTH;
+  coords->num_channels = 1;
 }
 
 static void sequencer_drop_on_exit(wmDropBox *drop, wmDrag * /*drag*/)
@@ -665,7 +692,7 @@ static void nop_draw_droptip_fn(bContext * /*C*/,
 }
 
 /* This region dropbox definition. */
-static void sequencer_dropboxes_add_to_lb(ListBase *lb)
+static void sequencer_dropboxes_add_to_lb(ListBaseT<wmDropBox> *lb)
 {
   wmDropBox *drop;
   drop = WM_dropbox_add(
@@ -730,7 +757,7 @@ static bool sound_drop_preview_poll(bContext * /*C*/, wmDrag *drag, const wmEven
   return WM_drag_is_ID_type(drag, ID_SO);
 }
 
-static void sequencer_preview_dropboxes_add_to_lb(ListBase *lb)
+static void sequencer_preview_dropboxes_add_to_lb(ListBaseT<wmDropBox> *lb)
 {
   WM_dropbox_add(lb,
                  "SEQUENCER_OT_image_strip_add",
@@ -756,7 +783,7 @@ static void sequencer_preview_dropboxes_add_to_lb(ListBase *lb)
 
 void sequencer_dropboxes()
 {
-  ListBase *lb = WM_dropboxmap_find("Sequencer", SPACE_SEQ, RGN_TYPE_WINDOW);
+  ListBaseT<wmDropBox> *lb = WM_dropboxmap_find("Sequencer", SPACE_SEQ, RGN_TYPE_WINDOW);
   sequencer_dropboxes_add_to_lb(lb);
   lb = WM_dropboxmap_find("Sequencer", SPACE_SEQ, RGN_TYPE_PREVIEW);
   sequencer_preview_dropboxes_add_to_lb(lb);

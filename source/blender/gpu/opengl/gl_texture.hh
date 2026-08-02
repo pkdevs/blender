@@ -10,16 +10,18 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_assert.h"
+#include "BLI_assert.hh"
 
 #include "gpu_texture_private.hh"
 
-namespace blender {
-namespace gpu {
+namespace blender::gpu {
+
+class GLTexturePool;
 
 class GLTexture : public Texture {
   friend class GLStateManager;
   friend class GLFrameBuffer;
+  friend class GLTexturePool;
 
  private:
   /**
@@ -58,8 +60,12 @@ class GLTexture : public Texture {
   GLTexture(const char *name);
   ~GLTexture();
 
-  void update_sub(
-      int mip, int offset[3], int extent[3], eGPUDataFormat type, const void *data) override;
+  void update_sub(int mip,
+                  int offset[3],
+                  int extent[3],
+                  eGPUDataFormat type,
+                  const void *data,
+                  const uint unpack_row_length = 0) override;
   void update_sub(int offset[3],
                   int extent[3],
                   eGPUDataFormat format,
@@ -72,16 +78,12 @@ class GLTexture : public Texture {
    * \warning This resets the mipmap range.
    */
   void generate_mipmap() override;
-  void copy_to(Texture *dst) override;
-  void clear(eGPUDataFormat format, const void *data) override;
+  void copy_to(Texture *dst, IndexRange mip_levels) override;
+  void clear(const double4 data) override;
   void swizzle_set(const char swizzle_mask[4]) override;
-  void mip_range_set(int min, int max) override;
-  void *read(int mip, eGPUDataFormat type) override;
+  void read(int mip, eGPUDataFormat type, void *data) override;
 
   void check_feedback_loop();
-
-  /* TODO(fclem): Legacy. Should be removed at some point. */
-  uint gl_bindcode_get() const override;
 
   /**
    * Pre-generate, setup all possible samplers and cache them in the samplers_state_cache_ and
@@ -96,14 +98,6 @@ class GLTexture : public Texture {
   static void samplers_free();
 
   /**
-   * Updates the anisotropic filter parameters of samplers that enables anisotropic filtering. This
-   * is not done as a one time initialization in samplers_init() method because the user might
-   * change the anisotropic filtering samples in the user preferences. So it is called in
-   * samplers_init() method as well as every time the user preferences change.
-   */
-  static void samplers_update();
-
-  /**
    * Get the handle of the OpenGL sampler that corresponds to the given sampler state.
    * The sampler is retrieved from the cached samplers computed in the samplers_init() method.
    */
@@ -115,13 +109,11 @@ class GLTexture : public Texture {
   /** Return true on success. */
   bool init_internal(VertBuf *vbo) override;
   /** Return true on success. */
-  bool init_internal(gpu::Texture *src,
-                     int mip_offset,
-                     int layer_offset,
-                     bool use_stencil) override;
+  bool init_internal(gpu::Texture *src, bool use_stencil) override;
 
  private:
   bool proxy_check(int mip);
+  void mip_range_set(int min, int max);
   void stencil_texture_mode_set(bool use_stencil);
   void update_sub_direct_state_access(
       int mip, int offset[3], int extent[3], GLenum gl_format, GLenum gl_type, const void *data);
@@ -162,7 +154,7 @@ inline GLenum to_gl_internal_format(TextureFormat format)
   return 0;
 }
 
-inline GLenum to_gl_target(eGPUTextureType type)
+inline GLenum to_gl_target(GPUTextureType type)
 {
   switch (type) {
     case GPU_TEXTURE_1D:
@@ -187,7 +179,7 @@ inline GLenum to_gl_target(eGPUTextureType type)
   }
 }
 
-inline GLenum to_gl_proxy(eGPUTextureType type)
+inline GLenum to_gl_proxy(GPUTextureType type)
 {
   switch (type) {
     case GPU_TEXTURE_1D:
@@ -378,5 +370,14 @@ inline GLenum channel_len_to_gl(int channel_len)
   }
 }
 
-}  // namespace gpu
-}  // namespace blender
+BLI_INLINE GLTexture *unwrap(Texture *tex)
+{
+  return static_cast<GLTexture *>(tex);
+}
+
+BLI_INLINE Texture *wrap(GLTexture *texture)
+{
+  return static_cast<Texture *>(texture);
+}
+
+}  // namespace blender::gpu

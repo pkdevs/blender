@@ -2,63 +2,77 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-/** \file
- * \ingroup cmpnodes
- */
+#include "MEM_guardedalloc.h"
 
-#include "BKE_node.hh"
-
-#include "BLI_assert.h"
 #include "BLI_math_angle_types.hh"
 #include "BLI_math_matrix.hh"
 
-#include "COM_node_operation.hh"
-
 #include "DNA_node_types.h"
 
-#include "UI_interface_layout.hh"
-#include "UI_resources.hh"
+#include "RNA_enum_types.hh"
 
-#include "MEM_guardedalloc.h"
+#include "BKE_node.hh"
+
+#include "COM_node_operation.hh"
 
 #include "node_composite_util.hh"
 
-/* **************** Transform  ******************** */
-
 namespace blender::nodes::node_composite_transform_cc {
 
-NODE_STORAGE_FUNCS(NodeTransformData)
-
-static void cmp_node_init_transform(bNodeTree * /*ntree*/, bNode *node)
+static void node_declare(NodeDeclarationBuilder &b)
 {
-  NodeTransformData *data = MEM_callocN<NodeTransformData>(__func__);
-  data->interpolation = CMP_NODE_INTERPOLATION_NEAREST;
-  data->extension_x = CMP_NODE_EXTENSION_MODE_CLIP;
-  data->extension_y = CMP_NODE_EXTENSION_MODE_CLIP;
-  node->storage = data;
-}
+  b.use_custom_socket_order();
+  b.allow_any_socket_order();
 
-static void cmp_node_transform_declare(NodeDeclarationBuilder &b)
-{
-  b.add_input<decl::Color>("Image")
+  b.add_input<decl::Color>("Image"_ustr)
       .default_value({0.8f, 0.8f, 0.8f, 1.0f})
+      .hide_value()
       .compositor_realization_mode(CompositorInputRealizationMode::None)
       .structure_type(StructureType::Dynamic);
-  b.add_input<decl::Float>("X").default_value(0.0f).min(-10000.0f).max(10000.0f);
-  b.add_input<decl::Float>("Y").default_value(0.0f).min(-10000.0f).max(10000.0f);
-  b.add_input<decl::Float>("Angle").default_value(0.0f).min(-10000.0f).max(10000.0f).subtype(
-      PROP_ANGLE);
-  b.add_input<decl::Float>("Scale").default_value(1.0f).min(0.0001f).max(CMP_SCALE_MAX);
-  b.add_output<decl::Color>("Image");
+  b.add_output<decl::Color>("Image"_ustr)
+      .structure_type(StructureType::Dynamic)
+      .align_with_previous();
+
+  b.add_input<decl::Float>("X"_ustr)
+      .default_value(0.0f)
+      .subtype(PROP_PIXEL)
+      .min(-10000.0f)
+      .max(10000.0f);
+  b.add_input<decl::Float>("Y"_ustr)
+      .default_value(0.0f)
+      .subtype(PROP_PIXEL)
+      .min(-10000.0f)
+      .max(10000.0f);
+  b.add_input<decl::Float>("Angle"_ustr)
+      .default_value(0.0f)
+      .min(-10000.0f)
+      .max(10000.0f)
+      .subtype(PROP_ANGLE);
+  b.add_input<decl::Float>("Scale"_ustr).default_value(1.0f).min(0.0001f).max(CMP_SCALE_MAX);
+
+  PanelDeclarationBuilder &sampling_panel = b.add_panel("Sampling"_ustr).default_closed(true);
+  sampling_panel.add_input<decl::Menu>("Interpolation"_ustr)
+      .default_value(CMP_NODE_INTERPOLATION_BILINEAR)
+      .static_items(rna_enum_node_compositor_interpolation_items)
+      .optional_label()
+      .description("Interpolation method");
+  sampling_panel.add_input<decl::Menu>("Extension X"_ustr)
+      .default_value(CMP_NODE_EXTENSION_MODE_CLIP)
+      .static_items(rna_enum_node_compositor_extension_items)
+      .optional_label()
+      .description("The extension mode applied to the X axis");
+  sampling_panel.add_input<decl::Menu>("Extension Y"_ustr)
+      .default_value(CMP_NODE_EXTENSION_MODE_CLIP)
+      .static_items(rna_enum_node_compositor_extension_items)
+      .optional_label()
+      .description("The extension mode applied to the Y axis");
 }
 
-static void node_composit_buts_transform(uiLayout *layout, bContext * /*C*/, PointerRNA *ptr)
+static void node_init(bNodeTree * /*ntree*/, bNode *node)
 {
-  uiLayout &column = layout->column(true);
-  column.prop(ptr, "interpolation", UI_ITEM_R_SPLIT_EMPTY_NAME, "", ICON_NONE);
-  uiLayout &row = column.row(true);
-  row.prop(ptr, "extension_x", UI_ITEM_R_SPLIT_EMPTY_NAME, "", ICON_NONE);
-  row.prop(ptr, "extension_y", UI_ITEM_R_SPLIT_EMPTY_NAME, "", ICON_NONE);
+  /* Unused, kept for forward compatibility. */
+  NodeTransformData *data = MEM_new<NodeTransformData>(__func__);
+  node->storage = data;
 }
 
 using namespace blender::compositor;
@@ -69,10 +83,10 @@ class TransformOperation : public NodeOperation {
 
   void execute() override
   {
-    const float2 translation = float2(this->get_input("X").get_single_value_default(0.0f),
-                                      this->get_input("Y").get_single_value_default(0.0f));
-    const math::AngleRadian rotation = this->get_input("Angle").get_single_value_default(0.0f);
-    const float2 scale = float2(this->get_input("Scale").get_single_value_default(1.0f));
+    const float2 translation = float2(this->get_input("X").get_single_value_default<float>(),
+                                      this->get_input("Y").get_single_value_default<float>());
+    const math::AngleRadian rotation = this->get_input("Angle").get_single_value_default<float>();
+    const float2 scale = float2(this->get_input("Scale").get_single_value_default<float>());
     const float3x3 transformation = math::from_loc_rot_scale<float3x3>(
         translation, rotation, scale);
 
@@ -85,78 +99,79 @@ class TransformOperation : public NodeOperation {
     output.get_realization_options().extension_y = this->get_extension_mode_y();
   }
 
-  ExtensionMode get_extension_mode_x()
-  {
-    switch (static_cast<CMPExtensionMode>(node_storage(bnode()).extension_x)) {
-      case CMP_NODE_EXTENSION_MODE_CLIP:
-        return ExtensionMode::Clip;
-      case CMP_NODE_EXTENSION_MODE_REPEAT:
-        return ExtensionMode::Repeat;
-      case CMP_NODE_EXTENSION_MODE_EXTEND:
-        return ExtensionMode::Extend;
-    }
-
-    BLI_assert_unreachable();
-    return ExtensionMode::Clip;
-  }
-
-  ExtensionMode get_extension_mode_y()
-  {
-    switch (static_cast<CMPExtensionMode>(node_storage(bnode()).extension_y)) {
-      case CMP_NODE_EXTENSION_MODE_CLIP:
-        return ExtensionMode::Clip;
-      case CMP_NODE_EXTENSION_MODE_REPEAT:
-        return ExtensionMode::Repeat;
-      case CMP_NODE_EXTENSION_MODE_EXTEND:
-        return ExtensionMode::Extend;
-    }
-
-    BLI_assert_unreachable();
-    return ExtensionMode::Clip;
-  }
-
   Interpolation get_interpolation()
   {
-    switch (static_cast<CMPNodeInterpolation>(node_storage(bnode()).interpolation)) {
+    const CMPNodeInterpolation interpolation = CMPNodeInterpolation(
+        this->get_input("Interpolation").get_single_value_default<MenuValue>().value);
+    switch (interpolation) {
       case CMP_NODE_INTERPOLATION_NEAREST:
         return Interpolation::Nearest;
       case CMP_NODE_INTERPOLATION_BILINEAR:
         return Interpolation::Bilinear;
-      case CMP_NODE_INTERPOLATION_ANISOTROPIC:
       case CMP_NODE_INTERPOLATION_BICUBIC:
         return Interpolation::Bicubic;
+      case CMP_NODE_INTERPOLATION_ANISOTROPIC:
+        return Interpolation::Anisotropic;
     }
 
-    BLI_assert_unreachable();
     return Interpolation::Nearest;
+  }
+
+  Extension get_extension_mode_x()
+  {
+    const CMPExtensionMode extension_x = CMPExtensionMode(
+        this->get_input("Extension X").get_single_value_default<MenuValue>().value);
+    switch (extension_x) {
+      case CMP_NODE_EXTENSION_MODE_CLIP:
+        return Extension::Clip;
+      case CMP_NODE_EXTENSION_MODE_REPEAT:
+        return Extension::Repeat;
+      case CMP_NODE_EXTENSION_MODE_EXTEND:
+        return Extension::Extend;
+    }
+
+    return Extension::Clip;
+  }
+
+  Extension get_extension_mode_y()
+  {
+    const CMPExtensionMode extension_y = CMPExtensionMode(
+        this->get_input("Extension Y").get_single_value_default<MenuValue>().value);
+    switch (extension_y) {
+      case CMP_NODE_EXTENSION_MODE_CLIP:
+        return Extension::Clip;
+      case CMP_NODE_EXTENSION_MODE_REPEAT:
+        return Extension::Repeat;
+      case CMP_NODE_EXTENSION_MODE_EXTEND:
+        return Extension::Extend;
+    }
+
+    return Extension::Clip;
   }
 };
 
-static NodeOperation *get_compositor_operation(Context &context, DNode node)
+static NodeOperation *get_compositor_operation(Context &context, const bNode &node)
 {
   return new TransformOperation(context, node);
 }
 
-}  // namespace blender::nodes::node_composite_transform_cc
-
-static void register_node_type_cmp_transform()
+static void node_register()
 {
-  namespace file_ns = blender::nodes::node_composite_transform_cc;
+  static bke::bNodeType ntype;
 
-  static blender::bke::bNodeType ntype;
-
-  cmp_node_type_base(&ntype, "CompositorNodeTransform", CMP_NODE_TRANSFORM);
+  cmp_node_type_base(&ntype, "CompositorNodeTransform"_ustr, CMP_NODE_TRANSFORM);
   ntype.ui_name = "Transform";
   ntype.ui_description = "Scale, translate and rotate an image";
   ntype.enum_name_legacy = "TRANSFORM";
   ntype.nclass = NODE_CLASS_DISTORT;
-  ntype.declare = file_ns::cmp_node_transform_declare;
-  ntype.draw_buttons = file_ns::node_composit_buts_transform;
-  ntype.get_compositor_operation = file_ns::get_compositor_operation;
-  ntype.initfunc = file_ns::cmp_node_init_transform;
-  blender::bke::node_type_storage(
+  ntype.declare = node_declare;
+  ntype.get_compositor_operation = get_compositor_operation;
+  ntype.initfunc = node_init;
+  bke::node_type_storage(
       ntype, "NodeTransformData", node_free_standard_storage, node_copy_standard_storage);
 
-  blender::bke::node_register_type(ntype);
+  bke::node_register_type(ntype);
 }
-NOD_REGISTER_NODE(register_node_type_cmp_transform)
+NOD_REGISTER_NODE(node_register)
+
+}  // namespace blender::nodes::node_composite_transform_cc

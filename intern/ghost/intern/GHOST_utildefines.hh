@@ -5,27 +5,12 @@
 /** \file
  * \ingroup GHOST
  *
- * Utility defines (avoid depending on `BLI_utildefines.h`).
+ * Utility defines (avoid depending on `BLI_utildefines.hh`).
  */
 
 #pragma once
 
 #include "GHOST_utildefines_variadic.hh"
-
-/* -------------------------------------------------------------------- */
-/** \name Branch Prediction Macros
- * \{ */
-
-/* hints for branch prediction, only use in code that runs a _lot_ where */
-#ifdef __GNUC__
-#  define LIKELY(x) __builtin_expect(!!(x), 1)
-#  define UNLIKELY(x) __builtin_expect(!!(x), 0)
-#else
-#  define LIKELY(x) (x)
-#  define UNLIKELY(x) (x)
-#endif
-
-/** \} */
 
 /* -------------------------------------------------------------------- */
 /** \name Array Unpacking Macros

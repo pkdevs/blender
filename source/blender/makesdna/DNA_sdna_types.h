@@ -7,24 +7,38 @@
 
 #pragma once
 
-#include "BLI_sys_types.h"
+#include "BLI_array.hh"
+#include "BLI_linear_allocator.hh"
+#include "BLI_map.hh"
+#include "BLI_string_ref.hh"
+#include "BLI_sys_types.hh"
+#include "BLI_vector.hh"
 
-struct MemArena;
+namespace blender {
+
+/**
+ * The struct index representing type-less bytes buffers.
+ *
+ * Although code has historically (pre-4.3) be fairly unreliable (logically incorrect, see inline
+ * code-comments for #DNA_struct_get_compareflags regarding this), most of read/write blend-file
+ * code would assume that the `0` value was raw data, so keep it at this value.
+ */
+#define SDNA_RAW_DATA_STRUCT_INDEX 0
 
 #
 #
-typedef struct SDNA_StructMember {
+struct SDNA_StructMember {
   /** This struct must not change, it's only a convenience view for raw data stored in SDNA. */
 
   /** An index into SDNA->types. */
   short type_index;
   /** An index into SDNA->members. */
   short member_index;
-} SDNA_StructMember;
+};
 
 #
 #
-typedef struct SDNA_Struct {
+struct SDNA_Struct {
   /** This struct must not change, it's only a convenience view for raw data stored in SDNA. */
 
   /** An index into SDNA->types. */
@@ -33,19 +47,19 @@ typedef struct SDNA_Struct {
   short members_num;
   /** "Flexible array member" that contains information about all members of this struct. */
   SDNA_StructMember members[];
-} SDNA_Struct;
+};
 
 #
 #
-typedef struct SDNA {
+struct SDNA {
   /** The 'encoded' data (full copy when #data_alloc is set, otherwise borrowed memory). */
-  const char *data;
+  const char *data = nullptr;
   /** Length of #data, in bytes. */
-  int data_size;
-  bool data_alloc;
+  int data_size = 0;
+  bool data_alloc = false;
 
   /** Size of a pointer in bytes. */
-  int pointer_size;
+  int pointer_size = 0;
 
   /* ***** Start of SDNA types. ***** */
   /**
@@ -57,17 +71,17 @@ typedef struct SDNA {
    *     members of another struct which gets parsed first.
    */
   /** Number of types. */
-  int types_num;
+  int types_num = 0;
   /** Type names. */
-  const char **types;
+  Array<StringRef> types;
   /** Type lengths. */
-  short *types_size;
+  short *types_size = nullptr;
   /**
    * Alignment used when allocating pointers to this type. The actual minimum alignment of the
    * type may be lower in some cases. For example, the pointer alignment of a single char is at
    * least 8 bytes, but the alignment of the type itself is 1.
    */
-  int *types_alignment;
+  Array<int> types_alignment;
   /* ***** End of SDNA types. ***** */
 
   /* ***** Start of SDNA structs. ***** */
@@ -77,31 +91,22 @@ typedef struct SDNA {
    * NOTE: See comment above about SDNA types above for differences between structs and types
    * definitions.
    */
-  /** Number of struct definitions. */
-  int structs_num;
   /** Information about structs and their members. */
-  SDNA_Struct **structs;
+  Array<SDNA_Struct *, 0> structs;
   /* ***** End of SDNA structs. ***** */
 
   /* ***** Start of SDNA struct members. ***** */
   /** Total number of struct members. */
-  int members_num;
-  /**
-   * Contains the number of allocated items in both #members and #members_array_num arrays below.
-   *
-   * Typically same as #members_len, unless after versioning DNA info (these arrays are
-   * reallocated by chunks, see #DNA_sdna_patch_struct_member).
-   */
-  int members_num_alloc;
+  int members_num = 0;
   /** Struct member names. */
-  const char **members;
+  Vector<StringRef> members;
   /**
    * Aligned with #members. The total number of items in the array defined by the matching member,
    * if any, otherwise 1.
    *
    * Result of #DNA_member_array_num.
    */
-  short *members_array_num;
+  Vector<short> members_array_num;
   /* ***** End of SDNA struct members. ***** */
 
   /**
@@ -110,7 +115,7 @@ typedef struct SDNA {
    *
    * Requires WITH_DNA_GHASH to be used for now.
    */
-  struct GHash *types_to_structs_map;
+  Map<StringRef, int> types_to_structs_map;
 
   /**
    * Runtime versions of data stored in DNA, lazy initialized, only different when renaming is
@@ -122,22 +127,17 @@ typedef struct SDNA {
    */
   struct {
     /** Aligned with #SDNA.types, same pointers when unchanged. */
-    const char **types;
+    Array<StringRef> types;
     /** Aligned with #SDNA.members, same pointers when unchanged. */
-    const char **members;
+    Vector<StringRef> members;
     /** A version of #SDNA.types_to_structs_map that uses #SDNA.alias.types for its keys. */
-    struct GHash *types_to_structs_map;
+    Map<StringRef, int> types_to_structs_map;
   } alias;
 
   /** Temporary memory currently only used for version patching DNA. */
-  struct MemArena *mem_arena;
-} SDNA;
+  LinearAllocator<> mem_arena;
 
-/**
- * The struct index representing type-less bytes buffers.
- *
- * Although code has historically (pre-4.3) be fairly unreliable (logically incorrect, see inline
- * code-comments for #DNA_struct_get_compareflags regarding this), most of read/write blend-file
- * code would assume that the `0` value was raw data, so keep it at this value.
- */
-#define SDNA_RAW_DATA_STRUCT_INDEX 0
+  ~SDNA();
+};
+
+}  // namespace blender

@@ -19,9 +19,13 @@
 
 #pragma once
 
-#include "eevee_shader_shared.hh"
+#include "eevee_depth_of_field_shared.hh"
+
+#include "draw_pass.hh"
 
 namespace blender::eevee {
+
+using namespace draw;
 
 class Instance;
 
@@ -37,12 +41,19 @@ struct DepthOfFieldBuffer {
    * Note this should be private as its inner working only concerns the Depth Of Field
    * implementation. The view itself should not touch it.
    */
-  Texture stabilize_history_tx_ = {"dof_taa"};
+  TextureFromPool stabilize_history_tx_ = {"dof_taa"};
 };
 
+using DepthOfFieldScatterListBuf = draw::StorageArrayBuffer<ScatterRect, 16, true>;
+using DepthOfFieldDataBuf = draw::UniformBuffer<DepthOfFieldData>;
+
 class DepthOfField {
+
  private:
   class Instance &inst_;
+
+  static constexpr GPUSamplerState no_filter = GPUSamplerState::default_sampler();
+  static constexpr GPUSamplerState with_filter = {GPU_SAMPLER_FILTERING_LINEAR};
 
   /** Input/Output texture references. */
   gpu::Texture *input_color_tx_ = nullptr;
@@ -60,9 +71,11 @@ class DepthOfField {
   int3 dispatch_setup_size_ = int3(-1);
   PassSimple setup_ps_ = {"Setup"};
 
-  /** Allocated because we need mip chain. Which isn't supported by TextureFromPool. */
-  Texture reduced_coc_tx_ = {"dof_reduced_coc"};
-  Texture reduced_color_tx_ = {"dof_reduced_color"};
+  /* Reduce buffer mip chains with view texture per level. */
+  TextureFromPool reduced_coc_tx_ = {"dof_reduced_coc"};
+  TextureFromPool reduced_color_tx_ = {"dof_reduced_color"};
+  std::array<gpu::Texture *, DOF_MIP_COUNT> reduced_coc_mip_views_;
+  std::array<gpu::Texture *, DOF_MIP_COUNT> reduced_color_mip_views_;
 
   /** Stabilization (flicker attenuation) of Color and CoC output of the setup pass. */
   TextureFromPool stabilize_output_tx_ = {"dof_taa"};
@@ -150,8 +163,8 @@ class DepthOfField {
   bool enabled_ = false;
 
  public:
-  DepthOfField(Instance &inst) : inst_(inst){};
-  ~DepthOfField(){};
+  DepthOfField(Instance &inst) : inst_(inst) {};
+  ~DepthOfField() {};
 
   void init();
 

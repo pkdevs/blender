@@ -31,6 +31,14 @@ class VKIndexBuffer : public IndexBuf {
   {
     return buffer_get().vk_handle();
   }
+  const VKResourceWithHandle<VkBuffer> &resource() const
+  {
+    return buffer_get().resource();
+  }
+  inline bool has_device_address() const
+  {
+    return buffer_get().has_device_address();
+  }
   inline VkDeviceAddress device_address_get() const
   {
     return buffer_get().device_address_get();
@@ -38,6 +46,11 @@ class VKIndexBuffer : public IndexBuf {
   VkIndexType vk_index_type() const
   {
     return to_vk_index_type(index_type_);
+  }
+  /** \brief Return the allocated size of the buffer in bytes. */
+  inline VkDeviceSize allocated_size_get() const
+  {
+    return buffer_get().allocated_size_in_bytes();
   }
 
   void ensure_updated();
@@ -52,6 +65,11 @@ class VKIndexBuffer : public IndexBuf {
 static inline VKIndexBuffer *unwrap(IndexBuf *index_buffer)
 {
   return static_cast<VKIndexBuffer *>(index_buffer);
+}
+
+static inline VKIndexBuffer &unwrap(IndexBuf &index_buffer)
+{
+  return static_cast<VKIndexBuffer &>(index_buffer);
 }
 
 }  // namespace blender::gpu

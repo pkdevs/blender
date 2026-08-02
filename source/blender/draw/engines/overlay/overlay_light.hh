@@ -10,7 +10,7 @@
 
 #include "DNA_light_types.h"
 
-#include "BLI_math_matrix.h"
+#include "BLI_math_matrix_c.hh"
 
 #include "overlay_base.hh"
 
@@ -41,7 +41,7 @@ class Lights : Overlay {
   } call_buffers_{selection_type_};
 
  public:
-  Lights(const SelectionType selection_type) : selection_type_(selection_type){};
+  Lights(const SelectionType selection_type) : selection_type_(selection_type) {};
 
   void begin_sync(Resources & /*res*/, const State &state) final
   {

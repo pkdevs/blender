@@ -32,11 +32,10 @@ PyDoc_STRVAR(
     "\n"
     "   Returns a list of occluding shapes that cover this Interface1D.\n"
     "\n"
-    "   :arg inter: An Interface1D object.\n"
+    "   :param inter: An Interface1D object.\n"
     "   :type inter: :class:`freestyle.types.Interface1D`\n"
     "   :return: A list of occluding shapes that cover the Interface1D.\n"
     "   :rtype: list[:class:`freestyle.types.ViewShape`]\n");
-
 static int GetOccludersF1D___init__(BPy_GetOccludersF1D *self, PyObject *args, PyObject *kwds)
 {
   static const char *kwlist[] = {nullptr};

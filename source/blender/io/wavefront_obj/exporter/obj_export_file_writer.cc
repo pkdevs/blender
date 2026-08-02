@@ -13,15 +13,16 @@
 #include "BKE_blender_version.h"
 #include "BKE_mesh.hh"
 
-#include "BLI_color.hh"
+#include "BLI_color_types.hh"
 #include "BLI_enumerable_thread_specific.hh"
-#include "BLI_fileops.h"
-#include "BLI_math_matrix.h"
+#include "BLI_fileops.hh"
+#include "BLI_math_color_c.hh"
 #include "BLI_math_matrix.hh"
-#include "BLI_math_rotation.h"
-#include "BLI_math_vector.h"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_rotation_c.hh"
+#include "BLI_math_vector_c.hh"
 #include "BLI_path_utils.hh"
-#include "BLI_string.h"
+#include "BLI_string.hh"
 #include "BLI_task.hh"
 
 #include "IO_path_util.hh"
@@ -33,9 +34,12 @@
 #include "obj_export_file_writer.hh"
 
 #include "CLG_log.h"
+
+namespace blender {
+
 static CLG_LogRef LOG = {"io.obj"};
 
-namespace blender::io::obj {
+namespace io::obj {
 /**
  * Per reference http://www.martinreddy.net/gfx/3d/OBJ.spec:
  * To turn off smoothing groups, use a value of 0 or off.
@@ -453,22 +457,15 @@ void OBJWriter::write_edges_indices(FormatHandler &fh,
                                     const OBJMesh &obj_mesh_data) const
 {
   const Mesh &mesh = *obj_mesh_data.get_mesh();
-  const bke::LooseEdgeCache &loose_edges = mesh.loose_edges();
-  if (loose_edges.count == 0) {
-    return;
-  }
-
   const Span<int2> edges = mesh.edges();
-  for (const int64_t i : edges.index_range()) {
-    if (loose_edges.is_loose_bits[i]) {
-      const int2 obj_edge = edges[i] + offsets.vertex_offset + 1;
-      fh.write_obj_edge(obj_edge[0], obj_edge[1]);
-    }
-  }
+  mesh.loose_edges().foreach_index([&](const int i) {
+    const int2 obj_edge = edges[i] + offsets.vertex_offset + 1;
+    fh.write_obj_edge(obj_edge[0], obj_edge[1]);
+  });
 }
 
 static float4x4 compute_world_axes_transform(const OBJExportParams &export_params,
-                                             const blender::float4x4 &object_to_world)
+                                             const float4x4 &object_to_world)
 {
   float4x4 world_axes_transform;
   float axes_transform[3][3];
@@ -745,9 +742,8 @@ void MTLWriter::write_materials(const char *blen_filepath,
   BLI_path_slash_native(blen_filedir);
   BLI_path_normalize(blen_filedir);
 
-  std::sort(mtlmaterials_.begin(),
-            mtlmaterials_.end(),
-            [](const MTLMaterial &a, const MTLMaterial &b) { return a.name < b.name; });
+  std::ranges::sort(mtlmaterials_,
+                    [](const MTLMaterial &a, const MTLMaterial &b) { return a.name < b.name; });
   Set<std::pair<std::string, std::string>> copy_set;
   for (const MTLMaterial &mtlmat : mtlmaterials_) {
     fmt_handler_.write_string("");
@@ -773,25 +769,25 @@ void MTLWriter::write_materials(const char *blen_filepath,
 
 Vector<int> MTLWriter::add_materials(const OBJMesh &mesh_to_export)
 {
-  Vector<int> r_mtl_indices;
-  r_mtl_indices.resize(mesh_to_export.tot_materials());
+  Vector<int> mtl_indices;
+  mtl_indices.resize(mesh_to_export.tot_materials());
   for (int16_t i = 0; i < mesh_to_export.tot_materials(); i++) {
     const Material *material = mesh_to_export.materials[i];
     if (!material) {
-      r_mtl_indices[i] = -1;
+      mtl_indices[i] = -1;
       continue;
     }
     int mtlmat_index = material_map_.lookup_default(material, -1);
     if (mtlmat_index != -1) {
-      r_mtl_indices[i] = mtlmat_index;
+      mtl_indices[i] = mtlmat_index;
     }
     else {
       mtlmaterials_.append(mtlmaterial_for_material(material));
-      r_mtl_indices[i] = mtlmaterials_.size() - 1;
-      material_map_.add_new(material, r_mtl_indices[i]);
+      mtl_indices[i] = mtlmaterials_.size() - 1;
+      material_map_.add_new(material, mtl_indices[i]);
     }
   }
-  return r_mtl_indices;
+  return mtl_indices;
 }
 
 const char *MTLWriter::mtlmaterial_name(int index)
@@ -803,4 +799,5 @@ const char *MTLWriter::mtlmaterial_name(int index)
 }
 /** \} */
 
-}  // namespace blender::io::obj
+}  // namespace io::obj
+}  // namespace blender

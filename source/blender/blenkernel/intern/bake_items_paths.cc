@@ -6,7 +6,7 @@
 
 #include "BLI_fileops.hh"
 #include "BLI_path_utils.hh"
-#include "BLI_string.h"
+#include "BLI_string.hh"
 #include "BLI_string_utils.hh"
 
 namespace blender::bke::bake {
@@ -57,9 +57,8 @@ Vector<MetaFile> find_sorted_meta_files(const StringRefNull meta_dir)
     meta_files.append({*frame, dir_entry_path});
   }
 
-  std::sort(meta_files.begin(), meta_files.end(), [](const MetaFile &a, const MetaFile &b) {
-    return a.frame < b.frame;
-  });
+  std::ranges::sort(meta_files,
+                    [](const MetaFile &a, const MetaFile &b) { return a.frame < b.frame; });
 
   return meta_files;
 }
