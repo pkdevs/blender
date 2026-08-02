@@ -15,6 +15,8 @@
 
 #include "BLI_ghash.hh"
 #include "BLI_listbase.hh"
+#include "BLI_span.hh"
+#include "BLI_string_utf8.hh"
 #include "BLI_string_utils.hh"
 #include "BLI_utildefines.hh"
 
@@ -52,6 +54,16 @@ static Lattice *object_defgroup_lattice_get(ID *id)
   Lattice *lt = id_cast<Lattice *>(id);
   BLI_assert(GS(id->name) == ID_LT);
   return (lt->editlatt) ? lt->editlatt->latt : lt;
+}
+
+static void object_defgroup_update_name_if_matches(const char *old_name,
+                                                      const char *new_name,
+                                                      char *prop,
+                                                      size_t prop_size)
+{
+  if (STREQ(prop, old_name)) {
+    BLI_strncpy_utf8(prop, new_name, prop_size);
+  }
 }
 
 void BKE_object_defgroup_remap_update_users(Object *ob, const int *map)
@@ -94,6 +106,200 @@ void BKE_object_defgroup_remap_update_users(Object *ob, const int *map)
   }
 }
 
+void BKE_object_defgroup_name_update_users(Object *ob,
+                                              const char *old_name,
+                                              const char *new_name)
+{
+  for (ModifierData &md : ob->modifiers) {
+    switch (md.type) {
+      case eModifierType_Armature: {
+        ArmatureModifierData *amd = reinterpret_cast<ArmatureModifierData *>(&md);
+        object_defgroup_update_name_if_matches(old_name, new_name, amd->defgrp_name, sizeof(amd->defgrp_name));
+        break;
+      }
+      case eModifierType_Bevel: {
+        BevelModifierData *bmd = reinterpret_cast<BevelModifierData *>(&md);
+        object_defgroup_update_name_if_matches(old_name, new_name, bmd->defgrp_name, sizeof(bmd->defgrp_name));
+        break;
+      }
+      case eModifierType_Cast: {
+        CastModifierData *cmd = reinterpret_cast<CastModifierData *>(&md);
+        object_defgroup_update_name_if_matches(old_name, new_name, cmd->defgrp_name, sizeof(cmd->defgrp_name));
+        break;
+      }
+      case eModifierType_Curve: {
+        CurveModifierData *cmd = reinterpret_cast<CurveModifierData *>(&md);
+        object_defgroup_update_name_if_matches(old_name, new_name, cmd->name, sizeof(cmd->name));
+        break;
+      }
+      case eModifierType_DataTransfer: {
+        DataTransferModifierData *dmd = reinterpret_cast<DataTransferModifierData *>(&md);
+        object_defgroup_update_name_if_matches(old_name, new_name, dmd->defgrp_name, sizeof(dmd->defgrp_name));
+        break;
+      }
+      case eModifierType_Decimate: {
+        DecimateModifierData *dmd = reinterpret_cast<DecimateModifierData *>(&md);
+        object_defgroup_update_name_if_matches(old_name, new_name, dmd->defgrp_name, sizeof(dmd->defgrp_name));
+        break;
+      }
+      case eModifierType_CorrectiveSmooth: {
+        CorrectiveSmoothModifierData *csmd = reinterpret_cast<CorrectiveSmoothModifierData *>(&md);
+        object_defgroup_update_name_if_matches(old_name, new_name, csmd->defgrp_name, sizeof(csmd->defgrp_name));
+        break;
+      }
+      case eModifierType_Displace: {
+        DisplaceModifierData *dmd = reinterpret_cast<DisplaceModifierData *>(&md);
+        object_defgroup_update_name_if_matches(old_name, new_name, dmd->defgrp_name, sizeof(dmd->defgrp_name));
+        break;
+      }
+      case eModifierType_Hook: {
+        HookModifierData *hmd = reinterpret_cast<HookModifierData *>(&md);
+        object_defgroup_update_name_if_matches(old_name, new_name, hmd->name, sizeof(hmd->name));
+        break;
+      }
+      case eModifierType_LaplacianDeform: {
+        LaplacianDeformModifierData *ldmd = reinterpret_cast<LaplacianDeformModifierData *>(&md);
+        object_defgroup_update_name_if_matches(old_name, new_name, ldmd->anchor_grp_name, sizeof(ldmd->anchor_grp_name));
+        break;
+      }
+      case eModifierType_LaplacianSmooth: {
+        LaplacianSmoothModifierData *lsmd = reinterpret_cast<LaplacianSmoothModifierData *>(&md);
+        object_defgroup_update_name_if_matches(old_name, new_name, lsmd->defgrp_name, sizeof(lsmd->defgrp_name));
+        break;
+      }
+      case eModifierType_Lattice: {
+        LatticeModifierData *lmd = reinterpret_cast<LatticeModifierData *>(&md);
+        object_defgroup_update_name_if_matches(old_name, new_name, lmd->name, sizeof(lmd->name));
+        break;
+      }
+      case eModifierType_Mask: {
+        MaskModifierData *mmd = reinterpret_cast<MaskModifierData *>(&md);
+        object_defgroup_update_name_if_matches(old_name, new_name, mmd->vgroup, sizeof(mmd->vgroup));
+        break;
+      }
+      case eModifierType_MeshCache: {
+        MeshCacheModifierData *mcmd = reinterpret_cast<MeshCacheModifierData *>(&md);
+        object_defgroup_update_name_if_matches(old_name, new_name, mcmd->defgrp_name, sizeof(mcmd->defgrp_name));
+        break;
+      }
+      case eModifierType_MeshDeform: {
+        MeshDeformModifierData *mmd = reinterpret_cast<MeshDeformModifierData *>(&md);
+        object_defgroup_update_name_if_matches(old_name, new_name, mmd->defgrp_name, sizeof(mmd->defgrp_name));
+        break;
+      }
+      case eModifierType_NormalEdit: {
+        NormalEditModifierData *nemd = reinterpret_cast<NormalEditModifierData *>(&md);
+        object_defgroup_update_name_if_matches(old_name, new_name, nemd->defgrp_name, sizeof(nemd->defgrp_name));
+        break;
+      }
+      case eModifierType_Shrinkwrap: {
+        ShrinkwrapModifierData *smd = reinterpret_cast<ShrinkwrapModifierData *>(&md);
+        object_defgroup_update_name_if_matches(old_name, new_name, smd->vgroup_name, sizeof(smd->vgroup_name));
+        break;
+      }
+      case eModifierType_SimpleDeform: {
+        SimpleDeformModifierData *sdmd = reinterpret_cast<SimpleDeformModifierData *>(&md);
+        object_defgroup_update_name_if_matches(old_name, new_name, sdmd->vgroup_name, sizeof(sdmd->vgroup_name));
+        break;
+      }
+      case eModifierType_Smooth: {
+        SmoothModifierData *smd = reinterpret_cast<SmoothModifierData *>(&md);
+        object_defgroup_update_name_if_matches(old_name, new_name, smd->defgrp_name, sizeof(smd->defgrp_name));
+        break;
+      }
+      case eModifierType_Solidify: {
+        SolidifyModifierData *smd = reinterpret_cast<SolidifyModifierData *>(&md);
+        object_defgroup_update_name_if_matches(old_name, new_name, smd->defgrp_name, sizeof(smd->defgrp_name));
+        object_defgroup_update_name_if_matches(old_name, new_name, smd->shell_defgrp_name, sizeof(smd->shell_defgrp_name));
+        object_defgroup_update_name_if_matches(old_name, new_name, smd->rim_defgrp_name, sizeof(smd->rim_defgrp_name));
+        break;
+      }
+      case eModifierType_SurfaceDeform: {
+        SurfaceDeformModifierData *sdmd = reinterpret_cast<SurfaceDeformModifierData *>(&md);
+        object_defgroup_update_name_if_matches(old_name, new_name, sdmd->defgrp_name, sizeof(sdmd->defgrp_name));
+        break;
+      }
+      case eModifierType_UVWarp: {
+        UVWarpModifierData *uvmd = reinterpret_cast<UVWarpModifierData *>(&md);
+        object_defgroup_update_name_if_matches(old_name, new_name, uvmd->vgroup_name, sizeof(uvmd->vgroup_name));
+        break;
+      }
+      case eModifierType_Warp: {
+        WarpModifierData *wmd = reinterpret_cast<WarpModifierData *>(&md);
+        object_defgroup_update_name_if_matches(old_name, new_name, wmd->defgrp_name, sizeof(wmd->defgrp_name));
+        break;
+      }
+      case eModifierType_Wave: {
+        WaveModifierData *wmd = reinterpret_cast<WaveModifierData *>(&md);
+        object_defgroup_update_name_if_matches(old_name, new_name, wmd->defgrp_name, sizeof(wmd->defgrp_name));
+        break;
+      }
+      case eModifierType_WeightVGEdit: {
+        WeightVGEditModifierData *wmd = reinterpret_cast<WeightVGEditModifierData *>(&md);
+        object_defgroup_update_name_if_matches(old_name, new_name, wmd->defgrp_name, sizeof(wmd->defgrp_name));
+        object_defgroup_update_name_if_matches(old_name, new_name, wmd->mask_defgrp_name, sizeof(wmd->mask_defgrp_name));
+        break;
+      }
+      case eModifierType_WeightVGMix: {
+        WeightVGMixModifierData *wmd = reinterpret_cast<WeightVGMixModifierData *>(&md);
+        object_defgroup_update_name_if_matches(old_name, new_name, wmd->defgrp_name_a, sizeof(wmd->defgrp_name_a));
+        object_defgroup_update_name_if_matches(old_name, new_name, wmd->defgrp_name_b, sizeof(wmd->defgrp_name_b));
+        object_defgroup_update_name_if_matches(old_name, new_name, wmd->mask_defgrp_name, sizeof(wmd->mask_defgrp_name));
+        break;
+      }
+      case eModifierType_WeightVGProximity: {
+        WeightVGProximityModifierData *wmd = reinterpret_cast<WeightVGProximityModifierData *>(&md);
+        object_defgroup_update_name_if_matches(old_name, new_name, wmd->defgrp_name, sizeof(wmd->defgrp_name));
+        object_defgroup_update_name_if_matches(old_name, new_name, wmd->mask_defgrp_name, sizeof(wmd->mask_defgrp_name));
+        break;
+      }
+      case eModifierType_WeightedNormal: {
+        WeightedNormalModifierData *wnmd = reinterpret_cast<WeightedNormalModifierData *>(&md);
+        object_defgroup_update_name_if_matches(old_name, new_name, wnmd->defgrp_name, sizeof(wnmd->defgrp_name));
+        break;
+      }
+      case eModifierType_Weld: {
+        WeldModifierData *wmd = reinterpret_cast<WeldModifierData *>(&md);
+        object_defgroup_update_name_if_matches(old_name, new_name, wmd->defgrp_name, sizeof(wmd->defgrp_name));
+        break;
+      }
+      case eModifierType_Wireframe: {
+        WireframeModifierData *wmd = reinterpret_cast<WireframeModifierData *>(&md);
+        object_defgroup_update_name_if_matches(old_name, new_name, wmd->defgrp_name, sizeof(wmd->defgrp_name));
+        break;
+      }
+      case eModifierType_GreasePencilWeightAngle: {
+        GreasePencilWeightAngleModifierData *gmd = reinterpret_cast<GreasePencilWeightAngleModifierData *>(&md);
+        object_defgroup_update_name_if_matches(old_name, new_name, gmd->target_vgname, sizeof(gmd->target_vgname));
+        break;
+      }
+      case eModifierType_GreasePencilWeightProximity: {
+        GreasePencilWeightProximityModifierData *gmd = reinterpret_cast<GreasePencilWeightProximityModifierData *>(&md);
+        object_defgroup_update_name_if_matches(old_name, new_name, gmd->target_vgname, sizeof(gmd->target_vgname));
+        break;
+      }
+      case eModifierType_GreasePencilLineart: {
+        GreasePencilLineartModifierData *gmd = reinterpret_cast<GreasePencilLineartModifierData *>(&md);
+        object_defgroup_update_name_if_matches(old_name, new_name, gmd->vgname, sizeof(gmd->vgname));
+        break;
+      }
+      case eModifierType_GreasePencilBuild: {
+        GreasePencilBuildModifierData *gmd = reinterpret_cast<GreasePencilBuildModifierData *>(&md);
+        object_defgroup_update_name_if_matches(old_name, new_name, gmd->target_vgname, sizeof(gmd->target_vgname));
+        break;
+      }
+      default:
+        break;
+    }
+  }
+
+  if (ob->soft) {
+    object_defgroup_update_name_if_matches(old_name, new_name, ob->soft->namedVG_Mass, sizeof(ob->soft->namedVG_Mass));
+    object_defgroup_update_name_if_matches(old_name, new_name, ob->soft->namedVG_Softgoal, sizeof(ob->soft->namedVG_Softgoal));
+    object_defgroup_update_name_if_matches(old_name, new_name, ob->soft->namedVG_Spring_K, sizeof(ob->soft->namedVG_Spring_K));
+  }
+}
+
 /** \} */
 
 /* -------------------------------------------------------------------- */
@@ -122,7 +328,8 @@ bDeformGroup *BKE_object_defgroup_add(Object *ob)
 MDeformVert *BKE_object_defgroup_data_create(ID *id)
 {
   if (GS(id->name) == ID_ME) {
-    return (id_cast<Mesh *>(id))->deform_verts_for_write().data();
+    Mesh *mesh = id_cast<Mesh *>(id);
+    return mesh->deform_verts_for_write().data();
   }
   if (GS(id->name) == ID_LT) {
     Lattice *lt = id_cast<Lattice *>(id);
@@ -170,7 +377,7 @@ bool BKE_object_defgroup_clear(Object *ob, bDeformGroup *dg, const bool use_sele
       }
     }
     else {
-      if (mesh->deform_verts().data()) {
+      if (!mesh->deform_verts().is_empty()) {
         const AttributeAccessor attributes = mesh->attributes();
         const VArray select_vert = *attributes.lookup_or_default<bool>(
             ".select_vert", AttrDomain::Point, false);
