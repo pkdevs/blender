@@ -3754,68 +3754,6 @@ void OBJECT_OT_geometry_nodes_debug_view_toggle(wmOperatorType *ot)
   RNA_def_property_flag(prop, PROP_HIDDEN | PROP_SKIP_SAVE);
 }
 
-/* Test-only operator. Production UI always uses the complete stable identity operator above. */
-static wmOperatorStatus geometry_nodes_debug_view_test_toggle_exec(bContext *C, wmOperator *op)
-{
-  Object *object = CTX_data_active_object(C);
-  ModifierData *md = object ? BKE_object_active_modifier(object) : nullptr;
-  if (!md || md->type != eModifierType_Nodes) {
-    return OPERATOR_CANCELLED;
-  }
-  auto &nmd = *reinterpret_cast<NodesModifierData *>(md);
-  std::shared_ptr<nodes::eval_log::NodesEvalLog> eval_log;
-  const Span<nodes::debug_view::Candidate> candidates = geometry_nodes_debug_view_candidates_get(
-      nmd, eval_log);
-  const int candidate_index = RNA_int_get(op->ptr, "candidate_index");
-  if (!candidates.index_range().contains(candidate_index)) {
-    return OPERATOR_CANCELLED;
-  }
-  nodes::debug_view::initialize_state(candidates, nmd.runtime->debug_view_state);
-  const nodes::debug_view::Identifier &identifier = candidates[candidate_index].identifier;
-  const int expected_enabled = RNA_int_get(op->ptr, "expected_enabled");
-  if (expected_enabled != -1) {
-    return nmd.runtime->debug_view_state.enabled.contains(identifier) == bool(expected_enabled) ?
-               OPERATOR_FINISHED :
-               OPERATOR_CANCELLED;
-  }
-  if (!nodes::debug_view::toggle_candidate(candidates, identifier, nmd.runtime->debug_view_state))
-  {
-    return OPERATOR_CANCELLED;
-  }
-  geometry_nodes_debug_view_notify(C, *object);
-  return OPERATOR_FINISHED;
-}
-
-void OBJECT_OT_geometry_nodes_debug_view_test_toggle(wmOperatorType *ot)
-{
-  ot->name = "Test Geometry Nodes Debug View Toggle";
-  ot->description = "Internal test utility for toggling a deterministically ordered candidate";
-  ot->idname = "OBJECT_OT_geometry_nodes_debug_view_test_toggle";
-  ot->exec = geometry_nodes_debug_view_test_toggle_exec;
-  ot->flag = OPTYPE_INTERNAL;
-
-  PropertyRNA *prop = RNA_def_int(ot->srna,
-                                  "candidate_index",
-                                  -1,
-                                  -1,
-                                  INT_MAX,
-                                  "Candidate Index",
-                                  "Deterministically ordered test candidate",
-                                  -1,
-                                  INT_MAX);
-  RNA_def_property_flag(prop, PROP_HIDDEN | PROP_SKIP_SAVE);
-  prop = RNA_def_int(ot->srna,
-                     "expected_enabled",
-                     -1,
-                     -1,
-                     1,
-                     "Expected Enabled State",
-                     "Test the candidate state instead of toggling it; -1 toggles",
-                     -1,
-                     1);
-  RNA_def_property_flag(prop, PROP_HIDDEN | PROP_SKIP_SAVE);
-}
-
 /** \} */
 
 /* ------------------------------------------------------------------- */
