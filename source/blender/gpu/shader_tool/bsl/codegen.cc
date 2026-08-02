@@ -28,7 +28,7 @@ static string to_uppercase(string str)
 }
 
 struct CodegenContext : NodeErrorHandler {
-  SymbolTable &symbols;
+  SymbolTable &table;
   metadata::Source &metadata;
 
   struct StringBuilder {
@@ -76,7 +76,7 @@ struct CodegenContext : NodeErrorHandler {
                  metadata::Source &metadata,
                  SourceProcessor::ErrorHandler &error_handler)
       : NodeErrorHandler(error_handler),
-        symbols(symbols),
+        table(symbols),
         metadata(metadata),
         builder(Token::invalid(&parser))
   {
@@ -277,7 +277,7 @@ struct CodegenContext : NodeErrorHandler {
 
   void pipeline_decl(PipelineDecl stmt, SymbolScope &scope)
   {
-    SymbolVariable *pipeline = scope.lookup_variable(symbols, stmt.identifier());
+    SymbolVariable *pipeline = scope.lookup_variable(table, stmt.identifier());
 
     const bool is_graphic = stmt.type().str() == "PipelineGraphic";
 
@@ -298,8 +298,8 @@ struct CodegenContext : NodeErrorHandler {
         return;
       }
       /* Resolve vertex function. */
-      auto *fn = scope.lookup_function(symbols, LocalVar(vert_fn.child_first()).identifier())
-                     .unwrap(this);
+      auto *fn =
+          scope.lookup_function(table, LocalVar(vert_fn.child_first()).identifier()).unwrap(this);
       if (fn->entry_point_type != SymbolFunction::EntryPointType::VERT) {
         error(vert_fn, Diag::ExpectedVertexShaderEntryPoint);
         return;
@@ -314,8 +314,8 @@ struct CodegenContext : NodeErrorHandler {
         return;
       }
       /* Resolve fragment function. */
-      auto *fn2 = scope.lookup_function(symbols, LocalVar(frag_fn.child_first()).identifier())
-                      .unwrap(this);
+      auto *fn2 =
+          scope.lookup_function(table, LocalVar(frag_fn.child_first()).identifier()).unwrap(this);
       if (fn2->entry_point_type != SymbolFunction::EntryPointType::FRAG) {
         error(frag_fn, Diag::ExpectedFragmentShaderEntryPoint);
         return;
@@ -333,8 +333,8 @@ struct CodegenContext : NodeErrorHandler {
         return;
       }
       /* Resolve compute function. */
-      auto *fn = scope.lookup_function(symbols, LocalVar(comp_fn.child_first()).identifier())
-                     .unwrap(this);
+      auto *fn =
+          scope.lookup_function(table, LocalVar(comp_fn.child_first()).identifier()).unwrap(this);
       if (fn->entry_point_type != SymbolFunction::EntryPointType::COMP) {
         error(comp_fn, Diag::ExpectedComputeShaderEntryPoint);
         return;
@@ -348,7 +348,7 @@ struct CodegenContext : NodeErrorHandler {
 
     while (constants_init.is_valid()) {
       if (Constructor ctor(constants_init.child_first()); ctor.is_valid()) {
-        auto *cls = scope.lookup_class(symbols, ctor.id()).unwrap(this);
+        auto *cls = scope.lookup_class(table, ctor.id()).unwrap(this);
         builder << cls->identifier;
         builder << ctor.initializer_list();
       }
@@ -448,7 +448,7 @@ struct CodegenContext : NodeErrorHandler {
       return;
     }
     Declarator decl = init_stmt.child_first(NodeType::Declarator);
-    SymbolVariable *var = scope.lookup_variable(symbols, decl.identifier());
+    SymbolVariable *var = scope.lookup_variable(table, decl.identifier());
     if (var->is_error) {
       error(decl.identifier(), Diag::UnknownVariable, decl.identifier().str());
       return;
@@ -460,7 +460,7 @@ struct CodegenContext : NodeErrorHandler {
     }
     /* Check if loop variable is of integer type. */
     SymbolClass *cls = var->type;
-    if (cls != symbols.int_cls && cls != symbols.uint_cls) {
+    if (cls != table.int_cls && cls != table.uint_cls) {
       error(init_stmt.type(), Diag::UnrolledLoopNonIntVar);
       return;
     }
@@ -470,7 +470,7 @@ struct CodegenContext : NodeErrorHandler {
       error(decl, Diag::UnrolledLoopMissingAssignment);
       return;
     }
-    auto result = symbols.expr_type_analysis(scope, init_expr.child_first()).unwrap(this);
+    auto result = table.expr_type_analysis(scope, init_expr.child_first()).unwrap(this);
     if (!result.is_constexpr()) {
       error(decl, Diag::UnrolledLoopNotConstexpr);
       return;
@@ -492,7 +492,7 @@ struct CodegenContext : NodeErrorHandler {
     /* Run a small virtual machine. For each iteration, check the condition, and run the loop
      * statement. */
     for (int i = 0;; i++) {
-      auto result = symbols.expr_type_analysis(scope, cond_expr.child_first()).unwrap(this);
+      auto result = table.expr_type_analysis(scope, cond_expr.child_first()).unwrap(this);
       if (!result.is_constexpr()) {
         error(cond_expr, Diag::UnrolledLoopNotConstexpr);
         break;
@@ -542,7 +542,7 @@ struct CodegenContext : NodeErrorHandler {
       }
 
       if (local_var.is_valid()) {
-        if (scope.lookup_variable(symbols, local_var.identifier()) != var) {
+        if (scope.lookup_variable(table, local_var.identifier()) != var) {
           error(expr, Diag::UnrolledLoopMustAssignToVar, var->identifier);
           return 0;
         }
@@ -564,7 +564,7 @@ struct CodegenContext : NodeErrorHandler {
        * We have to handle it ourselves. */
       LocalVar local_var = expr.child_first();
       if (local_var.is_valid()) {
-        if (scope.lookup_variable(symbols, local_var.identifier()) != var) {
+        if (scope.lookup_variable(table, local_var.identifier()) != var) {
           error(expr, Diag::UnrolledLoopMustAssignToVar, var->identifier);
           return 0;
         }
@@ -572,7 +572,7 @@ struct CodegenContext : NodeErrorHandler {
         if (op.type() == NodeType::Op) {
           Node node = op.next();
 
-          auto result = symbols.expr_type_analysis(scope, node).unwrap(this);
+          auto result = table.expr_type_analysis(scope, node).unwrap(this);
           if (!result.is_constexpr()) {
             error(expr, Diag::UnrolledLoopNotConstexpr, var->identifier);
             return 0;
@@ -701,7 +701,7 @@ struct CodegenContext : NodeErrorHandler {
     SymbolClass *cls_ptr = inst_cls;
     if (!cls_ptr) {
       if (decl.identifier().is_valid()) {
-        cls_ptr = scope.lookup_class(symbols, decl.identifier()).unwrap(this);
+        cls_ptr = scope.lookup_class(table, decl.identifier()).unwrap(this);
       }
       else {
         cls_ptr = scope.lookup_class("a" + to_string(nested_id));
@@ -926,7 +926,7 @@ struct CodegenContext : NodeErrorHandler {
             if (!decl.type().is_static()) {
               SymbolClass *type = id_type_lookup_resolved(decl.type().id(), cls);
               for (Declarator d : decl.children_of_type<Declarator>()) {
-                SymbolVariable *var = cls.lookup_variable(symbols, d.identifier());
+                SymbolVariable *var = cls.lookup_variable(table, d.identifier());
                 if (var->is_static) {
                   continue;
                 }
@@ -1234,7 +1234,7 @@ struct CodegenContext : NodeErrorHandler {
     for (FuncArg arg : decl.arguments().children_of_type<FuncArg>()) {
       auto attr = resource_type_from_attributes(arg.attributes()).unwrap(this);
 
-      SymbolVariable *var = fn.lookup_variable(symbols, arg.identifier());
+      SymbolVariable *var = fn.lookup_variable(table, arg.identifier());
 
       const string &resolved_type = var->type->identifier;
 
@@ -1396,20 +1396,20 @@ struct CodegenContext : NodeErrorHandler {
   {
     if (temp_decl.is_class()) {
       ClassDecl decl = temp_decl.decl();
-      auto *base_cls = scope.lookup_class_base(symbols, decl.identifier());
+      auto *base_cls = scope.lookup_class_base(table, decl.identifier());
       /* Instantiation should have been checked already. */
       auto [temp_cls, full_id, _] = base_cls->template_data->lookup_inst(
-          temp_decl.parameters(), scope, symbols);
+          temp_decl.parameters(), scope, table);
       NOTE(decl.identifier(), Diag::NoteInstantiationClassTemplateRequested, full_id);
       Node decl_tmp = base_cls->template_data->decl.decl();
       class_decl(decl_tmp, scope, 0, temp_cls);
     }
     else {
       FuncForwardDecl decl = temp_decl.decl();
-      auto *base_fn = scope.lookup_function_base(symbols, decl.identifier());
+      auto *base_fn = scope.lookup_function_base(table, decl.identifier());
       /* Instantiation should have been checked already. */
       auto [temp_fn, full_id, _] = base_fn->template_data->lookup_inst(
-          temp_decl.parameters(), scope, symbols);
+          temp_decl.parameters(), scope, table);
       NOTE(decl.identifier(), Diag::NoteInstantiationFuncTemplateRequested, full_id);
       Node decl_tmp = base_fn->template_data->decl.decl();
       func_decl(decl_tmp, *temp_fn->parent, temp_fn);
@@ -1420,19 +1420,19 @@ struct CodegenContext : NodeErrorHandler {
   {
     if (temp_spec.is_class()) {
       ClassDecl decl = temp_spec.decl();
-      auto *base_cls = scope.lookup_class_base(symbols, decl.identifier());
+      auto *base_cls = scope.lookup_class_base(table, decl.identifier());
       /* Instantiation should have been checked already. */
       auto [temp_cls, full_id, _] = base_cls->template_data->lookup_inst(
-          temp_spec.parameters(), scope, symbols);
+          temp_spec.parameters(), scope, table);
       NOTE(decl.identifier(), Diag::NoteInstantiationClassTemplateRequested, full_id);
       class_decl(decl, scope, 0, temp_cls);
     }
     else {
       FuncDecl decl = temp_spec.decl();
-      auto *base_fn = scope.lookup_function_base(symbols, decl.identifier());
+      auto *base_fn = scope.lookup_function_base(table, decl.identifier());
       /* Instantiation should have been checked already. */
       auto [temp_fn, full_id, _] = base_fn->template_data->lookup_inst(
-          temp_spec.parameters(), scope, symbols);
+          temp_spec.parameters(), scope, table);
       NOTE(decl.identifier(), Diag::NoteInstantiationFuncTemplateRequested, full_id);
       func_decl(decl, *temp_fn->parent, temp_fn);
     }
@@ -1456,7 +1456,7 @@ struct CodegenContext : NodeErrorHandler {
     bool constexpr_value = true;
     if (cond.is_valid()) {
       LocalStmt stmt = cond.child_first();
-      auto result = symbols.expr_type_analysis(scope, stmt.expr().child_first()).unwrap(this);
+      auto result = table.expr_type_analysis(scope, stmt.expr().child_first()).unwrap(this);
 
       constexpr_value = value_as<int>(result.value) != 0;
 
@@ -1543,7 +1543,7 @@ struct CodegenContext : NodeErrorHandler {
       LocalStmt stmt(cond.child_first());
       int unused_count = 0;
       /* Checks that condition is made of compilation constants or constexpr. */
-      auto cond_str = symbols
+      auto cond_str = table
                           .expr_to_string(
                               parent_scope, stmt.expr().child_first(), unused_count, true)
                           .unwrap(this);
@@ -1596,14 +1596,14 @@ struct CodegenContext : NodeErrorHandler {
             (!is_for_loop || (child.prev().is_valid() && child.next().is_valid())))
         {
           Node start = LocalStmt(child).expr().child_first();
-          auto *type = symbols.expr_type_analysis(scope, start).unwrap(this).type;
-          if (type == symbols.int_cls) {
+          auto *type = table.expr_type_analysis(scope, start).unwrap(this).type;
+          if (type == table.int_cls) {
             builder.ss << "!=0";
           }
-          else if (type == symbols.uint_cls) {
+          else if (type == table.uint_cls) {
             builder.ss << "!=0u";
           }
-          else if (type != symbols.bool_cls && type != symbols.bool32_t_cls) {
+          else if (type != table.bool_cls && type != table.bool32_t_cls) {
             error(child, Diag::TypeNotConvertibleToBool, type->original);
           }
         }
@@ -1700,7 +1700,7 @@ struct CodegenContext : NodeErrorHandler {
 
     if (decl.type().id().str() == "auto") {
       Declarator d = decl.child_first(NodeType::Declarator);
-      auto *cls = symbols.resolve_auto_type(scope, d).unwrap(this);
+      auto *cls = table.resolve_auto_type(scope, d).unwrap(this);
       builder << cls->identifier + trivia(decl.type().id());
     }
     else {
@@ -1887,7 +1887,7 @@ struct CodegenContext : NodeErrorHandler {
         error(sub, "Multi-dimensional arrays cannot have implicit size");
       }
       else {
-        auto [result, err] = symbols.expr_type_analysis(scope, sub.expr().child_first());
+        auto [result, err] = table.expr_type_analysis(scope, sub.expr().child_first());
         /* Note: Do not report error. The size might be defined by compilation constant. */
         if (!err && result.is_constexpr()) {
           if (value_as<uint>(result.value) == 0) {
@@ -1902,7 +1902,7 @@ struct CodegenContext : NodeErrorHandler {
   void declarator(Declarator decl, SymbolScope &scope, bool skip_value = false)
   {
     ArrayDecl array = decl.array();
-    SymbolVariable *var = scope.lookup_variable(symbols, decl.identifier());
+    SymbolVariable *var = scope.lookup_variable(table, decl.identifier());
 
     const bool par = match_if('(');
     if (var->type->is_srt()) {
@@ -1959,7 +1959,7 @@ struct CodegenContext : NodeErrorHandler {
 
   void constructor(Constructor construct, SymbolScope &scope)
   {
-    auto *cls = scope.lookup_class(symbols, construct.id()).unwrap(this);
+    auto *cls = scope.lookup_class(table, construct.id()).unwrap(this);
     if (cls->is_srt()) {
       error(construct, Diag::ResourceTableConstructorNotAllowed, cls->identifier);
     }
@@ -2069,7 +2069,7 @@ struct CodegenContext : NodeErrorHandler {
   SymbolClass *id_type_lookup_resolved(IdQualified id, const SymbolScope &scope)
   {
     assert(id.is_valid());
-    auto *cls = scope.lookup_class(symbols, id).unwrap(this);
+    auto *cls = scope.lookup_class(table, id).unwrap(this);
     if (cls->template_data && !id.template_params().is_valid()) {
       error(id, "Missing explicit template arguments");
     }
@@ -2103,7 +2103,7 @@ struct CodegenContext : NodeErrorHandler {
                                           const SymbolScope &param_scope)
   {
     assert(id.is_valid());
-    return scope.lookup_function(symbols, id, params, param_scope).unwrap(this);
+    return scope.lookup_function(table, id, params, param_scope).unwrap(this);
   }
 
   template<typename ArgOrParamList>
@@ -2122,7 +2122,7 @@ struct CodegenContext : NodeErrorHandler {
   SymbolVariable *id_var_resolved(IdQualified id, const SymbolScope &scope)
   {
     assert(id.is_valid());
-    SymbolVariable *var = scope.lookup_variable(symbols, id);
+    SymbolVariable *var = scope.lookup_variable(table, id);
     if (var->is_error) {
       error(id, Diag::UnknownVariable, string(id.str()));
       builder << id;
@@ -2165,7 +2165,7 @@ struct CodegenContext : NodeErrorHandler {
   SymbolVariable *id_var_decl_resolved(IdQualified id, const SymbolScope &scope)
   {
     assert(id.is_valid());
-    SymbolVariable *var = scope.lookup_variable(symbols, id);
+    SymbolVariable *var = scope.lookup_variable(table, id);
     if (var->is_error) {
       error(id, Diag::UnknownVariable, string(id.str()));
       builder << id;
@@ -2203,7 +2203,7 @@ struct CodegenContext : NodeErrorHandler {
 
     for (VarDecl decl : body.children_of_type<VarDecl>()) {
       Declarator d = decl.child_first(NodeType::Declarator);
-      SymbolVariable *var = cls.lookup_variable(symbols, d.identifier());
+      SymbolVariable *var = cls.lookup_variable(table, d.identifier());
       const string &type_name = var->type->identifier;
       const string &var_name = var->identifier;
       switch (cls.srt_type) {
@@ -2309,13 +2309,13 @@ struct CodegenContext : NodeErrorHandler {
   {
     Node node = expr.child_first();
     if (LocalVar var = node; var.is_valid()) {
-      SymbolVariable *sym = cls.lookup_variable(symbols, var.identifier());
+      SymbolVariable *sym = cls.lookup_variable(table, var.identifier());
       if (sym->is_error) {
         /* This could be a macro. Don't make an error. */
         return string(expr.str());
       }
       int enum_val = value_as<int>(sym->value);
-      if (auto it = symbols.image_formats.find(enum_val); it != symbols.image_formats.end()) {
+      if (auto it = table.image_formats.find(enum_val); it != table.image_formats.end()) {
         return it->second;
       }
     }
