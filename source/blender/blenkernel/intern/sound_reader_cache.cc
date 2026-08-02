@@ -98,23 +98,24 @@ SoundReaderCache::SoundReaderCache(std::shared_ptr<aud::ISound> sound)
 
 SoundReaderCache::~SoundReaderCache() = default;
 
-std::optional<SoundReaderLease> SoundReaderCache::acquire() const
+SoundReaderLease SoundReaderCache::acquire()
 {
+  std::shared_ptr<SoundReaderCacheState> state = this->state_;
   std::shared_ptr<aud::IReader> reader;
   {
-    std::lock_guard lock{this->state_->mutex};
-    if (!this->state_->idle_readers.is_empty()) {
-      reader = this->state_->idle_readers.pop_last();
+    std::lock_guard lock{state->mutex};
+    if (!state->idle_readers.is_empty()) {
+      reader = state->idle_readers.pop_last();
     }
   }
 
-  if (!reader && this->state_->sound) {
-    reader = this->state_->sound->createReader();
+  if (!reader && state->sound) {
+    reader = state->sound->createReader();
   }
   if (!reader) {
-    return std::nullopt;
+    return {};
   }
-  return SoundReaderLease(this->state_, std::move(reader));
+  return SoundReaderLease(std::move(state), std::move(reader));
 }
 
 }  // namespace blender::bke

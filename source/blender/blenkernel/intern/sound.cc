@@ -28,7 +28,6 @@
 #include "BLI_listbase.hh"
 #include "BLI_math_base_c.hh"
 #include "BLI_math_rotation_c.hh"
-#include "BLI_mutex.hh"
 #include "BLI_path_utils.hh"
 #include "BLI_string.hh"
 #include "BLI_threads.hh"
@@ -110,8 +109,6 @@
 
 namespace blender {
 
-static void sound_init_runtime(bSound *sound);
-
 namespace bke {
 struct SceneAudioRuntime;
 
@@ -140,7 +137,8 @@ struct SoundRuntime {
   Vector<float> *waveform = nullptr;
   SoundTags tags = SoundTags::None;
 
-  /* #ConcurrentMap has no clear operation, so reconstruct it when the sound is reloaded. */
+  /* Cached samplers retain the old sound and reader cache. Reconstruct this map on reload because
+   * #ConcurrentMap has no clear operation. */
   std::optional<bSoundFrequencySamplerMap> samplers{std::in_place};
 #ifdef WITH_AUDASPACE
   /** Reusable readers shared by all consumers of this sound. */
@@ -2292,11 +2290,10 @@ std::optional<Array<float>> bSoundFrequencySampler::compute_fft(const int start_
     if (!readers_) {
       return std::nullopt;
     }
-    std::optional<SoundReaderLease> reader_lease = readers_->acquire();
-    if (!reader_lease) {
+    SoundReaderLease reader = readers_->acquire();
+    if (!reader) {
       return std::nullopt;
     }
-    SoundReaderLease &reader = *reader_lease;
     channels_num = reader->getSpecs().channels;
     read_buffer_extra.reinitialize((key_.fft_size + warmup_samples) * channels_num);
     try {

@@ -7,7 +7,6 @@
 #if defined(WITH_AUDASPACE)
 
 #  include <memory>
-#  include <optional>
 
 #  include "BLI_utility_mixins.hh"
 
@@ -25,6 +24,10 @@ class SoundReaderCache;
 /** Exclusive access to a sound reader. The reader returns to its cache on destruction. */
 class SoundReaderLease : NonCopyable {
  private:
+  /**
+   * Keep the shared cache state alive so a lease can return its reader after the outer cache has
+   * been replaced or destroyed.
+   */
   std::shared_ptr<SoundReaderCacheState> state_;
   std::shared_ptr<aud::IReader> reader_;
 
@@ -65,7 +68,8 @@ class SoundReaderCache : NonCopyable {
   explicit SoundReaderCache(std::shared_ptr<aud::ISound> sound);
   ~SoundReaderCache();
 
-  std::optional<SoundReaderLease> acquire() const;
+  /** Acquire a reader. Returns an empty lease when reader creation returns null. */
+  SoundReaderLease acquire();
 };
 
 }  // namespace blender::bke
