@@ -834,6 +834,8 @@ add_blender_test(
 add_blender_test(
   bl_geometry_nodes_debug_view
   --python ${CMAKE_CURRENT_LIST_DIR}/bl_geometry_nodes_debug_view.py
+  --
+  --testdir "${TEST_SRC_DIR}/modeling/geometry_nodes/debug_view"
 )
 
 if(TEST_SRC_DIR_EXISTS)

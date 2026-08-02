@@ -3,11 +3,15 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 
 import os
+import pathlib
 import sys
 import tempfile
 import unittest
 
 import bpy
+
+
+args = None
 
 
 class GeometryNodesDebugViewTest(unittest.TestCase):
@@ -395,5 +399,90 @@ class GeometryNodesDebugViewTest(unittest.TestCase):
             self.assertTrue(loaded_modifier.show_debug_views)
 
 
+class GeometryNodesDebugViewFixtureTest(unittest.TestCase):
+    def setUp(self):
+        if args is None or args.testdir is None:
+            self.skipTest("Debug View fixture test directory was not provided")
+
+        fixture_path = args.testdir / "persistent_debug_view.blend"
+        self.assertTrue(fixture_path.exists(), f"Missing fixture: {fixture_path}")
+        bpy.ops.wm.open_mainfile(filepath=str(fixture_path))
+
+        self.obj = bpy.data.objects["Persistent Debug View Object"]
+        self.modifier = self.obj.modifiers["Persistent Debug View Modifier"]
+        self.root_group = bpy.data.node_groups["Persistent Debug View Root"]
+        self.nested_group = bpy.data.node_groups["Nested Debug Group"]
+
+    def evaluate(self):
+        bpy.context.view_layer.update()
+        depsgraph = bpy.context.evaluated_depsgraph_get()
+        evaluated_obj = self.obj.evaluated_get(depsgraph)
+        return len(evaluated_obj.data.vertices)
+
+    def warning_messages(self):
+        return [warning.message for warning in self.modifier.node_warnings]
+
+    def test_fixture_smoke(self):
+        self.assertEqual(len(bpy.data.objects), 1)
+        self.assertEqual(self.modifier.node_group, self.root_group)
+
+        root_a = self.root_group.nodes["Root Debug A"]
+        root_b = self.root_group.nodes["Root Debug B"]
+        nested = self.nested_group.nodes["Nested Debug"]
+        self.assertEqual(root_a.label, "Root Debug A")
+        self.assertEqual(root_b.label, "Root Debug B")
+        self.assertEqual(nested.label, "Nested Debug")
+        self.assertTrue(root_a.is_debug_view)
+        self.assertTrue(root_b.is_debug_view)
+        self.assertTrue(nested.is_debug_view)
+
+        root_a_show = root_a.inputs["Show"]
+        root_b_show = root_b.inputs["Show"]
+        nested_show = nested.inputs["Show"]
+        self.assertEqual(len(root_a_show.links), 0)
+        self.assertTrue(root_a_show.default_value)
+        self.assertEqual(len(root_b_show.links), 0)
+        self.assertTrue(root_b_show.default_value)
+        self.assertEqual(len(nested_show.links), 0)
+        self.assertTrue(nested_show.default_value)
+
+        self.assertFalse(self.modifier.show_debug_views)
+        self.assertEqual(self.evaluate(), 8)
+        self.assertEqual(self.warning_messages(), [])
+
+        self.modifier.show_debug_views = True
+        self.assertEqual(self.evaluate(), 8)
+        warnings = self.warning_messages()
+        self.assertIn("ROOT_DEBUG_A_EVALUATED", warnings)
+        self.assertIn("ROOT_DEBUG_B_EVALUATED", warnings)
+        self.assertIn("NESTED_DEBUG_EVALUATED", warnings)
+
+        root_b_show.default_value = False
+        self.assertEqual(self.evaluate(), 8)
+        warnings = self.warning_messages()
+        self.assertNotIn("ROOT_DEBUG_B_EVALUATED", warnings)
+        self.assertIn("ROOT_DEBUG_A_EVALUATED", warnings)
+        self.assertIn("NESTED_DEBUG_EVALUATED", warnings)
+
+        root_b_show.default_value = True
+        self.assertEqual(self.evaluate(), 8)
+
+
+def main():
+    global args
+    import argparse
+
+    if '--' in sys.argv:
+        argv = [sys.argv[0]] + sys.argv[sys.argv.index('--') + 1:]
+    else:
+        argv = sys.argv
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--testdir', type=pathlib.Path)
+    args, remaining = parser.parse_known_args(argv)
+
+    unittest.main(argv=remaining)
+
+
 if __name__ == "__main__":
-    unittest.main(argv=[sys.argv[0]])
+    main()
