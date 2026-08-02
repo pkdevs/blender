@@ -300,21 +300,21 @@ int b; int &a = ++b;)";
 TEST(shader_tool, Constexpr)
 {
   {
-    string input =
-        "static constexpr int a{1};\n"
-        "static constexpr int b = {3};\n"
-        //"// static constexpr int c = int{3}; /* TODO */\n"
-        "static constexpr int d = 4;\n"
-        "static constexpr int e = {{4}};\n"
-        "static constexpr int f = (a + b / 2) * d - e;\n"
-        "int func() { return f; }\n";
-    string expect =
-        "       constexpr int a= 1;\n"
-        "       constexpr int b = 3;\n"
-        "       constexpr int d = 4;\n"
-        "       constexpr int e = 4;\n"
-        "       constexpr int f = 4;\n"
-        "int func() { return 4; }\n";
+    string input = R"(
+static constexpr int a{1};
+static constexpr int b = {3};
+// static constexpr int c = int{3}; /* TODO */
+static constexpr int d = 4;
+static constexpr int e = {{4}};
+static constexpr int f = (a + b / 2) * d - e;
+int func() { return f; })";
+    string expect = R"(
+       constexpr int a= 1;
+       constexpr int b = 3;
+       constexpr int d = 4;
+       constexpr int e = 4;
+       constexpr int f = 4;
+int func() { return 4; })";
     auto [output, _, error] = process_test_string(input, Language::BSL);
     EXPECT_EQ(output, expect);
     EXPECT_EQ(error, "");

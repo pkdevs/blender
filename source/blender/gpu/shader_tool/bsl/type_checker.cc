@@ -128,7 +128,7 @@ struct ExpressionTypeParser
   ExpressionResult parenthesis(const ast::Node &t, BindingPower p)
   {
     /* Enter sub-expression */
-    this->node = t.child_first();
+    this->node = ast::ExprSub(t).expr().child_first();
     /* Parse the whole parenthesis expression. */
     ExpressionResult v = expr(p);
     /* Exit sub-expression. */
