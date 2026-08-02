@@ -16,20 +16,6 @@ class VertexGroupRenameTest(unittest.TestCase):
     def setUp(self) -> None:
         bpy.ops.wm.read_homefile(use_factory_startup=True)
 
-    def test_modifier_reference_updates_on_vertex_group_rename(self):
-        bpy.ops.mesh.primitive_cube_add(size=2.0, location=(0.0, 0.0, 0.0))
-        obj = bpy.context.active_object
-
-        vg = obj.vertex_groups.new(name="Group")
-        bpy.ops.object.modifier_add(type='ARMATURE')
-        modifier = obj.modifiers[-1]
-        modifier.vertex_group = vg.name
-
-        vg.name = "RenamedGroup"
-
-        self.assertEqual(modifier.vertex_group, "RenamedGroup")
-        self.assertIn("RenamedGroup", obj.vertex_groups)
-
     def test_all_modifier_references_update_on_vertex_group_rename(self):
         # Modifiers that store vertex group names, mapping the modifier type to
         # the RNA properties (on the modifier) holding those names.
