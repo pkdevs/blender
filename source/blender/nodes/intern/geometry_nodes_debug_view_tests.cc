@@ -193,7 +193,7 @@ TEST(GeometryNodesDebugView, FirstInitialization)
   EXPECT_EQ(state.enabled.size(), 2);
 }
 
-TEST(GeometryNodesDebugView, ZeroOneAndManyEnabledCandidates)
+TEST(GeometryNodesDebugView, IndependentTogglingAndDisableAll)
 {
   Vector<Candidate> candidates;
   candidates.append(candidate(10, 1, {1}, {}, "First"));
@@ -202,39 +202,27 @@ TEST(GeometryNodesDebugView, ZeroOneAndManyEnabledCandidates)
   finalize_candidates(candidates);
 
   State state;
-  state.initialized = true;
-  EXPECT_TRUE(enabled_candidate_indices(candidates, state).is_empty());
-
-  state.enabled.add(candidates[1].identifier);
-  EXPECT_EQ(enabled_candidate_indices(candidates, state), Vector<int>({1}));
-
-  state.enabled.add(candidates[0].identifier);
-  state.enabled.add(candidates[2].identifier);
-  EXPECT_EQ(enabled_candidate_indices(candidates, state), Vector<int>({0, 1, 2}));
-}
-
-TEST(GeometryNodesDebugView, IndependentTogglingAndDisableAll)
-{
-  Vector<Candidate> candidates;
-  candidates.append(candidate(10, 1, {1}, {}, "First"));
-  candidates.append(candidate(20, 2, {2}, {}, "Second"));
-  finalize_candidates(candidates);
-
-  State state;
   initialize_state(candidates, state);
+  EXPECT_EQ(enabled_candidate_indices(candidates, state), Vector<int>({0}));
+
   EXPECT_TRUE(toggle_candidate(candidates, candidates[1].identifier, state));
-  EXPECT_TRUE(state.enabled.contains(candidates[0].identifier));
-  EXPECT_TRUE(state.enabled.contains(candidates[1].identifier));
+  EXPECT_EQ(enabled_candidate_indices(candidates, state), Vector<int>({0, 1}));
 
   EXPECT_TRUE(toggle_candidate(candidates, candidates[0].identifier, state));
-  EXPECT_FALSE(state.enabled.contains(candidates[0].identifier));
-  EXPECT_TRUE(state.enabled.contains(candidates[1].identifier));
+  EXPECT_EQ(enabled_candidate_indices(candidates, state), Vector<int>({1}));
+
+  EXPECT_TRUE(toggle_candidate(candidates, candidates[2].identifier, state));
+  EXPECT_EQ(enabled_candidate_indices(candidates, state), Vector<int>({1, 2}));
 
   EXPECT_TRUE(toggle_candidate(candidates, candidates[1].identifier, state));
-  EXPECT_TRUE(state.enabled.is_empty());
-  EXPECT_TRUE(state.initialized);
+  EXPECT_EQ(enabled_candidate_indices(candidates, state), Vector<int>({2}));
+
+  EXPECT_TRUE(toggle_candidate(candidates, candidates[2].identifier, state));
+  EXPECT_TRUE(enabled_candidate_indices(candidates, state).is_empty());
+
   EXPECT_FALSE(toggle_candidate(candidates, identifier(99, 99), state));
   EXPECT_TRUE(state.enabled.is_empty());
+  EXPECT_TRUE(enabled_candidate_indices(candidates, state).is_empty());
 }
 
 TEST(GeometryNodesDebugView, StaleIdentityRestorationAndNewCandidatesDefaultOff)
@@ -242,41 +230,39 @@ TEST(GeometryNodesDebugView, StaleIdentityRestorationAndNewCandidatesDefaultOff)
   Vector<Candidate> candidates;
   candidates.append(candidate(10, 1, {1}, {}, "First"));
   candidates.append(candidate(20, 2, {2}, {}, "Second"));
-  finalize_candidates(candidates);
-
-  State state;
-  initialize_state(candidates, state);
-  toggle_candidate(candidates, candidates[1].identifier, state);
-  EXPECT_EQ(state.enabled.size(), 2);
-
-  Vector<Candidate> changed_candidates = {candidates[1], candidate(30, 3, {3}, {}, "New")};
-  finalize_candidates(changed_candidates);
-  EXPECT_EQ(enabled_candidate_indices(changed_candidates, state), Vector<int>({0}));
-  EXPECT_EQ(state.enabled.size(), 2);
-  EXPECT_FALSE(state.enabled.contains(changed_candidates[1].identifier));
-
-  changed_candidates.append(candidates[0]);
-  finalize_candidates(changed_candidates);
-  EXPECT_EQ(enabled_candidate_indices(changed_candidates, state), Vector<int>({0, 1}));
-  EXPECT_EQ(state.enabled.size(), 2);
-}
-
-TEST(GeometryNodesDebugView, RemovingCandidateDoesNotChangeOtherStates)
-{
-  Vector<Candidate> candidates;
-  candidates.append(candidate(10, 1, {1}, {}, "First"));
-  candidates.append(candidate(20, 2, {2}, {}, "Second"));
   candidates.append(candidate(30, 3, {3}, {}, "Third"));
   finalize_candidates(candidates);
 
   State state;
-  state.initialized = true;
-  state.enabled.add(candidates[0].identifier);
-  state.enabled.add(candidates[2].identifier);
-  candidates.remove(1);
-
-  EXPECT_EQ(enabled_candidate_indices(candidates, state), Vector<int>({0, 1}));
+  initialize_state(candidates, state);
+  EXPECT_TRUE(toggle_candidate(candidates, candidates[2].identifier, state));
   EXPECT_EQ(state.enabled.size(), 2);
+
+  const Candidate removed_candidate = candidates[0];
+  const Candidate new_candidate = candidate(40, 4, {4}, {}, "New");
+  Vector<Candidate> changed_candidates = {candidates[0], candidates[2], new_candidate};
+  finalize_candidates(changed_candidates);
+  EXPECT_EQ(enabled_candidate_indices(changed_candidates, state), Vector<int>({0, 1}));
+  EXPECT_EQ(state.enabled.size(), 2);
+  EXPECT_TRUE(state.enabled.contains(candidates[0].identifier));
+  EXPECT_TRUE(state.enabled.contains(candidates[2].identifier));
+  EXPECT_FALSE(state.enabled.contains(new_candidate.identifier));
+
+  changed_candidates.remove(0);
+  finalize_candidates(changed_candidates);
+  EXPECT_EQ(enabled_candidate_indices(changed_candidates, state), Vector<int>({0}));
+  EXPECT_EQ(state.enabled.size(), 2);
+  EXPECT_TRUE(state.enabled.contains(candidates[2].identifier));
+  EXPECT_TRUE(state.enabled.contains(removed_candidate.identifier));
+  EXPECT_FALSE(state.enabled.contains(new_candidate.identifier));
+
+  changed_candidates.append(removed_candidate);
+  finalize_candidates(changed_candidates);
+  EXPECT_EQ(enabled_candidate_indices(changed_candidates, state), Vector<int>({0, 1}));
+  EXPECT_EQ(state.enabled.size(), 2);
+  EXPECT_TRUE(state.enabled.contains(removed_candidate.identifier));
+  EXPECT_TRUE(state.enabled.contains(candidates[2].identifier));
+  EXPECT_FALSE(state.enabled.contains(new_candidate.identifier));
 }
 
 TEST(GeometryNodesDebugView, StateIsIndependentBetweenModifiersAndObjectsSharingNodeGroup)
