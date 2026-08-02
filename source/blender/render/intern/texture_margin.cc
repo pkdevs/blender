@@ -324,7 +324,7 @@ class TextureMarginMap {
   /**
    * Walk over the map and look up the pixel from the adjacent face.
    */
-  void lookup_pixels(ImBuf *ibuf, ImBuf *im_read, int maxFaceSteps)
+  void lookup_pixels(ImBuf *ibuf, ImBuf *im_read, int max_face_steps)
   {
     float4 *ibuf_ptr_fl = reinterpret_cast<float4 *>(ibuf->float_data_for_write());
     uchar4 *ibuf_ptr_ch = reinterpret_cast<uchar4 *>(ibuf->byte_data_for_write());
@@ -400,7 +400,7 @@ class TextureMarginMap {
 
         bool found_pixel_in_face = false;
 
-        for (int i = 0; i < maxFaceSteps; i++) {
+        for (int i = 0; i < max_face_steps; i++) {
           /* If at least one pixel in the interpolation range contains the target
            * face, then it's safe to sample interpolated data from this point.
            * A better solution is to analytically check if point is inside the
