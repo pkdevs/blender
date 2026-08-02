@@ -183,7 +183,7 @@ struct ExpressionTypeParser
         if (!table->is_convertible(arg.type, table->uint_cls, false)) {
           error(t, Diag::SubscriptNotInt);
         }
-        if (is_reference && !(arg.flags & ExprFlag::Constant)) {
+        if (is_reference && !(arg.flags & ExprFlag::IsConstant)) {
           error(t, Diag::ReferenceCannotBindNonConstSubscript);
         }
 
@@ -239,7 +239,7 @@ struct ExpressionTypeParser
     }
 
     ExprFlag flags = ExprFlag(right.flags);
-    if (flags & ExprFlag::Constexpr) {
+    if (flags & ExprFlag::IsConstexpr) {
       switch (op_type) {
         /* Note that side effects are not propagated. */
         case Increment:
@@ -288,7 +288,7 @@ struct ExpressionTypeParser
     }
 
     ExprFlag flags = ExprFlag(left.flags);
-    if (flags & ExprFlag::Constexpr) {
+    if (flags & ExprFlag::IsConstexpr) {
       switch (op_type) {
         /* Note that side effects are not propagated. */
         case Increment:
@@ -327,7 +327,7 @@ struct ExpressionTypeParser
     SymbolClass *type = it->second->return_type;
     ExprFlag flags = ExprFlag(lhs.flags & rhs.flags);
 
-    if (flags & ExprFlag::Constexpr) {
+    if (flags & ExprFlag::IsConstexpr) {
       switch (op_type) {
         case Multiply:
           return {type, apply_arithmetic(lhs, rhs, [](auto l, auto r) { return l * r; })};
@@ -394,7 +394,7 @@ struct ExpressionTypeParser
     }
 
     ExprFlag flags = ExprFlag(left.flags & tval.flags & fval.flags);
-    if (flags & ExprFlag::Constexpr) {
+    if (flags & ExprFlag::IsConstexpr) {
       return {tval.type, std::get<bool>(left.value) ? tval.value : fval.value};
     }
     /* Operand types match. We can return either. */
@@ -544,6 +544,8 @@ Result<ExpressionResult> SymbolTable::expr_type_analysis(const SymbolScope &scop
                                                          bool is_reference) const
 {
   assert(start_node.is_valid());
+  /* Caller must not pass the Expr node but it's first child. */
+  assert(start_node.type() != ast::NodeType::Expr);
   return ExpressionTypeParser(this, &scope, start_node, is_reference).eval();
 }
 

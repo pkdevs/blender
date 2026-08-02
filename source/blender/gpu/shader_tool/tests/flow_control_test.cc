@@ -223,7 +223,7 @@ for (int i; i < 2; i++) [[unroll]] { i; }
 for (int i = atomicAdd(i, i); i < 2; i++) [[unroll]] { i; }
   )";
     auto [output, _, error] = process_test_local(input, Language::BSL);
-    EXPECT_EQ(error, "constant expression cannot contain function calls");
+    EXPECT_EQ(error, "Non-constant expression in unrolled loop control");
   }
   {
     string input = R"(
@@ -237,7 +237,7 @@ for (int i = 0; i < 2; i++, i++) [[unroll]] { i; }
 for (int i = 0; i < atomicAdd(i, i); i++) [[unroll]] { i; }
   )";
     auto [output, _, error] = process_test_local(input, Language::BSL);
-    EXPECT_EQ(error, "constant expression cannot contain function calls");
+    EXPECT_EQ(error, "Non-constant expression in unrolled loop control");
   }
   {
     string input = R"(

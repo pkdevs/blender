@@ -20,7 +20,7 @@ Result<vector<SymbolClass *>> SymbolFunction::to_arg_types(const SymbolTable &ta
   std::optional<AstNodeException> error;
   vector<SymbolClass *> arg_types;
   for (Expr expr : list.children_of_type<Expr>()) {
-    arg_types.emplace_back(table.expr_type_analysis(scope, expr).unwrap(error).type);
+    arg_types.emplace_back(table.expr_type_analysis(scope, expr.child_first()).unwrap(error).type);
   }
   return {arg_types, error};
 }

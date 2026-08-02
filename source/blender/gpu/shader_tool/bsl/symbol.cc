@@ -769,7 +769,7 @@ struct SymbolParser : NodeErrorHandler {
       return;
     }
 
-    SymbolClass *cls = table.expr_type_analysis(scope, expr).unwrap(this).type;
+    SymbolClass *cls = table.expr_type_analysis(scope, expr.child_first()).unwrap(this).type;
     if (cls->is_error) {
       error(decl, Diag::CannotDeduceAutoType);
       return;
