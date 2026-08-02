@@ -5436,7 +5436,7 @@ PyDoc_STRVAR(
     "   :type dst_index: int\n");
 static PyObject *pyrna_prop_collection_idprop_move(BPy_PropertyRNA *self, PyObject *args)
 {
-  int key = 0, pos = 0;
+  int src_index = 0, dst_index = 0;
 
 #ifdef USE_PEDANTIC_WRITE
   if (rna_disallow_writes && rna_id_write_error(&self->ptr.value(), nullptr)) {
@@ -5448,20 +5448,30 @@ static PyObject *pyrna_prop_collection_idprop_move(BPy_PropertyRNA *self, PyObje
                         "i" /* `src_index` */
                         "i" /* `dst_index` */
                         ":move",
-                        &key,
-                        &pos))
+                        &src_index,
+                        &dst_index))
   {
     PyErr_SetString(PyExc_TypeError, "bpy_prop_collection.move(): expected two ints as arguments");
     return nullptr;
   }
 
-  if (!RNA_property_collection_move(&self->ptr.value(), self->prop, key, pos)) {
-    PyErr_SetString(PyExc_TypeError,
-                    "bpy_prop_collection.move() not supported for this collection");
-    return nullptr;
+  switch (RNA_property_collection_move(&self->ptr.value(), self->prop, src_index, dst_index)) {
+    case eRNAStatus::Success: {
+      Py_RETURN_NONE;
+    }
+    case eRNAStatus::IndexOutOfRange: {
+      PyErr_SetString(PyExc_IndexError, "collection index out of range");
+      return nullptr;
+    }
+    case eRNAStatus::Immutable: {
+      PyErr_SetString(PyExc_TypeError, "collection is not editable");
+      return nullptr;
+    }
+    default:
+      PyErr_SetString(PyExc_TypeError,
+                      "bpy_prop_collection.move() not supported for this collection");
+      return nullptr;
   }
-
-  Py_RETURN_NONE;
 }
 
 PyDoc_STRVAR(
