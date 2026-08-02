@@ -152,6 +152,25 @@ static Vector<EnumPropertyItem> items_value_in(const Span<T> values,
   return items;
 }
 
+static void node_rna(StructRNA *srna)
+{
+  static const Vector<EnumPropertyItem> supported_items = items_value_in<bke::AttrDomain>(
+      {bke::AttrDomain::Point,
+       bke::AttrDomain::Edge,
+       bke::AttrDomain::Face,
+       bke::AttrDomain::Curve,
+       bke::AttrDomain::Instance},
+      rna_enum_attribute_domain_items);
+
+  RNA_def_node_enum(srna,
+                    "domain",
+                    "Domain",
+                    "",
+                    supported_items.data(),
+                    NOD_menu_input_default_value_accessors("Domain"_ustr),
+                    int(bke::AttrDomain::Point));
+}
+
 static void node_register()
 {
   static bke::bNodeType ntype;
@@ -164,6 +183,8 @@ static void node_register()
   ntype.declare = node_declare;
   ntype.geometry_node_execute = node_geo_exec;
   bke::node_register_type(ntype);
+
+  node_rna(ntype.rna_ext.srna);
 }
 NOD_REGISTER_NODE(node_register)
 

@@ -48,22 +48,25 @@ static void blo_do_domain_sockets_530(Main *bmain)
     ASSIGN_MENU_VALUE_FROM_INLINE_RNA_ENUM(
         "GeometryNodeAttributeStatistic"_ustr, "Domain"_ustr, custom2)
     ASSIGN_MENU_VALUE_FROM_INLINE_RNA_ENUM(
-        "GeometryNodeDistributePointsInGrid"_ustr, "Distribution Method"_ustr, custom1)
+        "GeometryNodeDistributePointsInGrid"_ustr, "Distribute Method"_ustr, custom1)
     ASSIGN_MENU_VALUE_FROM_INLINE_RNA_ENUM(
-        "GeometryNodeDistributePointsOnFaces"_ustr, "Distribution Method"_ustr, custom1)
+        "GeometryNodeDistributePointsOnFaces"_ustr, "Distribute Method"_ustr, custom1)
 
     ASSIGN_MENU_VALUE_FROM_INLINE_RNA_ENUM(
         "GeometryNodeMeshBoolean"_ustr, "Operation"_ustr, custom1)
     ASSIGN_MENU_VALUE_FROM_INLINE_RNA_ENUM("GeometryNodeMeshBoolean"_ustr, "Solver"_ustr, custom2)
-    ASSIGN_MENU_VALUE_FROM_INLINE_RNA_ENUM("GeometryNodeToolSetSelection"_ustr, "Domain"_ustr, custom1)
-    ASSIGN_MENU_VALUE_FROM_INLINE_RNA_ENUM("GeometryNodeToolSetSelection"_ustr, "Selection Type"_ustr, custom2)
     ASSIGN_MENU_VALUE_FROM_INLINE_RNA_ENUM(
-        "GeometryNodeSetMeshNormal"_ustr, "Mode"_ustr, custom1)
+        "GeometryNodeToolSetSelection"_ustr, "Domain"_ustr, custom1)
+    ASSIGN_MENU_VALUE_FROM_INLINE_RNA_ENUM(
+        "GeometryNodeToolSetSelection"_ustr, "Selection Type"_ustr, custom2)
+    ASSIGN_MENU_VALUE_FROM_INLINE_RNA_ENUM("GeometryNodeSetMeshNormal"_ustr, "Mode"_ustr, custom1)
     ASSIGN_MENU_VALUE_FROM_INLINE_RNA_ENUM(
         "GeometryNodeSetMeshNormal"_ustr, "Domain"_ustr, custom2)
     ASSIGN_MENU_VALUE_FROM_INLINE_RNA_ENUM("GeometryNodeFieldAtIndex"_ustr, "Domain"_ustr, custom1)
-    ASSIGN_MENU_VALUE_FROM_INLINE_RNA_ENUM("GeometryNodeFieldAtIndex"_ustr, "Data Type"_ustr, custom2)
-    ASSIGN_MENU_VALUE_FROM_INLINE_RNA_ENUM("GeometryNodeToolActiveElement"_ustr, "Domain"_ustr, custom1)
+    ASSIGN_MENU_VALUE_FROM_INLINE_RNA_ENUM(
+        "GeometryNodeFieldAtIndex"_ustr, "Data Type"_ustr, custom2)
+    ASSIGN_MENU_VALUE_FROM_INLINE_RNA_ENUM(
+        "GeometryNodeToolActiveElement"_ustr, "Domain"_ustr, custom1)
   }
 
 #undef ASSIGN_MENU_VALUE_FROM_RNA_ENUM

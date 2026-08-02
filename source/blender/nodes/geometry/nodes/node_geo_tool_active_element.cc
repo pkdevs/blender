@@ -15,15 +15,16 @@
 
 namespace blender::nodes::node_geo_tool_active_element_cc {
 
+static const EnumPropertyItem domain_items[] = {
+    {int(AttrDomain::Point), "POINT", 0, "Point", ""},
+    {int(AttrDomain::Edge), "EDGE", 0, "Edge", ""},
+    {int(AttrDomain::Face), "FACE", 0, "Face", ""},
+    {int(AttrDomain::Layer), "LAYER", 0, "Layer", ""},
+    {0, nullptr, 0, nullptr, nullptr},
+};
+
 static void node_declare(NodeDeclarationBuilder &b)
 {
-  static const EnumPropertyItem domain_items[] = {
-      {int(AttrDomain::Point), "POINT", 0, "Point", ""},
-      {int(AttrDomain::Edge), "EDGE", 0, "Edge", ""},
-      {int(AttrDomain::Face), "FACE", 0, "Face", ""},
-      {int(AttrDomain::Layer), "LAYER", 0, "Layer", ""},
-      {0, nullptr, 0, nullptr, nullptr},
-  };
   b.add_input<decl::Menu>("Domain"_ustr)
       .static_items(domain_items)
       .default_value(AttrDomain::Point)
@@ -76,6 +77,17 @@ static void node_exec(GeoNodeExecParams params)
   }
 }
 
+static void node_rna(StructRNA *srna)
+{
+  RNA_def_node_enum(srna,
+                    "domain",
+                    "Domain",
+                    "",
+                    domain_items,
+                    NOD_menu_input_default_value_accessors("Domain"_ustr),
+                    int(AttrDomain::Point));
+}
+
 static void node_register()
 {
   static bke::bNodeType ntype;
@@ -88,6 +100,8 @@ static void node_register()
   ntype.declare = node_declare;
   ntype.gather_link_search_ops = search_link_ops_for_tool_node;
   bke::node_register_type(ntype);
+
+  node_rna(ntype.rna_ext.srna);
 }
 NOD_REGISTER_NODE(node_register)
 

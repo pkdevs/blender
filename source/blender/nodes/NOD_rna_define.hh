@@ -36,6 +36,22 @@ struct EnumRNAAccessors {
 };
 
 /**
+ * Generates accessor methods for menu socket properties.
+ */
+#define NOD_menu_input_default_value_accessors(identifier) \
+  EnumRNAAccessors( \
+      [](PointerRNA *ptr, PropertyRNA * /*prop*/) -> int { \
+        const bNode &node = *static_cast<const bNode *>(ptr->data); \
+        const bNodeSocket &socket = *node.input_by_identifier(identifier); \
+        return socket.default_value_typed<bNodeSocketValueMenu>()->value; \
+      }, \
+      [](PointerRNA *ptr, PropertyRNA * /*prop*/, const int value) { \
+        bNode &node = *static_cast<bNode *>(ptr->data); \
+        bNodeSocket &socket = *node.input_by_identifier(identifier); \
+        socket.default_value_typed<bNodeSocketValueMenu>()->value = value; \
+      })
+
+/**
  * Generates accessor methods for a property stored directly in the `bNode`, typically
  * `bNode->custom1` or similar.
  */

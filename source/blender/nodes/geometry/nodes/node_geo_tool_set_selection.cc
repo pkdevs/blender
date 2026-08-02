@@ -59,7 +59,7 @@ static void node_declare(NodeDeclarationBuilder &b)
       .optional_label();
   b.add_input<decl::Geometry>("Geometry"_ustr).description("Geometry to update the selection of");
   b.add_output<decl::Geometry>("Geometry"_ustr).align_with_previous();
-  
+
   b.add_input<decl::Bool>("Selection"_ustr)
       .default_value(true)
       .evaluated_geometry_field()
@@ -207,6 +207,24 @@ static void node_geo_exec(GeoNodeExecParams params)
   params.set_output("Geometry"_ustr, std::move(geometry));
 }
 
+static void node_rna(StructRNA *srna)
+{
+  RNA_def_node_enum(srna,
+                    "domain",
+                    "Domain",
+                    "",
+                    rna_enum_attribute_domain_point_edge_face_curve_items,
+                    NOD_menu_input_default_value_accessors("Domain"_ustr),
+                    int(AttrDomain::Point));
+  RNA_def_node_enum(srna,
+                    "selection_type",
+                    "Selection Type",
+                    "",
+                    mode_items,
+                    NOD_menu_input_default_value_accessors("Selection Type"_ustr),
+                    int(SelectionType::Boolean));
+}
+
 static void node_register()
 {
   static bke::bNodeType ntype;
@@ -219,6 +237,8 @@ static void node_register()
   ntype.geometry_node_execute = node_geo_exec;
   ntype.gather_link_search_ops = search_link_ops_for_tool_node;
   bke::node_register_type(ntype);
+
+  node_rna(ntype.rna_ext.srna);
 }
 NOD_REGISTER_NODE(node_register)
 

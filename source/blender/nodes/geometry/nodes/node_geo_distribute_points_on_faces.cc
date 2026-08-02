@@ -46,7 +46,18 @@ static const EnumPropertyItem mode_items[] = {
 
 static void node_declare(NodeDeclarationBuilder &b)
 {
-  b.add_input<decl::Menu>("Distribution Method"_ustr)
+  auto enable_random = [](bNode &node) {
+    node.input_by_identifier("Distribute Method"_ustr)
+        ->default_value_typed<bNodeSocketValueMenu>()
+        ->value = GEO_NODE_POINT_DISTRIBUTE_POINTS_ON_FACES_RANDOM;
+  };
+  auto enable_poisson = [](bNode &node) {
+    node.input_by_identifier("Distribute Method"_ustr)
+        ->default_value_typed<bNodeSocketValueMenu>()
+        ->value = GEO_NODE_POINT_DISTRIBUTE_POINTS_ON_FACES_POISSON;
+  };
+
+  b.add_input<decl::Menu>("Distribute Method"_ustr)
       .static_items(mode_items)
       .default_value(GEO_NODE_POINT_DISTRIBUTE_POINTS_ON_FACES_RANDOM)
       .description("Method to use for scattering points")
@@ -61,26 +72,27 @@ static void node_declare(NodeDeclarationBuilder &b)
   b.add_input<decl::Float>("Distance Min"_ustr)
       .min(0.0f)
       .subtype(PROP_DISTANCE)
-      .usage_by_menu("Distribution Method"_ustr,
-                     GEO_NODE_POINT_DISTRIBUTE_POINTS_ON_FACES_POISSON);
+      .make_available(enable_poisson)
+      .usage_by_menu("Distribute Method"_ustr, GEO_NODE_POINT_DISTRIBUTE_POINTS_ON_FACES_POISSON);
   b.add_input<decl::Float>("Density Max"_ustr)
       .default_value(10.0f)
       .min(0.0f)
-      .usage_by_menu("Distribution Method"_ustr,
-                     GEO_NODE_POINT_DISTRIBUTE_POINTS_ON_FACES_POISSON);
+      .make_available(enable_poisson)
+      .usage_by_menu("Distribute Method"_ustr, GEO_NODE_POINT_DISTRIBUTE_POINTS_ON_FACES_POISSON);
   b.add_input<decl::Float>("Density"_ustr)
       .default_value(10.0f)
       .min(0.0f)
       .evaluated_geometry_field()
-      .usage_by_menu("Distribution Method"_ustr, GEO_NODE_POINT_DISTRIBUTE_POINTS_ON_FACES_RANDOM);
+      .make_available(enable_random)
+      .usage_by_menu("Distribute Method"_ustr, GEO_NODE_POINT_DISTRIBUTE_POINTS_ON_FACES_RANDOM);
   b.add_input<decl::Float>("Density Factor"_ustr)
       .default_value(1.0f)
       .min(0.0f)
       .max(1.0f)
       .subtype(PROP_FACTOR)
       .evaluated_geometry_field()
-      .usage_by_menu("Distribution Method"_ustr,
-                     GEO_NODE_POINT_DISTRIBUTE_POINTS_ON_FACES_POISSON);
+      .make_available(enable_poisson)
+      .usage_by_menu("Distribute Method"_ustr, GEO_NODE_POINT_DISTRIBUTE_POINTS_ON_FACES_POISSON);
   b.add_input<decl::Int>("Seed"_ustr);
 
   b.add_output<decl::Geometry>("Points"_ustr).propagate_all_geometry();
@@ -641,7 +653,7 @@ static void node_geo_exec(GeoNodeExecParams params)
   lazy_threading::send_hint();
 
   const auto mode = params.extract_input<GeometryNodeDistributePointsOnFacesMode>(
-      "Distribution Method"_ustr);
+      "Distribute Method"_ustr);
 
   switch (mode) {
     case GEO_NODE_POINT_DISTRIBUTE_POINTS_ON_FACES_RANDOM: {

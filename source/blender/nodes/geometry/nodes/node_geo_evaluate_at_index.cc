@@ -78,6 +78,26 @@ static void node_geo_exec(GeoNodeExecParams params)
   params.set_output<GField>("Value"_ustr, std::move(output_field));
 }
 
+static void node_rna(StructRNA *srna)
+{
+  RNA_def_node_enum(srna,
+                    "domain",
+                    "Domain",
+                    "Domain the field is evaluated in",
+                    rna_enum_attribute_domain_items,
+                    NOD_menu_input_default_value_accessors("Domain"_ustr),
+                    int(AttrDomain::Point));
+
+  RNA_def_node_enum(srna,
+                    "data_type",
+                    "Data Type",
+                    "",
+                    rna_enum_attribute_type_items,
+                    NOD_menu_input_default_value_accessors("Data Type"_ustr),
+                    CD_PROP_FLOAT,
+                    enums::attribute_type_type_with_socket_fn);
+}
+
 static void node_register()
 {
   static bke::bNodeType ntype;
@@ -91,6 +111,8 @@ static void node_register()
   ntype.declare = node_declare;
   ntype.gather_link_search_ops = node_gather_link_searches;
   bke::node_register_type(ntype);
+
+  node_rna(ntype.rna_ext.srna);
 }
 NOD_REGISTER_NODE(node_register)
 

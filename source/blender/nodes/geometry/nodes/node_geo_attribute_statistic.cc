@@ -354,6 +354,16 @@ static void node_rna(StructRNA *srna)
           return ELEM(item.value, CD_PROP_FLOAT, CD_PROP_FLOAT3);
         });
       });
+
+  RNA_def_node_enum(srna,
+                    "domain",
+                    "Domain",
+                    "Which domain to read the data from",
+                    rna_enum_attribute_domain_items,
+                    NOD_menu_input_default_value_accessors("Domain"_ustr),
+                    int(AttrDomain::Point),
+                    nullptr,
+                    true);
 }
 
 static void node_register()

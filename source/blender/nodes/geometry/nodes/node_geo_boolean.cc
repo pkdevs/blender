@@ -292,6 +292,25 @@ static void node_geo_exec(GeoNodeExecParams params)
   params.set_output("Mesh"_ustr, std::move(result_geometry));
 }
 
+static void node_rna(StructRNA *srna)
+{
+  RNA_def_node_enum(srna,
+                    "operation",
+                    "Operation",
+                    "",
+                    rna_node_geometry_boolean_method_items,
+                    NOD_menu_input_default_value_accessors("Operation"_ustr),
+                    int(geometry::boolean::Operation::Intersect));
+
+  RNA_def_node_enum(srna,
+                    "solver",
+                    "Solver",
+                    "",
+                    rna_geometry_boolean_solver_items,
+                    NOD_menu_input_default_value_accessors("Solver"_ustr),
+                    int(geometry::boolean::Solver::Float));
+}
+
 static void node_register()
 {
   static bke::bNodeType ntype;
@@ -303,6 +322,8 @@ static void node_register()
   ntype.declare = node_declare;
   ntype.geometry_node_execute = node_geo_exec;
   bke::node_register_type(ntype);
+
+  node_rna(ntype.rna_ext.srna);
 }
 NOD_REGISTER_NODE(node_register)
 

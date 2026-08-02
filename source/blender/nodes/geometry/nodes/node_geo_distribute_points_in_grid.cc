@@ -48,7 +48,7 @@ static const EnumPropertyItem mode_items[] = {
 
 static void node_declare(NodeDeclarationBuilder &b)
 {
-  b.add_input<decl::Menu>("Distribution Method"_ustr)
+  b.add_input<decl::Menu>("Distribute Method"_ustr)
       .static_items(mode_items)
       .default_value(DistributeMode::Random)
       .description("Method to use for scattering points")
@@ -62,24 +62,24 @@ static void node_declare(NodeDeclarationBuilder &b)
       .description(
           "When combined with each voxel's value, determines the number of points "
           "to sample per unit volume")
-      .usage_by_menu("Distribution Method"_ustr, int(DistributeMode::Random));
+      .usage_by_menu("Distribute Method"_ustr, int(DistributeMode::Random));
   b.add_input<decl::Int>("Seed"_ustr)
       .min(-10000)
       .max(10000)
       .description("Seed used by the random number generator to generate random points")
-      .usage_by_menu("Distribution Method"_ustr, int(DistributeMode::Random));
+      .usage_by_menu("Distribute Method"_ustr, int(DistributeMode::Random));
   b.add_input<decl::Vector>("Spacing"_ustr)
       .default_value({0.3, 0.3, 0.3})
       .min(0.0001f)
       .subtype(PROP_XYZ)
       .description("Spacing between grid points")
-      .usage_by_menu("Distribution Method"_ustr, int(DistributeMode::Grid));
+      .usage_by_menu("Distribute Method"_ustr, int(DistributeMode::Grid));
   b.add_input<decl::Float>("Threshold"_ustr)
       .default_value(0.1f)
       .min(0.0f)
       .max(FLT_MAX)
       .description("Minimum density of a voxel to contain a grid point")
-      .usage_by_menu("Distribution Method"_ustr, int(DistributeMode::Grid));
+      .usage_by_menu("Distribute Method"_ustr, int(DistributeMode::Grid));
   b.add_output<decl::Geometry>("Points"_ustr).propagate_all_geometry();
 }
 
@@ -187,7 +187,7 @@ static void node_geo_exec(GeoNodeExecParams params)
   }
   const openvdb::FloatGrid &grid = static_cast<const openvdb::FloatGrid &>(base_grid);
 
-  const DistributeMode mode = params.extract_input<DistributeMode>("Distribution Method"_ustr);
+  const DistributeMode mode = params.extract_input<DistributeMode>("Distribute Method"_ustr);
 
   float density;
   int seed;
@@ -223,6 +223,17 @@ static void node_geo_exec(GeoNodeExecParams params)
 #endif
 }
 
+static void node_rna(StructRNA *srna)
+{
+  RNA_def_node_enum(srna,
+                    "mode",
+                    "Distribution Method",
+                    "Method to use for scattering points",
+                    mode_items,
+                    NOD_menu_input_default_value_accessors("Distribute Method"_ustr),
+                    int(DistributeMode::Random));
+}
+
 static void node_register()
 {
   static bke::bNodeType ntype;
@@ -236,6 +247,8 @@ static void node_register()
   ntype.declare = node_declare;
   ntype.geometry_node_execute = node_geo_exec;
   bke::node_register_type(ntype);
+
+  node_rna(ntype.rna_ext.srna);
 }
 NOD_REGISTER_NODE(node_register)
 
