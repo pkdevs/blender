@@ -43,7 +43,7 @@ enum eID_OverrideLib_Op : short;
  */
 enum class eRNAStatus {
   /** The operation completed successfully. */
-  Success,
+  Success = 0,
   /** The specified index is outside the valid range. */
   IndexOutOfRange,
   /** The property cannot be edited. */

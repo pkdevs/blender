@@ -226,6 +226,30 @@ static void pyrna_prop_warn_deprecated(const PointerRNA *ptr,
                    deprecated->note);
 }
 
+static bool pyrna_status_as_exception(eRNAStatus status, const char *error_prefix)
+{
+  switch (status) {
+    case eRNAStatus::Success: {
+      return false;
+    }
+    case eRNAStatus::IndexOutOfRange: {
+      PyErr_Format(PyExc_IndexError, "%.200s: index out of range", error_prefix);
+      return true;
+    }
+    case eRNAStatus::Immutable: {
+      PyErr_Format(PyExc_TypeError, "%.200s: is not editable", error_prefix);
+      return true;
+    }
+    case eRNAStatus::Unsupported: {
+      PyErr_Format(PyExc_TypeError, "%.200s: not supported for this collection", error_prefix);
+      return true;
+    }
+    default:
+      BLI_assert_unreachable();
+      return false;
+  }
+}
+
 #ifdef USE_PYRNA_INVALIDATE_GC
 #  define FROM_GC(g) ((PyObject *)(((PyGC_Head *)g) + 1))
 
@@ -5455,23 +5479,13 @@ static PyObject *pyrna_prop_collection_idprop_move(BPy_PropertyRNA *self, PyObje
     return nullptr;
   }
 
-  switch (RNA_property_collection_move(&self->ptr.value(), self->prop, src_index, dst_index)) {
-    case eRNAStatus::Success: {
-      Py_RETURN_NONE;
-    }
-    case eRNAStatus::IndexOutOfRange: {
-      PyErr_SetString(PyExc_IndexError, "collection index out of range");
-      return nullptr;
-    }
-    case eRNAStatus::Immutable: {
-      PyErr_SetString(PyExc_TypeError, "collection is not editable");
-      return nullptr;
-    }
-    default:
-      PyErr_SetString(PyExc_TypeError,
-                      "bpy_prop_collection.move() not supported for this collection");
-      return nullptr;
+  eRNAStatus status = RNA_property_collection_move(
+      &self->ptr.value(), self->prop, src_index, dst_index);
+  if (pyrna_status_as_exception(status, "bpy_prop_collection.move")) {
+    return nullptr;
   }
+
+  Py_RETURN_NONE;
 }
 
 PyDoc_STRVAR(
