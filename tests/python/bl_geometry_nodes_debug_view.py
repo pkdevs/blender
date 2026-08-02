@@ -2,7 +2,6 @@
 #
 # SPDX-License-Identifier: GPL-2.0-or-later
 
-import os
 import pathlib
 import sys
 import tempfile
@@ -189,50 +188,50 @@ class GeometryNodesDebugViewTest(unittest.TestCase):
             node.bl_idname == "GeometryNodeViewer" for node in restored_tree.nodes))
 
     def test_debug_view_settings_persist(self):
-        group, viewer = self.create_node_group()
-        obj, modifier = self.create_object_with_modifier("Object", group)
-        viewer.label = "Surface"
-        viewer.is_debug_view = True
-        show_socket = viewer.inputs["Show"]
-        show_socket.default_value = False
-        boolean = group.nodes.new("FunctionNodeInputBool")
-        group.links.new(boolean.outputs["Boolean"], show_socket)
+        fixture_path = args.testdir / "persistent_debug_view.blend"
+        self.assertTrue(fixture_path.exists(), f"Missing fixture: {fixture_path}")
+        bpy.ops.wm.open_mainfile(filepath=str(fixture_path))
 
-        inactive_viewer = group.nodes.new("GeometryNodeViewer")
-        inactive_viewer.label = "Inactive"
-        inactive_viewer.viewer_items.new('GEOMETRY', "Geometry")
-        inactive_viewer.is_debug_view = True
-        group.links.new(boolean.outputs["Boolean"], inactive_viewer.inputs["Show"])
-        inactive_viewer.is_debug_view = False
+        modifier = bpy.data.objects["Persistent Debug View Object"].modifiers[
+            "Persistent Debug View Modifier"]
         modifier.show_debug_views = True
 
         with tempfile.TemporaryDirectory() as temp_dir:
-            filepath = os.path.join(temp_dir, "debug_view_persistence.blend")
-            bpy.ops.wm.save_as_mainfile(filepath=filepath)
-            bpy.ops.wm.open_mainfile(filepath=filepath)
+            filepath = pathlib.Path(temp_dir) / "debug_view_persistence.blend"
+            bpy.ops.wm.save_as_mainfile(filepath=str(filepath))
+            self.assertTrue(filepath.exists())
+            modifier.show_debug_views = False
+            bpy.ops.wm.open_mainfile(filepath=str(filepath))
 
-            loaded_group = bpy.data.node_groups["Geometry Nodes"]
-            loaded_viewer = next(
-                node for node in loaded_group.nodes if node.label == "Surface")
-            loaded_modifier = bpy.data.objects["Object"].modifiers["Geometry Nodes"]
-            loaded_show_socket = loaded_viewer.inputs["Show"]
-            loaded_inactive_viewer = next(
-                node for node in loaded_group.nodes if node.label == "Inactive")
+            loaded_obj = bpy.data.objects["Persistent Debug View Object"]
+            loaded_modifier = loaded_obj.modifiers["Persistent Debug View Modifier"]
+            loaded_root_group = loaded_modifier.node_group
+            loaded_nested_group = bpy.data.node_groups["Nested Debug Group"]
 
-            self.assertEqual(loaded_viewer.label, "Surface")
-            self.assertTrue(loaded_viewer.is_debug_view)
-            self.assertFalse(loaded_show_socket.default_value)
-            self.assertEqual(len(loaded_show_socket.links), 1)
-            self.assertEqual(loaded_show_socket.links[0].from_node.bl_idname,
-                             "FunctionNodeInputBool")
-            self.assertFalse(loaded_inactive_viewer.is_debug_view)
-            self.assertIsNone(loaded_inactive_viewer.inputs.get("Show"))
-            loaded_inactive_viewer.is_debug_view = True
-            loaded_inactive_show_socket = loaded_inactive_viewer.inputs["Show"]
-            self.assertEqual(len(loaded_inactive_show_socket.links), 1)
-            self.assertEqual(loaded_inactive_show_socket.links[0].from_node.bl_idname,
-                             "FunctionNodeInputBool")
+            self.assertEqual(loaded_root_group.name, "Persistent Debug View Root")
             self.assertTrue(loaded_modifier.show_debug_views)
+            root_a, root_b = (loaded_root_group.nodes[name] for name in
+                               ("Root Debug A", "Root Debug B"))
+            nested = loaded_nested_group.nodes["Nested Debug"]
+            for viewer, name in ((root_a, "Root Debug A"), (root_b, "Root Debug B"),
+                                 (nested, "Nested Debug")):
+                self.assertEqual((viewer.label, viewer.is_debug_view), (name, True))
+
+            root_a_show = root_a.inputs["Show"]
+            self.assertEqual((root_a_show.default_value, len(root_a_show.links)), (False, 1))
+            root_a_show_link = root_a_show.links[0]
+            self.assertTrue(root_a_show_link.is_valid)
+            self.assertEqual((root_a_show_link.to_node, root_a_show_link.to_socket),
+                             (root_a, root_a_show))
+            self.assertEqual(
+                (root_a_show_link.from_node.name, root_a_show_link.from_node.bl_idname,
+                 root_a_show_link.from_socket.name),
+                ("Root Debug A Show Source", "FunctionNodeBooleanMath", "Boolean"))
+
+            for viewer in (root_b, nested):
+                show = viewer.inputs["Show"]
+                self.assertEqual((len(show.links), show.default_value), (0, True))
+            self.assertEqual(self.evaluate(loaded_obj), 8)
 
 
 class GeometryNodesDebugViewFixtureTest(unittest.TestCase):
