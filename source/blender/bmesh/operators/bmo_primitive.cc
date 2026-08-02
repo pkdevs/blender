@@ -854,8 +854,6 @@ void bmo_create_quadsphere_exec(BMesh *bm, BMOperator *op)
   const int subdiv = BMO_slot_int_get(op->slots_in, "subdivisions");
   const int cd_loop_uv_offset = CustomData_get_offset(&bm->ldata, CD_PROP_FLOAT2);
   const bool calc_uvs = (cd_loop_uv_offset != -1) && BMO_slot_bool_get(op->slots_in, "calc_uvs");
-
-  /* TODO: Add UV map for the quad sphere */
   const char faces[6][4] = {
       {0, 1, 3, 2},
       {2, 3, 7, 6},
@@ -928,12 +926,13 @@ void bmo_create_quadsphere_exec(BMesh *bm, BMOperator *op)
       float y = co[1];
       float z = co[2];
       int p = 500;
-      float xc = std::sqrt(std::pow(x, p) + std::pow(y, 2) + std::pow(z, 2)) * std::tan(x * std::atan(1 / (std::sqrt(std::pow(x, p) + std::pow(y, 2) + std::pow(z, 2)))));
-      float yc = std::sqrt(std::pow(x, 2) + std::pow(y, p) + std::pow(z, 2)) * std::tan(y * std::atan(1 / (std::sqrt(std::pow(x, 2) + std::pow(y, p) + std::pow(z, 2)))));
-      float zc = std::sqrt(std::pow(x, 2) + std::pow(y, 2) + std::pow(z, p)) * std::tan(z * std::atan(1 / (std::sqrt(std::pow(x, 2) + std::pow(y, 2) + std::pow(z, p)))));
-      co[0] = xc / std::sqrt(std::pow(xc, 2) + std::pow(yc, 2) + std::pow(zc, 2));
-      co[1] = yc / std::sqrt(std::pow(xc, 2) + std::pow(yc, 2) + std::pow(zc, 2));
-      co[2] = zc / std::sqrt(std::pow(xc, 2) + std::pow(yc, 2) + std::pow(zc, 2));
+      float xc = std::sqrt(std::pow(x, p) + y * y + z * z) * std::tan(x * std::atan(1 / std::sqrt(std::pow(x, p) + y * y + z * z)));
+      float yc = std::sqrt(x * x + std::pow(y, p) + z * z) * std::tan(y * std::atan(1 / std::sqrt(x * x + std::pow(y, p) + z * z)));
+      float zc = std::sqrt(x * x + y * y + std::pow(z, p)) * std::tan(z * std::atan(1 / std::sqrt(x * x + y * y + std::pow(z, p))));
+      float n = std::sqrt(xc * xc + yc * yc + zc * zc);
+      co[0] = xc / n;
+      co[1] = yc / n;
+      co[2] = zc / n;
       // Apply the radius
       co[0] = co[0] * rad;
       co[1] = co[1] * rad;
