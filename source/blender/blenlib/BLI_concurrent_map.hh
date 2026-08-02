@@ -193,6 +193,21 @@ class ConcurrentMap {
   }
 
 #endif
+
+  /**
+   * Remove all key-value-pairs.
+   *
+   * This must not be called concurrently with any other operation on the map. In particular, all
+   * accessors must be destroyed before calling it.
+   */
+  void clear()
+  {
+#ifdef WITH_TBB
+    map_.clear();
+#else
+    set_.clear();
+#endif
+  }
 };
 
 }  // namespace blender
