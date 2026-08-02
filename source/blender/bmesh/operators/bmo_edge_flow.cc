@@ -13,6 +13,7 @@
 #include "BLI_math_geom.hh"
 #include "BLI_math_vector.hh"
 #include "BLI_math_vector_c.hh"
+#include "BLI_set.hh"
 #include "BLI_vector.hh"
 
 #include "BKE_curves.hh"
@@ -28,7 +29,8 @@ struct EdgeFlowLoop {
   bool is_cyclic;
 };
 
-static void walk_edge_loop(BMEdge *start_edge, Vector<BMEdge *> &r_edges) {
+/* Walkers only step onto tagged edges unless limit_to_tagged is off, which walks the full loop. */
+static void walk_edge_loop(BMEdge *start_edge, const bool limit_to_tagged, Vector<BMEdge *> &r_edges) {
   Vector<BMEdge *> side[2];
   int dir = 0;
 
@@ -49,7 +51,7 @@ static void walk_edge_loop(BMEdge *start_edge, Vector<BMEdge *> &r_edges) {
           break;
         }
 
-        if (!BM_elem_flag_test(l->e, BM_ELEM_TAG)) {
+        if (limit_to_tagged && !BM_elem_flag_test(l->e, BM_ELEM_TAG)) {
           break;
         }
 
@@ -73,7 +75,7 @@ static void walk_edge_loop(BMEdge *start_edge, Vector<BMEdge *> &r_edges) {
   }
 }
 
-static void walk_ngon(BMEdge *start_edge, Vector<BMEdge *> &r_edges) {
+static void walk_ngon(BMEdge *start_edge, const bool limit_to_tagged, Vector<BMEdge *> &r_edges) {
   BMLoop *start_loop = nullptr;
   int max_valence = 0;
 
@@ -95,7 +97,7 @@ static void walk_ngon(BMEdge *start_edge, Vector<BMEdge *> &r_edges) {
   /* Forward walk around face while vert is non-junction. */
   l = start_loop->next;
   while (BM_vert_edge_count(l->v) < 4 && l->e != start_edge && !forward.contains(l->e)) {
-    if (!BM_elem_flag_test(l->e, BM_ELEM_TAG)) {
+    if (limit_to_tagged && !BM_elem_flag_test(l->e, BM_ELEM_TAG)) {
       break;
     }
 
@@ -106,7 +108,7 @@ static void walk_ngon(BMEdge *start_edge, Vector<BMEdge *> &r_edges) {
   /* Backward walk around face while other vert is non-junction. */
   l = start_loop->prev;
   while (BM_vert_edge_count(BM_edge_other_vert(l->e, l->v)) < 4 && l->e != start_edge && !forward.contains(l->e) && !backward.contains(l->e)) {
-    if (!BM_elem_flag_test(l->e, BM_ELEM_TAG)) {
+    if (limit_to_tagged && !BM_elem_flag_test(l->e, BM_ELEM_TAG)) {
       break;
     }
 
@@ -126,7 +128,7 @@ static void walk_ngon(BMEdge *start_edge, Vector<BMEdge *> &r_edges) {
   }
 }
 
-static void walk_boundary(BMEdge *start_edge, Vector<BMEdge *> &r_edges)
+static void walk_boundary(BMEdge *start_edge, const bool limit_to_tagged, Vector<BMEdge *> &r_edges)
 {
   /* collect boundary edges reachable from start_edge through junction verts valence > 2 */
   Vector<BMEdge *> edge_loop;
@@ -144,7 +146,7 @@ static void walk_boundary(BMEdge *start_edge, Vector<BMEdge *> &r_edges)
         BMIter eiter;
         BMEdge *e;
         BM_ITER_ELEM (e, &eiter, v, BM_EDGES_OF_VERT) {
-          if (BM_edge_is_boundary(e) && BM_elem_flag_test(e, BM_ELEM_TAG) &&
+          if (BM_edge_is_boundary(e) && (!limit_to_tagged || BM_elem_flag_test(e, BM_ELEM_TAG)) &&
               !edge_loop.contains(e))
           {
             edge_loop.append(e);
@@ -203,7 +205,7 @@ static void walk_boundary(BMEdge *start_edge, Vector<BMEdge *> &r_edges)
   }
 }
 
-static void edge_flow_walk_loop(BMEdge *start_edge, Vector<BMEdge *> &r_edges)
+static void edge_flow_walk_loop(BMEdge *start_edge, const bool limit_to_tagged, Vector<BMEdge *> &r_edges)
 {
   bool is_ngon = false;
   BMIter l_iter;
@@ -221,14 +223,52 @@ static void edge_flow_walk_loop(BMEdge *start_edge, Vector<BMEdge *> &r_edges)
   const bool loop_end = (val0 > 4 && val1 == 4) || (val0 == 4 && val1 > 4);
 
   if (is_ngon && !quad_flow && !loop_end) {
-    walk_ngon(start_edge, r_edges);
+    walk_ngon(start_edge, limit_to_tagged, r_edges);
   }
   else if (BM_edge_is_boundary(start_edge)) {
-    walk_boundary(start_edge, r_edges);   
+    walk_boundary(start_edge, limit_to_tagged, r_edges);
   }
   else {
-    walk_edge_loop(start_edge, r_edges);
+    walk_edge_loop(start_edge, limit_to_tagged, r_edges);
   }
+}
+
+/* Order the verts of a walked edge run. Returns false if the edges are not contiguous. */
+static bool edge_flow_loop_from_edges(Span<BMEdge *> edges, EdgeFlowLoop &r_loop)
+{
+  /* Find p1, vert of edges[0] not shared with edges[1]. */
+  BMVert *p1 = nullptr;
+  if (edges.size() == 1) {
+    p1 = edges[0]->v1;
+  }
+  else if (edges[0]->v1 != edges[1]->v1 && edges[0]->v1 != edges[1]->v2) {
+    p1 = edges[0]->v1;
+  }
+  else {
+    p1 = edges[0]->v2;
+  }
+
+  r_loop.verts.append(p1);
+  BMVert *last = p1;
+  for (BMEdge *e : edges) {
+    BMVert *next = BM_edge_other_vert(e, last);
+    if (next == nullptr) {
+      /* Backstop for non-contiguous edges */
+      return false;
+    }
+    r_loop.verts.append(next);
+    last = next;
+  }
+
+  /* Ensure larger coord endpoint is first for stable loop ordering. */
+  const float3 first_co = r_loop.verts.first()->co;
+  const float3 last_co = r_loop.verts.last()->co;
+  if (first_co.x + first_co.y + first_co.z < last_co.x + last_co.y + last_co.z) {
+    std::reverse(r_loop.verts.begin(), r_loop.verts.end());
+  }
+
+  r_loop.is_cyclic = (r_loop.verts.first() == r_loop.verts.last());
+  return true;
 }
 
 /* Returns the number of walks dropped because their edges were not contiguous. */
@@ -245,7 +285,7 @@ static int edge_flow_collect_loops(BMesh *bm, Vector<EdgeFlowLoop> &r_loops)
 
     /* Walk one ordered, contiguous run of tagged edges starting at e. */
     Vector<BMEdge *> loop_edges;
-    edge_flow_walk_loop(e, loop_edges);
+    edge_flow_walk_loop(e, true, loop_edges);
 
     for (BMEdge *le : loop_edges) {
       BM_elem_flag_disable(le, BM_ELEM_TAG);
@@ -255,51 +295,78 @@ static int edge_flow_collect_loops(BMesh *bm, Vector<EdgeFlowLoop> &r_loops)
       continue;
     }
 
-    /* Find p1, vert of edges[0] not shared with edges[1]. */
-    BMVert *p1 = nullptr;
-    if (loop_edges.size() == 1) {
-      p1 = loop_edges[0]->v1;
-    }
-    else if (loop_edges[0]->v1 != loop_edges[1]->v1 && loop_edges[0]->v1 != loop_edges[1]->v2) {
-      p1 = loop_edges[0]->v1;
-    }
-    else {
-      p1 = loop_edges[0]->v2;
-    }
-
-    /* Build ordered vert array. */
     EdgeFlowLoop loop;
-    loop.verts.append(p1);
-    BMVert *last = p1;
-    bool valid = true;
-    for (BMEdge *le : loop_edges) {
-      BMVert *next = BM_edge_other_vert(le, last);
-      if (next == nullptr) {
-        /* Backstop for non-contiguous edges */
-        valid = false;
-        break;
-      }
-      loop.verts.append(next);
-      last = next;
-    }
-
-    if (!valid) {
+    if (!edge_flow_loop_from_edges(loop_edges, loop)) {
       dropped++;
       continue;
     }
 
-    /* Ensure larger coord endpoint is first for stable loop ordering. */
-    const float3 first_co = loop.verts.first()->co;
-    const float3 last_co = loop.verts.last()->co;
-    if (first_co.x + first_co.y + first_co.z < last_co.x + last_co.y + last_co.z) {
-      std::reverse(loop.verts.begin(), loop.verts.end());
-    }
-
-    loop.is_cyclic = (loop.verts.first() == loop.verts.last());
     r_loops.append(std::move(loop));
   }
 
   return dropped;
+}
+
+/**
+ * Collect the closed edge loops crossing `chains`, the selection Flow needs to reach the region
+ * a Linear or Curve selection describes. Flow moves its selection across the loops it selects
+ * while Linear and Curve redistribute along theirs, so the two take transposed selections.
+ */
+static void edge_flow_collect_crossing_loops(const Span<EdgeFlowLoop> chains,
+                                             Vector<EdgeFlowLoop> &r_loops)
+{
+  Set<BMEdge *> chain_edges;
+  Set<BMVert *> chain_interior;
+  for (const EdgeFlowLoop &chain : chains) {
+    for (const int i : chain.verts.index_range().drop_back(1)) {
+      if (BMEdge *e = BM_edge_exists(chain.verts[i], chain.verts[i + 1])) {
+        chain_edges.add(e);
+      }
+    }
+    for (BMVert *v : chain.verts.as_span().drop_front(1).drop_back(1)) {
+      chain_interior.add(v);
+    }
+  }
+
+  Set<BMEdge *> visited;
+  for (const EdgeFlowLoop &chain : chains) {
+    for (BMVert *v : chain.verts.as_span().drop_front(1).drop_back(1)) {
+      BMIter eiter;
+      BMEdge *e;
+      BM_ITER_ELEM (e, &eiter, v, BM_EDGES_OF_VERT) {
+        /* Seed off edges leaving the selection, and walk each crossing loop once. */
+        if (chain_edges.contains(e) || !visited.add(e)) {
+          continue;
+        }
+
+        Vector<BMEdge *> loop_edges;
+        edge_flow_walk_loop(e, false, loop_edges);
+        for (BMEdge *le : loop_edges) {
+          visited.add(le);
+        }
+
+        EdgeFlowLoop loop;
+        if (!edge_flow_loop_from_edges(loop_edges, loop) || !loop.is_cyclic) {
+          continue;
+        }
+
+        /* Take the loop only when the selection crosses all of it. A loop the selection meets
+         * in a few places is one the user picked a chain across, not the region they described. */
+        bool crossed_throughout = true;
+        for (BMVert *loop_v : loop.verts) {
+          if (!chain_interior.contains(loop_v)) {
+            crossed_throughout = false;
+            break;
+          }
+        }
+        if (!crossed_throughout) {
+          continue;
+        }
+
+        r_loops.append(std::move(loop));
+      }
+    }
+  }
 }
 
 static bool edge_flow_calc_spline_target(BMLoop *l, const float tension, const float min_angle, float3 &r_target)
@@ -475,6 +542,26 @@ void bmo_edge_flow_exec(BMesh *bm, BMOperator *op)
   const int dropped = edge_flow_collect_loops(bm, loops);
   if (dropped > 0) {
     BMO_error_raise(bm, op, BMO_ERROR_WARN, "Non-contiguous edge chains skipped");
+  }
+
+  /* An all open selection is the shape Linear and Curve take, so swap in the closed loops
+   * crossing it. Keep the selection as it came when there are none to cross onto. */
+  if (mode == EDGE_FLOW_FLOW && !loops.is_empty()) {
+    bool all_open = true;
+    for (const EdgeFlowLoop &loop : loops) {
+      if (loop.is_cyclic) {
+        all_open = false;
+        break;
+      }
+    }
+
+    if (all_open) {
+      Vector<EdgeFlowLoop> crossing_loops;
+      edge_flow_collect_crossing_loops(loops, crossing_loops);
+      if (!crossing_loops.is_empty()) {
+        loops = std::move(crossing_loops);
+      }
+    }
   }
 
   if (mode == EDGE_FLOW_FLOW) {
