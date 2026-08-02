@@ -355,58 +355,61 @@ void f()
 TEST(shader_tool, FunctionOverloads)
 {
   {
-    string input =
-        "struct A {};\n"
-        "void f() {}\n"
-        "void f(int a) {}\n"
-        "void f(int a, float b) {}\n"
-        "void f(float2 a, float b) {}\n"
-        "void f(float a) {}\n"
-        "void func()\n"
-        "{\n"
-        "  int a;\n"
-        "  float b;\n"
-        "  float2 c;\n"
-        "  A d;\n"
-        "  f();\n"
-        "  f(a);\n"
-        "  f(a, b);\n"
-        "  f(c, b);\n"
-        "  f(c + 1 * 0.5f, b);\n"
-        "}\n";
-    string expect =
-        "struct A {int _pad;\n"
-        "#line 1\n"
-        "          };\n"
-        "#line 1\n"
-        "A A_ctor_() {A r;r._pad=0;return r;}\n"
-        "void f() {\n"
-        "#line 2\n"
-        "          }\n"
-        "void f3(int a) {\n"
-        "#line 3\n"
-        "               }\n"
-        "void f4(int a, float b) {\n"
-        "#line 4\n"
-        "                        }\n"
-        "void f5(float2 a, float b) {\n"
-        "#line 5\n"
-        "                           }\n"
-        "void f6(float a) {\n"
-        "#line 6\n"
-        "                 }\n"
-        "void func()\n"
-        "{\n"
-        "  int a;\n"
-        "  float b;\n"
-        "  float2 c;\n"
-        "  A d;\n"
-        "  f();\n"
-        "  f3(a);\n"
-        "  f4(a, b);\n"
-        "  f5(c, b);\n"
-        "  f5(c + 1 * 0.5f, b);\n"
-        "}\n";
+    string input = R"(
+struct A {};
+void f() {}
+void f(int a) {}
+void f(int a, float b) {}
+void f(float2 a, float b) {}
+void f(float a) {}
+void func()
+{
+  int a;
+  float b;
+  float2 c;
+  A d;
+  f();
+  f(a);
+  f(a, b);
+  f(c, b);
+  f(c + 1 * 0.5f, b);
+}
+)";
+
+    string expect = R"(
+struct A {int _pad;
+#line 1
+          };
+#line 1
+A A_ctor_() {A r;r._pad=0;return r;}
+void f() {
+#line 2
+          }
+void f3(int a) {
+#line 3
+               }
+void f4(int a, float b) {
+#line 4
+                        }
+void f5(float2 a, float b) {
+#line 5
+                           }
+void f6(float a) {
+#line 6
+                 }
+void func()
+{
+  int a;
+  float b;
+  float2 c;
+  A d;
+  f();
+  f3(a);
+  f4(a, b);
+  f5(c, b);
+  f5(c + 1 * 0.5f, b);
+}
+)";
     auto [output, _, error] = process_test_string(input, shader::Language::BSL);
     EXPECT_EQ(output, expect);
     EXPECT_EQ(error, "");
