@@ -576,6 +576,7 @@ static int gwl_window_fractional_from_viewport_round(const GWL_WindowFrame &fram
   return lroundf(double(value * FRACTIONAL_DENOMINATOR) / double(frame.fractional_scale));
 }
 
+#ifdef WITH_GHOST_CSD
 /**
  * Convert a value in physical pixels (as used by #GWL_WindowFrame.size) into the window's
  * surface-local (logical) coordinate space, as needed for WAYLAND requests that operate in
@@ -589,6 +590,7 @@ static int32_t gwl_window_physical_to_surface_local(const GWL_Window *win, const
   }
   return value / win->frame.buffer_scale;
 }
+#endif /* WITH_GHOST_CSD */
 
 static bool gwl_window_viewport_set(GWL_Window *win,
                                     bool *r_surface_needs_commit,
@@ -2484,7 +2486,8 @@ GHOST_Context *GHOST_WindowWayland::newDrawingContext(GHOST_TDrawingContextType 
 void GHOST_WindowWayland::beginIME(
     const int32_t x, const int32_t y, const int32_t w, const int32_t h, const bool completed)
 {
-  system_->ime_begin(this, x, y, w, h, completed);
+  /* WAYLAND anchors the rectangle at its top-left. */
+  system_->ime_begin(this, x, y - h, w, h, completed);
 }
 
 void GHOST_WindowWayland::endIME()
