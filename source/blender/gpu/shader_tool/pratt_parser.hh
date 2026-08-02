@@ -17,13 +17,13 @@
  * - ResultT parenthesis(BindingPower p)                             // Must parse closing token
  * - ResultT member(ResultT left, const NodeT &t, BindingPower p)
  * - ResultT subscript(ResultT left, const NodeT &t, BindingPower p) // Must parse closing token
- * - ResultT postfix(ResultT left, const NodeT &t, BindingPower p)
+ * - ResultT suffix(ResultT left, const NodeT &t)
  * - ResultT binary(ResultT left, const NodeT &t, BindingPower p)
  * - ResultT ternary(ResultT left, const NodeT &t, BindingPower p)
  * - ResultT error(ErrorType err, lexit::TokenType type)
- * - NodeT peek() const
+ * - lexit::TokenType peek() const
  * - NodeT consume()
- * - bool is_valid_token(const NodeT &t) const
+ * - lexit::TokenType to_type(const NodeT &t)
  */
 template<typename Derived, typename ResultT, typename NodeT> class PrattParser {
  public:
@@ -47,15 +47,15 @@ template<typename Derived, typename ResultT, typename NodeT> class PrattParser {
 
   ResultT expr(BindingPower right)
   {
+    using namespace lexit;
+
     Derived &self = static_cast<Derived &>(*this);
 
     /* Parse unary operator, evaluate parenthesis, evaluate constant. */
     ResultT left = nud(self.consume());
 
     /* While left binding power is greater than the right, continue consuming binary operations. */
-    while (self.is_valid_token(self.peek()) &&
-           left_binding_power(self.peek().type()) > right.binding_power)
-    {
+    while (self.peek() != Invalid && left_binding_power(self.peek()) > right.binding_power) {
       left = led(left, self.consume());
     }
 
@@ -69,7 +69,7 @@ template<typename Derived, typename ResultT, typename NodeT> class PrattParser {
     using namespace lexit;
 
     Derived &self = static_cast<Derived &>(*this);
-    TokenType type = t.type();
+    TokenType type = self.to_type(t);
 
     switch (type) {
       case Word:
@@ -87,7 +87,7 @@ template<typename Derived, typename ResultT, typename NodeT> class PrattParser {
         return self.prefix(t, BindingPower::unary);
       case ParOpen:
         /* Parse the whole parenthesis expression. */
-        return self.parenthesis(BindingPower::parenthesis);
+        return self.parenthesis(t, BindingPower::parenthesis);
       default:
         return self.error(ErrorType::InvalidExpression, type);
     }
@@ -100,16 +100,18 @@ template<typename Derived, typename ResultT, typename NodeT> class PrattParser {
     using namespace lexit;
 
     Derived &self = static_cast<Derived &>(*this);
-    TokenType type = t.type();
+    TokenType type = self.to_type(t);
 
     switch (type) {
       case Dot:
         return self.member(left, t);
       case SquareOpen:
         return self.subscript(left, t);
+      case ParOpen:
+        return self.function_call(left, t);
       case Increment:
       case Decrement:
-        return self.postfix(left, t, left_binding_power(type));
+        return self.suffix(left, t);
       case Multiply:
       case Divide:
       case Modulo:

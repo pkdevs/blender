@@ -20,18 +20,18 @@ Result<vector<SymbolClass *>> SymbolFunction::to_arg_types(const SymbolTable &ta
   std::optional<AstNodeException> error;
   vector<SymbolClass *> arg_types;
   for (Expr expr : list.children_of_type<Expr>()) {
-    arg_types.emplace_back(table.expr_type_analysis(scope, expr).unwrap(error));
+    arg_types.emplace_back(table.expr_type_analysis(scope, expr).unwrap(error).type);
   }
   return {arg_types, error};
 }
 
-Result<vector<SymbolClass *>> SymbolFunction::to_arg_types(const SymbolTable & /*table*/,
+Result<vector<SymbolClass *>> SymbolFunction::to_arg_types(const SymbolTable &table,
                                                            const SymbolScope &scope,
                                                            FuncArgList list)
 {
   vector<SymbolClass *> arg_types;
   for (FuncArg arg : list.children_of_type<FuncArg>()) {
-    auto [cls, _] = scope.lookup_class(arg.type().id());
+    auto [cls, _] = scope.lookup_class(table, arg.type().id());
     arg_types.emplace_back(cls);
   }
   return {arg_types, std::nullopt};

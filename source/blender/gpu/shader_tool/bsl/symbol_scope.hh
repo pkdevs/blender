@@ -82,24 +82,24 @@ struct SymbolScope : Symbol {
   {
   }
 
-  SymbolVariable *lookup_variable(ast::IdQualified id) const;
-  Result<SymbolFunction *> lookup_function(ast::IdQualified id) const;
+  SymbolVariable *lookup_variable(const SymbolTable &table, ast::IdQualified id) const;
+  Result<SymbolFunction *> lookup_function(const SymbolTable &table, ast::IdQualified id) const;
   template<typename ArgOrParamList>
-  Result<SymbolFunction *> lookup_function(ast::IdQualified id,
+  Result<SymbolFunction *> lookup_function(const SymbolTable &table,
+                                           ast::IdQualified id,
                                            ArgOrParamList params,
-                                           const SymbolTable &table,
                                            const SymbolScope &arguments_scope) const;
-  Result<SymbolClass *> lookup_class(ast::IdQualified id) const;
+  Result<SymbolClass *> lookup_class(const SymbolTable &table, ast::IdQualified id) const;
 
-  Result<SymbolClass *> lookup_class(ast::Id id, ast::Id last) const;
+  Result<SymbolClass *> lookup_class(const SymbolTable &table, ast::Id id, ast::Id last) const;
 
   SymbolVariable *lookup_variable(string id) const;
   SymbolFunction *lookup_function(string id) const;
   SymbolClass *lookup_class(string id) const;
 
   /* Doesn't match last template in identifier. */
-  SymbolFunction *lookup_function_base(ast::IdQualified id) const;
-  SymbolClass *lookup_class_base(ast::IdQualified id) const;
+  SymbolFunction *lookup_function_base(const SymbolTable &table, ast::IdQualified id) const;
+  SymbolClass *lookup_class_base(const SymbolTable &table, ast::IdQualified id) const;
 
   void print() const;
 
@@ -121,9 +121,15 @@ struct SymbolScope : Symbol {
   vector<SymbolVariable *> non_static_variables_in_declaration_order() const;
 
  private:
-  template<typename T> T *lookup_generic(ast::IdQualified id, const SourceLocation &loc) const;
   template<typename T>
-  T *lookup_generic_nested(ast::Id id, ast::Id last, const SourceLocation &loc) const;
+  T *lookup_generic(const SymbolTable &table,
+                    ast::IdQualified id,
+                    const SourceLocation &loc) const;
+  template<typename T>
+  T *lookup_generic_nested(const SymbolTable &table,
+                           ast::Id id,
+                           ast::Id last,
+                           const SourceLocation &loc) const;
 
   int id = 0;
   /* Create a unique, non-reachable key.

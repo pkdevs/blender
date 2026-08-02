@@ -108,10 +108,13 @@ enum class Diag {
   UnrolledLoopMultipleVars,
   UnrolledLoopNonIntVar,
   UnrolledLoopMissingAssignment,
+  UnrolledLoopNotConstexpr,
   UnrolledLoopCommaOperator,
   UnrolledLoopTooManyIterations,
   UnrolledLoopMustAssignToVar,
   UnrolledLoopInvalidExpression,
+  IfConstexprNotConstexpr,
+  NonStaticBranchNotHomogenous,
   UnknownVariable,
   UnknownTypeName,
   TypeNotConvertibleToBool,
@@ -144,13 +147,15 @@ enum class Diag {
   NoteInstantiationFuncTemplateRequested,
   NoteInDeclarationOfVariable,
   SubscriptNotInt,
-  ArrayTypeTemporary,
   ParserTrailingInput,
   InvalidExprTypeChecker,
   ArrayTypeOperand,
   InvalidSubscript,
+  ExpectedParenthesis,
+  ExpectedColon,
   TypeInvalidOperator,
   TokenInvalidOperator,
+  CondInvalidTernary,
   TypeInvalidTernary,
   InvalidBinaryOperands,
   InvalidUnaryArgumentType,
@@ -181,6 +186,7 @@ enum class Diag {
   AnonymousUnionNotSupportedAtNamespaceScope,
   RedefinitionOfEntryPointFunction,
   TemplateParameterCountMismatch,
+  TemplateParameterNotConstexpr,
   MissingTemplateParameters,
   MissingParentClassInstantiation,
   CannotDeduceAutoType,
@@ -225,6 +231,9 @@ enum class Diag {
   UnknownClassInstantiation,
   Redefinition,
   RedefinitionTemplate,
+  CalledIsNotFunction,
+  InvalidNumberLiteral,
+  EnumNotConstexpr,
 };
 
 static inline std::string_view diagnostic_message_get(Diag diag)
@@ -259,6 +268,8 @@ static inline std::string_view diagnostic_message_get(Diag diag)
       return "Loop variable needs to be an integer type for unrolled loops";
     case Diag::UnrolledLoopMissingAssignment:
       return "Loop variable needs to be assigned a value (using assignment) for unrolled loops";
+    case Diag::UnrolledLoopNotConstexpr:
+      return "Non-constant expression in unrolled loop control";
     case Diag::UnrolledLoopCommaOperator:
       return "Comma operator is not allowed in unrolled loop statement";
     case Diag::UnrolledLoopTooManyIterations:
@@ -268,6 +279,10 @@ static inline std::string_view diagnostic_message_get(Diag diag)
     case Diag::UnrolledLoopInvalidExpression:
       return "Expected '++{0}', '--{0}', '{0}++', '{0}--' or '{0} = expr', '{0} += expr', '{0} "
              "-= expr', '{0} /= expr', '{0} *= expr' for unrolled loop expression";
+    case Diag::IfConstexprNotConstexpr:
+      return "Constexpr if condition is not a constant expression";
+    case Diag::NonStaticBranchNotHomogenous:
+      return "Statement cannot be tagged as 'static_branch' because previous statement also isn't";
     case Diag::UnknownVariable:
       return "Unknown variable '{}'";
     case Diag::UnknownTypeName:
@@ -326,8 +341,6 @@ static inline std::string_view diagnostic_message_get(Diag diag)
       return "In instantiation of function template specialization '{}' requested here";
     case Diag::SubscriptNotInt:
       return "Array subscript is not an integer";
-    case Diag::ArrayTypeTemporary:
-      return "Expression result is of array type";
     case Diag::ArrayTypeOperand:
       return "Invalid operand of array type";
     case Diag::ParserTrailingInput:
@@ -338,8 +351,14 @@ static inline std::string_view diagnostic_message_get(Diag diag)
       return "Subscripted value is not an array or vector";
     case Diag::TypeInvalidOperator:
       return "Invalid operator for type '{}'";
+    case Diag::ExpectedParenthesis:
+      return "Expected closing parenthesis";
+    case Diag::ExpectedColon:
+      return "Expected colon ':'";
     case Diag::TokenInvalidOperator:
       return "Invalid operator token '{}'";
+    case Diag::CondInvalidTernary:
+      return "Value of type '{}' is not contextually convertible to 'bool'";
     case Diag::TypeInvalidTernary:
       return "Incompatible operand types ('{}' and '{}')";
     case Diag::InvalidBinaryOperands:
@@ -408,6 +427,8 @@ static inline std::string_view diagnostic_message_get(Diag diag)
       return "Redefinition of entry point function '{}'";
     case Diag::TemplateParameterCountMismatch:
       return "Template parameter count must match declaration argument count";
+    case Diag::TemplateParameterNotConstexpr:
+      return "Non-type template argument is not a constant expression";
     case Diag::MissingTemplateParameters:
       return "Missing template parameters";
     case Diag::MissingParentClassInstantiation:
@@ -441,7 +462,7 @@ static inline std::string_view diagnostic_message_get(Diag diag)
     case Diag::FunctionCallNotAllowedInReferenceDefinition:
       return "Function calls are not allowed in reference definition";
     case Diag::ReferenceCannotBindNonConstSubscript:
-      return "Reference cannot bind to non-const subscript because '{}' is not defined as 'const'";
+      return "Reference cannot bind to expression of non-const subscript index";
     case Diag::ReferenceTypeMismatch:
       return "Reference to type '{}' cannot bind to a value of unrelated type '{}'";
     case Diag::ReferenceVariableRequiresInitializer:
@@ -455,7 +476,7 @@ static inline std::string_view diagnostic_message_get(Diag diag)
     case Diag::ExcessElementsInScalarInitializer:
       return "Excess elements in scalar initializer";
     case Diag::ConstexprVarMustBeIntOrUint:
-      return "Constexpr variable must be of type int or uint";
+      return "Constexpr variable must be of type 'int', 'uint', 'bool' or 'float'";
     case Diag::NoteInStorageBufferDeclaration:
       return "In this storage buffer declaration";
     case Diag::ConstexprVarMustBeInitializedByConstantExpr:
@@ -496,6 +517,12 @@ static inline std::string_view diagnostic_message_get(Diag diag)
       return "Redefinition of template '{}'";
     case Diag::Redefinition:
       return "Redefinition of '{}'";
+    case Diag::CalledIsNotFunction:
+      return "Called object type '{}' is not a function";
+    case Diag::InvalidNumberLiteral:
+      return "Unsupported literal";
+    case Diag::EnumNotConstexpr:
+      return "Expression is not an integral constant expression";
   }
   return "Compiler error: Invalid diagnostic value";
 }

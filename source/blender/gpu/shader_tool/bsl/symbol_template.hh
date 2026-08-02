@@ -39,7 +39,9 @@ template<typename T> struct SymbolTemplate {
     return !temp_arg_index_in_fn_arg.empty();
   }
 
-  ResultPair<T *, string> lookup_inst(ast::TemplateParamList list, const SymbolScope &scope) const;
+  ResultPair<T *, string> lookup_inst(ast::TemplateParamList list,
+                                      const SymbolScope &scope,
+                                      const SymbolTable &table) const;
   Result<T *> lookup_adl(const SymbolTable &symbols,
                          ast::FuncParamList list,
                          const SymbolScope &scope) const;

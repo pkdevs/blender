@@ -45,7 +45,7 @@ class ExpressionParser : public Parser<ExpressionLexer, NullParser> {
     EvalContext ctx((*this)[0]);
 
     int64_t v = ctx.expr(EvalContext::BindingPower(0));
-    if (ctx.peek().type() != Invalid) {
+    if (ctx.peek() != Invalid) {
       throw std::runtime_error("Trailing input");
     }
     return v;
@@ -98,7 +98,7 @@ class ExpressionParser : public Parser<ExpressionLexer, NullParser> {
       }
     }
 
-    int64_t parenthesis(BindingPower p)
+    int64_t parenthesis(const Token & /*t*/, BindingPower p)
     {
       /* Parse the whole parenthesis expression. */
       int64_t v = expr(p);
@@ -114,14 +114,19 @@ class ExpressionParser : public Parser<ExpressionLexer, NullParser> {
       throw std::runtime_error("Invalid operator: member access not supported");
     }
 
+    int64_t function_call(int64_t /*left*/, const Token & /*t*/)
+    {
+      throw std::runtime_error("Invalid expression: function call not supported");
+    }
+
     int64_t subscript(int64_t /*left*/, const Token & /*t*/)
     {
       throw std::runtime_error("Invalid operator: subscript not supported");
     }
 
-    int64_t postfix(int64_t /*left*/, const Token & /*t*/, BindingPower /*p*/)
+    int64_t suffix(int64_t /*left*/, const Token & /*t*/)
     {
-      throw std::runtime_error("Invalid operator: postfix not supported");
+      throw std::runtime_error("Invalid operator: suffix not supported");
     }
 
     int64_t binary(int64_t left, const Token &t, BindingPower p)
@@ -209,9 +214,9 @@ class ExpressionParser : public Parser<ExpressionLexer, NullParser> {
       throw std::runtime_error("Parse error");
     }
 
-    Token peek() const
+    TokenType peek() const
     {
-      return tok;
+      return tok.type();
     }
 
     Token consume()
@@ -221,9 +226,9 @@ class ExpressionParser : public Parser<ExpressionLexer, NullParser> {
       return t;
     }
 
-    bool is_valid_token(const Token &t) const
+    TokenType to_type(const Token &t) const
     {
-      return t.type() != Invalid;
+      return t.type();
     }
   };
 };

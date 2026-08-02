@@ -16,12 +16,15 @@ namespace bsl {
 using namespace blender::gpu::shader::parser::ast;
 
 template<typename T, typename AstNodeT>
-static Result<T *> resolve_template_instantiation(T *sym, AstNodeT id, const SymbolScope &scope)
+static Result<T *> resolve_template_instantiation(const SymbolTable &table,
+                                                  T *sym,
+                                                  AstNodeT id,
+                                                  const SymbolScope &scope)
 {
   if (TemplateParamList param = id.template_params();
       param.is_valid() && sym && sym->template_data)
   {
-    auto [inst, _, err] = sym->template_data->lookup_inst(param, scope);
+    auto [inst, _, err] = sym->template_data->lookup_inst(param, scope, table);
     return {inst, err};
   }
   return {sym, std::nullopt};
@@ -33,25 +36,26 @@ static Result<T *> resolve_template_instantiation(T *sym, AstNodeT id, const Sym
 #  define LOOKUP_LOG(a)
 #endif
 
-Result<SymbolFunction *> SymbolScope::lookup_function(IdQualified id) const
+Result<SymbolFunction *> SymbolScope::lookup_function(const SymbolTable &table,
+                                                      IdQualified id) const
 {
 #ifdef DEBUG_SYMBOL_LOOKUP
   LOOKUP_LOG("\n")
 #endif
-  SymbolFunction *func = lookup_generic<SymbolFunction>(id, id.front());
-  return resolve_template_instantiation(func, id, *this);
+  SymbolFunction *func = lookup_generic<SymbolFunction>(table, id, id.front());
+  return resolve_template_instantiation(table, func, id, *this);
 }
 
 template<typename ArgOrParamList>
-Result<SymbolFunction *> SymbolScope::lookup_function(IdQualified id,
+Result<SymbolFunction *> SymbolScope::lookup_function(const SymbolTable &table,
+                                                      IdQualified id,
                                                       ArgOrParamList params,
-                                                      const SymbolTable &table,
                                                       const SymbolScope &arguments_scope) const
 {
-  auto [func, err] = lookup_function(id);
+  auto [func, err] = lookup_function(table, id);
   if (func->is_error) {
     /* Try to resolve type constructors (only for builtins for now). */
-    if (auto [cls, err_cls] = lookup_class(id); !cls->is_error && cls && cls->is_builtin) {
+    if (auto [cls, err_cls] = lookup_class(table, id); !cls->is_error && cls && cls->is_builtin) {
       return {root_scope()->lookup_function(cls->identifier), {}};
     }
     return {func, err ? err : AstNodeException{id, Diag::UnknownFunction}};
@@ -63,56 +67,56 @@ Result<SymbolFunction *> SymbolScope::lookup_function(IdQualified id,
 }
 
 template Result<SymbolFunction *> SymbolScope::lookup_function(
+    const SymbolTable &table,
     IdQualified id,
     FuncParamList params,
-    const SymbolTable &table,
     const SymbolScope &arguments_scope) const;
 template Result<SymbolFunction *> SymbolScope::lookup_function(
+    const SymbolTable &table,
     IdQualified id,
     FuncArgList params,
-    const SymbolTable &table,
     const SymbolScope &arguments_scope) const;
 
-Result<SymbolClass *> SymbolScope::lookup_class(IdQualified id) const
+Result<SymbolClass *> SymbolScope::lookup_class(const SymbolTable &table, IdQualified id) const
 {
 #ifdef DEBUG_SYMBOL_LOOKUP
   LOOKUP_LOG("\n")
 #endif
-  SymbolClass *cls = lookup_generic<SymbolClass>(id, id.front());
-  return resolve_template_instantiation(cls, id, *this);
+  SymbolClass *cls = lookup_generic<SymbolClass>(table, id, id.front());
+  return resolve_template_instantiation(table, cls, id, *this);
 }
 
-Result<SymbolClass *> SymbolScope::lookup_class(Id id, Id last) const
+Result<SymbolClass *> SymbolScope::lookup_class(const SymbolTable &table, Id id, Id last) const
 {
 #ifdef DEBUG_SYMBOL_LOOKUP
   LOOKUP_LOG("\n")
 #endif
-  SymbolClass *cls = lookup_generic_nested<SymbolClass>(id, last, id.front());
-  return resolve_template_instantiation(cls, last, *this);
+  SymbolClass *cls = lookup_generic_nested<SymbolClass>(table, id, last, id.front());
+  return resolve_template_instantiation(table, cls, last, *this);
 }
 
-SymbolFunction *SymbolScope::lookup_function_base(IdQualified id) const
+SymbolFunction *SymbolScope::lookup_function_base(const SymbolTable &table, IdQualified id) const
 {
 #ifdef DEBUG_SYMBOL_LOOKUP
   LOOKUP_LOG("\n")
 #endif
-  return lookup_generic<SymbolFunction>(id, id.front());
+  return lookup_generic<SymbolFunction>(table, id, id.front());
 }
 
-SymbolClass *SymbolScope::lookup_class_base(IdQualified id) const
+SymbolClass *SymbolScope::lookup_class_base(const SymbolTable &table, IdQualified id) const
 {
 #ifdef DEBUG_SYMBOL_LOOKUP
   LOOKUP_LOG("\n")
 #endif
-  return lookup_generic<SymbolClass>(id, id.front());
+  return lookup_generic<SymbolClass>(table, id, id.front());
 }
 
-SymbolVariable *SymbolScope::lookup_variable(IdQualified id) const
+SymbolVariable *SymbolScope::lookup_variable(const SymbolTable &table, IdQualified id) const
 {
 #ifdef DEBUG_SYMBOL_LOOKUP
   LOOKUP_LOG("\n")
 #endif
-  return lookup_generic<SymbolVariable>(id, id.front());
+  return lookup_generic<SymbolVariable>(table, id, id.front());
 }
 
 const SymbolScope *SymbolScope::root_scope() const
@@ -151,7 +155,9 @@ template<typename T> const char *get_symbol_type_name()
 }
 
 template<typename T>
-T *SymbolScope::lookup_generic(IdQualified id, const SourceLocation &loc) const
+T *SymbolScope::lookup_generic(const SymbolTable &table,
+                               IdQualified id,
+                               const SourceLocation &loc) const
 {
   assert(id.is_valid());
 
@@ -162,11 +168,13 @@ T *SymbolScope::lookup_generic(IdQualified id, const SourceLocation &loc) const
   if (id.is_global() && parent) {
     LOOKUP_LOG("[Lookup] Global lookup: Bubbling up to parent scope " << parent->identifier
                                                                       << "\n")
-    return parent->lookup_generic<T>(id, loc);
+    return parent->lookup_generic<T>(table, id, loc);
   }
 
   /* Try to match within this scope. */
-  if (auto v = lookup_generic_nested<T>(id.namespace_start(), id.child_last(NodeType::Id), loc)) {
+  if (auto v = lookup_generic_nested<T>(
+          table, id.namespace_start(), id.child_last(NodeType::Id), loc))
+  {
     LOOKUP_LOG("[Lookup] Symbol found locally '" << identifier << "'.\n")
     return v;
   }
@@ -174,7 +182,7 @@ T *SymbolScope::lookup_generic(IdQualified id, const SourceLocation &loc) const
   /* Delegate to parent scope if not found locally. */
   if (parent) {
     LOOKUP_LOG("[Lookup] Not found locally. Delegating to parent scope\n")
-    return parent->lookup_generic<T>(id, loc);
+    return parent->lookup_generic<T>(table, id, loc);
   }
 
   /* Lookup failure at root level, try to return error symbol. */
@@ -204,7 +212,10 @@ T *SymbolScope::lookup_generic(IdQualified id, const SourceLocation &loc) const
 }
 
 template<typename T>
-T *SymbolScope::lookup_generic_nested(Id id, Id last, const SourceLocation &loc) const
+T *SymbolScope::lookup_generic_nested(const SymbolTable &table,
+                                      Id id,
+                                      Id last,
+                                      const SourceLocation &loc) const
 {
   LOOKUP_LOG("[Nested] Looking up " << get_symbol_type_name<T>() << " '"
                                     << id.front().buf_->substr(id.front(), last.front())
@@ -214,7 +225,7 @@ T *SymbolScope::lookup_generic_nested(Id id, Id last, const SourceLocation &loc)
   if (auto it = scopes.find(""); it != scopes.end()) {
     LOOKUP_LOG("[Nested] Looking up anonymous namespace scope\n")
     Id next_search_id = id.id != last.id ? id.next_id() : id;
-    if (auto ret = it->second->lookup_generic_nested<T>(next_search_id, last, loc)) {
+    if (auto ret = it->second->lookup_generic_nested<T>(table, next_search_id, last, loc)) {
       return ret;
     }
   }
@@ -226,9 +237,11 @@ T *SymbolScope::lookup_generic_nested(Id id, Id last, const SourceLocation &loc)
       LOOKUP_LOG("[Nested] Segment '" << id.str() << "' has template params. Checking classes.\n")
       if (auto it = classes.find(string(id.str())); it != classes.end()) {
         if (SymbolClass *cls = it->second.second->as_class(); cls && cls->template_data) {
-          if (auto [tmp, _, err] = cls->template_data->lookup_inst(list, *this); !tmp->is_error) {
+          if (auto [tmp, _, err] = cls->template_data->lookup_inst(list, *this, table);
+              !tmp->is_error)
+          {
             LOOKUP_LOG("[Nested] Found template instance scope '" << tmp->identifier << "'.\n")
-            return tmp->lookup_generic_nested<T>(id.next_id(), last, loc);
+            return tmp->lookup_generic_nested<T>(table, id.next_id(), last, loc);
           }
         }
       }
@@ -239,7 +252,7 @@ T *SymbolScope::lookup_generic_nested(Id id, Id last, const SourceLocation &loc)
     if (auto it = scopes.find(string(id.str())); it != scopes.end()) {
       LOOKUP_LOG("[Nested] Match sub-scope/namespace '"
                  << id.str() << "' at " << it->second->identifier << ". Descending...\n")
-      return it->second->lookup_generic_nested<T>(id.next_id(), last, loc);
+      return it->second->lookup_generic_nested<T>(table, id.next_id(), last, loc);
     }
     LOOKUP_LOG("[Nested] Mid-segment '" << id.str() << "' could not be resolved as a scope.\n")
     return nullptr;

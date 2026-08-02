@@ -277,7 +277,7 @@ struct CodegenContext : NodeErrorHandler {
 
   void pipeline_decl(PipelineDecl stmt, SymbolScope &scope)
   {
-    SymbolVariable *pipeline = scope.lookup_variable(stmt.identifier());
+    SymbolVariable *pipeline = scope.lookup_variable(symbols, stmt.identifier());
 
     const bool is_graphic = stmt.type().str() == "PipelineGraphic";
 
@@ -298,7 +298,8 @@ struct CodegenContext : NodeErrorHandler {
         return;
       }
       /* Resolve vertex function. */
-      auto *fn = scope.lookup_function(LocalVar(vert_fn.child_first()).identifier()).unwrap(this);
+      auto *fn = scope.lookup_function(symbols, LocalVar(vert_fn.child_first()).identifier())
+                     .unwrap(this);
       if (fn->entry_point_type != SymbolFunction::EntryPointType::VERT) {
         error(vert_fn, Diag::ExpectedVertexShaderEntryPoint);
         return;
@@ -313,7 +314,8 @@ struct CodegenContext : NodeErrorHandler {
         return;
       }
       /* Resolve fragment function. */
-      auto *fn2 = scope.lookup_function(LocalVar(frag_fn.child_first()).identifier()).unwrap(this);
+      auto *fn2 = scope.lookup_function(symbols, LocalVar(frag_fn.child_first()).identifier())
+                      .unwrap(this);
       if (fn2->entry_point_type != SymbolFunction::EntryPointType::FRAG) {
         error(frag_fn, Diag::ExpectedFragmentShaderEntryPoint);
         return;
@@ -331,7 +333,8 @@ struct CodegenContext : NodeErrorHandler {
         return;
       }
       /* Resolve compute function. */
-      auto *fn = scope.lookup_function(LocalVar(comp_fn.child_first()).identifier()).unwrap(this);
+      auto *fn = scope.lookup_function(symbols, LocalVar(comp_fn.child_first()).identifier())
+                     .unwrap(this);
       if (fn->entry_point_type != SymbolFunction::EntryPointType::COMP) {
         error(comp_fn, Diag::ExpectedComputeShaderEntryPoint);
         return;
@@ -345,7 +348,7 @@ struct CodegenContext : NodeErrorHandler {
 
     while (constants_init.is_valid()) {
       if (Constructor ctor(constants_init.child_first()); ctor.is_valid()) {
-        auto *cls = scope.lookup_class(ctor.id()).unwrap(this);
+        auto *cls = scope.lookup_class(symbols, ctor.id()).unwrap(this);
         builder << cls->identifier;
         builder << ctor.initializer_list();
       }
@@ -445,7 +448,7 @@ struct CodegenContext : NodeErrorHandler {
       return;
     }
     Declarator decl = init_stmt.child_first(NodeType::Declarator);
-    SymbolVariable *var = scope.lookup_variable(decl.identifier());
+    SymbolVariable *var = scope.lookup_variable(symbols, decl.identifier());
     if (var->is_error) {
       error(decl.identifier(), Diag::UnknownVariable, decl.identifier().str());
       return;
@@ -457,7 +460,7 @@ struct CodegenContext : NodeErrorHandler {
     }
     /* Check if loop variable is of integer type. */
     SymbolClass *cls = var->type;
-    if (cls->identifier != "int" && cls->identifier != "uint") {
+    if (cls != symbols.int_cls && cls != symbols.uint_cls) {
       error(init_stmt.type(), Diag::UnrolledLoopNonIntVar);
       return;
     }
@@ -467,7 +470,12 @@ struct CodegenContext : NodeErrorHandler {
       error(decl, Diag::UnrolledLoopMissingAssignment);
       return;
     }
-    int64_t val = SymbolTable::evaluate_constexpr(scope, init_expr.child_first()).unwrap(this);
+    auto result = symbols.expr_type_analysis(scope, init_expr.child_first()).unwrap(this);
+    if (!result.is_constexpr()) {
+      error(decl, Diag::UnrolledLoopNotConstexpr);
+      return;
+    }
+    ConstexprValue val = result.value;
     /* Check if loop statement assign to and only to the loop variable. */
     for (Node node : end_expr.children_range()) {
       if (node.type() == NodeType::Op && node.front() == ',') {
@@ -482,12 +490,15 @@ struct CodegenContext : NodeErrorHandler {
     var->is_constexpr = true;
     var->value = val;
     /* Run a small virtual machine. For each iteration, check the condition, and run the loop
-     * statement. Break only if we  */
+     * statement. */
     for (int i = 0;; i++) {
-      int64_t cond_val =
-          SymbolTable::evaluate_constexpr(scope, cond_expr.child_first()).unwrap(this);
+      auto result = symbols.expr_type_analysis(scope, cond_expr.child_first()).unwrap(this);
+      if (!result.is_constexpr()) {
+        error(cond_expr, Diag::UnrolledLoopNotConstexpr);
+        break;
+      }
       /* Break if condition is false. */
-      if (cond_val == 0) {
+      if (value_as<int>(result.value) == 0) {
         break;
       }
       /* Break if too many iterations. */
@@ -500,7 +511,7 @@ struct CodegenContext : NodeErrorHandler {
       local_scope(stmt.body(), scope);
 
       /* Evaluate the loop statement. */
-      var->value = eval_constexpr_with_side_effects(var, end_expr, scope).unwrap(this);
+      var->value = eval_constexpr_with_side_effects(var, end_expr, scope);
       if (err_handler.err) {
         break;
       }
@@ -512,39 +523,39 @@ struct CodegenContext : NodeErrorHandler {
     jump_to(stmt.back().next());
   }
 
-  Result<int64_t> eval_constexpr_with_side_effects(SymbolVariable *var,
-                                                   Expr expr,
-                                                   SymbolScope &scope)
+  ConstexprValue eval_constexpr_with_side_effects(SymbolVariable *var,
+                                                  Expr expr,
+                                                  SymbolScope &scope)
   {
     if (expr.child_count() == 2) {
       /* ExpressionParser will not evaluate increment and decrement operators.
        * We have to handle it ourselves. */
+      TokenType op_type = Invalid;
+      LocalVar local_var = expr.child_first();
       if (expr.child_last().type() == NodeType::Op) {
-        LocalVar local_var = expr.child_first();
-        if (local_var.is_valid()) {
-          if (scope.lookup_variable(local_var.identifier()) != var) {
-            return {0, AstNodeException(expr, Diag::UnrolledLoopMustAssignToVar, var->identifier)};
-          }
-          if (expr.back() == Decrement) {
-            return {var->value - 1, {}};
-          }
-          if (expr.back() == Increment) {
-            return {var->value + 1, {}};
-          }
-        }
+        local_var = expr.child_first();
+        op_type = expr.back().type();
       }
       else if (expr.child_first().type() == NodeType::Op) {
-        LocalVar local_var = expr.child_last();
-        if (local_var.is_valid()) {
-          if (scope.lookup_variable(local_var.identifier()) != var) {
-            return {0, AstNodeException(expr, Diag::UnrolledLoopMustAssignToVar, var->identifier)};
-          }
-          if (expr.front() == Decrement) {
-            return {var->value - 1, {}};
-          }
-          if (expr.front() == Increment) {
-            return {var->value + 1, {}};
-          }
+        local_var = expr.child_last();
+        op_type = expr.front().type();
+      }
+
+      if (local_var.is_valid()) {
+        if (scope.lookup_variable(symbols, local_var.identifier()) != var) {
+          error(expr, Diag::UnrolledLoopMustAssignToVar, var->identifier);
+          return 0;
+        }
+        /* Assign with the correct type cast. */
+        switch (op_type) {
+          case Decrement:
+            return visit([](auto &&v) -> ConstexprValue { return decay_t<decltype(v)>(v - 1); },
+                         var->value);
+          case Increment:
+            return visit([](auto &&v) -> ConstexprValue { return decay_t<decltype(v)>(v + 1); },
+                         var->value);
+          default:
+            break;
         }
       }
     }
@@ -553,37 +564,59 @@ struct CodegenContext : NodeErrorHandler {
        * We have to handle it ourselves. */
       LocalVar local_var = expr.child_first();
       if (local_var.is_valid()) {
-        if (scope.lookup_variable(local_var.identifier()) != var) {
-          return {0, AstNodeException(expr, Diag::UnrolledLoopMustAssignToVar, var->identifier)};
+        if (scope.lookup_variable(symbols, local_var.identifier()) != var) {
+          error(expr, Diag::UnrolledLoopMustAssignToVar, var->identifier);
+          return 0;
         }
         Node op = local_var.next();
         if (op.type() == NodeType::Op) {
           Node node = op.next();
 
-          auto [loop_val, err_val] = SymbolTable::evaluate_constexpr(scope, node);
+          auto result = symbols.expr_type_analysis(scope, node).unwrap(this);
+          if (!result.is_constexpr()) {
+            error(expr, Diag::UnrolledLoopNotConstexpr, var->identifier);
+            return 0;
+          }
 
+          /* Assign with the correct type cast. */
           switch (op.front().type()) {
             case Assign:
-              return {loop_val, err_val};
+              return visit(
+                  [](auto &&a, auto &&b) -> ConstexprValue { return decay_t<decltype(a)>(b); },
+                  var->value,
+                  result.value);
             case AssignAdd:
-              return {var->value + loop_val, err_val};
+              return visit(
+                  [](auto &&a, auto &&b) -> ConstexprValue { return decay_t<decltype(a)>(a + b); },
+                  var->value,
+                  result.value);
             case AssignSub:
-              return {var->value - loop_val, err_val};
+              return visit(
+                  [](auto &&a, auto &&b) -> ConstexprValue { return decay_t<decltype(a)>(a - b); },
+                  var->value,
+                  result.value);
             case AssignMul:
-              return {var->value * loop_val, err_val};
+              return visit(
+                  [](auto &&a, auto &&b) -> ConstexprValue { return decay_t<decltype(a)>(a * b); },
+                  var->value,
+                  result.value);
             case AssignDiv:
-              if (loop_val == 0) {
-                return {var->value / loop_val,
-                        err_val ? err_val : AstNodeException(op, Diag::ConstexprDivisionByZero)};
+              if (visit([](auto &&a) -> bool { return a == 0; }, result.value)) {
+                error(expr, Diag::ConstexprDivisionByZero);
+                return 0;
               }
-              return {var->value / loop_val, err_val};
+              return visit(
+                  [](auto &&a, auto &&b) -> ConstexprValue { return decay_t<decltype(a)>(a / b); },
+                  var->value,
+                  result.value);
             default:
               break;
           }
         }
       }
     }
-    return {0, AstNodeException(expr, Diag::UnrolledLoopInvalidExpression, var->identifier)};
+    error(expr, Diag::UnrolledLoopInvalidExpression, var->identifier);
+    return 0;
   }
 
   void for_loop(ForLoop stmt, SymbolScope &scope)
@@ -668,7 +701,7 @@ struct CodegenContext : NodeErrorHandler {
     SymbolClass *cls_ptr = inst_cls;
     if (!cls_ptr) {
       if (decl.identifier().is_valid()) {
-        cls_ptr = scope.lookup_class(decl.identifier()).unwrap(this);
+        cls_ptr = scope.lookup_class(symbols, decl.identifier()).unwrap(this);
       }
       else {
         cls_ptr = scope.lookup_class("a" + to_string(nested_id));
@@ -893,7 +926,7 @@ struct CodegenContext : NodeErrorHandler {
             if (!decl.type().is_static()) {
               SymbolClass *type = id_type_lookup_resolved(decl.type().id(), cls);
               for (Declarator d : decl.children_of_type<Declarator>()) {
-                SymbolVariable *var = cls.lookup_variable(d.identifier());
+                SymbolVariable *var = cls.lookup_variable(symbols, d.identifier());
                 if (var->is_static) {
                   continue;
                 }
@@ -1201,7 +1234,7 @@ struct CodegenContext : NodeErrorHandler {
     for (FuncArg arg : decl.arguments().children_of_type<FuncArg>()) {
       auto attr = resource_type_from_attributes(arg.attributes()).unwrap(this);
 
-      SymbolVariable *var = fn.lookup_variable(arg.identifier());
+      SymbolVariable *var = fn.lookup_variable(symbols, arg.identifier());
 
       const string &resolved_type = var->type->identifier;
 
@@ -1363,20 +1396,20 @@ struct CodegenContext : NodeErrorHandler {
   {
     if (temp_decl.is_class()) {
       ClassDecl decl = temp_decl.decl();
-      auto *base_cls = scope.lookup_class_base(decl.identifier());
+      auto *base_cls = scope.lookup_class_base(symbols, decl.identifier());
       /* Instantiation should have been checked already. */
-      auto [temp_cls, full_id, _] = base_cls->template_data->lookup_inst(temp_decl.parameters(),
-                                                                         scope);
+      auto [temp_cls, full_id, _] = base_cls->template_data->lookup_inst(
+          temp_decl.parameters(), scope, symbols);
       NOTE(decl.identifier(), Diag::NoteInstantiationClassTemplateRequested, full_id);
       Node decl_tmp = base_cls->template_data->decl.decl();
       class_decl(decl_tmp, scope, 0, temp_cls);
     }
     else {
       FuncForwardDecl decl = temp_decl.decl();
-      auto *base_fn = scope.lookup_function_base(decl.identifier());
+      auto *base_fn = scope.lookup_function_base(symbols, decl.identifier());
       /* Instantiation should have been checked already. */
-      auto [temp_fn, full_id, _] = base_fn->template_data->lookup_inst(temp_decl.parameters(),
-                                                                       scope);
+      auto [temp_fn, full_id, _] = base_fn->template_data->lookup_inst(
+          temp_decl.parameters(), scope, symbols);
       NOTE(decl.identifier(), Diag::NoteInstantiationFuncTemplateRequested, full_id);
       Node decl_tmp = base_fn->template_data->decl.decl();
       func_decl(decl_tmp, *temp_fn->parent, temp_fn);
@@ -1387,19 +1420,19 @@ struct CodegenContext : NodeErrorHandler {
   {
     if (temp_spec.is_class()) {
       ClassDecl decl = temp_spec.decl();
-      auto *base_cls = scope.lookup_class_base(decl.identifier());
+      auto *base_cls = scope.lookup_class_base(symbols, decl.identifier());
       /* Instantiation should have been checked already. */
-      auto [temp_cls, full_id, _] = base_cls->template_data->lookup_inst(temp_spec.parameters(),
-                                                                         scope);
+      auto [temp_cls, full_id, _] = base_cls->template_data->lookup_inst(
+          temp_spec.parameters(), scope, symbols);
       NOTE(decl.identifier(), Diag::NoteInstantiationClassTemplateRequested, full_id);
       class_decl(decl, scope, 0, temp_cls);
     }
     else {
       FuncDecl decl = temp_spec.decl();
-      auto *base_fn = scope.lookup_function_base(decl.identifier());
+      auto *base_fn = scope.lookup_function_base(symbols, decl.identifier());
       /* Instantiation should have been checked already. */
-      auto [temp_fn, full_id, _] = base_fn->template_data->lookup_inst(temp_spec.parameters(),
-                                                                       scope);
+      auto [temp_fn, full_id, _] = base_fn->template_data->lookup_inst(
+          temp_spec.parameters(), scope, symbols);
       NOTE(decl.identifier(), Diag::NoteInstantiationFuncTemplateRequested, full_id);
       func_decl(decl, *temp_fn->parent, temp_fn);
     }
@@ -1423,22 +1456,21 @@ struct CodegenContext : NodeErrorHandler {
     bool constexpr_value = true;
     if (cond.is_valid()) {
       LocalStmt stmt = cond.child_first();
-      auto [value, err] = SymbolTable::evaluate_constexpr(scope, stmt.expr().child_first());
-      constexpr_value = value != 0;
+      auto result = symbols.expr_type_analysis(scope, stmt.expr().child_first()).unwrap(this);
 
-      if (is_constexpr) {
+      constexpr_value = value_as<int>(result.value) != 0;
+
+      if (is_constexpr && !result.is_constexpr()) {
         /* Report error if expression couldn't be evaluated. */
-        error(err);
+        error(stmt, Diag::IfConstexprNotConstexpr);
       }
-      else if (!err.has_value()) {
+      else if (result.is_constexpr()) {
         /* Expression was evaluated successfully. Treat the statement as constexpr. */
         is_constexpr = true;
       }
 
       if (cond.attributes().contains_attr("static_branch")) {
-        error(
-            decl,
-            "statement cannot be tagged as 'static_branch' because previous statement also isn't");
+        error(decl, Diag::NonStaticBranchNotHomogenous);
       }
     }
 
@@ -1511,8 +1543,9 @@ struct CodegenContext : NodeErrorHandler {
       LocalStmt stmt(cond.child_first());
       int unused_count = 0;
       /* Checks that condition is made of compilation constants or constexpr. */
-      auto cond_str = SymbolTable::expr_to_string(
-                          parent_scope, stmt.expr().child_first(), unused_count, true)
+      auto cond_str = symbols
+                          .expr_to_string(
+                              parent_scope, stmt.expr().child_first(), unused_count, true)
                           .unwrap(this);
       builder.ss << (first ? "#if " : "#elif ") + cond_str + "\n";
     }
@@ -1562,15 +1595,16 @@ struct CodegenContext : NodeErrorHandler {
         if (do_implicit_conversion &&
             (!is_for_loop || (child.prev().is_valid() && child.next().is_valid())))
         {
-          auto *type = symbols.expr_type_analysis(scope, LocalStmt(child).expr()).unwrap(this);
-          if (type->identifier == "int") {
+          Node start = LocalStmt(child).expr().child_first();
+          auto *type = symbols.expr_type_analysis(scope, start).unwrap(this).type;
+          if (type == symbols.int_cls) {
             builder.ss << "!=0";
           }
-          else if (type->identifier == "uint") {
+          else if (type == symbols.uint_cls) {
             builder.ss << "!=0u";
           }
-          else if (type->identifier != "bool" && type->identifier != "bool32_t") {
-            error(child, Diag::TypeNotConvertibleToBool, type->identifier);
+          else if (type != symbols.bool_cls && type != symbols.bool32_t_cls) {
+            error(child, Diag::TypeNotConvertibleToBool, type->original);
           }
         }
       }
@@ -1853,10 +1887,10 @@ struct CodegenContext : NodeErrorHandler {
         error(sub, "Multi-dimensional arrays cannot have implicit size");
       }
       else {
-        auto [size, err] = SymbolTable::evaluate_constexpr(scope, sub.expr().child_first());
+        auto [result, err] = symbols.expr_type_analysis(scope, sub.expr().child_first());
         /* Note: Do not report error. The size might be defined by compilation constant. */
-        if (!err) {
-          if (size == 0) {
+        if (!err && result.is_constexpr()) {
+          if (value_as<uint>(result.value) == 0) {
             error(decl, "Array size must be greater than zero");
           }
         }
@@ -1868,7 +1902,7 @@ struct CodegenContext : NodeErrorHandler {
   void declarator(Declarator decl, SymbolScope &scope, bool skip_value = false)
   {
     ArrayDecl array = decl.array();
-    SymbolVariable *var = scope.lookup_variable(decl.identifier());
+    SymbolVariable *var = scope.lookup_variable(symbols, decl.identifier());
 
     const bool par = match_if('(');
     if (var->type->is_srt()) {
@@ -1925,7 +1959,7 @@ struct CodegenContext : NodeErrorHandler {
 
   void constructor(Constructor construct, SymbolScope &scope)
   {
-    auto *cls = scope.lookup_class(construct.id()).unwrap(this);
+    auto *cls = scope.lookup_class(symbols, construct.id()).unwrap(this);
     if (cls->is_srt()) {
       error(construct, Diag::ResourceTableConstructorNotAllowed, cls->identifier);
     }
@@ -2035,7 +2069,7 @@ struct CodegenContext : NodeErrorHandler {
   SymbolClass *id_type_lookup_resolved(IdQualified id, const SymbolScope &scope)
   {
     assert(id.is_valid());
-    auto *cls = scope.lookup_class(id).unwrap(this);
+    auto *cls = scope.lookup_class(symbols, id).unwrap(this);
     if (cls->template_data && !id.template_params().is_valid()) {
       error(id, "Missing explicit template arguments");
     }
@@ -2069,7 +2103,7 @@ struct CodegenContext : NodeErrorHandler {
                                           const SymbolScope &param_scope)
   {
     assert(id.is_valid());
-    return scope.lookup_function(id, params, symbols, param_scope).unwrap(this);
+    return scope.lookup_function(symbols, id, params, param_scope).unwrap(this);
   }
 
   template<typename ArgOrParamList>
@@ -2088,7 +2122,7 @@ struct CodegenContext : NodeErrorHandler {
   SymbolVariable *id_var_resolved(IdQualified id, const SymbolScope &scope)
   {
     assert(id.is_valid());
-    SymbolVariable *var = scope.lookup_variable(id);
+    SymbolVariable *var = scope.lookup_variable(symbols, id);
     if (var->is_error) {
       error(id, "Unknown variable '" + string(id.str()) + "'");
       builder << id;
@@ -2131,7 +2165,7 @@ struct CodegenContext : NodeErrorHandler {
   SymbolVariable *id_var_decl_resolved(IdQualified id, const SymbolScope &scope)
   {
     assert(id.is_valid());
-    SymbolVariable *var = scope.lookup_variable(id);
+    SymbolVariable *var = scope.lookup_variable(symbols, id);
     if (var->is_error) {
       error(id, "Unknown variable '" + string(id.str()) + "'");
       builder << id;
@@ -2169,7 +2203,7 @@ struct CodegenContext : NodeErrorHandler {
 
     for (VarDecl decl : body.children_of_type<VarDecl>()) {
       Declarator d = decl.child_first(NodeType::Declarator);
-      SymbolVariable *var = cls.lookup_variable(d.identifier());
+      SymbolVariable *var = cls.lookup_variable(symbols, d.identifier());
       const string &type_name = var->type->identifier;
       const string &var_name = var->identifier;
       switch (cls.srt_type) {
@@ -2275,12 +2309,13 @@ struct CodegenContext : NodeErrorHandler {
   {
     Node node = expr.child_first();
     if (LocalVar var = node; var.is_valid()) {
-      SymbolVariable *sym = cls.lookup_variable(var.identifier());
+      SymbolVariable *sym = cls.lookup_variable(symbols, var.identifier());
       if (sym->is_error) {
         /* This could be a macro. Don't make an error. */
         return string(expr.str());
       }
-      if (auto it = symbols.image_formats.find(sym->value); it != symbols.image_formats.end()) {
+      int enum_val = value_as<int>(sym->value);
+      if (auto it = symbols.image_formats.find(enum_val); it != symbols.image_formats.end()) {
         return it->second;
       }
     }

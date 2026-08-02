@@ -15,6 +15,7 @@ namespace bsl {
 
 struct SymbolScope;
 struct SymbolClass;
+struct SymbolTable;
 
 struct Symbol {
   string identifier;
@@ -24,6 +25,13 @@ struct Symbol {
   SymbolScope *parent = nullptr;
 };
 
+using ConstexprValue = std::variant<bool, int, uint, float>;
+
+template<typename T> T value_as(const ConstexprValue &v)
+{
+  return std::visit([](auto &&arg) -> T { return static_cast<T>(arg); }, v);
+}
+
 struct SymbolVariable : Symbol {
   SymbolClass *type = nullptr; /* TODO rename to type */
 
@@ -32,7 +40,7 @@ struct SymbolVariable : Symbol {
   ast::Expr reference_value = {};
 
   /* Value if constexpr. */
-  int64_t value = 0;
+  ConstexprValue value = 0;
 
   ResourceType res_type = ResourceType::NONE;
 
@@ -50,7 +58,10 @@ struct SymbolVariable : Symbol {
   bool is_const = false;
   bool is_compilation_const = false;
 
-  SymbolVariable(SymbolScope *parent, SymbolClass *type, ast::Declarator decl);
+  SymbolVariable(SymbolScope *parent,
+                 SymbolClass *type,
+                 ast::Declarator decl,
+                 const SymbolTable &table);
 
   SymbolVariable(SymbolScope *parent, SymbolClass *type, ast::EnumValue decl)
       : Symbol(string(decl.identifier().str()),

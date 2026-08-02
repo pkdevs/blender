@@ -13,6 +13,7 @@
 #include "symbol_class.hh"
 #include "symbol_function.hh"
 #include "symbol_variable.hh"
+#include "type_checker.hh"
 
 #include <unordered_map>
 
@@ -140,23 +141,24 @@ struct SymbolTable {
 
   void parse(ast::LocalScope node, ErrorHandler &err_handler);
 
-  static Result<StringPair> mangle_identifier(ast::TemplateArgList args,
-                                              ast::TemplateParamList list,
-                                              const SymbolScope &scope);
+  Result<StringPair> mangle_identifier(ast::TemplateArgList args,
+                                       ast::TemplateParamList list,
+                                       const SymbolScope &scope) const;
+
   Result<StringPair> mangle_identifier(const SymbolFunctionTemplate &tmp,
                                        ast::FuncParamList list,
                                        const SymbolScope &scope) const;
 
-  Result<SymbolClass *> expr_type_analysis(const SymbolScope &scope, ast::Expr expr) const;
+  Result<ExpressionResult> expr_type_analysis(const SymbolScope &scope,
+                                              ast::Node start_node,
+                                              bool is_reference = false) const;
 
   Result<SymbolClass *> resolve_auto_type(SymbolScope &scope, ast::Declarator decl) const;
 
-  static Result<int64_t> evaluate_constexpr(const SymbolScope &scope, ast::Node start);
-
-  static Result<string> expr_to_string(const SymbolScope &scope,
-                                       ast::Node start,
-                                       int &node_count,
-                                       bool allow_compilation_constant = false);
+  Result<string> expr_to_string(const SymbolScope &scope,
+                                ast::Node start,
+                                int &node_count,
+                                bool allow_compilation_constant = false) const;
 
   SymbolClass *get_literal_type(string_view lit) const;
   bool is_convertible(const SymbolClass *from,

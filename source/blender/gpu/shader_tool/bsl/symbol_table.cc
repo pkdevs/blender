@@ -25,36 +25,6 @@ SymbolTable::SymbolTable(ParserBase &parser)
   register_builtins(node);
 }
 
-Result<int64_t> SymbolTable::evaluate_constexpr(const SymbolScope &scope, Node start)
-{
-  /* First build a string containing only numerical constants by substituting all the symbols. */
-  int count = 0;
-  auto [expr_str, error] = expr_to_string(scope, start, count);
-  if (error) {
-    return {0, error};
-  }
-
-  /* Fast path. */
-  if (count == 1) {
-    try {
-      return {stoll(expr_str), {}};
-    }
-    catch (...) {
-      return {0, AstNodeException(start, Diag::ErrorParsingIntegerLiteral)};
-    }
-  }
-
-  /* Then use the expression parser to evaluate it. */
-  try {
-    ExpressionParser expression_parser;
-    expression_parser.lexical_analysis(expr_str);
-    return {expression_parser.eval(), {}};
-  }
-  catch (const std::exception &e) {
-    return {0, AstNodeException(start, Diag::FailedToEvaluateExpandedExpr, expr_str)};
-  }
-}
-
 Result<SymbolClass *> SymbolTable::resolve_auto_type(SymbolScope &scope, Declarator decl) const
 {
   std::optional<AstNodeException> err;
@@ -62,7 +32,7 @@ Result<SymbolClass *> SymbolTable::resolve_auto_type(SymbolScope &scope, Declara
   AssignStmt assign(node);
 
   if (Expr expr = assign.expr(); expr.is_valid()) {
-    return expr_type_analysis(scope, expr);
+    return {expr_type_analysis(scope, expr.child_first()).unwrap(err).type, err};
   }
 
   InitializerList list(node);
@@ -79,7 +49,8 @@ Result<SymbolClass *> SymbolTable::resolve_auto_type(SymbolScope &scope, Declara
       err = {init.next(), Diag::AutoTypeMultipleExpressions, string(decl.identifier().str())};
     }
     else {
-      return expr_type_analysis(scope, Expr(init.child_first()));
+      Expr expr(init.child_first());
+      return {expr_type_analysis(scope, expr.child_first()).unwrap(err).type, err};
     }
   }
 
@@ -88,7 +59,7 @@ Result<SymbolClass *> SymbolTable::resolve_auto_type(SymbolScope &scope, Declara
 
 Result<StringPair> SymbolTable::mangle_identifier(TemplateArgList args,
                                                   TemplateParamList list,
-                                                  const SymbolScope &scope)
+                                                  const SymbolScope &scope) const
 {
   Expr param = list.child_first();
 
@@ -106,7 +77,7 @@ Result<StringPair> SymbolTable::mangle_identifier(TemplateArgList args,
       }
       else {
         IdQualified type_id(LocalVar(param.child_first()).identifier());
-        auto *type = scope.lookup_class_base(type_id);
+        auto *type = scope.lookup_class_base(*this, type_id);
         if (type->template_data) {
           TemplateParamList list_nested = type_id.template_params();
           if (!list_nested.is_valid()) {
@@ -115,7 +86,7 @@ Result<StringPair> SymbolTable::mangle_identifier(TemplateArgList args,
           }
           else {
             /* Recursive. */
-            auto [type_, _, err_] = type->template_data->lookup_inst(list_nested, scope);
+            auto [type_, _, err_] = type->template_data->lookup_inst(list_nested, scope, *this);
             type = type_;
             if (err_) {
               err = err_;
@@ -132,10 +103,11 @@ Result<StringPair> SymbolTable::mangle_identifier(TemplateArgList args,
       }
     }
     else {
-      auto [val, err_] = SymbolTable::evaluate_constexpr(scope, param.child_first());
-      if (err_) {
-        err = err_;
+      auto expr_result = expr_type_analysis(scope, param.child_first()).unwrap(err);
+      if (!expr_result.is_constexpr()) {
+        err = AstNodeException(param, Diag::TemplateParameterNotConstexpr);
       }
+      int val = value_as<int>(expr_result.value);
       /* Replace minus sign by underscore. */
       result.str += string("T") + (val < 0 ? "_" : "") + to_string(abs(val));
       result.str_debug += ", " + to_string(val);
@@ -148,7 +120,7 @@ Result<StringPair> SymbolTable::mangle_identifier(TemplateArgList args,
 Result<string> SymbolTable::expr_to_string(const SymbolScope &scope,
                                            Node start,
                                            int &node_count,
-                                           bool allow_compilation_constant)
+                                           bool allow_compilation_constant) const
 {
   const char *expr_type = allow_compilation_constant ? "static branch condition" :
                                                        "constant expression";
@@ -157,7 +129,7 @@ Result<string> SymbolTable::expr_to_string(const SymbolScope &scope,
   for (Node child = start; child.is_valid(); child = child.next()) {
     switch (child.type()) {
       case NodeType::LocalVar: {
-        SymbolVariable *var = scope.lookup_variable(LocalVar(child).identifier());
+        SymbolVariable *var = scope.lookup_variable(*this, LocalVar(child).identifier());
         /* Resolve member access. */
 
         for (Node next = child.next(); next.type() == NodeType::Op && next.front() == '.';
@@ -166,7 +138,7 @@ Result<string> SymbolTable::expr_to_string(const SymbolScope &scope,
           child = next.next();
 
           if (child.type() == NodeType::LocalVar) {
-            var = var->type->lookup_variable(LocalVar(child).identifier());
+            var = var->type->lookup_variable(*this, LocalVar(child).identifier());
           }
           else if (child.type() == NodeType::FuncCall) {
             return {
@@ -193,7 +165,7 @@ Result<string> SymbolTable::expr_to_string(const SymbolScope &scope,
           return {"0", AstNodeException(child, Diag::NonConstVariableInExpr, string(expr_type))};
         }
         else {
-          expr_str += to_string(var->value);
+          expr_str += var->value_str();
         }
         node_count++;
         break;

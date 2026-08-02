@@ -21,7 +21,7 @@ struct SymbolClass : SymbolScope {
   SymbolClassTemplate *template_data = nullptr;
 
   /* For enums, the value of the last declaration. */
-  int enum_last_val = -1;
+  ConstexprValue enum_last_val = -1;
 
   int size = -1;  /* -1 is for not computed yet. */
   int align = -1; /* -1 is for not computed yet. */

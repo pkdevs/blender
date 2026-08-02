@@ -13,7 +13,10 @@ namespace bsl {
 
 using namespace blender::gpu::shader::parser::ast;
 
-SymbolVariable::SymbolVariable(SymbolScope *parent, SymbolClass *type, Declarator decl)
+SymbolVariable::SymbolVariable(SymbolScope *parent,
+                               SymbolClass *type,
+                               Declarator decl,
+                               const SymbolTable &table)
     : Symbol(
           string(decl.identifier().str()), string(decl.identifier().str()), decl.front(), parent),
       type(type),
@@ -34,12 +37,12 @@ SymbolVariable::SymbolVariable(SymbolScope *parent, SymbolClass *type, Declarato
         array_elements = -1;
         break;
       }
-      auto [value, err] = SymbolTable::evaluate_constexpr(*parent, node);
-      if (err) {
+      auto [result, _] = table.expr_type_analysis(*parent, node);
+      if (!result.is_constexpr()) {
         array_elements = -1;
         break;
       }
-      array_elements *= value;
+      array_elements *= value_as<int>(result.value);
     }
   }
 }
@@ -65,10 +68,17 @@ SymbolClass *SymbolVariable::parent_class()
 string SymbolVariable::value_str() const
 {
   assert(is_constexpr);
-  if (type->identifier == "bool") {
-    return (!!value) ? "true" : "false";
-  }
-  return to_string(value);
+  return visit(
+      [](auto &&v) -> string {
+        using T = std::decay_t<decltype(v)>;
+        if constexpr (std::is_same_v<T, bool>) {
+          return v ? "true" : "false";
+        }
+        else {
+          return to_string(v);
+        }
+      },
+      value);
 }
 
 }  // namespace bsl

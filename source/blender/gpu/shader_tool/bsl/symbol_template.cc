@@ -15,9 +15,10 @@ using namespace blender::gpu::shader::parser::ast;
 
 template<typename T>
 ResultPair<T *, string> SymbolTemplate<T>::lookup_inst(TemplateParamList list,
-                                                       const SymbolScope &scope) const
+                                                       const SymbolScope &scope,
+                                                       const SymbolTable &table) const
 {
-  auto [mangled, err] = SymbolTable::mangle_identifier(decl.arguments(), list, scope);
+  auto [mangled, err] = table.mangle_identifier(decl.arguments(), list, scope);
   auto [args, args_debug] = mangled;
   auto it = instances.find(args);
   string full_id = string(id().str()) + "<" + args_debug.substr(2) + ">";
@@ -77,8 +78,8 @@ Result<StringPair> SymbolTable::mangle_identifier(const SymbolFunctionTemplate &
 {
   vector<SymbolClass *> arg_cls;
   for (Expr expr : list.children_of_type<Expr>()) {
-    auto [type, _] = expr_type_analysis(scope, expr);
-    arg_cls.emplace_back(type);
+    auto [result, _] = expr_type_analysis(scope, expr.child_first());
+    arg_cls.emplace_back(result.type);
   }
 
   StringPair result;
