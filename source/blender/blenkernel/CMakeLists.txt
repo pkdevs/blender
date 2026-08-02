@@ -270,7 +270,6 @@ set(SRC
   intern/softbody.cc
   intern/sound.cc
   intern/sound_reader_cache.cc
-  intern/sound_reader_cache.hh
   intern/speaker.cc
   intern/studiolight.cc
   intern/subdiv.cc
@@ -565,6 +564,7 @@ set(SRC
   intern/pbvh_intern.hh
   intern/pbvh_pixels_copy.hh
   intern/pbvh_uv_islands.hh
+  intern/sound_reader_cache.hh
   intern/subdiv_converter.hh
   intern/subdiv_inline.hh
   intern/tracking_private.hh
