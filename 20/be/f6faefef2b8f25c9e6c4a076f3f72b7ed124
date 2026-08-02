@@ -1,0 +1,1 @@
+Referenced by issue #162219, PyGPU: shared variables break compute shader compilation.
