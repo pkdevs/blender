@@ -39,9 +39,7 @@ static Result<T *> resolve_template_instantiation(const SymbolTable &table,
 Result<SymbolFunction *> SymbolScope::lookup_function(const SymbolTable &table,
                                                       IdQualified id) const
 {
-#ifdef DEBUG_SYMBOL_LOOKUP
   LOOKUP_LOG("\n")
-#endif
   SymbolFunction *func = lookup_generic<SymbolFunction>(table, id, id.front());
   return resolve_template_instantiation(table, func, id, *this);
 }
@@ -62,7 +60,9 @@ Result<SymbolFunction *> SymbolScope::lookup_function(const SymbolTable &table,
   }
 
   auto arg_types = SymbolFunction::to_arg_types(table, arguments_scope, params).unwrap(err);
-  func = func->lookup_overload(id, table, arg_types).unwrap(err);
+  /* Get exact match when querying for the declaration. */
+  constexpr bool exact_match = is_same_v<ArgOrParamList, ArgOrParamList>;
+  func = func->lookup_overload<exact_match>(id, table, arg_types).unwrap(err);
   return {func, err};
 }
 
@@ -79,43 +79,33 @@ template Result<SymbolFunction *> SymbolScope::lookup_function(
 
 Result<SymbolClass *> SymbolScope::lookup_class(const SymbolTable &table, IdQualified id) const
 {
-#ifdef DEBUG_SYMBOL_LOOKUP
   LOOKUP_LOG("\n")
-#endif
   SymbolClass *cls = lookup_generic<SymbolClass>(table, id, id.front());
   return resolve_template_instantiation(table, cls, id, *this);
 }
 
 Result<SymbolClass *> SymbolScope::lookup_class(const SymbolTable &table, Id id, Id last) const
 {
-#ifdef DEBUG_SYMBOL_LOOKUP
   LOOKUP_LOG("\n")
-#endif
   SymbolClass *cls = lookup_generic_nested<SymbolClass>(table, id, last, id.front());
   return resolve_template_instantiation(table, cls, last, *this);
 }
 
 SymbolFunction *SymbolScope::lookup_function_base(const SymbolTable &table, IdQualified id) const
 {
-#ifdef DEBUG_SYMBOL_LOOKUP
   LOOKUP_LOG("\n")
-#endif
   return lookup_generic<SymbolFunction>(table, id, id.front());
 }
 
 SymbolClass *SymbolScope::lookup_class_base(const SymbolTable &table, IdQualified id) const
 {
-#ifdef DEBUG_SYMBOL_LOOKUP
   LOOKUP_LOG("\n")
-#endif
   return lookup_generic<SymbolClass>(table, id, id.front());
 }
 
 SymbolVariable *SymbolScope::lookup_variable(const SymbolTable &table, IdQualified id) const
 {
-#ifdef DEBUG_SYMBOL_LOOKUP
   LOOKUP_LOG("\n")
-#endif
   return lookup_generic<SymbolVariable>(table, id, id.front());
 }
 

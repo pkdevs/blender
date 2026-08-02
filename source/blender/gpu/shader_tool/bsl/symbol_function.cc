@@ -46,13 +46,23 @@ static string to_str(const vector<SymbolClass *> &types)
   return "(" + parameters.substr(2) + ")";
 }
 
+template<bool only_exact_match>
 Result<SymbolFunction *> SymbolFunction::lookup_overload(IdQualified id,
                                                          const SymbolTable &table,
                                                          const vector<SymbolClass *> &arg_types)
 {
   for (SymbolFunction *fn = this; fn; fn = fn->overload_next) {
-    if (fn->is_complete && fn->argument_matches(table, arg_types)) {
-      return {fn, {}};
+    if (fn->is_complete) {
+      if constexpr (only_exact_match) {
+        if (fn->arg_types == arg_types) {
+          return {fn, {}};
+        }
+      }
+      else {
+        if (fn->argument_matches(table, arg_types)) {
+          return {fn, {}};
+        }
+      }
     }
   }
   /* List all candidates inside the error message. */
@@ -67,6 +77,11 @@ Result<SymbolFunction *> SymbolFunction::lookup_overload(IdQualified id,
   return {root_scope()->lookup_function(SymbolTable::err_symbol),
           AstNodeException(id, Diag::NoMatchingOverload, original, to_str(arg_types), candidates)};
 }
+
+template Result<SymbolFunction *> SymbolFunction::lookup_overload<true>(
+    IdQualified id, const SymbolTable &table, const vector<SymbolClass *> &arg_types);
+template Result<SymbolFunction *> SymbolFunction::lookup_overload<false>(
+    IdQualified id, const SymbolTable &table, const vector<SymbolClass *> &arg_types);
 
 void SymbolFunction::add_overload(SymbolFunction *fn)
 {

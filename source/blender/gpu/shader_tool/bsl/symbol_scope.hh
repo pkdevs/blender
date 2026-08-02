@@ -83,12 +83,15 @@ struct SymbolScope : Symbol {
   }
 
   SymbolVariable *lookup_variable(const SymbolTable &table, ast::IdQualified id) const;
+
   Result<SymbolFunction *> lookup_function(const SymbolTable &table, ast::IdQualified id) const;
+
   template<typename ArgOrParamList>
   Result<SymbolFunction *> lookup_function(const SymbolTable &table,
                                            ast::IdQualified id,
                                            ArgOrParamList params,
                                            const SymbolScope &arguments_scope) const;
+
   Result<SymbolClass *> lookup_class(const SymbolTable &table, ast::IdQualified id) const;
 
   Result<SymbolClass *> lookup_class(const SymbolTable &table, ast::Id id, ast::Id last) const;

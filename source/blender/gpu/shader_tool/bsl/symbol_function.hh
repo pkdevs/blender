@@ -80,6 +80,7 @@ struct SymbolFunction : SymbolScope {
   }
 
   /* To be called on the first registered overload. */
+  template<bool exact_match>
   Result<SymbolFunction *> lookup_overload(ast::IdQualified id,
                                            const SymbolTable &table,
                                            const vector<SymbolClass *> &arg_types);

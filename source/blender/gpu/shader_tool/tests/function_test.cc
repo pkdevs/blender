@@ -355,8 +355,7 @@ void f()
 TEST(shader_tool, FunctionOverloads)
 {
   {
-    string input = R"(
-struct A {};
+    string input = R"(struct A {};
 void f() {}
 void f(int a) {}
 void f(int a, float b) {}
@@ -376,8 +375,7 @@ void func()
 }
 )";
 
-    string expect = R"(
-struct A {int _pad;
+    string expect = R"(struct A {int _pad;
 #line 1
           };
 #line 1
