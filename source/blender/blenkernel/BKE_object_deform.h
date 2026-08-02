@@ -30,8 +30,8 @@ struct bDeformGroup;
  */
 void BKE_object_defgroup_remap_update_users(struct Object *ob, const int *map);
 void BKE_object_defgroup_name_update_users(struct Object *ob,
-                                          const char *old_name,
-                                          const char *new_name);
+                                           const char *old_name,
+                                           const char *new_name);
 
 /**
  * Get #MDeformVert vgroup data from given object. Should only be used in Object mode.
