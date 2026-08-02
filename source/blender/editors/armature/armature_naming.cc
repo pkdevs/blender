@@ -14,6 +14,7 @@
 #include "DNA_armature_types.h"
 #include "DNA_camera_types.h"
 #include "DNA_constraint_types.h"
+#include "DNA_node_types.h"
 #include "DNA_object_types.h"
 
 #include "BLI_ghash.hh"
@@ -35,6 +36,8 @@
 #include "BKE_layer.hh"
 #include "BKE_main.hh"
 #include "BKE_modifier.hh"
+#include "BKE_node.hh"
+#include "BKE_node_tree_update.hh"
 
 #include "DEG_depsgraph.hh"
 
@@ -369,6 +372,38 @@ void ED_armature_bone_rename(Main *bmain,
    * caught by the rename function. */
   BKE_animdata_fix_paths(
       arm->id, "bones", old_name_esc, new_name_esc, /*verify_paths=*/true, driver_map);
+
+  /* Fix Bone Info nodes that reference this bone by name. Only nodes whose armature input is set
+   * directly on the node can be resolved here; if it is linked, the referenced armature is only
+   * known at evaluation time. */
+  FOREACH_NODETREE_BEGIN (bmain, ntree, owner_id) {
+    bool changed = false;
+    for (bNode &node : ntree->nodes) {
+      if (!STREQ(node.idname, "GeometryNodeBoneInfo")) {
+        continue;
+      }
+      const bNodeSocket *armature_socket = bke::node_find_socket(node, SOCK_IN, "Armature"_ustr);
+      bNodeSocket *bone_socket = bke::node_find_socket(node, SOCK_IN, "Bone Name"_ustr);
+      if (!armature_socket || !bone_socket || (armature_socket->flag & SOCK_IS_LINKED)) {
+        continue;
+      }
+      const Object *object = armature_socket->default_value_typed<bNodeSocketValueObject>()->value;
+      if (!object || object->data != id_cast<const ID *>(arm)) {
+        continue;
+      }
+      bNodeSocketValueString *bone_value = bone_socket->default_value_typed<
+          bNodeSocketValueString>();
+      if (STREQ(bone_value->value, oldname)) {
+        STRNCPY_UTF8(bone_value->value, newname);
+        BKE_ntree_update_tag_node_property(ntree, &node);
+        changed = true;
+      }
+    }
+    if (changed) {
+      DEG_id_tag_update(owner_id, ID_RECALC_SYNC_TO_EVAL);
+    }
+  }
+  FOREACH_NODETREE_END;
 
   /* correct view locking */
   {

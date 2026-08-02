@@ -6,11 +6,16 @@
 
 #include "BKE_action.hh"
 #include "BKE_armature.hh"
+#include "BKE_node.hh"
+#include "BKE_node_runtime.hh"
 
 #include "DEG_depsgraph_query.hh"
 
+#include "RNA_access.hh"
+
 #include "NOD_rna_define.hh"
 #include "NOD_socket_search_link.hh"
+#include "NOD_socket_usage_inference.hh"
 
 #include "UI_interface_layout.hh"
 #include "UI_resources.hh"
@@ -26,7 +31,34 @@ static void node_declare(NodeDeclarationBuilder &b)
       .description("Armature object to retrieve the bone information from");
   b.add_input<decl::String>("Bone Name"_ustr)
       .optional_label()
-      .description("Name of the bone to retrieve");
+      .description("Name of the bone to retrieve")
+      .custom_draw([](CustomSocketDrawParams &params) {
+        /* When the armature is chosen directly on the node, the set of bones is known, so the
+         * name can be picked from a search menu instead of being typed blindly. */
+        const bNodeSocket *armature_socket = bke::node_find_socket(
+            params.node, SOCK_IN, "Armature"_ustr);
+        if (armature_socket && !armature_socket->is_directly_linked()) {
+          const Object *object =
+              armature_socket->default_value_typed<bNodeSocketValueObject>()->value;
+          if (object && object->type == OB_ARMATURE) {
+            PointerRNA armature_ptr = RNA_id_pointer_create(static_cast<ID *>(object->data));
+            params.layout.prop_search(
+                &params.socket_ptr, "default_value", &armature_ptr, "bones", "", ICON_BONE_DATA);
+            return;
+          }
+        }
+        params.draw_standard(params.layout);
+      })
+      .usage_inference(
+          [](const socket_usage_inference::SocketUsageParams &params) -> std::optional<bool> {
+            const std::optional<Object *> object =
+                params.get_input("Armature"_ustr).get_if_primitive<Object *>();
+            if (!object.has_value()) {
+              /* The armature is linked, so whether a bone name is needed is only known later. */
+              return true;
+            }
+            return *object != nullptr;
+          });
 
   b.add_output<decl::Matrix>("Pose"_ustr)
       .description("Evaluated final transform of the bone in armature space");
