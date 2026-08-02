@@ -15,7 +15,6 @@
 
 #include "BLI_ghash.hh"
 #include "BLI_listbase.hh"
-#include "BLI_span.hh"
 #include "BLI_string_utf8.hh"
 #include "BLI_string_utils.hh"
 #include "BLI_utildefines.hh"
@@ -328,8 +327,7 @@ bDeformGroup *BKE_object_defgroup_add(Object *ob)
 MDeformVert *BKE_object_defgroup_data_create(ID *id)
 {
   if (GS(id->name) == ID_ME) {
-    Mesh *mesh = id_cast<Mesh *>(id);
-    return mesh->deform_verts_for_write().data();
+    return (id_cast<Mesh *>(id))->deform_verts_for_write().data();
   }
   if (GS(id->name) == ID_LT) {
     Lattice *lt = id_cast<Lattice *>(id);
@@ -377,7 +375,7 @@ bool BKE_object_defgroup_clear(Object *ob, bDeformGroup *dg, const bool use_sele
       }
     }
     else {
-      if (!mesh->deform_verts().is_empty()) {
+      if (mesh->deform_verts().data()) {
         const AttributeAccessor attributes = mesh->attributes();
         const VArray select_vert = *attributes.lookup_or_default<bool>(
             ".select_vert", AttrDomain::Point, false);
