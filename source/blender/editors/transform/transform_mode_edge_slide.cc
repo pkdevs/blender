@@ -1191,9 +1191,7 @@ static void applyEdgeSlide(TransInfo *t)
     status.opmodal(IFACE_("Rotate"), op->type, TFM_MODAL_ROTATE);
     status.opmodal(IFACE_("Resize"), op->type, TFM_MODAL_RESIZE);
     status.opmodal(IFACE_("Precision Mode"), op->type, TFM_MODAL_PRECISION, is_precision);
-    if (!slp->use_clone) {
-      status.item_bool(IFACE_("Clamp"), is_clamp, ICON_EVENT_C, ICON_EVENT_ALT);
-    }
+    status.item_bool(IFACE_("Clamp"), is_clamp, ICON_EVENT_C, ICON_EVENT_ALT);
     status.item_bool(IFACE_("Even"), use_even, ICON_EVENT_E);
     if (use_even) {
       status.item_bool(IFACE_("Flipped"), flipped, ICON_EVENT_F);
@@ -1257,23 +1255,18 @@ static void edge_slide_clone_loops_copy_across(BMesh *bm, BMFace *f, BMEdge *e_s
 }
 
 /**
- * Give a link edge the data its two rungs agree on: a boolean flag continues across the band only
- * when both rungs carry it, scalar layers take the average of the two.
+ * Give a link edge the data of the keep-side rung. The band is a loop cut of the keep-side row,
+ * so the link edge is the near half of that rung split in two and inherits it whole.
  */
-static void edge_slide_clone_link_edge_data(BMesh *bm,
-                                            BMEdge *e_link,
-                                            BMEdge *e_rung_a,
-                                            BMEdge *e_rung_b)
+static void edge_slide_clone_link_edge_data(BMesh *bm, BMEdge *e_link, BMEdge *e_rung_keep)
 {
-  if (!e_link || !e_rung_a || !e_rung_b) {
+  if (!e_link || !e_rung_keep) {
     return;
   }
-  BM_data_interp_from_edges(bm, e_rung_a, e_rung_b, e_link, 0.5f);
+  BM_data_interp_from_edges(bm, e_rung_keep, e_rung_keep, e_link, 0.0f);
 
-  const char hflag_and = e_rung_a->head.hflag & e_rung_b->head.hflag;
-  const char hflag_or = e_rung_a->head.hflag | e_rung_b->head.hflag;
-  BM_elem_flag_set(e_link, BM_ELEM_SEAM, (hflag_and & BM_ELEM_SEAM) != 0);
-  BM_elem_flag_set(e_link, BM_ELEM_SMOOTH, (hflag_or & BM_ELEM_SMOOTH) != 0);
+  BM_elem_flag_set(e_link, BM_ELEM_SEAM, BM_elem_flag_test(e_rung_keep, BM_ELEM_SEAM) != 0);
+  BM_elem_flag_set(e_link, BM_ELEM_SMOOTH, BM_elem_flag_test(e_rung_keep, BM_ELEM_SMOOTH) != 0);
 }
 
 void transform_mode_edge_slide_clone_confirm(TransInfo *t)
@@ -1546,17 +1539,7 @@ void transform_mode_edge_slide_clone_confirm(TransInfo *t)
           break;
         }
       }
-      BMEdge *e_rung_other = nullptr;
-      for (BMVert *nb : nd.side[1 - keep_side].rung_verts) {
-        if (orig_to_clone.contains(nb)) {
-          continue;
-        }
-        e_rung_other = BM_edge_exists(v_orig, nb);
-        if (e_rung_other) {
-          break;
-        }
-      }
-      edge_slide_clone_link_edge_data(bm, e_link, e_rung_keep, e_rung_other);
+      edge_slide_clone_link_edge_data(bm, e_link, e_rung_keep);
     }
 
     /* Leave the slid loop selected so the result is chainable. */
