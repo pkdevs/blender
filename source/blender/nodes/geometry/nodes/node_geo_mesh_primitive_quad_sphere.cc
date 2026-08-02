@@ -72,12 +72,13 @@ static void node_geo_exec(GeoNodeExecParams params)
     float x = co.x;
     float y = co.y;
     float z = co.z;
-    float xc = std::sqrt(std::pow(x, p) + std::pow(y, 2) + std::pow(z, 2)) * std::tan(x * std::atan(1 / (std::sqrt(std::pow(x, p) + std::pow(y, 2) + std::pow(z, 2)))));
-	  float yc = std::sqrt(std::pow(x, 2) + std::pow(y, p) + std::pow(z, 2)) * std::tan(y * std::atan(1 / (std::sqrt(std::pow(x, 2) + std::pow(y, p) + std::pow(z, 2)))));
-	  float zc = std::sqrt(std::pow(x, 2) + std::pow(y, 2) + std::pow(z, p)) * std::tan(z * std::atan(1 / (std::sqrt(std::pow(x, 2) + std::pow(y, 2) + std::pow(z, p)))));
-    co.x = xc / std::sqrt(std::pow(xc, 2) + std::pow(yc, 2) + std::pow(zc, 2));
-	  co.y = yc / std::sqrt(std::pow(xc, 2) + std::pow(yc, 2) + std::pow(zc, 2));
-	  co.z = zc / std::sqrt(std::pow(xc, 2) + std::pow(yc, 2) + std::pow(zc, 2));
+    float xc = std::sqrt(std::pow(x, p) + y * y + z * z) * std::tan(x * std::atan(1 / std::sqrt(std::pow(x, p) + y * y + z * z)));
+    float yc = std::sqrt(x * x + std::pow(y, p) + z * z) * std::tan(y * std::atan(1 / std::sqrt(x * x + std::pow(y, p) + z * z)));
+    float zc = std::sqrt(x * x + y * y + std::pow(z, p)) * std::tan(z * std::atan(1 / std::sqrt(x * x + y * y + std::pow(z, p))));
+    float n = std::sqrt(xc * xc + yc * yc + zc * zc);
+    co.x = xc / n;
+	  co.y = yc / n;
+	  co.z = zc / n;
     // Apply the radius
 	  co.x = co.x * rad;
 	  co.y = co.y * rad;
