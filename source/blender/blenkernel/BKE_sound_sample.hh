@@ -84,10 +84,9 @@ class bSoundFrequencySampler {
     mutable std::optional<Array<float, 0>> cumulative_amplitudes;
   };
 
-  AUD_Sound sound_;
   Key key_;
 #if defined(WITH_AUDASPACE)
-  std::shared_ptr<SoundReaderCache> readers_;
+  std::shared_ptr<SoundReaderCache> reader_cache_;
 #endif
   /** Derived from the sound. */
   int samples_per_second_;
@@ -120,7 +119,7 @@ class bSoundFrequencySampler {
 #if defined(WITH_AUDASPACE)
   /** Construct a sampler sharing the reader cache owned by its #bSound runtime. */
   bSoundFrequencySampler(AUD_Sound sound,
-                         std::shared_ptr<SoundReaderCache> readers,
+                         std::shared_ptr<SoundReaderCache> reader_cache,
                          const Key &key);
 #endif
   float sample_frequency_range_in_window(int window_i,

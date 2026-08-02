@@ -137,12 +137,11 @@ struct SoundRuntime {
   Vector<float> *waveform = nullptr;
   SoundTags tags = SoundTags::None;
 
-  /* Cached samplers retain the old sound and reader cache. Reconstruct this map on reload because
-   * #ConcurrentMap has no clear operation. */
-  std::optional<bSoundFrequencySamplerMap> samplers{std::in_place};
+  /** Cached frequency samplers for this sound. */
+  bSoundFrequencySamplerMap samplers;
 #ifdef WITH_AUDASPACE
   /** Reusable readers shared by all consumers of this sound. */
-  std::shared_ptr<SoundReaderCache> readers;
+  std::shared_ptr<SoundReaderCache> reader_cache;
 #endif
 };
 
@@ -372,8 +371,9 @@ static void sound_free_audio(bSound *sound)
 {
 #ifdef WITH_AUDASPACE
   bke::SoundRuntime *runtime = sound->runtime;
-  runtime->samplers.emplace();
-  runtime->readers.reset();
+  /* Sound audio handles are replaced outside concurrent sound evaluation. */
+  runtime->samplers.clear();
+  runtime->reader_cache.reset();
   runtime->handle.reset();
   runtime->playback_handle.reset();
   runtime->cache.reset();
@@ -700,8 +700,9 @@ void BKE_sound_refresh_callback_bmain(Main *bmain)
 static void sound_load_audio(Main *bmain, bSound *sound, bool free_waveform)
 {
   bke::SoundRuntime *runtime = sound->runtime;
-  runtime->samplers.emplace();
-  runtime->readers.reset();
+  /* Sound audio handles are replaced outside concurrent sound evaluation. */
+  runtime->samplers.clear();
+  runtime->reader_cache.reset();
   runtime->cache.reset();
   runtime->handle.reset();
   runtime->playback_handle.reset();
@@ -736,7 +737,7 @@ static void sound_load_audio(Main *bmain, bSound *sound, bool free_waveform)
     runtime->handle = AUD_Sound(new aud::ChannelMapper(runtime->handle, specs));
   }
 
-  runtime->readers = std::make_shared<bke::SoundReaderCache>(runtime->handle);
+  runtime->reader_cache = std::make_shared<bke::SoundReaderCache>(runtime->handle);
 
   if (sound->flags & SOUND_FLAGS_CACHING) {
     try {
@@ -2166,13 +2167,10 @@ const bSoundFrequencySampler *bSoundFrequencySampler::get_cached(const bSound &s
                                                                  const Key &key)
 {
 #ifdef WITH_AUDASPACE
-  if (!sound.runtime) {
-    return nullptr;
-  }
   {
     /* Fast common case when the sampler has been created already. */
     bSoundFrequencySamplerMap::ConstAccessor accessor;
-    if (sound.runtime->samplers->lookup(accessor, key)) {
+    if (sound.runtime->samplers.lookup(accessor, key)) {
       return accessor->second.get();
     }
   }
@@ -2183,7 +2181,7 @@ const bSoundFrequencySampler *bSoundFrequencySampler::get_cached(const bSound &s
   }
   /* Slower case when the sampler is newly created. */
   bSoundFrequencySamplerMap::MutableAccessor accessor;
-  if (sound.runtime->samplers->add(accessor, key)) {
+  if (sound.runtime->samplers.add(accessor, key)) {
     if (key.channel.has_value()) {
       const SoundInfo info = sound_info_get(sound_handle);
       const int channel = *key.channel;
@@ -2192,7 +2190,7 @@ const bSoundFrequencySampler *bSoundFrequencySampler::get_cached(const bSound &s
       }
     }
     accessor->second = std::shared_ptr<bSoundFrequencySampler>(
-        new bSoundFrequencySampler(sound_handle, sound.runtime->readers, key));
+        new bSoundFrequencySampler(sound_handle, sound.runtime->reader_cache, key));
   }
   return accessor->second.get();
 #else
@@ -2253,14 +2251,13 @@ static const bSoundFrequencySampler::WindowWeights &get_window_function_weights(
 
 #ifdef WITH_AUDASPACE
 bSoundFrequencySampler::bSoundFrequencySampler(AUD_Sound sound,
-                                               std::shared_ptr<SoundReaderCache> readers,
+                                               std::shared_ptr<SoundReaderCache> reader_cache,
                                                const Key &key)
-    : sound_(sound),
-      key_(key),
-      readers_(std::move(readers)),
+    : key_(key),
+      reader_cache_(std::move(reader_cache)),
       window_weights_(get_window_function_weights(key.window_function, key.fft_size))
 {
-  const SoundInfo info = bke::sound_info_get(sound_);
+  const SoundInfo info = bke::sound_info_get(sound);
   samples_per_second_ = info.specs.samplerate;
   /* This could be a parameter but a single fixed value seems fine for now and makes caching much
    * simpler. */
@@ -2287,10 +2284,7 @@ std::optional<Array<float>> bSoundFrequencySampler::compute_fft(const int start_
   bool is_end_of_stream = false;
   int length = key_.fft_size + warmup_samples;
   {
-    if (!readers_) {
-      return std::nullopt;
-    }
-    SoundReaderLease reader = readers_->acquire();
+    SoundReaderLease reader = reader_cache_->acquire();
     if (!reader) {
       return std::nullopt;
     }
