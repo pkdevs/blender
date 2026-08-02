@@ -99,44 +99,14 @@ class GeometryNodesDebugViewTest(unittest.TestCase):
         modifier_a.show_debug_views = True
         modifier_b.show_debug_views = False
 
-        self.assertEqual(self.evaluate(obj_a), 8)
         self.assertEqual(self.evaluate(obj_b), 8)
         self.assertEqual(self.warning_messages(modifier_a), [])
         self.assertEqual(self.warning_messages(modifier_b), [])
 
         viewer.is_debug_view = True
-        show_socket = viewer.inputs["Show"]
-        show_socket.default_value = False
-
-        self.assertEqual(self.evaluate(obj_a), 8)
-        self.assertEqual(self.warning_messages(modifier_a), [])
-
-        show_socket.default_value = True
-
-        self.assertEqual(self.evaluate(obj_a), 8)
         self.assertEqual(self.evaluate(obj_b), 8)
         self.assertIn("Debug View evaluated", self.warning_messages(modifier_a))
         self.assertEqual(self.warning_messages(modifier_b), [])
-
-    def test_show_socket_preserves_link(self):
-        group, viewer = self.create_node_group()
-        self.assertFalse(viewer.is_debug_view)
-        viewer.is_debug_view = True
-        show_socket = viewer.inputs["Show"]
-        self.assertTrue(show_socket.default_value)
-        show_socket.default_value = False
-        boolean = group.nodes.new("FunctionNodeInputBool")
-        group.links.new(boolean.outputs["Boolean"], show_socket)
-
-        viewer.is_debug_view = False
-        self.assertTrue(show_socket.is_unavailable)
-        self.assertEqual(len(show_socket.links), 1)
-
-        viewer.is_debug_view = True
-        self.assertFalse(show_socket.is_unavailable)
-        self.assertFalse(show_socket.default_value)
-        self.assertEqual(len(show_socket.links), 1)
-        self.assertEqual(show_socket.links[0].from_node, boolean)
 
     def test_modifier_and_object_isolation(self):
         group, viewer = self.create_node_group()
@@ -439,8 +409,13 @@ class GeometryNodesDebugViewFixtureTest(unittest.TestCase):
         root_a_show = root_a.inputs["Show"]
         root_b_show = root_b.inputs["Show"]
         nested_show = nested.inputs["Show"]
-        self.assertEqual(len(root_a_show.links), 0)
-        self.assertTrue(root_a_show.default_value)
+        self.assertEqual(len(root_a_show.links), 1)
+        root_a_show_link = root_a_show.links[0]
+        root_a_show_source = root_a_show_link.from_node
+        self.assertEqual(root_a_show_source.name, "Root Debug A Show Source")
+        self.assertEqual(root_a_show_source.bl_idname, "FunctionNodeBooleanMath")
+        self.assertEqual(root_a_show_link.from_socket.name, "Boolean")
+        self.assertFalse(root_a_show.default_value)
         self.assertEqual(len(root_b_show.links), 0)
         self.assertTrue(root_b_show.default_value)
         self.assertEqual(len(nested_show.links), 0)
@@ -456,6 +431,19 @@ class GeometryNodesDebugViewFixtureTest(unittest.TestCase):
         self.assertIn("ROOT_DEBUG_A_EVALUATED", warnings)
         self.assertIn("ROOT_DEBUG_B_EVALUATED", warnings)
         self.assertIn("NESTED_DEBUG_EVALUATED", warnings)
+
+        root_a.is_debug_view = False
+        self.assertTrue(root_a_show.is_unavailable)
+        self.assertEqual(len(root_a_show.links), 1)
+        self.assertEqual(root_a_show.links[0].from_node, root_a_show_source)
+        self.assertEqual(self.evaluate(), 8)
+
+        root_a.is_debug_view = True
+        self.assertFalse(root_a_show.is_unavailable)
+        self.assertFalse(root_a_show.default_value)
+        self.assertEqual(len(root_a_show.links), 1)
+        self.assertEqual(root_a_show.links[0].from_node, root_a_show_source)
+        self.assertEqual(self.evaluate(), 8)
 
         root_b_show.default_value = False
         self.assertEqual(self.evaluate(), 8)
