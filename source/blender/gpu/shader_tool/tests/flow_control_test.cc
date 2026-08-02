@@ -277,7 +277,7 @@ for (int i = 1; i < 2; i <<= 1) [[unroll]] { i; }
 for (int i = 0; i < 2; i += atomicAdd(i, i)) [[unroll]] { i; }
   )";
     auto [output, _, error] = process_test_local(input, Language::BSL);
-    EXPECT_EQ(error, "constant expression cannot contain function calls");
+    EXPECT_EQ(error, "Non-constant expression in unrolled loop control");
   }
 }
 
@@ -695,7 +695,7 @@ void f(int a)
 }
 )";
     auto [output, _, error] = process_test_string(input, Language::BSL);
-    EXPECT_EQ(error, "Read of non-const variable is not allowed in a constant expression");
+    EXPECT_EQ(error, "Constexpr if condition is not a constant expression");
   }
   {
     string input = R"(
