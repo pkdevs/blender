@@ -86,6 +86,11 @@ Node Node::child_last() const
   return is_valid() ? Node{p, p->ast_nodes[id].child_last} : Node{};
 }
 
+const NodeData *Node::data() const
+{
+  return is_valid() ? &p->ast_nodes[id] : nullptr;
+}
+
 NodeType Node::type() const
 {
   return is_valid() ? p->ast_nodes[id].type : NodeType::Invalid;

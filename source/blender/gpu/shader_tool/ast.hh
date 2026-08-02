@@ -129,6 +129,7 @@ struct Node {
   NodeID id = -1;
 #ifdef LEXIT_DEBUG
   NodeType debug_type;
+  const NodeData *debug_data;
   std::string_view debug_str;
 #endif
 
@@ -138,9 +139,11 @@ struct Node {
 #ifdef LEXIT_DEBUG
     debug_str = str();
     debug_type = type();
+    debug_data = data();
 #endif
   }
 
+  const NodeData *data() const;
   NodeType type() const;
 
   Token front() const;
