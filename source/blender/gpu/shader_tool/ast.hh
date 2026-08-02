@@ -128,6 +128,7 @@ struct Node {
   const ParserBase *p = nullptr;
   NodeID id = -1;
 #ifdef LEXIT_DEBUG
+  NodeType debug_type;
   std::string_view debug_str;
 #endif
 
@@ -136,6 +137,7 @@ struct Node {
   {
 #ifdef LEXIT_DEBUG
     debug_str = str();
+    debug_type = type();
 #endif
   }
 
