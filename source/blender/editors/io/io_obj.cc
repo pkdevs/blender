@@ -334,7 +334,7 @@ void WM_OT_obj_export(wmOperatorType *ot)
   RNA_def_enum(ot->srna,
                "export_eval_mode",
                io_obj_export_evaluation_mode,
-               DAG_EVAL_VIEWPORT,
+               DAG_EVAL_RENDER,
                "Object Properties",
                "Determines properties like object visibility, modifiers etc., where they differ "
                "for Render and Viewport");
