@@ -306,6 +306,12 @@ static void blend_read(BlendDataReader *reader, ModifierData *md)
   modifier::greasepencil::read_influence_data(reader, &amd->influence);
 }
 
+static void update_defgroup_name(ModifierData *md, const char *old_name, const char *new_name)
+{
+  auto *amd = reinterpret_cast<GreasePencilArmatureModifierData *>(md);
+  BKE_modifier_defgroup_name_update_grease_pencil_influence(&amd->influence, old_name, new_name);
+}
+
 ModifierTypeInfo modifierType_GreasePencilArmature = {
     /*idname*/ "GreasePencilArmature",
     /*name*/ N_("Armature"),
@@ -339,6 +345,9 @@ ModifierTypeInfo modifierType_GreasePencilArmature = {
     /*panel_register*/ panel_register,
     /*blend_write*/ blend_write,
     /*blend_read*/ blend_read,
+    /*foreach_cache*/ nullptr,
+    /*foreach_working_space_color*/ nullptr,
+    /*update_defgroup_name*/ update_defgroup_name,
 };
 
 }  // namespace blender

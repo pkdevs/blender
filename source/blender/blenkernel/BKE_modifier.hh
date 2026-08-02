@@ -423,6 +423,11 @@ struct ModifierTypeInfo {
    */
   void (*foreach_working_space_color)(ModifierData *md,
                                       const IDTypeForeachColorFunctionCallback &fn);
+
+  /**
+   * Update any vertex-group name references stored by this modifier.
+   */
+  void (*update_defgroup_name)(ModifierData *md, const char *old_name, const char *new_name);
 };
 
 /** Used to set a modifier's panel type. */
@@ -449,6 +454,15 @@ ModifierData *BKE_modifier_new(int type);
 
 void BKE_modifier_free_ex(ModifierData *md, int flag);
 void BKE_modifier_free(ModifierData *md);
+void BKE_modifier_defgroup_name_update(ModifierData *md,
+                                       const char *old_name,
+                                       const char *new_name);
+void BKE_modifier_defgroup_name_update_char(char *prop,
+                                            size_t prop_size,
+                                            const char *old_name,
+                                            const char *new_name);
+void BKE_modifier_defgroup_name_update_grease_pencil_influence(
+    GreasePencilModifierInfluenceData *influence, const char *old_name, const char *new_name);
 /**
  * Use instead of `BLI_remlink` when the object's active modifier should change.
  */

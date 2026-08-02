@@ -501,6 +501,12 @@ static void blend_read(BlendDataReader *reader, ModifierData *md)
   BLO_read_struct(reader, ColorBand, &tmd->color_ramp);
 }
 
+static void update_defgroup_name(ModifierData *md, const char *old_name, const char *new_name)
+{
+  auto *tmd = reinterpret_cast<GreasePencilTintModifierData *>(md);
+  BKE_modifier_defgroup_name_update_grease_pencil_influence(&tmd->influence, old_name, new_name);
+}
+
 ModifierTypeInfo modifierType_GreasePencilTint = {
     /*idname*/ "GreasePencilTint",
     /*name*/ N_("Tint"),
@@ -536,6 +542,7 @@ ModifierTypeInfo modifierType_GreasePencilTint = {
     /*blend_read*/ blend_read,
     /*foreach_cache*/ nullptr,
     /*foreach_working_space_color*/ foreach_working_space_color,
+    /*update_defgroup_name*/ update_defgroup_name,
 };
 
 }  // namespace blender

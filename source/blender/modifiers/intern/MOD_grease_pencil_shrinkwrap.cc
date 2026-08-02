@@ -320,6 +320,12 @@ static void blend_read(BlendDataReader *reader, ModifierData *md)
   modifier::greasepencil::read_influence_data(reader, &smd->influence);
 }
 
+static void update_defgroup_name(ModifierData *md, const char *old_name, const char *new_name)
+{
+  auto *smd = reinterpret_cast<GreasePencilShrinkwrapModifierData *>(md);
+  BKE_modifier_defgroup_name_update_grease_pencil_influence(&smd->influence, old_name, new_name);
+}
+
 ModifierTypeInfo modifierType_GreasePencilShrinkwrap = {
     /*idname*/ "GreasePencilShrinkwrap",
     /*name*/ N_("Shrinkwrap"),
@@ -353,6 +359,9 @@ ModifierTypeInfo modifierType_GreasePencilShrinkwrap = {
     /*panel_register*/ panel_register,
     /*blend_write*/ blend_write,
     /*blend_read*/ blend_read,
+    /*foreach_cache*/ nullptr,
+    /*foreach_working_space_color*/ nullptr,
+    /*update_defgroup_name*/ update_defgroup_name,
 };
 
 }  // namespace blender

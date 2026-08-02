@@ -235,6 +235,13 @@ static void panel_register(ARegionType *region_type)
   modifier_panel_register(region_type, eModifierType_Armature, panel_draw);
 }
 
+static void update_defgroup_name(ModifierData *md, const char *old_name, const char *new_name)
+{
+  ArmatureModifierData *amd = reinterpret_cast<ArmatureModifierData *>(md);
+  BKE_modifier_defgroup_name_update_char(
+      amd->defgrp_name, sizeof(amd->defgrp_name), old_name, new_name);
+}
+
 static void blend_read(BlendDataReader * /*reader*/, ModifierData *md)
 {
   ArmatureModifierData *amd = reinterpret_cast<ArmatureModifierData *>(md);
@@ -277,6 +284,7 @@ ModifierTypeInfo modifierType_Armature = {
     /*blend_read*/ blend_read,
     /*foreach_cache*/ nullptr,
     /*foreach_working_space_color*/ nullptr,
+    /*update_defgroup_name*/ update_defgroup_name,
 };
 
 }  // namespace blender

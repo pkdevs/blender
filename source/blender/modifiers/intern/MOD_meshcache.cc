@@ -371,6 +371,13 @@ static void panel_register(ARegionType *region_type)
       region_type, "axis_mapping", "Axis Mapping", nullptr, axis_mapping_panel_draw, panel_type);
 }
 
+static void update_defgroup_name(ModifierData *md, const char *old_name, const char *new_name)
+{
+  MeshCacheModifierData *mcmd = reinterpret_cast<MeshCacheModifierData *>(md);
+  BKE_modifier_defgroup_name_update_char(
+      mcmd->defgrp_name, sizeof(mcmd->defgrp_name), old_name, new_name);
+}
+
 ModifierTypeInfo modifierType_MeshCache = {
     /*idname*/ "MeshCache",
     /*name*/ N_("MeshCache"),
@@ -406,6 +413,7 @@ ModifierTypeInfo modifierType_MeshCache = {
     /*blend_read*/ nullptr,
     /*foreach_cache*/ nullptr,
     /*foreach_working_space_color*/ nullptr,
+    /*update_defgroup_name*/ update_defgroup_name,
 };
 
 }  // namespace blender

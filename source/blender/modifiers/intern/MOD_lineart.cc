@@ -878,6 +878,12 @@ static void blend_read(BlendDataReader * /*reader*/, ModifierData *md)
   lmd->runtime = MEM_new<LineartModifierRuntime>(__func__);
 }
 
+static void update_defgroup_name(ModifierData *md, const char *old_name, const char *new_name)
+{
+  GreasePencilLineartModifierData *lmd = reinterpret_cast<GreasePencilLineartModifierData *>(md);
+  BKE_modifier_defgroup_name_update_char(lmd->vgname, sizeof(lmd->vgname), old_name, new_name);
+}
+
 ModifierTypeInfo modifierType_GreasePencilLineart = {
     /*idname*/ "Lineart Modifier",
     /*name*/ N_("Lineart"),
@@ -910,6 +916,9 @@ ModifierTypeInfo modifierType_GreasePencilLineart = {
     /*panel_register*/ panel_register,
     /*blend_write*/ blend_write,
     /*blend_read*/ blend_read,
+    /*foreach_cache*/ nullptr,
+    /*foreach_working_space_color*/ nullptr,
+    /*update_defgroup_name*/ update_defgroup_name,
 };
 
 }  // namespace blender

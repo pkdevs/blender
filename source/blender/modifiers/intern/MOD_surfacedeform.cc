@@ -1725,6 +1725,13 @@ static void blend_read(BlendDataReader *reader, ModifierData *md)
   }
 }
 
+static void update_defgroup_name(ModifierData *md, const char *old_name, const char *new_name)
+{
+  SurfaceDeformModifierData *smd = reinterpret_cast<SurfaceDeformModifierData *>(md);
+  BKE_modifier_defgroup_name_update_char(
+      smd->defgrp_name, sizeof(smd->defgrp_name), old_name, new_name);
+}
+
 ModifierTypeInfo modifierType_SurfaceDeform = {
     /*idname*/ "SurfaceDeform",
     /*name*/ N_("SurfaceDeform"),
@@ -1759,6 +1766,7 @@ ModifierTypeInfo modifierType_SurfaceDeform = {
     /*blend_read*/ blend_read,
     /*foreach_cache*/ nullptr,
     /*foreach_working_space_color*/ nullptr,
+    /*update_defgroup_name*/ update_defgroup_name,
 };
 
 }  // namespace blender

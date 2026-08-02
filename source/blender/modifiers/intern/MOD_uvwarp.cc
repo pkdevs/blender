@@ -302,6 +302,13 @@ static void panel_register(ARegionType *region_type)
       region_type, "offset", "Transform", nullptr, transform_panel_draw, panel_type);
 }
 
+static void update_defgroup_name(ModifierData *md, const char *old_name, const char *new_name)
+{
+  UVWarpModifierData *umd = reinterpret_cast<UVWarpModifierData *>(md);
+  BKE_modifier_defgroup_name_update_char(
+      umd->vgroup_name, sizeof(umd->vgroup_name), old_name, new_name);
+}
+
 ModifierTypeInfo modifierType_UVWarp = {
     /*idname*/ "UVWarp",
     /*name*/ N_("UVWarp"),
@@ -337,6 +344,7 @@ ModifierTypeInfo modifierType_UVWarp = {
     /*blend_read*/ nullptr,
     /*foreach_cache*/ nullptr,
     /*foreach_working_space_color*/ nullptr,
+    /*update_defgroup_name*/ update_defgroup_name,
 };
 
 }  // namespace blender

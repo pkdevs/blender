@@ -461,6 +461,13 @@ static void blend_read(BlendDataReader *reader, ModifierData *md)
   }
 }
 
+static void update_defgroup_name(ModifierData *md, const char *old_name, const char *new_name)
+{
+  WarpModifierData *wmd = reinterpret_cast<WarpModifierData *>(md);
+  BKE_modifier_defgroup_name_update_char(
+      wmd->defgrp_name, sizeof(wmd->defgrp_name), old_name, new_name);
+}
+
 ModifierTypeInfo modifierType_Warp = {
     /*idname*/ "Warp",
     /*name*/ N_("Warp"),
@@ -495,6 +502,7 @@ ModifierTypeInfo modifierType_Warp = {
     /*blend_read*/ blend_read,
     /*foreach_cache*/ nullptr,
     /*foreach_working_space_color*/ nullptr,
+    /*update_defgroup_name*/ update_defgroup_name,
 };
 
 }  // namespace blender

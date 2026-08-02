@@ -673,6 +673,13 @@ static void panel_register(ARegionType *region_type)
       region_type, "offset", "Offset", nullptr, offset_panel_draw, panel_type);
 }
 
+static void update_defgroup_name(ModifierData *md, const char *old_name, const char *new_name)
+{
+  NormalEditModifierData *nemd = reinterpret_cast<NormalEditModifierData *>(md);
+  BKE_modifier_defgroup_name_update_char(
+      nemd->defgrp_name, sizeof(nemd->defgrp_name), old_name, new_name);
+}
+
 ModifierTypeInfo modifierType_NormalEdit = {
     /*idname*/ "NormalEdit",
     /*name*/ N_("NormalEdit"),
@@ -708,6 +715,7 @@ ModifierTypeInfo modifierType_NormalEdit = {
     /*blend_read*/ nullptr,
     /*foreach_cache*/ nullptr,
     /*foreach_working_space_color*/ nullptr,
+    /*update_defgroup_name*/ update_defgroup_name,
 };
 
 }  // namespace blender

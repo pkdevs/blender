@@ -127,6 +127,35 @@ const ModifierTypeInfo *BKE_modifier_get_info(ModifierType type)
   return nullptr;
 }
 
+void BKE_modifier_defgroup_name_update_char(char *prop,
+                                            size_t prop_size,
+                                            const char *old_name,
+                                            const char *new_name)
+{
+  if (prop != nullptr && STREQ(prop, old_name)) {
+    BLI_strncpy_utf8(prop, new_name, prop_size);
+  }
+}
+
+void BKE_modifier_defgroup_name_update_grease_pencil_influence(
+    GreasePencilModifierInfluenceData *influence, const char *old_name, const char *new_name)
+{
+  if (influence != nullptr) {
+    BKE_modifier_defgroup_name_update_char(
+        influence->vertex_group_name, sizeof(influence->vertex_group_name), old_name, new_name);
+  }
+}
+
+void BKE_modifier_defgroup_name_update(ModifierData *md,
+                                       const char *old_name,
+                                       const char *new_name)
+{
+  const ModifierTypeInfo *mti = BKE_modifier_get_info(md->type);
+  if (mti != nullptr && mti->update_defgroup_name != nullptr) {
+    mti->update_defgroup_name(md, old_name, new_name);
+  }
+}
+
 void BKE_modifier_type_panel_id(ModifierType type, char *r_idname)
 {
   const ModifierTypeInfo *mti = BKE_modifier_get_info(type);

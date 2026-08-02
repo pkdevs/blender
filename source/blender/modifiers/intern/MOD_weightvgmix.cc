@@ -484,6 +484,17 @@ static void panel_register(ARegionType *region_type)
       region_type, "influence", "Influence", nullptr, influence_panel_draw, panel_type);
 }
 
+static void update_defgroup_name(ModifierData *md, const char *old_name, const char *new_name)
+{
+  WeightVGMixModifierData *wmd = reinterpret_cast<WeightVGMixModifierData *>(md);
+  BKE_modifier_defgroup_name_update_char(
+      wmd->defgrp_name_a, sizeof(wmd->defgrp_name_a), old_name, new_name);
+  BKE_modifier_defgroup_name_update_char(
+      wmd->defgrp_name_b, sizeof(wmd->defgrp_name_b), old_name, new_name);
+  BKE_modifier_defgroup_name_update_char(
+      wmd->mask_defgrp_name, sizeof(wmd->mask_defgrp_name), old_name, new_name);
+}
+
 ModifierTypeInfo modifierType_WeightVGMix = {
     /*idname*/ "VertexWeightMix",
     /*name*/ N_("VertexWeightMix"),
@@ -519,6 +530,7 @@ ModifierTypeInfo modifierType_WeightVGMix = {
     /*blend_read*/ nullptr,
     /*foreach_cache*/ nullptr,
     /*foreach_working_space_color*/ nullptr,
+    /*update_defgroup_name*/ update_defgroup_name,
 };
 
 }  // namespace blender

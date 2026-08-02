@@ -472,6 +472,13 @@ static void blend_read(BlendDataReader *reader, ModifierData *md)
   }
 }
 
+static void update_defgroup_name(ModifierData *md, const char *old_name, const char *new_name)
+{
+  BevelModifierData *bmd = reinterpret_cast<BevelModifierData *>(md);
+  BKE_modifier_defgroup_name_update_char(
+      bmd->defgrp_name, sizeof(bmd->defgrp_name), old_name, new_name);
+}
+
 ModifierTypeInfo modifierType_Bevel = {
     /*idname*/ "Bevel",
     /*name*/ N_("Bevel"),
@@ -504,6 +511,7 @@ ModifierTypeInfo modifierType_Bevel = {
     /*blend_read*/ blend_read,
     /*foreach_cache*/ nullptr,
     /*foreach_working_space_color*/ nullptr,
+    /*update_defgroup_name*/ update_defgroup_name,
 };
 
 }  // namespace blender

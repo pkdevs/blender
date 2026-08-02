@@ -180,6 +180,12 @@ static void panel_register(ARegionType *region_type)
   modifier_panel_register(region_type, eModifierType_Curve, panel_draw);
 }
 
+static void update_defgroup_name(ModifierData *md, const char *old_name, const char *new_name)
+{
+  CurveModifierData *cmd = reinterpret_cast<CurveModifierData *>(md);
+  BKE_modifier_defgroup_name_update_char(cmd->name, sizeof(cmd->name), old_name, new_name);
+}
+
 ModifierTypeInfo modifierType_Curve = {
     /*idname*/ "Curve",
     /*name*/ N_("Curve"),
@@ -215,6 +221,7 @@ ModifierTypeInfo modifierType_Curve = {
     /*blend_read*/ nullptr,
     /*foreach_cache*/ nullptr,
     /*foreach_working_space_color*/ nullptr,
+    /*update_defgroup_name*/ update_defgroup_name,
 };
 
 }  // namespace blender
