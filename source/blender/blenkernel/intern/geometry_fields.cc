@@ -931,7 +931,6 @@ static bool try_add_shared_field_attribute(MutableAttributeAccessor attributes,
   }
   const AttributeInitShared init(attribute.varray.get_internal_span().data(),
                                  *attribute.sharing_info);
-
   return attributes.add_override(id_to_create, domain, data_type, init);
 }
 
