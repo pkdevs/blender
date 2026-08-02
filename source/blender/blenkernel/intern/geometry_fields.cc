@@ -929,12 +929,8 @@ static bool try_add_shared_field_attribute(MutableAttributeAccessor attributes,
   if (!attribute.sharing_info || !attribute.varray.is_span()) {
     return false;
   }
-
   const AttributeInitShared init(attribute.varray.get_internal_span().data(),
                                  *attribute.sharing_info);
-  if (attributes.add(id_to_create, domain, data_type, init)) {
-    return true;
-  }
 
   return attributes.add_override(id_to_create, domain, data_type, init);
 }
