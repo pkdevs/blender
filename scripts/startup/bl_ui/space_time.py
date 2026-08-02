@@ -59,7 +59,12 @@ def playback_controls(layout, context):
         row = layout.row(align=True)
         row.prop(tool_settings, "use_keyframe_insert_auto", text="", toggle=True)
         sub = row.row(align=True)
-        icon_keytype = 'KEYTYPE_{:s}_VEC'.format(tool_settings.keyframe_type)
+
+        if scene.keying_sets_all.active is not None:
+            icon_keytype = 'KEYTYPE_{:s}_VEC'.format(tool_settings.keyframe_type)
+        else:
+            icon_keytype = 'KEYFRAME'
+
         sub.popover(
             panel="TIME_PT_keyframing",
             text="",
