@@ -2124,7 +2124,7 @@ struct CodegenContext : NodeErrorHandler {
     assert(id.is_valid());
     SymbolVariable *var = scope.lookup_variable(symbols, id);
     if (var->is_error) {
-      error(id, "Unknown variable '" + string(id.str()) + "'");
+      error(id, Diag::UnknownVariable, string(id.str()));
       builder << id;
       return var;
     }
@@ -2167,7 +2167,7 @@ struct CodegenContext : NodeErrorHandler {
     assert(id.is_valid());
     SymbolVariable *var = scope.lookup_variable(symbols, id);
     if (var->is_error) {
-      error(id, "Unknown variable '" + string(id.str()) + "'");
+      error(id, Diag::UnknownVariable, string(id.str()));
       builder << id;
       return var;
     }
