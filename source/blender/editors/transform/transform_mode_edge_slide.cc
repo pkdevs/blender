@@ -550,14 +550,14 @@ static void edge_slide_clone_fan_calc(BMVert *v,
       f_next = l ? l->radial_next->f : nullptr;
     }
     if (!f_next) {
-      /* The fan ends at the chain end. */
       r_side->bound_verts.append(BM_edge_other_vert(e_curr, v));
+      r_side->rung_verts.append(BM_edge_other_vert(e_curr, v));
       return;
     }
+    r_side->rung_verts.append(BM_edge_other_vert(e_curr, v));
     if (r_side->faces.contains(f_next)) {
       break;
     }
-    r_side->rung_verts.append(BM_edge_other_vert(e_curr, v));
     r_side->faces.append(f_next);
     f_curr = f_next;
     e_curr = edge_slide_clone_face_other_edge(f_next, v, e_curr);
@@ -1529,14 +1529,39 @@ void transform_mode_edge_slide_clone_confirm(TransInfo *t)
         continue;
       }
 
+      /* The rung the crossing loop continues through. Where the keep-side fan offers several,
+       * take the one pointing most nearly opposite an other-side rung. */
       BMEdge *e_rung_keep = nullptr;
+      float align_best = -FLT_MAX;
       for (BMVert *nb : nd.side[keep_side].rung_verts) {
         if (orig_to_clone.contains(nb)) {
           continue;
         }
-        e_rung_keep = BM_edge_exists(v_sep, nb);
-        if (e_rung_keep) {
-          break;
+        BMEdge *e_keep = BM_edge_exists(v_sep, nb);
+        if (!e_keep) {
+          continue;
+        }
+        const float3 vec_keep = float3(nb->co) - float3(v_sep->co);
+        float align = -FLT_MAX;
+        if (!math::is_zero(vec_keep)) {
+          const float3 dir_keep = math::normalize(vec_keep);
+          for (BMVert *nb_other : nd.side[1 - keep_side].rung_verts) {
+            if (orig_to_clone.contains(nb_other) || !BM_edge_exists(v_orig, nb_other)) {
+              continue;
+            }
+            const float3 vec_other = float3(nb_other->co) - float3(v_orig->co);
+            if (math::is_zero(vec_other)) {
+              continue;
+            }
+            const float a = -math::dot(dir_keep, math::normalize(vec_other));
+            if (a > align) {
+              align = a;
+            }
+          }
+        }
+        if (!e_rung_keep || align > align_best) {
+          e_rung_keep = e_keep;
+          align_best = align;
         }
       }
       edge_slide_clone_link_edge_data(bm, e_link, e_rung_keep);
