@@ -26,8 +26,6 @@
 #include "UI_interface_c.hh"
 #include "UI_resources.hh"
 
-#include "BKE_theme.hh"
-
 #include "BLF_api.hh"
 
 namespace blender {
