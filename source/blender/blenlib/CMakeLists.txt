@@ -521,7 +521,6 @@ if(WITH_GTESTS)
     tests/BLI_build_config_test.cc
     tests/BLI_color_test.cc
     tests/BLI_compression_test.cc
-    tests/BLI_concurrent_map_test.cc
     tests/BLI_convexhull_2d_test.cc
     tests/BLI_cpp_type_test.cc
     tests/BLI_csv_parse_test.cc

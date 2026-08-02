@@ -106,7 +106,8 @@ class bSoundFrequencySampler {
 
  public:
   /** Access a reusable frequency sampler for the given sound.  */
-  static const bSoundFrequencySampler *get_cached(const bSound &sound, const Key &key);
+  static std::shared_ptr<const bSoundFrequencySampler> get_cached(const bSound &sound,
+                                                                  const Key &key);
 
   /** Sample the amplitude a the given time and frequency range. */
   float sample(float time,
@@ -117,7 +118,7 @@ class bSoundFrequencySampler {
 
  private:
 #if defined(WITH_AUDASPACE)
-  /** Construct a sampler sharing the reader cache owned by its #bSound runtime. */
+  /** Construct a sampler sharing the reader cache of its runtime generation. */
   bSoundFrequencySampler(AUD_Sound sound,
                          std::shared_ptr<SoundReaderCache> reader_cache,
                          const Key &key);

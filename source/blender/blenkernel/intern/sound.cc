@@ -123,6 +123,14 @@ ENUM_OPERATORS(SoundTags);
 using bSoundFrequencySamplerMap =
     ConcurrentMap<bSoundFrequencySampler::Key, std::shared_ptr<bSoundFrequencySampler>>;
 
+#ifdef WITH_AUDASPACE
+struct SoundRuntimeGeneration {
+  AUD_Sound handle;
+  bSoundFrequencySamplerMap samplers;
+  std::shared_ptr<SoundReaderCache> reader_cache;
+};
+#endif
+
 struct SoundRuntime {
   AUD_Sound handle;
   AUD_Sound cache;
@@ -137,11 +145,9 @@ struct SoundRuntime {
   Vector<float> *waveform = nullptr;
   SoundTags tags = SoundTags::None;
 
-  /** Cached frequency samplers for this sound. */
-  bSoundFrequencySamplerMap samplers;
 #ifdef WITH_AUDASPACE
-  /** Reusable readers shared by all consumers of this sound. */
-  std::shared_ptr<SoundReaderCache> reader_cache;
+  std::mutex generation_mutex;
+  std::shared_ptr<SoundRuntimeGeneration> generation;
 #endif
 };
 
@@ -154,6 +160,29 @@ static void sound_init_runtime(bSound *sound)
   sound->runtime = MEM_new<bke::SoundRuntime>(__func__);
   BLI_spin_init(&sound->runtime->spinlock);
 }
+
+#ifdef WITH_AUDASPACE
+static void sound_runtime_generation_replace(
+    bSound *sound, std::shared_ptr<bke::SoundRuntimeGeneration> generation)
+{
+  bke::SoundRuntime *runtime = sound->runtime;
+  std::shared_ptr<bke::SoundRuntimeGeneration> old_generation;
+  {
+    std::lock_guard lock{runtime->generation_mutex};
+    old_generation = std::move(runtime->generation);
+    runtime->generation = std::move(generation);
+  }
+  old_generation.reset();
+}
+
+static std::shared_ptr<bke::SoundRuntimeGeneration> sound_runtime_generation_get(
+    const bSound &sound)
+{
+  bke::SoundRuntime *runtime = sound.runtime;
+  std::lock_guard lock{runtime->generation_mutex};
+  return runtime->generation;
+}
+#endif
 
 static void sound_free_waveform(bSound *sound)
 {
@@ -371,9 +400,7 @@ static void sound_free_audio(bSound *sound)
 {
 #ifdef WITH_AUDASPACE
   bke::SoundRuntime *runtime = sound->runtime;
-  /* Sound audio handles are replaced outside concurrent sound evaluation. */
-  runtime->samplers.clear();
-  runtime->reader_cache.reset();
+  sound_runtime_generation_replace(sound, nullptr);
   runtime->handle.reset();
   runtime->playback_handle.reset();
   runtime->cache.reset();
@@ -700,9 +727,7 @@ void BKE_sound_refresh_callback_bmain(Main *bmain)
 static void sound_load_audio(Main *bmain, bSound *sound, bool free_waveform)
 {
   bke::SoundRuntime *runtime = sound->runtime;
-  /* Sound audio handles are replaced outside concurrent sound evaluation. */
-  runtime->samplers.clear();
-  runtime->reader_cache.reset();
+  sound_runtime_generation_replace(sound, nullptr);
   runtime->cache.reset();
   runtime->handle.reset();
   runtime->playback_handle.reset();
@@ -737,8 +762,6 @@ static void sound_load_audio(Main *bmain, bSound *sound, bool free_waveform)
     runtime->handle = AUD_Sound(new aud::ChannelMapper(runtime->handle, specs));
   }
 
-  runtime->reader_cache = std::make_shared<bke::SoundReaderCache>(runtime->handle);
-
   if (sound->flags & SOUND_FLAGS_CACHING) {
     try {
       runtime->cache = AUD_Sound(new aud::StreamBuffer(runtime->handle));
@@ -754,6 +777,11 @@ static void sound_load_audio(Main *bmain, bSound *sound, bool free_waveform)
   else {
     runtime->playback_handle = runtime->handle;
   }
+
+  auto generation = std::make_shared<bke::SoundRuntimeGeneration>();
+  generation->handle = runtime->handle;
+  generation->reader_cache = std::make_shared<bke::SoundReaderCache>(generation->handle);
+  sound_runtime_generation_replace(sound, std::move(generation));
 }
 
 void BKE_sound_load(Main *bmain, bSound *sound)
@@ -2163,25 +2191,29 @@ const Vector<float> *BKE_sound_runtime_get_waveform(const bSound *sound)
 
 namespace bke {
 
-const bSoundFrequencySampler *bSoundFrequencySampler::get_cached(const bSound &sound,
-                                                                 const Key &key)
+std::shared_ptr<const bSoundFrequencySampler> bSoundFrequencySampler::get_cached(
+    const bSound &sound, const Key &key)
 {
 #ifdef WITH_AUDASPACE
+  const std::shared_ptr<SoundRuntimeGeneration> generation = sound_runtime_generation_get(sound);
+  if (!generation) {
+    return nullptr;
+  }
   {
     /* Fast common case when the sampler has been created already. */
     bSoundFrequencySamplerMap::ConstAccessor accessor;
-    if (sound.runtime->samplers.lookup(accessor, key)) {
-      return accessor->second.get();
+    if (generation->samplers.lookup(accessor, key)) {
+      return accessor->second;
     }
   }
-  AUD_Sound sound_handle = sound.runtime->handle;
+  AUD_Sound sound_handle = generation->handle;
   if (!sound_handle) {
     /* Maybe try to load the sound in this case instead of relying on cache. */
     return nullptr;
   }
   /* Slower case when the sampler is newly created. */
   bSoundFrequencySamplerMap::MutableAccessor accessor;
-  if (sound.runtime->samplers.add(accessor, key)) {
+  if (generation->samplers.add(accessor, key)) {
     if (key.channel.has_value()) {
       const SoundInfo info = sound_info_get(sound_handle);
       const int channel = *key.channel;
@@ -2190,9 +2222,9 @@ const bSoundFrequencySampler *bSoundFrequencySampler::get_cached(const bSound &s
       }
     }
     accessor->second = std::shared_ptr<bSoundFrequencySampler>(
-        new bSoundFrequencySampler(sound_handle, sound.runtime->reader_cache, key));
+        new bSoundFrequencySampler(sound_handle, generation->reader_cache, key));
   }
-  return accessor->second.get();
+  return accessor->second;
 #else
   UNUSED_VARS(sound, key);
   return nullptr;
