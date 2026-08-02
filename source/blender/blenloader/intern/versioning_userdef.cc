@@ -1785,7 +1785,16 @@ void blo_do_versions_userdef(UserDef *userdef)
     userdef->asset_flag |= USER_ASSETS_USE_ONLINE_ESSENTIALS;
   }
 
-  if (!USER_VERSION_ATLEAST(503, 9)) {
+  /* Make Vulkan default on Linux/Windows x64. Keep existing option for Apple and Windows on ARM.*/
+#ifdef __APPLE__
+#elif defined(WIN32) && (defined(_M_ARM64) || defined(__aarch64__))
+#else
+  if (!USER_VERSION_ATLEAST(503, 10)) {
+    userdef->gpu_backend = USER_GPU_BACKEND_DEFAULT;
+  }
+#endif
+
+  if (!USER_VERSION_ATLEAST(503, 11)) {
     /* Adding dark/light theme split: Update dark theme to the previous active theme. The light
      * slot is left unset, falling back to the dark theme until the user picks one, see
      * #blender::bke::active_theme_get. */
