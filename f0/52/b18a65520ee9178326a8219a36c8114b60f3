@@ -4,3 +4,4 @@ Referenced by issue #113109, Regression: Linked Data is not kept in 4.0 when It'
 Referenced by issue #106321, How to handle preservations of linked IDs when they are effectively unused.
 Referenced by issue #99262, How to handle 'fake user' in linked data.
 Referenced by issue #157359, fake user get's cleared on file save/re-load
+Referenced by issue #162215, Linked datablocks can have Fake users added to them which do not work
