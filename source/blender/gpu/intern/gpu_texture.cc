@@ -157,7 +157,7 @@ bool Texture::init_view(Texture *src,
                                                         (src->layer_count() - view_layer_start_));
   }
   else {
-    view_extent[src->dimensions_count()] = 0;
+    view_extent[src->dimensions_count() - 1] = 0;
   }
 
   w_ = view_extent[0];
