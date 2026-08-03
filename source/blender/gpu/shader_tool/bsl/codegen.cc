@@ -1742,7 +1742,7 @@ struct CodegenContext : NodeErrorHandler {
     node = node.next();
     if (node.type() == NodeType::Op && node.front() == TokenType::Dot) {
       if (cls == nullptr) {
-        error(node, "Cannot access member of unknown class");
+        error(node, Diag::CannotAccessMemberOfUnknownClass);
         return;
       }
       Node member = node.next();
@@ -1766,8 +1766,9 @@ struct CodegenContext : NodeErrorHandler {
       for (int dim = var ? var->array_dimensions : 0, count = 0; dim > 0; --dim, ++count) {
         if (node.type() != NodeType::Subscript) {
           error(array_start,
-                "Not enough subscript (" + to_string(count) + ") to match array dimensions (" +
-                    to_string(var->array_dimensions) + ")");
+                Diag::NotEnoughSubscriptToMatchArrayDimensions,
+                to_string(count),
+                to_string(var->array_dimensions));
           break;
         }
         subscript(node, expr_scope);
@@ -1877,15 +1878,14 @@ struct CodegenContext : NodeErrorHandler {
         AssignStmt stmt = decl.initial_value();
         InitializerList list = stmt.initializer_list();
         if (!list.is_valid()) {
-          error(decl,
-                "Definition of variable with array type needs an explicit size or an initializer");
+          error(decl, Diag::ArrayTypeNeedsExplicitSizeOrInitializer);
         }
         int size = list.child_count();
         builder << builder.curr;
         builder.ss << to_string(size);
         builder << builder.curr;
         if (size == 0) {
-          error(decl, "Array size must be greater than zero");
+          error(decl, Diag::ArraySizeMustBeGreaterThanZero);
         }
         return;
       }
@@ -1893,14 +1893,14 @@ struct CodegenContext : NodeErrorHandler {
 
     for (Subscript sub : array.children_of_type<Subscript>()) {
       if (sub.is_empty()) {
-        error(sub, "Multi-dimensional arrays cannot have implicit size");
+        error(decl, Diag::MultidimensionalArrayImplicitSize);
       }
       else {
         auto [result, err] = table.expr_type_analysis(scope, sub.expr().child_first());
         /* Note: Do not report error. The size might be defined by compilation constant. */
         if (!err && result.is_constexpr()) {
           if (value_as<uint>(result.value) == 0) {
-            error(decl, "Array size must be greater than zero");
+            error(decl, Diag::ArraySizeMustBeGreaterThanZero);
           }
         }
       }
@@ -1992,7 +1992,7 @@ struct CodegenContext : NodeErrorHandler {
     else if (cls == nullptr || cls->is_error) {
       /* TODO(fclem): Long term, we can lookup what is the expected type of the expression and pass
        * it down the initializer tree. */
-      error(list, "Initializer list requires explicit type");
+      error(list, Diag::InitializerListRequiresExplicitType);
       return;
     }
     builder.curr = list.front();
@@ -2023,12 +2023,12 @@ struct CodegenContext : NodeErrorHandler {
     DesignatedInitializer designated(list.child_first());
     if (designated.is_valid()) {
       if (array_dim > 0) {
-        error(designated, "Expected array member initializer but got designated initializer");
+        error(designated, Diag::ExpectedArrayMemberInitializer);
       }
       /* Iterate over the list of members, zero initializing the omitted members, until we find
        * the given initializer. If member is out of order or not existing, raise an error. */
       for (SymbolVariable *var : cls->non_static_variables_in_declaration_order()) {
-        if (designated.is_valid() && var->identifier == designated.id().str()) {
+        if (designated.is_valid() && var->identifier == designated.identifier().str()) {
           AssignStmt stmt = designated.assign();
           builder.curr = stmt.child_first().front();
           init_expression_or_initializer_list(stmt.child_first(), scope, var->type);
@@ -2040,17 +2040,17 @@ struct CodegenContext : NodeErrorHandler {
         }
       }
       if (designated.is_valid()) {
-        if (auto *var = cls->lookup_variable(string(designated.id().str())); var && !var->is_error)
+        if (auto *var = cls->lookup_variable(string(designated.identifier().str()));
+            var && !var->is_error)
         {
-          error(designated,
-                "Field designator '" + string(designated.id().str()) +
-                    "' needs to be specified in declaration order");
+          error(designated, Diag::FieldDesignatorOutOfOrder, designated.identifier().str());
         }
         else {
           /* Note, can also happen. */
           error(designated,
-                "Field designator '" + string(designated.id().str()) +
-                    "' does not refer to any field in type '" + cls->identifier + "'");
+                Diag::FieldDesignatorNotFound,
+                designated.identifier().str(),
+                cls->identifier);
         }
       }
     }
@@ -2080,10 +2080,10 @@ struct CodegenContext : NodeErrorHandler {
     assert(id.is_valid());
     auto *cls = scope.lookup_class(table, id).unwrap(this);
     if (cls->template_data && !id.template_params().is_valid()) {
-      error(id, "Missing explicit template arguments");
+      error(id, Diag::MissingExplicitTemplateArguments);
     }
     else if (cls->is_error) {
-      error(id, "Unknown type name");
+      error(id, Diag::UnknownTypeNameWithArg);
     }
     return cls;
   }
@@ -2328,7 +2328,7 @@ struct CodegenContext : NodeErrorHandler {
         return it->second;
       }
     }
-    error(expr, "Expected image format");
+    error(expr, Diag::ExpectedImageFormat);
     return "0";
   }
 

@@ -235,6 +235,11 @@ enum class Diag {
   InvalidNumberLiteral,
   EnumNotConstexpr,
   AmbiguousOverload,
+  CannotAccessMemberOfUnknownClass,
+  NotEnoughSubscriptToMatchArrayDimensions,
+  ArrayTypeNeedsExplicitSizeOrInitializer,
+  MultiDimensionalArrayCannotHaveImplicitSize,
+  FieldDesignatorOrder,
 };
 
 static inline std::string_view diagnostic_message_get(Diag diag)
@@ -526,6 +531,16 @@ static inline std::string_view diagnostic_message_get(Diag diag)
       return "Unsupported literal";
     case Diag::EnumNotConstexpr:
       return "Expression is not an integral constant expression";
+    case Diag::CannotAccessMemberOfUnknownClass:
+      return "Cannot access member of unknown class";
+    case Diag::NotEnoughSubscriptToMatchArrayDimensions:
+      return "Not enough subscript ({}) to match array dimensions ({})";
+    case Diag::ArrayTypeNeedsExplicitSizeOrInitializer:
+      return "Definition of variable with array type needs an explicit size or an initializer";
+    case Diag::MultiDimensionalArrayCannotHaveImplicitSize:
+      return "Multi-dimensional arrays cannot have implicit size";
+    case Diag::FieldDesignatorOrder:
+      return "Field designator '{}' needs to be specified in declaration order";
   }
   return "Compiler error: Invalid diagnostic value";
 }

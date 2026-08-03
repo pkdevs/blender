@@ -762,7 +762,7 @@ struct AssignStmt : Node {
 struct DesignatedInitializer : Node {
   NODE_COMMON(DesignatedInitializer);
 
-  Id id() const
+  Id identifier() const
   {
     return child_first();
   }
