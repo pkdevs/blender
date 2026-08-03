@@ -42,15 +42,6 @@ def _setup_info_area():
     return e, t, window, area
 
 
-def _set_report_filters(space, *, debug=False, info=False,
-                        warning=False, error=False, operator=False):
-    space.show_report_debug = debug
-    space.show_report_info = info
-    space.show_report_warning = warning
-    space.show_report_error = error
-    space.show_report_operator = operator
-
-
 def _select_reports(area, action, t):
     import bpy
 
@@ -98,15 +89,6 @@ def test_info_report_selection_modes():
     space = area.spaces.active
     t.assertIsInstance(space, bpy.types.SpaceInfo)
 
-    _set_report_filters(
-        space,
-        debug=True,
-        info=True,
-        warning=True,
-        error=True,
-        operator=True,
-    )
-
     yield
     for action in ("SELECT", "DESELECT"):
         yield from _select_reports(area, action, t)
@@ -123,15 +105,6 @@ def test_info_report_delete():
 
     space = area.spaces.active
     t.assertIsInstance(space, bpy.types.SpaceInfo)
-
-    _set_report_filters(
-        space,
-        debug=True,
-        info=True,
-        warning=True,
-        error=True,
-        operator=True,
-    )
 
     yield from _select_reports(area, 'SELECT', t)
     yield from _delete_reports(area, t)
