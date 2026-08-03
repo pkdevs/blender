@@ -115,6 +115,10 @@ struct EdgeSlideParams {
   bool use_clone;
 };
 
+/**
+ * Clone is always clamped. The un-clamped overlay in #drawEdgeSlide takes precedence over the
+ * clone overlay, so the cloned loop would stop being drawn. The operation itself is unaffected.
+ */
 static bool edge_slide_use_clamp(const TransInfo *t)
 {
   const EdgeSlideParams *slp = static_cast<const EdgeSlideParams *>(t->custom.mode.data);
@@ -460,21 +464,14 @@ static void freeEdgeSlideVerts(TransInfo *t, TransDataContainer *tc, TransCustom
     return;
   }
 
-  /* `t->custom.mode.data` (the #EdgeSlideParams) is already freed by #postTrans at this point
-   * so detect clone mode from the container's own data instead. */
   if (!sld->original_verts.is_empty() && t->state == TRANS_CANCEL) {
     BMEditMesh *em = BKE_editmesh_from_object(tc->obedit);
     BMesh *bm = em->bm;
 
     /* Remove the clones and restore the original selection that was replaced on init. */
-    for (int i = 0; i < int(sld->sv.size()); i++) {
-      BMVert *v_clone = static_cast<BMVert *>(sld->sv[i].td->extra);
-      if (v_clone) {
-        BM_vert_kill(bm, v_clone);
-      }
-      if (BMVert *v_orig = sld->original_verts[i]) {
-        BM_elem_flag_enable(v_orig, BM_ELEM_SELECT);
-      }
+    for (const int i : sld->original_verts.index_range()) {
+      BM_vert_kill(bm, static_cast<BMVert *>(sld->sv[i].td->extra));
+      BM_elem_flag_enable(sld->original_verts[i], BM_ELEM_SELECT);
     }
     EDBM_selectmode_flush(em);
 
