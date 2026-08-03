@@ -148,13 +148,13 @@ struct SymbolParser : NodeErrorHandler {
         IdQualified type_id(LocalVar(param.child_first()).identifier());
         SymbolClass *resolved = inst_scope.lookup_class(table, type_id).unwrap(this);
         /* IMPORTANT: Instantiate at argument declaration. Allow correct lookup. */
-        scope.classes.emplace(id, resolved, arg.id().front());
+        scope.classes.emplace(id, resolved, arg.identifier().front());
       }
       else {
         IdQualified type = arg.type();
-        string id(arg.id().str());
+        string id(arg.identifier().str());
         SymbolClass *cls = inst_scope.lookup_class(table, type).unwrap(this);
-        SymbolVariable *var = table.var_arena.alloc(&scope, cls, arg.id().front(), id);
+        SymbolVariable *var = table.var_arena.alloc(&scope, cls, arg.identifier().front(), id);
         auto val = table.expr_type_analysis(scope, param.child_first()).unwrap(this);
         if (!val.is_constexpr()) {
           error(param, Diag::TemplateParameterNotConstexpr);
@@ -171,7 +171,8 @@ struct SymbolParser : NodeErrorHandler {
   void parse_function_return_type(SymbolScope &scope, FuncDecl decl)
   {
     SymbolFunction *fn_sym = static_cast<SymbolFunction *>(&scope);
-    fn_sym->return_type = fn_sym->lookup_class(table, decl.return_type().id()).unwrap(this);
+    fn_sym->return_type =
+        fn_sym->lookup_class(table, decl.return_type().identifier()).unwrap(this);
 
     if (fn_sym->is_entry_point() && fn_sym->return_type != table.void_cls) {
       error(decl.return_type(), Diag::EntryPointVoidReturn);
@@ -189,7 +190,7 @@ struct SymbolParser : NodeErrorHandler {
     for (FuncArg arg : decl.arguments().children_of_type<FuncArg>()) {
       auto attr = resource_type_from_attributes(arg.attributes()).unwrap(this);
 
-      SymbolClass *type = scope.lookup_class(table, arg.type().id()).unwrap(this);
+      SymbolClass *type = scope.lookup_class(table, arg.type().identifier()).unwrap(this);
       SymbolVariable *var = table.var_arena.alloc(&scope, type, arg.declarator(), table);
       scope.variables.emplace(var->identifier, var);
       /* Register argument type for argument resolution. */
@@ -268,7 +269,7 @@ struct SymbolParser : NodeErrorHandler {
               break;
             case SymbolFunction::EntryPointType::FRAG:
               if (type->srt_type != ResourceTableType::FRAGMENT_OUT) {
-                error(arg.type().id(),
+                error(arg.type().identifier(),
                       Diag::ExpectedResourceOfType,
                       to_str(ResourceTableType::FRAGMENT_OUT),
                       to_str(type->srt_type));
@@ -276,27 +277,27 @@ struct SymbolParser : NodeErrorHandler {
               break;
             case SymbolFunction::EntryPointType::VERT:
               if (type->srt_type != ResourceTableType::VERTEX_OUT) {
-                error(arg.type().id(),
+                error(arg.type().identifier(),
                       Diag::ExpectedResourceOfType,
                       to_str(ResourceTableType::VERTEX_IN),
                       to_str(type->srt_type));
               }
               break;
             case SymbolFunction::EntryPointType::NONE:
-              error(arg.type().id(), Diag::OnlyEntryPointsCanUseOutAttribute);
+              error(arg.type().identifier(), Diag::OnlyEntryPointsCanUseOutAttribute);
               break;
           }
           break;
         case ResourceType::IN:
           switch (entry_point_type) {
             case SymbolFunction::EntryPointType::COMP:
-              error(arg.type().id(), Diag::InAttributeOnlyAllowedInVertFrag);
+              error(arg.type().identifier(), Diag::InAttributeOnlyAllowedInVertFrag);
               break;
             case SymbolFunction::EntryPointType::FRAG:
               if (type->srt_type != ResourceTableType::FRAGMENT_IN &&
                   type->srt_type != ResourceTableType::VERTEX_OUT)
               {
-                error(arg.type().id(),
+                error(arg.type().identifier(),
                       Diag::ExpectedResourceOfEitherType,
                       to_str(ResourceTableType::FRAGMENT_IN),
                       to_str(ResourceTableType::VERTEX_OUT),
@@ -305,14 +306,14 @@ struct SymbolParser : NodeErrorHandler {
               break;
             case SymbolFunction::EntryPointType::VERT:
               if (type->srt_type != ResourceTableType::VERTEX_IN) {
-                error(arg.type().id(),
+                error(arg.type().identifier(),
                       Diag::ExpectedResourceOfType,
                       to_str(ResourceTableType::VERTEX_IN),
                       to_str(type->srt_type));
               }
               break;
             case SymbolFunction::EntryPointType::NONE:
-              error(arg.type().id(), Diag::OnlyEntryPointsCanUseInAttribute);
+              error(arg.type().identifier(), Diag::OnlyEntryPointsCanUseInAttribute);
               break;
           }
           break;
@@ -350,7 +351,7 @@ struct SymbolParser : NodeErrorHandler {
   void parse_loop_arguments(SymbolScope &scope, ForLoop loop)
   {
     for (VarDecl var : loop.condition().descendants_of_type<VarDecl>()) {
-      SymbolClass *type = scope.lookup_class(table, var.type().id()).unwrap(this);
+      SymbolClass *type = scope.lookup_class(table, var.type().identifier()).unwrap(this);
       for (Declarator decl : var.children_of_type<Declarator>()) {
         SymbolVariable *sym = table.var_arena.alloc(&scope, type, decl, table);
         sym->type = type;
@@ -447,7 +448,7 @@ struct SymbolParser : NodeErrorHandler {
     }
     else {
       IdQualified aliased(stmt.aliased());
-      IdQualified name(stmt.id());
+      IdQualified name(stmt.identifier());
       SymbolClass *type = scope.lookup_class(table, aliased).unwrap(this);
       if (type->is_error) {
         error(aliased, Diag::UnknownTypeAlias);
@@ -455,7 +456,7 @@ struct SymbolParser : NodeErrorHandler {
       }
       string identifier(name.name().str());
       if (type) {
-        scope.classes.emplace(identifier, type, stmt.id().front());
+        scope.classes.emplace(identifier, type, stmt.identifier().front());
         return;
       }
     }
@@ -807,7 +808,7 @@ struct SymbolParser : NodeErrorHandler {
 
   void parse_var_decl(SymbolScope &scope, VarDecl var, int &offset, const std::string &prefix)
   {
-    IdQualified type_id = var.type().id();
+    IdQualified type_id = var.type().identifier();
     string_view type_id_str = type_id.str();
 
     /* Assumes C++ compilation already checked that all declarator uses the same type.

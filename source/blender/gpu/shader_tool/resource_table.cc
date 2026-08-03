@@ -89,7 +89,7 @@ void SourceProcessor::lower_srt_accessor_templates_ast(Parser &parser)
     for (VarDecl var : decl.body().children_of_type<VarDecl>()) {
       IdType type = var.type();
       bool is_resource_table = var.attributes().contains_attr("resource_table");
-      bool is_srt = type.id().name().str() == "srt_t";
+      bool is_srt = type.identifier().name().str() == "srt_t";
       if (!is_srt) {
         continue;
       }
@@ -111,8 +111,8 @@ void SourceProcessor::lower_srt_accessor_templates_ast(Parser &parser)
       }
 
       /* Remove the template but not the wrapped type. */
-      parser.erase(type.id().name());
-      TemplateParamList list = type.id().template_params();
+      parser.erase(type.identifier().name());
+      TemplateParamList list = type.identifier().template_params();
       if (list.is_valid()) {
         parser.erase(list.front());
         parser.erase(list.back());

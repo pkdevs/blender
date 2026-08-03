@@ -477,15 +477,15 @@ void SourceProcessor::lower_union_accessor_templates_ast(Parser &parser)
     if (decl.is_union()) {
       for (VarDecl var : decl.body().children_of_type<VarDecl>()) {
         IdType type = var.type();
-        Id name = type.id().name();
+        Id name = type.identifier().name();
 
-        if (type.id().name().str() != "union_t") {
+        if (type.identifier().name().str() != "union_t") {
           continue;
         }
 
         /* Remove the template but not the wrapped type. */
         parser.erase(name);
-        TemplateParamList param = type.id().template_params();
+        TemplateParamList param = type.identifier().template_params();
         if (param.is_valid()) {
           parser.erase(param.front());
           parser.erase(param.back());

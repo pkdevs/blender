@@ -55,7 +55,7 @@ template<typename T> SymbolTemplate<T>::SymbolTemplate(ast::TemplateDecl temp) :
     int arg_id = -1;
     int id = 0;
     for (TemplateArg tmp_arg : tmp_args.children_of_type<TemplateArg>()) {
-      if (tmp_arg.id().str() == arg.type().id().str()) {
+      if (tmp_arg.identifier().str() == arg.type().identifier().str()) {
         arg_id = id;
       }
       ++id;

@@ -31,7 +31,7 @@ Result<vector<SymbolClass *>> SymbolFunction::to_arg_types(const SymbolTable &ta
 {
   vector<SymbolClass *> arg_types;
   for (FuncArg arg : list.children_of_type<FuncArg>()) {
-    auto [cls, _] = scope.lookup_class(table, arg.type().id());
+    auto [cls, _] = scope.lookup_class(table, arg.type().identifier());
     arg_types.emplace_back(cls);
   }
   return {arg_types, std::nullopt};

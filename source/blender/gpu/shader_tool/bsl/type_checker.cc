@@ -64,7 +64,7 @@ struct ExpressionTypeParser
     switch (t.type()) {
       case ast::NodeType::Constructor: {
         ast::Constructor ctor = t;
-        return scope->lookup_class(*table, ctor.id()).unwrap(err);
+        return scope->lookup_class(*table, ctor.identifier()).unwrap(err);
       }
       case ast::NodeType::FuncCall: {
         ast::FuncCall call = t;

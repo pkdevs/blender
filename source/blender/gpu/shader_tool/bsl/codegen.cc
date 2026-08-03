@@ -352,7 +352,7 @@ struct CodegenContext : NodeErrorHandler {
 
     while (constants_init.is_valid()) {
       if (Constructor ctor(constants_init.child_first()); ctor.is_valid()) {
-        auto *cls = scope.lookup_class(table, ctor.id()).unwrap(this);
+        auto *cls = scope.lookup_class(table, ctor.identifier()).unwrap(this);
         builder << cls->identifier;
         builder << ctor.initializer_list();
       }
@@ -933,7 +933,7 @@ struct CodegenContext : NodeErrorHandler {
           case NodeType::VarDecl: {
             VarDecl decl = node;
             if (!decl.type().is_static()) {
-              SymbolClass *type = id_type_lookup_resolved(decl.type().id(), cls);
+              SymbolClass *type = id_type_lookup_resolved(decl.type().identifier(), cls);
               for (Declarator d : decl.children_of_type<Declarator>()) {
                 SymbolVariable *var = cls.lookup_variable(table, d.identifier());
                 if (var->is_static) {
@@ -1707,10 +1707,10 @@ struct CodegenContext : NodeErrorHandler {
 
     skip_node(decl.attributes());
 
-    if (decl.type().id().str() == "auto") {
+    if (decl.type().identifier().str() == "auto") {
       Declarator d = decl.child_first(NodeType::Declarator);
       auto *cls = table.resolve_auto_type(scope, d).unwrap(this);
-      builder << cls->identifier + trivia(decl.type().id());
+      builder << cls->identifier + trivia(decl.type().identifier());
     }
     else {
       id_type(decl.type(), scope);
@@ -1728,7 +1728,7 @@ struct CodegenContext : NodeErrorHandler {
     skip_if(Static);
     match_if(TokenType::Const, Constexpr);
     skip_if(Struct, Class, Enum);
-    id_type_resolved(type.id(), scope);
+    id_type_resolved(type.identifier(), scope);
   }
 
   /* Process the next member access operator at the right of the node.
@@ -1968,7 +1968,7 @@ struct CodegenContext : NodeErrorHandler {
 
   void constructor(Constructor construct, SymbolScope &scope)
   {
-    auto *cls = scope.lookup_class(table, construct.id()).unwrap(this);
+    auto *cls = scope.lookup_class(table, construct.identifier()).unwrap(this);
     if (cls->is_srt()) {
       error(construct, Diag::ResourceTableConstructorNotAllowed, cls->identifier);
     }

@@ -536,7 +536,7 @@ struct TemplateArg : Node {
     return child_first();
   }
 
-  IdQualified id() const
+  IdQualified identifier() const
   {
     return child_last();
   }
@@ -596,7 +596,7 @@ struct UsingStmt : Node {
 
   bool is_namespace() const;
 
-  IdQualified id() const
+  IdQualified identifier() const
   {
     return child_first();
   }
@@ -645,7 +645,7 @@ struct IdType : Node {
     return child_first(NodeType::Const);
   }
 
-  IdQualified id() const
+  IdQualified identifier() const
   {
     return child_first(NodeType::IdQualified);
   }
@@ -691,7 +691,7 @@ struct InitializerList : Node {
 struct Constructor : Node {
   NODE_COMMON(Constructor);
 
-  IdQualified id() const
+  IdQualified identifier() const
   {
     return child_first();
   }
