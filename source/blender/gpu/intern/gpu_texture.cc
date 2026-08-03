@@ -160,8 +160,8 @@ bool Texture::init_view(Texture *src,
     view_extent[src->dimensions_count() - 1] = std::min(layer_len,
                                                         (src->layer_count() - view_layer_start_));
   }
-  else {
-    view_extent[src->dimensions_count() - 1] = 0;
+  else if (src->type_get() & GPU_TEXTURE_ARRAY) {
+    view_extent[src->dimensions_count()] = 0;
   }
 
   w_ = view_extent[0];
