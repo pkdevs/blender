@@ -1532,8 +1532,14 @@ static size_t text_shorten_next_template_var(char *str, size_t byte_position)
 
   const StringRef short_expression{BKE_TEMPLATE_EXPRESSION_ABBREVIATION};
 
-  /* Don't substitute if the short expression isn't actually shorter. */
-  if (info->byte_range.size() <= short_expression.size()) {
+  /* Since we don't have control over the length of `str`, for now we just don't
+   * substitute if it would grow the length of the string. This is a bit hacky,
+   * and it means that 1 and 2-byte template expressions won't get substituted.
+   *
+   * In the future we can get a bit more involved and grow the string as needed,
+   * and perhaps also verify that the substitution actually reduces the display
+   * length of the string. */
+  if (short_expression.size() > info->byte_range.size()) {
     return info->byte_range.one_after_last();
   }
 
