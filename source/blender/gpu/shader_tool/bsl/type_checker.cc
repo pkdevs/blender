@@ -383,12 +383,11 @@ struct ExpressionTypeParser
       return table->err_cls;
     }
 
-    ExprFlag flags = ExprFlag(left.flags & tval.flags & fval.flags);
-    if (flags & ExprFlag::IsConstexpr) {
+    if (left.flags & ExprFlag::IsConstexpr) {
       return {tval.type, std::get<bool>(left.value) ? tval.value : fval.value};
     }
     /* Operand types match. We can return either. */
-    return {tval.type, flags};
+    return {tval.type, tval.flags & fval.flags};
   }
 
   ExpressionResult error(ErrorType err, lexit::TokenType type)
