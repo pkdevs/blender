@@ -64,14 +64,10 @@ struct CodegenContext : NodeErrorHandler {
     CodegenContext &ctx;
     const SymbolScope &scope;
     ast::Node node;
-    SymbolClass *expected_cls;
 
    public:
-    CodegenExpressionParser(CodegenContext &ctx,
-                            const SymbolScope &scope,
-                            ast::Node start_node,
-                            SymbolClass *expected_cls = nullptr)
-        : ctx(ctx), scope(scope), node(start_node), expected_cls(expected_cls)
+    CodegenExpressionParser(CodegenContext &ctx, const SymbolScope &scope, ast::Node start_node)
+        : ctx(ctx), scope(scope), node(start_node)
     {
     }
 
@@ -120,12 +116,20 @@ struct CodegenContext : NodeErrorHandler {
 
     ExpressionResult member(ExpressionResult left, const ast::Node &t)
     {
-      ast::Node right = consume();
-      switch (right.type()) {
-        case ast::NodeType::FuncCall:
-          return function(right, *left.type);
-        case ast::NodeType::LocalVar:
-          return variable(LocalVar(right).identifier(), *left.type);
+      ast::Node rhs = consume();
+      switch (rhs.type()) {
+        case ast::NodeType::FuncCall: {
+          ExpressionResult right = function(rhs, *left.type);
+          return {left.str + string(t.str_full()) + right.str, right.type};
+        }
+        case ast::NodeType::LocalVar: {
+          ExpressionResult right = variable(LocalVar(rhs).identifier(), *left.type);
+          if (left.type->is_srt()) {
+            /* Remove access to SRT type (makes the resource global). */
+            return {left.str + as_whitespace(t.str_full()) + right.str, right.type};
+          }
+          return {left.str + string(t.str_full()) + right.str, right.type};
+        }
         default:
           return {t, ctx.table.err_cls};
       }
@@ -137,8 +141,11 @@ struct CodegenContext : NodeErrorHandler {
       if (ast::Subscript sub = t; sub.is_valid()) {
         ExpressionResult param = ctx.expr(sub.expr(), scope);
 
+        string_view front = t.front().str_with_whitespace();
+        string_view back = t.back().str_with_whitespace();
+
         if (left.array_dim > 0) {
-          left.str += string(t.front().str()) + param.str + string(t.back().str());
+          left.str += string(front) + param.str + string(back);
           left.array_dim -= 1;
           return left;
         }
@@ -150,7 +157,7 @@ struct CodegenContext : NodeErrorHandler {
             return {left.str, left.type->operator_subscript->return_type};
           }
 #endif
-          left.str += string(t.front().str()) + param.str + string(t.back().str());
+          left.str += string(front) + param.str + string(back);
           return {left.str, left.type->operator_subscript->return_type};
         }
       }
@@ -284,7 +291,7 @@ struct CodegenContext : NodeErrorHandler {
         bool followed_by_member_call = id.parent().next().next() == NodeType::FuncCall;
         if (followed_by_dot && !followed_by_member_call) {
           /* Remove access to SRT type (makes the resource global). */
-          return {"", var->type};
+          return {as_whitespace(id.str_full()), var->type};
         }
         /* SRT type is used in an expression (likely as function argument). Call the ctor. */
         return {var->type->identifier + "_ctor_()" + whitespace, var->type};
@@ -684,7 +691,12 @@ struct CodegenContext : NodeErrorHandler {
   {
     if (SymbolFunction *fn = scope.parent_function(); fn) {
       match_if(Return);
-      builder.ss << expr(stmt.expression(), scope, fn->return_type).str;
+      if (InitializerList list(stmt.expression().child_first()); list.is_valid()) {
+        builder.ss << initializer_list(list, scope, fn->return_type).str;
+      }
+      else {
+        builder.ss << expr(stmt.expression(), scope).str;
+      }
       builder.curr = stmt.expression().back().next();
       match_if(';');
     }
@@ -1942,21 +1954,10 @@ struct CodegenContext : NodeErrorHandler {
     skip_node(AttrList(cond.next()));
   }
 
-  ExpressionResult expr(Expr node, const SymbolScope &scope, SymbolClass *cls = nullptr)
+  ExpressionResult expr(Expr node, const SymbolScope &scope)
   {
     assert(node.is_valid());
-    return CodegenExpressionParser(*this, scope, node.child_first(), cls).eval();
-  }
-
-  /* For subscript in expressions. */
-  void subscript(Subscript stmt, SymbolScope &scope)
-  {
-    match_if('[');
-    if (stmt.expr().is_valid()) {
-      builder.ss << expr(stmt.expr(), scope).str;
-      builder.curr = stmt.expr().back().next();
-    }
-    match_if(']');
+    return CodegenExpressionParser(*this, scope, node.child_first()).eval();
   }
 
   /* Return true if declaration was issued. */
@@ -2080,8 +2081,10 @@ struct CodegenContext : NodeErrorHandler {
       assignment(decl.initial_value(), scope, var->type, array.dimensions());
     }
     else if (decl.initializer_list().is_valid()) {
-      builder.ss << "=";
-      initializer_list(decl.initializer_list(), scope, var->type, array.dimensions());
+      builder.ss << "=" + initializer_list(
+                              decl.initializer_list(), scope, var->type, array.dimensions())
+                              .str;
+      builder.curr = decl.back().next();
     }
   }
 
