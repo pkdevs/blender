@@ -710,7 +710,7 @@ static void bake_differentials(BakeDataZSpan *bd,
   }
 }
 
-static void bakepixels_add_margin(BakePixel pixel_array[], const BakeTargets *targets, int margin)
+static void bake_pixels_add_margin(BakePixel pixel_array[], const BakeTargets *targets, int margin)
 {
   for (int image_id = 0; image_id < targets->images_num; image_id++) {
     BakeImage *image = &targets->images[image_id];
@@ -863,7 +863,7 @@ void RE_bake_pixels_populate(Mesh *mesh,
   }
 
   if (margin > 0) {
-    bakepixels_add_margin(pixel_array, targets, margin);
+    bake_pixels_add_margin(pixel_array, targets, margin);
   }
 
   MEM_delete(corner_tris);
