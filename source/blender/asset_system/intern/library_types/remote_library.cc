@@ -56,8 +56,10 @@ namespace blender::asset_system {
 
 RemoteLibraryDefinitionRef::RemoteLibraryDefinitionRef(const bUserAssetLibrary &library_definition)
     : remote_url(library_definition.remote_url),
-      auth_token(library_definition.auth_token ? library_definition.auth_token : ""),
-      cache_dirpath(library_definition.dirpath)
+      cache_dirpath(library_definition.dirpath),
+      auth_token(library_definition.auth_token ?
+                     std::optional<StringRefNull>(library_definition.auth_token) :
+                     std::nullopt)
 {
   BLI_assert((library_definition.flag & ASSET_LIBRARY_USE_REMOTE_URL) != 0);
 }
@@ -72,10 +74,8 @@ RemoteAssetLibrary::RemoteAssetLibrary(const eAssetLibraryType library_type,
                                        const bool is_read_only,
                                        const StringRef remote_url,
                                        const StringRef name,
-                                       const StringRef root_path,
-                                       const StringRef auth_token)
-    : AssetLibrary(library_type, is_read_only, name, root_path, auth_token),
-      remote_url_(remote_url)
+                                       const StringRef root_path)
+    : AssetLibrary(library_type, is_read_only, name, root_path), remote_url_(remote_url)
 {
   may_override_import_method_ = false;
 }
@@ -83,7 +83,7 @@ RemoteAssetLibrary::RemoteAssetLibrary(const eAssetLibraryType library_type,
 void RemoteAssetLibrary::force_remote_listing_download() const
 {
   remote_library_request_download(
-      RemoteLibraryDefinitionRef{remote_url_, auth_token().value_or(""), root_path()});
+      RemoteLibraryDefinitionRef{remote_url_, root_path(), auth_token()});
 }
 
 std::optional<eAssetImportMethod> RemoteAssetLibrary::import_method() const
@@ -116,9 +116,7 @@ PreferencesRemoteAssetLibrary::PreferencesRemoteAssetLibrary(
                          /*is_read_only=*/true,
                          /*remote_url=*/custom_library.remote_url,
                          /*name=*/custom_library.name,
-                         /*root_path=*/custom_library.dirpath,
-                         /*auth_token=*/custom_library.auth_token ? custom_library.auth_token :
-                                                                    ""),
+                         /*root_path=*/custom_library.dirpath),
       user_library_(custom_library)
 {
   BLI_assert(custom_library.flag & ASSET_LIBRARY_USE_REMOTE_URL);
@@ -153,6 +151,22 @@ bool PreferencesRemoteAssetLibrary::is_enabled() const
   }
 
   return (library_definition->flag & ASSET_LIBRARY_DISABLED) == 0;
+}
+
+std::optional<StringRefNull> PreferencesRemoteAssetLibrary::auth_token() const
+{
+  const bUserAssetLibrary *library_definition = user_library_.user_asset_library();
+  if (library_definition == nullptr) {
+    return std::nullopt;
+  }
+
+  StringRefNull token(library_definition->auth_token);
+  if (token.is_empty()) {
+    return std::nullopt;
+  }
+
+  BLI_assert(library_definition->flag & ASSET_LIBRARY_USE_AUTH_TOKEN);
+  return token;
 }
 
 /** \} */
@@ -640,8 +654,9 @@ void remote_library_request_download(const RemoteLibraryDefinitionRef &library_d
 
     std::unique_ptr locals = bke::idprop::create_group("locals");
     IDP_AddToGroup(locals.get(), IDP_NewString(library_definition.remote_url, "library_url"));
-    IDP_AddToGroup(locals.get(), IDP_NewString(library_definition.auth_token, "auth_token"));
     IDP_AddToGroup(locals.get(), IDP_NewString(library_definition.cache_dirpath, "library_path"));
+    IDP_AddToGroup(locals.get(),
+                   IDP_NewString(library_definition.auth_token.value_or(""), "auth_token"));
 
     /* TODO: report errors in the UI somehow. */
     BPY_run_string_exec_with_locals(nullptr, script, *locals);
@@ -737,7 +752,7 @@ static std::optional<std::string> remote_library_request_asset_download_file(
 
   std::unique_ptr locals = bke::idprop::create_group("locals");
   IDP_AddToGroup(locals.get(), IDP_NewString(*library.remote_url(), "library_url"));
-  IDP_AddToGroup(locals.get(), IDP_NewString(*library.auth_token(), "auth_token"));
+  IDP_AddToGroup(locals.get(), IDP_NewString(library.auth_token().value_or(""), "auth_token"));
   IDP_AddToGroup(locals.get(), IDP_NewString(library.root_path(), "library_path"));
   IDP_AddToGroup(locals.get(), IDP_NewString(dst_filepath, "dst_filepath"));
   IDP_AddToGroup(locals.get(), IDP_NewString(asset_url.url, "asset_url"));
@@ -883,7 +898,8 @@ void remote_library_request_preview_download(const bContext &C,
 
     std::unique_ptr locals = bke::idprop::create_group("locals");
     IDP_AddToGroup(locals.get(), IDP_NewString(*library_url, "library_url"));
-    IDP_AddToGroup(locals.get(), IDP_NewString(*library.auth_token(), "library_auth_token"));
+    IDP_AddToGroup(locals.get(),
+                   IDP_NewString(library.auth_token().value_or(""), "library_auth_token"));
     IDP_AddToGroup(locals.get(), IDP_NewString(library.root_path(), "library_path"));
     IDP_AddToGroup(locals.get(), IDP_NewString(*preview_url, "preview_url"));
     IDP_AddToGroup(locals.get(), IDP_NewString(*preview_hash, "preview_hash"));

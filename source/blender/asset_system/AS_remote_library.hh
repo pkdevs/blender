@@ -28,17 +28,20 @@ namespace asset_system {
 
 struct RemoteLibraryDefinitionRef {
   StringRefNull remote_url;
-  StringRefNull auth_token;
   StringRefNull cache_dirpath;
+  std::optional<StringRefNull> auth_token;
 
   RemoteLibraryDefinitionRef(const bUserAssetLibrary &library_definition);
   RemoteLibraryDefinitionRef(StringRefNull remote_url,
-                             StringRefNull auth_token,
-                             StringRefNull cache_dirpath)
-      : remote_url(remote_url), auth_token(auth_token), cache_dirpath(cache_dirpath)
+                             StringRefNull cache_dirpath,
+                             std::optional<StringRefNull> auth_token = std::nullopt)
+      : remote_url(remote_url), cache_dirpath(cache_dirpath), auth_token(auth_token)
   {
   }
 };
+
+// RemoteLibraryDefinitionRef(/*...other args...*/, std::optional<StringRefNull> auth_token =
+// std::nullopt)
 
 constexpr StringRefNull REMOTE_LIBRARY_TOP_META_FILE_NAME = "_asset-library-meta.json";
 constexpr StringRefNull REMOTE_LIBRARY_TOP_META_FILE_NAME_LEADING_SLASH =

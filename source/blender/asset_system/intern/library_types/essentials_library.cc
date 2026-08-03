@@ -40,7 +40,7 @@ EssentialsAssetLibrary::EssentialsAssetLibrary()
 void EssentialsAssetLibrary::force_remote_listing_download() const
 {
   remote_library_request_download(RemoteLibraryDefinitionRef{
-      online_essentials_url(), "", online_essentials_cache_directory_path()});
+      online_essentials_url(), online_essentials_cache_directory_path()});
 }
 
 std::optional<AssetLibraryReference> EssentialsAssetLibrary::library_reference() const

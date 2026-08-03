@@ -20,14 +20,14 @@ namespace blender::asset_system {
  */
 class RemoteAssetLibrary : public AssetLibrary {
   std::string remote_url_;
+  std::string auth_token_;
 
  public:
   RemoteAssetLibrary(eAssetLibraryType library_type,
                      bool is_read_only,
                      StringRef remote_url,
                      StringRef name,
-                     StringRef root_path,
-                     StringRef auth_token = "");
+                     StringRef root_path);
   void force_remote_listing_download() const override;
 
   std::optional<eAssetImportMethod> import_method() const override;
@@ -40,8 +40,9 @@ class PreferencesRemoteAssetLibrary : public RemoteAssetLibrary {
   UserAssetLibraryWrapper user_library_;
 
  public:
-  PreferencesRemoteAssetLibrary(const bUserAssetLibrary &custom_library);
+  PreferencesRemoteAssetLibrary(const bUserAssetLibrary &);
   std::optional<AssetLibraryReference> library_reference() const override;
+  std::optional<StringRefNull> auth_token() const override;
   bool is_enabled() const;
 };
 

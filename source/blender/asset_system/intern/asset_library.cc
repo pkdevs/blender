@@ -218,13 +218,11 @@ namespace asset_system {
 AssetLibrary::AssetLibrary(eAssetLibraryType library_type,
                            const bool is_read_only,
                            StringRef name,
-                           StringRef root_path,
-                           StringRef auth_token)
+                           StringRef root_path)
     : library_type_(library_type),
       is_read_only_(is_read_only),
       name_(name),
       root_path_(std::make_shared<std::string>(utils::normalize_directory_path(root_path))),
-      auth_token_(std::make_shared<std::string>(auth_token)),
       catalog_service_(std::make_unique<AssetCatalogService>(
           *root_path_,
           is_read_only ? std::optional{AssetCatalogService::read_only_tag{}} : std::nullopt))
@@ -263,8 +261,8 @@ std::optional<StringRefNull> AssetLibrary::remote_url() const
 
 std::optional<StringRefNull> AssetLibrary::auth_token() const
 {
-  return *auth_token_;
-};
+  return std::nullopt;
+}
 
 AssetCatalogService &AssetLibrary::catalog_service() const
 {
