@@ -164,12 +164,16 @@ struct CodegenContext : NodeErrorHandler {
   void local_scope(LocalScope node, SymbolScope &symbol)
   {
     assert(node.is_valid());
+
+    /* Check if scope started with a bracket, otherwise we could emit a contained scope last token
+     * because of the last jump_to. */
+    bool has_bracket = false;
     if (symbol.parent != nullptr) {
       if (symbol.type == SymbolScope::NAMESPACE) {
         skip_if('{');
       }
       else {
-        match_if('{');
+        has_bracket = match_if('{');
       }
     }
 
@@ -269,7 +273,7 @@ struct CodegenContext : NodeErrorHandler {
       if (symbol.type == SymbolScope::NAMESPACE) {
         skip_if('}');
       }
-      else {
+      else if (has_bracket) {
         match_if('}');
       }
     }
@@ -423,7 +427,12 @@ struct CodegenContext : NodeErrorHandler {
             builder.curr = val.back().next();
           }
           match_if(Colon);
-          local_scope(switch_case.body(), *scope.scopes[to_string(local_scope_id++)]);
+          if (LocalScope body = switch_case.body(); body.front() == '{') {
+            local_scope(switch_case.body(), *scope.scopes[to_string(local_scope_id++)]);
+          }
+          else {
+            local_scope(switch_case.body(), *scope.scopes[to_string(local_scope_id++)]);
+          }
           break;
         }
         case NodeType::Condition:
