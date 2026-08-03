@@ -6185,7 +6185,8 @@ static PyObject *foreach_getset(BPy_PropertyRNA *self, PyObject *args, int set)
     buffer_is_compat = false;
     if (PyObject_CheckBuffer(seq)) {
       Py_buffer buf;
-      if (PyObject_GetBuffer(seq, &buf, PyBUF_ND | PyBUF_FORMAT) == -1) {
+      /* Writable, the buffer is filled in below. */
+      if (PyObject_GetBuffer(seq, &buf, PyBUF_ND | PyBUF_FORMAT | PyBUF_WRITABLE) == -1) {
         /* Request failed. A `PyExc_BufferError` will have been raised,
          * so clear it to silently fall back to accessing as a sequence. */
         PyErr_Clear();
@@ -6375,7 +6376,9 @@ static PyObject *pyprop_array_foreach_getset(BPy_PropertyArrayRNA *self,
   }
 
   Py_buffer buf;
-  if (PyObject_GetBuffer(seq, &buf, PyBUF_ND | PyBUF_FORMAT) == -1) {
+  /* Writable when reading into the buffer, `do_set` only reads from it. */
+  if (PyObject_GetBuffer(seq, &buf, PyBUF_ND | PyBUF_FORMAT | (do_set ? 0 : PyBUF_WRITABLE)) == -1)
+  {
     PyErr_Clear();
 
     switch (prop_type) {
@@ -10639,6 +10642,15 @@ static PyObject *pyrna_register_class(PyObject * /*self*/, PyObject *py_class)
         srna_new, RNA_property_identifier(parent_name_prop));
     if (name_prop && name_prop != parent_name_prop && RNA_property_type(name_prop) == PROP_STRING)
     {
+      RNA_def_struct_name_property(srna_new, name_prop, true);
+    }
+    else if (name_prop == RNA_struct_name_property(RNA_PropertyGroup)) {
+      /* The `name` property inherited from 'PropertyGroup' is read-only, to avoid issues
+       * with types that have a fixed set of ID properties. For backwards compatibility,
+       * add a writable property here. */
+      name_prop = RNA_def_property(srna_new, "name", PROP_STRING, PROP_NONE);
+      RNA_def_property_ui_text(name_prop, "Name", "Unique name used in the code and scripting");
+      RNA_def_property_duplicate_pointers(srna_new, name_prop);
       RNA_def_struct_name_property(srna_new, name_prop, true);
     }
   }
