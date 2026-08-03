@@ -1164,7 +1164,6 @@ Span<debug_view::Candidate> NodesEvalLog::debug_view_candidates()
         const NodeTreeLogger &tree_logger = *item.value;
 
         Vector<int> reversed_sort_order;
-        Vector<int32_t> reversed_group_node_ids;
         Vector<std::string> reversed_context_names;
         Vector<uint32_t> reversed_tree_session_uids;
         bool supported_context = true;
@@ -1185,7 +1184,6 @@ Span<debug_view::Candidate> NodesEvalLog::debug_view_candidates()
               break;
             }
             reversed_sort_order.append(context_logger->context_order);
-            reversed_group_node_ids.append(*context_logger->parent_node_id);
             reversed_context_names.append(context_logger->context_name);
           }
           else {
@@ -1211,7 +1209,6 @@ Span<debug_view::Candidate> NodesEvalLog::debug_view_candidates()
           continue;
         }
         std::ranges::reverse(reversed_sort_order);
-        std::ranges::reverse(reversed_group_node_ids);
         std::ranges::reverse(reversed_context_names);
         std::ranges::reverse(reversed_tree_session_uids);
         const ComputeContextHash tree_lineage_hash = debug_view::node_tree_lineage_hash(
@@ -1231,8 +1228,6 @@ Span<debug_view::Candidate> NodesEvalLog::debug_view_candidates()
           candidate.sort_order.append(viewer_log.viewer_log->node_order);
           candidate.context_names = reversed_context_names;
           candidate.viewer_name = viewer_log.viewer_log->debug_view_name;
-          candidate.tree_session_uids = reversed_tree_session_uids;
-          candidate.group_node_ids = reversed_group_node_ids;
         }
       }
     }

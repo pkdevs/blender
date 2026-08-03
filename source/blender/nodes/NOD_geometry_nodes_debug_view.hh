@@ -61,9 +61,6 @@ struct Candidate {
   Vector<std::string> context_names;
   /** Empty for the standard Viewer name, which is translated only when presented in the UI. */
   std::string viewer_name;
-  /** Original node trees and group-node identifiers retained with the candidate. */
-  Vector<uint32_t> tree_session_uids;
-  Vector<int32_t> group_node_ids;
 };
 
 struct CandidatePresentation {
