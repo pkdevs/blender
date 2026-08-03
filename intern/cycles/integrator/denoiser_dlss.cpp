@@ -428,7 +428,7 @@ bool DLSSDenoiser::denoise_filter_color_preprocess(const DenoiseContext &context
                                                    const DenoisePass &pass)
 {
   if (pass.type != PASS_COMBINED) {
-    return false;
+    return true;
   }
 
   // Input params (with resolution divider applied)
@@ -454,7 +454,7 @@ bool DLSSDenoiser::denoise_filter_color_postprocess(const DenoiseContext &contex
                                                     const DenoisePass &pass)
 {
   if (pass.type != PASS_COMBINED) {
-    return false;
+    return true;
   }
 
   // Output params
@@ -531,7 +531,7 @@ bool DLSSDenoiser::denoise_filter_guiding_preprocess(DenoiseContext &context)
 bool DLSSDenoiser::denoise_run(const DenoiseContext &context, const DenoisePass &pass)
 {
   if (pass.type != PASS_COMBINED) {
-    return false;
+    return true;
   }
 
   NVSDK_NGX_Parameter *params = nullptr;
