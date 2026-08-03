@@ -28,7 +28,7 @@ static void node_declare(NodeDeclarationBuilder &b)
       .description("Distance from the generated points to the origin");
   b.add_input<decl::Int>("Subdivisions"_ustr)
        .default_value(3)
-       .min(2)
+       .min(1)
        .max(7)
        .description("Number of subdivisions");
   b.add_output<decl::Geometry>("Mesh"_ustr);
