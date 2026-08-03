@@ -232,7 +232,7 @@ def addon_draw_item_expanded(
     col_b = split.column()
 
     if item_description:
-        col_a.label(
+        col_a.label_multiline(
             text=" {:s}.".format(item_description),
             translate=False,
         )
