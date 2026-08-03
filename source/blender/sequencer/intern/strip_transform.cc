@@ -95,7 +95,7 @@ void transform_set_overlap_flags(const Scene *scene,
 {
   edit_cancel_removal(scene);
   for (Strip *strip : strips) {
-    strip->runtime->flag &= ~seq::StripRuntimeFlag::Overlap;
+    strip->runtime->flag &= ~StripRuntimeFlag::Overlap;
   }
 
   /* First flag transitions for deletion. */
@@ -428,7 +428,7 @@ static void strip_transform_handle_overwrite_trim(Scene *scene,
                                                   Strip *target,
                                                   bool covers_left)
 {
-  Editing *ed = seq::editing_get(scene);
+  Editing *ed = editing_get(scene);
   VectorSet<Strip *> targets;
   targets.add(target);
   expand_strips(ed, targets, StripRelation::EffectChain);
@@ -575,14 +575,14 @@ void transform_handle_overlap(Scene *scene,
   }
 
   /* Finally remove transition strips if the input strips are no longer adjacent. */
-  Editing *ed = seq::editing_get(scene);
+  Editing *ed = editing_get(scene);
 
   VectorSet<Strip *> transform_expanded;
   transform_expanded.add_multiple(source_strips);
-  seq::expand_strips(ed, transform_expanded, StripRelation::Effects);
+  expand_strips(ed, transform_expanded, StripRelation::Effects);
   transform_set_overlap_flags(scene, seqbasep, transform_expanded);
 
-  seq::edit_remove_flagged_strips(scene, seqbasep);
+  edit_remove_flagged_strips(scene, seqbasep);
 }
 
 void transform_strips_after_frame(Scene *scene,

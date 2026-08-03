@@ -379,11 +379,11 @@ bool strip_type_can_be_transition(StripType type)
 
 Strip *get_transition_between(Scene *scene, Strip *input1, Strip *input2)
 {
-  Editing *ed = seq::editing_get(scene);
+  Editing *ed = editing_get(scene);
   if (ed == nullptr) {
     return nullptr;
   }
-  Span<Strip *> effect_strips = seq::lookup_effects_by_strip(ed, input1);
+  Span<Strip *> effect_strips = lookup_effects_by_strip(ed, input1);
   for (Strip *effect : effect_strips) {
     /* Inputs should never be in the reverse order, but check anyway. */
     if (effect->is_same_channel_transition() && ELEM(input2, effect->input1, effect->input2)) {
@@ -393,17 +393,17 @@ Strip *get_transition_between(Scene *scene, Strip *input1, Strip *input2)
   return nullptr;
 }
 
-Strip *get_transition_on_side(Editing *ed, const Strip *strip, const seq::Side side)
+Strip *get_transition_on_side(Editing *ed, const Strip *strip, const Side side)
 {
-  Span<Strip *> effects = seq::lookup_effects_by_strip(ed, strip);
+  Span<Strip *> effects = lookup_effects_by_strip(ed, strip);
   for (Strip *transition : effects) {
     if (!transition->is_same_channel_transition()) {
       continue;
     }
-    if (side == seq::Side::Left && transition->input2 == strip) {
+    if (side == Side::Left && transition->input2 == strip) {
       return transition;
     }
-    if (side == seq::Side::Right && transition->input1 == strip) {
+    if (side == Side::Right && transition->input1 == strip) {
       return transition;
     }
   }

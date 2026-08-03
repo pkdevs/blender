@@ -164,7 +164,7 @@ Strip *add_mask_strip(Scene *scene, ListBaseT<Strip> *seqbase, LoadData *load_da
 
 Strip *add_effect_strip(Scene *scene, ListBaseT<Strip> *seqbase, LoadData *load_data)
 {
-  Editing *ed = seq::editing_get(scene);
+  Editing *ed = editing_get(scene);
 
   Strip *strip = strip_alloc(
       seqbase, load_data->start_frame, load_data->channel, load_data->effect.type);
@@ -190,16 +190,14 @@ Strip *add_effect_strip(Scene *scene, ListBaseT<Strip> *seqbase, LoadData *load_
   }
 
   if ((strip->input1 != nullptr) && (strip->input2 != nullptr) &&
-      seq::strip_type_can_be_transition(strip->type))
+      strip_type_can_be_transition(strip->type))
   {
     strip->flag |= SEQ_SAME_CHANNEL_TRANSITION;
 
     const Strip *input1 = load_data->effect.input1;
     const Strip *input2 = load_data->effect.input2;
-    const Strip *left_adjacent_transition = seq::get_transition_on_side(
-        ed, input1, seq::Side::Left);
-    const Strip *right_adjacent_transition = seq::get_transition_on_side(
-        ed, input2, seq::Side::Right);
+    const Strip *left_adjacent_transition = get_transition_on_side(ed, input1, Side::Left);
+    const Strip *right_adjacent_transition = get_transition_on_side(ed, input2, Side::Right);
     const int length = load_data->effect.length;
 
     int left_handle = max_ii(input1->right_handle(scene) - floor(length / 2.0),
