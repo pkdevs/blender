@@ -630,28 +630,26 @@ SymbolClass *SymbolTable::get_literal_type(string_view lit) const
   return int_cls;
 }
 
-bool SymbolTable::is_convertible(const SymbolClass *from,
-                                 const SymbolClass *to,
-                                 bool allow_vector_promotion) const
+MatchRank SymbolTable::get_conversion_rank(const SymbolClass *from, const SymbolClass *to) const
 {
+  if (from == to) {
+    return MatchRank::Exact;
+  }
+
   /* Check 'packed_floatX' to 'floatX' promotion. */
-  if (from == packed_float3_cls && to == float3_cls) {
-    return true;
+  if ((from == packed_float3_cls && to == float3_cls) ||
+      (from == packed_float2_cls && to == float2_cls) ||
+      (from == packed_float4_cls && to == float4_cls))
+  {
+    return MatchRank::Promotion;
   }
-  if (from == packed_float2_cls && to == float2_cls) {
-    return true;
+
+  /* Check standard conversions. */
+  if (from == int_cls && to == uint_cls) {
+    return MatchRank::Conversion;
   }
-  if (from == packed_float4_cls && to == float4_cls) {
-    return true;
-  }
-  /* Promote scalar. */
-  if (from->comp_len == 1 && from->comp_len == to->comp_len) {
-    return true;
-  }
-  if (allow_vector_promotion && from->comp_len != 0 && from->comp_len == to->comp_len) {
-    return true;
-  }
-  return false;
+
+  return MatchRank::None;
 }
 
 /* Generates every single legal BSL builtin function dynamically. */

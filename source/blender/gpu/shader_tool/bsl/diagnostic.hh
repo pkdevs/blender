@@ -234,6 +234,7 @@ enum class Diag {
   CalledIsNotFunction,
   InvalidNumberLiteral,
   EnumNotConstexpr,
+  AmbiguousOverload,
 };
 
 static inline std::string_view diagnostic_message_get(Diag diag)
@@ -485,6 +486,8 @@ static inline std::string_view diagnostic_message_get(Diag diag)
       return "Unknown function name";
     case Diag::NoMatchingOverload:
       return "No matching function for call to '{}' for parameters {} with candidates: {}";
+    case Diag::AmbiguousOverload:
+      return "Call to '{}' is ambiguous for parameters '{}' with candidates: {}";
     case Diag::DeclarationAlreadyOfType:
       return "Declaration is already of type '{}'";
     case Diag::UnknownAttribute:

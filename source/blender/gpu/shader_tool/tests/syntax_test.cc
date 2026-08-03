@@ -311,6 +311,7 @@ int func() { return f; })";
     string expect = R"(
        constexpr int a= 1;
        constexpr int b = 3;
+
        constexpr int d = 4;
        constexpr int e = 4;
        constexpr int f = 4;

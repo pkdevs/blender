@@ -13,6 +13,8 @@
 
 namespace bsl {
 
+enum class MatchRank { None = 0, Conversion = 1, Promotion = 2, Exact = 3 };
+
 struct SymbolFunction : SymbolScope {
   /* Single linked list of overloads. */
   SymbolFunction *overload_next = nullptr;
@@ -90,15 +92,17 @@ struct SymbolFunction : SymbolScope {
 
   void reserve_arguments(int n);
 
-  /* Return true if the given argument types are compatible */
-  bool argument_matches(const SymbolTable &table, const vector<SymbolClass *> &param_types) const;
-
   static Result<vector<SymbolClass *>> to_arg_types(const SymbolTable &table,
                                                     const SymbolScope &scope,
                                                     ast::FuncParamList list);
   static Result<vector<SymbolClass *>> to_arg_types(const SymbolTable &table,
                                                     const SymbolScope &scope,
                                                     ast::FuncArgList list);
+
+ private:
+  /* Returning empty indicates this is not a viable candidate */
+  optional<vector<MatchRank>> get_match_ranks(const SymbolTable &table,
+                                              const vector<SymbolClass *> &param_types) const;
 };
 
 }  // namespace bsl
