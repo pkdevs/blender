@@ -1,1 +1,1 @@
-Referenced by pull request #162253, Fix #162216: Context property driver can't handle matrix inside data path
+Referenced by pull request #162253, Fix #162216: Remove redundant parameter from `driver_get_variable_property`
