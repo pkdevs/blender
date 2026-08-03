@@ -382,6 +382,7 @@ void BKE_blender_userdef_data_free(UserDef *userdef, bool clear_fonts)
     MEM_SAFE_DELETE(library_ref.auth_token);
     MEM_delete(&library_ref);
   }
+  userdef->asset_libraries.clear_no_delete();
 
   for (bUserExtensionRepo &repo_ref : userdef->extension_repos.items_mutable()) {
     MEM_SAFE_DELETE(repo_ref.access_token);
