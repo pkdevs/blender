@@ -123,7 +123,6 @@ static void store_bake_pixel(void *handle, int x, int y, float u, float v)
   pixel->dv_dy = bd->dv_dy;
   pixel->object_id = 0;
   pixel->seed = i;
-  pixel->is_margin = false;
 }
 
 void RE_bake_mask_fill(const BakePixel pixel_array[], const size_t pixels_num, char *mask)
@@ -385,7 +384,7 @@ static bool cast_ray_highpoly(bke::BVHTreeFromMesh *treeData,
     pixel_high->primitive_id = primitive_id_high;
     pixel_high->object_id = hit_mesh;
     pixel_high->seed = pixel_id;
-    pixel_high->is_margin = false;
+    pixel_high->is_margin = pixel_low->is_margin;
 
     /* ray direction in high poly object space */
     float dir_high[3];
@@ -800,6 +799,7 @@ void RE_bake_pixels_populate(Mesh *mesh,
   for (int i = 0; i < pixels_num; i++) {
     pixel_array[i].primitive_id = -1;
     pixel_array[i].object_id = 0;
+    pixel_array[i].is_margin = false;
   }
 
   for (int i = 0; i < targets->images_num; i++) {
@@ -950,11 +950,10 @@ void RE_bake_normal_world_to_tangent(const BakePixel pixel_array[],
     bool is_smooth;
 
     int primitive_id = pixel_array[i].primitive_id;
-    bool is_margin = pixel_array[i].is_margin;
 
     offset = i * depth;
 
-    if (primitive_id == -1 || is_margin) {
+    if (primitive_id == -1) {
       if (depth == 4) {
         copy_v4_fl4(&result[offset], 0.5f, 0.5f, 1.0f, 1.0f);
       }
@@ -1052,7 +1051,7 @@ void RE_bake_normal_world_to_object(const BakePixel pixel_array[],
     size_t offset;
     float nor[3];
 
-    if (pixel_array[i].primitive_id == -1 || pixel_array[i].is_margin) {
+    if (pixel_array[i].primitive_id == -1) {
       continue;
     }
 
@@ -1080,7 +1079,7 @@ void RE_bake_normal_world_to_world(const BakePixel pixel_array[],
     size_t offset;
     float nor[3];
 
-    if (pixel_array[i].primitive_id == -1 || pixel_array[i].is_margin) {
+    if (pixel_array[i].primitive_id == -1) {
       continue;
     }
 
