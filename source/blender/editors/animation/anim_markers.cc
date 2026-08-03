@@ -78,7 +78,7 @@ ListBaseT<TimeMarker> *ED_scene_markers_get(const bContext *C, Scene *scene)
   return ac.markers;
 }
 
-ID *ED_scene_markers_get_owner_id(const bContext *C, Scene *scene)
+ID *ED_markers_get_owner_id(const bContext *C, Scene *scene)
 {
   if (!scene) {
     return nullptr;

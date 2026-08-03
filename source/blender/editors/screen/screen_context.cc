@@ -1199,8 +1199,9 @@ static eContextResult screen_ctx_markers(const bContext *C, bContextDataResult *
     return CTX_RESULT_NO_DATA;
   }
 
-  ID *owner_id = ED_scene_markers_get_owner_id(C, scene);
+  ID *owner_id = ED_markers_get_owner_id(C, scene);
   for (TimeMarker &marker : *markers) {
+    /* Scene's markers and action's markers are both of type RNA_TimelineMarker. */
     CTX_data_list_add(result, owner_id, RNA_TimelineMarker, &marker);
   }
 
@@ -1215,9 +1216,10 @@ static eContextResult screen_ctx_selected_markers(const bContext *C, bContextDat
     return CTX_RESULT_NO_DATA;
   }
 
-  ID *owner_id = ED_scene_markers_get_owner_id(C, scene);
+  ID *owner_id = ED_markers_get_owner_id(C, scene);
   for (TimeMarker &marker : *markers) {
     if (marker.flag & SELECT) {
+      /* Scene's markers and action's markers are both of type RNA_TimelineMarker. */
       CTX_data_list_add(result, owner_id, RNA_TimelineMarker, &marker);
     }
   }
