@@ -834,6 +834,15 @@ static void wm_draw_region_blit(ARegion *region, int view)
     }
   }
 
+  /* Regions are copied in without blending, so without this, the region's own alpha would land in
+   * the window's frame-buffer. That matters for client-side-decorated windows for rounded corners:
+   * viewports are transparent where nothing was rendered, leading to un-wanted transparency.
+   *
+   * Everything else drawn into the window blends with #GPU_BLEND_ALPHA which leaves an opaque
+   * desination opaque, so masking here is enough to keep the window opaque for the whole frame,
+   * see #WM_window_csd_draw_corner_mask. */
+  GPU_color_mask(true, true, true, false);
+
   if (region->runtime->draw_buffer->viewport) {
     GPU_viewport_draw_to_screen(region->runtime->draw_buffer->viewport, view, &region->winrct);
   }
@@ -841,6 +850,8 @@ static void wm_draw_region_blit(ARegion *region, int view)
     GPU_offscreen_draw_to_screen(
         region->runtime->draw_buffer->offscreen, region->winrct.xmin, region->winrct.ymin);
   }
+
+  GPU_color_mask(true, true, true, true);
 }
 
 gpu::Texture *wm_draw_region_texture(ARegion *region, int view)
@@ -1247,6 +1258,11 @@ static void wm_draw_window(bContext *C, wmWindow *win)
   if (WM_window_is_csd(win)) {
     WM_window_csd_draw_titlebar(win);
   }
+  else {
+    /* Full-screen windows draw no decorations, so nothing above clears the frame-buffer.
+     * Their alpha channel still has to be made opaque, see #WM_window_csd_clear_alpha. */
+    WM_window_csd_clear_alpha(win);
+  }
 #endif
 
   /* Draw area regions into their own frame-buffer. This way we can redraw
@@ -1319,6 +1335,14 @@ static void wm_draw_window(bContext *C, wmWindow *win)
       wm_draw_window_onscreen(C, win, 0);
     }
   }
+
+#ifdef WITH_GHOST_CSD
+  /* Rounded corners, run last so the corners are cut away no matter what covered them
+   * (the title bar at the top, editor areas & the status bar at the bottom). */
+  if (WM_window_is_csd(win)) {
+    WM_window_csd_draw_corner_mask(win);
+  }
+#endif
 
   screen->do_draw = false;
 
