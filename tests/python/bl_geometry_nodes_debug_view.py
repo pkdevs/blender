@@ -102,43 +102,6 @@ class GeometryNodesDebugViewTest(unittest.TestCase):
         self.assertIn("Debug View evaluated", self.warning_messages(modifier_a_first))
         self.assertEqual(self.warning_messages(modifier_a_second), [])
 
-    def test_disabled_modifier_does_not_evaluate_debug_view(self):
-        group, viewer = self.create_node_group()
-        viewer.is_debug_view = True
-        obj, modifier = self.create_object_with_modifier("Object", group)
-        modifier.show_debug_views = True
-        modifier.show_viewport = False
-
-        self.assertEqual(self.evaluate(obj), 0)
-        self.assertEqual(self.warning_messages(modifier), [])
-
-    def test_debug_view_operator_rejects_incomplete_and_stale_identities(self):
-        group, viewer = self.create_node_group()
-        viewer.is_debug_view = True
-        obj, modifier = self.create_object_with_modifier("Object", group)
-        modifier.show_debug_views = True
-        bpy.context.view_layer.objects.active = obj
-        obj.select_set(True)
-        self.evaluate(obj)
-
-        with bpy.context.temp_override(
-                object=obj, active_object=obj, modifier=modifier):
-            # An incomplete stable identity must be rejected.
-            self.assertEqual(
-                bpy.ops.object.geometry_nodes_debug_view_toggle(context_hash=(1, 2, 3, 4)),
-                {'CANCELLED'})
-            self.assertEqual(
-                bpy.ops.object.geometry_nodes_debug_view_toggle(
-                    node_tree_lineage_hash=(1, 2, 3, 4)),
-                {'CANCELLED'})
-            # A complete but stale identity cannot resolve to an available candidate.
-            self.assertEqual(
-                bpy.ops.object.geometry_nodes_debug_view_toggle(
-                    context_hash=(1, 2, 3, 4),
-                    node_tree_lineage_hash=(5, 6, 7, 8),
-                    viewer_node_id=9),
-                {'CANCELLED'})
-
     def test_node_group_replacement_and_viewer_deletion_memfile_undo(self):
         original_group, original_viewer = self.create_node_group()
         replacement_group, replacement_viewer = self.create_node_group()
@@ -187,52 +150,6 @@ class GeometryNodesDebugViewTest(unittest.TestCase):
         self.assertTrue(any(
             node.bl_idname == "GeometryNodeViewer" for node in restored_tree.nodes))
 
-    def test_debug_view_settings_persist(self):
-        fixture_path = args.testdir / "persistent_debug_view.blend"
-        self.assertTrue(fixture_path.exists(), f"Missing fixture: {fixture_path}")
-        bpy.ops.wm.open_mainfile(filepath=str(fixture_path))
-
-        modifier = bpy.data.objects["Persistent Debug View Object"].modifiers[
-            "Persistent Debug View Modifier"]
-        modifier.show_debug_views = True
-
-        with tempfile.TemporaryDirectory() as temp_dir:
-            filepath = pathlib.Path(temp_dir) / "debug_view_persistence.blend"
-            bpy.ops.wm.save_as_mainfile(filepath=str(filepath))
-            self.assertTrue(filepath.exists())
-            modifier.show_debug_views = False
-            bpy.ops.wm.open_mainfile(filepath=str(filepath))
-
-            loaded_obj = bpy.data.objects["Persistent Debug View Object"]
-            loaded_modifier = loaded_obj.modifiers["Persistent Debug View Modifier"]
-            loaded_root_group = loaded_modifier.node_group
-            loaded_nested_group = bpy.data.node_groups["Nested Debug Group"]
-
-            self.assertEqual(loaded_root_group.name, "Persistent Debug View Root")
-            self.assertTrue(loaded_modifier.show_debug_views)
-            root_a, root_b = (loaded_root_group.nodes[name] for name in
-                               ("Root Debug A", "Root Debug B"))
-            nested = loaded_nested_group.nodes["Nested Debug"]
-            for viewer, name in ((root_a, "Root Debug A"), (root_b, "Root Debug B"),
-                                 (nested, "Nested Debug")):
-                self.assertEqual((viewer.label, viewer.is_debug_view), (name, True))
-
-            root_a_show = root_a.inputs["Show"]
-            self.assertEqual((root_a_show.default_value, len(root_a_show.links)), (False, 1))
-            root_a_show_link = root_a_show.links[0]
-            self.assertTrue(root_a_show_link.is_valid)
-            self.assertEqual((root_a_show_link.to_node, root_a_show_link.to_socket),
-                             (root_a, root_a_show))
-            self.assertEqual(
-                (root_a_show_link.from_node.name, root_a_show_link.from_node.bl_idname,
-                 root_a_show_link.from_socket.name),
-                ("Root Debug A Show Source", "FunctionNodeBooleanMath", "Boolean"))
-
-            for viewer in (root_b, nested):
-                show = viewer.inputs["Show"]
-                self.assertEqual((len(show.links), show.default_value), (0, True))
-            self.assertEqual(self.evaluate(loaded_obj), 8)
-
 
 class GeometryNodesDebugViewFixtureTest(unittest.TestCase):
     def setUp(self):
@@ -256,6 +173,96 @@ class GeometryNodesDebugViewFixtureTest(unittest.TestCase):
 
     def warning_messages(self):
         return [warning.message for warning in self.modifier.node_warnings]
+
+    def test_disabled_modifier_does_not_evaluate_debug_view(self):
+        self.modifier.show_debug_views = True
+        self.modifier.show_viewport = False
+
+        self.assertEqual(self.evaluate(), 0)
+        self.assertEqual(self.warning_messages(), [])
+
+    def test_debug_view_operator_rejects_incomplete_and_stale_identities(self):
+        self.modifier.show_debug_views = True
+        bpy.context.view_layer.objects.active = self.obj
+        self.obj.select_set(True)
+        self.evaluate()
+
+        with bpy.context.temp_override(
+                object=self.obj, active_object=self.obj, modifier=self.modifier):
+            # An incomplete stable identity must be rejected.
+            self.assertEqual(
+                bpy.ops.object.geometry_nodes_debug_view_toggle(context_hash=(1, 2, 3, 4)),
+                {'CANCELLED'})
+            self.assertEqual(
+                bpy.ops.object.geometry_nodes_debug_view_toggle(
+                    node_tree_lineage_hash=(1, 2, 3, 4)),
+                {'CANCELLED'})
+            # A complete but stale identity cannot resolve to an available candidate.
+            self.assertEqual(
+                bpy.ops.object.geometry_nodes_debug_view_toggle(
+                    context_hash=(1, 2, 3, 4),
+                    node_tree_lineage_hash=(5, 6, 7, 8),
+                    viewer_node_id=9),
+                {'CANCELLED'})
+
+    def test_debug_view_settings_persist(self):
+        self.modifier.show_debug_views = True
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            filepath = pathlib.Path(temp_dir) / "debug_view_persistence.blend"
+            bpy.ops.wm.save_as_mainfile(filepath=str(filepath))
+            self.assertTrue(filepath.exists())
+            self.modifier.show_debug_views = False
+            self.assertFalse(self.modifier.show_debug_views)
+            bpy.ops.wm.open_mainfile(filepath=str(filepath))
+
+            loaded_obj = bpy.data.objects.get("Persistent Debug View Object")
+            self.assertIsNotNone(loaded_obj)
+            loaded_modifier = loaded_obj.modifiers.get("Persistent Debug View Modifier")
+            self.assertIsNotNone(loaded_modifier)
+            loaded_root_group = bpy.data.node_groups.get("Persistent Debug View Root")
+            self.assertIsNotNone(loaded_root_group)
+            loaded_nested_group = bpy.data.node_groups.get("Nested Debug Group")
+            self.assertIsNotNone(loaded_nested_group)
+
+            self.assertEqual(loaded_modifier.node_group, loaded_root_group)
+            self.assertEqual(loaded_modifier.node_group.name, "Persistent Debug View Root")
+            self.assertTrue(loaded_modifier.show_debug_views)
+
+            root_a = loaded_root_group.nodes["Root Debug A"]
+            root_b = loaded_root_group.nodes["Root Debug B"]
+            nested = loaded_nested_group.nodes["Nested Debug"]
+
+            self.assertEqual(root_a.label, "Root Debug A")
+            self.assertTrue(root_a.is_debug_view)
+            self.assertEqual(root_b.label, "Root Debug B")
+            self.assertTrue(root_b.is_debug_view)
+            self.assertEqual(nested.label, "Nested Debug")
+            self.assertTrue(nested.is_debug_view)
+
+            root_a_show = root_a.inputs["Show"]
+            self.assertFalse(root_a_show.default_value)
+            self.assertEqual(len(root_a_show.links), 1)
+            root_a_show_link = root_a_show.links[0]
+            self.assertTrue(root_a_show_link.is_valid)
+            self.assertEqual(root_a_show_link.to_node, root_a)
+            self.assertEqual(root_a_show_link.to_socket, root_a_show)
+            self.assertEqual(root_a_show_link.from_node.name, "Root Debug A Show Source")
+            self.assertEqual(root_a_show_link.from_node.bl_idname, "FunctionNodeBooleanMath")
+            self.assertEqual(root_a_show_link.from_socket.name, "Boolean")
+
+            root_b_show = root_b.inputs["Show"]
+            self.assertEqual(len(root_b_show.links), 0)
+            self.assertTrue(root_b_show.default_value)
+            nested_show = nested.inputs["Show"]
+            self.assertEqual(len(nested_show.links), 0)
+            self.assertTrue(nested_show.default_value)
+
+            self.obj = loaded_obj
+            self.modifier = loaded_modifier
+            self.root_group = loaded_root_group
+            self.nested_group = loaded_nested_group
+            self.assertEqual(self.evaluate(), 8)
 
     def test_fixture_smoke(self):
         self.assertEqual(len(bpy.data.objects), 1)
