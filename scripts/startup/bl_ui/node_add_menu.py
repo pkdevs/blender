@@ -514,8 +514,7 @@ class NODE_MT_group_input_base(NodeMenu):
         for item in direct_parent.interface_items:
             if item.item_type == 'SOCKET' and item.in_out == 'INPUT':
                 parent_names = (i.name for i in parents)
-                trimmed_name = item.name.removeprefix(direct_parent.name).strip()
-                self.draw_group_input(layout, item.identifier, label=" \u25B8 ".join((*parent_names, trimmed_name)))
+                self.draw_group_input(layout, item.identifier, label=" \u25B8 ".join((*parent_names, item.name)))
             elif item.item_type == 'PANEL':
                 self.draw_children(layout, tree, parents=[*parents, item])
 
