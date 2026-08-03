@@ -13,90 +13,67 @@ import bpy
 args = None
 
 
-class GeometryNodesDebugViewTest(unittest.TestCase):
+class GeometryNodesDebugViewLifecycleFixtureTest(unittest.TestCase):
     def setUp(self):
-        bpy.ops.wm.read_factory_settings(use_empty=True)
+        if args is None or args.testdir is None:
+            self.skipTest("Debug View fixture test directory was not provided")
 
-    def create_node_group(self):
-        group = bpy.data.node_groups.new("Geometry Nodes", "GeometryNodeTree")
-        group.interface.new_socket(
-            name="Geometry", in_out='OUTPUT', socket_type="NodeSocketGeometry")
+        fixture_path = args.testdir / "persistent_debug_view_lifecycle.blend"
+        self.assertTrue(fixture_path.exists(), f"Missing fixture: {fixture_path}")
+        bpy.ops.wm.open_mainfile(filepath=str(fixture_path))
 
-        output = group.nodes.new("NodeGroupOutput")
-        normal_geometry = group.nodes.new("GeometryNodeMeshCube")
-        debug_geometry = group.nodes.new("GeometryNodeMeshIcoSphere")
-        warning = group.nodes.new("GeometryNodeWarning")
-        warning.inputs["Show"].default_value = True
-        warning.inputs["Message"].default_value = "Debug View evaluated"
+        self.obj = bpy.data.objects["Debug View Lifecycle Object"]
+        self.modifier = self.obj.modifiers["Debug View Lifecycle Modifier"]
+        self.original_group = bpy.data.node_groups["Debug View Original Group"]
+        self.replacement_group = bpy.data.node_groups["Debug View Replacement Group"]
+        self.original_viewer = self.original_group.nodes["Original Debug"]
+        self.replacement_viewer = self.replacement_group.nodes["Replacement Debug"]
 
-        switch = group.nodes.new("GeometryNodeSwitch")
-        switch.input_type = 'GEOMETRY'
-        group.links.new(warning.outputs["Show"], switch.inputs["Switch"])
-        group.links.new(debug_geometry.outputs["Mesh"], switch.inputs["True"])
-
-        viewer = group.nodes.new("GeometryNodeViewer")
-        viewer.viewer_items.new('GEOMETRY', "Geometry")
-        group.links.new(switch.outputs["Output"], viewer.inputs["Geometry"])
-        group.links.new(normal_geometry.outputs["Mesh"], output.inputs["Geometry"])
-        return group, viewer
-
-    def create_object_with_modifier(self, name, group):
-        mesh = bpy.data.meshes.new(name + " Mesh")
-        obj = bpy.data.objects.new(name, mesh)
-        bpy.context.collection.objects.link(obj)
-        modifier = obj.modifiers.new("Geometry Nodes", 'NODES')
-        modifier.node_group = group
-        obj.modifiers.active = modifier
-        self.assertFalse(modifier.show_debug_views)
-        return obj, modifier
+    def evaluate(self, obj):
+        bpy.context.view_layer.update()
+        depsgraph = bpy.context.evaluated_depsgraph_get()
+        evaluated_obj = obj.evaluated_get(depsgraph)
+        return len(evaluated_obj.data.vertices)
 
     def test_node_group_replacement_and_viewer_deletion_memfile_undo(self):
-        original_group, original_viewer = self.create_node_group()
-        replacement_group, replacement_viewer = self.create_node_group()
-        original_group.name = "Original Geometry Nodes"
-        replacement_group.name = "Replacement Geometry Nodes"
-        original_viewer.is_debug_view = True
-        replacement_viewer.is_debug_view = True
-        # Creation order deliberately gives the unrelated trees equivalent node/context
-        # structure. Raw integer identifier equality is covered directly by the C++ test because
-        # node identifiers are intentionally not exposed through RNA.
-        self.assertEqual(
-            [node.bl_idname for node in original_group.nodes],
-            [node.bl_idname for node in replacement_group.nodes],
-        )
-
-        obj, modifier = self.create_object_with_modifier("Object", original_group)
-        modifier.show_debug_views = True
-        bpy.context.view_layer.objects.active = obj
-        obj.select_set(True)
+        self.assertEqual(self.obj.name, "Debug View Lifecycle Object")
+        self.assertEqual(self.modifier.name, "Debug View Lifecycle Modifier")
+        self.assertEqual(self.original_group.name, "Debug View Original Group")
+        self.assertEqual(self.replacement_group.name, "Debug View Replacement Group")
+        self.assertEqual(self.original_viewer.name, "Original Debug")
+        self.assertEqual(self.replacement_viewer.name, "Replacement Debug")
+        self.assertEqual(self.modifier.node_group, self.original_group)
+        self.assertEqual(self.evaluate(self.obj), 8)
 
         bpy.ops.ed.undo_push()
         bpy.ops.ed.undo_push()
 
-        modifier.node_group = replacement_group
+        self.modifier.node_group = self.replacement_group
+        self.assertEqual(self.evaluate(self.obj), 8)
         bpy.ops.ed.undo_push()
 
+        self.assertEqual(self.modifier.node_group.name, "Debug View Replacement Group")
         self.assertEqual(bpy.ops.ed.undo(), {'FINISHED'})
-        restored_obj = bpy.data.objects["Object"]
-        restored_modifier = restored_obj.modifiers["Geometry Nodes"]
-        self.assertEqual(restored_modifier.node_group.name, "Original Geometry Nodes")
+        restored_obj = bpy.data.objects["Debug View Lifecycle Object"]
+        restored_modifier = restored_obj.modifiers["Debug View Lifecycle Modifier"]
+        self.assertEqual(restored_modifier.node_group.name, "Debug View Original Group")
+        self.assertEqual(self.evaluate(restored_obj), 8)
 
         self.assertEqual(bpy.ops.ed.redo(), {'FINISHED'})
-        redone_obj = bpy.data.objects["Object"]
-        redone_modifier = redone_obj.modifiers["Geometry Nodes"]
-        self.assertEqual(redone_modifier.node_group.name, "Replacement Geometry Nodes")
+        redone_obj = bpy.data.objects["Debug View Lifecycle Object"]
+        redone_modifier = redone_obj.modifiers["Debug View Lifecycle Modifier"]
+        self.assertEqual(redone_modifier.node_group.name, "Debug View Replacement Group")
+        self.assertEqual(self.evaluate(redone_obj), 8)
 
         bpy.ops.ed.undo_push()
         replacement_tree = redone_modifier.node_group
-        replacement_tree.nodes.remove(
-            next(node for node in replacement_tree.nodes if node.bl_idname == "GeometryNodeViewer"))
+        replacement_tree.nodes.remove(replacement_tree.nodes["Replacement Debug"])
         bpy.ops.ed.undo_push()
-        self.assertFalse(any(
-            node.bl_idname == "GeometryNodeViewer" for node in replacement_tree.nodes))
+        self.assertIsNone(replacement_tree.nodes.get("Replacement Debug"))
+
         self.assertEqual(bpy.ops.ed.undo(), {'FINISHED'})
-        restored_tree = bpy.data.node_groups["Replacement Geometry Nodes"]
-        self.assertTrue(any(
-            node.bl_idname == "GeometryNodeViewer" for node in restored_tree.nodes))
+        restored_tree = bpy.data.node_groups["Debug View Replacement Group"]
+        self.assertIsNotNone(restored_tree.nodes.get("Replacement Debug"))
 
 
 class GeometryNodesDebugViewIsolationFixtureTest(unittest.TestCase):
