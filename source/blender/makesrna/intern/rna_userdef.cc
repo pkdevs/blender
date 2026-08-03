@@ -7044,13 +7044,15 @@ static void rna_def_userdef_filepaths_asset_library(BlenderRNA *brna)
   prop = RNA_def_property(srna, "use_auth_token", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, nullptr, "flag", ASSET_LIBRARY_USE_AUTH_TOKEN);
   RNA_def_property_ui_text(
-      prop, "Requires Token", "Asset library requires an authentication token");
+      prop, "Requires Access Token", "Asset library requires an authentication token");
   RNA_def_property_flag(prop, PROP_CONTEXT_UPDATE);
   RNA_def_property_update(prop, 0, "rna_userdef_asset_library_use_auth_token_update");
 
   prop = RNA_def_property(srna, "auth_token", PROP_STRING, PROP_PASSWORD);
   RNA_def_property_ui_text(
-      prop, "Token", "Personal authentication token, may be required by some asset libraries");
+      prop,
+      "Access Token",
+      "Personal authentication token, may be required by some asset libraries");
   RNA_def_property_string_funcs(prop,
                                 "rna_userdef_asset_library_auth_token_get",
                                 "rna_userdef_asset_library_auth_token_length",
