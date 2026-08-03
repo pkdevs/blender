@@ -66,6 +66,101 @@ void PathTraceWorkCPU::deinit_execution()
   kernel_thread_globals_ = nullptr;
 }
 
+void PathTraceWorkCPU::setup_work_tile(KernelWorkTile &work_tile,
+                                       const int64_t work_index,
+                                       const int64_t image_width,
+                                       const int64_t image_height,
+                                       const int start_sample,
+                                       const int sample_offset)
+{
+  const int y = work_index / image_width;
+  const int x = work_index - y * image_width;
+
+  work_tile.min_x = effective_buffer_params_.full_x;
+  work_tile.min_y = effective_buffer_params_.full_y;
+  work_tile.max_x = effective_buffer_params_.full_x + image_width - 1;
+  work_tile.max_y = effective_buffer_params_.full_y + image_height - 1;
+  work_tile.x = effective_buffer_params_.full_x + x;
+  work_tile.y = effective_buffer_params_.full_y + y;
+  work_tile.w = 1;
+  work_tile.h = 1;
+  work_tile.start_sample = start_sample;
+  work_tile.sample_offset = sample_offset;
+  work_tile.num_samples = 1;
+  work_tile.offset = effective_buffer_params_.offset;
+  work_tile.stride = effective_buffer_params_.stride;
+}
+
+void PathTraceWorkCPU::initial_resampling(const int64_t image_width,
+                                          const int64_t image_height,
+                                          const int start_sample,
+                                          const int sample_offset)
+{
+  const int64_t total_pixels_num = image_width * image_height;
+
+  parallel_for(int64_t(0), total_pixels_num, [&](int64_t work_index) {
+    if (is_cancel_requested()) {
+      return;
+    }
+
+    KernelWorkTile work_tile;
+    setup_work_tile(work_tile, work_index, image_width, image_height, start_sample, sample_offset);
+
+    // ThreadKernelGlobalsCPU *kernel_globals = kernel_thread_globals_get(kernel_thread_globals_);
+    ThreadKernelGlobalsCPU *kernel_globals = kernel_thread_globals_->data();
+
+    render_samples_full_pipeline(kernel_globals, work_tile);
+  });
+}
+
+void PathTraceWorkCPU::spatial_resampling(const int64_t image_width,
+                                          const int64_t image_height,
+                                          const int start_sample,
+                                          const int sample_offset,
+                                          const int iteration)
+{
+  const int64_t total_pixels_num = image_width * image_height;
+
+  parallel_for(int64_t(0), total_pixels_num, [&](int64_t work_index) {
+    if (is_cancel_requested()) {
+      return;
+    }
+
+    KernelWorkTile work_tile;
+    setup_work_tile(work_tile, work_index, image_width, image_height, start_sample, sample_offset);
+
+    // ThreadKernelGlobalsCPU *kernel_globals = kernel_thread_globals_get(kernel_thread_globals_);
+    ThreadKernelGlobalsCPU *kernel_globals = kernel_thread_globals_->data();
+
+    render_samples_direct_illumination(kernel_globals, work_tile, iteration);
+  });
+}
+
+void PathTraceWorkCPU::evaluate_final_samples(const int64_t image_width,
+                                              const int64_t image_height,
+                                              const int start_sample,
+                                              const int sample_offset,
+                                              const int iteration)
+{
+  const int64_t total_pixels_num = image_width * image_height;
+
+  parallel_for(int64_t(0), total_pixels_num, [&](int64_t work_index) {
+    if (is_cancel_requested()) {
+      return;
+    }
+
+    KernelWorkTile work_tile;
+    setup_work_tile(work_tile, work_index, image_width, image_height, start_sample, sample_offset);
+
+    // CPUKernelThreadGlobals
+    // ThreadKernelGlobalsCPU *kernel_globals = kernel_thread_globals_get(kernel_thread_globals_);
+    ThreadKernelGlobalsCPU *kernel_globals = kernel_thread_globals_->data();
+
+    render_samples_evaluate_final(kernel_globals, work_tile, iteration);
+    ++work_tile.start_sample;
+  });
+}
+
 void PathTraceWorkCPU::render_samples(RenderStatistics &statistics,
                                       const int start_sample,
                                       const int samples_num,
@@ -73,7 +168,7 @@ void PathTraceWorkCPU::render_samples(RenderStatistics &statistics,
 {
   const int64_t image_width = effective_buffer_params_.width;
   const int64_t image_height = effective_buffer_params_.height;
-  const int64_t total_pixels_num = image_width * image_height;
+  // const int64_t total_pixels_num = image_width * image_height;
 
   if (device_->profiler.active()) {
     for (ThreadKernelGlobalsCPU &kernel_globals : *kernel_thread_globals_) {
@@ -82,31 +177,24 @@ void PathTraceWorkCPU::render_samples(RenderStatistics &statistics,
   }
 
   tbb::task_arena local_arena = local_tbb_arena_create(device_);
-  local_arena.execute([&]() {
-    parallel_for(int64_t(0), total_pixels_num, [&](int64_t work_index) {
-      if (is_cancel_requested()) {
-        return;
-      }
+  /* Initial Resampling. */
+  local_arena.execute(
+      [&] { initial_resampling(image_width, image_height, start_sample, sample_offset); });
 
-      const int y = work_index / image_width;
-      const int x = work_index - y * image_width;
+  /* FIXME(weizhen): spatial resampling makes adaptive sampling (noise threshold) fail. */
+  /* Spatial Resampling. */
+  int i = 0;
+  if (device_scene_->data.integrator.use_restir) {
+    for (; i < device_scene_->data.integrator.restir_spatial_iterations; i++) {
+      local_arena.execute(
+          [&] { spatial_resampling(image_width, image_height, start_sample, sample_offset, i); });
+    }
 
-      KernelWorkTile work_tile;
-      work_tile.x = effective_buffer_params_.full_x + x;
-      work_tile.y = effective_buffer_params_.full_y + y;
-      work_tile.w = 1;
-      work_tile.h = 1;
-      work_tile.start_sample = start_sample;
-      work_tile.sample_offset = sample_offset;
-      work_tile.num_samples = 1;
-      work_tile.offset = effective_buffer_params_.offset;
-      work_tile.stride = effective_buffer_params_.stride;
-
-      ThreadKernelGlobalsCPU *kernel_globals = kernel_thread_globals_get(*kernel_thread_globals_);
-
-      render_samples_full_pipeline(kernel_globals, work_tile, samples_num);
+    local_arena.execute([&] {
+      evaluate_final_samples(image_width, image_height, start_sample, sample_offset, i); // New
     });
-  });
+  }
+
   if (device_->profiler.active()) {
     for (ThreadKernelGlobalsCPU &kernel_globals : *kernel_thread_globals_) {
       kernel_globals.stop_profiling();
@@ -117,8 +205,7 @@ void PathTraceWorkCPU::render_samples(RenderStatistics &statistics,
 }
 
 void PathTraceWorkCPU::render_samples_full_pipeline(ThreadKernelGlobalsCPU *kernel_globals,
-                                                    const KernelWorkTile &work_tile,
-                                                    const int samples_num)
+                                                    const KernelWorkTile &work_tile)
 {
   const bool has_bake = device_scene_->data.bake.use;
 
@@ -126,6 +213,9 @@ void PathTraceWorkCPU::render_samples_full_pipeline(ThreadKernelGlobalsCPU *kern
 
   IntegratorStateCPU *state = &integrator_states[0];
   IntegratorStateCPU *shadow_catcher_state = nullptr;
+
+  INTEGRATOR_STATE_WRITE(state, path, setup_restir) = false;
+  INTEGRATOR_STATE_WRITE(state, path, final_evaluation) = false;
 
   if (device_scene_->data.integrator.has_shadow_catcher) {
     shadow_catcher_state = &integrator_states[1];
@@ -137,62 +227,117 @@ void PathTraceWorkCPU::render_samples_full_pipeline(ThreadKernelGlobalsCPU *kern
 
   fast_timer render_timer;
 
-  for (int sample = 0; sample < samples_num; ++sample) {
-    if (is_cancel_requested()) {
-      break;
-    }
+  if (is_cancel_requested()) {
+    return;
+  }
 
-    if (has_bake) {
-      if (!kernels_.integrator_init_from_bake(
-              kernel_globals, state, &sample_work_tile, render_buffer))
-      {
-        break;
-      }
+  if (has_bake) {
+    if (!kernels_.integrator_init_from_bake(
+            kernel_globals, state, &sample_work_tile, render_buffer))
+    {
+      return;
     }
-    else {
-      if (!kernels_.integrator_init_from_camera(
-              kernel_globals, state, &sample_work_tile, render_buffer))
-      {
-        break;
-      }
+  }
+  else {
+    if (!kernels_.integrator_init_from_camera(
+            kernel_globals, state, &sample_work_tile, render_buffer))
+    {
+      return;
     }
+  }
 
 #if defined(WITH_PATH_GUIDING)
-    if (kernel_globals->data.integrator.train_guiding) {
-      assert(kernel_globals->opgl_path_segment_storage);
-      assert(kernel_globals->opgl_path_segment_storage->GetNumSegments() == 0);
+  if (kernel_globals->data.integrator.train_guiding) {
+    assert(kernel_globals->opgl_path_segment_storage);
+    assert(kernel_globals->opgl_path_segment_storage->GetNumSegments() == 0);
 
-      kernels_.integrator_megakernel(kernel_globals, state, render_buffer);
+    kernels_.integrator_megakernel(kernel_globals, state, render_buffer);
 
-      /* Push the generated sample data to the global sample data storage. */
-      guiding_push_sample_data_to_global_storage(kernel_globals, state, render_buffer);
+    /* Push the generated sample data to the global sample data storage. */
+    guiding_push_sample_data_to_global_storage(kernel_globals, state, render_buffer);
 
-      /* No training for shadow catcher paths. */
-      if (shadow_catcher_state) {
-        kernel_globals->data.integrator.train_guiding = false;
-        kernels_.integrator_megakernel(kernel_globals, shadow_catcher_state, render_buffer);
-        kernel_globals->data.integrator.train_guiding = true;
-      }
+    /* No training for shadow catcher paths. */
+    if (shadow_catcher_state) {
+      kernel_globals->data.integrator.train_guiding = false;
+      kernels_.integrator_megakernel(kernel_globals, shadow_catcher_state, render_buffer);
+      kernel_globals->data.integrator.train_guiding = true;
     }
-    else
-#endif
-    {
-      kernels_.integrator_megakernel(kernel_globals, state, render_buffer);
-      if (shadow_catcher_state) {
-        kernels_.integrator_megakernel(kernel_globals, shadow_catcher_state, render_buffer);
-      }
-    }
-
-    if (kernel_globals->data.film.pass_render_time != PASS_UNUSED) {
-      uint64_t time;
-      if (render_timer.lap(time)) {
-        ccl_global float *buffer = render_buffer + (uint64_t)state->path.render_pixel_index *
-                                                       kernel_globals->data.film.pass_stride;
-        *(buffer + kernel_globals->data.film.pass_render_time) += float(time);
-      }
-    }
-    ++sample_work_tile.start_sample;
   }
+  else
+#endif
+  {
+    kernels_.integrator_megakernel(kernel_globals, state, render_buffer);
+    if (shadow_catcher_state) {
+      kernels_.integrator_megakernel(kernel_globals, shadow_catcher_state, render_buffer);
+    }
+  }
+
+  if (kernel_globals->data.film.pass_render_time != PASS_UNUSED) {
+    uint64_t time;
+    if (render_timer.lap(time)) {
+      ccl_global float *buffer = render_buffer + (uint64_t)state->path.render_pixel_index *
+                                                      kernel_globals->data.film.pass_stride;
+      *(buffer + kernel_globals->data.film.pass_render_time) += float(time);
+    }
+  }
+}
+
+void PathTraceWorkCPU::render_samples_direct_illumination(ThreadKernelGlobalsCPU *kernel_globals,
+                                                          const KernelWorkTile &work_tile,
+                                                          const int iteration)
+{
+  IntegratorStateCPU integrator_states[2];
+
+  IntegratorStateCPU *state = &integrator_states[0];
+
+  INTEGRATOR_STATE_WRITE(state, path, spatial_iteration) = iteration;
+  INTEGRATOR_STATE_WRITE(state, path, setup_restir) = true;
+  INTEGRATOR_STATE_WRITE(state, path, final_evaluation) = false;
+
+  KernelWorkTile sample_work_tile = work_tile;
+  float *render_buffer = buffers_->buffer.data();
+
+  if (is_cancel_requested()) {
+    return;
+  }
+
+  if (!kernels_.integrator_init_from_camera(
+          kernel_globals, state, &sample_work_tile, render_buffer))
+  {
+    return;
+  }
+
+  // TODO: restir.h
+  // kernels_.integrator_restir(kernel_globals, state, &sample_work_tile, render_buffer);
+}
+
+// void PathTraceWorkCPU::render_samples_evaluate_final(KernelGlobalsCPU *kernel_globals,
+void PathTraceWorkCPU::render_samples_evaluate_final(ThreadKernelGlobalsCPU *kernel_globals,
+                                                     const KernelWorkTile &work_tile,
+                                                     const int iteration)
+{
+  IntegratorStateCPU integrator_states[2];
+
+  IntegratorStateCPU *state = &integrator_states[0];
+
+  INTEGRATOR_STATE_WRITE(state, path, spatial_iteration) = iteration;
+  INTEGRATOR_STATE_WRITE(state, path, setup_restir) = false;
+  INTEGRATOR_STATE_WRITE(state, path, final_evaluation) = true;
+
+  KernelWorkTile sample_work_tile = work_tile;
+  float *render_buffer = buffers_->buffer.data();
+
+  if (is_cancel_requested()) {
+    return;
+  }
+
+  if (!kernels_.integrator_init_from_camera(
+          kernel_globals, state, &sample_work_tile, render_buffer))
+  {
+    return;
+  }
+
+  kernels_.integrator_megakernel(kernel_globals, state, render_buffer);
 }
 
 void PathTraceWorkCPU::copy_to_display(PathTraceDisplay *display,
