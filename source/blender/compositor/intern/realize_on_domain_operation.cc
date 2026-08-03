@@ -64,6 +64,9 @@ void RealizeOnDomainOperation::execute()
 {
   Result &input = this->get_input();
   RealizationOptions options = input.domain().realization_options;
+  if (!input.is_interpolated()) {
+    options.interpolation = Interpolation::Nearest;
+  }
   const Domain domain = this->compute_domain();
 
   /* Translate the input such that it is centered in the virtual compositing space. */
@@ -211,7 +214,7 @@ void RealizeOnDomainOperation::realize_on_domain_gpu(const RealizationOptions &o
 
   GPU_shader_uniform_mat3_as_mat4(shader, "transformation", transformation.ptr());
 
-  if (!GPU_texture_has_integer_format(input)) {
+  if (input.is_interpolated()) {
     /* The texture sampler should use bilinear interpolation for both the bilinear and bicubic
      * cases, as the logic used by the bicubic realization shader expects textures to use bilinear
      * interpolation. */
