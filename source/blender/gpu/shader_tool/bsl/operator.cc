@@ -231,7 +231,16 @@ SymbolClass *SymbolTable::make_type(SymbolClass *base, int size)
 void SymbolTable::add_operator(
     SourceLocation loc, SymbolClass *left, TokenType op, SymbolClass *right, SymbolClass *ret)
 {
-  string id((!left ? unary_type_to_id : binary_type_to_id).find(op)->second);
+  string id;
+  if (left && right) {
+    id = binary_type_to_id.find(op)->second;
+  }
+  else if (left) {
+    id = suffix_type_to_id.find(op)->second;
+  }
+  else if (right) {
+    id = prefix_type_to_id.find(op)->second;
+  }
   SymbolFunction *sym = fun_arena.alloc(root, loc.tok, ret, id, SymbolFunction::GLOBAL);
   operators.emplace(OperatorKey(left, op, right), sym);
 }
@@ -246,6 +255,8 @@ void SymbolTable::generate_builtin_operators(SourceLocation loc, const vector<Bu
       add_operator(loc, nullptr, Minus, t.type, t.type);
       add_operator(loc, nullptr, Increment, t.type, t.type);
       add_operator(loc, nullptr, Decrement, t.type, t.type);
+      add_operator(loc, t.type, Increment, nullptr, t.type);
+      add_operator(loc, t.type, Decrement, nullptr, t.type);
     }
     if (is_integer(t.base)) {
       add_operator(loc, nullptr, BitwiseNot, t.type, t.type);

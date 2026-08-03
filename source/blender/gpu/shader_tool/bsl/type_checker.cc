@@ -117,7 +117,7 @@ struct ExpressionTypeParser
       error(t, Diag::InvalidNumberLiteral);
       return table->err_cls;
     }
-    return {type, value};
+    return {type, value, /* is_temporary */ false};
   }
 
   ExpressionResult string(const ast::Node & /*t*/)
@@ -180,7 +180,7 @@ struct ExpressionTypeParser
       if (left.array_dim > 0) {
         ExpressionResult arg = subscript_parameter(sub);
 
-        if (table->get_conversion_rank(arg.type, table->int_cls) != MatchRank::Promotion) {
+        if (table->get_conversion_rank(arg.type, table->int_cls) <= MatchRank::Promotion) {
           error(t, Diag::SubscriptNotInt);
         }
         if (is_reference && !(arg.flags & ExprFlag::IsConstant)) {
@@ -193,7 +193,7 @@ struct ExpressionTypeParser
       /* Call subscript operator */
       if (left.type->operator_subscript) {
         ExpressionResult arg = subscript_parameter(sub);
-        if (table->get_conversion_rank(arg.type, table->int_cls) != MatchRank::Promotion) {
+        if (table->get_conversion_rank(arg.type, table->int_cls) <= MatchRank::Promotion) {
           error(t, Diag::SubscriptNotInt);
         }
         return left.type->operator_subscript->return_type;

@@ -44,11 +44,11 @@ struct ExpressionResult {
   {
   }
 
-  ExpressionResult(SymbolClass *cls, ConstexprValue value)
+  ExpressionResult(SymbolClass *cls, ConstexprValue value, bool is_temporary = true)
       : type(cls),
         value(value),
         flags(ExprFlag(ExprFlag::IsConstexpr | ExprFlag::IsConstant)),
-        is_temporary(true)
+        is_temporary(is_temporary)
   {
   }
 

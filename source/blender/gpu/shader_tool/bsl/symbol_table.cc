@@ -513,13 +513,18 @@ void SymbolTable::register_builtins(LocalScope node)
 
   /* Builtin operators. */
 
-  unary_type_to_id = {
+  prefix_type_to_id = {
       {Increment, "inc_op_"},
       {Decrement, "dec_op_"},
       {Plus, "pos_op_"},
       {Minus, "neg_op_"},
       {BitwiseNot, "bitnot_op_"},
       {Not, "not_op_"},
+  };
+
+  suffix_type_to_id = {
+      {Increment, "suffix_inc_op_"},
+      {Decrement, "suffix_dec_op_"},
   };
 
   binary_type_to_id = {

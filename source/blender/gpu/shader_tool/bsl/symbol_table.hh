@@ -130,7 +130,8 @@ struct SymbolTable {
 
   unordered_map<int, string> image_formats;
 
-  unordered_map<TokenType, const char *> unary_type_to_id;
+  unordered_map<TokenType, const char *> prefix_type_to_id;
+  unordered_map<TokenType, const char *> suffix_type_to_id;
   unordered_map<TokenType, const char *> binary_type_to_id;
 
   template<typename SymbolT> SymbolT *alloc(SymbolT &&sym);

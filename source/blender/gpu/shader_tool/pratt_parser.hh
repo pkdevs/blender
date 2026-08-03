@@ -78,6 +78,8 @@ template<typename Derived, typename ResultT, typename NodeT> class PrattParser {
         return self.number(t);
       case String:
         return self.string(t);
+      case Increment:
+      case Decrement:
       case Plus:
       case Minus:
       case Not:

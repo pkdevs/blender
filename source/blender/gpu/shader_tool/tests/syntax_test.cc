@@ -254,9 +254,7 @@ void f(){ int c[1]; auto &a = c[b(0)]; }
     string input = R"(
 int b[1]; int i = 0; auto &a = b[i + 1];)";
     auto [output, _, error] = process_test_local(input, Language::BSL);
-    EXPECT_EQ(
-        error,
-        "Reference cannot bind to non-const subscript because 'i' is not defined as 'const'");
+    EXPECT_EQ(error, "Reference cannot bind to expression of non-const subscript index");
   }
   {
     string input = R"(
@@ -287,7 +285,7 @@ const int &a = 1;)";
     string input = R"(
 int b; int &a = b++;)";
     auto [output, _, error] = process_test_local(input, Language::BSL);
-    EXPECT_EQ(error, "Reference cannot bind to a temporary");
+    EXPECT_EQ(error, "Reference cannot bind to an expression with side effect");
   }
   {
     string input = R"(
