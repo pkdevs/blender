@@ -347,9 +347,17 @@ static bool sequencer_swap_inputs_poll(bContext *C)
   }
   Scene *scene = CTX_data_sequencer_scene(C);
   Strip *active_strip = seq::select_active_get(scene);
-  if (active_strip && active_strip->effect_num_inputs_get() == 2 &&
-      !seq::effect_is_transition(active_strip->type))
-  {
+  if (active_strip && active_strip->effect_num_inputs_get() == 2) {
+    const Strip *input1 = active_strip->input1;
+    const Strip *input2 = active_strip->input2;
+    const bool inputs_fully_overlap = input1->left_handle() == input2->left_handle() &&
+                                      input1->right_handle(scene) == input2->right_handle(scene);
+    if (seq::effect_is_transition(active_strip->type) && !inputs_fully_overlap) {
+      CTX_wm_operator_poll_msg_set(C,
+                                   "Transition inputs can only be swapped if the order is "
+                                   "ambiguous (i.e. if inputs fully overlap horizontally)");
+      return false;
+    }
     return true;
   }
 
@@ -1703,18 +1711,22 @@ VectorSet<Strip *> strip_effect_get_new_inputs(const Scene *scene,
     Strip *first = inputs[0];
     Strip *second = inputs[1];
     bool do_swap = false;
-    if (seq::effect_is_transition(effect_type) &&
-        seq::transition_inputs_have_wrong_order(scene, first, second))
-    {
-      /* Sort by timeline frame so 2-input transitions go "from" earlier "to" later. */
-      do_swap = true;
+    /* Makes the active strip the second input. If neither strip is active (as in reassign inputs),
+     * make it the strip on the lower channel. */
+    const bool default_order_swap = first == seq::select_active_get(scene) ||
+                                    (ignore_active && first->channel < second->channel);
+    if (seq::effect_is_transition(effect_type)) {
+      /* Sort by timeline frame so 2-input transitions go "from" earlier "to" later. If the order
+       * is ambiguous, use the same order as for other 2-input effects. */
+      const bool inputs_fully_overlap = first->left_handle() == second->left_handle() &&
+                                        first->right_handle(scene) == second->right_handle(scene);
+      do_swap = inputs_fully_overlap ?
+                    default_order_swap :
+                    seq::transition_inputs_have_wrong_order(scene, first, second);
     }
-    else if (first == seq::select_active_get(scene) ||
-             (ignore_active && first->channel < second->channel))
-    {
-      /* Other 2-input effects (blend-modes) make the active strip the second input. If neither
-       * strip is active (as in reassign inputs), make it the strip on the lower channel. */
-      do_swap = true;
+    else {
+      /* Other 2-input effects (blend-modes). */
+      do_swap = default_order_swap;
     }
     if (do_swap) {
       inputs.clear();

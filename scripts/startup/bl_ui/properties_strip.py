@@ -233,11 +233,12 @@ class STRIP_PT_effect(StripButtonsPanel, Panel):
             row.prop(strip, "input_1")
 
             if strip.input_count > 1:
-                if bpy.ops.sequencer.swap_inputs.poll():
+                is_transition = strip_type in {'CROSS', 'GAMMA_CROSS', 'WIPE', 'COMPOSITOR'}
+                if not is_transition:
                     row.operator("sequencer.swap_inputs", text="", icon='SORT_ASC')
                 row = col.row()
                 row.prop(strip, "input_2")
-                if bpy.ops.sequencer.swap_inputs.poll():
+                if not is_transition:
                     row.operator("sequencer.swap_inputs", text="", icon='SORT_DESC')
 
         if strip_type == 'COLOR':
