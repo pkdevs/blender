@@ -738,8 +738,8 @@ void draw_widget_scroll(uiWidgetColors *wcol, const rcti *rect, const rcti *slid
  * are less than 10 characters before the clipping, it rather clips right, which is more readable.
  *
  * \param shorten_template_variables: When true, shortens template variable expressions
- * (e.g. "{blend_name}" -> "{bn}") as needed starting from the left. NOTE: this should only be set
- * to true if the text field being clipped supports template variables!
+ * as needed starting from the left. NOTE: this should only be set to true if the text
+ * field being clipped supports template variables!
  */
 float text_clip_middle_ex(const uiFontStyle *fstyle,
                           char *str,

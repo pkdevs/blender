@@ -1546,6 +1546,63 @@ static size_t text_shorten_next_template_var(char *str, size_t byte_position)
 }
 
 /**
+ * Shift the given split offset (if needed) to avoid splitting certain string patterns.
+ *
+ * If no shift is needed, then this simply returns the split offset as-is.
+ *
+ * \param str: the string being split.
+ *
+ * \param split_offset: the proposed split position, as a byte offset from the start of the string.
+ *
+ * \param shift_left: if true, will shift the split position left, otherwise will shift it right.
+ *
+ * \returns The (possibly) shifted split offset.
+ */
+static size_t avoid_non_split_patterns(StringRef str,
+                                       const size_t split_offset,
+                                       const bool shift_left)
+{
+  /* String patterns to avoid splitting when clipping text: they are either left
+   * as-is or removed completely, never partially removed. */
+  const StringRef no_split_strings[] = {
+      "{…}" /* Shortened template variable expressions. */
+  };
+
+  for (const StringRef unit : no_split_strings) {
+    /* Algorithm summary:
+     * - We scan backwards to find the first character of the unsplittable pattern.
+     * - If found, we scan forward to verify if there's a full match.
+     * - If there's a full match, we move the split offset to be on one side or the other of the
+     *   unsplittable pattern.
+     *
+     * Note that we limit the scan range so that if a match is found, we know that it straddles the
+     * split offset.
+     */
+    const int range_min = std::max(0, int(split_offset - unit.size() + 1));
+    const int range_max = std::max(0, int(split_offset - 1));
+    int match = -1;
+    for (int i = range_max; i >= range_min; i--) {
+      if (str.drop_prefix(i).startswith(unit)) {
+        match = i;
+      }
+    }
+
+    if (match == -1) {
+      continue;
+    }
+
+    size_t new_offset = match;
+    if (!shift_left) {
+      new_offset += unit.size();
+    }
+
+    return new_offset;
+  }
+
+  return split_offset;
+}
+
+/**
  * Helper.
  * This func assumes things like kerning handling have already been handled!
  * Return the length of modified (right-clipped + ellipsis) string.
@@ -1564,6 +1621,8 @@ static void text_clip_right_ex(const uiFontStyle *fstyle,
   /* How many BYTES (not characters) of this UTF8 string can fit, along with appended ellipsis. */
   int l_end = BLF_width_to_strlen(
       fstyle->uifont_id, str, max_len, okwidth - sep_strwidth, nullptr);
+  l_end = avoid_non_split_patterns(str, l_end, true);
+
   if (l_end > 0) {
     StringRef trimmed_str = StringRef(str, l_end).trim_right();
     /* At least one character, so clip and add the ellipsis. */
@@ -1624,6 +1683,7 @@ float text_clip_middle_ex(const uiFontStyle *fstyle,
       rpart = strrchr(str, rpart_sep);
 
       if (rpart) {
+        rpart = str + avoid_non_split_patterns(str, size_t(rpart - str), false);
         rpart_len = strlen(rpart);
         rpart_width = BLF_width(fstyle->uifont_id, rpart, rpart_len);
         okwidth -= rpart_width;
@@ -1649,6 +1709,7 @@ float text_clip_middle_ex(const uiFontStyle *fstyle,
     }
 
     size_t l_end = BLF_width_to_strlen(fstyle->uifont_id, str, max_len, parts_strwidth, nullptr);
+    l_end = avoid_non_split_patterns(str, l_end, true);
     if (clip_right_if_tight &&
         (l_end < 10 || min_ff(parts_strwidth, strwidth - okwidth) < minwidth))
     {
@@ -1662,6 +1723,7 @@ float text_clip_middle_ex(const uiFontStyle *fstyle,
       l_end = StringRef(str, l_end).trim_right().size();
       size_t r_offset, r_len;
       r_offset = BLF_width_to_rstrlen(fstyle->uifont_id, str, max_len, parts_strwidth, nullptr);
+      r_offset = avoid_non_split_patterns(str, r_offset, false);
       const StringRef r_trimmed = StringRef(str + r_offset).trim_left();
       r_len = r_trimmed.size();
 
