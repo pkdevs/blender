@@ -172,7 +172,6 @@ static void sound_runtime_generation_replace(
     old_generation = std::move(runtime->generation);
     runtime->generation = std::move(generation);
   }
-  old_generation.reset();
 }
 
 static std::shared_ptr<bke::SoundRuntimeGeneration> sound_runtime_generation_get(
