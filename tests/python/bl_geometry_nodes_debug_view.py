@@ -50,58 +50,6 @@ class GeometryNodesDebugViewTest(unittest.TestCase):
         self.assertFalse(modifier.show_debug_views)
         return obj, modifier
 
-    def evaluate(self, obj):
-        bpy.context.view_layer.update()
-        depsgraph = bpy.context.evaluated_depsgraph_get()
-        evaluated_obj = obj.evaluated_get(depsgraph)
-        return len(evaluated_obj.data.vertices)
-
-    def warning_messages(self, modifier):
-        return [warning.message for warning in modifier.node_warnings]
-
-    def test_debug_view_evaluation_and_modifier_isolation(self):
-        group, viewer = self.create_node_group()
-        obj_a, modifier_a = self.create_object_with_modifier("Object A", group)
-        obj_b, modifier_b = self.create_object_with_modifier("Object B", group)
-
-        self.assertIsNone(viewer.inputs.get("Show"))
-        modifier_a.show_debug_views = True
-        modifier_b.show_debug_views = False
-
-        self.assertEqual(self.evaluate(obj_b), 8)
-        self.assertEqual(self.warning_messages(modifier_a), [])
-        self.assertEqual(self.warning_messages(modifier_b), [])
-
-        viewer.is_debug_view = True
-        self.assertEqual(self.evaluate(obj_b), 8)
-        self.assertIn("Debug View evaluated", self.warning_messages(modifier_a))
-        self.assertEqual(self.warning_messages(modifier_b), [])
-
-    def test_modifier_and_object_isolation(self):
-        group, viewer = self.create_node_group()
-        viewer.is_debug_view = True
-
-        obj_a, modifier_a_first = self.create_object_with_modifier("Object A", group)
-        modifier_a_second = obj_a.modifiers.new("Geometry Nodes Second", 'NODES')
-        modifier_a_second.node_group = group
-        obj_b, modifier_b = self.create_object_with_modifier("Object B", group)
-
-        modifier_a_first.show_debug_views = False
-        modifier_a_second.show_debug_views = True
-        modifier_b.show_debug_views = False
-
-        self.assertEqual(self.evaluate(obj_a), 8)
-        self.assertEqual(self.evaluate(obj_b), 8)
-        self.assertEqual(self.warning_messages(modifier_a_first), [])
-        self.assertIn("Debug View evaluated", self.warning_messages(modifier_a_second))
-        self.assertEqual(self.warning_messages(modifier_b), [])
-
-        modifier_a_first.show_debug_views = True
-        modifier_a_second.show_debug_views = False
-        self.assertEqual(self.evaluate(obj_a), 8)
-        self.assertIn("Debug View evaluated", self.warning_messages(modifier_a_first))
-        self.assertEqual(self.warning_messages(modifier_a_second), [])
-
     def test_node_group_replacement_and_viewer_deletion_memfile_undo(self):
         original_group, original_viewer = self.create_node_group()
         replacement_group, replacement_viewer = self.create_node_group()
@@ -149,6 +97,76 @@ class GeometryNodesDebugViewTest(unittest.TestCase):
         restored_tree = bpy.data.node_groups["Replacement Geometry Nodes"]
         self.assertTrue(any(
             node.bl_idname == "GeometryNodeViewer" for node in restored_tree.nodes))
+
+
+class GeometryNodesDebugViewIsolationFixtureTest(unittest.TestCase):
+    def setUp(self):
+        if args is None or args.testdir is None:
+            self.skipTest("Debug View fixture test directory was not provided")
+
+        fixture_path = args.testdir / "persistent_debug_view_isolation.blend"
+        self.assertTrue(fixture_path.exists(), f"Missing fixture: {fixture_path}")
+        bpy.ops.wm.open_mainfile(filepath=str(fixture_path))
+
+        self.group = bpy.data.node_groups["Persistent Debug View Isolation Group"]
+        self.viewer = self.group.nodes["Isolation Debug View"]
+        self.obj = bpy.data.objects["Debug View Isolation Object"]
+        self.first_modifier = self.obj.modifiers["Debug View Isolation First"]
+        self.second_modifier = self.obj.modifiers["Debug View Isolation Second"]
+        self.shared_obj = bpy.data.objects["Debug View Shared Object"]
+        self.shared_modifier = self.shared_obj.modifiers["Debug View Shared Modifier"]
+
+    def evaluate(self, obj):
+        bpy.context.view_layer.update()
+        depsgraph = bpy.context.evaluated_depsgraph_get()
+        evaluated_obj = obj.evaluated_get(depsgraph)
+        return len(evaluated_obj.data.vertices)
+
+    def warning_messages(self, modifier):
+        return [warning.message for warning in modifier.node_warnings]
+
+    def test_debug_view_evaluation_and_modifier_isolation(self):
+        self.assertFalse(self.viewer.is_debug_view)
+        self.assertIsNone(self.viewer.inputs.get("Show"))
+        self.first_modifier.show_debug_views = True
+        self.second_modifier.show_debug_views = False
+
+        self.assertEqual(self.evaluate(self.obj), 8)
+        self.assertEqual(self.warning_messages(self.first_modifier), [])
+        self.assertEqual(self.warning_messages(self.second_modifier), [])
+
+        self.viewer.is_debug_view = True
+        self.assertEqual(self.evaluate(self.obj), 8)
+        self.assertIn(
+            "ISOLATION_DEBUG_EVALUATED", self.warning_messages(self.first_modifier))
+        self.assertEqual(self.warning_messages(self.second_modifier), [])
+
+    def test_modifier_and_object_isolation(self):
+        self.assertEqual(self.first_modifier.node_group, self.group)
+        self.assertEqual(self.second_modifier.node_group, self.group)
+        self.assertEqual(self.shared_modifier.node_group, self.group)
+
+        self.viewer.is_debug_view = True
+        self.first_modifier.show_debug_views = False
+        self.second_modifier.show_debug_views = True
+        self.shared_modifier.show_debug_views = False
+
+        self.assertEqual(self.evaluate(self.obj), 8)
+        self.assertEqual(self.evaluate(self.shared_obj), 8)
+        self.assertEqual(self.warning_messages(self.first_modifier), [])
+        self.assertIn(
+            "ISOLATION_DEBUG_EVALUATED", self.warning_messages(self.second_modifier))
+        self.assertEqual(self.warning_messages(self.shared_modifier), [])
+
+        self.first_modifier.show_debug_views = True
+        self.second_modifier.show_debug_views = False
+        self.assertEqual(self.evaluate(self.obj), 8)
+        self.assertIn(
+            "ISOLATION_DEBUG_EVALUATED", self.warning_messages(self.first_modifier))
+        self.assertEqual(self.warning_messages(self.second_modifier), [])
+
+        self.assertEqual(self.evaluate(self.shared_obj), 8)
+        self.assertEqual(self.warning_messages(self.shared_modifier), [])
 
 
 class GeometryNodesDebugViewFixtureTest(unittest.TestCase):
