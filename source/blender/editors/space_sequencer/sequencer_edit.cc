@@ -1799,6 +1799,21 @@ static wmOperatorStatus sequencer_reassign_inputs_exec(bContext *C, wmOperator *
   return OPERATOR_FINISHED;
 }
 
+static bool sequencer_reassign_inputs_poll(bContext *C)
+{
+  const Scene *scene = CTX_data_sequencer_scene(C);
+  const Strip *active_strip = seq::select_active_get(scene);
+
+  if (active_strip && active_strip->is_effect()) {
+    if (active_strip->is_same_channel_transition()) {
+      CTX_wm_operator_poll_msg_set(C, "Cannot reassign same channel transition inputs");
+      return false;
+    }
+    return true;
+  }
+  return false;
+}
+
 void SEQUENCER_OT_reassign_inputs(wmOperatorType *ot)
 {
   /* Identifiers. */
@@ -1808,7 +1823,7 @@ void SEQUENCER_OT_reassign_inputs(wmOperatorType *ot)
 
   /* API callbacks. */
   ot->exec = sequencer_reassign_inputs_exec;
-  ot->poll = sequencer_effect_poll;
+  ot->poll = sequencer_reassign_inputs_poll;
 
   /* Flags. */
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
