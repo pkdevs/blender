@@ -399,7 +399,7 @@ void RE_engine_update_result(RenderEngine *engine, RenderResult *result)
     render_result_merge(re->result, result);
     result->renlay = static_cast<RenderLayer *>(
         result->layers.first); /* weak, draws first layer always */
-    re->display->display_update(result, nullptr);
+    re->display->display_update(result);
   }
 }
 
@@ -459,7 +459,7 @@ void RE_engine_end_result(
     if (!re->display->test_break()) {
       result->renlay = static_cast<RenderLayer *>(
           result->layers.first); /* weak, draws first layer always */
-      re->display->display_update(result, nullptr);
+      re->display->display_update(result);
     }
   }
 
@@ -1445,6 +1445,25 @@ void RE_engine_gpu_context_unlock(RenderEngine *engine)
       BLI_mutex_unlock(&engine->blender_gpu_context_mutex);
     }
   }
+}
+
+void RE_engine_view_pause(RenderEngine *engine, const bContext *context)
+{
+  if (engine->type->view_pause) {
+    engine->type->view_pause(engine, context);
+    engine->auto_paused = true;
+  }
+}
+
+void RE_engine_view_resume(RenderEngine *engine, const bContext *context)
+{
+  if (!engine->auto_paused) {
+    return;
+  }
+  if (engine->type->view_resume) {
+    engine->type->view_resume(engine, context);
+  }
+  engine->auto_paused = false;
 }
 
 /** \} */
