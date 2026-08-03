@@ -949,6 +949,7 @@ struct BSLParser {
     } while (match_if(','));
     match(']');
     assignment();
+    match(';');
   }
 
   void using_statement()
