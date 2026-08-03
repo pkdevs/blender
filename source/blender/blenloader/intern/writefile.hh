@@ -142,7 +142,7 @@ struct WriteData {
   WriteWrap *ww;
 
   /** Filepath being written to, may be the empty string. */
-  StringRefNull filepath;
+  std::string filepath;
 
   /**
    * Timestamp info defined when creating the new WriteData. Used for performance logging.

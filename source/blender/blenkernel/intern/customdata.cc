@@ -4307,7 +4307,7 @@ void CustomData_external_read(
     return;
   }
 
-  customdata_external_filename(filepath, basepath.c_str(), id, external);
+  customdata_external_filename(filepath, basepath, id, external);
 
   CDataFile *cdf = cdf_create(CDF_TYPE_MESH);
   if (!cdf_read_open(cdf, filepath)) {
@@ -4386,7 +4386,7 @@ void CustomData_external_write(CustomData *data,
   }
 
   /* make sure data is read before we try to write */
-  CustomData_external_read(data, basepath.c_str(), id, mask, totelem);
+  CustomData_external_read(data, basepath, id, mask, totelem);
   customdata_external_filename(filepath, basepath, id, external);
 
   CDataFile *cdf = cdf_create(CDF_TYPE_MESH);
