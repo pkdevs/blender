@@ -9,6 +9,7 @@ set(INC
   metal
   opengl
   vulkan
+  shader_tool
   ../makesrna
 
   # For theme color access.
@@ -127,11 +128,19 @@ set(SRC
 
   shader_tool/lexit/lexit.cc
 
-  shader_tool/bsl/symbol.cc
   shader_tool/bsl/codegen.cc
-  shader_tool/bsl/grammar.cc
   shader_tool/bsl/constructor.cc
+  shader_tool/bsl/grammar.cc
   shader_tool/bsl/operator.cc
+  shader_tool/bsl/resource.cc
+  shader_tool/bsl/symbol.cc
+  shader_tool/bsl/symbol_class.cc
+  shader_tool/bsl/symbol_function.cc
+  shader_tool/bsl/symbol_scope.cc
+  shader_tool/bsl/symbol_table.cc
+  shader_tool/bsl/symbol_template.cc
+  shader_tool/bsl/symbol_variable.cc
+  shader_tool/bsl/type_checker.cc
 
   GPU_attribute_convert.hh
   GPU_batch.hh
