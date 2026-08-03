@@ -499,14 +499,16 @@ void GLTexture::read(int mip, eGPUDataFormat type, void *data)
       format_ == TextureFormat::SFLOAT_32_DEPTH_UINT_8 ? TextureFormat::SFLOAT_32_DEPTH : format_);
   GLenum gl_type = to_gl(type);
 
+  const int3 extent = mip_size_get(mip);
+
   glGetTextureSubImage(texture->tex_id_,
                        mip + mip_min_,
                        0,
                        0,
                        view_layer_start_,
-                       w_,
-                       std::max(h_, 1),
-                       std::max(d_, 1),
+                       extent.x,
+                       extent.y,
+                       extent.z,
                        gl_format,
                        gl_type,
                        texture_size,
