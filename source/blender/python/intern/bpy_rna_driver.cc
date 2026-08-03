@@ -32,7 +32,7 @@ PyObject *pyrna_driver_get_variable_value(const AnimationEvalContext *anim_eval_
   int index;
 
   switch (driver_get_variable_property(
-      anim_eval_context, driver, dvar, dtar, true, &ptr, &prop, &index))
+      anim_eval_context, driver, dvar, dtar, &ptr, &prop, &index))
   {
     case DRIVER_VAR_PROPERTY_SUCCESS:
       /* object only */
