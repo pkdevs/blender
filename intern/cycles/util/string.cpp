@@ -16,6 +16,8 @@
 #  ifndef vsnprintf
 #    define vsnprintf _vsnprintf
 #  endif
+#else
+#  include <locale.h>
 #endif /* _WIN32 */
 
 CCL_NAMESPACE_BEGIN
@@ -239,25 +241,51 @@ string string_remove_gpu_from_cpu_name(const string &s)
 
 /* Wide char strings helpers for Windows. */
 
-#ifdef _WIN32
-
 wstring string_to_wstring(const string &str)
 {
+#ifdef _WIN32
   const int length_wc = MultiByteToWideChar(CP_UTF8, 0, str.c_str(), str.length(), nullptr, 0);
   wstring str_wc(length_wc, 0);
   MultiByteToWideChar(CP_UTF8, 0, str.c_str(), str.length(), &str_wc[0], length_wc);
+#else
+  locale_t new_locale = newlocale(LC_CTYPE_MASK, "C", (locale_t)0);
+  locale_t old_locale = uselocale(new_locale);
+  const size_t length_wc = mbstowcs(nullptr, str.c_str(), str.size());
+  wstring str_wc;
+  if (length_wc != (size_t)-1) {
+    str_wc.resize(length_wc, 0);
+    mbstowcs(str_wc.data(), str.c_str(), str.size());
+  }
+  uselocale(old_locale);
+  freelocale(new_locale);
+#endif
   return str_wc;
 }
 
 string string_from_wstring(const wstring &str)
 {
+#ifdef _WIN32
   int length_mb = WideCharToMultiByte(
       CP_UTF8, 0, str.c_str(), str.size(), nullptr, 0, nullptr, nullptr);
   string str_mb(length_mb, 0);
   WideCharToMultiByte(
       CP_UTF8, 0, str.c_str(), str.size(), &str_mb[0], length_mb, nullptr, nullptr);
+#else
+  locale_t new_locale = newlocale(LC_CTYPE_MASK, "C", (locale_t)0);
+  locale_t old_locale = uselocale(new_locale);
+  const size_t length_mb = wcstombs(nullptr, str.c_str(), str.size());
+  string str_mb;
+  if (length_mb != (size_t)-1) {
+    str_mb.resize(length_mb, 0);
+    wcstombs(str_mb.data(), str.c_str(), str.size());
+  }
+  uselocale(old_locale);
+  freelocale(new_locale);
+#endif
   return str_mb;
 }
+
+#ifdef _WIN32
 
 string string_to_ansi(const string &str)
 {

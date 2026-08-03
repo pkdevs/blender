@@ -174,18 +174,8 @@ DLSSDenoiser::DLSSDenoiser(Device *denoiser_device, const DenoiseParams &params)
     return;
   }
 
-#  ifdef _WIN32
   const wstring app_path = string_to_wstring(path_get());
   const wstring user_path = string_to_wstring(path_user_get());
-#  else
-  string app_path_narrow = path_get();
-  string user_path_narrow = path_user_get();
-  std::wstring app_path(app_path_narrow.size(), L' ');
-  std::wstring user_path(user_path_narrow.size(), L' ');
-  app_path.resize(std::mbstowcs(app_path.data(), app_path_narrow.c_str(), app_path_narrow.size()));
-  user_path.resize(
-      std::mbstowcs(user_path.data(), user_path_narrow.c_str(), user_path_narrow.size()));
-#  endif
 
   const wchar_t *const app_paths[] = {app_path.c_str()};
 
@@ -282,14 +272,7 @@ bool DLSSDenoiser::is_device_supported(const DeviceInfo &device)
     return false;
   }
 
-#  ifdef _WIN32
   const wstring user_path = string_to_wstring(path_user_get());
-#  else
-  string user_path_narrow = path_user_get();
-  std::wstring user_path(user_path_narrow.size(), L' ');
-  user_path.resize(
-      std::mbstowcs(user_path.data(), user_path_narrow.c_str(), user_path_narrow.size()));
-#  endif
 
   CUdevice cuDevice = 0;
   cuDeviceGet(&cuDevice, device.num);
