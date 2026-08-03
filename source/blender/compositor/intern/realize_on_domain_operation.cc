@@ -7,7 +7,6 @@
 #include "BLI_math_matrix.hh"
 #include "BLI_math_matrix_types.hh"
 #include "BLI_math_vector_types.hh"
-#include "BLI_utildefines.hh"
 
 #include "GPU_shader.hh"
 #include "GPU_texture.hh"
@@ -37,102 +36,200 @@ RealizeOnDomainOperation::RealizeOnDomainOperation(Context &context,
   this->populate_result(type);
 }
 
-void RealizeOnDomainOperation::execute()
+/* Fast approximation of (hypot(a.x, b.x), hypot(a.y, b.y))
+ * Assumes the vectors are more than 45 degrees apart.
+ */
+static inline float2 hypot_fast(const float2 &a, const float2 &b)
 {
-  const Domain input_domain = this->get_input().domain();
-  const Domain output_domain = target_domain_;
-
-  /* Create a transformation matrix that transforms the pixels in the data window from the data
-   * space to the virtual compositing space. This is done by first adding the data offset to go
-   * from the data space to the display space, then subtracting the center of the display window to
-   * go from the display space to the virtual compositing space. See the corrective translation
-   * function for more information on its function. */
-  const float2 input_center = float2(input_domain.display_size) / 2.0f;
-  const float2 input_translation = float2(input_domain.data_offset) - input_center +
-                                   this->compute_corrective_translation();
-  const float3x3 input_data_to_virtual = math::translate(input_domain.transformation,
-                                                         input_translation);
-
-  /* Same as above but for the output domain. */
-  const float2 output_center = float2(output_domain.display_size) / 2.0f;
-  const float2 output_translation = float2(output_domain.data_offset) - output_center;
-  const float3x3 output_data_to_virtual = math::translate(output_domain.transformation,
-                                                          output_translation);
-
-  /* Create a transformation matrix from the output data space to the input data space */
-  const float3x3 virtual_to_input_data = math::invert(input_data_to_virtual);
-  const float3x3 output_data_to_input_data = virtual_to_input_data * output_data_to_virtual;
-
-  /* Create a transformation matrix from the output integer texel to the input normalized sampler
-   * coordinates. This is done by adding 0.5 to evaluate the output at the center if pixels and
-   * dividing by the input size to get normalized coordinates. */
-  const float3x3 output_texel_to_output_data = math::from_location<float3x3>(float2(0.5f));
-  const float3x3 input_data_to_input_sampler = math::from_scale<float3x3, 2>(
-      1.0f / float2(input_domain.data_size));
-  const float3x3 output_texel_to_input_sampler = input_data_to_input_sampler *
-                                                 output_data_to_input_data *
-                                                 output_texel_to_output_data;
-
-  if (this->context().use_gpu()) {
-    this->realize_on_domain_gpu(output_texel_to_input_sampler);
+  float ax = fabsf(a.x);
+  float ay = fabsf(a.y);
+  float bx = fabsf(b.x);
+  float by = fabsf(b.y);
+  if (ax < bx) {
+    return float2(bx + 0.375f * ax, ay + 0.375f * by);
   }
   else {
-    this->realize_on_domain_cpu(output_texel_to_input_sampler);
+    return float2(ax + 0.375f * bx, by + 0.375f * ay);
   }
 }
 
-float2 RealizeOnDomainOperation::compute_corrective_translation()
+/* Is row N of matrix all approximately integers? */
+static inline bool is_int(const float3x3 &m, int n)
 {
-  if (this->get_input().get_realization_options().interpolation == Interpolation::Nearest) {
+  return compare_ff(m[0][n], rintf(m[0][n]), 1e-6) && compare_ff(m[1][n], rintf(m[1][n]), 1e-6) &&
+         compare_ff(m[2][n], rintf(m[2][n]), 1e-1);
+}
+
+void RealizeOnDomainOperation::execute()
+{
+  Result &input = this->get_input();
+  RealizationOptions options = input.domain().realization_options;
+  const Domain domain = this->compute_domain();
+
+  /* Translate the input such that it is centered in the virtual compositing space. */
+  float2 input_center_translation = float2(-float2(input.domain().data_size) / 2.0f);
+
+  /* Add any corrective translation if necessary */
+  if (options.interpolation == Interpolation::Nearest) {
     /* Bias translations in case of nearest interpolation to avoids the round-to-even behavior of
      * some GPUs at pixel boundaries. */
-    return float2(std::numeric_limits<float>::epsilon() * 10e3f);
+    input_center_translation += float2(std::numeric_limits<float>::epsilon() * 10e3f);
+  }
+  else {
+    /* Assuming no transformations, if the input size is odd and output size is even or vice versa,
+     * the centers of pixels of the input and output will be half a pixel away from each other due
+     * to the centering translation. Which introduce fuzzy result due to interpolation. So if one
+     * is odd and the other is even, detected by testing the low bit of the xor of the sizes, shift
+     * the input by 1/2 pixel so the pixels align. */
+    const int2 output_size = domain.data_size;
+    const int2 input_size = input.domain().data_size;
+    if ((input_size.x ^ output_size.x) & 1)
+      input_center_translation.x -= 0.5f;
+    if ((input_size.y ^ output_size.y) & 1)
+      input_center_translation.y -= 0.5f;
   }
 
-  /* Assuming no transformations, if the input size is odd and output size is even or vice versa,
-   * the centers of pixels of the input and output will be half a pixel away from each other due
-   * to the centering translation. Which introduce fuzzy result due to interpolation. So if one
-   * is odd and the other is even, detected by testing the low bit of the xor of the sizes, shift
-   * the input by 1/2 pixel so the pixels align. */
-  const int2 output_size = this->compute_domain().data_size;
-  const int2 input_size = this->get_input().domain().data_size;
-  return float2(((input_size[0] ^ output_size[0]) & 1) ? -0.5f : 0.0f,
-                ((input_size[1] ^ output_size[1]) & 1) ? -0.5f : 0.0f);
+  const float3x3 input_transformation = math::translate(input.domain().transformation,
+                                                        input_center_translation);
+
+  /* Translate the output such that it is centered in the virtual compositing space. */
+  const float2 output_center_translation = -float2(domain.data_size) / 2.0f;
+  const float3x3 output_transformation = math::translate(domain.transformation,
+                                                         output_center_translation);
+
+  /* Get the transformation from the output space to the input space */
+  float3x3 transformation = math::invert(input_transformation) * output_transformation;
+
+  /* compute derivatives of input location and convert to rectangle */
+  float2 wh = hypot_fast(transformation[0].xy(), transformation[1].xy());
+
+  /* select faster interpolation if possible */
+  if (options.interpolation == Interpolation::Anisotropic && wh[0] < 1.1f && wh[1] < 1.1f &&
+      is_int(transformation, 0) && is_int(transformation, 1))
+  {
+    options.interpolation = Interpolation::Nearest;
+  }
+  else if (options.interpolation == Interpolation::Anisotropic &&
+           (wh[0] < 1.1f || (wh[0] < 2.1f && is_int(transformation, 0))) &&
+           (wh[1] < 1.1f || (wh[1] < 2.1f && is_int(transformation, 1))))
+  {
+    options.interpolation = Interpolation::Bilinear;
+  }
+
+  /* Transform from pixel centers rather than pixel corners */
+  transformation *= math::from_location<float3x3>(float2(0.5f));
+  /* Transform to normalized coordinates */
+  float2 scale = 1.0f / float2(input.domain().data_size);
+  transformation = math::from_scale<float3x3>(scale) * transformation;
+  wh *= scale;
+
+  /* Don't make the input image smaller than 2 pixels, to avoid aliasing and moire patterns */
+  if (wh.x > 0.5f) {
+    transformation = math::from_scale<float3x3>(float2(0.5f / wh.x, 1.0f)) * transformation;
+    wh.x = 0.5f;
+  }
+  if (wh.y > 0.5f) {
+    transformation = math::from_scale<float3x3>(float2(1.0f, 0.5f / wh.y)) * transformation;
+    wh.y = 0.5f;
+  }
+
+  this->get_result().allocate_texture(domain);
+
+  if (this->context().use_gpu()) {
+    this->realize_on_domain_gpu(options, transformation);
+  }
+  else {
+    this->realize_on_domain_cpu(options, transformation);
+  }
 }
 
-void RealizeOnDomainOperation::realize_on_domain_gpu(const float3x3 &transformation)
+void RealizeOnDomainOperation::realize_on_domain_gpu(const RealizationOptions &options,
+                                                     const float3x3 &transformation)
 {
-  gpu::Shader *shader = this->context().get_shader(this->get_realization_shader_name());
+  Result &input = this->get_input();
+
+  const char *shader_name = nullptr;
+  switch (input.type()) {
+    case ResultType::Float:
+      if (options.interpolation == Interpolation::Bicubic)
+        shader_name = "compositor_realize_on_domain_bicubic_float";
+      else
+        shader_name = "compositor_realize_on_domain_float";
+      break;
+    case ResultType::Float2:
+      if (options.interpolation == Interpolation::Bicubic)
+        shader_name = "compositor_realize_on_domain_bicubic_float2";
+      else
+        shader_name = "compositor_realize_on_domain_float2";
+      break;
+    case ResultType::Float3:
+      /* Float3 is internally stored in a float4 texture due to GPU module limitations. */
+    case ResultType::Float4:
+    case ResultType::Color:
+    case ResultType::Quaternion:
+      if (options.interpolation == Interpolation::Bicubic)
+        shader_name = "compositor_realize_on_domain_bicubic_float4";
+      else if (options.interpolation == Interpolation::Anisotropic)
+        shader_name = "compositor_realize_on_domain_anisotropic_float4";
+      else
+        shader_name = "compositor_realize_on_domain_float4";
+      break;
+    case ResultType::Int:
+      shader_name = "compositor_realize_on_domain_int";
+      break;
+    case ResultType::Int2:
+      shader_name = "compositor_realize_on_domain_int2";
+      break;
+    case ResultType::Int3:
+      /* Int3 is internally stored in a int4 texture due to GPU module limitations. */
+    case ResultType::Int4:
+      shader_name = "compositor_realize_on_domain_int4";
+      break;
+    case ResultType::Bool:
+      shader_name = "compositor_realize_on_domain_bool";
+      break;
+    case ResultType::Menu:
+      shader_name = "compositor_realize_on_domain_menu";
+      break;
+    case ResultType::Float4x4:
+      shader_name = "compositor_realize_on_domain_float4x4";
+      break;
+    case ResultType::String:
+    case ResultType::Object:
+    case ResultType::Image:
+    case ResultType::Font:
+    case ResultType::Scene:
+    case ResultType::Text:
+    case ResultType::Mask:
+      /* Single only types do not support GPU code path. */
+      BLI_assert(Result::is_single_value_only_type(this->get_input().type()));
+      BLI_assert_unreachable();
+      break;
+  }
+  gpu::Shader *shader = this->context().get_shader(shader_name);
   GPU_shader_bind(shader);
 
   GPU_shader_uniform_mat3_as_mat4(shader, "transformation", transformation.ptr());
-
-  Result &input = this->get_input();
-  const RealizationOptions realization_options = input.get_realization_options();
 
   if (!GPU_texture_has_integer_format(input)) {
     /* The texture sampler should use bilinear interpolation for both the bilinear and bicubic
      * cases, as the logic used by the bicubic realization shader expects textures to use bilinear
      * interpolation. */
-    if (realization_options.interpolation == Interpolation::Anisotropic) {
+    if (options.interpolation == Interpolation::Anisotropic) {
       GPU_texture_anisotropic_filter(input, true);
       GPU_texture_mipmap_mode(input, true, true);
     }
     else {
-      GPU_texture_filter_mode(input, realization_options.interpolation != Interpolation::Nearest);
+      GPU_texture_filter_mode(input, options.interpolation != Interpolation::Nearest);
     }
   }
 
-  GPU_texture_extend_mode_x(input,
-                            map_extension_mode_to_extend_mode(realization_options.extension_x));
-  GPU_texture_extend_mode_y(input,
-                            map_extension_mode_to_extend_mode(realization_options.extension_y));
+  GPU_texture_extend_mode_x(input, map_extension_mode_to_extend_mode(options.extension_x));
+  GPU_texture_extend_mode_y(input, map_extension_mode_to_extend_mode(options.extension_y));
 
   input.bind_as_texture(shader, "input_tx");
 
-  const Domain domain = this->compute_domain();
   Result &output = this->get_result();
-  output.allocate_texture(domain);
   output.bind_as_image(shader, "domain_img");
 
   compute_dispatch_threads_at_least(shader, output.domain().data_size);
@@ -142,125 +239,26 @@ void RealizeOnDomainOperation::realize_on_domain_gpu(const float3x3 &transformat
   GPU_shader_unbind();
 }
 
-const char *RealizeOnDomainOperation::get_realization_shader_name()
-{
-  const Interpolation interpolation = get_input().get_realization_options().interpolation;
-  if (interpolation == Interpolation::Bicubic) {
-    switch (this->get_input().type()) {
-      case ResultType::Float:
-        return "compositor_realize_on_domain_bicubic_float";
-      case ResultType::Float2:
-        return "compositor_realize_on_domain_bicubic_float2";
-      case ResultType::Float3:
-        /* Float3 is internally stored in a float4 texture due to GPU module limitations. */
-        return "compositor_realize_on_domain_bicubic_float4";
-      case ResultType::Float4:
-        return "compositor_realize_on_domain_bicubic_float4";
-      case ResultType::Color:
-        return "compositor_realize_on_domain_bicubic_float4";
-      case ResultType::Int:
-        return "compositor_realize_on_domain_int";
-      case ResultType::Int2:
-        return "compositor_realize_on_domain_int2";
-      case ResultType::Int3:
-        /* Int3 is internally stored in a int4 texture due to GPU module limitations. */
-        return "compositor_realize_on_domain_int4";
-      case ResultType::Int4:
-        return "compositor_realize_on_domain_int4";
-      case ResultType::Bool:
-        return "compositor_realize_on_domain_bool";
-      case ResultType::Float4x4:
-        return "compositor_realize_on_domain_float4x4";
-      case ResultType::Menu:
-        return "compositor_realize_on_domain_menu";
-      case ResultType::Quaternion:
-        return "compositor_realize_on_domain_bicubic_float4";
-      case ResultType::String:
-      case ResultType::Object:
-      case ResultType::Image:
-      case ResultType::Font:
-      case ResultType::Scene:
-      case ResultType::Text:
-      case ResultType::Mask:
-        /* Single only types do not support GPU code path. */
-        BLI_assert(Result::is_single_value_only_type(this->get_input().type()));
-        BLI_assert_unreachable();
-        break;
-    }
-  }
-  else {
-    switch (this->get_input().type()) {
-      case ResultType::Float:
-        return "compositor_realize_on_domain_float";
-      case ResultType::Float2:
-        return "compositor_realize_on_domain_float2";
-      case ResultType::Float3:
-        /* Float3 is internally stored in a float4 texture due to GPU module limitations. */
-        return "compositor_realize_on_domain_float4";
-      case ResultType::Float4:
-      case ResultType::Color:
-        return (interpolation == Interpolation::Anisotropic) ?
-                   "compositor_realize_on_domain_anisotropic_float4" :
-                   "compositor_realize_on_domain_float4";
-      case ResultType::Int:
-        return "compositor_realize_on_domain_int";
-      case ResultType::Int2:
-        return "compositor_realize_on_domain_int2";
-      case ResultType::Int3:
-        /* Int3 is internally stored in a int4 texture due to GPU module limitations. */
-        return "compositor_realize_on_domain_int4";
-      case ResultType::Int4:
-        return "compositor_realize_on_domain_int4";
-      case ResultType::Bool:
-        return "compositor_realize_on_domain_bool";
-      case ResultType::Float4x4:
-        return "compositor_realize_on_domain_float4x4";
-      case ResultType::Menu:
-        return "compositor_realize_on_domain_menu";
-      case ResultType::Quaternion:
-        return "compositor_realize_on_domain_float4";
-      case ResultType::String:
-      case ResultType::Object:
-      case ResultType::Image:
-      case ResultType::Font:
-      case ResultType::Scene:
-      case ResultType::Text:
-      case ResultType::Mask:
-        /* Single only types do not support GPU code path. */
-        BLI_assert(Result::is_single_value_only_type(this->get_input().type()));
-        BLI_assert_unreachable();
-        break;
-    }
-  }
-
-  BLI_assert_unreachable();
-  return nullptr;
-}
-
 template<typename T>
-static void realize_on_domain(const Result &input, Result &output, const float3x3 &transformation)
+static void realize_on_domain(const Result &input,
+                              Result &output,
+                              const RealizationOptions &options,
+                              const float3x3 &transformation)
 {
-  const RealizationOptions realization_options = input.get_realization_options();
   const float2x2 jacobian(transformation);
   parallel_for(output.domain().data_size, [&](const int2 texel) {
     const float2 coordinates = math::transform_point(transformation, float2(texel));
-    T sample = input.sample<T>(coordinates,
-                               realization_options.interpolation,
-                               realization_options.extension_x,
-                               realization_options.extension_y,
-                               jacobian);
+    T sample = input.sample<T>(
+        coordinates, options.interpolation, options.extension_x, options.extension_y, jacobian);
     output.store_pixel(texel, sample);
   });
 }
 
-void RealizeOnDomainOperation::realize_on_domain_cpu(const float3x3 &transformation)
+void RealizeOnDomainOperation::realize_on_domain_cpu(const RealizationOptions &options,
+                                                     const float3x3 &transformation)
 {
   Result &input = this->get_input();
   Result &output = this->get_result();
-
-  const Domain domain = this->compute_domain();
-  output.allocate_texture(domain);
-
   input.get_cpp_type()
       .to_static_type<float,
                       float2,
@@ -275,7 +273,7 @@ void RealizeOnDomainOperation::realize_on_domain_cpu(const float3x3 &transformat
                       float4x4,
                       nodes::MenuValue,
                       math::Quaternion>(
-          [&]<typename T>() { realize_on_domain<T>(input, output, transformation); });
+          [&]<typename T>() { realize_on_domain<T>(input, output, options, transformation); });
 }
 
 Domain RealizeOnDomainOperation::compute_domain()
