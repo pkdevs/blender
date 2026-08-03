@@ -13,24 +13,28 @@
 #include "AS_essentials_library.hh"
 #include "AS_remote_library.hh"
 
-#include "BLI_fileops.h"
-#include "BLI_listbase.h"
+#include "BLI_fileops.hh"
+#include "BLI_listbase.hh"
 #include "BLI_path_utils.hh"
-#include "BLI_string.h"
-#include "BLI_string_utf8.h"
+#include "BLI_string.hh"
+#include "BLI_string_utf8.hh"
 #include "BLI_string_utils.hh"
 
 #include "BKE_appdir.hh"
 #include "BKE_asset.hh"
+#include "BKE_blender_version.h"
 #include "BKE_preferences.h"
 
-#include "BLI_utildefines.h"
+#include "BLI_utildefines.hh"
 
 #include "BLT_translation.hh"
 
 #include "BLO_read_write.hh"
 
 #include "DNA_userdef_types.h"
+
+#include "RNA_define.hh"
+#include "RNA_enum_types.hh"
 
 namespace blender {
 
@@ -223,7 +227,7 @@ static void url_ensure_trailing_slash(char *str, const size_t max_len)
 void BKE_preferences_remote_asset_library_url_set(bUserAssetLibrary *library,
                                                   const StringRef remote_url)
 {
-  /* Always trim whitespace off of URLs. */
+  /* Always trim white-space off of URLs. */
   remote_url.trim().copy_bytes_truncated(library->remote_url);
 
   const bool ends_in_top_meta_file = asset_system::remote_library_url_ends_with_top_meta_file_name(
@@ -609,7 +613,7 @@ void BKE_preferences_remote_to_name(const char *remote_url, char name[MAX_NAME])
       }
     }
   }
-  if (UNLIKELY(remote_url[0] == '\0')) {
+  if (remote_url[0] == '\0') [[unlikely]] {
     return;
   }
 
@@ -712,5 +716,42 @@ bool BKE_preferences_asset_shelf_settings_ensure_catalog_path_enabled(UserDef *u
 }
 
 /** \} */
+
+const EnumPropertyItem *BKE_preferences_active_section_itemf(const UserDef *userdef, bool *r_free)
+{
+
+  const bool use_developer_ui = (userdef->flag & USER_DEVELOPER_UI) != 0;
+  const bool is_alpha = BKE_blender_version_is_alpha();
+
+  if (use_developer_ui && is_alpha) {
+    *r_free = false;
+    return rna_enum_preference_section_items;
+  }
+
+  EnumPropertyItem *items = nullptr;
+  int totitem = 0;
+
+  for (const EnumPropertyItem *it = rna_enum_preference_section_items; it->identifier != nullptr;
+       it++)
+  {
+    if (it->value == USER_SECTION_EXPERIMENTAL) {
+      if (is_alpha == false) {
+        continue;
+      }
+    }
+    else if (it->value == USER_SECTION_DEVELOPER_TOOLS) {
+      if (use_developer_ui == false) {
+        continue;
+      }
+    }
+
+    RNA_enum_item_add(&items, &totitem, it);
+  }
+
+  RNA_enum_item_end(&items, &totitem);
+
+  *r_free = true;
+  return items;
+}
 
 }  // namespace blender

@@ -21,12 +21,12 @@
 #include "DNA_sequence_types.h"
 #include "DNA_sound_types.h"
 
-#include "BLI_assert.h"
-#include "BLI_listbase.h"
+#include "BLI_assert.hh"
+#include "BLI_listbase.hh"
 #include "BLI_map.hh"
 #include "BLI_path_utils.hh"
-#include "BLI_string.h"
-#include "BLI_string_utf8.h"
+#include "BLI_string.hh"
+#include "BLI_string_utf8.hh"
 
 #include "BKE_duplilist.hh"
 #include "BKE_fcurve.hh"
@@ -135,7 +135,7 @@ Strip *strip_alloc(ListBaseT<Strip> *lb, int timeline_frame, int channel, StripT
 
   strip->flag = SEQ_SELECT;
   strip->start = timeline_frame;
-  strip_channel_set(strip, channel);
+  strip->channel_set(channel);
   strip->sat = 1.0;
   strip->mul = 1.0;
   strip->blend_opacity = 100.0;
@@ -216,12 +216,10 @@ static void seq_strip_free_ex(Scene *scene,
   }
 
   if (strip->prop) {
-    IDP_FreePropertyContent_ex(strip->prop, do_id_user);
-    MEM_delete(strip->prop);
+    IDP_FreeProperty_ex(strip->prop, do_id_user);
   }
   if (strip->system_properties) {
-    IDP_FreePropertyContent_ex(strip->system_properties, do_id_user);
-    MEM_delete(strip->system_properties);
+    IDP_FreeProperty_ex(strip->system_properties, do_id_user);
   }
 
   /* free modifiers */

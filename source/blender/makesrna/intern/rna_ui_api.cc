@@ -115,7 +115,7 @@ static void rna_uiItemTextBox(Layout *layout,
                               bContext *C,
                               PointerRNA *ptr,
                               const char *propname,
-                              PointerRNA *state_ptr,
+                              const int initial_visible_lines,
                               const char *placeholder,
                               const char *text_ctxt,
                               bool translate)
@@ -128,6 +128,29 @@ static void rna_uiItemTextBox(Layout *layout,
                      propname);
     return;
   }
+  std::optional<StringRefNull> placeholder_opt = std::nullopt;
+  if (placeholder) {
+    placeholder_opt = rna_translate_ui_text(placeholder, text_ctxt, nullptr, prop, translate);
+  }
+  layout->textbox(C, ptr, propname, placeholder_opt, initial_visible_lines);
+}
+
+static void rna_uiItemTextBoxWithState(Layout *layout,
+                                       PointerRNA *ptr,
+                                       const char *propname,
+                                       PointerRNA *state_ptr,
+                                       const char *placeholder,
+                                       const char *text_ctxt,
+                                       bool translate)
+{
+  PropertyRNA *prop = RNA_struct_find_property(ptr, propname);
+
+  if (!prop) {
+    RNA_warning_bare("UILayout.textbox_with_state(): property not found: %s.%s",
+                     RNA_struct_identifier(ptr->type),
+                     propname);
+    return;
+  }
 
   std::optional<StringRefNull> placeholder_opt = std::nullopt;
 
@@ -135,12 +158,7 @@ static void rna_uiItemTextBox(Layout *layout,
     placeholder_opt = rna_translate_ui_text(placeholder, text_ctxt, nullptr, prop, translate);
   }
 
-  if (state_ptr && !RNA_pointer_is_null(state_ptr)) {
-    layout->textbox_with_state(ptr, propname, state_ptr->data_as<TextboxState>(), placeholder_opt);
-  }
-  else {
-    layout->textbox(C, ptr, propname, placeholder_opt);
-  }
+  layout->textbox_with_state(ptr, propname, state_ptr->data_as<TextboxState>(), placeholder_opt);
 }
 
 static void rna_uiItemR(Layout *layout,
@@ -576,6 +594,24 @@ static void rna_uiItemL(Layout *layout,
   }
 
   layout->label(text.value_or(""), icon);
+}
+
+static void rna_layout_label_multiline(Layout *layout,
+                                       const char *name,
+                                       const char *text_ctxt,
+                                       bool translate,
+                                       int icon,
+                                       int icon_value,
+                                       int alignment,
+                                       int max_lines)
+{
+  /* Get translated name (label). */
+  std::optional<StringRefNull> text = rna_translate_ui_text(
+      name, text_ctxt, nullptr, nullptr, translate);
+  if (icon_value && !icon) {
+    icon = icon_value;
+  }
+  layout->label_multiline(text.value_or(""), icon, ui::FontStyleAlign(alignment), max_lines);
 }
 
 static void rna_layout_link(Layout *layout,
@@ -1368,6 +1404,12 @@ void RNA_api_ui_layout(StructRNA *srna)
        "Replace the selected nodes with the specified type."},
       {0, nullptr, 0, nullptr, nullptr},
   };
+  static const EnumPropertyItem rna_enum_text_align[] = {
+      {int(ui::UI_STYLE_TEXT_LEFT), "LEFT", 0, "LEFT", ""},
+      {int(ui::UI_STYLE_TEXT_RIGHT), "RIGHT", 0, "RIGHT", ""},
+      {int(ui::UI_STYLE_TEXT_CENTER), "CENTER", 0, "CENTER", ""},
+      {0, nullptr, 0, nullptr, nullptr},
+  };
 
   static const float node_socket_color_default[] = {0.0f, 0.0f, 0.0f, 1.0f};
 
@@ -1542,10 +1584,30 @@ void RNA_api_ui_layout(StructRNA *srna)
 
   /* items */
   func = RNA_def_function(srna, "textbox", "rna_uiItemTextBox");
+  RNA_def_function_ui_description(func,
+                                  "Exposes an RNA string property in the layout using a text-box "
+                                  "widget with multi-line support. Text-box state will be stored "
+                                  "in the current context region.");
   RNA_def_function_flag(func, FUNC_USE_CONTEXT);
   api_ui_item_rna_common(func);
-  parm = RNA_def_pointer(func, "textbox_state", "TextboxState", nullptr, "");
-  RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_RNAPTR);
+  parm = RNA_def_int(
+      func, "initial_visible_lines", 3, 1, INT_MAX, "Initial Visible Lines", "", 1, INT_MAX);
+  parm = RNA_def_string(
+      func, "placeholder", nullptr, 0, "", "Hint describing the expected value when empty");
+  RNA_def_property_clear_flag(parm, PROP_NEVER_NULL);
+  api_ui_item_common_translation(func);
+
+  func = RNA_def_function(srna, "textbox_with_state", "rna_uiItemTextBoxWithState");
+  RNA_def_function_ui_description(func,
+                                  "Exposes an RNA string property in the layout using a text-box "
+                                  "widget with multi-line support");
+  api_ui_item_rna_common(func);
+  parm = RNA_def_pointer(func,
+                         "textbox_state",
+                         "TextboxState",
+                         "",
+                         "Pointer to a pre-allocated text-box state storage (builtin)");
+  RNA_def_parameter_flags(parm, PROP_NEVER_NULL, PARM_RNAPTR | PARM_REQUIRED);
   parm = RNA_def_string(
       func, "placeholder", nullptr, 0, "", "Hint describing the expected value when empty");
   RNA_def_property_clear_flag(parm, PROP_NEVER_NULL);
@@ -1740,6 +1802,16 @@ void RNA_api_ui_layout(StructRNA *srna)
   api_ui_item_common(func);
   parm = RNA_def_property(func, "icon_value", PROP_INT, PROP_UNSIGNED);
   RNA_def_property_ui_text(parm, "Icon Value", "Override automatic icon of the item");
+
+  func = RNA_def_function(srna, "label_multiline", "rna_layout_label_multiline");
+  RNA_def_function_ui_description(func, "Displays multiline text in the layout.");
+  api_ui_item_common(func);
+  parm = RNA_def_property(func, "icon_value", PROP_INT, PROP_UNSIGNED);
+  RNA_def_property_ui_text(parm, "Icon Value", "Override automatic icon of the item");
+  parm = RNA_def_enum(func, "alignment", rna_enum_text_align, 0, "", "");
+  parm = RNA_def_property(func, "max_lines", PROP_INT, PROP_UNSIGNED);
+  RNA_def_property_range(parm, 0, INT_MAX);
+  RNA_def_property_ui_text(parm, "", "Maximum number of lines to display, 0 means all");
 
   func = RNA_def_function(srna, "link", "rna_layout_link");
   RNA_def_function_ui_description(func, "Item. Displays a url that can be clicked in the layout.");

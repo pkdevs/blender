@@ -25,16 +25,17 @@
 
 #include "DNA_listBase.h"
 
-#include "BLI_listbase.h"
-#include "BLI_math_geom.h"
-#include "BLI_math_matrix.h"
-#include "BLI_math_vector.h"
-#include "BLI_memarena.h"
-#include "BLI_utildefines.h"
+#include "BLI_array_utils.hh"
+#include "BLI_listbase.hh"
+#include "BLI_math_geom_c.hh"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_vector_c.hh"
+#include "BLI_memarena.hh"
+#include "BLI_utildefines.hh"
 
-#include "BLI_scanfill.h" /* own include */
+#include "BLI_scanfill.hh" /* own include */
 
-#include "BLI_strict_flags.h" /* IWYU pragma: keep. Keep last. */
+#include "BLI_strict_flags.hh" /* IWYU pragma: keep. Keep last. */
 
 namespace blender {
 
@@ -334,7 +335,7 @@ static ScanFillVertLink *addedgetoscanlist(ScanFillVertLink *scdata, ScanFillEdg
   sc = static_cast<ScanFillVertLink *>(
       bsearch(&scsearch, scdata, len, sizeof(ScanFillVertLink), vergscdata));
 
-  if (UNLIKELY(sc == nullptr)) {
+  if (sc == nullptr) [[unlikely]] {
     printf("Error in search edge: %p\n", static_cast<void *>(eed));
   }
   else if (addedgetoscanvert(sc, eed) == false) {
@@ -861,7 +862,7 @@ uint BLI_scanfill_calc_ex(ScanFillContext *sf_ctx, const int flag, const float n
     }
   }
 
-  if (UNLIKELY(!vert_available)) {
+  if (!vert_available) [[unlikely]] {
     return 0;
   }
 
@@ -884,14 +885,14 @@ uint BLI_scanfill_calc_ex(ScanFillContext *sf_ctx, const int flag, const float n
     v_prev = static_cast<ScanFillVert *>(sf_ctx->fillvertbase.last)->co;
 
     for (ScanFillVert &eve : sf_ctx->fillvertbase) {
-      if (LIKELY(!compare_v3v3(v_prev, eve.co, SF_EPSILON))) {
+      if (!compare_v3v3(v_prev, eve.co, SF_EPSILON)) [[likely]] {
         add_newell_cross_v3_v3v3(n, v_prev, eve.co);
         v_prev = eve.co;
       }
     }
   }
 
-  if (UNLIKELY(normalize_v3(n) == 0.0f)) {
+  if (normalize_v3(n) == 0.0f) [[unlikely]] {
     return 0;
   }
 
@@ -1079,8 +1080,8 @@ uint BLI_scanfill_calc_ex(ScanFillContext *sf_ctx, const int flag, const float n
     }
 #endif
 
-    uint *target_map = MEM_new_array_zeroed<uint>(poly, "polycache");
-    range_vn_u(target_map, poly, 0);
+    uint *target_map = MEM_new_array<uint>(poly, "polycache");
+    array_utils::fill_index_range<uint>({target_map, poly});
 
     for (a = 0; a < poly; a++) {
       if (target_map[a] != a) {

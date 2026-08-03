@@ -59,6 +59,7 @@ class LazyFunctionForEnableOutputNode : public LazyFunction {
   LazyFunctionForEnableOutputNode(const bNode &node, MutableSpan<int> r_lf_index_by_bsocket)
       : node_(node)
   {
+    debug_name_ = node.name;
     r_lf_index_by_bsocket[node.input_socket(0).index_in_tree()] = inputs_.append_and_get_index_as(
         "Enable", CPPType::get<SocketValueVariant>());
     r_lf_index_by_bsocket[node.input_socket(1).index_in_tree()] = inputs_.append_and_get_index_as(
@@ -132,7 +133,7 @@ static void node_extra_info(NodeExtraInfoParams &params)
       NodeExtraInfoRow row;
       row.text = RPT_("Invalid Output Link");
       row.tooltip = TIP_("This node should be linked to the group output node");
-      row.icon = ICON_ERROR;
+      row.icon = ICON_STATUS_ERROR;
       params.rows.append(std::move(row));
       return;
     }

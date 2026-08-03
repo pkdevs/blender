@@ -54,6 +54,8 @@ struct SeqResult {
   }
 
   ImBuf *image = nullptr;
+  /* How much the resulting image should be translated, in pixels. */
+  float2 translation = float2(0, 0);
   bool is_opaque_before_transform = false;
 };
 
@@ -84,7 +86,8 @@ void seq_imbuf_assign_spaces(const Scene *scene, ImBuf *ibuf);
 
 StripScreenQuad get_strip_screen_quad(const RenderData *context, const Strip *strip);
 
-void convert_multilayer_ibuf(ImBuf *ibuf);
+/** Ensure image buffer has 4 channels, most sequencer code assumes this. */
+void ensure_ibuf_is_rgba(ImBuf *ibuf);
 bool seq_image_strip_is_multiview_render(const Scene *scene,
                                          const Strip *strip,
                                          int totfiles,

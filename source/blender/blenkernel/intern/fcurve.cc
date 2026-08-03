@@ -20,14 +20,14 @@
 #include "DNA_anim_types.h"
 #include "DNA_curve_types.h"
 
-#include "BLI_easing.h"
-#include "BLI_ghash.h"
-#include "BLI_listbase.h"
-#include "BLI_math_vector.h"
+#include "BLI_easing.hh"
+#include "BLI_ghash.hh"
+#include "BLI_listbase.hh"
+#include "BLI_math_vector_c.hh"
 #include "BLI_math_vector_types.hh"
-#include "BLI_rect.h"
-#include "BLI_sort_utils.h"
-#include "BLI_string.h"
+#include "BLI_rect.hh"
+#include "BLI_sort_utils.hh"
+#include "BLI_string.hh"
 #include "BLI_string_utils.hh"
 #include "BLI_task.hh"
 #include "BLI_vector_set.hh"
@@ -35,7 +35,7 @@
 #include "BLT_translation.hh"
 
 #include "BKE_anim_data.hh"
-#include "BKE_animsys.h"
+#include "BKE_animsys.hh"
 #include "BKE_context.hh"
 #include "BKE_curve.hh"
 #include "BKE_fcurve.hh"
@@ -66,6 +66,7 @@ static CLG_LogRef LOG = {"anim.fcurve"};
 FCurve *BKE_fcurve_create()
 {
   FCurve *fcu = MEM_new<FCurve>(__func__);
+  fcu->runtime = MEM_new<FCurveRuntime>(__func__);
   return fcu;
 }
 
@@ -93,6 +94,7 @@ void BKE_fcurve_free(FCurve *fcu)
   free_fmodifiers(&fcu->modifiers);
 
   /* Free the f-curve itself. */
+  MEM_delete(fcu->runtime);
   MEM_delete(fcu);
 }
 
@@ -130,6 +132,7 @@ FCurve *BKE_fcurve_copy(const FCurve *fcu)
 
   /* Make a copy. */
   FCurve *fcu_d = MEM_dupalloc(fcu);
+  fcu_d->runtime = MEM_new<bke::FCurveRuntime>(__func__, *fcu->runtime);
 
   fcu_d->next = fcu_d->prev = nullptr;
   fcu_d->grp = nullptr;
@@ -273,8 +276,8 @@ FCurve *BKE_fcurve_find(ListBaseT<FCurve> *list, const char rna_path[], const in
   for (FCurve &fcu : *list) {
     /* Check indices first, much cheaper than a string comparison. */
     /* Simple string-compare (this assumes that they have the same root...) */
-    if (UNLIKELY(fcu.array_index == array_index && fcu.rna_path &&
-                 fcu.rna_path[0] == rna_path[0] && STREQ(fcu.rna_path, rna_path)))
+    if (fcu.array_index == array_index && fcu.rna_path && fcu.rna_path[0] == rna_path[0] &&
+        STREQ(fcu.rna_path, rna_path)) [[unlikely]]
     {
       return &fcu;
     }
@@ -756,17 +759,14 @@ bool BKE_fcurve_calc_range(const FCurve *fcu,
   return foundvert;
 }
 
-float *BKE_fcurves_calc_keyed_frames_ex(FCurve **fcurve_array,
-                                        int fcurve_array_len,
-                                        const float interval,
-                                        int *r_frames_len)
+Array<float> BKE_fcurves_calc_keyed_frames_ex(const Span<FCurve *> fcurve_array,
+                                              const float interval)
 {
   /* Use `1e-3f` as the smallest possible value since these are converted to integers
    * and we can be sure `MAXFRAME / 1e-3f < INT_MAX` as it's around half the size. */
   const double interval_db = max_ff(interval, 1e-3f);
   VectorSet<int> frames_unique;
-  for (int fcurve_index = 0; fcurve_index < fcurve_array_len; fcurve_index++) {
-    const FCurve *fcu = fcurve_array[fcurve_index];
+  for (FCurve *fcu : fcurve_array) {
     for (int i = 0; i < fcu->totvert; i++) {
       const BezTriple *bezt = &fcu->bezt[i];
       const double value = round(double(bezt->vec[1][0]) / interval_db);
@@ -776,23 +776,20 @@ float *BKE_fcurves_calc_keyed_frames_ex(FCurve **fcurve_array,
   }
 
   const size_t frames_len = frames_unique.size();
-  float *frames = MEM_new_array_uninitialized<float>(frames_len, __func__);
+  Array<float> frames(frames_len);
 
   for (const int i : frames_unique.index_range()) {
     const int value = frames_unique[i];
     frames[i] = double(value) * interval_db;
   }
 
-  qsort(frames, frames_len, sizeof(*frames), BLI_sortutil_cmp_float);
-  *r_frames_len = frames_len;
+  qsort(frames.data(), frames_len, sizeof(float), BLI_sortutil_cmp_float);
   return frames;
 }
 
-float *BKE_fcurves_calc_keyed_frames(FCurve **fcurve_array,
-                                     int fcurve_array_len,
-                                     int *r_frames_len)
+Array<float> BKE_fcurves_calc_keyed_frames(const Span<FCurve *> fcurve_array)
 {
-  return BKE_fcurves_calc_keyed_frames_ex(fcurve_array, fcurve_array_len, 1.0f, r_frames_len);
+  return BKE_fcurves_calc_keyed_frames_ex(fcurve_array, 1.0f);
 }
 
 /** \} */
@@ -2492,7 +2489,7 @@ float calculate_fcurve(PathResolvedRNA *anim_rna,
   else {
     curval = evaluate_fcurve(fcu, anim_eval_context->eval_time);
   }
-  fcu->curval = curval; /* Debug display only, not thread safe! */
+  fcu->runtime->curval = curval; /* Debug display only, not thread safe! */
   return curval;
 }
 
@@ -2626,7 +2623,9 @@ void BKE_fcurve_blend_write_data(BlendWriter *writer, FCurve *fcu)
 
 void BKE_fcurve_blend_write_listbase(BlendWriter *writer, ListBaseT<FCurve> *fcurves)
 {
-  writer->write_struct_list(fcurves);
+  writer->write_struct_list(fcurves, [](BlendStructWriter &struct_writer) {
+    struct_writer.runtime_ptr(offsetof(FCurve, runtime));
+  });
   for (FCurve &fcu : *fcurves) {
     BKE_fcurve_blend_write_data(writer, &fcu);
   }
@@ -2636,6 +2635,7 @@ void BKE_fcurve_blend_read_data(BlendDataReader *reader, FCurve *fcu)
 {
   /* Curve data: only one of `bezt`/`fpt` is set, so guard validation to avoid clobbering
    * `totvert` when reading the unset pointer. */
+  fcu->runtime = MEM_new<bke::FCurveRuntime>(__func__);
   if (fcu->bezt) {
     BLO_read_array_and_validate_size(reader, &fcu->bezt, &fcu->totvert);
   }

@@ -8,7 +8,7 @@
  */
 
 #include "BLI_array.hh"
-#include "BLI_rect.h"
+#include "BLI_rect.hh"
 #include "BLI_task.hh"
 
 #include "IMB_filter.hh"
@@ -310,9 +310,6 @@ void IMB_byte_from_float(ImBuf *ibuf)
                                    1,
                                    ibuf->x);
       });
-
-  /* ensure user flag is reset */
-  ibuf->userflags &= ~IB_RECT_INVALID;
 }
 
 void IMB_float_from_byte_ex(ImBuf *dst, const ImBuf *src, const rcti *region_to_update)

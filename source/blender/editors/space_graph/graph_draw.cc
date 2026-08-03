@@ -12,9 +12,9 @@
 #include <cstdio>
 #include <cstring>
 
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 #include "BLI_math_vector_types.hh"
-#include "BLI_utildefines.h"
+#include "BLI_utildefines.hh"
 #include "BLI_vector.hh"
 
 #include "DNA_anim_types.h"
@@ -1359,7 +1359,7 @@ static void graph_draw_driver_debug(bAnimContext *ac, ID *id, FCurve *fcu)
   if ((driver->flag & DRIVER_FLAG_INVALID) == 0) {
     /* grab "coordinates" for driver outputs */
     float x = driver->curval;
-    float y = fcu->curval * unitfac;
+    float y = fcu->runtime->curval * unitfac;
 
     /* Only draw indicators if the point is in range. */
     if (x >= v2d->cur.xmin) {

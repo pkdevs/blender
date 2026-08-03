@@ -17,6 +17,7 @@
 #include "gpu_shader_fullscreen_lib.glsl"
 #include "gpu_shader_math_safe_lib.glsl"
 #include "gpu_shader_math_vector_lib.glsl"
+#include "gpu_shader_math_vector_safe_lib.glsl"
 
 namespace eevee::film {
 
@@ -77,6 +78,38 @@ float patch_float_for_16f_storage(float value)
   return uintBitsToFloat(floatBitsToUint(value) + 0x1000);
 }
 
+float4 safe_divide_even_color(float4 a, float4 b)
+{
+  a *= safe_rcp(b);
+  /* Try to get gray even if b is zero. */
+  if (b.x == 0.0f) {
+    if (b.y == 0.0f) {
+      a.x = a.z;
+      a.y = a.z;
+    }
+    else if (b.z == 0.0f) {
+      a.x = a.y;
+      a.z = a.y;
+    }
+    else {
+      a.x = 0.5f * (a.y + a.z);
+    }
+  }
+  else if (b.y == 0.0f) {
+    if (b.z == 0.0f) {
+      a.y = a.x;
+      a.z = a.x;
+    }
+    else {
+      a.y = 0.5f * (a.x + a.z);
+    }
+  }
+  else if (b.z == 0.0f) {
+    a.z = 0.5f * (a.x + a.y);
+  }
+  return a;
+}
+
 struct Film {
   [[resource_table]] srt_t<CameraVelocity> camera;
   [[resource_table]] srt_t<draw::View> views_;
@@ -104,10 +137,11 @@ struct Film {
   [[image(1, write, SFLOAT_32)]] image2DArray out_weight_img;
 
   /* Accumulation buffers. */
-  [[image(3, read_write, SFLOAT_16_16_16_16)]] image2D out_combined_img;
-  [[image(4, read_write, SFLOAT_32)]] image2D depth_img;
-  [[image(5, read_write, SFLOAT_16_16_16_16)]] image2DArray color_accum_img;
-  [[image(6, read_write, SFLOAT_16)]] image2DArray value_accum_img;
+  [[image(2, read_write, SFLOAT_16_16_16_16)]] image2D out_combined_img;
+  [[image(3, read_write, SFLOAT_32)]] image2D depth_img;
+  [[image(4, read_write, SFLOAT_16_16_16_16)]] image2DArray color_accum_img;
+  [[image(5, read_write, SFLOAT_16)]] image2DArray value_accum_img;
+  [[image(6, read_write, SFLOAT_32)]] image2D denoising_depth_img;
 
   [[resource_table]] srt_t<Cryptomatte> cryptomatte;
   [[resource_table]] srt_t<Uniform> uniforms;
@@ -630,20 +664,9 @@ struct Film {
     imageStoreFast(out_combined_img, dst.texel, color);
   }
 
-  void store_color(FilmSample dst,
-                   int pass_id,
-                   float4 color,
-                   float4 &display,
-                   bool do_clamp_negative_values = true)
+  void store_color_ex(
+      FilmSample dst, int pass_id, float4 color, float4 &display, bool do_clamp_negative_values)
   {
-    if (pass_id == -1) {
-      return;
-    }
-
-    float4 data_film = imageLoadFast(color_accum_img, int3(dst.texel, pass_id));
-
-    color = (data_film * dst.weight + color) * dst.weight_sum_inv;
-
     /* Filter NaNs. */
     if (any(isnan(color))) {
       color = float4(0.0f, 0.0f, 0.0f, 1.0f);
@@ -664,6 +687,50 @@ struct Film {
     }
     color = patch_float_for_16f_storage(color);
     imageStoreFast(color_accum_img, int3(dst.texel, pass_id), color);
+  }
+
+  void store_color(FilmSample dst,
+                   int pass_id,
+                   float4 color,
+                   float4 &display,
+                   bool do_clamp_negative_values = true)
+  {
+    if (pass_id == -1) {
+      return;
+    }
+
+    float4 data_film = imageLoadFast(color_accum_img, int3(dst.texel, pass_id));
+
+    color = (data_film * dst.weight + color) * dst.weight_sum_inv;
+
+    store_color_ex(dst, pass_id, color, display, do_clamp_negative_values);
+  }
+
+  void store_color_and_light(FilmSample dst,
+                             int color_pass_id,
+                             int light_pass_id,
+                             float4 color,
+                             float4 light,
+                             float4 &display)
+  {
+    if (color_pass_id == -1) {
+      return;
+    }
+
+    float4 color_film = imageLoadFast(color_accum_img, int3(dst.texel, color_pass_id));
+    color = (color_film * dst.weight + color) * dst.weight_sum_inv;
+    store_color_ex(dst, color_pass_id, color, display, true);
+
+    if (light_pass_id == -1) {
+      return;
+    }
+
+    float4 light_film = imageLoadFast(color_accum_img, int3(dst.texel, light_pass_id));
+    /* Undivide. */
+    light_film *= color_film;
+    light = (light_film * dst.weight + light) * dst.weight_sum_inv;
+    light = safe_divide_even_color(light, color);
+    store_color_ex(dst, light_pass_id, light, display, true);
   }
 
   void store_value(FilmSample dst, int pass_id, float value, float4 &display)
@@ -710,9 +777,35 @@ struct Film {
       return;
     }
 
-    out_depth = depth_convert_to_scene(views.get(0), value);
+    float depth_value = depth_convert_to_scene(views.get(0), value);
+    out_depth = depth_value;
 
-    imageStoreFast(depth_img, texel_film, float4(out_depth));
+    if (value == 1.0f) {
+      /* Match clear value in render_layer_allocate_pass. */
+      depth_value = 1e10f;
+    }
+
+    imageStoreFast(depth_img, texel_film, float4(depth_value));
+  }
+
+  void store_denoising_depth(FilmSample dst, float value, float4 &display)
+  {
+    [[resource_table]] const Uniform &uni = this->uniforms;
+
+    if (uni.uniform_buf.film.denoising_depth_id == -1) {
+      return;
+    }
+
+    float data_film = imageLoadFast(denoising_depth_img, dst.texel).x;
+
+    value = (data_film * dst.weight + value) * dst.weight_sum_inv;
+
+    if (uni.uniform_buf.film.display_storage_type == PASS_STORAGE_DENOISING_DEPTH &&
+        display_id == uni.uniform_buf.film.denoising_depth_id)
+    {
+      display = float4(value, value, value, 1.0f);
+    }
+    imageStoreFast(denoising_depth_img, dst.texel, float4(value));
   }
 
   void store_distance(int2 texel, float value)
@@ -807,47 +900,10 @@ struct Film {
     }
 
     if (flag_test(enabled_categories, PASS_CATEGORY_COLOR_1)) {
-      float4 diffuse_light_accum = float4(0.0f);
-      float4 specular_light_accum = float4(0.0f);
-      float4 volume_light_accum = float4(0.0f);
-      float4 emission_accum = float4(0.0f);
-
-      for (int i = 0; i < samples_len; i++) {
-        FilmSample src = sample_get(i, texel_film);
-        sample_accum(src,
-                     uni.uniform_buf.film.diffuse_light_id,
-                     uni.uniform_buf.render_pass.diffuse_light_id,
-                     rp_color_tx,
-                     diffuse_light_accum);
-        sample_accum(src,
-                     uni.uniform_buf.film.specular_light_id,
-                     uni.uniform_buf.render_pass.specular_light_id,
-                     rp_color_tx,
-                     specular_light_accum);
-        sample_accum(src,
-                     uni.uniform_buf.film.volume_light_id,
-                     uni.uniform_buf.render_pass.volume_light_id,
-                     rp_color_tx,
-                     volume_light_accum);
-        sample_accum(src,
-                     uni.uniform_buf.film.emission_id,
-                     uni.uniform_buf.render_pass.emission_id,
-                     rp_color_tx,
-                     emission_accum);
-      }
-      store_color(dst, uni.uniform_buf.film.diffuse_light_id, diffuse_light_accum, out_color);
-      store_color(dst, uni.uniform_buf.film.specular_light_id, specular_light_accum, out_color);
-      store_color(dst, uni.uniform_buf.film.volume_light_id, volume_light_accum, out_color);
-      store_color(dst, uni.uniform_buf.film.emission_id, emission_accum, out_color);
-    }
-
-    if (flag_test(enabled_categories, PASS_CATEGORY_COLOR_2)) {
       float4 diffuse_color_accum = float4(0.0f);
       float4 specular_color_accum = float4(0.0f);
-      float4 environment_accum = float4(0.0f);
-      float mist_accum = 0.0f;
-      float shadow_accum = 0.0f;
-      float ao_accum = 0.0f;
+      float4 diffuse_light_accum = float4(0.0f);
+      float4 specular_light_accum = float4(0.0f);
 
       for (int i = 0; i < samples_len; i++) {
         FilmSample src = sample_get(i, texel_film);
@@ -861,6 +917,52 @@ struct Film {
                      uni.uniform_buf.render_pass.specular_color_id,
                      rp_color_tx,
                      specular_color_accum);
+        sample_accum(src,
+                     uni.uniform_buf.film.diffuse_light_id,
+                     uni.uniform_buf.render_pass.diffuse_light_id,
+                     rp_color_tx,
+                     diffuse_light_accum);
+        sample_accum(src,
+                     uni.uniform_buf.film.specular_light_id,
+                     uni.uniform_buf.render_pass.specular_light_id,
+                     rp_color_tx,
+                     specular_light_accum);
+      }
+
+      store_color_and_light(dst,
+                            uni.uniform_buf.film.diffuse_color_id,
+                            uni.uniform_buf.film.diffuse_light_id,
+                            diffuse_color_accum,
+                            diffuse_light_accum,
+                            out_color);
+      store_color_and_light(dst,
+                            uni.uniform_buf.film.specular_color_id,
+                            uni.uniform_buf.film.specular_light_id,
+                            specular_color_accum,
+                            specular_light_accum,
+                            out_color);
+    }
+
+    if (flag_test(enabled_categories, PASS_CATEGORY_COLOR_2)) {
+      float4 environment_accum = float4(0.0f);
+      float4 volume_light_accum = float4(0.0f);
+      float4 emission_accum = float4(0.0f);
+      float mist_accum = 0.0f;
+      float shadow_accum = 0.0f;
+      float ao_accum = 0.0f;
+
+      for (int i = 0; i < samples_len; i++) {
+        FilmSample src = sample_get(i, texel_film);
+        sample_accum(src,
+                     uni.uniform_buf.film.volume_light_id,
+                     uni.uniform_buf.render_pass.volume_light_id,
+                     rp_color_tx,
+                     volume_light_accum);
+        sample_accum(src,
+                     uni.uniform_buf.film.emission_id,
+                     uni.uniform_buf.render_pass.emission_id,
+                     rp_color_tx,
+                     emission_accum);
         sample_accum(src,
                      uni.uniform_buf.film.environment_id,
                      uni.uniform_buf.render_pass.environment_id,
@@ -882,8 +984,8 @@ struct Film {
       float4 shadow_accum_color = float4(float3(shadow_accum), weight_accum);
       float4 ao_accum_color = float4(float3(ao_accum), weight_accum);
 
-      store_color(dst, uni.uniform_buf.film.diffuse_color_id, diffuse_color_accum, out_color);
-      store_color(dst, uni.uniform_buf.film.specular_color_id, specular_color_accum, out_color);
+      store_color(dst, uni.uniform_buf.film.volume_light_id, volume_light_accum, out_color);
+      store_color(dst, uni.uniform_buf.film.emission_id, emission_accum, out_color);
       store_color(dst, uni.uniform_buf.film.environment_id, environment_accum, out_color);
       store_color(dst, uni.uniform_buf.film.shadow_id, shadow_accum_color, out_color);
       store_color(dst, uni.uniform_buf.film.ambient_occlusion_id, ao_accum_color, out_color);
@@ -905,6 +1007,65 @@ struct Film {
       transparent_accum.a = weight_accum - transparent_accum.a;
 
       store_color(dst, uni.uniform_buf.film.transparent_id, transparent_accum, out_color);
+    }
+
+    if (flag_test(enabled_categories, PASS_CATEGORY_DENOISE)) {
+      float denoising_depth_accum = 0.0f;
+      float4 denoising_normal_accum = float4(0.0f);
+      float denoising_roughness_accum = 0.0f;
+      float4 denoising_diffuse_albedo_accum = float4(0.0f);
+      float4 denoising_specular_albedo_accum = float4(0.0f);
+
+      for (int i = 0; i < samples_len; i++) {
+        FilmSample src = sample_get(i, texel_film);
+        if (uni.uniform_buf.film.denoising_depth_id >= 0) {
+          float depth = reverse_z::read(texelFetch(depth_tx, src.texel, 0).x);
+          if (depth == 1.0f) {
+            /* Match clear value of depth pass. */
+            depth = 1e10f;
+          }
+          else {
+            /* Average over view space z. */
+            [[resource_table]] const draw::View &views = this->views_;
+            depth = depth_convert_to_scene(views.get(0), depth);
+          }
+          denoising_depth_accum += depth * src.weight;
+        }
+        sample_accum(src,
+                     uni.uniform_buf.film.denoising_normal_id,
+                     uni.uniform_buf.render_pass.denoising_normal_id,
+                     rp_color_tx,
+                     denoising_normal_accum);
+        sample_accum(src,
+                     uni.uniform_buf.film.denoising_roughness_id,
+                     uni.uniform_buf.render_pass.denoising_roughness_id,
+                     rp_value_tx,
+                     denoising_roughness_accum);
+        sample_accum(src,
+                     uni.uniform_buf.film.denoising_diffuse_albedo_id,
+                     uni.uniform_buf.render_pass.denoising_diffuse_albedo_id,
+                     rp_color_tx,
+                     denoising_diffuse_albedo_accum);
+        sample_accum(src,
+                     uni.uniform_buf.film.denoising_specular_albedo_id,
+                     uni.uniform_buf.render_pass.denoising_specular_albedo_id,
+                     rp_color_tx,
+                     denoising_specular_albedo_accum);
+      }
+
+      store_denoising_depth(dst, denoising_depth_accum, out_color);
+      store_color(
+          dst, uni.uniform_buf.film.denoising_normal_id, denoising_normal_accum, out_color, false);
+      store_value(
+          dst, uni.uniform_buf.film.denoising_roughness_id, denoising_roughness_accum, out_color);
+      store_color(dst,
+                  uni.uniform_buf.film.denoising_diffuse_albedo_id,
+                  denoising_diffuse_albedo_accum,
+                  out_color);
+      store_color(dst,
+                  uni.uniform_buf.film.denoising_specular_albedo_id,
+                  denoising_specular_albedo_accum,
+                  out_color);
     }
 
     if (flag_test(enabled_categories, PASS_CATEGORY_AOV)) {
@@ -965,7 +1126,7 @@ struct FilmDisplay {
   [[push_constant]] bool display_only;
 };
 
-/* Accumulate and output to the render framebuffer.
+/* Accumulate and output to the render frame-buffer.
  * Used for viewport. */
 [[fragment]]
 void accumulate_or_display_frag([[resource_table]] const FilmDisplay &srt,
@@ -994,9 +1155,13 @@ void accumulate_or_display_frag([[resource_table]] const FilmDisplay &srt,
     else if (uni.uniform_buf.film.display_storage_type == PASS_STORAGE_COLOR) {
       frag_out.color = imageLoadFast(film.color_accum_img, int3(texel_film, film.display_id));
     }
-    else /* PASS_STORAGE_CRYPTOMATTE */ {
+    else if (uni.uniform_buf.film.display_storage_type == PASS_STORAGE_CRYPTOMATTE) {
       frag_out.color = cryptomatte::false_color(
           imageLoadFast(cryptomatte.cryptomatte_img, int3(texel_film, film.display_id)).r);
+    }
+    else /* PASS_STORAGE_DENOISING_DEPTH */ {
+      frag_out.color.rgb = imageLoadFast(film.denoising_depth_img, texel_film).rrr;
+      frag_out.color.a = 1.0f;
     }
   }
   else {
@@ -1037,9 +1202,12 @@ void display_frag([[resource_table]] Film &film,
   else if (uni.uniform_buf.film.display_storage_type == PASS_STORAGE_COLOR) {
     frag_out.color = imageLoadFast(film.color_accum_img, int3(texel, film.display_id));
   }
-  else /* PASS_STORAGE_CRYPTOMATTE */ {
+  else if (uni.uniform_buf.film.display_storage_type == PASS_STORAGE_CRYPTOMATTE) {
     frag_out.color = cryptomatte::false_color(
         imageLoadFast(cryptomatte.cryptomatte_img, int3(texel, film.display_id)).r);
+  }
+  else /* PASS_STORAGE_DENOISING_DEPTH */ {
+    frag_out.color = imageLoadFast(film.denoising_depth_img, texel);
   }
 
   out_depth = imageLoadFast(film.depth_img, texel).r;

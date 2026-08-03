@@ -4,13 +4,13 @@
 
 #include <cstring>
 
-#include "BLI_assert.h"
+#include "BLI_assert.hh"
 #include "BLI_cpp_type.hh"
 #include "BLI_generic_pointer.hh"
 #include "BLI_index_range.hh"
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 #include "BLI_path_utils.hh"
-#include "BLI_string.h"
+#include "BLI_string.hh"
 
 #include "BLT_translation.hh"
 
@@ -107,7 +107,7 @@ static void node_init(const bContext *C, PointerRNA *node_pointer)
   node->storage = data;
   data->save_as_render = true;
   data->use_file_extension = true;
-  data->file_name = BLI_strdup(DATA_("{blend_name}"));
+  data->file_name = BLI_strdup("{blend_name}");
 
   BKE_image_format_init(&data->format);
   BKE_image_format_media_type_set(
@@ -266,7 +266,8 @@ static void output_path_layout(ui::Layout &layout,
   }
   else {
     for (const bke::path_templates::Error &error : path_errors) {
-      layout.label(BKE_path_template_error_to_string(error, image_path).c_str(), ICON_ERROR);
+      layout.label(BKE_path_template_error_to_string(error, image_path).c_str(),
+                   ICON_STATUS_ERROR);
     }
   }
 }
@@ -401,7 +402,7 @@ static void node_extra_info(NodeExtraInfoParams &parameters)
     NodeExtraInfoRow row;
     row.text = RPT_("Node Unsupported");
     row.tooltip = TIP_("The File Output node is only supported for scene compositing");
-    row.icon = ICON_ERROR;
+    row.icon = ICON_STATUS_ERROR;
     parameters.rows.append(std::move(row));
   }
 }

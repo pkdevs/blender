@@ -11,8 +11,7 @@
 #include "DNA_vec_types.h"
 #include "DNA_windowmanager_types.h"
 
-#include "BLI_math_vector.h"
-#include "BLI_rect.h"
+#include "BLI_rect.hh"
 
 #include "GHOST_IWindow.hh"
 
@@ -228,7 +227,7 @@ void WM_window_csd_draw_titlebar_ex(const int win_size[2],
 
       for (int i = 0; i < ARRAY_SIZE(button_types); i++) {
         const GHOST_TCSD_Type ty = button_types[i];
-        if (UNLIKELY(csd_elems[ty].type == GHOST_kCSDTypeBody)) {
+        if (csd_elems[ty].type == GHOST_kCSDTypeBody) [[unlikely]] {
           continue;
         }
         const rcti butrect = {
@@ -252,7 +251,7 @@ void WM_window_csd_draw_titlebar_ex(const int win_size[2],
                                                                fractional_scale);
     for (int i = 0; i < ARRAY_SIZE(button_types); i++) {
       const GHOST_TCSD_Type ty = button_types[i];
-      if (UNLIKELY(csd_elems[ty].type == GHOST_kCSDTypeBody)) {
+      if (csd_elems[ty].type == GHOST_kCSDTypeBody) [[unlikely]] {
         continue;
       }
       const rcti butrect = {
@@ -287,15 +286,12 @@ void WM_window_csd_draw_titlebar(const wmWindow *win)
   const char *title = window_title.c_str();
   const bool is_active = (win->active != 0);
 
-  uchar border_color[3], text_color[3];
+  const bScreen *screen = WM_window_get_active_screen(win);
+  wm_window_titlebar_theme_context_set(win, screen);
 
-  /* NOTE(@ideasman42): avoid theme functions as #blender::ui::theme::theme_set
-   * won't have run after loading factory settings, see: #152138.
-   * Access the theme directly as this will probably be replaced by something else,
-   * it's better other parts of Blender don't unintentionally rely on the theme being set here. */
-  const bTheme &theme = *static_cast<const bTheme *>(U.themes.first);
-  copy_v3_v3_uchar(border_color, theme.space_view3d.header);
-  copy_v3_v3_uchar(text_color, theme.space_view3d.text_hi);
+  uchar border_color[3], text_color[3];
+  ui::theme::get_color_3ubv(TH_BACK, border_color);
+  ui::theme::get_color_3ubv(TH_TEXT_HI, text_color);
 
   const uiStyle *style = ui::style_get_dpi();
   const uiFontStyle &fstyle = style->paneltitle;

@@ -16,9 +16,9 @@
 #include "DNA_scene_types.h"
 #include "DNA_screen_types.h"
 
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 #include "BLI_span.hh"
-#include "BLI_utildefines.h"
+#include "BLI_utildefines.hh"
 #include "BLI_vector.hh"
 
 #include "BKE_attribute.hh"
@@ -436,12 +436,7 @@ static void multiresbake_freejob(void *bkv)
   data = static_cast<MultiresBakerJobData *>(bkj->data.first);
   while (data) {
     next = data->next;
-
     /* delete here, since this delete will be called from main thread */
-    for (Image *image : data->images) {
-      BKE_image_partial_update_mark_full_update(image);
-    }
-
     MEM_delete(data);
     data = next;
   }

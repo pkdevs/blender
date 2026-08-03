@@ -21,10 +21,10 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_ghash.h"
-#include "BLI_listbase.h"
-#include "BLI_string_utf8.h"
-#include "BLI_utildefines.h"
+#include "BLI_ghash.hh"
+#include "BLI_listbase.hh"
+#include "BLI_string_utf8.hh"
+#include "BLI_utildefines.hh"
 
 #include "BLT_translation.hh"
 
@@ -187,7 +187,7 @@ static void window_manager_blend_read_data(BlendDataReader *reader, ID *id)
 
     /* Multi-view always falls back to anaglyph at file opening
      * otherwise quad-buffer saved files can break Blender. */
-    if (win.stereo3d_format) {
+    if (win.stereo3d_format && win.stereo3d_format->display_mode == S3D_DISPLAY_PAGEFLIP) {
       win.stereo3d_format->display_mode = S3D_DISPLAY_ANAGLYPH;
     }
     win.runtime = MEM_new<bke::WindowRuntime>(__func__);
@@ -494,6 +494,9 @@ void WM_check(bContext *C)
       WM_file_autosave_init(wm);
     }
 
+    /* Initialize GPU backend for GHOST before opening windows. */
+    WM_init_gpu_backend();
+
     /* Case: no open windows at all, for old file reads. */
     wm_window_ghostwindows_ensure(wm);
   }
@@ -577,8 +580,11 @@ void wm_close_and_free(bContext *C, wmWindowManager *wm)
   wm_xr_data_free(wm);
 
   while (wmWindow *win = static_cast<wmWindow *>(BLI_pophead(&wm->windows))) {
-    /* Prevent draw clear to use screen. */
-    BKE_workspace_active_set(win->workspace_hook, nullptr);
+    /* Prevent draw clear to use screen. `workspace_hook` may be null for a window that was not
+     * completely read from an invalid file. */
+    if (win->workspace_hook != nullptr) {
+      BKE_workspace_active_set(win->workspace_hook, nullptr);
+    }
     wm_window_free(C, wm, win);
   }
 

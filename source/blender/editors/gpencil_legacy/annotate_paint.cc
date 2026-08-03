@@ -14,10 +14,10 @@
 #include "MEM_guardedalloc.h"
 
 #include "BLI_enum_flags.hh"
-#include "BLI_listbase.h"
-#include "BLI_math_geom.h"
-#include "BLI_math_matrix.h"
-#include "BLI_time.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_geom_c.hh"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_time.hh"
 
 #include "BLT_translation.hh"
 
@@ -1610,7 +1610,7 @@ static void annotation_paint_initstroke(tGPsdata *p,
       if (rv3d->persp == RV3D_CAMOB) {
         /* no shift */
         ED_view3d_calc_camera_border(
-            p->scene, depsgraph, p->region, v3d, rv3d, true, &p->subrect_data);
+            p->scene, depsgraph, p->region, v3d, rv3d, true, true, &p->subrect_data);
         p->subrect = &p->subrect_data;
       }
     }

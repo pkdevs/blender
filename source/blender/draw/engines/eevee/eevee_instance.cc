@@ -14,8 +14,8 @@
 #include "BKE_object.hh"
 #include "BKE_scene.hh"
 
-#include "BLI_rect.h"
-#include "BLI_time.h"
+#include "BLI_rect.hh"
+#include "BLI_time.hh"
 
 #include "BLT_translation.hh"
 
@@ -95,7 +95,8 @@ void Instance::init()
         else {
           rctf viewborder;
           /* TODO(fclem) Might be better to get it from DRW. */
-          ED_view3d_calc_camera_border(scene, depsgraph, region, v3d, rv3d, false, &viewborder);
+          ED_view3d_calc_camera_border(
+              scene, depsgraph, region, v3d, rv3d, false, true, &viewborder);
           float viewborder_sizex = BLI_rctf_size_x(&viewborder);
           float viewborder_sizey = BLI_rctf_size_y(&viewborder);
           rect.xmin = floorf(viewborder.xmin + (scene->r.border.xmin * viewborder_sizex));
@@ -204,6 +205,17 @@ void Instance::init(const int2 &output_res,
     is_image_render = true;
   }
 
+  rcti lookdev_rect = *visible_rect;
+  if (is_viewport() && v3d && rv3d && rv3d->persp == RV3D_CAMOB && v3d->camera &&
+      !draw_ctx->is_viewport_image_render() && !draw_ctx->is_viewport_xr())
+  {
+    rctf camera_border;
+    /* Anchor reference spheres to camera border. */
+    ED_view3d_calc_camera_border(
+        scene, depsgraph, draw_ctx->region, v3d, rv3d, false, false, &camera_border);
+    BLI_rcti_rctf_copy(&lookdev_rect, &camera_border);
+  }
+
   anisotropic_filtering = GPU_anisotropic_filtering_flags(scene->r.anisotropic_filter);
 
   sampling.init(scene);
@@ -223,7 +235,7 @@ void Instance::init(const int2 &output_res,
   sphere_probes.init();
   volume_probes.init();
   volume.init();
-  lookdev.init(visible_rect);
+  lookdev.init(&lookdev_rect);
 
   /* Request static shaders */
   ShaderGroups shader_request = DEFERRED_LIGHTING_SHADERS | SHADOW_SHADERS | FILM_SHADERS |
@@ -459,7 +471,11 @@ void Instance::end_sync()
     loaded_shaders |= shaders.static_shaders_wait_ready(request_bits);
   }
 
-  materials.end_sync();
+  /* Reset temporal accumulation if new textures will be loaded this frame to avoid ghosting. */
+  if (is_viewport() && manager->has_deferred_textures()) {
+    sampling.reset();
+  }
+
   velocity.end_sync();
   volume.end_sync();  /* Needs to be before shadows. */
   shadows.end_sync(); /* Needs to be before lights. */
@@ -821,6 +837,12 @@ void Instance::update_passes(RenderEngine *engine, Scene *scene, ViewLayer *view
         engine, scene, view_layer, RE_PASSNAME_##name, channels, chanid, type); \
   } \
   ((void)0)
+#define CHECK_PASS_DENOISING(name, type, channels, chanid) \
+  if (view_layer->eevee.denoising_pass_flags & (EEVEE_DENOISING_PASS_STORE)) { \
+    RE_engine_register_pass( \
+        engine, scene, view_layer, RE_PASSNAME_##name, channels, chanid, type); \
+  } \
+  ((void)0)
 
   CHECK_PASS_LEGACY(DEPTH, SOCK_FLOAT, 1, "Z");
   CHECK_PASS_LEGACY(MIST, SOCK_FLOAT, 1, "Z");
@@ -837,6 +859,11 @@ void Instance::update_passes(RenderEngine *engine, Scene *scene, ViewLayer *view
   CHECK_PASS_LEGACY(SHADOW, SOCK_RGBA, 3, "RGB");
   CHECK_PASS_LEGACY(AO, SOCK_RGBA, 3, "RGB");
   CHECK_PASS_EEVEE(TRANSPARENT, SOCK_RGBA, 4, "RGBA");
+  CHECK_PASS_DENOISING(DENOISING_DEPTH, SOCK_FLOAT, 1, "X");
+  CHECK_PASS_DENOISING(DENOISING_NORMAL, SOCK_VECTOR, 3, "XYZ");
+  CHECK_PASS_DENOISING(DENOISING_ROUGHNESS, SOCK_FLOAT, 1, "X");
+  CHECK_PASS_DENOISING(DENOISING_DIFFUSE_ALBEDO, SOCK_RGBA, 3, "RGB");
+  CHECK_PASS_DENOISING(DENOISING_SPECULAR_ALBEDO, SOCK_RGBA, 3, "RGB");
 
   for (ViewLayerAOV &aov : view_layer->aovs) {
     if ((aov.flag & AOV_CONFLICT) != 0) {
