@@ -2259,13 +2259,13 @@ static int area_snap_calc_location(sAreaMoveData *md, const int delta)
         if (md->area2 && md->area2->spacetype == SPACE_CONSOLE) {
           /* Minimal snap for Console below. */
           SpaceConsole *console = static_cast<SpaceConsole *>(md->area2->spacedata.first);
-          snaps.append(m_min + int(float(console->lheight) * UI_SCALE_FAC * 1.5f));
+          snaps.append(m_min + int(float(console->line_height) * UI_SCALE_FAC * 1.5f));
         }
         if (md->area1 && md->area1->spacetype == SPACE_CONSOLE) {
           /* Maximal snap for Console above. */
           SpaceConsole *console = static_cast<SpaceConsole *>(md->area1->spacedata.first);
           snaps.append(md->origval + md->bigger -
-                       int(float(console->lheight) * UI_SCALE_FAC * 1.5f));
+                       int(float(console->line_height) * UI_SCALE_FAC * 1.5f));
         }
       }
 
@@ -6767,10 +6767,13 @@ bScreen *ED_screen_animation_no_scrub(const wmWindowManager *wm)
   return nullptr;
 }
 
-static void stop_playback(bContext *C)
+void screen_stop_playback(Main *bmain, wmWindowManager *wm, wmWindow *win, bScreen *screen)
 {
-  Main *bmain = CTX_data_main(C);
-  bScreen *screen = ED_screen_animation_playing(CTX_wm_manager(C));
+  if (!screen || !screen->animtimer) {
+    /* Allow calls without knowing whether animation is actually running or not. */
+    return;
+  }
+
   wmTimer *wt = screen->animtimer;
   ScreenAnimData *sad = static_cast<ScreenAnimData *>(wt->customdata);
   Scene *scene = sad->scene;
@@ -6786,20 +6789,28 @@ static void stop_playback(bContext *C)
     BKE_sound_stop_scene(scene_eval);
   }
 
-  ED_screen_animation_timer(C, scene, view_layer, 0, 0, 0);
+  ED_screen_animation_timer_remove(wm, win);
   ED_scene_fps_average_clear(scene);
   BKE_callback_exec_id_depsgraph(bmain, &scene->id, depsgraph, BKE_CB_EVT_ANIMATION_PLAYBACK_POST);
 
   /* Send a fake mouse-move event so that the active button (the one the mouse hovers over) is
    * updated for the change in playback buttons (Pause button disappearing, Reverse/Normal playback
    * buttons appearing). */
-  WM_event_add_mousemove(CTX_wm_window(C));
+  WM_event_add_mousemove(win);
 
   /* Triggers redraw of sequencer preview so that it does not show to fps anymore after stopping
    * playback. */
-  WM_event_add_notifier(C, NC_SPACE | ND_SPACE_SEQUENCER, scene);
-  WM_event_add_notifier(C, NC_SPACE | ND_SPACE_SPREADSHEET, scene);
-  WM_event_add_notifier(C, NC_SCENE | ND_TRANSFORM, scene);
+  WM_event_add_notifier_ex(wm, win, NC_SPACE | ND_SPACE_SEQUENCER, scene);
+  WM_event_add_notifier_ex(wm, win, NC_SPACE | ND_SPACE_SPREADSHEET, scene);
+  WM_event_add_notifier_ex(wm, win, NC_SCENE | ND_TRANSFORM, scene);
+  WM_event_add_notifier_ex(wm, win, NC_SCREEN | ND_ANIMPLAY, nullptr);
+}
+
+static void stop_playback(bContext *C)
+{
+  wmWindowManager *wm = CTX_wm_manager(C);
+  bScreen *stopscreen = ED_screen_animation_playing(wm);
+  screen_stop_playback(CTX_data_main(C), wm, CTX_wm_window(C), stopscreen);
 }
 
 static wmOperatorStatus start_playback(bContext *C, int sync, int mode)
@@ -6813,6 +6824,14 @@ static wmOperatorStatus start_playback(bContext *C, int sync, int mode)
     return OPERATOR_CANCELLED;
   }
 
+  /* The anim timer MUST be created before the 'jump to the start frame' code below executes. The
+   * anim timer data structure also contains the 'started from' frame, which gets restored on
+   * cancelling the playback, and that should be the actual current frame, not the one that's set
+   * below. */
+  ViewLayer *view_layer = is_sequencer ? BKE_view_layer_default_render(scene) :
+                                         CTX_data_view_layer(C);
+  ED_screen_animation_timer(C, scene, view_layer, screen->redraws_flag, sync, mode);
+
   /* The SCE_LOOP_MODE_STOP_END_FRAME loop mode is special: playback should stop at the end frame,
    * but when playback starts, in this mode, already at the end frame, it should actually start
    * playback from the start frame. This way, you can repeatedly play back the scene, each time
@@ -6825,11 +6844,10 @@ static wmOperatorStatus start_playback(bContext *C, int sync, int mode)
       const int start_frame = is_playing_forward ? scene->playback_start() : scene->playback_end();
       scene->r.cfra = start_frame;
       scene->r.subframe = 0.0f;
+      DEG_id_tag_update(&scene->id, ID_RECALC_FRAME_CHANGE);
     }
   }
 
-  ViewLayer *view_layer = is_sequencer ? BKE_view_layer_default_render(scene) :
-                                         CTX_data_view_layer(C);
   Depsgraph *depsgraph = is_sequencer ? BKE_scene_ensure_depsgraph(bmain, scene, view_layer) :
                                         CTX_data_ensure_evaluated_depsgraph(C);
   if (is_sequencer) {
@@ -6844,7 +6862,6 @@ static wmOperatorStatus start_playback(bContext *C, int sync, int mode)
     BKE_sound_play_scene(scene_eval);
   }
 
-  ED_screen_animation_timer(C, scene, view_layer, screen->redraws_flag, sync, mode);
   ED_scene_fps_average_clear(scene);
 
   if (screen->animtimer) {
@@ -6870,6 +6887,50 @@ wmOperatorStatus ED_screen_animation_play(bContext *C, int sync, int mode)
   }
 
   return start_playback(C, sync, mode);
+}
+
+/* If any screen is playing animation, stops playback and returns its flags as a #PreScrubbingState
+ * to resume later. always sets `screen.scrubbing` to true regardless of whether playback was
+ * active. */
+std::optional<PreScrubbingState> ED_screen_scrubbing_enable(bContext &C, bScreen &screen)
+{
+  BLI_assert_msg(!screen.scrubbing, "scrubbing should not be active yet");
+  screen.scrubbing = true;
+
+  wmWindowManager *wm = CTX_wm_manager(&C);
+  bScreen *play_screen = ED_screen_animation_no_scrub(wm);
+
+  if (!play_screen || !play_screen->animtimer) {
+    return std::nullopt;
+  }
+  const ScreenAnimData *sad = static_cast<ScreenAnimData *>(play_screen->animtimer->customdata);
+  if (sad == nullptr) {
+    return std::nullopt;
+  }
+
+  PreScrubbingState resume;
+  resume.play_mode = (sad->flag & ANIMPLAY_FLAG_REVERSE) ? PlaybackDirection::BACKWARDS :
+                                                           PlaybackDirection::FORWARDS;
+  resume.play_sync = (sad->flag & ANIMPLAY_FLAG_SYNC) ?
+                         PlaySyncMode::ON :
+                         ((sad->flag & ANIMPLAY_FLAG_NO_SYNC) ? PlaySyncMode::OFF :
+                                                                PlaySyncMode::UNCHANGED);
+
+  screen_stop_playback(CTX_data_main(&C), wm, CTX_wm_window(&C), play_screen);
+
+  return resume;
+}
+
+void ED_screen_scrubbing_disable(bContext &C,
+                                 bScreen &screen,
+                                 const std::optional<PreScrubbingState> &resume)
+{
+  BLI_assert_msg(screen.scrubbing, "scrubbing should be active");
+  screen.scrubbing = false;
+
+  if (resume.has_value()) {
+    ED_screen_animation_play(&C, int(resume->play_sync), int(resume->play_mode));
+  }
 }
 
 static wmOperatorStatus screen_animation_play_exec(bContext *C, wmOperator *op)
@@ -7189,6 +7250,8 @@ static void SCREEN_OT_userpref_show(wmOperatorType *ot)
                       "Section to activate in the Preferences");
   RNA_def_property_flag(prop, PROP_HIDDEN);
 }
+
+/** \} */
 
 /* -------------------------------------------------------------------- */
 /** \name Show Project Setup Operator

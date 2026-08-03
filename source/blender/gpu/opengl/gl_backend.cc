@@ -312,6 +312,11 @@ void GLBackend::platform_init()
       std::cout << "Error: The OpenGL implementation doesn't support ARB_clip_control\n";
       support_level = GPU_SUPPORT_LEVEL_UNSUPPORTED;
     }
+
+    if (!epoxy_has_gl_extension("GL_ARB_get_texture_sub_image")) {
+      std::cout << "Error: The OpenGL implementation doesn't support ARB_get_texture_sub_image\n";
+      support_level = GPU_SUPPORT_LEVEL_UNSUPPORTED;
+    }
   }
 
   /* Compute shaders have some issues with those versions (see #94936). */
@@ -605,7 +610,6 @@ GLint GLContext::max_ssbo_binds = 0;
 
 bool GLContext::debug_layer_support = false;
 bool GLContext::direct_state_access_support = false;
-bool GLContext::explicit_location_support = false;
 bool GLContext::framebuffer_fetch_support = false;
 bool GLContext::layered_rendering_support = false;
 bool GLContext::vertex_shader_viewport_index_support = false;
@@ -622,7 +626,6 @@ bool GLContext::derivative_control_support = false;
 
 bool GLContext::debug_layer_workaround = false;
 bool GLContext::unused_fb_slot_workaround = false;
-bool GLContext::generate_mipmap_workaround = false;
 
 void GLBackend::capabilities_init()
 {
@@ -684,7 +687,6 @@ void GLBackend::capabilities_init()
                                    epoxy_has_gl_extension("GL_KHR_debug") ||
                                    epoxy_has_gl_extension("GL_ARB_debug_output");
   GLContext::direct_state_access_support = epoxy_has_gl_extension("GL_ARB_direct_state_access");
-  GLContext::explicit_location_support = epoxy_gl_version() >= 43;
   GLContext::framebuffer_fetch_support = epoxy_has_gl_extension("GL_EXT_shader_framebuffer_fetch");
   GLContext::texture_barrier_support = epoxy_has_gl_extension("GL_ARB_texture_barrier");
   GLContext::layered_rendering_support = epoxy_has_gl_extension(
@@ -821,14 +823,12 @@ void GLBackend::log_workarounds()
   CLOG_DEBUG(&LOG,
              "OpenGL Workarounds\n"
              " - [%c] Debug layer workaround\n"
-             " - [%c] Generate mipmap workaround\n"
              " - [%c] Unused framebuffer slot workaround\n"
              " - [%c] Depth blitting workaround\n"
              " - [%c] Stencil classify buffer workaround\n"
              " - [%c] High-quality normals\n"
              " - [%c] Use main context\n",
              GLContext::debug_layer_workaround ? 'X' : ' ',
-             GLContext::generate_mipmap_workaround ? 'X' : ' ',
              GLContext::unused_fb_slot_workaround ? 'X' : ' ',
              GCaps.depth_blitting_workaround ? 'X' : ' ',
              GCaps.stencil_clasify_buffer_workaround ? 'X' : ' ',

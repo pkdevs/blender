@@ -1086,6 +1086,7 @@ static wmOperatorStatus grease_pencil_set_active_material_exec(bContext *C, wmOp
     const VArray<int> materials = *curves.attributes().lookup_or_default<int>(
         "material_index", bke::AttrDomain::Curve, 0);
     object->actcol = materials[strokes.first()] + 1;
+    BKE_object_material_active_index_sanitize(object);
     break;
   };
 
@@ -2077,8 +2078,12 @@ static wmOperatorStatus grease_pencil_move_to_layer_exec(bContext *C, wmOperator
     }
 
     if (has_active_key && is_key_inserted) {
+      /* If we inserted new key frame on target layer, then it means target layer/drawing was newly
+       * created, so we move strokes to that drawing instead, otherwise insert to their original
+       * frames. */
+      const int frame_number_dst = is_key_inserted ? scene->r.cfra : info.frame_number;
       /* Move geometry to a new drawing in target layer. */
-      Drawing &drawing_dst = *grease_pencil.get_drawing_at(layer_dst, info.frame_number);
+      Drawing &drawing_dst = *grease_pencil.get_drawing_at(layer_dst, frame_number_dst);
       drawing_dst.strokes_for_write() = bke::curves_copy_curve_selection(
           curves_src, selected_strokes, {});
 
@@ -5807,7 +5812,7 @@ static void join_object_with_active(Main &bmain,
         if (name_dst != name_src) {
           const char *old_path = fcu->rna_path;
           fcu->rna_path = BKE_animsys_fix_rna_path_rename(
-              id, fcu->rna_path, "layers", name_src.c_str(), name_dst.c_str(), 0, 0, false);
+              id, fcu->rna_path, "layers", name_src, name_dst);
           if (old_path != fcu->rna_path) {
             /* Stop after first match. */
             break;
@@ -5828,9 +5833,9 @@ static void join_object_with_active(Main &bmain,
           if (dtar->rna_path && strstr(dtar->rna_path, "layers[")) {
             for (auto [name_src, name_dst] : layer_name_map.items()) {
               if (name_dst != name_src) {
-                const char *old_path = fcu->rna_path;
+                const char *old_path = dtar->rna_path;
                 dtar->rna_path = BKE_animsys_fix_rna_path_rename(
-                    id, dtar->rna_path, "layers", name_src.c_str(), name_dst.c_str(), 0, 0, false);
+                    id, dtar->rna_path, "layers", name_src, name_dst);
                 if (old_path != dtar->rna_path) {
                   break;
                 }
