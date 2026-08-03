@@ -6292,7 +6292,7 @@ static void rna_def_space_properties(BlenderRNA *brna)
   RNA_def_property_boolean_default(prop, true);
   RNA_def_property_editable_func(prop, "rna_SpaceProperties_show_context_editable");
   RNA_def_property_ui_text(
-      prop, "Show Context Path and Pin", "Show context path and pinning panel");
+      prop, "Show Context Path and Pin", "Display breadcrumbs for the properties contex");
   RNA_def_property_update(prop, NC_SPACE | ND_SPACE_PROPERTIES, nullptr);
 
   /* Property search. */

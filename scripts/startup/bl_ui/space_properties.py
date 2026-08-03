@@ -113,15 +113,18 @@ class PROPERTIES_PT_options(Panel):
 
     def draw(self, context):
         layout = self.layout
-
         space = context.space_data
 
         col = layout.column()
         col.label(text="Sync with Outliner")
         col.row().prop(space, "outliner_sync", expand=True)
 
-        col.prop(space, "show_context_path")
-        col.prop(space, "use_pin_id", text="Pin Context")
+        layout.separator()
+
+        layout.use_property_split = True
+        col = layout.column(heading="Context")
+        col.prop(space, "use_pin_id", text="Pin Properties")
+        col.prop(space, "show_context_path", text="Path")
 
 
 class PropertiesAnimationMixin:
