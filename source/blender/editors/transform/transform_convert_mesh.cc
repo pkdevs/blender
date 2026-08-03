@@ -1178,136 +1178,67 @@ void transform_convert_mesh_connectivity_distance(BMesh *bm,
 /** \name TransDataMirror Creation
  * \{ */
 
-/* Used for both mirror epsilon and TD_MIRROR_EDGE_ */
+/* Used for TD_MIRROR_EDGE_ proximity-to-plane test. */
 #define TRANSFORM_MAXDIST_MIRROR 0.00002f
 
-static bool is_in_quadrant_v3(const float co[3], const int quadrant[3], const float epsilon)
-{
-  if (quadrant[0] && ((co[0] * quadrant[0]) < -epsilon)) {
-    return false;
-  }
-  if (quadrant[1] && ((co[1] * quadrant[1]) < -epsilon)) {
-    return false;
-  }
-  if (quadrant[2] && ((co[2] * quadrant[2]) < -epsilon)) {
-    return false;
-  }
-  return true;
-}
-
-void transform_convert_mesh_mirrordata_calc(BMEditMesh *em,
-                                            const bool use_select,
-                                            const bool use_topology,
-                                            const bool mirror_axis[3],
+void transform_convert_mesh_mirrordata_calc(Object *obedit,
+                                            BMEditMesh *em,
                                             TransMirrorData *r_mirror_data)
 {
-  MirrorDataVert *vert_map;
+  r_mirror_data->vert_map = nullptr;
+  r_mirror_data->mirror_elem_len = 0;
+
+  std::optional<EditMeshSymmetryHelper> symmetry_helper =
+      EditMeshSymmetryHelper::create_if_needed(obedit, BM_VERT);
+  if (!symmetry_helper) {
+    return;
+  }
 
   BMesh *bm = em->bm;
+  BM_mesh_elem_index_ensure(bm, BM_VERT);
+
+  const int totvert = bm->totvert;
+  MirrorDataVert *vert_map = MEM_new_array_zeroed<MirrorDataVert>(totvert, __func__);
+
   BMVert *eve;
   BMIter iter;
-  int i, flag, totvert = bm->totvert;
-
-  vert_map = MEM_new_array_zeroed<MirrorDataVert>(totvert, __func__);
-
-  float select_sum[3] = {0};
+  int i;
   BM_ITER_MESH_INDEX (eve, &iter, bm, BM_VERTS_OF_MESH, i) {
     vert_map[i] = MirrorDataVert{-1, 0};
+  }
+
+  uint mirror_elem_len = 0;
+  BM_ITER_MESH_INDEX (eve, &iter, bm, BM_VERTS_OF_MESH, i) {
     if (BM_elem_flag_test(eve, BM_ELEM_HIDDEN)) {
       continue;
     }
     if (BM_elem_flag_test(eve, BM_ELEM_SELECT)) {
-      add_v3_v3(select_sum, eve->co);
+      continue;
     }
-  }
-
-  /* Tag only elements that will be transformed within the quadrant. */
-  int quadrant[3];
-  for (int a = 0; a < 3; a++) {
-    if (mirror_axis[a]) {
-      quadrant[a] = select_sum[a] >= 0.0f ? 1 : -1;
-    }
-    else {
-      quadrant[a] = 0;
-    }
-  }
-
-  uint mirror_elem_len = 0;
-  int *index[3] = {nullptr, nullptr, nullptr};
-  bool is_single_mirror_axis = (mirror_axis[0] + mirror_axis[1] + mirror_axis[2]) == 1;
-  bool test_selected_only = use_select && is_single_mirror_axis;
-  for (int a = 0; a < 3; a++) {
-    if (!mirror_axis[a]) {
+    if (!BM_elem_flag_test(eve, BM_ELEM_MIRRORED_SELECT)) {
       continue;
     }
 
-    index[a] = MEM_new_array_uninitialized<int>(totvert, __func__);
-    EDBM_verts_mirror_cache_begin_ex(
-        em, a, false, test_selected_only, true, use_topology, TRANSFORM_MAXDIST_MIRROR, index[a]);
-
-    flag = TD_MIRROR_X << a;
-    BM_ITER_MESH_INDEX (eve, &iter, bm, BM_VERTS_OF_MESH, i) {
-      int i_mirr = index[a][i];
-      if (i_mirr < 0) {
-        continue;
+    BMVert *v_src = nullptr;
+    symmetry_helper->apply_on_mirror_verts(eve, [&v_src](BMVert *v_mirr) {
+      if (!v_src && BM_elem_flag_test(v_mirr, BM_ELEM_SELECT) &&
+          !BM_elem_flag_test(v_mirr, BM_ELEM_HIDDEN))
+      {
+        v_src = v_mirr;
       }
-      if (BM_elem_flag_test(eve, BM_ELEM_HIDDEN)) {
-        continue;
-      }
-      if (use_select && !BM_elem_flag_test(eve, BM_ELEM_SELECT)) {
-        continue;
-      }
-      if (!is_in_quadrant_v3(eve->co, quadrant, TRANSFORM_MAXDIST_MIRROR)) {
-        continue;
-      }
-      if (vert_map[i_mirr].flag != 0) {
-        /* One mirror per element.
-         * It can happen when vertices occupy the same position. */
-        continue;
-      }
-      if (vert_map[i].flag & flag) {
-        /* It's already a mirror.
-         * Avoid a mirror vertex dependency cycle.
-         * This can happen when the vertices are within the mirror threshold. */
-        continue;
-      }
-
-      vert_map[i_mirr] = MirrorDataVert{i, flag};
-      mirror_elem_len++;
+    });
+    if (!v_src) {
+      continue;
     }
+
+    vert_map[i] = MirrorDataVert{BM_elem_index_get(v_src), 0};
+    mirror_elem_len++;
   }
 
   if (!mirror_elem_len) {
     MEM_delete(vert_map);
     vert_map = nullptr;
   }
-  else if (!is_single_mirror_axis) {
-    /* Adjustment for elements that are mirrors of mirrored elements. */
-    for (int a = 0; a < 3; a++) {
-      if (!mirror_axis[a]) {
-        continue;
-      }
-
-      flag = TD_MIRROR_X << a;
-      for (i = 0; i < totvert; i++) {
-        int i_mirr = index[a][i];
-        if (i_mirr < 0) {
-          continue;
-        }
-        if (vert_map[i].index != -1 && !(vert_map[i].flag & flag)) {
-          if (vert_map[i_mirr].index == -1) {
-            mirror_elem_len++;
-          }
-          vert_map[i_mirr].index = vert_map[i].index;
-          vert_map[i_mirr].flag |= vert_map[i].flag | flag;
-        }
-      }
-    }
-  }
-
-  MEM_SAFE_DELETE(index[0]);
-  MEM_SAFE_DELETE(index[1]);
-  MEM_SAFE_DELETE(index[2]);
 
   r_mirror_data->vert_map = vert_map;
   r_mirror_data->mirror_elem_len = mirror_elem_len;
@@ -1486,7 +1417,6 @@ static void createTransEditVerts(bContext * /*C*/, TransInfo *t)
   FOREACH_TRANS_DATA_CONTAINER (t, tc) {
     TransDataExtension *tx = nullptr;
     BMEditMesh *em = BKE_editmesh_from_object(tc->obedit);
-    Mesh *mesh = id_cast<Mesh *>(tc->obedit->data);
     BMesh *bm = em->bm;
     BMVert *eve;
     BMIter iter;
@@ -1495,7 +1425,6 @@ static void createTransEditVerts(bContext * /*C*/, TransInfo *t)
     const int prop_mode = (t->flag & T_PROP_EDIT) ? (t->flag & T_PROP_EDIT_ALL) : 0;
 
     TransIslandData island_data = {nullptr};
-    TransMirrorData mirror_data = {nullptr};
     TransMeshDataCrazySpace crazyspace_data = {};
 
     /* Avoid editing locked shapes. */
@@ -1526,6 +1455,15 @@ static void createTransEditVerts(bContext * /*C*/, TransInfo *t)
     }
     else {
       data_len = bm->totvertsel;
+      if (tc->use_mirror_axis_any) {
+        BM_ITER_MESH (eve, &iter, bm, BM_VERTS_OF_MESH) {
+          if (!BM_elem_flag_test(eve, BM_ELEM_HIDDEN) && !BM_elem_flag_test(eve, BM_ELEM_SELECT) &&
+              BM_elem_flag_test(eve, BM_ELEM_MIRRORED_SELECT))
+          {
+            data_len++;
+          }
+        }
+      }
     }
 
     if (data_len == 0) {
@@ -1577,30 +1515,6 @@ static void createTransEditVerts(bContext * /*C*/, TransInfo *t)
       transform_convert_mesh_connectivity_distance(em->bm, mtx, dists, dists_index);
     }
 
-    /* Create TransDataMirror. */
-    if (tc->use_mirror_axis_any) {
-      bool use_topology = (mesh->editflag & ME_EDIT_MIRROR_TOPO) != 0;
-      bool use_select = (t->flag & T_PROP_EDIT) == 0;
-      const bool mirror_axis[3] = {
-          bool(tc->use_mirror_axis_x), bool(tc->use_mirror_axis_y), bool(tc->use_mirror_axis_z)};
-      transform_convert_mesh_mirrordata_calc(
-          em, use_select, use_topology, mirror_axis, &mirror_data);
-
-      if (mirror_data.vert_map) {
-        tc->data_mirror_len = mirror_data.mirror_elem_len;
-        tc->data_mirror = MEM_new_array_zeroed<TransDataMirror>(mirror_data.mirror_elem_len,
-                                                                __func__);
-
-        BM_ITER_MESH_INDEX (eve, &iter, bm, BM_VERTS_OF_MESH, a) {
-          if (prop_mode || BM_elem_flag_test(eve, BM_ELEM_SELECT)) {
-            if (mirror_data.vert_map[a].index != -1) {
-              data_len--;
-            }
-          }
-        }
-      }
-    }
-
     /* Detect CrazySpace [tm]. */
     transform_convert_mesh_crazyspace_detect(t, tc, em, &crazyspace_data);
 
@@ -1618,7 +1532,6 @@ static void createTransEditVerts(bContext * /*C*/, TransInfo *t)
     }
 
     TransData *tob = tc->data;
-    TransDataMirror *td_mirror = tc->data_mirror;
     BM_ITER_MESH_INDEX (eve, &iter, bm, BM_VERTS_OF_MESH, a) {
       if (BM_elem_flag_test(eve, BM_ELEM_HIDDEN)) {
         continue;
@@ -1630,24 +1543,11 @@ static void createTransEditVerts(bContext * /*C*/, TransInfo *t)
         island_index = island_data.island_vert_map[connected_index];
       }
 
-      if (mirror_data.vert_map && mirror_data.vert_map[a].index != -1) {
-        int elem_index = mirror_data.vert_map[a].index;
-        BMVert *v_src = BM_vert_at_index(bm, elem_index);
+      const bool is_selected = BM_elem_flag_test(eve, BM_ELEM_SELECT);
+      const bool is_mirror_selected = !is_selected && tc->use_mirror_axis_any &&
+                                      BM_elem_flag_test(eve, BM_ELEM_MIRRORED_SELECT);
 
-        if (BM_elem_flag_test(eve, BM_ELEM_SELECT)) {
-          mirror_data.vert_map[a].flag |= TD_SELECTED;
-        }
-
-        td_mirror->extra = eve;
-        td_mirror->loc = eve->co;
-        copy_v3_v3(td_mirror->iloc, eve->co);
-        td_mirror->flag = mirror_data.vert_map[a].flag;
-        td_mirror->loc_src = v_src->co;
-        mesh_transdata_center_copy(&island_data, island_index, td_mirror->iloc, td_mirror->center);
-
-        td_mirror++;
-      }
-      else if (prop_mode || BM_elem_flag_test(eve, BM_ELEM_SELECT)) {
+      if (prop_mode || is_selected || is_mirror_selected) {
         /* Do not use the island center in case we are using islands
          * only to get axis for snap/rotate to normal... */
         VertsToTransData(t, tob, tx, em, eve, &island_data, island_index);
@@ -1655,8 +1555,8 @@ static void createTransEditVerts(bContext * /*C*/, TransInfo *t)
           tx++;
         }
 
-        /* Selected. */
-        if (BM_elem_flag_test(eve, BM_ELEM_SELECT)) {
+        /* Selected */
+        if (is_selected || is_mirror_selected) {
           tob->flag |= TD_SELECTED;
         }
 
@@ -1679,14 +1579,37 @@ static void createTransEditVerts(bContext * /*C*/, TransInfo *t)
                 nullptr,
             tob);
 
-        if (tc->use_mirror_axis_any) {
-          if (tc->use_mirror_axis_x && fabsf(tob->loc[0]) < TRANSFORM_MAXDIST_MIRROR) {
+        if (is_mirror_selected) {
+          float reflect[3][3];
+          unit_m3(reflect);
+          for (int axis = 0; axis < 3; axis++) {
+            if (t->mirror_axis & (1 << axis)) {
+              reflect[axis][axis] = -1.0f;
+            }
+          }
+
+          float smtx_mirrored[3][3];
+          mul_m3_m3m3(smtx_mirrored, reflect, tob->smtx);
+          copy_m3_m3(tob->smtx, smtx_mirrored);
+
+          float mtx_mirrored[3][3];
+          mul_m3_m3m3(mtx_mirrored, tob->mtx, reflect);
+          copy_m3_m3(tob->mtx, mtx_mirrored);
+        }
+        else if (tc->use_mirror_axis_any) {
+          if (tc->use_mirror_axis_x && (t->mirror_axis & (1 << 0)) &&
+              fabsf(tob->loc[0]) < TRANSFORM_MAXDIST_MIRROR)
+          {
             tob->flag |= TD_MIRROR_EDGE_X;
           }
-          if (tc->use_mirror_axis_y && fabsf(tob->loc[1]) < TRANSFORM_MAXDIST_MIRROR) {
+          if (tc->use_mirror_axis_y && (t->mirror_axis & (1 << 1)) &&
+              fabsf(tob->loc[1]) < TRANSFORM_MAXDIST_MIRROR)
+          {
             tob->flag |= TD_MIRROR_EDGE_Y;
           }
-          if (tc->use_mirror_axis_z && fabsf(tob->loc[2]) < TRANSFORM_MAXDIST_MIRROR) {
+          if (tc->use_mirror_axis_z && (t->mirror_axis & (1 << 2)) &&
+              fabsf(tob->loc[2]) < TRANSFORM_MAXDIST_MIRROR)
+          {
             tob->flag |= TD_MIRROR_EDGE_Z;
           }
         }
@@ -1696,7 +1619,6 @@ static void createTransEditVerts(bContext * /*C*/, TransInfo *t)
     }
 
     transform_convert_mesh_islanddata_free(&island_data);
-    transform_convert_mesh_mirrordata_free(&mirror_data);
     transform_convert_mesh_crazyspace_free(&crazyspace_data);
     if (dists) {
       MEM_delete(dists);
@@ -2078,14 +2000,11 @@ static void recalcData_mesh(TransInfo *t)
   if (!is_canceling) {
     transform_snap_project_individual_apply(t);
 
-    bool do_mirror = !(t->flag & T_NO_MIRROR);
     FOREACH_TRANS_DATA_CONTAINER (t, tc) {
       /* Apply clipping after so we never project past the clip plane #25423. */
       transform_convert_clip_mirror_modifier_apply(tc);
 
-      if (do_mirror) {
-        mesh_transdata_mirror_apply(tc);
-      }
+      mesh_transdata_mirror_apply(tc);
 
       mesh_customdatacorrect_apply(tc, false);
     }

@@ -682,6 +682,12 @@ void properties_register(wmOperatorType *ot, int flags)
       /* Only used so macros can disable this option. */
       RNA_def_property_flag(prop, PROP_HIDDEN);
     }
+    prop = RNA_def_enum_flag(ot->srna,
+                             "mirror_axis",
+                             rna_enum_axis_flag_xyz_items,
+                             (1 << 0) | (1 << 1) | (1 << 2),
+                             "Mirror Axis",
+                             "");
   }
 
   if (flags & P_PROPORTIONAL) {
@@ -869,9 +875,9 @@ static void TRANSFORM_OT_translate(wmOperatorType *ot)
   WM_operatortype_props_advanced_begin(ot);
 
   properties_register(ot,
-                      P_ORIENT_MATRIX | P_CONSTRAINT | P_PROPORTIONAL | P_MIRROR | P_ALIGN_SNAP |
-                          P_OPTIONS | P_GPENCIL_EDIT | P_CURSOR_EDIT | P_VIEW2D_EDGE_PAN |
-                          P_POST_TRANSFORM | P_TRANSLATE_ORIGIN);
+                      P_ORIENT_MATRIX | P_CONSTRAINT | P_PROPORTIONAL | P_MIRROR_DUMMY |
+                          P_ALIGN_SNAP | P_OPTIONS | P_GPENCIL_EDIT | P_CURSOR_EDIT |
+                          P_VIEW2D_EDGE_PAN | P_POST_TRANSFORM | P_TRANSLATE_ORIGIN);
 }
 
 static void TRANSFORM_OT_resize(wmOperatorType *ot)
@@ -909,8 +915,8 @@ static void TRANSFORM_OT_resize(wmOperatorType *ot)
   WM_operatortype_props_advanced_begin(ot);
 
   properties_register(ot,
-                      P_ORIENT_MATRIX | P_CONSTRAINT | P_PROPORTIONAL | P_MIRROR | P_GEO_SNAP |
-                          P_OPTIONS | P_GPENCIL_EDIT | P_CENTER);
+                      P_ORIENT_MATRIX | P_CONSTRAINT | P_PROPORTIONAL | P_MIRROR_DUMMY |
+                          P_GEO_SNAP | P_OPTIONS | P_GPENCIL_EDIT | P_CENTER);
 }
 
 static void TRANSFORM_OT_skin_resize(wmOperatorType *ot)
@@ -986,8 +992,8 @@ static void TRANSFORM_OT_rotate(wmOperatorType *ot)
   WM_operatortype_props_advanced_begin(ot);
 
   properties_register(ot,
-                      P_ORIENT_AXIS | P_ORIENT_MATRIX | P_CONSTRAINT | P_PROPORTIONAL | P_MIRROR |
-                          P_GEO_SNAP | P_GPENCIL_EDIT | P_CENTER);
+                      P_ORIENT_AXIS | P_ORIENT_MATRIX | P_CONSTRAINT | P_PROPORTIONAL |
+                          P_MIRROR_DUMMY | P_GEO_SNAP | P_GPENCIL_EDIT | P_CENTER);
 }
 
 static bool tilt_poll(bContext *C)

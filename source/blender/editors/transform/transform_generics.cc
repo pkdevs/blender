@@ -571,6 +571,10 @@ void initTransInfo(bContext *C, TransInfo *t, wmOperator *op, const wmEvent *eve
     t->flag |= T_NO_MIRROR;
   }
 
+  if (op && (prop = RNA_struct_find_property(op->ptr, "mirror_axis"))) {
+    t->mirror_axis = RNA_property_enum_get(op->ptr, prop);
+  }
+
   /* Setting proportional editing flag only if property exist in operator. Otherwise, assume it's
    * not supported. */
   if (op && (prop = RNA_struct_find_property(op->ptr, "use_proportional_edit"))) {

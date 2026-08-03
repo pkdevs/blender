@@ -827,6 +827,8 @@ struct TransInfo {
   eTFlag flag;
   /** Special modifiers, by function, not key. */
   eTModifier modifiers;
+
+  int mirror_axis;
   /** Current state (running, canceled, ...). */
   eTState state;
   /** Redraw flag. */
