@@ -947,10 +947,8 @@ struct SymbolParser : NodeErrorHandler {
       }
 
       if (sym->is_constexpr) {
-        if (sym->is_static) {
-          sym->value = initialize_constexpr(scope, sym->type, decl);
-        }
-        else {
+        sym->value = initialize_constexpr(scope, sym->type, decl);
+        if (!sym->is_static) {
           if (sym->parent_class()) {
             error(var.type(), Diag::NonStaticConstexprMember);
           }

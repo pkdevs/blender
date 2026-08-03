@@ -8,6 +8,7 @@
 
 #include "diagnostic.hh"
 #include "metadata.hh"
+#include "pratt_parser.hh"
 #include "processor.hh"
 #include "symbol_table.hh"
 
@@ -30,6 +31,330 @@ static string to_uppercase(string str)
 struct CodegenContext : NodeErrorHandler {
   SymbolTable &table;
   metadata::Source &metadata;
+
+  struct ExpressionResult {
+    string str;
+
+    SymbolClass *type;
+    /* Array dimension of the current temporary. */
+    uint8_t array_dim = 0;
+
+    ExpressionResult(SymbolVariable *var)
+        : str(var->is_constexpr ? var->value_str() : var->identifier),
+          type(var->type),
+          array_dim(var->array_dimensions)
+    {
+    }
+
+    ExpressionResult(const ast::Node &node, SymbolClass *cls) : str(node.str_full()), type(cls) {}
+    ExpressionResult(const string &str, SymbolClass *cls) : str(str), type(cls) {}
+  };
+
+  /**
+   * Expression parser for code generation using Pratt parsing.
+   * Evaluates operand types and emits tokens in source order.
+   */
+  struct CodegenExpressionParser
+      : public PrattParser<CodegenExpressionParser, ExpressionResult, ast::Node> {
+    using Base = PrattParser<CodegenExpressionParser, ExpressionResult, ast::Node>;
+    using ErrorType = Base::ErrorType;
+    using BindingPower = Base::BindingPower;
+
+   private:
+    CodegenContext &ctx;
+    const SymbolScope &scope;
+    ast::Node node;
+    SymbolClass *expected_cls;
+
+   public:
+    CodegenExpressionParser(CodegenContext &ctx,
+                            const SymbolScope &scope,
+                            ast::Node start_node,
+                            SymbolClass *expected_cls = nullptr)
+        : ctx(ctx), scope(scope), node(start_node), expected_cls(expected_cls)
+    {
+    }
+
+    ExpressionResult eval()
+    {
+      if (!node.is_valid()) {
+        return {node, ctx.table.err_cls};
+      }
+      return expr(0);
+    }
+
+    /**
+     * CRTP Overrides
+     */
+
+    ExpressionResult identifier(const ast::Node &t)
+    {
+      switch (t.type()) {
+        case ast::NodeType::Constructor: {
+          return constructor(t);
+        }
+        case ast::NodeType::FuncCall:
+          return function(t, scope, scope);
+        case ast::NodeType::LocalVar:
+          return variable(LocalVar(t).identifier(), scope);
+        default:
+          return {t, ctx.table.err_cls};
+      }
+      return {t, ctx.table.err_cls};
+    }
+
+    ExpressionResult number(const ast::Node &t)
+    {
+      return {t, ctx.table.get_literal_type(t.str())};
+    }
+
+    ExpressionResult string(const ast::Node &t)
+    {
+      return {t, ctx.table.str_cls};
+    }
+
+    ExpressionResult parenthesis(const ast::Node &t, BindingPower p)
+    {
+      // ctx.match_if('(');
+      // ExpressionResult v = expr(p);
+      // ctx.match_if(')');
+      // return v;
+      return {t, ctx.table.err_cls};
+    }
+
+    ExpressionResult member(ExpressionResult left, const ast::Node &t)
+    {
+      return {t, ctx.table.err_cls};
+
+      // ast::Node right = consume();
+      // if (left.type && left.type->is_srt()) {
+      //   /* Remove access to SRT type (makes the resource global). */
+      //   ctx.skip_node(t);
+      // }
+      // else {
+      //   ctx.builder << t; /* Emit '.' */
+      // }
+
+      // switch (right.type()) {
+      //   case ast::NodeType::FuncCall: {
+      //     ast::FuncCall call = right;
+      //     SymbolFunction *sym = ctx.id_func_resolved(
+      //         call.identifier(), call.parameters(), *left.type, scope);
+      //     ctx.func_param_list(call.parameters(), scope, sym);
+      //     return sym->return_type;
+      //   }
+      //   case ast::NodeType::LocalVar: {
+      //     ast::LocalVar var = right;
+      //     SymbolVariable *sym = ctx.id_var_resolved(var.identifier(), *left.type);
+      //     return sym;
+      //   }
+      //   default:
+      //     ctx.builder << right;
+      //     return ctx.table.err_cls;
+      // }
+    }
+
+    ExpressionResult subscript(ExpressionResult left, const ast::Node &t)
+    {
+      return {t, ctx.table.err_cls};
+      // if (ast::Subscript sub = t; sub.is_valid()) {
+      //   ctx.subscript(sub, scope);
+      //   if (left.array_dim > 0) {
+      //     left.array_dim -= 1;
+      //     return left;
+      //   }
+      //   if (left.type && left.type->operator_subscript) {
+      //     return {left.type->operator_subscript->return_type};
+      //   }
+      // }
+      // return left;
+    }
+
+    ExpressionResult function_call(ExpressionResult left, const ast::Node &t)
+    {
+      ctx.error(t, Diag::CalledIsNotFunction, left.type ? left.type->identifier : "");
+      return {t, ctx.table.err_cls};
+    }
+
+    ExpressionResult prefix(const ast::Node &t, BindingPower p)
+    {
+      TokenType op_type = t.front().type();
+      ExpressionResult right = expr(p);
+
+      auto it = ctx.table.operators.find({nullptr, op_type, right.type});
+      SymbolClass *type = (it != ctx.table.operators.end()) ? it->second->return_type :
+                                                              ctx.table.err_cls;
+      return {std::string(t.str_full()) + right.str, type};
+    }
+
+    ExpressionResult suffix(ExpressionResult left, const ast::Node &t)
+    {
+      TokenType op_type = t.front().type();
+
+      auto it = ctx.table.operators.find({left.type, op_type, nullptr});
+      SymbolClass *type = (it != ctx.table.operators.end()) ? it->second->return_type :
+                                                              ctx.table.err_cls;
+      return {left.str + std::string(t.str_full()), type};
+    }
+
+    ExpressionResult binary(ExpressionResult lhs, const ast::Node &t, BindingPower p)
+    {
+      TokenType op_type = t.front().type();
+
+      ExpressionResult rhs = expr(p);
+
+      auto it = ctx.table.operators.find({lhs.type, op_type, rhs.type});
+      SymbolClass *type = (it != ctx.table.operators.end()) ? it->second->return_type :
+                                                              ctx.table.err_cls;
+
+#if 0 /* Future operator overloading */
+      if (true) {
+        const std::string op_name = ctx.table.binary_type_to_id.find(op_type)->second;
+        return {op_name + '(' + lhs.str + ',' + rhs.str + ')', type};
+      }
+#endif
+      return {lhs.str + std::string(t.str_full()) + rhs.str, type};
+    }
+
+    ExpressionResult ternary(ExpressionResult left,
+                             const ast::Node &t,
+                             BindingPower p_first,
+                             BindingPower p_second)
+    {
+      return {t, ctx.table.err_cls};
+      // ctx.builder << t; /* '?' */
+      // ExpressionResult tval = expr(p_first);
+      // ctx.match_if(Colon);
+      // ExpressionResult fval = expr(p_second);
+      // return {tval.type};
+    }
+
+    TokenType peek() const
+    {
+      return node.is_valid() ? node.front().type() : Invalid;
+    }
+
+    ast::Node consume()
+    {
+      ast::Node n = node;
+      node = node.next();
+      return n;
+    }
+
+    TokenType to_type(const ast::Node &t) const
+    {
+      return t.is_valid() ? t.front().type() : Invalid;
+    }
+
+    ExpressionResult error(ErrorType err, lexit::TokenType type)
+    {
+      switch (err) {
+        case ErrorType::ExpectedParenthesis:
+          ctx.error(node, Diag::ExpectedParenthesis);
+          break;
+        case ErrorType::ExpectedColon:
+          ctx.error(node, Diag::ExpectedColon);
+          break;
+        case ErrorType::InvalidOperator:
+          ctx.error(node, Diag::TokenInvalidOperator, to_str(type));
+          break;
+        case ErrorType::InvalidExpression:
+          ctx.error(node, Diag::InvalidExprTypeChecker);
+          break;
+      }
+      return {node, ctx.table.err_cls};
+    }
+
+   private:
+    ExpressionResult constructor(Constructor construct)
+    {
+      SymbolClass *cls = scope.lookup_class(ctx.table, construct.identifier()).unwrap(&ctx);
+      if (cls->is_srt()) {
+        ctx.error(construct, Diag::ResourceTableConstructorNotAllowed, cls->identifier);
+      }
+
+      return ctx.initializer_list(construct.initializer_list(), scope, cls);
+    }
+
+    ExpressionResult variable(IdQualified id, const SymbolScope &scope)
+    {
+      assert(id.is_valid());
+      SymbolVariable *var = scope.lookup_variable(ctx.table, id);
+      if (var->is_error) {
+        ctx.error(id, Diag::UnknownVariable, id.str());
+        return var;
+      }
+
+      if (var->is_constexpr) {
+        return var;
+      }
+
+      if (var->type->is_srt()) {
+        bool followed_by_dot = id.back().next() == '.';
+        bool followed_by_member_call = id.parent().next().next() == NodeType::FuncCall;
+        if (followed_by_dot && !followed_by_member_call) {
+          /* Remove access to SRT type (makes the resource global). */
+          return {"", var->type};
+        }
+        /* SRT type is used in an expression (likely as function argument). Call the ctor. */
+        return {var->type->identifier + "_ctor_()" + trivia(id), var->type};
+      }
+
+      if (var->reference_value.is_valid()) {
+        return {std::string(var->reference_value.str()) + trivia(id), var->type};
+      }
+
+      bool preceded_by_dot = id.front().prev() == '.';
+      if (!var->is_static && !preceded_by_dot && var->parent->as_class() != nullptr) {
+        return {"this_." + var->identifier + trivia(id), var->type};
+      }
+      return var;
+    }
+
+    ExpressionResult function(const ast::FuncCall &call,
+                              const SymbolScope &expr_scope,
+                              const SymbolScope &param_scope)
+    {
+      assert(call.is_valid());
+      SymbolFunction *sym = ctx.id_func_resolved_lookup(
+          call.identifier(), call.parameters(), expr_scope, param_scope);
+
+      FuncParamList list = call.parameters();
+      std::string params_str;
+      if (sym->fn_type == SymbolFunction::MEMBER && list.parent().prev().back() != '.') {
+        params_str += "this_";
+        if (!list.is_empty()) {
+          params_str += ", ";
+        }
+      }
+
+      int param_count = 0;
+      for (Expr param : list.children_of_type<Expr>()) {
+        params_str += ctx.expr(param, expr_scope).str;
+        params_str += ctx.opt_str(param.back().next(), Comma);
+        ++param_count;
+      }
+
+      /* Default arguments. */
+      for (; param_count < sym->arg_defaults.size(); ++param_count) {
+        if (sym->arg_defaults[param_count].is_valid()) {
+          if (param_count != 0) {
+            params_str += ", ";
+          }
+          /* Note: We evaluate the expression from where it was defined, in the function scope. */
+          params_str += ctx.expr(sym->arg_defaults[param_count], *sym).str;
+        }
+        else {
+          ctx.error(list, Diag::MissingParameterForCall, sym->identifier);
+        }
+      }
+
+      params_str = std::string(list.front().str_with_whitespace()) + params_str +
+                   std::string(list.back().str_with_whitespace()) + trivia(call);
+
+      return {sym->identifier + trivia(call.identifier()) + params_str, sym->return_type};
+    }
+  };
 
   struct StringBuilder {
     Token curr;
@@ -371,7 +696,8 @@ struct CodegenContext : NodeErrorHandler {
   {
     if (SymbolFunction *fn = scope.parent_function(); fn) {
       match_if(Return);
-      expr(stmt.expression(), scope, fn->return_type);
+      builder.ss << expr(stmt.expression(), scope, fn->return_type).str;
+      builder.curr = stmt.expression().back().next();
       match_if(';');
     }
     else {
@@ -658,7 +984,8 @@ struct CodegenContext : NodeErrorHandler {
   void local_statement(LocalStmt stmt, SymbolScope &scope)
   {
     skip_node(stmt.attributes());
-    expr(stmt.expr(), scope);
+    builder.ss << expr(stmt.expr(), scope).str;
+    builder.curr = stmt.expr().back().next();
     match_if(';');
   }
 
@@ -1627,52 +1954,10 @@ struct CodegenContext : NodeErrorHandler {
     skip_node(AttrList(cond.next()));
   }
 
-  void expr(Node decl, SymbolScope &scope, SymbolClass *cls = nullptr)
+  ExpressionResult expr(Expr node, const SymbolScope &scope, SymbolClass *cls = nullptr)
   {
-    for (Node child : decl.children_range()) {
-      switch (child.type()) {
-        case NodeType::LocalVar:
-          local_var(scope, child, scope);
-          break;
-        case NodeType::FuncCall:
-          func_call(scope, child, scope);
-          break;
-        case NodeType::InitializerList:
-          initializer_list(child, scope, cls);
-          break;
-        case NodeType::Constructor:
-          constructor(child, scope);
-          break;
-        case NodeType::Expr:
-          expr(child, scope);
-          break;
-        case NodeType::ExprSub:
-          match_if('(');
-          expr(child, scope);
-          match_if(')');
-          break;
-        case NodeType::Subscript:
-          /* Subscript operator should have already been processed. */
-          builder.curr = child.back().next();
-          break;
-        case NodeType::TemplateExplicit:
-          skip_if(Template);
-          expr(child, scope);
-          break;
-        case NodeType::Op:
-          if (child.front() == '.') {
-            builder.curr = child.back().next();
-            /* Dot member access operator right operand should have already been processed. */
-            break;
-          }
-          [[fallthrough]];
-        case NodeType::StringConst:
-        case NodeType::NumConst:
-        default:
-          builder << child;
-          break;
-      }
-    }
+    assert(node.is_valid());
+    return CodegenExpressionParser(*this, scope, node.child_first(), cls).eval();
   }
 
   /* For subscript in expressions. */
@@ -1680,7 +1965,8 @@ struct CodegenContext : NodeErrorHandler {
   {
     match_if('[');
     if (stmt.expr().is_valid()) {
-      expr(stmt.expr(), scope);
+      builder.ss << expr(stmt.expr(), scope).str;
+      builder.curr = stmt.expr().back().next();
     }
     match_if(']');
   }
@@ -1729,142 +2015,6 @@ struct CodegenContext : NodeErrorHandler {
     match_if(TokenType::Const, Constexpr);
     skip_if(Struct, Class, Enum);
     id_type_resolved(type.identifier(), scope);
-  }
-
-  /* Process the next member access operator at the right of the node.
-   * cls is the class being accessed.
-   * Does nothing if there is no access operator following node. */
-  void member_access(SymbolScope &expr_scope,
-                     Node node,
-                     SymbolClass *cls,
-                     SymbolVariable *var = nullptr)
-  {
-    node = node.next();
-    if (node.type() == NodeType::Op && node.front() == TokenType::Dot) {
-      if (cls == nullptr) {
-        error(node, Diag::CannotAccessMemberOfUnknownClass);
-        return;
-      }
-      Node member = node.next();
-      if (member.type() == NodeType::FuncCall) {
-        builder << node;
-        func_call(expr_scope, member, *cls, true);
-      }
-      else {
-        if (cls->is_srt()) {
-          /* Remove access to SRT type (makes the resource global). */
-          skip_node(node);
-        }
-        else {
-          builder << node;
-        }
-        local_var(expr_scope, member, *cls, true);
-      }
-    }
-    else if (node.type() == NodeType::Subscript) {
-      Node array_start = node;
-      for (int dim = var ? var->array_dimensions : 0, count = 0; dim > 0; --dim, ++count) {
-        if (node.type() != NodeType::Subscript) {
-          error(array_start,
-                Diag::NotEnoughSubscriptToMatchArrayDimensions,
-                to_string(count),
-                to_string(var->array_dimensions));
-          break;
-        }
-        subscript(node, expr_scope);
-        node = node.next();
-      }
-
-      if (SymbolFunction *fn = cls->operator_subscript; fn && node.type() == NodeType::Subscript) {
-        match_if('[');
-        expr(node, expr_scope);
-        match_if(']');
-        member_access(expr_scope, node, fn->return_type);
-      }
-      else {
-        member_access(expr_scope, node.prev(), var->type);
-      }
-    }
-  }
-
-  bool is_member_accessed(Node node)
-  {
-    node = node.prev();
-    return (node.type() == NodeType::Op && node.front() == TokenType::Dot) ||
-           (node.type() == NodeType::Subscript);
-  }
-
-  void local_var(SymbolScope &expr_scope, LocalVar var, SymbolScope &scope, bool accessed = false)
-  {
-    if (is_member_accessed(var) && !accessed) {
-      /* Dot member access operator right operand should have already been processed. */
-      builder.curr = var.back().next();
-      return;
-    }
-
-    SymbolVariable *sym = id_var_resolved(var.identifier(), scope);
-
-    if (!sym->is_constexpr) {
-      member_access(expr_scope, var, sym->type, sym);
-    }
-
-    builder.curr = var.back().next();
-  }
-
-  void func_call(SymbolScope &expr_scope, FuncCall call, SymbolScope &scope, bool accessed = false)
-  {
-    if (is_member_accessed(call) && !accessed) {
-      /* Dot member access operator right operand should have already been processed. */
-      builder.curr = call.back().next();
-      return;
-    }
-
-    SymbolFunction *sym = id_func_resolved(
-        call.identifier(), call.parameters(), scope, expr_scope);
-    func_param_list(call.parameters(), expr_scope, sym);
-
-    member_access(expr_scope, call, sym->return_type);
-
-    builder.curr = call.back().next();
-  }
-
-  void func_param_list(FuncParamList list, SymbolScope &scope, SymbolFunction *sym)
-  {
-    match_if('(');
-
-    if (sym->fn_type == SymbolFunction::MEMBER && list.parent().prev().back() != '.') {
-      builder.ss << "this_";
-      if (!list.is_empty()) {
-        builder.ss << ", ";
-      }
-      builder.curr = list.front().next();
-    }
-
-    int param_count = 0;
-    if (builder.curr != ')') {
-      for (Expr param : list.children_of_type<Expr>()) {
-        expr(param, scope);
-        match_if(',');
-        ++param_count;
-      }
-    }
-
-    /* Default arguments. */
-    for (; param_count < sym->arg_defaults.size(); ++param_count) {
-      if (sym->arg_defaults[param_count].is_valid()) {
-        if (param_count != 0) {
-          builder.ss << ", ";
-        }
-        /* Note: We evaluate the expression from where it was defined, in the function scope. */
-        expr(sym->arg_defaults[param_count], *sym);
-      }
-      else {
-        error(list, Diag::MissingParameterForCall, sym->identifier);
-      }
-      builder.curr = list.back();
-    }
-
-    match_if(')');
   }
 
   void array_decl(ArrayDecl array, Declarator decl, SymbolScope &scope)
@@ -1950,40 +2100,30 @@ struct CodegenContext : NodeErrorHandler {
   void assignment(AssignStmt stmt, SymbolScope &scope, SymbolClass *cls, int array_dim = 0)
   {
     match_if('=');
-    init_expression_or_initializer_list(stmt.child_first(), scope, cls, array_dim);
+    builder.ss
+        << init_expression_or_initializer_list(stmt.child_first(), scope, cls, array_dim).str;
+    builder.curr = stmt.back().next();
   }
 
-  void init_expression_or_initializer_list(Node node,
-                                           SymbolScope &scope,
-                                           SymbolClass *cls,
-                                           int array_dim = 0)
+  ExpressionResult init_expression_or_initializer_list(Node node,
+                                                       const SymbolScope &scope,
+                                                       SymbolClass *cls,
+                                                       int array_dim = 0)
   {
     if (node == NodeType::InitializerList) {
-      initializer_list(node, scope, cls, array_dim);
+      return initializer_list(node, scope, cls, array_dim);
     }
-    else if (node == NodeType::Expr) {
-      expr(node, scope);
+    if (node == NodeType::Expr) {
+      return expr(node, scope);
     }
+    assert(0);
+    return {"", cls};
   }
 
-  void constructor(Constructor construct, SymbolScope &scope)
-  {
-    auto *cls = scope.lookup_class(table, construct.identifier()).unwrap(this);
-    if (cls->is_srt()) {
-      error(construct, Diag::ResourceTableConstructorNotAllowed, cls->identifier);
-    }
-
-    initializer_list(construct.initializer_list(), scope, cls);
-
-    member_access(scope, construct, cls);
-
-    builder.curr = construct.back().next();
-  }
-
-  void initializer_list(InitializerList list,
-                        SymbolScope &scope,
-                        SymbolClass *cls,
-                        int array_dim = 0)
+  ExpressionResult initializer_list(InitializerList list,
+                                    const SymbolScope &scope,
+                                    SymbolClass *cls,
+                                    int array_dim = 0)
   {
     const bool is_empty = list.is_empty();
     if (array_dim > 0) {
@@ -1993,33 +2133,37 @@ struct CodegenContext : NodeErrorHandler {
       /* TODO(fclem): Long term, we can lookup what is the expected type of the expression and pass
        * it down the initializer tree. */
       error(list, Diag::InitializerListRequiresExplicitType);
-      return;
+      return {"", cls};
     }
-    builder.curr = list.front();
 
+    string open, close;
     if (array_dim > 0) {
       /* Only use aggregate syntax for arrays. */
-      match_if('{');
+      open = '{', close = '}';
     }
     else if (cls->is_builtin) {
       /* Use constructor syntax for builtin types. */
-      builder << cls->identifier + "(" + trivia(builder.curr);
+      open = cls->identifier + "(", close = ')';
     }
     else if (is_empty) {
       /* Call default constructor. */
       if (cls->is_builtin) {
-        builder << cls->identifier + "(0" + trivia(builder.curr);
+        open = cls->identifier + "(0", close = ')';
       }
       else {
-        builder << cls->identifier + "_ctor_(" + trivia(builder.curr);
+        open = cls->identifier + "_ctor_(", close = ')';
       }
     }
     else {
       /* '_ctor' macro resolve to either aggregate or default constructor depending on target
        * language. */
-      builder << "_ctor(" + cls->identifier + ")" + trivia(builder.curr);
+      open = "_ctor(" + cls->identifier + ")";
+      close = " _rotc()";
     }
+    open += trivia(list.front());
+    close += trivia(list.back());
 
+    string content;
     DesignatedInitializer designated(list.child_first());
     if (designated.is_valid()) {
       if (array_dim > 0) {
@@ -2030,15 +2174,15 @@ struct CodegenContext : NodeErrorHandler {
       for (SymbolVariable *var : cls->non_static_variables_in_declaration_order()) {
         if (designated.is_valid() && var->identifier == designated.identifier().str()) {
           AssignStmt stmt = designated.assign();
-          builder.curr = stmt.child_first().front();
-          init_expression_or_initializer_list(stmt.child_first(), scope, var->type);
-          match_if(',');
+          content += init_expression_or_initializer_list(stmt.child_first(), scope, var->type).str;
+          content += opt_str(designated.back().next(), Comma);
           designated = designated.next();
         }
         else {
-          builder.ss << default_value(*var->type) + ", ";
+          content += default_value(*var->type) + ",";
         }
       }
+
       if (designated.is_valid()) {
         if (auto *var = cls->lookup_variable(string(designated.identifier().str()));
             var && !var->is_error)
@@ -2046,7 +2190,6 @@ struct CodegenContext : NodeErrorHandler {
           error(designated, Diag::FieldDesignatorOutOfOrder, designated.identifier().str());
         }
         else {
-          /* Note, can also happen. */
           error(designated,
                 Diag::FieldDesignatorNotFound,
                 designated.identifier().str(),
@@ -2056,23 +2199,20 @@ struct CodegenContext : NodeErrorHandler {
     }
     else {
       for (Node child : list.children_range()) {
-        init_expression_or_initializer_list(
-            child.child_last(), scope, array_dim > 0 ? cls : nullptr /* TODO */, array_dim - 1);
-        match_if(',');
+        content += init_expression_or_initializer_list(child.child_last(),
+                                                       scope,
+                                                       array_dim > 0 ? cls : nullptr /* TODO */,
+                                                       array_dim - 1)
+                       .str;
+        content += opt_str(child.back().next(), Comma);
       }
     }
+    return {open + content + close, cls};
+  }
 
-    if (array_dim > 0) {
-      /* Only use aggregate syntax for arrays. */
-      match_if('}');
-    }
-    else if (cls->is_builtin || is_empty) {
-      /* Use constructor syntax for builtin types. */
-      builder << ")" + trivia(builder.curr);
-    }
-    else {
-      builder << " _rotc()" + trivia(builder.curr);
-    }
+  string_view opt_str(Token tok, TokenType type)
+  {
+    return tok == type ? tok.str_with_whitespace() : string_view();
   }
 
   SymbolClass *id_type_lookup_resolved(IdQualified id, const SymbolScope &scope)

@@ -116,6 +116,11 @@ std::string_view Node::str() const
   return is_valid() ? p->substr(front(), back()) : "";
 }
 
+std::string_view Node::str_full() const
+{
+  return is_valid() ? p->substr(front(), back(), true) : "";
+}
+
 bool FuncParamList::is_empty() const
 {
   return back().index_ - front().index_ == 1;

@@ -178,6 +178,8 @@ struct Node {
 
   void print_ast() const;
   std::string_view str() const;
+  /* Same as str buf with trailing whitespaces. */
+  std::string_view str_full() const;
 
   bool operator==(NodeType type) const
   {

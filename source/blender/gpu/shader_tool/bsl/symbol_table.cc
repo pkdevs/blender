@@ -570,15 +570,15 @@ void SymbolTable::register_builtins(LocalScope node)
     string id;
     string type;
     bool is_constexpr;
-    int value;
+    ConstexprValue value;
   };
 
   std::vector<BuiltinConst> consts = {
       /* Error variable symbol. */
       {err_symbol, err_symbol, false, 1},
 
-      {"true", "bool", true, 1},
-      {"false", "bool", true, 0},
+      {"true", "bool", true, true},
+      {"false", "bool", true, false},
 
       /* WORKAROUND: Should become an entry point argument. */
       {"gl_FragStencilRefARB", "uint", false, 0},
