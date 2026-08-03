@@ -244,10 +244,10 @@ static bool pyrna_status_as_exception(eRNAStatus status, const char *error_prefi
       PyErr_Format(PyExc_TypeError, "%.200s: not supported for this collection", error_prefix);
       return true;
     }
-    default:
-      BLI_assert_unreachable();
-      return false;
   }
+
+  BLI_assert_unreachable();
+  return false;
 }
 
 #ifdef USE_PYRNA_INVALIDATE_GC
