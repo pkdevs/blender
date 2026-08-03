@@ -504,26 +504,10 @@ class NODE_MT_group_input_base(NodeMenu):
         if hasattr(props, "use_transform"):
             props.use_transform = cls.use_transform
 
-    @staticmethod
-    def get_root_panel(tree):
-        item = tree.interface.items_tree[0]
-
-        # NOTE: Only check up to 20 levels of nesting to prevent infinite loops
-        # This limit can be raised accordingly if evedr needed.
-        for _ in range(20):
-            parent = item.parent
-
-            if parent is None:
-                return item
-            
-            item = parent
-
-        return item
-
     def draw_children(self, layout, tree, parents=None):
         if parents is None:
             parents = []
-            direct_parent = self.get_root_panel(tree)
+            direct_parent = tree.interface.root_panel
         else:
             direct_parent = parents[-1]
 
