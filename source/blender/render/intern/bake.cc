@@ -861,7 +861,9 @@ void RE_bake_pixels_populate(Mesh *mesh,
   }
 
   if (margin > 0) {
-    bake_pixels_add_margin(pixel_array, targets, margin);
+    /* 4 pixels should be enough for denoiser to distinguish
+       rendered pixels from the background. */
+    bake_pixels_add_margin(pixel_array, targets, std::min(margin, 4));
   }
 
   MEM_delete(corner_tris);
