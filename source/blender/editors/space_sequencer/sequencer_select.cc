@@ -269,19 +269,6 @@ static void select_linked_time_strip(const Scene *scene,
   }
 }
 
-#if 0 /* BRING BACK */
-void select_surround_from_last(Scene *scene)
-{
-  Strip *strip = get_last_seq(scene);
-
-  if (strip == nullptr) {
-    return;
-  }
-
-  select_surrounding_handles(scene, strip);
-}
-#endif
-
 void select_strip_single(Scene *scene, Strip *strip, bool deselect_all)
 {
   if (deselect_all) {
@@ -348,39 +335,6 @@ Strip *find_neighboring_strip(const Scene *scene, const Strip *test, const seq::
   }
   return nullptr;
 }
-
-#if 0
-static void select_neighbor_from_last(Scene *scene, int lr)
-{
-  Strip *strip = seq::SEQ_select_active_get(scene);
-  Strip *neighbor;
-  bool changed = false;
-  if (strip) {
-    neighbor = find_neighboring_strip(scene, strip, lr, -1);
-    if (neighbor) {
-      switch (lr) {
-        case seq::Side::Left:
-          neighbor->flag |= SEQ_SELECT;
-          recurs_sel_strip(neighbor);
-          neighbor->flag |= SEQ_RIGHTSEL;
-          strip->flag |= SEQ_LEFTSEL;
-          break;
-        case seq::Side::Right:
-          neighbor->flag |= SEQ_SELECT;
-          recurs_sel_strip(neighbor);
-          neighbor->flag |= SEQ_LEFTSEL;
-          strip->flag |= SEQ_RIGHTSEL;
-          break;
-      }
-      strip->flag |= SEQ_SELECT;
-      changed = true;
-    }
-  }
-  if (changed) {
-    /* Pass. */
-  }
-}
-#endif
 
 bool strip_point_image_isect(const Scene *scene, const Strip *strip, float point_view[2])
 {
