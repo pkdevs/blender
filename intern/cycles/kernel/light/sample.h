@@ -444,10 +444,13 @@ ccl_device ShaderEvalResult light_sample_shader_eval(
     ccl_private LightSample *ccl_restrict ls,
     const float time,
     ccl_private Spectrum &r_eval,
-    ccl_private const ShaderData *ccl_restrict sd = nullptr,
+    // ccl_private const ShaderData *ccl_restrict sd = nullptr,
+    ccl_private const ShaderData *ccl_restrict sd,
     ccl_private const ReSTIRLightSampleReference *ccl_restrict reference = nullptr, // Only required by the triangle path // ???: Maybe background as well
     const bool check_visibility = false)
 {
+  kernel_assert(sd != nullptr);
+
   /* Setup shading at the emitter. */
   Spectrum eval = zero_spectrum();
 
@@ -472,23 +475,41 @@ ccl_device ShaderEvalResult light_sample_shader_eval(
         kg, ls->shader, ls->prim, true, eval);
 
     if (!is_constant) {
+      // /*
+      //  * Reconstruct a ray origin from the target-dependent LightSample.
+      //  *
+      //  * For finite analytic lights:
+      //  *   ls->P = ray_P + ls->D * ls->t
+      //  *
+      //  * For distant lights, light_sample_shader_eval_forward() ignores ray_P
+      //  * when t == FLT_MAX and uses P = -ray_D instead.
+      //  */
+      // const float3 ray_P = (ls->t == FLT_MAX) ?
+      //                         zero_float3() : ls->P - ls->D * ls->t;
+
+      // const ShaderEvalResult result = light_sample_shader_eval_forward(
+      //     kg,
+      //     state,
+      //     ls->prim,
+      //     ray_P,
+      //     ls->D,
+      //     ls->t,
+      //     time,
+      //     eval);
+
       /*
-       * Reconstruct a ray origin from the target-dependent LightSample.
-       *
-       * For finite analytic lights:
-       *   ls->P = ray_P + ls->D * ls->t
+       * The candidate LightSample was constructed for this target shading
+       * point. Pass that target directly to the modern forward evaluator
+       * instead of recovering it from ls->P - ls->D * ls->t.
        *
        * For distant lights, light_sample_shader_eval_forward() ignores ray_P
-       * when t == FLT_MAX and uses P = -ray_D instead.
+       * when t == FLT_MAX and uses P = -ray_D.
        */
-      const float3 ray_P = (ls->t == FLT_MAX) ?
-                              zero_float3() : ls->P - ls->D * ls->t;
-
       const ShaderEvalResult result = light_sample_shader_eval_forward(
           kg,
           state,
           ls->prim,
-          ray_P,
+          sd->P,
           ls->D,
           ls->t,
           time,
@@ -619,7 +640,7 @@ ccl_device ShaderEvalResult light_sample_shader_eval(
   eval *= ls->eval_fac;
 
   if (check_visibility) {
-    kernel_assert(sd != nullptr);
+    // kernel_assert(sd != nullptr);
 
     Ray ray ccl_optional_struct_init;
     light_sample_to_surface_shadow_ray(kg, sd, ls, &ray);

@@ -1865,10 +1865,10 @@ struct KernelWorkTile {
   int path_index_offset;
   int work_size;
 
-  // int min_x;
-  // int max_x;
-  // int min_y;
-  // int max_y;
+  int min_x;
+  int max_x;
+  int min_y;
+  int max_y;
 };
 
 /* Shader Evaluation.
@@ -1932,9 +1932,9 @@ enum DeviceKernel : int {
   DEVICE_KERNEL_INTEGRATOR_SHADE_DEDICATED_LIGHT,
   DEVICE_KERNEL_INTEGRATOR_SHADOW_PATH_MNEE_PENDING,
 
-	// DEVICE_KERNEL_INTEGRATOR_RESTIR,
-  // DEVICE_KERNEL_INTEGRATOR_FINAL_EVALUATION,
-  // DEVICE_KERNEL_INTEGRATOR_RESTIR_PT_EVALUATION,
+	DEVICE_KERNEL_INTEGRATOR_RESTIR,
+  DEVICE_KERNEL_INTEGRATOR_FINAL_EVALUATION,
+  DEVICE_KERNEL_INTEGRATOR_RESTIR_PT_EVALUATION,
 
   DEVICE_KERNEL_INTEGRATOR_MEGAKERNEL,
 

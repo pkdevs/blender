@@ -70,9 +70,6 @@ ccl_device_inline bool restir_light_reference_is_valid(
 
 // MARK: - Producers
 
-/**
- * Producer
- */
 ccl_device_inline bool restir_point_light_reference_from_sample(
     KernelGlobals kg,
     const ccl_private LightSample *ls,
@@ -216,6 +213,18 @@ ccl_device_inline bool restir_light_reference_from_sample( // !!!
       return restir_area_light_reference_from_sample(kg, ls, reference);
 
     default:
+#if !defined(__KERNEL_GPU__) && defined(RESTIR_DI_DEBUG)
+  printf("restir_light_reference_from_sample() 1; RESTIR REF dispatcher reject: "
+         "unsupported type=%d prim=%d object=%d shader=%d "
+         "pdf=%.9g eval_fac=%.9g\n",
+         (int)ls->type,
+         ls->prim,
+         ls->object,
+         ls->shader,
+         (double)ls->pdf,
+         (double)ls->eval_fac);
+#endif
+
       *reference = restir_light_reference_empty();
       return false;
   }
@@ -279,8 +288,7 @@ ccl_device_inline bool restir_point_light_sample_from_reference(
   *ls = {};
 
   if (!restir_light_reference_is_valid(reference) ||
-      reference->type != LIGHT_POINT ||
-      reference->prim < 0)
+      reference->type != LIGHT_POINT || reference->prim < 0)
   {
     return false;
   }
@@ -347,6 +355,7 @@ ccl_device_inline bool restir_point_light_sample_from_reference(
    * measure-one delta PDF.
    */
   const float3 lightN = safe_normalize(P - klight->co);
+  // TODO: Check for zero-radius
   ls->pdf = light_pdf_area_to_solid_angle(lightN, -ls->D, ls->t);
 
   return isfinite(ls->pdf) && ls->pdf > 0.0f && ls->t >= 0.0f;

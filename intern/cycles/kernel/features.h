@@ -82,6 +82,10 @@ CCL_NAMESPACE_BEGIN
 /* Light tree. */
 #define KERNEL_FEATURE_LIGHT_TREE (1U << 31U)
 
+/* ReSTIR. */
+// !!!(Tri): warning: shift count >= width of type!
+#define KERNEL_FEATURE_RESTIR (1U << 32U)
+
 /* Shader node feature mask, to specialize shader evaluation for kernels. */
 
 #define KERNEL_FEATURE_NODE_MASK_SURFACE_LIGHT \
@@ -161,6 +165,7 @@ CCL_NAMESPACE_BEGIN
 #    define __PATH_GUIDING__
 #  endif
 #  define __VOLUME_RECORD_ALL__
+#  define RESTIR_DI_DEBUG
 #endif /* !__KERNEL_GPU__ */
 
 /* MNEE caused "Compute function exceeds available temporary registers" in macOS < 13 due to a bug
