@@ -107,16 +107,18 @@ void RealizeOnDomainOperation::execute()
   float2 wh = hypot_fast(transformation[0].xy(), transformation[1].xy());
 
   /* select faster interpolation if possible */
+  bool jacobian = options.interpolation != Interpolation::Nearest;
   if (options.interpolation == Interpolation::Anisotropic && wh[0] < 1.1f && wh[1] < 1.1f &&
       is_int(transformation, 0) && is_int(transformation, 1))
   {
     options.interpolation = Interpolation::Nearest;
+    jacobian = false;
   }
   else if (options.interpolation == Interpolation::Anisotropic &&
            (wh[0] < 1.1f || (wh[0] < 2.1f && is_int(transformation, 0))) &&
            (wh[1] < 1.1f || (wh[1] < 2.1f && is_int(transformation, 1))))
   {
-    options.interpolation = Interpolation::Bilinear;
+    jacobian = false; /* bilinear sampling can be used */
   }
 
   /* Transform from pixel centers rather than pixel corners */
@@ -139,15 +141,16 @@ void RealizeOnDomainOperation::execute()
   this->get_result().allocate_texture(domain);
 
   if (this->context().use_gpu()) {
-    this->realize_on_domain_gpu(options, transformation);
+    this->realize_on_domain_gpu(options, transformation, jacobian);
   }
   else {
-    this->realize_on_domain_cpu(options, transformation);
+    this->realize_on_domain_cpu(options, transformation, jacobian);
   }
 }
 
 void RealizeOnDomainOperation::realize_on_domain_gpu(const RealizationOptions &options,
-                                                     const float3x3 &transformation)
+                                                     const float3x3 &transformation,
+                                                     bool jacobian)
 {
   Result &input = this->get_input();
 
@@ -172,7 +175,7 @@ void RealizeOnDomainOperation::realize_on_domain_gpu(const RealizationOptions &o
     case ResultType::Quaternion:
       if (options.interpolation == Interpolation::Bicubic)
         shader_name = "compositor_realize_on_domain_bicubic_float4";
-      else if (options.interpolation == Interpolation::Anisotropic)
+      else if (options.interpolation == Interpolation::Anisotropic && jacobian)
         shader_name = "compositor_realize_on_domain_anisotropic_float4";
       else
         shader_name = "compositor_realize_on_domain_float4";
@@ -248,6 +251,20 @@ static void realize_on_domain(const Result &input,
                               const RealizationOptions &options,
                               const float3x3 &transformation)
 {
+  parallel_for(output.domain().data_size, [&](const int2 texel) {
+    const float2 coordinates = math::transform_point(transformation, float2(texel));
+    T sample = input.sample<T>(
+        coordinates, options.interpolation, options.extension_x, options.extension_y);
+    output.store_pixel(texel, sample);
+  });
+}
+
+template<typename T>
+static void realize_on_domain_jacobian(const Result &input,
+                                       Result &output,
+                                       const RealizationOptions &options,
+                                       const float3x3 &transformation)
+{
   const float2x2 jacobian(transformation);
   parallel_for(output.domain().data_size, [&](const int2 texel) {
     const float2 coordinates = math::transform_point(transformation, float2(texel));
@@ -258,25 +275,34 @@ static void realize_on_domain(const Result &input,
 }
 
 void RealizeOnDomainOperation::realize_on_domain_cpu(const RealizationOptions &options,
-                                                     const float3x3 &transformation)
+                                                     const float3x3 &transformation,
+                                                     bool jacobian)
 {
   Result &input = this->get_input();
   Result &output = this->get_result();
-  input.get_cpp_type()
-      .to_static_type<float,
-                      float2,
-                      float3,
-                      float4,
-                      Color,
-                      int32_t,
-                      int2,
-                      int3,
-                      int4,
-                      bool,
-                      float4x4,
-                      nodes::MenuValue,
-                      math::Quaternion>(
-          [&]<typename T>() { realize_on_domain<T>(input, output, options, transformation); });
+  if (jacobian) {
+    input.get_cpp_type().to_static_type<float, float2, float3, float4, Color, math::Quaternion>(
+        [&]<typename T>() {
+          realize_on_domain_jacobian<T>(input, output, options, transformation);
+        });
+  }
+  else {
+    input.get_cpp_type()
+        .to_static_type<float,
+                        float2,
+                        float3,
+                        float4,
+                        Color,
+                        int32_t,
+                        int2,
+                        int3,
+                        int4,
+                        bool,
+                        float4x4,
+                        nodes::MenuValue,
+                        math::Quaternion>(
+            [&]<typename T>() { realize_on_domain<T>(input, output, options, transformation); });
+  }
 }
 
 Domain RealizeOnDomainOperation::compute_domain()

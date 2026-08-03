@@ -46,8 +46,8 @@ class RealizeOnDomainOperation : public SimpleOperation {
   Domain compute_domain() override;
 
  private:
-  void realize_on_domain_gpu(const RealizationOptions &options, const float3x3 &);
-  void realize_on_domain_cpu(const RealizationOptions &options, const float3x3 &);
+  void realize_on_domain_gpu(const RealizationOptions &options, const float3x3 &, bool jacobian);
+  void realize_on_domain_cpu(const RealizationOptions &options, const float3x3 &, bool jacobian);
 };
 
 }  // namespace blender::compositor
