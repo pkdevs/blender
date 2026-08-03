@@ -722,8 +722,8 @@ static void bake_pixels_add_margin(BakePixel pixel_array[], const BakeTargets *t
 
     BakePixel *bk_pixels = pixel_array + image_offset;
 
-    char *mask = MEM_new_array_zeroed<char>(pixels_num, "Bake denoise margin mask");
-    RE_bake_mask_fill(bk_pixels, pixels_num, mask);
+    Array<char> mask(pixels_num, 0);
+    RE_bake_mask_fill(bk_pixels, pixels_num, mask.data());
 
     for (int r = 0; r < margin; r++) {
       for (int y = 0; y < height; y++) {
@@ -768,8 +768,6 @@ static void bake_pixels_add_margin(BakePixel pixel_array[], const BakeTargets *t
         }
       }
     }
-
-    MEM_delete(mask);
   }
 }
 
