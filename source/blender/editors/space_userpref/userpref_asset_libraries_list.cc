@@ -221,20 +221,18 @@ static void draw_active_library_settings(const bContext *C,
 
       if (ui::Layout *panel = layout.panel(C, "advanced", true, IFACE_("Advanced"))) {
         panel->use_property_split_set(true);
-        ui::Layout &column = panel->column(true);
-        ui::Layout &row = column.row(true, IFACE_("Authentication"));
-        row.prop(&library_ptr, "use_auth_token", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+        ui::Layout &column = panel->column(true, IFACE_("Authentication"));
+        column.prop(&library_ptr, "use_auth_token", UI_ITEM_NONE, std::nullopt, ICON_NONE);
 
         if (library.user_library->flag & ASSET_LIBRARY_USE_AUTH_TOKEN) {
-          ui::Layout &row = column.row(false);
-          row.prop(&library_ptr,
-                   RNA_struct_find_property(&library_ptr, "auth_token"),
-                   RNA_NO_INDEX,
-                   0,
-                   UI_ITEM_NONE,
-                   " ",
-                   library.user_library->auth_token ? ICON_LOCKED : ICON_UNLOCKED,
-                   std::nullopt);
+          column.prop(&library_ptr,
+                      RNA_struct_find_property(&library_ptr, "auth_token"),
+                      RNA_NO_INDEX,
+                      0,
+                      UI_ITEM_NONE,
+                      " ",
+                      library.user_library->auth_token ? ICON_LOCKED : ICON_UNLOCKED,
+                      std::nullopt);
         }
       }
     }
