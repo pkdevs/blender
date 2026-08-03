@@ -127,21 +127,16 @@ struct ExpressionTypeParser
 
   ExpressionResult parenthesis(const ast::Node &t, BindingPower p)
   {
-    /* Enter sub-expression */
-    this->node = ast::ExprSub(t).expr().child_first();
-    /* Parse the whole parenthesis expression. */
-    ExpressionResult v = expr(p);
-    /* Exit sub-expression. */
-    this->node = t.next();
-    return v;
+    return sub_expression(t, ast::ExprSub(t).expr(), p);
   }
 
   ExpressionResult member(ExpressionResult left, const ast::Node &t)
   {
     SymbolClass *l = left.type;
-    switch (t.type()) {
+    ast::Node right = consume();
+    switch (right.type()) {
       case ast::NodeType::FuncCall: {
-        ast::FuncCall call = t;
+        ast::FuncCall call = right;
         if (is_reference) {
           error(t, Diag::FunctionCallNotAllowedInReferenceDefinition);
         }
@@ -149,7 +144,7 @@ struct ExpressionTypeParser
         return sym.unwrap(err)->return_type;
       }
       case ast::NodeType::LocalVar: {
-        ast::LocalVar var = t;
+        ast::LocalVar var = right;
         SymbolVariable *sym = l->lookup_variable(*table, var.identifier());
         if (sym) {
           return sym;
@@ -205,13 +200,7 @@ struct ExpressionTypeParser
 
   ExpressionResult subscript_parameter(ast::Subscript &sub)
   {
-    /* Enter sub-expression */
-    this->node = sub.expr().child_first();
-    /* Parse the whole parenthesis expression. */
-    ExpressionResult v = expr(0);
-    /* Exit sub-expression. */
-    this->node = sub.next();
-    return v;
+    return sub_expression(sub, sub.expr(), 0);
   }
 
   ExpressionResult prefix(const ast::Node &t, BindingPower p)
@@ -378,9 +367,10 @@ struct ExpressionTypeParser
                            BindingPower p_first,
                            BindingPower p_second)
   {
-    ExpressionResult tval = expr(p_first);
+    ExpressionResult tval = sub_expression(node, node, p_first);
     if (consume().front().type() != Colon) {
       error(ErrorType::ExpectedColon, Colon);
+      return table->err_cls;
     }
     ExpressionResult fval = expr(p_second);
 
@@ -422,7 +412,7 @@ struct ExpressionTypeParser
 
   TokenType peek() const
   {
-    return node.front().type();
+    return node.is_valid() ? node.front().type() : Invalid;
   }
 
   ast::Node consume()
@@ -434,10 +424,22 @@ struct ExpressionTypeParser
 
   TokenType to_type(const ast::Node &t) const
   {
-    return t.front().type();
+    return t.is_valid() ? t.front().type() : Invalid;
   }
 
  private:
+  /* Helper to allow evaluating nested AST node inside the expression. */
+  ExpressionResult sub_expression(ast::Node node, ast::Expr expression, BindingPower p)
+  {
+    /* Enter sub-expression */
+    this->node = expression.child_first();
+    /* Parse the whole parenthesis expression. */
+    ExpressionResult v = expr(p);
+    /* Exit sub-expression. */
+    this->node = node.next();
+    return v;
+  }
+
   /*
    * Helper to evaluate operations valid for all types (Arithmetic).
    * C++ decltype(a op b) natively dictates the correct promoted return type

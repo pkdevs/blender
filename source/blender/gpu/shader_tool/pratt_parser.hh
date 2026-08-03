@@ -36,7 +36,7 @@ template<typename Derived, typename ResultT, typename NodeT> class PrattParser {
 
   struct BindingPower {
     /* Unary operators must have the highest precedence. */
-    static constexpr int unary = 1000;
+    static constexpr int prefix = 120;
     /* Let parenthesis evaluate everything until a closing parenthesis. */
     static constexpr int parenthesis = 0;
 
@@ -86,7 +86,7 @@ template<typename Derived, typename ResultT, typename NodeT> class PrattParser {
       case BitwiseNot:
         /* Note that '!' token is of MultiTok class and can contain many unary '!'.
          * Implementation must take care of it. */
-        return self.prefix(t, BindingPower::unary);
+        return self.prefix(t, BindingPower::prefix);
       case ParOpen:
         /* Parse the whole parenthesis expression. */
         return self.parenthesis(t, BindingPower::parenthesis);

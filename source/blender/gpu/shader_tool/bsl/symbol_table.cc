@@ -620,10 +620,13 @@ SymbolClass *SymbolTable::get_literal_type(string_view lit) const
     str.push_back(tolower(static_cast<unsigned char>(c)));
   }
 
-  bool has_decimal = (str.find('.') != string_view::npos);
-  bool has_exponent = !str.starts_with("0x") && (str.find('e') != string_view::npos);
+  bool is_hex = str.starts_with("0x");
 
-  if (has_decimal || has_exponent || str.back() == 'f') {
+  bool has_decimal = (str.find('.') != string::npos);
+  bool has_exponent = !is_hex && (str.find('e') != string::npos);
+  bool has_float_suffix = !is_hex && (str.back() == 'f');
+
+  if (has_decimal || has_exponent || has_float_suffix) {
     return float_cls;
   }
   if (str.back() == 'u') {
@@ -649,8 +652,11 @@ MatchRank SymbolTable::get_conversion_rank(const SymbolClass *from, const Symbol
     return MatchRank::Promotion;
   }
 
-  /* Check standard conversions. */
-  if (from == int_cls && to == uint_cls) {
+  /* Check standard scalar conversions (int <-> uint <-> float). */
+  /* Note that only GLSL compatible conversions are allowed. */
+  if ((from == float_cls || from == int_cls || from == uint_cls) &&
+      (to == float_cls || to == int_cls || to == uint_cls))
+  {
     return MatchRank::Conversion;
   }
 

@@ -61,8 +61,7 @@ Result<SymbolFunction *> SymbolScope::lookup_function(const SymbolTable &table,
 
   auto arg_types = SymbolFunction::to_arg_types(table, arguments_scope, params).unwrap(err);
   /* Get exact match when querying for the declaration. */
-  constexpr bool exact_match = is_same_v<ArgOrParamList, ast::FuncArgList>;
-  func = func->lookup_overload<exact_match>(id, table, arg_types).unwrap(err);
+  func = func->lookup_overload(id, table, arg_types).unwrap(err);
   return {func, err};
 }
 

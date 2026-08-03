@@ -92,7 +92,6 @@ static bool is_strictly_better(const std::vector<MatchRank> &candidate,
   return has_strictly_better_arg;
 }
 
-template<bool only_exact_match>
 Result<SymbolFunction *> SymbolFunction::lookup_overload(IdQualified id,
                                                          const SymbolTable &table,
                                                          const vector<SymbolClass *> &arg_types)
@@ -148,11 +147,6 @@ Result<SymbolFunction *> SymbolFunction::lookup_overload(IdQualified id,
   return {root_scope()->lookup_function(SymbolTable::err_symbol),
           AstNodeException(id, error_type, original, to_str(arg_types), candidates)};
 }
-
-template Result<SymbolFunction *> SymbolFunction::lookup_overload<true>(
-    IdQualified id, const SymbolTable &table, const vector<SymbolClass *> &arg_types);
-template Result<SymbolFunction *> SymbolFunction::lookup_overload<false>(
-    IdQualified id, const SymbolTable &table, const vector<SymbolClass *> &arg_types);
 
 void SymbolFunction::add_overload(SymbolFunction *fn)
 {
