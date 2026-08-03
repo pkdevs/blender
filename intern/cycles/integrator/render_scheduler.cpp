@@ -1167,6 +1167,11 @@ bool RenderScheduler::work_need_rebalance()
 
 void RenderScheduler::update_start_resolution_divider()
 {
+  if (denoiser_params_.use && denoiser_params_.type == DENOISER_DLSS) {
+    start_resolution_divider_ = 1;
+    return;
+  }
+
   if (default_start_resolution_divider_ == 0) {
     return;
   }

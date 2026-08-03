@@ -1138,13 +1138,6 @@ SessionParams BlenderSync::get_session_params(blender::RenderEngine &b_engine,
   }
   else {
     params.use_auto_tile = false;
-
-    if (get_boolean(cscene, "use_preview_denoising") &&
-        get_enum(cscene, "preview_denoiser", DENOISER_NUM, DENOISER_NONE) == DENOISER_DLSS)
-    {
-      /* Disable resolution divider with DLSS */
-      params.use_resolution_divider = false;
-    }
   }
 
   return params;
