@@ -18,6 +18,7 @@
 #include "DNA_collection_types.h"
 #include "DNA_layer_types.h"
 #include "DNA_object_types.h"
+#include "DNA_userdef_types.h"
 
 #include "BKE_collection.hh"
 #include "BKE_context.hh"
@@ -845,6 +846,7 @@ static wmOperatorStatus collection_instance_exec(bContext *C, wmOperator * /*op*
     Object *ob = object::add_type(
         C, OB_EMPTY, collection->id.name + 2, scene->cursor.location, nullptr, false, 0);
     ob->instance_collection = collection;
+    ob->empty_drawsize = U.collection_instance_empty_size;
     ob->transflag |= OB_DUPLICOLLECTION;
     id_us_plus(&collection->id);
   }
