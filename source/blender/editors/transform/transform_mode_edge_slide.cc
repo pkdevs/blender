@@ -14,6 +14,7 @@
 #include "BLI_string_utf8.hh"
 
 #include "DNA_mesh_types.h"
+#include "DNA_userdef_types.h"
 
 #include "BKE_editmesh.hh"
 #include "BKE_editmesh_bvh.hh"
@@ -114,19 +115,6 @@ struct EdgeSlideParams {
   bool update_status_bar;
   bool use_clone;
 };
-
-/**
- * Clone is always clamped. The un-clamped overlay in #drawEdgeSlide takes precedence over the
- * clone overlay, so the cloned loop would stop being drawn. The operation itself is unaffected.
- */
-static bool edge_slide_use_clamp(const TransInfo *t)
-{
-  const EdgeSlideParams *slp = static_cast<const EdgeSlideParams *>(t->custom.mode.data);
-  if (slp && slp->use_clone) {
-    return true;
-  }
-  return !(t->flag & T_ALT_TRANSFORM);
-}
 
 /**
  * Get the first valid TransDataContainer *.
@@ -749,8 +737,8 @@ static eRedrawFlag handleEventEdgeSlide(TransInfo *t, const wmEvent *event)
         }
         break;
       case EVT_CKEY:
-        /* Use like a modifier key. Clone is always clamped, see #edge_slide_use_clamp. */
-        if (event->val == KM_PRESS && !slp->use_clone) {
+        /* Use like a modifier key. */
+        if (event->val == KM_PRESS) {
           t->flag ^= T_ALT_TRANSFORM;
           calcEdgeSlideCustomPoints(t);
           slp->update_status_bar = true;
@@ -767,6 +755,63 @@ static eRedrawFlag handleEventEdgeSlide(TransInfo *t, const wmEvent *event)
   return TREDRAW_NOTHING;
 }
 
+/**
+ * The clones are hidden from the evaluated mesh, so this is the only thing that shows where the
+ * new loop is. Drawn over whichever slide guide is active rather than in place of it.
+ */
+static void edge_slide_draw_clone(const EdgeSlideData *sld, const uint pos, const float line_size)
+{
+  if (sld->original_verts.is_empty()) {
+    return;
+  }
+
+  Map<BMVert *, BMVert *> orig_to_clone;
+  orig_to_clone.reserve(sld->sv.size());
+  for (const int i : sld->original_verts.index_range()) {
+    orig_to_clone.add(sld->original_verts[i], static_cast<BMVert *>(sld->sv[i].td->extra));
+  }
+
+  /* The guide that ran before this may have left another program bound. */
+  immUnbindProgram();
+
+  float viewport[4];
+  GPU_viewport_size_get_f(viewport);
+  immBindBuiltinProgram(GPU_SHADER_3D_POLYLINE_UNIFORM_COLOR);
+  immUniform2fv("viewportSize", &viewport[2]);
+  immUniform1f("lineWidth", line_size * U.pixelsize);
+  immUniformThemeColor3(TH_GIZMO_PRIMARY);
+
+  Set<BMVert *> chained_verts;
+  if (!sld->clone_chain_edges.is_empty()) {
+    immBeginAtMost(GPU_PRIM_LINES, sld->clone_chain_edges.size() * 2);
+    for (const EdgeSlideData::CloneChainEdge &ce : sld->clone_chain_edges) {
+      BMVert *v1_clone = orig_to_clone.lookup_default(ce.v1, nullptr);
+      BMVert *v2_clone = orig_to_clone.lookup_default(ce.v2, nullptr);
+      if (v1_clone && v2_clone) {
+        chained_verts.add(ce.v1);
+        chained_verts.add(ce.v2);
+        immVertex3fv(pos, v1_clone->co);
+        immVertex3fv(pos, v2_clone->co);
+      }
+    }
+    immEnd();
+  }
+
+  if (chained_verts.size() < sld->original_verts.size()) {
+    immUnbindProgram();
+    immBindBuiltinProgram(GPU_SHADER_3D_POINT_UNIFORM_SIZE_UNIFORM_COLOR_AA);
+    immUniformThemeColor3(TH_GIZMO_PRIMARY);
+    GPU_point_size(ui::theme::get_value_f(TH_FACEDOT_SIZE) + 1.5f);
+    immBeginAtMost(GPU_PRIM_POINTS, sld->original_verts.size());
+    for (const int i : sld->original_verts.index_range()) {
+      if (!chained_verts.contains(sld->original_verts[i])) {
+        immVertex3fv(pos, static_cast<BMVert *>(sld->sv[i].td->extra)->co);
+      }
+    }
+    immEnd();
+  }
+}
+
 static void drawEdgeSlide(TransInfo *t)
 {
   EdgeSlideData *sld = edgeSlideFirstGet(t);
@@ -775,7 +820,7 @@ static void drawEdgeSlide(TransInfo *t)
   }
 
   const EdgeSlideParams *slp = static_cast<const EdgeSlideParams *>(t->custom.mode.data);
-  const bool is_clamp = edge_slide_use_clamp(t);
+  const bool is_clamp = !(t->flag & T_ALT_TRANSFORM);
 
   const float line_size = ui::theme::get_value_f(TH_OUTLINE_WIDTH) + 0.5f;
 
@@ -881,47 +926,6 @@ static void drawEdgeSlide(TransInfo *t)
     }
     immEnd();
   }
-  else if (slp->use_clone) {
-    if (!sld->original_verts.is_empty()) {
-      Map<BMVert *, BMVert *> orig_to_clone;
-      orig_to_clone.reserve(sld->sv.size());
-      for (int i = 0; i < int(sld->sv.size()); i++) {
-        orig_to_clone.add(sld->original_verts[i], static_cast<BMVert *>(sld->sv[i].td->extra));
-      }
-
-      Set<BMVert *> chained_verts;
-      if (!sld->clone_chain_edges.is_empty()) {
-        GPU_line_width(line_size);
-        immUniformThemeColorShadeAlpha(TH_EDGE_SELECT, 80, -100);
-        immBeginAtMost(GPU_PRIM_LINES, sld->clone_chain_edges.size() * 2);
-        for (const EdgeSlideData::CloneChainEdge &ce : sld->clone_chain_edges) {
-          BMVert *v1_clone = orig_to_clone.lookup_default(ce.v1, nullptr);
-          BMVert *v2_clone = orig_to_clone.lookup_default(ce.v2, nullptr);
-          if (v1_clone && v2_clone) {
-            chained_verts.add(ce.v1);
-            chained_verts.add(ce.v2);
-            immVertex3fv(pos, v1_clone->co);
-            immVertex3fv(pos, v2_clone->co);
-          }
-        }
-        immEnd();
-      }
-
-      if (chained_verts.size() < sld->original_verts.size()) {
-        immUnbindProgram();
-        immBindBuiltinProgram(GPU_SHADER_3D_POINT_UNIFORM_SIZE_UNIFORM_COLOR_AA);
-        immUniformThemeColorShadeAlpha(TH_SELECT, 255, -30);
-        GPU_point_size(ui::theme::get_value_f(TH_FACEDOT_SIZE) + 1.5f);
-        immBeginAtMost(GPU_PRIM_POINTS, sld->original_verts.size());
-        for (int i = 0; i < int(sld->original_verts.size()); i++) {
-          if (!chained_verts.contains(sld->original_verts[i])) {
-            immVertex3fv(pos, static_cast<BMVert *>(sld->sv[i].td->extra)->co);
-          }
-        }
-        immEnd();
-      }
-    }
-  }
   else {
     /* Common case. */
     const int alpha_shade = -160;
@@ -935,6 +939,10 @@ static void drawEdgeSlide(TransInfo *t)
     immVertex3fv(pos, curr_sv_co_orig);
     immVertex3fv(pos, co_dir);
     immEnd();
+  }
+
+  if (slp->use_clone) {
+    edge_slide_draw_clone(sld, pos, line_size);
   }
 
   immUnbindProgram();
@@ -972,7 +980,7 @@ static void edge_slide_snap_apply(TransInfo *t, float *value)
   int side_index;
   float t_mid;
   if (slp->use_even == false) {
-    const bool is_clamp = edge_slide_use_clamp(t);
+    const bool is_clamp = !(t->flag & T_ALT_TRANSFORM);
     if (is_clamp) {
       side_index = perc < 0.0f;
     }
@@ -1093,7 +1101,7 @@ static void doEdgeSlide(TransInfo *t, float perc)
 
   slp->perc = perc;
 
-  const bool use_clamp = edge_slide_use_clamp(t);
+  const bool use_clamp = !(t->flag & T_ALT_TRANSFORM);
   const bool use_even = slp->use_even;
   const bool use_flip = slp->flipped;
 
@@ -1129,7 +1137,7 @@ static void applyEdgeSlide(TransInfo *t)
   EdgeSlideParams *slp = static_cast<EdgeSlideParams *>(t->custom.mode.data);
   bool flipped = slp->flipped;
   bool use_even = slp->use_even;
-  const bool is_clamp = edge_slide_use_clamp(t);
+  const bool is_clamp = !(t->flag & T_ALT_TRANSFORM);
   const bool is_constrained = !(is_clamp == false || hasNumInput(&t->num));
   const bool is_precision = t->modifiers & MOD_PRECISION;
   const bool is_snap = t->modifiers & MOD_SNAP;
@@ -1217,7 +1225,7 @@ static void edge_slide_transform_matrix_fn(TransInfo *t, float mat_xform[4][4])
                         fac,
                         curr_length_fac,
                         slp->curr_side_unclamp,
-                        edge_slide_use_clamp(t),
+                        !(t->flag & T_ALT_TRANSFORM),
                         slp->use_even,
                         slp->flipped,
                         final_co);
