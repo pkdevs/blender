@@ -587,15 +587,19 @@ static void create_transition_clamp_data(TransInfo *t, const Scene *scene, Strip
 
   const int left_edge_offset = left_input->left_handle() - strip->left_handle();
   const int left_cutpoint_offset = (right_input->left_handle() - 1) - strip->left_handle();
+  /* Effects have no offsets. Content start returns a float value. */
   const int left_content_offset = right_input->is_effect() ?
                                       (INT_MIN + 1) :
                                       int(ceil(right_input->content_start()) -
                                           strip->left_handle());
+  /* Prevent the left handle from moving past left strip bounds or right strip content bounds.*/
   if (left_sel) {
     ts->hard_clamp.xmin = max_ii(ts->hard_clamp.xmin, left_edge_offset);
     ts->hard_clamp.xmax = min_ii(ts->hard_clamp.xmax, left_cutpoint_offset);
     ts->soft_clamp_min = max_ii(ts->soft_clamp_min, left_content_offset);
   }
+  /* Symmetric strip / content bounds clamping for the left handle. Done when only the right handle
+   * is selected, since selecting both handles moves the entire transition. */
   else if (right_sel) {
     ts->symmetric_hard_clamp_max = min_ii(ts->symmetric_hard_clamp_max, -left_edge_offset);
     ts->symmetric_hard_clamp_min = max_ii(ts->symmetric_hard_clamp_min, -left_cutpoint_offset);
@@ -604,15 +608,19 @@ static void create_transition_clamp_data(TransInfo *t, const Scene *scene, Strip
 
   const int right_edge_offset = right_input->right_handle(scene) - strip->right_handle(scene);
   const int right_cutpoint_offset = (right_input->left_handle() + 1) - strip->right_handle(scene);
+  /* Effects have no offsets. Content start returns a float value. */
   const int right_content_offset = left_input->is_effect() ?
                                        INT_MAX :
                                        int(floor(left_input->content_end(scene)) -
                                            strip->right_handle(scene));
+  /* Prevent the right handle from moving past right strip bounds or left strip content bounds.*/
   if (right_sel) {
     ts->hard_clamp.xmax = min_ii(ts->hard_clamp.xmax, right_edge_offset);
     ts->hard_clamp.xmin = max_ii(ts->hard_clamp.xmin, right_cutpoint_offset);
     ts->soft_clamp_max = min_ii(ts->soft_clamp_max, right_content_offset);
   }
+  /* Symmetric strip / content bounds clamping for the right handle. Done when only the left handle
+   * is selected, since selecting both handles moves the entire transition. */
   else if (left_sel) {
     ts->symmetric_hard_clamp_min = max_ii(ts->symmetric_hard_clamp_min, -right_edge_offset);
     ts->symmetric_hard_clamp_max = min_ii(ts->symmetric_hard_clamp_max, -right_cutpoint_offset);
@@ -954,10 +962,13 @@ static void flush_transition_transforms(TransInfo *t,
   /* Clamped offset from #x_old. */
   const int x_offset = round_fl_to_int(offset_clamped[0]);
 
+  /* New value for the handle opposite of #tdsq->sel_flag. */
   int opposite_new = tdsq->opposite_handle;
   if (!flag_is_set(t->modifiers, MOD_STRIP_ASYMMETRIC)) {
     opposite_new -= x_offset;
   }
+  /* If both handles are selected the entire transition is moved. In this case update the handles
+   * with the same offset instead of doing symmetric handle movement. */
   switch (tdsq->sel_flag) {
     case SEQ_LEFTSEL:
       r_left_new = x_old + x_offset;
