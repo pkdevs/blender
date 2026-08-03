@@ -57,7 +57,8 @@ struct BakePixel {
   float uv[2];
   float du_dx, du_dy;
   float dv_dx, dv_dy;
-  bool keep_original;
+  /* Is a margin pixel used to improve denoise quality and is not copied into final image. */
+  bool is_margin;
 };
 
 struct BakeHighPolyData {

@@ -123,7 +123,7 @@ static void store_bake_pixel(void *handle, int x, int y, float u, float v)
   pixel->dv_dy = bd->dv_dy;
   pixel->object_id = 0;
   pixel->seed = i;
-  pixel->keep_original = false;
+  pixel->is_margin = false;
 }
 
 void RE_bake_mask_fill(const BakePixel pixel_array[], const size_t pixels_num, char *mask)
@@ -137,7 +137,7 @@ void RE_bake_mask_fill(const BakePixel pixel_array[], const size_t pixels_num, c
   for (i = 0; i < pixels_num; i++) {
     const BakePixel *px = &pixel_array[i];
 
-    if (px->primitive_id != -1 && !px->keep_original) {
+    if (px->primitive_id != -1 && !px->is_margin) {
       mask[i] = FILTER_MASK_USED;
     }
   }
@@ -385,7 +385,7 @@ static bool cast_ray_highpoly(bke::BVHTreeFromMesh *treeData,
     pixel_high->primitive_id = primitive_id_high;
     pixel_high->object_id = hit_mesh;
     pixel_high->seed = pixel_id;
-    pixel_high->keep_original = false;
+    pixel_high->is_margin = false;
 
     /* ray direction in high poly object space */
     float dir_high[3];
@@ -754,7 +754,7 @@ static void bake_pixels_add_margin(BakePixel pixel_array[], const BakeTargets *t
           mask[px_index] = FILTER_MASK_MARGIN;
           bk_pixels[px_index] = bk_pixels[copy_index];
           bk_pixels[px_index].seed = px_index + image_offset;
-          bk_pixels[px_index].keep_original = true;
+          bk_pixels[px_index].is_margin = true;
         }
       }
 
@@ -952,11 +952,11 @@ void RE_bake_normal_world_to_tangent(const BakePixel pixel_array[],
     bool is_smooth;
 
     int primitive_id = pixel_array[i].primitive_id;
-    bool keep_original = pixel_array[i].keep_original;
+    bool is_margin = pixel_array[i].is_margin;
 
     offset = i * depth;
 
-    if (primitive_id == -1 || keep_original) {
+    if (primitive_id == -1 || is_margin) {
       if (depth == 4) {
         copy_v4_fl4(&result[offset], 0.5f, 0.5f, 1.0f, 1.0f);
       }
@@ -1054,7 +1054,7 @@ void RE_bake_normal_world_to_object(const BakePixel pixel_array[],
     size_t offset;
     float nor[3];
 
-    if (pixel_array[i].primitive_id == -1 || pixel_array[i].keep_original) {
+    if (pixel_array[i].primitive_id == -1 || pixel_array[i].is_margin) {
       continue;
     }
 
@@ -1082,7 +1082,7 @@ void RE_bake_normal_world_to_world(const BakePixel pixel_array[],
     size_t offset;
     float nor[3];
 
-    if (pixel_array[i].primitive_id == -1 || pixel_array[i].keep_original) {
+    if (pixel_array[i].primitive_id == -1 || pixel_array[i].is_margin) {
       continue;
     }
 

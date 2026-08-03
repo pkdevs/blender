@@ -1057,7 +1057,7 @@ static void bake_targets_populate_pixels_color_attributes(BakeTargets *targets,
     pixel->dv_dy = 0.0f;
     pixel->uv[0] = 0.0f;
     pixel->uv[1] = 0.0f;
-    pixel->keep_original = false;
+    pixel->is_margin = false;
   }
 
   /* Populate through adjacent triangles, first triangle wins. */
