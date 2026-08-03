@@ -39,8 +39,8 @@ struct CodegenContext : NodeErrorHandler {
     /* Array dimension of the current temporary. */
     uint8_t array_dim = 0;
 
-    ExpressionResult(SymbolVariable *var)
-        : str(var->is_constexpr ? var->value_str() : var->identifier),
+    ExpressionResult(SymbolVariable *var, const string &trivia)
+        : str((var->is_constexpr ? var->value_str() : var->identifier) + trivia),
           type(var->type),
           array_dim(var->array_dimensions)
     {
@@ -90,11 +90,10 @@ struct CodegenContext : NodeErrorHandler {
     ExpressionResult identifier(const ast::Node &t)
     {
       switch (t.type()) {
-        case ast::NodeType::Constructor: {
+        case ast::NodeType::Constructor:
           return constructor(t);
-        }
         case ast::NodeType::FuncCall:
-          return function(t, scope, scope);
+          return function(t, scope);
         case ast::NodeType::LocalVar:
           return variable(LocalVar(t).identifier(), scope);
         default:
@@ -103,71 +102,59 @@ struct CodegenContext : NodeErrorHandler {
       return {t, ctx.table.err_cls};
     }
 
-    ExpressionResult number(const ast::Node &t)
+    ExpressionResult number_literal(const ast::Node &t)
     {
       return {t, ctx.table.get_literal_type(t.str())};
     }
 
-    ExpressionResult string(const ast::Node &t)
+    ExpressionResult string_literal(const ast::Node &t)
     {
       return {t, ctx.table.str_cls};
     }
 
-    ExpressionResult parenthesis(const ast::Node &t, BindingPower p)
+    ExpressionResult parenthesis(const ast::Node &t, BindingPower /*p*/)
     {
-      // ctx.match_if('(');
-      // ExpressionResult v = expr(p);
-      // ctx.match_if(')');
-      // return v;
-      return {t, ctx.table.err_cls};
+      ExpressionResult result = ctx.expr(ExprSub(t).expr(), scope);
+      return {string(t.front().str()) + result.str + string(t.back().str()), result.type};
     }
 
     ExpressionResult member(ExpressionResult left, const ast::Node &t)
     {
-      return {t, ctx.table.err_cls};
-
-      // ast::Node right = consume();
-      // if (left.type && left.type->is_srt()) {
-      //   /* Remove access to SRT type (makes the resource global). */
-      //   ctx.skip_node(t);
-      // }
-      // else {
-      //   ctx.builder << t; /* Emit '.' */
-      // }
-
-      // switch (right.type()) {
-      //   case ast::NodeType::FuncCall: {
-      //     ast::FuncCall call = right;
-      //     SymbolFunction *sym = ctx.id_func_resolved(
-      //         call.identifier(), call.parameters(), *left.type, scope);
-      //     ctx.func_param_list(call.parameters(), scope, sym);
-      //     return sym->return_type;
-      //   }
-      //   case ast::NodeType::LocalVar: {
-      //     ast::LocalVar var = right;
-      //     SymbolVariable *sym = ctx.id_var_resolved(var.identifier(), *left.type);
-      //     return sym;
-      //   }
-      //   default:
-      //     ctx.builder << right;
-      //     return ctx.table.err_cls;
-      // }
+      ast::Node right = consume();
+      switch (right.type()) {
+        case ast::NodeType::FuncCall:
+          return function(right, *left.type);
+        case ast::NodeType::LocalVar:
+          return variable(LocalVar(right).identifier(), *left.type);
+        default:
+          return {t, ctx.table.err_cls};
+      }
     }
 
     ExpressionResult subscript(ExpressionResult left, const ast::Node &t)
     {
+      /* Subscript operator. */
+      if (ast::Subscript sub = t; sub.is_valid()) {
+        ExpressionResult param = ctx.expr(sub.expr(), scope);
+
+        if (left.array_dim > 0) {
+          left.str += string(t.front().str()) + param.str + string(t.back().str());
+          left.array_dim -= 1;
+          return left;
+        }
+        /* Call subscript operator */
+        if (left.type->operator_subscript) {
+#if 0 /* Future operator overloading */
+          if (true) {
+            left.str = SymbolTable::subscript_operator_id + '(' + left.str + ',' + param.str + ')';
+            return {left.str, left.type->operator_subscript->return_type};
+          }
+#endif
+          left.str += string(t.front().str()) + param.str + string(t.back().str());
+          return {left.str, left.type->operator_subscript->return_type};
+        }
+      }
       return {t, ctx.table.err_cls};
-      // if (ast::Subscript sub = t; sub.is_valid()) {
-      //   ctx.subscript(sub, scope);
-      //   if (left.array_dim > 0) {
-      //     left.array_dim -= 1;
-      //     return left;
-      //   }
-      //   if (left.type && left.type->operator_subscript) {
-      //     return {left.type->operator_subscript->return_type};
-      //   }
-      // }
-      // return left;
     }
 
     ExpressionResult function_call(ExpressionResult left, const ast::Node &t)
@@ -184,7 +171,7 @@ struct CodegenContext : NodeErrorHandler {
       auto it = ctx.table.operators.find({nullptr, op_type, right.type});
       SymbolClass *type = (it != ctx.table.operators.end()) ? it->second->return_type :
                                                               ctx.table.err_cls;
-      return {std::string(t.str_full()) + right.str, type};
+      return {string(t.str_full()) + right.str, type};
     }
 
     ExpressionResult suffix(ExpressionResult left, const ast::Node &t)
@@ -194,7 +181,7 @@ struct CodegenContext : NodeErrorHandler {
       auto it = ctx.table.operators.find({left.type, op_type, nullptr});
       SymbolClass *type = (it != ctx.table.operators.end()) ? it->second->return_type :
                                                               ctx.table.err_cls;
-      return {left.str + std::string(t.str_full()), type};
+      return {left.str + string(t.str_full()), type};
     }
 
     ExpressionResult binary(ExpressionResult lhs, const ast::Node &t, BindingPower p)
@@ -209,24 +196,25 @@ struct CodegenContext : NodeErrorHandler {
 
 #if 0 /* Future operator overloading */
       if (true) {
-        const std::string op_name = ctx.table.binary_type_to_id.find(op_type)->second;
+        const string op_name = ctx.table.binary_type_to_id.find(op_type)->second;
         return {op_name + '(' + lhs.str + ',' + rhs.str + ')', type};
       }
 #endif
-      return {lhs.str + std::string(t.str_full()) + rhs.str, type};
+      return {lhs.str + string(t.str_full()) + rhs.str, type};
     }
 
     ExpressionResult ternary(ExpressionResult left,
                              const ast::Node &t,
-                             BindingPower p_first,
+                             BindingPower /*p_first*/,
                              BindingPower p_second)
     {
-      return {t, ctx.table.err_cls};
-      // ctx.builder << t; /* '?' */
-      // ExpressionResult tval = expr(p_first);
-      // ctx.match_if(Colon);
-      // ExpressionResult fval = expr(p_second);
-      // return {tval.type};
+      ast::Node question = t;
+      ExpressionResult tval = ctx.expr(consume(), scope);
+      ast::Node colon = consume();
+      ExpressionResult fval = expr(p_second);
+      return {left.str + string(question.str_full()) + tval.str + string(colon.str_full()) +
+                  fval.str,
+              tval.type};
     }
 
     TokenType peek() const
@@ -276,17 +264,19 @@ struct CodegenContext : NodeErrorHandler {
       return ctx.initializer_list(construct.initializer_list(), scope, cls);
     }
 
-    ExpressionResult variable(IdQualified id, const SymbolScope &scope)
+    ExpressionResult variable(IdQualified id, const SymbolScope &symbol_scope)
     {
       assert(id.is_valid());
-      SymbolVariable *var = scope.lookup_variable(ctx.table, id);
+      string whitespace = trivia(id);
+
+      SymbolVariable *var = symbol_scope.lookup_variable(ctx.table, id);
       if (var->is_error) {
         ctx.error(id, Diag::UnknownVariable, id.str());
-        return var;
+        return {var, whitespace};
       }
 
       if (var->is_constexpr) {
-        return var;
+        return {var, whitespace};
       }
 
       if (var->type->is_srt()) {
@@ -297,27 +287,25 @@ struct CodegenContext : NodeErrorHandler {
           return {"", var->type};
         }
         /* SRT type is used in an expression (likely as function argument). Call the ctor. */
-        return {var->type->identifier + "_ctor_()" + trivia(id), var->type};
+        return {var->type->identifier + "_ctor_()" + whitespace, var->type};
       }
 
       if (var->reference_value.is_valid()) {
-        return {std::string(var->reference_value.str()) + trivia(id), var->type};
+        return {string(var->reference_value.str()) + whitespace, var->type};
       }
 
       bool preceded_by_dot = id.front().prev() == '.';
       if (!var->is_static && !preceded_by_dot && var->parent->as_class() != nullptr) {
-        return {"this_." + var->identifier + trivia(id), var->type};
+        return {"this_." + var->identifier + whitespace, var->type};
       }
-      return var;
+      return {var, whitespace};
     }
 
-    ExpressionResult function(const ast::FuncCall &call,
-                              const SymbolScope &expr_scope,
-                              const SymbolScope &param_scope)
+    ExpressionResult function(const ast::FuncCall &call, const SymbolScope &symbol_scope)
     {
       assert(call.is_valid());
       SymbolFunction *sym = ctx.id_func_resolved_lookup(
-          call.identifier(), call.parameters(), expr_scope, param_scope);
+          call.identifier(), call.parameters(), symbol_scope, scope);
 
       FuncParamList list = call.parameters();
       std::string params_str;
@@ -330,7 +318,7 @@ struct CodegenContext : NodeErrorHandler {
 
       int param_count = 0;
       for (Expr param : list.children_of_type<Expr>()) {
-        params_str += ctx.expr(param, expr_scope).str;
+        params_str += ctx.expr(param, scope).str;
         params_str += ctx.opt_str(param.back().next(), Comma);
         ++param_count;
       }

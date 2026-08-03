@@ -136,6 +136,7 @@ struct SymbolTable {
   unordered_map<TokenType, const char *> prefix_type_to_id;
   unordered_map<TokenType, const char *> suffix_type_to_id;
   unordered_map<TokenType, const char *> binary_type_to_id;
+  static constexpr string subscript_operator_id = "arr_op_";
 
   template<typename SymbolT> SymbolT *alloc(SymbolT &&sym);
 

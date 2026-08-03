@@ -16,8 +16,6 @@ using namespace blender::gpu::shader::parser::ast;
 using namespace std;
 using Token = blender::gpu::shader::parser::Token;
 
-static const char *subscript_operator_id = "arr_op_";
-
 SymbolTable::SymbolTable(ParserBase &parser)
 {
   LocalScope node = parser.root();

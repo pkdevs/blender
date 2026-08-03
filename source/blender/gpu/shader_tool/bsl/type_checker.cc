@@ -89,7 +89,7 @@ struct ExpressionTypeParser
     }
   }
 
-  ExpressionResult number(const ast::Node &t)
+  ExpressionResult number_literal(const ast::Node &t)
   {
     SymbolClass *type = table->get_literal_type(t.str());
 
@@ -120,7 +120,7 @@ struct ExpressionTypeParser
     return {type, value, /* is_temporary */ false};
   }
 
-  ExpressionResult string(const ast::Node & /*t*/)
+  ExpressionResult string_literal(const ast::Node & /*t*/)
   {
     return table->str_cls;
   }

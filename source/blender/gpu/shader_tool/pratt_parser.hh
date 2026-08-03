@@ -75,9 +75,9 @@ template<typename Derived, typename ResultT, typename NodeT> class PrattParser {
       case Word:
         return self.identifier(t);
       case Number:
-        return self.number(t);
+        return self.number_literal(t);
       case String:
-        return self.string(t);
+        return self.string_literal(t);
       case Increment:
       case Decrement:
       case Plus:
@@ -133,6 +133,15 @@ template<typename Derived, typename ResultT, typename NodeT> class PrattParser {
       case LogicalAnd:
       case LogicalOr:
         return self.binary(left, t, left_binding_power(type));
+      case Assign:
+      case AssignAdd:
+      case AssignSub:
+      case AssignMul:
+      case AssignDiv:
+      case AssignLShift:
+      case AssignRShift:
+        /* Subtract 1 to enforce Right-Associativity */
+        return self.binary(left, t, left_binding_power(type) - 1);
       case Question:
         /* The middle expression can be almost anything so use 0 so it only stops at the ':' (since
          * Colon has a precedence of 0).
@@ -186,6 +195,14 @@ template<typename Derived, typename ResultT, typename NodeT> class PrattParser {
         return 20;
       case Question:
         return 10;
+      case Assign:
+      case AssignAdd:
+      case AssignSub:
+      case AssignMul:
+      case AssignDiv:
+      case AssignLShift:
+      case AssignRShift:
+        return 5;
       case Colon:
       case ParOpen:
       case ParClose:

@@ -69,12 +69,12 @@ class ExpressionParser : public Parser<ExpressionLexer, NullParser> {
       return 0;
     }
 
-    int64_t number(const Token &t)
+    int64_t number_literal(const Token &t)
     {
       return int64_t(std::stoull(std::string(t.str()), nullptr, 0));
     }
 
-    int64_t string(const Token & /*t*/)
+    int64_t string_literal(const Token & /*t*/)
     {
       throw std::runtime_error("Invalid expression: strings not supported");
     }
