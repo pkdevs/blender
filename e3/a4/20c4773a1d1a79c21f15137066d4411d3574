@@ -3,4 +3,4 @@ Referenced by issue #73966, Bevel Modifier: Inconsistent vertex colors with odd-
 Referenced by issue #60302, bevel modifier material problem
 Referenced by issue #56625, Bevel modifier UV problem with corners
 Referenced by issue #137335, Bevel modifier inconsistently interpolates color attributes for odd numbered-segment loops.
-Referenced by pull request #161118, Fix #142279: Inconsistent materials on odd-segment bevel center strip
+Referenced by pull request #161118, Fix: Bevel: odd-segment center strip ignores tie-break rules on non-seam edges
