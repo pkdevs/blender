@@ -1188,8 +1188,8 @@ void transform_convert_mesh_mirrordata_calc(Object *obedit,
   r_mirror_data->vert_map = nullptr;
   r_mirror_data->mirror_elem_len = 0;
 
-  std::optional<EditMeshSymmetryHelper> symmetry_helper =
-      EditMeshSymmetryHelper::create_if_needed(obedit, BM_VERT);
+  std::optional<EditMeshSymmetryHelper> symmetry_helper = EditMeshSymmetryHelper::create_if_needed(
+      obedit, BM_VERT);
   if (!symmetry_helper) {
     return;
   }
