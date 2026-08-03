@@ -1406,8 +1406,7 @@ def extension_draw_item(
         row = col.row()
         row.active = is_enabled
 
-        # The full tagline may be multiple lines (not yet supported by Blender's UI).
-        row.label(text=" {:s}.".format(item.tagline), translate=False)
+        row.label_multiline(text=" {:s}.".format(item.tagline), translate=False)
 
         col.separator(type='LINE')
         del col
