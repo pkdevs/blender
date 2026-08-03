@@ -10,7 +10,7 @@
 
 #include "BLI_vector.hh"
 
-#include "gpu_work_in_flight_private.hh"
+#include "GPU_work_in_flight.hh"
 
 #include <epoxy/gl.h>
 

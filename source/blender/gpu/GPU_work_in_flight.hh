@@ -8,26 +8,41 @@
 
 #pragma once
 
-namespace blender {
+#include <memory>
 
-namespace gpu {
+#include "BLI_assert.hh"
+
+namespace blender::gpu {
+
 class WorkInFlight;
-}  // namespace gpu
+
+class WorkInFlightDeleter {
+ public:
+  void operator()(WorkInFlight *work_in_flight);
+};
+
+using WorkInFlightPtr = std::unique_ptr<gpu::WorkInFlight, gpu::WorkInFlightDeleter>;
 
 /**
  * Limiter for the maximum amount of work packets simultaneously in flight on the GPU.
+ * Base class which is then specialized for each implementation (GL, VK, ...).
  */
-gpu::WorkInFlight *GPU_work_in_flight_create(unsigned int max_in_flight);
-void GPU_work_in_flight_free(gpu::WorkInFlight *work_in_flight);
+class WorkInFlight {
+ public:
+  static WorkInFlightPtr create(unsigned int max_in_flight);
 
-/* Reset the internal state. Needs to be called before the first or after the last work packet. */
-void GPU_work_in_flight_reset(gpu::WorkInFlight *work_in_flight);
+  virtual ~WorkInFlight() = default;
 
-/* Needs to be called before beginning a work packet. Blocks if the maximum number of work packets
- * in flight is reached. */
-void GPU_work_in_flight_begin_work(gpu::WorkInFlight *work_in_flight);
+  /* Reset the internal state. Needs to be called before the first or after the last work packet.
+   */
+  virtual void reset() = 0;
 
-/* Needs to be called after the end of a work packet. */
-void GPU_work_in_flight_end_work(gpu::WorkInFlight *work_in_flight);
+  /* Needs to be called before beginning a work packet. Blocks if the maximum number of work
+   * packets in flight is reached. */
+  virtual void begin_work() = 0;
 
-}  // namespace blender
+  /* Needs to be called after the end of a work packet. */
+  virtual void end_work() = 0;
+};
+
+}  // namespace blender::gpu

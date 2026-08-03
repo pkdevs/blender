@@ -8,8 +8,9 @@
 
 #pragma once
 
+#include "GPU_work_in_flight.hh"
+
 #include "gpu_context_private.hh"
-#include "gpu_work_in_flight_private.hh"
 
 #include "mtl_context.hh"
 

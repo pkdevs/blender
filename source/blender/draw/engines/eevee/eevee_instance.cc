@@ -282,7 +282,7 @@ void Instance::init(const int2 &output_res,
 
   if (!samples_in_flight) {
     /** Allow up to 3 samples in flight on the GPU. */
-    samples_in_flight = GPU_work_in_flight_create(3);
+    samples_in_flight = gpu::WorkInFlight::create(3);
   }
 }
 
@@ -326,13 +326,6 @@ void Instance::init_light_bake(Depsgraph *depsgraph, draw::Manager *manager)
   needed_shaders = IRRADIANCE_BAKE_SHADERS | SHADOW_SHADERS | SURFEL_SHADERS;
   shaders.static_shaders_load_async(needed_shaders);
   shaders.static_shaders_wait_ready(needed_shaders);
-}
-
-Instance::~Instance()
-{
-  if (samples_in_flight) {
-    GPU_work_in_flight_free(samples_in_flight);
-  }
 }
 
 void Instance::set_time(float time)
@@ -692,7 +685,7 @@ void Instance::render_frame(RenderEngine *engine, RenderLayer *render_layer, con
   /* TODO: Break on RE_engine_test_break(engine) */
   double start_time = BLI_time_now_seconds();
   while (!sampling.finished()) {
-    GPU_work_in_flight_begin_work(samples_in_flight);
+    samples_in_flight->begin_work();
     this->render_sample();
 
     if ((sampling.sample_index() == 1) || ((sampling.sample_index() % 25) == 0) ||
@@ -704,7 +697,7 @@ void Instance::render_frame(RenderEngine *engine, RenderLayer *render_layer, con
       RE_engine_update_stats(engine, nullptr, re_info.c_str());
     }
 
-    GPU_work_in_flight_end_work(samples_in_flight);
+    samples_in_flight->end_work();
     GPU_render_step();
 
 #if 0
@@ -808,9 +801,9 @@ void Instance::draw_viewport_image_render()
 
   do {
     /* Render at least once to blit the finished image. */
-    GPU_work_in_flight_begin_work(samples_in_flight);
+    samples_in_flight->begin_work();
     this->render_sample();
-    GPU_work_in_flight_end_work(samples_in_flight);
+    samples_in_flight->end_work();
   } while (!sampling.finished_viewport());
   velocity.step_swap();
 

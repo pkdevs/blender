@@ -197,7 +197,6 @@ set(SRC
   intern/gpu_texture_private.hh
   intern/gpu_uniform_buffer_private.hh
   intern/gpu_vertex_format_private.hh
-  intern/gpu_work_in_flight_private.hh
 
   dummy/dummy_backend.hh
   dummy/dummy_batch.hh
