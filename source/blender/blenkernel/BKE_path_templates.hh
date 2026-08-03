@@ -79,6 +79,9 @@
 #include "DNA_node_types.h"
 #include "DNA_scene_types.h"
 
+/* Collapsed abbreviation to use when shortening path template strings for viewing purposes. */
+#define BKE_TEMPLATE_EXPRESSION_ABBREVIATION "{…}"
+
 namespace blender {
 
 struct bContext;

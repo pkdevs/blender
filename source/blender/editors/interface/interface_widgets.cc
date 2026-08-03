@@ -1530,7 +1530,7 @@ static size_t text_shorten_next_template_var(char *str, size_t byte_position)
     return -1;
   }
 
-  const StringRef short_expression{"{…}"};
+  const StringRef short_expression{BKE_TEMPLATE_EXPRESSION_ABBREVIATION};
 
   /* Don't substitute if the short expression isn't actually shorter. */
   if (info->byte_range.size() <= short_expression.size()) {
@@ -1565,7 +1565,7 @@ static size_t avoid_non_split_patterns(StringRef str,
   /* String patterns to avoid splitting when clipping text: they are either left
    * as-is or removed completely, never partially removed. */
   const StringRef no_split_strings[] = {
-      "{…}" /* Shortened template variable expressions. */
+      BKE_TEMPLATE_EXPRESSION_ABBREVIATION,
   };
 
   for (const StringRef unit : no_split_strings) {
