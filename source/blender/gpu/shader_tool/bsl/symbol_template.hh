@@ -10,6 +10,7 @@
 
 #include "ast.hh"
 #include "diagnostic.hh"
+#include "symbol_variable.hh"
 
 #include <unordered_map>
 
@@ -29,10 +30,7 @@ template<typename T> struct SymbolTemplate {
   /* For argument dependent lookup. Maps a template argument to a function argument. */
   vector<int> temp_arg_index_in_fn_arg;
 
-  SymbolTemplate(ast::TemplateDecl temp) : decl(temp)
-  {
-    init_adl();
-  }
+  SymbolTemplate(ast::TemplateDecl temp);
 
   bool is_adl_possible() const
   {
@@ -45,8 +43,6 @@ template<typename T> struct SymbolTemplate {
   Result<T *> lookup_adl(const SymbolTable &symbols,
                          ast::FuncParamList list,
                          const SymbolScope &scope) const;
-
-  void init_adl();
 
  private:
   ast::IdQualified id() const

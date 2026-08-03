@@ -682,6 +682,8 @@ struct SymbolParser : NodeErrorHandler {
         NOTE(decl.identifier(), Diag::NoteInstantiationFuncTemplateRequested, full_id);
         SymbolFunction *fn_inst = parse_func_decl(
             *parent, temp_decl.decl(), prefix, mangled.str, temp);
+        fn_inst->is_specialization = true;
+        fn_inst->template_data = fn->template_data;
         fn->template_data->instances.emplace(mangled.str, fn_inst);
         fn->add_overload(fn_inst);
       }
@@ -727,6 +729,7 @@ struct SymbolParser : NodeErrorHandler {
         string full_id = string(decl.identifier().str()) + "<" + mangled.str_debug.substr(2) + ">";
         NOTE(decl.identifier(), Diag::NoteInstantiationFuncTemplateRequested, full_id);
         SymbolFunction *spec = parse_func_decl(scope, decl, prefix, mangled.str);
+        spec->is_specialization = true;
         fn->template_data->instances.emplace(mangled.str, spec);
         fn->add_overload(spec);
       }

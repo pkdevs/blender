@@ -30,6 +30,8 @@ struct SymbolFunction : SymbolScope {
   bool is_complete = true;
   /* If true, will allow vector type casting. */
   bool is_builtin = false;
+  /* True for template specialization and instantiation. */
+  bool is_specialization = false;
 
   enum Type { STATIC, MEMBER, GLOBAL } fn_type;
   enum class EntryPointType { FRAG, VERT, COMP, NONE } entry_point_type;

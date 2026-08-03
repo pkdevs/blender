@@ -73,6 +73,9 @@ struct SymbolTable {
   Allocator<SymbolClassTemplate> tmp_cls_arena;
   Allocator<SymbolFunctionTemplate> tmp_fun_arena;
 
+  SymbolVariable *err_var = nullptr;
+  SymbolFunction *err_func = nullptr;
+
   SymbolClass *err_cls = nullptr;
   SymbolClass *char_cls = nullptr;
   SymbolClass *short_cls = nullptr;

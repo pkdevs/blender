@@ -609,6 +609,9 @@ void SymbolTable::register_builtins(LocalScope node)
     sym->value = c.value;
     root->variables.emplace(sym->identifier, sym);
   }
+
+  this->err_var = root->lookup_variable(err_symbol);
+  this->err_func = root->lookup_function(err_symbol);
 }
 
 SymbolClass *SymbolTable::get_literal_type(string_view lit) const

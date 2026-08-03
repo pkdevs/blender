@@ -59,6 +59,20 @@ Result<SymbolFunction *> SymbolScope::lookup_function(const SymbolTable &table,
     return {func, err ? err : AstNodeException{id, Diag::UnknownFunction}};
   }
 
+  if (func->template_data) {
+    /* TODO(fclem): This doesn't resolve overloads of templated function. */
+    TemplateParamList template_params = id.template_params();
+    if (template_params.is_valid()) {
+      func = func->template_data->lookup_inst(template_params, arguments_scope, table)
+                 .unwrap(err)
+                 .first;
+      return {func, err};
+    }
+    // if (!func->template_data->is_adl_possible()) {
+    //   return {table.err_func, AstNodeException{id, Diag::MissingExplicitTemplateArguments}};
+    // }
+  }
+
   auto arg_types = SymbolFunction::to_arg_types(table, arguments_scope, params).unwrap(err);
   /* Get exact match when querying for the declaration. */
   func = func->lookup_overload(id, table, arg_types).unwrap(err);

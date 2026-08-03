@@ -38,9 +38,8 @@ ResultPair<T *, string> SymbolTemplate<T>::lookup_inst(TemplateParamList list,
   return {it->second, full_id, err};
 }
 
-template<typename T> void SymbolTemplate<T>::init_adl()
+template<typename T> SymbolTemplate<T>::SymbolTemplate(ast::TemplateDecl temp) : decl(temp)
 {
-  TemplateDecl temp = this->decl;
   if (temp.is_class()) {
     return;
   }
@@ -50,7 +49,6 @@ template<typename T> void SymbolTemplate<T>::init_adl()
   if (tmp_arg_count == 0) {
     return;
   }
-  temp_arg_index_in_fn_arg.reserve(tmp_arg_count);
 
   FuncDecl decl(temp.decl());
   for (FuncArg arg : decl.arguments().children_of_type<FuncArg>()) {
@@ -68,6 +66,7 @@ template<typename T> void SymbolTemplate<T>::init_adl()
   }
 
   if (temp_arg_index_in_fn_arg.size() != tmp_arg_count) {
+    /* ADL not possible. */
     temp_arg_index_in_fn_arg.clear();
   }
 }
