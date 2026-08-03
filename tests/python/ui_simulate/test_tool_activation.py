@@ -187,7 +187,7 @@ def _activate_tools_for_context(space_type, *, mode=None, setup_fn=None):
         t.assertEqual(active_tool_id, tool.idname)
 
 
-def view3d_tool_settings_header():
+def view3d():
     for mode in ("OBJECT", "EDIT_MESH", "SCULPT"):
         yield from _activate_tools_for_context(
             "VIEW_3D",
@@ -196,7 +196,7 @@ def view3d_tool_settings_header():
         )
 
 
-def image_editor_tool_settings_header():
+def image_editor():
     for mode in ("VIEW", "PAINT", "UV", "MASK"):
         yield from _activate_tools_for_context(
             "IMAGE_EDITOR",
@@ -205,11 +205,11 @@ def image_editor_tool_settings_header():
         )
 
 
-def node_editor_tool_settings_header():
+def node_editor():
     yield from _activate_tools_for_context("NODE_EDITOR")
 
 
-def sequencer_tool_settings_header():
+def sequencer():
     for view_type in (
         "SEQUENCER",
         "PREVIEW",
