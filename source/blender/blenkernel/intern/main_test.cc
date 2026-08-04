@@ -71,9 +71,8 @@ TEST_F(BMainAllIDsIteratorTest, basics)
   EXPECT_EQ(2, bmain->objects.count());
 
   MainAllIDsIterator main_iter{*bmain};
-  MainAllIDsIterator main_iter_user_first{*bmain, MainAllIDsIterator::Type::USER_FIRST};
-  MainAllIDsIterator main_iter_dependency_first{*bmain,
-                                                MainAllIDsIterator::Type::DEPENDENCY_FIRST};
+  MainAllIDsIterator main_iter_user_first{*bmain, false};
+  MainAllIDsIterator main_iter_dependency_first{*bmain, true};
   EXPECT_EQ(4, main_iter.size());
   EXPECT_EQ(4, main_iter_dependency_first.size());
   EXPECT_EQ(4, main_iter_user_first.size());

@@ -209,42 +209,20 @@ static void rna_Main_version_get(PointerRNA *ptr, int *value)
   value[2] = bmain->subversionfile;
 }
 
-static int rna_iterator_BlendData_all_ids_dependency_first_length(PointerRNA *ptr)
+static int rna_iterator_BlendData_all_ids_length(PointerRNA *ptr)
 {
   Main &bmain = *static_cast<Main *>(ptr->data);
 
-  MainAllIDsIterator internal_iter{bmain, MainAllIDsIterator::Type::DEPENDENCY_FIRST};
+  MainAllIDsIterator internal_iter{bmain};
   return int(internal_iter.size());
 }
 
-static void rna_iterator_BlendData_all_ids_dependency_first_begin(CollectionPropertyIterator *iter,
-                                                                  PointerRNA *ptr)
+static void rna_iterator_BlendData_all_ids_begin(CollectionPropertyIterator *iter, PointerRNA *ptr)
 {
   Main &bmain = *static_cast<Main *>(ptr->data);
 
   iter->parent = *ptr;
-  MainAllIDsIterator *internal_iter = MEM_new<MainAllIDsIterator>(
-      __func__, bmain, MainAllIDsIterator::Type::DEPENDENCY_FIRST);
-  iter->internal.custom = internal_iter;
-  iter->valid = (*internal_iter != internal_iter->end());
-}
-
-static int rna_iterator_BlendData_all_ids_user_first_length(PointerRNA *ptr)
-{
-  Main &bmain = *static_cast<Main *>(ptr->data);
-
-  MainAllIDsIterator internal_iter{bmain, MainAllIDsIterator::Type::USER_FIRST};
-  return int(internal_iter.size());
-}
-
-static void rna_iterator_BlendData_all_ids_user_first_begin(CollectionPropertyIterator *iter,
-                                                            PointerRNA *ptr)
-{
-  Main &bmain = *static_cast<Main *>(ptr->data);
-
-  iter->parent = *ptr;
-  MainAllIDsIterator *internal_iter = MEM_new<MainAllIDsIterator>(
-      __func__, bmain, MainAllIDsIterator::Type::USER_FIRST);
+  MainAllIDsIterator *internal_iter = MEM_new<MainAllIDsIterator>(__func__, bmain);
   iter->internal.custom = internal_iter;
   iter->valid = (*internal_iter != internal_iter->end());
 }
@@ -666,64 +644,19 @@ void RNA_def_main(BlenderRNA *brna)
   RNA_def_property_override_clear_flag(prop, PROPOVERRIDE_NO_COMPARISON);
   RNA_def_property_struct_type(prop, "ID");
   RNA_def_property_collection_funcs(prop,
-                                    "rna_iterator_BlendData_all_ids_dependency_first_begin",
+                                    "rna_iterator_BlendData_all_ids_begin",
                                     "rna_iterator_BlendData_all_ids_next",
                                     "rna_iterator_BlendData_all_ids_end",
                                     "rna_iterator_BlendData_all_ids_get",
-                                    "rna_iterator_BlendData_all_ids_dependency_first_length",
+                                    "rna_iterator_BlendData_all_ids_length",
                                     nullptr,
                                     nullptr,
                                     nullptr);
   RNA_def_property_ui_text(
       prop,
       "All Data-Blocks",
-      "Read-only list of all IDs listed in Blender data-base, starting from lower-level ID types "
-      "(typically IDs that are dependencies from other IDs, e.g. Meshes <- Objects <- "
-      "Collections)");
-  RNA_def_property_deprecated(prop,
-                              "Same as `all_ids_dependency_first`. Use `all_ids_user_first` or "
-                              "`all_ids_dependency_first` instead",
-                              503,
-                              600);
-
-  prop = RNA_def_property(srna, "all_ids_dependency_first", PROP_COLLECTION, PROP_NONE);
-  RNA_def_property_clear_flag(prop, PROP_EDITABLE);
-  RNA_def_property_override_clear_flag(prop, PROPOVERRIDE_NO_COMPARISON);
-  RNA_def_property_struct_type(prop, "ID");
-  RNA_def_property_collection_funcs(prop,
-                                    "rna_iterator_BlendData_all_ids_dependency_first_begin",
-                                    "rna_iterator_BlendData_all_ids_next",
-                                    "rna_iterator_BlendData_all_ids_end",
-                                    "rna_iterator_BlendData_all_ids_get",
-                                    "rna_iterator_BlendData_all_ids_dependency_first_length",
-                                    nullptr,
-                                    nullptr,
-                                    nullptr);
-  RNA_def_property_ui_text(
-      prop,
-      "All Data-Blocks",
-      "Read-only list of all IDs listed in Blender data-base, starting from lower-level ID types "
-      "(typically IDs that are dependencies from other IDs, e.g. Meshes <- Objects <- "
-      "Collections)");
-
-  prop = RNA_def_property(srna, "all_ids_user_first", PROP_COLLECTION, PROP_NONE);
-  RNA_def_property_clear_flag(prop, PROP_EDITABLE);
-  RNA_def_property_override_clear_flag(prop, PROPOVERRIDE_NO_COMPARISON);
-  RNA_def_property_struct_type(prop, "ID");
-  RNA_def_property_collection_funcs(prop,
-                                    "rna_iterator_BlendData_all_ids_user_first_begin",
-                                    "rna_iterator_BlendData_all_ids_next",
-                                    "rna_iterator_BlendData_all_ids_end",
-                                    "rna_iterator_BlendData_all_ids_get",
-                                    "rna_iterator_BlendData_all_ids_user_first_length",
-                                    nullptr,
-                                    nullptr,
-                                    nullptr);
-  RNA_def_property_ui_text(
-      prop,
-      "All Data-Blocks",
-      "Read-only list of all IDs listed in Blender data-base, starting from higher-level ID types "
-      "(typically IDs that are using other IDs, e.g. Collections -> Objects -> Meshes)");
+      "Read-only list of all IDs listed in Blender data-base. Warning: Order is not guaranteed "
+      "and should be considered an internal implementation detail.");
 
   prop = RNA_def_property(srna, "project", PROP_POINTER, PROP_NONE);
   RNA_def_property_clear_flag(prop, PROP_EDITABLE);

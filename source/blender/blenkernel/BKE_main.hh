@@ -804,12 +804,8 @@ MainListsArray BKE_main_lists_get(Main &bmain);
  * An iterator over all IDs in the given Main.
  *
  * As with the historic C-based APIs, order is defined by these rules:
- *   - ID types are iterated based on their #eID_Index, based on the type of iterator specified at
- *     construction (see also the documentation of #eID_Index):
- *     - Type::USER_FIRST goes from highest #eID_Index value to lowest (starting with
- * WindowManager), i.e. from user ID types to dependency ID types.
- *     - Type::DEPENDENCY_FIRST goes from lowest #eID_Index value to highest (starting with
- * Library), i.e. from dependency ID types to user ID types.
+ *   - ID types are iterated based on their #eID_Index, by default from higher index to lower one
+ *     (for historical reasons). This can be inverted by using the #reverse_id_type_order option.
  *   - Within a same type, IDs are iterated based on their libraries (local IDs always iterated
  *     first) and names (alphanumeric sorting).
  *
@@ -828,44 +824,29 @@ class MainAllIDsIterator {
   using pointer = ID *;
   using reference = ID &;
 
-  enum class Type {
-    /**
-     * Forward iteration will first return ID of 'higher level' types, which are generally using
-     * other dependency IDs. See also the documentation of #eID_Index.
-     */
-    USER_FIRST = 0,
-    /**
-     * Forward iteration will first return ID of 'lower level' types, which are generally being
-     * used by other IDs. See also the documentation of #eID_Index.
-     */
-    DEPENDENCY_FIRST = 1,
-  };
-
  private:
-  Type type_;
   MainListsArray lbarray_;
+  bool reverse_id_type_order_ = false;
   int64_t curr_lbarray_index_;
   ID *curr_id_ = nullptr;
 
  public:
   /* Note: default constructor is a requirement to make the iterator usable with std::ranges. */
-  MainAllIDsIterator() : type_(Type::USER_FIRST), lbarray_{}
+  MainAllIDsIterator() : lbarray_{}
   {
     curr_lbarray_index_ = lbarray_index_lower_bound();
     ++(*this);
   }
 
-  explicit MainAllIDsIterator(MainListsArray &lbarray,
-                              MainAllIDsIterator::Type type = MainAllIDsIterator::Type::USER_FIRST)
-      : type_(type), lbarray_(lbarray)
+  explicit MainAllIDsIterator(MainListsArray &lbarray, const bool reverse_id_type_order = false)
+      : lbarray_(lbarray), reverse_id_type_order_(reverse_id_type_order)
   {
     curr_lbarray_index_ = lbarray_index_lower_bound();
     ++(*this);
   }
 
-  explicit MainAllIDsIterator(Main &bmain,
-                              MainAllIDsIterator::Type type = MainAllIDsIterator::Type::USER_FIRST)
-      : type_(type), lbarray_(BKE_main_lists_get(bmain))
+  explicit MainAllIDsIterator(Main &bmain, const bool reverse_id_type_order = false)
+      : lbarray_(BKE_main_lists_get(bmain)), reverse_id_type_order_(reverse_id_type_order)
   {
     curr_lbarray_index_ = lbarray_index_lower_bound();
     ++(*this);
@@ -874,12 +855,12 @@ class MainAllIDsIterator {
  private:
   int64_t lbarray_index_lower_bound() const
   {
-    return (type_ == Type::USER_FIRST) ? int64_t(lbarray_.size()) : -1;
+    return reverse_id_type_order_ ? -1 : int64_t(lbarray_.size());
   }
 
   int64_t lbarray_index_upper_bound() const
   {
-    return (type_ == Type::USER_FIRST) ? -1 : int64_t(lbarray_.size());
+    return reverse_id_type_order_ ? int64_t(lbarray_.size()) : -1;
   }
 
   bool lbarray_index_is_valid() const
@@ -889,21 +870,21 @@ class MainAllIDsIterator {
 
   void lbarray_index_increase()
   {
-    if (type_ == Type::USER_FIRST) {
-      curr_lbarray_index_--;
+    if (reverse_id_type_order_) {
+      curr_lbarray_index_++;
     }
     else {
-      curr_lbarray_index_++;
+      curr_lbarray_index_--;
     }
   }
 
   void lbarray_index_decrease()
   {
-    if (type_ == Type::USER_FIRST) {
-      curr_lbarray_index_++;
+    if (reverse_id_type_order_) {
+      curr_lbarray_index_--;
     }
     else {
-      curr_lbarray_index_--;
+      curr_lbarray_index_++;
     }
   }
 
