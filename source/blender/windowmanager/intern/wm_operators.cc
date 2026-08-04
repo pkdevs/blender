@@ -4348,6 +4348,7 @@ static void gesture_circle_modal_keymap(wmKeyConfig *keyconf)
   }
 
   keymap = WM_modalkeymap_ensure(keyconf, "View3D Gesture Circle", modal_items);
+  keymap->modal_item_status_draw = ui::circle_select_modal_item_draw;
 
   /* Assign map to operators. */
   WM_modalkeymap_assign(keymap, "VIEW3D_OT_select_circle");

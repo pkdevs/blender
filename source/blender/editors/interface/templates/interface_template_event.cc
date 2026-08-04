@@ -16,6 +16,16 @@
 #include "interface_intern.hh"
 
 namespace blender::ui {
+/* templates for custom drawing of modal keymap items. */
+void circle_select_modal_item_draw(ui::Layout *layout, wmKeyMap *keymap, const EnumPropertyItem *item)
+{
+  if (ELEM(item->value, GESTURE_MODAL_CANCEL, GESTURE_MODAL_CIRCLE_SIZE, GESTURE_MODAL_NOP)) {
+    return;
+  }
+}
+} // namespace blender::ui
+
+namespace blender::ui {
 
 static const wmKeyMapItem *keymap_item_from_enum_item(const wmKeyMap *keymap,
                                                       const EnumPropertyItem *item)

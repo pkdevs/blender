@@ -57,6 +57,7 @@ struct Stereo3dFormat;
 struct bContext;
 struct bScreen;
 struct wmTimer;
+struct EnumPropertyItem;
 
 #define OP_MAX_TYPENAME 64
 #define KMAP_MAX_NAME 64
@@ -440,6 +441,7 @@ struct wmKeyMap {
   /** Verify if enabled in the current context, use #WM_keymap_poll instead of direct calls. */
   bool (*poll)(struct bContext *);
   bool (*poll_modal_item)(const struct wmOperator *op, int value) = {};
+  void (*modal_item_status_draw)(ui::Layout *layout, wmKeyMap *keymap, const EnumPropertyItem *item) = {};
 
   /** For modal, #EnumPropertyItem for now. */
   const void *modal_items = nullptr;
