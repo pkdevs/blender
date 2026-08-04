@@ -8,7 +8,7 @@
  * \ingroup imbuf
  */
 
-#include "BLI_compiler_compat.h"
+#include "BLI_compiler_compat.hh"
 #include "BLI_math_matrix_types.hh"
 #include "BLI_string_ref.hh"
 #include "BLI_vector.hh"
@@ -88,8 +88,14 @@ const char *IMB_colormanagement_space_from_filepath_rules(const char *filepath);
 const ColorSpace *IMB_colormanagement_space_get_named(const char *name);
 const ColorSpace *IMB_colormanagement_space_get_named(StringRefNull name);
 bool IMB_colormanagement_space_is_data(const ColorSpace *colorspace);
+
+/** Is colorspace the same as the scene linear working space? */
 bool IMB_colormanagement_space_is_scene_linear(const ColorSpace *colorspace);
+/** Is the colorspace sRGB? */
 bool IMB_colormanagement_space_is_srgb(const ColorSpace *colorspace);
+/* Is the colorspace scene linear + the sRGB transfer function? */
+bool IMB_colormanagement_space_is_scene_linear_srgb(const ColorSpace *colorspace);
+
 bool IMB_colormanagement_space_name_is_data(const char *name);
 bool IMB_colormanagement_space_name_is_scene_linear(const char *name);
 bool IMB_colormanagement_space_name_is_srgb(const char *name);

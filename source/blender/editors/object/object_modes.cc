@@ -13,8 +13,8 @@
 #include "DNA_object_types.h"
 #include "DNA_scene_types.h"
 
-#include "BLI_time.h"
-#include "BLI_utildefines.h"
+#include "BLI_time.hh"
+#include "BLI_utildefines.hh"
 
 #include "BKE_context.hh"
 #include "BKE_idtype.hh"
@@ -27,8 +27,8 @@
 #include "BKE_paint_types.hh"
 #include "BKE_report.hh"
 
-#include "BLI_math_vector.h"
-#include "BLI_string.h"
+#include "BLI_math_vector_c.hh"
+#include "BLI_string.hh"
 
 #include "WM_api.hh"
 #include "WM_types.hh"
@@ -205,6 +205,13 @@ bool mode_set_ex(bContext *C, eObjectMode mode, bool use_undo, ReportList *repor
   }
 
   const char *opstring = object_mode_op_string((mode == OB_MODE_OBJECT) ? ob->mode : mode);
+  if (opstring == nullptr) {
+    BKE_reportf(reports,
+                RPT_ERROR,
+                "Unable to set invalid object mode %d",
+                int((mode == OB_MODE_OBJECT) ? ob->mode : mode));
+    return false;
+  }
   wmOperatorType *ot = WM_operatortype_find(opstring, false);
 
   if (!use_undo) {

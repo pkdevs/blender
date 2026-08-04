@@ -8,6 +8,8 @@
 
 #include "BKE_node.hh"
 
+#include "NOD_geometry_nodes_warning.hh"
+
 #include "COM_context.hh"
 #include "COM_operation.hh"
 #include "COM_result.hh"
@@ -29,8 +31,6 @@ class NodeOperation : public Operation {
  private:
   /* The node that this operation represents. */
   const bNode &node_;
-  /* A node instance key that identifies the node instance in the nested node groups path. */
-  bNodeInstanceKey instance_key_ = bke::NODE_INSTANCE_KEY_NONE;
   /* The compute context where this node operation is executing. */
   const ComputeContext *compute_context_ = nullptr;
   /* False if node previews are not needed and true otherwise. */
@@ -51,10 +51,6 @@ class NodeOperation : public Operation {
    * output corresponding to each result. The node execution schedule is given as an input. */
   void compute_results_reference_counts(const Schedule &schedule);
 
-  /* Setter and getter for instance_key_. */
-  void set_instance_key(const bNodeInstanceKey &instance_key);
-  const bNodeInstanceKey &get_instance_key() const;
-
   /* Setter and getter for compute_context_. */
   void set_compute_context(const ComputeContext &compute_context);
   const ComputeContext &get_compute_context() const;
@@ -63,6 +59,9 @@ class NodeOperation : public Operation {
   void set_needs_node_previews(const bool needed);
 
  protected:
+  /* Add a warning of the given type and message to the node. */
+  void add_warning(nodes::NodeWarningType type, std::string message);
+
   /* Log the values for the inputs and outputs of the node as well as its image preview. */
   void log_data() override;
 

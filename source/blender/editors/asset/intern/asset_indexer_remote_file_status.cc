@@ -2,9 +2,9 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#include "BLI_fileops.h"
+#include "BLI_fileops.hh"
 #include "BLI_path_utils.hh"
-#include "BLI_string.h"
+#include "BLI_string.hh"
 
 #include "AS_remote_library.hh"
 
@@ -23,6 +23,8 @@ namespace blender::ed::asset::index {
  *
  * The Disk File Hash Service itself will complete the filename depending on the back-end used. At
  * the moment of writing that's SQLite, which will append `_v{schema version}.sqlite`.
+ *
+ * NOTE: if this changes, also update the RemoteAssetListingLocator class in listing_downloader.py.
  */
 constexpr const char *hash_service_filename_prefix = "_file_hashes";
 

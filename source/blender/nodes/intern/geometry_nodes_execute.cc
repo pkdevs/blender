@@ -8,9 +8,9 @@
 
 #include <cfloat>
 
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 #include "BLI_math_euler.hh"
-#include "BLI_string.h"
+#include "BLI_string.hh"
 
 #include "PRF_profile.hh"
 
@@ -576,7 +576,7 @@ bke::GeometrySet execute_geometry_nodes_on_geometry(const bNodeTree &btree,
       .slice(function.outputs.input_usages)
       .fill(lf::ValueUsage::Unused);
 
-  call_data.call_depth_limit = U.geometry_nodes_stack_limit;
+  call_data.call_depth_limit = U.nodes_stack_limit;
 
   GeoNodesUserData user_data;
   user_data.call_data = &call_data;

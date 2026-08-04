@@ -11,15 +11,15 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_endian_switch.h"
-#include "BLI_fileops.h"
-#include "BLI_math_base.h"
+#include "BLI_endian_switch.hh"
+#include "BLI_fileops.hh"
 #include "BLI_math_base.hh"
+#include "BLI_math_base_c.hh"
 #include "BLI_path_utils.hh"
-#include "BLI_string.h"
+#include "BLI_string.hh"
 #include "BLI_string_utils.hh"
-#include "BLI_time.h"
-#include "BLI_utildefines.h"
+#include "BLI_time.hh"
+#include "BLI_utildefines.hh"
 
 #include "CLG_log.h"
 
@@ -490,10 +490,10 @@ static MovieProxyBuilder *proxy_builder_create(MovieReader *anim,
 
   streamcount = anim->streamindex;
 
-  /* Find the video stream */
+  /* Find the video stream. */
   context->videoStream = -1;
   for (i = 0; i < context->iFormatCtx->nb_streams; i++) {
-    if (context->iFormatCtx->streams[i]->codecpar->codec_type == AVMEDIA_TYPE_VIDEO) {
+    if (ffmpeg_stream_counts_as_video(context->iFormatCtx, context->iFormatCtx->streams[i])) {
       if (streamcount > 0) {
         streamcount--;
         continue;

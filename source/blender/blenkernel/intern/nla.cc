@@ -17,12 +17,12 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_ghash.h"
-#include "BLI_listbase.h"
-#include "BLI_string.h"
-#include "BLI_string_utf8.h"
+#include "BLI_ghash.hh"
+#include "BLI_listbase.hh"
+#include "BLI_string.hh"
+#include "BLI_string_utf8.hh"
 #include "BLI_string_utils.hh"
-#include "BLI_utildefines.h"
+#include "BLI_utildefines.hh"
 
 #include "BLT_translation.hh"
 
@@ -1844,7 +1844,7 @@ void BKE_nlastrip_validate_fcurves(NlaStrip *strip)
       fcu->auto_smoothing = U.auto_smoothing_new;
 
       /* store path - make copy, and store that */
-      fcu->rna_path = BLI_strdupn("influence", 9);
+      fcu->rna_path_set("influence");
 
       /* insert keyframe to ensure current value stays on first refresh */
       fcu->bezt = MEM_new_zeroed<BezTriple>("nlastrip influence bezt");
@@ -1875,7 +1875,7 @@ void BKE_nlastrip_validate_fcurves(NlaStrip *strip)
       fcu->auto_smoothing = U.auto_smoothing_new;
 
       /* store path - make copy, and store that */
-      fcu->rna_path = BLI_strdupn("strip_time", 10);
+      fcu->rna_path_set("strip_time");
 
       /* TODO: insert a few keyframes to ensure default behavior? */
     }
@@ -1884,10 +1884,11 @@ void BKE_nlastrip_validate_fcurves(NlaStrip *strip)
 
 bool BKE_nlastrip_controlcurve_remove(NlaStrip *strip, FCurve *fcurve)
 {
-  if (STREQ(fcurve->rna_path, "strip_time")) {
+  const StringRefNull rna_path = fcurve->rna_path();
+  if (rna_path == "strip_time") {
     strip->flag &= ~NLASTRIP_FLAG_USR_TIME;
   }
-  else if (STREQ(fcurve->rna_path, "influence")) {
+  else if (rna_path == "influence") {
     strip->flag &= ~NLASTRIP_FLAG_USR_INFLUENCE;
   }
   else {

@@ -15,14 +15,14 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 #include "BLI_map.hh"
-#include "BLI_math_matrix.h"
-#include "BLI_math_rotation.h"
-#include "BLI_math_vector.h"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_rotation_c.hh"
 #include "BLI_math_vector.hh"
-#include "BLI_string.h"
-#include "BLI_string_utf8.h"
+#include "BLI_math_vector_c.hh"
+#include "BLI_string.hh"
+#include "BLI_string_utf8.hh"
 #include "BLI_string_utils.hh"
 
 #include "BLT_translation.hh"
@@ -545,32 +545,32 @@ static void update_duplicate_action_constraint_settings(
         continue;
       }
       const char *new_path = BLI_string_replaceN(
-          old_fcurve->rna_path, orig_bone->name, dup_bone->name);
+          old_fcurve->rna_path().c_str(), orig_bone->name, dup_bone->name);
       FCurve &new_curve = cbag->fcurve_clone(
           *old_fcurve, new_path, old_fcurve->array_index, dup_bone->name);
       MEM_delete(new_path);
       /* Flip the animation */
+      const StringRefNull rna_path = new_curve.rna_path();
+      const size_t slength = rna_path.size();
       int i;
       BezTriple *bezt;
       for (i = 0, bezt = new_curve.bezt; i < new_curve.totvert; i++, bezt++) {
-        const size_t slength = strlen(new_curve.rna_path);
         bool flip = false;
-        if (BLI_strn_endswith(new_curve.rna_path, "location", slength) &&
-            new_curve.array_index == 0)
+        if (BLI_strn_endswith(rna_path.c_str(), "location", slength) && new_curve.array_index == 0)
         {
           flip = true;
         }
-        else if (BLI_strn_endswith(new_curve.rna_path, "rotation_quaternion", slength) &&
+        else if (BLI_strn_endswith(rna_path.c_str(), "rotation_quaternion", slength) &&
                  ELEM(new_curve.array_index, 2, 3))
         {
           flip = true;
         }
-        else if (BLI_strn_endswith(new_curve.rna_path, "rotation_euler", slength) &&
+        else if (BLI_strn_endswith(rna_path.c_str(), "rotation_euler", slength) &&
                  ELEM(new_curve.array_index, 1, 2))
         {
           flip = true;
         }
-        else if (BLI_strn_endswith(new_curve.rna_path, "rotation_axis_angle", slength) &&
+        else if (BLI_strn_endswith(rna_path.c_str(), "rotation_axis_angle", slength) &&
                  ELEM(new_curve.array_index, 2, 3))
         {
           flip = true;

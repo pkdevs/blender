@@ -16,9 +16,9 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_listbase.h"
-#include "BLI_rect.h"
-#include "BLI_string.h"
+#include "BLI_listbase.hh"
+#include "BLI_rect.hh"
+#include "BLI_string.hh"
 #include "BLI_vector.hh"
 
 #include "BKE_context.hh"
@@ -611,6 +611,23 @@ static wmOperatorStatus gizmo_tweak_invoke(bContext *C, wmOperator *op, const wm
   mtweak->flag = 0;
 
   op->customdata = mtweak;
+  wmKeyMap *keymap = WM_keymap_active(CTX_wm_manager(C), op->type->modalkeymap);
+  for (const wmKeyMapItem &kmi : keymap->items) {
+    if (kmi.flag & KMI_INACTIVE) {
+      continue;
+    }
+
+    if (kmi.propvalue == TWEAK_MODAL_SNAP_ON &&
+        WM_event_modifier_flag_match_kmi_press(event->modifier, &kmi))
+    {
+      mtweak->flag |= WM_GIZMO_TWEAK_SNAP;
+    }
+    else if (kmi.propvalue == TWEAK_MODAL_PRECISION_ON &&
+             WM_event_modifier_flag_match_kmi_press(event->modifier, &kmi))
+    {
+      mtweak->flag |= WM_GIZMO_TWEAK_PRECISE;
+    }
+  }
 
   WM_event_add_modal_handler(C, op);
 

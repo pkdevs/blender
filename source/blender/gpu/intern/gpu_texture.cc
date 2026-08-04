@@ -6,7 +6,7 @@
  * \ingroup gpu
  */
 
-#include "BLI_string.h"
+#include "BLI_string.hh"
 
 #include "DNA_userdef_types.h"
 
@@ -34,20 +34,14 @@ Texture::Texture(const char *name)
     name_ = name;
   }
 
-  for (int i = 0; i < ARRAY_SIZE(fb_); i++) {
-    fb_[i] = nullptr;
-  }
-
   gpu_image_usage_flags_ = GPU_TEXTURE_USAGE_GENERAL;
 }
 
 Texture::~Texture()
 {
-  for (int i = 0; i < ARRAY_SIZE(fb_); i++) {
-    if (fb_[i] != nullptr) {
-      fb_[i]->attachment_remove(fb_attachment_[i]);
-    }
-  }
+  fb_attachments_.foreach_item(
+      [&](FrameBuffer *key, const GPUAttachmentType value) { key->attachment_remove(value); });
+  fb_attachments_.clear();
 
 #ifndef GPU_NO_USE_PY_REFERENCES
   if (this->py_ref) {
@@ -142,39 +136,41 @@ bool Texture::init_view(Texture *src,
                         bool cube_as_array,
                         bool use_stencil)
 {
-  is_texture_view_ = true;
-  w_ = src->w_;
-  h_ = src->h_;
-  d_ = src->d_;
-  layer_start = min_ii(layer_start, src->layer_count() - 1);
-  layer_len = min_ii(layer_len, (src->layer_count() - layer_start));
-  switch (type) {
-    case GPU_TEXTURE_1D_ARRAY:
-      h_ = layer_len;
-      break;
-    case GPU_TEXTURE_CUBE_ARRAY:
-      BLI_assert(layer_len % 6 == 0);
-      ATTR_FALLTHROUGH;
-    case GPU_TEXTURE_2D_ARRAY:
-      d_ = layer_len;
-      break;
-    default:
-      BLI_assert(layer_len == 1 && layer_start == 0);
-      break;
-  }
-  mip_start = min_ii(mip_start, src->mipmaps_ - 1);
-  mip_len = min_ii(mip_len, (src->mipmaps_ - mip_start));
-  mipmaps_ = mip_len;
-  format_ = format;
-  format_flag_ = to_format_flag(format);
+  BLI_assert(source_texture_ == nullptr);
+  source_texture_ = src;
+  gpu_image_usage_flags_ = src->gpu_image_usage_flags_;
+  sampler_state = src->sampler_state;
+
+  int view_extent[3]{0, 0, 0};
+  src->mip_size_get(mip_start, view_extent);
+
+  view_layer_start_ = min_ii(layer_start, src->layer_count() - 1);
+
   type_ = type;
   if (cube_as_array) {
     BLI_assert(type_ & GPU_TEXTURE_CUBE);
     type_ = (type_ & ~GPU_TEXTURE_CUBE) | GPU_TEXTURE_2D_ARRAY;
   }
-  sampler_state = src->sampler_state;
-  gpu_image_usage_flags_ = src->gpu_image_usage_flags_;
-  return this->init_internal(src, mip_start, layer_start, use_stencil);
+
+  if (type & GPU_TEXTURE_ARRAY) {
+    view_extent[src->dimensions_count() - 1] = std::min(layer_len,
+                                                        (src->layer_count() - view_layer_start_));
+  }
+  else {
+    view_extent[src->dimensions_count()] = 0;
+  }
+
+  w_ = view_extent[0];
+  h_ = view_extent[1];
+  d_ = view_extent[2];
+
+  mip_min_ = min_ii(mip_start, src->mipmaps_ - 1);
+  mipmaps_ = min_ii(mip_len, (src->mipmaps_ - mip_min_));
+  mip_max_ = mip_min_ + mipmaps_ - 1;
+  format_ = format;
+  format_flag_ = to_format_flag(format);
+
+  return this->init_internal(src, use_stencil);
 }
 
 void Texture::usage_set(eGPUTextureUsage usage_flags)
@@ -190,37 +186,22 @@ void Texture::usage_set(eGPUTextureUsage usage_flags)
 
 void Texture::attach_to(FrameBuffer *fb, GPUAttachmentType type)
 {
-  for (int i = 0; i < ARRAY_SIZE(fb_); i++) {
-    if (fb_[i] == fb) {
-      /* Already stores a reference */
-      if (fb_attachment_[i] != type) {
-        /* Ensure it's not attached twice to the same FrameBuffer. */
-        fb_[i]->attachment_remove(fb_attachment_[i]);
-        fb_attachment_[i] = type;
-      }
-      return;
-    }
+  GPUAttachmentType &current_type = fb_attachments_.lookup_or_add(fb, type);
+  if (current_type != type) {
+    fb->attachment_remove(current_type);
+    current_type = type;
   }
-  for (int i = 0; i < ARRAY_SIZE(fb_); i++) {
-    if (fb_[i] == nullptr) {
-      fb_attachment_[i] = type;
-      fb_[i] = fb;
-      return;
-    }
-  }
-  BLI_assert_msg(0, "GPU: Error: Texture: Not enough attachment");
 }
 
 void Texture::detach_from(FrameBuffer *fb)
 {
-  for (int i = 0; i < ARRAY_SIZE(fb_); i++) {
-    if (fb_[i] == fb) {
-      fb_[i]->attachment_remove(fb_attachment_[i]);
-      fb_[i] = nullptr;
-      return;
-    }
+  std::optional<GPUAttachmentType> type = fb_attachments_.pop_try(fb);
+  if (type.has_value()) {
+    fb->attachment_remove(*type);
   }
-  BLI_assert_msg(0, "GPU: Error: Texture: Framebuffer is not attached");
+  else {
+    BLI_assert_msg(0, "GPU: Error: Texture: Framebuffer is not attached");
+  };
 }
 
 void Texture::update(eGPUDataFormat format, const void *data)

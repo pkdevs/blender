@@ -16,9 +16,9 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_listbase.h"
-#include "BLI_math_vector.h"
-#include "BLI_utildefines.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_vector_c.hh"
+#include "BLI_utildefines.hh"
 
 #include "BLT_translation.hh"
 
@@ -151,6 +151,13 @@ static void object_shape_key_add(bContext *C, Object *ob, const bool from_mix)
     Key *key = BKE_key_from_object(ob);
     /* for absolute shape keys, new keys may not be added last */
     ob->shapenr = BLI_findindex(&key->block, kb) + 1;
+
+    /* Explicitly deselect current selection when adding a new key, rather than
+     * relying on the tree view's state. This is problematic when the same data is
+     * shown in more than one view instance, see #161071. */
+    for (KeyBlock &other : key->block) {
+      SET_FLAG_FROM_TEST(other.flag, &other == kb, KEYBLOCK_SEL);
+    }
 
     WM_event_add_notifier(C, NC_OBJECT | ND_DRAW, ob);
   }
@@ -814,7 +821,7 @@ enum {
 
 static wmOperatorStatus shape_key_lock_exec(bContext *C, wmOperator *op)
 {
-  Object *ob = CTX_data_active_object(C);
+  Object *ob = context_object(C);
   const int action = RNA_enum_get(op->ptr, "action");
   const Key *keys = BKE_key_from_object(ob);
 

@@ -17,14 +17,14 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_listbase.h"
-#include "BLI_math_rotation.h"
-#include "BLI_math_vector.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_rotation_c.hh"
+#include "BLI_math_vector_c.hh"
 #include "BLI_math_vector_types.hh"
-#include "BLI_mempool.h"
-#include "BLI_string.h"
-#include "BLI_string_utf8.h"
-#include "BLI_utildefines.h"
+#include "BLI_mempool.hh"
+#include "BLI_string.hh"
+#include "BLI_string_utf8.hh"
+#include "BLI_utildefines.hh"
 
 #include "DNA_camera_types.h"
 #include "DNA_curveprofile_types.h"
@@ -372,10 +372,6 @@ void BLO_update_defaults_workspace(WorkSpace *workspace, const char *app_templat
                                                                                &sl.regionbase;
               ARegion *sidebar = BKE_region_find_in_listbase_by_type(regionbase, RGN_TYPE_UI);
               sidebar->flag |= RGN_FLAG_HIDDEN;
-            }
-            if (sl.spacetype == SPACE_PROPERTIES) {
-              SpaceProperties *properties = reinterpret_cast<SpaceProperties *>(&sl);
-              properties->mainb = properties->mainbo = properties->mainbuser = BCONTEXT_STRIP;
             }
           }
         }

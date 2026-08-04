@@ -14,11 +14,11 @@
 
 #include "DNA_userdef_types.h"
 
-#include "BLI_listbase.h"
-#include "BLI_math_geom.h"
-#include "BLI_math_matrix.h"
-#include "BLI_math_rotation.h"
-#include "BLI_math_vector.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_geom_c.hh"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_rotation_c.hh"
+#include "BLI_math_vector_c.hh"
 
 #include "BKE_context.hh"
 #include "BKE_scene.hh"
@@ -103,7 +103,7 @@ static void wm_xr_draw_matrices_create(const wmXrDrawData *draw_data,
   wm_xr_pose_to_imat(&eye_pose, eye_inv);
 
   /* Apply base pose and navigation. */
-  wm_xr_pose_scale_to_imat(&session_state->base_pose, session_state->base_scale, base_inv);
+  wm_xr_pose_scale_to_imat(&draw_data->base_pose, draw_data->base_scale, base_inv);
   wm_xr_pose_scale_to_imat(&session_state->nav_pose_last_actions_sync,
                            session_state->viewer_scale_last_actions_sync,
                            nav_inv);

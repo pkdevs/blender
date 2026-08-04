@@ -4,9 +4,9 @@
 
 #include <cmath>
 
-#include "BLI_listbase.h"
-#include "BLI_math_vector.h"
-#include "BLI_string_utf8.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_vector_c.hh"
+#include "BLI_string_utf8.hh"
 
 #include "BLT_translation.hh"
 
@@ -39,7 +39,14 @@ NODE_STORAGE_FUNCS(NodeFunctionCompare)
 static bool is_supported_data_block_type(const bNodeTree *ntree,
                                          const eNodeSocketDatatype data_type)
 {
-  if (!ELEM(data_type, SOCK_OBJECT, SOCK_IMAGE, SOCK_COLLECTION, SOCK_FONT, SOCK_SOUND)) {
+  if (!ELEM(data_type,
+            SOCK_OBJECT,
+            SOCK_IMAGE,
+            SOCK_COLLECTION,
+            SOCK_MATERIAL,
+            SOCK_FONT,
+            SOCK_SOUND))
+  {
     return false;
   }
   return bke::node_tree_type_supports_socket_type_static(ntree->type, data_type);
@@ -188,14 +195,18 @@ static void node_gather_link_searches(GatherLinkSearchOpParams &params)
     }
   }
 
-  if (params.in_out() == SOCK_IN &&
-      (type != SOCK_STRING || is_supported_data_block_type(&ntree, type)))
-  {
-    params.add_item(
-        IFACE_("Angle"),
-        SocketSearchOp{
-            "Angle"_ustr, SOCK_VECTOR, NODE_COMPARE_GREATER_THAN, NODE_COMPARE_MODE_DIRECTION});
+  if (params.in_out() != SOCK_IN) {
+    return;
   }
+
+  if (type == SOCK_STRING || is_supported_data_block_type(&ntree, type)) {
+    return;
+  }
+
+  params.add_item(
+      IFACE_("Angle"),
+      SocketSearchOp{
+          "Angle"_ustr, SOCK_VECTOR, NODE_COMPARE_GREATER_THAN, NODE_COMPARE_MODE_DIRECTION});
 }
 
 static void node_label(const bNodeTree * /*tree*/,
@@ -227,6 +238,8 @@ static auto to_static_data_block_type(const eNodeSocketDatatype socket_type, Fn 
       return fn.template operator()<Image>();
     case SOCK_COLLECTION:
       return fn.template operator()<Collection>();
+    case SOCK_MATERIAL:
+      return fn.template operator()<Material>();
     case SOCK_FONT:
       return fn.template operator()<VFont>();
     case SOCK_SOUND:

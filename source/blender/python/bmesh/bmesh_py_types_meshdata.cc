@@ -25,10 +25,10 @@
 
 #include "BKE_customdata.hh"
 
-#include "BLI_math_base.h"
-#include "BLI_math_color.h"
-#include "BLI_math_vector.h"
-#include "BLI_utildefines.h"
+#include "BLI_math_base_c.hh"
+#include "BLI_math_color_c.hh"
+#include "BLI_math_vector_c.hh"
+#include "BLI_utildefines.hh"
 
 #include "BKE_deform.hh"
 
@@ -405,9 +405,10 @@ int BPy_BMLoopColor_AssignPyObject(MLoopCol *mloopcol, PyObject *value)
 
 PyObject *BPy_BMLoopColor_CreatePyObject(MLoopCol *mloopcol)
 {
-  PyObject *color_capsule;
-  color_capsule = PyCapsule_New(mloopcol, nullptr, nullptr);
-  return Vector_CreatePyObject_cb(color_capsule, 4, mathutils_bmloopcol_cb_index, 0);
+  PyObject *color_capsule = PyCapsule_New(mloopcol, nullptr, nullptr);
+  PyObject *ret = Vector_CreatePyObject_cb(color_capsule, 4, mathutils_bmloopcol_cb_index, 0);
+  Py_DECREF(color_capsule);
+  return ret;
 }
 
 #undef MLOOPCOL_FROM_CAPSULE
@@ -501,15 +502,15 @@ static int bpy_bmdeformvert_ass_subscript(BPy_BMDeformVert *self, PyObject *key,
         return -1;
       }
 
-      MDeformWeight *dw = BKE_defvert_ensure_index(self->data, i);
       const float f = PyFloat_AsDouble(value);
-      if (f == -1 && PyErr_Occurred()) { /* Parsed key not a number. */
+      if (f == -1 && PyErr_Occurred()) { /* Assigned value not a number. */
         PyErr_SetString(PyExc_TypeError,
                         "BMDeformVert[key] = x: "
                         "assigned value not a number");
         return -1;
       }
 
+      MDeformWeight *dw = BKE_defvert_ensure_index(self->data, i);
       dw->weight = clamp_f(f, 0.0f, 1.0f);
     }
     else {
@@ -520,6 +521,7 @@ static int bpy_bmdeformvert_ass_subscript(BPy_BMDeformVert *self, PyObject *key,
         PyErr_SetString(PyExc_KeyError,
                         "del BMDeformVert[key]: "
                         "key not found");
+        return -1;
       }
       BKE_defvert_remove_group(self->data, dw);
     }
@@ -664,7 +666,14 @@ static PyObject *bpy_bmdeformvert_get(BPy_BMDeformVert *self, PyObject *args)
   int key;
   PyObject *def = Py_None;
 
-  if (!PyArg_ParseTuple(args, "i|O:get", &key, &def)) {
+  if (!PyArg_ParseTuple(args,
+                        "i" /* `key` */
+                        "|" /* Optional arguments. */
+                        "O" /* `default` */
+                        ":get",
+                        &key,
+                        &def))
+  {
     return nullptr;
   }
 

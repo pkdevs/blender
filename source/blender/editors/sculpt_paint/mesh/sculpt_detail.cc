@@ -10,12 +10,12 @@
 #include "MEM_guardedalloc.h"
 
 #include "BLI_index_mask.hh"
-#include "BLI_math_geom.h"
-#include "BLI_math_matrix.h"
-#include "BLI_math_rotation.h"
+#include "BLI_math_geom_c.hh"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_rotation_c.hh"
 #include "BLI_math_vector.hh"
-#include "BLI_string_utf8.h"
-#include "BLI_time.h"
+#include "BLI_string_utf8.hh"
+#include "BLI_time.hh"
 
 #include "BLT_translation.hh"
 
@@ -221,7 +221,7 @@ static bool sample_detail_voxel(bContext *C, ViewContext *vc, const int mval[2])
   if (!cursor_geometry_info_update(C, mval_fl, false)) {
     return false;
   }
-  BKE_sculpt_update_object_for_edit(depsgraph, &ob, false);
+  BKE_sculptsession_update_for_edit(depsgraph, &ob, false);
 
   /* Average the edge length of the connected edges to the active vertex. */
   const int active_vert = std::get<int>(ss.active_vert());

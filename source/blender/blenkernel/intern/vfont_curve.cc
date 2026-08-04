@@ -17,15 +17,15 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_listbase.h"
-#include "BLI_math_base_safe.h"
-#include "BLI_math_matrix.h"
-#include "BLI_math_vector.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_base_safe.hh"
+#include "BLI_math_matrix_c.hh"
 #include "BLI_math_vector.hh"
-#include "BLI_rect.h"
-#include "BLI_string_utf8.h"
-#include "BLI_threads.h"
-#include "BLI_utildefines.h"
+#include "BLI_math_vector_c.hh"
+#include "BLI_rect.hh"
+#include "BLI_string_utf8.hh"
+#include "BLI_threads.hh"
+#include "BLI_utildefines.hh"
 
 #include "DNA_curve_types.h"
 #include "DNA_object_types.h"
@@ -501,8 +501,14 @@ void BKE_vfont_char_build(const Curve &cu,
   if (!vfd) {
     return;
   }
-  VChar *che;
-  vfont_char_find(vfd, charcode, &che);
+  VChar *che = nullptr;
+  /* C0 control characters should not generate geometry. */
+  if (charcode >= 32) {
+    VCharPlaceHolder che_placeholder = {
+        /*metrics*/ &vfd->metrics,
+    };
+    che = vfont_char_find_or_placeholder(vfd, charcode, che_placeholder);
+  }
   vfont_char_build_impl(cu, nubase, che, info, is_smallcaps, offset, rotate, charidx, fsize);
 }
 
