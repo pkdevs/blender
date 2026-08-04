@@ -84,10 +84,6 @@
 #include "WM_types.hh"
 #include "wm_event_system.hh"
 
-#ifdef WITH_INPUT_IME
-#  include "wm_window.hh"
-#endif
-
 namespace blender::ui {
 
 static CLG_LogRef LOG = {"ui.handler"};
@@ -226,7 +222,7 @@ enum ButtonActivateType {
   BUTTON_ACTIVATE_OPEN,
 };
 
-enum HandleButtonState {
+enum HandleButtonState : int {
   BUTTON_STATE_INIT,
   BUTTON_STATE_HIGHLIGHT,
   BUTTON_STATE_WAIT_FLASH,
@@ -3629,14 +3625,15 @@ static void textedit_ime_begin(wmWindow *win, Button *but)
   /* XXX Is this really needed? */
   int x, y;
 
-  BLI_assert(win->runtime->ime_data == nullptr);
+  /* If we were in an IME elsewhere, end it so we can start fresh. */
+  WM_window_IME_end(win);
 
   /* enable IME and position to cursor, it's a trick */
   x = win->runtime->eventstate->xy[0];
   /* flip y and move down a bit, prevent the IME panel cover the edit button */
   y = win->runtime->eventstate->xy[1] - 12;
 
-  wm_window_IME_begin(win, x, y, 0, 0, true);
+  WM_window_IME_begin(win, x, y, 0, 0, true);
 }
 
 /* Disable IME, and clear #Button IME data. */
@@ -3645,7 +3642,7 @@ static void textedit_ime_end(wmWindow *win, Button *but)
   if (ELEM(but->type, ButtonType::Num, ButtonType::NumSlider)) {
     return;
   }
-  wm_window_IME_end(win);
+  WM_window_IME_end(win);
 }
 
 void button_ime_reposition(Button *but, int x, int y, bool complete)
@@ -3657,7 +3654,7 @@ void button_ime_reposition(Button *but, int x, int y, bool complete)
   HandleButtonData *data = but->semi_modal_state ? but->semi_modal_state : but->active;
 
   region_to_window(data->region, &x, &y);
-  wm_window_IME_begin(data->window, x, y - 4, 0, 0, complete);
+  WM_window_IME_begin(data->window, x, y - 4, 0, 0, complete);
 }
 
 const wmIMEData *button_ime_data_get(Button *but)
@@ -3983,13 +3980,7 @@ static void textedit_end(bContext *C, Button *but, HandleButtonData *data)
   text_edit.undo_stack_text = nullptr;
 
 #ifdef WITH_INPUT_IME
-  /* See #wm_window_IME_end code-comments for details. */
-#  ifdef __APPLE__
-  if (win->runtime->ime_data)
-#  endif
-  {
-    textedit_ime_end(win, but);
-  }
+  textedit_ime_end(win, but);
 #endif
 }
 
@@ -4624,6 +4615,10 @@ static void numedit_begin_set_values(Button *but, HandleButtonData *data)
 
 static void numedit_begin(Button *but, HandleButtonData *data)
 {
+#ifdef WITH_INPUT_IME
+  WM_window_IME_end(data->window);
+#endif
+
   if (but->type == ButtonType::Curve) {
     ButtonCurveMapping *but_cumap = static_cast<ButtonCurveMapping *>(but);
     but_cumap->edit_cumap = reinterpret_cast<CurveMapping *>(but->poin);
@@ -9452,8 +9447,8 @@ static void button_activate_state(bContext *C, Button *but, HandleButtonState st
     data->text_select_auto_scroll = nullptr;
   }
 
-  /* Only Textbox buttons can set #BUTTON_STATE_TEXTBOX_SCROLLING or #BUTTON_STATE_TEXTBOX_RESIZING
-   * as state. */
+  /* Only Text-box buttons can set
+   * #BUTTON_STATE_TEXTBOX_SCROLLING or #BUTTON_STATE_TEXTBOX_RESIZING as state. */
   BLI_assert(!ELEM(state, BUTTON_STATE_TEXTBOX_SCROLLING, BUTTON_STATE_TEXTBOX_RESIZING) ||
              but->type == ButtonType::TextBox);
 
@@ -13636,5 +13631,157 @@ static void block_interaction_begin_ensure(bContext *C,
 }
 
 /** \} */
+
+std::optional<int2> try_activate_rna_button(bContext *C,
+                                            ARegion *region,
+                                            ActivationButtonState target_state,
+                                            PointerRNA *ptr,
+                                            PropertyRNA *prop,
+                                            bool warp_cursor_at_button,
+                                            int index)
+{
+  HandleButtonState state = [target_state]() {
+    switch (target_state) {
+      case ActivationButtonState::WaitKeyEvent:
+        return BUTTON_STATE_WAIT_KEY_EVENT;
+      case ActivationButtonState::NumEditing:
+        return BUTTON_STATE_NUM_EDITING;
+      case ActivationButtonState::TextEditing:
+        return BUTTON_STATE_TEXT_EDITING;
+      default:
+        return BUTTON_STATE_HIGHLIGHT;
+    }
+  }();
+
+  if (region->runtime->do_draw & RGN_DRAWING) {
+    return std::nullopt;
+  }
+
+  wmWindow *win = CTX_wm_window(C);
+  bScreen *screen = CTX_wm_screen(C);
+  ED_screen_areas_iter (win, screen, area) {
+    for (ARegion &other_region : area->regionbase) {
+      if (other_region.runtime->do_draw & RGN_DRAWING) {
+        /* Ensure no one else is drawing too. */
+        return std::nullopt;
+      }
+    }
+  }
+
+  ScrArea *area = nullptr;
+  for (ScrArea &test_area : screen->areabase) {
+    if (std::find_if(test_area.regionbase.begin(),
+                     test_area.regionbase.end(),
+                     [region](ARegion &r) { return &r == region; }) != test_area.regionbase.end())
+    {
+
+      area = &test_area;
+      break;
+    }
+  }
+
+  if (!area) {
+    return std::nullopt;
+  }
+
+  Button *button = nullptr;
+  for (Block &block : region->runtime->uiblocks) {
+    auto but_itr = std::ranges::find_if(
+        block.buttons_ptrs, [&](const std::unique_ptr<Button> &but) {
+          return but->rnapoin.data == ptr->data && but->rnaprop == prop && but->rnaindex == index;
+        });
+    if (but_itr != block.buttons_ptrs.end()) {
+      button = but_itr->get();
+      break;
+    }
+  }
+
+  if (!button) {
+    return std::nullopt;
+  }
+
+  const int2 old_view_xy = {int(region->v2d.cur.xmin), int(region->v2d.cur.ymin)};
+  if ((button->block->flag & BLOCK_CLIP_EVENTS) == 0) {
+    /* Blocks with BLOCK_CLIP_EVENTS are overlapping their region, so scrolling
+     * that region to ensure it is in view can't work and causes issues. #97530 */
+    but_ensure_in_view(C, region, button);
+  }
+
+  const int2 xy{BLI_rcti_cent_x(&region->winrct), BLI_rcti_cent_y(&region->winrct)};
+
+  ED_screen_areas_iter (win, screen, area) {
+    for (ARegion &other_region : area->regionbase) {
+      UI_region_free_active_but_all(C, &other_region);
+    }
+  }
+
+  ED_screen_set_active_region(C, CTX_wm_window(C), xy);
+  ScrArea *current_screen = CTX_wm_area(C);
+  ARegion *current_region = CTX_wm_region(C);
+
+  CTX_wm_area_set(C, area);
+  CTX_wm_region_set(C, region);
+  /* Init button active data with state as #BUTTON_STATE_HIGHLIGHT */
+  handle_button_activate(C, region, button, BUTTON_ACTIVATE);
+
+  const rctf button_rect = button->rect;
+  /* Temporally override button position so its already in view when putting mouse over. */
+  BLI_rctf_translate(
+      &button->rect, region->v2d.cur.xmin - old_view_xy.x, old_view_xy.y - region->v2d.cur.ymin);
+  rctf button_view_rect;
+  block_to_window_rctf(region, button->block, &button_view_rect, &button->rect);
+
+  if (warp_cursor_at_button) {
+    WM_cursor_warp(win, BLI_rctf_cent_x(&button_view_rect), BLI_rctf_cent_y(&button_view_rect));
+  }
+
+  /* Disable textsearch interactive mode. */
+  button->changed = false;
+
+  if (button->flag & (BUT_DISABLED | UI_HIDDEN)) {
+    /* Restore button position. */
+    button->rect = button_rect;
+    return std::nullopt;
+  }
+
+  if (state == BUTTON_STATE_TEXT_EDITING && ELEM(button->type,
+                                                 ButtonType::Text,
+                                                 ButtonType::Num,
+                                                 ButtonType::NumSlider,
+                                                 ButtonType::SearchMenu))
+  {
+    button_activate_state(C, button, BUTTON_STATE_TEXT_EDITING);
+  }
+
+  if (state == BUTTON_STATE_NUM_EDITING && ELEM(button->type,
+                                                ButtonType::Num,
+                                                ButtonType::NumSlider,
+                                                ButtonType::HsvCircle,
+                                                ButtonType::HsvCube))
+  {
+
+    wmEvent event = *win->runtime->eventstate;
+    event.type = LEFTMOUSE;
+    event.val = KM_PRESS;
+    event.xy[0] = BLI_rctf_cent_x(&button_view_rect);
+    event.xy[1] = BLI_rctf_cent_y(&button_view_rect);
+    /* Use `ui_do_button` for #BUTTON_STATE_NUM_EDITING with a dummy event, some buttons do some
+     * aditional configurations on left click to start editing. */
+    do_button(C, button->block, button, &event);
+  }
+
+  if (state == BUTTON_STATE_WAIT_KEY_EVENT &&
+      ELEM(button->type, ButtonType::KeyEvent, ButtonType::HotkeyEvent))
+  {
+    button_activate_state(C, button, BUTTON_STATE_WAIT_KEY_EVENT);
+  }
+
+  CTX_wm_area_set(C, current_screen);
+  CTX_wm_region_set(C, current_region);
+  /* Restore button position. */
+  button->rect = button_rect;
+
+  return int2{int(BLI_rctf_cent_x(&button_view_rect)), int(BLI_rctf_cent_y(&button_view_rect))};
+}
 
 }  // namespace blender::ui
