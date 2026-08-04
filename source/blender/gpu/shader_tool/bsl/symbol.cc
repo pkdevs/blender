@@ -394,7 +394,9 @@ struct SymbolParser : NodeErrorHandler {
       else {
         SymbolClass *type = table.int_cls;
         if (directive.back() == value) {
-          if (value == Number) {
+          if (value == Number ||
+              (value == Word && (value.str() == "true" || value.str() == "false")))
+          {
             /* Value is a single token try to guess its type. */
             type = table.get_literal_type(value.str());
           }

@@ -614,6 +614,10 @@ void SymbolTable::register_builtins(LocalScope node)
 
 SymbolClass *SymbolTable::get_literal_type(string_view lit) const
 {
+  if (lit == "true" || lit == "false") {
+    return bool_cls;
+  }
+
   /* Convert to lowercase helper for easier suffix matching */
   string str;
   str.reserve(lit.size());
@@ -632,9 +636,6 @@ SymbolClass *SymbolTable::get_literal_type(string_view lit) const
   }
   if (str.back() == 'u') {
     return uint_cls;
-  }
-  if (str == "true" || str == "false") {
-    return bool_cls;
   }
   return int_cls;
 }
