@@ -1,3 +1,4 @@
 Referenced by issue #158185, Geometry Nodes: Rotation in `Instance on Points` node not respected in Array modifier asset
 Referenced by issue #158701, Crash when playing animation
 Referenced by pull request #162337, Fix #162159: Point Cloud Geometry Proximity incorrectly deduplicated
+Referenced by commit 29ccd5e2e824128c86fc6174c9c502c02212434a, Fix #162159: Point Cloud Geometry Proximity incorrectly deduplicated
