@@ -446,9 +446,9 @@ class NODE_MT_gn_instance_base(node_add_menu.NodeMenu):
         layout.separator()
         self.node_operator(layout, "GeometryNodeInputInstanceBounds")
         self.node_operator(layout, "GeometryNodeInputInstanceReference")
-        self.node_operator(layout, "GeometryNodeInstanceTransform")
         self.node_operator(layout, "GeometryNodeInputInstanceRotation")
         self.node_operator(layout, "GeometryNodeInputInstanceScale")
+        self.node_operator(layout, "GeometryNodeInstanceTransform")
 
         self.draw_assets_for_catalog(layout, self.bl_label)
 
