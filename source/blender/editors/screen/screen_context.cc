@@ -1191,7 +1191,9 @@ static eContextResult screen_ctx_sequencer_scene(const bContext *C, bContextData
   }
   return CTX_RESULT_NO_DATA;
 }
-static eContextResult screen_ctx_markers(const bContext *C, bContextDataResult *result)
+static eContextResult screen_ctx_markers_(const bContext *C,
+                                          bContextDataResult *result,
+                                          const bool selected_only)
 {
   Scene *scene = CTX_data_scene(C);
   ListBaseT<TimeMarker> *markers = ED_scene_markers_get(C, scene);
@@ -1201,24 +1203,7 @@ static eContextResult screen_ctx_markers(const bContext *C, bContextDataResult *
 
   ID *owner_id = ED_markers_get_owner_id(C, scene);
   for (TimeMarker &marker : *markers) {
-    /* Scene's markers and action's markers are both of type RNA_TimelineMarker. */
-    CTX_data_list_add(result, owner_id, RNA_TimelineMarker, &marker);
-  }
-
-  CTX_data_type_set(result, ContextDataType::Collection);
-  return CTX_RESULT_OK;
-}
-static eContextResult screen_ctx_selected_markers(const bContext *C, bContextDataResult *result)
-{
-  Scene *scene = CTX_data_scene(C);
-  ListBaseT<TimeMarker> *markers = ED_scene_markers_get(C, scene);
-  if (!markers) {
-    return CTX_RESULT_NO_DATA;
-  }
-
-  ID *owner_id = ED_markers_get_owner_id(C, scene);
-  for (TimeMarker &marker : *markers) {
-    if (marker.flag & SELECT) {
+    if (!selected_only || (marker.flag & SELECT)) {
       /* Scene's markers and action's markers are both of type RNA_TimelineMarker. */
       CTX_data_list_add(result, owner_id, RNA_TimelineMarker, &marker);
     }
@@ -1226,6 +1211,14 @@ static eContextResult screen_ctx_selected_markers(const bContext *C, bContextDat
 
   CTX_data_type_set(result, ContextDataType::Collection);
   return CTX_RESULT_OK;
+}
+static eContextResult screen_ctx_markers(const bContext *C, bContextDataResult *result)
+{
+  return screen_ctx_markers_(C, result, false);
+}
+static eContextResult screen_ctx_selected_markers(const bContext *C, bContextDataResult *result)
+{
+  return screen_ctx_markers_(C, result, true);
 }
 
 /* Registry of context callback functions. */
