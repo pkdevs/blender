@@ -80,7 +80,7 @@
 #include "DNA_scene_types.h"
 
 /* Collapsed abbreviation to use when shortening path template strings for viewing purposes. */
-#define BKE_TEMPLATE_EXPRESSION_ABBREVIATION "{…}"
+#define BKE_TEMPLATE_EXPRESSION_ABBREVIATION "{" BLI_STR_UTF8_HORIZONTAL_ELLIPSIS "}"
 
 namespace blender {
 
