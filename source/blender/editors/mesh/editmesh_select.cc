@@ -2887,7 +2887,7 @@ bool EDBM_select_pick(bContext *C, const int mval[2], const SelectPick_Params &p
           bool is_mirrored_selected = BM_elem_flag_test(eed, BM_ELEM_MIRRORED_SELECT);
           if (!is_selected && !is_mirrored_selected) {
             BM_select_history_store(bm, eed);
-            BM_edge_select_set(bm, eed, true, BM_ELEM_SELECT);
+            BM_edge_select_set(bm, eed, true);
             if (symmetry_helper.has_value()) {
               symmetry_helper->set_hflag_on_mirror_edges(eed, BM_ELEM_MIRRORED_SELECT, true);
             }

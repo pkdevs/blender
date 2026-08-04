@@ -1455,13 +1455,11 @@ static void createTransEditVerts(bContext * /*C*/, TransInfo *t)
     }
     else {
       data_len = bm->totvertsel;
-      if (tc->use_mirror_axis_any) {
-        BM_ITER_MESH (eve, &iter, bm, BM_VERTS_OF_MESH) {
-          if (!BM_elem_flag_test(eve, BM_ELEM_HIDDEN) && !BM_elem_flag_test(eve, BM_ELEM_SELECT) &&
-              BM_elem_flag_test(eve, BM_ELEM_MIRRORED_SELECT))
-          {
-            data_len++;
-          }
+      BM_ITER_MESH (eve, &iter, bm, BM_VERTS_OF_MESH) {
+        if (!BM_elem_flag_test(eve, BM_ELEM_HIDDEN) && !BM_elem_flag_test(eve, BM_ELEM_SELECT) &&
+            BM_elem_flag_test(eve, BM_ELEM_MIRRORED_SELECT))
+        {
+          data_len++;
         }
       }
     }
@@ -1544,7 +1542,7 @@ static void createTransEditVerts(bContext * /*C*/, TransInfo *t)
       }
 
       const bool is_selected = BM_elem_flag_test(eve, BM_ELEM_SELECT);
-      const bool is_mirror_selected = !is_selected && tc->use_mirror_axis_any &&
+      const bool is_mirror_selected = !is_selected &&
                                       BM_elem_flag_test(eve, BM_ELEM_MIRRORED_SELECT);
 
       if (prop_mode || is_selected || is_mirror_selected) {
@@ -1951,35 +1949,33 @@ static void mesh_partial_update(TransInfo *t,
 
 static void mesh_transdata_mirror_apply(TransDataContainer *tc)
 {
-  if (tc->use_mirror_axis_any) {
-    int i;
-    TransData *td;
-    for (i = 0, td = tc->data; i < tc->data_len; i++, td++) {
-      if (td->flag & (TD_MIRROR_EDGE_X | TD_MIRROR_EDGE_Y | TD_MIRROR_EDGE_Z)) {
-        if (td->flag & TD_MIRROR_EDGE_X) {
-          td->loc[0] = 0.0f;
-        }
-        if (td->flag & TD_MIRROR_EDGE_Y) {
-          td->loc[1] = 0.0f;
-        }
-        if (td->flag & TD_MIRROR_EDGE_Z) {
-          td->loc[2] = 0.0f;
-        }
+  int i;
+  TransData *td;
+  for (i = 0, td = tc->data; i < tc->data_len; i++, td++) {
+    if (td->flag & (TD_MIRROR_EDGE_X | TD_MIRROR_EDGE_Y | TD_MIRROR_EDGE_Z)) {
+      if (td->flag & TD_MIRROR_EDGE_X) {
+        td->loc[0] = 0.0f;
+      }
+      if (td->flag & TD_MIRROR_EDGE_Y) {
+        td->loc[1] = 0.0f;
+      }
+      if (td->flag & TD_MIRROR_EDGE_Z) {
+        td->loc[2] = 0.0f;
       }
     }
+  }
 
-    TransDataMirror *td_mirror = tc->data_mirror;
-    for (i = 0; i < tc->data_mirror_len; i++, td_mirror++) {
-      copy_v3_v3(td_mirror->loc, td_mirror->loc_src);
-      if (td_mirror->flag & TD_MIRROR_X) {
-        td_mirror->loc[0] *= -1;
-      }
-      if (td_mirror->flag & TD_MIRROR_Y) {
-        td_mirror->loc[1] *= -1;
-      }
-      if (td_mirror->flag & TD_MIRROR_Z) {
-        td_mirror->loc[2] *= -1;
-      }
+  TransDataMirror *td_mirror = tc->data_mirror;
+  for (i = 0; i < tc->data_mirror_len; i++, td_mirror++) {
+    copy_v3_v3(td_mirror->loc, td_mirror->loc_src);
+    if (td_mirror->flag & TD_MIRROR_X) {
+      td_mirror->loc[0] *= -1;
+    }
+    if (td_mirror->flag & TD_MIRROR_Y) {
+      td_mirror->loc[1] *= -1;
+    }
+    if (td_mirror->flag & TD_MIRROR_Z) {
+      td_mirror->loc[2] *= -1;
     }
   }
 }
