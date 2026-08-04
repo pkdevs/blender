@@ -602,6 +602,14 @@ struct BKEIDDeleteOptions {
    * IDs. Useful e.g. for ID deletion within liboverride resync process and the like.
    */
   bool prevent_liboverride_hierarchy_root_ensure = false;
+
+  /**
+   * Do not update invariants after deletion.
+   *
+   * This is required when deleting data in cases where there is no fully valid Main available
+   * (e.g. from readfile code).
+   */
+  bool prevent_invariants_update = false;
 };
 
 /**
@@ -674,6 +682,7 @@ void BKE_libblock_management_usercounts_clear(Main *bmain, void *idv);
  * This ensures that no reference to indirectly used IDs are kept in the written blend-file.
  */
 void id_lib_extern(ID *id);
+void id_lib_indirect(ID *id);
 void id_lib_indirect_weak_link(ID *id);
 /**
  * Ensure we have a real user
