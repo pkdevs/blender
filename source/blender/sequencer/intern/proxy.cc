@@ -13,13 +13,13 @@
 #include "DNA_scene_types.h"
 #include "DNA_sequence_types.h"
 
-#include "BLI_fileops.h"
-#include "BLI_math_base.h"
+#include "BLI_fileops.hh"
+#include "BLI_math_base_c.hh"
 #include "BLI_path_utils.hh"
-#include "BLI_string.h"
+#include "BLI_string.hh"
 
 #ifdef WIN32
-#  include "BLI_winstuff.h"
+#  include "BLI_winstuff.hh"
 #else
 #  include <unistd.h>
 #endif
@@ -518,7 +518,7 @@ static ImBuf *render_image_strip_frame(const ProxyBuildContext &context,
 {
   ImBuf *ibuf = nullptr;
 
-  ImBufFlags flag = ImBufFlags::ByteData | ImBufFlags::Metadata | ImBufFlags::MultiLayer;
+  ImBufFlags flag = ImBufFlags::ByteData | ImBufFlags::Metadata;
   if (strip.alpha_mode == SEQ_ALPHA_PREMUL) {
     flag |= ImBufFlags::AlphaPremul;
   }
@@ -536,7 +536,7 @@ static ImBuf *render_image_strip_frame(const ProxyBuildContext &context,
     return nullptr;
   }
 
-  convert_multilayer_ibuf(ibuf);
+  ensure_ibuf_is_rgba(ibuf);
   if (ibuf->float_data() != nullptr && ibuf->byte_data() != nullptr) {
     IMB_free_byte_pixels(ibuf); /* If both float & byte exist, free byte buffer. */
   }
@@ -566,7 +566,7 @@ static void image_proxy_builder_process(ProxyBuildContext &context,
   const char *base_path = ID_BLEND_PATH_FROM_GLOBAL(&context.scene->id);
   const int tot_views = BKE_scene_multiview_num_views_get(&context.scene->r);
 
-  for (int elem_index = 0; elem_index < strip.len; elem_index++) {
+  for (int elem_index = 0; elem_index < strip.content_length(); elem_index++) {
     const StripElem &s_elem = strip.data->stripdata[elem_index];
 
     char filepath[FILE_MAX];
@@ -592,7 +592,10 @@ static void image_proxy_builder_process(ProxyBuildContext &context,
 
       if (ibufs_arr[0] != nullptr) {
         if (strip.views_format == R_IMF_VIEWS_STEREO_3D) {
-          IMB_ImBufFromStereo3d(strip.stereo3d_format, ibufs_arr[0], &ibufs_arr[0], &ibufs_arr[1]);
+          IMB_ImBufFromStereo3d(strip.stereo3d_format,
+                                ibufs_arr[0],
+                                &ibufs_arr[0],  // NOLINT(readability-container-data-pointer)
+                                &ibufs_arr[1]);
         }
 
         /* Return the requested image; release the others. */
@@ -630,7 +633,7 @@ static void image_proxy_builder_process(ProxyBuildContext &context,
       }
 
       if (set_progress_fn) {
-        float progress = float(elem_index) / float(strip.len);
+        float progress = float(elem_index) / float(strip.content_length());
         set_progress_fn(progress);
       }
 

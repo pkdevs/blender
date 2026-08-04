@@ -14,11 +14,11 @@
 #include <string>
 #include <type_traits>
 
-#include "BLI_compiler_attrs.h"
+#include "BLI_compiler_attrs.hh"
 #include "BLI_enum_flags.hh"
 #include "BLI_string_ref.hh"
-#include "BLI_string_utf8_symbols.h"
-#include "BLI_sys_types.h" /* size_t */
+#include "BLI_string_utf8_symbols.hh"
+#include "BLI_sys_types.hh" /* size_t */
 
 #include "DNA_listBase.h"
 #include "DNA_userdef_types.h"
@@ -341,7 +341,7 @@ enum {
 };
 
 /** #Button.flag general state flags. */
-enum ButtonFlag {
+enum ButtonFlag : int64_t {
   /* WARNING: the first 8 flags are internal (see #UI_SELECT definition). */
 
   BUT_ICON_SUBMENU = 1 << 8,
@@ -350,19 +350,19 @@ enum ButtonFlag {
   BUT_NODE_LINK = 1 << 10,
   BUT_NODE_ACTIVE = 1 << 11,
   BUT_DRAG_LOCK = 1 << 12,
-  BUT_DRAG_LOCK_X = BUT_DRAG_LOCK | 1 << 21,
+  BUT_DRAG_LOCK_X = BUT_DRAG_LOCK | 1 << 13,
 
   /** Grayed out and un-editable. */
-  BUT_DISABLED = 1 << 13,
+  BUT_DISABLED = 1 << 14,
 
-  BUT_ANIMATED = 1 << 14,
-  BUT_ANIMATED_KEY = 1 << 15,
-  BUT_DRIVEN = 1 << 16,
-  BUT_REDALERT = 1 << 17,
+  BUT_ANIMATED = 1 << 15,
+  BUT_ANIMATED_KEY = 1 << 16,
+  BUT_DRIVEN = 1 << 17,
+  BUT_REDALERT = 1 << 18,
   /** Grayed out but still editable. */
-  BUT_INACTIVE = 1 << 18,
-  BUT_LAST_ACTIVE = 1 << 19,
-  BUT_UNDO = 1 << 20,
+  BUT_INACTIVE = 1 << 19,
+  BUT_LAST_ACTIVE = 1 << 20,
+  BUT_UNDO = 1 << 21,
   BUT_NO_UTF8 = 1 << 22,
 
   /** For popups, pressing return activates this button, overriding the highlighted button.
@@ -392,22 +392,20 @@ enum ButtonFlag {
   BUT_VALUE_CLEAR = 1 << 30,
 
   /** RNA property of the button is overridden from linked reference data. */
-  BUT_OVERRIDDEN = 1u << 31u,
-};
+  BUT_OVERRIDDEN = int64_t(1) << 31,
 
-enum {
   /**
    * This is used when `BUT_ACTIVATE_ON_INIT` is used, which is used to activate e.g. a search
    * box as soon as a popup opens. Usually, the text in the search box is selected by default.
    * However, sometimes this behavior is not desired, so it can be disabled with this flag.
    */
-  BUT2_ACTIVATE_ON_INIT_NO_SELECT = 1 << 0,
+  BUT_ACTIVATE_ON_INIT_NO_SELECT = int64_t(1) << 32,
   /**
    * Force the button as active in a semi-modal state. For example, text buttons can continuously
    * capture text input, while leaving the remaining UI interactive. Only supported well for text
    * buttons currently.
    */
-  BUT2_FORCE_SEMI_MODAL_ACTIVE = 1 << 1,
+  BUT_FORCE_SEMI_MODAL_ACTIVE = int64_t(1) << 33,
 };
 
 /** #Button.dragflag */
@@ -750,7 +748,7 @@ float text_clip_middle_ex(const uiFontStyle *fstyle,
 Vector<StringRef> text_clip_multiline_middle(const uiFontStyle *fstyle,
                                              const char *str,
                                              char *clipped_str_buf,
-                                             const size_t max_len_clipped_str_buf,
+                                             const size_t clipped_str_buf_maxncpy,
                                              const float max_line_width,
                                              const int max_lines);
 
@@ -1213,10 +1211,9 @@ Button *button_active_drop_name_button(const bContext *C);
 bool button_active_drop_name(const bContext *C);
 bool button_active_drop_color(bContext *C);
 
-void button_flag_enable(Button *but, int flag);
-void button_flag_disable(Button *but, int flag);
-bool button_flag_is_set(Button *but, int flag);
-void button_flag2_enable(Button *but, int flag);
+void button_flag_enable(Button *but, int64_t flag);
+void button_flag_disable(Button *but, int64_t flag);
+bool button_flag_is_set(Button *but, int64_t flag);
 
 void button_drawflag_enable(Button *but, int flag);
 void button_drawflag_disable(Button *but, int flag);
@@ -1857,7 +1854,7 @@ bool search_item_add(SearchItems *items,
                      StringRef name,
                      void *poin,
                      int iconid,
-                     int but_flag,
+                     int64_t but_flag,
                      uint8_t name_prefix_offset);
 
 /**
@@ -2886,13 +2883,6 @@ Block *region_block_find_mouse_over(const ARegion *region, const int xy[2], bool
  */
 ARegion *region_searchbox_region_get(const ARegion *button_region);
 
-/** #uiFontStyle.align */
-enum FontStyleAlign {
-  UI_STYLE_TEXT_LEFT = 0,
-  UI_STYLE_TEXT_CENTER = 1,
-  UI_STYLE_TEXT_RIGHT = 2,
-};
-
 struct FontStyleDrawParams {
   FontStyleAlign align;
   uint word_wrap : 1;
@@ -3158,5 +3148,28 @@ AbstractViewItem *region_views_find_active_item(const ARegion *region, const Abs
 Button *region_views_find_active_item_but(const ARegion *region);
 void region_views_clear_search_highlight(const ARegion *region);
 
+enum class ActivationButtonState : int8_t {
+  Highlight,
+  WaitKeyEvent,
+  NumEditing,
+  TextEditing,
+};
+
+/**
+ * Attempt to activate an button referencing an RNA property. If any other button in the screen is
+ * active, it will be deactivated.
+ * \param state: Activation state for the button. Some states are specific to certain button types;
+ * when an incompatible state is provided, the button will be activated with the
+ * #ActivationButtonState::Highlight state.
+ * \param index: Index of the button that references the RNA property.
+ * \return The center point of the button in window coordinates when successfully activated.
+ */
+std::optional<int2> try_activate_rna_button(bContext *C,
+                                            ARegion *region,
+                                            ActivationButtonState target_state,
+                                            PointerRNA *ptr,
+                                            PropertyRNA *prop,
+                                            bool warp_cursor_at_button = false,
+                                            int index = 0);
 }  // namespace ui
 }  // namespace blender

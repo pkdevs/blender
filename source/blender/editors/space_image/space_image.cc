@@ -16,9 +16,9 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_listbase.h"
-#include "BLI_string_utf8.h"
-#include "BLI_threads.h"
+#include "BLI_listbase.hh"
+#include "BLI_string_utf8.hh"
+#include "BLI_threads.hh"
 
 #include "BKE_colortools.hh"
 #include "BKE_context.hh"
@@ -329,7 +329,6 @@ static void image_listener(const wmSpaceTypeListenerParams *params)
         case ND_COMPO_RESULT:
           if (ED_space_image_show_render(sima)) {
             image_scopes_tag_refresh(area);
-            BKE_image_partial_update_mark_full_update(sima->image);
           }
           ED_area_tag_redraw(area);
           const ARegion *region = BKE_area_find_region_type(area, RGN_TYPE_WINDOW);

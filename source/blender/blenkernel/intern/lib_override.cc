@@ -50,6 +50,7 @@
 #include "BKE_lib_remap.hh"
 #include "BKE_library.hh"
 #include "BKE_main.hh"
+#include "BKE_main_invariants.hh"
 #include "BKE_main_namemap.hh"
 #include "BKE_node.hh"
 #include "BKE_report.hh"
@@ -57,15 +58,15 @@
 
 #include "BLO_readfile.hh"
 
-#include "BLI_linklist.h"
-#include "BLI_listbase.h"
+#include "BLI_linklist.hh"
+#include "BLI_listbase.hh"
 #include "BLI_map.hh"
-#include "BLI_memarena.h"
+#include "BLI_memarena.hh"
 #include "BLI_set.hh"
-#include "BLI_string.h"
-#include "BLI_task.h"
-#include "BLI_time.h"
-#include "BLI_utildefines.h"
+#include "BLI_string.hh"
+#include "BLI_task_c.hh"
+#include "BLI_time.hh"
+#include "BLI_utildefines.hh"
 #include "BLI_vector.hh"
 #include "BLI_vector_set.hh"
 
@@ -83,7 +84,7 @@ namespace blender {
 // #define DEBUG_OVERRIDE_TIMEIT
 
 #ifdef DEBUG_OVERRIDE_TIMEIT
-#  include "BLI_time_utildefines.h"
+#  include "BLI_time_utildefines.hh"
 #endif
 
 using namespace blender::bke;
@@ -2881,7 +2882,12 @@ static bool lib_override_library_resync(Main *bmain,
   /* Cleanup, many pointers in this Map are already invalid now. */
   linkedref_to_old_override.clear();
 
-  BKE_id_multi_tagged_delete(bmain, {.prevent_liboverride_hierarchy_root_ensure = true});
+  /* Prevent any expansive update process, as this is a in-progress cleanup,
+   * #lib_override_cleanup_after_resync will ensure that this is called properly at the end of the
+   * whole resync process. */
+  BKE_id_multi_tagged_delete(
+      bmain,
+      {.prevent_liboverride_hierarchy_root_ensure = true, .prevent_invariants_update = true});
 
   /* At this point, `id_root` may have been resynced, therefore deleted. In that case we need to
    * update it to its new version.
@@ -2928,6 +2934,11 @@ static bool lib_override_library_resync(Main *bmain,
 /** Cleanup: Remove unused 'place holder' linked IDs. */
 static void lib_override_cleanup_after_resync(Main *bmain)
 {
+  /* Deletions during the resync itself skip the invariants update. Ensure it happened before
+   * searching for unused IDs, since obsolete node sockets kept alive by an outdated node tree
+   * still count as users of the IDs they reference. */
+  BKE_main_ensure_invariants(*bmain);
+
   LibQueryUnusedIDsData parameters;
   parameters.do_local_ids = true;
   parameters.do_linked_ids = true;
@@ -2984,6 +2995,7 @@ static void lib_override_cleanup_after_resync(Main *bmain)
                parameters.num_total[INDEX_ID_NULL],
                parameters.num_local[INDEX_ID_NULL]);
   }
+  /* Do ensure invariants after deletion here, as this is a final cleanup call. */
   BKE_id_multi_tagged_delete(bmain, {.prevent_liboverride_hierarchy_root_ensure = true});
 }
 
@@ -3463,17 +3475,18 @@ static void lib_override_resync_tagging_finalize(Main *bmain,
                   IDOverrideLibraryTag::TAG_RESYNC_ISOLATED_FROM_ROOT) == IDOverrideLibraryTag(0));
     }
 
-    LinkNodePair *id_resync_roots = id_roots.lookup_or_add_cb(
-        hierarchy_root, []() { return MEM_new_zeroed<LinkNodePair>(__func__); });
+    LinkNodePair *id_resync_roots = id_roots.lookup_or_add_cb(hierarchy_root, []() {
+      return MEM_new_zeroed<LinkNodePair>("lib_override_resync_tagging_finalize");
+    });
     BLI_linklist_append(id_resync_roots, id_iter);
   }
   FOREACH_MAIN_ID_END;
 
   BKE_main_relations_tag_set(
       bmain,
-      static_cast<const eMainIDRelationsEntryTags>(MAINIDRELATIONS_ENTRY_TAGS_PROCESSED |
-                                                   MAINIDRELATIONS_ENTRY_TAGS_DOIT |
-                                                   MAINIDRELATIONS_ENTRY_TAGS_INPROGRESS),
+      static_cast<eMainIDRelationsEntryTags>(MAINIDRELATIONS_ENTRY_TAGS_PROCESSED |
+                                             MAINIDRELATIONS_ENTRY_TAGS_DOIT |
+                                             MAINIDRELATIONS_ENTRY_TAGS_INPROGRESS),
       false);
 }
 
@@ -3776,8 +3789,14 @@ static bool lib_override_library_main_resync_on_library_indirect_level(
   }
   FOREACH_MAIN_ID_END;
 
-  /* Delete 'isolated from root' remaining IDs tagged in above check loop. */
-  BKE_id_multi_tagged_delete(bmain, {.prevent_liboverride_hierarchy_root_ensure = true});
+  /* Delete 'isolated from root' remaining IDs tagged in above check loop.
+   *
+   * Prevent any expansive update process, as this is a in-progress cleanup,
+   * #lib_override_cleanup_after_resync will ensure that this is called properly at the end of the
+   * whole resync process. */
+  BKE_id_multi_tagged_delete(
+      bmain,
+      {.prevent_liboverride_hierarchy_root_ensure = true, .prevent_invariants_update = true});
   BKE_main_id_tag_all(bmain, ID_TAG_DOIT, false);
 
   for (LinkNodePair *pair : id_roots.values()) {
@@ -3944,7 +3963,7 @@ static int lib_override_libraries_index_define(Main *bmain)
       Vector<std::pair<ID *, ID *>> &lib_user_ids = sort_libs_data.dependency_trace_data.lookup(
           &library);
       if (lib_user_ids.size() >= LibOverrideSortLibrariesData::MAX_DEPENDENCY_DEPTH) {
-        std::string deps_chain = "";
+        std::string deps_chain;
         int index = -1;
         for (auto [id_owner, id] : lib_user_ids) {
           index++;
@@ -3996,7 +4015,7 @@ void BKE_lib_override_library_main_resync(
       }
       if (view_layer) {
         CLOG_WARN(&LOG_RESYNC,
-                  "Provided scene '%s' is not local, using instead local scene '%s', viewlayer "
+                  "Provided scene '%s' is not local, using instead local scene '%s', view-layer "
                   "'%s' as container for the library override leftover collections and objects",
                   BKE_id_name(scene->id),
                   BKE_id_name(new_scene->id),
@@ -4265,7 +4284,7 @@ static Map<StringRefNull, IDOverrideLibraryProperty *> &override_library_rna_pat
     IDOverrideLibrary *liboverride)
 {
   IDOverrideLibraryRuntime *liboverride_runtime = override_library_runtime_ensure(liboverride);
-  if (UNLIKELY(!liboverride_runtime->rna_path_to_override_properties)) {
+  if (!liboverride_runtime->rna_path_to_override_properties) [[unlikely]] {
     liboverride_runtime->rna_path_to_override_properties =
         std::make_optional<Map<StringRefNull, IDOverrideLibraryProperty *>>();
     for (IDOverrideLibraryProperty *op =

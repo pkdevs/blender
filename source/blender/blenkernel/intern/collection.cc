@@ -16,12 +16,12 @@
 #include <cstring>
 #include <optional>
 
-#include "BLI_iterator.h"
-#include "BLI_listbase.h"
-#include "BLI_math_base.h"
+#include "BLI_iterator.hh"
+#include "BLI_listbase.hh"
+#include "BLI_math_base_c.hh"
 #include "BLI_mutex.hh"
-#include "BLI_string.h"
-#include "BLI_string_utf8.h"
+#include "BLI_string.hh"
+#include "BLI_string_utf8.hh"
 #include "BLI_string_utils.hh"
 
 #include "BLT_translation.hh"
@@ -1228,7 +1228,7 @@ static void collection_gobject_hash_create(Collection *collection)
 {
   CollectionObjectMap *gobject_hash = collection_gobject_hash_alloc(collection);
   for (CollectionObject &cob : collection->gobject) {
-    if (UNLIKELY(cob.ob == nullptr)) {
+    if (cob.ob == nullptr) [[unlikely]] {
       BLI_assert(collection->runtime->tag & COLLECTION_TAG_COLLECTION_OBJECT_DIRTY);
       continue;
     }
@@ -1461,7 +1461,7 @@ static bool collection_object_add(Main *bmain,
   bool newly_added = false;
   CollectionObject *cob = collection->runtime->gobject_hash->lookup_or_add_cb(ob, [&]() {
     newly_added = true;
-    return MEM_new<CollectionObject>(__func__);
+    return MEM_new<CollectionObject>("collection_object_add");
   });
   if (!newly_added) {
     return false;

@@ -13,10 +13,10 @@
 #include "BKE_colortools.hh"
 #include "BKE_scene.hh"
 
-#include "BLI_rand.h"
+#include "BLI_rand_c.hh"
 
 #include "BLI_math_base.hh"
-#include "BLI_math_base_safe.h"
+#include "BLI_math_base_safe.hh"
 
 #include "eevee_instance.hh"
 #include "eevee_sampling.hh"
@@ -260,6 +260,16 @@ void Sampling::step()
     data_.dimensions[SAMPLING_GBUFFER_U] = r[0];
     data_.dimensions[SAMPLING_GBUFFER_V] = r[1];
     data_.dimensions[SAMPLING_GBUFFER_W] = r[2];
+  }
+  {
+    /* Separate sequence for film accumulation buffer quantization dithering (see #129533).
+     * Only `SAMPLING_FILM_U` is used, but the array must stay a multiple of 4, so pad the
+     * remaining slots with the same value. */
+    double x, offset = 0;
+    BLI_halton_1d(19, offset, sample_ + 1, &x);
+    for (int i = 0; i < 4; i++) {
+      data_.dimensions[SAMPLING_FILM_U + i] = float(x);
+    }
   }
 
   for (int i : IndexRange(SAMPLING_DIMENSION_COUNT)) {

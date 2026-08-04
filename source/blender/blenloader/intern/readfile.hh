@@ -13,12 +13,12 @@
 #include <optional>
 
 #ifdef WIN32
-#  include "BLI_winstuff.h"
+#  include "BLI_winstuff.hh"
 #endif
 
 #include "BLI_enum_flags.hh"
-#include "BLI_fileops.h"
-#include "BLI_filereader.h"
+#include "BLI_fileops.hh"
+#include "BLI_filereader.hh"
 #include "BLI_map.hh"
 
 #include "DNA_sdna_types.h"
@@ -106,7 +106,7 @@ struct FileData {
   char relabase[FILE_MAX] = {};
 
   /** General reading variables. */
-  SDNA *filesdna = nullptr;
+  std::unique_ptr<SDNA> filesdna;
   const SDNA *memsdna = nullptr;
   /** Array of #eSDNA_StructCompare. */
   const char *compflags = nullptr;
@@ -147,7 +147,7 @@ struct FileData {
    * \note This is initialized from #LibraryLink_Params.id_tag_extra since passing it as an
    * argument would need an additional argument to be passed around when expanding library data.
    */
-  int id_tag_extra = 0;
+  eID_Tag id_tag_extra = {};
 
   OldNewMap *datamap = nullptr;
   OldNewMap *globmap = nullptr;
@@ -343,6 +343,7 @@ void blo_do_versions_450(FileData *fd, Library *lib, Main *bmain);
 void blo_do_versions_500(FileData *fd, Library *lib, Main *bmain);
 void blo_do_versions_510(FileData *fd, Library *lib, Main *bmain);
 void blo_do_versions_520(FileData *fd, Library *lib, Main *bmain);
+void blo_do_versions_530(FileData *fd, Library *lib, Main *bmain);
 
 void do_versions_after_linking_250(Main *bmain);
 void do_versions_after_linking_260(Main *bmain);
@@ -359,6 +360,7 @@ void do_versions_after_linking_450(FileData *fd, Main *bmain);
 void do_versions_after_linking_500(FileData *fd, Main *bmain);
 void do_versions_after_linking_510(FileData *fd, Main *bmain);
 void do_versions_after_linking_520(FileData *fd, Main *bmain);
+void do_versions_after_linking_530(FileData *fd, Main *bmain);
 
 void do_versions_after_setup(Main *new_bmain,
                              BlendfileLinkAppendContext *lapp_context,

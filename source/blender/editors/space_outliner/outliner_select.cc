@@ -17,8 +17,8 @@
 #include "DNA_sequence_types.h"
 #include "DNA_shader_fx_types.h"
 
-#include "BLI_listbase.h"
-#include "BLI_utildefines.h"
+#include "BLI_listbase.hh"
+#include "BLI_utildefines.hh"
 
 #include "BKE_armature.hh"
 #include "BKE_collection.hh"
@@ -936,6 +936,7 @@ void tree_element_type_active_set(bContext *C,
       break;
     case TSE_SHAPE_KEY_BLOCK:
       tree_elemment_shapekey_active_set(C, te);
+      break;
     default:
       break;
   }

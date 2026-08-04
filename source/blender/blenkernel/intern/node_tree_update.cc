@@ -4,15 +4,15 @@
 
 #include <fmt/format.h>
 
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 #include "BLI_map.hh"
 #include "BLI_multi_value_map.hh"
 #include "BLI_noise.hh"
 #include "BLI_rand.hh"
 #include "BLI_set.hh"
 #include "BLI_stack.hh"
-#include "BLI_string.h"
-#include "BLI_string_utf8_symbols.h"
+#include "BLI_string.hh"
+#include "BLI_string_utf8_symbols.hh"
 #include "BLI_vector_set.hh"
 
 #include "DNA_anim_types.h"
@@ -56,6 +56,8 @@
 #include "SEQ_iterator.hh"
 #include "SEQ_modifier.hh"
 #include "SEQ_sequencer.hh"
+
+#include "PRF_profile.hh"
 
 namespace blender {
 
@@ -388,6 +390,7 @@ class NodeTreeMainUpdater {
     if (root_ntrees.is_empty()) {
       return;
     }
+    PRF_scope_with_name("NodeTreeMainUpdater::update_rooted", ProfileCategory::Core);
 
     bool is_single_tree_update = false;
 
@@ -442,7 +445,8 @@ class NodeTreeMainUpdater {
             ModifierData *md = pair.second;
 
             if (md->type == eModifierType_Nodes) {
-              MOD_nodes_update_interface(object, reinterpret_cast<NodesModifierData *>(md));
+              MOD_nodes_update_interface(
+                  *bmain_, object, reinterpret_cast<NodesModifierData *>(md));
             }
           }
         }
@@ -454,7 +458,7 @@ class NodeTreeMainUpdater {
 
             if (md->type == eSeqModifierType_Compositor) {
               seq::compositor_nodes_update_interface(
-                  *scene, *reinterpret_cast<SequencerCompositorModifierData *>(md));
+                  *bmain_, *scene, *reinterpret_cast<SequencerCompositorModifierData *>(md));
             }
           }
         }
@@ -569,11 +573,17 @@ class NodeTreeMainUpdater {
 
   TreeUpdateResult update_tree(bNodeTree &ntree)
   {
+    PRF_scope_with_name("NodeTreeMainUpdater::update_tree", ProfileCategory::Core);
     TreeUpdateResult result;
 
     ntree.runtime->link_errors.clear();
     ntree.runtime->invalid_zone_output_node_ids.clear();
     ntree.runtime->shader_node_errors.clear();
+
+    if (ntree.runtime->changed_flag & NTREE_CHANGED_ANY) {
+      result.interface_changed = true;
+      result.output_changed = true;
+    }
 
     if (this->update_panel_toggle_names(ntree)) {
       result.interface_changed = true;

@@ -17,13 +17,13 @@
 #include "DNA_collection_types.h"
 #include "DNA_scene_types.h"
 
-#include "BLI_utildefines.h"
+#include "BLI_utildefines.hh"
 
-#include "BLI_ghash.h"
-#include "BLI_listbase.h"
+#include "BLI_ghash.hh"
+#include "BLI_listbase.hh"
 #include "BLI_path_utils.hh"
 #include "BLI_set.hh"
-#include "BLI_string.h"
+#include "BLI_string.hh"
 #include "BLI_vector_set.hh"
 
 #include "BLT_translation.hh"
@@ -784,6 +784,45 @@ void bke::library::pack_linked_id_hierarchy(Main &bmain, ID &root_id)
       IDWALK_READONLY | IDWALK_RECURSE);
 
   pack_linked_ids(bmain, ids_to_pack);
+}
+
+static Library *add_external_archive_library(Main &bmain, Library &reference_library)
+{
+  BLI_assert((reference_library.flag & LIBRARY_FLAG_IS_EXTERNAL) != 0);
+  /* Cannot copy libraries using generic ID copying functions, so create the copy manually. */
+  Library *external_library = BKE_id_new<Library>(&bmain, BKE_id_name(reference_library.id));
+
+  /* Like in #direct_link_library. */
+  id_us_ensure_real(&external_library->id);
+
+  external_library->archive_parent_library = &reference_library;
+  constexpr uint16_t copy_flag = ~(LIBRARY_FLAG_IS_ARCHIVE | LIBRARY_FLAG_IS_EXTERNAL);
+  external_library->flag = (reference_library.flag & copy_flag) |
+                           (LIBRARY_FLAG_IS_ARCHIVE | LIBRARY_FLAG_IS_EXTERNAL);
+  BKE_library_filepath_set(&bmain, external_library, reference_library.filepath);
+
+  external_library->runtime->parent = reference_library.runtime->parent;
+  /* Only copy a subset of the reference library tags. E.g. an archive library should never be
+   * considered as writable, so never copy #LIBRARY_ASSET_FILE_WRITABLE. This may need further
+   * tweaking still. */
+  constexpr uint16_t copy_tag = (LIBRARY_TAG_RESYNC_REQUIRED | LIBRARY_ASSET_EDITABLE |
+                                 LIBRARY_IS_ASSET_EDIT_FILE);
+  external_library->runtime->tag = reference_library.runtime->tag & copy_tag;
+
+  reference_library.runtime->archived_libraries.append(external_library);
+
+  return external_library;
+}
+
+Library *bke::library::create_external_archive_library(Main &bmain, Library &external_library)
+{
+  BLI_assert(external_library.flag & LIBRARY_FLAG_IS_EXTERNAL);
+  BLI_assert(external_library.runtime->archived_libraries.is_empty());
+
+  Library *archive_library = add_external_archive_library(bmain, external_library);
+
+  BLI_assert(external_library.runtime->archived_libraries.contains(archive_library));
+  return archive_library;
 }
 
 void bke::library::main_cleanup_parent_archives(Main &bmain)

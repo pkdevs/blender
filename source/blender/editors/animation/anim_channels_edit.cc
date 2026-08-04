@@ -13,11 +13,11 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_listbase.h"
-#include "BLI_math_base.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_base_c.hh"
 #include "BLI_span.hh"
-#include "BLI_string_utf8.h"
-#include "BLI_utildefines.h"
+#include "BLI_string_utf8.hh"
+#include "BLI_utildefines.hh"
 
 #include "DNA_anim_types.h"
 #include "DNA_gpencil_legacy_types.h"
@@ -2726,7 +2726,7 @@ void ED_anim_ale_fcurve_delete(bAnimContext &ac, bAnimListElem &ale)
       FCurve *fcu = static_cast<FCurve *>(ale.data);
       if (!BKE_nlastrip_controlcurve_remove(strip, fcu)) {
         printf("ERROR: Trying to delete NLA Control Curve for unknown property '%s'\n",
-               fcu->rna_path);
+               fcu->rna_path().c_str());
       }
       break;
     }

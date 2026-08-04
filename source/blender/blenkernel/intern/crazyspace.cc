@@ -12,12 +12,12 @@
 #include "DNA_modifier_types.h"
 #include "DNA_object_types.h"
 
-#include "BLI_linklist.h"
-#include "BLI_math_matrix.h"
-#include "BLI_math_rotation.h"
+#include "BLI_linklist.hh"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_rotation_c.hh"
 #include "BLI_math_vector_types.hh"
 #include "BLI_span.hh"
-#include "BLI_utildefines.h"
+#include "BLI_utildefines.hh"
 
 #include "BKE_crazyspace.hh"
 #include "BKE_curves.hh"
@@ -105,7 +105,7 @@ Array<float3> BKE_crazyspace_get_mapped_editverts(Depsgraph *depsgraph, Object *
 
   /* Now get the cage. */
   BMEditMesh *em = BKE_editmesh_from_object(obedit);
-  Mesh *mesh_eval_cage = bke::editbmesh_get_eval_cage(
+  const Mesh *mesh_eval_cage = bke::editbmesh_get_eval_cage(
       depsgraph, scene_eval, obedit_eval, em, &CD_MASK_BAREMESH);
 
   const int nverts = em->bm->totvert;

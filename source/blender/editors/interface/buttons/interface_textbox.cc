@@ -6,10 +6,10 @@
 
 #include "BLF_api.hh"
 
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 #include "BLI_listbase_iterator.hh"
-#include "BLI_rect.h"
-#include "BLI_string.h"
+#include "BLI_rect.hh"
+#include "BLI_string.hh"
 
 #include "DNA_screen_types.h"
 
@@ -23,13 +23,17 @@ namespace blender::ui {
 void invalidate_text_wrap_cache(const ARegion &region)
 {
   for (Block &block : region.runtime->uiblocks) {
+    block.text_wrap_cache.clear();
     for (Button &button : block.buttons()) {
-      if (button.type != ButtonType::TextBox) {
-        continue;
+      if (button.type == ButtonType::TextBox) {
+        auto &textbox = static_cast<ButtonTextBox &>(button);
+        textbox.wrap_cache.reset();
+        textbox.placeholder_wrap_cache.reset();
       }
-      ButtonTextBox &textbox = static_cast<ButtonTextBox &>(button);
-      textbox.wrap_cache.reset();
-      textbox.placeholder_wrap_cache.reset();
+      if (button.type == ButtonType::Label) {
+        auto &label = static_cast<ButtonLabel &>(button);
+        label.wrap_cache.reset();
+      }
     }
   }
 }
@@ -48,7 +52,7 @@ void textbox_scroll_to_cursor(ButtonTextBox *textbox)
 #ifdef WITH_INPUT_IME
   /* Include the ime composition string when scrolling to the cursor. */
   const wmIMEData *ime_data = button_ime_data_get(textbox);
-  if (ime_data && ime_data->composite.size() && ime_data->cursor_pos != -1) {
+  if (ime_data && !ime_data->composite.empty() && ime_data->cursor_pos != -1) {
     but_pos += ime_data->cursor_pos;
   }
 #endif
@@ -110,9 +114,8 @@ void textbox_textedit_set_cursor_pos(ButtonTextBox *textbox,
       fstyle.uifont_id, line.data(), line.size(), int(xy.x - start.x));
   int position = line.begin() - lines[0].data() + offset;
 #ifdef WITH_INPUT_IME
-  /* Textbox text wrap includes the IME composition string, remove the ime string pad from the
-   * selection.
-   */
+  /* Text-box text wrap includes the IME composition string, remove the IME string pad from the
+   * selection. */
   const wmIMEData *ime_data = button_ime_data_get(textbox);
   if (ime_data && position > int(textbox->pos)) {
     position = std::max<int>(int(textbox->pos), position - int(ime_data->composite.size()));
@@ -208,7 +211,7 @@ Vector<StringRef> textbox_wrap_lines(ButtonTextBox *textbox)
   StringRef text = textbox->drawstr;
 #ifdef WITH_INPUT_IME
   const wmIMEData *ime_data = button_ime_data_get(textbox);
-  if (ime_data && ime_data->composite.size() > 0) {
+  if (ime_data && !ime_data->composite.empty()) {
     StringRef edit_str = textbox->editstr;
     StringRef l = edit_str.is_empty() ? StringRef("") : edit_str.substr(0, textbox->pos);
     StringRef r = edit_str.is_empty() ? StringRef("") : edit_str.substr(textbox->pos);
@@ -248,8 +251,8 @@ Vector<StringRef> textbox_wrap_lines(ButtonTextBox *textbox)
   }
   textbox->last_total_lines = lines.size();
 
-  /* WORKAROUND: Textbox event handling and drawing requires lines to not include line breaks, but
-   * sometimes text wrap adds them and other times not. */
+  /* WORKAROUND: Text-box event handling and drawing requires lines to not include line breaks,
+   * but sometimes text wrap adds them and other times not. */
   for (int i : lines.index_range()) {
     if (lines[i].endswith("\n")) {
       lines[i] = lines[i].drop_suffix(1);

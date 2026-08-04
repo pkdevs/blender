@@ -11,7 +11,7 @@
 
 #include "BKE_action.hh"
 #include "BKE_anim_data.hh"
-#include "BKE_animsys.h"
+#include "BKE_animsys.hh"
 #include "BKE_asset_edit.hh"
 #include "BKE_attribute_legacy_convert.hh"
 #include "BKE_attribute_storage.hh"
@@ -39,26 +39,26 @@
 #include "BLI_color_types.hh"
 #include "BLI_delaunay_2d.hh"
 #include "BLI_enumerable_thread_specific.hh"
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 #include "BLI_map.hh"
 #include "BLI_math_euler_types.hh"
-#include "BLI_math_geom.h"
-#include "BLI_math_matrix.h"
+#include "BLI_math_geom_c.hh"
 #include "BLI_math_matrix.hh"
+#include "BLI_math_matrix_c.hh"
 #include "BLI_math_matrix_types.hh"
 #include "BLI_math_vector_types.hh"
-#include "BLI_memarena.h"
+#include "BLI_memarena.hh"
 #include "BLI_memory_utils.hh"
-#include "BLI_polyfill_2d.h"
+#include "BLI_polyfill_2d.hh"
 #include "BLI_resource_scope.hh"
 #include "BLI_span.hh"
 #include "BLI_stack.hh"
-#include "BLI_string.h"
+#include "BLI_string.hh"
 #include "BLI_string_ref.hh"
-#include "BLI_string_utf8.h"
+#include "BLI_string_utf8.hh"
 #include "BLI_string_utils.hh"
 #include "BLI_task.hh"
-#include "BLI_utildefines.h"
+#include "BLI_utildefines.hh"
 #include "BLI_vector_set.hh"
 #include "BLI_virtual_array.hh"
 
@@ -305,7 +305,9 @@ static void grease_pencil_blend_write(BlendWriter *writer, ID *id, const void *i
   CustomData_reset(&grease_pencil->layers_data_legacy);
 
   /* Write LibData */
-  writer->write_id_struct(id_address, grease_pencil);
+  writer->write_id_struct(id_address, grease_pencil, [](BlendStructWriter &struct_writer) {
+    struct_writer.generated_ptr(offsetof(GreasePencil, attribute_storage.dna_attributes));
+  });
   BKE_id_blend_write(writer, &grease_pencil->id);
 
   grease_pencil->attribute_storage.wrap().blend_write(*writer, attribute_data);
@@ -556,38 +558,39 @@ static void update_triangle_and_offsets_cache(const Span<float3> positions,
               continue;
             }
 
-            meshintersect::CDT_input<double> input;
-            input.vert.reinitialize(num_points);
-            input.face.reinitialize(fill.size());
-            input.need_ids = true;
-
+            Array<double2, 64> verts(num_points);
             threading::parallel_for(IndexRange(num_points), 512, [&](const IndexRange range) {
               for (const int i : range) {
-                input.vert[i] = double2(projverts[i]);
+                verts[i] = double2(projverts[i]);
               }
             });
 
             const Span<float2> projverts_span = Span(reinterpret_cast<float2 *>(projverts),
                                                      num_points);
 
-            fill.foreach_index(
-                [&](const int64_t curve_i, const int64_t pos) {
-                  const IndexRange fill_points = fill_points_by_curve[pos];
-                  const IndexRange points = points_by_curve[curve_i];
-                  input.face[pos].resize(points.size());
-                  MutableSpan<int> face = input.face[pos].as_mutable_span();
+            Array<int, 64> face_vert_indices(fill_points_by_curve.total_size());
+            threading::parallel_for(fill.index_range(), 256, [&](const IndexRange range) {
+              for (const int i : range) {
+                const IndexRange fill_points = fill_points_by_curve[i];
+                MutableSpan<int> face = face_vert_indices.as_mutable_span().slice(fill_points);
 
-                  array_utils::fill_index_range<int>(face, fill_points.first());
-                  const Span<float2> projpoints = projverts_span.slice(fill_points);
+                array_utils::fill_index_range<int>(face, fill_points.first());
+                const Span<float2> projpoints = projverts_span.slice(fill_points);
 
-                  /* Curve have to be in a counterclockwise order, so check if a flip is need. */
-                  if (cross_poly_v2(reinterpret_cast<const float (*)[2]>(projpoints.data()),
-                                    projpoints.size()) < 0.0)
-                  {
-                    face.reverse();
-                  }
-                },
-                exec_mode::grain_size(256));
+                /* Curve have to be in a counterclockwise order, so check if a flip is need. */
+                if (cross_poly_v2(reinterpret_cast<const float (*)[2]>(projpoints.data()),
+                                  projpoints.size()) < 0.0)
+                {
+                  face.reverse();
+                }
+              }
+            });
+
+            meshintersect::CDT_input<double> input;
+            input.vert = verts;
+            input.face_offsets = fill_points_by_curve;
+            input.face_vert_indices = face_vert_indices;
+            input.needed_ids = CDT_ORIG_VERTS | CDT_ONLY_ONE_ORIG;
 
             meshintersect::CDT_result<double> result = delaunay_2d_calc(input,
                                                                         CDT_INSIDE_WITH_HOLES);
@@ -3345,9 +3348,7 @@ bool GreasePencil::remove_frames(bke::greasepencil::Layer &layer, Span<int> fram
     return true;
   }
 #ifndef NDEBUG
-  else {
-    this->validate_drawing_user_counts();
-  }
+  this->validate_drawing_user_counts();
 #endif
   return false;
 }
@@ -4366,7 +4367,12 @@ void GreasePencil::rename_node(Main &bmain,
 
   /* Update layer name dependencies. */
   if (node.is_layer()) {
-    BKE_animdata_fix_paths_rename_all(&this->id, "layers", old_name.c_str(), node.name().c_str());
+    BKE_animdata_fix_paths(this->id,
+                           "layers",
+                           RNA_path_name_to_infix(old_name),
+                           RNA_path_name_to_infix(node.name()),
+                           /*verify_paths=*/true,
+                           bmain);
     /* Update names in layer masks. */
     for (bke::greasepencil::Layer *layer : this->layers_for_write()) {
       for (GreasePencilLayerMask &mask : layer->masks) {
@@ -4620,7 +4626,11 @@ static void write_drawing_array(GreasePencil &grease_pencil,
         curves.blend_write_prepare(write_data, !BLO_write_is_undo(writer));
         drawing_copy.runtime = nullptr;
 
-        writer->write_struct_at_address_cast<GreasePencilDrawing>(drawing_base, &drawing_copy);
+        writer->write_struct_at_address_cast<GreasePencilDrawing>(
+            drawing_base, &drawing_copy, [](BlendStructWriter &struct_writer) {
+              struct_writer.generated_ptr(
+                  offsetof(GreasePencilDrawing, geometry.attribute_storage.dna_attributes));
+            });
         curves.blend_write(*writer, grease_pencil.id, write_data);
         break;
       }

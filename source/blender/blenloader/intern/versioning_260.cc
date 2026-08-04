@@ -15,8 +15,8 @@
 #define DNA_GENFILE_VERSIONING_MACROS
 
 #include "BKE_idprop.hh"
-#include "BLI_listbase.h"
-#include "BLI_utildefines.h"
+#include "BLI_listbase.hh"
+#include "BLI_utildefines.hh"
 
 #include "DNA_anim_types.h"
 #include "DNA_brush_types.h"
@@ -45,12 +45,12 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_math_matrix.h"
-#include "BLI_math_rotation.h"
-#include "BLI_math_vector.h"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_rotation_c.hh"
+#include "BLI_math_vector_c.hh"
 #include "BLI_path_utils.hh"
-#include "BLI_string.h"
-#include "BLI_string_utf8.h"
+#include "BLI_string.hh"
+#include "BLI_string_utf8.hh"
 #include "BLI_string_utils.hh"
 
 #include "BKE_anim_visualization.h"
@@ -2090,7 +2090,7 @@ void blo_do_versions_260(FileData *fd, Library * /*lib*/, Main *bmain)
     for (Object &ob : bmain->objects) {
       if (ob.pose) {
         if (ob.pose->avs.path_step == 0) {
-          animviz_settings_init(&ob.pose->avs);
+          bke::animviz::settings_init(&ob.pose->avs);
         }
       }
     }

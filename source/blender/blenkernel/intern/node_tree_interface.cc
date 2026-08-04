@@ -15,9 +15,9 @@
 #include "BKE_node_tree_interface_convert.hh"
 #include "BKE_node_tree_update.hh"
 
-#include "BLI_math_vector.h"
+#include "BLI_math_vector_c.hh"
 #include "BLI_stack.hh"
-#include "BLI_string.h"
+#include "BLI_string.hh"
 
 #include "BLO_read_write.hh"
 
@@ -262,7 +262,7 @@ static void *make_socket_data(const StringRef socket_type)
 {
   void *socket_data = nullptr;
   socket_data_to_static_type(socket_type, [&socket_data]<typename SocketDataType>() {
-    SocketDataType *new_socket_data = MEM_new<SocketDataType>(__func__);
+    SocketDataType *new_socket_data = MEM_new<SocketDataType>("make_socket_data");
     socket_data_init_impl(*new_socket_data);
     socket_data = new_socket_data;
   });

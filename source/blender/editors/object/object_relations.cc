@@ -28,12 +28,12 @@
 #include "DNA_vfont_types.h"
 
 #include "BLI_kdtree.hh"
-#include "BLI_linklist.h"
-#include "BLI_listbase.h"
-#include "BLI_math_matrix.h"
-#include "BLI_math_vector.h"
-#include "BLI_string_utf8.h"
-#include "BLI_utildefines.h"
+#include "BLI_linklist.hh"
+#include "BLI_listbase.hh"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_vector_c.hh"
+#include "BLI_string_utf8.hh"
+#include "BLI_utildefines.hh"
 #include "BLI_vector_set.hh"
 
 #include "BLT_translation.hh"
@@ -3196,7 +3196,7 @@ static wmOperatorStatus drop_geometry_nodes_invoke(bContext *C,
 
   nmd->node_group = node_tree;
   id_us_plus(&node_tree->id);
-  MOD_nodes_update_interface(ob, nmd);
+  MOD_nodes_update_interface(*bmain, ob, nmd);
 
   DEG_id_tag_update(&ob->id, ID_RECALC_GEOMETRY);
   WM_event_add_notifier(C, NC_OBJECT | ND_MODIFIER, nullptr);

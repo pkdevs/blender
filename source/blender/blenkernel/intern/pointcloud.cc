@@ -19,7 +19,7 @@
 #include "BLI_index_range.hh"
 #include "BLI_resource_scope.hh"
 #include "BLI_span.hh"
-#include "BLI_utildefines.h"
+#include "BLI_utildefines.hh"
 #include "BLI_vector.hh"
 
 #include "BKE_anim_data.hh"
@@ -136,7 +136,9 @@ static void pointcloud_blend_write(BlendWriter *writer, ID *id, const void *id_a
   CustomData_reset(&pointcloud->pdata_legacy);
 
   /* Write LibData */
-  writer->write_id_struct(id_address, pointcloud);
+  writer->write_id_struct(id_address, pointcloud, [](BlendStructWriter &struct_writer) {
+    struct_writer.generated_ptr(offsetof(PointCloud, attribute_storage.dna_attributes));
+  });
   BKE_id_blend_write(writer, &pointcloud->id);
 
   /* Direct data */

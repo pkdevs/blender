@@ -14,7 +14,7 @@
 #include "BLI_kdtree.hh"
 #include "BLI_math_vector.hh"
 #include "BLI_offset_indices.hh"
-#include "BLI_rect.h"
+#include "BLI_rect.hh"
 #include "BLI_stack.hh"
 #include "BLI_task.hh"
 
@@ -597,13 +597,10 @@ static void generate_corner(const float3 &pt_a,
       r_src_indices.append_n_times(src_point_index, 2);
       return;
     }
-    else {
-      const float3 miter_point = pt_b + miter * radius / miter_invscale;
-
-      r_perimeter.append(miter_point);
-      r_src_indices.append(src_point_index);
-      return;
-    }
+    const float3 miter_point = pt_b + miter * radius / miter_invscale;
+    r_perimeter.append(miter_point);
+    r_src_indices.append(src_point_index);
+    return;
   }
 
   /* Avoid division by tiny values for steep angles. */

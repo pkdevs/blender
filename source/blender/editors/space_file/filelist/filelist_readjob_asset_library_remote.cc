@@ -12,11 +12,11 @@
 #include "AS_asset_representation.hh"
 #include "AS_remote_library.hh"
 
-#include "BLI_assert.h"
-#include "BLI_listbase.h"
+#include "BLI_assert.hh"
+#include "BLI_listbase.hh"
 #include "BLI_map.hh"
 #include "BLI_path_utils.hh"
-#include "BLI_string.h"
+#include "BLI_string.hh"
 #include "BLI_string_utils.hh"
 
 #include "BKE_global.hh"
@@ -41,7 +41,7 @@ using RemoteLibraryLoadingStatus = asset_system::RemoteLibraryLoadingStatus;
 static void filelist_readjob_remote_asset_library_index_read(
     FileListReadJob *job_params,
     RemoteLibraryRequest &request,
-    bool *stop,
+    const bool *stop,
     bool *do_update,
     float * /*progress*/,
     Map<StringRef, asset_system::AssetRepresentation *> &already_downloaded_assets)

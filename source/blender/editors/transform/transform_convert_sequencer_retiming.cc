@@ -12,9 +12,9 @@
 #include "DNA_sequence_types.h"
 #include "DNA_space_types.h"
 
-#include "BLI_math_matrix.h"
-#include "BLI_math_vector.h"
-#include "BLI_rect.h"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_vector_c.hh"
+#include "BLI_rect.hh"
 
 #include "BKE_context.hh"
 
@@ -74,7 +74,7 @@ static void freeSeqData(TransInfo *t, TransDataContainer *tc, TransCustomData *c
 {
   const TransData *const td = tc->data;
   Scene *scene = t->scene;
-  const Editing *ed = seq::editing_get(t->scene);
+  Editing *ed = seq::editing_get(t->scene);
 
   /* Handle overlapping strips. */
 
@@ -85,7 +85,7 @@ static void freeSeqData(TransInfo *t, TransDataContainer *tc, TransCustomData *c
   }
 
   ListBaseT<Strip> *seqbasep = seq::active_seqbase_get(ed);
-  seq::iterator_set_expand(seqbasep, transformed_strips, seq::query_strip_effect_chain);
+  seq::expand_strips(ed, transformed_strips, seq::StripRelation::Effects);
 
   VectorSet<Strip *> dependant;
   dependant.add_multiple(transformed_strips);
@@ -249,8 +249,7 @@ static void recalcData_sequencer_retiming(TransInfo *t)
 
   /* Test overlap, displays red outline. */
   Editing *ed = seq::editing_get(t->scene);
-  seq::iterator_set_expand(
-      seq::active_seqbase_get(ed), transformed_strips, seq::query_strip_effect_chain);
+  seq::expand_strips(ed, transformed_strips, seq::StripRelation::Effects);
   for (Strip *strip : transformed_strips) {
     strip->runtime->flag &= ~seq::StripRuntimeFlag::Overlap;
     if (seq::transform_test_overlap(t->scene, seq::active_seqbase_get(ed), strip)) {

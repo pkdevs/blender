@@ -8,12 +8,12 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_linklist.h"
-#include "BLI_listbase.h"
-#include "BLI_math_matrix.h"
-#include "BLI_math_rotation.h"
-#include "BLI_math_vector.h"
-#include "BLI_rect.h"
+#include "BLI_linklist.hh"
+#include "BLI_listbase.hh"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_rotation_c.hh"
+#include "BLI_math_vector_c.hh"
+#include "BLI_rect.hh"
 
 #include "BKE_action.hh"
 #include "BKE_context.hh"
@@ -77,7 +77,8 @@ static wmOperatorStatus view3d_camera_to_view_exec(bContext *C, wmOperator * /*o
 
   BKE_object_tfm_protected_backup(v3d->camera, &obtfm);
 
-  ED_view3d_to_object(depsgraph, v3d->camera, rv3d->ofs, rv3d->viewquat, rv3d->dist);
+  ED_view3d_to_object(depsgraph, v3d->camera, rv3d->ofs, rv3d->viewquat, rv3d->dist, 0.0f);
+  rv3d->camroll = 0.0f;
 
   BKE_object_tfm_protected_restore(v3d->camera, &obtfm, v3d->camera->protectflag);
 
@@ -384,6 +385,10 @@ static void obmat_to_viewmat(RegionView3D *rv3d, Object *ob)
   rv3d->view = RV3D_VIEW_USER; /* don't show the grid */
 
   normalize_m4_m4(bmat, ob->object_to_world().ptr());
+  /* Apply roll. */
+  if (rv3d->camroll != 0.0f) {
+    rotate_m4(bmat, 'Z', -rv3d->camroll);
+  }
   invert_m4_m4(rv3d->viewmat, bmat);
 
   /* view quat calculation, needed for add object */

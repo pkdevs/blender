@@ -9,13 +9,13 @@
 #include "ANIM_keyframing.hh"
 #include "ANIM_keyingsets.hh"
 
-#include "BKE_animsys.h"
+#include "BKE_animsys.hh"
 #include "BKE_context.hh"
 #include "BKE_main.hh"
 #include "BKE_report.hh"
 
-#include "BLI_listbase.h"
-#include "BLI_string.h"
+#include "BLI_listbase.hh"
+#include "BLI_string.hh"
 
 #include "DEG_depsgraph.hh"
 

@@ -31,9 +31,9 @@
 #include "MEM_guardedalloc.h"
 
 #include "BLI_array.hh"
-#include "BLI_listbase.h"
-#include "BLI_math_rotation.h"
-#include "BLI_string.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_rotation_c.hh"
+#include "BLI_string.hh"
 
 #include "BLT_translation.hh"
 
@@ -217,7 +217,7 @@ static Vector<FCurve *> fcurves_filtered_by_path(const Span<FCurve *> input_fcur
 {
   Vector<FCurve *> fcurves;
   for (FCurve *fcurve : input_fcurves) {
-    if (StringRefNull(fcurve->rna_path) != path) {
+    if (fcurve->rna_path() != path) {
       continue;
     }
     fcurves.append(fcurve);

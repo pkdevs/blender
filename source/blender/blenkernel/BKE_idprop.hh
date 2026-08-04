@@ -14,11 +14,11 @@
 #include "DNA_ID.h"
 #include "DNA_ID_enums.h"
 
-#include "BLI_compiler_attrs.h"
+#include "BLI_compiler_attrs.hh"
 #include "BLI_function_ref.hh"
 #include "BLI_span.hh"
 #include "BLI_string_ref.hh"
-#include "BLI_sys_types.h"
+#include "BLI_sys_types.hh"
 #include "BLI_vector_set.hh"
 
 #include "BLI_math_vector_types.hh"
@@ -121,6 +121,9 @@ const IDPropertyUIDataEnumItem *IDP_EnumItemFind(const IDProperty *prop);
 bool IDP_EnumItemsValidate(const IDPropertyUIDataEnumItem *items,
                            int items_num,
                            void (*error_fn)(const char *));
+
+/** Free the items and their allocated strings. */
+void IDP_EnumItemsFree(IDPropertyUIDataEnumItem *items, int items_num);
 
 /*-------- ID Type -------*/
 

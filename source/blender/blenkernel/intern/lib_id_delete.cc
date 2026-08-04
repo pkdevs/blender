@@ -14,9 +14,9 @@
 #include "DNA_ID.h"
 #include "DNA_key_types.h"
 
-#include "BLI_utildefines.h"
+#include "BLI_utildefines.hh"
 
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 #include "BLI_set.hh"
 #include "BLI_vector.hh"
 
@@ -31,6 +31,7 @@
 #include "BKE_lib_remap.hh"
 #include "BKE_library.hh"
 #include "BKE_main.hh"
+#include "BKE_main_invariants.hh"
 #include "BKE_main_namemap.hh"
 
 #include "BLO_readfile.hh"
@@ -384,6 +385,9 @@ static size_t id_delete(Main *bmain, Set<ID *> &ids_to_delete, const BKEIDDelete
   BKE_main_unlock(bmain);
   BKE_layer_collection_resync_allow(*bmain);
   BKE_main_collection_sync_remap(bmain);
+  if (!options.prevent_invariants_update) {
+    BKE_main_ensure_invariants(*bmain);
+  }
 
   if (has_deleted_library) {
     BKE_library_main_rebuild_hierarchy(bmain);

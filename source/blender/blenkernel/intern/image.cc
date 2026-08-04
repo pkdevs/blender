@@ -24,11 +24,11 @@
 #include <string>
 
 #include "BLI_array.hh"
-#include "BLI_fileops.h"
-#include "BLI_listbase.h"
+#include "BLI_fileops.hh"
+#include "BLI_listbase.hh"
 #include "BLI_path_utils.hh"
-#include "BLI_rect.h"
-#include "BLI_string.h"
+#include "BLI_rect.hh"
+#include "BLI_string.hh"
 #include "BLI_string_utils.hh"
 
 #include "CLG_log.h"
@@ -41,6 +41,7 @@
 #include "IMB_imbuf_types.hh"
 #include "IMB_metadata.hh"
 #include "IMB_openexr.hh"
+#include "IMB_partial_update.hh"
 
 #include "MOV_read.hh"
 
@@ -60,15 +61,15 @@
 #include "DNA_windowmanager_types.h"
 #include "DNA_world_types.h"
 
-#include "BLI_math_vector.h"
-#include "BLI_mempool.h"
-#include "BLI_string_utf8.h"
-#include "BLI_system.h"
-#include "BLI_task.h"
-#include "BLI_threads.h"
-#include "BLI_time.h"
-#include "BLI_timecode.h" /* For stamp time-code format. */
-#include "BLI_utildefines.h"
+#include "BLI_math_vector_c.hh"
+#include "BLI_mempool.hh"
+#include "BLI_string_utf8.hh"
+#include "BLI_system.hh"
+#include "BLI_task_c.hh"
+#include "BLI_threads.hh"
+#include "BLI_time.hh"
+#include "BLI_timecode.hh" /* For stamp time-code format. */
+#include "BLI_utildefines.hh"
 
 #include "BLT_translation.hh"
 
@@ -79,6 +80,7 @@
 #include "BKE_idtype.hh"
 #include "BKE_image.hh"
 #include "BKE_image_format.hh"
+#include "BKE_image_gpu.hh"
 #include "BKE_lib_id.hh"
 #include "BKE_library.hh"
 #include "BKE_main.hh"
@@ -99,9 +101,8 @@
 #include "SEQ_utils.hh" /* SEQ_get_topmost_sequence() */
 
 #include "GPU_material.hh"
-#include "GPU_texture.hh"
 
-#include "BLI_sys_types.h" /* for intptr_t support */
+#include "BLI_sys_types.hh" /* for intptr_t support */
 
 #include "DEG_depsgraph.hh"
 #include "DEG_depsgraph_query.hh"
@@ -114,6 +115,8 @@
 #include "DNA_node_types.h"
 #include "DNA_screen_types.h"
 #include "DNA_space_types.h"
+
+#include "image_intern.hh"
 
 namespace blender {
 
@@ -128,15 +131,6 @@ static void copy_image_packedfiles(ListBaseT<ImagePackedFile> *lb_dst,
 /* -------------------------------------------------------------------- */
 /** \name Image #IDTypeInfo API
  * \{ */
-
-static void image_runtime_free_data(Image *image)
-{
-  if (image->runtime->partial_update_user != nullptr) {
-    BKE_image_partial_update_free(image->runtime->partial_update_user);
-    image->runtime->partial_update_user = nullptr;
-  }
-  BKE_image_partial_update_register_free(image);
-}
 
 static void image_init_data(ID *id)
 {
@@ -213,7 +207,6 @@ static void image_free_data(ID *id)
 
   image->tiles.free_no_destruct();
 
-  image_runtime_free_data(image);
   MEM_delete(image->runtime);
 }
 
@@ -243,26 +236,6 @@ static void image_foreach_cache(ID *id,
 
   key.identifier = runtime_base_id + offsetof(bke::ImageRuntime, cache);
   function_callback(id, &key, reinterpret_cast<void **>(&image->runtime->cache), 0, user_data);
-
-  auto gputexture_offset = [image](int target, int eye) {
-    constexpr size_t base_offset = offsetof(bke::ImageRuntime, gputexture);
-    gpu::Texture **first = &image->runtime->gputexture[0][0];
-    const size_t array_offset = sizeof(*first) *
-                                (&image->runtime->gputexture[target][eye] - first);
-    return base_offset + array_offset;
-  };
-
-  for (int eye = 0; eye < 2; eye++) {
-    for (int a = 0; a < TEXTARGET_COUNT; a++) {
-      const gpu::Texture *texture = image->runtime->gputexture[a][eye];
-      if (texture == nullptr) {
-        continue;
-      }
-      key.identifier = runtime_base_id + gputexture_offset(a, eye);
-      function_callback(
-          id, &key, reinterpret_cast<void **>(&image->runtime->gputexture[a][eye]), 0, user_data);
-    }
-  }
 }
 
 static void image_foreach_texture_cache_path(BPathForeachPathData *bpath_data,
@@ -557,29 +530,16 @@ static ImBuf *image_load_image_file(
 static ImBuf *image_acquire_ibuf(Image *ima,
                                  ImageUser *iuser,
                                  void **r_lock,
-                                 const bool ensure_host_buffer);
+                                 const bool ensure_host_buffer,
+                                 bool *r_load_failed = nullptr);
 static void image_update_views_format(Image *ima, ImageUser *iuser);
 static void image_add_view(Image *ima, const char *viewname, const char *filepath);
-
-/* max int, to indicate we don't store sequences in ibuf */
-#define IMA_NO_INDEX 0x7FEFEFEF
-
-/* quick lookup: supports 1 million entries, thousand passes */
-#define IMA_MAKE_INDEX(entry, index) (((entry) << 10) + (index))
-#define IMA_INDEX_ENTRY(index) ((index) >> 10)
-#if 0
-#  define IMA_INDEX_PASS(index) (index & ~1023)
-#endif
 
 /** \} */
 
 /* -------------------------------------------------------------------- */
 /** \name Image Cache
  * \{ */
-
-struct ImageCacheKey {
-  int index;
-};
 
 static uint imagecache_hashhash(const void *key_v)
 {
@@ -604,10 +564,8 @@ static void imagecache_keydata(void *userkey, int *framenr, int *proxy, int *ren
   *render_flags = 0;
 }
 
-static void imagecache_put(Image *image, int index, ImBuf *ibuf)
+void imagecache_put(Image *image, ImageCacheKey key, ImBuf *ibuf)
 {
-  ImageCacheKey key;
-
   if (image->runtime->cache == nullptr) {
     // char cache_name[64];
     // SNPRINTF_UTF8(cache_name, "Image Datablock %s", image->id.name);
@@ -617,28 +575,30 @@ static void imagecache_put(Image *image, int index, ImBuf *ibuf)
     IMB_cache_set_getdata_callback(image->runtime->cache, imagecache_keydata);
   }
 
-  key.index = index;
+  if (ibuf != nullptr) {
+    ibuf->lastused = BLI_time_now_seconds_i();
+  }
 
   IMB_cache_put(image->runtime->cache, &key, ibuf);
 }
 
-static void imagecache_remove(Image *image, int index)
+static void imagecache_remove(Image *image, ImageCacheKey key)
 {
   if (image->runtime->cache == nullptr) {
     return;
   }
 
-  ImageCacheKey key;
-  key.index = index;
   IMB_cache_remove(image->runtime->cache, &key);
 }
 
-static ImBuf *imagecache_get(Image *image, int index, bool *r_is_cached_empty)
+static ImBuf *imagecache_get(Image *image, ImageCacheKey key, bool *r_is_cached_empty)
 {
   if (image->runtime->cache) {
-    ImageCacheKey key;
-    key.index = index;
-    return IMB_cache_get(image->runtime->cache, &key, r_is_cached_empty);
+    ImBuf *ibuf = IMB_cache_get(image->runtime->cache, &key, r_is_cached_empty);
+    if (ibuf != nullptr) {
+      ibuf->lastused = BLI_time_now_seconds_i();
+    }
+    return ibuf;
   }
 
   return nullptr;
@@ -725,8 +685,6 @@ void BKE_image_free_buffers_ex(Image *ima, bool do_lock)
     ima->rr = nullptr;
   }
 
-  BKE_image_free_gputextures(ima);
-
   if (do_lock) {
     ima->runtime->cache_mutex.unlock();
   }
@@ -735,6 +693,81 @@ void BKE_image_free_buffers_ex(Image *ima, bool do_lock)
 void BKE_image_free_buffers(Image *ima)
 {
   BKE_image_free_buffers_ex(ima, false);
+}
+
+void BKE_image_free_old_buffers(Main *bmain)
+{
+  static int64_t lasttime = 0;
+  const int64_t ctime = BLI_time_now_seconds_i();
+
+  /*
+   * Run garbage collector once for every collecting period of time
+   * if textimeout is 0, that's the option to NOT run the collector
+   */
+  if (U.textimeout == 0 || ctime % U.texcollectrate || ctime == lasttime) {
+    return;
+  }
+
+  /* of course not! */
+  if (G.is_rendering) {
+    return;
+  }
+
+  lasttime = ctime;
+
+  for (Image &ima : bmain->images) {
+    if ((ima.flag & IMA_NOCOLLECT) || ima.runtime->cache == nullptr) {
+      continue;
+    }
+
+    bool any_buffer_left = false;
+    {
+      std::scoped_lock lock(ima.runtime->cache_mutex);
+
+      /* Gather entries to remove. */
+      Vector<ImageCacheKey> to_remove;
+      ImBufCacheIter *iter = IMB_cacheIter_new(ima.runtime->cache);
+      while (!IMB_cacheIter_done(iter)) {
+        ImBuf *ibuf = IMB_cacheIter_getImBuf(iter);
+        if (ibuf != nullptr) {
+          /* GPU buffers: free when past timeout and image buffer is not used elsewhere. */
+          bool freed_gpu = false;
+          if (ctime - ibuf->gpu.lastused > U.textimeout) {
+            if ((ibuf->gpu.texture || ibuf->gpu.flag & IMB_GPU_LOAD_FAILED) &&
+                ibuf->refcounter == 0)
+            {
+              IMB_free_gpu_textures(ibuf);
+              freed_gpu = true;
+            }
+          }
+
+          /* CPU buffers: free whole image buffer if past timeout, and image has not been
+           * edited and has not GPU buffers. When the GPU texture was just freed, keep the
+           * buffer for another more collection cycle to give it a chance to be reused. */
+          if (!freed_gpu && ibuf->gpu.texture == nullptr &&
+              (ibuf->userflags & IB_BITMAPDIRTY) == 0 && (ctime - ibuf->lastused > U.textimeout))
+          {
+            to_remove.append(*static_cast<const ImageCacheKey *>(IMB_cacheIter_getUserKey(iter)));
+          }
+          else {
+            any_buffer_left = true;
+          }
+        }
+        IMB_cacheIter_step(iter);
+      }
+      IMB_cacheIter_free(iter);
+
+      /* Remove entries. */
+      for (const ImageCacheKey &key : to_remove) {
+        imagecache_remove(&ima, key);
+      }
+    }
+
+    /* If there are no buffers, also close the movie reader handles. */
+    if (!any_buffer_left && !BLI_listbase_is_empty(&ima.anims)) {
+      image_free_anims(&ima);
+    }
+  }
 }
 
 void BKE_image_free_data(Image *ima)
@@ -811,7 +844,8 @@ static ImBuf *image_get_cached_ibuf_for_index_entry(Image *ima,
     index = IMA_MAKE_INDEX(entry, index);
   }
 
-  return imagecache_get(ima, index, r_is_cached_empty);
+  ImageCacheKey key = {.index = index};
+  return imagecache_get(ima, key, r_is_cached_empty);
 }
 
 static void image_assign_ibuf(Image *ima, ImBuf *ibuf, int index, int entry)
@@ -820,7 +854,8 @@ static void image_assign_ibuf(Image *ima, ImBuf *ibuf, int index, int entry)
     index = IMA_MAKE_INDEX(entry, index);
   }
 
-  imagecache_put(ima, index, ibuf);
+  ImageCacheKey key = {.index = index};
+  imagecache_put(ima, key, ibuf);
 }
 
 static void image_remove_ibuf(Image *ima, int index, int entry)
@@ -828,7 +863,13 @@ static void image_remove_ibuf(Image *ima, int index, int entry)
   if (index != IMA_NO_INDEX) {
     index = IMA_MAKE_INDEX(entry, index);
   }
-  imagecache_remove(ima, index);
+  ImageCacheKey key = {.index = index};
+  imagecache_remove(ima, key);
+}
+
+static bool image_index_is_gpu_only(const int index)
+{
+  return ELEM(index, IMA_INDEX_UDIM_ATLAS, IMA_INDEX_UDIM_TILE_MAPPING);
 }
 
 static void copy_image_packedfiles(ListBaseT<ImagePackedFile> *lb_dst,
@@ -868,7 +909,7 @@ void BKE_image_merge(Main *bmain, Image *dest, Image *source)
         while (!IMB_cacheIter_done(iter)) {
           ImBuf *ibuf = IMB_cacheIter_getImBuf(iter);
           ImageCacheKey *key = static_cast<ImageCacheKey *>(IMB_cacheIter_getUserKey(iter));
-          imagecache_put(dest, key->index, ibuf);
+          imagecache_put(dest, *key, ibuf);
           IMB_cacheIter_step(iter);
         }
         IMB_cacheIter_free(iter);
@@ -890,24 +931,13 @@ bool BKE_image_scale(Image *image, int width, int height, ImageUser *iuser)
 
   if (ibuf) {
     IMB_scale(ibuf, width, height, IMBScaleFilter::Box, false);
-    BKE_image_mark_dirty(image, ibuf);
+    IMB_partial_update_mark_full(ibuf);
+    IMB_mark_dirty(ibuf);
   }
 
   BKE_image_release_ibuf(image, ibuf, lock);
 
   return (ibuf != nullptr);
-}
-
-bool BKE_image_has_gpu_texture(Image *ima)
-{
-  for (int eye = 0; eye < 2; eye++) {
-    for (int i = 0; i < TEXTARGET_COUNT; i++) {
-      if (ima->runtime->gputexture[i][eye] != nullptr) {
-        return true;
-      }
-    }
-  }
-  return false;
 }
 
 static int image_get_tile_number_from_iuser(const Image *ima, const ImageUser *iuser)
@@ -1472,7 +1502,7 @@ void BKE_image_replace_imbuf(Image *image, ImBuf *ibuf)
 
   /* Consider image dirty since its content can not be re-created unless the image is explicitly
    * saved. */
-  BKE_image_mark_dirty(image, ibuf);
+  IMB_mark_dirty(ibuf);
 }
 
 /** Pack image buffer to memory as PNG or EXR. */
@@ -1720,6 +1750,14 @@ void BKE_image_packfiles_from_mem(ReportList *reports,
 void BKE_image_packfile_ensure(
     Main *bmain, Image *image, ReportList *reports, const char *data, const int data_len)
 {
+  if (ID_IS_LINKED(image)) {
+    BKE_reportf(reports, RPT_ERROR, "Cannot pack linked image '%s'", image->id.name + 2);
+    return;
+  }
+  if (ELEM(image->type, IMA_TYPE_R_RESULT, IMA_TYPE_COMPOSITE)) {
+    BKE_report(reports, RPT_ERROR, "Cannot pack render result or viewer node images");
+    return;
+  }
   const bool is_packed = BKE_image_has_packedfile(image);
   const bool is_dirty = BKE_image_is_dirty(image);
 
@@ -1731,6 +1769,7 @@ void BKE_image_packfile_ensure(
      *
      * See #152638.
      */
+    BKE_report(reports, RPT_INFO, "Image is already packed");
     return;
   }
 
@@ -1750,11 +1789,6 @@ void BKE_image_packfile_ensure(
   }
 }
 
-void BKE_image_tag_time(Image *ima)
-{
-  ima->runtime->lastused = BLI_time_now_seconds_i();
-}
-
 static uintptr_t image_mem_size(Image *image)
 {
   uintptr_t size = 0;
@@ -1771,8 +1805,10 @@ static uintptr_t image_mem_size(Image *image)
 
     while (!IMB_cacheIter_done(iter)) {
       ImBuf *ibuf = IMB_cacheIter_getImBuf(iter);
+      const ImageCacheKey *key = static_cast<const ImageCacheKey *>(
+          IMB_cacheIter_getUserKey(iter));
       IMB_cacheIter_step(iter);
-      if (ibuf == nullptr) {
+      if (ibuf == nullptr || image_index_is_gpu_only(key->index)) {
         continue;
       }
 
@@ -1860,25 +1896,21 @@ void BKE_image_free_all_textures(Main *bmain)
 #endif
 }
 
-static bool imagecache_check_free_anim(ImBuf *ibuf, void * /*userkey*/, void *userdata)
+static bool imagecache_check_free_anim(ImBuf *ibuf, void *userkey, void *userdata)
 {
   if (ibuf == nullptr) {
     return true;
   }
-  int except_frame = *static_cast<int *>(userdata);
-  return (ibuf->userflags & IB_BITMAPDIRTY) == 0 && (ibuf->index != IMA_NO_INDEX) &&
-         (except_frame != IMA_INDEX_ENTRY(ibuf->index));
-}
-
-void BKE_image_free_anim_ibufs(Image *ima, int except_frame)
-{
-  std::scoped_lock lock(ima->runtime->cache_mutex);
-  if (ima->runtime->cache != nullptr) {
-    IMB_cache_cleanup(ima->runtime->cache, imagecache_check_free_anim, &except_frame);
+  const ImageCacheKey *key = static_cast<const ImageCacheKey *>(userkey);
+  const int except_frame = *static_cast<int *>(userdata);
+  if (image_index_is_gpu_only(key->index)) {
+    return false;
   }
+  return (ibuf->userflags & IB_BITMAPDIRTY) == 0 && key->index != IMA_NO_INDEX &&
+         (except_frame != IMA_INDEX_ENTRY(key->index));
 }
 
-void BKE_image_all_free_anim_ibufs(Main *bmain, int cfra)
+void BKE_image_all_free_anim_ibufs(Main *bmain, int except_frame)
 {
   Image *ima;
 
@@ -1886,7 +1918,10 @@ void BKE_image_all_free_anim_ibufs(Main *bmain, int cfra)
        ima = static_cast<Image *>(ima->id.next))
   {
     if (BKE_image_is_animated(ima)) {
-      BKE_image_free_anim_ibufs(ima, cfra);
+      std::scoped_lock lock(ima->runtime->cache_mutex);
+      if (ima->runtime->cache != nullptr) {
+        IMB_cache_cleanup(ima->runtime->cache, imagecache_check_free_anim, &except_frame);
+      }
     }
   }
 }
@@ -2714,7 +2749,7 @@ static void metadata_set_field(void *data,
 {
   /* We know it is an `ImBuf *` because that's what we pass to #BKE_stamp_info_callback. */
   ImBuf *imbuf = static_cast<ImBuf *>(data);
-  IMB_metadata_set_field(imbuf->metadata, propname, propvalue);
+  IMB_metadata_set_field(imbuf->metadata_for_write(), propname, propvalue);
 }
 
 static void metadata_get_field(void *data,
@@ -2724,13 +2759,12 @@ static void metadata_get_field(void *data,
 {
   /* We know it is an `ImBuf *` because that's what we pass to #BKE_stamp_info_callback. */
   ImBuf *imbuf = static_cast<ImBuf *>(data);
-  IMB_metadata_get_field(imbuf->metadata, propname, propvalue, propvalue_maxncpy);
+  IMB_metadata_get_field(imbuf->metadata(), propname, propvalue, propvalue_maxncpy);
 }
 
 void BKE_imbuf_stamp_info(const RenderResult *rr, ImBuf *ibuf)
 {
   StampData *stamp_data = const_cast<StampData *>(rr->stamp_data);
-  IMB_metadata_ensure(&ibuf->metadata);
   BKE_stamp_info_callback(ibuf, stamp_data, metadata_set_field, false);
 }
 
@@ -2749,7 +2783,6 @@ void BKE_stamp_info_from_imbuf(RenderResult *rr, ImBuf *ibuf)
     rr->stamp_data = MEM_new_zeroed<StampData>("RenderResult.stamp_data");
   }
   StampData *stamp_data = rr->stamp_data;
-  IMB_metadata_ensure(&ibuf->metadata);
   BKE_stamp_info_callback(ibuf, stamp_data, metadata_get_field, true);
   /* Copy render engine specific settings. */
   IMB_metadata_foreach(ibuf, metadata_copy_custom_fields, rr);
@@ -2797,18 +2830,19 @@ bool BKE_imbuf_write_as(ImBuf *ibuf,
                         const ImageFormatData *imf,
                         const bool save_copy)
 {
-  ImBuf ibuf_back = *ibuf;
-  bool ok;
+  const eImbFileType ftype_back = ibuf->ftype;
+  const ImbFormatOptions foptions_back = ibuf->foptions;
+  const ImColorMode color_mode_back = ibuf->color_mode;
 
   ibuf->color_mode = imf->color_mode;
 
-  ok = BKE_imbuf_write(ibuf, filepath, imf);
+  bool ok = BKE_imbuf_write(ibuf, filepath, imf);
 
   if (save_copy) {
     /* note that we are not restoring _all_ settings */
-    ibuf->color_mode = ibuf_back.color_mode;
-    ibuf->ftype = ibuf_back.ftype;
-    ibuf->foptions = ibuf_back.foptions;
+    ibuf->color_mode = color_mode_back;
+    ibuf->ftype = ftype_back;
+    ibuf->foptions = foptions_back;
   }
 
   return ok;
@@ -3237,7 +3271,6 @@ static void image_tag_reload(Image *ima, ID *iuser_id, ImageUser *iuser, void *c
       /* Must copy image user changes to evaluated data-block. */
       DEG_id_tag_update(iuser_id, ID_RECALC_SYNC_TO_EVAL);
     }
-    BKE_image_partial_update_mark_full_update(ima);
   }
 }
 
@@ -3262,21 +3295,8 @@ void BKE_image_init_imageuser(Image *ima, ImageUser *iuser)
 
 static void image_free_tile(Image *ima, ImageTile *tile)
 {
-  for (int i = 0; i < TEXTARGET_COUNT; i++) {
-    /* Only two textures depends on all tiles, so if this is a secondary tile we can keep the other
-     * two. */
-    if (tile != ima->tiles.first && !ELEM(i, TEXTARGET_2D_ARRAY, TEXTARGET_TILE_MAPPING)) {
-      continue;
-    }
-
-    for (int eye = 0; eye < 2; eye++) {
-      if (ima->runtime->gputexture[i][eye] != nullptr) {
-        GPU_texture_free(ima->runtime->gputexture[i][eye]);
-        ima->runtime->gputexture[i][eye] = nullptr;
-      }
-    }
-  }
-  BKE_image_partial_update_mark_full_update(ima);
+  /* UDIM tiles are packed into an atlas for the GPU, so need to free all. */
+  BKE_image_free_gpu_udim_textures(ima);
 
   if (BKE_image_is_multiview(ima)) {
     const int totviews = ima->views.count();
@@ -3401,7 +3421,6 @@ void BKE_image_signal(Main *bmain, Image *ima, ImageUser *iuser, int signal)
         image_tag_frame_recalc(ima, nullptr, iuser, ima);
       }
       BKE_image_walk_all_users(bmain, ima, image_tag_frame_recalc);
-      BKE_image_partial_update_mark_full_update(ima);
 
       break;
 
@@ -3663,18 +3682,7 @@ ImageTile *BKE_image_add_tile(Image *ima, int tile_number, const char *label)
     STRNCPY_UTF8(tile->label, label);
   }
 
-  for (int eye = 0; eye < 2; eye++) {
-    /* Reallocate GPU tile array. */
-    if (ima->runtime->gputexture[TEXTARGET_2D_ARRAY][eye] != nullptr) {
-      GPU_texture_free(ima->runtime->gputexture[TEXTARGET_2D_ARRAY][eye]);
-      ima->runtime->gputexture[TEXTARGET_2D_ARRAY][eye] = nullptr;
-    }
-    if (ima->runtime->gputexture[TEXTARGET_TILE_MAPPING][eye] != nullptr) {
-      GPU_texture_free(ima->runtime->gputexture[TEXTARGET_TILE_MAPPING][eye]);
-      ima->runtime->gputexture[TEXTARGET_TILE_MAPPING][eye] = nullptr;
-    }
-  }
-  BKE_image_partial_update_mark_full_update(ima);
+  BKE_image_free_gpu_udim_textures(ima);
 
   return tile;
 }
@@ -3717,18 +3725,7 @@ void BKE_image_reassign_tile(Image *ima, ImageTile *tile, int new_tile_number)
     IMB_freeImBuf(ibuf);
   }
 
-  for (int eye = 0; eye < 2; eye++) {
-    /* Reallocate GPU tile array. */
-    if (ima->runtime->gputexture[TEXTARGET_2D_ARRAY][eye] != nullptr) {
-      GPU_texture_free(ima->runtime->gputexture[TEXTARGET_2D_ARRAY][eye]);
-      ima->runtime->gputexture[TEXTARGET_2D_ARRAY][eye] = nullptr;
-    }
-    if (ima->runtime->gputexture[TEXTARGET_TILE_MAPPING][eye] != nullptr) {
-      GPU_texture_free(ima->runtime->gputexture[TEXTARGET_TILE_MAPPING][eye]);
-      ima->runtime->gputexture[TEXTARGET_TILE_MAPPING][eye] = nullptr;
-    }
-  }
-  BKE_image_partial_update_mark_full_update(ima);
+  BKE_image_free_gpu_udim_textures(ima);
 }
 
 static int tile_sort_cb(const void *a, const void *b)
@@ -4039,7 +4036,6 @@ RenderResult *BKE_image_acquire_renderresult(Scene *scene, Image *ima)
     }
     else {
       rr = BKE_image_get_renderslot(ima, ima->render_slot)->render;
-      BKE_image_partial_update_mark_full_update(ima);
     }
 
     /* set proper views */
@@ -4153,19 +4149,18 @@ static void image_add_view(Image *ima, const char *viewname, const char *filepat
 
 /* After imbuf load, OpenEXR type can return with a EXR-handle open
  * in that case we have to build a render-result. */
-static void image_create_multilayer(Image *ima, ImBuf *ibuf, int framenr)
+static void image_create_multilayer(Image *ima, ImBuf *ibuf, ExrReadHandle *handle, int framenr)
 {
   const char *colorspace = ima->colorspace_settings.name;
   bool predivide = (ima->alpha_mode == IMA_ALPHA_PREMUL);
 
   /* only load rr once for multiview */
   if (!ima->rr) {
-    ima->rr = RE_MultilayerConvert(ibuf->exrhandle, colorspace, predivide, ibuf->x, ibuf->y);
+    ima->rr = RE_MultilayerConvert(handle, colorspace, predivide, ibuf->x, ibuf->y);
   }
 
-  IMB_exr_close(ibuf->exrhandle);
+  IMB_exr_close(handle);
 
-  ibuf->exrhandle = nullptr;
   if (ima->rr != nullptr) {
     ima->rr->framenr = framenr;
     BKE_stamp_info_from_imbuf(ima->rr, ibuf);
@@ -4183,9 +4178,6 @@ static void image_init_after_load(Image *ima, ImageUser *iuser, ImBuf * /*ibuf*/
   if (G.background == 0 && ima->preview == nullptr && BLI_thread_is_main()) {
     BKE_icon_changed(BKE_icon_id_ensure(&ima->id));
   }
-
-  /* timer */
-  BKE_image_tag_time(ima);
 
   ImageTile *tile = BKE_image_get_tile_from_iuser(ima, iuser);
   /* Images should never get loaded if the corresponding tile does not exist,
@@ -4264,6 +4256,7 @@ static ImBuf *image_load_sequence_multilayer(Image *ima, ImageUser *iuser, int e
       copy_v2_v2_db(ibuf->ppm, ima->rr->ppm);
 
       image_init_after_load(ima, iuser, ibuf);
+      ibuf->fileframe = frame;
       image_assign_ibuf(ima, ibuf, iuser ? iuser->multi_index : 0, entry);
     }
     // else printf("pass not found\n");
@@ -4377,6 +4370,7 @@ static ImBuf *load_image_single(Image *ima,
 {
   char filepath[FILE_MAX];
   ImBuf *ibuf = nullptr;
+  ExrReadHandle *exr_handle = nullptr;
   ImBufFlags flag = ImBufFlags::ByteData | ImBufFlags::MultiLayer | ImBufFlags::Metadata |
                     imbuf_alpha_flags_for_image(ima);
 
@@ -4388,13 +4382,16 @@ static ImBuf *load_image_single(Image *ima,
     for (ImagePackedFile &imapf : ima->packedfiles) {
       if (imapf.view == view_id && imapf.tile_number == tile_number) {
         if (imapf.packedfile) {
-          ibuf = IMB_load_image_from_memory(
-              static_cast<uchar *>(const_cast<void *>(imapf.packedfile->data)),
-              imapf.packedfile->size,
-              flag,
-              "<packed data>",
-              nullptr,
-              ima->colorspace_settings.name);
+          uchar *data = static_cast<uchar *>(const_cast<void *>(imapf.packedfile->data));
+          ibuf = IMB_load_image_from_memory(data,
+                                            imapf.packedfile->size,
+                                            flag,
+                                            "<packed data>",
+                                            nullptr,
+                                            ima->colorspace_settings.name);
+          if (ibuf && flag_is_set(ibuf->flags, ImBufFlags::MultiLayer)) {
+            exr_handle = IMB_exr_open_multilayer_from_memory(data, imapf.packedfile->size);
+          }
         }
         break;
       }
@@ -4425,24 +4422,33 @@ static ImBuf *load_image_single(Image *ima,
 
     /* read ibuf */
     ibuf = IMB_load_image_from_filepath(filepath, flag, ima->colorspace_settings.name);
+    if (ibuf && flag_is_set(ibuf->flags, ImBufFlags::MultiLayer)) {
+      exr_handle = IMB_exr_open_multilayer(filepath);
+    }
   }
 
   if (ibuf) {
-    if (ibuf->ftype == IMB_FTYPE_OPENEXR && ibuf->exrhandle) {
-      /* Handle multilayer and multiview cases, don't assign ibuf here.
-       * will be set layer in BKE_image_acquire_ibuf from ima->rr. */
-      if (IMB_exr_has_multilayer(ibuf->exrhandle)) {
-        image_create_multilayer(ima, ibuf, cfra);
+    if (flag_is_set(ibuf->flags, ImBufFlags::MultiLayer)) {
+      /* Handle multilayer and multiview cases, don't assign ibuf here. will be set layer
+       * in BKE_image_acquire_ibuf from ima->rr. The loaded ibuf only contains metadata,
+       * so it is discarded here. */
+      if (exr_handle) {
+        image_create_multilayer(ima, ibuf, exr_handle, cfra);
         ima->type = IMA_TYPE_MULTILAYER;
-        IMB_freeImBuf(ibuf);
-        ibuf = nullptr;
-        /* Null ibuf in the cache means the image failed to load. However for multilayer we load
-         * pixels into RenderResult instead and intentionally leave ibuf null. */
-        *r_cache_ibuf = false;
       }
+      IMB_freeImBuf(ibuf);
+      ibuf = nullptr;
+      /* Null ibuf in the cache means the image failed to load. However for multilayer we load
+       * pixels into RenderResult instead and intentionally leave ibuf null. */
+      *r_cache_ibuf = false;
     }
     else {
       image_init_after_load(ima, iuser, ibuf);
+
+      /* Remember which frame this sequence buffer holds, for per-frame cache management. */
+      if (is_sequence) {
+        ibuf->fileframe = cfra;
+      }
 
       /* Make packed file for auto-pack. */
       if (!is_sequence && (has_packed == false) && (G.fileflags & G_FILE_AUTOPACK)) {
@@ -4571,7 +4577,7 @@ void BKE_image_populate_cache_from_autosave(Image *ima)
   const bool tiled = ima->source == IMA_SRC_TILED;
   const int index = image_get_multiview_index(ima, nullptr);
 
-  const ImBufFlags flag = ImBufFlags::ByteData | ImBufFlags::MultiLayer | ImBufFlags::Metadata |
+  const ImBufFlags flag = ImBufFlags::ByteData | ImBufFlags::Metadata |
                           imbuf_alpha_flags_for_image(ima);
   for (ImagePackedFile &imapf : ima->autosave_packedfiles) {
     if (imapf.packedfile) {
@@ -4869,13 +4875,17 @@ BLI_INLINE bool image_quick_test(Image *ima, const ImageUser *iuser)
 static ImBuf *image_acquire_ibuf(Image *ima,
                                  ImageUser *iuser,
                                  void **r_lock,
-                                 const bool ensure_host_buffer)
+                                 const bool ensure_host_buffer,
+                                 bool *r_load_failed)
 {
   ImBuf *ibuf = nullptr;
   int entry = 0, index = 0;
 
   if (r_lock) {
     *r_lock = nullptr;
+  }
+  if (r_load_failed) {
+    *r_load_failed = false;
   }
 
   /* quick reject tests */
@@ -4886,6 +4896,9 @@ static ImBuf *image_acquire_ibuf(Image *ima,
   bool is_cached_empty = false;
   ibuf = image_get_cached_ibuf(ima, iuser, &entry, &index, &is_cached_empty);
   if (is_cached_empty) {
+    if (r_load_failed) {
+      *r_load_failed = true;
+    }
     return nullptr;
   }
 
@@ -4990,8 +5003,6 @@ static ImBuf *image_acquire_ibuf(Image *ima,
     IMB_ensure_host_buffer(ibuf);
   }
 
-  BKE_image_tag_time(ima);
-
   return ibuf;
 }
 
@@ -5010,14 +5021,14 @@ ImBuf *BKE_image_acquire_ibuf(Image *ima, ImageUser *iuser, void **r_lock)
 
 /* Identical to BKE_image_acquire_ibuf but passing false to the ensure_host_buffer argument for the
  * image_acquire_ibuf function. */
-ImBuf *BKE_image_acquire_ibuf_gpu(Image *ima, ImageUser *iuser, void **r_lock)
+ImBuf *BKE_image_acquire_ibuf_gpu(Image *ima, ImageUser *iuser, void **r_lock, bool *r_load_failed)
 {
   if (ima == nullptr) {
     return nullptr;
   }
 
   std::scoped_lock lock(ima->runtime->cache_mutex);
-  return image_acquire_ibuf(ima, iuser, r_lock, false);
+  return image_acquire_ibuf(ima, iuser, r_lock, false, r_load_failed);
 }
 
 static int get_multilayer_view_index(const Image &image,
@@ -5274,6 +5285,13 @@ void BKE_image_pool_release_ibuf(Image *ima, ImBuf *ibuf, ImagePool *pool)
   }
 }
 
+bool BKE_image_user_match(const ImageUser &a, const ImageUser &b)
+{
+  return a.frames == b.frames && a.offset == b.offset && a.sfra == b.sfra && a.cycl == b.cycl &&
+         a.multi_index == b.multi_index && a.view == b.view && a.layer == b.layer &&
+         a.pass == b.pass && a.tile == b.tile;
+}
+
 int BKE_image_user_frame_get(const ImageUser *iuser, int cfra, bool *r_is_in_range)
 {
   const int len = iuser->frames;
@@ -5357,16 +5375,6 @@ void BKE_image_user_frame_calc(Image *ima, ImageUser *iuser, int cfra)
       /* Set fixed frame number for still image. */
       iuser->framenr = 0;
       iuser->flag |= IMA_USER_FRAME_IN_RANGE;
-    }
-
-    if (ima && ima->runtime->gpuframenr != iuser->framenr) {
-      /* NOTE: a single texture and refresh doesn't really work when
-       * multiple image users may use different frames, this is to
-       * be improved with perhaps a GPU texture cache. */
-      if (ima->runtime->gpuframenr != IMAGE_GPU_FRAME_NONE) {
-        BKE_image_partial_update_mark_full_update(ima);
-      }
-      ima->runtime->gpuframenr = iuser->framenr;
     }
 
     iuser->flag &= ~IMA_NEED_FRAME_RECALC;
@@ -5677,11 +5685,6 @@ bool BKE_image_is_dirty(Image *image)
   return BKE_image_is_dirty_writable(image, nullptr);
 }
 
-void BKE_image_mark_dirty(Image * /*image*/, ImBuf *ibuf)
-{
-  ibuf->userflags |= IB_BITMAPDIRTY;
-}
-
 bool BKE_image_buffer_format_writable(ImBuf *ibuf)
 {
   ImageFormatData im_format;
@@ -5718,7 +5721,9 @@ bool BKE_image_has_loaded_ibuf(Image *image)
 
     while (!IMB_cacheIter_done(iter)) {
       ImBuf *ibuf = IMB_cacheIter_getImBuf(iter);
-      if (ibuf != nullptr) {
+      const ImageCacheKey *key = static_cast<const ImageCacheKey *>(
+          IMB_cacheIter_getUserKey(iter));
+      if (ibuf != nullptr && !image_index_is_gpu_only(key->index)) {
         has_loaded_ibuf = true;
         break;
       }
@@ -5764,10 +5769,13 @@ ImBuf *BKE_image_get_first_ibuf(Image *image)
 
     while (!IMB_cacheIter_done(iter)) {
       ibuf = IMB_cacheIter_getImBuf(iter);
-      if (ibuf != nullptr) {
+      const ImageCacheKey *key = static_cast<const ImageCacheKey *>(
+          IMB_cacheIter_getUserKey(iter));
+      if (ibuf != nullptr && !image_index_is_gpu_only(key->index)) {
         IMB_refImBuf(ibuf);
+        break;
       }
-      break;
+      IMB_cacheIter_step(iter);
     }
     IMB_cacheIter_free(iter);
   }

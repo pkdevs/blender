@@ -12,7 +12,7 @@
 #include "DNA_material_types.h"
 #include "DNA_mesh_types.h"
 
-#include "BLI_math_rotation.h"
+#include "BLI_math_rotation_c.hh"
 
 #include "BLT_translation.hh"
 
@@ -69,7 +69,7 @@ const EnumPropertyItem rna_enum_ramp_blend_items[] = {
 #  include "DNA_screen_types.h"
 #  include "DNA_space_types.h"
 
-#  include "BLI_string_utf8.h"
+#  include "BLI_string_utf8.hh"
 
 #  include "BKE_attribute.h"
 #  include "BKE_attribute.hh"
@@ -725,14 +725,14 @@ static void rna_def_material_greasepencil(BlenderRNA *brna)
   RNA_def_property_ui_text(prop, "Show Stroke", "Show stroke lines of this material");
   RNA_def_property_update(prop, NC_GPENCIL | ND_SHADING, "rna_MaterialGpencil_update");
   RNA_def_property_deprecated(
-      prop, "Unused but kept for compatibility with older versions of Blender.", 510, 600);
+      prop, "Unused but kept for compatibility with older versions of Blender.", 501, 600);
 
   prop = RNA_def_property(srna, "show_fill", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, nullptr, "flag", GP_MATERIAL_FILL_SHOW);
   RNA_def_property_ui_text(prop, "Show Fill", "Show stroke fills of this material");
   RNA_def_property_update(prop, NC_GPENCIL | ND_SHADING, "rna_MaterialGpencil_update");
   RNA_def_property_deprecated(
-      prop, "Unused but kept for compatibility with older versions of Blender.", 510, 600);
+      prop, "Unused but kept for compatibility with older versions of Blender.", 501, 600);
 
   /* Mode to align Dots and Boxes to drawing path and object rotation */
   prop = RNA_def_property(srna, "alignment_mode", PROP_ENUM, PROP_NONE);
@@ -849,10 +849,13 @@ static void rna_def_material_greasepencil(BlenderRNA *brna)
   RNA_def_property_ui_text(prop, "Noise Scale", "Scale the noise frequency");
   RNA_def_property_update(prop, NC_GPENCIL | ND_SHADING, "rna_MaterialGpencil_update");
 
-  /* pass index for future compositing and editing tools */
+  /* Pass index for modifiers. */
   prop = RNA_def_property(srna, "pass_index", PROP_INT, PROP_UNSIGNED);
   RNA_def_property_int_sdna(prop, nullptr, "index");
-  RNA_def_property_ui_text(prop, "Pass Index", "Index number for the \"Color Index\" pass");
+  RNA_def_property_ui_text(prop,
+                           "Pass Index",
+                           "Identifier that can be used with some modifiers to restrict their "
+                           "influence to only certain materials");
   RNA_def_property_update(prop, NC_GPENCIL | ND_SHADING, "rna_MaterialGpencil_update");
 
   /* mode type */

@@ -42,14 +42,14 @@
 #include "DNA_world_types.h"
 
 #include "BLI_function_ref.hh"
-#include "BLI_listbase.h"
-#include "BLI_math_base.h"
-#include "BLI_math_rotation.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_base_c.hh"
+#include "BLI_math_rotation_c.hh"
 #include "BLI_path_utils.hh"
-#include "BLI_string_utf8.h"
+#include "BLI_string_utf8.hh"
 #include "BLI_string_utils.hh"
-#include "BLI_threads.h"
-#include "BLI_utildefines.h"
+#include "BLI_threads.hh"
+#include "BLI_utildefines.hh"
 
 #include "BLO_readfile.hh"
 
@@ -57,7 +57,7 @@
 
 #include "BKE_action.hh"
 #include "BKE_anim_data.hh"
-#include "BKE_animsys.h"
+#include "BKE_animsys.hh"
 #include "BKE_bpath.hh"
 #include "BKE_callbacks.hh"
 #include "BKE_collection.hh"
@@ -157,6 +157,15 @@ CurveMapping *BKE_paint_default_curve()
 {
   CurveMapping *cumap = BKE_curvemapping_add(1, 0, 0, 1, 1);
   BKE_curvemap_reset(cumap->cm, &cumap->clipr, CURVE_PRESET_LINE, CurveMapSlopeType::Positive);
+  BKE_curvemapping_init(cumap);
+
+  return cumap;
+}
+
+CurveMapping *BKE_paint_default_curve_inverted()
+{
+  CurveMapping *cumap = BKE_curvemapping_add(1, 0, 0, 1, 1);
+  BKE_curvemap_reset(cumap->cm, &cumap->clipr, CURVE_PRESET_LINE, CurveMapSlopeType::Negative);
   BKE_curvemapping_init(cumap);
 
   return cumap;
@@ -1077,7 +1086,9 @@ static void scene_blend_write_compositor_forward_compat(Scene &scene,
                                                  "Final render output",
                                                  "COMPOSITE",
                                                  NODE_CLASS_OUTPUT,
-                                                 false);
+                                                 140.0f,
+                                                 100.0f,
+                                                 true);
       composite_input = &version_node_add_socket(
           *temp_nodetree_copy, *composite_node, SOCK_IN, "NodeSocketColor", "Image");
 
@@ -1693,7 +1704,7 @@ static void remove_sequencer_fcurves(Scene *sce)
   Vector<FCurve *> fcurves = channelbag->fcurves();
 
   for (FCurve *fcurve : fcurves) {
-    if ((fcurve->rna_path) && strstr(fcurve->rna_path, "sequence_editor.strips_all")) {
+    if (strstr(fcurve->rna_path().c_str(), "sequence_editor.strips_all")) {
       channelbag->fcurve_remove(*fcurve);
     }
   }
@@ -3445,7 +3456,7 @@ int BKE_scene_multiview_num_videos_get(const RenderData *rd, const ImageFormatDa
 void BKE_scene_ppm_get(const RenderData *rd, double r_ppm[2])
 {
   /* Should not be zero, prevent divide by zero if it is. */
-  if (UNLIKELY(rd->ppm_base == 0.0f)) {
+  if (rd->ppm_base == 0.0f) [[unlikely]] {
     /* Zero PPM should be ignored. */
     r_ppm[0] = 0.0;
     r_ppm[1] = 0.0;

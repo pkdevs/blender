@@ -14,13 +14,13 @@
 
 #include "BLI_map.hh"
 #include "BLI_math_base.hh"
-#include "BLI_math_rotation.h"
-#include "BLI_math_vector.h"
+#include "BLI_math_rotation_c.hh"
 #include "BLI_math_vector.hh"
+#include "BLI_math_vector_c.hh"
 #include "BLI_path_utils.hh"
-#include "BLI_rect.h"
-#include "BLI_string.h"
-#include "BLI_string_utf8.h"
+#include "BLI_rect.hh"
+#include "BLI_string.hh"
+#include "BLI_string_utf8.hh"
 #include "BLI_task.hh"
 #include "BLI_vector.hh"
 
@@ -798,10 +798,9 @@ static int text_effect_line_size_get(const RenderData *context, const TextVars &
   return size_scale * text.text_size;
 }
 
-static int text_effect_font_init(const RenderData *context, TextVars &text, FontFlags font_flags)
+int text_effect_font_get(TextVars &text)
 {
   int font = blf_mono_font_render;
-
   /* In case font got unloaded behind our backs: mark it as needing a load. */
   if (text.text_blf_id >= 0 && !BLF_is_loaded_id(text.text_blf_id)) {
     text.text_blf_id = STRIP_FONT_NOT_LOADED;
@@ -815,7 +814,12 @@ static int text_effect_font_init(const RenderData *context, TextVars &text, Font
   if (text.text_blf_id >= 0) {
     font = text.text_blf_id;
   }
+  return font;
+}
 
+static int text_effect_font_init(const RenderData *context, TextVars &text, FontFlags font_flags)
+{
+  int font = text_effect_font_get(text);
   BLF_size(font, text_effect_line_size_get(context, text));
   BLF_enable(font, font_flags);
   return font;
@@ -1066,6 +1070,19 @@ void text_effect_update_runtime(const RenderData *context, TextVars &text, const
   apply_word_wrapping(&text, &runtime, image_size, characters_temp);
   apply_text_alignment(&text, &runtime, image_size);
   calc_boundbox(&text, &runtime, image_size);
+}
+
+void text_effect_adjust_relative(TextVars &text, const int2 old_size, const int2 new_size)
+{
+  /* Word wrap is relative to image width. Adjust to avoid text reflow at the new size. */
+  text.wrap_width *= float(old_size.x) / float(new_size.x);
+
+  /* Location is relative to image size. Shift so it sits at the origin, filling the new size. */
+  std::scoped_lock runtime_lock(text_runtime_mutex_get());
+  text_effect_update_runtime(nullptr, text, new_size);
+  BLF_disable(text.runtime->font, BLF_BOLD | BLF_ITALIC);
+  text.loc[0] -= float(text.runtime->text_boundbox.xmin) / new_size.x;
+  text.loc[1] -= float(text.runtime->text_boundbox.ymin) / new_size.y;
 }
 
 static SeqResult do_text_effect(const RenderData *context,

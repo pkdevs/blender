@@ -25,14 +25,14 @@
 
 #include "BLF_api.hh"
 
-#include "BLI_fileops.h"
-#include "BLI_ghash.h"
-#include "BLI_listbase.h"
-#include "BLI_math_vector.h"
+#include "BLI_fileops.hh"
+#include "BLI_ghash.hh"
+#include "BLI_listbase.hh"
+#include "BLI_math_vector_c.hh"
 #include "BLI_path_utils.hh"
-#include "BLI_string.h"
-#include "BLI_task.h"
-#include "BLI_threads.h"
+#include "BLI_string.hh"
+#include "BLI_task_c.hh"
+#include "BLI_threads.hh"
 
 #include "BKE_asset.hh"
 #include "BKE_blendfile.hh"
@@ -366,7 +366,7 @@ static int filelist_geticon_file_type_ex(const FileList *filelist,
     }
 
     if (file->attributes & FILE_ATTR_OFFLINE) {
-      return ICON_ERROR;
+      return ICON_STATUS_ERROR;
     }
     if (file->attributes & FILE_ATTR_TEMPORARY) {
       return ICON_FILE_CACHE;

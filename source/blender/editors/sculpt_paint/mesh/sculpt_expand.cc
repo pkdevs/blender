@@ -13,7 +13,7 @@
 
 #include "BLI_array_utils.hh"
 #include "BLI_bit_vector.hh"
-#include "BLI_linklist_stack.h"
+#include "BLI_linklist_stack.hh"
 #include "BLI_math_vector.hh"
 
 #include "DNA_brush_types.h"
@@ -2542,7 +2542,7 @@ static wmOperatorStatus sculpt_expand_modal(bContext *C, wmOperator *op, const w
 
   /* Update SculptSession data. */
   Depsgraph *depsgraph = CTX_data_depsgraph_pointer(C);
-  BKE_sculpt_update_object_for_edit(depsgraph, &ob, false);
+  BKE_sculptsession_update_for_edit(depsgraph, &ob, false);
   ensure_sculptsession_data(ob);
 
   /* Update and get the active vertex (and face) from the cursor. */
@@ -2947,7 +2947,7 @@ static wmOperatorStatus sculpt_expand_invoke(bContext *C, wmOperator *op, const 
     }
   }
 
-  BKE_sculpt_update_object_for_edit(depsgraph, &ob, needs_colors);
+  BKE_sculptsession_update_for_edit(depsgraph, &ob, needs_colors);
 
   if (ss.expand_cache->target == TargetType::Mask) {
     ed::sculpt_paint::mask_overlay_check(*C, *op);

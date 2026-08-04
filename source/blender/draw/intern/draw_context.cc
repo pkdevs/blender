@@ -12,16 +12,16 @@
 
 #include "BLI_enum_flags.hh"
 #include "BLI_function_ref.hh"
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 #include "BLI_map.hh"
-#include "BLI_math_matrix.h"
+#include "BLI_math_matrix_c.hh"
 #include "BLI_math_matrix_types.hh"
-#include "BLI_math_vector.h"
-#include "BLI_rect.h"
-#include "BLI_string.h"
-#include "BLI_sys_types.h"
-#include "BLI_task.h"
-#include "BLI_threads.h"
+#include "BLI_math_vector_c.hh"
+#include "BLI_rect.hh"
+#include "BLI_string.hh"
+#include "BLI_sys_types.hh"
+#include "BLI_task_c.hh"
+#include "BLI_threads.hh"
 
 #include "BLF_api.hh"
 
@@ -107,7 +107,7 @@
 #include "DEG_depsgraph.hh"
 #include "DEG_depsgraph_query.hh"
 
-#include "BLI_time.h"
+#include "BLI_time.hh"
 
 #include "DRW_select_buffer.hh"
 
@@ -669,8 +669,8 @@ namespace draw {
 static bool supports_handle_ranges(DupliObject *dupli, Object *parent, const DRWContext &draw_ctx)
 {
   int ob_type = dupli->ob_data ? BKE_object_obdata_to_type(dupli->ob_data) : OB_EMPTY;
-  if (!ELEM(ob_type, OB_MESH, OB_CURVES_LEGACY, OB_SURF, OB_FONT, OB_POINTCLOUD, OB_GREASE_PENCIL))
-  {
+  if (!ELEM(ob_type, OB_MESH, OB_CURVES_LEGACY, OB_SURF, OB_FONT, OB_POINTCLOUD)) {
+    /* TODO: Add Grease Pencil support. */
     return false;
   }
 
@@ -698,11 +698,6 @@ static bool supports_handle_ranges(DupliObject *dupli, Object *parent, const DRW
     }
     /* Smoke drawing doesn't support handle ranges. */
     return !BKE_modifiers_findby_type(ob, eModifierType_Fluid);
-  }
-
-  if (ob_type == OB_GREASE_PENCIL) {
-    GreasePencil *grease_pencil = reinterpret_cast<GreasePencil *>(dupli->ob_data);
-    return grease_pencil->flag & GREASE_PENCIL_STROKE_ORDER_3D;
   }
 
   return true;
@@ -976,6 +971,9 @@ static void foreach_obref_in_scene(
       /* Should use DrawInstances data instead. */
       tmp_object.runtime->object_to_world = float4x4();
       tmp_object.runtime->world_to_object = float4x4();
+#ifndef NDEBUG
+      tmp_object.runtime->is_draw_dupli_reference_tmp_object = true;
+#endif
 
       draw::ObjectRef ob_ref(tmp_object, ob, instances);
       draw_object_cb(ob_ref);

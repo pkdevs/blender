@@ -7,8 +7,8 @@
 #include "AS_asset_library.hh"
 #include "AS_asset_representation.hh"
 
-#include "BLI_listbase.h"
-#include "BLI_string_utf8.h"
+#include "BLI_listbase.hh"
+#include "BLI_string_utf8.hh"
 
 #include "BKE_asset.hh"
 #include "BKE_context.hh"
@@ -185,7 +185,7 @@ static void root_catalogs_draw(const bContext *C, Menu *menu)
     layout.separator();
 
     if (!loading_finished) {
-      layout.label(IFACE_("Loading Asset Libraries"), ICON_INFO);
+      layout.label(IFACE_("Loading Asset Libraries"), ICON_STATUS_INFO);
     }
 
     tree.catalogs.foreach_root_item([&](const asset_system::AssetCatalogTreeItem &item) {
@@ -240,6 +240,7 @@ static bNodeTree *get_node_group(const bContext &C, PointerRNA &ptr, ReportList 
 
 static wmOperatorStatus strip_modifier_add_asset_exec(bContext *C, wmOperator *op)
 {
+  Main &bmain = *CTX_data_main(C);
   Scene *scene = CTX_data_sequencer_scene(C);
   Strip *strip = seq::select_active_get(scene);
 
@@ -264,7 +265,7 @@ static wmOperatorStatus strip_modifier_add_asset_exec(bContext *C, wmOperator *o
 
   seq::modifier_persistent_uid_init(*strip, cmd->modifier);
 
-  seq::compositor_nodes_update_interface(*scene, *cmd);
+  seq::compositor_nodes_update_interface(bmain, *scene, *cmd);
 
   seq::relations_invalidate_cache(scene, strip);
   WM_event_add_notifier(C, NC_SCENE | ND_SEQUENCER, scene);

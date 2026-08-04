@@ -14,6 +14,7 @@
 
 #include "IMB_imbuf.hh"
 #include "IMB_imbuf_types.hh"
+#include "IMB_partial_update.hh"
 
 #include "IMB_colormanagement_intern.hh"
 #include "IMB_metadata.hh"
@@ -115,16 +116,6 @@ void IMB_free_all_data(ImBuf *ibuf)
   IMB_free_float_pixels(ibuf);
 }
 
-void IMB_free_gpu_textures(ImBuf *ibuf)
-{
-  if (!ibuf || !ibuf->gpu.texture) {
-    return;
-  }
-
-  GPU_texture_free(ibuf->gpu.texture);
-  ibuf->gpu.texture = nullptr;
-}
-
 void IMB_freeImBuf(ImBuf *ibuf)
 {
   if (ibuf == nullptr) {
@@ -139,7 +130,7 @@ void IMB_freeImBuf(ImBuf *ibuf)
 
     IMB_free_all_data(ibuf);
     IMB_free_gpu_textures(ibuf);
-    IMB_metadata_free(ibuf->metadata);
+    IMB_partial_update_free(ibuf);
     MEM_delete(ibuf);
   }
 }
@@ -161,8 +152,6 @@ ImBuf *IMB_makeSingleUser(ImBuf *ibuf)
   }
 
   ImBuf *rval = IMB_dupImBuf(ibuf);
-
-  IMB_metadata_copy(rval, ibuf);
 
   IMB_freeImBuf(ibuf);
 
@@ -265,12 +254,6 @@ void ImBuf::assign_float_data(const float *data, ImplicitSharingPtr<> sharing_pt
   BLI_assert(sharing_ptr.get() != nullptr);
   this->float_buffer.data = data;
   this->float_buffer.sharing_info = std::move(sharing_ptr);
-}
-
-void IMB_assign_gpu_texture(ImBuf *ibuf, gpu::Texture *texture)
-{
-  IMB_free_gpu_textures(ibuf);
-  ibuf->gpu.texture = texture;
 }
 
 void IMB_ensure_host_buffer(ImBuf *ibuf)
@@ -376,7 +359,8 @@ ImBuf *IMB_allocImBuf(uint x, uint y, ImBufFlags flags)
 
 bool IMB_initImBuf(ImBuf *ibuf, uint x, uint y, ImBufFlags flags)
 {
-  *ibuf = ImBuf{};
+  ibuf->~ImBuf();
+  new (ibuf) ImBuf();
 
   ibuf->x = x;
   ibuf->y = y;
@@ -436,12 +420,10 @@ ImBuf *IMB_dupImBuf(const ImBuf *ibuf1)
   ibuf2->ppm[0] = ibuf1->ppm[0];
   ibuf2->ppm[1] = ibuf1->ppm[1];
   ibuf2->dither = ibuf1->dither;
-  ibuf2->index = ibuf1->index;
   ibuf2->userflags = ibuf1->userflags;
   ibuf2->userflags = ibuf1->userflags;
-  /* for now don't duplicate metadata */
-  ibuf2->metadata = nullptr;
-  ibuf2->exrhandle = ibuf1->exrhandle;
+  ibuf2->metadata_ptr = ibuf1->metadata_ptr;
+  ibuf2->metadata_sharing_info = ibuf1->metadata_sharing_info;
   ibuf2->ftype = ibuf1->ftype;
   ibuf2->foptions = ibuf1->foptions;
   ibuf2->filepath = ibuf1->filepath;
@@ -473,6 +455,27 @@ size_t IMB_get_size_in_memory(const ImBuf *ibuf)
   size += channel_size * IMB_get_pixel_count(ibuf) * size_t(ibuf->channels);
 
   return size;
+}
+
+ImColorMode IMB_color_mode_from_channels(const int channels)
+{
+  switch (channels) {
+    case 1:
+      return ImColorMode::BW;
+    case 2:
+      return ImColorMode::BW_A;
+    case 3:
+      return ImColorMode::RGB;
+    case 4:
+      return ImColorMode::RGBA;
+  }
+  return ImColorMode::RGBA;
+}
+
+bool IMB_chan_id_is_color(const StringRef chan_id)
+{
+  return chan_id == "RGB" || chan_id == "RGBA" || chan_id == "RA" || chan_id == "BA" ||
+         chan_id == "GA" || chan_id == "R" || chan_id == "G" || chan_id == "B" || chan_id == "A";
 }
 
 }  // namespace blender

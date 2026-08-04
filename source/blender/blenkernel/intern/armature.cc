@@ -14,19 +14,19 @@
 #include <limits>
 #include <optional>
 
-#include "BLI_alloca.h"
-#include "BLI_assert.h"
+#include "BLI_alloca.hh"
+#include "BLI_assert.hh"
 #include "BLI_bounds.hh"
-#include "BLI_ghash.h"
-#include "BLI_listbase.h"
-#include "BLI_math_geom.h"
-#include "BLI_math_matrix.h"
+#include "BLI_ghash.hh"
+#include "BLI_listbase.hh"
+#include "BLI_math_geom_c.hh"
 #include "BLI_math_matrix.hh"
-#include "BLI_math_rotation.h"
-#include "BLI_math_vector.h"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_rotation_c.hh"
+#include "BLI_math_vector_c.hh"
 #include "BLI_span.hh"
-#include "BLI_string_utf8.h"
-#include "BLI_utildefines.h"
+#include "BLI_string_utf8.hh"
+#include "BLI_utildefines.hh"
 #include "BLT_translation.hh"
 
 #include "DNA_action_types.h"
@@ -41,7 +41,7 @@
 #include "BKE_action.hh"
 #include "BKE_anim_data.hh"
 #include "BKE_anim_visualization.h"
-#include "BKE_animsys.h"
+#include "BKE_animsys.hh"
 #include "BKE_armature.hh"
 #include "BKE_constraint.h"
 #include "BKE_curve.hh"
@@ -66,7 +66,11 @@
 
 #include "BLO_read_write.hh"
 
+#include "CLG_log.h"
+
 namespace blender {
+
+static CLG_LogRef LOG = {"bke.armature"};
 
 /* -------------------------------------------------------------------- */
 /** \name Prototypes
@@ -407,8 +411,11 @@ static void armature_blend_write(BlendWriter *writer, ID *id, const void *id_add
   arm->runtime = runtime_backup;
 }
 
-static void direct_link_bones(BlendDataReader *reader, Bone *bone)
+static void direct_link_bones(BlendDataReader *reader, Bone *bone, bool *all_bones_are_named)
 {
+  if (bone->name[0] == '\0') {
+    *all_bones_are_named = false;
+  }
   BLO_read_struct(reader, Bone, &bone->parent);
 
   BLO_read_struct(reader, IDProperty, &bone->prop);
@@ -424,7 +431,7 @@ static void direct_link_bones(BlendDataReader *reader, Bone *bone)
   BLO_read_struct_list(reader, Bone, &bone->childbase);
 
   for (Bone &child : bone->childbase) {
-    direct_link_bones(reader, &child);
+    direct_link_bones(reader, &child, all_bones_are_named);
   }
 
   bone->runtime = Bone_Runtime{};
@@ -496,6 +503,42 @@ static void read_bone_collections(BlendDataReader *reader, bArmature *arm)
   }
 }
 
+/**
+ * While not likely, it can happen that bones load with no name. This would crash Blender and
+ * thus needs to be avoided. Sets "unnamed.<some_number>" to any empty name. See #162046.
+ */
+static void fix_empty_bone_names(bArmature &armature)
+{
+  constexpr const char *name_prefix = "unnamed.";
+  constexpr const char *format_string = "unnamed.{:0>3}";
+
+  Set<StringRefNull> potential_duplicates;
+  Vector<Bone *> no_name_bones;
+  BKE_armature_foreach_bone(armature, [&](const int /* bone_index */, const Bone &bone) {
+    if (bone.name[0] == '\0') {
+      no_name_bones.append(const_cast<Bone *>(&bone));
+    }
+    else {
+      if (StringRefNull(bone.name).startswith(name_prefix)) {
+        potential_duplicates.add(bone.name);
+      }
+    }
+  });
+  /* Custom unique bone name logic because the actual logic is editor code and relies on the
+   * hashmap already built. */
+  int unique_index = 0;
+  std::string bone_name;
+  for (Bone *bone : no_name_bones) {
+    bone_name = fmt::format(format_string, unique_index);
+    while (potential_duplicates.contains(bone_name)) {
+      unique_index++;
+      bone_name = fmt::format(format_string, unique_index);
+    }
+    STRNCPY_UTF8(bone->name, bone_name.c_str());
+    unique_index++;
+  }
+}
+
 static void armature_blend_read_data(BlendDataReader *reader, ID *id)
 {
   bArmature *arm = id_cast<bArmature *>(id);
@@ -504,9 +547,13 @@ static void armature_blend_read_data(BlendDataReader *reader, ID *id)
   arm->edbo = nullptr;
   /* Must always be cleared (armatures don't have their own edit-data). */
   arm->needs_flush_to_id = 0;
-
+  bool all_bones_are_named = true;
   for (Bone &bone : arm->bonebase) {
-    direct_link_bones(reader, &bone);
+    direct_link_bones(reader, &bone, &all_bones_are_named);
+  }
+  if (!all_bones_are_named) {
+    CLOG_WARN(&LOG, "Found bones with empty names. Fixing automatically.\n");
+    fix_empty_bone_names(*arm);
   }
 
   read_bone_collections(reader, arm);
@@ -1569,7 +1616,7 @@ static void ease_handle_axis(const float deriv1[3], const float deriv2[3], float
   copy_v3_v3(r_axis, deriv1);
 
   const float len2 = len_squared_v3(deriv2);
-  if (UNLIKELY(len2 == 0.0f)) {
+  if (len2 == 0.0f) [[unlikely]] {
     return;
   }
   const float len1 = len_squared_v3(deriv1);
@@ -2973,7 +3020,7 @@ void BKE_pose_rebuild(Main *bmain, Object *ob, bArmature *arm, const bool do_id_
     ob->pose = MEM_new<bPose>("new pose");
 
     /* set default settings for animviz */
-    animviz_settings_init(&ob->pose->avs);
+    bke::animviz::settings_init(&ob->pose->avs);
   }
   pose = ob->pose;
 

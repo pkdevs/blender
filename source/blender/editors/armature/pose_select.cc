@@ -16,10 +16,10 @@
 #include "DNA_scene_types.h"
 #include "DNA_windowmanager_enums.h"
 
-#include "BLI_assert.h"
-#include "BLI_listbase.h"
+#include "BLI_assert.hh"
+#include "BLI_listbase.hh"
 #include "BLI_map.hh"
-#include "BLI_string.h"
+#include "BLI_string.hh"
 
 #include "BKE_action.hh"
 #include "BKE_armature.hh"
@@ -537,6 +537,10 @@ bool ED_pose_deselect_all(Object *ob, int select_mode, const bool ignore_visibil
   bool changed = false;
   for (bPoseChannel &pchan : ob->pose->chanbase) {
     Bone *bone = pchan.bone_get(*ob);
+    if (!bone) {
+      /* Ignore the pchan if it doesn't have a corresponding bone. */
+      continue;
+    }
     /* ignore the pchan if it isn't visible or if its selection cannot be changed */
     if (ignore_visibility || animrig::bone_is_visible(arm, {&pchan, bone})) {
       int flag_prev = pchan.flag;

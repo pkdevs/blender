@@ -20,18 +20,18 @@
 #include "DNA_scene_types.h"
 
 #include "BLI_array.hh"
-#include "BLI_bitmap.h"
-#include "BLI_heap_simple.h"
-#include "BLI_linklist.h"
-#include "BLI_linklist_stack.h"
-#include "BLI_listbase.h"
-#include "BLI_math_bits.h"
-#include "BLI_math_geom.h"
-#include "BLI_math_matrix.h"
-#include "BLI_math_rotation.h"
-#include "BLI_math_vector.h"
-#include "BLI_rand.h"
-#include "BLI_sort_utils.h"
+#include "BLI_bitmap.hh"
+#include "BLI_heap_simple.hh"
+#include "BLI_linklist.hh"
+#include "BLI_linklist_stack.hh"
+#include "BLI_listbase.hh"
+#include "BLI_math_bits.hh"
+#include "BLI_math_geom_c.hh"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_rotation_c.hh"
+#include "BLI_math_vector_c.hh"
+#include "BLI_rand_c.hh"
+#include "BLI_sort_utils.hh"
 
 #include "BKE_attribute.h"
 #include "BKE_context.hh"
@@ -4764,11 +4764,6 @@ void MESH_OT_fill(wmOperatorType *ot)
 /** \name Grid Fill Operator
  * \{ */
 
-static bool bm_edge_test_fill_grid_cb(BMEdge *e, void * /*bm_v*/)
-{
-  return BM_elem_flag_test_bool(e, BM_ELEM_SELECT);
-}
-
 static float edbm_fill_grid_vert_tag_angle(BMVert *v)
 {
   BMIter iter;
@@ -4802,7 +4797,8 @@ static bool edbm_fill_grid_prepare(BMesh *bm, int offset, int *span_p, const boo
   BMEdgeLoopStore *el_store;
   // LinkData *el_store;
 
-  count = BM_mesh_edgeloops_find(bm, &eloops, bm_edge_test_fill_grid_cb, bm);
+  count = BM_mesh_edgeloops_find(
+      bm, &eloops, [](BMEdge *e) { return BM_elem_flag_test_bool(e, BM_ELEM_SELECT); });
   el_store = static_cast<BMEdgeLoopStore *>(eloops.first);
 
   if (count != 1) {
@@ -5177,9 +5173,7 @@ static wmOperatorStatus edbm_fill_grid_exec(bContext *C, wmOperator *op)
 
       /* Only reuse on redo because these settings need to match the current selection.
        * We never want to use them on other geometry, repeat last for eg, see: #60777. */
-      if (((op->flag & OP_IS_INVOKE) || (op->flag & OP_IS_REPEAT_LAST) == 0) &&
-          RNA_property_is_set(op->ptr, prop_span))
-      {
+      if (((op->flag & OP_IS_REPEAT_LAST) == 0) && RNA_property_is_set(op->ptr, prop_span)) {
         span = RNA_property_int_get(op->ptr, prop_span);
         calc_span = false;
       }

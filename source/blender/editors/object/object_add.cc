@@ -33,17 +33,17 @@
 
 #include "BLI_array_utils.hh"
 #include "BLI_bounds.hh"
-#include "BLI_ghash.h"
-#include "BLI_listbase.h"
-#include "BLI_math_color.h"
-#include "BLI_math_matrix.h"
+#include "BLI_ghash.hh"
+#include "BLI_listbase.hh"
+#include "BLI_math_color_c.hh"
+#include "BLI_math_matrix_c.hh"
 #include "BLI_math_matrix_types.hh"
-#include "BLI_math_rotation.h"
+#include "BLI_math_rotation_c.hh"
 #include "BLI_math_vector_types.hh"
 #include "BLI_rand.hh"
-#include "BLI_string.h"
-#include "BLI_string_utf8.h"
-#include "BLI_utildefines.h"
+#include "BLI_string.hh"
+#include "BLI_string_utf8.hh"
+#include "BLI_utildefines.hh"
 #include "BLI_vector.hh"
 
 #include "BLT_translation.hh"
@@ -893,7 +893,7 @@ static wmOperatorStatus lattice_add_to_selected_exec(bContext *C, wmOperator *op
         GreasePencilLatticeModifierData *lmd = reinterpret_cast<GreasePencilLatticeModifierData *>(
             modifier_add(
                 op->reports, bmain, scene, ob, nullptr, eModifierType_GreasePencilLattice));
-        if (UNLIKELY(lmd == nullptr)) {
+        if (lmd == nullptr) [[unlikely]] {
           continue;
         }
 
@@ -902,7 +902,7 @@ static wmOperatorStatus lattice_add_to_selected_exec(bContext *C, wmOperator *op
       else {
         LatticeModifierData *lmd = reinterpret_cast<LatticeModifierData *>(
             modifier_add(op->reports, bmain, scene, ob, nullptr, eModifierType_Lattice));
-        if (UNLIKELY(lmd == nullptr)) {
+        if (lmd == nullptr) [[unlikely]] {
           continue;
         }
 
@@ -2371,7 +2371,7 @@ static NodesModifierData *add_essential_asset_modifier(bContext &C,
   id_us_plus(&node_group->id);
   nmd->flag |= NODES_MODIFIER_HIDE_DATABLOCK_SELECTOR;
   BKE_modifier_unique_name(&object.modifiers, &nmd->modifier);
-  MOD_nodes_update_interface(&object, nmd);
+  MOD_nodes_update_interface(bmain, &object, nmd);
   DEG_id_tag_update(&object.id, ID_RECALC_GEOMETRY);
   return nmd;
 }

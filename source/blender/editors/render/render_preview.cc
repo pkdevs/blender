@@ -21,12 +21,12 @@
 #endif
 #include "MEM_guardedalloc.h"
 
-#include "BLI_math_matrix.h"
-#include "BLI_math_rotation.h"
-#include "BLI_rect.h"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_rotation_c.hh"
+#include "BLI_rect.hh"
 #include "BLI_set.hh"
-#include "BLI_string_utf8.h"
-#include "BLI_utildefines.h"
+#include "BLI_string_utf8.hh"
+#include "BLI_utildefines.hh"
 
 #include "BLT_translation.hh"
 
@@ -44,7 +44,7 @@
 #include "DNA_space_types.h"
 #include "DNA_world_types.h"
 
-#include "BKE_animsys.h"
+#include "BKE_animsys.hh"
 #include "BKE_armature.hh"
 #include "BKE_brush.hh"
 #include "BKE_collection.hh"
@@ -70,7 +70,7 @@
 #include "BKE_texture.h"
 #include "BKE_world.h"
 
-#include "BLI_math_vector.h"
+#include "BLI_math_vector_c.hh"
 
 #include "DEG_depsgraph.hh"
 #include "DEG_depsgraph_build.hh"
@@ -104,7 +104,7 @@ namespace blender {
 
 #ifndef NDEBUG
 /* Used for database init assert(). */
-#  include "BLI_threads.h"
+#  include "BLI_threads.hh"
 #endif
 
 static void icon_copy_rect(const ImBuf *ibuf, uint w, uint h, uint *rect);
@@ -366,11 +366,11 @@ static World *preview_get_localized_world(ShaderPreview *sp, World *world)
   return sp->worldcopy;
 }
 
-World *ED_preview_prepare_world_simple(Main *pr_main)
+World *ED_preview_prepare_world_simple(Main *bmain)
 {
   using namespace blender::bke;
 
-  World *world = BKE_world_add(pr_main, "SimpleWorld");
+  World *world = BKE_world_add(bmain, "SimpleWorld");
   bNodeTree *ntree = world->nodetree;
 
   bNode *background = node_add_node(nullptr, *ntree, "ShaderNodeBackground"_ustr);
@@ -1129,7 +1129,7 @@ static void scene_preview_render(const PreviewImage *prv_img,
  * \{ */
 
 /* inside thread, called by renderer, sets job update value */
-static void shader_preview_update(void *spv, RenderResult * /*rr*/, rcti * /*rect*/)
+static void shader_preview_update(void *spv, RenderResult * /*rr*/)
 {
   ShaderPreview *sp = static_cast<ShaderPreview *>(spv);
 
@@ -1725,7 +1725,7 @@ class PreviewLoadJob {
   std::mutex todo_queue_mutex_;
 
   /** Push the RequestedPreview to the 'todo' queue, ensuring it is only queued once. */
-  void todo_queue_push(RequestedPreview *preview);
+  void todo_queue_push(RequestedPreview *request);
   /** Pop an item off the 'todo' queue, waiting at most wait_time_msec for an item to appear. */
   RequestedPreview *todo_queue_pop(int wait_time_msec);
 

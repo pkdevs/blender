@@ -18,20 +18,20 @@
 #include "DNA_object_types.h"
 
 #include "BLI_array_utils.hh"
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 #include "BLI_map.hh"
-#include "BLI_math_geom.h"
-#include "BLI_math_matrix.h"
-#include "BLI_math_rotation.h"
+#include "BLI_math_geom_c.hh"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_rotation_c.hh"
 #include "BLI_math_vector_types.hh"
-#include "BLI_memarena.h"
+#include "BLI_memarena.hh"
 #include "BLI_multi_value_map.hh"
 #include "BLI_ordered_edge.hh"
-#include "BLI_polyfill_2d.h"
-#include "BLI_string.h"
-#include "BLI_string_utf8.h"
+#include "BLI_polyfill_2d.hh"
+#include "BLI_string.hh"
+#include "BLI_string_utf8.hh"
 #include "BLI_task.hh"
-#include "BLI_utildefines.h"
+#include "BLI_utildefines.hh"
 
 #include "BKE_attribute.h"
 #include "BKE_attribute.hh"
@@ -286,7 +286,7 @@ void BKE_mesh_strip_loose_faces(Mesh *mesh)
 
 void BKE_mesh_do_versions_cd_flag_init(Mesh *mesh)
 {
-  if (UNLIKELY(mesh->cd_flag)) {
+  if (mesh->cd_flag) [[unlikely]] {
     return;
   }
 
@@ -428,7 +428,6 @@ static void bm_corners_to_loops_ex(ID *id,
 
       for (int i = 0; i < tot; i++, disps += side_sq, ld++) {
         ld->totdisp = side_sq;
-        ld->level = int(logf(float(side) - 1.0f) / float(M_LN2)) + 1;
 
         if (ld->disps) {
           MEM_delete(ld->disps);
@@ -590,12 +589,17 @@ static void update_active_fdata_layers(Mesh &mesh, CustomData *fdata_legacy, Cus
 {
   int act;
 
-  if (CustomData_has_layer(ldata, CD_PROP_FLOAT2)) {
-    act = CustomData_get_active_layer(ldata, CD_PROP_FLOAT2);
-    CustomData_set_layer_active(fdata_legacy, CD_MTFACE, act);
+  /* Active/default UV map status is stored by name on Mesh, not in CustomData. */
+  if (CustomData_has_layer(fdata_legacy, CD_MTFACE)) {
+    act = CustomData_get_named_layer(fdata_legacy, CD_MTFACE, mesh.active_uv_map_name());
+    if (act != -1) {
+      CustomData_set_layer_active(fdata_legacy, CD_MTFACE, act);
+    }
 
-    act = CustomData_get_render_layer(ldata, CD_PROP_FLOAT2);
-    CustomData_set_layer_render(fdata_legacy, CD_MTFACE, act);
+    act = CustomData_get_named_layer(fdata_legacy, CD_MTFACE, mesh.default_uv_map_name());
+    if (act != -1) {
+      CustomData_set_layer_render(fdata_legacy, CD_MTFACE, act);
+    }
   }
 
   if (CustomData_has_layer(ldata, CD_PROP_BYTE_COLOR)) {
@@ -694,7 +698,7 @@ static void add_mface_layers(Mesh &mesh, CustomData *fdata_legacy, CustomData *l
 
 static void mesh_ensure_tessellation_customdata(Mesh *mesh)
 {
-  if (UNLIKELY((mesh->totface_legacy != 0) && (mesh->faces_num == 0))) {
+  if ((mesh->totface_legacy != 0) && (mesh->faces_num == 0)) [[unlikely]] {
     /* Pass, otherwise this function clears 'mface' before
      * versioning 'mface -> mpoly' code kicks in #30583.
      *
@@ -1106,7 +1110,7 @@ static void mesh_tessface_calc(Mesh &mesh)
 
       const uint totfilltri = mp_totloop - 2;
 
-      if (UNLIKELY(arena == nullptr)) {
+      if (arena == nullptr) [[unlikely]] {
         arena = BLI_memarena_new(BLI_MEMARENA_STD_BUFSIZE, __func__);
       }
 
@@ -1125,7 +1129,7 @@ static void mesh_tessface_calc(Mesh &mesh)
         add_newell_cross_v3_v3v3(normal, co_prev, co_curr);
         co_prev = co_curr;
       }
-      if (UNLIKELY(normalize_v3(normal) == 0.0f)) {
+      if (normalize_v3(normal) == 0.0f) [[unlikely]] {
         normal[2] = 1.0f;
       }
 
@@ -1183,7 +1187,7 @@ static void mesh_tessface_calc(Mesh &mesh)
   BLI_assert(totface <= corner_tris_num);
 
   /* Not essential but without this we store over-allocated memory in the #CustomData layers. */
-  if (LIKELY(corner_tris_num != totface)) {
+  if (corner_tris_num != totface) [[likely]] {
     mface = static_cast<MFace *>(
         MEM_realloc_uninitialized(mface, sizeof(*mface) * size_t(totface)));
     mface_to_poly_map = static_cast<int *>(MEM_realloc_uninitialized(

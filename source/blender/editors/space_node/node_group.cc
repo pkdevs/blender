@@ -12,16 +12,16 @@
 
 #include "DNA_node_types.h"
 
-#include "BLI_math_vector.h"
+#include "BLI_math_vector_c.hh"
 #include "BLI_math_vector_types.hh"
-#include "BLI_string.h"
-#include "BLI_string_utf8.h"
+#include "BLI_string.hh"
+#include "BLI_string_utf8.hh"
 #include "BLI_vector.hh"
 
 #include "BLT_translation.hh"
 
 #include "BKE_action.hh"
-#include "BKE_animsys.h"
+#include "BKE_animsys.hh"
 #include "BKE_context.hh"
 #include "BKE_lib_id.hh"
 #include "BKE_library.hh"

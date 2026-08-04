@@ -26,14 +26,14 @@
 #include "BLI_bounds.hh"
 #include "BLI_convexhull_2d.hh"
 #include "BLI_function_ref.hh"
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 #include "BLI_map.hh"
-#include "BLI_math_color.h"
+#include "BLI_math_color_c.hh"
 #include "BLI_set.hh"
 #include "BLI_span.hh"
-#include "BLI_string.h"
+#include "BLI_string.hh"
 #include "BLI_string_ref.hh"
-#include "BLI_string_utf8.h"
+#include "BLI_string_utf8.hh"
 #include "BLI_vector.hh"
 
 #include "BLT_translation.hh"
@@ -1233,7 +1233,7 @@ static void node_update_basis_from_socket_lists(TreeDrawContext &tree_draw_ctx,
                                                 int &locy)
 {
   /* Space at the top. */
-  locy -= NODE_DYS / 2;
+  locy -= NODE_ITEM_SPACING_Y * 2;
 
   /* Output sockets. */
   bool add_output_space = false;
@@ -1242,43 +1242,40 @@ static void node_update_basis_from_socket_lists(TreeDrawContext &tree_draw_ctx,
     /* Clear flag, conventional drawing does not support panels. */
     socket->flag &= ~SOCK_PANEL_COLLAPSED;
 
+    if (socket->is_visible() && add_output_space) {
+      locy -= NODE_ITEM_SPACING_Y;
+    }
     if (node_update_basis_socket(
             tree_draw_ctx, C, ntree, node, nullptr, nullptr, socket, block, locx, locy))
     {
-      if (socket->next && socket->next->is_available()) {
-        locy -= NODE_ITEM_SPACING_Y;
-      }
       add_output_space = true;
     }
-  }
-
-  if (add_output_space) {
-    locy -= NODE_DY / 4;
   }
 
   const bool add_button_space = node_update_basis_buttons(
       C, ntree, node, node.typeinfo->draw_buttons, block, locy);
 
   bool add_input_space = false;
+  const bool add_before_first_input = add_output_space && !add_button_space;
 
   /* Input sockets. */
   for (bNodeSocket *socket : node.input_sockets()) {
     /* Clear flag, conventional drawing does not support panels. */
     socket->flag &= ~SOCK_PANEL_COLLAPSED;
 
+    if (socket->is_visible() && (add_input_space || add_before_first_input)) {
+      locy -= NODE_ITEM_SPACING_Y;
+    }
     if (node_update_basis_socket(
             tree_draw_ctx, C, ntree, node, nullptr, socket, nullptr, block, locx, locy))
     {
-      if (socket->next) {
-        locy -= NODE_ITEM_SPACING_Y;
-      }
       add_input_space = true;
     }
   }
 
   /* Little bit of padding at the bottom. */
-  if (add_input_space || add_button_space) {
-    locy -= NODE_DYS / 2;
+  if (add_output_space || add_input_space || add_button_space) {
+    locy -= NODE_ITEM_SPACING_Y * 2;
   }
 }
 
@@ -2216,7 +2213,7 @@ static void node_add_error_message_button(const TreeDrawContext &tree_draw_ctx,
     if (errors->is_empty()) {
       return;
     }
-    ui::Button *but = add_error_message_button(block, rect, ICON_ERROR, icon_offset);
+    ui::Button *but = add_error_message_button(block, rect, ICON_STATUS_ERROR, icon_offset);
     button_func_quick_tooltip_set(but, [errors = *errors](const ui::Button * /*but*/) {
       std::string tooltip;
       for (const int i : errors.index_range()) {
@@ -2480,7 +2477,7 @@ static Vector<NodeExtraInfoRow> node_get_extra_info(const bContext &C,
   if (node.typeinfo->deprecation_notice) {
     NodeExtraInfoRow row;
     row.text = IFACE_("Deprecated");
-    row.icon = ICON_INFO;
+    row.icon = ICON_STATUS_INFO;
     row.tooltip = TIP_(node.typeinfo->deprecation_notice);
     rows.append(std::move(row));
   }
@@ -2535,7 +2532,7 @@ static Vector<NodeExtraInfoRow> node_get_extra_info(const bContext &C,
       for (const StringRef message : node_log->debug_messages) {
         NodeExtraInfoRow row;
         row.text = message;
-        row.icon = ICON_INFO;
+        row.icon = ICON_STATUS_INFO;
         rows.append(std::move(row));
       }
     }
@@ -3841,7 +3838,7 @@ static Set<const bNodeSocket *> find_sockets_on_active_gizmo_paths(
     const bContext &C, const SpaceNode &snode, bke::ComputeContextCache &compute_context_cache)
 {
   const std::optional<ed::space_node::ObjectAndModifier> object_and_modifier =
-      ed::space_node::get_modifier_for_node_editor(snode);
+      ed::space_node::get_geometry_nodes_modifier_for_node_editor(snode);
   if (!object_and_modifier) {
     return {};
   }
@@ -4485,7 +4482,7 @@ static void draw_link_errors(const bContext &C,
   block_emboss_set(&invalid_links_block, ui::EmbossType::None);
   ui::Button *but = uiDefIconBut(&invalid_links_block,
                                  ui::ButtonType::But,
-                                 ICON_ERROR,
+                                 ICON_STATUS_WARNING_FILLED,
                                  draw_position.x - icon_size / 2,
                                  draw_position.y - icon_size / 2,
                                  icon_size,

@@ -19,21 +19,21 @@
 #  include "CLG_log.h"
 
 #  ifdef WIN32
-#    include "BLI_winstuff.h"
+#    include "BLI_winstuff.hh"
 #  endif
 
-#  include "BLI_args.h"
-#  include "BLI_dynstr.h"
-#  include "BLI_fileops.h"
-#  include "BLI_listbase.h"
+#  include "BLI_args.hh"
+#  include "BLI_dynstr.hh"
+#  include "BLI_fileops.hh"
+#  include "BLI_listbase.hh"
 #  include "BLI_path_utils.hh"
-#  include "BLI_string.h"
-#  include "BLI_string_utf8.h"
-#  include "BLI_system.h"
-#  include "BLI_threads.h"
-#  include "BLI_utildefines.h"
+#  include "BLI_string.hh"
+#  include "BLI_string_utf8.hh"
+#  include "BLI_system.hh"
+#  include "BLI_threads.hh"
+#  include "BLI_utildefines.hh"
 #  ifndef NDEBUG
-#    include "BLI_mempool.h"
+#    include "BLI_mempool.hh"
 #  endif
 
 #  include "BKE_appdir.hh"
@@ -1292,7 +1292,7 @@ static int arg_handle_log_file_set(int argc, const char **argv, void * /*data*/)
       fprintf(stderr, "\nError: %s '%s %s'.\n", err_msg, arg_id, argv[1]);
     }
     else {
-      if (UNLIKELY(G.log.file != nullptr)) {
+      if (G.log.file != nullptr) [[unlikely]] {
         fclose(static_cast<FILE *>(G.log.file));
       }
       G.log.file = fp;
@@ -2534,6 +2534,12 @@ static int arg_handle_render_frame(int argc, const char **argv, void *data)
         return 1;
       }
 
+      if (!RE_is_rendering_allowed(*bmain, scene, nullptr, nullptr, &reports)) {
+        BKE_reports_free(&reports);
+        MEM_delete(frame_range_arr);
+        return 1;
+      }
+
       re = RE_NewSceneRender(scene);
       RE_SetReports(re, &reports);
 
@@ -2576,6 +2582,11 @@ static int arg_handle_render_animation(int /*argc*/, const char ** /*argv*/, voi
     BKE_reports_init(&reports, RPT_STORE);
 
     if (!RE_disable_save_output_allowed(true, *scene, &reports)) {
+      BKE_reports_free(&reports);
+      return 0;
+    }
+
+    if (!RE_is_rendering_allowed(*bmain, scene, nullptr, nullptr, &reports)) {
       BKE_reports_free(&reports);
       return 0;
     }

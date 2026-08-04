@@ -7,9 +7,9 @@
  */
 
 #include "BLI_colorspace.hh"
-#include "BLI_math_matrix.h"
+#include "BLI_math_matrix_c.hh"
 #include "BLI_math_matrix_types.hh"
-#include "BLI_string.h"
+#include "BLI_string.hh"
 
 #include "CLG_log.h"
 
@@ -203,7 +203,7 @@ bool GPU_shader_create_info_check_error(const GPUShaderCreateInfo *_info, char r
   using namespace blender::gpu::shader;
   const ShaderCreateInfo &info = *reinterpret_cast<const ShaderCreateInfo *>(_info);
   std::string error = info.check_error();
-  if (error.length() == 0) {
+  if (error.empty()) {
     return true;
   }
 
@@ -238,6 +238,11 @@ std::string GPU_shader_preprocess_source(StringRefNull original,
   }
   gpu::shader::SourceProcessor processor(original, "python_shader.glsl", shader::Language::GLSL);
   auto [processed_str, metadata, error] = processor.convert();
+
+  if (error.has_value()) {
+    std::cerr << error->full_report << std::endl;
+    return "\n#error conversion failed\n";
+  }
 
   for (auto builtin : metadata.builtins) {
     info.builtins(gpu::shader::convert_builtin_bit(builtin));
@@ -557,6 +562,13 @@ int GPU_shader_get_sampler_binding(gpu::Shader *shader, const char *name)
   return tex ? tex->binding : -1;
 }
 
+int GPU_shader_get_tlas_binding(gpu::Shader *shader, const char *name)
+{
+  const ShaderInterface *interface = shader->interface;
+  const ShaderInput *tlas = interface->tlas_get(name);
+  return tlas ? tlas->location : -1;
+}
+
 uint GPU_shader_get_attribute_len(const gpu::Shader *shader)
 {
   const ShaderInterface *interface = shader->interface;
@@ -805,7 +817,7 @@ Shader *ShaderCompiler::compile(const shader::ShaderCreateInfo &orig_info, bool 
 
   ShaderCreateInfo specialized_info = orig_info;
 
-  /* WORKAROUND: For BSL shaders, allow to disable costly builtins programatically. */
+  /* WORKAROUND: For BSL shaders, allow to disable costly builtins programmatically. */
   if (bool(specialized_info.builtins_ & BuiltinBits::NO_VIEWPORT_INDEX)) {
     specialized_info.builtins_ &= ~BuiltinBits::VIEWPORT_INDEX;
   }

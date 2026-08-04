@@ -5,9 +5,9 @@
 #include <sstream>
 
 #include "BLI_fileops.hh"
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 #include "BLI_path_utils.hh"
-#include "BLI_string.h"
+#include "BLI_string.hh"
 #include "BLI_vector.hh"
 
 #include "BLT_translation.hh"
@@ -831,8 +831,9 @@ static PathUsersMap bake_simulation_get_path_users(bContext *C, const Span<Objec
       }
 
       /* If all bakes have a custom directory, we're done. */
-      if (all_bakes_have_custom_dir)
+      if (all_bakes_have_custom_dir) {
         continue;
+      }
 
       if (StringRef(nmd->bake_directory).is_empty()) {
         continue;

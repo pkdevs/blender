@@ -17,14 +17,14 @@
 
 #include <fmt/format.h>
 
-#include "BLI_listbase.h"
-#include "BLI_math_base.h"
-#include "BLI_math_vector.h"
-#include "BLI_math_matrix.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_base_c.hh"
+#include "BLI_math_vector_c.hh"
+#include "BLI_math_matrix.hh"
 #include "BLI_set.hh"
-#include "BLI_string.h"
-#include "BLI_string_utf8.h"
-#include "BLI_utildefines.h"
+#include "BLI_string.hh"
+#include "BLI_string_utf8.hh"
+#include "BLI_utildefines.hh"
 
 #include "BKE_idprop.hh"
 #include "BKE_idprop_hash.hh"
@@ -36,7 +36,7 @@
 
 #include "BLO_read_write.hh"
 
-#include "BLI_strict_flags.h" /* IWYU pragma: keep. Keep last. */
+#include "BLI_strict_flags.hh" /* IWYU pragma: keep. Keep last. */
 
 namespace blender {
 
@@ -522,15 +522,21 @@ void IDP_FreeString(IDProperty *prop)
 /** \name Enum Type (IDProperty Enum API)
  * \{ */
 
-static void IDP_int_ui_data_free_enum_items(IDPropertyUIDataInt *ui_data)
+void IDP_EnumItemsFree(IDPropertyUIDataEnumItem *items, const int items_num)
 {
-  for (const int64_t i : IndexRange(ui_data->enum_items_num)) {
-    IDPropertyUIDataEnumItem &item = ui_data->enum_items[i];
+  for (const int64_t i : IndexRange(items_num)) {
+    IDPropertyUIDataEnumItem &item = items[i];
     MEM_SAFE_DELETE(item.identifier);
     MEM_SAFE_DELETE(item.name);
     MEM_SAFE_DELETE(item.description);
   }
-  MEM_SAFE_DELETE(ui_data->enum_items);
+  MEM_SAFE_DELETE(items);
+}
+
+static void IDP_int_ui_data_free_enum_items(IDPropertyUIDataInt *ui_data)
+{
+  IDP_EnumItemsFree(ui_data->enum_items, ui_data->enum_items_num);
+  ui_data->enum_items = nullptr;
 }
 
 const IDPropertyUIDataEnumItem *IDP_EnumItemFind(const IDProperty *prop)
@@ -1690,7 +1696,7 @@ static void IDP_WriteIDPArray(const IDProperty *prop,
       CLOG_ERROR(&LOG,
                  "Too deep level of IDProperties embedding detected (over %d levels), this is "
                  "likely caused by a buggy script or add-on. The data in property '%s' will not "
-                 "be written in the blendfile or memfile undo step",
+                 "be written in the blend-file or memfile undo step",
                  MAX_IDPROP_DEPTH_LEVEL_FOR_WRITE,
                  prop->name);
       IDProperty *empty_prop_idparray = IDP_NewIDPArray(prop->name);
@@ -1774,7 +1780,7 @@ static void idp_blend_write_recurse(BlendWriter *writer,
     CLOG_ERROR(&LOG,
                "Too deep level of IDProperties embedding detected (over %d levels), this is "
                "likely caused by a buggy script or add-on. The data in property '%s' will not "
-               "be written in the blendfile or memfile undo step",
+               "be written in the blend-file or memfile undo step",
                MAX_IDPROP_DEPTH_LEVEL_FOR_WRITE,
                prop->name);
     IDProperty empty_prop = {};
@@ -1994,7 +2000,7 @@ static void IDP_DirectLinkProperty(IDProperty *prop,
     CLOG_ERROR(&LOG,
                "Too deep level of IDProperties embedding detected (over %d levels), this is "
                "likely caused by a buggy script or add-on. The data in property '%s' will not "
-               "be read from the blendfile",
+               "be read from the blend-file",
                MAX_IDPROP_DEPTH_LEVEL_FOR_READ,
                prop->name);
     /* NOTE: No attempt to free the property, as it may lead to further recursion. */

@@ -7,7 +7,7 @@
 #include "NOD_socket_search_link.hh"
 
 #include "BKE_idprop.hh"
-#include "BLI_math_vector.h"
+#include "BLI_math_vector.hh"
 
 #include "UI_resources.hh"
 

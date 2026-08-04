@@ -11,13 +11,13 @@
 
 #include "BLI_array_utils.hh"
 #include "BLI_enumerable_thread_specific.hh"
-#include "BLI_math_geom.h"
-#include "BLI_math_matrix.h"
+#include "BLI_math_geom_c.hh"
 #include "BLI_math_matrix.hh"
-#include "BLI_math_rotation.h"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_rotation_c.hh"
 #include "BLI_math_vector.hh"
 #include "BLI_ordered_edge.hh"
-#include "BLI_utildefines.h"
+#include "BLI_utildefines.hh"
 #include "BLI_vector.hh"
 
 #include "BLT_translation.hh"
@@ -1961,13 +1961,14 @@ void simulation_limits_draw(const uint gpuattr,
 }
 
 void plane_falloff_preview_draw(const uint gpuattr,
+                                Brush &brush,
                                 SculptSession &ss,
                                 const float outline_col[3],
                                 float outline_alpha)
 {
   float4x4 local_mat = ss.cache->stroke_local_mat;
 
-  if (ss.cache->brush->cloth_deform_type == BRUSH_CLOTH_DEFORM_GRAB) {
+  if (brush.cloth_deform_type == BRUSH_CLOTH_DEFORM_GRAB) {
     add_v3_v3v3(local_mat[3], ss.cache->location, ss.cache->grab_delta);
   }
 
@@ -2344,7 +2345,7 @@ static wmOperatorStatus sculpt_cloth_filter_modal(bContext *C,
 
   vert_random_access_ensure(object);
 
-  BKE_sculpt_update_object_for_edit(depsgraph, &object, false);
+  BKE_sculptsession_update_for_edit(depsgraph, &object, false);
 
   brush_store_simulation_state(*depsgraph, object, *ss.filter_cache->cloth_sim);
 
@@ -2468,7 +2469,7 @@ static wmOperatorStatus sculpt_cloth_filter_invoke(bContext *C,
   cursor_geometry_info_update(C, mval_fl, false);
 
   /* Needs mask data to be available as it is used when solving the constraints. */
-  BKE_sculpt_update_object_for_edit(depsgraph, &ob, false);
+  BKE_sculptsession_update_for_edit(depsgraph, &ob, false);
 
   if (!shape_key_check(ob, op->reports)) {
     return OPERATOR_CANCELLED;

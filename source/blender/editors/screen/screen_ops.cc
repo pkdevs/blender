@@ -12,12 +12,12 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_build_config.h"
-#include "BLI_listbase.h"
-#include "BLI_math_rotation.h"
-#include "BLI_math_vector.h"
-#include "BLI_time.h"
-#include "BLI_utildefines.h"
+#include "BLI_build_config.hh"
+#include "BLI_listbase.hh"
+#include "BLI_math_rotation_c.hh"
+#include "BLI_math_vector_c.hh"
+#include "BLI_time.hh"
+#include "BLI_utildefines.hh"
 
 #include "BLT_translation.hh"
 
@@ -2259,13 +2259,13 @@ static int area_snap_calc_location(sAreaMoveData *md, const int delta)
         if (md->area2 && md->area2->spacetype == SPACE_CONSOLE) {
           /* Minimal snap for Console below. */
           SpaceConsole *console = static_cast<SpaceConsole *>(md->area2->spacedata.first);
-          snaps.append(m_min + int(float(console->lheight) * UI_SCALE_FAC * 1.5f));
+          snaps.append(m_min + int(float(console->line_height) * UI_SCALE_FAC * 1.5f));
         }
         if (md->area1 && md->area1->spacetype == SPACE_CONSOLE) {
           /* Maximal snap for Console above. */
           SpaceConsole *console = static_cast<SpaceConsole *>(md->area1->spacedata.first);
           snaps.append(md->origval + md->bigger -
-                       int(float(console->lheight) * UI_SCALE_FAC * 1.5f));
+                       int(float(console->line_height) * UI_SCALE_FAC * 1.5f));
         }
       }
 
@@ -6824,6 +6824,14 @@ static wmOperatorStatus start_playback(bContext *C, int sync, int mode)
     return OPERATOR_CANCELLED;
   }
 
+  /* The anim timer MUST be created before the 'jump to the start frame' code below executes. The
+   * anim timer data structure also contains the 'started from' frame, which gets restored on
+   * cancelling the playback, and that should be the actual current frame, not the one that's set
+   * below. */
+  ViewLayer *view_layer = is_sequencer ? BKE_view_layer_default_render(scene) :
+                                         CTX_data_view_layer(C);
+  ED_screen_animation_timer(C, scene, view_layer, screen->redraws_flag, sync, mode);
+
   /* The SCE_LOOP_MODE_STOP_END_FRAME loop mode is special: playback should stop at the end frame,
    * but when playback starts, in this mode, already at the end frame, it should actually start
    * playback from the start frame. This way, you can repeatedly play back the scene, each time
@@ -6836,11 +6844,10 @@ static wmOperatorStatus start_playback(bContext *C, int sync, int mode)
       const int start_frame = is_playing_forward ? scene->playback_start() : scene->playback_end();
       scene->r.cfra = start_frame;
       scene->r.subframe = 0.0f;
+      DEG_id_tag_update(&scene->id, ID_RECALC_FRAME_CHANGE);
     }
   }
 
-  ViewLayer *view_layer = is_sequencer ? BKE_view_layer_default_render(scene) :
-                                         CTX_data_view_layer(C);
   Depsgraph *depsgraph = is_sequencer ? BKE_scene_ensure_depsgraph(bmain, scene, view_layer) :
                                         CTX_data_ensure_evaluated_depsgraph(C);
   if (is_sequencer) {
@@ -6855,7 +6862,6 @@ static wmOperatorStatus start_playback(bContext *C, int sync, int mode)
     BKE_sound_play_scene(scene_eval);
   }
 
-  ED_screen_animation_timer(C, scene, view_layer, screen->redraws_flag, sync, mode);
   ED_scene_fps_average_clear(scene);
 
   if (screen->animtimer) {
@@ -6881,6 +6887,50 @@ wmOperatorStatus ED_screen_animation_play(bContext *C, int sync, int mode)
   }
 
   return start_playback(C, sync, mode);
+}
+
+/* If any screen is playing animation, stops playback and returns its flags as a #PreScrubbingState
+ * to resume later. always sets `screen.scrubbing` to true regardless of whether playback was
+ * active. */
+std::optional<PreScrubbingState> ED_screen_scrubbing_enable(bContext &C, bScreen &screen)
+{
+  BLI_assert_msg(!screen.scrubbing, "scrubbing should not be active yet");
+  screen.scrubbing = true;
+
+  wmWindowManager *wm = CTX_wm_manager(&C);
+  bScreen *play_screen = ED_screen_animation_no_scrub(wm);
+
+  if (!play_screen || !play_screen->animtimer) {
+    return std::nullopt;
+  }
+  const ScreenAnimData *sad = static_cast<ScreenAnimData *>(play_screen->animtimer->customdata);
+  if (sad == nullptr) {
+    return std::nullopt;
+  }
+
+  PreScrubbingState resume;
+  resume.play_mode = (sad->flag & ANIMPLAY_FLAG_REVERSE) ? PlaybackDirection::BACKWARDS :
+                                                           PlaybackDirection::FORWARDS;
+  resume.play_sync = (sad->flag & ANIMPLAY_FLAG_SYNC) ?
+                         PlaySyncMode::ON :
+                         ((sad->flag & ANIMPLAY_FLAG_NO_SYNC) ? PlaySyncMode::OFF :
+                                                                PlaySyncMode::UNCHANGED);
+
+  screen_stop_playback(CTX_data_main(&C), wm, CTX_wm_window(&C), play_screen);
+
+  return resume;
+}
+
+void ED_screen_scrubbing_disable(bContext &C,
+                                 bScreen &screen,
+                                 const std::optional<PreScrubbingState> &resume)
+{
+  BLI_assert_msg(screen.scrubbing, "scrubbing should be active");
+  screen.scrubbing = false;
+
+  if (resume.has_value()) {
+    ED_screen_animation_play(&C, int(resume->play_sync), int(resume->play_mode));
+  }
 }
 
 static wmOperatorStatus screen_animation_play_exec(bContext *C, wmOperator *op)
@@ -7199,6 +7249,43 @@ static void SCREEN_OT_userpref_show(wmOperatorType *ot)
                       "",
                       "Section to activate in the Preferences");
   RNA_def_property_flag(prop, PROP_HIDDEN);
+}
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Show Project Setup Operator
+ * \{ */
+
+static wmOperatorStatus project_setup_show_exec(bContext *C, wmOperator *op)
+{
+  /* changes context! */
+  if (ScrArea *area = ED_screen_temp_space_open(
+          C, nullptr, SPACE_PROJECT, USER_TEMP_SPACE_DISPLAY_WINDOW, false))
+  {
+    /* The header only contains the editor switcher and looks empty.
+     * So hiding in the temp window makes sense. */
+    ARegion *region_header = BKE_area_find_region_type(area, RGN_TYPE_HEADER);
+
+    region_header->flag |= RGN_FLAG_HIDDEN;
+    ED_region_visibility_change_update(C, area, region_header);
+
+    return OPERATOR_FINISHED;
+  }
+  BKE_report(op->reports, RPT_ERROR, "Failed to open window!");
+  return OPERATOR_CANCELLED;
+}
+
+static void SCREEN_OT_project_setup_show(wmOperatorType *ot)
+{
+  /* identifiers */
+  ot->name = "Open Project Setup...";
+  ot->description = "Create and manage projects";
+  ot->idname = "SCREEN_OT_project_setup_show";
+
+  /* API callbacks. */
+  ot->exec = project_setup_show_exec;
+  ot->poll = ED_operator_screenactive_nobackground; /* Not in background as this opens a window. */
 }
 
 /** \} */
@@ -7766,6 +7853,7 @@ void ED_operatortypes_screen()
   WM_operatortype_append(SCREEN_OT_screenshot);
   WM_operatortype_append(SCREEN_OT_screenshot_area);
   WM_operatortype_append(SCREEN_OT_userpref_show);
+  WM_operatortype_append(SCREEN_OT_project_setup_show);
   WM_operatortype_append(SCREEN_OT_drivers_editor_show);
   WM_operatortype_append(SCREEN_OT_info_log_show);
   WM_operatortype_append(SCREEN_OT_region_blend);

@@ -14,14 +14,14 @@
 
 #include "DNA_userdef_types.h"
 
-#include "BLI_linklist.h"
-#include "BLI_listbase.h"
-#include "BLI_math_vector.h"
+#include "BLI_linklist.hh"
+#include "BLI_listbase.hh"
+#include "BLI_math_vector_c.hh"
 #include "BLI_rand.hh"
-#include "BLI_string.h"
-#include "BLI_string_utf8.h"
+#include "BLI_string.hh"
+#include "BLI_string_utf8.hh"
 #include "BLI_string_utils.hh"
-#include "BLI_utildefines.h"
+#include "BLI_utildefines.hh"
 
 #include "BKE_context.hh"
 #include "BKE_global.hh"
@@ -517,6 +517,20 @@ void ED_region_do_draw(bContext *C, ARegion *region)
     at->draw(C, region);
   }
 
+#ifdef WITH_INPUT_IME
+  /* Manage the IME candidate window for the active region based on `cursor_ime`:
+   * - Position returned: start (if no session) or reposition IME.
+   * - nullopt returned: end any active IME session (e.g. exited edit mode).
+   * Deferred during animation playback, keeping `do_ime` set for when it stops. */
+  if (at->cursor_ime && region->runtime->do_ime) {
+    const bScreen *screen = WM_window_get_active_screen(win);
+    if (!screen->animtimer && !screen->scrubbing && region == screen->active_region) {
+      WM_window_IME_region_refresh(win, area, region);
+      region->runtime->do_ime = false;
+    }
+  }
+#endif
+
   /* XXX test: add convention to end regions always in pixel space,
    * for drawing of borders/gestures etc */
   ED_region_pixelspace(region);
@@ -632,6 +646,8 @@ void ED_region_tag_redraw(ARegion *region)
     region->runtime->do_draw &= ~(RGN_DRAW_PARTIAL | RGN_DRAW_NO_REBUILD |
                                   RGN_DRAW_EDITOR_OVERLAYS);
     region->runtime->do_draw |= RGN_DRAW;
+    /* Also refresh the IME cursor position on the next draw. */
+    region->runtime->do_ime = true;
     region->runtime->drawrct = rcti{};
   }
 }
@@ -648,6 +664,8 @@ void ED_region_tag_redraw_no_rebuild(ARegion *region)
   if (region && !(region->runtime->do_draw & (RGN_DRAWING | RGN_DRAW))) {
     region->runtime->do_draw &= ~(RGN_DRAW_PARTIAL | RGN_DRAW_EDITOR_OVERLAYS);
     region->runtime->do_draw |= RGN_DRAW_NO_REBUILD;
+    /* Also refresh the IME cursor position on the next draw. */
+    region->runtime->do_ime = true;
     region->runtime->drawrct = rcti{};
   }
 }
@@ -762,6 +780,22 @@ void ED_area_tag_region_size_update(ScrArea *area, ARegion *changed_region)
       continue;
     }
     ED_region_tag_redraw(following_region);
+  }
+}
+
+void ED_area_hud_region_set_padding_flag(ScrArea *area,
+                                         ARegion *changed_region,
+                                         const bool set_padding)
+{
+  ARegion *hud_region = BKE_area_find_region_type(area, RGN_TYPE_HUD);
+  if (hud_region == nullptr) {
+    return;
+  }
+
+  if (set_padding != bool(hud_region->runtime->flag & bke::ARegionRuntimeFlag::HUD_PADDING)) {
+    SET_FLAG_FROM_TEST(
+        hud_region->runtime->flag, set_padding, bke::ARegionRuntimeFlag::HUD_PADDING);
+    ED_area_tag_region_size_update(area, changed_region);
   }
 }
 
@@ -1549,7 +1583,7 @@ bool ED_region_is_overlap(const int spacetype, const int regiontype)
     case SPACE_VIEW3D:
       if (regiontype == RGN_TYPE_HEADER) {
         /* Only treat as overlapped if there is transparency. */
-        bTheme *theme = ui::theme::theme_get();
+        const bTheme *theme = ui::theme::theme_get();
         return theme->space_view3d.header[3] != 255;
       }
       return ELEM(regiontype,
@@ -1679,6 +1713,9 @@ static void region_rect_recursive(
                     max_ii(0, BLI_rcti_size_y(overlap_remainder) - UI_UNIT_Y / 2));
     region->winrct.xmin = overlap_remainder_margin.xmin + region->runtime->offset_x;
     region->winrct.ymin = overlap_remainder_margin.ymin + region->runtime->offset_y;
+    if (region->runtime->flag & bke::ARegionRuntimeFlag::HUD_PADDING) {
+      region->winrct.ymin += UI_UNIT_Y;
+    }
     region->winrct.xmax = region->winrct.xmin + prefsizex - 1;
     region->winrct.ymax = region->winrct.ymin + prefsizey - 1;
 
@@ -2219,7 +2256,7 @@ static void area_init_type_fallback(ScrArea *area, eSpace_Type space_type)
   }
   if (sl) {
     SpaceLink *sl_old = static_cast<SpaceLink *>(area->spacedata.first);
-    if (LIKELY(sl != sl_old)) {
+    if (sl != sl_old) [[likely]] {
       BLI_remlink(&area->spacedata, sl);
       BLI_addhead(&area->spacedata, sl);
 
@@ -2824,6 +2861,14 @@ void ED_area_newspace(bContext *C, ScrArea *area, int type, const bool skip_regi
 
     ED_area_exit(C, area);
 
+#ifdef WITH_INPUT_IME
+    /* Will be null for newly opened windows (file selector for e.g.). */
+    if (win->runtime && win->runtime->ghostwin) {
+      /* End any active IME session - the old space type's cursor_ime is no longer valid. */
+      WM_window_IME_end(win);
+    }
+#endif
+
     /* restore old area exit callback */
     if (skip_region_exit && area->type) {
       area->type->exit = area_exit;
@@ -3271,7 +3316,7 @@ static bool panel_add_check(const bContext *C,
     }
   }
 
-  if (LIKELY(panel_type->draw)) {
+  if (panel_type->draw) [[likely]] {
     if (panel_type->poll && !panel_type->poll(C, panel_type)) {
       return false;
     }
@@ -3762,7 +3807,7 @@ static bool panel_property_search(const bContext *C,
         block, ui::LayoutDirection::Horizontal, ui::LayoutType::Header, 0, 0, 0, 0, 0, style);
     panel_type->draw_header(C, panel);
   }
-  if (LIKELY(panel->type->draw != nullptr)) {
+  if (panel->type->draw != nullptr) [[likely]] {
     panel->layout = &ui::block_layout(
         block, ui::LayoutDirection::Vertical, ui::LayoutType::Panel, 0, 0, 0, 0, 0, style);
     panel_type->draw(C, panel);
@@ -4422,7 +4467,7 @@ void ED_region_cache_draw_curfra_label(const int framenr, const float x, const f
       &rect, bg_color, nullptr, 1.0f, outline_color, U.pixelsize, 3 * UI_SCALE_FAC);
 
   /* Text label. */
-  ui::theme::font_theme_color_set(fontid, TH_HEADER_TEXT_HI);
+  ui::theme::font_theme_color_set(fontid, TH_TEXT_HI);
   BLF_position(fontid, x - text_dims.x * 0.5f, y + padding, 0.0f);
   BLF_draw(fontid, numstr, sizeof(numstr));
 }
