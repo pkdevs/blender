@@ -94,7 +94,7 @@ void evaluate_and_apply_action(PointerRNA &animated_id_ptr,
 /* Copy of the same-named function in anim_sys.cc, with the check on action groups removed. */
 static bool is_fcurve_evaluatable(const FCurve *fcu)
 {
-  if (fcu->rna_path == nullptr) {
+  if (fcu->rna_path().is_empty()) {
     return false;
   }
 
@@ -168,7 +168,7 @@ static EvaluationResult evaluate_keyframe_data(PointerRNA &animated_id_ptr,
       if (!is_fcurve_evaluatable(fcu)) {
         continue;
       }
-      parsed_rna_paths[i] = ParsedRNAPath<>::from_string(fcu->rna_path);
+      parsed_rna_paths[i] = ParsedRNAPath<>::from_string(fcu->rna_path());
       if (!parsed_rna_paths[i]) {
         continue;
       }

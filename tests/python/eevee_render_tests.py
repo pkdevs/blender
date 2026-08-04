@@ -344,7 +344,7 @@ def main():
     elif args.gpu_backend == "opengl":
         blocklist += BLOCKLIST_OPENGL
 
-    gpu_vendor = render_report.get_gpu_device_vendor(args.blender)
+    gpu_vendor = render_report.get_gpu_device_vendor(args.blender, args.gpu_backend)
     if os.getenv("BLENDER_TEST_IGNORE_VENDOR_BLOCKLIST") is None:
         if gpu_vendor == "INTEL":
             blocklist += BLOCKLIST_INTEL
@@ -413,7 +413,7 @@ def main():
     elif test_dir_name.startswith('hair'):
         # hair_close_up has differences of line rasterization on linux.
         if gpu_vendor == "INTEL":
-            report.set_fail_percent(0.13)
+            report.set_fail_percent(0.135)
     elif test_dir_name.startswith('principled_bsdf'):
         # principled_bsdf_thinfilm_metallic has some weird behavior in reflection of
         # black surfaces. to be investigated

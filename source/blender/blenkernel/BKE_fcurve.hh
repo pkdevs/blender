@@ -36,6 +36,15 @@ struct StructRNA;
 struct bAction;
 struct bContext;
 
+namespace bke {
+
+struct FCurveRuntime {
+  /** Value stored from last time curve was evaluated (not threadsafe, debug display only!). */
+  float curval = 0;
+};
+
+}  // namespace bke
+
 /* ************** F-Curve Modifiers *************** */
 
 /**
@@ -234,11 +243,6 @@ void BKE_fcurves_free(ListBaseT<FCurve> *list);
  * Duplicate a list of F-Curves.
  */
 void BKE_fcurves_copy(ListBaseT<FCurve> *dst, ListBaseT<FCurve> *src);
-
-/**
- * Set the RNA path of a F-Curve.
- */
-void BKE_fcurve_rnapath_set(FCurve &fcu, StringRef rna_path);
 
 /* Set fcurve modifier name and ensure uniqueness.
  * Pass new name string when it's been edited otherwise pass empty string. */

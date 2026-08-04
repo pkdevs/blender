@@ -324,7 +324,9 @@ static void write_channelbag(BlendWriter *writer, animrig::Channelbag &channelba
   Span<FCurve *> fcurves = channelbag.fcurves();
   writer->write_pointer_array(fcurves.size(), fcurves.data());
   for (FCurve *fcurve : fcurves) {
-    writer->write_struct(fcurve);
+    writer->write_struct(fcurve, [](BlendStructWriter &struct_writer) {
+      struct_writer.runtime_ptr(offsetof(FCurve, runtime));
+    });
     BKE_fcurve_blend_write_data(writer, fcurve);
   }
 }
@@ -908,6 +910,9 @@ bPoseChannel *BKE_pose_channel_ensure(bPose *pose, const char *name)
     return nullptr;
   }
 
+  BLI_assert_msg(
+      name[0] != '\0',
+      "Bones have to have a name, otherwise the function below will always return a nullptr");
   /* See if this channel exists */
   chan = BKE_pose_channel_find_name(pose, name);
   if (chan) {
@@ -1112,7 +1117,7 @@ void BKE_pose_copy_data_ex(bPose **dst,
 
       /* XXX: This is needed for motionpath drawing to work.
        * Dunno why it was setting to null before... */
-      pchan.mpath = animviz_copy_motionpath(pchan.mpath);
+      pchan.mpath = bke::motionpath::copy(pchan.mpath);
     }
 
     if (pchan.prop) {
@@ -1340,7 +1345,7 @@ void BKE_pose_channel_free_ex(bPoseChannel *pchan, bool do_id_user)
   }
 
   if (pchan->mpath) {
-    animviz_free_motionpath(pchan->mpath);
+    bke::motionpath::free(pchan->mpath);
     pchan->mpath = nullptr;
   }
 
@@ -1899,7 +1904,7 @@ void BKE_pose_blend_write(BlendWriter *writer, bPose *pose)
 
     BKE_constraint_blend_write(writer, &chan.constraints);
 
-    animviz_motionpath_blend_write(writer, chan.mpath);
+    bke::motionpath::blend_write(writer, chan.mpath);
 
     writer->write_struct(&chan);
   }
@@ -1953,7 +1958,7 @@ void BKE_pose_blend_read_data(BlendDataReader *reader, ID *id_owner, bPose *pose
 
     BLO_read_struct(reader, bMotionPath, &pchan.mpath);
     if (pchan.mpath) {
-      animviz_motionpath_blend_read_data(reader, pchan.mpath);
+      bke::motionpath::blend_read_data(reader, pchan.mpath);
     }
 
     pchan.iktree.clear_no_delete();
