@@ -441,7 +441,9 @@ struct wmKeyMap {
   /** Verify if enabled in the current context, use #WM_keymap_poll instead of direct calls. */
   bool (*poll)(struct bContext *);
   bool (*poll_modal_item)(const struct wmOperator *op, int value) = {};
-  int (*modal_item_status_draw)(ui::Layout *layout, const wmKeyMap *keymap, const EnumPropertyItem *item) = {};
+  int (*modal_item_status_draw)(ui::Layout *layout,
+                                const wmKeyMap *keymap,
+                                const EnumPropertyItem *item) = {};
 
   /** For modal, #EnumPropertyItem for now. */
   const void *modal_items = nullptr;

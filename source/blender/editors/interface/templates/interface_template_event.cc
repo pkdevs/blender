@@ -256,7 +256,9 @@ int keymap_item_icon_ensure(const wmKeyMap *keymap, const EnumPropertyItem *item
 }
 
 /* templates for custom drawing of modal keymap items. */
-int circle_select_modal_item_draw(ui::Layout *layout, const wmKeyMap *keymap, const EnumPropertyItem *item)
+int circle_select_modal_item_draw(ui::Layout *layout,
+                                  const wmKeyMap *keymap,
+                                  const EnumPropertyItem *item)
 {
   if (ELEM(item->value, GESTURE_MODAL_CANCEL, GESTURE_MODAL_CIRCLE_SIZE, GESTURE_MODAL_NOP)) {
     return 1;
@@ -280,4 +282,4 @@ int circle_select_modal_item_draw(ui::Layout *layout, const wmKeyMap *keymap, co
   }
   return 0;
 }
-} // namespace blender::ui
+}  // namespace blender::ui
