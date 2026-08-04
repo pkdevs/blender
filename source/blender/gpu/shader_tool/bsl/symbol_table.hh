@@ -166,7 +166,7 @@ struct SymbolTable {
 
   MatchRank get_conversion_rank(const SymbolClass *from,
                                 const SymbolClass *to,
-                                const bool allow_vector_conversion = false) const;
+                                const bool ctor_conversion = false) const;
 
   SymbolClass *to_class(builtin::ClassId id) const;
 

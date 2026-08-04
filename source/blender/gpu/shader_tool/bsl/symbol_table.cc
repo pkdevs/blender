@@ -641,14 +641,19 @@ SymbolClass *SymbolTable::get_literal_type(string_view lit) const
 
 MatchRank SymbolTable::get_conversion_rank(const SymbolClass *from,
                                            const SymbolClass *to,
-                                           const bool allow_vector_conversion) const
+                                           const bool ctor_conversion) const
 {
   if (from == to) {
     return MatchRank::Exact;
   }
 
-  if (!from->is_builtin() || !to->is_builtin()) {
+  if (!from->is_builtin()) {
     return MatchRank::None;
+  }
+
+  /* Casting enum or packed types. */
+  if (from->builtin_class == to->builtin_class) {
+    return MatchRank::Conversion;
   }
 
   using namespace builtin;
@@ -662,18 +667,20 @@ MatchRank SymbolTable::get_conversion_rank(const SymbolClass *from,
   /* Masking BASE_MASK strips component length, leaving only base type flags and rank. */
   const uint16_t from_len = from_raw & LEN_MASK;
   const uint16_t to_len = to_raw & LEN_MASK;
-
   /* Check standard GLSL compatible convertible base types (int <-> uint <-> float). */
-  if ((from_raw & FLAG_NUMERIC) && (to_raw & FLAG_NUMERIC)) {
-    if (from_len == to_len) {
-      if (from_len == 1) {
+  const bool both_numeric = (from_raw & FLAG_NUMERIC) && (to_raw & FLAG_NUMERIC);
+  const bool is_promotion = (from_raw & FLAG_INTEGER) == (to_raw & FLAG_INTEGER);
+
+  if (from_len == to_len) {
+    if (from_len == 1) {
+      if (both_numeric || ctor_conversion) {
         /* Scalar conversion. */
-        return MatchRank::Conversion;
+        return is_promotion ? MatchRank::Promotion : MatchRank::Conversion;
       }
-      if (allow_vector_conversion) {
-        /* Scalar conversion. */
-        return MatchRank::Conversion;
-      }
+    }
+    if (ctor_conversion) {
+      /* Vector conversion. */
+      return MatchRank::Conversion;
     }
   }
 

@@ -535,6 +535,7 @@ struct SymbolParser : NodeErrorHandler {
       SymbolClass *underlying_type = scope.lookup_class(table, decl.parent_class()).unwrap(this);
       cls->size = underlying_type->size;
       cls->align = underlying_type->align;
+      cls->builtin_class = underlying_type->builtin_class;
       cls->is_std140_compatible = cls->size == 4;
       cls->is_std430_compatible = cls->size == 4;
     }

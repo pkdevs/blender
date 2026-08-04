@@ -20,11 +20,13 @@ enum ClassFlag : uint16_t {
   /* Bitfield Masks & Flags (16-bit layout) */
   RANK_SHIFT = 3,
   MATRIX_SHIFT = 9,
-  LEN_MASK = 0b0000'0000'0000'0111,      // Bits 0..2: Component length (1..4)
-  RANK_MASK = 0b0000'0000'0111'1000,     // Bits 3..6: Type promotion rank
-  FLAG_NUMERIC = 0b0000'0000'1000'0000,  // Bit 7:  Numeric flag
-  FLAG_INTEGER = 0b0000'0001'0000'0000,  // Bit 8:  Integer flag
-  MATRIX_MASK = 0b0000'1110'0000'0000,   // Bit 9..11: Matrix column length (2..4)
+  /* clang-format off */
+  LEN_MASK     = 0b0000'0000'0000'0111, /* Bits 0..2: Component length (1..4)*/
+  RANK_MASK    = 0b0000'0000'0111'1000, /* Bits 3..6: Type promotion rank*/
+  FLAG_NUMERIC = 0b0000'0000'1000'0000, /* Bit 7:  Numeric flag*/
+  FLAG_INTEGER = 0b0000'0001'0000'0000, /* Bit 8:  Integer flag*/
+  MATRIX_MASK  = 0b0000'1110'0000'0000, /* Bit 9..11: Matrix column length (2..4)*/
+  /* clang-format on */
 
   BASE_MASK = FLAG_NUMERIC | FLAG_INTEGER | MATRIX_MASK | RANK_MASK,
 
@@ -113,8 +115,6 @@ struct SymbolClass : SymbolScope {
 
   SymbolFunction *operator_subscript = nullptr;
   SymbolClassTemplate *template_data = nullptr;
-  /* For builtin types (and enum), implicit conversion to this type for operators. */
-  SymbolClass *decayed = nullptr;
 
   /* For enums, the value of the last declaration. */
   ConstexprValue enum_last_val = -1;
