@@ -364,8 +364,13 @@ constexpr int64_t power_of_2_max(const int64_t x)
   ((void)0)
 
 /**
- * Checks if the passed in buffer is all zeroes. Note that this invokes undefined behavior if the
- * buffer contains any padding bits or bytes.
+ * Check if `size` bytes at `data` are all zero.
+ *
+ * \warning Every byte is compared, including any padding.
+ * Padding is indeterminate even when all struct members have been zeroed,
+ * so only buffers where every byte has been written are safe to pass in
+ * (`memset` or `calloc` for e.g.).
+ * For typed values prefer #value_is_zero which accounts for this.
  */
 constexpr bool memory_is_zero(const void *data, const size_t size)
 {
