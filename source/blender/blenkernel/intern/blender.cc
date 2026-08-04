@@ -379,10 +379,8 @@ void BKE_blender_userdef_data_free(UserDef *userdef, bool clear_fonts)
   userdef->autoexec_paths.free_no_destruct();
   userdef->script_directories.free_no_destruct();
 
-  while (bUserAssetLibrary *library = static_cast<bUserAssetLibrary *>(
-             userdef->asset_libraries.first))
-  {
-    BKE_preferences_asset_library_remove(userdef, library);
+  for (bUserAssetLibrary &library_ref : userdef->asset_libraries.items_mutable()) {
+    BKE_preferences_asset_library_remove(userdef, &library_ref);
   }
 
   for (bUserExtensionRepo &repo_ref : userdef->extension_repos.items_mutable()) {
