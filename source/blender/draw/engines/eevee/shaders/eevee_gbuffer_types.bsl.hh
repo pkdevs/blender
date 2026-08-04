@@ -176,10 +176,10 @@ float3 normal_unpack(float2 N_packed)
 }
 
 /* Keep IOR 1.0 stable across 10-bit quantization. */
-#define closure_10bit_unit (1.0f / 1023.0f)
-#define ior_packed_lt_1_scale (511.0f * closure_10bit_unit)
-#define ior_packed_eq_1 (512.0f * closure_10bit_unit)
-#define ior_packed_gt_1_bias (510.0f * closure_10bit_unit)
+static constexpr float closure_10bit_unit = 1.0f / 1023.0f;
+static constexpr float ior_packed_lt_1_scale = 511.0f * closure_10bit_unit;
+static constexpr float ior_packed_eq_1 = 512.0f * closure_10bit_unit;
+static constexpr float ior_packed_gt_1_bias = 510.0f * closure_10bit_unit;
 
 float ior_pack(float ior)
 {

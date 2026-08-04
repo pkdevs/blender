@@ -305,8 +305,7 @@ struct Film {
     [[resource_table]] const Uniform &uni = this->uniforms;
 
     /* x = hash, y = accumulated weight. Only keep track of 4 highest weighted samples. */
-    float2 crypto_samples[4] = float2_array(
-        float2(0.0f), float2(0.0f), float2(0.0f), float2(0.0f));
+    float2 crypto_samples[4] = {float2(0.0f), float2(0.0f), float2(0.0f), float2(0.0f)};
     for (int i = 0; i < samples_len; i++) {
       FilmSample src = sample_get(i, texel_film);
       sample_cryptomatte_accum(src, layer_component, cryptomatte_tx, crypto_samples);

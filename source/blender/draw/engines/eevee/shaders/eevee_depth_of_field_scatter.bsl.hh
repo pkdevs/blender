@@ -14,9 +14,12 @@
 #include "gpu_shader_math_vector_reduce_lib.glsl"
 #include "gpu_shader_math_vector_safe_lib.glsl"
 
-#define linearstep(p0, p1, v) (clamp(((v) - (p0)) / abs((p1) - (p0)), 0.0f, 1.0f))
-
 namespace eevee::dof::scatter {
+
+float4 linearstep(float p0, float p1, float4 v)
+{
+  return (v - p0) / abs(p1 - p0);
+}
 
 struct VertOut {
   /** Colors, weights, and Circle of confusion radii for the 4 pixels to scatter. */

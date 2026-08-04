@@ -22,35 +22,35 @@
 #endif
 
 /* Debug options */
-#define debug_gather_perf false
-#define debug_scatter_perf false
-#define debug_resolve_perf false
+static constexpr bool debug_gather_perf = false;
+static constexpr bool debug_scatter_perf = false;
+static constexpr bool debug_resolve_perf = false;
 
-#define no_smooth_intersection false
-#define no_gather_occlusion false
-#define no_gather_mipmaps false
-#define no_gather_random false
-#define no_gather_filtering false
-#define no_scatter_occlusion false
-#define no_scatter_pass false
-#define no_foreground_pass false
-#define no_background_pass false
-#define no_slight_focus_pass false
-#define no_focus_pass false
-#define no_hole_fill_pass false
+static constexpr bool no_smooth_intersection = false;
+static constexpr bool no_gather_occlusion = false;
+static constexpr bool no_gather_mipmaps = false;
+static constexpr bool no_gather_random = false;
+static constexpr bool no_gather_filtering = false;
+static constexpr bool no_scatter_occlusion = false;
+static constexpr bool no_scatter_pass = false;
+static constexpr bool no_foreground_pass = false;
+static constexpr bool no_background_pass = false;
+static constexpr bool no_slight_focus_pass = false;
+static constexpr bool no_focus_pass = false;
+static constexpr bool no_hole_fill_pass = false;
 
 /* Distribute weights between near/slight-focus/far fields (slide 117). */
-#define dof_layer_threshold (4.0f)
+static constexpr float dof_layer_threshold = 4.0f;
 /* Make sure it overlaps. */
-#define dof_layer_offset_fg (0.5f + 1.0f)
+static constexpr float dof_layer_offset_fg = 0.5f + 1.0f;
 /* Extra offset for convolution layers to avoid light leaking from background. */
-#define dof_layer_offset (0.5f + 0.5f)
+static constexpr float dof_layer_offset = 0.5f + 0.5f;
 
-#define dof_max_slight_focus_radius DOF_MAX_SLIGHT_FOCUS_RADIUS
+static constexpr float dof_max_slight_focus_radius = DOF_MAX_SLIGHT_FOCUS_RADIUS;
 
-const uint2 quad_offsets_u[4] = uint2_array(uint2(0, 1), uint2(1, 1), uint2(1, 0), uint2(0, 0));
-const float2 quad_offsets[4] = float2_array(
-    float2(-0.5f, 0.5f), float2(0.5f, 0.5f), float2(0.5f, -0.5f), float2(-0.5f, -0.5f));
+const uint2 quad_offsets_u[4] = {uint2(0, 1), uint2(1, 1), uint2(1, 0), uint2(0, 0)};
+const float2 quad_offsets[4] = {
+    float2(-0.5f, 0.5f), float2(0.5f, 0.5f), float2(0.5f, -0.5f), float2(-0.5f, -0.5f)};
 
 /** \} */
 
