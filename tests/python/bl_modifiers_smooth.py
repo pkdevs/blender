@@ -130,6 +130,40 @@ def _frequency_amplitude(positions, mode):
     )
 
 
+def _frequency_equation_relative_residual(obj, original, filtered, cutoff, axis=2):
+    """Return ||b - (I + L^T L / cutoff^2)x|| / ||b|| for uniform edge weights."""
+    neighbors = [[] for _ in obj.data.vertices]
+    for edge in obj.data.edges:
+        a, b = edge.vertices
+        neighbors[a].append(b)
+        neighbors[b].append(a)
+
+    def laplacian(values):
+        result = []
+        for i, adjacent in enumerate(neighbors):
+            if adjacent:
+                result.append(values[i] - sum(values[j] for j in adjacent) / len(adjacent))
+            else:
+                result.append(0.0)
+        return result
+
+    filtered_axis = [position[axis] for position in filtered]
+    laplacian_values = laplacian(filtered_axis)
+    transposed_laplacian = []
+    for i, adjacent in enumerate(neighbors):
+        value = laplacian_values[i]
+        value -= sum(laplacian_values[j] / len(neighbors[j]) for j in adjacent)
+        transposed_laplacian.append(value)
+
+    residual = [
+        original[i][axis] -
+        (filtered_axis[i] + transposed_laplacian[i] / (cutoff * cutoff))
+        for i in range(len(original))
+    ]
+    right_hand_side_squared = sum(position[axis] ** 2 for position in original)
+    return (sum(value * value for value in residual) / right_hand_side_squared) ** 0.5
+
+
 class TestSmoothDisabled(unittest.TestCase):
     """The modifier must be a true no-op when its parameters cancel out."""
 
@@ -202,13 +236,17 @@ class TestSmoothFrequencyResponse(unittest.TestCase):
     """The implicit biharmonic filter must discriminate Laplacian frequencies."""
 
     @staticmethod
-    def _retained_amplitude(mode, cutoff, iterations=1):
-        obj = _make_frequency_ring(mode)
+    def _retained_amplitude(
+            mode, cutoff, iterations=1, factor=1.0, verts_num=32, scale=1.0):
+        obj = _make_frequency_ring(mode, verts_num)
+        if scale != 1.0:
+            for vertex in obj.data.vertices:
+                vertex.co *= scale
         original = _frequency_amplitude(_evaluated_positions(obj), mode)
         _add_smooth(
             obj,
             method='FREQUENCY',
-            factor=1.0,
+            factor=factor,
             frequency_cutoff=cutoff,
             iterations=iterations,
             use_x=False,
@@ -218,10 +256,25 @@ class TestSmoothFrequencyResponse(unittest.TestCase):
         filtered = _frequency_amplitude(_evaluated_positions(obj), mode)
         return abs(filtered / original)
 
-    def test_cutoff_is_half_power_frequency(self):
+    def test_cutoff_is_half_amplitude_frequency(self):
         """On a 32-ring, mode 8 has normalized Laplacian frequency exactly 1."""
         retained = self._retained_amplitude(mode=8, cutoff=1.0)
         self.assertAlmostEqual(retained, 0.5, places=4)
+
+    def test_factor_is_applied_after_filter(self):
+        retained = self._retained_amplitude(mode=8, cutoff=1.0, factor=0.5)
+        self.assertAlmostEqual(retained, 0.75, places=4)
+
+    def test_frequency_is_normalized_to_connectivity(self):
+        """Equal cycles per edge have equal response even at different vertex counts."""
+        ring_32 = self._retained_amplitude(mode=8, cutoff=1.0, verts_num=32)
+        ring_64 = self._retained_amplitude(mode=16, cutoff=1.0, verts_num=64)
+        self.assertAlmostEqual(ring_32, ring_64, places=4)
+
+    def test_response_is_coordinate_scale_invariant(self):
+        regular = self._retained_amplitude(mode=8, cutoff=1.0)
+        microscopic = self._retained_amplitude(mode=8, cutoff=1.0, scale=1e-12)
+        self.assertAlmostEqual(regular, microscopic, places=4)
 
     def test_high_frequency_is_attenuated_more(self):
         low = self._retained_amplitude(mode=1, cutoff=0.25)
@@ -234,6 +287,29 @@ class TestSmoothFrequencyResponse(unittest.TestCase):
         lower_cutoff = self._retained_amplitude(mode=8, cutoff=0.1)
         higher_cutoff = self._retained_amplitude(mode=8, cutoff=0.8)
         self.assertLess(lower_cutoff, higher_cutoff)
+
+    def test_low_cutoff_mixed_spectrum_satisfies_filter_equation(self):
+        """A mixed spectrum catches false convergence that a single Fourier mode cannot."""
+        cutoff = 0.01
+        obj, _boundary = _make_grid(x_segments=24, y_segments=25)
+        for i, vertex in enumerate(obj.data.vertices):
+            vertex.co.z = sin(i * 0.731) + 0.35 * cos(i * 1.913)
+        original = _evaluated_positions(obj)
+        _add_smooth(
+            obj,
+            method='FREQUENCY',
+            factor=1.0,
+            frequency_cutoff=cutoff,
+            iterations=1,
+            use_x=False,
+            use_y=False,
+            use_z=True,
+        )
+        filtered = _evaluated_positions(obj)
+        residual = _frequency_equation_relative_residual(
+            obj, original, filtered, cutoff, axis=2,
+        )
+        self.assertLess(residual, 5e-3)
 
 
 class TestSmoothVolumePreservation(unittest.TestCase):
@@ -265,12 +341,13 @@ class TestSmoothVolumePreservation(unittest.TestCase):
 
 class TestSmoothAxisMask(unittest.TestCase):
 
-    def test_only_z_keeps_xy_unchanged(self):
+    def _assert_only_z_keeps_xy_unchanged(self, method, **params):
         obj = _make_uv_sphere()
         original = _evaluated_positions(obj)
         _add_smooth(
-            obj, method='SIMPLE', factor=0.5, iterations=3,
+            obj, method=method, iterations=3,
             use_x=False, use_y=False, use_z=True,
+            **params,
         )
         deformed = _evaluated_positions(obj)
         for a, b in zip(original, deformed):
@@ -279,6 +356,14 @@ class TestSmoothAxisMask(unittest.TestCase):
         # Z should actually move for at least some verts.
         max_dz = max(abs(a.z - b.z) for a, b in zip(original, deformed))
         self.assertGreater(max_dz, 1e-4)
+
+    def test_simple(self):
+        self._assert_only_z_keeps_xy_unchanged('SIMPLE', factor=0.5)
+
+    def test_frequency(self):
+        self._assert_only_z_keeps_xy_unchanged(
+            'FREQUENCY', factor=1.0, frequency_cutoff=0.25,
+        )
 
 
 class TestSmoothDeterminism(unittest.TestCase):
@@ -404,6 +489,11 @@ class TestSmoothPinEdgeMarks(unittest.TestCase):
     def test_seam_hc(self):
         self._assert_marked_pinned('seam', 'use_pin_seam', 'HC', factor=1.0, hc_alpha=0.0, hc_beta=0.5)
 
+    def test_seam_frequency(self):
+        self._assert_marked_pinned(
+            'seam', 'use_pin_seam', 'FREQUENCY', factor=1.0, frequency_cutoff=0.01,
+        )
+
     def test_sharp_simple(self):
         self._assert_marked_pinned('sharp', 'use_pin_sharp', 'SIMPLE', factor=0.5)
 
@@ -412,6 +502,11 @@ class TestSmoothPinEdgeMarks(unittest.TestCase):
 
     def test_sharp_hc(self):
         self._assert_marked_pinned('sharp', 'use_pin_sharp', 'HC', factor=1.0, hc_alpha=0.0, hc_beta=0.5)
+
+    def test_sharp_frequency(self):
+        self._assert_marked_pinned(
+            'sharp', 'use_pin_sharp', 'FREQUENCY', factor=1.0, frequency_cutoff=0.01,
+        )
 
     def test_seam_off_by_default_marked_verts_move(self):
         """Interior seam verts must drift when the toggle is off (regression guard)."""
@@ -442,22 +537,71 @@ class TestSmoothPinEdgeMarks(unittest.TestCase):
         self.assertLess(max_pinned_drift, 1e-5)
 
 
+class TestSmoothFrequencyVertexGroup(unittest.TestCase):
+
+    def _assert_vertex_group_mask(self, invert):
+        obj, _boundary = _make_grid()
+        for i, vertex in enumerate(obj.data.vertices):
+            vertex.co.z = 0.3 if i % 2 == 0 else -0.3
+
+        group_indices = [i for i in range(len(obj.data.vertices)) if i % 3 == 0]
+        group = obj.vertex_groups.new(name="frequency_mask")
+        group.add(group_indices, 1.0, 'REPLACE')
+        original = _evaluated_positions(obj)
+        _add_smooth(
+            obj,
+            method='FREQUENCY',
+            factor=1.0,
+            frequency_cutoff=0.01,
+            iterations=2,
+            vertex_group=group.name,
+            invert_vertex_group=invert,
+        )
+        deformed = _evaluated_positions(obj)
+
+        group_indices = set(group_indices)
+        active = [
+            i for i in range(len(original))
+            if (i in group_indices) != invert
+        ]
+        inactive = [i for i in range(len(original)) if i not in active]
+        self.assertGreater(max((original[i] - deformed[i]).length for i in active), 1e-3)
+        self.assertLess(max((original[i] - deformed[i]).length for i in inactive), 1e-6)
+
+    def test_vertex_group(self):
+        self._assert_vertex_group_mask(invert=False)
+
+    def test_inverted_vertex_group(self):
+        self._assert_vertex_group_mask(invert=True)
+
+
 class TestSmoothCotangentWeights(unittest.TestCase):
 
-    def test_cotangent_toggle_changes_result_on_irregular_mesh(self):
+    def _assert_cotangent_changes_result_on_irregular_mesh(self, method, **params):
         """A UV sphere's pole triangulation is non-uniform — cotangent must differ."""
-        params = {
-            'method': 'TAUBIN', 'factor': 0.5, 'taubin_mu': -0.53, 'iterations': 5,
-        }
         obj_uniform = _make_uv_sphere()
-        _add_smooth(obj_uniform, use_cotangent_weights=False, **params)
+        _add_smooth(
+            obj_uniform, method=method, use_cotangent_weights=False, iterations=5, **params,
+        )
         uniform = _evaluated_positions(obj_uniform)
 
         obj_cotan = _make_uv_sphere()
-        _add_smooth(obj_cotan, use_cotangent_weights=True, **params)
+        _add_smooth(
+            obj_cotan, method=method, use_cotangent_weights=True, iterations=5, **params,
+        )
         cotan = _evaluated_positions(obj_cotan)
 
         self.assertGreater(_max_distance(uniform, cotan), 1e-4)
+
+    def test_taubin(self):
+        self._assert_cotangent_changes_result_on_irregular_mesh(
+            'TAUBIN', factor=0.5, taubin_mu=-0.53,
+        )
+
+    def test_frequency(self):
+        self._assert_cotangent_changes_result_on_irregular_mesh(
+            'FREQUENCY', factor=1.0, frequency_cutoff=0.25,
+        )
 
 
 def main():
