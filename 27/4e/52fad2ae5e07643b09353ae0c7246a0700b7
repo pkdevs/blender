@@ -1,2 +1,3 @@
 Referenced by issue #158373, When you select the add-on built into Blender 5.2, FBX disappears completely.
 Referenced by issue #161928, "ReferenceError: StructRNA of type Object has been removed" in FBX export, when invoking export scripts from an Add-on
+Referenced by commit e80b691142cb763c658409cfe514834e186a658a, Fix #161928: Core add-ons loaded after extensions in 5.2
