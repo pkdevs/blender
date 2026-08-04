@@ -1,9 +1,9 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 5.3.0 Alpha (b'96294be75080')\n"
+"Project-Id-Version: Blender 5.3.0 Alpha (b'af9ba6af7621')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-07-20 07:29+0000\n"
+"POT-Creation-Date: 2026-08-03 07:24+0000\n"
 "PO-Revision-Date: 2025-12-01 09:17+0000\n"
 "Last-Translator: Matt Mitacek <mattmitacek@gmail.com>\n"
 "Language-Team: Czech <https://translate.blender.org/projects/blender-ui/ui/cs/>\n"
@@ -13807,54 +13807,6 @@ msgid "Material slot name"
 msgstr "Název okénka materiálu"
 
 
-msgid "Apply"
-msgstr "Použít"
-
-
-msgid "Track"
-msgstr "Sledování"
-
-
-msgid "Quick Effects"
-msgstr "Rychlé Efekty"
-
-
-msgid "Show/Hide"
-msgstr "Zobrazit/skrýt"
-
-
-msgid "Clean Up"
-msgstr "Vyčistit"
-
-
-msgid "Make Single User"
-msgstr "Přivlastnit"
-
-
-msgid "Hooks"
-msgstr "Háky"
-
-
-msgid "Math"
-msgstr "Matematika"
-
-
-msgid "Clear Transform"
-msgstr "Vyčistit transformaci"
-
-
-msgid "Utilities"
-msgstr "Nástroje"
-
-
-msgid "Propagate"
-msgstr "Vložit"
-
-
-msgid "Names"
-msgstr "Názvy"
-
-
 msgid "Mesh Select Mode"
 msgstr "Síťový mód výběru"
 
@@ -13863,12 +13815,16 @@ msgid "Face Data"
 msgstr "Data Ploch"
 
 
+msgid "Clean Up"
+msgstr "Vyčistit"
+
+
 msgid "Merge"
 msgstr "Sloučit"
 
 
-msgid "Instances"
-msgstr "Instance"
+msgid "Show/Hide"
+msgstr "Zobrazit/skrýt"
 
 
 msgid "Special Characters"
@@ -13879,12 +13835,20 @@ msgid "Metaball"
 msgstr "Meta objekt"
 
 
-msgid "Import"
-msgstr "Importovat"
+msgid "Names"
+msgstr "Názvy"
 
 
 msgid "Bone Roll"
 msgstr "Kost"
+
+
+msgid "Math"
+msgstr "Matematika"
+
+
+msgid "Utilities"
+msgstr "Nástroje"
 
 
 msgid "Pivot Point"
@@ -13897,6 +13861,14 @@ msgstr "Přichytit"
 
 msgid "Proportional Editing Falloff"
 msgstr "Způsob útlumu"
+
+
+msgid "Instances"
+msgstr "Instance"
+
+
+msgid "Import"
+msgstr "Importovat"
 
 
 msgid "Mirror"
@@ -13919,28 +13891,12 @@ msgid "Align View"
 msgstr "Zarovnat pohled"
 
 
-msgid "Linked"
-msgstr "Propojené"
-
-
-msgid "Layout"
-msgstr "Rozložení"
-
-
 msgid "Select Linked"
 msgstr "Vybrat Propojené"
 
 
 msgid "Assign Material"
 msgstr "Přiřadit Materiál"
-
-
-msgid "Keying"
-msgstr "Klíčovací sestava"
-
-
-msgid "Tracking"
-msgstr "Sledování"
 
 
 msgid "Light"
@@ -13953,6 +13909,50 @@ msgstr "Vztahy"
 
 msgid "Rigid Body"
 msgstr "Tuhé Těleso"
+
+
+msgid "Apply"
+msgstr "Použít"
+
+
+msgid "Track"
+msgstr "Sledování"
+
+
+msgid "Quick Effects"
+msgstr "Rychlé Efekty"
+
+
+msgid "Make Single User"
+msgstr "Přivlastnit"
+
+
+msgid "Linked"
+msgstr "Propojené"
+
+
+msgid "Layout"
+msgstr "Rozložení"
+
+
+msgid "Hooks"
+msgstr "Háky"
+
+
+msgid "Keying"
+msgstr "Klíčovací sestava"
+
+
+msgid "Clear Transform"
+msgstr "Vyčistit transformaci"
+
+
+msgid "Tracking"
+msgstr "Sledování"
+
+
+msgid "Propagate"
+msgstr "Vložit"
 
 
 msgid "Basic"
@@ -17633,6 +17633,10 @@ msgid "Value to Normal"
 msgstr "Hodnota k Normále"
 
 
+msgid "Scalar"
+msgstr "Změna velikosti"
+
+
 msgid "Node Inputs"
 msgstr "Vstupy Uzlu"
 
@@ -18567,11 +18571,6 @@ msgstr "Chvění"
 
 msgid "Generated"
 msgstr "Oddělit"
-
-
-msgctxt "Operator"
-msgid "Make Markers Local"
-msgstr "Vytvořit lokální"
 
 
 msgctxt "Operator"
@@ -19598,10 +19597,6 @@ msgstr "Přesunout modifikátor"
 
 msgid "Move boid state up in the list"
 msgstr "Odstraní duplicity označených vertexů"
-
-
-msgid "Scalar"
-msgstr "Změna velikosti"
 
 
 msgctxt "Operator"
@@ -30866,6 +30861,10 @@ msgid "Find & Replace"
 msgstr "Najít & nahradit"
 
 
+msgid "Auto Keying"
+msgstr "Automaticky klíčovat"
+
+
 msgid "Playback"
 msgstr "Playback"
 
@@ -35859,10 +35858,6 @@ msgid "Window Background"
 msgstr "Pozadí okna"
 
 
-msgid "Header Text Highlight"
-msgstr "Zvýrazněný Text Záhlaví"
-
-
 msgid "Text Highlight"
 msgstr "Zvýrazěný Text"
 
@@ -36185,10 +36180,6 @@ msgstr "Přichytává k mřížce"
 
 msgid "Only Endpoints"
 msgstr "Pouze Koncové Body"
-
-
-msgid "Auto Keying"
-msgstr "Automaticky klíčovat"
 
 
 msgid "Auto Keyframe Insert Keying Set"
@@ -37033,11 +37024,6 @@ msgstr "Dokumentace"
 
 msgid "File:"
 msgstr "Soubor:"
-
-
-msgctxt "Operator"
-msgid "Apply"
-msgstr "Použít"
 
 
 msgid "Options:"
@@ -38860,12 +38846,12 @@ msgid "Jump to Next Marker"
 msgstr "Skončit na Další Značku"
 
 
-msgid "Active Editor"
-msgstr "Aktivní editor"
-
-
 msgid "Only Active Keying Set"
 msgstr "Pouze Aktivní Klíčová Sestava"
+
+
+msgid "Active Editor"
+msgstr "Aktivní editor"
 
 
 msgid "Intersections"
@@ -40044,6 +40030,11 @@ msgstr "VBar malování"
 msgctxt "Operator"
 msgid "Quick Edit"
 msgstr "Rychlá úprava"
+
+
+msgctxt "Operator"
+msgid "Apply"
+msgstr "Použít"
 
 
 msgctxt "Operator"
@@ -42107,10 +42098,6 @@ msgstr "Perspektiva Uživatele"
 
 msgid " (Local)"
 msgstr " (Místní)"
-
-
-msgid "Cannot fly an object with constraints"
-msgstr "Vyčistit vazby objektu"
 
 
 msgid "Depth too large"
