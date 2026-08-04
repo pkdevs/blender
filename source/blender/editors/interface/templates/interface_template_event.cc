@@ -45,6 +45,12 @@ int template_status_bar_modal_item(Layout *layout,
                                    const wmKeyMap *keymap,
                                    const EnumPropertyItem *item)
 {
+  if (keymap->modal_item_status_draw) {
+    if (int items_used = keymap->modal_item_status_draw(layout, keymap, item)) {
+      return items_used;
+    }
+  }
+
   const wmKeyMapItem *kmi = keymap_item_from_enum_item(keymap, item);
   if (kmi == nullptr) {
     return 0;
@@ -230,7 +236,7 @@ bool template_event_from_keymap_item(Layout *layout,
 
 namespace blender::ui {
 
-int keymap_item_icon_ensure(wmKeyMap *keymap, const EnumPropertyItem *item)
+int keymap_item_icon_ensure(const wmKeyMap *keymap, const EnumPropertyItem *item)
 {
   if (item == nullptr) {
     return ICON_NONE;
@@ -250,10 +256,10 @@ int keymap_item_icon_ensure(wmKeyMap *keymap, const EnumPropertyItem *item)
 }
 
 /* templates for custom drawing of modal keymap items. */
-void circle_select_modal_item_draw(ui::Layout *layout, wmKeyMap *keymap, const EnumPropertyItem *item)
+int circle_select_modal_item_draw(ui::Layout *layout, const wmKeyMap *keymap, const EnumPropertyItem *item)
 {
   if (ELEM(item->value, GESTURE_MODAL_CANCEL, GESTURE_MODAL_CIRCLE_SIZE, GESTURE_MODAL_NOP)) {
-    return;
+    return 1;
   }
   if (item->value == GESTURE_MODAL_CIRCLE_ADD) {
     int icon = keymap_item_icon_ensure(keymap, item);
@@ -268,10 +274,10 @@ void circle_select_modal_item_draw(ui::Layout *layout, wmKeyMap *keymap, const E
         layout->separator(0.2f);
         layout->label(IFACE_("Resize"), ICON_NONE);
         layout->separator(0.6f);
-        return;
+        return 2;
       }
     }
   }
-  template_status_bar_modal_item(layout, nullptr, keymap, item);
+  return 0;
 }
 } // namespace blender::ui

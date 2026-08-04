@@ -7044,11 +7044,6 @@ bool WM_window_modal_keymap_status_draw(bContext *C, wmWindow *win, ui::Layout &
       continue;
     }
 
-    if (keymap->modal_item_status_draw) {
-      keymap->modal_item_status_draw(&row, keymap, &items[i]);
-      continue;
-    }
-
     const int num_items_used = template_status_bar_modal_item(&row, op, keymap, items + i);
     if (num_items_used > 0) {
       /* Skip items in case consecutive items were merged. */

@@ -2660,7 +2660,7 @@ int template_status_bar_modal_item(Layout *layout,
                                    const wmKeyMap *keymap,
                                    const EnumPropertyItem *item);
 
-void circle_select_modal_item_draw(ui::Layout *layout, wmKeyMap *keymap, const EnumPropertyItem *item);
+int circle_select_modal_item_draw(ui::Layout *layout, const wmKeyMap *keymap, const EnumPropertyItem *item);
 
 void template_component_menu(Layout *layout,
                              PointerRNA *ptr,
