@@ -298,6 +298,7 @@ TEST(array, ConstructStructWithBitFields)
 TEST(array, ConstructZeroVector)
 {
   /* This mainly exercises the #value_is_zero_memory specialization for VecBase. */
+  static_assert(!std::has_unique_object_representations_v<float3>);
   float3 vec{0};
   Array<float3> array(3, vec);
   EXPECT_EQ(array[0], vec);
