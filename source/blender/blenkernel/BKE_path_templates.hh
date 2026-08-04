@@ -252,12 +252,18 @@ class VariableMap {
  * Info about a template variable expression in a string.
  */
 struct ExpressionInfo {
-  /* Byte index range (exclusive on the right) of the expression in the string.
-   * This includes the starting/ending braces of the expression. */
+  /**
+   * Byte index range (exclusive on the right) of the expression in the string.
+   *
+   * This includes the starting/ending braces of the expression.
+   */
   IndexRange byte_range;
 
-  /* Reference to the variable name as written in the template string. Note
-   * that this points into the template string, and does not own the value. */
+  /**
+   * Reference to the variable name as written in the template string.
+   *
+   * Note that this points into the template string, and does not own the value.
+   */
   StringRef variable_name;
 };
 
