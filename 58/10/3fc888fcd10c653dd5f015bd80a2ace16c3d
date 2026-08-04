@@ -1,1 +1,2 @@
 Referenced by issue #161229, Blender LTS: Maintenance Task 5.2
+Referenced by pull request #162304, Fix: Empty bone name could still crash Blender on file load
