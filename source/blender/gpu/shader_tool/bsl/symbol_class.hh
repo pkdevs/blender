@@ -21,22 +21,23 @@ enum ClassFlag : uint16_t {
   RANK_SHIFT = 3,
   MATRIX_SHIFT = 9,
   /* clang-format off */
-  LEN_MASK     = 0b0000'0000'0000'0111, /* Bits 0..2: Component length (1..4)*/
-  RANK_MASK    = 0b0000'0000'0111'1000, /* Bits 3..6: Type promotion rank*/
-  FLAG_NUMERIC = 0b0000'0000'1000'0000, /* Bit 7:  Numeric flag*/
-  FLAG_INTEGER = 0b0000'0001'0000'0000, /* Bit 8:  Integer flag*/
-  MATRIX_MASK  = 0b0000'1110'0000'0000, /* Bit 9..11: Matrix column length (2..4)*/
+  LEN_MASK     = 0b0000'0000'0000'0111, /* Bits 0..2: Component length (1..4). */
+  RANK_MASK    = 0b0000'0000'0111'1000, /* Bits 3..6: Type promotion rank. */
+  FLAG_NUMERIC = 0b0000'0000'1000'0000, /* Bit 7:  Numeric flag. */
+  FLAG_INTEGER = 0b0000'0001'0000'0000, /* Bit 8:  Integer flag. */
+  MATRIX_MASK  = 0b0000'1110'0000'0000, /* Bit 9..11: Matrix column length (2..4). */
+  FLAG_SIGN    = 0b0001'0000'0000'0000, /* Bit 12: Signedness bit. */
   /* clang-format on */
 
-  BASE_MASK = FLAG_NUMERIC | FLAG_INTEGER | MATRIX_MASK | RANK_MASK,
+  BASE_MASK = FLAG_NUMERIC | FLAG_INTEGER | MATRIX_MASK | FLAG_SIGN | RANK_MASK,
 
   /* Base Type Encodings */
   CLASS_BOOL = (0 << RANK_SHIFT),
-  CLASS_CHAR = (1 << RANK_SHIFT) | FLAG_NUMERIC | FLAG_INTEGER,
+  CLASS_CHAR = (1 << RANK_SHIFT) | FLAG_NUMERIC | FLAG_INTEGER | FLAG_SIGN,
   CLASS_UCHAR = (2 << RANK_SHIFT) | FLAG_NUMERIC | FLAG_INTEGER,
-  CLASS_SHORT = (3 << RANK_SHIFT) | FLAG_NUMERIC | FLAG_INTEGER,
+  CLASS_SHORT = (3 << RANK_SHIFT) | FLAG_NUMERIC | FLAG_INTEGER | FLAG_SIGN,
   CLASS_USHORT = (4 << RANK_SHIFT) | FLAG_NUMERIC | FLAG_INTEGER,
-  CLASS_INT = (5 << RANK_SHIFT) | FLAG_NUMERIC | FLAG_INTEGER,
+  CLASS_INT = (5 << RANK_SHIFT) | FLAG_NUMERIC | FLAG_INTEGER | FLAG_SIGN,
   CLASS_UINT = (6 << RANK_SHIFT) | FLAG_NUMERIC | FLAG_INTEGER,
   CLASS_HALF = (7 << RANK_SHIFT) | FLAG_NUMERIC,
   CLASS_FLOAT = (8 << RANK_SHIFT) | FLAG_NUMERIC,

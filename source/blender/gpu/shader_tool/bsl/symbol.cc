@@ -540,6 +540,13 @@ struct SymbolParser : NodeErrorHandler {
       cls->builtin_class = underlying_type->builtin_class;
       cls->is_std140_compatible = cls->size == 4;
       cls->is_std430_compatible = cls->size == 4;
+
+      /* Create scalar constructor. */
+      SymbolFunction *ctor = table.fun_arena.alloc(
+          &scope, decl.front(), cls, cls->original, SymbolFunction::Type::GLOBAL);
+      ctor->add_argument(cls);
+      ctor->is_builtin = true;
+      scope.function_emplace(ctor, true);
     }
     else {
       cls->ensure_size_and_align();

@@ -126,8 +126,16 @@ ClassId binary_operator_return_type(SymbolClass *lhs, TokenType op, SymbolClass 
 
   /* Equality (==, !=): Scalars of exact matching base types only. */
   if (o & OP_EQUALITY) {
-    return (l_len == 1 && r_len == 1 && (l & BASE_MASK) == (r & BASE_MASK)) ? ClassId::bool_t :
-                                                                              ClassId::Invalid;
+    /* Comparing float to int is not allowed. */
+    if ((l & FLAG_INTEGER) != (r & FLAG_INTEGER)) {
+      return ClassId::Invalid;
+    }
+    /* Comparing integers of different signedness is not allowed. */
+    if ((l & FLAG_SIGN) != (r & FLAG_SIGN)) {
+      /* TODO. Codebase still uses this. Patch it all at once. */
+      // return ClassId::Invalid;
+    }
+    return (l_len == 1 && r_len == 1) ? ClassId::bool_t : ClassId::Invalid;
   }
 
   /* Relational (<, >, <=, >=): Scalar numerics only. */
