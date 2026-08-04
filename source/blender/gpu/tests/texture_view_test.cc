@@ -190,7 +190,7 @@ GPU_OPENGL_TEST(texture_view_SFLOAT_32_32_32_32);
 static void test_texture_view_SFLOAT_32_32()
 {
   if (GPU_type_matches_ex(GPU_DEVICE_ATI, GPU_OS_ANY, GPU_DRIVER_ANY, GPU_BACKEND_OPENGL)) {
-    // GTEST_SKIP() << "Broken on AMD.";
+    GTEST_SKIP() << "Broken on AMD.";
   }
 
   texture_view_create_format_test<TextureFormat::SFLOAT_32_32, TextureFormat::SFLOAT_32_32>();
@@ -208,7 +208,7 @@ GPU_OPENGL_TEST(texture_view_SFLOAT_32_32);
 static void test_texture_view_SFLOAT_32()
 {
   if (GPU_type_matches_ex(GPU_DEVICE_ATI, GPU_OS_ANY, GPU_DRIVER_ANY, GPU_BACKEND_OPENGL)) {
-    // GTEST_SKIP() << "Broken on AMD.";
+    GTEST_SKIP() << "Broken on AMD.";
   }
 
   texture_view_create_format_test<TextureFormat::SFLOAT_32, TextureFormat::SFLOAT_32>();
@@ -237,7 +237,7 @@ GPU_OPENGL_TEST(texture_view_SFLOAT_32);
 static void test_texture_view_SFLOAT_16()
 {
   if (GPU_type_matches_ex(GPU_DEVICE_ATI, GPU_OS_ANY, GPU_DRIVER_ANY, GPU_BACKEND_OPENGL)) {
-    // GTEST_SKIP() << "Broken on AMD.";
+    GTEST_SKIP() << "Broken on AMD.";
   }
 
   texture_view_create_format_test<TextureFormat::SFLOAT_16, TextureFormat::SFLOAT_16>();
@@ -266,8 +266,8 @@ static void test_texture_view_mip_layer_test()
   if (GPU_type_matches_ex(
           GPU_DEVICE_ATI | GPU_DEVICE_INTEL, GPU_OS_ANY, GPU_DRIVER_ANY, GPU_BACKEND_OPENGL))
   {
-    // GTEST_SKIP()
-    //     << "GL Texture Views are quite broken in all drivers. Only Nvidia passes this test.";
+    GTEST_SKIP()
+        << "GL Texture Views are quite broken in all drivers. Only Nvidia passes this test.";
   }
 
   GPU_render_begin();
