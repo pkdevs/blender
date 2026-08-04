@@ -532,6 +532,7 @@ static void rna_userdef_asset_library_use_auth_token_update(bContext * /*C*/, Po
   const bool use_auth_token = (library->flag & ASSET_LIBRARY_USE_AUTH_TOKEN) != 0;
 
   if (!use_auth_token && library->auth_token) {
+    /* Make sure the token is wiped if we are not using it. */
     rna_userdef_asset_library_auth_token_set(ptr, "");
   }
 }
