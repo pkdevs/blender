@@ -16,7 +16,7 @@
 #include "BLI_string.hh"
 #include "BLI_sys_types.hh" /* for bool */
 
-#include "RNA_path.hh"
+#include "RNA_path_fwd.hh"
 
 #include <string>
 

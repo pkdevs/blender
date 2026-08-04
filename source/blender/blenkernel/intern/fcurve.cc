@@ -2670,6 +2670,7 @@ void BKE_fcurve_blend_read_data(BlendDataReader *reader, FCurve *fcu)
 
   /* rna path */
   BLO_read_string(reader, &fcu->rna_path_ptr);
+  fcu->runtime->parsed_rna_path = ParsedRNAPath<>::from_string(fcu->rna_path_ptr);
 
   /* group */
   BLO_read_struct(reader, bActionGroup, &fcu->grp);

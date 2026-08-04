@@ -23,18 +23,13 @@ namespace blender::animrig {
  */
 class PropIdentifier {
  public:
-  /**
-   * The pre-parsed RNA path of the property.'
-   * Ideally this would be cached right next to the rna-path it's created from (e.g. on the
-   * FCurve).
-   */
   ParsedRNAPathRef rna_path;
   int array_index;
 
   PropIdentifier() = default;
 
-  PropIdentifier(ParsedRNAPathRef rna_path, const int array_index)
-      : rna_path(std::move(rna_path)), array_index(array_index)
+  PropIdentifier(const ParsedRNAPathRef rna_path, const int array_index)
+      : rna_path(rna_path), array_index(array_index)
   {
   }
 
@@ -99,20 +94,14 @@ class EvaluationResult {
     result_.reserve(size);
   };
 
-  void store(ParsedRNAPathRef rna_path,
+  void store(const ParsedRNAPathRef rna_path,
              const int array_index,
              const float value,
              PathResolvedRNA prop_rna)
   {
-    result_.add_overwrite(PropIdentifier(std::move(rna_path), array_index),
+    result_.add_overwrite(PropIdentifier(rna_path, array_index),
                           AnimatedProperty(value, std::move(prop_rna)));
   }
-
-  // AnimatedProperty value(const StringRefNull rna_path, const int array_index) const
-  // {
-  //   PropIdentifier key(rna_path, array_index);
-  //   return result_.lookup(key);
-  // }
 
   const AnimatedProperty *lookup_ptr(const PropIdentifier &key) const
   {

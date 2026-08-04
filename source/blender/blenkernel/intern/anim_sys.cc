@@ -397,11 +397,10 @@ bool BKE_animsys_rna_path_resolve(
   return true;
 }
 
-bool BKE_animsys_rna_path_resolve(
-    PointerRNA *ptr, /* typically 'fcu->rna_path', 'fcu->array_index' */
-    const char *rna_path,
-    const int array_index,
-    PathResolvedRNA *r_result)
+bool BKE_animsys_rna_path_resolve(PointerRNA *ptr,
+                                  const char *rna_path,
+                                  const int array_index,
+                                  PathResolvedRNA *r_result)
 {
   if (rna_path == nullptr) {
     return false;

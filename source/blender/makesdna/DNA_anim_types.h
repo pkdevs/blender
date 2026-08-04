@@ -13,8 +13,6 @@
 #include "DNA_curve_types.h"
 #include "DNA_listBase.h"
 
-// #include "RNA_path_fwd.hh"
-
 #include <type_traits>
 #include <variant>
 
@@ -27,21 +25,14 @@ struct NlaStripRuntime;
 }  // namespace bke
 using FCurveRuntime = bke::FCurveRuntime;
 using NlaStripRuntime = bke::NlaStripRuntime;
-
 template<typename T> class Span;
-
 namespace rna_path {
-
 struct Member;
 struct LookupIndex;
 struct LookupKey;
-
 using Item = std::variant<Member, LookupIndex, LookupKey>;
-
 }  // namespace rna_path
-
 using ParsedRNAPathRef = Span<rna_path::Item>;
-
 #else
 typedef struct FCurveRuntime FCurveRuntime;
 typedef struct NlaStripRuntime NlaStripRuntime;
