@@ -939,7 +939,7 @@ NodeTreeLogger &NodesEvalLog::get_local_tree_logger(const ComputeContext &comput
                &compute_context))
   {
     tree_logger.parent_node_id.emplace(context->output_node_id());
-    tree_logger.context_type = NodeTreeLogger::ContextType::Zone;
+    tree_logger.context_type = NodeTreeLogger::ContextType::SimulationZone;
     tree_logger.tree_orig_session_uid = parent_tree_session_uid;
   }
   else if (const auto *context = dynamic_cast<const bke::EvaluateClosureComputeContext *>(
@@ -1170,28 +1170,40 @@ Span<debug_view::Candidate> NodesEvalLog::debug_view_candidates()
         const NodeTreeLogger *context_logger = &tree_logger;
         while (context_logger) {
           if (context_logger->context_type == NodeTreeLogger::ContextType::Zone) {
+            /* Repeat, foreach, and closure contexts cannot be represented by one stable Debug
+             * View candidate. */
             supported_context = false;
             break;
           }
-          if (!context_logger->tree_orig_session_uid) {
-            supported_context = false;
-            break;
-          }
-          reversed_tree_session_uids.append(*context_logger->tree_orig_session_uid);
-          if (context_logger->context_type == NodeTreeLogger::ContextType::Group) {
+          if (context_logger->context_type == NodeTreeLogger::ContextType::SimulationZone) {
+            /* A simulation zone is part of its parent tree. Its stable output-node identity is
+             * already part of the compute context hash, so it must not add a duplicate tree
+             * lineage entry or a per-zone presentation level. */
             if (!context_logger->parent_node_id) {
               supported_context = false;
               break;
             }
-            reversed_sort_order.append(context_logger->context_order);
-            reversed_context_names.append(context_logger->context_name);
           }
           else {
-            /* The first non-group tree logger is the root tree. Its parent is the
-             * object/data-block
-             * compute context, which intentionally has no
-             * node-tree identity. */
-            break;
+            if (!context_logger->tree_orig_session_uid) {
+              supported_context = false;
+              break;
+            }
+            reversed_tree_session_uids.append(*context_logger->tree_orig_session_uid);
+            if (context_logger->context_type == NodeTreeLogger::ContextType::Group) {
+              if (!context_logger->parent_node_id) {
+                supported_context = false;
+                break;
+              }
+              reversed_sort_order.append(context_logger->context_order);
+              reversed_context_names.append(context_logger->context_name);
+            }
+            else {
+              /* The first non-group tree logger is the root tree. Its parent is the
+               * object/data-block compute context, which intentionally has no node-tree identity.
+               */
+              break;
+            }
           }
           if (!context_logger->parent_hash) {
             supported_context = false;

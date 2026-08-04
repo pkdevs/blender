@@ -321,6 +321,7 @@ class NodeTreeLogger {
   enum class ContextType {
     Other,
     Group,
+    SimulationZone,
     Zone,
   };
 
