@@ -934,7 +934,12 @@ struct SymbolParser : NodeErrorHandler {
       }
 
       if (sym->is_constexpr) {
-        sym->value = initialize_constexpr(scope, sym->type, decl);
+        ExpressionResult result = initialize_constexpr(scope, sym->type, decl);
+        /* For now demote constexpr if we couldn't deduce its value. */
+        if (result.is_constexpr()) {
+          sym->value = result.value;
+        }
+
         if (!sym->is_static) {
           if (sym->parent_class()) {
             error(var.type(), Diag::NonStaticConstexprMember);
@@ -985,13 +990,16 @@ struct SymbolParser : NodeErrorHandler {
     return result;
   }
 
-  ConstexprValue initialize_constexpr(const SymbolScope &scope, SymbolClass *cls, Declarator decl)
+  ExpressionResult initialize_constexpr(const SymbolScope &scope,
+                                        SymbolClass *cls,
+                                        Declarator decl)
   {
     if (cls != table.int_cls && cls != table.uint_cls && cls != table.bool_cls &&
         cls != table.float_cls)
     {
-      error(decl, Diag::ConstexprVarMustBeIntOrUint);
-      return 0;
+      /* TODO: Currently creates too many false positive. */
+      // error(decl, Diag::ConstexprVarMustBeIntOrUint);
+      return {table.err_cls};
     }
 
     ExpressionResult result = cls;
@@ -1003,9 +1011,10 @@ struct SymbolParser : NodeErrorHandler {
     }
 
     if (!result.is_constexpr()) {
-      error(decl, Diag::ConstexprVarMustBeInitializedByConstantExpr, decl.identifier().str());
+      /* TODO: Currently creates too many false positive. */
+      // error(decl, Diag::ConstexprVarMustBeInitializedByConstantExpr, decl.identifier().str());
     }
-    return result.value;
+    return result;
   }
 
   struct AnonScopePrefix {
