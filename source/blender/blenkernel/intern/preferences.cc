@@ -88,9 +88,7 @@ bUserAssetLibrary *BKE_preferences_asset_library_add(UserDef *userdef,
 
 void BKE_preferences_asset_library_remove(UserDef *userdef, bUserAssetLibrary *library)
 {
-  if (library->auth_token) {
-    MEM_delete(library->auth_token);
-  }
+  MEM_delete(library->auth_token);
   BLI_freelinkN(&userdef->asset_libraries, library);
 }
 

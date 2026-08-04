@@ -46,7 +46,7 @@ def download_asset_file(
         identifier of this library (to create a downloader per library), as well
         as for resolving relative URLs.
 
-    :param asset_library_auth_token: Authentication tokens optionally required by some servers.
+    :param asset_library_auth_token: Optional authentication token for bearer authentication.
 
     :param asset_library_local_path: Root path of the local asset cache. Used to
         resolve relative `save_to` paths, but also to find the HTTP metadata

@@ -40,9 +40,6 @@ struct RemoteLibraryDefinitionRef {
   }
 };
 
-// RemoteLibraryDefinitionRef(/*...other args...*/, std::optional<StringRefNull> auth_token =
-// std::nullopt)
-
 constexpr StringRefNull REMOTE_LIBRARY_TOP_META_FILE_NAME = "_asset-library-meta.json";
 constexpr StringRefNull REMOTE_LIBRARY_TOP_META_FILE_NAME_LEADING_SLASH =
     "/_asset-library-meta.json";

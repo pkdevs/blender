@@ -38,6 +38,7 @@
 #include "BKE_idprop.hh"
 #include "BKE_main.hh"
 #include "BKE_node.hh"
+#include "BKE_preferences.h"
 #include "BKE_screen.hh"
 #include "BKE_studiolight.h"
 
@@ -378,11 +379,11 @@ void BKE_blender_userdef_data_free(UserDef *userdef, bool clear_fonts)
   userdef->autoexec_paths.free_no_destruct();
   userdef->script_directories.free_no_destruct();
 
-  for (bUserAssetLibrary &library_ref : userdef->asset_libraries.items_mutable()) {
-    MEM_SAFE_DELETE(library_ref.auth_token);
-    MEM_delete(&library_ref);
+  while (bUserAssetLibrary *library = static_cast<bUserAssetLibrary *>(
+             userdef->asset_libraries.first))
+  {
+    BKE_preferences_asset_library_remove(userdef, library);
   }
-  userdef->asset_libraries.clear_no_delete();
 
   for (bUserExtensionRepo &repo_ref : userdef->extension_repos.items_mutable()) {
     MEM_SAFE_DELETE(repo_ref.access_token);

@@ -489,25 +489,9 @@ static void rna_userdef_asset_libraries_use_online_essentials_update(bContext *C
   rna_userdef_update(CTX_data_main(C), CTX_data_scene(C), ptr);
 }
 
-static void rna_userdef_asset_library_use_auth_token_update(bContext * /*C*/, PointerRNA *ptr)
-{
-  bUserAssetLibrary *library = (bUserAssetLibrary *)ptr->data;
-  const bool use_auth_token = (library->flag & ASSET_LIBRARY_USE_AUTH_TOKEN) != 0;
-
-  if (!use_auth_token && library->auth_token) {
-    /* Replace the existing token with random characters to avoid leaving it in memory. */
-    RNG *rng = BLI_rng_new_srandom(uint(intptr_t(library->auth_token)));
-    BLI_rng_get_char_n(rng, library->auth_token, strlen(library->auth_token));
-    BLI_rng_free(rng);
-    /* Now we can more comfortably delete the token. */
-    MEM_delete(library->auth_token);
-    library->auth_token = nullptr;
-  }
-}
-
 static void rna_userdef_asset_library_auth_token_get(PointerRNA *ptr, char *value)
 {
-  bUserAssetLibrary *library = (bUserAssetLibrary *)ptr->data;
+  bUserAssetLibrary *library = static_cast<bUserAssetLibrary *>(ptr->data);
   if (library->auth_token) {
     strcpy(value, library->auth_token);
   }
@@ -518,17 +502,38 @@ static void rna_userdef_asset_library_auth_token_get(PointerRNA *ptr, char *valu
 
 static int rna_userdef_asset_library_auth_token_length(PointerRNA *ptr)
 {
-  bUserAssetLibrary *library = (bUserAssetLibrary *)ptr->data;
+  bUserAssetLibrary *library = static_cast<bUserAssetLibrary *>(ptr->data);
   return (library->auth_token) ? strlen(library->auth_token) : 0;
 }
 
 static void rna_userdef_asset_library_auth_token_set(PointerRNA *ptr, const char *value)
 {
-  bUserAssetLibrary *library = (bUserAssetLibrary *)ptr->data;
+  bUserAssetLibrary *library = static_cast<bUserAssetLibrary *>(ptr->data);
+
   if (library->auth_token) {
+    /* Replace the existing token with random characters to avoid leaving it in memory. */
+    RNG *rng = BLI_rng_new_srandom(uint(intptr_t(library->auth_token)));
+    BLI_rng_get_char_n(rng, library->auth_token, strlen(library->auth_token));
+    BLI_rng_free(rng);
+    /* Now we can more comfortably delete the token. */
     MEM_delete(library->auth_token);
+    library->auth_token = nullptr;
   }
-  library->auth_token = value[0] ? BLI_strdup(value) : nullptr;
+
+  if (value[0]) {
+    const StringRef auth_token = StringRef{value}.trim();
+    library->auth_token = BLI_strdupn(auth_token.data(), auth_token.size());
+  }
+}
+
+static void rna_userdef_asset_library_use_auth_token_update(bContext * /*C*/, PointerRNA *ptr)
+{
+  bUserAssetLibrary *library = static_cast<bUserAssetLibrary *>(ptr->data);
+  const bool use_auth_token = (library->flag & ASSET_LIBRARY_USE_AUTH_TOKEN) != 0;
+
+  if (!use_auth_token && library->auth_token) {
+    rna_userdef_asset_library_auth_token_set(ptr, "");
+  }
 }
 
 /**

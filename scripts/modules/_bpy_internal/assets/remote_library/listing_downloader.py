@@ -251,7 +251,7 @@ class RemoteAssetListingDownloader:
            blender_asset_library_openapi.yaml for the files downloaded from
            there.
 
-        :param auth_token: Authentication token optionally required by some servers.
+        :param asset_library_auth_token: Optional authentication token for bearer authentication.
 
         :param local_path: The directory to download the index files to.
 
