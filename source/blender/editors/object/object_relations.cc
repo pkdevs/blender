@@ -2153,13 +2153,19 @@ static void single_mat_users(
 
   FOREACH_OBJECT_FLAG_BEGIN (bmain, scene, view_layer, v3d, flag, ob) {
     if (BKE_id_is_editable(bmain, &ob->id)) {
+      const bool is_obdata_editable = ob->data ? BKE_id_is_editable(bmain, ob->data) : false;
       for (a = 1; a <= ob->totcol; a++) {
+        if (!ob->matbits[a - 1] && !is_obdata_editable) {
+          /* Cannot edit material usage of obdata if it's not editable (e.g. local object using a
+           * linked mesh). See also #161211. */
+          continue;
+        }
         ma = BKE_object_material_get(ob, short(a));
         if (single_data_needs_duplication(&ma->id)) {
           man = id_cast<Material *>(
               BKE_id_copy_ex(bmain, &ma->id, nullptr, LIB_ID_COPY_DEFAULT | LIB_ID_COPY_ACTIONS));
           man->id.us = 0;
-          BKE_object_material_assign(bmain, ob, man, short(a), BKE_MAT_ASSIGN_USERPREF);
+          BKE_object_material_assign(bmain, ob, man, short(a), BKE_MAT_ASSIGN_EXISTING);
         }
       }
     }
@@ -3190,7 +3196,7 @@ static wmOperatorStatus drop_geometry_nodes_invoke(bContext *C,
 
   nmd->node_group = node_tree;
   id_us_plus(&node_tree->id);
-  MOD_nodes_update_interface(ob, nmd);
+  MOD_nodes_update_interface(*bmain, ob, nmd);
 
   DEG_id_tag_update(&ob->id, ID_RECALC_GEOMETRY);
   WM_event_add_notifier(C, NC_OBJECT | ND_MODIFIER, nullptr);

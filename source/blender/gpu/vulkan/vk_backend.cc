@@ -28,6 +28,7 @@
 #include "vk_index_buffer.hh"
 #include "vk_pixel_buffer.hh"
 #include "vk_query.hh"
+#include "vk_ray_tracing.hh"
 #include "vk_shader.hh"
 #include "vk_state_manager.hh"
 #include "vk_storage_buffer.hh"
@@ -349,6 +350,7 @@ void VKBackend::supported_devices_print(FILE *fp)
     fprintf(fp, "Unable to initialize a Vulkan 1.2 instance.\n");
     return;
   }
+  volkLoadInstanceOnly(vk_instance);
 
   uint32_t physical_devices_count = 0;
   vkEnumeratePhysicalDevices(vk_instance, &physical_devices_count, nullptr);
@@ -534,6 +536,7 @@ void VKBackend::detect_workarounds(VKDevice &device)
     extensions.wide_lines = false;
     extensions.line_rasterization = false;
     extensions.extended_dynamic_state = false;
+    GCaps.ray_query_support = false;
     GCaps.stencil_export_support = false;
     GCaps.texture_pool_workaround = true;
 
@@ -804,6 +807,15 @@ VertBuf *VKBackend::vertbuf_alloc()
   return new VKVertexBuffer();
 }
 
+TopLevelAS *VKBackend::tlas_alloc(const char *name)
+{
+  return new VKTopLevelAS(name);
+}
+BottomLevelAS *VKBackend::blas_alloc(const char *name)
+{
+  return new VKBottomLevelAS(name);
+}
+
 void VKBackend::render_begin()
 {
   VKThreadData &thread_data = device.current_thread_data();
@@ -857,6 +869,11 @@ void VKBackend::capabilities_init(VKDevice &device)
   GCaps.geometry_shader_support = true;
   GCaps.stencil_export_support = device.supports_extension(
       VK_EXT_SHADER_STENCIL_EXPORT_EXTENSION_NAME);
+  GCaps.ray_query_support =
+      device.supports_extension(VK_KHR_RAY_QUERY_EXTENSION_NAME) &&
+      device.physical_device_acceleration_structure_properties_get().maxGeometryCount > 0 &&
+      device.physical_device_acceleration_structure_properties_get().maxPrimitiveCount > 0 &&
+      device.physical_device_acceleration_structure_properties_get().maxInstanceCount > 0;
 
   GCaps.max_texture_size = max_ii(limits.maxImageDimension1D, limits.maxImageDimension2D);
   GCaps.max_texture_3d_size = min_uu(limits.maxImageDimension3D, INT_MAX);
