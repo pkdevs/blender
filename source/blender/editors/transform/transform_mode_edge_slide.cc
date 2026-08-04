@@ -53,14 +53,16 @@ struct EdgeSlideData {
   Array<TransDataEdgeSlideVert> sv;
 
   Vector<BMVert *> original_verts;
-
-  struct CloneChainEdge {
-    BMVert *v1, *v2;
-  };
-  Vector<CloneChainEdge> clone_chain_edges;
+  /* The selected chain edges, as index pairs into #original_verts. */
+  Vector<int2> clone_chain_edges;
 
   int mval_start[2], mval_end[2];
   int curr_sv_index;
+
+  BMVert *clone_vert(const int i) const
+  {
+    return static_cast<BMVert *>(this->sv[i].td->extra);
+  }
 
  private:
   float4x4 proj_mat;
@@ -458,7 +460,7 @@ static void freeEdgeSlideVerts(TransInfo *t, TransDataContainer *tc, TransCustom
 
     /* Remove the clones and restore the original selection that was replaced on init. */
     for (const int i : sld->original_verts.index_range()) {
-      BM_vert_kill(bm, static_cast<BMVert *>(sld->sv[i].td->extra));
+      BM_vert_kill(bm, sld->clone_vert(i));
       BM_elem_flag_enable(sld->original_verts[i], BM_ELEM_SELECT);
     }
     EDBM_selectmode_flush(em);
@@ -594,8 +596,8 @@ static Vector<CloneVertInfo> edge_slide_clone_verts_calc(const EdgeSlideData *sl
 {
   Set<BMEdge *> chain_edge_set;
   chain_edge_set.reserve(sld->clone_chain_edges.size());
-  for (const EdgeSlideData::CloneChainEdge &ce : sld->clone_chain_edges) {
-    if (BMEdge *e = BM_edge_exists(ce.v1, ce.v2)) {
+  for (const int2 &ce : sld->clone_chain_edges) {
+    if (BMEdge *e = BM_edge_exists(sld->original_verts[ce[0]], sld->original_verts[ce[1]])) {
       chain_edge_set.add(e);
     }
   }
@@ -765,12 +767,6 @@ static void edge_slide_draw_clone(const EdgeSlideData *sld, const uint pos, cons
     return;
   }
 
-  Map<BMVert *, BMVert *> orig_to_clone;
-  orig_to_clone.reserve(sld->sv.size());
-  for (const int i : sld->original_verts.index_range()) {
-    orig_to_clone.add(sld->original_verts[i], static_cast<BMVert *>(sld->sv[i].td->extra));
-  }
-
   /* The guide that ran before this may have left another program bound. */
   immUnbindProgram();
 
@@ -781,18 +777,14 @@ static void edge_slide_draw_clone(const EdgeSlideData *sld, const uint pos, cons
   immUniform1f("lineWidth", line_size * U.pixelsize);
   immUniformThemeColor3(TH_GIZMO_PRIMARY);
 
-  Set<BMVert *> chained_verts;
+  Set<int> chained_verts;
   if (!sld->clone_chain_edges.is_empty()) {
-    immBeginAtMost(GPU_PRIM_LINES, sld->clone_chain_edges.size() * 2);
-    for (const EdgeSlideData::CloneChainEdge &ce : sld->clone_chain_edges) {
-      BMVert *v1_clone = orig_to_clone.lookup_default(ce.v1, nullptr);
-      BMVert *v2_clone = orig_to_clone.lookup_default(ce.v2, nullptr);
-      if (v1_clone && v2_clone) {
-        chained_verts.add(ce.v1);
-        chained_verts.add(ce.v2);
-        immVertex3fv(pos, v1_clone->co);
-        immVertex3fv(pos, v2_clone->co);
-      }
+    immBegin(GPU_PRIM_LINES, sld->clone_chain_edges.size() * 2);
+    for (const int2 &ce : sld->clone_chain_edges) {
+      chained_verts.add(ce[0]);
+      chained_verts.add(ce[1]);
+      immVertex3fv(pos, sld->clone_vert(ce[0])->co);
+      immVertex3fv(pos, sld->clone_vert(ce[1])->co);
     }
     immEnd();
   }
@@ -804,8 +796,8 @@ static void edge_slide_draw_clone(const EdgeSlideData *sld, const uint pos, cons
     GPU_point_size(ui::theme::get_value_f(TH_FACEDOT_SIZE) + 1.5f);
     immBeginAtMost(GPU_PRIM_POINTS, sld->original_verts.size());
     for (const int i : sld->original_verts.index_range()) {
-      if (!chained_verts.contains(sld->original_verts[i])) {
-        immVertex3fv(pos, static_cast<BMVert *>(sld->sv[i].td->extra)->co);
+      if (!chained_verts.contains(i)) {
+        immVertex3fv(pos, sld->clone_vert(i)->co);
       }
     }
     immEnd();
@@ -1302,8 +1294,8 @@ void transform_mode_edge_slide_clone_confirm(TransInfo *t)
 
     Map<BMVert *, BMVert *> orig_to_clone;
     orig_to_clone.reserve(sld->sv.size());
-    for (int i = 0; i < int(sld->sv.size()); i++) {
-      orig_to_clone.add(sld->original_verts[i], static_cast<BMVert *>(sld->sv[i].td->extra));
+    for (const int i : sld->original_verts.index_range()) {
+      orig_to_clone.add(sld->original_verts[i], sld->clone_vert(i));
     }
 
     /* Separate keep-side face loops from each original vert. */
@@ -1402,23 +1394,25 @@ void transform_mode_edge_slide_clone_confirm(TransInfo *t)
     }
 
     /* Create band faces from original vertices to the separated vertices. */
-    for (const EdgeSlideData::CloneChainEdge &ce : sld->clone_chain_edges) {
-      BMVert *v_sep1 = orig_to_sep.lookup_default(ce.v1, nullptr);
-      BMVert *v_sep2 = orig_to_sep.lookup_default(ce.v2, nullptr);
+    for (const int2 &ce : sld->clone_chain_edges) {
+      BMVert *v_orig1 = sld->original_verts[ce[0]];
+      BMVert *v_orig2 = sld->original_verts[ce[1]];
+      BMVert *v_sep1 = orig_to_sep.lookup_default(v_orig1, nullptr);
+      BMVert *v_sep2 = orig_to_sep.lookup_default(v_orig2, nullptr);
 
       if (!v_sep1 || !v_sep2) {
         continue;
       }
 
       BMEdge *e_sep = BM_edge_exists(v_sep1, v_sep2);
-      BMEdge *e_orig = BM_edge_exists(ce.v1, ce.v2);
+      BMEdge *e_orig = BM_edge_exists(v_orig1, v_orig2);
 
       /* The band fills the area the keep side face vacated, so it inherits that face's attributes */
       BMFace *f_example = (e_sep && e_sep->l)   ? e_sep->l->f :
                           (e_orig && e_orig->l) ? e_orig->l->f :
                                                   nullptr;
 
-      BMVert *quad[4] = {ce.v1, v_sep1, v_sep2, ce.v2};
+      BMVert *quad[4] = {v_orig1, v_sep1, v_sep2, v_orig2};
       BMFace *f_band = BM_face_create_verts(bm, quad, 4, f_example, BM_CREATE_NOP, true);
       if (f_band) {
         BM_elem_flag_disable(f_band, BM_ELEM_HIDDEN);
@@ -1585,12 +1579,14 @@ void transform_mode_edge_slide_clone_confirm(TransInfo *t)
           BM_vert_select_set(bm, v_sep, true);
         }
       }
-      for (const EdgeSlideData::CloneChainEdge &ce : sld->clone_chain_edges) {
-        if (BMEdge *e_orig = BM_edge_exists(ce.v1, ce.v2)) {
+      for (const int2 &ce : sld->clone_chain_edges) {
+        BMVert *v_orig1 = sld->original_verts[ce[0]];
+        BMVert *v_orig2 = sld->original_verts[ce[1]];
+        if (BMEdge *e_orig = BM_edge_exists(v_orig1, v_orig2)) {
           BM_edge_select_set(bm, e_orig, false);
         }
-        BMVert *v_sep1 = orig_to_sep.lookup_default(ce.v1, nullptr);
-        BMVert *v_sep2 = orig_to_sep.lookup_default(ce.v2, nullptr);
+        BMVert *v_sep1 = orig_to_sep.lookup_default(v_orig1, nullptr);
+        BMVert *v_sep2 = orig_to_sep.lookup_default(v_orig2, nullptr);
         if (v_sep1 && v_sep2) {
           if (BMEdge *e_new = BM_edge_exists(v_sep1, v_sep2)) {
             BM_edge_select_set(bm, e_new, true);
@@ -1692,16 +1688,17 @@ static void initEdgeSlide_ex(TransInfo *t,
         BMEditMesh *em = BKE_editmesh_from_object(tc->obedit);
         BMesh *bm = em->bm;
 
-        Map<BMVert *, BMVert *> vert_map;
-        vert_map.reserve(sld->sv.size());
+        Map<BMVert *, int> vert_index;
+        vert_index.reserve(sld->sv.size());
 
-        for (TransDataEdgeSlideVert &sv : sld->sv) {
+        for (const int i : sld->sv.index_range()) {
+          TransDataEdgeSlideVert &sv = sld->sv[i];
           /* duplicate bmesh verts */
           BMVert *v = static_cast<BMVert *>(sv.td->extra);
           BMVert *v_clone = BM_vert_create(bm, v->co, v, BM_CREATE_NOP);
 
           sld->original_verts.append(v);
-          vert_map.add(v, v_clone);
+          vert_index.add(v, i);
 
           /* transform clones, not originals */
           BM_elem_flag_disable(v, BM_ELEM_SELECT);
@@ -1711,27 +1708,24 @@ static void initEdgeSlide_ex(TransInfo *t,
         }
 
         /* Recreate the selected chain edges between the clones. */
-        for (BMVert *v_orig : sld->original_verts) {
+        for (const int i : sld->original_verts.index_range()) {
+          BMVert *v_orig = sld->original_verts[i];
           BMEdge *e;
           BMIter e_iter;
           BM_ITER_ELEM (e, &e_iter, v_orig, BM_EDGES_OF_VERT) {
             if (e->v1 != v_orig || !BM_elem_flag_test(e, BM_ELEM_SELECT)) {
               continue;
             }
-            BMVert *v1 = vert_map.lookup_default(e->v1, nullptr);
-            BMVert *v2 = vert_map.lookup_default(e->v2, nullptr);
-
-            if (v1 && v2) {
-              BM_edge_create(bm, v1, v2, e, BM_CREATE_NOP);
-              sld->clone_chain_edges.append({e->v1, e->v2});
+            if (const int *i_other = vert_index.lookup_ptr(e->v2)) {
+              BM_edge_create(bm, sld->clone_vert(i), sld->clone_vert(*i_other), e, BM_CREATE_NOP);
+              sld->clone_chain_edges.append({i, *i_other});
             }
           }
         }
 
-        /* Keep the clones out of the evaluated mesh, the overlay draws them.
-         * Runs after the chain edges exist so they are hidden along with the verts. */
-        for (BMVert *v_orig : sld->original_verts) {
-          BM_vert_hide_set(vert_map.lookup(v_orig), true);
+        /* Keep the clones out of the evaluated mesh, the overlay draws them. */
+        for (const int i : sld->original_verts.index_range()) {
+          BM_vert_hide_set(sld->clone_vert(i), true);
         }
 
         EDBM_selectmode_flush(em);
