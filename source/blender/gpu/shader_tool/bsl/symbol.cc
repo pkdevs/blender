@@ -888,7 +888,7 @@ struct SymbolParser : NodeErrorHandler {
           ExpressionResult result =
               table.expr_type_analysis(scope, stmt.expr().child_first(), true).unwrap(this);
 
-          if (result.is_temporary) {
+          if (result.is_temporary && !result.type->is_srt()) {
             error(decl, Diag::ReferenceCannotBindTemporary);
           }
           else if (type != result.type) {

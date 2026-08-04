@@ -163,6 +163,7 @@ struct CodegenContext : NodeErrorHandler {
           return {left.str, left.type->operator_subscript->return_type};
         }
       }
+      ctx.error(t, Diag::SubscriptNotArray);
       return {t, ctx.table.err_cls};
     }
 

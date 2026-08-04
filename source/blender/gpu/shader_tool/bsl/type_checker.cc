@@ -68,6 +68,17 @@ struct ExpressionTypeParser
       }
       case ast::NodeType::FuncCall: {
         ast::FuncCall call = t;
+
+        /* Legacy BSL. */
+        if (call.identifier().str() == "resource_table_get") {
+          auto [param] = call.parameters().splat_1();
+          if (ast::LocalVar var = param.child_first(); var.is_valid()) {
+            return scope->lookup_class(*table, var.identifier()).unwrap(err);
+          }
+          error(call.parameters(), Diag::ExpectedOneTypename);
+          return {table->err_cls, 1, false};
+        }
+
         if (is_reference) {
           error(t, Diag::FunctionCallNotAllowedInReferenceDefinition);
         }
@@ -137,7 +148,8 @@ struct ExpressionTypeParser
     switch (right.type()) {
       case ast::NodeType::FuncCall: {
         ast::FuncCall call = right;
-        if (is_reference) {
+        /* The exception is for legacy BSL. */
+        if (is_reference && call.identifier().str() != "resource_table_get") {
           error(t, Diag::FunctionCallNotAllowedInReferenceDefinition);
         }
         auto sym = l->lookup_function(*table, call.identifier(), call.parameters(), *scope);

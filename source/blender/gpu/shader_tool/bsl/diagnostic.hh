@@ -232,6 +232,7 @@ enum class Diag {
   Redefinition,
   RedefinitionTemplate,
   CalledIsNotFunction,
+  SubscriptNotArray,
   InvalidNumberLiteral,
   EnumNotConstexpr,
   AmbiguousOverload,
@@ -527,6 +528,8 @@ static inline std::string_view diagnostic_message_get(Diag diag)
       return "Redefinition of '{}'";
     case Diag::CalledIsNotFunction:
       return "Called object type '{}' is not a function";
+    case Diag::SubscriptNotArray:
+      return "Subscripted value is not an array, pointer, or vector";
     case Diag::InvalidNumberLiteral:
       return "Unsupported literal";
     case Diag::EnumNotConstexpr:
