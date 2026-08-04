@@ -854,7 +854,7 @@ void wm_event_do_notifiers(bContext *C)
   GPU_render_end();
 }
 
-static bool wm_event_always_pass(const wmEvent *event)
+bool wm_event_always_pass(const wmEvent *event)
 {
   /* Some events we always pass on, to ensure proper communication. */
   return ISTIMER(event->type) || (event->type == WINDEACTIVATE);

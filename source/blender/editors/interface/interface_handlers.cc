@@ -2170,6 +2170,12 @@ static void selectcontext_apply(bContext *C,
 
 static bool but_drag_init(bContext *C, Button *but, HandleButtonData *data, const wmEvent *event)
 {
+  /* Prevent #TIMER events to initilize drag events wich can overlap with #KM_PRESS_DRAG events,
+   * see #161044.  */
+  if (wm_event_always_pass(event)) {
+    return false;
+  }
+
   /* prevent other WM gestures to start while we try to drag */
   WM_gestures_remove(CTX_wm_window(C));
 
