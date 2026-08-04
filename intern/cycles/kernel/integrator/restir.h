@@ -2,6 +2,8 @@
  *
  * SPDX-License-Identifier: Apache-2.0 */
 
+#pragma once
+
 #include "kernel/integrator/reservoir.h"
 #include "kernel/light/sample_reference.h"
 #include "kernel/integrator/state.h"
@@ -142,7 +144,8 @@ ccl_device_inline bool integrator_restir_unpack_reservoir(KernelGlobals kg,
 }
 
 ccl_device_inline void ray_setup(KernelGlobals kg,
-                                 ConstIntegratorState state,
+                                //  ConstIntegratorState state, // !!!: Wrong; causes template deduction
+                                 IntegratorState state,
                                  ccl_private Ray *ccl_restrict ray,
                                  const uint3 render_pixel_index)
 {
@@ -168,7 +171,8 @@ ccl_device_inline void ray_setup(KernelGlobals kg,
 }
 
 ccl_device_forceinline void shader_data_setup_from_restir(KernelGlobals kg,
-                                                          ConstIntegratorState state,
+                                                          // ConstIntegratorState state,
+                                                          IntegratorState state,
                                                           ccl_private SpatialReservoir *reservoir,
                                                           ccl_global float *ccl_restrict
                                                               render_buffer)
@@ -183,8 +187,9 @@ ccl_device_forceinline void shader_data_setup_from_restir(KernelGlobals kg,
 
   // !!!: PathRayVisibility path_visibility
   const PathRayVisibility path_visibility = INTEGRATOR_STATE(state, path, visibility);
+
   /* TODO(weizhen): what features are needed here? Is this the right state? */
-  surface_shader_eval<KERNEL_FEATURE_NODE_MASK_SURFACE_SHADOW>(
+  surface_shader_eval<KERNEL_FEATURE_NODE_MASK_SURFACE_SHADOW>( // !!!: The code path that pulls in OSL evaluation.
       kg, state, &reservoir->sd, render_buffer, path_visibility, reservoir->path_flag);
   /* TODO(weizhen): do we call `surface_shader_prepare_closures()` here? */
 }
@@ -268,6 +273,7 @@ ccl_device_inline bool streaming_di_samples(KernelGlobals kg,
                                             ccl_global float *ccl_restrict render_buffer)
 {
   PROFILING_INIT(kg, PROFILING_RESTIR_SPATIAL_RESAMPLING);
+
   /* Ping-pong between two reservoirs. */
   // const bool read_prev = state->spatial_iteration % 2;
   const bool read_prev = INTEGRATOR_STATE(state, path, spatial_iteration) % 2;
@@ -434,7 +440,7 @@ ccl_device void integrator_evaluate_final_samples(KernelGlobals kg, // DEVICE_KE
     return;
   }
 
-  shader_data_setup_from_restir(kg, state, &current, render_buffer);
+  shader_data_setup_from_restir(kg, state, &current, render_buffer); // !!!: 
 
   // light_sample_from_uv(kg, &current.sd, current.path_flag, &reservoir.ls); // !!!
   restir_light_sample_from_reference(
@@ -530,6 +536,7 @@ ccl_device void integrator_evaluate_restir_pt(KernelGlobals kg, // DEVICE_KERNEL
                                               ccl_global float *ccl_restrict render_buffer)
 {
   PROFILING_INIT(kg, PROFILING_RESTIR_SPATIAL_RESAMPLING);
+
   // const bool read_prev = state->spatial_iteration % 2;
   const bool read_prev = INTEGRATOR_STATE(state, path, spatial_iteration) % 2;
   

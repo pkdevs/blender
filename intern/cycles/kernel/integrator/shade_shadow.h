@@ -5,7 +5,6 @@
 #pragma once
 
 #include "kernel/integrator/guiding.h"
-// #include "kernel/integrator/restir.h"
 #include "kernel/integrator/shade_volume.h"
 #include "kernel/integrator/surface_shader.h"
 #include "kernel/integrator/volume_stack.h"

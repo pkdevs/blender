@@ -261,9 +261,9 @@ KERNEL_STRUCT_BEGIN(KernelImage, image)
 KERNEL_STRUCT_MEMBER(image, float, mip_bias)
 
 /* Padding. */
-KERNEL_STRUCT_MEMBER(image, int, pad1)
-KERNEL_STRUCT_MEMBER(image, int, pad2)
-KERNEL_STRUCT_MEMBER(image, int, pad3)
+// KERNEL_STRUCT_MEMBER(image, int, pad1)
+// KERNEL_STRUCT_MEMBER(image, int, pad2)
+// KERNEL_STRUCT_MEMBER(image, int, pad3)
 KERNEL_STRUCT_END(KernelImage)
 
 /* SVM. For shader specialization. */
