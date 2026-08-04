@@ -2,8 +2,6 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#include <memory>
-
 #include "BKE_sound_sample.hh"
 
 #include "NOD_socket_usage_inference.hh"
