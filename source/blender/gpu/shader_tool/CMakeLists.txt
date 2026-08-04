@@ -58,6 +58,7 @@ if(WITH_GTESTS)
     tests/expression_test.cc
     tests/flow_control_test.cc
     tests/function_test.cc
+    tests/grammar_test.cc
     tests/metadata_test.cc
     tests/namespace_test.cc
     tests/parser_test.cc
