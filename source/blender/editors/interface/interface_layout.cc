@@ -607,10 +607,10 @@ LayoutDirection Layout::local_direction() const
     case ItemType::LayoutOverlap:
     case ItemType::LayoutPanelHeader:
     case ItemType::LayoutGridFlow:
-    case ItemType::LayoutSplit:
       return LayoutDirection::Horizontal;
     case ItemType::LayoutColumn:
     case ItemType::LayoutColumnFlow:
+    case ItemType::LayoutSplit:
     case ItemType::LayoutAbsolute:
     case ItemType::LayoutBox:
     case ItemType::LayoutPanelBody:
@@ -5799,11 +5799,11 @@ static int item_estimate_fit_text_extra_width(Item &item)
     else if (button.opptr) {
       full_width = text_icon_full_width(button.str, button.icon, text_pad_none, UI_FSTYLE_WIDGET);
     }
-    button_item.full_width = std::nullopt;
+    button_item.full_width = full_width;
     return std::max(full_width - width, 0);
   }
 
-  auto &layout = static_cast<const Layout &>(item);
+  const auto &layout = static_cast<const Layout &>(item);
   if (layout.items().is_empty()) {
     return 0;
   }
@@ -5811,7 +5811,7 @@ static int item_estimate_fit_text_extra_width(Item &item)
   if (layout.type() == ItemType::LayoutSplit) {
     /* Do width proportionally for split sub-items. */
     float factor = 1.0f;
-    for (auto &sub : layout.items()) {
+    for (Item *sub : layout.items()) {
       factor = std::max(factor,
                         (sub->size().x + item_estimate_fit_text_extra_width(*sub)) /
                             float(sub->size().x));
@@ -5823,9 +5823,15 @@ static int item_estimate_fit_text_extra_width(Item &item)
                                             static_cast<const LayoutItemGridFlow *>(&item) :
                                             nullptr;
 
-  if (layout.local_direction() == LayoutDirection::Vertical && !grid_flow) {
+  const LayoutDirection direction = layout.type() == ItemType::LayoutRoot ?
+                                        layout.root()->direction :
+                                    layout.type() == ItemType::LayoutSplit ?
+                                        LayoutDirection::Horizontal :
+                                        layout.local_direction();
+
+  if (direction == LayoutDirection::Vertical && !grid_flow) {
     int max_extra_width = 0;
-    for (auto &sub : layout.items()) {
+    for (Item *sub : layout.items()) {
       max_extra_width = std::max(max_extra_width, item_estimate_fit_text_extra_width(*sub));
     }
     return max_extra_width;
@@ -5837,29 +5843,19 @@ static int item_estimate_fit_text_extra_width(Item &item)
   const LayoutItemFlow *col_flow = layout.type() == ItemType::LayoutColumnFlow ?
                                        static_cast<const LayoutItemFlow *>(&item) :
                                        nullptr;
-  const LayoutItemSplit *split = layout.type() == ItemType::LayoutSplit ?
-                                     static_cast<const LayoutItemSplit *>(&item) :
-                                     nullptr;
 
-  const bool even_colums = grid_flow || col_flow || (split && split->percentage == 0.0f);
+  const bool even_colums = grid_flow || col_flow;
 
   for (Item *sub : layout.items()) {
     const int subitem_fit_width = item_estimate_fit_text_extra_width(*sub);
     if (even_colums) {
       max_extra_width = std::max(max_extra_width, subitem_fit_width);
     }
-    else if (split) {
-      add_extra_width = std::max<int>(add_extra_width,
-                                      subitem_fit_width / (sub == layout.items().last() ?
-                                                               1.0f - split->percentage :
-                                                               split->percentage));
+    else {
+      add_extra_width += subitem_fit_width;
     }
-    add_extra_width += subitem_fit_width;
   }
-  int columms = grid_flow                            ? grid_flow->tot_columns :
-                col_flow                             ? col_flow->totcol :
-                (split && split->percentage == 0.0f) ? split->items().size() :
-                                                       0;
+  int columms = grid_flow ? grid_flow->tot_columns : col_flow ? col_flow->totcol : 0;
   return add_extra_width + (max_extra_width * columms);
 }
 

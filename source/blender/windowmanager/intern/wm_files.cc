@@ -3765,7 +3765,7 @@ static ui::Block *block_create_save_modified_images_dialog(bContext *C, ARegion 
 
   ui::Block *block = block_begin(
       C, region, save_modified_images_dialog_name, ui::EmbossType::Emboss);
-  popup_block_auto_width_layout_enable(C, block);
+  popup_block_auto_width_layout_enable(block);
   block_flag_enable(
       block, ui::BLOCK_KEEP_OPEN | ui::BLOCK_LOOP | ui::BLOCK_NO_WIN_CLIP | ui::BLOCK_NUMSELECT);
   block_theme_style_set(block, ui::BLOCK_THEME_STYLE_POPUP);
@@ -4787,7 +4787,7 @@ static ui::Block *block_create_save_file_overwrite_dialog(bContext *C, ARegion *
 
   ui::Block *block = block_begin(
       C, region, save_file_overwrite_dialog_name, ui::EmbossType::Emboss);
-  popup_block_auto_width_layout_enable(C, block);
+  popup_block_auto_width_layout_enable(block);
   block_flag_enable(
       block, ui::BLOCK_KEEP_OPEN | ui::BLOCK_LOOP | ui::BLOCK_NO_WIN_CLIP | ui::BLOCK_NUMSELECT);
   block_theme_style_set(block, ui::BLOCK_THEME_STYLE_POPUP);
@@ -5037,7 +5037,7 @@ static ui::Block *block_create__close_file_dialog(bContext *C, ARegion *region, 
   Main *bmain = CTX_data_main(C);
 
   ui::Block *block = block_begin(C, region, close_file_dialog_name, ui::EmbossType::Emboss);
-  popup_block_auto_width_layout_enable(C, block);
+  popup_block_auto_width_layout_enable(block);
   block_flag_enable(
       block, ui::BLOCK_KEEP_OPEN | ui::BLOCK_LOOP | ui::BLOCK_NO_WIN_CLIP | ui::BLOCK_NUMSELECT);
   block_theme_style_set(block, ui::BLOCK_THEME_STYLE_POPUP);

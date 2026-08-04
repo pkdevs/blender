@@ -184,7 +184,7 @@ static void popup_menu_create_block(bContext *C,
   const uiStyle *style = style_get_dpi();
 
   pup->block = block_begin(C, nullptr, block_name, EmbossType::Pulldown);
-  popup_block_auto_width_layout_enable(C, pup->block);
+  popup_block_auto_width_layout_enable(pup->block);
 
   /* A title is only provided when a Menu has a label, this is not always the case, see e.g.
    * `VIEW3D_MT_edit_mesh_context_menu` -- this specifies its own label inside the draw function
@@ -903,12 +903,11 @@ void popup_block_close(bContext *C, wmWindow *win, Block *block)
   ED_workspace_status_text(C, nullptr);
 }
 
-void popup_block_auto_width_layout_enable(const bContext *C, Block *block)
+void popup_block_auto_width_layout_enable(Block *block)
 {
   if (!block->popup_auto_width) {
     /* This is copied on block redraws, don't override. */
     block->popup_auto_width = Block::PopupAutoWidth{};
-    block->popup_auto_width->max_window_width = WM_window_native_pixel_y(CTX_wm_window(C));
   }
 }
 

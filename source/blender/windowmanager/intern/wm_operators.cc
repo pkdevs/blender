@@ -17,7 +17,6 @@
 #include <cstddef>
 #include <cstdio>
 #include <cstring>
-#include <iostream>
 #include <sstream>
 
 #include <fmt/format.h>
@@ -1161,7 +1160,7 @@ static ui::Block *wm_enum_search_menu(bContext *C, ARegion *region, void *arg)
   static char search[256] = "";
 
   ui::Block *block = block_begin(C, region, "_popup", ui::EmbossType::Emboss);
-  popup_block_auto_width_layout_enable(C, block);
+  popup_block_auto_width_layout_enable(block);
   block_flag_enable(block, ui::BLOCK_LOOP | ui::BLOCK_MOVEMOUSE_QUIT | ui::BLOCK_SEARCH_MENU);
   block_theme_style_set(block, ui::BLOCK_THEME_STYLE_POPUP);
 
@@ -1426,7 +1425,7 @@ static ui::Block *wm_block_create_redo(bContext *C, ARegion *region, void *arg_o
   int width = 15 * UI_UNIT_X;
 
   ui::Block *block = block_begin(C, region, __func__, ui::EmbossType::Emboss);
-  popup_block_auto_width_layout_enable(C, block);
+  popup_block_auto_width_layout_enable(block);
   block_flag_disable(block, ui::BLOCK_LOOP);
   block_theme_style_set(block, ui::BLOCK_THEME_STYLE_REGULAR);
 
@@ -1531,7 +1530,7 @@ static ui::Block *wm_block_dialog_create(bContext *C, ARegion *region, void *use
   const short icon_size = (small ? 32 : 40) * UI_SCALE_FAC;
 
   ui::Block *block = block_begin(C, region, __func__, ui::EmbossType::Emboss);
-  popup_block_auto_width_layout_enable(C, block);
+  popup_block_auto_width_layout_enable(block);
   block_flag_disable(block, ui::BLOCK_LOOP);
   block_theme_style_set(block, ui::BLOCK_THEME_STYLE_POPUP);
   popup_dummy_panel_set(region, block, op->idname);
@@ -1676,7 +1675,7 @@ static ui::Block *wm_operator_ui_create(bContext *C, ARegion *region, void *user
   const uiStyle *style = ui::style_get_dpi();
 
   ui::Block *block = block_begin(C, region, __func__, ui::EmbossType::Emboss);
-  popup_block_auto_width_layout_enable(C, block);
+  popup_block_auto_width_layout_enable(block);
   block_flag_disable(block, ui::BLOCK_LOOP);
   block_flag_enable(block, ui::BLOCK_KEEP_OPEN | ui::BLOCK_MOVEMOUSE_QUIT | ui::BLOCK_POPUP);
   block_theme_style_set(block, ui::BLOCK_THEME_STYLE_REGULAR);

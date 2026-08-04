@@ -809,7 +809,6 @@ struct Block {
   /** Auto popup width, this makes label/checkbox elements to fit in popups/popovers.  */
   struct PopupAutoWidth {
     int min_width = 0;
-    int max_window_width = 0;
     int oldwidth = 0;
     int width = 0;
   };

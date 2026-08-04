@@ -439,7 +439,7 @@ static ui::Block *wm_block_about_create(bContext *C, ARegion *region, void * /*a
   const int dialog_width = style->widget.points * 42 * UI_SCALE_FAC;
 
   ui::Block *block = block_begin(C, region, "about", ui::EmbossType::Emboss);
-  popup_block_auto_width_layout_enable(C, block);
+  popup_block_auto_width_layout_enable(block);
   block_flag_enable(block, ui::BLOCK_KEEP_OPEN | ui::BLOCK_LOOP | ui::BLOCK_NO_WIN_CLIP);
   block_theme_style_set(block, ui::BLOCK_THEME_STYLE_POPUP);
 

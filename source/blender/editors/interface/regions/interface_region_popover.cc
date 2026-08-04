@@ -89,7 +89,7 @@ static void popover_create_block(bContext *C,
   const uiStyle *style = style_get_dpi();
 
   pup->block = block_begin(C, region, __func__, EmbossType::Emboss);
-  popup_block_auto_width_layout_enable(C, pup->block);
+  popup_block_auto_width_layout_enable(pup->block);
   block_flag_enable(pup->block, BLOCK_KEEP_OPEN | BLOCK_POPOVER);
 #ifdef USE_UI_POPOVER_ONCE
   if (pup->is_once) {
