@@ -50,6 +50,7 @@
 #include "BKE_node_legacy_types.hh"
 #include "BKE_node_runtime.hh"
 #include "BKE_node_tree_update.hh"
+#include "BKE_node_tree_zones.hh"
 #include "BKE_object.hh"
 #include "BKE_packedFile.hh"
 #include "BKE_pointcloud.hh"
@@ -686,6 +687,130 @@ static void find_side_effect_nodes_for_viewer_path(
   try_add_side_effect_node(ctx, *current, parsed_path->viewer_node_id, nmd, r_side_effect_nodes);
 }
 
+static void find_side_effect_nodes_for_persistent_debug_views_in_tree(
+    const ModifierEvalContext &ctx,
+    const NodesModifierData &nmd,
+    const bNodeTree &tree,
+    const ComputeContext &compute_context,
+    bke::ComputeContextCache &compute_context_cache,
+    nodes::GeoNodesSideEffectNodes &r_side_effect_nodes,
+    bool inside_simulation_zone);
+
+static bool is_persistent_debug_viewer(const bNode &node)
+{
+  if (node.type_legacy != GEO_NODE_VIEWER) {
+    return false;
+  }
+  const NodeGeometryViewer *storage = static_cast<const NodeGeometryViewer *>(node.storage);
+  return storage && (storage->flag & NODE_GEO_VIEWER_FLAG_DEBUG_VIEW);
+}
+
+/* Persistent viewers inside a simulation zone are not local side effects of the zone body,
+ * because the body can be skipped when a cached state is used. Register the complete static path
+ * through the existing side-effect mechanism so the zone is solved when debug views are enabled.
+ */
+static void find_side_effect_nodes_for_persistent_debug_views_in_zone(
+    const ModifierEvalContext &ctx,
+    const NodesModifierData &nmd,
+    const bNodeTree &tree,
+    const bke::bNodeTreeZone &zone,
+    const ComputeContext &parent_compute_context,
+    bke::ComputeContextCache &compute_context_cache,
+    nodes::GeoNodesSideEffectNodes &r_side_effect_nodes)
+{
+  const bNode *output_node = zone.output_node();
+  if (output_node == nullptr || output_node->type_legacy != GEO_NODE_SIMULATION_OUTPUT) {
+    /* Repeat, foreach and closure zones do not have a stable context for this purpose. */
+    return;
+  }
+
+  const bke::SimulationZoneComputeContext &simulation_compute_context =
+      compute_context_cache.for_simulation_zone(&parent_compute_context, *output_node);
+
+  /* A group node inside a simulation zone has a stable path from the simulation context. If that
+   * group contains another supported simulation zone, visit it as well. */
+  for (const bNode *node : zone.child_nodes()) {
+    if (node == nullptr) {
+      continue;
+    }
+    if (is_persistent_debug_viewer(*node)) {
+      try_add_side_effect_node(
+          ctx, simulation_compute_context, node->identifier, nmd, r_side_effect_nodes);
+      continue;
+    }
+    if (!node->is_group() || node->id == nullptr) {
+      continue;
+    }
+    const bNodeTree *group_tree = reinterpret_cast<const bNodeTree *>(node->id);
+    const bke::GroupNodeComputeContext &group_compute_context =
+        compute_context_cache.for_group_node(&simulation_compute_context, node->identifier, &tree);
+    find_side_effect_nodes_for_persistent_debug_views_in_tree(ctx,
+                                                              nmd,
+                                                              *group_tree,
+                                                              group_compute_context,
+                                                              compute_context_cache,
+                                                              r_side_effect_nodes,
+                                                              true);
+  }
+
+  for (const bke::bNodeTreeZone *child_zone : zone.child_zones) {
+    if (child_zone != nullptr) {
+      find_side_effect_nodes_for_persistent_debug_views_in_zone(ctx,
+                                                                nmd,
+                                                                tree,
+                                                                *child_zone,
+                                                                simulation_compute_context,
+                                                                compute_context_cache,
+                                                                r_side_effect_nodes);
+    }
+  }
+}
+
+static void find_side_effect_nodes_for_persistent_debug_views_in_tree(
+    const ModifierEvalContext &ctx,
+    const NodesModifierData &nmd,
+    const bNodeTree &tree,
+    const ComputeContext &compute_context,
+    bke::ComputeContextCache &compute_context_cache,
+    nodes::GeoNodesSideEffectNodes &r_side_effect_nodes,
+    const bool inside_simulation_zone)
+{
+  const bke::bNodeTreeZones *tree_zones = tree.zones();
+  if (tree_zones == nullptr) {
+    return;
+  }
+
+  for (const bke::bNodeTreeZone *zone : tree_zones->root_zones) {
+    if (zone != nullptr) {
+      find_side_effect_nodes_for_persistent_debug_views_in_zone(
+          ctx, nmd, tree, *zone, compute_context, compute_context_cache, r_side_effect_nodes);
+    }
+  }
+
+  for (const bNode *node : tree_zones->nodes_outside_zones()) {
+    if (node == nullptr) {
+      continue;
+    }
+    if (inside_simulation_zone && is_persistent_debug_viewer(*node)) {
+      try_add_side_effect_node(ctx, compute_context, node->identifier, nmd, r_side_effect_nodes);
+      continue;
+    }
+    if (!node->is_group() || node->id == nullptr) {
+      continue;
+    }
+    const bNodeTree *group_tree = reinterpret_cast<const bNodeTree *>(node->id);
+    const bke::GroupNodeComputeContext &group_compute_context =
+        compute_context_cache.for_group_node(&compute_context, node->identifier, &tree);
+    find_side_effect_nodes_for_persistent_debug_views_in_tree(ctx,
+                                                              nmd,
+                                                              *group_tree,
+                                                              group_compute_context,
+                                                              compute_context_cache,
+                                                              r_side_effect_nodes,
+                                                              inside_simulation_zone);
+  }
+}
+
 static void find_side_effect_nodes_for_nested_node(
     const ModifierEvalContext &ctx,
     const NodesModifierData &nmd,
@@ -794,6 +919,23 @@ static void find_side_effect_nodes(const NodesModifierData &nmd,
                                    nodes::GeoNodesSideEffectNodes &r_side_effect_nodes,
                                    Set<ComputeContextHash> &r_verbose_log_contexts)
 {
+  if (nmd.node_group != nullptr && (nmd.flag & NODES_MODIFIER_SHOW_DEBUG_VIEWS)) {
+    /* This is independent of the selected candidate. The master toggle makes all persistent
+     * debug viewers usable, matching their regular side-effect behavior. */
+    bke::ComputeContextCache compute_context_cache;
+    const ComputeContext *object_context = &compute_context_cache.for_data_block(nullptr,
+                                                                                 ctx.object->id);
+    const ComputeContext *modifier_context = &compute_context_cache.for_geometry_nodes_modifier(
+        object_context, nmd);
+    find_side_effect_nodes_for_persistent_debug_views_in_tree(ctx,
+                                                              nmd,
+                                                              *nmd.node_group,
+                                                              *modifier_context,
+                                                              compute_context_cache,
+                                                              r_side_effect_nodes,
+                                                              false);
+  }
+
   Main *bmain = DEG_get_bmain(ctx.depsgraph);
   wmWindowManager *wm = static_cast<wmWindowManager *>(bmain->wm.first);
   if (wm == nullptr) {
