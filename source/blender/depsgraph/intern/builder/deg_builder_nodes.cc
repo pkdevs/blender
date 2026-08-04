@@ -1337,7 +1337,7 @@ void DepsgraphNodeBuilder::build_animdata_drivers(ID *id, AnimData *adt)
 
   for (const auto [driver_index, fcu] : adt->drivers.enumerate()) {
     build_driver(id, &fcu, driver_index);
-    needs_unshare = needs_unshare || data_path_maybe_shared(*id, fcu.rna_path);
+    needs_unshare = needs_unshare || data_path_maybe_shared(*id, fcu.rna_path());
   }
 
   if (!needs_unshare) {
@@ -1369,7 +1369,7 @@ void DepsgraphNodeBuilder::build_driver(ID *id, FCurve *fcurve, int driver_index
       [id_cow, driver_index, fcurve](blender::Depsgraph *depsgraph) {
         BKE_animsys_eval_driver(depsgraph, id_cow, driver_index, fcurve);
       },
-      fcurve->rna_path ? fcurve->rna_path : "",
+      fcurve->rna_path().c_str(),
       fcurve->array_index);
   build_driver_variables(id, fcurve);
 }
@@ -1378,7 +1378,7 @@ void DepsgraphNodeBuilder::build_driver_variables(ID *id, FCurve *fcurve)
 {
   PointerRNA id_ptr = RNA_id_pointer_create(id);
 
-  build_driver_id_property(id_ptr, fcurve->rna_path);
+  build_driver_id_property(id_ptr, fcurve->rna_path().c_str());
 
   DriverTargetContext driver_target_context;
   driver_target_context.scene = graph_->scene;
@@ -1733,8 +1733,9 @@ void DepsgraphNodeBuilder::build_empty_object(Object *object)
   Scene *scene_cow = get_cow_datablock(scene_);
   Object *object_cow = get_cow_datablock(object);
 
-  const bool has_modifiers = !BLI_listbase_is_empty(&object->modifiers);
-  if (!has_modifiers) {
+  const bool can_have_geometry = !BLI_listbase_is_empty(&object->modifiers) ||
+                                 object->instance_collection;
+  if (!can_have_geometry) {
     if (deg_eval_copy_is_expanded(&object_cow->id)) {
       /* The empty might have had modifiers previously, so it might still have cached evaluated
        * geometry. Usually this would be freed by #BKE_object_eval_uber_data during the next
