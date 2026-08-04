@@ -48,13 +48,20 @@ enum [[host_shared]] eSamplingDimension : uint32_t {
   SAMPLING_GBUFFER_V = 30u,
   SAMPLING_GBUFFER_W = 31u,
   SAMPLING_FILM_U = 32u,
+  SAMPLING_PAD0 = 33u,
+  SAMPLING_PAD1 = 34u,
+  SAMPLING_PAD2 = 35u,
+
+  SAMPLING_DIMENSION_COUNT,
 };
 
 /**
  * IMPORTANT: Make sure the array can contain all sampling dimensions.
  * Also note that it needs to be multiple of 4.
  */
-#define SAMPLING_DIMENSION_COUNT 36
+#ifndef GPU_SHADER
+static_assert(SAMPLING_DIMENSION_COUNT % 4 == 0);
+#endif
 
 /* NOTE(@fclem): Needs to be used in #StorageBuffer because of arrays of scalar. */
 struct [[host_shared]] SamplingData {

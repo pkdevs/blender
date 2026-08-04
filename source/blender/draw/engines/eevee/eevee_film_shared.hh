@@ -14,7 +14,7 @@
 namespace blender::eevee {
 #endif
 
-#define FILM_PRECOMP_SAMPLE_MAX 16
+enum FilmConst : int { FILM_PRECOMP_SAMPLE_MAX = 16 };
 
 enum [[host_shared]] eFilmWeightLayerIndex : uint32_t {
   FILM_WEIGHT_LAYER_ACCUMULATION,
