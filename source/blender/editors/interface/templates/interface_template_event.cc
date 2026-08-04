@@ -46,7 +46,7 @@ int template_status_bar_modal_item(Layout *layout,
                                    const EnumPropertyItem *item)
 {
   if (keymap->modal_item_status_draw) {
-    if (int items_used = keymap->modal_item_status_draw(layout, keymap, item)) {
+    if (const int items_used = keymap->modal_item_status_draw(layout, keymap, item)) {
       return items_used;
     }
   }
@@ -134,14 +134,6 @@ int template_status_bar_modal_item(Layout *layout,
   /* Try to merge some known paired items to save horizontal space. */
   if (kmi_y && keymap_item_can_collapse(kmi, kmi_y)) {
     const char *ab_label = nullptr;
-    if (STREQ(item->identifier, "ADD") && STREQ(item_y->identifier, "SUBTRACT")) {
-      if (kmi->type == WHEELDOWNMOUSE) {
-        layout->label("", ICON_MOUSE_MMB_SCROLL);
-        layout->label(IFACE_("Resize"), ICON_NONE);
-        layout->separator(0.6f);
-        return 2;
-      }
-    }
 
     if (STREQ(item->identifier, "PROPORTIONAL_SIZE_UP") &&
         STREQ(item_y->identifier, "PROPORTIONAL_SIZE_DOWN"))
