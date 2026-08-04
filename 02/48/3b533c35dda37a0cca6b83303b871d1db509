@@ -1,3 +1,4 @@
 Referenced by issue #158858, Multires modifier unsubdivide is broken.
 Referenced by pull request #158881, Fix #158858: Multires modifier unsubdivide is broken
 Referenced by commit a690120c464632084075ad568dcfd577a597a449, Fix #158858: Multires modifier unsubdivide is broken
+Referenced by issue #162305, Multires unsubdivide operation produces mesh errors in Blender 5.2.0, but works fine in 5.1.1
