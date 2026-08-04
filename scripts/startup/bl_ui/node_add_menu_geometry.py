@@ -77,6 +77,7 @@ class NODE_MT_gn_curve_read_base(node_add_menu.NodeMenu):
         self.node_operator(layout, "GeometryNodeCurveHandleTypeSelection")
         self.node_operator(layout, "GeometryNodeNURBSOrder")
         self.node_operator(layout, "GeometryNodeNURBSWeight")
+        layout.separator()
         self.node_operator(layout, "GeometryNodeInputSplineCyclic")
         self.node_operator(layout, "GeometryNodeSplineLength")
         self.node_operator(layout, "GeometryNodeSplineParameter")
