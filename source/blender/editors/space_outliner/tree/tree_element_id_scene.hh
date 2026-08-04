@@ -23,6 +23,7 @@ class TreeElementIDScene final : public TreeElementID {
   TreeElementIDScene(TreeElement &legacy_te, Scene &scene);
 
   void expand(SpaceOutliner & /*soops*/) const override;
+  void expand_context_menu(bContext *C) override;
 
  private:
   void expand_view_layers() const;

@@ -11,6 +11,7 @@
 #include <memory>
 
 #include "DNA_listBase.h"
+#include "DNA_windowmanager_enums.h"
 
 #include "BLI_function_ref.hh"
 
@@ -466,6 +467,8 @@ void outliner_set_coordinates(const ARegion *region, SpaceOutliner *space_outlin
 void outliner_item_openclose(TreeElement *te, bool open, bool toggle_all);
 
 void outliner_scroll_to_active(SpaceOutliner *space_outliner, ARegion *region, short idcode);
+
+wmOperatorStatus outliner_operator_menu(bContext *C, const char *opname);
 
 /* `outliner_dragdrop.cc` */
 

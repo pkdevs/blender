@@ -22,6 +22,7 @@ class TreeElementViewCollectionBase final : public AbstractTreeElement {
 
  public:
   TreeElementViewCollectionBase(TreeElement &legacy_te, Scene &scene);
+  void expand_context_menu(bContext *C) override;
 };
 
 }  // namespace ed::outliner

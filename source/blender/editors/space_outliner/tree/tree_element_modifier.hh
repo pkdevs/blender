@@ -52,6 +52,7 @@ class TreeElementModifier final : public AbstractTreeElement {
  public:
   TreeElementModifier(TreeElement &legacy_te, Object &object, ModifierDataStoreElem &md);
   void expand(SpaceOutliner & /*soops*/) const override;
+  void expand_context_menu(bContext *C) override;
 
   std::optional<BIFIconID> get_icon() const override;
 };

@@ -23,6 +23,7 @@ class TreeElementIDObject final : public TreeElementID {
   TreeElementIDObject(TreeElement &legacy_te, Object &object);
 
   void expand(SpaceOutliner & /*soops*/) const override;
+  void expand_context_menu(bContext *C) override;
 
  private:
   void expand_data() const;

@@ -31,6 +31,7 @@ class TreeElementID : public AbstractTreeElement {
   bool expand_poll(const SpaceOutliner & /*soops*/) const override;
 
   void expand(SpaceOutliner & /*soops*/) const override;
+  void expand_context_menu(bContext *C) override;
 
   ID &get_ID()
   {

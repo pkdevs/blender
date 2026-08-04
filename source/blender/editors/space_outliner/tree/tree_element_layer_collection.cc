@@ -15,6 +15,9 @@
 
 #include "tree_element_layer_collection.hh"
 
+#include "WM_types.hh"
+#include "WM_api.hh"
+
 namespace blender::ed::outliner {
 
 TreeElementLayerCollection::TreeElementLayerCollection(TreeElement &legacy_te, LayerCollection &lc)
@@ -23,6 +26,11 @@ TreeElementLayerCollection::TreeElementLayerCollection(TreeElement &legacy_te, L
   BLI_assert(legacy_te.store_elem->type == TSE_LAYER_COLLECTION);
   legacy_te.name = lc_.collection->id.name + 2;
   legacy_te.directdata = &lc_;
+}
+
+void TreeElementLayerCollection::expand_context_menu(bContext *C)
+{
+  WM_menu_name_call(C, "OUTLINER_MT_collection", wm::OpCallContext::InvokeRegionWin);
 }
 
 }  // namespace blender::ed::outliner

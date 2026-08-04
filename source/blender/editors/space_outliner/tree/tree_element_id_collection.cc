@@ -12,6 +12,9 @@
 
 #include "tree_element_id_collection.hh"
 
+#include "WM_types.hh"
+#include "WM_api.hh"
+
 namespace blender::ed::outliner {
 
 TreeElementIDCollection::TreeElementIDCollection(TreeElement &legacy_te, Collection &collection)
@@ -25,6 +28,11 @@ void TreeElementIDCollection::expand(SpaceOutliner &space_outliner) const
   if (!(legacy_te_.parent && legacy_te_.parent->idcode == ID_OB)) {
     outliner_add_collection_recursive(&space_outliner, &collection_, &legacy_te_);
   }
+}
+
+void TreeElementIDCollection::expand_context_menu(bContext *C)
+{
+  WM_menu_name_call(C, "OUTLINER_MT_collection", wm::OpCallContext::InvokeRegionWin);
 }
 
 }  // namespace blender::ed::outliner

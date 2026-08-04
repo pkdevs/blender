@@ -21,6 +21,7 @@ class TreeElementIDLibrary final : public TreeElementID {
   TreeElementIDLibrary(TreeElement &legacy_te, Library &library);
 
   StringRefNull get_warning() const override;
+  void expand_context_menu(bContext *C) override;
 };
 
 }  // namespace ed::outliner

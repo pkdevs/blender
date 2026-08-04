@@ -18,6 +18,9 @@
 
 #include "tree_element_id_object.hh"
 
+#include "WM_types.hh"
+#include "WM_api.hh"
+
 namespace blender {
 
 struct bConstraint;
@@ -44,6 +47,11 @@ void TreeElementIDObject::expand(SpaceOutliner & /*space_outliner*/) const
   expand_gpencil_effects();
   expand_vertex_groups();
   expand_duplicated_group();
+}
+
+void TreeElementIDObject::expand_context_menu(bContext *C)
+{
+  WM_menu_name_call(C, "OUTLINER_MT_object", wm::OpCallContext::InvokeRegionWin);
 }
 
 void TreeElementIDObject::expand_data() const

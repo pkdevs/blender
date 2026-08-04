@@ -41,4 +41,8 @@ StringRefNull TreeElementIDLibrary::get_warning() const
   return {};
 }
 
+void TreeElementIDLibrary::expand_context_menu(bContext *C)
+{
+  outliner_operator_menu(C, "OUTLINER_OT_lib_operation");
+}
 }  // namespace blender::ed::outliner

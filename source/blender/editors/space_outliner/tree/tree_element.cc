@@ -228,6 +228,11 @@ std::optional<BIFIconID> AbstractTreeElement::get_icon() const
   return {};
 }
 
+void AbstractTreeElement::expand_context_menu(bContext * /*C*/)
+{
+  /* Default implementation does nothing. */
+}
+
 void AbstractTreeElement::print_path()
 {
   std::string path = legacy_te_.name;

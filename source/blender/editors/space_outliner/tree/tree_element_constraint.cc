@@ -44,4 +44,9 @@ std::optional<BIFIconID> TreeElementConstraint::get_icon() const
   const PointerRNA ptr = RNA_pointer_create_discrete(&ob->id, RNA_Constraint, con);
   return RNA_struct_ui_icon(ptr.type);
 }
+
+  void TreeElementConstraint::expand_context_menu(bContext *C)
+  {
+    outliner_operator_menu(C, "OUTLINER_OT_constraint_operation");
+  }
 }  // namespace blender::ed::outliner

@@ -19,6 +19,7 @@ namespace blender {
 
 struct ID;
 struct SpaceOutliner;
+struct bContext;
 
 namespace ed::outliner {
 
@@ -78,6 +79,9 @@ class AbstractTreeElement {
    * All elements should be ported to use this over #tree_element_get_icon().
    */
   virtual std::optional<BIFIconID> get_icon() const;
+
+  /* Draw context menu separately for different types. */
+  virtual void expand_context_menu(bContext *C);
 
   /**
    * Debugging helper: Print effective path of this tree element, constructed out of the

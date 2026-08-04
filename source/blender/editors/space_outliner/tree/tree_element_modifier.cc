@@ -141,6 +141,11 @@ void TreeElementModifier::expand(SpaceOutliner & /*space_outliner*/) const
   }
 }
 
+void TreeElementModifier::expand_context_menu(bContext *C)
+{
+  outliner_operator_menu(C, "OUTLINER_OT_modifier_operation");
+}
+
 std::optional<BIFIconID> TreeElementModifier::get_icon() const
 {
   Object *ob = reinterpret_cast<Object *>(legacy_te_.store_elem->id);

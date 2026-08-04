@@ -23,6 +23,7 @@ class TreeElementCollectionBase final : public AbstractTreeElement {
   TreeElementCollectionBase(TreeElement &legacy_te, Scene &scene);
 
   void expand(SpaceOutliner & /*soops*/) const override;
+  void expand_context_menu(bContext *C) override;
 };
 
 }  // namespace ed::outliner

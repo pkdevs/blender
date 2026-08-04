@@ -3959,7 +3959,7 @@ void OUTLINER_OT_data_operation(wmOperatorType *ot)
 /** \name Context Menu Operator
  * \{ */
 
-static wmOperatorStatus outliner_operator_menu(bContext *C, const char *opname)
+wmOperatorStatus outliner_operator_menu(bContext *C, const char *opname)
 {
   wmOperatorType *ot = WM_operatortype_find(opname, false);
   ui::PopupMenu *pup = ui::popup_menu_begin(
@@ -4004,53 +4004,9 @@ static wmOperatorStatus do_outliner_operation_event(bContext *C,
 
   get_element_operation_type(te, &scenelevel, &objectlevel, &idlevel, &datalevel);
 
-  if (scenelevel) {
-    return outliner_operator_menu(C, "OUTLINER_OT_scene_operation");
-  }
-  if (objectlevel) {
-    WM_menu_name_call(C, "OUTLINER_MT_object", wm::OpCallContext::InvokeRegionWin);
-    return OPERATOR_FINISHED;
-  }
-  if (idlevel) {
-    switch (idlevel) {
-      case ID_GR:
-        WM_menu_name_call(C, "OUTLINER_MT_collection", wm::OpCallContext::InvokeRegionWin);
-        return OPERATOR_FINISHED;
-        break;
-      case ID_LI:
-        return outliner_operator_menu(C, "OUTLINER_OT_lib_operation");
-        break;
-      default:
-        return outliner_operator_menu(C, "OUTLINER_OT_id_operation");
-        break;
-    }
-  }
-  else if (datalevel) {
-    if (datalevel == TSE_ANIM_DATA) {
-      return outliner_operator_menu(C, "OUTLINER_OT_animdata_operation");
-    }
-    if (datalevel == TSE_DRIVER_BASE) {
-      /* do nothing... no special ops needed yet */
-      return OPERATOR_CANCELLED;
-    }
-    if (datalevel == TSE_LAYER_COLLECTION) {
-      WM_menu_name_call(C, "OUTLINER_MT_collection", wm::OpCallContext::InvokeRegionWin);
-      return OPERATOR_FINISHED;
-    }
-    if (ELEM(datalevel, TSE_SCENE_COLLECTION_BASE, TSE_VIEW_COLLECTION_BASE)) {
-      WM_menu_name_call(C, "OUTLINER_MT_collection_new", wm::OpCallContext::InvokeRegionWin);
-      return OPERATOR_FINISHED;
-    }
-    if (datalevel == TSE_ID_BASE) {
-      /* do nothing... there are no ops needed here yet */
-      return OPERATOR_CANCELLED;
-    }
-    if (datalevel == TSE_CONSTRAINT) {
-      return outliner_operator_menu(C, "OUTLINER_OT_constraint_operation");
-    }
-    if (datalevel == TSE_MODIFIER) {
-      return outliner_operator_menu(C, "OUTLINER_OT_modifier_operation");
-    }
+  te->abstract_element->expand_context_menu(C);
+
+  if (datalevel) {
     return outliner_operator_menu(C, "OUTLINER_OT_data_operation");
   }
 

@@ -45,6 +45,11 @@ void TreeElementAnimData::expand(SpaceOutliner & /*space_outliner*/) const
   expand_NLA_tracks();
 }
 
+void TreeElementAnimData::expand_context_menu(bContext *C)
+{
+  outliner_operator_menu(C, "OUTLINER_OT_animdata_operation");
+}
+
 animrig::slot_handle_t TreeElementAnimData::get_slot_handle() const
 {
   return this->anim_data_.slot_handle;

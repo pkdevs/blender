@@ -130,6 +130,11 @@ void TreeElementID::expand(SpaceOutliner & /*space_outliner*/) const
   }
 }
 
+void TreeElementID::expand_context_menu(bContext *C)
+{
+  outliner_operator_menu(C, "OUTLINER_OT_id_operation");
+}
+
 void TreeElementID::expand_animation_data(AnimData *anim_data) const
 {
   if (outliner_animdata_test(anim_data)) {

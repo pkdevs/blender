@@ -15,6 +15,9 @@
 
 #include "tree_element_collection.hh"
 
+#include "WM_types.hh"
+#include "WM_api.hh"
+
 namespace blender::ed::outliner {
 
 TreeElementCollectionBase::TreeElementCollectionBase(TreeElement &legacy_te, Scene &scene)
@@ -27,6 +30,11 @@ TreeElementCollectionBase::TreeElementCollectionBase(TreeElement &legacy_te, Sce
 void TreeElementCollectionBase::expand(SpaceOutliner &space_outliner) const
 {
   outliner_add_collection_recursive(&space_outliner, scene_.master_collection, &legacy_te_);
+}
+
+void TreeElementCollectionBase::expand_context_menu(bContext *C)
+{
+  WM_menu_name_call(C, "OUTLINER_MT_collection_new", wm::OpCallContext::InvokeRegionWin);
 }
 
 }  // namespace blender::ed::outliner

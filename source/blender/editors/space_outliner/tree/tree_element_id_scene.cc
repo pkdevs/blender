@@ -30,6 +30,11 @@ void TreeElementIDScene::expand(SpaceOutliner & /*space_outliner*/) const
   expand_animation_data(scene_.adt);
 }
 
+void TreeElementIDScene::expand_context_menu(bContext *C)
+{
+  outliner_operator_menu(C, "OUTLINER_OT_scene_operation");
+}
+
 void TreeElementIDScene::expand_view_layers() const
 {
   add_element(&legacy_te_.subtree, &scene_.id, nullptr, &legacy_te_, TSE_R_LAYER_BASE, 0);

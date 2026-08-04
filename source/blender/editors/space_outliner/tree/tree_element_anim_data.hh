@@ -25,6 +25,7 @@ class TreeElementAnimData final : public AbstractTreeElement {
   TreeElementAnimData(TreeElement &legacy_te, AnimData &anim_data);
 
   void expand(SpaceOutliner &space_outliner) const override;
+  void expand_context_menu(bContext *C) override;
 
   std::optional<BIFIconID> get_icon() const override
   {

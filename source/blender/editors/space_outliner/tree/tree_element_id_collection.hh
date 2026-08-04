@@ -23,6 +23,7 @@ class TreeElementIDCollection final : public TreeElementID {
   TreeElementIDCollection(TreeElement &legacy_te, Collection &collection);
 
   void expand(SpaceOutliner & /*soops*/) const override;
+  void expand_context_menu(bContext *C) override;
 };
 
 }  // namespace ed::outliner
