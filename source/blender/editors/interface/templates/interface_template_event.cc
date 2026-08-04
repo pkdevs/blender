@@ -16,16 +16,6 @@
 #include "interface_intern.hh"
 
 namespace blender::ui {
-/* templates for custom drawing of modal keymap items. */
-void circle_select_modal_item_draw(ui::Layout *layout, wmKeyMap *keymap, const EnumPropertyItem *item)
-{
-  if (ELEM(item->value, GESTURE_MODAL_CANCEL, GESTURE_MODAL_CIRCLE_SIZE, GESTURE_MODAL_NOP)) {
-    return;
-  }
-}
-} // namespace blender::ui
-
-namespace blender::ui {
 
 static const wmKeyMapItem *keymap_item_from_enum_item(const wmKeyMap *keymap,
                                                       const EnumPropertyItem *item)
@@ -65,9 +55,6 @@ int template_status_bar_modal_item(Layout *layout,
     return 1;
   }
 
-  if (STREQ(item->identifier, "NOP")){
-    return 1;
-  }
   /* Try to merge some known triplet items to save horizontal space. */
   const EnumPropertyItem *item_y = (item[1].identifier) ? item + 1 : nullptr;
   const EnumPropertyItem *item_z = (item_y && item[2].identifier) ? item + 2 : nullptr;
@@ -240,3 +227,51 @@ bool template_event_from_keymap_item(Layout *layout,
 }
 
 }  // namespace blender::ui
+
+namespace blender::ui {
+
+int keymap_item_icon_ensure(wmKeyMap *keymap, const EnumPropertyItem *item)
+{
+  if (item == nullptr) {
+    return ICON_NONE;
+  }
+
+  for (wmKeyMapItem *kmi = static_cast<wmKeyMapItem *>(keymap->items.first); kmi; kmi = kmi->next)
+  {
+    if (kmi->propvalue == item->value) {
+      int icon = icon_from_keymap_item(kmi, nullptr);
+      if (icon != ICON_NONE) {
+        return icon;
+      }
+    }
+  }
+
+  return ICON_NONE;
+}
+
+/* templates for custom drawing of modal keymap items. */
+void circle_select_modal_item_draw(ui::Layout *layout, wmKeyMap *keymap, const EnumPropertyItem *item)
+{
+  if (ELEM(item->value, GESTURE_MODAL_CANCEL, GESTURE_MODAL_CIRCLE_SIZE, GESTURE_MODAL_NOP)) {
+    return;
+  }
+  if (item->value == GESTURE_MODAL_CIRCLE_ADD) {
+    int icon = keymap_item_icon_ensure(keymap, item);
+    const EnumPropertyItem *item_next = item + 1;
+    if (item_next->value == GESTURE_MODAL_CIRCLE_SUB) {
+      int icon_next = keymap_item_icon_ensure(keymap, item_next);
+      if (icon != ICON_NONE && icon_next != ICON_NONE) {
+        layout->label("", icon);
+        layout->separator(event_icon_offset(icon));
+        layout->label("", icon_next);
+        layout->separator(event_icon_offset(icon_next));
+        layout->separator(0.2f);
+        layout->label(IFACE_("Resize"), ICON_NONE);
+        layout->separator(0.6f);
+        return;
+      }
+    }
+  }
+  template_status_bar_modal_item(layout, nullptr, keymap, item);
+}
+} // namespace blender::ui

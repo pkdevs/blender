@@ -4328,12 +4328,11 @@ static void gesture_circle_modal_keymap(wmKeyConfig *keyconf)
   static const EnumPropertyItem modal_items[] = {
       {GESTURE_MODAL_CONFIRM, "CONFIRM", 0, "Confirm", ""},
       {GESTURE_MODAL_CANCEL, "CANCEL", 0, "Cancel", ""},
+      {GESTURE_MODAL_SELECT, "SELECT", 0, "Select", ""},
+      {GESTURE_MODAL_DESELECT, "DESELECT", 0, "Deselect", ""},
       {GESTURE_MODAL_CIRCLE_ADD, "ADD", 0, "Add", ""},
       {GESTURE_MODAL_CIRCLE_SUB, "SUBTRACT", 0, "Subtract", ""},
       {GESTURE_MODAL_CIRCLE_SIZE, "SIZE", 0, "Size", ""},
-
-      {GESTURE_MODAL_SELECT, "SELECT", 0, "Select", ""},
-      {GESTURE_MODAL_DESELECT, "DESELECT", 0, "Deselect", ""},
       {GESTURE_MODAL_NOP, "NOP", 0, "No Operation", ""},
 
       {0, nullptr, 0, nullptr, nullptr},
