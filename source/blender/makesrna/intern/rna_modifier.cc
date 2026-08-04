@@ -4350,9 +4350,9 @@ static void rna_def_modifier_smooth(BlenderRNA *brna)
       {MOD_SMOOTH_METHOD_FREQUENCY,
        "FREQUENCY",
        0,
-       "Frequency",
-       "Implicit biharmonic filtering that removes high-frequency detail while retaining the "
-       "broad shape"},
+       "Frequency-Aware",
+       "Implicit biharmonic filtering of normalized graph frequencies that removes fine detail "
+       "while retaining the broad shape"},
       {0, nullptr, 0, nullptr, nullptr},
   };
 
@@ -4422,13 +4422,15 @@ static void rna_def_modifier_smooth(BlenderRNA *brna)
 
   prop = RNA_def_property(srna, "frequency_cutoff", PROP_FLOAT, PROP_FACTOR);
   RNA_def_property_float_sdna(prop, nullptr, "frequency_cutoff");
-  RNA_def_property_range(prop, 0.001f, 1.0f);
-  RNA_def_property_ui_range(prop, 0.01f, 1.0f, 0.01f, 3);
+  RNA_def_property_range(prop, 0.001f, 2.0f);
+  RNA_def_property_ui_range(prop, 0.001f, 2.0f, 0.01f, 3);
+  RNA_def_property_ui_scale_type(prop, PROP_SCALE_LOG);
   RNA_def_property_ui_text(
       prop,
-      "Frequency Cutoff",
-      "Frequency at which detail is reduced to half strength in one iteration; lower values "
-      "remove coarser detail");
+      "Normalized Cutoff",
+      "Normalized graph frequency whose amplitude is halved by one filter iteration before "
+      "Factor is applied; lower values remove coarser detail, and the scale depends on mesh "
+      "topology and resolution");
   RNA_def_property_update(prop, 0, "rna_Modifier_update");
 
   prop = RNA_def_property(srna, "use_cotangent_weights", PROP_BOOLEAN, PROP_NONE);

@@ -428,8 +428,7 @@ void blo_do_versions_503(FileData *fd, Library * /*lib*/, Main *bmain)
   }
 
   if (!MAIN_VERSION_FILE_ATLEAST(bmain, 503, 20)) {
-    if (!DNA_struct_member_exists(
-            fd->filesdna, "SmoothModifierData", "float", "frequency_cutoff")) {
+    if (!DNA_struct_member_exists(fd->filesdna, "SmoothModifierData", "float", "frequency_cutoff"))
     {
       for (Object &ob : bmain->objects) {
         for (ModifierData &md : ob.modifiers) {
