@@ -50,7 +50,6 @@ struct OperatorKeyHasher {
 };
 
 struct SymbolTable {
-  using OperatorMap = unordered_map<OperatorKey, SymbolFunction *, OperatorKeyHasher>;
 
   static constexpr string err_symbol = "ERROR_SYMBOL";
 
@@ -129,8 +128,6 @@ struct SymbolTable {
   SymbolClass *float4x3_cls = nullptr;
   SymbolClass *bool32_t_cls = nullptr;
 
-  OperatorMap operators;
-
   unordered_map<int, string> image_formats;
 
   unordered_map<TokenType, const char *> prefix_type_to_id;
@@ -169,6 +166,8 @@ struct SymbolTable {
 
   MatchRank get_conversion_rank(const SymbolClass *from, const SymbolClass *to) const;
 
+  SymbolClass *to_class(builtin::ClassId id) const;
+
  private:
   struct BuiltinType {
     /* "int", "int2", ... */
@@ -192,15 +191,9 @@ struct SymbolTable {
 
   void register_builtins(ast::LocalScope node);
   vector<BuiltinType> generate_builtin_types();
-  void generate_builtin_operators(SourceLocation loc, const vector<BuiltinType> &types);
   vector<BuiltinFunc> generate_all_constructors(const vector<BuiltinType> &types);
   vector<BuiltinFunc> generate_all_builtin_functions();
 
-  bool is_numeric(const SymbolClass *base);
-  bool is_integer(const SymbolClass *base);
-
-  int get_rank(const SymbolClass *base);
-  SymbolClass *get_promoted_base(SymbolClass *b1, SymbolClass *b2);
   SymbolClass *make_type(SymbolClass *base, int size);
 
   void add_operator(

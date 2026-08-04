@@ -64,7 +64,7 @@ optional<TokenException> SymbolClass::get_flat_members_recursive(const SymbolCla
 
     for (int i = 0; i < elements; ++i) {
       string array_accessor = var->array_dimensions > 0 ? "[" + to_string(i) + "]" : "";
-      if (var->type->is_builtin) {
+      if (var->type->is_builtin()) {
         /* Base case: It's a primitive/builtin type. Add to the flat buffer. */
         out_buffer.emplace_back(var->type, next_path + array_accessor, offset);
         offset += var->type->size;
@@ -85,7 +85,7 @@ optional<TokenException> SymbolClass::get_flat_members_recursive(const SymbolCla
 
 void SymbolClass::ensure_size_and_align(NodeErrorHandler *err_handler, bool check_st430)
 {
-  if (size != -1 && (err_handler == nullptr || is_builtin)) {
+  if (size != -1 && (err_handler == nullptr || is_builtin())) {
     return;
   }
   size = 0;
@@ -178,7 +178,7 @@ void SymbolClass::ensure_size_and_align(NodeErrorHandler *err_handler, bool chec
     else {
       /* Padding to next member alignment.
        * Force struct and arrays to all have alignment of float4. */
-      int align = (cls.is_builtin || cls.is_enum) && var->array_dimensions == 0 ? cls.align : 16;
+      int align = (cls.is_builtin() || cls.is_enum) && var->array_dimensions == 0 ? cls.align : 16;
       int padded = pad(size, align);
       /* Consider class compatible if it has no implicit padding. */
       is_std140_compatible &= padded == size;
@@ -194,7 +194,7 @@ void SymbolClass::ensure_size_and_align(NodeErrorHandler *err_handler, bool chec
     /* Update the overall alignment of the current struct. */
     align = max(align, cls.align);
 
-    if (!cls.is_builtin && !cls.is_enum && cls.size % 16 != 0) {
+    if (!cls.is_builtin() && !cls.is_enum && cls.size % 16 != 0) {
       is_std140_compatible = false;
       if (err_handler && !check_st430) {
         err_handler->error(

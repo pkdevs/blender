@@ -204,25 +204,26 @@ void SymbolTable::register_builtins(LocalScope node)
     string id;
     size_t size;
     size_t align;
+    builtin::ClassId cls;
   };
 
   const vector<BuiltinBasicType> basic_types = {
-      {err_symbol, 1, 1},
+      {err_symbol, 1, 1, builtin::Invalid},
 
-      {"char", 1, 1},
-      {"short", 2, 2},
-      {"int", 4, 4},
-      {"uchar", 1, 1},
-      {"ushort", 2, 2},
-      {"uint", 4, 4},
-      {"half", 2, 2},
-      {"float", 4, 4},
-      {"bool", 1, 1},
-      {"bool32_t", 4, 4},
+      {"char", 1, 1, builtin::char_t},
+      {"short", 2, 2, builtin::short_t},
+      {"int", 4, 4, builtin::int_t},
+      {"uchar", 1, 1, builtin::uchar_t},
+      {"ushort", 2, 2, builtin::ushort_t},
+      {"uint", 4, 4, builtin::uint_t},
+      {"half", 2, 2, builtin::half_t},
+      {"float", 4, 4, builtin::float_t},
+      {"bool", 1, 1, builtin::bool_t},
+      {"bool32_t", 4, 4, builtin::bool_t},
   };
 
   for (const auto &t : basic_types) {
-    SymbolClass *cls = cls_arena.alloc(root, tok, t.id, t.size, t.align);
+    SymbolClass *cls = cls_arena.alloc(root, tok, t.id, t.size, t.align, t.cls);
     cls->is_std140_compatible = t.align == 4;
     cls->is_std430_compatible = t.align == 4;
     cls->comp_len = 1;
@@ -325,6 +326,7 @@ void SymbolTable::register_builtins(LocalScope node)
     SymbolClass *base;
     int comp;
     int align;
+    builtin::ClassId cls_id;
   };
 
   const char *swizzle_xyzw[4] = {"x", "y", "z", "w"};
@@ -332,7 +334,7 @@ void SymbolTable::register_builtins(LocalScope node)
 
   auto generate_vector = [&](const BuiltinVector &t, const bool do_swizzle) {
     SymbolClass *base = t.base;
-    SymbolClass *cls = cls_arena.alloc(root, tok, t.id, t.comp * base->size, t.align);
+    SymbolClass *cls = cls_arena.alloc(root, tok, t.id, t.comp * base->size, t.align, t.cls_id);
     root->classes.emplace(t.id, cls);
     root->scopes.emplace(t.id, cls);
 
@@ -355,39 +357,39 @@ void SymbolTable::register_builtins(LocalScope node)
   };
 
   const std::vector<BuiltinVector> vectors = {
-      {"float2", float_cls, 2, 8},
-      {"float3", float_cls, 3, 16},
-      {"float4", float_cls, 4, 16},
-      {"half2", half_cls, 2, 4},
-      {"half3", half_cls, 3, 8},
-      {"half4", half_cls, 4, 8},
-      {"char2", char_cls, 2, 2},
-      {"char3", char_cls, 3, 3},
-      {"char4", char_cls, 4, 4},
-      {"uchar2", uchar_cls, 2, 2},
-      {"uchar3", uchar_cls, 3, 3},
-      {"uchar4", uchar_cls, 4, 4},
-      {"short2", short_cls, 2, 4},
-      {"short3", short_cls, 3, 6},
-      {"short4", short_cls, 4, 8},
-      {"ushort2", ushort_cls, 2, 4},
-      {"ushort3", ushort_cls, 3, 6},
-      {"ushort4", ushort_cls, 4, 8},
-      {"int2", int_cls, 2, 8},
-      {"int3", int_cls, 3, 16},
-      {"int4", int_cls, 4, 16},
-      {"uint2", uint_cls, 2, 8},
-      {"uint3", uint_cls, 3, 16},
-      {"uint4", uint_cls, 4, 16},
-      {"bool2", bool_cls, 2, 2},
-      {"bool3", bool_cls, 3, 3},
-      {"bool4", bool_cls, 4, 4},
-      {"packed_float2", float_cls, 2, 8},
-      {"packed_float3", float_cls, 3, 16},
-      {"packed_float4", float_cls, 4, 16},
-      {"packed_int2", float_cls, 2, 8},
-      {"packed_int3", float_cls, 3, 16},
-      {"packed_int4", float_cls, 4, 16},
+      {"float2", float_cls, 2, 8, builtin::ClassId::float2_t},
+      {"float3", float_cls, 3, 16, builtin::ClassId::float3_t},
+      {"float4", float_cls, 4, 16, builtin::ClassId::float4_t},
+      {"half2", half_cls, 2, 4, builtin::ClassId::half2_t},
+      {"half3", half_cls, 3, 8, builtin::ClassId::half3_t},
+      {"half4", half_cls, 4, 8, builtin::ClassId::half4_t},
+      {"char2", char_cls, 2, 2, builtin::ClassId::char2_t},
+      {"char3", char_cls, 3, 3, builtin::ClassId::char3_t},
+      {"char4", char_cls, 4, 4, builtin::ClassId::char4_t},
+      {"uchar2", uchar_cls, 2, 2, builtin::ClassId::uchar2_t},
+      {"uchar3", uchar_cls, 3, 3, builtin::ClassId::uchar3_t},
+      {"uchar4", uchar_cls, 4, 4, builtin::ClassId::uchar4_t},
+      {"short2", short_cls, 2, 4, builtin::ClassId::short2_t},
+      {"short3", short_cls, 3, 6, builtin::ClassId::short3_t},
+      {"short4", short_cls, 4, 8, builtin::ClassId::short4_t},
+      {"ushort2", ushort_cls, 2, 4, builtin::ClassId::ushort2_t},
+      {"ushort3", ushort_cls, 3, 6, builtin::ClassId::ushort3_t},
+      {"ushort4", ushort_cls, 4, 8, builtin::ClassId::ushort4_t},
+      {"int2", int_cls, 2, 8, builtin::ClassId::int2_t},
+      {"int3", int_cls, 3, 16, builtin::ClassId::int3_t},
+      {"int4", int_cls, 4, 16, builtin::ClassId::int4_t},
+      {"uint2", uint_cls, 2, 8, builtin::ClassId::uint2_t},
+      {"uint3", uint_cls, 3, 16, builtin::ClassId::uint3_t},
+      {"uint4", uint_cls, 4, 16, builtin::ClassId::uint4_t},
+      {"bool2", bool_cls, 2, 2, builtin::ClassId::bool2_t},
+      {"bool3", bool_cls, 3, 3, builtin::ClassId::bool3_t},
+      {"bool4", bool_cls, 4, 4, builtin::ClassId::bool4_t},
+      {"packed_float2", float_cls, 2, 8, builtin::ClassId::float2_t},
+      {"packed_float3", float_cls, 3, 16, builtin::ClassId::float3_t},
+      {"packed_float4", float_cls, 4, 16, builtin::ClassId::float4_t},
+      {"packed_int2", float_cls, 2, 8, builtin::ClassId::int2_t},
+      {"packed_int3", float_cls, 3, 16, builtin::ClassId::int3_t},
+      {"packed_int4", float_cls, 4, 16, builtin::ClassId::int4_t},
   };
 
   for (const auto &t : vectors) {
@@ -459,7 +461,7 @@ void SymbolTable::register_builtins(LocalScope node)
   /* Swizzle Generation */
   /* We do this in a separate loop because a swizzle on a float2 (like .xxxx)
    * might require float4 to already be registered in root->classes. */
-  for (const auto &[name, base, comp, __] : vectors) {
+  for (const auto &[name, base, comp, __, ___] : vectors) {
     SymbolClass *type = root->classes[name];
     auto generate_swizzles =
         [&](auto &self, string current, int target_length, auto swizzle) -> void {
@@ -545,8 +547,6 @@ void SymbolTable::register_builtins(LocalScope node)
       {LogicalAnd, "and_op_"},
       {LogicalOr, "or_op_"},
   };
-
-  generate_builtin_operators(tok, builtin_types);
 
   image_formats = {
       {0, "SNORM_8"},           {1, "SNORM_8_8"},        {2, "SNORM_8_8_8_8"},

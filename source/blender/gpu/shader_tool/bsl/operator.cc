@@ -10,68 +10,291 @@
 
 namespace bsl {
 
-/* Generates all scalar and vector types (e.g. int, int2, int3, int4). */
-vector<SymbolTable::BuiltinType> SymbolTable::generate_builtin_types()
+enum OperatorType : uint16_t {
+  /* clang-format off */
+  /* Operand Constraints (Bits 11..13) */
+  OP_NUMERIC = 0b0000'1000'0000'0000,
+  OP_INTEGER = 0b0001'0000'0000'0000,
+  OP_BOOL    = 0b0010'0000'0000'0000,
+
+  /* Operator Categories (Bits 0..5) */
+  OP_ARITHMETIC = 0b0000'0000'0000'0001,
+  OP_BITWISE    = 0b0000'0000'0000'0010,
+  OP_SHIFT      = 0b0000'0000'0000'0100,
+  OP_EQUALITY   = 0b0000'0000'0000'1000,
+  OP_RELATIONAL = 0b0000'0000'0001'0000,
+  OP_LOGICAL    = 0b0000'0000'0010'0000,
+
+  /* clang-format on */
+
+  OP_INVALID = 0b1111'1111'1111'1111,
+};
+
+OperatorType to_operator_type(TokenType tok_type)
 {
-  vector<BuiltinType> types{
-      {char_cls, char_cls},    {short_cls, short_cls},    {int_cls, int_cls},
-      {uchar_cls, uchar_cls},  {ushort_cls, ushort_cls},  {uint_cls, uint_cls},
-      {half_cls, half_cls},    {float_cls, float_cls},
+  switch (tok_type) {
+    case Plus:
+      return OperatorType(OP_NUMERIC | OP_ARITHMETIC);
+    case Minus:
+      return OperatorType(OP_NUMERIC | OP_ARITHMETIC);
+    case Multiply:
+      return OperatorType(OP_NUMERIC | OP_ARITHMETIC);
+    case Divide:
+      return OperatorType(OP_NUMERIC | OP_ARITHMETIC);
+    case Increment:
+      return OperatorType(OP_NUMERIC);
+    case Decrement:
+      return OperatorType(OP_NUMERIC);
 
-      {char2_cls, char_cls},   {short2_cls, short_cls},   {int2_cls, int_cls},
-      {uchar2_cls, uchar_cls}, {ushort2_cls, ushort_cls}, {uint2_cls, uint_cls},
-      {half2_cls, half_cls},   {float2_cls, float_cls},
+    case Modulo:
+      return OperatorType(OP_INTEGER | OP_ARITHMETIC);
+    case And:
+      return OperatorType(OP_INTEGER | OP_BITWISE);
+    case Or:
+      return OperatorType(OP_INTEGER | OP_BITWISE);
+    case Xor:
+      return OperatorType(OP_INTEGER | OP_BITWISE);
+    case BitwiseNot:
+      return OperatorType(OP_INTEGER);
 
-      {char3_cls, char_cls},   {short3_cls, short_cls},   {int3_cls, int_cls},
-      {uchar3_cls, uchar_cls}, {ushort3_cls, ushort_cls}, {uint3_cls, uint_cls},
-      {half3_cls, half_cls},   {float3_cls, float_cls},
+    case LShift:
+      return OperatorType(OP_INTEGER | OP_SHIFT);
+    case RShift:
+      return OperatorType(OP_INTEGER | OP_SHIFT);
 
-      {char4_cls, char_cls},   {short4_cls, short_cls},   {int4_cls, int_cls},
-      {uchar4_cls, uchar_cls}, {ushort4_cls, ushort_cls}, {uint4_cls, uint_cls},
-      {half4_cls, half_cls},   {float4_cls, float_cls},
-  };
-  return types;
+    case Equal:
+      return OperatorType(OP_EQUALITY);
+    case NotEqual:
+      return OperatorType(OP_EQUALITY);
+
+    case LThan:
+      return OperatorType(OP_NUMERIC | OP_RELATIONAL);
+    case GThan:
+      return OperatorType(OP_NUMERIC | OP_RELATIONAL);
+    case LEqual:
+      return OperatorType(OP_NUMERIC | OP_RELATIONAL);
+    case GEqual:
+      return OperatorType(OP_NUMERIC | OP_RELATIONAL);
+
+    case Not:
+      return OperatorType(OP_BOOL);
+    case LogicalAnd:
+      return OperatorType(OP_BOOL | OP_LOGICAL);
+    case LogicalOr:
+      return OperatorType(OP_BOOL | OP_LOGICAL);
+    default:
+      return OP_INVALID;
+  }
 }
 
-bool SymbolTable::is_numeric(const SymbolClass *base)
+namespace builtin {
+
+ClassId binary_operator_return_type(SymbolClass *lhs, TokenType op, SymbolClass *rhs)
 {
-  return base != bool_cls;
+  using namespace builtin;
+  /* Validate inputs and binary capability. */
+  if (lhs->builtin_class == ClassId::Invalid || rhs->builtin_class == ClassId::Invalid) {
+    return ClassId::Invalid;
+  }
+
+  const uint16_t l = uint16_t(lhs->builtin_class);
+  const uint16_t r = uint16_t(rhs->builtin_class);
+  const OperatorType o = to_operator_type(op);
+
+  /* Logical operators (&&, ||): scalar bool only. */
+  if (o & OP_LOGICAL) {
+    return (l == ClassId::bool_t && r == ClassId::bool_t) ? ClassId::bool_t : ClassId::Invalid;
+  }
+
+  /* Enforce scalar base category (Numeric vs Integer). */
+  if ((o & OP_NUMERIC) && (!(l & FLAG_NUMERIC) || !(r & FLAG_NUMERIC))) {
+    return ClassId::Invalid;
+  }
+
+  if ((o & OP_INTEGER) && (!(l & FLAG_INTEGER) || !(r & FLAG_INTEGER))) {
+    return ClassId::Invalid;
+  }
+
+  const uint16_t l_len = l & LEN_MASK;
+  const uint16_t r_len = r & LEN_MASK;
+  assert(l_len != 0 && r_len != 0);
+
+  /* Bitwise Shifts (<<, >>): RHS must be scalar or match LHS length. */
+  if (o & OP_SHIFT) {
+    return (r_len == 1 || r_len == l_len) ? ClassId(l) : ClassId::Invalid;
+  }
+
+  /* Equality (==, !=): Scalars of exact matching base types only. */
+  if (o & OP_EQUALITY) {
+    return (l_len == 1 && r_len == 1 && (l & BASE_MASK) == (r & BASE_MASK)) ? ClassId::bool_t :
+                                                                              ClassId::Invalid;
+  }
+
+  /* Relational (<, >, <=, >=): Scalar numerics only. */
+  if (o & OP_RELATIONAL) {
+    return (l_len == 1 && r_len == 1) ? ClassId::bool_t : ClassId::Invalid;
+  }
+
+  uint16_t target_len = l_len;
+  if (l_len != r_len) {
+    /* Vector Dimension Promotion (Scalar-Vector / Vector-Scalar). */
+    if (l_len == 1) {
+      target_len = r_len;
+    }
+    else if (r_len == 1) {
+      target_len = l_len;
+    }
+    else {
+      return ClassId::Invalid;
+    }
+  }
+
+  /* Base Type Promotion: Higher rank base wins. */
+  const uint16_t l_rank = l & RANK_MASK;
+  const uint16_t r_rank = r & RANK_MASK;
+  const uint16_t promoted_base = (l_rank > r_rank) ? (l & BASE_MASK) : (r & BASE_MASK);
+
+  return static_cast<ClassId>(promoted_base | target_len);
 }
 
-bool SymbolTable::is_integer(const SymbolClass *base)
+ClassId unary_prefix_operator_return_type(TokenType op, SymbolClass *rhs)
 {
-  return base != float_cls;
+  using namespace builtin;
+  const uint16_t r = uint16_t(rhs->builtin_class);
+  const OperatorType o = to_operator_type(op);
+
+  if (r == ClassId::Invalid) {
+    return ClassId::Invalid;
+  }
+
+  if (o & OP_BOOL) {
+    return (r == ClassId::bool_t) ? ClassId::bool_t : ClassId::Invalid;
+  }
+  if ((o & OP_NUMERIC) && !(r & FLAG_NUMERIC)) {
+    return ClassId::Invalid;
+  }
+  if ((o & OP_INTEGER) && !(r & FLAG_INTEGER)) {
+    return ClassId::Invalid;
+  }
+
+  return rhs->builtin_class;
 }
 
-int SymbolTable::get_rank(const SymbolClass *base)
+ClassId unary_suffix_operator_return_type(SymbolClass *lhs, TokenType op)
 {
-  if (base == char_cls) {
-    return 1;
+  using namespace builtin;
+  const uint16_t l = uint16_t(lhs->builtin_class);
+  const OperatorType o = to_operator_type(op);
+
+  if (l == ClassId::Invalid) {
+    return ClassId::Invalid;
   }
-  if (base == uchar_cls) {
-    return 2;
+
+  if ((o & OP_NUMERIC) && !(l & FLAG_NUMERIC)) {
+    return ClassId::Invalid;
   }
-  if (base == short_cls) {
-    return 3;
-  }
-  if (base == ushort_cls) {
-    return 4;
-  }
-  if (base == int_cls) {
-    return 5;
-  }
-  if (base == uint_cls) {
-    return 6;
-  }
-  if (base == float_cls) {
-    return 7;
-  }
-  return 0;
+
+  return lhs->builtin_class;
 }
 
-SymbolClass *SymbolTable::get_promoted_base(SymbolClass *b1, SymbolClass *b2)
+}  // namespace builtin
+
+SymbolClass *SymbolTable::to_class(builtin::ClassId id) const
 {
-  return (get_rank(b1) >= get_rank(b2)) ? b1 : b2;
+  switch (id) {
+    case builtin::ClassId::bool_t:
+      return bool_cls;
+    case builtin::ClassId::bool2_t:
+      return bool2_cls;
+    case builtin::ClassId::bool3_t:
+      return bool3_cls;
+    case builtin::ClassId::bool4_t:
+      return bool4_cls;
+    case builtin::ClassId::char_t:
+      return char_cls;
+    case builtin::ClassId::char2_t:
+      return char2_cls;
+    case builtin::ClassId::char3_t:
+      return char3_cls;
+    case builtin::ClassId::char4_t:
+      return char4_cls;
+    case builtin::ClassId::float_t:
+      return float_cls;
+    case builtin::ClassId::float2_t:
+      return float2_cls;
+    case builtin::ClassId::float3_t:
+      return float3_cls;
+    case builtin::ClassId::float4_t:
+      return float4_cls;
+    case builtin::ClassId::half_t:
+      return half_cls;
+    case builtin::ClassId::half2_t:
+      return half2_cls;
+    case builtin::ClassId::half3_t:
+      return half3_cls;
+    case builtin::ClassId::half4_t:
+      return half4_cls;
+    case builtin::ClassId::int_t:
+      return int_cls;
+    case builtin::ClassId::int2_t:
+      return int2_cls;
+    case builtin::ClassId::int3_t:
+      return int3_cls;
+    case builtin::ClassId::int4_t:
+      return int4_cls;
+    case builtin::ClassId::short_t:
+      return short_cls;
+    case builtin::ClassId::short2_t:
+      return short2_cls;
+    case builtin::ClassId::short3_t:
+      return short3_cls;
+    case builtin::ClassId::short4_t:
+      return short4_cls;
+    case builtin::ClassId::uchar_t:
+      return uchar_cls;
+    case builtin::ClassId::uchar2_t:
+      return uchar2_cls;
+    case builtin::ClassId::uchar3_t:
+      return uchar3_cls;
+    case builtin::ClassId::uchar4_t:
+      return uchar4_cls;
+    case builtin::ClassId::uint_t:
+      return uint_cls;
+    case builtin::ClassId::uint2_t:
+      return uint2_cls;
+    case builtin::ClassId::uint3_t:
+      return uint3_cls;
+    case builtin::ClassId::uint4_t:
+      return uint4_cls;
+    case builtin::ClassId::ushort_t:
+      return ushort_cls;
+    case builtin::ClassId::ushort2_t:
+      return ushort2_cls;
+    case builtin::ClassId::ushort3_t:
+      return ushort3_cls;
+    case builtin::ClassId::ushort4_t:
+      return ushort4_cls;
+    case builtin::ClassId::float2x2_t:
+      return float2x2_cls;
+    case builtin::ClassId::float2x3_t:
+      return float2x3_cls;
+    case builtin::ClassId::float2x4_t:
+      return float2x4_cls;
+    case builtin::ClassId::float3x2_t:
+      return float3x2_cls;
+    case builtin::ClassId::float3x3_t:
+      return float3x3_cls;
+    case builtin::ClassId::float3x4_t:
+      return float3x4_cls;
+    case builtin::ClassId::float4x2_t:
+      return float4x2_cls;
+    case builtin::ClassId::float4x3_t:
+      return float4x3_cls;
+    case builtin::ClassId::float4x4_t:
+      return float4x4_cls;
+    default:
+      return err_cls;
+  }
 }
 
 SymbolClass *SymbolTable::make_type(SymbolClass *base, int size)
@@ -228,135 +451,27 @@ SymbolClass *SymbolTable::make_type(SymbolClass *base, int size)
   return nullptr;
 }
 
-void SymbolTable::add_operator(
-    SourceLocation loc, SymbolClass *left, TokenType op, SymbolClass *right, SymbolClass *ret)
+/* Generates all scalar and vector types (e.g. int, int2, int3, int4). */
+vector<SymbolTable::BuiltinType> SymbolTable::generate_builtin_types()
 {
-  string id;
-  if (left && right) {
-    id = binary_type_to_id.find(op)->second;
-  }
-  else if (left) {
-    id = suffix_type_to_id.find(op)->second;
-  }
-  else if (right) {
-    id = prefix_type_to_id.find(op)->second;
-  }
-  SymbolFunction *sym = fun_arena.alloc(root, loc.tok, ret, id, SymbolFunction::GLOBAL);
-  operators.emplace(OperatorKey(left, op, right), sym);
-}
+  vector<BuiltinType> types{
+      {char_cls, char_cls},    {short_cls, short_cls},    {int_cls, int_cls},
+      {uchar_cls, uchar_cls},  {ushort_cls, ushort_cls},  {uint_cls, uint_cls},
+      {half_cls, half_cls},    {float_cls, float_cls},
 
-/* Generates every single legal BSL operator overload dynamically. */
-void SymbolTable::generate_builtin_operators(SourceLocation loc, const vector<BuiltinType> &types)
-{
-  /* Unary Operators */
-  for (const auto &t : types) {
-    if (is_numeric(t.base)) {
-      add_operator(loc, nullptr, Plus, t.type, t.type);
-      add_operator(loc, nullptr, Minus, t.type, t.type);
-      add_operator(loc, nullptr, Increment, t.type, t.type);
-      add_operator(loc, nullptr, Decrement, t.type, t.type);
-      add_operator(loc, t.type, Increment, nullptr, t.type);
-      add_operator(loc, t.type, Decrement, nullptr, t.type);
-    }
-    if (is_integer(t.base)) {
-      add_operator(loc, nullptr, BitwiseNot, t.type, t.type);
-    }
-  }
+      {char2_cls, char_cls},   {short2_cls, short_cls},   {int2_cls, int_cls},
+      {uchar2_cls, uchar_cls}, {ushort2_cls, ushort_cls}, {uint2_cls, uint_cls},
+      {half2_cls, half_cls},   {float2_cls, float_cls},
 
-  add_operator(loc, nullptr, Not, bool_cls, bool_cls);
-  add_operator(loc, nullptr, Not, bool32_t_cls, bool_cls);
+      {char3_cls, char_cls},   {short3_cls, short_cls},   {int3_cls, int_cls},
+      {uchar3_cls, uchar_cls}, {ushort3_cls, ushort_cls}, {uint3_cls, uint_cls},
+      {half3_cls, half_cls},   {float3_cls, float_cls},
 
-  /* Binary Operators */
-  for (const auto &t1 : types) {
-    for (const auto &t2 : types) {
-      int target_size = 0;
-      if (t1.type->comp_len == t2.type->comp_len) {
-        target_size = t1.type->comp_len;
-      }
-      else if (t1.type->comp_len == 1) {
-        /* Scalar-Vector Promotion. */
-        target_size = t2.type->comp_len;
-      }
-      else if (t2.type->comp_len == 1) {
-        /* Vector-Scalar Promotion. */
-        target_size = t1.type->comp_len;
-      }
-      else {
-        /* Size mismatch (e.g., float2 with float3). */
-        continue;
-      }
-
-      /* Arithmetic (+, -, *, /). */
-      if (is_numeric(t1.base) && is_numeric(t2.base)) {
-        SymbolClass *res_base = get_promoted_base(t1.base, t2.base);
-        SymbolClass *res_type = make_type(res_base, target_size);
-        add_operator(loc, t1.type, Plus, t2.type, res_type);
-        add_operator(loc, t1.type, Minus, t2.type, res_type);
-        add_operator(loc, t1.type, Multiply, t2.type, res_type);
-        add_operator(loc, t1.type, Divide, t2.type, res_type);
-      }
-
-      /* Modulo (%). */
-      if (is_integer(t1.base) && is_integer(t2.base)) {
-        SymbolClass *res_base = get_promoted_base(t1.base, t2.base);
-        SymbolClass *res_type = make_type(res_base, target_size);
-        add_operator(loc, t1.type, Modulo, t2.type, res_type);
-      }
-
-      /* Bitwise Logic (&, |, ^). */
-      if (is_integer(t1.base) && is_integer(t2.base)) {
-        SymbolClass *res_base = get_promoted_base(t1.base, t2.base);
-        SymbolClass *res_type = make_type(res_base, target_size);
-        add_operator(loc, t1.type, And, t2.type, res_type);
-        add_operator(loc, t1.type, Or, t2.type, res_type);
-        add_operator(loc, t1.type, Xor, t2.type, res_type);
-      }
-
-      /* Bitwise Shifts (<<, >>). */
-      /* L can be scalar/vector, R can be scalar or matching size vector. */
-      if (is_integer(t1.base) && is_integer(t2.base)) {
-        if (t2.type->comp_len == 1 || t2.type->comp_len == t1.type->comp_len) {
-          add_operator(loc, t1.type, LShift, t2.type, t1.type);
-          add_operator(loc, t1.type, RShift, t2.type, t1.type);
-        }
-      }
-
-      /* Equality (==, !=) */
-      /* Do not support vector-vector comparisons for MSL compatibility. */
-      if (t1.type->comp_len == 1 && t2.type->comp_len == 1) {
-        if (t1.base == t2.base) {
-          add_operator(loc, t1.type, Equal, t2.type, bool_cls);
-          add_operator(loc, t1.type, NotEqual, t2.type, bool_cls);
-        }
-      }
-    }
-  }
-
-  /* Relational (<, >, <=, >=).
-   * Only valid on scalar numeric types. */
-  for (const auto &t1 : types) {
-    if (t1.type->comp_len != 1 || !is_numeric(t1.base)) {
-      continue;
-    }
-    for (const auto &t2 : types) {
-      if (t2.type->comp_len != 1 || !is_numeric(t2.base)) {
-        continue;
-      }
-      add_operator(loc, t1.type, LThan, t2.type, bool_cls);
-      add_operator(loc, t1.type, GThan, t2.type, bool_cls);
-      add_operator(loc, t1.type, LEqual, t2.type, bool_cls);
-      add_operator(loc, t1.type, GEqual, t2.type, bool_cls);
-    }
-  }
-
-  /* Logical Operators (&&, ||).
-   * Only valid on scalar bool. */
-  add_operator(loc, bool_cls, LogicalAnd, bool_cls, bool_cls);
-  add_operator(loc, bool_cls, LogicalOr, bool_cls, bool_cls);
-
-  /* Add packed_float3 operators in order to support most auto casts. */
-  add_operator(loc, nullptr, Plus, packed_float3_cls, packed_float3_cls);
-  add_operator(loc, nullptr, Minus, packed_float3_cls, packed_float3_cls);
+      {char4_cls, char_cls},   {short4_cls, short_cls},   {int4_cls, int_cls},
+      {uchar4_cls, uchar_cls}, {ushort4_cls, ushort_cls}, {uint4_cls, uint_cls},
+      {half4_cls, half_cls},   {float4_cls, float_cls},
+  };
+  return types;
 }
 
 }  // namespace bsl

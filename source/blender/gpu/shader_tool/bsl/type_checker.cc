@@ -205,6 +205,7 @@ struct ExpressionTypeParser
 
   ExpressionResult prefix(const ast::Node &t, BindingPower p)
   {
+    using namespace builtin;
     ExpressionResult right = expr(p);
 
     if (right.array_dim > 0) {
@@ -214,13 +215,13 @@ struct ExpressionTypeParser
 
     TokenType op_type = t.front().type();
 
-    auto it = table->operators.find({nullptr, op_type, right.type});
-    if (it == table->operators.end()) {
+    ClassId type_id = unary_prefix_operator_return_type(op_type, right.type);
+    if (type_id == builtin::Invalid) {
       error(t, Diag::InvalidUnaryArgumentType, to_str(op_type), right.type->identifier);
       return table->err_cls;
     }
 
-    SymbolClass *type = it->second->return_type;
+    SymbolClass *type = table->to_class(type_id);
 
     if (is_reference && (op_type == Increment || op_type == Decrement)) {
       error(t, Diag::ReferenceCannotBindSideEffect);
@@ -256,6 +257,7 @@ struct ExpressionTypeParser
 
   ExpressionResult suffix(ExpressionResult left, const ast::Node &t)
   {
+    using namespace builtin;
     if (left.array_dim > 0) {
       error(node, Diag::ArrayTypeOperand);
       return table->err_cls;
@@ -263,13 +265,13 @@ struct ExpressionTypeParser
 
     TokenType op_type = t.front().type();
 
-    auto it = table->operators.find({left.type, op_type, nullptr});
-    if (it == table->operators.end()) {
+    ClassId type_id = unary_suffix_operator_return_type(left.type, op_type);
+    if (type_id == builtin::Invalid) {
       error(t, Diag::InvalidUnaryArgumentType, to_str(op_type), left.type->identifier);
       return table->err_cls;
     }
 
-    SymbolClass *type = it->second->return_type;
+    SymbolClass *type = table->to_class(type_id);
 
     if (is_reference && (op_type == Increment || op_type == Decrement)) {
       error(t, Diag::ReferenceCannotBindSideEffect);
@@ -294,6 +296,7 @@ struct ExpressionTypeParser
 
   ExpressionResult binary(ExpressionResult lhs, const ast::Node &t, BindingPower p)
   {
+    using namespace builtin;
     ExpressionResult rhs = expr(p);
 
     if (lhs.array_dim > 0 || rhs.array_dim > 0) {
@@ -303,8 +306,8 @@ struct ExpressionTypeParser
 
     TokenType op_type = t.front().type();
 
-    auto it = table->operators.find({lhs.type, op_type, rhs.type});
-    if (it == table->operators.end()) {
+    ClassId type_id = binary_operator_return_type(lhs.type, op_type, rhs.type);
+    if (type_id == builtin::Invalid) {
       error(t,
             Diag::InvalidBinaryOperands,
             lhs.type->identifier,
@@ -313,7 +316,7 @@ struct ExpressionTypeParser
       return table->err_cls;
     }
 
-    SymbolClass *type = it->second->return_type;
+    SymbolClass *type = table->to_class(type_id);
     ExprFlag flags = ExprFlag(lhs.flags & rhs.flags);
 
     if (flags & ExprFlag::IsConstexpr) {

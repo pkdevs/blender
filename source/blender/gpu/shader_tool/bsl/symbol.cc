@@ -537,20 +537,6 @@ struct SymbolParser : NodeErrorHandler {
       cls->align = underlying_type->align;
       cls->is_std140_compatible = cls->size == 4;
       cls->is_std430_compatible = cls->size == 4;
-      /* Define comparison operators. */
-      for (TokenType op : {Equal, NotEqual, LThan, GThan, LEqual, GEqual}) {
-        string id(table.binary_type_to_id.find(op)->second);
-        {
-          SymbolFunction *sym = table.fun_arena.alloc(
-              table.root, decl.front(), table.bool_cls, id, SymbolFunction::GLOBAL);
-          table.operators.emplace(OperatorKey(underlying_type, op, cls), sym);
-        }
-        {
-          SymbolFunction *sym = table.fun_arena.alloc(
-              table.root, decl.front(), table.bool_cls, id, SymbolFunction::GLOBAL);
-          table.operators.emplace(OperatorKey(cls, op, underlying_type), sym);
-        }
-      }
     }
     else {
       cls->ensure_size_and_align();

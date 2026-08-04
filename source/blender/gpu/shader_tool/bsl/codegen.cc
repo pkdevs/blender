@@ -172,42 +172,38 @@ struct CodegenContext : NodeErrorHandler {
 
     ExpressionResult prefix(const ast::Node &t, BindingPower p)
     {
+      using namespace builtin;
       TokenType op_type = t.front().type();
       ExpressionResult right = expr(p);
 
-      auto it = ctx.table.operators.find({nullptr, op_type, right.type});
-      SymbolClass *type = (it != ctx.table.operators.end()) ? it->second->return_type :
-                                                              ctx.table.err_cls;
-      return {string(t.str_full()) + right.str, type};
+      ClassId type = unary_prefix_operator_return_type(op_type, right.type);
+      return {string(t.str_full()) + right.str, ctx.table.to_class(type)};
     }
 
     ExpressionResult suffix(ExpressionResult left, const ast::Node &t)
     {
+      using namespace builtin;
       TokenType op_type = t.front().type();
 
-      auto it = ctx.table.operators.find({left.type, op_type, nullptr});
-      SymbolClass *type = (it != ctx.table.operators.end()) ? it->second->return_type :
-                                                              ctx.table.err_cls;
-      return {left.str + string(t.str_full()), type};
+      ClassId type = unary_suffix_operator_return_type(left.type, op_type);
+      return {left.str + string(t.str_full()), ctx.table.to_class(type)};
     }
 
     ExpressionResult binary(ExpressionResult lhs, const ast::Node &t, BindingPower p)
     {
+      using namespace builtin;
       TokenType op_type = t.front().type();
 
       ExpressionResult rhs = expr(p);
 
-      auto it = ctx.table.operators.find({lhs.type, op_type, rhs.type});
-      SymbolClass *type = (it != ctx.table.operators.end()) ? it->second->return_type :
-                                                              ctx.table.err_cls;
-
+      ClassId type = binary_operator_return_type(lhs.type, op_type, rhs.type);
 #if 0 /* Future operator overloading */
       if (true) {
         const string op_name = ctx.table.binary_type_to_id.find(op_type)->second;
         return {op_name + '(' + lhs.str + ',' + rhs.str + ')', type};
       }
 #endif
-      return {lhs.str + string(t.str_full()) + rhs.str, type};
+      return {lhs.str + string(t.str_full()) + rhs.str, ctx.table.to_class(type)};
     }
 
     ExpressionResult ternary(ExpressionResult left,
@@ -1225,7 +1221,7 @@ struct CodegenContext : NodeErrorHandler {
     if (type.identifier == "bool") {
       return "false";
     }
-    if (type.is_builtin) {
+    if (type.is_builtin()) {
       return type.identifier + "(0)";
     }
     return type.identifier + "_ctor_()";
@@ -1386,7 +1382,7 @@ struct CodegenContext : NodeErrorHandler {
     string fn_name = "_" + member.original;
     string fn_args = "(" + union_type_id + " this_)";
     string fn_body = "{\n";
-    if (member_type.is_builtin) {
+    if (member_type.is_builtin()) {
       if (member.array_dimensions > 0) {
         error(member.loc.tok, Diag::UnionArrayUnsupported);
       }
@@ -1417,7 +1413,7 @@ struct CodegenContext : NodeErrorHandler {
     string fn_name = "_" + member.original + "_set_";
     string fn_args = "(" + union_type_id + " &this_, " + member_type_id + " v)";
     string fn_body = "{\n";
-    if (member_type.is_builtin) {
+    if (member_type.is_builtin()) {
       if (member.array_dimensions > 0) {
         error(member.loc.tok, Diag::UnionArrayUnsupportedAlt);
       }
@@ -2132,13 +2128,13 @@ struct CodegenContext : NodeErrorHandler {
       /* Only use aggregate syntax for arrays. */
       open = '{', close = '}';
     }
-    else if (cls->is_builtin) {
+    else if (cls->is_builtin()) {
       /* Use constructor syntax for builtin types. */
       open = cls->identifier + "(", close = ')';
     }
     else if (is_empty) {
       /* Call default constructor. */
-      if (cls->is_builtin) {
+      if (cls->is_builtin()) {
         open = cls->identifier + "(0", close = ')';
       }
       else {
