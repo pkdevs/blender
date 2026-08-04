@@ -1377,7 +1377,7 @@ void EDBM_verts_mirror_cache_begin_ex(BMEditMesh *em,
   BM_mesh_elem_index_ensure(bm, BM_VERT);
 
   if (use_topology) {
-    ED_mesh_mirrtopo_init(em, nullptr, &mesh_topo_store, true);
+    ED_mesh_mirrtopo_init(em, nullptr, &mesh_topo_store, true, axis);
   }
   else {
     tree = kdtree_new<float3>(bm->totvert);

@@ -513,7 +513,8 @@ bool ED_mesh_mirrtopo_recalc_check(BMEditMesh *em, Mesh *mesh, MirrTopoStore_t *
 void ED_mesh_mirrtopo_init(BMEditMesh *em,
                            Mesh *mesh,
                            MirrTopoStore_t *mesh_topo_store,
-                           bool skip_em_vert_array_init);
+                           bool skip_em_vert_array_init,
+                           int axis = 0);
 void ED_mesh_mirrtopo_free(MirrTopoStore_t *mesh_topo_store);
 
 /* `mesh_data.cc` */

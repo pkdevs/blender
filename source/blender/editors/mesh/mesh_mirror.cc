@@ -17,6 +17,7 @@
 #include "BKE_mesh_types.hh"
 
 #include "BLI_kdtree.hh"
+#include "BLI_math_vector_types.hh"
 
 #include "ED_mesh.hh"
 
@@ -163,10 +164,23 @@ bool ED_mesh_mirrtopo_recalc_check(BMEditMesh *em, Mesh *mesh, MirrTopoStore_t *
   return false;
 }
 
+static bool mirrtopo_axis_opposite_sides(float axis_a, float axis_b)
+{
+  const float eps = 1e-6f;
+  if (axis_a > eps && axis_b > eps) {
+    return false;
+  }
+  if (axis_a < -eps && axis_b < -eps) {
+    return false;
+  }
+  return true;
+}
+
 void ED_mesh_mirrtopo_init(BMEditMesh *em,
                            Mesh *mesh,
                            MirrTopoStore_t *mesh_topo_store,
-                           const bool skip_em_vert_array_init)
+                           const bool skip_em_vert_array_init,
+                           const int axis)
 {
   if (em) {
     BLI_assert(mesh == nullptr);
@@ -305,8 +319,10 @@ void ED_mesh_mirrtopo_init(BMEditMesh *em,
         const int match_count = a - last;
         if (match_count == 2) {
           const int j = topo_pairs[a - 1].v_index, k = topo_pairs[a - 2].v_index;
-          index_lookup[j] = intptr_t(vtable[k]);
-          index_lookup[k] = intptr_t(vtable[j]);
+          if (mirrtopo_axis_opposite_sides(vtable[j]->co[axis], vtable[k]->co[axis])) {
+            index_lookup[j] = intptr_t(vtable[k]);
+            index_lookup[k] = intptr_t(vtable[j]);
+          }
         }
         else if (match_count == 1) {
           /* Center vertex. */
@@ -319,13 +335,16 @@ void ED_mesh_mirrtopo_init(BMEditMesh *em,
   }
   else {
     /* same as above, for mesh */
+    const Span<float3> positions = mesh->vert_positions();
     for (a = 1; a <= totvert; a++) {
       if ((a == totvert) || (topo_pairs[a - 1].hash != topo_pairs[a].hash)) {
         const int match_count = a - last;
         if (match_count == 2) {
           const int j = topo_pairs[a - 1].v_index, k = topo_pairs[a - 2].v_index;
-          index_lookup[j] = k;
-          index_lookup[k] = j;
+          if (mirrtopo_axis_opposite_sides(positions[j][axis], positions[k][axis])) {
+            index_lookup[j] = k;
+            index_lookup[k] = j;
+          }
         }
         else if (match_count == 1) {
           /* Center vertex. */
