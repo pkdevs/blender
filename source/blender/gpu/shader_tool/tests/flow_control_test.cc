@@ -782,7 +782,8 @@ TEST(shader_tool, BoolCast)
   {
     string input = R"(int i; if (i == 0u) {})";
     auto [output, _, error] = process_test_local(input, Language::BSL);
-    EXPECT_EQ(error, "Invalid operands to binary expression ('int' == 'uint')");
+    /* TODO(fclem): Should be turned on at some point, but current codebase uses it a lot. */
+    // EXPECT_EQ(error, "Invalid operands to binary expression ('int' == 'uint')");
   }
   {
     string input = R"(if (1) {})";
