@@ -273,8 +273,13 @@ static bool UNUSED_FUNCTION(EDBM_select_mirrored_extend_all)(Object *obedit, BME
   if (selectmode & SCE_SELECT_VERTEX) {
     symmetry_htype |= BM_VERT;
   }
+  Mesh *mesh = id_cast<Mesh *>(obedit->data);
+  const bool use_self = (symmetry_htype & BM_VERT) != 0;
+  const bool use_select = (symmetry_htype & BM_EDGE) != 0;
+  const bool respecthide = (symmetry_htype & BM_FACE) != 0;
   if (std::optional<EditMeshSymmetryHelper> symmetry_helper =
-          EditMeshSymmetryHelper::create_if_needed(obedit, symmetry_htype))
+          EditMeshSymmetryHelper::create_if_needed(
+              obedit, symmetry_htype, mesh->symmetry, use_self, use_select, respecthide))
   {
     const char hflag = BM_ELEM_SELECT;
     BMIter iter;

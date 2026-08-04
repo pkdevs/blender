@@ -53,7 +53,14 @@ struct UvElementMap;
 /* `editmesh_utils.cc` */
 class EditMeshSymmetryHelper {
  public:
-  static std::optional<EditMeshSymmetryHelper> create_if_needed(Object *ob, uchar htype);
+  static std::optional<EditMeshSymmetryHelper> create_if_needed(
+      Object *ob,
+      uchar htype,
+      uint8_t symmetry_axes,
+      bool use_self,
+      bool use_select,
+      bool respecthide,
+      std::optional<bool> use_topology = std::nullopt);
 
   bool any_mirror_vert_selected(BMVert *v, char hflag) const;
   bool any_mirror_edge_selected(BMEdge *e, char hflag) const;
@@ -68,7 +75,13 @@ class EditMeshSymmetryHelper {
   void apply_on_mirror_faces(BMFace *f, FunctionRef<void(BMFace *)> op) const;
 
  private:
-  EditMeshSymmetryHelper(Object *ob, uchar htype);
+  EditMeshSymmetryHelper(Object *ob,
+                         uchar htype,
+                         uint8_t symmetry_axes,
+                         bool use_self,
+                         bool use_select,
+                         bool respecthide,
+                         std::optional<bool> use_topology);
 
   BMEditMesh *em_;
   Mesh *mesh_;

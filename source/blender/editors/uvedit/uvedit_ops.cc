@@ -2702,138 +2702,66 @@ static void UV_OT_mark_seam(wmOperatorType *ot)
 }
 
 static bool uv_copy_mirrored_faces(const Scene *scene,
+                                   Object *obedit,
                                    BMesh *bm,
                                    const int mesh_axis,
                                    const int uv_axis,
-                                   const int precision,
-                                   int *r_double_warn)
+                                   const bool use_topology)
 {
-  *r_double_warn = 0;
-  const float precision_scale = powf(10.0f, precision);
-  /* TODO: replace mirror look-ups with #EditMeshSymmetryHelper. */
-  Map<float3, BMVert *> mirror_gt, mirror_lt;
-  Map<BMVert *, BMVert *> vmap;
+  const int axis = mesh_axis % 3;
+  const uint8_t symmetry_axis = ME_SYMMETRY_X << axis;
+  std::optional<EditMeshSymmetryHelper> symmetry_helper = EditMeshSymmetryHelper::create_if_needed(
+      obedit, BM_VERT | BM_FACE, symmetry_axis, true, false, true, use_topology);
+  if (!symmetry_helper) {
+    return false;
+  }
 
   const BMUVOffsets offsets = BM_uv_map_offsets_get(bm);
   BLI_assert(offsets.uv != -1);
   UNUSED_VARS_NDEBUG(offsets);
-  BMVert *v;
-  BMIter iter;
-
-  const int axis = mesh_axis % 3;
-  BM_ITER_MESH (v, &iter, bm, BM_VERTS_OF_MESH) {
-    float3 pos = math::round(float3(v->co) * precision_scale);
-    if (pos[axis] >= 0.0f) {
-      if (!mirror_gt.add_overwrite(pos, v)) {
-        (*r_double_warn)++;
-      }
-    }
-    if (pos[axis] <= 0.0f) {
-      if (!mirror_lt.add_overwrite(pos, v)) {
-        (*r_double_warn)++;
-      }
-    }
-  }
-
-  for (const auto &[pos, v] : mirror_gt.items()) {
-    float3 mirror_pos = pos;
-    mirror_pos[axis] = -mirror_pos[axis];
-    BMVert *v_mirror = mirror_lt.lookup_default(mirror_pos, nullptr);
-    if (v_mirror) {
-      vmap.add(v, v_mirror);
-    }
-  }
-  for (const auto &[pos, v] : mirror_lt.items()) {
-    float3 mirror_pos = pos;
-    mirror_pos[axis] = -mirror_pos[axis];
-    BMVert *v_mirror = mirror_gt.lookup_default(mirror_pos, nullptr);
-    if (v_mirror) {
-      vmap.add(v, v_mirror);
-    }
-  }
-
-  Map<Array<BMVert *>, BMFace *> sorted_verts_to_face;
-  /* Maps faces to their corresponding mirrored face. */
-  Map<BMFace *, BMFace *> face_map;
-
-  BMFace *f;
-  BMIter iter_face;
-  BM_ITER_MESH (f, &iter_face, bm, BM_FACES_OF_MESH) {
-    Array<BMVert *> sorted_verts(f->len);
-    bool valid = true;
-    int loop_index = 0;
-    BMLoop *l;
-    BMIter liter;
-    BM_ITER_ELEM_INDEX (l, &liter, f, BM_LOOPS_OF_FACE, loop_index) {
-      if (!vmap.contains(l->v)) {
-        valid = false;
-        break;
-      }
-      sorted_verts[loop_index] = l->v;
-    }
-    if (valid) {
-      std::ranges::sort(sorted_verts);
-      sorted_verts_to_face.add(std::move(sorted_verts), f);
-    }
-  }
-
-  for (const auto &[sorted_verts, f_dst] : sorted_verts_to_face.items()) {
-    Array<BMVert *> mirror_verts(sorted_verts.size());
-    for (int index = 0; index < sorted_verts.size(); index++) {
-      mirror_verts[index] = vmap.lookup_default(sorted_verts[index], nullptr);
-    }
-    std::ranges::sort(mirror_verts);
-    BMFace *f_src = sorted_verts_to_face.lookup_default(mirror_verts, nullptr);
-    if (f_src) {
-      if (f_src != f_dst) {
-        face_map.add(f_dst, f_src);
-      }
-    }
-  }
 
   const int cd_loop_uv_offset = CustomData_get_offset(&bm->ldata, CD_PROP_FLOAT2);
 
   bool changed = false;
   const int other_uv_axis = 1 - uv_axis;
   const bool is_negative = mesh_axis >= OB_NEGX;
-  for (const auto &[f_dst, f_src] : face_map.items()) {
 
-    /* Skip unless both faces have all their UVs selected. */
+  BMFace *f_dst;
+  BMIter iter_face;
+  BM_ITER_MESH (f_dst, &iter_face, bm, BM_FACES_OF_MESH) {
+    /* Skip unless the destination face has all its UVs selected. */
     if (!uvedit_face_visible_test(scene, f_dst) || !uvedit_face_select_test(scene, bm, f_dst)) {
       continue;
     }
-    if (!uvedit_face_visible_test(scene, f_src) || !uvedit_face_select_test(scene, bm, f_src)) {
+
+    float f_dst_center[3];
+    BM_face_calc_center_median(f_dst, f_dst_center);
+    if (is_negative ? (f_dst_center[axis] > 0.0f) : (f_dst_center[axis] < 0.0f)) {
       continue;
     }
 
-    {
-      float f_dst_center[3];
-      BM_face_calc_center_median(f_dst, f_dst_center);
-      if (is_negative ? (f_dst_center[axis] > 0.0f) : (f_dst_center[axis] < 0.0f)) {
-        continue;
-      }
-    }
-
-    BMIter liter;
-    BMLoop *l_dst;
-
-    BM_ITER_ELEM (l_dst, &liter, f_dst, BM_LOOPS_OF_FACE) {
-      BMVert *v_src = vmap.lookup_default(l_dst->v, nullptr);
-      if (!v_src) {
-        continue;
+    symmetry_helper->apply_on_mirror_faces(f_dst, [&](BMFace *f_src) {
+      if (!uvedit_face_visible_test(scene, f_src) || !uvedit_face_select_test(scene, bm, f_src)) {
+        return;
       }
 
-      BMLoop *l_src = BM_face_vert_share_loop(f_src, v_src);
-      if (!l_src) {
-        continue;
-      }
-      const float *uv_src = BM_ELEM_CD_GET_FLOAT_P(l_src, cd_loop_uv_offset);
-      float *uv_dst = BM_ELEM_CD_GET_FLOAT_P(l_dst, cd_loop_uv_offset);
+      BMIter liter;
+      BMLoop *l_dst;
+      BM_ITER_ELEM (l_dst, &liter, f_dst, BM_LOOPS_OF_FACE) {
+        symmetry_helper->apply_on_mirror_verts(l_dst->v, [&](BMVert *v_src) {
+          BMLoop *l_src = BM_face_vert_share_loop(f_src, v_src);
+          if (!l_src) {
+            return;
+          }
+          const float *uv_src = BM_ELEM_CD_GET_FLOAT_P(l_src, cd_loop_uv_offset);
+          float *uv_dst = BM_ELEM_CD_GET_FLOAT_P(l_dst, cd_loop_uv_offset);
 
-      uv_dst[uv_axis] = -(uv_src[uv_axis] - 0.5f) + 0.5f;
-      uv_dst[other_uv_axis] = uv_src[other_uv_axis];
-      changed = true;
-    }
+          uv_dst[uv_axis] = -(uv_src[uv_axis] - 0.5f) + 0.5f;
+          uv_dst[other_uv_axis] = uv_src[other_uv_axis];
+          changed = true;
+        });
+      }
+    });
   }
 
   return changed;
@@ -2846,39 +2774,20 @@ static wmOperatorStatus uv_copy_mirrored_faces_exec(bContext *C, wmOperator *op)
   ViewLayer *view_layer = CTX_data_view_layer(C);
   Vector<Object *> objects = BKE_view_layer_array_from_objects_in_edit_mode_unique_data_with_uvs(
       *bmain, scene, view_layer, nullptr);
-  const int precision = RNA_int_get(op->ptr, "precision");
 
   const int mesh_axis = RNA_enum_get(op->ptr, "mesh_axis");
   const int uv_axis = RNA_enum_get(op->ptr, "uv_axis");
-
-  int total_duplicates = 0;
-  int meshes_with_duplicates = 0;
+  const bool use_topology = RNA_boolean_get(op->ptr, "use_topology");
 
   for (Object *obedit : objects) {
     BMEditMesh *em = BKE_editmesh_from_object(obedit);
 
-    int double_warn = 0;
-
-    bool changed = uv_copy_mirrored_faces(
-        scene, em->bm, mesh_axis, uv_axis, precision, &double_warn);
-
-    if (double_warn) {
-      total_duplicates += double_warn;
-      meshes_with_duplicates++;
-    }
+    bool changed = uv_copy_mirrored_faces(scene, obedit, em->bm, mesh_axis, uv_axis, use_topology);
 
     if (changed) {
       DEG_id_tag_update(obedit->data, 0);
       WM_event_add_notifier(C, NC_GEOM | ND_DATA, obedit->data);
     }
-  }
-
-  if (total_duplicates) {
-    BKE_reportf(op->reports,
-                RPT_WARNING,
-                "%d duplicates found in %d mesh(es), mirror may be incomplete",
-                total_duplicates,
-                meshes_with_duplicates);
   }
 
   return OPERATOR_FINISHED;
@@ -2902,15 +2811,11 @@ void UV_OT_copy_mirrored_faces(wmOperatorType *ot)
                "Mirror vertices based on mesh axis");
   RNA_def_enum(
       ot->srna, "uv_axis", rna_enum_axis_xy_items, 0, "UV Axis", "Axis to mirror UV coordinates");
-  RNA_def_int(ot->srna,
-              "precision",
-              3,
-              1,
-              16,
-              "Precision",
-              "Tolerance for finding vertex duplicates",
-              1,
-              16);
+  RNA_def_boolean(ot->srna,
+                  "use_topology",
+                  false,
+                  "Topology Mirror",
+                  "Use topology-based mirror lookup instead of vertex position matching");
 }
 
 /** \} */
