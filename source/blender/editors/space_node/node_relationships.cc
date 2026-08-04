@@ -570,6 +570,20 @@ static bool is_viewer_node(const bNode &node)
   return ELEM(node.type_legacy, CMP_NODE_VIEWER, GEO_NODE_VIEWER);
 }
 
+static bool is_viewer_node_reusable(const bNode &node)
+{
+  if (!is_viewer_node(node)) {
+    return false;
+  }
+  if (node.type_legacy == GEO_NODE_VIEWER) {
+    const auto &storage = *static_cast<const NodeGeometryViewer *>(node.storage);
+    if (storage.flag & NODE_GEO_VIEWER_FLAG_DEBUG_VIEW) {
+      return false;
+    }
+  }
+  return true;
+}
+
 static bool is_viewer_socket_in_viewer(const bNodeSocket &socket)
 {
   const bNode &node = socket.owner_node();
@@ -861,7 +875,7 @@ static int view_socket(const bContext &C,
   bNode *viewer_node = nullptr;
   /* Try to find a viewer that is already active. */
   for (bNode *node : btree.all_nodes()) {
-    if (is_viewer_node(*node)) {
+    if (is_viewer_node_reusable(*node)) {
       if (node->flag & NODE_DO_OUTPUT && node->custom1 == NODE_VIEWER_SHORTCUT_NONE) {
         viewer_node = node;
         break;
@@ -873,7 +887,9 @@ static int view_socket(const bContext &C,
   for (bNodeLink *link : bsocket_to_view.directly_linked_links()) {
     bNodeSocket &target_socket = *link->tosock;
     bNode &target_node = *link->tonode;
-    if (is_viewer_socket(target_socket) && ELEM(viewer_node, nullptr, &target_node)) {
+    if (is_viewer_socket(target_socket) && is_viewer_node_reusable(target_node) &&
+        ELEM(viewer_node, nullptr, &target_node))
+    {
       finalize_viewer_link(C, snode, target_node, *link);
       position_viewer_node(C, btree, target_node, bnode_to_view);
       return OPERATOR_FINISHED;
@@ -882,7 +898,7 @@ static int view_socket(const bContext &C,
 
   if (viewer_node == nullptr) {
     for (bNode *node : btree.all_nodes()) {
-      if (is_viewer_node(*node) && node->custom1 == NODE_VIEWER_SHORTCUT_NONE) {
+      if (is_viewer_node_reusable(*node) && node->custom1 == NODE_VIEWER_SHORTCUT_NONE) {
         viewer_node = node;
         break;
       }

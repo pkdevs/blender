@@ -576,6 +576,49 @@ class NodeMakeGroupTest(AbstractNodeCopyOperatorTest):
                 self.compare(mapping)
 
 
+class NodeViewerShortcutTest(unittest.TestCase):
+    def test_viewer_shortcut_does_not_reuse_persistent_debug_viewer(self):
+        if args.subtest != "viewer_shortcut":
+            self.skipTest("Run as the dedicated viewer shortcut test")
+
+        area = next(area for area in bpy.context.screen.areas if area.type == 'NODE_EDITOR')
+        space = area.spaces[0]
+        original_tree = space.node_tree
+        tree = bpy.data.node_groups.new("Viewer Shortcut Debug View Test", 'GeometryNodeTree')
+        try:
+            debug_source = tree.nodes.new("GeometryNodeMeshCube")
+            debug_viewer = tree.nodes.new("GeometryNodeViewer")
+            debug_viewer.viewer_items.new('GEOMETRY', "Configured Debug Geometry")
+            debug_viewer.is_debug_view = True
+            tree.links.new(debug_source.outputs["Mesh"], debug_viewer.inputs["Configured Debug Geometry"])
+            original_debug_name = debug_viewer.name
+            original_debug_item_name = debug_viewer.inputs[0].name
+
+            target_source = tree.nodes.new("GeometryNodeMeshCube")
+            with node_editor_context_override(
+                    bpy.context, tree, selected_nodes=[target_source], active_node=target_source):
+                bpy.ops.node.link_viewer()
+
+            self.assertEqual(debug_viewer.name, original_debug_name)
+            self.assertEqual(debug_viewer.inputs[0].name, original_debug_item_name)
+            self.assertTrue(debug_viewer.is_debug_view)
+            self.assertEqual(len(debug_viewer.inputs[0].links), 1)
+            self.assertEqual(debug_viewer.inputs[0].links[0].from_node, debug_source)
+            self.assertEqual(debug_viewer.inputs[0].links[0].from_socket, debug_source.outputs["Mesh"])
+
+            ordinary_viewers = [
+                node for node in tree.nodes
+                if node.bl_idname == "GeometryNodeViewer" and node != debug_viewer
+            ]
+            self.assertEqual(len(ordinary_viewers), 1)
+            self.assertEqual(len(target_source.outputs["Mesh"].links), 1)
+            self.assertEqual(target_source.outputs["Mesh"].links[0].to_node, ordinary_viewers[0])
+            self.assertFalse(ordinary_viewers[0].is_debug_view)
+        finally:
+            space.node_tree = original_tree
+            bpy.data.node_groups.remove(tree)
+
+
 ################
 # Code for generating ground truth test data, sharing functions with test code.
 

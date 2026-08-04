@@ -874,6 +874,19 @@ if(TEST_SRC_DIR_EXISTS)
     --testdir "${TEST_SRC_DIR}/node_group"
   )
 
+  add_blender_test_impl(
+    bl_node_viewer_reuse
+    ""
+    "${TEST_BLENDER_EXE}"
+    --background
+    "${TEST_SRC_DIR}/node_group/node_copy_operators.blend"
+    --python ${CMAKE_CURRENT_LIST_DIR}/bl_node_copy_operators.py
+    --
+    --testdir "${TEST_SRC_DIR}/node_group"
+    --subtest viewer_shortcut
+    NodeViewerShortcutTest.test_viewer_shortcut_does_not_reuse_persistent_debug_viewer
+  )
+
   add_blender_test(
     bl_node_link_drag
     --python ${CMAKE_CURRENT_LIST_DIR}/bl_node_link_drag.py
