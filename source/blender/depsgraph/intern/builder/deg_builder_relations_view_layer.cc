@@ -27,6 +27,7 @@
 
 #include "intern/builder/deg_builder.h"
 
+#include "intern/depsgraph_relation.hh"
 #include "intern/node/deg_node.hh"
 #include "intern/node/deg_node_component.hh"
 #include "intern/node/deg_node_id.hh"
@@ -34,42 +35,36 @@
 
 namespace blender::deg {
 
-void DepsgraphRelationBuilder::build_layer_collection_recursive(
-    LayerCollection *layer_collection, const ComponentKey &parent_hierarchy_key)
+void DepsgraphRelationBuilder::build_layer_collections(LayerCollection *layer_collection,
+                                                       const ComponentKey &parent_hierarchy_key)
 {
   const int hide_flag = (graph_->mode == DAG_EVAL_VIEWPORT) ? COLLECTION_HIDE_VIEWPORT :
                                                               COLLECTION_HIDE_RENDER;
 
   Collection *collection = layer_collection->collection;
 
-  /* Hidden collections are a hard stop, matching the node builder which does not recurse
-   * into children of a hidden collection. */
   if (collection->flag & hide_flag) {
     return;
   }
 
-  /* Exclude is not inherited (see BKE_layer.cc), so a non-excluded descendant of an excluded
-   * collection still contributes objects and is built by the node builder. Recurse through
-   * the excluded collection without building it, keeping the parent hierarchy key so the
-   * descendant attaches to the nearest non-excluded ancestor. */
-  if (layer_collection->flag & LAYER_COLLECTION_EXCLUDE) {
-    for (LayerCollection &child : layer_collection->layer_collections) {
-      build_layer_collection_recursive(&child, parent_hierarchy_key);
-    }
-    return;
+  /* Exclude is not inherited: an excluded layer is skipped but its children are still built. */
+  ComponentKey child_hierarchy_key = parent_hierarchy_key;
+  if ((layer_collection->flag & LAYER_COLLECTION_EXCLUDE) == 0) {
+    build_collection(layer_collection, collection);
+
+    /* A collection that is linked multiple times can end up with the same parent hierarchy key
+     * more than once, for example when linked directly into the scene as well as under an
+     * excluded collection. Check for an existing relation to avoid duplicates. */
+    const ComponentKey collection_hierarchy_key{&collection->id, NodeType::HIERARCHY};
+    add_relation(parent_hierarchy_key,
+                 collection_hierarchy_key,
+                 "Collection hierarchy",
+                 RELATION_CHECK_BEFORE_ADD);
+    child_hierarchy_key = collection_hierarchy_key;
   }
 
-  build_collection(layer_collection, collection);
-
-  const ComponentKey collection_hierarchy_key{&collection->id, NodeType::HIERARCHY};
-  /* Keep the historic relation descriptions stable for depsgraph dumps. */
-  const char *relation_description = (parent_hierarchy_key.id == &scene_->id) ?
-                                         "Scene -> Collection hierarchy" :
-                                         "Collection hierarchy";
-  add_relation(parent_hierarchy_key, collection_hierarchy_key, relation_description);
-
   for (LayerCollection &child : layer_collection->layer_collections) {
-    build_layer_collection_recursive(&child, collection_hierarchy_key);
+    build_layer_collections(&child, child_hierarchy_key);
   }
 }
 
@@ -78,7 +73,7 @@ void DepsgraphRelationBuilder::build_view_layer_collections(ViewLayer *view_laye
   const ComponentKey scene_hierarchy_key{&scene_->id, NodeType::HIERARCHY};
 
   for (LayerCollection &layer_collection : view_layer->layer_collections) {
-    build_layer_collection_recursive(&layer_collection, scene_hierarchy_key);
+    build_layer_collections(&layer_collection, scene_hierarchy_key);
   }
 }
 

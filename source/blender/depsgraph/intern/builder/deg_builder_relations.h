@@ -137,18 +137,11 @@ class DepsgraphRelationBuilder : public DepsgraphBuilder {
   virtual void build_scene_parameters(Scene *scene);
   virtual void build_scene_compositor(Scene *scene);
 
+  /* Excluded layer collections are not built themselves, but their children are, attached to
+   * `parent_hierarchy_key`: the nearest non-excluded ancestor (or the scene). */
+  virtual void build_layer_collections(LayerCollection *layer_collection,
+                                       const ComponentKey &parent_hierarchy_key);
   virtual void build_view_layer_collections(ViewLayer *view_layer);
-
- private:
-  /* Build relations for a layer collection sub-tree, mirroring the recursion of
-   * DepsgraphNodeBuilder::build_layer_collections so both builders cover the same
-   * collections. Excluded collections are skipped but still recursed through; a
-   * descendant attaches to `parent_hierarchy_key`, the nearest non-excluded ancestor
-   * (or the scene). */
-  void build_layer_collection_recursive(LayerCollection *layer_collection,
-                                        const ComponentKey &parent_hierarchy_key);
-
- public:
 
   virtual void build_view_layer(Scene *scene,
                                 ViewLayer *view_layer,

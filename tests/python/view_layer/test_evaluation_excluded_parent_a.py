@@ -2,23 +2,10 @@
 #
 # SPDX-License-Identifier: GPL-2.0-or-later
 
-# Regression test for missing HIERARCHY relations when a non-excluded layer
-# collection lives under an excluded ancestor.
-#
-# Because LAYER_COLLECTION_EXCLUDE is not inherited, the node builder keeps
-# recursing through an excluded ancestor and builds the non-excluded
-# descendant collection. Before the fix the relation builder stopped at the
-# excluded ancestor, so that descendant collection got a node but no incoming
-# HIERARCHY relation. The resulting node/relation asymmetry is what
-# do_sanity_checks() reports, and the missing ordering edge let parallel
-# object evaluation race in Mesh::bounds_min_max().
-#
-# do_sanity_checks() only runs in debug builds and the crash itself is a
-# non-deterministic race, so neither is usable as a CI assertion. Instead this
-# test inspects the built relation graph directly (deterministic, release-safe)
-# and asserts the re-activated collection has a HIERARCHY edge coming from an
-# ancestor outside its own datablock (the nearest non-excluded ancestor, or
-# the scene). Without the fix that edge is absent.
+# A non-excluded layer collection under an excluded ancestor is built by the
+# node builder, but before the fix the relation builder stopped at the excluded
+# ancestor, leaving the descendant collection without an incoming HIERARCHY
+# relation. This test asserts that relation exists in the built depsgraph.
 
 import re
 import unittest
@@ -27,6 +14,76 @@ from view_layer_common import (
     ViewLayerTesting,
     setup_extra_arguments,
 )
+
+
+class UnitTesting(ViewLayerTesting):
+    def test_excluded_parent_re_activated_child(self):
+        import bpy
+
+        bpy.ops.wm.read_homefile(use_factory_startup=True, use_empty=True)
+
+        scene = bpy.context.scene
+        view_layer = bpy.context.view_layer
+
+        parent_coll = bpy.data.collections.new("RegressionParent")
+        child_coll = bpy.data.collections.new("RegressionChild")
+        scene.collection.children.link(parent_coll)
+        parent_coll.children.link(child_coll)
+
+        parent_coll.objects.link(
+            bpy.data.objects.new('parent_obj', bpy.data.meshes.new('parent_mesh')))
+        child_coll.objects.link(
+            bpy.data.objects.new('child_obj_a', bpy.data.meshes.new('child_mesh_a')))
+        child_coll.objects.link(
+            bpy.data.objects.new('child_obj_b', bpy.data.meshes.new('child_mesh_b')))
+        view_layer.update()
+
+        lc_parent = _find_layer_collection(view_layer.layer_collection, parent_coll)
+        lc_child = _find_layer_collection(view_layer.layer_collection, child_coll)
+        self.assertIsNotNone(lc_parent)
+        self.assertIsNotNone(lc_child)
+
+        # Exclude both, then re-activate only the child: it is now a
+        # non-excluded collection under an excluded ancestor.
+        lc_parent.exclude = True
+        lc_child.exclude = True
+        view_layer.update()
+
+        lc_child.exclude = False
+        view_layer.update()
+
+        depsgraph = bpy.context.evaluated_depsgraph_get()
+
+        # The fix restores the hierarchy edge from the nearest non-excluded
+        # ancestor (here the scene, since the parent stays excluded) to the
+        # re-activated child collection. Without the fix the child collection
+        # node has no incoming HIERARCHY relation; more than one would be a
+        # duplicate relation.
+        self.assertEqual(
+            _external_hierarchy_in_edges(depsgraph, child_coll), 1,
+            "Re-activated collection under an excluded ancestor must have "
+            "exactly one incoming HIERARCHY relation")
+
+        # The excluded ancestor itself must not be built as a relation source.
+        self.assertEqual(
+            _external_hierarchy_in_edges(depsgraph, parent_coll), 0)
+
+        # Sanity: object membership still follows exclude non-inheritance.
+        evaluated_names = {ob.name for ob in depsgraph.objects}
+        self.assertIn('child_obj_a', evaluated_names)
+        self.assertIn('child_obj_b', evaluated_names)
+        self.assertNotIn('parent_obj', evaluated_names)
+
+        # Link the child directly into the scene as well: both layer
+        # collections now resolve to the scene hierarchy key, which must not
+        # create a duplicate relation.
+        scene.collection.children.link(child_coll)
+        view_layer.update()
+        depsgraph = bpy.context.evaluated_depsgraph_get()
+        self.assertEqual(
+            _external_hierarchy_in_edges(depsgraph, child_coll), 1,
+            "Collection linked both into the scene and under an excluded "
+            "collection must not get duplicate HIERARCHY relations")
 
 
 def _find_layer_collection(layer_collection, target_collection):
@@ -95,69 +152,6 @@ def _external_hierarchy_in_edges(depsgraph, collection):
         if src_label == "HIERARCHY()" and src_owner != owner_name:
             count += 1
     return count
-
-
-class UnitTesting(ViewLayerTesting):
-    def test_excluded_parent_re_activated_child(self):
-        import bpy
-
-        for obj in list(bpy.data.objects):
-            bpy.data.objects.remove(obj, do_unlink=True)
-        for col in list(bpy.data.collections):
-            bpy.data.collections.remove(col, do_unlink=True)
-        for mesh in list(bpy.data.meshes):
-            bpy.data.meshes.remove(mesh, do_unlink=True)
-
-        scene = bpy.context.scene
-        view_layer = bpy.context.view_layer
-
-        parent_coll = bpy.data.collections.new("RegressionParent")
-        child_coll = bpy.data.collections.new("RegressionChild")
-        scene.collection.children.link(parent_coll)
-        parent_coll.children.link(child_coll)
-
-        parent_coll.objects.link(
-            bpy.data.objects.new('parent_obj', bpy.data.meshes.new('parent_mesh')))
-        child_coll.objects.link(
-            bpy.data.objects.new('child_obj_a', bpy.data.meshes.new('child_mesh_a')))
-        child_coll.objects.link(
-            bpy.data.objects.new('child_obj_b', bpy.data.meshes.new('child_mesh_b')))
-        view_layer.update()
-
-        lc_parent = _find_layer_collection(view_layer.layer_collection, parent_coll)
-        lc_child = _find_layer_collection(view_layer.layer_collection, child_coll)
-        self.assertIsNotNone(lc_parent)
-        self.assertIsNotNone(lc_child)
-
-        # Exclude both, then re-activate only the child: it is now a
-        # non-excluded collection under an excluded ancestor.
-        lc_parent.exclude = True
-        lc_child.exclude = True
-        view_layer.update()
-
-        lc_child.exclude = False
-        view_layer.update()
-
-        depsgraph = bpy.context.evaluated_depsgraph_get()
-
-        # The fix restores the hierarchy edge from the nearest non-excluded
-        # ancestor (here the scene, since the parent stays excluded) to the
-        # re-activated child collection. Without the fix the child collection
-        # node has no incoming HIERARCHY relation.
-        self.assertGreaterEqual(
-            _external_hierarchy_in_edges(depsgraph, child_coll), 1,
-            "Re-activated collection under an excluded ancestor is missing its "
-            "incoming HIERARCHY relation")
-
-        # The excluded ancestor itself must not be built as a relation source.
-        self.assertEqual(
-            _external_hierarchy_in_edges(depsgraph, parent_coll), 0)
-
-        # Sanity: object membership still follows exclude non-inheritance.
-        evaluated_names = {ob.name for ob in depsgraph.objects}
-        self.assertIn('child_obj_a', evaluated_names)
-        self.assertIn('child_obj_b', evaluated_names)
-        self.assertNotIn('parent_obj', evaluated_names)
 
 
 if __name__ == '__main__':
