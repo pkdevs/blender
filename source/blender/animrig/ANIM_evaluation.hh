@@ -12,6 +12,8 @@
 #include "BLI_map.hh"
 #include "BLI_string_ref.hh"
 
+#include "RNA_path.hh"
+
 #include "ANIM_action.hh"
 
 namespace blender::animrig {
@@ -26,29 +28,24 @@ class PropIdentifier {
    * Ideally this would be cached right next to the rna-path it's created from (e.g. on the
    * FCurve).
    */
-  std::optional<ParsedRNAPath<>> rna_path;
+  ParsedRNAPathRef rna_path;
   int array_index;
 
   PropIdentifier() = default;
 
-  PropIdentifier(std::optional<ParsedRNAPath<>> rna_path, const int array_index)
+  PropIdentifier(ParsedRNAPathRef rna_path, const int array_index)
       : rna_path(std::move(rna_path)), array_index(array_index)
-  {
-  }
-  PropIdentifier(StringRefNull rna_path, const int array_index)
-      : rna_path(ParsedRNAPath<>::from_string(rna_path)), array_index(array_index)
   {
   }
 
   friend bool operator==(const PropIdentifier &a, const PropIdentifier &b)
   {
-    return a.array_index == b.array_index &&
-           ParsedRNAPathRef(*a.rna_path) == ParsedRNAPathRef(*b.rna_path);
+    return a.array_index == b.array_index && a.rna_path == b.rna_path;
   }
 
   uint64_t hash() const
   {
-    return get_default_hash(this->array_index, ParsedRNAPathRef(*this->rna_path));
+    return get_default_hash(this->array_index, this->rna_path);
   }
 };
 
@@ -102,7 +99,7 @@ class EvaluationResult {
     result_.reserve(size);
   };
 
-  void store(ParsedRNAPath<> rna_path,
+  void store(ParsedRNAPathRef rna_path,
              const int array_index,
              const float value,
              PathResolvedRNA prop_rna)
@@ -111,11 +108,11 @@ class EvaluationResult {
                           AnimatedProperty(value, std::move(prop_rna)));
   }
 
-  AnimatedProperty value(const StringRefNull rna_path, const int array_index) const
-  {
-    PropIdentifier key(rna_path, array_index);
-    return result_.lookup(key);
-  }
+  // AnimatedProperty value(const StringRefNull rna_path, const int array_index) const
+  // {
+  //   PropIdentifier key(rna_path, array_index);
+  //   return result_.lookup(key);
+  // }
 
   const AnimatedProperty *lookup_ptr(const PropIdentifier &key) const
   {

@@ -13,7 +13,10 @@
 #include "DNA_curve_types.h"
 #include "DNA_listBase.h"
 
+// #include "RNA_path_fwd.hh"
+
 #include <type_traits>
+#include <variant>
 
 namespace blender {
 
@@ -24,6 +27,21 @@ struct NlaStripRuntime;
 }  // namespace bke
 using FCurveRuntime = bke::FCurveRuntime;
 using NlaStripRuntime = bke::NlaStripRuntime;
+
+template<typename T> class Span;
+
+namespace rna_path {
+
+struct Member;
+struct LookupIndex;
+struct LookupKey;
+
+using Item = std::variant<Member, LookupIndex, LookupKey>;
+
+}  // namespace rna_path
+
+using ParsedRNAPathRef = Span<rna_path::Item>;
+
 #else
 typedef struct FCurveRuntime FCurveRuntime;
 typedef struct NlaStripRuntime NlaStripRuntime;
@@ -415,6 +433,7 @@ struct FCurve {
    * \note String look-ups for collection and custom-properties are escaped using #BLI_str_escape.
    */
   StringRefNull rna_path() const;
+  ParsedRNAPathRef rna_path_parsed() const;
 
   /** Set the RNA path for this F-Curve, copying the given string. */
   void rna_path_set(StringRef path);

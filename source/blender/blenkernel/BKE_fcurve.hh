@@ -15,6 +15,8 @@
 #include "DNA_curve_types.h"
 #include "DNA_listBase.h"
 
+#include "RNA_path.hh"
+
 namespace blender {
 
 struct ChannelDriver;
@@ -41,6 +43,8 @@ namespace bke {
 struct FCurveRuntime {
   /** Value stored from last time curve was evaluated (not threadsafe, debug display only!). */
   float curval = 0;
+
+  std::optional<ParsedRNAPath<>> parsed_rna_path;
 };
 
 }  // namespace bke

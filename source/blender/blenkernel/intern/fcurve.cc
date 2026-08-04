@@ -175,17 +175,28 @@ void FCurve::rna_path_set(const StringRef path)
 {
   MEM_SAFE_DELETE(this->rna_path_ptr);
   this->rna_path_ptr = BLI_strdupn(path.data(), path.size());
+  this->runtime->parsed_rna_path = ParsedRNAPath<>::from_string(
+      StringRefNull(this->rna_path_ptr, path.size()));
 }
 
 void FCurve::rna_path_set_move(char *path)
 {
   MEM_SAFE_DELETE(this->rna_path_ptr);
   this->rna_path_ptr = path;
+  this->runtime->parsed_rna_path = ParsedRNAPath<>::from_string(path);
 }
 
 StringRefNull FCurve::rna_path() const
 {
   return this->rna_path_ptr ? StringRefNull(this->rna_path_ptr) : StringRefNull("");
+}
+
+ParsedRNAPathRef FCurve::rna_path_parsed() const
+{
+  if (!this->runtime->parsed_rna_path) {
+    return {};
+  }
+  return *this->runtime->parsed_rna_path;
 }
 
 void BKE_fmodifier_name_set(FModifier *fcm, const char *name)
