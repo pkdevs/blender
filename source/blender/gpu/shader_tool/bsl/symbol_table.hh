@@ -164,7 +164,9 @@ struct SymbolTable {
 
   SymbolClass *get_literal_type(string_view lit) const;
 
-  MatchRank get_conversion_rank(const SymbolClass *from, const SymbolClass *to) const;
+  MatchRank get_conversion_rank(const SymbolClass *from,
+                                const SymbolClass *to,
+                                const bool allow_vector_conversion = false) const;
 
   SymbolClass *to_class(builtin::ClassId id) const;
 

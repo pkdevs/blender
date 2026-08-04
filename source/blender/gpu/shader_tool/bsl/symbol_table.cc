@@ -486,11 +486,11 @@ void SymbolTable::register_builtins(LocalScope node)
     }
   }
 
-  auto builtin_function_decl = [&](const BuiltinFunc &fn) {
+  auto builtin_function_decl = [&](const BuiltinFunc &fn, bool allow_vector_promotion) {
     SymbolFunction *sym = fun_arena.alloc(
         root, tok, fn.return_type, fn.id, SymbolFunction::GLOBAL);
     sym->is_error = fn.id == err_symbol;
-    sym->is_builtin = true;
+    sym->is_builtin = allow_vector_promotion;
     sym->reserve_arguments(fn.arg_types.size());
     for (SymbolClass *arg : fn.arg_types) {
       sym->add_argument(arg);
@@ -501,14 +501,14 @@ void SymbolTable::register_builtins(LocalScope node)
   const vector<BuiltinFunc> functions = generate_all_builtin_functions();
   /* Builtin functions. */
   for (const auto &f : functions) {
-    builtin_function_decl(f);
+    builtin_function_decl(f, false);
   }
 
   const vector<BuiltinType> builtin_types = generate_builtin_types();
 
   const vector<BuiltinFunc> builtin_constructors = generate_all_constructors(builtin_types);
   for (const auto &fn : builtin_constructors) {
-    builtin_function_decl(fn);
+    builtin_function_decl(fn, true);
   }
 
   /* Builtin operators. */
@@ -639,26 +639,42 @@ SymbolClass *SymbolTable::get_literal_type(string_view lit) const
   return int_cls;
 }
 
-MatchRank SymbolTable::get_conversion_rank(const SymbolClass *from, const SymbolClass *to) const
+MatchRank SymbolTable::get_conversion_rank(const SymbolClass *from,
+                                           const SymbolClass *to,
+                                           const bool allow_vector_conversion) const
 {
   if (from == to) {
     return MatchRank::Exact;
   }
 
-  /* Check 'packed_floatX' to 'floatX' promotion. */
-  if ((from == packed_float3_cls && to == float3_cls) ||
-      (from == packed_float2_cls && to == float2_cls) ||
-      (from == packed_float4_cls && to == float4_cls))
-  {
-    return MatchRank::Promotion;
+  if (!from->is_builtin() || !to->is_builtin()) {
+    return MatchRank::None;
   }
 
-  /* Check standard scalar conversions (int <-> uint <-> float). */
-  /* Note that only GLSL compatible conversions are allowed. */
-  if ((from == float_cls || from == int_cls || from == uint_cls) &&
-      (to == float_cls || to == int_cls || to == uint_cls))
-  {
-    return MatchRank::Conversion;
+  using namespace builtin;
+
+  const builtin::ClassId from_cls = from->builtin_class;
+  const builtin::ClassId to_cls = to->builtin_class;
+
+  const uint16_t from_raw = uint16_t(from_cls);
+  const uint16_t to_raw = uint16_t(to_cls);
+
+  /* Masking BASE_MASK strips component length, leaving only base type flags and rank. */
+  const uint16_t from_len = from_raw & LEN_MASK;
+  const uint16_t to_len = to_raw & LEN_MASK;
+
+  /* Check standard GLSL compatible convertible base types (int <-> uint <-> float). */
+  if ((from_raw & FLAG_NUMERIC) && (to_raw & FLAG_NUMERIC)) {
+    if (from_len == to_len) {
+      if (from_len == 1) {
+        /* Scalar conversion. */
+        return MatchRank::Conversion;
+      }
+      if (allow_vector_conversion) {
+        /* Scalar conversion. */
+        return MatchRank::Conversion;
+      }
+    }
   }
 
   return MatchRank::None;

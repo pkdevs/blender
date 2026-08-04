@@ -56,7 +56,7 @@ optional<vector<MatchRank>> SymbolFunction::get_match_ranks(
 
   vector<MatchRank> ranks;
   for (size_t i = 0; i < param_types.size(); ++i) {
-    MatchRank rank = table.get_conversion_rank(param_types[i], arg_types[i]);
+    MatchRank rank = table.get_conversion_rank(param_types[i], arg_types[i], is_builtin);
     if (rank == MatchRank::None) {
       return {}; /* Not a viable candidate. */
     }
