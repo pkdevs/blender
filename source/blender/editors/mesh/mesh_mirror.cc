@@ -408,13 +408,10 @@ EditMeshSymmetryHelper::EditMeshSymmetryHelper(
             processed_verts.add(v_curr);
           }
           else if (v_mirr) {
-            BMVert *v_mirr_check = EDBM_verts_mirror_get(em_, v_mirr);
-            if (v_mirr_check == v_curr) {
-              vert_to_mirror_map_.lookup_or_add(v_curr, {}).append(v_mirr);
-              vert_to_mirror_map_.lookup_or_add(v_mirr, {}).append(v_curr);
-              processed_verts.add(v_curr);
-              processed_verts.add(v_mirr);
-            }
+            vert_to_mirror_map_.lookup_or_add(v_curr, {}).append(v_mirr);
+            vert_to_mirror_map_.lookup_or_add(v_mirr, {}).append(v_curr);
+            processed_verts.add(v_curr);
+            processed_verts.add(v_mirr);
           }
         }
       }
@@ -431,13 +428,10 @@ EditMeshSymmetryHelper::EditMeshSymmetryHelper(
             processed_edges.add(e_curr);
           }
           else if (e_mirr) {
-            BMEdge *e_mirr_check = EDBM_verts_mirror_get_edge(em_, e_mirr);
-            if (e_mirr_check == e_curr) {
-              edge_to_mirror_map_.lookup_or_add(e_curr, {}).append(e_mirr);
-              edge_to_mirror_map_.lookup_or_add(e_mirr, {}).append(e_curr);
-              processed_edges.add(e_curr);
-              processed_edges.add(e_mirr);
-            }
+            edge_to_mirror_map_.lookup_or_add(e_curr, {}).append(e_mirr);
+            edge_to_mirror_map_.lookup_or_add(e_mirr, {}).append(e_curr);
+            processed_edges.add(e_curr);
+            processed_edges.add(e_mirr);
           }
         }
       }
@@ -450,13 +444,10 @@ EditMeshSymmetryHelper::EditMeshSymmetryHelper(
           }
           BMFace *f_mirr = EDBM_verts_mirror_get_face(em_, f_curr);
           if (f_mirr && f_mirr != f_curr) {
-            BMFace *f_mirr_check = EDBM_verts_mirror_get_face(em_, f_mirr);
-            if (f_mirr_check == f_curr) {
-              face_to_mirror_map_.lookup_or_add(f_curr, {}).append(f_mirr);
-              face_to_mirror_map_.lookup_or_add(f_mirr, {}).append(f_curr);
-              processed_faces.add(f_curr);
-              processed_faces.add(f_mirr);
-            }
+            face_to_mirror_map_.lookup_or_add(f_curr, {}).append(f_mirr);
+            face_to_mirror_map_.lookup_or_add(f_mirr, {}).append(f_curr);
+            processed_faces.add(f_curr);
+            processed_faces.add(f_mirr);
           }
         }
       }
