@@ -213,17 +213,17 @@ ccl_device_inline bool restir_light_reference_from_sample( // !!!
       return restir_area_light_reference_from_sample(kg, ls, reference);
 
     default:
-#if !defined(__KERNEL_GPU__) && defined(RESTIR_DI_DEBUG)
-  printf("restir_light_reference_from_sample() 1; RESTIR REF dispatcher reject: "
-         "unsupported type=%d prim=%d object=%d shader=%d "
-         "pdf=%.9g eval_fac=%.9g\n",
-         (int)ls->type,
-         ls->prim,
-         ls->object,
-         ls->shader,
-         (double)ls->pdf,
-         (double)ls->eval_fac);
-#endif
+// #if !defined(__KERNEL_GPU__) && defined(RESTIR_DI_DEBUG)
+//   printf("restir_light_reference_from_sample() 1; RESTIR REF dispatcher reject: "
+//          "unsupported type=%d prim=%d object=%d shader=%d "
+//          "pdf=%.9g eval_fac=%.9g\n",
+//          (int)ls->type,
+//          ls->prim,
+//          ls->object,
+//          ls->shader,
+//          (double)ls->pdf,
+//          (double)ls->eval_fac);
+// #endif
 
       *reference = restir_light_reference_empty();
       return false;
@@ -543,7 +543,8 @@ ccl_device_inline bool restir_area_light_sample_from_reference(
 }
 
 
-// Dispatcher
+// Dispatcher; restir_light_sample_reconstruct()
+// Basically a replacement for `light_sample_from_uv()`
 ccl_device_inline bool restir_light_sample_from_reference(
     KernelGlobals kg,
     const ccl_private ReSTIRLightSampleReference *reference,

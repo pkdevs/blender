@@ -191,7 +191,7 @@ ccl_device_inline bool point_light_sample_from_intersection(KernelGlobals kg,
 ccl_device_inline void point_light_sample_from_uv(KernelGlobals kg,
                                                   const ccl_global KernelLight *klight,
                                                   const float3 ray_P,
-                                                  const float2 uv_,
+                                                  const float2 uv_, // swap with ReSTIRLightSampleReference
                                                   ccl_private LightSample *ccl_restrict ls)
 {
   ls->eval_fac = klight->spot.eval_fac;
@@ -204,15 +204,8 @@ ccl_device_inline void point_light_sample_from_uv(KernelGlobals kg,
     // ls->pdf = 1.0f; // Ensure PDF is set
 
     /* Recompute texture coordinates from the new direction. */
-    // !!!: remove since we already store UV
-    /**
-     * We store `reservoir.uv` which represents the ORIGINAL sampling parameterization
-     * The reservoirs' UVs no longer require any updates since the ORIGINAL sampling param is stored!
-     * So, the following call is removed:
-     ```
-      point_light_uv(kg, klight, ls->Ng);
-     ```
-    */
+    point_light_uv(kg, klight, ls->Ng);
+
     return;
   }
 

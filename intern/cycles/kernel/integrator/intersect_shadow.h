@@ -9,7 +9,6 @@
 
 #include "kernel/bvh/bvh.h"
 
-#include "kernel/integrator/restir.h"
 #include "kernel/integrator/state.h"
 #include "kernel/integrator/state_flow.h"
 #include "kernel/integrator/state_util.h"

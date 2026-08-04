@@ -15,7 +15,7 @@ RIS candidates
 
 #pragma once
 
-#include "kernel/integrator/restir.h"
+#include "kernel/integrator/restir_.h"
 #include "kernel/integrator/path_state.h" // RNGState
 #include "kernel/geom/shader_data.h"
 #include "kernel/light/sample.h"

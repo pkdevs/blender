@@ -7,11 +7,10 @@
 #include "kernel/integrator/intersect_closest.h"
 #include "kernel/integrator/intersect_dedicated_light.h"
 #include "kernel/integrator/intersect_mnee.h"
-#include "kernel/integrator/restir.h"
 #include "kernel/integrator/intersect_shadow.h"
 #include "kernel/integrator/intersect_subsurface.h"
 #include "kernel/integrator/intersect_volume_stack.h"
-// #include "kernel/integrator/restir.h"
+#include "kernel/integrator/restir.h"
 #include "kernel/integrator/shade_background.h"
 #include "kernel/integrator/shade_dedicated_light.h"
 #include "kernel/integrator/shade_light.h"
@@ -111,10 +110,10 @@ ccl_device void integrator_megakernel(KernelGlobals kg,
           break;
 
         case DEVICE_KERNEL_INTEGRATOR_FINAL_EVALUATION:
-          // integrator_evaluate_final_samples(kg, state, render_buffer);
+          integrator_evaluate_final_samples(kg, state, render_buffer);
           break;
         case DEVICE_KERNEL_INTEGRATOR_RESTIR_PT_EVALUATION:
-          // integrator_evaluate_restir_pt(kg, state, render_buffer);
+          integrator_evaluate_restir_pt(kg, state, render_buffer);
           break;
 
         default:

@@ -539,17 +539,23 @@ ccl_device void light_normal_uv_from_position(KernelGlobals kg,
   }
 }
 
+/*
+ !!!: Dispatch `light_sample_from_uv()` can be removed since `light_sample_from_reference()` handles the job here.
+ But internal helpers (such as triangle_light_sample_from_reference()) may remain useful:
+ triangle_light_sample_from_reference(...) can literally become:
+    triangle_light_sample_from_uv(kg, reference->object, reference->prim, reference->param, ...);
+*/
 // TODO(Tri): WIP: Will require multiple new features in LS & possibly SD
 /**
  * Does (uv → position); opposite of `light_normal_uv_from_position`
  * Enables light sample relocation!
  */
-ccl_device_inline void restir_light_sample_from_uv(
+ccl_device_inline void light_sample_from_uv(
     KernelGlobals kg,
     const ccl_private ShaderData *sd,
     const uint32_t path_flag,
     ccl_private LightSample *ls,
-    const float2 uv_)
+    const float2 uv_) // !!!: This probably should be removed and an allocated `ReSTIRLightSampleReference` in the method's body should handle things...
 {
   PROFILING_INIT(kg, PROFILING_RESTIR_LIGHT_SETUP);
 
@@ -585,7 +591,7 @@ ccl_device_inline void restir_light_sample_from_uv(
     ls->type = type;
     ls->shader = klight->shader_id;
 
-    // ls->group = object_lightgroup(kg, klight->object_id); // !!!: Wrong
+    // ls->group = object_lightgroup(kg, klight->object_id); // Incomplete
     // lamp_lightgroup(kg, lamp_index) // Deprecated
     if (ls->object == OBJECT_NONE) {
         // analytic light

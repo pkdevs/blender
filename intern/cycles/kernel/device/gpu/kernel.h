@@ -33,7 +33,7 @@
 #include "kernel/integrator/intersect_shadow.h"
 #include "kernel/integrator/intersect_subsurface.h"
 #include "kernel/integrator/intersect_volume_stack.h"
-// #include "kernel/integrator/restir.h"
+#include "kernel/integrator/restir.h"
 #include "kernel/integrator/shade_background.h"
 #include "kernel/integrator/shade_dedicated_light.h"
 #include "kernel/integrator/shade_light.h"
@@ -307,6 +307,21 @@ ccl_gpu_kernel(GPU_KERNEL_BLOCK_NUM_THREADS, GPU_KERNEL_MAX_REGISTERS)
   if (ccl_gpu_kernel_within_bounds(global_index, work_size)) {
     const int state = (path_index_array) ? path_index_array[global_index] : global_index;
     ccl_gpu_kernel_call(integrator_shade_shadow(nullptr, state, render_buffer));
+  }
+}
+ccl_gpu_kernel_postfix
+
+ccl_gpu_kernel(GPU_KERNEL_BLOCK_NUM_THREADS, GPU_KERNEL_MAX_REGISTERS)
+    ccl_gpu_kernel_signature(integrator_restir,
+                             ccl_global const int *path_index_array,
+                             ccl_global float *render_buffer,
+                             const int work_size)
+{
+  const int global_index = ccl_gpu_global_id_x();
+
+  if (ccl_gpu_kernel_within_bounds(global_index, work_size)) {
+    const int state = (path_index_array) ? path_index_array[global_index] : global_index;
+    ccl_gpu_kernel_call(integrator_restir(NULL, state, render_buffer));
   }
 }
 ccl_gpu_kernel_postfix
