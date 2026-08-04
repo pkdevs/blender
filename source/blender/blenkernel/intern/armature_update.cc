@@ -162,7 +162,7 @@ static void splineik_init_tree_from_pchan(Scene * /*scene*/, Object *ob, bPoseCh
     tree->totlength = totlength;
 
     /* Move the array of links to bones in the chain (from tip to root) to the tree. */
-    tree->chain = pchan_chain;
+    tree->chain = std::move(pchan_chain);
 
     /* Store reference to joint position array. */
     tree->points = ik_data->points;
