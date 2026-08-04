@@ -57,7 +57,7 @@ namespace draw::pbvh {
 
 uint64_t ViewportRequest::hash() const
 {
-  return get_default_hash(attributes, use_coarse_grids, mat_index_to_uv_index);
+  return get_default_hash(attributes, use_coarse_grids);
 }
 
 /**
@@ -68,7 +68,7 @@ uint64_t ViewportRequest::hash() const
 struct OrigMeshData {
   StringRef active_color;
   StringRef default_color;
-  VectorSet<StringRefNull> uv_map_names;
+  VectorSet<StringRef> uv_map_names;
   StringRef active_uv_map;
   StringRef default_uv_map;
   int active_uv_map_index;
@@ -84,8 +84,7 @@ struct OrigMeshData {
         face_set_seed(mesh.face_sets_color_seed),
         attributes(mesh.attributes())
   {
-    uv_map_names = mesh.uv_map_names();
-    active_uv_map_index = uv_map_names.index_of_try(StringRefNull(active_uv_map));
+    uv_map_names.add_multiple(mesh.uv_map_names().as_span().cast<StringRef>());
   }
 };
 
@@ -183,7 +182,6 @@ class DrawCacheImpl : public DrawCache {
 
   Span<gpu::VertBufPtr> ensure_attribute_data(const Object &object,
                                               const OrigMeshData &orig_mesh_data,
-                                              const Span<int> mat_index_to_uv_index,
                                               const AttributeRequest &attr,
                                               const IndexMask &node_mask);
 
@@ -992,14 +990,12 @@ static void calc_non_quad_uv(const SubdivCCG &subdiv_ccg,
 static void calc_node_uvs_for_flat_layout(const SubdivCCG &subdiv_ccg,
                                           const int uv_map_index,
                                           Span<int> grids,
-                                          Vector<float2> &result)
+                                          MutableSpan<float2> result)
 {
   const CCGKey key = BKE_subdiv_ccg_key_top_level(subdiv_ccg);
   const int grid_size_1 = key.grid_size - 1;
   const int grid_area_1 = grid_size_1 * grid_size_1;
   const int verts_per_grid = grid_area_1 * 4;
-
-  result.resize(grids.size() * verts_per_grid);
 
   const Span<int> face_ptex_offset = bke::subdiv::face_ptex_offset_get(subdiv_ccg.subdiv);
   const float grid_size_1_inv = 1.0f / (key.grid_size - 1);
@@ -1109,13 +1105,11 @@ static void calc_node_uvs_for_flat_layout(const SubdivCCG &subdiv_ccg,
 static void calc_node_uvs_for_standard_layout(const SubdivCCG &subdiv_ccg,
                                               const int uv_map_index,
                                               Span<int> grids,
-                                              Vector<float2> &result)
+                                              MutableSpan<float2> result)
 {
   const CCGKey key = BKE_subdiv_ccg_key_top_level(subdiv_ccg);
   const int grid_size = key.grid_size;
   const int grid_area = key.grid_area;
-
-  result.resize(grids.size() * grid_area);
 
   const Span<int> face_ptex_offset = bke::subdiv::face_ptex_offset_get(subdiv_ccg.subdiv);
   const float grid_size_1_inv = 1.0f / (grid_size - 1);
@@ -1160,7 +1154,7 @@ static void calc_node_uvs(const SubdivCCG &subdiv_ccg,
                           const int uv_map_index,
                           const bke::pbvh::GridsNode &node,
                           const bool use_flat_layout,
-                          Vector<float2> &result)
+                          MutableSpan<float2> result)
 {
   const Span<int> grids = node.grids();
   if (use_flat_layout) {
@@ -1173,8 +1167,6 @@ static void calc_node_uvs(const SubdivCCG &subdiv_ccg,
 
 BLI_NOINLINE static void fill_uvs_grids(const Object &object,
                                         const OrigMeshData &orig_mesh_data,
-                                        const Span<int> material_indices,
-                                        const Span<int> mat_index_to_uv_index,
                                         const BitSpan use_flat_layout,
                                         const IndexMask &node_mask,
                                         const StringRef name,
@@ -1188,34 +1180,29 @@ BLI_NOINLINE static void fill_uvs_grids(const Object &object,
                               use_flat_layout,
                               node_mask,
                               vbos);
-  threading::EnumerableThreadSpecific<Vector<float2>> all_tls;
   node_mask.foreach_index(
       [&](const int i) {
         float2 *data = vbos[i]->data<float2>().data();
-        Vector<float2> &tls = all_tls.local();
 
-        const int uv_channel = mat_index_to_uv_index.is_empty() || material_indices.is_empty() ?
-                                   orig_mesh_data.active_uv_map_index :
-                                   mat_index_to_uv_index[material_indices[i]];
+        const int uv_channel = orig_mesh_data.uv_map_names.index_of(name);
         if (uv_channel == -1) [[unlikely]] {
           BLI_assert_msg(uv_channel != -1,
                          "Unable to find appropriate FVar channel for given UV map");
-          tls.resize(vbos[i]->data<float2>().size());
-          tls.fill(float2(0));
+          std::fill_n(data, vbos[i]->data<float2>().size(), float2(0));
         }
         else {
-          calc_node_uvs(subdiv_ccg, uv_channel, nodes[i], use_flat_layout[i], tls);
+          calc_node_uvs(subdiv_ccg,
+                        uv_channel,
+                        nodes[i],
+                        use_flat_layout[i],
+                        {data, vbos[i]->data<float2>().size()});
         }
-        BLI_assert(tls.size() == vbos[i]->data<float2>().size());
-        std::copy_n(tls.data(), tls.size(), data);
       },
       exec_mode::grain_size(1));
 }
 
 BLI_NOINLINE static void update_generic_attribute_grids(const Object &object,
                                                         const OrigMeshData &orig_mesh_data,
-                                                        const Span<int> material_indices,
-                                                        const Span<int> mat_index_to_uv_index,
                                                         const BitSpan use_flat_layout,
                                                         const IndexMask &node_mask,
                                                         const StringRef name,
@@ -1241,14 +1228,7 @@ BLI_NOINLINE static void update_generic_attribute_grids(const Object &object,
   const bke::AttrType data_type = bke::cpp_type_to_attribute_type(attr.varray.type());
 
   if (attr.domain == bke::AttrDomain::Corner && data_type == bke::AttrType::Float2) {
-    fill_uvs_grids(object,
-                   orig_mesh_data,
-                   material_indices,
-                   mat_index_to_uv_index,
-                   use_flat_layout,
-                   node_mask,
-                   name,
-                   vbos);
+    fill_uvs_grids(object, orig_mesh_data, use_flat_layout, node_mask, name, vbos);
     return;
   }
 
@@ -2018,7 +1998,6 @@ BLI_NOINLINE static void flush_vbo_data(const Span<gpu::VertBufPtr> vbos,
 
 Span<gpu::VertBufPtr> DrawCacheImpl::ensure_attribute_data(const Object &object,
                                                            const OrigMeshData &orig_mesh_data,
-                                                           const Span<int> mat_index_to_uv_index,
                                                            const AttributeRequest &attr,
                                                            const IndexMask &node_mask)
 {
@@ -2082,14 +2061,8 @@ Span<gpu::VertBufPtr> DrawCacheImpl::ensure_attribute_data(const Object &object,
         }
       }
       else {
-        update_generic_attribute_grids(object,
-                                       orig_mesh_data,
-                                       material_indices_,
-                                       mat_index_to_uv_index,
-                                       use_flat_layout_,
-                                       mask,
-                                       std::get<GenericRequest>(attr),
-                                       vbos);
+        update_generic_attribute_grids(
+            object, orig_mesh_data, use_flat_layout_, mask, std::get<GenericRequest>(attr), vbos);
       }
       break;
     }
@@ -2212,8 +2185,7 @@ Span<gpu::Batch *> DrawCacheImpl::ensure_tris_batches(const Object &object,
       object, orig_mesh_data, nodes_to_update, request.use_coarse_grids);
 
   for (const AttributeRequest &attr : request.attributes) {
-    this->ensure_attribute_data(
-        object, orig_mesh_data, request.mat_index_to_uv_index, attr, nodes_to_update);
+    this->ensure_attribute_data(object, orig_mesh_data, attr, nodes_to_update);
   }
 
   /* Collect VBO spans in a different loop because #ensure_attribute_data invalidates the allocated
@@ -2256,7 +2228,7 @@ Span<gpu::Batch *> DrawCacheImpl::ensure_lines_batches(const Object &object,
   this->free_nodes_with_changed_topology(pbvh);
 
   const Span<gpu::VertBufPtr> position = this->ensure_attribute_data(
-      object, orig_mesh_data, {}, CustomRequest::Position, nodes_to_update);
+      object, orig_mesh_data, CustomRequest::Position, nodes_to_update);
   const Span<gpu::IndexBufPtr> lines = this->ensure_lines_indices(
       object, orig_mesh_data, nodes_to_update, request.use_coarse_grids);
 
