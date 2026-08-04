@@ -297,7 +297,7 @@ TEST(array, ConstructStructWithBitFields)
 
 TEST(array, ConstructZeroVector)
 {
-  /* This mainly exercises the #value_is_zero specialization for VecBase. */
+  /* This mainly exercises the #value_is_zero_memory specialization for VecBase. */
   float3 vec{0};
   Array<float3> array(3, vec);
   EXPECT_EQ(array[0], vec);

@@ -391,7 +391,7 @@ constexpr bool memory_is_zero(const void *data, const size_t size)
  *
  * This can be overloaded for custom types if an is-zero check is important for performance.
  */
-template<typename T> constexpr bool value_is_zero(const T &value)
+template<typename T> constexpr bool value_is_zero_memory(const T &value)
 {
   if constexpr (std::is_pointer_v<T>) {
     return value == nullptr;
@@ -407,7 +407,7 @@ template<typename T> constexpr bool value_is_zero(const T &value)
   }
   else {
     /* Can't use #memory_is_zero here without invoking undefined behavior. Other types can overload
-     * the #value_is_zero function. */
+     * the #value_is_zero_memory function. Also see #161759. */
     return false;
   }
 }
