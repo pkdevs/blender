@@ -21,6 +21,7 @@
 #include "kernel/bvh/intersect_filter.h"
 #include "kernel/bvh/types.h"
 #include "kernel/bvh/util.h"
+#include "kernel/geom/gsplat_intersect.h"
 #include "kernel/geom/object.h"
 #include "kernel/integrator/state.h"
 #include "kernel/integrator/state_util.h"
@@ -53,7 +54,8 @@ using numhit_t = uint32_t;
                       RTC_FEATURE_FLAG_FILTER_FUNCTION_IN_ARGUMENTS | RTC_FEATURE_FLAG_POINT | \
                       RTC_FEATURE_FLAG_MOTION_BLUR | RTC_FEATURE_FLAG_ROUND_CATMULL_ROM_CURVE | \
                       RTC_FEATURE_FLAG_FLAT_CATMULL_ROM_CURVE | \
-                      RTC_FEATURE_FLAG_ROUND_LINEAR_CURVE)
+                      RTC_FEATURE_FLAG_ROUND_LINEAR_CURVE | \
+                      RTC_FEATURE_FLAG_USER_GEOMETRY_CALLBACK_IN_ARGUMENTS)
 #endif
 
 #define EMBREE_IS_HAIR(x) (x & 1)
@@ -222,6 +224,72 @@ ccl_device_forceinline void kernel_embree_filter_intersection_func_impl(
     *args->valid = 0;
     return;
   }
+#endif
+}
+
+static void custom_intersect(const RTCIntersectFunctionNArguments *args)
+{
+  assert(args->N == 1);
+  static_assert(RTC_MAX_INSTANCE_LEVEL_COUNT == 1);
+
+#if defined(__GSPLATS__)
+  CCLFirstHitContext *ctx = (CCLFirstHitContext *)(args->context);
+  RTCRayHit *ray_hit = (RTCRayHit *)args->rayhit;
+
+#  ifdef __KERNEL_ONEAPI__
+  KernelGlobalsGPU *kg = nullptr;
+#  else
+  const ThreadKernelGlobalsCPU *kg = ctx->kg;
+#  endif
+
+  if (!args->valid[0]) {
+    return;
+  }
+
+  const float3 ray_P = make_float3(ray_hit->ray.org_x, ray_hit->ray.org_y, ray_hit->ray.org_z);
+  const float3 ray_D = make_float3(ray_hit->ray.dir_x, ray_hit->ray.dir_y, ray_hit->ray.dir_z);
+
+  const uint object = ((ctx->instID[0] != RTC_INVALID_GEOMETRY_ID) ? ctx->instID[0] :
+                                                                     args->geomID) /
+                      2;
+  const int prim_offset = kernel_data_fetch(object_prim_offset, object);
+  const int prim = args->primID + prim_offset;
+
+  assert(kernel_data_fetch(objects, object).primitive_type == PRIMITIVE_GSPLAT);
+
+  float isect_t;
+  if (!gsplat_intersect_test(
+          kg, ray_P, ray_D, ray_hit->ray.tnear, ray_hit->ray.tfar, object, prim, isect_t))
+  {
+    args->valid[0] = 0;
+    return;
+  }
+
+  ray_hit->hit.u = 0.0f;
+  ray_hit->hit.v = 0.0f;
+  ray_hit->hit.primID = args->primID;
+  ray_hit->hit.geomID = args->geomID;
+  ray_hit->hit.instID[0] = ctx->instID[0];
+
+  ray_hit->ray.tfar = isect_t;
+
+  args->valid[0] = 1;
+#else
+  args->valid[0] = 0;
+#endif
+}
+
+static void custom_occluded(const RTCOccludedFunctionNArguments *args)
+{
+  assert(args->N == 1);
+  static_assert(RTC_MAX_INSTANCE_LEVEL_COUNT == 1);
+
+#if defined(__GSPLATS__)
+  if (!args->valid[0]) {
+    return;
+  }
+
+  /* XXX: Implement accumulation of the gsplat transparency. */
 #endif
 }
 
@@ -475,6 +543,7 @@ ccl_device_intersect bool kernel_embree_intersect(KernelGlobals kg,
   RTCIntersectArguments args;
   rtcInitIntersectArguments(&args);
   args.filter = reinterpret_cast<RTCFilterFunctionN>(kernel_embree_filter_intersection_func);
+  args.intersect = custom_intersect;
   args.feature_mask = CYCLES_EMBREE_USED_FEATURES;
   args.context = &ctx;
   rtcTraversableIntersect1(kernel_data.device_bvh, &ray_hit, &args);
@@ -583,6 +652,7 @@ ccl_device_intersect void kernel_embree_intersect_shadow_all(KernelGlobals kg,
   rtcInitOccludedArguments(&args);
   args.filter = reinterpret_cast<RTCFilterFunctionN>(
       kernel_embree_filter_occluded_shadow_all_func);
+  args.occluded = custom_occluded;
   args.feature_mask = CYCLES_EMBREE_USED_FEATURES;
   args.context = &ctx;
 

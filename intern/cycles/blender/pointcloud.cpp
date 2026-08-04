@@ -115,6 +115,60 @@ static void copy_attributes(PointCloud *pointcloud,
   });
 }
 
+static void export_pointcloud_gsplat_attributes(PointCloud *pointcloud,
+                                                const blender::PointCloud &b_pointcloud)
+{
+  const blender::bke::AttributeAccessor b_attributes = b_pointcloud.attributes();
+  const size_t num_points = pointcloud->num_points();
+
+  /* Base radiance and opacity. */
+  sync_attribute_from_blender(
+      pointcloud->attributes,
+      ATTR_STD_GSPLAT_RADIANCE_BASE,
+      b_attributes.lookup<blender::float4>("radiance:base", blender::bke::AttrDomain::Point),
+      num_points);
+
+  /* Scale. */
+  sync_attribute_from_blender(
+      pointcloud->attributes,
+      ATTR_STD_GSPLAT_SCALE,
+      b_attributes.lookup<blender::float3>("scale", blender::bke::AttrDomain::Point),
+      num_points);
+
+  /* Rotation. */
+  sync_attribute_from_blender(
+      pointcloud->attributes,
+      ATTR_STD_GSPLAT_ROTATION,
+      b_attributes.lookup<blender::math::Quaternion>("rotation", blender::bke::AttrDomain::Point),
+      num_points);
+
+  /* Spherical harmonics. */
+  vector<blender::bke::AttributeReader<blender::float3>> sh_attribute_readers;
+  for (int i = 0; i < PackedSphericalHarmonics::MAX_COEFFICIENTS; ++i) {
+    const string sh_attr_name = "radiance:sh_" + std::to_string(i);
+    blender::bke::AttributeReader<blender::float3> reader = b_attributes.lookup<blender::float3>(
+        sh_attr_name, blender::bke::AttrDomain::Point);
+    if (!reader) {
+      break;
+    }
+    sh_attribute_readers.push_back(std::move(reader));
+  }
+  if (!sh_attribute_readers.empty()) {
+    Attribute *attr = pointcloud->attributes.add(ATTR_STD_GSPLAT_RADIANCE_SPHERICAL_HARMONICS);
+    PackedSphericalHarmonics *sh_data = attr->data_for_write<PackedSphericalHarmonics>();
+    for (size_t point_index = 0; point_index < num_points; ++point_index) {
+      spherical_harmonics_fill_zero(sh_data[point_index]);
+      for (int sh_index = 0; sh_index < sh_attribute_readers.size(); ++sh_index) {
+        const blender::VArraySpan<blender::float3> src = *sh_attribute_readers[sh_index];
+        spherical_harmonics_set_coefficient(
+            sh_data[point_index],
+            sh_index,
+            make_float3(src[point_index].x, src[point_index].y, src[point_index].z));
+      }
+    }
+  }
+}
+
 static void export_pointcloud(Scene *scene,
                               PointCloud *pointcloud,
                               const blender::PointCloud &b_pointcloud,
@@ -157,6 +211,11 @@ static void export_pointcloud(Scene *scene,
     for (const int i : b_positions.index_range()) {
       data[i] = hash_uint2_to_float(i, 0);
     }
+  }
+
+  if (b_pointcloud.render_as == blender::PT_RENDER_AS_SPLATS) {
+    export_pointcloud_gsplat_attributes(pointcloud, b_pointcloud);
+    pointcloud->set_render_as(PointCloud::RENDER_AS_GSPLATS);
   }
 
   copy_attributes(pointcloud, b_pointcloud, need_motion, motion_scale);

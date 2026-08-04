@@ -7,6 +7,7 @@
 #include "kernel/globals.h"
 
 #include "kernel/geom/attribute.h"
+#include "kernel/geom/gsplat.h"
 #include "kernel/geom/object.h"
 #include "kernel/geom/primitive.h"
 #include "kernel/geom/volume.h"
@@ -73,6 +74,11 @@ svm_node_attr_surface_eval(KernelGlobals kg,
                            const AttributeDescriptor desc)
 {
   using FloatType = dual_scalar_t<Float3Type>;
+
+  if (sd->type == PRIMITIVE_GSPLAT && node.attr == ATTR_STD_GSPLAT_RADIANCE) {
+    const float3 radiance = gsplat_radiance(kg, *sd);
+    return Float3Type(radiance);
+  }
 
   if (sd->type == PRIMITIVE_LAMP && node.attr == ATTR_STD_UV) {
     Float3Type uv(make_float3(1.0f - sd->u - sd->v, sd->u, 0.0f));

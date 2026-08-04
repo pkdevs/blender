@@ -24,10 +24,10 @@ Attribute::Attribute(ustring name,
                      AttributePrimitive prim)
     : name(name), std(ATTR_STD_NONE), type(type), element(element), flags(0), modified(true)
 {
-  /* string and matrix not supported! */
+  /* String is not supported! */
   assert(type == TypeFloat || type == TypeColor || type == TypePoint || type == TypeVector ||
          type == TypeNormal || type == TypeMatrix || type == TypeFloat2 || type == TypeFloat4 ||
-         type == TypeRGBA);
+         type == TypeRGBA || type == TypePackedSphericalHarmonics);
 
   if (element & ATTR_ELEMENT_VOXEL) {
     auto *data = GuardedAllocator<ImageHandle>().allocate(1);
@@ -350,6 +350,9 @@ size_t Attribute::data_sizeof() const
   if (type == TypeRGBA) {
     return sizeof(float4);
   }
+  if (type == TypePackedSphericalHarmonics) {
+    return sizeof(PackedSphericalHarmonics);
+  }
   return sizeof(packed_float3);
 }
 
@@ -521,6 +524,16 @@ const char *Attribute::standard_name(AttributeStandard std)
       return "random_per_island";
     case ATTR_STD_SHADOW_TRANSPARENCY:
       return "shadow_transparency";
+    case ATTR_STD_GSPLAT_RADIANCE_BASE:
+      return "radiance:base";
+    case ATTR_STD_GSPLAT_RADIANCE_SPHERICAL_HARMONICS:
+      return "radiance:sh";
+    case ATTR_STD_GSPLAT_RADIANCE:
+      return "radiance";
+    case ATTR_STD_GSPLAT_SCALE:
+      return "scale";
+    case ATTR_STD_GSPLAT_ROTATION:
+      return "rotation";
     case ATTR_STD_NOT_FOUND:
     case ATTR_STD_NONE:
     case ATTR_STD_NUM:
@@ -597,6 +610,10 @@ AttrKernelDataType Attribute::kernel_type(const Attribute &attr)
 
   if (attr.type == TypeFloat4 || attr.type == TypeRGBA || attr.type == TypeMatrix) {
     return AttrKernelDataType::FLOAT4;
+  }
+
+  if (attr.type == TypePackedSphericalHarmonics) {
+    return AttrKernelDataType::SPHERICAL_HARMONICS;
   }
 
   return AttrKernelDataType::FLOAT3;
@@ -808,6 +825,26 @@ static bool standard_type_element(const Geometry *geometry,
       case ATTR_STD_GENERATED_TRANSFORM:
         type = TypeMatrix;
         element = ATTR_ELEMENT_MESH;
+        return true;
+      case ATTR_STD_GSPLAT_RADIANCE_BASE:
+        type = TypeFloat4;
+        element = ATTR_ELEMENT_VERTEX;
+        return true;
+      case ATTR_STD_GSPLAT_RADIANCE_SPHERICAL_HARMONICS:
+        type = TypePackedSphericalHarmonics;
+        element = ATTR_ELEMENT_VERTEX;
+        return true;
+      case ATTR_STD_GSPLAT_RADIANCE:
+        type = TypeRGBA;
+        element = ATTR_ELEMENT_VERTEX;
+        return true;
+      case ATTR_STD_GSPLAT_SCALE:
+        type = TypeVector;
+        element = ATTR_ELEMENT_VERTEX;
+        return true;
+      case ATTR_STD_GSPLAT_ROTATION:
+        type = TypeFloat4;
+        element = ATTR_ELEMENT_VERTEX;
         return true;
       default:
         return false;
@@ -1132,12 +1169,12 @@ void AttributeSet::clear_modified()
 void AttributeSet::tag_modified(const Attribute &attr)
 {
   const AttrKernelDataType kernel_type = Attribute::kernel_type(attr);
-  modified_flag |= (1u << kernel_type);
+  modified_flag |= (1u << int(kernel_type));
 }
 
-bool AttributeSet::modified(AttrKernelDataType kernel_type) const
+bool AttributeSet::modified(const AttrKernelDataType kernel_type) const
 {
-  return (modified_flag & (1u << kernel_type)) != 0;
+  return (modified_flag & (1u << int(kernel_type))) != 0;
 }
 
 /* AttributeRequest */

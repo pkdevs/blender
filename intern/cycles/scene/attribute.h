@@ -37,14 +37,15 @@ struct Transform;
  *
  * The values of this enumeration are also used as flags to detect changes in AttributeSet. */
 
-enum AttrKernelDataType {
+enum class AttrKernelDataType {
   FLOAT = 0,
   FLOAT2 = 1,
   FLOAT3 = 2,
   FLOAT4 = 3,
   UCHAR4 = 4,
   NORMAL = 5,
-  NUM = 6
+  SPHERICAL_HARMONICS = 6,
+  NUM = 7
 };
 
 /* Attribute

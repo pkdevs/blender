@@ -260,6 +260,7 @@ void Integrator::device_update(Device *device, DeviceScene *dscene, Scene *scene
       break;
     }
   }
+  // XXX: Gaussian splats technically have transparent shadows.
 
   kintegrator->volume_ray_marching = volume_ray_marching;
   kintegrator->volume_max_steps = volume_max_steps;

@@ -7,6 +7,7 @@
 #include "kernel/globals.h"
 #include "kernel/types.h"
 
+#include "kernel/geom/gsplat.h"
 #include "kernel/geom/motion_point.h"
 #include "kernel/geom/object.h"
 
@@ -115,7 +116,18 @@ ccl_device_inline void point_shader_setup(KernelGlobals kg,
   }
 
   /* Normal */
-  sd->Ng = normalize(sd->P - center);
+#  if defined(__GSPLATS__)
+  if (isect->type & PRIMITIVE_POINT)
+#  endif
+  {
+    sd->Ng = normalize(sd->P - center);
+  }
+#  if defined(__GSPLATS__)
+  else {
+    sd->Ng = gsplat_normal(kg, sd->object, sd->prim);
+  }
+#  endif
+
   sd->N = sd->Ng;
 
 #  ifdef __DPDU__

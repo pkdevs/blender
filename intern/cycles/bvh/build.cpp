@@ -242,12 +242,13 @@ void BVHBuild::add_reference_points(BoundBox &root,
 
   if (!has_motion) {
     /* Really simple logic for static points. */
+    const PrimitiveType primitive_type = pointcloud->primitive_type();
     for (uint j = 0; j < num_points; j++) {
       const PointCloud::Point point = pointcloud->get_point(j);
       BoundBox bounds = BoundBox::empty;
       point.bounds_grow(points_data, radius_data, bounds);
       if (bounds.valid()) {
-        references.push_back(BVHReference(bounds, j, i, PRIMITIVE_POINT));
+        references.push_back(BVHReference(bounds, j, i, primitive_type));
         root.grow(bounds);
         center.grow(bounds.center2());
       }
@@ -259,6 +260,7 @@ void BVHBuild::add_reference_points(BoundBox &root,
      * rendering.
      */
     /* TODO(sergey): Support motion steps for spatially split BVH. */
+    const PrimitiveType primitive_type = pointcloud->primitive_type();
     for (uint j = 0; j < num_points; j++) {
       const PointCloud::Point point = pointcloud->get_point(j);
       BoundBox bounds = BoundBox::empty;
@@ -268,7 +270,7 @@ void BVHBuild::add_reference_points(BoundBox &root,
         point.bounds_grow(make_float4(float3(mP[j]), mR[j]), bounds);
       }
       if (bounds.valid()) {
-        references.push_back(BVHReference(bounds, j, i, PRIMITIVE_MOTION_POINT));
+        references.push_back(BVHReference(bounds, j, i, primitive_type));
         root.grow(bounds);
         center.grow(bounds.center2());
       }
@@ -667,7 +669,7 @@ bool BVHBuild::range_within_max_leaf_size(const BVHRange &range,
         num_triangles++;
       }
     }
-    else if (ref.prim_type() & PRIMITIVE_POINT) {
+    else if (ref.prim_type() & PRIMITIVE_ANY_POINT) {
       if (ref.prim_type() & PRIMITIVE_MOTION) {
         num_motion_points++;
       }

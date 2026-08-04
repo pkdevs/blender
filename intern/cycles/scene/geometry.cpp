@@ -331,6 +331,10 @@ static void update_device_flags_attribute(uint32_t &device_update_flags,
         device_update_flags |= ATTR_NORMAL_MODIFIED;
         break;
       }
+      case AttrKernelDataType::SPHERICAL_HARMONICS: {
+        device_update_flags |= ATTR_SPHERICAL_HARMONICS_MODIFIED;
+        break;
+      }
       case AttrKernelDataType::NUM: {
         break;
       }
@@ -358,6 +362,9 @@ static void update_attribute_realloc_flags(uint32_t &device_update_flags,
   }
   if (attributes.modified(AttrKernelDataType::NORMAL)) {
     device_update_flags |= ATTR_NORMAL_NEEDS_REALLOC;
+  }
+  if (attributes.modified(AttrKernelDataType::SPHERICAL_HARMONICS)) {
+    device_update_flags |= ATTR_SPHERICAL_HARMONICS_NEEDS_REALLOC;
   }
 }
 
@@ -405,6 +412,14 @@ void GeometryManager::geom_calc_offset(Scene *scene, BVHLayout bvh_layout)
       PointCloud *pointcloud = static_cast<PointCloud *>(geom);
 
       prim_offset_changed = (pointcloud->prim_offset != point_size);
+
+      /* Changing Render As on point cloud is likely to change its underlying BVH type (i.e. Render
+       * As Points uses hardware-accelerated point primitives, and Render As GSplats uses custom
+       * primitives). */
+      /* TODO(sergey): There could be a better place for doing this check. */
+      if (pointcloud->render_as_is_modified()) {
+        geom->need_update_rebuild = true;
+      }
 
       pointcloud->prim_offset = point_size;
       point_size += pointcloud->num_points();
@@ -686,6 +701,14 @@ void GeometryManager::device_update_preprocess(Device *device, Scene *scene, Pro
     dscene->attributes_normal.tag_modified();
   }
 
+  if (device_update_flags & ATTR_SPHERICAL_HARMONICS_NEEDS_REALLOC) {
+    dscene->attributes_map.tag_realloc();
+    dscene->attributes_spherical_harmonics.tag_realloc();
+  }
+  else if (device_update_flags & ATTR_SPHERICAL_HARMONICS_MODIFIED) {
+    dscene->attributes_spherical_harmonics.tag_modified();
+  }
+
   if (device_update_flags & DEVICE_MESH_DATA_MODIFIED) {
     /* if anything else than vertices or shaders are modified, we would need to reallocate, so
      * these are the only arrays that can be updated */
@@ -836,6 +859,11 @@ void GeometryManager::device_update(Device *device,
           if (mesh->has_true_displacement()) {
             true_displacement_used = true;
           }
+        }
+        else if (geom->is_pointcloud()) {
+          /* Precompute gsplat bounding sphere for faster access to its bounds. */
+          PointCloud *pointcloud = static_cast<PointCloud *>(geom);
+          pointcloud->update_gsplat_radii();
         }
       }
 

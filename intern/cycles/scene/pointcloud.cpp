@@ -71,6 +71,12 @@ NODE_DEFINE(PointCloud)
 
   SOCKET_INT_ARRAY(shader, "Shader", array<int>());
 
+  static NodeEnum remder_as_enum;
+  remder_as_enum.insert("points", RENDER_AS_POINTS);
+  remder_as_enum.insert("gsplats", RENDER_AS_GSPLATS);
+
+  SOCKET_ENUM(render_as, "Render As", remder_as_enum, RENDER_AS_POINTS);
+
   return type;
 }
 
@@ -250,6 +256,9 @@ void PointCloud::pack(Scene *scene, uint *packed_shader)
   const size_t numpoints = num_points();
   int *shader_data = shader.data();
 
+  Shader *default_shader = (render_as == RENDER_AS_GSPLATS) ? scene->default_gsplat :
+                                                              scene->default_surface;
+
   uint shader_id = 0;
   uint last_shader = -1;
   for (size_t i = 0; i < numpoints; i++) {
@@ -257,15 +266,69 @@ void PointCloud::pack(Scene *scene, uint *packed_shader)
       last_shader = shader_data[i];
       Shader *shader = (last_shader < used_shaders.size()) ?
                            static_cast<Shader *>(used_shaders[last_shader]) :
-                           scene->default_surface;
+                           default_shader;
       shader_id = scene->shader_manager->get_shader_id(shader);
     }
     packed_shader[i] = shader_id;
   }
 }
 
+void PointCloud::update_gsplat_radii()
+{
+  /* Calculate radius attribute to bound the gaussian splats based on the splat scale, allowing
+   * splats to be added to BVH as point primitives.
+   *
+   * Calculation is based on
+   *
+   *     Nicolas Moenne-Loccoz et. al.
+   *     "3D Gaussian Ray Tracing: Fast Tracing of Particle Scenes" (2024)
+   *     ACM Transactions on Graphics and SIGGRAPH Asia
+   *
+   * Using Formula (7) from the paper with some tweaks.
+   * Since spheres are rotation-agnostic we only consider scale. */
+
+  /* Minimum response of the gaussian splat which must be captures.
+   * The value comes from the paper. */
+  constexpr float ALPHA_MIN = 0.01f;
+
+  if (render_as != RENDER_AS_GSPLATS) {
+    return;
+  }
+
+  Attribute *attr_radiance_base = attributes.find(ATTR_STD_GSPLAT_RADIANCE_BASE);
+  Attribute *attr_scale = attributes.find(ATTR_STD_GSPLAT_SCALE);
+  if (!attr_radiance_base || !attr_scale) {
+    return;
+  }
+
+  const float4 *radiance_base_data = attr_radiance_base->data<float4>();
+  const packed_float3 *scale_data = attr_scale->data<packed_float3>();
+
+  const size_t num_points = this->num_points();
+  float *radius_data = get_radius_for_write();
+
+  for (size_t i = 0; i < num_points; i++) {
+    const float opacity = radiance_base_data[i].w;
+    if (opacity < ALPHA_MIN) {
+      radius_data[i] = 0;
+      continue;
+    }
+    const float factor = sqrtf(2.0f * logf(opacity / ALPHA_MIN));
+    const float3 scale = fabs(factor * scale_data[i]);
+    radius_data[i] = reduce_max(scale);
+  }
+}
+
 PrimitiveType PointCloud::primitive_type() const
 {
+  if (render_as == RENDER_AS_GSPLATS) {
+    const Attribute *attr_radiance_base = attributes.find(ATTR_STD_GSPLAT_RADIANCE_BASE);
+    const Attribute *attr_scale = attributes.find(ATTR_STD_GSPLAT_SCALE);
+    const Attribute *attr_rotation = attributes.find(ATTR_STD_GSPLAT_ROTATION);
+    if (attr_radiance_base && attr_scale && attr_rotation) {
+      return has_motion_blur() ? PRIMITIVE_MOTION_GSPLAT : PRIMITIVE_GSPLAT;
+    }
+  }
   return has_motion_blur() ? PRIMITIVE_MOTION_POINT : PRIMITIVE_POINT;
 }
 

@@ -242,19 +242,17 @@ ccl_device_inline bool point_custom_intersect(const hiprtRay &ray,
     return false;
   }
 
-  const float ray_time = payload->ray_time;
-
   Intersection isect;
-  const bool b_hit = point_intersect(kg,
-                                     &isect,
-                                     ray.origin,
-                                     ray.direction,
-                                     ray.minT,
-                                     ray.maxT,
-                                     object,
-                                     prim,
-                                     ray_time,
-                                     primitive_type);
+  const bool b_hit = point_or_gsplat_intersect(kg,
+                                               &isect,
+                                               ray.origin,
+                                               ray.direction,
+                                               ray.minT,
+                                               ray.maxT,
+                                               object,
+                                               prim,
+                                               payload->ray_time,
+                                               primitive_type);
 
   if (b_hit) {
     hit.uv.x = isect.u;
