@@ -1385,7 +1385,6 @@ static void draw_colorband_handle(uint shdr_pos,
   GPU_polygon_smooth(false);
   GPU_blend(GPU_BLEND_NONE);
 }
-
 void draw_but_COLORBAND(Button *but, const uiWidgetColors *wcol, const rcti *rect)
 {
   const ColorManagedDisplay *display = block_cm_display_get(but->block);
@@ -1399,11 +1398,27 @@ void draw_but_COLORBAND(Button *but, const uiWidgetColors *wcol, const rcti *rec
     return;
   }
 
-  const float x1 = rect->xmin + U.pixelsize;
-  const float sizex = rect->xmax - x1 - U.pixelsize;
-  const float y1 = rect->ymin + U.pixelsize;
-  const float sizey = rect->ymax - y1 - U.pixelsize;
-  const float sizey_solid = sizey * 0.25f;
+  /* calculation for padding of click sensitive area */
+  const float x1_in = rect->xmin + U.pixelsize;
+  const float y1_in = rect->ymin + U.pixelsize;
+
+  const float sizeyq = rect->ymax - y1_in - U.pixelsize;
+
+
+  const int pad_x =  .07f* sizeyq; /* Horizontal hit padding */
+  const int pad_y = .12f* sizeyq; /* Vertical hit padding */
+
+  rcti visual_rect = *rect;
+  visual_rect.xmin += pad_x;
+  visual_rect.xmax -= pad_x;
+  visual_rect.ymin += pad_y;
+  visual_rect.ymax -= pad_y;
+
+  const float x1 = visual_rect.xmin + U.pixelsize;
+  const float sizex = visual_rect.xmax - x1 - U.pixelsize;
+  const float y1 = visual_rect.ymin + U.pixelsize;
+  const float sizey = visual_rect.ymax - y1 - U.pixelsize;
+  const float sizey_solid = sizey * 1.0f;
 
   /* exit early if too narrow */
   if (sizex <= 0) {
@@ -1418,10 +1433,10 @@ void draw_but_COLORBAND(Button *but, const uiWidgetColors *wcol, const rcti *rec
   immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
   immUniformColor4ubv(wcol->outline);
   immBegin(GPU_PRIM_TRI_STRIP, 4);
-  immVertex2f(pos_id, rect->xmin, rect->ymin);
-  immVertex2f(pos_id, rect->xmax, rect->ymin);
-  immVertex2f(pos_id, rect->xmin, rect->ymax);
-  immVertex2f(pos_id, rect->xmax, rect->ymax);
+  immVertex2f(pos_id, visual_rect.xmin, visual_rect.ymin);
+  immVertex2f(pos_id, visual_rect.xmax, visual_rect.ymin);
+  immVertex2f(pos_id, visual_rect.xmin, visual_rect.ymax);
+  immVertex2f(pos_id, visual_rect.xmax, visual_rect.ymax);
   immEnd();
   immUnbindProgram();
 
@@ -1495,7 +1510,7 @@ void draw_but_COLORBAND(Button *but, const uiWidgetColors *wcol, const rcti *rec
   for (int a = 0; a < coba->tot; a++, cbd++) {
     if (a != coba->cur) {
       const float pos = x1 + cbd->pos * (sizex - 1) + 1;
-      draw_colorband_handle(pos_id, rect, pos, &cbd->r, display, false);
+      draw_colorband_handle(pos_id, &visual_rect, pos, &cbd->r, display, false);
     }
   }
 
@@ -1503,9 +1518,10 @@ void draw_but_COLORBAND(Button *but, const uiWidgetColors *wcol, const rcti *rec
   if (coba->tot != 0) {
     cbd = &coba->data[coba->cur];
     const float pos = x1 + cbd->pos * (sizex - 1) + 1;
-    draw_colorband_handle(pos_id, rect, pos, &cbd->r, display, true);
+    draw_colorband_handle(pos_id, &visual_rect, pos, &cbd->r, display, true);
   }
 }
+
 
 void draw_but_UNITVEC(Button *but,
                       const uiWidgetColors *wcol,
