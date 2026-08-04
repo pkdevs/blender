@@ -563,22 +563,43 @@ void mesh_hide_face_flush(Mesh &mesh)
   const OffsetIndices faces = mesh.faces();
   const Span<int> corner_verts = mesh.corner_verts();
   const Span<int> corner_edges = mesh.corner_edges();
+
+  const bool vert_attr_exists = attributes.contains(".hide_vert");
+  const bool edge_attr_exists = attributes.contains(".hide_edge");
+
   SpanAttributeWriter<bool> hide_vert = attributes.convert_or_add_for_write_only_span<bool>(
       ".hide_vert", AttrDomain::Point);
   SpanAttributeWriter<bool> hide_edge = attributes.convert_or_add_for_write_only_span<bool>(
       ".hide_edge", AttrDomain::Edge);
 
-  Array<bool> processed_edges(mesh.edges_num, false);
-  Array<bool> processed_verts(mesh.verts_num, false);
+  /* If the attribute is newly created, ensure the loose edges and vertices are properly
+   * initialized, as the face-based fill below will not guarantee this. */
+  if (!vert_attr_exists) {
+    const IndexMask mask = mesh.loose_verts();
+    Array<int> loose_vert_indices(mask.size());
+    mask.to_indices(loose_vert_indices.as_mutable_span());
+    hide_vert.span.fill_indices(loose_vert_indices.as_span(), false);
+
+    const Span<int2> edges = mesh.edges();
+    mesh.loose_edges().foreach_index([&](const int i) {
+      hide_vert.span[edges[i][0]] = false;
+      hide_vert.span[edges[i][1]] = false;
+    }, exec_mode::grain_size(1024));
+  }
+
+  if (!edge_attr_exists) {
+    const IndexMask mask = mesh.loose_edges();
+    Array<int> loose_edge_indices(mask.size());
+    mask.to_indices(loose_edge_indices.as_mutable_span());
+    hide_edge.span.fill_indices(loose_edge_indices.as_span(), false);
+  }
 
   /* Hide all edges or vertices connected to hidden polygons. */
   threading::parallel_for(faces.index_range(), 1024, [&](const IndexRange range) {
     for (const int i : range) {
       if (hide_poly_span[i]) {
         hide_vert.span.fill_indices(corner_verts.slice(faces[i]), true);
-        processed_verts.as_mutable_span().fill_indices(corner_verts.slice(faces[i]), true);
         hide_edge.span.fill_indices(corner_edges.slice(faces[i]), true);
-        processed_edges.as_mutable_span().fill_indices(corner_edges.slice(faces[i]), true);
       }
     }
   });
@@ -587,21 +608,10 @@ void mesh_hide_face_flush(Mesh &mesh)
     for (const int i : range) {
       if (!hide_poly_span[i]) {
         hide_vert.span.fill_indices(corner_verts.slice(faces[i]), false);
-        processed_verts.as_mutable_span().fill_indices(corner_verts.slice(faces[i]), true);
         hide_edge.span.fill_indices(corner_edges.slice(faces[i]), false);
-        processed_edges.as_mutable_span().fill_indices(corner_edges.slice(faces[i]), true);
       }
     }
   });
-
-  IndexMaskMemory memory;
-  const IndexMask remaining_edges = IndexMask::from_bools_inverse(processed_edges, memory);
-  remaining_edges.foreach_index([&](const int i) { hide_edge.span[i] = false; },
-                                exec_mode::grain_size(1024));
-
-  const IndexMask remaining_verts = IndexMask::from_bools_inverse(processed_verts, memory);
-  remaining_verts.foreach_index([&](const int i) { hide_vert.span[i] = false; },
-                                exec_mode::grain_size(1024));
 
   hide_vert.finish();
   hide_edge.finish();
