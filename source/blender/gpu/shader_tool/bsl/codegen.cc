@@ -46,8 +46,15 @@ struct CodegenContext : NodeErrorHandler {
     {
     }
 
-    ExpressionResult(const ast::Node &node, SymbolClass *cls) : str(node.str_full()), type(cls) {}
-    ExpressionResult(const string &str, SymbolClass *cls) : str(str), type(cls) {}
+    ExpressionResult(const ast::Node &node, SymbolClass *cls, uint8_t array_dim = 0)
+        : str(node.str_full()), type(cls), array_dim(array_dim)
+    {
+    }
+
+    ExpressionResult(const string &str, SymbolClass *cls, uint8_t array_dim = 0)
+        : str(str), type(cls), array_dim(array_dim)
+    {
+    }
   };
 
   /**
@@ -118,19 +125,19 @@ struct CodegenContext : NodeErrorHandler {
 
     ExpressionResult member(ExpressionResult left, const ast::Node &t)
     {
-      ast::Node rhs = consume();
-      switch (rhs.type()) {
+      ast::Node right = consume();
+      switch (right.type()) {
         case ast::NodeType::FuncCall: {
-          ExpressionResult right = function(rhs, *left.type);
-          return {left.str + string(t.str_full()) + right.str, right.type};
+          ExpressionResult rhs = function(right, *left.type);
+          return {left.str + string(t.str_full()) + rhs.str, rhs.type};
         }
         case ast::NodeType::LocalVar: {
-          ExpressionResult right = variable(LocalVar(rhs).identifier(), *left.type);
+          ExpressionResult rhs = variable(LocalVar(right).identifier(), *left.type);
           if (left.type->is_srt()) {
             /* Remove access to SRT type (makes the resource global). */
-            return {left.str + as_whitespace(t.str_full()) + right.str, right.type};
+            return {left.str + as_whitespace(t.str_full()) + rhs.str, rhs.type, rhs.array_dim};
           }
-          return {left.str + string(t.str_full()) + right.str, right.type};
+          return {left.str + string(t.str_full()) + rhs.str, rhs.type, rhs.array_dim};
         }
         default:
           return {t, ctx.table.err_cls};
@@ -1078,6 +1085,7 @@ struct CodegenContext : NodeErrorHandler {
       builder << cls.identifier + trivia(decl.identifier());
     }
 
+    builder.curr = body.front();
     match_if('{');
 
     if (cls.is_union) {

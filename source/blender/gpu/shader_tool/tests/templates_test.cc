@@ -570,6 +570,36 @@ ATfloat _method(ATfloat this_, float b);
     EXPECT_EQ(output, expect);
     EXPECT_EQ(error, "");
   }
+
+  {
+    string input = R"(
+template<int i> struct T {};
+
+template<> struct T<0> {
+  int b[1];
+};
+
+int f(T<0> a)
+{
+  return a.b[1];
+}
+)";
+    string expect = R"(#line 4
+           struct TT0 {
+  int b[1];
+};
+#line 4
+TT0 TT0_ctor_() {TT0 r;for(int a =0;a < 1;++a) {r.b[a]=0;}return r;}
+#line 8
+int f(TT0 a)
+{
+  return a.b[1];
+}
+)";
+    auto [output, _, error] = process_test_string(input, Language::BSL);
+    EXPECT_EQ(output, expect);
+    EXPECT_EQ(error, "");
+  }
 }
 
 }  // namespace blender::gpu::tests
