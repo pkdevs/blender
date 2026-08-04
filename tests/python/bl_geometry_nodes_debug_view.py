@@ -323,6 +323,71 @@ class GeometryNodesDebugViewFixtureTest(unittest.TestCase):
         self.assertEqual(self.evaluate(), 8)
 
 
+class GeometryNodesDebugViewSimulationZoneFixtureTest(unittest.TestCase):
+    def setUp(self):
+        if args is None or args.testdir is None:
+            self.skipTest("Debug View fixture test directory was not provided")
+
+        fixture_path = args.testdir / "persistent_debug_view_simulation_zone.blend"
+        self.assertTrue(fixture_path.exists(), f"Missing fixture: {fixture_path}")
+        bpy.ops.wm.open_mainfile(filepath=str(fixture_path))
+
+        self.obj = bpy.data.objects["Persistent Debug View Simulation Object"]
+        self.modifier = self.obj.modifiers["Persistent Debug View Simulation Modifier"]
+        self.root_group = bpy.data.node_groups["Persistent Debug View Simulation Root"]
+        self.nested_group = bpy.data.node_groups["Simulation Debug Nested Group"]
+        self.viewer = self.nested_group.nodes["Simulation Persistent Debug"]
+        self.marker = self.nested_group.nodes["Simulation Debug Marker"]
+
+    def evaluate(self):
+        bpy.context.scene.frame_set(1)
+        bpy.context.view_layer.update()
+        depsgraph = bpy.context.evaluated_depsgraph_get()
+        evaluated_obj = self.obj.evaluated_get(depsgraph)
+        return len(evaluated_obj.data.vertices)
+
+    def warning_messages(self):
+        return [warning.message for warning in self.modifier.node_warnings]
+
+    def test_nested_debug_view_is_available_and_evaluates_through_simulation(self):
+        self.assertEqual(len(bpy.data.objects), 1)
+        self.assertEqual(len(self.obj.modifiers), 1)
+        self.assertEqual(
+            len([node for node in self.root_group.nodes
+                 if node.bl_idname == "GeometryNodeSimulationOutput"]), 1)
+        self.assertEqual(
+            len([node for node in self.root_group.nodes if node.bl_idname == "GeometryNodeGroup"]), 1)
+        self.assertTrue(self.viewer.is_debug_view)
+        self.assertEqual(self.marker.inputs["Message"].default_value,
+                         "SIMULATION_DEBUG_BRANCH_EVALUATED")
+
+        self.assertFalse(self.modifier.show_debug_views)
+        self.assertEqual(self.evaluate(), 8)
+        self.assertEqual(self.warning_messages(), [])
+        with bpy.context.temp_override(
+                object=self.obj, active_object=self.obj, modifier=self.modifier):
+            self.assertFalse(bpy.ops.object.geometry_nodes_debug_view_toggle.poll())
+
+        self.modifier.show_debug_views = True
+        self.assertEqual(self.evaluate(), 8)
+        self.assertIn("SIMULATION_DEBUG_BRANCH_EVALUATED", self.warning_messages())
+        with bpy.context.temp_override(
+                object=self.obj, active_object=self.obj, modifier=self.modifier):
+            self.assertTrue(bpy.ops.object.geometry_nodes_debug_view_toggle.poll())
+
+        self.modifier.show_debug_views = False
+        self.assertEqual(self.evaluate(), 8)
+        self.assertEqual(self.warning_messages(), [])
+
+    def test_reload_starts_from_deterministic_initial_state(self):
+        self.assertFalse(self.modifier.show_debug_views)
+        self.assertEqual(self.evaluate(), 8)
+        self.assertEqual(self.warning_messages(), [])
+        self.assertTrue(self.viewer.is_debug_view)
+        self.assertEqual(self.marker.inputs["Message"].default_value,
+                         "SIMULATION_DEBUG_BRANCH_EVALUATED")
+
+
 def main():
     global args
     import argparse

@@ -499,6 +499,49 @@ static Vector<Identifier> identifiers_for_tree_lineage(const uint32_t root_tree_
   return identifiers;
 }
 
+TEST_F(CandidateCollectionTest, SimulationZonePathIsStableAndOtherZonesRemainUnsupported)
+{
+  eval_log::NodesEvalLog root_log;
+  NodesModifierData nmd = {};
+  bke::DataBlockComputeContext object_context(nullptr, 1);
+  bke::GeometryNodesModifierComputeContext modifier_context(&object_context, nmd);
+
+  eval_log::NodeTreeLogger &root_logger = root_log.get_local_tree_logger(modifier_context);
+  root_logger.tree_orig_session_uid = 100;
+
+  bke::SimulationZoneComputeContext simulation_context(&modifier_context, 70);
+  bke::GroupNodeComputeContext simulation_group_context(&simulation_context, 50);
+  eval_log::NodeTreeLogger &simulation_group_logger = root_log.get_local_tree_logger(
+      simulation_group_context);
+  simulation_group_logger.tree_orig_session_uid = 200;
+  simulation_group_logger.context_order = 3;
+  simulation_group_logger.context_name = "Simulation Group";
+  add_viewer_log(simulation_group_logger, 60, 4, "Simulation Viewer");
+
+  /* These dynamic contexts remain intentionally unsupported. */
+  bke::RepeatZoneComputeContext repeat_context(&modifier_context, 80, 0);
+  bke::GroupNodeComputeContext repeat_group_context(&repeat_context, 51);
+  eval_log::NodeTreeLogger &repeat_group_logger = root_log.get_local_tree_logger(
+      repeat_group_context);
+  repeat_group_logger.tree_orig_session_uid = 201;
+  repeat_group_logger.context_order = 4;
+  add_viewer_log(repeat_group_logger, 61, 5, "Repeat Viewer");
+
+  const Span<Candidate> candidates = root_log.debug_view_candidates();
+  ASSERT_EQ(candidates.size(), 1);
+  EXPECT_EQ(candidates[0].identifier.compute_context_hash, simulation_group_context.hash());
+  EXPECT_EQ(candidates[0].identifier.node_tree_lineage_hash,
+            node_tree_lineage_hash({uint32_t(100), uint32_t(200)}));
+  EXPECT_EQ(candidates[0].sort_order, Vector<int>({3, 4}));
+  EXPECT_EQ(candidates[0].context_names, Vector<std::string>({"Simulation Group"}));
+  EXPECT_EQ(candidates[0].viewer_name, "Simulation Viewer");
+
+  State state;
+  state.initialized = true;
+  EXPECT_TRUE(toggle_candidate(candidates, candidates[0].identifier, state));
+  EXPECT_EQ(enabled_candidate_indices(candidates, state), Vector<int>({0}));
+}
+
 static Vector<Candidate> candidates_from_identifiers(const Span<Identifier> identifiers)
 {
   Vector<Candidate> candidates;
