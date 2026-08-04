@@ -46,7 +46,7 @@ struct tSplineIK_Tree {
   float totlength; /* total length of bones in the chain */
 
   const float *points;  /* parametric positions for the joints along the curve */
-  blender::Array<bPoseChannel *> chain; /* Chain of bones to affect using Spline IK (ordered from the tip). */
+  Array<bPoseChannel *> chain; /* Chain of bones to affect using Spline IK (ordered from the tip). */
 
   bPoseChannel *root; /* bone that is the root node of the chain */
 
@@ -90,8 +90,8 @@ static void splineik_init_tree_from_pchan(Scene * /*scene*/, Object *ob, bPoseCh
   /* Find the root bone and the chain of bones from the root to the tip.
    * NOTE: this assumes that the bones are connected, but that may not be true... */
   Bone *pchan_bone = pchan_tip->bone_get(*ob);
-  blender::Array<bPoseChannel *> pchan_chain(ik_data->chainlen);
-  blender::Array<float> bone_lengths(ik_data->chainlen);
+  Array<bPoseChannel *> pchan_chain(ik_data->chainlen);
+  Array<float> bone_lengths(ik_data->chainlen);
   for (pchan = pchan_tip; pchan && (segcount < ik_data->chainlen);
        pchan = pchan->parent, pchan_bone = pchan_bone->parent, segcount++)
   {
@@ -771,7 +771,7 @@ static void splineik_execute_tree(
     }
 
     /* Free the tree info specific to SplineIK trees by removing the original array from scope. */
-    tree->chain = blender::Array<bPoseChannel *>();
+    tree->chain = Array<bPoseChannel *>();
 
     /* free this tree */
     BLI_freelinkN(&pchan_root->siktree, tree);
