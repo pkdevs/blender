@@ -283,26 +283,24 @@ void BKE_add_template_variables_general(bke::path_templates::VariableMap &variab
     variables.add_string("project_name", project->get_name());
     variables.add_filepath("project_root", project->get_root_path());
 
-    for (const std::unique_ptr<IDProperty, bke::idprop::IDPropertyDeleter> &var :
-         project->variables)
-    {
-      switch (var->type) {
-        case eIDPropertyType::IDP_STRING: {
-          if (var->ui_data->rna_subtype == PropertySubType::PROP_FILEPATH) {
-            variables.add_filepath(var->name, IDP_string_get(var.get()));
+    for (const std::unique_ptr<bke::ProjectVariable> &var : project->variables) {
+      switch (var->type_get()) {
+        case bke::ProjectVariableType::STRING: {
+          if (var->string_subtype_get() == bke::ProjectVariableStringSubtype::FILEPATH) {
+            variables.add_filepath(var->name_get(), var->value_string_get());
           }
           else {
-            variables.add_string(var->name, IDP_string_get(var.get()));
+            variables.add_string(var->name_get(), var->value_string_get());
           }
           break;
         }
 
-        case eIDPropertyType::IDP_INT:
-          variables.add_integer(var->name, IDP_int_get(var.get()));
+        case bke::ProjectVariableType::INT:
+          variables.add_integer(var->name_get(), var->value_int_get());
           break;
 
-        case eIDPropertyType::IDP_FLOAT:
-          variables.add_float(var->name, IDP_float_get(var.get()));
+        case bke::ProjectVariableType::FLOAT:
+          variables.add_float(var->name_get(), var->value_float_get());
           break;
 
         default:

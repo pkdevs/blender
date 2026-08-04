@@ -27,6 +27,64 @@ struct Main;
 
 namespace bke {
 
+enum class ProjectVariableType : char {
+  STRING = eIDPropertyType::IDP_STRING,
+  INT = eIDPropertyType::IDP_INT,
+  FLOAT = eIDPropertyType::IDP_FLOAT,
+};
+
+enum class ProjectVariableStringSubtype {
+  /* These should be kept in sync with their counterparts in PropertySubType
+   * from RNA_types.hh. We don't include that header here because some places
+   * that include *this* header don't have access to it. */
+  NONE = 0,     /* PropertySubType::PROP_NONE */
+  FILEPATH = 1, /* PropertySubType::PROP_FILEPATH */
+};
+
+class ProjectVariable : public IDProperty {
+ public:
+  ProjectVariable(StringRef name, ProjectVariableType type);
+
+  ~ProjectVariable();
+  ProjectVariable(const ProjectVariable &other) = delete;
+  ProjectVariable &operator=(const ProjectVariable &other) = delete;
+  ProjectVariable(ProjectVariable &&other) noexcept;
+  ProjectVariable &operator=(ProjectVariable &&other) noexcept;
+
+  /** Get this variable as its underlying ID property. */
+  IDProperty &prop()
+  {
+    return *this;
+  }
+  const IDProperty &prop() const
+  {
+    return *this;
+  }
+
+  /**
+   * Get the variable's name.
+   *
+   * \see Project::rename_variable()
+   */
+  StringRefNull name_get() const;
+
+  ProjectVariableType type_get() const;
+
+  ProjectVariableStringSubtype string_subtype_get() const;
+  void string_subtype_set(ProjectVariableStringSubtype type);
+
+  StringRefNull value_string_get() const;
+  int value_int_get() const;
+  float value_float_get() const;
+
+  void value_set(StringRefNull value);
+  void value_set(int value);
+  void value_set(float value);
+
+  StringRefNull description_get() const;
+  void description_set(StringRef description);
+};
+
 /**
  * A Blender project.
  *
@@ -48,7 +106,7 @@ class BlenderProject {
   std::string root_path_;
 
  public:
-  Vector<std::unique_ptr<IDProperty, idprop::IDPropertyDeleter>> variables;
+  Vector<std::unique_ptr<ProjectVariable>> variables;
   int active_variable_index = 0;
 
   /**
@@ -85,9 +143,9 @@ class BlenderProject {
    *
    * \return If the variable is found, the index of the variable.  If not found, -1.
    */
-  int find_variable_index(IDProperty *var);
+  int find_variable_index(ProjectVariable *var);
 
-  IDProperty *new_variable(StringRef name, eIDPropertyType type);
+  ProjectVariable *new_variable(StringRef name, ProjectVariableType type);
 
   /**
    * Remove the given variable.
@@ -95,7 +153,7 @@ class BlenderProject {
    * Returns the index that the removed variable had, or -1 if the variable
    * wasn't found.
    */
-  int remove_variable(IDProperty *var);
+  int remove_variable(ProjectVariable *var);
 
   /**
    * Move the variable at from_index to to_index.

@@ -59,6 +59,128 @@ static std::shared_mutex &get_project_mutex()
 
 namespace bke {
 
+ProjectVariable::ProjectVariable(StringRef name, ProjectVariableType type)
+{
+  /* This variable is a hack to get around IDProperties having no value-based APIs for property
+   * creation, only pointer-based. We free this after copying its data to `this`. */
+  IDProperty *tmp_property;
+
+  switch (type) {
+    case ProjectVariableType::INT: {
+      IDPropertyTemplate prop_template{0};
+      prop_template.i = 0;
+      tmp_property = IDP_New(eIDPropertyType::IDP_INT, &prop_template, name, eIDPropertyFlag(0));
+      break;
+    }
+
+    case ProjectVariableType::FLOAT: {
+      IDPropertyTemplate prop_template{0};
+      prop_template.f = 0.0f;
+      tmp_property = IDP_New(eIDPropertyType::IDP_FLOAT, &prop_template, name, eIDPropertyFlag(0));
+      break;
+    }
+
+    case ProjectVariableType::STRING: {
+      tmp_property = IDP_NewString("", name, eIDPropertyFlag(0));
+      break;
+    }
+  }
+
+  IDP_ui_data_ensure(tmp_property);
+  tmp_property->ui_data->description = BLI_strdup("");
+
+  this->prop() = *tmp_property;
+
+  /* Shallow delete, so the pointers copied to `this` remain valid. */
+  MEM_delete(tmp_property);
+}
+
+ProjectVariable::~ProjectVariable()
+{
+  IDP_ClearProperty(this);
+}
+
+ProjectVariable::ProjectVariable(ProjectVariable &&other) noexcept
+{
+  this->prop() = other.prop();
+  other.prop() = {};
+}
+
+ProjectVariable &ProjectVariable::operator=(ProjectVariable &&other) noexcept
+{
+  if (this != &other) {
+    IDP_ClearProperty(this);
+    this->prop() = other.prop();
+    other.prop() = {};
+  }
+  return *this;
+}
+
+StringRefNull ProjectVariable::name_get() const
+{
+  return StringRefNull(this->prop().name);
+}
+
+ProjectVariableType ProjectVariable::type_get() const
+{
+  return ProjectVariableType(this->prop().type);
+}
+
+ProjectVariableStringSubtype ProjectVariable::string_subtype_get() const
+{
+  return ProjectVariableStringSubtype(this->prop().ui_data->rna_subtype);
+}
+
+void ProjectVariable::string_subtype_set(ProjectVariableStringSubtype type)
+{
+  this->prop().ui_data->rna_subtype = PropertySubType(type);
+}
+
+StringRefNull ProjectVariable::value_string_get() const
+{
+  return StringRefNull(IDP_string_get(&this->prop()));
+}
+
+int ProjectVariable::value_int_get() const
+{
+  return IDP_int_get(&this->prop());
+}
+
+float ProjectVariable::value_float_get() const
+{
+  return IDP_float_get(&this->prop());
+}
+
+void ProjectVariable::value_set(StringRefNull value)
+{
+  IDP_AssignString(&this->prop(), value.c_str());
+}
+
+void ProjectVariable::value_set(int value)
+{
+  IDP_int_set(&this->prop(), value);
+}
+
+void ProjectVariable::value_set(float value)
+{
+  IDP_float_set(&this->prop(), value);
+}
+
+StringRefNull ProjectVariable::description_get() const
+{
+  return StringRefNull(this->prop().ui_data->description);
+}
+
+void ProjectVariable::description_set(StringRef description)
+{
+  IDProperty &prop = this->prop();
+
+  MEM_delete(prop.ui_data->description);
+  prop.ui_data->description = MEM_new_array<char>(description.size() + 1,
+                                                  "ProjectVariable description");
+  description.copy_unsafe(prop.ui_data->description);
+}
+
 void BlenderProject::set_name(StringRef name)
 {
   BLI_assert(!name.is_empty());
@@ -87,7 +209,7 @@ StringRefNull BlenderProject::get_root_path() const
   return StringRefNull(this->root_path_);
 }
 
-int BlenderProject::find_variable_index(IDProperty *var)
+int BlenderProject::find_variable_index(ProjectVariable *var)
 {
   BLI_assert(var != nullptr);
   if (var == nullptr) {
@@ -103,49 +225,34 @@ int BlenderProject::find_variable_index(IDProperty *var)
   return -1;
 }
 
-IDProperty *BlenderProject::new_variable(StringRef name, eIDPropertyType type)
+ProjectVariable *BlenderProject::new_variable(StringRef name, ProjectVariableType type)
 {
-  std::unique_ptr<IDProperty, idprop::IDPropertyDeleter> prop;
-  switch (type) {
-    case eIDPropertyType::IDP_INT: {
-      prop = idprop::create(name, int32_t(0), eIDPropertyFlag(0));
-      break;
-    }
+  const std::string new_name = ensure_is_valid_project_variable_name(name);
 
-    case eIDPropertyType::IDP_FLOAT: {
-      prop = idprop::create(name, 0.0f, eIDPropertyFlag(0));
-      break;
-    }
-
-    case eIDPropertyType::IDP_STRING: {
-      prop = idprop::create(name, "", eIDPropertyFlag(0));
-      break;
-    }
-
-    default:
-      /* Other IDProperty types not yet supported by project variables. */
-      BLI_assert_unreachable();
-      return nullptr;
-  }
-
-  IDP_ui_data_ensure(prop.get());
-  prop->ui_data->description = BLI_strdup("");
-
-  this->variables.append(std::move(prop));
+  ProjectVariable *var = MEM_new<ProjectVariable>("ProjectVariable", "", type);
+  this->variables.append(std::unique_ptr<ProjectVariable>(var));
+  this->rename_variable(this->variables.size() - 1, new_name); /* Also ensures name uniqueness. */
 
   this->is_dirty = true;
 
   return this->variables.last().get();
 }
 
-int BlenderProject::remove_variable(IDProperty *var)
+int BlenderProject::remove_variable(ProjectVariable *var)
 {
-  const int index = find_variable_index(var);
+  const int index = this->find_variable_index(var);
   if (index == -1) {
     return -1;
   }
 
   this->variables.remove(index);
+
+  if (this->active_variable_index > index) {
+    this->active_variable_index -= 1;
+  }
+  this->active_variable_index = std::min(this->active_variable_index,
+                                         int(this->variables.size() - 1));
+
   this->is_dirty = true;
   return index;
 }
@@ -181,23 +288,25 @@ bool BlenderProject::rename_variable(int variable_index, StringRef name)
     return false;
   }
 
-  auto check_name_is_used = [&](const StringRefNull name) -> bool {
-    for (const std::unique_ptr<IDProperty, idprop::IDPropertyDeleter> &other_var : this->variables)
-    {
-      if (other_var.get() == this->variables[variable_index].get()) {
-        /* Skip this var itself. */
+  const std::string new_name = ensure_is_valid_project_variable_name(name);
+
+  auto is_variable_name_used = [&](StringRef name) -> bool {
+    for (int i = 0; i < this->variables.size(); i++) {
+      if (i == variable_index) {
+        /* Skip the variable we're renaming. */
         continue;
       }
-      if (other_var->name == name) {
+
+      if (this->variables[i]->name_get() == name) {
         return true;
       }
     }
+
     return false;
   };
 
-  std::string new_name = ensure_is_valid_project_variable_name(name);
   this->variables[variable_index]->name[0] = '\0';
-  BLI_uniquename_cb(check_name_is_used,
+  BLI_uniquename_cb(is_variable_name_used,
                     new_name.c_str(),
                     '_',
                     this->variables[variable_index]->name,
