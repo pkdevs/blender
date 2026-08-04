@@ -90,9 +90,8 @@ def playback_controls(layout, context):
     row.operator("screen.keyframe_jump", text="", icon='NEXT_KEYFRAME').next = True
     row.operator("screen.time_jump", text="", icon='FRAME_NEXT').backward = False
     row.operator("screen.frame_jump", text="", icon='FF').end = True
-    row.popover(panel="TIME_PT_timeline_wrap", text="")
 
-    row.popover(panel="TIME_PT_jump", text="")
+    row.popover(panel="TIME_PT_playback_options", text="")
 
     if tool_settings:
         row = layout.row(align=True)
@@ -349,30 +348,11 @@ class TIME_PT_auto_keyframing(TimelinePanelButtons, Panel):
             col.prop(tool_settings, "use_record_with_nla", text="Layered Recording")
 
 
-class TIME_PT_jump(TimelinePanelButtons, Panel):
-    bl_label = "Time Jump"
+class TIME_PT_playback_options(TimelinePanelButtons, Panel):
+    bl_label = "Playback Options"
     bl_options = {'HIDE_HEADER'}
     bl_region_type = 'HEADER'
-    bl_ui_units_x = 10
-
-    def draw(self, context):
-        layout = self.layout
-        layout.use_property_split = True
-        layout.use_property_decorate = False
-
-        st = context.space_data
-        is_sequencer = st.type == 'SEQUENCE_EDITOR' and st.view_type == 'SEQUENCER'
-        scene = context.scene if not is_sequencer else context.sequencer_scene
-
-        layout.prop(scene, "time_jump_unit", expand=True, text="Jump Unit")
-        layout.prop(scene, "time_jump_delta", text="Delta")
-
-
-class TIME_PT_timeline_wrap(TimelinePanelButtons, Panel):
-    bl_label = "Timeline Wrap"
-    bl_options = {'HIDE_HEADER'}
-    bl_region_type = 'HEADER'
-    bl_ui_units_x = 15
+    bl_ui_units_x = 14
 
     def draw(self, context):
         layout = self.layout
@@ -384,6 +364,9 @@ class TIME_PT_timeline_wrap(TimelinePanelButtons, Panel):
         scene = context.scene if not is_sequencer else context.sequencer_scene
 
         layout.prop(scene, "wrap_timeline_navigation", text="Wrap Timeline Navigation")
+        layout.separator()
+        layout.prop(scene, "time_jump_unit", expand=True, text="Jump Unit")
+        layout.prop(scene, "time_jump_delta", text="Delta")
 
 
 ###################################
@@ -394,8 +377,7 @@ classes = (
     TIME_PT_keyframing,
     TIME_PT_keyframing_settings,
     TIME_PT_auto_keyframing,
-    TIME_PT_jump,
-    TIME_PT_timeline_wrap,
+    TIME_PT_playback_options,
     TIME_PT_playhead_snapping,
 )
 
