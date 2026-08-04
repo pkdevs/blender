@@ -1,9 +1,9 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 5.3.0 Alpha (b'bf67fb078da0')\n"
+"Project-Id-Version: Blender 5.3.0 Alpha (b'af9ba6af7621')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-07-27 09:52+0000\n"
+"POT-Creation-Date: 2026-08-03 07:24+0000\n"
 "PO-Revision-Date: 2026-02-24 05:12+0000\n"
 "Last-Translator: தமிழ்நேரம் <anishprabu.t@gmail.com>\n"
 "Language-Team: Tamil <https://translate.blender.org/projects/blender-ui/ui/ta/>\n"
@@ -34900,22 +34900,6 @@ msgid "Creative"
 msgstr "படைப்பாற்றல்"
 
 
-msgid "Bone Collections"
-msgstr "எலும்பு வசூல்"
-
-
-msgid "Names"
-msgstr "பெயர்கள்"
-
-
-msgid "Show/Hide"
-msgstr "காட்டு/மறைக்க"
-
-
-msgid "Apply"
-msgstr "இடு"
-
-
 msgid "Toggle Bone Options"
 msgstr "எலும்பு விருப்பங்களை மாற்றவும்"
 
@@ -34952,6 +34936,10 @@ msgid "Merge"
 msgstr "ஒன்றிணைக்கவும்"
 
 
+msgid "Show/Hide"
+msgstr "காட்டு/மறைக்க"
+
+
 msgid "Special Characters"
 msgstr "சிறப்பு எழுத்துக்கள்"
 
@@ -34960,36 +34948,24 @@ msgid "Kerning"
 msgstr "கெர்னிங்"
 
 
-msgid "Math"
-msgstr "கணிதம்"
-
-
 msgid "Metaball"
 msgstr "வளர்சிதை மாற்ற"
 
 
-msgid "Utilities"
-msgstr "பயன்பாடுகள்"
+msgid "Names"
+msgstr "பெயர்கள்"
 
 
 msgid "Bone Roll"
 msgstr "எலும்பு ரோல்"
 
 
-msgid "Read"
-msgstr "படி"
+msgid "Math"
+msgstr "கணிதம்"
 
 
-msgid "Sample"
-msgstr "மாதிரி"
-
-
-msgid "Write"
-msgstr "எழுதுங்கள்"
-
-
-msgid "Primitives"
-msgstr "ப்ரைமிடிவ்ச்"
+msgid "Utilities"
+msgstr "பயன்பாடுகள்"
 
 
 msgid "Pivot Point"
@@ -35004,16 +34980,32 @@ msgid "Proportional Editing Falloff"
 msgstr "விகிதாசார திருத்துதல் வீழ்ச்சி"
 
 
+msgid "Read"
+msgstr "படி"
+
+
 msgid "Mask Edit"
 msgstr "முகமூடி திருத்து"
+
+
+msgid "Sample"
+msgstr "மாதிரி"
 
 
 msgid "Automasking"
 msgstr "ஆட்டோமேச்கிங்"
 
 
+msgid "Write"
+msgstr "எழுதுங்கள்"
+
+
 msgid "Face Sets Edit"
 msgstr "முகம் தொகுப்புகள் திருத்து"
+
+
+msgid "Primitives"
+msgstr "ப்ரைமிடிவ்ச்"
 
 
 msgid "Vertex Group Locks"
@@ -35040,10 +35032,6 @@ msgid "Mirror"
 msgstr "கண்ணாடி"
 
 
-msgid "Deprecated"
-msgstr "மதிப்பிடப்பட்டது"
-
-
 msgid "UV Mapping"
 msgstr "புறஊதா மேப்பிங்"
 
@@ -35064,8 +35052,8 @@ msgid "Align View"
 msgstr "பார்வையை சீரமைக்கவும்"
 
 
-msgid "UV"
-msgstr "புறஊதா"
+msgid "Deprecated"
+msgstr "மதிப்பிடப்பட்டது"
 
 
 msgid "Align View to Active"
@@ -35082,6 +35070,10 @@ msgstr "மேலும்/குறைவாக தேர்ந்தெடு�
 
 msgid "Select Similar"
 msgstr "ஒத்ததைத் தேர்ந்தெடுக்கவும்"
+
+
+msgid "UV"
+msgstr "புறஊதா"
 
 
 msgid "Select All by Trait"
@@ -35120,16 +35112,12 @@ msgid "Rigid Body"
 msgstr "கடினமான உடல்"
 
 
+msgid "Apply"
+msgstr "இடு"
+
+
 msgid "Track"
 msgstr "டிராக்"
-
-
-msgid "Linked"
-msgstr "இணைக்கப்பட்ட"
-
-
-msgid "Layout"
-msgstr "தளவமைப்பு"
 
 
 msgid "Quick Effects"
@@ -35148,32 +35136,28 @@ msgid "Convert"
 msgstr "மாற்றவும்"
 
 
+msgid "Linked"
+msgstr "இணைக்கப்பட்ட"
+
+
 msgid "Link/Transfer Data"
 msgstr "இணைப்பு/பரிமாற்ற தரவு"
+
+
+msgid "Layout"
+msgstr "தளவமைப்பு"
 
 
 msgid "Hooks"
 msgstr "கொக்கிகள்"
 
 
-msgid "Adjust"
-msgstr "சரிசெய்யவும்"
-
-
 msgid "Trim/Add"
 msgstr "டிரிம்/சேர்"
 
 
-msgid "Keying"
-msgstr "கீயிங்"
-
-
 msgid "Sculpt Set Pivot"
 msgstr "சிற்பம் செட் பிவோட்"
-
-
-msgid "Tracking"
-msgstr "கண்காணிப்பு"
 
 
 msgid "Face Sets Init"
@@ -35184,6 +35168,14 @@ msgid "Random Mask"
 msgstr "சீரற்ற முகமூடி"
 
 
+msgid "Adjust"
+msgstr "சரிசெய்யவும்"
+
+
+msgid "Keying"
+msgstr "கீயிங்"
+
+
 msgid "Clear Transform"
 msgstr "தெளிவான உருமாற்றம்"
 
@@ -35192,8 +35184,16 @@ msgid "In-Betweens"
 msgstr "இன்-பெட்வீன்ச்"
 
 
+msgid "Tracking"
+msgstr "கண்காணிப்பு"
+
+
 msgid "Propagate"
 msgstr "பிரச்சாரம்"
+
+
+msgid "Bone Collections"
+msgstr "எலும்பு வசூல்"
 
 
 msgid "Keyframe Insert Pie"
@@ -52003,6 +52003,10 @@ msgid "Collection of main items"
 msgstr "முக்கிய பொருட்களின் சேகரிப்பு"
 
 
+msgid "Scalar"
+msgstr "ச்காலார்"
+
+
 msgid "Collection of repeat items"
 msgstr "மறுநிகழ்வு உருப்படிகளின் சேகரிப்பு"
 
@@ -56289,15 +56293,6 @@ msgstr "உருவாக்கப்பட்டது"
 
 
 msgctxt "Operator"
-msgid "Make Markers Local"
-msgstr "குறிப்பான்களை உள்ளக ஆக்குங்கள்"
-
-
-msgid "Move selected scene markers to the active Action as local 'pose' markers"
-msgstr "தேர்ந்தெடுக்கப்பட்ட காட்சி குறிப்பான்களை உள்ளக 'போச்' குறிப்பான்களாக செயலில் உள்ள செயலுக்கு நகர்த்தவும்"
-
-
-msgctxt "Operator"
 msgid "Mirror Keys"
 msgstr "கண்ணாடி விசைகள்"
 
@@ -58599,10 +58594,6 @@ msgstr "சிற்பம்/வண்ணப்பூச்சு தூரி�
 
 msgid "Change brush size by a scalar"
 msgstr "தூரிகை அளவை அளவிடுதல் மூலம் மாற்றவும்"
-
-
-msgid "Scalar"
-msgstr "ச்காலார்"
 
 
 msgid "Factor to scale brush size by"
@@ -74630,15 +74621,6 @@ msgid "Select all objects which block light from this emitter"
 msgstr "இந்த உமிழ்ப்பாளரிடமிருந்து ஒளியைத் தடுக்கும் அனைத்து பொருட்களையும் தேர்ந்தெடுக்கவும்"
 
 
-msgctxt "Operator"
-msgid "Link Receivers to Emitter"
-msgstr "உமிழ்ப்பாளர்களுடன் பெறுநர்களை இணைக்கவும்"
-
-
-msgid "Light link selected receivers to the active emitter object"
-msgstr "செயலில் உள்ள உமிழ்ப்பான் பொருளுக்கு ஒளி இணைப்பு தேர்ந்தெடுக்கப்பட்ட பெறுநர்கள்"
-
-
 msgid "State of the light linking"
 msgstr "ஒளியின் நிலை"
 
@@ -78608,10 +78590,6 @@ msgstr "அனைத்து செங்குத்துகளின் த�
 msgctxt "Operator"
 msgid "Weight from Bones"
 msgstr "எலும்புகளிலிருந்து எடை"
-
-
-msgid "Set the weights of the groups matching the attached armature's selected bones, using the distance between the vertices and the bones"
-msgstr "இணைக்கப்பட்ட ஆர்மேச்சரின் தேர்ந்தெடுக்கப்பட்ட எலும்புகளுடன் பொருந்தக்கூடிய குழுக்களின் எடையை அமைக்கவும், செங்குத்துகளுக்கும் எலும்புகளுக்கும் இடையிலான தூரத்தைப் பயன்படுத்துதல்"
 
 
 msgid "Method to use for assigning weights"
@@ -97041,10 +97019,6 @@ msgid "Danish - Dansk"
 msgstr "டேனிச் - டேனிச்"
 
 
-msgid "Locale code: da. Translation progress: 3%"
-msgstr "மொழி குறியீடு: da. மொழிபெயர்ப்பு முன்னேற்றம்: 3%"
-
-
 msgid "Dutch - Nederlands"
 msgstr "டச்சு - நெடர்லேண்ட்ச்"
 
@@ -97071,10 +97045,6 @@ msgstr "உள்ளக குறியீடு: eo. மொழிபெயர�
 
 msgid "Finnish - Suomi"
 msgstr "ஃபின்னிச் - பின்லாந்து"
-
-
-msgid "Locale code: fi_FI. Translation progress: 11%"
-msgstr "மொழி குறியீடு: fi_FI. மொழிபெயர்ப்பு முன்னேற்றம்: 11%"
 
 
 msgid "French - Français"
@@ -97119,10 +97089,6 @@ msgstr "- அங்கேரியன்"
 
 msgid "Indonesian - Bahasa indonesia"
 msgstr "இந்தோனேசிய - இந்தோனேசிய"
-
-
-msgid "Locale code: id_ID. Translation progress: 21%"
-msgstr "மொழி குறியீடு: id_ID. மொழிபெயர்ப்பு முன்னேற்றம்: 21%"
 
 
 msgid "Italian - Italiano"
@@ -119992,10 +119958,6 @@ msgid "No free inputs for node {}"
 msgstr "முனைக்கு இலவச உள்ளீடுகள் இல்லை {}"
 
 
-msgid "Selected nodes are not of the same type as {}"
-msgstr "தேர்ந்தெடுக்கப்பட்ட முனைகள் {to அதே வகையைச் சேர்ந்தவை அல்ல"
-
-
 msgid "Successfully copied attributes from {} to {}"
 msgstr "பண்புகளை {} முதல் {} வரை வெற்றிகரமாக நகலெடுத்தது"
 
@@ -120379,16 +120341,8 @@ msgstr ""
 " {:s} இல் ஒன்றாக இருக்க வேண்டும்."
 
 
-msgid "Active node should not be of type {:s}."
-msgstr "செயலில் உள்ள முனை {: S fy வகையாக இருக்கக்கூடாது."
-
-
 msgid "At least {:d} nodes must be selected."
 msgstr "குறைந்தது {:d} முனைகள் தேர்ந்தெடுக்கப்பட வேண்டும்."
-
-
-msgid "Active node should be of type {:s}."
-msgstr "செயலில் உள்ள முனை {: S fy வகையாக இருக்க வேண்டும்."
 
 
 msgctxt "Operator"
@@ -120656,10 +120610,6 @@ msgstr "நகலெடுக்கப்பட்டது {:s} அளவுர
 
 msgid "Copied the value to {:d} bones"
 msgstr "மதிப்பை {:d} எலும்புகளுக்கு நகலெடுத்தார்"
-
-
-msgid "Cannot find class {:s} in {:s}"
-msgstr "{:s} இல் வகுப்பைக் கண்டுபிடிக்க முடியவில்லை"
 
 
 msgid "Bone {:s} selected on both sides, mirroring would be ambiguous, aborting. Only select the left or right side, not both"
@@ -121016,10 +120966,6 @@ msgstr "பட்டியல் உள்ளீடுகளைச் சேர�
 
 msgid "Collection {:s} has the same uid {:d} as {:s}"
 msgstr "சேகரிப்பு {:s} அதே uid {:d} அச் {:s}"
-
-
-msgid "Bone {:s} has a broken reference to {:s} collection '{:s}'"
-msgstr "எலும்புகள்} {:s} சேகரிப்புகள்} 'க்கு உடைந்த குறிப்பு உள்ளது"
 
 
 msgid "WARNING: preferences are lost when add-on is disabled, be sure to use \"Save Persistent\" if you want to keep your settings!"
@@ -126718,6 +126664,14 @@ msgid "Duplicate Marker to Scene"
 msgstr "காட்சிக்கு நகல் மார்க்கர்"
 
 
+msgid "Only Active Keying Set"
+msgstr "ஆக்டிவ் கீயிங் செட் மட்டும்"
+
+
+msgid "Jump Unit"
+msgstr "சம்ப் யூனிட்"
+
+
 msgid "Limit to Frame Range"
 msgstr "பிரேம் வரம்பிற்கான வரம்பு"
 
@@ -126736,14 +126690,6 @@ msgstr "ஆக்டிவ் திருத்தி"
 
 msgid "Properties and Sidebars"
 msgstr "பண்புகள் மற்றும் பக்கப்பட்டிகள்"
-
-
-msgid "Only Active Keying Set"
-msgstr "ஆக்டிவ் கீயிங் செட் மட்டும்"
-
-
-msgid "Jump Unit"
-msgstr "சம்ப் யூனிட்"
 
 
 msgid "Layered Recording"
@@ -131792,10 +131738,6 @@ msgid "Error: Reached max shadow updates."
 msgstr "பிழை: அதிகபட்ச நிழல் புதுப்பிப்புகளை அடைந்தது."
 
 
-msgid "Warning: Volume rendering data could not be allocated. Now using a resolution of 1:{} instead of 1:{}."
-msgstr "எச்சரிக்கை: தொகுதி வழங்குதல் தரவை ஒதுக்க முடியவில்லை. இப்போது 1: {the க்கு பதிலாக 1: {} என்ற தீர்மானத்தைப் பயன்படுத்துகிறது."
-
-
 msgid "Error: Curves object contains too many points. Reduce curve resolution or curve count to fix this issue."
 msgstr "பிழை: வளைவுப் பொருளில் பல புள்ளிகள் உள்ளன. இந்தச் சிக்கலைச் சரிசெய்ய வளைவுத் தீர்மானம் அல்லது வளைவு எண்ணிக்கையைக் குறைக்கவும்."
 
@@ -133623,18 +133565,6 @@ msgid "Online Python Reference"
 msgstr "நிகழ்நிலை பைதான் குறிப்பு"
 
 
-msgid "Drop {} on slot {} (replacing {}) of {}"
-msgstr "} of இன் ச்லாட் {} ({} ஐ மாற்றுதல்) இல் {} ஐ விடுங்கள்"
-
-
-msgid "Drop {} on slot {} (active slot) of {}"
-msgstr "} of இன் ச்லாட் {} (செயலில் ச்லாட்) இல் {} ஐ விடுங்கள்"
-
-
-msgid "Drop {} on slot {} of {}"
-msgstr "} of இன் ச்லாட்} on இல்}} ஐ விடுங்கள்"
-
-
 msgid "Autocomplete"
 msgstr "தன்னியக்க வேறுபாடு"
 
@@ -134198,16 +134128,8 @@ msgid "Reset Profile"
 msgstr "சுயவிவரத்தை மீட்டமைக்கவும்"
 
 
-msgid "Move {} {} into {}"
-msgstr "{} {The} {to க்கு நகர்த்தவும்"
-
-
 msgid "Move {} {} above {}"
 msgstr "{} மேலே {} {} நகர்த்தவும்"
-
-
-msgid "Move {} {} below {}"
-msgstr "கீழே {} {}}} ஐ நகர்த்தவும்"
 
 
 msgid "Layer is locked or not visible"
@@ -134587,14 +134509,6 @@ msgid "Add to linking collection"
 msgstr "இணைக்க சேகரிப்பைச் சேர்க்கவும்"
 
 
-msgid "Add to linking collection before {}"
-msgstr "{before க்கு முன் சேகரிப்பை இணைப்பதில் சேர்க்கவும்"
-
-
-msgid "Add to linking collection after {}"
-msgstr "{fol க்குப் பிறகு சேகரிப்பை இணைக்கச் சேர்க்கவும்"
-
-
 msgctxt "Operator"
 msgid "Add to linking collection"
 msgstr "இணைக்கும் சேகரிப்பில் சேர்க்கவும்"
@@ -134915,10 +134829,6 @@ msgstr "காட்சி நோக்கம்"
 
 msgid "Particles and Instancing"
 msgstr "துகள்கள் மற்றும் நிறுவுதல்"
-
-
-msgid "Import {} files"
-msgstr "}} கோப்புகளை இறக்குமதி செய்யுங்கள்"
 
 
 msgid "No weights/vertex groups on object(s)"
@@ -137444,10 +137354,6 @@ msgid "Blender Info Log"
 msgstr "கலப்பான் செய்தி பதிவு"
 
 
-msgid "Show {} preferences"
-msgstr "}} விருப்பங்களைக் காட்டு"
-
-
 msgid "Link {}"
 msgstr "இணைப்பு {}"
 
@@ -138377,20 +138283,12 @@ msgid "Delete Catalog"
 msgstr "பட்டியலை நீக்கு"
 
 
-msgid "Move catalog {} into {}"
-msgstr "அட்டவணை {} {to க்கு நகர்த்தவும்"
-
-
 msgid "Move assets to catalog"
 msgstr "சொத்துக்களை பட்டியலிட நகர்த்தவும்"
 
 
 msgid "Move asset to catalog"
 msgstr "பட்டியலுக்கு சொத்தை நகர்த்தவும்"
-
-
-msgid "Move catalog {} to the top level of the tree"
-msgstr "அட்டவணை {the மரத்தின் மேல் நிலைக்கு நகர்த்தவும்"
 
 
 msgid "Move assets out of any catalog"
@@ -141417,10 +141315,6 @@ msgid "Cannot fly when the view offset is locked"
 msgstr "பார்வை ஆஃப்செட் பூட்டப்படும்போது பறக்க முடியாது"
 
 
-msgid "Cannot fly an object with constraints"
-msgstr "கட்டுப்பாடுகளுடன் ஒரு பொருளை பறக்க முடியாது"
-
-
 msgid "Cannot dolly when the view offset is locked"
 msgstr "பார்வை ஆஃப்செட் பூட்டப்படும்போது டோலி முடியாது"
 
@@ -141443,10 +141337,6 @@ msgstr "சட் அச்சு திருத்தம்"
 
 msgid "Cannot navigate when the view offset is locked"
 msgstr "பார்வை ஆஃப்செட் பூட்டப்படும்போது செல்ல முடியாது"
-
-
-msgid "Cannot navigate an object with constraints"
-msgstr "கட்டுப்பாடுகளுடன் ஒரு பொருளை வழிநடத்த முடியாது"
 
 
 msgid "Depth too large"
@@ -147050,10 +146940,6 @@ msgid "There are no inputs."
 msgstr "உள்ளீடுகள் எதுவும் இல்லை."
 
 
-msgid "Input with index {} does not exist. Currently, the maximum possible index is {}. Did you mean to use {{:{}}}?"
-msgstr "குறியீட்டு} bith உடன் உள்ளீடு இல்லை. தற்போது, அதிகபட்ச சாத்தியமான குறியீடு {}. {{: {}} Bease பயன்படுத்த வேண்டுமா?"
-
-
 msgid "Input does not exist: \"{}\""
 msgstr "உள்ளீடு இல்லை: \"{}\""
 
@@ -148112,10 +147998,6 @@ msgstr "மதிப்பீடு செய்யப்பட்ட மேற�
 
 msgid "Curves are not attached to any UV map"
 msgstr "எந்த புறஊதா வரைபடத்திலும் வளைவுகள் இணைக்கப்படவில்லை"
-
-
-msgid "Invalid surface UVs on {} curves"
-msgstr "}} வளைவுகளில் தவறான மேற்பரப்பு uv கள்"
 
 
 msgid "Curves to deform"
@@ -150090,10 +149972,6 @@ msgstr "ஒவ்வொரு குழு நிகழ்வின் குழ
 
 msgid "Anonymous attributes cannot be created here"
 msgstr "அநாமதேய பண்புகளை இங்கு உருவாக்க முடியாது"
-
-
-msgid "Failed to write to attribute \"{}\" with domain \"{}\" and type \"{}\""
-msgstr "\"{}\" டொமைன் \"{}\" உடன் \"{}\" என்ற பண்புக்கு எழுதத் தவறிவிட்டது மற்றும் \"{}\""
 
 
 msgid "Geometry to store a new attribute with the given name on"

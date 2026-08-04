@@ -1377,6 +1377,14 @@ if(WITH_USD AND TEST_SRC_DIR_EXISTS)
     --testdir "${TEST_SRC_DIR}/usd"
     --outdir "${TEST_OUT_DIR}/io_usd"
   )
+
+  # The collection IO tests need USD
+  add_blender_test(
+    io_collections
+    --python ${CMAKE_CURRENT_LIST_DIR}/io_collections_test.py
+    --
+    --testdir "${TEST_SRC_DIR}/io_tests/io_collections"
+  )
 endif()
 
 if(TEST_SRC_DIR_EXISTS)
@@ -1775,6 +1783,7 @@ if(WITH_UI_TESTS)
     test_pie_menus.test_clip_view_pie_view_all
     test_pie_menus.test_anim_keyframe_insert_pie_location
     test_pie_menus.test_weight_paint_vgroup_lock_pie
+    test_button_input.test_string_buttons_interactions
   )
   foreach(ui_test ${_ui_tests})
     add_blender_test_ui(
