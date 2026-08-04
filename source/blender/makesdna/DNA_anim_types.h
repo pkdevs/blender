@@ -424,6 +424,14 @@ struct FCurve {
    * \note String look-ups for collection and custom-properties are escaped using #BLI_str_escape.
    */
   StringRefNull rna_path() const;
+
+  /**
+   * Retrieve a pre-parsed version of the FCurve's RNA path, owned by the FCurve itself. The
+   * referenced memory is only valid as long as the FCurve's path is not changed. Due to its use of
+   * specialized RNA path storage types, this can be much more efficient to work with than the
+   * string representation.
+   * \note This path does not include FCurve::array_index.
+   */
   ParsedRNAPathRef rna_path_parsed() const;
 
   /** Set the RNA path for this F-Curve, copying the given string. */

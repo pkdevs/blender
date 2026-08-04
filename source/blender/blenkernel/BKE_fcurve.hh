@@ -44,6 +44,7 @@ struct FCurveRuntime {
   /** Value stored from last time curve was evaluated (not threadsafe, debug display only!). */
   float curval = 0;
 
+  /** Cached parsed RNA path, computed eagerly when the string path is changed. */
   std::optional<ParsedRNAPath<>> parsed_rna_path;
 };
 
