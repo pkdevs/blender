@@ -12,6 +12,13 @@
 
 namespace eevee::dof::setup {
 
+float4 weighted_sum_array(float4 val[4], float4 weights)
+{
+  auto weight_sum = weights[0] + weights[1] + weights[2] + weights[3];
+  return (val[0] * weights[0] + val[1] * weights[1] + val[2] * weights[2] + val[3] * weights[3]) *
+         safe_rcp(weight_sum);
+}
+
 /**
  * Setup pass: CoC and luma aware downsample to half resolution of the input scene color buffer.
  *

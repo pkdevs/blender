@@ -7,7 +7,7 @@
 #include "gpu_shader_compat.hh"
 
 /* ---------------------------------------------------------------------- */
-/** \name Comparison
+/** \name Reduce
  * \{ */
 
 float reduce_max(float2 a)
@@ -123,6 +123,13 @@ float average(float3 a)
 float average(float4 a)
 {
   return reduce_add(a) * (1.0f / 4.0f);
+}
+
+float4 weighted_sum(float4 v0, float4 v1, float4 v2, float4 v3, float4 w)
+{
+  float sum = reduce_add(w);
+
+  return (v0 * w.x + v1 * w.y + v2 * w.z + v3 * w.w) * (sum > 0.0f ? 1.0f / sum : 0.0f);
 }
 
 /** \} */
