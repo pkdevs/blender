@@ -55,8 +55,6 @@ class PathTraceWorkGPU : public PathTraceWork {
   void alloc_integrator_queue();
   void alloc_integrator_sorting();
   void alloc_integrator_path_split();
-  void alloc_restir_buffers();
-  void restir_swap_and_clear();
 
   /* Returns DEVICE_KERNEL_NUM if there are no scheduled kernels. */
   DeviceKernel get_most_queued_kernel() const;
@@ -148,10 +146,6 @@ class PathTraceWorkGPU : public PathTraceWork {
   /* Temporary buffer to get an array of queued path for a particular kernel. */
   device_vector<int> queued_paths_;
   device_vector<int> num_queued_paths_;
-
-  /* Spatio temporal resevoir resampling buffers. */
-  device_vector<ReSTIRDIReservoir> restir_reservoirs_; // per-pixel
-  device_vector<ReSTIRDIReservoir> restir_reservoirs_prev_;
 
   /* Temporary buffer for passing work tiles to kernel. */
   device_vector<KernelWorkTile> work_tiles_;

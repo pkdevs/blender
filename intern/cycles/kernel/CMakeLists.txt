@@ -194,7 +194,6 @@ set(SRC_KERNEL_INTEGRATOR_HEADERS
   integrator/path_state.h
   integrator/reservoir.h
   integrator/restir.h
-  integrator/restir_temporal.h
   integrator/shade_background.h
   integrator/shade_light.h
   integrator/shade_shadow.h

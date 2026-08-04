@@ -97,8 +97,6 @@ PathTraceWorkGPU::PathTraceWorkGPU(Device *device,
           device, "integrator_next_shadow_path_index", MEM_READ_WRITE),
       queued_paths_(device, "queued_paths", MEM_READ_WRITE),
       num_queued_paths_(device, "num_queued_paths", MEM_READ_WRITE),
-      restir_reservoirs_(device, "restir_reservoirs", MEM_READ_WRITE), // !!!
-      restir_reservoirs_prev_(device, "restir_reservoirs_prev", MEM_READ_WRITE),
       work_tiles_(device, "work_tiles", MEM_READ_WRITE),
       display_rgba_half_(device, "display buffer half", MEM_READ_WRITE),
       max_num_paths_(0),
@@ -308,30 +306,12 @@ void PathTraceWorkGPU::alloc_integrator_path_split()
   }
 }
 
-void PathTraceWorkGPU::alloc_restir_buffers()
-{
-  const int pixel_count = max_num_paths_;
-
-  // printf("PathTraceWorkGPU::alloc_restir_buffers() ---> pixel_count:%d\n", pixel_count); // DEBUG ONLY
-
-  if (restir_reservoirs_.size() != pixel_count) {
-    restir_reservoirs_.alloc(pixel_count);
-    restir_reservoirs_.zero_to_device();
-  }
-
-  if (restir_reservoirs_prev_.size() != pixel_count) {
-    restir_reservoirs_prev_.alloc(pixel_count);
-    restir_reservoirs_prev_.zero_to_device();
-  }
-}
-
 void PathTraceWorkGPU::alloc_work_memory()
 {
   alloc_integrator_soa();
   alloc_integrator_queue();
   alloc_integrator_sorting();
   alloc_integrator_path_split();
-  alloc_restir_buffers();
 }
 
 void PathTraceWorkGPU::init_execution()
@@ -365,19 +345,6 @@ bool PathTraceWorkGPU::update_queue_counter_and_cache()
   }
 
   return true;
-}
-
-void PathTraceWorkGPU::restir_swap_and_clear()
-{
-  // Ping-pong the ReSTIR reservoirs: The 'current' buffer from this sample 
-  // becomes the 'previous' buffer for the next sample to enable temporal resampling.
-  restir_pingpong_ = !restir_pingpong_; // !!!
-
-  // Clear the new 'current' buffer so it doesn't contain stale data from two samples ago.
-  device_vector<ReSTIRDIReservoir> &next_current = restir_pingpong_ ? 
-                                                 restir_reservoirs_prev_ : restir_reservoirs_;
-
-  next_current.zero_to_device();
 }
 
 void PathTraceWorkGPU::render_samples(RenderStatistics &statistics,
@@ -437,8 +404,6 @@ void PathTraceWorkGPU::render_samples(RenderStatistics &statistics,
     num_busy_accum += num_active_main_paths_paths();
     ++num_iterations;
   }
-
-  restir_swap_and_clear();
 
   if (num_iterations) {
     statistics.occupancy = float(num_busy_accum) / num_iterations / max_num_paths_;
@@ -627,19 +592,10 @@ void PathTraceWorkGPU::enqueue_path_iteration(DeviceKernel kernel, const int num
       queue_->enqueue(kernel, work_size, args);
       break;
     }
-
     case DEVICE_KERNEL_INTEGRATOR_INTERSECT_SHADOW: {
-      device_vector<ReSTIRDIReservoir> &current =
-          restir_pingpong_ ? restir_reservoirs_prev_ : restir_reservoirs_;
-
-      device_ptr restir_current = current.device_pointer;
-      const int restir_reservoir_count = current.size();
-
       const DeviceKernelArguments args(&d_path_index,
                                       &buffers_->buffer.device_pointer,
-                                      &work_size,
-                                      &restir_current,
-                                      &restir_reservoir_count);
+                                      &work_size);
 
       queue_->enqueue(kernel, work_size, args);
       break;
@@ -654,6 +610,7 @@ void PathTraceWorkGPU::enqueue_path_iteration(DeviceKernel kernel, const int num
       queue_->enqueue(kernel, work_size, args);
       break;
     }
+    case DEVICE_KERNEL_INTEGRATOR_RESTIR:
     case DEVICE_KERNEL_INTEGRATOR_SHADE_BACKGROUND:
     case DEVICE_KERNEL_INTEGRATOR_SHADE_LIGHT_NEE:
     case DEVICE_KERNEL_INTEGRATOR_SHADE_LIGHT_FORWARD: {
@@ -666,21 +623,10 @@ void PathTraceWorkGPU::enqueue_path_iteration(DeviceKernel kernel, const int num
     }
     case DEVICE_KERNEL_INTEGRATOR_SHADE_SHADOW:
     case DEVICE_KERNEL_INTEGRATOR_SHADE_SURFACE: {
-      device_vector<ReSTIRDIReservoir> &current =
-          restir_pingpong_ ? restir_reservoirs_prev_ : restir_reservoirs_;
-      device_vector<ReSTIRDIReservoir> &previous =
-          restir_pingpong_ ? restir_reservoirs_ : restir_reservoirs_prev_;
-
-      device_ptr restir_current = current.device_pointer;
-      device_ptr restir_prev = previous.device_pointer;
-      const int restir_reservoir_count = current.size();
 
       const DeviceKernelArguments args(&d_path_index,
                                       &buffers_->buffer.device_pointer,
-                                      &work_size,
-                                      &restir_current,
-                                      &restir_prev,
-                                      &restir_reservoir_count);
+                                      &work_size);
 
       queue_->enqueue(kernel, work_size, args);
       break;
@@ -808,6 +754,8 @@ void PathTraceWorkGPU::compact_shadow_paths()
   const int num_active_paths =
       queue_counter->num_queued[DEVICE_KERNEL_INTEGRATOR_SHADE_LIGHT_NEE] +
       queue_counter->num_queued[DEVICE_KERNEL_INTEGRATOR_INTERSECT_SHADOW] +
+      // queue_counter->num_queued[DEVICE_KERNEL_INTEGRATOR_SHADE_SHADOW] +
+      queue_counter->num_queued[DEVICE_KERNEL_INTEGRATOR_RESTIR] +
       queue_counter->num_queued[DEVICE_KERNEL_INTEGRATOR_SHADE_SHADOW] +
       queue_counter->num_queued[DEVICE_KERNEL_INTEGRATOR_SHADOW_PATH_MNEE_PENDING];
 
@@ -1418,7 +1366,9 @@ bool PathTraceWorkGPU::kernel_creates_ao_paths(DeviceKernel kernel)
 bool PathTraceWorkGPU::kernel_is_shadow_path(DeviceKernel kernel)
 {
   return (kernel == DEVICE_KERNEL_INTEGRATOR_INTERSECT_SHADOW ||
+          // kernel == DEVICE_KERNEL_INTEGRATOR_SHADE_SHADOW ||
           kernel == DEVICE_KERNEL_INTEGRATOR_SHADE_SHADOW ||
+          kernel == DEVICE_KERNEL_INTEGRATOR_RESTIR ||
           kernel == DEVICE_KERNEL_INTEGRATOR_SHADE_LIGHT_NEE);
 }
 

@@ -308,7 +308,7 @@ void PathTraceWorkCPU::render_samples_direct_illumination(ThreadKernelGlobalsCPU
   }
 
   // TODO: restir.h
-  // kernels_.integrator_restir(kernel_globals, state, &sample_work_tile, render_buffer);
+  kernels_.integrator_restir(kernel_globals, state, &sample_work_tile, render_buffer);
 }
 
 // void PathTraceWorkCPU::render_samples_evaluate_final(KernelGlobalsCPU *kernel_globals,

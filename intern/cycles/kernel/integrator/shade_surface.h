@@ -236,8 +236,8 @@ ccl_device_forceinline float radiance_eval(KernelGlobals kg,
                                            IntegratorState state,
                                            ccl_private ShaderData *sd,
                                            ccl_private LightSample *ls,
-                                           ccl_private const ReSTIRLightSampleReference *reference, // !!! See if needed here...
                                            ccl_private BsdfEval *radiance,
+                                           ccl_private const ReSTIRLightSampleReference *reference = nullptr, // !!! See if needed here...
                                            const bool check_visibility = false)
 {
   if (!(ls->pdf > 0.0f)) {
@@ -997,24 +997,24 @@ ccl_device
       /* Construct the reference from the light sample in ordinary NEE. */
       // !!!: One contributor of the darkness in DI (not all types are supported; current support might have issues)
       // !!!: restir_light_reference_from_sample() may have problem populating reference
-      if (!restir_light_reference_from_sample(kg, &ls, &reference)) { // Even though `radiance_eval` calls light_sample_shader_eval(), if this isn't called, we'll get total darkness for constant lights
+      if (!restir_light_reference_from_sample(kg, &ls, &reference)) { // Even though `radiance_eval` calls light_sample_shader_eval() (which is for none-constant lighst), if this isn't called, we'll get total darkness for constant lights
         continue;
       }
     }
 
-    kernel_assert(restir_light_reference_is_valid(&reference));
     // // !!!: DEBUG ONLY
+    kernel_assert(restir_light_reference_is_valid(&reference)); // !!!: Will fail on unvalid lights
     // if (!restir_light_reference_is_valid(&reference)) {
     //   kernel_assert(false);
     //   continue;
     // }
 
     /* Evaluate light shader. */
-    const bool check_visibility = use_restir && kernel_data.integrator.restir_unbiased;
+    const bool check_visibility = use_restir && kernel_data.integrator.restir_unbiased; // !!!
 
     /* Evaluates light emission, BSDF response, and the geometry conversion. */
     const float bsdf_pdf = radiance_eval( // !!!:
-        kg, state, sd, &ls, &reference, &radiance, check_visibility);
+        kg, state, sd, &ls, &radiance, &reference, check_visibility);
 
     // !!!: Dangerous rejection
     // /* Reject invalid candidate weights before reservoir replacement. */

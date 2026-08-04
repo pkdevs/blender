@@ -356,11 +356,21 @@ ccl_device_inline bool spatial_reservoir_is_empty(
 
 ccl_device_inline void spatial_reservoir_add_reservoir(
     ccl_private SpatialReservoir *spatial_reservoir,
+    const ccl_private Reservoir &other,
+    const float rand,
+    const bool require_valid_reference)
+{
+  reservoir_add_reservoir(&spatial_reservoir->reservoir, other, rand, require_valid_reference);
+}
+
+// TODO: Remove
+ccl_device_inline void spatial_reservoir_add_reservoir(
+    ccl_private SpatialReservoir *spatial_reservoir,
     const ccl_private SpatialReservoir &other,
     const float rand,
     const bool require_valid_reference)
 {
-  reservoir_add_reservoir(&spatial_reservoir->reservoir, other.reservoir, rand, require_valid_reference);
+  spatial_reservoir_add_reservoir(spatial_reservoir, other.reservoir, rand, require_valid_reference);
 }
 
 // TODO: Debug

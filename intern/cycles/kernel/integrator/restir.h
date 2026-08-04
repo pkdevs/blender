@@ -3,8 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0 */
 
 #include "kernel/integrator/reservoir.h"
+#include "kernel/light/sample_reference.h"
 #include "kernel/integrator/state.h"
-#include "util/profiling.h"
 
 CCL_NAMESPACE_BEGIN
 
@@ -257,9 +257,212 @@ float compute_luminance(KernelGlobals kg, const ccl_private BsdfEval &radiance)
   return dot(spectrum_to_rgb(radiance.sum), float4_to_float3(kernel_data.film.rgb_to_y));
 }
 
+/* Add neighboring reservoirs to the current reservoir using pairewise MIS weight. */
+ccl_device_inline bool streaming_di_samples(KernelGlobals kg,
+                                            IntegratorState state,
+                                            const ccl_private SpatialResampling *resampling,
+                                            ccl_private SpatialReservoir *current,
+                                            const ccl_private RNGState *rng_state,
+                                            const int samples,
+                                            const bool visibility,
+                                            ccl_global float *ccl_restrict render_buffer)
+{
+  PROFILING_INIT(kg, PROFILING_RESTIR_SPATIAL_RESAMPLING);
+  /* Ping-pong between two reservoirs. */
+  // const bool read_prev = state->spatial_iteration % 2;
+  const bool read_prev = INTEGRATOR_STATE(state, path, spatial_iteration) % 2;
 
+  Reservoir canonical = current->reservoir;
+  const uint32_t render_pixel_index = INTEGRATOR_STATE(state, path, render_pixel_index);
+  if (integrator_restir_unpack_reservoir(
+          kg, &canonical, render_pixel_index, render_buffer, read_prev))
+  {
+    // light_sample_from_uv(kg, &current->sd, current->path_flag, &canonical.ls); // !!!
+    restir_light_sample_from_reference(
+        kg,
+        &canonical.reference,
+        current->sd.P,
+        current->sd.N,
+        current->sd.shader,
+        current->path_flag,
+        &canonical.light);
+  }
 
+  /* Give the canonical sample a defensive constant in the weight. */
+  float canonical_mis_weight = 1.0f;
+  // LightSample canonical_ls = canonical.ls;
+  LightSample canonical_ls = canonical.light;
+  int valid_neighbors = 1;
+  const int neighbors = samples - 1;
 
+  for (int i = 1; i < samples; i++) {
+    const float3 rand = path_branched_rng_3D(kg,
+                                             rng_state,
+                                            //  state->spatial_iteration * samples + i,
+                                            INTEGRATOR_STATE(state, path, spatial_iteration) * samples + i,
+                                             kernel_data.integrator.restir_spatial_iterations *
+                                                 samples,
+                                             PRNG_SPATIAL_RESAMPLING);
+
+    SpatialReservoir neighbor;
+    spatial_reservoir_init(kg, &neighbor, true); // !!!: require_valid_reference
+
+    if (!restir_unpack_neighbor(
+            kg, resampling, current, &neighbor, i, rand, render_buffer, read_prev))
+    {
+      continue;
+    }
+
+    valid_neighbors++;
+    shader_data_setup_from_restir(kg, state, &neighbor, render_buffer);
+
+    /* Calculate canonical MIS weight. */
+    if (!reservoir_is_empty(&canonical)) {
+      /* TODO(weizhen): verify if branching has influence on performance on GPU. This branching and
+       * the `neighbor.is_empty()` check is unnecessary, because if `total_weight` is zero then the
+       * sample would not picked by the reservoir regardless of the `mis_weight`. */
+      BsdfEval radiance;
+
+      /* Evaluate current sample from the neighbor shading point. */
+      // light_sample_from_uv(kg, &neighbor.sd, neighbor.path_flag, &canonical_ls); // !!!
+      restir_light_sample_from_reference(
+          kg,
+          &canonical.reference,
+          neighbor.sd.P,
+          neighbor.sd.N,
+          neighbor.sd.shader,
+          neighbor.path_flag,
+          &canonical_ls);
+
+      radiance_eval(kg, state, &neighbor.sd, &canonical_ls, &radiance, nullptr, visibility);
+
+      const float canonical_at_neighbor = compute_luminance(kg, radiance);
+
+      canonical_mis_weight += (1.0f - mis_weight_pairwise(
+                                          canonical_at_neighbor, canonical.luminance, neighbors));
+    }
+
+    if (spatial_reservoir_is_empty(&neighbor)) {
+      continue;
+    }
+
+    // light_sample_from_uv(kg, &neighbor.sd, neighbor.path_flag, &neighbor.reservoir.ls); // !!!
+    restir_light_sample_from_reference(kg,
+                                       &neighbor.reservoir.reference, // !!!: Ensure
+                                       neighbor.sd.P,
+                                       neighbor.sd.N,
+                                       neighbor.sd.shader,
+                                       neighbor.path_flag,
+                                       &neighbor.reservoir.light);
+
+    /* Jacobian. */
+    const bool copy_direction = sample_copy_direction(kg, neighbor.reservoir);
+    if (copy_direction) { // !!!
+      neighbor.reservoir.total_weight *= neighbor.reservoir.light.jacobian_area_to_solid_angle();
+    }
+
+    /* Evaluate neighbor sample from the current shading point. */
+    // light_sample_from_uv(kg, &current->sd, current->path_flag, &neighbor.reservoir.light); // !!!
+    restir_light_sample_from_reference(
+        kg,
+        &neighbor.reservoir.reference, // !!!: Ensure
+        current->sd.P,
+        current->sd.N,
+        current->sd.shader,
+        current->path_flag,
+        &neighbor.reservoir.light);
+
+    radiance_eval(
+        kg, state, &current->sd, &neighbor.reservoir.light, &neighbor.reservoir.radiance, nullptr, visibility);
+    const float neighbor_at_canonical = compute_luminance(kg, neighbor.reservoir.radiance);
+
+    if (copy_direction) { // !!!
+      neighbor.reservoir.total_weight *= neighbor.reservoir.light.jacobian_solid_angle_to_area();
+    }
+
+    /* TODO(weizhen): either the MIS weight computation should be a member function of
+     * SpatialReservoir, or the struct SpatialReservoir should be removed. */
+    neighbor.reservoir.total_weight *= mis_weight_pairwise(
+        neighbor.reservoir.luminance, neighbor_at_canonical, neighbors);
+
+    spatial_reservoir_add_reservoir(current, neighbor, rand.z, true); // !!!: require_valid_reference
+  }
+
+  if (!reservoir_is_empty(&canonical)) {
+    /* Add canonical sample to the reservoir. */
+    radiance_eval(kg, state, &current->sd, &canonical.light, &canonical.radiance, nullptr, visibility);
+    canonical.total_weight *= canonical_mis_weight;
+    const float rand = path_branched_rng_3D(kg,
+                                            rng_state,
+                                            // state->spatial_iteration * samples,
+                                            INTEGRATOR_STATE(state, path, spatial_iteration) ,
+                                            kernel_data.integrator.restir_spatial_iterations * samples,
+                                            PRNG_SPATIAL_RESAMPLING)
+                           .z;
+    // current->reservoir.add_reservoir(canonical, rand);
+    spatial_reservoir_add_reservoir(current, canonical, rand, true); // !!!: require_valid_reference
+  }
+
+  current->reservoir.total_weight /= valid_neighbors;
+
+  return reservoir_finalize(&current->reservoir, true); // !!!: require_valid_reference
+}
+
+/* Evaluate ReSTIR DI final samples. */
+ccl_device void integrator_evaluate_final_samples(KernelGlobals kg, // DEVICE_KERNEL_INTEGRATOR_FINAL_EVALUATION
+                                                  IntegratorState state,
+                                                  ccl_global float *ccl_restrict render_buffer)
+{
+  SpatialReservoir current;
+  spatial_reservoir_init(kg, &current, true); // !!!: require_valid_reference
+
+  Reservoir reservoir;
+  reservoir_init(kg, &reservoir);
+
+  const uint32_t render_pixel_index = INTEGRATOR_STATE(state, path, render_pixel_index);
+
+  // const bool read_prev = state->spatial_iteration % 2;
+  const bool read_prev = INTEGRATOR_STATE(state, path, spatial_iteration) % 2;
+
+  if (!integrator_restir_unpack_reservoir(
+          kg, &reservoir, render_pixel_index, render_buffer, read_prev) ||
+      !integrator_restir_unpack_shader(kg, &current, render_pixel_index, render_buffer))
+  {
+    integrator_path_next(state,
+                         DEVICE_KERNEL_INTEGRATOR_FINAL_EVALUATION,
+                         DEVICE_KERNEL_INTEGRATOR_RESTIR_PT_EVALUATION);
+    return;
+  }
+
+  shader_data_setup_from_restir(kg, state, &current, render_buffer);
+
+  // light_sample_from_uv(kg, &current.sd, current.path_flag, &reservoir.ls); // !!!
+  restir_light_sample_from_reference(
+      kg,
+      &reservoir.reference,
+      current.sd.P,
+      current.sd.N,
+      current.sd.shader,
+      current.path_flag,
+      &reservoir.light);
+
+  radiance_eval(kg, state, &current.sd, &reservoir.light, &reservoir.radiance, nullptr); // TODO: Remove &reservoir.reference?
+
+  reservoir_add_reservoir(&current.reservoir, reservoir, 0.0f, true); // !!!: require_valid_reference
+  reservoir_finalize(&current.reservoir, true); // !!!: require_valid_reference
+
+  bsdf_eval_mul(&current.reservoir.radiance, current.reservoir.total_weight);
+
+  /* Load random number state. */
+  RNGState rng_state;
+  path_state_rng_load(state, &rng_state);
+  integrate_direct_light_create_shadow_path<true>(
+      kg, state, &rng_state, &current.sd, &current.reservoir.light, &current.reservoir.radiance, 0);
+
+  integrator_path_next(state,
+                       DEVICE_KERNEL_INTEGRATOR_FINAL_EVALUATION,
+                       DEVICE_KERNEL_INTEGRATOR_RESTIR_PT_EVALUATION);
+}
 
 ccl_device_inline void streaming_pt_samples(KernelGlobals kg,
                                             IntegratorState state,
@@ -293,7 +496,7 @@ ccl_device_inline void streaming_pt_samples(KernelGlobals kg,
       kg,
       rng_state,
     //  state->spatial_iteration * samples + i,
-      INTEGRATOR_STATE(state, path, spatial_iteration * samples + i),
+      INTEGRATOR_STATE(state, path, spatial_iteration) * samples + i,
       kernel_data.integrator.restir_spatial_iterations * samples,
       PRNG_SPATIAL_RESAMPLING);
 
@@ -356,56 +559,56 @@ ccl_device void integrator_evaluate_restir_pt(KernelGlobals kg, // DEVICE_KERNEL
   integrator_path_terminate(kg, state, render_buffer, DEVICE_KERNEL_INTEGRATOR_RESTIR_PT_EVALUATION);
 }
 
-// ccl_device bool integrator_restir(KernelGlobals kg,
-//                                   IntegratorState state,
-//                                   ccl_global const KernelWorkTile *ccl_restrict tile,
-//                                   ccl_global float *ccl_restrict render_buffer,
-//                                   const int x,
-//                                   const int y,
-//                                   const int scheduled_sample)
-// {
-//   PROFILING_INIT(kg, PROFILING_RESTIR_SPATIAL_RESAMPLING);
+ccl_device bool integrator_restir(KernelGlobals kg,
+                                  IntegratorState state,
+                                  ccl_global const KernelWorkTile *ccl_restrict tile,
+                                  ccl_global float *ccl_restrict render_buffer,
+                                  const int x,
+                                  const int y,
+                                  const int scheduled_sample)
+{
+  PROFILING_INIT(kg, PROFILING_RESTIR_SPATIAL_RESAMPLING);
 
-//   SpatialReservoir current;
-//   spatial_reservoir_init(kg, &current, true); // !!!: require_valid_reference
+  SpatialReservoir current;
+  spatial_reservoir_init(kg, &current, true); // !!!: require_valid_reference
 
-//   const uint32_t render_pixel_index = INTEGRATOR_STATE(state, path, render_pixel_index);
-//   if (!integrator_restir_unpack_shader(kg, &current, render_pixel_index, render_buffer)) {
-//     return false;
-//   }
+  const uint32_t render_pixel_index = INTEGRATOR_STATE(state, path, render_pixel_index);
+  if (!integrator_restir_unpack_shader(kg, &current, render_pixel_index, render_buffer)) {
+    return false;
+  }
 
-//   shader_data_setup_from_restir(kg, state, &current, render_buffer);
+  shader_data_setup_from_restir(kg, state, &current, render_buffer);
 
-//   /* Load random number state. */
-//   RNGState rng_state;
-//   path_state_rng_load(state, &rng_state);
+  /* Load random number state. */
+  RNGState rng_state;
+  path_state_rng_load(state, &rng_state);
 
-//   /* Plus one to account for the current pixel. */
-//   const int samples = kernel_data.integrator.restir_spatial_neighbors + 1;
+  /* Plus one to account for the current pixel. */
+  const int samples = kernel_data.integrator.restir_spatial_neighbors + 1;
 
-//   const int radius = kernel_data.integrator.restir_spatial_radius;
-//   SpatialResampling spatial_resampling(tile, radius);
+  const int radius = kernel_data.integrator.restir_spatial_radius;
+  SpatialResampling spatial_resampling(tile, radius);
 
-//   const bool visibility = kernel_data.integrator.restir_unbiased; // !!!: power heuristics
+  const bool visibility = kernel_data.integrator.restir_unbiased; // !!!: power heuristics
 
-//   /* Uniformly sample neighboring reservoirs within a radius. There is probability to pick the same
-//    * reservoir twice, but the chance should be low if the radius is big enough and low descrepancy
-//    * samples are used. */
-//   streaming_di_samples(
-//       kg, state, &spatial_resampling, &current, &rng_state, samples, visibility, render_buffer);
+  /* Uniformly sample neighboring reservoirs within a radius. There is probability to pick the same
+   * reservoir twice, but the chance should be low if the radius is big enough and low descrepancy
+   * samples are used. */
+  streaming_di_samples(
+      kg, state, &spatial_resampling, &current, &rng_state, samples, visibility, render_buffer);
 
-//   GlobalReservoir current_pt;
-//   global_reservoir_init(kg, &current_pt);
+  GlobalReservoir current_pt;
+  global_reservoir_init(kg, &current_pt);
 
-//   streaming_pt_samples(
-//       kg, state, &spatial_resampling, &current_pt, &rng_state, samples, render_buffer);
+  streaming_pt_samples(
+      kg, state, &spatial_resampling, &current_pt, &rng_state, samples, render_buffer);
 
-//   // const bool write_prev = (state->spatial_iteration + 1) % 2;
-//   const bool write_prev = (INTEGRATOR_STATE(state, path, spatial_iteration) + 1) % 2;
+  // const bool write_prev = (state->spatial_iteration + 1) % 2;
+  const bool write_prev = (INTEGRATOR_STATE(state, path, spatial_iteration) + 1) % 2;
 
-//   film_write_pass_reservoir(kg, state, &current.reservoir, render_buffer, write_prev);
-//   film_write_pass_reservoir_pt(kg, state, &current_pt, render_buffer, write_prev); // light_pass
-//   return true;
-// }
+  film_write_pass_reservoir(kg, state, &current.reservoir, render_buffer, write_prev);
+  film_write_pass_reservoir_pt(kg, state, &current_pt, render_buffer, write_prev); // light_pass
+  return true;
+}
 
 CCL_NAMESPACE_END
