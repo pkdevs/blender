@@ -320,8 +320,8 @@ void ED_mesh_mirrtopo_init(BMEditMesh *em,
         if (match_count == 2) {
           const int j = topo_pairs[a - 1].v_index, k = topo_pairs[a - 2].v_index;
           if (mirrtopo_axis_opposite_sides(vtable[j]->co[axis], vtable[k]->co[axis])) {
-            index_lookup[k] = intptr_t(vtable[j]);
             index_lookup[j] = intptr_t(vtable[k]);
+            index_lookup[k] = intptr_t(vtable[j]);
           }
         }
         else if (match_count == 1) {
@@ -342,8 +342,8 @@ void ED_mesh_mirrtopo_init(BMEditMesh *em,
         if (match_count == 2) {
           const int j = topo_pairs[a - 1].v_index, k = topo_pairs[a - 2].v_index;
           if (mirrtopo_axis_opposite_sides(positions[j][axis], positions[k][axis])) {
-            index_lookup[k] = j;
             index_lookup[j] = k;
+            index_lookup[k] = j;
           }
         }
         else if (match_count == 1) {
