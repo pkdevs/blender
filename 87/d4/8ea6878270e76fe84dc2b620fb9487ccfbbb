@@ -1,2 +1,3 @@
 Referenced by issue #161602, Fire and smoke fluid simulations are not working correctly.
 Referenced by pull request #161623, Fix #161602: Avoid early gas fluid reallocation
+Referenced by commit 4afd2ae81034847b83efd4324c44ebd15fad29f4, Fix #161602: Avoid early gas fluid reallocation
