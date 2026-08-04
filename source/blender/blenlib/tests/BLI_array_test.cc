@@ -290,9 +290,21 @@ TEST(array, ConstructStructWithBitFields)
     uint b : 1;
   };
 
-  Array<TestStruct> array(3, {false, false});
-  EXPECT_EQ(array[0].a, 0);
-  EXPECT_EQ(array[0].b, 0);
+  {
+    Array<TestStruct> array(3, {false, false});
+    EXPECT_EQ(array[0].a, 0);
+    EXPECT_EQ(array[0].b, 0);
+  }
+  {
+    Array<TestStruct> array(3, {true, false});
+    EXPECT_EQ(array[0].a, 1);
+    EXPECT_EQ(array[0].b, 0);
+  }
+  {
+    Array<TestStruct> array(3, {true, true});
+    EXPECT_EQ(array[0].a, 1);
+    EXPECT_EQ(array[0].b, 1);
+  }
 }
 
 TEST(array, ConstructZeroVector)
