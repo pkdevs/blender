@@ -67,6 +67,7 @@ bool Result::is_single_value_only_type(ResultType type)
     case ResultType::Scene:
     case ResultType::Text:
     case ResultType::Mask:
+    case ResultType::Bundle:
       return true;
   }
 
@@ -119,6 +120,7 @@ gpu::TextureFormat Result::gpu_texture_format(ResultType type, ResultPrecision p
         case ResultType::Scene:
         case ResultType::Text:
         case ResultType::Mask:
+        case ResultType::Bundle:
           /* Single only types do not support GPU code path. */
           BLI_assert(Result::is_single_value_only_type(type));
           BLI_assert_unreachable();
@@ -167,6 +169,7 @@ gpu::TextureFormat Result::gpu_texture_format(ResultType type, ResultPrecision p
         case ResultType::Scene:
         case ResultType::Text:
         case ResultType::Mask:
+        case ResultType::Bundle:
           /* Single only types do not support GPU storage. */
           BLI_assert(Result::is_single_value_only_type(type));
           BLI_assert_unreachable();
@@ -204,6 +207,7 @@ eGPUDataFormat Result::gpu_data_format(ResultType type)
     case ResultType::Scene:
     case ResultType::Text:
     case ResultType::Mask:
+    case ResultType::Bundle:
       /* Single only types do not support GPU storage. */
       BLI_assert(Result::is_single_value_only_type(type));
       BLI_assert_unreachable();
@@ -398,6 +402,8 @@ const CPPType &Result::cpp_type(const ResultType type)
       return CPPType::get<Text *>();
     case ResultType::Mask:
       return CPPType::get<Mask *>();
+    case ResultType::Bundle:
+      return CPPType::get<nodes::BundlePtr>();
   }
 
   BLI_assert_unreachable();
@@ -447,6 +453,8 @@ const char *Result::type_name(const ResultType type)
       return "text";
     case ResultType::Mask:
       return "mask";
+    case ResultType::Bundle:
+      return "bundle";
   }
 
   BLI_assert_unreachable();
@@ -580,6 +588,9 @@ void Result::allocate_single_value()
     case ResultType::Mask:
       this->set_single_value(static_cast<Mask *>(nullptr));
       break;
+    case ResultType::Bundle:
+      this->set_single_value(nodes::BundlePtr());
+      break;
   }
 }
 
@@ -657,6 +668,7 @@ Result Result::upload_to_gpu(const bool from_pool) const
     case ResultType::Scene:
     case ResultType::Text:
     case ResultType::Mask:
+    case ResultType::Bundle:
       /* Single only types do not support GPU. */
       break;
   }
@@ -749,6 +761,7 @@ Result Result::download_to_cpu() const
     case ResultType::Scene:
     case ResultType::Text:
     case ResultType::Mask:
+    case ResultType::Bundle:
       /* Single only types do not support GPU. */
       break;
   }
@@ -907,6 +920,8 @@ void Result::free()
   delete derived_resources_;
   derived_resources_ = nullptr;
 
+  single_value_ = {};
+
   sharing_info_ = {};
   switch (storage_type_) {
     case ResultStorageType::GPU:
@@ -1009,6 +1024,7 @@ int64_t Result::channels_count() const
     case ResultType::Scene:
     case ResultType::Text:
     case ResultType::Mask:
+    case ResultType::Bundle:
       /* Single only types do not have channels. */
       BLI_assert(Result::is_single_value_only_type(type_));
       BLI_assert_unreachable();
@@ -1087,6 +1103,7 @@ void Result::update_single_value_data()
         case ResultType::Scene:
         case ResultType::Text:
         case ResultType::Mask:
+        case ResultType::Bundle:
           /* Single only types do not support GPU storage. */
           BLI_assert(Result::is_single_value_only_type(this->type()));
           BLI_assert_unreachable();

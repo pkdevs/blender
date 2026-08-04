@@ -168,6 +168,9 @@ void NodeOperation::log_data()
 
     const Result &input = this->get_input(input_socket->identifier);
     if (input.is_single_value()) {
+      if (input.type() == ResultType::Bundle) {
+        continue;
+      }
       tree_logger.log_value(this->node(), *input_socket, input.single_value());
       continue;
     }
@@ -190,6 +193,9 @@ void NodeOperation::log_data()
     }
 
     if (result.is_single_value()) {
+      if (result.type() == ResultType::Bundle) {
+        continue;
+      }
       tree_logger.log_value(this->node(), *output_socket, result.single_value());
       continue;
     }

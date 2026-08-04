@@ -148,6 +148,10 @@ void SingleValueNodeInputOperation::execute()
       result.set_single_value(value);
       break;
     }
+    case SOCK_BUNDLE: {
+      result.set_single_value(nodes::BundlePtr());
+      break;
+    }
     case SOCK_CUSTOM:
       /* An undefined socket, its value does not matter. */
       break;
