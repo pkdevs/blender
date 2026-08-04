@@ -111,7 +111,9 @@ struct CodegenContext : NodeErrorHandler {
     ExpressionResult parenthesis(const ast::Node &t, BindingPower /*p*/)
     {
       ExpressionResult result = ctx.expr(ExprSub(t).expr(), scope);
-      return {string(t.front().str()) + result.str + string(t.back().str()), result.type};
+      string front(t.front().str_with_whitespace());
+      string back(t.back().str_with_whitespace());
+      return {front + result.str + back, result.type};
     }
 
     ExpressionResult member(ExpressionResult left, const ast::Node &t)
