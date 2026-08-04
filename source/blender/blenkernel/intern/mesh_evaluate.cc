@@ -581,10 +581,12 @@ void mesh_hide_face_flush(Mesh &mesh)
     hide_vert.span.fill_indices(loose_vert_indices.as_span(), false);
 
     const Span<int2> edges = mesh.edges();
-    mesh.loose_edges().foreach_index([&](const int i) {
-      hide_vert.span[edges[i][0]] = false;
-      hide_vert.span[edges[i][1]] = false;
-    }, exec_mode::grain_size(1024));
+    mesh.loose_edges().foreach_index(
+        [&](const int i) {
+          hide_vert.span[edges[i][0]] = false;
+          hide_vert.span[edges[i][1]] = false;
+        },
+        exec_mode::grain_size(1024));
   }
 
   if (!edge_attr_exists) {
