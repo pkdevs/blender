@@ -1171,7 +1171,7 @@ class SEQUENCER_MT_strip(Menu):
                 }:
                     layout.menu("SEQUENCER_MT_strip_effect")
 
-                if strip_type != 'SOUND':
+                elif strip_type != 'SOUND':
                     layout.separator()
                     layout.operator("sequencer.rendersize")
                 if strip_type == 'MOVIE':
