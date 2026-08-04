@@ -31,45 +31,74 @@ namespace blender {
 
 // static CLG_LogRef LOG = {"blend.doversion"};
 
-static void blo_do_domain_sockets_530(Main *bmain)
+static void do_convert_inline_enum_properties_to_socket_default_values(Main *bmain)
 {
-#define ASSIGN_MENU_VALUE_FROM_INLINE_RNA_ENUM(type_idname, input_identifier, node_var) \
-  for (bNode *node : node_tree.nodes_by_type(type_idname)) { \
-    if (bNodeSocket *node_socket = node->input_by_identifier(input_identifier)) { \
-      node_socket->default_value_typed<bNodeSocketValueMenu>()->value = node->node_var; \
-    } \
-  }
-
   for (bNodeTree &node_tree : bmain->nodetrees) {
     node_tree.ensure_topology_cache();
-    ASSIGN_MENU_VALUE_FROM_INLINE_RNA_ENUM(
-        "GeometryNodeScaleElements"_ustr, "Domain"_ustr, custom1)
-    ASSIGN_MENU_VALUE_FROM_INLINE_RNA_ENUM("GeometryNodeSortElements"_ustr, "Domain"_ustr, custom1)
-    ASSIGN_MENU_VALUE_FROM_INLINE_RNA_ENUM(
-        "GeometryNodeAttributeStatistic"_ustr, "Domain"_ustr, custom2)
-    ASSIGN_MENU_VALUE_FROM_INLINE_RNA_ENUM(
-        "GeometryNodeDistributePointsInGrid"_ustr, "Distribute Method"_ustr, custom1)
-    ASSIGN_MENU_VALUE_FROM_INLINE_RNA_ENUM(
-        "GeometryNodeDistributePointsOnFaces"_ustr, "Distribute Method"_ustr, custom1)
 
-    ASSIGN_MENU_VALUE_FROM_INLINE_RNA_ENUM(
-        "GeometryNodeMeshBoolean"_ustr, "Operation"_ustr, custom1)
-    ASSIGN_MENU_VALUE_FROM_INLINE_RNA_ENUM("GeometryNodeMeshBoolean"_ustr, "Solver"_ustr, custom2)
-    ASSIGN_MENU_VALUE_FROM_INLINE_RNA_ENUM(
-        "GeometryNodeToolSetSelection"_ustr, "Domain"_ustr, custom1)
-    ASSIGN_MENU_VALUE_FROM_INLINE_RNA_ENUM(
-        "GeometryNodeToolSetSelection"_ustr, "Selection Type"_ustr, custom2)
-    ASSIGN_MENU_VALUE_FROM_INLINE_RNA_ENUM("GeometryNodeSetMeshNormal"_ustr, "Mode"_ustr, custom1)
-    ASSIGN_MENU_VALUE_FROM_INLINE_RNA_ENUM(
-        "GeometryNodeSetMeshNormal"_ustr, "Domain"_ustr, custom2)
-    ASSIGN_MENU_VALUE_FROM_INLINE_RNA_ENUM("GeometryNodeFieldAtIndex"_ustr, "Domain"_ustr, custom1)
-    ASSIGN_MENU_VALUE_FROM_INLINE_RNA_ENUM(
-        "GeometryNodeFieldAtIndex"_ustr, "Data Type"_ustr, custom2)
-    ASSIGN_MENU_VALUE_FROM_INLINE_RNA_ENUM(
-        "GeometryNodeToolActiveElement"_ustr, "Domain"_ustr, custom1)
+    for (bNode *node : node_tree.nodes_by_type("GeometryNodeScaleElements"_ustr)) {
+      if (bNodeSocket *node_socket = node->input_by_identifier("Domain"_ustr)) {
+        node_socket->default_value_typed<bNodeSocketValueMenu>()->value = node->custom1;
+      }
+    }
+
+    for (bNode *node : node_tree.nodes_by_type("GeometryNodeSortElements"_ustr)) {
+      if (bNodeSocket *node_socket = node->input_by_identifier("Domain"_ustr)) {
+        node_socket->default_value_typed<bNodeSocketValueMenu>()->value = node->custom1;
+      }
+    }
+
+    for (bNode *node : node_tree.nodes_by_type("GeometryNodeAttributeStatistic"_ustr)) {
+      if (bNodeSocket *node_socket = node->input_by_identifier("Domain"_ustr)) {
+        node_socket->default_value_typed<bNodeSocketValueMenu>()->value = node->custom2;
+      }
+    }
+
+    for (bNode *node : node_tree.nodes_by_type("GeometryNodeDistributePointsInGrid"_ustr)) {
+      if (bNodeSocket *node_socket = node->input_by_identifier("Distribute Method"_ustr)) {
+        node_socket->default_value_typed<bNodeSocketValueMenu>()->value = node->custom1;
+      }
+    }
+
+    for (bNode *node : node_tree.nodes_by_type("GeometryNodeDistributePointsOnFaces"_ustr)) {
+      if (bNodeSocket *node_socket = node->input_by_identifier("Distribute Method"_ustr)) {
+        node_socket->default_value_typed<bNodeSocketValueMenu>()->value = node->custom1;
+      }
+    }
+
+    for (bNode *node : node_tree.nodes_by_type("GeometryNodeMeshBoolean"_ustr)) {
+      if (bNodeSocket *node_socket = node->input_by_identifier("Operation"_ustr)) {
+        node_socket->default_value_typed<bNodeSocketValueMenu>()->value = node->custom1;
+      }
+      if (bNodeSocket *node_socket = node->input_by_identifier("Solver"_ustr)) {
+        node_socket->default_value_typed<bNodeSocketValueMenu>()->value = node->custom2;
+      }
+    }
+
+    for (bNode *node : node_tree.nodes_by_type("GeometryNodeToolSetSelection"_ustr)) {
+      if (bNodeSocket *node_socket = node->input_by_identifier("Domain"_ustr)) {
+        node_socket->default_value_typed<bNodeSocketValueMenu>()->value = node->custom1;
+      }
+      if (bNodeSocket *node_socket = node->input_by_identifier("Selection Type"_ustr)) {
+        node_socket->default_value_typed<bNodeSocketValueMenu>()->value = node->custom2;
+      }
+    }
+
+    for (bNode *node : node_tree.nodes_by_type("GeometryNodeSetMeshNormal"_ustr)) {
+      if (bNodeSocket *node_socket = node->input_by_identifier("Mode"_ustr)) {
+        node_socket->default_value_typed<bNodeSocketValueMenu>()->value = node->custom1;
+      }
+      if (bNodeSocket *node_socket = node->input_by_identifier("Domain"_ustr)) {
+        node_socket->default_value_typed<bNodeSocketValueMenu>()->value = node->custom2;
+      }
+    }
+
+    for (bNode *node : node_tree.nodes_by_type("GeometryNodeToolActiveElement"_ustr)) {
+      if (bNodeSocket *node_socket = node->input_by_identifier("Domain"_ustr)) {
+        node_socket->default_value_typed<bNodeSocketValueMenu>()->value = node->custom1;
+      }
+    }
   }
-
-#undef ASSIGN_MENU_VALUE_FROM_RNA_ENUM
 }
 
 static void do_version_set_grease_pencil_colors_options_to_inputs(bNodeTree &ntree, bNode &node)
@@ -114,7 +143,7 @@ void do_versions_after_linking_530(FileData * /*fd*/, Main *bmain)
   }
 
   if (!MAIN_VERSION_FILE_ATLEAST(bmain, 503, 11)) {
-    blo_do_domain_sockets_530(bmain);
+    do_convert_inline_enum_properties_to_socket_default_values(bmain);
   }
   /**
    * Always bump subversion in BKE_blender_version.h when adding versioning
