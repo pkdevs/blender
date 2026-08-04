@@ -2356,6 +2356,8 @@ Array<TransDataEdgeSlideVert> transform_mesh_edge_slide_data_create(const TransD
     sv->loop_nr = -1;
     sv->dir_side[0] = float3(0);
     sv->dir_side[1] = float3(0);
+    sv->f_side[0] = nullptr;
+    sv->f_side[1] = nullptr;
 
     /* Identify the #TransDataEdgeSlideVert by the vertex index. */
     v = static_cast<BMVert *>(td->extra);
@@ -2723,9 +2725,11 @@ Array<TransDataEdgeSlideVert> transform_mesh_edge_slide_data_create(const TransD
       float3 iloc = curr.sv->td->iloc;
       if (curr.fdata[0].f) {
         curr.sv->dir_side[0] = curr.fdata[0].dst - iloc;
+        curr.sv->f_side[0] = curr.fdata[0].f;
       }
       if (curr.fdata[1].f) {
         curr.sv->dir_side[1] = curr.fdata[1].dst - iloc;
+        curr.sv->f_side[1] = curr.fdata[1].f;
       }
       curr.sv->edge_len = math::distance(curr.sv->dir_side[0], curr.sv->dir_side[1]);
       curr.sv->loop_nr = loop_nr;

@@ -584,6 +584,8 @@ struct UVGroups {
         sv->td = td;
         sv->dir_side[0] = float3(0);
         sv->dir_side[1] = float3(0);
+        sv->f_side[0] = nullptr;
+        sv->f_side[1] = nullptr;
         sv->loop_nr = -1;
         sv++;
       }

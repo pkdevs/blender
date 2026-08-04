@@ -24,6 +24,7 @@ struct TransInfo;
 namespace blender {
 
 struct BMEditMesh;
+struct BMFace;
 struct BMesh;
 struct bConstraint;
 struct BezTriple;
@@ -66,8 +67,11 @@ struct TransConvertTypeInfo {
 struct TransDataEdgeSlideVert {
   TransData *td;
   float3 dir_side[2]; /* Directional vectors on the sides. */
-  float edge_len;     /* Distance between vectors. */
-  int loop_nr;        /* Number that identifies the group of connected edges. */
+  /* The face slid through on each side, matching #dir_side. Null for non-mesh slides.
+   * Anything that permutes #dir_side must permute this in step. */
+  BMFace *f_side[2];
+  float edge_len; /* Distance between vectors. */
+  int loop_nr;    /* Number that identifies the group of connected edges. */
 
   const float *v_co_orig() const
   {
