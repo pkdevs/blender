@@ -6,7 +6,6 @@
 This file does not run anything; its methods are accessed by run_blender_setup.py.
 
 Tests for Info Editor / Reports functionality:
-  - Filter property state (RNA round-trip only, see NOTE below)
   - Selection modes
   - Copying reports
   - Deleting reports
