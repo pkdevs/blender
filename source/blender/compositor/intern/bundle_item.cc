@@ -16,7 +16,7 @@ BundleItem::BundleItem(Context &context, Result &result)
   result_.share_data(result);
 }
 
-nodes::BundleItemValue BundleItem::NewBundleItemValue(Context &context, Result &result)
+nodes::BundleItemValue BundleItem::new_bundle_item_value(Context &context, Result &result)
 {
   return nodes::BundleItemValue{nodes::BundleItemInternalValue{
       ImplicitSharingPtr<const BundleItem>(new BundleItem(context, result))}};

@@ -188,7 +188,7 @@ class CombineBundleOperation : public NodeOperation {
         continue;
       }
       Result &input = this->get_input(this->node().input_socket(i).identifier);
-      bundle.add(*key, BundleItem::NewBundleItemValue(this->context(), input));
+      bundle.add(*key, BundleItem::new_bundle_item_value(this->context(), input));
     }
 
     Result &output = this->get_result("Bundle");

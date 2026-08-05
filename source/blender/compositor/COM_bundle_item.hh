@@ -25,7 +25,7 @@ class BundleItem : public nodes::BundleItemInternalValueMixin {
 
   /* Constructs a new BundleItemValue to be inserted into a bundle, which is essentially a wrapper
    * around the constructor. */
-  static nodes::BundleItemValue NewBundleItemValue(Context &context, Result &result);
+  static nodes::BundleItemValue new_bundle_item_value(Context &context, Result &result);
 
   /* A name for logging. */
   StringRefNull type_name() const override;

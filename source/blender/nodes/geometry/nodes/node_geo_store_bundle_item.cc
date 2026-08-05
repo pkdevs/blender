@@ -130,7 +130,7 @@ class StoreBundleItemOperation : public NodeOperation {
 
     Result &input_item = this->get_input("Item");
     bundle.add_path_override(*split_path,
-                             BundleItem::NewBundleItemValue(this->context(), input_item));
+                             BundleItem::new_bundle_item_value(this->context(), input_item));
     output_bundle.allocate_single_value();
     output_bundle.set_single_value(bundle_ptr);
   }
