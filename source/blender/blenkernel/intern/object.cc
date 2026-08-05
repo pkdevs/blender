@@ -1709,6 +1709,13 @@ static void object_update_from_subsurf_ccg(Object *object)
   if (object->type != OB_MESH) {
     return;
   }
+  /* If object does not own evaluated mesh we can not access it since it might be freed already
+   * (happens on dependency graph free where order of evaluated IDs free is undefined).
+   *
+   * Good news is: such mesh does not have modifiers applied, so no need to worry about CCG. */
+  if (!object->runtime->is_data_eval_owned) {
+    return;
+  }
   /* Object was never evaluated, so can not have CCG subdivision surface. If it were evaluated, do
    * not try to compute OpenSubDiv on the CPU as it is not needed here. */
   Mesh *mesh_eval = BKE_object_get_evaluated_mesh_no_subsurf_unchecked(object);
