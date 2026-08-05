@@ -4062,7 +4062,7 @@ static void dynamic_paint_paint_mesh_cell_point_cb_ex(void *__restrict userdata,
         }
 
         /* Do a face normal directional ray-cast, and use that distance. */
-        const bke::bvh::Ray ray(ray_start, proj_ray);
+        const bke::bvh::Ray ray(ray_start, proj_ray, brush_radius);
         if (const std::optional<bke::bvh::RayHit> hit = treeData.ray_intersect(ray)) {
           proxDist = hit->distance;
 
