@@ -453,7 +453,8 @@ static bool create_strip_clamp_data(TransInfo *t, const Scene *scene, Strip *str
   bool right_sel = (strip->flag & SEQ_RIGHTSEL);
 
   /* If any strips start out with hold offsets visible, disable handle clamping on init. */
-  if ((strip->startofs < 0 || strip->end_offset() < 0) &&
+  const bool clamp_default = (U.sequencer_editor_flag & USER_SEQ_ED_CLAMP_STRIPS_BY_DEFAULT);
+  if (clamp_default && (strip->startofs < 0 || strip->end_offset() < 0) &&
       !seq::transform_single_image_check(strip))
   {
     t->modifiers &= ~MOD_STRIP_CLAMP_HOLDS;
@@ -502,8 +503,10 @@ static void create_trans_seq_clamp_data(TransInfo *t, const Scene *scene)
   TransSeq *ts = static_cast<TransSeq *>(tc->custom.type.data);
   Editing *ed = seq::editing_get(scene);
 
-  /* Try to clamp handles by default. */
-  t->modifiers |= MOD_STRIP_CLAMP_HOLDS;
+  if (U.sequencer_editor_flag & USER_SEQ_ED_CLAMP_STRIPS_BY_DEFAULT) {
+    t->modifiers |= MOD_STRIP_CLAMP_HOLDS;
+  }
+
   /* Prevent snaps and change in `values` past `hard_clamp` for all selected strips. */
   BLI_rcti_init(&ts->hard_clamp, INT_MIN, INT_MAX, -seq::MAX_CHANNELS, seq::MAX_CHANNELS);
 
