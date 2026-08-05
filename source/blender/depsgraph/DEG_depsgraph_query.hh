@@ -10,10 +10,10 @@
 
 #pragma once
 
+#include "BLI_enum_flags.hh"
 #include "BLI_function_ref.hh"
-#include "BLI_iterator.h"
+#include "BLI_iterator.hh"
 #include "BLI_set.hh"
-#include "BLI_utildefines.h"
 
 #include "DEG_depsgraph.hh"
 #include "DEG_depsgraph_build.hh"
@@ -24,12 +24,13 @@
 #include "BKE_duplilist.hh"
 #include "BKE_object_types.hh"
 
+namespace blender {
+
 struct BLI_Iterator;
 struct CustomData_MeshMasks;
 struct Depsgraph;
 struct DupliObject;
 struct ID;
-struct ListBase;
 struct PointerRNA;
 struct Scene;
 struct ViewLayer;
@@ -64,6 +65,9 @@ float DEG_get_ctime(const Depsgraph *graph);
 bool DEG_id_type_updated(const Depsgraph *depsgraph, short id_type);
 bool DEG_id_type_any_updated(const Depsgraph *depsgraph);
 
+/** Check if given ID was updated due to user input. */
+bool DEG_id_is_user_modified(const Depsgraph *graph, const ID *id);
+
 /** Check if given ID type is present in the depsgraph */
 bool DEG_id_type_any_exists(const Depsgraph *depsgraph, short id_type);
 
@@ -96,13 +100,13 @@ const ID *DEG_get_evaluated_id(const Depsgraph *depsgraph, const ID *id);
 
 template<typename T> T *DEG_get_evaluated(const Depsgraph *depsgraph, T *id)
 {
-  static_assert(blender::dna::is_ID_v<T>);
+  static_assert(dna::is_ID_v<T>);
   return reinterpret_cast<T *>(DEG_get_evaluated_id(depsgraph, reinterpret_cast<ID *>(id)));
 }
 
 template<typename T> const T *DEG_get_evaluated(const Depsgraph *depsgraph, const T *id)
 {
-  static_assert(blender::dna::is_ID_v<T>);
+  static_assert(dna::is_ID_v<T>);
   return reinterpret_cast<const T *>(
       DEG_get_evaluated_id(depsgraph, reinterpret_cast<const ID *>(id)));
 }
@@ -118,13 +122,13 @@ const ID *DEG_get_original_id(const ID *id);
 
 template<typename T> T *DEG_get_original(T *id)
 {
-  static_assert(blender::dna::is_ID_v<T>);
+  static_assert(dna::is_ID_v<T>);
   return reinterpret_cast<T *>(DEG_get_original_id(reinterpret_cast<ID *>(id)));
 }
 
 template<typename T> const T *DEG_get_original(const T *id)
 {
-  static_assert(blender::dna::is_ID_v<T>);
+  static_assert(dna::is_ID_v<T>);
   return reinterpret_cast<const T *>(DEG_get_original_id(reinterpret_cast<const ID *>(id)));
 }
 
@@ -148,7 +152,7 @@ bool DEG_is_original_id(const ID *id);
 
 template<typename T> bool DEG_is_original(const T *id)
 {
-  static_assert(blender::dna::is_ID_v<T>);
+  static_assert(dna::is_ID_v<T>);
   return DEG_is_original_id(reinterpret_cast<const ID *>(id));
 }
 
@@ -160,7 +164,7 @@ bool DEG_is_evaluated_id(const ID *id);
 
 template<typename T> bool DEG_is_evaluated(const T *id)
 {
-  static_assert(blender::dna::is_ID_v<T>);
+  static_assert(dna::is_ID_v<T>);
   return DEG_is_evaluated_id(reinterpret_cast<const ID *>(id));
 }
 
@@ -214,7 +218,7 @@ enum DegIterFlag {
   DEG_ITER_OBJECT_FLAG_VISIBLE = (1 << 3),
   DEG_ITER_OBJECT_FLAG_DUPLI = (1 << 4),
 };
-ENUM_OPERATORS(DegIterFlag, DEG_ITER_OBJECT_FLAG_DUPLI)
+ENUM_OPERATORS(DegIterFlag)
 
 struct DEGObjectIterSettings {
   Depsgraph *depsgraph;
@@ -237,22 +241,20 @@ struct DEGObjectIterSettings {
    * If not empty, the iterator should only return objects that are in this list (or their
    * instances are in it). Pointers in this span should be the original data-block.
    */
-  blender::Set<const Object *> *included_objects;
+  Set<const Object *> *included_objects;
 };
 
 /**
  * Flags to get objects for draw manager and final render.
  */
 #define DEG_OBJECT_ITER_FOR_RENDER_ENGINE_FLAGS \
-  DEG_ITER_OBJECT_FLAG_LINKED_DIRECTLY | DEG_ITER_OBJECT_FLAG_LINKED_VIA_SET | \
-      DEG_ITER_OBJECT_FLAG_VISIBLE | DEG_ITER_OBJECT_FLAG_DUPLI
+  blender::DEG_ITER_OBJECT_FLAG_LINKED_DIRECTLY | blender::DEG_ITER_OBJECT_FLAG_LINKED_VIA_SET | \
+      blender::DEG_ITER_OBJECT_FLAG_VISIBLE | blender::DEG_ITER_OBJECT_FLAG_DUPLI
 
 struct DEGObjectIterData {
   DEGObjectIterSettings *settings;
   Depsgraph *graph;
   int flag;
-
-  Scene *scene;
 
   eEvaluationMode eval_mode;
 
@@ -277,7 +279,7 @@ struct DEGObjectIterData {
   /* Temporary storage to report fully populated DNA to the render engine or
    * other users of the iterator. */
   Object temp_dupli_object;
-  blender::bke::ObjectRuntime temp_dupli_object_runtime;
+  bke::ObjectRuntime temp_dupli_object_runtime;
 
   /* **** Iteration over ID nodes **** */
   size_t id_node_index;
@@ -296,7 +298,7 @@ void DEG_iterator_objects_end(BLI_Iterator *iter);
     DEGObjectIterData data_ = { \
         (settings_), \
         (settings_)->depsgraph, \
-        (int)(settings_)->flags, \
+        int((settings_)->flags), \
     }; \
 \
     ITER_BEGIN (DEG_iterator_objects_begin, \
@@ -310,6 +312,59 @@ void DEG_iterator_objects_end(BLI_Iterator *iter);
   ITER_END; \
   } \
   ((void)0)
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name DEG object iterators - Manual dupli iteration
+ * Helper functions for handling dupli instances iteration manually (ie. without passing
+ * DEG_ITER_OBJECT_FLAG_DUPLI to DEGObjectIterSettings::flags)
+ * \{ */
+
+/**
+ * Returns true if the object should be visible on the given context.
+ */
+bool DEG_iterator_object_is_visible(eEvaluationMode eval_mode, const Object *ob);
+
+/**
+ * Returns true if the dupli instance should be visible on the given context.
+ */
+bool DEG_iterator_dupli_is_visible(const DupliObject *dupli, eEvaluationMode eval_mode);
+
+namespace evil {
+/**
+ * WARNING: DON'T USE!!!
+ *
+ * These functions are exposed publicly as a temporary measure while we figure out how to fully get
+ * rid of temporary objects in the Draw module (See #144811).
+ *
+ * DON'T ADD NEW USE CASES FOR THESE FUNCTIONS.
+ */
+
+/**
+ * WARNING: DON'T USE!!!
+ * Generates a temporary object for a given dupli instance.
+ *
+ * Returns true if the resulting object should be visible, otherwise the temp object should be
+ * considered invalid.
+ * NOTE: DEG_iterator_temp_object_free_properties should be called regardless.
+ *
+ * \param do_matrix_setup: If false, the temp_object won't have valid
+ * object_to_world/world_to_object matrices, and the OB_NEG_SCALE flag will never be set.
+ */
+[[nodiscard]] bool DEG_iterator_temp_object_from_dupli(const Object *dupli_parent,
+                                                       const DupliObject *dupli,
+                                                       eEvaluationMode eval_mode,
+                                                       bool do_matrix_setup,
+                                                       Object *r_temp_object,
+                                                       bke::ObjectRuntime *r_temp_runtime);
+
+/**
+ * WARNING: DON'T USE!!!
+ * Frees any property allocated when calling DEG_iterator_temp_object_from_dupli.
+ */
+void DEG_iterator_temp_object_free_properties(const DupliObject *dupli, Object *temp_object);
+}  // namespace evil
 
 /** \} */
 
@@ -335,9 +390,9 @@ void DEG_iterator_ids_end(BLI_Iterator *iter);
 /** \name DEG traversal
  * \{ */
 
-using DEGForeachIDCallback = blender::FunctionRef<void(ID *id)>;
+using DEGForeachIDCallback = FunctionRef<void(ID *id)>;
 using DEGForeachIDComponentCallback =
-    blender::FunctionRef<void(ID *id, eDepsObjectComponentType component)>;
+    FunctionRef<void(ID *id, eDepsObjectComponentType component)>;
 
 /**
  * \note Modifies runtime flags in depsgraph nodes,
@@ -352,7 +407,7 @@ void DEG_foreach_dependent_ID(const Depsgraph *depsgraph,
 
 /**
  * Starts traversal from given component of the given ID, invokes callback for every other
- * component  which is directly on indirectly dependent on the source one.
+ * component which is directly on indirectly dependent on the source one.
  */
 enum {
   /* Ignore transform solvers which depends on multiple inputs and affects final transform.
@@ -374,3 +429,17 @@ void DEG_foreach_dependent_ID_component(const Depsgraph *depsgraph,
 void DEG_foreach_ID(const Depsgraph *depsgraph, DEGForeachIDCallback callback);
 
 /** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name DEG query evaluation timings
+ * \{ */
+
+/**
+ * Return the last evaluation time of \a depsgraph in seconds or #std::nullopt if \a depsgraph
+ * hasn't been (fully) evaluated.
+ */
+std::optional<double> DEG_get_last_evaluation_time(const Depsgraph *depsgraph);
+
+/** \} */
+
+}  // namespace blender

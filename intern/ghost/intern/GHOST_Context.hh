@@ -10,9 +10,9 @@
 #pragma once
 
 #include "GHOST_IContext.hh"
-#include "GHOST_Types.h"
+#include "GHOST_Types.hh"
 
-#include <cstdlib>  // for nullptr
+#include <cstdlib> /* For `nullptr`. */
 
 class GHOST_Context : public GHOST_IContext {
  protected:
@@ -21,9 +21,9 @@ class GHOST_Context : public GHOST_IContext {
  public:
   /**
    * Constructor.
-   * \param stereoVisual: Stereo visual for quad buffered stereo.
+   * \param context_params: Parameters to use when initializing the context.
    */
-  GHOST_Context(bool stereoVisual) : m_stereoVisual(stereoVisual) {}
+  GHOST_Context(const GHOST_ContextParams &context_params) : context_params_(context_params) {}
 
   /**
    * Destructor.
@@ -38,13 +38,16 @@ class GHOST_Context : public GHOST_IContext {
   /**
    * Returns the thread's currently active drawing context.
    */
-  static inline GHOST_Context *getActiveDrawingContext()
+  static GHOST_Context *getActiveDrawingContext()
   {
     return active_context_;
   }
 
+  /** \copydoc #GHOST_IContext::swapBuffersAcquire */
+  GHOST_TSuccess swapBufferAcquire() override = 0;
+
   /** \copydoc #GHOST_IContext::swapBuffers */
-  GHOST_TSuccess swapBuffers() override = 0;
+  GHOST_TSuccess swapBufferRelease() override = 0;
 
   /** \copydoc #GHOST_IContext::activateDrawingContext */
   GHOST_TSuccess activateDrawingContext() override = 0;
@@ -86,10 +89,10 @@ class GHOST_Context : public GHOST_IContext {
 
   /**
    * Gets the current swap interval for #swapBuffers.
-   * \param intervalOut: Variable to store the swap interval if it can be read.
+   * \param interval_out: Variable to store the swap interval if it can be read.
    * \return Whether the swap interval can be read.
    */
-  virtual GHOST_TSuccess getSwapInterval(int & /*interval*/)
+  virtual GHOST_TSuccess getSwapInterval(int & /*interval_out*/)
   {
     return GHOST_kFailure;
   }
@@ -99,7 +102,7 @@ class GHOST_Context : public GHOST_IContext {
    */
   void *getUserData()
   {
-    return m_user_data;
+    return user_data_;
   }
 
   /**
@@ -107,7 +110,7 @@ class GHOST_Context : public GHOST_IContext {
    */
   void setUserData(void *user_data)
   {
-    m_user_data = user_data;
+    user_data_ = user_data;
   }
 
   /**
@@ -117,7 +120,13 @@ class GHOST_Context : public GHOST_IContext {
    */
   bool isStereoVisual() const
   {
-    return m_stereoVisual;
+    return context_params_.is_stereo_visual;
+  }
+
+  /** Get the VSync value. */
+  virtual GHOST_TVSyncModes getVSync()
+  {
+    return context_params_.vsync;
   }
 
   /**
@@ -136,21 +145,21 @@ class GHOST_Context : public GHOST_IContext {
 
 #ifdef WITH_VULKAN_BACKEND
   /** \copydoc #GHOST_IContext::getVulkanHandles */
-  virtual GHOST_TSuccess getVulkanHandles(GHOST_VulkanHandles & /* r_handles */) override
+  GHOST_TSuccess getVulkanHandles(GHOST_VulkanHandles & /* r_handles */) override
   {
     return GHOST_kFailure;
   };
   /** \copydoc #GHOST_IContext::getVulkanSwapChainFormat */
-  virtual GHOST_TSuccess getVulkanSwapChainFormat(
+  GHOST_TSuccess getVulkanSwapChainFormat(
       GHOST_VulkanSwapChainData * /*r_swap_chain_data*/) override
   {
     return GHOST_kFailure;
   }
 
   /** \copydoc #GHOST_IContext::setVulkanSwapBuffersCallbacks */
-  virtual GHOST_TSuccess setVulkanSwapBuffersCallbacks(
-      std::function<void(const GHOST_VulkanSwapChainData *)> /*swap_buffers_pre_callback*/,
-      std::function<void(void)> /*swap_buffers_post_callback*/,
+  GHOST_TSuccess setVulkanSwapBuffersCallbacks(
+      std::function<void(const GHOST_VulkanSwapChainData *, bool)> /*swap_buffer_draw_callback*/,
+      std::function<void(void)> /*swap_buffer_acquired_callback*/,
       std::function<void(GHOST_VulkanOpenXRData *)> /*openxr_acquire_framebuffer_image_callback*/,
       std::function<void(GHOST_VulkanOpenXRData *)> /*openxr_release_framebuffer_image_callback*/)
       override
@@ -160,10 +169,10 @@ class GHOST_Context : public GHOST_IContext {
 #endif
 
  protected:
-  bool m_stereoVisual;
+  GHOST_ContextParams context_params_;
 
   /** Caller specified, not for internal use. */
-  void *m_user_data = nullptr;
+  void *user_data_ = nullptr;
 
 #ifdef WITH_OPENGL_BACKEND
   static void initClearGL();

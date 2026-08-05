@@ -12,17 +12,16 @@
 #pragma once
 
 #include <array>
-#include <string>
 
+#include "BLI_enum_flags.hh"
+#include "BLI_map.hh"
 #include "BLI_mutex.hh"
-#include "BLI_string_ref.hh"
 
 #include "DRW_render.hh"
 #include "GPU_material.hh"
 #include "GPU_shader.hh"
 
-#include "eevee_material.hh"
-#include "eevee_sync.hh"
+#include "eevee_material_shared.hh"
 
 namespace blender::eevee {
 
@@ -42,6 +41,7 @@ enum eShaderType {
   FILM_PASS_CONVERT_COLOR,
   FILM_PASS_CONVERT_CRYPTOMATTE,
 
+  DEFERRED_AOV_CLEAR,
   DEFERRED_CAPTURE_EVAL,
   DEFERRED_COMBINE,
   DEFERRED_LIGHT_SINGLE,
@@ -81,16 +81,17 @@ enum eShaderType {
   HIZ_UPDATE_LAYER,
   HIZ_DEBUG,
 
-  HORIZON_DENOISE,
-  HORIZON_RESOLVE,
-  HORIZON_SCAN,
-  HORIZON_SETUP,
+  FAST_GI_DENOISE,
+  FAST_GI_RESOLVE,
+  FAST_GI_SCAN,
+  FAST_GI_SETUP,
 
   LIGHT_CULLING_DEBUG,
   LIGHT_CULLING_SELECT,
   LIGHT_CULLING_SORT,
   LIGHT_CULLING_TILE,
   LIGHT_CULLING_ZBIN,
+  LIGHT_SHAPE_DISPLAY,
   LIGHT_SHADOW_SETUP,
 
   LIGHTPROBE_IRRADIANCE_BOUNDS,
@@ -99,6 +100,7 @@ enum eShaderType {
   LIGHTPROBE_IRRADIANCE_LOAD,
   LIGHTPROBE_IRRADIANCE_WORLD,
 
+  LOOKDEV_COPY_WORLD,
   LOOKDEV_DISPLAY,
 
   MOTION_BLUR_GATHER,
@@ -131,14 +133,13 @@ enum eShaderType {
   SHADOW_PAGE_DEFRAG,
   SHADOW_PAGE_FREE,
   SHADOW_PAGE_MASK,
-  SHADOW_PAGE_TILE_CLEAR,
-  SHADOW_PAGE_TILE_STORE,
   SHADOW_TILEMAP_AMEND,
   SHADOW_TILEMAP_BOUNDS,
   SHADOW_TILEMAP_FINALIZE,
   SHADOW_TILEMAP_RENDERMAP,
   SHADOW_TILEMAP_INIT,
   SHADOW_TILEMAP_TAG_UPDATE,
+  SHADOW_TILEMAP_TAG_UPDATE_PROPAGATE,
   SHADOW_TILEMAP_TAG_USAGE_OPAQUE,
   SHADOW_TILEMAP_TAG_USAGE_SURFELS,
   SHADOW_TILEMAP_TAG_USAGE_TRANSPARENT,
@@ -151,8 +152,13 @@ enum eShaderType {
   SURFEL_CLUSTER_BUILD,
   SURFEL_LIGHT,
   SURFEL_LIST_BUILD,
+  SURFEL_LIST_FLATTEN,
+  SURFEL_LIST_PREFIX,
+  SURFEL_LIST_PREPARE,
   SURFEL_LIST_SORT,
   SURFEL_RAY,
+
+  TRANSPARENCY_RESOLVE,
 
   VERTEX_COPY,
 
@@ -164,6 +170,38 @@ enum eShaderType {
 
   MAX_SHADER_TYPE,
 };
+
+/**
+ * Bitmask representing the shader categories.
+ * This allows the loading of certain parts of the engine to kick-in as soon as the shaders that
+ * depends on it are compiled.
+ */
+enum ShaderGroups : uint32_t {
+  NONE = 0,
+  DEFERRED_LIGHTING_SHADERS = 1 << 0,
+  DEFERRED_CAPTURE_SHADERS = 1 << 1,
+  DEFERRED_PLANAR_SHADERS = 1 << 2,
+  DEPTH_OF_FIELD_SHADERS = 1 << 3,
+  HIZ_SHADERS = 1 << 4,
+  FAST_GI_SHADERS = 1 << 5,
+  LIGHT_CULLING_SHADERS = 1 << 6,
+  IRRADIANCE_BAKE_SHADERS = 1 << 7,
+  SPHERE_PROBE_SHADERS = 1 << 8,
+  SHADOW_SHADERS = 1 << 9,
+  AMBIENT_OCCLUSION_SHADERS = 1 << 10,
+  MOTION_BLUR_SHADERS = 1 << 11,
+  RAYTRACING_SHADERS = 1 << 12,
+  FILM_SHADERS = 1 << 13,
+  SUBSURFACE_SHADERS = 1 << 14,
+  SURFEL_SHADERS = 1 << 15,
+  VERTEX_COPY_SHADERS = 1 << 16,
+  VOLUME_EVAL_SHADERS = 1 << 17,
+  DEFAULT_MATERIALS = 1 << 18,
+  WORLD_SHADERS = 1 << 19,
+  MATERIAL_SHADERS = 1 << 20,
+  VOLUME_PROBE_SHADERS = 1 << 21,
+};
+ENUM_OPERATORS(ShaderGroups)
 
 /**
  * Shader module. shared between instances.
@@ -205,14 +243,9 @@ class ShaderModule {
     {
       return hash_value_ == k.hash_value_;
     }
-
-    bool operator<(const SpecializationsKey &k) const
-    {
-      return hash_value_ < k.hash_value_;
-    }
   };
 
-  Map<SpecializationsKey, SpecializationBatchHandle> specialization_handles_;
+  Map<SpecializationsKey, Vector<AsyncSpecializationHandle>> specialization_handles_;
 
   static gpu::StaticShaderCache<ShaderModule> &get_static_cache()
   {
@@ -244,14 +277,14 @@ class ShaderModule {
                                bool use_split_indirect,
                                bool use_lightprobe_eval);
 
-  GPUShader *static_shader_get(eShaderType shader_type);
-  GPUMaterial *material_shader_get(::Material *blender_mat,
+  gpu::Shader *static_shader_get(eShaderType shader_type);
+  GPUMaterial *material_shader_get(blender::Material *blender_mat,
                                    bNodeTree *nodetree,
                                    eMaterialPipeline pipeline_type,
                                    eMaterialGeometry geometry_type,
                                    bool deferred_compilation,
-                                   ::Material *default_mat);
-  GPUMaterial *world_shader_get(::World *blender_world,
+                                   blender::Material *default_mat);
+  GPUMaterial *world_shader_get(blender::World *blender_world,
                                 bNodeTree *nodetree,
                                 eMaterialPipeline pipeline_type,
                                 bool deferred_compilation);
@@ -265,6 +298,9 @@ class ShaderModule {
  private:
   const char *static_shader_create_info_name_get(eShaderType shader_type);
   ShaderGroups static_shaders_load(ShaderGroups request_bits, bool block_until_ready);
+  void material_create_info_pipelines_amend(eMaterialGeometry geometry_type,
+                                            eMaterialPipeline pipeline_type,
+                                            gpu::shader::ShaderCreateInfo &r_info);
 };
 
 }  // namespace blender::eevee

@@ -8,7 +8,10 @@
 
 #pragma once
 
+#include <atomic>
 #include <cstdint>
+
+namespace blender {
 
 struct ImBuf;
 
@@ -16,6 +19,8 @@ struct ImBuf;
  * Thumbnail creation and retrieval according to the 'Thumbnail Management Standard'
  * supported by Gimp, Gnome (Nautilus), KDE etc.
  * Reference: http://jens.triq.net/thumbnail-spec/index.html
+ *
+ * This standard is not used for #THB_SOURCE_DIRECT, see its documentation.
  */
 
 enum ThumbSize {
@@ -30,6 +35,37 @@ enum ThumbSource : int8_t {
   THB_SOURCE_BLEND,
   THB_SOURCE_FONT,
   THB_SOURCE_OBJECT_IO,
+  /**
+   * The thumbnail is not created from some other file, but the given file path refers to the
+   * thumbnail itself directly.
+   *
+   * Can be useful to directly load an image from disk that can be displayed as a thumbnail,
+   * without requiring the caller to handle these cases specially.
+   *
+   * Does _not_ use the thumbnail standard.
+   */
+  THB_SOURCE_DIRECT,
+};
+
+struct ThumbCancellationToken {
+ private:
+  std::atomic<bool> is_cancelled_ = false;
+
+ public:
+  void cancel()
+  {
+    is_cancelled_.store(true, std::memory_order_release);
+  }
+
+  void reset()
+  {
+    is_cancelled_.store(false, std::memory_order_release);
+  }
+
+  bool is_cancelled() const
+  {
+    return is_cancelled_.load(std::memory_order_acquire);
+  }
 };
 
 /**
@@ -49,6 +85,9 @@ enum ThumbSource : int8_t {
 
 /**
  * Create thumbnail for file and returns new ImBuf for thumbnail.
+ *
+ * Does not support #THB_SOURCE_DIRECT as \a source.
+ *
  * \param filepath: File path (but not a library path!) to the thumbnail to be created.
  */
 ImBuf *IMB_thumb_create(const char *filepath, ThumbSize size, ThumbSource source, ImBuf *img);
@@ -75,7 +114,10 @@ void IMB_thumb_delete(const char *file_or_lib_path, ThumbSize size);
  * \param file_or_lib_path: File path or library-ID path (e.g. `/a/b.blend/Material/MyMaterial`) to
  *                          the thumbnail to be created/managed.
  */
-ImBuf *IMB_thumb_manage(const char *file_or_lib_path, ThumbSize size, ThumbSource source);
+ImBuf *IMB_thumb_manage(const char *file_or_lib_path,
+                        ThumbSize size,
+                        ThumbSource source,
+                        const ThumbCancellationToken *cancel_token = nullptr);
 
 /**
  * Create the necessary directories to store the thumbnails.
@@ -93,7 +135,10 @@ ImBuf *IMB_thumb_load_blend(const char *blen_path, const char *blen_group, const
 ImBuf *IMB_thumb_load_font(const char *filepath, unsigned int x, unsigned int y);
 bool IMB_thumb_load_font_get_hash(char *r_hash);
 
-ImBuf *IMB_font_preview(const char *filepath, unsigned int width, const float color[4]);
+ImBuf *IMB_font_preview(const char *filepath,
+                        unsigned int width,
+                        const float color[4],
+                        const char *sample_text = nullptr);
 
 /* Threading */
 
@@ -101,3 +146,5 @@ void IMB_thumb_locks_acquire();
 void IMB_thumb_locks_release();
 void IMB_thumb_path_lock(const char *path);
 void IMB_thumb_path_unlock(const char *path);
+
+}  // namespace blender

@@ -8,11 +8,17 @@
 
 #include "DNA_userdef_types.h"
 
+#include "BKE_image.hh"
+#include "BKE_image_gpu.hh"
 #include "BKE_paint.hh"
 #include "BKE_paint_bvh.hh"
 
-#include "BLI_math_base.h"
+#include "BLI_math_base_c.hh"
+#include "BLI_task.hh"
+
 #include "GPU_compute.hh"
+#include "GPU_shader.hh"
+#include "GPU_texture.hh"
 
 #include "draw_context_private.hh"
 #include "draw_debug.hh"
@@ -55,6 +61,7 @@ void Manager::begin_sync(Object *object_active)
   }
 
   acquired_textures.clear();
+  deferred_textures_.clear();
   layer_attributes.clear();
 
 /* For some reason, if this uninitialized data pattern was enabled (ie release asserts enabled),
@@ -92,7 +99,7 @@ void Manager::sync_layer_attributes()
     id_list.append(id);
   }
 
-  std::sort(id_list.begin(), id_list.end());
+  std::ranges::sort(id_list);
 
   /* Look up the attributes. */
   int count = 0, size = layer_attributes_buf.end() - layer_attributes_buf.begin();
@@ -111,9 +118,49 @@ void Manager::sync_layer_attributes()
   layer_attributes_buf[0].buffer_length = count;
 }
 
+void Manager::load_deferred_textures()
+{
+  if (deferred_textures_.is_empty()) {
+    return;
+  }
+
+  GPU_debug_group_begin("Texture Loading");
+
+  /* Load files from disk in a multithreaded manner. Allow better parallelism. */
+  threading::parallel_for(deferred_textures_.index_range(), 1, [&](const IndexRange range) {
+    for (const int i : range) {
+      DeferredTexture &deferred = *deferred_textures_[i];
+      BKE_image_get_tile(deferred.image, 0);
+      threading::isolate_task([&]() {
+        ImBuf *imbuf = BKE_image_acquire_ibuf(deferred.image, deferred.image_user, nullptr);
+        BKE_image_release_ibuf(deferred.image, imbuf, nullptr);
+      });
+    }
+  });
+
+  /* Avoid any leftover bind before GPU texture creation which could cause assert
+   * about missing specialization constants. */
+  GPU_shader_unbind();
+
+  /* Upload to the GPU (create gpu::Texture). This part still requires a valid GPU context and
+   * is not easily parallelized. */
+  for (std::unique_ptr<DeferredTexture> &deferred : deferred_textures_) {
+    const ImageGPUTextures textures = BKE_image_acquire_gpu_material_texture(
+        deferred->image, deferred->image_user, deferred->use_tile_mapping, false);
+    deferred->texture = textures.texture;
+    deferred->tile_mapping = textures.tile_mapping;
+    hold_texture(textures.texture);
+    hold_texture(textures.tile_mapping);
+  }
+
+  GPU_debug_group_end();
+}
+
 void Manager::end_sync()
 {
   GPU_debug_group_begin("Manager.end_sync");
+
+  load_deferred_textures();
 
   sync_layer_attributes();
 
@@ -131,7 +178,7 @@ void Manager::end_sync()
 
   /* Dispatch compute to finalize the resources on GPU. Save a bit of CPU time. */
   uint thread_groups = divide_ceil_u(resource_len_, DRW_FINALIZE_GROUP_SIZE);
-  GPUShader *shader = DRW_shader_draw_resource_finalize_get();
+  gpu::Shader *shader = DRW_shader_draw_resource_finalize_get();
   GPU_shader_bind(shader);
   GPU_shader_uniform_1i(shader, "resource_len", resource_len_);
   GPU_storagebuf_bind(matrix_buf.current(), GPU_shader_get_ssbo_binding(shader, "matrix_buf"));
@@ -147,7 +194,7 @@ void Manager::end_sync()
 
 void Manager::debug_bind()
 {
-  GPUStorageBuf *gpu_buf = DebugDraw::get().gpu_draw_buf_get();
+  gpu::StorageBuf *gpu_buf = DebugDraw::get().gpu_draw_buf_get();
   if (gpu_buf == nullptr) {
     return;
   }
@@ -178,7 +225,7 @@ ResourceHandleRange Manager::unique_handle_for_sculpt(const ObjectRef &ref)
     return ref.sculpt_handle_;
   }
   const bke::pbvh::Tree &pbvh = *bke::object::pbvh_get(*ref.object);
-  const blender::Bounds<float3> bounds = bke::pbvh::bounds_get(pbvh);
+  const Bounds<float3> bounds = bke::pbvh::bounds_get(pbvh);
   const float3 center = math::midpoint(bounds.min, bounds.max);
   const float3 half_extent = bounds.max - center;
   /* WORKAROUND: Instead of breaking const correctness everywhere, we only break it for this. */
@@ -189,7 +236,7 @@ ResourceHandleRange Manager::unique_handle_for_sculpt(const ObjectRef &ref)
 
 void Manager::compute_visibility(View &view)
 {
-  bool freeze_culling = (USER_EXPERIMENTAL_TEST(&U, use_viewport_debug) && drw_get().v3d &&
+  bool freeze_culling = (USER_DEVELOPER_TOOL_TEST(&U, use_viewport_debug) && drw_get().v3d &&
                          (drw_get().v3d->debug_flag & V3D_DEBUG_FREEZE_CULLING) != 0);
 
   BLI_assert_msg(view.manager_fingerprint_ != this->fingerprint_get(),
@@ -384,7 +431,7 @@ Manager::SubmitDebugOutput Manager::submit_debug(PassSimple &pass, View &view)
   output.resource_id = {pass.draw_commands_buf_.resource_id_buf_.data(),
                         pass.draw_commands_buf_.resource_id_count_};
   /* There is no visibility data for PassSimple. */
-  output.visibility = {(uint *)view.get_visibility_buffer().data(), 0};
+  output.visibility = {static_cast<uint *>(view.get_visibility_buffer().data()), 0};
   return output;
 }
 
@@ -400,7 +447,7 @@ Manager::SubmitDebugOutput Manager::submit_debug(PassMain &pass, View &view)
   Manager::SubmitDebugOutput output;
   output.resource_id = {pass.draw_commands_buf_.resource_id_buf_.data(),
                         pass.draw_commands_buf_.resource_id_count_};
-  output.visibility = {(uint *)view.get_visibility_buffer().data(),
+  output.visibility = {static_cast<uint *>(view.get_visibility_buffer().data()),
                        divide_ceil_u(resource_len_, 32)};
   return output;
 }

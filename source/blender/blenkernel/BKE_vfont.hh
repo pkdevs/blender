@@ -3,7 +3,12 @@
  * SPDX-License-Identifier: GPL-2.0-or-later */
 #pragma once
 
-#include "BLI_sys_types.h"
+#include "DNA_listBase.h"
+
+#include "BLI_math_vector_types.hh"
+#include "BLI_sys_types.hh"
+
+namespace blender {
 
 /** \file
  * \ingroup bke
@@ -11,21 +16,26 @@
 
 struct CharInfo;
 struct Curve;
-struct ListBase;
 struct Main;
 struct Object;
+struct ReportList;
 struct VFont;
+struct Nurb;
 
 struct CharTrans {
-  float xof, yof;
-  float rot;
-  short linenr, charnr;
-  char dobreak;
+  float2 offset;
+  float rotate;
+  short linenr, charnr, wordnr;
+
+  uint do_break : 1;
+  uint is_overflow : 1;
+  uint is_wrap : 1;
+  uint is_smallcaps : 1;
 };
 
 struct EditFontSelBox {
   float x, y, w, h;
-  float rot;
+  float rotate;
 };
 
 /**
@@ -37,8 +47,11 @@ struct EditFont {
   /** Text style info (aligned with `textbuf`). */
   CharInfo *textbufinfo;
 
+  /** The font size from the last evaluated text layout. */
+  float font_size_eval;
+
   /** Array of rectangles & rotation. */
-  float textcurs[4][2];
+  float2 textcurs[4];
   EditFontSelBox *selboxes;
   int selboxes_len;
 
@@ -74,11 +87,14 @@ enum eEditFontMode {
   FO_DUPLI = 4,
   FO_PAGEUP = 8,
   FO_PAGEDOWN = 9,
-  FO_SELCHANGE = 10,
+  FO_LINE_BEGIN = 10,
+  FO_LINE_END = 11,
+  FO_SELCHANGE = 12,
 };
 
 /** #BKE_vfont_to_curve will move the cursor in these cases. */
-#define FO_CURS_IS_MOTION(mode) (ELEM(mode, FO_CURSUP, FO_CURSDOWN, FO_PAGEUP, FO_PAGEDOWN))
+#define FO_CURS_IS_MOTION(mode) \
+  (ELEM(mode, FO_CURSUP, FO_CURSDOWN, FO_PAGEUP, FO_PAGEDOWN, FO_LINE_BEGIN, FO_LINE_END))
 
 /* -------------------------------------------------------------------- */
 /** \name VFont API
@@ -94,6 +110,14 @@ void BKE_vfont_builtin_register(const void *mem, int size);
  */
 VFont *BKE_vfont_builtin_ensure();
 
+/**
+ * High-level pack function.
+ *
+ * Packs font data from its filepath.
+ * Does nothing if font is already packed.
+ */
+void BKE_vfont_packfile_ensure(Main *bmain, VFont *vfont, ReportList *reports);
+
 void BKE_vfont_data_ensure(VFont *vfont);
 void BKE_vfont_data_free(VFont *vfont);
 
@@ -101,8 +125,8 @@ VFont *BKE_vfont_load(Main *bmain, const char *filepath);
 VFont *BKE_vfont_load_exists_ex(Main *bmain, const char *filepath, bool *r_exists);
 VFont *BKE_vfont_load_exists(Main *bmain, const char *filepath);
 
-int BKE_vfont_select_get(Object *ob, int *r_start, int *r_end);
-void BKE_vfont_select_clamp(Object *ob);
+int BKE_vfont_select_get(const Curve *cu, int *r_start, int *r_end);
+void BKE_vfont_select_clamp(Curve *cu);
 
 void BKE_vfont_clipboard_free();
 void BKE_vfont_clipboard_set(const char32_t *text_buf, const CharInfo *info_buf, size_t len);
@@ -119,30 +143,33 @@ void BKE_vfont_clipboard_get(char32_t **r_text_buf,
  * See `vfont_curve.c`.
  * \{ */
 
-int BKE_vfont_cursor_to_text_index(Object *ob, const float cursor_location[2]);
+int BKE_vfont_cursor_to_text_index(Object *ob, const float2 &cursor_location);
 
 /**
  * \warning Expects to have access to evaluated data (i.e. passed object should be evaluated one).
  */
 bool BKE_vfont_to_curve(Object *ob, eEditFontMode mode);
-void BKE_vfont_char_build(Curve *cu,
-                          ListBase *nubase,
+void BKE_vfont_char_build(const Curve &cu,
+                          ListBaseT<Nurb> *nubase,
                           unsigned int charcode,
                           const CharInfo *info,
-                          float ofsx,
-                          float ofsy,
-                          float rot,
+                          bool is_smallcaps,
+                          const float2 &offset,
+                          float rotate,
                           int charidx,
                           float fsize);
 
 bool BKE_vfont_to_curve_ex(Object *ob,
-                           Curve *cu,
+                           const Curve &cu,
                            eEditFontMode mode,
-                           ListBase *r_nubase,
+                           ListBaseT<Nurb> *r_nubase,
                            const char32_t **r_text,
                            int *r_text_len,
                            bool *r_text_free,
-                           CharTrans **r_chartransdata);
-bool BKE_vfont_to_curve_nubase(Object *ob, eEditFontMode mode, ListBase *r_nubase);
+                           CharTrans **r_chartransdata,
+                           float *r_font_size_eval);
+bool BKE_vfont_to_curve_nubase(Object *ob, eEditFontMode mode, ListBaseT<Nurb> *r_nubase);
 
 /** \} */
+
+}  // namespace blender

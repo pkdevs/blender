@@ -15,15 +15,16 @@
 #include "ANIM_action_legacy.hh"
 #include "ANIM_versioning.hh"
 
-#include "DNA_action_defaults.h"
 #include "DNA_action_types.h"
 
+#include "BKE_lib_id.hh"
 #include "BKE_main.hh"
+#include "BKE_nla.hh"
 #include "BKE_node.hh"
 #include "BKE_report.hh"
 
-#include "BLI_listbase.h"
-#include "BLI_string_utf8.h"
+#include "BLI_listbase.hh"
+#include "BLI_string_utf8.hh"
 
 #include "BLT_translation.hh"
 
@@ -47,17 +48,15 @@ bool action_is_layered(const bAction &dna_action)
   const animrig::Action &action = dna_action.wrap();
 
   const bool has_layered_data = action.layer_array_num > 0 || action.slot_array_num > 0;
-  const bool has_animato_data = !(BLI_listbase_is_empty(&action.curves) &&
-                                  BLI_listbase_is_empty(&action.groups));
-  const bool has_pre_animato_data = !BLI_listbase_is_empty(&action.chanbase);
+  const bool has_animato_data = !(action.curves.is_empty() && action.groups.is_empty());
 
-  return has_layered_data || (!has_animato_data && !has_pre_animato_data);
+  return has_layered_data || !has_animato_data;
 }
 
 void convert_legacy_animato_actions(Main &bmain)
 {
-  LISTBASE_FOREACH (bAction *, dna_action, &bmain.actions) {
-    blender::animrig::Action &action = dna_action->wrap();
+  for (bAction &dna_action : bmain.actions) {
+    animrig::Action &action = dna_action.wrap();
 
     if (action_is_layered(action) && !action.is_empty()) {
       /* This is just a safety net. Blender files that trigger this versioning code are not
@@ -68,29 +67,16 @@ void convert_legacy_animato_actions(Main &bmain)
       continue;
     }
 
-    /* This function should skip pre-2.50 Actions, as those are versioned in a special step (see
-     * `do_versions_after_setup()` in `versioning_common.cc`). */
-    if (!BLI_listbase_is_empty(&action.chanbase)) {
-      continue;
-    }
-
     convert_legacy_animato_action(action);
   }
 }
 
 void convert_legacy_animato_action(bAction &dna_action)
 {
-  BLI_assert_msg(BLI_listbase_is_empty(&dna_action.chanbase),
-                 "this function cannot handle pre-2.50 Actions");
-  if (!BLI_listbase_is_empty(&dna_action.chanbase)) {
-    /* This is a pre-2.5 Action, which cannot be converted here. It's converted in another function
-     * to a post-2.5 Action (aka Animato Action), and after that, this function will be called
-     * again. */
-    return;
-  }
-
   Action &action = dna_action.wrap();
-  BLI_assert(action.is_action_legacy());
+  /* Check that this is a legacy action.
+   * Cannot use `!action_is_layered` because that would be false on empty actions. */
+  BLI_assert(action.layer_array_num == 0 && action.slot_array_num == 0);
 
   /* Store this ahead of time, because adding the slot sets the action's idroot
    * to 0. We also set the action's idroot to 0 manually, just to be defensive
@@ -110,40 +96,39 @@ void convert_legacy_animato_action(bAction &dna_action)
   action.slot_identifier_define(slot, slot_identifier);
 
   Layer &layer = action.layer_add(DATA_(legacy::DEFAULT_LEGACY_LAYER_NAME));
-  blender::animrig::Strip &strip = layer.strip_add(action,
-                                                   blender::animrig::Strip::Type::Keyframe);
+  animrig::Strip &strip = layer.strip_add(action, animrig::Strip::Type::Keyframe);
   Channelbag &bag = strip.data<StripKeyframeData>(action).channelbag_for_slot_ensure(slot);
-  const int fcu_count = BLI_listbase_count(&action.curves);
-  const int group_count = BLI_listbase_count(&action.groups);
-  bag.fcurve_array = MEM_calloc_arrayN<FCurve *>(fcu_count, "Action versioning - fcurves");
+  const int fcu_count = action.curves.count();
+  const int group_count = action.groups.count();
+  bag.fcurve_array = MEM_new_array_zeroed<FCurve *>(fcu_count, "Action versioning - fcurves");
   bag.fcurve_array_num = fcu_count;
-  bag.group_array = MEM_calloc_arrayN<bActionGroup *>(group_count, "Action versioning - groups");
+  bag.group_array = MEM_new_array_zeroed<bActionGroup *>(group_count,
+                                                         "Action versioning - groups");
   bag.group_array_num = group_count;
 
-  int group_index = 0;
   int fcurve_index = 0;
-  LISTBASE_FOREACH_INDEX (bActionGroup *, group, &action.groups, group_index) {
-    bag.group_array[group_index] = group;
+  for (const auto [group_index, group] : action.groups.enumerate()) {
+    bag.group_array[group_index] = &group;
 
-    group->channelbag = &bag;
-    group->fcurve_range_start = fcurve_index;
+    group.channelbag = &bag;
+    group.fcurve_range_start = fcurve_index;
 
-    LISTBASE_FOREACH (FCurve *, fcu, &group->channels) {
-      if (fcu->grp != group) {
+    for (FCurve &fcu : group.channels) {
+      if (fcu.grp != &group) {
         break;
       }
-      bag.fcurve_array[fcurve_index++] = fcu;
+      bag.fcurve_array[fcurve_index++] = &fcu;
     }
 
-    group->fcurve_range_length = fcurve_index - group->fcurve_range_start;
+    group.fcurve_range_length = fcurve_index - group.fcurve_range_start;
   }
 
-  LISTBASE_FOREACH (FCurve *, fcu, &action.curves) {
+  for (FCurve &fcu : action.curves) {
     /* Any fcurves with groups have already been added to the fcurve array. */
-    if (fcu->grp) {
+    if (fcu.grp) {
       continue;
     }
-    bag.fcurve_array[fcurve_index++] = fcu;
+    bag.fcurve_array[fcurve_index++] = &fcu;
   }
 
   BLI_assert(fcurve_index == fcu_count);
@@ -154,7 +139,7 @@ void convert_legacy_animato_action(bAction &dna_action)
 
 void tag_action_user_for_slotted_actions_conversion(ID &animated_id)
 {
-  animated_id.runtime.readfile_data->tags.action_assignment_needs_slot = true;
+  animated_id.runtime->readfile_data->tags.action_assignment_needs_slot = true;
 }
 
 void tag_action_users_for_slotted_actions_conversion(Main &bmain)
@@ -181,7 +166,7 @@ void tag_action_users_for_slotted_actions_conversion(Main &bmain)
      * have their own Action+Slot. Unfortunately there is no generic looper
      * for embedded IDs. At this moment the only animatable embedded ID is a
      * node tree. */
-    bNodeTree *node_tree = blender::bke::node_tree_from_id(id);
+    bNodeTree *node_tree = bke::node_tree_from_id(id);
     if (node_tree) {
       foreach_action_slot_use_with_references(node_tree->id, flag_adt);
     }
@@ -248,7 +233,7 @@ void convert_legacy_action_assignments(Main &bmain, ReportList *reports)
     }
 
     PointerRNA slot_to_assign_ptr = RNA_pointer_create_discrete(
-        &action.id, &RNA_ActionSlot, slot_to_assign);
+        &action.id, RNA_ActionSlot, slot_to_assign);
     RNA_property_pointer_set(
         &action_slot_owner_ptr, &action_slot_prop, slot_to_assign_ptr, reports);
     RNA_property_update_main(&bmain, nullptr, &action_slot_owner_ptr, &action_slot_prop);
@@ -257,10 +242,10 @@ void convert_legacy_action_assignments(Main &bmain, ReportList *reports)
   };
 
   /* Note that the code below does not remove the `action_assignment_needs_slot` tag. One ID can
-   * use multiple Actions (via NLA, Action constraints, etc.); if one of those Action is an ancient
-   * one from before 2.50 (just to name one example case) this ID may needs to be re-visited
-   * after those were versioned. Rather than trying to figure out if re-visiting is necessary, this
-   * function is safe to call multiple times, and all that's lost is a little bit of CPU time. */
+   * use multiple Actions (via NLA, Action constraints, etc.); if one of those Action is a legacy
+   * one from a linked datablock, this ID may needs to be re-visited after the library file was
+   * versioned. Rather than trying to figure out if re-visiting is necessary, this function is safe
+   * to call multiple times, and all that's lost is a little bit of CPU time. */
 
   ID *id;
   FOREACH_MAIN_ID_BEGIN (&bmain, id) {
@@ -273,12 +258,149 @@ void convert_legacy_action_assignments(Main &bmain, ReportList *reports)
      * have their own Action+Slot. Unfortunately there is no generic looper
      * for embedded IDs. At this moment the only animatable embedded ID is a
      * node tree. */
-    bNodeTree *node_tree = blender::bke::node_tree_from_id(id);
+    bNodeTree *node_tree = bke::node_tree_from_id(id);
     if (node_tree && BLO_readfile_id_runtime_tags(node_tree->id).action_assignment_needs_slot) {
       foreach_action_slot_use_with_rna(node_tree->id, version_slot_assignment);
     }
   }
   FOREACH_MAIN_ID_END;
+}
+
+void action_groups_reconstruct(bAction *act)
+{
+  if (!act) {
+    return;
+  }
+  /* Check that this is a legacy action.
+   * Cannot use `!action_is_layered` because that would be false on empty actions. */
+  BLI_assert(act->layer_array_num == 0 && act->slot_array_num == 0);
+  /* Clear out all group channels. Channels that are actually in use are
+   * reconstructed below; this step is necessary to clear out unused groups. */
+  for (bActionGroup &group : act->groups) {
+    group.channels.clear_no_delete();
+  }
+  /* Sort the channels into the group lists, destroying the act->curves list. */
+  ListBaseT<FCurve> ungrouped = {nullptr, nullptr};
+  for (FCurve &fcurve : act->curves.items_mutable()) {
+    if (fcurve.grp) {
+      BLI_assert(BLI_findindex(&act->groups, fcurve.grp) >= 0);
+      BLI_addtail(&fcurve.grp->channels, &fcurve);
+    }
+    else {
+      BLI_addtail(&ungrouped, &fcurve);
+    }
+  }
+  /* Recombine into the main list. */
+  act->curves.clear_no_delete();
+  for (bActionGroup &group : act->groups) {
+    /* Copy the list header to preserve the pointers in the group. */
+    ListBase tmp = group.channels;
+    BLI_movelisttolist(&act->curves, &tmp);
+  }
+  BLI_movelisttolist(&act->curves, &ungrouped);
+}
+
+using IDFCurveCallback = FunctionRef<bool(ID *, FCurve *)>;
+
+/**
+ * Iterates over FCurves until the callback returns false or all FCurves were visited.
+ *
+ * \returns true if all FCurves were visited.
+ */
+static bool fcurves_listbase_apply_cb(ID *id,
+                                      ListBaseT<FCurve> *fcurves,
+                                      const IDFCurveCallback func)
+{
+  for (FCurve &fcu : *fcurves) {
+    if (!func(id, &fcu)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+/* Helper for adt_apply_all_fcurves_cb() - Recursively go through each NLA strip */
+static bool nlastrips_apply_all_curves_cb(ID *id,
+                                          ListBaseT<NlaStrip> *strips,
+                                          const IDFCurveCallback func)
+{
+  for (NlaStrip &strip : *strips) {
+    if (strip.act) {
+      if (!fcurves_listbase_apply_cb(id, &strip.act->curves, func)) {
+        return false;
+      }
+    }
+    if (!nlastrips_apply_all_curves_cb(id, &strip.strips, func)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+static bool adt_apply_all_fcurves_cb(ID *id, AnimData *adt, const IDFCurveCallback func)
+{
+  if (adt->action) {
+    if (!fcurves_listbase_apply_cb(id, &adt->action->curves, func)) {
+      return false;
+    }
+  }
+
+  if (adt->tmpact) {
+    if (!fcurves_listbase_apply_cb(id, &adt->tmpact->curves, func)) {
+      return false;
+    }
+  }
+
+  /* Drivers, stored as a list of F-Curves. */
+  if (!fcurves_listbase_apply_cb(id, &adt->drivers, func)) {
+    return false;
+  }
+
+  /* NLA Data - Animation Data for Strips */
+  for (NlaTrack &nlt : adt->nla_tracks) {
+    if (!nlastrips_apply_all_curves_cb(id, &nlt.strips, func)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+void fcurves_id_cb(ID *id, const FunctionRef<void(ID *, FCurve *)> func)
+{
+  AnimData *adt = BKE_animdata_from_id(id);
+  if (adt != nullptr) {
+    /* Use a little wrapper function to always return 'true' and thus keep the loop looping. */
+    const auto wrapper = [&func](ID *id, FCurve *fcurve) {
+      func(id, fcurve);
+      return true;
+    };
+    adt_apply_all_fcurves_cb(id, adt, wrapper);
+  }
+}
+
+void fcurves_main_cb(Main *bmain, const FunctionRef<void(ID *, FCurve *)> func)
+{
+  /* Use a little wrapper function to always return 'true' and thus keep the loop looping. */
+  const auto wrapper = [&func](ID *id, FCurve *fcurve) {
+    func(id, fcurve);
+    return true;
+  };
+
+  /* Use the AnimData-based function so that we don't have to reimplement all that stuff */
+  BKE_animdata_main_cb(bmain,
+                       [&](ID *id, AnimData *adt) { adt_apply_all_fcurves_cb(id, adt, wrapper); });
+}
+
+Vector<FCurve *> fcurves_for_legacy_action(bAction *action)
+{
+  if (!action) {
+    return {};
+  }
+  Vector<FCurve *> fcurves;
+  for (FCurve &fcu : action->curves) {
+    fcurves.append(&fcu);
+  }
+  return fcurves;
 }
 
 }  // namespace blender::animrig::versioning

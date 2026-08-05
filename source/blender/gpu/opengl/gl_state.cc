@@ -8,8 +8,8 @@
 
 #include "BKE_global.hh"
 
-#include "BLI_math_base.h"
-#include "BLI_math_bits.h"
+#include "BLI_math_base_c.hh"
+#include "BLI_math_bits.hh"
 
 #include "GPU_capabilities.hh"
 
@@ -78,23 +78,23 @@ void GLStateManager::set_state(const GPUState &state)
   GPUState changed = state ^ current_;
 
   if (changed.blend != 0) {
-    set_blend((eGPUBlend)state.blend);
+    set_blend(GPUBlend(state.blend));
   }
   if (changed.write_mask != 0) {
-    set_write_mask((eGPUWriteMask)state.write_mask);
+    set_write_mask(GPUWriteMask(state.write_mask));
   }
   if (changed.depth_test != 0) {
-    set_depth_test((eGPUDepthTest)state.depth_test);
+    set_depth_test(GPUDepthTest(state.depth_test));
   }
   if (changed.stencil_test != 0 || changed.stencil_op != 0) {
-    set_stencil_test((eGPUStencilTest)state.stencil_test, (eGPUStencilOp)state.stencil_op);
-    set_stencil_mask((eGPUStencilTest)state.stencil_test, mutable_state);
+    set_stencil_test(GPUStencilTest(state.stencil_test), GPUStencilOp(state.stencil_op));
+    set_stencil_mask(GPUStencilTest(state.stencil_test), mutable_state);
   }
   if (changed.clip_distances != 0) {
     set_clip_distances(state.clip_distances, current_.clip_distances);
   }
   if (changed.culling_test != 0) {
-    set_backface_culling((eGPUFaceCullTest)state.culling_test);
+    set_backface_culling(GPUFaceCullTest(state.culling_test));
   }
   if (changed.logic_op_xor != 0) {
     set_logic_op(state.logic_op_xor);
@@ -103,10 +103,7 @@ void GLStateManager::set_state(const GPUState &state)
     set_facing(state.invert_facing);
   }
   if (changed.provoking_vert != 0) {
-    set_provoking_vert((eGPUProvokingVertex)state.provoking_vert);
-  }
-  if (changed.shadow_bias != 0) {
-    set_shadow_bias(state.shadow_bias);
+    set_provoking_vert(GPUProvokingVertex(state.provoking_vert));
   }
   if (changed.clip_control != 0) {
     set_clip_control(state.clip_control);
@@ -153,15 +150,10 @@ void GLStateManager::set_mutable_state(const GPUStateMutable &state)
     glLineWidth(clamp_f(state.line_width, line_width_range_[0], line_width_range_[1]));
   }
 
-  if (float_as_uint(changed.depth_range[0]) != 0 || float_as_uint(changed.depth_range[1]) != 0) {
-    /* TODO: remove, should modify the projection matrix instead. */
-    glDepthRange(UNPACK2(state.depth_range));
-  }
-
   if (changed.stencil_compare_mask != 0 || changed.stencil_reference != 0 ||
       changed.stencil_write_mask != 0)
   {
-    set_stencil_mask((eGPUStencilTest)current_.stencil_test, state);
+    set_stencil_mask(GPUStencilTest(current_.stencil_test), state);
   }
 
   current_mutable_ = state;
@@ -173,7 +165,7 @@ void GLStateManager::set_mutable_state(const GPUStateMutable &state)
 /** \name State set functions
  * \{ */
 
-void GLStateManager::set_write_mask(const eGPUWriteMask value)
+void GLStateManager::set_write_mask(const GPUWriteMask value)
 {
   glDepthMask((value & GPU_WRITE_DEPTH) != 0);
   glColorMask((value & GPU_WRITE_RED) != 0,
@@ -189,7 +181,7 @@ void GLStateManager::set_write_mask(const eGPUWriteMask value)
   }
 }
 
-void GLStateManager::set_depth_test(const eGPUDepthTest value)
+void GLStateManager::set_depth_test(const GPUDepthTest value)
 {
   GLenum func;
   switch (value) {
@@ -223,7 +215,7 @@ void GLStateManager::set_depth_test(const eGPUDepthTest value)
   }
 }
 
-void GLStateManager::set_stencil_test(const eGPUStencilTest test, const eGPUStencilOp operation)
+void GLStateManager::set_stencil_test(const GPUStencilTest test, const GPUStencilOp operation)
 {
   switch (operation) {
     case GPU_STENCIL_OP_REPLACE:
@@ -250,7 +242,7 @@ void GLStateManager::set_stencil_test(const eGPUStencilTest test, const eGPUSten
   }
 }
 
-void GLStateManager::set_stencil_mask(const eGPUStencilTest test, const GPUStateMutable &state)
+void GLStateManager::set_stencil_mask(const GPUStencilTest test, const GPUStateMutable &state)
 {
   GLenum func;
   switch (test) {
@@ -300,7 +292,7 @@ void GLStateManager::set_facing(const bool invert)
   glFrontFace((invert) ? GL_CW : GL_CCW);
 }
 
-void GLStateManager::set_backface_culling(const eGPUFaceCullTest test)
+void GLStateManager::set_backface_culling(const GPUFaceCullTest test)
 {
   if (test != GPU_CULL_NONE) {
     glEnable(GL_CULL_FACE);
@@ -311,41 +303,25 @@ void GLStateManager::set_backface_culling(const eGPUFaceCullTest test)
   }
 }
 
-void GLStateManager::set_provoking_vert(const eGPUProvokingVertex vert)
+void GLStateManager::set_provoking_vert(const GPUProvokingVertex vert)
 {
   GLenum value = (vert == GPU_VERTEX_FIRST) ? GL_FIRST_VERTEX_CONVENTION :
                                               GL_LAST_VERTEX_CONVENTION;
   glProvokingVertex(value);
 }
 
-void GLStateManager::set_shadow_bias(const bool enable)
-{
-  if (enable) {
-    glEnable(GL_POLYGON_OFFSET_FILL);
-    glEnable(GL_POLYGON_OFFSET_LINE);
-    /* 2.0 Seems to be the lowest possible slope bias that works in every case. */
-    glPolygonOffset(2.0f, 1.0f);
-  }
-  else {
-    glDisable(GL_POLYGON_OFFSET_FILL);
-    glDisable(GL_POLYGON_OFFSET_LINE);
-  }
-}
-
 void GLStateManager::set_clip_control(const bool enable)
 {
-  if (GLContext::clip_control_support) {
-    if (enable) {
-      /* Match Vulkan and Metal by default. */
-      glClipControl(GL_LOWER_LEFT, GL_ZERO_TO_ONE);
-    }
-    else {
-      glClipControl(GL_LOWER_LEFT, GL_NEGATIVE_ONE_TO_ONE);
-    }
+  if (enable) {
+    /* Match Vulkan and Metal by default. */
+    glClipControl(GL_LOWER_LEFT, GL_ZERO_TO_ONE);
+  }
+  else {
+    glClipControl(GL_LOWER_LEFT, GL_NEGATIVE_ONE_TO_ONE);
   }
 }
 
-void GLStateManager::set_blend(const eGPUBlend value)
+void GLStateManager::set_blend(const GPUBlend value)
 {
   /**
    * Factors to the equation.
@@ -379,6 +355,9 @@ void GLStateManager::set_blend(const eGPUBlend value)
       dst_alpha = GL_ONE;
       break;
     }
+    /* Factors are not use in min or max mode, but avoid uninitialized values. */;
+    case GPU_BLEND_MIN:
+    case GPU_BLEND_MAX:
     case GPU_BLEND_SUBTRACT:
     case GPU_BLEND_ADDITIVE_PREMULT: {
       /* Let alpha accumulate. */
@@ -437,9 +416,22 @@ void GLStateManager::set_blend(const eGPUBlend value)
       dst_alpha = GL_ONE_MINUS_SRC_ALPHA;
       break;
     }
+    case GPU_BLEND_TRANSPARENCY: {
+      src_rgb = GL_ONE;
+      dst_rgb = GL_SRC_ALPHA;
+      src_alpha = GL_ZERO;
+      dst_alpha = GL_SRC_ALPHA;
+      break;
+    }
   }
 
-  if (value == GPU_BLEND_SUBTRACT) {
+  if (value == GPU_BLEND_MIN) {
+    glBlendEquation(GL_MIN);
+  }
+  else if (value == GPU_BLEND_MAX) {
+    glBlendEquation(GL_MAX);
+  }
+  else if (value == GPU_BLEND_SUBTRACT) {
     glBlendEquation(GL_FUNC_REVERSE_SUBTRACT);
   }
   else {
@@ -552,11 +544,6 @@ void GLStateManager::texture_bind_apply()
   }
 }
 
-void GLStateManager::texture_unpack_row_length_set(uint len)
-{
-  glPixelStorei(GL_UNPACK_ROW_LENGTH, len);
-}
-
 uint64_t GLStateManager::bound_texture_slots()
 {
   uint64_t bound_slots = 0;
@@ -584,6 +571,7 @@ void GLStateManager::image_bind(Texture *tex_, int unit)
   }
   images_[unit] = tex->tex_id_;
   formats_[unit] = to_gl_internal_format(tex->format_);
+  image_formats[unit] = TextureWriteFormat(tex->format_get());
   tex->is_bound_image_ = true;
   dirty_image_binds_ |= 1ULL << unit;
 }
@@ -599,6 +587,7 @@ void GLStateManager::image_unbind(Texture *tex_)
   for (int i = 0; i < ARRAY_SIZE(images_); i++) {
     if (images_[i] == tex_id) {
       images_[i] = 0;
+      image_formats[i] = TextureWriteFormat::Invalid;
       dirty_image_binds_ |= 1ULL << i;
     }
   }
@@ -613,6 +602,7 @@ void GLStateManager::image_unbind_all()
       dirty_image_binds_ |= 1ULL << i;
     }
   }
+  image_formats.fill(TextureWriteFormat::Invalid);
   this->image_bind_apply();
 }
 
@@ -657,7 +647,7 @@ uint8_t GLStateManager::bound_image_slots()
 /** \name Memory barrier
  * \{ */
 
-void GLStateManager::issue_barrier(eGPUBarrier barrier_bits)
+void GLStateManager::issue_barrier(GPUBarrier barrier_bits)
 {
   glMemoryBarrier(to_gl(barrier_bits));
 }

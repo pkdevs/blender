@@ -18,6 +18,7 @@
 #include "BLI_task.hh"
 
 #include "GPU_capabilities.hh"
+#include "GPU_debug.hh"
 
 #include "draw_cache_extract.hh"
 #include "draw_subdivision.hh"
@@ -27,10 +28,14 @@
 // #define DEBUG_TIME
 
 #ifdef DEBUG_TIME
-#  include "BLI_time_utildefines.h"
+#  include "BLI_time_utildefines.hh"
 #endif
 
 namespace blender::draw {
+
+/* ---------------------------------------------------------------------- */
+/** \name Dependency Data
+ * \{ */
 
 static void ensure_dependency_data(MeshRenderData &mr,
                                    Span<IBOType> ibo_requests,
@@ -188,14 +193,20 @@ void mesh_buffer_cache_create_requested(TaskGraph & /*task_graph*/,
       case IBOType::LinesAdjacency:
         created_ibos[i] = extract_lines_adjacency(mr, cache.is_manifold);
         break;
-      case IBOType::UVLines:
-        created_ibos[i] = extract_edituv_lines(mr, false);
+      case IBOType::UVTris:
+        created_ibos[i] = extract_edituv_tris(mr, false);
         break;
       case IBOType::EditUVTris:
-        created_ibos[i] = extract_edituv_tris(mr);
+        created_ibos[i] = extract_edituv_tris(mr, true);
+        break;
+      case IBOType::AllUVLines:
+        created_ibos[i] = extract_edituv_lines(mr, UvExtractionMode::All);
+        break;
+      case IBOType::UVLines:
+        created_ibos[i] = extract_edituv_lines(mr, UvExtractionMode::Selection);
         break;
       case IBOType::EditUVLines:
-        created_ibos[i] = extract_edituv_lines(mr, true);
+        created_ibos[i] = extract_edituv_lines(mr, UvExtractionMode::Edit);
         break;
       case IBOType::EditUVPoints:
         created_ibos[i] = extract_edituv_points(mr);
@@ -358,6 +369,9 @@ void mesh_buffer_cache_create_requested_subdiv(MeshBatchCache &cache,
     return;
   }
 
+  static gpu::DebugScope subdiv_extract_scope = {"SubdivExtraction"};
+  auto capture = subdiv_extract_scope.scoped_capture();
+
   if (vbos_to_create.contains(VBOType::Position) || vbos_to_create.contains(VBOType::Orco)) {
     gpu::VertBufPtr orco_vbo;
     /* Don't use `add_new` because #VBOType::Orco might be requested after #VBOType::Position
@@ -465,8 +479,14 @@ void mesh_buffer_cache_create_requested_subdiv(MeshBatchCache &cache,
     /* Make sure UVs are computed before edituv stuffs. */
     buffers.vbos.add_new(VBOType::UVs, extract_uv_maps_subdiv(subdiv_cache, cache));
   }
+  if (ibos_to_create.contains(IBOType::AllUVLines)) {
+    buffers.ibos.add_new(IBOType::AllUVLines,
+                         extract_edituv_lines_subdiv(mr, subdiv_cache, UvExtractionMode::All));
+  }
   if (ibos_to_create.contains(IBOType::UVLines)) {
-    buffers.ibos.add_new(IBOType::UVLines, extract_edituv_lines_subdiv(mr, subdiv_cache, false));
+    buffers.ibos.add_new(
+        IBOType::UVLines,
+        extract_edituv_lines_subdiv(mr, subdiv_cache, UvExtractionMode::Selection));
   }
   if (vbos_to_create.contains(VBOType::EditUVStretchArea)) {
     buffers.vbos.add_new(
@@ -485,7 +505,7 @@ void mesh_buffer_cache_create_requested_subdiv(MeshBatchCache &cache,
   }
   if (ibos_to_create.contains(IBOType::EditUVLines)) {
     buffers.ibos.add_new(IBOType::EditUVLines,
-                         extract_edituv_lines_subdiv(mr, subdiv_cache, true));
+                         extract_edituv_lines_subdiv(mr, subdiv_cache, UvExtractionMode::Edit));
   }
   if (ibos_to_create.contains(IBOType::EditUVPoints)) {
     buffers.ibos.add_new(IBOType::EditUVPoints, extract_edituv_points_subdiv(mr, subdiv_cache));

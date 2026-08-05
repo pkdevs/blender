@@ -38,11 +38,10 @@ PyDoc_STRVAR(
     "   with this cases in a specific way should implement its own\n"
     "   getShapeIdF0D functor.\n"
     "\n"
-    "   :arg it: An Interface0DIterator object.\n"
+    "   :param it: An Interface0DIterator object.\n"
     "   :type it: :class:`freestyle.types.Interface0DIterator`\n"
     "   :return: The Id of the Shape the pointed Interface0D belongs to.\n"
     "   :rtype: :class:`freestyle.types.Id`\n");
-
 static int ShapeIdF0D___init__(BPy_ShapeIdF0D *self, PyObject *args, PyObject *kwds)
 {
   static const char *kwlist[] = {nullptr};

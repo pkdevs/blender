@@ -8,14 +8,16 @@
 
 #pragma once
 
+namespace blender {
+
 struct FluidModifierData;
 struct GPUMaterial;
-struct GPUUniformBuf;
 
-namespace blender::gpu {
+namespace gpu {
 class Texture;
+class UniformBuf;
 class VertBuf;
-}  // namespace blender::gpu
+}  // namespace gpu
 struct ModifierData;
 struct Object;
 struct ParticleSystem;
@@ -23,31 +25,17 @@ struct RegionView3D;
 struct ViewLayer;
 struct Scene;
 struct DRWData;
-namespace blender::draw {
+namespace draw {
 class Manager;
 struct CurvesModule;
 struct PointCloudModule;
 struct VolumeModule;
 class ObjectRef;
-}  // namespace blender::draw
-
-/* draw_hair.cc */
-
-/**
- * \note Only valid after #DRW_curves_update().
- */
-blender::gpu::VertBuf *DRW_hair_pos_buffer_get(Object *object,
-                                               ParticleSystem *psys,
-                                               ModifierData *md);
+}  // namespace draw
 
 /* draw_curves.cc */
 
-namespace blender::draw {
-
-/**
- * \note Only valid after #DRW_curves_update().
- */
-gpu::VertBuf *DRW_curves_pos_buffer_get(Object *object);
+namespace draw {
 
 /* If drw_data is nullptr, DST global is accessed to get it. */
 void DRW_curves_init(DRWData *drw_data = nullptr);
@@ -67,7 +55,7 @@ void DRW_pointcloud_module_free(draw::PointCloudModule *module);
 void DRW_volume_init(DRWData *drw_data = nullptr);
 void DRW_volume_module_free(draw::VolumeModule *module);
 
-}  // namespace blender::draw
+}  // namespace draw
 
 /* `draw_fluid.cc` */
 
@@ -82,3 +70,5 @@ void DRW_smoke_free(FluidModifierData *fmd);
 
 void DRW_smoke_begin_sync(DRWData *drw_data);
 void DRW_smoke_exit(DRWData *drw_data);
+
+}  // namespace blender

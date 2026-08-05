@@ -10,7 +10,9 @@
  * \ingroup bli
  */
 
-#include "BLI_smaa_textures.h"
+#include "BLI_smaa_textures.hh"
+
+namespace blender {
 
 /* Don't re-wrap large data definitions. */
 /* clang-format off */
@@ -15042,3 +15044,5 @@ const unsigned char searchTexBytes[] = {
 };
 
 /* clang-format on */
+
+}  // namespace blender

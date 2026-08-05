@@ -24,9 +24,13 @@
 
 #include <pthread.h>
 
+class GHOST_IWindow;
+
+namespace blender {
+
 struct GPUMatrixState;
 
-namespace blender::gpu {
+namespace gpu {
 
 class Context {
  public:
@@ -51,17 +55,18 @@ class Context {
 
   DebugStack debug_stack;
   bool debug_is_capturing = false;
+  bool debug_pipeline_creation = false;
 
   /* GPUContext counter used to assign a unique ID to each GPUContext.
    * NOTE(Metal): This is required by the Metal Backend, as a bug exists in the global OS shader
    * cache wherein compilation of identical source from two distinct threads can result in an
    * invalid cache collision, result in a broken shader object. Appending the unique context ID
    * onto compiled sources ensures the source hashes are different. */
-  static int context_counter;
+  static inline std::atomic<int> context_counter = 0;
   int context_id = 0;
 
   /* Used as a stack. Each render_begin/end pair will push pop from the stack. */
-  Vector<GPUStorageBuf *> printf_buf;
+  Vector<StorageBuf *> printf_buf;
 
   /** Dummy VBO to feed the procedural batches. */
   VertBuf *dummy_vbo = nullptr;
@@ -82,8 +87,8 @@ class Context {
   /** Thread on which this context is active. */
   pthread_t thread_;
   bool is_active_;
-  /** Avoid including GHOST headers. Can be nullptr for off-screen contexts. */
-  void *ghost_window_;
+  /** Can be nullptr for off-screen contexts. */
+  GHOST_IWindow *ghost_window_;
 
  public:
   Context();
@@ -103,8 +108,8 @@ class Context {
 
   virtual void memory_statistics_get(int *r_total_mem, int *r_free_mem) = 0;
 
-  virtual void debug_group_begin(const char * /*name*/, int /*index*/){};
-  virtual void debug_group_end(){};
+  virtual void debug_group_begin(const char * /*name*/, int /*index*/) {};
+  virtual void debug_group_end() {};
 
   /* Returns true if capture successfully started. */
   virtual bool debug_capture_begin(const char *title) = 0;
@@ -134,7 +139,7 @@ class Context {
       return;
     }
 
-    if (!(state_manager->state.write_mask & eGPUWriteMask::GPU_WRITE_COLOR)) {
+    if (!(state_manager->state.write_mask & GPUWriteMask::GPU_WRITE_COLOR)) {
       return;
     }
 
@@ -172,4 +177,5 @@ static inline const Context *unwrap(const GPUContext *ctx)
   return reinterpret_cast<const Context *>(ctx);
 }
 
-}  // namespace blender::gpu
+}  // namespace gpu
+}  // namespace blender

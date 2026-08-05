@@ -13,15 +13,18 @@
 
 #include "BKE_editmesh.hh"
 
+#include "DNA_mesh_types.h"
 #include "DNA_object_types.h"
 
 #include "ED_mesh.hh"
 
 #include "tools/bmesh_intersect_edges.hh"
 
+namespace blender {
+
 // #define DEBUG_TIME
 #ifdef DEBUG_TIME
-#  include "BLI_time.h"
+#  include "BLI_time.hh"
 #endif
 
 /* use bmesh operator flags for a few operators */
@@ -33,7 +36,12 @@
  * Used after transform operations.
  * \{ */
 
-void EDBM_automerge(Object *obedit, bool update, const char hflag, const float dist)
+static bool edbm_automerge_impl(Object *obedit,
+                                bool update,
+                                const char hflag,
+                                const float dist,
+                                const bool use_connected,
+                                const bool use_centroid)
 {
   BMEditMesh *em = BKE_editmesh_from_object(obedit);
   BMesh *bm = em->bm;
@@ -46,27 +54,41 @@ void EDBM_automerge(Object *obedit, bool update, const char hflag, const float d
   BMO_op_initf(bm,
                &findop,
                BMO_FLAG_DEFAULTS,
-               "find_doubles verts=%av keep_verts=%Hv dist=%f",
+               "find_doubles verts=%av keep_verts=%Hv dist=%f use_connected=%b",
                hflag,
-               dist);
+               dist,
+               use_connected);
 
   BMO_op_exec(bm, &findop);
 
   /* weld the vertices */
-  BMO_op_init(bm, &weldop, BMO_FLAG_DEFAULTS, "weld_verts");
+  BMO_op_initf(bm, &weldop, BMO_FLAG_DEFAULTS, "weld_verts use_centroid=%b", use_centroid);
   BMO_slot_copy(&findop, slots_out, "targetmap.out", &weldop, slots_in, "targetmap");
   BMO_op_exec(bm, &weldop);
 
   BMO_op_finish(bm, &findop);
   BMO_op_finish(bm, &weldop);
 
-  EDBMUpdate_Params params{};
-  params.calc_looptris = true;
-  params.calc_normals = false;
-  params.is_destructive = true;
-  if ((totvert_prev != bm->totvert) && update) {
-    EDBM_update(static_cast<Mesh *>(obedit->data), &params);
+  bool changed = totvert_prev != bm->totvert;
+  if (changed && update) {
+    EDBMUpdate_Params params{};
+    params.calc_looptris = true;
+    params.calc_normals = false;
+    params.is_destructive = true;
+    EDBM_update(id_cast<Mesh *>(obedit->data), &params);
   }
+  return changed;
+}
+
+bool EDBM_automerge(
+    Object *obedit, bool update, const char hflag, const float dist, const bool use_centroid)
+{
+  return edbm_automerge_impl(obedit, update, hflag, dist, false, use_centroid);
+}
+
+bool EDBM_automerge_connected(Object *obedit, bool update, const char hflag, const float dist)
+{
+  return edbm_automerge_impl(obedit, update, hflag, dist, true, false);
 }
 
 /** \} */
@@ -77,7 +99,7 @@ void EDBM_automerge(Object *obedit, bool update, const char hflag, const float d
  * Used after transform operations.
  * \{ */
 
-void EDBM_automerge_and_split(Object *obedit,
+bool EDBM_automerge_and_split(Object *obedit,
                               const bool /*split_edges*/,
                               const bool split_faces,
                               const bool update,
@@ -127,8 +149,12 @@ void EDBM_automerge_and_split(Object *obedit,
     params.calc_looptris = true;
     params.calc_normals = false;
     params.is_destructive = true;
-    EDBM_update(static_cast<Mesh *>(obedit->data), &params);
+    EDBM_update(id_cast<Mesh *>(obedit->data), &params);
   }
+
+  return ok;
 }
 
 /** \} */
+
+}  // namespace blender

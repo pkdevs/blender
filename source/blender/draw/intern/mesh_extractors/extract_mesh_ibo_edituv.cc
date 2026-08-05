@@ -8,7 +8,7 @@
 
 #include "BKE_editmesh.hh"
 
-#include "BLI_math_geom.h"
+#include "BLI_math_geom_c.hh"
 
 #include "extract_mesh.hh"
 
@@ -53,7 +53,7 @@ static gpu::IndexBufPtr extract_edituv_tris_bm(const MeshRenderData &mr, const b
 
   IndexMaskMemory memory;
   const IndexMask selection = IndexMask::from_predicate(
-      IndexRange(bm.totface), GrainSize(4096), memory, [&](const int face) {
+      IndexRange(bm.totface), memory, [&](const int face) {
         return !skip_bm_face(*BM_face_at_index(&const_cast<BMesh &>(bm), face), sync_selection);
       });
 
@@ -84,15 +84,17 @@ static gpu::IndexBufPtr extract_edituv_tris_bm(const MeshRenderData &mr, const b
   GPU_indexbuf_init(&builder, GPU_PRIM_TRIS, tris_num, mr.corners_num);
   MutableSpan<uint3> data = GPU_indexbuf_get_data(&builder).cast<uint3>();
 
-  selection.foreach_index(GrainSize(4096), [&](const int face, const int mask) {
-    const IndexRange tris = bke::mesh::face_triangles_range(faces, face);
-    const IndexRange ibo_tris = bke::mesh::face_triangles_range(selected_faces, mask);
-    for (const int i : tris.index_range()) {
-      data[ibo_tris[i]] = uint3(BM_elem_index_get(looptris[tris[i]][0]),
-                                BM_elem_index_get(looptris[tris[i]][1]),
-                                BM_elem_index_get(looptris[tris[i]][2]));
-    }
-  });
+  selection.foreach_index(
+      [&](const int face, const int mask) {
+        const IndexRange tris = bke::mesh::face_triangles_range(faces, face);
+        const IndexRange ibo_tris = bke::mesh::face_triangles_range(selected_faces, mask);
+        for (const int i : tris.index_range()) {
+          data[ibo_tris[i]] = uint3(BM_elem_index_get(looptris[tris[i]][0]),
+                                    BM_elem_index_get(looptris[tris[i]][1]),
+                                    BM_elem_index_get(looptris[tris[i]][2]));
+        }
+      },
+      exec_mode::grain_size(4096));
 
   return gpu::IndexBufPtr(GPU_indexbuf_build_ex(&builder, 0, mr.corners_num, false));
 }
@@ -104,17 +106,31 @@ static gpu::IndexBufPtr extract_edituv_tris_mesh(const MeshRenderData &mr,
   const Span<int3> corner_tris = mr.mesh->corner_tris();
 
   IndexMaskMemory memory;
-  const IndexMask selection = IndexMask::from_predicate(
-      faces.index_range(), GrainSize(4096), memory, [&](const int face) {
-        const BMFace *face_orig = bm_original_face_get(mr, face);
-        if (!face_orig) {
-          return false;
-        }
-        if (skip_bm_face(*face_orig, sync_selection)) {
-          return false;
-        }
-        return true;
-      });
+  IndexMask selection;
+  if (mr.bm) {
+    selection = IndexMask::from_predicate(faces.index_range(), memory, [&](const int face) {
+      const BMFace *face_orig = bm_original_face_get(mr, face);
+      if (!face_orig) {
+        return false;
+      }
+      if (skip_bm_face(*face_orig, sync_selection)) {
+        return false;
+      }
+      return true;
+    });
+  }
+  else {
+    if (mr.hide_poly.is_empty()) {
+      selection = faces.index_range();
+    }
+    else {
+      selection = IndexMask::from_bools_inverse(faces.index_range(), mr.hide_poly, memory);
+    }
+
+    if (!sync_selection && !mr.select_poly.is_empty()) {
+      selection = IndexMask::from_bools(selection, mr.select_poly, memory);
+    }
+  }
 
   if (selection.size() == faces.size()) {
     return gpu::IndexBufPtr(GPU_indexbuf_build_from_memory(GPU_PRIM_TRIS,
@@ -135,21 +151,24 @@ static gpu::IndexBufPtr extract_edituv_tris_mesh(const MeshRenderData &mr,
   GPU_indexbuf_init(&builder, GPU_PRIM_TRIS, tris_num, mr.corners_num);
   MutableSpan<uint3> data = GPU_indexbuf_get_data(&builder).cast<uint3>();
 
-  selection.foreach_index(GrainSize(4096), [&](const int face, const int mask) {
-    const IndexRange tris = bke::mesh::face_triangles_range(faces, face);
-    const IndexRange ibo_tris = bke::mesh::face_triangles_range(selected_faces, mask);
-    for (const int i : tris.index_range()) {
-      data[ibo_tris[i]] = uint3(
-          corner_tris[tris[i]][0], corner_tris[tris[i]][1], corner_tris[tris[i]][2]);
-    }
-  });
+  selection.foreach_index(
+      [&](const int face, const int mask) {
+        const IndexRange tris = bke::mesh::face_triangles_range(faces, face);
+        const IndexRange ibo_tris = bke::mesh::face_triangles_range(selected_faces, mask);
+        for (const int i : tris.index_range()) {
+          data[ibo_tris[i]] = uint3(
+              corner_tris[tris[i]][0], corner_tris[tris[i]][1], corner_tris[tris[i]][2]);
+        }
+      },
+      exec_mode::grain_size(4096));
 
   return gpu::IndexBufPtr(GPU_indexbuf_build_ex(&builder, 0, mr.corners_num, false));
 }
 
-gpu::IndexBufPtr extract_edituv_tris(const MeshRenderData &mr)
+gpu::IndexBufPtr extract_edituv_tris(const MeshRenderData &mr, const bool edit_uvs)
 {
-  const bool sync_selection = (mr.toolsettings->uv_flag & UV_FLAG_SYNC_SELECT) != 0;
+  const bool sync_selection = edit_uvs ? (mr.toolsettings->uv_flag & UV_FLAG_SELECT_SYNC) != 0 :
+                                         false;
   if (mr.extract_type == MeshExtractType::BMesh) {
     return extract_edituv_tris_bm(mr, sync_selection);
   }
@@ -165,11 +184,13 @@ static gpu::IndexBufPtr build_tris_from_subdiv_quad_selection(const DRWSubdivCac
   GPU_indexbuf_init(&builder, GPU_PRIM_TRIS, tris_num, subdiv_cache.num_subdiv_loops);
   MutableSpan<uint3> data = GPU_indexbuf_get_data(&builder).cast<uint3>();
 
-  selection.foreach_index(GrainSize(4096), [&](const int subdiv_quad_index, const int mask) {
-    const uint corner_start = subdiv_quad_index * 4;
-    data[mask * 2 + 0] = uint3(corner_start, corner_start + 1, corner_start + 2);
-    data[mask * 2 + 1] = uint3(corner_start, corner_start + 2, corner_start + 3);
-  });
+  selection.foreach_index(
+      [&](const int subdiv_quad_index, const int mask) {
+        const uint corner_start = subdiv_quad_index * 4;
+        data[mask * 2 + 0] = uint3(corner_start, corner_start + 1, corner_start + 2);
+        data[mask * 2 + 1] = uint3(corner_start, corner_start + 2, corner_start + 3);
+      },
+      exec_mode::grain_size(4096));
 
   return gpu::IndexBufPtr(
       GPU_indexbuf_build_ex(&builder, 0, subdiv_cache.num_subdiv_loops, false));
@@ -185,10 +206,7 @@ static gpu::IndexBufPtr extract_edituv_tris_subdiv_bm(const MeshRenderData &mr,
 
   IndexMaskMemory memory;
   const IndexMask selection = IndexMask::from_predicate(
-      IndexRange(subdiv_cache.num_subdiv_quads),
-      GrainSize(4096),
-      memory,
-      [&](const int subdiv_quad_index) {
+      IndexRange(subdiv_cache.num_subdiv_quads), memory, [&](const int subdiv_quad_index) {
         const uint corner_start = subdiv_quad_index * 4;
         const int coarse_face = subdiv_loop_face_index[corner_start];
         const BMFace &bm_face = *BM_face_at_index(&const_cast<BMesh &>(bm), coarse_face);
@@ -207,10 +225,7 @@ static gpu::IndexBufPtr extract_edituv_tris_subdiv_mesh(const MeshRenderData &mr
 
   IndexMaskMemory memory;
   const IndexMask selection = IndexMask::from_predicate(
-      IndexRange(subdiv_cache.num_subdiv_quads),
-      GrainSize(4096),
-      memory,
-      [&](const int subdiv_quad_index) {
+      IndexRange(subdiv_cache.num_subdiv_quads), memory, [&](const int subdiv_quad_index) {
         const uint corner_start = subdiv_quad_index * 4;
         const int coarse_face = subdiv_loop_face_index[corner_start];
         const BMFace *face_orig = bm_original_face_get(mr, coarse_face);
@@ -229,7 +244,7 @@ static gpu::IndexBufPtr extract_edituv_tris_subdiv_mesh(const MeshRenderData &mr
 gpu::IndexBufPtr extract_edituv_tris_subdiv(const MeshRenderData &mr,
                                             const DRWSubdivCache &subdiv_cache)
 {
-  const bool sync_selection = (mr.toolsettings->uv_flag & UV_FLAG_SYNC_SELECT) != 0;
+  const bool sync_selection = (mr.toolsettings->uv_flag & UV_FLAG_SELECT_SYNC) != 0;
   if (mr.extract_type == MeshExtractType::BMesh) {
     return extract_edituv_tris_subdiv_bm(mr, subdiv_cache, sync_selection);
   }
@@ -346,9 +361,20 @@ static gpu::IndexBufPtr extract_edituv_lines_mesh(const MeshRenderData &mr,
   return result;
 }
 
-gpu::IndexBufPtr extract_edituv_lines(const MeshRenderData &mr, bool edit_uvs)
+gpu::IndexBufPtr extract_edituv_lines(const MeshRenderData &mr, const UvExtractionMode mode)
 {
-  const bool sync_selection = ((mr.toolsettings->uv_flag & UV_FLAG_SYNC_SELECT) != 0) || !edit_uvs;
+  bool sync_selection = false;
+  switch (mode) {
+    case UvExtractionMode::All:
+      sync_selection = true;
+      break;
+    case UvExtractionMode::Edit:
+      sync_selection = ((mr.toolsettings->uv_flag & UV_FLAG_SELECT_SYNC) != 0);
+      break;
+    case UvExtractionMode::Selection:
+      sync_selection = false;
+      break;
+  }
 
   if (mr.extract_type == MeshExtractType::BMesh) {
     return extract_edituv_lines_bm(mr, sync_selection);
@@ -450,9 +476,20 @@ static gpu::IndexBufPtr extract_edituv_lines_subdiv_mesh(const MeshRenderData &m
 
 gpu::IndexBufPtr extract_edituv_lines_subdiv(const MeshRenderData &mr,
                                              const DRWSubdivCache &subdiv_cache,
-                                             bool edit_uvs)
+                                             const UvExtractionMode mode)
 {
-  const bool sync_selection = ((mr.toolsettings->uv_flag & UV_FLAG_SYNC_SELECT) != 0) || !edit_uvs;
+  bool sync_selection = false;
+  switch (mode) {
+    case UvExtractionMode::All:
+      sync_selection = true;
+      break;
+    case UvExtractionMode::Edit:
+      sync_selection = ((mr.toolsettings->uv_flag & UV_FLAG_SELECT_SYNC) != 0);
+      break;
+    case UvExtractionMode::Selection:
+      sync_selection = false;
+      break;
+  }
 
   if (mr.extract_type == MeshExtractType::BMesh) {
     return extract_edituv_lines_subdiv_bm(mr, subdiv_cache, sync_selection);
@@ -514,7 +551,7 @@ static void extract_edituv_points_mesh(const MeshRenderData &mr,
 
 gpu::IndexBufPtr extract_edituv_points(const MeshRenderData &mr)
 {
-  const bool sync_selection = (mr.toolsettings->uv_flag & UV_FLAG_SYNC_SELECT) != 0;
+  const bool sync_selection = (mr.toolsettings->uv_flag & UV_FLAG_SELECT_SYNC) != 0;
 
   GPUIndexBufBuilder builder;
   GPU_indexbuf_init(&builder, GPU_PRIM_POINTS, mr.corners_num, mr.corners_num);
@@ -584,7 +621,7 @@ static void extract_edituv_points_subdiv_mesh(const MeshRenderData &mr,
 gpu::IndexBufPtr extract_edituv_points_subdiv(const MeshRenderData &mr,
                                               const DRWSubdivCache &subdiv_cache)
 {
-  const bool sync_selection = (mr.toolsettings->uv_flag & UV_FLAG_SYNC_SELECT) != 0;
+  const bool sync_selection = (mr.toolsettings->uv_flag & UV_FLAG_SELECT_SYNC) != 0;
 
   GPUIndexBufBuilder builder;
   GPU_indexbuf_init(
@@ -610,7 +647,7 @@ static gpu::IndexBufPtr extract_edituv_face_dots_bm(const MeshRenderData &mr,
   const BMesh &bm = *mr.bm;
   IndexMaskMemory memory;
   const IndexMask visible = IndexMask::from_predicate(
-      IndexMask(bm.totface), GrainSize(4096), memory, [&](const int i) {
+      IndexMask(bm.totface), memory, [&](const int i) {
         return !skip_bm_face(*BM_face_at_index(&const_cast<BMesh &>(bm), i), sync_selection);
       });
 
@@ -625,21 +662,20 @@ static gpu::IndexBufPtr extract_edituv_face_dots_mesh(const MeshRenderData &mr,
 {
   const OffsetIndices faces = mr.faces;
   IndexMaskMemory memory;
-  IndexMask visible = IndexMask::from_predicate(
-      faces.index_range(), GrainSize(4096), memory, [&](const int i) {
-        const BMFace *face_orig = bm_original_face_get(mr, i);
-        if (!face_orig) {
-          return false;
-        }
-        if (skip_bm_face(*face_orig, sync_selection)) {
-          return false;
-        }
-        return true;
-      });
+  IndexMask visible = IndexMask::from_predicate(faces.index_range(), memory, [&](const int i) {
+    const BMFace *face_orig = bm_original_face_get(mr, i);
+    if (!face_orig) {
+      return false;
+    }
+    if (skip_bm_face(*face_orig, sync_selection)) {
+      return false;
+    }
+    return true;
+  });
   if (mr.use_subsurf_fdots) {
     const BitSpan facedot_tags = mr.mesh->runtime->subsurf_face_dot_tags;
     const Span<int> corner_verts = mr.corner_verts;
-    visible = IndexMask::from_predicate(visible, GrainSize(4096), memory, [&](const int i) {
+    visible = IndexMask::from_predicate(visible, memory, [&](const int i) {
       const Span<int> face_verts = corner_verts.slice(faces[i]);
       return std::any_of(face_verts.begin(), face_verts.end(), [&](const int vert) {
         return facedot_tags[vert];
@@ -655,7 +691,7 @@ static gpu::IndexBufPtr extract_edituv_face_dots_mesh(const MeshRenderData &mr,
 
 gpu::IndexBufPtr extract_edituv_face_dots(const MeshRenderData &mr)
 {
-  const bool sync_selection = (mr.toolsettings->uv_flag & UV_FLAG_SYNC_SELECT) != 0;
+  const bool sync_selection = (mr.toolsettings->uv_flag & UV_FLAG_SELECT_SYNC) != 0;
   if (mr.extract_type == MeshExtractType::BMesh) {
     return extract_edituv_face_dots_bm(mr, sync_selection);
   }

@@ -10,16 +10,17 @@
 
 #pragma once
 
-#include "BLI_system.h"
 #include "BLI_vector.hh"
 #include "DNA_scene_types.h"
-#include "DRW_render.hh"
 
-#include "eevee_shader_shared.hh"
+#include "eevee_sampling_shared.hh"
+#include "eevee_uniform_shared.hh"
 
 namespace blender::eevee {
 
 class Instance;
+
+using SamplingDataBuf = draw::StorageBuffer<SamplingData>;
 
 class Sampling {
  private:
@@ -62,14 +63,27 @@ class Sampling {
    * Accumulation sampling from sample interactive_mode_threshold to sample_count_.
    */
   static constexpr int interactive_mode_threshold = 3;
+  /**
+   * Limits the render time. Zero disables the limit.
+   */
+  float time_limit_ = 0.0f;
+  float start_render_time_ = 0.0f;
+  float current_time_ = 0.0f;
+  /**
+   * For overwriting pixel jitter sample position.
+   */
+  bool use_custom_pixel_jitter_sample_ = false;
+  float2 custom_pixel_jitter_sample_ = {};
 
-  SamplingDataBuf data_;
+  SamplingDataBuf data_ = {"SamplingDataBuf"};
 
   ClampData &clamp_data_;
 
+  bool check_time_limit_reached() const;
+
  public:
-  Sampling(Instance &inst, ClampData &clamp_data) : inst_(inst), clamp_data_(clamp_data){};
-  ~Sampling(){};
+  Sampling(Instance &inst, ClampData &clamp_data) : inst_(inst), clamp_data_(clamp_data) {};
+  ~Sampling() {};
 
   void init(const Scene *scene);
   void init(const Object &probe_object);
@@ -115,13 +129,14 @@ class Sampling {
   /* Returns true if rendering has finished. */
   bool finished() const
   {
-    return (sample_ >= sample_count_);
+    return (sample_ >= sample_count_) || check_time_limit_reached();
   }
 
   /* Returns true if viewport smoothing and sampling has finished. */
   bool finished_viewport() const
   {
-    return (viewport_sample_ >= sample_count_) && !interactive_mode_;
+    return ((viewport_sample_ >= sample_count_) && !interactive_mode_) ||
+           check_time_limit_reached();
   }
 
   /* Returns true if viewport renderer is in interactive mode and should use TAA. */
@@ -142,6 +157,16 @@ class Sampling {
     return sample_;
   }
 
+  /* Updates the current progress towards the time limit. Must be called after a sample has been
+   * rendered and before `finished` or `finished_viewport` are called. */
+  void update_time();
+
+  /* Returns true if a custom pixel jitter sample position is set. */
+  bool use_custom_pixel_jitter_sample() const
+  {
+    return use_custom_pixel_jitter_sample_;
+  }
+
   bool use_clamp_direct() const
   {
     return clamp_data_.surface_direct != 0.0f;
@@ -150,6 +175,26 @@ class Sampling {
   bool use_clamp_indirect() const
   {
     return clamp_data_.surface_indirect != 0.0f;
+  }
+
+  bool use_direct_scale() const
+  {
+    return clamp_data_.direct_scale != 1.0f;
+  }
+
+  float direct_scale() const
+  {
+    return clamp_data_.direct_scale;
+  }
+
+  bool use_indirect_scale() const
+  {
+    return clamp_data_.indirect_scale != 1.0f;
+  }
+
+  float indirect_scale() const
+  {
+    return clamp_data_.indirect_scale;
   }
 
   /* Return true if we are starting a new motion blur step. We need to run sync again since

@@ -59,6 +59,7 @@ set(LIB
   PRIVATE bf::blenfont
   PRIVATE bf::blenkernel
   PRIVATE bf::blenlib
+  PRIVATE bf::blenloader
   PRIVATE bf::blentranslation
   PRIVATE bf::bmesh
   PRIVATE bf::depsgraph
@@ -66,7 +67,6 @@ set(LIB
   bf_editor_mesh
   bf_editor_metaball
   bf_editor_grease_pencil
-  PRIVATE bf::extern::fmtlib
   PRIVATE bf::functions
   PRIVATE bf::geometry
   PRIVATE bf::gpu

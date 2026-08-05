@@ -19,15 +19,30 @@ class CPUProcessor;
 class GPUShaderBinder;
 
 struct DisplayParameters {
+  /* Convert from a colorspace to a display, using the view transform and look. */
   StringRefNull from_colorspace;
   StringRefNull view;
   StringRefNull display;
   StringRefNull look;
+  /* Artistic controls. */
   float scale = 1.0f;
   float exponent = 1.0f;
   float temperature = 6500.0f;
   float tint = 10.0f;
   bool use_white_balance = false;
+  /* Writing to a HDR windows buffer. */
+  bool use_hdr_buffer = false;
+  /* Chosen display is HDR. */
+  bool use_hdr_display = false;
+  /* Display transform is being used for image output. */
+  bool is_image_output = false;
+  /* Rather than outputting colors for the specified display, output extended
+   * sRGB colors emulating the specified display. */
+  bool use_display_emulation = false;
+  /* Rather than outputting native display colors, output in a color space
+   * suitable for plotting SDR or HDR scopes. */
+  bool use_scope_space = false;
+  /* Invert the entire transform. */
   bool inverse = false;
 };
 
@@ -44,12 +59,6 @@ class Config {
    * If there is an error creating the configuration nullptr is returned.
    */
   static std::unique_ptr<Config> create_from_environment();
-
-  /**
-   * Create OpenColorIO configuration using configuration from the given configuration file.
-   * If there is an error creating the configuration nullptr is returned.
-   */
-  static std::unique_ptr<Config> create_from_file(StringRefNull filename);
 
   /**
    * Create fallback implementation which is always guaranteed to work.
@@ -116,6 +125,26 @@ class Config {
    * If the index is invalid nullptr is returned.
    */
   virtual const ColorSpace *get_sorted_color_space_by_index(int index) const = 0;
+
+  /**
+   * Get color space for the given interop ID.
+   * If not found a nullptr is returned.
+   */
+  virtual const ColorSpace *get_color_space_by_interop_id(StringRefNull interop_id) const = 0;
+
+  /**
+   * Get colorspace to be used for saving and loading HDR image files, which
+   * may need adjustments compared to the colorspace as chosen by the user.
+   */
+  virtual const ColorSpace *get_color_space_for_hdr_image(StringRefNull name) const = 0;
+
+  /** \} */
+
+  /* -------------------------------------------------------------------- */
+  /** \name Working colorspace API
+   * \{ */
+
+  virtual void set_scene_linear_role(StringRefNull name) = 0;
 
   /** \} */
 

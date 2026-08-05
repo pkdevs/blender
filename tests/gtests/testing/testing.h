@@ -4,6 +4,7 @@
 #ifndef __BLENDER_TESTING_H__
 #define __BLENDER_TESTING_H__
 
+#include <cstdint>
 #include <vector>
 
 #include <gflags/gflags.h>  // IWYU pragma: export
@@ -24,6 +25,9 @@ namespace blender::tests {
  * The arguments are added automatically when invoking tests via `ctest`. */
 const std::string &flags_test_asset_dir();   /* tests/files in the Blender repository. */
 const std::string &flags_test_release_dir(); /* bin/{blender version} in the build directory. */
+
+/* Returns true if the `BLENDER_TEST_IGNORE_BLOCKLIST` environment variable is set. */
+bool should_ignore_blocklist(bool is_all_gpu_vendors);
 
 }  // namespace blender::tests
 
@@ -149,6 +153,19 @@ inline void EXPECT_EQ_SPAN(const blender::Span<T> expected, const blender::Span<
   if (expected.size() == actual.size()) {
     for (const int64_t i : expected.index_range()) {
       EXPECT_EQ(expected[i], actual[i]) << "Element mismatch at index " << i;
+    }
+  }
+}
+
+template<typename T, typename U>
+inline void EXPECT_NEAR_SPAN(const blender::Span<T> expected,
+                             const blender::Span<T> actual,
+                             const U tolerance)
+{
+  EXPECT_EQ(expected.size(), actual.size());
+  if (expected.size() == actual.size()) {
+    for (const int64_t i : expected.index_range()) {
+      EXPECT_NEAR(expected[i], actual[i], tolerance) << "Element mismatch at index " << i;
     }
   }
 }

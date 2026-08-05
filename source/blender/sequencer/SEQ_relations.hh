@@ -10,29 +10,35 @@
 
 #include <cstddef>
 
-struct ListBase;
+#include "DNA_listBase.h"
+
+#include "BLI_enum_flags.hh"
+
+namespace blender {
+
 struct Main;
 struct MovieClip;
 struct ReportList;
+struct bNodeTree;
 struct Scene;
 struct Strip;
 
-namespace blender::seq {
+namespace seq {
 
 /**
  * Check if one strip is input to the other.
  */
 bool relation_is_effect_of_strip(const Strip *effect, const Strip *input);
 /**
- * Function to free imbuf and anim data on changes.
+ * Free currently open movie strip readers.
  */
-void relations_strip_free_anim(Strip *strip);
+void strip_free_movie_readers(Strip *strip);
 bool relations_check_scene_recursion(Scene *scene, ReportList *reports);
 /**
  * Check if "strip_main" (indirectly) uses strip "strip".
  */
 bool relations_render_loop_check(Strip *strip_main, Strip *strip);
-void relations_free_imbuf(Scene *scene, ListBase *seqbase, bool for_render);
+void relations_free_imbuf(Scene *scene, ListBaseT<Strip> *seqbase, bool for_render);
 
 /**
  * Invalidates various caches related to a given strip:
@@ -53,6 +59,25 @@ void relations_invalidate_cache(Scene *scene, Strip *strip);
 void relations_invalidate_cache_raw(Scene *scene, Strip *strip);
 void relations_invalidate_scene_strips(const Main *bmain, const Scene *scene_target);
 
+/**
+ * Sync sequencer scene strips that reference a view layer by name.
+ * This updates `strip->scene_view_layer_name` from \a old_name to \a new_name for any matching
+ * strip across all sequencer scenes that use \a scene as input.
+ *
+ * NOTE: If a view layer is deleted, `new_name = nullptr` should be passed to clear the strips'
+ * `scene_view_layer_name` to the default view layer. In this case, the function will also clear
+ * the caches of these matching strips to evict stale frames.
+ */
+void relations_update_view_layer_scene_strips(Main *bmain,
+                                              Scene *scene,
+                                              const char *old_name,
+                                              const char *new_name);
+
+/**
+ * Invalidates the cache for all strips that uses the given compositor node tree.
+ */
+void relations_invalidate_compositor_users(const Main *bmain, const bNodeTree *node_tree);
+
 void relations_invalidate_movieclip_strips(Main *bmain, MovieClip *clip_target);
 /**
  * Release FFmpeg handles of strips that are not currently displayed to minimize memory usage.
@@ -68,7 +93,23 @@ void relations_check_uids_unique_and_report(const Scene *scene);
  */
 void relations_session_uid_generate(Strip *strip);
 
-void cache_cleanup(Scene *scene);
+enum class CacheCleanup {
+  FinalImage = (1 << 0),
+  SourceImage = (1 << 1),
+  Thumbnails = (1 << 2),
+  IntraFrame = (1 << 3),
+
+  /* All cache types. */
+  All = FinalImage | SourceImage | Thumbnails | IntraFrame,
+
+  /* Typical "what gets rendered" cache types: final frame
+   * cache, plus various intra-frame cached things. */
+  FinalAndIntra = FinalImage | IntraFrame,
+};
+ENUM_OPERATORS(CacheCleanup);
+
+void cache_cleanup(Scene *scene, CacheCleanup mode);
+
 void cache_settings_changed(Scene *scene);
 bool is_cache_full(const Scene *scene);
 bool evict_caches_if_full(Scene *scene);
@@ -85,6 +126,7 @@ void final_image_cache_iterate(Scene *scene,
 size_t source_image_cache_calc_memory_size(const Scene *scene);
 size_t final_image_cache_calc_memory_size(const Scene *scene);
 
-bool exists_in_seqbase(const Strip *strip, const ListBase *seqbase);
+bool exists_in_seqbase(const Strip *strip, const ListBaseT<Strip> *seqbase);
 
-}  // namespace blender::seq
+}  // namespace seq
+}  // namespace blender

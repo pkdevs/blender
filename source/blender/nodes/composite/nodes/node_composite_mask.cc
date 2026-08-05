@@ -2,58 +2,77 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-/** \file
- * \ingroup cmpnodes
- */
-
 #include "BLI_math_base.hh"
-#include "BLI_string_utf8.h"
+#include "BLI_string_utf8.hh"
 
 #include "DNA_mask_types.h"
 
 #include "UI_interface.hh"
 #include "UI_interface_layout.hh"
 
-#include "UI_resources.hh"
-
 #include "COM_cached_mask.hh"
 #include "COM_node_operation.hh"
 
 #include "node_composite_util.hh"
 
-/* **************** Mask  ******************** */
-
 namespace blender::nodes::node_composite_mask_cc {
 
-static void cmp_node_mask_declare(NodeDeclarationBuilder &b)
+static const EnumPropertyItem size_source_items[] = {
+    {0, "SCENE", 0, "Scene Size", ""},
+    {CMP_NODE_MASK_FLAG_SIZE_FIXED, "FIXED", 0, N_("Fixed"), N_("Use pixel size for the buffer")},
+    {CMP_NODE_MASK_FLAG_SIZE_FIXED_SCENE,
+     "FIXED_SCENE",
+     0,
+     N_("Fixed/Scene"),
+     N_("Pixel size scaled by scene percentage")},
+    {0, nullptr, 0, nullptr, nullptr},
+};
+
+static void node_declare(NodeDeclarationBuilder &b)
 {
   b.use_custom_socket_order();
 
-  b.add_output<decl::Float>("Mask").structure_type(StructureType::Dynamic);
+  b.add_output<decl::Float>("Mask"_ustr).structure_type(StructureType::Dynamic);
 
-  b.add_layout([](uiLayout *layout, bContext *C, PointerRNA *ptr) {
-    uiTemplateID(layout, C, ptr, "mask", nullptr, nullptr, nullptr);
-    layout->prop(ptr, "size_source", UI_ITEM_R_SPLIT_EMPTY_NAME, "", ICON_NONE);
+  b.add_layout([](ui::Layout &layout, bContext *C, PointerRNA *ptr) {
+    template_id(&layout, C, ptr, "mask", "mask.new", nullptr, nullptr);
   });
 
-  b.add_input<decl::Int>("Size X").default_value(256).min(1).description(
-      "The resolution of the mask along the X direction");
-  b.add_input<decl::Int>("Size Y").default_value(256).min(1).description(
-      "The resolution of the mask along the Y direction");
-  b.add_input<decl::Bool>("Feather").default_value(true).description(
-      "Use feather information from the mask");
+  b.add_input<decl::Menu>("Size Source"_ustr)
+      .default_value(MenuValue(0))
+      .static_items(size_source_items)
+      .optional_label()
+      .description("The source where the size of the mask is retrieved");
+  b.add_input<decl::Int>("Size X"_ustr)
+      .default_value(256)
+      .subtype(PROP_PIXEL)
+      .min(1)
+      .usage_by_menu("Size Source"_ustr,
+                     {CMP_NODE_MASK_FLAG_SIZE_FIXED, CMP_NODE_MASK_FLAG_SIZE_FIXED_SCENE})
+      .description("The resolution of the mask along the X direction");
+  b.add_input<decl::Int>("Size Y"_ustr)
+      .default_value(256)
+      .subtype(PROP_PIXEL)
+      .min(1)
+      .usage_by_menu("Size Source"_ustr,
+                     {CMP_NODE_MASK_FLAG_SIZE_FIXED, CMP_NODE_MASK_FLAG_SIZE_FIXED_SCENE})
+      .description("The resolution of the mask along the Y direction");
+  b.add_input<decl::Bool>("Feather"_ustr)
+      .default_value(true)
+      .description("Use feather information from the mask");
 
-  PanelDeclarationBuilder &motion_blur_panel = b.add_panel("Motion Blur").default_closed(true);
-  motion_blur_panel.add_input<decl::Bool>("Motion Blur")
+  PanelDeclarationBuilder &motion_blur_panel =
+      b.add_panel("Motion Blur"_ustr).default_closed(true);
+  motion_blur_panel.add_input<decl::Bool>("Motion Blur"_ustr)
       .default_value(false)
       .panel_toggle()
       .description("Use multi-sampled motion blur of the mask");
-  motion_blur_panel.add_input<decl::Int>("Samples", "Motion Blur Samples")
+  motion_blur_panel.add_input<decl::Int>("Samples"_ustr, "Motion Blur Samples"_ustr)
       .default_value(16)
       .min(1)
       .max(64)
       .description("Number of motion blur samples");
-  motion_blur_panel.add_input<decl::Float>("Shutter", "Motion Blur Shutter")
+  motion_blur_panel.add_input<decl::Float>("Shutter"_ustr, "Motion Blur Shutter"_ustr)
       .default_value(0.5f)
       .subtype(PROP_FACTOR)
       .min(0.0f)
@@ -61,22 +80,12 @@ static void cmp_node_mask_declare(NodeDeclarationBuilder &b)
       .description("Exposure for motion blur as a factor of FPS");
 }
 
-static void node_mask_label(const bNodeTree * /*ntree*/,
-                            const bNode *node,
-                            char *label,
-                            int label_maxncpy)
+static void node_label(const bNodeTree * /*ntree*/,
+                       const bNode *node,
+                       char *label,
+                       int label_maxncpy)
 {
   BLI_strncpy_utf8(label, node->id ? node->id->name + 2 : IFACE_("Mask"), label_maxncpy);
-}
-
-static void node_update(bNodeTree *ntree, bNode *node)
-{
-  const bool is_size_needed = node->custom1 & (CMP_NODE_MASK_FLAG_SIZE_FIXED |
-                                               CMP_NODE_MASK_FLAG_SIZE_FIXED_SCENE);
-  bNodeSocket *size_x_input = bke::node_find_socket(*node, SOCK_IN, "Size X");
-  bNodeSocket *size_y_input = bke::node_find_socket(*node, SOCK_IN, "Size Y");
-  blender::bke::node_set_socket_availability(*ntree, *size_x_input, is_size_needed);
-  blender::bke::node_set_socket_availability(*ntree, *size_y_input, is_size_needed);
 }
 
 using namespace blender::compositor;
@@ -87,11 +96,8 @@ class MaskOperation : public NodeOperation {
 
   void execute() override
   {
-    Result &output_mask = this->get_result("Mask");
-    if (!this->get_mask() ||
-        (!this->is_fixed_size() && !this->context().is_valid_compositing_region()))
-    {
-      output_mask.allocate_invalid();
+    if (!this->get_mask()) {
+      this->allocate_default_remaining_outputs();
       return;
     }
 
@@ -99,37 +105,35 @@ class MaskOperation : public NodeOperation {
     Result &cached_mask = context().cache_manager().cached_masks.get(
         this->context(),
         this->get_mask(),
-        domain.size,
+        domain,
         this->get_aspect_ratio(),
         this->get_use_feather(),
+        this->context().get_frame_number(),
         this->get_motion_blur_samples(),
-        this->get_motion_blur_shutter());
+        this->get_motion_blur_shutter(),
+        false);
 
-    output_mask.wrap_external(cached_mask);
+    Result &output_mask = this->get_result("Mask");
+    output_mask.share_data(cached_mask);
   }
 
   Domain compute_domain() override
   {
-    return Domain(this->compute_size());
-  }
-
-  int2 compute_size()
-  {
     if (this->get_flags() & CMP_NODE_MASK_FLAG_SIZE_FIXED) {
-      return this->get_size();
+      return Domain(this->get_size());
     }
 
     if (this->get_flags() & CMP_NODE_MASK_FLAG_SIZE_FIXED_SCENE) {
-      return this->get_size() * this->context().get_render_percentage();
+      return Domain(this->get_size() * this->context().get_render_percentage());
     }
 
-    return this->context().get_compositing_region_size();
+    return this->context().get_compositing_domain();
   }
 
   int2 get_size()
   {
-    return int2(math::max(1, this->get_input("Size X").get_single_value_default(256)),
-                math::max(1, this->get_input("Size Y").get_single_value_default(256)));
+    return int2(math::max(1, this->get_input("Size X").get_single_value_default<int>()),
+                math::max(1, this->get_input("Size Y").get_single_value_default<int>()));
   }
 
   float get_aspect_ratio()
@@ -149,61 +153,59 @@ class MaskOperation : public NodeOperation {
 
   bool get_use_feather()
   {
-    return this->get_input("Feather").get_single_value_default(true);
+    return this->get_input("Feather").get_single_value_default<bool>();
   }
 
   int get_motion_blur_samples()
   {
     const int samples = math::clamp(
-        this->get_input("Motion Blur Samples").get_single_value_default(16), 1, 64);
+        this->get_input("Motion Blur Samples").get_single_value_default<int>(), 1, 64);
     return this->use_motion_blur() ? samples : 1;
   }
 
   float get_motion_blur_shutter()
   {
     return math::clamp(
-        this->get_input("Motion Blur Shutter").get_single_value_default(0.5f), 0.0f, 1.0f);
+        this->get_input("Motion Blur Shutter").get_single_value_default<float>(), 0.0f, 1.0f);
   }
 
   bool use_motion_blur()
   {
-    return this->get_input("Motion Blur").get_single_value_default(false);
+    return this->get_input("Motion Blur").get_single_value_default<bool>();
   }
 
   CMPNodeMaskFlags get_flags()
   {
-    return static_cast<CMPNodeMaskFlags>(this->bnode().custom1);
+    return CMPNodeMaskFlags(
+        this->get_input("Size Source").get_single_value_default<MenuValue>().value);
   }
 
   Mask *get_mask()
   {
-    return reinterpret_cast<Mask *>(this->bnode().id);
+    return reinterpret_cast<Mask *>(this->node().id);
   }
 };
 
-static NodeOperation *get_compositor_operation(Context &context, DNode node)
+static NodeOperation *get_compositor_operation(Context &context, const bNode &node)
 {
   return new MaskOperation(context, node);
 }
 
-}  // namespace blender::nodes::node_composite_mask_cc
-
-static void register_node_type_cmp_mask()
+static void node_register()
 {
-  namespace file_ns = blender::nodes::node_composite_mask_cc;
+  static bke::bNodeType ntype;
 
-  static blender::bke::bNodeType ntype;
-
-  cmp_node_type_base(&ntype, "CompositorNodeMask", CMP_NODE_MASK);
+  cmp_node_type_base(&ntype, "CompositorNodeMask"_ustr, CMP_NODE_MASK);
   ntype.ui_name = "Mask";
-  ntype.ui_description = "Input mask from a mask datablock, created in the image editor";
+  ntype.ui_description = "Input mask from a mask data-block, created in the image editor";
   ntype.enum_name_legacy = "MASK";
   ntype.nclass = NODE_CLASS_INPUT;
-  ntype.declare = file_ns::cmp_node_mask_declare;
-  ntype.updatefunc = file_ns::node_update;
-  ntype.labelfunc = file_ns::node_mask_label;
-  ntype.get_compositor_operation = file_ns::get_compositor_operation;
+  ntype.declare = node_declare;
+  ntype.labelfunc = node_label;
+  ntype.get_compositor_operation = get_compositor_operation;
 
-  blender::bke::node_register_type(ntype);
+  bke::node_register_type(ntype);
 }
-NOD_REGISTER_NODE(register_node_type_cmp_mask)
+NOD_REGISTER_NODE(node_register)
+
+}  // namespace blender::nodes::node_composite_mask_cc

@@ -3,8 +3,10 @@
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
 #include "BLI_array_utils.hh"
+#include "BLI_bit_span_ops.hh"
+#include "BLI_bit_vector.hh"
+#include "BLI_enum_flags.hh"
 #include "BLI_stack.hh"
-#include "BLI_utildefines.h"
 
 #include "BKE_node.hh"
 #include "BKE_node_legacy_types.hh"
@@ -20,10 +22,46 @@
 namespace blender::bke::node_structure_type_inferencing {
 
 using nodes::StructureType;
-namespace aal = nodes::anonymous_attribute_lifetime;
+namespace rl = nodes::reference_lifetimes;
+
+static StructureType ensure_supported_structure_type(const eNodeSocketDatatype socket_type,
+                                                     const StructureType structure_type)
+{
+  if (structure_type == StructureType::Field && !nodes::socket_type_supports_fields(socket_type)) {
+    return StructureType::Single;
+  }
+  if (structure_type == StructureType::Grid && !nodes::socket_type_supports_grids(socket_type)) {
+    return StructureType::Single;
+  }
+  return structure_type;
+}
+
+static StructureType ensure_supported_structure_type(const bNodeSocket &socket,
+                                                     const StructureType structure_type)
+{
+  return ensure_supported_structure_type(eNodeSocketDatatype(socket.type), structure_type);
+}
+
+static StructureType ensure_supported_structure_type(const bNodeTreeInterfaceSocket &io_socket,
+                                                     const StructureType structure_type)
+{
+  const bke::bNodeSocketType *socket_type = io_socket.socket_typeinfo();
+  if (!socket_type) {
+    return structure_type;
+  }
+  return ensure_supported_structure_type(eNodeSocketDatatype(socket_type->type), structure_type);
+}
 
 static nodes::StructureTypeInterface calc_node_interface(const bNode &node)
 {
+  if (node.is_group()) {
+    if (const bNodeTree *group = id_cast<const bNodeTree *>(node.id)) {
+      if (!ID_MISSING(group) && group->runtime->structure_type_interface) {
+        return *group->runtime->structure_type_interface;
+      }
+    }
+  }
+
   const Span<const bNodeSocket *> input_sockets = node.input_sockets();
   const Span<const bNodeSocket *> output_sockets = node.output_sockets();
 
@@ -55,23 +93,23 @@ static nodes::StructureTypeInterface calc_node_interface(const bNode &node)
     if (dependency.type != StructureType::Dynamic) {
       continue;
     }
-
-    /* Currently the input sockets that influence the field status of an output are the same as the
-     * sockets that influence its structure type. Reuse that for the propagation of structure type
-     * until there is a more generic format of intra-node dependencies. */
-    switch (decl.output_field_dependency.field_type()) {
-      case nodes::OutputSocketFieldType::None:
-        break;
-      case nodes::OutputSocketFieldType::FieldSource:
-        break;
-      case nodes::OutputSocketFieldType::DependentField:
-        dependency.linked_inputs.reinitialize(input_sockets.size());
-        array_utils::fill_index_range(dependency.linked_inputs.as_mutable_span());
-        break;
-      case nodes::OutputSocketFieldType::PartiallyDependent:
-        dependency.linked_inputs = decl.output_field_dependency.linked_input_indices();
-        break;
-    }
+    std::visit(
+        [&]<typename T>(const T &value) {
+          if constexpr (std::is_same_v<T, nodes::OutputStructureTypeDependency::None>) {
+            /* Nothing to do. */
+          }
+          else if constexpr (std::is_same_v<T, nodes::OutputStructureTypeDependency::All>) {
+            dependency.linked_inputs.reinitialize(input_sockets.size());
+            array_utils::fill_index_range(dependency.linked_inputs.as_mutable_span());
+          }
+          else if constexpr (std::is_same_v<T, nodes::OutputStructureTypeDependency::Partial>) {
+            dependency.linked_inputs = value.linked_inputs.as_span();
+          }
+          else {
+            BLI_assert_unreachable_static_t(T);
+          }
+        },
+        decl.structure_type_output_dependency.variant);
   }
 
   return node_interface;
@@ -129,26 +167,128 @@ static StructureType data_requirement_to_auto_structure_type(const DataRequireme
   return StructureType::Dynamic;
 }
 
+static void find_auto_structure_type_sockets(const bNodeTree &tree,
+                                             bits::MutableBoundedBitSpan is_auto_structure_type)
+{
+  /* Handle group inputs. */
+  for (const int i : tree.interface_inputs().index_range()) {
+    const bNodeTreeInterfaceSocket &io_socket = *tree.interface_inputs()[i];
+    if (io_socket.structure_type != NodeSocketInterfaceStructureType::Auto) {
+      continue;
+    }
+    for (const bNode *node : tree.group_input_nodes()) {
+      const bNodeSocket &socket = node->output_socket(i);
+      is_auto_structure_type[socket.index_in_tree()].set();
+    }
+  }
+
+  /* Handle group outputs. */
+  if (const bNode *group_output_node = tree.group_output_node()) {
+    is_auto_structure_type.slice(group_output_node->input_socket_indices_in_tree().drop_back(1))
+        .set_all();
+  }
+
+  /* Handle closure inputs and outputs. */
+  const bke::bNodeZoneType *closure_zone_type = bke::zone_type_by_node_type(NODE_CLOSURE_OUTPUT);
+  for (const bNode *closure_input_node : tree.nodes_by_type("NodeClosureInput"_ustr)) {
+    const auto *closure_output_node = closure_zone_type->get_corresponding_output(
+        tree, *closure_input_node);
+    if (!closure_output_node) {
+      continue;
+    }
+    const auto &storage = *static_cast<const NodeClosureOutput *>(closure_output_node->storage);
+    for (const int i : IndexRange(storage.input_items.items_num)) {
+      const NodeClosureInputItem &item = storage.input_items.items[i];
+      if (item.structure_type == NodeSocketInterfaceStructureType::Auto) {
+        const bNodeSocket &socket = closure_input_node->output_socket(i);
+        is_auto_structure_type[socket.index_in_tree()].set();
+      }
+    }
+    for (const int i : IndexRange(storage.output_items.items_num)) {
+      const NodeClosureOutputItem &item = storage.output_items.items[i];
+      if (item.structure_type == NodeSocketInterfaceStructureType::Auto) {
+        const bNodeSocket &socket = closure_output_node->input_socket(i);
+        is_auto_structure_type[socket.index_in_tree()].set();
+      }
+    }
+  }
+
+  /* Handle Evaluate Closure nodes. */
+  for (const bNode *evaluate_closure_node : tree.nodes_by_type("NodeEvaluateClosure"_ustr)) {
+    auto &storage = *static_cast<NodeEvaluateClosure *>(evaluate_closure_node->storage);
+    for (const int i : IndexRange(storage.input_items.items_num)) {
+      const NodeEvaluateClosureInputItem &item = storage.input_items.items[i];
+      if (item.structure_type == NodeSocketInterfaceStructureType::Auto) {
+        const bNodeSocket &socket = evaluate_closure_node->input_socket(i + 1);
+        is_auto_structure_type[socket.index_in_tree()].set();
+      }
+    }
+    for (const int i : IndexRange(storage.output_items.items_num)) {
+      const NodeEvaluateClosureOutputItem &item = storage.output_items.items[i];
+      if (item.structure_type == NodeSocketInterfaceStructureType::Auto) {
+        const bNodeSocket &socket = evaluate_closure_node->output_socket(i);
+        is_auto_structure_type[socket.index_in_tree()].set();
+      }
+    }
+  }
+
+  /* Handle Combine Bundle nodes. */
+  for (const bNode *node : tree.nodes_by_type("NodeCombineBundle"_ustr)) {
+    auto &storage = *static_cast<NodeCombineBundle *>(node->storage);
+    for (const int i : IndexRange(storage.items_num)) {
+      const NodeCombineBundleItem &item = storage.items[i];
+      if (item.structure_type == NodeSocketInterfaceStructureType::Auto) {
+        const bNodeSocket &socket = node->input_socket(i);
+        is_auto_structure_type[socket.index_in_tree()].set();
+      }
+    }
+  }
+
+  /* Handle Separate Bundle nodes. */
+  for (const bNode *node : tree.nodes_by_type("NodeSeparateBundle"_ustr)) {
+    auto &storage = *static_cast<NodeSeparateBundle *>(node->storage);
+    for (const int i : IndexRange(storage.items_num)) {
+      const NodeSeparateBundleItem &item = storage.items[i];
+      if (item.structure_type == NodeSocketInterfaceStructureType::Auto) {
+        const bNodeSocket &socket = node->output_socket(i);
+        is_auto_structure_type[socket.index_in_tree()].set();
+      }
+    }
+  }
+
+  /* Handle Store Bundle Item nodes. */
+  for (const bNode *node : tree.nodes_by_type("NodeStoreBundleItem"_ustr)) {
+    auto &storage = *static_cast<NodeStoreBundleItem *>(node->storage);
+    if (storage.structure_type == NodeSocketInterfaceStructureType::Auto) {
+      const bNodeSocket &socket = *node->input_by_identifier("Item"_ustr);
+      is_auto_structure_type[socket.index_in_tree()].set();
+    }
+  }
+
+  /* Handle Get Bundle Item nodes. */
+  for (const bNode *node : tree.nodes_by_type("NodeGetBundleItem"_ustr)) {
+    auto &storage = *static_cast<NodeGetBundleItem *>(node->storage);
+    if (storage.structure_type == NodeSocketInterfaceStructureType::Auto) {
+      const bNodeSocket &socket = *node->output_by_identifier("Item"_ustr);
+      is_auto_structure_type[socket.index_in_tree()].set();
+    }
+  }
+}
+
 static void init_input_requirements(const bNodeTree &tree,
+                                    const bits::BoundedBitSpan is_auto_structure_type,
                                     MutableSpan<DataRequirement> input_requirements)
 {
   for (const bNode *node : tree.all_nodes()) {
-    if (ELEM(node->type_legacy, NODE_GROUP_OUTPUT, NODE_CLOSURE_OUTPUT)) {
-      for (const bNodeSocket *socket : node->input_sockets()) {
-        /* Inputs of these nodes have no requirements. */
-        input_requirements[socket->index_in_all_inputs()] = DataRequirement::None;
-      }
-      continue;
-    }
     for (const bNodeSocket *socket : node->input_sockets()) {
       DataRequirement &requirement = input_requirements[socket->index_in_all_inputs()];
-      const nodes::SocketDeclaration *declaration = socket->runtime->declaration;
-      if (!declaration) {
+      if (is_auto_structure_type[socket->index_in_tree()]) {
         requirement = DataRequirement::None;
         continue;
       }
-      if (nodes::socket_type_always_single(eNodeSocketDatatype(socket->type))) {
-        requirement = DataRequirement::Single;
+      const nodes::SocketDeclaration *declaration = socket->runtime->declaration;
+      if (!declaration) {
+        requirement = DataRequirement::None;
         continue;
       }
       switch (declaration->structure_type) {
@@ -212,47 +352,40 @@ static void store_group_input_structure_types(const bNodeTree &tree,
   /* Build derived interface structure types from group input nodes. */
   for (const int i : tree.interface_inputs().index_range()) {
     const bNodeTreeInterfaceSocket &io_socket = *tree.interface_inputs()[i];
-    if (io_socket.structure_type != NODE_INTERFACE_SOCKET_STRUCTURE_TYPE_AUTO) {
-      derived_interface.inputs[i] = StructureType(io_socket.structure_type);
+    if (io_socket.structure_type != NodeSocketInterfaceStructureType::Auto) {
+      derived_interface.inputs[i] = ensure_supported_structure_type(
+          io_socket, StructureType(io_socket.structure_type));
       continue;
     }
 
     const DataRequirement requirement = interface_requirements[i];
-    derived_interface.inputs[i] = data_requirement_to_auto_structure_type(requirement);
+    derived_interface.inputs[i] = ensure_supported_structure_type(
+        io_socket, data_requirement_to_auto_structure_type(requirement));
   }
 }
 
-static void store_closure_input_structure_types(const bNodeTree &tree,
-                                                const Span<DataRequirement> input_requirements,
-                                                MutableSpan<StructureType> structure_types)
+static void store_auto_output_structure_types(const bNodeTree &tree,
+                                              const Span<DataRequirement> input_requirements,
+                                              const bits::BoundedBitSpan is_auto_structure_type,
+                                              MutableSpan<StructureType> structure_types)
 {
-  const bNodeTreeZones *zones = tree.zones();
-  if (!zones) {
-    return;
-  }
-  for (const bNodeTreeZone *zone : zones->zones) {
-    const bNode *input_node = zone->input_node();
-    const bNode *output_node = zone->output_node();
-    if (!input_node || !output_node) {
-      continue;
+  const Span<const bNodeSocket *> all_sockets = tree.all_sockets();
+  bits::foreach_1_index(is_auto_structure_type, [&](const int i) {
+    const bNodeSocket &socket = *all_sockets[i];
+    if (socket.is_input()) {
+      return;
     }
-    if (!output_node->is_type("NodeClosureOutput")) {
-      continue;
+    const bNode &node = socket.owner_node();
+    if (node.is_group_input()) {
+      /* Group input nodes have special handling in #store_group_input_structure_types because
+       * corresponding sockets on all group input nodes should have the same structure type. */
+      return;
     }
-    const auto *storage = static_cast<const NodeClosureOutput *>(output_node->storage);
-    for (const int i : IndexRange(storage->input_items.items_num)) {
-      const NodeClosureInputItem &item = storage->input_items.items[i];
-      const bNodeSocket &socket = input_node->output_socket(i);
-      StructureType &structure_type = structure_types[socket.index_in_tree()];
-      if (item.structure_type != NODE_INTERFACE_SOCKET_STRUCTURE_TYPE_AUTO) {
-        structure_type = StructureType(item.structure_type);
-        continue;
-      }
-      const DataRequirement requirement = calc_output_socket_requirement(socket,
-                                                                         input_requirements);
-      structure_type = data_requirement_to_auto_structure_type(requirement);
-    }
-  }
+
+    const DataRequirement requirement = calc_output_socket_requirement(socket, input_requirements);
+    structure_types[socket.index_in_tree()] = ensure_supported_structure_type(
+        socket, data_requirement_to_auto_structure_type(requirement));
+  });
 }
 
 enum class ZoneInOutChange {
@@ -260,7 +393,7 @@ enum class ZoneInOutChange {
   In = (1 << 1),
   Out = (1 << 2),
 };
-ENUM_OPERATORS(ZoneInOutChange, ZoneInOutChange::Out);
+ENUM_OPERATORS(ZoneInOutChange);
 
 static ZoneInOutChange simulation_zone_requirements_propagate(
     const bNode &input_node,
@@ -324,19 +457,19 @@ static bool propagate_zone_data_requirements(const bNodeTree &tree,
       if (const bNode *output_node = tree.node_by_id(data.output_node_id)) {
         const ZoneInOutChange change = simulation_zone_requirements_propagate(
             node, *output_node, input_requirements);
-        if ((change & ZoneInOutChange::Out) != ZoneInOutChange::None) {
+        if (flag_is_set(change, ZoneInOutChange::Out)) {
           return true;
         }
       }
       return false;
     }
     case GEO_NODE_SIMULATION_OUTPUT: {
-      for (const bNode *input_node : tree.nodes_by_type("GeometryNodeSimulationInput")) {
+      for (const bNode *input_node : tree.nodes_by_type("GeometryNodeSimulationInput"_ustr)) {
         const auto &data = *static_cast<const NodeGeometrySimulationInput *>(input_node->storage);
         if (node.identifier == data.output_node_id) {
           const ZoneInOutChange change = simulation_zone_requirements_propagate(
               *input_node, node, input_requirements);
-          if ((change & ZoneInOutChange::In) != ZoneInOutChange::None) {
+          if (flag_is_set(change, ZoneInOutChange::In)) {
             return true;
           }
         }
@@ -348,19 +481,19 @@ static bool propagate_zone_data_requirements(const bNodeTree &tree,
       if (const bNode *output_node = tree.node_by_id(data.output_node_id)) {
         const ZoneInOutChange change = repeat_zone_requirements_propagate(
             node, *output_node, input_requirements);
-        if ((change & ZoneInOutChange::Out) != ZoneInOutChange::None) {
+        if (flag_is_set(change, ZoneInOutChange::Out)) {
           return true;
         }
       }
       return false;
     }
     case GEO_NODE_REPEAT_OUTPUT: {
-      for (const bNode *input_node : tree.nodes_by_type("GeometryNodeRepeatInput")) {
+      for (const bNode *input_node : tree.nodes_by_type("GeometryNodeRepeatInput"_ustr)) {
         const auto &data = *static_cast<const NodeGeometryRepeatInput *>(input_node->storage);
         if (node.identifier == data.output_node_id) {
           const ZoneInOutChange change = repeat_zone_requirements_propagate(
               *input_node, node, input_requirements);
-          if ((change & ZoneInOutChange::In) != ZoneInOutChange::None) {
+          if (flag_is_set(change, ZoneInOutChange::In)) {
             return true;
           }
         }
@@ -418,6 +551,12 @@ static void propagate_right_to_left(const bNodeTree &tree,
             Vector<int, 8> inputs_with_links;
             for (const int input : node_interface.outputs[output].linked_inputs) {
               const bNodeSocket &input_socket = *input_sockets[input];
+              if (input_requirements[input_socket.index_in_all_inputs()] ==
+                  DataRequirement::Single)
+              {
+                /* Inputs which require a single value can't get a different requirement. */
+                continue;
+              }
               if (input_socket.is_directly_linked()) {
                 inputs_with_links.append(input_socket.index_in_all_inputs());
               }
@@ -452,20 +591,8 @@ static StructureType left_to_right_merge(const StructureType a, const StructureT
   if (a == b) {
     return a;
   }
-  if ((a == StructureType::Dynamic && b == StructureType::Single) ||
-      (a == StructureType::Single && b == StructureType::Dynamic))
-  {
+  if (a == StructureType::Dynamic || b == StructureType::Dynamic) {
     return StructureType::Dynamic;
-  }
-  if ((a == StructureType::Dynamic && b == StructureType::Field) ||
-      (a == StructureType::Field && b == StructureType::Dynamic))
-  {
-    return StructureType::Dynamic;
-  }
-  if ((a == StructureType::Dynamic && b == StructureType::Grid) ||
-      (a == StructureType::Grid && b == StructureType::Dynamic))
-  {
-    return StructureType::Grid;
   }
   if ((a == StructureType::Field && b == StructureType::Grid) ||
       (a == StructureType::Grid && b == StructureType::Field))
@@ -482,6 +609,16 @@ static StructureType left_to_right_merge(const StructureType a, const StructureT
   {
     return StructureType::Grid;
   }
+  if ((a == StructureType::Single && b == StructureType::List) ||
+      (a == StructureType::List && b == StructureType::Single))
+  {
+    return StructureType::List;
+  }
+  if ((a == StructureType::Field && b == StructureType::List) ||
+      (a == StructureType::List && b == StructureType::Field))
+  {
+    return StructureType::List;
+  }
   /* Invalid combination. */
   return a;
 }
@@ -497,12 +634,14 @@ static ZoneInOutChange simulation_zone_status_propagate(const bNode &input_node,
     const bNodeSocket &output = output_node.output_socket(i);
     const StructureType new_value = left_to_right_merge(structure_types[input.index_in_tree()],
                                                         structure_types[output.index_in_tree()]);
-    if (structure_types[input.index_in_tree()] != new_value) {
-      structure_types[input.index_in_tree()] = new_value;
+    const StructureType new_input_value = ensure_supported_structure_type(input, new_value);
+    const StructureType new_output_value = ensure_supported_structure_type(output, new_value);
+    if (structure_types[input.index_in_tree()] != new_input_value) {
+      structure_types[input.index_in_tree()] = new_input_value;
       change |= ZoneInOutChange::In;
     }
-    if (structure_types[output.index_in_tree()] != new_value) {
-      structure_types[output.index_in_tree()] = new_value;
+    if (structure_types[output.index_in_tree()] != new_output_value) {
+      structure_types[output.index_in_tree()] = new_output_value;
       change |= ZoneInOutChange::Out;
     }
   }
@@ -520,12 +659,16 @@ static ZoneInOutChange repeat_zone_status_propagate(const bNode &input_node,
     const StructureType new_value = left_to_right_merge(
         structure_types[input_of_input_node.index_in_tree()],
         structure_types[output_of_output_node.index_in_tree()]);
-    if (structure_types[input_of_input_node.index_in_tree()] != new_value) {
-      structure_types[input_of_input_node.index_in_tree()] = new_value;
+    const StructureType new_input_value = ensure_supported_structure_type(input_of_input_node,
+                                                                          new_value);
+    const StructureType new_output_value = ensure_supported_structure_type(output_of_output_node,
+                                                                           new_value);
+    if (structure_types[input_of_input_node.index_in_tree()] != new_input_value) {
+      structure_types[input_of_input_node.index_in_tree()] = new_input_value;
       change |= ZoneInOutChange::In;
     }
-    if (structure_types[output_of_output_node.index_in_tree()] != new_value) {
-      structure_types[output_of_output_node.index_in_tree()] = new_value;
+    if (structure_types[output_of_output_node.index_in_tree()] != new_output_value) {
+      structure_types[output_of_output_node.index_in_tree()] = new_output_value;
       change |= ZoneInOutChange::Out;
     }
   }
@@ -543,19 +686,19 @@ static bool propagate_zone_status(const bNodeTree &tree,
       if (const bNode *output_node = tree.node_by_id(data.output_node_id)) {
         const ZoneInOutChange change = simulation_zone_status_propagate(
             node, *output_node, structure_types);
-        if ((change & ZoneInOutChange::Out) != ZoneInOutChange::None) {
+        if (flag_is_set(change, ZoneInOutChange::Out)) {
           return true;
         }
       }
       return false;
     }
     case GEO_NODE_SIMULATION_OUTPUT: {
-      for (const bNode *input_node : tree.nodes_by_type("GeometryNodeSimulationInput")) {
+      for (const bNode *input_node : tree.nodes_by_type("GeometryNodeSimulationInput"_ustr)) {
         const auto &data = *static_cast<const NodeGeometrySimulationInput *>(input_node->storage);
         if (node.identifier == data.output_node_id) {
           const ZoneInOutChange change = simulation_zone_status_propagate(
               *input_node, node, structure_types);
-          if ((change & ZoneInOutChange::In) != ZoneInOutChange::None) {
+          if (flag_is_set(change, ZoneInOutChange::In)) {
             return true;
           }
         }
@@ -567,19 +710,19 @@ static bool propagate_zone_status(const bNodeTree &tree,
       if (const bNode *output_node = tree.node_by_id(data.output_node_id)) {
         const ZoneInOutChange change = repeat_zone_status_propagate(
             node, *output_node, structure_types);
-        if ((change & ZoneInOutChange::Out) != ZoneInOutChange::None) {
+        if (flag_is_set(change, ZoneInOutChange::Out)) {
           return true;
         }
       }
       return false;
     }
     case GEO_NODE_REPEAT_OUTPUT: {
-      for (const bNode *input_node : tree.nodes_by_type("GeometryNodeRepeatInput")) {
+      for (const bNode *input_node : tree.nodes_by_type("GeometryNodeRepeatInput"_ustr)) {
         const auto &data = *static_cast<const NodeGeometryRepeatInput *>(input_node->storage);
         if (node.identifier == data.output_node_id) {
           const ZoneInOutChange change = repeat_zone_status_propagate(
               *input_node, node, structure_types);
-          if ((change & ZoneInOutChange::In) != ZoneInOutChange::None) {
+          if (flag_is_set(change, ZoneInOutChange::In)) {
             return true;
           }
         }
@@ -594,7 +737,7 @@ static bool propagate_zone_status(const bNodeTree &tree,
 static StructureType get_unconnected_input_structure_type(
     const nodes::SocketDeclaration &declaration)
 {
-  if (declaration.input_field_type == nodes::InputSocketFieldType::Implicit) {
+  if (nodes::default_input_type_is_field(declaration.default_input_type)) {
     return StructureType::Field;
   }
   return StructureType::Single;
@@ -603,6 +746,7 @@ static StructureType get_unconnected_input_structure_type(
 static void propagate_left_to_right(const bNodeTree &tree,
                                     const Span<nodes::StructureTypeInterface> node_interfaces,
                                     const Span<StructureType> group_input_structure_types,
+                                    const bits::BoundedBitSpan is_auto_structure_type,
                                     MutableSpan<StructureType> structure_types)
 {
   for (const bNodeSocket *input : tree.all_input_sockets()) {
@@ -611,14 +755,18 @@ static void propagate_left_to_right(const bNodeTree &tree,
     }
     if (!input->is_directly_linked()) {
       if (const nodes::SocketDeclaration *declaration = input->runtime->declaration) {
-        structure_types[input->index_in_tree()] = get_unconnected_input_structure_type(
-            *declaration);
+        structure_types[input->index_in_tree()] = ensure_supported_structure_type(
+            *input, get_unconnected_input_structure_type(*declaration));
       }
     }
   }
 
   /* Outputs of these nodes have dynamic structure type but should start out as single values. */
-  for (const StringRefNull idname : {"GeometryNodeRepeatInput", "GeometryNodeRepeatOutput"}) {
+  for (const UString idname : {"GeometryNodeRepeatInput"_ustr,
+                               "GeometryNodeRepeatOutput"_ustr,
+                               "GeometryNodeSimulationInput"_ustr,
+                               "GeometryNodeSimulationOutput"_ustr})
+  {
     for (const bNode *node : tree.nodes_by_type(idname)) {
       for (const bNodeSocket *socket : node->output_sockets()) {
         structure_types[socket->index_in_tree()] = StructureType::Single;
@@ -636,12 +784,9 @@ static void propagate_left_to_right(const bNodeTree &tree,
       const Span<const bNodeSocket *> output_sockets = node->output_sockets();
       if (node->is_group_input()) {
         for (const int i : output_sockets.index_range().drop_back(1)) {
-          structure_types[output_sockets[i]->index_in_tree()] = group_input_structure_types[i];
+          structure_types[output_sockets[i]->index_in_tree()] = ensure_supported_structure_type(
+              *output_sockets[i], group_input_structure_types[i]);
         }
-        continue;
-      }
-      if (node->type_legacy == NODE_CLOSURE_INPUT) {
-        /* Initialized in #store_closure_input_structure_types already. */
         continue;
       }
 
@@ -664,7 +809,8 @@ static void propagate_left_to_right(const bNodeTree &tree,
           }
         }
         if (input_type) {
-          structure_types[input->index_in_tree()] = *input_type;
+          structure_types[input->index_in_tree()] = ensure_supported_structure_type(*input,
+                                                                                    *input_type);
         }
       }
 
@@ -673,6 +819,10 @@ static void propagate_left_to_right(const bNodeTree &tree,
       for (const int output_index : node_interface.outputs.index_range()) {
         const bNodeSocket &output = *output_sockets[output_index];
         if (!output.is_available() || !output.runtime->declaration) {
+          continue;
+        }
+        if (is_auto_structure_type[output.index_in_tree()]) {
+          /* Has been initialized in #store_auto_output_structure_types. */
           continue;
         }
         const nodes::SocketDeclaration &declaration = *output.runtime->declaration;
@@ -691,7 +841,8 @@ static void propagate_left_to_right(const bNodeTree &tree,
             output_type = new_type;
           }
         }
-        structure_types[output.index_in_tree()] = output_type.value_or(declaration.structure_type);
+        structure_types[output.index_in_tree()] = ensure_supported_structure_type(
+            output, output_type.value_or(declaration.structure_type));
       }
 
       if (propagate_zone_status(tree, *node, structure_types)) {
@@ -763,12 +914,16 @@ static void store_group_output_structure_types(
   const Span<const bNodeTreeInterfaceSocket *> interface_outputs = tree.interface_outputs();
   const Span<const bNodeSocket *> sockets = group_output_node->input_sockets().drop_back(1);
   for (const int i : sockets.index_range()) {
-    if (interface_outputs[i]->structure_type != NODE_INTERFACE_SOCKET_STRUCTURE_TYPE_AUTO) {
-      interface.outputs[i] = {StructureType(interface_outputs[i]->structure_type), {}};
+    if (interface_outputs[i]->structure_type != NodeSocketInterfaceStructureType::Auto) {
+      interface.outputs[i] = {
+          ensure_supported_structure_type(*interface_outputs[i],
+                                          StructureType(interface_outputs[i]->structure_type)),
+          {}};
       continue;
     }
     /* Update derived interface output structure types from output node socket usages. */
-    interface.outputs[i].type = structure_types[sockets[i]->index_in_tree()];
+    interface.outputs[i].type = ensure_supported_structure_type(
+        *interface_outputs[i], structure_types[sockets[i]->index_in_tree()]);
     if (interface.outputs[i].type == StructureType::Dynamic) {
       const Vector<int> linked_inputs = find_dynamic_output_linked_inputs(*sockets[i],
                                                                           interface_by_node);
@@ -800,25 +955,23 @@ static StructureTypeInferenceResult calc_structure_type_interface(const bNodeTre
   }
 
   Array<nodes::StructureTypeInterface> node_interfaces = calc_node_interfaces(tree);
+  bits::BitVector<> is_auto_structure_type(tree.all_sockets().size(), false);
 
   Array<DataRequirement> data_requirements(tree.all_input_sockets().size());
 
-  init_input_requirements(tree, data_requirements);
+  find_auto_structure_type_sockets(tree, is_auto_structure_type);
+  init_input_requirements(tree, is_auto_structure_type, data_requirements);
   propagate_right_to_left(tree, node_interfaces, data_requirements);
   store_group_input_structure_types(tree, data_requirements, result.group_interface);
-  store_closure_input_structure_types(tree, data_requirements, result.socket_structure_types);
-  propagate_left_to_right(
-      tree, node_interfaces, result.group_interface.inputs, result.socket_structure_types);
+  store_auto_output_structure_types(
+      tree, data_requirements, is_auto_structure_type, result.socket_structure_types);
+  propagate_left_to_right(tree,
+                          node_interfaces,
+                          result.group_interface.inputs,
+                          is_auto_structure_type,
+                          result.socket_structure_types);
   store_group_output_structure_types(
       tree, node_interfaces, result.socket_structure_types, result.group_interface);
-
-  /* Ensure that the structure type is never invalid. */
-  for (const int i : tree.all_sockets().index_range()) {
-    const bNodeSocket &socket = *tree.all_sockets()[i];
-    if (nodes::socket_type_always_single(eNodeSocketDatatype(socket.type))) {
-      result.socket_structure_types[i] = StructureType::Single;
-    }
-  }
 
   return result;
 }
@@ -826,7 +979,10 @@ static StructureTypeInferenceResult calc_structure_type_interface(const bNodeTre
 bool update_structure_type_interface(bNodeTree &tree)
 {
   StructureTypeInferenceResult result = calc_structure_type_interface(tree);
-  tree.runtime->inferred_structure_types = std::move(result.socket_structure_types);
+  for (const int i : tree.all_sockets().index_range()) {
+    const bNodeSocket &socket = *tree.all_sockets()[i];
+    socket.runtime->inferred_structure_type = result.socket_structure_types[i];
+  }
   if (tree.runtime->structure_type_interface &&
       *tree.runtime->structure_type_interface == result.group_interface)
   {

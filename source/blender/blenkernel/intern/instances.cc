@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
 #include "BLI_array_utils.hh"
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 #include "BLI_rand.hh"
 #include "BLI_task.hh"
 
@@ -71,24 +71,41 @@ MutableAttributeAccessor Instances::attributes_for_write()
   return MutableAttributeAccessor(this, instance_attribute_accessor_functions());
 }
 
-static void convert_collection_to_instances(const Collection &collection,
-                                            bke::Instances &instances)
+static std::unique_ptr<bke::Instances> convert_collection_to_instances(
+    const Collection &collection)
 {
-  LISTBASE_FOREACH (CollectionChild *, collection_child, &collection.children) {
+  const int instances_num = collection.children.count() + collection.gobject.count();
+
+  auto instances = std::make_unique<bke::Instances>(instances_num);
+
+  MutableSpan<int> handles = instances->reference_handles_for_write();
+  MutableSpan<float4x4> transforms = instances->transforms_for_write();
+
+  int i = 0;
+
+  for (CollectionChild &collection_child : collection.children) {
     float4x4 transform = float4x4::identity();
-    transform.location() += float3(collection_child->collection->instance_offset);
+    transform.location() += float3(collection_child.collection->instance_offset);
     transform.location() -= float3(collection.instance_offset);
-    const int handle = instances.add_reference(*collection_child->collection);
-    instances.add_instance(handle, transform);
+    transforms[i] = transform;
+
+    handles[i] = instances->add_reference(*collection_child.collection);
+
+    i++;
   }
 
-  LISTBASE_FOREACH (CollectionObject *, collection_object, &collection.gobject) {
+  for (CollectionObject &collection_object : collection.gobject) {
     float4x4 transform = float4x4::identity();
     transform.location() -= float3(collection.instance_offset);
-    transform *= (collection_object->ob)->object_to_world();
-    const int handle = instances.add_reference(*collection_object->ob);
-    instances.add_instance(handle, transform);
+    transform *= (collection_object.ob)->object_to_world();
+    transforms[i] = transform;
+
+    handles[i] = instances->add_reference(*collection_object.ob);
+
+    i++;
   }
+
+  return instances;
 }
 
 void InstanceReference::to_geometry_set(GeometrySet &r_geometry_set) const
@@ -102,8 +119,7 @@ void InstanceReference::to_geometry_set(GeometrySet &r_geometry_set) const
     }
     case Type::Collection: {
       const Collection &collection = this->collection();
-      std::unique_ptr<bke::Instances> instances_ptr = std::make_unique<bke::Instances>();
-      convert_collection_to_instances(collection, *instances_ptr);
+      std::unique_ptr<bke::Instances> instances_ptr = convert_collection_to_instances(collection);
       r_geometry_set.replace_instances(instances_ptr.release());
       break;
     }
@@ -125,7 +141,7 @@ StringRefNull InstanceReference::name() const
     case Type::Collection:
       return this->collection().id.name + 2;
     case Type::GeometrySet:
-      return this->geometry_set().name;
+      return this->geometry_set().name();
     case Type::None:
       break;
   }
@@ -148,12 +164,17 @@ uint64_t InstanceReference::hash() const
 
 Instances::Instances() = default;
 
+Instances::Instances(const int size) : instances_num_(size)
+{
+  attributes_.resize(AttrDomain::Instance, size);
+}
+
 Instances::Instances(Instances &&other)
     : references_(std::move(other.references_)),
       instances_num_(other.instances_num_),
       attributes_(std::move(other.attributes_)),
       reference_user_counts_(std::move(other.reference_user_counts_)),
-      almost_unique_ids_cache_(std::move(other.almost_unique_ids_cache_))
+      unique_ids_cache_(std::move(other.unique_ids_cache_))
 {
 }
 
@@ -162,7 +183,7 @@ Instances::Instances(const Instances &other)
       instances_num_(other.instances_num_),
       attributes_(other.attributes_),
       reference_user_counts_(other.reference_user_counts_),
-      almost_unique_ids_cache_(other.almost_unique_ids_cache_)
+      unique_ids_cache_(other.unique_ids_cache_)
 {
 }
 
@@ -188,34 +209,17 @@ Instances &Instances::operator=(Instances &&other)
   return *this;
 }
 
-void Instances::resize(int capacity)
+void Instances::resize(int size)
 {
-  const int old_size = this->instances_num();
-  attributes_.resize(AttrDomain::Instance, capacity);
-  instances_num_ = capacity;
-  if (capacity > old_size) {
-    fill_attribute_range_default(this->attributes_for_write(),
-                                 AttrDomain::Instance,
-                                 {},
-                                 IndexRange::from_begin_end(old_size, capacity));
-  }
-}
-
-void Instances::add_instance(const int instance_handle, const float4x4 &transform)
-{
-  BLI_assert(instance_handle >= 0);
-  BLI_assert(instance_handle < references_.size());
-  instances_num_++;
-  attributes_.resize(AttrDomain::Instance, instances_num_);
-  this->reference_handles_for_write().last() = instance_handle;
-  this->transforms_for_write().last() = transform;
-  this->tag_reference_handles_changed();
+  attributes_.resize(AttrDomain::Instance, size);
+  instances_num_ = size;
 }
 
 Span<int> Instances::reference_handles() const
 {
   return get_span_attribute<int>(
-      attributes_, AttrDomain::Instance, ".reference_index", instances_num_);
+             attributes_, AttrDomain::Instance, ".reference_index", instances_num_)
+      .value_or(Span<int>());
 }
 
 MutableSpan<int> Instances::reference_handles_for_write()
@@ -227,7 +231,8 @@ MutableSpan<int> Instances::reference_handles_for_write()
 Span<float4x4> Instances::transforms() const
 {
   return get_span_attribute<float4x4>(
-      attributes_, AttrDomain::Instance, "instance_transform", instances_num_);
+             attributes_, AttrDomain::Instance, "instance_transform", instances_num_)
+      .value_or(Span<float4x4>());
 }
 
 MutableSpan<float4x4> Instances::transforms_for_write()
@@ -264,13 +269,26 @@ int Instances::add_reference(const InstanceReference &reference)
   return this->add_new_reference(reference);
 }
 
-int Instances::add_new_reference(const InstanceReference &reference)
+int Instances::add_reference(InstanceReference &&reference)
+{
+  if (std::optional<int> handle = this->find_reference_handle(reference)) {
+    return *handle;
+  }
+  return this->add_new_reference(std::move(reference));
+}
+
+int Instances::add_new_reference(InstanceReference reference)
 {
   this->tag_reference_handles_changed();
-  return references_.append_and_get_index(reference);
+  return references_.append_and_get_index(std::move(reference));
 }
 
 Span<InstanceReference> Instances::references() const
+{
+  return references_;
+}
+
+MutableSpan<InstanceReference> Instances::references_for_write()
 {
   return references_;
 }
@@ -461,10 +479,15 @@ static Array<int> generate_unique_instance_ids(Span<int> original_ids)
         break;
       }
       if (iteration == max_iteration) {
-        /* It seems to be very unlikely that we ever run into this case (assuming there are less
-         * than 2^30 instances). However, if that happens, it's better to use an id that is not
-         * unique than to be stuck in an infinite loop. */
-        unique_ids[instance_index] = original_id;
+        /* The likelihood of running into this case is very low even if there is a huge number of
+         * instances. For correctness, it's still good to systematically find an unused id instead
+         * of purely relying on randomness. */
+        for (const int generated_id : IndexRange(INT32_MAX)) {
+          if (used_unique_ids.add(generated_id)) {
+            unique_ids[instance_index] = generated_id;
+            break;
+          }
+        }
         break;
       }
     }
@@ -490,9 +513,9 @@ Span<int> Instances::reference_user_counts() const
   return reference_user_counts_.data();
 }
 
-Span<int> Instances::almost_unique_ids() const
+Span<int> Instances::unique_ids() const
 {
-  almost_unique_ids_cache_.ensure([&](Array<int> &r_data) {
+  unique_ids_cache_.ensure([&](Array<int> &r_data) {
     const VArraySpan<int> instance_ids = *this->attributes().lookup<int>("id");
     if (instance_ids.is_empty()) {
       r_data.reinitialize(instances_num_);
@@ -501,7 +524,7 @@ Span<int> Instances::almost_unique_ids() const
     }
     r_data = generate_unique_instance_ids(instance_ids);
   });
-  return almost_unique_ids_cache_.data();
+  return unique_ids_cache_.data();
 }
 
 static float3 get_transform_position(const float4x4 &transform)

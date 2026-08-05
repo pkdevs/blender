@@ -12,8 +12,8 @@
  * Input needs to be jittered so that the filter converges to the right result.
  */
 
-#include "BLI_hash.h"
-#include "BLI_rect.h"
+#include "BLI_hash_c.hh"
+#include "BLI_rect.hh"
 #include "BLI_set.hh"
 
 #include "BKE_compositor.hh"
@@ -48,8 +48,8 @@ void Film::init_aovs(const Set<std::string> &passes_used_by_viewport_compositor)
     /* Viewport case. */
     if (inst_.v3d->shading.render_pass == EEVEE_RENDER_PASS_AOV) {
       /* AOV display, request only a single AOV. */
-      ViewLayerAOV *aov = (ViewLayerAOV *)BLI_findstring(
-          &inst_.view_layer->aovs, inst_.v3d->shading.aov_name, offsetof(ViewLayerAOV, name));
+      ViewLayerAOV *aov = static_cast<ViewLayerAOV *>(BLI_findstring(
+          &inst_.view_layer->aovs, inst_.v3d->shading.aov_name, offsetof(ViewLayerAOV, name)));
 
       /* AOV found in view layer. */
       if (aov) {
@@ -60,22 +60,22 @@ void Film::init_aovs(const Set<std::string> &passes_used_by_viewport_compositor)
     }
 
     if (inst_.is_viewport_compositor_enabled) {
-      LISTBASE_FOREACH (ViewLayerAOV *, aov, &inst_.view_layer->aovs) {
+      for (ViewLayerAOV &aov : inst_.view_layer->aovs) {
         /* Already added as a display pass. No need to add again. */
-        if (!aovs.is_empty() && aovs.last() == aov) {
+        if (!aovs.is_empty() && aovs.last() == &aov) {
           continue;
         }
 
-        if (passes_used_by_viewport_compositor.contains(aov->name)) {
-          aovs.append(aov);
+        if (passes_used_by_viewport_compositor.contains(aov.name)) {
+          aovs.append(&aov);
         }
       }
     }
   }
   else {
     /* Render case. */
-    LISTBASE_FOREACH (ViewLayerAOV *, aov, &inst_.view_layer->aovs) {
-      aovs.append(aov);
+    for (ViewLayerAOV &aov : inst_.view_layer->aovs) {
+      aovs.append(&aov);
     }
   }
 
@@ -87,8 +87,11 @@ void Film::init_aovs(const Set<std::string> &passes_used_by_viewport_compositor)
   for (ViewLayerAOV *aov : aovs) {
     bool is_value = (aov->type == AOV_TYPE_VALUE);
     int &index = is_value ? aovs_info.value_len : aovs_info.color_len;
-    uint &hash = is_value ? aovs_info.hash_value[index].x : aovs_info.hash_color[index].x;
-    hash = BLI_hash_string(aov->name);
+
+    /* Pack hash in `AOVsInfoData` uint4 array. We place value AOVs after color AOVs. */
+    int combined_index = is_value ? aovs_info.color_len + index : index;
+    aovs_info.hash[combined_index / 4][combined_index % 4] = BLI_hash_string(aov->name);
+
     index++;
   }
 
@@ -107,7 +110,7 @@ float *Film::read_aov(ViewLayerAOV *aov)
 
   GPU_memory_barrier(GPU_BARRIER_TEXTURE_UPDATE);
 
-  return (float *)GPU_texture_read(pass_tx, GPU_DATA_FLOAT, 0);
+  return static_cast<float *>(GPU_texture_read(pass_tx, GPU_DATA_FLOAT, 0));
 }
 
 gpu::Texture *Film::get_aov_texture(ViewLayerAOV *aov)
@@ -115,18 +118,20 @@ gpu::Texture *Film::get_aov_texture(ViewLayerAOV *aov)
   bool is_value = (aov->type == AOV_TYPE_VALUE);
   Texture &accum_tx = is_value ? value_accum_tx_ : color_accum_tx_;
 
-  Span<uint4> aovs_hash(is_value ? aovs_info.hash_value : aovs_info.hash_color,
-                        is_value ? aovs_info.value_len : aovs_info.color_len);
-  /* Find AOV index. */
+  /* Find AOV index next, by searching for the matching hash. */
   uint hash = BLI_hash_string(aov->name);
   int aov_index = -1;
-  int i = 0;
-  for (uint4 candidate_hash : aovs_hash) {
-    if (candidate_hash.x == hash) {
-      aov_index = i;
+
+  /* Hashes are packed in tuples of 4, and value hashes are placed after color hashes,
+   * so we iterate only the relevant range. */
+  IndexRange color_range(0, aovs_info.color_len);
+  IndexRange value_range(aovs_info.color_len, aovs_info.value_len);
+  for (int i : (is_value ? value_range : color_range)) {
+    uint candidate_hash = aovs_info.hash[i / 4][i % 4];
+    if (candidate_hash == hash) {
+      aov_index = i - (is_value ? aovs_info.color_len : 0);
       break;
     }
-    i++;
   }
 
   if (aov_index == -1) {
@@ -148,7 +153,7 @@ gpu::Texture *Film::get_aov_texture(ViewLayerAOV *aov)
 void Film::sync_mist()
 {
   const CameraData &cam = inst_.camera.data_get();
-  const ::World *world = inst_.scene->world;
+  const blender::World *world = inst_.scene->world;
   float mist_start = world ? world->miststa : cam.clip_near;
   float mist_distance = world ? world->mistdist : fabsf(cam.clip_far - cam.clip_near);
   int mist_type = world ? world->mistype : int(WO_MIST_LINEAR);
@@ -233,6 +238,13 @@ static eViewLayerEEVEEPassType enabled_passes(const ViewLayer *view_layer)
                      view_layer->cryptomatte_flag & VIEW_LAYER_CRYPTOMATTE_MATERIAL,
                      EEVEE_RENDER_PASS_CRYPTOMATTE_MATERIAL);
 
+  SET_FLAG_FROM_TEST(result,
+                     view_layer->eevee.denoising_pass_flags & EEVEE_DENOISING_PASS_STORE,
+                     EEVEE_RENDER_PASS_DENOISING_DEPTH | EEVEE_RENDER_PASS_DENOISING_NORMAL |
+                         EEVEE_RENDER_PASS_DENOISING_ROUGHNESS |
+                         EEVEE_RENDER_PASS_DENOISING_DIFFUSE_ALBEDO |
+                         EEVEE_RENDER_PASS_DENOISING_SPECULAR_ALBEDO);
+
   return result;
 }
 
@@ -263,6 +275,19 @@ static eViewLayerEEVEEPassType get_viewport_compositor_enabled_passes(
   return viewport_compositor_enabled_passes;
 }
 
+/* Light passes are stored pre-divided by their matching Color pass, so Color must be enabled
+ * whenever Light is (#161352). */
+static eViewLayerEEVEEPassType with_light_pass_color_dependencies(eViewLayerEEVEEPassType passes)
+{
+  if (passes & EEVEE_RENDER_PASS_DIFFUSE_LIGHT) {
+    passes |= EEVEE_RENDER_PASS_DIFFUSE_COLOR;
+  }
+  if (passes & EEVEE_RENDER_PASS_SPECULAR_LIGHT) {
+    passes |= EEVEE_RENDER_PASS_SPECULAR_COLOR;
+  }
+  return passes;
+}
+
 void Film::init(const int2 &extent, const rcti *output_rect)
 {
   using namespace math;
@@ -281,8 +306,7 @@ void Film::init(const int2 &extent, const rcti *output_rect)
     }
   }
 
-  this->depth = GPU_clip_control_support() ? DepthState{0.0f, DRW_STATE_DEPTH_GREATER_EQUAL} :
-                                             DepthState{1.0f, DRW_STATE_DEPTH_LESS_EQUAL};
+  this->depth = DepthState{0.0f, DRW_STATE_DEPTH_GREATER_EQUAL};
 
   /* Compute the passes needed by the viewport compositor. */
   Set<std::string> passes_used_by_viewport_compositor;
@@ -309,6 +333,8 @@ void Film::init(const int2 &extent, const rcti *output_rect)
         enabled_passes |= EEVEE_RENDER_PASS_DEPTH;
       }
 
+      enabled_passes = with_light_pass_color_dependencies(enabled_passes);
+
       if (assign_if_different(enabled_passes_, enabled_passes)) {
         inst_.sampling.reset();
       }
@@ -317,6 +343,8 @@ void Film::init(const int2 &extent, const rcti *output_rect)
       /* Render Case. */
       enabled_passes_ = enabled_passes(inst_.view_layer);
     }
+
+    enabled_passes_ = with_light_pass_color_dependencies(enabled_passes_);
 
     /* Filter obsolete passes. */
     enabled_passes_ &= ~(EEVEE_RENDER_PASS_UNUSED_8 | EEVEE_RENDER_PASS_UNUSED_14);
@@ -389,15 +417,23 @@ void Film::init(const int2 &extent, const rcti *output_rect)
                                                 EEVEE_RENDER_PASS_POSITION |
                                                 EEVEE_RENDER_PASS_VECTOR;
     const eViewLayerEEVEEPassType color_passes_1 = EEVEE_RENDER_PASS_DIFFUSE_LIGHT |
+                                                   EEVEE_RENDER_PASS_DIFFUSE_COLOR |
                                                    EEVEE_RENDER_PASS_SPECULAR_LIGHT |
-                                                   EEVEE_RENDER_PASS_VOLUME_LIGHT |
-                                                   EEVEE_RENDER_PASS_EMIT;
-    const eViewLayerEEVEEPassType color_passes_2 = EEVEE_RENDER_PASS_DIFFUSE_COLOR |
-                                                   EEVEE_RENDER_PASS_SPECULAR_COLOR |
+                                                   EEVEE_RENDER_PASS_SPECULAR_COLOR;
+    const eViewLayerEEVEEPassType color_passes_2 = EEVEE_RENDER_PASS_VOLUME_LIGHT |
+                                                   EEVEE_RENDER_PASS_EMIT |
                                                    EEVEE_RENDER_PASS_ENVIRONMENT |
                                                    EEVEE_RENDER_PASS_MIST |
                                                    EEVEE_RENDER_PASS_SHADOW | EEVEE_RENDER_PASS_AO;
     const eViewLayerEEVEEPassType color_passes_3 = EEVEE_RENDER_PASS_TRANSPARENT;
+    const eViewLayerEEVEEPassType denoising_passes = EEVEE_RENDER_PASS_DENOISING_DEPTH |
+                                                     EEVEE_RENDER_PASS_DENOISING_NORMAL |
+                                                     EEVEE_RENDER_PASS_DENOISING_ROUGHNESS |
+                                                     EEVEE_RENDER_PASS_DENOISING_DIFFUSE_ALBEDO |
+                                                     EEVEE_RENDER_PASS_DENOISING_SPECULAR_ALBEDO;
+    const eViewLayerEEVEEPassType cryptomatte_passes = EEVEE_RENDER_PASS_CRYPTOMATTE_ASSET |
+                                                       EEVEE_RENDER_PASS_CRYPTOMATTE_MATERIAL |
+                                                       EEVEE_RENDER_PASS_CRYPTOMATTE_OBJECT;
 
     data_.exposure_scale = pow2f(scene.view_settings.exposure);
     if (enabled_passes_ & data_passes) {
@@ -411,6 +447,12 @@ void Film::init(const int2 &extent, const rcti *output_rect)
     }
     if (enabled_passes_ & color_passes_3) {
       enabled_categories_ |= PASS_CATEGORY_COLOR_3;
+    }
+    if (enabled_passes_ & cryptomatte_passes) {
+      enabled_categories_ |= PASS_CATEGORY_CRYPTOMATTE;
+    }
+    if (enabled_passes_ & denoising_passes) {
+      enabled_categories_ |= PASS_CATEGORY_DENOISE;
     }
   }
   {
@@ -428,14 +470,29 @@ void Film::init(const int2 &extent, const rcti *output_rect)
     data_.color_len = 0;
     data_.value_len = 0;
 
+    int cryptomatte_id = 0;
     auto pass_index_get = [&](eViewLayerEEVEEPassType pass_type) {
       ePassStorageType storage_type = pass_storage_type(pass_type);
-      int index = (enabled_passes_ & pass_type) ?
-                      (storage_type == PASS_STORAGE_VALUE ? data_.value_len : data_.color_len)++ :
-                      -1;
-      if (inst_.is_viewport() && inst_.v3d->shading.render_pass == pass_type) {
-        data_.display_id = index;
-        data_.display_storage_type = storage_type;
+      int index = -1;
+      if (enabled_passes_ & pass_type) {
+        if (storage_type == PASS_STORAGE_COLOR) {
+          index = data_.color_len++;
+        }
+        else if (storage_type == PASS_STORAGE_VALUE) {
+          index = data_.value_len++;
+        }
+        else if (storage_type == PASS_STORAGE_CRYPTOMATTE) {
+          index = cryptomatte_id;
+          cryptomatte_id += divide_ceil_u(data_.cryptomatte_samples_len, 2u);
+        }
+        else if (storage_type == PASS_STORAGE_DENOISING_DEPTH) {
+          index = 0;
+        }
+
+        if (inst_.is_viewport() && inst_.v3d->shading.render_pass == pass_type) {
+          data_.display_id = index;
+          data_.display_storage_type = storage_type;
+        }
       }
       return index;
     };
@@ -455,6 +512,13 @@ void Film::init(const int2 &extent, const rcti *output_rect)
     data_.ambient_occlusion_id = pass_index_get(EEVEE_RENDER_PASS_AO);
     data_.transparent_id = pass_index_get(EEVEE_RENDER_PASS_TRANSPARENT);
 
+    data_.denoising_depth_id = pass_index_get(EEVEE_RENDER_PASS_DENOISING_DEPTH);
+    data_.denoising_normal_id = pass_index_get(EEVEE_RENDER_PASS_DENOISING_NORMAL);
+    data_.denoising_roughness_id = pass_index_get(EEVEE_RENDER_PASS_DENOISING_ROUGHNESS);
+    data_.denoising_diffuse_albedo_id = pass_index_get(EEVEE_RENDER_PASS_DENOISING_DIFFUSE_ALBEDO);
+    data_.denoising_specular_albedo_id = pass_index_get(
+        EEVEE_RENDER_PASS_DENOISING_SPECULAR_ALBEDO);
+
     data_.aov_color_id = data_.color_len;
     data_.aov_value_id = data_.value_len;
 
@@ -464,30 +528,9 @@ void Film::init(const int2 &extent, const rcti *output_rect)
     data_.color_len += data_.aov_color_len;
     data_.value_len += data_.aov_value_len;
 
-    int cryptomatte_id = 0;
-    auto cryptomatte_index_get = [&](eViewLayerEEVEEPassType pass_type) {
-      int index = -1;
-      if (enabled_passes_ & pass_type) {
-        index = cryptomatte_id;
-        cryptomatte_id += divide_ceil_u(data_.cryptomatte_samples_len, 2u);
-
-        if (inst_.is_viewport() && inst_.v3d->shading.render_pass == pass_type) {
-          data_.display_id = index;
-          data_.display_storage_type = PASS_STORAGE_CRYPTOMATTE;
-        }
-      }
-      return index;
-    };
-    data_.cryptomatte_object_id = cryptomatte_index_get(EEVEE_RENDER_PASS_CRYPTOMATTE_OBJECT);
-    data_.cryptomatte_asset_id = cryptomatte_index_get(EEVEE_RENDER_PASS_CRYPTOMATTE_ASSET);
-    data_.cryptomatte_material_id = cryptomatte_index_get(EEVEE_RENDER_PASS_CRYPTOMATTE_MATERIAL);
-
-    if ((enabled_passes_ &
-         (EEVEE_RENDER_PASS_CRYPTOMATTE_ASSET | EEVEE_RENDER_PASS_CRYPTOMATTE_MATERIAL |
-          EEVEE_RENDER_PASS_CRYPTOMATTE_OBJECT)) != 0)
-    {
-      enabled_categories_ |= PASS_CATEGORY_CRYPTOMATTE;
-    }
+    data_.cryptomatte_object_id = pass_index_get(EEVEE_RENDER_PASS_CRYPTOMATTE_OBJECT);
+    data_.cryptomatte_asset_id = pass_index_get(EEVEE_RENDER_PASS_CRYPTOMATTE_ASSET);
+    data_.cryptomatte_material_id = pass_index_get(EEVEE_RENDER_PASS_CRYPTOMATTE_MATERIAL);
   }
   {
     int2 weight_extent = (inst_.camera.is_panoramic() || (data_.scaling_factor > 1)) ?
@@ -520,6 +563,9 @@ void Film::init(const int2 &extent, const rcti *output_rect)
                                              (cryptomatte_array_len > 0) ? data_.extent : int2(1),
                                              (cryptomatte_array_len > 0) ? cryptomatte_array_len :
                                                                            1);
+    reset += denoising_depth_tx_.ensure_2d(
+        depth_format,
+        (enabled_passes_ & EEVEE_RENDER_PASS_DENOISING_DEPTH) ? data_.extent : int2(1));
 
     if (reset > 0) {
       data_.use_history = 0;
@@ -532,6 +578,7 @@ void Film::init(const int2 &extent, const rcti *output_rect)
       weight_tx_.current().clear(float4(0.0f));
       depth_tx_.clear(float4(0.0f));
       cryptomatte_tx_.clear(float4(0.0f));
+      denoising_depth_tx_.clear(float4(0.0f));
     }
   }
 }
@@ -542,15 +589,23 @@ void Film::sync()
    *
    * Compute shader is also used to work around Metal/Intel iGPU issues concerning
    * read write support for array textures. In this case the copy_ps_ is used to
-   * copy the right color/value to the framebuffer. */
+   * copy the right color/value to the framebuffer.
+   *
+   * It is also disabled for Windows on ARM as certain GPU/Driver combinations will cause a driver
+   * compiler crash. There is no way to detect up front when this is the case.
+   *
+   * See #153463
+   */
   use_compute_ = !inst_.is_viewport() ||
-                 GPU_type_matches(GPU_DEVICE_INTEL, GPU_OS_MAC, GPU_DRIVER_ANY);
+                 GPU_type_matches(GPU_DEVICE_INTEL, GPU_OS_MAC, GPU_DRIVER_ANY) ||
+                 GPU_type_matches_ex(
+                     GPU_DEVICE_QUALCOMM, GPU_OS_WIN, GPU_DRIVER_ANY, GPU_BACKEND_VULKAN);
 
   eShaderType shader = use_compute_ ? FILM_COMP : FILM_FRAG;
 
   /* TODO(fclem): Shader variation for panoramic & scaled resolution. */
 
-  GPUShader *sh = inst_.shaders.static_shader_get(shader);
+  gpu::Shader *sh = inst_.shaders.static_shader_get(shader);
   accumulate_ps_.init();
   init_pass(accumulate_ps_, sh);
   /* Sync with rendering passes. */
@@ -559,6 +614,7 @@ void Film::sync()
     accumulate_ps_.dispatch(int3(math::divide_ceil(data_.extent, int2(FILM_GROUP_SIZE)), 1));
   }
   else {
+    accumulate_ps_.push_constant("display_only", &display_only_);
     accumulate_ps_.draw_procedural(GPU_PRIM_TRIS, 1, 3);
   }
 
@@ -586,7 +642,7 @@ void Film::sync()
   }
 }
 
-void Film::init_pass(PassSimple &pass, GPUShader *sh)
+void Film::init_pass(PassSimple &pass, gpu::Shader *sh)
 {
   GPUSamplerState filter = {GPU_SAMPLER_FILTERING_LINEAR};
   RenderBuffers &rbuffers = inst_.render_buffers;
@@ -626,7 +682,9 @@ void Film::init_pass(PassSimple &pass, GPUShader *sh)
   pass.bind_image("color_accum_img", &color_accum_tx_);
   pass.bind_image("value_accum_img", &value_accum_tx_);
   pass.bind_image("cryptomatte_img", &cryptomatte_tx_);
+  pass.bind_image("denoising_depth_img", &denoising_depth_tx_);
   pass.bind_resources(inst_.uniform_data);
+  pass.bind_resources(inst_.sampling);
 }
 
 void Film::end_sync()
@@ -657,7 +715,9 @@ float2 Film::pixel_jitter_get() const
 {
   float2 jitter = inst_.sampling.rng_2d_get(SAMPLING_FILTER_U);
 
-  if (!use_box_filter && data_.filter_radius < M_SQRT1_2 && !inst_.camera.is_panoramic()) {
+  if (!use_box_filter && data_.filter_radius < M_SQRT1_2 && !inst_.camera.is_panoramic() &&
+      !inst_.sampling.use_custom_pixel_jitter_sample())
+  {
     /* For filter size less than a pixel, change sampling strategy and use a uniform disk
      * distribution covering the filter shape. This avoids putting samples in areas without any
      * weights. */
@@ -841,19 +901,14 @@ void Film::accumulate(View &view, gpu::Texture *combined_final_tx)
     GPU_framebuffer_bind(dfbl->default_fb);
     /* Clear when using render borders. */
     if (data_.extent != int2(GPU_texture_width(dtxl->color), GPU_texture_height(dtxl->color))) {
-      float4 clear_color = {0.0f, 0.0f, 0.0f, 0.0f};
-      GPU_framebuffer_clear_color(dfbl->default_fb, clear_color);
+      GPU_framebuffer_clear_color(dfbl->default_fb, double4(0.0));
     }
     GPU_framebuffer_viewport_set(dfbl->default_fb, UNPACK2(data_.offset), UNPACK2(data_.extent));
   }
 
-  update_sample_table();
-
   combined_final_tx_ = combined_final_tx;
 
-  data_.display_only = false;
-  inst_.uniform_data.push_update();
-
+  display_only_ = false;
   inst_.manager->submit(accumulate_ps_, view);
   inst_.manager->submit(copy_ps_, view);
 
@@ -879,11 +934,9 @@ void Film::display()
 
   combined_final_tx_ = inst_.render_buffers.combined_tx;
 
-  data_.display_only = true;
-  inst_.uniform_data.push_update();
-
   draw::View &drw_view = draw::View::default_get();
 
+  display_only_ = true;
   DRW_manager_get()->submit(accumulate_ps_, drw_view);
 
   inst_.render_buffers.release();
@@ -902,7 +955,7 @@ float *Film::read_pass(eViewLayerEEVEEPassType pass_type, int layer_offset)
 
   GPU_memory_barrier(GPU_BARRIER_TEXTURE_UPDATE);
 
-  float *result = (float *)GPU_texture_read(pass_tx, GPU_DATA_FLOAT, 0);
+  float *result = static_cast<float *>(GPU_texture_read(pass_tx, GPU_DATA_FLOAT, 0));
 
   if (pass_is_float3(pass_type)) {
     /* Convert result in place as we cannot do this conversion on GPU. */
@@ -925,6 +978,8 @@ gpu::Texture *Film::get_pass_texture(eViewLayerEEVEEPassType pass_type, int laye
                           combined_tx_.current() :
                       (pass_type == EEVEE_RENDER_PASS_DEPTH) ?
                           depth_tx_ :
+                      (pass_type == EEVEE_RENDER_PASS_DENOISING_DEPTH) ?
+                          denoising_depth_tx_ :
                           (is_cryptomatte ? cryptomatte_tx_ :
                                             (is_value ? value_accum_tx_ : color_accum_tx_));
 
@@ -952,6 +1007,7 @@ static eShaderType get_write_pass_shader_type(eViewLayerEEVEEPassType pass_type)
 
   switch (Film::pass_storage_type(pass_type)) {
     case PASS_STORAGE_VALUE:
+    case PASS_STORAGE_DENOISING_DEPTH:
       return FILM_PASS_CONVERT_VALUE;
     case PASS_STORAGE_COLOR:
       return FILM_PASS_CONVERT_COLOR;
@@ -987,13 +1043,6 @@ void Film::write_viewport_compositor_passes()
       continue;
     }
 
-    /* The compositor will use the viewport color texture as the combined pass because the viewport
-     * texture will include Grease Pencil, so no need to write the combined pass from the engine
-     * side. */
-    if (pass_type == EEVEE_RENDER_PASS_COMBINED) {
-      continue;
-    }
-
     Vector<std::string> pass_names = Film::pass_to_render_pass_names(pass_type, inst_.view_layer);
     for (const int64_t pass_offset : IndexRange(pass_names.size())) {
       gpu::Texture *pass_texture = this->get_pass_texture(pass_type, pass_offset);
@@ -1009,7 +1058,7 @@ void Film::write_viewport_compositor_passes()
        * all cases for now. */
       const char *pass_name = pass_names[pass_offset].c_str();
       draw::TextureFromPool &output_pass_texture = DRW_viewport_pass_texture_get(pass_name);
-      output_pass_texture.acquire(this->display_extent, GPU_texture_format(pass_texture));
+      output_pass_texture.acquire_2d(this->display_extent, GPU_texture_format(pass_texture));
 
       PassSimple write_pass_ps = {"Film.WriteViewportCompositorPass"};
       const eShaderType write_shader_type = get_write_pass_shader_type(pass_type);
@@ -1024,21 +1073,21 @@ void Film::write_viewport_compositor_passes()
   }
 
   /* Write AOV passes. */
-  LISTBASE_FOREACH (ViewLayerAOV *, aov, &inst_.view_layer->aovs) {
-    if ((aov->flag & AOV_CONFLICT) != 0) {
+  for (ViewLayerAOV &aov : inst_.view_layer->aovs) {
+    if ((aov.flag & AOV_CONFLICT) != 0) {
       continue;
     }
-    gpu::Texture *pass_texture = this->get_aov_texture(aov);
+    gpu::Texture *pass_texture = this->get_aov_texture(&aov);
     if (!pass_texture) {
       continue;
     }
 
     /* See above comment regarding the allocation extent. */
-    draw::TextureFromPool &output_pass_texture = DRW_viewport_pass_texture_get(aov->name);
-    output_pass_texture.acquire(this->display_extent, GPU_texture_format(pass_texture));
+    draw::TextureFromPool &output_pass_texture = DRW_viewport_pass_texture_get(aov.name);
+    output_pass_texture.acquire_2d(this->display_extent, GPU_texture_format(pass_texture));
 
     PassSimple write_pass_ps = {"Film.WriteViewportCompositorPass"};
-    const eShaderType write_shader_type = get_aov_write_pass_shader_type(aov);
+    const eShaderType write_shader_type = get_aov_write_pass_shader_type(&aov);
     write_pass_ps.shader_set(inst_.shaders.static_shader_get(write_shader_type));
     write_pass_ps.push_constant("offset", data_.offset);
     write_pass_ps.bind_texture("input_tx", pass_texture);

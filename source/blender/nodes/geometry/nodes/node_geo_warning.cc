@@ -7,13 +7,17 @@
 #include "UI_interface_layout.hh"
 #include "UI_resources.hh"
 
-#include "BLI_string_utf8.h"
+#include "BLI_string_utf8.hh"
 
 #include "NOD_rna_define.hh"
 #include "RNA_access.hh"
 #include "RNA_enum_types.hh"
 
-namespace blender::nodes::node_geo_warning_cc {
+#include "COM_node_operation.hh"
+
+namespace blender {
+
+namespace nodes::node_geo_warning_cc {
 
 static void node_declare(NodeDeclarationBuilder &b)
 {
@@ -22,9 +26,9 @@ static void node_declare(NodeDeclarationBuilder &b)
 
   b.add_default_layout();
 
-  b.add_input<decl::Bool>("Show").default_value(true).hide_value();
-  b.add_output<decl::Bool>("Show").align_with_previous();
-  b.add_input<decl::String>("Message").hide_label();
+  b.add_input<decl::Bool>("Show"_ustr).default_value(true).hide_value();
+  b.add_output<decl::Bool>("Show"_ustr).align_with_previous();
+  b.add_input<decl::String>("Message"_ustr).optional_label();
 }
 
 class LazyFunctionForWarningNode : public LazyFunction {
@@ -58,8 +62,7 @@ class LazyFunctionForWarningNode : public LazyFunction {
     GeoNodesUserData &user_data = *static_cast<GeoNodesUserData *>(context.user_data);
     GeoNodesLocalUserData &local_user_data = *static_cast<GeoNodesLocalUserData *>(
         context.local_user_data);
-    if (geo_eval_log::GeoTreeLogger *tree_logger = local_user_data.try_get_tree_logger(user_data))
-    {
+    if (eval_log::NodeTreeLogger *tree_logger = local_user_data.try_get_tree_logger(user_data)) {
       tree_logger->node_warnings.append(
           *tree_logger->allocator,
           {node_.identifier, {NodeWarningType(node_.custom1), std::move(message)}});
@@ -69,11 +72,36 @@ class LazyFunctionForWarningNode : public LazyFunction {
   }
 };
 
-static void node_layout(uiLayout *layout, bContext * /*C*/, PointerRNA *ptr)
+using namespace blender::compositor;
+
+class WarningOperation : public NodeOperation {
+ public:
+  using NodeOperation::NodeOperation;
+
+  void execute() override
+  {
+    const Result &input_show = this->get_input("Show");
+    Result &output_show = this->get_result("Show");
+    output_show.share_data(input_show);
+    if (!input_show.get_single_value_default<bool>()) {
+      return;
+    }
+
+    const std::string message = this->get_input("Message").get_single_value_default<std::string>();
+    this->add_warning(NodeWarningType(this->node().custom1), message);
+  }
+};
+
+static NodeOperation *get_compositor_operation(Context &context, const bNode &node)
 {
-  layout->use_property_split_set(true);
-  layout->use_property_decorate_set(false);
-  layout->prop(ptr, "warning_type", UI_ITEM_NONE, "", ICON_NONE);
+  return new WarningOperation(context, node);
+}
+
+static void node_layout(ui::Layout &layout, bContext * /*C*/, PointerRNA *ptr)
+{
+  layout.use_property_split_set(true);
+  layout.use_property_decorate_set(false);
+  layout.prop(ptr, "warning_type", UI_ITEM_NONE, "", ICON_NONE);
 }
 
 static void node_rna(StructRNA *srna)
@@ -101,9 +129,9 @@ static void node_label(const bNodeTree * /*ntree*/,
 
 static void node_register()
 {
-  static blender::bke::bNodeType ntype;
+  static bke::bNodeType ntype;
 
-  geo_node_type_base(&ntype, "GeometryNodeWarning", GEO_NODE_WARNING);
+  geo_cmp_node_type_base(&ntype, "GeometryNodeWarning"_ustr, GEO_NODE_WARNING);
   ntype.ui_name = "Warning";
   ntype.ui_description = "Create custom warnings in node groups";
   ntype.enum_name_legacy = "WARNING";
@@ -111,15 +139,16 @@ static void node_register()
   ntype.declare = node_declare;
   ntype.labelfunc = node_label;
   ntype.draw_buttons = node_layout;
-  blender::bke::node_register_type(ntype);
+  ntype.get_compositor_operation = get_compositor_operation;
+  bke::node_register_type(ntype);
 
   node_rna(ntype.rna_ext.srna);
 }
 NOD_REGISTER_NODE(node_register)
 
-}  // namespace blender::nodes::node_geo_warning_cc
+}  // namespace nodes::node_geo_warning_cc
 
-namespace blender::nodes {
+namespace nodes {
 
 std::unique_ptr<LazyFunction> get_warning_node_lazy_function(const bNode &node)
 {
@@ -128,4 +157,5 @@ std::unique_ptr<LazyFunction> get_warning_node_lazy_function(const bNode &node)
   return std::make_unique<LazyFunctionForWarningNode>(node);
 }
 
-}  // namespace blender::nodes
+}  // namespace nodes
+}  // namespace blender

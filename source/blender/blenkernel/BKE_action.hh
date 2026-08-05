@@ -8,14 +8,19 @@
  * \brief Blender kernel action and pose functionality.
  */
 
-#include "BLI_compiler_attrs.h"
+#include "BLI_compiler_attrs.hh"
 #include "BLI_function_ref.hh"
 #include "BLI_span.hh"
+
+#include "BKE_pose.hh"
+
+namespace blender {
 
 struct BlendDataReader;
 struct BlendLibReader;
 struct BlendWriter;
 struct bArmature;
+struct BoneParentTransform;
 
 /* The following structures are defined in DNA_action_types.h, and DNA_anim_types.h */
 struct AnimationEvalContext;
@@ -31,7 +36,7 @@ struct bPose;
 struct bPoseChannel;
 struct bPoseChannel_Runtime;
 
-namespace blender::animrig {
+namespace animrig {
 
 /**
  * Action slot handle type.
@@ -48,42 +53,23 @@ namespace blender::animrig {
  */
 using slot_handle_t = int32_t;
 
-}  // namespace blender::animrig
+}  // namespace animrig
 
 /* Action Lib Stuff ----------------- */
 
 /* Allocate a new bAction with the given name */
 bAction *BKE_action_add(Main *bmain, const char name[]);
 
-/* Action API ----------------- */
-
-/**
- * Remove all fcurves from the action.
- *
- * \note This function only supports legacy Actions.
- */
-void BKE_action_fcurves_clear(bAction *act);
-
 /* Action Groups API ----------------- */
 
 /**
- * Get the active action-group for an Action.
- *
- * \note This function supports both legacy and layered Actions.
- */
-bActionGroup *get_active_actiongroup(bAction *act) ATTR_WARN_UNUSED_RESULT;
-
-/**
- * Make the given Action-Group the active one.
- *
- * \note This function supports both legacy and layered Actions.
- */
-void set_active_action_group(bAction *act, bActionGroup *agrp, short select);
-
-/**
  * Sync colors used for action/bone group with theme settings.
+ * This has to be called when the color theme index on the group changes so the actual color can be
+ * copied from the theme.
+ *
+ * \note Only meaningful on objects since for bones the group color is defined by the bone color.
  */
-void action_group_colors_sync(bActionGroup *grp, const bActionGroup *ref_grp);
+void action_group_colors_sync(bActionGroup *grp);
 
 /**
  * Set colors used on this action group.
@@ -96,55 +82,9 @@ void action_group_colors_set(bActionGroup *grp, const BoneColor *color);
  * If `pchan->color` is set to a non-default color, that is used. Otherwise the
  * armature bone color is used.
  *
- * Note that if `pchan->bone` is `nullptr`, this function silently does nothing.
+ * Note that if the posechan's armature bone is nullptr, this function silently does nothing.
  */
-void action_group_colors_set_from_posebone(bActionGroup *grp, const bPoseChannel *pchan);
-
-/**
- * Add a new action group with the given name to the action>
- *
- * \note This function ONLY works on legacy Actions, not on layered Actions.
- */
-bActionGroup *action_groups_add_new(bAction *act, const char name[]);
-
-/**
- * Add given channel into (active) group
- * - assumes that channel is not linked to anything anymore
- * - always adds at the end of the group
- *
- * \note This function ONLY works on legacy Actions, not on layered Actions.
- */
-void action_groups_add_channel(bAction *act, bActionGroup *agrp, FCurve *fcurve);
-
-/**
- * Remove the given channel from all groups.
- *
- * \note This function ONLY works on legacy Actions, not on layered Actions.
- */
-void action_groups_remove_channel(bAction *act, FCurve *fcu);
-
-/**
- * Reconstruct channel pointers.
- * Assumes that the groups referred to by the FCurves are already in act->groups.
- * Reorders the main channel list to match group order.
- *
- * \note This function ONLY works on legacy Actions, not on layered Actions.
- */
-void BKE_action_groups_reconstruct(bAction *act);
-
-/**
- * Find a group with the given name.
- *
- * \note This function supports only legacy Actions.
- */
-bActionGroup *BKE_action_group_find_name(bAction *act, const char name[]);
-
-/**
- * Clear all 'temp' flags on all groups.
- *
- * \note This function supports both legacy and layered Actions.
- */
-void action_groups_clear_tempflags(bAction *act);
+void action_group_colors_set_from_posebone(bActionGroup *grp, bke::PChanBoneConst pchanbone);
 
 /* Pose API ----------------- */
 
@@ -233,8 +173,8 @@ bool BKE_pose_is_bonecoll_visible(const bArmature *arm,
 /**
  * Find the active pose-channel for an object
  *
- * \param check_bonecoll: checks if the bone is on a visible bone collection (this might be skipped
- * (e.g. for "Show Active" from the Outliner).
+ * \param check_bonecoll: checks if the bone is on a visible bone collection
+ * (this might be skipped: e.g. for "Show Active" from the Outliner).
  * \return #bPoseChannel if found or NULL.
  * \note #Object, not #bPose is used here, as we need info (collection/active bone) from Armature.
  */
@@ -281,7 +221,7 @@ bool BKE_pose_channels_is_valid(const bPose *pose) ATTR_WARN_UNUSED_RESULT;
  * Checks for IK constraint, Spline IK, and also for Follow-Path constraint.
  * can do more constraints flags later. pose should be entirely OK.
  */
-void BKE_pose_update_constraint_flags(bPose *pose) ATTR_NONNULL(1);
+void BKE_pose_update_constraint_flags(Object &pose_ob);
 
 /**
  * Tag constraint flags for update.
@@ -307,6 +247,21 @@ void BKE_pose_itasc_init(bItasc *itasc);
  * Checks if a bone is part of an IK chain or not.
  */
 bool BKE_pose_channel_in_IK_chain(Object *ob, bPoseChannel *pchan);
+
+/**
+ * Get the transform location, accounting for POSE_TRANSFORM_AT_CUSTOM_TX.
+ */
+void BKE_pose_channel_transform_location(const bArmature *arm,
+                                         const bPoseChannel *pose_bone,
+                                         float r_pose_space_pivot[3]);
+
+/**
+ * Get the transform pose orientation, accounting for
+ * POSE_TRANSFORM_AT_CUSTOM_TX.
+ */
+void BKE_pose_channel_transform_orientation(const bArmature *arm,
+                                            const bPoseChannel *pose_bone,
+                                            float r_pose_orientation[3][3]);
 
 /* Bone Groups API --------------------- */
 
@@ -336,7 +291,7 @@ void what_does_obaction(Object *ob,
                         bPose *pose,
                         bAction *act,
                         int32_t action_slot_handle,
-                        char groupname[],
+                        const char groupname[],
                         const AnimationEvalContext *anim_eval_context) ATTR_NONNULL(1, 2);
 
 void BKE_pose_copy_pchan_result(bPoseChannel *pchanto, const bPoseChannel *pchanfrom)
@@ -348,14 +303,14 @@ bool BKE_pose_copy_result(bPose *to, bPose *from);
 /**
  * Zero the pose transforms for the entire pose or only for selected bones.
  */
-void BKE_pose_rest(bPose *pose, bool selected_bones_only);
+void BKE_pose_rest(Object &pose_ob, bool selected_bones_only);
 
 /**
  * Tag pose for recalculation. Also tag all related data to be recalculated.
  */
 void BKE_pose_tag_recalc(Main *bmain, bPose *pose) ATTR_NONNULL(1, 2);
 
-void BKE_pose_blend_write(BlendWriter *writer, bPose *pose, bArmature *arm) ATTR_NONNULL(1, 2, 3);
+void BKE_pose_blend_write(BlendWriter *writer, bPose *pose) ATTR_NONNULL(1, 2);
 void BKE_pose_blend_read_data(BlendDataReader *reader, ID *id_owner, bPose *pose)
     ATTR_NONNULL(1, 2);
 void BKE_pose_blend_read_after_liblink(BlendLibReader *reader, Object *ob, bPose *pose)
@@ -367,13 +322,12 @@ void BKE_pose_blend_read_after_liblink(BlendLibReader *reader, Object *ob, bPose
  * Flip the action so it can be applied as a mirror. Only data of slots that are related to the
  * given objects is mirrored.
  */
-void BKE_action_flip_with_pose(bAction *act, blender::Span<Object *> objects) ATTR_NONNULL(1);
+void BKE_action_flip_with_pose(bAction *act, Span<Object *> objects) ATTR_NONNULL(1);
 
-namespace blender::bke {
+namespace bke {
 
-using FoundFCurveCallback = blender::FunctionRef<void(FCurve *fcurve, const char *bone_name)>;
-using FoundFCurveCallbackConst =
-    blender::FunctionRef<void(const FCurve *fcurve, const char *bone_name)>;
+using FoundFCurveCallback = FunctionRef<void(FCurve *fcurve, const char *bone_name)>;
+using FoundFCurveCallbackConst = FunctionRef<void(const FCurve *fcurve, const char *bone_name)>;
 
 /**
  * Calls `callback` for every fcurve in an action slot that targets any bone.
@@ -381,10 +335,12 @@ using FoundFCurveCallbackConst =
  * \param slot_handle: only FCurves from the given action slot are visited.
  */
 void BKE_action_find_fcurves_with_bones(bAction *action,
-                                        blender::animrig::slot_handle_t slot_handle,
+                                        animrig::slot_handle_t slot_handle,
                                         FoundFCurveCallback callback);
 void BKE_action_find_fcurves_with_bones(const bAction *action,
-                                        blender::animrig::slot_handle_t slot_handle,
+                                        animrig::slot_handle_t slot_handle,
                                         FoundFCurveCallbackConst callback);
 
-};  // namespace blender::bke
+};  // namespace bke
+
+}  // namespace blender

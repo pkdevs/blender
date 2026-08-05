@@ -15,6 +15,8 @@
 #include "BLI_array.hh"
 #include "BLI_vector.hh"
 
+namespace blender {
+
 struct DynStr;
 
 extern char BaseMathObject_is_wrapped_doc[];
@@ -40,12 +42,20 @@ enum {
    * (typical use cases for tuple).
    */
   BASE_MATH_FLAG_IS_FROZEN = (1 << 1),
+  /**
+   * When set, prevents calling freeze() and resize() while using the buffer protocol.
+   *
+   * \note `memoryview` & `np.frombuffer` pass the `PyBUF_FORMAT | PyBUF_INDIRECT` flags,
+   * and the object can be mutated, so `PyBUF_WRITABLE` can't be handled.
+   * That's why it's always necessary to check for write access.
+   */
+  BASE_MATH_FLAG_HAS_BUFFER_VIEW = (1 << 2),
 };
 #define BASE_MATH_FLAG_DEFAULT 0
 
 #define BASE_MATH_MEMBERS(_data) \
   /** Array of data (alias), wrapped status depends on wrapped status. */ \
-  PyObject_VAR_HEAD \
+  PyObject_HEAD \
   float *_data; \
   /** If this vector references another object, otherwise NULL, *Note* this owns its reference */ \
   PyObject *cb_user; \
@@ -61,12 +71,16 @@ struct BaseMathObject {
   BASE_MATH_MEMBERS(data);
 };
 
+}  // namespace blender
+
 /* types */
 #include "mathutils_Color.hh"       // IWYU pragma: export
 #include "mathutils_Euler.hh"       // IWYU pragma: export
 #include "mathutils_Matrix.hh"      // IWYU pragma: export
 #include "mathutils_Quaternion.hh"  // IWYU pragma: export
 #include "mathutils_Vector.hh"      // IWYU pragma: export
+
+namespace blender {
 
 /* avoid checking all types */
 #define BaseMathObject_CheckExact(v) (Py_TYPE(v)->tp_dealloc == (destructor)BaseMathObject_dealloc)
@@ -118,6 +132,12 @@ struct Mathutils_Callback {
 [[nodiscard]] int _BaseMathObject_WriteCallback(BaseMathObject *self);
 [[nodiscard]] int _BaseMathObject_ReadIndexCallback(BaseMathObject *self, int index);
 [[nodiscard]] int _BaseMathObject_WriteIndexCallback(BaseMathObject *self, int index);
+/** To implement #BaseMath_Prepare_ForResize. */
+[[nodiscard]] int _BaseMathObject_ResizeOkOrRaiseExc(BaseMathObject *self,
+                                                     const char *error_prefix);
+[[nodiscard]] int _BaseMathObject_RaiseBufferViewExc(BaseMathObject *self,
+                                                     Py_buffer *view,
+                                                     int flags);
 
 void _BaseMathObject_RaiseFrozenExc(const BaseMathObject *self);
 void _BaseMathObject_RaiseNotFrozenExc(const BaseMathObject *self);
@@ -154,6 +174,21 @@ void _BaseMathObject_RaiseNotFrozenExc(const BaseMathObject *self);
   (UNLIKELY(((_self)->flag & BASE_MATH_FLAG_IS_FROZEN) == 0) ? \
        (_BaseMathObject_RaiseNotFrozenExc((BaseMathObject *)_self), -1) : \
        0)
+/**
+ * Helper to de-duplicate checks for in-place resizing.
+ * \return -1 and set an exception if the vector `_self` cannot be resized.
+ */
+#define BaseMathObject_Prepare_ForResize(_self, error_prefix) \
+  _BaseMathObject_ResizeOkOrRaiseExc((BaseMathObject *)_self, error_prefix)
+
+/**
+ * Ensure #BASE_MATH_FLAG_HAS_BUFFER_VIEW is supported.
+ * \param _view: The `view` argument forwarded from #PyBufferProcs::bf_getbuffer.
+ * \param _flags: The `flags` argument forwarded from #PyBufferProcs::bf_getbuffer.
+ * \return -1 and set an exception if the vector `_self` does not support buffer access.
+ */
+#define BaseMath_Prepare_ForBufferAccess(_self, _view, _flags) \
+  _BaseMathObject_RaiseBufferViewExc((BaseMathObject *)_self, _view, _flags)
 
 /* utility func */
 /**
@@ -195,10 +230,26 @@ void _BaseMathObject_RaiseNotFrozenExc(const BaseMathObject *self);
  */
 [[nodiscard]] bool mathutils_array_parse_alloc_viseq(PyObject *value,
                                                      const char *error_prefix,
-                                                     blender::Array<blender::Vector<int>> &r_data);
+                                                     Array<int> &r_offsets,
+                                                     Array<int> &r_data);
 [[nodiscard]] int mathutils_any_to_rotmat(float rmat[3][3],
                                           PyObject *value,
                                           const char *error_prefix);
+
+/**
+ * Returns true when a slice does *not* address every element of an `array_num`.
+ */
+[[nodiscard]] inline bool mathutils_slice_is_subset(Py_ssize_t start,
+                                                    Py_ssize_t step,
+                                                    Py_ssize_t slice_length,
+                                                    Py_ssize_t array_num)
+{
+  return !((slice_length == array_num) &&
+           /* All forward `[:]`. */
+           ((start == 0 && step == 1) ||
+            /* All reverse `[::-1]`. */
+            (start == array_num - 1 && step == -1)));
+}
 
 /**
  * helper function that returns a Python `__hash__`.
@@ -207,10 +258,12 @@ void _BaseMathObject_RaiseNotFrozenExc(const BaseMathObject *self);
  */
 [[nodiscard]] Py_hash_t mathutils_array_hash(const float *array, size_t array_len);
 
-/* zero remaining unused elements of the array */
+/** Zero remaining unused elements of the array. */
 #define MU_ARRAY_ZERO (1u << 30)
-/* ignore larger py sequences than requested (just use first elements),
- * handy when using 3d vectors as 2d */
+/**
+ * Ignore larger py sequences than requested (just use first elements),
+ * handy when using 3d vectors as 2d.
+ */
 #define MU_ARRAY_SPILL (1u << 31)
 
 #define MU_ARRAY_FLAGS (MU_ARRAY_ZERO | MU_ARRAY_SPILL)
@@ -231,7 +284,8 @@ void _BaseMathObject_RaiseNotFrozenExc(const BaseMathObject *self);
                                                MatrixObject *mat);
 
 #ifndef MATH_STANDALONE
-/* dynstr as python string utility functions */
 /* dynstr as python string utility functions, frees 'ds'! */
 [[nodiscard]] PyObject *mathutils_dynstr_to_py(struct DynStr *ds);
 #endif
+
+}  // namespace blender

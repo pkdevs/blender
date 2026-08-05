@@ -22,6 +22,7 @@ set(SRC
   intern/curves_extrude.cc
   intern/curves_masks.cc
   intern/curves_ops.cc
+  intern/curves_pen.cc
   intern/curves_selection.cc
   intern/curves_undo.cc
   intern/join.cc
@@ -37,7 +38,6 @@ set(LIB
   PRIVATE bf::depsgraph
   PRIVATE bf::dna
   PRIVATE bf::extern::curve_fit_nd
-  PRIVATE bf::extern::fmtlib
   PRIVATE bf::functions
   PRIVATE bf::geometry
   PRIVATE bf::gpu
@@ -46,14 +46,6 @@ set(LIB
   PRIVATE bf::nodes
   PRIVATE bf::windowmanager
 )
-
-if(WITH_TBB)
-  if(WIN32)
-    # TBB includes Windows.h which will define min/max macros
-    # that will collide with the STL versions.
-    add_definitions(-DNOMINMAX)
-  endif()
-endif()
 
 blender_add_lib(bf_editor_curves "${SRC}" "${INC}" "${INC_SYS}" "${LIB}")
 add_dependencies(bf_editor_curves bf_rna)

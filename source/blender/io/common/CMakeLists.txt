@@ -8,13 +8,13 @@ set(INC
 )
 
 set(INC_SYS
-  ../../../../extern/fast_float
 )
 
 set(SRC
   intern/abstract_hierarchy_iterator.cc
   intern/dupli_parent_finder.cc
   intern/dupli_persistent_id.cc
+  intern/mesh_utils.cc
   intern/object_identifier.cc
   intern/orientation.cc
   intern/path_util.cc
@@ -23,12 +23,14 @@ set(SRC
 
   IO_abstract_hierarchy_iterator.h
   IO_dupli_persistent_id.hh
+  IO_mesh_utils.hh
   IO_orientation.hh
   IO_path_util.hh
   IO_path_util_types.hh
   IO_string_utils.hh
   IO_subdiv_disabler.hh
   IO_types.hh
+  IO_validate.hh
   intern/dupli_parent_finder.hh
 )
 
@@ -39,12 +41,10 @@ set(LIB
   PRIVATE bf::dna
   PRIVATE bf::intern::clog
   PRIVATE bf::intern::guardedalloc
-  PRIVATE bf::extern::fmtlib
+  PRIVATE bf::extern::fast_float
 )
 
 blender_add_lib(bf_io_common "${SRC}" "${INC}" "${INC_SYS}" "${LIB}")
-
-target_link_libraries(bf_io_common INTERFACE)
 
 if(WITH_GTESTS)
   set(TEST_SRC

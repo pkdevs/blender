@@ -67,7 +67,7 @@ static void morphological_distance_feather_pass(const Result &input,
 {
   /* Notice that the size is transposed, see the note on the horizontal pass method for more
    * information on the reasoning behind this. */
-  const int2 size = int2(output.domain().size.y, output.domain().size.x);
+  const int2 size = int2(output.domain().data_size.y, output.domain().data_size.x);
   parallel_for(size, [&](const int2 texel) {
     /* A value for accumulating the blur result. */
     float accumulated_value = 0.0f;
@@ -77,7 +77,7 @@ static void morphological_distance_feather_pass(const Result &input,
     if constexpr (IsErode) {
       center_value = 1.0f - center_value;
     }
-    accumulated_value += center_value * weights.weights_result.load_pixel<float>(int2(0));
+    accumulated_value += center_value * weights.weights.load_pixel<float>(int2(0));
 
     /* Start with the center value as the maximum/minimum distance and reassign to the true maximum
      * or minimum in the search loop below. Additionally, the center falloff is always 1.0, so
@@ -89,9 +89,9 @@ static void morphological_distance_feather_pass(const Result &input,
      * falloffs textures only store the weights and falloffs for the positive half, but since the
      * they are both symmetric, the same weights and falloffs are used for the negative half and we
      * compute both of their contributions. */
-    for (int i = 1; i < weights.weights_result.domain().size.x; i++) {
-      float weight = weights.weights_result.load_pixel<float>(int2(i, 0));
-      float falloff = weights.falloffs_result.load_pixel<float>(int2(i, 0));
+    for (int i = 1; i < weights.weights.domain().data_size.x; i++) {
+      float weight = weights.weights.load_pixel<float>(int2(i, 0));
+      float falloff = weights.falloffs.load_pixel<float>(int2(i, 0));
 
       /* Loop for two iterations, where s takes the value of -1 and 1, which is used as the sign
        * needed to evaluated the positive and negative sides as explain above. */
@@ -142,7 +142,7 @@ static Result horizontal_pass_gpu(Context &context,
                                   const int distance,
                                   const int falloff_type)
 {
-  GPUShader *shader = context.get_shader(get_shader_name(distance));
+  gpu::Shader *shader = context.get_shader(get_shader_name(distance));
   GPU_shader_bind(shader);
 
   input.bind_as_texture(shader, "input_tx");
@@ -150,8 +150,8 @@ static Result horizontal_pass_gpu(Context &context,
   const MorphologicalDistanceFeatherWeights &weights =
       context.cache_manager().morphological_distance_feather_weights.get(
           context, falloff_type, math::abs(distance));
-  weights.weights_result.bind_as_texture(shader, "weights_tx");
-  weights.falloffs_result.bind_as_texture(shader, "falloffs_tx");
+  weights.weights.bind_as_texture(shader, "weights_tx");
+  weights.falloffs.bind_as_texture(shader, "falloffs_tx");
 
   /* We allocate an output image of a transposed size, that is, with a height equivalent to the
    * width of the input and vice versa. This is done as a performance optimization. The shader
@@ -162,18 +162,18 @@ static Result horizontal_pass_gpu(Context &context,
    * spatial cache locality in the shader and to avoid having two separate shaders for each of
    * the passes. */
   const Domain domain = input.domain();
-  const int2 transposed_domain = int2(domain.size.y, domain.size.x);
+  const int2 transposed_domain = int2(domain.data_size.y, domain.data_size.x);
 
   Result output = context.create_result(ResultType::Float);
   output.allocate_texture(transposed_domain);
   output.bind_as_image(shader, "output_img");
 
-  compute_dispatch_threads_at_least(shader, domain.size);
+  compute_dispatch_threads_at_least(shader, domain.data_size);
 
   GPU_shader_unbind();
   input.unbind_as_texture();
-  weights.weights_result.unbind_as_texture();
-  weights.falloffs_result.unbind_as_texture();
+  weights.weights.unbind_as_texture();
+  weights.falloffs.unbind_as_texture();
   output.unbind_as_image();
 
   return output;
@@ -197,7 +197,7 @@ static Result horizontal_pass_cpu(Context &context,
    * spatial cache locality in the shader and to avoid having two separate shaders for each of
    * the passes. */
   const Domain domain = input.domain();
-  const int2 transposed_domain = int2(domain.size.y, domain.size.x);
+  const int2 transposed_domain = int2(domain.data_size.y, domain.data_size.x);
 
   Result output = context.create_result(ResultType::Float);
   output.allocate_texture(transposed_domain);
@@ -230,7 +230,7 @@ static void vertical_pass_gpu(Context &context,
                               const int distance,
                               const int falloff_type)
 {
-  GPUShader *shader = context.get_shader(get_shader_name(distance));
+  gpu::Shader *shader = context.get_shader(get_shader_name(distance));
   GPU_shader_bind(shader);
 
   horizontal_pass_result.bind_as_texture(shader, "input_tx");
@@ -238,8 +238,8 @@ static void vertical_pass_gpu(Context &context,
   const MorphologicalDistanceFeatherWeights &weights =
       context.cache_manager().morphological_distance_feather_weights.get(
           context, falloff_type, math::abs(distance));
-  weights.weights_result.bind_as_texture(shader, "weights_tx");
-  weights.falloffs_result.bind_as_texture(shader, "falloffs_tx");
+  weights.weights.bind_as_texture(shader, "weights_tx");
+  weights.falloffs.bind_as_texture(shader, "falloffs_tx");
 
   const Domain domain = original_input.domain();
   output.allocate_texture(domain);
@@ -247,12 +247,12 @@ static void vertical_pass_gpu(Context &context,
 
   /* Notice that the domain is transposed, see the note on the horizontal pass function for more
    * information on the reasoning behind this. */
-  compute_dispatch_threads_at_least(shader, int2(domain.size.y, domain.size.x));
+  compute_dispatch_threads_at_least(shader, int2(domain.data_size.y, domain.data_size.x));
 
   GPU_shader_unbind();
   horizontal_pass_result.unbind_as_texture();
-  weights.weights_result.unbind_as_texture();
-  weights.falloffs_result.unbind_as_texture();
+  weights.weights.unbind_as_texture();
+  weights.falloffs.unbind_as_texture();
   output.unbind_as_image();
 }
 

@@ -5,12 +5,12 @@
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
- * \ingroup bke
+ * \ingroup sequencer
  */
 
 #include "DNA_scene_types.h"
 
-#include "BLI_string.h"
+#include "BLI_string.hh"
 
 #include "BKE_scene.hh"
 

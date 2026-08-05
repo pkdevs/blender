@@ -6,9 +6,11 @@
 
 #include <cstring>
 
-#include "BLI_expr_pylike_eval.h"
-#include "BLI_math_base.h"
-#include "BLI_utildefines.h"
+#include "BLI_expr_pylike_eval.hh"
+#include "BLI_math_base_c.hh"
+#include "BLI_utildefines.hh"
+
+namespace blender {
 
 #define TRUE_VAL 1.0
 #define FALSE_VAL 0.0
@@ -364,3 +366,5 @@ TEST(expr_pylike, Error_ArgumentCount)
 
   BLI_expr_pylike_free(expr);
 }
+
+}  // namespace blender

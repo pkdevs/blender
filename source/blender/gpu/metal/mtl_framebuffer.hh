@@ -24,15 +24,12 @@ class MTLContext;
 
 struct MTLAttachment {
   bool used = false;
+  bool ignored = false;
   gpu::MTLTexture *texture = nullptr;
-  union {
-    float color[4];
-    float depth;
-    uint stencil;
-  } clear_value;
+  double4 clear_value;
 
-  eGPULoadOp load_action = GPU_LOADACTION_DONT_CARE;
-  eGPUStoreOp store_action = GPU_STOREACTION_DONT_CARE;
+  GPULoadOp load_action = GPU_LOADACTION_DONT_CARE;
+  GPUStoreOp store_action = GPU_STOREACTION_DONT_CARE;
   uint mip = 0;
   uint slice = 0;
   uint depth_plane = 0;
@@ -108,15 +105,15 @@ class MTLFrameBuffer : public FrameBuffer {
   /** Whether the primary Frame-buffer attachment is an SRGB target or not. */
   bool srgb_;
 
-  /** Default width/height represent raw size of active frame-buffer attachments.
+  /** Attachment width/height represent raw size of active frame-buffer attachments.
    * For consistency with OpenGL backend, as width_/height_ can affect viewport and scissor
    * size, we need to track this differently to ensure viewport state does not get reset.
    * This size is only used to reset viewport/scissor regions when viewports and scissor are
    * disabled, as Metal does not provide a utility to fully disable either without manually
    * specifying the size.
    */
-  int default_width_ = 0;
-  int default_height_ = 0;
+  int attachment_width_ = 0;
+  int attachment_height_ = 0;
 
  public:
   /**
@@ -130,25 +127,23 @@ class MTLFrameBuffer : public FrameBuffer {
 
   bool check(char err_out[256]) override;
 
-  void clear(eGPUFrameBufferBits buffers,
-             const float clear_col[4],
+  void clear(GPUFrameBufferBits buffers,
+             const double4 clear_col,
              float clear_depth,
              uint clear_stencil) override;
-  void clear_multi(const float (*clear_cols)[4]) override;
-  void clear_attachment(GPUAttachmentType type,
-                        eGPUDataFormat data_format,
-                        const void *clear_value) override;
+  void clear_multi(Span<double4> clear_cols) override;
+  void clear_attachment(GPUAttachmentType type, const double4 clear_value) override;
 
   void attachment_set_loadstore_op(GPUAttachmentType type, GPULoadStore ls) override;
 
-  void read(eGPUFrameBufferBits planes,
+  void read(GPUFrameBufferBits planes,
             eGPUDataFormat format,
             const int area[4],
             int channel_len,
             int slot,
             void *r_data) override;
 
-  void blit_to(eGPUFrameBufferBits planes,
+  void blit_to(GPUFrameBufferBits planes,
                int src_slot,
                FrameBuffer *dst,
                int dst_slot,
@@ -186,12 +181,12 @@ class MTLFrameBuffer : public FrameBuffer {
   void ensure_render_target_size();
 
   /* Clear values -> Load/store actions. */
-  bool set_color_attachment_clear_color(uint slot, const float clear_color[4]);
+  bool set_color_attachment_clear_color(uint slot, const double4 clear_color);
   bool set_depth_attachment_clear_value(float depth_clear);
   bool set_stencil_attachment_clear_value(uint stencil_clear);
-  bool set_color_loadstore_op(uint slot, eGPULoadOp load_action, eGPUStoreOp store_action);
-  bool set_depth_loadstore_op(eGPULoadOp load_action, eGPUStoreOp store_action);
-  bool set_stencil_loadstore_op(eGPULoadOp load_action, eGPUStoreOp store_action);
+  bool set_color_loadstore_op(uint slot, GPULoadOp load_action, GPUStoreOp store_action);
+  bool set_depth_loadstore_op(GPULoadOp load_action, GPUStoreOp store_action);
+  bool set_stencil_loadstore_op(GPULoadOp load_action, GPUStoreOp store_action);
 
   /* Remove any pending clears - Ensure "load" configuration is used. */
   bool reset_clear_state();
@@ -225,12 +220,13 @@ class MTLFrameBuffer : public FrameBuffer {
             uint dst_y_offset,
             uint width,
             uint height,
-            eGPUFrameBufferBits blit_buffers);
+            GPUFrameBufferBits blit_buffers);
 
   int get_width();
   int get_height();
-  int get_default_width();
-  int get_default_height();
+  int get_attachment_width();
+  int get_attachment_height();
+  void attachment_size_set(int w, int h);
 
   bool get_dirty()
   {
@@ -250,12 +246,6 @@ class MTLFrameBuffer : public FrameBuffer {
   bool get_is_srgb()
   {
     return srgb_;
-  }
-
-  inline void default_size_set(int w, int h)
-  {
-    default_width_ = w;
-    default_height_ = h;
   }
 
  private:

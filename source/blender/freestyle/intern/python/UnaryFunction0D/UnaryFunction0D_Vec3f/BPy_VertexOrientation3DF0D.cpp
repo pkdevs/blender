@@ -33,12 +33,11 @@ PyDoc_STRVAR(
     "   pointed by the Interface0DIterator belongs. The 3D oriented tangent\n"
     "   is evaluated at the pointed Interface0D.\n"
     "\n"
-    "   :arg it: An Interface0DIterator object.\n"
+    "   :param it: An Interface0DIterator object.\n"
     "   :type it: :class:`freestyle.types.Interface0DIterator`\n"
     "   :return: The 3D oriented tangent to the 1D element evaluated at the\n"
     "      pointed Interface0D.\n"
     "   :rtype: :class:`mathutils.Vector`\n");
-
 static int VertexOrientation3DF0D___init__(BPy_VertexOrientation3DF0D *self,
                                            PyObject *args,
                                            PyObject *kwds)

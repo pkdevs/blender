@@ -6,11 +6,13 @@
 #include <cstdlib>
 #include <cstring>
 
-#include "BLI_endian_defines.h"
-#include "BLI_filereader.h"
+#include "BLI_endian_defines.hh"
+#include "BLI_filereader.hh"
 
 #include "BLO_core_bhead.hh"
 #include "BLO_core_blend_header.hh"
+
+namespace blender {
 
 BHeadType BlenderHeader::bhead_type() const
 {
@@ -123,3 +125,5 @@ BlenderHeaderVariant BLO_readfile_blender_header_decode(FileReader *file)
   header.file_version = std::atoi(version_str);
   return header;
 }
+
+}  // namespace blender

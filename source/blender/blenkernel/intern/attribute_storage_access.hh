@@ -5,6 +5,11 @@
 #include "BKE_attribute.hh"
 #include "BKE_attribute_storage.hh"
 
+#include "DNA_meshdata_types.h"
+#include "DNA_object_types.h"
+
+#include <optional>
+
 namespace blender::bke {
 
 using AttrUpdateOnChange = void (*)(void *owner);
@@ -29,7 +34,8 @@ GAttributeWriter attribute_to_writer(void *owner,
 
 Attribute::DataVariant attribute_init_to_data(const bke::AttrType data_type,
                                               const int64_t domain_size,
-                                              const AttributeInit &initializer);
+                                              const AttributeInit &initializer,
+                                              bool require_array_data);
 
 GVArray get_varray_attribute(const AttributeStorage &storage,
                              AttrDomain domain,
@@ -50,20 +56,24 @@ inline VArray<T> get_varray_attribute(const AttributeStorage &storage,
   return varray.typed<T>();
 }
 
-GSpan get_span_attribute(const AttributeStorage &storage,
-                         AttrDomain domain,
-                         const CPPType &cpp_type,
-                         StringRef name,
-                         const int64_t domain_size);
+std::optional<GSpan> get_span_attribute(const AttributeStorage &storage,
+                                        AttrDomain domain,
+                                        const CPPType &cpp_type,
+                                        StringRef name,
+                                        const int64_t domain_size);
 
 template<typename T>
-inline Span<T> get_span_attribute(const AttributeStorage &storage,
-                                  const AttrDomain domain,
-                                  const StringRef name,
-                                  const int64_t domain_size)
+inline std::optional<Span<T>> get_span_attribute(const AttributeStorage &storage,
+                                                 const AttrDomain domain,
+                                                 const StringRef name,
+                                                 const int64_t domain_size)
 {
-  const GSpan span = get_span_attribute(storage, domain, CPPType::get<T>(), name, domain_size);
-  return span.typed<T>();
+  const std::optional<GSpan> span = get_span_attribute(
+      storage, domain, CPPType::get<T>(), name, domain_size);
+  if (!span) {
+    return std::nullopt;
+  }
+  return span->typed<T>();
 }
 
 GMutableSpan get_mutable_attribute(AttributeStorage &storage,
@@ -84,5 +94,18 @@ inline MutableSpan<T> get_mutable_attribute(AttributeStorage &storage,
       storage, domain, CPPType::get<T>(), name, domain_size, &default_value);
   return span.typed<T>();
 }
+
+bool try_delete_vertex_group(ListBaseT<bDeformGroup> &vertex_groups,
+                             StringRef name,
+                             FunctionRef<MutableSpan<MDeformVert>()> get_mutable_dverts);
+
+Set<StringRef> rename_attributes(AttributeStorage &storage,
+                                 const Map<StringRef, StringRef> &name_map,
+                                 bool overwrite,
+                                 const Map<StringRef, AttrBuiltinInfo> &builtin_attributes,
+                                 const Set<StringRef> &array_storage_required,
+                                 FunctionRef<int(AttrDomain)> domain_size_fn,
+                                 std::optional<ListBaseT<bDeformGroup> *> vertex_groups,
+                                 FunctionRef<MutableSpan<MDeformVert>()> get_mutable_dverts);
 
 }  // namespace blender::bke

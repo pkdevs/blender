@@ -14,9 +14,18 @@
 
 #include "DEG_depsgraph_query.hh"
 
-#include "hydra/object.hh"
-
 namespace blender::render::hydra {
+
+static pxr::GfMatrix4d gf_matrix_from_transform(const float m[4][4])
+{
+  pxr::GfMatrix4d ret;
+  for (int i = 0; i < 4; i++) {
+    for (int j = 0; j < 4; j++) {
+      ret[i][j] = m[i][j];
+    }
+  }
+  return ret;
+}
 
 static void gf_camera_fill_dof_data(const Object *camera_obj, pxr::GfCamera *gf_camera)
 {
@@ -24,7 +33,7 @@ static void gf_camera_fill_dof_data(const Object *camera_obj, pxr::GfCamera *gf_
     return;
   }
 
-  const Camera *camera = static_cast<Camera *>(camera_obj->data);
+  const Camera *camera = id_cast<Camera *>(camera_obj->data);
   if (!(camera->dof.flag & CAM_DOF_ENABLED)) {
     return;
   }
@@ -91,7 +100,7 @@ pxr::GfCamera gf_camera(const Depsgraph *depsgraph,
                         const ARegion *region,
                         const pxr::GfVec4f &border)
 {
-  const RegionView3D *region_data = (const RegionView3D *)region->regiondata;
+  const RegionView3D *region_data = static_cast<const RegionView3D *>(region->regiondata);
   const Scene *scene = DEG_get_evaluated_scene(depsgraph);
 
   CameraParams params;
@@ -99,7 +108,7 @@ pxr::GfCamera gf_camera(const Depsgraph *depsgraph,
   BKE_camera_params_from_view3d(&params, depsgraph, v3d, region_data);
 
   pxr::GfCamera camera = gf_camera(params, pxr::GfVec2i(region->winx, region->winy), border);
-  camera.SetTransform(io::hydra::gf_matrix_from_transform(region_data->viewmat).GetInverse());
+  camera.SetTransform(gf_matrix_from_transform(region_data->viewmat).GetInverse());
 
   /* Ensure viewport is in active camera view mode. */
   if (region_data->persp == RV3D_CAMOB) {
@@ -118,7 +127,7 @@ pxr::GfCamera gf_camera(const Object *camera_obj,
   BKE_camera_params_from_object(&params, camera_obj);
 
   pxr::GfCamera camera = gf_camera(params, res, border);
-  camera.SetTransform(io::hydra::gf_matrix_from_transform(camera_obj->object_to_world().ptr()));
+  camera.SetTransform(gf_matrix_from_transform(camera_obj->object_to_world().ptr()));
 
   gf_camera_fill_dof_data(camera_obj, &camera);
 

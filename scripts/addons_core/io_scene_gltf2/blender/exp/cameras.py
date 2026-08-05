@@ -3,7 +3,6 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import bpy
-import math
 from ...io.com import gltf2_io
 from ...blender.com.conversion import yvof_blender_to_gltf
 from ...io.exp.user_extensions import export_user_extensions
@@ -26,6 +25,8 @@ def gather_camera(blender_camera, export_settings):
         perspective=__gather_perspective(blender_camera, export_settings),
         type=__gather_type(blender_camera, export_settings)
     )
+    if export_settings['gltf_extras'] and export_settings['gltf_export_anim_pointer']:
+        export_settings['KHR_animation_pointer']['extras']['cameras'][id(blender_camera)]['glTF_extras'] = camera
 
     export_user_extensions('gather_camera_hook', export_settings, camera, blender_camera)
 
@@ -42,7 +43,7 @@ def __gather_extensions(blender_camera, export_settings):
 
 def __gather_extras(blender_camera, export_settings):
     if export_settings['gltf_extras']:
-        return generate_extras(blender_camera)
+        return generate_extras(blender_camera, 'cameras', export_settings)
     return None
 
 
@@ -67,7 +68,8 @@ def __gather_orthographic(blender_camera, export_settings):
         scene_square = max(scene_x, scene_y)
         del _render
 
-        # `Camera().ortho_scale` (and also FOV FTR) maps to the maximum of either image width or image height— This is the box that gets shown from camera view with the checkbox `.show_sensor = True`.
+        # `Camera().ortho_scale` (and also FOV FTR) maps to the maximum of either image width or image height
+        # This is the box that gets shown from camera view with the checkbox `.show_sensor = True`.
 
         orthographic.xmag = blender_camera.ortho_scale * (scene_x / scene_square) / 2
         orthographic.ymag = blender_camera.ortho_scale * (scene_y / scene_square) / 2

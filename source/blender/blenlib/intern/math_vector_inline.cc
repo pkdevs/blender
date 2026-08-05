@@ -6,13 +6,16 @@
  * \ingroup bli
  */
 
-#ifndef __MATH_VECTOR_INLINE_C__
-#define __MATH_VECTOR_INLINE_C__
+#pragma once
 
-#include "BLI_math_base.h"
-#include "BLI_utildefines.h"
+#include "BLI_math_base_c.hh"
+#include "BLI_utildefines.hh"
 
-/********************************** Init *************************************/
+namespace blender {
+
+/* -------------------------------------------------------------------- */
+/** \name Init
+ * \{ */
 
 MINLINE void zero_v2(float r[2])
 {
@@ -169,40 +172,40 @@ MINLINE void copy_v4_v4_db(double r[4], const double a[4])
 
 MINLINE void copy_v2fl_v2i(float r[2], const int a[2])
 {
-  r[0] = (float)a[0];
-  r[1] = (float)a[1];
+  r[0] = float(a[0]);
+  r[1] = float(a[1]);
 }
 
 /* double -> float */
 
 MINLINE void copy_v3fl_v3db(float r[3], const double a[3])
 {
-  r[0] = (float)a[0];
-  r[1] = (float)a[1];
-  r[2] = (float)a[2];
+  r[0] = float(a[0]);
+  r[1] = float(a[1]);
+  r[2] = float(a[2]);
 }
 
 MINLINE void copy_v4fl_v4db(float r[4], const double a[4])
 {
-  r[0] = (float)a[0];
-  r[1] = (float)a[1];
-  r[2] = (float)a[2];
-  r[3] = (float)a[3];
+  r[0] = float(a[0]);
+  r[1] = float(a[1]);
+  r[2] = float(a[2]);
+  r[3] = float(a[3]);
 }
 
 /* float -> double */
 
 MINLINE void copy_v2db_v2fl(double r[2], const float a[2])
 {
-  r[0] = (double)a[0];
-  r[1] = (double)a[1];
+  r[0] = double(a[0]);
+  r[1] = double(a[1]);
 }
 
 MINLINE void copy_v3db_v3fl(double r[3], const float a[3])
 {
-  r[0] = (double)a[0];
-  r[1] = (double)a[1];
-  r[2] = (double)a[2];
+  r[0] = double(a[0]);
+  r[1] = double(a[1]);
+  r[2] = double(a[2]);
 }
 
 MINLINE void swap_v2_v2(float a[2], float b[2])
@@ -249,7 +252,11 @@ MINLINE void copy_v4_fl4(float v[4], float x, float y, float z, float w)
   v[3] = w;
 }
 
-/********************************* Arithmetic ********************************/
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Arithmetic
+ * \{ */
 
 MINLINE void add_v2_fl(float r[2], float f)
 {
@@ -299,9 +306,9 @@ MINLINE void add_v3_v3v3(float r[3], const float a[3], const float b[3])
 
 MINLINE void add_v3fl_v3fl_v3i(float r[3], const float a[3], const int b[3])
 {
-  r[0] = a[0] + (float)b[0];
-  r[1] = a[1] + (float)b[1];
-  r[2] = a[2] + (float)b[2];
+  r[0] = a[0] + float(b[0]);
+  r[1] = a[1] + float(b[1]);
+  r[2] = a[2] + float(b[2]);
 }
 
 MINLINE void add_v4_v4(float r[4], const float a[4])
@@ -314,9 +321,9 @@ MINLINE void add_v4_v4(float r[4], const float a[4])
 
 MINLINE void add_v3_uchar_clamped(uchar r[3], int i)
 {
-  r[0] = (uchar)clamp_i(r[0] + i, 0, 255);
-  r[1] = (uchar)clamp_i(r[1] + i, 0, 255);
-  r[2] = (uchar)clamp_i(r[2] + i, 0, 255);
+  r[0] = uchar(clamp_i(r[0] + i, 0, 255));
+  r[1] = uchar(clamp_i(r[1] + i, 0, 255));
+  r[2] = uchar(clamp_i(r[2] + i, 0, 255));
 }
 
 MINLINE void sub_v2_v2(float r[2], const float a[2])
@@ -373,15 +380,15 @@ MINLINE void sub_v3_v3v3_db(double r[3], const double a[3], const double b[3])
 
 MINLINE void sub_v2db_v2fl_v2fl(double r[2], const float a[2], const float b[2])
 {
-  r[0] = (double)a[0] - (double)b[0];
-  r[1] = (double)a[1] - (double)b[1];
+  r[0] = double(a[0]) - double(b[0]);
+  r[1] = double(a[1]) - double(b[1]);
 }
 
 MINLINE void sub_v3db_v3fl_v3fl(double r[3], const float a[3], const float b[3])
 {
-  r[0] = (double)a[0] - (double)b[0];
-  r[1] = (double)a[1] - (double)b[1];
-  r[2] = (double)a[2] - (double)b[2];
+  r[0] = double(a[0]) - double(b[0]);
+  r[1] = double(a[1]) - double(b[1]);
+  r[2] = double(a[2]) - double(b[2]);
 }
 
 MINLINE void sub_v4_v4v4(float r[4], const float a[4], const float b[4])
@@ -523,9 +530,9 @@ MINLINE void madd_v3fl_v3fl_v3fl_v3i(float r[3],
                                      const float b[3],
                                      const int c[3])
 {
-  r[0] = a[0] + b[0] * (float)c[0];
-  r[1] = a[1] + b[1] * (float)c[1];
-  r[2] = a[2] + b[2] * (float)c[2];
+  r[0] = a[0] + b[0] * float(c[0]);
+  r[1] = a[1] + b[1] * float(c[1]);
+  r[2] = a[2] + b[2] * float(c[2]);
 }
 
 MINLINE void madd_v4_v4fl(float r[4], const float a[4], float f)
@@ -656,7 +663,7 @@ MINLINE float dot_v4v4(const float a[4], const float b[4])
 
 MINLINE double dot_v3db_v3fl(const double a[3], const float b[3])
 {
-  return a[0] * (double)b[0] + a[1] * (double)b[1] + a[2] * (double)b[2];
+  return a[0] * double(b[0]) + a[1] * double(b[1]) + a[2] * double(b[2]);
 }
 
 MINLINE double dot_v3v3_db(const double a[3], const double b[3])
@@ -697,7 +704,11 @@ MINLINE void add_newell_cross_v3_v3v3(float n[3], const float v_prev[3], const f
   n[2] += (v_prev[0] - v_curr[0]) * (v_prev[1] + v_curr[1]);
 }
 
-/*********************************** Length **********************************/
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Length
+ * \{ */
 
 MINLINE float len_squared_v2(const float v[2])
 {
@@ -756,8 +767,8 @@ MINLINE float len_v2v2_int(const int v1[2], const int v2[2])
 {
   float x, y;
 
-  x = (float)(v1[0] - v2[0]);
-  y = (float)(v1[1] - v2[1]);
+  x = float(v1[0] - v2[0]);
+  y = float(v1[1] - v2[1]);
   return sqrtf(x * x + y * y);
 }
 
@@ -927,12 +938,16 @@ MINLINE void normal_short_to_float_v3(float out[3], const short in[3])
 
 MINLINE void normal_float_to_short_v3(short out[3], const float in[3])
 {
-  out[0] = (short)(in[0] * 32767.0f);
-  out[1] = (short)(in[1] * 32767.0f);
-  out[2] = (short)(in[2] * 32767.0f);
+  out[0] = short(in[0] * 32767.0f);
+  out[1] = short(in[1] * 32767.0f);
+  out[2] = short(in[2] * 32767.0f);
 }
 
-/********************************* Comparison ********************************/
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Comparison
+ * \{ */
 
 MINLINE bool is_zero_v2(const float v[2])
 {
@@ -968,6 +983,8 @@ MINLINE bool is_one_v3(const float v[3])
 {
   return (v[0] == 1.0f && v[1] == 1.0f && v[2] == 1.0f);
 }
+
+/** \} */
 
 /* -------------------------------------------------------------------- */
 /** \name Vector Comparison
@@ -1037,6 +1054,8 @@ MINLINE bool compare_size_v3v3(const float v1[3], const float v2[3], const float
   return true;
 }
 
+/** \} */
+
 /* -------------------------------------------------------------------- */
 /** \name Vector Clamping
  * \{ */
@@ -1064,6 +1083,10 @@ MINLINE void clamp_v4(float vec[4], const float min, const float max)
 
 /** \} */
 
+/* -------------------------------------------------------------------- */
+/** \name Geometry Utilities
+ * \{ */
+
 MINLINE float line_point_side_v2(const float l1[2], const float l2[2], const float pt[2])
 {
   return (((l1[0] - pt[0]) * (l2[1] - pt[1])) - ((l2[0] - pt[0]) * (l1[1] - pt[1])));
@@ -1071,4 +1094,4 @@ MINLINE float line_point_side_v2(const float l1[2], const float l2[2], const flo
 
 /** \} */
 
-#endif /* __MATH_VECTOR_INLINE_C__ */
+}  // namespace blender

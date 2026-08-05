@@ -12,16 +12,17 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_alloca.h"
-#include "BLI_heap.h"
-#include "BLI_linklist.h"
-#include "BLI_math_geom.h"
-#include "BLI_math_vector.h"
-#include "BLI_memarena.h"
-#include "BLI_polyfill_2d.h"
-#include "BLI_polyfill_2d_beautify.h"
-#include "BLI_quadric.h"
-#include "BLI_utildefines_stack.h"
+#include "BLI_array.hh"
+#include "BLI_enum_flags.hh"
+#include "BLI_heap.hh"
+#include "BLI_linklist.hh"
+#include "BLI_math_geom_c.hh"
+#include "BLI_math_vector_c.hh"
+#include "BLI_memarena.hh"
+#include "BLI_polyfill_2d.hh"
+#include "BLI_polyfill_2d_beautify.hh"
+#include "BLI_quadric.hh"
+#include "BLI_utildefines_stack.hh"
 
 #include "BKE_customdata.hh"
 
@@ -32,8 +33,10 @@
 
 #define USE_SYMMETRY
 #ifdef USE_SYMMETRY
-#  include "BLI_kdtree.h"
+#  include "BLI_kdtree.hh"
 #endif
+
+namespace blender {
 
 /* defines for testing */
 #define USE_CUSTOMDATA
@@ -61,7 +64,7 @@ enum CD_UseFlag {
   CD_DO_EDGE = (1 << 1),
   CD_DO_LOOP = (1 << 2),
 };
-ENUM_OPERATORS(CD_UseFlag, CD_DO_LOOP)
+ENUM_OPERATORS(CD_UseFlag)
 
 /* BMesh Helper Functions
  * ********************** */
@@ -97,7 +100,7 @@ static void bm_decim_build_quadrics(BMesh *bm, Quadric *vquadrics)
 
   /* boundary edges */
   BM_ITER_MESH (e, &iter, bm, BM_EDGES_OF_MESH) {
-    if (UNLIKELY(BM_edge_is_boundary(e))) {
+    if (BM_edge_is_boundary(e)) [[unlikely]] {
       float edge_vector[3];
       float edge_plane[3];
       double edge_plane_db[4];
@@ -236,8 +239,8 @@ static void bm_decim_build_edge_cost_single(BMEdge *e,
 {
   float cost;
 
-  if (UNLIKELY(vweights && ((vweights[BM_elem_index_get(e->v1)] == 0.0f) ||
-                            (vweights[BM_elem_index_get(e->v2)] == 0.0f))))
+  if (vweights && ((vweights[BM_elem_index_get(e->v1)] == 0.0f) ||
+                   (vweights[BM_elem_index_get(e->v2)] == 0.0f))) [[unlikely]]
   {
     goto clear;
   }
@@ -282,7 +285,7 @@ static void bm_decim_build_edge_cost_single(BMEdge *e,
   cost = fabsf(cost);
 
 #ifdef USE_TOPOLOGY_FALLBACK
-  if (UNLIKELY(cost < TOPOLOGY_FALLBACK_EPS)) {
+  if (cost < TOPOLOGY_FALLBACK_EPS) [[unlikely]] {
     /* subtract existing cost to further differentiate edges from one another
      *
      * keep topology cost below 0.0 so their values don't interfere with quadric cost,
@@ -345,10 +348,12 @@ static void bm_decim_build_edge_cost(BMesh *bm,
   uint i;
 
   BM_ITER_MESH_INDEX (e, &iter, bm, BM_EDGES_OF_MESH, i) {
+    BM_elem_index_set(e, i); /* set_inline */
     /* keep sanity check happy */
     eheap_table[i] = nullptr;
     bm_decim_build_edge_cost_single(e, vquadrics, vweights, vweight_factor, eheap, eheap_table);
   }
+  bm->elem_index_dirty &= ~BM_EDGE;
 }
 
 #ifdef USE_SYMMETRY
@@ -368,7 +373,7 @@ struct KD_Symmetry_Data {
 
 static bool bm_edge_symmetry_check_cb(void *user_data,
                                       int index,
-                                      const float /*co*/[3],
+                                      const float3 & /*co*/,
                                       float /*dist_sq*/)
 {
   KD_Symmetry_Data *sym_data = static_cast<KD_Symmetry_Data *>(user_data);
@@ -405,22 +410,22 @@ static int *bm_edge_symmetry_map(BMesh *bm, uint symmetry_axis, float limit)
   uint i;
   int *edge_symmetry_map;
   const float limit_sq = square_f(limit);
-  KDTree_3d *tree;
+  KDTree<float3> *tree;
 
-  tree = BLI_kdtree_3d_new(bm->totedge);
+  tree = kdtree_new<float3>(bm->totedge);
 
-  etable = MEM_malloc_arrayN<BMEdge *>(bm->totedge, __func__);
-  edge_symmetry_map = MEM_malloc_arrayN<int>(bm->totedge, __func__);
+  etable = MEM_new_array_uninitialized<BMEdge *>(bm->totedge, __func__);
+  edge_symmetry_map = MEM_new_array_uninitialized<int>(bm->totedge, __func__);
 
   BM_ITER_MESH_INDEX (e, &iter, bm, BM_EDGES_OF_MESH, i) {
     float co[3];
     mid_v3_v3v3(co, e->v1->co, e->v2->co);
-    BLI_kdtree_3d_insert(tree, i, co);
+    kdtree_insert<float3>(tree, i, co);
     etable[i] = e;
     edge_symmetry_map[i] = -1;
   }
 
-  BLI_kdtree_3d_balance(tree);
+  kdtree_balance<float3>(tree);
 
   sym_data.etable = etable;
   sym_data.limit_sq = limit_sq;
@@ -438,7 +443,10 @@ static int *bm_edge_symmetry_map(BMesh *bm, uint symmetry_axis, float limit)
       sub_v3_v3v3(sym_data.e_dir, sym_data.e_v2_co, sym_data.e_v1_co);
       sym_data.e_found_index = -1;
 
-      BLI_kdtree_3d_range_search_cb(tree, co, limit, bm_edge_symmetry_check_cb, &sym_data);
+      kdtree_range_search_cb<float3>(
+          tree, co, limit, [&](int index, const float3 &co, float dist_sq) {
+            return bm_edge_symmetry_check_cb(&sym_data, index, co, dist_sq);
+          });
 
       if (sym_data.e_found_index != -1) {
         const int i_other = sym_data.e_found_index;
@@ -448,8 +456,8 @@ static int *bm_edge_symmetry_map(BMesh *bm, uint symmetry_axis, float limit)
     }
   }
 
-  MEM_freeN(etable);
-  BLI_kdtree_3d_free(tree);
+  MEM_delete(etable);
+  kdtree_free<float3>(tree);
 
   return edge_symmetry_map;
 }
@@ -483,8 +491,8 @@ static bool bm_face_triangulate(BMesh *bm,
   const int f_base_len = f_base->len;
   int faces_array_tot = f_base_len - 3;
   int edges_array_tot = f_base_len - 3;
-  BMFace **faces_array = BLI_array_alloca(faces_array, faces_array_tot);
-  BMEdge **edges_array = BLI_array_alloca(edges_array, edges_array_tot);
+  Array<BMFace *, BM_DEFAULT_NGON_STACK_SIZE> faces_array(faces_array_tot);
+  Array<BMEdge *, BM_DEFAULT_NGON_STACK_SIZE> edges_array(edges_array_tot);
   const int quad_method = 0, ngon_method = 0; /* beauty */
 
   bool has_cut = false;
@@ -493,9 +501,9 @@ static bool bm_face_triangulate(BMesh *bm,
 
   BM_face_triangulate(bm,
                       f_base,
-                      faces_array,
+                      faces_array.data(),
                       &faces_array_tot,
-                      edges_array,
+                      edges_array.data(),
                       &edges_array_tot,
                       r_faces_double,
                       quad_method,
@@ -579,7 +587,7 @@ static bool bm_decim_triangulate_begin(BMesh *bm, int *r_edges_tri_tot)
     while (faces_double) {
       LinkNode *next = faces_double->next;
       BM_face_kill(bm, static_cast<BMFace *>(faces_double->link));
-      MEM_freeN(faces_double);
+      MEM_delete(faces_double);
       faces_double = next;
     }
 
@@ -606,8 +614,8 @@ static void bm_decim_triangulate_end(BMesh *bm, const int edges_tri_tot)
   BMEdge *e;
 
   /* we need to collect before merging for ngons since the loops indices will be lost */
-  BMEdge **edges_tri = static_cast<BMEdge **>(
-      MEM_mallocN(std::min(edges_tri_tot, bm->totedge) * sizeof(*edges_tri), __func__));
+  BMEdge **edges_tri = MEM_new_array_uninitialized<BMEdge *>(std::min(edges_tri_tot, bm->totedge),
+                                                             __func__);
   STACK_DECLARE(edges_tri);
 
   STACK_INIT(edges_tri, std::min(edges_tri_tot, bm->totedge));
@@ -664,17 +672,21 @@ static void bm_decim_triangulate_end(BMesh *bm, const int edges_tri_tot)
       BMFace *f_double;
 
       BMFace *f_array[2] = {l_a->f, l_b->f};
-      BM_faces_join(bm, f_array, 2, false, &f_double);
-      /* See #BM_faces_join note on callers asserting when `r_double` is non-null. */
-      BLI_assert_msg(f_double == nullptr,
-                     "Doubled face detected at " AT ". Resulting mesh may be corrupt.");
+      BMFace *f_join = BM_faces_join(bm, f_array, 2, false, &f_double);
+      /* In practice - duplicates should be quite rare - but we can't guarantee
+       * that merging faces does *not* create a duplicate.
+       * Since duplicates are not allowed in the resulting mesh (see #BM_mesh_validate),
+       * they must be removed here, see: #159549. */
+      if (f_double != nullptr) [[unlikely]] {
+        BM_face_kill(bm, f_join);
+      }
 
       if (e->l == nullptr) {
         BM_edge_kill(bm, e);
       }
     }
   }
-  MEM_freeN(edges_tri);
+  MEM_delete(edges_tri);
 }
 
 #endif /* USE_TRIANGULATE */
@@ -775,7 +787,6 @@ static void bm_edge_collapse_loop_customdata(
             CustomData_bmesh_interp_n(&bm->ldata,
                                       cd_src,
                                       w,
-                                      nullptr,
                                       ARRAY_SIZE(cd_src),
                                       POINTER_OFFSET(l_iter->head.data, offset),
                                       i);
@@ -1054,7 +1065,7 @@ static bool bm_edge_collapse(BMesh *bm,
     }
 #endif
 
-    // BM_mesh_validate(bm);
+    // BM_mesh_is_valid(bm);
 
     return true;
   }
@@ -1110,7 +1121,7 @@ static bool bm_edge_collapse(BMesh *bm,
     }
 #endif
 
-    // BM_mesh_validate(bm);
+    // BM_mesh_is_valid(bm);
 
     return true;
   }
@@ -1151,7 +1162,7 @@ static bool bm_decim_edge_collapse(BMesh *bm,
   /* when false, use without degenerate checks */
   if (optimize_co_calc) {
     /* disallow collapsing which results in degenerate cases */
-    if (UNLIKELY(bm_edge_collapse_is_degenerate_topology(e))) {
+    if (bm_edge_collapse_is_degenerate_topology(e)) [[unlikely]] {
       /* add back with a high cost */
       bm_decim_invalid_edge_cost_single(e, eheap, eheap_table);
       return false;
@@ -1160,7 +1171,7 @@ static bool bm_decim_edge_collapse(BMesh *bm,
     bm_decim_calc_target_co_fl(e, optimize_co, vquadrics);
 
     /* check if this would result in an overlapping face */
-    if (UNLIKELY(bm_edge_collapse_is_degenerate_flip(e, optimize_co))) {
+    if (bm_edge_collapse_is_degenerate_flip(e, optimize_co)) [[unlikely]] {
       /* add back with a high cost */
       bm_decim_invalid_edge_cost_single(e, eheap, eheap_table);
       return false;
@@ -1168,7 +1179,7 @@ static bool bm_decim_edge_collapse(BMesh *bm,
   }
 
   /* use for customdata merging */
-  if (LIKELY(compare_v3v3(e->v1->co, e->v2->co, FLT_EPSILON) == false)) {
+  if (compare_v3v3(e->v1->co, e->v2->co, FLT_EPSILON) == false) [[likely]] {
     customdata_fac = line_point_factor_v3(optimize_co, e->v1->co, e->v2->co);
 #if 0
     /* simple test for stupid collapse */
@@ -1231,7 +1242,7 @@ static bool bm_decim_edge_collapse(BMesh *bm,
 #endif
 
     /* update error costs and the eheap */
-    if (LIKELY(v_other->e)) {
+    if (v_other->e) [[likely]] {
       BMEdge *e_iter;
       BMEdge *e_first;
       e_iter = e_first = v_other->e;
@@ -1311,11 +1322,16 @@ void BM_mesh_decimate_collapse(BMesh *bm,
   UNUSED_VARS(do_triangulate);
 #endif
 
+  /* Edge indices are used to index into `eheap_table`, ensure they're valid.
+   * Needed since callers may pass a mesh with dirty edge indices,
+   * for example running the decimate operator twice in edit-mode. */
+  BM_mesh_elem_index_ensure(bm, BM_EDGE);
+
   /* Allocate variables. */
-  vquadrics = MEM_calloc_arrayN<Quadric>(bm->totvert, __func__);
+  vquadrics = MEM_new_array_zeroed<Quadric>(bm->totvert, __func__);
   /* Since some edges may be degenerate, we might be over allocating a little here. */
   eheap = BLI_heap_new_ex(bm->totedge);
-  eheap_table = MEM_malloc_arrayN<HeapNode *>(bm->totedge, __func__);
+  eheap_table = MEM_new_array_uninitialized<HeapNode *>(bm->totedge, __func__);
   tot_edge_orig = bm->totedge;
 
   /* build initial edge collapse cost data */
@@ -1433,7 +1449,7 @@ void BM_mesh_decimate_collapse(BMesh *bm,
 
         /* disallow collapsing which results in degenerate cases */
 
-        if (UNLIKELY(!ok_a || !ok_b)) {
+        if (!ok_a || !ok_b) [[unlikely]] {
           e_invalidate |= (1 | (e_mirr ? 2 : 0));
           goto invalidate;
         }
@@ -1445,7 +1461,7 @@ void BM_mesh_decimate_collapse(BMesh *bm,
         }
 
         /* check if this would result in an overlapping face */
-        if (UNLIKELY(bm_edge_collapse_is_degenerate_flip(e, optimize_co))) {
+        if (bm_edge_collapse_is_degenerate_flip(e, optimize_co)) [[unlikely]] {
           e_invalidate |= (1 | (e_mirr ? 2 : 0));
           goto invalidate;
         }
@@ -1504,14 +1520,14 @@ void BM_mesh_decimate_collapse(BMesh *bm,
       }
     }
 
-    MEM_freeN(edge_symmetry_map);
+    MEM_delete(edge_symmetry_map);
   }
 #endif /* USE_SYMMETRY */
 
 #ifdef USE_TRIANGULATE
   if (do_triangulate == false) {
     /* its possible we only had triangles, skip this step in that case */
-    if (LIKELY(use_triangulate)) {
+    if (use_triangulate) [[likely]] {
       /* temp convert quads to triangles */
       bm_decim_triangulate_end(bm, edges_tri_tot);
     }
@@ -1519,13 +1535,15 @@ void BM_mesh_decimate_collapse(BMesh *bm,
 #endif
 
   /* free vars */
-  MEM_freeN(vquadrics);
-  MEM_freeN(eheap_table);
+  MEM_delete(vquadrics);
+  MEM_delete(eheap_table);
   BLI_heap_free(eheap, nullptr);
 
   /* testing only */
-  // BM_mesh_validate(bm);
+  // BM_mesh_is_valid(bm);
 
   /* quiet release build warning */
   (void)tot_edge_orig;
 }
+
+}  // namespace blender

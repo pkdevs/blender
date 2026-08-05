@@ -68,13 +68,26 @@ static std::optional<int64_t> choose_swapchain_format_from_candidates(
 
 GHOST_XrGraphicsBindingD3D::GHOST_XrGraphicsBindingD3D() : GHOST_IXrGraphicsBinding()
 {
-  m_ghost_d3d_ctx = GHOST_SystemWin32::createOffscreenContextD3D();
+  ghost_d3d_ctx_ = GHOST_SystemWin32::createOffscreenContextD3D();
 }
 GHOST_XrGraphicsBindingD3D::~GHOST_XrGraphicsBindingD3D()
 {
-  if (m_ghost_d3d_ctx) {
-    GHOST_SystemWin32::disposeContextD3D(m_ghost_d3d_ctx);
+  if (ghost_d3d_ctx_) {
+    GHOST_SystemWin32::disposeContextD3D(ghost_d3d_ctx_);
   }
+}
+
+bool GHOST_XrGraphicsBindingD3D::loadExtensionFunctions(XrInstance instance)
+{
+#define LOAD_FUNCTION(fn_ptr, name) \
+  if (XR_FAILED(xrGetInstanceProcAddr(instance, #name, (PFN_xrVoidFunction *)&fn_ptr))) { \
+    return false; \
+  }
+
+  LOAD_FUNCTION(xrGetD3D11GraphicsRequirementsKHR_, xrGetD3D11GraphicsRequirementsKHR);
+
+#undef LOAD_FUNCTION
+  return true;
 }
 
 bool GHOST_XrGraphicsBindingD3D::checkVersionRequirements(
@@ -83,29 +96,8 @@ bool GHOST_XrGraphicsBindingD3D::checkVersionRequirements(
     XrSystemId system_id,
     std::string *r_requirement_info) const
 {
-  static PFN_xrGetD3D11GraphicsRequirementsKHR s_xrGetD3D11GraphicsRequirementsKHR_fn = nullptr;
-  // static XrInstance s_instance = XR_NULL_HANDLE;
   XrGraphicsRequirementsD3D11KHR gpu_requirements = {XR_TYPE_GRAPHICS_REQUIREMENTS_D3D11_KHR};
-
-  /* Although it would seem reasonable that the PROC address would not change if the instance was
-   * the same, in testing, repeated calls to #xrGetInstanceProcAddress() with the same instance
-   * can still result in changes so the workaround is to simply set the function pointer every
-   * time (trivializing its 'static' designation). */
-  // if (instance != s_instance) {
-  // s_instance = instance;
-  s_xrGetD3D11GraphicsRequirementsKHR_fn = nullptr;
-  //}
-  if (!s_xrGetD3D11GraphicsRequirementsKHR_fn &&
-      XR_FAILED(
-          xrGetInstanceProcAddr(instance,
-                                "xrGetD3D11GraphicsRequirementsKHR",
-                                (PFN_xrVoidFunction *)&s_xrGetD3D11GraphicsRequirementsKHR_fn)))
-  {
-    s_xrGetD3D11GraphicsRequirementsKHR_fn = nullptr;
-    return false;
-  }
-
-  s_xrGetD3D11GraphicsRequirementsKHR_fn(instance, system_id, &gpu_requirements);
+  xrGetD3D11GraphicsRequirementsKHR_(instance, system_id, &gpu_requirements);
 
   if (r_requirement_info) {
     std::ostringstream strstream;
@@ -115,7 +107,7 @@ bool GHOST_XrGraphicsBindingD3D::checkVersionRequirements(
     *r_requirement_info = strstream.str();
   }
 
-  return m_ghost_d3d_ctx->m_device->GetFeatureLevel() >= gpu_requirements.minFeatureLevel;
+  return ghost_d3d_ctx_->device_->GetFeatureLevel() >= gpu_requirements.minFeatureLevel;
 }
 
 void GHOST_XrGraphicsBindingD3D::initFromGhostContext(
@@ -125,7 +117,7 @@ void GHOST_XrGraphicsBindingD3D::initFromGhostContext(
 )
 {
   oxr_binding.d3d11.type = XR_TYPE_GRAPHICS_BINDING_D3D11_KHR;
-  oxr_binding.d3d11.device = m_ghost_d3d_ctx->m_device;
+  oxr_binding.d3d11.device = ghost_d3d_ctx_->device_;
 }
 
 std::optional<int64_t> GHOST_XrGraphicsBindingD3D::chooseSwapchainFormat(
@@ -139,13 +131,13 @@ std::optional<int64_t> GHOST_XrGraphicsBindingD3D::chooseSwapchainFormat(
         DXGI_FORMAT_R10G10B10A2_UNORM,
         DXGI_FORMAT_R16G16B16A16_UNORM,
 #endif
-    DXGI_FORMAT_R16G16B16A16_FLOAT,
+      DXGI_FORMAT_R16G16B16A16_FLOAT,
 #if 1
-    DXGI_FORMAT_R10G10B10A2_UNORM,
-    DXGI_FORMAT_R16G16B16A16_UNORM,
+      DXGI_FORMAT_R10G10B10A2_UNORM,
+      DXGI_FORMAT_R16G16B16A16_UNORM,
 #endif
-    DXGI_FORMAT_R8G8B8A8_UNORM,
-    DXGI_FORMAT_R8G8B8A8_UNORM_SRGB,
+      DXGI_FORMAT_R8G8B8A8_UNORM,
+      DXGI_FORMAT_R8G8B8A8_UNORM_SRGB,
   };
 
   std::optional result = choose_swapchain_format_from_candidates(gpu_binding_formats,
@@ -190,17 +182,17 @@ std::vector<XrSwapchainImageBaseHeader *> GHOST_XrGraphicsBindingD3D::createSwap
   }
 
   /* Keep alive. */
-  m_image_cache.push_back(std::move(d3d_images));
+  image_cache_.push_back(std::move(d3d_images));
 
   return base_images;
 }
 
 bool GHOST_XrGraphicsBindingD3D::needsUpsideDownDrawing(GHOST_Context &) const
 {
-  return m_ghost_d3d_ctx->isUpsideDown();
+  return ghost_d3d_ctx_->isUpsideDown();
 }
 
-/* \} */
+/** \} */
 
 /* -------------------------------------------------------------------- */
 /** \name OpenGL-Direct3D bridge
@@ -208,15 +200,15 @@ bool GHOST_XrGraphicsBindingD3D::needsUpsideDownDrawing(GHOST_Context &) const
 
 GHOST_XrGraphicsBindingOpenGLD3D::GHOST_XrGraphicsBindingOpenGLD3D(GHOST_Context &ghost_ctx)
 
-    : GHOST_XrGraphicsBindingD3D(), m_ghost_wgl_ctx(static_cast<GHOST_ContextWGL &>(ghost_ctx))
+    : GHOST_XrGraphicsBindingD3D(), ghost_wgl_ctx_(static_cast<GHOST_ContextWGL &>(ghost_ctx))
 {
 }
 
 GHOST_XrGraphicsBindingOpenGLD3D::~GHOST_XrGraphicsBindingOpenGLD3D()
 {
-  if (m_shared_resource) {
-    m_ghost_d3d_ctx->disposeSharedOpenGLResource(m_shared_resource);
-    m_shared_resource = nullptr;
+  if (shared_resource_) {
+    ghost_d3d_ctx_->disposeSharedOpenGLResource(shared_resource_);
+    shared_resource_ = nullptr;
   }
 }
 
@@ -237,30 +229,30 @@ void GHOST_XrGraphicsBindingOpenGLD3D::submitToSwapchainImage(
     CD3D11_RENDER_TARGET_VIEW_DESC rtv_desc(D3D11_RTV_DIMENSION_TEXTURE2D,
                                             DXGI_FORMAT_R8G8B8A8_UNORM);
 
-    m_ghost_ctx->m_device->CreateRenderTargetView(d3d_swapchain_image.texture, &rtv_desc, &rtv);
-    if (!m_shared_resource) {
+    ghost_ctx_->device_->CreateRenderTargetView(d3d_swapchain_image.texture, &rtv_desc, &rtv);
+    if (!shared_resource_) {
       DXGI_FORMAT format;
       ghost_format_to_dx_format(draw_info.swapchain_format, draw_info.expects_srgb_buffer, format);
-      m_shared_resource = m_ghost_ctx->createSharedOpenGLResource(
+      shared_resource_ = ghost_ctx_->createSharedOpenGLResource(
           draw_info.width, draw_info.height, format, rtv);
     }
-    m_ghost_ctx->blitFromOpenGLContext(m_shared_resource, draw_info.width, draw_info.height);
+    ghost_ctx_->blitFromOpenGLContext(shared_resource_, draw_info.width, draw_info.height);
 #else
-  if (!m_shared_resource) {
+  if (!shared_resource_) {
     DXGI_FORMAT format;
     ghost_format_to_dx_format(draw_info.swapchain_format, draw_info.expects_srgb_buffer, format);
-    m_shared_resource = m_ghost_d3d_ctx->createSharedOpenGLResource(
+    shared_resource_ = ghost_d3d_ctx_->createSharedOpenGLResource(
         draw_info.width, draw_info.height, format);
   }
-  m_ghost_d3d_ctx->blitFromOpenGLContext(m_shared_resource, draw_info.width, draw_info.height);
+  ghost_d3d_ctx_->blitFromOpenGLContext(shared_resource_, draw_info.width, draw_info.height);
 
-  m_ghost_d3d_ctx->m_device_ctx->OMSetRenderTargets(0, nullptr, nullptr);
-  m_ghost_d3d_ctx->m_device_ctx->CopyResource(
-      d3d_swapchain_image.texture, m_ghost_d3d_ctx->getSharedTexture2D(m_shared_resource));
+  ghost_d3d_ctx_->device_ctx_->OMSetRenderTargets(0, nullptr, nullptr);
+  ghost_d3d_ctx_->device_ctx_->CopyResource(d3d_swapchain_image.texture,
+                                            ghost_d3d_ctx_->getSharedTexture2D(shared_resource_));
 #endif
 }
 
-/* \} */
+/** \} */
 
 #ifdef WITH_VULKAN_BACKEND
 
@@ -270,7 +262,7 @@ void GHOST_XrGraphicsBindingOpenGLD3D::submitToSwapchainImage(
 
 GHOST_XrGraphicsBindingVulkanD3D::GHOST_XrGraphicsBindingVulkanD3D(GHOST_Context &ghost_ctx)
 
-    : GHOST_XrGraphicsBindingD3D(), m_ghost_ctx(static_cast<GHOST_ContextVK &>(ghost_ctx))
+    : GHOST_XrGraphicsBindingD3D(), ghost_ctx_(static_cast<GHOST_ContextVK &>(ghost_ctx))
 {
 }
 
@@ -289,14 +281,14 @@ void GHOST_XrGraphicsBindingVulkanD3D::submitToSwapchainImage(
     component_size = 4 * sizeof(uint16_t);
   }
 
-  ID3D11Device *d3d_device = m_ghost_d3d_ctx->m_device;
-  ID3D11DeviceContext *d3d_device_ctx = m_ghost_d3d_ctx->m_device_ctx;
+  ID3D11Device *d3d_device = ghost_d3d_ctx_->device_;
+  ID3D11DeviceContext *d3d_device_ctx = ghost_d3d_ctx_->device_ctx_;
   DXGI_FORMAT format;
   ghost_format_to_dx_format(draw_info.swapchain_format, draw_info.expects_srgb_buffer, format);
 
   /* Acquire frame buffer image. */
   GHOST_VulkanOpenXRData openxr_data = {GHOST_kVulkanXRModeCPU};
-  m_ghost_ctx.openxr_acquire_framebuffer_image_callback_(&openxr_data);
+  ghost_ctx_.openxr_acquire_framebuffer_image_callback_(&openxr_data);
 
   /* Upload the data to a D3D Texture */
   D3D11_TEXTURE2D_DESC desc;
@@ -328,9 +320,9 @@ void GHOST_XrGraphicsBindingVulkanD3D::submitToSwapchainImage(
   texture->Release();
 
   /* Release frame buffer image. */
-  m_ghost_ctx.openxr_release_framebuffer_image_callback_(&openxr_data);
+  ghost_ctx_.openxr_release_framebuffer_image_callback_(&openxr_data);
 }
 
-/* \} */
+/** \} */
 
 #endif

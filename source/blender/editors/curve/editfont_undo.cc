@@ -13,8 +13,8 @@
 
 #include "CLG_log.h"
 
-#include "BLI_array_utils.h" /* For #BLI_array_is_zeroed. */
-#include "BLI_utildefines.h"
+#include "BLI_array_utils_c.hh" /* For #BLI_array_is_zeroed. */
+#include "BLI_utildefines.hh"
 
 #include "DNA_curve_types.h"
 #include "DNA_object_types.h"
@@ -37,11 +37,13 @@
 
 #ifdef USE_ARRAY_STORE
 // #  define DEBUG_PRINT
-#  include "BLI_array_store.h"
-#  include "BLI_array_store_utils.h"
-#  include "BLI_listbase.h"
+#  include "BLI_array_store.hh"
+#  include "BLI_array_store_utils.hh"
+#  include "BLI_listbase.hh"
 #  define ARRAY_CHUNK_SIZE 32
 #endif
+
+namespace blender {
 
 /** Only needed this locally. */
 static CLG_LogRef LOG = {"undo.font"};
@@ -66,6 +68,8 @@ struct UndoFont {
   size_t undo_size;
 };
 
+/** \} */
+
 #ifdef USE_ARRAY_STORE
 
 /* -------------------------------------------------------------------- */
@@ -77,7 +81,7 @@ static struct {
   int users;
 
   /* We could have the undo API pass in the previous state, for now store a local list */
-  ListBase local_links;
+  ListBaseT<LinkData> local_links;
 
 } uf_arraystore = {{nullptr}};
 
@@ -100,7 +104,7 @@ static void uf_arraystore_compact_ex(UndoFont *uf, const UndoFont *uf_ref, bool 
             bs, (uf)->id, size_t(len) * stride, state_reference); \
       } \
       /* keep uf->len for validation */ \
-      MEM_freeN((uf)->id); \
+      MEM_delete((uf)->id); \
       (uf)->id = nullptr; \
     } \
     ((void)0)
@@ -217,6 +221,10 @@ static void uf_arraystore_free(UndoFont *uf)
 
 #endif /* USE_ARRAY_STORE */
 
+/* -------------------------------------------------------------------- */
+/** \name Undo/Redo Helper Functions
+ * \{ */
+
 static void undofont_to_editfont(UndoFont *uf, Curve *cu)
 {
   EditFont *ef = cu->editfont;
@@ -251,16 +259,14 @@ static void *undofont_from_editfont(UndoFont *uf, Curve *cu)
 
   size_t mem_used_prev = MEM_get_memory_in_use();
 
-  size_t final_size;
+  size_t alloc_len = ef->len + 1;
 
   BLI_assert(sizeof(*uf->textbuf) == sizeof(*ef->textbuf));
-  final_size = sizeof(*uf->textbuf) * (ef->len + 1);
-  uf->textbuf = static_cast<char32_t *>(MEM_mallocN(final_size, __func__));
-  memcpy(uf->textbuf, ef->textbuf, final_size);
+  uf->textbuf = MEM_new_array_uninitialized<char32_t>(alloc_len, __func__);
+  memcpy(uf->textbuf, ef->textbuf, sizeof(char32_t) * alloc_len);
 
-  final_size = sizeof(CharInfo) * (ef->len + 1);
-  uf->textbufinfo = static_cast<CharInfo *>(MEM_mallocN(final_size, __func__));
-  memcpy(uf->textbufinfo, ef->textbufinfo, final_size);
+  uf->textbufinfo = MEM_new_array<CharInfo>(alloc_len, __func__);
+  memcpy(uf->textbufinfo, ef->textbufinfo, sizeof(CharInfo) * alloc_len);
 
   uf->pos = ef->pos;
   uf->selstart = ef->selstart;
@@ -270,8 +276,9 @@ static void *undofont_from_editfont(UndoFont *uf, Curve *cu)
 #ifdef USE_ARRAY_STORE
   {
     const UndoFont *uf_ref = static_cast<const UndoFont *>(
-        uf_arraystore.local_links.last ? ((LinkData *)uf_arraystore.local_links.last)->data :
-                                         nullptr);
+        uf_arraystore.local_links.last ?
+            (static_cast<LinkData *>(uf_arraystore.local_links.last))->data :
+            nullptr);
 
     /* Add ourselves. */
     BLI_addtail(&uf_arraystore.local_links, BLI_genericNodeN(uf));
@@ -294,27 +301,28 @@ static void undofont_free_data(UndoFont *uf)
     LinkData *link = static_cast<LinkData *>(
         BLI_findptr(&uf_arraystore.local_links, uf, offsetof(LinkData, data)));
     BLI_remlink(&uf_arraystore.local_links, link);
-    MEM_freeN(link);
+    MEM_delete(link);
   }
   uf_arraystore_free(uf);
 #endif
 
   if (uf->textbuf) {
-    MEM_freeN(uf->textbuf);
+    MEM_delete(uf->textbuf);
   }
   if (uf->textbufinfo) {
-    MEM_freeN(uf->textbufinfo);
+    MEM_delete(uf->textbufinfo);
   }
 }
 
 static Object *editfont_object_from_context(bContext *C)
 {
+  const Main *bmain = CTX_data_main(C);
   Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
-  BKE_view_layer_synced_ensure(scene, view_layer);
+  BKE_view_layer_synced_ensure(*bmain, scene, view_layer);
   Object *obedit = BKE_view_layer_edit_object_get(view_layer);
   if (obedit && obedit->type == OB_FONT) {
-    const Curve *cu = static_cast<Curve *>(obedit->data);
+    const Curve *cu = id_cast<Curve *>(obedit->data);
     const EditFont *ef = cu->editfont;
     if (ef != nullptr) {
       return obedit;
@@ -345,10 +353,10 @@ static bool font_undosys_poll(bContext *C)
 
 static bool font_undosys_step_encode(bContext *C, Main *bmain, UndoStep *us_p)
 {
-  FontUndoStep *us = (FontUndoStep *)us_p;
+  FontUndoStep *us = reinterpret_cast<FontUndoStep *>(us_p);
   us->scene_ref.ptr = CTX_data_scene(C);
   us->obedit_ref.ptr = editfont_object_from_context(C);
-  Curve *cu = static_cast<Curve *>(us->obedit_ref.ptr->data);
+  Curve *cu = id_cast<Curve *>(us->obedit_ref.ptr->data);
   undofont_from_editfont(&us->data, cu);
   us->step.data_size = us->data.undo_size;
   cu->editfont->needs_flush_to_id = 1;
@@ -361,7 +369,7 @@ static void font_undosys_step_decode(
     bContext *C, Main *bmain, UndoStep *us_p, const eUndoStepDir /*dir*/, bool /*is_final*/)
 {
 
-  FontUndoStep *us = (FontUndoStep *)us_p;
+  FontUndoStep *us = reinterpret_cast<FontUndoStep *>(us_p);
   Object *obedit = us->obedit_ref.ptr;
   Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
@@ -371,11 +379,11 @@ static void font_undosys_step_decode(
       CTX_wm_manager(C), us->scene_ref.ptr, &scene, &view_layer);
   ED_undo_object_editmode_restore_helper(scene, view_layer, &obedit, 1, sizeof(Object *));
 
-  Curve *cu = static_cast<Curve *>(obedit->data);
+  Curve *cu = id_cast<Curve *>(obedit->data);
   undofont_to_editfont(&us->data, cu);
   DEG_id_tag_update(&cu->id, ID_RECALC_GEOMETRY);
 
-  ED_undo_object_set_active_or_warn(scene, view_layer, obedit, us_p->name, &LOG);
+  ED_undo_object_set_active_or_warn(*bmain, scene, view_layer, obedit, us_p->name, &LOG);
 
   /* Check after setting active (unless undoing into another scene). */
   BLI_assert(font_undosys_poll(C) || (scene != CTX_data_scene(C)));
@@ -387,7 +395,7 @@ static void font_undosys_step_decode(
 
 static void font_undosys_step_free(UndoStep *us_p)
 {
-  FontUndoStep *us = (FontUndoStep *)us_p;
+  FontUndoStep *us = reinterpret_cast<FontUndoStep *>(us_p);
   undofont_free_data(&us->data);
 }
 
@@ -395,14 +403,14 @@ static void font_undosys_foreach_ID_ref(UndoStep *us_p,
                                         UndoTypeForEachIDRefFn foreach_ID_ref_fn,
                                         void *user_data)
 {
-  FontUndoStep *us = (FontUndoStep *)us_p;
-  foreach_ID_ref_fn(user_data, ((UndoRefID *)&us->scene_ref));
-  foreach_ID_ref_fn(user_data, ((UndoRefID *)&us->obedit_ref));
+  FontUndoStep *us = reinterpret_cast<FontUndoStep *>(us_p);
+  foreach_ID_ref_fn(user_data, (reinterpret_cast<UndoRefID *>(&us->scene_ref)));
+  foreach_ID_ref_fn(user_data, (reinterpret_cast<UndoRefID *>(&us->obedit_ref)));
 }
 
 void ED_font_undosys_type(UndoType *ut)
 {
-  ut->name = "Edit Font";
+  ut->identifier = "EDIT_FONT";
   ut->poll = font_undosys_poll;
   ut->step_encode = font_undosys_step_encode;
   ut->step_decode = font_undosys_step_decode;
@@ -416,3 +424,5 @@ void ED_font_undosys_type(UndoType *ut)
 }
 
 /** \} */
+
+}  // namespace blender

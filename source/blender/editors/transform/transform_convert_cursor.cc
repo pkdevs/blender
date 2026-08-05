@@ -13,9 +13,9 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_math_matrix.h"
-#include "BLI_math_rotation.h"
-#include "BLI_math_vector.h"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_rotation_c.hh"
+#include "BLI_math_vector_c.hh"
 
 #include "BKE_library.hh"
 #include "BKE_report.hh"
@@ -37,8 +37,8 @@ static void createTransCursor_2D_impl(TransInfo *t, float cursor_location[2])
     BLI_assert(t->data_container_len == 1);
     TransDataContainer *tc = t->data_container;
     tc->data_len = 1;
-    td = tc->data = MEM_callocN<TransData>("TransTexspace");
-    td2d = tc->data_2d = MEM_calloc_arrayN<TransData2D>(tc->data_len, "TransObData2D(Cursor)");
+    td = tc->data = MEM_new_zeroed<TransData>("TransTexspace");
+    td2d = tc->data_2d = MEM_new_array_zeroed<TransData2D>(tc->data_len, "TransObData2D(Cursor)");
   }
 
   td->flag = TD_SELECTED;
@@ -128,7 +128,7 @@ static void createTransCursor_view3d(bContext * /*C*/, TransInfo *t)
 
   Scene *scene = t->scene;
   if (!ID_IS_EDITABLE(scene)) {
-    BKE_report(t->reports, RPT_ERROR, "Linked data can't text-space transform");
+    BKE_report(t->reports, RPT_ERROR, "Cannot create transform on linked data");
     return;
   }
 
@@ -137,8 +137,8 @@ static void createTransCursor_view3d(bContext * /*C*/, TransInfo *t)
     BLI_assert(t->data_container_len == 1);
     TransDataContainer *tc = t->data_container;
     tc->data_len = 1;
-    td = tc->data = MEM_callocN<TransData>("TransTexspace");
-    td_ext = tc->data_ext = MEM_callocN<TransDataExtension>("TransTexspace");
+    td = tc->data = MEM_new_zeroed<TransData>("TransTexspace");
+    td_ext = tc->data_ext = MEM_new_zeroed<TransDataExtension>("TransTexspace");
   }
 
   td->flag = TD_SELECTED;
@@ -188,14 +188,14 @@ static void recalcData_cursor_view3d(TransInfo *t)
 /** \} */
 
 TransConvertTypeInfo TransConvertType_CursorImage = {
-    /*flags*/ T_2D_EDIT,
+    /*flags*/ (T_POINTS | T_2D_EDIT),
     /*create_trans_data*/ createTransCursor_image,
     /*recalc_data*/ recalcData_cursor_image,
     /*special_aftertrans_update*/ nullptr,
 };
 
 TransConvertTypeInfo TransConvertType_CursorSequencer = {
-    /*flags*/ T_2D_EDIT,
+    /*flags*/ (T_POINTS | T_2D_EDIT),
     /*create_trans_data*/ createTransCursor_sequencer,
     /*recalc_data*/ recalcData_cursor_sequencer,
     /*special_aftertrans_update*/ nullptr,

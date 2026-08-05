@@ -3,10 +3,9 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from ctypes import *
-from pathlib import Path
 
 from ...io.exp.binary_data import BinaryData
-from ...io.com.draco import dll_path
+from ...io.com.library import dll_path
 
 
 def encode_scene_primitives(scenes, export_settings):
@@ -16,7 +15,7 @@ def encode_scene_primitives(scenes, export_settings):
     """
 
     # Load DLL and setup function signatures.
-    dll = cdll.LoadLibrary(str(dll_path().resolve()))
+    dll = cdll.LoadLibrary(str(dll_path('bf_intern_draco_bridge', 'Draco').resolve()))
 
     dll.encoderCreate.restype = c_void_p
     dll.encoderCreate.argtypes = [c_uint32]

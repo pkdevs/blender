@@ -62,7 +62,7 @@ Object *ArmatureImportContext::create_armature_for_node(const ufbx_node *node)
   bArmature *arm = BKE_armature_add(&this->bmain, arm_name);
   Object *obj = BKE_object_add_only_object(&this->bmain, OB_ARMATURE, obj_name);
   obj->dtx |= OB_DRAW_IN_FRONT;
-  obj->data = arm;
+  obj->data = id_cast<ID *>(arm);
   this->mapping.imported_objects.add(obj);
   if (!node->is_root) {
     this->mapping.el_to_object.add(&node->element, obj);
@@ -106,10 +106,18 @@ void ArmatureImportContext::create_armature_bones(const ufbx_node *node,
                                                   const float parent_bone_size)
 {
   BLI_assert(node != nullptr && !node->is_root);
-  bArmature *arm = static_cast<bArmature *>(arm_obj->data);
+  bArmature *arm = id_cast<bArmature *>(arm_obj->data);
 
   /* Create an EditBone. */
-  EditBone *bone = ED_armature_ebone_add(arm, get_fbx_name(node->name, "Bone"));
+  std::string name;
+  if (node->is_geometry_transform_helper) {
+    /* Name geometry transform adjustment helpers with parent name and _GeomAdjust suffix. */
+    name = get_fbx_name(node->parent->name, "Bone") + std::string("_GeomAdjust");
+  }
+  else {
+    name = get_fbx_name(node->name, "Bone");
+  }
+  EditBone *bone = ED_armature_ebone_add(arm, name.c_str());
   this->mapping.node_to_name.add(node, bone->name);
   this->mapping.node_is_blender_bone.add(node);
   this->mapping.bone_to_armature.add(node, arm_obj);
@@ -321,7 +329,7 @@ void ArmatureImportContext::find_armatures(const ufbx_node *node)
     Set<const ufbx_node *> bone_nodes = find_all_bones(node);
 
     /* Create bones in edit mode. */
-    bArmature *arm = static_cast<bArmature *>(arm_obj->data);
+    bArmature *arm = id_cast<bArmature *>(arm_obj->data);
     ED_armature_to_edit(arm);
     this->mapping.node_to_name.add(node, BKE_id_name(arm_obj->id));
     for (const ufbx_node *fchild : node->children) {

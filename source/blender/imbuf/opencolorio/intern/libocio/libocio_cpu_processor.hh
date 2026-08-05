@@ -4,13 +4,11 @@
 
 #pragma once
 
-#if defined(WITH_OPENCOLORIO)
+#include "MEM_guardedalloc.h"
 
-#  include "MEM_guardedalloc.h"
+#include "OCIO_cpu_processor.hh"
 
-#  include "OCIO_cpu_processor.hh"
-
-#  include "../opencolorio.hh"
+#include "../opencolorio.hh"
 
 namespace blender::ocio {
 
@@ -22,7 +20,7 @@ class LibOCIOCPUProcessor : public CPUProcessor {
 
   bool is_noop() const override
   {
-    return false;
+    return ocio_cpu_processor_->isNoOp();
   }
 
   void apply_rgb(float rgb[3]) const override;
@@ -37,5 +35,3 @@ class LibOCIOCPUProcessor : public CPUProcessor {
 };
 
 }  // namespace blender::ocio
-
-#endif

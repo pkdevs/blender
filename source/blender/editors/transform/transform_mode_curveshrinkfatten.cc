@@ -8,9 +8,9 @@
 
 #include <cstdlib>
 
-#include "BLI_math_bits.h"
-#include "BLI_math_vector.h"
-#include "BLI_string_utf8.h"
+#include "BLI_math_bits.hh"
+#include "BLI_math_vector_c.hh"
+#include "BLI_string_utf8.hh"
 
 #include "BKE_unit.hh"
 
@@ -101,15 +101,39 @@ static void initCurveShrinkFatten(TransInfo *t, wmOperator * /*op*/)
   t->num.unit_type[0] = B_UNIT_NONE;
 
   float scale_factor = 0.0f;
-  if (((t->spacetype == SPACE_VIEW3D) && (t->region->regiontype == RGN_TYPE_WINDOW) &&
-       (t->data_len_all == 1)) ||
-      (t->data_len_all == 3 && TRANS_DATA_CONTAINER_FIRST_OK(t)->data[0].val == nullptr))
-  {
+  if ((t->spacetype == SPACE_VIEW3D) && (t->region->regiontype == RGN_TYPE_WINDOW)) {
     /* For cases where only one point on the curve is being transformed and the radius of that
-     * point is zero, use the factor to multiply the offset of the ratio and allow scaling.
-     * Note that for bezier curves, 3 TransData equals 1 point in most cases. */
-    RegionView3D *rv3d = static_cast<RegionView3D *>(t->region->regiondata);
-    scale_factor = rv3d->pixsize * t->mouse.factor * t->zfac;
+     * point is zero [that is actually only checked for in #applyCurveShrinkFatten()], use the
+     * factor to multiply the offset of the ratio and allow scaling. Note that for bezier curves, 3
+     * TransData equals 1 point in most cases. */
+    bool use_scaling_factor = false;
+    if (t->data_len_all == 1) {
+      /* Either a single control point of a non-bezier curve or single handle of a bezier curve
+       * selected. */
+      use_scaling_factor = TRANS_DATA_CONTAINER_FIRST_OK(t)->data[0].val != nullptr;
+    }
+    if (t->data_len_all == 3) {
+      /* Either a single control point of a bezier curve (or its handles as well) selected, also
+       * true for three individual handles selected. Note the layout/order of TransData is
+       * different for Curve vs. Curves (Curves have the control point first, Curve has it in the
+       * middle), so check this explicitly. */
+      TransDataContainer *tc = TRANS_DATA_CONTAINER_FIRST_OK(t);
+
+      if (t->data_type == &TransConvertType_Curve) {
+        use_scaling_factor = tc->data[1].val != nullptr;
+      }
+      else if (ELEM(t->data_type,
+                    &curves::TransConvertType_Curves,
+                    &greasepencil::TransConvertType_GreasePencil))
+      {
+        use_scaling_factor = tc->data[0].val != nullptr;
+      }
+    }
+
+    if (use_scaling_factor) {
+      RegionView3D *rv3d = static_cast<RegionView3D *>(t->region->regiondata);
+      scale_factor = rv3d->pixsize * t->mouse.factor * t->zfac;
+    }
   }
   t->custom.mode.data = POINTER_FROM_UINT(float_as_uint(scale_factor));
 }

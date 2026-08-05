@@ -9,12 +9,14 @@
 #include <pxr/usd/usdGeom/curves.h>
 #include <pxr/usd/usdGeom/nurbsCurves.h>
 
-namespace blender::bke {
+namespace blender {
+
+namespace bke {
 class AttributeIter;
 class CurvesGeometry;
-}  // namespace blender::bke
+}  // namespace bke
 
-namespace blender::io::usd {
+namespace io::usd {
 
 /* Writer for writing Curves data as USD curves. */
 class USDCurvesWriter final : public USDAbstractWriter {
@@ -40,8 +42,9 @@ class USDCurvesWriter final : public USDAbstractWriter {
                              const pxr::TfToken interpolation);
 
   void set_writer_attributes_for_nurbs(const pxr::UsdGeomNurbsCurves &usd_nurbs_curves,
-                                       const pxr::VtArray<double> &knots,
-                                       const pxr::VtArray<int> &orders,
+                                       pxr::VtArray<double> &knots,
+                                       pxr::VtArray<double> &weights,
+                                       pxr::VtArray<int> &orders,
                                        const pxr::UsdTimeCode time);
 
   void write_generic_data(const bke::CurvesGeometry &curves,
@@ -52,8 +55,8 @@ class USDCurvesWriter final : public USDAbstractWriter {
 
   void write_velocities(const bke::CurvesGeometry &curves, const pxr::UsdGeomCurves &usd_curves);
 
-  void write_custom_data(const blender::bke::CurvesGeometry &curves,
-                         const pxr::UsdGeomCurves &usd_curves);
+  void write_custom_data(const bke::CurvesGeometry &curves, const pxr::UsdGeomCurves &usd_curves);
 };
 
-}  // namespace blender::io::usd
+}  // namespace io::usd
+}  // namespace blender

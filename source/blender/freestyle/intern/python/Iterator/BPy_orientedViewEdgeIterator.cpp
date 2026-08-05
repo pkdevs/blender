@@ -26,15 +26,18 @@ PyDoc_STRVAR(
     "plane). An instance of an orientedViewEdgeIterator can only be\n"
     "obtained from a ViewVertex by calling edges_begin() or edges_end().\n"
     "\n"
-    ".. method:: __init__()\n"
-    "            __init__(iBrother)\n"
+    ".. method:: __init__(*args)\n"
+    "\n"
+    "   Accepted call signatures:\n"
+    "\n"
+    "   - ``__init__()``\n"
+    "   - ``__init__(iBrother)``\n"
     "\n"
     "   Creates an :class:`orientedViewEdgeIterator` using either the\n"
     "   default constructor or the copy constructor.\n"
     "\n"
-    "   :arg iBrother: An orientedViewEdgeIterator object.\n"
-    "   :type iBrother: :class:`orientedViewEdgeIterator`");
-
+    "   :param iBrother: An orientedViewEdgeIterator object.\n"
+    "   :type iBrother: :class:`orientedViewEdgeIterator`\n");
 static int orientedViewEdgeIterator_init(BPy_orientedViewEdgeIterator *self,
                                          PyObject *args,
                                          PyObject *kwds)
@@ -42,8 +45,14 @@ static int orientedViewEdgeIterator_init(BPy_orientedViewEdgeIterator *self,
   static const char *kwlist[] = {"brother", nullptr};
   PyObject *brother = nullptr;
 
-  if (!PyArg_ParseTupleAndKeywords(
-          args, kwds, "|O!", (char **)kwlist, &orientedViewEdgeIterator_Type, &brother))
+  if (!PyArg_ParseTupleAndKeywords(args,
+                                   kwds,
+                                   "|"  /* Optional arguments. */
+                                   "O!" /* `brother` */
+                                   ":__init__",
+                                   (char **)kwlist,
+                                   &orientedViewEdgeIterator_Type,
+                                   &brother))
   {
     return -1;
   }
@@ -107,8 +116,7 @@ PyDoc_STRVAR(
     "value) currently pointed to by this iterator. If the boolean value is true,\n"
     "the ViewEdge is incoming.\n"
     "\n"
-    ":type: (:class:`ViewEdge`, bool)");
-
+    ":type: tuple[:class:`ViewEdge`, bool]\n");
 static PyObject *orientedViewEdgeIterator_object_get(BPy_orientedViewEdgeIterator *self,
                                                      void * /*closure*/)
 {

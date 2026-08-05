@@ -10,11 +10,11 @@
 
 #include <cstring>
 
-#include "BLI_dynstr.h"
-#include "BLI_fileops.h"
-#include "BLI_linklist.h"
+#include "BLI_dynstr.hh"
+#include "BLI_fileops.hh"
+#include "BLI_linklist.hh"
 #include "BLI_path_utils.hh"
-#include "BLI_string.h"
+#include "BLI_string.hh"
 
 #include "BLT_translation.hh"
 
@@ -25,6 +25,8 @@
 #include "GPU_platform.hh"
 
 #include "CLG_log.h"
+
+namespace blender {
 
 #define WM_PLATFORM_SUPPORT_TEXT_SIZE 1024
 
@@ -106,7 +108,7 @@ bool WM_platform_support_perform_checks()
 
   bool result = true;
 
-  eGPUSupportLevel support_level = GPU_platform_support_level();
+  GPUSupportLevel support_level = GPU_platform_support_level();
   const char *platform_key = GPU_platform_support_level_key();
 
   CLOG_INFO(&LOG, "Using GPU \"%s\"", GPU_platform_gpu_name());
@@ -252,3 +254,5 @@ bool WM_platform_support_perform_checks()
 
   return result;
 }
+
+}  // namespace blender

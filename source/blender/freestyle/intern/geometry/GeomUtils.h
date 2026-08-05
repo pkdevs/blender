@@ -58,12 +58,12 @@ template<class T> real distPointSegment(const T &P, const T &A, const T &B)
 // Non-templated procedures
 //
 /////////////////////////////////////////////////////////////////////////////
-typedef enum {
+enum intersection_test {
   DONT_INTERSECT,
   DO_INTERSECT,
   COLINEAR,
   COINCIDENT,
-} intersection_test;
+};
 
 intersection_test intersect2dSeg2dSeg(const Vec2r &p1,
                                       const Vec2r &p2,  // first segment
@@ -225,7 +225,7 @@ void fromImageToRetina(const Vec3r &p, Vec3r &q, const int viewport[4]);
 /** computes the coordinates of q in the camera coordinates system,
  *  using the known z coordinates of the 3D point.
  *  That means that this method does not inverse any matrices,
- *  it only computes X and Y from x,y and Z)
+ *  it only computes X and Y from x,y and Z
  *  p
  *    point's coordinates expressed in retina system
  *  q

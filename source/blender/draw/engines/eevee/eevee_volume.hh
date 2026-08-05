@@ -40,8 +40,8 @@
 #include "DRW_gpu_wrapper.hh"
 #include "GPU_batch_utils.hh"
 
-#include "eevee_shader_shared.hh"
 #include "eevee_sync.hh"
+#include "eevee_volume_shared.hh"
 
 namespace blender::eevee {
 
@@ -57,6 +57,7 @@ class VolumeModule {
   Instance &inst_;
 
   bool enabled_;
+  bool viewport_sampling_is_reset_ = false;
   bool use_reprojection_;
   bool use_lights_;
 
@@ -138,7 +139,7 @@ class VolumeModule {
     return enabled_ && use_lights_;
   }
 
-  /* Return a the future value of enabled() that will only be available after end_sync(). */
+  /* Return the future value of enabled() that will only be available after end_sync(). */
   bool will_enable() const;
 
   /* Returns the state of the module. */
@@ -167,7 +168,9 @@ class VolumeModule {
 
   void end_sync();
 
-  /* Render material properties. */
+  void set_view(View &main_view);
+
+  /* Render material properties. Needs to be called after `set_view`. */
   void draw_prepass(View &main_view);
   /* Compute scattering and integration. */
   void draw_compute(View &main_view, int2 extent);

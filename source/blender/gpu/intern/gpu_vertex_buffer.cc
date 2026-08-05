@@ -19,11 +19,13 @@
 
 #include <cstring>
 
+namespace blender {
+
 /* -------------------------------------------------------------------- */
 /** \name VertBuf
  * \{ */
 
-namespace blender::gpu {
+namespace gpu {
 
 size_t VertBuf::memory_usage = 0;
 
@@ -41,6 +43,12 @@ VertBuf::~VertBuf()
 
 void VertBuf::init(const GPUVertFormat &format, GPUUsageType usage)
 {
+#if 0 /* Disabled until Grease pencil. Comply to this. */
+  if (usage & GPU_USAGE_FLAG_BUFFER_TEXTURE_ONLY) {
+    BLI_assert_msg(format.attr_len == 1,
+                   "Only single attribute format are supported for buffer textures");
+  }
+#endif
   /* Strip extended usage flags. */
   usage_ = usage & ~GPU_USAGE_FLAG_BUFFER_TEXTURE_ONLY;
 #ifndef NDEBUG
@@ -89,7 +97,7 @@ void VertBuf::upload()
   this->upload_data();
 }
 
-}  // namespace blender::gpu
+}  // namespace gpu
 
 /** \} */
 
@@ -97,7 +105,6 @@ void VertBuf::upload()
 /** \name C-API
  * \{ */
 
-using namespace blender;
 using namespace blender::gpu;
 
 /* -------- Creation & deletion -------- */
@@ -229,7 +236,7 @@ void GPU_vertbuf_attr_fill_stride(VertBuf *verts, uint a_idx, uint stride, const
     /* we must copy it per vertex */
     for (uint v = 0; v < vertex_len; v++) {
       memcpy(verts->data<uchar>().data() + a->offset + v * format->stride,
-             (const uchar *)data + v * stride,
+             static_cast<const uchar *>(data) + v * stride,
              a->type.size());
     }
   }
@@ -246,7 +253,7 @@ void GPU_vertbuf_attr_get_raw_data(VertBuf *verts, uint a_idx, GPUVertBufRaw *ac
   verts->flag &= ~GPU_VERTBUF_DATA_UPLOADED;
   access->size = a->type.size();
   access->stride = format->stride;
-  access->data = (uchar *)verts->data<uchar>().data() + a->offset;
+  access->data = static_cast<uchar *>(verts->data<uchar>().data()) + a->offset;
   access->data_init = access->data;
 #ifndef NDEBUG
   access->_data_end = access->data_init + size_t(verts->vertex_alloc * format->stride);
@@ -311,3 +318,5 @@ void GPU_vertbuf_update_sub(VertBuf *verts, uint start, uint len, const void *da
 }
 
 /** \} */
+
+}  // namespace blender

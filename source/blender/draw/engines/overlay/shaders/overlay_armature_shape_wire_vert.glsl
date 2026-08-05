@@ -2,7 +2,7 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#include "infos/overlay_armature_info.hh"
+#include "infos/overlay_armature_infos.hh"
 
 VERTEX_SHADER_CREATE_INFO(overlay_armature_shape_wire)
 
@@ -106,7 +106,7 @@ void do_vertex(const uint strip_index,
 void geometry_main(VertOut geom_in[2],
                    uint out_vertex_id,
                    uint out_primitive_id,
-                   uint out_invocation_id)
+                   uint /*out_invocation_id*/)
 {
   /* Clip line against near plane to avoid deformed lines. */
   float4 pos0 = geom_in[0].gpu_position;

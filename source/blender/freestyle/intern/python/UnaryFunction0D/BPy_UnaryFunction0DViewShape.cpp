@@ -58,7 +58,6 @@ PyDoc_STRVAR(
     ".. method:: __init__()\n"
     "\n"
     "   Default constructor.\n");
-
 static int UnaryFunction0DViewShape___init__(BPy_UnaryFunction0DViewShape *self,
                                              PyObject *args,
                                              PyObject *kwds)
@@ -92,8 +91,13 @@ static PyObject *UnaryFunction0DViewShape___call__(BPy_UnaryFunction0DViewShape 
   static const char *kwlist[] = {"it", nullptr};
   PyObject *obj;
 
-  if (!PyArg_ParseTupleAndKeywords(
-          args, kwds, "O!", (char **)kwlist, &Interface0DIterator_Type, &obj))
+  if (!PyArg_ParseTupleAndKeywords(args,
+                                   kwds,
+                                   "O!" /* `it` */
+                                   ":__call__",
+                                   (char **)kwlist,
+                                   &Interface0DIterator_Type,
+                                   &obj))
   {
     return nullptr;
   }

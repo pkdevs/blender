@@ -2,6 +2,9 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+#include "gpu_shader_math_vector_safe_lib.glsl"
+
+[[node]]
 void node_subsurface_scattering(float4 color,
                                 float scale,
                                 float3 radius,
@@ -10,7 +13,8 @@ void node_subsurface_scattering(float4 color,
                                 float anisotropy,
                                 float3 N,
                                 float weight,
-                                out Closure result)
+                                float random_walk_radius_scale,
+                                Closure &result)
 {
   color = max(color, float4(0.0f));
   ior = max(ior, 1e-5f);
@@ -18,10 +22,9 @@ void node_subsurface_scattering(float4 color,
   N = safe_normalize(N);
 
   ClosureSubsurface sss_data;
-  sss_data.weight = weight;
-  sss_data.color = color.rgb;
+  sss_data.color = color.rgb * weight;
   sss_data.N = N;
-  sss_data.sss_radius = max(radius * scale, float3(0.0f));
+  sss_data.sss_radius = max(radius * scale * random_walk_radius_scale, float3(0.0f));
 
   result = closure_eval(sss_data);
 }

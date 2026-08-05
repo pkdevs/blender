@@ -2,7 +2,7 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#include "infos/overlay_edit_mode_info.hh"
+#include "infos/overlay_edit_mode_infos.hh"
 
 VERTEX_SHADER_CREATE_INFO(overlay_depth_curves)
 
@@ -12,23 +12,18 @@ VERTEX_SHADER_CREATE_INFO(overlay_depth_curves)
 #include "draw_view_lib.glsl"
 #include "select_lib.glsl"
 
+#if defined(GPU_NVIDIA) && defined(GPU_OPENGL)
+/* WORKAROUND: Fix legacy driver compiler issue (see #148472). */
+#  define const
+#endif
+
 void main()
 {
   select_id_set(drw_custom_id());
 
-  bool is_persp = (drw_view().winmat[3][3] == 0.0f);
-  float time, thick_time, thickness;
-  float3 world_pos, tangent, binor;
-  hair_get_pos_tan_binor_time(is_persp,
-                              drw_modelinv(),
-                              drw_view().viewinv[3].xyz,
-                              drw_view().viewinv[2].xyz,
-                              world_pos,
-                              tangent,
-                              binor,
-                              time,
-                              thickness,
-                              thick_time);
+  const curves::Point ls_pt = curves::point_get(uint(gl_VertexID));
+  const curves::Point ws_pt = curves::object_to_world(ls_pt, drw_modelmat());
+  float3 world_pos = curves::shape_point_get(ws_pt, drw_world_incident_vector(ws_pt.P)).P;
 
   gl_Position = drw_point_world_to_homogenous(world_pos);
 

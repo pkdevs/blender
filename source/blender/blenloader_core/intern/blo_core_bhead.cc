@@ -2,9 +2,11 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#include "BLI_filereader.h"
+#include "BLI_filereader.hh"
 
 #include "BLO_core_bhead.hh"
+
+namespace blender {
 
 static BHead bhead_from_bhead4(const BHead4 &bhead4)
 {
@@ -85,3 +87,5 @@ std::optional<BHead> BLO_readfile_read_bhead(FileReader *file, const BHeadType t
   }
   return std::nullopt;
 }
+
+}  // namespace blender

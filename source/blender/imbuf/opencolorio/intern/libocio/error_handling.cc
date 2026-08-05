@@ -4,15 +4,13 @@
 
 #include "error_handling.hh"
 
-#if defined(WITH_OPENCOLORIO)
+#include "CLG_log.h"
 
-#  include "CLG_log.h"
-
-#  include "../opencolorio.hh"
+#include "../opencolorio.hh"
 
 namespace blender::ocio {
 
-static CLG_LogRef LOG = {"image.color_management"};
+static CLG_LogRef LOG = {"color_management"};
 
 void report_exception(const OCIO_NAMESPACE::Exception &exception)
 {
@@ -25,5 +23,3 @@ void report_error(const StringRefNull error)
 }
 
 }  // namespace blender::ocio
-
-#endif

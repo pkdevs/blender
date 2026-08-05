@@ -11,12 +11,12 @@
 #include <cstdio>
 #include <cstring>
 
-#include "BLI_utildefines.h"
+#include "BLI_utildefines.hh"
 
-#include "BLI_fileops.h"
+#include "BLI_fileops.hh"
 
 #ifdef WIN32
-#  include "BLI_winstuff.h"
+#  include "BLI_winstuff.hh"
 #endif
 
 #include "BLT_translation.hh"
@@ -24,6 +24,8 @@
 #include "DNA_modifier_types.h"
 
 #include "MOD_meshcache_util.hh" /* own include */
+
+namespace blender {
 
 struct PC2Head {
   char header[12];  /* 'POINTCACHE2\0' */
@@ -272,3 +274,5 @@ bool MOD_meshcache_read_pc2_times(const char *filepath,
   fclose(fp);
   return ok;
 }
+
+}  // namespace blender

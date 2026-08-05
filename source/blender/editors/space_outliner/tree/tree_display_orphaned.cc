@@ -9,7 +9,7 @@
 #include "DNA_ID.h"
 #include "DNA_space_types.h"
 
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 #include "BLI_listbase_wrapper.hh"
 
 #include "BKE_idtype.hh"
@@ -28,14 +28,14 @@ TreeDisplayIDOrphans::TreeDisplayIDOrphans(SpaceOutliner &space_outliner)
 {
 }
 
-ListBase TreeDisplayIDOrphans::build_tree(const TreeSourceData &source_data)
+ListBaseT<TreeElement> TreeDisplayIDOrphans::build_tree(const TreeSourceData &source_data)
 {
-  ListBase tree = {nullptr};
+  ListBaseT<TreeElement> tree = {nullptr};
   short filter_id_type = (space_outliner_.filter & SO_FILTER_ID_TYPE) ?
                              space_outliner_.filter_id_type :
                              0;
 
-  Vector<ListBase *> lbarray;
+  Vector<ListBaseT<ID> *> lbarray;
   if (filter_id_type) {
     lbarray.append(which_libbase(source_data.bmain, filter_id_type));
   }
@@ -54,7 +54,7 @@ ListBase TreeDisplayIDOrphans::build_tree(const TreeSourceData &source_data)
     /* Header for this type of data-block. */
     TreeElement *te = nullptr;
     if (!filter_id_type) {
-      ID *id = (ID *)lbarray[a]->first;
+      ID *id = static_cast<ID *>(lbarray[a]->first);
       te = add_element(&tree, nullptr, lbarray[a], nullptr, TSE_ID_BASE, 0);
       te->directdata = lbarray[a];
       te->name = outliner_idcode_to_plural(GS(id->name));
@@ -71,9 +71,9 @@ ListBase TreeDisplayIDOrphans::build_tree(const TreeSourceData &source_data)
   return tree;
 }
 
-bool TreeDisplayIDOrphans::datablock_has_orphans(ListBase &lb) const
+bool TreeDisplayIDOrphans::datablock_has_orphans(ListBaseT<ID> &lb) const
 {
-  if (BLI_listbase_is_empty(&lb)) {
+  if (lb.is_empty()) {
     return false;
   }
   const IDTypeInfo *id_type = BKE_idtype_get_info_from_id(static_cast<ID *>(lb.first));

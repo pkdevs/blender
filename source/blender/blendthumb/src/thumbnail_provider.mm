@@ -4,8 +4,8 @@
 
 #import <AppKit/NSImage.h>
 
-#include "BLI_fileops.h"
-#include "BLI_filereader.h"
+#include "BLI_fileops.hh"
+#include "BLI_filereader.hh"
 #include "BLI_utility_mixins.hh"
 #include "blendthumb.hh"
 
@@ -25,7 +25,7 @@
  * The Info.plist file should be properly configured with supported content type.
  *
  * # Codesigning
- * The plugin should be codesigned with entitlements at least for sandbox  and read-only/
+ * The plugin should be codesigned with entitlements at least for sandbox and read-only/
  * read-write (for access to the given file). It's needed to even run the plugin locally.
  * com.apple.security.get-task-allow entitlement is required for debugging.
  *
@@ -75,7 +75,7 @@ class FileDescriptorRAII : blender::NonCopyable, blender::NonMovable {
  public:
   explicit FileDescriptorRAII(const char *file_path)
   {
-    src_fd = BLI_open(file_path, O_BINARY | O_RDONLY, 0);
+    src_fd = blender::BLI_open(file_path, O_BINARY | O_RDONLY, 0);
   }
 
   ~FileDescriptorRAII()
@@ -116,16 +116,16 @@ static NSImage *generate_nsimage_for_file(const char *src_blend_path, NSError *e
     return nil;
   }
 
-  FileReader *file_content = BLI_filereader_new_file(src_file_fd.get());
+  blender::FileReader *file_content = blender::BLI_filereader_new_file(src_file_fd.get());
   if (file_content == nullptr) {
     error = create_nserror_from_string(@"Failed to read from blend");
     return nil;
   }
 
   /* Extract thumbnail from file. */
-  Thumbnail thumb;
-  eThumbStatus err = blendthumb_create_thumb_from_file(file_content, &thumb);
-  if (err != BT_OK) {
+  blender::Thumbnail thumb;
+  blender::eThumbStatus err = blendthumb_create_thumb_from_file(file_content, &thumb);
+  if (err != blender::BT_OK) {
     error = create_nserror_from_string(@"Failed to create thumbnail from file");
     return nil;
   }
@@ -180,7 +180,7 @@ static NSImage *generate_nsimage_for_file(const char *src_blend_path, NSError *e
     /* Return the thumbnail reply. */
     handler(thumbnailReply, nil);
   }
-  NSLog(@"Thumbnail generation succcessfully completed");
+  NSLog(@"Thumbnail generation successfully completed");
 }
 
 @end

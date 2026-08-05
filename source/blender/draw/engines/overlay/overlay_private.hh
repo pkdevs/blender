@@ -9,7 +9,7 @@
 #pragma once
 
 #include "BKE_context.hh"
-#include "BKE_movieclip.h"
+#include "BKE_movieclip.hh"
 #include "BKE_object.hh"
 
 #include "BLI_function_ref.hh"
@@ -32,14 +32,16 @@
 
 #include "draw_common.hh"
 
-template<> struct blender::gpu::AttrType<VertexClass> {
+namespace blender {
+
+template<> struct gpu::AttrType<VertexClass> {
   static constexpr VertAttrType type = VertAttrType::SINT_32;
 };
-template<> struct blender::gpu::AttrType<StickBoneFlag> {
+template<> struct gpu::AttrType<StickBoneFlag> {
   static constexpr VertAttrType type = VertAttrType::SINT_32;
 };
 
-namespace blender::draw::overlay {
+namespace draw::overlay {
 
 struct BoneInstanceData {
   /* Keep sync with bone instance vertex format (OVERLAY_InstanceFormats) */
@@ -75,7 +77,7 @@ struct BoneInstanceData {
     mat44[0] = ob_mat[0] * radius;
     mat44[1] = ob_mat[1] * radius;
     mat44[2] = ob_mat[2] * radius;
-    mat44[3] = float4(blender::math::transform_point(ob_mat, pos), 0.0f);
+    mat44[3] = float4(math::transform_point(ob_mat, pos), 0.0f);
     set_color(color);
   }
 
@@ -116,11 +118,11 @@ struct BoneInstanceData {
 
 using SelectionType = select::SelectionType;
 
-using blender::draw::Framebuffer;
-using blender::draw::StorageVectorBuffer;
-using blender::draw::Texture;
-using blender::draw::TextureFromPool;
-using blender::draw::TextureRef;
+using draw::Framebuffer;
+using draw::StorageVectorBuffer;
+using draw::Texture;
+using draw::TextureFromPool;
+using draw::TextureRef;
 
 struct State {
   Depsgraph *depsgraph = nullptr;
@@ -153,6 +155,8 @@ struct State {
   bool draw_background = false;
   /** True if the render engine outputs satisfactory depth information to the depth buffer. */
   bool is_render_depth_available = false;
+  /** Whether we should render a vignette over the scene. */
+  bool vignette_enabled = false;
   /** Should text draw in this mode? */
   bool show_text = false;
   bool hide_overlays = false;
@@ -445,7 +449,7 @@ class ShaderModule {
 
  public:
   /** Shaders */
-  StaticShader anti_aliasing = {"overlay_antialiasing"};
+  StaticShader anti_aliasing = {"overlay_antialiasing_pipeline"};
   StaticShader armature_degrees_of_freedom = shader_clippable("overlay_armature_dof");
   StaticShader attribute_viewer_mesh = shader_clippable("overlay_viewer_attribute_mesh");
   StaticShader attribute_viewer_pointcloud = shader_clippable(
@@ -514,7 +518,7 @@ class ShaderModule {
   StaticShader uv_image_borders = {"overlay_edit_uv_tiled_image_borders"};
   StaticShader uv_paint_mask = {"overlay_edit_uv_mask_image"};
   StaticShader uv_wireframe = {"overlay_wireframe_uv"};
-  StaticShader xray_fade = {"overlay_xray_fade"};
+  StaticShader xray_fade = {"overlay_xray_fade_pipeline"};
 
   /** Selectable Shaders */
   StaticShader armature_envelope_fill = shader_selectable("overlay_armature_envelope_solid");
@@ -547,6 +551,8 @@ class ShaderModule {
   StaticShader wireframe_mesh = shader_selectable("overlay_wireframe");
   /* Draw objects without edges for the wireframe overlay. */
   StaticShader wireframe_points = shader_selectable("overlay_wireframe_points");
+  StaticShader wireframe_points_with_radius = shader_selectable(
+      "overlay_wireframe_points_with_radius");
   StaticShader wireframe_curve = shader_selectable("overlay_wireframe_curve");
 
   StaticShader fluid_grid_lines_flags = shader_selectable_no_clip(
@@ -566,7 +572,7 @@ class ShaderModule {
 
  private:
   ShaderModule(const SelectionType selection_type, const bool clipping_enabled)
-      : selection_type_(selection_type), clipping_enabled_(clipping_enabled){};
+      : selection_type_(selection_type), clipping_enabled_(clipping_enabled) {};
 
   StaticShader shader_clippable(const char *create_info_name);
   StaticShader shader_selectable(const char *create_info_name);
@@ -580,7 +586,7 @@ struct GreasePencilDepthPlane {
   /* Center and size of the bounding box of the Grease Pencil object. */
   Bounds<float3> bounds;
   /* Grease-pencil object resource handle. */
-  ResourceHandleRange handle;
+  ResourceHandle handle;
 };
 
 struct Resources : public select::SelectMap {
@@ -606,8 +612,8 @@ struct Resources : public select::SelectMap {
 
   /* Render Frame-buffers. Only used for multiplicative blending on top of the render. */
   /* TODO(fclem): Remove the usage of these somehow. This is against design. */
-  GPUFrameBuffer *render_fb = nullptr;
-  GPUFrameBuffer *render_in_front_fb = nullptr;
+  gpu::FrameBuffer *render_fb = nullptr;
+  gpu::FrameBuffer *render_in_front_fb = nullptr;
 
   /* Target containing line direction and data for line expansion and anti-aliasing. */
   TextureFromPool line_tx = {"line_tx"};
@@ -669,7 +675,7 @@ struct Resources : public select::SelectMap {
   const ShapeCache &shapes;
 
   Resources(const SelectionType selection_type_, const ShapeCache &shapes_)
-      : select::SelectMap(selection_type_), shapes(shapes_){};
+      : select::SelectMap(selection_type_), shapes(shapes_) {};
 
   ~Resources()
   {
@@ -777,18 +783,18 @@ struct Resources : public select::SelectMap {
 
     if (state.xray_enabled) {
       /* For X-ray we render the scene to a separate depth buffer. */
-      this->xray_depth_tx.acquire(render_size, gpu::TextureFormat::SFLOAT_32_DEPTH_UINT_8);
+      this->xray_depth_tx.acquire_2d(render_size, gpu::TextureFormat::SFLOAT_32_DEPTH_UINT_8);
       this->depth_target_tx.wrap(this->xray_depth_tx);
       /* TODO(fclem): Remove mandatory allocation. */
-      this->xray_depth_in_front_tx.acquire(render_size,
-                                           gpu::TextureFormat::SFLOAT_32_DEPTH_UINT_8);
+      this->xray_depth_in_front_tx.acquire_2d(render_size,
+                                              gpu::TextureFormat::SFLOAT_32_DEPTH_UINT_8);
       this->depth_target_in_front_tx.wrap(this->xray_depth_in_front_tx);
     }
     else {
       /* TODO(fclem): Remove mandatory allocation. */
       if (!this->depth_in_front_tx.is_valid()) {
-        this->depth_in_front_alloc_tx.acquire(render_size,
-                                              gpu::TextureFormat::SFLOAT_32_DEPTH_UINT_8);
+        this->depth_in_front_alloc_tx.acquire_2d(render_size,
+                                                 gpu::TextureFormat::SFLOAT_32_DEPTH_UINT_8);
         this->depth_in_front_tx.wrap(this->depth_in_front_alloc_tx);
       }
       this->depth_target_tx.wrap(this->depth_tx);
@@ -798,14 +804,14 @@ struct Resources : public select::SelectMap {
     /* TODO: Better semantics using a switch? */
     if (!this->color_overlay_tx.is_valid()) {
       /* Likely to be the selection case. Allocate dummy texture and bind only depth buffer. */
-      this->color_overlay_alloc_tx.acquire(int2(1, 1), gpu::TextureFormat::SRGBA_8_8_8_8);
-      this->color_render_alloc_tx.acquire(int2(1, 1), gpu::TextureFormat::SRGBA_8_8_8_8);
+      this->color_overlay_alloc_tx.acquire_2d(int2(1, 1), gpu::TextureFormat::SRGBA_8_8_8_8);
+      this->color_render_alloc_tx.acquire_2d(int2(1, 1), gpu::TextureFormat::SRGBA_8_8_8_8);
 
       this->color_overlay_tx.wrap(this->color_overlay_alloc_tx);
       this->color_render_tx.wrap(this->color_render_alloc_tx);
 
-      this->line_tx.acquire(int2(1, 1), gpu::TextureFormat::UNORM_8_8_8_8);
-      this->overlay_tx.acquire(int2(1, 1), gpu::TextureFormat::SRGBA_8_8_8_8);
+      this->line_tx.acquire_2d(int2(1, 1), gpu::TextureFormat::UNORM_8_8);
+      this->overlay_tx.acquire_2d(int2(1, 1), gpu::TextureFormat::SRGBA_8_8_8_8);
 
       this->overlay_fb.ensure(GPU_ATTACHMENT_TEXTURE(this->depth_target_tx));
       this->overlay_line_fb.ensure(GPU_ATTACHMENT_TEXTURE(this->depth_target_tx));
@@ -815,8 +821,8 @@ struct Resources : public select::SelectMap {
     else {
       eGPUTextureUsage usage = GPU_TEXTURE_USAGE_SHADER_READ | GPU_TEXTURE_USAGE_SHADER_WRITE |
                                GPU_TEXTURE_USAGE_ATTACHMENT;
-      this->line_tx.acquire(render_size, gpu::TextureFormat::UNORM_8_8_8_8, usage);
-      this->overlay_tx.acquire(render_size, gpu::TextureFormat::SRGBA_8_8_8_8, usage);
+      this->line_tx.acquire_2d(render_size, gpu::TextureFormat::UNORM_8_8, usage);
+      this->overlay_tx.acquire_2d(render_size, gpu::TextureFormat::SRGBA_8_8_8_8, usage);
 
       this->overlay_fb.ensure(GPU_ATTACHMENT_TEXTURE(this->depth_target_tx),
                               GPU_ATTACHMENT_TEXTURE(this->overlay_tx));
@@ -892,7 +898,7 @@ struct Resources : public select::SelectMap {
 
   const float4 &object_wire_color(const ObjectRef &ob_ref, ThemeColorID theme_id) const
   {
-    if (UNLIKELY(ob_ref.object->base_flag & BASE_FROM_SET)) {
+    if (ob_ref.object->base_flag & BASE_FROM_SET) [[unlikely]] {
       return theme.colors.wire;
     }
     switch (theme_id) {
@@ -926,7 +932,7 @@ struct Resources : public select::SelectMap {
   float4 background_blend_color(ThemeColorID theme_id) const
   {
     float4 color;
-    UI_GetThemeColorBlendShade4fv(theme_id, TH_BACK, 0.5, 0, color);
+    ui::theme::get_color_blend_shade_4fv(theme_id, TH_BACK, 0.5, 0, color);
     return color;
   }
 
@@ -947,7 +953,7 @@ struct Resources : public select::SelectMap {
       return state.v3d->shading.background_color;
     }
     float4 color;
-    UI_GetThemeColor3fv(TH_BACK, color);
+    ui::theme::get_color_3fv(TH_BACK, color);
     return color;
   }
 
@@ -963,7 +969,7 @@ struct Resources : public select::SelectMap {
   static float vertex_size_get()
   {
     /* M_SQRT2 to be at least the same size of the old square */
-    return max_ff(1.0f, UI_GetThemeValuef(TH_VERTEX_SIZE) * float(M_SQRT2) / 2.0f);
+    return max_ff(1.0f, ui::theme::get_value_f(TH_VERTEX_SIZE) * float(M_SQRT2) / 2.0f);
   }
 
   /** Convenience functions. */
@@ -987,9 +993,9 @@ struct FlatObjectRef {
   int flattened_axis_id;
 
   /* Returns flat axis index if only one axis is flat. Returns -1 otherwise. */
-  static int flat_axis_index_get(const Object *ob)
+  static int flat_axis_index_get(const ObjectRef &ob_ref)
   {
-    BLI_assert(ELEM(ob->type,
+    BLI_assert(ELEM(ob_ref.object->type,
                     OB_MESH,
                     OB_CURVES_LEGACY,
                     OB_SURF,
@@ -998,38 +1004,57 @@ struct FlatObjectRef {
                     OB_POINTCLOUD,
                     OB_VOLUME));
 
-    float dim[3];
-    BKE_object_dimensions_get(ob, dim);
-    if (dim[0] == 0.0f) {
+    float3 dim;
+    if (!ob_ref.is_dupli()) {
+      BKE_object_dimensions_get(ob_ref.object, dim);
+    }
+    else {
+      /* BKE_object_dimensions_get can't be used with dupli objects.
+       * Just use mesh bounds instead of object bounds. */
+      std::optional<Bounds<float3>> bounds = BKE_object_boundbox_get(ob_ref.object);
+      if (!bounds) {
+        return -1;
+      }
+      dim = bounds->size();
+    }
+
+    /* Small epsilon relative to object size to handle float errors in flat axis detection after
+     * rotation. See #139555. */
+    const float max_dim = math::reduce_max(float3(dim));
+    const float epsilon = max_dim * 1e-6f;
+
+    if (dim[0] <= epsilon) {
       return 0;
     }
-    if (dim[1] == 0.0f) {
+    if (dim[1] <= epsilon) {
       return 1;
     }
-    if (dim[2] == 0.0f) {
+    if (dim[2] <= epsilon) {
       return 2;
     }
     return -1;
   }
 
-  using Callback = FunctionRef<void(gpu::Batch *geom, ResourceHandleRange handle)>;
+  using Callback = FunctionRef<void(gpu::Batch *geom, ResourceID handle)>;
 
   /* Execute callback for every handles that is orthogonal to the view.
    * Note: Only works in orthogonal view. */
   void if_flat_axis_orthogonal_to_view(Manager &manager, const View &view, Callback callback) const
   {
-    const float4x4 &object_to_world =
-        manager.matrix_buf.current().get_or_resize(handle.resource_index()).model;
+    for (ResourceID resource_id : handle.id_range()) {
+      const float4x4 &object_to_world =
+          manager.matrix_buf.current().get_or_resize(resource_id.index()).model;
 
-    float3 view_forward = view.forward();
-    float3 axis_not_flat_a = (flattened_axis_id == 0) ? object_to_world.y_axis() :
-                                                        object_to_world.x_axis();
-    float3 axis_not_flat_b = (flattened_axis_id == 1) ? object_to_world.z_axis() :
-                                                        object_to_world.y_axis();
-    float3 axis_flat = math::cross(axis_not_flat_a, axis_not_flat_b);
+      float3 view_forward = view.forward();
+      float3 axis_not_flat_a = (flattened_axis_id == 0) ? object_to_world.y_axis() :
+                                                          object_to_world.x_axis();
+      float3 axis_not_flat_b = (flattened_axis_id == 1) ? object_to_world.z_axis() :
+                                                          object_to_world.y_axis();
+      float3 axis_flat = math::cross(axis_not_flat_a, axis_not_flat_b);
 
-    if (math::abs(math::dot(view_forward, axis_flat)) < 1e-3f) {
-      callback(geom, handle);
+      if (math::abs(math::dot(view_forward, axis_flat)) < 1e-3f) {
+        callback(geom, resource_id);
+      }
     }
   }
 };
@@ -1042,7 +1067,7 @@ template<typename InstanceDataT> struct ShapeInstanceBuf : private select::Selec
   StorageVectorBuffer<InstanceDataT> data_buf;
 
   ShapeInstanceBuf(const SelectionType selection_type, const char *name = nullptr)
-      : select::SelectBuf(selection_type), data_buf(name){};
+      : select::SelectBuf(selection_type), data_buf(name) {};
 
   void clear()
   {
@@ -1089,7 +1114,7 @@ struct VertexPrimitiveBuf {
   int color_id = 0;
 
   VertexPrimitiveBuf(const SelectionType selection_type, const char *name = nullptr)
-      : select_buf(selection_type), data_buf(name){};
+      : select_buf(selection_type), data_buf(name) {};
 
   void append(const float3 &position, const float4 &color)
   {
@@ -1192,4 +1217,5 @@ static inline bool is_from_dupli_or_set(const ObjectRef &ob_ref)
   return is_from_dupli_or_set(ob_ref.object);
 }
 
-}  // namespace blender::draw::overlay
+}  // namespace draw::overlay
+}  // namespace blender

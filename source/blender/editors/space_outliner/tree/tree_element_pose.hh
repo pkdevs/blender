@@ -10,10 +10,12 @@
 
 #include "tree_element.hh"
 
+namespace blender {
+
 struct bPoseChannel;
 struct Object;
 
-namespace blender::ed::outliner {
+namespace ed::outliner {
 
 class TreeElementPoseBase final : public AbstractTreeElement {
   Object &object_;
@@ -21,6 +23,11 @@ class TreeElementPoseBase final : public AbstractTreeElement {
  public:
   TreeElementPoseBase(TreeElement &legacy_te, Object &object);
   void expand(SpaceOutliner & /*soops*/) const override;
+
+  std::optional<BIFIconID> get_icon() const override
+  {
+    return ICON_ARMATURE_DATA;
+  }
 };
 
 class TreeElementPoseChannel final : public AbstractTreeElement {
@@ -30,6 +37,12 @@ class TreeElementPoseChannel final : public AbstractTreeElement {
 
  public:
   TreeElementPoseChannel(TreeElement &legacy_te, Object &object, bPoseChannel &pchan);
+
+  std::optional<BIFIconID> get_icon() const override
+  {
+    return ICON_BONE_DATA;
+  }
 };
 
-}  // namespace blender::ed::outliner
+}  // namespace ed::outliner
+}  // namespace blender

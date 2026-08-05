@@ -9,7 +9,7 @@
 #include "BLI_math_boolean.hh"
 #include "BLI_math_mpq.hh"
 #include "BLI_math_vector_types.hh"
-#include "BLI_utildefines.h"
+#include "BLI_utildefines.hh"
 
 namespace blender {
 
@@ -182,7 +182,7 @@ static RobustInitCaller init_caller;
  * Split(), and Two_Product() are all implemented as described in the
  * reference.  Each of these macros requires certain variables to be
  * defined in the calling routine.  The variables `bvirt`, `c`, `abig`,
- * `_i`, `_j`, `_k`, `_l`, `_m`, and `_n` are declared `INEXACT' because
+ * `_i`, `_j`, `_k`, `_l`, `_m`, and `_n` are declared `INEXACT` because
  * they store the result of an operation that may incur round-off error.
  * The input parameter `x` (or the highest numbered `x_` parameter) must
  * also be declared `INEXACT`.
@@ -424,7 +424,7 @@ void exactinit()
   splitter = 1.0;
   check = 1.0;
   /* Repeatedly divide `epsilon` by two until it is too small to add to
-   * one without causing round-off.  (Also check if the sum is equal to
+   * one without causing round-off. Also check if the sum is equal to
    * the previous sum, for machines that round up instead of using exact
    * rounding.  Not that this library will work on such machines anyway. */
   do {
@@ -542,12 +542,12 @@ static int fast_expansion_sum_zeroelim(
   return hindex;
 }
 
-/*  scale_expansion_zeroelim()   Multiply an expansion by a scalar,
- *                               eliminating zero components from the
- *                               output expansion.
+/* scale_expansion_zeroelim()   Multiply an expansion by a scalar,
+ *                              eliminating zero components from the
+ *                              output expansion.
  *
- *  Sets h = be.  See either version of my paper for details.
- *  e and h cannot be the same.
+ * Sets h = be.  See either version of my paper for details.
+ * e and h cannot be the same.
  */
 static int scale_expansion_zeroelim(int elen, const double *e, double b, double *h)
 {
@@ -588,7 +588,7 @@ static int scale_expansion_zeroelim(int elen, const double *e, double b, double 
   return hindex;
 }
 
-/*  estimate()   Produce a one-word estimate of an expansion's value. */
+/* estimate()   Produce a one-word estimate of an expansion's value. */
 static double estimate(int elen, const double *e)
 {
   double Q;
@@ -2466,12 +2466,12 @@ static int sgn(double x)
 
 int orient2d(const double2 &a, const double2 &b, const double2 &c)
 {
-  return sgn(blender::robust_pred::orient2d(a, b, c));
+  return sgn(robust_pred::orient2d(a, b, c));
 }
 
 int orient2d_fast(const double2 &a, const double2 &b, const double2 &c)
 {
-  return sgn(blender::robust_pred::orient2dfast(a, b, c));
+  return sgn(robust_pred::orient2dfast(a, b, c));
 }
 
 int incircle(const double2 &a, const double2 &b, const double2 &c, const double2 &d)

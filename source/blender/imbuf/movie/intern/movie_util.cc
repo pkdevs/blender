@@ -7,8 +7,10 @@
  */
 
 #include "BLI_path_utils.hh"
-#include "BLI_utildefines.h"
+#include "BLI_threads.hh"
+#include "BLI_utildefines.hh"
 
+#include "CLG_log.h"
 #include "DNA_scene_types.h"
 
 #include "MOV_enums.hh"
@@ -16,12 +18,10 @@
 
 #include "ffmpeg_swscale.hh"
 #include "movie_util.hh"
+#include <mutex>
 
 #ifdef WITH_FFMPEG
-
-#  include "BLI_string.h"
-
-#  include "BKE_global.hh"
+#  include "BLI_string.hh"
 
 extern "C" {
 #  include "ffmpeg_compat.h"
@@ -30,6 +30,13 @@ extern "C" {
 #  include <libavformat/avformat.h>
 #  include <libavutil/log.h>
 }
+#endif
+
+namespace blender {
+
+#ifdef WITH_FFMPEG
+
+static CLG_LogRef LOG = {"video.ffmpeg"};
 
 static char ffmpeg_last_error_buffer[1024];
 
@@ -39,23 +46,75 @@ static char ffmpeg_last_error_buffer[1024];
 #    pragma GCC diagnostic ignored "-Wmissing-format-attribute"
 #  endif
 
-static void ffmpeg_log_callback(void *ptr, int level, const char *format, va_list arg)
+static size_t ffmpeg_log_to_buffer(char *buffer,
+                                   const size_t buffer_size,
+                                   const char *format,
+                                   va_list arg)
 {
-  if (ELEM(level, AV_LOG_FATAL, AV_LOG_ERROR)) {
-    size_t n;
-    va_list args_cpy;
+  va_list args_cpy;
+  size_t n;
 
-    va_copy(args_cpy, arg);
-    n = VSNPRINTF(ffmpeg_last_error_buffer, format, args_cpy);
-    va_end(args_cpy);
+  va_copy(args_cpy, arg);
+  n = BLI_vsnprintf(buffer, buffer_size, format, args_cpy);
+  va_end(args_cpy);
 
-    /* strip trailing \n */
+  return n;
+}
+
+static void ffmpeg_log_callback(void * /*ptr*/, int level, const char *format, va_list arg)
+{
+  CLG_Level clg_level;
+
+  switch (level) {
+    case AV_LOG_PANIC:
+    case AV_LOG_FATAL:
+      /* ffmpeg "fatal" should not quit whole Blender; report as error. */
+      clg_level = CLG_LEVEL_ERROR;
+      break;
+    case AV_LOG_ERROR:
+    case AV_LOG_WARNING:
+    case AV_LOG_INFO:
+      /* Note: most ffmpeg internal errors/warnings are not actionable; treat them as "info"
+       * log level. */
+      clg_level = CLG_LEVEL_INFO;
+      break;
+    case AV_LOG_VERBOSE:
+    case AV_LOG_DEBUG:
+      clg_level = CLG_LEVEL_DEBUG;
+      break;
+    case AV_LOG_TRACE:
+    default:
+      clg_level = CLG_LEVEL_TRACE;
+      break;
+  }
+
+  static std::mutex mutex;
+  std::scoped_lock lock(mutex);
+
+  if (ELEM(level, AV_LOG_PANIC, AV_LOG_FATAL, AV_LOG_ERROR)) {
+    const size_t n = ffmpeg_log_to_buffer(
+        ffmpeg_last_error_buffer, sizeof(ffmpeg_last_error_buffer), format, arg);
+    /* Strip trailing \n. */
     ffmpeg_last_error_buffer[n - 1] = '\0';
   }
 
-  if (G.debug & G_DEBUG_FFMPEG) {
-    /* call default logger to print all message to console */
-    av_log_default_callback(ptr, level, format, arg);
+  if (CLOG_CHECK(&LOG, clg_level)) {
+    /* FFmpeg calls this multiple times without a line ending, so accumulate until
+     * we reach a line ending. This will not work well with multithreading, but the
+     * output would be garbled either way. */
+    static char buffer[1024];
+    static int buffer_used = 0;
+
+    buffer_used += ffmpeg_log_to_buffer(
+        buffer + buffer_used, sizeof(buffer) - buffer_used, format, arg);
+
+    if (buffer_used >= sizeof(buffer) || (buffer_used > 0 && buffer[buffer_used - 1] == '\n')) {
+      if (buffer[buffer_used - 1] == '\n') {
+        buffer[buffer_used - 1] = '\0';
+      }
+      CLOG_STR_AT_LEVEL(&LOG, clg_level, buffer);
+      buffer_used = 0;
+    }
   }
 }
 
@@ -66,6 +125,30 @@ static void ffmpeg_log_callback(void *ptr, int level, const char *format, va_lis
 const char *ffmpeg_last_error()
 {
   return ffmpeg_last_error_buffer;
+}
+
+static bool ffmpeg_container_has_real_video(const AVFormatContext *format_ctx)
+{
+  for (int i = 0; i < format_ctx->nb_streams; i++) {
+    const AVStream *stream = format_ctx->streams[i];
+    if (stream->codecpar->codec_type == AVMEDIA_TYPE_VIDEO &&
+        (stream->disposition & AV_DISPOSITION_ATTACHED_PIC) == 0)
+    {
+      return true;
+    }
+  }
+  return false;
+}
+
+bool ffmpeg_stream_counts_as_video(const AVFormatContext *format_ctx, const AVStream *stream)
+{
+  if (stream->codecpar->codec_type != AVMEDIA_TYPE_VIDEO) {
+    return false;
+  }
+  if ((stream->disposition & AV_DISPOSITION_ATTACHED_PIC) == 0) {
+    return true;
+  }
+  return !ffmpeg_container_has_real_video(format_ctx);
 }
 
 static int isffmpeg(const char *filepath)
@@ -445,9 +528,9 @@ static void ffmpeg_preset_set(RenderData *rd, int preset)
   }
 }
 
-int MOV_codec_valid_bit_depths(AVCodecID av_codec_id)
+eImageFormatDepth MOV_codec_valid_bit_depths(AVCodecID av_codec_id)
 {
-  int bit_depths = R_IMF_CHAN_DEPTH_8;
+  eImageFormatDepth bit_depths = R_IMF_CHAN_DEPTH_8;
   /* Note: update properties_output.py `use_bpp` when changing this function. */
   if (ELEM(av_codec_id,
            AV_CODEC_ID_H264,
@@ -490,6 +573,12 @@ bool MOV_codec_supports_crf(AVCodecID av_codec_id)
               AV_CODEC_ID_AV1);
 }
 
+int MOV_thread_count()
+{
+  /* ffmpeg does not recommend thread counts above 16. */
+  return std::min(BLI_system_thread_count(), 16);
+}
+
 #endif /* WITH_FFMPEG */
 
 bool MOV_is_movie_file(const char *filepath)
@@ -514,8 +603,14 @@ void MOV_init()
 
   ffmpeg_last_error_buffer[0] = '\0';
 
-  if (G.debug & G_DEBUG_FFMPEG) {
+  if (CLOG_CHECK(&LOG, CLG_LEVEL_INFO)) {
+    av_log_set_level(AV_LOG_INFO);
+  }
+  else if (CLOG_CHECK(&LOG, CLG_LEVEL_DEBUG)) {
     av_log_set_level(AV_LOG_DEBUG);
+  }
+  else if (CLOG_CHECK(&LOG, CLG_LEVEL_TRACE)) {
+    av_log_set_level(AV_LOG_TRACE);
   }
 
   /* set separate callback which could store last error to report to UI */
@@ -547,32 +642,12 @@ void MOV_validate_output_settings(RenderData *rd, const ImageFormatData *imf)
       rd->ffcodecdata.type = FFMPEG_MPEG2;
     }
   }
-  else if (imf->imtype == R_IMF_IMTYPE_H264) {
-    if (rd->ffcodecdata.codec_id_get() != FFMPEG_CODEC_ID_H264) {
-      ffmpeg_preset_set(rd, FFMPEG_PRESET_H264);
-    }
-  }
-  else if (imf->imtype == R_IMF_IMTYPE_XVID) {
-    if (rd->ffcodecdata.codec_id_get() != FFMPEG_CODEC_ID_MPEG4) {
-      ffmpeg_preset_set(rd, FFMPEG_PRESET_XVID);
-    }
-  }
-  else if (imf->imtype == R_IMF_IMTYPE_THEORA) {
-    if (rd->ffcodecdata.codec_id_get() != FFMPEG_CODEC_ID_THEORA) {
-      ffmpeg_preset_set(rd, FFMPEG_PRESET_THEORA);
-    }
-  }
-  else if (imf->imtype == R_IMF_IMTYPE_AV1) {
-    if (rd->ffcodecdata.codec_id_get() != FFMPEG_CODEC_ID_AV1) {
-      ffmpeg_preset_set(rd, FFMPEG_PRESET_AV1);
-    }
-  }
 #else
   UNUSED_VARS(rd, imf);
 #endif
 }
 
-int MOV_codec_valid_bit_depths(IMB_Ffmpeg_Codec_ID codec_id)
+eImageFormatDepth MOV_codec_valid_bit_depths(IMB_Ffmpeg_Codec_ID codec_id)
 {
 #ifdef WITH_FFMPEG
   return MOV_codec_valid_bit_depths(mov_av_codec_id_get(codec_id));
@@ -601,3 +676,5 @@ bool MOV_codec_supports_crf(IMB_Ffmpeg_Codec_ID codec_id)
   return false;
 #endif
 }
+
+}  // namespace blender

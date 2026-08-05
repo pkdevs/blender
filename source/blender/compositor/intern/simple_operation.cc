@@ -22,21 +22,16 @@ void SimpleOperation::map_input_to_result(Result *result)
   Operation::map_input_to_result(input_identifier_, result);
 }
 
-void SimpleOperation::add_and_evaluate_input_processors() {}
+void SimpleOperation::evaluate_input_processors() {}
 
 Result &SimpleOperation::get_input()
 {
   return Operation::get_input(input_identifier_);
 }
 
-void SimpleOperation::switch_result_mapped_to_input(Result *result)
+void SimpleOperation::populate_result(const ResultType type)
 {
-  Operation::switch_result_mapped_to_input(input_identifier_, result);
-}
-
-void SimpleOperation::populate_result(Result result)
-{
-  Operation::populate_result(output_identifier_, result);
+  Operation::populate_result(output_identifier_, type);
 
   /* The result of a simple operation is guaranteed to have a single user. */
   get_result().set_reference_count(1);

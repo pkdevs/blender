@@ -35,15 +35,18 @@ PyDoc_STRVAR(
     "a StrokeVertexIterator can be converted to an Interface0DIterator by\n"
     "by calling Interface0DIterator(it).\n"
     "\n"
-    ".. method:: __init__()\n"
-    "            __init__(brother)\n"
+    ".. method:: __init__(*args)\n"
+    "\n"
+    "   Accepted call signatures:\n"
+    "\n"
+    "   - ``__init__()``\n"
+    "   - ``__init__(brother)``\n"
     "\n"
     "   Creates a :class:`StrokeVertexIterator` using either the\n"
     "   default constructor or the copy constructor.\n"
     "\n"
-    "   :arg brother: A StrokeVertexIterator object.\n"
-    "   :type brother: :class:`StrokeVertexIterator`");
-
+    "   :param brother: A StrokeVertexIterator object.\n"
+    "   :type brother: :class:`StrokeVertexIterator`\n");
 static int StrokeVertexIterator_init(BPy_StrokeVertexIterator *self,
                                      PyObject *args,
                                      PyObject *kwds)
@@ -52,8 +55,13 @@ static int StrokeVertexIterator_init(BPy_StrokeVertexIterator *self,
   static const char *kwlist_2[] = {"stroke", nullptr};
   PyObject *brother = nullptr, *stroke = nullptr;
 
-  if (PyArg_ParseTupleAndKeywords(
-          args, kwds, "O!", (char **)kwlist_1, &StrokeVertexIterator_Type, &brother))
+  if (PyArg_ParseTupleAndKeywords(args,
+                                  kwds,
+                                  "O!" /* `brother` */
+                                  ":__init__",
+                                  (char **)kwlist_1,
+                                  &StrokeVertexIterator_Type,
+                                  &brother))
   {
     self->sv_it = new StrokeInternal::StrokeVertexIterator(
         *(((BPy_StrokeVertexIterator *)brother)->sv_it));
@@ -62,8 +70,14 @@ static int StrokeVertexIterator_init(BPy_StrokeVertexIterator *self,
   }
 
   else if ((void)PyErr_Clear(),
-           PyArg_ParseTupleAndKeywords(
-               args, kwds, "|O!", (char **)kwlist_2, &Stroke_Type, &stroke))
+           PyArg_ParseTupleAndKeywords(args,
+                                       kwds,
+                                       "|"  /* Optional arguments. */
+                                       "O!" /* `stroke` */
+                                       ":__init__",
+                                       (char **)kwlist_2,
+                                       &Stroke_Type,
+                                       &stroke))
   {
     if (!stroke) {
       self->sv_it = new StrokeInternal::StrokeVertexIterator();
@@ -140,8 +154,7 @@ PyDoc_STRVAR(
     "   Returns a copy of an incremented StrokeVertexIterator.\n"
     "\n"
     "   :return: A StrokeVertexIterator pointing the next StrokeVertex.\n"
-    "   :rtype: :class:`StrokeVertexIterator`");
-
+    "   :rtype: :class:`StrokeVertexIterator`\n");
 static PyObject *StrokeVertexIterator_incremented(BPy_StrokeVertexIterator *self)
 {
   if (self->sv_it->isEnd()) {
@@ -161,8 +174,7 @@ PyDoc_STRVAR(
     "   Returns a copy of a decremented StrokeVertexIterator.\n"
     "\n"
     "   :return: A StrokeVertexIterator pointing the previous StrokeVertex.\n"
-    "   :rtype: :class:`StrokeVertexIterator`");
-
+    "   :rtype: :class:`StrokeVertexIterator`\n");
 static PyObject *StrokeVertexIterator_decremented(BPy_StrokeVertexIterator *self)
 {
   if (self->sv_it->isBegin()) {
@@ -183,8 +195,7 @@ PyDoc_STRVAR(
     "   reversed order.\n"
     "\n"
     "   :return: A StrokeVertexIterator traversing stroke vertices backward.\n"
-    "   :rtype: :class:`StrokeVertexIterator`");
-
+    "   :rtype: :class:`StrokeVertexIterator`\n");
 static PyObject *StrokeVertexIterator_reversed(BPy_StrokeVertexIterator *self)
 {
   return BPy_StrokeVertexIterator_from_StrokeVertexIterator(*self->sv_it, !self->reversed);
@@ -231,8 +242,7 @@ PyDoc_STRVAR(
     StrokeVertexIterator_object_doc,
     "The StrokeVertex object currently pointed to by this iterator.\n"
     "\n"
-    ":type: :class:`StrokeVertex`");
-
+    ":type: :class:`StrokeVertex`\n");
 static PyObject *StrokeVertexIterator_object_get(BPy_StrokeVertexIterator *self,
                                                  void * /*closure*/)
 {
@@ -252,8 +262,7 @@ PyDoc_STRVAR(
     StrokeVertexIterator_t_doc,
     "The curvilinear abscissa of the current point.\n"
     "\n"
-    ":type: float");
-
+    ":type: float\n");
 static PyObject *StrokeVertexIterator_t_get(BPy_StrokeVertexIterator *self, void * /*closure*/)
 {
   return PyFloat_FromDouble(self->sv_it->t());
@@ -264,8 +273,7 @@ PyDoc_STRVAR(
     StrokeVertexIterator_u_doc,
     "The point parameter at the current point in the stroke (0 <= u <= 1).\n"
     "\n"
-    ":type: float");
-
+    ":type: float\n");
 static PyObject *StrokeVertexIterator_u_get(BPy_StrokeVertexIterator *self, void * /*closure*/)
 {
   return PyFloat_FromDouble(self->sv_it->u());
@@ -277,8 +285,7 @@ PyDoc_STRVAR(
     "True if the iterator points to the last valid element.\n"
     "For its counterpart (pointing to the first valid element), use it.is_begin.\n"
     "\n"
-    ":type: bool");
-
+    ":type: bool\n");
 static PyObject *StrokeVertexIterator_at_last_get(BPy_StrokeVertexIterator *self)
 {
   return PyBool_from_bool(self->sv_it->atLast());

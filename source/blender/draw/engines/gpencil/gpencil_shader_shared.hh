@@ -4,11 +4,9 @@
 
 #pragma once
 
-#ifndef GPU_SHADER
-#  include "GPU_shader_shared_utils.hh"
-#endif
+#include "GPU_shader_shared_utils.hh"
 
-enum gpMaterialFlag : uint32_t {
+enum [[host_shared]] gpMaterialFlag : uint32_t {
   GP_FLAG_NONE = 0u,
   GP_STROKE_ALIGNMENT_STROKE = 1u,
   GP_STROKE_ALIGNMENT_OBJECT = 2u,
@@ -26,11 +24,17 @@ enum gpMaterialFlag : uint32_t {
   GP_FILL_TEXTURE_CLIP = (1u << 12u),
   GP_FILL_GRADIENT_USE = (1u << 13u),
   GP_FILL_GRADIENT_RADIAL = (1u << 14u),
+  GP_FILL = (1u << 15u),
   GP_FILL_FLAGS = (GP_FILL_TEXTURE_USE | GP_FILL_TEXTURE_PREMUL | GP_FILL_TEXTURE_CLIP |
-                   GP_FILL_GRADIENT_USE | GP_FILL_GRADIENT_RADIAL | GP_FILL_HOLDOUT),
+                   GP_FILL_GRADIENT_USE | GP_FILL_GRADIENT_RADIAL | GP_FILL_HOLDOUT | GP_FILL),
+  GP_DOTS_PLACEMENT_MODE = ((1u << 16u) | (1u << 17u)),
+  GP_DOTS_PLACEMENT_MODE_COUNT = 0u,
+  GP_DOTS_PLACEMENT_MODE_DENSITY = (1u << 16u),
+  GP_DOTS_PLACEMENT_MODE_RADIUS = (1u << 17u),
+  GP_DOTS_USE_RANDOMIZATION = (1u << 18u),
 };
 
-enum gpLightType : uint32_t {
+enum [[host_shared]] gpLightType : uint32_t {
   GP_LIGHT_TYPE_POINT = 0u,
   GP_LIGHT_TYPE_SPOT = 1u,
   GP_LIGHT_TYPE_SUN = 2u,
@@ -39,14 +43,16 @@ enum gpLightType : uint32_t {
 
 #define GP_IS_STROKE_VERTEX_BIT (1 << 30)
 #define GP_VERTEX_ID_SHIFT 2
+#define GP_CORNER_TYPE_ROUND_BITS 0u
+#define GP_CORNER_TYPE_BEVEL_BITS 63u
+#define GP_CORNER_TYPE_MITER_NUMBER 62u
 
 /* Avoid compiler funkiness with enum types not being strongly typed in C. */
 #ifndef GPU_SHADER
 #  define gpMaterialFlag uint
-#  define gpLightType uint
 #endif
 
-struct gpMaterial {
+struct [[host_shared]] gpMaterial {
   float4 stroke_color;
   float4 fill_color;
   float4 fill_mix_color;
@@ -73,46 +79,22 @@ struct gpMaterial {
   /** NOTE(@fclem): Needs floatBitsToUint(). */
 #  define _flag packed2.w
 #endif
+  uint4 random_packed;
 };
-BLI_STATIC_ASSERT_ALIGN(gpMaterial, 16)
 
-#ifdef GP_LIGHT
-struct gpLight {
-#  ifndef GPU_SHADER
-  float3 color;
-  gpLightType type;
-  float3 right;
+struct [[host_shared]] gpLight {
+  packed_float3 light_color; /* Not using color because of macro in overlay_extra_wire_base.  */
+  enum gpLightType type;
+  packed_float3 right;
   float spot_size;
-  float3 up;
+  packed_float3 up;
   float spot_blend;
-  float3 forward;
+  packed_float3 forward;
   float _pad0;
-  float3 position;
+  packed_float3 position;
   float _pad1;
-#  else
-  /* Some drivers are completely messing the alignment or the fetches here.
-   * We are forced to pack these into float4 otherwise we only get 0.0 as value. */
-  /* NOTE(@fclem): This was the case on MacOS OpenGL implementation.
-   * This might be fixed in newer APIs. */
-  float4 packed0;
-  float4 packed1;
-  float4 packed2;
-  float4 packed3;
-  float4 packed4;
-#    define _color packed0.xyz
-#    define _type packed0.w
-#    define _right packed1.xyz
-#    define _spot_size packed1.w
-#    define _up packed2.xyz
-#    define _spot_blend packed2.w
-#    define _forward packed3.xyz
-#    define _position packed4.xyz
-#  endif
 };
-BLI_STATIC_ASSERT_ALIGN(gpLight, 16)
-#endif
 
 #ifndef GPU_SHADER
 #  undef gpMaterialFlag
-#  undef gpLightType
 #endif

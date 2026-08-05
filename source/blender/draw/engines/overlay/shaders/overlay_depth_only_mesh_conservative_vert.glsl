@@ -2,7 +2,7 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#include "infos/overlay_edit_mode_info.hh"
+#include "infos/overlay_edit_mode_infos.hh"
 
 VERTEX_SHADER_CREATE_INFO(overlay_depth_mesh_conservative)
 
@@ -11,7 +11,8 @@ VERTEX_SHADER_CREATE_INFO(overlay_depth_mesh_conservative)
 #include "draw_view_lib.glsl"
 #include "gpu_shader_attribute_load_lib.glsl"
 #include "gpu_shader_index_load_lib.glsl"
-#include "gpu_shader_math_matrix_lib.glsl"
+
+#include "gpu_shader_math_matrix_compare_lib.glsl"
 #include "gpu_shader_utildefines_lib.glsl"
 #include "select_lib.glsl"
 
@@ -44,7 +45,7 @@ VertOut vertex_main(VertIn v_in)
 
 void do_vertex(uint i,
                uint out_vertex_id,
-               uint out_primitive_id,
+               uint /*out_primitive_id*/,
                VertOut geom_in,
                bool2 is_subpixel,
                bool is_coplanar)
@@ -88,7 +89,7 @@ void do_vertex(uint i,
 void geometry_main(VertOut geom_in[3],
                    uint out_vertex_id,
                    uint out_primitive_id,
-                   uint out_invocation_id)
+                   uint /*out_invocation_id*/)
 {
   /* Compute plane normal in NDC space. */
   float3 pos0 = geom_in[0].hs_P.xyz / geom_in[0].hs_P.w;
