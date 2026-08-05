@@ -207,27 +207,30 @@ class SeparateBundleOperation : public NodeOperation {
   void execute() override
   {
     nodes::BundlePtr bundle = this->get_input("Bundle").get_single_value<nodes::BundlePtr>();
-    const NodeSeparateBundle &storage = node_storage(this->node());
 
+    const NodeSeparateBundle &storage = node_storage(this->node());
     for (const int i : IndexRange(storage.items_num)) {
+      Result &result = this->get_result(this->node().output_socket(i).identifier);
+      if (!result.should_compute()) {
+        continue;
+      }
+
       const NodeSeparateBundleItem &item = storage.items[i];
       const StringRef name = item.name;
       std::optional<BundleKey> key = BundleKey::from_str(name);
       if (!key) {
         continue;
       }
-      std::optional<ImplicitSharingPtr<BundleItem>> value =
+      std::optional<ImplicitSharingPtr<BundleItem>> bundle_item =
           bundle->lookup<ImplicitSharingPtr<BundleItem>>(*key);
-      if (!value.has_value()) {
+      if (!bundle_item.has_value()) {
         this->add_warning(
             NodeWarningType::Error,
             fmt::format(fmt::runtime(TIP_("Value not found in bundle: \"{}\"")), name));
         continue;
       }
 
-      const Result &bundle_result = value.value()->result();
-
-      Result &result = this->get_result(this->node().output_socket(i).identifier);
+      const Result &bundle_result = bundle_item.value()->result();
       if (result.type() == bundle_result.type()) {
         result.share_data(bundle_result);
         continue;

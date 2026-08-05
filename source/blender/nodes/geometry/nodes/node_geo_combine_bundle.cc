@@ -171,17 +171,16 @@ static void node_geo_exec(GeoNodeExecParams params)
 
 using namespace blender::compositor;
 
-class CombineOperation : public NodeOperation {
+class CombineBundleOperation : public NodeOperation {
  public:
   using NodeOperation::NodeOperation;
 
   void execute() override
   {
-    const NodeCombineBundle &storage = node_storage(this->node());
-
     BundlePtr bundle_ptr = Bundle::create();
     Bundle &bundle = bundle_ptr.ensure_mutable_inplace();
 
+    const NodeCombineBundle &storage = node_storage(this->node());
     for (const int i : IndexRange(storage.items_num)) {
       const StringRef name = storage.items[i].name;
       const std::optional<BundleKey> key = BundleKey::from_str(name);
@@ -200,7 +199,7 @@ class CombineOperation : public NodeOperation {
 
 static NodeOperation *get_compositor_operation(Context &context, const bNode &node)
 {
-  return new CombineOperation(context, node);
+  return new CombineBundleOperation(context, node);
 }
 
 static void node_gather_link_searches(GatherLinkSearchOpParams &params)

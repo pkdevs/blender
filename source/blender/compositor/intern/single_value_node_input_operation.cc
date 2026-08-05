@@ -13,6 +13,8 @@
 #include "BKE_node.hh"
 #include "BKE_node_runtime.hh"
 
+#include "NOD_geometry_nodes_bundle.hh"
+
 #include "COM_operation.hh"
 #include "COM_result.hh"
 #include "COM_single_value_node_input_operation.hh"
@@ -149,7 +151,7 @@ void SingleValueNodeInputOperation::execute()
       break;
     }
     case SOCK_BUNDLE: {
-      result.set_single_value(nodes::BundlePtr());
+      result.set_single_value(nodes::Bundle::create());
       break;
     }
     case SOCK_CUSTOM:

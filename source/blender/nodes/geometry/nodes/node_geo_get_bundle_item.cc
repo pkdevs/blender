@@ -168,48 +168,46 @@ class GetBundleItemOperation : public NodeOperation {
     std::optional<ImplicitSharingPtr<BundleItem>> bundle_item =
         bundle->lookup_path<ImplicitSharingPtr<BundleItem>>(path);
     if (!bundle_item.has_value()) {
-      if (!exists_output.should_compute()) {
-        this->add_warning(NodeWarningType::Warning, "Bundle path not found");
-      }
       if (output_bundle.should_compute()) {
         output_bundle.share_data(this->get_input("Bundle"));
+      }
+      if (exists_output.should_compute()) {
+        exists_output.allocate_single_value();
+        exists_output.set_single_value(false);
+      }
+      else {
+        this->add_warning(NodeWarningType::Warning, "Bundle path not found");
       }
       this->allocate_default_remaining_outputs();
       return;
     }
 
-    if (exists_output.should_compute()) {
-      exists_output.allocate_single_value();
-      exists_output.set_single_value(true);
-    }
-
     const Result &bundle_result = bundle_item.value()->result();
 
     Result &item_result = this->get_result("Item");
-    if (item_result.type() == bundle_result.type()) {
-      item_result.share_data(bundle_result);
-    }
-    else {
-      const bke::DataTypeConversions &conversions = bke::get_implicit_type_conversions();
-      if (!conversions.is_convertible(bundle_result.get_cpp_type(), item_result.get_cpp_type())) {
-        this->add_warning(NodeWarningType::Error,
-                          "Cannot implicitly convert item to the selected type");
-        if (output_bundle.should_compute()) {
-          output_bundle.share_data(this->get_input("Bundle"));
-        }
-        this->allocate_default_remaining_outputs();
-        return;
+    if (item_result.should_compute()) {
+      if (item_result.type() == bundle_result.type()) {
+        item_result.share_data(bundle_result);
       }
-
-      ConversionOperation conversion_operation(
-          this->context(), bundle_result.type(), item_result.type());
-      Result conversion_input = this->context().create_result(bundle_result.type(),
-                                                              bundle_result.precision());
-      conversion_input.share_data(bundle_result);
-      conversion_operation.map_input_to_result(&conversion_input);
-      conversion_operation.evaluate();
-      item_result.share_data(conversion_operation.get_result());
-      conversion_operation.get_result().release();
+      else {
+        const bke::DataTypeConversions &conversions = bke::get_implicit_type_conversions();
+        if (conversions.is_convertible(bundle_result.get_cpp_type(), item_result.get_cpp_type())) {
+          ConversionOperation conversion_operation(
+              this->context(), bundle_result.type(), item_result.type());
+          Result conversion_input = this->context().create_result(bundle_result.type(),
+                                                                  bundle_result.precision());
+          conversion_input.share_data(bundle_result);
+          conversion_operation.map_input_to_result(&conversion_input);
+          conversion_operation.evaluate();
+          item_result.share_data(conversion_operation.get_result());
+          conversion_operation.get_result().release();
+        }
+        else {
+          item_result.allocate_invalid();
+          this->add_warning(NodeWarningType::Error,
+                            "Cannot implicitly convert item to the selected type");
+        }
+      }
     }
 
     if (output_bundle.should_compute()) {
@@ -218,6 +216,11 @@ class GetBundleItemOperation : public NodeOperation {
       }
       output_bundle.allocate_single_value();
       output_bundle.set_single_value(std::move(bundle));
+    }
+
+    if (exists_output.should_compute()) {
+      exists_output.allocate_single_value();
+      exists_output.set_single_value(true);
     }
   }
 };

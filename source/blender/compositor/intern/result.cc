@@ -23,6 +23,8 @@
 #include "GPU_texture.hh"
 #include "GPU_texture_pool.hh"
 
+#include "NOD_geometry_nodes_bundle.hh"
+
 #include "COM_context.hh"
 #include "COM_derived_resources.hh"
 #include "COM_domain.hh"
@@ -589,7 +591,7 @@ void Result::allocate_single_value()
       this->set_single_value(static_cast<Mask *>(nullptr));
       break;
     case ResultType::Bundle:
-      this->set_single_value(nodes::BundlePtr());
+      this->set_single_value(nodes::Bundle::create());
       break;
   }
 }
