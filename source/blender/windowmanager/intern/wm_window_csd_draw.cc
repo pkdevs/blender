@@ -313,7 +313,6 @@ void WM_window_csd_draw_corner_mask(const wmWindow *win)
     return;
   }
 
-  const int2 win_size = WM_window_native_pixel_size(win);
   const int fractional_scale[2] = {
       GHOST_CSD_DPI_FRACTIONAL_BASE,
       ghost_window->getDPIHint(),
@@ -343,6 +342,7 @@ void WM_window_csd_draw_corner_mask(const wmWindow *win)
     return;
   }
 
+  const int2 win_size = WM_window_native_pixel_size(win);
   const rcti window_rect = {
       .xmin = 0,
       .xmax = win_size[0],
