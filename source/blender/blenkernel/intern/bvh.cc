@@ -580,19 +580,24 @@ void Tree::range_query(const float3 &point, const float radius, FunctionRef<bool
   query.radius = radius;
   RTCPointQueryContext context{};
   rtcInitPointQueryContext(&context);
+  struct UserData {
+    const FunctionRef<bool(int)> &fn;
+    Span<Array<int, 0>> index_map_by_geom;
+  };
+  UserData data{fn, index_map_by_geom_};
   rtcPointQuery(
       this->rtc_scene_,
       &query,
       &context,
       [](RTCPointQueryFunctionArguments *args) -> bool {
-        FunctionRef<bool(int)> fn = *static_cast<FunctionRef<bool(int)> *>(args->userPtr);
+        UserData *data = static_cast<UserData *>(args->userPtr);
         int index = args->primID;
-        if (!ctx->index_map_by_geom[args->geomID].is_empty()) {
-          index = ctx->index_map_by_geom[args->geomID][index];
+        if (!data->index_map_by_geom[args->geomID].is_empty()) {
+          index = data->index_map_by_geom[args->geomID][index];
         }
-        return fn(index);
+        return data->fn(index);
       },
-      &fn);
+      &data);
 #else /* WITH_EMBREE */
   BVHTreeFromMesh *data = fallback_mesh_data(*this->fallback_tree_);
   if (!data->tree) {
