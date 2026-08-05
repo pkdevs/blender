@@ -1654,7 +1654,7 @@ static void rna_Object_constraints_remove_constraints(Object *object,
   indices = sorted.as_span();
 
   if (indices.first() < 0 || indices.last() >= object->constraints.count()) {
-    BKE_report(reports, RPT_ERROR, "Indices must be in range");
+    BKE_report(reports, RPT_ERROR_INVALID_INPUT, "Indices must be in range");
     return;
   }
 

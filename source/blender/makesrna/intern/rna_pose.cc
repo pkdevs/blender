@@ -468,7 +468,7 @@ static void rna_PoseChannel_constraints_remove_constraints(ID *id,
   indices = sorted.as_span();
 
   if (indices.first() < 0 || indices.last() >= pchan->constraints.count()) {
-    BKE_report(reports, RPT_ERROR, "Indices must be in range");
+    BKE_report(reports, RPT_ERROR_INVALID_INPUT, "Indices must be in range");
     return;
   }
 
