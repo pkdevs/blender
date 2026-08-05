@@ -11,6 +11,7 @@
 #include "MEM_guardedalloc.h"
 
 #include "BLI_boxpack_2d.hh"
+#include "BLI_fileops.hh"
 #include "BLI_listbase.hh"
 #include "BLI_math_base.hh"
 #include "BLI_math_base_c.hh"
@@ -25,6 +26,7 @@
 #include "IMB_imbuf.hh"
 #include "IMB_imbuf_types.hh"
 
+#include "BKE_global.hh"
 #include "BKE_image.hh"
 #include "BKE_image_gpu.hh"
 #include "BKE_main.hh"
@@ -393,7 +395,30 @@ static ImBuf *image_gpu_error_imbuf_ensure()
   return g_error_imbuf;
 }
 
-static void image_gpu_log_load_error_once(Image *ima, ImageUser *iuser)
+/* Reason an image failed to be displayed, to give a more helpful error message. */
+enum class ImageLoadError {
+  /* The image buffer could not be acquired. */
+  LoadFailed,
+  /* The image buffer could not be acquired, and the file is not on disk. */
+  FileMissing,
+  /* The image buffer is valid, but no GPU texture could be created from it. */
+  GPUTextureFailed,
+};
+
+/* Whether a file is expected to exist on disk for this image, so that a missing
+ * file is a meaningful thing to report. */
+static bool image_gpu_file_expected_on_disk(const Image *ima)
+{
+  if (!ELEM(ima->source, IMA_SRC_FILE, IMA_SRC_SEQUENCE, IMA_SRC_MOVIE, IMA_SRC_TILED)) {
+    return false;
+  }
+  if (BKE_image_has_packedfile(ima)) {
+    return false;
+  }
+  return ima->filepath[0] != '\0';
+}
+
+static void image_gpu_log_load_error_once(Image *ima, ImageUser *iuser, ImageLoadError error)
 {
   if (ELEM(ima->type, IMA_TYPE_R_RESULT, IMA_TYPE_COMPOSITE)) {
     return;
@@ -403,14 +428,31 @@ static void image_gpu_log_load_error_once(Image *ima, ImageUser *iuser)
   }
   ima->runtime->gpu_load_error_logged = true;
 
+  /* Resolves UDIM tile and sequence frame numbers, and makes the path absolute. Multi-view
+   * lookup requires an image user, so it is only resolved when one is available. */
   char filepath[FILE_MAX];
-  if (iuser != nullptr) {
-    BKE_image_user_file_path(iuser, ima, filepath);
+  BKE_image_user_file_path_ex(G_MAIN, iuser, ima, filepath, true, iuser != nullptr);
+
+  /* Report a missing file separately, matching the Cycles message for the same situation.
+   * This only runs on the error path, once per image, so the file system access is not
+   * performance relevant. */
+  if (error == ImageLoadError::LoadFailed && image_gpu_file_expected_on_disk(ima) &&
+      !BLI_exists(filepath))
+  {
+    error = ImageLoadError::FileMissing;
   }
-  else {
-    BLI_strncpy(filepath, ima->filepath, sizeof(filepath));
+
+  switch (error) {
+    case ImageLoadError::LoadFailed:
+      CLOG_ERROR(&LOG, "Failed to load image \"%s\"", filepath);
+      break;
+    case ImageLoadError::FileMissing:
+      CLOG_ERROR(&LOG, "Image file \"%s\" does not exist", filepath);
+      break;
+    case ImageLoadError::GPUTextureFailed:
+      CLOG_ERROR(&LOG, "Failed to create texture for \"%s\"", filepath);
+      break;
   }
-  CLOG_ERROR(&LOG, "Failed to create texture for \"%s\"", filepath);
 }
 
 static void image_gpu_clear_load_error(Image *ima)
@@ -567,7 +609,7 @@ static ImageGPUTextures image_get_gpu_texture_tiled(Image *ima,
   gpu::Texture *mapping_tex = nullptr;
 
   if (ibuf == nullptr) {
-    image_gpu_log_load_error_once(ima, iuser);
+    image_gpu_log_load_error_once(ima, iuser, ImageLoadError::LoadFailed);
   }
   else {
     /* Create atlas and tile mapping textures. */
@@ -579,7 +621,7 @@ static ImageGPUTextures image_get_gpu_texture_tiled(Image *ima,
       image_gpu_clear_load_error(ima);
     }
     else {
-      image_gpu_log_load_error_once(ima, iuser);
+      image_gpu_log_load_error_once(ima, iuser, ImageLoadError::GPUTextureFailed);
     }
   }
 
@@ -656,7 +698,7 @@ static ImageGPUTextures image_get_gpu_texture_single(Image *ima,
       image_gpu_clear_load_error(ima);
     }
     else if (!try_only) {
-      image_gpu_log_load_error_once(ima, iuser);
+      image_gpu_log_load_error_once(ima, iuser, ImageLoadError::GPUTextureFailed);
     }
     if (!try_only) {
       image_cache_free_inactive_frame_gpu_textures(ima, ibuf);
@@ -673,7 +715,9 @@ static ImageGPUTextures image_get_gpu_texture_single(Image *ima,
   if (result.texture == nullptr && (!try_only || cpu_load_failed || gpu_load_failed) &&
       !only_full_resolution)
   {
-    image_gpu_log_load_error_once(ima, iuser);
+    const ImageLoadError error = gpu_load_failed ? ImageLoadError::GPUTextureFailed :
+                                                   ImageLoadError::LoadFailed;
+    image_gpu_log_load_error_once(ima, iuser, error);
     ImBuf *error_ibuf = image_gpu_error_imbuf_ensure();
     result.texture = IMB_acquire_gpu_texture(ima->id.name + 2, error_ibuf, false, false, false);
   }
