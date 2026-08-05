@@ -53,17 +53,17 @@ optimize_debug_target(shader_tool)
 
 if(WITH_GTESTS)
   set(TEST_SRC
-    tests/shader_tool_testing.hh
     tests/expression_test.cc
-    tests/syntax_test.cc
-    tests/parser_test.cc
-    tests/metadata_test.cc
-    tests/templates_test.cc
     tests/flow_control_test.cc
-    tests/resource_table_test.cc
     tests/function_test.cc
+    tests/metadata_test.cc
     tests/namespace_test.cc
+    tests/parser_test.cc
+    tests/resource_table_test.cc
+    tests/shader_tool_testing.hh
     tests/struct_test.cc
+    tests/syntax_test.cc
+    tests/templates_test.cc
   )
 
   set(TEST_INC
@@ -72,10 +72,10 @@ if(WITH_GTESTS)
 
   blender_add_test_suite_executable(
     shader_tool
-    "${TEST_SRC};${SRC}"
+    "${TEST_SRC}"
     "${TEST_INC}"
     ""
     ""
-    ""
+    "${SRC}"
   )
 endif()

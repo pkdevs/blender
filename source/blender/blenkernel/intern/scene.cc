@@ -162,6 +162,15 @@ CurveMapping *BKE_paint_default_curve()
   return cumap;
 }
 
+CurveMapping *BKE_paint_default_curve_inverted()
+{
+  CurveMapping *cumap = BKE_curvemapping_add(1, 0, 0, 1, 1);
+  BKE_curvemap_reset(cumap->cm, &cumap->clipr, CURVE_PRESET_LINE, CurveMapSlopeType::Negative);
+  BKE_curvemapping_init(cumap);
+
+  return cumap;
+}
+
 static void scene_init_data(ID *id)
 {
   Scene *scene = id_cast<Scene *>(id);
@@ -1695,7 +1704,7 @@ static void remove_sequencer_fcurves(Scene *sce)
   Vector<FCurve *> fcurves = channelbag->fcurves();
 
   for (FCurve *fcurve : fcurves) {
-    if ((fcurve->rna_path) && strstr(fcurve->rna_path, "sequence_editor.strips_all")) {
+    if (strstr(fcurve->rna_path().c_str(), "sequence_editor.strips_all")) {
       channelbag->fcurve_remove(*fcurve);
     }
   }
