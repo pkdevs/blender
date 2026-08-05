@@ -53,6 +53,9 @@ void foreach([[resource_table]] const LightRenderData &srt,
   }
 }
 
+// TODO: BSL issue workaround
+#define bool_ctor_() false
+
 struct VisibleLightIterator {
   int index;
 
