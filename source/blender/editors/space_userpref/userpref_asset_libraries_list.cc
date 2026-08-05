@@ -225,16 +225,14 @@ static void draw_active_library_settings(const bContext *C,
         column.prop(&library_ptr, "use_auth_token", UI_ITEM_NONE, std::nullopt, ICON_NONE);
 
         if (library.user_library->flag & ASSET_LIBRARY_USE_AUTH_TOKEN) {
-          column.prop(
-              &library_ptr,
-              RNA_struct_find_property(&library_ptr, "auth_token"),
-              RNA_NO_INDEX,
-              0,
-              UI_ITEM_NONE,
-              /* The empty space is needed otherwise the token takes the entire panel width. */
-              " ",
-              library.user_library->auth_token ? ICON_LOCKED : ICON_UNLOCKED,
-              std::nullopt);
+          column.prop(&library_ptr,
+                      RNA_struct_find_property(&library_ptr, "auth_token"),
+                      RNA_NO_INDEX,
+                      0,
+                      UI_ITEM_NONE,
+                      IFACE_("Secret"),
+                      library.user_library->auth_token ? ICON_LOCKED : ICON_UNLOCKED,
+                      std::nullopt);
         }
       }
     }
