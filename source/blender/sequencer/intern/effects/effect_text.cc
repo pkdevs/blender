@@ -8,7 +8,6 @@
 
 #include <cmath>
 
-#include "BKE_appdir.hh"
 #include "BKE_lib_id.hh"
 #include "BKE_library.hh"
 #include "BKE_main.hh"
@@ -90,7 +89,11 @@ void fontmap_clear()
     BLF_unload_id(item.value);
   }
   g_font_map.name_to_mem_font_id.clear();
-  g_fallback_font_id = -1;
+
+  if (g_fallback_font_id) {
+    BLF_unload_id(g_fallback_font_id);
+    g_fallback_font_id = -1;
+  }
 }
 
 static int strip_load_font_file(const std::string &path)
@@ -157,25 +160,6 @@ static void strip_unload_font(int fontid)
     g_font_map.path_to_file_font_id.remove_if([&](auto item) { return item.value == fontid; });
     g_font_map.name_to_mem_font_id.remove_if([&](auto item) { return item.value == fontid; });
   }
-}
-
-static void strip_load_fallback_font()
-{
-  const std::optional<std::string> dir = BKE_appdir_folder_id(BLENDER_DATAFILES,
-                                                              BLF_DATAFILES_FONTS_DIR);
-  if (!dir.has_value()) {
-    fprintf(stderr,
-            "%s: 'fonts' data path not found for '%s', will not be able to display strip default "
-            "font text\n",
-            __func__,
-            BLF_DEFAULT_MONOSPACED_FONT);
-    g_fallback_font_id = -1;
-    return;
-  }
-
-  char filepath[FILE_MAX];
-  BLI_path_join(filepath, sizeof(filepath), dir->c_str(), BLF_DEFAULT_MONOSPACED_FONT);
-  g_fallback_font_id = strip_load_font_file(filepath);
 }
 
 /* -------------------------------------------------------------------- */
@@ -839,8 +823,9 @@ int text_effect_font_get(TextVars &text)
 
   if (font < 0) {
     /* Try to fallback to the default Blender monospaced font. */
+    std::lock_guard lock(g_font_map.mutex);
     if (g_fallback_font_id < 0) {
-      strip_load_fallback_font();
+      g_fallback_font_id = BLF_load_mono_default(true);
     }
     font = g_fallback_font_id;
   }
