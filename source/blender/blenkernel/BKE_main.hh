@@ -812,7 +812,7 @@ MainListsArray BKE_main_lists_get(Main &bmain);
  * This iterator will remain stable if the underlying Main is modified, as long as the current ID
  * pointed at by the iterator is not modified.
  *   - Renaming the current ID may shift its position in the underlying main, making the iterator
- * no more stable (some items may be skipped, or iterated over several times).
+ *     unstable (some items may be skipped, or iterated over several times).
  *   - Deleting the current ID will fully invalidate the iterator, attempt to use it in any way
  *     afterwards will result in invalid memory accesses.
  */
@@ -853,11 +853,13 @@ class MainAllIDsIterator {
   }
 
  private:
+  /** Exclusive: Return the invalid index 'just before' the first valid one. */
   int64_t lbarray_index_lower_bound() const
   {
     return reverse_id_type_order_ ? -1 : int64_t(lbarray_.size());
   }
 
+  /** Exclusive: Return the invalid index 'just after' the last valid one. */
   int64_t lbarray_index_upper_bound() const
   {
     return reverse_id_type_order_ ? int64_t(lbarray_.size()) : -1;
@@ -868,7 +870,7 @@ class MainAllIDsIterator {
     return (curr_lbarray_index_ >= -1 && curr_lbarray_index_ <= int64_t(lbarray_.size()));
   }
 
-  void lbarray_index_increase()
+  void lbarray_index_step_next()
   {
     if (reverse_id_type_order_) {
       curr_lbarray_index_++;
@@ -878,7 +880,7 @@ class MainAllIDsIterator {
     }
   }
 
-  void lbarray_index_decrease()
+  void lbarray_index_step_prev()
   {
     if (reverse_id_type_order_) {
       curr_lbarray_index_--;

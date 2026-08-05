@@ -656,7 +656,7 @@ void RNA_def_main(BlenderRNA *brna)
       prop,
       "All Data-Blocks",
       "Read-only list of all IDs listed in Blender data-base. Warning: Order is not guaranteed "
-      "and should be considered an internal implementation detail.");
+      "and should be considered an internal implementation detail");
 
   prop = RNA_def_property(srna, "project", PROP_POINTER, PROP_NONE);
   RNA_def_property_clear_flag(prop, PROP_EDITABLE);

@@ -1229,7 +1229,7 @@ MainAllIDsIterator &MainAllIDsIterator::operator++()
     return *this;
   }
   while (true) {
-    lbarray_index_increase();
+    lbarray_index_step_next();
     BLI_assert(lbarray_index_is_valid());
     if (curr_lbarray_index_ == lbarray_index_upper_bound()) {
       return *this;
@@ -1262,7 +1262,7 @@ MainAllIDsIterator &MainAllIDsIterator::operator--()
     return *this;
   }
   while (true) {
-    lbarray_index_decrease();
+    lbarray_index_step_prev();
     BLI_assert(lbarray_index_is_valid());
     if (curr_lbarray_index_ == lbarray_index_lower_bound()) {
       return *this;

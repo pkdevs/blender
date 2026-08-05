@@ -63,7 +63,7 @@ TEST_F(BMainAllIDsIteratorTest, basics)
   Object *ob_linked = BKE_id_new_in_lib<Object>(bmain, lib, "Object_linked");
   BKE_collection_object_add(bmain, coll, ob_linked);
 
-  Array<ID *> expected_ids_dependecy_first = {&lib->id, &ob->id, &ob_linked->id, &coll->id};
+  Array<ID *> expected_ids_dependency_first = {&lib->id, &ob->id, &ob_linked->id, &coll->id};
   Array<ID *> expected_ids_user_first = {&coll->id, &ob->id, &ob_linked->id, &lib->id};
 
   EXPECT_EQ(1, bmain->libraries.count());
@@ -91,7 +91,7 @@ TEST_F(BMainAllIDsIteratorTest, basics)
   EXPECT_EQ(4, i);
   i = 0;
   for (ID &id_iter : main_iter_dependency_first) {
-    EXPECT_EQ(expected_ids_dependecy_first[i], &id_iter);
+    EXPECT_EQ(expected_ids_dependency_first[i], &id_iter);
     i++;
   }
   EXPECT_EQ(4, i);
@@ -111,7 +111,7 @@ TEST_F(BMainAllIDsIteratorTest, basics)
   i = 4;
   for (ID &id_iter : main_iter_dependency_first.begin() | std::views::reverse) {
     i--;
-    EXPECT_EQ(expected_ids_dependecy_first[i], &id_iter);
+    EXPECT_EQ(expected_ids_dependency_first[i], &id_iter);
   }
   EXPECT_EQ(0, i);
 }
