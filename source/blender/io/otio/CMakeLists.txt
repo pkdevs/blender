@@ -52,3 +52,20 @@ set(LIB
 blender_add_lib(bf_io_otio "${SRC}" "${INC}" "${INC_SYS}" "${LIB}")
 add_dependencies(bf_io_otio bf_rna)
 
+if(WITH_GTESTS)
+  set(TEST_SRC
+    tests/otio_round_trip_test.cc
+  )
+
+  set(TEST_INC
+  )
+
+  set(TEST_LIB
+    bf_io_otio
+    bf_blenloader_test_util
+    PRIVATE bf::render
+    PRIVATE bf::dependencies::optional::audaspace
+    PRIVATE bf::dependencies::optional::ffmpeg
+  )
+  blender_add_test_suite_lib(io_otio "${TEST_SRC}" "${INC};${TEST_INC}" "${INC_SYS}" "${LIB};${TEST_LIB}")
+endif()
