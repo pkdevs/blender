@@ -61,6 +61,8 @@ struct SymbolScope : Symbol {
   SymbolMap<SymbolFunction> functions;
   SymbolMap<SymbolClass> classes;
 
+  vector<ast::FuncForwardDecl> function_prototypes;
+
   /* Function scope act as anonymous scopes but still have identifier. */
   enum Type { FUNCTION, CLASS, NAMESPACE, LOCAL, ROOT } type = ROOT;
 
@@ -103,6 +105,8 @@ struct SymbolScope : Symbol {
   /* Doesn't match last template in identifier. */
   SymbolFunction *lookup_function_base(const SymbolTable &table, ast::IdQualified id) const;
   SymbolClass *lookup_class_base(const SymbolTable &table, ast::IdQualified id) const;
+
+  ast::FuncForwardDecl lookup_function_forward_decl(ast::FuncDecl decl) const;
 
   void print() const;
 

@@ -70,6 +70,9 @@ struct SymbolParser : NodeErrorHandler {
           case NodeType::EnumValue:
             parse_enum_value(scope, child, parent, prefix);
             break;
+          case NodeType::FuncForwardDecl:
+            parse_func_forward_decl(scope, child);
+            break;
           case NodeType::FuncDecl:
             parse_func_decl(scope, child, prefix);
             break;
@@ -564,6 +567,12 @@ struct SymbolParser : NodeErrorHandler {
     return cls;
   }
 
+  void parse_func_forward_decl(SymbolScope &scope, FuncForwardDecl decl)
+  {
+    /* Record a function prototype. */
+    scope.function_prototypes.emplace_back(decl);
+  }
+
   SymbolFunction *parse_func_decl(SymbolScope &scope,
                                   FuncDecl func,
                                   const std::string &prefix,
@@ -573,6 +582,10 @@ struct SymbolParser : NodeErrorHandler {
     /* Set return type to error type since we need to parse it after template argument
      * instantiation. */
     SymbolFunction *fn = table.fun_arena.alloc(&scope, table.err_cls, func, suffix);
+    if (FuncForwardDecl fdecl = scope.lookup_function_forward_decl(func); fdecl.is_valid()) {
+      /* Modify symbol location if it is forward declared. */
+      fn->loc = fdecl.front();
+    }
     bool is_overload = scope.function_emplace(fn);
     if (is_overload && fn->is_entry_point()) {
       error(func.identifier(), Diag::RedefinitionOfEntryPointFunction, func.identifier().str());

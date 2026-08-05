@@ -123,6 +123,43 @@ SymbolVariable *SymbolScope::lookup_variable(const SymbolTable &table, IdQualifi
   return lookup_generic<SymbolVariable>(table, id, id.front());
 }
 
+ast::FuncForwardDecl SymbolScope::lookup_function_forward_decl(ast::FuncDecl decl) const
+{
+  /* Note: while this linear search might seem very slow, it is only concerning a handful of
+   * functions. */
+  for (ast::FuncForwardDecl fwd : function_prototypes) {
+    /* Check identifier. */
+    if (fwd.identifier().str() != decl.identifier().str()) {
+      continue;
+    }
+    /* Check return type. */
+    if (fwd.return_type().str() != decl.return_type().str()) {
+      continue;
+    }
+    /* Check arg type. */
+    FuncArg fwd_arg = fwd.arguments().child_first();
+    FuncArg decl_par = decl.arguments().child_first();
+    while (fwd_arg.is_valid() &&
+           /* Check type. */
+           fwd_arg.type().str() == decl_par.type().str() &&
+           /* Check reference. */
+           fwd_arg.declarator().is_reference() == decl_par.declarator().is_reference() &&
+           /* Check array. */
+           fwd_arg.declarator().is_array() == decl_par.declarator().is_array())
+    {
+      fwd_arg = fwd_arg.next();
+      decl_par = decl_par.next();
+    }
+    /* Arg count or value doesn't match. */
+    if (decl_par.is_valid() != fwd_arg.is_valid()) {
+      continue;
+    }
+    /* Match! */
+    return fwd;
+  }
+  return {};
+}
+
 const SymbolScope *SymbolScope::root_scope() const
 {
   const SymbolScope *scope = this;
