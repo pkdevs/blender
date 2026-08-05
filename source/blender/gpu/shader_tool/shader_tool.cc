@@ -186,7 +186,7 @@ int main(int argc, char **argv)
     if (!filename.ends_with("gpu_shader_2D_widget_base.bsl.hh") &&
         !filename.ends_with("gpu_shader_2D_update_mipmaps.bsl.hh"))
     {
-      language = Language::BLENDER_GLSL;
+      // language = Language::BLENDER_GLSL;
     }
   }
 

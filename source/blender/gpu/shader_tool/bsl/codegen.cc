@@ -12,6 +12,7 @@
 #include "processor.hh"
 #include "symbol_table.hh"
 
+#include <algorithm>
 #include <sstream>
 
 namespace bsl {
@@ -320,6 +321,15 @@ struct CodegenContext : NodeErrorHandler {
       SymbolFunction *sym = ctx.id_func_resolved_lookup(
           call.identifier(), call.parameters(), symbol_scope, scope);
 
+      if (sym->is_error) {
+        ctx.error(call, Diag::UnknownFunction);
+        return {"", sym->return_type};
+      }
+
+      if (sym->is_inline) {
+        ctx.error(call, Diag::InvalidInlinedFunctionLocation);
+      }
+
       FuncParamList list = call.parameters();
       std::string params_str;
       if (sym->fn_type == SymbolFunction::MEMBER && list.parent().prev().back() != '.') {
@@ -331,6 +341,13 @@ struct CodegenContext : NodeErrorHandler {
 
       int param_count = 0;
       for (Expr param : list.children_of_type<Expr>()) {
+        auto result = ctx.expr(param, scope);
+        if (result.type != sym->arg_types[param_count]) {
+          ctx.error(param,
+                    Diag::InvalidParameterType,
+                    sym->arg_types[param_count]->identifier,
+                    result.type->identifier);
+        }
         params_str += ctx.expr(param, scope).str;
         params_str += ctx.opt_str(param.back().next(), Comma);
         ++param_count;
@@ -696,14 +713,35 @@ struct CodegenContext : NodeErrorHandler {
   void return_statement(ReturnStmt stmt, SymbolScope &scope)
   {
     if (SymbolFunction *fn = scope.parent_function(); fn) {
-      match_if(Return);
-      if (InitializerList list(stmt.expression().child_first()); list.is_valid()) {
+      string ret_val;
+      if (auto [r_fn, call] = get_inlined_function(stmt.expression(), scope); r_fn) {
+        ret_val = inline_function(r_fn, call, scope);
+        /* Resume. */
+        jump_to(stmt.front());
+      }
+
+      if (fn->is_inline) {
+        SymbolVariable *var = fn->lookup_variable(SymbolFunction::inline_fn_ret_id);
+        builder.ss << var->identifier << " = ";
+      }
+      else {
+        match_if(Return);
+      }
+
+      if (!ret_val.empty()) {
+        builder.ss << ret_val;
+      }
+      else if (InitializerList list(stmt.expression().child_first()); list.is_valid()) {
         builder.ss << initializer_list(list, scope, fn->return_type).str;
       }
       else {
         builder.ss << expr(stmt.expression(), scope).str;
       }
       builder.curr = stmt.expression().back().next();
+
+      if (fn->is_inline) {
+        builder.ss << "; break";
+      }
       match_if(';');
     }
     else {
@@ -729,7 +767,7 @@ struct CodegenContext : NodeErrorHandler {
     builder.ss << decl_str + string(max(0, pad - int(decl_str.size())), ' ');
 
     builder.curr = assign_front;
-    assignment(assign, scope, tmp_var->type);
+    assignment(assign, scope, tmp_var);
     match_if(';');
   }
 
@@ -990,6 +1028,12 @@ struct CodegenContext : NodeErrorHandler {
   void local_statement(LocalStmt stmt, SymbolScope &scope)
   {
     skip_node(stmt.attributes());
+
+    if (auto [fn, call] = get_inlined_function(stmt.expr(), scope); fn) {
+      inline_function(fn, call, scope);
+      return;
+    }
+
     builder.ss << expr(stmt.expr(), scope).str;
     builder.curr = stmt.expr().back().next();
     match_if(';');
@@ -1500,6 +1544,11 @@ struct CodegenContext : NodeErrorHandler {
       inst_fn = id_func_resolved_lookup(decl.identifier(), decl.arguments(), scope, scope);
     }
 
+    if (inst_fn->is_inline) {
+      /* Do not emit inline function. */
+      return;
+    }
+
     if (inst_fn->fn_type == SymbolFunction::MEMBER && decl.is_template()) {
       if (SymbolClass *cls = inst_fn->parent_class(); cls) {
         /* Leave a breadcrum for a mutation pass which will move the following forward declaration
@@ -1549,6 +1598,96 @@ struct CodegenContext : NodeErrorHandler {
     if (inst_fn->is_entry_point()) {
       entry_point_arg_list_metadata(decl, *inst_fn);
     }
+  }
+
+  pair<SymbolFunction *, FuncCall> get_inlined_function(Expr expr, SymbolScope &scope)
+  {
+    FuncCall call(expr.child_first());
+    if (!call.is_valid()) {
+      return {nullptr, {}};
+    }
+    if (!expr.has_single_child() || expr.parent().parent().type() == NodeType::Condition) {
+      return {nullptr, {}};
+    }
+    SymbolFunction *fn = scope.lookup_function(table, call.identifier()).unwrap(this);
+    if (!fn || !fn->is_inline) {
+      return {nullptr, {}};
+    }
+    return {fn, call};
+  }
+
+  vector<SymbolFunction *> inlining_stack;
+
+  string inline_function(SymbolFunction *fn, FuncCall call, SymbolScope &scope)
+  {
+    string uuid = to_string(call.front().index_);
+    string ret_val = "_r" + uuid;
+
+    if (std::ranges::find(inlining_stack, fn) != inlining_stack.end()) {
+      error(call, Diag::RecursiveInlining);
+      return "";
+    }
+
+    inlining_stack.push_back(fn);
+    NOTE(call, Diag::InInliningOf, fn->original);
+
+    jump_to(fn->decl.front());
+
+    /* Communicate the name of the return variable to the return statements. */
+    if (auto it = fn->variables.find(SymbolFunction::inline_fn_ret_id); it != fn->variables.end())
+    {
+      SymbolVariable *var = it->second.second;
+      var->identifier = ret_val;
+      /* Create return variable if any. */
+      builder.ss << fn->return_type->identifier << " " << ret_val << ";\n";
+    }
+
+    /* Create local scope. */
+    builder.ss << "do {\n";
+    jump_to(fn->decl.front());
+
+    /* Declare argument copies. */
+    int arg_i = 0;
+    Expr param = call.parameters().child_first();
+    for (FuncArg arg : fn->decl.arguments().children_range()) {
+      SymbolVariable *var = fn->lookup_variable(table, arg.identifier());
+
+      if (!param.is_valid() && (arg.is_reference() || !fn->arg_defaults[arg_i].is_valid())) {
+        error(call, Diag::MissingParameterForCall, var->identifier);
+        continue;
+      }
+
+      if (arg.is_reference() || var->type->is_opaque) {
+        /* Check if reference has no side effect. */
+        auto result = table.expr_type_analysis(scope, param.child_first(), true).unwrap(this);
+        if (result.type != var->type) {
+          error(param, Diag::InvalidParameterType, var->type->identifier, result.type->identifier);
+        }
+        var->identifier = expr(param, scope).str;
+      }
+      else {
+        /* Make parameter name unique to avoid shadowing. */
+        string id = "_" + string(arg.identifier().str()) + uuid;
+        /* Change the mangled name of the argument. */
+        var->identifier = id;
+
+        Expr init_expr = (param.is_valid()) ? param : fn->arg_defaults[arg_i];
+        builder.ss << fn->arg_types[arg_i]->identifier << " " << id;
+        builder.ss << " = " << expr(init_expr, scope).str << "; ";
+      }
+      param = param.next();
+      ++arg_i;
+    }
+    builder.ss << "\n";
+
+    local_scope(fn->decl.body(), *fn);
+
+    /* Create argument assignments. */
+    builder.ss << "} while (false);\n";
+
+    inlining_stack.pop_back();
+
+    return ret_val;
   }
 
   void entry_point_arg_list_metadata(FuncDecl decl, SymbolFunction &fn)
@@ -2087,7 +2226,7 @@ struct CodegenContext : NodeErrorHandler {
       skip_node(decl.initial_value());
     }
     else if (decl.initial_value().is_valid()) {
-      assignment(decl.initial_value(), scope, var->type, array.dimensions());
+      assignment(decl.initial_value(), scope, var);
     }
     else if (decl.initializer_list().is_valid()) {
       builder.ss << "=" + initializer_list(
@@ -2097,11 +2236,30 @@ struct CodegenContext : NodeErrorHandler {
     }
   }
 
-  void assignment(AssignStmt stmt, SymbolScope &scope, SymbolClass *cls, int array_dim = 0)
+  void assignment(AssignStmt stmt, SymbolScope &scope, SymbolVariable *var)
   {
+
+    if (auto [fn, call] = get_inlined_function(stmt.expr(), scope); fn) {
+      /* Check if this part of a declarator sequence before inlining. */
+      if (Declarator d(stmt.parent()), d_next(d.next()); d_next.is_valid()) {
+        /* Could be supported, but keep it simple for now. Continuing will trigger an error. */
+      }
+      else {
+        /* Need to stop the declaration here. */
+        builder.ss << ";";
+        string val = inline_function(fn, call, scope);
+        /* Resume. */
+        jump_to(var->loc.tok);
+        builder.ss << var->identifier << " = " << val;
+        builder.curr = stmt.back().next();
+        return;
+      }
+    }
+
     match_if('=');
-    builder.ss
-        << init_expression_or_initializer_list(stmt.child_first(), scope, cls, array_dim).str;
+    builder.ss << init_expression_or_initializer_list(
+                      stmt.child_first(), scope, var->type, var->array_dimensions)
+                      .str;
     builder.curr = stmt.back().next();
   }
 

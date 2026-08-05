@@ -814,4 +814,94 @@ int i; if (i!=0) {
   }
 }
 
+TEST(shader_tool, ForceInline)
+{
+  /* Call inside itself (recursion). */
+  {
+    string input = R"(
+[[force_inline]] void f() { f(); }
+void foo() { f(); }
+)";
+    auto [output, _, error] = process_test_string(input, Language::BSL);
+    EXPECT_EQ(error, "Cannot inline recursive call");
+  }
+  {
+    string input = R"(
+int f3(int a);
+[[force_inline]] int f2(int a) {
+  return f3(b);
+}
+[[force_inline]] int f3(int b) {
+  return f2(b);
+}
+void foo() {
+  int result = f3(5);
+}
+)";
+    auto [output, _, error] = process_test_string(input, Language::BSL);
+    EXPECT_EQ(error, "Cannot inline recursive call");
+  }
+
+  /* Call inside compound expression. */
+  {
+    string input = R"(
+[[force_inline]] int get_val() { return 42; }
+void foo() {
+  int x = get_val() + 10;
+}
+)";
+    auto [output, _, error] = process_test_string(input, Language::BSL);
+    EXPECT_EQ(error, "Cannot inline function call inside a compound expression");
+  }
+
+  /* Call inside loops. */
+  {
+    string input = R"(
+[[force_inline]] int add_one(int val) {
+  return val + 1;
+}
+void foo() {
+  int sum = 0;
+  for (int i = 0; i < 10; ++i) {
+    sum = add_one(sum);
+  }
+}
+)";
+    auto [output, _, error] = process_test_string(input, Language::BSL);
+    /* TODO(fclem): We should support that at some point. */
+    EXPECT_EQ(error, "Cannot inline function call inside a compound expression");
+  }
+
+  /* Call inside if conditions. */
+  {
+    string input = R"(
+[[force_inline]] bool is_active() { return true; }
+void foo() {
+  if (is_active()) {
+    int x = 1;
+  }
+}
+)";
+    auto [output, _, error] = process_test_string(input, Language::BSL);
+    EXPECT_EQ(error, "Cannot inline function call inside a compound expression");
+  }
+
+  /* Call inside other inlined functions (nesting). */
+  {
+    string input = R"(
+[[force_inline]] int inner(int a) {
+  return a * 2;
+}
+[[force_inline]] int outer(int b) {
+  return inner(b);
+}
+void foo() {
+  int result = outer(5);
+}
+)";
+    auto [output, _, error] = process_test_string(input, Language::BSL);
+    EXPECT_EQ(error, "");
+  }
+}
+
 }  // namespace blender::gpu::tests

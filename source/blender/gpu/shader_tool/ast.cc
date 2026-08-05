@@ -67,6 +67,11 @@ Node Node::children() const
   return is_valid() ? Node{p, p->ast_nodes[id].child_first} : Node{};
 }
 
+bool Node::has_single_child() const
+{
+  return p->ast_nodes[id].child_first == p->ast_nodes[id].child_last;
+}
+
 int Node::child_count() const
 {
   int count = 0;

@@ -175,6 +175,7 @@ struct Node {
   {
     return id != -1;
   }
+  bool has_single_child() const;
 
   void print_ast() const;
   std::string_view str() const;

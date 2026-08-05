@@ -592,6 +592,13 @@ struct SymbolParser : NodeErrorHandler {
         break;
     }
 
+    if (fn->is_inline && fn->return_type != table.void_cls) {
+      /* Create return variable instance. To be used during inlining. */
+      SymbolVariable *var = table.var_arena.alloc(
+          fn, fn->return_type, fn->decl.front(), SymbolFunction::inline_fn_ret_id);
+      fn->variables.emplace(SymbolFunction::inline_fn_ret_id, var);
+    }
+
     return fn;
   }
 

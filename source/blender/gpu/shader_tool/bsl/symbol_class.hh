@@ -134,6 +134,8 @@ struct SymbolClass : SymbolScope {
   bool is_std140_compatible = false;
   bool is_std430_compatible = false;
   bool is_error = false;
+  /* e.g. image2D, sampler2d, string_t ... */
+  bool is_opaque = false;
 
   SymbolClass(SymbolScope *parent, ast::ClassDecl decl, const string &suffix = "");
 

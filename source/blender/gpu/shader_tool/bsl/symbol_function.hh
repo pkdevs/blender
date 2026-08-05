@@ -22,6 +22,8 @@ struct SymbolFunction : SymbolScope {
   SymbolFunctionTemplate *template_data = nullptr;
   SymbolClass *return_type = nullptr;
 
+  ast::FuncDecl decl = {};
+
   vector<SymbolClass *> arg_types;
   vector<ast::Expr> arg_defaults;
 
@@ -32,6 +34,12 @@ struct SymbolFunction : SymbolScope {
   bool is_builtin = false;
   /* True for template specialization and instantiation. */
   bool is_specialization = false;
+  /* True for template specialization and instantiation. */
+  bool is_inline = false;
+
+  /* Identifier of the temporary return variable.
+   * The real identifier is then specialized per instantiation. */
+  static constexpr string inline_fn_ret_id = "_r";
 
   enum Type { STATIC, MEMBER, GLOBAL } fn_type;
   enum class EntryPointType { FRAG, VERT, COMP, NONE } entry_point_type;
@@ -43,6 +51,8 @@ struct SymbolFunction : SymbolScope {
       : SymbolScope(
             parent, decl.front(), string(decl.identifier().name().str()) + suffix, FUNCTION),
         return_type(return_type),
+        decl(decl),
+        is_inline(decl.attributes().contains_attr("force_inline")),
         fn_type(decl.is_method() ? (decl.is_static() ? STATIC : MEMBER) : GLOBAL),
         entry_point_type(EntryPointType::NONE)
   {

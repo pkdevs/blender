@@ -315,6 +315,7 @@ void SymbolTable::register_builtins(LocalScope node)
   for (const auto &t : special_types) {
     SymbolClass *sym = cls_arena.alloc(root, tok, t.id, t.size, t.align);
     sym->is_error = t.id == err_symbol;
+    sym->is_opaque = true;
     root->classes.emplace(t.id, sym);
   }
 
