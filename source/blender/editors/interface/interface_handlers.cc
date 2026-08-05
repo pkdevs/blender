@@ -2170,8 +2170,8 @@ static void selectcontext_apply(bContext *C,
 
 static bool but_drag_init(bContext *C, Button *but, HandleButtonData *data, const wmEvent *event)
 {
-  /* Prevent #TIMER events to initilize drag events wich can overlap with #KM_PRESS_DRAG events,
-   * see #161044.  */
+  /* Prevent #TIMER events from initializing drag events which can overlap with #KM_PRESS_DRAG
+   * events, see #161044.  */
   if (ISTIMER(event->type)) {
     return false;
   }
