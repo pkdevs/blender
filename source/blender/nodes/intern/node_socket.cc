@@ -1216,7 +1216,13 @@ static void make_common_type_prop(StructRNA &srna,
  * for strip modifiers and compositor effects. */
 static Strip *find_compositor_properties_strip(PointerRNA *ptr, Editing *ed)
 {
-  /* Modifier. */
+  if (const std::optional<AncestorPointerRNA> strip = RNA_struct_search_closest_ancestor_by_type(
+          ptr, RNA_Strip))
+  {
+    return static_cast<Strip *>(strip->data);
+  }
+
+  /* Modifier fallback for properties pointers created without a strip ancestor. */
   if (const std::optional<AncestorPointerRNA> ancestor =
           RNA_struct_search_closest_ancestor_by_type(ptr,
                                                      RNA_SequencerCompositorModifierProperties))
@@ -1233,7 +1239,7 @@ static Strip *find_compositor_properties_strip(PointerRNA *ptr, Editing *ed)
     return found_strip;
   }
 
-  /* Effect. */
+  /* Effect fallback for properties pointers created without a strip ancestor. */
   if (const std::optional<AncestorPointerRNA> ancestor =
           RNA_struct_search_closest_ancestor_by_type(ptr, RNA_SequencerCompositorEffectProperties))
   {
