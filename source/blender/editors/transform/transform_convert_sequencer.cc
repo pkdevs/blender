@@ -501,7 +501,6 @@ static void create_trans_seq_clamp_data(TransInfo *t, const Scene *scene)
 {
   TransDataContainer *tc = TRANS_DATA_CONTAINER_FIRST_SINGLE(t);
   TransSeq *ts = static_cast<TransSeq *>(tc->custom.type.data);
-  Editing *ed = seq::editing_get(scene);
 
   if (U.sequencer_editor_flag & USER_SEQ_ED_CLAMP_STRIPS_BY_DEFAULT) {
     t->modifiers |= MOD_STRIP_CLAMP_HOLDS;
