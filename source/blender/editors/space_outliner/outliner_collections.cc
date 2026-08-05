@@ -18,7 +18,6 @@
 #include "DNA_collection_types.h"
 #include "DNA_layer_types.h"
 #include "DNA_object_types.h"
-#include "DNA_userdef_types.h"
 
 #include "BKE_collection.hh"
 #include "BKE_context.hh"
