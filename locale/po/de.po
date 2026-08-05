@@ -1,9 +1,9 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 5.3.0 Alpha (b'96294be75080')\n"
+"Project-Id-Version: Blender 5.3.0 Alpha (b'af9ba6af7621')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-07-20 07:29+0000\n"
+"POT-Creation-Date: 2026-08-03 07:24+0000\n"
 "PO-Revision-Date: 2025-12-02 20:06+0000\n"
 "Last-Translator: Bastitron <bastitronhd@gmail.com>\n"
 "Language-Team: German <https://translate.blender.org/projects/blender-ui/ui/de/>\n"
@@ -18671,66 +18671,6 @@ msgid "Material slot name"
 msgstr "Materialsteckplatzname"
 
 
-msgid "Apply"
-msgstr "Anwenden"
-
-
-msgid "Track"
-msgstr "Spur"
-
-
-msgid "Quick Effects"
-msgstr "Schnelle Effekte"
-
-
-msgid "Show/Hide"
-msgstr "Zeigen/Verbergen"
-
-
-msgid "Clean Up"
-msgstr "Aufräumen"
-
-
-msgid "Asset"
-msgstr "Asset"
-
-
-msgid "Make Single User"
-msgstr "Einfachen Benutzer erzeugen"
-
-
-msgid "Convert"
-msgstr "Konvertieren"
-
-
-msgid "Hooks"
-msgstr "Haken"
-
-
-msgid "Vertex Group Locks"
-msgstr "Punktgruppen sperren"
-
-
-msgid "Random Mask"
-msgstr "Zufällige Maske"
-
-
-msgid "Math"
-msgstr "Mathematisch"
-
-
-msgid "Clear Transform"
-msgstr "Transformation löschen"
-
-
-msgid "In-Betweens"
-msgstr "Dazwischen"
-
-
-msgid "Names"
-msgstr "Namen"
-
-
 msgid "Toggle Bone Options"
 msgstr "Knochen-Optionen umschalten"
 
@@ -18751,28 +18691,16 @@ msgid "Face Data"
 msgstr "Flächendaten"
 
 
-msgid "Read"
-msgstr "Lesen"
-
-
-msgid "Sample"
-msgstr "Beispiel"
-
-
-msgid "Write"
-msgstr "Schreiben"
-
-
-msgid "Primitives"
-msgstr "Grundkörper"
+msgid "Clean Up"
+msgstr "Aufräumen"
 
 
 msgid "Merge"
 msgstr "Zusammenführen"
 
 
-msgid "Instances"
-msgstr "Instanzen"
+msgid "Show/Hide"
+msgstr "Zeigen/Verbergen"
 
 
 msgid "Special Characters"
@@ -18787,12 +18715,12 @@ msgid "Metaball"
 msgstr "Metaball"
 
 
-msgid "Import"
-msgstr "Importieren"
+msgid "Names"
+msgstr "Namen"
 
 
-msgid "UV"
-msgstr "UV"
+msgid "Math"
+msgstr "Mathematisch"
 
 
 msgid "Pivot Point"
@@ -18807,8 +18735,36 @@ msgid "Proportional Editing Falloff"
 msgstr "Proportionaler Bearbeitungsabfall"
 
 
+msgid "Read"
+msgstr "Lesen"
+
+
 msgid "Mask Edit"
 msgstr "Maskenbearbeitung"
+
+
+msgid "Sample"
+msgstr "Beispiel"
+
+
+msgid "Write"
+msgstr "Schreiben"
+
+
+msgid "Primitives"
+msgstr "Grundkörper"
+
+
+msgid "Vertex Group Locks"
+msgstr "Punktgruppen sperren"
+
+
+msgid "Instances"
+msgstr "Instanzen"
+
+
+msgid "Import"
+msgstr "Importieren"
 
 
 msgid "Mirror"
@@ -18847,16 +18803,12 @@ msgid "Select Similar"
 msgstr "Ähnliche auswählen"
 
 
+msgid "UV"
+msgstr "UV"
+
+
 msgid "Select All by Trait"
 msgstr "Alles nach Merkmal auswählen"
-
-
-msgid "Linked"
-msgstr "Verknüpft"
-
-
-msgid "Layout"
-msgstr "Layout"
 
 
 msgid "Select Linked"
@@ -18869,14 +18821,6 @@ msgstr "Schleifen auswählen"
 
 msgid "Assign Material"
 msgstr "Material zuweisen"
-
-
-msgid "Keying"
-msgstr "Schlüsselbilder"
-
-
-msgid "Tracking"
-msgstr "Verfolgen"
 
 
 msgid "Light"
@@ -18897,6 +18841,62 @@ msgstr "Beziehungen"
 
 msgid "Rigid Body"
 msgstr "Rigid Body"
+
+
+msgid "Apply"
+msgstr "Anwenden"
+
+
+msgid "Track"
+msgstr "Spur"
+
+
+msgid "Quick Effects"
+msgstr "Schnelle Effekte"
+
+
+msgid "Asset"
+msgstr "Asset"
+
+
+msgid "Make Single User"
+msgstr "Einfachen Benutzer erzeugen"
+
+
+msgid "Convert"
+msgstr "Konvertieren"
+
+
+msgid "Linked"
+msgstr "Verknüpft"
+
+
+msgid "Layout"
+msgstr "Layout"
+
+
+msgid "Hooks"
+msgstr "Haken"
+
+
+msgid "Random Mask"
+msgstr "Zufällige Maske"
+
+
+msgid "Keying"
+msgstr "Schlüsselbilder"
+
+
+msgid "Clear Transform"
+msgstr "Transformation löschen"
+
+
+msgid "In-Betweens"
+msgstr "Dazwischen"
+
+
+msgid "Tracking"
+msgstr "Verfolgen"
 
 
 msgid "Assets"
@@ -24363,6 +24363,10 @@ msgid "Attribute Domain"
 msgstr "Attributdomäne"
 
 
+msgid "Scalar"
+msgstr "Skalar"
+
+
 msgid "Node Inputs"
 msgstr "Knoteneingaben"
 
@@ -25537,11 +25541,6 @@ msgstr "Generieren"
 
 
 msgctxt "Operator"
-msgid "Make Markers Local"
-msgstr "Marker lokal machen"
-
-
-msgctxt "Operator"
 msgid "Mirror Keys"
 msgstr "Spiegel"
 
@@ -26544,10 +26543,6 @@ msgstr "Boid-Zustand löschen"
 
 msgid "Delete current boid state"
 msgstr "Aktuellen Boid-Zustand löschen"
-
-
-msgid "Scalar"
-msgstr "Skalar"
 
 
 msgctxt "Operator"
@@ -38712,10 +38707,6 @@ msgid "Active Palette Color"
 msgstr "Aktive Farbpalette"
 
 
-msgid "VR"
-msgstr "VR"
-
-
 msgid "Active Tool"
 msgstr "Aktives Werkzeug"
 
@@ -38786,6 +38777,10 @@ msgstr "Stereoskopie"
 
 msgid "Auto-Masking"
 msgstr "Automatisches Maskieren"
+
+
+msgid "VR"
+msgstr "VR"
 
 
 msgid "Chain Scaling"
@@ -39339,8 +39334,8 @@ msgid "Find & Replace"
 msgstr "Suchen & Ersetzen"
 
 
-msgid "Auto Keyframing"
-msgstr "Auto-Schlüsselbilder"
+msgid "Auto Keying"
+msgstr "Automatische Schlüsselbilder"
 
 
 msgid "Playback"
@@ -46444,10 +46439,6 @@ msgid "Window Background"
 msgstr "Fensterhintergrund"
 
 
-msgid "Header Text Highlight"
-msgstr "Kopfleistentext-Hervorhebung"
-
-
 msgid "Text Highlight"
 msgstr "Texthervorhebung"
 
@@ -46855,10 +46846,6 @@ msgstr "Maskenselektion"
 
 msgid "Compact List"
 msgstr "Kompakte Liste"
-
-
-msgid "Auto Keying"
-msgstr "Automatische Schlüsselbilder"
 
 
 msgid "Auto Merge Vertices"
@@ -48492,11 +48479,6 @@ msgstr "Dokumentation"
 
 msgid "File:"
 msgstr "Datei:"
-
-
-msgctxt "Operator"
-msgid "Apply"
-msgstr "Anwenden"
 
 
 msgid "Options:"
@@ -51439,6 +51421,10 @@ msgid "Duplicate Marker to Scene"
 msgstr "Marker der Szene duplizieren"
 
 
+msgid "Only Active Keying Set"
+msgstr "Nur aktiver Schlüsselbildsatz"
+
+
 msgid "Limit to Frame Range"
 msgstr "Limit für Einzelbildbereich"
 
@@ -51453,14 +51439,6 @@ msgstr "Abspielen in"
 
 msgid "Active Editor"
 msgstr "Aktiver Editor"
-
-
-msgid "New Keyframe Type"
-msgstr "Neuer Schlüsselbildtyp"
-
-
-msgid "Only Active Keying Set"
-msgstr "Nur aktiver Schlüsselbildsatz"
 
 
 msgid "Layered Recording"
@@ -53135,6 +53113,11 @@ msgstr "Mehrfach malen"
 msgctxt "Operator"
 msgid "Quick Edit"
 msgstr "Schnell bearbeiten"
+
+
+msgctxt "Operator"
+msgid "Apply"
+msgstr "Anwenden"
 
 
 msgctxt "Operator"
@@ -56248,16 +56231,8 @@ msgid "fps: %i"
 msgstr "fps: %i"
 
 
-msgid "Cannot fly an object with constraints"
-msgstr "Ein Objekt mit Einschränkungen kann nicht geflogen werden"
-
-
 msgid "Cannot navigate when the view offset is locked"
 msgstr "Navigieren ist nicht möglich wenn der Sichtversatz gesperrt ist"
-
-
-msgid "Cannot navigate an object with constraints"
-msgstr "Navigation nicht möglich bei einem Objekt mit Beschränkung"
 
 
 msgid "Depth too large"
