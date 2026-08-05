@@ -1254,14 +1254,16 @@ static void wm_draw_window(bContext *C, wmWindow *win)
   bool stereo = WM_stereo3d_enabled(win, false);
 
 #ifdef WITH_GHOST_CSD
-  /* Title bar. */
-  if (WM_window_is_csd(win)) {
-    WM_window_csd_draw_titlebar(win);
-  }
-  else {
-    /* Full-screen windows draw no decorations, so nothing above clears the frame-buffer.
-     * Their alpha channel still has to be made opaque, see #WM_window_csd_clear_alpha. */
-    WM_window_csd_clear_alpha(win);
+  if (WM_window_csd_is_active()) {
+    /* Title bar. */
+    if (WM_window_is_csd(win)) {
+      WM_window_csd_draw_titlebar(win);
+    }
+    else {
+      /* Full-screen windows draw no decorations, so nothing above clears the frame-buffer.
+       * Their alpha channel still has to be made opaque, see #WM_window_csd_clear_alpha. */
+      WM_window_csd_clear_alpha(win);
+    }
   }
 #endif
 

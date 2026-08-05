@@ -3165,6 +3165,15 @@ static void wm_window_csd_title_redraw_tag(wmWindowManager *wm, wmWindow *win)
 #endif
 }
 
+bool WM_window_csd_is_active()
+{
+#ifdef WITH_GHOST_CSD
+  return g_system_use_csd;
+#else
+  return false;
+#endif
+}
+
 bool WM_window_is_csd(const wmWindow *win)
 {
 #ifdef WITH_GHOST_CSD
