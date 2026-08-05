@@ -448,19 +448,23 @@ static void query_time_dependent_strips_strips(TransInfo *t,
 static bool create_strip_clamp_data(TransInfo *t, const Scene *scene, Strip *strip)
 {
   TransSeq *ts = static_cast<TransSeq *>(TRANS_DATA_CONTAINER_FIRST_SINGLE(t)->custom.type.data);
+
   bool left_sel = (strip->flag & SEQ_LEFTSEL);
   bool right_sel = (strip->flag & SEQ_RIGHTSEL);
+
   /* If any strips start out with hold offsets visible, disable handle clamping on init. */
   if ((strip->startofs < 0 || strip->end_offset() < 0) &&
       !seq::transform_single_image_check(strip))
   {
     t->modifiers &= ~MOD_STRIP_CLAMP_HOLDS;
   }
+
   /* If both handles are selected, there must be enough underlying content to clamp holds. */
   bool can_clamp_holds = !(left_sel && right_sel) ||
                          (strip->content_length() >=
                           strip->right_handle(scene) - strip->left_handle());
   can_clamp_holds &= !seq::transform_single_image_check(strip);
+
   /* A handle is selected. Update x-axis clamping data. */
   if (left_sel || right_sel) {
     if (left_sel) {
@@ -469,6 +473,7 @@ static bool create_strip_clamp_data(TransInfo *t, const Scene *scene, Strip *str
         int offset = (strip->right_handle(scene) - 1) - strip->left_handle();
         ts->hard_clamp.xmax = min_ii(ts->hard_clamp.xmax, offset);
       }
+
       if (can_clamp_holds) {
         /* Ensure that the left handle's frame is greater than or equal to the content start. */
         ts->soft_clamp_min = max_ii(ts->soft_clamp_min, -strip->startofs);
@@ -480,12 +485,13 @@ static bool create_strip_clamp_data(TransInfo *t, const Scene *scene, Strip *str
         int offset = (strip->left_handle() + 1) - strip->right_handle(scene);
         ts->hard_clamp.xmin = max_ii(ts->hard_clamp.xmin, offset);
       }
+
       if (can_clamp_holds) {
         /* Ensure that the right handle's frame is less than or equal to the content end. */
         ts->soft_clamp_max = min_ii(ts->soft_clamp_max, strip->end_offset());
       }
     }
-    return true;
+    return true; /* Has handle(s) selected. */
   }
   return false;
 }
@@ -667,6 +673,8 @@ static int flush_strip_transforms(Scene *scene,
       const int new_channel = round_fl_to_int(td->iloc[1] + offset_clamped[1]);
       const int delta_x = new_frame - strip->left_handle();
 
+      /* Locked strips aren't included in the transform data.
+       * Set the channel for effect strips too. */
       strip->channel_set(new_channel);
 
       if (seq::transform_strip_can_be_translated(strip)) {
@@ -760,6 +768,7 @@ static void flushTransSeq(TransInfo *t)
   }
 
   TransSeq *ts = static_cast<TransSeq *>(TRANS_DATA_CONTAINER_FIRST_SINGLE(t)->custom.type.data);
+
   /* Update animation for effects. */
   for (Strip *strip : ts->time_dependent_strips) {
     seq::offset_animdata(scene, strip, max_offset);
