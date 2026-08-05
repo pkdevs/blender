@@ -167,7 +167,6 @@ def register():
         items=(
             ('OFFICIAL', "Official", "Officially supported"),
             ('COMMUNITY', "Community", "Maintained by community developers"),
-            ('TESTING', "Testing", "In development, not ready for use in production"),
         ),
         name="Support",
         description="Display support level",
