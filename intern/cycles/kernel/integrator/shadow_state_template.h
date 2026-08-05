@@ -42,11 +42,11 @@ KERNEL_STRUCT_MEMBER(shadow_path,
                      KERNEL_FEATURE_AO_ADDITIVE)
 /* Ratio of throughput to distinguish diffuse / glossy / transmission render passes. */
 KERNEL_STRUCT_MEMBER(shadow_path,
-                     gpu_packed_half_spectrum,
+                     SpectrumCompressedOnGPU,
                      pass_diffuse_weight,
                      KERNEL_FEATURE_LIGHT_PASSES)
 KERNEL_STRUCT_MEMBER(shadow_path,
-                     gpu_packed_half_spectrum,
+                     SpectrumCompressedOnGPU,
                      pass_glossy_weight,
                      KERNEL_FEATURE_LIGHT_PASSES)
 /* Packed number of intersections found by ray-tracing, and on GPU also the resume hit index
@@ -59,7 +59,7 @@ KERNEL_STRUCT_MEMBER(shadow_path, uint16_t, packed_num_hits, KERNEL_FEATURE_PATH
 KERNEL_STRUCT_MEMBER(shadow_path, uint8_t, lightgroup, KERNEL_FEATURE_PATH_TRACING)
 /* Path guiding. */
 KERNEL_STRUCT_MEMBER(shadow_path,
-                     gpu_packed_half_spectrum,
+                     SpectrumCompressedOnGPU,
                      unlit_throughput,
                      KERNEL_FEATURE_PATH_GUIDING)
 #if defined(__PATH_GUIDING__)
@@ -92,8 +92,8 @@ KERNEL_STRUCT_MEMBER_PACKED(shadow_ray, float, tmax, KERNEL_FEATURE_PATH_TRACING
 KERNEL_STRUCT_MEMBER_PACKED(shadow_ray, float, dP, KERNEL_FEATURE_PATH_TRACING)
 KERNEL_STRUCT_MEMBER_PACKED(shadow_ray, int, self_light_object, KERNEL_FEATURE_PATH_TRACING)
 KERNEL_STRUCT_MEMBER_PACKED(shadow_ray, int, self_light_prim, KERNEL_FEATURE_PATH_TRACING)
-KERNEL_STRUCT_MEMBER_PACKED(shadow_ray, gpu_packed_half, time, KERNEL_FEATURE_PATH_TRACING)
-KERNEL_STRUCT_MEMBER_PACKED(shadow_ray, gpu_packed_half, dD, KERNEL_FEATURE_PATH_TRACING)
+KERNEL_STRUCT_MEMBER_PACKED(shadow_ray, FloatCompressedOnGPU, time, KERNEL_FEATURE_PATH_TRACING)
+KERNEL_STRUCT_MEMBER_PACKED(shadow_ray, FloatCompressedOnGPU, dD, KERNEL_FEATURE_PATH_TRACING)
 KERNEL_STRUCT_END(shadow_ray)
 
 /*********************** Shadow Intersection result **************************/

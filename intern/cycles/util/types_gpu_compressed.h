@@ -14,9 +14,9 @@ CCL_NAMESPACE_BEGIN
  * math is relatively cheap. */
 
 /* A float stored in half precision. */
-struct gpu_packed_half {
+struct FloatCompressedOnGPU {
   using value_type = float;
-  using packed_type = half;
+  using compressed_type = half;
 
 #ifdef __KERNEL_GPU__
   half v;
@@ -24,9 +24,9 @@ struct gpu_packed_half {
   float v;
 #endif
 
-  gpu_packed_half() = default;
+  FloatCompressedOnGPU() = default;
 
-  ccl_device_inline_method gpu_packed_half(const float a)
+  ccl_device_inline_method FloatCompressedOnGPU(const float a)
   {
 #ifdef __KERNEL_GPU__
     v = float_to_half(a);
@@ -44,7 +44,7 @@ struct gpu_packed_half {
 #endif
   }
 
-  ccl_device_inline_method ccl_global gpu_packed_half &operator=(const float a) ccl_global
+  ccl_device_inline_method ccl_global FloatCompressedOnGPU &operator=(const float a) ccl_global
   {
 #ifdef __KERNEL_GPU__
     v = float_to_half(a);
@@ -54,7 +54,8 @@ struct gpu_packed_half {
     return *this;
   }
 
-  ccl_device_inline_method ccl_global gpu_packed_half &operator=(gpu_packed_half a) ccl_global
+  ccl_device_inline_method ccl_global FloatCompressedOnGPU &operator=(FloatCompressedOnGPU a)
+      ccl_global
   {
     v = a.v;
     return *this;
@@ -70,7 +71,7 @@ struct gpu_packed_half {
 #  endif
   }
 
-  ccl_device_inline_method ccl_private gpu_packed_half &operator=(const float a) ccl_private
+  ccl_device_inline_method ccl_private FloatCompressedOnGPU &operator=(const float a) ccl_private
   {
 #  ifdef __KERNEL_GPU__
     v = float_to_half(a);
@@ -80,7 +81,8 @@ struct gpu_packed_half {
     return *this;
   }
 
-  ccl_device_inline_method ccl_private gpu_packed_half &operator=(gpu_packed_half a) ccl_private
+  ccl_device_inline_method ccl_private FloatCompressedOnGPU &operator=(FloatCompressedOnGPU a)
+      ccl_private
   {
     v = a.v;
     return *this;
@@ -89,9 +91,9 @@ struct gpu_packed_half {
 };
 
 /* Spectrum stored in half precision. */
-struct gpu_packed_half_spectrum {
+struct SpectrumCompressedOnGPU {
   using value_type = Spectrum;
-  using packed_type = packed_half3;
+  using compressed_type = packed_half3;
 
 #ifdef __KERNEL_GPU__
   packed_half3 v;
@@ -99,9 +101,9 @@ struct gpu_packed_half_spectrum {
   Spectrum v;
 #endif
 
-  gpu_packed_half_spectrum() = default;
+  SpectrumCompressedOnGPU() = default;
 
-  ccl_device_inline_method gpu_packed_half_spectrum(const Spectrum a)
+  ccl_device_inline_method SpectrumCompressedOnGPU(const Spectrum a)
   {
 #ifdef __KERNEL_GPU__
     v = float3_to_packed_half3(a);
@@ -119,7 +121,7 @@ struct gpu_packed_half_spectrum {
 #endif
   }
 
-  ccl_device_inline_method ccl_global gpu_packed_half_spectrum &operator=(const Spectrum a)
+  ccl_device_inline_method ccl_global SpectrumCompressedOnGPU &operator=(const Spectrum a)
       ccl_global
   {
 #ifdef __KERNEL_GPU__
@@ -130,8 +132,8 @@ struct gpu_packed_half_spectrum {
     return *this;
   }
 
-  ccl_device_inline_method ccl_global gpu_packed_half_spectrum &operator=(
-      gpu_packed_half_spectrum a) ccl_global
+  ccl_device_inline_method ccl_global SpectrumCompressedOnGPU &operator=(SpectrumCompressedOnGPU a)
+      ccl_global
   {
     v = a.v;
     return *this;
@@ -147,7 +149,7 @@ struct gpu_packed_half_spectrum {
 #  endif
   }
 
-  ccl_device_inline_method ccl_private gpu_packed_half_spectrum &operator=(const Spectrum a)
+  ccl_device_inline_method ccl_private SpectrumCompressedOnGPU &operator=(const Spectrum a)
       ccl_private
   {
 #  ifdef __KERNEL_GPU__
@@ -158,8 +160,8 @@ struct gpu_packed_half_spectrum {
     return *this;
   }
 
-  ccl_device_inline_method ccl_private gpu_packed_half_spectrum &operator=(
-      gpu_packed_half_spectrum a) ccl_private
+  ccl_device_inline_method ccl_private SpectrumCompressedOnGPU &operator=(
+      SpectrumCompressedOnGPU a) ccl_private
   {
     v = a.v;
     return *this;
@@ -172,8 +174,8 @@ template<typename...> using gpu_void_t = void;
 template<typename T, typename = void> struct gpu_state_storage {
   using gpu_type = T;
 };
-template<typename T> struct gpu_state_storage<T, gpu_void_t<typename T::packed_type>> {
-  using gpu_type = typename T::packed_type;
+template<typename T> struct gpu_state_storage<T, gpu_void_t<typename T::compressed_type>> {
+  using gpu_type = typename T::compressed_type;
 };
 
 CCL_NAMESPACE_END

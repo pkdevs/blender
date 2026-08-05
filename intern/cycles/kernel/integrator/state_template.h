@@ -57,7 +57,10 @@ KERNEL_STRUCT_MEMBER(path, packed_float3, mis_origin_n, KERNEL_FEATURE_PATH_TRAC
 /* Filter glossy. */
 KERNEL_STRUCT_MEMBER(path, float, min_ray_pdf, KERNEL_FEATURE_PATH_TRACING)
 /* Continuation probability for path termination. */
-KERNEL_STRUCT_MEMBER(path, gpu_packed_half, continuation_probability, KERNEL_FEATURE_PATH_TRACING)
+KERNEL_STRUCT_MEMBER(path,
+                     FloatCompressedOnGPU,
+                     continuation_probability,
+                     KERNEL_FEATURE_PATH_TRACING)
 /* Throughput. */
 KERNEL_STRUCT_MEMBER(path, PackedSpectrum, throughput, KERNEL_FEATURE_PATH_TRACING)
 /* Factor to multiple with throughput to get remove any guiding PDFS.
@@ -65,16 +68,16 @@ KERNEL_STRUCT_MEMBER(path, PackedSpectrum, throughput, KERNEL_FEATURE_PATH_TRACI
 KERNEL_STRUCT_MEMBER(path, float, unguided_throughput, KERNEL_FEATURE_PATH_GUIDING)
 /* Ratio of throughput to distinguish diffuse / glossy / transmission render passes. */
 KERNEL_STRUCT_MEMBER(path,
-                     gpu_packed_half_spectrum,
+                     SpectrumCompressedOnGPU,
                      pass_diffuse_weight,
                      KERNEL_FEATURE_LIGHT_PASSES)
 KERNEL_STRUCT_MEMBER(path,
-                     gpu_packed_half_spectrum,
+                     SpectrumCompressedOnGPU,
                      pass_glossy_weight,
                      KERNEL_FEATURE_LIGHT_PASSES)
 /* Denoising. */
 KERNEL_STRUCT_MEMBER(path,
-                     gpu_packed_half_spectrum,
+                     SpectrumCompressedOnGPU,
                      denoising_feature_throughput,
                      KERNEL_FEATURE_DENOISING)
 /* Shader sorting. */
@@ -90,8 +93,8 @@ KERNEL_STRUCT_MEMBER_PACKED(ray, packed_float3, D, KERNEL_FEATURE_PATH_TRACING)
 KERNEL_STRUCT_MEMBER_PACKED(ray, float, tmin, KERNEL_FEATURE_PATH_TRACING)
 KERNEL_STRUCT_MEMBER_PACKED(ray, float, tmax, KERNEL_FEATURE_PATH_TRACING)
 KERNEL_STRUCT_MEMBER_PACKED(ray, float, dP, KERNEL_FEATURE_PATH_TRACING)
-KERNEL_STRUCT_MEMBER_PACKED(ray, gpu_packed_half, dD, KERNEL_FEATURE_PATH_TRACING)
-KERNEL_STRUCT_MEMBER_PACKED(ray, gpu_packed_half, time, KERNEL_FEATURE_PATH_TRACING)
+KERNEL_STRUCT_MEMBER_PACKED(ray, FloatCompressedOnGPU, dD, KERNEL_FEATURE_PATH_TRACING)
+KERNEL_STRUCT_MEMBER_PACKED(ray, FloatCompressedOnGPU, time, KERNEL_FEATURE_PATH_TRACING)
 KERNEL_STRUCT_MEMBER(ray, float, previous_dt, KERNEL_FEATURE_LIGHT_TREE)
 KERNEL_STRUCT_END(ray)
 
@@ -112,11 +115,11 @@ KERNEL_STRUCT_END(isect)
 KERNEL_STRUCT_BEGIN_PACKED(subsurface, KERNEL_FEATURE_SUBSURFACE)
 KERNEL_STRUCT_MEMBER_PACKED(subsurface, PackedSpectrum, radius, KERNEL_FEATURE_SUBSURFACE)
 KERNEL_STRUCT_MEMBER_PACKED(subsurface, packed_float3, N, KERNEL_FEATURE_SUBSURFACE)
+KERNEL_STRUCT_MEMBER_PACKED(subsurface, SpectrumCompressedOnGPU, albedo, KERNEL_FEATURE_SUBSURFACE)
 KERNEL_STRUCT_MEMBER_PACKED(subsurface,
-                            gpu_packed_half_spectrum,
-                            albedo,
+                            FloatCompressedOnGPU,
+                            anisotropy,
                             KERNEL_FEATURE_SUBSURFACE)
-KERNEL_STRUCT_MEMBER_PACKED(subsurface, gpu_packed_half, anisotropy, KERNEL_FEATURE_SUBSURFACE)
 KERNEL_STRUCT_END(subsurface)
 
 /********************************** Volume Stack ******************************/
@@ -145,27 +148,30 @@ KERNEL_STRUCT_MEMBER(guiding, bool, use_surface_guiding, KERNEL_FEATURE_PATH_GUI
 /* Random number used for additional guiding decisions (e.g., cache query, selection to use guiding
  * or BSDF sampling) */
 KERNEL_STRUCT_MEMBER(guiding,
-                     gpu_packed_half,
+                     FloatCompressedOnGPU,
                      sample_surface_guiding_rand,
                      KERNEL_FEATURE_PATH_GUIDING)
 /* The probability to use surface guiding (i.e., diffuse sampling prob * guiding prob). */
 KERNEL_STRUCT_MEMBER(guiding,
-                     gpu_packed_half,
+                     FloatCompressedOnGPU,
                      surface_guiding_sampling_prob,
                      KERNEL_FEATURE_PATH_GUIDING)
 /* Probability of sampling a BSSRDF closure instead of a BSDF closure. */
-KERNEL_STRUCT_MEMBER(guiding, gpu_packed_half, bssrdf_sampling_prob, KERNEL_FEATURE_PATH_GUIDING)
+KERNEL_STRUCT_MEMBER(guiding,
+                     FloatCompressedOnGPU,
+                     bssrdf_sampling_prob,
+                     KERNEL_FEATURE_PATH_GUIDING)
 /* If volume guiding is enabled */
 KERNEL_STRUCT_MEMBER(guiding, bool, use_volume_guiding, KERNEL_FEATURE_PATH_GUIDING)
 /* Random number used for additional guiding decisions (e.g., cache query, selection to use guiding
  * or BSDF sampling) */
 KERNEL_STRUCT_MEMBER(guiding,
-                     gpu_packed_half,
+                     FloatCompressedOnGPU,
                      sample_volume_guiding_rand,
                      KERNEL_FEATURE_PATH_GUIDING)
 /* The probability to use surface guiding (i.e., diffuse sampling prob * guiding prob). */
 KERNEL_STRUCT_MEMBER(guiding,
-                     gpu_packed_half,
+                     FloatCompressedOnGPU,
                      volume_guiding_sampling_prob,
                      KERNEL_FEATURE_PATH_GUIDING)
 KERNEL_STRUCT_END(guiding)

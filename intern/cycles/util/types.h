@@ -33,4 +33,4 @@
 
 #include "util/types_dual.h"  // IWYU pragma: export
 
-#include "util/types_gpu_packed.h"  // IWYU pragma: export
+#include "util/types_gpu_compressed.h"  // IWYU pragma: export
