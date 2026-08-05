@@ -4362,7 +4362,7 @@ static wmOperatorStatus marker_jump_exec(bContext *C, wmOperator *op)
 
   /* Find matching marker in the right direction. */
   for (TimeMarker &marker : scene->markers) {
-    /* Ignore markers outside of playback_range */
+    /* Ignore markers outside of playback_range. */
     if (wrap_timeline_navigation && !playback_range.contains(marker.frame)) {
       continue;
     }

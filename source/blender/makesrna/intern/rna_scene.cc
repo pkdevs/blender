@@ -9115,7 +9115,7 @@ void RNA_def_scene(BlenderRNA *brna)
   RNA_def_property_ui_text(
       prop,
       "Wrap Timeline",
-      "Should the playhead wrap around the playback range when navigating the timeline");
+      "Wrap the playhead around the playback range when navigating the timeline");
   RNA_def_property_update(prop, NC_SCENE | ND_FRAME, nullptr);
 
   /* Stamp */
