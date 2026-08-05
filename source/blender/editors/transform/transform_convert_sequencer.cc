@@ -482,7 +482,9 @@ static bool create_non_transition_clamp_data(TransInfo *t, const Scene *scene, S
   bool right_sel = (strip->flag & SEQ_RIGHTSEL);
 
   /* If any strips start out with hold offsets visible, disable handle clamping on init. */
-  if ((strip->startofs < 0 || strip->end_offset() < 0) &&
+  const bool clamp_default = (U.sequencer_editor_flag & USER_SEQ_ED_CLAMP_STRIPS_BY_DEFAULT);
+
+  if (clamp_default && (strip->startofs < 0 || strip->end_offset() < 0) &&
       !seq::transform_single_image_check(strip))
   {
     t->modifiers &= ~MOD_STRIP_CLAMP_HOLDS;
@@ -699,8 +701,9 @@ static void create_trans_seq_clamp_data(TransInfo *t, const Scene *scene)
 
   VectorSet<Strip *> strips = seq_transform_collection_from_transdata(tc);
 
-  /* Try to clamp handles by default. */
-  t->modifiers |= MOD_STRIP_CLAMP_HOLDS;
+  if (U.sequencer_editor_flag & USER_SEQ_ED_CLAMP_STRIPS_BY_DEFAULT) {
+    t->modifiers |= MOD_STRIP_CLAMP_HOLDS;
+  }
 
   bool only_handles_selected = true;
   bool valid_transition_input_selection = true;
