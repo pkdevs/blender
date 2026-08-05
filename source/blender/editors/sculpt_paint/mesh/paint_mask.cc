@@ -802,7 +802,8 @@ static void gesture_apply_for_symmetry_pass(bContext & /*C*/, gesture::GestureDa
   const View3D *v3d = gesture_data.vc.v3d;
   RegionView3D *rv3d = gesture_data.vc.rv3d;
   Object &object = *gesture_data.vc.obact;
-  if (RV3D_CLIPPING_ENABLED(v3d, rv3d)) {
+  const bool is_clipping = RV3D_CLIPPING_ENABLED(v3d, rv3d);
+  if (is_clipping) {
     ED_view3d_clipping_local(rv3d, object.object_to_world().ptr());
   }
   const IndexMask &node_mask = gesture_data.node_mask;
@@ -816,6 +817,11 @@ static void gesture_apply_for_symmetry_pass(bContext & /*C*/, gesture::GestureDa
           depsgraph, object, node_mask, [&](MutableSpan<float> node_mask, const Span<int> verts) {
             for (const int i : verts.index_range()) {
               const int vert = verts[i];
+              if (is_clipping) {
+                if (ED_view3d_clipping_test(rv3d, positions[vert], true)) {
+                  continue;
+                }
+              }
               if (gesture::is_affected(gesture_data, positions[vert], normals[vert])) {
                 node_mask[i] = mask_gesture_get_new_value(node_mask[i], op.mode, op.value);
               }

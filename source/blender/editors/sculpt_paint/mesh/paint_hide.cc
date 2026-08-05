@@ -1251,12 +1251,23 @@ static void partialvis_gesture_update_mesh(gesture::GestureData &gesture_data)
     return;
   }
 
+  const View3D *v3d = gesture_data.vc.v3d;
+  RegionView3D *rv3d = gesture_data.vc.rv3d;
+  const bool is_clipping = RV3D_CLIPPING_ENABLED(v3d, rv3d);
+  if (is_clipping) {
+    ED_view3d_clipping_local(rv3d, object->object_to_world().ptr());
+  }
   const bool value = action_to_hide(action);
   const Span<float3> positions = bke::pbvh::vert_positions_eval(depsgraph, *object);
   const Span<float3> normals = bke::pbvh::vert_normals_eval(depsgraph, *object);
   vert_hide_update(
       depsgraph, *object, node_mask, [&](const Span<int> verts, MutableSpan<bool> hide) {
         for (const int i : verts.index_range()) {
+          if (is_clipping) {
+            if (ED_view3d_clipping_test(rv3d, positions[verts[i]], true)) {
+              continue;
+            }
+          }
           if (gesture::is_affected(gesture_data, positions[verts[i]], normals[verts[i]])) {
             hide[i] = value;
           }
