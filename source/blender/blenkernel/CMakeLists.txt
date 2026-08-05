@@ -621,7 +621,7 @@ if(WITH_BINRELOC)
   add_definitions(-DWITH_BINRELOC)
 endif()
 
-if(WITH_CYCLES_EMBREE)
+if(WITH_EMBREE)
   list(APPEND LIB
     PRIVATE bf::dependencies::optional::embree
   )
