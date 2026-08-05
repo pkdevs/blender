@@ -175,8 +175,8 @@ void ED_buttons_visible_tabs_menu(bContext *C, ui::Layout *layout, void * /*arg*
   /* These can be reordered freely. */
   constexpr std::array<StringRefNull, BCONTEXT_TOT> filter_items = {
       "show_properties_tool",        "show_properties_render",
-      "show_properties_output",      "show_properties_view_layer",
-      "show_properties_scene",       "show_properties_world",
+      "show_properties_output",      "show_properties_scene",
+      "show_properties_view_layer",  "show_properties_world",
       "show_properties_collection",  "show_properties_object",
       "show_properties_modifiers",   "show_properties_effects",
       "show_properties_particles",   "show_properties_physics",
@@ -221,8 +221,8 @@ Vector<eSpaceButtons_Context> ED_buttons_tabs_list(const SpaceProperties *sbuts,
 
   add_tab(BCONTEXT_RENDER);
   add_tab(BCONTEXT_OUTPUT);
-  add_tab(BCONTEXT_VIEW_LAYER);
   add_tab(BCONTEXT_SCENE);
+  add_tab(BCONTEXT_VIEW_LAYER);
   add_tab(BCONTEXT_WORLD);
 
   add_spacer();
