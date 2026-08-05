@@ -5,6 +5,7 @@
 #include "BLI_kdopbvh.hh"
 #include "BLI_math_geom_c.hh"
 #include "BLI_math_vector.hh"
+#include "BLI_simd.hh"
 
 #include "DNA_mesh_types.h"
 
@@ -17,48 +18,6 @@
 #ifdef WITH_EMBREE
 
 #  include <embree4/rtcore.h>
-
-/* Similar to Cycles simd.h. */
-
-#  if defined(FREE_WINDOWS64)
-#    include <windows.h>
-#  elif defined(_MSC_VER) && !defined(__KERNEL_NEON__)
-#    include <intrin.h>
-#  elif (defined(__x86_64__) || defined(__i386__))
-#    include <x86intrin.h>
-#  elif defined(__KERNEL_NEON__)
-#    define SSE2NEON_PRECISE_MINMAX 1
-#    include <sse2neon.h>
-#  endif
-
-/* Floating Point Control, for Embree. */
-#  if defined(__x86_64__) || defined(_M_X64)
-#    define SIMD_SET_FLUSH_TO_ZERO \
-      _MM_SET_FLUSH_ZERO_MODE(_MM_FLUSH_ZERO_ON); \
-      _MM_SET_DENORMALS_ZERO_MODE(_MM_DENORMALS_ZERO_ON);
-#  elif defined(__aarch64__) || defined(_M_ARM64)
-/* The get/set denormals to zero was implemented in sse2neon v1.5.0.
- * Keep the compatibility code until the minimum library version is increased. */
-#    if defined(_MM_SET_FLUSH_ZERO_MODE)
-#      define SIMD_SET_FLUSH_TO_ZERO \
-        _MM_SET_FLUSH_ZERO_MODE(_MM_FLUSH_ZERO_ON); \
-        _MM_SET_DENORMALS_ZERO_MODE(_MM_DENORMALS_ZERO_ON);
-#    elif !defined(_M_ARM64)
-#      define _MM_FLUSH_ZERO_ON 24
-#      define __get_fpcr(__fpcr) __asm__ __volatile__("mrs %0,fpcr" : "=r"(__fpcr))
-#      define __set_fpcr(__fpcr) __asm__ __volatile__("msr fpcr,%0" : : "ri"(__fpcr))
-#      define SIMD_SET_FLUSH_TO_ZERO set_fz(_MM_FLUSH_ZERO_ON);
-#      define SIMD_GET_FLUSH_TO_ZERO get_fz(_MM_FLUSH_ZERO_ON)
-#    else
-#      define _MM_FLUSH_ZERO_ON 24
-#      define __get_fpcr(__fpcr) __fpcr = _ReadStatusReg(0x5A20)
-#      define __set_fpcr(__fpcr) _WriteStatusReg(0x5A20, __fpcr)
-#      define SIMD_SET_FLUSH_TO_ZERO set_fz(_MM_FLUSH_ZERO_ON);
-#      define SIMD_GET_FLUSH_TO_ZERO get_fz(_MM_FLUSH_ZERO_ON)
-#    endif
-#  else
-#    define SIMD_SET_FLUSH_TO_ZERO
-#  endif
 
 #endif /* WITH_EMBREE */
 
@@ -627,7 +586,11 @@ void Tree::range_query(const float3 &point, const float radius, FunctionRef<bool
       &context,
       [](RTCPointQueryFunctionArguments *args) -> bool {
         FunctionRef<bool(int)> fn = *static_cast<FunctionRef<bool(int)> *>(args->userPtr);
-        return fn(args->primID);
+        int index = args->primID;
+        if (!ctx->index_map_by_geom[args->geomID].is_empty()) {
+          index = ctx->index_map_by_geom[args->geomID][index];
+        }
+        return fn(index);
       },
       &fn);
 #else /* WITH_EMBREE */
