@@ -9,14 +9,14 @@
 
 #  include <openvdb/openvdb.h>
 
+#  include <nanovdb/NanoVDB.h>  // manages and streams the raw memory buffer of a NanoVDB grid.
+
 #  define NANOVDB_USE_OPENVDB
 
 #  if NANOVDB_MAJOR_VERSION_NUMBER > 32 || \
       (NANOVDB_MAJOR_VERSION_NUMBER == 32 && NANOVDB_MINOR_VERSION_NUMBER >= 9)
 #    define NANOVDB_USE_TBB
 #  endif
-
-#  include <nanovdb/NanoVDB.h>  // manages and streams the raw memory buffer of a NanoVDB grid.
 
 #  if NANOVDB_MAJOR_VERSION_NUMBER > 32 || \
       (NANOVDB_MAJOR_VERSION_NUMBER == 32 && NANOVDB_MINOR_VERSION_NUMBER >= 7)
