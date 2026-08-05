@@ -14,7 +14,7 @@ namespace blender::compositor {
 
 class Context;
 
-/* A thing wrapper around a compositor result to be added and retrieved from bundles. */
+/* A thin wrapper around a compositor result to be added and retrieved from bundles. */
 class BundleItem : public nodes::BundleItemInternalValueMixin {
  private:
   Result result_;
