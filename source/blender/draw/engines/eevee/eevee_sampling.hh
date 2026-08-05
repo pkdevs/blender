@@ -68,6 +68,7 @@ class Sampling {
    */
   float time_limit_ = 0.0f;
   float start_render_time_ = 0.0f;
+  float current_time_ = 0.0f;
   /**
    * For overwriting pixel jitter sample position.
    */
@@ -128,14 +129,13 @@ class Sampling {
   /* Returns true if rendering has finished. */
   bool finished() const
   {
-    return (sample_ >= sample_count_) || check_time_limit_reached();
+    return sample_ >= sample_count_ || check_time_limit_reached();
   }
 
   /* Returns true if viewport smoothing and sampling has finished. */
   bool finished_viewport() const
   {
-    return ((viewport_sample_ >= sample_count_) && !interactive_mode_) ||
-           check_time_limit_reached();
+    return (viewport_sample_ >= sample_count_ || check_time_limit_reached()) && !interactive_mode_;
   }
 
   /* Returns true if viewport renderer is in interactive mode and should use TAA. */
@@ -155,6 +155,9 @@ class Sampling {
   {
     return sample_;
   }
+
+  /* Must to be called to update the current progress towards the time limit. */
+  void update_time();
 
   /* Returns true if a custom pixel jitter sample position is set. */
   bool use_custom_pixel_jitter_sample() const
