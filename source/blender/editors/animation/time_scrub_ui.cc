@@ -106,7 +106,9 @@ static PlayheadDimensions get_playhead_dimensions(const Scene *scene,
   char frame_str[max_frame_string_len];
   get_current_time_str(scene, display_seconds, current_frame, frame_str, max_frame_string_len);
 
-  dimensions.outline_width = UI_SCALE_FAC;
+  /* Forcing the outline width to always be a full pixel solves alignment issues between
+   * the tip, the box and the stalk. */
+  dimensions.outline_width = std::max(1.0f, round(UI_SCALE_FAC));
   dimensions.text_width = ui::fontstyle_string_width(UI_FSTYLE_WIDGET, frame_str);
   const float text_padding = 4.0f * UI_SCALE_FAC;
   const float box_min_width = 24.0f * UI_SCALE_FAC;
