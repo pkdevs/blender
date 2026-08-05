@@ -254,7 +254,6 @@ class SeparateBundleOperation : public NodeOperation {
       conversion_operation.evaluate();
       result.share_data(conversion_operation.get_result());
       conversion_operation.get_result().release();
-      conversion_input.release();
 
       this->add_warning(
           NodeWarningType::Info,

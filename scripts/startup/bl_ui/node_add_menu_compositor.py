@@ -4,6 +4,7 @@
 
 from bl_ui import node_add_menu
 from bpy.app.translations import (
+    pgettext_n as n_,
     contexts as i18n_contexts,
 )
 
@@ -412,6 +413,11 @@ class NODE_MT_compositor_utilities_bundle_base(node_add_menu.NodeMenu):
         layout = self.layout
         self.node_operator(layout, "NodeCombineBundle")
         self.node_operator(layout, "NodeSeparateBundle")
+        layout.separator()
+        self.node_operator(layout, "NodeGetBundleItem")
+        self.node_operator(layout, "NodeStoreBundleItem")
+        layout.separator()
+        self.typed_bundle(layout, label=n_("Typed Bundle"))
 
         self.draw_assets_for_catalog(layout, self.menu_path)
 

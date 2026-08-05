@@ -13,6 +13,12 @@
 #include "UI_interface_layout.hh"
 #include "UI_resources.hh"
 
+#include "BKE_type_conversions.hh"
+
+#include "COM_bundle_item.hh"
+#include "COM_conversion_operation.hh"
+#include "COM_node_operation.hh"
+
 #include <fmt/format.h>
 
 namespace blender::nodes::node_geo_get_bundle_item_cc {
@@ -133,6 +139,94 @@ static void node_geo_exec(GeoNodeExecParams params)
   params.set_output("Exists"_ustr, true);
 }
 
+using namespace blender::compositor;
+
+class GetBundleItemOperation : public NodeOperation {
+ public:
+  using NodeOperation::NodeOperation;
+
+  void execute() override
+  {
+    Result &output_bundle = this->get_result("Bundle");
+
+    const std::string path = this->get_input("Path").get_single_value<std::string>();
+    if (!Bundle::is_valid_path(path)) {
+      if (!path.empty()) {
+        this->add_warning(NodeWarningType::Warning, "Invalid bundle path");
+      }
+      if (output_bundle.should_compute()) {
+        output_bundle.share_data(this->get_input("Bundle"));
+      }
+      this->allocate_default_remaining_outputs();
+      return;
+    }
+
+    Result &exists_output = this->get_result("Exists");
+
+    const Result &input_bundle = this->get_input("Bundle");
+    nodes::BundlePtr bundle = input_bundle.get_single_value<nodes::BundlePtr>();
+    std::optional<ImplicitSharingPtr<BundleItem>> bundle_item =
+        bundle->lookup_path<ImplicitSharingPtr<BundleItem>>(path);
+    if (!bundle_item.has_value()) {
+      if (!exists_output.should_compute()) {
+        this->add_warning(NodeWarningType::Warning, "Bundle path not found");
+      }
+      if (output_bundle.should_compute()) {
+        output_bundle.share_data(this->get_input("Bundle"));
+      }
+      this->allocate_default_remaining_outputs();
+      return;
+    }
+
+    if (exists_output.should_compute()) {
+      exists_output.allocate_single_value();
+      exists_output.set_single_value(true);
+    }
+
+    const Result &bundle_result = bundle_item.value()->result();
+
+    Result &item_result = this->get_result("Item");
+    if (item_result.type() == bundle_result.type()) {
+      item_result.share_data(bundle_result);
+    }
+    else {
+      const bke::DataTypeConversions &conversions = bke::get_implicit_type_conversions();
+      if (!conversions.is_convertible(bundle_result.get_cpp_type(), item_result.get_cpp_type())) {
+        this->add_warning(NodeWarningType::Error,
+                          "Cannot implicitly convert item to the selected type");
+        if (output_bundle.should_compute()) {
+          output_bundle.share_data(this->get_input("Bundle"));
+        }
+        this->allocate_default_remaining_outputs();
+        return;
+      }
+
+      ConversionOperation conversion_operation(
+          this->context(), bundle_result.type(), item_result.type());
+      Result conversion_input = this->context().create_result(bundle_result.type(),
+                                                              bundle_result.precision());
+      conversion_input.share_data(bundle_result);
+      conversion_operation.map_input_to_result(&conversion_input);
+      conversion_operation.evaluate();
+      item_result.share_data(conversion_operation.get_result());
+      conversion_operation.get_result().release();
+    }
+
+    if (output_bundle.should_compute()) {
+      if (this->get_input("Remove").get_single_value<bool>()) {
+        bundle.ensure_mutable_inplace().remove_path(path);
+      }
+      output_bundle.allocate_single_value();
+      output_bundle.set_single_value(std::move(bundle));
+    }
+  }
+};
+
+static NodeOperation *get_compositor_operation(Context &context, const bNode &node)
+{
+  return new GetBundleItemOperation(context, node);
+}
+
 static void node_rna(StructRNA *srna)
 {
   RNA_def_node_enum(srna,
@@ -163,7 +257,7 @@ static void node_register()
 {
   static bke::bNodeType ntype;
 
-  geo_node_type_base(&ntype, "NodeGetBundleItem"_ustr);
+  geo_cmp_node_type_base(&ntype, "NodeGetBundleItem"_ustr);
   ntype.ui_name = "Get Bundle Item";
   ntype.ui_description = "Retrieve a bundle item by path.";
   ntype.nclass = NODE_CLASS_CONVERTER;
@@ -172,6 +266,7 @@ static void node_register()
   ntype.geometry_node_execute = node_geo_exec;
   ntype.draw_buttons = node_layout;
   ntype.draw_buttons_ex = node_layout_ex;
+  ntype.get_compositor_operation = get_compositor_operation;
   bke::node_type_storage(
       ntype, "NodeGetBundleItem", node_free_standard_storage, node_copy_standard_storage);
   bke::node_register_type(ntype);
