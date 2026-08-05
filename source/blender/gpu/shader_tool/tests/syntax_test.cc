@@ -307,12 +307,12 @@ static constexpr int e = {{4}};
 static constexpr int f = (a + b / 2) * d - e;
 int func() { return f; })";
     string expect = R"(
-       constexpr int a= 1;
-       constexpr int b = 3;
+static constexpr int a= 1;
+static constexpr int b = 3;
 
-       constexpr int d = 4;
-       constexpr int e = 4;
-       constexpr int f = 4;
+static constexpr int d = 4;
+static constexpr int e = 4;
+static constexpr int f = 4;
 int func() { return 4; })";
     auto [output, _, error] = process_test_string(input, Language::BSL);
     EXPECT_EQ(output, expect);

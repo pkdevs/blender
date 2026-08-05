@@ -694,7 +694,7 @@ enum class enum_class : int {
 )";
     string expect = R"(
 
-constant static constexpr int enum_class_VALUE = 0;
+static constexpr int enum_class_VALUE = 0;
 
 #define enum_class int
 #line 2
@@ -715,15 +715,15 @@ enum_class enum_class_ctor_() { return enum_class(0); }
 enum E : int { A, B = 2, C, D = 1, E };
 )";
     string expect = R"(
-constant static constexpr int A = 0;
+static constexpr int A = 0;
 #line 2
-constant static constexpr int B = 2;
+static constexpr int B = 2;
 #line 2
-constant static constexpr int C = B + 1;
+static constexpr int C = B + 1;
 #line 2
-constant static constexpr int D = 1;
+static constexpr int D = 1;
 #line 2
-constant static constexpr int E = D + 1;
+static constexpr int E = D + 1;
 
 #define E int
 #line 2
@@ -744,7 +744,7 @@ enum class enum_class : int {
 )";
     string expect = R"(
 
-constant static constexpr int enum_class_VALUE = 0;
+static constexpr int enum_class_VALUE = 0;
 
 #define enum_class int
 #line 2

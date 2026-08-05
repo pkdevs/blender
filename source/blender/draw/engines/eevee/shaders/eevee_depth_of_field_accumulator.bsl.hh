@@ -644,7 +644,7 @@ struct Accumulator {
         pair_data[i].dist = ring_dist;
         if (use_lut) {
           /* Contains sub-pixel distance to bokeh shape. */
-          int2 lut_texel = int2(round(sample_offset)) + dof_max_slight_focus_radius;
+          int2 lut_texel = int2(round(sample_offset)) + int(dof_max_slight_focus_radius);
           pair_data[i].dist = texelFetch(bkh_lut_tx, lut_texel, 0).r;
         }
         pair_data[i].coc = clamp(pair_data[i].coc, -dof_buf.coc_abs_max, dof_buf.coc_abs_max);

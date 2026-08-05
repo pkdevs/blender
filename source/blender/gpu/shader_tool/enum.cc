@@ -95,7 +95,7 @@ void SourceProcessor::lower_enums(Parser &parser)
       if (class_tok.is_valid()) {
         name = enum_name_str + "::" + name;
       }
-      string decl = "constant static constexpr " + type_str + " " + name + " " + value + ";\n";
+      string decl = "static constexpr " + type_str + " " + name + " " + value + ";\n";
       parser.insert_line_number(enum_tok.prev(), name_tok.line_number());
       parser.insert_after(enum_tok.prev(), decl);
 
@@ -188,8 +188,7 @@ void SourceProcessor::lower_enums_ast(Parser &parser)
       Id id = val.identifier();
 
       /* Convert to static constant. */
-      parser.insert_before(id.front(),
-                           "constant static constexpr " + underlying_type + " " + class_prefix);
+      parser.insert_before(id.front(), "static constexpr " + underlying_type + " " + class_prefix);
 
       /* Insert value if it doesn't exists. */
       AssignStmt assign = val.value();

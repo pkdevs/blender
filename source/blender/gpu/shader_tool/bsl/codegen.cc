@@ -1453,6 +1453,7 @@ struct CodegenContext : NodeErrorHandler {
       // jump_to(decl.front()); /* Adds too many directives. */
       builder.curr = decl.front();
       skip_node(decl.attributes());
+      skip_if(Static);
       id_type(decl.return_type(), scope);
       id_func_resolved(decl.identifier(), decl.arguments(), scope, scope);
       func_arg_list(decl.arguments(), body_scope, false);
@@ -1523,6 +1524,7 @@ struct CodegenContext : NodeErrorHandler {
 
     jump_to(decl.front());
     skip_node(decl.attributes());
+    skip_if(Static);
     /* Note that we match the id type from inside the function scope in order to match template
      * argument aliases.  */
     id_type(decl.return_type(), *inst_fn);
@@ -2007,7 +2009,7 @@ struct CodegenContext : NodeErrorHandler {
 
   void id_type(IdType type, SymbolScope &scope)
   {
-    skip_if(Static);
+    match_if(Static);
     match_if(TokenType::Const, Constexpr);
     skip_if(Struct, Class, Enum);
     id_type_resolved(type.identifier(), scope);

@@ -127,3 +127,5 @@ float4 texelFetchExtend(sampler2DDepth samp, int2 texel, int lvl)
 #define gpu_dfdx(x) dFdx(x)
 #define gpu_dfdy(x) dFdy(x)
 #define gpu_fwidth(x) fwidth(x)
+
+#define static constant static
