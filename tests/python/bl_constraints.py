@@ -541,38 +541,58 @@ class GeometryAttributeConstraintTest(AbstractConstraintTests):
         )
 
 
-class PoseBonesConstratintTest(AbstractConstraintTests):
+class AbstractConstraintRemovalTests:
+    """This abstracts away tests for constraint mass removal called on either
+    ObjectConstraints or PoseBoneConstraints structs.
+
+    Should be inherited from alongside AbstractConstraintTests.
+    """
+    constraints = None
+
+    def test_remove_constraints(self):
+        """Remove Constraints: simple remove."""
+        # Non-sorted indices and duplicates, both should be handled properly
+        # by the function.
+        self.constraints.remove_constraints(indices=(2, 0, 2))
+        self.assertEqual(len(self.constraints), 1)
+        self.assertEqual(self.constraints.keys(), ['Copy Location.001'])
+
+    def test_remove_all_constraints(self):
+        """Remove Constraints: remove all constraints with explicit empty tuple."""
+        self.constraints.remove_constraints(indices=())
+        self.assertEqual(len(self.constraints), 0)
+
+    def test_remove_all_constraints_no_args(self):
+        """Remove Constraints: remove all constraints with no args."""
+        self.constraints.remove_constraints()
+        self.assertEqual(len(self.constraints), 0)
+
+    def test_exceptions(self):
+        """Remove Constraints: throw exceptions for out-of-range indices."""
+        self.assertRaises(RuntimeError, self.constraints.remove_constraints, indices=(-1,))
+        self.assertRaises(RuntimeError, self.constraints.remove_constraints, indices=(3,))
+
+
+class PoseBonesConstratintTest(AbstractConstraintRemovalTests, AbstractConstraintTests):
+    """Test constraint mass removal on PoseBoneConstraints."""
     layer_collection = 'Pose Bones'
 
-    def test_remove_constraints(self):
+    def setUp(self):
+        super().setUp()
         context_override = self.bone_constraint_context('Pose Bones')
         with bpy.context.temp_override(**context_override):
-            bpy.context.active_pose_bone.constraints.remove_constraints(indices=(2, 0))
-            self.assertEqual(len(bpy.context.active_pose_bone.constraints), 1)
-            self.assertEqual(bpy.context.active_pose_bone.constraints.keys(), ['Copy Location.001'])
-
-    def test_remove_all_constraints(self):
-        context_override = self.bone_constraint_context('Pose Bones')
-        with bpy.context.temp_override(**context_override):
-            bpy.context.active_pose_bone.constraints.remove_constraints(indices=())
-            self.assertEqual(len(bpy.context.active_pose_bone.constraints), 0)
+            self.constraints = bpy.context.active_pose_bone.constraints
 
 
-class ObjectConstratintTest(AbstractConstraintTests):
+class ObjectConstratintTest(AbstractConstraintRemovalTests, AbstractConstraintTests):
+    """Test constraint mass removal on ObjectConstraints."""
     layer_collection = 'Object'
 
-    def test_remove_constraints(self):
+    def setUp(self):
+        super().setUp()
         context_override = self.constraint_context('Object')
         with bpy.context.temp_override(**context_override):
-            bpy.context.object.constraints.remove_constraints(indices=(2, 0))
-            self.assertEqual(len(bpy.context.object.constraints), 1)
-            self.assertEqual(bpy.context.object.constraints.keys(), ['Copy Location.001'])
-
-    def test_remove_all_constraints(self):
-        context_override = self.constraint_context('Object')
-        with bpy.context.temp_override(**context_override):
-            bpy.context.object.constraints.remove_constraints(indices=())
-            self.assertEqual(len(bpy.context.object.constraints), 0)
+            self.constraints = bpy.context.object.constraints
 
 
 def main():
