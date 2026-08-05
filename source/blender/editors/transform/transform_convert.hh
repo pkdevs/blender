@@ -424,10 +424,10 @@ struct TransSeq {
   /* An array of TransDataSeq for either retiming or normal transform. */
   void *tdseq;
   /* Maximum delta allowed along x and y before clamping selected strips/handles. Always active. */
-  rcti offset_clamp;
+  rcti hard_clamp;
   /* Maximum delta before clamping handles to the bounds of underlying content. May be disabled. */
-  int hold_clamp_min = INT_MIN;
-  int hold_clamp_max = INT_MAX;
+  int soft_clamp_min = INT_MIN;
+  int soft_clamp_max = INT_MAX;
 
   /* Initial rect of the view2d, used for computing offset during edge panning. */
   rctf initial_v2d_cur;

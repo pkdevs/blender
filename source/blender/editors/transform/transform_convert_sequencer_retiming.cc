@@ -112,7 +112,7 @@ static void create_trans_seq_clamp_data(TransInfo *t, const Scene *scene)
   const Editing *ed = seq::editing_get(scene);
 
   /* Prevent snaps and change in `values` past `offset_clamp` for all selected retiming keys. */
-  BLI_rcti_init(&ts->offset_clamp, INT_MIN, INT_MAX, 0, 0);
+  BLI_rcti_init(&ts->hard_clamp, INT_MIN, INT_MAX, 0, 0);
 
   Map selection = seq::retiming_selection_get(ed);
   for (auto item : selection.items()) {
@@ -137,15 +137,14 @@ static void create_trans_seq_clamp_data(TransInfo *t, const Scene *scene)
 
       if (key_start->flag & SEQ_KEY_SELECTED) {
         /* Ensure start transition key cannot pass the midpoint. */
-        ts->offset_clamp.xmax = min_ii(midpoint - key_start->strip_frame_index,
-                                       ts->offset_clamp.xmax);
-        ts->offset_clamp.xmin = max_ii(-max_offset, ts->offset_clamp.xmin);
+        ts->hard_clamp.xmax = min_ii(midpoint - key_start->strip_frame_index, ts->hard_clamp.xmax);
+        ts->hard_clamp.xmin = max_ii(-max_offset, ts->hard_clamp.xmin);
       }
       else {
         /* Ensure end transition key cannot pass the midpoint. */
-        ts->offset_clamp.xmin = max_ii(-(key_end->strip_frame_index - midpoint - 1),
-                                       ts->offset_clamp.xmin);
-        ts->offset_clamp.xmax = min_ii(max_offset, ts->offset_clamp.xmax);
+        ts->hard_clamp.xmin = max_ii(-(key_end->strip_frame_index - midpoint - 1),
+                                     ts->hard_clamp.xmin);
+        ts->hard_clamp.xmax = min_ii(max_offset, ts->hard_clamp.xmax);
       }
     }
     /* Non-transition retiming key. */
@@ -154,16 +153,16 @@ static void create_trans_seq_clamp_data(TransInfo *t, const Scene *scene)
       SeqRetimingKey *key_prev = key - 1, *key_next = key + 1;
       if (!seq::retiming_is_last_key(strip, key)) {
         /* Ensure that this key cannot pass the next key. */
-        ts->offset_clamp.xmax = min_ii(key_next->strip_frame_index - key->strip_frame_index - 1,
-                                       ts->offset_clamp.xmax);
+        ts->hard_clamp.xmax = min_ii(key_next->strip_frame_index - key->strip_frame_index - 1,
+                                     ts->hard_clamp.xmax);
         /* TODO(john): There is an off-by-one error for the last "fake" key's `strip_frame_index`,
          * which is 1 less than it should be. This is not an immediate issue but should be fixed.
          */
       }
       if (key->strip_frame_index != 0) {
         /* Ensure that this key cannot pass the previous key. */
-        ts->offset_clamp.xmin = max_ii(-(key->strip_frame_index - key_prev->strip_frame_index - 1),
-                                       ts->offset_clamp.xmin);
+        ts->hard_clamp.xmin = max_ii(-(key->strip_frame_index - key_prev->strip_frame_index - 1),
+                                     ts->hard_clamp.xmin);
       }
     }
   }
