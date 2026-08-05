@@ -213,14 +213,19 @@ class BoundBox2D {
             top == other.top);
   }
 
-  float width()
+  float width() const
   {
     return right - left;
   }
 
-  float height()
+  float height() const
   {
     return top - bottom;
+  }
+
+  bool is_empty() const
+  {
+    return width() == 0.0f && height() == 0.0f;
   }
 
   BoundBox2D operator*(float f) const

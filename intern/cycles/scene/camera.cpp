@@ -141,6 +141,16 @@ NODE_DEFINE(Camera)
   SOCKET_FLOAT(viewplane.bottom, "Viewplane Bottom", 0);
   SOCKET_FLOAT(viewplane.top, "Viewplane Top", 0);
 
+  SOCKET_FLOAT(viewplane_pre.left, "Viewplane Pre Left", 0);
+  SOCKET_FLOAT(viewplane_pre.right, "Viewplane Pre Right", 0);
+  SOCKET_FLOAT(viewplane_pre.bottom, "Viewplane Pre Bottom", 0);
+  SOCKET_FLOAT(viewplane_pre.top, "Viewplane Pre Top", 0);
+
+  SOCKET_FLOAT(viewplane_post.left, "Viewplane Post Left", 0);
+  SOCKET_FLOAT(viewplane_post.right, "Viewplane Post Right", 0);
+  SOCKET_FLOAT(viewplane_post.bottom, "Viewplane Post Bottom", 0);
+  SOCKET_FLOAT(viewplane_post.top, "Viewplane Post Top", 0);
+
   SOCKET_FLOAT(border.left, "Border Left", 0);
   SOCKET_FLOAT(border.right, "Border Right", 0);
   SOCKET_FLOAT(border.bottom, "Border Bottom", 0);
@@ -182,10 +192,6 @@ Camera::Camera() : Node(get_node_type())
   worldtoraster = projection_identity();
 
   full_rastertocamera = projection_identity();
-
-  previous_worldtoraster = projection_identity();
-  previous_worldtocamera = transform_identity();
-  has_previous_transforms = false;
 
   dx = zero_float3();
   dy = zero_float3();
@@ -365,21 +371,7 @@ void Camera::update(Scene *scene)
     have_motion = have_motion || motion[i] != matrix;
   }
 
-  if (need_motion == Scene::MOTION_PASS_INTERACTIVE) {
-    /* Use the fully-resolved transforms of the previous frame for viewport motion. Unlike the
-     * camera matrix these also capture viewplane changes (orthographic pan/zoom, camera zoom, lens
-     * shift) that do not modify the camera matrix and would otherwise produce zero motion vectors.
-     * There is only a previous and a current frame in the viewport (i.e., no forward motion), so
-     * "post" is set to the current frame. */
-    kcam->motion_pass_pre = has_previous_transforms ? previous_worldtocamera : kcam->worldtocamera;
-    kcam->motion_pass_post = kcam->worldtocamera;
-    if (camera_type != CAMERA_PANORAMA && camera_type != CAMERA_CUSTOM) {
-      kcam->perspective_pre = has_previous_transforms ? previous_worldtoraster :
-                                                        kcam->worldtoraster;
-      kcam->perspective_post = kcam->worldtoraster;
-    }
-  }
-  else if (need_motion == Scene::MOTION_PASS) {
+  if (need_motion == Scene::MOTION_PASS || need_motion == Scene::MOTION_PASS_INTERACTIVE) {
     if (have_motion) {
       kcam->motion_pass_pre = transform_inverse(motion[0]);
       kcam->motion_pass_post = transform_inverse(motion[motion.size() - 1]);
@@ -389,7 +381,13 @@ void Camera::update(Scene *scene)
       kcam->motion_pass_post = kcam->worldtocamera;
     }
     if (camera_type != CAMERA_PANORAMA && camera_type != CAMERA_CUSTOM) {
-      if (have_motion || fov != fov_pre || fov != fov_post) {
+      const BoundBox2D motion_viewplane_pre = viewplane_pre.is_empty() ? viewplane : viewplane_pre;
+      const BoundBox2D motion_viewplane_post = viewplane_post.is_empty() ? viewplane :
+                                                                           viewplane_post;
+
+      if (have_motion || fov != fov_pre || fov != fov_post || viewplane != motion_viewplane_pre ||
+          viewplane != motion_viewplane_post)
+      {
         /* Note the values for perspective_pre/perspective_post calculated for MOTION_PASS are
          * different to those calculated for MOTION_BLUR below, so the code has not been combined.
          */
@@ -400,8 +398,13 @@ void Camera::update(Scene *scene)
           cameratoscreen_post = projection_perspective(fov_post, nearclip, farclip);
         }
 
-        const ProjectionTransform cameratoraster_pre = screentoraster * cameratoscreen_pre;
-        const ProjectionTransform cameratoraster_post = screentoraster * cameratoscreen_post;
+        const Transform screentoraster_pre = ndctoraster * fulltoborder *
+                                             transform_from_viewplane(motion_viewplane_pre);
+        const Transform screentoraster_post = ndctoraster * fulltoborder *
+                                              transform_from_viewplane(motion_viewplane_post);
+
+        const ProjectionTransform cameratoraster_pre = screentoraster_pre * cameratoscreen_pre;
+        const ProjectionTransform cameratoraster_post = screentoraster_post * cameratoscreen_post;
         if (have_motion) {
           kcam->perspective_pre = cameratoraster_pre * transform_inverse(motion[0]);
           kcam->perspective_post = cameratoraster_post *
@@ -536,20 +539,10 @@ void Camera::update_interactive_motion()
   }
 
   set_fov_pre(fov);
-
-  /* If the fully-resolved projection changed this frame, request one more update so the motion
-   * vectors are cleared once viewport navigation stops. The camera-matrix change above already
-   * triggers this via set_motion(), but viewplane-only changes (orthographic pan/zoom, camera
-   * zoom, lens shift) do not, so detect them here explicitly. */
-  if (has_previous_transforms &&
-      memcmp(&previous_worldtoraster, &worldtoraster, sizeof(ProjectionTransform)) != 0)
-  {
-    tag_modified();
-  }
-
-  previous_worldtoraster = worldtoraster;
-  previous_worldtocamera = worldtocamera;
-  has_previous_transforms = true;
+  set_viewplane_pre_left(viewplane.left);
+  set_viewplane_pre_right(viewplane.right);
+  set_viewplane_pre_bottom(viewplane.bottom);
+  set_viewplane_pre_top(viewplane.top);
 }
 
 void Camera::device_update(Device * /*device*/, DeviceScene *dscene, Scene *scene)

@@ -156,6 +156,17 @@ class Camera : public Node {
   NODE_SOCKET_API(float, fov_pre)
   NODE_SOCKET_API(float, fov_post)
 
+  BoundBox2D viewplane_pre;
+  BoundBox2D viewplane_post;
+  NODE_SOCKET_API_STRUCT_MEMBER(float, viewplane_pre, left)
+  NODE_SOCKET_API_STRUCT_MEMBER(float, viewplane_pre, right)
+  NODE_SOCKET_API_STRUCT_MEMBER(float, viewplane_pre, bottom)
+  NODE_SOCKET_API_STRUCT_MEMBER(float, viewplane_pre, top)
+  NODE_SOCKET_API_STRUCT_MEMBER(float, viewplane_post, left)
+  NODE_SOCKET_API_STRUCT_MEMBER(float, viewplane_post, right)
+  NODE_SOCKET_API_STRUCT_MEMBER(float, viewplane_post, bottom)
+  NODE_SOCKET_API_STRUCT_MEMBER(float, viewplane_post, top)
+
   /* computed camera parameters */
   ProjectionTransform screentoworld;
   ProjectionTransform rastertoworld;
@@ -170,13 +181,6 @@ class Camera : public Node {
   ProjectionTransform rastertocamera;
 
   ProjectionTransform full_rastertocamera;
-
-  /* Fully-resolved transforms of the previous frame, used to compute interactive viewport motion
-   * vectors. Unlike the camera matrix these also capture viewplane changes (orthographic pan/zoom,
-   * camera zoom, lens shift), which would otherwise produce no motion. */
-  ProjectionTransform previous_worldtoraster;
-  Transform previous_worldtocamera;
-  bool has_previous_transforms;
 
   float3 dx;
   float3 dy;
