@@ -5847,10 +5847,8 @@ static int item_estimate_fit_text_extra_width(Item &item)
     }
     return max_extra_width;
   }
-  /* For fixed or auto fixed sub items adds it extra fit width. */
-  int add_extra_width = 0;
-  /* For non fixed or non auto fixed sub items add the max fit width per item. */
-  int max_extra_width = 0;
+  /* How much the layout should expand to fit text. */
+  int extra_width = 0;
   const LayoutItemFlow *col_flow = layout.type() == ItemType::LayoutColumnFlow ?
                                        static_cast<const LayoutItemFlow *>(&item) :
                                        nullptr;
@@ -5860,14 +5858,14 @@ static int item_estimate_fit_text_extra_width(Item &item)
   for (Item *sub : layout.items()) {
     const int subitem_fit_width = item_estimate_fit_text_extra_width(*sub);
     if (even_colums) {
-      max_extra_width = std::max(max_extra_width, subitem_fit_width);
+      extra_width = std::max(extra_width, subitem_fit_width);
     }
     else {
-      add_extra_width += subitem_fit_width;
+      extra_width += subitem_fit_width;
     }
   }
   int columms = grid_flow ? grid_flow->tot_columns : col_flow ? col_flow->totcol : 0;
-  return add_extra_width + (max_extra_width * columms);
+  return even_colums ? (extra_width * columms) : extra_width;
 }
 
 /**
