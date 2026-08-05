@@ -2172,7 +2172,7 @@ static bool but_drag_init(bContext *C, Button *but, HandleButtonData *data, cons
 {
   /* Prevent #TIMER events to initilize drag events wich can overlap with #KM_PRESS_DRAG events,
    * see #161044.  */
-  if (wm_event_always_pass(event)) {
+  if (ISTIMER(event->type)) {
     return false;
   }
 

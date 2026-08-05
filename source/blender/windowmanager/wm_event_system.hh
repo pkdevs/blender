@@ -143,10 +143,6 @@ struct wmEventHandler_Dropbox {
 
 /* `wm_event_system.cc` */
 
-/** Return `true` with events that are always passed on to every event handler, like #TIMER events.
- */
-bool wm_event_always_pass(const wmEvent *event);
-
 void wm_event_free_all(wmWindow *win);
 void wm_event_free(wmEvent *event);
 void wm_event_free_handler(wmEventHandler *handler);
