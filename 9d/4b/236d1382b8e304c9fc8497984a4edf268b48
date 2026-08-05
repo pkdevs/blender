@@ -1,1 +1,2 @@
 Referenced by pull request #162140, Fix #161898: Color management memory leak with curves enabled
+Referenced by commit f207c2ddf3bc64c37f045240b7fefd26c820dfd2, Fix #161898: Color management memory leak with curves enabled
