@@ -1354,7 +1354,7 @@ void EDBM_verts_mirror_cache_begin_ex(BMEditMesh *em,
   /* one or the other is used depending if topo is enabled */
   KDTree<float3> *tree = nullptr;
   MirrTopoStore_t mesh_topo_store = {nullptr, -1, -1, false};
-  uint *coincident_vert_hash = nullptr;
+  uint *vert_topo_hashes = nullptr;
 
   BM_mesh_elem_table_ensure(bm, BM_VERT);
 
@@ -1427,12 +1427,12 @@ void EDBM_verts_mirror_cache_begin_ex(BMEditMesh *em,
         v_mirr = BM_vert_at_index(bm, nearest[0].index);
       }
       else if (nearest_len > 1) {
-        if (coincident_vert_hash == nullptr) {
-          coincident_vert_hash = ED_mesh_mirrtopo_hash_calc(em, nullptr);
+        if (vert_topo_hashes == nullptr) {
+          vert_topo_hashes = ED_mesh_mirrtopo_hash_calc(em, nullptr);
         }
-        const uint v_hash = coincident_vert_hash[i];
+        const uint v_hash = vert_topo_hashes[i];
         for (int n = 0; n < nearest_len; n++) {
-          if (coincident_vert_hash[nearest[n].index] == v_hash) {
+          if (vert_topo_hashes[nearest[n].index] == v_hash) {
             v_mirr = BM_vert_at_index(bm, nearest[n].index);
             break;
           }
@@ -1462,8 +1462,8 @@ void EDBM_verts_mirror_cache_begin_ex(BMEditMesh *em,
   }
   else {
     kdtree_free<float3>(tree);
-    if (coincident_vert_hash) {
-      MEM_delete(coincident_vert_hash);
+    if (vert_topo_hashes) {
+      MEM_delete(vert_topo_hashes);
     }
   }
 }
