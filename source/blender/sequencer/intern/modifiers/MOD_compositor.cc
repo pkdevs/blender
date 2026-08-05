@@ -6,8 +6,6 @@
  * \ingroup sequencer
  */
 
-#include "BLI_math_rotation.hh"
-
 #include "BLT_translation.hh"
 
 #include "COM_domain.hh"

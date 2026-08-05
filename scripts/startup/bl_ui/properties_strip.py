@@ -226,7 +226,6 @@ class STRIP_PT_effect(StripButtonsPanel, Panel):
         if strip_type == 'COMPOSITOR':
             layout.template_ID(strip, "node_group", new="node.new_compositor_sequencer_node_group")
             draw_compositor_effect_node_group_errors(layout, strip.node_group, strip.input_count)
-            layout.template_compositor_strip_inputs(strip)
 
         if strip.input_count > 0:
             col = layout.column()
@@ -330,6 +329,9 @@ class STRIP_PT_effect(StripButtonsPanel, Panel):
             layout.prop(strip, "blend_effect", text="Blend Mode")
             row = layout.row(align=True)
             row.prop(strip, "factor", slider=True)
+
+        if strip_type == 'COMPOSITOR':
+            layout.template_compositor_strip_inputs(strip)
 
 
 class STRIP_PT_effect_text_layout(StripButtonsPanel, Panel):
