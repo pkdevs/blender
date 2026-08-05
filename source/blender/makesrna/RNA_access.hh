@@ -39,7 +39,7 @@ enum eID_OverrideLib_Op : short;
 
 /**
  * \note Some functions perform multiple checks whose results are more
- *       accurately and informatively represented using an enum status.
+ * accurately and informatively represented using an enum status.
  */
 enum class eRNAStatus {
   /** The operation completed successfully. */

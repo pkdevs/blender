@@ -226,28 +226,28 @@ static void pyrna_prop_warn_deprecated(const PointerRNA *ptr,
                    deprecated->note);
 }
 
-static bool pyrna_status_as_exception(eRNAStatus status, const char *error_prefix)
+static bool pyrna_status_ok_or_error(eRNAStatus status, const char *error_prefix)
 {
   switch (status) {
     case eRNAStatus::Success: {
-      return false;
+      return true;
     }
     case eRNAStatus::IndexOutOfRange: {
       PyErr_Format(PyExc_IndexError, "%.200s: index out of range", error_prefix);
-      return true;
+      return false;
     }
     case eRNAStatus::Immutable: {
       PyErr_Format(PyExc_TypeError, "%.200s: is not editable", error_prefix);
-      return true;
+      return false;
     }
     case eRNAStatus::Unsupported: {
       PyErr_Format(PyExc_TypeError, "%.200s: not supported for this collection", error_prefix);
-      return true;
+      return false;
     }
   }
 
   BLI_assert_unreachable();
-  return false;
+  return true;
 }
 
 #ifdef USE_PYRNA_INVALIDATE_GC
@@ -5481,7 +5481,7 @@ static PyObject *pyrna_prop_collection_idprop_move(BPy_PropertyRNA *self, PyObje
 
   eRNAStatus status = RNA_property_collection_move(
       &self->ptr.value(), self->prop, src_index, dst_index);
-  if (pyrna_status_as_exception(status, "bpy_prop_collection.move")) {
+  if (!pyrna_status_ok_or_error(status, "bpy_prop_collection.move")) {
     return nullptr;
   }
 
