@@ -983,7 +983,8 @@ static void datastack_drop_link(bContext *C, StackDropData *drop_data)
 
       ListBaseT<bConstraint> *dst;
       if (tselem->type == TSE_POSE_CHANNEL) {
-        bPoseChannel *pchan = static_cast<bPoseChannel *>(drop_data->drop_te->abstract_element->data());
+        bPoseChannel *pchan = static_cast<bPoseChannel *>(
+            drop_data->drop_te->abstract_element->data());
         dst = &pchan->constraints;
       }
       else {

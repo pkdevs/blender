@@ -228,7 +228,7 @@ std::optional<BIFIconID> AbstractTreeElement::get_icon() const
   return {};
 }
 
-void* AbstractTreeElement::data() const
+void *AbstractTreeElement::data() const
 {
   return data_;
 }

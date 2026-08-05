@@ -120,8 +120,9 @@ class AbstractTreeElement {
                            short index,
                            const bool expand = true) const;
 
-private:
-  /* This is required for TSE_ID_BASE, it can be removed once it's ported to AbstractTreeElement. */
+ private:
+  /* This is required for TSE_ID_BASE, it can be removed once it's ported to AbstractTreeElement.
+   */
   void *data_;
 };
 

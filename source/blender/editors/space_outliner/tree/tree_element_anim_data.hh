@@ -37,6 +37,7 @@ class TreeElementAnimData final : public AbstractTreeElement {
   {
     return &anim_data_;
   }
+
  private:
   void expand_drivers() const;
   void expand_NLA_tracks() const;

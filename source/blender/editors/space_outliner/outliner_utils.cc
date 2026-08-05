@@ -500,7 +500,7 @@ Base *ED_outliner_give_base_under_cursor(bContext *C, const int mval[2])
       Object *ob = id_cast<Object *>(tselem->id);
       BKE_view_layer_synced_ensure(*bmain, scene, view_layer);
       base = (te->abstract_element->data()) ? static_cast<Base *>(te->abstract_element->data()) :
-                                BKE_view_layer_base_find(view_layer, ob);
+                                              BKE_view_layer_base_find(view_layer, ob);
     }
   }
 

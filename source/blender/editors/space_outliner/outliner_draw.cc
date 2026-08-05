@@ -1145,7 +1145,8 @@ static bool outliner_restrict_properties_collection_set(Scene *scene,
 {
   TreeStoreElem *tselem = TREESTORE(te);
   LayerCollection *layer_collection = (tselem->type == TSE_LAYER_COLLECTION) ?
-                                          static_cast<LayerCollection *>(te->abstract_element->data()) :
+                                          static_cast<LayerCollection *>(
+                                              te->abstract_element->data()) :
                                           nullptr;
   Collection *collection = outliner_collection_from_tree_element(te);
 
@@ -1291,8 +1292,9 @@ static void outliner_draw_restrictbuts(ui::Block *block,
 
         if (space_outliner->show_restrict_flags & SO_RESTRICT_HIDE) {
           BKE_view_layer_synced_ensure(bmain, scene, view_layer);
-          Base *base = (te.abstract_element->data()) ? static_cast<Base *>(te.abstract_element->data()) :
-                                         BKE_view_layer_base_find(view_layer, ob);
+          Base *base = (te.abstract_element->data()) ?
+                           static_cast<Base *>(te.abstract_element->data()) :
+                           BKE_view_layer_base_find(view_layer, ob);
           if (base) {
             PointerRNA base_ptr = RNA_pointer_create_discrete(&scene->id, RNA_ObjectBase, base);
             bt = uiDefIconButR_prop(block,
@@ -1627,7 +1629,8 @@ static void outliner_draw_restrictbuts(ui::Block *block,
         {
 
           LayerCollection *layer_collection = (tselem->type == TSE_LAYER_COLLECTION) ?
-                                                  static_cast<LayerCollection *>(te.abstract_element->data()) :
+                                                  static_cast<LayerCollection *>(
+                                                      te.abstract_element->data()) :
                                                   nullptr;
           Collection *collection = outliner_collection_from_tree_element(&te);
 
@@ -3110,8 +3113,9 @@ static void outliner_draw_tree_element(ui::Block *block,
       if (te->idcode == ID_OB) {
         Object *ob = id_cast<Object *>(tselem->id);
         BKE_view_layer_synced_ensure(*tvc.bmain, tvc.scene, tvc.view_layer);
-        Base *base = (te->abstract_element->data()) ? static_cast<Base *>(te->abstract_element->data()) :
-                                        BKE_view_layer_base_find(tvc.view_layer, ob);
+        Base *base = (te->abstract_element->data()) ?
+                         static_cast<Base *>(te->abstract_element->data()) :
+                         BKE_view_layer_base_find(tvc.view_layer, ob);
         const bool is_selected = (base != nullptr) && ((base->flag & BASE_SELECTED) != 0);
 
         if (ob == tvc.obact) {

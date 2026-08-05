@@ -33,8 +33,8 @@ class TreeElementActionSlot final : public AbstractTreeElement {
     return slot_;
   }
 
-  private:
-    animrig::Slot *slot_;
+ private:
+  animrig::Slot *slot_;
 };
 
 }  // namespace ed::outliner

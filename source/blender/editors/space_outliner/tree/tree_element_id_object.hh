@@ -25,7 +25,7 @@ class TreeElementIDObject final : public TreeElementID {
 
   void expand(SpaceOutliner & /*soops*/) const override;
 
-  void *data() const override 
+  void *data() const override
   {
     return base_;
   }

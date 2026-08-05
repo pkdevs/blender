@@ -541,7 +541,8 @@ static wmOperatorStatus collection_objects_select_exec(bContext *C, wmOperator *
   for (LinkData &link : selected_collections.selected_array) {
     TreeElement *te = static_cast<TreeElement *>(link.data);
     if (te->store_elem->type == TSE_LAYER_COLLECTION) {
-      LayerCollection *layer_collection = static_cast<LayerCollection *>(te->abstract_element->data());
+      LayerCollection *layer_collection = static_cast<LayerCollection *>(
+          te->abstract_element->data());
       BKE_layer_collection_objects_select(*bmain, scene, view_layer, layer_collection, deselect);
     }
   }

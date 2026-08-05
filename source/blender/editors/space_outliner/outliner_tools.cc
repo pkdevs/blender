@@ -2540,7 +2540,8 @@ static void constraint_fn(int event, TreeElement *te, TreeStoreElem * /*tselem*/
     ListBaseT<bConstraint> *lb = nullptr;
 
     if (TREESTORE(te->parent->parent)->type == TSE_POSE_CHANNEL) {
-      lb = &(static_cast<bPoseChannel *>(te->parent->parent->abstract_element->data()))->constraints;
+      lb = &(static_cast<bPoseChannel *>(te->parent->parent->abstract_element->data()))
+                ->constraints;
     }
     else {
       lb = &ob->constraints;

@@ -28,7 +28,8 @@ class TreeElementGPencilLayer final : public AbstractTreeElement {
   {
     return &gplayer_;
   }
-  private:
+
+ private:
   bGPDlayer &gplayer_;
 };
 

@@ -1050,7 +1050,8 @@ static eOLDrawState tree_element_bone_collection_state_get(const TreeElement *te
                                                            const TreeStoreElem *tselem)
 {
   const bArmature *arm = reinterpret_cast<const bArmature *>(tselem->id);
-  const BoneCollection *bcoll = reinterpret_cast<const BoneCollection *>(te->abstract_element->data());
+  const BoneCollection *bcoll = reinterpret_cast<const BoneCollection *>(
+      te->abstract_element->data());
 
   if (arm->runtime->active_collection == bcoll) {
     return OL_DRAWSEL_ACTIVE;
@@ -1483,11 +1484,13 @@ static void outliner_set_properties_tab(bContext *C, TreeElement *te, TreeStoreE
         context = BCONTEXT_DATA;
         break;
       case TSE_BONE_COLLECTION:
-        ptr = RNA_pointer_create_discrete(tselem->id, RNA_BoneCollection, te->abstract_element->data());
+        ptr = RNA_pointer_create_discrete(
+            tselem->id, RNA_BoneCollection, te->abstract_element->data());
         context = BCONTEXT_DATA;
         break;
       case TSE_LAYER_COLLECTION:
-        ptr = RNA_pointer_create_discrete(tselem->id, RNA_Collection, te->abstract_element->data());
+        ptr = RNA_pointer_create_discrete(
+            tselem->id, RNA_Collection, te->abstract_element->data());
         context = BCONTEXT_COLLECTION;
         break;
       default:
@@ -1709,7 +1712,9 @@ static void do_outliner_select_recursive(ListBaseT<TreeElement> *lb,
          * the edge-case where there is an object which is part of this collection, but which has
          * children that are part of another collection. */
         do_outliner_select_recursive(
-            &te.subtree, selecting, static_cast<LayerCollection *>(te.abstract_element->data())->collection);
+            &te.subtree,
+            selecting,
+            static_cast<LayerCollection *>(te.abstract_element->data())->collection);
       }
       else {
         do_outliner_select_recursive(&te.subtree, selecting, in_collection);

@@ -184,7 +184,7 @@ static void outliner_select_sync_to_object(ViewLayer *view_layer,
 {
   Object *ob = id_cast<Object *>(tselem->id);
   Base *base = (te->abstract_element->data()) ? static_cast<Base *>(te->abstract_element->data()) :
-                                  BKE_view_layer_base_find(view_layer, ob);
+                                                BKE_view_layer_base_find(view_layer, ob);
 
   if (base && (base->flag & BASE_SELECTABLE)) {
     if (tselem->flag & TSE_SELECTED) {
@@ -384,7 +384,7 @@ static void outliner_select_sync_from_object(const Main &bmain,
   Object *ob = id_cast<Object *>(tselem->id);
   BKE_view_layer_synced_ensure(bmain, scene, view_layer);
   Base *base = (te->abstract_element->data()) ? static_cast<Base *>(te->abstract_element->data()) :
-                                  BKE_view_layer_base_find(view_layer, ob);
+                                                BKE_view_layer_base_find(view_layer, ob);
   const bool is_selected = (base != nullptr) && ((base->flag & BASE_SELECTED) != 0);
 
   if (base && (ob == obact)) {
