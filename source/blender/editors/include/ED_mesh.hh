@@ -516,6 +516,8 @@ void ED_mesh_mirrtopo_init(BMEditMesh *em,
                            bool skip_em_vert_array_init);
 void ED_mesh_mirrtopo_free(MirrTopoStore_t *mesh_topo_store);
 
+uint *ED_mesh_mirrtopo_hash_calc(BMEditMesh *em, Mesh *mesh);
+
 /* `mesh_data.cc` */
 
 void ED_mesh_verts_add(Mesh *mesh, ReportList *reports, int count);

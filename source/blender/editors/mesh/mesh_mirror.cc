@@ -162,48 +162,22 @@ bool ED_mesh_mirrtopo_recalc_check(BMEditMesh *em, Mesh *mesh, MirrTopoStore_t *
   }
   return false;
 }
-
-void ED_mesh_mirrtopo_init(BMEditMesh *em,
-                           Mesh *mesh,
-                           MirrTopoStore_t *mesh_topo_store,
-                           const bool skip_em_vert_array_init)
+static MirrTopoHash_t *mirrtopo_hash_calc(BMEditMesh *em, Mesh *mesh, int totvert)
 {
-  if (em) {
-    BLI_assert(mesh == nullptr);
-  }
-  const bool is_editmode = (em != nullptr);
-
   /* Edit-mode variables. */
   BMEdge *eed;
   BMIter iter;
 
-  int a, last;
-  int totvert, totedge;
+  int a;
   int tot_unique = -1, tot_unique_prev = -1;
   int tot_unique_edges = 0, tot_unique_edges_prev;
 
   MirrTopoHash_t topo_pass = 1;
 
-  /* reallocate if needed */
-  ED_mesh_mirrtopo_free(mesh_topo_store);
-
-  mesh_topo_store->prev_is_editmode = is_editmode;
-
-  if (em) {
-    BM_mesh_elem_index_ensure(em->bm, BM_VERT);
-
-    totvert = em->bm->totvert;
-  }
-  else {
-    totvert = mesh->verts_num;
-  }
-
   MirrTopoHash_t *topo_hash = MEM_new_array_zeroed<MirrTopoHash_t>(totvert, __func__);
 
   /* Initialize the vert-edge-user counts used to detect unique topology */
   if (em) {
-    totedge = em->bm->totedge;
-
     BM_ITER_MESH (eed, &iter, em->bm, BM_EDGES_OF_MESH) {
       const int i1 = BM_elem_index_get(eed->v1), i2 = BM_elem_index_get(eed->v2);
       topo_hash[i1]++;
@@ -211,7 +185,6 @@ void ED_mesh_mirrtopo_init(BMEditMesh *em,
     }
   }
   else {
-    totedge = mesh->edges_num;
     for (const int2 &edge : mesh->edges()) {
       topo_hash[edge[0]]++;
       topo_hash[edge[1]]++;
@@ -268,6 +241,51 @@ void ED_mesh_mirrtopo_init(BMEditMesh *em,
 
     topo_pass++;
   }
+
+  MEM_delete(topo_hash_prev);
+
+  return topo_hash;
+}
+
+uint *ED_mesh_mirrtopo_hash_calc(BMEditMesh *em, Mesh *mesh)
+{
+  BLI_assert((em == nullptr) != (mesh == nullptr));
+  if (em) {
+    BM_mesh_elem_index_ensure(em->bm, BM_VERT);
+  }
+  const int totvert = em ? em->bm->totvert : mesh->verts_num;
+  return mirrtopo_hash_calc(em, mesh, totvert);
+}
+
+void ED_mesh_mirrtopo_init(BMEditMesh *em,
+                           Mesh *mesh,
+                           MirrTopoStore_t *mesh_topo_store,
+                           const bool skip_em_vert_array_init)
+{
+  if (em) {
+    BLI_assert(mesh == nullptr);
+  }
+  const bool is_editmode = (em != nullptr);
+
+  int a, last;
+  int totvert, totedge;
+
+  ED_mesh_mirrtopo_free(mesh_topo_store);
+
+  mesh_topo_store->prev_is_editmode = is_editmode;
+
+  if (em) {
+    BM_mesh_elem_index_ensure(em->bm, BM_VERT);
+
+    totvert = em->bm->totvert;
+    totedge = em->bm->totedge;
+  }
+  else {
+    totvert = mesh->verts_num;
+    totedge = mesh->edges_num;
+  }
+
+  MirrTopoHash_t *topo_hash = mirrtopo_hash_calc(em, mesh, totvert);
 
   /* Hash/Index pairs are needed for sorting to find index pairs */
   MirrTopoVert_t *topo_pairs = MEM_new_array_zeroed<MirrTopoVert_t>(totvert, "MirrTopoPairs");
@@ -341,7 +359,6 @@ void ED_mesh_mirrtopo_init(BMEditMesh *em,
   topo_pairs = nullptr;
 
   MEM_delete(topo_hash);
-  MEM_delete(topo_hash_prev);
 
   mesh_topo_store->index_lookup = index_lookup;
   mesh_topo_store->prev_vert_tot = totvert;

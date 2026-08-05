@@ -1350,11 +1350,11 @@ void EDBM_verts_mirror_cache_begin_ex(BMEditMesh *em,
   BMVert *v;
   int cd_vmirr_offset = 0;
   int i;
-  const float maxdist_sq = square_f(maxdist);
 
   /* one or the other is used depending if topo is enabled */
   KDTree<float3> *tree = nullptr;
   MirrTopoStore_t mesh_topo_store = {nullptr, -1, -1, false};
+  uint *coincident_vert_hash = nullptr;
 
   BM_mesh_elem_table_ensure(bm, BM_VERT);
 
@@ -1416,19 +1416,32 @@ void EDBM_verts_mirror_cache_begin_ex(BMEditMesh *em,
       }
     }
     else {
-      int i_mirr;
-      float co[3];
-      copy_v3_v3(co, v->co);
+      float3 co = v->co;
       co[axis] *= -1.0f;
 
       v_mirr = nullptr;
-      i_mirr = kdtree_find_nearest<float3>(tree, co, nullptr);
-      if (i_mirr != -1) {
-        BMVert *v_test = BM_vert_at_index(bm, i_mirr);
-        if (len_squared_v3v3(co, v_test->co) < maxdist_sq) {
-          v_mirr = v_test;
+      KDTreeNearest<float3> *nearest = nullptr;
+      const int nearest_len = kdtree_range_search<float3>(tree, co, &nearest, maxdist);
+
+      if (nearest_len == 1) {
+        v_mirr = BM_vert_at_index(bm, nearest[0].index);
+      }
+      else if (nearest_len > 1) {
+        if (coincident_vert_hash == nullptr) {
+          coincident_vert_hash = ED_mesh_mirrtopo_hash_calc(em, nullptr);
+        }
+        const uint v_hash = coincident_vert_hash[i];
+        for (int n = 0; n < nearest_len; n++) {
+          if (coincident_vert_hash[nearest[n].index] == v_hash) {
+            v_mirr = BM_vert_at_index(bm, nearest[n].index);
+            break;
+          }
+        }
+        if (v_mirr == nullptr) {
+          v_mirr = BM_vert_at_index(bm, nearest[0].index);
         }
       }
+      MEM_delete(nearest);
     }
 
     if (v_mirr && (use_self || (v_mirr != v))) {
@@ -1449,6 +1462,9 @@ void EDBM_verts_mirror_cache_begin_ex(BMEditMesh *em,
   }
   else {
     kdtree_free<float3>(tree);
+    if (coincident_vert_hash) {
+      MEM_delete(coincident_vert_hash);
+    }
   }
 }
 
