@@ -126,12 +126,12 @@ class GHOST_Context : public GHOST_IContext {
   /**
    * True when the frame-buffer has an alpha channel the compositor blends against the desktop.
    *
-   * Requested via #GHOST_ContextParams::want_alpha, this reflects what was actually created;
-   * drivers that expose no matching configuration fall back to opaque presentation.
+   * This reflects what was actually created; drivers that expose no matching configuration fall
+   * back to opaque presentation.
    */
   bool hasAlpha() const
   {
-    return context_params_.want_alpha;
+    return context_params_.use_alpha;
   }
 
   /** Get the VSync value. */

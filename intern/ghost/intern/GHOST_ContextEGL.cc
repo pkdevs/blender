@@ -463,7 +463,7 @@ GHOST_TSuccess GHOST_ContextEGL::initializeDrawingContext()
   }
 
   /* Requested last so the attributes can be dropped when no matching config exists, see below. */
-  if (context_params_.want_alpha) {
+  if (context_params_.use_alpha) {
     attrib_list.push_back(EGL_ALPHA_SIZE);
     attrib_list.push_back(8);
   }
@@ -475,13 +475,13 @@ GHOST_TSuccess GHOST_ContextEGL::initializeDrawingContext()
   if (!EGL_CHK(::eglChooseConfig(display_, attrib_list.data(), &config_, 1, &num_config)) ||
       (num_config != 1))
   {
-    if (!context_params_.want_alpha) {
+    if (!context_params_.use_alpha) {
       goto error;
     }
     /* Not all drivers expose a configuration with an alpha channel. Retry without it, the
      * caller is expected to handle the loss of transparency (drawing square window corners
      * instead of rounded), see #GHOST_Context::hasAlpha. */
-    context_params_.want_alpha = false;
+    context_params_.use_alpha = false;
     attrib_list.resize(attrib_list.size() - 3);
     attrib_list.push_back(EGL_NONE);
 
@@ -506,7 +506,7 @@ GHOST_TSuccess GHOST_ContextEGL::initializeDrawingContext()
      * See #102994. */
     /* EGL_EXT_present_opaque isn't added to the latest release of epoxy, but is part of the latest
      * EGL https://github.com/KhronosGroup/EGL-Registry/blob/main/api/egl.xml */
-    if (!context_params_.want_alpha && epoxy_has_egl_extension(display_, "EGL_EXT_present_opaque"))
+    if (!context_params_.use_alpha && epoxy_has_egl_extension(display_, "EGL_EXT_present_opaque"))
     {
 #  ifndef EGL_PRESENT_OPAQUE_EXT
 #    define EGL_PRESENT_OPAQUE_EXT 0x31DF

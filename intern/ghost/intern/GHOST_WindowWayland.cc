@@ -969,9 +969,9 @@ static void gwl_window_csd_margin_update(GWL_Window *win)
 /**
  * Keep the main surface's opaque region in sync with the window's current size & state.
  *
- * CSD windows request an alpha channel so their corners can be rounded (see
- * #GHOST_ContextParams::want_alpha). Without an opaque region the compositor has to blend the
- * whole window, marking everything but the corners opaque can avoid that cost.
+ * CSD windows request an alpha channel so their corners can be rounded. Without an opaque region
+ * the compositor has to blend the whole window, marking everything but the corners opaque can
+ * avoid that cost.
  */
 static void gwl_window_csd_opaque_region_update(GWL_Window *win)
 {
@@ -1896,7 +1896,7 @@ GHOST_WindowWayland::GHOST_WindowWayland(GHOST_SystemWayland *system,
   if (window_->xdg_decor && system_->use_window_frame_csd_get()) {
     window_->xdg_csd = new GWL_WindowCSD;
     /* Rounded corners require the compositor to blend the surface. */
-    want_context_params_.want_alpha = system_->getWindowCSD().corner_radius > 0;
+    want_context_params_.use_alpha = system_->getWindowCSD().corner_radius > 0;
   }
 #endif
 

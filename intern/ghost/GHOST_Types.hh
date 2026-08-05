@@ -850,12 +850,13 @@ struct GHOST_ContextParams {
   bool is_debug;
   /**
    * Request a frame-buffer with an alpha channel that the compositor blends against the
-   * desktop, instead of presenting the surface as opaque.
+   * desktop, instead of presenting the surface as opaque. Only needed for client-side-decorations
+   * (rounded corners), see `WITH_GHOST_CSD`. Opaque presentation is used otherwise.
    *
-   * Only needed for client-side-decorations (rounded corners), see `WITH_GHOST_CSD`.
-   * Opaque presentation is used otherwise.
+   * Used to request the alpha channel, but that request may be rejected in which case this will
+   * become false.
    */
-  bool want_alpha;
+  bool use_alpha;
   GHOST_TVSyncModes vsync;
 };
 
@@ -863,7 +864,7 @@ struct GHOST_ContextParams {
   { \
       /*is_stereo_visual*/ false, \
       /*is_debug*/ false, \
-      /*want_alpha*/ false, \
+      /*use_alpha*/ false, \
       /*vsync*/ GHOST_kVSyncModeUnset, \
   }
 
@@ -871,7 +872,7 @@ struct GHOST_ContextParams {
   { \
       /*is_stereo_visual*/ false, \
       /*is_debug*/ (((gpu_settings).flags & GHOST_gpuDebugContext) != 0), \
-      /*want_alpha*/ false, \
+      /*use_alpha*/ false, \
       /*vsync*/ GHOST_kVSyncModeUnset, \
   }
 
@@ -879,7 +880,7 @@ struct GHOST_ContextParams {
   { \
       /*is_stereo_visual*/ (((gpu_settings).flags & GHOST_gpuStereoVisual) != 0), \
       /*is_debug*/ (((gpu_settings).flags & GHOST_gpuDebugContext) != 0), \
-      /*want_alpha*/ false, /*vsync*/ \
+      /*use_alpha*/ false, /*vsync*/ \
       (((gpu_settings).flags & GHOST_gpuVSyncIsOverridden) ? (gpu_settings).vsync : \
                                                              GHOST_kVSyncModeUnset), \
   }
