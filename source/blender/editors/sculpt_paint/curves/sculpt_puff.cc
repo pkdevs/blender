@@ -293,6 +293,9 @@ struct PuffOperationExecutor {
              * that point. */
             const std::optional<bke::bvh::ClosestPointResult> nearest =
                 surface_bvh_->closest_point(first_pos_su);
+            if (!nearest) {
+              continue;
+            }
 
             const int3 &tri = surface_corner_tris_[nearest->index];
             const float3 closest_pos_su = nearest->position;

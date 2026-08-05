@@ -347,9 +347,11 @@ static void try_convert_single_object(Object &curves_ob,
     const float3 &root_pos_cu = positions_cu[points.first()];
     const float3 root_pos_su = math::transform_point(transforms.curves_to_surface, root_pos_cu);
 
-    const bke::bvh::ClosestPointResult nearest = *surface_bvh.closest_point(root_pos_su);
+    const std::optional<bke::bvh::ClosestPointResult> nearest = surface_bvh.closest_point(
+        root_pos_su);
+    BLI_assert(nearest.has_value());
 
-    const int tri_i = nearest.index;
+    const int tri_i = nearest->index;
     const int face_i = tri_faces[tri_i];
 
     const int mface_i = find_mface_for_root_position(

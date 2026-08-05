@@ -374,6 +374,7 @@ BLI_INLINE uint nearestVert(SDefBindCalcData *const data, const float point_co[3
 
   const std::optional<bke::bvh::ClosestPointResult> nearest = data->treeData->closest_point(
       t_point);
+  BLI_assert(nearest.has_value());
 
   const IndexRange face = data->polys[data->tri_faces[nearest->index]];
 
