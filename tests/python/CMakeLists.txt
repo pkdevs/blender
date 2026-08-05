@@ -1377,6 +1377,14 @@ if(WITH_USD AND TEST_SRC_DIR_EXISTS)
     --testdir "${TEST_SRC_DIR}/usd"
     --outdir "${TEST_OUT_DIR}/io_usd"
   )
+
+  # The collection IO tests need USD
+  add_blender_test(
+    io_collections
+    --python ${CMAKE_CURRENT_LIST_DIR}/io_collections_test.py
+    --
+    --testdir "${TEST_SRC_DIR}/io_tests/io_collections"
+  )
 endif()
 
 if(TEST_SRC_DIR_EXISTS)
@@ -1749,6 +1757,7 @@ if(WITH_UI_TESTS)
     test_render.interactive_rendering_eevee
     test_render.animation_rendering_and_player
     test_bpy_types.unregister_referenced_type
+    test_sequencer.compositor_modifier_mask_with_single_input
     test_menu_search_and_exec.test_view3d_add
     test_menu_search_and_exec.test_modifier_add
     test_menu_search_and_exec.test_sequencer_add
@@ -1785,6 +1794,10 @@ if(WITH_UI_TESTS)
     test_pie_menus.test_anim_keyframe_insert_pie_location
     test_pie_menus.test_weight_paint_vgroup_lock_pie
     test_button_input.test_string_buttons_interactions
+    test_tool_activation.view3d
+    test_tool_activation.image_editor
+    test_tool_activation.node_editor
+    test_tool_activation.sequencer
   )
   foreach(ui_test ${_ui_tests})
     add_blender_test_ui(
