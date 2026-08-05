@@ -132,11 +132,11 @@ bool check_show_strip(const SpaceSeq &sseq)
 
 static bool sequencer_fcurves_targets_color_strip(const FCurve *fcurve)
 {
-  if (!BLI_str_startswith(fcurve->rna_path, "sequence_editor.strips_all[\"")) {
+  if (!fcurve->rna_path().startswith("sequence_editor.strips_all[\"")) {
     return false;
   }
 
-  if (!BLI_str_endswith(fcurve->rna_path, "\"].color")) {
+  if (!fcurve->rna_path().endswith("\"].color")) {
     return false;
   }
 
@@ -954,12 +954,14 @@ static SlipData *slip_data_init(bContext *C, const wmOperator *op, const wmEvent
   data->clamp_warning = false;
   data->can_clamp = false;
 
-  data->clamp = true;
+  const bool clamp_default = (U.sequencer_editor_flag & USER_SEQ_ED_CLAMP_STRIPS_BY_DEFAULT);
+  data->clamp = clamp_default;
+
   for (Strip *strip : strips) {
     strip->runtime->flag |= seq::StripRuntimeFlag::ShowOffsets;
 
     /* If any strips start out with hold offsets visible, disable clamping on initialization. */
-    if (strip->startofs < 0 || strip->end_offset() < 0) {
+    if (clamp_default && (strip->startofs < 0 || strip->end_offset() < 0)) {
       data->clamp = false;
     }
     /* If any strips do not have enough underlying content to
