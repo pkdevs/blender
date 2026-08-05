@@ -88,8 +88,8 @@ struct PlayheadDimensions {
   float outline_width;
 
   float tip_top;
+  float tip_bottom;
   float tip_half_width;
-  float tip_height;
 
   rctf stalk_rect;
   rctf box_rect;
@@ -101,7 +101,6 @@ static PlayheadDimensions get_playhead_dimensions(const Scene *scene,
                                                   const bool display_seconds,
                                                   const float region_x)
 {
-  const int center_pixel = round(region_x);
   PlayheadDimensions dimensions;
   constexpr int max_frame_string_len = 64;
   char frame_str[max_frame_string_len];
@@ -134,9 +133,9 @@ static PlayheadDimensions get_playhead_dimensions(const Scene *scene,
   dimensions.box_rect.ymax = ceil(scrub_region_rect->ymax - box_margin + dimensions.outline_width);
 
   /* Connecting shape between box and stalk. */
-  dimensions.tip_top = ceil(scrub_region_rect->ymin + box_margin);
+  dimensions.tip_top = dimensions.box_rect.ymin + dimensions.outline_width;
+  dimensions.tip_bottom = dimensions.stalk_rect.ymax - dimensions.outline_width;
   dimensions.tip_half_width = 6.0f * UI_SCALE_FAC;
-  dimensions.tip_height = 6.0f * UI_SCALE_FAC;
 
   return dimensions;
 }
@@ -155,17 +154,12 @@ static void draw_playhead_stalk(const float region_x,
   immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
   GPU_polygon_smooth(true);
   immUniformColor4fv(bg_color);
-  immBegin(GPU_PRIM_TRIS, 3);
-  const float diag_offset = 0.4f * UI_SCALE_FAC;
-  immVertex2f(pos,
-              floor(region_x - dimensions.tip_half_width - outline_width - diag_offset),
-              dimensions.outline_width);
-  immVertex2f(pos,
-              floor(region_x + dimensions.tip_half_width + outline_width + 1.0f + diag_offset),
-              dimensions.outline_width);
-  immVertex2f(pos,
-              region_x + 0.5f,
-              dimensions.outline_width - dimensions.tip_height - diag_offset - outline_width);
+  immBegin(GPU_PRIM_TRI_STRIP, 4);
+  immVertex2f(pos, region_x - dimensions.tip_half_width - outline_width, dimensions.tip_top);
+  immVertex2f(pos, region_x + dimensions.tip_half_width + outline_width, dimensions.tip_top);
+  immVertex2f(pos, dimensions.stalk_rect.xmin, dimensions.tip_bottom);
+  immVertex2f(pos, dimensions.stalk_rect.xmax, dimensions.tip_bottom);
+
   immEnd();
   immUnbindProgram();
   GPU_polygon_smooth(false);
@@ -202,7 +196,7 @@ static void draw_playhead_box(const float region_x,
       fstyle, region_x - (dimensions.text_width / 2.0f), y, frame_str, text_color);
 }
 
-/* Draws the little triangle at the bottom of the playhead. */
+/* Draws the little tip at the bottom of the playhead. */
 static void draw_playhead_tip(const float region_x,
                               const PlayheadDimensions &dimensions,
                               const float fg_color[4])
@@ -216,8 +210,9 @@ static void draw_playhead_tip(const float region_x,
   immBegin(GPU_PRIM_TRI_STRIP, 4);
   immUniformColor4fv(fg_color);
   immVertex2f(pos, region_x - dimensions.tip_half_width, dimensions.tip_top);
-  immVertex2f(pos, region_x + dimensions.tip_half_width + 1, dimensions.tip_top);
-  immVertex2f(pos, region_x + 0.5f, dimensions.tip_top - dimensions.tip_height);
+  immVertex2f(pos, region_x + dimensions.tip_half_width, dimensions.tip_top);
+  immVertex2f(pos, dimensions.stalk_rect.xmin + dimensions.outline_width, dimensions.tip_bottom);
+  immVertex2f(pos, dimensions.stalk_rect.xmax - dimensions.outline_width, dimensions.tip_bottom);
   immEnd();
   immUnbindProgram();
   GPU_polygon_smooth(false);
