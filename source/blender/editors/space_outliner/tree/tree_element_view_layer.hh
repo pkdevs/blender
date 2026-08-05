@@ -43,6 +43,16 @@ class TreeElementViewLayer final : public AbstractTreeElement {
   {
     return ICON_RENDER_RESULT;
   }
+
+  void *data() const override
+  {
+    return &view_layer_;
+  }
+
+  void set_data(void *data) override
+  {
+    view_layer_ = *static_cast<ViewLayer *>(data);
+  }
 };
 
 }  // namespace ed::outliner

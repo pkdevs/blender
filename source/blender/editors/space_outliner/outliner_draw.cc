@@ -823,7 +823,7 @@ static void namebutton_fn(bContext *C, TreeStoreElem *tselem, const char *oldnam
       switch (tselem->type) {
         case TSE_DEFGROUP: {
           Object *ob = id_cast<Object *>(tselem->id);
-          bDeformGroup *vg = static_cast<bDeformGroup *>(te->directdata);
+          bDeformGroup *vg = static_cast<bDeformGroup *>(te->abstract_element->data());
           BKE_object_defgroup_unique_name(vg, ob);
           WM_msg_publish_rna_prop(mbus, &ob->id, vg, VertexGroup, name);
           DEG_id_tag_update(tselem->id, ID_RECALC_SYNC_TO_EVAL);
@@ -854,7 +854,7 @@ static void namebutton_fn(bContext *C, TreeStoreElem *tselem, const char *oldnam
         case TSE_EBONE: {
           bArmature *arm = id_cast<bArmature *>(tselem->id);
           if (arm->edbo) {
-            EditBone *ebone = static_cast<EditBone *>(te->directdata);
+            EditBone *ebone = static_cast<EditBone *>(te->abstract_element->data());
             char newname[sizeof(ebone->name)];
 
             /* restore bone name */
@@ -875,7 +875,7 @@ static void namebutton_fn(bContext *C, TreeStoreElem *tselem, const char *oldnam
           outliner_viewcontext_init(C, &tvc);
 
           bArmature *arm = id_cast<bArmature *>(tselem->id);
-          Bone *bone = static_cast<Bone *>(te->directdata);
+          Bone *bone = static_cast<Bone *>(te->abstract_element->data());
           char newname[sizeof(bone->name)];
 
           /* always make current object active */
@@ -898,7 +898,7 @@ static void namebutton_fn(bContext *C, TreeStoreElem *tselem, const char *oldnam
 
           Object *ob = id_cast<Object *>(tselem->id);
           bArmature *arm = id_cast<bArmature *>(ob->data);
-          bPoseChannel *pchan = static_cast<bPoseChannel *>(te->directdata);
+          bPoseChannel *pchan = static_cast<bPoseChannel *>(te->abstract_element->data());
           char newname[sizeof(pchan->name)];
 
           /* always make current pose-bone active */
@@ -920,7 +920,7 @@ static void namebutton_fn(bContext *C, TreeStoreElem *tselem, const char *oldnam
         }
         case TSE_GP_LAYER: {
           bGPdata *gpd = id_cast<bGPdata *>(tselem->id); /* id = GP Datablock */
-          bGPDlayer *gpl = static_cast<bGPDlayer *>(te->directdata);
+          bGPDlayer *gpl = static_cast<bGPDlayer *>(te->abstract_element->data());
 
           /* always make layer active */
           BKE_gpencil_layer_active_set(gpd, gpl);
@@ -954,7 +954,7 @@ static void namebutton_fn(bContext *C, TreeStoreElem *tselem, const char *oldnam
         }
         case TSE_R_LAYER: {
           Scene *scene = id_cast<Scene *>(tselem->id);
-          ViewLayer *view_layer = static_cast<ViewLayer *>(te->directdata);
+          ViewLayer *view_layer = static_cast<ViewLayer *>(te->abstract_element->data());
 
           /* Restore old name. */
           char newname[sizeof(view_layer->name)];
@@ -982,7 +982,7 @@ static void namebutton_fn(bContext *C, TreeStoreElem *tselem, const char *oldnam
 
         case TSE_BONE_COLLECTION: {
           bArmature *arm = id_cast<bArmature *>(tselem->id);
-          BoneCollection *bcoll = static_cast<BoneCollection *>(te->directdata);
+          BoneCollection *bcoll = static_cast<BoneCollection *>(te->abstract_element->data());
 
           ANIM_armature_bonecoll_name_set(*bmain, arm, bcoll, bcoll->name);
           WM_msg_publish_rna_prop(mbus, &arm->id, bcoll, BoneCollection, name);
@@ -999,7 +999,7 @@ static void namebutton_fn(bContext *C, TreeStoreElem *tselem, const char *oldnam
         }
         case TSE_SHAPE_KEY_BLOCK: {
           Key *key = id_cast<Key *>(tselem->id);
-          KeyBlock *keyblock = static_cast<KeyBlock *>(te->directdata);
+          KeyBlock *keyblock = static_cast<KeyBlock *>(te->abstract_element->data());
           /* Outliner renaming already sets the new name to the KeyBlock. Restore the old name
           before calling rename function which will ensure unique name. */
           char newname[sizeof(keyblock->name)];
@@ -1145,7 +1145,7 @@ static bool outliner_restrict_properties_collection_set(Scene *scene,
 {
   TreeStoreElem *tselem = TREESTORE(te);
   LayerCollection *layer_collection = (tselem->type == TSE_LAYER_COLLECTION) ?
-                                          static_cast<LayerCollection *>(te->directdata) :
+                                          static_cast<LayerCollection *>(te->abstract_element->data()) :
                                           nullptr;
   Collection *collection = outliner_collection_from_tree_element(te);
 
@@ -1261,7 +1261,7 @@ static void outliner_draw_restrictbuts(ui::Block *block,
       {
         if (space_outliner->show_restrict_flags & SO_RESTRICT_RENDER) {
           /* View layer render toggle. */
-          ViewLayer *layer = static_cast<ViewLayer *>(te.directdata);
+          ViewLayer *layer = static_cast<ViewLayer *>(te.abstract_element->data());
 
           bt = uiDefIconButBit(block,
                                ui::ButtonType::IconToggleN,
@@ -1291,7 +1291,7 @@ static void outliner_draw_restrictbuts(ui::Block *block,
 
         if (space_outliner->show_restrict_flags & SO_RESTRICT_HIDE) {
           BKE_view_layer_synced_ensure(bmain, scene, view_layer);
-          Base *base = (te.directdata) ? static_cast<Base *>(te.directdata) :
+          Base *base = (te.abstract_element->data()) ? static_cast<Base *>(te.abstract_element->data()) :
                                          BKE_view_layer_base_find(view_layer, ob);
           if (base) {
             PointerRNA base_ptr = RNA_pointer_create_discrete(&scene->id, RNA_ObjectBase, base);
@@ -1387,7 +1387,7 @@ static void outliner_draw_restrictbuts(ui::Block *block,
         }
       }
       else if (tselem->type == TSE_CONSTRAINT) {
-        bConstraint *con = static_cast<bConstraint *>(te.directdata);
+        bConstraint *con = static_cast<bConstraint *>(te.abstract_element->data());
 
         PointerRNA ptr = RNA_pointer_create_discrete(tselem->id, RNA_Constraint, con);
 
@@ -1412,7 +1412,7 @@ static void outliner_draw_restrictbuts(ui::Block *block,
         }
       }
       else if (tselem->type == TSE_MODIFIER) {
-        ModifierData *md = static_cast<ModifierData *>(te.directdata);
+        ModifierData *md = static_cast<ModifierData *>(te.abstract_element->data());
 
         PointerRNA ptr = RNA_pointer_create_discrete(tselem->id, RNA_Modifier, md);
 
@@ -1457,7 +1457,7 @@ static void outliner_draw_restrictbuts(ui::Block *block,
         }
       }
       else if (tselem->type == TSE_POSE_CHANNEL) {
-        bPoseChannel *pchan = static_cast<bPoseChannel *>(te.directdata);
+        bPoseChannel *pchan = static_cast<bPoseChannel *>(te.abstract_element->data());
         Object *ob = id_cast<Object *>(tselem->id);
         bArmature *arm = id_cast<bArmature *>(ob->data);
 
@@ -1505,7 +1505,7 @@ static void outliner_draw_restrictbuts(ui::Block *block,
       }
       else if (tselem->type == TSE_EBONE) {
         bArmature *arm = id_cast<bArmature *>(tselem->id);
-        EditBone *ebone = static_cast<EditBone *>(te.directdata);
+        EditBone *ebone = static_cast<EditBone *>(te.abstract_element->data());
 
         if (space_outliner->show_restrict_flags & SO_RESTRICT_VIEWPORT) {
           bt = uiDefIconButBit(block,
@@ -1547,7 +1547,7 @@ static void outliner_draw_restrictbuts(ui::Block *block,
       }
       else if (tselem->type == TSE_GP_LAYER) {
         ID *id = tselem->id;
-        bGPDlayer *gpl = static_cast<bGPDlayer *>(te.directdata);
+        bGPDlayer *gpl = static_cast<bGPDlayer *>(te.abstract_element->data());
 
         if (space_outliner->show_restrict_flags & SO_RESTRICT_HIDE) {
           bt = uiDefIconButBit(block,
@@ -1627,7 +1627,7 @@ static void outliner_draw_restrictbuts(ui::Block *block,
         {
 
           LayerCollection *layer_collection = (tselem->type == TSE_LAYER_COLLECTION) ?
-                                                  static_cast<LayerCollection *>(te.directdata) :
+                                                  static_cast<LayerCollection *>(te.abstract_element->data()) :
                                                   nullptr;
           Collection *collection = outliner_collection_from_tree_element(&te);
 
@@ -3025,8 +3025,8 @@ static bool element_should_draw_faded(const TreeViewContext &tvc,
         const Object *ob = id_cast<const Object *>(tselem->id);
         /* Lookup in view layer is logically const as it only checks a cache. */
         BKE_view_layer_synced_ensure(*tvc.bmain, tvc.scene, tvc.view_layer);
-        const Base *base = (te->directdata) ?
-                               static_cast<const Base *>(te->directdata) :
+        const Base *base = (te->abstract_element->data()) ?
+                               static_cast<const Base *>(te->abstract_element->data()) :
                                BKE_view_layer_base_find(static_cast<ViewLayer *>(tvc.view_layer),
                                                         const_cast<Object *>(ob));
         const bool is_visible = (base != nullptr) &&
@@ -3045,7 +3045,7 @@ static bool element_should_draw_faded(const TreeViewContext &tvc,
   switch (tselem->type) {
     case TSE_LAYER_COLLECTION: {
       const LayerCollection *layer_collection = static_cast<const LayerCollection *>(
-          te->directdata);
+          te->abstract_element->data());
       const bool is_visible = layer_collection->runtime_flag & LAYER_COLLECTION_VISIBLE_VIEW_LAYER;
       const bool is_excluded = layer_collection->flag & LAYER_COLLECTION_EXCLUDE;
       return !is_visible || is_excluded;
@@ -3110,7 +3110,7 @@ static void outliner_draw_tree_element(ui::Block *block,
       if (te->idcode == ID_OB) {
         Object *ob = id_cast<Object *>(tselem->id);
         BKE_view_layer_synced_ensure(*tvc.bmain, tvc.scene, tvc.view_layer);
-        Base *base = (te->directdata) ? static_cast<Base *>(te->directdata) :
+        Base *base = (te->abstract_element->data()) ? static_cast<Base *>(te->abstract_element->data()) :
                                         BKE_view_layer_base_find(tvc.view_layer, ob);
         const bool is_selected = (base != nullptr) && ((base->flag & BASE_SELECTED) != 0);
 

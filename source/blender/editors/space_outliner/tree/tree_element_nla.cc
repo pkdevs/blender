@@ -24,7 +24,6 @@ TreeElementNLA::TreeElementNLA(TreeElement &legacy_te, AnimData &anim_data)
 {
   BLI_assert(legacy_te.store_elem->type == TSE_NLA);
   legacy_te.name = IFACE_("NLA Tracks");
-  legacy_te.directdata = &anim_data;
 }
 
 void TreeElementNLA::expand(SpaceOutliner & /*space_outliner*/) const

@@ -29,6 +29,11 @@ class TreeElementBone final : public AbstractTreeElement {
   {
     return ICON_BONE_DATA;
   }
+
+  void *data() const override
+  {
+    return &bone_;
+  }
 };
 
 }  // namespace ed::outliner

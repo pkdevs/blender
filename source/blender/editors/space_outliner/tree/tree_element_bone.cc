@@ -20,7 +20,6 @@ TreeElementBone::TreeElementBone(TreeElement &legacy_te, ID & /*armature_id*/, B
 {
   BLI_assert(legacy_te.store_elem->type == TSE_BONE);
   legacy_te.name = bone_.name;
-  legacy_te.directdata = &bone_;
 }
 
 }  // namespace blender::ed::outliner

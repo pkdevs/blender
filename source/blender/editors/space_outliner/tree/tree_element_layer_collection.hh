@@ -21,6 +21,10 @@ class TreeElementLayerCollection final : public AbstractTreeElement {
 
  public:
   TreeElementLayerCollection(TreeElement &legacy_te, LayerCollection &lc);
+  void *data() const override
+  {
+    return &lc_;
+  }
 };
 
 }  // namespace ed::outliner

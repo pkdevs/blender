@@ -43,7 +43,6 @@ TreeElementShapeKey::TreeElementShapeKey(TreeElement &legacy_te, KeyBlock &keybl
 {
   BLI_assert(legacy_te.store_elem->type == TSE_SHAPE_KEY_BLOCK);
   legacy_te.name = keyblock_.name;
-  legacy_te.directdata = &keyblock_;
 }
 
 }  // namespace blender::ed::outliner

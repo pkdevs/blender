@@ -42,6 +42,11 @@ class TreeElementDeformGroup final : public AbstractTreeElement {
   {
     return ICON_GROUP_VERTEX;
   }
+
+  void *data() const override
+  {
+    return &defgroup_;
+  }
 };
 
 }  // namespace ed::outliner

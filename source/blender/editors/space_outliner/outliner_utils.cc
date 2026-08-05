@@ -227,7 +227,7 @@ TreeElement *outliner_find_id(SpaceOutliner *space_outliner,
 TreeElement *outliner_find_posechannel(ListBaseT<TreeElement> *lb, const bPoseChannel *pchan)
 {
   for (TreeElement &te : *lb) {
-    if (te.directdata == pchan) {
+    if (te.abstract_element->data() == pchan) {
       return &te;
     }
 
@@ -245,7 +245,7 @@ TreeElement *outliner_find_posechannel(ListBaseT<TreeElement> *lb, const bPoseCh
 TreeElement *outliner_find_editbone(ListBaseT<TreeElement> *lb, const EditBone *ebone)
 {
   for (TreeElement &te : *lb) {
-    if (te.directdata == ebone) {
+    if (te.abstract_element->data() == ebone) {
       return &te;
     }
 
@@ -499,7 +499,7 @@ Base *ED_outliner_give_base_under_cursor(bContext *C, const int mval[2])
     if ((tselem->type == TSE_SOME_ID) && (te->idcode == ID_OB)) {
       Object *ob = id_cast<Object *>(tselem->id);
       BKE_view_layer_synced_ensure(*bmain, scene, view_layer);
-      base = (te->directdata) ? static_cast<Base *>(te->directdata) :
+      base = (te->abstract_element->data()) ? static_cast<Base *>(te->abstract_element->data()) :
                                 BKE_view_layer_base_find(view_layer, ob);
     }
   }
@@ -525,17 +525,17 @@ bool ED_outliner_give_rna_under_cursor(bContext *C, const int mval[2], PointerRN
   TreeStoreElem *tselem = TREESTORE(te);
   switch (tselem->type) {
     case TSE_BONE: {
-      Bone *bone = static_cast<Bone *>(te->directdata);
+      Bone *bone = static_cast<Bone *>(te->abstract_element->data());
       *r_ptr = RNA_pointer_create_discrete(tselem->id, RNA_Bone, bone);
       break;
     }
     case TSE_POSE_CHANNEL: {
-      bPoseChannel *pchan = static_cast<bPoseChannel *>(te->directdata);
+      bPoseChannel *pchan = static_cast<bPoseChannel *>(te->abstract_element->data());
       *r_ptr = RNA_pointer_create_discrete(tselem->id, RNA_PoseBone, pchan);
       break;
     }
     case TSE_EBONE: {
-      EditBone *bone = static_cast<EditBone *>(te->directdata);
+      EditBone *bone = static_cast<EditBone *>(te->abstract_element->data());
       *r_ptr = RNA_pointer_create_discrete(tselem->id, RNA_EditBone, bone);
       break;
     }

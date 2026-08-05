@@ -228,6 +228,16 @@ std::optional<BIFIconID> AbstractTreeElement::get_icon() const
   return {};
 }
 
+void* AbstractTreeElement::data() const
+{
+  return data_;
+}
+
+void AbstractTreeElement::set_data(void *data)
+{
+  data_ = data;
+}
+
 void AbstractTreeElement::print_path()
 {
   std::string path = legacy_te_.name;

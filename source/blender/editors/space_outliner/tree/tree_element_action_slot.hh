@@ -27,6 +27,14 @@ class TreeElementActionSlot final : public AbstractTreeElement {
   {
     return ICON_ACTION_SLOT;
   }
+
+  void *data() const override
+  {
+    return slot_;
+  }
+
+  private:
+    animrig::Slot *slot_;
 };
 
 }  // namespace ed::outliner

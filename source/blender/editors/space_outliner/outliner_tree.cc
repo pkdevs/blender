@@ -396,12 +396,6 @@ TreeElement *AbstractTreeDisplay::add_element(ListBaseT<TreeElement> *lb,
 
 /* ======================================================= */
 
-BLI_INLINE void outliner_add_collection_init(TreeElement *te, Collection *collection)
-{
-  te->name = BKE_collection_ui_name_get(collection);
-  te->directdata = collection;
-}
-
 BLI_INLINE void outliner_add_collection_objects(SpaceOutliner *space_outliner,
                                                 ListBaseT<TreeElement> *tree,
                                                 Collection *collection,
@@ -417,7 +411,7 @@ TreeElement *outliner_add_collection_recursive(SpaceOutliner *space_outliner,
                                                Collection *collection,
                                                TreeElement *ten)
 {
-  outliner_add_collection_init(ten, collection);
+  ten->name = BKE_collection_ui_name_get(collection);
 
   for (CollectionChild &child : collection->children) {
     AbstractTreeDisplay::add_element(
@@ -911,7 +905,7 @@ static bool outliner_element_visible_get(const Main &bmain,
     }
 
     Object *ob = id_cast<Object *>(tselem->id);
-    Base *base = static_cast<Base *>(te->directdata);
+    Base *base = static_cast<Base *>(te->abstract_element->data());
     BLI_assert((base == nullptr) || (base->object == ob));
 
     if (exclude_filter & SO_FILTER_OB_TYPE) {

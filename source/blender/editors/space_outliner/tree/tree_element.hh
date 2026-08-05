@@ -78,6 +78,8 @@ class AbstractTreeElement {
    * All elements should be ported to use this over #tree_element_get_icon().
    */
   virtual std::optional<BIFIconID> get_icon() const;
+  virtual void *data() const;
+  virtual void set_data(void *data);
 
   /**
    * Debugging helper: Print effective path of this tree element, constructed out of the
@@ -117,6 +119,10 @@ class AbstractTreeElement {
                            short type,
                            short index,
                            const bool expand = true) const;
+
+private:
+  /* This is required for TSE_ID_BASE, it can be removed once it's ported to AbstractTreeElement. */
+  void *data_;
 };
 
 void tree_element_expand(const AbstractTreeElement &tree_element, SpaceOutliner &space_outliner);

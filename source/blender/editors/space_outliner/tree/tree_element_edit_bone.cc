@@ -22,7 +22,6 @@ TreeElementEditBone::TreeElementEditBone(TreeElement &legacy_te,
     : AbstractTreeElement(legacy_te) /*, armature_id_(armature_id)*/, ebone_(ebone)
 {
   BLI_assert(legacy_te.store_elem->type == TSE_EBONE);
-  legacy_te.directdata = &ebone_;
   legacy_te.name = ebone_.name;
 }
 

@@ -16,12 +16,11 @@
 namespace blender::ed::outliner {
 
 TreeElementGPencilLayer::TreeElementGPencilLayer(TreeElement &legacy_te, bGPDlayer &gplayer)
-    : AbstractTreeElement(legacy_te)
+    : AbstractTreeElement(legacy_te), gplayer_(gplayer)
 {
   BLI_assert(legacy_te.store_elem->type == TSE_GP_LAYER);
   /* this element's info */
   legacy_te.name = gplayer.info;
-  legacy_te.directdata = &gplayer;
 }
 
 }  // namespace blender::ed::outliner

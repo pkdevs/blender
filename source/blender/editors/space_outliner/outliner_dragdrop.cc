@@ -293,7 +293,7 @@ static int outliner_get_insert_index(TreeElement *drag_te,
     return 0;
   }
 
-  return BLI_findindex(listbase, drop_te->directdata);
+  return BLI_findindex(listbase, drop_te->abstract_element->data());
 }
 
 /** \} */
@@ -795,7 +795,7 @@ static bool datastack_drop_init(bContext *C, const wmEvent *event, StackDropData
   bPoseChannel *pchan = nullptr;
   TreeElement *pchan_te = outliner_data_from_tree_element_and_parents(is_pchan_element, te_target);
   if (pchan_te) {
-    pchan = static_cast<bPoseChannel *>(pchan_te->directdata);
+    pchan = static_cast<bPoseChannel *>(pchan_te->abstract_element->data());
   }
   if (pchan) {
     ob = nullptr;
@@ -983,7 +983,7 @@ static void datastack_drop_link(bContext *C, StackDropData *drop_data)
 
       ListBaseT<bConstraint> *dst;
       if (tselem->type == TSE_POSE_CHANNEL) {
-        bPoseChannel *pchan = static_cast<bPoseChannel *>(drop_data->drop_te->directdata);
+        bPoseChannel *pchan = static_cast<bPoseChannel *>(drop_data->drop_te->abstract_element->data());
         dst = &pchan->constraints;
       }
       else {
@@ -1029,7 +1029,7 @@ static void datastack_drop_copy(bContext *C, StackDropData *drop_data)
         object::constraint_copy_for_pose(
             bmain,
             ob_dst,
-            static_cast<bPoseChannel *>(drop_data->drop_te->directdata),
+            static_cast<bPoseChannel *>(drop_data->drop_te->abstract_element->data()),
             static_cast<bConstraint *>(drop_data->drag_directdata));
       }
       else {
@@ -1518,7 +1518,7 @@ static wmOperatorStatus outliner_item_drag_drop_invoke(bContext *C,
     TreeElement *te_bone = nullptr;
     bPoseChannel *pchan = outliner_find_parent_bone(te, &te_bone);
     datastack_drop_data_init(
-        drag, id_cast<Object *>(tselem->id), pchan, te, tselem, te->directdata);
+        drag, id_cast<Object *>(tselem->id), pchan, te, tselem, te->abstract_element->data());
   }
   else if (ELEM(GS(data.drag_id->name), ID_OB, ID_GR)) {
     /* For collections and objects we cheat and drag all selected. */

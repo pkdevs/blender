@@ -35,13 +35,11 @@ TreeElementConstraint::TreeElementConstraint(TreeElement &legacy_te,
 {
   BLI_assert(legacy_te.store_elem->type == TSE_CONSTRAINT);
   legacy_te.name = con_.name;
-  legacy_te.directdata = &con_;
 }
 std::optional<BIFIconID> TreeElementConstraint::get_icon() const
 {
-  bConstraint *con = static_cast<bConstraint *>(legacy_te_.directdata);
   Object *ob = reinterpret_cast<Object *>(legacy_te_.store_elem->id);
-  const PointerRNA ptr = RNA_pointer_create_discrete(&ob->id, RNA_Constraint, con);
+  const PointerRNA ptr = RNA_pointer_create_discrete(&ob->id, RNA_Constraint, &con_);
   return RNA_struct_ui_icon(ptr.type);
 }
 }  // namespace blender::ed::outliner

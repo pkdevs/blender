@@ -95,7 +95,7 @@ ListBaseT<TreeElement> TreeDisplayViewLayer::build_tree(const TreeSourceData &so
       }
 
       te_view_layer.name = view_layer->name;
-      te_view_layer.directdata = view_layer;
+      te_view_layer.abstract_element->set_data(view_layer);
 
       add_view_layer(*scene, te_view_layer.subtree, &te_view_layer);
     }
@@ -116,7 +116,7 @@ void TreeDisplayViewLayer::add_view_layer(Scene &scene,
     for (Base &base : *BKE_view_layer_object_bases_get(view_layer_)) {
       TreeElement *te_object = add_element(
           &tree, reinterpret_cast<ID *>(base.object), nullptr, parent, TSE_SOME_ID, 0);
-      te_object->directdata = &base;
+      te_object->abstract_element->set_data(&base);
     }
 
     if (show_children) {
@@ -184,7 +184,7 @@ void TreeDisplayViewLayer::add_layer_collection_objects(ListBaseT<TreeElement> &
     Base *base = BKE_view_layer_base_find(view_layer_, cob.ob);
     TreeElement *te_object = add_element(
         &tree, reinterpret_cast<ID *>(base->object), nullptr, &ten, TSE_SOME_ID, 0);
-    te_object->directdata = base;
+    te_object->abstract_element->set_data(base);
   }
 }
 

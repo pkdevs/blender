@@ -30,6 +30,11 @@ class TreeElementNLA final : public AbstractTreeElement {
   {
     return ICON_NLA;
   }
+
+  void *data() const override
+  {
+    return &anim_data_;
+  }
 };
 
 class TreeElementNLATrack final : public AbstractTreeElement {

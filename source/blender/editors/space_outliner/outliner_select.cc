@@ -231,7 +231,7 @@ static void tree_element_viewlayer_activate(bContext *C, TreeElement *te)
     return;
   }
 
-  ViewLayer *view_layer = static_cast<ViewLayer *>(te->directdata);
+  ViewLayer *view_layer = static_cast<ViewLayer *>(te->abstract_element->data());
   wmWindow *win = CTX_wm_window(C);
   Scene *scene = WM_window_get_active_scene(win);
 
@@ -488,7 +488,7 @@ static void tree_element_defgroup_activate(bContext *C, TreeElement *te, TreeSto
 static void tree_element_gplayer_activate(bContext *C, TreeElement *te, TreeStoreElem *tselem)
 {
   bGPdata *gpd = id_cast<bGPdata *>(tselem->id);
-  bGPDlayer *gpl = static_cast<bGPDlayer *>(te->directdata);
+  bGPDlayer *gpl = static_cast<bGPDlayer *>(te->abstract_element->data());
 
   /* We can only have a single "active" layer at a time
    * and there must always be an active layer... */
@@ -540,7 +540,7 @@ static void tree_element_bonecollection_activate(bContext *C,
                                                  TreeStoreElem *tselem)
 {
   bArmature *arm = reinterpret_cast<bArmature *>(tselem->id);
-  BoneCollection *bcoll = reinterpret_cast<BoneCollection *>(te->directdata);
+  BoneCollection *bcoll = reinterpret_cast<BoneCollection *>(te->abstract_element->data());
   ANIM_armature_bonecoll_active_set(arm, bcoll);
   WM_event_add_notifier(C, NC_OBJECT | ND_BONE_COLLECTION, arm);
 }
@@ -556,7 +556,7 @@ static void tree_element_posechannel_activate(bContext *C,
   const Main *bmain = CTX_data_main(C);
   Object *ob = id_cast<Object *>(tselem->id);
   bArmature *arm = id_cast<bArmature *>(ob->data);
-  bPoseChannel *pchan = static_cast<bPoseChannel *>(te->directdata);
+  bPoseChannel *pchan = static_cast<bPoseChannel *>(te->abstract_element->data());
 
   if (set != OL_SETSEL_EXTEND) {
     /* Single select forces all other bones to get unselected. */
@@ -611,7 +611,7 @@ static void tree_element_bone_activate(bContext *C,
                                        bool recursive)
 {
   bArmature *arm = id_cast<bArmature *>(tselem->id);
-  Bone *bone = static_cast<Bone *>(te->directdata);
+  Bone *bone = static_cast<Bone *>(te->abstract_element->data());
 
   BKE_view_layer_synced_ensure(bmain, scene, view_layer);
   Object *ob = BKE_view_layer_active_object_get(view_layer);
@@ -666,7 +666,7 @@ static void tree_element_ebone_activate(bContext *C,
                                         bool recursive)
 {
   bArmature *arm = id_cast<bArmature *>(tselem->id);
-  EditBone *ebone = static_cast<EditBone *>(te->directdata);
+  EditBone *ebone = static_cast<EditBone *>(te->abstract_element->data());
 
   if (set == OL_SETSEL_NORMAL) {
     ObjectsInModeParams ob_params{};
@@ -702,7 +702,7 @@ static void tree_element_modifier_activate(bContext *C,
                                            const eOLSetState set)
 {
   Object *ob = id_cast<Object *>(tselem->id);
-  ModifierData *md = static_cast<ModifierData *>(te->directdata);
+  ModifierData *md = static_cast<ModifierData *>(te->abstract_element->data());
 
   if (set == OL_SETSEL_NORMAL) {
     BKE_object_modifier_set_active(ob, md);
@@ -812,7 +812,7 @@ static void tree_element_master_collection_activate(const bContext *C)
 static void tree_element_layer_collection_activate(bContext *C, TreeElement *te)
 {
   Scene *scene = CTX_data_scene(C);
-  LayerCollection *layer_collection = static_cast<LayerCollection *>(te->directdata);
+  LayerCollection *layer_collection = static_cast<LayerCollection *>(te->abstract_element->data());
   ViewLayer *view_layer = BKE_view_layer_find_from_collection(scene, layer_collection);
   BKE_layer_collection_activate(view_layer, layer_collection);
   /* A very precise notifier - ND_LAYER alone is quite vague, we want to avoid unnecessary work
@@ -965,7 +965,7 @@ static eOLDrawState tree_element_bone_state_get(const Main &bmain,
                                                 const TreeStoreElem *tselem)
 {
   const bArmature *arm = id_cast<const bArmature *>(tselem->id);
-  const Bone *bone = static_cast<Bone *>(te->directdata);
+  const Bone *bone = static_cast<Bone *>(te->abstract_element->data());
   BKE_view_layer_synced_ensure(bmain, scene, view_layer);
   const Object *ob = BKE_view_layer_active_object_get(view_layer);
   if (ob && ob->data == id_cast<const ID *>(arm)) {
@@ -978,7 +978,7 @@ static eOLDrawState tree_element_bone_state_get(const Main &bmain,
 
 static eOLDrawState tree_element_ebone_state_get(const TreeElement *te)
 {
-  const EditBone *ebone = static_cast<EditBone *>(te->directdata);
+  const EditBone *ebone = static_cast<EditBone *>(te->abstract_element->data());
   if (ebone->flag & BONE_SELECTED) {
     return OL_DRAWSEL_NORMAL;
   }
@@ -989,7 +989,7 @@ static eOLDrawState tree_element_modifier_state_get(const TreeElement *te,
                                                     const TreeStoreElem *tselem)
 {
   const Object *ob = id_cast<const Object *>(tselem->id);
-  const ModifierData *md = static_cast<const ModifierData *>(te->directdata);
+  const ModifierData *md = static_cast<const ModifierData *>(te->abstract_element->data());
 
   return (BKE_object_active_modifier(ob) == md) ? OL_DRAWSEL_NORMAL : OL_DRAWSEL_NONE;
 }
@@ -1026,7 +1026,7 @@ static eOLDrawState tree_element_posechannel_state_get(const Object *ob_pose,
                                                        const TreeStoreElem *tselem)
 {
   const Object *ob = id_cast<const Object *>(tselem->id);
-  const bPoseChannel *pchan = static_cast<bPoseChannel *>(te->directdata);
+  const bPoseChannel *pchan = static_cast<bPoseChannel *>(te->abstract_element->data());
   if (ob == ob_pose && ob->pose) {
     if (pchan->flag & POSE_SELECTED) {
       return OL_DRAWSEL_NORMAL;
@@ -1038,7 +1038,7 @@ static eOLDrawState tree_element_posechannel_state_get(const Object *ob_pose,
 static eOLDrawState tree_element_viewlayer_state_get(const ViewLayer *view_layer,
                                                      const TreeElement *te)
 {
-  const ViewLayer *te_view_layer = static_cast<ViewLayer *>(te->directdata);
+  const ViewLayer *te_view_layer = static_cast<ViewLayer *>(te->abstract_element->data());
 
   if (view_layer == te_view_layer) {
     return OL_DRAWSEL_NORMAL;
@@ -1050,7 +1050,7 @@ static eOLDrawState tree_element_bone_collection_state_get(const TreeElement *te
                                                            const TreeStoreElem *tselem)
 {
   const bArmature *arm = reinterpret_cast<const bArmature *>(tselem->id);
-  const BoneCollection *bcoll = reinterpret_cast<const BoneCollection *>(te->directdata);
+  const BoneCollection *bcoll = reinterpret_cast<const BoneCollection *>(te->abstract_element->data());
 
   if (arm->runtime->active_collection == bcoll) {
     return OL_DRAWSEL_ACTIVE;
@@ -1086,7 +1086,7 @@ static eOLDrawState tree_element_strip_dup_state_get(const TreeElement *te)
 
 static eOLDrawState tree_element_gplayer_state_get(const TreeElement *te)
 {
-  if ((static_cast<const bGPDlayer *>(te->directdata))->flag & GP_LAYER_ACTIVE) {
+  if ((static_cast<const bGPDlayer *>(te->abstract_element->data()))->flag & GP_LAYER_ACTIVE) {
     return OL_DRAWSEL_NORMAL;
   }
   return OL_DRAWSEL_NONE;
@@ -1114,7 +1114,7 @@ static eOLDrawState tree_element_master_collection_state_get(
 static eOLDrawState tree_element_layer_collection_state_get(
     const LayerCollection *layer_collection, const TreeElement *te)
 {
-  if (layer_collection == te->directdata) {
+  if (layer_collection == te->abstract_element->data()) {
     return OL_DRAWSEL_NORMAL;
   }
   return OL_DRAWSEL_NONE;
@@ -1282,7 +1282,7 @@ bPoseChannel *outliner_find_parent_bone(TreeElement *te, TreeElement **r_bone_te
     tselem = TREESTORE(te);
     if (tselem->type == TSE_POSE_CHANNEL) {
       *r_bone_te = te;
-      return static_cast<bPoseChannel *>(te->directdata);
+      return static_cast<bPoseChannel *>(te->abstract_element->data());
     }
     te = te->parent;
   }
@@ -1381,7 +1381,7 @@ static void outliner_set_properties_tab(bContext *C, TreeElement *te, TreeStoreE
 
         /* Expand the selected constraint in the properties editor. */
         if (tselem->type != TSE_CONSTRAINT_BASE) {
-          BKE_constraint_panel_expand(static_cast<bConstraint *>(te->directdata));
+          BKE_constraint_panel_expand(static_cast<bConstraint *>(te->abstract_element->data()));
         }
         break;
       }
@@ -1391,7 +1391,7 @@ static void outliner_set_properties_tab(bContext *C, TreeElement *te, TreeStoreE
         context = BCONTEXT_MODIFIER;
 
         if (tselem->type != TSE_MODIFIER_BASE) {
-          ModifierData *md = static_cast<ModifierData *>(te->directdata);
+          ModifierData *md = static_cast<ModifierData *>(te->abstract_element->data());
 
           switch (md->type) {
             case eModifierType_ParticleSystem:
@@ -1422,12 +1422,12 @@ static void outliner_set_properties_tab(bContext *C, TreeElement *te, TreeStoreE
         context = BCONTEXT_SHADERFX;
 
         if (tselem->type != TSE_GPENCIL_EFFECT_BASE) {
-          BKE_shaderfx_panel_expand(static_cast<ShaderFxData *>(te->directdata));
+          BKE_shaderfx_panel_expand(static_cast<ShaderFxData *>(te->abstract_element->data()));
         }
         break;
       case TSE_BONE: {
         bArmature *arm = id_cast<bArmature *>(tselem->id);
-        Bone *bone = static_cast<Bone *>(te->directdata);
+        Bone *bone = static_cast<Bone *>(te->abstract_element->data());
 
         ptr = RNA_pointer_create_discrete(&arm->id, RNA_Bone, bone);
         context = BCONTEXT_BONE;
@@ -1435,7 +1435,7 @@ static void outliner_set_properties_tab(bContext *C, TreeElement *te, TreeStoreE
       }
       case TSE_EBONE: {
         bArmature *arm = id_cast<bArmature *>(tselem->id);
-        EditBone *ebone = static_cast<EditBone *>(te->directdata);
+        EditBone *ebone = static_cast<EditBone *>(te->abstract_element->data());
 
         ptr = RNA_pointer_create_discrete(&arm->id, RNA_EditBone, ebone);
         context = BCONTEXT_BONE;
@@ -1444,7 +1444,7 @@ static void outliner_set_properties_tab(bContext *C, TreeElement *te, TreeStoreE
       case TSE_POSE_CHANNEL: {
         Object *ob = id_cast<Object *>(tselem->id);
         bArmature *arm = id_cast<bArmature *>(ob->data);
-        bPoseChannel *pchan = static_cast<bPoseChannel *>(te->directdata);
+        bPoseChannel *pchan = static_cast<bPoseChannel *>(te->abstract_element->data());
 
         ptr = RNA_pointer_create_discrete(&arm->id, RNA_PoseBone, pchan);
         context = BCONTEXT_BONE;
@@ -1459,7 +1459,7 @@ static void outliner_set_properties_tab(bContext *C, TreeElement *te, TreeStoreE
         break;
       }
       case TSE_R_LAYER: {
-        ViewLayer *view_layer = static_cast<ViewLayer *>(te->directdata);
+        ViewLayer *view_layer = static_cast<ViewLayer *>(te->abstract_element->data());
 
         ptr = RNA_pointer_create_discrete(tselem->id, RNA_ViewLayer, view_layer);
         context = BCONTEXT_VIEW_LAYER;
@@ -1483,11 +1483,11 @@ static void outliner_set_properties_tab(bContext *C, TreeElement *te, TreeStoreE
         context = BCONTEXT_DATA;
         break;
       case TSE_BONE_COLLECTION:
-        ptr = RNA_pointer_create_discrete(tselem->id, RNA_BoneCollection, te->directdata);
+        ptr = RNA_pointer_create_discrete(tselem->id, RNA_BoneCollection, te->abstract_element->data());
         context = BCONTEXT_DATA;
         break;
       case TSE_LAYER_COLLECTION:
-        ptr = RNA_pointer_create_discrete(tselem->id, RNA_Collection, te->directdata);
+        ptr = RNA_pointer_create_discrete(tselem->id, RNA_Collection, te->abstract_element->data());
         context = BCONTEXT_COLLECTION;
         break;
       default:
@@ -1664,7 +1664,7 @@ static Collection *outliner_collection_get_for_recursive(bContext *C, TreeElemen
    * parents.) */
   Collection *parent_collection = nullptr;
   if (te->store_elem->type == TSE_LAYER_COLLECTION) {
-    parent_collection = static_cast<LayerCollection *>(te->directdata)->collection;
+    parent_collection = static_cast<LayerCollection *>(te->abstract_element->data())->collection;
   }
   else if (te->store_elem->type == TSE_SOME_ID && te->idcode == ID_OB) {
     parent_collection = BKE_collection_object_find(CTX_data_main(C),
@@ -1709,7 +1709,7 @@ static void do_outliner_select_recursive(ListBaseT<TreeElement> *lb,
          * the edge-case where there is an object which is part of this collection, but which has
          * children that are part of another collection. */
         do_outliner_select_recursive(
-            &te.subtree, selecting, static_cast<LayerCollection *>(te.directdata)->collection);
+            &te.subtree, selecting, static_cast<LayerCollection *>(te.abstract_element->data())->collection);
       }
       else {
         do_outliner_select_recursive(&te.subtree, selecting, in_collection);
@@ -1751,7 +1751,7 @@ static bool do_outliner_range_select_recursive(ListBaseT<TreeElement> *lb,
        * the precedent for inclusion of its sub-objects. */
       Collection *child_collection = in_collection;
       if (tselem->type == TSE_LAYER_COLLECTION) {
-        child_collection = static_cast<LayerCollection *>(te.directdata)->collection;
+        child_collection = static_cast<LayerCollection *>(te.abstract_element->data())->collection;
       }
       selecting = do_outliner_range_select_recursive(
           &te.subtree, active, cursor, selecting, recurse, child_collection);

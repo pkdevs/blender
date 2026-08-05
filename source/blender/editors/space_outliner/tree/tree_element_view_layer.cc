@@ -41,7 +41,6 @@ TreeElementViewLayer::TreeElementViewLayer(TreeElement &legacy_te,
 {
   BLI_assert(legacy_te.store_elem->type == TSE_R_LAYER);
   legacy_te.name = view_layer_.name;
-  legacy_te.directdata = &view_layer_;
 }
 
 }  // namespace blender::ed::outliner

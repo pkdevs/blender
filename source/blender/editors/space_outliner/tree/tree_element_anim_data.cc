@@ -25,7 +25,6 @@ TreeElementAnimData::TreeElementAnimData(TreeElement &legacy_te, AnimData &anim_
   BLI_assert(legacy_te.store_elem->type == TSE_ANIM_DATA);
   /* this element's info */
   legacy_te.name = IFACE_("Animation");
-  legacy_te.directdata = &anim_data_;
 }
 
 void TreeElementAnimData::expand(SpaceOutliner & /*space_outliner*/) const

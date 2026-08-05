@@ -22,7 +22,6 @@ TreeElementLayerCollection::TreeElementLayerCollection(TreeElement &legacy_te, L
 {
   BLI_assert(legacy_te.store_elem->type == TSE_LAYER_COLLECTION);
   legacy_te.name = lc_.collection->id.name + 2;
-  legacy_te.directdata = &lc_;
 }
 
 }  // namespace blender::ed::outliner

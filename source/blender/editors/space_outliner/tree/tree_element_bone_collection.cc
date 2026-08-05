@@ -42,7 +42,6 @@ TreeElementBoneCollection::TreeElementBoneCollection(TreeElement &legacy_te,
 {
   BLI_assert(legacy_te.store_elem->type == TSE_BONE_COLLECTION);
   legacy_te.name = bcoll_.name;
-  legacy_te.directdata = &bcoll_;
 }
 
 void TreeElementBoneCollection::expand(SpaceOutliner & /*space_outliner*/) const

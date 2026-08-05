@@ -49,7 +49,6 @@ TreeElementDeformGroup::TreeElementDeformGroup(TreeElement &legacy_te,
 {
   BLI_assert(legacy_te.store_elem->type == TSE_DEFGROUP);
   legacy_te.name = defgroup_.name;
-  legacy_te.directdata = &defgroup_;
 }
 
 }  // namespace blender::ed::outliner

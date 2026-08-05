@@ -183,7 +183,7 @@ static void outliner_select_sync_to_object(ViewLayer *view_layer,
                                            Set<Base *> &selected_objects)
 {
   Object *ob = id_cast<Object *>(tselem->id);
-  Base *base = (te->directdata) ? static_cast<Base *>(te->directdata) :
+  Base *base = (te->abstract_element->data()) ? static_cast<Base *>(te->abstract_element->data()) :
                                   BKE_view_layer_base_find(view_layer, ob);
 
   if (base && (base->flag & BASE_SELECTABLE)) {
@@ -205,7 +205,7 @@ static void outliner_select_sync_to_edit_bone(const Main &bmain,
                                               Set<EditBone *> &selected_ebones)
 {
   bArmature *arm = id_cast<bArmature *>(tselem->id);
-  EditBone *ebone = static_cast<EditBone *>(te->directdata);
+  EditBone *ebone = static_cast<EditBone *>(te->abstract_element->data());
 
   short bone_flag = ebone->flag;
 
@@ -237,7 +237,7 @@ static void outliner_select_sync_to_pose_bone(TreeElement *te,
 {
   Object *ob = id_cast<Object *>(tselem->id);
   bArmature *arm = id_cast<bArmature *>(ob->data);
-  bPoseChannel *pchan = static_cast<bPoseChannel *>(te->directdata);
+  bPoseChannel *pchan = static_cast<bPoseChannel *>(te->abstract_element->data());
 
   short bone_flag = pchan->flag;
 
@@ -383,7 +383,7 @@ static void outliner_select_sync_from_object(const Main &bmain,
 {
   Object *ob = id_cast<Object *>(tselem->id);
   BKE_view_layer_synced_ensure(bmain, scene, view_layer);
-  Base *base = (te->directdata) ? static_cast<Base *>(te->directdata) :
+  Base *base = (te->abstract_element->data()) ? static_cast<Base *>(te->abstract_element->data()) :
                                   BKE_view_layer_base_find(view_layer, ob);
   const bool is_selected = (base != nullptr) && ((base->flag & BASE_SELECTED) != 0);
 
@@ -406,7 +406,7 @@ static void outliner_select_sync_from_edit_bone(EditBone *ebone_active,
                                                 TreeElement *te,
                                                 TreeStoreElem *tselem)
 {
-  EditBone *ebone = static_cast<EditBone *>(te->directdata);
+  EditBone *ebone = static_cast<EditBone *>(te->abstract_element->data());
 
   if (ebone == ebone_active) {
     tselem->flag |= TSE_ACTIVE;
@@ -427,7 +427,7 @@ static void outliner_select_sync_from_pose_bone(bPoseChannel *pchan_active,
                                                 TreeElement *te,
                                                 TreeStoreElem *tselem)
 {
-  bPoseChannel *pchan = static_cast<bPoseChannel *>(te->directdata);
+  bPoseChannel *pchan = static_cast<bPoseChannel *>(te->abstract_element->data());
 
   if (pchan == pchan_active) {
     tselem->flag |= TSE_ACTIVE;

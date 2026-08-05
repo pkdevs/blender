@@ -42,6 +42,11 @@ class TreeElementBoneCollection final : public AbstractTreeElement {
   {
     return ICON_GROUP_BONE;
   }
+
+  void *data() const override
+  {
+    return &bcoll_;
+  }
 };
 
 }  // namespace ed::outliner

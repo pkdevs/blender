@@ -67,7 +67,7 @@ void TreeElementIDArmature::expand_edit_bones() const
                                         nullptr;
   while (ten) {
     TreeElement *nten = ten->next, *par;
-    EditBone *ebone = static_cast<EditBone *>(ten->directdata);
+    EditBone *ebone = static_cast<EditBone *>(ten->abstract_element->data());
     if (ebone->parent) {
       BLI_remlink(&legacy_te_.subtree, ten);
       par = static_cast<TreeElement *>(ebone->parent->temp.p);

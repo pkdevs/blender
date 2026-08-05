@@ -54,6 +54,17 @@ class TreeElementModifier final : public AbstractTreeElement {
   void expand(SpaceOutliner & /*soops*/) const override;
 
   std::optional<BIFIconID> get_icon() const override;
+
+  void *data() const override
+  {
+    if (md_.type == MODIFIER_TYPE) {
+      return md_.md;
+    }
+    if (md_.type == GPENCIL_MODIFIER_TYPE) {
+      return md_.gp_md;
+    }
+    return nullptr;
+  }
 };
 
 }  // namespace ed::outliner

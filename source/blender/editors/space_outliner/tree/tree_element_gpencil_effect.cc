@@ -42,7 +42,6 @@ TreeElementGPencilEffect::TreeElementGPencilEffect(TreeElement &legacy_te,
 {
   BLI_assert(legacy_te.store_elem->type == TSE_GPENCIL_EFFECT);
   legacy_te.name = fx_.name;
-  legacy_te.directdata = &fx_;
 }
 
 void TreeElementGPencilEffect::expand(SpaceOutliner & /*space_outliner*/) const

@@ -42,6 +42,11 @@ class TreeElementPoseChannel final : public AbstractTreeElement {
   {
     return ICON_BONE_DATA;
   }
+
+  void *data() const override
+  {
+    return &pchan_;
+  }
 };
 
 }  // namespace ed::outliner

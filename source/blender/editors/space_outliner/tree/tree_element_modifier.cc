@@ -51,11 +51,9 @@ TreeElementModifier::TreeElementModifier(TreeElement &legacy_te,
 {
   if (md_.type == MODIFIER_TYPE) {
     legacy_te.name = md_.md->name;
-    legacy_te.directdata = md_.md;
   }
   if (md_.type == GPENCIL_MODIFIER_TYPE) {
     legacy_te.name = md_.gp_md->name;
-    legacy_te.directdata = md_.gp_md;
   }
 }
 

@@ -20,7 +20,7 @@ TreeElementActionSlot::TreeElementActionSlot(TreeElement &legacy_te, animrig::Sl
     : AbstractTreeElement(legacy_te)
 {
   legacy_te.name = &slot.identifier[2];
-  legacy_te.directdata = &slot;
+  slot_ = &slot;
 }
 
 }  // namespace blender::ed::outliner

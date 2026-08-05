@@ -28,6 +28,11 @@ class TreeElementParticleSystem final : public AbstractTreeElement {
   {
     return ICON_PARTICLES;
   }
+
+  void *data() const override
+  {
+    return &psys_;
+  }
 };
 
 }  // namespace ed::outliner

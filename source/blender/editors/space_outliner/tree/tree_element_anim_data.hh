@@ -33,6 +33,10 @@ class TreeElementAnimData final : public AbstractTreeElement {
 
   animrig::slot_handle_t get_slot_handle() const;
 
+  void *data() const override
+  {
+    return &anim_data_;
+  }
  private:
   void expand_drivers() const;
   void expand_NLA_tracks() const;

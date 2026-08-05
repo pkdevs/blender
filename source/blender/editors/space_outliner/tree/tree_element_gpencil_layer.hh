@@ -23,6 +23,13 @@ class TreeElementGPencilLayer final : public AbstractTreeElement {
   {
     return ICON_OUTLINER_DATA_GP_LAYER;
   }
+
+  void *data() const override
+  {
+    return &gplayer_;
+  }
+  private:
+  bGPDlayer &gplayer_;
 };
 
 }  // namespace ed::outliner
