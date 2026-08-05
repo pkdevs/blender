@@ -901,8 +901,8 @@ static void gwl_window_csd_margin_update(GWL_Window *win)
   /* Zero hides the margin: no border exists for full-screen & maximized windows,
    * a zero size means it's disabled (also accounting for rounding at extreme scales). */
   int32_t margin_local = 0;
-  if (!ELEM(gwl_window_state_get(win), GHOST_kWindowStateFullScreen, GHOST_kWindowStateMaximized))
-  {
+  const GHOST_TWindowState state = gwl_window_state_get(win);
+  if (!ELEM(state, GHOST_kWindowStateFullScreen, GHOST_kWindowStateMaximized)) {
     const GHOST_CSD_Params &params = system->getWindowCSD();
     const int32_t margin_physical = (params.resize_margin_size * win->ghost_window->getDPIHint()) /
                                     GHOST_CSD_DPI_FRACTIONAL_BASE;
@@ -986,8 +986,9 @@ static void gwl_window_csd_opaque_region_update(GWL_Window *win)
   }
 
   int32_t radius_local = 0;
+  const GHOST_TWindowState state = gwl_window_state_get(win);
   if (win->ghost_window->hasAlpha() &&
-      !ELEM(gwl_window_state_get(win), GHOST_kWindowStateFullScreen, GHOST_kWindowStateMaximized))
+      !ELEM(state, GHOST_kWindowStateFullScreen, GHOST_kWindowStateMaximized))
   {
     const GHOST_CSD_Params &params = system->getWindowCSD();
     const int32_t radius_physical = (params.corner_radius * win->ghost_window->getDPIHint()) /
