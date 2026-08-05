@@ -2261,14 +2261,19 @@ static void direct_link_id_common(BlendDataReader *reader,
                  "Data-block '%s' flagged as packed, but without a valid library, fixing by "
                  "making fully local...",
                  id->name);
-      id->flag &= ~ID_FLAG_LINKED_AND_PACKED;
+      id->tag &= ~(ID_TAG_INDIRECT | ID_TAG_EXTERN);
+      id->flag &= ~(ID_FLAG_INDIRECT_WEAK_LINK | ID_FLAG_LINKED_AND_PACKED);
     }
     else if ((current_library->flag & LIBRARY_FLAG_IS_ARCHIVE) == 0) {
       CLOG_ERROR(&LOG,
                  "Data-block '%s' flagged as packed, but using a regular library, fixing by "
-                 "making fully linked...",
+                 "making fully indirectly linked...",
                  id->name);
       id->flag &= ~ID_FLAG_LINKED_AND_PACKED;
+      if (id->tag & ID_TAG_EXTERN) {
+        id->tag &= ~ID_TAG_EXTERN;
+        id->tag |= ID_TAG_INDIRECT;
+      }
     }
   }
   id->lib = current_library;
@@ -4484,10 +4489,18 @@ BlendFileData *blo_read_file_internal(FileData *fd, const char *filepath)
   if ((fd->skip_flags & BLO_READ_SKIP_DATA) == 0) {
     fd->reports->duration.libraries = BLI_time_now_seconds();
     read_libraries(fd);
+    if (bfd->main->is_read_invalid) {
+      return bfd;
+    }
+
     BLI_assert((*bfd->main->split_mains)[0] == bfd->main);
     blo_join_main(bfd->main);
 
     lib_link_all(fd, bfd->main);
+    if (bfd->main->is_read_invalid) {
+      return bfd;
+    }
+
     after_liblink_merged_bmain_process(bfd->main, fd->reports);
 
     if (is_undo) {
@@ -5646,8 +5659,9 @@ static void read_library_linked_id(
     FileData *basefd, FileData *fd, Main *mainvar, ID *id, ID **r_id)
 {
   BHead *bhead = nullptr;
+  BLI_assert_msg(!ID_IS_PACKED(id), "Packed IDs should never take this codepath.");
   const bool is_valid = BKE_idtype_idcode_is_linkable(GS(id->name)) ||
-                        ((id->tag & ID_TAG_EXTERN) == 0) || ID_IS_PACKED(id);
+                        ((id->tag & ID_TAG_EXTERN) == 0);
 
   if (fd) {
     /* About future longer ID names: This is one of the main places that prevent linking IDs with
