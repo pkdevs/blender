@@ -849,15 +849,25 @@ bool light_iter_should_skip(eevee::light::VisibleLightIterator &iter)
 #endif
 }
 
-#define LIGHT_ITER_BEGIN(light_index) \
-  { \
-    eevee::light::VisibleLightIterator iter; \
-    light_iter_init(iter); \
-    while (light_iter_next(iter)) { \
-      if (light_iter_should_skip(iter)) { \
-        continue; \
-      } \
-      light_index = iter.index;
+#if defined(GPU_FRAGMENT_SHADER) && defined(MAT_LIGHT_ITER)
+
+#  define LIGHT_ITER_BEGIN(light_index) \
+    { \
+      eevee::light::VisibleLightIterator iter; \
+      light_iter_init(iter); \
+      while (light_iter_next(iter)) { \
+        if (light_iter_should_skip(iter)) { \
+          continue; \
+        } \
+        light_index = iter.index;
+
+#else
+
+#  define LIGHT_ITER_BEGIN(light_index) \
+    { \
+      if (false) {
+
+#endif
 
 #define LIGHT_ITER_END() \
   } \

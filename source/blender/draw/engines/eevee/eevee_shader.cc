@@ -833,6 +833,7 @@ static SlotAllocator add_pipeline_create_info(gpu::shader::ShaderCreateInfo &inf
           if (use_shader_to_rgba) {
             pipeline_info_name = "eevee_surf_hybrid_infos_";
             info.define("closure_to_rgba", "closure_to_rgba_hybrid");
+            info.define("MAT_LIGHT_ITER");
             info.name_ += "_deferred_hybrid";
             info.compilation_constant(gpu::shader::Type::bool_t, "use_velocity", false);
             /* Until every vertex shader are ported, we need to bridge the gap here by defining the
