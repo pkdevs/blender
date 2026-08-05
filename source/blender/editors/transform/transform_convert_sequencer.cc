@@ -511,10 +511,8 @@ static void create_trans_seq_clamp_data(TransInfo *t, const Scene *scene)
   BLI_rcti_init(&ts->hard_clamp, INT_MIN, INT_MAX, -seq::MAX_CHANNELS, seq::MAX_CHANNELS);
 
   bool only_handles_selected = true;
+  /* Loop over the strips that can be transformed, ignoring locked channels. */
   for (Strip *strip : seq_transform_collection_from_transdata(tc)) {
-    if (seq::transform_is_locked(seq::channels_displayed_get(ed), strip)) {
-      continue;
-    }
     /* Limit y-axis clamping to at least the channel bounds. */
     ts->hard_clamp.ymin = max_ii(ts->hard_clamp.ymin, 1 - strip->channel);
     ts->hard_clamp.ymax = min_ii(ts->hard_clamp.ymax, seq::MAX_CHANNELS - strip->channel);
