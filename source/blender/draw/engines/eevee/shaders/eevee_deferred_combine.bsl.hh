@@ -125,13 +125,13 @@ void combine_frag([[resource_table]] Combine &srt,
   float3 specular_direct =
       render_passes.load_color(texel, uni.uniform_buf.render_pass.specular_light_id).rgb;
   float3 specular_indirect = float3(0.0f);
-  float3 out_direct = float3(0.0f);
+  float3 out_direct = (diffuse_direct * diffuse_color) + (specular_direct * specular_color);
   float3 out_indirect = float3(0.0f);
   float3 average_normal = float3(0.0f);
   /* Denoising render pass data. */
   float average_roughness = 0.0f;
-  float3 diffuse_albedo = float3(0.0f);
-  float3 specular_albedo = float3(0.0f);
+  float3 diffuse_albedo = diffuse_color;
+  float3 specular_albedo = specular_color;
 
   /* Unroll needed for gbuf.layer access. */
   for (int i = 0; i < 3 /* GBUFFER_LAYER_MAX */; i++) [[unroll]] {
