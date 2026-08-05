@@ -162,11 +162,11 @@ static void draw_property_for_socket(DrawGroupInputsContext &ctx,
 static void draw_interface_root_panel_content(DrawGroupInputsContext &ctx,
                                               ui::Layout &layout,
                                               const bNodeTreeInterfacePanel &interface_panel,
-                                              const int num_skipped_float_inputs,
-                                              const int num_skipped_color_inputs)
+                                              const Span<bool> skipped_inputs)
 {
-  int skip_floats_left = num_skipped_float_inputs;
-  int skip_colors_left = num_skipped_color_inputs;
+  const auto input_is_skipped = [&](const bNodeTreeInterfaceSocket &socket) {
+    return skipped_inputs[ctx.tree->interface_input_index(socket)];
+  };
   for (const bNodeTreeInterfaceItem *item : interface_panel.items()) {
     switch (item->item_type) {
       case NodeTreeInterfaceItemType::Panel: {
@@ -176,29 +176,28 @@ static void draw_interface_root_panel_content(DrawGroupInputsContext &ctx,
             layout,
             ctx.properties_ptr,
             sub_interface_panel,
-            [&](const bNodeTreeInterfaceSocket &socket) { return ctx.input_is_visible(socket); },
-            [&](const bNodeTreeInterfaceSocket &socket) { return ctx.input_is_active(socket); },
+            [&](const bNodeTreeInterfaceSocket &socket) {
+              return !input_is_skipped(socket) && ctx.input_is_visible(socket);
+            },
+            [&](const bNodeTreeInterfaceSocket &socket) {
+              return !input_is_skipped(socket) && ctx.input_is_active(socket);
+            },
             [&](ui::Layout &layout,
                 const bNodeTreeInterfaceSocket &socket,
                 PointerRNA *socket_props_ptr,
                 const std::optional<StringRef> parent_name) {
-              draw_property_for_socket(ctx, layout, socket, socket_props_ptr, parent_name);
+              if (!input_is_skipped(socket)) {
+                draw_property_for_socket(ctx, layout, socket, socket_props_ptr, parent_name);
+              }
             });
         break;
       }
       case NodeTreeInterfaceItemType::Socket: {
         const auto &interface_socket = *reinterpret_cast<const bNodeTreeInterfaceSocket *>(item);
-        const bke::bNodeSocketType *typeinfo = interface_socket.socket_typeinfo();
-        const eNodeSocketDatatype socket_type = typeinfo ? typeinfo->type : SOCK_CUSTOM;
         if (interface_socket.flag & NODE_INTERFACE_SOCKET_INPUT) {
-          /* Skip the leading inputs that the strip/modifier supplies during evaluation. */
-          if (skip_floats_left > 0 && socket_type == SOCK_FLOAT) {
-            skip_floats_left--;
-          }
-          else if (skip_colors_left > 0 && socket_type == SOCK_RGBA) {
-            skip_colors_left--;
-          }
-          else if (!(interface_socket.flag & NODE_INTERFACE_SOCKET_HIDE_IN_MODIFIER)) {
+          if (!input_is_skipped(interface_socket) &&
+              !(interface_socket.flag & NODE_INTERFACE_SOCKET_HIDE_IN_MODIFIER))
+          {
             PointerRNA inputs_ptr = RNA_pointer_get(ctx.properties_ptr, "inputs");
             PointerRNA socket_props_ptr = RNA_pointer_get(&inputs_ptr,
                                                           interface_socket.identifier);
@@ -210,6 +209,29 @@ static void draw_interface_root_panel_content(DrawGroupInputsContext &ctx,
       }
     }
   }
+}
+
+static Array<bool> find_automatic_inputs(const bNodeTree &tree,
+                                         const int num_float_inputs,
+                                         const int num_color_inputs)
+{
+  const Span<const bNodeTreeInterfaceSocket *> inputs = tree.interface_inputs();
+  Array<bool> supplied_inputs(inputs.size(), false);
+  int floats_left = num_float_inputs;
+  int colors_left = num_color_inputs;
+  for (const int i : inputs.index_range()) {
+    const bke::bNodeSocketType *typeinfo = inputs[i]->socket_typeinfo();
+    const eNodeSocketDatatype socket_type = typeinfo ? typeinfo->type : SOCK_CUSTOM;
+    if (floats_left > 0 && socket_type == SOCK_FLOAT) {
+      supplied_inputs[i] = true;
+      floats_left--;
+    }
+    else if (colors_left > 0 && socket_type == SOCK_RGBA) {
+      supplied_inputs[i] = true;
+      colors_left--;
+    }
+  }
+  return supplied_inputs;
 }
 
 static void draw_mask_input_type_settings(const bContext &C, ui::Layout &layout, PointerRNA *ptr)
@@ -315,8 +337,9 @@ void draw_compositor_nodes_modifier_ui(const bContext &C,
     ctx.output_usages.reinitialize(tree.interface_outputs().size());
     nodes::socket_usage_inference::infer_group_interface_inputs_usage(
         tree, *ctx.properties_ptr, ctx.input_usages, ctx.output_usages);
+    const Array<bool> supplied_inputs = find_automatic_inputs(tree, 0, is_mask_used ? 2 : 1);
     draw_interface_root_panel_content(
-        ctx, layout, tree.tree_interface.root_panel, 0, is_mask_used ? 2 : 1);
+        ctx, layout, tree.tree_interface.root_panel, supplied_inputs);
   }
 
   if (ui::Layout *mask_input_layout = layout.panel_prop(
@@ -362,8 +385,9 @@ void draw_compositor_nodes_effect_ui(const bContext &C, PointerRNA *strip_ptr, u
     ctx.input_usages[i].is_visible = i < visible.size() ? visible[i] : true;
   }
 
-  draw_interface_root_panel_content(
-      ctx, layout, tree.tree_interface.root_panel, 1, strip.effect_num_inputs_get());
+  const Array<bool> supplied_inputs = find_automatic_inputs(
+      tree, 1, strip.effect_num_inputs_get());
+  draw_interface_root_panel_content(ctx, layout, tree.tree_interface.root_panel, supplied_inputs);
 }
 
 };  // namespace blender::nodes
