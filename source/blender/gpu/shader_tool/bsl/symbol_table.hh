@@ -15,6 +15,7 @@
 #include "symbol_variable.hh"
 #include "type_checker.hh"
 
+#include <deque>
 #include <unordered_map>
 
 namespace bsl {

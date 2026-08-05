@@ -11,6 +11,8 @@
 #include "resource.hh"
 #include "source_location.hh"
 
+#include <variant>
+
 namespace bsl {
 
 struct SymbolScope;

@@ -8,6 +8,8 @@
 
 #include "resource.hh"
 
+#include <unordered_map>
+
 namespace bsl {
 
 using namespace blender::gpu::shader::parser::ast;
