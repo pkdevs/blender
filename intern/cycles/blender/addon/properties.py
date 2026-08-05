@@ -659,8 +659,8 @@ class CyclesRenderSettings(bpy.types.PropertyGroup):
     blur_glossy: FloatProperty(
         name="Filter Glossy",
         description="Adaptively blur glossy shaders and image textures after blurry bounces, "
-        "to reduce noise and improve texture cache efficiency at the cost of accuracy. Lowering "
-        "this value is needed to render caustics",
+        "to reduce noise and improve texture cache efficiency at the cost of accuracy. Lower "
+        "this value to render caustics",
         min=0.0, max=10.0,
         default=1.0,
     )
