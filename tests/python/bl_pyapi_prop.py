@@ -584,26 +584,30 @@ class TestPropCollectionAndPointer(unittest.TestCase):
         self.assertEqual(len(id_inst.test_collection_move), 0)
 
         # Out of range in no-init empty collection.
-        with self.assertRaises(IndexError):
+        with self.assertRaises(IndexError) as context:
             id_inst.test_collection_move.move(0, 0)
+        self.assertEqual(str(context.exception), "bpy_prop_collection.move: index out of range")
 
         # Out of range in init empty collection.
         id_inst.test_collection_move.add()
         id_inst.test_collection_move.clear()
-        with self.assertRaises(IndexError):
+        with self.assertRaises(IndexError) as context:
             id_inst.test_collection_move.move(0, 0)
+        self.assertEqual(str(context.exception), "bpy_prop_collection.move: index out of range")
 
         # Fill.
         for i in range(4):
             id_inst.test_collection_move.add().test_prop = i
 
         # Out of range.
-        with self.assertRaises(IndexError):
+        with self.assertRaises(IndexError) as context:
             id_inst.test_collection_move.move(0, 4)
+        self.assertEqual(str(context.exception), "bpy_prop_collection.move: index out of range")
 
         # Negative index.
-        with self.assertRaises(IndexError):
+        with self.assertRaises(IndexError) as context:
             id_inst.test_collection_move.move(-1, 0)
+        self.assertEqual(str(context.exception), "bpy_prop_collection.move: index out of range")
 
         # Regular move case.
         id_inst.test_collection_move.move(0, 3)
