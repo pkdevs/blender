@@ -129,13 +129,14 @@ class Sampling {
   /* Returns true if rendering has finished. */
   bool finished() const
   {
-    return sample_ >= sample_count_ || check_time_limit_reached();
+    return (sample_ >= sample_count_) || check_time_limit_reached();
   }
 
   /* Returns true if viewport smoothing and sampling has finished. */
   bool finished_viewport() const
   {
-    return (viewport_sample_ >= sample_count_ || check_time_limit_reached()) && !interactive_mode_;
+    return ((viewport_sample_ >= sample_count_) && !interactive_mode_) ||
+           check_time_limit_reached();
   }
 
   /* Returns true if viewport renderer is in interactive mode and should use TAA. */
@@ -156,7 +157,8 @@ class Sampling {
     return sample_;
   }
 
-  /* Must to be called to update the current progress towards the time limit. */
+  /* Updates the current progress towards the time limit. Must be called after a sample has been
+   * rendered and before `finished` or `finished_viewport` are called. */
   void update_time();
 
   /* Returns true if a custom pixel jitter sample position is set. */
