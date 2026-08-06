@@ -1493,7 +1493,7 @@ struct CodegenContext : NodeErrorHandler {
       skip_if(Static);
       id_type(decl.return_type(), scope);
       id_func_resolved(decl.identifier(), decl.arguments(), scope, scope);
-      func_arg_list(decl.arguments(), body_scope, false);
+      func_arg_list(decl.arguments(), body_scope, false, true);
       builder << string(";\n");
     }
     else {
@@ -1820,7 +1820,10 @@ struct CodegenContext : NodeErrorHandler {
     return cond;
   }
 
-  void func_arg_list(FuncArgList list, SymbolScope &scope, bool with_trivia = true)
+  void func_arg_list(FuncArgList list,
+                     SymbolScope &scope,
+                     bool with_trivia = true,
+                     bool no_arg_name = false)
   {
     match_if('(');
 
@@ -1848,10 +1851,11 @@ struct CodegenContext : NodeErrorHandler {
     }
 
     if (builder.curr != ')') {
+      int i = 0;
       for (FuncArg arg : list.children_of_type<FuncArg>()) {
         skip_node(arg.attributes());
         id_type(arg.type(), scope);
-        declarator(arg.declarator(), scope, true);
+        declarator(arg.declarator(), scope, true, no_arg_name ? i++ : -1);
         match_if(',');
       }
     }
@@ -2187,7 +2191,12 @@ struct CodegenContext : NodeErrorHandler {
     }
   }
 
-  void declarator(Declarator decl, SymbolScope &scope, bool skip_value = false)
+  /* If skip_name_match_index is not -1, will not try to match the declared argument name and
+   * declare empty . */
+  void declarator(Declarator decl,
+                  SymbolScope &scope,
+                  bool skip_value = false,
+                  int skip_name_match_index = -1)
   {
     ArrayDecl array = decl.array();
     SymbolVariable *var = scope.lookup_variable(table, decl.identifier());
@@ -2201,7 +2210,15 @@ struct CodegenContext : NodeErrorHandler {
     else {
       match_if('&');
     }
-    id_var_decl_resolved(decl.identifier(), scope);
+
+    if (skip_name_match_index != -1) {
+      /* Do not try to match the identifier for forward declarations. */
+      builder << "_" + to_string(skip_name_match_index);
+    }
+    else {
+      id_var_decl_resolved(decl.identifier(), scope);
+    }
+
     if (par) {
       match_if(')');
     }

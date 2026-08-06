@@ -684,8 +684,7 @@ struct SymbolParser : NodeErrorHandler {
           parent = nullptr;
           Id start = id.namespace_start();
           Id last = id.child_last(NodeType::Id).prev(NodeType::Id);
-          if (auto [parent_cls, err_cls] = scope.lookup_class(table, start, last); parent_cls) {
-            error(err_cls);
+          if (auto *parent_cls = scope.lookup_class(table, start, last).unwrap(this); parent_cls) {
             if (parent_cls->template_data && !last.template_params().is_valid()) {
               error(last, Diag::MissingTemplateParameters);
             }
@@ -751,6 +750,7 @@ struct SymbolParser : NodeErrorHandler {
         NOTE(decl.identifier(), Diag::NoteInstantiationFuncTemplateRequested, full_id);
         SymbolFunction *spec = parse_func_decl(scope, decl, prefix, mangled.str);
         spec->is_specialization = true;
+        spec->template_data = fn->template_data;
         fn->template_data->instances.emplace(mangled.str, spec);
         fn->add_overload(spec);
       }
