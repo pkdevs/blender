@@ -12,7 +12,6 @@
 
 #include <atomic>
 #include <condition_variable>
-#include <mutex>
 #include <optional>
 #include <thread>
 #include <vector>
