@@ -50,6 +50,7 @@
 #include "SEQ_transform.hh"
 #include "SEQ_utils.hh"
 
+#include "cache/movie_reader_cache.hh"
 #include "effects/effects.hh"
 #include "multiview.hh"
 #include "proxy.hh"
@@ -564,6 +565,8 @@ void add_reload_new_file(Main *bmain, Scene *scene, Strip *strip, const bool loc
           filepath, sizeof(filepath), strip->data->dirpath, strip->data->stripdata->filename);
       BLI_path_abs(filepath, ID_BLEND_PATH(bmain, &scene->id));
 
+      /* The file may have changed on disk without changing the cache key. */
+      movie_reader_cache_invalidate(*scene, *strip);
       strip_free_movie_readers(strip);
 
       if (is_multiview && (strip->views_format == R_IMF_VIEWS_INDIVIDUAL)) {

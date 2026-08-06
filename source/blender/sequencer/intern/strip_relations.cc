@@ -34,6 +34,7 @@
 
 #include "cache/final_image_cache.hh"
 #include "cache/intra_frame_cache.hh"
+#include "cache/movie_reader_cache.hh"
 #include "cache/source_image_cache.hh"
 #include "effects/effects.hh"
 #include "sequencer.hh"
@@ -269,6 +270,9 @@ void relations_free_imbuf(Scene *scene, ListBaseT<Strip> *seqbase, bool for_rend
   }
 
   prefetch_stop(scene);
+  if (!for_render && seqbase == &scene->ed->seqbase) {
+    movie_reader_cache_clear(*scene);
+  }
 
   for (Strip &strip : *seqbase) {
     if (for_render && strip.intersects_frame(scene, scene->r.cfra)) {

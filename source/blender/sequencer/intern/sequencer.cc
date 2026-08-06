@@ -57,6 +57,8 @@
 #include "SEQ_transform.hh"
 #include "SEQ_utils.hh"
 
+#include "cache/movie_reader_cache.hh"
+
 #include "BLO_read_write.hh"
 
 #include "cache/compositor_cache.hh"
@@ -1284,8 +1286,11 @@ void eval_strips(Depsgraph *depsgraph, Scene *scene, ListBaseT<Strip> *seqbase)
   sound_update_bounds_all(scene);
 }
 
+EditingRuntime::EditingRuntime() : movie_reader_cache(movie_reader_cache_create()) {}
+
 EditingRuntime::~EditingRuntime()
 {
+  movie_reader_cache_destroy(this->movie_reader_cache);
   MEM_delete(this->compositor_cache);
 }
 

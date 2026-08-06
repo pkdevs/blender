@@ -37,6 +37,7 @@ class CompositorCache;
 struct FinalImageCache;
 struct IntraFrameCache;
 struct MediaPresence;
+struct MovieReaderCache;
 struct PrefetchJob;
 struct PreviewCache;
 struct SourceImageCache;
@@ -104,6 +105,7 @@ struct StripRuntime {
 };
 
 struct EditingRuntime {
+  EditingRuntime();
   ~EditingRuntime();
 
   StripLookup *strip_lookup = nullptr;
@@ -112,6 +114,7 @@ struct EditingRuntime {
   IntraFrameCache *intra_frame_cache = nullptr;
   SourceImageCache *source_image_cache = nullptr;
   FinalImageCache *final_image_cache = nullptr;
+  MovieReaderCache *movie_reader_cache = nullptr;
   PreviewCache *preview_cache = nullptr;
   PrefetchJob *prefetch_job = nullptr;
   CompositorCache *compositor_cache = nullptr;

@@ -28,7 +28,6 @@
 #include "BLT_translation.hh"
 
 #include "BKE_animsys.hh"
-#include "BKE_global.hh"
 #include "BKE_image.hh"
 #include "BKE_library.hh"
 #include "BKE_main.hh"
@@ -229,49 +228,21 @@ static MovieReader *open_anim_filepath(Strip *strip, const char *filepath, bool 
                          strip->data->colorspace_settings.name);
 }
 
-static bool use_proxy(Editing *ed, Strip *strip)
+static void index_dir_set(const Editing &ed, const Strip &strip, MovieReader *reader)
 {
-  StripProxy *proxy = strip->data->proxy;
-  return proxy && ((proxy->storage & SEQ_STORAGE_PROXY_CUSTOM_DIR) != 0 ||
-                   (ed->proxy_storage == SEQ_EDIT_PROXY_DIR_STORAGE));
-}
-
-static void proxy_dir_get(Editing *ed, Strip *strip, char r_proxy_dirpath[FILE_MAX])
-{
-  if (use_proxy(ed, strip)) {
-    if (ed->proxy_storage == SEQ_EDIT_PROXY_DIR_STORAGE) {
-      if (ed->proxy_dir[0] == 0) {
-        BLI_strncpy(r_proxy_dirpath, "//BL_proxy", FILE_MAX);
-      }
-      else {
-        BLI_strncpy(r_proxy_dirpath, ed->proxy_dir, FILE_MAX);
-      }
-    }
-    else {
-      BLI_strncpy(r_proxy_dirpath, strip->data->proxy->dirpath, FILE_MAX);
-    }
-    BLI_path_abs(r_proxy_dirpath, BKE_main_blendfile_path_from_global());
-  }
-}
-
-static void index_dir_set(Editing *ed, Strip *strip, MovieReader *reader)
-{
-  if (reader == nullptr || !use_proxy(ed, strip)) {
+  if (reader == nullptr) {
     return;
   }
 
   char proxy_dirpath[FILE_MAX];
-  proxy_dir_get(ed, strip, proxy_dirpath);
-  seq_proxy_index_dir_set(reader, proxy_dirpath);
+  if (seq_proxy_get_custom_dir(ed, strip, proxy_dirpath)) {
+    seq_proxy_index_dir_set(reader, proxy_dirpath);
+  }
 }
 
 static bool open_anim_file_multiview(Scene *scene, Strip *strip, const char *filepath)
 {
-  char prefix[FILE_MAX];
-  const char *ext = nullptr;
-  BKE_scene_multiview_view_prefix_get(scene, filepath, prefix, &ext);
-
-  if (strip->views_format != R_IMF_VIEWS_INDIVIDUAL || prefix[0] == '\0') {
+  if (strip->views_format != R_IMF_VIEWS_INDIVIDUAL) {
     return false;
   }
 
@@ -280,9 +251,13 @@ static bool open_anim_file_multiview(Scene *scene, Strip *strip, const char *fil
   int totfiles = seq_num_files(scene, strip->views_format, true);
 
   for (int i = 0; i < totfiles; i++) {
-    const char *suffix = BKE_scene_multiview_view_id_suffix_get(&scene->r, i);
     char filepath_view[FILE_MAX];
-    SNPRINTF(filepath_view, "%s%s%s", prefix, suffix, ext);
+    const char *suffix = nullptr;
+    if (!seq_multiview_view_filepath_get(
+            *scene, filepath, i, filepath_view, sizeof(filepath_view), &suffix))
+    {
+      return false;
+    }
 
     /* Multiview files must be loaded, otherwise it is not possible to detect failure. */
     MovieReader *reader = open_anim_filepath(strip, filepath_view, true);
@@ -292,7 +267,7 @@ static bool open_anim_file_multiview(Scene *scene, Strip *strip, const char *fil
       return false; /* Multiview render failed. */
     }
 
-    index_dir_set(ed, strip, reader);
+    index_dir_set(*ed, *strip, reader);
     strip->runtime->movie_readers.append(reader);
     MOV_set_multiview_suffix(reader, suffix);
     is_multiview_loaded = true;
@@ -326,7 +301,7 @@ void strip_open_anim_file(Scene *scene, Strip *strip, bool openfile)
   if (!is_multiview || !multiview_is_loaded) {
     MovieReader *reader = open_anim_filepath(strip, filepath, openfile);
     strip->runtime->movie_readers.append(reader);
-    index_dir_set(ed, strip, reader);
+    index_dir_set(*ed, *strip, reader);
   }
 }
 

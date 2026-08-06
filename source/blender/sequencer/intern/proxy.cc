@@ -121,6 +121,25 @@ bool seq_proxy_get_custom_file_filepath(const Strip *strip, char *filepath, cons
   return true;
 }
 
+bool seq_proxy_get_custom_dir(const Editing &ed, const Strip &strip, char r_dirpath[FILE_MAX])
+{
+  const StripProxy *proxy = strip.data->proxy;
+  if (proxy == nullptr || ((proxy->storage & SEQ_STORAGE_PROXY_CUSTOM_DIR) == 0 &&
+                           ed.proxy_storage != SEQ_EDIT_PROXY_DIR_STORAGE))
+  {
+    return false;
+  }
+
+  if (ed.proxy_storage == SEQ_EDIT_PROXY_DIR_STORAGE) {
+    BLI_strncpy(r_dirpath, ed.proxy_dir[0] ? ed.proxy_dir : "//BL_proxy", FILE_MAX);
+  }
+  else {
+    BLI_strncpy(r_dirpath, proxy->dirpath, FILE_MAX);
+  }
+  BLI_path_abs(r_dirpath, BKE_main_blendfile_path_from_global());
+  return true;
+}
+
 static bool seq_proxy_get_filepath_for_elem(const Scene *scene,
                                             const Strip &strip,
                                             const StripElem &strip_elem,
@@ -151,24 +170,9 @@ static bool seq_proxy_get_filepath_for_elem(const Scene *scene,
     }
   }
 
-  if (ed->proxy_storage == SEQ_EDIT_PROXY_DIR_STORAGE) {
-    /* Per project default. */
-    if (ed->proxy_dir[0] == 0) {
-      STRNCPY(dirpath, "//BL_proxy");
-    }
-    else { /* Per project with custom dirpath. */
-      STRNCPY(dirpath, ed->proxy_dir);
-    }
-    BLI_path_abs(filepath, BKE_main_blendfile_path_from_global());
-  }
-  else {
-    /* Pre strip with custom dir. */
-    if (proxy->storage & SEQ_STORAGE_PROXY_CUSTOM_DIR) {
-      STRNCPY(dirpath, strip.data->proxy->dirpath);
-    }
-    else { /* Per strip default. */
-      SNPRINTF(dirpath, "%s" SEP_STR "BL_proxy", strip.data->dirpath);
-    }
+  if (!seq_proxy_get_custom_dir(*ed, strip, dirpath)) {
+    /* Per strip default. */
+    SNPRINTF(dirpath, "%s" SEP_STR "BL_proxy", strip.data->dirpath);
   }
 
   /* Proxy size number to be used in path. */
@@ -511,9 +515,8 @@ static void seq_proxy_build_frame(const Scene *scene,
 
 static ImBuf *render_image_strip_frame(const ProxyBuildContext &context,
                                        const Strip &strip,
-                                       char *filepath,
-                                       char *prefix,
-                                       const char *ext,
+                                       const char *filepath,
+                                       const char *prefix,
                                        int view_id)
 {
   ImBuf *ibuf = nullptr;
@@ -528,8 +531,11 @@ static ImBuf *render_image_strip_frame(const ProxyBuildContext &context,
   }
   else {
     char filepath_view[FILE_MAX];
-    BKE_scene_multiview_view_prefix_get(context.scene, filepath, prefix, &ext);
-    seq_multiview_name(context.scene, view_id, prefix, ext, filepath_view, FILE_MAX);
+    if (!seq_multiview_view_filepath_get(
+            *context.scene, filepath, view_id, filepath_view, sizeof(filepath_view), nullptr))
+    {
+      return nullptr;
+    }
     ibuf = IMB_load_image_from_filepath(filepath_view, flag, strip.data->colorspace_settings.name);
   }
   if (ibuf == nullptr) {
@@ -570,7 +576,6 @@ static void image_proxy_builder_process(ProxyBuildContext &context,
     const StripElem &s_elem = strip.data->stripdata[elem_index];
 
     char filepath[FILE_MAX];
-    const char *ext = nullptr;
     char prefix[FILE_MAX];
 
     ImBuf *ibuf = nullptr;
@@ -580,14 +585,13 @@ static void image_proxy_builder_process(ProxyBuildContext &context,
 
     const int totfiles = seq_num_files(context.scene, strip.views_format, true);
     bool is_multiview_render = seq_image_strip_is_multiview_render(
-        context.scene, &strip, totfiles, filepath, prefix, ext);
+        context.scene, &strip, totfiles, filepath, prefix);
 
     if (is_multiview_render) {
       Array<ImBuf *> ibufs_arr(tot_views, nullptr);
 
       for (int view_id = 0; view_id < totfiles; view_id++) {
-        ibufs_arr[view_id] = render_image_strip_frame(
-            context, strip, filepath, prefix, ext, view_id);
+        ibufs_arr[view_id] = render_image_strip_frame(context, strip, filepath, prefix, view_id);
       }
 
       if (ibufs_arr[0] != nullptr) {
@@ -611,7 +615,7 @@ static void image_proxy_builder_process(ProxyBuildContext &context,
       }
     }
     else {
-      ibuf = render_image_strip_frame(context, strip, filepath, prefix, ext, context.view_id);
+      ibuf = render_image_strip_frame(context, strip, filepath, prefix, context.view_id);
     }
 
     if (ibuf != nullptr) {
