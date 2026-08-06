@@ -972,32 +972,37 @@ vector<SymbolTable::BuiltinFunc> SymbolTable::generate_all_builtin_functions()
       functions.push_back({type, "texelFetch", {sampler, icoord_type, int_cls}});
     }
 
-    const vector<SymbolClass *> images = {
-        root->classes[prefix + "image2D"],
-        root->classes[prefix + "image2DArray"],
-        root->classes[prefix + "image3D"],
+    vector<tuple<SymbolClass *, int>> images = {
+        {root->classes[prefix + "image2D"], 2},
+        {root->classes[prefix + "image2DArray"], 3},
+        {root->classes[prefix + "image3D"], 3},
     };
 
-    for (size_t i = 0; i < images.size(); ++i) {
-      SymbolClass *coord_type = i_types[i == 0 ? 1 : 2];
-      functions.push_back({type, "imageLoad", {images[i], coord_type}});
-      functions.push_back({type, "imageLoadFast", {images[i], coord_type}});
-      functions.push_back({void_cls, "imageStore", {images[i], coord_type, type}});
-      functions.push_back({void_cls, "imageStoreFast", {images[i], coord_type, type}});
+    if (!prefix.empty()) {
+      images.emplace_back(root->classes[prefix + "image2DAtomic"], 2);
+      images.emplace_back(root->classes[prefix + "image3DAtomic"], 3);
+      images.emplace_back(root->classes[prefix + "image2DArrayAtomic"], 3);
+    }
 
-      if (!prefix.empty()) {
-        functions.push_back({type, "imageAtomicAdd", {images[i], coord_type, type}});
-        functions.push_back({type, "imageAtomicMin", {images[i], coord_type, type}});
-        functions.push_back({type, "imageAtomicMax", {images[i], coord_type, type}});
-        functions.push_back({type, "imageAtomicAnd", {images[i], coord_type, type}});
-        functions.push_back({type, "imageAtomicOr", {images[i], coord_type, type}});
-        functions.push_back({type, "imageAtomicXor", {images[i], coord_type, type}});
-        functions.push_back({type, "imageAtomicExchange", {images[i], coord_type, type}});
-        functions.push_back({type, "imageAtomicCompSwap", {images[i], coord_type, type, type}});
+    for (auto [image, coord_dim] : images) {
+      SymbolClass *coord_type = i_types[coord_dim - 1];
+      functions.push_back({type, "imageLoad", {image, coord_type}});
+      functions.push_back({type, "imageLoadFast", {image, coord_type}});
+      functions.push_back({void_cls, "imageStore", {image, coord_type, type}});
+      functions.push_back({void_cls, "imageStoreFast", {image, coord_type, type}});
+      functions.push_back({coord_type, "imageSize", {image}});
+      functions.push_back({void_cls, "imageFence", {image}});
+
+      if (image->identifier.ends_with("Atomic")) {
+        functions.push_back({type, "imageAtomicAdd", {image, coord_type, type}});
+        functions.push_back({type, "imageAtomicMin", {image, coord_type, type}});
+        functions.push_back({type, "imageAtomicMax", {image, coord_type, type}});
+        functions.push_back({type, "imageAtomicAnd", {image, coord_type, type}});
+        functions.push_back({type, "imageAtomicOr", {image, coord_type, type}});
+        functions.push_back({type, "imageAtomicXor", {image, coord_type, type}});
+        functions.push_back({type, "imageAtomicExchange", {image, coord_type, type}});
+        functions.push_back({type, "imageAtomicCompSwap", {image, coord_type, type, type}});
       }
-
-      functions.push_back({coord_type, "imageSize", {images[i]}});
-      functions.push_back({void_cls, "imageFence", {images[i]}});
     }
   }
 
