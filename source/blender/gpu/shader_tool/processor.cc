@@ -260,7 +260,7 @@ SourceProcessor::Result SourceProcessor::convert_bsl()
     parser.language = Language::CPP;
     parser.set_str(str);
 
-    disabled_code_mutation(parser);
+    disabled_code_mutation(parser, true);
     /* Preprocessor directive parsing & linting. */
     lint_pragma_once(parser, filename);
     parse_pragma_runtime_generated(parser);
@@ -508,7 +508,7 @@ metadata::Source SourceProcessor::parse_include_and_symbols(SourceManager &sourc
   Parser &parser = sources.new_source(error_handler);
   try {
     parser.set_str(str);
-    disabled_code_mutation(parser);
+    disabled_code_mutation(parser, true);
     parse_pragma_runtime_generated(parser);
     parse_includes(parser);
 
@@ -893,7 +893,7 @@ void SourceProcessor::lower_namesless_parameters_ast(Parser &parser)
   }
 }
 
-void SourceProcessor::disabled_code_mutation(Parser &parser)
+void SourceProcessor::disabled_code_mutation(Parser &parser, bool new_bsl_compiler)
 {
   auto process_disabled_scope = [&](Token start_tok) {
     /* Search for endif with the same indentation. Assume formatted input. */
@@ -946,12 +946,21 @@ void SourceProcessor::disabled_code_mutation(Parser &parser)
   };
 
   parser().foreach_match<true>("#AA", [&](const vector<Token> &tokens) {
-    if (tokens[1].str() == "ifndef" && tokens[2].str() == "GPU_SHADER") {
+    if (tokens[1].str() != "ifndef") {
+      return;
+    }
+    if (tokens[2].str() == "GPU_SHADER" ||
+        (new_bsl_compiler ? tokens[2].str() == "__BSL__" : false))
+    {
       process_disabled_scope(tokens[0]);
     }
   });
   parser().foreach_match<true>("#i!A(A)", [&](const vector<Token> &tokens) {
-    if (tokens[1].str() == "if" && tokens[3].str() == "defined" && tokens[5].str() == "GPU_SHADER")
+    if (tokens[1].str() != "if" || tokens[3].str() != "defined") {
+      return;
+    }
+    if (tokens[5].str() == "GPU_SHADER" ||
+        (new_bsl_compiler ? tokens[5].str() == "__BSL__" : false))
     {
       process_disabled_scope(tokens[0]);
     }

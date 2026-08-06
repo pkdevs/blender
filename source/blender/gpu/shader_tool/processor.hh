@@ -163,7 +163,7 @@ class SourceProcessor {
    * Avoid processing code that is not destined to be shader code and could contain unsupported
    * syntax. */
   std::string disabled_code_mutation(const std::string &str);
-  void disabled_code_mutation(Parser &parser);
+  void disabled_code_mutation(Parser &parser, bool new_bsl_compiler = false);
   /* Remove trailing white spaces. */
   template<typename ParserT> void cleanup_whitespace(ParserT &parser, bool do_leading = false);
   /* Successive mutations can introduce a lot of unneeded line directives. */
