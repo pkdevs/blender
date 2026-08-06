@@ -1211,15 +1211,50 @@ static void make_common_type_prop(StructRNA &srna,
       "");
   RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
 }
-static PointerRNA find_compositor_modifier(PointerRNA *ptr)
+
+/* Find the strip that owns the compositor properties an input value belongs to. Works both
+ * for strip modifiers and compositor effects. */
+static Strip *find_compositor_properties_strip(PointerRNA *ptr, Editing *ed)
 {
+  if (const std::optional<AncestorPointerRNA> strip = RNA_struct_search_closest_ancestor_by_type(
+          ptr, RNA_Strip))
+  {
+    return static_cast<Strip *>(strip->data);
+  }
+
+  /* Modifier fallback for properties pointers created without a strip ancestor. */
   if (const std::optional<AncestorPointerRNA> ancestor =
           RNA_struct_search_closest_ancestor_by_type(ptr,
                                                      RNA_SequencerCompositorModifierProperties))
   {
-    return PointerRNA(ptr->owner_id, ancestor->type, ancestor->data);
+    auto *cmd = static_cast<SequencerCompositorModifierData *>(ancestor->data);
+    Strip *found_strip = nullptr;
+    seq::foreach_strip(&ed->seqbase, [&](Strip *strip) {
+      if (BLI_findindex(&strip->modifiers, cmd) != -1) {
+        found_strip = strip;
+        return false;
+      }
+      return true;
+    });
+    return found_strip;
   }
-  return PointerRNA_NULL;
+
+  /* Effect fallback for properties pointers created without a strip ancestor. */
+  if (const std::optional<AncestorPointerRNA> ancestor =
+          RNA_struct_search_closest_ancestor_by_type(ptr, RNA_SequencerCompositorEffectProperties))
+  {
+    const void *effectdata = ancestor->data;
+    Strip *found_strip = nullptr;
+    seq::foreach_strip(&ed->seqbase, [&](Strip *strip) {
+      if (strip->effectdata == effectdata) {
+        found_strip = strip;
+        return false;
+      }
+      return true;
+    });
+    return found_strip;
+  }
+  return nullptr;
 }
 static void set_common_sequencer_update_function(PropertyRNA *prop)
 {
@@ -1229,19 +1264,10 @@ static void set_common_sequencer_update_function(PropertyRNA *prop)
     if (!ed) {
       return;
     }
-    PointerRNA cmd_ptr = find_compositor_modifier(ptr);
-    auto *cmd = cmd_ptr.data_as<SequencerCompositorModifierData>();
-
-    /* TODO: Should be in ancestors?? */
-    Strip *modifier_strip = nullptr;
-    seq::foreach_strip(&ed->seqbase, [&](Strip *strip) {
-      if (BLI_findindex(&strip->modifiers, cmd) != -1) {
-        modifier_strip = strip;
-        return false;
-      }
-      return true;
-    });
-    seq::relations_invalidate_cache(sequencer_scene, modifier_strip);
+    Strip *properties_strip = find_compositor_properties_strip(ptr, ed);
+    if (properties_strip) {
+      seq::relations_invalidate_cache(sequencer_scene, properties_strip);
+    }
   });
   RNA_def_property_update_notifier(prop, NC_SCENE | ND_SEQUENCER);
 }
@@ -1296,6 +1322,11 @@ static void make_common_fallback_props(StructRNA &srna,
                         nodes::geometry_nodes_input_type_items_fallback,
                         nodes::GeometryNodesInputType::Fallback,
                         r_generated);
+}
+
+static void data_block_pointer_update(Main *bmain, Scene * /*scene*/, PointerRNA * /*ptr*/)
+{
+  DEG_relations_tag_update(bmain);
 }
 
 static bke::bNodeSocketType *make_socket_type_bool()
@@ -1964,6 +1995,7 @@ static bke::bNodeSocketType *make_socket_type_object()
     }
     RNA_def_property_flag(prop, PROP_FORCE_GEOMETRY_EVAL);
     RNA_def_property_override_flag(prop, PROPOVERRIDE_OVERRIDABLE_LIBRARY);
+    RNA_def_property_update_runtime(prop, data_block_pointer_update);
     make_common_value_props(srna, socket, r_generated);
   };
   socktype->make_compositor_nodes_input_srna = [](const bNodeTree & /*tree*/,
@@ -2046,6 +2078,7 @@ static bke::bNodeSocketType *make_socket_type_collection()
     }
     RNA_def_property_flag(prop, PROP_FORCE_GEOMETRY_EVAL);
     RNA_def_property_override_flag(prop, PROPOVERRIDE_OVERRIDABLE_LIBRARY);
+    RNA_def_property_update_runtime(prop, data_block_pointer_update);
     make_common_value_props(srna, socket, r_generated);
   };
   socktype->make_compositor_nodes_input_srna = [](const bNodeTree & /*tree*/,
@@ -2083,6 +2116,7 @@ static bke::bNodeSocketType *make_socket_type_texture()
         &srna, "value", RNA_Texture, socket.name, socket.description);
     RNA_def_property_flag(prop, PROP_FORCE_GEOMETRY_EVAL);
     RNA_def_property_override_flag(prop, PROPOVERRIDE_OVERRIDABLE_LIBRARY);
+    RNA_def_property_update_runtime(prop, data_block_pointer_update);
     make_common_value_props(srna, socket, r_generated);
   };
   socktype->make_compositor_nodes_input_srna = [](const bNodeTree & /*tree*/,
@@ -2126,6 +2160,7 @@ static bke::bNodeSocketType *make_socket_type_image()
     }
     RNA_def_property_flag(prop, PROP_FORCE_GEOMETRY_EVAL);
     RNA_def_property_override_flag(prop, PROPOVERRIDE_OVERRIDABLE_LIBRARY);
+    RNA_def_property_update_runtime(prop, data_block_pointer_update);
     make_common_value_props(srna, socket, r_generated);
   };
   socktype->make_compositor_nodes_input_srna = [](const bNodeTree & /*tree*/,
@@ -2169,6 +2204,7 @@ static bke::bNodeSocketType *make_socket_type_material()
     }
     RNA_def_property_flag(prop, PROP_FORCE_GEOMETRY_EVAL);
     RNA_def_property_override_flag(prop, PROPOVERRIDE_OVERRIDABLE_LIBRARY);
+    RNA_def_property_update_runtime(prop, data_block_pointer_update);
     make_common_value_props(srna, socket, r_generated);
   };
   socktype->make_compositor_nodes_input_srna = [](const bNodeTree & /*tree*/,
@@ -2211,6 +2247,7 @@ static bke::bNodeSocketType *make_socket_type_font()
     }
     RNA_def_property_flag(prop, PROP_FORCE_GEOMETRY_EVAL);
     RNA_def_property_override_flag(prop, PROPOVERRIDE_OVERRIDABLE_LIBRARY);
+    RNA_def_property_update_runtime(prop, data_block_pointer_update);
     make_common_value_props(srna, socket, r_generated);
   };
   socktype->make_compositor_nodes_input_srna = [](const bNodeTree & /*tree*/,
@@ -2313,6 +2350,7 @@ static bke::bNodeSocketType *make_socket_type_sound()
     }
     RNA_def_property_flag(prop, PROP_FORCE_GEOMETRY_EVAL);
     RNA_def_property_override_flag(prop, PROPOVERRIDE_OVERRIDABLE_LIBRARY);
+    RNA_def_property_update_runtime(prop, data_block_pointer_update);
     make_common_value_props(srna, socket, r_generated);
   };
   return socktype;
