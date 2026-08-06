@@ -184,6 +184,55 @@ void blo_do_versions_530(FileData * /*fd*/, Library * /*lib*/, Main *bmain)
     FOREACH_NODETREE_END;
   }
 
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 503, 9)) {
+    for (Brush &brush : bmain->brushes) {
+      if (brush.curve_hardness == nullptr) {
+        brush.curve_hardness = brush.paint_flags & BRUSH_PAINT_HARDNESS_PRESSURE_INVERT ?
+                                   BKE_paint_default_curve_inverted() :
+                                   BKE_paint_default_curve();
+      }
+      if (brush.curve_auto_smooth == nullptr) {
+        brush.curve_auto_smooth = BKE_paint_default_curve_inverted();
+      }
+      if (brush.curve_spacing == nullptr) {
+        brush.curve_spacing = BKE_paint_default_curve();
+      }
+    }
+  }
+
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 503, 10)) {
+    /* This code formerly ran whenever entering Sculpt Mode, it is unlikely that there are any
+     * files that have these settings with invalid values, but since these values have never been
+     * set in versioning, perform this
+     */
+    for (Scene &scene : bmain->scenes) {
+      Sculpt *sd = scene.toolsettings->sculpt;
+      if (sd == nullptr) {
+        continue;
+      }
+
+      const Sculpt defaults = {};
+      if (sd->detail_percent == 0.0f) {
+        sd->detail_percent = defaults.detail_percent;
+      }
+      if (sd->constant_detail == 0.0f) {
+        sd->constant_detail = defaults.constant_detail;
+      }
+      if (sd->detail_size == 0.0f) {
+        sd->detail_size = defaults.detail_size;
+      }
+
+      if (!sd->paint.tile_offset[0]) {
+        sd->paint.tile_offset[0] = 1.0f;
+      }
+      if (!sd->paint.tile_offset[1]) {
+        sd->paint.tile_offset[1] = 1.0f;
+      }
+      if (!sd->paint.tile_offset[2]) {
+        sd->paint.tile_offset[2] = 1.0f;
+      }
+    }
+  }
   /**
    * Always bump subversion in BKE_blender_version.h when adding versioning
    * code here, and wrap it inside a MAIN_VERSION_FILE_ATLEAST check.
