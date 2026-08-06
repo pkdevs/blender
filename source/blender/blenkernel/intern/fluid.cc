@@ -1076,14 +1076,14 @@ static void obstacles_from_mesh(Object *coll_ob,
 
     /* Skip effector sampling loop if object has disabled effector. */
     bool use_effector = fes->flags & FLUID_EFFECTOR_USE_EFFEC;
-    const bke::bvh::Tree &tree = mesh->bvh_tris();
-    if (use_effector) {
+    if (use_effector && mesh->faces_num > 0) {
+      const bke::bvh::Tree &tree_data = mesh->bvh_tris();
       ObstaclesFromDMData data{};
       data.fes = fes;
       data.vert_positions = positions;
       data.corner_verts = corner_verts;
       data.corner_tris = corner_tris;
-      data.tree = &tree;
+      data.tree = &tree_data;
       data.bb = bb;
       data.has_velocity = has_velocity;
       data.vert_vel = vert_vel;
@@ -2108,8 +2108,8 @@ static void emit_from_mesh(
 
     /* Skip flow sampling loop if object has disabled flow. */
     bool use_flow = ffs->flags & FLUID_FLOW_USE_INFLOW;
-    const bke::bvh::Tree &tree = mesh->bvh_tris();
-    if (use_flow) {
+    if (use_flow && mesh->faces_num > 0) {
+      const bke::bvh::Tree &tree_data = mesh->bvh_tris();
 
       EmitFromDMData data{};
       data.fds = fds;
@@ -2121,7 +2121,7 @@ static void emit_from_mesh(
       data.uv_map = uv_map;
       data.dvert = dvert;
       data.defgrp_index = defgrp_index;
-      data.tree = &tree;
+      data.tree = &tree_data;
       data.bb = bb;
       data.has_velocity = has_velocity;
       data.vert_vel = vert_vel;
