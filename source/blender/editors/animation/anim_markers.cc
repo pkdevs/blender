@@ -90,7 +90,7 @@ ID *ED_markers_get_owner_id(const bContext *C, Scene *scene)
   }
 
   if (ac.active_action && ac.spacetype == SPACE_ACTION &&
-      (ac.datatype == ANIMCONT_ACTION || ac.datatype == ANIMCONT_SHAPEKEY))
+      ELEM(ac.datatype, ANIMCONT_ACTION, ANIMCONT_SHAPEKEY))
   {
     const SpaceAction *saction = static_cast<SpaceAction *>(ac.area->spacedata.first);
     if (saction->flag & SACTION_POSEMARKERS_SHOW) {

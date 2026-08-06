@@ -782,8 +782,8 @@ class TOPBAR_PT_name_marker(Panel):
         sd = context.space_data
         if sd.type == 'SEQUENCE_EDITOR':
             with context.temp_override(scene=context.sequencer_scene):
-                return next(iter(context.selected_markers), None)
-        return next(iter(context.selected_markers), None)
+                return context.selected_markers[0] if context.selected_markers else None
+        return context.selected_markers[0] if context.selected_markers else None
 
     @staticmethod
     def row_with_icon(layout, icon):

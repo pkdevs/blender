@@ -1191,9 +1191,9 @@ static eContextResult screen_ctx_sequencer_scene(const bContext *C, bContextData
   }
   return CTX_RESULT_NO_DATA;
 }
-static eContextResult screen_ctx_markers_(const bContext *C,
-                                          bContextDataResult *result,
-                                          const bool selected_only)
+static eContextResult screen_ctx_markers_ex(const bContext *C,
+                                            bContextDataResult *result,
+                                            const bool selected_only)
 {
   Scene *scene = CTX_data_scene(C);
   ListBaseT<TimeMarker> *markers = ED_scene_markers_get(C, scene);
@@ -1214,11 +1214,11 @@ static eContextResult screen_ctx_markers_(const bContext *C,
 }
 static eContextResult screen_ctx_markers(const bContext *C, bContextDataResult *result)
 {
-  return screen_ctx_markers_(C, result, false);
+  return screen_ctx_markers_ex(C, result, /*selected_only=*/false);
 }
 static eContextResult screen_ctx_selected_markers(const bContext *C, bContextDataResult *result)
 {
-  return screen_ctx_markers_(C, result, true);
+  return screen_ctx_markers_ex(C, result, /*selected_only=*/true);
 }
 
 /* Registry of context callback functions. */
