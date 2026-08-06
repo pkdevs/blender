@@ -826,13 +826,22 @@ vector<SymbolTable::BuiltinFunc> SymbolTable::generate_all_builtin_functions()
 
   add_ternary("fma", f_types);
 
-  // Bit-reinterpretation conversions
+  /* Bit-reinterpretation conversions. */
   for (size_t i = 0; i < f_types.size(); ++i) {
     functions.push_back({i_types[i], "floatBitsToInt", {f_types[i]}});
     functions.push_back({u_types[i], "floatBitsToUint", {f_types[i]}});
     functions.push_back({f_types[i], "intBitsToFloat", {i_types[i]}});
     functions.push_back({f_types[i], "uintBitsToFloat", {u_types[i]}});
   }
+
+  /* Matrix conversion functions. */
+  functions.push_back({float2x2_cls, "to_float2x2", {float3x3_cls}});
+  functions.push_back({float2x2_cls, "to_float2x2", {float4x4_cls}});
+  functions.push_back({float3x3_cls, "to_float3x3", {float4x4_cls}});
+  functions.push_back({float3x3_cls, "to_float3x3", {float2x2_cls}});
+  functions.push_back({float4x4_cls, "to_float4x4", {float2x2_cls}});
+  functions.push_back({float4x4_cls, "to_float4x4", {float3x3_cls}});
+  functions.push_back({float3x3_cls, "to_float3x3", {float3x4_cls}});
 
   functions.push_back({uint_cls, "packUnorm2x16", {float2_cls}});
   functions.push_back({uint_cls, "packSnorm2x16", {float2_cls}});
