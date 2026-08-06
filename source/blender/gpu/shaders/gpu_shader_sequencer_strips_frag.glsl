@@ -100,13 +100,11 @@ float4 draw_transition()
   float4 col = unpackUnorm4x8(strip.col_background);
 
   /* Diagonal transition line. */
-  if (co.x >= strip.left_handle && co.x <= strip.right_handle && co.y < strip.strip_content_top)
-  {
+  if (co.x >= strip.left_handle && co.x <= strip.right_handle && co.y < strip.strip_content_top) {
     float start_x = strip.left_handle + 2.0f * context_data.pixelsize;
     float end_x = strip.right_handle - 2.0f * context_data.pixelsize;
-    float diag_y = pos1.y + (strip.strip_content_top - pos1.y) *
-                                                  (co.x - start_x) /
-                                                  (end_x - start_x);
+    float diag_y = pos1.y +
+                   (strip.strip_content_top - pos1.y) * (co.x - start_x) / (end_x - start_x);
     uint transition_color = co.y <= diag_y ? strip.col_transition_out : strip.col_transition_in;
     col.rgba = unpackUnorm4x8(transition_color).rgba;
   }
