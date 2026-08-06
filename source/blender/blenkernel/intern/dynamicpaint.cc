@@ -3983,18 +3983,7 @@ static void dynamic_paint_paint_mesh_cell_point_cb_ex(void *__restrict userdata,
       const bke::bvh::Ray ray(ray_start, ray_dir);
       if (const std::optional<bke::bvh::RayHit> hit = treeData.ray_intersect(ray)) {
         /* We hit a triangle, now check if collision point normal is facing the point */
-
-        /* For optimization sake, hit point normal isn't calculated in ray cast loop */
-        const int vtri[3] = {
-            corner_verts[corner_tris[hit->index][0]],
-            corner_verts[corner_tris[hit->index][1]],
-            corner_verts[corner_tris[hit->index][2]],
-        };
-        float dot;
-
-        float3 hit_no;
-        normal_tri_v3(hit_no, positions[vtri[0]], positions[vtri[1]], positions[vtri[2]]);
-        dot = dot_v3v3(ray_dir, hit_no);
+        float dot = dot_v3v3(ray_dir, math::normalize(hit->normal));
 
         /* If ray and hit face normal are facing same direction
          * hit point is inside a closed mesh. */
