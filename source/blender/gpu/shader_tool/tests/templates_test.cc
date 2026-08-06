@@ -71,6 +71,57 @@ int funcT4() {
     EXPECT_EQ(error, "");
   }
   {
+    /* CRTP. */
+    string input = R"(
+template<typename T> struct A {
+  void f(T t)
+  {
+    t.f();
+  }
+};
+
+struct U {
+  void f() {}
+};
+
+template struct A<U>;
+)";
+    string expect = R"(#line 9
+struct U {
+  int _pad;
+};
+#line 9
+U U_ctor_() {U r;r._pad=0;return r;}
+
+#ifndef GPU_METAL
+void _f(_ref(U ,this_));
+#endif
+#line 10
+  void _f(_ref(U ,this_)) {
+#line 10
+            }
+#line 2
+                     struct ATU {
+  int _pad;
+#line 7
+};
+#line 2
+ATU ATU_ctor_() {ATU r;r._pad=0;return r;}
+
+#ifndef GPU_METAL
+void _f(_ref(ATU ,this_), U _0);
+#endif
+#line 3
+  void _f(_ref(ATU ,this_), U t)
+  {
+    _f(t);
+  }
+)";
+    auto [output, _, error] = process_test_string(input, Language::BSL);
+    EXPECT_EQ(output, expect);
+    EXPECT_EQ(error, "");
+  }
+  {
     string input = R"(
 template<typename T>
 void func(T a) {a;}
@@ -554,7 +605,7 @@ template struct A<float>;
 ATfloat ATfloat_ctor_() {ATfloat r;r.a=0.0f;return r;}
 
 #ifndef GPU_METAL
-ATfloat _method(ATfloat this_, float b);
+ATfloat _method(ATfloat this_, float _0);
 #endif
 #line 4
   ATfloat _method(ATfloat this_, float b)

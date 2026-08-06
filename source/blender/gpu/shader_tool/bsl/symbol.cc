@@ -511,6 +511,7 @@ struct SymbolParser : NodeErrorHandler {
                                 int &offset,
                                 const std::string &prefix,
                                 const std::string &suffix = "",
+                                optional<SourceLocation> poi = nullopt,
                                 TemplateInst temp = {},
                                 SymbolClassTemplate *cls_template = nullptr)
   {
@@ -518,6 +519,13 @@ struct SymbolParser : NodeErrorHandler {
     if (!scope.classes.emplace(cls).second) {
       error(decl, Diag::Redefinition, cls->identifier);
       return table.err_cls;
+    }
+    if (poi) {
+      cls->poi = poi;
+    }
+    else if (scope.poi) {
+      /* Classes inherit the point of instantiation of their parent scope. */
+      cls->poi = scope.poi;
     }
 
     scope.scopes.emplace(cls->identifier, cls);
@@ -581,6 +589,7 @@ struct SymbolParser : NodeErrorHandler {
                                   FuncDecl func,
                                   const std::string &prefix,
                                   const std::string &suffix = "",
+                                  optional<SourceLocation> poi = nullopt,
                                   TemplateInst temp = {})
   {
     /* Set return type to error type since we need to parse it after template argument
@@ -589,6 +598,13 @@ struct SymbolParser : NodeErrorHandler {
     if (FuncForwardDecl fdecl = scope.lookup_function_forward_decl(func); fdecl.is_valid()) {
       /* Modify symbol location if it is forward declared. */
       fn->loc = fdecl.front();
+    }
+    if (poi) {
+      fn->poi = poi;
+    }
+    else if (scope.poi) {
+      /* Functions inherit the point of instantiation of their class. */
+      fn->poi = scope.poi;
     }
     bool is_overload = scope.function_emplace(fn);
     if (is_overload && fn->is_entry_point()) {
@@ -671,6 +687,7 @@ struct SymbolParser : NodeErrorHandler {
     if (temp.is_function()) {
       const FuncForwardDecl decl = temp.decl();
       const IdQualified id = decl.identifier();
+      const SourceLocation poi = id.front();
       SymbolFunction *fn = scope.lookup_function_base(table, id);
 
       if (TemplateDecl temp_decl = check_template_instance(tmp_params, decl, *fn);
@@ -697,11 +714,10 @@ struct SymbolParser : NodeErrorHandler {
           }
         }
 
-        string full_id = string(decl.identifier().name().str()) + "<" +
-                         mangled.str_debug.substr(2) + ">";
-        NOTE(decl.identifier(), Diag::NoteInstantiationFuncTemplateRequested, full_id);
+        string full_id = string(id.name().str()) + "<" + mangled.str_debug.substr(2) + ">";
+        NOTE(id, Diag::NoteInstantiationFuncTemplateRequested, full_id);
         SymbolFunction *fn_inst = parse_func_decl(
-            *parent, temp_decl.decl(), prefix, mangled.str, temp);
+            *parent, temp_decl.decl(), prefix, mangled.str, poi, temp);
         fn_inst->is_specialization = true;
         fn_inst->template_data = fn->template_data;
         fn->template_data->instances.emplace(mangled.str, fn_inst);
@@ -709,17 +725,18 @@ struct SymbolParser : NodeErrorHandler {
       }
     }
     else {
-      const ClassDecl decl(temp.decl());
-      auto *cls = scope.lookup_class_base(table, decl.identifier());
+      const ClassDecl decl = temp.decl();
+      const IdQualified id = decl.identifier();
+      const SourceLocation poi = id.front();
+      auto *cls = scope.lookup_class_base(table, id);
 
       if (TemplateDecl temp_decl = check_template_instance(tmp_params, decl, *cls);
           temp_decl.is_valid())
       {
         auto mangled =
             table.mangle_identifier(temp_decl.arguments(), tmp_params, scope).unwrap(this);
-        string full_id = string(decl.identifier().name().str()) + "<" +
-                         mangled.str_debug.substr(2) + ">";
-        NOTE(decl.identifier(), Diag::NoteInstantiationClassTemplateRequested, full_id);
+        string full_id = string(id.name().str()) + "<" + mangled.str_debug.substr(2) + ">";
+        NOTE(id, Diag::NoteInstantiationClassTemplateRequested, full_id);
         int unused_offset = 0;
         parse_class_decl(scope,
                          temp_decl.decl(),
@@ -727,6 +744,7 @@ struct SymbolParser : NodeErrorHandler {
                          unused_offset,
                          prefix,
                          mangled.str,
+                         poi,
                          temp,
                          cls->template_data);
       }
@@ -735,10 +753,13 @@ struct SymbolParser : NodeErrorHandler {
 
   void parse_template_spec(SymbolScope &scope, TemplateSpec temp, const std::string &prefix)
   {
+    SourceLocation poi = temp.front();
     TemplateParamList temp_params = temp.parameters();
     /* Instantiate the whole symbol into the current namespace. */
     if (temp.is_function()) {
-      const FuncDecl decl(temp.decl());
+      const FuncDecl decl = temp.decl();
+      const IdQualified id = decl.identifier();
+      const SourceLocation poi = id.front();
       auto *fn = scope.lookup_function_base(table, decl.identifier());
 
       if (TemplateDecl temp_decl = check_template_instance(temp_params, decl, *fn);
@@ -748,7 +769,7 @@ struct SymbolParser : NodeErrorHandler {
             table.mangle_identifier(temp_decl.arguments(), temp_params, scope).unwrap(this);
         string full_id = string(decl.identifier().str()) + "<" + mangled.str_debug.substr(2) + ">";
         NOTE(decl.identifier(), Diag::NoteInstantiationFuncTemplateRequested, full_id);
-        SymbolFunction *spec = parse_func_decl(scope, decl, prefix, mangled.str);
+        SymbolFunction *spec = parse_func_decl(scope, decl, prefix, mangled.str, poi);
         spec->is_specialization = true;
         spec->template_data = fn->template_data;
         fn->template_data->instances.emplace(mangled.str, spec);
@@ -756,7 +777,9 @@ struct SymbolParser : NodeErrorHandler {
       }
     }
     else {
-      const ClassDecl decl(temp.decl());
+      const ClassDecl decl = temp.decl();
+      const IdQualified id = decl.identifier();
+      const SourceLocation poi = id.front();
       auto *cls = scope.lookup_class_base(table, decl.identifier());
 
       if (TemplateDecl temp_decl = check_template_instance(temp_params, decl, *cls);
@@ -768,7 +791,7 @@ struct SymbolParser : NodeErrorHandler {
         NOTE(decl.identifier(), Diag::NoteInstantiationClassTemplateRequested, full_id);
         int unused_offset = 0;
         SymbolClass *spec = parse_class_decl(
-            scope, decl, Node{}, unused_offset, prefix, mangled.str);
+            scope, decl, Node{}, unused_offset, prefix, mangled.str, poi);
         cls->template_data->instances.emplace(mangled.str, spec);
       }
     }

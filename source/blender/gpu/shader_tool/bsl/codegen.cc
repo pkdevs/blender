@@ -71,12 +71,17 @@ struct CodegenContext : NodeErrorHandler {
    private:
     CodegenContext &ctx;
     const SymbolScope &scope;
+    /* Point of instantiation of the containing function. */
+    optional<SourceLocation> poi;
     ast::Node node;
 
    public:
     CodegenExpressionParser(CodegenContext &ctx, const SymbolScope &scope, ast::Node start_node)
         : ctx(ctx), scope(scope), node(start_node)
     {
+      if (const SymbolFunction *fn = scope.parent_function(); fn) {
+        poi = fn->poi;
+      }
     }
 
     ExpressionResult eval()
@@ -318,8 +323,15 @@ struct CodegenContext : NodeErrorHandler {
     ExpressionResult function(const ast::FuncCall &call, const SymbolScope &symbol_scope)
     {
       assert(call.is_valid());
+
+      IdQualified id = call.identifier();
+
+      /* If accessing a function in a different class, we need to set the location at the point of
+       * instantiation. Otherwise we cannot use CRTP patterns. */
+      SourceLocation loc = (&symbol_scope != &scope) ? poi.value_or(id.front()) : id.front();
+
       SymbolFunction *sym = ctx.id_func_resolved_lookup(
-          call.identifier(), call.parameters(), symbol_scope, scope);
+          id, call.parameters(), symbol_scope, scope, loc);
 
       if (sym->is_error) {
         ctx.error(call, Diag::UnknownFunction);
@@ -363,7 +375,7 @@ struct CodegenContext : NodeErrorHandler {
       params_str = std::string(list.front().str_with_whitespace()) + params_str +
                    std::string(list.back().str_with_whitespace()) + trivia(call);
 
-      return {sym->identifier + trivia(call.identifier()) + params_str, sym->return_type};
+      return {sym->identifier + trivia(id) + params_str, sym->return_type};
     }
   };
 
@@ -2416,19 +2428,21 @@ struct CodegenContext : NodeErrorHandler {
   SymbolFunction *id_func_resolved_lookup(IdQualified id,
                                           ArgOrParamList params,
                                           const SymbolScope &scope,
-                                          const SymbolScope &param_scope)
+                                          const SymbolScope &param_scope,
+                                          optional<SourceLocation> loc = nullopt)
   {
     assert(id.is_valid());
-    return scope.lookup_function(table, id, params, param_scope).unwrap(this);
+    return scope.lookup_function(table, id, params, param_scope, loc).unwrap(this);
   }
 
   template<typename ArgOrParamList>
   SymbolFunction *id_func_resolved(IdQualified id,
                                    ArgOrParamList params,
                                    const SymbolScope &scope,
-                                   const SymbolScope &param_scope)
+                                   const SymbolScope &param_scope,
+                                   optional<SourceLocation> loc = nullopt)
   {
-    SymbolFunction *func = id_func_resolved_lookup(id, params, scope, param_scope);
+    SymbolFunction *func = id_func_resolved_lookup(id, params, scope, param_scope, loc);
     builder.curr = id.back();
     builder << func->identifier + trivia(id);
     return func;

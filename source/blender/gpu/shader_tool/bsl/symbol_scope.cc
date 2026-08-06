@@ -37,10 +37,11 @@ static Result<T *> resolve_template_instantiation(const SymbolTable &table,
 #endif
 
 Result<SymbolFunction *> SymbolScope::lookup_function(const SymbolTable &table,
-                                                      IdQualified id) const
+                                                      IdQualified id,
+                                                      optional<SourceLocation> loc) const
 {
   LOOKUP_LOG("\n")
-  SymbolFunction *func = lookup_generic<SymbolFunction>(table, id, id.front());
+  SymbolFunction *func = lookup_generic<SymbolFunction>(table, id, loc.value_or(id.front()));
   return resolve_template_instantiation(table, func, id, *this);
 }
 
@@ -48,9 +49,10 @@ template<typename ArgOrParamList>
 Result<SymbolFunction *> SymbolScope::lookup_function(const SymbolTable &table,
                                                       IdQualified id,
                                                       ArgOrParamList params,
-                                                      const SymbolScope &arguments_scope) const
+                                                      const SymbolScope &arguments_scope,
+                                                      optional<SourceLocation> loc) const
 {
-  auto [func, err] = lookup_function(table, id);
+  auto [func, err] = lookup_function(table, id, loc);
   if (func->is_error) {
     /* Try to resolve type constructors (only for builtins for now). */
     if (auto [cls, err_cls] = lookup_class(table, id); !cls->is_error && cls && cls->is_builtin())
@@ -80,28 +82,33 @@ Result<SymbolFunction *> SymbolScope::lookup_function(const SymbolTable &table,
   return {func, err};
 }
 
-template Result<SymbolFunction *> SymbolScope::lookup_function(
-    const SymbolTable &table,
-    IdQualified id,
-    FuncParamList params,
-    const SymbolScope &arguments_scope) const;
-template Result<SymbolFunction *> SymbolScope::lookup_function(
-    const SymbolTable &table,
-    IdQualified id,
-    FuncArgList params,
-    const SymbolScope &arguments_scope) const;
+template Result<SymbolFunction *> SymbolScope::lookup_function(const SymbolTable &table,
+                                                               IdQualified id,
+                                                               FuncParamList params,
+                                                               const SymbolScope &arguments_scope,
+                                                               optional<SourceLocation> loc) const;
+template Result<SymbolFunction *> SymbolScope::lookup_function(const SymbolTable &table,
+                                                               IdQualified id,
+                                                               FuncArgList params,
+                                                               const SymbolScope &arguments_scope,
+                                                               optional<SourceLocation> loc) const;
 
-Result<SymbolClass *> SymbolScope::lookup_class(const SymbolTable &table, IdQualified id) const
+Result<SymbolClass *> SymbolScope::lookup_class(const SymbolTable &table,
+                                                IdQualified id,
+                                                optional<SourceLocation> loc) const
 {
   LOOKUP_LOG("\n")
-  SymbolClass *cls = lookup_generic<SymbolClass>(table, id, id.front());
+  SymbolClass *cls = lookup_generic<SymbolClass>(table, id, loc.value_or(id.front()));
   return resolve_template_instantiation(table, cls, id, *this);
 }
 
-Result<SymbolClass *> SymbolScope::lookup_class(const SymbolTable &table, Id id, Id last) const
+Result<SymbolClass *> SymbolScope::lookup_class(const SymbolTable &table,
+                                                Id id,
+                                                Id last,
+                                                optional<SourceLocation> loc) const
 {
   LOOKUP_LOG("\n")
-  SymbolClass *cls = lookup_generic_nested<SymbolClass>(table, id, last, id.front());
+  SymbolClass *cls = lookup_generic_nested<SymbolClass>(table, id, last, loc.value_or(id.front()));
   return resolve_template_instantiation(table, cls, last, *this);
 }
 
@@ -209,7 +216,7 @@ T *SymbolScope::lookup_generic(const SymbolTable &table,
   if (id.is_global() && parent) {
     LOOKUP_LOG("[Lookup] Global lookup: Bubbling up to parent scope " << parent->identifier
                                                                       << "\n")
-    return parent->lookup_generic<T>(table, id, loc);
+    return parent->lookup_generic<T>(table, id, poi.value_or(loc));
   }
 
   /* Try to match within this scope. */
@@ -223,7 +230,7 @@ T *SymbolScope::lookup_generic(const SymbolTable &table,
   /* Delegate to parent scope if not found locally. */
   if (parent) {
     LOOKUP_LOG("[Lookup] Not found locally. Delegating to parent scope\n")
-    return parent->lookup_generic<T>(table, id, loc);
+    return parent->lookup_generic<T>(table, id, poi.value_or(loc));
   }
 
   /* Lookup failure at root level, try to return error symbol. */
@@ -367,10 +374,22 @@ SymbolFunction *SymbolScope::as_function()
 {
   return type == FUNCTION ? static_cast<SymbolFunction *>(this) : nullptr;
 }
+const SymbolFunction *SymbolScope::as_function() const
+{
+  return type == FUNCTION ? static_cast<const SymbolFunction *>(this) : nullptr;
+}
 
 SymbolFunction *SymbolScope::parent_function()
 {
   SymbolScope *fn = this;
+  while (fn && fn->type != FUNCTION) {
+    fn = fn->parent;
+  }
+  return fn ? fn->as_function() : nullptr;
+}
+const SymbolFunction *SymbolScope::parent_function() const
+{
+  const SymbolScope *fn = this;
   while (fn && fn->type != FUNCTION) {
     fn = fn->parent;
   }

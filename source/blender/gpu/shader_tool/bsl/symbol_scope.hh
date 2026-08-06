@@ -63,6 +63,21 @@ struct SymbolScope : Symbol {
 
   vector<ast::FuncForwardDecl> function_prototypes;
 
+  /* Point of instantiation if this is a template instantiation.
+   *
+   * The point of instantiation allows to correctly resolve symbols external to the templated
+   * symbol itself.
+   *
+   * For this to work, we need to substitute the symbol location with the POI when doing name
+   * lookup outside of the symbol's scope.
+   *
+   * This will effectively teleport the symbol location when trying to match symbol outside of this
+   * scope.
+   *
+   * The tricky part is that member access to outsider classes also need to have their location
+   * substituted.*/
+  optional<SourceLocation> poi;
+
   /* Function scope act as anonymous scopes but still have identifier. */
   enum Type { FUNCTION, CLASS, NAMESPACE, LOCAL, ROOT } type = ROOT;
 
@@ -86,17 +101,25 @@ struct SymbolScope : Symbol {
 
   SymbolVariable *lookup_variable(const SymbolTable &table, ast::IdQualified id) const;
 
-  Result<SymbolFunction *> lookup_function(const SymbolTable &table, ast::IdQualified id) const;
+  Result<SymbolFunction *> lookup_function(const SymbolTable &table,
+                                           ast::IdQualified id,
+                                           optional<SourceLocation> loc = nullopt) const;
 
   template<typename ArgOrParamList>
   Result<SymbolFunction *> lookup_function(const SymbolTable &table,
                                            ast::IdQualified id,
                                            ArgOrParamList params,
-                                           const SymbolScope &arguments_scope) const;
+                                           const SymbolScope &arguments_scope,
+                                           optional<SourceLocation> loc = nullopt) const;
 
-  Result<SymbolClass *> lookup_class(const SymbolTable &table, ast::IdQualified id) const;
+  Result<SymbolClass *> lookup_class(const SymbolTable &table,
+                                     ast::IdQualified id,
+                                     optional<SourceLocation> loc = nullopt) const;
 
-  Result<SymbolClass *> lookup_class(const SymbolTable &table, ast::Id id, ast::Id last) const;
+  Result<SymbolClass *> lookup_class(const SymbolTable &table,
+                                     ast::Id id,
+                                     ast::Id last,
+                                     optional<SourceLocation> loc = nullopt) const;
 
   SymbolVariable *lookup_variable(string id) const;
   SymbolFunction *lookup_function(string id) const;
@@ -117,10 +140,12 @@ struct SymbolScope : Symbol {
   SymbolClass *as_class();
   /* Can be null if this is not a function. */
   SymbolFunction *as_function();
+  const SymbolFunction *as_function() const;
 
   /* Return the function containing this scope or the scope itself if it is a function.
    * Return nullptr if this scope is not inside a function. */
   SymbolFunction *parent_function();
+  const SymbolFunction *parent_function() const;
 
   /* Returns true if the function is an overload or redefines the symbol. */
   bool function_emplace(SymbolFunction *fn, bool builtin = false);
