@@ -1033,40 +1033,25 @@ void node_socket_move_default_value(Main &bmain,
                                     bNodeSocket &src,
                                     bNodeSocket &dst);
 
-/**
- * Initialize an already-allocated #bNodeSocketValue* with type-appropriate defaults.
- * \param subtype: RNA property subtype for types that store one (ignored otherwise).
- */
+/** Initialize an already-allocated #bNodeSocketValue*. */
 void socket_value_init(eNodeSocketDatatype type, void *data, int subtype = 0);
-/**
- * Allocate and initialize a #bNodeSocketValue* with defaults.
- * Returns null for socket types that do not store a default value.
- */
+
+/** Create a new socket value. Returns null if the socket type does not have a value. */
 void *socket_value_new(eNodeSocketDatatype type, int subtype = 0);
-/**
- * Allocate a copy of a #bNodeSocketValue* struct.
- * Always handles non-trivial owned data (for example menu enum items).
- * \param do_id_user: When true, increments ID user counts for ID pointers in the copy.
- */
+
+/** Copy a socket value struct with optional user counting. */
 void *socket_value_new_copy(eNodeSocketDatatype type, const void *src, bool do_id_user = false);
-/**
- * Free a #bNodeSocketValue* struct and its owned data.
- * \param do_id_user: When true, decrements ID user counts for ID pointers before freeing.
- */
+
+/** Free a socket value with optional user counting. */
 void socket_value_free(eNodeSocketDatatype type, void *data, bool do_id_user = false);
-/**
- * Copy a #bNodeSocketValue* into an existing destination.
- * Releases previous owned data in \a dst when it differs from \a src.
- * \param do_id_user: When true, adjusts ID user counts for replaced ID pointers.
- */
-void socket_value_copy(eNodeSocketDatatype type, void *dst, const void *src, bool do_id_user = false);
-/**
- * Increment ID user counts for ID pointers stored in a #bNodeSocketValue* (no-op otherwise).
- */
+
+/** Copy a socket value in an existing buffer with optional user counting */
+void socket_value_copy(eNodeSocketDatatype type,
+                       void *dst,
+                       const void *src,
+                       bool do_id_user = false);
+
 void socket_value_id_user_increment(eNodeSocketDatatype type, void *data);
-/**
- * Decrement ID user counts for ID pointers stored in a #bNodeSocketValue* (no-op otherwise).
- */
 void socket_value_id_user_decrement(eNodeSocketDatatype type, void *data);
 
 /**
