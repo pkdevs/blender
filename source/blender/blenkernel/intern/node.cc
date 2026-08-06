@@ -2689,7 +2689,7 @@ static void node_socket_set_typeinfo(bNodeTree *ntree,
 
     if (sock->default_value == nullptr) {
       /* initialize the default_value pointer used by standard socket types */
-      node_socket_init_default_value(sock);
+      sock->default_value = socket_value_new(sock->type, sock->typeinfo->subtype);
     }
   }
   else {

@@ -1665,7 +1665,7 @@ bNode *create_proxy_converter_node(const eNodeSocketDatatype socket_type,
   BKE_ntree_update_after_single_tree_change(*CTX_data_main(&C), dst_tree);
 
   bNodeSocket *socket = static_cast<bNodeSocket *>(proxy_node->inputs.first);
-  node_socket_copy_default_value_data(socket->type, socket->default_value, src_value);
+  bke::socket_value_copy(socket->type, socket->default_value, src_value);
 
   proxy_node->flag |= NODE_COLLAPSED;
 

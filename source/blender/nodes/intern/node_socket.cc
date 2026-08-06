@@ -715,52 +715,6 @@ void node_verify_sockets(Main *bmain, bNodeTree *ntree, bNode *node, bool do_id_
   }
 }
 
-void node_socket_init_default_value_data(eNodeSocketDatatype datatype, int subtype, void **data)
-{
-  if (!data) {
-    return;
-  }
-  *data = bke::socket_value_new(datatype, subtype);
-}
-
-void node_socket_copy_default_value_data(eNodeSocketDatatype datatype, void *to, const void *from)
-{
-  bke::socket_value_copy(datatype, to, from, true);
-}
-
-void node_socket_init_default_value(bNodeSocket *sock)
-{
-  if (sock->default_value) {
-    return; /* already initialized */
-  }
-
-  node_socket_init_default_value_data(
-      sock->typeinfo->type, PropertySubType(sock->typeinfo->subtype), &sock->default_value);
-}
-
-void node_socket_copy_default_value(bNodeSocket *to, const bNodeSocket *from)
-{
-  /* sanity check */
-  if (to->type != from->type) {
-    return;
-  }
-
-  /* make sure both exist */
-  if (!from->default_value) {
-    return;
-  }
-  node_socket_init_default_value(to);
-
-  /* use label instead of name if it has been set */
-  if (from->runtime->declaration->label_fn) {
-    STRNCPY_UTF8(to->name, (*from->runtime->declaration->label_fn)(from->owner_node()).c_str());
-  }
-
-  node_socket_copy_default_value_data(to->typeinfo->type, to->default_value, from->default_value);
-
-  to->flag |= (from->flag & SOCK_HIDE_VALUE);
-}
-
 static void standard_node_socket_interface_init_socket(
     ID * /*id*/,
     const bNodeTreeInterfaceSocket *interface_socket,
@@ -770,10 +724,7 @@ static void standard_node_socket_interface_init_socket(
 {
   /* initialize the type value */
   sock->type = sock->typeinfo->type;
-
-  node_socket_init_default_value_data(sock->type, sock->typeinfo->subtype, &sock->default_value);
-  node_socket_copy_default_value_data(
-      sock->type, sock->default_value, interface_socket->socket_data);
+  sock->default_value = bke::socket_value_new_copy(sock->type, interface_socket->socket_data);
 }
 
 static void standard_node_socket_interface_from_socket(ID * /*id*/,
