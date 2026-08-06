@@ -1054,6 +1054,79 @@ void socket_value_copy(eNodeSocketDatatype type,
 void socket_value_id_user_increment(eNodeSocketDatatype type, void *data);
 void socket_value_id_user_decrement(eNodeSocketDatatype type, void *data);
 
+template<typename Fn>
+inline bool socket_data_to_static_type(const eNodeSocketDatatype type, Fn &&fn)
+{
+  switch (type) {
+    case SOCK_FLOAT:
+      fn.template operator()<bNodeSocketValueFloat>();
+      return true;
+    case SOCK_INT:
+      fn.template operator()<bNodeSocketValueInt>();
+      return true;
+    case SOCK_BOOLEAN:
+      fn.template operator()<bNodeSocketValueBoolean>();
+      return true;
+    case SOCK_ROTATION:
+      fn.template operator()<bNodeSocketValueRotation>();
+      return true;
+    case SOCK_VECTOR:
+      fn.template operator()<bNodeSocketValueVector>();
+      return true;
+    case SOCK_RGBA:
+      fn.template operator()<bNodeSocketValueRGBA>();
+      return true;
+    case SOCK_STRING:
+      fn.template operator()<bNodeSocketValueString>();
+      return true;
+    case SOCK_OBJECT:
+      fn.template operator()<bNodeSocketValueObject>();
+      return true;
+    case SOCK_IMAGE:
+      fn.template operator()<bNodeSocketValueImage>();
+      return true;
+    case SOCK_COLLECTION:
+      fn.template operator()<bNodeSocketValueCollection>();
+      return true;
+    case SOCK_TEXTURE:
+      fn.template operator()<bNodeSocketValueTexture>();
+      return true;
+    case SOCK_MATERIAL:
+      fn.template operator()<bNodeSocketValueMaterial>();
+      return true;
+    case SOCK_FONT:
+      fn.template operator()<bNodeSocketValueFont>();
+      return true;
+    case SOCK_SCENE:
+      fn.template operator()<bNodeSocketValueScene>();
+      return true;
+    case SOCK_TEXT_ID:
+      fn.template operator()<bNodeSocketValueText>();
+      return true;
+    case SOCK_MASK:
+      fn.template operator()<bNodeSocketValueMask>();
+      return true;
+    case SOCK_SOUND:
+      fn.template operator()<bNodeSocketValueSound>();
+      return true;
+    case SOCK_MENU:
+      fn.template operator()<bNodeSocketValueMenu>();
+      return true;
+    case SOCK_INT_VECTOR:
+      fn.template operator()<bNodeSocketValueIntVector>();
+      return true;
+
+    case SOCK_CUSTOM:
+    case SOCK_SHADER:
+    case SOCK_MATRIX:
+    case SOCK_GEOMETRY:
+    case SOCK_BUNDLE:
+    case SOCK_CLOSURE:
+      return true;
+  }
+  return false;
+}
+
 /**
  * Free the node itself.
  *
