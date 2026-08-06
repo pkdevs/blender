@@ -378,7 +378,7 @@ struct ExpressionTypeParser
   }
 
   ExpressionResult ternary(ExpressionResult left,
-                           const ast::Node & /*t*/,
+                           const ast::Node &t,
                            BindingPower p_first,
                            BindingPower p_second)
   {
@@ -390,11 +390,11 @@ struct ExpressionTypeParser
     ExpressionResult fval = expr(p_second);
 
     if (left.type != table->bool_cls) {
-      error(node, Diag::CondInvalidTernary, left.type->original);
+      error(t, Diag::CondInvalidTernary, left.type->original);
       return table->err_cls;
     }
     if (tval.type != fval.type) {
-      error(node, Diag::TypeInvalidTernary, tval.type->original, fval.type->original);
+      error(t, Diag::TypeInvalidTernary, tval.type->original, fval.type->original);
       return table->err_cls;
     }
 
