@@ -572,25 +572,25 @@ ccl_device_inline void film_write_direct_light(KernelGlobals kg,
   }
 
 // !!!: >>> TEMPORARILY DISABLED
-  // // TODO: Move before AO for benchmark parity?
-  // // TODO(weizhen): bounce number probably doesn't work for volume.
-  // if (kernel_data.integrator.use_restir &&
-  //     INTEGRATOR_STATE(state, shadow_path, bounce) > 0)
-  // {
-  //   RNGState rng_state;
-  //   shadow_path_state_rng_load(state, &rng_state);
+  // TODO: Move before AO for benchmark parity?
+  // TODO(weizhen): bounce number probably doesn't work for volume.
+  if (kernel_data.integrator.use_restir &&
+      INTEGRATOR_STATE(state, shadow_path, bounce) > 0)
+  {
+    RNGState rng_state;
+    shadow_path_state_rng_load(state, &rng_state);
 
-  //   /* TODO(weizhen): does this result in correlated samples in ReSTIR PT if branched version is
-  //    * used in DI? */
-  //   film_add_reservoir_pt(kg, path_flag, contribution, &rng_state, buffer);
-  // }
-  // else {
-  //   film_clamp_light(kg, &contribution, INTEGRATOR_STATE(state, shadow_path, bounce));
+    /* TODO(weizhen): does this result in correlated samples in ReSTIR PT if branched version is
+     * used in DI? */
+    film_add_reservoir_pt(kg, path_flag, contribution, &rng_state, buffer);
+  }
+  else {
+    film_clamp_light(kg, &contribution, INTEGRATOR_STATE(state, shadow_path, bounce));
 
-  //   /* Direct light shadow. */
-  //   film_write_combined_pass(
-  //       kg, path_visibility, path_flag, sample, contribution, buffer);
-  // }
+    /* Direct light shadow. */
+    film_write_combined_pass(
+        kg, path_visibility, path_flag, sample, contribution, buffer);
+  }
 // !!!: <<<
   film_write_combined_pass(kg, path_visibility, path_flag, sample, contribution, buffer); // TODO: Remove when ReSTIR's integrated
 

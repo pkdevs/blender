@@ -429,16 +429,16 @@ ccl_device_inline void shader_setup_from_background(KernelGlobals kg,
 }
 
 /* TODO(weizhen): mostly copied from `shader_setup_from_ray()`, the original function requires
- * `isect` in many places, but they are also available in `sd`, can probably reuse. */
+  `isect` in many places, but they are also available in `sd`, can probably reuse. */
 ccl_device_inline void shader_setup_from_restir(KernelGlobals kg,
                                                 const ccl_private Ray *ccl_restrict ray,
                                                 ccl_private ShaderData *ccl_restrict sd)
 {
   sd->object_flag = kernel_data_fetch(object_flag, sd->object);
-  sd->prim = PRIM_NONE;
+  // sd->prim = PRIM_NONE; // !!!: Overwrites the previous writes; ShaderData already contains: object, prim, u, v, type from the film pass.
 
 #ifdef __OBJECT_MOTION__
-  shader_setup_object_transforms(kg, sd, sd->time);
+  shader_setup_object_transforms(kg, sd, sd->time); // !!!: runs before sd->time = ray->time;
 #endif
 
   /* TODO(weizhen): curve and point cloud. */

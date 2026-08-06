@@ -51,6 +51,13 @@ struct SpatialResampling {
   }
 };
 
+/* Reconstruct the minimal ShaderData state required to rebuild the
+ * complete surface using shader_setup_from_restir().
+ *
+ * Fields such as P, N, Ng, shader IDs, object flags and differential
+ * geometry are intentionally regenerated from (object, prim, u, v)
+ * rather than stored in the render buffer in `shader_setup_from_restir()`.
+ */
 /* TODO(weizhen): better to pack in another pass. */
 ccl_device_inline bool integrator_restir_unpack_shader(ccl_private ShaderData *sd,
                                                        ccl_private uint32_t *path_flag,
@@ -144,12 +151,11 @@ ccl_device_inline bool integrator_restir_unpack_reservoir(KernelGlobals kg,
 }
 
 ccl_device_inline void ray_setup(KernelGlobals kg,
-                                //  ConstIntegratorState state, // !!!: Wrong; causes template deduction
                                  IntegratorState state,
                                  ccl_private Ray *ccl_restrict ray,
                                  const uint3 render_pixel_index)
 {
-  if (render_pixel_index.z == -1) {
+  if (render_pixel_index.z == UINT_MAX) {
     integrator_state_read_ray(state, ray);
   }
   else {
@@ -171,7 +177,6 @@ ccl_device_inline void ray_setup(KernelGlobals kg,
 }
 
 ccl_device_forceinline void shader_data_setup_from_restir(KernelGlobals kg,
-                                                          // ConstIntegratorState state,
                                                           IntegratorState state,
                                                           ccl_private SpatialReservoir *reservoir,
                                                           ccl_global float *ccl_restrict
@@ -296,7 +301,6 @@ ccl_device_inline bool streaming_di_samples(KernelGlobals kg,
 
   /* Give the canonical sample a defensive constant in the weight. */
   float canonical_mis_weight = 1.0f;
-  // LightSample canonical_ls = canonical.ls;
   LightSample canonical_ls = canonical.light;
   int valid_neighbors = 1;
   const int neighbors = samples - 1;

@@ -510,7 +510,7 @@ class CYCLES_RENDER_PT_sampling_advanced_sample_subset(CyclesButtonsPanel, Panel
 class CYCLES_RENDER_PT_sampling_lights(CyclesButtonsPanel, Panel):
     bl_label = "Lights"
     bl_parent_id = "CYCLES_RENDER_PT_sampling"
-    bl_options = {'DEFAULT_CLOSED'}
+    bl_options = {'HEADER_LAYOUT_EXPAND'} # Make ReSTIR visible
 
     def draw(self, context):
         layout = self.layout
