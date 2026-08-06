@@ -307,7 +307,7 @@ template<typename Fn> bool socket_data_to_static_type(const StringRef socket_typ
 {
   for (const bNodeSocketStaticTypeInfo &info : node_socket_subtypes) {
     if (socket_type == info.socket_identifier) {
-      return socket_data_to_static_type(info.type, fn);
+      return bke::socket_data_to_static_type(info.type, fn);
     }
   }
   return false;

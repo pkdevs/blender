@@ -70,13 +70,11 @@ static bool is_supported_socket_type(const StringRef socket_type)
 
 static void *make_socket_data(const StringRef socket_type)
 {
-  void *socket_data = nullptr;
   const bNodeSocketType *stype = node_socket_type_find(socket_type);
-  const int subtype = stype ? stype->subtype : 0;
-  socket_data_to_static_type(socket_type, [&socket_data, subtype]<typename SocketDataType>() {
-    socket_data = socket_value_new(SocketDataType::socket_type, subtype);
-  });
-  return socket_data;
+  if (!stype) {
+    return nullptr;
+  }
+  return socket_value_new(stype->type, stype->subtype);
 }
 
 /** \} */
@@ -90,10 +88,9 @@ static void socket_data_free(bNodeTreeInterfaceSocket &socket, const bool do_id_
   if (socket.socket_data == nullptr) {
     return;
   }
-  socket_data_to_static_type(socket.socket_type, [&]<typename SocketDataType>() {
-    socket_value_free(SocketDataType::socket_type, socket.socket_data, do_id_user);
-    socket.socket_data = nullptr;
-  });
+  if (const bNodeSocketType *stype = socket.socket_typeinfo()) {
+    socket_value_free(stype->type, socket.socket_data, do_id_user);
+  }
 }
 
 /** \} */
@@ -107,12 +104,9 @@ static void socket_data_copy(bNodeTreeInterfaceSocket &dst,
                              int flag)
 {
   const bool do_id_user = (flag & LIB_ID_CREATE_NO_USER_REFCOUNT) == 0;
-  socket_data_to_static_type(dst.socket_type, [&]<typename SocketDataType>() {
-    if (src.socket_data) {
-      dst.socket_data = socket_value_new_copy(
-          SocketDataType::socket_type, src.socket_data, do_id_user);
-    }
-  });
+  if (const bNodeSocketType *stype = src.socket_typeinfo()) {
+    dst.socket_data = socket_value_new_copy(stype->type, src.socket_data, do_id_user);
+  }
 }
 
 /* Copy socket data from a raw pointer, e.g. from a #bNodeSocket. */
@@ -125,12 +119,9 @@ static void socket_data_copy_ptr(bNodeTreeInterfaceSocket &dst,
   }
 
   const bool do_id_user = (flag & LIB_ID_CREATE_NO_USER_REFCOUNT) == 0;
-  socket_data_to_static_type(dst.socket_type, [&]<typename SocketDataType>() {
-    if (src_socket_data) {
-      dst.socket_data = socket_value_new_copy(
-          SocketDataType::socket_type, src_socket_data, do_id_user);
-    }
-  });
+  if (const bNodeSocketType *stype = dst.socket_typeinfo()) {
+    dst.socket_data = socket_value_new_copy(stype->type, src_socket_data, do_id_user);
+  }
 }
 
 /** \} */

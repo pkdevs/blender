@@ -3121,7 +3121,7 @@ static bNodeSocket *make_socket(bNodeTree *ntree,
 static ID *socket_value_get_id_ptr(const eNodeSocketDatatype type, void *data)
 {
   ID *id = nullptr;
-  node_interface::socket_types::socket_data_to_static_type(type, [&]<typename T>() {
+  socket_data_to_static_type(type, [&]<typename T>() {
     if constexpr (is_same_any_v<T,
                                 bNodeSocketValueObject,
                                 bNodeSocketValueImage,
@@ -3258,14 +3258,14 @@ void socket_value_init(const eNodeSocketDatatype type, void *data, const int sub
   if (data == nullptr) {
     return;
   }
-  node_interface::socket_types::socket_data_to_static_type(
+  socket_data_to_static_type(
       type, [&]<typename T>() { socket_value_init_impl(*static_cast<T *>(data), subtype); });
 }
 
 void *socket_value_new(const eNodeSocketDatatype type, const int subtype)
 {
   void *result = nullptr;
-  node_interface::socket_types::socket_data_to_static_type(type, [&]<typename T>() {
+  socket_data_to_static_type(type, [&]<typename T>() {
     T *data = MEM_new<T>(__func__);
     socket_value_init_impl(*data, subtype);
     result = data;
@@ -3279,10 +3279,10 @@ void *socket_value_new_copy(const eNodeSocketDatatype type, const void *src, con
     return nullptr;
   }
   void *result = nullptr;
-  node_interface::socket_types::socket_data_to_static_type(type, [&]<typename T>() {
+  socket_data_to_static_type(type, [&]<typename T>() {
     const T &src_value = *static_cast<const T *>(src);
     if constexpr (std::is_same_v<T, bNodeSocketValueMenu>) {
-      T *dst = MEM_new<T>(__func__, src_value);
+      T *dst = MEM_new<T>("copy menu socket value", src_value);
       /* Copy of shared data pointer. */
       if (dst->enum_items) {
         dst->enum_items->add_user();
@@ -3290,13 +3290,9 @@ void *socket_value_new_copy(const eNodeSocketDatatype type, const void *src, con
       result = dst;
     }
     else {
-      result = MEM_new<T>(__func__, src_value);
+      result = MEM_new<T>("copy socket value", src_value);
     }
   });
-  if (result == nullptr) {
-    /* Fallback for unexpected types that still have allocated default values. */
-    result = MEM_dupalloc_void(src);
-  }
   if (do_id_user) {
     socket_value_id_user_increment(type, result);
   }
@@ -3314,7 +3310,7 @@ void socket_value_copy(const eNodeSocketDatatype type,
   if (do_id_user) {
     socket_value_id_user_decrement(type, dst);
   }
-  node_interface::socket_types::socket_data_to_static_type(type, [&]<typename T>() {
+  socket_data_to_static_type(type, [&]<typename T>() {
     T &dst_value = *static_cast<T *>(dst);
     const T &src_value = *static_cast<const T *>(src);
     if constexpr (std::is_same_v<T, bNodeSocketValueMenu>) {
@@ -3346,10 +3342,9 @@ void socket_value_free(const eNodeSocketDatatype type, void *data, const bool do
   if (do_id_user) {
     socket_value_id_user_decrement(type, data);
   }
-  bool freed = false;
-  node_interface::socket_types::socket_data_to_static_type(type, [&]<typename T>() {
+  socket_data_to_static_type(type, [&]<typename T>() {
     if constexpr (std::is_same_v<T, bNodeSocketValueMenu>) {
-      T &value = *static_cast<T *>(data);
+      auto &value = *static_cast<bNodeSocketValueMenu *>(data);
       if (value.enum_items) {
         /* Release shared data pointer. */
         value.enum_items->remove_user_and_delete_if_last();
@@ -3359,11 +3354,7 @@ void socket_value_free(const eNodeSocketDatatype type, void *data, const bool do
     else {
       MEM_delete(static_cast<T *>(data));
     }
-    freed = true;
   });
-  if (!freed) {
-    MEM_delete_void(data);
-  }
 }
 
 static void node_socket_free_default_value(bNodeSocket *sock, const bool do_id_user)
