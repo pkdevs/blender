@@ -1040,16 +1040,16 @@ void socket_value_init(eNodeSocketDatatype type, void *data, int subtype = 0);
 void *socket_value_new(eNodeSocketDatatype type, int subtype = 0);
 
 /** Copy a socket value struct with optional user counting. */
-void *socket_value_copy(eNodeSocketDatatype type, const void *src, bool do_id_user = false);
+void *socket_value_copy(eNodeSocketDatatype type, const void *src, bool do_id_user);
 
 /** Free a socket value with optional user counting. */
-void socket_value_free(eNodeSocketDatatype type, void *data, bool do_id_user = false);
+void socket_value_free(eNodeSocketDatatype type, void *data, bool do_id_user);
 
 /** Copy a socket value in an existing buffer with optional user counting */
 void socket_value_copy_content(eNodeSocketDatatype type,
                                void *dst,
                                const void *src,
-                               bool do_id_user = false);
+                               bool do_id_user);
 
 void socket_value_id_user_increment(eNodeSocketDatatype type, void *data);
 void socket_value_id_user_decrement(eNodeSocketDatatype type, void *data);
