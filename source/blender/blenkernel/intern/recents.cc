@@ -178,11 +178,6 @@ bool save()
   return true;
 }
 
-Section section(const StringRef section_name)
-{
-  return Section(section_name);
-}
-
 static const toml::value *recents_find_in(const toml::value &root,
                                           const std::string &section_name,
                                           const std::string &item_key)

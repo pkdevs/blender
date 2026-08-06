@@ -92,6 +92,4 @@ void init_async();
 void ensure_init();
 bool save();
 
-Section section(StringRef section_name);
-
 }  // namespace blender::recents
