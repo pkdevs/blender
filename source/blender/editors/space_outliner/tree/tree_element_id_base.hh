@@ -22,5 +22,5 @@ struct TreeElementIDBase final : public AbstractTreeElement {
  public:
   TreeElementIDBase(TreeElement &legacy_te, void *data);
 };
-} /// namespace ed::outliner
-} /// namespace blender
+}  // namespace ed::outliner
+}  // namespace blender

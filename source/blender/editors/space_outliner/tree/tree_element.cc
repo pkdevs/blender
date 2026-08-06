@@ -29,6 +29,7 @@
 #include "tree_element_gpencil_layer.hh"
 #include "tree_element_grease_pencil_node.hh"
 #include "tree_element_id.hh"
+#include "tree_element_id_base.hh"
 #include "tree_element_label.hh"
 #include "tree_element_layer_collection.hh"
 #include "tree_element_linked_node_tree.hh"
@@ -44,7 +45,6 @@
 #include "tree_element_shapekey.hh"
 #include "tree_element_view_collection.hh"
 #include "tree_element_view_layer.hh"
-#include "tree_element_id_base.hh"
 
 #include "../outliner_intern.hh"
 #include "tree_element.hh"

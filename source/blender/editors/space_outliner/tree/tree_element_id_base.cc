@@ -6,10 +6,10 @@
  * \ingroup spoutliner
  */
 
+#include "tree_element_id_base.hh"
+#include "../outliner_intern.hh"
 #include "DNA_ID.h"
 #include "DNA_outliner_types.h"
-#include "../outliner_intern.hh"
-#include "tree_element_id_base.hh"
 
 namespace blender::ed::outliner {
 
@@ -20,4 +20,4 @@ TreeElementIDBase::TreeElementIDBase(TreeElement &legacy_te, void *data)
   legacy_te.directdata = data_;
   legacy_te.name = "";
 }
-} // namespace blender::ed::outliner
+}  // namespace blender::ed::outliner
