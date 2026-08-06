@@ -1137,6 +1137,7 @@ class ShaderNodesInliner {
         auto &mix_storage = *static_cast<NodeShaderMix *>(mix.node->storage);
         mix_storage.data_type = socket_type;
         mix_storage.clamp_result = false;
+        /* Use clamping of the mix node to avoid the need for a separate clamp node. */
         mix_storage.clamp_factor = true;
         /* This makes the right sockets for the given data type available. */
         mix.node->typeinfo->updatefunc(&dst_tree_, mix.node);
