@@ -42,6 +42,8 @@ BLOCKLIST_HYDRA = [
     "osl_camera_.*.blend",
     # The result doesn't match storm-usd
     "many_lights.blend",
+    # The result differs between platforms
+    "principled_bsdf_dispersion.blend",
 ]
 
 BLOCKLIST_USD = [
