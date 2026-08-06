@@ -136,6 +136,8 @@ template<> struct DefaultHash<rna_path::Item> {
  * Storage for a parsed path, using a variable inline buffer to avoid allocations. This class helps
  * to amortize the cost of string parsing across multiple uses of the RNA path. If this is just
  * stored on the stack, a larger inline buffer can make more sense.
+ *
+ * \param N: The inline buffer size of the vector for optimized storage of common shorter paths.
  */
 template<int64_t N = 4> class ParsedRNAPath {
  public:
