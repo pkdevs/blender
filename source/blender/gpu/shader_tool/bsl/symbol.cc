@@ -194,6 +194,10 @@ struct SymbolParser : NodeErrorHandler {
       auto attr = resource_type_from_attributes(arg.attributes()).unwrap(this);
 
       SymbolClass *type = scope.lookup_class(table, arg.type().identifier()).unwrap(this);
+      if (type->is_error) {
+        error(
+            arg.type().identifier(), Diag::UnknownTypeNameWithArg, arg.type().identifier().str());
+      }
       SymbolVariable *var = table.var_arena.alloc(&scope, type, arg.declarator(), table);
       scope.variables.emplace(var->identifier, var);
       /* Register argument type for argument resolution. */
