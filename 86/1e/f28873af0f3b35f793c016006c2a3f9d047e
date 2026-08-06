@@ -1,2 +1,3 @@
 Referenced by issue #158297, EEVEE plane probe - pink rendering glitch (could be related to temporal accumulation in denoising).
 Referenced by issue #161639, Ghosting with Fast Gi disabled on some shaders
+Referenced by issue #162398, EEVEE rendering changes in 5.2
