@@ -64,29 +64,6 @@ static void frame_to_time_string(
       r_str, str_maxncpy, brevity_level, seconds, scene->frames_per_second(), U.timecode_style);
 }
 
-/**
- * Generates a string based on the given `frame`.
- * Depending on `step` the returned string has 0 - 3 decimal positions.
- */
-static void frame_to_string(
-    const Scene *scene, const float frame, const float step, char *r_str, const uint str_maxncpy)
-{
-  const float offset_frame = (scene->flag & SCE_DRAW_TIME_SCENE_RELATIVE) ? frame - scene->r.sfra :
-                                                                            frame;
-  if (step >= 1.0f) {
-    BLI_snprintf_utf8(r_str, str_maxncpy, "%d", int(offset_frame));
-  }
-  else if (step >= 0.5f) {
-    BLI_snprintf_utf8(r_str, str_maxncpy, "%.1f", offset_frame);
-  }
-  else if (step >= 0.01f) {
-    BLI_snprintf_utf8(r_str, str_maxncpy, "%.2f", offset_frame);
-  }
-  else {
-    BLI_snprintf_utf8(r_str, str_maxncpy, "%.3f", offset_frame);
-  }
-}
-
 static void value_to_string(const float value,
                             const float step,
                             char *r_str,
@@ -104,6 +81,18 @@ static void value_to_string(const float value,
   else {
     BLI_snprintf_utf8(r_str, str_maxncpy, "%.3f", value);
   }
+}
+
+/**
+ * Generates a string based on the given `frame`.
+ * Depending on `step` the returned string has 0 - 3 decimal positions.
+ */
+static void frame_to_string(
+    const Scene *scene, const float frame, const float step, char *r_str, const uint str_maxncpy)
+{
+  const float offset_frame = (scene->flag & SCE_DRAW_TIME_SCENE_RELATIVE) ? frame - scene->r.sfra :
+                                                                            frame;
+  value_to_string(offset_frame, step, r_str, str_maxncpy);
 }
 
 /* This essentially performs a special prime factor decomposition where it can only use 2, 3 and 5
