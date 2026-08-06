@@ -430,15 +430,15 @@ void SymbolTable::register_builtins(LocalScope node)
   this->bool4_cls = root->lookup_class("bool4");
 
   const std::vector<BuiltinVector> matrices = {
-      {"float2x2", float2_cls, 2, 16},
-      {"float2x3", float3_cls, 2, 16},
-      {"float2x4", float4_cls, 2, 16},
-      {"float3x2", float2_cls, 3, 16},
-      {"float3x3", float3_cls, 3, 16},
-      {"float3x4", float4_cls, 3, 16},
-      {"float4x2", float2_cls, 4, 16},
-      {"float4x3", float3_cls, 4, 16},
-      {"float4x4", float4_cls, 4, 16},
+      {"float2x2", float2_cls, 2, 16, builtin::ClassId::float2x2_t},
+      {"float2x3", float3_cls, 2, 16, builtin::ClassId::float2x3_t},
+      {"float2x4", float4_cls, 2, 16, builtin::ClassId::float2x4_t},
+      {"float3x2", float2_cls, 3, 16, builtin::ClassId::float3x2_t},
+      {"float3x3", float3_cls, 3, 16, builtin::ClassId::float3x3_t},
+      {"float3x4", float4_cls, 3, 16, builtin::ClassId::float3x4_t},
+      {"float4x2", float2_cls, 4, 16, builtin::ClassId::float4x2_t},
+      {"float4x3", float3_cls, 4, 16, builtin::ClassId::float4x3_t},
+      {"float4x4", float4_cls, 4, 16, builtin::ClassId::float4x4_t},
   };
 
   for (const auto &t : matrices) {

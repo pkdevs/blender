@@ -101,6 +101,17 @@ ClassId binary_operator_return_type(SymbolClass *lhs, TokenType op, SymbolClass 
   const uint16_t r = uint16_t(rhs->builtin_class);
   const OperatorType o = to_operator_type(op);
 
+  if (l & MATRIX_MASK) {
+    uint16_t col = (l & MATRIX_MASK) >> MATRIX_SHIFT;
+    uint16_t row = l & LEN_MASK;
+    return (r == (CLASS_FLOAT | col)) ? ClassId(CLASS_FLOAT | row) : ClassId::Invalid;
+  }
+  if (r & MATRIX_MASK) {
+    uint16_t col = (r & MATRIX_MASK) >> MATRIX_SHIFT;
+    uint16_t row = r & LEN_MASK;
+    return (l == (CLASS_FLOAT | row)) ? ClassId(CLASS_FLOAT | col) : ClassId::Invalid;
+  }
+
   /* Logical operators (&&, ||): scalar bool only. */
   if (o & OP_LOGICAL) {
     return (l == ClassId::bool_t && r == ClassId::bool_t) ? ClassId::bool_t : ClassId::Invalid;
