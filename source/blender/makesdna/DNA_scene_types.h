@@ -999,11 +999,11 @@ struct RenderData {
   char _pad5[4] = {};
 
   /* Render simplify. */
-  short simplify_subsurf = 0;
-  short simplify_subsurf_render = 6;
+  short simplify_subsurf = 6;
+  short simplify_subsurf_render = 0;
   short simplify_gpencil = 0;
-  float simplify_particles = 0.0f;
-  float simplify_particles_render = 1.0f;
+  float simplify_particles = 1.0f;
+  float simplify_particles_render = 0;
   float simplify_volumes = 1.0f;
 
   /** Freestyle line thickness options. */
