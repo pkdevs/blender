@@ -9,17 +9,18 @@
  */
 
 #include <algorithm>
-#include <cmath>
 
 #include "DNA_vec_types.h"
 #include "DNA_windowmanager_types.h"
 
-#include "BLI_bounds_types.hh"
+#include "BLI_index_range.hh"
 #include "BLI_math_vector_types.hh"
 #include "BLI_rect.hh"
 
 #include "GHOST_IWindow.hh"
 
+#include "GPU_batch.hh"
+#include "GPU_batch_presets.hh"
 #include "GPU_immediate.hh"
 #include "GPU_state.hh"
 #include "GPU_viewport.hh" /* #GLA_PIXEL_OFS */
@@ -326,19 +327,18 @@ void WM_window_csd_draw_corner_mask(const wmWindow *win)
     return;
   }
 
-  /* The Y axis points up here, so the first two are the *bottom* corners of the window. */
-  const GHOST_TWindowTiledFlag tiled_edges = ghost_window->getTiledEdges();
   const std::array<int, 4> corner_tiled_edges{
-      GHOST_kWindowTiledLeft | GHOST_kWindowTiledBottom,
-      GHOST_kWindowTiledRight | GHOST_kWindowTiledBottom,
       GHOST_kWindowTiledRight | GHOST_kWindowTiledTop,
       GHOST_kWindowTiledLeft | GHOST_kWindowTiledTop,
+      GHOST_kWindowTiledLeft | GHOST_kWindowTiledBottom,
+      GHOST_kWindowTiledRight | GHOST_kWindowTiledBottom,
   };
-
-  const bool all_corners_square = std::ranges::all_of(
-      corner_tiled_edges,
-      [&](const int corner_edges) { return (tiled_edges & corner_edges) != 0; });
-  if (all_corners_square) {
+  const GHOST_TWindowTiledFlag tiled_edges = ghost_window->getTiledEdges();
+  std::array<float, 4> radii;
+  for (const int corner : IndexRange(4)) {
+    radii[corner] = (tiled_edges & corner_tiled_edges[corner]) ? 0.0f : float(radius);
+  }
+  if (std::ranges::all_of(radii, [](const float value) { return value == 0.0f; })) {
     return;
   }
 
@@ -351,102 +351,24 @@ void WM_window_csd_draw_corner_mask(const wmWindow *win)
   };
   wmWindowViewportTitle_ex(window_rect, 0.0f);
 
-  GPUVertFormat *format = immVertexFormat();
-  const uint shdr_pos = GPU_vertformat_attr_add(format, "pos", gpu::VertAttrType::SFLOAT_32_32);
-  const uint shdr_col = GPU_vertformat_attr_add(
-      format, "color", gpu::VertAttrType::SFLOAT_32_32_32_32);
-
-  /* The bounding square of each corner, ordered to match #corner_tiled_edges above. */
-  const std::array<Bounds<float2>, 4> corner_bounds{
-      Bounds<float2>{
-          float2(0.0f, 0.0f),
-          float2(radius, radius),
-      },
-      Bounds<float2>{
-          float2(win_size[0] - radius, 0.0f),
-          float2(win_size[0], radius),
-      },
-      Bounds<float2>{
-          float2(win_size[0] - radius, win_size[1] - radius),
-          float2(win_size[0], win_size[1]),
-      },
-      Bounds<float2>{
-          float2(0.0f, win_size[1] - radius),
-          float2(radius, win_size[1]),
-      },
+  const rctf rect = {
+      .xmin = 0.0f,
+      .xmax = float(win_size[0]),
+      .ymin = 0.0f,
+      .ymax = float(win_size[1]),
   };
+  /* Only the alpha is used, the blend mode scales the window down by one minus it. */
+  const float color[4] = {0.0f, 0.0f, 0.0f, 1.0f};
 
-  /* Scaling the color along with the alpha is what keeps the anti-aliased edge correct, the
-   * surface is composited pre-multiplied. */
   GPU_blend(GPU_BLEND_OVERLAY_MASK_FROM_ALPHA);
-  immBindBuiltinProgram(GPU_SHADER_3D_SMOOTH_COLOR);
 
-  const int segments = std::clamp(radius / 2, 6, 24);
-  /* Half a pixel either side of the arc gives a one pixel wide anti-aliased edge. */
-  const float feather = 0.5f;
+  gpu::Batch *batch = GPU_batch_preset_quad();
+  GPU_batch_program_set_builtin(batch, GPU_SHADER_2D_ROUNDED_CORNER_MASK);
+  GPU_batch_uniform_4fv(batch, "rect", (const float *)&rect);
+  GPU_batch_uniform_4fv(batch, "color", color);
+  GPU_batch_uniform_4fv(batch, "radii", radii.data());
+  GPU_batch_draw_instance_range(batch, 0, 4);
 
-  for (int corner = 0; corner < 4; corner++) {
-    if (tiled_edges & corner_tiled_edges[corner]) {
-      continue;
-    }
-    const Bounds<float2> &bounds = corner_bounds[corner];
-    const bool is_max_x = ELEM(corner, 1, 2);
-    const bool is_max_y = corner >= 2;
-
-    const float2 window_corner{
-        is_max_x ? bounds.max.x : bounds.min.x,
-        is_max_y ? bounds.max.y : bounds.min.y,
-    };
-    const float2 arc_center{
-        is_max_x ? bounds.min.x : bounds.max.x,
-        is_max_y ? bounds.min.y : bounds.max.y,
-    };
-    const float2 sign = {is_max_x ? 1.0f : -1.0f, is_max_y ? 1.0f : -1.0f};
-
-    /* Sweep from the vertical window edge round to the horizontal one. */
-    auto arc_co = [&](const float angle, const float dist) {
-      return float2{arc_center[0] + (sign[0] * dist * std::cos(angle)),
-                    arc_center[1] + (sign[1] * dist * std::sin(angle))};
-    };
-
-    /* Add one triangle filling in to the corner and two for the feathered edge. */
-    immBegin(GPU_PRIM_TRIS, segments * 9);
-    for (int i = 0; i < segments; i++) {
-      const float angle_a = (float(M_PI_2) * float(i)) / float(segments);
-      const float angle_b = (float(M_PI_2) * float(i + 1)) / float(segments);
-
-      const float2 outer_a = arc_co(angle_a, float(radius) + feather);
-      const float2 outer_b = arc_co(angle_b, float(radius) + feather);
-      const float2 inner_a = arc_co(angle_a, float(radius) - feather);
-      const float2 inner_b = arc_co(angle_b, float(radius) - feather);
-
-      /* Fully cut away, between the corner and the outside of the arc. */
-      immAttr4f(shdr_col, 0.0f, 0.0f, 0.0f, 1.0f);
-      immVertex2fv(shdr_pos, window_corner);
-      immAttr4f(shdr_col, 0.0f, 0.0f, 0.0f, 1.0f);
-      immVertex2fv(shdr_pos, outer_a);
-      immAttr4f(shdr_col, 0.0f, 0.0f, 0.0f, 1.0f);
-      immVertex2fv(shdr_pos, outer_b);
-
-      /* Fading out across the arc, leaving the window untouched on the inside. */
-      immAttr4f(shdr_col, 0.0f, 0.0f, 0.0f, 1.0f);
-      immVertex2fv(shdr_pos, outer_a);
-      immAttr4f(shdr_col, 0.0f, 0.0f, 0.0f, 0.0f);
-      immVertex2fv(shdr_pos, inner_a);
-      immAttr4f(shdr_col, 0.0f, 0.0f, 0.0f, 0.0f);
-      immVertex2fv(shdr_pos, inner_b);
-
-      immAttr4f(shdr_col, 0.0f, 0.0f, 0.0f, 1.0f);
-      immVertex2fv(shdr_pos, outer_a);
-      immAttr4f(shdr_col, 0.0f, 0.0f, 0.0f, 0.0f);
-      immVertex2fv(shdr_pos, inner_b);
-      immAttr4f(shdr_col, 0.0f, 0.0f, 0.0f, 1.0f);
-      immVertex2fv(shdr_pos, outer_b);
-    }
-    immEnd();
-  }
-
-  immUnbindProgram();
   GPU_blend(GPU_BLEND_NONE);
 }
 
