@@ -161,9 +161,7 @@ TEST_F(AnimationEvaluationTest, evaluate_layer__keyframes)
       cube_rna_ptr, *action, *layer, slot->handle, anim_eval_context);
 
   std::optional<ParsedRNAPath<>> parsed_rna_path = ParsedRNAPath<>::from_string("location");
-  if (!parsed_rna_path) {
-    return;
-  }
+  EXPECT_TRUE(parsed_rna_path.has_value());
 
   /* Check the result. */
   ASSERT_FALSE(result.is_empty());
