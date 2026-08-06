@@ -521,7 +521,7 @@ class NODE_MT_group_input_base(NodeMenu):
     def draw(self, context):
         layout = self.layout
         tree = context.space_data.edit_tree
-        
+
         self.draw_children(layout, tree)
 
 
@@ -539,7 +539,7 @@ class NODE_MT_layout_base(NodeMenu):
 add_base_pathing_dict = {
     "Group": "NODE_MT_group_add",
     "Group/Linked": "NODE_MT_linked_group_add",
-    "Group/Inputs" : "NODE_MT_group_input_add",
+    "Group/Inputs": "NODE_MT_group_input_add",
     "Layout": "NODE_MT_category_layout",
 }
 
@@ -547,7 +547,7 @@ add_base_pathing_dict = {
 swap_base_pathing_dict = {
     "Group": "NODE_MT_group_swap",
     "Group/Linked": "NODE_MT_linked_group_swap",
-    "Group/Inputs" : "NODE_MT_group_input_swap",
+    "Group/Inputs": "NODE_MT_group_input_swap",
     "Layout": "NODE_MT_layout_swap",
 }
 
