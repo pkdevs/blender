@@ -282,8 +282,8 @@ static void node_socket_add_replace(const bContext *C,
             bke::node_add_link(*ntree, *link->fromnode, *link->fromsock, *node_from, sock_from);
             bke::node_remove_link(ntree, *link);
           }
-          sock_from.default_value = bke::socket_value_copy(
-              sock_from.type, sock_prev.default_value, true);
+          bke::socket_value_copy_content(
+              sock_from.type, sock_from.default_value, sock_prev.default_value, true);
         }
       }
     }

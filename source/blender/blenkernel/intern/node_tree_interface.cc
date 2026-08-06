@@ -91,6 +91,7 @@ static void socket_data_free(bNodeTreeInterfaceSocket &socket, const bool do_id_
   if (const bNodeSocketType *stype = socket.socket_typeinfo()) {
     socket_value_free(stype->type, socket.socket_data, do_id_user);
   }
+  socket.socket_data = nullptr;
 }
 
 /** \} */
