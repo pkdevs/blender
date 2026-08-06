@@ -55,7 +55,7 @@ static void node_geo_exec(GeoNodeExecParams params)
       return;
   }
   const float rad = params.extract_input<float>("Radius"_ustr);
-  const int subdivisions = (1 << (s - 1)) - 1 + 2;
+  const int subdivisions = (1 << (s - 1)) + 1;
   const int verts_x = subdivisions;
   const int verts_y = subdivisions;
   const int verts_z = subdivisions;
