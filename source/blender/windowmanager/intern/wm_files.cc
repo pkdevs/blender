@@ -119,6 +119,7 @@
 #include "ED_view3d_offscreen.hh"
 
 #include "NOD_composite.hh"
+#include "NOD_geo_string_to_curves.hh"
 
 #include "GHOST_ISystemPaths.hh"
 #include "GHOST_IWindow.hh"
@@ -662,6 +663,9 @@ void wm_file_read_report(Main *bmain, wmWindow *win)
 static void wm_file_read_pre(bool use_data, bool /*use_userdef*/)
 {
   if (use_data) {
+    /* This cache is generally small but there isn't really a need to preserve it when loading a
+     * new file. */
+    nodes::string_to_curves_cache_clear();
     BLI_timer_on_file_load();
   }
 
