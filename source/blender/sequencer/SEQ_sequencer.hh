@@ -53,7 +53,6 @@ enum class Side : int {
   Both,
   NoChange,
 };
-ENUM_OPERATORS(Side);
 
 /* strip_duplicate' flags */
 enum class StripDuplicate : uint8_t {
