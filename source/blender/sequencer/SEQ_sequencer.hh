@@ -126,7 +126,6 @@ struct EditingRuntime {
    * Deletion data stored between calls to #edit_flag_for_removal and #edit_remove_flagged_strips
    */
   Set<Strip *> strips_to_remove;
-  Set<Strip **> pointers_to_clear;
 
   CompositorCache &ensure_compositor_cache();
 };
