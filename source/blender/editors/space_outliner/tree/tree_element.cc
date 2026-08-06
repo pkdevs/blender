@@ -44,6 +44,7 @@
 #include "tree_element_shapekey.hh"
 #include "tree_element_view_collection.hh"
 #include "tree_element_view_layer.hh"
+#include "tree_element_id_base.hh"
 
 #include "../outliner_intern.hh"
 #include "tree_element.hh"
@@ -211,6 +212,8 @@ std::unique_ptr<AbstractTreeElement> AbstractTreeElement::create_from_type(const
     case TSE_SHAPE_KEY_BASE:
       return std::make_unique<TreeElementShapeKeyBase>(legacy_te,
                                                        *reinterpret_cast<Key *>(owner_id));
+    case TSE_ID_BASE:
+      return std::make_unique<TreeElementIDBase>(legacy_te, static_cast<ID *>(create_data));
     default:
       break;
   }

@@ -149,8 +149,7 @@ TreeElement *TreeDisplayLibraries::add_library_contents(Main &mainvar,
         }
         else if (id->lib == lib) {
           ten = add_element(
-              &tenlib->subtree, reinterpret_cast<ID *>(lib), nullptr, nullptr, TSE_ID_BASE, a);
-          ten->directdata = lbarray[a];
+              &tenlib->subtree, reinterpret_cast<ID *>(lib), lbarray[a], nullptr, TSE_ID_BASE, a);
           ten->name = outliner_idcode_to_plural(GS(id->name));
         }
 
