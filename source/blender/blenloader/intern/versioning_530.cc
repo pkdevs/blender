@@ -234,7 +234,7 @@ void blo_do_versions_530(FileData * /*fd*/, Library * /*lib*/, Main *bmain)
     }
   }
 
-  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 503, 11)) {
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 503, 12)) {
     FOREACH_NODETREE_BEGIN (bmain, node_tree, id_owner) {
       for (bNode &node : node_tree->nodes) {
         if (STREQ(node.idname, "GeometryNodeStringToCurves")) {
