@@ -952,6 +952,7 @@ struct SymbolParser : NodeErrorHandler {
           }
 
           sym->reference_value = stmt.expr();
+          sym->array_dimensions = result.array_dim;
         }
         else {
           error(decl, Diag::ReferenceVariableRequiresInitializer, decl.identifier().str());

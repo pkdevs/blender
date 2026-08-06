@@ -46,7 +46,7 @@ struct SymbolVariable : Symbol {
 
   ResourceType res_type = ResourceType::NONE;
 
-  int array_dimensions = 0;
+  int8_t array_dimensions = 0;
   /* Number of array elements in the declaration.
    * 0 if not array.
    * -1 if not known at compile time. */

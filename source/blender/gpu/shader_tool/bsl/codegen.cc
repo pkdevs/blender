@@ -38,7 +38,7 @@ struct CodegenContext : NodeErrorHandler {
 
     SymbolClass *type;
     /* Array dimension of the current temporary. */
-    uint8_t array_dim = 0;
+    int8_t array_dim = 0;
 
     ExpressionResult(SymbolVariable *var, const string &trivia)
         : str((var->is_constexpr ? var->value_str() : var->identifier) + trivia),
@@ -47,12 +47,12 @@ struct CodegenContext : NodeErrorHandler {
     {
     }
 
-    ExpressionResult(const ast::Node &node, SymbolClass *cls, uint8_t array_dim = 0)
+    ExpressionResult(const ast::Node &node, SymbolClass *cls, int8_t array_dim = 0)
         : str(node.str_full()), type(cls), array_dim(array_dim)
     {
     }
 
-    ExpressionResult(const string &str, SymbolClass *cls, uint8_t array_dim = 0)
+    ExpressionResult(const string &str, SymbolClass *cls, int8_t array_dim = 0)
         : str(str), type(cls), array_dim(array_dim)
     {
     }
@@ -310,12 +310,12 @@ struct CodegenContext : NodeErrorHandler {
       }
 
       if (var->reference_value.is_valid()) {
-        return {string(var->reference_value.str()) + whitespace, var->type};
+        return {string(var->reference_value.str()) + whitespace, var->type, var->array_dimensions};
       }
 
       bool preceded_by_dot = id.front().prev() == '.';
       if (!var->is_static && !preceded_by_dot && var->parent->as_class() != nullptr) {
-        return {"this_." + var->identifier + whitespace, var->type};
+        return {"this_." + var->identifier + whitespace, var->type, var->array_dimensions};
       }
       return {var, whitespace};
     }
