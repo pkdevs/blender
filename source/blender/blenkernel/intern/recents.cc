@@ -68,10 +68,12 @@ _default = true
 static std::string recents_file_path()
 {
   std::optional<std::string> datafiles_path = BKE_appdir_folder_id(BLENDER_USER_CONFIG, "");
-  if (datafiles_path.has_value()) {
-    return *datafiles_path + SEP + BLENDER_RECENTS_FILE;
+  if (!datafiles_path.has_value()) {
+    return {};
   }
-  return {};
+  datafiles_path->append(SEP_STR);
+  datafiles_path->append(BLENDER_RECENTS_FILE);
+  return std::move(*datafiles_path);
 }
 
 static void recents_print_errors(const std::vector<toml::error_info> &errors)
