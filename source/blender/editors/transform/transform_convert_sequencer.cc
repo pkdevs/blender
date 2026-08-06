@@ -771,6 +771,7 @@ static void recalcData_sequencer(TransInfo *t)
   TransData *td;
   int a;
   Strip *strip_prev = nullptr;
+  bool affects_scene_time = false;
 
   TransDataContainer *tc = TRANS_DATA_CONTAINER_FIRST_SINGLE(t);
   Scene *scene = CTX_data_sequencer_scene(t->context);
@@ -781,15 +782,19 @@ static void recalcData_sequencer(TransInfo *t)
 
     if (strip != strip_prev) {
       seq::relations_invalidate_cache(scene, strip);
+      affects_scene_time |= ELEM(strip->type, STRIP_TYPE_SCENE, STRIP_TYPE_META);
     }
 
     strip_prev = strip;
   }
 
-  vse::sync_active_scene_and_time_with_scene_strip(*t->context);
-  DEG_id_tag_update(&scene->id, ID_RECALC_SEQUENCER_STRIPS);
-
   flushTransSeq(t);
+
+  /* Only Scene Strips and metas can alter a source-scene time relation. */
+  if (affects_scene_time) {
+    vse::sync_active_scene_and_time_with_scene_strip(*t->context);
+  }
+  DEG_id_tag_update(&scene->id, ID_RECALC_SEQUENCER_STRIPS);
 }
 
 /** \} */

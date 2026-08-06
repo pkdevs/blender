@@ -33,6 +33,7 @@
 #include "DNA_object_types.h"
 #include "DNA_space_types.h"
 #include "DNA_view3d_types.h"
+#include "DNA_workspace_types.h"
 
 #include "RNA_define.hh"
 
@@ -1211,16 +1212,14 @@ static void rna_Space_view2d_sync_set(PointerRNA *ptr, bool value)
   }
 }
 
-static void rna_Space_view2d_sync_update(Main * /*bmain*/, Scene * /*scene*/, PointerRNA *ptr)
+static void rna_Space_view2d_sync_update(bContext *C, PointerRNA *ptr)
 {
-  ScrArea *area;
-  ARegion *region;
-
-  area = rna_area_from_space(ptr); /* can be nullptr */
+  ScrArea *area = rna_area_from_space(ptr); /* can be nullptr */
   if (area == nullptr) {
     return;
   }
 
+  ARegion *region;
   if (area->spacetype == SPACE_CLIP) {
     region = BKE_area_find_region_type(area, RGN_TYPE_PREVIEW);
   }
@@ -1228,12 +1227,36 @@ static void rna_Space_view2d_sync_update(Main * /*bmain*/, Scene * /*scene*/, Po
     region = BKE_area_find_region_type(area, RGN_TYPE_WINDOW);
   }
 
-  if (region) {
-    bScreen *screen = id_cast<bScreen *>(ptr->owner_id);
-    View2D *v2d = &region->v2d;
-
-    ui::view2d_sync(screen, area, v2d, V2D_LOCK_SET);
+  if (region == nullptr) {
+    return;
   }
+
+  const bool sync_visible_range =
+      (region->v2d.flag & V2D_VIEWSYNC_SCREEN_TIME) != 0;
+
+  /*
+   * Keep the Workspace Scene Time flags untouched when unlinking the Sequencer.
+   * The UI shows the remembered state while disabled, and the runtime gating in
+   * the Sequencer code makes the unchecked Link behave as the effective master.
+   */
+  if (!sync_visible_range && area->spacetype == SPACE_SEQ) {
+    if (C != nullptr) {
+      WM_event_add_notifier(C, NC_WINDOW, nullptr);
+    }
+    return;
+  }
+
+  if (!sync_visible_range || C == nullptr) {
+    return;
+  }
+
+  /*
+   * Join the visible-range group through the dedicated lifecycle path. The generic View2D sync
+   * also handles vertical channel synchronization; calling it with V2D_LOCK_SET from this RNA
+   * update could copy the channel region's Y range into the Sequencer window and jump near high
+   * channel numbers.
+   */
+  ui::view2d_sync_time_to_area(C, area);
 }
 
 /* Space 3D View */
@@ -4217,6 +4240,7 @@ static void rna_def_space(BlenderRNA *brna)
   /* Access to #V2D_VIEWSYNC_SCREEN_TIME. */
   prop = RNA_def_property(srna, "show_locked_time", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_funcs(prop, "rna_Space_view2d_sync_get", "rna_Space_view2d_sync_set");
+  RNA_def_property_flag(prop, PROP_CONTEXT_UPDATE);
   RNA_def_property_ui_text(prop,
                            "Sync Visible Range",
                            "Synchronize the visible timeline range with other time-based editors");

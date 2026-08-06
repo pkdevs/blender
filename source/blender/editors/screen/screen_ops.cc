@@ -3869,6 +3869,7 @@ static wmOperatorStatus frame_offset_exec(bContext *C, wmOperator *op)
     return OPERATOR_CANCELLED;
   }
 
+  const float previous_frame = BKE_scene_frame_get(scene);
   int delta = RNA_int_get(op->ptr, "delta");
 
   /* In order to jump from e.g. 1.5 to 1 the delta needs to be incremented by 1 since the sub-frame
@@ -3882,7 +3883,7 @@ static wmOperatorStatus frame_offset_exec(bContext *C, wmOperator *op)
 
   ED_areas_do_frame_follow(C, false);
 
-  ed::vse::sync_active_scene_and_time_with_scene_strip(*C);
+  ed::vse::scene_time_sync_apply_frame_change(*C, *scene, previous_frame, true);
 
   DEG_id_tag_update(&scene->id, ID_RECALC_FRAME_CHANGE);
 
@@ -3921,6 +3922,7 @@ static wmOperatorStatus frame_jump_exec(bContext *C, wmOperator *op)
   if (!scene) {
     return OPERATOR_CANCELLED;
   }
+  const float previous_frame = BKE_scene_frame_get(scene);
   wmTimer *animtimer = CTX_wm_screen(C)->animtimer;
   const ScenePlaybackRange playback_range = BKE_scene_get_playback_range(scene);
 
@@ -3951,7 +3953,7 @@ static wmOperatorStatus frame_jump_exec(bContext *C, wmOperator *op)
 
     ED_areas_do_frame_follow(C, true);
 
-    ed::vse::sync_active_scene_and_time_with_scene_strip(*C);
+    ed::vse::scene_time_sync_apply_frame_change(*C, *scene, previous_frame, true);
 
     DEG_id_tag_update(&scene->id, ID_RECALC_FRAME_CHANGE);
 
@@ -3994,6 +3996,7 @@ static wmOperatorStatus frame_jump_delta_exec(bContext *C, wmOperator *op)
     return OPERATOR_CANCELLED;
   }
 
+  const float previous_frame = BKE_scene_frame_get(scene);
   float delta = scene->r.time_jump_delta;
 
   if (scene->r.time_jump_unit == SCE_TIME_JUMP_SECOND) {
@@ -4027,7 +4030,7 @@ static wmOperatorStatus frame_jump_delta_exec(bContext *C, wmOperator *op)
   FRAMENUMBER_MIN_CLAMP(scene->r.cfra);
 
   ED_areas_do_frame_follow(C, true);
-  ed::vse::sync_active_scene_and_time_with_scene_strip(*C);
+  ed::vse::scene_time_sync_apply_frame_change(*C, *scene, previous_frame, true);
 
   DEG_id_tag_update(&scene->id, ID_RECALC_FRAME_CHANGE);
 
@@ -4206,7 +4209,7 @@ static wmOperatorStatus keyframe_jump_exec(bContext *C, wmOperator *op)
   }
 
   ED_areas_do_frame_follow(C, true);
-  ed::vse::sync_active_scene_and_time_with_scene_strip(*C);
+  ed::vse::scene_time_sync_apply_frame_change(*C, *scene, cfra, true);
 
   DEG_id_tag_update(&scene->id, ID_RECALC_FRAME_CHANGE);
 
@@ -4250,6 +4253,7 @@ static wmOperatorStatus marker_jump_exec(bContext *C, wmOperator *op)
   if (!scene) {
     return OPERATOR_CANCELLED;
   }
+  const float previous_frame = BKE_scene_frame_get(scene);
   int closest = scene->r.cfra;
   const bool next = RNA_boolean_get(op->ptr, "next");
   bool found = false;
@@ -4281,7 +4285,7 @@ static wmOperatorStatus marker_jump_exec(bContext *C, wmOperator *op)
 
   ED_areas_do_frame_follow(C, true);
 
-  ed::vse::sync_active_scene_and_time_with_scene_strip(*C);
+  ed::vse::scene_time_sync_apply_frame_change(*C, *scene, previous_frame, true);
 
   DEG_id_tag_update(&scene->id, ID_RECALC_FRAME_CHANGE);
 
@@ -6435,6 +6439,7 @@ static wmOperatorStatus screen_animation_step_invoke(bContext *C,
   Main *bmain = CTX_data_main(C);
   ScreenAnimData *sad = static_cast<ScreenAnimData *>(wt->customdata);
   Scene *scene = sad->scene;
+  const float previous_frame = BKE_scene_frame_get(scene);
   ViewLayer *view_layer = sad->view_layer;
   Depsgraph *depsgraph = BKE_scene_get_depsgraph(scene, view_layer);
   Scene *scene_eval = (depsgraph != nullptr) ? DEG_get_evaluated_scene(depsgraph) : nullptr;
@@ -6593,7 +6598,7 @@ static wmOperatorStatus screen_animation_step_invoke(bContext *C,
 
   WM_event_add_notifier(C, NC_SCREEN | ND_ANIMATION_PLAYBACK, screen);
 
-  ed::vse::sync_active_scene_and_time_with_scene_strip(*C);
+  ed::vse::scene_time_sync_apply_frame_change(*C, *scene, previous_frame, true);
 
   /* Since we follow draw-flags, we can't send notifier but tag regions ourselves. */
   if (depsgraph != nullptr) {
@@ -7042,9 +7047,11 @@ static wmOperatorStatus screen_animation_cancel_exec(bContext *C, wmOperator *op
     /* Stop playback */
     ED_screen_animation_play(C, 0, 0);
     if (restore_start_frame) {
-      /* reset current frame and just send a notifier to deal with the rest */
+      /* Reset current frame and synchronize the corresponding Scene Strip relation. */
+      const float previous_frame = BKE_scene_frame_get(scene);
       scene->r.cfra = frame;
-      ed::vse::sync_active_scene_and_time_with_scene_strip(*C);
+      scene->r.subframe = 0.0f;
+      ed::vse::scene_time_sync_apply_frame_change(*C, *scene, previous_frame, true);
       WM_event_add_notifier(C, NC_SCENE | ND_FRAME, scene);
     }
   }

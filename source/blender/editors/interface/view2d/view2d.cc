@@ -14,7 +14,10 @@
 
 #include "MEM_guardedalloc.h"
 
+#include "DNA_scene_types.h"
+#include "DNA_sequence_types.h"
 #include "DNA_userdef_types.h"
+#include "DNA_workspace_types.h"
 
 #include "BLI_link_utils.hh"
 #include "BLI_listbase.hh"
@@ -36,6 +39,8 @@
 #include "BLF_api.hh"
 
 #include "ED_screen.hh"
+
+#include "SEQ_time.hh"
 
 #include "UI_interface.hh"
 #include "UI_view2d.hh"
@@ -812,6 +817,40 @@ void view2d_curRect_validate(View2D *v2d)
   view2d_curRect_validate_resize(v2d, false);
 }
 
+void view2d_sync(bScreen *screen, ScrArea *area, View2D *v2dcur, int flag)
+{
+  view2d_sync_with_context(nullptr, screen, area, v2dcur, flag);
+}
+
+static ARegion *view2d_time_sync_region_find(ScrArea *area)
+{
+  if (area == nullptr) {
+    return nullptr;
+  }
+
+  for (ARegion &region : area->regionbase) {
+    if (region.runtime->visible && (region.v2d.flag & V2D_VIEWSYNC_SCREEN_TIME) != 0 &&
+        (region.v2d.flag & V2D_IS_INIT) != 0 && BLI_rcti_size_x(&region.v2d.mask) > 0)
+    {
+      return &region;
+    }
+  }
+  return nullptr;
+}
+
+static void view2d_sync_time_from_scene_relation_impl(const bContext *C);
+static void view2d_sync_time_to_area_impl(const bContext *C, ScrArea *target_area);
+
+void view2d_sync_time_from_scene_relation(const bContext *C)
+{
+  view2d_sync_time_from_scene_relation_impl(C);
+}
+
+void view2d_sync_time_to_area(const bContext *C, ScrArea *target_area)
+{
+  view2d_sync_time_to_area_impl(C, target_area);
+}
+
 void view2d_curRect_changed(const bContext *C, View2D *v2d)
 {
   view2d_curRect_validate(v2d);
@@ -847,7 +886,301 @@ bool view2d_area_supports_sync(ScrArea *area)
   return ELEM(area->spacetype, SPACE_ACTION, SPACE_NLA, SPACE_SEQ, SPACE_CLIP, SPACE_GRAPH);
 }
 
-void view2d_sync(bScreen *screen, ScrArea *area, View2D *v2dcur, int flag)
+static ARegion *view2d_find_region_from_view(ScrArea *area, const View2D *v2d)
+{
+  if (area == nullptr) {
+    return nullptr;
+  }
+
+  for (ARegion &region : area->regionbase) {
+    if (&region.v2d == v2d) {
+      return &region;
+    }
+  }
+  return nullptr;
+}
+
+static bool view2d_region_visible_screen_x_range(ARegion &region, int &r_xmin, int &r_xmax)
+{
+  const rcti *visible_rect = ED_region_visible_rect(&region);
+  const int local_xmin = std::max(region.v2d.mask.xmin, visible_rect->xmin);
+  const int local_xmax = std::min(region.v2d.mask.xmax, visible_rect->xmax);
+
+  if (local_xmin >= local_xmax) {
+    return false;
+  }
+
+  r_xmin = region.winrct.xmin + local_xmin;
+  r_xmax = region.winrct.xmin + local_xmax;
+  return true;
+}
+
+struct View2DTimeSyncContext {
+  const Scene *active_scene = nullptr;
+  const Scene *sequencer_scene = nullptr;
+  bool use_scene_strip_mapping = false;
+  bool relation_valid = false;
+  seq::SceneTimeSyncRelation relation;
+};
+
+static View2DTimeSyncContext view2d_time_sync_context_get(const bContext *C)
+{
+  View2DTimeSyncContext context;
+  if (C == nullptr) {
+    return context;
+  }
+
+  const WorkSpace *workspace = CTX_wm_workspace(C);
+  context.active_scene = CTX_data_scene(C);
+  if (workspace == nullptr || workspace->sequencer_scene == nullptr ||
+      context.active_scene == nullptr)
+  {
+    return context;
+  }
+
+  context.sequencer_scene = workspace->sequencer_scene;
+  context.use_scene_strip_mapping =
+      (workspace->flags & WORKSPACE_SYNC_SCENE_TIME) != 0;
+
+  if (!context.use_scene_strip_mapping ||
+      context.active_scene == context.sequencer_scene)
+  {
+    return context;
+  }
+
+  context.relation_valid = seq::scene_time_sync_relation_get(
+      context.sequencer_scene,
+      context.active_scene,
+      seq::SceneTimeSyncDirection::SceneToSequencer,
+      &context.relation);
+  return context;
+}
+
+static bool view2d_time_frame_map(const View2DTimeSyncContext &context,
+                                  const ScrArea &source_area,
+                                  const ScrArea &target_area,
+                                  const float source_frame,
+                                  float &r_target_frame)
+{
+  const bool source_is_sequencer = source_area.spacetype == SPACE_SEQ;
+  const bool target_is_sequencer = target_area.spacetype == SPACE_SEQ;
+
+  if (source_is_sequencer == target_is_sequencer) {
+    r_target_frame = source_frame;
+    return true;
+  }
+
+  if (context.active_scene == nullptr || context.sequencer_scene == nullptr) {
+    return false;
+  }
+
+  if (context.active_scene == context.sequencer_scene) {
+    r_target_frame = source_frame;
+    return true;
+  }
+
+  if (!context.use_scene_strip_mapping) {
+    return false;
+  }
+
+  /*
+   * Visible ranges use one stable Scene Strip relation in both directions. Unlike playhead
+   * synchronization, this relation may be the active or nearest matching strip when the Sequencer
+   * playhead is outside the strip.
+   */
+  return context.relation_valid &&
+         seq::scene_time_sync_frame_map(
+             context.relation,
+             source_is_sequencer ? seq::SceneTimeSyncDirection::SequencerToScene :
+                                   seq::SceneTimeSyncDirection::SceneToSequencer,
+             source_frame,
+             &r_target_frame);
+}
+
+enum class View2DTimeSyncResult {
+  Unavailable,
+  Unchanged,
+  Changed,
+};
+
+static View2DTimeSyncResult view2d_sync_screen_x(
+    ARegion &source_region,
+    const ScrArea &source_area,
+    ARegion &target_region,
+    const ScrArea &target_area,
+    const View2DTimeSyncContext &context)
+{
+  float source_frame_min = source_region.v2d.cur.xmin;
+  float source_frame_max = source_region.v2d.cur.xmax;
+
+  if (BLI_rcti_size_x(&source_region.v2d.mask) > 0 &&
+      BLI_rcti_size_x(&target_region.v2d.mask) > 0)
+  {
+    int source_visible_xmin, source_visible_xmax;
+    int target_visible_xmin, target_visible_xmax;
+    if (view2d_region_visible_screen_x_range(
+            source_region, source_visible_xmin, source_visible_xmax) &&
+        view2d_region_visible_screen_x_range(
+            target_region, target_visible_xmin, target_visible_xmax) &&
+        std::max(source_visible_xmin, target_visible_xmin) <
+            std::min(source_visible_xmax, target_visible_xmax))
+    {
+      const float target_screen_xmin = float(target_region.winrct.xmin +
+                                             target_region.v2d.mask.xmin);
+      const float target_screen_xmax = float(target_region.winrct.xmin +
+                                             target_region.v2d.mask.xmax);
+      source_frame_min = view2d_region_to_view_x(
+          &source_region.v2d, target_screen_xmin - float(source_region.winrct.xmin));
+      source_frame_max = view2d_region_to_view_x(
+          &source_region.v2d, target_screen_xmax - float(source_region.winrct.xmin));
+    }
+  }
+
+  float target_frame_a, target_frame_b;
+  if (!view2d_time_frame_map(
+          context, source_area, target_area, source_frame_min, target_frame_a) ||
+      !view2d_time_frame_map(
+          context, source_area, target_area, source_frame_max, target_frame_b))
+  {
+    return View2DTimeSyncResult::Unavailable;
+  }
+
+  const float target_frame_min = std::min(target_frame_a, target_frame_b);
+  const float target_frame_max = std::max(target_frame_a, target_frame_b);
+  constexpr float range_epsilon = 1.0e-5f;
+  if (std::abs(target_region.v2d.cur.xmin - target_frame_min) <= range_epsilon &&
+      std::abs(target_region.v2d.cur.xmax - target_frame_max) <= range_epsilon)
+  {
+    return View2DTimeSyncResult::Unchanged;
+  }
+
+  target_region.v2d.cur.xmin = target_frame_min;
+  target_region.v2d.cur.xmax = target_frame_max;
+  return View2DTimeSyncResult::Changed;
+}
+
+static void view2d_sync_time_from_scene_relation_impl(const bContext *C)
+{
+  if (C == nullptr) {
+    return;
+  }
+
+  bScreen *screen = CTX_wm_screen(C);
+  if (screen == nullptr) {
+    return;
+  }
+
+  const View2DTimeSyncContext context = view2d_time_sync_context_get(C);
+  auto sync_from_anchor = [&](ScrArea &source_area, bool *r_cross_area_synchronized) {
+    ARegion *source_region = view2d_time_sync_region_find(&source_area);
+    if (source_region == nullptr) {
+      return;
+    }
+
+    for (ScrArea &target_area : screen->areabase) {
+      if (&target_area == &source_area || !view2d_area_supports_sync(&target_area)) {
+        continue;
+      }
+      ARegion *target_region = view2d_time_sync_region_find(&target_area);
+      if (target_region == nullptr) {
+        continue;
+      }
+
+      const View2DTimeSyncResult result = view2d_sync_screen_x(
+          *source_region, source_area, *target_region, target_area, context);
+      if (result == View2DTimeSyncResult::Changed) {
+        ED_region_tag_redraw_no_rebuild(target_region);
+      }
+      if (r_cross_area_synchronized != nullptr &&
+          (source_area.spacetype == SPACE_SEQ) != (target_area.spacetype == SPACE_SEQ) &&
+          result != View2DTimeSyncResult::Unavailable)
+      {
+        *r_cross_area_synchronized = true;
+      }
+    }
+  };
+
+  ScrArea *sequencer_anchor = nullptr;
+  for (ScrArea &area : screen->areabase) {
+    if (area.spacetype == SPACE_SEQ && view2d_time_sync_region_find(&area) != nullptr) {
+      sequencer_anchor = &area;
+      break;
+    }
+  }
+
+  if (sequencer_anchor != nullptr) {
+    bool cross_area_synchronized = false;
+    sync_from_anchor(*sequencer_anchor, &cross_area_synchronized);
+    if (cross_area_synchronized) {
+      return;
+    }
+  }
+
+  /* No usable Scene Strip relation: keep all non-Sequencer time editors aligned together. */
+  for (ScrArea &area : screen->areabase) {
+    if (area.spacetype != SPACE_SEQ && view2d_area_supports_sync(&area) &&
+        view2d_time_sync_region_find(&area) != nullptr)
+    {
+      sync_from_anchor(area, nullptr);
+      return;
+    }
+  }
+}
+
+static void view2d_sync_time_to_area_impl(const bContext *C, ScrArea *target_area)
+{
+  if (C == nullptr || target_area == nullptr || !view2d_area_supports_sync(target_area)) {
+    return;
+  }
+
+  ARegion *target_region = view2d_time_sync_region_find(target_area);
+  bScreen *screen = CTX_wm_screen(C);
+  if (target_region == nullptr || screen == nullptr) {
+    return;
+  }
+
+  const View2DTimeSyncContext context = view2d_time_sync_context_get(C);
+  auto sync_from_area = [&](ScrArea &source_area) {
+    ARegion *source_region = view2d_time_sync_region_find(&source_area);
+    if (source_region == nullptr) {
+      return View2DTimeSyncResult::Unavailable;
+    }
+    const View2DTimeSyncResult result = view2d_sync_screen_x(
+        *source_region, source_area, *target_region, *target_area, context);
+    if (result == View2DTimeSyncResult::Changed) {
+      ED_region_tag_redraw_no_rebuild(target_region);
+    }
+    return result;
+  };
+
+  /* Prefer a compatible linked Sequencer, then fall back to another linked time editor. */
+  for (ScrArea &area : screen->areabase) {
+    if (&area != target_area && area.spacetype == SPACE_SEQ &&
+        sync_from_area(area) != View2DTimeSyncResult::Unavailable)
+    {
+      return;
+    }
+  }
+
+  ScrArea *context_area = CTX_wm_area(C);
+  if (context_area != nullptr && context_area != target_area &&
+      view2d_area_supports_sync(context_area) &&
+      sync_from_area(*context_area) != View2DTimeSyncResult::Unavailable)
+  {
+    return;
+  }
+
+  for (ScrArea &area : screen->areabase) {
+    if (&area != target_area && view2d_area_supports_sync(&area) &&
+        sync_from_area(area) != View2DTimeSyncResult::Unavailable)
+    {
+      return;
+    }
+  }
+}
+
+void view2d_sync_with_context(
+    const bContext *C, bScreen *screen, ScrArea *area, View2D *v2dcur, int flag)
 {
   /* don't continue if no view syncing to be done */
   if ((v2dcur->flag & (V2D_VIEWSYNC_SCREEN_TIME | V2D_VIEWSYNC_AREA_VERTICAL)) == 0) {
@@ -881,6 +1214,9 @@ void view2d_sync(bScreen *screen, ScrArea *area, View2D *v2dcur, int flag)
 
   /* check if doing whole screen syncing (i.e. time/horizontal) */
   if ((v2dcur->flag & V2D_VIEWSYNC_SCREEN_TIME) && (screen)) {
+    const View2DTimeSyncContext time_sync_context = view2d_time_sync_context_get(C);
+    ARegion *current_region = view2d_find_region_from_view(area, v2dcur);
+
     for (ScrArea &area_iter : screen->areabase) {
       if (!view2d_area_supports_sync(&area_iter)) {
         continue;
@@ -890,19 +1226,24 @@ void view2d_sync(bScreen *screen, ScrArea *area, View2D *v2dcur, int flag)
         if (v2dcur != &region.v2d) {
           /* only if view has horizontal locks enabled */
           if (region.v2d.flag & V2D_VIEWSYNC_SCREEN_TIME) {
-            if (flag == V2D_LOCK_COPY) {
-              /* other views with locks on must copy active */
-              region.v2d.cur.xmin = v2dcur->cur.xmin;
-              region.v2d.cur.xmax = v2dcur->cur.xmax;
-            }
-            else { /* V2D_LOCK_SET */
-                   /* active must copy others */
-              v2dcur->cur.xmin = region.v2d.cur.xmin;
-              v2dcur->cur.xmax = region.v2d.cur.xmax;
+            View2DTimeSyncResult result = View2DTimeSyncResult::Unavailable;
+            if (current_region != nullptr && area != nullptr) {
+              if (flag == V2D_LOCK_COPY) {
+                /* Other linked views copy the active view. */
+                result = view2d_sync_screen_x(
+                    *current_region, *area, region, area_iter, time_sync_context);
+              }
+              else { /* V2D_LOCK_SET */
+                     /* The active view copies another linked view. */
+                result = view2d_sync_screen_x(
+                    region, area_iter, *current_region, *area, time_sync_context);
+              }
             }
 
-            /* region possibly changed, so refresh */
-            ED_region_tag_redraw_no_rebuild(&region);
+            if (result == View2DTimeSyncResult::Changed) {
+              ED_region_tag_redraw_no_rebuild(flag == V2D_LOCK_COPY ? &region :
+                                                                      current_region);
+            }
           }
         }
       }

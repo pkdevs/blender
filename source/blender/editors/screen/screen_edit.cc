@@ -47,6 +47,7 @@
 #include "RNA_enum_types.hh"
 
 #include "UI_interface.hh"
+#include "UI_view2d.hh"
 
 #include "WM_message.hh"
 #include "WM_toolsystem.hh"
@@ -832,6 +833,12 @@ void ED_screen_refresh(bContext *C, wmWindowManager *wm, wmWindow *win)
   /* Enforce full refresh. */
   screen->do_refresh = true;
   screen_refresh_if_needed(C, wm, win);
+
+  /*
+   * All regions have been initialized at this point. This covers new windows and startup
+   * templates, where no pan/zoom event exists to trigger screen-wide time synchronization.
+   */
+  ui::view2d_sync_time_from_scene_relation(C);
 }
 
 void ED_screens_init(bContext *C, Main *bmain, wmWindowManager *wm)

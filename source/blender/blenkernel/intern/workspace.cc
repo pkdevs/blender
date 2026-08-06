@@ -48,6 +48,7 @@ static void workspace_init_data(ID *id)
   WorkSpace *workspace = id_cast<WorkSpace *>(id);
 
   workspace->runtime = MEM_new<bke::WorkSpaceRuntime>(__func__);
+  workspace->flags |= WORKSPACE_SYNC_SCENE_TIME;
 
   BKE_asset_library_reference_init_default(&workspace->asset_library_ref);
 }

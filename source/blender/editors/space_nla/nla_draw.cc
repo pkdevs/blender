@@ -980,7 +980,7 @@ void draw_nla_track_list(const bContext *C,
 
   /* need to do a view-sync here, so that the keys area doesn't jump around
    * (it must copy this) */
-  ui::view2d_sync(nullptr, ac->area, v2d, V2D_LOCK_COPY);
+  ui::view2d_sync_with_context(C, nullptr, ac->area, v2d, V2D_LOCK_COPY);
 
   /* draw tracks */
   { /* first pass: just the standard GL-drawing for backdrop + text */

@@ -155,6 +155,20 @@ bool view2d_area_supports_sync(ScrArea *area);
  * to make sure 'related' views stay in synchrony.
  */
 void view2d_sync(bScreen *screen, ScrArea *area, View2D *v2dcur, int flag);
+void view2d_sync_with_context(
+    const bContext *C, bScreen *screen, ScrArea *area, View2D *v2dcur, int flag);
+
+/**
+ * Reproject linked time editors immediately after the active scene, Scene Strip relation or
+ * synchronized playhead changes. The Sequencer is preferred as the visual anchor.
+ */
+void view2d_sync_time_from_scene_relation(const bContext *C);
+
+/**
+ * Initialize a newly-created or newly-converted time editor from another synchronized editor.
+ * The target area is never used as the source anchor.
+ */
+void view2d_sync_time_to_area(const bContext *C, ScrArea *target_area);
 
 /**
  * Perform all required updates after `v2d->cur` as been modified.

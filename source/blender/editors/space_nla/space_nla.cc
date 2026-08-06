@@ -122,7 +122,7 @@ static SpaceLink *nla_create(const ScrArea *area, const Scene *scene)
   region->v2d.keepzoom = V2D_LOCKZOOM_Y;
   region->v2d.keepofs = V2D_KEEPOFS_Y;
   region->v2d.align = V2D_ALIGN_NO_POS_Y;
-  region->v2d.flag = V2D_VIEWSYNC_AREA_VERTICAL;
+  region->v2d.flag = V2D_VIEWSYNC_AREA_VERTICAL | V2D_VIEWSYNC_SCREEN_TIME;
 
   return reinterpret_cast<SpaceLink *>(snla);
 }

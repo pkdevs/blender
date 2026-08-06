@@ -191,7 +191,8 @@ static SpaceLink *sequencer_create(const ScrArea * /*area*/, const Scene *scene)
   region->v2d.keepzoom = V2D_KEEPZOOM;
   region->v2d.keepofs = V2D_KEEPOFS_X | V2D_KEEPOFS_Y;
   region->v2d.keeptot = V2D_KEEPTOT_FREE;
-  region->v2d.flag |= V2D_VIEWSYNC_AREA_VERTICAL | V2D_ZOOM_IGNORE_KEEPOFS;
+  region->v2d.flag |= V2D_VIEWSYNC_AREA_VERTICAL | V2D_VIEWSYNC_SCREEN_TIME |
+                      V2D_ZOOM_IGNORE_KEEPOFS;
   region->v2d.align = V2D_ALIGN_NO_NEG_Y;
 
   return reinterpret_cast<SpaceLink *>(sseq);

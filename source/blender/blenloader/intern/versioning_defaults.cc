@@ -130,6 +130,12 @@ static void blo_update_defaults_screen(bScreen *screen,
       /* Reset size so it uses consistent defaults from the region types. */
       region.sizex = 0;
       region.sizey = 0;
+
+      if (region.regiontype == RGN_TYPE_WINDOW &&
+          ELEM(area.spacetype, SPACE_ACTION, SPACE_GRAPH, SPACE_NLA, SPACE_SEQ))
+      {
+        region.v2d.flag |= V2D_VIEWSYNC_SCREEN_TIME;
+      }
     }
 
     if (area.spacetype == SPACE_IMAGE) {
@@ -323,6 +329,10 @@ static void blo_update_defaults_screen(bScreen *screen,
 
 void BLO_update_defaults_workspace(WorkSpace *workspace, const char *app_template)
 {
+  if (blo_is_builtin_template(app_template)) {
+    workspace->flags |= WORKSPACE_SYNC_SCENE_TIME;
+  }
+
   for (WorkSpaceLayout &layout : workspace->layouts) {
     if (layout.screen) {
       blo_update_defaults_screen(layout.screen, app_template, workspace->id.name + 2);

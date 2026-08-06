@@ -130,6 +130,7 @@ static SpaceLink *graph_create(const ScrArea * /*area*/, const Scene *scene)
   region->v2d.scroll |= (V2D_SCROLL_RIGHT | V2D_SCROLL_VERTICAL_HANDLES);
 
   region->v2d.keeptot = eView2D_KeepTot{};
+  region->v2d.flag = V2D_VIEWSYNC_SCREEN_TIME;
 
   return reinterpret_cast<SpaceLink *>(sipo);
 }

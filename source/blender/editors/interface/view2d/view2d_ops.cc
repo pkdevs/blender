@@ -196,7 +196,7 @@ static void view_pan_apply_ex(bContext *C, v2dViewPanData *vpd, float dx, float 
   /* request updates to be done... */
   WM_event_add_mousemove(CTX_wm_window(C));
 
-  view2d_sync(vpd->screen, vpd->area, v2d, V2D_LOCK_COPY);
+  view2d_sync_with_context(C, vpd->screen, vpd->area, v2d, V2D_LOCK_COPY);
 }
 
 static void view_pan_apply(bContext *C, wmOperator *op)
@@ -862,7 +862,7 @@ static void view_zoomstep_apply_ex(bContext *C,
 
   /* request updates to be done... */
   ED_region_tag_redraw_no_rebuild(vzd->region);
-  view2d_sync(CTX_wm_screen(C), CTX_wm_area(C), v2d, V2D_LOCK_COPY);
+  view2d_sync_with_context(C, CTX_wm_screen(C), CTX_wm_area(C), v2d, V2D_LOCK_COPY);
 }
 
 static void view_zoomstep_apply(bContext *C, wmOperator *op)
@@ -1121,7 +1121,7 @@ static void view_zoomdrag_apply(bContext *C, wmOperator *op)
 
   /* request updates to be done... */
   ED_region_tag_redraw_no_rebuild(vzd->region);
-  view2d_sync(CTX_wm_screen(C), CTX_wm_area(C), v2d, V2D_LOCK_COPY);
+  view2d_sync_with_context(C, CTX_wm_screen(C), CTX_wm_area(C), v2d, V2D_LOCK_COPY);
 }
 
 /* Cleanup temp custom-data. */
@@ -1709,7 +1709,7 @@ void view2d_smooth_view(const bContext *C,
 
     view2d_curRect_changed(C, v2d);
     ED_region_tag_redraw_no_rebuild(region);
-    view2d_sync(CTX_wm_screen(C), CTX_wm_area(C), v2d, V2D_LOCK_COPY);
+    view2d_sync_with_context(C, CTX_wm_screen(C), CTX_wm_area(C), v2d, V2D_LOCK_COPY);
   }
 }
 
@@ -1757,7 +1757,7 @@ static wmOperatorStatus view2d_smoothview_invoke(bContext *C,
   }
 
   view2d_curRect_changed(C, v2d);
-  view2d_sync(CTX_wm_screen(C), CTX_wm_area(C), v2d, V2D_LOCK_COPY);
+  view2d_sync_with_context(C, CTX_wm_screen(C), CTX_wm_area(C), v2d, V2D_LOCK_COPY);
   ED_region_tag_redraw_no_rebuild(region);
 
   if (v2d->sms == nullptr) {
@@ -2058,7 +2058,7 @@ static void scroller_activate_apply(bContext *C, wmOperator *op)
 
   /* request updates to be done... */
   ED_region_tag_redraw_no_rebuild(vsm->region);
-  view2d_sync(CTX_wm_screen(C), CTX_wm_area(C), v2d, V2D_LOCK_COPY);
+  view2d_sync_with_context(C, CTX_wm_screen(C), CTX_wm_area(C), v2d, V2D_LOCK_COPY);
 }
 
 /**
@@ -2315,7 +2315,7 @@ static wmOperatorStatus reset_exec(bContext *C, wmOperator * /*op*/)
 
   /* request updates to be done... */
   ED_region_tag_redraw(region);
-  view2d_sync(CTX_wm_screen(C), CTX_wm_area(C), v2d, V2D_LOCK_COPY);
+  view2d_sync_with_context(C, CTX_wm_screen(C), CTX_wm_area(C), v2d, V2D_LOCK_COPY);
 
   view2d_zoom_cache_reset();
 

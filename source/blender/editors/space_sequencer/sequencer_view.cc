@@ -283,7 +283,7 @@ static wmOperatorStatus sequencer_view_all_preview_exec(bContext *C, wmOperator 
 
   v2d->cur = v2d->tot;
   ui::view2d_curRect_changed(C, v2d);
-  ui::view2d_sync(screen, area, v2d, V2D_LOCK_COPY);
+  ui::view2d_sync_with_context(C, screen, area, v2d, V2D_LOCK_COPY);
 
 #if 0
   /* Like zooming on an image view. */

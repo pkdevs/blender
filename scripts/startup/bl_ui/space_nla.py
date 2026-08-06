@@ -9,7 +9,11 @@ from bl_ui.space_dopesheet import (
     DopesheetActionPanelBase,
     dopesheet_filter,
 )
-from bl_ui.space_time import playback_controls
+from bl_ui.space_time import (
+    TimeSyncPanelBase,
+    playback_controls,
+    time_sync_controls,
+)
 
 
 class NLA_HT_header(Header):
@@ -41,6 +45,8 @@ class NLA_HT_header(Header):
             text="",
         )
 
+        time_sync_controls(layout, context, "NLA_PT_time_sync")
+
 
 class NLA_HT_playback_controls(Header):
     bl_space_type = 'NLA_EDITOR'
@@ -50,6 +56,10 @@ class NLA_HT_playback_controls(Header):
         layout = self.layout
 
         playback_controls(layout, context)
+
+
+class NLA_PT_time_sync(TimeSyncPanelBase, Panel):
+    bl_space_type = 'NLA_EDITOR'
 
 
 class NLA_PT_snapping(Panel):
@@ -422,6 +432,7 @@ classes = (
     NLA_MT_channel_context_menu,
     NLA_PT_filters,
     NLA_PT_action,
+    NLA_PT_time_sync,
     NLA_PT_snapping,
 )
 

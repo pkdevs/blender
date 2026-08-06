@@ -83,12 +83,44 @@ bool can_select_handle(const Scene *scene, const Strip *strip, const View2D *v2d
 bool handle_is_selected(const Strip *strip, eStripHandle handle);
 
 bool is_scene_time_sync_needed(const bContext &C);
+
 /**
- * Returns the scene strip (if any) that should be used for the scene synchronization feature.
- * This is the top-most visible scene strip at the current time of the \a sequencer_scene.
+ * Return the top-most visible Scene Strip at the current Sequencer frame.
+ *
+ * Kept as an editor API because animation drawing uses it for the source-scene range overlay.
  */
 const Strip *get_scene_strip_for_time_sync(const Scene *sequencer_scene);
-void sync_active_scene_and_time_with_scene_strip(bContext &C);
 
+enum class SceneTimeSyncSource {
+  Sequencer,
+  ActiveScene,
+};
+
+/**
+ * Apply one complete synchronization transaction.
+ *
+ * This resolves the workspace, scenes and Scene Strip, maps the requested frame, handles a skipped
+ * strip boundary, updates the target scene and finally refreshes linked View2D ranges.
+ */
+void scene_time_sync_apply(bContext &C,
+                           SceneTimeSyncSource source,
+                           float previous_frame,
+                           bool has_previous_frame);
+
+/**
+ * Synchronize after an arbitrary frame change.
+ *
+ * The changed scene determines whether the transaction originated in the Sequencer or in the
+ * active source scene. Unrelated scenes are ignored.
+ */
+void scene_time_sync_apply_frame_change(bContext &C,
+                                        Scene &changed_scene,
+                                        float previous_frame,
+                                        bool has_previous_frame);
+
+/**
+ * Compatibility entry point used by the existing Scene Time update and playback paths.
+ */
+void sync_active_scene_and_time_with_scene_strip(bContext &C);
 }  // namespace ed::vse
 }  // namespace blender

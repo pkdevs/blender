@@ -15,6 +15,7 @@
 
 #include "BLI_listbase.hh"
 #include "BLI_math_base_c.hh"
+#include "BLI_vector_set.hh"
 
 #include "BKE_movieclip.hh"
 #include "BKE_sound.hh"
@@ -29,6 +30,7 @@
 #include "SEQ_iterator.hh"
 #include "SEQ_render.hh"
 #include "SEQ_retiming.hh"
+#include "SEQ_select.hh"
 #include "SEQ_sequencer.hh"
 #include "SEQ_time.hh"
 #include "SEQ_transform.hh"
@@ -81,6 +83,242 @@ float give_frame_index(const Scene *scene, const Strip *strip, float timeline_fr
   }
 
   return frame_index;
+}
+
+const Strip *scene_strip_get_for_time_sync_at_frame(const Scene *sequencer_scene,
+                                                    const int timeline_frame)
+{
+  if (sequencer_scene == nullptr) {
+    return nullptr;
+  }
+
+  const Editing *ed = editing_get(sequencer_scene);
+  if (ed == nullptr) {
+    return nullptr;
+  }
+
+  ListBaseT<Strip> *seqbase = active_seqbase_get(ed);
+  const ListBaseT<SeqTimelineChannel> *channels = channels_displayed_get(ed);
+  const VectorSet<Strip *> strips = query_strips_recursive_at_frame(
+      sequencer_scene, seqbase, timeline_frame);
+
+  const Strip *top_strip = nullptr;
+  for (const Strip *strip : strips) {
+    if (strip->type != STRIP_TYPE_SCENE || strip->scene == nullptr ||
+        render_is_muted(channels, strip))
+    {
+      continue;
+    }
+    if (top_strip == nullptr || strip->channel > top_strip->channel) {
+      top_strip = strip;
+    }
+  }
+  return top_strip;
+}
+
+const Strip *scene_strip_get_for_time_sync(const Scene *sequencer_scene)
+{
+  if (sequencer_scene == nullptr) {
+    return nullptr;
+  }
+  return scene_strip_get_for_time_sync_at_frame(sequencer_scene, sequencer_scene->r.cfra);
+}
+
+static bool scene_strip_matches_source_scene(
+    const ListBaseT<SeqTimelineChannel> *channels,
+    const Strip *strip,
+    const Scene *source_scene)
+{
+  return strip != nullptr && strip->type == STRIP_TYPE_SCENE && strip->scene == source_scene &&
+         !render_is_muted(channels, strip);
+}
+
+static int scene_strip_distance_to_timeline_frame(const Scene *sequencer_scene,
+                                                  const Strip *strip,
+                                                  const int timeline_frame)
+{
+  if (timeline_frame < strip->left_handle()) {
+    return strip->left_handle() - timeline_frame;
+  }
+
+  const int right_frame = strip->right_handle(sequencer_scene);
+  if (timeline_frame >= right_frame) {
+    return timeline_frame - (right_frame - 1);
+  }
+  return 0;
+}
+
+const Strip *scene_strip_get_for_source_scene_time_sync(const Scene *sequencer_scene,
+                                                        const Scene *source_scene)
+{
+  if (sequencer_scene == nullptr || source_scene == nullptr) {
+    return nullptr;
+  }
+
+  const Editing *ed = editing_get(sequencer_scene);
+  if (ed == nullptr) {
+    return nullptr;
+  }
+
+  ListBaseT<Strip> *seqbase = active_seqbase_get(ed);
+  const ListBaseT<SeqTimelineChannel> *channels = channels_displayed_get(ed);
+
+  const Strip *active_strip = select_active_get(sequencer_scene);
+  if (scene_strip_matches_source_scene(channels, active_strip, source_scene)) {
+    return active_strip;
+  }
+
+  const Strip *strip_at_playhead = scene_strip_get_for_time_sync(sequencer_scene);
+  if (scene_strip_matches_source_scene(channels, strip_at_playhead, source_scene)) {
+    return strip_at_playhead;
+  }
+
+  const Strip *best_strip = nullptr;
+  int best_distance = 0;
+  for (const Strip *strip : query_all_strips(seqbase)) {
+    if (!scene_strip_matches_source_scene(channels, strip, source_scene)) {
+      continue;
+    }
+
+    const int distance = scene_strip_distance_to_timeline_frame(
+        sequencer_scene, strip, sequencer_scene->r.cfra);
+    if (best_strip == nullptr || distance < best_distance ||
+        (distance == best_distance && strip->channel > best_strip->channel) ||
+        (distance == best_distance && strip->channel == best_strip->channel &&
+         strip->left_handle() < best_strip->left_handle()))
+    {
+      best_strip = strip;
+      best_distance = distance;
+    }
+  }
+
+  return best_strip;
+}
+
+static bool scene_strip_has_affine_time_mapping(const Strip *scene_strip)
+{
+  return scene_strip != nullptr && scene_strip->type == STRIP_TYPE_SCENE &&
+         scene_strip->scene != nullptr && !retiming_has_keys(scene_strip) &&
+         scene_strip->strobe <= 1.0f;
+}
+
+bool scene_strip_timeline_frame_to_scene_frame(const Scene *sequencer_scene,
+                                               const Strip *scene_strip,
+                                               const float timeline_frame,
+                                               float *r_scene_frame)
+{
+  if (sequencer_scene == nullptr || r_scene_frame == nullptr ||
+      !scene_strip_has_affine_time_mapping(scene_strip))
+  {
+    return false;
+  }
+
+  const float scene_fps = float(sequencer_scene->r.frs_sec) /
+                          float(sequencer_scene->r.frs_sec_base);
+  const float playback_rate = scene_strip->media_playback_rate_factor(scene_fps);
+  if (playback_rate == 0.0f) {
+    return false;
+  }
+
+  const float strip_frame = (scene_strip->flag & SEQ_REVERSE_FRAMES) ?
+                                scene_strip->content_end(sequencer_scene) - 1.0f - timeline_frame :
+                                timeline_frame - scene_strip->content_start();
+  const float frame_index = strip_frame * playback_rate;
+  *r_scene_frame = frame_index + scene_strip->scene->r.sfra + scene_strip->anim_startofs;
+  return true;
+}
+
+bool scene_strip_scene_frame_to_timeline_frame(const Scene *sequencer_scene,
+                                               const Strip *scene_strip,
+                                               const float scene_frame,
+                                               float *r_timeline_frame)
+{
+  if (sequencer_scene == nullptr || r_timeline_frame == nullptr ||
+      !scene_strip_has_affine_time_mapping(scene_strip))
+  {
+    return false;
+  }
+
+  const float scene_fps = float(sequencer_scene->r.frs_sec) /
+                          float(sequencer_scene->r.frs_sec_base);
+  const float playback_rate = scene_strip->media_playback_rate_factor(scene_fps);
+  if (playback_rate == 0.0f) {
+    return false;
+  }
+
+  const float frame_index = scene_frame - scene_strip->scene->r.sfra -
+                            scene_strip->anim_startofs;
+  const float strip_frame = frame_index / playback_rate;
+  *r_timeline_frame = (scene_strip->flag & SEQ_REVERSE_FRAMES) ?
+                          scene_strip->content_end(sequencer_scene) - 1.0f - strip_frame :
+                          scene_strip->content_start() + strip_frame;
+  return true;
+}
+
+bool scene_time_sync_relation_get(const Scene *sequencer_scene,
+                                  const Scene *active_scene,
+                                  const SceneTimeSyncDirection direction,
+                                  SceneTimeSyncRelation *r_relation)
+{
+  if (sequencer_scene == nullptr || active_scene == nullptr || r_relation == nullptr) {
+    return false;
+  }
+
+  *r_relation = {};
+  r_relation->sequencer_scene = sequencer_scene;
+  r_relation->active_scene = active_scene;
+
+  if (sequencer_scene == active_scene) {
+    return true;
+  }
+
+  if (direction == SceneTimeSyncDirection::SequencerToScene) {
+    r_relation->scene_strip = scene_strip_get_for_time_sync(sequencer_scene);
+    if (r_relation->scene_strip == nullptr ||
+        r_relation->scene_strip->scene != active_scene)
+    {
+      r_relation->scene_strip = nullptr;
+      return false;
+    }
+  }
+  else {
+    r_relation->scene_strip = scene_strip_get_for_source_scene_time_sync(
+        sequencer_scene, active_scene);
+    if (r_relation->scene_strip == nullptr) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+bool scene_time_sync_frame_map(const SceneTimeSyncRelation &relation,
+                               const SceneTimeSyncDirection direction,
+                               const float source_frame,
+                               float *r_target_frame)
+{
+  if (r_target_frame == nullptr || relation.sequencer_scene == nullptr ||
+      relation.active_scene == nullptr)
+  {
+    return false;
+  }
+
+  if (relation.sequencer_scene == relation.active_scene) {
+    *r_target_frame = source_frame;
+    return true;
+  }
+
+  if (relation.scene_strip == nullptr || relation.scene_strip->scene != relation.active_scene) {
+    return false;
+  }
+
+  if (direction == SceneTimeSyncDirection::SequencerToScene) {
+    return scene_strip_timeline_frame_to_scene_frame(
+        relation.sequencer_scene, relation.scene_strip, source_frame, r_target_frame);
+  }
+
+  return scene_strip_scene_frame_to_timeline_frame(
+      relation.sequencer_scene, relation.scene_strip, source_frame, r_target_frame);
 }
 
 static int metastrip_start_get(Strip *strip_meta)

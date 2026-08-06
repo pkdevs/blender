@@ -45,6 +45,10 @@
 #  include "BKE_wm_runtime.hh"
 #  include "BKE_workspace.hh"
 
+#  include "ED_sequencer.hh"
+
+#  include "UI_view2d.hh"
+
 #  include "wm_event_system.hh"
 
 namespace blender {
@@ -950,6 +954,12 @@ static void rna_Window_scene_update(bContext *C, PointerRNA *ptr)
 
     wmWindowManager *wm = CTX_wm_manager(C);
     WM_event_add_notifier_ex(wm, win, NC_SCENE | ND_SCENEBROWSE, win->new_scene);
+
+    Scene *active_scene = WM_window_get_active_scene(win);
+    const float active_frame = float(active_scene->r.cfra) + active_scene->r.subframe;
+    ed::vse::scene_time_sync_apply(
+        *C, ed::vse::SceneTimeSyncSource::ActiveScene, active_frame, false);
+    ui::view2d_sync_time_from_scene_relation(C);
 
     if (G.debug & G_DEBUG) {
       printf("scene set %p\n", win->new_scene);

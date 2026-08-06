@@ -11,7 +11,11 @@ from bl_ui.space_dopesheet import (
     DopesheetFilterPopoverBase,
     dopesheet_filter,
 )
-from bl_ui.space_time import playback_controls
+from bl_ui.space_time import (
+    TimeSyncPanelBase,
+    playback_controls,
+    time_sync_controls,
+)
 
 
 def drivers_editor_footer(layout, context):
@@ -109,6 +113,8 @@ class GRAPH_HT_header(Header):
             panel="GRAPH_PT_proportional_edit",
         )
 
+        time_sync_controls(layout, context, "GRAPH_PT_time_sync")
+
 
 class GRAPH_HT_playback_controls(Header):
     bl_space_type = 'GRAPH_EDITOR'
@@ -122,6 +128,10 @@ class GRAPH_HT_playback_controls(Header):
             drivers_editor_footer(layout, context)
         else:
             playback_controls(layout, context)
+
+
+class GRAPH_PT_time_sync(TimeSyncPanelBase, Panel):
+    bl_space_type = 'GRAPH_EDITOR'
 
 
 class GRAPH_PT_proportional_edit(Panel):
@@ -593,6 +603,7 @@ class GRAPH_MT_snap_pie(Menu):
 classes = (
     GRAPH_HT_header,
     GRAPH_HT_playback_controls,
+    GRAPH_PT_time_sync,
     GRAPH_PT_proportional_edit,
     GRAPH_MT_editor_menus,
     GRAPH_MT_view,

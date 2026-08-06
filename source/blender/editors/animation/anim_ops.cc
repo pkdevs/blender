@@ -578,8 +578,9 @@ static void change_frame_apply(bContext *C, wmOperator *op, const bool always_up
 
   /* set the new frame number */
   if (scene->r.flag & SCER_SHOW_SUBFRAME) {
-    scene->r.cfra = int(frame);
-    scene->r.subframe = frame - int(frame);
+    const float frame_floor = std::floor(frame);
+    scene->r.cfra = int(frame_floor);
+    scene->r.subframe = frame - frame_floor;
   }
   else {
     scene->r.cfra = round_fl_to_int(frame);
@@ -594,8 +595,8 @@ static void change_frame_apply(bContext *C, wmOperator *op, const bool always_up
   }
   FRAMENUMBER_MIN_CLAMP(scene->r.cfra);
 
-  ed::vse::sync_active_scene_and_time_with_scene_strip(*C);
-
+  const float previous_frame = float(old_frame) + old_subframe;
+  ed::vse::scene_time_sync_apply_frame_change(*C, *scene, previous_frame, true);
   /* do updates */
   const bool frame_changed = (old_frame != scene->r.cfra) || (old_subframe != scene->r.subframe);
   if (frame_changed || always_update) {
@@ -1217,7 +1218,7 @@ static wmOperatorStatus scene_range_frame_exec(bContext *C, wmOperator * /*op*/)
 
   v2d.cur = ANIM_frame_range_view2d_add_xmargin(v2d, v2d.cur);
 
-  ui::view2d_sync(CTX_wm_screen(C), CTX_wm_area(C), &v2d, V2D_LOCK_COPY);
+  ui::view2d_sync_with_context(C, CTX_wm_screen(C), CTX_wm_area(C), &v2d, V2D_LOCK_COPY);
   ED_area_tag_redraw(CTX_wm_area(C));
 
   return OPERATOR_FINISHED;

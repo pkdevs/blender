@@ -209,7 +209,7 @@ static void edge_pan_apply_delta(bContext *C, View2DEdgePanData *vpd, float dx, 
     /* Request updates to be done. */
     WM_event_add_mousemove(CTX_wm_window(C));
 
-    view2d_sync(vpd->screen, vpd->area, v2d, V2D_LOCK_COPY);
+    view2d_sync_with_context(C, vpd->screen, vpd->area, v2d, V2D_LOCK_COPY);
   }
 }
 
@@ -299,7 +299,7 @@ void view2d_edge_pan_cancel(bContext *C, View2DEdgePanData *vpd)
   /* Request updates to be done. */
   WM_event_add_mousemove(CTX_wm_window(C));
 
-  view2d_sync(vpd->screen, vpd->area, v2d, V2D_LOCK_COPY);
+  view2d_sync_with_context(C, vpd->screen, vpd->area, v2d, V2D_LOCK_COPY);
 }
 
 void view2d_edge_pan_operator_properties(wmOperatorType *ot)

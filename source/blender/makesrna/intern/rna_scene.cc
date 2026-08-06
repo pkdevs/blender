@@ -1163,7 +1163,8 @@ static void rna_Scene_show_subframe_update(Main * /*bmain*/,
 static void rna_Scene_frame_update_context(bContext *C, PointerRNA *ptr)
 {
   Scene *scene = id_cast<Scene *>(ptr->owner_id);
-  ed::vse::sync_active_scene_and_time_with_scene_strip(*C);
+  const float current_frame = BKE_scene_frame_get(scene);
+  ed::vse::scene_time_sync_apply_frame_change(*C, *scene, current_frame, false);
   DEG_id_tag_update(&scene->id, ID_RECALC_FRAME_CHANGE);
   WM_main_add_notifier(NC_SCENE | ND_FRAME, scene);
 }
@@ -8991,18 +8992,20 @@ void RNA_def_scene(BlenderRNA *brna)
   RNA_def_property_float_sdna(prop, nullptr, "r.subframe");
   RNA_def_property_ui_text(prop, "Current Subframe", "");
   RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
+  RNA_def_property_flag(prop, PROP_CONTEXT_UPDATE);
   RNA_def_property_range(prop, 0.0f, 1.0f);
   RNA_def_property_ui_range(prop, 0.0f, 1.0f, 0.01, 2);
-  RNA_def_property_update(prop, NC_SCENE | ND_FRAME, "rna_Scene_frame_update");
+  RNA_def_property_update(prop, NC_SCENE | ND_FRAME, "rna_Scene_frame_update_context");
 
   prop = RNA_def_property(srna, "frame_float", PROP_FLOAT, PROP_TIME);
   RNA_def_property_ui_text(prop, "Current Subframe", "");
   RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
+  RNA_def_property_flag(prop, PROP_CONTEXT_UPDATE);
   RNA_def_property_range(prop, MINAFRAME, MAXFRAME);
   RNA_def_property_ui_range(prop, MINAFRAME, MAXFRAME, 0.1, 2);
   RNA_def_property_float_funcs(
       prop, "rna_Scene_frame_float_get", "rna_Scene_frame_float_set", nullptr);
-  RNA_def_property_update(prop, NC_SCENE | ND_FRAME, "rna_Scene_frame_update");
+  RNA_def_property_update(prop, NC_SCENE | ND_FRAME, "rna_Scene_frame_update_context");
 
   prop = RNA_def_property(srna, "frame_start", PROP_INT, PROP_TIME);
   RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);

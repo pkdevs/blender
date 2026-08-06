@@ -38,6 +38,9 @@ class WORKSPACE_PT_main(WorkSpaceButtonsPanel, Panel):
         layout.prop(workspace, "object_mode", text="Mode")
         layout.prop(workspace, "sequencer_scene")
         layout.prop(workspace, "use_scene_time_sync")
+        sub = layout.column()
+        sub.active = workspace.use_scene_time_sync
+        sub.prop(workspace, "use_scene_time_sync_follow_scene")
 
 
 class WORKSPACE_PT_addons(WorkSpaceButtonsPanel, Panel):

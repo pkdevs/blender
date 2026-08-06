@@ -16,7 +16,11 @@ from bl_ui.properties_data_grease_pencil import (
     GreasePencil_LayerAdjustmentsPanel,
     GreasePencil_LayerDisplayPanel,
 )
-from bl_ui.space_time import playback_controls
+from bl_ui.space_time import (
+    TimeSyncPanelBase,
+    playback_controls,
+    time_sync_controls,
+)
 from bl_ui.properties_data_mesh import draw_shape_key_properties
 
 from rna_prop_ui import PropertyPanel
@@ -227,6 +231,7 @@ class DOPESHEET_HT_editor_buttons:
             playback_controls(layout, context)
             layout.separator()
             cls._draw_overlay_selector(context, layout)
+            time_sync_controls(layout, context, "DOPESHEET_PT_time_sync")
             return
 
         if st.mode in {'ACTION', 'SHAPEKEY'} and context.object:
@@ -297,6 +302,7 @@ class DOPESHEET_HT_editor_buttons:
         )
 
         cls._draw_overlay_selector(context, layout)
+        time_sync_controls(layout, context, "DOPESHEET_PT_time_sync")
 
     @classmethod
     def _draw_overlay_selector(cls, context, layout):
@@ -1074,6 +1080,10 @@ class DOPESHEET_PT_overlay(Panel):
         pass
 
 
+class DOPESHEET_PT_time_sync(TimeSyncPanelBase, Panel):
+    bl_space_type = 'DOPESHEET_EDITOR'
+
+
 class DOPESHEET_PT_dopesheet_overlay(Panel):
     bl_space_type = 'DOPESHEET_EDITOR'
     bl_region_type = 'HEADER'
@@ -1125,6 +1135,7 @@ classes = (
     DOPESHEET_PT_ShapeKey,
 
     DOPESHEET_PT_overlay,
+    DOPESHEET_PT_time_sync,
     DOPESHEET_PT_dopesheet_overlay,
 )
 

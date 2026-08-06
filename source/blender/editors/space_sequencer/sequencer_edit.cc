@@ -6,6 +6,8 @@
  * \ingroup spseq
  */
 
+#include <cmath>
+
 #include "CLG_log.h"
 
 #include "BLI_fileops.hh"
@@ -370,151 +372,405 @@ static bool sequencer_swap_inputs_poll(bContext *C)
 /** \name Scene syncing with current scene strip
  * \{ */
 
+static bool workspace_has_linked_sequencer_for_scene_time(const bContext &C);
+
 bool is_scene_time_sync_needed(const bContext &C)
 {
-  WorkSpace *workspace = CTX_wm_workspace(&C);
-  if (!workspace || !workspace->sequencer_scene) {
+  const WorkSpace *workspace = CTX_wm_workspace(&C);
+  if (workspace == nullptr || (workspace->flags & WORKSPACE_SYNC_SCENE_TIME) == 0) {
     return false;
   }
-  if ((workspace->flags & WORKSPACE_SYNC_SCENE_TIME) == 0) {
-    return false;
-  }
-  SpaceSeq *sseq = CTX_wm_space_seq(&C);
-  SpaceProperties *sprop = CTX_wm_space_properties(&C);
-  if (!sseq && !sprop) {
-    /* We only want to start syncing the time when we're in a sequence editor,
-     * or if updating strip properties.
-     * Changing time in any other editor should just affect the active scene. */
-    return false;
-  }
-  return true;
-}
 
-static Scene *get_sequencer_scene_for_time_sync(const bContext &C)
-{
-  wmWindowManager *wm = CTX_wm_manager(&C);
-  bScreen *screen = ED_screen_animation_playing(wm);
-  if (screen && screen->animtimer) {
-    wmTimer *wt = screen->animtimer;
-    ScreenAnimData *sad = static_cast<ScreenAnimData *>(wt->customdata);
-    if (sad->do_scene_syncing) {
-      return sad->scene;
-    }
-    /* If we're playing a scene that's not a sequence scene, don't try and sync. */
-    return nullptr;
-  }
-  if (is_scene_time_sync_needed(C)) {
-    return CTX_data_sequencer_scene(&C);
-  }
-  return nullptr;
+  return workspace_has_linked_sequencer_for_scene_time(C);
 }
 
 const Strip *get_scene_strip_for_time_sync(const Scene *sequencer_scene)
 {
-  const Editing *ed = seq::editing_get(sequencer_scene);
-  if (!ed) {
-    return nullptr;
-  }
-  ListBaseT<Strip> *seqbase = seq::active_seqbase_get(ed);
-  const ListBaseT<SeqTimelineChannel> *channels = seq::channels_displayed_get(ed);
-  VectorSet<Strip *> query_strips = seq::query_strips_recursive_at_frame(
-      sequencer_scene, seqbase, sequencer_scene->r.cfra);
-  /* Ignore effect strips, sound strips and muted strips. */
-  query_strips.remove_if([&](const Strip *strip) {
-    return strip->is_effect() || strip->type == STRIP_TYPE_SOUND ||
-           seq::render_is_muted(channels, strip);
-  });
-  Vector<Strip *> strips = query_strips.extract_vector();
-  /* Sort strips by channel. */
-  std::ranges::sort(strips,
-                    [](const Strip *a, const Strip *b) { return a->channel > b->channel; });
-  /* Get the top-most scene strip. */
-  for (const Strip *strip : strips) {
-    if (strip->type == STRIP_TYPE_SCENE) {
-      return strip;
-    }
-  }
-  return nullptr;
+  return seq::scene_strip_get_for_time_sync(sequencer_scene);
 }
 
-void sync_active_scene_and_time_with_scene_strip(bContext &C)
+static bool sequencer_area_is_linked_for_scene_time(const ScrArea *area)
 {
-  Scene *sequencer_scene = get_sequencer_scene_for_time_sync(C);
-  if (!sequencer_scene) {
-    return;
+  if (area == nullptr || area->spacetype != SPACE_SEQ) {
+    return false;
   }
 
-  wmWindow *win = CTX_wm_window(&C);
-  const Strip *scene_strip = get_scene_strip_for_time_sync(sequencer_scene);
-  if (!scene_strip || !scene_strip->scene) {
-    /* No scene strip with scene found. Switch to pinned scene. */
-    Main *bmain = CTX_data_main(&C);
-    WM_window_set_active_scene(bmain, &C, win, sequencer_scene);
-    return;
+  const SpaceSeq *sseq = static_cast<const SpaceSeq *>(area->spacedata.first);
+  return sseq != nullptr && (sseq->v2d.flag & V2D_VIEWSYNC_SCREEN_TIME) != 0;
+}
+
+static bool workspace_has_linked_sequencer_for_scene_time(const bContext &C)
+{
+  const bScreen *screen = CTX_wm_screen(&C);
+  if (screen == nullptr) {
+    return false;
   }
 
-  ViewLayer *view_layer = WM_window_get_active_view_layer(win);
-  Object *prev_obact = BKE_view_layer_active_object_get(view_layer);
-
-  Scene *active_scene = WM_window_get_active_scene(win);
-  if (active_scene != scene_strip->scene) {
-    /* Sync active scene in window. */
-    Main *bmain = CTX_data_main(&C);
-    WM_window_set_active_scene(bmain, &C, win, scene_strip->scene);
-    active_scene = scene_strip->scene;
-  }
-  Object *camera = [&]() -> Object * {
-    if (scene_strip->scene_camera) {
-      return scene_strip->scene_camera;
+  for (const ScrArea &area : screen->areabase) {
+    if (sequencer_area_is_linked_for_scene_time(&area)) {
+      return true;
     }
-    return scene_strip->scene->camera;
-  }();
-  if (camera) {
-    /* Sync camera in any 3D view that uses camera view. */
-    PointerRNA camera_ptr = RNA_id_pointer_create(&camera->id);
-    bScreen *screen = WM_window_get_active_screen(win);
-    for (ScrArea &area : screen->areabase) {
-      for (SpaceLink &sl : area.spacedata) {
-        if (sl.spacetype != SPACE_VIEW3D) {
-          continue;
+  }
+  return false;
+}
+
+static Scene *get_sequencer_scene_for_time_sync(const bContext &C)
+{
+  const WorkSpace *workspace = CTX_wm_workspace(&C);
+  if (workspace == nullptr || workspace->sequencer_scene == nullptr ||
+      (workspace->flags & WORKSPACE_SYNC_SCENE_TIME) == 0)
+  {
+    return nullptr;
+  }
+
+  wmWindowManager *wm = CTX_wm_manager(&C);
+  bScreen *screen = ED_screen_animation_playing(wm);
+  if (screen != nullptr && screen->animtimer != nullptr) {
+    wmTimer *wt = screen->animtimer;
+    ScreenAnimData *sad = static_cast<ScreenAnimData *>(wt->customdata);
+    return sad->do_scene_syncing ? workspace->sequencer_scene : nullptr;
+  }
+
+  return workspace->sequencer_scene;
+}
+
+static float scene_time_sync_frame_get(const Scene &scene)
+{
+  return float(scene.r.cfra) + scene.r.subframe;
+}
+
+static bool scene_time_sync_frame_set(bContext &C, Scene &scene, const float frame)
+{
+  const int old_frame = scene.r.cfra;
+  const float old_subframe = scene.r.subframe;
+
+  if (scene.r.flag & SCER_SHOW_SUBFRAME) {
+    const float frame_floor = std::floor(frame);
+    scene.r.cfra = int(frame_floor);
+    scene.r.subframe = frame - frame_floor;
+  }
+  else {
+    scene.r.cfra = round_fl_to_int(frame);
+    scene.r.subframe = 0.0f;
+  }
+  FRAMENUMBER_MIN_CLAMP(scene.r.cfra);
+
+  if (old_frame == scene.r.cfra && old_subframe == scene.r.subframe) {
+    return false;
+  }
+
+  DEG_id_tag_update(&scene.id, ID_RECALC_FRAME_CHANGE);
+  WM_event_add_notifier(&C, NC_SCENE | ND_FRAME, &scene);
+  WM_event_add_notifier(&C, NC_WINDOW, nullptr);
+  return true;
+}
+
+static bool scene_strip_timeline_frame_is_visible(const Scene &sequencer_scene,
+                                                  const Strip &scene_strip,
+                                                  const float timeline_frame)
+{
+  return timeline_frame >= float(scene_strip.left_handle()) &&
+         timeline_frame < float(scene_strip.right_handle(&sequencer_scene));
+}
+
+static bool scene_time_sync_sequencer_to_scene_frame(const Scene &sequencer_scene,
+                                                     const Scene &active_scene,
+                                                     const Strip &scene_strip,
+                                                     const float sequencer_frame,
+                                                     float &r_scene_frame)
+{
+  const seq::SceneTimeSyncRelation relation{&sequencer_scene, &active_scene, &scene_strip};
+  if (seq::scene_time_sync_frame_map(relation,
+                                     seq::SceneTimeSyncDirection::SequencerToScene,
+                                     sequencer_frame,
+                                     &r_scene_frame))
+  {
+    return true;
+  }
+
+  /* Retiming and strobe are not invertible, but Blender has a native forward mapping. */
+  const float frame_index = seq::give_frame_index(
+      &sequencer_scene, &scene_strip, sequencer_frame);
+  if (frame_index < 0.0f) {
+    return false;
+  }
+  r_scene_frame = frame_index + active_scene.r.sfra + scene_strip.anim_startofs;
+  return true;
+}
+
+static bool scene_time_sync_active_scene_set(bContext &C,
+                                             Scene &scene,
+                                             const Strip *scene_strip,
+                                             const bool update_camera)
+{
+  wmWindow *win = CTX_wm_window(&C);
+  if (win == nullptr) {
+    return false;
+  }
+
+  const bool scene_changed = WM_window_get_active_scene(win) != &scene;
+  Object *previous_active_object = nullptr;
+  if (scene_changed) {
+    ViewLayer *view_layer = WM_window_get_active_view_layer(win);
+    previous_active_object = view_layer != nullptr ?
+                                 BKE_view_layer_active_object_get(view_layer) :
+                                 nullptr;
+
+    Main *bmain = CTX_data_main(&C);
+    WM_window_set_active_scene(bmain, &C, win, &scene);
+  }
+
+  /* Two Scene Strips can reference the same scene but override different cameras. */
+  if ((scene_changed || update_camera) && scene_strip != nullptr) {
+    Object *camera = scene_strip->scene_camera != nullptr ? scene_strip->scene_camera :
+                                                           scene.camera;
+    if (camera != nullptr) {
+      PointerRNA camera_ptr = RNA_id_pointer_create(&camera->id);
+      bScreen *screen = WM_window_get_active_screen(win);
+      if (screen != nullptr) {
+        for (ScrArea &area : screen->areabase) {
+          for (SpaceLink &sl : area.spacedata) {
+            if (sl.spacetype != SPACE_VIEW3D) {
+              continue;
+            }
+
+            View3D *view3d = reinterpret_cast<View3D *>(&sl);
+            if (view3d->camera == camera) {
+              continue;
+            }
+
+            PointerRNA view3d_ptr = RNA_pointer_create_discrete(
+                &screen->id, RNA_SpaceView3D, view3d);
+            RNA_boolean_set(&view3d_ptr, "use_local_camera", true);
+            RNA_pointer_set(&view3d_ptr, "camera", camera_ptr);
+          }
         }
-        View3D *view3d = reinterpret_cast<View3D *>(&sl);
-        if (view3d->camera == camera) {
-          continue;
-        }
-        /* HACK: This should not hijack the local camera of 3d viewports. */
-        PointerRNA view3d_ptr = RNA_pointer_create_discrete(&screen->id, RNA_SpaceView3D, view3d);
-        RNA_boolean_set(&view3d_ptr, "use_local_camera", true);
-        RNA_pointer_set(&view3d_ptr, "camera", camera_ptr);
       }
     }
   }
 
-  /* Compute the scene time based on the scene strip. */
-  const float frame_index = seq::give_frame_index(
-                                sequencer_scene, scene_strip, sequencer_scene->r.cfra) +
-                            active_scene->r.sfra + scene_strip->anim_startofs;
-  if (active_scene->r.flag & SCER_SHOW_SUBFRAME) {
-    active_scene->r.cfra = int(frame_index);
-    active_scene->r.subframe = frame_index - int(frame_index);
+  if (scene_changed && previous_active_object != nullptr) {
+    Object *active_object = CTX_data_active_object(&C);
+    if (active_object != nullptr && previous_active_object->type == active_object->type) {
+      object::mode_set(&C, previous_active_object->mode);
+    }
   }
-  else {
-    active_scene->r.cfra = round_fl_to_int(frame_index);
-    active_scene->r.subframe = 0.0f;
-  }
-  FRAMENUMBER_MIN_CLAMP(active_scene->r.cfra);
+  return scene_changed;
+}
 
-  /* Try to sync the object mode of the active object. */
-  if (prev_obact) {
-    Object *obact = CTX_data_active_object(&C);
-    if (obact && prev_obact->type == obact->type) {
-      object::mode_set(&C, prev_obact->mode);
+static void scene_time_sync_view_refresh(bContext &C)
+{
+  ui::view2d_sync_time_from_scene_relation(&C);
+}
+
+void scene_time_sync_apply(bContext &C,
+                           const SceneTimeSyncSource source,
+                           const float previous_frame,
+                           const bool has_previous_frame)
+{
+  WorkSpace *workspace = CTX_wm_workspace(&C);
+  if (workspace == nullptr || workspace->sequencer_scene == nullptr ||
+      (workspace->flags & WORKSPACE_SYNC_SCENE_TIME) == 0)
+  {
+    return;
+  }
+
+  Scene *sequencer_scene = source == SceneTimeSyncSource::Sequencer ?
+                               get_sequencer_scene_for_time_sync(C) :
+                               workspace->sequencer_scene;
+  if (sequencer_scene == nullptr) {
+    return;
+  }
+
+  wmWindow *win = CTX_wm_window(&C);
+  Scene *active_scene = win != nullptr ? WM_window_get_active_scene(win) :
+                                        CTX_data_scene(&C);
+  if (active_scene == nullptr) {
+    return;
+  }
+
+  const float initial_sequencer_frame = scene_time_sync_frame_get(*sequencer_scene);
+  const float requested_frame = source == SceneTimeSyncSource::Sequencer ?
+                                    initial_sequencer_frame :
+                                    scene_time_sync_frame_get(*active_scene);
+
+  const Strip *current_scene_strip = nullptr;
+  bool current_scene_strip_resolved = false;
+  auto current_scene_strip_get = [&]() -> const Strip * {
+    if (!current_scene_strip_resolved) {
+      current_scene_strip = seq::scene_strip_get_for_time_sync_at_frame(
+          sequencer_scene, int(std::floor(initial_sequencer_frame)));
+      current_scene_strip_resolved = true;
+    }
+    return current_scene_strip;
+  };
+
+  const Strip *scene_strip_before = nullptr;
+  if (has_previous_frame && active_scene != sequencer_scene) {
+    if (source == SceneTimeSyncSource::Sequencer && previous_frame != initial_sequencer_frame) {
+      scene_strip_before = seq::scene_strip_get_for_time_sync_at_frame(
+          sequencer_scene, int(std::floor(previous_frame)));
+    }
+    else {
+      scene_strip_before = current_scene_strip_get();
     }
   }
 
-  DEG_id_tag_update(&active_scene->id, ID_RECALC_FRAME_CHANGE);
-  WM_event_add_notifier(&C, NC_WINDOW, nullptr);
-  WM_event_add_notifier(&C, NC_SCENE | ND_FRAME, nullptr);
+  bool active_scene_changed = false;
+  if (source == SceneTimeSyncSource::Sequencer &&
+      (workspace->flags & WORKSPACE_SYNC_SCENE_FOLLOW) != 0)
+  {
+    const Strip *scene_strip = current_scene_strip_get();
+    Scene *desired_scene = scene_strip != nullptr && scene_strip->scene != nullptr ?
+                               scene_strip->scene :
+                               sequencer_scene;
+    const bool update_camera = !has_previous_frame || scene_strip_before != scene_strip;
+    active_scene_changed = scene_time_sync_active_scene_set(
+        C, *desired_scene, scene_strip, update_camera);
+    active_scene = win != nullptr ? WM_window_get_active_scene(win) : desired_scene;
+  }
+
+  if (active_scene == sequencer_scene) {
+    if (active_scene_changed) {
+      scene_time_sync_view_refresh(C);
+    }
+    return;
+  }
+
+  if (source == SceneTimeSyncSource::Sequencer) {
+    const Strip *scene_strip = current_scene_strip_get();
+    if (scene_strip != nullptr && scene_strip->scene == active_scene) {
+      float target_frame;
+      if (scene_time_sync_sequencer_to_scene_frame(
+              *sequencer_scene, *active_scene, *scene_strip, requested_frame, target_frame))
+      {
+        scene_time_sync_frame_set(C, *active_scene, target_frame);
+      }
+    }
+    else if (has_previous_frame) {
+      const Strip *previous_strip = scene_strip_before;
+      if (previous_strip != nullptr && previous_strip->scene == active_scene &&
+          scene_strip_timeline_frame_is_visible(
+              *sequencer_scene, *previous_strip, previous_frame) &&
+          !scene_strip_timeline_frame_is_visible(
+              *sequencer_scene, *previous_strip, requested_frame))
+      {
+        const float boundary_frame = requested_frame >= previous_frame ?
+                                         float(previous_strip->right_handle(sequencer_scene) - 1) :
+                                         float(previous_strip->left_handle());
+        float target_frame;
+        if (scene_time_sync_sequencer_to_scene_frame(
+                *sequencer_scene, *active_scene, *previous_strip, boundary_frame, target_frame))
+        {
+          scene_time_sync_frame_set(C, *active_scene, target_frame);
+        }
+      }
+    }
+  }
+  else {
+    seq::SceneTimeSyncRelation relation;
+    if (seq::scene_time_sync_relation_get(sequencer_scene,
+                                          active_scene,
+                                          seq::SceneTimeSyncDirection::SceneToSequencer,
+                                          &relation))
+    {
+      float target_frame;
+      if (seq::scene_time_sync_frame_map(relation,
+                                         seq::SceneTimeSyncDirection::SceneToSequencer,
+                                         requested_frame,
+                                         &target_frame))
+      {
+        if (relation.scene_strip != nullptr &&
+            scene_strip_timeline_frame_is_visible(
+                *sequencer_scene, *relation.scene_strip, target_frame))
+        {
+          scene_time_sync_frame_set(C, *sequencer_scene, target_frame);
+        }
+        else if (has_previous_frame && relation.scene_strip != nullptr) {
+          float previous_target_frame;
+          if (seq::scene_time_sync_frame_map(relation,
+                                             seq::SceneTimeSyncDirection::SceneToSequencer,
+                                             previous_frame,
+                                             &previous_target_frame))
+          {
+            const float left_frame = float(relation.scene_strip->left_handle());
+            const float right_frame = float(
+                relation.scene_strip->right_handle(sequencer_scene));
+            const bool previous_inside = previous_target_frame >= left_frame &&
+                                         previous_target_frame < right_frame;
+            const bool crossed_from_left = previous_target_frame < left_frame &&
+                                           target_frame >= right_frame;
+            const bool crossed_from_right = previous_target_frame >= right_frame &&
+                                            target_frame < left_frame;
+            if (previous_inside || crossed_from_left || crossed_from_right) {
+              const float boundary_frame = target_frame >= previous_target_frame ?
+                                               right_frame - 1.0f :
+                                               left_frame;
+              scene_time_sync_frame_set(C, *sequencer_scene, boundary_frame);
+            }
+          }
+        }
+      }
+    }
+  }
+
+  bool refresh_views = active_scene_changed || !has_previous_frame;
+  if (!refresh_views && source == SceneTimeSyncSource::Sequencer &&
+      current_scene_strip_get() == nullptr)
+  {
+    /* The nearest duplicate Scene Strip can change while scrubbing through a gap. */
+    refresh_views = true;
+  }
+  if (!refresh_views) {
+    const float final_sequencer_frame = scene_time_sync_frame_get(*sequencer_scene);
+    const Strip *scene_strip_after = final_sequencer_frame == initial_sequencer_frame ?
+                                         current_scene_strip_get() :
+                                         seq::scene_strip_get_for_time_sync_at_frame(
+                                             sequencer_scene,
+                                             int(std::floor(final_sequencer_frame)));
+    refresh_views = scene_strip_before != scene_strip_after;
+  }
+  if (refresh_views) {
+    scene_time_sync_view_refresh(C);
+  }
+}
+
+void scene_time_sync_apply_frame_change(bContext &C,
+                                        Scene &changed_scene,
+                                        const float previous_frame,
+                                        const bool has_previous_frame)
+{
+  WorkSpace *workspace = CTX_wm_workspace(&C);
+  if (workspace == nullptr || workspace->sequencer_scene == nullptr ||
+      (workspace->flags & WORKSPACE_SYNC_SCENE_TIME) == 0)
+  {
+    return;
+  }
+
+  if (&changed_scene == workspace->sequencer_scene) {
+    scene_time_sync_apply(
+        C, SceneTimeSyncSource::Sequencer, previous_frame, has_previous_frame);
+    return;
+  }
+
+  wmWindow *win = CTX_wm_window(&C);
+  Scene *active_scene = win != nullptr ? WM_window_get_active_scene(win) :
+                                        CTX_data_scene(&C);
+  if (&changed_scene == active_scene) {
+    scene_time_sync_apply(
+        C, SceneTimeSyncSource::ActiveScene, previous_frame, has_previous_frame);
+  }
+}
+
+void sync_active_scene_and_time_with_scene_strip(bContext &C)
+{
+  WorkSpace *workspace = CTX_wm_workspace(&C);
+  Scene *sequencer_scene = workspace != nullptr ? workspace->sequencer_scene : nullptr;
+  const float current_frame = sequencer_scene != nullptr ?
+                                  scene_time_sync_frame_get(*sequencer_scene) :
+                                  0.0f;
+  scene_time_sync_apply(
+      C, SceneTimeSyncSource::Sequencer, current_frame, false);
 }
 
 /** \} */

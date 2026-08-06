@@ -434,7 +434,7 @@ static wmOperatorStatus actkeys_viewall(bContext *C, const bool only_sel)
   }
 
   /* do View2D syncing */
-  ui::view2d_sync(CTX_wm_screen(C), CTX_wm_area(C), v2d, V2D_LOCK_COPY);
+  ui::view2d_sync_with_context(C, CTX_wm_screen(C), CTX_wm_area(C), v2d, V2D_LOCK_COPY);
 
   /* just redraw this view */
   ED_area_tag_redraw(CTX_wm_area(C));

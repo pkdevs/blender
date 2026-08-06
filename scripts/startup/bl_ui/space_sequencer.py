@@ -21,7 +21,11 @@ from bl_ui.space_toolsystem_common import (
 )
 
 from rna_prop_ui import PropertyPanel
-from bl_ui.space_time import playback_controls
+from bl_ui.space_time import (
+    TimeSyncPanelBase,
+    playback_controls,
+    time_sync_controls,
+)
 from bl_ui.properties_data_camera import DATA_PT_camera_display_composition_guides
 
 
@@ -136,6 +140,9 @@ class SEQUENCER_HT_header(Header):
         sub.popover(panel="SEQUENCER_PT_overlay", text="")
         sub.active = st.show_overlays
 
+        if st.view_type in {'SEQUENCER', 'SEQUENCER_PREVIEW'}:
+            time_sync_controls(layout, context, "SEQUENCER_PT_time_sync")
+
 
 class SEQUENCER_HT_playback_controls(Header):
     bl_space_type = 'SEQUENCE_EDITOR'
@@ -200,6 +207,10 @@ class SEQUENCER_PT_overlay(Panel):
 
     def draw(self, _context):
         pass
+
+
+class SEQUENCER_PT_time_sync(TimeSyncPanelBase, Panel):
+    bl_space_type = 'SEQUENCE_EDITOR'
 
 
 class SEQUENCER_PT_preview_overlay(Panel):
@@ -2111,6 +2122,7 @@ classes = (
 
     SEQUENCER_PT_gizmo_display,
     SEQUENCER_PT_overlay,
+    SEQUENCER_PT_time_sync,
     SEQUENCER_PT_preview_overlay,
     SEQUENCER_PT_sequencer_overlay,
     SEQUENCER_PT_sequencer_overlay_strips,

@@ -303,7 +303,7 @@ void clip_draw_dopesheet_channels(const bContext *C, ARegion *region)
 
   /* need to do a view-sync here, so that the keys area doesn't jump around
    * (it must copy this) */
-  ui::view2d_sync(nullptr, area, v2d, V2D_LOCK_COPY);
+  ui::view2d_sync_with_context(C, nullptr, area, v2d, V2D_LOCK_COPY);
 
   /* loop through channels, and set up drawing depending on their type
    * first pass: just the standard GL-drawing for backdrop + text

@@ -35,6 +35,8 @@
 #  include "ED_paint.hh"
 #  include "ED_sequencer.hh"
 
+#  include "UI_view2d.hh"
+
 #  include "RNA_access.hh"
 
 #  include "WM_toolsystem.hh"
@@ -248,9 +250,18 @@ static int rna_WorkSpaceTool_widget_length(PointerRNA *ptr)
   return tref->runtime ? strlen(tref->runtime->gizmo_group) : 0;
 }
 
-static void rna_workspace_sync_scene_time_update(bContext *C, PointerRNA * /*ptr*/)
+static void rna_workspace_sync_scene_time_update(bContext *C, PointerRNA *ptr)
 {
-  ed::vse::sync_active_scene_and_time_with_scene_strip(*C);
+  WorkSpace *workspace = static_cast<WorkSpace *>(ptr->data);
+  if ((workspace->flags & WORKSPACE_SYNC_SCENE_TIME) == 0) {
+    workspace->flags &= ~WORKSPACE_SYNC_SCENE_FOLLOW;
+  }
+  else {
+    ed::vse::sync_active_scene_and_time_with_scene_strip(*C);
+  }
+
+  ui::view2d_sync_time_from_scene_relation(C);
+  WM_event_add_notifier(C, NC_WINDOW, nullptr);
 }
 
 }  // namespace blender
@@ -508,9 +519,46 @@ static void rna_def_workspace(BlenderRNA *brna)
   prop = RNA_def_property(srna, "use_scene_time_sync", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, nullptr, "flags", WORKSPACE_SYNC_SCENE_TIME);
   RNA_def_property_ui_text(
-      prop, "Sync Scene Time", "Set the active scene and time based on the current scene strip");
+      prop,
+      "Sync Scene Time",
+      "Synchronize time and visible ranges between the Sequencer and referenced scenes");
   RNA_def_property_flag(prop, PROP_CONTEXT_UPDATE);
   RNA_def_property_update(prop, NC_WINDOW, "rna_workspace_sync_scene_time_update");
+
+  prop = RNA_def_property(
+      srna, "use_scene_time_sync_follow_scene", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, nullptr, "flags", WORKSPACE_SYNC_SCENE_FOLLOW);
+  RNA_def_property_ui_text(
+      prop,
+      "Follow Scene Strips",
+      "Switch the active scene to the Scene Strip under the Sequencer playhead");
+  RNA_def_property_flag(prop, PROP_CONTEXT_UPDATE);
+  RNA_def_property_update(prop, NC_WINDOW, "rna_workspace_sync_scene_time_update");
+
+  prop = RNA_def_property(srna, "show_jump_to_endpoints", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_negative_sdna(
+      prop, nullptr, "flags", WORKSPACE_TIME_JUMP_HIDE_ENDPOINTS);
+  RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
+  RNA_def_property_ui_text(
+      prop, "Show Jump to Start/End", "Show the jump-to-start and jump-to-end controls");
+  RNA_def_property_update(prop, NC_WINDOW, nullptr);
+
+  prop = RNA_def_property(srna, "show_jump_to_keyframes", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_negative_sdna(
+      prop, nullptr, "flags", WORKSPACE_TIME_JUMP_HIDE_KEYFRAMES);
+  RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
+  RNA_def_property_ui_text(
+      prop,
+      "Show Jump to Prev/Next Keyframe",
+      "Show the previous-keyframe and next-keyframe controls");
+  RNA_def_property_update(prop, NC_WINDOW, nullptr);
+
+  prop = RNA_def_property(srna, "show_jump_by_delta", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, nullptr, "flags", WORKSPACE_TIME_JUMP_SHOW_DELTA);
+  RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
+  RNA_def_property_ui_text(
+      prop, "Show Jump Time by Delta", "Show the backward and forward time-delta controls");
+  RNA_def_property_update(prop, NC_WINDOW, nullptr);
 
   RNA_api_workspace(srna);
 }

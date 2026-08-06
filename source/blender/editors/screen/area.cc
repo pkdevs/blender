@@ -2194,12 +2194,66 @@ static void ed_default_handlers(wmWindowManager *wm,
   }
 }
 
+struct AreaTimeViewTransform {
+  ARegion *region = nullptr;
+  float frames_per_pixel = 0.0f;
+  float frame_at_screen_x_zero = 0.0f;
+};
+
+static AreaTimeViewTransform area_time_view_transform_capture(ScrArea *area)
+{
+  AreaTimeViewTransform transform;
+  for (ARegion &region : area->regionbase) {
+    if ((region.v2d.flag & V2D_VIEWSYNC_SCREEN_TIME) == 0 ||
+        (region.v2d.flag & V2D_IS_INIT) == 0)
+    {
+      continue;
+    }
+    if (BLI_rcti_size_x(&region.v2d.mask) <= 0) {
+      continue;
+    }
+
+    transform.region = &region;
+    const float region_x_at_screen_zero = -float(region.winrct.xmin);
+    transform.frame_at_screen_x_zero = ui::view2d_region_to_view_x(
+        &region.v2d, region_x_at_screen_zero);
+    transform.frames_per_pixel =
+        ui::view2d_region_to_view_x(&region.v2d, region_x_at_screen_zero + 1.0f) -
+        transform.frame_at_screen_x_zero;
+    break;
+  }
+  return transform;
+}
+
+static void area_time_view_transform_restore(const AreaTimeViewTransform &transform)
+{
+  if (transform.region == nullptr ||
+      (transform.region->v2d.flag & V2D_VIEWSYNC_SCREEN_TIME) == 0)
+  {
+    return;
+  }
+
+  ARegion &region = *transform.region;
+  if (BLI_rcti_size_x(&region.v2d.mask) <= 0) {
+    return;
+  }
+
+  const float mask_screen_xmin = float(region.winrct.xmin + region.v2d.mask.xmin);
+  const float mask_screen_xmax = float(region.winrct.xmin + region.v2d.mask.xmax);
+  region.v2d.cur.xmin =
+      transform.frame_at_screen_x_zero + mask_screen_xmin * transform.frames_per_pixel;
+  region.v2d.cur.xmax =
+      transform.frame_at_screen_x_zero + mask_screen_xmax * transform.frames_per_pixel;
+  ED_region_tag_redraw_no_rebuild(&region);
+}
+
 void ED_area_update_region_sizes(wmWindowManager *wm, wmWindow *win, ScrArea *area)
 {
   if (!(area->flag & AREA_FLAG_REGION_SIZE_UPDATE)) {
     return;
   }
   const bScreen *screen = WM_window_get_active_screen(win);
+  const AreaTimeViewTransform time_view_transform = area_time_view_transform_capture(area);
 
   rcti window_rect;
   WM_window_screen_rect_calc(win, &window_rect);
@@ -2228,6 +2282,8 @@ void ED_area_update_region_sizes(wmWindowManager *wm, wmWindow *win, ScrArea *ar
     /* Some AZones use View2D data which is only updated in region init, so call that first! */
     region_azones_add(screen, area, &region);
   }
+
+  area_time_view_transform_restore(time_view_transform);
   ED_area_azones_update(area, win->runtime->eventstate->xy);
 
   area->flag &= ~AREA_FLAG_REGION_SIZE_UPDATE;
@@ -2305,6 +2361,7 @@ void ED_area_init(bContext *C, const wmWindow *win, ScrArea *area)
   WM_window_screen_rect_calc(win, &window_rect);
 
   ED_area_and_region_types_init(area);
+  const AreaTimeViewTransform time_view_transform = area_time_view_transform_capture(area);
 
   /* area sizes */
   area_calc_totrct(screen, area, &window_rect);
@@ -2349,6 +2406,8 @@ void ED_area_init(bContext *C, const wmWindow *win, ScrArea *area)
     /* Some AZones use View2D data which is only updated in region init, so call that first! */
     region_azones_add(screen, area, &region);
   }
+
+  area_time_view_transform_restore(time_view_transform);
 
   /* Avoid re-initializing tools while resizing areas & regions. */
   if ((G.moving & G_TRANSFORM_WM) == 0) {
@@ -2974,6 +3033,12 @@ void ED_area_newspace(bContext *C, ScrArea *area, int type, const bool skip_regi
       WM_event_add_notifier(C, NC_WINDOW, nullptr);
     }
   }
+
+  /*
+   * A newly-created time editor has a valid View2D now. Pull its range from an already initialized
+   * editor instead of waiting for the first pan or zoom event.
+   */
+  ui::view2d_sync_time_to_area(C, area);
 
   /* also redraw when re-used */
   ED_area_tag_redraw(area);

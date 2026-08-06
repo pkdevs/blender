@@ -145,6 +145,14 @@ enum eWorkSpaceFlags : int {
   WORKSPACE_USE_PIN_SCENE = (1 << 2),
   /* Used for syncing time between sequencer scene strips and the active scene. */
   WORKSPACE_SYNC_SCENE_TIME = (1 << 3),
+  /* Switch the active window scene to the Scene Strip under the Sequencer playhead. */
+  WORKSPACE_SYNC_SCENE_FOLLOW = (1 << 4),
+  /* Hide the Start/End playback-header controls. Default is visible. */
+  WORKSPACE_TIME_JUMP_HIDE_ENDPOINTS = (1 << 5),
+  /* Hide the previous/next keyframe playback-header controls. Default is visible. */
+  WORKSPACE_TIME_JUMP_HIDE_KEYFRAMES = (1 << 6),
+  /* Show the optional time-delta playback-header controls. Default is hidden. */
+  WORKSPACE_TIME_JUMP_SHOW_DELTA = (1 << 7),
 };
 ENUM_OPERATORS(eWorkSpaceFlags)
 

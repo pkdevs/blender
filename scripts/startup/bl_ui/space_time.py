@@ -66,10 +66,14 @@ def playback_controls(layout, context):
             icon=icon_keytype,
         )
 
+    workspace = context.workspace
     row = layout.row(align=True)
-    row.operator("screen.frame_jump", text="", icon='REW').end = False
-    row.operator("screen.time_jump", text="", icon='FRAME_PREV').backward = True
-    row.operator("screen.keyframe_jump", text="", icon='PREV_KEYFRAME').next = False
+    if workspace.show_jump_to_endpoints:
+        row.operator("screen.frame_jump", text="", icon='REW').end = False
+    if workspace.show_jump_by_delta:
+        row.operator("screen.time_jump", text="", icon='FRAME_PREV').backward = True
+    if workspace.show_jump_to_keyframes:
+        row.operator("screen.keyframe_jump", text="", icon='PREV_KEYFRAME').next = False
 
     if not screen.is_animation_playing:
         # if using JACK and A/V sync:
@@ -87,9 +91,12 @@ def playback_controls(layout, context):
         row.operator("screen.animation_pause", text="", icon='PAUSE')
         row.scale_x = 1
 
-    row.operator("screen.keyframe_jump", text="", icon='NEXT_KEYFRAME').next = True
-    row.operator("screen.time_jump", text="", icon='FRAME_NEXT').backward = False
-    row.operator("screen.frame_jump", text="", icon='FF').end = True
+    if workspace.show_jump_to_keyframes:
+        row.operator("screen.keyframe_jump", text="", icon='NEXT_KEYFRAME').next = True
+    if workspace.show_jump_by_delta:
+        row.operator("screen.time_jump", text="", icon='FRAME_NEXT').backward = False
+    if workspace.show_jump_to_endpoints:
+        row.operator("screen.frame_jump", text="", icon='FF').end = True
 
     row.popover(panel="TIME_PT_jump", text="")
 
@@ -120,6 +127,50 @@ def playback_controls(layout, context):
         else:
             sub.prop(scene, "frame_preview_start", text="Start")
             sub.prop(scene, "frame_preview_end", text="End")
+
+
+def time_sync_controls(layout, context, panel):
+    """Draw the linked visible-range toggle and its synchronization popover."""
+    st = context.space_data
+
+    row = layout.row(align=True)
+    row.prop(
+        st,
+        "show_locked_time",
+        text="",
+        icon='LINKED' if st.show_locked_time else 'UNLINKED',
+        toggle=True,
+    )
+    row.popover(panel=panel, text="")
+
+
+class TimeSyncPanelBase:
+    bl_region_type = 'HEADER'
+    bl_label = "Synchronization"
+    bl_ui_units_x = 12
+
+    def draw(self, context):
+        layout = self.layout
+        layout.use_property_split = True
+        layout.use_property_decorate = False
+
+        st = context.space_data
+        layout.prop(st, "show_locked_time", text="Sync Visible Range")
+
+        if st.type == 'SEQUENCE_EDITOR':
+            layout.separator()
+
+            col = layout.column(heading="Scene Strips")
+            col.active = st.show_locked_time
+            col.prop(context.workspace, "use_scene_time_sync", text="Scene Time")
+
+            sub = col.column()
+            sub.active = st.show_locked_time and context.workspace.use_scene_time_sync
+            sub.prop(
+                context.workspace,
+                "use_scene_time_sync_follow_scene",
+                text="Follow Scene Strips",
+            )
 
 
 class TIME_MT_view(Menu):
@@ -214,7 +265,7 @@ class TIME_PT_playback(TimelinePanelButtons, Panel):
 
         screen = context.screen
         st = context.space_data
-        is_sequencer = st.type == 'SEQUENCE_EDITOR' and st.view_type == 'SEQUENCER'
+        is_sequencer = st.type == 'SEQUENCE_EDITOR'
         scene = context.scene if not is_sequencer else context.sequencer_scene
 
         # Timeline settings.
@@ -266,7 +317,15 @@ class TIME_PT_playback(TimelinePanelButtons, Panel):
             header.label(text="Sequencer")
             if panel:
                 col = panel.column(heading="Sync")
+                col.active = st.show_locked_time
                 col.prop(context.workspace, "use_scene_time_sync", text="Scene Time")
+                sub = col.column()
+                sub.active = st.show_locked_time and context.workspace.use_scene_time_sync
+                sub.prop(
+                    context.workspace,
+                    "use_scene_time_sync_follow_scene",
+                    text="Follow Scene Strips",
+                )
 
         layout.separator()
 
@@ -308,7 +367,7 @@ class TIME_PT_keyframing_settings(TimelinePanelButtons, Panel):
         layout.use_property_decorate = False
 
         st = context.space_data
-        is_sequencer = st.type == 'SEQUENCE_EDITOR' and st.view_type == 'SEQUENCER'
+        is_sequencer = st.type == 'SEQUENCE_EDITOR'
         scene = context.scene if not is_sequencer else context.sequencer_scene
         tool_settings = context.tool_settings
 
@@ -360,11 +419,41 @@ class TIME_PT_jump(TimelinePanelButtons, Panel):
         layout.use_property_decorate = False
 
         st = context.space_data
-        is_sequencer = st.type == 'SEQUENCE_EDITOR' and st.view_type == 'SEQUENCER'
+        is_sequencer = st.type == 'SEQUENCE_EDITOR'
         scene = context.scene if not is_sequencer else context.sequencer_scene
 
-        layout.prop(scene, "time_jump_unit", expand=True, text="Jump Unit")
-        layout.prop(scene, "time_jump_delta", text="Delta")
+        workspace = context.workspace
+        jump_visibility = layout.column(align=True)
+        jump_visibility.use_property_split = False
+        jump_visibility.use_property_decorate = False
+        jump_visibility.alignment = 'LEFT'
+        jump_visibility.prop(
+            workspace,
+            "show_jump_to_endpoints",
+            text="Jump to Start/End",
+        )
+        jump_visibility.prop(
+            workspace,
+            "show_jump_to_keyframes",
+            text="Jump to Prev/Next Keyframe",
+        )
+
+        layout.separator()
+
+        jump_delta_toggle = layout.column(align=True)
+        jump_delta_toggle.use_property_split = False
+        jump_delta_toggle.use_property_decorate = False
+        jump_delta_toggle.alignment = 'LEFT'
+        jump_delta_toggle.prop(
+            workspace,
+            "show_jump_by_delta",
+            text="Jump by Delta",
+        )
+
+        jump_settings = layout.column()
+        jump_settings.active = workspace.show_jump_by_delta
+        jump_settings.prop(scene, "time_jump_unit", expand=True, text="Jump Unit")
+        jump_settings.prop(scene, "time_jump_delta", text="Delta")
 
 
 ###################################

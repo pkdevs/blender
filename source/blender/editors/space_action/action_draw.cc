@@ -63,7 +63,7 @@ void draw_channel_names(bContext *C,
   bAnimListElem *ale;
   View2D *v2d = &region->v2d;
   /* need to do a view-sync here, so that the keys area doesn't jump around (it must copy this) */
-  ui::view2d_sync(nullptr, ac->area, v2d, V2D_LOCK_COPY);
+  ui::view2d_sync_with_context(C, nullptr, ac->area, v2d, V2D_LOCK_COPY);
 
   const float channel_step = ANIM_UI_get_channel_step();
   /* Loop through channels, and set up drawing depending on their type. */
