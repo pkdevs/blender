@@ -1166,6 +1166,29 @@ class ShaderNodesInliner {
     return mix;
   }
 
+  /**
+   * Returns the socket type that's used internally to emulate switch nodes. Not all types are
+   * natively supported by render engines.
+   */
+  std::optional<eNodeSocketDatatype> get_internal_mix_socket_type(
+      const eNodeSocketDatatype socket_type) const
+  {
+    switch (socket_type) {
+      case SOCK_FLOAT:
+      case SOCK_INT:
+      case SOCK_BOOLEAN:
+        return SOCK_FLOAT;
+      case SOCK_VECTOR:
+        return SOCK_VECTOR;
+      case SOCK_RGBA:
+        return SOCK_RGBA;
+      case SOCK_SHADER:
+        return SOCK_SHADER;
+      default:
+        return std::nullopt;
+    }
+  }
+
   void handle_output_socket__index_switch(const SocketInContext &socket)
   {
     const NodeInContext node = socket.owner_node();
@@ -1201,27 +1224,13 @@ class ShaderNodesInliner {
     /* If the index is not a constant value, we immitate the index switch node using a chain of
      * mix nodes. This allows renderers using the Index Switch node with rendering backends which
      * don't support it natively. */
-    eNodeSocketDatatype internal_mix_type;
-    switch (storage.data_type) {
-      case SOCK_FLOAT:
-      case SOCK_INT:
-      case SOCK_BOOLEAN:
-        internal_mix_type = SOCK_FLOAT;
-        break;
-      case SOCK_VECTOR:
-        internal_mix_type = SOCK_VECTOR;
-        break;
-      case SOCK_RGBA:
-        internal_mix_type = SOCK_RGBA;
-        break;
-      case SOCK_SHADER:
-        internal_mix_type = SOCK_SHADER;
-        break;
-      default:
-        params_.r_error_messages.append(
-            {node.node, TIP_("Index must be a constant value for this data type")});
-        this->store_socket_value_fallback(socket);
-        return;
+    const std::optional<eNodeSocketDatatype> internal_mix_type =
+        this->get_internal_mix_socket_type(storage.data_type);
+    if (!internal_mix_type) {
+      params_.r_error_messages.append(
+          {node.node, TIP_("Index must be a constant value for this data type")});
+      this->store_socket_value_fallback(socket);
+      return;
     }
 
     const EnsureInputsResult ensured_inputs = this->ensure_node_inputs(node);
@@ -1263,7 +1272,7 @@ class ShaderNodesInliner {
         factor_out = static_cast<bNodeSocket *>(add_math_node.outputs.first);
       }
 
-      const MixNodeInfo mix = this->create_mix_node(internal_mix_type);
+      const MixNodeInfo mix = this->create_mix_node(*internal_mix_type);
       bke::node_add_link(dst_tree_, *factor_node, *factor_out, *mix.node, *mix.factor_in);
       if (i == 0) {
         this->set_input_socket_value(*node, *mix.node, *mix.a_in, {FallbackValue{}});
@@ -1313,27 +1322,13 @@ class ShaderNodesInliner {
     /* If the switch condition is not a constant value, imitate the Switch node using a mix node.
      * This allows using the Switch node with rendering backends which don't support it natively.
      */
-    eNodeSocketDatatype internal_mix_type;
-    switch (storage.input_type) {
-      case SOCK_FLOAT:
-      case SOCK_INT:
-      case SOCK_BOOLEAN:
-        internal_mix_type = SOCK_FLOAT;
-        break;
-      case SOCK_VECTOR:
-        internal_mix_type = SOCK_VECTOR;
-        break;
-      case SOCK_RGBA:
-        internal_mix_type = SOCK_RGBA;
-        break;
-      case SOCK_SHADER:
-        internal_mix_type = SOCK_SHADER;
-        break;
-      default:
-        params_.r_error_messages.append(
-            {node.node, TIP_("Switch must be a constant value for this data type")});
-        this->store_socket_value_fallback(socket);
-        return;
+    const std::optional<eNodeSocketDatatype> internal_mix_type =
+        this->get_internal_mix_socket_type(storage.input_type);
+    if (!internal_mix_type) {
+      params_.r_error_messages.append(
+          {node.node, TIP_("Switch must be a constant value for this data type")});
+      this->store_socket_value_fallback(socket);
+      return;
     }
 
     const EnsureInputsResult ensured_inputs = this->ensure_node_inputs(node);
@@ -1352,7 +1347,7 @@ class ShaderNodesInliner {
     this->set_input_socket_value(*node, to_bool_math_node, to_bool_in_1, *switch_input_value);
     static_cast<bNodeSocketValueFloat *>(to_bool_in_2.default_value)->value = 0.0f;
 
-    const MixNodeInfo mix = this->create_mix_node(internal_mix_type);
+    const MixNodeInfo mix = this->create_mix_node(*internal_mix_type);
     bke::node_add_link(dst_tree_, to_bool_math_node, to_bool_out, *mix.node, *mix.factor_in);
 
     const SocketInContext false_input = node.input_socket(1);
