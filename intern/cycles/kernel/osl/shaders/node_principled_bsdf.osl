@@ -198,7 +198,8 @@ shader node_principled_bsdf(string distribution = "multi_ggx",
   if (coat_weight > CLOSURE_WEIGHT_CUTOFF) {
     float coat_ior = max(CoatIOR, 1.0);
     float coat_alpha = clamp(CoatRoughness, 0.0, 1.0);
-    closure color CoatBSDF = coat_bsdf(CoatTint, coat_ior, coat_alpha, CoatNormal);
+    closure color CoatBSDF = coat_bsdf(
+        CoatTint, coat_ior, coat_alpha, 0.0, 0.0, CoatNormal, vector(0.0));
     BSDF = layer(coat_weight * CoatBSDF, BSDF);
   }
 

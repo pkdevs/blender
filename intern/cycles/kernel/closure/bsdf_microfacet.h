@@ -139,7 +139,10 @@ struct Coat {
   float ior;
   packed_float3 N;
   float roughness;
-  Spectrum weight;
+  PackedSpectrum weight;
+  float darkening;
+  packed_float3 T = zero_float3();
+  float anisotropy = 0.0f;
 };
 
 /* -------------------------------------------------------------------- */
@@ -1607,6 +1610,24 @@ ccl_device FresnelCoeff bsdf_thin_glass_setup(KernelGlobals kg,
 
 /** \} */
 
+/* Anisotropic mapping, OpenPBR Surface specification v1.1.1, Eq. (20). */
+ccl_device_inline float2 openpbr_anisotropic_roughness(const float roughness,
+                                                       const float anisotropy,
+                                                       const float3 tangent)
+{
+  float2 alpha = make_float2(sqr(roughness));
+
+  if (anisotropy > 0.0f && !is_zero(tangent) && !roughness_is_almost_specular(alpha.x, alpha.y)) {
+    alpha.x *= sqrt(2.0f / (1.0f + sqr(1.0f - anisotropy)));
+    alpha.y = (1.0f - anisotropy) * alpha.x;
+    /* Clamp so that the closure is not treated as specular. */
+    /* TODO(OpenPBR): maybe multiplicative roughness is not a good criteria. */
+    alpha = max(alpha, make_float2(1.5e-5f));
+  }
+
+  return alpha;
+}
+
 /* Given the transmittance through a slab at normal incidence, compute the transmittance at a
  * certain incident angle, based on Beer-Lambert law. */
 ccl_device_inline Spectrum slab_color_at_angle(const float3 color,
@@ -1650,9 +1671,11 @@ ccl_device Spectrum bsdf_coat_setup(KernelGlobals kg,
     ccl_private MicrofacetBsdf *bsdf = bsdf_alloc_maybe_emission(sd, &coat_bsdf, coat.weight);
     if (bsdf) {
       bsdf->N = coat.N;
-      bsdf->T = zero_float3();
+      bsdf->T = coat.T;
       bsdf->ior = coat.ior;
-      bsdf->alpha_x = bsdf->alpha_y = sqr(coat.roughness);
+      const float2 alpha = openpbr_anisotropic_roughness(coat.roughness, coat.anisotropy, coat.T);
+      bsdf->alpha_x = alpha.x;
+      bsdf->alpha_y = alpha.y;
 
       const int runtime_flag = bsdf_microfacet_ggx_setup(bsdf);
       if (bsdf != &coat_bsdf) {

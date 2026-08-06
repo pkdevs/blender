@@ -289,6 +289,10 @@ ccl_device void osl_closure_coat_bsdf_setup(KernelGlobals kg,
   coat.N = maybe_ensure_valid_specular_reflection(sd, safe_normalize_fallback(closure->N, sd->N));
   coat.roughness = closure->roughness;
   coat.weight = rgb_to_spectrum(weight);
+  coat.darkening = closure->darkening;
+  coat.T = closure->T;
+  coat.anisotropy = closure->anisotropy;
+
   const Spectrum albedo = bsdf_coat_setup(kg, sd, path_visibility, coat);
 
   if (layer_albedo) {
