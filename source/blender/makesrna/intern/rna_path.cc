@@ -468,7 +468,7 @@ static bool rna_path_parse(const PointerRNA *ptr,
               return false;
             }
 
-            if (array_indices[d] >= dimension_size[d]) {
+            if (array_indices[d] < 0 || array_indices[d] >= dimension_size[d]) {
               return false;
             }
             item_iter++;
