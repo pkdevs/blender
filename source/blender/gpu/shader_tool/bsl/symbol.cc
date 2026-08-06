@@ -713,6 +713,9 @@ struct SymbolParser : NodeErrorHandler {
             return;
           }
         }
+        else {
+          parent = fn->parent;
+        }
 
         string full_id = string(id.name().str()) + "<" + mangled.str_debug.substr(2) + ">";
         NOTE(id, Diag::NoteInstantiationFuncTemplateRequested, full_id);

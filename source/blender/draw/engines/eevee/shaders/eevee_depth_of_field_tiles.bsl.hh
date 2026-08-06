@@ -48,7 +48,8 @@ struct Resources {
   [[shared]] uint bg_min_intersectable_coc;
 };
 
-#define dof_tile_large_coc_uint floatBitsToUint(dof_tile_large_coc)
+/* TODO: Builtin functions constexpr floatBitsToUint(dof_tile_large_coc); */
+static constexpr uint dof_tile_large_coc_uint = 0x44800000u;
 
 [[compute, local_size(DOF_TILES_FLATTEN_GROUP_SIZE, DOF_TILES_FLATTEN_GROUP_SIZE)]]
 void comp_main([[resource_table]] Resources &srt,
