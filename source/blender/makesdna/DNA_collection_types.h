@@ -136,15 +136,19 @@ struct CollectionChild {
 };
 
 /* Collection IO property storage and access. */
-typedef struct CollectionImport {
+struct CollectionImport {
   /** Identifier that matches the #FileHandlerType.idname. */
   char fh_idname[64] = "";
+
+  /** The archive library this importer is associated with. Will be null when an import has not
+   * occurred yet or has since been cleared. */
+  Library *archive_library = nullptr;
 
   IDProperty *import_properties = nullptr;
   uint32_t flag = 0;
 
   uint32_t _pad0 = {};
-} CollectionImport;
+};
 
 struct CollectionExport {
   struct CollectionExport *next = nullptr, *prev = nullptr;

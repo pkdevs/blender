@@ -578,7 +578,6 @@ static wmOperatorStatus collection_importer_import_exec(bContext *C, wmOperator 
     return OPERATOR_CANCELLED;
   }
 
-  using namespace blender;
   bke::FileHandlerType *fh = bke::file_handler_find(data->fh_idname);
   if (!fh) {
     BKE_reportf(op->reports, RPT_ERROR, "File handler '%s' not found", data->fh_idname);
@@ -595,7 +594,6 @@ static wmOperatorStatus collection_importer_import_exec(bContext *C, wmOperator 
   /* Execute operator with our stored properties. */
   IDProperty *op_props = IDP_CopyProperty(data->import_properties);
   PointerRNA properties = RNA_pointer_create_discrete(nullptr, ot->srna, op_props);
-  const char *collection_name = collection->id.name + 2;
 
   /* Ensure we have a valid filepath set. Create one if the user has not specified anything yet. */
   char filepath[FILE_MAX];
@@ -620,21 +618,16 @@ static wmOperatorStatus collection_importer_import_exec(bContext *C, wmOperator 
   BLI_path_abs(filepath, BKE_main_blendfile_path(bmain));
   RNA_string_set(&properties, "filepath", filepath);
 
-  /* TODO: If there is already a library for this collection, then an import has already occurred.
-   * Return early until "reload" is implemented in the future. */
-  for (Library *lib = static_cast<Library *>(bmain->libraries.first); lib;
-       lib = static_cast<Library *>(lib->id.next))
-  {
-    if (STREQ(lib->id.name + 2, collection_name)) {
-      BKE_reportf(op->reports,
-                  RPT_WARNING,
-                  "Collection '%s' has already been imported from '%s'",
-                  collection_name,
-                  filepath);
-
-      IDP_FreeProperty(op_props);
-      return OPERATOR_CANCELLED;
-    }
+  /* If there is already a library for this collection importer, then an import has already
+   * occurred. */
+  if (data->archive_library) {
+    BKE_reportf(op->reports,
+                RPT_WARNING,
+                "Collection '%s' has already been imported from '%s'",
+                collection->id.name + 2,
+                filepath);
+    IDP_FreeProperty(op_props);
+    return OPERATOR_CANCELLED;
   }
 
   wmWindowManager *wm = CTX_wm_manager(C);
@@ -664,14 +657,26 @@ static wmOperatorStatus collection_importer_import_exec(bContext *C, wmOperator 
   wm->op_undo_depth--;
 
   if (op_result == OPERATOR_FINISHED) {
-    /* Create a real library to encapsulate our external archive library.
-     * TODO: Adjust after determining what to do about the missing library check above. */
-    Library *external_lib = BKE_id_new<Library>(bmain, collection_name);
-    external_lib->flag |= LIBRARY_FLAG_IS_EXTERNAL;
-    id_us_ensure_real(&external_lib->id);
-    BKE_library_filepath_set(bmain, external_lib, filepath);
+    /* Create an external parent library to encapsulate the external archive library if one is
+     * not already present. */
+    Library *external_lib = nullptr;
+    for (Library *lib = static_cast<Library *>(bmain->libraries.first); lib;
+         lib = static_cast<Library *>(lib->id.next))
+    {
+      if (STREQ(lib->filepath, filepath)) {
+        external_lib = lib;
+        break;
+      }
+    }
 
-    /* Create an external archive library to serve as the namespace for all IDs imported from the
+    if (!external_lib) {
+      external_lib = BKE_id_new<Library>(bmain, BLI_path_basename(filepath));
+      external_lib->flag |= LIBRARY_FLAG_IS_EXTERNAL;
+      id_us_ensure_real(&external_lib->id);
+      BKE_library_filepath_set(bmain, external_lib, filepath);
+    }
+
+    /* Create the external archive library to serve as the namespace for all IDs imported from the
      * external file. The library is marked as both an archive (it will never be written out as a
      * separate .blend) and external (it originates outside Blender). */
     Library *external_archive_lib = bke::library::create_external_archive_library(*bmain,
@@ -694,6 +699,7 @@ static wmOperatorStatus collection_importer_import_exec(bContext *C, wmOperator 
 
     BKE_main_id_tag_all(bmain, ID_TAG_PRE_EXISTING, false);
 
+    data->archive_library = external_archive_lib;
     collection->importer = data;
 
     DEG_id_tag_update(&collection->id, ID_RECALC_SYNC_TO_EVAL);

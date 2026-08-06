@@ -150,13 +150,13 @@ class TestCollectionImport(CollectionIOTestBase):
         self.assertEqual(len(bpy.data.collections[coll_A].all_objects), 4)
         self.assertEqual(len(bpy.data.collections[coll_B].all_objects), 1)
         self.assertEqual(len(bpy.data.collections[coll_C].all_objects), 0)
+
+        # Scenario should produce 3 main libraries and 3 archives
         self.assertEqual(len(bpy.data.libraries), 6)
         self.assertEqual(len([l for l in bpy.data.libraries if l.is_archive == False]), 3)
         self.assertEqual(len([l for l in bpy.data.libraries if l.is_archive]), 3)
 
-    # Disabled: Multiple importers all referencing the same external file is
-    # currently not supported.
-    def __disabled_test_import_multi(self):
+    def test_import_multi(self):
         # Validate multiple importers all using the same external file.
         self.reset_blender()
 
@@ -170,9 +170,7 @@ class TestCollectionImport(CollectionIOTestBase):
         self.add_collection_importer(coll_B, "IO_FH_usd")
         self.add_collection_importer(coll_C, "IO_FH_usd")
 
-        # Setup each importer
-        # NOTE: Add additional validation for bpy.data.libraries once bug with multiple importers
-        # all referencing the same external file is fixed.
+        # Setup each importer using the same external file
         coll = bpy.data.collections[coll_A]
         coll.importer.filepath = str(self.testdir / "import-default.usda")
 
@@ -191,7 +189,11 @@ class TestCollectionImport(CollectionIOTestBase):
         self.assertEqual(len(bpy.data.collections[coll_A].all_objects), 4)
         self.assertEqual(len(bpy.data.collections[coll_B].all_objects), 1)
         self.assertEqual(len(bpy.data.collections[coll_C].all_objects), 0)
-        # TODO: Library validation once scenario is supported
+
+        # Scenario should produce 1 main library and 3 archives
+        self.assertEqual(len(bpy.data.libraries), 4)
+        self.assertEqual(len([l for l in bpy.data.libraries if l.is_archive == False]), 1)
+        self.assertEqual(len([l for l in bpy.data.libraries if l.is_archive]), 3)
 
     def test_link_after_import(self):
         # Validate that a remote collection, which has an importer, is able to
