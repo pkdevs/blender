@@ -3886,6 +3886,8 @@ def km_animation(_params):
         # Frame management.
         ("wm.context_toggle", {"type": 'T', "value": 'PRESS', "ctrl": True},
          {"properties": [("data_path", "space_data.show_seconds")]}),
+        ("wm.context_toggle", {"type": 'T', "value": 'PRESS', "ctrl": True, "shift": True},
+         {"properties": [("data_path", "scene.draw_scene_relative_time")]}),
         # Preview range.
         ("anim.previewrange_set", {"type": 'P', "value": 'PRESS'}, None),
         ("anim.previewrange_clear", {"type": 'P', "value": 'PRESS', "alt": True}, None),
