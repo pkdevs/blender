@@ -5,7 +5,7 @@
 /** \file
  * \ingroup bli
  *
- * Implementation of RecentsFile / Section backed by TOML.
+ * Implementation of Section backed by TOML.
  */
 
 #include "toml.hpp"
