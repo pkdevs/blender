@@ -777,7 +777,7 @@ static void create_mesh(Scene *scene,
     int *subd_ptex_offset = mesh->get_subd_ptex_offset().data();
     int *subd_face_corners = mesh->get_subd_face_corners().data();
 
-    if (!sharp_faces.is_empty() && !use_corner_normals) {
+    if (!sharp_faces.is_empty()) {
       for (int i = 0; i < numfaces; i++) {
         subd_smooth[i] = !sharp_faces[i];
       }
