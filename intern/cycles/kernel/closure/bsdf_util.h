@@ -20,6 +20,7 @@ CCL_NAMESPACE_BEGIN
 struct FresnelThinFilm {
   float thickness;
   float ior;
+  float weight;
 };
 
 template<typename T> struct complex {

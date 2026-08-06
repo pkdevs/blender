@@ -384,10 +384,11 @@ ccl_device_forceinline FresnelCoeff microfacet_fresnel(KernelGlobals kg,
       return {zero_spectrum(), zero_spectrum()};
     }
     ccl_private FresnelConductor *fresnel = (ccl_private FresnelConductor *)bsdf->fresnel;
-    if (fresnel->thin_film.thickness > THINFILM_THICKNESS_CUTOFF) {
+    if (fresnel->thin_film.thickness > THINFILM_THICKNESS_CUTOFF && fresnel->thin_film.weight > CLOSURE_WEIGHT_CUTOFF) {
       /* One channel at a time to reduce GPU register pressure. */
+      Spectrum F;
       FOREACH_SPECTRUM_CHANNEL (i) {
-        GET_SPECTRUM_CHANNEL(coeff.reflectance, i) = fresnel_iridescence_channel<true>(
+        GET_SPECTRUM_CHANNEL(F, i) = fresnel_iridescence_channel<true>(
             kg,
             i,
             1.0f,
@@ -398,6 +399,12 @@ ccl_device_forceinline FresnelCoeff microfacet_fresnel(KernelGlobals kg,
             cos_theta_i,
             r_cos_theta_t);
       }
+
+      if (fresnel->thin_film.weight < 1.0f) {
+        const Spectrum Fc = fresnel_conductor(cos_theta_i, fresnel->ior);
+        F = mix(Fc, F, fresnel->thin_film.weight);
+      } 
+      coeff.reflectance = F;
     }
     else {
       coeff.reflectance = fresnel_conductor(cos_theta_i, fresnel->ior);
@@ -412,10 +419,11 @@ ccl_device_forceinline FresnelCoeff microfacet_fresnel(KernelGlobals kg,
      * term which modulates the reflectivity around acos(1/7) degrees (ca. 82°). */
     ccl_private FresnelF82Tint *fresnel = (ccl_private FresnelF82Tint *)bsdf->fresnel;
 
-    if (fresnel->thin_film.thickness > THINFILM_THICKNESS_CUTOFF) {
+    if (fresnel->thin_film.thickness > THINFILM_THICKNESS_CUTOFF && fresnel->thin_film.weight > CLOSURE_WEIGHT_CUTOFF) {
       /* Estimate n and k by reinterpreting F0 and F82 as r and g from "Artist Friendly Metallic
        * Fresnel" by Ole Gulbrandsen.
        * One channel at a time to reduce GPU register pressure. */
+      Spectrum F;
       FOREACH_SPECTRUM_CHANNEL (i) {
         const float f0 = GET_SPECTRUM_CHANNEL(fresnel->f0, i);
         const float r = min(f0, 0.999f);
@@ -425,9 +433,14 @@ ccl_device_forceinline FresnelCoeff microfacet_fresnel(KernelGlobals kg,
         const float n = mix((1.0f + sqrt_r) / (1.0f - sqrt_r), (1.0f - r) / (1.0f + r), g);
         const float k = safe_sqrtf((r * sqr(n + 1.0f) - sqr(n - 1.0f)) / (1.0f - r));
 
-        GET_SPECTRUM_CHANNEL(coeff.reflectance, i) = fresnel_iridescence_channel<true>(
+        GET_SPECTRUM_CHANNEL(F, i) = fresnel_iridescence_channel<true>(
             kg, i, 1.0f, fresnel->thin_film, n, k, g, cos_theta_i, r_cos_theta_t);
       }
+      if (fresnel->thin_film.weight < 1.0f) {
+        const Spectrum F82 = fresnel_f82(cos_theta_i, fresnel->f0, fresnel->b);
+        F = mix(F82, F, fresnel->thin_film.weight);
+      } 
+      coeff.reflectance = F;
     }
     else {
       coeff.reflectance = fresnel_f82(cos_theta_i, fresnel->f0, fresnel->b);
@@ -438,6 +451,26 @@ ccl_device_forceinline FresnelCoeff microfacet_fresnel(KernelGlobals kg,
                                                          bsdf->fresnel;
     coeff *= generalized_schlick_fresnel(kg, fresnel, bsdf->ior, cos_theta_i, r_cos_theta_t);
   }
+  else if(bsdf->fresnel_type == MicrofacetFresnel::DIELECTRIC_TINT) {
+    ccl_private FresnelDielectricTint *fresnel = (ccl_private FresnelDielectricTint *)bsdf->fresnel;
+    if (fresnel->thin_film.thickness > THINFILM_THICKNESS_CUTOFF && fresnel->thin_film.weight > CLOSURE_WEIGHT_CUTOFF) {
+      Spectrum F;
+      FOREACH_SPECTRUM_CHANNEL (i) {
+      GET_SPECTRUM_CHANNEL(F, i) = fresnel_iridescence_channel<false>(
+          kg, i, 1.0f, fresnel->thin_film, bsdf->ior, 0.0f, -1.0f, cos_theta_i, r_cos_theta_t);
+      }
+      if (fresnel->thin_film.weight < 1.0f) {
+        const float Fd = fresnel_dielectric(cos_theta_i, bsdf->ior, r_cos_theta_t);
+        F = mix(make_spectrum(Fd), F, fresnel->thin_film.weight);
+      } 
+      coeff *= F;
+    } else {
+      coeff *= fresnel_dielectric(cos_theta_i, bsdf->ior, r_cos_theta_t);
+    }
+    coeff *= fresnel->tint;
+  } else if(bsdf->fresnel_type == MicrofacetFresnel::DIELECTRIC) {
+    coeff *= fresnel_dielectric(cos_theta_i, bsdf->ior, r_cos_theta_t);
+  }
   else if (bsdf->fresnel_type == MicrofacetFresnel::NONE) {
     /* No Fresnel used, this is either purely reflective or purely refractive closure. */
     /* Exclude total internal reflection. */
@@ -445,18 +478,6 @@ ccl_device_forceinline FresnelCoeff microfacet_fresnel(KernelGlobals kg,
       coeff.transmittance = zero_spectrum();
     }
   }
-  else {
-    /* Transmissive dielectric. */
-    coeff *= fresnel_dielectric(cos_theta_i, bsdf->ior, r_cos_theta_t);
-
-    if (bsdf->fresnel_type == MicrofacetFresnel::DIELECTRIC_TINT) {
-      coeff *= ((ccl_private FresnelDielectricTint *)bsdf->fresnel)->tint;
-    }
-    else {
-      kernel_assert(bsdf->fresnel_type == MicrofacetFresnel::DIELECTRIC);
-    }
-  }
-
   return coeff;
 }
 
