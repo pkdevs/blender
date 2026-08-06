@@ -598,8 +598,8 @@ void CopyPixelTile::copy_pixels(ImBuf &tile_buffer, const IndexRange group_range
   else {
     pixels::copy_pixels(tile_buffer.byte_data_for_write(),
                         tile_buffer.x,
-                        groups,
-                        command_deltas.as_span().slice(group_range));
+                        groups.as_span().slice(group_range),
+                        command_deltas);
   }
 }
 
