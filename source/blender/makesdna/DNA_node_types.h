@@ -2072,10 +2072,6 @@ struct bNodeTree {
  */
 
 struct bNodeSocketValueInt {
-#ifdef __cplusplus
-  static constexpr eNodeSocketDatatype socket_type = SOCK_INT;
-#endif
-
   /** RNA subtype. */
   int subtype = 0;
   int value = 0;
@@ -2083,10 +2079,6 @@ struct bNodeSocketValueInt {
 };
 
 struct bNodeSocketValueFloat {
-#ifdef __cplusplus
-  static constexpr eNodeSocketDatatype socket_type = SOCK_FLOAT;
-#endif
-
   /** RNA subtype. */
   int subtype = 0;
   float value = 0;
@@ -2094,18 +2086,10 @@ struct bNodeSocketValueFloat {
 };
 
 struct bNodeSocketValueBoolean {
-#ifdef __cplusplus
-  static constexpr eNodeSocketDatatype socket_type = SOCK_BOOLEAN;
-#endif
-
   char value = 0;
 };
 
 struct bNodeSocketValueVector {
-#ifdef __cplusplus
-  static constexpr eNodeSocketDatatype socket_type = SOCK_VECTOR;
-#endif
-
   /** RNA subtype. */
   int subtype = 0;
   /* Only some of the values might be used depending on the dimensions. */
@@ -2116,10 +2100,6 @@ struct bNodeSocketValueVector {
 };
 
 struct bNodeSocketValueIntVector {
-#ifdef __cplusplus
-  static constexpr eNodeSocketDatatype socket_type = SOCK_INT_VECTOR;
-#endif
-
   /** RNA subtype. */
   int subtype = 0;
   /* Only some of the values might be used depending on the dimensions. */
@@ -2130,116 +2110,60 @@ struct bNodeSocketValueIntVector {
 };
 
 struct bNodeSocketValueRotation {
-#ifdef __cplusplus
-  static constexpr eNodeSocketDatatype socket_type = SOCK_ROTATION;
-#endif
-
   float value_euler[3] = {};
 };
 
 struct bNodeSocketValueRGBA {
-#ifdef __cplusplus
-  static constexpr eNodeSocketDatatype socket_type = SOCK_RGBA;
-#endif
-
   float value[4] = {};
 };
 
 struct bNodeSocketValueString {
-#ifdef __cplusplus
-  static constexpr eNodeSocketDatatype socket_type = SOCK_STRING;
-#endif
-
   int subtype = 0;
   char _pad[4] = {};
   char value[/*FILE_MAX*/ 1024] = "";
 };
 
 struct bNodeSocketValueObject {
-#ifdef __cplusplus
-  static constexpr eNodeSocketDatatype socket_type = SOCK_OBJECT;
-#endif
-
   struct Object *value = nullptr;
 };
 
 struct bNodeSocketValueImage {
-#ifdef __cplusplus
-  static constexpr eNodeSocketDatatype socket_type = SOCK_IMAGE;
-#endif
-
   struct Image *value = nullptr;
 };
 
 struct bNodeSocketValueCollection {
-#ifdef __cplusplus
-  static constexpr eNodeSocketDatatype socket_type = SOCK_COLLECTION;
-#endif
-
   struct Collection *value = nullptr;
 };
 
 struct bNodeSocketValueTexture {
-#ifdef __cplusplus
-  static constexpr eNodeSocketDatatype socket_type = SOCK_TEXTURE;
-#endif
-
   struct Tex *value = nullptr;
 };
 
 struct bNodeSocketValueMaterial {
-#ifdef __cplusplus
-  static constexpr eNodeSocketDatatype socket_type = SOCK_MATERIAL;
-#endif
-
   struct Material *value = nullptr;
 };
 
 struct bNodeSocketValueFont {
-#ifdef __cplusplus
-  static constexpr eNodeSocketDatatype socket_type = SOCK_FONT;
-#endif
-
   struct VFont *value = nullptr;
 };
 
 struct bNodeSocketValueScene {
-#ifdef __cplusplus
-  static constexpr eNodeSocketDatatype socket_type = SOCK_SCENE;
-#endif
-
   struct Scene *value = nullptr;
 };
 
 struct bNodeSocketValueText {
-#ifdef __cplusplus
-  static constexpr eNodeSocketDatatype socket_type = SOCK_TEXT_ID;
-#endif
-
   struct Text *value = nullptr;
 };
 
 struct bNodeSocketValueMask {
-#ifdef __cplusplus
-  static constexpr eNodeSocketDatatype socket_type = SOCK_MASK;
-#endif
-
   struct Mask *value = nullptr;
 };
 
 struct bNodeSocketValueSound {
-#ifdef __cplusplus
-  static constexpr eNodeSocketDatatype socket_type = SOCK_SOUND;
-#endif
-
   struct bSound *value = nullptr;
 };
 
 struct bNodeSocketValueMenu {
-#ifdef __cplusplus
-  static constexpr eNodeSocketDatatype socket_type = SOCK_MENU;
-#endif
-
   /* Default input enum identifier. */
   int value = 0;
   /* #NodeSocketValueMenuRuntimeFlag */
