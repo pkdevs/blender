@@ -118,12 +118,17 @@ template<bool is_transmission> struct EvalCtx {
       return;
     }
 
-#if defined(SRT_CONSTANT_shadow_ray_count)
+#ifndef __BSL__
+#  if defined(SRT_CONSTANT_shadow_ray_count)
     int ray_count = shadow_ray_count;
     int ray_step_count = shadow_ray_step_count;
-#else
+#  else
     int ray_count = uni.uniform_buf.shadow.ray_count;
     int ray_step_count = uni.uniform_buf.shadow.step_count;
+#  endif
+#else
+    int ray_count = 0;      /* TODO Fixme */
+    int ray_step_count = 0; /* TODO Fixme */
 #endif
 
     LightVector lv = light_vector_get(light, is_directional, P);

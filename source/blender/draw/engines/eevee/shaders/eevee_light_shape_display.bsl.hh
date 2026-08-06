@@ -28,23 +28,31 @@ struct ShapeDisplayFragOut {
 float shape_display_light_radiance_get(LightData light)
 {
   if (is_sun_light(light.type)) {
-#ifdef __BSL__
-    float radius = light.sun.shape_radius;
-#else
+#ifndef __BSL__
     float radius = light.sun().shape_radius;
+#else
+    float radius = light.sun.shape_radius;
 #endif
     return M_1_PI * (1.0f + 1.0f / max(radius * radius, 1e-20f));
   }
 
   if (is_area_light(light.type)) {
+#ifndef __BSL__
     float area = light.area().size.x * light.area().size.y * 4.0f;
+#else
+    float area = light.area.size.x * light.area.size.y * 4.0f;
+#endif
     if (light.type == LIGHT_ELLIPSE) {
       area *= M_PI * 0.25f;
     }
     return 1.0f / max(M_PI * area, 1e-20f);
   }
 
+#ifndef __BSL__
   float radius = light.local().local.shape_radius;
+#else
+  float radius = light.local.local.shape_radius;
+#endif
   float area = 4.0f * M_PI * radius * radius;
   return 1.0f / max(M_PI * area, 1e-20f);
 }
@@ -52,10 +60,18 @@ float shape_display_light_radiance_get(LightData light)
 float3 shape_display_light_position_get(const ViewMatrices view, LightData light, float2 quad_pos)
 {
   if (is_area_light(light.type)) {
+#ifndef __BSL__
     return transform_point(light.object_to_world, float3(quad_pos * light.area().size, 0.0f));
+#else
+    return transform_point(light.object_to_world, float3(quad_pos * light.area.size, 0.0f));
+#endif
   }
 
+#ifndef __BSL__
   float radius = light.local().local.shape_radius;
+#else
+  float radius = light.local.local.shape_radius;
+#endif
   float3 center = light.position();
   float3 view_right = view.viewinv[0].xyz;
   float3 view_up = view.viewinv[1].xyz;

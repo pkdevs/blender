@@ -88,12 +88,12 @@ struct Resources {
   {
     [[resource_table]] const Uniform &uni = uniforms;
 
-#ifdef __BSL__
-    int level_min = light.sun.clipmap_lod_min;
-    int level_max = light.sun.clipmap_lod_max;
-#else
+#ifndef __BSL__
     int level_min = light.sun().clipmap_lod_min;
     int level_max = light.sun().clipmap_lod_max;
+#else
+    int level_min = light.sun.clipmap_lod_min;
+    int level_max = light.sun.clipmap_lod_max;
 #endif
     int level_range = level_max - level_min;
     int level_len = level_range + 1;

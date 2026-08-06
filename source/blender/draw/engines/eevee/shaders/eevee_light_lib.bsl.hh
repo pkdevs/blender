@@ -27,10 +27,10 @@ LightVector light_vector_get(LightData light, const bool is_directional, float3 
 {
   LightVector lv;
   if (is_directional) {
-#ifdef __BSL__
-    lv.L = light.sun.direction;
-#else
+#ifndef __BSL__
     lv.L = light.sun().direction;
+#else
+    lv.L = light.sun.direction;
 #endif
     lv.dist = 1.0f;
   }
@@ -47,7 +47,11 @@ LightVector light_vector_get(LightData light, const bool is_directional, float3 
 LightVector light_shape_vector_get(LightData light, const bool is_directional, float3 P)
 {
   if (!is_directional && is_area_light(light.type)) {
+#ifndef __BSL__
     LightAreaData area = light.area();
+#else
+    LightAreaData area = light.area;
+#endif
 
     float3 lP = transform_point_inversed(light.object_to_world, P);
     float2 ls_closest_point = lP.xy;
@@ -92,7 +96,11 @@ float light_influence_attenuation(float dist, float inv_sqr_influence)
 
 float light_spot_attenuation(LightData light, float3 L)
 {
+#ifndef __BSL__
   LightSpotData spot = light.spot();
+#else
+  LightSpotData spot = light.spot;
+#endif
   float3 lL = light_world_to_local_direction(light, L);
   float ellipse = inversesqrt(1.0f + length_squared(lL.xy * spot.spot_size_inv / lL.z));
   float spotmask = smoothstep(0.0f, 1.0f, ellipse * spot.spot_mul + spot.spot_bias);
@@ -115,6 +123,7 @@ float light_attenuation_common(LightData light, const bool is_directional, float
 
 float light_shape_radius(LightData light)
 {
+#ifndef __BSL__
   if (is_sun_light(light.type)) {
     return light.sun().shape_radius;
   }
@@ -122,6 +131,15 @@ float light_shape_radius(LightData light)
     return length(light.area().size);
   }
   return light.local().local.shape_radius;
+#else
+  if (is_sun_light(light.type)) {
+    return light.sun.shape_radius;
+  }
+  if (is_area_light(light.type)) {
+    return length(light.area.size);
+  }
+  return light.local.local.shape_radius;
+#endif
 }
 
 /**
@@ -148,8 +166,13 @@ float light_attenuation_surface(LightData light, const bool is_directional, Ligh
 {
   float result = light_attenuation_common(light, is_directional, lv.L);
   if (!is_directional) {
+#ifndef __BSL__
     result *= light_influence_attenuation(lv.dist,
                                           light.local().local.influence_radius_invsqr_surface);
+#else
+    result *= light_influence_attenuation(lv.dist,
+                                          light.local.local.influence_radius_invsqr_surface);
+#endif
   }
   return result;
 }
@@ -158,8 +181,13 @@ float light_attenuation_volume(LightData light, const bool is_directional, Light
 {
   float result = light_attenuation_common(light, is_directional, lv.L);
   if (!is_directional) {
+#ifndef __BSL__
     result *= light_influence_attenuation(lv.dist,
                                           light.local().local.influence_radius_invsqr_volume);
+#else
+    result *= light_influence_attenuation(lv.dist,
+                                          light.local.local.influence_radius_invsqr_volume);
+#endif
   }
   return result;
 }
@@ -176,13 +204,22 @@ float light_point_light(LightData light, const bool is_directional, LightVector 
    * http://www.cemyuksel.com/research/pointlightattenuation/
    */
   float d_sqr = square(lv.dist);
+
+#ifndef __BSL__
   float r_sqr = square(light.local().local.shape_radius);
+#else
+  float r_sqr = square(light.local.local.shape_radius);
+#endif
   /* Using reformulation that has better numerical precision. */
   float power = 2.0f / (d_sqr + r_sqr + lv.dist * sqrt(d_sqr + r_sqr));
 
   if (is_area_light(light.type)) {
     /* Modulate by light plane orientation / solid angle. */
+#ifndef __BSL__
     power *= saturate(dot(light.z_axis(), lv.L));
+#else
+    power *= saturate(dot(light.z_axis, lv.L));
+#endif
   }
   return power;
 }
@@ -231,6 +268,7 @@ LightVertices light_shape_corners(LightData light, LightVector lv)
     }
 
     float2 size;
+#ifndef __BSL__
     if (is_sphere_light(light.type)) {
       /* Spherical omni or spot light. */
       size = float2(light_sphere_disk_radius(light.local().local.shape_radius, lv.dist));
@@ -246,6 +284,23 @@ LightVertices light_shape_corners(LightData light, LightVector lv)
       /* Area light. */
       size = float2(light.area().size);
     }
+#else
+    if (is_sphere_light(light.type)) {
+      /* Spherical omni or spot light. */
+      size = float2(light_sphere_disk_radius(light.local.local.shape_radius, lv.dist));
+    }
+    else if (is_oriented_disk_light(light.type)) {
+      /* View direction-aligned disk. */
+      size = float2(light.local.local.shape_radius);
+    }
+    else if (is_sun_light(light.type)) {
+      size = float2(light.sun.shape_radius);
+    }
+    else {
+      /* Area light. */
+      size = float2(light.area.size);
+    }
+#endif
 
     vertices.v[0] = Px * -size.x + Py * -size.y;
     vertices.v[1] = Px * size.x + Py * -size.y;
@@ -265,10 +320,17 @@ float light_ltc(sampler2DArray utility_tx,
                 LightVector lv,
                 LightVertices vertices)
 {
+#ifndef __BSL__
   if (is_sphere_light(light.type) && lv.dist < light.local().local.shape_radius) {
     /* Inside the sphere light, integrate over the hemisphere. */
     return 1.0f;
   }
+#else
+  if (is_sphere_light(light.type) && lv.dist < light.local.local.shape_radius) {
+    /* Inside the sphere light, integrate over the hemisphere. */
+    return 1.0f;
+  }
+#endif
 
   if (light.type == LIGHT_RECT) {
     return eevee::ltc::evaluate_quad(utility_tx, ltc_data, vertices.v);

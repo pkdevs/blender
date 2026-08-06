@@ -53,9 +53,17 @@ void cull_main([[resource_table]] Cull &srt,
       light.color = srt.sunlight_buf[l_idx].color;
       light.object_to_world = srt.sunlight_buf[l_idx].object_to_world;
 
+#ifndef __BSL__
       LightSunData sun_data = light.sun();
+#else
+      LightSunData sun_data = light.sun;
+#endif
       sun_data.direction = srt.sunlight_buf[l_idx].object_to_world.z_axis();
+#ifndef __BSL__
       light.sun() = sun_data;
+#else
+      light.sun = sun_data;
+#endif
       /* NOTE: Use the radius from UI instead of auto sun size for now. */
     }
     /* NOTE: We know the index because sun lights are packed at the start of the input buffer. */
@@ -63,16 +71,26 @@ void cull_main([[resource_table]] Cull &srt,
     return;
   }
 
-  /* Do not select 0 power lights. */
+/* Do not select 0 power lights. */
+#ifndef __BSL__
   if (light.local().local.influence_radius_max < 1e-8f) {
     return;
   }
+#else
+  if (light.local.local.influence_radius_max < 1e-8f) {
+    return;
+  }
+#endif
 
   Sphere sphere;
   switch (light.type) {
     case LIGHT_SPOT_SPHERE:
     case LIGHT_SPOT_DISK: {
+#ifndef __BSL__
       LightSpotData spot = light.spot();
+#else
+      LightSpotData spot = light.spot;
+#endif
       /* Only for < ~170 degree Cone due to plane extraction precision. */
       if (spot.spot_tan < 10.0f) {
         float3 x_axis = light.x_axis();

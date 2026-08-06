@@ -697,6 +697,7 @@ vector<SymbolTable::BuiltinFunc> SymbolTable::generate_all_builtin_functions()
 
   /* Special functions */
   functions.push_back({void_cls, "printf", {str_cls}});
+  functions.push_back({void_cls, "static_assert", {bool_cls}});
 
   /* Type definition vectors for vectorized generation */
   const vector<SymbolClass *> f_types = {float_cls, float2_cls, float3_cls, float4_cls};
