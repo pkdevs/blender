@@ -7,23 +7,34 @@ import sys
 from pathlib import Path
 
 
-def dll_path(lib_name, lib_display_name) -> Path:
+def dll_path(lib_name, lib_display_name) -> Path | None:
     """
     Get the library path, that should be at addon root
     :return: library path.
     """
-    library_name = {
-        'win32': '{}.dll'.format(lib_name),
-        'linux': 'lib{}.so'.format(lib_name),
-        'darwin': 'lib{}.dylib'.format(lib_name)
-    }.get(sys.platform)
+    import bpy
 
-    path = os.path.dirname(sys.modules['io_scene_gltf2'].__file__)
-    if path is not None:
-        return Path(os.path.join(path, library_name))
+    if sys.platform == 'win32':
+        library_name = '{}.dll'.format(lib_name)
+        # Bundled beside the add-on's `__init__.py`.
+        base = os.path.dirname(sys.modules['io_scene_gltf2'].__file__)
+    elif sys.platform == 'darwin':
+        library_name = 'lib{}.dylib'.format(lib_name)
+        # Bundled beside the add-on's `__init__.py`.
+        base = os.path.dirname(sys.modules['io_scene_gltf2'].__file__)
+    else:
+        # Linux, BSD & other UNIX-like systems.
+        library_name = 'lib{}.so'.format(lib_name)
+        if (system_libs := bpy.utils.resource_path('SYSTEM_LIBS')):
+            # System installs place the library beside the add-on, under the system-libs path.
+            base = os.path.join(system_libs, 'scripts', 'addons_core', 'io_scene_gltf2')
+        elif local := bpy.utils.resource_path('LOCAL'):
+            # Portable builds bundle the library in `lib`, beside the shared libraries it depends on.
+            base = os.path.join(os.path.dirname(local), 'lib')
+        else:
+            return None
 
-    if library_name is None:
-        print('WARNING', 'Unsupported platform {}, {} is unavailable'.format(sys.platform, lib_display_name))
+    return Path(os.path.join(base, library_name))
 
 
 def dll_exists(lib_name, lib_display_name) -> bool:
@@ -32,6 +43,9 @@ def dll_exists(lib_name, lib_display_name) -> bool:
     :return: True if the DLL exists.
     """
     path = dll_path(lib_name, lib_display_name)
+    if path is None:
+        print('ERROR', '{} is not available because its location could not be determined'.format(lib_display_name))
+        return False
     exists = path.exists() and path.is_file()
     if exists:
         print('INFO', '{} is available, use library at %s'.format(lib_display_name) % path.absolute())

@@ -14,7 +14,7 @@
 #include "BLI_kdtree.hh"
 #include "BLI_math_vector.hh"
 #include "BLI_offset_indices.hh"
-#include "BLI_rect.h"
+#include "BLI_rect.hh"
 #include "BLI_stack.hh"
 #include "BLI_task.hh"
 
@@ -326,13 +326,11 @@ bke::CurvesGeometry curves_merge_by_distance(const bke::CurvesGeometry &src_curv
 
     bke::GSpanAttributeWriter dst_attribute = dst_attributes.lookup_or_add_for_write_only_span(
         iter.name, bke::AttrDomain::Point, iter.data_type);
-    threading::parallel_for(dst_curves.points_range(), 1024, [&](IndexRange range) {
-      bke::attribute_math::mix_groups(GVArraySpan(src_attribute.varray),
-                                      map_offsets.slice(range),
-                                      merge_map_indices,
-                                      std::nullopt,
-                                      dst_attribute.span.slice(range));
-    });
+    bke::attribute_math::mix_groups(GVArraySpan(src_attribute.varray),
+                                    map_offsets,
+                                    merge_map_indices,
+                                    std::nullopt,
+                                    dst_attribute.span);
     dst_attribute.finish();
   });
 

@@ -18,8 +18,8 @@
 #include "DNA_pointcloud_types.h"
 #include "DNA_scene_types.h"
 
-#include "BLI_listbase.h"
-#include "BLI_utildefines.h"
+#include "BLI_listbase.hh"
+#include "BLI_utildefines.hh"
 
 #include "BKE_armature.hh"
 #include "BKE_context.hh"
@@ -507,7 +507,8 @@ void ED_transverts_create_from_obedit(TransVertStore *tvs, const Object *obedit,
     }
   }
   else if (obedit->type == OB_LATTICE) {
-    Lattice *lt = id_cast<Lattice *>(obedit->data);
+    const Object *object_orig = DEG_get_original(obedit);
+    Lattice *lt = id_cast<Lattice *>(object_orig->data);
 
     bp = lt->editlatt->latt->def;
 

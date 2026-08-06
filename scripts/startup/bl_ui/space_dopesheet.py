@@ -522,6 +522,7 @@ class DOPESHEET_MT_cache(Menu):
         col.prop(st, "cache_softbody")
         col.prop(st, "cache_particles")
         col.prop(st, "cache_cloth")
+        col.prop(st, "cache_compositor")
         col.prop(st, "cache_simulation_nodes")
         col.prop(st, "cache_smoke")
         col.prop(st, "cache_dynamicpaint")
@@ -644,6 +645,7 @@ class DOPESHEET_MT_action(Menu):
         layout.operator("anim.separate_slots")
         layout.operator("anim.replace_action")
         layout.operator("anim.replace_action_new")
+        layout.operator("anim.replace_action_duplicate")
 
         layout.separator()
         layout.operator("anim.slot_channels_move_to_new_action")

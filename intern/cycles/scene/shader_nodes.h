@@ -31,11 +31,12 @@ class TextureMapping {
   bool skip();
   void compile(SVMCompiler &compiler,
                const SVMStackOffset offset_in,
-               const SVMStackOffset offset_out);
+               const SVMStackOffset offset_out,
+               ShaderNode *node);
   int compile(SVMCompiler &compiler, ShaderInput *vector_in);
   void compile(OSLCompiler &compiler);
 
-  SVMStackOffset compile_begin(SVMCompiler &compiler, ShaderInput *vector_in);
+  SVMStackOffset compile_begin(SVMCompiler &compiler, ShaderInput *vector_in, ShaderNode *node);
   void compile_end(SVMCompiler &compiler,
                    ShaderInput *vector_in,
                    const SVMStackOffset vector_offset);
@@ -1398,8 +1399,6 @@ class AttributeNode : public ShaderNode {
     return true;
   }
   ShaderNodeType shader_node_type() const override;
-
-  static void add_named_attribute_request(AttributeRequestSet *attributes, ustring attribute);
 
   NODE_SOCKET_API(ustring, attribute)
 

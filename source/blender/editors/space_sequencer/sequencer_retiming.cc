@@ -6,9 +6,9 @@
  * \ingroup spseq
  */
 
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 #include "BLI_map.hh"
-#include "BLI_math_base.h"
+#include "BLI_math_base_c.hh"
 #include "BLI_set.hh"
 
 #include "DNA_scene_types.h"
@@ -482,7 +482,7 @@ void SEQUENCER_OT_retiming_transition_add(wmOperatorType *ot)
               0,
               INT_MAX,
               "Duration",
-              "Duration of freeze frame segment",
+              "Duration of speed transition segment",
               0,
               INT_MAX);
 }
