@@ -70,9 +70,8 @@ ccl_device_inline float3 wavelength_to_rgb_d65(KernelGlobals kg, const float lam
   float3 xyz = mix(make_float3(c[0], c[1], c[2]), make_float3(c[3], c[4], c[5]), f);
   xyz *= mix(cie_d65_spd[i], cie_d65_spd[i + 1], f);
 
-  /* Normalization factor. */
-  constexpr float normalization = (WAVELENGTH_CIE_MAX - WAVELENGTH_CIE_MIN) /
-                                  10.566864005283874576f;
+  /* Normalize so that the CIE D65 spectrum integrates to a luminance of 1. */
+  constexpr float normalization = 0.03785528242588043212890625f;
 
   return xyz_to_rgb(kg, xyz * normalization);
 }

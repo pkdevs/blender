@@ -282,8 +282,7 @@ ccl_device_inline float bsdf_glass_ior(ccl_private ShaderData *sd, float ior, co
   constexpr float fac = 1.0f / (1.0f / (lambda_F * lambda_F) - 1.0f / (lambda_C * lambda_C));
   constexpr float inv_lambda_d_sq = 1.0f / (lambda_d * lambda_d);
 
-  /* Cauchy empirical formula.
-   * OpenPBR Surface specification v1.1.1, Eq. (56). */
+  /* OpenPBR Surface specification v1.1.1, Eq. (56). */
   const float B = (ior - 1.0f) * inv_abbe * fac;
   const float A = ior - B * inv_lambda_d_sq;
 
