@@ -187,13 +187,14 @@ struct BSLParser {
         match(';');
         return curr.is_valid();
       }
+      Token at_semi_colon = curr;
       if (match_if(';')) {
         if (!expect_body) {
           return true; /* Template explicit instantiation. */
         }
-        curr = curr.prev(2); /* For correct error token. */
+        curr = at_semi_colon; /* For correct error token. */
         error("Forward declaration of classes is not supported");
-        curr = curr.next(2);
+        curr = at_semi_colon.next();
         return false;
       }
       if (peek() == Word) {
