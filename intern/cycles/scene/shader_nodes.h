@@ -410,6 +410,19 @@ class WhiteNoiseTextureNode : public ShaderNode {
   NODE_SOCKET_API(float, w)
 };
 
+class FlakesTextureNode : public ShaderNode {
+ public:
+  SHADER_NODE_CLASS(FlakesTextureNode)
+
+  NODE_SOCKET_API(int, dimensions)
+  NODE_SOCKET_API(float3, vector)
+  NODE_SOCKET_API(float, w)
+  NODE_SOCKET_API(float, scale)
+  NODE_SOCKET_API(float, density)
+  NODE_SOCKET_API(float, flake_size)
+  NODE_SOCKET_API(float, randomness)
+};
+
 class MappingNode : public ShaderNode {
  public:
   SHADER_NODE_CLASS(MappingNode)

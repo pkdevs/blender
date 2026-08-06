@@ -1530,6 +1530,59 @@ void WhiteNoiseTextureNode::compile(OSLCompiler &compiler)
   compiler.add(this, "node_white_noise_texture");
 }
 
+/* Flakes Texture */
+
+NODE_DEFINE(FlakesTextureNode)
+{
+  NodeType *type = NodeType::add("flakes_texture", create, NodeType::SHADER);
+
+  static NodeEnum dimensions_enum;
+  dimensions_enum.insert("1D", 1);
+  dimensions_enum.insert("2D", 2);
+  dimensions_enum.insert("3D", 3);
+  dimensions_enum.insert("4D", 4);
+  SOCKET_ENUM(dimensions, "Dimensions", dimensions_enum, 3);
+
+  SOCKET_IN_POINT(vector, "Vector", zero_float3());
+  SOCKET_IN_FLOAT(w, "W", 0.0f);
+  SOCKET_IN_FLOAT(scale, "Scale", 5.0f);
+  SOCKET_IN_FLOAT(density, "Density", 0.5f);
+  SOCKET_IN_FLOAT(flake_size, "Flake Size", 0.5f);
+  SOCKET_IN_FLOAT(randomness, "Randomness", 1.0f);
+
+  SOCKET_OUT_COLOR(color, "Color");
+  SOCKET_OUT_VECTOR(normal, "Normal");
+  SOCKET_OUT_FLOAT(fac, "Fac");
+
+  return type;
+}
+
+FlakesTextureNode::FlakesTextureNode() : ShaderNode(get_node_type()) {}
+
+void FlakesTextureNode::compile(SVMCompiler &compiler)
+{
+  compiler.add_node(this,
+                    NODE_TEX_FLAKES,
+                    SVMNodeTexFlakes{
+                        .dimensions = uint(dimensions),
+                        .vector = compiler.input_float3("Vector"),
+                        .w = compiler.input_float("W"),
+                        .scale = compiler.input_float("Scale"),
+                        .density = compiler.input_float("Density"),
+                        .flake_size = compiler.input_float("Flake Size"),
+                        .randomness = compiler.input_float("Randomness"),
+                        .color_offset = compiler.output("Color"),
+                        .normal_offset = compiler.output("Normal"),
+                        .fac_offset = compiler.output("Fac"),
+                    });
+}
+
+void FlakesTextureNode::compile(OSLCompiler &compiler)
+{
+  compiler.parameter(this, "dimensions");
+  compiler.add(this, "node_flakes_texture");
+}
+
 /* Wave Texture */
 
 NODE_DEFINE(WaveTextureNode)

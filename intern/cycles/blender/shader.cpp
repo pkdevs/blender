@@ -1131,6 +1131,11 @@ static ShaderNode *add_node(Scene *scene,
     white_noise_node->set_dimensions(b_node.custom1);
     node = white_noise_node;
   }
+  else if (b_node.is_type("ShaderNodeTexFlakes"_ustr)) {
+    FlakesTextureNode *flakes_node = graph->create_node<FlakesTextureNode>();
+    flakes_node->set_dimensions(b_node.custom1);
+    node = flakes_node;
+  }
   else if (b_node.is_type("ShaderNodeNormalMap"_ustr)) {
     const auto &storage = *static_cast<blender::NodeShaderNormalMap *>(b_node.storage);
     NormalMapNode *nmap = graph->create_node<NormalMapNode>();

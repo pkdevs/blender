@@ -77,6 +77,7 @@
 #include "kernel/svm/wave.h"
 #include "kernel/svm/wavelength.h"
 #include "kernel/svm/white_noise.h"
+#include "kernel/svm/flakes.h"
 #include "kernel/svm/wireframe.h"
 #include "util/defines.h"
 
@@ -475,6 +476,9 @@ ccl_device void svm_eval_nodes(KernelGlobals kg,
       break;
       SVM_CASE(NODE_TEX_WHITE_NOISE)
       svm_node_tex_white_noise(stack, svm_node_get<SVMNodeTexWhiteNoise>(kg, &offset));
+      break;
+      SVM_CASE(NODE_TEX_FLAKES)
+      svm_node_tex_flakes(stack, svm_node_get<SVMNodeTexFlakes>(kg, &offset));
       break;
       SVM_CASE(NODE_NORMAL)
       svm_node_normal(stack, svm_node_get<SVMNodeNormal>(kg, &offset));
