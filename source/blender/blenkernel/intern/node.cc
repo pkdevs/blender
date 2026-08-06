@@ -3273,7 +3273,7 @@ void *socket_value_new(const eNodeSocketDatatype type, const int subtype)
   return result;
 }
 
-void *socket_value_new_copy(const eNodeSocketDatatype type, const void *src, const bool do_id_user)
+void *socket_value_copy(const eNodeSocketDatatype type, const void *src, const bool do_id_user)
 {
   if (src == nullptr) {
     return nullptr;
@@ -3299,10 +3299,10 @@ void *socket_value_new_copy(const eNodeSocketDatatype type, const void *src, con
   return result;
 }
 
-void socket_value_copy(const eNodeSocketDatatype type,
-                       void *dst,
-                       const void *src,
-                       const bool do_id_user)
+void socket_value_copy_content(const eNodeSocketDatatype type,
+                               void *dst,
+                               const void *src,
+                               const bool do_id_user)
 {
   if (dst == nullptr || src == nullptr) {
     return;
@@ -4305,9 +4305,9 @@ static void node_socket_copy(bNodeSocket *sock_dst, const bNodeSocket *sock_src,
   }
 
   if (sock_src->default_value) {
-    sock_dst->default_value = socket_value_new_copy(eNodeSocketDatatype(sock_src->type),
-                                                    sock_src->default_value,
-                                                    (flag & LIB_ID_CREATE_NO_USER_REFCOUNT) == 0);
+    sock_dst->default_value = socket_value_copy(eNodeSocketDatatype(sock_src->type),
+                                                sock_src->default_value,
+                                                (flag & LIB_ID_CREATE_NO_USER_REFCOUNT) == 0);
   }
 
   sock_dst->default_attribute_name = static_cast<char *>(

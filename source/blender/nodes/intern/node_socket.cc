@@ -724,7 +724,7 @@ static void standard_node_socket_interface_init_socket(
 {
   /* initialize the type value */
   sock->type = sock->typeinfo->type;
-  sock->default_value = bke::socket_value_new_copy(sock->type, interface_socket->socket_data);
+  sock->default_value = bke::socket_value_copy(sock->type, interface_socket->socket_data);
 }
 
 static void standard_node_socket_interface_from_socket(ID * /*id*/,

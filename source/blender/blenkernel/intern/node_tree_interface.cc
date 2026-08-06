@@ -105,7 +105,7 @@ static void socket_data_copy(bNodeTreeInterfaceSocket &dst,
 {
   const bool do_id_user = (flag & LIB_ID_CREATE_NO_USER_REFCOUNT) == 0;
   if (const bNodeSocketType *stype = src.socket_typeinfo()) {
-    dst.socket_data = socket_value_new_copy(stype->type, src.socket_data, do_id_user);
+    dst.socket_data = socket_value_copy(stype->type, src.socket_data, do_id_user);
   }
 }
 
@@ -120,7 +120,7 @@ static void socket_data_copy_ptr(bNodeTreeInterfaceSocket &dst,
 
   const bool do_id_user = (flag & LIB_ID_CREATE_NO_USER_REFCOUNT) == 0;
   if (const bNodeSocketType *stype = dst.socket_typeinfo()) {
-    dst.socket_data = socket_value_new_copy(stype->type, src_socket_data, do_id_user);
+    dst.socket_data = socket_value_copy(stype->type, src_socket_data, do_id_user);
   }
 }
 
@@ -1378,7 +1378,7 @@ bNode *create_proxy_const_input_node(const eNodeSocketDatatype socket_type,
     case SOCK_FLOAT: {
       bNode *node = bke::node_add_node(&C, dst_tree, "ShaderNodeValue"_ustr);
       bNodeSocket *socket = static_cast<bNodeSocket *>(node->outputs.first);
-      socket_value_copy(SOCK_FLOAT, socket->default_value, value);
+      socket_value_copy_content(SOCK_FLOAT, socket->default_value, value);
       anim_basepaths.append(
           {src_property_path, get_socket_property_path(dst_tree, *socket, "default_value")});
       return node;
@@ -1656,7 +1656,7 @@ bNode *create_proxy_converter_node(const eNodeSocketDatatype socket_type,
   BKE_ntree_update_after_single_tree_change(*CTX_data_main(&C), dst_tree);
 
   bNodeSocket *socket = static_cast<bNodeSocket *>(proxy_node->inputs.first);
-  bke::socket_value_copy(socket->type, socket->default_value, src_value);
+  bke::socket_value_copy_content(socket->type, socket->default_value, src_value);
 
   proxy_node->flag |= NODE_COLLAPSED;
 
