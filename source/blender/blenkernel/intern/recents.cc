@@ -41,7 +41,29 @@ static std::atomic<bool> recents_ready{false};
 static std::condition_variable_any recents_init_cv;
 static std::once_flag recents_init_once;
 
-StringRef recents_defaults();
+StringRef recents_defaults()
+{
+  return R"_delim_(
+title = "Saved UI State Settings"
+name = "Blender"
+
+["temp.window.dimensions"]
+_default = [100.0, 900.0, 200.0, 800.0]
+PREFERENCES = [100.0, 940.0, 350.0, 900.0]
+FILE_BROWSER = [100.0, 1160.0, 350.0, 950.0]
+IMAGE_EDITOR = [50.0, 1360.0, 50.0, 830.0]
+GRAPH_EDITOR = [50.0, 950.0, 200.0, 780.0]
+INFO = [100.0, 1000.0, 300.0, 880.0]
+OUTLINER = [100.0, 550.0, 350.0, 800.0]
+
+["panel.sortorder"]
+_default = -1
+
+["panel.open"]
+_default = true
+
+)_delim_";
+}
 
 static std::string recents_file_path()
 {
@@ -319,32 +341,5 @@ template void Section::set<std::vector<double>>(const StringRef item_key,
 template std::vector<float> Section::get<std::vector<float>>(const StringRef item_key) const;
 template void Section::set<std::vector<float>>(const StringRef item_key,
                                                const std::vector<float> &value);
-
-/* Defaults. */
-
-StringRef recents_defaults()
-{
-  static const StringRef s = R"_delim_(
-title = "Saved UI State Settings"
-name = "Blender"
-
-["temp.window.dimensions"]
-_default = [100.0, 900.0, 200.0, 800.0]
-PREFERENCES = [100.0, 940.0, 350.0, 900.0]
-FILE_BROWSER = [100.0, 1160.0, 350.0, 950.0]
-IMAGE_EDITOR = [50.0, 1360.0, 50.0, 830.0]
-GRAPH_EDITOR = [50.0, 950.0, 200.0, 780.0]
-INFO = [100.0, 1000.0, 300.0, 880.0]
-OUTLINER = [100.0, 550.0, 350.0, 800.0]
-
-["panel.sortorder"]
-_default = -1
-
-["panel.open"]
-_default = true
-
-)_delim_";
-  return s;
-}
 
 }  // namespace blender::recents
