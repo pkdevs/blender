@@ -341,13 +341,6 @@ struct CodegenContext : NodeErrorHandler {
 
       int param_count = 0;
       for (Expr param : list.children_of_type<Expr>()) {
-        auto result = ctx.expr(param, scope);
-        if (result.type != sym->arg_types[param_count]) {
-          ctx.error(param,
-                    Diag::InvalidParameterType,
-                    sym->arg_types[param_count]->identifier,
-                    result.type->identifier);
-        }
         params_str += ctx.expr(param, scope).str;
         params_str += ctx.opt_str(param.back().next(), Comma);
         ++param_count;
@@ -1609,7 +1602,9 @@ struct CodegenContext : NodeErrorHandler {
     if (!expr.has_single_child() || expr.parent().parent().type() == NodeType::Condition) {
       return {nullptr, {}};
     }
-    SymbolFunction *fn = scope.lookup_function(table, call.identifier()).unwrap(this);
+
+    SymbolFunction *fn = id_func_resolved_lookup(
+        call.identifier(), call.parameters(), scope, scope);
     if (!fn || !fn->is_inline) {
       return {nullptr, {}};
     }
@@ -1659,10 +1654,7 @@ struct CodegenContext : NodeErrorHandler {
 
       if (arg.is_reference() || var->type->is_opaque) {
         /* Check if reference has no side effect. */
-        auto result = table.expr_type_analysis(scope, param.child_first(), true).unwrap(this);
-        if (result.type != var->type) {
-          error(param, Diag::InvalidParameterType, var->type->identifier, result.type->identifier);
-        }
+        table.expr_type_analysis(scope, param.child_first(), true).unwrap(this);
         var->identifier = expr(param, scope).str;
       }
       else {

@@ -101,7 +101,6 @@ enum class Diag {
   ResourceTableConstructorNotAllowed,
   ReturnOutsideFunction,
   MissingParameterForCall,
-  InvalidParameterType,
   InvalidInlinedFunctionLocation,
   RecursiveInlining,
   InInliningOf,
@@ -265,8 +264,6 @@ static inline std::string_view diagnostic_message_get(Diag diag)
       return "Return statement outside of a function";
     case Diag::RecursiveInlining:
       return "Cannot inline recursive call";
-    case Diag::InvalidParameterType:
-      return "Expected parameter type '{}' but got '{}'";
     case Diag::InvalidInlinedFunctionLocation:
       return "Cannot inline function call inside a compound expression";
     case Diag::InInliningOf:
