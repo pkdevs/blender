@@ -435,7 +435,6 @@ struct wmGizmoGroupType {
   char owner_id[128];
 
   /** Optional, used when drawing a group background with `draw_background`. */
-  float4 background_color;
   float4 outline_color;
 
   /** Poll if gizmo-map should be visible. */
