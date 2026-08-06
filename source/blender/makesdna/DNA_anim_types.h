@@ -431,6 +431,8 @@ struct FCurve {
    * specialized RNA path storage types, this can be much more efficient to work with than the
    * string representation.
    * \note This path does not include FCurve::array_index.
+   * \note This may return empty when an invalid RNA path that cannot be parsed is set, or when the
+   * `rna_path_set` API is skipped.
    */
   ParsedRNAPathRef rna_path_parsed() const;
 
