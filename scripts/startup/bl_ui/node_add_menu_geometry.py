@@ -714,6 +714,7 @@ class NODE_MT_gn_texture_base(node_add_menu.NodeMenu):
         layout = self.layout
         self.node_operator(layout, "ShaderNodeTexBrick")
         self.node_operator(layout, "ShaderNodeTexChecker")
+        self.node_operator(layout, "ShaderNodeTexFlakes")
         self.node_operator(layout, "ShaderNodeTexGabor")
         self.node_operator(layout, "ShaderNodeTexGradient")
         self.node_operator(layout, "GeometryNodeImageTexture")
