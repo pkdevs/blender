@@ -52,43 +52,39 @@
 namespace blender::recents {
 
 class Section {
+  std::string section_;
+
  public:
-  explicit Section(const StringRef sec) : section_(sec.data(), sec.size()) {}
+  explicit Section(std::string section) : section_(std::move(section)) {}
 
-  template<typename T> T get(const StringRef item_key) const;
-  template<typename T> void set(const StringRef item_key, const T &value);
+  template<typename T> T get(const std::string &item_key) const;
+  template<typename T> void set(const std::string &item_key, const T &value);
 
-  void remove(const StringRef item_key);
+  void remove(const std::string &item_key);
   void remove_section();
 
   struct Proxy {
-    Section *section_ptr;
-    std::string key; /* Owning copy of the key */
+    Section *section_ptr_;
+    std::string key_;
 
-    Proxy(Section *section_p, const StringRef key_)
-        : section_ptr(section_p), key(key_.data(), key_.size())
-    {
-    }
+    Proxy(Section *section_p, std::string key) : section_ptr_(section_p), key_(std::move(key)) {}
 
     template<typename T> operator T() const
     {
-      return this->section_ptr->get<T>(StringRef(this->key));
+      return section_ptr_->get<T>(key_);
     }
 
     template<typename T> Proxy &operator=(const T &value)
     {
-      this->section_ptr->set(StringRef(this->key), value);
+      section_ptr_->set(key_, value);
       return *this;
     }
   };
 
-  Proxy operator[](const StringRef item_key)
+  Proxy operator[](const std::string &item_key)
   {
     return Proxy(this, item_key);
   }
-
- private:
-  std::string section_;
 };
 
 void init();
