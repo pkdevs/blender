@@ -65,6 +65,7 @@ struct ClosestPointResult {
  */
 class Tree {
  public:
+  /* Type erased non Embree implementation to avoid extra includes. */
   struct FallbackTree {
     virtual ~FallbackTree() = default;
   };
