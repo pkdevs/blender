@@ -517,6 +517,20 @@ void ED_region_do_draw(bContext *C, ARegion *region)
     at->draw(C, region);
   }
 
+#ifdef WITH_INPUT_IME
+  /* Manage the IME candidate window for the active region based on `cursor_ime`:
+   * - Position returned: start (if no session) or reposition IME.
+   * - nullopt returned: end any active IME session (e.g. exited edit mode).
+   * Deferred during animation playback, keeping `do_ime` set for when it stops. */
+  if (at->cursor_ime && region->runtime->do_ime) {
+    const bScreen *screen = WM_window_get_active_screen(win);
+    if (!screen->animtimer && !screen->scrubbing && region == screen->active_region) {
+      WM_window_IME_region_refresh(win, area, region);
+      region->runtime->do_ime = false;
+    }
+  }
+#endif
+
   /* XXX test: add convention to end regions always in pixel space,
    * for drawing of borders/gestures etc */
   ED_region_pixelspace(region);
@@ -632,6 +646,8 @@ void ED_region_tag_redraw(ARegion *region)
     region->runtime->do_draw &= ~(RGN_DRAW_PARTIAL | RGN_DRAW_NO_REBUILD |
                                   RGN_DRAW_EDITOR_OVERLAYS);
     region->runtime->do_draw |= RGN_DRAW;
+    /* Also refresh the IME cursor position on the next draw. */
+    region->runtime->do_ime = true;
     region->runtime->drawrct = rcti{};
   }
 }
@@ -648,6 +664,8 @@ void ED_region_tag_redraw_no_rebuild(ARegion *region)
   if (region && !(region->runtime->do_draw & (RGN_DRAWING | RGN_DRAW))) {
     region->runtime->do_draw &= ~(RGN_DRAW_PARTIAL | RGN_DRAW_EDITOR_OVERLAYS);
     region->runtime->do_draw |= RGN_DRAW_NO_REBUILD;
+    /* Also refresh the IME cursor position on the next draw. */
+    region->runtime->do_ime = true;
     region->runtime->drawrct = rcti{};
   }
 }
@@ -762,6 +780,22 @@ void ED_area_tag_region_size_update(ScrArea *area, ARegion *changed_region)
       continue;
     }
     ED_region_tag_redraw(following_region);
+  }
+}
+
+void ED_area_hud_region_set_padding_flag(ScrArea *area,
+                                         ARegion *changed_region,
+                                         const bool set_padding)
+{
+  ARegion *hud_region = BKE_area_find_region_type(area, RGN_TYPE_HUD);
+  if (hud_region == nullptr) {
+    return;
+  }
+
+  if (set_padding != bool(hud_region->runtime->flag & bke::ARegionRuntimeFlag::HUD_PADDING)) {
+    SET_FLAG_FROM_TEST(
+        hud_region->runtime->flag, set_padding, bke::ARegionRuntimeFlag::HUD_PADDING);
+    ED_area_tag_region_size_update(area, changed_region);
   }
 }
 
@@ -1549,7 +1583,7 @@ bool ED_region_is_overlap(const int spacetype, const int regiontype)
     case SPACE_VIEW3D:
       if (regiontype == RGN_TYPE_HEADER) {
         /* Only treat as overlapped if there is transparency. */
-        bTheme *theme = ui::theme::theme_get();
+        const bTheme *theme = ui::theme::theme_get();
         return theme->space_view3d.header[3] != 255;
       }
       return ELEM(regiontype,
@@ -1679,6 +1713,9 @@ static void region_rect_recursive(
                     max_ii(0, BLI_rcti_size_y(overlap_remainder) - UI_UNIT_Y / 2));
     region->winrct.xmin = overlap_remainder_margin.xmin + region->runtime->offset_x;
     region->winrct.ymin = overlap_remainder_margin.ymin + region->runtime->offset_y;
+    if (region->runtime->flag & bke::ARegionRuntimeFlag::HUD_PADDING) {
+      region->winrct.ymin += UI_UNIT_Y;
+    }
     region->winrct.xmax = region->winrct.xmin + prefsizex - 1;
     region->winrct.ymax = region->winrct.ymin + prefsizey - 1;
 
@@ -2823,6 +2860,14 @@ void ED_area_newspace(bContext *C, ScrArea *area, int type, const bool skip_regi
     }
 
     ED_area_exit(C, area);
+
+#ifdef WITH_INPUT_IME
+    /* Will be null for newly opened windows (file selector for e.g.). */
+    if (win->runtime && win->runtime->ghostwin) {
+      /* End any active IME session - the old space type's cursor_ime is no longer valid. */
+      WM_window_IME_end(win);
+    }
+#endif
 
     /* restore old area exit callback */
     if (skip_region_exit && area->type) {
@@ -4333,27 +4378,32 @@ static void region_visible_rect_calc(ARegion *region, rcti *rect)
   /* check if a region overlaps with the current one */
   for (; region_iter; region_iter = region_iter->next) {
     if (region != region_iter && region_iter->overlap) {
-      if (BLI_rcti_isect(rect, &region_iter->winrct, nullptr)) {
+      /* Use the region's animated rect so the visible area tracks its slide/fade animation instead
+       * of jumping to the final size at the start or end of the animation. */
+      rcti sibling_rect;
+      ED_region_blend_rect(region_iter, &sibling_rect);
+
+      if (BLI_rcti_isect(rect, &sibling_rect, nullptr)) {
         int alignment = RGN_ALIGN_ENUM_FROM_MASK(region_iter->alignment);
 
         if (ELEM(alignment, RGN_ALIGN_LEFT, RGN_ALIGN_RIGHT)) {
           /* Overlap left, also check 1 pixel offset (2 regions on one side). */
-          if (abs(rect->xmin - region_iter->winrct.xmin) < 2) {
-            rect->xmin = region_iter->winrct.xmax;
+          if (abs(rect->xmin - sibling_rect.xmin) < 2) {
+            rect->xmin = sibling_rect.xmax;
           }
 
           /* Overlap right. */
-          if (abs(rect->xmax - region_iter->winrct.xmax) < 2) {
-            rect->xmax = region_iter->winrct.xmin;
+          if (abs(rect->xmax - sibling_rect.xmax) < 2) {
+            rect->xmax = sibling_rect.xmin;
           }
         }
         else if (ELEM(alignment, RGN_ALIGN_TOP, RGN_ALIGN_BOTTOM)) {
           /* Same logic as above for vertical regions. */
-          if (abs(rect->ymin - region_iter->winrct.ymin) < 2) {
-            rect->ymin = region_iter->winrct.ymax;
+          if (abs(rect->ymin - sibling_rect.ymin) < 2) {
+            rect->ymin = sibling_rect.ymax;
           }
-          if (abs(rect->ymax - region_iter->winrct.ymax) < 2) {
-            rect->ymax = region_iter->winrct.ymin;
+          if (abs(rect->ymax - sibling_rect.ymax) < 2) {
+            rect->ymax = sibling_rect.ymin;
           }
         }
         else if (alignment == RGN_ALIGN_FLOAT) {
@@ -4422,7 +4472,7 @@ void ED_region_cache_draw_curfra_label(const int framenr, const float x, const f
       &rect, bg_color, nullptr, 1.0f, outline_color, U.pixelsize, 3 * UI_SCALE_FAC);
 
   /* Text label. */
-  ui::theme::font_theme_color_set(fontid, TH_HEADER_TEXT_HI);
+  ui::theme::font_theme_color_set(fontid, TH_TEXT_HI);
   BLF_position(fontid, x - text_dims.x * 0.5f, y + padding, 0.0f);
   BLF_draw(fontid, numstr, sizeof(numstr));
 }

@@ -590,6 +590,7 @@ class USERPREF_PT_edit_sequence_editor(EditingPanel, CenterAlignMixIn, Panel):
         edit = prefs.edit
 
         layout.prop(edit, "connect_strips_by_default")
+        layout.prop(edit, "clamp_strips_by_default")
 
 
 class USERPREF_PT_edit_misc(EditingPanel, CenterAlignMixIn, Panel):
@@ -681,10 +682,13 @@ class USERPREF_PT_animation_timeline_advanced(AnimationPanel, CenterAlignMixIn, 
         edit = prefs.edit
 
         layout.prop(edit, "use_negative_frames")
-        row = layout.row(align=False)
-        row.active = edit.use_negative_frames
-        row.alignment = 'RIGHT'
-        row.label(icon='STATUS_WARNING', text="Negative frames can cause issues with audio playback and exporters.")
+        split = layout.split(factor=0.4)
+        split.active = edit.use_negative_frames
+        split.separator()
+        split.label_multiline(
+            icon='STATUS_WARNING_FILLED',
+            text="Negative frames can cause issues with audio playback and exporters.",
+            alignment='LEFT')
 
 
 # -----------------------------------------------------------------------------
@@ -877,7 +881,7 @@ class USERPREF_PT_system_memory(SystemPanel, CenterAlignMixIn, Panel):
         layout.separator()
 
         col = layout.column()
-        col.prop(system, "geometry_nodes_stack_limit")
+        col.prop(system, "nodes_stack_limit")
 
 
 class USERPREF_PT_system_video_sequencer(SystemPanel, CenterAlignMixIn, Panel):
@@ -956,6 +960,12 @@ class USERPREF_PT_viewport_quality(ViewportPanel, CenterAlignMixIn, Panel):
         col = layout.column(heading="Smooth Wires")
         col.prop(system, "use_overlay_smooth_wire", text="Overlay")
         col.prop(system, "use_edit_mode_smooth_wire", text="Edit Mode")
+
+        import gpu
+
+        col = layout.column(heading="Shadows")
+        col.active = gpu.capabilities.ray_query_support_get()
+        col.prop(system, "use_rt_shadows", text="Hardware Raytracing")
 
 
 class USERPREF_PT_viewport_textures(ViewportPanel, CenterAlignMixIn, Panel):
@@ -2314,13 +2324,6 @@ class USERPREF_PT_extensions_repos(Panel):
             split.prop(active_repo, "remote_url", text="", icon='INTERNET', placeholder="Repository URL")
             split = row.split()
 
-            if active_repo.use_access_token:
-                access_token_icon = 'LOCKED' if active_repo.access_token else 'UNLOCKED'
-                row = layout.row()
-                split = row.split(factor=0.936)
-                split.prop(active_repo, "access_token", icon=access_token_icon)
-                split = row.split()
-
             layout.prop(active_repo, "use_sync_on_startup")
 
         layout_header, layout_panel = layout.panel("advanced", default_closed=True)
@@ -2348,8 +2351,12 @@ class USERPREF_PT_extensions_repos(Panel):
                 sub.prop(active_repo, "directory", text="")
 
             if use_remote_url:
-                row = layout_panel.row(align=True, heading="Authentication")
-                row.prop(active_repo, "use_access_token")
+                col = layout_panel.column(align=True, heading="Authentication")
+                col.prop(active_repo, "use_access_token")
+
+                if active_repo.use_access_token:
+                    access_token_icon = 'LOCKED' if active_repo.access_token else 'UNLOCKED'
+                    col.prop(active_repo, "access_token", icon=access_token_icon)
 
                 layout_panel.prop(active_repo, "use_cache")
             else:
@@ -2405,7 +2412,6 @@ class USERPREF_PT_addons(AddOnPanel, Panel):
     _support_icon_mapping = {
         'OFFICIAL': 'BLENDER',
         'COMMUNITY': 'COMMUNITY',
-        'TESTING': 'EXPERIMENTAL',
     }
 
     @staticmethod

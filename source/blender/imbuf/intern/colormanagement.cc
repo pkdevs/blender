@@ -6,6 +6,7 @@
  * \ingroup imbuf
  */
 
+#include "BLI_utility_mixins.hh"
 #include "IMB_colormanagement.hh"
 #include "IMB_colormanagement_intern.hh"
 
@@ -122,14 +123,24 @@ float3x3 global_scene_linear_to_xyz_default = float3x3::zero();
  */
 static pthread_mutex_t processor_lock = BLI_MUTEX_INITIALIZER;
 
-static struct GlobalGPUState {
+static struct GlobalGPUState : NonCopyable {
   GlobalGPUState() = default;
 
   ~GlobalGPUState()
   {
+    reset();
+  }
+
+  void reset()
+  {
+    gpu_shader_bound = false;
     if (curve_mapping) {
       BKE_curvemapping_free(curve_mapping);
+      curve_mapping = nullptr;
     }
+    orig_curve_mapping = nullptr;
+    use_curve_mapping = false;
+    curve_mapping_timestamp = 0;
   }
 
   /* GPU shader currently bound. */
@@ -348,7 +359,7 @@ void colormanagement_init()
 
 void colormanagement_exit()
 {
-  global_gpu_state = GlobalGPUState();
+  global_gpu_state.reset();
   global_color_picking_state = GlobalColorPickingState();
 
   colormanage_free_config();
@@ -2261,14 +2272,6 @@ ImBuf *IMB_colormanagement_imbuf_for_write(ImBuf *ibuf,
 {
   ImBuf *colormanaged_ibuf = ibuf;
 
-  /* Update byte buffer if exists but invalid. */
-  if (ibuf->float_data() && ibuf->byte_data() &&
-      (ibuf->userflags & (IB_DISPLAY_BUFFER_INVALID | IB_RECT_INVALID)) != 0)
-  {
-    IMB_byte_from_float(ibuf);
-    ibuf->userflags &= ~(IB_RECT_INVALID | IB_DISPLAY_BUFFER_INVALID);
-  }
-
   /* Detect if we are writing to a file format that needs a linear float buffer. */
   const bool linear_float_output = BKE_imtype_requires_linear_float(image_format->imtype);
 
@@ -2276,6 +2279,12 @@ ImBuf *IMB_colormanagement_imbuf_for_write(ImBuf *ibuf,
    * with color management conversions applied. This may be for either applying the
    * display transform for renders, or a user specified color space for the file. */
   const bool byte_output = BKE_image_format_is_byte(image_format);
+
+  /* Create temporary byte image buffer if we are saving byte as float. */
+  if (byte_output && ibuf->float_data() && ibuf->byte_data()) {
+    colormanaged_ibuf = imbuf_ensure_editable(ibuf, colormanaged_ibuf, allocate_result);
+    IMB_free_byte_pixels(colormanaged_ibuf);
+  }
 
   /* If we're saving from RGBA to RGB buffer then it's not so much useful to just ignore alpha --
    * it leads to bad artifacts especially when saving byte images.
@@ -2340,7 +2349,7 @@ ImBuf *IMB_colormanagement_imbuf_for_write(ImBuf *ibuf,
     /* Linear render or regular file output: conversion between two color spaces. */
 
     /* Detect which color space we need to convert between. */
-    const char *from_colorspace = imbuf_colorspace_name(ibuf, byte_output);
+    const char *from_colorspace = imbuf_colorspace_name(colormanaged_ibuf, byte_output);
     const char *to_colorspace = image_format->linear_colorspace_settings.name;
 
     /* to_colorspace may need to modified to compensate for 100 vs 203 nits conventions. */
@@ -2355,9 +2364,10 @@ ImBuf *IMB_colormanagement_imbuf_for_write(ImBuf *ibuf,
     /* TODO: can we check with OCIO if color spaces are the same but have different names? */
     if (to_colorspace[0] == '\0' || STREQ(from_colorspace, to_colorspace)) {
       /* No conversion needed, but may still need to allocate byte buffer for output. */
-      if (byte_output && !ibuf->byte_data()) {
-        ibuf->byte_buffer.colorspace = ibuf->float_buffer.colorspace;
-        IMB_byte_from_float(ibuf);
+      if (byte_output && !colormanaged_ibuf->byte_data()) {
+        colormanaged_ibuf = imbuf_ensure_editable(ibuf, colormanaged_ibuf, allocate_result);
+        colormanaged_ibuf->byte_buffer.colorspace = colormanaged_ibuf->float_buffer.colorspace;
+        IMB_byte_from_float(colormanaged_ibuf);
       }
     }
     else {
