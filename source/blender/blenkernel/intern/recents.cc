@@ -21,10 +21,12 @@
 #include "BKE_global.hh"
 #include "BKE_recents.hh"
 
-#include "BLI_fileops.h"
+#include "BLI_fileops.hh"
 #include "BLI_mutex.hh"
 #include "BLI_path_utils.hh"
-#include "BLI_time.h"
+#include "BLI_time.hh"
+
+#include "BLI_timeit.hh"
 
 namespace blender::recents {
 
@@ -39,7 +41,7 @@ static std::atomic<bool> recents_ready{false};
 static std::condition_variable_any recents_init_cv;
 static std::once_flag recents_init_once;
 
-const StringRef &recents_defaults();
+StringRef recents_defaults();
 
 static std::string recents_file_path()
 {
@@ -60,6 +62,7 @@ static void recents_print_errors(const std::vector<toml::error_info> &errors)
 
 static void recents_init_impl()
 {
+  SCOPED_TIMER_AVERAGED("recents_init");
   toml::result default_result = toml::try_parse_str(recents_defaults(), version);
   if (default_result.is_ok()) {
     std::lock_guard<Mutex> lock(recents_mutex);
@@ -319,7 +322,7 @@ template void Section::set<std::vector<float>>(const StringRef item_key,
 
 /* Defaults. */
 
-const StringRef &recents_defaults()
+StringRef recents_defaults()
 {
   static const StringRef s = R"_delim_(
 title = "Saved UI State Settings"
