@@ -46,7 +46,6 @@
 #pragma once
 
 #include <string>
-#include <vector>
 
 #include "BLI_string_ref.hh"
 
