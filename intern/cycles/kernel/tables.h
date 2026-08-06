@@ -41,8 +41,10 @@ ccl_inline_constant float blackbody_table_b[][4] = {
 /* CIE1931 visible wavelength range in um. */
 #define WAVELENGTH_CIE_MIN 0.38f
 #define WAVELENGTH_CIE_MAX 0.78f
+/* Wavelength steps in um. */
 #define WAVELENGTH_DLAMBDA 0.005f
-#define WAVELENGTH_RESOLUTION 80 /* = (0.78 - 0.38) / 0.005 */
+/* Table resolution, (WAVELENGTH_CIE_MAX - WAVELENGTH_CIE_MIN) / WAVELENGTH_DLAMBDA */
+#define WAVELENGTH_RESOLUTION 80
 
 /* CIE 1931 colour-matching functions, 2 degree observer
  * x, y, and z for wavelengths from 380 to 780 nm, 5 nm wavelength steps.
@@ -77,6 +79,10 @@ ccl_inline_constant float cie_color_match[][3] = {
   {0.0002f, 0.0001f, 0.0000f}, {0.0002f, 0.0001f, 0.0000f}, {0.0001f, 0.0000f, 0.0000f},
   {0.0001f, 0.0000f, 0.0000f}, {0.0001f, 0.0000f, 0.0000f}, {0.0000f, 0.0000f, 0.0000f}
 };
+
+/* Normalization factor so that the D65 spectrum integrates to a luminance of 1.0 under
+ * CIE1931 2 degree observer. */
+#define CIE_D65_NORMALIZATION 0.03785528242588043212890625f
 
 /* Spectral power distribution of D65, wavelengths from 380 to 780 nm, 5 nm wavelength steps.
  * https://doi.org/10.25039/CIE.DS.hjfjmt59
