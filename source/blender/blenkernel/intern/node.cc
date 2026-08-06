@@ -3279,10 +3279,11 @@ void *socket_value_copy(const eNodeSocketDatatype type, const void *src, const b
     return nullptr;
   }
   void *result = nullptr;
+  constexpr const char *func = __func__;
   socket_data_to_static_type(type, [&]<typename T>() {
     const T &src_value = *static_cast<const T *>(src);
     if constexpr (std::is_same_v<T, bNodeSocketValueMenu>) {
-      T *dst = MEM_new<T>("copy menu socket value", src_value);
+      T *dst = MEM_new<T>(func, src_value);
       /* Copy of shared data pointer. */
       if (dst->enum_items) {
         dst->enum_items->add_user();
@@ -3290,7 +3291,7 @@ void *socket_value_copy(const eNodeSocketDatatype type, const void *src, const b
       result = dst;
     }
     else {
-      result = MEM_new<T>("copy socket value", src_value);
+      result = MEM_new<T>(func, src_value);
     }
   });
   if (do_id_user) {
