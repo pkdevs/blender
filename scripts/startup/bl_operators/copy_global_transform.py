@@ -747,6 +747,11 @@ class OBJECT_OT_fix_to_camera(FixToCameraCommon, Operator):
                     last_camera_name = scene.camera.name
 
                 for t, camera_rel_matrix in matrices.items():
+                    if isinstance(t, TransformableObject) and t.object == scene.camera:
+                        # Avoid fixing the camera to itself. We don't want to implode the universe.
+                        # This has to happen here, as each frame can have a different active camera.
+                        continue
+
                     key_info = t.key_info()
                     key_type = key_info.get(frame, "")
                     if key_type not in {self.keytype, ""}:
