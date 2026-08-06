@@ -80,16 +80,12 @@ void ED_gizmo_button2d_group_background(const bContext *C, wmGizmoGroup *gzgroup
 
   float background_color[4];
   ui::theme::get_color_4fv(TH_HEADER, background_color);
+  background_color[3] += 0.3f;
   /* A bit of padding above and below. */
   BLI_rctf_pad(&draw_rect, 0.0f, rad * 0.2f);
   ui::draw_roundbox_corner_set(ui::CNR_ALL);
-  ui::draw_roundbox_4fv_ex(&draw_rect,
-                           background_color,
-                           nullptr,
-                           1.0f,
-                           gzgroup->type->outline_color,
-                           U.pixelsize,
-                           rad);
+  ui::draw_roundbox_4fv_ex(
+      &draw_rect, background_color, nullptr, 1.0f, gzgroup->type->outline_color, U.pixelsize, rad);
 }
 
 /* -------------------------------------------------------------------- */
@@ -324,7 +320,6 @@ static void button2d_draw_intern(const bContext *C,
       GPU_polygon_smooth(false);
 
       uchar icon_color[4];
-      View3D *v3d = CTX_wm_view3d(C);
 
       ui::theme::get_color_4ubv(highlight ? TH_TEXT_HI : TH_TEXT, icon_color);
 
