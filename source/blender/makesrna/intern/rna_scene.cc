@@ -9153,6 +9153,15 @@ void RNA_def_scene(BlenderRNA *brna)
   RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
   RNA_def_property_update(prop, NC_SCENE, "rna_Scene_set_update");
 
+  prop = RNA_def_property(srna, "draw_scene_relative_time", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, nullptr, "flag", SCE_DRAW_TIME_SCENE_RELATIVE);
+  RNA_def_property_ui_text(
+      prop,
+      "Draw Scene Relative Time",
+      "Draw the frame numbers and lines relative to the start frame of the scene");
+  RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
+  RNA_def_property_update(prop, NC_SCENE, "rna_Scene_set_update");
+
   prop = RNA_def_property(srna, "simulation_frame_start", PROP_INT, PROP_NONE);
   RNA_def_property_ui_text(prop, "Simulation Frame Start", "Frame at which simulations start");
   RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);

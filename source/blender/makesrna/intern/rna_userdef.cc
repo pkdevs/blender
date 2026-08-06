@@ -5446,14 +5446,6 @@ static void rna_def_userdef_view(BlenderRNA *brna)
   RNA_def_property_range(prop, 0.0, 10000.0);
   RNA_def_property_ui_text(prop, "Zoom Seconds", "Seconds around cursor that we zoom around");
 
-  prop = RNA_def_property(srna, "use_scene_relative_timecode", PROP_BOOLEAN, PROP_NONE);
-  RNA_def_property_boolean_sdna(prop, nullptr, "uiflag2", USER_UIFLAG2_SCENE_RELATIVE_TIMECODE);
-  RNA_def_property_ui_text(prop,
-                           "Scene Relative Timecode",
-                           "Draw timecode and vertical lines starting from the scene's "
-                           "start frame instead of zero.");
-  RNA_def_property_update(prop, 0, "rna_userdef_update");
-
   /* Text. */
 
   prop = RNA_def_property(srna, "use_text_antialiasing", PROP_BOOLEAN, PROP_NONE);

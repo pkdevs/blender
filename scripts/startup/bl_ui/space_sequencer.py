@@ -479,6 +479,7 @@ class SEQUENCER_MT_view(Menu):
 
         layout.separator()
         layout.prop(st, "show_seconds")
+        layout.prop(context.scene, "draw_scene_relative_time")
 
         if is_sequencer_view:
 

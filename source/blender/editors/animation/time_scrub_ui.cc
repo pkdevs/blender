@@ -69,7 +69,7 @@ static void get_current_time_str(
     const Scene *scene, bool display_seconds, const float frame, char *r_str, uint str_maxncpy)
 {
   if (display_seconds) {
-    float offset = (U.uiflag2 & USER_UIFLAG2_SCENE_RELATIVE_TIMECODE) ? scene->r.sfra : 0;
+    float offset = scene->flag & SCE_DRAW_TIME_SCENE_RELATIVE ? scene->r.sfra : 0;
     float seconds = BKE_frame_to_seconds_get(scene, frame - offset, true);
     BLI_timecode_string_from_time(
         r_str, str_maxncpy, -1, seconds, scene->frames_per_second(), U.timecode_style);

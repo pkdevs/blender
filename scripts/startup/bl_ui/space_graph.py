@@ -239,6 +239,7 @@ class GRAPH_MT_view(Menu):
             layout.prop(st, "show_markers")
         layout.prop(st, "show_cursor")
         layout.prop(st, "show_seconds")
+        layout.prop(context.scene, "draw_scene_relative_time")
         layout.prop(st, "show_locked_time")
         layout.separator()
 

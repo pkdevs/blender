@@ -2797,6 +2797,8 @@ enum eScene_Flag : int {
   SCE_KEYS_NO_SELONLY = 1 << 4,
   SCE_READFILE_LIBLINK_NEED_SETSCENE_CHECK = 1 << 5,
   SCE_CUSTOM_SIMULATION_RANGE = 1 << 6,
+  /* Draw the lines and numbers relative to the scene start frame. */
+  SCE_DRAW_TIME_SCENE_RELATIVE = 1 << 7,
 };
 ENUM_OPERATORS(eScene_Flag)
 
@@ -2846,7 +2848,7 @@ struct Scene {
   DNA_DEPRECATED int layact = 0;
   char _pad2[4] = {};
 
-  /** Various settings. */
+  /** Various settings. See eScene_Flag. */
   short flag = 0;
 
   DNA_DEPRECATED char use_nodes = 0;

@@ -433,7 +433,7 @@ static void frame_to_time_string(
   if (U.timecode_style == USER_TIMECODE_MINIMAL && step >= scene->frames_per_second()) {
     brevity_level = 1;
   }
-  float offset = (U.uiflag2 & USER_UIFLAG2_SCENE_RELATIVE_TIMECODE) ? scene->r.sfra : 0;
+  float offset = (scene->flag & SCE_DRAW_TIME_SCENE_RELATIVE) ? scene->r.sfra : 0;
   float seconds = BKE_frame_to_seconds_get(scene, frame - offset, false);
   BLI_timecode_string_from_time(
       r_str, str_maxncpy, brevity_level, seconds, scene->frames_per_second(), U.timecode_style);
@@ -563,7 +563,7 @@ void view2d_draw_lines_x_frames(const View2D *v2d,
                                 const bool draw_minor_lines)
 {
   const int fps = round_db_to_int(scene->frames_per_second());
-  const bool use_scene_relative = (U.uiflag2 & USER_UIFLAG2_SCENE_RELATIVE_TIMECODE);
+  const bool use_scene_relative = scene->flag & SCE_DRAW_TIME_SCENE_RELATIVE;
   const float offset = (display_seconds && use_scene_relative) ? scene->r.sfra : 0;
   view2d_draw_lines_x(v2d, scene, display_seconds, show_fractions, draw_minor_lines, offset, fps);
 }
@@ -623,7 +623,7 @@ void view2d_draw_scale_x(const ARegion *region,
   }
 
   if (display_seconds) {
-    float offset = (U.uiflag2 & USER_UIFLAG2_SCENE_RELATIVE_TIMECODE) ? scene->r.sfra : 0;
+    float offset = (scene->flag & SCE_DRAW_TIME_SCENE_RELATIVE) ? scene->r.sfra : 0;
     draw_horizontal_scale_indicators(
         region, v2d, step, offset, rect, frame_to_time_string, scene, colorid);
   }

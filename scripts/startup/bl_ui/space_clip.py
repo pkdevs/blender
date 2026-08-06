@@ -1354,6 +1354,7 @@ class CLIP_MT_view(Menu):
 
             layout.separator()
             layout.prop(sc, "show_seconds")
+            layout.prop(context.scene, "draw_scene_relative_time")
             layout.prop(sc, "show_locked_time")
 
         layout.separator()

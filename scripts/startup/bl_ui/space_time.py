@@ -141,6 +141,7 @@ class TIME_MT_view(Menu):
         layout.separator()
         layout.prop(st, "show_markers")
         layout.prop(st, "show_seconds")
+        layout.prop(scene, "draw_scene_relative_time")
         layout.prop(st, "show_locked_time")
         layout.separator()
         layout.prop(scene, "show_keys_from_selected_only")
