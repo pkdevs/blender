@@ -218,7 +218,8 @@ static void add_mesh_faces(const BvhBuildContext &ctx,
       exec_mode::grain_size(1024));
 
   /* If #rtcSetSharedGeometryBuffer could be used, remapping to avoid copying unnecessary
-   * vertex positions could be unnecessary. */
+   * vertex positions could be unnecessary. Sharing the buffer currently doesn't work because
+   * Embree must load past the end of the buffer for SIMD loads. */
   float3 *positions_ptr = static_cast<float3 *>(rtcSetNewGeometryBuffer(
       geom_id, RTC_BUFFER_TYPE_VERTEX, 0, RTC_FORMAT_FLOAT3, sizeof(float3), used_verts.size()));
   array_utils::gather<float3>(positions, used_verts.as_span(), {positions_ptr, used_verts.size()});
