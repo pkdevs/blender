@@ -23,8 +23,9 @@ namespace bke::bvh {
 
 struct Ray {
   float3 origin;
+  /* The ray direction does not have to be normalized. */
   float3 direction;
-  /* End of ray segment relative to ray length. */
+  /* Scale factor for the ray direction (the ray length if the direction is normalized). */
   float dist_max = std::numeric_limits<float>::max();
 
   Ray() = default;
@@ -40,6 +41,7 @@ struct RayHit {
   float3 normal;
   /** Triangle barycentric coordinates of the hit. */
   float3 bary_coord;
+  /** Index of the hit element (i.e. triangle). */
   int index;
   float distance;
   float3 position(const Ray &ray) const
@@ -53,6 +55,7 @@ struct ClosestPointResult {
   float3 position;
   /** Triangle barycentric coordinates of the closest point. */
   float3 bary_coord;
+  /** Index of the closest element. */
   uint32_t index;
   /* Currently unused. */
   uint32_t geomID;
@@ -94,8 +97,6 @@ class Tree {
   /**
    * Create a BVH tree from a subset of the mesh faces. #from_single_mesh should be used when all
    * faces are contained in the mask.
-   * \param tris_num: Pre-calculated number of triangles in the mask, technically redundant with
-   * the mask, but passed as an argument to avoid recalculating it.
    */
   static Tree from_tris(const Mesh &mesh, const IndexMask &mask, bool map_global_indices);
   /** Create a BVH tree from the entire mesh. */
@@ -111,7 +112,7 @@ class Tree {
   std::optional<ClosestPointResult> closest_point(
       const float3 &point, float radius = std::numeric_limits<float>::max()) const;
 
-  /** Call a callback for every point within a given radius. */
+  /** Call a callback for every element within a given radius. */
   void range_query(const float3 &point, const float radius, FunctionRef<bool(int)> fn) const;
 
  private:
