@@ -47,6 +47,65 @@ namespace blender::ui {
  * information, for example the Graph Editor. */
 constexpr int subframe_range = 100;
 
+/**
+ * Generates a timecode string with the time represented by `frame`.
+ * The timecode formatting depends on the user preferences.
+ */
+static void frame_to_time_string(
+    const Scene *scene, const float frame, const float step, char *r_str, const uint str_maxncpy)
+{
+  int brevity_level = -1;
+  if (U.timecode_style == USER_TIMECODE_MINIMAL && step >= scene->frames_per_second()) {
+    brevity_level = 1;
+  }
+  const float offset = (scene->flag & SCE_DRAW_TIME_SCENE_RELATIVE) ? scene->r.sfra : 0;
+  float seconds = BKE_frame_to_seconds_get(scene, frame - offset, false);
+  BLI_timecode_string_from_time(
+      r_str, str_maxncpy, brevity_level, seconds, scene->frames_per_second(), U.timecode_style);
+}
+
+/**
+ * Generates a string based on the given `frame`.
+ * Depending on `step` the returned string has 0 - 3 decimal positions.
+ */
+static void frame_to_string(
+    const Scene *scene, const float frame, const float step, char *r_str, const uint str_maxncpy)
+{
+  const float offset_frame = (scene->flag & SCE_DRAW_TIME_SCENE_RELATIVE) ? frame - scene->r.sfra :
+                                                                            frame;
+  if (step >= 1.0f) {
+    BLI_snprintf_utf8(r_str, str_maxncpy, "%d", int(offset_frame));
+  }
+  else if (step >= 0.5f) {
+    BLI_snprintf_utf8(r_str, str_maxncpy, "%.1f", offset_frame);
+  }
+  else if (step >= 0.01f) {
+    BLI_snprintf_utf8(r_str, str_maxncpy, "%.2f", offset_frame);
+  }
+  else {
+    BLI_snprintf_utf8(r_str, str_maxncpy, "%.3f", offset_frame);
+  }
+}
+
+static void value_to_string(const float value,
+                            const float step,
+                            char *r_str,
+                            const uint str_maxncpy)
+{
+  if (step >= 1.0f) {
+    BLI_snprintf_utf8(r_str, str_maxncpy, "%d", int(value));
+  }
+  else if (step >= 0.5f) {
+    BLI_snprintf_utf8(r_str, str_maxncpy, "%.1f", value);
+  }
+  else if (step >= 0.01f) {
+    BLI_snprintf_utf8(r_str, str_maxncpy, "%.2f", value);
+  }
+  else {
+    BLI_snprintf_utf8(r_str, str_maxncpy, "%.3f", value);
+  }
+}
+
 /* This essentially performs a special prime factor decomposition where it can only use 2, 3 and 5
  * as prime factors. Divisions that result in 2 are preferred. */
 static int get_divisor(const int distance)
@@ -315,7 +374,6 @@ using PositionToString =
 static void draw_horizontal_scale_indicators(const ARegion *region,
                                              const View2D *v2d,
                                              const float distance,
-                                             const float offset,
                                              const rcti *rect,
                                              PositionToString to_string,
                                              const Scene *scene,
@@ -324,10 +382,10 @@ static void draw_horizontal_scale_indicators(const ARegion *region,
   if (view2d_scale_get_x(v2d) <= 0.0f) {
     return;
   }
-
   float start_value;
   uint steps;
   {
+    const float offset = (scene->flag & SCE_DRAW_TIME_SCENE_RELATIVE) ? scene->r.sfra : 0;
     const float2 view_bounds = {view2d_region_to_view_x(v2d, rect->xmin),
                                 view2d_region_to_view_x(v2d, rect->xmax)};
     get_parallel_lines_draw_steps(distance, offset, view_bounds, &start_value, &steps);
@@ -364,8 +422,6 @@ static void draw_vertical_scale_indicators(const ARegion *region,
                                            float distance,
                                            float display_offset,
                                            const rcti *rect,
-                                           PositionToString to_string,
-                                           const Scene *scene,
                                            int colorid)
 {
   if (view2d_scale_get_y(v2d) <= 0.0f) {
@@ -408,7 +464,7 @@ static void draw_vertical_scale_indicators(const ARegion *region,
     const float ypos_view = start + i * distance;
     const float ypos_region = view2d_view_to_region_y(v2d, ypos_view + display_offset);
     char text[32];
-    to_string(scene, ypos_view, distance, text, sizeof(text));
+    value_to_string(ypos_view, distance, text, sizeof(text));
 
     if (ypos_region - y_offset >= ymin && ypos_region + y_offset <= ymax) {
       BLF_draw_default(xpos, ypos_region - y_offset, 0.0f, text, sizeof(text));
@@ -420,47 +476,6 @@ static void draw_vertical_scale_indicators(const ARegion *region,
   BLF_batch_draw_end();
 
   GPU_matrix_pop_projection();
-}
-
-/**
- * Generates a timecode string with the time represented by `frame`.
- * The timecode formatting depends on the user preferences.
- */
-static void frame_to_time_string(
-    const Scene *scene, const float frame, const float step, char *r_str, const uint str_maxncpy)
-{
-  int brevity_level = -1;
-  if (U.timecode_style == USER_TIMECODE_MINIMAL && step >= scene->frames_per_second()) {
-    brevity_level = 1;
-  }
-  float offset = (scene->flag & SCE_DRAW_TIME_SCENE_RELATIVE) ? scene->r.sfra : 0;
-  float seconds = BKE_frame_to_seconds_get(scene, frame - offset, false);
-  BLI_timecode_string_from_time(
-      r_str, str_maxncpy, brevity_level, seconds, scene->frames_per_second(), U.timecode_style);
-}
-
-/**
- * Generates a string based on the given `frame`.
- * Depending on `step` the returned string has 0 - 3 decimal positions.
- */
-static void frame_to_string(const Scene * /*user_data*/,
-                            const float frame,
-                            const float step,
-                            char *r_str,
-                            const uint str_maxncpy)
-{
-  if (step >= 1.0f) {
-    BLI_snprintf_utf8(r_str, str_maxncpy, "%d", int(frame));
-  }
-  else if (step >= 0.5f) {
-    BLI_snprintf_utf8(r_str, str_maxncpy, "%.1f", frame);
-  }
-  else if (step >= 0.01f) {
-    BLI_snprintf_utf8(r_str, str_maxncpy, "%.2f", frame);
-  }
-  else {
-    BLI_snprintf_utf8(r_str, str_maxncpy, "%.3f", frame);
-  }
 }
 
 /**
@@ -536,7 +551,6 @@ void view2d_draw_lines_x(const View2D *v2d,
                          const bool display_seconds,
                          const bool show_fractions,
                          bool draw_minor_lines,
-                         const float offset,
                          const int base)
 {
   const float min_line_distance = get_min_line_distance_x(v2d, scene, display_seconds);
@@ -551,6 +565,7 @@ void view2d_draw_lines_x(const View2D *v2d,
         base, BLI_rcti_size_x(&v2d->mask) + 1, BLI_rctf_size_x(&v2d->cur), min_line_distance);
     draw_minor_lines = draw_minor_lines && (major_line_distance > 1);
   }
+  const float offset = scene->flag & SCE_DRAW_TIME_SCENE_RELATIVE ? scene->r.sfra : 0;
   /* The extra check for minor line drawing here is so minor lines are *not* drawn
    * below a distance of 1. */
   view2d_draw_lines(v2d, major_line_distance, offset, draw_minor_lines, 'v');
@@ -563,9 +578,7 @@ void view2d_draw_lines_x_frames(const View2D *v2d,
                                 const bool draw_minor_lines)
 {
   const int fps = round_db_to_int(scene->frames_per_second());
-  const bool use_scene_relative = scene->flag & SCE_DRAW_TIME_SCENE_RELATIVE;
-  const float offset = (display_seconds && use_scene_relative) ? scene->r.sfra : 0;
-  view2d_draw_lines_x(v2d, scene, display_seconds, show_fractions, draw_minor_lines, offset, fps);
+  view2d_draw_lines_x(v2d, scene, display_seconds, show_fractions, draw_minor_lines, fps);
 }
 
 void view2d_draw_lines_y(const View2D *v2d, const bool show_fractions, const int base)
@@ -597,7 +610,7 @@ void view2d_draw_scale_y(
 {
   const float step = calculate_grid_step_fractions(
       base, BLI_rcti_size_y(&v2d->mask) + 1, BLI_rctf_size_y(&v2d->cur), MIN_MAJOR_LINE_DISTANCE);
-  draw_vertical_scale_indicators(region, v2d, step, 0.0f, rect, frame_to_string, nullptr, colorid);
+  draw_vertical_scale_indicators(region, v2d, step, 0.0f, rect, colorid);
 }
 
 void view2d_draw_scale_x(const ARegion *region,
@@ -623,13 +636,11 @@ void view2d_draw_scale_x(const ARegion *region,
   }
 
   if (display_seconds) {
-    float offset = (scene->flag & SCE_DRAW_TIME_SCENE_RELATIVE) ? scene->r.sfra : 0;
     draw_horizontal_scale_indicators(
-        region, v2d, step, offset, rect, frame_to_time_string, scene, colorid);
+        region, v2d, step, rect, frame_to_time_string, scene, colorid);
   }
   else {
-    draw_horizontal_scale_indicators(
-        region, v2d, step, 0, rect, frame_to_string, nullptr, colorid);
+    draw_horizontal_scale_indicators(region, v2d, step, rect, frame_to_string, scene, colorid);
   }
 }
 

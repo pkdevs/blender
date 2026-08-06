@@ -243,7 +243,6 @@ void view2d_draw_lines_x(const View2D *v2d,
                          bool display_seconds,
                          bool show_fractions,
                          bool draw_minor_lines,
-                         const float offset,
                          int base);
 /**
  * Wrapper around `view2d_draw_lines_x` that calculates the `base` from the `scene` frame-rate.
