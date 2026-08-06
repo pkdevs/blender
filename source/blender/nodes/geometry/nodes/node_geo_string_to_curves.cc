@@ -14,6 +14,8 @@
 
 #include "BLI_bounds.hh"
 #include "BLI_math_matrix.hh"
+#include "BLI_memory_counter.hh"
+#include "BLI_string.hh"
 #include "BLI_string_utf8.hh"
 #include "BLI_task.hh"
 
@@ -212,6 +214,41 @@ static void node_declare(NodeDeclarationBuilder &b)
   }
 }
 
+struct CharCacheKey {
+  char32_t char_code;
+  bool randomized;
+  UString font_path;
+
+  bool operator==(const CharCacheKey &other) const = default;
+
+  uint64_t hash() const
+  {
+    return get_default_hash(this->char_code, this->randomized, this->font_path);
+  }
+};
+
+struct CharCache {
+  mutable Mutex mutex;
+  mutable Map<CharCacheKey, GeometrySet> map;
+
+  int64_t approx_size() const
+  {
+    MemoryCount count;
+    MemoryCounter counter(count);
+    std::lock_guard lock(this->mutex);
+    for (const GeometrySet &geo : this->map.values()) {
+      geo.count_memory(counter);
+    }
+    return count.total_bytes;
+  }
+};
+
+static CharCache &get_char_cache()
+{
+  static CharCache char_cache;
+  return char_cache;
+}
+
 static void node_init(bNodeTree * /*tree*/, bNode *node)
 {
   /* Still used for forward compatibility. */
@@ -222,6 +259,11 @@ static void node_init(bNodeTree * /*tree*/, bNode *node)
 static void node_layout_ex(ui::Layout &layout, bContext * /*C*/, PointerRNA *ptr)
 {
   layout.prop(ptr, "apply_scale_legacy", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+
+  const int64_t cache_size = get_char_cache().approx_size();
+  char size_str[BLI_STR_FORMAT_INT64_BYTE_UNIT_SIZE];
+  BLI_str_format_byte_unit(size_str, cache_size, true);
+  layout.label(fmt::format("{}: {}", IFACE_("Cache Size"), size_str), ICON_NONE);
 }
 
 static float3 get_pivot_point(GeoNodeExecParams &params, const bke::CurvesGeometry &curves)
@@ -424,30 +466,6 @@ static Curves *create_character_curves(VFont *vfont, const char32_t char_code)
     geometry::debug_randomize_curve_order(&curves_id->geometry.wrap());
   }
   return curves_id;
-}
-
-struct CharCacheKey {
-  char32_t char_code;
-  bool randomized;
-  UString font_path;
-
-  bool operator==(const CharCacheKey &other) const = default;
-
-  uint64_t hash() const
-  {
-    return get_default_hash(this->char_code, this->randomized, this->font_path);
-  }
-};
-
-struct CharCache {
-  Mutex mutex;
-  Map<CharCacheKey, GeometrySet> map;
-};
-
-static CharCache &get_char_cache()
-{
-  static CharCache char_cache;
-  return char_cache;
 }
 
 /** Returns a mapping of UTF32 character code to instance handle. */
