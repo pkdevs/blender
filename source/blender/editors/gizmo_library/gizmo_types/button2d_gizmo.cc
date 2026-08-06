@@ -80,12 +80,17 @@ void ED_gizmo_button2d_group_background(const bContext *C, wmGizmoGroup *gzgroup
 
   float background_color[4];
   ui::theme::get_color_4fv(TH_HEADER, background_color);
-  background_color[3] += 0.3f;
+  background_color[3] = std::max(background_color[3], 0.3f);
+
+  float outline_color[4];
+  copy_v4_v4(outline_color, background_color);
+  outline_color[3] = 1.0f;
+
   /* A bit of padding above and below. */
   BLI_rctf_pad(&draw_rect, 0.0f, rad * 0.2f);
   ui::draw_roundbox_corner_set(ui::CNR_ALL);
   ui::draw_roundbox_4fv_ex(
-      &draw_rect, background_color, nullptr, 1.0f, gzgroup->type->outline_color, U.pixelsize, rad);
+      &draw_rect, background_color, nullptr, 1.0f, outline_color, U.pixelsize, rad);
 }
 
 /* -------------------------------------------------------------------- */
