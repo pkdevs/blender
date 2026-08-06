@@ -664,8 +664,7 @@ class FixToCameraCommon:
         return {'FINISHED'}
 
     def _transformable_objects(self, context: Context) -> list[Transformable]:
-        camera_ob = context.scene.camera
-        return [TransformableObject(object=ob) for ob in context.selected_editable_objects if ob != camera_ob]
+        return [TransformableObject(object=ob) for ob in context.selected_editable_objects]
 
     def _transformable_pbones(self, context: Context) -> list[Transformable]:
         return [TransformableBone(pose_bone=bone) for bone in context.selected_pose_bones]
