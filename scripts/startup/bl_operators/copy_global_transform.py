@@ -697,7 +697,8 @@ class OBJECT_OT_fix_to_camera(FixToCameraCommon, Operator):
         camera_eval = camera_object.evaluated_get(depsgraph)
         return camera_eval.matrix_world @ camera_object.calc_matrix_camera(depsgraph).inverted()
 
-    def _get_transformable_matrices(self, camera_matrix: Matrix, transformables: list[Transformable]) -> dict[Transformable, Matrix]:
+    def _get_transformable_matrices(self, camera_matrix: Matrix,
+                                    transformables: list[Transformable]) -> dict[Transformable, Matrix]:
         camera_mat_inv = camera_matrix.inverted()
         return {t: camera_mat_inv @ t.matrix_world() for t in transformables}
 
