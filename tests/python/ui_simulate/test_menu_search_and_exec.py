@@ -43,7 +43,7 @@ def _search(e, t, w, a, menu, search_text):
     yield e.ret()
 
 
-def test_view3d_add():
+def view3d_add():
     import bpy
     e, t, w, a = _setup('VIEW_3D')
     yield
@@ -57,7 +57,7 @@ def test_view3d_add():
     t.assertEqual(len(bpy.data.objects), count_before + 1)
 
 
-def test_modifier_add():
+def modifier_add():
     import bpy
     e, t, w, a = _setup('PROPERTIES')
     yield
@@ -75,7 +75,7 @@ def test_modifier_add():
     t.assertTrue(any(m.type == 'SUBSURF' for m in cube.modifiers))
 
 
-def test_sequencer_add():
+def sequencer_add():
     import bpy
     e, t, w, a = _setup('SEQUENCE_EDITOR')
     yield
@@ -92,7 +92,7 @@ def test_sequencer_add():
     t.assertEqual(len(bpy.context.scene.sequence_editor.strips), count_before + 1)
 
 
-def test_sequencer_modifier_add():
+def sequencer_modifier_add():
     import bpy
     e, t, w, a = _setup('SEQUENCE_EDITOR')
     yield
@@ -111,7 +111,7 @@ def test_sequencer_modifier_add():
     t.assertEqual(len(strip.modifiers), count_before + 1)
 
 
-def test_shader_node_add():
+def shader_node_add():
     import bpy
     e, t, w, a = _setup('NODE_EDITOR')
     yield
@@ -132,7 +132,7 @@ def test_shader_node_add():
     t.assertTrue(any(n.type == 'MATH' for n in mat.node_tree.nodes))
 
 
-def test_compositor_node_add():
+def compositor_node_add():
     import bpy
     e, t, w, a = _setup('NODE_EDITOR')
     yield
@@ -152,7 +152,7 @@ def test_compositor_node_add():
     t.assertTrue(any(n.type == 'CURVE_RGB' for n in tree.nodes))
 
 
-def test_geometry_node_add():
+def geometry_node_add():
     import bpy
     e, t, w, a = _setup('NODE_EDITOR')
     yield
@@ -175,7 +175,7 @@ def test_geometry_node_add():
     t.assertTrue(any(n.bl_idname == 'GeometryNodeTransform' for n in node_tree.nodes))
 
 
-def test_node_swap_search():
+def node_swap_search():
     import bpy
     e, t, w, a = _setup('NODE_EDITOR')
     yield
@@ -196,7 +196,7 @@ def test_node_swap_search():
     t.assertEqual(node_tree.nodes.active.type, 'MATH')
 
 
-def test_grease_pencil_layer_search():
+def grease_pencil_layer_search():
     import bpy
     e, t, w, a = _setup('PROPERTIES')
     yield
