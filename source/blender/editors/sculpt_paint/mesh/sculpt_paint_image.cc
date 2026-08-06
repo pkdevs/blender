@@ -151,13 +151,13 @@ static void fetch_image_buffers(ImageData &image_data,
         image_data.data_buffers.add_overwrite(
             tile.tile_number,
             MutableSpan(reinterpret_cast<float4 *>(buffer->float_data_for_write()),
-                        buffer->x * buffer->y));
+                        IMB_get_pixel_count(buffer)));
       }
       else {
         image_data.data_buffers.add_overwrite(
             tile.tile_number,
             MutableSpan(reinterpret_cast<uchar4 *>(buffer->byte_data_for_write()),
-                        buffer->x * buffer->y));
+                        IMB_get_pixel_count(buffer)));
       }
     }
   }
@@ -513,7 +513,7 @@ static void do_paint_pixels(const Depsgraph &depsgraph,
                                                                        BufferType{});
     if (std::holds_alternative<std::monostate>(mutable_buffer)) {
       BLI_assert_unreachable();
-      return;
+      continue;
     }
 
     const TileColorspaceProcessor *processors = image_data.processors.lookup_ptr(
