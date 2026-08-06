@@ -14,10 +14,10 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_listbase.h"
-#include "BLI_mempool.h"
-#include "BLI_string_utf8.h"
-#include "BLI_utildefines.h"
+#include "BLI_listbase.hh"
+#include "BLI_mempool.hh"
+#include "BLI_string_utf8.hh"
+#include "BLI_utildefines.hh"
 
 #include "BKE_context.hh"
 #include "BKE_lib_query.hh"
@@ -440,7 +440,7 @@ static SpaceLink *outliner_duplicate(SpaceLink *sl)
   SpaceOutliner *space_outliner_new = MEM_new<SpaceOutliner>(__func__, *space_outliner);
   space_outliner_new->runtime = MEM_new<SpaceOutliner_Runtime>(__func__, *space_outliner->runtime);
 
-  BLI_listbase_clear(&space_outliner_new->runtime->tree);
+  space_outliner_new->runtime->tree.clear_no_delete();
   space_outliner_new->treestore = nullptr;
 
   space_outliner_new->sync_select_dirty = WM_OUTLINER_SYNC_SELECT_FROM_ALL;
@@ -541,16 +541,15 @@ static void outliner_space_blend_read_data(BlendDataReader *reader, SpaceLink *s
   SpaceOutliner *space_outliner = reinterpret_cast<SpaceOutliner *>(sl);
   space_outliner->runtime = MEM_new<SpaceOutliner_Runtime>(__func__);
 
-  /* use #BLO_read_get_new_data_address_no_us and do not free old memory avoiding double
+  /* use #BLO_read_struct_no_us and do not free old memory avoiding double
    * frees and use of freed memory. this could happen because of a
    * bug fixed in revision 58959 where the treestore memory address
    * was not unique */
-  TreeStore *ts = static_cast<TreeStore *>(
-      BLO_read_get_new_data_address_no_us(reader, space_outliner->treestore, sizeof(TreeStore)));
+  TreeStore *ts = reinterpret_cast<TreeStore *>(space_outliner->treestore);
   space_outliner->treestore = nullptr;
-  if (ts) {
-    TreeStoreElem *elems = static_cast<TreeStoreElem *>(BLO_read_get_new_data_address_no_us(
-        reader, ts->data, sizeof(TreeStoreElem) * ts->usedelem));
+  if (BLO_read_struct_no_us(reader, TreeStore, &ts)) {
+    TreeStoreElem *elems = ts->data;
+    BLO_read_struct_array_no_us(reader, TreeStoreElem, &elems, ts->usedelem);
 
     space_outliner->treestore = BLI_mempool_create(
         sizeof(TreeStoreElem), ts->usedelem, 512, BLI_MEMPOOL_ALLOW_ITER);
@@ -564,7 +563,7 @@ static void outliner_space_blend_read_data(BlendDataReader *reader, SpaceLink *s
     /* we only saved what was used */
     space_outliner->storeflag |= SO_TREESTORE_CLEANUP; /* at first draw */
   }
-  BLI_listbase_clear(&space_outliner->runtime->tree);
+  space_outliner->runtime->tree.clear_no_delete();
 }
 
 static void outliner_space_blend_read_after_liblink(BlendLibReader * /*reader*/,

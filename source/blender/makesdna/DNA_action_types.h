@@ -161,8 +161,9 @@ ENUM_OPERATORS(bPoseChannelRuntimeFlag);
 
 /* PoseChannel (transform) flags. */
 enum ePchan_Flag : short {
-  /* (1 << 0) to (1 << 3) used to be flags to determine if a type of channel should be modified by
-     pose sliding. This has been moved to the `SlideSubject` struct in Blender 5.2.  */
+  /* (1 << 0) to (1 << 3) used to be flags to determine if a type of channel
+   * should be modified by pose sliding.
+   * This has been moved to the `SlideSubject` struct in Blender 5.2. */
 
   /* old IK/cache stuff
    * - used to be here from (1 << 3) to (1 << 8)
@@ -275,8 +276,8 @@ enum ePchan_BBoneFlag : char {
 enum eRotationModes : short {
   /* quaternion rotations (default, and for older Blender versions) */
   ROT_MODE_QUAT = 0,
-  /* euler rotations - keep in sync with enum in BLI_math_rotation.h */
-  /** Blender 'default' (classic) - must be as 1 to sync with BLI_math_rotation.h defines */
+  /* euler rotations - keep in sync with enum in BLI_math_rotation_c.hh */
+  /** Blender 'default' (classic) - must be as 1 to sync with BLI_math_rotation_c.hh defines */
   ROT_MODE_EUL = 1,
   ROT_MODE_XYZ = 1,
   ROT_MODE_XZY = 2,
@@ -563,7 +564,7 @@ enum DNA_DEPRECATED eAnimEdit_AutoSnap : int {
 };
 
 /* SAction->cache_display */
-enum eTimeline_Cache_Flag : char {
+enum eTimeline_Cache_Flag : uint16_t {
   TIME_CACHE_DISPLAY = (1 << 0),
   TIME_CACHE_SOFTBODY = (1 << 1),
   TIME_CACHE_PARTICLES = (1 << 2),
@@ -571,7 +572,8 @@ enum eTimeline_Cache_Flag : char {
   TIME_CACHE_SMOKE = (1 << 4),
   TIME_CACHE_DYNAMICPAINT = (1 << 5),
   TIME_CACHE_RIGIDBODY = (1 << 6),
-  TIME_CACHE_SIMULATION_NODES = static_cast<char>(1 << 7),
+  TIME_CACHE_SIMULATION_NODES = (1 << 7),
+  TIME_CACHE_COMPOSITOR = (1 << 8),
 };
 ENUM_OPERATORS(eTimeline_Cache_Flag)
 
@@ -583,7 +585,7 @@ ENUM_OPERATORS(eTimeline_Cache_Flag)
 
 /** Data point for motion path (`mpv`). */
 struct bMotionPathVert {
-  /** Coordinates of point in 3D-space. */
+  /** Coordinates of point in world space or NDC space. */
   float co[3] = {};
   /** Quick settings. */
   eMotionPathVert_Flag flag = {};
@@ -676,8 +678,11 @@ struct bPoseChannel_BBoneSegmentBoundary {
   float depth_scale = 0;
 };
 
+static constexpr int64_t BONE_INDEX_UNKNOWN = -1;
 struct bPoseChannel_Runtime {
   SessionUID session_uid;
+
+  int64_t bone_index = BONE_INDEX_UNKNOWN;
 
   /* Cached dual quaternion for deformation. */
   struct DualQuat deform_dual_quat;
@@ -757,8 +762,6 @@ struct bPoseChannel {
   DNA_DEPRECATED char bboneflag = 0;
   char _pad0[4] = {};
 
-  /** Set on read file or rebuild pose. */
-  struct Bone *bone = nullptr; /* Soon to be DNA_DEPRECATED. */
   /** Set on read file or rebuild pose. */
   struct bPoseChannel *parent = nullptr;
   /** Set on read file or rebuild pose, the 'ik' child, for b-bones. */
@@ -875,8 +878,6 @@ struct bPoseChannel {
 
   BoneColor color; /* MUST be named the same as in Bone and EditBone structs. */
 
-  void *_pad2 = nullptr;
-
   /** Runtime data (keep last). */
   struct bPoseChannel_Runtime runtime;
 
@@ -893,6 +894,9 @@ struct bPoseChannel {
    * Get the armature bone that corresponds to this bPoseChannel.
    *
    * Prefer bone_get(object) over this function, as that performs more checks at runtime.
+   *
+   * \warning only use when you are sure bone indices are up to date.
+   * Call `BKE_pose_ensure_bone_indices` to ensure bone indices are correct.
    */
   const Bone *bone_get(const bArmature &armature) const;
   Bone *bone_get(bArmature &armature);
@@ -936,7 +940,7 @@ struct bPose {
   ePose_IKSolverType iksolver = {};
   /** Temporary IK data, depends on the IK solver. Not saved in file. */
   void *ikdata = nullptr;
-  /** IK solver parameter for ItaSC .*/
+  /** IK solver parameter for ItaSC. */
   bItasc *ikparam = nullptr;
 
   /** Settings for visualization of bone animation. */
@@ -1191,8 +1195,9 @@ struct SpaceAction {
   char mode_prev = 0;
   /* Snapping now lives on the Scene. */
   DNA_DEPRECATED char autosnap = 0;
+  char _pad1 = {};
   eTimeline_Cache_Flag cache_display = {};
-  char _pad1[6] = {};
+  char _pad2[4] = {};
 
   SpaceActionOverlays overlays;
 

@@ -23,12 +23,12 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_listbase.h"
-#include "BLI_math_matrix.h"
-#include "BLI_math_vector.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_vector_c.hh"
 #include "BLI_math_vector_types.hh"
-#include "BLI_rect.h"
-#include "BLI_utildefines.h"
+#include "BLI_rect.hh"
+#include "BLI_utildefines.hh"
 
 #include "BKE_context.hh"
 #include "BKE_image.hh"
@@ -55,6 +55,8 @@
 #include "GPU_state.hh"
 #include "GPU_texture.hh"
 #include "GPU_viewport.hh"
+
+#include "PRF_profile.hh"
 
 #include "RE_engine.h"
 
@@ -196,7 +198,7 @@ struct GrabState {
 
 static bool wm_software_cursor_needed()
 {
-  if (UNLIKELY(g_software_cursor.enabled == -1)) {
+  if (g_software_cursor.enabled == -1) [[unlikely]] {
     g_software_cursor.enabled = !(WM_capabilities_flag() & WM_CAPABILITY_CURSOR_WARP);
   }
   return g_software_cursor.enabled;
@@ -330,7 +332,7 @@ static void wm_software_cursor_draw_crosshair(const float system_scale, const in
    * are set by the operating-system, where the pixel information isn't easily available. */
 
   /* The cursor scaled by the "default" size. */
-  const float cursor_scale = float(WM_cursor_preferred_logical_size()) /
+  const float cursor_scale = float(WM_cursor_preferred_logical_size(false)) /
                              float(WM_CURSOR_DEFAULT_LOGICAL_SIZE);
   const float unit = max_ff(system_scale * cursor_scale, 1.0f);
   uint pos = GPU_vertformat_attr_add(immVertexFormat(), "pos", gpu::VertAttrType::SFLOAT_32_32);
@@ -608,6 +610,7 @@ static const char *wm_area_name(const ScrArea *area)
     SPACE_NAME(SPACE_NODE);
     SPACE_NAME(SPACE_CONSOLE);
     SPACE_NAME(SPACE_USERPREF);
+    SPACE_NAME(SPACE_PROJECT);
     SPACE_NAME(SPACE_CLIP);
     SPACE_NAME(SPACE_TOPBAR);
     SPACE_NAME(SPACE_STATUSBAR);
@@ -874,6 +877,9 @@ void wm_draw_region_blend(ARegion *region, int view, bool blend)
   const float halfy = GLA_PIXEL_OFS / (BLI_rcti_size_y(&region->winrct) + 1);
 
   rcti rect_geo = region->winrct;
+  if (blend) {
+    ED_region_blend_rect(region, &rect_geo);
+  }
   rect_geo.xmax += 1;
   rect_geo.ymax += 1;
 
@@ -883,27 +889,17 @@ void wm_draw_region_blend(ARegion *region, int view, bool blend)
   rect_tex.xmax = 1.0f + halfx;
   rect_tex.ymax = 1.0f + halfy;
 
-  /* Quadratic ease-out: 1 - (1 - alpha)^2 == alpha * (2 - alpha). */
-  float alpha_easing = alpha * (2.0f - alpha);
-
-  /* Slide panels. */
-  float ofs_x = BLI_rcti_size_x(&region->winrct) * (1.0f - alpha_easing);
-  float ofs_y = BLI_rcti_size_y(&region->winrct) * (1.0f - alpha_easing);
   if (RGN_ALIGN_ENUM_FROM_MASK(region->alignment) == RGN_ALIGN_RIGHT) {
-    rect_geo.xmin += ofs_x;
-    rect_tex.xmax *= alpha_easing;
+    rect_tex.xmax *= alpha;
   }
   else if (RGN_ALIGN_ENUM_FROM_MASK(region->alignment) == RGN_ALIGN_LEFT) {
-    rect_geo.xmax -= ofs_x;
-    rect_tex.xmin += 1.0f - alpha_easing;
+    rect_tex.xmin += 1.0f - alpha;
   }
   else if (RGN_ALIGN_ENUM_FROM_MASK(region->alignment) == RGN_ALIGN_TOP) {
-    rect_geo.ymin += ofs_y;
-    rect_tex.ymax *= alpha_easing;
+    rect_tex.ymax *= alpha;
   }
   else if (RGN_ALIGN_ENUM_FROM_MASK(region->alignment) == RGN_ALIGN_BOTTOM) {
-    rect_geo.ymax -= ofs_y;
-    rect_tex.ymin += 1.0f - alpha_easing;
+    rect_tex.ymin += 1.0f - alpha;
   }
 
   /* Not the same layout as #rctf/#rcti. */
@@ -931,8 +927,7 @@ void wm_draw_region_blend(ARegion *region, int view, bool blend)
 
   GPU_shader_uniform_float_ex(shader, rect_tex_loc, 4, 1, rectt);
   GPU_shader_uniform_float_ex(shader, rect_geo_loc, 4, 1, rectg);
-  GPU_shader_uniform_float_ex(
-      shader, color_loc, 4, 1, float4{alpha_easing, alpha_easing, alpha_easing, alpha_easing});
+  GPU_shader_uniform_float_ex(shader, color_loc, 4, 1, float4{alpha, alpha, alpha, alpha});
 
   gpu::Batch *quad = GPU_batch_preset_quad();
   GPU_batch_set_shader(quad, shader);
@@ -1233,6 +1228,7 @@ static void wm_draw_window_onscreen(bContext *C, wmWindow *win, int view)
 
 static void wm_draw_window(bContext *C, wmWindow *win)
 {
+  PRF_scope(ProfileCategory::Draw);
   GPU_context_begin_frame(static_cast<GPUContext *>(win->runtime->gpuctx));
 
   bScreen *screen = WM_window_get_active_screen(win);
@@ -1362,9 +1358,8 @@ uint8_t *WM_window_pixels_read_from_frontbuffer(const wmWindowManager *wm,
    * See it's comments for details on why it's needed, see also #98462. */
   bool setup_context = wm->runtime->windrawable != win;
 
-  GHOST_IWindow *ghost_window = static_cast<GHOST_IWindow *>(win->runtime->ghostwin);
   if (setup_context) {
-    ghost_window->activateDrawingContext();
+    static_cast<GHOST_IWindow *>(win->runtime->ghostwin)->activateDrawingContext();
     GPU_context_active_set(static_cast<GPUContext *>(win->runtime->gpuctx));
   }
 
@@ -1376,7 +1371,8 @@ uint8_t *WM_window_pixels_read_from_frontbuffer(const wmWindowManager *wm,
 
   if (setup_context) {
     if (wm->runtime->windrawable) {
-      ghost_window->activateDrawingContext();
+      static_cast<GHOST_IWindow *>(wm->runtime->windrawable->runtime->ghostwin)
+          ->activateDrawingContext();
       GPU_context_active_set(static_cast<GPUContext *>(wm->runtime->windrawable->runtime->gpuctx));
     }
   }
@@ -1401,9 +1397,8 @@ void WM_window_pixels_read_sample_from_frontbuffer(const wmWindowManager *wm,
   BLI_assert(WM_capabilities_flag() & WM_CAPABILITY_GPU_FRONT_BUFFER_READ);
   bool setup_context = wm->runtime->windrawable != win;
 
-  GHOST_IWindow *ghost_window = static_cast<GHOST_IWindow *>(win->runtime->ghostwin);
   if (setup_context) {
-    ghost_window->activateDrawingContext();
+    static_cast<GHOST_IWindow *>(win->runtime->ghostwin)->activateDrawingContext();
     GPU_context_active_set(static_cast<GPUContext *>(win->runtime->gpuctx));
   }
 
@@ -1419,7 +1414,8 @@ void WM_window_pixels_read_sample_from_frontbuffer(const wmWindowManager *wm,
 
   if (setup_context) {
     if (wm->runtime->windrawable) {
-      ghost_window->activateDrawingContext();
+      static_cast<GHOST_IWindow *>(wm->runtime->windrawable->runtime->ghostwin)
+          ->activateDrawingContext();
       GPU_context_active_set(static_cast<GPUContext *>(wm->runtime->windrawable->runtime->gpuctx));
     }
   }
@@ -1452,7 +1448,7 @@ uint8_t *WM_window_pixels_read_from_offscreen(bContext *C, wmWindow *win, int r_
                                                  GPU_TEXTURE_USAGE_SHADER_READ,
                                                  false,
                                                  nullptr);
-  if (UNLIKELY(!offscreen)) {
+  if (!offscreen) [[unlikely]] {
     return nullptr;
   }
 
@@ -1491,7 +1487,7 @@ bool WM_window_pixels_read_sample_from_offscreen(bContext *C,
                                                  GPU_TEXTURE_USAGE_SHADER_READ,
                                                  false,
                                                  nullptr);
-  if (UNLIKELY(!offscreen)) {
+  if (!offscreen) [[unlikely]] {
     return false;
   }
 
@@ -1638,6 +1634,8 @@ void WM_paint_cursor_tag_redraw(wmWindow *win, ARegion * /*region*/)
 
 void wm_draw_update(bContext *C)
 {
+  PRF_scope(ProfileCategory::Draw);
+
   Main *bmain = CTX_data_main(C);
   wmWindowManager *wm = CTX_wm_manager(C);
   const bool rna_disallow_writes = true;
@@ -1648,8 +1646,6 @@ void wm_draw_update(bContext *C)
 
   GPU_render_begin();
   GPU_render_step();
-
-  BKE_image_free_unused_gpu_textures();
 
 #ifdef WITH_METAL_BACKEND
   /* Reset drawable to ensure GPU context activation happens at least once per frame if only a
@@ -1673,6 +1669,7 @@ void wm_draw_update(bContext *C)
     CTX_wm_window_set(C, &win);
 
     if (wm_draw_update_test_window(bmain, C, &win)) {
+      PRF_frame_mark_start("Window Drawing"_ustr);
       /* Sets context window+screen. */
       wm_window_make_drawable(wm, &win);
       wm_window_swap_buffer_acquire(&win);
@@ -1684,6 +1681,7 @@ void wm_draw_update(bContext *C)
       wm_draw_update_clear_window(C, &win);
 
       wm_window_swap_buffer_release(&win);
+      PRF_frame_mark_end("Window Drawing"_ustr);
     }
   }
 

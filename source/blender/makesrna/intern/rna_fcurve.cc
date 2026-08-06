@@ -191,9 +191,9 @@ static const EnumPropertyItem rna_enum_driver_target_context_property_items[] = 
 
 #  include "DNA_scene_types.h"
 
-#  include "BLI_listbase.h"
-#  include "BLI_string.h"
-#  include "BLI_string_utf8.h"
+#  include "BLI_listbase.hh"
+#  include "BLI_string.hh"
+#  include "BLI_string_utf8.hh"
 
 #  include "ANIM_action.hh"
 #  include "ANIM_fcurve.hh"
@@ -327,7 +327,7 @@ static void rna_DriverTarget_update_data(Main *bmain, Scene *scene, PointerRNA *
   DriverTarget *dtar = static_cast<DriverTarget *>(ptr->data);
   FCurve *fcu = rna_FCurve_find_driver_by_target(ptr->owner_id, dtar);
   BLI_assert(fcu); /* This hints at an internal error, data may be corrupt. */
-  if (UNLIKELY(fcu == nullptr)) {
+  if (fcu == nullptr) [[unlikely]] {
     return;
   }
   /* Find function ensures it's never nullptr. */
@@ -341,7 +341,7 @@ static void rna_DriverVariable_update_name(Main *bmain, Scene *scene, PointerRNA
   DriverVar *dvar = static_cast<DriverVar *>(ptr->data);
   FCurve *fcu = rna_FCurve_find_driver_by_variable(ptr->owner_id, dvar);
   BLI_assert(fcu); /* This hints at an internal error, data may be corrupt. */
-  if (UNLIKELY(fcu == nullptr)) {
+  if (fcu == nullptr) [[unlikely]] {
     return;
   }
   /* Find function ensures it's never nullptr. */
@@ -356,7 +356,7 @@ static void rna_DriverVariable_update_data(Main *bmain, Scene *scene, PointerRNA
   DriverVar *dvar = static_cast<DriverVar *>(ptr->data);
   FCurve *fcu = rna_FCurve_find_driver_by_variable(ptr->owner_id, dvar);
   BLI_assert(fcu); /* This hints at an internal error, data may be corrupt. */
-  if (UNLIKELY(fcu == nullptr)) {
+  if (fcu == nullptr) [[unlikely]] {
     return;
   }
   /* Find function ensures it's never nullptr. */
@@ -620,38 +620,25 @@ static void rna_FCurve_RnaPath_get(PointerRNA *ptr, char *value)
 {
   FCurve *fcu = static_cast<FCurve *>(ptr->data);
 
-  if (fcu->rna_path) {
-    strcpy(value, fcu->rna_path);
-  }
-  else {
-    value[0] = '\0';
-  }
+  strcpy(value, fcu->rna_path().c_str());
 }
 
 static int rna_FCurve_RnaPath_length(PointerRNA *ptr)
 {
   FCurve *fcu = static_cast<FCurve *>(ptr->data);
-
-  if (fcu->rna_path) {
-    return strlen(fcu->rna_path);
-  }
-  return 0;
+  return fcu->rna_path().size();
 }
 
 static void rna_FCurve_RnaPath_set(PointerRNA *ptr, const char *value)
 {
   FCurve *fcu = static_cast<FCurve *>(ptr->data);
 
-  if (fcu->rna_path) {
-    MEM_delete(fcu->rna_path);
-  }
-
   if (value[0]) {
-    fcu->rna_path = BLI_strdup(value);
+    fcu->rna_path_set(value);
     fcu->flag &= ~FCURVE_DISABLED;
   }
   else {
-    fcu->rna_path = nullptr;
+    fcu->rna_path_set("");
   }
 }
 
@@ -711,7 +698,7 @@ static void rna_FCurve_group_set(PointerRNA *ptr, PointerRNA value, ReportList *
     printf(
         "ERROR: F-Curve (datapath: '%s') doesn't belong to the same channel bag as "
         "channel group '%s'\n",
-        fcu->rna_path,
+        fcu->rna_path().c_str(),
         group->name);
     return;
   }
@@ -1369,7 +1356,7 @@ static void rna_def_fmodifier_function_generator(BlenderRNA *brna)
   prop = RNA_def_property(srna, "phase_multiplier", PROP_FLOAT, PROP_NONE);
   RNA_def_property_override_flag(prop, PROPOVERRIDE_OVERRIDABLE_LIBRARY);
   RNA_def_property_ui_text(
-      prop, "Phase Multiple", "Scale factor determining the 'speed' of the function");
+      prop, "Phase Multiplier", "Scale factor determining the 'speed' of the function");
   RNA_def_property_update(prop, NC_ANIMATION | ND_KEYFRAME | NA_EDITED, "rna_FModifier_update");
   RNA_def_property_float_default(prop, 1.0);
 

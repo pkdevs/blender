@@ -18,14 +18,14 @@
 #include "DNA_curve_types.h"
 
 #include "BLI_math_base.hh"
-#include "BLI_math_color.h"
+#include "BLI_math_color_c.hh"
 #include "BLI_math_matrix_types.hh"
 #include "BLI_math_vector.hh"
 #include "BLI_math_vector_types.hh"
-#include "BLI_rect.h"
-#include "BLI_string_utf8.h"
-#include "BLI_task.h"
-#include "BLI_utildefines.h"
+#include "BLI_rect.hh"
+#include "BLI_string_utf8.hh"
+#include "BLI_task_c.hh"
+#include "BLI_utildefines.hh"
 
 #include "BKE_colortools.hh"
 #include "BKE_curve.hh"
@@ -1524,7 +1524,7 @@ void BKE_curvemapping_blend_read(BlendDataReader *reader, CurveMapping *cumap)
   cumap->flag &= ~CUMA_PREMULLED;
 
   for (int a = 0; a < CM_TOT; a++) {
-    BLO_read_struct_array(reader, CurveMapPoint, cumap->cm[a].totpoint, &cumap->cm[a].curve);
+    BLO_read_array_and_validate_size(reader, &cumap->cm[a].curve, &cumap->cm[a].totpoint);
     cumap->cm[a].table = nullptr;
     cumap->cm[a].premultable = nullptr;
   }

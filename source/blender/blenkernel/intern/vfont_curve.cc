@@ -17,15 +17,15 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_listbase.h"
-#include "BLI_math_base_safe.h"
-#include "BLI_math_matrix.h"
-#include "BLI_math_vector.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_base_safe.hh"
+#include "BLI_math_matrix_c.hh"
 #include "BLI_math_vector.hh"
-#include "BLI_rect.h"
-#include "BLI_string_utf8.h"
-#include "BLI_threads.h"
-#include "BLI_utildefines.h"
+#include "BLI_math_vector_c.hh"
+#include "BLI_rect.hh"
+#include "BLI_string_utf8.hh"
+#include "BLI_threads.hh"
+#include "BLI_utildefines.hh"
 
 #include "DNA_curve_types.h"
 #include "DNA_object_types.h"
@@ -279,7 +279,7 @@ static VChar *vfont_char_find_or_placeholder(const VFontData *vfd,
   if (vfd) {
     vfont_char_find(vfd, charcode, &che);
   }
-  if (UNLIKELY(che == nullptr)) {
+  if (che == nullptr) [[unlikely]] {
     che = vfont_placeholder_ensure(che_placeholder, charcode);
   }
   return che;
@@ -501,8 +501,14 @@ void BKE_vfont_char_build(const Curve &cu,
   if (!vfd) {
     return;
   }
-  VChar *che;
-  vfont_char_find(vfd, charcode, &che);
+  VChar *che = nullptr;
+  /* C0 control characters should not generate geometry. */
+  if (charcode >= 32) {
+    VCharPlaceHolder che_placeholder = {
+        /*metrics*/ &vfd->metrics,
+    };
+    che = vfont_char_find_or_placeholder(vfd, charcode, che_placeholder);
+  }
   vfont_char_build_impl(cu, nubase, che, info, is_smallcaps, offset, rotate, charidx, fsize);
 }
 
@@ -519,9 +525,22 @@ static float vfont_char_width(const Curve &cu, VChar *che, const bool is_smallca
   return che->width;
 }
 
+/**
+ * A combining character, drawn over the previous base character.
+ *
+ * Check the code-point as well as the width since some fonts use
+ * zero-width glyphs for spacing characters (the "." in LCD style digit fonts for e.g.)
+ * which must not be drawn over the previous character, see #162036.
+ * See also: `blf_glyph_is_combining` which also uses this logic.
+ */
+static bool vfont_char_is_combining(const char32_t charcode, const float char_width)
+{
+  return (char_width == 0.0f) && (BLI_wcwidth_or_error(charcode) == 0);
+}
+
 static char32_t vfont_char_apply_smallcaps(char32_t charcode, const bool is_smallcaps)
 {
-  if (UNLIKELY(is_smallcaps)) {
+  if (is_smallcaps) [[unlikely]] {
     return toupper(charcode);
   }
   return charcode;
@@ -721,7 +740,7 @@ static bool vfont_to_curve(Object *ob,
   BLI_assert(ob == nullptr || ob->type == OB_FONT);
 
   /* Read-file ensures non-null, must have become null at run-time, this is a bug! */
-  if (UNLIKELY(!(cu.str && cu.tb && (ef ? ef->textbufinfo : cu.strinfo)))) {
+  if (!(cu.str && cu.tb && (ef ? ef->textbufinfo : cu.strinfo))) [[unlikely]] {
     BLI_assert(0);
     return false;
   }
@@ -940,7 +959,7 @@ static bool vfont_to_curve(Object *ob,
         for (j = i; (mem[j] != '\n') && (chartransdata[j].do_break == 0); j--) {
 
           /* Special case when there are no breaks possible. */
-          if (UNLIKELY(j == 0)) {
+          if (j == 0) [[unlikely]] {
             if (i == slen) {
               /* Use the behavior of zero a height text-box when a break cannot be inserted.
                *
@@ -1056,7 +1075,7 @@ static bool vfont_to_curve(Object *ob,
       /* Won't have been changed since last assignment, ensure this remains the case. */
       BLI_assert(twidth == vfont_char_width(cu, che, ct->is_smallcaps));
 
-      if (twidth == 0.0f && che != nullptr) {
+      if ((che != nullptr) && vfont_char_is_combining(charcode, twidth)) [[unlikely]] {
         /* Combining character: center the mark over the previous base character.
          * This mirrors the fallback algorithm used by BLF (see #blf_glyph_step)
          * and HarfBuzz when GPOS tables are absent. */
@@ -1876,7 +1895,7 @@ static bool vfont_to_curve(Object *ob,
         che = vfont_char_find_or_placeholder(vfinfo_ctx.vfd, charcode, che_placeholder);
 
         const float charwidth = vfont_char_width(cu, che, info);
-        if (charwidth == 0.0f) {
+        if (vfont_char_is_combining(charcode, charwidth)) [[unlikely]] {
           /* Combining character, skip so the cursor won't be between combining characters. */
           continue;
         }

@@ -117,9 +117,10 @@ class ImageCache {
                                 const float texture_resolution,
                                 KernelImageTexture &tex);
 
-  void load_image_tiled(DeviceScene &dscene,
-                        const ImageMetaData &metadata,
-                        KernelImageTexture &tex);
+  void load_image_tiled(const ImageMetaData &metadata, KernelImageTexture &tex);
+
+  void load_image_tiled_descriptors(DeviceScene &dscene,
+                                    std::span<KernelImageTexture> image_textures);
 
   void free_image(DeviceScene &dscene, const KernelImageTexture &tex);
 
@@ -129,6 +130,7 @@ class ImageCache {
                             const KernelImageTexture &tex,
                             ImageLoader &loader,
                             const ImageMetaData &metadata,
+                            int miplevel_offset,
                             const uint8_t *access_state);
 
   void load_requested_tile(Device &device,
@@ -139,7 +141,8 @@ class ImageCache {
                            int x,
                            int y,
                            ImageLoader &loader,
-                           const ImageMetaData &metadata);
+                           const ImageMetaData &metadata,
+                           int miplevel_offset);
 
   /* Copy image cache data to device if modified. Either for all devices, or a single
    * device whose queue is provided. */
@@ -196,7 +199,6 @@ class ImageCache {
                            ImageDataType type,
                            InterpolationType interpolation,
                            const int tile_size_padded,
-                           const bool for_cpu_cache_miss,
                            KernelTileDescriptor &r_tile_descriptor);
   void free_tile(const KernelTileDescriptor tile);
 

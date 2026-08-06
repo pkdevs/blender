@@ -14,11 +14,11 @@
 #include <cstring>
 
 #include "BLI_enum_flags.hh"
-#include "BLI_listbase.h"
-#include "BLI_math_rotation.h"
-#include "BLI_mempool.h"
-#include "BLI_string.h"
-#include "BLI_string_utf8.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_rotation_c.hh"
+#include "BLI_mempool.hh"
+#include "BLI_string.hh"
+#include "BLI_string_utf8.hh"
 
 /* Define macros in `DNA_genfile.h`. */
 #define DNA_GENFILE_VERSIONING_MACROS
@@ -173,14 +173,14 @@ static void do_version_area_change_space_to_space_action(ScrArea *area, const Sc
   for (ARegion &region : area->regionbase) {
     BKE_area_region_free(area->type, &region);
   }
-  BLI_freelistN(&area->regionbase);
+  area->regionbase.free_no_destruct();
 
   area->type = stype;
   area->spacetype = stype->spaceid;
 
   BLI_addhead(&area->spacedata, saction);
   area->regionbase = saction->regionbase;
-  BLI_listbase_clear(&saction->regionbase);
+  saction->regionbase.clear_no_delete();
 
   /* Different defaults for timeline */
   region_channels = BKE_area_find_region_type(area, RGN_TYPE_CHANNELS);
@@ -205,7 +205,7 @@ static void do_version_area_change_space_to_space_action(ScrArea *area, const Sc
  */
 static void do_version_workspaces_after_lib_link(Main *bmain)
 {
-  BLI_assert(BLI_listbase_is_empty(&bmain->workspaces));
+  BLI_assert(bmain->workspaces.is_empty());
 
   do_version_workspaces_create_from_screens(bmain);
 
@@ -253,7 +253,7 @@ static void do_version_workspaces_after_lib_link(Main *bmain)
 
   for (bScreen &screen : bmain->screens) {
     /* Deprecated from now on! */
-    BLI_freelistN(&screen.scene->transform_spaces);
+    screen.scene->transform_spaces.free_no_destruct();
     screen.scene = nullptr;
   }
 }
@@ -377,7 +377,7 @@ static void do_version_layers_to_collections(Main *bmain, Scene *scene)
     }
   }
 
-  BLI_freelistN(&scene->r.layers);
+  scene->r.layers.free_no_destruct();
 
   /* If render layers included overrides, or there are no render layers,
    * we also create a vanilla viewport layer. */
@@ -387,7 +387,7 @@ static void do_version_layers_to_collections(Main *bmain, Scene *scene)
 
     /* If we ported all the original render layers,
      * we don't need to make the viewport layer renderable. */
-    if (!BLI_listbase_is_single(&scene->view_layers)) {
+    if (!scene->view_layers.is_single()) {
       view_layer->flag &= ~VIEW_LAYER_RENDER;
     }
 
@@ -413,7 +413,7 @@ static void do_version_layers_to_collections(Main *bmain, Scene *scene)
     id_us_min(&base.object->id);
   }
 
-  BLI_freelistN(&scene->base);
+  scene->base.free_no_destruct();
   scene->basact = nullptr;
 }
 
@@ -539,23 +539,21 @@ static void do_version_bones_inherit_scale(ListBaseT<Bone> *lb)
   }
 }
 
-static bool replace_bbone_scale_rnapath(char **p_old_path)
+/**
+ * \return a newly allocated replacement path, or nullptr if `old_path` doesn't need replacing.
+ */
+static char *replace_bbone_scale_rnapath(const char *old_path)
 {
-  char *old_path = *p_old_path;
-
   if (old_path == nullptr) {
-    return false;
+    return nullptr;
   }
 
   if (BLI_str_endswith(old_path, "bbone_scalein") || BLI_str_endswith(old_path, "bbone_scaleout"))
   {
-    *p_old_path = BLI_strdupcat(old_path, "x");
-
-    MEM_delete(old_path);
-    return true;
+    return BLI_strdupcat(old_path, "x");
   }
 
-  return false;
+  return nullptr;
 }
 
 static void do_version_bbone_scale_fcurve_fix(ListBaseT<FCurve> *curves, FCurve *fcu)
@@ -564,18 +562,25 @@ static void do_version_bbone_scale_fcurve_fix(ListBaseT<FCurve> *curves, FCurve 
   if (fcu->driver) {
     for (DriverVar &dvar : fcu->driver->variables) {
       DRIVER_TARGETS_LOOPER_BEGIN (&dvar) {
-        replace_bbone_scale_rnapath(&dtar->rna_path);
+        if (char *new_path = replace_bbone_scale_rnapath(dtar->rna_path)) {
+          MEM_delete(dtar->rna_path);
+          dtar->rna_path = new_path;
+        }
       }
       DRIVER_TARGETS_LOOPER_END;
     }
   }
 
   /* Update F-Curve's path. */
-  if (replace_bbone_scale_rnapath(&fcu->rna_path)) {
+  if (char *new_path = replace_bbone_scale_rnapath(fcu->rna_path().c_str())) {
+    fcu->rna_path_set_move(new_path);
+
     /* If matched, duplicate the curve and tweak name. */
     FCurve *second = BKE_fcurve_copy(fcu);
 
-    second->rna_path[strlen(second->rna_path) - 1] = 'y';
+    char *second_path = BLI_strdup(second->rna_path().c_str());
+    second_path[strlen(second_path) - 1] = 'y';
+    second->rna_path_set_move(second_path);
 
     BLI_insertlinkafter(curves, fcu, second);
 
@@ -1693,35 +1698,33 @@ static void update_mapping_node_fcurve_rna_path_callback(FCurve *fcurve,
                                                          const bNode *minimumNode,
                                                          const bNode *maximumNode)
 {
-  if (!STRPREFIX(fcurve->rna_path, nodePath) ||
-      BLI_str_endswith(fcurve->rna_path, "default_value"))
+  if (!STRPREFIX(fcurve->rna_path().c_str(), nodePath) ||
+      BLI_str_endswith(fcurve->rna_path().c_str(), "default_value"))
   {
     return;
   }
-  char *old_fcurve_rna_path = fcurve->rna_path;
+  const char *old_fcurve_rna_path = fcurve->rna_path().c_str();
 
   if (BLI_str_endswith(old_fcurve_rna_path, "translation")) {
-    fcurve->rna_path = BLI_sprintfN("%s.%s", nodePath, "inputs[1].default_value");
+    fcurve->rna_path_set_move(BLI_sprintfN("%s.%s", nodePath, "inputs[1].default_value"));
   }
   else if (BLI_str_endswith(old_fcurve_rna_path, "rotation")) {
-    fcurve->rna_path = BLI_sprintfN("%s.%s", nodePath, "inputs[2].default_value");
+    fcurve->rna_path_set_move(BLI_sprintfN("%s.%s", nodePath, "inputs[2].default_value"));
   }
   else if (BLI_str_endswith(old_fcurve_rna_path, "scale")) {
-    fcurve->rna_path = BLI_sprintfN("%s.%s", nodePath, "inputs[3].default_value");
+    fcurve->rna_path_set_move(BLI_sprintfN("%s.%s", nodePath, "inputs[3].default_value"));
   }
   else if (minimumNode && BLI_str_endswith(old_fcurve_rna_path, "max")) {
     char node_name_esc[sizeof(minimumNode->name) * 2];
     BLI_str_escape(node_name_esc, minimumNode->name, sizeof(node_name_esc));
-    fcurve->rna_path = BLI_sprintfN("nodes[\"%s\"].%s", node_name_esc, "inputs[1].default_value");
+    fcurve->rna_path_set_move(
+        BLI_sprintfN("nodes[\"%s\"].%s", node_name_esc, "inputs[1].default_value"));
   }
   else if (maximumNode && BLI_str_endswith(old_fcurve_rna_path, "min")) {
     char node_name_esc[sizeof(maximumNode->name) * 2];
     BLI_str_escape(node_name_esc, maximumNode->name, sizeof(node_name_esc));
-    fcurve->rna_path = BLI_sprintfN("nodes[\"%s\"].%s", node_name_esc, "inputs[1].default_value");
-  }
-
-  if (fcurve->rna_path != old_fcurve_rna_path) {
-    MEM_delete(old_fcurve_rna_path);
+    fcurve->rna_path_set_move(
+        BLI_sprintfN("nodes[\"%s\"].%s", node_name_esc, "inputs[1].default_value"));
   }
 }
 
@@ -2283,7 +2286,7 @@ void do_versions_after_linking_280(FileData *fd, Main *bmain)
 
             space_outliner->outlinevis = SO_VIEW_LAYER;
 
-            if (BLI_listbase_is_single(&layer->layer_collections)) {
+            if (layer->layer_collections.is_single()) {
               if (space_outliner->treestore == nullptr) {
                 space_outliner->treestore = BLI_mempool_create(
                     sizeof(TreeStoreElem), 1, 512, BLI_MEMPOOL_ALLOW_ITER);
@@ -2345,7 +2348,7 @@ void do_versions_after_linking_280(FileData *fd, Main *bmain)
         }
         BKE_freestyle_config_free(&srl.freestyleConfig, true);
       }
-      BLI_freelistN(&scene.r.layers);
+      scene.r.layers.free_no_destruct();
     }
   }
 
@@ -2920,12 +2923,11 @@ void do_versions_after_linking_280(FileData *fd, Main *bmain)
      * removed, and reintroduced in 5e968a996a53 as "Object.hide_viewport". */
     for (Object &ob : bmain->objects) {
       animrig::versioning::fcurves_id_cb(&ob.id, [&](ID * /*id*/, FCurve *fcu) {
-        if (fcu->rna_path == nullptr || !STREQ(fcu->rna_path, "hide")) {
+        if (fcu->rna_path() != "hide") {
           return;
         }
 
-        MEM_delete(fcu->rna_path);
-        fcu->rna_path = BLI_strdupn("hide_viewport", 13);
+        fcu->rna_path_set("hide_viewport");
       });
     }
 
@@ -3116,9 +3118,9 @@ void blo_do_versions_280(FileData *fd, Library * /*lib*/, Main *bmain)
     if (flag_is_set(error, eNTreeDoVersionErrors::NTREE_DOVERSION_NEED_OUTPUT)) {
       BKE_report(fd->reports != nullptr ? fd->reports->reports : nullptr,
                  RPT_ERROR,
-                 "Eevee material conversion problem. Error in console");
+                 "EEVEE material conversion problem. Error in console");
       printf(
-          "You need to connect Principled and Eevee Specular shader nodes to new material "
+          "You need to connect Principled and EEVEE Specular shader nodes to new material "
           "output "
           "nodes.\n");
     }
@@ -3126,7 +3128,7 @@ void blo_do_versions_280(FileData *fd, Library * /*lib*/, Main *bmain)
     if (flag_is_set(error, eNTreeDoVersionErrors::NTREE_DOVERSION_TRANSPARENCY_EMISSION)) {
       BKE_report(fd->reports != nullptr ? fd->reports->reports : nullptr,
                  RPT_ERROR,
-                 "Eevee material conversion problem. Error in console");
+                 "EEVEE material conversion problem. Error in console");
       printf(
           "You need to combine transparency and emission shaders to the converted Principled "
           "shader nodes.\n");
@@ -3849,7 +3851,7 @@ void blo_do_versions_280(FileData *fd, Library * /*lib*/, Main *bmain)
         rbw->shared->ptcaches = rbw->ptcaches;
 
         rbw->pointcache = nullptr;
-        BLI_listbase_clear(&rbw->ptcaches);
+        rbw->ptcaches.clear_no_delete();
 
         if (rbw->shared->pointcache == nullptr) {
           rbw->shared->pointcache = BKE_ptcache_add(&(rbw->shared->ptcaches));
@@ -3872,7 +3874,7 @@ void blo_do_versions_280(FileData *fd, Library * /*lib*/, Main *bmain)
         sb->shared->ptcaches = sb->ptcaches;
 
         sb->pointcache = nullptr;
-        BLI_listbase_clear(&sb->ptcaches);
+        sb->ptcaches.clear_no_delete();
       }
     }
 
@@ -4847,7 +4849,7 @@ void blo_do_versions_280(FileData *fd, Library * /*lib*/, Main *bmain)
   if (!MAIN_VERSION_FILE_ATLEAST(bmain, 280, 49)) {
     /* All tool names changed, reset to defaults. */
     for (WorkSpace &workspace : bmain->workspaces) {
-      while (!BLI_listbase_is_empty(&workspace.tools)) {
+      while (!workspace.tools.is_empty()) {
         BKE_workspace_tool_remove(&workspace, static_cast<bToolRef *>(workspace.tools.first));
       }
     }

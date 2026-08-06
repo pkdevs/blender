@@ -27,14 +27,11 @@ static void node_declare(NodeDeclarationBuilder &b)
   const bNode *node = b.node_or_null();
 
   b.add_input<decl::Bundle>("Bundle"_ustr);
-  b.add_output<decl::Bundle>("Bundle"_ustr)
-      .align_with_previous()
-      .propagate_all()
-      .reference_pass_all();
+  b.add_output<decl::Bundle>("Bundle"_ustr).align_with_previous().propagate_all();
   if (node != nullptr) {
     const NodeGetBundleItem &storage = node_storage(*node);
-    const eNodeSocketDatatype socket_type = eNodeSocketDatatype(storage.socket_type);
-    auto &decl = b.add_output(socket_type, "Item"_ustr);
+    const eNodeSocketDatatype socket_type = storage.socket_type;
+    auto &decl = b.add_output(socket_type, "Item"_ustr).propagate_all();
     if (storage.structure_type == NodeSocketInterfaceStructureType::Auto) {
       decl.structure_type(StructureType::Dynamic);
     }
@@ -56,6 +53,7 @@ static void node_layout(ui::Layout &layout, bContext * /*C*/, PointerRNA *ptr)
 
 static void node_layout_ex(ui::Layout &layout, bContext * /*C*/, PointerRNA *ptr)
 {
+  layout.prop(ptr, "socket_type", UI_ITEM_NONE, "", ICON_NONE);
   layout.use_property_split_set(true);
   layout.use_property_decorate_set(false);
   layout.prop(ptr, "structure_type", UI_ITEM_NONE, IFACE_("Shape"), ICON_NONE);

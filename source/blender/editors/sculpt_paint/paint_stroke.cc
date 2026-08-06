@@ -13,16 +13,18 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_math_matrix.h"
 #include "BLI_math_matrix.hh"
-#include "BLI_math_vector.h"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_vector_c.hh"
 #include "BLI_rand.hh"
-#include "BLI_utildefines.h"
+#include "BLI_utildefines.hh"
 
 #include "DNA_brush_types.h"
 #include "DNA_curve_types.h"
 #include "DNA_object_types.h"
 #include "DNA_scene_types.h"
+
+#include "PRF_profile.hh"
 
 #include "RNA_access.hh"
 
@@ -50,12 +52,6 @@
 
 #include "mesh/sculpt_cloth.hh"
 #include "mesh/sculpt_intern.hh"
-
-// #define DEBUG_TIME
-
-#ifdef DEBUG_TIME
-#  include "BLI_time_utildefines.h"
-#endif
 
 namespace blender::ed::sculpt_paint {
 
@@ -237,6 +233,7 @@ bool PaintStroke::update(bContext *C,
                          float r_location[3],
                          bool *r_location_is_set)
 {
+  PRF_scope(ProfileCategory::Editor);
   Scene *scene = CTX_data_scene(C);
   Paint *paint = BKE_paint_get_active_from_paintmode(scene, mode);
   bke::PaintRuntime &paint_runtime = *paint->runtime;
@@ -475,6 +472,7 @@ float2 paint_stroke_jitter_pos(Paint *paint,
 /* Put the location of the next stroke dot into the stroke RNA and apply it to the mesh */
 void PaintStroke::add_step(bContext *C, wmOperator *op, const float2 mval, float pressure)
 {
+  PRF_scope(ProfileCategory::Editor);
   const PaintMode mode = BKE_paintmode_get_active_from_context(C);
   const Brush &brush = *BKE_paint_brush_for_read(this->paint);
   bke::PaintRuntime *paint_runtime = this->paint->runtime;
@@ -632,7 +630,8 @@ static float paint_space_stroke_spacing(const ViewContext &vc,
 
   /* apply spacing pressure */
   if (brush->stroke_method == BRUSH_STROKE_SPACE && brush->flag & BRUSH_SPACING_PRESSURE) {
-    spacing = spacing * (1.5f - pressure);
+    const float spacing_factor = BKE_curvemapping_evaluateF(brush->curve_spacing, 0, pressure);
+    spacing = spacing * (1.5f - spacing_factor);
   }
 
   if (cloth::is_cloth_deform_brush(*brush)) {
@@ -759,6 +758,7 @@ int PaintStroke::space_stroke(bContext *C,
                               const float2 final_mouse,
                               const float final_pressure)
 {
+  PRF_scope(ProfileCategory::Editor);
   const ARegion *region = CTX_wm_region(C);
   bke::PaintRuntime *paint_runtime = this->paint->runtime;
   const Paint &paint = *BKE_paint_get_active_from_context(C);
@@ -851,7 +851,7 @@ static bool print_pressure_status_enabled()
 
 /**** Public API ****/
 
-PaintStroke::PaintStroke(bContext *C, wmOperator *op, int event_type) : event_type_(event_type)
+PaintStroke::PaintStroke(bContext *C, wmOperator *op, const wmEvent *event)
 {
   this->depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
   this->paint = BKE_paint_get_active_from_context(C);
@@ -864,6 +864,16 @@ PaintStroke::PaintStroke(bContext *C, wmOperator *op, int event_type) : event_ty
   this->vc = ED_view3d_viewcontext_init(C, this->depsgraph);
   this->object = CTX_data_active_object(C);
   this->scene = CTX_data_scene(C);
+
+  if (event) {
+    WM_event_tablet_data(event, &pen_flip_, nullptr);
+    RNA_boolean_set(op->ptr, "pen_flip", pen_flip_);
+    event_type_ = event->type;
+  }
+  else {
+    pen_flip_ = RNA_boolean_get(op->ptr, "pen_flip");
+    event_type_ = 0;
+  }
 
   stroke_mode_ = BrushStrokeMode(RNA_enum_get(op->ptr, "mode"));
   brush_switch_mode_ = BrushSwitchMode(RNA_enum_get(op->ptr, "brush_toggle"));
@@ -928,6 +938,7 @@ PaintStroke::PaintStroke(bContext *C, wmOperator *op, int event_type) : event_ty
 
 void PaintStroke::done(bContext *C, const bool is_cancel)
 {
+  PRF_scope(ProfileCategory::Editor);
   if (print_pressure_status_enabled()) {
     ED_workspace_status_text(C, nullptr);
   }
@@ -1123,6 +1134,7 @@ void PaintStroke::add_sample(const int input_samples,
                              const float y,
                              const float pressure)
 {
+  PRF_scope(ProfileCategory::Editor);
   PaintSample *sample = &samples_[cur_sample_];
   const int max_samples = std::clamp(input_samples, 1, PAINT_MAX_INPUT_SAMPLES);
 
@@ -1165,6 +1177,7 @@ void PaintStroke::lines_spacing(bContext *C,
                                 const float2 old_pos,
                                 const float2 new_pos)
 {
+  PRF_scope(ProfileCategory::Editor);
   Paint *paint = BKE_paint_get_active_from_context(C);
   bke::PaintRuntime *paint_runtime = paint->runtime;
   const Brush &brush = *BKE_paint_brush(paint);
@@ -1251,6 +1264,7 @@ void PaintStroke::lines_spacing(bContext *C,
 
 void PaintStroke::line_end(bContext *C, wmOperator *op, const float2 mouse)
 {
+  PRF_scope(ProfileCategory::Editor);
   Brush *br = this->brush;
   bke::PaintRuntime *paint_runtime = this->paint->runtime;
   if (stroke_started_ && br->stroke_method == BRUSH_STROKE_LINE) {
@@ -1263,6 +1277,7 @@ void PaintStroke::line_end(bContext *C, wmOperator *op, const float2 mouse)
 
 bool PaintStroke::curve_end(bContext *C, wmOperator *op)
 {
+  PRF_scope(ProfileCategory::Editor);
   const Brush &br = *this->brush;
   if (br.stroke_method != BRUSH_STROKE_CURVE) {
     return false;
@@ -1278,10 +1293,6 @@ bool PaintStroke::curve_end(bContext *C, wmOperator *op)
   if (!pc) {
     return true;
   }
-
-#ifdef DEBUG_TIME
-  TIMEIT_START_AVERAGED(whole_stroke);
-#endif
 
   const PaintCurvePoint *pcp = pc->points;
   paint_runtime->overlap_factor = paint_stroke_integrate_overlap(br, 1.0);
@@ -1352,10 +1363,6 @@ bool PaintStroke::curve_end(bContext *C, wmOperator *op)
 
   this->done(C, false);
 
-#ifdef DEBUG_TIME
-  TIMEIT_END_AVERAGED(whole_stroke);
-#endif
-
   return true;
 }
 
@@ -1387,6 +1394,7 @@ static void paint_stroke_line_constrain(float2 last_mouse_position,
 
 wmOperatorStatus PaintStroke::modal(bContext *C, wmOperator *op, const wmEvent *event)
 {
+  PRF_scope(ProfileCategory::Editor);
   /* TODO: Temporary, used to facilitate removing bContext usage in subclasses */
   this->evil_C = C;
 
@@ -1411,7 +1419,7 @@ wmOperatorStatus PaintStroke::modal(bContext *C, wmOperator *op, const wmEvent *
   }
 
   /* see if tablet affects event. Line, anchored and drag dot strokes do not support pressure */
-  const float tablet_pressure = WM_event_tablet_data(event, &pen_flip_, nullptr);
+  const float tablet_pressure = WM_event_tablet_data(event, nullptr, nullptr);
   float pressure =
       ELEM(br->stroke_method, BRUSH_STROKE_LINE, BRUSH_STROKE_ANCHORED, BRUSH_STROKE_DRAG_DOT) ?
           1.0f :
@@ -1464,7 +1472,7 @@ wmOperatorStatus PaintStroke::modal(bContext *C, wmOperator *op, const wmEvent *
 
   /* one time stroke initialization */
   if (!stroke_started_) {
-    RNA_boolean_set(op->ptr, "pen_flip", pen_flip_);
+    pen_flip_ = RNA_boolean_get(op->ptr, "pen_flip");
 
     last_pressure_ = sample_average.pressure;
     this->last_mouse_position = sample_average.mouse;
@@ -1631,6 +1639,7 @@ wmOperatorStatus PaintStroke::modal(bContext *C, wmOperator *op, const wmEvent *
 
 wmOperatorStatus PaintStroke::exec(bContext *C, wmOperator *op)
 {
+  PRF_scope(ProfileCategory::Editor);
   /* TODO: Temporary, used to facilitate removing bContext usage in subclasses */
   this->evil_C = C;
 
@@ -1684,11 +1693,13 @@ wmOperatorStatus PaintStroke::exec(bContext *C, wmOperator *op)
 
 void PaintStroke::finish(bContext *C)
 {
+  PRF_scope(ProfileCategory::Editor);
   this->done(C, false);
 }
 
 void PaintStroke::cancel(bContext *C)
 {
+  PRF_scope(ProfileCategory::Editor);
   this->done(C, true);
 }
 

@@ -6,9 +6,9 @@
  * \ingroup spseq
  */
 
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 #include "BLI_map.hh"
-#include "BLI_math_base.h"
+#include "BLI_math_base_c.hh"
 #include "BLI_set.hh"
 
 #include "DNA_scene_types.h"
@@ -38,7 +38,7 @@
 
 namespace blender::ed::vse {
 
-/*-------------------------------------------------------------------- */
+/* -------------------------------------------------------------------- */
 /** \name Retiming Generic Functions
  * \{ */
 
@@ -65,7 +65,7 @@ static bool retiming_poll(bContext *C)
 
 /** \} */
 
-/*-------------------------------------------------------------------- */
+/* -------------------------------------------------------------------- */
 /** \name Retiming Data Show
  * \{ */
 
@@ -128,7 +128,7 @@ void SEQUENCER_OT_retiming_show(wmOperatorType *ot)
 
 /** \} */
 
-/*-------------------------------------------------------------------- */
+/* -------------------------------------------------------------------- */
 /** \name Retiming Reset
  * \{ */
 
@@ -482,7 +482,7 @@ void SEQUENCER_OT_retiming_transition_add(wmOperatorType *ot)
               0,
               INT_MAX,
               "Duration",
-              "Duration of freeze frame segment",
+              "Duration of speed transition segment",
               0,
               INT_MAX);
 }
@@ -535,7 +535,7 @@ static wmOperatorStatus sequencer_retiming_key_delete_invoke(bContext *C,
   Scene *scene = CTX_data_sequencer_scene(C);
   ListBaseT<TimeMarker> *markers = &scene->markers;
 
-  if (!BLI_listbase_is_empty(markers)) {
+  if (!markers->is_empty()) {
     ARegion *region = CTX_wm_region(C);
     if (region && (region->regiontype == RGN_TYPE_WINDOW)) {
       /* Bounding box of 30 pixels is used for markers shortcuts,
