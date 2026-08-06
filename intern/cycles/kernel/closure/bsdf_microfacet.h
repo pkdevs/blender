@@ -73,19 +73,19 @@ ccl_device_inline bool iszero(ccl_private const FresnelCoeff &coeff)
   return is_zero(coeff.reflectance) && is_zero(coeff.transmittance);
 }
 
-struct FresnelDielectricTint {
+struct FresnelThinFilmed {
   FresnelThinFilm thin_film;
+};
+
+struct FresnelDielectricTint : public FresnelThinFilmed {
   FresnelCoeff tint;
 };
 
-struct FresnelConductor {
-  FresnelThinFilm thin_film;
+struct FresnelConductor : public FresnelThinFilmed {
   complex<Spectrum> ior;
 };
 
-struct FresnelGeneralizedSchlick {
-  FresnelThinFilm thin_film;
-
+struct FresnelGeneralizedSchlick : public FresnelThinFilmed {
   FresnelCoeff tint;
   /* Reflectivity at perpendicular (F0) and glancing (F90) angles. */
   Spectrum f0, f90;
@@ -93,10 +93,7 @@ struct FresnelGeneralizedSchlick {
   float exponent;
 };
 
-struct FresnelF82Tint {
-  FresnelThinFilm thin_film;
-
-  /* Perpendicular reflectivity. */
+struct FresnelF82Tint : public FresnelThinFilmed {  /* Perpendicular reflectivity. */
   Spectrum f0;
   /* Precomputed (1-cos)^6 factor for edge tint. */
   Spectrum b;
@@ -309,15 +306,20 @@ generalized_schlick_fresnel(KernelGlobals kg,
                             const float cos_theta_i,
                             ccl_private float *r_cos_theta_t)
 {
-  Spectrum F;
-  if (fresnel->thin_film.thickness > THINFILM_THICKNESS_CUTOFF) {
+  Spectrum Ftf = make_spectrum(0.0f);
+  Spectrum F = make_spectrum(0.0f);
+  bool thin_film = false;
+  float thin_film_weight = 0.0f;
+  if (fresnel->thin_film.thickness > THINFILM_THICKNESS_CUTOFF &&
+      fresnel->thin_film.weight > CLOSURE_WEIGHT_CUTOFF)
+  {
     /* Iridescence doesn't combine well with the general case. We only expose it through the
      * Principled BSDF for now, so it's fine to not support custom exponents and F90. */
     kernel_assert(fresnel->exponent < 0.0f);
     kernel_assert(fresnel->f90 == one_spectrum());
     /* One channel at a time to reduce GPU register pressure. */
     FOREACH_SPECTRUM_CHANNEL (i) {
-      GET_SPECTRUM_CHANNEL(F, i) = fresnel_iridescence_channel<false>(
+      GET_SPECTRUM_CHANNEL(Ftf, i) = fresnel_iridescence_channel<false>(
           kg, i, 1.0f, fresnel->thin_film, ior, 0.0f, -1.0f, cos_theta_i, r_cos_theta_t);
     }
     /* Apply F0 scaling (here per-channel, since iridescence produces colored output).
@@ -327,41 +329,49 @@ generalized_schlick_fresnel(KernelGlobals kg,
      * There isn't one single "correct" way to do this, it's just for artistic control anyways.
      */
     const float F0_real = F0_from_ior(ior);
-    if (F0_real > 1e-5f && !isequal(F, one_spectrum())) {
+    if (F0_real > 1e-5f && !isequal(Ftf, one_spectrum())) {
       FOREACH_SPECTRUM_CHANNEL (i) {
-        const float s = saturatef(inverse_lerp(1.0f, F0_real, GET_SPECTRUM_CHANNEL(F, i)));
+        const float s = saturatef(inverse_lerp(1.0f, F0_real, GET_SPECTRUM_CHANNEL(Ftf, i)));
         const float factor = GET_SPECTRUM_CHANNEL(fresnel->f0, i) / F0_real;
-        GET_SPECTRUM_CHANNEL(F, i) *= mix(1.0f, factor, s);
+        GET_SPECTRUM_CHANNEL(Ftf, i) *= mix(1.0f, factor, s);
       }
     }
+    thin_film = true;
+    thin_film_weight = fresnel->thin_film.weight;
   }
-  else if (fresnel->exponent < 0.0f) {
-    /* Special case: Use real Fresnel curve to determine the interpolation between F0 and F90.
-     * Used by Principled BSDF. */
-    const float F_real = fresnel_dielectric(cos_theta_i, ior, r_cos_theta_t);
-    const float F0_real = F0_from_ior(ior);
-    const float s = saturatef(inverse_lerp(F0_real, 1.0f, F_real));
-    F = mix(fresnel->f0, fresnel->f90, s);
-  }
-  else {
-    /* Regular case: Generalized Schlick term. */
-    const float cos_theta_t_sq = 1.0f - (1.0f - sqr(cos_theta_i)) / sqr(ior);
-    if (cos_theta_t_sq <= 0.0f) {
-      /* Total internal reflection */
-      return {fresnel->tint.reflectance, zero_spectrum()};
-    }
-    const float cos_theta_t = sqrtf(cos_theta_t_sq);
-    if (r_cos_theta_t) {
-      *r_cos_theta_t = cos_theta_t;
-    }
 
-    /* TODO(lukas): Is a special case for exponent==5 worth it? */
-    /* When going from a higher to a lower IOR, we must use the transmitted angle. */
-    const float fresnel_angle = (ior < 1.0f) ? cos_theta_t : cos_theta_i;
-    const float s = powf(1.0f - fresnel_angle, fresnel->exponent);
-    F = mix(fresnel->f0, fresnel->f90, s);
+  if (!thin_film || thin_film_weight < 1.0f) {
+    if (fresnel->exponent < 0.0f) {
+      /* Special case: Use real Fresnel curve to determine the interpolation between F0 and F90.
+       * Used by Principled BSDF. */
+      const float F_real = fresnel_dielectric(cos_theta_i, ior, r_cos_theta_t);
+      const float F0_real = F0_from_ior(ior);
+      const float s = saturatef(inverse_lerp(F0_real, 1.0f, F_real));
+      F = mix(fresnel->f0, fresnel->f90, s);
+    }
+    else {
+      /* Regular case: Generalized Schlick term. */
+      const float cos_theta_t_sq = 1.0f - (1.0f - sqr(cos_theta_i)) / sqr(ior);
+      if (cos_theta_t_sq <= 0.0f) {
+        /* Total internal reflection */
+        return {fresnel->tint.reflectance, zero_spectrum()};
+      }
+      const float cos_theta_t = sqrtf(cos_theta_t_sq);
+      if (r_cos_theta_t) {
+        *r_cos_theta_t = cos_theta_t;
+      }
+
+      /* TODO(lukas): Is a special case for exponent==5 worth it? */
+      /* When going from a higher to a lower IOR, we must use the transmitted angle. */
+      const float fresnel_angle = (ior < 1.0f) ? cos_theta_t : cos_theta_i;
+      const float s = powf(1.0f - fresnel_angle, fresnel->exponent);
+      F = mix(fresnel->f0, fresnel->f90, s);
+    }
   }
-  return fresnel->tint * F;
+
+  Spectrum Fmix = endvalue_preserving_mix(F, Ftf, thin_film_weight);
+
+  return fresnel->tint * Fmix;
 }
 
 /* Computes the Fresnel reflectance and transmittance given the Microfacet BSDF and the cosine of
@@ -379,103 +389,127 @@ ccl_device_forceinline FresnelCoeff microfacet_fresnel(KernelGlobals kg,
 
   FresnelCoeff coeff(has_reflection, has_transmission);
 
-  if (bsdf->fresnel_type == MicrofacetFresnel::CONDUCTOR) {
-    if (!has_reflection) {
-      return {zero_spectrum(), zero_spectrum()};
-    }
-    ccl_private FresnelConductor *fresnel = (ccl_private FresnelConductor *)bsdf->fresnel;
-    if (fresnel->thin_film.thickness > THINFILM_THICKNESS_CUTOFF && fresnel->thin_film.weight > CLOSURE_WEIGHT_CUTOFF) {
-      /* One channel at a time to reduce GPU register pressure. */
-      Spectrum F;
-      FOREACH_SPECTRUM_CHANNEL (i) {
-        GET_SPECTRUM_CHANNEL(F, i) = fresnel_iridescence_channel<true>(
-            kg,
-            i,
-            1.0f,
-            fresnel->thin_film,
-            GET_SPECTRUM_CHANNEL(fresnel->ior.re, i),
-            GET_SPECTRUM_CHANNEL(fresnel->ior.im, i),
-            -1.0f,
-            cos_theta_i,
-            r_cos_theta_t);
+  switch (bsdf->fresnel_type) {
+    case MicrofacetFresnel::CONDUCTOR: {
+      if (!has_reflection) {
+        return {zero_spectrum(), zero_spectrum()};
       }
+      ccl_private FresnelConductor *fresnel = (ccl_private FresnelConductor *)bsdf->fresnel;
+      if (fresnel->thin_film.thickness > THINFILM_THICKNESS_CUTOFF &&
+          fresnel->thin_film.weight > CLOSURE_WEIGHT_CUTOFF)
+      {
+        /* One channel at a time to reduce GPU register pressure. */
+        Spectrum F;
+        FOREACH_SPECTRUM_CHANNEL (i) {
+          GET_SPECTRUM_CHANNEL(F, i) = fresnel_iridescence_channel<true>(
+              kg,
+              i,
+              1.0f,
+              fresnel->thin_film,
+              GET_SPECTRUM_CHANNEL(fresnel->ior.re, i),
+              GET_SPECTRUM_CHANNEL(fresnel->ior.im, i),
+              -1.0f,
+              cos_theta_i,
+              r_cos_theta_t);
+        }
 
-      if (fresnel->thin_film.weight < 1.0f) {
-        const Spectrum Fc = fresnel_conductor(cos_theta_i, fresnel->ior);
-        F = mix(Fc, F, fresnel->thin_film.weight);
-      } 
-      coeff.reflectance = F;
-    }
-    else {
-      coeff.reflectance = fresnel_conductor(cos_theta_i, fresnel->ior);
-    }
-  }
-  else if (bsdf->fresnel_type == MicrofacetFresnel::F82_TINT) {
-    if (!has_reflection) {
-      return {zero_spectrum(), zero_spectrum()};
-    }
-    /* F82-Tint model, described in "Novel aspects of the Adobe Standard Material" by Kutz et al.
-     * Essentially, this is the usual Schlick Fresnel with an additional cosI*(1-cosI)^6
-     * term which modulates the reflectivity around acos(1/7) degrees (ca. 82°). */
-    ccl_private FresnelF82Tint *fresnel = (ccl_private FresnelF82Tint *)bsdf->fresnel;
-
-    if (fresnel->thin_film.thickness > THINFILM_THICKNESS_CUTOFF && fresnel->thin_film.weight > CLOSURE_WEIGHT_CUTOFF) {
-      /* Estimate n and k by reinterpreting F0 and F82 as r and g from "Artist Friendly Metallic
-       * Fresnel" by Ole Gulbrandsen.
-       * One channel at a time to reduce GPU register pressure. */
-      Spectrum F;
-      FOREACH_SPECTRUM_CHANNEL (i) {
-        const float f0 = GET_SPECTRUM_CHANNEL(fresnel->f0, i);
-        const float r = min(f0, 0.999f);
-        const float g = fresnel_f82(1.0f / 7.0f, f0, GET_SPECTRUM_CHANNEL(fresnel->b, i));
-
-        const float sqrt_r = sqrtf(r);
-        const float n = mix((1.0f + sqrt_r) / (1.0f - sqrt_r), (1.0f - r) / (1.0f + r), g);
-        const float k = safe_sqrtf((r * sqr(n + 1.0f) - sqr(n - 1.0f)) / (1.0f - r));
-
-        GET_SPECTRUM_CHANNEL(F, i) = fresnel_iridescence_channel<true>(
-            kg, i, 1.0f, fresnel->thin_film, n, k, g, cos_theta_i, r_cos_theta_t);
+        if (fresnel->thin_film.weight < 1.0f) {
+          const Spectrum Fc = fresnel_conductor(cos_theta_i, fresnel->ior);
+          F = endvalue_preserving_mix(Fc, F, fresnel->thin_film.weight);
+        }
+        coeff.reflectance = F;
       }
-      if (fresnel->thin_film.weight < 1.0f) {
-        const Spectrum F82 = fresnel_f82(cos_theta_i, fresnel->f0, fresnel->b);
-        F = mix(F82, F, fresnel->thin_film.weight);
-      } 
-      coeff.reflectance = F;
-    }
-    else {
-      coeff.reflectance = fresnel_f82(cos_theta_i, fresnel->f0, fresnel->b);
-    }
-  }
-  else if (bsdf->fresnel_type == MicrofacetFresnel::GENERALIZED_SCHLICK) {
-    ccl_private FresnelGeneralizedSchlick *fresnel = (ccl_private FresnelGeneralizedSchlick *)
-                                                         bsdf->fresnel;
-    coeff *= generalized_schlick_fresnel(kg, fresnel, bsdf->ior, cos_theta_i, r_cos_theta_t);
-  }
-  else if(bsdf->fresnel_type == MicrofacetFresnel::DIELECTRIC_TINT) {
-    ccl_private FresnelDielectricTint *fresnel = (ccl_private FresnelDielectricTint *)bsdf->fresnel;
-    if (fresnel->thin_film.thickness > THINFILM_THICKNESS_CUTOFF && fresnel->thin_film.weight > CLOSURE_WEIGHT_CUTOFF) {
-      Spectrum F;
-      FOREACH_SPECTRUM_CHANNEL (i) {
-      GET_SPECTRUM_CHANNEL(F, i) = fresnel_iridescence_channel<false>(
-          kg, i, 1.0f, fresnel->thin_film, bsdf->ior, 0.0f, -1.0f, cos_theta_i, r_cos_theta_t);
+      else {
+        coeff.reflectance = fresnel_conductor(cos_theta_i, fresnel->ior);
       }
-      if (fresnel->thin_film.weight < 1.0f) {
-        const float Fd = fresnel_dielectric(cos_theta_i, bsdf->ior, r_cos_theta_t);
-        F = mix(make_spectrum(Fd), F, fresnel->thin_film.weight);
-      } 
+    } break;
+    case MicrofacetFresnel::F82_TINT: {
+      if (!has_reflection) {
+        return {zero_spectrum(), zero_spectrum()};
+      }
+      /* F82-Tint model, described in "Novel aspects of the Adobe Standard Material" by Kutz et al.
+       * Essentially, this is the usual Schlick Fresnel with an additional cosI*(1-cosI)^6
+       * term which modulates the reflectivity around acos(1/7) degrees (ca. 82°). */
+      ccl_private FresnelF82Tint *fresnel = (ccl_private FresnelF82Tint *)bsdf->fresnel;
+
+      if (fresnel->thin_film.thickness > THINFILM_THICKNESS_CUTOFF &&
+          fresnel->thin_film.weight > CLOSURE_WEIGHT_CUTOFF)
+      {
+        /* Estimate n and k by reinterpreting F0 and F82 as r and g from "Artist Friendly Metallic
+         * Fresnel" by Ole Gulbrandsen.
+         * One channel at a time to reduce GPU register pressure. */
+        Spectrum F;
+        FOREACH_SPECTRUM_CHANNEL (i) {
+          const float f0 = GET_SPECTRUM_CHANNEL(fresnel->f0, i);
+          const float r = min(f0, 0.999f);
+          const float g = fresnel_f82(1.0f / 7.0f, f0, GET_SPECTRUM_CHANNEL(fresnel->b, i));
+
+          const float sqrt_r = sqrtf(r);
+          const float n = mix((1.0f + sqrt_r) / (1.0f - sqrt_r), (1.0f - r) / (1.0f + r), g);
+          const float k = safe_sqrtf((r * sqr(n + 1.0f) - sqr(n - 1.0f)) / (1.0f - r));
+
+          GET_SPECTRUM_CHANNEL(F, i) = fresnel_iridescence_channel<true>(
+              kg, i, 1.0f, fresnel->thin_film, n, k, g, cos_theta_i, r_cos_theta_t);
+        }
+        if (fresnel->thin_film.weight < 1.0f) {
+          const Spectrum F82 = fresnel_f82(cos_theta_i, fresnel->f0, fresnel->b);
+          F = endvalue_preserving_mix(F82, F, fresnel->thin_film.weight);
+        }
+        coeff.reflectance = F;
+      }
+      else {
+        coeff.reflectance = fresnel_f82(cos_theta_i, fresnel->f0, fresnel->b);
+      }
+      break;
+    }
+    case MicrofacetFresnel::GENERALIZED_SCHLICK: {
+      ccl_private FresnelGeneralizedSchlick *fresnel = (ccl_private FresnelGeneralizedSchlick *)
+                                                           bsdf->fresnel;
+      coeff *= generalized_schlick_fresnel(kg, fresnel, bsdf->ior, cos_theta_i, r_cos_theta_t);
+      break;
+    }
+    case MicrofacetFresnel::DIELECTRIC_TINT:{
+      Spectrum F;
+      ccl_private FresnelThinFilmed *fresnel_thin_filmed = (ccl_private FresnelThinFilmed *)
+                                                               bsdf->fresnel;
+      if (fresnel_thin_filmed->thin_film.thickness > THINFILM_THICKNESS_CUTOFF &&
+          fresnel_thin_filmed->thin_film.weight > CLOSURE_WEIGHT_CUTOFF)
+      {
+        FOREACH_SPECTRUM_CHANNEL (i) {
+          GET_SPECTRUM_CHANNEL(F, i) = fresnel_iridescence_channel<false>(
+              kg,
+              i,
+              1.0f,
+              fresnel_thin_filmed->thin_film,
+              bsdf->ior,
+              0.0f,
+              -1.0f,
+              cos_theta_i,
+              r_cos_theta_t);
+        }
+        if (fresnel_thin_filmed->thin_film.weight < 1.0f) {
+          const float Fd = fresnel_dielectric(cos_theta_i, bsdf->ior, r_cos_theta_t);
+          F = endvalue_preserving_mix(make_spectrum(Fd), F, fresnel_thin_filmed->thin_film.weight);
+        }
+      }
+      else {
+        F = make_spectrum(fresnel_dielectric(cos_theta_i, bsdf->ior, r_cos_theta_t));
+      }
       coeff *= F;
-    } else {
-      coeff *= fresnel_dielectric(cos_theta_i, bsdf->ior, r_cos_theta_t);
+      coeff *= ((ccl_private FresnelDielectricTint *)bsdf->fresnel)->tint;
+      break;
     }
-    coeff *= fresnel->tint;
-  } else if(bsdf->fresnel_type == MicrofacetFresnel::DIELECTRIC) {
-    coeff *= fresnel_dielectric(cos_theta_i, bsdf->ior, r_cos_theta_t);
-  }
-  else if (bsdf->fresnel_type == MicrofacetFresnel::NONE) {
-    /* No Fresnel used, this is either purely reflective or purely refractive closure. */
-    /* Exclude total internal reflection. */
-    if (has_transmission && fresnel_dielectric(cos_theta_i, bsdf->ior, r_cos_theta_t) == 1.0f) {
-      coeff.transmittance = zero_spectrum();
+    case MicrofacetFresnel::DIELECTRIC: {
+      coeff *= fresnel_dielectric(cos_theta_i, bsdf->ior, r_cos_theta_t);
+      break;
+    }
+    case MicrofacetFresnel::NONE: {
+      /* No Fresnel used, this is either purely reflective or purely refractive closure. */
+      /* Exclude total internal reflection. */
+      if (has_transmission && fresnel_dielectric(cos_theta_i, bsdf->ior, r_cos_theta_t) == 1.0f) {
+        coeff.transmittance = zero_spectrum();
+      }
+      break;
     }
   }
   return coeff;
