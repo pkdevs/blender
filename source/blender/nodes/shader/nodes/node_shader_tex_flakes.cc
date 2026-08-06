@@ -99,14 +99,6 @@ static int gpu_shader_tex_flakes(GPUMaterial *mat,
   return GPU_stack_link(mat, node, name, in, out);
 }
 
-/* For geometry nodes/multi function, it is omitted here for brevity to keep it simple, 
- * or we can implement it if required, but it's not strictly necessary for the Shader Editor.
- * I will provide an empty implementation or a fallback to avoid compilation errors if not fully implemented.
- */
-static void sh_node_flakes_build_multi_function(NodeMultiFunctionBuilder & /*builder*/)
-{
-  /* To do: implement mf::MultiFunction for Flakes geometry nodes support. */
-}
 
 NODE_SHADER_MATERIALX_BEGIN
 #ifdef WITH_MATERIALX
@@ -134,7 +126,6 @@ void register_node_type_sh_tex_flakes()
   ntype.draw_buttons = file_ns::node_shader_buts_tex_flakes;
   ntype.initfunc = file_ns::node_shader_init_tex_flakes;
   ntype.gpu_fn = file_ns::gpu_shader_tex_flakes;
-  ntype.build_multi_function = file_ns::sh_node_flakes_build_multi_function;
   ntype.materialx_fn = file_ns::node_shader_materialx;
 
   bke::node_register_type(ntype);
