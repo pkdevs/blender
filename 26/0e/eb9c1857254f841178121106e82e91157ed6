@@ -1,2 +1,3 @@
 Referenced by issue #161369, EEVEE hardware ray query tests fail locally
 Referenced by issue #161575, EEVEE OpenGL: Invalid image bindings when using texture pool
+Referenced by issue #162391, Crash creating Playblast from Range in VSE
