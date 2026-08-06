@@ -941,29 +941,33 @@ vector<SymbolTable::BuiltinFunc> SymbolTable::generate_all_builtin_functions()
   };
 
   for (auto [type, prefix] : image_types) {
-    vector<pair<SymbolClass *, int>> samplers = {
+    vector<tuple<SymbolClass *, int, int>> samplers = {
         /* Name, Coordinate Dimensions. */
-        {root->classes[prefix + "sampler1D"], 1},
-        {root->classes[prefix + "sampler2D"], 2},
-        {root->classes[prefix + "sampler3D"], 3},
-        {root->classes[prefix + "samplerCube"], 3},
-        {root->classes[prefix + "sampler1DArray"], 2},
-        {root->classes[prefix + "sampler2DArray"], 3},
-        {root->classes[prefix + "samplerCubeArray"], 4},
+        {root->classes[prefix + "sampler1D"], 1, 1},
+        {root->classes[prefix + "sampler2D"], 2, 2},
+        {root->classes[prefix + "sampler3D"], 3, 3},
+        {root->classes[prefix + "samplerCube"], 3, 3},
+        {root->classes[prefix + "sampler1DArray"], 2, 1},
+        {root->classes[prefix + "sampler2DArray"], 3, 2},
+        {root->classes[prefix + "samplerCubeArray"], 4, 3},
     };
 
     if (prefix.empty()) {
-      samplers.emplace_back(root->classes[prefix + "sampler2DDepth"], 2);
-      samplers.emplace_back(root->classes[prefix + "samplerCubeDepth"], 3);
-      samplers.emplace_back(root->classes[prefix + "sampler2DArrayDepth"], 3);
-      samplers.emplace_back(root->classes[prefix + "samplerCubeArrayDepth"], 4);
+      samplers.emplace_back(root->classes["sampler2DDepth"], 2, 2);
+      samplers.emplace_back(root->classes["samplerCubeDepth"], 3, 3);
+      samplers.emplace_back(root->classes["sampler2DArrayDepth"], 3, 2);
+      samplers.emplace_back(root->classes["samplerCubeArrayDepth"], 4, 3);
     }
 
-    for (auto [sampler, dim] : samplers) {
-      SymbolClass *coord_type = f_types[dim - 1];
-      SymbolClass *icoord_type = i_types[dim - 1];
+    for (auto [sampler, coord_dim, deriv_dim] : samplers) {
+      SymbolClass *coord_type = f_types[coord_dim - 1];
+      SymbolClass *icoord_type = i_types[coord_dim - 1];
+      SymbolClass *deriv_type = f_types[deriv_dim - 1];
+
       functions.push_back({type, "texture", {sampler, coord_type}});
       functions.push_back({type, "textureLod", {sampler, coord_type, float_cls}});
+      functions.push_back({type, "textureGather", {sampler, coord_type}});
+      functions.push_back({type, "textureGrad", {sampler, coord_type, deriv_type, deriv_type}});
       functions.push_back({icoord_type, "textureSize", {sampler, int_cls}});
       functions.push_back({type, "texelFetch", {sampler, icoord_type, int_cls}});
     }
