@@ -43,7 +43,9 @@ inline AlignRotationsConstraintResult evaluate_align_rotations_constraint(
 
   const float4 residual_neg = rot_diff_f - rest_rot_f;
   const float4 residual_pos = rot_diff_f + rest_rot_f;
-  const float4 residual = math::length_squared(residual_neg) < math::length_squared(residual_pos) ?
+  constexpr float residual_noise_threshold = 1e-7f;
+  const float4 residual = math::length_squared(residual_neg) <
+                                  math::length_squared(residual_pos) + residual_noise_threshold ?
                               residual_neg :
                               residual_pos;
 
