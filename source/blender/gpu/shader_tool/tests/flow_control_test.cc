@@ -829,7 +829,7 @@ void foo() { f(); }
     string input = R"(
 int f3(int a);
 [[force_inline]] int f2(int a) {
-  return f3(b);
+  return f3(a);
 }
 [[force_inline]] int f3(int b) {
   return f2(b);
