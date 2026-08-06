@@ -28,7 +28,11 @@ struct ShapeDisplayFragOut {
 float shape_display_light_radiance_get(LightData light)
 {
   if (is_sun_light(light.type)) {
+#ifdef __BSL__
+    float radius = light.sun.shape_radius;
+#else
     float radius = light.sun().shape_radius;
+#endif
     return M_1_PI * (1.0f + 1.0f / max(radius * radius, 1e-20f));
   }
 

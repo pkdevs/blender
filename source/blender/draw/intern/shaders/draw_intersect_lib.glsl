@@ -11,6 +11,7 @@
 
 #include "draw_view_infos.hh"
 
+#include "draw_shader_shared.hh"
 #include "draw_shape_lib.glsl"
 #include "gpu_shader_math_base_lib.glsl"
 #include "gpu_shader_math_safe_lib.glsl"
