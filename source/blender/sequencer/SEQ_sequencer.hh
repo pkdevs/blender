@@ -77,7 +77,6 @@ enum class StripRuntimeFlag {
   IgnoreChannelLock = (1 << 5), /* For #SEQUENCER_OT_duplicate_move macro. */
   ShowOffsets = (1 << 6),       /* Set during #SEQUENCER_OT_slip. */
 };
-ENUM_OPERATORS(StripRuntimeFlag);
 
 struct StripRuntime {
   ~StripRuntime();
