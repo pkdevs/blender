@@ -874,12 +874,14 @@ bool light_iter_should_skip(eevee::light::VisibleLightIterator &iter)
   }
 
 void node_light_info_impl(const int light_index,
+                          float3 position,
                           float4 &color,
                           float &power,
-                          float3 &position,
+                          float3 &light_position,
                           float3 &direction,
                           float &distance,
-                          float &mask)
+                          float &mask,
+                          float &is_sun)
 {
   /* clang-format off */ /* Multiline macros would break line count. */
   [[resource_table]] const eevee::LightRenderData &lrd = resource_table_get(eevee::LightRenderData);
@@ -888,12 +890,13 @@ void node_light_info_impl(const int light_index,
   LightData light = lrd.light_buf[light_index];
   color = float4(light.color, 1.0f);
   power = eevee::light::power_get(light, LIGHT_VOLUME);
-  position = light.object_to_world.location();
+  light_position = light.object_to_world.location();
   const bool is_directional = (light.type == LIGHT_SUN) || (light.type == LIGHT_SUN_ORTHO);
-  LightVector lv = light_vector_get(light, is_directional, g_data.P);
+  LightVector lv = light_vector_get(light, is_directional, position);
   direction = lv.L;
   distance = lv.dist;
   mask = light_attenuation_surface(light, is_directional, lv);
+  is_sun = is_directional ? 1.0f : 0.0f;
 }
 
 void node_light_accumulation_impl(float4 diffuse_light,
@@ -920,7 +923,6 @@ void node_light_evaluation_impl(const int light_index,
                                 float3 position,
                                 float3 normal,
                                 float roughness,
-                                float4 &color,
                                 float &factor,
                                 float &energy_scale)
 {

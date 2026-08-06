@@ -4,12 +4,15 @@
 
 [[node]]
 void node_light_info(const float light_index,
+                     float3 position,
                      float4 &color,
                      float &power,
-                     float3 &position,
+                     float3 &light_position,
                      float3 &direction,
                      float &distance,
-                     float &mask)
+                     float &mask,
+                     float &is_sun)
 {
-  node_light_info_impl(int(light_index), color, power, position, direction, distance, mask);
+  node_light_info_impl(
+      int(light_index), position, color, power, light_position, direction, distance, mask, is_sun);
 }
