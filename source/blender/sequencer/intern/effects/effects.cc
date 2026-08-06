@@ -380,15 +380,4 @@ bool effect_is_transition(StripType type)
   return ELEM(type, STRIP_TYPE_CROSS, STRIP_TYPE_GAMCROSS, STRIP_TYPE_WIPE, STRIP_TYPE_COMPOSITOR);
 }
 
-bool transition_inputs_have_wrong_order(const Scene *scene,
-                                        const Strip *input1,
-                                        const Strip *input2)
-{
-  const int first_start = input1->left_handle();
-  const int second_start = input2->left_handle();
-  return (first_start > second_start) ||
-         (first_start == second_start &&
-          input1->right_handle(scene) > input2->right_handle(scene));
-}
-
 }  // namespace blender::seq

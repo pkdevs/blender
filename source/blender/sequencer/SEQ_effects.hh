@@ -35,9 +35,6 @@ void effect_free(Strip *strip);
 int effect_type_get_min_num_inputs(StripType type);
 bool strip_type_is_effect(StripType type);
 bool effect_is_transition(StripType type);
-bool transition_inputs_have_wrong_order(const Scene *scene,
-                                        const Strip *input1,
-                                        const Strip *input2);
 
 void effect_text_font_set(Strip *strip, VFont *font);
 bool effects_can_render_text(const Strip *strip);
