@@ -747,11 +747,12 @@ Panel *panel_begin(
   if (newpanel && region->regiontype == RGN_TYPE_TOOLS &&
       STRPREFIX(panel->panelname, "FILEBROWSER_PT_"))
   {
-    const int order = recents::Section("panel.sortorder")[panel->panelname];
+    const std::string panel_name_str = panel->panelname;
+    const int order = recents::Section("panel.sortorder").get<int>(panel_name_str);
     if (order >= 0) {
       panel->sortorder = order;
       SET_FLAG_FROM_TEST(
-          panel->flag, !recents::Section("panel.open")[panel->panelname], PNL_CLOSED);
+          panel->flag, !recents::Section("panel.open").get<int>(panel_name_str), PNL_CLOSED);
     }
   }
 
@@ -2936,8 +2937,9 @@ static void panel_activate_state(const bContext *C, Panel *panel, const HandlePa
     if (CTX_wm_area(C)->spacetype == SPACE_FILE && region->regiontype == RGN_TYPE_TOOLS) {
       for (Panel &pnl : region->panels) {
         if (STRPREFIX(pnl.panelname, "FILEBROWSER_PT_")) {
-          recents::Section("panel.sortorder")[pnl.panelname] = pnl.sortorder;
-          recents::Section("panel.open")[pnl.panelname] = !(pnl.flag & PNL_CLOSED);
+          const std::string pnl_name_str = pnl.panelname;
+          recents::Section("panel.sortorder").set(pnl_name_str, pnl.sortorder);
+          recents::Section("panel.open").set(pnl_name_str, !(pnl.flag & PNL_CLOSED));
         }
       }
     }

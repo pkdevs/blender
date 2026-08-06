@@ -31,23 +31,21 @@
  * Typical usage
  *   // Read
  *   std::vector<float> bounds =
- *       recents::section("temp.window.dimensions")["PREFERENCES"];
+ *       recents::Section("temp.window.dimensions").get("PREFERENCES");
  *
  *   // Write
- *   recents::section("temp.window.dimensions")["PREFERENCES"] = bounds;
+ *   recents::Section("temp.window.dimensions").set("PREFERENCES", bounds);
  *
  *   // Explicit get/set
- *   auto s = recents::section("panels");
- *   bool is_open = s["open"];
- *   s["width"] = 12;
+ *   auto s = recents::Section("panels");
+ *   bool is_open = s.get<bool>("open");
+ *   s.set("width", 12);
  *
  */
 
 #pragma once
 
 #include <string>
-
-#include "BLI_string_ref.hh"
 
 namespace blender::recents {
 
@@ -62,29 +60,6 @@ class Section {
 
   void remove(const std::string &item_key);
   void remove_section();
-
-  struct Proxy {
-    Section *section_ptr_;
-    std::string key_;
-
-    Proxy(Section *section_p, std::string key) : section_ptr_(section_p), key_(std::move(key)) {}
-
-    template<typename T> operator T() const
-    {
-      return section_ptr_->get<T>(key_);
-    }
-
-    template<typename T> Proxy &operator=(const T &value)
-    {
-      section_ptr_->set(key_, value);
-      return *this;
-    }
-  };
-
-  Proxy operator[](const std::string &item_key)
-  {
-    return Proxy(this, item_key);
-  }
 };
 
 void init();

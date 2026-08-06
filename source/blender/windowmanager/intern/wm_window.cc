@@ -507,7 +507,7 @@ void wm_window_close_request(bContext *C, wmWindowManager *wm, wmWindow *win)
                                      float(win->posy) * fac,
                                      float(win->posy) * fac + float(win->sizey) * fac};
 
-        recents::Section("temp.window.dimensions")[win->runtime->recents_storage_key] = bounds;
+        recents::Section("temp.window.dimensions").set(win->runtime->recents_storage_key, bounds);
       }
     }
   }
@@ -1426,9 +1426,9 @@ wmWindow *WM_window_open_temp(bContext *C, const char *title, int space_type, bo
   const int index = RNA_enum_from_value(rna_enum_space_type_items, space_type);
   BLI_assert(index != -1);
   const EnumPropertyItem item = rna_enum_space_type_items[index];
-  StringRef key = item.identifier;
 
-  std::vector<float> bounds = recents::Section("temp.window.dimensions")[key];
+  std::string key = item.identifier;
+  auto bounds = recents::Section("temp.window.dimensions").get<std::vector<float>>(key);
 
   const bool bounds_valid = (bounds.size() == 4 && (bounds[1] - bounds[0] > 150.0f) &&
                              (bounds[3] - bounds[2] > 100.0f));
@@ -1456,7 +1456,7 @@ wmWindow *WM_window_open_temp(bContext *C, const char *title, int space_type, bo
   wmWindow *win = WM_window_open(
       C, title, &rect, space_type, false, dialog, true, align, nullptr, nullptr);
   if (win) {
-    win->runtime->recents_storage_key = key;
+    win->runtime->recents_storage_key = std::move(key);
   }
   return win;
 }
