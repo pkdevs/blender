@@ -30,6 +30,7 @@
 #include "DNA_userdef_types.h"
 
 #include "BKE_context.hh"
+#include "BKE_recents.hh"
 #include "BKE_screen.hh"
 
 #include "RNA_access.hh"
@@ -740,6 +741,17 @@ Panel *panel_begin(
       if (&panel_next != panel && panel_next.sortorder >= panel->sortorder) {
         panel_next.sortorder++;
       }
+    }
+  }
+
+  if (newpanel && region->regiontype == RGN_TYPE_TOOLS &&
+      STRPREFIX(panel->panelname, "FILEBROWSER_PT_"))
+  {
+    const int order = recents::section("panel.sortorder")[panel->panelname];
+    if (order >= 0) {
+      panel->sortorder = order;
+      SET_FLAG_FROM_TEST(
+          panel->flag, !recents::section("panel.open")[panel->panelname], PNL_CLOSED);
     }
   }
 
@@ -2918,6 +2930,16 @@ static void panel_activate_state(const bContext *C, Panel *panel, const HandlePa
     if (data->animtimer) {
       WM_event_timer_remove(CTX_wm_manager(C), win, data->animtimer);
       data->animtimer = nullptr;
+    }
+
+    /* Save File Browser panel order and open/close state. */
+    if (CTX_wm_area(C)->spacetype == SPACE_FILE && region->regiontype == RGN_TYPE_TOOLS) {
+      for (Panel &pnl : region->panels) {
+        if (STRPREFIX(pnl.panelname, "FILEBROWSER_PT_")) {
+          recents::section("panel.sortorder")[pnl.panelname] = pnl.sortorder;
+          recents::section("panel.open")[pnl.panelname] = !(pnl.flag & PNL_CLOSED);
+        }
+      }
     }
 
     MEM_delete(data);
