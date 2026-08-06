@@ -4227,12 +4227,12 @@ static wmOperatorStatus keyframe_jump_exec(bContext *C, wmOperator *op)
     ak = ED_keylist_find_next(keylist, cfra);
     while ((ak != nullptr) && (done == false)) {
       if (wrap_timeline_navigation) {
-        /* Ignore keyframes before playback_range */
+        /* Ignore keyframes before playback_range. */
         if (ak->cfra < playback_range.start_frame) {
           ak = ak->next;
           continue;
         }
-        /* No more keyframes within playback_range */
+        /* No more keyframes within playback_range. */
         if (ak->cfra > playback_range.end_frame) {
           break;
         }
@@ -4258,12 +4258,12 @@ static wmOperatorStatus keyframe_jump_exec(bContext *C, wmOperator *op)
     ak = ED_keylist_find_prev(keylist, cfra);
     while ((ak != nullptr) && (done == false)) {
       if (wrap_timeline_navigation) {
-        /* Ignore keyframes after playback_range */
+        /* Ignore keyframes after playback_range. */
         if (ak->cfra > playback_range.end_frame) {
           ak = ak->prev;
           continue;
         }
-        /* No more keyframes within playback_range */
+        /* No more keyframes within playback_range. */
         if (ak->cfra < playback_range.start_frame) {
           break;
         }
@@ -4381,7 +4381,7 @@ static wmOperatorStatus marker_jump_exec(bContext *C, wmOperator *op)
     }
   }
 
-  /* Wrap around playback range and try to look for markers again */
+  /* Wrap around playback range and try to look for markers again. */
   if (!found && wrap_timeline_navigation) {
     if (next) {
       if (const std::optional<int> frame = get_first_marker_in_range(playback_range,
