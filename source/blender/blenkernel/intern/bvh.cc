@@ -23,10 +23,9 @@
 
 namespace blender::bke::bvh {
 
-Tree::Tree()
-{
+Tree::Tree() {
 #ifdef WITH_EMBREE
-  SIMD_SET_FLUSH_TO_ZERO;
+// SIMD_SET_FLUSH_TO_ZERO;
 #endif
 };
 
