@@ -420,7 +420,9 @@ static Curves *create_character_curves(VFont *vfont, const char32_t char_code)
   Curves *curves_id = bke::curve_legacy_to_curves(cu);
   BKE_nurbList_free(&cu.nurb);
 
-  geometry::debug_randomize_curve_order(&curves_id->geometry.wrap());
+  if (curves_id) {
+    geometry::debug_randomize_curve_order(&curves_id->geometry.wrap());
+  }
   return curves_id;
 }
 
