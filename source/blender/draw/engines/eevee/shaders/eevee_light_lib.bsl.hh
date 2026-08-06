@@ -27,7 +27,11 @@ LightVector light_vector_get(LightData light, const bool is_directional, float3 
 {
   LightVector lv;
   if (is_directional) {
+#ifdef __BSL__
+    lv.L = light.sun.direction;
+#else
     lv.L = light.sun().direction;
+#endif
     lv.dist = 1.0f;
   }
   else {

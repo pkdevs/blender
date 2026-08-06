@@ -375,7 +375,7 @@ void mip_convolve([[resource_table]] Convolve &srt, [[global_invocation_id]] con
     float2 in_uv = direction_to_uv(in_direction, float(srt.read_lod), sample_coord);
     float4 radiance = texture(srt.in_atlas_mip_tx, float3(in_uv, sample_coord.layer));
 #else /* For reference and debugging. */
-    float4 radiance = texture(cubemap_tx, in_direction);
+    float4 radiance = texture(srt.cubemap_tx, in_direction);
 #endif
 
     float weight = sample_weight(out_direction, in_direction, mip_roughness_clamped);
