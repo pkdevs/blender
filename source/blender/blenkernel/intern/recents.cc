@@ -24,9 +24,6 @@
 #include "BLI_fileops.hh"
 #include "BLI_mutex.hh"
 #include "BLI_path_utils.hh"
-#include "BLI_time.hh"
-
-#include "BLI_timeit.hh"
 
 namespace blender::recents {
 
@@ -99,7 +96,6 @@ static toml::value &current_get()
 
 static void recents_init_impl()
 {
-  SCOPED_TIMER_AVERAGED("recents_init");
   defaults_get();
 
   /* Load from on-disk file if found. */
