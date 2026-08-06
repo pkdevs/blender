@@ -4032,6 +4032,7 @@ NODE_DEFINE(TextureCoordinateNode)
   SOCKET_OUT_POINT(camera, "Camera");
   SOCKET_OUT_POINT(window, "Window");
   SOCKET_OUT_NORMAL(reflection, "Reflection");
+  SOCKET_OUT_POINT(triplanar, "Triplanar");
 
   return type;
 }
@@ -4248,6 +4249,20 @@ void TextureCoordinateNode::compile(SVMCompiler &compiler)
                         },
                         use_derivative);
     }
+  }
+
+  out = output("Triplanar");
+  if (!out->links.empty()) {
+    compiler.add_node(this,
+                      NODE_TEX_COORD,
+                      SVMNodeTexCoord{
+                          .texco_type = NODE_TEXCO_TRIPLANAR,
+                          .bump_offset = bump_offset,
+                          .store_derivatives = store_derivatives,
+                          .out_offset = compiler.output("Triplanar"),
+                          .bump_filter_width = bump_filter_width,
+                      },
+                      use_derivative);
   }
 }
 

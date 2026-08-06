@@ -22,6 +22,7 @@ static void node_declare(NodeDeclarationBuilder &b)
   b.add_output<decl::Vector>("Camera"_ustr);
   b.add_output<decl::Vector>("Window"_ustr);
   b.add_output<decl::Vector>("Reflection"_ustr);
+  b.add_output<decl::Vector>("Triplanar"_ustr);
 }
 
 static void node_shader_buts_tex_coord(ui::Layout &layout, bContext * /*C*/, PointerRNA *ptr)

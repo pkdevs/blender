@@ -168,6 +168,44 @@ ccl_device_noinline Float3Type svm_node_tex_coord_eval(KernelGlobals kg,
 #endif
       break;
     }
+    case NODE_TEXCO_TRIPLANAR: {
+      Float3Type P = shading_position<Float3Type>(sd);
+      object_inverse_position_transform_if_object(kg, sd, &P);
+      Float3Type N;
+      if constexpr (is_dual_v<Float3Type>) {
+        N = svm_texco_smooth_normal(kg, sd);
+      }
+      else {
+        N = sd->N;
+        object_inverse_normal_transform(kg, sd, &N);
+      }
+      if constexpr (is_dual_v<Float3Type>) {
+        using FloatType = dual_scalar_t<Float3Type>;
+        float3 abs_normal = abs(N.val);
+        if (abs_normal.x >= abs_normal.y && abs_normal.x >= abs_normal.z) {
+          data = make_float3(P.y(), P.z(), FloatType(0.0f));
+        }
+        else if (abs_normal.y >= abs_normal.x && abs_normal.y >= abs_normal.z) {
+          data = make_float3(P.x(), P.z(), FloatType(0.0f));
+        }
+        else {
+          data = make_float3(P.x(), P.y(), FloatType(0.0f));
+        }
+      }
+      else {
+        float3 abs_normal = abs(N);
+        if (abs_normal.x >= abs_normal.y && abs_normal.x >= abs_normal.z) {
+          data = make_float3(P.y, P.z, 0.0f);
+        }
+        else if (abs_normal.y >= abs_normal.x && abs_normal.y >= abs_normal.z) {
+          data = make_float3(P.x, P.z, 0.0f);
+        }
+        else {
+          data = make_float3(P.x, P.y, 0.0f);
+        }
+      }
+      break;
+    }
     default:
       data = make_zero<Float3Type>();
       break;

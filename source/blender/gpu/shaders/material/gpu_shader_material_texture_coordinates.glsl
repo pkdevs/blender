@@ -20,7 +20,8 @@ void node_tex_coord(float4x4 obmatinv,
                     float3 &object,
                     float3 &camera,
                     float3 &window,
-                    float3 &reflection)
+                    float3 &reflection,
+                    float3 &triplanar)
 {
   generated = attr_orco;
   normal_transform_world_to_object(g_data.N, normal);
@@ -35,4 +36,13 @@ void node_tex_coord(float4x4 obmatinv,
   camera = coordinate_camera(g_data.P);
   window = coordinate_screen(g_data.P);
   reflection = coordinate_reflect(g_data.P, g_data.N);
+  
+  float3 abs_normal = abs(normal);
+  if (abs_normal.x >= abs_normal.y && abs_normal.x >= abs_normal.z) {
+    triplanar = float3(object.y, object.z, 0.0);
+  } else if (abs_normal.y >= abs_normal.x && abs_normal.y >= abs_normal.z) {
+    triplanar = float3(object.x, object.z, 0.0);
+  } else {
+    triplanar = float3(object.x, object.y, 0.0);
+  }
 }
