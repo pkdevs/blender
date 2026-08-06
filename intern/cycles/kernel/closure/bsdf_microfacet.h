@@ -260,6 +260,8 @@ ccl_device_forceinline float3 microfacet_ggx_sample_vndf(const float3 wi,
   return normalize(make_float3(alpha_x * H_.x, alpha_y * H_.y, max(0.0f, H_.z)));
 }
 
+/* Calculate ior of potentially dispersive materials, using Cauchy empirical formula. Input ior is
+ * the ior at the Fraunhofer d spectral line, after applying backface flipping. */
 ccl_device_inline float bsdf_glass_ior(ccl_private ShaderData *sd, float ior, const float inv_abbe)
 {
 #ifdef __SPECTRAL__

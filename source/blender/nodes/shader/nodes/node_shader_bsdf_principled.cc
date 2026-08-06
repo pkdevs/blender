@@ -231,7 +231,6 @@ static void node_declare(NodeDeclarationBuilder &b)
       .default_value(20.0f)
       .min(9.0f)
       .max(91.0f)
-      .subtype(PROP_FACTOR)
       .description(
           "Abbe number of the base dielectric medium. Smaller number gives stronger dispersion");
 #define SOCK_TRANSMISSION_DISPERSION_ABBE_NUMBER_ID 21

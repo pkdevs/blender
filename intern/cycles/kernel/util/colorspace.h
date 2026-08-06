@@ -53,12 +53,16 @@ ccl_device float spectrum_to_gray(KernelGlobals kg, Spectrum c)
 }
 
 #ifdef __SPECTRAL__
+/* Given a wavelength, convert it to linear rgb, assuming D65 illuminant.
+ * [Metameric: Spectral Uplifting via Controllable Color Constraints]
+ * (https://markvanderuit.nl/files/2023-07-23-paper-metameric/metameric-paper.pdf)
+ * by Mark van de Ruit and Elmar Eisemann, Eq. (1). */
 ccl_device_inline float3 wavelength_to_rgb_d65(KernelGlobals kg, const float lambda_um)
 {
   int i;
   const float f = floorfrac((lambda_um - WAVELENGTH_CIE_MIN) / WAVELENGTH_DLAMBDA, &i);
 
-  if (i < 0 || i >= 80) {
+  if (i < 0 || i >= WAVELENGTH_RESOLUTION) {
     return zero_float3();
   }
 

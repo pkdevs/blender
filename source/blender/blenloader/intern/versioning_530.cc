@@ -17,7 +17,6 @@
 
 #include "BKE_main.hh"
 #include "BKE_node.hh"
-#include "BKE_node_legacy_types.hh"
 #include "BKE_node_runtime.hh"
 #include "BKE_paint.hh"
 #include "BKE_paint_types.hh"
@@ -75,7 +74,7 @@ void do_versions_after_linking_530(FileData * /*fd*/, Main *bmain)
 
   if (!MAIN_VERSION_FILE_ATLEAST(bmain, 503, 11)) {
     /* Shift animation data to accommodate the new dispersion inputs. */
-    version_node_socket_index_animdata(bmain, NTREE_SHADER, SH_NODE_BSDF_PRINCIPLED, 20, 2, 33);
+    version_node_socket_index_animdata(bmain, NTREE_SHADER, "ShaderNodeBsdfPrincipled", 20, 2, 33);
   }
 
   /**

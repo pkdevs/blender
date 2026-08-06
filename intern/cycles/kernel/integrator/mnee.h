@@ -1031,6 +1031,11 @@ ccl_device_inline ShaderEvalResult kernel_path_mnee_sample(KernelGlobals kg,
         return SHADER_EVAL_CACHE_MISS;
       }
 
+      /* Query before #mnee_setup_manifold_vertex resets the runtime flag. */
+      if (sd_mnee->runtime_flag & SR_BSDF_HAS_DISPERSION) {
+        has_dispersion = true;
+      }
+
       /* Get and sample refraction bsdf */
       bool found_refractive_microfacet_bsdf = false;
       for (int ci = 0; ci < sd_mnee->num_closure; ci++) {
@@ -1063,9 +1068,6 @@ ccl_device_inline ShaderEvalResult kernel_path_mnee_sample(KernelGlobals kg,
       }
       if (!found_refractive_microfacet_bsdf) {
         return SHADER_EVAL_EMPTY;
-      }
-      if (sd_mnee->runtime_flag & SR_BSDF_HAS_DISPERSION) {
-        has_dispersion = true;
       }
     }
 
@@ -1132,14 +1134,6 @@ ccl_device_inline ShaderEvalResult kernel_path_mnee_sample(KernelGlobals kg,
                                                      throughput,
                                                      r_receiver_wo);
 
-#ifdef __SPECTRAL__
-    if (has_dispersion) {
-      /* Restore the flag in case it was reset by another non-dispersive vertex. */
-      sd_mnee->runtime_flag |= SR_BSDF_HAS_DISPERSION;
-      update_path_throughput_for_dispersion(kg, state, sd_mnee);
-    }
-#endif
-
     /* TODO: Cache misses are not handled correctly.
      * - PATH_MNEE_VALID flag is not handled properly
      * - AOVs and other passes have already been written at this point
@@ -1147,6 +1141,12 @@ ccl_device_inline ShaderEvalResult kernel_path_mnee_sample(KernelGlobals kg,
     if (result != SHADER_EVAL_OK) {
       return result;
     }
+
+#ifdef __SPECTRAL__
+    if (has_dispersion && !(INTEGRATOR_STATE(state, path, flag) & PATH_RAY_SPECTRAL)) {
+      *throughput *= dispersion_throughput_weight(kg, sd_mnee->rand_wavelength);
+    }
+#endif
 
     r_vertex_count = vertex_count;
     return SHADER_EVAL_OK;

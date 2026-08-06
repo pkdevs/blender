@@ -46,7 +46,7 @@ ccl_inline_constant float blackbody_table_b[][4] = {
 
 /* CIE 1931 colour-matching functions, 2 degree observer
  * x, y, and z for wavelengths from 380 to 780 nm, 5 nm wavelength steps.
- * https://cie.co.at/datatable/cie-1931-colour-matching-functions-2-degree-observer
+ * https://doi.org/10.25039/CIE.DS.xvudnb9b
  */
 ccl_inline_constant float cie_color_match[][3] = {
   {0.0014f, 0.0000f, 0.0065f}, {0.0022f, 0.0001f, 0.0105f}, {0.0042f, 0.0001f, 0.0201f},
@@ -79,7 +79,7 @@ ccl_inline_constant float cie_color_match[][3] = {
 };
 
 /* Spectral power distribution of D65, wavelengths from 380 to 780 nm, 5 nm wavelength steps.
- * https://cie.co.at/datatable/cie-standard-illuminant-d65
+ * https://doi.org/10.25039/CIE.DS.hjfjmt59
  */
 ccl_inline_constant float cie_d65_spd[] = {
     49.9755f, 52.3118f, 54.6482f, 68.7015f, 82.7549f, 87.1204f, 91.486f,  92.4589f, 93.4318f,
