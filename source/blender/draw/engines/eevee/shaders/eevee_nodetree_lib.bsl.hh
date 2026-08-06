@@ -880,6 +880,7 @@ void node_light_info_impl(const int light_index,
                           float3 &light_position,
                           float3 &direction,
                           float &distance,
+                          float &cutoff_distance,
                           float &mask,
                           float &is_sun)
 {
@@ -895,6 +896,7 @@ void node_light_info_impl(const int light_index,
   LightVector lv = light_vector_get(light, is_directional, position);
   direction = lv.L;
   distance = lv.dist;
+  cutoff_distance = is_directional ? 1.0f : light.local().local.influence_radius_max;
   mask = light_attenuation_surface(light, is_directional, lv);
   is_sun = is_directional ? 1.0f : 0.0f;
 }

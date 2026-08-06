@@ -22,6 +22,7 @@ static void node_declare(NodeDeclarationBuilder &b)
   b.add_output<decl::Vector>("Position"_ustr);
   b.add_output<decl::Vector>("Direction"_ustr);
   b.add_output<decl::Float>("Distance"_ustr);
+  b.add_output<decl::Float>("Cutoff Distance"_ustr);
   b.add_output<decl::Float>("Mask"_ustr);
   b.add_output<decl::Float>("Is Sun"_ustr);
 }
