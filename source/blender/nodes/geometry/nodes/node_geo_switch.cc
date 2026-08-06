@@ -76,10 +76,10 @@ static void node_layout(ui::Layout &layout, bContext * /*C*/, PointerRNA *ptr)
   layout.prop(ptr, "input_type", UI_ITEM_NONE, "", ICON_NONE);
 }
 
-static void node_init(bNodeTree * /*tree*/, bNode *node)
+static void node_init(bNodeTree *tree, bNode *node)
 {
   NodeSwitch *data = MEM_new<NodeSwitch>(__func__);
-  data->input_type = SOCK_FLOAT;
+  data->input_type = tree->type == NTREE_GEOMETRY ? SOCK_FLOAT : SOCK_RGBA;
   node->storage = data;
 }
 
