@@ -488,10 +488,9 @@ CursorSampleResult calc_node_mask(const Depsgraph &depsgraph,
   const SculptSession &ss = *ob.runtime->sculpt_session;
   const bke::pbvh::Tree &pbvh = *bke::object::pbvh_get(ob);
 
-  const bool use_original = !ss.cache->accum;
   const IndexMask initial_node_mask = gather_nodes(pbvh,
                                                    eBrushFalloffShape(brush.falloff_shape),
-                                                   use_original,
+                                                   false,
                                                    ss.cache->location_symm,
                                                    ss.cache->radius_squared,
                                                    ss.cache->view_normal_symm,
@@ -512,7 +511,7 @@ CursorSampleResult calc_node_mask(const Depsgraph &depsgraph,
         if (node_fully_masked_or_hidden(node)) {
           return false;
         }
-        return node_in_sphere(node, plane_center, ss.cache->radius_squared, use_original);
+        return node_in_sphere(node, plane_center, ss.cache->radius_squared, false);
       });
 
   return {plane_mask, plane_center, plane_normal};
