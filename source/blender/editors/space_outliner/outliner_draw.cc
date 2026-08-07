@@ -549,42 +549,17 @@ static bool outliner_collection_is_isolated(Scene *scene,
   return true;
 }
 
-static void child_iterator(Scene *scene,
-                           TreeElement *te,
-                           PropertyRNA *layer_or_collection_prop,
-                           const std::optional<bool> value = std::nullopt)
-{
-  const bool is_layer_collection = (te->store_elem->type == TSE_LAYER_COLLECTION);
-  PointerRNA ptr;
-  for (TreeElement &te_child : te->parent->subtree) {
-    if (!outliner_is_collection_tree_element(&te_child)) {
-      continue;
-    }
-    LayerCollection *lc = nullptr;
-    Collection *col = nullptr;
-    if (is_layer_collection && (te_child.store_elem->type == TSE_LAYER_COLLECTION)) {
-      lc = static_cast<LayerCollection *>(te_child.directdata);
-    }
-    else {
-      col = outliner_collection_from_tree_element(te);
-    }
-
-    outliner_layer_or_collection_pointer_create(scene, lc, col, &ptr);
-    RNA_property_boolean_set(&ptr, layer_or_collection_prop, value.value_or(&te_child != te));
-  }
-}
-
 struct CollectionData {
   LayerCollection *lc = nullptr;
   Collection *col = nullptr;
 };
 
-static CollectionData get_collection_from_tree_element(TreeElement *te)
+static CollectionData get_collection_from_tree_element(TreeElement *te, const bool use_id_collection = false)
 {
   LayerCollection *lc = nullptr;
   Collection *col = nullptr;
-  const bool is_layer_collection = (te->store_elem->type == TSE_LAYER_COLLECTION);
-  if (is_layer_collection && (te->store_elem->type == TSE_LAYER_COLLECTION)) {
+
+  if (!use_id_collection && (te->store_elem->type == TSE_LAYER_COLLECTION)) {
     lc = static_cast<LayerCollection *>(te->directdata);
   }
   else {
@@ -593,10 +568,31 @@ static CollectionData get_collection_from_tree_element(TreeElement *te)
   return {lc, col};
 }
 
+/* Iterate elements belong in same hierarchy as the clicked item */
+static void sibling_iterator(Scene *scene,
+                           TreeElement *te,
+                           PropertyRNA *layer_or_collection_prop,
+                           const bool use_id_collection,
+                           const std::optional<bool> value = std::nullopt)
+{
+  const bool is_layer_collection = (te->store_elem->type == TSE_LAYER_COLLECTION);
+  PointerRNA ptr;
+  for (TreeElement &te_child : te->parent->subtree) {
+    if (!outliner_is_collection_tree_element(&te_child)) {
+      continue;
+    }
+    CollectionData data = get_collection_from_tree_element(&te_child, use_id_collection);
+
+    outliner_layer_or_collection_pointer_create(scene, data.lc, data.col, &ptr);
+    RNA_property_boolean_set(&ptr, layer_or_collection_prop, value.value_or(&te_child != te));
+  }
+}
+
 static bool collection_is_isolated(Scene *scene,
                                    TreeElement *te,
                                    const bool value_cmp,
-                                   PropertyRNA *layer_or_collection_prop)
+                                   PropertyRNA *layer_or_collection_prop,
+                                   const bool use_id_collection)
 {
   PointerRNA ptr;
   /* Compare parent values */
@@ -605,7 +601,7 @@ static bool collection_is_isolated(Scene *scene,
       continue;
     }
 
-    CollectionData data = get_collection_from_tree_element(te_parent);
+    CollectionData data = get_collection_from_tree_element(te_parent, use_id_collection);
     outliner_layer_or_collection_pointer_create(scene, data.lc, data.col, &ptr);
     const bool value = RNA_property_boolean_get(&ptr, layer_or_collection_prop);
     if (value != value_cmp) {
@@ -623,7 +619,7 @@ static bool collection_is_isolated(Scene *scene,
       continue;
     }
     
-    CollectionData data = get_collection_from_tree_element(&te_child);
+    CollectionData data = get_collection_from_tree_element(&te_child, use_id_collection);
     outliner_layer_or_collection_pointer_create(scene, data.lc, data.col, &ptr);
     const bool value = RNA_property_boolean_get(&ptr, layer_or_collection_prop);
     if (value == value_cmp) {
@@ -633,28 +629,29 @@ static bool collection_is_isolated(Scene *scene,
   return true;
 }
 
-void outliner_collection_isolate_flag(const Main &bmain,
+void outliner_collection_isolate_flag(const Main &/*bmain*/,
                                       Scene *scene,
-                                      ViewLayer *view_layer,
+                                      ViewLayer */*view_layer*/,
                                       TreeElement *te,
-                                      LayerCollection *layer_collection,
-                                      Collection *collection,
+                                      LayerCollection */*layer_collection*/,
+                                      Collection */*collection*/,
                                       PropertyRNA *layer_or_collection_prop,
                                       const char *propname,
-                                      const bool value)
+                                      const bool value,
+                                      const bool use_id_collection)
 {
   PointerRNA ptr;
   const bool is_hide = strstr(propname, "hide_") || STREQ(propname, "exclude");
 
   bool was_isolated = (value == is_hide);
-  was_isolated &= collection_is_isolated(scene, te, !is_hide, layer_or_collection_prop);
+  was_isolated &= collection_is_isolated(scene, te, !is_hide, layer_or_collection_prop, use_id_collection);
 
   if (was_isolated) {
-    CollectionData data = get_collection_from_tree_element(te);
+    CollectionData data = get_collection_from_tree_element(te, use_id_collection);
     outliner_layer_or_collection_pointer_create(scene, data.lc, data.col, &ptr);
     const bool default_value = RNA_property_boolean_get_default(&ptr, layer_or_collection_prop);
     /* Make every collection go back to its default "visibility" state. */
-    child_iterator(scene, te, layer_or_collection_prop, default_value);
+    sibling_iterator(scene, te, layer_or_collection_prop, use_id_collection, default_value);
     return;
   }
 
@@ -668,18 +665,17 @@ void outliner_collection_isolate_flag(const Main &bmain,
       continue;
     }
 
-    CollectionData data = get_collection_from_tree_element(te_parent);
+    CollectionData data = get_collection_from_tree_element(te_parent, use_id_collection);
     outliner_layer_or_collection_pointer_create(scene, data.lc, data.col, &ptr);
     RNA_property_boolean_set(&ptr, layer_or_collection_prop, !is_hide);
   }
 
-  child_iterator(scene, te, layer_or_collection_prop);
+  sibling_iterator(scene, te, layer_or_collection_prop, use_id_collection);
 }
 
 static void outliner_collection_set_flag_recursive_fn(bContext *C,
                                                       TreeElement *te,
-                                                      LayerCollection *layer_collection,
-                                                      Collection *collection,
+                                                      const bool use_id_collection,
                                                       const char *propname)
 {
   Main *bmain = CTX_data_main(C);
@@ -695,21 +691,23 @@ static void outliner_collection_set_flag_recursive_fn(bContext *C,
   }
 
   /* Create PointerRNA and PropertyRNA for either Collection or LayerCollection. */
-  ID *id = collection ? &collection->id : &scene->id;
-  StructRNA *struct_rna = collection ? RNA_Collection : RNA_LayerCollection;
-  void *data = collection ? static_cast<void *>(collection) :
-                            static_cast<void *>(layer_collection);
+  CollectionData collection_data = get_collection_from_tree_element(te, use_id_collection);
+  
+  ID *id = use_id_collection && collection_data.col ? &collection_data.col->id : &scene->id;
+  StructRNA *struct_rna = use_id_collection ? RNA_Collection : RNA_LayerCollection;
+  void *data = use_id_collection ? static_cast<void *>(collection_data.col) :
+                            static_cast<void *>(collection_data.lc);
 
   PointerRNA ptr = RNA_pointer_create_discrete(id, struct_rna, data);
-  outliner_layer_or_collection_pointer_create(scene, layer_collection, collection, &ptr);
+  outliner_layer_or_collection_pointer_create(scene, collection_data.lc, collection_data.col, &ptr);
   PropertyRNA *layer_or_collection_prop = RNA_struct_type_find_property(struct_rna, propname);
   const bool value = RNA_property_boolean_get(&ptr, layer_or_collection_prop);
 
   PropertyRNA *base_or_object_prop = nullptr;
-  if (layer_collection != nullptr) {
+  if (collection_data.lc != nullptr) {
     /* If we are toggling Layer collections we still want to change the properties of the base
      * or the objects. If we have a matching property, toggle it as well, it can be nullptr. */
-    struct_rna = collection ? RNA_Object : RNA_ObjectBase;
+    struct_rna = use_id_collection ? RNA_Object : RNA_ObjectBase;
     base_or_object_prop = RNA_struct_type_find_property(struct_rna, propname);
   }
 
@@ -717,8 +715,8 @@ static void outliner_collection_set_flag_recursive_fn(bContext *C,
     outliner_collection_set_flag_recursive(*bmain,
                                            scene,
                                            view_layer,
-                                           layer_collection,
-                                           collection,
+                                           collection_data.lc,
+                                           collection_data.col,
                                            layer_or_collection_prop,
                                            base_or_object_prop,
                                            value);
@@ -728,11 +726,12 @@ static void outliner_collection_set_flag_recursive_fn(bContext *C,
                                      scene,
                                      view_layer,
                                      te,
-                                     layer_collection,
-                                     collection,
+                                     nullptr,
+                                     nullptr,
                                      layer_or_collection_prop,
                                      propname,
-                                     value);
+                                     value,
+                                     use_id_collection);
   }
 
   /* We don't call RNA_property_update() due to performance, so we batch update them. */
@@ -751,7 +750,7 @@ static void view_layer__layer_collection_set_flag_recursive_fn(bContext *C,
   TreeElement *te = static_cast<TreeElement *>(poin);
   LayerCollection *layer_collection = static_cast<LayerCollection *>(te->directdata);
   const char *propname = static_cast<const char *>(poin2);
-  outliner_collection_set_flag_recursive_fn(C, te, layer_collection, nullptr, propname);
+  outliner_collection_set_flag_recursive_fn(C, te, false, propname);
 }
 
 /**
@@ -764,7 +763,7 @@ static void view_layer__collection_set_flag_recursive_fn(bContext *C, void *poin
   LayerCollection *layer_collection = static_cast<LayerCollection *>(te->directdata);
   const char *propname = static_cast<const char *>(poin2);
   outliner_collection_set_flag_recursive_fn(
-      C, te, layer_collection, layer_collection->collection, propname);
+      C, te, true, propname);
 }
 
 /**
@@ -776,7 +775,7 @@ static void scenes__collection_set_flag_recursive_fn(bContext *C, void *poin, vo
   TreeElement *te = static_cast<TreeElement *>(poin);
   Collection *collection = static_cast<Collection *>(te->directdata);
   const char *propname = static_cast<const char *>(poin2);
-  outliner_collection_set_flag_recursive_fn(C, te, nullptr, collection, propname);
+  outliner_collection_set_flag_recursive_fn(C, te, true, propname);
 }
 
 static void namebutton_fn(bContext *C, TreeStoreElem *tselem, const char *oldname)

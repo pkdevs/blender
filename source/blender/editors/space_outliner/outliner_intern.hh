@@ -322,7 +322,8 @@ void outliner_collection_isolate_flag(const Main &bmain,
                                       Collection *collection,
                                       PropertyRNA *layer_or_collection_prop,
                                       const char *propname,
-                                      bool value);
+                                      bool value,
+                                      bool use_id_collection = false);
 
 /**
  * Return the index to use based on the TreeElement ID and object type
