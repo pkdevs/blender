@@ -88,15 +88,16 @@ float4 draw_transition()
   center = (pos1 + pos2) * 0.5f;
   sdf_inner = sdf_rounded_box(pos - center, size, radius);
 
-  float box = box_mask(sdf);
+  /* The content area of the strip: strip bounds minus outline and handles. */
   float box_inner = box_mask(sdf_inner);
 
+  /* The entire strip rectangle is filled with the outline color. This is later mixed with the
+   * strip contents. */
   float4 outline = unpackUnorm4x8(strip.col_outline);
-  outline.a *= (box - box_inner);
-  /* Premultiply. */
-  outline = float4(outline.rgb * outline.a, outline.a);
+  outline.a *= box_mask(sdf);
 
-  /* Title bar. */
+  /* Strip header and contents, i.e. everything except the outline. This is later masked when
+   * mixing in the outline. */
   float4 col = unpackUnorm4x8(strip.col_background);
 
   /* Diagonal transition line. */
@@ -109,10 +110,10 @@ float4 draw_transition()
     col.rgba = unpackUnorm4x8(transition_color).rgba;
   }
 
-  /* Mask out the contents within the rounded rectangle. */
-  col.a *= box_inner;
+  col = mix(outline, col, box_inner);
 
-  col = blend_color(outline, col);
+  /* Previous parts were in straight alpha. From now on it needs to be premultiplied. */
+  col.rgb *= col.a;
 
   /* Inset line. */
   if (selected) {
