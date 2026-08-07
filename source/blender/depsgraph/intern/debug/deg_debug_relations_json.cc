@@ -12,6 +12,7 @@
 
 #include "BLI_stack.hh"
 #include "BLI_string_utils.hh"
+#include "BLI_ustring.hh"
 
 #include "BKE_idtype.hh"
 
@@ -25,6 +26,11 @@
 #include "intern/node/deg_node_id.hh"
 #include "intern/node/deg_node_operation.hh"
 #include "intern/node/deg_node_time.hh"
+
+#include "RNA_access.hh"
+#include "RNA_enum_types.hh"
+#include "RNA_prototypes.hh"
+#include "RNA_types.hh"
 
 #include <sstream>
 #include <variant>
@@ -131,6 +137,11 @@ class JSONStream {
     return this->value(std::string(value));
   }
 
+  JSONStream &value(const UString &value)
+  {
+    return this->value(value.c_str());
+  }
+
   JSONStream &value(const int value)
   {
     ss_ << std::to_string(value);
@@ -221,6 +232,20 @@ static ConstNodeVariant get_node_variant(const Node &node)
   return {};
 }
 
+static const UString &get_id_type_identifier(const ID_Type id_type)
+{
+  static const Map<ID_Type, UString> id_type_map = []() {
+    Map<ID_Type, UString> result;
+    for (int i = 0; rna_enum_id_type_items[i].identifier != nullptr; ++i) {
+      result.add_new(ID_Type(rna_enum_id_type_items[i].value),
+                     UString(rna_enum_id_type_items[i].identifier));
+    }
+    return result;
+  }();
+
+  return id_type_map.lookup(id_type);
+}
+
 static void deg_debug_json_node_recursive(JSONStream &json,
                                           const Node &node,
                                           const bool is_entry = false,
@@ -239,7 +264,8 @@ static void deg_debug_json_node_recursive(JSONStream &json,
     json.object_key("id_session_uid");
     json.value((*id_node)->id_orig_session_uid);
     json.object_key("id_type");
-    json.value(BKE_idtype_idcode_to_name(GS((*id_node)->id_orig->name)));
+    const ID_Type id_type = GS((*id_node)->id_orig->name);
+    json.value(get_id_type_identifier(id_type));
     json.object_key("id_name");
     json.value((*id_node)->id_orig->name + 2);
     json.object_key("components");
