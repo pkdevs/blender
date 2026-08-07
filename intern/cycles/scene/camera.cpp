@@ -137,9 +137,9 @@ NODE_DEFINE(Camera)
   SOCKET_FLOAT(farclip, "Far Clip", 1e5f);
 
   SOCKET_FLOAT(viewplane.left, "Viewplane Left", 0);
-  SOCKET_FLOAT(viewplane.right, "Viewplane Right", 0);
+  SOCKET_FLOAT(viewplane.right, "Viewplane Right", 1);
   SOCKET_FLOAT(viewplane.bottom, "Viewplane Bottom", 0);
-  SOCKET_FLOAT(viewplane.top, "Viewplane Top", 0);
+  SOCKET_FLOAT(viewplane.top, "Viewplane Top", 1);
 
   SOCKET_FLOAT(viewplane_pre.left, "Viewplane Pre Left", 0);
   SOCKET_FLOAT(viewplane_pre.right, "Viewplane Pre Right", 0);
@@ -152,14 +152,14 @@ NODE_DEFINE(Camera)
   SOCKET_FLOAT(viewplane_post.top, "Viewplane Post Top", 0);
 
   SOCKET_FLOAT(border.left, "Border Left", 0);
-  SOCKET_FLOAT(border.right, "Border Right", 0);
+  SOCKET_FLOAT(border.right, "Border Right", 1);
   SOCKET_FLOAT(border.bottom, "Border Bottom", 0);
-  SOCKET_FLOAT(border.top, "Border Top", 0);
+  SOCKET_FLOAT(border.top, "Border Top", 1);
 
   SOCKET_FLOAT(viewport_camera_border.left, "Viewport Border Left", 0);
-  SOCKET_FLOAT(viewport_camera_border.right, "Viewport Border Right", 0);
+  SOCKET_FLOAT(viewport_camera_border.right, "Viewport Border Right", 1);
   SOCKET_FLOAT(viewport_camera_border.bottom, "Viewport Border Bottom", 0);
-  SOCKET_FLOAT(viewport_camera_border.top, "Viewport Border Top", 0);
+  SOCKET_FLOAT(viewport_camera_border.top, "Viewport Border Top", 1);
 
   SOCKET_FLOAT(offscreen_dicing_scale, "Offscreen Dicing Scale", 1.0f);
 
@@ -208,7 +208,7 @@ Camera::~Camera() = default;
 void Camera::compute_auto_viewplane()
 {
   if (camera_type == CAMERA_PANORAMA || camera_type == CAMERA_CUSTOM) {
-    viewplane = BoundBox2D();
+    viewplane = BoundBox2D::full;
   }
   else {
     const float aspect = (float)full_width / (float)full_height;

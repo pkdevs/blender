@@ -101,9 +101,9 @@ class BlenderCamera {
   int render_width = 0;
   int render_height = 0;
 
-  BoundBox2D border = BoundBox2D();
-  BoundBox2D viewport_camera_border = BoundBox2D();
-  BoundBox2D pano_viewplane = BoundBox2D();
+  BoundBox2D border = BoundBox2D::full;
+  BoundBox2D viewport_camera_border = BoundBox2D::full;
+  BoundBox2D pano_viewplane = BoundBox2D::full;
   float pano_aspectratio = 0.0f;
 
   float passepartout_alpha = 0.5f;
@@ -1117,7 +1117,7 @@ static void blender_camera_border(BlenderCamera *bcam,
   }
 
   /* Determine camera border inside the viewport. */
-  const BoundBox2D full_border;
+  const BoundBox2D full_border = BoundBox2D::full;
   blender_camera_border_subset(b_engine,
                                b_render,
                                b_scene,
