@@ -699,6 +699,12 @@ vector<SymbolTable::BuiltinFunc> SymbolTable::generate_all_builtin_functions()
   functions.push_back({void_cls, "printf", {str_cls}});
   functions.push_back({void_cls, "static_assert", {bool_cls}});
 
+  /* There are many other overloads but we don't use them currently. */
+  functions.push_back({uint_cls, "simd_broadcast_first", {uint_cls}});
+  functions.push_back({uint_cls, "simd_min", {uint_cls}});
+  functions.push_back({uint_cls, "simd_max", {uint_cls}});
+  functions.push_back({uint_cls, "simd_or", {uint_cls}});
+
   /* Type definition vectors for vectorized generation */
   const vector<SymbolClass *> f_types = {float_cls, float2_cls, float3_cls, float4_cls};
   const vector<SymbolClass *> i_types = {int_cls, int2_cls, int3_cls, int4_cls};
@@ -906,10 +912,21 @@ vector<SymbolTable::BuiltinFunc> SymbolTable::generate_all_builtin_functions()
     functions.push_back({b_types[i], "not", {b_types[i]}});
   }
 
-  const vector<string> bit_unary = {"bitfieldReverse", "bitCount", "findLSB", "findMSB"};
+  const vector<string> bit_unary = {"bitfieldReverse"};
   for (const auto &op : bit_unary) {
     add_unary(op, i_types);
     add_unary(op, u_types);
+  }
+
+  for (int i : {0, 1, 2, 3}) {
+    SymbolClass *u_type = u_types[i];
+    SymbolClass *i_type = i_types[i];
+
+    for (SymbolClass *input : {u_type, i_type}) {
+      functions.push_back({i_type, "bitCount", {input}});
+      functions.push_back({i_type, "findLSB", {input}});
+      functions.push_back({i_type, "findMSB", {input}});
+    }
   }
 
   for (const auto &tlist : {i_types, u_types}) {
