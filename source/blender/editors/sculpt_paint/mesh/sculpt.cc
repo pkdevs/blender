@@ -2565,12 +2565,12 @@ bool node_in_box(const float4x4 &mat,
     return projection > radius1 + radius2;
   };
 
-  const std::vector<float3> brush_axes = test_z_axis ?
-                                             std::vector<float3>{float3{1.0f, 0.0f, 0.0f},
-                                                                 float3{0.0f, 1.0f, 0.0f},
-                                                                 float3{0.0f, 0.0f, 1.0f}} :
-                                             std::vector<float3>{float3{1.0f, 0.0f, 0.0f},
-                                                                 float3{0.0f, 1.0f, 0.0f}};
+  const blender::Array<float3> brush_axes = test_z_axis ?
+                                                blender::Array<float3>{float3{1.0f, 0.0f, 0.0f},
+                                                                       float3{0.0f, 1.0f, 0.0f},
+                                                                       float3{0.0f, 0.0f, 1.0f}} :
+                                                blender::Array<float3>{float3{1.0f, 0.0f, 0.0f},
+                                                                       float3{0.0f, 1.0f, 0.0f}};
 
   const std::array<float3, 3> node_axes = {node_x_axis, node_y_axis, node_z_axis};
 
