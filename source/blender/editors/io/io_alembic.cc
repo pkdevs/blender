@@ -727,7 +727,7 @@ void alembic_file_handler_add()
   STRNCPY_UTF8(fh->idname, "IO_FH_alembic");
   STRNCPY_UTF8(fh->import_operator, "WM_OT_alembic_import");
   STRNCPY_UTF8(fh->export_operator, "WM_OT_alembic_export");
-  STRNCPY_UTF8(fh->label, "Alembic");
+  STRNCPY_UTF8(fh->label, "Alembic (.abc)");
   STRNCPY_UTF8(fh->file_extensions_str, ".abc");
   fh->poll_drop = poll_file_object_drop;
   bke::file_handler_add(std::move(fh));

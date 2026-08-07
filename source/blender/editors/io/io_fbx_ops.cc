@@ -253,7 +253,7 @@ void fbx_file_handler_add()
   STRNCPY_UTF8(fh->idname, "IO_FH_fbx");
   STRNCPY_UTF8(fh->import_operator, "WM_OT_fbx_import");
   STRNCPY_UTF8(fh->export_operator, "export_scene.fbx"); /* Use Python add-on for export. */
-  STRNCPY_UTF8(fh->label, "FBX");
+  STRNCPY_UTF8(fh->label, "FBX (.fbx)");
   STRNCPY_UTF8(fh->file_extensions_str, ".fbx");
   fh->poll_drop = poll_file_object_drop;
   bke::file_handler_add(std::move(fh));

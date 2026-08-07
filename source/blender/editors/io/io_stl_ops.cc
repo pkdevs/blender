@@ -347,7 +347,7 @@ void stl_file_handler_add()
   STRNCPY_UTF8(fh->idname, "IO_FH_stl");
   STRNCPY_UTF8(fh->import_operator, "WM_OT_stl_import");
   STRNCPY_UTF8(fh->export_operator, "WM_OT_stl_export");
-  STRNCPY_UTF8(fh->label, "STL");
+  STRNCPY_UTF8(fh->label, "STL (.stl)");
   STRNCPY_UTF8(fh->file_extensions_str, ".stl");
   fh->poll_drop = poll_file_object_drop;
   bke::file_handler_add(std::move(fh));

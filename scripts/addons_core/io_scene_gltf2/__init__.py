@@ -2249,7 +2249,7 @@ class GLTF_AddonPreferences(bpy.types.AddonPreferences):
 
 class IO_FH_gltf2(bpy.types.FileHandler):
     bl_idname = "IO_FH_gltf2"
-    bl_label = "glTF 2.0"
+    bl_label = "glTF 2.0 (.glb/.gltf)"
     bl_import_operator = "import_scene.gltf"
     bl_export_operator = "export_scene.gltf"
     bl_file_extensions = ".glb;.gltf"

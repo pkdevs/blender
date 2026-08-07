@@ -605,7 +605,7 @@ void obj_file_handler_add()
   STRNCPY_UTF8(fh->idname, "IO_FH_obj");
   STRNCPY_UTF8(fh->import_operator, "WM_OT_obj_import");
   STRNCPY_UTF8(fh->export_operator, "WM_OT_obj_export");
-  STRNCPY_UTF8(fh->label, "Wavefront OBJ");
+  STRNCPY_UTF8(fh->label, "Wavefront (.obj)");
   STRNCPY_UTF8(fh->file_extensions_str, ".obj");
   fh->poll_drop = poll_file_object_drop;
   bke::file_handler_add(std::move(fh));
