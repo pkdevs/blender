@@ -24,6 +24,7 @@ enum OperatorType : uint16_t {
   OP_EQUALITY   = 0b0000'0000'0000'1000,
   OP_RELATIONAL = 0b0000'0000'0001'0000,
   OP_LOGICAL    = 0b0000'0000'0010'0000,
+  OP_ASSIGN     = 0b0000'0000'0100'0000,
 
   /* clang-format on */
 
@@ -82,6 +83,15 @@ OperatorType to_operator_type(TokenType tok_type)
       return OperatorType(OP_BOOL | OP_LOGICAL);
     case LogicalOr:
       return OperatorType(OP_BOOL | OP_LOGICAL);
+
+    case Assign:
+    case AssignAdd:
+    case AssignSub:
+    case AssignMul:
+    case AssignDiv:
+    case AssignLShift:
+    case AssignRShift:
+      return OperatorType(OP_ASSIGN);
     default:
       return OP_INVALID;
   }
@@ -100,6 +110,10 @@ ClassId binary_operator_return_type(SymbolClass *lhs, TokenType op, SymbolClass 
   const uint16_t l = uint16_t(lhs->builtin_class);
   const uint16_t r = uint16_t(rhs->builtin_class);
   const OperatorType o = to_operator_type(op);
+
+  if (o == OP_ASSIGN) {
+    return lhs->builtin_class;
+  }
 
   if (l & MATRIX_MASK) {
     uint16_t col = (l & MATRIX_MASK) >> MATRIX_SHIFT;
