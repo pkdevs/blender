@@ -5,7 +5,13 @@
 # ./blender.bin -b -X -P tests/python/bl_keymap_completeness.py
 #
 
-# simple script to test 'bl_keymap_utils.keymap_hierarchy' contains correct values.
+"""
+Simple script to test ``bl_keymap_utils.keymap_hierarchy`` contains correct values.
+"""
+
+__all__ = (
+    "main",
+)
 
 # Needed for 'bl_keymap_utils.keymap_hierarchy' which inspects tools.
 import os
@@ -53,6 +59,8 @@ def keymaps_missing_fallback(maps_py, maps_bl):
 
 
 def check_maps():
+    import bpy
+
     # A key-map is identified by its name, space-type & region-type, all three must match
     # for the key-map to be found, see `rna_keymap_ui.draw_entry`.
     maps_py = set()
@@ -64,7 +72,6 @@ def check_maps():
 
     fill_maps(keymap_hierarchy.generate())
 
-    import bpy
     keyconf = bpy.context.window_manager.keyconfigs.active
     maps_bl = {(km.name, km.space_type, km.region_type) for km in keyconf.keymaps}
 
