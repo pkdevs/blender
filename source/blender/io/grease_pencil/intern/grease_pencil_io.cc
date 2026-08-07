@@ -430,6 +430,8 @@ void GreasePencilExporter::foreach_shape_in_layer(const Object &object,
   const VArraySpan<float> radii = drawing.radii();
   const VArraySpan<float> opacities = drawing.opacities();
   const VArraySpan<ColorGeometry4f> vertex_colors = drawing.vertex_colors();
+  const VArray<float> fill_opacities = *attributes.lookup_or_default<float>(
+      "fill_opacity", bke::AttrDomain::Curve, 1.0f);
 
   Array<float3> world_positions(positions.size());
   math::transform_points(positions, layer_to_world, world_positions);
@@ -493,6 +495,7 @@ void GreasePencilExporter::foreach_shape_in_layer(const Object &object,
       const ColorGeometry4f material_fill_color = ColorGeometry4f(material->gp_style->fill_rgba);
       const ColorGeometry4f fill_color = math::interpolate(
           material_fill_color, fill_colors[i_curve], fill_colors[i_curve].a);
+      const float fill_opacity = fill_opacities[i_curve];
       shape_fn(positions,
                positions_left,
                positions_right,
@@ -501,7 +504,7 @@ void GreasePencilExporter::foreach_shape_in_layer(const Object &object,
                cyclic,
                types,
                fill_color,
-               layer.opacity,
+               layer.opacity * fill_opacity,
                std::nullopt,
                std::nullopt,
                false,
