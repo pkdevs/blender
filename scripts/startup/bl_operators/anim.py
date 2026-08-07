@@ -4,6 +4,10 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass, field
+
+import json
+import cattrs
 
 import bpy
 from bpy.types import Operator
@@ -689,6 +693,119 @@ class ARMATURE_OT_collection_remove_unused(Operator):
         )
 
 
+@dataclass
+class BoneCollection:
+    name: str
+    is_visible: bool = True
+    is_solo: bool = False
+    children: list["BoneCollection"] = field(default_factory=list)
+
+
+class ARMATURE_OT_collections_to_clipboard(Operator):
+    """Copy the bone collection hierarchy to the clipboard"""
+    bl_idname = "armature.collections_to_clipboard"
+    bl_label = "Copy Bone Collections to Clipboard"
+    bl_options = {'REGISTER'}
+
+    @classmethod
+    def poll(cls, context):
+        armature = _armature_from_context(context)
+        if not armature:
+            return False
+        if has_collections := len(armature.collections) > 0:
+            cls.poll_message_set("Armature has no bone collections")
+        return has_collections
+
+    def _populate_bone_collections(self, parent) -> list[BoneCollection]:
+        if not parent.children:
+            return []
+        
+        children = []
+        for child in parent.children:
+            collection = BoneCollection(name=child.name)
+            collection.is_solo = child.is_solo
+            collection.is_visible = child.is_visible
+            if child.children:
+                collection.children = self._populate_bone_collections(child)
+            children.append(collection)
+
+        return children
+
+    def execute(self, context):
+        armature = _armature_from_context(context)
+
+        # Get the root collections (those without a parent) and populate the hierarchy
+        collections = armature.collections
+
+        collection_hierarchy = []
+        for collection in collections:
+            bone_collection = BoneCollection(name=collection.name)
+            bone_collection.is_visible = collection.is_visible
+            bone_collection.is_solo = collection.is_solo
+            bone_collection.children = self._populate_bone_collections(collection)
+            collection_hierarchy.append(bone_collection)
+
+        converter = cattrs.preconf.json.JsonConverter(omit_if_default=True)
+        context.window_manager.clipboard = converter.dumps(collection_hierarchy, indent=2)
+
+        return {'FINISHED'}
+
+
+class ARMATURE_OT_collections_from_clipboard(Operator):
+    """Create the bone collection hirarchy from the clipboard"""
+    bl_idname = "armature.collections_from_clipboard"
+    bl_label = "Create Bone Collections from Clipboard"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    @classmethod
+    def poll(cls, context):
+        armature = _armature_from_context(context)
+        if not armature:
+            return False
+        if not context.window_manager.clipboard:
+            cls.poll_message_set("Clipboard is empty")
+            return False
+        if not cls._check_clipboard_supported(cls):
+            cls.poll_message_set("Clipboard does not contain a valid bone collection hierarchy")
+            return False
+        return True
+
+    def _check_clipboard_supported(self):
+        try:
+            collections_hierarchy = json.loads(bpy.context.window_manager.clipboard)
+            converter = cattrs.preconf.json.JsonConverter(omit_if_default=True)
+            self.loaded = converter.structure(collections_hierarchy, list[BoneCollection])
+            return True
+        except Exception:
+            return False
+
+    def _recursive_dict_to_collection(self, bone_collections: list[BoneCollection], parent_collection=None):
+        """Recursively create collections from a list of BoneCollection"""
+        armature = _armature_from_context(bpy.context)
+        for collection in bone_collections:
+            # Create a new collection if it doesn't exist
+            new_collection = None
+            if collection.name not in armature.collections_all:
+                new_collection = armature.collections.new(collection.name)
+            else:
+                new_collection = armature.collections_all[collection.name]
+            
+            if parent_collection:
+                new_collection.parent = parent_collection
+            
+            # Recursively create child collections
+            if collection.children:
+                self._recursive_dict_to_collection(collection.children, parent_collection=new_collection)
+
+            new_collection.is_visible = collection.is_visible
+            new_collection.is_solo = collection.is_solo
+
+    def execute(self, context):
+        self._recursive_dict_to_collection(self.loaded, parent_collection=None)
+
+        return {'FINISHED'}
+
+
 class ANIM_OT_slot_new_for_id(Operator):
     """Create a new Action Slot for an ID.
 
@@ -915,6 +1032,8 @@ classes = (
     ARMATURE_OT_collection_show_all,
     ARMATURE_OT_collection_unsolo_all,
     ARMATURE_OT_collection_remove_unused,
+    ARMATURE_OT_collections_to_clipboard,
+    ARMATURE_OT_collections_from_clipboard,
     ANIM_OT_slot_new_for_id,
     ANIM_OT_slot_unassign_from_id,
     ANIM_OT_slot_unassign_from_nla_strip,
