@@ -1056,9 +1056,7 @@ static void draw_strip_icons(const TimelineDrawContext &ctx,
 
       const float pixelx = pixel_x(ctx.v2d);
       const float icon_size_x = ICON_SIZE * pixelx * UI_SCALE_FAC;
-      const float icon_indent = 2.0f * strip.handle_width -
-                                (strip.strip->is_same_channel_transition() ? 2.0f : 4.0f) *
-                                    pixelx * UI_SCALE_FAC;
+      const float icon_indent = 2.0f * strip.handle_width - 4 * pixelx * UI_SCALE_FAC;
       const float icon_spacing = 3.0f * pixelx * UI_SCALE_FAC;
       rctf rect;
       rect.ymin = strip.top - strip_header_size_get(pixel_y(ctx.v2d));
@@ -1132,9 +1130,7 @@ static void draw_seq_text_overlay(const TimelineDrawContext &ctx,
   get_strip_text_color(strip_ctx, col);
 
   /* Note that the subtracted portion is half of `icon_indent`'s  in `draw_strip_icons`. */
-  float text_margin = 2.0f * strip_ctx.handle_width -
-                      (strip_ctx.strip->is_same_channel_transition() ? 0.0f : 2.0f) * pixelx *
-                          UI_SCALE_FAC;
+  float text_margin = 2.0f * strip_ctx.handle_width - 2 * pixelx * UI_SCALE_FAC;
   rctf rect;
   rect.xmin = strip_ctx.left_handle + text_margin;
   rect.xmax = strip_ctx.right_handle - text_margin;

@@ -63,9 +63,8 @@ float4 draw_transition()
             radius);
 
   bool selected = (strip.flags & GPU_SEQ_FLAG_SELECTED) != 0;
-  bool active_strip = (strip.flags & GPU_SEQ_FLAG_ACTIVE) != 0;
 
-  float outline_width = selected ? 3.0f : 2.0f;
+  float outline_width = (selected ? 3.0f : 2.0f) * context_data.pixelsize;
 
   /* Distance to whole strip shape. */
   float sdf = sdf_rounded_box(pos - center, size, radius);
@@ -73,16 +72,16 @@ float4 draw_transition()
   /* Distance to inner part when handles are taken into account. */
   float sdf_inner = sdf;
   float handle_width = strip.handle_width;
+  /* Reduce vertical size by outline width. */
+  pos1 += outline_width;
+  pos2 -= outline_width;
   /* Take left/right handle from horizontal sides. */
   if ((strip.flags & GPU_SEQ_FLAG_SELECTED_LH) != 0) {
-    pos1.x += handle_width;
+    pos1.x += handle_width - outline_width;
   }
   if ((strip.flags & GPU_SEQ_FLAG_SELECTED_RH) != 0) {
-    pos2.x -= handle_width;
+    pos2.x -= handle_width - outline_width;
   }
-  /* Reduce vertical size by outline width. */
-  pos1 += context_data.pixelsize * outline_width;
-  pos2 -= context_data.pixelsize * outline_width;
 
   size = (pos2 - pos1) * 0.5f;
   center = (pos1 + pos2) * 0.5f;
@@ -148,30 +147,27 @@ void main()
 
   bool border = (strip.flags & GPU_SEQ_FLAG_BORDER) != 0;
   bool selected = (strip.flags & GPU_SEQ_FLAG_SELECTED) != 0;
-  float outline_width = selected ? 2.0f : 1.0f;
+
+  float outline_width = (selected ? 2.0f : 1.0f) * context_data.pixelsize;
 
   /* Distance to whole strip shape. */
   float sdf = sdf_rounded_box(pos - center, size, radius);
 
   /* Distance to inner part when handles are taken into account. */
-  float sdf_inner = sdf;
-  if ((strip.flags & GPU_SEQ_FLAG_ANY_HANDLE) != 0) {
-    float handle_width = strip.handle_width;
-    /* Take left/right handle from horizontal sides. */
-    if ((strip.flags & GPU_SEQ_FLAG_SELECTED_LH) != 0) {
-      pos1.x += handle_width;
-    }
-    if ((strip.flags & GPU_SEQ_FLAG_SELECTED_RH) != 0) {
-      pos2.x -= handle_width;
-    }
-    /* Reduce vertical size by outline width. */
-    pos1.y += context_data.pixelsize * outline_width;
-    pos2.y -= context_data.pixelsize * outline_width;
-
-    size = (pos2 - pos1) * 0.5f;
-    center = (pos1 + pos2) * 0.5f;
-    sdf_inner = sdf_rounded_box(pos - center, size, radius);
+  float handle_width = strip.handle_width;
+  /* Reduce vertical size by outline width. */
+  pos1 += outline_width;
+  pos2 -= outline_width;
+  /* Take left/right handle from horizontal sides. */
+  if ((strip.flags & GPU_SEQ_FLAG_SELECTED_LH) != 0) {
+    pos1.x += handle_width - outline_width;
   }
+  if ((strip.flags & GPU_SEQ_FLAG_SELECTED_RH) != 0) {
+    pos2.x -= handle_width - outline_width;
+  }
+  size = (pos2 - pos1) * 0.5f;
+  center = (pos1 + pos2) * 0.5f;
+  float sdf_inner = sdf_rounded_box(pos - center, size, radius);
 
   float4 col = float4(0.0f);
 
@@ -251,11 +247,6 @@ void main()
       float4 hcol = selected_handle ? col_outline : float4(0, 0, 0, 0.2f);
       hcol.a *= clamp(sdf_inner, 0.0f, 1.0f);
       col = blend_color(col, hcol);
-    }
-    /* For an unselected handle, no longer take it into account
-     * for the "inner" distance. */
-    if (!selected_handle) {
-      sdf_inner = sdf;
     }
   }
 
