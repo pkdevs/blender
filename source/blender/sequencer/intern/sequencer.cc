@@ -176,8 +176,6 @@ static void seq_strip_free_ex(Scene *scene,
     strip->data = nullptr;
   }
 
-  strip_free_movie_readers(strip);
-
   if (strip->is_effect()) {
     EffectHandle sh = strip_effect_handle_get(strip);
     if (sh.free) {
@@ -279,6 +277,9 @@ void seq_free_strip_recurse(Scene *scene, Strip *strip, const bool do_id_user)
 
 StripRuntime::~StripRuntime()
 {
+  if (movie_metadata != nullptr) {
+    IDP_FreeProperty(movie_metadata);
+  }
   clear_sound_time_stretch();
 }
 

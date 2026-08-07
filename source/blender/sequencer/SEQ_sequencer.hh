@@ -11,7 +11,6 @@
 #include "BKE_sound_types.hh"
 #include "BLI_enum_flags.hh"
 #include "BLI_map.hh"
-#include "BLI_vector.hh"
 #include "BLI_vector_set.hh"
 #include "DNA_scene_types.h"
 #include "DNA_sequence_types.h"
@@ -23,9 +22,9 @@ struct BlendDataReader;
 struct BlendWriter;
 struct Depsgraph;
 struct Editing;
+struct IDProperty;
 struct Main;
 struct MetaStack;
-struct MovieReader;
 struct Scene;
 struct SeqTimelineChannel;
 struct Strip;
@@ -88,17 +87,12 @@ struct StripRuntime {
   AUD_Sound sound_time_stretch;
   float sound_time_stretch_fps = 0.0f;
 
-  Vector<MovieReader *, 1> movie_readers;
+  /* A null pointer can mean either not loaded yet or that the movie has no metadata. */
+  IDProperty *movie_metadata = nullptr;
+  bool movie_metadata_is_loaded = false;
+
   /* To detect the removal of a sound modifier. */
   int sound_modifiers_count = 0;
-
-  [[nodiscard]] MovieReader *movie_reader_get(int64_t index = 0) const
-  {
-    if (index < 0 || index >= movie_readers.size()) {
-      return nullptr;
-    }
-    return movie_readers[index];
-  }
 
   void clear_sound_time_stretch();
   void remove_scene_sound(Scene *scene);
@@ -271,6 +265,11 @@ void strip_lookup_free(Editing *ed);
  * Mark strip lookup as invalid (i.e. will need rebuilding).
  */
 void strip_lookup_invalidate(const Editing *ed);
+
+/** Return movie metadata copied into the strip runtime, reading the source lazily if needed. */
+IDProperty *movie_metadata_ensure(Scene &scene, Strip &strip);
+/** Discard metadata copied from the movie source. */
+void movie_metadata_invalidate(Strip &strip);
 
 }  // namespace seq
 }  // namespace blender

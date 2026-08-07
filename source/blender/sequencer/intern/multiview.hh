@@ -35,7 +35,7 @@ bool seq_multiview_view_filepath_get(const Scene &scene,
 /**
  * The number of files will vary according to the stereo format.
  */
-int seq_num_files(Scene *scene, char views_format, bool is_multiview);
+int seq_num_files(const Scene *scene, char views_format, bool is_multiview);
 
 }  // namespace seq
 }  // namespace blender

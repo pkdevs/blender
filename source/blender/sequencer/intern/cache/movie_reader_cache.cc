@@ -79,9 +79,12 @@ struct MovieReaderCache {
   ~MovieReaderCache() = default;
 
   MovieReaderAccessor acquire(const MovieReaderKey &key, int frame_index, uint64_t timestamp);
+  MovieReaderAccessor acquire_any(const MovieReaderKey &key);
   void invalidate(const std::string &source_filepath);
   void clear();
   void release(MovieReaderCacheEntry &entry);
+  void reader_open(MovieReaderCacheEntry &entry);
+  bool reader_ensure_initialized(MovieReaderCacheEntry &entry);
   bool remove_oldest_stale_entry();
   void remove_excess_entries();
 };
@@ -205,32 +208,101 @@ MovieReaderAccessor MovieReaderCache::acquire(const MovieReaderKey &key,
   best->timestamp = timestamp_counter_;
   lock.unlock();
 
-  if (best->reader == nullptr) {
-    char colorspace[IM_MAX_SPACE];
-    STRNCPY(colorspace, key.colorspace.c_str());
-    best->reader = MOV_open_file(
-        key.filepath.c_str(), key.flags, key.stream_index, true, colorspace);
-    if (best->reader != nullptr && key.uses_multiview_filepath) {
-      ImBuf *ibuf = MOV_decode_frame(best->reader, 0, IMB_PROXY_NONE);
-      if (ibuf == nullptr) {
-        MOV_close(best->reader);
-        best->reader = nullptr;
-      }
-      else {
-        IMB_freeImBuf(ibuf);
-        best->frame_index = 0;
-      }
+  reader_open(*best);
+  return MovieReaderAccessor(this, best);
+}
+
+MovieReaderAccessor MovieReaderCache::acquire_any(const MovieReaderKey &key)
+{
+  /* Property queries do not seek, so any free matching reader is suitable even if it was used by
+   * another strip during the current rendered frame. Prefer an initialized reader, then the most
+   * recently used one. */
+  std::unique_lock lock(mutex_);
+  MovieReaderCacheEntry *best = nullptr;
+  bool best_is_initialized = false;
+  for (const std::unique_ptr<MovieReaderCacheEntry> &candidate : entries_) {
+    if (candidate->is_accessed || candidate->invalidated || !(candidate->key == key)) {
+      continue;
     }
-    if (best->reader != nullptr) {
-      if (!key.proxy_dir.empty()) {
-        seq_proxy_index_dir_set(best->reader, key.proxy_dir.c_str());
-      }
-      if (!key.multiview_suffix.empty()) {
-        MOV_set_multiview_suffix(best->reader, key.multiview_suffix.c_str());
-      }
+    const bool candidate_is_initialized = candidate->reader != nullptr &&
+                                          MOV_is_initialized_and_valid(candidate->reader);
+    if (best == nullptr || (candidate_is_initialized && !best_is_initialized) ||
+        (candidate_is_initialized == best_is_initialized &&
+         candidate->timestamp > best->timestamp))
+    {
+      best = candidate.get();
+      best_is_initialized = candidate_is_initialized;
     }
   }
+
+  if (best == nullptr) {
+    if (entries_.size() >= max_entries) {
+      remove_oldest_stale_entry();
+    }
+    auto entry = std::make_unique<MovieReaderCacheEntry>();
+    entry->key = key;
+    best = entry.get();
+    entries_.append(std::move(entry));
+  }
+
+  best->is_accessed = true;
+  /* This access does not decode a rendered frame, so do not reserve the reader for the current
+   * render timestamp. */
+  lock.unlock();
+
+  reader_open(*best);
+  if (!reader_ensure_initialized(*best)) {
+    MOV_close(best->reader);
+    best->reader = nullptr;
+    std::lock_guard failure_lock(mutex_);
+    best->invalidated = true;
+  }
   return MovieReaderAccessor(this, best);
+}
+
+void MovieReaderCache::reader_open(MovieReaderCacheEntry &entry)
+{
+  if (entry.reader != nullptr) {
+    return;
+  }
+
+  const MovieReaderKey &key = entry.key;
+  char colorspace[IM_MAX_SPACE];
+  STRNCPY(colorspace, key.colorspace.c_str());
+  entry.reader = MOV_open_file(
+      key.filepath.c_str(), key.flags, key.stream_index, true, colorspace);
+  if (entry.reader == nullptr) {
+    return;
+  }
+  if (!key.proxy_dir.empty()) {
+    seq_proxy_index_dir_set(entry.reader, key.proxy_dir.c_str());
+  }
+  if (!key.multiview_suffix.empty()) {
+    MOV_set_multiview_suffix(entry.reader, key.multiview_suffix.c_str());
+  }
+
+  if (key.uses_multiview_filepath && !reader_ensure_initialized(entry)) {
+    MOV_close(entry.reader);
+    entry.reader = nullptr;
+  }
+}
+
+bool MovieReaderCache::reader_ensure_initialized(MovieReaderCacheEntry &entry)
+{
+  if (entry.reader == nullptr) {
+    return false;
+  }
+  if (MOV_is_initialized_and_valid(entry.reader)) {
+    return true;
+  }
+
+  ImBuf *ibuf = MOV_decode_frame(entry.reader, 0, IMB_PROXY_NONE);
+  if (ibuf == nullptr) {
+    return false;
+  }
+  IMB_freeImBuf(ibuf);
+  entry.frame_index = 0;
+  return MOV_is_initialized_and_valid(entry.reader);
 }
 
 void MovieReaderCache::release(MovieReaderCacheEntry &entry)
@@ -335,6 +407,11 @@ bool MovieReaderAccessor::uses_multiview_filepath() const
   return entry_ != nullptr && entry_->key.uses_multiview_filepath;
 }
 
+MovieReader *MovieReaderAccessor::reader()
+{
+  return entry_ ? entry_->reader : nullptr;
+}
+
 const MovieReader *MovieReaderAccessor::reader() const
 {
   return entry_ ? entry_->reader : nullptr;
@@ -355,6 +432,60 @@ MovieReaderAccessor movie_reader_cache_acquire_view(const Scene &scene,
 {
   return scene.ed->runtime->movie_reader_cache->acquire(
       movie_reader_key_get(scene, strip, view_id), frame_index, current_timestamp);
+}
+
+static MovieReaderAccessor movie_reader_cache_acquire_any_base(const Scene &scene,
+                                                               const Strip &strip)
+{
+  return scene.ed->runtime->movie_reader_cache->acquire_any(
+      movie_reader_key_get(scene, strip, std::nullopt));
+}
+
+static MovieReaderAccessor movie_reader_cache_acquire_any_view(const Scene &scene,
+                                                               const Strip &strip,
+                                                               const int view_id)
+{
+  return scene.ed->runtime->movie_reader_cache->acquire_any(
+      movie_reader_key_get(scene, strip, view_id));
+}
+
+MovieReaderAccessor movie_reader_cache_acquire_any(const Scene &scene, const Strip &strip)
+{
+  MovieReaderAccessor reader = movie_reader_cache_acquire_any_view(scene, strip, 0);
+  if (!reader && reader.uses_multiview_filepath()) {
+    reader = {};
+    return movie_reader_cache_acquire_any_base(scene, strip);
+  }
+  return reader;
+}
+
+bool movie_reader_cache_can_produce_frames(const Scene &scene, const Strip &strip)
+{
+  const bool use_multiview = (strip.flag & SEQ_USE_VIEWS) != 0 &&
+                             (scene.r.scemode & R_MULTIVIEW) != 0;
+  if (use_multiview && strip.views_format == R_IMF_VIEWS_INDIVIDUAL) {
+    Vector<MovieReaderAccessor> readers;
+    const int files_num = seq_num_files(&scene, strip.views_format, true);
+    if (files_num <= 0) {
+      return bool(movie_reader_cache_acquire_any_base(scene, strip));
+    }
+
+    MovieReaderAccessor primary_reader = movie_reader_cache_acquire_any_view(scene, strip, 0);
+    if (!primary_reader.uses_multiview_filepath()) {
+      return bool(primary_reader);
+    }
+
+    bool all_readers_open = bool(primary_reader);
+    readers.append(std::move(primary_reader));
+    for (int view_id = 1; view_id < files_num && all_readers_open; view_id++) {
+      readers.append(movie_reader_cache_acquire_any_view(scene, strip, view_id));
+      all_readers_open = bool(readers.last());
+    }
+    if (all_readers_open) {
+      return true;
+    }
+  }
+  return bool(movie_reader_cache_acquire_any_base(scene, strip));
 }
 
 MovieReaderCache *movie_reader_cache_create()

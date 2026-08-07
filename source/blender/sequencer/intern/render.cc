@@ -1117,7 +1117,7 @@ static ImBuf *seq_render_movie_strip(const RenderData *context,
                           readers[0].uses_multiview_filepath();
 
     /* Opening individual multiview files is all-or-nothing. Fall back to the original filepath if
-     * any view cannot be opened, matching #strip_open_anim_file behavior. */
+     * any view cannot be opened. */
     if (is_multiview_render && strip->views_format == R_IMF_VIEWS_INDIVIDUAL) {
       bool all_readers_open = static_cast<bool>(readers[0]);
       for (int view_id = 1; view_id < totfiles && all_readers_open; view_id++) {
@@ -1792,9 +1792,6 @@ static SeqResult do_render_strip_uncached(const RenderData *context,
           local_context.skip_cache = true;
 
           out = do_render_strip_seqbase(&local_context, state, strip, frame_index);
-
-          /* Free legacy per-strip movie readers no longer needed by the current frame. */
-          relations_free_all_anim_ibufs(local_context.scene, frame_index);
         }
       }
       else {
@@ -2122,9 +2119,6 @@ ImBuf *render_give_ibuf(const RenderData *context, float timeline_frame, int cha
 
   Vector<Strip *> strips = query_rendered_strips_sorted(
       scene, channels, seqbasep, timeline_frame, chanshown);
-
-  /* Make sure we only keep the `anim` data for strips that are in view. */
-  relations_free_all_anim_ibufs(context->scene, timeline_frame);
 
   SeqRenderState state;
 
