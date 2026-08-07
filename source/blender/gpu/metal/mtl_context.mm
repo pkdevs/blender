@@ -455,9 +455,17 @@ void MTLContext::finish()
 
 void MTLContext::memory_statistics_get(int *r_total_mem, int *r_free_mem)
 {
-  /* TODO(Metal): Implement. */
-  *r_total_mem = 0;
-  *r_free_mem = 0;
+  if (this->device == nil) {
+    *r_total_mem = 0;
+    *r_free_mem = 0;
+    return;
+  }
+
+  /* Values in Kb, to match the other backends. */
+  const size_t total_mem = size_t(this->device.recommendedMaxWorkingSetSize);
+  const size_t used_mem = size_t(this->device.currentAllocatedSize);
+  *r_total_mem = int(total_mem >> 10);
+  *r_free_mem = int((total_mem > used_mem) ? (total_mem - used_mem) >> 10 : 0);
 }
 
 void MTLContext::framebuffer_bind(MTLFrameBuffer *framebuffer)

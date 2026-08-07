@@ -168,6 +168,16 @@ class Texture {
                  bool cube_as_array,
                  bool use_stencil);
 
+  /**
+   * Size of the GPU memory allocation backing this texture, in bytes, or 0 when the backend
+   * can't report it. This can differ from the naive size of all mip levels, as drivers pick
+   * an internal layout based on the usage flags.
+   */
+  virtual size_t allocation_size_get() const
+  {
+    return 0;
+  }
+
   virtual void generate_mipmap() = 0;
   virtual void copy_to(Texture *tex, IndexRange mip_levels) = 0;
   virtual void clear(const double4 data) = 0;

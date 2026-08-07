@@ -287,6 +287,7 @@ class MTLTexture : public Texture {
                   eGPUDataFormat format,
                   GPUPixelBuffer *pixbuf) override;
 
+  size_t allocation_size_get() const override;
   void generate_mipmap() override;
   void copy_to(Texture *dst, IndexRange mip_levels) override;
   void clear(const double4 data) override;

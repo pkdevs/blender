@@ -82,6 +82,7 @@ class VKTexture : public Texture {
 
   virtual ~VKTexture() override;
 
+  size_t allocation_size_get() const override;
   void generate_mipmap() override;
   void copy_to(Texture *texture, IndexRange mip_levels) override;
   void copy_to(VKTexture &dst_texture, IndexRange mip_levels, VkImageAspectFlags vk_image_aspect);

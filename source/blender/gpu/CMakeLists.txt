@@ -813,6 +813,7 @@ set(GLSL_TEST_SRC
   tests/shaders/gpu_ray_query_custom_index_test.glsl
   tests/shaders/gpu_texture_test.glsl
   tests/shaders/gpu_texture_atomic_test.glsl
+  tests/shaders/gpu_texture_bandwidth_test.glsl
 )
 
 set(MTL_BACKEND_GLSL_SRC
@@ -983,39 +984,45 @@ if(WITH_GTESTS)
   )
 
   if(WITH_GPU_BACKEND_TESTS)
+    # DEBUG BRANCH: only the texture memory measurement is built, so it is the only
+    # thing CI has to run. Restore the full list before merging.
     list(APPEND TEST_SRC
-      tests/buffer_texture_test.cc
-      tests/compute_test.cc
-      tests/framebuffer_test.cc
-      tests/immediate_test.cc
-      tests/index_buffer_test.cc
-      tests/mipmap_test.cc
-      tests/push_constants_test.cc
-      tests/ray_tracing_test.cc
-      tests/shader_create_info_test.cc
-      tests/shader_test.cc
-      tests/specialization_constants_test.cc
-      tests/state_blend_test.cc
-      tests/storage_buffer_test.cc
-      tests/texture_test.cc
-      tests/texture_view_test.cc
-      tests/vertex_buffer_test.cc
+      tests/texture_memory_test.cc
     )
+    # list(APPEND TEST_SRC
+    #   tests/buffer_texture_test.cc
+    #   tests/compute_test.cc
+    #   tests/framebuffer_test.cc
+    #   tests/immediate_test.cc
+    #   tests/index_buffer_test.cc
+    #   tests/mipmap_test.cc
+    #   tests/push_constants_test.cc
+    #   tests/ray_tracing_test.cc
+    #   tests/shader_create_info_test.cc
+    #   tests/shader_test.cc
+    #   tests/specialization_constants_test.cc
+    #   tests/state_blend_test.cc
+    #   tests/storage_buffer_test.cc
+    #   tests/texture_test.cc
+    #   tests/texture_view_test.cc
+    #   tests/vertex_buffer_test.cc
+    # )
   endif()
 
-  if(WITH_VULKAN_BACKEND)
-    list(APPEND TEST_SRC
-      vulkan/tests/vk_data_conversion_test.cc
-      vulkan/tests/vk_memory_layout_test.cc
-      vulkan/render_graph/tests/vk_render_graph_test_compute.cc
-      vulkan/render_graph/tests/vk_render_graph_test_present.cc
-      vulkan/render_graph/tests/vk_render_graph_test_render.cc
-      vulkan/render_graph/tests/vk_render_graph_test_scheduler.cc
-      vulkan/render_graph/tests/vk_render_graph_test_transfer.cc
-
-      vulkan/render_graph/tests/vk_render_graph_test_types.hh
-    )
-  endif()
+  # DEBUG BRANCH: disabled, see above.
+  # if(WITH_VULKAN_BACKEND)
+  #   list(APPEND TEST_SRC
+  #     vulkan/tests/vk_data_conversion_test.cc
+  #     vulkan/tests/vk_memory_layout_test.cc
+  #     vulkan/render_graph/tests/vk_render_graph_test_compute.cc
+  #     vulkan/render_graph/tests/vk_render_graph_test_present.cc
+  #     vulkan/render_graph/tests/vk_render_graph_test_render.cc
+  #     vulkan/render_graph/tests/vk_render_graph_test_scheduler.cc
+  #     vulkan/render_graph/tests/vk_render_graph_test_transfer.cc
+  #
+  #     vulkan/render_graph/tests/vk_render_graph_test_types.hh
+  #   )
+  # endif()
 
   set(TEST_COMMON_SRC
     tests/gpu_testing.cc

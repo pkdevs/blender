@@ -939,6 +939,13 @@ VkImageUsageFlags to_vk_image_usage(const eGPUTextureUsage usage,
     result &= ~VK_IMAGE_USAGE_STORAGE_BIT;
   }
 
+  /* DEBUG BRANCH: sampled only reference for the texture memory benchmark. Note that
+   * #GPU_TEXTURE_USAGE_SHADER_READ alone normally still requests storage usage above, so this
+   * is the only way to get an image that a driver may apply color compression to. */
+  if (usage & GPU_TEXTURE_USAGE_DEBUG_NO_STORAGE) {
+    result &= ~VK_IMAGE_USAGE_STORAGE_BIT;
+  }
+
   return result;
 }
 

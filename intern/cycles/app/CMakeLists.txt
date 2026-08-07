@@ -139,9 +139,11 @@ if(WITH_CYCLES_STANDALONE)
       PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${app_output_dir}")
   endif()
 
-  add_test(
-    NAME cycles_version
-    COMMAND $<TARGET_FILE:cycles> --version)
+  # DEBUG BRANCH: disabled so CI only runs the GPU texture memory measurement.
+  # Remove before merging.
+  # add_test(
+  #   NAME cycles_version
+  #   COMMAND $<TARGET_FILE:cycles> --version)
 endif()
 
 if(WITH_CYCLES_PRECOMPUTE)

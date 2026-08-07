@@ -1244,6 +1244,16 @@ void gpu::MTLTexture::ensure_mipmaps(int miplvl)
   this->mip_range_set(0, mipmaps_ - 1);
 }
 
+size_t gpu::MTLTexture::allocation_size_get() const
+{
+  /* Views alias the memory of their source texture. Textures are baked lazily, so this
+   * only reports a size once the texture has actually been used. */
+  if (this->is_texture_view() || !is_baked_ || texture_ == nil) {
+    return 0;
+  }
+  return size_t(texture_.allocatedSize);
+}
+
 void gpu::MTLTexture::generate_mipmap()
 {
   /* Compressed textures allow users to provide their own custom mipmaps. And
@@ -2150,7 +2160,8 @@ void gpu::MTLTexture::prepare_internal()
    * buffer is cleared instead.
    */
   if (!((internal_gpu_image_usage_flags_ & GPU_TEXTURE_USAGE_ATOMIC) &&
-        !MTLBackend::get_capabilities().supports_texture_atomics))
+        !MTLBackend::get_capabilities().supports_texture_atomics) &&
+      !(internal_gpu_image_usage_flags_ & GPU_TEXTURE_USAGE_DEBUG_NO_STORAGE))
   {
     /* Force attachment usage - see comment above. */
     internal_gpu_image_usage_flags_ |= GPU_TEXTURE_USAGE_ATTACHMENT;

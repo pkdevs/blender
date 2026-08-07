@@ -779,6 +779,11 @@ enum eGPUTextureUsage {
    * This is unoptimized and should not be used. */
   GPU_TEXTURE_USAGE_GENERAL = (0xFF & (~(GPU_TEXTURE_USAGE_MEMORYLESS | GPU_TEXTURE_USAGE_ATOMIC |
                                          GPU_TEXTURE_USAGE_MEMORY_EXPORT))),
+  /* DEBUG BRANCH: Never request storage image usage from the backend, even if the backend
+   * would normally add it regardless of the flags above. The texture can then only be sampled,
+   * which is what lets a driver apply its internal color compression. Only exists to provide a
+   * reference point for the texture memory benchmark, real code must not use it. */
+  GPU_TEXTURE_USAGE_DEBUG_NO_STORAGE = (1 << 8),
 };
 
 ENUM_OPERATORS(eGPUTextureUsage);
@@ -1341,6 +1346,13 @@ const char *GPU_texture_format_name(gpu::TextureFormat format);
  * memory back and forth depending on usage.
  */
 unsigned int GPU_texture_memory_usage_get();
+
+/**
+ * Size of the GPU memory allocation backing a single texture, in bytes, or 0 when the
+ * backend can't report it. Drivers pick an internal memory layout based on the usage flags,
+ * so this can differ from the naive size of all mip levels.
+ */
+size_t GPU_texture_allocation_size(const gpu::Texture *texture);
 
 /** \} */
 

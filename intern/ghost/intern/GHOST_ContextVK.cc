@@ -322,6 +322,11 @@ class GHOST_DeviceVK {
     if (extensions.is_enabled(VK_EXT_MEMORY_PRIORITY_EXTENSION_NAME)) {
       vma_allocator_create_info.flags |= VMA_ALLOCATOR_CREATE_EXT_MEMORY_PRIORITY_BIT;
     }
+    /* Without this, `vmaGetHeapBudgets` reports VMA's own block bytes rather than the memory
+     * usage the driver reports, which hides anything the driver allocates on the side. */
+    if (extensions.is_enabled(VK_EXT_MEMORY_BUDGET_EXTENSION_NAME)) {
+      vma_allocator_create_info.flags |= VMA_ALLOCATOR_CREATE_EXT_MEMORY_BUDGET_BIT;
+    }
     if (extensions.is_enabled(VK_KHR_MAINTENANCE_4_EXTENSION_NAME)) {
       vma_allocator_create_info.flags |= VMA_ALLOCATOR_CREATE_KHR_MAINTENANCE4_BIT;
     }
@@ -1845,6 +1850,7 @@ GHOST_TSuccess GHOST_ContextVK::initializeDrawingContext()
     optional_device_extensions.append(VK_EXT_ROBUSTNESS_2_EXTENSION_NAME);
     optional_device_extensions.append(VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME);
     optional_device_extensions.append(VK_EXT_MEMORY_PRIORITY_EXTENSION_NAME);
+    optional_device_extensions.append(VK_EXT_MEMORY_BUDGET_EXTENSION_NAME);
     optional_device_extensions.append(VK_EXT_PAGEABLE_DEVICE_LOCAL_MEMORY_EXTENSION_NAME);
     optional_device_extensions.append(VK_KHR_PIPELINE_LIBRARY_EXTENSION_NAME);
     optional_device_extensions.append(VK_EXT_GRAPHICS_PIPELINE_LIBRARY_EXTENSION_NAME);

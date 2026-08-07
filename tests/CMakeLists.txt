@@ -71,15 +71,18 @@ set(TEST_BLENDER_EXE_PARAMS_NO_THUMB
   --python-expr [=[import bpy\;bpy.context.preferences.filepaths.file_preview_type='NONE']=]
 )
 
+# DEBUG BRANCH: Python tests are disabled so CI only runs the GPU texture memory
+# measurement. Remove before merging.
+
 # Python CTests
-if(WITH_BLENDER AND WITH_PYTHON AND NOT WITH_PYTHON_MODULE)
-  add_subdirectory(python)
-endif()
+# if(WITH_BLENDER AND WITH_PYTHON AND NOT WITH_PYTHON_MODULE)
+#   add_subdirectory(python)
+# endif()
 
 # Blender as python module tests.
-if(WITH_PYTHON_MODULE)
-  add_subdirectory(blender_as_python_module)
-endif()
+# if(WITH_PYTHON_MODULE)
+#   add_subdirectory(blender_as_python_module)
+# endif()
 
 # GTest
 add_subdirectory(gtests)

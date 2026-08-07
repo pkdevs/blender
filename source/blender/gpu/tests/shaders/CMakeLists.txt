@@ -39,6 +39,7 @@ set(SRC_GLSL_COMP
   gpu_ray_query_custom_index_test.glsl
   gpu_specialization_test.glsl
   gpu_texture_atomic_test.glsl
+  gpu_texture_bandwidth_test.glsl
 )
 
 set(SRC_BSL

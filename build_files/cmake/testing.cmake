@@ -2,6 +2,10 @@
 #
 # SPDX-License-Identifier: GPL-2.0-or-later
 
+# DEBUG BRANCH: only this test suite is built and registered with CTest, so that CI only
+# runs the GPU texture memory measurement. Remove before merging.
+set(BLENDER_ONLY_TEST_SUITE "gpu")
+
 function(get_blender_test_install_dir VARIABLE_NAME)
   get_property(GENERATOR_IS_MULTI_CONFIG GLOBAL PROPERTY GENERATOR_IS_MULTI_CONFIG)
   if(GENERATOR_IS_MULTI_CONFIG)
@@ -193,6 +197,10 @@ function(blender_add_test_suite_lib
   library_deps
   )
 
+  if(BLENDER_ONLY_TEST_SUITE AND NOT name STREQUAL BLENDER_ONLY_TEST_SUITE)
+    return()
+  endif()
+
   # Sources which are common for all suites and do not need to yield their own
   # test suite binaries when WITH_TESTS_SINGLE_BINARY is OFF.
   set(common_sources ${ARGN})
@@ -307,6 +315,10 @@ function(blender_add_test_suite_executable
   library_deps
   )
 
+  if(BLENDER_ONLY_TEST_SUITE AND NOT name STREQUAL BLENDER_ONLY_TEST_SUITE)
+    return()
+  endif()
+
   # Sources which are common for all suites and do not need to yield their own
   # test suite binaries when WITH_TESTS_SINGLE_BINARY is OFF.
   set(common_sources ${ARGN})
@@ -378,6 +390,10 @@ function(blender_add_test_executable
   includes_sys
   library_deps
   )
+  if(BLENDER_ONLY_TEST_SUITE AND NOT name STREQUAL BLENDER_ONLY_TEST_SUITE)
+    return()
+  endif()
+
   blender_add_test_executable_impl(
     "${name}"
     "${sources}"
@@ -398,6 +414,10 @@ function(blender_add_test_performance_executable
   includes_sys
   library_deps
   )
+  if(BLENDER_ONLY_TEST_SUITE AND NOT name STREQUAL BLENDER_ONLY_TEST_SUITE)
+    return()
+  endif()
+
   blender_add_test_executable_impl(
     "${name}"
     "${sources}"

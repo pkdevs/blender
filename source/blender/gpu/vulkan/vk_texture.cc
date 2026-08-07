@@ -50,6 +50,12 @@ VKTexture::~VKTexture()
   }
 }
 
+size_t VKTexture::allocation_size_get() const
+{
+  /* Views alias the memory of their source texture. */
+  return is_texture_view() ? 0 : size_t(allocation_info_.size);
+}
+
 void VKTexture::generate_mipmap()
 {
   BLI_assert(!is_texture_view());

@@ -235,6 +235,12 @@ uint GPU_texture_memory_usage_get()
   return 0;
 }
 
+size_t GPU_texture_allocation_size(const gpu::Texture *texture)
+{
+  BLI_assert(texture);
+  return texture->allocation_size_get();
+}
+
 /* ------ Creation ------ */
 
 static inline gpu::Texture *gpu_texture_create(const char *name,

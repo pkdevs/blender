@@ -548,7 +548,7 @@ void MTLBackend::capabilities_init(MTLContext *ctx)
   GCaps.max_varying_floats = 60;
 
   /* Feature support */
-  GCaps.mem_stats_support = false;
+  GCaps.mem_stats_support = true;
   GCaps.hdr_viewport_support = true;
 
   GCaps.geometry_shader_support = false;
