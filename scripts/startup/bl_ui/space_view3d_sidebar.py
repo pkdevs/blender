@@ -78,7 +78,7 @@ class VIEW3D_PT_copy_global_transform_fix_to_camera(GlobalTransformPanelMixin, P
             # logical AND of the settings is used, so a property is only keyed
             # when the keying set AND the above check-boxes say it's OK.
             props_box.label_multiline(
-                text="Keying set is active, which may reduce the effect of the above options.",
+                text="A keying set is active, which may reduce the effect of the options above.",
                 icon="STATUS_WARNING",
                 max_lines=3)
 
