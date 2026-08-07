@@ -39,9 +39,6 @@ def check_maps():
     if test:
         print("Keymaps that are in 'bl_keymap_utils.keymap_hierarchy' but not blender")
         for km_id in test:
-            if callable(km_id):
-                # Keymap functions of tools are not in blender anyway...
-                continue
             print("\t{:s}".format(km_id))
             # TODO #65963, broken keymap hierarchy tests disabled until fixed.
             # err = True
