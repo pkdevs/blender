@@ -23,8 +23,12 @@ static void node_declare(NodeDeclarationBuilder &b)
 static void node_build_multi_function(NodeMultiFunctionBuilder &builder)
 {
   static auto fn = mf::build::SI2_SO<float3, float4x4, float3>(
-      "Project Point",
-      [](float3 point, float4x4 matrix) { return math::project_point(matrix, point); });
+      "Project Point", [](float3 point, float4x4 matrix) {
+        if (math::is_zero(matrix)) {
+          matrix = float4x4::identity();
+        }
+        return math::project_point(matrix, point);
+      });
   builder.set_matching_fn(fn);
 }
 
