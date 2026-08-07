@@ -306,6 +306,13 @@ struct ExpressionTypeParser
     return {type, flags};
   }
 
+  ExpressionResult comma(ExpressionResult /*lhs*/, const ast::Node & /*t*/, BindingPower p)
+  {
+    using namespace builtin;
+    ExpressionResult rhs = expr(p);
+    return rhs;
+  }
+
   ExpressionResult binary(ExpressionResult lhs, const ast::Node &t, BindingPower p)
   {
     using namespace builtin;

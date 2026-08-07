@@ -205,6 +205,13 @@ struct CodegenContext : NodeErrorHandler {
       return {left.str + string(t.str_full()), ctx.table.to_class(type)};
     }
 
+    ExpressionResult comma(ExpressionResult lhs, const ast::Node &t, BindingPower p)
+    {
+      using namespace builtin;
+      ExpressionResult rhs = expr(p);
+      return {lhs.str + string(t.str_full()) + rhs.str, rhs.type};
+    }
+
     ExpressionResult binary(ExpressionResult lhs, const ast::Node &t, BindingPower p)
     {
       using namespace builtin;

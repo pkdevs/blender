@@ -133,6 +133,8 @@ template<typename Derived, typename ResultT, typename NodeT> class PrattParser {
       case LogicalAnd:
       case LogicalOr:
         return self.binary(left, t, left_binding_power(type));
+      case Comma:
+        return self.comma(left, t, left_binding_power(type));
       case Assign:
       case AssignAdd:
       case AssignSub:
@@ -203,6 +205,8 @@ template<typename Derived, typename ResultT, typename NodeT> class PrattParser {
       case AssignLShift:
       case AssignRShift:
         return 5;
+      case Comma:
+        return 2;
       case Colon:
       case ParOpen:
       case ParClose:

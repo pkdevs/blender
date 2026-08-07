@@ -129,6 +129,11 @@ class ExpressionParser : public Parser<ExpressionLexer, NullParser> {
       throw std::runtime_error("Invalid operator: suffix not supported");
     }
 
+    int64_t comma(int64_t /*left*/, const Token & /*t*/, BindingPower /*p*/)
+    {
+      throw std::runtime_error("Invalid operator: comma not supported");
+    }
+
     int64_t binary(int64_t left, const Token &t, BindingPower p)
     {
       switch (t.type()) {
