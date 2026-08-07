@@ -461,91 +461,82 @@ static void outliner_collection_set_flag_recursive(const Main &bmain,
 /**
  * Check if collection is already isolated.
  *
- * A collection is isolated if all its parents and children are "visible".
- * All the other collections must be "invisible".
+ * A collection is isolated if all its parents and neighbors are "visible".
+ * All the other collections may be "invisible".
  *
  * NOTE: We could/should boost performance by iterating over the tree twice.
  * First tagging all the children/parent collections, then getting their values and comparing.
  * To run BKE_collection_has_collection() so many times is silly and slow.
  */
 static bool outliner_collection_is_isolated(Scene *scene,
-                                            const LayerCollection *layer_collection_cmp,
-                                            const Collection *collection_cmp,
-                                            const bool value_cmp,
-                                            PropertyRNA *layer_or_collection_prop,
+                                            ViewLayer *view_layer,
                                             LayerCollection *layer_collection,
-                                            Collection *collection)
+                                            Collection *collection,
+                                            PropertyRNA *layer_or_collection_prop,
+                                            bool value_cmp)
 {
+  Collection *collection_ensure = layer_collection ? layer_collection->collection : collection;
+  Collection *parent = scene->master_collection;
   PointerRNA ptr;
-  outliner_layer_or_collection_pointer_create(scene, layer_collection, collection, &ptr);
-  const bool value = RNA_property_boolean_get(&ptr, layer_or_collection_prop);
-  Collection *collection_ensure = collection ? collection : layer_collection->collection;
-  const Collection *collection_ensure_cmp = collection_cmp ? collection_cmp :
-                                                             layer_collection_cmp->collection;
 
-  /* Exclude linked collections, otherwise toggling property won't reset the visibility for
-   * editable collections, see: #130579. */
-  if (layer_or_collection_prop && !RNA_property_editable(&ptr, layer_or_collection_prop)) {
-    return true;
-  }
-
-  if (collection_ensure->flag & COLLECTION_IS_MASTER) {
-  }
-  else if (collection_ensure == collection_ensure_cmp) {
-  }
-  else if (BKE_collection_has_collection(collection_ensure,
-                                         const_cast<Collection *>(collection_ensure_cmp)) ||
-           BKE_collection_has_collection(const_cast<Collection *>(collection_ensure_cmp),
-                                         collection_ensure))
-  {
-    /* This collection is either a parent or a child of the collection.
-     * We expect it to be set "visible" already. */
-    if (value != value_cmp) {
-      return false;
-    }
-  }
-  else {
-    /* This collection is neither a parent nor a child of the collection.
-     * We expect it to be "invisible". */
-    if (value == value_cmp) {
-      return false;
-    }
-  }
-
-  /* Keep going recursively. */
   if (layer_collection) {
-    for (LayerCollection &layer_collection_iter : layer_collection->layer_collections) {
-      if (layer_collection_iter.flag & LAYER_COLLECTION_EXCLUDE) {
+    LayerCollection *scene_layer_collection = static_cast<LayerCollection *>(
+        view_layer->layer_collections.first);
+    LayerCollection *parent = scene_layer_collection;
+
+    bool changed = true;
+    while (changed) {
+      outliner_layer_or_collection_pointer_create(scene, parent, nullptr, &ptr);
+      const bool value = RNA_property_boolean_get(&ptr, layer_or_collection_prop);
+      if (value != value_cmp) {
+        return false;
+      }
+      changed = false;
+      for (LayerCollection &lc_iter : parent->layer_collections) {
+        if ((&lc_iter != layer_collection) &&
+            BKE_layer_collection_has_layer_collection(&lc_iter, layer_collection))
+        {
+          parent = &lc_iter;
+          changed = true;
+          break;
+        }
+      }
+    }
+
+    for (LayerCollection &iter : parent->layer_collections) {
+      if (&iter == layer_collection) {
         continue;
       }
-      if (!outliner_collection_is_isolated(scene,
-                                           layer_collection_cmp,
-                                           collection_cmp,
-                                           value_cmp,
-                                           layer_or_collection_prop,
-                                           &layer_collection_iter,
-                                           collection ? layer_collection_iter.collection :
-                                                        nullptr))
-      {
+      outliner_layer_or_collection_pointer_create(scene, &iter, nullptr, &ptr);
+      const bool value = RNA_property_boolean_get(&ptr, layer_or_collection_prop);
+      if (value == value_cmp) {
         return false;
       }
     }
   }
   else {
-    for (CollectionChild &child : collection->children) {
-      if (!outliner_collection_is_isolated(scene,
-                                           layer_collection_cmp,
-                                           collection_cmp,
-                                           value_cmp,
-                                           layer_or_collection_prop,
-                                           nullptr,
-                                           child.collection))
-      {
+    while (parent != collection_ensure) {
+      outliner_layer_or_collection_pointer_create(scene, nullptr, collection_ensure, &ptr);
+      const bool value = RNA_property_boolean_get(&ptr, layer_or_collection_prop);
+      if (value != value_cmp) {
+        return false;
+      }
+      for (CollectionChild &col : parent->children) {
+        if (BKE_collection_has_collection(col.collection, collection_ensure)) {
+          parent = col.collection;
+          break;
+        }
+      }
+    }
+
+    for (CollectionChild &col : parent->children) {
+      outliner_layer_or_collection_pointer_create(scene, nullptr, col.collection, &ptr);
+      const bool value = RNA_property_boolean_get(&ptr, layer_or_collection_prop);
+      if (value != value_cmp) {
         return false;
       }
     }
   }
-
   return true;
 }
 
@@ -559,7 +550,7 @@ void outliner_collection_isolate_flag(const Main &bmain,
                                       const bool value)
 {
   PointerRNA ptr;
-  const bool is_hide = strstr(propname, "hide_") || STREQ(propname, "exclude");
+  bool is_hide = strstr(propname, "hide_") || STREQ(propname, "exclude");
 
   LayerCollection *top_layer_collection = layer_collection ?
                                               static_cast<LayerCollection *>(
@@ -568,13 +559,9 @@ void outliner_collection_isolate_flag(const Main &bmain,
   Collection *top_collection = collection ? scene->master_collection : nullptr;
 
   bool was_isolated = (value == is_hide);
-  was_isolated &= outliner_collection_is_isolated(scene,
-                                                  layer_collection,
-                                                  collection,
-                                                  !is_hide,
-                                                  layer_or_collection_prop,
-                                                  top_layer_collection,
-                                                  top_collection);
+
+  was_isolated &= outliner_collection_is_isolated(
+      scene, view_layer, layer_collection, collection, layer_or_collection_prop, !is_hide);
 
   if (was_isolated) {
     const bool default_value = RNA_property_boolean_get_default(nullptr, layer_or_collection_prop);
@@ -590,48 +577,34 @@ void outliner_collection_isolate_flag(const Main &bmain,
     return;
   }
 
-  /* Make every collection "invisible". */
-  outliner_collection_set_flag_recursive(bmain,
-                                         scene,
-                                         view_layer,
-                                         top_layer_collection,
-                                         top_collection,
-                                         layer_or_collection_prop,
-                                         nullptr,
-                                         is_hide);
-
-  /* Make this collection and its children collections the only "visible". */
-  outliner_collection_set_flag_recursive(bmain,
-                                         scene,
-                                         view_layer,
-                                         layer_collection,
-                                         collection,
-                                         layer_or_collection_prop,
-                                         nullptr,
-                                         !is_hide);
-
   /* Make this collection direct parents also "visible". */
   if (layer_collection) {
-    LayerCollection *lc_parent = layer_collection;
-    for (LayerCollection &lc_iter : top_layer_collection->layer_collections) {
-      if (BKE_layer_collection_has_layer_collection(&lc_iter, layer_collection)) {
-        lc_parent = &lc_iter;
-        break;
-      }
-    }
+    LayerCollection *lc_parent = top_layer_collection;
 
-    while (lc_parent != layer_collection) {
+    bool changed = true;
+    while (changed) {
       outliner_layer_or_collection_pointer_create(
           scene, lc_parent, collection ? lc_parent->collection : nullptr, &ptr);
       RNA_property_boolean_set(&ptr, layer_or_collection_prop, !is_hide);
-
+      changed = false;
       for (LayerCollection &lc_iter : lc_parent->layer_collections) {
-        if (BKE_layer_collection_has_layer_collection(&lc_iter, layer_collection)) {
+        if ((&lc_iter != layer_collection) &&
+            BKE_layer_collection_has_layer_collection(&lc_iter, layer_collection))
+        {
           lc_parent = &lc_iter;
+          changed = true;
           break;
         }
       }
     }
+
+    for (LayerCollection &iter : lc_parent->layer_collections) {
+      outliner_layer_or_collection_pointer_create(
+          scene, &iter, collection ? iter.collection : nullptr, &ptr);
+      is_hide = &iter == layer_collection;
+      RNA_property_boolean_set(&ptr, layer_or_collection_prop, !is_hide);
+    }
+    DEG_id_tag_update(&scene->id, ID_RECALC_BASE_FLAGS);
   }
   else {
     CollectionParent *parent;
