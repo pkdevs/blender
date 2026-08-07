@@ -8,9 +8,11 @@
 # simple script to test 'bl_keymap_utils.keymap_hierarchy' contains correct values.
 
 # Needed for 'bl_keymap_utils.keymap_hierarchy' which inspects tools.
-import sys
 import os
+import sys
+
 sys.path.append(os.path.join(os.path.dirname(__file__), os.pardir, os.pardir, "scripts", "startup"))
+
 del sys, os
 
 from bl_keymap_utils import keymap_hierarchy
@@ -69,9 +71,14 @@ def check_maps():
 
 
 def main():
+    import bpy
+
+    # Not loaded in background mode.
+    if bpy.app.background:
+        bpy.utils.keyconfig_init()
+
     err = check_maps()
 
-    import bpy
     if err and bpy.app.background:
         # alert CTest we failed
         import sys
