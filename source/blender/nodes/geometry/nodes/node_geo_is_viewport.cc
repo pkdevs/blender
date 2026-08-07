@@ -32,7 +32,7 @@ class IsViewportOperation : public NodeOperation {
 
   void execute() override
   {
-    const bool is_viewport = this->context().is_viewport_compositor();
+    const bool is_viewport = this->context().is_viewport();
 
     Result &result = this->get_result("Is Viewport");
     result.allocate_single_value();

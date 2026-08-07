@@ -50,7 +50,7 @@ RenderContext *Context::render_context() const
   return nullptr;
 }
 
-bool Context::is_viewport_compositor() const
+bool Context::is_viewport() const
 {
   return false;
 }

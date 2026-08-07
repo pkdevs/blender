@@ -196,7 +196,7 @@ static std::optional<T> get_input_socket_value(const bNode &node,
   if (linked_node.is_type("GeometryNodeIsViewport"_ustr)) {
     /* Is Viewport node's value can be determined statically.
      * Convert according to the same implicit conversion table used at runtime. */
-    const bool is_viewport = node_group_operation.context().is_viewport_compositor();
+    const bool is_viewport = node_group_operation.context().is_viewport();
     if constexpr (std::is_same_v<T, bool>) {
       return is_viewport;
     }

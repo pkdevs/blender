@@ -83,7 +83,7 @@ class Context : public compositor::Context {
     return true;
   }
 
-  bool is_viewport_compositor() const override
+  bool is_viewport() const override
   {
     return true;
   }
