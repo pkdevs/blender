@@ -498,14 +498,15 @@ void VIEW3D_OT_zoom_camera_1_to_1(wmOperatorType *ot)
  * Sets the roll of the view to an angle.
  * \{ */
 
-static void view3d_set_view_angle(ARegion *region, View3D *v3d, const float angle)
+static void view3d_set_view_angle(ARegion *region, View3D *v3d, const float input_angle)
 {
   RegionView3D *rv3d = static_cast<RegionView3D *>(region->regiondata);
+  const float angle = angle_wrap_rad(input_angle);
 
   if (rv3d->persp == RV3D_CAMOB) {
     const bool is_camera_lock = ED_view3d_camera_lock_check(v3d, rv3d);
     if (!is_camera_lock) {
-      rv3d->camroll = angle_wrap_rad(angle);
+      rv3d->camroll = angle;
       return;
     }
   }
