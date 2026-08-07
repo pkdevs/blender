@@ -38,7 +38,7 @@ Point point_get(uint vert_id)
   Point pt;
   pt.point_id = point_id_get(vert_id);
 
-  auto &buf = sampler_get(draw_pointcloud, ptcloud_pos_rad_tx);
+  samplerBuffer &buf = sampler_get(draw_pointcloud, ptcloud_pos_rad_tx);
   float4 pos_rad = texelFetch(buf, pt.point_id);
   pt.P = pos_rad.xyz;
   pt.radius = pos_rad.w;
@@ -120,7 +120,7 @@ ShapePoint shape_point_get(const Point pt,
 
 float3 get_point_position(const int point_id)
 {
-  auto &buf = sampler_get(draw_pointcloud, ptcloud_pos_rad_tx);
+  samplerBuffer &buf = sampler_get(draw_pointcloud, ptcloud_pos_rad_tx);
   return texelFetch(buf, point_id).xyz;
 }
 

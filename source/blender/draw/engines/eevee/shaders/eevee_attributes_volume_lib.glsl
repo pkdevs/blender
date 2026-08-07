@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include "draw_shader_shared.hh"
 #include "eevee_geom_types_lib.bsl.hh"
 #include "gpu_shader_codegen_lib.glsl"
 
@@ -16,7 +17,7 @@
 
 float3 grid_coordinates(float3 lP, int index)
 {
-  const auto &drw_volume = buffer_get(draw_volume_infos, drw_volume);
+  const VolumeInfos &drw_volume = buffer_get(draw_volume_infos, drw_volume);
   return (drw_volume.grids_xform[index] * float4(lP, 1.0f)).xyz;
 }
 

@@ -117,7 +117,7 @@ struct SurfVolume {
     nodetree_volume();
 
     if (is_volume_object) [[static_branch]] {
-      const auto &drw_volume = buffer_get(draw_volume_infos, drw_volume);
+      const VolumeInfos &drw_volume = buffer_get(draw_volume_infos, drw_volume);
       g_volume_scattering *= drw_volume.density_scale;
       g_volume_absorption *= drw_volume.density_scale;
       g_emission *= drw_volume.density_scale;

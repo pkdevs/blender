@@ -371,9 +371,9 @@ void raycast_eval([[maybe_unused]] float3 position,
 
     [[resource_table]] const draw::View &views = resource_table_get(draw::View);
     [[resource_table]] const eevee::Sampling &samp = resource_table_get(eevee::Sampling);
-    const auto &raycast_depth_tx = sampler_get(eevee_raycast, raycast_depth_tx);
-    const auto &prepass_normal_tx = sampler_get(eevee_raycast, prepass_normal_tx);
-    const auto &object_id_tx = sampler_get(eevee_raycast, object_id_tx);
+    const sampler2D &raycast_depth_tx = sampler_get(eevee_raycast, raycast_depth_tx);
+    const sampler2D &prepass_normal_tx = sampler_get(eevee_raycast, prepass_normal_tx);
+    const usampler2D &object_id_tx = sampler_get(eevee_raycast, object_id_tx);
 
     const ViewMatrices view = views.get(0);
 
@@ -797,7 +797,7 @@ float4 attr_load_color_post(float4 attr)
 
 float4 attr_load_uniform(float4 /*attr*/, const uint attr_hash)
 {
-  const auto &attrs_buf = buffer_get(draw_object_attributes, drw_attrs);
+  const ObjectAttribute(&attrs_buf)[] = buffer_get(draw_object_attributes, drw_attrs);
 
   ObjectInfos infos = object_infos_get();
   uint index = infos.object_attrs_offset;

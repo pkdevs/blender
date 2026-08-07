@@ -147,7 +147,7 @@ void surf_deferred([[resource_table]] PipelineConstants &pipe,
 
   /* Some render pass can be written during the gbuffer pass. Light passes are written later. */
   {
-    const auto &nt = buffer_get(eevee_nodetree, node_tree);
+    const NodeTree &nt = buffer_get(eevee_nodetree, node_tree);
     cryptomatte.store(out_texel, nt.crypto_hash, resource_id);
     render_passes.store_color(
         out_texel, uni.uniform_buf.render_pass.emission_id, float4(g_emission, 1.0f));

@@ -64,8 +64,8 @@ struct Indirection {
 
 Indirection indirection_get(Segment segment)
 {
-  const auto &curves_indirection_buf = sampler_get(draw_curves, curves_indirection_buf);
-  const auto &drw_curves = buffer_get(draw_curves_infos, drw_curves);
+  const isamplerBuffer &curves_indirection_buf = sampler_get(draw_curves, curves_indirection_buf);
+  const CurvesInfos &drw_curves = buffer_get(draw_curves_infos, drw_curves);
 
   Indirection ind;
   ind.is_cyclic_point = false;

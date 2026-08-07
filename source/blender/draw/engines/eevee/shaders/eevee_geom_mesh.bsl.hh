@@ -95,7 +95,7 @@ struct GeomMeshVertIn {
 
   if (pipe.use_clip_plane) [[static_branch]] {
     auto &clip_interp = interface_get(eevee_clip_plane, clip_interp);
-    const auto &clip_plane = buffer_get(eevee_clip_plane, clip_plane);
+    const ClipPlaneData &clip_plane = buffer_get(eevee_clip_plane, clip_plane);
     clip_interp.clip_distance = dot(clip_plane.plane, float4(interp.P, 1.0f));
   }
 

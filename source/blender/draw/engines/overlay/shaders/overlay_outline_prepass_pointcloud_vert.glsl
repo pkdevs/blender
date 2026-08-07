@@ -29,7 +29,8 @@ uint outline_colorid_get()
 
 void main()
 {
-  const eObjectInfoFlag ob_flag = buffer_get(draw_object_infos, drw_infos)[drw_resource_id()].flag;
+  const ObjectInfos(&ob_buf)[] = buffer_get(draw_object_infos, drw_infos);
+  const eObjectInfoFlag ob_flag = ob_buf[drw_resource_id()].flag;
 
   const pointcloud::Point ls_pt = pointcloud::point_get(uint(gl_VertexID));
   const pointcloud::Point ws_pt = pointcloud::object_to_world(ls_pt, drw_modelmat());
