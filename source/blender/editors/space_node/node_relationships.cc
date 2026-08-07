@@ -440,6 +440,13 @@ static bool socket_can_be_viewed(const bNodeSocket &socket)
   if (STREQ(socket.idname, "NodeSocketVirtual")) {
     return false;
   }
+
+  /* The compositor viewer can only view color sockets, so we make sure the socket can be converted
+   * into a color. */
+  if (socket.owner_tree().type == NTREE_COMPOSIT) {
+    return socket.owner_tree().typeinfo->validate_link(socket.type, SOCK_RGBA);
+  }
+
   return true;
 }
 
@@ -2373,9 +2380,9 @@ static wmOperatorStatus node_join_nodes_exec(bContext *C, wmOperator *op)
     return OPERATOR_CANCELLED;
   }
 
-  if (std::all_of(selected_nodes.begin(), selected_nodes.end(), [](const bNode *node) {
-        return node->is_group_input();
-      }))
+  if (std::all_of(selected_nodes.begin(),
+                  selected_nodes.end(),
+                  [](const bNode *node) { return node->is_group_input(); }))
   {
     join_group_inputs(ntree, std::move(selected_nodes), active_node);
   }
