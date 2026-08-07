@@ -517,13 +517,15 @@ static void view3d_set_view_angle(ARegion *region, View3D *v3d, const float inpu
 
   float3 alignment_vector = float3(0.0f, 0.0f, 1.0f);
 
+  constexpr float axis_align_eps = 1e-4f;
+
   /* Use the Positive Y-Axis when on the top view.*/
-  if (math::distance(pivot_axis_local, alignment_vector) < 0.0001f) {
+  if (math::distance(pivot_axis_local, alignment_vector) < axis_align_eps) {
     alignment_vector = float3(0.0f, 1.0f, 0.0f);
   }
 
   /* Use the negative Y-Axis when on the bottom view. */
-  if (math::distance(pivot_axis_local, -alignment_vector) < 0.0001f) {
+  if (math::distance(pivot_axis_local, -alignment_vector) < axis_align_eps) {
     alignment_vector = float3(0.0f, -1.0f, 0.0f);
   }
 
