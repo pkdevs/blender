@@ -8,7 +8,7 @@
 
 #include <cstdlib>
 
-#include "BLI_math_rotation.h"
+#include "BLI_math_rotation_c.hh"
 
 #include "BLT_translation.hh"
 
@@ -133,7 +133,7 @@ const EnumPropertyItem rna_enum_constraint_type_items[] = {
     RNA_ENUM_ITEM_HEADING(N_("Relationship"), nullptr),
     {CONSTRAINT_TYPE_ACTION,
      "ACTION",
-     ICON_ACTION,
+     ICON_CON_ACTION,
      "Action",
      "Use transform property of target to look up pose for owner from an Action"},
     {CONSTRAINT_TYPE_ARMATURE,
@@ -278,14 +278,15 @@ static const EnumPropertyItem euler_order_items[] = {
 
 #  include "DNA_cachefile_types.h"
 
-#  include "BLI_listbase.h"
-#  include "BLI_string.h"
-#  include "BLI_string_utf8.h"
+#  include "BLI_listbase.hh"
+#  include "BLI_string.hh"
+#  include "BLI_string_utf8.hh"
 
 #  include "BKE_action.hh"
-#  include "BKE_animsys.h"
+#  include "BKE_animsys.hh"
 #  include "BKE_constraint.h"
 #  include "BKE_context.hh"
+#  include "BKE_global.hh"
 #  include "BKE_lib_id.hh"
 
 #  ifdef WITH_ALEMBIC
@@ -441,7 +442,12 @@ static void rna_Constraint_name_set(PointerRNA *ptr, const char *value)
   }
 
   /* fix all the animation data which may link to this */
-  BKE_animdata_fix_paths_rename_all(nullptr, "constraints", oldname, con->name);
+  BKE_animdata_fix_paths(*ptr->owner_id,
+                         "constraints",
+                         RNA_path_name_to_infix(oldname),
+                         RNA_path_name_to_infix(con->name),
+                         /*verify_paths=*/true,
+                         *G_MAIN);
 }
 
 static std::optional<std::string> rna_Constraint_do_compute_path(Object *ob, bConstraint *con)
@@ -559,7 +565,7 @@ static void rna_Constraint_ik_type_set(PointerRNA *ptr, int value)
       case CONSTRAINT_IK_DISTANCE:
         break;
     }
-    ikdata->type = value;
+    ikdata->type = eConstraint_IK_Type(value);
   }
 }
 
@@ -656,7 +662,7 @@ static void rna_ArmatureConstraint_target_clear(ID *id, bConstraint *con, Main *
 {
   bArmatureConstraint *acon = static_cast<bArmatureConstraint *>(con->data);
 
-  BLI_freelistN(&acon->targets);
+  acon->targets.free_no_destruct();
 
   ed::object::constraint_dependency_tag_update(bmain, id_cast<Object *>(id), con);
 }
@@ -666,7 +672,7 @@ static void rna_ActionConstraint_mix_mode_set(PointerRNA *ptr, int value)
   bConstraint *con = static_cast<bConstraint *>(ptr->data);
   bActionConstraint *acon = static_cast<bActionConstraint *>(con->data);
 
-  acon->mix_mode = value;
+  acon->mix_mode = eActionConstraint_MixMode(value);
 
   /* The After mode can be computed in world space for efficiency
    * and backward compatibility, while Before or Split requires Local. */
@@ -865,7 +871,7 @@ static void rna_ShrinkwrapConstraint_face_cull_set(PointerRNA *ptr, int value)
 {
   bConstraint *con = static_cast<bConstraint *>(ptr->data);
   bShrinkwrapConstraint *swc = static_cast<bShrinkwrapConstraint *>(con->data);
-  swc->flag = (swc->flag & ~CON_SHRINKWRAP_PROJECT_CULL_MASK) | value;
+  swc->flag = (swc->flag & ~CON_SHRINKWRAP_PROJECT_CULL_MASK) | eShrinkwrap_Flags(value);
 }
 
 static bool rna_Constraint_cameraObject_poll(PointerRNA *ptr, PointerRNA value)
@@ -1914,7 +1920,7 @@ static void rna_def_constraint_action(BlenderRNA *brna)
   RNA_def_struct_ui_text(
       srna, "Action Constraint", "Map an action to the transform axes of a bone");
   RNA_def_struct_sdna_from(srna, "bActionConstraint", "data");
-  RNA_def_struct_ui_icon(srna, ICON_ACTION);
+  RNA_def_struct_ui_icon(srna, ICON_CON_ACTION);
 
   rna_def_constraint_target_common(srna);
 

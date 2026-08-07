@@ -8,13 +8,13 @@
 
 #include "DNA_curve_types.h"
 
-#include "BLI_dial_2d.h"
-#include "BLI_listbase.h"
-#include "BLI_math_geom.h"
+#include "BLI_dial_2d.hh"
+#include "BLI_listbase.hh"
+#include "BLI_math_geom_c.hh"
 #include "BLI_math_matrix.hh"
-#include "BLI_math_rotation.h"
+#include "BLI_math_rotation_c.hh"
 #include "BLI_math_vector.hh"
-#include "BLI_rect.h"
+#include "BLI_rect.hh"
 
 #include "BKE_context.hh"
 #include "BKE_layer.hh"
@@ -97,6 +97,7 @@ void ViewOpsData::state_backup()
   this->init.camdx = rv3d->camdx;
   this->init.camdy = rv3d->camdy;
   this->init.camzoom = rv3d->camzoom;
+  this->init.camroll = rv3d->camroll;
   this->init.dist = rv3d->dist;
   copy_qt_qt(this->init.quat, rv3d->viewquat);
 
@@ -159,6 +160,7 @@ void ViewOpsData::state_restore()
   {
     /* Note this does not remove auto-keys on locked cameras. */
     copy_qt_qt(this->rv3d->viewquat, this->init.quat);
+    this->rv3d->camroll = this->init.camroll;
   }
 
   /* ROTATE. */
@@ -495,7 +497,7 @@ struct ViewOpsData_Utility : ViewOpsData {
   MEM_CXX_CLASS_ALLOC_FUNCS("ViewOpsData_Utility")
 };
 
-static bool view3d_navigation_poll_impl(bContext *C, const char viewlock)
+static bool view3d_navigation_poll_impl(bContext *C, const eRegionView3D_ViewLock viewlock)
 {
   if (!ED_operator_region_view3d_active(C)) {
     return false;
@@ -782,11 +784,11 @@ static void view3d_orbit_apply_dyn_ofs_ortho_correction(float ofs[3],
 
   const float angle_cos = max_ff(0.0f, dot_v3v3(view_z_init, view_z_curr));
   /* 1.0 or more means no rotation, there is nothing to do in that case. */
-  if (LIKELY(angle_cos < 1.0f)) {
+  if (angle_cos < 1.0f) [[likely]] {
     const float dot_ofs_curr = dot_v3v3(view_z_curr, ofs);
     const float dot_ofs_next = dot_v3v3(view_z_curr, dyn_ofs);
     const float ofs_delta = dot_ofs_next - dot_ofs_curr;
-    if (LIKELY(ofs_delta != 0.0f)) {
+    if (ofs_delta != 0.0f) [[likely]] {
       /* Calculate a factor where 0.0 represents no rotation and 1.0 represents 90d or more.
        * NOTE: Without applying the factor, the distances immediately changes
        * (useful for testing), but not good for the users experience as minor rotations
@@ -934,9 +936,9 @@ void axis_set_view(bContext *C,
                    View3D *v3d,
                    ARegion *region,
                    const float quat_[4],
-                   char view,
-                   char view_axis_roll,
-                   int perspo,
+                   eRegionView3D_View view,
+                   eRegionView3D_ViewAxisRoll view_axis_roll,
+                   eRegionView3D_Persp perspo,
                    const float *align_to_quat,
                    const int smooth_viewtx)
 {
@@ -944,9 +946,9 @@ void axis_set_view(bContext *C,
   RegionView3D *rv3d = static_cast<RegionView3D *>(region->regiondata);
 
   float quat[4];
-  const short orig_persp = rv3d->persp;
-  const char orig_view = rv3d->view;
-  const char orig_view_axis_roll = rv3d->view_axis_roll;
+  const eRegionView3D_Persp orig_persp = rv3d->persp;
+  const eRegionView3D_View orig_view = rv3d->view;
+  const eRegionView3D_ViewAxisRoll orig_view_axis_roll = rv3d->view_axis_roll;
 
   normalize_qt_qt(quat, quat_);
 
@@ -1003,7 +1005,7 @@ void axis_set_view(bContext *C,
 
     /* so we animate _from_ the camera location */
     Object *camera_eval = DEG_get_evaluated(CTX_data_ensure_evaluated_depsgraph(C), v3d->camera);
-    ED_view3d_from_object(camera_eval, rv3d->ofs, nullptr, &rv3d->dist, nullptr);
+    ED_view3d_from_object(camera_eval, rv3d->ofs, nullptr, &rv3d->dist, 0.0f, nullptr);
 
     V3D_SmoothParams sview = {nullptr};
     sview.camera_old = camera_eval;

@@ -18,7 +18,7 @@
 #include <memory>
 #include <string>
 
-#include "BLI_assert.h"
+#include "BLI_assert.hh"
 
 #include "DNA_layer_types.h"
 #include "DNA_object_types.h"
@@ -212,6 +212,10 @@ ABCAbstractWriter *ABCHierarchyIterator::create_data_writer_for_object_type(
     case OB_LIGHTPROBE:
     case OB_LATTICE:
     case OB_ARMATURE:
+    case OB_GPENCIL_LEGACY:
+    case OB_POINTCLOUD:
+    case OB_VOLUME:
+    case OB_GREASE_PENCIL:
       return nullptr;
     case OB_TYPE_MAX:
       BLI_assert_msg(0, "OB_TYPE_MAX should not be used");

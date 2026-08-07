@@ -14,15 +14,15 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_ghash.h"
-#include "BLI_listbase.h"
+#include "BLI_ghash.hh"
+#include "BLI_listbase.hh"
 #include "BLI_map.hh"
-#include "BLI_math_geom.h"
-#include "BLI_math_matrix.h"
-#include "BLI_math_vector.h"
-#include "BLI_string_utf8.h"
+#include "BLI_math_geom_c.hh"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_vector_c.hh"
+#include "BLI_string_utf8.hh"
 #include "BLI_string_utils.hh"
-#include "BLI_utildefines.h"
+#include "BLI_utildefines.hh"
 
 #include "BLT_translation.hh"
 
@@ -30,10 +30,13 @@
 #include "DNA_movieclip_types.h"
 #include "DNA_object_types.h"
 
-#include "BKE_animsys.h"
+#include "RNA_path.hh"
+
+#include "BKE_animsys.hh"
 #include "BKE_curve.hh"
 #include "BKE_idtype.hh"
 
+#include "BKE_global.hh"
 #include "BKE_image.hh"
 #include "BKE_lib_id.hh"
 #include "BKE_lib_query.hh"
@@ -65,7 +68,7 @@ static void mask_copy_data(Main * /*bmain*/,
   Mask *mask_dst = id_cast<Mask *>(id_dst);
   const Mask *mask_src = id_cast<const Mask *>(id_src);
 
-  BLI_listbase_clear(&mask_dst->masklayers);
+  mask_dst->masklayers.clear_no_delete();
 
   /* TODO: add unused flag to those as well. */
   BKE_mask_layer_copy_list(&mask_dst->masklayers, &mask_src->masklayers);
@@ -151,13 +154,13 @@ static void mask_blend_read_data(BlendDataReader *reader, ID *id)
     for (MaskSpline &spline : masklay.splines) {
       MaskSplinePoint *points_old = spline.points;
 
-      BLO_read_struct_array(reader, MaskSplinePoint, spline.tot_point, &spline.points);
+      BLO_read_array_and_validate_size(reader, &spline.points, &spline.tot_point);
 
       for (int i = 0; i < spline.tot_point; i++) {
         MaskSplinePoint *point = &spline.points[i];
 
         if (point->tot_uw) {
-          BLO_read_struct_array(reader, MaskSplinePointUW, point->tot_uw, &point->uw);
+          BLO_read_array_and_validate_size(reader, &point->uw, &point->tot_uw);
         }
       }
 
@@ -172,9 +175,13 @@ static void mask_blend_read_data(BlendDataReader *reader, ID *id)
     BLO_read_struct_list(reader, MaskLayerShape, &masklay.splines_shapes);
 
     for (MaskLayerShape &masklay_shape : masklay.splines_shapes) {
-      BLO_read_float_array(reader,
-                           masklay_shape.tot_vert * (sizeof(MaskLayerShapeElem) / sizeof(float)),
-                           &masklay_shape.data);
+      if (!BLO_read_array(reader,
+                          &masklay_shape.data,
+                          masklay_shape.tot_vert,
+                          sizeof(MaskLayerShapeElem) / sizeof(float)))
+      {
+        masklay_shape.tot_vert = 0;
+      }
     }
 
     BLO_read_struct(reader, MaskSpline, &masklay.act_spline);
@@ -357,17 +364,20 @@ void BKE_mask_layer_unique_name(Mask *mask, MaskLayer *masklay)
                  sizeof(masklay->name));
 }
 
-void BKE_mask_layer_rename(Mask *mask,
-                           MaskLayer *masklay,
-                           const char *oldname,
-                           const char *newname)
+void BKE_mask_layer_rename(
+    Main &bmain, Mask *mask, MaskLayer *masklay, const char *oldname, const char *newname)
 {
   STRNCPY_UTF8(masklay->name, newname);
 
   BKE_mask_layer_unique_name(mask, masklay);
 
   /* now fix animation paths */
-  BKE_animdata_fix_paths_rename_all(&mask->id, "layers", oldname, masklay->name);
+  BKE_animdata_fix_paths(mask->id,
+                         "layers",
+                         RNA_path_name_to_infix(oldname),
+                         RNA_path_name_to_infix(masklay->name),
+                         /*verify_paths=*/true,
+                         bmain);
 }
 
 MaskLayer *BKE_mask_layer_copy(const MaskLayer *masklay)
@@ -950,14 +960,14 @@ void BKE_mask_point_select_set_handle(MaskSplinePoint *point,
 {
   if (do_select) {
     if (ELEM(which_handle, MASK_WHICH_HANDLE_STICK, MASK_WHICH_HANDLE_BOTH)) {
-      point->bezt.f1 |= SELECT;
-      point->bezt.f3 |= SELECT;
+      point->bezt.f1 |= BEZT_FLAG_SELECT;
+      point->bezt.f3 |= BEZT_FLAG_SELECT;
     }
     else if (which_handle == MASK_WHICH_HANDLE_LEFT) {
-      point->bezt.f1 |= SELECT;
+      point->bezt.f1 |= BEZT_FLAG_SELECT;
     }
     else if (which_handle == MASK_WHICH_HANDLE_RIGHT) {
-      point->bezt.f3 |= SELECT;
+      point->bezt.f3 |= BEZT_FLAG_SELECT;
     }
     else {
       BLI_assert_msg(0, "Wrong which_handle passed to BKE_mask_point_select_set_handle");
@@ -965,14 +975,14 @@ void BKE_mask_point_select_set_handle(MaskSplinePoint *point,
   }
   else {
     if (ELEM(which_handle, MASK_WHICH_HANDLE_STICK, MASK_WHICH_HANDLE_BOTH)) {
-      point->bezt.f1 &= ~SELECT;
-      point->bezt.f3 &= ~SELECT;
+      point->bezt.f1 &= ~BEZT_FLAG_SELECT;
+      point->bezt.f3 &= ~BEZT_FLAG_SELECT;
     }
     else if (which_handle == MASK_WHICH_HANDLE_LEFT) {
-      point->bezt.f1 &= ~SELECT;
+      point->bezt.f1 &= ~BEZT_FLAG_SELECT;
     }
     else if (which_handle == MASK_WHICH_HANDLE_RIGHT) {
-      point->bezt.f3 &= ~SELECT;
+      point->bezt.f3 &= ~BEZT_FLAG_SELECT;
     }
     else {
       BLI_assert_msg(0, "Wrong which_handle passed to BKE_mask_point_select_set_handle");
@@ -1463,7 +1473,7 @@ void BKE_mask_calc_handle_point_auto(MaskSpline *spline,
                                      const bool do_recalc_length)
 {
   MaskSplinePoint *point_prev, *point_next;
-  const uint8_t h_back[2] = {point->bezt.h1, point->bezt.h2};
+  const eBezTriple_Handle h_back[2] = {point->bezt.h1, point->bezt.h2};
   const float length_average = (do_recalc_length) ?
                                    0.0f /* dummy value */ :
                                    (len_v3v3(point->bezt.vec[0], point->bezt.vec[1]) +
@@ -1735,7 +1745,7 @@ MaskLayerShape *BKE_mask_layer_shape_duplicate(MaskLayerShape *masklay_shape)
 {
   MaskLayerShape *masklay_shape_copy = MEM_dupalloc(masklay_shape);
 
-  if (LIKELY(masklay_shape_copy->data)) {
+  if (masklay_shape_copy->data) [[likely]] {
     masklay_shape_copy->data = MEM_dupalloc(masklay_shape_copy->data);
   }
 
@@ -1963,7 +1973,7 @@ static void mask_clipboard_clear()
 {
   MaskClipboard &mask_clipboard = get_mask_clipboard();
   BKE_mask_spline_free_list(&mask_clipboard.splines);
-  BLI_listbase_clear(&mask_clipboard.splines);
+  mask_clipboard.splines.clear_no_delete();
   mask_clipboard.id_hash.clear();
 }
 

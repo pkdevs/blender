@@ -13,15 +13,17 @@
 #include "DNA_node_types.h"
 
 #include "BLI_color_types.hh"
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 #include "BLI_math_euler.hh"
 #include "BLI_math_quaternion_types.hh"
-#include "BLI_math_vector.h"
+#include "BLI_math_vector_c.hh"
 #include "BLI_math_vector_types.hh"
-#include "BLI_string.h"
-#include "BLI_string_utf8.h"
-#include "BLI_utildefines.h"
+#include "BLI_string.hh"
+#include "BLI_string_utf8.hh"
+#include "BLI_utildefines.hh"
 
+#include "BKE_action.hh"
+#include "BKE_animsys.hh"
 #include "BKE_geometry_set.hh"
 #include "BKE_lib_id.hh"
 #include "BKE_node.hh"
@@ -31,6 +33,7 @@
 #include "BKE_node_socket_value.hh"
 #include "BKE_node_tree_update.hh"
 
+#include "DNA_anim_types.h"
 #include "DNA_collection_types.h"
 #include "DNA_mask_types.h"
 #include "DNA_material_types.h"
@@ -60,6 +63,12 @@
 #include "SEQ_sequencer.hh"
 
 #include "WM_types.hh"
+
+#include "DEG_depsgraph.hh"
+#include "DEG_depsgraph_build.hh"
+
+#include "ANIM_action.hh"
+#include "ANIM_action_iterators.hh"
 
 namespace blender {
 
@@ -353,17 +362,8 @@ static const char *get_current_socket_identifier_for_future_socket(
     const Span<const SocketDeclaration *> socket_decls)
 {
   switch (node.type_legacy) {
-    case FN_NODE_RANDOM_VALUE: {
-      return get_identifier_from_decl({"Min", "Max", "Value"}, socket, socket_decls);
-    }
     case SH_NODE_MIX: {
       return get_identifier_from_decl({"A", "B", "Result"}, socket, socket_decls);
-    }
-    case FN_NODE_COMPARE: {
-      if (STREQ(socket.identifier, "Angle")) {
-        return nullptr;
-      }
-      return get_identifier_from_decl({"A", "B"}, socket, socket_decls);
     }
     case SH_NODE_MAP_RANGE: {
       if (socket.type == SOCK_VECTOR) {
@@ -436,7 +436,108 @@ static bool hide_new_group_input_sockets(const bNode &node)
   return false;
 }
 
-static void refresh_node_sockets_and_panels(bNodeTree &ntree,
+static void refresh_node_sockets_animation_inout(Main &bmain,
+                                                 bNodeTree &ntree,
+                                                 bNode &node,
+                                                 const eNodeSocketInOut in_out,
+                                                 const Span<bNodeSocket *> old_sockets,
+                                                 const Span<bNodeSocket *> new_sockets)
+{
+  std::optional<std::pair<animrig::Action *, animrig::Slot *>> action_and_slot =
+      animrig::get_action_slot_pair(ntree.id);
+  if (!action_and_slot) {
+    return;
+  }
+  animrig::Action &action = *action_and_slot->first;
+  animrig::Slot &slot = *action_and_slot->second;
+
+  Map<UString, int> new_index_by_identifier;
+  for (const int new_i : new_sockets.index_range()) {
+    const bNodeSocket &new_socket = *new_sockets[new_i];
+    new_index_by_identifier.add_new(new_socket.identifier_ustr(), new_i);
+  }
+
+  struct IndexMove {
+    int old_i;
+    int new_i;
+  };
+  Vector<IndexMove> moved_indices;
+  Vector<int> removed_indices;
+  for (const int old_i : old_sockets.index_range()) {
+    bNodeSocket &old_socket = *old_sockets[old_i];
+    const std::optional<int> new_i = new_index_by_identifier.lookup_try(
+        old_socket.identifier_ustr());
+    if (!new_i) {
+      removed_indices.append(old_i);
+      continue;
+    }
+    if (new_i == old_i) {
+      continue;
+    }
+    moved_indices.append({old_i, *new_i});
+  }
+  if (moved_indices.is_empty() && removed_indices.is_empty()) {
+    return;
+  }
+
+  const std::string node_path = fmt::format("nodes[\"{}\"]", BLI_str_escape(node.name));
+  const StringRef inout_str = in_out == SOCK_IN ? "inputs" : "outputs";
+  bool animation_changed = false;
+
+  if (!removed_indices.is_empty()) {
+    for (const int removed_i : removed_indices) {
+      const std::string old_path = fmt::format("{}.{}[{}]", node_path, inout_str, removed_i);
+      if (BKE_animdata_fix_paths_remove(&ntree.id, old_path.c_str())) {
+        animation_changed = true;
+      }
+    }
+  }
+  if (!moved_indices.is_empty()) {
+    auto construct_new_rna_path = [&](const StringRef old_path) -> char * {
+      if (!old_path.startswith(node_path)) {
+        return nullptr;
+      }
+      for (const IndexMove &index_move : moved_indices) {
+        const std::string old_path_prefix = fmt::format(
+            "{}.{}[{}]", node_path, inout_str, index_move.old_i);
+        if (!old_path.startswith(old_path_prefix)) {
+          continue;
+        }
+        const std::string new_path = fmt::format("{}.{}[{}]{}",
+                                                 node_path,
+                                                 inout_str,
+                                                 index_move.new_i,
+                                                 old_path.substr(old_path_prefix.size()));
+        animation_changed = true;
+        return BLI_strdup(new_path.c_str());
+      }
+      return nullptr;
+    };
+
+    /* All index changes have to be applied in a single pass over the fcurves. Otherwise, when
+     * sockets swap their position, the same fcurve may be modified twice and ends up with its
+     * original rna path. */
+    animrig::foreach_fcurve_in_action_slot(action, slot.handle, [&](FCurve &fcurve) {
+      if (char *new_path = construct_new_rna_path(fcurve.rna_path())) {
+        fcurve.rna_path_set_move(new_path);
+      }
+    });
+    for (FCurve &driver_fcurve : ntree.adt->drivers) {
+      if (char *new_path = construct_new_rna_path(driver_fcurve.rna_path())) {
+        driver_fcurve.rna_path_set_move(new_path);
+      }
+    }
+  }
+
+  if (animation_changed) {
+    DEG_id_tag_update(&ntree.id, ID_RECALC_ANIMATION);
+    DEG_id_tag_update(&action.id, ID_RECALC_SYNC_TO_EVAL);
+    DEG_relations_tag_update(&bmain);
+  }
+}
+
+static void refresh_node_sockets_and_panels(Main *bmain,
+                                            bNodeTree &ntree,
                                             bNode &node,
                                             const NodeDeclaration &node_decl,
                                             const bool do_id_user)
@@ -477,15 +578,19 @@ static void refresh_node_sockets_and_panels(bNodeTree &ntree,
   VectorSet<bNodeSocket *> new_inputs;
   VectorSet<bNodeSocket *> new_outputs;
   bNodePanelState *new_panel = node.panel_states_array;
+  Vector<bNodeSocket *> remaining_old_inputs = old_inputs;
+  Vector<bNodeSocket *> remaining_old_outputs = old_outputs;
   for (const ItemDeclarationPtr &item_decl : node_decl.all_items) {
     if (const SocketDeclaration *socket_decl = dynamic_cast<const SocketDeclaration *>(
             item_decl.get()))
     {
       if (socket_decl->in_out == SOCK_IN) {
-        refresh_node_socket(ntree, node, *socket_decl, old_inputs, new_inputs, hide_new_sockets);
+        refresh_node_socket(
+            ntree, node, *socket_decl, remaining_old_inputs, new_inputs, hide_new_sockets);
       }
       else {
-        refresh_node_socket(ntree, node, *socket_decl, old_outputs, new_outputs, hide_new_sockets);
+        refresh_node_socket(
+            ntree, node, *socket_decl, remaining_old_outputs, new_outputs, hide_new_sockets);
       }
     }
     else if (const PanelDeclaration *panel_decl = dynamic_cast<const PanelDeclaration *>(
@@ -494,6 +599,13 @@ static void refresh_node_sockets_and_panels(bNodeTree &ntree,
       refresh_node_panel(*panel_decl, old_panels, *new_panel);
       ++new_panel;
     }
+  }
+
+  /* Animation rna paths use the socket index, so they need to be updated when the socket order
+   * changes. */
+  if (bmain) {
+    refresh_node_sockets_animation_inout(*bmain, ntree, node, SOCK_IN, old_inputs, new_inputs);
+    refresh_node_sockets_animation_inout(*bmain, ntree, node, SOCK_OUT, old_outputs, new_outputs);
   }
 
   /* Destroy any remaining sockets that are no longer in the declaration. */
@@ -509,8 +621,8 @@ static void refresh_node_sockets_and_panels(bNodeTree &ntree,
   }
 
   /* Clear and reinsert sockets in the new order. */
-  BLI_listbase_clear(&node.inputs);
-  BLI_listbase_clear(&node.outputs);
+  node.inputs.clear_no_delete();
+  node.outputs.clear_no_delete();
   for (bNodeSocket *socket : new_inputs) {
     BLI_addtail(&node.inputs, socket);
   }
@@ -519,21 +631,19 @@ static void refresh_node_sockets_and_panels(bNodeTree &ntree,
   }
 }
 
-static void refresh_node(bNodeTree &ntree,
-                         bNode &node,
-                         nodes::NodeDeclaration &node_decl,
-                         bool do_id_user)
+static void refresh_node(
+    Main *bmain, bNodeTree &ntree, bNode &node, nodes::NodeDeclaration &node_decl, bool do_id_user)
 {
   if (node_decl.skip_updating_sockets) {
     return;
   }
   if (!node_decl.matches(node)) {
-    refresh_node_sockets_and_panels(ntree, node, node_decl, do_id_user);
+    refresh_node_sockets_and_panels(bmain, ntree, node, node_decl, do_id_user);
   }
   bke::node_socket_declarations_update(&node);
 }
 
-void update_node_declaration_and_sockets(bNodeTree &ntree, bNode &node)
+void update_node_declaration_and_sockets(bNodeTree &ntree, bNode &node, Main *bmain)
 {
   if (node.typeinfo->declare) {
     if (node.typeinfo->static_declaration->is_context_dependent) {
@@ -543,7 +653,7 @@ void update_node_declaration_and_sockets(bNodeTree &ntree, bNode &node)
       build_node_declaration(*node.typeinfo, *node.runtime->declaration, &ntree, &node);
     }
   }
-  refresh_node(ntree, node, *node.runtime->declaration, true);
+  refresh_node(bmain, ntree, node, *node.runtime->declaration, true);
 }
 
 bool socket_type_supports_fields(const eNodeSocketDatatype socket_type)
@@ -579,7 +689,7 @@ bool socket_type_supports_grids(const eNodeSocketDatatype socket_type)
 
 }  // namespace nodes
 
-void node_verify_sockets(bNodeTree *ntree, bNode *node, bool do_id_user)
+void node_verify_sockets(Main *bmain, bNodeTree *ntree, bNode *node, bool do_id_user)
 {
   bke::bNodeType *ntype = node->typeinfo;
   if (ntype == nullptr) {
@@ -587,7 +697,7 @@ void node_verify_sockets(bNodeTree *ntree, bNode *node, bool do_id_user)
   }
   if (ntype->declare) {
     bke::node_declaration_ensure_on_outdated_node(*ntree, *node);
-    refresh_node(*ntree, *node, *node->runtime->declaration, do_id_user);
+    refresh_node(bmain, *ntree, *node, *node->runtime->declaration, do_id_user);
     return;
   }
   /* Don't try to match socket lists when there are no templates.
@@ -605,365 +715,6 @@ void node_verify_sockets(bNodeTree *ntree, bNode *node, bool do_id_user)
   }
 }
 
-void node_socket_init_default_value_data(eNodeSocketDatatype datatype, int subtype, void **data)
-{
-  if (!data) {
-    return;
-  }
-
-  switch (datatype) {
-    case SOCK_FLOAT: {
-      bNodeSocketValueFloat *dval = MEM_new<bNodeSocketValueFloat>("node socket value float");
-      dval->subtype = subtype;
-      dval->value = 0.0f;
-      dval->min = -FLT_MAX;
-      dval->max = FLT_MAX;
-
-      *data = dval;
-      break;
-    }
-    case SOCK_INT: {
-      bNodeSocketValueInt *dval = MEM_new<bNodeSocketValueInt>("node socket value int");
-      dval->subtype = subtype;
-      dval->value = 0;
-      dval->min = INT_MIN;
-      dval->max = INT_MAX;
-
-      *data = dval;
-      break;
-    }
-    case SOCK_BOOLEAN: {
-      bNodeSocketValueBoolean *dval = MEM_new<bNodeSocketValueBoolean>("node socket value bool");
-      dval->value = false;
-
-      *data = dval;
-      break;
-    }
-    case SOCK_ROTATION: {
-      bNodeSocketValueRotation *dval = MEM_new<bNodeSocketValueRotation>(__func__);
-      *data = dval;
-      break;
-    }
-    case SOCK_VECTOR: {
-      static float default_value[] = {0.0f, 0.0f, 0.0f};
-      bNodeSocketValueVector *dval = MEM_new<bNodeSocketValueVector>("node socket value vector");
-      dval->subtype = subtype;
-      dval->dimensions = 3;
-      copy_v3_v3(dval->value, default_value);
-      dval->min = -FLT_MAX;
-      dval->max = FLT_MAX;
-
-      *data = dval;
-      break;
-    }
-    case SOCK_INT_VECTOR: {
-      static int default_value[] = {0, 0, 0};
-      bNodeSocketValueIntVector *dval = MEM_new<bNodeSocketValueIntVector>(
-          "node socket value integer vector");
-      dval->subtype = subtype;
-      dval->dimensions = 3;
-      copy_v3_v3_int(dval->value, default_value);
-      dval->min = INT_MIN;
-      dval->max = INT_MAX;
-
-      *data = dval;
-      break;
-    }
-    case SOCK_RGBA: {
-      static float default_value[] = {0.0f, 0.0f, 0.0f, 1.0f};
-      bNodeSocketValueRGBA *dval = MEM_new<bNodeSocketValueRGBA>("node socket value color");
-      copy_v4_v4(dval->value, default_value);
-
-      *data = dval;
-      break;
-    }
-    case SOCK_STRING: {
-      bNodeSocketValueString *dval = MEM_new<bNodeSocketValueString>("node socket value string");
-      dval->subtype = subtype;
-      dval->value[0] = '\0';
-
-      *data = dval;
-      break;
-    }
-    case SOCK_MENU: {
-      bNodeSocketValueMenu *dval = MEM_new<bNodeSocketValueMenu>("node socket value menu");
-      dval->value = -1;
-
-      *data = dval;
-      break;
-    }
-    case SOCK_OBJECT: {
-      bNodeSocketValueObject *dval = MEM_new<bNodeSocketValueObject>("node socket value object");
-      dval->value = nullptr;
-
-      *data = dval;
-      break;
-    }
-    case SOCK_IMAGE: {
-      bNodeSocketValueImage *dval = MEM_new<bNodeSocketValueImage>("node socket value image");
-      dval->value = nullptr;
-
-      *data = dval;
-      break;
-    }
-    case SOCK_COLLECTION: {
-      bNodeSocketValueCollection *dval = MEM_new<bNodeSocketValueCollection>(
-          "node socket value object");
-      dval->value = nullptr;
-
-      *data = dval;
-      break;
-    }
-    case SOCK_TEXTURE: {
-      bNodeSocketValueTexture *dval = MEM_new<bNodeSocketValueTexture>(
-          "node socket value texture");
-      dval->value = nullptr;
-
-      *data = dval;
-      break;
-    }
-    case SOCK_MATERIAL: {
-      bNodeSocketValueMaterial *dval = MEM_new<bNodeSocketValueMaterial>(
-          "node socket value material");
-      dval->value = nullptr;
-
-      *data = dval;
-      break;
-    }
-    case SOCK_FONT: {
-      bNodeSocketValueFont *dval = MEM_new<bNodeSocketValueFont>("node socket value font");
-      dval->value = nullptr;
-      *data = dval;
-      break;
-    }
-    case SOCK_SCENE: {
-      bNodeSocketValueScene *dval = MEM_new<bNodeSocketValueScene>("node socket value scene");
-      dval->value = nullptr;
-      *data = dval;
-      break;
-    }
-    case SOCK_TEXT_ID: {
-      bNodeSocketValueText *dval = MEM_new<bNodeSocketValueText>("node socket value text");
-      dval->value = nullptr;
-      *data = dval;
-      break;
-    }
-    case SOCK_MASK: {
-      bNodeSocketValueMask *dval = MEM_new<bNodeSocketValueMask>("node socket value mask");
-      dval->value = nullptr;
-      *data = dval;
-      break;
-    }
-    case SOCK_SOUND: {
-      bNodeSocketValueSound *dval = MEM_new<bNodeSocketValueSound>("node socket value sound");
-      dval->value = nullptr;
-      *data = dval;
-      break;
-    }
-
-    case SOCK_CUSTOM:
-    case SOCK_GEOMETRY:
-    case SOCK_MATRIX:
-    case SOCK_SHADER:
-    case SOCK_BUNDLE:
-    case SOCK_CLOSURE:
-      break;
-  }
-}
-
-void node_socket_copy_default_value_data(eNodeSocketDatatype datatype, void *to, const void *from)
-{
-  if (!to || !from) {
-    return;
-  }
-
-  switch (datatype) {
-    case SOCK_FLOAT: {
-      bNodeSocketValueFloat *toval = static_cast<bNodeSocketValueFloat *>(to);
-      bNodeSocketValueFloat *fromval = static_cast<bNodeSocketValueFloat *>(
-          const_cast<void *>(from));
-      *toval = *fromval;
-      break;
-    }
-    case SOCK_INT: {
-      bNodeSocketValueInt *toval = static_cast<bNodeSocketValueInt *>(to);
-      bNodeSocketValueInt *fromval = static_cast<bNodeSocketValueInt *>(const_cast<void *>(from));
-      *toval = *fromval;
-      break;
-    }
-    case SOCK_BOOLEAN: {
-      bNodeSocketValueBoolean *toval = static_cast<bNodeSocketValueBoolean *>(to);
-      bNodeSocketValueBoolean *fromval = static_cast<bNodeSocketValueBoolean *>(
-          const_cast<void *>(from));
-      *toval = *fromval;
-      break;
-    }
-    case SOCK_VECTOR: {
-      bNodeSocketValueVector *toval = static_cast<bNodeSocketValueVector *>(to);
-      bNodeSocketValueVector *fromval = static_cast<bNodeSocketValueVector *>(
-          const_cast<void *>(from));
-      *toval = *fromval;
-      break;
-    }
-    case SOCK_INT_VECTOR: {
-      bNodeSocketValueIntVector *toval = static_cast<bNodeSocketValueIntVector *>(to);
-      bNodeSocketValueIntVector *fromval = static_cast<bNodeSocketValueIntVector *>(
-          const_cast<void *>(from));
-      *toval = *fromval;
-      break;
-    }
-    case SOCK_RGBA: {
-      bNodeSocketValueRGBA *toval = static_cast<bNodeSocketValueRGBA *>(to);
-      bNodeSocketValueRGBA *fromval = static_cast<bNodeSocketValueRGBA *>(
-          const_cast<void *>(from));
-      *toval = *fromval;
-      break;
-    }
-    case SOCK_ROTATION: {
-      bNodeSocketValueRotation *toval = static_cast<bNodeSocketValueRotation *>(to);
-      bNodeSocketValueRotation *fromval = static_cast<bNodeSocketValueRotation *>(
-          const_cast<void *>(from));
-      *toval = *fromval;
-      break;
-    }
-    case SOCK_STRING: {
-      bNodeSocketValueString *toval = static_cast<bNodeSocketValueString *>(to);
-      bNodeSocketValueString *fromval = static_cast<bNodeSocketValueString *>(
-          const_cast<void *>(from));
-      *toval = *fromval;
-      break;
-    }
-    case SOCK_MENU: {
-      bNodeSocketValueMenu *toval = static_cast<bNodeSocketValueMenu *>(to);
-      bNodeSocketValueMenu *fromval = static_cast<bNodeSocketValueMenu *>(
-          const_cast<void *>(from));
-      *toval = *fromval;
-      break;
-    }
-    case SOCK_OBJECT: {
-      bNodeSocketValueObject *toval = static_cast<bNodeSocketValueObject *>(to);
-      bNodeSocketValueObject *fromval = static_cast<bNodeSocketValueObject *>(
-          const_cast<void *>(from));
-      *toval = *fromval;
-      id_us_plus(reinterpret_cast<ID *>(toval->value));
-      break;
-    }
-    case SOCK_IMAGE: {
-      bNodeSocketValueImage *toval = static_cast<bNodeSocketValueImage *>(to);
-      bNodeSocketValueImage *fromval = static_cast<bNodeSocketValueImage *>(
-          const_cast<void *>(from));
-      *toval = *fromval;
-      id_us_plus(reinterpret_cast<ID *>(toval->value));
-      break;
-    }
-    case SOCK_COLLECTION: {
-      bNodeSocketValueCollection *toval = static_cast<bNodeSocketValueCollection *>(to);
-      bNodeSocketValueCollection *fromval = static_cast<bNodeSocketValueCollection *>(
-          const_cast<void *>(from));
-      *toval = *fromval;
-      id_us_plus(reinterpret_cast<ID *>(toval->value));
-      break;
-    }
-    case SOCK_TEXTURE: {
-      bNodeSocketValueTexture *toval = static_cast<bNodeSocketValueTexture *>(to);
-      bNodeSocketValueTexture *fromval = static_cast<bNodeSocketValueTexture *>(
-          const_cast<void *>(from));
-      *toval = *fromval;
-      id_us_plus(reinterpret_cast<ID *>(toval->value));
-      break;
-    }
-    case SOCK_MATERIAL: {
-      bNodeSocketValueMaterial *toval = static_cast<bNodeSocketValueMaterial *>(to);
-      bNodeSocketValueMaterial *fromval = static_cast<bNodeSocketValueMaterial *>(
-          const_cast<void *>(from));
-      *toval = *fromval;
-      id_us_plus(reinterpret_cast<ID *>(toval->value));
-      break;
-    }
-    case SOCK_FONT: {
-      bNodeSocketValueFont *toval = static_cast<bNodeSocketValueFont *>(to);
-      bNodeSocketValueFont *fromval = static_cast<bNodeSocketValueFont *>(
-          const_cast<void *>(from));
-      *toval = *fromval;
-      id_us_plus(id_cast<ID *>(toval->value));
-      break;
-    }
-    case SOCK_SCENE: {
-      bNodeSocketValueScene *toval = static_cast<bNodeSocketValueScene *>(to);
-      bNodeSocketValueScene *fromval = static_cast<bNodeSocketValueScene *>(
-          const_cast<void *>(from));
-      *toval = *fromval;
-      id_us_plus(id_cast<ID *>(toval->value));
-      break;
-    }
-    case SOCK_TEXT_ID: {
-      bNodeSocketValueText *toval = static_cast<bNodeSocketValueText *>(to);
-      bNodeSocketValueText *fromval = static_cast<bNodeSocketValueText *>(
-          const_cast<void *>(from));
-      *toval = *fromval;
-      id_us_plus(id_cast<ID *>(toval->value));
-      break;
-    }
-    case SOCK_MASK: {
-      bNodeSocketValueMask *toval = static_cast<bNodeSocketValueMask *>(to);
-      bNodeSocketValueMask *fromval = static_cast<bNodeSocketValueMask *>(
-          const_cast<void *>(from));
-      *toval = *fromval;
-      id_us_plus(id_cast<ID *>(toval->value));
-      break;
-    }
-    case SOCK_SOUND: {
-      bNodeSocketValueSound *toval = static_cast<bNodeSocketValueSound *>(to);
-      bNodeSocketValueSound *fromval = static_cast<bNodeSocketValueSound *>(
-          const_cast<void *>(from));
-      *toval = *fromval;
-      id_us_plus(id_cast<ID *>(toval->value));
-      break;
-    }
-
-    case SOCK_CUSTOM:
-    case SOCK_GEOMETRY:
-    case SOCK_MATRIX:
-    case SOCK_SHADER:
-    case SOCK_BUNDLE:
-    case SOCK_CLOSURE:
-      break;
-  }
-}
-
-void node_socket_init_default_value(bNodeSocket *sock)
-{
-  if (sock->default_value) {
-    return; /* already initialized */
-  }
-
-  node_socket_init_default_value_data(
-      sock->typeinfo->type, PropertySubType(sock->typeinfo->subtype), &sock->default_value);
-}
-
-void node_socket_copy_default_value(bNodeSocket *to, const bNodeSocket *from)
-{
-  /* sanity check */
-  if (to->type != from->type) {
-    return;
-  }
-
-  /* make sure both exist */
-  if (!from->default_value) {
-    return;
-  }
-  node_socket_init_default_value(to);
-
-  /* use label instead of name if it has been set */
-  if (from->runtime->declaration->label_fn) {
-    STRNCPY_UTF8(to->name, (*from->runtime->declaration->label_fn)(from->owner_node()).c_str());
-  }
-
-  node_socket_copy_default_value_data(to->typeinfo->type, to->default_value, from->default_value);
-
-  to->flag |= (from->flag & SOCK_HIDE_VALUE);
-}
-
 static void standard_node_socket_interface_init_socket(
     ID * /*id*/,
     const bNodeTreeInterfaceSocket *interface_socket,
@@ -973,11 +724,7 @@ static void standard_node_socket_interface_init_socket(
 {
   /* initialize the type value */
   sock->type = sock->typeinfo->type;
-
-  node_socket_init_default_value_data(
-      eNodeSocketDatatype(sock->type), sock->typeinfo->subtype, &sock->default_value);
-  node_socket_copy_default_value_data(
-      eNodeSocketDatatype(sock->type), sock->default_value, interface_socket->socket_data);
+  sock->default_value = bke::socket_value_copy(sock->type, interface_socket->socket_data, true);
 }
 
 static void standard_node_socket_interface_from_socket(ID * /*id*/,
@@ -1080,7 +827,8 @@ static void make_common_type_prop(StructRNA &srna,
       "type",
       items,
       int(default_type),
-      r_generated.scope.add_value(fmt::format("{} {}", TIP_("Type for"), socket.name)).c_str(),
+      r_generated.scope.add_value(fmt::format(fmt::runtime(TIP_("Type for {}")), socket.name))
+          .c_str(),
       "");
   RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
   RNA_def_property_flag(prop, PROP_FORCE_GEOMETRY_EVAL);
@@ -1101,15 +849,50 @@ static void make_common_type_prop(StructRNA &srna,
       "");
   RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
 }
-static PointerRNA find_compositor_modifier(PointerRNA *ptr)
+
+/* Find the strip that owns the compositor properties an input value belongs to. Works both
+ * for strip modifiers and compositor effects. */
+static Strip *find_compositor_properties_strip(PointerRNA *ptr, Editing *ed)
 {
+  if (const std::optional<AncestorPointerRNA> strip = RNA_struct_search_closest_ancestor_by_type(
+          ptr, RNA_Strip))
+  {
+    return static_cast<Strip *>(strip->data);
+  }
+
+  /* Modifier fallback for properties pointers created without a strip ancestor. */
   if (const std::optional<AncestorPointerRNA> ancestor =
           RNA_struct_search_closest_ancestor_by_type(ptr,
                                                      RNA_SequencerCompositorModifierProperties))
   {
-    return PointerRNA(ptr->owner_id, ancestor->type, ancestor->data);
+    auto *cmd = static_cast<SequencerCompositorModifierData *>(ancestor->data);
+    Strip *found_strip = nullptr;
+    seq::foreach_strip(&ed->seqbase, [&](Strip *strip) {
+      if (BLI_findindex(&strip->modifiers, cmd) != -1) {
+        found_strip = strip;
+        return false;
+      }
+      return true;
+    });
+    return found_strip;
   }
-  return PointerRNA_NULL;
+
+  /* Effect fallback for properties pointers created without a strip ancestor. */
+  if (const std::optional<AncestorPointerRNA> ancestor =
+          RNA_struct_search_closest_ancestor_by_type(ptr, RNA_SequencerCompositorEffectProperties))
+  {
+    const void *effectdata = ancestor->data;
+    Strip *found_strip = nullptr;
+    seq::foreach_strip(&ed->seqbase, [&](Strip *strip) {
+      if (strip->effectdata == effectdata) {
+        found_strip = strip;
+        return false;
+      }
+      return true;
+    });
+    return found_strip;
+  }
+  return nullptr;
 }
 static void set_common_sequencer_update_function(PropertyRNA *prop)
 {
@@ -1119,19 +902,10 @@ static void set_common_sequencer_update_function(PropertyRNA *prop)
     if (!ed) {
       return;
     }
-    PointerRNA cmd_ptr = find_compositor_modifier(ptr);
-    auto *cmd = cmd_ptr.data_as<SequencerCompositorModifierData>();
-
-    /* TODO: Should be in ancestors?? */
-    Strip *modifier_strip = nullptr;
-    seq::foreach_strip(&ed->seqbase, [&](Strip *strip) {
-      if (BLI_findindex(&strip->modifiers, cmd) != -1) {
-        modifier_strip = strip;
-        return false;
-      }
-      return true;
-    });
-    seq::relations_invalidate_cache(sequencer_scene, modifier_strip);
+    Strip *properties_strip = find_compositor_properties_strip(ptr, ed);
+    if (properties_strip) {
+      seq::relations_invalidate_cache(sequencer_scene, properties_strip);
+    }
   });
   RNA_def_property_update_notifier(prop, NC_SCENE | ND_SEQUENCER);
 }
@@ -1145,7 +919,7 @@ static void make_common_attribute_name_prop(StructRNA &srna,
       "attribute_name",
       socket.default_attribute_name,
       0,
-      r_generated.scope.add_value(fmt::format("{} {}", TIP_("Attribute for"), socket.name))
+      r_generated.scope.add_value(fmt::format(fmt::runtime(TIP_("Attribute for {}")), socket.name))
           .c_str(),
       socket.description);
   RNA_def_property_flag(prop, PROP_FORCE_GEOMETRY_EVAL);
@@ -1188,6 +962,11 @@ static void make_common_fallback_props(StructRNA &srna,
                         r_generated);
 }
 
+static void data_block_pointer_update(Main *bmain, Scene * /*scene*/, PointerRNA * /*ptr*/)
+{
+  DEG_relations_tag_update(bmain);
+}
+
 static bke::bNodeSocketType *make_socket_type_bool()
 {
   bke::bNodeSocketType *socktype = make_standard_socket_type(SOCK_BOOLEAN, PROP_NONE);
@@ -1223,7 +1002,8 @@ static bke::bNodeSocketType *make_socket_type_bool()
         "layer_name",
         nullptr,
         0,
-        r_generated.scope.add_value(fmt::format("{} {}", TIP_("Layer for"), socket.name)).c_str(),
+        r_generated.scope.add_value(fmt::format(fmt::runtime(TIP_("Layer for {}")), socket.name))
+            .c_str(),
         socket.description);
     RNA_def_property_flag(prop, PROP_FORCE_GEOMETRY_EVAL);
     RNA_def_property_override_flag(prop, PROPOVERRIDE_OVERRIDABLE_LIBRARY);
@@ -1709,7 +1489,11 @@ static bke::bNodeSocketType *make_socket_type_string(PropertySubType subtype)
                           socket.description);
     RNA_def_property_flag(prop, PROP_FORCE_GEOMETRY_EVAL);
     RNA_def_property_override_flag(prop, PROPOVERRIDE_OVERRIDABLE_LIBRARY);
-    RNA_def_property_subtype(prop, PropertySubType(data->subtype));
+    PropertySubType subtype = PropertySubType(data->subtype);
+    RNA_def_property_subtype(prop, subtype);
+    if (subtype == PROP_FILEPATH) {
+      RNA_def_property_flag(prop, PROP_PATH_SUPPORTS_BLEND_RELATIVE);
+    }
     make_common_value_props(srna, socket, r_generated);
   };
   socktype->make_compositor_nodes_input_srna = [](const bNodeTree & /*tree*/,
@@ -1842,8 +1626,14 @@ static bke::bNodeSocketType *make_socket_type_object()
                                                 nodes::GeneratedTreeSrnaData &r_generated) {
     PropertyRNA *prop = RNA_def_pointer_runtime(
         &srna, "value", RNA_Object, socket.name, socket.description);
+    const auto *default_value = reinterpret_cast<const bNodeSocketValueObject *>(
+        socket.socket_data);
+    if (default_value->value) {
+      RNA_def_property_pointer_default_runtime(prop, default_value->value->id.session_uid);
+    }
     RNA_def_property_flag(prop, PROP_FORCE_GEOMETRY_EVAL);
     RNA_def_property_override_flag(prop, PROPOVERRIDE_OVERRIDABLE_LIBRARY);
+    RNA_def_property_update_runtime(prop, data_block_pointer_update);
     make_common_value_props(srna, socket, r_generated);
   };
   socktype->make_compositor_nodes_input_srna = [](const bNodeTree & /*tree*/,
@@ -1852,6 +1642,11 @@ static bke::bNodeSocketType *make_socket_type_object()
                                                   nodes::GeneratedTreeSrnaData &r_generated) {
     PropertyRNA *prop = RNA_def_pointer_runtime(
         &srna, "value", RNA_Object, socket.name, socket.description);
+    const auto *default_value = reinterpret_cast<const bNodeSocketValueObject *>(
+        socket.socket_data);
+    if (default_value->value) {
+      RNA_def_property_pointer_default_runtime(prop, default_value->value->id.session_uid);
+    }
     set_common_sequencer_update_function(prop);
     make_common_type_prop(srna,
                           socket,
@@ -1914,8 +1709,14 @@ static bke::bNodeSocketType *make_socket_type_collection()
                                                 nodes::GeneratedTreeSrnaData &r_generated) {
     PropertyRNA *prop = RNA_def_pointer_runtime(
         &srna, "value", RNA_Collection, socket.name, socket.description);
+    const auto *default_value = reinterpret_cast<const bNodeSocketValueCollection *>(
+        socket.socket_data);
+    if (default_value->value) {
+      RNA_def_property_pointer_default_runtime(prop, default_value->value->id.session_uid);
+    }
     RNA_def_property_flag(prop, PROP_FORCE_GEOMETRY_EVAL);
     RNA_def_property_override_flag(prop, PROPOVERRIDE_OVERRIDABLE_LIBRARY);
+    RNA_def_property_update_runtime(prop, data_block_pointer_update);
     make_common_value_props(srna, socket, r_generated);
   };
   socktype->make_compositor_nodes_input_srna = [](const bNodeTree & /*tree*/,
@@ -1953,6 +1754,7 @@ static bke::bNodeSocketType *make_socket_type_texture()
         &srna, "value", RNA_Texture, socket.name, socket.description);
     RNA_def_property_flag(prop, PROP_FORCE_GEOMETRY_EVAL);
     RNA_def_property_override_flag(prop, PROPOVERRIDE_OVERRIDABLE_LIBRARY);
+    RNA_def_property_update_runtime(prop, data_block_pointer_update);
     make_common_value_props(srna, socket, r_generated);
   };
   socktype->make_compositor_nodes_input_srna = [](const bNodeTree & /*tree*/,
@@ -1989,8 +1791,14 @@ static bke::bNodeSocketType *make_socket_type_image()
                                                 nodes::GeneratedTreeSrnaData &r_generated) {
     PropertyRNA *prop = RNA_def_pointer_runtime(
         &srna, "value", RNA_Image, socket.name, socket.description);
+    const auto *default_value = reinterpret_cast<const bNodeSocketValueImage *>(
+        socket.socket_data);
+    if (default_value->value) {
+      RNA_def_property_pointer_default_runtime(prop, default_value->value->id.session_uid);
+    }
     RNA_def_property_flag(prop, PROP_FORCE_GEOMETRY_EVAL);
     RNA_def_property_override_flag(prop, PROPOVERRIDE_OVERRIDABLE_LIBRARY);
+    RNA_def_property_update_runtime(prop, data_block_pointer_update);
     make_common_value_props(srna, socket, r_generated);
   };
   socktype->make_compositor_nodes_input_srna = [](const bNodeTree & /*tree*/,
@@ -2027,8 +1835,14 @@ static bke::bNodeSocketType *make_socket_type_material()
                                                 nodes::GeneratedTreeSrnaData &r_generated) {
     PropertyRNA *prop = RNA_def_pointer_runtime(
         &srna, "value", RNA_Material, socket.name, socket.description);
+    const auto *default_value = reinterpret_cast<const bNodeSocketValueMaterial *>(
+        socket.socket_data);
+    if (default_value->value) {
+      RNA_def_property_pointer_default_runtime(prop, default_value->value->id.session_uid);
+    }
     RNA_def_property_flag(prop, PROP_FORCE_GEOMETRY_EVAL);
     RNA_def_property_override_flag(prop, PROPOVERRIDE_OVERRIDABLE_LIBRARY);
+    RNA_def_property_update_runtime(prop, data_block_pointer_update);
     make_common_value_props(srna, socket, r_generated);
   };
   socktype->make_compositor_nodes_input_srna = [](const bNodeTree & /*tree*/,
@@ -2065,18 +1879,30 @@ static bke::bNodeSocketType *make_socket_type_font()
                                                 nodes::GeneratedTreeSrnaData &r_generated) {
     PropertyRNA *prop = RNA_def_pointer_runtime(
         &srna, "value", RNA_VectorFont, socket.name, socket.description);
+    const auto *default_value = reinterpret_cast<const bNodeSocketValueFont *>(socket.socket_data);
+    if (default_value->value) {
+      RNA_def_property_pointer_default_runtime(prop, default_value->value->id.session_uid);
+    }
     RNA_def_property_flag(prop, PROP_FORCE_GEOMETRY_EVAL);
     RNA_def_property_override_flag(prop, PROPOVERRIDE_OVERRIDABLE_LIBRARY);
+    RNA_def_property_update_runtime(prop, data_block_pointer_update);
     make_common_value_props(srna, socket, r_generated);
   };
   socktype->make_compositor_nodes_input_srna = [](const bNodeTree & /*tree*/,
                                                   StructRNA &srna,
                                                   const bNodeTreeInterfaceSocket &socket,
                                                   nodes::GeneratedTreeSrnaData &r_generated) {
+    PropertyRNA *prop = RNA_def_pointer_runtime(
+        &srna, "value", RNA_VectorFont, socket.name, socket.description);
+    const auto *default_value = reinterpret_cast<const bNodeSocketValueFont *>(socket.socket_data);
+    if (default_value->value) {
+      RNA_def_property_pointer_default_runtime(prop, default_value->value->id.session_uid);
+    }
+    set_common_sequencer_update_function(prop);
     make_common_type_prop(srna,
                           socket,
-                          nodes::compositor_nodes_input_type_items_fallback,
-                          nodes::CompositorNodesInputType::Fallback,
+                          nodes::compositor_nodes_input_type_items_value,
+                          nodes::CompositorNodesInputType::Value,
                           r_generated);
   };
   return socktype;
@@ -2155,8 +1981,14 @@ static bke::bNodeSocketType *make_socket_type_sound()
                                                 nodes::GeneratedTreeSrnaData &r_generated) {
     PropertyRNA *prop = RNA_def_pointer_runtime(
         &srna, "value", RNA_Sound, socket.name, socket.description);
+    const auto *default_value = reinterpret_cast<const bNodeSocketValueObject *>(
+        socket.socket_data);
+    if (default_value->value) {
+      RNA_def_property_pointer_default_runtime(prop, default_value->value->id.session_uid);
+    }
     RNA_def_property_flag(prop, PROP_FORCE_GEOMETRY_EVAL);
     RNA_def_property_override_flag(prop, PROPOVERRIDE_OVERRIDABLE_LIBRARY);
+    RNA_def_property_update_runtime(prop, data_block_pointer_update);
     make_common_value_props(srna, socket, r_generated);
   };
   return socktype;

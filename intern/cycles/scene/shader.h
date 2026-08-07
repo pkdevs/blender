@@ -122,6 +122,7 @@ class Shader : public Node {
   bool has_volume_attribute_dependency;
   bool has_light_path_node;
   bool has_aov_output_node;
+  bool has_time_dependency;
 
   float3 emission_estimate;
   EmissionSampling emission_sampling;
@@ -129,6 +130,7 @@ class Shader : public Node {
 
   /* requested mesh attributes */
   AttributeRequestSet attributes;
+  AttributeRequestSet global_attributes;
 
   /* determined before compiling */
   uint id;

@@ -16,10 +16,10 @@
 #include "DNA_scene_types.h"
 #include "DNA_userdef_types.h"
 
-#include "BLI_listbase.h"
-#include "BLI_rect.h"
-#include "BLI_string_utf8.h"
-#include "BLI_utildefines.h"
+#include "BLI_listbase.hh"
+#include "BLI_rect.hh"
+#include "BLI_string_utf8.hh"
+#include "BLI_utildefines.hh"
 
 #include "BKE_context.hh"
 #include "BKE_global.hh"
@@ -250,7 +250,7 @@ eScreenDir area_getorientation(ScrArea *sa_a, ScrArea *sa_b)
     return eScreenDir(3); /* sa_a on top of sa_b = S */
   }
   if (left_a == right_b && overlapy >= miny) {
-    return eScreenDir(0); /* sa_a to right of sa_b = W */
+    return eScreenDir{}; /* sa_a to right of sa_b = W */
   }
   if (right_a == left_b && overlapy >= miny) {
     return eScreenDir(2); /* sa_a to left of sa_b = E */
@@ -452,6 +452,7 @@ static bool screen_area_join_aligned(
   }
 
   screen_delarea(C, screen, sa2);
+  BKE_screen_remove_double_scrverts(screen);
   /* Update preview thumbnail */
   BKE_icon_changed(screen->id.icon_id);
 
@@ -603,7 +604,7 @@ void screen_area_spacelink_add(const Scene *scene, ScrArea *area, eSpace_Type sp
   area->regionbase = slink->regionbase;
 
   BLI_addhead(&area->spacedata, slink);
-  BLI_listbase_clear(&slink->regionbase);
+  slink->regionbase.clear_no_delete();
 }
 
 /* ****************** EXPORTED API TO OTHER MODULES *************************** */
@@ -951,12 +952,7 @@ void ED_screen_exit(bContext *C, wmWindow *window, bScreen *screen)
   CTX_wm_window_set(C, window);
 
   if (screen->animtimer) {
-    WM_event_timer_remove(wm, window, screen->animtimer);
-
-    Depsgraph *depsgraph = CTX_data_depsgraph_pointer(C);
-    Scene *scene = WM_window_get_active_scene(prevwin);
-    Scene *scene_eval = DEG_get_evaluated(depsgraph, scene);
-    BKE_sound_stop_scene(scene_eval);
+    screen_stop_playback(CTX_data_main(C), wm, window, screen);
   }
   screen->animtimer = nullptr;
   screen->scrubbing = false;
@@ -1172,6 +1168,12 @@ void ED_screen_set_active_region(bContext *C, wmWindow *win, const int xy[2])
       }
     }
   }
+
+#ifdef WITH_INPUT_IME
+  if (region_prev != screen->active_region) {
+    WM_window_IME_region_refresh(win, area, screen->active_region);
+  }
+#endif
 }
 
 int ED_screen_area_active(const bContext *C)
@@ -1580,7 +1582,7 @@ void ED_screen_full_restore(bContext *C, ScrArea *area)
   wmWindow *win = CTX_wm_window(C);
   SpaceLink *sl = static_cast<SpaceLink *>(area->spacedata.first);
   bScreen *screen = CTX_wm_screen(C);
-  short state = (screen ? screen->state : short(SCREENMAXIMIZED));
+  eScreen_State state = (screen ? screen->state : SCREENMAXIMIZED);
 
   /* If full-screen area has a temporary space (such as a file browser or full-screen render
    * overlaid on top of an existing setup) then return to the previous space. */
@@ -1612,7 +1614,7 @@ void ED_screen_full_restore(bContext *C, ScrArea *area)
 static bScreen *screen_state_to_nonnormal(bContext *C,
                                           wmWindow *win,
                                           ScrArea *toggle_area,
-                                          int state)
+                                          eScreen_State state)
 {
   Main *bmain = CTX_data_main(C);
   WorkSpace *workspace = WM_window_get_active_workspace(win);
@@ -1675,7 +1677,7 @@ static bScreen *screen_state_to_nonnormal(bContext *C,
     }
 
     /* Temporarily hide gizmos and overlays. */
-    screen->fullscreen_flag = 0;
+    screen->fullscreen_flag = eScreen_Fullscreen_Flag{};
     if (newa->spacetype == SPACE_VIEW3D) {
       View3D *v3d = static_cast<View3D *>(newa->spacedata.first);
       if (v3d && !(v3d->gizmo_flag & V3D_GIZMO_HIDE_NAVIGATE)) {
@@ -1729,7 +1731,10 @@ bScreen *ED_screen_state_maximized_create(bContext *C)
   return screen_state_to_nonnormal(C, CTX_wm_window(C), nullptr, SCREENMAXIMIZED);
 }
 
-ScrArea *ED_screen_state_toggle(bContext *C, wmWindow *win, ScrArea *area, const short state)
+ScrArea *ED_screen_state_toggle(bContext *C,
+                                wmWindow *win,
+                                ScrArea *area,
+                                const eScreen_State state)
 {
   wmWindowManager *wm = CTX_wm_manager(C);
   WorkSpace *workspace = WM_window_get_active_workspace(win);
@@ -1785,7 +1790,7 @@ ScrArea *ED_screen_state_toggle(bContext *C, wmWindow *win, ScrArea *area, const
       }
       /* restore the old side panels/header visibility */
       for (ARegion &region : area->regionbase) {
-        region.flag = region.flagfullscreen;
+        region.flag = eRegion_Flag(region.flagfullscreen);
       }
       /* Restore gizmos and overlays to their prior states. */
       if (area->spacetype == SPACE_VIEW3D) {
@@ -1922,18 +1927,45 @@ ScrArea *ED_screen_temp_space_open(
   return nullptr;
 }
 
+void ED_screen_animation_stop(Main *bmain,
+                              wmWindowManager *wm,
+                              FunctionRef<bool(const bScreen &screen)> should_stop_fn)
+{
+  /* Cannot use ED_window_animation_playing_no_scrub() here, because that only returns the window,
+   * and we need the screen too. */
+  for (wmWindow &win : wm->windows) {
+    bScreen *screen = WM_window_get_active_screen(&win);
+    if (!screen || !screen->animtimer) {
+      continue;
+    }
+    if (!should_stop_fn(*screen)) {
+      continue;
+    }
+
+    screen_stop_playback(bmain, wm, &win, screen);
+  }
+}
+
+void ED_screen_animation_timer_remove(wmWindowManager *wm, wmWindow *win)
+{
+  /* `ED_screen_animation_playing` isn't used, as it also checks for screens with
+   *  scrubbing enabled*/
+  bScreen *stopscreen = ED_screen_animation_no_scrub(wm);
+  if (!stopscreen) {
+    return;
+  }
+  WM_event_timer_remove(wm, win, stopscreen->animtimer);
+  stopscreen->animtimer = nullptr;
+}
+
 void ED_screen_animation_timer(
     bContext *C, Scene *scene, ViewLayer *view_layer, int redraws, int sync, int enable)
 {
   bScreen *screen = CTX_wm_screen(C);
   wmWindowManager *wm = CTX_wm_manager(C);
   wmWindow *win = CTX_wm_window(C);
-  bScreen *stopscreen = ED_screen_animation_playing(wm);
 
-  if (stopscreen) {
-    WM_event_timer_remove(wm, win, stopscreen->animtimer);
-    stopscreen->animtimer = nullptr;
-  }
+  ED_screen_animation_timer_remove(wm, win);
 
   if (enable) {
     ScreenAnimData *sad = MEM_new_zeroed<ScreenAnimData>("ScreenAnimData");

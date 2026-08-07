@@ -7,7 +7,6 @@
 #include "GPU_shader.hh"
 
 #include "COM_context.hh"
-#include "COM_profiler.hh"
 #include "COM_render_context.hh"
 #include "COM_static_cache_manager.hh"
 
@@ -39,11 +38,6 @@ ResultPrecision Context::get_precision() const
 
 void Context::set_info_message(StringRef /*message*/) const {}
 
-bool Context::treat_viewer_as_group_output() const
-{
-  return false;
-}
-
 void Context::populate_meta_data_for_pass(const Scene * /*scene*/,
                                           int /*view_layer_id*/,
                                           const char * /*pass_name*/,
@@ -56,7 +50,7 @@ RenderContext *Context::render_context() const
   return nullptr;
 }
 
-Profiler *Context::profiler() const
+nodes::eval_log::NodesEvalLog *Context::nodes_evaluation_log() const
 {
   return nullptr;
 }

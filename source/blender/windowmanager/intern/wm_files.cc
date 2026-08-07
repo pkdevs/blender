@@ -22,9 +22,9 @@
 /* Minimal requirements for SHGetSpecialFolderPath on MINGW MSVC has this defined already. */
 #    define _WIN32_IE 0x0400
 #  endif
-/* For #SHGetSpecialFolderPath, has to be done before `BLI_winstuff.h`
+/* For #SHGetSpecialFolderPath, has to be done before `BLI_winstuff.hh`
  * because 'near' is disabled through `BLI_windstuff.h`. */
-#  include "BLI_winstuff.h"
+#  include "BLI_winstuff.hh"
 #  include <shlobj.h>
 #endif
 
@@ -33,26 +33,27 @@
 #include "MEM_CacheLimiterC-Api.h"
 #include "MEM_guardedalloc.h"
 
-#include "BLI_fileops.h"
-#include "BLI_filereader.h"
-#include "BLI_linklist.h"
-#include "BLI_listbase.h"
-#include "BLI_math_base.h"
-#include "BLI_math_time.h"
+#include "BLI_fileops.hh"
+#include "BLI_filereader.hh"
+#include "BLI_linklist.hh"
+#include "BLI_listbase.hh"
+#include "BLI_math_base_c.hh"
+#include "BLI_math_time.hh"
 #include "BLI_memory_cache.hh"
-#include "BLI_string.h"
-#include "BLI_string_utf8.h"
-#include "BLI_system.h"
-#include "BLI_threads.h"
-#include "BLI_time.h"
-#include "BLI_timer.h"
-#include "BLI_utildefines.h"
+#include "BLI_string.hh"
+#include "BLI_string_utf8.hh"
+#include "BLI_system.hh"
+#include "BLI_threads.hh"
+#include "BLI_time.hh"
+#include "BLI_timer.hh"
+#include "BLI_utildefines.hh"
 #include BLI_SYSTEM_PID_H
 
 #include "BLO_core_blend_header.hh"
 #include "BLO_core_file_reader.hh"
 #include "BLO_readfile.hh"
 
+#include "BLT_date_string.hh"
 #include "BLT_lang.hh"
 #include "BLT_translation.hh"
 
@@ -390,13 +391,13 @@ static void wm_file_read_setup_wm_use_new(bContext *C,
   wm->runtime->defaultconf = old_wm->runtime->defaultconf;
   wm->runtime->userconf = old_wm->runtime->userconf;
 
-  BLI_listbase_clear(&old_wm->runtime->keyconfigs);
+  old_wm->runtime->keyconfigs.clear_no_delete();
   old_wm->runtime->addonconf = nullptr;
   old_wm->runtime->defaultconf = nullptr;
   old_wm->runtime->userconf = nullptr;
 
   /* Ensure new keymaps are made, and space types are set. */
-  wm->init_flag = 0;
+  wm->init_flag = eWM_InitFlag{};
   wm->runtime->winactive = nullptr;
 
   /* Clearing drawable of old WM before deleting any context to avoid clearing the wrong wm. */
@@ -558,7 +559,6 @@ static void wm_init_userdef(Main *bmain)
   BLO_sanitize_experimental_features_userpref_blend(&U);
 
   wm_gpu_backend_override_from_userdef();
-  GPU_backend_type_selection_detect();
 }
 
 /* Return codes. */
@@ -1760,12 +1760,12 @@ static uint8_t *blend_file_thumb_fast_downscale(const uint8_t *src_rect,
    * this isn't a concern. */
 
   BLI_assert(dst_size[0] <= src_size[0] && dst_size[1] <= src_size[1]);
-  uint8_t *dst_rect = MEM_new_array_uninitialized<uint8_t>(size_t(4 * dst_size[0] * dst_size[1]),
+  uint8_t *dst_rect = MEM_new_array_uninitialized<uint8_t>(size_t(4) * dst_size[0] * dst_size[1],
                                                            __func__);
 
   /* A row, the width of the destination to accumulate pixel values into
    * before writing into the image. */
-  uint32_t *accum_row = MEM_new_array_zeroed<uint32_t>(size_t(dst_size[0] * 4), __func__);
+  uint32_t *accum_row = MEM_new_array_zeroed<uint32_t>(size_t(dst_size[0]) * 4, __func__);
 
 #  ifndef NDEBUG
   /* Assert that samples are calculated correctly. */
@@ -1894,8 +1894,8 @@ static ImBuf *blend_file_thumb_from_screenshot(bContext *C, BlendThumbnail **r_t
       IMB_scale(ibuf, thumb_size_2x.x, thumb_size_2x.y, IMBScaleFilter::Box, false);
 
       /* Thumbnail inside blend should be 128x128. */
-      ImBuf *thumb_ibuf = IMB_dupImBuf(ibuf);
-      IMB_scale(thumb_ibuf, thumb_size.x, thumb_size.y, IMBScaleFilter::Box, false);
+      ImBuf *thumb_ibuf = IMB_scale_into_new(
+          ibuf, thumb_size.x, thumb_size.y, IMBScaleFilter::Box, false);
 
       BlendThumbnail *thumb = BKE_main_thumbnail_from_imbuf(nullptr, thumb_ibuf);
       IMB_freeImBuf(thumb_ibuf);
@@ -1907,8 +1907,7 @@ static ImBuf *blend_file_thumb_from_screenshot(bContext *C, BlendThumbnail **r_t
     /* Save metadata for quick access. */
     char version_str[10];
     SNPRINTF(version_str, "%d.%01d", BLENDER_VERSION / 100, BLENDER_VERSION % 100);
-    IMB_metadata_ensure(&ibuf->metadata);
-    IMB_metadata_set_field(ibuf->metadata, "Thumb::Blender::Version", version_str);
+    IMB_metadata_set_field(ibuf->metadata_for_write(), "Thumb::Blender::Version", version_str);
   }
 
   /* Must be freed by caller. */
@@ -1971,7 +1970,7 @@ static ImBuf *blend_file_thumb_from_camera(const bContext *C,
                                                  scene->camera,
                                                  PREVIEW_RENDER_LARGE_HEIGHT * 2,
                                                  PREVIEW_RENDER_LARGE_HEIGHT * 2,
-                                                 IB_byte_data,
+                                                 ImBufFlags::ByteData,
                                                  (v3d) ? V3D_OFSDRAW_OVERRIDE_SCENE_SETTINGS :
                                                          V3D_OFSDRAW_NONE,
                                                  R_ALPHAPREMUL,
@@ -1988,7 +1987,7 @@ static ImBuf *blend_file_thumb_from_camera(const bContext *C,
                                           region,
                                           PREVIEW_RENDER_LARGE_HEIGHT * 2,
                                           PREVIEW_RENDER_LARGE_HEIGHT * 2,
-                                          IB_byte_data,
+                                          ImBufFlags::ByteData,
                                           R_ALPHAPREMUL,
                                           nullptr,
                                           true,
@@ -2010,17 +2009,15 @@ static ImBuf *blend_file_thumb_from_camera(const bContext *C,
 
   if (ibuf) {
     /* Dirty oversampling. */
-    ImBuf *thumb_ibuf;
-    thumb_ibuf = IMB_dupImBuf(ibuf);
 
     /* Save metadata for quick access. */
     char version_str[10];
     SNPRINTF(version_str, "%d.%01d", BLENDER_VERSION / 100, BLENDER_VERSION % 100);
-    IMB_metadata_ensure(&ibuf->metadata);
-    IMB_metadata_set_field(ibuf->metadata, "Thumb::Blender::Version", version_str);
+    IMB_metadata_set_field(ibuf->metadata_for_write(), "Thumb::Blender::Version", version_str);
 
     /* BLEN_THUMB_SIZE is size of thumbnail inside blend file: 128x128. */
-    IMB_scale(thumb_ibuf, BLEN_THUMB_SIZE, BLEN_THUMB_SIZE, IMBScaleFilter::Box, false);
+    ImBuf *thumb_ibuf = IMB_scale_into_new(
+        ibuf, BLEN_THUMB_SIZE, BLEN_THUMB_SIZE, IMBScaleFilter::Box, false);
     thumb = BKE_main_thumbnail_from_imbuf(nullptr, thumb_ibuf);
     IMB_freeImBuf(thumb_ibuf);
     /* Thumbnail saved to file-system should be 256x256. */
@@ -2308,13 +2305,19 @@ static bool wm_autosave_write_try(Main *bmain, wmWindowManager *wm)
    * compared to when the #MemFile undo step was used for saving undo-steps. So for now just skip
    * auto-save when we are in a mode where auto-save wouldn't have worked previously anyway. This
    * check can be removed once the performance regressions have been solved. */
-  if (ED_undosys_stack_memfile_get_if_active(wm->runtime->undo_stack) != nullptr) {
-    WM_autosave_write(wm, bmain);
-    return true;
+  if (ED_undosys_autosave_compatible(wm->runtime->undo_stack)) {
+    const bool success = WM_autosave_write(wm, bmain, &wm->runtime->reports);
+    if (!success) {
+      WM_report_banner_show(wm, nullptr);
+    }
+    return success;
   }
   if ((U.uiflag & USER_GLOBALUNDO) == 0) {
-    WM_autosave_write(wm, bmain);
-    return true;
+    const bool success = WM_autosave_write(wm, bmain, &wm->runtime->reports);
+    if (!success) {
+      WM_report_banner_show(wm, nullptr);
+    }
+    return success;
   }
   /* Can't auto-save with MemFile right now, try again later. */
   return false;
@@ -2325,9 +2328,10 @@ bool WM_autosave_is_scheduled(wmWindowManager *wm)
   return wm->autosave_scheduled;
 }
 
-void WM_autosave_write(wmWindowManager *wm, Main *bmain)
+bool WM_autosave_write(wmWindowManager *wm, Main *bmain, ReportList *reports)
 {
   ED_editors_flush_edits(bmain);
+  ED_image_internal_autosave_flush(bmain);
 
   char filepath[FILE_MAX];
   wm_autosave_location(filepath);
@@ -2337,13 +2341,14 @@ void WM_autosave_write(wmWindowManager *wm, Main *bmain)
 
   /* Error reporting into console. */
   BlendFileWriteParams params{};
-  BLO_write_file(bmain, filepath, fileflags, &params, nullptr);
+  const bool success = BLO_write_file(bmain, filepath, fileflags, &params, reports);
 
   /* Restart auto-save timer. */
   wm_autosave_timer_end(wm);
   wm_autosave_timer_begin(wm);
 
-  wm->autosave_scheduled = false;
+  wm->autosave_scheduled = !success;
+  return success;
 }
 
 static void wm_autosave_timer_begin_ex(wmWindowManager *wm, double timestep)
@@ -2417,6 +2422,21 @@ void wm_autosave_delete()
       BLI_rename_overwrite(filepath, filepath_quit);
     }
   }
+}
+
+static wmOperatorStatus wm_save_auto_save_exec(bContext *C, wmOperator *op)
+{
+  const bool success = WM_autosave_write(CTX_wm_manager(C), CTX_data_main(C), op->reports);
+  return success ? OPERATOR_FINISHED : OPERATOR_CANCELLED;
+}
+
+void WM_OT_save_auto_save(wmOperatorType *ot)
+{
+  ot->name = "Save Autosave";
+  ot->idname = "WM_OT_save_auto_save";
+  ot->description = "Create an autosave in the temp directory for the current file";
+
+  ot->exec = wm_save_auto_save_exec;
 }
 
 /** \} */
@@ -3291,26 +3311,24 @@ static std::string wm_open_mainfile_get_description(bContext * /*C*/,
   }
 
   /* Date. */
-  char date_str[FILELIST_DIRENTRY_DATE_LEN];
-  char time_str[FILELIST_DIRENTRY_TIME_LEN];
-  bool is_today, is_yesterday;
-  BLI_filelist_entry_datetime_to_string(
-      nullptr, int64_t(stats.st_mtime), false, time_str, date_str, &is_today, &is_yesterday);
-  if (is_today || is_yesterday) {
-    STRNCPY(date_str, is_today ? TIP_("Today") : TIP_("Yesterday"));
-  }
+  const tm mod_time = date_string::localtime_safe(stats.st_mtime);
+  const time_t ts_now = time(nullptr);
+  const tm now_tm = date_string::localtime_safe(ts_now);
+  const char *lang = BLT_lang_get();
+  std::string modified_s = blender::date_string::datetime(mod_time,
+                                                          lang,
+                                                          date_string::DateFormat(U.date_format),
+                                                          date_string::TimeFormat(U.time_format),
+                                                          &now_tm,
+                                                          TIP_("Today"),
+                                                          TIP_("Yesterday"));
 
   /* Size. */
   char size_str[FILELIST_DIRENTRY_SIZE_LEN];
   BLI_filelist_entry_size_to_string(nullptr, uint64_t(stats.st_size), false, size_str);
 
-  return fmt::format("{}\n\n{}: {} {}\n{}: {}",
-                     filepath,
-                     TIP_("Modified"),
-                     date_str,
-                     time_str,
-                     TIP_("Size"),
-                     size_str);
+  return fmt::format(
+      "{}\n\n{}: {}\n{}: {}", filepath, TIP_("Modified"), modified_s, TIP_("Size"), size_str);
 }
 
 /* Currently fits in a pointer. */
@@ -3765,10 +3783,10 @@ static ui::Block *block_create_save_modified_images_dialog(bContext *C, ARegion 
   wm_block_image_save_errors(layout, reports);
 
   /* Modified Images Checkbox. */
-  char message[64];
-  SNPRINTF(message, RPT_("Save %u modified image(s)"), modified_images_count);
+  std::string message = fmt::format(fmt::runtime(RPT_("Save {} modified image(s)")),
+                                    modified_images_count);
   layout.separator();
-  uiDefButC(block,
+  uiDefButV(block,
             ui::ButtonType::Checkbox,
             message,
             0,
@@ -5057,13 +5075,13 @@ static ui::Block *block_create__close_file_dialog(bContext *C, ARegion *region, 
 
   /* Modified Images Checkbox. */
   if (modified_images_count > 0) {
-    char message[64];
-    SNPRINTF(message, RPT_("Save %u modified image(s)"), modified_images_count);
+    std::string message = fmt::format(fmt::runtime(RPT_("Save {} modified image(s)")),
+                                      modified_images_count);
     /* Only the first checkbox should get extra separation. */
     if (!has_extra_checkboxes) {
       layout.separator();
     }
-    uiDefButC(block,
+    uiDefButV(block,
               ui::ButtonType::Checkbox,
               message,
               0,
@@ -5086,18 +5104,18 @@ static ui::Block *block_create__close_file_dialog(bContext *C, ARegion *region, 
     if (!has_extra_checkboxes) {
       layout.separator();
     }
-    ui::Button *but = uiDefButBitC(block,
-                                   ui::ButtonType::Checkbox,
-                                   1,
-                                   "Save modified asset catalogs",
-                                   0,
-                                   0,
-                                   0,
-                                   UI_UNIT_Y,
-                                   &save_catalogs_when_file_is_closed,
-                                   0,
-                                   0,
-                                   "");
+    ui::Button *but = uiDefButBit(block,
+                                  ui::ButtonType::Checkbox,
+                                  1,
+                                  "Save modified asset catalogs",
+                                  0,
+                                  0,
+                                  0,
+                                  UI_UNIT_Y,
+                                  &save_catalogs_when_file_is_closed,
+                                  0,
+                                  0,
+                                  "");
     button_func_set(but,
                     save_catalogs_when_file_is_closed_set_fn,
                     &save_catalogs_when_file_is_closed,

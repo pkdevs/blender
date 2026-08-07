@@ -48,6 +48,7 @@ struct CameraParams {
   float lens = 0.0f;
   float ortho_scale = 1.0f;
   float zoom = 1.0f;
+  float roll = 0.0f;
 
   float shiftx = 0.0f;
   float shifty = 0.0f;
@@ -174,7 +175,7 @@ struct CameraBGImage *BKE_camera_background_image_new(struct Camera *cam);
 /**
  * Duplicate a background image, in a ID management compatible way.
  *
- * \param copy_flag: The usual ID copying flags, see `LIB_ID_CREATE_`/`LIB_ID_COPY_` enums in
+ * \param flag: The usual ID copying flags, see `LIB_ID_CREATE_`/`LIB_ID_COPY_` enums in
  * `BKE_lib_id.hh`.
  */
 struct CameraBGImage *BKE_camera_background_image_copy(const struct CameraBGImage *bgpic_src,

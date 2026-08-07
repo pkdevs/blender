@@ -13,10 +13,10 @@
 #include "DNA_curve_types.h"
 #include "DNA_curveprofile_types.h"
 
-#include "BLI_math_geom.h"
-#include "BLI_math_vector.h"
-#include "BLI_rect.h"
-#include "BLI_utildefines.h"
+#include "BLI_math_geom_c.hh"
+#include "BLI_math_vector_c.hh"
+#include "BLI_rect.hh"
+#include "BLI_utildefines.hh"
 
 #include "BKE_curve.hh"
 #include "BKE_curveprofile.h"
@@ -91,7 +91,7 @@ void BKE_curveprofile_blend_write(BlendWriter *writer, const CurveProfile *profi
 
 void BKE_curveprofile_blend_read(BlendDataReader *reader, CurveProfile *profile)
 {
-  BLO_read_struct_array(reader, CurveProfilePoint, profile->path_len, &profile->path);
+  BLO_read_array_and_validate_size(reader, &profile->path, &profile->path_len);
   profile->table = nullptr;
   profile->segments = nullptr;
 
@@ -280,7 +280,8 @@ void BKE_curveprofile_remove_by_flag(CurveProfile *profile, const short flag)
 /**
  * Shorthand helper function for setting location and interpolation of a point.
  */
-static void point_init(CurveProfilePoint *point, float x, float y, short flag, char h1, char h2)
+static void point_init(
+    CurveProfilePoint *point, float x, float y, eCurveProfilePoint_Flag flag, char h1, char h2)
 {
   point->x = x;
   point->y = y;
@@ -405,15 +406,15 @@ static void curveprofile_build_supports(CurveProfile *profile)
 {
   int n = profile->path_len;
 
-  point_init(&profile->path[0], 1.0f, 0.0f, 0, HD_VECT, HD_VECT);
-  point_init(&profile->path[1], 1.0f, 0.5f, 0, HD_VECT, HD_VECT);
+  point_init(&profile->path[0], 1.0f, 0.0f, eCurveProfilePoint_Flag{}, HD_VECT, HD_VECT);
+  point_init(&profile->path[1], 1.0f, 0.5f, eCurveProfilePoint_Flag{}, HD_VECT, HD_VECT);
   for (int i = 1; i < n - 2; i++) {
     const float x = 1.0f - (0.5f * (1.0f - cosf(float(i / float(n - 3)) * M_PI_2)));
     const float y = 0.5f + 0.5f * sinf(float((i / float(n - 3)) * M_PI_2));
-    point_init(&profile->path[i], x, y, 0, HD_AUTO, HD_AUTO);
+    point_init(&profile->path[i], x, y, eCurveProfilePoint_Flag{}, HD_AUTO, HD_AUTO);
   }
-  point_init(&profile->path[n - 2], 0.5f, 1.0f, 0, HD_VECT, HD_VECT);
-  point_init(&profile->path[n - 1], 0.0f, 1.0f, 0, HD_VECT, HD_VECT);
+  point_init(&profile->path[n - 2], 0.5f, 1.0f, eCurveProfilePoint_Flag{}, HD_VECT, HD_VECT);
+  point_init(&profile->path[n - 1], 0.0f, 1.0f, eCurveProfilePoint_Flag{}, HD_VECT, HD_VECT);
 }
 
 /**
@@ -426,8 +427,8 @@ static void curveprofile_build_steps(CurveProfile *profile)
 
   /* Special case for two points to avoid dividing by zero later. */
   if (n == 2) {
-    point_init(&profile->path[0], 1.0f, 0.0f, 0, HD_VECT, HD_VECT);
-    point_init(&profile->path[0], 0.0f, 1.0f, 0, HD_VECT, HD_VECT);
+    point_init(&profile->path[0], 1.0f, 0.0f, eCurveProfilePoint_Flag{}, HD_VECT, HD_VECT);
+    point_init(&profile->path[0], 0.0f, 1.0f, eCurveProfilePoint_Flag{}, HD_VECT, HD_VECT);
     return;
   }
 
@@ -439,7 +440,7 @@ static void curveprofile_build_steps(CurveProfile *profile)
     int step_y = i / 2;
     const float x = 1.0f - (float(2 * step_x) / n_steps_x);
     const float y = float(2 * step_y) / n_steps_y;
-    point_init(&profile->path[i], x, y, 0, HD_VECT, HD_VECT);
+    point_init(&profile->path[i], x, y, eCurveProfilePoint_Flag{}, HD_VECT, HD_VECT);
   }
 }
 
@@ -489,39 +490,39 @@ void BKE_curveprofile_reset(CurveProfile *profile)
 
   switch (preset) {
     case PROF_PRESET_LINE:
-      point_init(&profile->path[0], 1.0f, 0.0f, 0, HD_AUTO, HD_AUTO);
-      point_init(&profile->path[1], 0.0f, 1.0f, 0, HD_AUTO, HD_AUTO);
+      point_init(&profile->path[0], 1.0f, 0.0f, eCurveProfilePoint_Flag{}, HD_AUTO, HD_AUTO);
+      point_init(&profile->path[1], 0.0f, 1.0f, eCurveProfilePoint_Flag{}, HD_AUTO, HD_AUTO);
       break;
     case PROF_PRESET_SUPPORTS:
       curveprofile_build_supports(profile);
       break;
     case PROF_PRESET_CORNICE:
-      point_init(&profile->path[0], 1.0f, 0.0f, 0, HD_VECT, HD_VECT);
-      point_init(&profile->path[1], 1.0f, 0.125f, 0, HD_VECT, HD_VECT);
-      point_init(&profile->path[2], 0.92f, 0.16f, 0, HD_AUTO, HD_AUTO);
-      point_init(&profile->path[3], 0.875f, 0.25f, 0, HD_VECT, HD_VECT);
-      point_init(&profile->path[4], 0.8f, 0.25f, 0, HD_VECT, HD_VECT);
-      point_init(&profile->path[5], 0.733f, 0.433f, 0, HD_AUTO, HD_AUTO);
-      point_init(&profile->path[6], 0.582f, 0.522f, 0, HD_AUTO, HD_AUTO);
-      point_init(&profile->path[7], 0.4f, 0.6f, 0, HD_AUTO, HD_AUTO);
-      point_init(&profile->path[8], 0.289f, 0.727f, 0, HD_AUTO, HD_AUTO);
-      point_init(&profile->path[9], 0.25f, 0.925f, 0, HD_VECT, HD_VECT);
-      point_init(&profile->path[10], 0.175f, 0.925f, 0, HD_VECT, HD_VECT);
-      point_init(&profile->path[11], 0.175f, 1.0f, 0, HD_VECT, HD_VECT);
-      point_init(&profile->path[12], 0.0f, 1.0f, 0, HD_VECT, HD_VECT);
+      point_init(&profile->path[0], 1.0f, 0.0f, eCurveProfilePoint_Flag{}, HD_VECT, HD_VECT);
+      point_init(&profile->path[1], 1.0f, 0.125f, eCurveProfilePoint_Flag{}, HD_VECT, HD_VECT);
+      point_init(&profile->path[2], 0.92f, 0.16f, eCurveProfilePoint_Flag{}, HD_AUTO, HD_AUTO);
+      point_init(&profile->path[3], 0.875f, 0.25f, eCurveProfilePoint_Flag{}, HD_VECT, HD_VECT);
+      point_init(&profile->path[4], 0.8f, 0.25f, eCurveProfilePoint_Flag{}, HD_VECT, HD_VECT);
+      point_init(&profile->path[5], 0.733f, 0.433f, eCurveProfilePoint_Flag{}, HD_AUTO, HD_AUTO);
+      point_init(&profile->path[6], 0.582f, 0.522f, eCurveProfilePoint_Flag{}, HD_AUTO, HD_AUTO);
+      point_init(&profile->path[7], 0.4f, 0.6f, eCurveProfilePoint_Flag{}, HD_AUTO, HD_AUTO);
+      point_init(&profile->path[8], 0.289f, 0.727f, eCurveProfilePoint_Flag{}, HD_AUTO, HD_AUTO);
+      point_init(&profile->path[9], 0.25f, 0.925f, eCurveProfilePoint_Flag{}, HD_VECT, HD_VECT);
+      point_init(&profile->path[10], 0.175f, 0.925f, eCurveProfilePoint_Flag{}, HD_VECT, HD_VECT);
+      point_init(&profile->path[11], 0.175f, 1.0f, eCurveProfilePoint_Flag{}, HD_VECT, HD_VECT);
+      point_init(&profile->path[12], 0.0f, 1.0f, eCurveProfilePoint_Flag{}, HD_VECT, HD_VECT);
       break;
     case PROF_PRESET_CROWN:
-      point_init(&profile->path[0], 1.0f, 0.0f, 0, HD_VECT, HD_VECT);
-      point_init(&profile->path[1], 1.0f, 0.25f, 0, HD_VECT, HD_VECT);
-      point_init(&profile->path[2], 0.75f, 0.25f, 0, HD_VECT, HD_VECT);
-      point_init(&profile->path[3], 0.75f, 0.325f, 0, HD_VECT, HD_VECT);
-      point_init(&profile->path[4], 0.925f, 0.4f, 0, HD_AUTO, HD_AUTO);
-      point_init(&profile->path[5], 0.975f, 0.5f, 0, HD_AUTO, HD_AUTO);
-      point_init(&profile->path[6], 0.94f, 0.65f, 0, HD_AUTO, HD_AUTO);
-      point_init(&profile->path[7], 0.85f, 0.75f, 0, HD_AUTO, HD_AUTO);
-      point_init(&profile->path[8], 0.75f, 0.875f, 0, HD_AUTO, HD_AUTO);
-      point_init(&profile->path[9], 0.7f, 1.0f, 0, HD_VECT, HD_VECT);
-      point_init(&profile->path[10], 0.0f, 1.0f, 0, HD_VECT, HD_VECT);
+      point_init(&profile->path[0], 1.0f, 0.0f, eCurveProfilePoint_Flag{}, HD_VECT, HD_VECT);
+      point_init(&profile->path[1], 1.0f, 0.25f, eCurveProfilePoint_Flag{}, HD_VECT, HD_VECT);
+      point_init(&profile->path[2], 0.75f, 0.25f, eCurveProfilePoint_Flag{}, HD_VECT, HD_VECT);
+      point_init(&profile->path[3], 0.75f, 0.325f, eCurveProfilePoint_Flag{}, HD_VECT, HD_VECT);
+      point_init(&profile->path[4], 0.925f, 0.4f, eCurveProfilePoint_Flag{}, HD_AUTO, HD_AUTO);
+      point_init(&profile->path[5], 0.975f, 0.5f, eCurveProfilePoint_Flag{}, HD_AUTO, HD_AUTO);
+      point_init(&profile->path[6], 0.94f, 0.65f, eCurveProfilePoint_Flag{}, HD_AUTO, HD_AUTO);
+      point_init(&profile->path[7], 0.85f, 0.75f, eCurveProfilePoint_Flag{}, HD_AUTO, HD_AUTO);
+      point_init(&profile->path[8], 0.75f, 0.875f, eCurveProfilePoint_Flag{}, HD_AUTO, HD_AUTO);
+      point_init(&profile->path[9], 0.7f, 1.0f, eCurveProfilePoint_Flag{}, HD_VECT, HD_VECT);
+      point_init(&profile->path[10], 0.0f, 1.0f, eCurveProfilePoint_Flag{}, HD_VECT, HD_VECT);
       break;
     case PROF_PRESET_STEPS:
       curveprofile_build_steps(profile);
@@ -557,11 +558,11 @@ void BKE_curveprofile_activate_nearest_point(CurveProfile *profile, const int i_
       pts[idx].flag |= PROF_ACTIVE;
       return;
     }
-    else if (pts[idx].flag & PROF_H1_SELECT) {
+    if (pts[idx].flag & PROF_H1_SELECT) {
       pts[idx].flag |= PROF_H1_ACTIVE;
       return;
     }
-    else if (pts[idx].flag & PROF_H2_SELECT) {
+    if (pts[idx].flag & PROF_H2_SELECT) {
       pts[idx].flag |= PROF_H2_ACTIVE;
       return;
     }
@@ -826,7 +827,7 @@ static void create_samples(CurveProfile *profile,
       r_samples[i_sample].h2 = path[i].h2;
       /* All extra sample points for this control point get "auto" handles. */
       for (int j = i_sample + 1; j < i_sample + n_samples[i]; j++) {
-        r_samples[j].flag = 0;
+        r_samples[j].flag = eCurveProfilePoint_Flag{};
         r_samples[j].h1 = HD_AUTO;
         r_samples[j].h2 = HD_AUTO;
         BLI_assert(j < n_segments);
@@ -1087,26 +1088,26 @@ CurveProfilePoint *BKE_curveprofile_active_get(CurveProfile *profile)
   return active_pt;
 }
 
-float *BKE_curveprofile_active_location_get(CurveProfilePoint *pt)
+float *BKE_curveprofile_active_location_get(CurveProfilePoint *point)
 {
-  if (pt->flag & PROF_ACTIVE) {
-    return &pt->x;
+  if (point->flag & PROF_ACTIVE) {
+    return &point->x;
   }
-  else if (pt->flag & PROF_H1_ACTIVE) {
-    return &pt->h1_loc[0];
+  if (point->flag & PROF_H1_ACTIVE) {
+    return &point->h1_loc[0];
   }
-  else if (pt->flag & PROF_H2_ACTIVE) {
-    return &pt->h2_loc[0];
+  if (point->flag & PROF_H2_ACTIVE) {
+    return &point->h2_loc[0];
   }
   /* If no active point or handles, return the selected location. */
-  else if (pt->flag & PROF_SELECT) {
-    return &pt->x;
+  if (point->flag & PROF_SELECT) {
+    return &point->x;
   }
-  else if (pt->flag & PROF_H1_SELECT) {
-    return &pt->h1_loc[0];
+  if (point->flag & PROF_H1_SELECT) {
+    return &point->h1_loc[0];
   }
-  else if (pt->flag & PROF_H2_SELECT) {
-    return &pt->h2_loc[0];
+  if (point->flag & PROF_H2_SELECT) {
+    return &point->h2_loc[0];
   }
 
   /* Either the input point itself or its handle should be labeled as active. */

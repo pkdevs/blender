@@ -8,7 +8,7 @@
 
 #include <cstdlib>
 
-#include "BLI_math_rotation.h"
+#include "BLI_math_rotation_c.hh"
 
 #include "BLT_translation.hh"
 
@@ -119,8 +119,8 @@ const EnumPropertyItem rna_enum_linestyle_geometry_modifier_type_items[] = {
 
 #  include <fmt/format.h>
 
-#  include "BLI_string.h"
-#  include "BLI_string_utf8.h"
+#  include "BLI_string.hh"
+#  include "BLI_string_utf8.hh"
 #  include "BLI_string_utils.hh"
 
 #  include "BKE_context.hh"
@@ -390,7 +390,8 @@ static LineStyleModifier *rna_LineStyle_color_modifier_add(FreestyleLineStyle *l
                                                            const char *name,
                                                            int type)
 {
-  LineStyleModifier *modifier = BKE_linestyle_color_modifier_add(linestyle, name, type);
+  LineStyleModifier *modifier = BKE_linestyle_color_modifier_add(
+      linestyle, name, eLineStyleModifier_Type(type));
 
   if (!modifier) {
     BKE_report(reports, RPT_ERROR, "Failed to add the color modifier");
@@ -425,7 +426,8 @@ static LineStyleModifier *rna_LineStyle_alpha_modifier_add(FreestyleLineStyle *l
                                                            const char *name,
                                                            int type)
 {
-  LineStyleModifier *modifier = BKE_linestyle_alpha_modifier_add(linestyle, name, type);
+  LineStyleModifier *modifier = BKE_linestyle_alpha_modifier_add(
+      linestyle, name, eLineStyleModifier_Type(type));
 
   if (!modifier) {
     BKE_report(reports, RPT_ERROR, "Failed to add the alpha modifier");
@@ -460,7 +462,8 @@ static LineStyleModifier *rna_LineStyle_thickness_modifier_add(FreestyleLineStyl
                                                                const char *name,
                                                                int type)
 {
-  LineStyleModifier *modifier = BKE_linestyle_thickness_modifier_add(linestyle, name, type);
+  LineStyleModifier *modifier = BKE_linestyle_thickness_modifier_add(
+      linestyle, name, eLineStyleModifier_Type(type));
 
   if (!modifier) {
     BKE_report(reports, RPT_ERROR, "Failed to add the thickness modifier");
@@ -496,7 +499,8 @@ static LineStyleModifier *rna_LineStyle_geometry_modifier_add(FreestyleLineStyle
                                                               const char *name,
                                                               int type)
 {
-  LineStyleModifier *modifier = BKE_linestyle_geometry_modifier_add(linestyle, name, type);
+  LineStyleModifier *modifier = BKE_linestyle_geometry_modifier_add(
+      linestyle, name, eLineStyleModifier_Type(type));
 
   if (!modifier) {
     BKE_report(reports, RPT_ERROR, "Failed to add the geometry modifier");

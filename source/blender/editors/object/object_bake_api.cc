@@ -14,17 +14,18 @@
 #include "DNA_material_types.h"
 #include "DNA_mesh_types.h"
 #include "DNA_meshdata_types.h"
+#include "DNA_modifier_types.h"
 #include "DNA_object_types.h"
 
 #include "RNA_access.hh"
 #include "RNA_define.hh"
 #include "RNA_enum_types.hh"
 
-#include "BLI_listbase.h"
-#include "BLI_math_geom.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_geom_c.hh"
 #include "BLI_path_utils.hh"
 #include "BLI_string_ref.hh"
-#include "BLI_string_utf8.h"
+#include "BLI_string_utf8.hh"
 
 #include "BLT_translation.hh"
 
@@ -36,6 +37,7 @@
 #include "BKE_global.hh"
 #include "BKE_image.hh"
 #include "BKE_image_format.hh"
+#include "BKE_image_gpu.hh"
 #include "BKE_layer.hh"
 #include "BKE_lib_id.hh"
 #include "BKE_main.hh"
@@ -58,6 +60,7 @@
 #include "IMB_colormanagement.hh"
 #include "IMB_imbuf.hh"
 #include "IMB_imbuf_types.hh"
+#include "IMB_partial_update.hh"
 
 #include "WM_api.hh"
 #include "WM_types.hh"
@@ -274,52 +277,32 @@ static bool write_internal_bake_pixels(Image *image,
   /* populates the ImBuf */
   if (is_clear) {
     if (is_float) {
-      IMB_buffer_float_from_float(ibuf->float_data_for_write(),
-                                  buffer,
-                                  ibuf->channels,
-                                  IB_PROFILE_LINEAR_RGB,
-                                  IB_PROFILE_LINEAR_RGB,
-                                  false,
-                                  ibuf->x,
-                                  ibuf->y,
-                                  ibuf->x,
-                                  ibuf->x);
+      IMB_buffer_float_rgba_from_float(
+          ibuf->float_data_for_write(), buffer, ibuf->channels, ibuf->x, ibuf->y);
     }
     else {
       IMB_buffer_byte_from_float(ibuf->byte_data_for_write(),
                                  buffer,
                                  ibuf->channels,
                                  ibuf->dither,
-                                 IB_PROFILE_SRGB,
-                                 IB_PROFILE_SRGB,
                                  false,
                                  ibuf->x,
                                  ibuf->y,
-                                 ibuf->x,
                                  ibuf->x);
     }
   }
   else {
     if (is_float) {
-      IMB_buffer_float_from_float_mask(ibuf->float_data_for_write(),
-                                       buffer,
-                                       ibuf->channels,
-                                       ibuf->x,
-                                       ibuf->y,
-                                       ibuf->x,
-                                       ibuf->x,
-                                       mask_buffer);
+      IMB_buffer_float_rgba_from_float_mask(
+          ibuf->float_data_for_write(), buffer, ibuf->channels, ibuf->x, ibuf->y, mask_buffer);
     }
     else {
       IMB_buffer_byte_from_float_mask(ibuf->byte_data_for_write(),
                                       buffer,
                                       ibuf->channels,
                                       ibuf->dither,
-                                      false,
                                       ibuf->x,
                                       ibuf->y,
-                                      ibuf->x,
-                                      ibuf->x,
                                       mask_buffer);
     }
   }
@@ -329,12 +312,8 @@ static bool write_internal_bake_pixels(Image *image,
     RE_bake_margin(ibuf, mask_buffer, margin, margin_type, mesh_eval, uv_layer, uv_offset);
   }
 
-  ibuf->userflags |= IB_DISPLAY_BUFFER_INVALID;
-  BKE_image_mark_dirty(image, ibuf);
-
-  if (ibuf->float_data()) {
-    ibuf->userflags |= IB_RECT_INVALID;
-  }
+  IMB_partial_update_mark_full(ibuf);
+  IMB_mark_dirty(ibuf);
 
   BKE_image_release_ibuf(image, ibuf, nullptr);
 
@@ -352,8 +331,6 @@ static void bake_targets_refresh(BakeTargets *targets)
     Image *ima = targets->images[i].image;
 
     if (ima) {
-      BKE_image_partial_update_mark_full_update(ima);
-      BKE_image_free_gputextures(ima);
       DEG_id_tag_update(&ima->id, 0);
     }
   }
@@ -375,13 +352,11 @@ static bool write_external_bake_pixels(const char *filepath,
 {
   ImBuf *ibuf = nullptr;
   bool ok = false;
-  bool is_float;
-
-  is_float = im_format->depth > 8;
+  bool is_float = im_format->depth > 8;
 
   /* create a new ImBuf */
-  ibuf = IMB_allocImBuf(
-      width, height, im_format->planes, (is_float ? IB_float_data : IB_byte_data));
+  ibuf = IMB_allocImBuf(width, height, is_float ? ImBufFlags::FloatData : ImBufFlags::ByteData);
+  ibuf->color_mode = im_format->color_mode;
 
   if (!ibuf) {
     return false;
@@ -389,16 +364,8 @@ static bool write_external_bake_pixels(const char *filepath,
 
   /* populates the ImBuf */
   if (is_float) {
-    IMB_buffer_float_from_float(ibuf->float_data_for_write(),
-                                buffer,
-                                ibuf->channels,
-                                IB_PROFILE_LINEAR_RGB,
-                                IB_PROFILE_LINEAR_RGB,
-                                false,
-                                ibuf->x,
-                                ibuf->y,
-                                ibuf->x,
-                                ibuf->x);
+    IMB_buffer_float_rgba_from_float(
+        ibuf->float_data_for_write(), buffer, ibuf->channels, ibuf->x, ibuf->y);
   }
   else {
     if (!is_noncolor) {
@@ -417,12 +384,9 @@ static bool write_external_bake_pixels(const char *filepath,
                                buffer,
                                ibuf->channels,
                                ibuf->dither,
-                               IB_PROFILE_SRGB,
-                               IB_PROFILE_SRGB,
                                false,
                                ibuf->x,
                                ibuf->y,
-                               ibuf->x,
                                ibuf->x);
   }
 
@@ -1442,7 +1406,7 @@ static wmOperatorStatus bake(const BakeAPIRender *bkr,
   Mesh *me_cage_eval = nullptr;
 
   MultiresModifierData *mmd_low = nullptr;
-  int mmd_flags_low = 0;
+  MultiresModifierFlag mmd_flags_low = {};
 
   BakePixel *pixel_array_low = nullptr;
   BakePixel *pixel_array_high = nullptr;
@@ -1657,7 +1621,7 @@ static wmOperatorStatus bake(const BakeAPIRender *bkr,
        * Use an error here instead of a warning so users don't accidentally perform
        * a bake which seems to succeed with invalid results.
        * If visibility could be forced/overridden - it would help avoid the problem. */
-      if (UNLIKELY(mesh_eval == nullptr)) {
+      if (mesh_eval == nullptr) [[unlikely]] {
         BKE_reportf(
             reports,
             RPT_ERROR,
@@ -1779,7 +1743,7 @@ static wmOperatorStatus bake(const BakeAPIRender *bkr,
           /* From multi-resolution. */
           Mesh *me_nores = nullptr;
           ModifierData *md = nullptr;
-          int mode;
+          ModifierMode mode;
 
           BKE_object_eval_reset(ob_low_eval);
           md = BKE_modifiers_findby_type(ob_low_eval, eModifierType_Multires);

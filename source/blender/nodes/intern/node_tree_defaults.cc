@@ -15,9 +15,9 @@
 #include "BKE_node_runtime.hh"
 #include "BKE_node_tree_update.hh"
 
-#include "BLI_listbase.h"
-#include "BLI_math_vector.h"
-#include "BLI_string_utf8.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_vector_c.hh"
+#include "BLI_string_utf8.hh"
 
 #include "BLT_translation.hh"
 
@@ -69,11 +69,11 @@ void node_tree_shader_default(const bContext *C, Main *bmain, ID *id)
       output = bke::node_add_static_node(nullptr, *ntree, SH_NODE_OUTPUT_WORLD);
       bke::node_add_link(*ntree,
                          *shader,
-                         *bke::node_find_socket(*shader, SOCK_OUT, "Background"),
+                         *bke::node_find_socket(*shader, SOCK_OUT, "Background"_ustr),
                          *output,
-                         *bke::node_find_socket(*output, SOCK_IN, "Surface"));
+                         *bke::node_find_socket(*output, SOCK_IN, "Surface"_ustr));
 
-      bNodeSocket *color_sock = bke::node_find_socket(*shader, SOCK_IN, "Color");
+      bNodeSocket *color_sock = bke::node_find_socket(*shader, SOCK_IN, "Color"_ustr);
       copy_v3_v3((reinterpret_cast<bNodeSocketValueRGBA *>(color_sock->default_value))->value,
                  &world->horr);
     }
@@ -84,9 +84,9 @@ void node_tree_shader_default(const bContext *C, Main *bmain, ID *id)
       output = bke::node_add_static_node(nullptr, *ntree, SH_NODE_OUTPUT_LIGHT);
       bke::node_add_link(*ntree,
                          *shader,
-                         *bke::node_find_socket(*shader, SOCK_OUT, "Emission"),
+                         *bke::node_find_socket(*shader, SOCK_OUT, "Emission"_ustr),
                          *output,
-                         *bke::node_find_socket(*output, SOCK_IN, "Surface"));
+                         *bke::node_find_socket(*output, SOCK_IN, "Surface"_ustr));
     }
 
     shader->location[0] = -200.0f;
@@ -125,7 +125,7 @@ void node_tree_composit_default(const bContext *C, Scene *sce)
 void node_tree_composit_default_init(const bContext *C, bNodeTree *ntree)
 {
   BLI_assert(ntree != nullptr && ntree->type == NTREE_COMPOSIT);
-  BLI_assert(BLI_listbase_count(&ntree->nodes) == 0);
+  BLI_assert(ntree->nodes.count() == 0);
 
   ntree->tree_interface.add_socket(
       DATA_("Image"), "", "NodeSocketColor", NODE_INTERFACE_SOCKET_INPUT, nullptr);
@@ -138,39 +138,16 @@ void node_tree_composit_default_init(const bContext *C, bNodeTree *ntree)
    * visible area.*/
   composite->location[1] = 100.0f;
 
-  bNode *in = bke::node_add_static_node(C, *ntree, CMP_NODE_R_LAYERS);
+  bNode *in = bke::node_add_node(C, *ntree, "NodeGroupInput"_ustr);
   in->location[0] = -150.0f - in->width;
   in->location[1] = 100.0f;
   bke::node_set_active(*ntree, *in);
-  in->flag &= ~NODE_PREVIEW;
 
-  bNode *reroute = bke::node_add_static_node(C, *ntree, NODE_REROUTE);
-  reroute->location[0] = 100.0f;
-  reroute->location[1] = 65.0f;
-
-  bNode *viewer = bke::node_add_static_node(C, *ntree, CMP_NODE_VIEWER);
-  viewer->location[0] = 200.0f;
-  viewer->location[1] = 20.0f;
-
-  /* Viewer and Composite nodes are linked to Render Layer's output image socket through a reroute
-   * node. */
   bke::node_add_link(*ntree,
                      *in,
                      *reinterpret_cast<bNodeSocket *>(in->outputs.first),
-                     *reroute,
-                     *reinterpret_cast<bNodeSocket *>(reroute->inputs.first));
-
-  bke::node_add_link(*ntree,
-                     *reroute,
-                     *reinterpret_cast<bNodeSocket *>(reroute->outputs.first),
                      *composite,
                      *reinterpret_cast<bNodeSocket *>(composite->inputs.first));
-
-  bke::node_add_link(*ntree,
-                     *reroute,
-                     *reinterpret_cast<bNodeSocket *>(reroute->outputs.first),
-                     *viewer,
-                     *reinterpret_cast<bNodeSocket *>(viewer->inputs.first));
 
   BKE_ntree_update_after_single_tree_change(*CTX_data_main(C), *ntree);
 }

@@ -10,10 +10,6 @@
 
 #pragma once
 
-#ifndef __cplusplus
-#  error This is a C++ header.
-#endif
-
 #include "BLI_map.hh"
 
 #include "BKE_armature.hh"
@@ -208,7 +204,10 @@ BoneCollection *ANIM_armature_bonecoll_get_by_name(bArmature *armature,
 int ANIM_armature_bonecoll_get_index_by_name(bArmature *armature,
                                              const char *name) ATTR_WARN_UNUSED_RESULT;
 
-void ANIM_armature_bonecoll_name_set(bArmature *armature, BoneCollection *bcoll, const char *name);
+void ANIM_armature_bonecoll_name_set(Main &bmain,
+                                     bArmature *armature,
+                                     BoneCollection *bcoll,
+                                     const char *name);
 
 /**
  * Show this bone collection.
@@ -321,7 +320,7 @@ bool ANIM_bonecoll_is_visible_editbone(const bArmature *armature, const EditBone
 
 inline bool ANIM_bonecoll_is_visible_pchan(const bArmature *armature, const bPoseChannel *pchan)
 {
-  return ANIM_bone_in_visible_collection(armature, pchan->bone);
+  return ANIM_bone_in_visible_collection(armature, pchan->bone_get(*armature));
 }
 
 inline bool ANIM_bonecoll_is_visible_actbone(const bArmature *armature)
@@ -432,9 +431,9 @@ int armature_bonecoll_move_to_parent(bArmature *armature,
  * The destination parameters are pointers to those components, so they can
  * be modified.  The destination array should be empty and unallocated.
  *
- * \param bcoll_array_dst,bcoll_array_dst_num: the destination BoneCollection
+ * \param bcoll_array_dst, bcoll_array_dst_num: the destination BoneCollection
  * array and array size.
- * \param bcoll_array_src,bcoll_array_src_num: the source BoneCollection array
+ * \param bcoll_array_src, bcoll_array_src_num: the source BoneCollection array
  * and array size.
  * \param do_id_user: when true, increments the user count of IDs that
  * the BoneCollections' custom properties point to, if any.

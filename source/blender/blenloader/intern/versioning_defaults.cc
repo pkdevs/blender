@@ -17,14 +17,14 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_listbase.h"
-#include "BLI_math_rotation.h"
-#include "BLI_math_vector.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_rotation_c.hh"
+#include "BLI_math_vector_c.hh"
 #include "BLI_math_vector_types.hh"
-#include "BLI_mempool.h"
-#include "BLI_string.h"
-#include "BLI_string_utf8.h"
-#include "BLI_utildefines.h"
+#include "BLI_mempool.hh"
+#include "BLI_string.hh"
+#include "BLI_string_utf8.hh"
+#include "BLI_utildefines.hh"
 
 #include "DNA_camera_types.h"
 #include "DNA_curveprofile_types.h"
@@ -125,7 +125,7 @@ static void blo_update_defaults_screen(bScreen *screen,
       /* Remove all stored panels, we want to use defaults
        * (order, open/closed) as defined by UI code here! */
       BKE_area_region_panels_free(&region.panels);
-      BLI_freelistN(&region.panels_category_active);
+      region.panels_category_active.free_no_destruct();
 
       /* Reset size so it uses consistent defaults from the region types. */
       region.sizex = 0;
@@ -143,8 +143,9 @@ static void blo_update_defaults_screen(bScreen *screen,
       }
       else if (STR_ELEM(workspace_name, "Texture Paint", "Shading")) {
         SpaceImage *sima = static_cast<SpaceImage *>(area.spacedata.first);
+        /* Face opacity is set to 0 to not interfere with visualization while painting */
         sima->uv_face_opacity = 0.0f;
-        sima->uv_edge_opacity = 0.0f;
+        sima->uv_edge_opacity = 1.0f;
       }
       else if (BLI_str_startswith(workspace_name, "Compositing")) {
         SpaceImage *sima = static_cast<SpaceImage *>(area.spacedata.first);
@@ -330,7 +331,7 @@ void BLO_update_defaults_workspace(WorkSpace *workspace, const char *app_templat
 
   if (blo_is_builtin_template(app_template)) {
     /* Clear all tools to use default options instead, ignore the tool saved in the file. */
-    while (!BLI_listbase_is_empty(&workspace->tools)) {
+    while (!workspace->tools.is_empty()) {
       BKE_workspace_tool_remove(workspace, static_cast<bToolRef *>(workspace->tools.first));
     }
 
@@ -371,10 +372,6 @@ void BLO_update_defaults_workspace(WorkSpace *workspace, const char *app_templat
                                                                                &sl.regionbase;
               ARegion *sidebar = BKE_region_find_in_listbase_by_type(regionbase, RGN_TYPE_UI);
               sidebar->flag |= RGN_FLAG_HIDDEN;
-            }
-            if (sl.spacetype == SPACE_PROPERTIES) {
-              SpaceProperties *properties = reinterpret_cast<SpaceProperties *>(&sl);
-              properties->mainb = properties->mainbo = properties->mainbuser = BCONTEXT_STRIP;
             }
           }
         }
@@ -431,6 +428,8 @@ static void blo_update_defaults_scene(Main *bmain, Scene *scene)
   scene->r.im_format.exr_flag |= R_IMF_EXR_FLAG_MULTIPART;
   scene->r.bake.im_format.exr_flag |= R_IMF_EXR_FLAG_MULTIPART;
 
+  scene->r.compositor_device = SCE_COMPOSITOR_DEVICE_GPU;
+
   /* Don't enable compositing nodes. */
   if (scene->nodetree) {
     bke::node_tree_free_embedded_tree(scene->nodetree);
@@ -460,6 +459,8 @@ static void blo_update_defaults_scene(Main *bmain, Scene *scene)
   scene->eevee.motion_blur_shutter_deprecated = 0.5f;
   scene->eevee.flag &= ~SCE_EEVEE_VOLUME_CUSTOM_RANGE;
   scene->eevee.clamp_volume_indirect = 0.0f; /* Default from versioning is not 0. */
+  scene->eevee.ray_tracing_options = {};
+  scene->eevee.fast_gi_thickness_near = 0.1f; /* Default from versioning is not 0.1f. */
 
   copy_v3_v3(scene->display.light_direction, float3(M_SQRT1_3));
   copy_v2_fl2(scene->safe_areas.title, 0.1f, 0.05f);
@@ -561,6 +562,8 @@ static void blo_update_defaults_scene(Main *bmain, Scene *scene)
 
   /* Weight Paint settings */
   ts->weightuser = OB_DRAW_GROUPUSER_ACTIVE;
+  ts->multipaint = true;
+  ts->auto_normalize = true;
 
   /* Cycles settings. */
   IDProperty *cscene = version_cycles_properties_from_ID(&scene->id);
@@ -771,6 +774,8 @@ void BLO_update_defaults_startup_blend(Main *bmain, const char *app_template)
     /* Match voxel remesher options for all existing meshes in templates. */
     mesh.flag |= ME_REMESH_REPROJECT_VOLUME | ME_REMESH_REPROJECT_ATTRIBUTES;
 
+    mesh.editflag |= ME_EDIT_MIRROR_VERTEX_GROUPS;
+
     /* For Sculpting template. */
     if (app_template && STREQ(app_template, "Sculpting")) {
       mesh.remesh_voxel_size = 0.035f;
@@ -806,15 +811,18 @@ void BLO_update_defaults_startup_blend(Main *bmain, const char *app_template)
     if (ma.nodetree) {
       for (bNode *node : ma.nodetree->all_nodes()) {
         if (node->type_legacy == SH_NODE_BSDF_PRINCIPLED) {
-          bNodeSocket *roughness_socket = bke::node_find_socket(*node, SOCK_IN, "Roughness");
+          bNodeSocket *roughness_socket = bke::node_find_socket(*node, SOCK_IN, "Roughness"_ustr);
           *version_cycles_node_socket_float_value(roughness_socket) = 0.5f;
-          bNodeSocket *emission = bke::node_find_socket(*node, SOCK_IN, "Emission Color");
+          bNodeSocket *emission = bke::node_find_socket(*node, SOCK_IN, "Emission Color"_ustr);
           copy_v4_fl(version_cycles_node_socket_rgba_value(emission), 1.0f);
           bNodeSocket *emission_strength = bke::node_find_socket(
-              *node, SOCK_IN, "Emission Strength");
+              *node, SOCK_IN, "Emission Strength"_ustr);
           *version_cycles_node_socket_float_value(emission_strength) = 0.0f;
-          bNodeSocket *ior = bke::node_find_socket(*node, SOCK_IN, "IOR");
+          bNodeSocket *ior = bke::node_find_socket(*node, SOCK_IN, "IOR"_ustr);
           *version_cycles_node_socket_float_value(ior) = 1.5f;
+          bNodeSocket *subsurface_scale = bke::node_find_socket(
+              *node, SOCK_IN, "Subsurface Scale"_ustr);
+          *version_cycles_node_socket_float_value(subsurface_scale) = 0.005f;
 
           node->custom1 = SHD_GLOSSY_MULTI_GGX;
           node->custom2 = SHD_SUBSURFACE_RANDOM_WALK;
