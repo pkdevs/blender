@@ -511,26 +511,26 @@ static void view3d_set_view_angle(ARegion *region, View3D *v3d, const float inpu
     }
   }
 
-  const float3 up_axis = float3(0.0f, 0.0f, 1.0f);
-  const float3 cam_up_axis = float3(rv3d->viewinv[1]);
-  const float3 cam_pivot_axis = float3(rv3d->viewinv[2]);
+  const float3 z_up_global = float3(0.0f, 0.0f, 1.0f);
+  const float3 z_up_local = float3(rv3d->viewinv[1]);
+  const float3 pivot_axis_local = float3(rv3d->viewinv[2]);
 
   float3 alignment_vector = float3(0.0f, 0.0f, 1.0f);
 
   /* Use the Positive Y-Axis when on the top view.*/
-  if (math::distance(cam_pivot_axis, alignment_vector) < 0.0001f) {
+  if (math::distance(pivot_axis_local, alignment_vector) < 0.0001f) {
     alignment_vector = float3(0.0f, 1.0f, 0.0f);
   }
 
   /* Use the negative Y-Axis when on the bottom view. */
-  if (math::distance(cam_pivot_axis, -alignment_vector) < 0.0001f) {
+  if (math::distance(pivot_axis_local, -alignment_vector) < 0.0001f) {
     alignment_vector = float3(0.0f, -1.0f, 0.0f);
   }
 
   const float offset_angle = angle - angle_signed_on_axis_v3v3_v3(
-                                         alignment_vector, cam_up_axis, cam_pivot_axis);
+                                         alignment_vector, z_up_local, pivot_axis_local);
 
-  const math::AxisAngle axis_angle = math::AxisAngle(up_axis, offset_angle);
+  const math::AxisAngle axis_angle = math::AxisAngle(z_up_global, offset_angle);
   copy_qt_qt(rv3d->viewquat, math::to_quaternion(axis_angle) * math::Quaternion(rv3d->viewquat));
 }
 
