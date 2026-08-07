@@ -1,2 +1,3 @@
 Referenced by issue #155935, Blender 5.1 crashes when using mask quick toggle in Sculpt Mode
 Referenced by pull request #162433, Fix: Cycles: Various small issues
+Referenced by commit 7134070cfb88cedac15c1a4df9faef3dc2f08dd7, Fix: Cycles: Adaptive linear subdivision potential issue with corner normals
