@@ -105,14 +105,18 @@ void cull_main([[resource_table]] Cull &srt,
           return;
         }
       }
-      ATTR_FALLTHROUGH;
+      [[fallthrough]];
     }
     case LIGHT_RECT:
     case LIGHT_ELLIPSE:
     case LIGHT_OMNI_SPHERE:
     case LIGHT_OMNI_DISK:
       sphere.center = light.position();
+#ifndef __BSL__
       sphere.radius = light.local().local.influence_radius_max;
+#else
+      sphere.radius = light.local.local.influence_radius_max;
+#endif
       break;
     default:
       break;
@@ -248,7 +252,11 @@ void zbin_main([[resource_table]] ZBinning &srt,
     LightData light = srt.light_buf[index];
     float3 P = light.position();
     /* TODO(fclem): Could have better bounds for spot and area lights. */
+#ifndef __BSL__
     float radius = light.local().local.influence_radius_max;
+#else
+    float radius = light.local.local.influence_radius_max;
+#endif
     float z_dist = dot(view.forward(), P) - dot(view.forward(), view.position());
     int z_min = culling_z_to_zbin(
         srt.light_cull_buf.zbin_scale, srt.light_cull_buf.zbin_bias, z_dist + radius);
@@ -425,7 +433,11 @@ void tile_main([[resource_table]] const draw::View &views,
     float3 v_right = view.normal_world_to_view(light.x_axis());
     float3 v_up = view.normal_world_to_view(light.y_axis());
     float3 v_back = view.normal_world_to_view(light.z_axis());
+#ifndef __BSL__
     float radius = light.local().local.influence_radius_max;
+#else
+    float radius = light.local.local.influence_radius_max;
+#endif
 
     if (srt.light_cull_buf.view_is_flipped) {
       v_right = -v_right;

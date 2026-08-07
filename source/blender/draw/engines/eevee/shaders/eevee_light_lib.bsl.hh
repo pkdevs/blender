@@ -215,11 +215,7 @@ float light_point_light(LightData light, const bool is_directional, LightVector 
 
   if (is_area_light(light.type)) {
     /* Modulate by light plane orientation / solid angle. */
-#ifndef __BSL__
     power *= saturate(dot(light.z_axis(), lv.L));
-#else
-    power *= saturate(dot(light.z_axis, lv.L));
-#endif
   }
   return power;
 }

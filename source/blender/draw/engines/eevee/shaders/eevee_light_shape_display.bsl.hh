@@ -174,8 +174,13 @@ void shape_display_frag([[resource_table]] const draw::View &views,
   float3 V = view.world_incident_vector(P);
 
   if (is_sun_light(light_type)) {
+#ifndef __BSL__
     float3 sun_direction = light.sun().direction;
     float sun_cos = cos_from_tan(light.sun().shape_radius);
+#else
+    float3 sun_direction = light.sun.direction;
+    float sun_cos = cos_from_tan(light.sun.shape_radius);
+#endif
     if (dot(-V, sun_direction) < sun_cos) {
       gpu_discard_fragment();
       return;
