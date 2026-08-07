@@ -153,6 +153,15 @@ static destruct_ptr<nodes::eval_log::BundleValueLog> get_bundle_info_log(
 {
   Vector<nodes::eval_log::BundleValueLog::Item> items;
   for (const auto &item : result.get_single_value<nodes::BundlePtr>()->items()) {
+    /* Handle a special case where nested bundles might be stored in BundleItemSocketValue as
+     * opposed to BundleItemInternalValue. */
+    const nodes::BundleItemSocketValue *socket_value = std::get_if<nodes::BundleItemSocketValue>(
+        &item.value.value);
+    if (socket_value && socket_value->type->type == SOCK_BUNDLE) {
+      items.append({item.key.ustr(), {Result::type_name(ResultType::Bundle)}});
+      continue;
+    }
+
     std::optional<ImplicitSharingPtr<BundleItem>> bundle_item =
         item.value.as<ImplicitSharingPtr<BundleItem>>();
     const Result &bundle_result = bundle_item.value()->result();

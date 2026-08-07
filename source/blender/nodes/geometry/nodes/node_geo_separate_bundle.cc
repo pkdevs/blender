@@ -221,6 +221,28 @@ class SeparateBundleOperation : public NodeOperation {
       if (!key) {
         continue;
       }
+
+      /* Handle a special case where nested bundles might be stored in BundleItemSocketValue as
+       * opposed to BundleItemInternalValue. */
+      std::optional<BundlePtr> child_bundle = bundle->lookup<BundlePtr>(*key);
+      if (child_bundle.has_value()) {
+        if (result.type() == ResultType::Bundle) {
+          result.allocate_single_value();
+          result.set_single_value(child_bundle.value());
+          continue;
+        }
+
+        result.allocate_invalid();
+        this->add_warning(
+            NodeWarningType::Error,
+            fmt::format("{}: \"{}\" ({} " BLI_STR_UTF8_BLACK_RIGHT_POINTING_SMALL_TRIANGLE " {})",
+                        TIP_("Conversion not supported when separating bundle"),
+                        name,
+                        TIP_(Result::type_name(ResultType::Bundle)),
+                        TIP_(Result::type_name(result.type()))));
+        continue;
+      }
+
       std::optional<ImplicitSharingPtr<BundleItem>> bundle_item =
           bundle->lookup<ImplicitSharingPtr<BundleItem>>(*key);
       if (!bundle_item.has_value()) {

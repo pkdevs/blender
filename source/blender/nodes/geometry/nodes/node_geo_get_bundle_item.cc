@@ -147,29 +147,63 @@ class GetBundleItemOperation : public NodeOperation {
 
   void execute() override
   {
-    Result &output_bundle = this->get_result("Bundle");
+    Result &bundle_output = this->get_result("Bundle");
+    const Result &bundle_input = this->get_input("Bundle");
 
     const std::string path = this->get_input("Path").get_single_value<std::string>();
     if (!Bundle::is_valid_path(path)) {
       if (!path.empty()) {
         this->add_warning(NodeWarningType::Warning, "Invalid bundle path");
       }
-      if (output_bundle.should_compute()) {
-        output_bundle.share_data(this->get_input("Bundle"));
+      if (bundle_output.should_compute()) {
+        bundle_output.share_data(bundle_input);
       }
       this->allocate_default_remaining_outputs();
       return;
     }
 
+    Result &item_output = this->get_result("Item");
     Result &exists_output = this->get_result("Exists");
 
-    const Result &input_bundle = this->get_input("Bundle");
-    nodes::BundlePtr bundle = input_bundle.get_single_value<nodes::BundlePtr>();
+    nodes::BundlePtr bundle = bundle_input.get_single_value<nodes::BundlePtr>();
+
+    /* Handle a special case where nested bundles might be stored in BundleItemSocketValue as
+     * opposed to BundleItemInternalValue. */
+    std::optional<BundlePtr> child_bundle = bundle->lookup_path<BundlePtr>(path);
+    if (child_bundle.has_value()) {
+      if (item_output.should_compute()) {
+        if (item_output.type() == ResultType::Bundle) {
+          item_output.allocate_single_value();
+          item_output.set_single_value(child_bundle.value());
+        }
+        else {
+          item_output.allocate_invalid();
+          this->add_warning(NodeWarningType::Error,
+                            "Cannot implicitly convert item to the selected type");
+        }
+      }
+
+      if (bundle_output.should_compute()) {
+        if (this->get_input("Remove").get_single_value<bool>()) {
+          bundle.ensure_mutable_inplace().remove_path(path);
+        }
+        bundle_output.allocate_single_value();
+        bundle_output.set_single_value(std::move(bundle));
+      }
+
+      if (exists_output.should_compute()) {
+        exists_output.allocate_single_value();
+        exists_output.set_single_value(true);
+      }
+
+      return;
+    }
+
     std::optional<ImplicitSharingPtr<BundleItem>> bundle_item =
         bundle->lookup_path<ImplicitSharingPtr<BundleItem>>(path);
     if (!bundle_item.has_value()) {
-      if (output_bundle.should_compute()) {
-        output_bundle.share_data(this->get_input("Bundle"));
+      if (bundle_output.should_compute()) {
+        bundle_output.share_data(bundle_input);
       }
       if (exists_output.should_compute()) {
         exists_output.allocate_single_value();
@@ -184,38 +218,37 @@ class GetBundleItemOperation : public NodeOperation {
 
     const Result &bundle_result = bundle_item.value()->result();
 
-    Result &item_result = this->get_result("Item");
-    if (item_result.should_compute()) {
-      if (item_result.type() == bundle_result.type()) {
-        item_result.share_data(bundle_result);
+    if (item_output.should_compute()) {
+      if (item_output.type() == bundle_result.type()) {
+        item_output.share_data(bundle_result);
       }
       else {
         const bke::DataTypeConversions &conversions = bke::get_implicit_type_conversions();
-        if (conversions.is_convertible(bundle_result.get_cpp_type(), item_result.get_cpp_type())) {
+        if (conversions.is_convertible(bundle_result.get_cpp_type(), item_output.get_cpp_type())) {
           ConversionOperation conversion_operation(
-              this->context(), bundle_result.type(), item_result.type());
+              this->context(), bundle_result.type(), item_output.type());
           Result conversion_input = this->context().create_result(bundle_result.type(),
                                                                   bundle_result.precision());
           conversion_input.share_data(bundle_result);
           conversion_operation.map_input_to_result(&conversion_input);
           conversion_operation.evaluate();
-          item_result.share_data(conversion_operation.get_result());
+          item_output.share_data(conversion_operation.get_result());
           conversion_operation.get_result().release();
         }
         else {
-          item_result.allocate_invalid();
+          item_output.allocate_invalid();
           this->add_warning(NodeWarningType::Error,
-                            "Cannot implicitly convert item to the selected type");
+                            "cannot implicitly convert item to the selected type");
         }
       }
     }
 
-    if (output_bundle.should_compute()) {
+    if (bundle_output.should_compute()) {
       if (this->get_input("Remove").get_single_value<bool>()) {
         bundle.ensure_mutable_inplace().remove_path(path);
       }
-      output_bundle.allocate_single_value();
-      output_bundle.set_single_value(std::move(bundle));
+      bundle_output.allocate_single_value();
+      bundle_output.set_single_value(std::move(bundle));
     }
 
     if (exists_output.should_compute()) {
