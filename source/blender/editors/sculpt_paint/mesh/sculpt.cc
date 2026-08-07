@@ -3483,8 +3483,7 @@ static void do_brush_action(const Depsgraph &depsgraph,
   IndexMaskMemory memory;
   IndexMask texnode_mask;
 
-  const bool use_original = brush_type_needs_original(brush.sculpt_brush_type) ? true :
-                                                                                 !ss.cache->accum;
+  const bool use_original = brush_type_needs_original(brush.sculpt_brush_type);
   const bool use_pixels = sculpt_needs_pbvh_pixels(brush, ob);
 
   if (sculpt_needs_pbvh_pixels(brush, ob)) {
