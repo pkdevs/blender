@@ -549,9 +549,94 @@ static bool outliner_collection_is_isolated(Scene *scene,
   return true;
 }
 
+static void child_iterator(Scene *scene,
+                           TreeElement *te,
+                           PropertyRNA *layer_or_collection_prop,
+                           const std::optional<bool> value = std::nullopt)
+{
+  const bool is_layer_collection = (te->store_elem->type == TSE_LAYER_COLLECTION);
+  PointerRNA ptr;
+  for (TreeElement &te_child : te->parent->subtree) {
+    if (!outliner_is_collection_tree_element(&te_child)) {
+      continue;
+    }
+    LayerCollection *lc = nullptr;
+    Collection *col = nullptr;
+    if (is_layer_collection && (te_child.store_elem->type == TSE_LAYER_COLLECTION)) {
+      lc = static_cast<LayerCollection *>(te_child.directdata);
+    }
+    else {
+      col = outliner_collection_from_tree_element(te);
+    }
+
+    outliner_layer_or_collection_pointer_create(scene, lc, col, &ptr);
+    RNA_property_boolean_set(&ptr, layer_or_collection_prop, value.value_or(&te_child != te));
+  }
+}
+
+struct CollectionData {
+  LayerCollection *lc = nullptr;
+  Collection *col = nullptr;
+};
+
+static CollectionData get_collection_from_tree_element(TreeElement *te)
+{
+  LayerCollection *lc = nullptr;
+  Collection *col = nullptr;
+  const bool is_layer_collection = (te->store_elem->type == TSE_LAYER_COLLECTION);
+  if (is_layer_collection && (te->store_elem->type == TSE_LAYER_COLLECTION)) {
+    lc = static_cast<LayerCollection *>(te->directdata);
+  }
+  else {
+    col = outliner_collection_from_tree_element(te);
+  }
+  return {lc, col};
+}
+
+static bool collection_is_isolated(Scene *scene,
+                                   TreeElement *te,
+                                   const bool value_cmp,
+                                   PropertyRNA *layer_or_collection_prop)
+{
+  PointerRNA ptr;
+  /* Compare parent values */
+  for (TreeElement *te_parent = te->parent ; te_parent ; te_parent = te_parent->parent) {
+    if (!outliner_is_collection_tree_element(te_parent)) {
+      continue;
+    }
+
+    CollectionData data = get_collection_from_tree_element(te_parent);
+    outliner_layer_or_collection_pointer_create(scene, data.lc, data.col, &ptr);
+    const bool value = RNA_property_boolean_get(&ptr, layer_or_collection_prop);
+    if (value != value_cmp) {
+      return false;
+    }
+  }
+
+  /* Compare sibling values */
+  for (TreeElement &te_child : te->parent->subtree) {
+    if (!outliner_is_collection_tree_element(&te_child)) {
+      continue;
+    }
+
+    if (&te_child == te) {
+      continue;
+    }
+    
+    CollectionData data = get_collection_from_tree_element(&te_child);
+    outliner_layer_or_collection_pointer_create(scene, data.lc, data.col, &ptr);
+    const bool value = RNA_property_boolean_get(&ptr, layer_or_collection_prop);
+    if (value == value_cmp) {
+      return false;
+    }
+  }
+  return true;
+}
+
 void outliner_collection_isolate_flag(const Main &bmain,
                                       Scene *scene,
                                       ViewLayer *view_layer,
+                                      TreeElement *te,
                                       LayerCollection *layer_collection,
                                       Collection *collection,
                                       PropertyRNA *layer_or_collection_prop,
@@ -561,93 +646,38 @@ void outliner_collection_isolate_flag(const Main &bmain,
   PointerRNA ptr;
   const bool is_hide = strstr(propname, "hide_") || STREQ(propname, "exclude");
 
-  LayerCollection *top_layer_collection = layer_collection ?
-                                              static_cast<LayerCollection *>(
-                                                  view_layer->layer_collections.first) :
-                                              nullptr;
-  Collection *top_collection = collection ? scene->master_collection : nullptr;
-
   bool was_isolated = (value == is_hide);
-  was_isolated &= outliner_collection_is_isolated(scene,
-                                                  layer_collection,
-                                                  collection,
-                                                  !is_hide,
-                                                  layer_or_collection_prop,
-                                                  top_layer_collection,
-                                                  top_collection);
+  was_isolated &= collection_is_isolated(scene, te, !is_hide, layer_or_collection_prop);
 
   if (was_isolated) {
-    const bool default_value = RNA_property_boolean_get_default(nullptr, layer_or_collection_prop);
+    CollectionData data = get_collection_from_tree_element(te);
+    outliner_layer_or_collection_pointer_create(scene, data.lc, data.col, &ptr);
+    const bool default_value = RNA_property_boolean_get_default(&ptr, layer_or_collection_prop);
     /* Make every collection go back to its default "visibility" state. */
-    outliner_collection_set_flag_recursive(bmain,
-                                           scene,
-                                           view_layer,
-                                           top_layer_collection,
-                                           top_collection,
-                                           layer_or_collection_prop,
-                                           nullptr,
-                                           default_value);
+    child_iterator(scene, te, layer_or_collection_prop, default_value);
     return;
   }
 
-  /* Make every collection "invisible". */
-  outliner_collection_set_flag_recursive(bmain,
-                                         scene,
-                                         view_layer,
-                                         top_layer_collection,
-                                         top_collection,
-                                         layer_or_collection_prop,
-                                         nullptr,
-                                         is_hide);
-
-  /* Make this collection and its children collections the only "visible". */
-  outliner_collection_set_flag_recursive(bmain,
-                                         scene,
-                                         view_layer,
-                                         layer_collection,
-                                         collection,
-                                         layer_or_collection_prop,
-                                         nullptr,
-                                         !is_hide);
 
   /* Make this collection direct parents also "visible". */
-  if (layer_collection) {
-    LayerCollection *lc_parent = layer_collection;
-    for (LayerCollection &lc_iter : top_layer_collection->layer_collections) {
-      if (BKE_layer_collection_has_layer_collection(&lc_iter, layer_collection)) {
-        lc_parent = &lc_iter;
-        break;
-      }
+  for (TreeElement *te_parent = te->parent ; te_parent ; te_parent = te_parent->parent) {
+    if (!outliner_is_collection_tree_element(te_parent)) {
+      continue;
+    }
+    if (ELEM(te_parent->store_elem->type, TSE_SCENE_COLLECTION_BASE, TSE_VIEW_COLLECTION_BASE)) {
+      continue;
     }
 
-    while (lc_parent != layer_collection) {
-      outliner_layer_or_collection_pointer_create(
-          scene, lc_parent, collection ? lc_parent->collection : nullptr, &ptr);
-      RNA_property_boolean_set(&ptr, layer_or_collection_prop, !is_hide);
+    CollectionData data = get_collection_from_tree_element(te_parent);
+    outliner_layer_or_collection_pointer_create(scene, data.lc, data.col, &ptr);
+    RNA_property_boolean_set(&ptr, layer_or_collection_prop, !is_hide);
+  }
 
-      for (LayerCollection &lc_iter : lc_parent->layer_collections) {
-        if (BKE_layer_collection_has_layer_collection(&lc_iter, layer_collection)) {
-          lc_parent = &lc_iter;
-          break;
-        }
-      }
-    }
-  }
-  else {
-    CollectionParent *parent;
-    Collection *child = collection;
-    while ((parent = static_cast<CollectionParent *>(child->runtime->parents.first))) {
-      if (parent->collection->flag & COLLECTION_IS_MASTER) {
-        break;
-      }
-      ptr = RNA_id_pointer_create(&parent->collection->id);
-      RNA_property_boolean_set(&ptr, layer_or_collection_prop, !is_hide);
-      child = parent->collection;
-    }
-  }
+  child_iterator(scene, te, layer_or_collection_prop);
 }
 
 static void outliner_collection_set_flag_recursive_fn(bContext *C,
+                                                      TreeElement *te,
                                                       LayerCollection *layer_collection,
                                                       Collection *collection,
                                                       const char *propname)
@@ -697,6 +727,7 @@ static void outliner_collection_set_flag_recursive_fn(bContext *C,
     outliner_collection_isolate_flag(*bmain,
                                      scene,
                                      view_layer,
+                                     te,
                                      layer_collection,
                                      collection,
                                      layer_or_collection_prop,
@@ -717,9 +748,10 @@ static void view_layer__layer_collection_set_flag_recursive_fn(bContext *C,
                                                                void *poin,
                                                                void *poin2)
 {
-  LayerCollection *layer_collection = static_cast<LayerCollection *>(poin);
+  TreeElement *te = static_cast<TreeElement *>(poin);
+  LayerCollection *layer_collection = static_cast<LayerCollection *>(te->directdata);
   const char *propname = static_cast<const char *>(poin2);
-  outliner_collection_set_flag_recursive_fn(C, layer_collection, nullptr, propname);
+  outliner_collection_set_flag_recursive_fn(C, te, layer_collection, nullptr, propname);
 }
 
 /**
@@ -728,10 +760,11 @@ static void view_layer__layer_collection_set_flag_recursive_fn(bContext *C,
  */
 static void view_layer__collection_set_flag_recursive_fn(bContext *C, void *poin, void *poin2)
 {
-  LayerCollection *layer_collection = static_cast<LayerCollection *>(poin);
+  TreeElement *te = static_cast<TreeElement *>(poin);
+  LayerCollection *layer_collection = static_cast<LayerCollection *>(te->directdata);
   const char *propname = static_cast<const char *>(poin2);
   outliner_collection_set_flag_recursive_fn(
-      C, layer_collection, layer_collection->collection, propname);
+      C, te, layer_collection, layer_collection->collection, propname);
 }
 
 /**
@@ -740,9 +773,10 @@ static void view_layer__collection_set_flag_recursive_fn(bContext *C, void *poin
  */
 static void scenes__collection_set_flag_recursive_fn(bContext *C, void *poin, void *poin2)
 {
-  Collection *collection = static_cast<Collection *>(poin);
+  TreeElement *te = static_cast<TreeElement *>(poin);
+  Collection *collection = static_cast<Collection *>(te->directdata);
   const char *propname = static_cast<const char *>(poin2);
-  outliner_collection_set_flag_recursive_fn(C, nullptr, collection, propname);
+  outliner_collection_set_flag_recursive_fn(C, te, nullptr, collection, propname);
 }
 
 static void namebutton_fn(bContext *C, TreeStoreElem *tselem, const char *oldname)
@@ -1648,7 +1682,7 @@ static void outliner_draw_restrictbuts(ui::Block *block,
                                       std::nullopt);
               button_func_set(bt,
                               view_layer__layer_collection_set_flag_recursive_fn,
-                              layer_collection,
+                              &te,
                               const_cast<char *>("exclude"));
               button_flag_enable(bt, ui::BUT_DRAG_LOCK);
             }
@@ -1671,7 +1705,7 @@ static void outliner_draw_restrictbuts(ui::Block *block,
                                            " \u2022 Shift to set inside collections and objects"));
               button_func_set(bt,
                               view_layer__layer_collection_set_flag_recursive_fn,
-                              layer_collection,
+                              &te,
                               const_cast<char *>("hide_viewport"));
               button_flag_enable(bt, ui::BUT_DRAG_LOCK);
               if (!props_active.layer_collection_hide_viewport) {
@@ -1697,7 +1731,7 @@ static void outliner_draw_restrictbuts(ui::Block *block,
                                            " \u2022 Shift to set inside collections"));
               button_func_set(bt,
                               view_layer__layer_collection_set_flag_recursive_fn,
-                              layer_collection,
+                              &te,
                               const_cast<char *>("holdout"));
               button_flag_enable(bt, ui::BUT_DRAG_LOCK);
               if (!props_active.layer_collection_holdout) {
@@ -1725,7 +1759,7 @@ static void outliner_draw_restrictbuts(ui::Block *block,
                        " \u2022 Shift to set inside collections"));
               button_func_set(bt,
                               view_layer__layer_collection_set_flag_recursive_fn,
-                              layer_collection,
+                              &te,
                               const_cast<char *>("indirect_only"));
               button_flag_enable(bt, ui::BUT_DRAG_LOCK);
               if (props_active.layer_collection_holdout ||
@@ -1755,13 +1789,13 @@ static void outliner_draw_restrictbuts(ui::Block *block,
             if (layer_collection != nullptr) {
               button_func_set(bt,
                               view_layer__collection_set_flag_recursive_fn,
-                              layer_collection,
+                              &te,
                               const_cast<char *>("hide_viewport"));
             }
             else {
               button_func_set(bt,
                               scenes__collection_set_flag_recursive_fn,
-                              collection,
+                              &te,
                               const_cast<char *>("hide_viewport"));
             }
             button_flag_enable(bt, ui::BUT_DRAG_LOCK);
@@ -1789,13 +1823,13 @@ static void outliner_draw_restrictbuts(ui::Block *block,
             if (layer_collection != nullptr) {
               button_func_set(bt,
                               view_layer__collection_set_flag_recursive_fn,
-                              layer_collection,
+                              &te,
                               const_cast<char *>("hide_render"));
             }
             else {
               button_func_set(bt,
                               scenes__collection_set_flag_recursive_fn,
-                              collection,
+                              &te,
                               const_cast<char *>("hide_render"));
             }
             button_flag_enable(bt, ui::BUT_DRAG_LOCK);
@@ -1823,13 +1857,13 @@ static void outliner_draw_restrictbuts(ui::Block *block,
             if (layer_collection != nullptr) {
               button_func_set(bt,
                               view_layer__collection_set_flag_recursive_fn,
-                              layer_collection,
+                              &te,
                               const_cast<char *>("hide_select"));
             }
             else {
               button_func_set(bt,
                               scenes__collection_set_flag_recursive_fn,
-                              collection,
+                              &te,
                               const_cast<char *>("hide_select"));
             }
             button_flag_enable(bt, ui::BUT_DRAG_LOCK);

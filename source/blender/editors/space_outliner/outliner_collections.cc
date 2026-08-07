@@ -1120,7 +1120,7 @@ static wmOperatorStatus collection_isolate_exec(bContext *C, wmOperator *op)
                          &data);
 
   for (LayerCollection *layer_collection : data.layer_collections_to_edit) {
-    if (extend) {
+    if (true) {
       BKE_layer_collection_isolate_global(scene, view_layer, layer_collection, true);
     }
     else {
@@ -1132,8 +1132,15 @@ static wmOperatorStatus collection_isolate_exec(bContext *C, wmOperator *op)
        * outliner as a callback. That means the collection visibility was set before the callback
        * was called. */
       const bool value = !RNA_property_boolean_get(&ptr, prop);
-      outliner_collection_isolate_flag(
-          *bmain, scene, view_layer, layer_collection, nullptr, prop, "hide_viewport", value);
+      outliner_collection_isolate_flag(*bmain,
+                                       scene,
+                                       view_layer,
+                                       nullptr,
+                                       layer_collection,
+                                       nullptr,
+                                       prop,
+                                       "hide_viewport",
+                                       value);
       break;
     }
   }

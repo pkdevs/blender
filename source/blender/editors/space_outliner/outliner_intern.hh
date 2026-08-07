@@ -317,6 +317,7 @@ TreeElementIcon tree_element_get_icon(TreeStoreElem *tselem, TreeElement *te);
 void outliner_collection_isolate_flag(const Main &bmain,
                                       Scene *scene,
                                       ViewLayer *view_layer,
+                                      TreeElement *te,
                                       LayerCollection *layer_collection,
                                       Collection *collection,
                                       PropertyRNA *layer_or_collection_prop,
