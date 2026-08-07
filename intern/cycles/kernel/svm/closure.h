@@ -260,13 +260,16 @@ ccl_device_inline float2 openpbr_anisotropic_roughness(ccl_private float *ccl_re
   float2 alpha = make_float2(sqr(roughness));
   *tangent = zero_float3();
 
-  if (anisotropy > 0.0f && stack_valid(tangent_offset)) {
+  if (anisotropy > 0.0f && stack_valid(tangent_offset) &&
+      !roughness_is_almost_specular(alpha.x, alpha.y))
+  {
     *tangent = stack_load_float3(stack, tangent_offset);
 
     alpha.x *= sqrt(2.0f / (1.0f + sqr(1.0f - anisotropy)));
     alpha.y = (1.0f - anisotropy) * alpha.x;
-    alpha.x = max(alpha.x, 1e-6f);
-    alpha.y = max(alpha.y, 1e-6f);
+    /* Clamp so that the closure is not treated as specular. */
+    /* TODO(OpenPBR): maybe multiplicative roughness is not a good criteria. */
+    alpha = max(alpha, make_float2(1.5e-5f));
   }
 
   return alpha;
@@ -380,7 +383,7 @@ ccl_device_inline Spectrum openpbr_bsdf_emission(KernelGlobals kg,
     /* FIXME(OpenPBR): simply invert ior is incorrect, probably should do the same as thin film?
      * Didn't find in the spec how to address backface. Principled BSDF uses original coat IOR
      * without modification. */
-    ior = (sd->runtime_flag & SR_BACKFACING) ? 1.0f / ior : ior;
+    // ior = (sd->runtime_flag & SR_BACKFACING) ? 1.0f / ior : ior;
     if (reflective_caustics) {
       MicrofacetBsdf coat;
       ccl_private MicrofacetBsdf *bsdf = bsdf_alloc_maybe_emission(
@@ -805,7 +808,7 @@ ccl_device
       /* FIXME(OpenPBR): simply invert ior is incorrect, probably should do the same as thin film?
        * Didn't find in the spec how to address backface. Principled BSDF uses original coat IOR
        * without modification. */
-      coat_ior = backfacing ? 1.0f / coat_ior : coat_ior;
+      // coat_ior = backfacing ? 1.0f / coat_ior : coat_ior;
 
       weight *= openpbr_coat_darkening(data,
                                        stack,

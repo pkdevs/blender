@@ -250,7 +250,6 @@ static void node_declare(NodeDeclarationBuilder &b)
       .min(0.0f)
       .max(1.0f)
       .subtype(PROP_FACTOR)
-      .not_implemented()
       .description("Anisotropy of the coat layer");
 #define OPENPBR_SOCK_COAT_ROUGHNESS_ANISOTROPY_ID 25
   coat.add_input<decl::Float>("Coat IOR"_ustr)

@@ -2725,6 +2725,18 @@ OpenPBRBsdfNode::OpenPBRBsdfNode() : BsdfBaseNode(get_node_type())
   closure = CLOSURE_BSDF_OPEN_PBR_ID;
 }
 
+void OpenPBRBsdfNode::attributes(Shader *shader, AttributeRequestSet *attributes)
+{
+  if (shader->has_surface_link()) {
+
+    if (!input("Geometry Tangent")->link || !input("Geometry Coat Normal")->link) {
+      attributes->add(ATTR_STD_GENERATED);
+    }
+  }
+
+  ShaderNode::attributes(shader, attributes);
+}
+
 void OpenPBRBsdfNode::compile(SVMCompiler &compiler)
 {
   SVMStackOffset geometry_tangent_offset = SVM_STACK_INVALID;

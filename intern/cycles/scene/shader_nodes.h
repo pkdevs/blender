@@ -598,6 +598,7 @@ class OpenPBRBsdfNode : public BsdfBaseNode {
   NODE_SOCKET_API(float3, geometry_coat_tangent)
 
  public:
+  void attributes(Shader *shader, AttributeRequestSet *attributes) override;
   bool has_surface_transparent() override;
   bool has_surface_emission() override;
   bool has_surface_bssrdf() override;
