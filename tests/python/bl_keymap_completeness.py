@@ -20,6 +20,20 @@ from bl_keymap_utils import keymap_hierarchy
 # Suffix for the key-map used while the tool acts as the fallback tool, see `_fallback_id`.
 KEYMAP_SUFFIX_FALLBACK = " (fallback)"
 
+# Key-maps to skip when checking blender's key-maps can all be reached from the hierarchy.
+# TODO: investigate each of these, in most cases the key-map data should probably be removed.
+ALLOW_MISSING_FROM_HIERARCHY = {
+    # The "Spin Duplicates" tool was merged into "Spin", see: !117880.
+    "3D View Tool: Edit Mesh, Spin Duplicates",
+    # The mask editor shares the UV editors cursor tool, which uses "Image Editor Tool: Uv, Cursor".
+    "Image Editor Tool: Mask, Cursor",
+    # This tool is gizmo only, it intentionally has no default action.
+    "Image Editor Tool: Mask, Transform",
+    # The mask primitive tools are disabled, see the TODO in `space_toolsystem_toolbar.py`.
+    "Image Editor Tool: Mask, Box",
+    "Image Editor Tool: Mask, Circle",
+}
+
 
 def keymaps_missing(maps_py, maps_bl):
     return [
@@ -76,6 +90,9 @@ def check_maps():
 
     # Check blender's keymaps can all be reached from the hierarchy.
     test = sorted(maps_bl - maps_py)
+    if ALLOW_MISSING_FROM_HIERARCHY:
+        test = [km_id for km_id in test if km_id[0] not in ALLOW_MISSING_FROM_HIERARCHY]
+
     if test:
         print("Keymaps that are in blender but not in 'bl_keymap_utils.keymap_hierarchy'")
         for km_id in test:
