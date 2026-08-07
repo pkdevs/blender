@@ -17,6 +17,26 @@ del sys, os
 
 from bl_keymap_utils import keymap_hierarchy
 
+# Suffix for the key-map used while the tool acts as the fallback tool, see `_fallback_id`.
+KEYMAP_SUFFIX_FALLBACK = " (fallback)"
+
+
+def keymaps_missing(maps_py, maps_bl):
+    return [
+        km_id for km_id in sorted(maps_py - maps_bl)
+        if not km_id[0].endswith(KEYMAP_SUFFIX_FALLBACK)
+    ]
+
+
+def keymaps_missing_fallback(maps_py, maps_bl):
+    # `keymap_ui_hierarchy` yields a fallback for every tool keymap although only the select
+    # tools have them. So the fallback may not exist, the keymap it falls back from must.
+    return [
+        km_id for km_id in sorted(maps_py - maps_bl)
+        if km_id[0].endswith(KEYMAP_SUFFIX_FALLBACK)
+        if (km_id[0].removesuffix(KEYMAP_SUFFIX_FALLBACK), *km_id[1:]) not in maps_bl
+    ]
+
 
 def check_maps():
     # A key-map is identified by its name, space-type & region-type, all three must match
@@ -35,8 +55,11 @@ def check_maps():
     maps_bl = {(km.name, km.space_type, km.region_type) for km in keyconf.keymaps}
 
     err = False
-    # Check keyconfig contains only maps that exist in blender
-    test = sorted(maps_py - maps_bl)
+
+    # Check the hierarchy only references keymaps that exist in blender.
+    test = keymaps_missing(maps_py, maps_bl)
+    test_fallback = keymaps_missing_fallback(maps_py, maps_bl)
+
     if test:
         print("Keymaps that are in 'bl_keymap_utils.keymap_hierarchy' but not blender")
         for km_id in test:
@@ -44,6 +67,14 @@ def check_maps():
         # TODO #65963, broken keymap hierarchy tests disabled until fixed.
         # err = True
 
+    if test_fallback:
+        print("Fallback keymaps in 'bl_keymap_utils.keymap_hierarchy' with no keymap to fall back from")
+        for km_id in test_fallback:
+            print("    ('{:s}', '{:s}', '{:s}', []),".format(*km_id))
+        # TODO #65963, broken keymap hierarchy tests disabled until fixed.
+        # err = True
+
+    # Check blender's keymaps can all be reached from the hierarchy.
     test = sorted(maps_bl - maps_py)
     if test:
         print("Keymaps that are in blender but not in 'bl_keymap_utils.keymap_hierarchy'")
