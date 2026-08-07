@@ -50,7 +50,7 @@ static void node_geo_exec(GeoNodeExecParams params)
   const float3 size = {2.0f, 2.0f, 2.0f};
   const int s = params.extract_input<int>("Subdivisions"_ustr);
   if (s < 1) {
-      params.error_message_add(NodeWarningType::Info, TIP_("Subdivisions must be at least 2"));
+      params.error_message_add(NodeWarningType::Info, TIP_("Subdivisions must be at least 1"));
       params.set_default_remaining_outputs();
       return;
   }
