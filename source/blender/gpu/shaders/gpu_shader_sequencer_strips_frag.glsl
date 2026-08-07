@@ -148,7 +148,6 @@ void main()
 
   bool border = (strip.flags & GPU_SEQ_FLAG_BORDER) != 0;
   bool selected = (strip.flags & GPU_SEQ_FLAG_SELECTED) != 0;
-  bool transition = (strip.flags & GPU_SEQ_FLAG_TRANSITION) != 0;
   float outline_width = selected ? 2.0f : 1.0f;
 
   /* Distance to whole strip shape. */
@@ -199,14 +198,14 @@ void main()
   }
 
   /* Transition. */
-  if (transition) {
+  if ((strip.flags & GPU_SEQ_FLAG_TRANSITION) != 0) {
     if (co.x >= strip.content_start && co.x <= strip.content_end && co.y < strip.strip_content_top)
     {
       float diag_y = strip.strip_content_top - (strip.strip_content_top - strip.bottom) *
                                                    (co.x - strip.content_start) /
                                                    (strip.content_end - strip.content_start);
       uint transition_color = co.y <= diag_y ? strip.col_transition_in : strip.col_transition_out;
-      col.rgba = unpackUnorm4x8(transition_color).rgba;
+      col.rgb = unpackUnorm4x8(transition_color).rgb;
     }
   }
 
@@ -267,37 +266,30 @@ void main()
 
   /* Outline / border. */
   if (border) {
-    if (!transition) {
-      if (selected) {
-        /* Selection highlight + darker inset line. */
-        col = add_outline(sdf, 1.0f, 3.0f, col, col_outline);
-        /* Inset line should be inside regular border or inside the handles. */
-        if (!transition) {
-          float d = max(sdf_inner - 3.0f * context_data.pixelsize, sdf);
-          col = add_outline(d, 3.0f, 4.0f, col, float4(0, 0, 0, 0.33f));
-        }
-      }
 
-      /* Active, but not selected strips get a thin inner line. */
-      bool active_strip = (strip.flags & GPU_SEQ_FLAG_ACTIVE) != 0;
-      if (active_strip && !selected) {
-        col = add_outline(sdf, 1.0f, 2.0f, col, col_outline);
-      }
-
-      /* 2px outline for all overlapping strips. */
-      bool overlaps = (strip.flags & GPU_SEQ_FLAG_OVERLAP) != 0;
-      bool clamped = (strip.flags & GPU_SEQ_FLAG_CLAMPED) != 0;
-      if (overlaps || clamped) {
-        col = add_outline(sdf, 1.0f, 3.0f, col, col_outline);
-      }
-
-      /* Outer 1px outline for all strips. */
-      col = add_outline(sdf, 0.0f, 1.0f, col, unpackUnorm4x8(context_data.col_back));
+    if (selected) {
+      /* Selection highlight + darker inset line. */
+      col = add_outline(sdf, 1.0f, 3.0f, col, col_outline);
+      /* Inset line should be inside regular border or inside the handles. */
+      float d = max(sdf_inner - 3.0f * context_data.pixelsize, sdf);
+      col = add_outline(d, 3.0f, 4.0f, col, float4(0, 0, 0, 0.33f));
     }
-    else {
-      float width = selected ? 4.0f : 2.0f;
-      col = add_outline(sdf, 1.0f, width, col, col_outline);
+
+    /* Active, but not selected strips get a thin inner line. */
+    bool active_strip = (strip.flags & GPU_SEQ_FLAG_ACTIVE) != 0;
+    if (active_strip && !selected) {
+      col = add_outline(sdf, 1.0f, 2.0f, col, col_outline);
     }
+
+    /* 2px outline for all overlapping strips. */
+    bool overlaps = (strip.flags & GPU_SEQ_FLAG_OVERLAP) != 0;
+    bool clamped = (strip.flags & GPU_SEQ_FLAG_CLAMPED) != 0;
+    if (overlaps || clamped) {
+      col = add_outline(sdf, 1.0f, 3.0f, col, col_outline);
+    }
+
+    /* Outer 1px outline for all strips. */
+    col = add_outline(sdf, 0.0f, 1.0f, col, unpackUnorm4x8(context_data.col_back));
   }
 
   fragColor = col;
