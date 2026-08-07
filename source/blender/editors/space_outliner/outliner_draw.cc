@@ -461,94 +461,9 @@ static void outliner_collection_set_flag_recursive(const Main &bmain,
 /**
  * Check if collection is already isolated.
  *
- * A collection is isolated if all its parents and children are "visible".
- * All the other collections must be "invisible".
- *
- * NOTE: We could/should boost performance by iterating over the tree twice.
- * First tagging all the children/parent collections, then getting their values and comparing.
- * To run BKE_collection_has_collection() so many times is silly and slow.
+ * A collection is isolated if all its parents visible and sibling collection from same hierarchy
+ * are disabled.
  */
-static bool outliner_collection_is_isolated(Scene *scene,
-                                            const LayerCollection *layer_collection_cmp,
-                                            const Collection *collection_cmp,
-                                            const bool value_cmp,
-                                            PropertyRNA *layer_or_collection_prop,
-                                            LayerCollection *layer_collection,
-                                            Collection *collection)
-{
-  PointerRNA ptr;
-  outliner_layer_or_collection_pointer_create(scene, layer_collection, collection, &ptr);
-  const bool value = RNA_property_boolean_get(&ptr, layer_or_collection_prop);
-  Collection *collection_ensure = collection ? collection : layer_collection->collection;
-  const Collection *collection_ensure_cmp = collection_cmp ? collection_cmp :
-                                                             layer_collection_cmp->collection;
-
-  /* Exclude linked collections, otherwise toggling property won't reset the visibility for
-   * editable collections, see: #130579. */
-  if (layer_or_collection_prop && !RNA_property_editable(&ptr, layer_or_collection_prop)) {
-    return true;
-  }
-
-  if (collection_ensure->flag & COLLECTION_IS_MASTER) {
-  }
-  else if (collection_ensure == collection_ensure_cmp) {
-  }
-  else if (BKE_collection_has_collection(collection_ensure,
-                                         const_cast<Collection *>(collection_ensure_cmp)) ||
-           BKE_collection_has_collection(const_cast<Collection *>(collection_ensure_cmp),
-                                         collection_ensure))
-  {
-    /* This collection is either a parent or a child of the collection.
-     * We expect it to be set "visible" already. */
-    if (value != value_cmp) {
-      return false;
-    }
-  }
-  else {
-    /* This collection is neither a parent nor a child of the collection.
-     * We expect it to be "invisible". */
-    if (value == value_cmp) {
-      return false;
-    }
-  }
-
-  /* Keep going recursively. */
-  if (layer_collection) {
-    for (LayerCollection &layer_collection_iter : layer_collection->layer_collections) {
-      if (layer_collection_iter.flag & LAYER_COLLECTION_EXCLUDE) {
-        continue;
-      }
-      if (!outliner_collection_is_isolated(scene,
-                                           layer_collection_cmp,
-                                           collection_cmp,
-                                           value_cmp,
-                                           layer_or_collection_prop,
-                                           &layer_collection_iter,
-                                           collection ? layer_collection_iter.collection :
-                                                        nullptr))
-      {
-        return false;
-      }
-    }
-  }
-  else {
-    for (CollectionChild &child : collection->children) {
-      if (!outliner_collection_is_isolated(scene,
-                                           layer_collection_cmp,
-                                           collection_cmp,
-                                           value_cmp,
-                                           layer_or_collection_prop,
-                                           nullptr,
-                                           child.collection))
-      {
-        return false;
-      }
-    }
-  }
-
-  return true;
-}
-
 struct CollectionData {
   LayerCollection *lc = nullptr;
   Collection *col = nullptr;
@@ -576,7 +491,6 @@ static void sibling_iterator(Scene *scene,
                              const bool use_id_collection,
                              const std::optional<bool> value = std::nullopt)
 {
-  const bool is_layer_collection = (te->store_elem->type == TSE_LAYER_COLLECTION);
   PointerRNA ptr;
   for (TreeElement &te_child : te->parent->subtree) {
     if (!outliner_is_collection_tree_element(&te_child)) {
@@ -750,7 +664,6 @@ static void view_layer__layer_collection_set_flag_recursive_fn(bContext *C,
                                                                void *poin2)
 {
   TreeElement *te = static_cast<TreeElement *>(poin);
-  LayerCollection *layer_collection = static_cast<LayerCollection *>(te->directdata);
   const char *propname = static_cast<const char *>(poin2);
   outliner_collection_set_flag_recursive_fn(C, te, false, propname);
 }
@@ -762,7 +675,6 @@ static void view_layer__layer_collection_set_flag_recursive_fn(bContext *C,
 static void view_layer__collection_set_flag_recursive_fn(bContext *C, void *poin, void *poin2)
 {
   TreeElement *te = static_cast<TreeElement *>(poin);
-  LayerCollection *layer_collection = static_cast<LayerCollection *>(te->directdata);
   const char *propname = static_cast<const char *>(poin2);
   outliner_collection_set_flag_recursive_fn(C, te, true, propname);
 }
@@ -774,7 +686,6 @@ static void view_layer__collection_set_flag_recursive_fn(bContext *C, void *poin
 static void scenes__collection_set_flag_recursive_fn(bContext *C, void *poin, void *poin2)
 {
   TreeElement *te = static_cast<TreeElement *>(poin);
-  Collection *collection = static_cast<Collection *>(te->directdata);
   const char *propname = static_cast<const char *>(poin2);
   outliner_collection_set_flag_recursive_fn(C, te, true, propname);
 }
@@ -1663,7 +1574,6 @@ static void outliner_draw_restrictbuts(ui::Block *block,
           LayerCollection *layer_collection = (tselem->type == TSE_LAYER_COLLECTION) ?
                                                   static_cast<LayerCollection *>(te.directdata) :
                                                   nullptr;
-          Collection *collection = outliner_collection_from_tree_element(&te);
 
           if (layer_collection != nullptr) {
             if (space_outliner->show_restrict_flags & SO_RESTRICT_ENABLE) {

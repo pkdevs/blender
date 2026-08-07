@@ -1120,7 +1120,7 @@ static wmOperatorStatus collection_isolate_exec(bContext *C, wmOperator *op)
                          &data);
 
   for (LayerCollection *layer_collection : data.layer_collections_to_edit) {
-    if (true) {
+    if (extend) {
       BKE_layer_collection_isolate_global(scene, view_layer, layer_collection, true);
     }
     else {
