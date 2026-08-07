@@ -548,8 +548,7 @@ static wmOperatorStatus view3d_set_roll_exec(bContext *C, wmOperator *op)
   ED_view3d_smooth_view_force_finish(C, v3d, region);
 
   view3d_set_view_angle(region, v3d, angle);
-
-  WM_event_add_notifier(C, NC_SPACE | ND_SPACE_VIEW3D, v3d);
+  ED_region_tag_redraw(region);
 
   return OPERATOR_FINISHED;
 }
