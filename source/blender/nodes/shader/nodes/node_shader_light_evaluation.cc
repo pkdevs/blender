@@ -17,7 +17,11 @@ static void node_declare(NodeDeclarationBuilder &b)
 
   b.add_input<decl::Vector>("Position"_ustr).hide_value();
   b.add_input<decl::Vector>("Normal"_ustr).hide_value();
-  b.add_input<decl::Float>("Roughness"_ustr).default_value(1.0f);
+  b.add_input<decl::Float>("Roughness"_ustr)
+      .default_value(1.0f)
+      .min(0.0f)
+      .max(1.0f)
+      .subtype(PROP_FACTOR);
   b.add_output<decl::Float>("Factor"_ustr);
   b.add_output<decl::Float>("Energy Scale"_ustr);
 }
