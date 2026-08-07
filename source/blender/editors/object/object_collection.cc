@@ -659,15 +659,9 @@ static wmOperatorStatus collection_importer_import_exec(bContext *C, wmOperator 
   if (op_result == OPERATOR_FINISHED) {
     /* Create an external parent library to encapsulate the external archive library if one is
      * not already present. */
-    Library *external_lib = nullptr;
-    for (Library *lib = static_cast<Library *>(bmain->libraries.first); lib;
-         lib = static_cast<Library *>(lib->id.next))
-    {
-      if (STREQ(lib->filepath, filepath)) {
-        external_lib = lib;
-        break;
-      }
-    }
+    Library *external_lib = static_cast<Library *>(
+        BLI_findstring(&bmain->libraries, filepath, offsetof(Library, filepath)));
+    BLI_assert(!external_lib || external_lib->flag & LIBRARY_FLAG_IS_EXTERNAL);
 
     if (!external_lib) {
       external_lib = BKE_id_new<Library>(bmain, BLI_path_basename(filepath));
