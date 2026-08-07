@@ -2,6 +2,9 @@
 #
 # SPDX-License-Identifier: GPL-2.0-or-later
 
+# ./blender.bin -b -X -P tests/python/bl_keymap_completeness.py
+#
+
 # simple script to test 'bl_keymap_utils.keymap_hierarchy' contains correct values.
 
 # Needed for 'bl_keymap_utils.keymap_hierarchy' which inspects tools.
