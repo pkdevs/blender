@@ -1,1 +1,2 @@
 Referenced by pull request #162433, Fix: Cycles: Various small issues
+Referenced by commit 25fb138788d7404f23df29d741dee6794f4530f4, Fix: Cycles: Conservative bake rasterization inconsistent epsilons
