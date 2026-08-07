@@ -1775,8 +1775,9 @@ static void draw_seq_transitions(const TimelineDrawContext &ctx,
                                                     strip.left_handle,
                                                     strip.right_handle,
                                                     strip.handle_width,
-                                                    strip.is_single_image);
+                                                    true);
 
+    data.flags |= GPU_SEQ_FLAG_BACKGROUND;
     data.flags |= GPU_SEQ_FLAG_TRANSITION;
 
     strip_data_handle_flags_set(strip, ctx, data);

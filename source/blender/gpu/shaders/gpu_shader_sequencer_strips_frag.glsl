@@ -41,81 +41,24 @@ float box_mask(float d)
   return clamp(1.0f - d, 0.0f, 1.0f);
 }
 
-// TODO: I'll merge these later
-float4 draw_transition()
+float4 draw_transition(float sdf, float sdf_inner, float4 col_contents)
 {
-  float2 co = co_interp;
-
   SeqStripDrawData strip = strip_data[strip_id];
-
-  float2 pos1, pos2, size, center, pos;
-  float radius = 0.0f;
-  strip_box(strip.left_handle,
-            strip.right_handle,
-            strip.bottom,
-            strip.top,
-            co,
-            pos1,
-            pos2,
-            size,
-            center,
-            pos,
-            radius);
-
-  bool selected = (strip.flags & GPU_SEQ_FLAG_SELECTED) != 0;
-
-  float outline_width = (selected ? 3.0f : 2.0f) * context_data.pixelsize;
-
-  /* Distance to whole strip shape. */
-  float sdf = sdf_rounded_box(pos - center, size, radius);
-
-  /* Distance to inner part when handles are taken into account. */
-  float sdf_inner = sdf;
-  float handle_width = strip.handle_width;
-  /* Reduce vertical size by outline width. */
-  pos1 += outline_width;
-  pos2 -= outline_width;
-  /* Take left/right handle from horizontal sides. */
-  if ((strip.flags & GPU_SEQ_FLAG_SELECTED_LH) != 0) {
-    pos1.x += handle_width - outline_width;
-  }
-  if ((strip.flags & GPU_SEQ_FLAG_SELECTED_RH) != 0) {
-    pos2.x -= handle_width - outline_width;
-  }
-
-  size = (pos2 - pos1) * 0.5f;
-  center = (pos1 + pos2) * 0.5f;
-  sdf_inner = sdf_rounded_box(pos - center, size, radius);
 
   /* The content area of the strip: strip bounds minus outline and handles. */
   float box_inner = box_mask(sdf_inner);
 
-  /* The entire strip rectangle is filled with the outline color. This is later mixed with the
-   * strip contents. */
+  /* First fill with the outline color then mix with the strip contents. */
   float4 outline = unpackUnorm4x8(strip.col_outline);
   outline.a *= box_mask(sdf);
 
-  /* Strip header and contents, i.e. everything except the outline. This is later masked when
-   * mixing in the outline. */
-  float4 col = unpackUnorm4x8(strip.col_background);
+  float4 col = mix(outline, col_contents, box_inner);
 
-  /* Diagonal transition line. */
-  if (co.x >= strip.left_handle && co.x <= strip.right_handle && co.y < strip.strip_content_top) {
-    float start_x = strip.left_handle + 2.0f * context_data.pixelsize;
-    float end_x = strip.right_handle - 2.0f * context_data.pixelsize;
-    float diag_y = pos1.y +
-                   (strip.strip_content_top - pos1.y) * (co.x - start_x) / (end_x - start_x);
-    uint transition_color = co.y <= diag_y ? strip.col_transition_out : strip.col_transition_in;
-    col.rgba = unpackUnorm4x8(transition_color).rgba;
-  }
-
-  col = mix(outline, col, box_inner);
-
-  /* Previous parts were in straight alpha. From now on it needs to be premultiplied. */
+  /* Premultiply for add_outline. */
   col.rgb *= col.a;
 
   /* Inset line. */
-  if (selected) {
+  if ((strip.flags & GPU_SEQ_FLAG_SELECTED) != 0) {
     col = add_outline(sdf_inner, -1.0f, 0.0f, col, float4(0, 0, 0, 0.33f));
   }
 
@@ -125,10 +68,6 @@ float4 draw_transition()
 void main()
 {
   SeqStripDrawData strip = strip_data[strip_id];
-  if ((strip.flags & GPU_SEQ_FLAG_TRANSITION) != 0) {
-    fragColor = draw_transition();
-    return;
-  }
   float2 co = co_interp;
 
   float2 pos1, pos2, size, center, pos;
@@ -147,8 +86,9 @@ void main()
 
   bool border = (strip.flags & GPU_SEQ_FLAG_BORDER) != 0;
   bool selected = (strip.flags & GPU_SEQ_FLAG_SELECTED) != 0;
+  bool transition = (strip.flags & GPU_SEQ_FLAG_TRANSITION) != 0;
 
-  float outline_width = (selected ? 2.0f : 1.0f) * context_data.pixelsize;
+  float outline_width = (transition ? (selected ? 3.0f : 2.0f) : (selected ? 2.0f : 1.0f)) * context_data.pixelsize;
 
   /* Distance to whole strip shape. */
   float sdf = sdf_rounded_box(pos - center, size, radius);
@@ -182,6 +122,24 @@ void main()
     }
   }
 
+  /* Diagonal transition line. */
+  if (transition) {
+    if (co.x >= strip.left_handle && co.x <= strip.right_handle && co.y < strip.strip_content_top) {
+      float start_x = strip.left_handle + 2.0f * context_data.pixelsize;
+      float end_x = strip.right_handle - 2.0f * context_data.pixelsize;
+      float diag_y = pos1.y +
+                    (strip.strip_content_top - pos1.y) * (co.x - start_x) / (end_x - start_x);
+      uint transition_color = co.y <= diag_y ? strip.col_transition_out : strip.col_transition_in;
+      col.rgba = unpackUnorm4x8(transition_color).rgba;
+    }
+  }
+
+  /* Same channel transitions may have a transparent outline. Draw it in a separate function in one pass. */
+  if (transition) {
+    fragColor = draw_transition(sdf, sdf_inner, col);
+    return;
+  }
+
   /* Color band. */
   if ((strip.flags & GPU_SEQ_FLAG_COLOR_BAND) != 0) {
     if (co.y < strip.strip_content_top) {
@@ -190,18 +148,6 @@ void main()
       if (co.y > strip.strip_content_top - 1.0f) {
         col.rgb = color_shade(col.rgb, -20.0f);
       }
-    }
-  }
-
-  /* Transition. */
-  if ((strip.flags & GPU_SEQ_FLAG_TRANSITION) != 0) {
-    if (co.x >= strip.content_start && co.x <= strip.content_end && co.y < strip.strip_content_top)
-    {
-      float diag_y = strip.strip_content_top - (strip.strip_content_top - strip.bottom) *
-                                                   (co.x - strip.content_start) /
-                                                   (strip.content_end - strip.content_start);
-      uint transition_color = co.y <= diag_y ? strip.col_transition_in : strip.col_transition_out;
-      col.rgb = unpackUnorm4x8(transition_color).rgb;
     }
   }
 
