@@ -47,7 +47,6 @@ class TextureMarginMap {
   Span<int> corner_edges_;
   Span<int> corner_verts_;
   Span<float2> uv_map_;
-  Span<bool> uv_seams_;
 
   Vector<uint32_t> pixel_data_;
   char *mask_;
@@ -76,15 +75,13 @@ class TextureMarginMap {
                    const OffsetIndices<int> faces,
                    const Span<int> corner_edges,
                    const Span<int> corner_verts,
-                   const Span<float2> uv_map,
-                   const Span<bool> uv_seams)
+                   const Span<float2> uv_map)
       : w_(w),
         h_(h),
         faces_(faces),
         corner_edges_(corner_edges),
         corner_verts_(corner_verts),
-        uv_map_(uv_map),
-        uv_seams_(uv_seams)
+        uv_map_(uv_map)
   {
     copy_v2_v2(uv_offset_, uv_offset);
   }
@@ -549,11 +546,10 @@ class TextureMarginMap {
 
       is_valid &= has_adjacent_face;
 
-      /* Only non-seam edges disconnected in UV space should be
+      /* Only edges disconnected in UV space should be
        * considered for the first iteration. */
       if (has_adjacent_face && prev_face == -1) {
         const int edge = corner_edges_[corner_1];
-        is_valid &= !uv_seams_[edge];
         is_valid &= !edge_uv_connectivity_[edge];
       }
 
@@ -657,8 +653,6 @@ void RE_generate_texturemargin_adjacentfaces(ImBuf *ibuf,
   const bke::AttributeAccessor attributes = mesh->attributes();
 
   const VArraySpan<float2> uv_map = *attributes.lookup<float2>(name, bke::AttrDomain::Corner);
-  const VArraySpan<bool> uv_seams = *attributes.lookup_or_default<bool>(
-      "uv_seam", bke::AttrDomain::Edge, false);
 
   TextureMarginMap map(ibuf->x,
                        ibuf->y,
@@ -666,8 +660,7 @@ void RE_generate_texturemargin_adjacentfaces(ImBuf *ibuf,
                        mesh->faces(),
                        mesh->corner_edges(),
                        mesh->corner_verts(),
-                       uv_map,
-                       uv_seams);
+                       uv_map);
 
   bool draw_new_mask = false;
 
