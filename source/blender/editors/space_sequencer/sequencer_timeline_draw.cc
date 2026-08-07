@@ -839,7 +839,8 @@ static void draw_handle_transform_text(const TimelineDrawContext &ctx,
 
 float strip_handle_draw_size_get(const Scene *scene, const Strip *strip, const float pixelx)
 {
-  const float handle_size = pixelx * (5.0f * U.pixelsize);
+  const float handle_size = pixelx *
+                            ((strip->is_same_channel_transition() ? 7.0f : 5.0f) * U.pixelsize);
 
   /* Ensure that the handle is not wider than a quarter of the strip. */
   return min_ff(handle_size, (float(strip->right_handle(scene) - strip->left_handle()) / 4.0f));
