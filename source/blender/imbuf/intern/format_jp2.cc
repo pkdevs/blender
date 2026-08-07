@@ -358,31 +358,6 @@ ImBuf *imb_load_jp2(const uchar *mem,
   return ibuf;
 }
 
-ImBuf *imb_load_jp2_filepath(const char *filepath,
-                             ImBufFlags flags,
-                             ImFileColorSpace &r_colorspace)
-{
-  FILE *p_file = nullptr;
-  uchar mem[JP2_FILEHEADER_SIZE];
-  opj_stream_t *stream = opj_stream_create_from_file(
-      filepath, OPJ_J2K_STREAM_CHUNK_SIZE, true, &p_file);
-  if (stream) {
-    return nullptr;
-  }
-
-  if (fread(mem, sizeof(mem), 1, p_file) != sizeof(mem)) {
-    opj_stream_destroy(stream);
-    return nullptr;
-  }
-
-  fseek(p_file, 0, SEEK_SET);
-
-  const OPJ_CODEC_FORMAT format = format_from_header(mem, sizeof(mem));
-  ImBuf *ibuf = imb_load_jp2_stream(stream, format, flags, r_colorspace);
-  opj_stream_destroy(stream);
-  return ibuf;
-}
-
 static ImBuf *imb_load_jp2_stream(opj_stream_t *stream,
                                   const OPJ_CODEC_FORMAT format,
                                   ImBufFlags flags,
