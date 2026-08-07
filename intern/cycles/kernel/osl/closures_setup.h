@@ -463,10 +463,10 @@ ccl_device void osl_closure_generalized_schlick_bsdf_setup(
   const bool refractive_caustics = (kernel_data.integrator.caustics_refractive ||
                                     (path_visibility & PATH_RAY_VISIBILITY_DIFFUSE) == 0);
 
-  fresnel->tint.r = reflective_caustics ? rgb_to_spectrum(closure->reflection_tint) :
-                                          zero_spectrum();
-  fresnel->tint.t = refractive_caustics ? rgb_to_spectrum(closure->transmission_tint) :
-                                          zero_spectrum();
+  fresnel->tint.reflectance = reflective_caustics ? rgb_to_spectrum(closure->reflection_tint) :
+                                                    zero_spectrum();
+  fresnel->tint.transmittance = refractive_caustics ? rgb_to_spectrum(closure->transmission_tint) :
+                                                      zero_spectrum();
   fresnel->f0 = rgb_to_spectrum(closure->f0);
   fresnel->f90 = rgb_to_spectrum(closure->f90);
   fresnel->exponent = closure->exponent;
@@ -535,7 +535,8 @@ ccl_device void osl_closure_thin_glass_setup(KernelGlobals kg,
                                                      path_flag);
 
   if (layer_albedo != nullptr) {
-    *layer_albedo = fresnel.t * !!has_transmission + fresnel.r * !!has_reflection;
+    *layer_albedo = fresnel.transmittance * !!has_transmission +
+                    fresnel.reflectance * !!has_reflection;
   }
 }
 
