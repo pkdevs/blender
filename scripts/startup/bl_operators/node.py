@@ -1465,17 +1465,6 @@ class NODE_OT_interface_item_swap_io_type(NodeInterfaceOperator, Operator):
     bl_label = "Swap Input/Output Type"
     bl_options = {'REGISTER', 'UNDO'}
 
-    props = (
-        "name",
-        "description",
-        "hide_value",
-        "subtype",
-        "default_attribute_name",
-        "default_value",
-        "min_value",
-        "max_value",
-    )
-
     @classmethod
     def poll(cls, context):
         if not super().poll(context):
@@ -1502,9 +1491,13 @@ class NODE_OT_interface_item_swap_io_type(NodeInterfaceOperator, Operator):
             new_item = interface.new_socket("Socket", socket_type=old_item.socket_type,
                                             in_out="INPUT", parent=old_item.parent)
 
-        for prop in self.props:
-            if hasattr(new_item, prop):
+        for prop in dir(old_item):
+            try:
                 setattr(new_item, prop, getattr(old_item, prop))
+            except AttributeError:
+                pass
+
+        new_item.default_value = old_item.default_value
 
         # Clear multi-selection
         for item in interface.items_tree:
