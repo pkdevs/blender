@@ -163,7 +163,6 @@ enum class Diag {
   InvalidBinaryOperands,
   InvalidUnaryArgumentType,
   UnknownMember,
-  TypeCheckerInvalidExpression,
   ExpectedOneArgument,
   ExpectedOneTypename,
   ExpectedResourceTableTypename,
@@ -383,8 +382,6 @@ static inline std::string_view diagnostic_message_get(Diag diag)
       return "Invalid argument type '{0}' to unary expression ({0}'{1}')";
     case Diag::UnknownMember:
       return "Unknown member '{}'";
-    case Diag::TypeCheckerInvalidExpression:
-      return "Invalid expression in type checker";
     case Diag::ExpectedOneArgument:
       return "Expecting one argument";
     case Diag::ExpectedOneTypename:

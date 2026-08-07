@@ -257,7 +257,12 @@ struct CodegenContext : NodeErrorHandler {
 
     TokenType to_type(const ast::Node &t) const
     {
-      return t.is_valid() ? t.front().type() : Invalid;
+      ast::NodeType type = t.type();
+      return type != ast::NodeType::Invalid ?
+                 (type == ast::NodeType::IdQualified || type == ast::NodeType::FuncCall ?
+                      Word :
+                      t.front().type()) :
+                 Invalid;
     }
 
     ExpressionResult error(ErrorType err, lexit::TokenType type)
