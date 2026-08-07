@@ -1406,7 +1406,7 @@ PropertyRNA *RNA_def_property(StructOrFunctionRNA *cont_,
   rna_addtail(&cont->properties, prop);
 
   return prop;
-}  // namespace blender
+}
 
 void RNA_def_property_flag(PropertyRNA *prop, PropertyFlag flag)
 {
@@ -1531,8 +1531,8 @@ void RNA_def_property_array(PropertyRNA *prop, int length)
   /* For boolean arrays using bitflags, ensure that the DNA member is an array, and not a scalar
    * value.
    *
-   * NOTE: when using #RNA_def_property_boolean_bitset_array_sdna, #RNA_def_property_array will
-   * be called _before_ defining #dp->booleanbit, so this check won't be triggered. */
+   * NOTE: when using #RNA_def_property_boolean_bitset_array_sdna, #RNA_def_property_array will be
+   * called _before_ defining #dp->booleanbit, so this check won't be triggered. */
 #ifndef RNA_RUNTIME
   if (DefRNA.verify && prop->type == PROP_BOOLEAN) {
     PropertyDefRNA *dp = rna_find_struct_property_def(DefRNA.laststruct, prop);
@@ -1638,9 +1638,9 @@ void RNA_def_property_deprecated(PropertyRNA *prop,
   BLI_assert(note != nullptr);
   BLI_assert(version > 0);
   BLI_assert(removal_version > version);
-  /* Prevent adding deprecation warnings for future Blender versions, this should never be
-   * needed. Note that one version in the future is still allowed, as this might be useful in
-   * some rare cases. */
+  /* Prevent adding deprecation warnings for future Blender versions, this should never be needed.
+   * Note that one version in the future is still allowed, as this might be useful in some rare
+   * cases. */
   BLI_assert_msg(version <= BLENDER_VERSION + 1,
                  "Deprecation version is set in a future version of Blender");
 

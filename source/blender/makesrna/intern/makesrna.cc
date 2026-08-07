@@ -400,7 +400,7 @@ static StructRNA *rna_find_struct(const char *identifier)
   for (ds = static_cast<StructDefRNA *>(DefRNA.structs.first); ds;
        ds = static_cast<StructDefRNA *>(ds->cont.next))
   {
-    if (STREQ(ds->srna->identifier.c_str(), identifier)) {
+    if (ds->srna->identifier == identifier) {
       return ds->srna;
     }
   }
