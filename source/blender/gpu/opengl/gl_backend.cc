@@ -533,6 +533,8 @@ static void detect_workarounds()
        * these devices use driver 30.x.x.x */
       if (ver0 == 30) {
         GCaps.texture_pool_workaround = true;
+        /* sRGB texture writes through non-sRGB texture view fails on these devices. */
+        GCaps.srgb_write_view_support = false;
       }
     }
   }
