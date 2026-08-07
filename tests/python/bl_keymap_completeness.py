@@ -78,15 +78,13 @@ def check_maps():
         print("Keymaps that are in 'bl_keymap_utils.keymap_hierarchy' but not blender")
         for km_id in test:
             print("    ('{:s}', '{:s}', '{:s}', []),".format(*km_id))
-        # TODO #65963, broken keymap hierarchy tests disabled until fixed.
-        # err = True
+        err = True
 
     if test_fallback:
         print("Fallback keymaps in 'bl_keymap_utils.keymap_hierarchy' with no keymap to fall back from")
         for km_id in test_fallback:
             print("    ('{:s}', '{:s}', '{:s}', []),".format(*km_id))
-        # TODO #65963, broken keymap hierarchy tests disabled until fixed.
-        # err = True
+        err = True
 
     # Check blender's keymaps can all be reached from the hierarchy.
     test = sorted(maps_bl - maps_py)
@@ -102,8 +100,7 @@ def check_maps():
             if km_args_other:
                 km_args_text = ", ".join(["('{:s}', '{:s}')".format(*args) for args in km_args_other])
                 print("        listed with: {:s}".format(km_args_text))
-        # TODO #65963, broken keymap hierarchy tests disabled until fixed.
-        # err = True
+        err = True
 
     return err
 
