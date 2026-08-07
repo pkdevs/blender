@@ -3358,12 +3358,11 @@ static brushes::CursorSampleResult calc_brush_node_mask(const Depsgraph &depsgra
 
     if (brush.falloff_shape == PAINT_FALLOFF_SHAPE_SPHERE) {
       /* Calculate sculpt normal from a estimate of the surface normal. */
-      const float initial_radius_squared = math::square(ss.cache->radius * std::numbers::sqrt2);
       const IndexMask initial_node_mask = gather_nodes(pbvh,
                                                        eBrushFalloffShape(brush.falloff_shape),
                                                        use_original,
                                                        ss.cache->location_symm,
-                                                       initial_radius_squared,
+                                                       M_SQRT3,
                                                        ss.cache->view_normal_symm,
                                                        memory);
       tip_normal = calc_sculpt_normal(depsgraph, sd, ob, initial_node_mask);
@@ -3379,7 +3378,7 @@ static brushes::CursorSampleResult calc_brush_node_mask(const Depsgraph &depsgra
       return {IndexMask(), std::nullopt, std::nullopt};
     }
 
-    tilt_apply_to_normal(tip_normal, *ss.cache, brush.tilt_strength_factor);
+    tip_normal = tilt_apply_to_normal(tip_normal, *ss.cache, brush.tilt_strength_factor);
 
     float4x4 brush_local_mat;
     float4x4 brush_local_mat_inv;
