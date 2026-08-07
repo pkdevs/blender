@@ -1466,28 +1466,28 @@ class NODE_OT_interface_item_swap_io_type(NodeInterfaceOperator, Operator):
     bl_options = {'REGISTER', 'UNDO'}
 
     props = (
-            "name", 
-            "description", 
-            "hide_value", 
-            "subtype",
-            "default_attribute_name",
-            "default_value",
-            "min_value",
-            "max_value",
-            )
+        "name",
+        "description",
+        "hide_value",
+        "subtype",
+        "default_attribute_name",
+        "default_value",
+        "min_value",
+        "max_value",
+    )
 
     @classmethod
     def poll(cls, context):
         if not super().poll(context):
             return False
-        
+
         tree = context.space_data.edit_tree
         active_item = tree.interface.active
 
         if active_item.item_type != "SOCKET":
             cls.poll_message_set("Active item is not a socket")
             return False
-            
+
         return True
 
     def execute(self, context):
@@ -1496,10 +1496,12 @@ class NODE_OT_interface_item_swap_io_type(NodeInterfaceOperator, Operator):
         old_item = interface.active
 
         if old_item.in_out == "INPUT":
-            new_item = interface.new_socket("Socket", socket_type=old_item.socket_type, in_out="OUTPUT", parent=old_item.parent)
+            new_item = interface.new_socket("Socket", socket_type=old_item.socket_type,
+                                            in_out="OUTPUT", parent=old_item.parent)
         else:
-            new_item = interface.new_socket("Socket", socket_type=old_item.socket_type, in_out="INPUT", parent=old_item.parent)
-        
+            new_item = interface.new_socket("Socket", socket_type=old_item.socket_type,
+                                            in_out="INPUT", parent=old_item.parent)
+
         for prop in self.props:
             if hasattr(new_item, prop):
                 setattr(new_item, prop, getattr(old_item, prop))
