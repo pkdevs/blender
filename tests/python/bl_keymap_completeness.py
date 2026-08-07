@@ -37,7 +37,7 @@ def check_maps():
             if callable(km_id):
                 # Keymap functions of tools are not in blender anyway...
                 continue
-            print("\t%s" % km_id)
+            print("\t{:s}".format(km_id))
             # TODO #65963, broken keymap hierarchy tests disabled until fixed.
             # err = True
 
@@ -46,7 +46,7 @@ def check_maps():
         print("Keymaps that are in blender but not in 'bl_keymap_utils.keymap_hierarchy'")
         for km_id in test:
             km = keyconf.keymaps[km_id]
-            print("    ('%s', '%s', '%s', [])," % (km_id, km.space_type, km.region_type))
+            print("    ('{:s}', '{:s}', '{:s}', []),".format(km_id, km.space_type, km.region_type))
         # TODO #65963, broken keymap hierarchy tests disabled until fixed.
         # err = True
 
@@ -58,8 +58,8 @@ def check_maps():
             km_space_type, km_region_type = km_py
             if km_space_type != km.space_type or km_region_type != km.region_type:
                 print("  Error:")
-                print("    expected -- ('%s', '%s', '%s', [])," % (km_id, km.space_type, km.region_type))
-                print("    got      -- ('%s', '%s', '%s', [])," % (km_id, km_space_type, km_region_type))
+                print("    expected -- ('{:s}', '{:s}', '{:s}', []),".format(km_id, km.space_type, km.region_type))
+                print("    got      -- ('{:s}', '{:s}', '{:s}', []),".format(km_id, km_space_type, km_region_type))
     print("done!")
 
     return err
