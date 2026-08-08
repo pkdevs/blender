@@ -283,11 +283,13 @@ inline void kdtree_foreach_node_around(const KDTree<CoordT> &tree, const CoordT 
         return new_value.has_value();
       },
       [&](const KDTreeNode<CoordT> &node, const KDTreeNode<CoordT> &child) {
-        const ValueType max_dist = detail::axis_get(node.co, node.d) -
-                                   detail::axis_get(co, node.d);
-        if (math::square(max_dist) <= min_sq_dist) {
+        const ValueType max_dist = detail::axis_get(co, node.d) -
+                                   detail::axis_get(node.co, node.d);
+        const bool check_both_space_half = math::square(max_dist) <= min_sq_dist;
+        if (check_both_space_half) {
           return true;
         }
+        BLI_assert(!math::is_zero(max_dist));
 
         const bool coord_sign = math::sign(max_dist);
         const bool child_sign = kdtree_is_left_child(tree, node, child);
@@ -295,7 +297,7 @@ inline void kdtree_foreach_node_around(const KDTree<CoordT> &tree, const CoordT 
         return is_same_space_half;
       },
       [&](const KDTreeNode<CoordT> &node) {
-        return detail::axis_get(node.co, node.d) < detail::axis_get(co, node.d);
+        return detail::axis_get(co, node.d) < detail::axis_get(node.co, node.d);
       });
 }
 
