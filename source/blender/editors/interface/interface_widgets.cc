@@ -4810,22 +4810,17 @@ static void widget_icon_has_anim(Button *but,
     widget_menubut_embossn(but, wcol, rect, state, roundboxalign);
   }
   else if (but->type == ButtonType::Text && static_cast<ButtonText *>(but)->use_label_style) {
-    /* Draw hover highlight for label-style text buttons that can be edited. */
-    if (state->but_flag & UI_HOVER) {
-      const bTheme *btheme = theme::theme_get();
-      uiWidgetColors list_wcol = btheme->tui.wcol_list_item;
-      copy_v3_v3_uchar(list_wcol.inner, wcol->text);
-      list_wcol.inner[3] = 20;
-
-      WidgetBase wtb;
-      widget_init(&wtb);
-      wtb.draw_outline = false;
-
-      rcti draw_rect = *rect;
-      BLI_rcti_pad(&draw_rect, 5 * UI_SCALE_FAC * zoom, 0);
-      const float rad = widget_radius_from_zoom(zoom, &list_wcol);
-      round_box_edges(&wtb, CNR_ALL, &draw_rect, rad);
-      widgetbase_draw(&wtb, &list_wcol);
+    if (state->but_flag & UI_HOVER && !(state->but_flag & UI_SELECT)) {
+      /* Brighten dark text, darken light text for subtle hover feedback. */
+      const uchar lightness = srgb_to_grayscale_byte(wcol->text);
+      if (lightness <= 96) {
+        const uchar white[3] = {255, 255, 255};
+        color_blend_v3_v3(wcol->text, white, 0.3f);
+      }
+      else {
+        const uchar dark[3] = {0, 0, 0};
+        color_blend_v3_v3(wcol->text, dark, 0.3f);
+      }
     }
   }
 }
