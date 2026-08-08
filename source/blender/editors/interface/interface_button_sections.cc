@@ -153,8 +153,8 @@ static void draw_button_sections_background(const ARegion *region,
 
     rctf bounds_float;
     BLI_rctf_rcti_copy(&bounds_float, &bounds);
-    if (region->regiontype == RGN_TYPE_ASSET_SHELF_HEADER)
-    { /* Make space for the separator line. */
+    if (region->regiontype == RGN_TYPE_ASSET_SHELF_HEADER) {
+      /* Make space for the separator line. */
       if (align == ButtonSectionsAlign::Top) {
         bounds_float.ymax -= UI_BUTTON_SECTION_SEPERATOR_LINE_WITH;
       }
