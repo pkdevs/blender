@@ -716,26 +716,8 @@ const uchar *get_color_ptr(const bTheme *btheme, int spacetype, int colorid)
         case TH_SEQ_EFFECT:
           cp = ts->effect;
           break;
-        case TH_SEQ_TRANSITION_EFFECT:
-          cp = ts->transition_effect;
-          break;
         case TH_SEQ_TRANSITION:
           cp = ts->transition;
-          break;
-        case TH_SEQ_TRANSITION_OUTLINE:
-          cp = ts->transition_outline;
-          break;
-        case TH_SEQ_TRANSITION_IN:
-          cp = ts->transition_in;
-          break;
-        case TH_SEQ_TRANSITION_OUT:
-          cp = ts->transition_out;
-          break;
-        case TH_SEQ_TRANSITION_IN_SELECTED:
-          cp = ts->transition_in_selected;
-          break;
-        case TH_SEQ_TRANSITION_OUT_SELECTED:
-          cp = ts->transition_out_selected;
           break;
         case TH_SEQ_META:
           cp = ts->meta;

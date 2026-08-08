@@ -384,6 +384,11 @@ static void color3ubv_from_seq(const Scene *curscene,
     return;
   }
 
+  if (strip->is_same_channel_transition()) {
+    r_col[0] = r_col[1] = r_col[2] = 255;
+    return;
+  }
+
   uchar blendcol[3];
 
   /* Sometimes the active theme is not the sequencer theme, e.g. when an operator invokes the file
@@ -391,12 +396,6 @@ static void color3ubv_from_seq(const Scene *curscene,
   ui::theme::bThemeState theme_state;
   ui::theme::theme_store(&theme_state);
   ui::theme::theme_set(SPACE_SEQ, RGN_TYPE_WINDOW);
-
-  if (strip->is_same_channel_transition()) {
-    ui::theme::get_color_3ubv(TH_SEQ_TRANSITION, r_col);
-    ui::theme::theme_restore(&theme_state);
-    return;
-  }
 
   switch (strip->type) {
     case STRIP_TYPE_IMAGE:
@@ -431,7 +430,7 @@ static void color3ubv_from_seq(const Scene *curscene,
     case STRIP_TYPE_GAMCROSS:
     case STRIP_TYPE_WIPE:
     case STRIP_TYPE_COMPOSITOR:
-      ui::theme::get_color_3ubv(TH_SEQ_TRANSITION_EFFECT, r_col);
+      ui::theme::get_color_3ubv(TH_SEQ_TRANSITION, r_col);
 
       /* Slightly offset hue to distinguish different transition types. */
       if (strip->type == STRIP_TYPE_GAMCROSS) {
@@ -1545,7 +1544,7 @@ static void strip_data_outline_params_set(const StripDrawContext &strip,
       ui::theme::get_color_shade_3ubv(TH_BACK, -40, col);
     }
     else {
-      ui::theme::get_color_4ubv(TH_SEQ_TRANSITION_OUTLINE, col);
+      col = {255, 255, 255, 150};
     }
   }
 
@@ -1815,25 +1814,22 @@ static void draw_seq_transitions(const TimelineDrawContext &ctx,
     strip_data_outline_params_set(strip, ctx, data);
 
     uchar background[4];
-    uchar transition_in[4], transition_out[4];
 
     color3ubv_from_seq(
         ctx.scene, strip.strip, strip.show_strip_color_tag, strip.is_muted, background);
     background[3] = 255;
 
-    const int offset = strip.is_muted ? -100 : 0;
-    const int alpha_offset = strip.is_muted ? -60 : 0;
     const bool selected = strip.strip->flag & SEQ_SELECT;
 
-    const ThemeColorID transition_in_id = selected ? TH_SEQ_TRANSITION_IN_SELECTED :
-                                                     TH_SEQ_TRANSITION_IN;
-    const ThemeColorID transition_out_id = selected ? TH_SEQ_TRANSITION_OUT_SELECTED :
-                                                      TH_SEQ_TRANSITION_OUT;
-    ui::theme::get_color_shade_alpha_4ubv(transition_in_id, offset, alpha_offset, transition_in);
-    ui::theme::get_color_shade_alpha_4ubv(transition_out_id, offset, alpha_offset, transition_out);
+    uchar4 transition_in = selected ? uchar4(0x00, 0x00, 0x00, 0x33) :
+                                      uchar4(0xff, 0xff, 0xff, 0x33);
+    uchar4 transition_out = selected ? uchar4(0xff, 0xff, 0xff, 0xff) :
+                                       uchar4(0xff, 0xff, 0xff, 0xcc);
 
     if (strip.is_muted) {
       background[3] = MUTE_ALPHA;
+      transition_in[3] -= 30;
+      transition_out -= 60;
     }
     else if (!selected) {
       background[3] = 0xcc;

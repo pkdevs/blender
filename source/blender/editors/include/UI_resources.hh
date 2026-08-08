@@ -222,15 +222,7 @@ enum ThemeColorID {
   TH_SEQ_SCENE,
   TH_SEQ_AUDIO,
   TH_SEQ_EFFECT,
-  /* Transition effect strips that aren't on the same channel (from old files).
-   * Also reused for Compositor strips. */
-  TH_SEQ_TRANSITION_EFFECT,
   TH_SEQ_TRANSITION,
-  TH_SEQ_TRANSITION_OUTLINE,
-  TH_SEQ_TRANSITION_IN,
-  TH_SEQ_TRANSITION_OUT,
-  TH_SEQ_TRANSITION_IN_SELECTED,
-  TH_SEQ_TRANSITION_OUT_SELECTED,
   TH_SEQ_META,
   TH_SEQ_TEXT,
   TH_SEQ_PREVIEW,

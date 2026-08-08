@@ -3959,47 +3959,10 @@ static void rna_def_userdef_theme_space_seq(BlenderRNA *brna)
   RNA_def_property_ui_text(prop, "Effect Strip", "");
   RNA_def_property_update(prop, 0, "rna_userdef_theme_update");
 
-  prop = RNA_def_property(srna, "transition_effect_strip", PROP_FLOAT, PROP_COLOR_GAMMA);
-  RNA_def_property_float_sdna(prop, nullptr, "transition_effect");
-  RNA_def_property_array(prop, 3);
-  RNA_def_property_ui_text(
-      prop, "Transition Effect Strip", "Transition effects that aren't on the same channel");
-  RNA_def_property_update(prop, 0, "rna_userdef_theme_update");
-
   prop = RNA_def_property(srna, "transition_strip", PROP_FLOAT, PROP_COLOR_GAMMA);
   RNA_def_property_float_sdna(prop, nullptr, "transition");
   RNA_def_property_array(prop, 3);
   RNA_def_property_ui_text(prop, "Transition Strip", "");
-  RNA_def_property_update(prop, 0, "rna_userdef_theme_update");
-
-  prop = RNA_def_property(srna, "transition_outline", PROP_FLOAT, PROP_COLOR_GAMMA);
-  RNA_def_property_float_sdna(prop, nullptr, "transition_outline");
-  RNA_def_property_array(prop, 4);
-  RNA_def_property_ui_text(prop, "Transition Strip Outline", "");
-  RNA_def_property_update(prop, 0, "rna_userdef_theme_update");
-
-  prop = RNA_def_property(srna, "transition_in", PROP_FLOAT, PROP_COLOR_GAMMA);
-  RNA_def_property_float_sdna(prop, nullptr, "transition_in");
-  RNA_def_property_array(prop, 4);
-  RNA_def_property_ui_text(prop, "Transition In", "");
-  RNA_def_property_update(prop, 0, "rna_userdef_theme_update");
-
-  prop = RNA_def_property(srna, "transition_out", PROP_FLOAT, PROP_COLOR_GAMMA);
-  RNA_def_property_float_sdna(prop, nullptr, "transition_out");
-  RNA_def_property_array(prop, 4);
-  RNA_def_property_ui_text(prop, "Transition Out", "");
-  RNA_def_property_update(prop, 0, "rna_userdef_theme_update");
-
-  prop = RNA_def_property(srna, "transition_in_selected", PROP_FLOAT, PROP_COLOR_GAMMA);
-  RNA_def_property_float_sdna(prop, nullptr, "transition_in_selected");
-  RNA_def_property_array(prop, 4);
-  RNA_def_property_ui_text(prop, "Transition In Selected", "");
-  RNA_def_property_update(prop, 0, "rna_userdef_theme_update");
-
-  prop = RNA_def_property(srna, "transition_out_selected", PROP_FLOAT, PROP_COLOR_GAMMA);
-  RNA_def_property_float_sdna(prop, nullptr, "transition_out_selected");
-  RNA_def_property_array(prop, 4);
-  RNA_def_property_ui_text(prop, "Transition Out Selected", "");
   RNA_def_property_update(prop, 0, "rna_userdef_theme_update");
 
   prop = RNA_def_property(srna, "color_strip", PROP_FLOAT, PROP_COLOR_GAMMA);
