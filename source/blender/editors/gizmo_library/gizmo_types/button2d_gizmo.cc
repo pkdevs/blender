@@ -84,7 +84,7 @@ void ED_gizmo_button2d_group_background(const bContext *C, wmGizmoGroup *gzgroup
 
   float outline_color[4];
   copy_v4_v4(outline_color, background_color);
-  outline_color[3] = 1.0f;
+  outline_color[3] = std::max(outline_color[3], 0.5f);
 
   /* A bit of padding above and below. */
   BLI_rctf_pad(&draw_rect, 0.0f, rad * 0.2f);
