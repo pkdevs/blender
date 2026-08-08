@@ -35,6 +35,8 @@
 
 #pragma once
 
+#include <array>
+
 #include "BLI_set.hh"
 
 #include "DRW_gpu_wrapper.hh"
