@@ -108,14 +108,12 @@ ccl_device void integrator_megakernel(KernelGlobals kg,
         case DEVICE_KERNEL_INTEGRATOR_INTERSECT_MNEE:
           integrator_intersect_mnee(kg, state);
           break;
-
         case DEVICE_KERNEL_INTEGRATOR_FINAL_EVALUATION:
-          integrator_evaluate_final_samples(kg, state, render_buffer); // !!!: Will cause linker errors...
+          integrator_evaluate_final_samples(kg, state, render_buffer);
           break;
         case DEVICE_KERNEL_INTEGRATOR_RESTIR_PT_EVALUATION:
           integrator_evaluate_restir_pt(kg, state, render_buffer);
           break;
-
         default:
           kernel_assert(0);
           break;

@@ -571,26 +571,26 @@ ccl_device_inline void film_write_direct_light(KernelGlobals kg,
     return;
   }
 
+// !!!: Wrong?
 // !!!: >>> TEMPORARILY DISABLED
-  // TODO: Move before AO for benchmark parity?
-  // TODO(weizhen): bounce number probably doesn't work for volume.
-  if (kernel_data.integrator.use_restir &&
-      INTEGRATOR_STATE(state, shadow_path, bounce) > 0)
-  {
-    RNGState rng_state;
-    shadow_path_state_rng_load(state, &rng_state);
+  // // TODO: Move before AO for benchmark parity?
+  // // TODO(weizhen): bounce number probably doesn't work for volume.
+  // if (kernel_data.integrator.use_restir && INTEGRATOR_STATE(state, shadow_path, bounce) > 0)
+  // {
+  //   RNGState rng_state;
+  //   shadow_path_state_rng_load(state, &rng_state);
 
-    /* TODO(weizhen): does this result in correlated samples in ReSTIR PT if branched version is
-     * used in DI? */
-    film_add_reservoir_pt(kg, path_flag, contribution, &rng_state, buffer);
-  }
-  else {
-    film_clamp_light(kg, &contribution, INTEGRATOR_STATE(state, shadow_path, bounce));
+  //   /* TODO(weizhen): does this result in correlated samples in ReSTIR PT if branched version is
+  //    * used in DI? */
+  //   film_add_reservoir_pt(kg, path_flag, contribution, &rng_state, buffer);
+  // }
+  // else {
+  //   film_clamp_light(kg, &contribution, INTEGRATOR_STATE(state, shadow_path, bounce));
 
-    /* Direct light shadow. */
-    film_write_combined_pass(
-        kg, path_visibility, path_flag, sample, contribution, buffer);
-  }
+  //   /* Direct light shadow. */
+  //   film_write_combined_pass(
+  //       kg, path_visibility, path_flag, sample, contribution, buffer);
+  // }
 // !!!: <<<
   film_write_combined_pass(kg, path_visibility, path_flag, sample, contribution, buffer); // TODO: Remove when ReSTIR's integrated
 
@@ -735,6 +735,17 @@ ccl_device_inline void film_write_background(KernelGlobals kg,
 
 // MARK: - 
 
+// !!!: DI Blackout
+/* Debug eval:
+The writer itself is being handed a reservoir whose state is already inconsistent:
+
+total_weight > 0
+reference.object = -1
+reference.prim   = -1
+
+So the important invariant: total_weight > 0  =>  valid selected reference
+is being violated before the reservoir reaches the film buffer.
+*/
 ccl_device_inline void film_write_pass_reservoir(
     KernelGlobals kg,
     ConstIntegratorState state,
@@ -750,6 +761,30 @@ ccl_device_inline void film_write_pass_reservoir(
                                         kernel_data.film.pass_restir_previous_reservoir :
                                         kernel_data.film.pass_restir_reservoir);
 
+#if !defined(__KERNEL_GPU__) && defined(RESTIR_DI_DEBUG)
+  printf(
+      "\n=== RESTIR RESERVOIR WRITE; film_write_pass_reservoir() ===\n"
+      "pixel=%u\n"
+      "write_prev=%d\n"
+      "offset=%llu\n"
+      "reference=(type=%d object=%d prim=%d param=%g,%g)\n"
+      "total_weight=%g\n"
+      "luminance=%g\n",
+      INTEGRATOR_STATE(state, path, render_pixel_index),
+      (int)write_prev,
+      (unsigned long long)(
+          write_prev ?
+          kernel_data.film.pass_restir_previous_reservoir :
+          kernel_data.film.pass_restir_reservoir),
+      (int)reservoir->reference.type,
+      reservoir->reference.object,
+      reservoir->reference.prim,
+      (double)reservoir->reference.param.x,
+      (double)reservoir->reference.param.y,
+      (double)reservoir->total_weight,
+      (double)reservoir->luminance);
+#endif
+
   // TODO(weizhen): it is possible to compress the light sample reference.
 
   film_overwrite_pass_float(ptr++, (float)reservoir->reference.object);
@@ -760,8 +795,22 @@ ccl_device_inline void film_write_pass_reservoir(
 
   film_overwrite_pass_float(ptr++, reservoir->total_weight);
   film_overwrite_pass_float(ptr, reservoir->luminance);
+
+#if !defined(__KERNEL_GPU__) && defined(RESTIR_DI_DEBUG)
+  printf(
+      "serialized reservoir = "
+      "[%g, %g, %g, %g, %g, %g]\n"
+      "===========================================\n",
+      (double)ptr[-6],
+      (double)ptr[-5],
+      (double)ptr[-4],
+      (double)ptr[-3],
+      (double)ptr[-2],
+      (double)ptr[-1]);
+#endif
 }
 
+// !!!: It does not clear object prim, u, v, luminance
 /* TODO(weizhen): clear data properly. */
 ccl_device_inline void film_clear_pass_reservoir(KernelGlobals kg,
                                                  ConstIntegratorState state,
@@ -774,7 +823,7 @@ ccl_device_inline void film_clear_pass_reservoir(KernelGlobals kg,
   ccl_global float *buffer = film_pass_pixel_render_buffer(kg, state, render_buffer);
 
   /* Set DI reservoir weights to zero. */
-  ccl_global float *ptr = buffer + kernel_data.film.pass_restir_reservoir + 4;
+  ccl_global float *ptr = buffer + kernel_data.film.pass_restir_reservoir + 4; // !!!: offset + 4 = total_weight
   film_overwrite_pass_float(ptr, 0.0f);
 
   ptr = buffer + kernel_data.film.pass_restir_previous_reservoir + 4;
@@ -810,14 +859,15 @@ ccl_device_inline void integrator_finalize_reservoir(KernelGlobals kg,
   ccl_global float *buffer = film_pass_pixel_render_buffer(kg, state, render_buffer) +
                              kernel_data.film.pass_restir_reservoir;
 
-  // Reservoir reservoir(kg);
   Reservoir reservoir;
   reservoir_init(kg, &reservoir);
 
   // !!!: Necessary?
-  if (!restir_unpack_reservoir(kg, &reservoir, buffer)) {
-    return;
-  }
+  // if (!restir_unpack_reservoir(kg, &reservoir, buffer)) {
+  //   kernel_assert(false); // !!! WILL CRASH
+  //   return;
+  // }
+  restir_unpack_reservoir(kg, &reservoir, buffer);
 
   reservoir_finalize(&reservoir, use_restir);
   film_write_pass_reservoir(kg, state, &reservoir, render_buffer);

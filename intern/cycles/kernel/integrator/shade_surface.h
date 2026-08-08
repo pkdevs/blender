@@ -245,6 +245,7 @@ ccl_device_forceinline float radiance_eval(KernelGlobals kg,
     return 0.0f;
   }
 
+  // ???: See if some branches exit before initializing
   ShaderDataCausticsStorage emission_sd_storage;
   ccl_private ShaderData *emission_sd = AS_SHADER_DATA(&emission_sd_storage);
 
@@ -254,10 +255,7 @@ ccl_device_forceinline float radiance_eval(KernelGlobals kg,
   //     kg, state, emission_sd, ls, sd->time, sd, reference, check_visibility);
   
   Spectrum light_eval = zero_spectrum();
-  /* !!!: light_sample_shader_eval() only handle non-constant lights and all the constant lights 
-   * darkness issues are unrelated to this and caused elsewhere... 
-   * Fixing analytic UV reconstruction was only a latent correctness fix for nonconstant shaders.
-   */
+
   const ShaderEvalResult shader_result = light_sample_shader_eval(
       kg, state, emission_sd, ls, sd->time, light_eval, sd, reference, check_visibility);
 
@@ -269,94 +267,151 @@ ccl_device_forceinline float radiance_eval(KernelGlobals kg,
     //   return 0.0f; // !!!
     // }
   if (shader_result != SHADER_EVAL_OK) {
-#if !defined(__KERNEL_GPU__) && defined(RESTIR_DI_DEBUG)
-    printf("RESTIR SHADER FAIL: result=%d type=%d object=%d prim=%d shader=%d "
-           "light_pdf=%g\n",
-           (int)shader_result,
-           (int)ls->type,
-           ls->object,
-           ls->prim,
-           ls->shader,
-           (double)ls->pdf);
-#endif
+// #if !defined(__KERNEL_GPU__) && defined(RESTIR_DI_DEBUG)
+//     printf("radiance_eval(); RESTIR SHADER FAIL: result=%d type=%d object=%d prim=%d shader=%d "
+//            "light_eval=(%f, %f, %f) ls->eval_fac=%f light_pdf=%g\n",
+//            (int)shader_result,
+//            (int)ls->type,
+//            ls->object,
+//            ls->prim,
+//            ls->shader,
+//            (double)light_eval.x, (double)light_eval.y, (double)light_eval.z,
+//            (double)ls->eval_fac,
+//            (double)ls->pdf);
+// #endif
 
     bsdf_eval_init(radiance, zero_spectrum());
     return 0.0f;
   }
 
-
+// #if !defined(__KERNEL_GPU__) && defined(RESTIR_DI_DEBUG)
+//   printf(
+//   "radiance_eval(); Before BSDF surface_shader_bsdf_eval():\n"
+//   "sd->shader=%d\n"
+//   "sd->flag=0x%x\n"
+//   "sd->type=%u\n"
+//   "sd->object=%d\n"
+//   "sd->prim=%d\n"
+//   "ls.shader=%d\n"
+//   "ls.D=(%f,%f,%f)\n",
+//   sd->shader,
+//   sd->flag,
+//   sd->type,
+//   sd->object,
+//   sd->prim,
+//   ls->shader,
+//   (double)ls->D.x, (double)ls->D.y, (double)ls->D.z);
+// #endif
 
   PROFILING_EVENT(PROFILING_RESTIR_BSDF_EVAL);
   const float bsdf_pdf = surface_shader_bsdf_eval(kg, state, sd, ls->D, radiance, ls->shader);
   const float geometry_term = ls->jacobian_solid_angle_to_area();
 
-// !!!: DEBUG ONLY
-#if defined(__KERNEL_CPU__)
-if (kernel_data.integrator.use_restir) {
-  const bool zero_light = is_zero(light_eval);
-  const bool zero_geom = !(geometry_term > 0.0f);
-  const bool zero_bsdf = bsdf_eval_is_zero(radiance);
+// #if !defined(__KERNEL_GPU__) && defined(RESTIR_DI_DEBUG)
+//   printf(
+//   "radiance_eval(); After BSDF surface_shader_bsdf_eval():\n"
+//   "pdf=%g\n"
+//   "radiance=(%f,%f,%f)\n",
+//   (double)bsdf_pdf,
+//   (double)radiance->sum.x, (double)radiance->sum.y, (double)radiance->sum.z);
+// #endif
 
-  if (zero_light || zero_geom || zero_bsdf || !(bsdf_pdf > 0.0f)) {
-    printf("radiance_eval() 1; reject/suspicious: type=%d object=%d prim=%d shader=%d "
-           "pdf=%g bsdf_pdf=%g eval_fac=%g t=%g geom=%g "
-           "P=(%g,%g,%g) Ng=(%g,%g,%g) D=(%g,%g,%g) "
-           "ref=(type=%d object=%d prim=%d param=%g,%g) "
-           "zero_light=%d zero_bsdf=%d zero_geom=%d\n",
-           (int)ls->type,
-           ls->object,
-           ls->prim,
-           ls->shader,
-           (double)ls->pdf,
-           (double)bsdf_pdf,
-           (double)ls->eval_fac,
-           (double)ls->t,
-           (double)geometry_term,
-           (double)ls->P.x, (double)ls->P.y, (double)ls->P.z,
-           (double)ls->Ng.x, (double)ls->Ng.y, (double)ls->Ng.z,
-           (double)ls->D.x, (double)ls->D.y, (double)ls->D.z,
-           reference ? (int)reference->type : -1,
-           reference ? reference->object : -999,
-           reference ? reference->prim : -999,
-           reference ? (double)reference->param.x : -999.0,
-           reference ? (double)reference->param.y : -999.0,
-           (int)zero_light,
-           (int)zero_bsdf,
-           (int)zero_geom);
-  }
-}
-#endif
+// // !!!: DEBUG ONLY
+// #if defined(__KERNEL_CPU__)
+// if (kernel_data.integrator.use_restir) {
+//   const bool zero_light = is_zero(light_eval);
+//   const bool zero_geom = !(geometry_term > 0.0f);
+//   const bool zero_bsdf = bsdf_eval_is_zero(radiance);
 
-  bsdf_eval_mul(radiance, light_eval * geometry_term);
+//   if (zero_light || zero_geom || zero_bsdf || !(bsdf_pdf > 0.0f)) {
+//     printf("radiance_eval() 1; reject/suspicious: type=%d object=%d prim=%d shader=%d "
+//            "pdf=%g bsdf_pdf=%g eval_fac=%g t=%g geom=%g "
+//            "P=(%g,%g,%g) Ng=(%g,%g,%g) D=(%g,%g,%g) "
+//            "ref=(type=%d object=%d prim=%d param=%g,%g) "
+//            "zero_light=%d zero_bsdf=%d zero_geom=%d\n",
+//            (int)ls->type,
+//            ls->object,
+//            ls->prim,
+//            ls->shader,
+//            (double)ls->pdf,
+//            (double)bsdf_pdf,
+//            (double)ls->eval_fac,
+//            (double)ls->t,
+//            (double)geometry_term,
+//            (double)ls->P.x, (double)ls->P.y, (double)ls->P.z,
+//            (double)ls->Ng.x, (double)ls->Ng.y, (double)ls->Ng.z,
+//            (double)ls->D.x, (double)ls->D.y, (double)ls->D.z,
+//            reference ? (int)reference->type : -1,
+//            reference ? reference->object : -999,
+//            reference ? reference->prim : -999,
+//            reference ? (double)reference->param.x : -999.0,
+//            reference ? (double)reference->param.y : -999.0,
+//            (int)zero_light,
+//            (int)zero_bsdf,
+//            (int)zero_geom);
+//   }
+// }
 
-#if !defined(__KERNEL_GPU__) && defined(RESTIR_DI_DEBUG)
-  if (kernel_data.integrator.use_restir) {
-    const bool invalid_light_pdf = !(isfinite(ls->pdf) && ls->pdf > 0.0f);
-    const bool invalid_bsdf_pdf = !(isfinite(bsdf_pdf) && bsdf_pdf > 0.0f);
-    const bool invalid_geometry = !(isfinite(geometry_term) && geometry_term > 0.0f);
-    const bool zero_final_radiance = bsdf_eval_is_zero(radiance);
+//   printf(
+//   "radiance_eval(); !!!light_eval=(%f,%f,%f)\n--- --- ---\n",
+//   (double)light_eval.x,
+//   (double)light_eval.y,
+//   (double)light_eval.z);
+// #endif
 
-    if (invalid_light_pdf || invalid_bsdf_pdf || invalid_geometry || zero_final_radiance) {
-      printf("radiance_eval() 2; RESTIR RADIANCE FINAL INVALID: "
-             "type=%d object=%d prim=%d shader=%d "
-             "light_pdf=%g bsdf_pdf=%g eval_fac=%g geom=%g "
-             "zero_final=%d invalid_light_pdf=%d "
-             "invalid_bsdf_pdf=%d invalid_geom=%d\n",
-             (int)ls->type,
-             ls->object,
-             ls->prim,
-             ls->shader,
-             (double)ls->pdf,
-             (double)bsdf_pdf,
-             (double)ls->eval_fac,
-             (double)geometry_term,
-             (int)zero_final_radiance,
-             (int)invalid_light_pdf,
-             (int)invalid_bsdf_pdf,
-             (int)invalid_geometry);
-    }
-  }
-#endif
+  // bsdf_eval_mul(radiance, light_eval * geometry_term); // !!!: DI Blackout
+  const Spectrum scale = light_eval * geometry_term;
+
+// #if !defined(__KERNEL_GPU__) && defined(RESTIR_DI_DEBUG)
+//   printf("scale=(%f,%f,%f)\n",
+//   (double)scale.x,
+//   (double)scale.y,
+//   (double)scale.z);
+
+//   printf("before=(%f,%f,%f)\n",
+//   (double)radiance->sum.x,
+//   (double)radiance->sum.y,
+//   (double)radiance->sum.z);
+
+//   bsdf_eval_mul(radiance, scale);
+
+//   printf("after=(%f,%f,%f)\n",
+//   (double)radiance->sum.x,
+//   (double)radiance->sum.y,
+//   (double)radiance->sum.z);
+// #endif
+
+
+// #if !defined(__KERNEL_GPU__) && defined(RESTIR_DI_DEBUG)
+//   if (kernel_data.integrator.use_restir) {
+//     const bool invalid_light_pdf = !(isfinite(ls->pdf) && ls->pdf > 0.0f);
+//     const bool invalid_bsdf_pdf = !(isfinite(bsdf_pdf) && bsdf_pdf > 0.0f);
+//     const bool invalid_geometry = !(isfinite(geometry_term) && geometry_term > 0.0f);
+//     const bool zero_final_radiance = bsdf_eval_is_zero(radiance);
+
+//     if (invalid_light_pdf || invalid_bsdf_pdf || invalid_geometry || zero_final_radiance) {
+//       printf("radiance_eval() 2; RESTIR RADIANCE FINAL INVALID: "
+//              "type=%d object=%d prim=%d shader=%d "
+//              "light_pdf=%g bsdf_pdf=%g eval_fac=%g geom=%g "
+//              "light_eval=(%f, %f, %f)"
+//              "zero_final=%d invalid_light_pdf=%d "
+//              "invalid_bsdf_pdf=%d invalid_geom=%d\n",
+//              (int)ls->type,
+//              ls->object,
+//              ls->prim,
+//              ls->shader,
+//              (double)ls->pdf,
+//              (double)bsdf_pdf,
+//              (double)ls->eval_fac,
+//              (double)geometry_term,
+//              (double)light_eval.x, (double)light_eval.y, (double)light_eval.z,
+//              (int)zero_final_radiance,
+//              (int)invalid_light_pdf,
+//              (int)invalid_bsdf_pdf,
+//              (int)invalid_geometry);
+//     }
+//   }
+// #endif
 
   return bsdf_pdf;
 }
@@ -960,6 +1015,25 @@ ccl_device
       continue;
     }
 
+// #if !defined(__KERNEL_GPU__) && defined(RESTIR_DI_DEBUG)
+//     printf(
+//     "radiance_eval(); after light_sample_from_position():\n"
+//     "sd->shader=%d\n"
+//     "sd->flag=0x%x\n"
+//     "sd->type=%u\n"
+//     "sd->object=%d\n"
+//     "sd->prim=%d\n"
+//     "ls.shader=%d\n"
+//     "ls.D=(%f,%f,%f)\n",
+//     sd->shader,
+//     sd->flag,
+//     sd->type,
+//     sd->object,
+//     sd->prim,
+//     ls.shader,
+//     (double)ls.D.x, (double)ls.D.y, (double)ls.D.z);
+// #endif
+
     kernel_assert(ls.pdf != 0.0f);
 
     const bool is_transmission = dot(ls.D, sd->N) < 0.0f;
@@ -1003,7 +1077,7 @@ ccl_device
     }
 
     // // !!!: DEBUG ONLY
-    kernel_assert(restir_light_reference_is_valid(&reference)); // !!!: Will fail on unvalid lights
+    // kernel_assert(restir_light_reference_is_valid(&reference)); // !!!: Will fail on invalid lights
     // if (!restir_light_reference_is_valid(&reference)) {
     //   kernel_assert(false);
     //   continue;
@@ -1038,6 +1112,30 @@ ccl_device
 
 
     PROFILING_EVENT(PROFILING_RESTIR_RESERVOIR);
+
+// #if !defined(__KERNEL_GPU__) && defined(RESTIR_DI_DEBUG)
+// // !!! To verify Radiance
+//     printf(
+//         "integrate_surface_direct_light():\n"
+//         "Candidate %d\n"
+//         "light pdf      = %.9f\n"
+//         "bsdf pdf       = %.9f\n"
+//         "radiance sum   = (%f, %f, %f)\n"
+//         "radiance zero  = %d\n"
+//         "light type     = %d\n"
+//         "shader         = %d\n"
+//         "object         = %u\n"
+//         "prim           = %d\n",
+//         i,
+//         (double)ls.pdf,
+//         (double)bsdf_pdf,
+//         (double)bsdf_eval_sum(&radiance).x, (double)bsdf_eval_sum(&radiance).y, (double)bsdf_eval_sum(&radiance).z, // 
+//         (int)bsdf_eval_is_zero(&radiance),
+//         ls.type,
+//         ls.shader,
+//         ls.object,
+//         ls.prim);
+// #endif
 
     /* Compute the NEE MIS weight and divide by the light PDF in the appropriate measure. */
     reservoir_add_light_sample(&reservoir, ls, reference, radiance, bsdf_pdf, rand_pick, use_restir); // !!!
@@ -1207,7 +1305,7 @@ ccl_device_forceinline int integrate_surface_bsdf_bssrdf_bounce(
 
   path_state_next(kg, state, label, sd->flag);
 
-  film_write_reconnection_vertex(kg, state, bsdf_sampled_roughness, sd->ray_length, render_buffer); // New
+  film_write_reconnection_vertex(kg, state, bsdf_sampled_roughness, sd->ray_length, render_buffer);
 
   guiding_record_surface_bounce(kg,
                                 state,
