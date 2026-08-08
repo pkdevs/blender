@@ -654,8 +654,7 @@ gpu::Texture *IMB_touch_gpu_texture(const char *name,
                                     int h,
                                     int layers,
                                     bool use_high_bitdepth,
-                                    bool use_grayscale,
-                                    bool writable);
+                                    bool use_grayscale);
 
 /**
  * Mark the GPU texture of an image buffer as writable, so its mipmaps can be

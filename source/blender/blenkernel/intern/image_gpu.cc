@@ -212,7 +212,7 @@ static int compare_packtile(const void *a, const void *b)
   return tile_a->pack_score < tile_b->pack_score;
 }
 
-static gpu::Texture *gpu_texture_create_tile_array(Image *ima, ImBuf *main_ibuf, bool writable)
+static gpu::Texture *gpu_texture_create_tile_array(Image *ima, ImBuf *main_ibuf)
 {
   int arraywidth = 0, arrayheight = 0;
   ListBaseT<FixedSizeBoxPack> boxes = {nullptr};
@@ -288,8 +288,7 @@ static gpu::Texture *gpu_texture_create_tile_array(Image *ima, ImBuf *main_ibuf,
                                             arrayheight,
                                             arraylayers,
                                             use_high_bitdepth,
-                                            use_grayscale,
-                                            writable);
+                                            use_grayscale);
 
   if (!tex) {
     return nullptr;
@@ -557,8 +556,7 @@ static ImageGPUTextures image_get_gpu_texture_tiled(Image *ima,
   }
   else {
     /* Create atlas and tile mapping textures. */
-    const bool writable = (atlas_ibuf->gpu.flag & IMB_GPU_WRITABLE);
-    atlas_tex = gpu_texture_create_tile_array(ima, ibuf, writable);
+    atlas_tex = gpu_texture_create_tile_array(ima, ibuf);
     if (atlas_tex) {
       mapping_tex = gpu_texture_create_tile_mapping(ima, atlas_tex);
     }

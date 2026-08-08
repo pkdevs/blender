@@ -301,13 +301,15 @@ static void update_mipmaps(Texture &texture,
 
 using namespace blender::gpu;
 
-eGPUTextureUsage GPU_texture_mipmap_usage(TextureFormat format, bool writable)
+eGPUTextureUsage GPU_texture_mipmap_usage(TextureFormat format)
 {
   /* Mipmaps generated with the compute shader need write support. */
   eGPUTextureUsage usage = GPU_TEXTURE_USAGE_SHADER_WRITE;
 
-  /* If it's sRGB and we can't write directly to it, use a texture view to write through. */
-  if (writable && format == TextureFormat::SRGBA_8_8_8_8) {
+  /* If it's sRGB and we can't write directly to it, use a texture view to write through.
+   * Without this every regenerate goes through a temporary texture and two full mipmap chain
+   * copies, which costs more than the view does. */
+  if (format == TextureFormat::SRGBA_8_8_8_8) {
     if (!GCaps.srgb_write_direct_support && GCaps.srgb_write_view_support) {
       usage |= GPU_TEXTURE_USAGE_FORMAT_VIEW;
     }
