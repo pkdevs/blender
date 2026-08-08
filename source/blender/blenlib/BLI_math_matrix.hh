@@ -1667,7 +1667,7 @@ VecBase<T, N> project_point(const MatBase<T, N + 1, NumRow> &mat, const VecBase<
   VecBase<T, N + 1> tmp(point, T(1));
   tmp = mat * tmp;
   /* Absolute value to not flip the frustum upside down behind the camera. */
-  return VecBase<T, N>(tmp) / math::abs(tmp[N]);
+  return math::safe_divide(VecBase<T, N>(tmp), math::abs(tmp[N]));
 }
 
 extern template float3 transform_point(const float3x3 &mat, const float3 &point);
