@@ -511,11 +511,15 @@ static void view3d_set_view_angle(ARegion *region, View3D *v3d, const float inpu
     }
   }
 
-  const float3 z_up_global = float3(0.0f, 0.0f, 1.0f);
-  const float3 z_up_local = float3(rv3d->viewinv[1]);
-  const float3 pivot_axis_local = float3(rv3d->viewinv[2]);
+  /* Get the 3x3 matrix inverse from the quaternion. */
+  const float3x3 m_inv = math::invert(
+      math::from_rotation<float3x3>(math::Quaternion(rv3d->viewquat)));
 
-  float3 alignment_vector = float3(0.0f, 0.0f, 1.0f);
+  const float3 z_up_global = float3(0.0f, 0.0f, 1.0f);
+  const float3 z_up_local = m_inv[1];
+  const float3 pivot_axis_local = m_inv[2];
+
+  float3 alignment_vector = z_up_global;
 
   constexpr float axis_align_eps = 1e-4f;
 
