@@ -15,18 +15,14 @@ COMPUTE_SHADER_CREATE_INFO(gpu_texture_bandwidth_test)
  * Watch the Gtex/s column: if it is flat across formats while GB/s scales with the bytes per
  * texel, the reads are not reaching memory.
  *
- * Each invocation strides far enough per iteration to land on a different page, so consecutive
- * iterations of one invocation never hit the same cache line, while neighboring invocations
- * still read neighboring texels. */
+ * The dispatch spans the full texture width but only a band of its rows, so neighboring
+ * invocations read neighboring texels and a fetched cache line is used completely. Each
+ * iteration then offsets far enough to land on a different page, moving the band over the rest
+ * of the texture without ever reusing a cache line within one invocation. */
 void main()
 {
   int2 size = textureSize(source_tx, 0);
-
-  /* The dispatch is a fixed size while the texture is as large as it has to be to escape the
-   * cache, so spread the invocations out over the whole texture. */
-  int2 dispatch_size = int2(gl_NumWorkGroups.xy * gl_WorkGroupSize.xy);
-  int2 stride = max(size / dispatch_size, int2(1));
-  int2 coord = int2(gl_GlobalInvocationID.xy) * stride;
+  int2 coord = int2(gl_GlobalInvocationID.xy);
 
   float4 sum = float4(0.0f);
   for (int i = 0; i < sample_count; i++) {

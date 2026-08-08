@@ -62,10 +62,13 @@ static constexpr int64_t bandwidth_bytes_target = 384 * 1024 * 1024;
 /* The bandwidth texture is filled by uploading this tile repeatedly, so it does not need a host
  * side copy of the whole thing. */
 static constexpr int bandwidth_tile_size = 512;
-/* Width and height of the bandwidth dispatch. Deliberately independent of the texture size, so
- * the amount of work per pass stays the same no matter how large the texture has to be to escape
- * the cache. Invocations are spread over the whole texture. */
-static constexpr int bandwidth_dispatch_size = 2048;
+/* Number of invocations the bandwidth dispatch aims for, so the work per pass stays the same no
+ * matter how large the texture has to be to escape the cache.
+ *
+ * The dispatch spans the full texture width, so neighboring invocations read neighboring texels
+ * and a fetched cache line is used completely. It covers only a band of rows, which the per
+ * iteration offsets in the shader then move over the rest of the texture. */
+static constexpr int64_t bandwidth_invocations_target = 4 * 1024 * 1024;
 /* Number of floats in the bandwidth shader output buffer. Only there so the loads can't be
  * optimized out, so it is kept small and written to modulo its size rather than scaling with
  * the texture. Must be a power of two. */
@@ -186,6 +189,9 @@ struct Measurement {
   /* Same, but with incompressible content. Only measured for the baseline case, as a control:
    * if this matches #read_gb_per_second the measurement is not seeing compression at all. */
   double read_noise_gb_per_second = 0.0;
+  /* How much the same measurement moves when repeated with identical content, as a fraction.
+   * The control above only means something when the gap it finds is larger than this. */
+  double read_spread = 0.0;
   /* Size of the texture used for the bandwidth measurement. Larger than the measured textures,
    * so the reads miss the last level cache. */
   int bandwidth_size = 0;
@@ -361,7 +367,8 @@ static void fill_texture_tiled(gpu::Texture *texture,
  * of the device means the driver is compressing. */
 static double measure_bandwidth(gpu::Shader *shader,
                                 gpu::Texture *texture,
-                                const TextureFormat format)
+                                const TextureFormat format,
+                                const int size)
 {
   gpu::StorageBuf *ssbo = GPU_storagebuf_create_ex(
       sizeof(float) * bandwidth_output_len, nullptr, GPU_USAGE_DEVICE_ONLY, __func__);
@@ -372,10 +379,15 @@ static double measure_bandwidth(gpu::Shader *shader,
   GPU_shader_uniform_1i(shader, "sample_count", bandwidth_sample_count);
   GPU_shader_uniform_1i(shader, "output_mask", bandwidth_output_len - 1);
 
-  const int groups = bandwidth_dispatch_size / 16;
+  /* Full texture width, and as many rows as the invocation target allows. Never more rows than
+   * the texture has, or the same rows would just be read repeatedly. */
+  const int rows = std::min(std::max<int>(int(bandwidth_invocations_target / size) / 16, 1) * 16,
+                            size);
+  const int groups_x = size / 16;
+  const int groups_y = rows / 16;
 
   /* Warm up, so first use of the shader and texture is not part of the measurement. */
-  GPU_compute_dispatch(shader, groups, groups, 1);
+  GPU_compute_dispatch(shader, groups_x, groups_y, 1);
   GPU_finish();
 
   /* Calibrate the pass count so a run is long enough to be meaningful. A software rasterizer
@@ -385,7 +397,7 @@ static double measure_bandwidth(gpu::Shader *shader,
   while (true) {
     const double start = BLI_time_now_seconds();
     for ([[maybe_unused]] const int pass : IndexRange(passes)) {
-      GPU_compute_dispatch(shader, groups, groups, 1);
+      GPU_compute_dispatch(shader, groups_x, groups_y, 1);
     }
     GPU_finish();
     seconds = BLI_time_now_seconds() - start;
@@ -400,7 +412,7 @@ static double measure_bandwidth(gpu::Shader *shader,
   for ([[maybe_unused]] const int repeat : IndexRange(bandwidth_repeats - 1)) {
     const double start = BLI_time_now_seconds();
     for ([[maybe_unused]] const int pass : IndexRange(passes)) {
-      GPU_compute_dispatch(shader, groups, groups, 1);
+      GPU_compute_dispatch(shader, groups_x, groups_y, 1);
     }
     GPU_finish();
     seconds = std::min(seconds, BLI_time_now_seconds() - start);
@@ -413,8 +425,7 @@ static double measure_bandwidth(gpu::Shader *shader,
   if (seconds <= 0.0) {
     return 0.0;
   }
-  const double bytes = double(bandwidth_dispatch_size) * bandwidth_dispatch_size *
-                       bandwidth_sample_count * to_bytesize(format) * passes;
+  const double bytes = double(size) * rows * bandwidth_sample_count * to_bytesize(format) * passes;
   return bytes / seconds / 1.0e9;
 }
 
@@ -563,7 +574,7 @@ static Measurement measure_case(const MeasuredFormat &measured_format,
       fill_texture_tiled(texture, bandwidth_size, measured_format.format, gradient);
       regenerate_mipmaps(texture, memory_case.mipmap_path);
       measurement.read_gb_per_second = measure_bandwidth(
-          bandwidth_shader, texture, measured_format.format);
+          bandwidth_shader, texture, measured_format.format, bandwidth_size);
 
       /* Control, for the baseline case only. Incompressible content has to sample slower than
        * the gradient wherever the driver is actually compressing. If it does not, this whole
@@ -573,7 +584,19 @@ static Measurement measure_case(const MeasuredFormat &measured_format,
         fill_texture_tiled(texture, bandwidth_size, measured_format.format, noise);
         regenerate_mipmaps(texture, memory_case.mipmap_path);
         measurement.read_noise_gb_per_second = measure_bandwidth(
-            bandwidth_shader, texture, measured_format.format);
+            bandwidth_shader, texture, measured_format.format, bandwidth_size);
+
+        /* Repeat the gradient measurement, bracketing the noise one. Comparing the two says how
+         * much this measurement moves on its own, which is what the gap above has to beat to
+         * mean anything. Without it a noisy machine reads as compression. */
+        fill_texture_tiled(texture, bandwidth_size, measured_format.format, gradient);
+        regenerate_mipmaps(texture, memory_case.mipmap_path);
+        const double repeated = measure_bandwidth(
+            bandwidth_shader, texture, measured_format.format, bandwidth_size);
+        const double best = std::max(measurement.read_gb_per_second, repeated);
+        if (best > 0.0) {
+          measurement.read_spread = std::abs(measurement.read_gb_per_second - repeated) / best;
+        }
       }
 
       GPU_texture_free(texture);
@@ -719,6 +742,10 @@ static void test_texture_memory_usage()
                                                             measurement.read_gb_per_second);
           results[case_index].read_noise_gb_per_second = std::max(
               results[case_index].read_noise_gb_per_second, measurement.read_noise_gb_per_second);
+          /* Keep the worst spread seen, so a single quiet round can't make a noisy machine
+           * look trustworthy. */
+          results[case_index].read_spread = std::max(results[case_index].read_spread,
+                                                     measurement.read_spread);
           if (measurement.generate_ms > 0.0) {
             const double previous = results[case_index].generate_ms;
             results[case_index].generate_ms = (previous > 0.0) ?
@@ -779,16 +806,30 @@ static void test_texture_memory_usage()
      * gap here the measurement cannot observe driver compression at all. */
     const Measurement &base = results[base_case_index];
     if (base.read_gb_per_second > 0.0 && base.read_noise_gb_per_second > 0.0) {
-      const double ratio = base.read_gb_per_second / base.read_noise_gb_per_second;
-      printf("control  %-8s working set %d MB, gradient %.1f GB/s vs noise %.1f GB/s, ratio %.2f",
-             measured_format.name,
-             int(int64_t(base.bandwidth_size) * base.bandwidth_size *
-                 to_bytesize(measured_format.format) / (1024 * 1024)),
-             base.read_gb_per_second,
-             base.read_noise_gb_per_second,
-             ratio);
-      printf(ratio < 1.05 ? "  <-- NO COMPRESSION VISIBLE, read ratios above are meaningless\n" :
-                            "  <-- compression visible, read ratios above are meaningful\n");
+      /* How much slower incompressible content samples, against how much the measurement moves
+       * on its own. Only a gap clearly larger than the latter says anything. */
+      const double effect = 1.0 - base.read_noise_gb_per_second / base.read_gb_per_second;
+      const char *verdict;
+      if (effect > 2.0 * base.read_spread && effect > 0.03) {
+        verdict = "compression visible, read ratios above are meaningful";
+      }
+      else if (base.read_spread > 0.05) {
+        verdict = "INCONCLUSIVE, this measurement varies as much as the effect it looks for";
+      }
+      else {
+        verdict = "NO COMPRESSION VISIBLE, read ratios above are meaningless";
+      }
+      printf(
+          "control  %-8s working set %d MB, gradient %.1f GB/s vs noise %.1f GB/s, "
+          "effect %.1f%%, variance %.1f%%\n",
+          measured_format.name,
+          int(int64_t(base.bandwidth_size) * base.bandwidth_size *
+              to_bytesize(measured_format.format) / (1024 * 1024)),
+          base.read_gb_per_second,
+          base.read_noise_gb_per_second,
+          effect * 100.0,
+          base.read_spread * 100.0);
+      printf("         %s\n", verdict);
     }
     printf("\n");
   }
