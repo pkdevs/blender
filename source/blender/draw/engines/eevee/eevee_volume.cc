@@ -129,7 +129,8 @@ void VolumeModule::end_sync()
   if (volume_bounds && !inst_.world.has_volume() && !inst_.camera.is_panoramic()) {
     /* Restrict integration range to the object volume range. This increases precision.
      * Panoramic cameras render several views and `volume_bounds` is currently derived from only
-     * the main camera transform, therefore is not a valid shared range for their radial froxels. */
+     * the main camera transform, therefore is not a valid shared range for their radial froxels.
+     */
     integration_start = math::max(integration_start, -volume_bounds.value().max);
     integration_end = math::min(integration_end, -volume_bounds.value().min);
   }
