@@ -1278,7 +1278,9 @@ struct Film {
           else {
             /* Average over view space z. */
             [[resource_table]] const draw::View &views = this->views_;
-            depth = depth_convert_to_scene(views.get(0), depth);
+            float2 uv = (float2(src.texel) + 0.5f) / float2(textureSize(depth_tx, 0).xy);
+            depth = depth_convert_to_scene(
+                views.get(0), depth, uv, is_panoramic(uni.uniform_buf.camera.type));
           }
           denoising_depth_accum += depth * src.weight;
         }
