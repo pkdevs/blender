@@ -5500,6 +5500,7 @@ static bke::CurvesGeometry bevel_curves(const bke::CurvesGeometry &src_curves,
     return src_curves;
   }
 
+  const OffsetIndices<int> src_points_by_curve = src_curves.points_by_curve();
   const int num_points_per_vertex = segments + 1;
 
   bke::CurvesGeometry dst_curves(src_curves.points_num() * num_points_per_vertex,
@@ -5510,8 +5511,16 @@ static bke::CurvesGeometry bevel_curves(const bke::CurvesGeometry &src_curves,
   bke::MutableAttributeAccessor dst_attributes = dst_curves.attributes_for_write();
   const bke::AttributeAccessor src_attributes = src_curves.attributes();
 
-  const OffsetIndices<int> src_points_by_curve = src_curves.points_by_curve();
-  const OffsetIndices<int> dst_points_by_curve = dst_curves.points_by_curve();
+  MutableSpan<int> dst_curve_offsets = dst_curves.offsets_for_write();
+
+  for (const int curve_i : src_curves.curves_range()) {
+    const IndexRange src_points = src_points_by_curve[curve_i];
+
+    dst_curve_offsets[curve_i] = src_points.size() * num_points_per_vertex;
+  }
+  dst_curve_offsets.last() = 0;
+
+  offset_indices::accumulate_counts_to_offsets(dst_curve_offsets);
 
   bke::copy_attributes(
       src_attributes, bke::AttrDomain::Curve, bke::AttrDomain::Curve, {}, dst_attributes);
@@ -5541,29 +5550,33 @@ static bke::CurvesGeometry bevel_curves(const bke::CurvesGeometry &src_curves,
   const Span<float3> src_positions = src_curves.positions();
   MutableSpan<float3> dst_positions = dst_curves.positions_for_write();
 
-  for (const int i : src_curves.points_range()) {
-    const int i_prev = (i - 1 + src_curves.points_num()) % src_curves.points_num();
-    const int i_next = (i + 1) % src_curves.points_num();
+  for (const int curve_i : src_curves.curves_range()) {
+    const IndexRange src_points = src_points_by_curve[curve_i];
+    for (const int i : src_points.index_range()) {
+      const int i_prev = (i - 1 + src_points.size()) % src_points.size();
+      const int i_next = (i + 1) % src_points.size();
 
-    const float3 pos_prev = src_positions[i_prev];
-    const float3 pos = src_positions[i];
-    const float3 pos_next = src_positions[i_next];
+      const int point_i0 = src_points[i_prev];
+      const int point_i1 = src_points[i];
+      const int point_i2 = src_points[i_next];
 
-    const float3 dir_1 = pos_prev - pos;
-    const float3 dir_2 = pos_next - pos;
+      const float3 pos_0 = src_positions[point_i0];
+      const float3 pos_1 = src_positions[point_i1];
+      const float3 pos_2 = src_positions[point_i2];
 
-    const float factor_1 = math::min(offset / math::length(dir_1), 1.0f);
-    const float factor_2 = math::min(offset / math::length(dir_2), 1.0f);
+      const float3 dir_1 = pos_0 - pos_1;
+      const float3 dir_2 = pos_2 - pos_1;
 
-    const float3 c1 = pos + factor_1 * dir_1;
-    const float3 c2 = pos + factor_2 * dir_2;
+      const float factor_1 = math::min(offset / math::length(dir_1), 1.0f);
+      const float factor_2 = math::min(offset / math::length(dir_2), 1.0f);
 
-    dst_positions[num_points_per_vertex * i] = c1;
-    dst_positions[num_points_per_vertex * (i + 1) - 1] = c2;
+      const float3 c1 = pos_1 + factor_1 * dir_1;
+      const float3 c2 = pos_1 + factor_2 * dir_2;
 
-    for (const int j : IndexRange(num_points_per_vertex)) {
-      const float t = float(j) / (num_points_per_vertex - 1);
-      dst_positions[num_points_per_vertex * i + j] = math::interpolate(c1, c2, t);
+      for (const int j : IndexRange(num_points_per_vertex)) {
+        const float t = float(j) / (num_points_per_vertex - 1);
+        dst_positions[num_points_per_vertex * point_i1 + j] = math::interpolate(c1, c2, t);
+      }
     }
   }
 
