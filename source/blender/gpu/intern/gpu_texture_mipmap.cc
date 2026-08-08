@@ -261,8 +261,8 @@ static void update_mipmaps(Texture &texture,
 
   if (modified_chunks.is_empty() || use_temp_texture) {
     /* Full update of every layer. The temporary texture path does not currently
-     * support partial updates, but this code path should not be encountered in
-     * practice for painting after #IMB_gpu_texture_ensure_writable. */
+     * support partial updates, but image textures request #GPU_TEXTURE_USAGE_FORMAT_VIEW for
+     * the formats that would need it, so painting does not reach this. */
     update_mipmaps_layers(*texture_ptr, shader, IndexRange(layer_count), write_format, {});
   }
   else {

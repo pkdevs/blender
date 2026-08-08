@@ -608,9 +608,6 @@ enum class GPUTextureCreateFlags : uint8_t {
   LimitSize = 1 << 2,
   /** Allow generation of mipmaps. */
   EnableMipmaps = 1 << 3,
-  /** Create the texture with write usage. This means shaders can write to it, but same
-   * optimizations like lossless compressed storage may be disabled. */
-  Writable = 1 << 4,
 };
 ENUM_OPERATORS(GPUTextureCreateFlags)
 
@@ -655,12 +652,6 @@ gpu::Texture *IMB_touch_gpu_texture(const char *name,
                                     int layers,
                                     bool use_high_bitdepth,
                                     bool use_grayscale);
-
-/**
- * Mark the GPU texture of an image buffer as writable, so its mipmaps can be
- * partially regenerated in-place instead of a full regeneration.
- */
-void IMB_gpu_texture_ensure_writable(ImBuf *ibuf);
 
 /**
  * Will update a #gpu::Texture using the content of the #ImBuf. Only one layer will be

@@ -711,21 +711,6 @@ void BKE_image_assign_gpu_texture(Image *image, gpu::Texture *texture)
   BKE_image_release_ibuf(image, ibuf, lock);
 }
 
-void BKE_image_paint_ensure_gpu_writable(Image *image, ImBuf *ibuf)
-{
-  if (image->source == IMA_SRC_TILED) {
-    ImBuf *atlas_ibuf;
-    {
-      std::scoped_lock lock(image->runtime->cache_mutex);
-      atlas_ibuf = image_udim_gpu_ibuf_ensure(image, IMA_INDEX_UDIM_ATLAS);
-    }
-    IMB_gpu_texture_ensure_writable(atlas_ibuf);
-    IMB_freeImBuf(atlas_ibuf);
-  }
-
-  IMB_gpu_texture_ensure_writable(ibuf);
-}
-
 gpu::Texture *BKE_image_acquire_gpu_viewer_texture(Image *image,
                                                    ImageUser *iuser,
                                                    const bool only_full_resolution)

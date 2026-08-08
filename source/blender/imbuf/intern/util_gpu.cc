@@ -475,8 +475,10 @@ gpu::Texture *IMB_create_gpu_texture(const char *name,
     }
   }
 
-  /* Compressed textures can't be written to, so upload uncompressed when e.g. painting. */
-  if (ibuf->ftype == IMB_FTYPE_DDS && !flag_is_set(flags, GPUTextureCreateFlags::Writable)) {
+  /* The compressed data is read back from the file rather than taken from the image buffer, so
+   * it is only valid as long as the image buffer still matches the file. Once it has been
+   * modified, e.g. by painting, using it would silently revert those changes. */
+  if (ibuf->ftype == IMB_FTYPE_DDS && (ibuf->userflags & IB_BITMAPDIRTY) == 0) {
     gpu::TextureFormat compressed_format;
     if (!IMB_gpu_get_compressed_format(ibuf, &compressed_format)) {
       CLOG_WARN(&LOG,
@@ -740,58 +742,6 @@ void IMB_gpu_texture_apply_partial_update(gpu::Texture *tex,
   GPU_texture_unbind(tex);
 }
 
-static void imb_gpu_texture_make_writable(const char *name, ImBuf *ibuf)
-{
-  gpu::Texture *old_tex = ibuf->gpu.texture;
-  BLI_assert(old_tex != nullptr);
-
-  /* Compressed textures can't be written to, so fully recreate them uncompressed. */
-  if (GPU_texture_has_compressed_format(old_tex)) {
-    if (ibuf->byte_data() == nullptr && ibuf->float_data() == nullptr) {
-      return;
-    }
-    GPU_texture_free(old_tex);
-    ibuf->gpu.texture = nullptr;
-    ibuf->gpu.flag &= IMB_GPU_WRITABLE;
-    return;
-  }
-
-  /* Recreate texture, with GPU copy to avoid host roundtrip. */
-  const int w = GPU_texture_width(old_tex);
-  const int h = GPU_texture_height(old_tex);
-  const int mip_count = GPU_texture_mip_count(old_tex);
-  const gpu::TextureFormat format = GPU_texture_format(old_tex);
-  const eGPUTextureUsage usage = GPU_texture_usage(old_tex) | GPU_texture_mipmap_usage(format);
-  const bool is_array = GPU_texture_is_array(old_tex);
-
-  gpu::Texture *new_tex =
-      is_array ?
-          GPU_texture_create_2d_array(
-              name, w, h, GPU_texture_layer_count(old_tex), mip_count, format, usage, nullptr) :
-          GPU_texture_create_2d(name, w, h, mip_count, format, usage, nullptr);
-  if (new_tex == nullptr) {
-    return;
-  }
-
-  /* GPU pixel copy from old to new texture, including all mipmap levels and layers. */
-  GPU_texture_copy_mipmap_chain(new_tex, old_tex);
-
-  /* Initialize matching texture settings. */
-  if (is_array) {
-    imb_gpu_texture_default_init_array(new_tex);
-  }
-  else {
-    imb_gpu_texture_default_init(new_tex, ibuf);
-    imb_gpu_texture_default_init_mipmap(new_tex);
-  }
-
-  GPU_texture_original_size_set(
-      new_tex, GPU_texture_original_width(old_tex), GPU_texture_original_height(old_tex));
-
-  GPU_texture_free(old_tex);
-  ibuf->gpu.texture = new_tex;
-}
-
 static void imb_gpu_texture_apply_partial_updates(ImBuf *ibuf, const bool use_premult)
 {
   if (ibuf->byte_data() == nullptr && ibuf->float_data() == nullptr) {
@@ -807,9 +757,18 @@ static void imb_gpu_texture_apply_partial_updates(ImBuf *ibuf, const bool use_pr
     case Changes::Kind::Resized:
       GPU_texture_free(ibuf->gpu.texture);
       ibuf->gpu.texture = nullptr;
-      ibuf->gpu.flag &= IMB_GPU_WRITABLE;
+      ibuf->gpu.flag &= ~IMB_GPU_LOAD_FAILED;
       break;
     case Changes::Kind::Partial:
+      /* A compressed texture can't be updated in place. The image buffer no longer matches the
+       * file the compressed data was read from, so drop it and let it be recreated uncompressed
+       * from the image buffer. */
+      if (GPU_texture_has_compressed_format(ibuf->gpu.texture)) {
+        GPU_texture_free(ibuf->gpu.texture);
+        ibuf->gpu.texture = nullptr;
+        ibuf->gpu.flag &= ~IMB_GPU_LOAD_FAILED;
+        break;
+      }
       IMB_gpu_texture_apply_partial_update(
           ibuf->gpu.texture, ibuf, use_premult, changes, -1, int2(0), int2(0));
       ibuf->gpu.partial_update_changeset = new_changeset_id;
@@ -835,19 +794,7 @@ gpu::Texture *IMB_acquire_gpu_texture(const char *name,
 
   std::scoped_lock lock(ibuf->gpu.mutex);
   if (ibuf->gpu.texture != nullptr) {
-    /* Ensure the texture is writable when it needs to be. */
-    if (ibuf->gpu.flag & IMB_GPU_WRITABLE) {
-      gpu::Texture *tex = ibuf->gpu.texture;
-      const eGPUTextureUsage mipmap_usage = GPU_texture_mipmap_usage(GPU_texture_format(tex));
-      if (GPU_texture_has_compressed_format(tex) ||
-          (GPU_texture_usage(tex) & mipmap_usage) != mipmap_usage)
-      {
-        imb_gpu_texture_make_writable(name, ibuf);
-      }
-    }
-    if (ibuf->gpu.texture != nullptr) {
-      imb_gpu_texture_apply_partial_updates(ibuf, use_premult);
-    }
+    imb_gpu_texture_apply_partial_updates(ibuf, use_premult);
     if (ibuf->gpu.texture != nullptr) {
       ibuf->gpu.lastused = BLI_time_now_seconds_i();
       GPU_texture_ref(ibuf->gpu.texture);
@@ -869,9 +816,6 @@ gpu::Texture *IMB_acquire_gpu_texture(const char *name,
   }
   if (limit_size) {
     create_flags |= GPUTextureCreateFlags::LimitSize;
-  }
-  if (ibuf->gpu.flag & IMB_GPU_WRITABLE) {
-    create_flags |= GPUTextureCreateFlags::Writable;
   }
   gpu::Texture *tex = IMB_create_gpu_texture(name, ibuf, create_flags);
   if (tex == nullptr) {
@@ -911,14 +855,7 @@ void IMB_free_gpu_textures(ImBuf *ibuf)
     GPU_texture_free(ibuf->gpu.texture);
     ibuf->gpu.texture = nullptr;
   }
-  ibuf->gpu.flag &= IMB_GPU_WRITABLE;
-}
-
-void IMB_gpu_texture_ensure_writable(ImBuf *ibuf)
-{
-  /* Only set the flag here, #IMB_acquire_gpu_texture will take it into account. */
-  std::scoped_lock lock(ibuf->gpu.mutex);
-  ibuf->gpu.flag |= IMB_GPU_WRITABLE;
+  ibuf->gpu.flag &= ~IMB_GPU_LOAD_FAILED;
 }
 
 void IMB_assign_gpu_texture(ImBuf *ibuf, gpu::Texture *texture)

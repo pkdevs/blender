@@ -122,8 +122,9 @@ static const MemoryCase memory_cases[] = {
      * which is why the case above needs a flag of its own. */
     {"mipmaps, no regenerate", image_usage, MipmapPath::NoRegenerate, false, false},
     {"mipmaps, native", image_usage, MipmapPath::Native, false, false},
-    /* Separates the cost of the flag itself from the cost of actually writing to the texture,
-     * which is what the #BKE_image_paint_ensure_gpu_writable deferral is about. */
+    /* Separates the cost of the flag itself from the cost of actually writing to the texture.
+     * Apple documents the flag alone as enough to disable compression, AMD only decompresses
+     * once something is written. */
     {"mipmaps, write flag only",
      image_usage | GPU_TEXTURE_USAGE_SHADER_WRITE,
      MipmapPath::NoRegenerate,

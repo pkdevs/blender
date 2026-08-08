@@ -4454,7 +4454,6 @@ static void project_paint_build_proj_ima(ProjPaintState *ps,
       projIma->ibuf = BKE_image_acquire_ibuf(projIma->ima, &projIma->iuser, nullptr);
       BLI_assert(projIma->ibuf != nullptr);
     }
-    BKE_image_paint_ensure_gpu_writable(projIma->ima, projIma->ibuf);
     size = sizeof(void **) * ED_IMAGE_UNDO_TILE_NUMBER(projIma->ibuf->x) *
            ED_IMAGE_UNDO_TILE_NUMBER(projIma->ibuf->y);
     projIma->partRedrawRect = static_cast<ImagePaintPartialRedraw *>(
