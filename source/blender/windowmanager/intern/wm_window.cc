@@ -833,13 +833,10 @@ void WM_window_decoration_style_flags_set(const wmWindow *win,
       static_cast<GHOST_TWindowDecorationStyleFlags>(ghost_style_flags));
 }
 
-static void wm_window_decoration_style_set_from_theme(const wmWindow *win, const bScreen *screen)
+void wm_window_titlebar_theme_context_set(const wmWindow *win, const bScreen *screen)
 {
-  /* Set the decoration style settings from the current theme colors.
-   * NOTE: screen may be null. In which case, only the window is used as a theme provider. */
-  GHOST_WindowDecorationStyleSettings decoration_settings = {};
+  /* NOTE: screen may be null. In which case, only the window is used as a theme provider. */
 
-  /* Colored TitleBar Decoration. */
   /* For main windows, use the top-bar color. */
   if (WM_window_is_main_top_level(win)) {
     ui::theme::theme_set(SPACE_TOPBAR, RGN_TYPE_HEADER);
@@ -853,6 +850,15 @@ static void wm_window_decoration_style_set_from_theme(const wmWindow *win, const
   else {
     ui::theme::theme_set(0, RGN_TYPE_WINDOW);
   }
+}
+
+static void wm_window_decoration_style_set_from_theme(const wmWindow *win, const bScreen *screen)
+{
+  /* Set the decoration style settings from the current theme colors. */
+  GHOST_WindowDecorationStyleSettings decoration_settings = {};
+
+  /* Colored TitleBar Decoration. */
+  wm_window_titlebar_theme_context_set(win, screen);
 
   float titlebar_bg_color[3];
   ui::theme::get_color_3fv(TH_BACK, titlebar_bg_color);
@@ -1086,10 +1092,24 @@ static void wm_window_ghostwindow_add(wmWindowManager *wm,
     /* Needed here, because it's used before it reads #UserDef. */
     WM_window_dpi_set_userdef(win);
 
+#ifdef WITH_GHOST_CSD
+    /* This background is presented before anything else is drawn, so it needs its corners cut
+     * away too. Without this the window opens as a hard edged rectangle and visibly rounds off
+     * once the editors first draw. */
+    if (WM_window_is_csd(win)) {
+      WM_window_csd_draw_corner_mask(win);
+    }
+#endif
+
     wm_window_swap_buffer_release(win);
 
     /* Clear double buffer to avoids flickering of new windows on certain drivers, see #97600. */
     GPU_clear_color(window_bg_color[0], window_bg_color[1], window_bg_color[2], 1.0f);
+#ifdef WITH_GHOST_CSD
+    if (WM_window_is_csd(win)) {
+      WM_window_csd_draw_corner_mask(win);
+    }
+#endif
 
     GPU_render_end();
   }
@@ -2259,6 +2279,8 @@ void WM_window_csd_params_update()
 
       /*cursor_drag_threshold*/ U.drag_threshold_mouse,
       /*cursor_double_click_ms*/ U.dbl_click_time,
+      /*resize_margin_size*/ WM_WINDOW_CSD_RESIZE_MARGIN_SIZE,
+      /*corner_radius*/ WM_WINDOW_CSD_CORNER_RADIUS,
   };
   g_system->setWindowCSD(csd_params);
 }
@@ -3143,6 +3165,15 @@ static void wm_window_csd_title_redraw_tag(wmWindowManager *wm, wmWindow *win)
 #endif
 }
 
+bool WM_window_csd_is_active()
+{
+#ifdef WITH_GHOST_CSD
+  return g_system_use_csd;
+#else
+  return false;
+#endif
+}
+
 bool WM_window_is_csd(const wmWindow *win)
 {
 #ifdef WITH_GHOST_CSD
@@ -3441,6 +3472,8 @@ void WM_window_IME_begin(wmWindow *win, int x, int y, int w, int h, bool complet
   const float fac = ghost_window->getNativePixelSize();
   x /= fac;
   y /= fac;
+  w /= fac;
+  h /= fac;
   ghost_window->beginIME(x, win->sizey - y, w, h, complete);
 }
 

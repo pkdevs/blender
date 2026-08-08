@@ -54,6 +54,10 @@ namespace ed::asset {
 struct AssetItemTree;
 }
 
+namespace seq {
+enum class Side : int;
+}
+
 namespace ed::vse {
 
 class SeqQuadsBatch;
@@ -283,7 +287,7 @@ rctf strip_bounds_get(const Scene *scene, const Strip *strip);
  */
 rcti strip_int_bounds_get(const Scene *scene, const Strip *strip);
 
-Strip *find_neighboring_strip(const Scene *scene, const Strip *test, const int lr, int sel);
+Strip *find_neighboring_strip(const Scene *scene, const Strip *test, const seq::Side lr, int sel);
 
 void SEQUENCER_OT_select_all(wmOperatorType *ot);
 void SEQUENCER_OT_select(wmOperatorType *ot);
@@ -326,6 +330,13 @@ void SEQUENCER_OT_sound_strip_add(wmOperatorType *ot);
 void SEQUENCER_OT_image_strip_add(wmOperatorType *ot);
 void SEQUENCER_OT_effect_strip_add(wmOperatorType *ot);
 void SEQUENCER_OT_add_scene_strip_from_scene_asset(wmOperatorType *ot);
+
+void frame_filename_set(char *dst,
+                        size_t dst_len,
+                        const char *filename_stripped,
+                        const int frame,
+                        const int numdigits,
+                        const char *ext);
 
 /* `sequencer_drag_drop.cc` */
 
@@ -373,15 +384,6 @@ void SEQUENCER_OT_rename_channel(wmOperatorType *ot);
 /* `sequencer_preview.cc` */
 
 void sequencer_preview_add_sound(const bContext *C, const Strip *strip);
-
-/* `sequencer_add.cc` */
-
-int sequencer_image_strip_get_minmax_frame(wmOperator *op,
-                                           int sfra,
-                                           int *r_minframe,
-                                           int *r_numdigits);
-void sequencer_image_strip_reserve_frames(
-    wmOperator *op, StripElem *se, int len, int minframe, int numdigits);
 
 /* `sequencer_retiming.cc` */
 void SEQUENCER_OT_retiming_reset(wmOperatorType *ot);
