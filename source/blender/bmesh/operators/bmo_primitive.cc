@@ -871,7 +871,6 @@ void bmo_create_quadsphere_exec(BMesh *bm, BMOperator *op)
     for (int y = -1; y < 2; y += 2) {
       for (int z = -1; z < 2; z += 2) {
         float vec[3] = {float(x) * off, float(y) * off, float(z) * off};
-        mul_m4_v3(mat, vec);
         verts[i] = BM_vert_create(bm, vec, nullptr, BM_CREATE_NOP);
         BMO_vert_flag_enable(bm, verts[i], VERT_MARK);
         i++;
@@ -937,6 +936,7 @@ void bmo_create_quadsphere_exec(BMesh *bm, BMOperator *op)
       co[0] = co[0] * rad;
       co[1] = co[1] * rad;
       co[2] = co[2] * rad;
+      mul_m4_v3(mat, co);
       copy_v3_v3(v->co, co);
     }
     BMO_slot_buffer_from_enabled_flag(bm, op, op->slots_out, "verts.out", BM_VERT, VERT_MARK);
@@ -1744,7 +1744,6 @@ void bmo_create_cube_exec(BMesh *bm, BMOperator *op)
     for (int y = -1; y < 2; y += 2) {
       for (int z = -1; z < 2; z += 2) {
         float vec[3] = {float(x) * off, float(y) * off, float(z) * off};
-        mul_m4_v3(mat, vec);
         verts[i] = BM_vert_create(bm, vec, nullptr, BM_CREATE_NOP);
         BMO_vert_flag_enable(bm, verts[i], VERT_MARK);
         i++;
