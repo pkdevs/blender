@@ -5488,6 +5488,146 @@ static void GREASE_PENCIL_OT_separate_fills(wmOperatorType *ot)
 
 /** \} */
 
+/* -------------------------------------------------------------------- */
+/** \name Bevel Operator
+ * \{ */
+
+static bke::CurvesGeometry bevel_curves(const bke::CurvesGeometry &src_curves,
+                                        const float offset,
+                                        const int segments)
+{
+  if (offset <= 0.0f) {
+    return src_curves;
+  }
+
+  const int num_points_per_vertex = segments + 1;
+
+  bke::CurvesGeometry dst_curves(src_curves.points_num() * num_points_per_vertex,
+                                 src_curves.curves_num());
+
+  BKE_defgroup_copy_list(&dst_curves.vertex_group_names, &src_curves.vertex_group_names);
+
+  bke::MutableAttributeAccessor dst_attributes = dst_curves.attributes_for_write();
+  const bke::AttributeAccessor src_attributes = src_curves.attributes();
+
+  const OffsetIndices<int> src_points_by_curve = src_curves.points_by_curve();
+  const OffsetIndices<int> dst_points_by_curve = dst_curves.points_by_curve();
+
+  bke::copy_attributes(
+      src_attributes, bke::AttrDomain::Curve, bke::AttrDomain::Curve, {}, dst_attributes);
+
+  /* Copy/Interpolate point attributes. */
+  for (auto &attribute : bke::retrieve_attributes_for_transfer(
+           src_attributes, dst_attributes, {bke::AttrDomain::Point}, {}))
+  {
+    bke::attribute_math::to_static_type(attribute.dst.span.type(), [&]<typename T>() {
+      if constexpr (!std::is_same_v<T, std::string>) {
+        const Span<T> src_attr = attribute.src.typed<T>();
+        MutableSpan<T> dst_attr = attribute.dst.span.typed<T>();
+
+        threading::parallel_for(src_curves.points_range(), 4096, [&](const IndexRange points) {
+          for (const int i : points) {
+            for (const int j : IndexRange(num_points_per_vertex)) {
+              dst_attr[num_points_per_vertex * i + j] = src_attr[i];
+            }
+          }
+        });
+      }
+    });
+
+    attribute.dst.finish();
+  }
+
+  const Span<float3> src_positions = src_curves.positions();
+  MutableSpan<float3> dst_positions = dst_curves.positions_for_write();
+
+  for (const int i : src_curves.points_range()) {
+    const int i_prev = (i - 1 + src_curves.points_num()) % src_curves.points_num();
+    const int i_next = (i + 1) % src_curves.points_num();
+
+    const float3 pos_prev = src_positions[i_prev];
+    const float3 pos = src_positions[i];
+    const float3 pos_next = src_positions[i_next];
+
+    const float3 dir_1 = pos_prev - pos;
+    const float3 dir_2 = pos_next - pos;
+
+    const float factor_1 = math::min(offset / math::length(dir_1), 1.0f);
+    const float factor_2 = math::min(offset / math::length(dir_2), 1.0f);
+
+    const float3 c1 = pos + factor_1 * dir_1;
+    const float3 c2 = pos + factor_2 * dir_2;
+
+    dst_positions[num_points_per_vertex * i] = c1;
+    dst_positions[num_points_per_vertex * (i + 1) - 1] = c2;
+
+    for (const int j : IndexRange(num_points_per_vertex)) {
+      const float t = float(j) / (num_points_per_vertex - 1);
+      dst_positions[num_points_per_vertex * i + j] = math::interpolate(c1, c2, t);
+    }
+  }
+
+  return dst_curves;
+}
+
+static wmOperatorStatus grease_pencil_bevel_exec(bContext *C, wmOperator *op)
+{
+  const Scene *scene = CTX_data_scene(C);
+  Object *object = CTX_data_active_object(C);
+  GreasePencil &grease_pencil = *blender::id_cast<GreasePencil *>(object->data);
+
+  const float offset = RNA_float_get(op->ptr, "offset");
+  const int segments = RNA_int_get(op->ptr, "segments");
+
+  std::atomic<bool> changed = false;
+  const Vector<MutableDrawingInfo> drawings = retrieve_editable_drawings(*scene, grease_pencil);
+  threading::parallel_for_each(drawings, [&](const MutableDrawingInfo &info) {
+    IndexMaskMemory memory;
+    const IndexMask strokes = ed::greasepencil::retrieve_editable_and_selected_strokes(
+        *object, info.drawing, info.layer_index, memory);
+    if (strokes.is_empty()) {
+      return;
+    }
+    bke::CurvesGeometry &curves = info.drawing.strokes_for_write();
+
+    curves = bevel_curves(curves, offset, segments);
+
+    info.drawing.tag_topology_changed();
+
+    changed.store(true, std::memory_order_relaxed);
+  });
+
+  if (changed) {
+    DEG_id_tag_update(&grease_pencil.id, ID_RECALC_GEOMETRY);
+    WM_event_add_notifier(C, NC_GEOM | ND_DATA, &grease_pencil);
+  }
+
+  return OPERATOR_FINISHED;
+}
+
+static void GREASE_PENCIL_OT_bevel(wmOperatorType *ot)
+{
+  PropertyRNA *prop;
+
+  ot->name = "Bevel";
+  ot->idname = "GREASE_PENCIL_OT_bevel";
+  ot->description = "Cut into selected points at an angle to create bevel or chamfer";
+
+  ot->exec = grease_pencil_bevel_exec;
+  ot->poll = editable_grease_pencil_poll;
+
+  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
+
+  prop = RNA_def_float(
+      ot->srna, "offset", 0.0f, 0.0f, FLT_MAX, "Width", "Bevel amount", 0.0f, 100.0f);
+  RNA_def_property_flag(prop, PROP_SKIP_SAVE);
+
+  prop = RNA_def_int(
+      ot->srna, "segments", 1, 1, 1000, "Segments", "Segments for curved edge", 1, 100);
+}
+
+/** \} */
+
 }  // namespace ed::greasepencil
 
 void ED_operatortypes_grease_pencil_edit()
@@ -5535,6 +5675,7 @@ void ED_operatortypes_grease_pencil_edit()
   WM_operatortype_append(GREASE_PENCIL_OT_set_stroke_type);
   WM_operatortype_append(GREASE_PENCIL_OT_join_fills);
   WM_operatortype_append(GREASE_PENCIL_OT_separate_fills);
+  WM_operatortype_append(GREASE_PENCIL_OT_bevel);
 }
 
 /* -------------------------------------------------------------------- */
