@@ -86,78 +86,13 @@ ccl_device_inline bool reservoir_finalize(ccl_private Reservoir *reservoir,
     return false;
   }
 
-// #if !defined(__KERNEL_GPU__) && defined(RESTIR_DI_DEBUG)
-  // printf(
-  // "reservoir_finalize():\n"
-  // "num_bsdf_samples=%u\n"
-  // "num_light_samples=%u\n"
-  // "luminance=%g\n"
-  // "total_weight(before)=%g\n",
-  // reservoir->num_bsdf_samples,
-  // reservoir->num_light_samples,
-  // (double)reservoir->luminance,
-  // (double)reservoir->total_weight);
-
-
-// printf(
-// "\n================ RESERVOIR FINALIZE ================\n"
-// "before normalization\n"
-// "total_weight = %g\n"
-// "luminance    = %g\n"
-// "num_light    = %d\n"
-// "num_bsdf     = %d\n"
-// "reference.valid = %d\n"
-// "reference.type = %d\n"
-// "reference.object = %d\n"
-// "reference.prim = %d\n"
-// "reference.param = (%f,%f)\n"
-// "selected light:\n"
-// "  type=%d object=%d prim=%d shader=%d\n"
-// "selected radiance=(%f,%f,%f)\n",
-// (double)reservoir->total_weight,
-// (double)reservoir->luminance,
-// reservoir->num_light_samples,
-// reservoir->num_bsdf_samples,
-// (int)reservoir_has_valid_reference(reservoir),
-// (int)reservoir->reference.type,
-// reservoir->reference.object,
-// reservoir->reference.prim,
-// (double)reservoir->reference.param.x,
-// (double)reservoir->reference.param.y,
-// (int)reservoir->light.type,
-// reservoir->light.object,
-// reservoir->light.prim,
-// reservoir->light.shader,
-// (double)reservoir->radiance.sum.x,
-// (double)reservoir->radiance.sum.y,
-// (double)reservoir->radiance.sum.z);
-// #endif
-
   /* Apply unbiased contribution weight. */
   reservoir->total_weight /= reservoir->luminance; // !!!
 
-#if !defined(__KERNEL_GPU__) && defined(RESTIR_DI_DEBUG)
-  // printf("reservoir_finalize(): \ntotal_weight(after)=%f\n", (double)reservoir->total_weight);
-
-  // printf(
-  // "after normalization\n"
-  // "reservoir weight=%g\n",
-  // (double)reservoir->total_weight);
-#endif
-
   if (!(isfinite(reservoir->total_weight) && reservoir->total_weight > 0.0f)) {
     reservoir_clear(reservoir);
-    printf("reservoir_finalize(): checks failed! returned false!!! !!!");
     return false;
   }
-
-#if !defined(__KERNEL_GPU__) && defined(RESTIR_DI_DEBUG)
-  // printf(
-  // "after checks...\n"
-  // "reservoir weight=%g\n"
-  // "====================================================\n\n",
-  // (double)reservoir->total_weight);
-#endif
 
   return true;
 }
@@ -277,20 +212,6 @@ ccl_device_inline void reservoir_add_light_sample(
                        mis_weight / light_pdf_in_area,
                        rand,
                        require_valid_reference);
-
-// #if !defined(__KERNEL_GPU__) && defined(RESTIR_DI_DEBUG)
-//   printf("reservoir_add_sample():\n" // New Debug
-//   "candidate_reference param=(%f, %f)\n"
-//   "candidate_radiance sum= (%f, %f, %f)\n"
-//   "mis_weight=%f\n"
-//   "light_pdf_in_area=%f\n"
-//   "reservoir->total_weight=%g\n",
-//   (double)candidate_reference.param.x, (double)candidate_reference.param.y,
-//   (double)candidate_radiance.sum.x, (double)candidate_radiance.sum.y, (double)candidate_radiance.sum.z,
-//   (double)mis_weight,
-//   (double)light_pdf_in_area,
-//   (double)reservoir->total_weight);
-// #endif
 }
 
 ccl_device_inline void reservoir_add_bsdf_sample(
@@ -340,40 +261,9 @@ ccl_device_inline void reservoir_add_reservoir(ccl_private Reservoir *reservoir,
                                                const bool require_valid_reference)
 {
   // !!!: DI only
-  const bool a = reservoir_is_empty(&other);
-  const bool b = !reservoir_has_valid_reference(&other);
-  // if (reservoir_is_empty(&other) || !reservoir_has_valid_reference(&other)) {
-  if (a || b) {
-#if !defined(__KERNEL_GPU__) && defined(RESTIR_DI_DEBUG)
-    printf("!!! !!! reservoir_add_reservoir() early returned! !!! !!!\n"
-      "reservoir_is_empty():%u, !reservoir_has_valid_reference(): %d\n", 
-      a, b);
-#endif
+  if (reservoir_is_empty(&other) || !reservoir_has_valid_reference(&other)) {
     return;
   }
-
-#if !defined(__KERNEL_GPU__) && defined(RESTIR_DI_DEBUG)
-printf(
-"\n----- reservoir_add_reservoir -----\n"
-"other.total_weight=%g\n"
-"other.radiance=(%f,%f,%f)\n"
-"other.luminance=%g\n"
-"reference.valid=%d\n"
-"reference.type=%d\n"
-"reference.object=%d\n"
-"reference.prim=%d\n",
-(double)other.total_weight,
-(double)other.radiance.sum.x,
-(double)other.radiance.sum.y,
-(double)other.radiance.sum.z,
-(double)other.luminance,
-(int)reservoir_has_valid_reference(&other),
-(int)other.reference.type,
-other.reference.object,
-other.reference.prim);
-#endif
-/*If this already shows `radiance=(0,0,0)`
-then we know the corruption happened during film packing/unpacking.*/
 
   reservoir_add_sample(
       reservoir, other.light, other.reference, other.radiance, other.total_weight, rand, require_valid_reference);
@@ -381,29 +271,6 @@ then we know the corruption happened during film packing/unpacking.*/
 
 // TODO: Cleaner to inspect reservoir.reference?
 // TODO(weizhen): Maybe it should be determined when the sample is drawn, not afterwards
-// ccl_device_inline bool sample_copy_direction(KernelGlobals kg,
-//                                              ccl_private const Reservoir &reservoir)
-// {
-//   if (reservoir.is_empty()) {
-//     return false;
-//   }
-//
-//   if (reservoir.light.type == LIGHT_AREA) {
-//     const ccl_global KernelLight *klight = &kernel_data_fetch(lights, reservoir.light.prim); // light.lamp
-//     if (klight->area.tan_half_spread == 0.0f) {
-//       return true;
-//     }
-//   }
-//
-//   if (reservoir.light.type == LIGHT_POINT) {
-//     const ccl_global KernelLight *klight = &kernel_data_fetch(lights, reservoir.light.prim); // light.lamp
-//     if (!klight->spot.is_sphere) {
-//       return true;
-//     }
-//   }
-//
-//   return false;
-// }
 // !!!: Better against res.reference anyway, cause tis the persistent identity & survives film unpacking before light's been rebuilt.
 ccl_device_inline bool sample_copy_direction(KernelGlobals kg, // !!!: lamp
                                              ccl_private const Reservoir &reservoir)
@@ -482,71 +349,6 @@ ccl_device_inline void spatial_reservoir_add_reservoir(
   spatial_reservoir_add_reservoir(spatial_reservoir, other.reservoir, rand, require_valid_reference);
 }
 
-// TODO: Remove?
-// ccl_device_inline bool restir_unpack_light_reference(
-//     KernelGlobals kg,
-//     ccl_global const float *ptr,
-//     ccl_private ReSTIRLightSampleReference *reference)
-// {
-//   *reference = restir_light_reference_empty();
-
-//   reference->object = (int)ptr[0];
-//   reference->prim = (int)ptr[1];
-//   reference->param = make_float2(ptr[2], ptr[3]);
-
-//   if (reference->prim < 0) {
-//     return false;
-//   }
-
-//   const ccl_global KernelLight *klight = &kernel_data_fetch(lights, reference->prim);
-
-//   reference->type = (LightType)klight->type;
-//   reference->flags = RESTIR_LIGHT_REFERENCE_VALID;
-
-//   switch (reference->type) {
-//     case LIGHT_POINT:
-//       if (klight->spot.is_sphere) { // !!!: USE Proper distinguishment for spherical & delta point lights
-//         reference->flags |= RESTIR_LIGHT_REFERENCE_HAS_PARAM;
-//       }
-//       break;
-
-//     case LIGHT_SUN:
-//     case LIGHT_AREA:
-//       reference->flags |= RESTIR_LIGHT_REFERENCE_HAS_PARAM;
-//       break;
-
-//     default:
-//       *reference = restir_light_reference_empty();
-//       return false;
-//   }
-
-//   return true;
-// }
-
-// ccl_device_inline void restir_unpack_reservoir(
-//     KernelGlobals kg,
-//     ccl_private ReSTIRDIReservoir *reservoir,
-//     ccl_global const float *buffer)
-// {
-//   PROFILING_INIT(kg, PROFILING_RESTIR_RESERVOIR_PASSES);
-
-//   reservoir->reference = restir_light_reference_empty();
-
-//   const bool valid_reference = restir_unpack_light_reference(kg, buffer, &reservoir->reference);
-
-//   reservoir->total_weight = buffer[4];
-//   reservoir->luminance = buffer[5];
-
-//   // if (!valid_reference || !(reservoir->total_weight > 0.0f)) {
-//   if (!(isfinite(reservoir->total_weight) && reservoir->total_weight > 0.0f &&
-//       isfinite(reservoir->luminance) && reservoir->luminance >= 0.0f)) {
-//     reservoir->reference = restir_light_reference_empty();
-//     reservoir->total_weight = 0.0f;
-//     reservoir->luminance = 0.0f;
-//   }
-// }
-
-
 // !!!: Deserialize the persistent reference, not write identity and parameters into LightSample
 // !!!: Unpacking must produce a fully valid ReSTIRLightSampleReference
 ccl_device_inline bool restir_unpack_reservoir(KernelGlobals kg, // !!!: lamp
@@ -575,19 +377,7 @@ ccl_device_inline bool restir_unpack_reservoir(KernelGlobals kg, // !!!: lamp
   }
 
   // Reconstruct reference.type, RESTIR_LIGHT_REFERENCE_VALID, RESTIR_LIGHT_REFERENCE_HAS_PARAM
-  // return restir_light_reference_restore_metadata(kg, &reservoir->reference); // !!!: Make sure it properly reconstructs type
-  const bool ok = restir_light_reference_restore_metadata(kg, &reservoir->reference);
-
-  printf("restir_unpack_reservoir() returned=%d; prim=%d object=%d type=%d total_weight=%g\n",
-        ok,
-        reservoir->reference.prim,
-        reservoir->reference.object,
-        reservoir->reference.type,
-        (double)reservoir->total_weight);
-  kernel_assert(!ok || (reservoir->reference.prim >= 0 &&
-                reservoir->reference.prim < kernel_data.integrator.num_lights));
-
-  return ok;
+  return restir_light_reference_restore_metadata(kg, &reservoir->reference);
 }
 
 

@@ -213,18 +213,6 @@ ccl_device_inline bool restir_light_reference_from_sample( // !!!
       return restir_area_light_reference_from_sample(kg, ls, reference);
 
     default:
-// #if !defined(__KERNEL_GPU__) && defined(RESTIR_DI_DEBUG)
-//   printf("restir_light_reference_from_sample() 1; RESTIR REF dispatcher reject: "
-//          "unsupported type=%d prim=%d object=%d shader=%d "
-//          "pdf=%.9g eval_fac=%.9g\n",
-//          (int)ls->type,
-//          ls->prim,
-//          ls->object,
-//          ls->shader,
-//          (double)ls->pdf,
-//          (double)ls->eval_fac);
-// #endif
-
       *reference = restir_light_reference_empty();
       return false;
   }
@@ -239,12 +227,6 @@ ccl_device_inline bool restir_light_reference_restore_metadata(
     ccl_private ReSTIRLightSampleReference *reference)
 {
   reference->flags = 0;
-
-  // !!!: DI Blackout; Always returns false
-  // if (reference->object != OBJECT_NONE) {
-  //   printf("restir_light_reference_restore_metadata() returned=false; != OBJECT_NONE\n");
-  //   return false;
-  // }
 
   const ccl_global KernelLight *klight = &kernel_data_fetch(lights, reference->prim);
 
@@ -262,15 +244,9 @@ ccl_device_inline bool restir_light_reference_restore_metadata(
     case LIGHT_POINT:
     case LIGHT_SUN:
     case LIGHT_AREA:
-#if !defined(__KERNEL_GPU__) && defined(RESTIR_DI_DEBUG)
-      printf("restir_light_reference_restore_metadata() returned=true; supported lights\n");
-#endif
       return true;
     default:
       *reference = restir_light_reference_empty();
-#if !defined(__KERNEL_GPU__) && defined(RESTIR_DI_DEBUG)
-      printf("restir_light_reference_restore_metadata() returned=false; default case\n");
-#endif
       return false;
   }
 }
@@ -642,8 +618,10 @@ ccl_device_inline void restir_debug_validate_light_reference_roundtrip_from_refe
       kg, reference, P, N, shader_flags, path_flag, &reconstructed);
 
   if (!decoded) {
+#if !defined(__KERNEL_GPU__) && defined(RESTIR_DI_DEBUG)
     printf("ReSTIR roundtrip decode failed: type=%d prim=%d object=%d\n",
            (int)original->type, original->prim, original->object);
+#endif
     return;
   }
 
@@ -666,8 +644,9 @@ ccl_device_inline void restir_debug_validate_light_reference_roundtrip_from_refe
   ok &= restir_debug_compare_float(original->eval_fac, reconstructed.eval_fac, rel_eps);
 
   if (!ok) {
+#if !defined(__KERNEL_GPU__) && defined(RESTIR_DI_DEBUG)
     printf("ReSTIR roundtrip mismatch\n");
-// #if defined(__KERNEL_CPU__)
+
 //     printf("  original: type=%d prim=%d object=%d pdf=%f t=%f\n",
 //            (int)original->type, original->prim, original->object,
 //            (double)original->pdf, (double)original->t);
@@ -676,7 +655,7 @@ ccl_device_inline void restir_debug_validate_light_reference_roundtrip_from_refe
 //            (double)reconstructed.pdf, (double)reconstructed.t);
 // #else
 //     assert(false);
-// #endif
+#endif
   }
 }
 

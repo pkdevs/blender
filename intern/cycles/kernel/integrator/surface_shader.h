@@ -271,7 +271,7 @@ ccl_device_forceinline bool _surface_shader_exclude(ClosureType type,
 ccl_device_inline float _surface_shader_bsdf_eval_mis(KernelGlobals kg,
                                                       ccl_private ShaderData *sd,
                                                       const float3 wo,
-                                                      const ccl_private ShaderClosure *skip_sc,
+                                                      const ccl_private ShaderClosure *sampled_sc,
                                                       ccl_private BsdfEval *result_eval,
                                                       float sum_pdf,
                                                       float sum_sample_weight,
@@ -282,7 +282,7 @@ ccl_device_inline float _surface_shader_bsdf_eval_mis(KernelGlobals kg,
   for (int i = 0; i < sd->num_closure; i++) {
     const ccl_private ShaderClosure *sc = &sd->closure[i];
 
-    if (sc == skip_sc) {
+    if (sc == sampled_sc) {
       continue;
     }
 
@@ -357,6 +357,7 @@ ccl_device_inline float surface_shader_bsdf_eval_pdfs(const KernelGlobals kg,
   return (sum_sample_weight > 0.0f) ? sum_pdf / sum_sample_weight : 0.0f;
 }
 
+// !!!
 #ifndef __KERNEL_CUDA__
 ccl_device
 #else

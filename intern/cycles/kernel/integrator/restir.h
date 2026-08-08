@@ -80,31 +80,6 @@ ccl_device_inline bool integrator_restir_unpack_shader(ccl_private ShaderData *s
   /* TODO(weizhen): do I need to write to this? */
   // sd->closure_transparent_extinction;
 
-// #if !defined(__KERNEL_GPU__) && defined(RESTIR_DI_DEBUG)
-// printf(
-//     "RESTIR UNPACK SHADER:\n"
-//     "buffer[0] path_flag = %g\n"
-//     "buffer[1] u         = %g\n"
-//     "buffer[2] v         = %g\n"
-//     "buffer[3] type      = %g\n"
-//     "buffer[4] object    = %g\n"
-//     "buffer[5] prim      = %g\n"
-//     "buffer[6] lcg       = %g\n"
-//     "decoded: type=%u object=%d prim=%d u=%f v=%f\n",
-//     (double)buffer[0],
-//     (double)buffer[1],
-//     (double)buffer[2],
-//     (double)buffer[3],
-//     (double)buffer[4],
-//     (double)buffer[5],
-//     (double)buffer[6],
-//     (unsigned)sd->type,
-//     sd->object,
-//     sd->prim,
-//     (double)sd->u,
-//     (double)sd->v);
-// #endif
-
   /* Whether there is valid interesction at the current shading point. */
   /* TODO(weizhen): revisit this condition when we support background and distant lights. */ // !!!
   return sd->type; // !!!: a 0 type can mean that there was no valid surface intersection stored for this pixel.
@@ -145,21 +120,6 @@ ccl_device_inline bool integrator_restir_unpack_shader(KernelGlobals kg,
   return integrator_restir_unpack_shader(sd, &discard, buffer);
 }
 
-// ccl_device_inline bool integrator_restir_unpack_reservoir(KernelGlobals kg,
-//                                                           ccl_private Reservoir *reservoir,
-//                                                           uint32_t render_pixel_index,
-//                                                           ccl_global float *ccl_restrict
-//                                                               render_buffer,
-//                                                           const bool read_prev)
-// {
-//   PROFILING_INIT(kg, PROFILING_RESTIR_RESERVOIR_PASSES);
-
-//   ccl_global const float *buffer = pixel_render_buffer(kg, render_pixel_index, render_buffer) +
-//                                    (read_prev ? kernel_data.film.pass_restir_previous_reservoir :
-//                                                 kernel_data.film.pass_restir_reservoir);
-
-//   return restir_unpack_reservoir(kg, reservoir, buffer);
-// }
 ccl_device_inline bool integrator_restir_unpack_reservoir(
     KernelGlobals kg,
     ccl_private Reservoir *reservoir,
@@ -174,63 +134,7 @@ ccl_device_inline bool integrator_restir_unpack_reservoir(
       (read_prev ? kernel_data.film.pass_restir_previous_reservoir :
                    kernel_data.film.pass_restir_reservoir);
 
-#if !defined(__KERNEL_GPU__) && defined(RESTIR_DI_DEBUG)
-  printf(
-      "\n=== RESTIR RESERVOIR UNPACK; integrator_restir_unpack_reservoir() ===\n"
-      "pixel=%u\n"
-      "read_prev=%d\n"
-      "pass_stride=%llu\n"
-      "reservoir_offset=%llu\n"
-      "raw[0]=%g\n"
-      "raw[1]=%g\n"
-      "raw[2]=%g\n"
-      "raw[3]=%g\n"
-      "raw[4]=%g\n"
-      "raw[5]=%g\n",
-      render_pixel_index,
-      (int)read_prev,
-      (unsigned long long)kernel_data.film.pass_stride,
-      (unsigned long long)(
-          read_prev ?
-          kernel_data.film.pass_restir_previous_reservoir :
-          kernel_data.film.pass_restir_reservoir),
-      (double)buffer[0],
-      (double)buffer[1],
-      (double)buffer[2],
-      (double)buffer[3],
-      (double)buffer[4],
-      (double)buffer[5]);
-#endif
-
-  const bool result = restir_unpack_reservoir(kg, reservoir, buffer);
-
-#if !defined(__KERNEL_GPU__) && defined(RESTIR_DI_DEBUG)
-  printf(
-      "restir_unpack_reservoir() returned=%d\n"
-      "decoded total_weight=%g\n"
-      "decoded luminance=%g\n"
-      "decoded reference=(type=%d object=%d prim=%d param=%g,%g)\n"
-      "decoded light=(type=%d object=%d prim=%d shader=%d)\n"
-      "decoded radiance=(%g,%g,%g)\n"
-      "=============================================\n",
-      (int)result,
-      (double)reservoir->total_weight,
-      (double)reservoir->luminance,
-      (int)reservoir->reference.type,
-      reservoir->reference.object,
-      reservoir->reference.prim,
-      (double)reservoir->reference.param.x,
-      (double)reservoir->reference.param.y,
-      (int)reservoir->light.type,
-      reservoir->light.object,
-      reservoir->light.prim,
-      reservoir->light.shader,
-      (double)reservoir->radiance.sum.x,
-      (double)reservoir->radiance.sum.y,
-      (double)reservoir->radiance.sum.z);
-#endif
-
-  return result;
+  return restir_unpack_reservoir(kg, reservoir, buffer);
 }
 
 ccl_device_inline bool integrator_restir_unpack_reservoir(KernelGlobals kg,
@@ -405,7 +309,6 @@ ccl_device_inline bool streaming_di_samples(KernelGlobals kg,
   for (int i = 1; i < samples; i++) {
     const float3 rand = path_branched_rng_3D(kg,
                                              rng_state,
-                                            //  state->spatial_iteration * samples + i,
                                             INTEGRATOR_STATE(state, path, spatial_iteration) * samples + i,
                                              kernel_data.integrator.restir_spatial_iterations *
                                                  samples,
@@ -501,7 +404,6 @@ ccl_device_inline bool streaming_di_samples(KernelGlobals kg,
     canonical.total_weight *= canonical_mis_weight;
     const float rand = path_branched_rng_3D(kg,
                                             rng_state,
-                                            // state->spatial_iteration * samples,
                                             INTEGRATOR_STATE(state, path, spatial_iteration) ,
                                             kernel_data.integrator.restir_spatial_iterations * samples,
                                             PRNG_SPATIAL_RESAMPLING)
@@ -521,8 +423,6 @@ ccl_device void integrator_evaluate_final_samples(KernelGlobals kg, // DEVICE_KE
                                                   IntegratorState state,
                                                   ccl_global float *ccl_restrict render_buffer)
 {
-  // printf("=== === === integrator_evaluate_final_samples() Executed! === === ===\n"); // ALWAYS PRINTED
-
   SpatialReservoir current;
   spatial_reservoir_init(kg, &current, true); // !!!: require_valid_reference
 
@@ -533,63 +433,17 @@ ccl_device void integrator_evaluate_final_samples(KernelGlobals kg, // DEVICE_KE
 
   const bool read_prev = INTEGRATOR_STATE(state, path, spatial_iteration) % 2;
 
-#if !defined(__KERNEL_GPU__) && defined(RESTIR_DI_DEBUG)
-// printf(
-//     "\nFINAL EVAL; integrator_evaluate_final_samples():\n"
-//     "pixel=%u\n"
-//     "spatial_iteration=%d\n"
-//     "read_prev=%d\n"
-//     "pass_stride=%llu\n"
-//     "surface_offset=%llu\n"
-//     "reservoir_offset=%llu\n",
-//     render_pixel_index,
-//     INTEGRATOR_STATE(state, path, spatial_iteration),
-//     (int)read_prev,
-//     (unsigned long long)kernel_data.film.pass_stride,
-//     (unsigned long long)kernel_data.film.pass_surface_data,
-//     (unsigned long long)(read_prev ?
-//         kernel_data.film.pass_restir_previous_reservoir :
-//         kernel_data.film.pass_restir_reservoir));
-#endif
+  const bool reservoir_ok = integrator_restir_unpack_reservoir(
+      kg, &reservoir, render_pixel_index, render_buffer, read_prev);
+  const bool shader_ok = integrator_restir_unpack_shader(
+      kg, &current, render_pixel_index, render_buffer);
 
-const bool reservoir_ok = integrator_restir_unpack_reservoir(
-    kg, &reservoir, render_pixel_index, render_buffer, read_prev);
-
-const bool shader_ok = integrator_restir_unpack_shader(
-    kg, &current, render_pixel_index, render_buffer);
-
-  // if (!integrator_restir_unpack_reservoir(
-  //         kg, &reservoir, render_pixel_index, render_buffer, read_prev) ||
-  //     !integrator_restir_unpack_shader(kg, &current, render_pixel_index, render_buffer))
   if (!reservoir_ok || !shader_ok) {
-#if !defined(__KERNEL_GPU__) && defined(RESTIR_DI_DEBUG)
-    // !!!: Always early returns!!! reservoir_ok=0 shader_ok=1
-    // !!!: DI Blackout
-    printf("!!! integrator_evaluate_final_samples() Early returned! !!!\n"
-        "reservoir_ok=%d\nshader_ok=%d\n", (int)reservoir_ok, (int)shader_ok);
-#endif
-
     integrator_path_next(state,
                          DEVICE_KERNEL_INTEGRATOR_FINAL_EVALUATION,
                          DEVICE_KERNEL_INTEGRATOR_RESTIR_PT_EVALUATION);
     return;
   }
-
-#if !defined(__KERNEL_GPU__) && defined(RESTIR_DI_DEBUG)
-  printf(
-  "\n=== FINAL EVALUATION; integrator_evaluate_final_samples() ===\n"
-  "after unpack\n"
-  "weight=%g\n"
-  "radiance=(%f,%f,%f)\n"
-  "reference=(type=%d object=%d prim=%d)\n",
-  (double)reservoir.total_weight,
-  (double)reservoir.radiance.sum.x,
-  (double)reservoir.radiance.sum.y,
-  (double)reservoir.radiance.sum.z,
-  (int)reservoir.reference.type,
-  reservoir.reference.object,
-  reservoir.reference.prim);
-#endif
 
   shader_data_setup_from_restir(kg, state, &current, render_buffer); // !!!: 
 
@@ -603,82 +457,13 @@ const bool shader_ok = integrator_restir_unpack_shader(
       current.path_flag,
       &reservoir.light);
 
-#if !defined(__KERNEL_GPU__) && defined(RESTIR_DI_DEBUG)
-printf(
-"after rebuild\n"
-"light.type=%d\n"
-"light.object=%d\n"
-"light.prim=%d\n"
-"light.shader=%d\n"
-"light.pdf=%g\n"
-"light.eval_fac=%g\n",
-(int)reservoir.light.type,
-reservoir.light.object,
-reservoir.light.prim,
-reservoir.light.shader,
-(double)reservoir.light.pdf,
-(double)reservoir.light.eval_fac);
-#endif
-
   radiance_eval(kg, state, &current.sd, &reservoir.light, &reservoir.radiance, nullptr); // TODO: Remove &reservoir.reference?
-
-#if !defined(__KERNEL_GPU__) && defined(RESTIR_DI_DEBUG)
-printf(
-"after radiance_eval\n"
-"radiance=(%f,%f,%f)\n"
-"weight=%g\n",
-(double)reservoir.radiance.sum.x,
-(double)reservoir.radiance.sum.y,
-(double)reservoir.radiance.sum.z,
-(double)reservoir.total_weight);
-#endif
 
   reservoir_add_reservoir(&current.reservoir, reservoir, 0.0f, true); // !!!: require_valid_reference
 
-#if !defined(__KERNEL_GPU__) && defined(RESTIR_DI_DEBUG)
-printf(
-"after reservoir_add_reservoir\n"
-"current.weight=%g\n"
-"current.radiance=(%f,%f,%f)\n",
-(double)current.reservoir.total_weight,
-(double)current.reservoir.radiance.sum.x,
-(double)current.reservoir.radiance.sum.y,
-(double)current.reservoir.radiance.sum.z);
-#endif
-
   reservoir_finalize(&current.reservoir, true); // !!!: require_valid_reference
 
-#if !defined(__KERNEL_GPU__) && defined(RESTIR_DI_DEBUG)
-printf(
-"after finalize\n"
-"weight=%g\n"
-"radiance=(%f,%f,%f)\n",
-(double)current.reservoir.total_weight,
-(double)current.reservoir.radiance.sum.x,
-(double)current.reservoir.radiance.sum.y,
-(double)current.reservoir.radiance.sum.z);
-#endif
-
   bsdf_eval_mul(&current.reservoir.radiance, current.reservoir.total_weight); // !!!: DI Blackout?
-
-#if !defined(__KERNEL_GPU__) && defined(RESTIR_DI_DEBUG)
-printf(
-"\n******** FINAL CONTRIBUTION ********\n"
-"weight=%g\n"
-"radiance=(%f,%f,%f)\n"
-"final=(%f,%f,%f)\n"
-"************************************\n",
-(double)current.reservoir.total_weight,
-(double)(current.reservoir.radiance.sum.x /
-         current.reservoir.total_weight),
-(double)(current.reservoir.radiance.sum.y /
-         current.reservoir.total_weight),
-(double)(current.reservoir.radiance.sum.z /
-         current.reservoir.total_weight),
-(double)current.reservoir.radiance.sum.x,
-(double)current.reservoir.radiance.sum.y,
-(double)current.reservoir.radiance.sum.z);
-#endif
 
   /* Load random number state. */
   RNGState rng_state;
@@ -722,7 +507,6 @@ ccl_device_inline void streaming_pt_samples(KernelGlobals kg,
     const float4 rand = path_branched_rng_4D(
       kg,
       rng_state,
-    //  state->spatial_iteration * samples + i,
       INTEGRATOR_STATE(state, path, spatial_iteration) * samples + i,
       kernel_data.integrator.restir_spatial_iterations * samples,
       PRNG_SPATIAL_RESAMPLING);
@@ -797,8 +581,6 @@ ccl_device bool integrator_restir(KernelGlobals kg,
                                   const int scheduled_sample)
 {
   PROFILING_INIT(kg, PROFILING_RESTIR_SPATIAL_RESAMPLING);
-
-  // printf("=== === === integrator_restir() Executed! === === ===");
 
   SpatialReservoir current;
   spatial_reservoir_init(kg, &current, true); // !!!: require_valid_reference

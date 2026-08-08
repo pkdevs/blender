@@ -354,18 +354,6 @@ ccl_device ShaderEvalResult light_sample_shader_eval(
     if ((ls->prim != PRIM_NONE) && dot(ls->Ng, ls->D) > 0.0f) {
       ls->Ng = -ls->Ng;
     }
-
-// #if !defined(__KERNEL_GPU__) && defined(RESTIR_DI_DEBUG)
-//     printf(
-//         "light_sample_shader_eval() 1; LIGHT_EVAL stage=constant\n"
-//         "type=%d shader=%d\n"
-//         "eval=(%f,%f,%f)\n",
-//         (int)ls->type,
-//         ls->shader,
-//         (double)eval.x,
-//         (double)eval.y,
-//         (double)eval.z);
-// #endif
   }
   else {
     /* Setup shader data and call surface_shader_eval once, better
@@ -408,16 +396,6 @@ ccl_device ShaderEvalResult light_sample_shader_eval(
       ls->Ng = emission_sd->Ng;
     }
 
-// #if !defined(__KERNEL_GPU__) && defined(RESTIR_DI_DEBUG)
-//     printf(
-//         "light_sample_shader_eval() 2; LIGHT_EVAL stage=setup\n"
-//         "shader=%d object=%d prim=%d flag=0x%x\n",
-//         emission_sd->shader,
-//         emission_sd->object,
-//         emission_sd->prim,
-//         emission_sd->flag);
-// #endif
-
     PROFILING_SHADER(emission_sd->object, emission_sd->shader);
     PROFILING_EVENT(PROFILING_SHADE_LIGHT_EVAL);
 
@@ -430,9 +408,6 @@ ccl_device ShaderEvalResult light_sample_shader_eval(
         PATH_RAY_EMISSION);
 
     if (emission_sd->flag & SD_CACHE_MISS) {
-// #if !defined(__KERNEL_GPU__) && defined(RESTIR_DI_DEBUG)
-//       printf("LIGHT_EVAL stage=cache_miss\n");
-// #endif
       r_eval = zero_spectrum();
       return SHADER_EVAL_CACHE_MISS;
     }
@@ -443,30 +418,10 @@ ccl_device ShaderEvalResult light_sample_shader_eval(
     else {
       eval = surface_shader_emission(emission_sd);
     }
-
-// #if !defined(__KERNEL_GPU__) && defined(RESTIR_DI_DEBUG)
-//     printf(
-//         "light_sample_shader_eval() 3; LIGHT_EVAL stage=shader\n"
-//         "eval=(%f,%f,%f)\n",
-//         (double)eval.x,
-//         (double)eval.y,
-//         (double)eval.z);
-// #endif
   }
 
   /* Old PR semantics. */
   eval *= ls->eval_fac;
-
-// #if !defined(__KERNEL_GPU__) && defined(RESTIR_DI_DEBUG)
-//   printf(
-//       "light_sample_shader_eval() 4; LIGHT_EVAL stage=eval_fac\n"
-//       "eval_fac=%f\n"
-//       "eval=(%f,%f,%f)\n",
-//       (double)ls->eval_fac,
-//       (double)eval.x,
-//       (double)eval.y,
-//       (double)eval.z);
-// #endif
 
   /* Old PR:
    *
@@ -482,19 +437,6 @@ ccl_device ShaderEvalResult light_sample_shader_eval(
         klight->strength[0],
         klight->strength[1],
         klight->strength[2]));
-
-// #if !defined(__KERNEL_GPU__) && defined(RESTIR_DI_DEBUG)
-//     printf(
-//         "light_sample_shader_eval() 5; LIGHT_EVAL stage=strength\n"
-//         "strength=(%f,%f,%f)\n"
-//         "eval=(%f,%f,%f)\n",
-//         (double)klight->strength[0],
-//         (double)klight->strength[1],
-//         (double)klight->strength[2],
-//         (double)eval.x,
-//         (double)eval.y,
-//         (double)eval.z);
-// #endif
   }
 
   if (check_visibility) {
@@ -505,26 +447,10 @@ ccl_device ShaderEvalResult light_sample_shader_eval(
 
     Intersection isect;
     if (scene_intersect(kg, &ray, PATH_RAY_VISIBILITY_SHADOW_OPAQUE, &isect)) {
-// #if !defined(__KERNEL_GPU__) && defined(RESTIR_DI_DEBUG)
-//       printf("LIGHT_EVAL stage=visibility occluded\n");
-// #endif
       r_eval = zero_spectrum();
       return SHADER_EVAL_EMPTY;
     }
   }
-
-// #if !defined(__KERNEL_GPU__) && defined(RESTIR_DI_DEBUG)
-//   printf(
-//       "light_sample_shader_eval() 6; LIGHT_EVAL stage=return\n"
-//       "type=%d shader=%d prim=%d\n"
-//       "eval=(%f,%f,%f)\n",
-//       (int)ls->type,
-//       ls->shader,
-//       ls->prim,
-//       (double)eval.x,
-//       (double)eval.y,
-//       (double)eval.z);
-// #endif
 
   r_eval = eval;
   return is_zero(eval) ? SHADER_EVAL_EMPTY : SHADER_EVAL_OK;

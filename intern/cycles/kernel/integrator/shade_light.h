@@ -16,38 +16,6 @@
 
 CCL_NAMESPACE_BEGIN
 
-// TODO(Tri): Move elsewhere
-/* Reconstruct a ReSTIR light sample reference from a forward intersection. 
- * This is the inverse of 'reconstruct_light_sample' and is used to 
- * serialize a light hit into a reservoir. */
-ccl_device_inline ReSTIRLightSampleReference restir_light_sample_reference_from_isect(
-    KernelGlobals kg, 
-    ccl_private const Intersection *isect)
-{
-  ReSTIRLightSampleReference ref;
-
-  /* For mesh lights, isect.prim is the triangle index.
-   * For analytic lights, isect.prim is the ~lamp index (negative). */
-  if (isect->prim >= 0) {
-    /* Mesh Emitter */
-    ref.object = isect->object; // Storing object ID for mesh lights
-    ref.prim = isect->prim;
-  }
-  else {
-    /* Analytic Light (Lamp) */
-    ref.object = ~isect->prim;
-    ref.prim = -1;
-  }
-
-  /* Store barycentrics/UVs for the hit point */
-  ref.param.x = isect->u;
-  ref.param.y = isect->v;
-
-  return ref;
-}
-
-// MARK: - 
-
 ccl_device_inline ShaderEvalResult integrate_light_forward(
     KernelGlobals kg, IntegratorState state, ccl_global float *ccl_restrict render_buffer)
 {
@@ -103,7 +71,7 @@ ccl_device_inline ShaderEvalResult integrate_light_forward(
                                               isect.prim,
                                               light_eval.pdf,
                                               ray_P);
-  const float mis_weight = light_sample_mis_weight_forward(kg, forward_pdf, nee_pdf);
+  const float mis_weight = light_sample_mis_weight_forward(kg, forward_pdf, nee_pdf); // !!!: check against old PR
 
   guiding_record_surface_emission(kg, state, eval, mis_weight);
 
@@ -133,7 +101,7 @@ ccl_device_inline ShaderEvalResult integrate_light_forward(
     }
     else {
       const Spectrum contribution = INTEGRATOR_STATE(state, path, throughput) * eval * mis_weight;
-      ccl_global float *buffer = film_pass_pixel_render_buffer(kg, state, render_buffer);
+      ccl_global float *buffer = film_pass_pixel_render_buffer(kg, state, render_buffer); // !!!
       film_add_reservoir_pt(kg, path_flag, contribution, &rng_state, buffer);
     }
   }
