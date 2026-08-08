@@ -1461,6 +1461,36 @@ static void draw_strips_background(const TimelineDrawContext &ctx,
       rgb_float_to_uchar(col, colvars->col);
       data.col_color_band = color_pack(col);
     }
+
+    /* Transition state. */
+    if (show_overlay && strip.can_draw_strip_content &&
+        strip.strip->effect_num_inputs_get() == 2 &&
+        seq::strip_type_can_be_transition(strip.strip->type))
+    {
+      data.flags |= GPU_SEQ_FLAG_TRANSITION;
+      const Strip *input1 = strip.strip->input1;
+      const Strip *input2 = strip.strip->input2;
+      /* Left side. */
+      if (input1->type == STRIP_TYPE_COLOR) {
+        rgb_float_to_uchar(col, (static_cast<const SolidColorVars *>(input1->effectdata))->col);
+      }
+      else {
+        color3ubv_from_seq(scene, input1, strip.show_strip_color_tag, strip.is_muted, col);
+      }
+      data.col_transition_in = color_pack(col);
+      /* Right side. */
+      if (input2->type == STRIP_TYPE_COLOR) {
+        rgb_float_to_uchar(col, (static_cast<const SolidColorVars *>(input2->effectdata))->col);
+      }
+      else {
+        color3ubv_from_seq(scene, input2, strip.show_strip_color_tag, strip.is_muted, col);
+        /* If the transition inputs are of the same type, draw the right side slightly darker. */
+        if (input1->type == input2->type) {
+          ui::theme::get_color_shade_3ubv(col, -15, col);
+        }
+      }
+      data.col_transition_out = color_pack(col);
+    }
   }
   strips_batch.flush_batch();
   GPU_blend(GPU_BLEND_ALPHA);
@@ -1779,6 +1809,7 @@ static void draw_seq_transitions(const TimelineDrawContext &ctx,
 
     data.flags |= GPU_SEQ_FLAG_BACKGROUND;
     data.flags |= GPU_SEQ_FLAG_TRANSITION;
+    data.flags |= GPU_SEQ_FLAG_SAME_CHANNEL_TRANSITION;
 
     strip_data_handle_flags_set(strip, ctx, data);
     strip_data_outline_params_set(strip, ctx, data);

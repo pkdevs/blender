@@ -109,7 +109,6 @@ enum [[host_shared]] GPUSeqFlags : uint32_t {
   GPU_SEQ_FLAG_BACKGROUND = (1u << 0u),
   GPU_SEQ_FLAG_SINGLE_IMAGE = (1u << 1u),
   GPU_SEQ_FLAG_COLOR_BAND = (1u << 2u),
-  GPU_SEQ_FLAG_TRANSITION = (1u << 3u),
   GPU_SEQ_FLAG_LOCKED = (1u << 4u),
   GPU_SEQ_FLAG_MISSING_TITLE = (1u << 5u),
   GPU_SEQ_FLAG_MISSING_CONTENT = (1u << 6u),
@@ -119,6 +118,8 @@ enum [[host_shared]] GPUSeqFlags : uint32_t {
   GPU_SEQ_FLAG_BORDER = (1u << 10u),
   GPU_SEQ_FLAG_SELECTED_LH = (1u << 11u),
   GPU_SEQ_FLAG_SELECTED_RH = (1u << 12u),
+  GPU_SEQ_FLAG_TRANSITION = (1u << 13u),
+  GPU_SEQ_FLAG_SAME_CHANNEL_TRANSITION = (1u << 14u),
   GPU_SEQ_FLAG_OVERLAP = (1u << 15u),
   GPU_SEQ_FLAG_CLAMPED = (1u << 16u),
 

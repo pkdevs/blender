@@ -54,7 +54,7 @@ float4 draw_transition(float sdf, float sdf_inner, float4 col_contents)
 
   float4 col = mix(outline, col_contents, box_inner);
 
-  /* Premultiply for add_outline. */
+  /* Premultiply for #add_outline. */
   col.rgb *= col.a;
 
   /* Inset line. */
@@ -86,9 +86,10 @@ void main()
 
   bool border = (strip.flags & GPU_SEQ_FLAG_BORDER) != 0;
   bool selected = (strip.flags & GPU_SEQ_FLAG_SELECTED) != 0;
-  bool transition = (strip.flags & GPU_SEQ_FLAG_TRANSITION) != 0;
+  bool same_channel_transition = (strip.flags & GPU_SEQ_FLAG_SAME_CHANNEL_TRANSITION) != 0;
 
-  float outline_width = (transition ? (selected ? 3.0f : 2.0f) : (selected ? 2.0f : 1.0f)) *
+  float outline_width = (same_channel_transition ? (selected ? 3.0f : 2.0f) :
+                                                   (selected ? 2.0f : 1.0f)) *
                         context_data.pixelsize;
 
   /* Distance to whole strip shape. */
@@ -123,8 +124,8 @@ void main()
     }
   }
 
-  /* Diagonal transition line. */
-  if (transition) {
+  /* Diagonal transition line. Drawn both for effect and same channel transitions. */
+  if ((strip.flags & GPU_SEQ_FLAG_TRANSITION) != 0) {
     if (co.x >= strip.left_handle && co.x <= strip.right_handle && co.y < strip.strip_content_top)
     {
       float start_x = strip.left_handle + 2.0f * context_data.pixelsize;
@@ -138,7 +139,7 @@ void main()
 
   /* Same channel transitions may have a transparent outline.
    * Draw them in a separate function in one pass. */
-  if (transition) {
+  if (same_channel_transition) {
     fragColor = draw_transition(sdf, sdf_inner, col);
     return;
   }
