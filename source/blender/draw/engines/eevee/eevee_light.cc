@@ -501,7 +501,7 @@ void LightModule::end_sync()
   culling_light_buf_.resize(lights_allocated);
 
   {
-    int2 render_extent = inst_.film.render_extent_get();
+    int2 render_extent = inst_.film.render_extent_shading_view_get();
     int2 probe_extent = int2(inst_.sphere_probes.probe_render_extent());
     int2 max_extent = math::max(render_extent, probe_extent);
     /* Compute tile size and total word count. */

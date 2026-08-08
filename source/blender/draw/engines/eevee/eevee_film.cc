@@ -268,6 +268,18 @@ static eViewLayerEEVEEPassType get_viewport_compositor_enabled_passes(
   return viewport_compositor_enabled_passes;
 }
 
+int2 Film::render_extent_shading_view_get() const
+{
+  int2 extent = render_extent_get();
+  if (!inst_.camera.is_panoramic()) {
+    return extent;
+  }
+  /* Same square extent `ShadingView::sync` gives each face: same total pixel count as
+   * `extent`, reshaped to a square so pixel density stays close to the final film. */
+  int64_t render_pixel_count = extent.x * int64_t(extent.y);
+  return int2(ceilf(sqrtf(float(render_pixel_count))));
+}
+
 void Film::init(const int2 &extent, const rcti *output_rect)
 {
   using namespace math;
@@ -562,7 +574,9 @@ void Film::sync()
    *
    * See #153463
    */
-  use_compute_ = !inst_.is_viewport() ||
+  /* The fragment shader path below is only safe to call once per frame, so force the
+   * compute path for panoramic to avoid a race between accumulate calls. */
+  use_compute_ = !inst_.is_viewport() || inst_.camera.is_panoramic() ||
                  GPU_type_matches(GPU_DEVICE_INTEL, GPU_OS_MAC, GPU_DRIVER_ANY) ||
                  GPU_type_matches_ex(
                      GPU_DEVICE_QUALCOMM, GPU_OS_WIN, GPU_DRIVER_ANY, GPU_BACKEND_VULKAN);
@@ -587,6 +601,7 @@ void Film::sync()
   copy_ps_.init();
   if (use_compute_ && inst_.is_viewport()) {
     init_pass(copy_ps_, inst_.shaders.static_shader_get(FILM_COPY));
+    copy_ps_.barrier(GPU_BARRIER_TEXTURE_FETCH | GPU_BARRIER_SHADER_IMAGE_ACCESS);
     copy_ps_.draw_procedural(GPU_PRIM_TRIS, 1, 3);
   }
 
@@ -653,7 +668,7 @@ void Film::init_pass(PassSimple &pass, gpu::Shader *sh)
 
 void Film::end_sync()
 {
-  use_reprojection_ = inst_.sampling.interactive_mode();
+  use_reprojection_ = inst_.sampling.interactive_mode() && !inst_.camera.is_panoramic();
 
   /* Just bypass the reprojection and reset the accumulation. */
   if (inst_.is_viewport() && !use_reprojection_ && inst_.sampling.is_reset()) {

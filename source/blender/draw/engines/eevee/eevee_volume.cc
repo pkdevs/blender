@@ -27,7 +27,10 @@ void VolumeModule::init()
 
   const Scene *scene_eval = inst_.scene;
 
-  const int2 extent = inst_.film.render_extent_get();
+  /* The froxel grid's aspect ratio must match the view it will be sampled against in
+   * `VolumeModule::set_view`, otherwise `coord_scale` ends up sampling outside the valid tile
+   * range. */
+  const int2 extent = inst_.film.render_extent_shading_view_get();
   int tile_size = clamp_i(scene_eval->eevee.volumetric_tile_size, 1, 16);
 
   int3 tex_size;

@@ -148,6 +148,11 @@ class Film {
   {
     return data_.render_extent;
   }
+  /**
+   * Returns the extent rendered by one shading view, including overscan: a square cubemap face
+   * for panoramic cameras and the rectangular render extent for all other cameras.
+   */
+  int2 render_extent_shading_view_get() const;
   bool is_valid_render_extent() const
   {
     return is_valid_render_extent_;
