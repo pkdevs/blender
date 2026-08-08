@@ -44,6 +44,7 @@
 #include "BLI_string_utf8.hh"
 #include "BLI_system.hh"
 #include "BLI_time.hh"
+#include "BLI_vector.hh"
 
 #include "BLT_translation.hh"
 
@@ -2827,7 +2828,21 @@ bool WM_clipboard_image_available()
   if (G.background) {
     return false;
   }
-  return bool(g_system->hasClipboardImage());
+
+  const auto check_fn = [](GHOST_ImageData image_data) -> bool {
+    return std::visit(
+        []<typename T>(const T &value) -> bool {
+          if constexpr (std::is_same_v<T, GHOST_ImageData::FilePath>) {
+            return IMB_test_image(value.filepath);
+          }
+
+          BLI_assert_unreachable();
+          return false;
+        },
+        image_data.data);
+  };
+
+  return bool(g_system->hasClipboardImage(check_fn));
 }
 
 ImBuf *WM_clipboard_image_get()
@@ -2836,15 +2851,29 @@ ImBuf *WM_clipboard_image_get()
     return nullptr;
   }
 
-  int width, height;
+  ImBuf *ibuf = nullptr;
+  const auto load_fn = [&](GHOST_ImageData image_data) {
+    std::visit(
+        [&]<typename T>(const T &value) -> void {
+          if constexpr (std::is_same_v<T, GHOST_ImageData::Bitmap>) {
+            ibuf = IMB_allocFromBufferOwn(value.buffer, nullptr, value.width, value.height, 4);
+          }
+          else if constexpr (std::is_same_v<T, GHOST_ImageData::MemFile>) {
+            ibuf = IMB_load_image_from_memory(
+                value.buffer, value.size, ImBufFlags::ByteData, "<clipboard>");
+          }
+          else if constexpr (std::is_same_v<T, GHOST_ImageData::FilePath>) {
+            ibuf = IMB_load_image_from_filepath(value.filepath,
+                                                ImBufFlags::ByteData | ImBufFlags::MultiLayer);
+          }
+          else {
+            BLI_assert_unreachable();
+          }
+        },
+        image_data.data);
+  };
 
-  uint8_t *rgba = reinterpret_cast<uint8_t *>(g_system->getClipboardImage(&width, &height));
-  if (!rgba) {
-    return nullptr;
-  }
-
-  ImBuf *ibuf = IMB_allocFromBuffer(rgba, nullptr, width, height, 4);
-  free(rgba);
+  g_system->getClipboardImage(load_fn);
 
   return ibuf;
 }
@@ -2858,10 +2887,20 @@ bool WM_clipboard_image_set_byte_buffer(ImBuf *ibuf)
     return false;
   }
 
-  bool success = bool(g_system->putClipboardImage(
-      reinterpret_cast<uint *>(ibuf->byte_data_for_write()), ibuf->x, ibuf->y));
+  Vector<GHOST_ImageData> images;
 
-  return success;
+  images.append({.data = GHOST_ImageData::ConstBitmap{.width = uint32_t(ibuf->x),
+                                                      .height = uint32_t(ibuf->y),
+                                                      .buffer = ibuf->byte_data()}});
+
+#if !defined(__APPLE__)
+  BLI_assert(ibuf->ftype == IMB_FTYPE_PNG);
+  Vector<uint8_t> encoded = IMB_save_image_to_buffer(ibuf, ImBufFlags::ByteData);
+  images.append({.data = GHOST_ImageData::MemFile{.size = uint32_t(encoded.size()),
+                                                  .buffer = encoded.data()}});
+#endif
+
+  return bool(g_system->putClipboardImage(images));
 }
 
 /** \} */

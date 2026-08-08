@@ -15,6 +15,9 @@
 
 // #define __CARBONSOUND__
 
+#include <functional>
+#include <span>
+
 #include "GHOST_System.hh"
 
 class GHOST_EventCursor;
@@ -231,24 +234,21 @@ class GHOST_SystemCocoa : public GHOST_System {
 
   /**
    * Returns GHOST_kSuccess if the clipboard contains an image.
+   * \param check_fn: the callback to invoke on the potential clipboard data.
    */
-  GHOST_TSuccess hasClipboardImage() const override;
+  GHOST_TSuccess hasClipboardImage(std::function<bool(GHOST_ImageData)> check_fn) const override;
 
   /**
    * Get image data from the Clipboard
-   * \param r_width: the returned image width in pixels.
-   * \param r_height: the returned image height in pixels.
-   * \return pointer uint array in RGBA byte order. Caller must free.
+   * \param load_fn: the callback to invoke on the clipboard data.
    */
-  uint *getClipboardImage(int *r_width, int *r_height) const override;
+  void getClipboardImage(std::function<void(GHOST_ImageData)> load_fn) const override;
 
   /**
    * Put image data to the Clipboard
-   * \param rgba: uint array in RGBA byte order.
-   * \param width: the image width in pixels.
-   * \param height: the image height in pixels.
+   * \param images: a list of images to place onto the clipboard.
    */
-  GHOST_TSuccess putClipboardImage(uint *rgba, int width, int height) const override;
+  GHOST_TSuccess putClipboardImage(std::span<GHOST_ImageData> images) const override;
 
   /**
    * Handles a window event. Called by GHOST_WindowCocoa window delegate

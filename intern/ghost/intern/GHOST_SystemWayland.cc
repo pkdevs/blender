@@ -50,10 +50,12 @@
 
 #include <algorithm>
 #include <atomic>
+#include <functional>
 #include <optional>
 #include <string_view>
 #include <thread>
 #include <unordered_set>
+#include <variant>
 
 #ifdef WITH_GHOST_WAYLAND_DYNLOAD
 #  include <wayland_dynload_cursor.h>
@@ -105,9 +107,6 @@
 #include "GHOST_TimerTask.hh"
 
 static signed char has_wl_trackpad_physical_direction = -1;
-
-#include "IMB_imbuf.hh"
-#include "IMB_imbuf_types.hh"
 
 /* -------------------------------------------------------------------- */
 /** \name Defines for Testing
@@ -9576,7 +9575,8 @@ void GHOST_SystemWayland::putClipboard(const char *buffer, const bool selection)
 
 static constexpr const char *ghost_wl_mime_img_png = "image/png";
 
-GHOST_TSuccess GHOST_SystemWayland::hasClipboardImage() const
+GHOST_TSuccess GHOST_SystemWayland::hasClipboardImage(
+    std::function<bool(GHOST_ImageData)> check_fn) const
 {
 #ifdef USE_EVENT_BACKGROUND_THREAD
   std::lock_guard lock_server_guard{*server_mutex};
@@ -9609,7 +9609,8 @@ GHOST_TSuccess GHOST_SystemWayland::hasClipboardImage() const
         if (!uris.empty()) {
           const std::string_view &uri = uris.front();
           char *filepath = GHOST_URL_decode_alloc(uri.data(), uri.size());
-          if (blender::IMB_test_image(filepath)) {
+          GHOST_ImageData image_data{.data = GHOST_ImageData::FilePath{.filepath = filepath}};
+          if (check_fn(image_data)) {
             result = GHOST_kSuccess;
           }
           free(filepath);
@@ -9624,7 +9625,7 @@ GHOST_TSuccess GHOST_SystemWayland::hasClipboardImage() const
   return result;
 }
 
-uint *GHOST_SystemWayland::getClipboardImage(int *r_width, int *r_height) const
+void GHOST_SystemWayland::getClipboardImage(std::function<void(GHOST_ImageData)> load_fn) const
 {
 #ifdef USE_EVENT_BACKGROUND_THREAD
   std::lock_guard lock_server_guard{*server_mutex};
@@ -9649,10 +9650,9 @@ uint *GHOST_SystemWayland::getClipboardImage(int *r_width, int *r_height) const
       char *data = system_clipboard_get(display_, false, ghost_wl_mime_img_png, &data_len);
 
       if (data) {
-        /* Generate the image buffer with the received data. */
-        ibuf = blender::IMB_load_image_from_memory(
-            (const uint8_t *)data, data_len, blender::ImBufFlags::ByteData, "<clipboard>");
-        free(data);
+        GHOST_ImageData image_data{
+            .data = GHOST_ImageData::MemFile{.size = data_len, .buffer = (const uint8_t *)data}};
+        load_fn(image_data);
       }
     }
     else if (data_offer->types.contains(ghost_wl_mime_text_uri_list)) {
@@ -9666,27 +9666,17 @@ uint *GHOST_SystemWayland::getClipboardImage(int *r_width, int *r_height) const
         if (!uris.empty()) {
           const std::string_view &uri = uris.front();
           char *filepath = GHOST_URL_decode_alloc(uri.data(), uri.size());
-          ibuf = blender::IMB_load_image_from_filepath(filepath, blender::ImBufFlags::ByteData);
+          GHOST_ImageData image_data{.data = GHOST_ImageData::FilePath{.filepath = filepath}};
+          load_fn(image_data);
           free(filepath);
         }
         free(data);
       }
     }
-
-    if (ibuf) {
-      *r_width = ibuf->x;
-      *r_height = ibuf->y;
-      const size_t byte_count = size_t(ibuf->x) * size_t(ibuf->y) * 4;
-      rgba = (uint *)malloc(byte_count);
-      std::memcpy(rgba, ibuf->byte_data(), byte_count);
-      blender::IMB_freeImBuf(ibuf);
-    }
   }
-
-  return rgba;
 }
 
-GHOST_TSuccess GHOST_SystemWayland::putClipboardImage(uint *rgba, int width, int height) const
+GHOST_TSuccess GHOST_SystemWayland::putClipboardImage(std::span<GHOST_ImageData> images) const
 {
 #ifdef USE_EVENT_BACKGROUND_THREAD
   std::lock_guard lock_server_guard{*server_mutex};
@@ -9701,40 +9691,43 @@ GHOST_TSuccess GHOST_SystemWayland::putClipboardImage(uint *rgba, int width, int
 
   GWL_DataSource *data_source = seat->data_source;
 
-  /* Load buffer into an #ImBuf and convert to PNG. */
-  blender::ImBuf *ibuf = blender::IMB_allocFromBuffer(
-      reinterpret_cast<uint8_t *>(rgba), nullptr, width, height, 32);
-  ibuf->ftype = blender::IMB_FTYPE_PNG;
-  ibuf->foptions.quality = 15;
-  blender::Vector<uint8_t> encoded = blender::IMB_save_image_to_buffer(
-      ibuf, blender::ImBufFlags::ByteData);
-  if (encoded.is_empty()) {
-    blender::IMB_freeImBuf(ibuf);
-    return GHOST_kFailure;
+  bool ok = false;
+  for (const GHOST_ImageData &image : images) {
+    std::visit(
+        [&]<typename T>(const T &value) -> void {
+          if constexpr (std::is_same_v<T, GHOST_ImageData::MemFile>) {
+            /* Copy encoded buffer to data source. */
+            GWL_SimpleBuffer *imgbuffer = &data_source->buffer_out;
+            gwl_simple_buffer_free_data(imgbuffer);
+            imgbuffer->data_size = value.size;
+            char *data = static_cast<char *>(malloc(imgbuffer->data_size));
+            std::memcpy(data, value.buffer, value.size);
+            imgbuffer->data = data;
+
+            data_source->wl.source = wl_data_device_manager_create_data_source(
+                display_->wl.data_device_manager);
+            wl_data_source_add_listener(data_source->wl.source, &data_source_listener, seat);
+
+            /* Advertise the mime types supported. */
+            wl_data_source_offer(data_source->wl.source, ghost_wl_mime_img_png);
+
+            if (seat->wl.data_device) {
+              wl_data_device_set_selection(
+                  seat->wl.data_device, data_source->wl.source, seat->data_source_serial);
+            }
+
+            ok = true;
+          }
+        },
+        image.data);
+
+    /* We can break after successfully putting the first good image. */
+    if (ok) {
+      break;
+    }
   }
 
-  /* Copy encoded buffer to data source. */
-  GWL_SimpleBuffer *imgbuffer = &data_source->buffer_out;
-  gwl_simple_buffer_free_data(imgbuffer);
-  imgbuffer->data_size = encoded.size();
-  char *data = static_cast<char *>(malloc(imgbuffer->data_size));
-  std::memcpy(data, encoded.data(), encoded.size());
-  imgbuffer->data = data;
-
-  data_source->wl.source = wl_data_device_manager_create_data_source(
-      display_->wl.data_device_manager);
-  wl_data_source_add_listener(data_source->wl.source, &data_source_listener, seat);
-
-  /* Advertise the mime types supported. */
-  wl_data_source_offer(data_source->wl.source, ghost_wl_mime_img_png);
-
-  if (seat->wl.data_device) {
-    wl_data_device_set_selection(
-        seat->wl.data_device, data_source->wl.source, seat->data_source_serial);
-  }
-
-  blender::IMB_freeImBuf(ibuf);
-  return GHOST_kSuccess;
+  return ok ? GHOST_kSuccess : GHOST_kFailure;
 }
 
 uint8_t GHOST_SystemWayland::getNumDisplays() const

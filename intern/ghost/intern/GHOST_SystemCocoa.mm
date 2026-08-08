@@ -16,6 +16,8 @@
 #include "GHOST_WindowCocoa.hh"
 #include "GHOST_WindowManager.hh"
 
+#include "MEM_guardedalloc.h"
+
 /* Don't generate OpenGL deprecation warning. This is a known thing, and is not something easily
  * solvable in a short term. */
 #ifdef __clang__
@@ -1264,17 +1266,12 @@ static NSSize getNSImagePixelSize(NSImage *image)
 /**
  * Convert an NSImage to an ImBuf.
  * \param image: NSImage to convert.
- * \return Pointer to the resulting allocated ImBuf. Caller must free.
+ * \param image: GHOST_ImageData::Bitmap to point at converted image buffer.
+ * \return Boolean indicating success (true).
  */
-static blender::ImBuf *NSImageToImBuf(NSImage *image)
+static bool NSImageToBitmap(NSImage *image, GHOST_ImageData::Bitmap &bitmap)
 {
   const NSSize imageSize = getNSImagePixelSize(image);
-  blender::ImBuf *ibuf = blender::IMB_allocImBuf(
-      imageSize.width, imageSize.height, blender::ImBufFlags::ByteData);
-
-  if (!ibuf) {
-    return nullptr;
-  }
 
   @autoreleasepool {
     NSBitmapImageRep *bitmapImage = nil;
@@ -1288,22 +1285,27 @@ static blender::ImBuf *NSImageToImBuf(NSImage *image)
     if (bitmapImage == nil || bitmapImage.bitsPerPixel != 32 || bitmapImage.isPlanar ||
         bitmapImage.bitmapFormat & (NSBitmapFormatAlphaFirst | NSBitmapFormatFloatingPointSamples))
     {
-      return nullptr;
+      return false;
     }
 
-    uint8_t *ibuf_data = ibuf->byte_data_for_write();
+    uint8_t *data = MEM_new_array_uninitialized<uint8_t>(
+        uint64_t(imageSize.width) * imageSize.height * 4, "<clipboard>");
     uint8_t *bmp_data = (uint8_t *)bitmapImage.bitmapData;
 
     /* Vertical Flip. */
     for (int y = 0; y < imageSize.height; y++) {
       const int row_byte_count = 4 * imageSize.width;
-      const int ibuf_off = (imageSize.height - y - 1) * row_byte_count;
+      const int data_off = (imageSize.height - y - 1) * row_byte_count;
       const int bmp_off = y * row_byte_count;
-      memcpy(ibuf_data + ibuf_off, bmp_data + bmp_off, row_byte_count);
+      memcpy(data + data_off, bmp_data + bmp_off, row_byte_count);
     }
+
+    bitmap.width = uint32_t(imageSize.width);
+    bitmap.height = uint32_t(imageSize.height);
+    bitmap.buffer = data;
   }
 
-  return ibuf;
+  return true;
 }
 
 /* NOTE: called from #NSWindow subclass. */
@@ -1392,9 +1394,13 @@ GHOST_TSuccess GHOST_SystemCocoa::handleDraggingEvent(GHOST_TEventType eventType
           }
           case GHOST_kDragnDropTypeBitmap: {
             NSImage *droppedImg = static_cast<NSImage *>(data);
-            blender::ImBuf *ibuf = NSImageToImBuf(droppedImg);
-
-            eventData = static_cast<GHOST_TDragnDropDataPtr>(ibuf);
+            GHOST_ImageData::Bitmap *bitmap = MEM_new<GHOST_ImageData::Bitmap>("<dragndrop>");
+            if (NSImageToBitmap(droppedImg, *bitmap)) {
+              eventData = static_cast<GHOST_TDragnDropDataPtr>(bitmap);
+            }
+            else {
+              MEM_delete(bitmap);
+            }
 
             [droppedImg release];
             break;
@@ -2078,7 +2084,8 @@ static NSURL *NSPasteboardGetImageFile()
   return [pasteboardImageFile autorelease];
 }
 
-GHOST_TSuccess GHOST_SystemCocoa::hasClipboardImage() const
+GHOST_TSuccess GHOST_SystemCocoa::hasClipboardImage(
+    std::function<bool(GHOST_ImageData)> /*check_fn*/) const
 {
   @autoreleasepool {
     NSPasteboard *pasteboard = [NSPasteboard generalPasteboard];
@@ -2102,10 +2109,10 @@ GHOST_TSuccess GHOST_SystemCocoa::hasClipboardImage() const
   return GHOST_kSuccess;
 }
 
-uint *GHOST_SystemCocoa::getClipboardImage(int *r_width, int *r_height) const
+void GHOST_SystemCocoa::getClipboardImage(std::function<void(GHOST_ImageData)> load_fn) const
 {
   if (!hasClipboardImage()) {
-    return nullptr;
+    return;
   }
 
   @autoreleasepool {
@@ -2122,74 +2129,72 @@ uint *GHOST_SystemCocoa::getClipboardImage(int *r_width, int *r_height) const
     }
 
     if (!clipboardImage) {
-      return nullptr;
+      return;
     }
 
-    blender::ImBuf *ibuf = NSImageToImBuf(clipboardImage);
-    const NSSize clipboardImageSize = getNSImagePixelSize(clipboardImage);
-
-    if (ibuf) {
-      const size_t byteCount = clipboardImageSize.width * clipboardImageSize.height * 4;
-      uint *rgba = (uint *)malloc(byteCount);
-
-      if (!rgba) {
-        blender::IMB_freeImBuf(ibuf);
-        return nullptr;
-      }
-
-      memcpy(rgba, ibuf->byte_data(), byteCount);
-      blender::IMB_freeImBuf(ibuf);
-
-      *r_width = clipboardImageSize.width;
-      *r_height = clipboardImageSize.height;
-
-      return rgba;
+    GHOST_ImageData::Bitmap bitmap;
+    if (NSImageToBitmap(clipboardImage, bitmap)) {
+      GHOST_ImageData image_data{.data = bitmap};
+      load_fn(image_data);
     }
   }
-
-  return nullptr;
 }
 
-GHOST_TSuccess GHOST_SystemCocoa::putClipboardImage(uint *rgba, int width, int height) const
+GHOST_TSuccess GHOST_SystemCocoa::putClipboardImage(std::span<GHOST_ImageData> images) const
 {
+  bool ok = false;
   @autoreleasepool {
-    const size_t rowByteCount = width * 4;
+    for (const GHOST_ImageData &image : images) {
+      std::visit(
+          [&]<typename T>(const T &value) -> void {
+            if constexpr (std::is_same_v<T, GHOST_ImageData::ConstBitmap>) {
+              const uint64_t width = uint64_t(value.width);
+              const uint64_t height = uint64_t(value.height);
+              const uint64_t rowByteCount = width * 4;
 
-    NSBitmapImageRep *imageRep = [[NSBitmapImageRep alloc]
-        initWithBitmapDataPlanes:nil
-                      pixelsWide:width
-                      pixelsHigh:height
-                   bitsPerSample:8
-                 samplesPerPixel:4
-                        hasAlpha:YES
-                        isPlanar:NO
-                  colorSpaceName:NSDeviceRGBColorSpace
-                     bytesPerRow:rowByteCount
-                    bitsPerPixel:32];
+              NSBitmapImageRep *imageRep = [[NSBitmapImageRep alloc]
+                  initWithBitmapDataPlanes:nil
+                                pixelsWide:width
+                                pixelsHigh:height
+                             bitsPerSample:8
+                           samplesPerPixel:4
+                                  hasAlpha:YES
+                                  isPlanar:NO
+                            colorSpaceName:NSDeviceRGBColorSpace
+                               bytesPerRow:rowByteCount
+                              bitsPerPixel:32];
 
-    /* Copy the source image data to imageRep, flipping it vertically. */
-    uint8_t *srcBuffer = reinterpret_cast<uint8_t *>(rgba);
-    uint8_t *dstBuffer = static_cast<uint8_t *>([imageRep bitmapData]);
+              /* Copy the source image data to imageRep, flipping it vertically. */
+              const uint8_t *srcBuffer = value.buffer;
+              uint8_t *dstBuffer = static_cast<uint8_t *>([imageRep bitmapData]);
 
-    for (int y = 0; y < height; y++) {
-      const int dstOff = (height - y - 1) * rowByteCount;
-      const int srcOff = y * rowByteCount;
-      memcpy(dstBuffer + dstOff, srcBuffer + srcOff, rowByteCount);
-    }
+              for (int y = 0; y < height; y++) {
+                const uint64_t dstOff = (height - y - 1) * rowByteCount;
+                const uint64_t srcOff = y * rowByteCount;
+                memcpy(dstBuffer + dstOff, srcBuffer + srcOff, rowByteCount);
+              }
 
-    NSImage *image = [[[NSImage alloc] initWithSize:NSMakeSize(width, height)] autorelease];
-    [image addRepresentation:imageRep];
+              NSImage *image = [[[NSImage alloc] initWithSize:NSMakeSize(width, height)]
+                  autorelease];
+              [image addRepresentation:imageRep];
 
-    NSPasteboard *pasteboard = [NSPasteboard generalPasteboard];
-    [pasteboard clearContents];
+              NSPasteboard *pasteboard = [NSPasteboard generalPasteboard];
+              [pasteboard clearContents];
 
-    BOOL pasteSuccess = [pasteboard writeObjects:@[ image ]];
+              BOOL pasteSuccess = [pasteboard writeObjects:@[ image ]];
+              ok = bool(pasteSuccess);
+            }
+          },
+          image.data);
 
-    if (!pasteSuccess) {
-      return GHOST_kFailure;
+      /* We can break after successfully putting the first good image. */
+      if (ok) {
+        break;
+      }
     }
   }
-  return GHOST_kSuccess;
+
+  return ok ? GHOST_kSuccess : GHOST_kFailure;
 }
 
 GHOST_TSuccess GHOST_SystemCocoa::showMessageBox(const char *title,

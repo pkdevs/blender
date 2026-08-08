@@ -177,11 +177,11 @@ class GHOST_System : public GHOST_ISystem {
   /** \copydoc #GHOST_ISystem::putClipboard */
   void putClipboard(const char *buffer, bool selection) const override = 0;
   /** \copydoc #GHOST_ISystem::hasClipboardImage */
-  GHOST_TSuccess hasClipboardImage() const override;
+  GHOST_TSuccess hasClipboardImage(std::function<bool(GHOST_ImageData)> check_fn) const override;
   /** \copydoc #GHOST_ISystem::getClipboardImage */
-  uint *getClipboardImage(int *r_width, int *r_height) const override;
+  void getClipboardImage(std::function<void(GHOST_ImageData)> load_fn) const override;
   /** \copydoc #GHOST_ISystem::putClipboardImage */
-  GHOST_TSuccess putClipboardImage(uint *rgba, int width, int height) const override;
+  GHOST_TSuccess putClipboardImage(std::span<GHOST_ImageData> images) const override;
 
   /***************************************************************************************
    * Window "Client Side Decorations" (CSD)

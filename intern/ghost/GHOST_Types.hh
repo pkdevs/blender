@@ -11,6 +11,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <string>
+#include <variant>
 
 #ifdef WITH_VULKAN_BACKEND
 #  define VK_NO_PROTOTYPES
@@ -76,6 +77,40 @@ struct GHOST_CursorGenerator {
    * (could contain SVG data for example).
    */
   GHOST_TUserDataPtr user_data;
+};
+
+/**
+ * Container for clipboard image data. The data can be in one of four forms:
+ *  - Bitmap: a buffer of raw RGBA pixel data (recipient takes ownership).
+ *  - ConstBitmap: a const buffer of raw RGBA pixel data.
+ *  - MemFile: a buffer corresponding to an image file.
+ *  - FilePath: a path to an image file.
+ */
+struct GHOST_ImageData {
+  struct Bitmap {
+    uint32_t width = 0;
+    uint32_t height = 0;
+
+    /* Recipient of this buffer must take ownership and is responsible for freeing the buffer. */
+    uint8_t *buffer = nullptr;
+  };
+
+  struct ConstBitmap {
+    uint32_t width = 0;
+    uint32_t height = 0;
+    const uint8_t *buffer = nullptr;
+  };
+
+  struct MemFile {
+    uint64_t size = 0;
+    const uint8_t *buffer = nullptr;
+  };
+
+  struct FilePath {
+    const char *filepath = nullptr;
+  };
+
+  std::variant<Bitmap, ConstBitmap, MemFile, FilePath> data;
 };
 
 class GHOST_IWindow;

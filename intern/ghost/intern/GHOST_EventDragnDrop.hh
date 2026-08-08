@@ -9,8 +9,7 @@
 #pragma once
 
 #include "GHOST_Event.hh"
-#include "IMB_imbuf.hh"
-#include "IMB_imbuf_types.hh"
+#include "GHOST_Types.hh"
 
 /**
  * Drag & drop event
@@ -79,9 +78,12 @@ class GHOST_EventDragnDrop : public GHOST_Event {
     }
 
     switch (dragn_drop_event_data_.dataType) {
-      case GHOST_kDragnDropTypeBitmap:
-        blender::IMB_freeImBuf((blender::ImBuf *)dragn_drop_event_data_.data);
+      case GHOST_kDragnDropTypeBitmap: {
+        GHOST_ImageData::Bitmap *bitmap = (GHOST_ImageData::Bitmap *)dragn_drop_event_data_.data;
+        MEM_delete(bitmap->buffer);
+        MEM_delete(bitmap);
         break;
+      }
       case GHOST_kDragnDropTypeFilenames: {
         GHOST_TStringArray *strArray = (GHOST_TStringArray *)dragn_drop_event_data_.data;
         int i;

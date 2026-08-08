@@ -40,19 +40,15 @@ GHOST_System::~GHOST_System()
   exit();
 }
 
-GHOST_TSuccess GHOST_System::hasClipboardImage() const
+GHOST_TSuccess GHOST_System::hasClipboardImage(
+    std::function<bool(GHOST_ImageData)> /*check_fn*/) const
 {
   return GHOST_kFailure;
 }
 
-uint *GHOST_System::getClipboardImage(int * /*r_width*/, int * /*r_height*/) const
-{
-  return nullptr;
-}
+void GHOST_System::getClipboardImage(std::function<void(GHOST_ImageData)> /*load_fn*/) const {}
 
-GHOST_TSuccess GHOST_System::putClipboardImage(uint * /*rgba*/,
-                                               int /*width*/,
-                                               int /*height*/) const
+GHOST_TSuccess GHOST_System::putClipboardImage(std::span<GHOST_ImageData> /*images*/) const
 {
   return GHOST_kFailure;
 }

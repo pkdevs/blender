@@ -11,7 +11,9 @@
 
 #pragma once
 
-#include <cstdlib>
+#include <cstdint>
+#include <functional>
+#include <span>
 
 #include "GHOST_IContext.hh"
 #include "GHOST_ITimerTask.hh"
@@ -455,24 +457,22 @@ class GHOST_ISystem {
 
   /**
    * Returns GHOST_kSuccess if the clipboard contains an image.
+   * \param check_fn: the callback to invoke on the potential clipboard data.
    */
-  virtual GHOST_TSuccess hasClipboardImage() const = 0;
+  virtual GHOST_TSuccess hasClipboardImage(
+      std::function<bool(GHOST_ImageData)> check_fn) const = 0;
 
   /**
    * Get image data from the Clipboard
-   * \param r_width: the returned image width in pixels.
-   * \param r_height: the returned image height in pixels.
-   * \return pointer uint array in RGBA byte order. Caller must free.
+   * \param load_fn: the callback to invoke on the clipboard data.
    */
-  virtual uint *getClipboardImage(int *r_width, int *r_height) const = 0;
+  virtual void getClipboardImage(std::function<void(GHOST_ImageData)> load_fn) const = 0;
 
   /**
    * Put image data to the Clipboard
-   * \param rgba: uint array in RGBA byte order.
-   * \param width: the image width in pixels.
-   * \param height: the image height in pixels.
+   * \param images: a list of images to place onto the clipboard.
    */
-  virtual GHOST_TSuccess putClipboardImage(uint *rgba, int width, int height) const = 0;
+  virtual GHOST_TSuccess putClipboardImage(std::span<GHOST_ImageData> images) const = 0;
 
   /***************************************************************************************
    * Window "Client Side Decorations" (CSD)
