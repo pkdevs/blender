@@ -8,6 +8,7 @@ namespace blender::gpu {
 
 void VKStagingPool::init(size_t buffer_size)
 {
+  std::scoped_lock lock(mutex_);
   buffer_size_ = buffer_size;
   for (int i = 0; i < pool_buffer_count_; i++) {
     allocate_pool_buffer(buffers_[i]);
@@ -17,6 +18,7 @@ void VKStagingPool::init(size_t buffer_size)
 
 void VKStagingPool::free()
 {
+  std::scoped_lock lock(mutex_);
   for (int i = 0; i < pool_buffer_count_; i++) {
     buffers_[i].buffer.free();
     buffers_[i].mapped_base = nullptr;
@@ -44,10 +46,12 @@ void VKStagingPool::allocate_pool_buffer(PoolBuffer &buf)
 
 VKStagingAllocation VKStagingPool::sub_allocate(size_t size, size_t alignment)
 {
+  std::scoped_lock lock(mutex_);
+
   PoolBuffer &active = buffers_[active_index_];
   size_t aligned_offset = (active.offset + alignment - 1) & ~(alignment - 1);
 
-  if (aligned_offset + size > active.capacity) {
+  if (active.in_flight || aligned_offset + size > active.capacity) {
     return {VK_NULL_HANDLE, 0, nullptr};
   }
 
@@ -61,6 +65,7 @@ VKStagingAllocation VKStagingPool::sub_allocate(size_t size, size_t alignment)
 
 void VKStagingPool::tag_and_rotate(TimelineValue timeline)
 {
+  std::scoped_lock lock(mutex_);
   PoolBuffer &active = buffers_[active_index_];
   active.timeline_tag = timeline;
   active.in_flight = true;
@@ -69,6 +74,7 @@ void VKStagingPool::tag_and_rotate(TimelineValue timeline)
 
 void VKStagingPool::reclaim(TimelineValue completed_timeline)
 {
+  std::scoped_lock lock(mutex_);
   for (int i = 0; i < pool_buffer_count_; i++) {
     if (buffers_[i].in_flight) {
       try_reclaim(buffers_[i], completed_timeline);

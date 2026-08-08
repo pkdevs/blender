@@ -16,9 +16,7 @@
 #include "vk_vertex_buffer.hh"
 
 #include "CLG_log.h"
-#include <iostream>
-static int g_staging_allocs_per_frame = 0;
-static int g_staging_frees_per_frame = 0;
+
 namespace blender {
 
 static CLG_LogRef LOG = {"gpu.vulkan"};

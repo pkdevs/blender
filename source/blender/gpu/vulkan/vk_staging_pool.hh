@@ -4,6 +4,8 @@
 
 #pragma once
 
+#include "BLI_mutex.hh"
+
 #include "vk_buffer.hh"
 #include "vk_common.hh"
 
@@ -43,6 +45,7 @@ class VKStagingPool {
   PoolBuffer buffers_[pool_buffer_count_];
   int active_index_ = 0;
   size_t buffer_size_ = 0;
+  Mutex mutex_;
 
   bool try_reclaim(PoolBuffer &buf, TimelineValue completed_timeline);
   void allocate_pool_buffer(PoolBuffer &buf);
