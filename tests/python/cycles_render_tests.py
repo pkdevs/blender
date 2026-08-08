@@ -20,6 +20,13 @@ BLOCKLIST_ALL = [
     "hair_instancer_uv.blend",
     "principled_hair_directcoloring.blend",
     "visibility_particles.blend",
+    # TODO(weizhen): support spot lights
+    "spot_light.blend",
+    "spot_light_adaptive_split.blend",
+    # TODO(weizhen): support distant lights
+    "light_tree_multi_distant.blend",
+    # TODO(weizhen): support SSS
+    "all_light_types_in_volume.blend",
     # Tests for EEVEE-only setting (duplicates from the Cycles perspective)
     "raytrace_backface_on.blend",
     "raytrace_backface_off.blend",

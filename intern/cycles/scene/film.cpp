@@ -469,7 +469,7 @@ void Film::device_update(Device *device, DeviceScene *dscene, Scene *scene)
         kfilm->pass_surface_data = kfilm->pass_stride;
         break;
       default:
-        assert(false); // !!!: Crashes!
+        assert(false);
         break;
     }
 

@@ -864,6 +864,9 @@ static inline uint round_num_samples_to_power_of_2(const uint num_samples)
 
 int RenderScheduler::get_num_samples_to_path_trace() const
 {
+  /* TODO(Tri): test for ReSTIR. */
+  return 1;
+
   if (state_.resolution_divider != pixel_size_) {
     return get_num_samples_during_navigation(state_.resolution_divider);
   }
