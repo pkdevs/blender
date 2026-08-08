@@ -20,6 +20,7 @@
 #include "gpu_testing.hh"
 
 #include <algorithm>
+#include <cmath>
 #include <cstdio>
 
 #include "BLI_array.hh"
@@ -54,6 +55,24 @@ static constexpr size_t bytes_per_measurement = 256 * 1024 * 1024;
 static constexpr int64_t min_textures_per_measurement = 8;
 /* Number of texels each invocation of the bandwidth shader reads. */
 static constexpr int bandwidth_sample_count = 32;
+/* Total size of the texture the bandwidth measurement samples. Must be well above the last level
+ * cache of the GPU, or the reads never reach memory and the measurement sees nothing. Blackwell
+ * has 128 MB of L2, so this needs to stay far above that. */
+static constexpr int64_t bandwidth_bytes_target = 384 * 1024 * 1024;
+/* The bandwidth texture is filled by uploading this tile repeatedly, so it does not need a host
+ * side copy of the whole thing. */
+static constexpr int bandwidth_tile_size = 512;
+/* Width and height of the bandwidth dispatch. Deliberately independent of the texture size, so
+ * the amount of work per pass stays the same no matter how large the texture has to be to escape
+ * the cache. Invocations are spread over the whole texture. */
+static constexpr int bandwidth_dispatch_size = 2048;
+/* Number of floats in the bandwidth shader output buffer. Only there so the loads can't be
+ * optimized out, so it is kept small and written to modulo its size rather than scaling with
+ * the texture. Must be a power of two. */
+static constexpr int bandwidth_output_len = 1024 * 1024;
+/* Same calibration as the bandwidth measurement, for mipmap generation timing. */
+static constexpr double generate_target_seconds = 0.05;
+static constexpr int generate_max_passes = 256;
 /* Keep doubling the number of bandwidth passes until they take this long, so the measurement
  * works both on a fast GPU and on a software rasterizer. */
 static constexpr double bandwidth_target_seconds = 0.15;
@@ -163,6 +182,14 @@ struct Measurement {
    * internal compression is a bandwidth optimization, so it shows up here even on hardware
    * where it costs no extra memory. */
   double read_gb_per_second = 0.0;
+  /* Same, but with incompressible content. Only measured for the baseline case, as a control:
+   * if this matches #read_gb_per_second the measurement is not seeing compression at all. */
+  double read_noise_gb_per_second = 0.0;
+  /* Size of the texture used for the bandwidth measurement. Larger than the measured textures,
+   * so the reads miss the last level cache. */
+  int bandwidth_size = 0;
+  /* Time for a single mipmap chain regeneration, for the cases that regenerate one. */
+  double generate_ms = 0.0;
 };
 
 static int mip_len_get(const int size)
@@ -233,8 +260,7 @@ static void regenerate_mipmaps(gpu::Texture *texture, const MipmapPath mipmap_pa
   }
 }
 
-/* Smooth gradient, the kind of content driver internal compression is good at. Random noise
- * would be incompressible on any hardware and hide the effect being measured. */
+/* Smooth gradient, the kind of content driver internal compression is good at. */
 static Array<float4> gradient_data_get(const int size)
 {
   Array<float4> data(int64_t(size) * size);
@@ -248,22 +274,104 @@ static Array<float4> gradient_data_get(const int size)
   return data;
 }
 
+/* Random noise, incompressible on any hardware. Used as a control: if this samples at the same
+ * rate as the gradient above, the measurement is not observing driver internal compression at
+ * all and none of the ratios in the table mean anything. */
+static Array<float4> noise_data_get(const int size)
+{
+  Array<float4> data(int64_t(size) * size);
+  uint32_t state = 0x9e3779b9u;
+  const auto next_float = [&]() {
+    state ^= state << 13;
+    state ^= state >> 17;
+    state ^= state << 5;
+    return float(state >> 8) / float(1 << 24);
+  };
+  for (const int64_t i : IndexRange(data.size())) {
+    data[i] = float4(next_float(), next_float(), next_float(), next_float());
+  }
+  return data;
+}
+
+/* Size of the texture the bandwidth measurement samples, chosen so the working set exceeds any
+ * plausible last level cache. Clamped to what the hardware allows. */
+static int bandwidth_size_get(const TextureFormat format)
+{
+  /* A software renderer has no cache hierarchy worth escaping, and filling hundreds of megabytes
+   * on one takes long enough to time the test out. Keep it small there. */
+  const int64_t bytes_target = GPU_type_matches(GPU_DEVICE_SOFTWARE, GPU_OS_ANY, GPU_DRIVER_ANY) ?
+                                   8 * 1024 * 1024 :
+                                   bandwidth_bytes_target;
+
+  const int64_t bytes_per_texel = to_bytesize(format);
+  const int max_size = GPU_max_texture_size();
+  int size = bandwidth_tile_size;
+  while (int64_t(size) * size * bytes_per_texel < bytes_target &&
+         size + bandwidth_tile_size <= max_size)
+  {
+    size += bandwidth_tile_size;
+  }
+  return size;
+}
+
+/* Upload `tile` repeatedly to cover the whole texture, so a texture that is intentionally larger
+ * than the last level cache does not need a host side copy of the same size.
+ *
+ * 8 bit formats are uploaded as bytes so the backend can use a direct blit. Uploading floats
+ * makes Metal fall back to a compute upload, which it warns does not handle sRGB correctly. */
+static bool is_byte_format(const TextureFormat format)
+{
+  return ELEM(
+      format, TextureFormat::UNORM_8_8_8_8, TextureFormat::SRGBA_8_8_8_8, TextureFormat::UNORM_8);
+}
+
+static void fill_texture_tiled(gpu::Texture *texture,
+                               const int size,
+                               const TextureFormat format,
+                               const Array<float4> &tile)
+{
+  const bool use_bytes = is_byte_format(format);
+  const int channels = (format == TextureFormat::UNORM_8) ? 1 : 4;
+
+  Array<uint8_t> bytes;
+  if (use_bytes) {
+    bytes.reinitialize(tile.size() * channels);
+    for (const int64_t i : IndexRange(tile.size())) {
+      for (const int channel : IndexRange(channels)) {
+        bytes[i * channels + channel] = uint8_t(
+            std::lround(std::clamp(tile[i][channel], 0.0f, 1.0f) * 255.0f));
+      }
+    }
+  }
+
+  const eGPUDataFormat data_format = use_bytes ? GPU_DATA_UBYTE : GPU_DATA_FLOAT;
+  const void *data = use_bytes ? static_cast<const void *>(bytes.data()) :
+                                 static_cast<const void *>(tile.data());
+
+  for (int y = 0; y < size; y += bandwidth_tile_size) {
+    for (int x = 0; x < size; x += bandwidth_tile_size) {
+      GPU_texture_update_sub(
+          texture, data_format, data, x, y, 0, bandwidth_tile_size, bandwidth_tile_size, 1);
+    }
+  }
+}
+
 /* Sampling throughput in GB/s of uncompressed texel data. Higher than the raw memory bandwidth
  * of the device means the driver is compressing. */
 static double measure_bandwidth(gpu::Shader *shader,
                                 gpu::Texture *texture,
-                                const TextureFormat format,
-                                const int size)
+                                const TextureFormat format)
 {
   gpu::StorageBuf *ssbo = GPU_storagebuf_create_ex(
-      sizeof(float) * size_t(size) * size, nullptr, GPU_USAGE_DEVICE_ONLY, __func__);
+      sizeof(float) * bandwidth_output_len, nullptr, GPU_USAGE_DEVICE_ONLY, __func__);
 
   GPU_shader_bind(shader);
   GPU_texture_bind(texture, GPU_shader_get_sampler_binding(shader, "source_tx"));
   GPU_storagebuf_bind(ssbo, GPU_shader_get_ssbo_binding(shader, "data_out"));
   GPU_shader_uniform_1i(shader, "sample_count", bandwidth_sample_count);
+  GPU_shader_uniform_1i(shader, "output_mask", bandwidth_output_len - 1);
 
-  const int groups = size / 16;
+  const int groups = bandwidth_dispatch_size / 16;
 
   /* Warm up, so first use of the shader and texture is not part of the measurement. */
   GPU_compute_dispatch(shader, groups, groups, 1);
@@ -304,8 +412,55 @@ static double measure_bandwidth(gpu::Shader *shader,
   if (seconds <= 0.0) {
     return 0.0;
   }
-  const double bytes = double(size) * size * bandwidth_sample_count * to_bytesize(format) * passes;
+  const double bytes = double(bandwidth_dispatch_size) * bandwidth_dispatch_size *
+                       bandwidth_sample_count * to_bytesize(format) * passes;
   return bytes / seconds / 1.0e9;
+}
+
+/* Time for one mipmap chain regeneration, in milliseconds. Zero for the cases that never
+ * regenerate. For sRGB this is the direct comparison between the cases with and without
+ * #GPU_TEXTURE_USAGE_FORMAT_VIEW: without it, every regenerate goes through a temporary texture
+ * and two full mipmap chain copies. */
+static double measure_generate_ms(const MeasuredFormat &measured_format,
+                                  const MemoryCase &memory_case)
+{
+  if (!ELEM(memory_case.mipmap_path, MipmapPath::Native, MipmapPath::Compute)) {
+    return 0.0;
+  }
+
+  const int size = texture_size;
+  gpu::Texture *texture = GPU_texture_create_2d("texture_generate",
+                                                size,
+                                                size,
+                                                mip_len_get(size),
+                                                measured_format.format,
+                                                memory_case.usage,
+                                                nullptr);
+  if (texture == nullptr) {
+    return 0.0;
+  }
+
+  /* Warm up, so shader compilation and first use are not part of the measurement. */
+  regenerate_mipmaps(texture, memory_case.mipmap_path);
+  GPU_finish();
+
+  int passes = 1;
+  double seconds = 0.0;
+  while (true) {
+    const double start = BLI_time_now_seconds();
+    for ([[maybe_unused]] const int pass : IndexRange(passes)) {
+      regenerate_mipmaps(texture, memory_case.mipmap_path);
+    }
+    GPU_finish();
+    seconds = BLI_time_now_seconds() - start;
+    if (seconds >= generate_target_seconds || passes >= generate_max_passes) {
+      break;
+    }
+    passes *= 2;
+  }
+
+  GPU_texture_free(texture);
+  return seconds * 1000.0 / passes;
 }
 
 static Measurement measure_case(const MeasuredFormat &measured_format,
@@ -336,9 +491,16 @@ static Measurement measure_case(const MeasuredFormat &measured_format,
     textures.append(texture);
 
     /* Upload a single pixel. Metal creates its textures lazily on first use, so without this
-     * the memory would not be allocated yet. */
-    const float pixel[4] = {1.0f, 1.0f, 1.0f, 1.0f};
-    GPU_texture_update_sub(texture, GPU_DATA_FLOAT, pixel, 0, 0, 0, 1, 1, 1);
+     * the memory would not be allocated yet. Byte formats upload bytes so the backend can use a
+     * direct blit, see #fill_texture_tiled. */
+    if (is_byte_format(measured_format.format)) {
+      const uint8_t pixel[4] = {255, 255, 255, 255};
+      GPU_texture_update_sub(texture, GPU_DATA_UBYTE, pixel, 0, 0, 0, 1, 1, 1);
+    }
+    else {
+      const float pixel[4] = {1.0f, 1.0f, 1.0f, 1.0f};
+      GPU_texture_update_sub(texture, GPU_DATA_FLOAT, pixel, 0, 0, 0, 1, 1, 1);
+    }
 
     if (memory_case.create_format_view) {
       views.append(GPU_texture_create_view("texture_memory_view",
@@ -376,17 +538,43 @@ static Measurement measure_case(const MeasuredFormat &measured_format,
     GPU_texture_free(texture);
   }
 
-  /* Measure sampling throughput on a single texture, filled with real content. This is the
-   * measurement that detects compression on hardware where it costs no extra memory. */
+  measurement.generate_ms = measure_generate_ms(measured_format, memory_case);
+
+  /* Measure sampling throughput on a texture filled with real content, deliberately much larger
+   * than the measured textures so the reads miss the last level cache. This is the measurement
+   * that detects compression on hardware where it costs no extra memory. */
   if (bandwidth_shader != nullptr) {
-    gpu::Texture *texture = GPU_texture_create_2d(
-        "texture_bandwidth", size, size, mip_len, measured_format.format, memory_case.usage, nullptr);
+    const int bandwidth_size = bandwidth_size_get(measured_format.format);
+    const int bandwidth_mip_len = (memory_case.mipmap_path == MipmapPath::None) ?
+                                      1 :
+                                      mip_len_get(bandwidth_size);
+    gpu::Texture *texture = GPU_texture_create_2d("texture_bandwidth",
+                                                  bandwidth_size,
+                                                  bandwidth_size,
+                                                  bandwidth_mip_len,
+                                                  measured_format.format,
+                                                  memory_case.usage,
+                                                  nullptr);
     if (texture != nullptr) {
-      const Array<float4> data = gradient_data_get(size);
-      GPU_texture_update(texture, GPU_DATA_FLOAT, data.data());
+      measurement.bandwidth_size = bandwidth_size;
+
+      const Array<float4> gradient = gradient_data_get(bandwidth_tile_size);
+      fill_texture_tiled(texture, bandwidth_size, measured_format.format, gradient);
       regenerate_mipmaps(texture, memory_case.mipmap_path);
       measurement.read_gb_per_second = measure_bandwidth(
-          bandwidth_shader, texture, measured_format.format, size);
+          bandwidth_shader, texture, measured_format.format);
+
+      /* Control, for the baseline case only. Incompressible content has to sample slower than
+       * the gradient wherever the driver is actually compressing. If it does not, this whole
+       * column is measuring something other than memory bandwidth. */
+      if (memory_case.is_baseline) {
+        const Array<float4> noise = noise_data_get(bandwidth_tile_size);
+        fill_texture_tiled(texture, bandwidth_size, measured_format.format, noise);
+        regenerate_mipmaps(texture, memory_case.mipmap_path);
+        measurement.read_noise_gb_per_second = measure_bandwidth(
+            bandwidth_shader, texture, measured_format.format);
+      }
+
       GPU_texture_free(texture);
     }
   }
@@ -438,6 +626,29 @@ static void print_rate_ratio(const double gb_per_second, const double base_gb_pe
   }
 }
 
+/* Sampling rate in billions of texels per second. Unlike GB/s this should stay roughly constant
+ * across formats when the measurement is bound by texel fetch rate rather than by memory
+ * bandwidth, which is the giveaway that the texture is still cache resident. */
+static void print_texel_rate(const double gb_per_second, const TextureFormat format)
+{
+  if (gb_per_second <= 0.0) {
+    printf("%10s", "-");
+  }
+  else {
+    printf("%10.1f", gb_per_second / double(to_bytesize(format)));
+  }
+}
+
+static void print_ms(const double ms)
+{
+  if (ms <= 0.0) {
+    printf("%9s", "-");
+  }
+  else {
+    printf("%9.3f", ms);
+  }
+}
+
 static void test_texture_memory_usage()
 {
   printf("\n");
@@ -454,13 +665,24 @@ static void test_texture_memory_usage()
       "'reported' is what the backend says a single texture allocates, 'device' is the device\n"
       "memory statistics delta divided by the number of textures. Neither sees compression that\n"
       "costs no extra memory, which is the case on NVIDIA, so 'read' is the measurement that\n"
-      "matters there: sampling throughput drops when the driver can't compress.\n");
+      "matters there: sampling throughput drops when the driver can't compress.\n"
+      "\n"
+      "'Gtex/s' is the same measurement in texels rather than bytes. If it stays flat across\n"
+      "formats while GB/s scales with the bytes per texel, the reads are bound by texel fetch\n"
+      "rate and never reach memory, and the 'read' ratios mean nothing. The control line printed\n"
+      "under each table is the direct check for that.\n"
+      "\n"
+      "'gen ms' is the time for one mipmap chain regeneration at %dx%d. For sRGB without\n"
+      "GPU_TEXTURE_USAGE_FORMAT_VIEW this includes a temporary texture and two full mipmap chain\n"
+      "copies, so 'compute' versus 'compute + view' is what that flag buys.\n",
+      texture_size,
+      texture_size);
   printf("\n");
 
   gpu::Shader *bandwidth_shader = GPU_shader_create_from_info_name("gpu_texture_bandwidth_test");
   EXPECT_NE(bandwidth_shader, nullptr) << "bandwidth compute shader failed to compile";
 
-  printf("%-8s %-26s %6s %12s %12s %8s %12s %8s %12s %8s\n",
+  printf("%-8s %-26s %6s %12s %12s %8s %12s %8s %12s %8s %10s %9s\n",
          "format",
          "case",
          "count",
@@ -470,7 +692,9 @@ static void test_texture_memory_usage()
          "device",
          "ratio",
          "read",
-         "ratio");
+         "ratio",
+         "Gtex/s",
+         "gen ms");
 
   const int64_t cases_num = ARRAY_SIZE(memory_cases);
 
@@ -488,10 +712,18 @@ static void test_texture_memory_usage()
           results[case_index] = measurement;
         }
         else {
-          /* Keep the fastest read, slower rounds are contention rather than a property of the
-           * texture. */
-          results[case_index].read_gb_per_second = std::max(
-              results[case_index].read_gb_per_second, measurement.read_gb_per_second);
+          /* Keep the fastest read and generate, slower rounds are contention rather than a
+           * property of the texture. */
+          results[case_index].read_gb_per_second = std::max(results[case_index].read_gb_per_second,
+                                                            measurement.read_gb_per_second);
+          results[case_index].read_noise_gb_per_second = std::max(
+              results[case_index].read_noise_gb_per_second, measurement.read_noise_gb_per_second);
+          if (measurement.generate_ms > 0.0) {
+            const double previous = results[case_index].generate_ms;
+            results[case_index].generate_ms = (previous > 0.0) ?
+                                                  std::min(previous, measurement.generate_ms) :
+                                                  measurement.generate_ms;
+          }
         }
         if (measurement.device_size_valid) {
           device_samples[case_index].append(measurement.device_size);
@@ -511,6 +743,7 @@ static void test_texture_memory_usage()
     int64_t base_allocation_size = 0;
     int64_t base_device_size = 0;
     double base_gb_per_second = 0.0;
+    int64_t base_case_index = 0;
     bool have_base = false;
 
     for (const int64_t case_index : IndexRange(cases_num)) {
@@ -521,6 +754,7 @@ static void test_texture_memory_usage()
         base_allocation_size = measurement.allocation_size;
         base_device_size = measurement.device_size_valid ? measurement.device_size : 0;
         base_gb_per_second = measurement.read_gb_per_second;
+        base_case_index = case_index;
         have_base = true;
       }
 
@@ -535,7 +769,25 @@ static void test_texture_memory_usage()
       print_ratio(measurement.device_size_valid ? measurement.device_size : 0, base_device_size);
       print_rate(measurement.read_gb_per_second);
       print_rate_ratio(measurement.read_gb_per_second, base_gb_per_second);
+      print_texel_rate(measurement.read_gb_per_second, measured_format.format);
+      print_ms(measurement.generate_ms);
       printf("\n");
+    }
+
+    /* Control: incompressible content against the smooth gradient, both sampled only. Without a
+     * gap here the measurement cannot observe driver compression at all. */
+    const Measurement &base = results[base_case_index];
+    if (base.read_gb_per_second > 0.0 && base.read_noise_gb_per_second > 0.0) {
+      const double ratio = base.read_gb_per_second / base.read_noise_gb_per_second;
+      printf("control  %-8s working set %d MB, gradient %.1f GB/s vs noise %.1f GB/s, ratio %.2f",
+             measured_format.name,
+             int(int64_t(base.bandwidth_size) * base.bandwidth_size *
+                 to_bytesize(measured_format.format) / (1024 * 1024)),
+             base.read_gb_per_second,
+             base.read_noise_gb_per_second,
+             ratio);
+      printf(ratio < 1.05 ? "  <-- NO COMPRESSION VISIBLE, read ratios above are meaningless\n" :
+                            "  <-- compression visible, read ratios above are meaningful\n");
     }
     printf("\n");
   }
