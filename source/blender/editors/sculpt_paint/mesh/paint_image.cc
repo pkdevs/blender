@@ -23,6 +23,7 @@
 
 #include "IMB_imbuf.hh"
 #include "IMB_imbuf_types.hh"
+#include "IMB_partial_update.hh"
 
 #include "DNA_brush_types.h"
 #include "DNA_material_types.h"
@@ -34,8 +35,6 @@
 #include "BKE_brush.hh"
 #include "BKE_colorband.hh"
 #include "BKE_context.hh"
-#include "BKE_curves.hh"
-#include "BKE_grease_pencil.hh"
 #include "BKE_image.hh"
 #include "BKE_image_gpu.hh"
 #include "BKE_library.hh"
@@ -142,13 +141,12 @@ void ED_imapaint_dirty_region(
     }
   }
 
-  BKE_image_mark_dirty(ima, ibuf);
+  IMB_mark_dirty(ibuf);
 }
 
-void imapaint_image_update(
-    SpaceImage *sima, Image *image, ImBuf *ibuf, ImageUser *iuser, short texpaint)
+void imapaint_image_update(ImBuf *ibuf)
 {
-  if (BLI_rcti_is_empty(&imapaintpartial.dirty_region)) {
+  if (ibuf == nullptr || BLI_rcti_is_empty(&imapaintpartial.dirty_region)) {
     return;
   }
 
@@ -156,20 +154,13 @@ void imapaint_image_update(
    * make sure that partial updating is working but uses more GPU memory as the gpu texture will
    * have 4 channels. When so the whole texture needs to be re-uploaded to the GPU using the new
    * texture format. */
-  if (ibuf != nullptr && ibuf->color_mode == ImColorMode::BW) {
+  if (ibuf->color_mode == ImColorMode::BW) {
     ibuf->color_mode = ImColorMode::RGBA;
-    BKE_image_partial_update_mark_full_update(image);
+    IMB_partial_update_mark_full(ibuf);
     return;
   }
 
-  /* TODO: should set_tpage create ->rect? */
-  if (texpaint || (sima && sima->lock)) {
-    const int w = BLI_rcti_size_x(&imapaintpartial.dirty_region);
-    const int h = BLI_rcti_size_y(&imapaintpartial.dirty_region);
-    /* Testing with partial update in uv editor too. */
-    BKE_image_update_gputexture(
-        image, iuser, imapaintpartial.dirty_region.xmin, imapaintpartial.dirty_region.ymin, w, h);
-  }
+  IMB_partial_update_mark_region(ibuf, imapaintpartial.dirty_region);
 }
 
 /** \} */
@@ -624,70 +615,6 @@ void PAINT_OT_grab_clone(wmOperatorType *ot)
 /* -------------------------------------------------------------------- */
 /** \name Texture Paint Toggle Operator
  * \{ */
-
-static float3 paint_init_pivot_mesh(Object *ob)
-{
-  const Mesh *mesh_eval = BKE_object_get_evaluated_mesh(ob);
-  if (!mesh_eval) {
-    mesh_eval = id_cast<const Mesh *>(ob->data);
-  }
-
-  const std::optional<Bounds<float3>> bounds = mesh_eval->bounds_min_max();
-  if (!bounds) {
-    return float3(0.0f);
-  }
-
-  return math::midpoint(bounds->min, bounds->max);
-}
-
-static float3 paint_init_pivot_curves(Object *ob)
-{
-  const Curves &curves = *id_cast<const Curves *>(ob->data);
-  const std::optional<Bounds<float3>> bounds = curves.geometry.wrap().bounds_min_max();
-  if (bounds.has_value()) {
-    return math::midpoint(bounds->min, bounds->max);
-  }
-  return float3(0);
-}
-
-static float3 paint_init_pivot_grease_pencil(Object *ob, const int frame)
-{
-  const GreasePencil &grease_pencil = *id_cast<const GreasePencil *>(ob->data);
-  const std::optional<Bounds<float3>> bounds = grease_pencil.bounds_min_max(frame);
-  if (bounds.has_value()) {
-    return math::midpoint(bounds->min, bounds->max);
-  }
-  return float3(0.0f);
-}
-
-/* TODO: Move this out of paint image... */
-void paint_init_pivot(Object *ob, Scene *scene, Paint *paint)
-{
-  bke::PaintRuntime &paint_runtime = *paint->runtime;
-
-  float3 location;
-  switch (ob->type) {
-    case OB_MESH:
-      location = paint_init_pivot_mesh(ob);
-      break;
-    case OB_CURVES:
-      location = paint_init_pivot_curves(ob);
-      break;
-    case OB_GREASE_PENCIL:
-      location = paint_init_pivot_grease_pencil(ob, scene->r.cfra);
-      break;
-    default:
-      BLI_assert_unreachable();
-      paint_runtime.last_stroke_valid = false;
-      return;
-  }
-
-  mul_m4_v3(ob->object_to_world().ptr(), location);
-
-  paint_runtime.last_stroke_valid = true;
-  paint_runtime.average_stroke_counter = 1;
-  copy_v3_v3(paint_runtime.average_stroke_accum, location);
-}
 
 void ED_object_texture_paint_mode_enter_ex(Main &bmain,
                                            Scene &scene,
