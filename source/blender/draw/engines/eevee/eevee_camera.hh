@@ -9,7 +9,9 @@
  */
 
 #include "BLI_math_geom_c.hh"
+#include "BLI_math_matrix.hh"
 #include "BLI_math_matrix_c.hh"
+#include "BLI_math_vector.hh"
 
 #include "BKE_camera.h"
 
