@@ -1,0 +1,1 @@
+Referenced by pull request #162480, Fix: Undoing across mode boundaries can leave invalid `SculptSession`
