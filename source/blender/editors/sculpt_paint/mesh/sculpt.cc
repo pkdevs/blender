@@ -2843,13 +2843,6 @@ static void calc_brush_local_mat(const float rotation,
                        local_mat_inv);
 }
 
-/**
- * Calculates the local matrix of the brush and its inverse, which are used to transform points
- * from object-space to brush-space and vice versa respectively.
- *
- * \param tip_normal Tip normal is the sculpt normal under spherical falloff, but when under
- * projected falloff, it is the view normal.
- */
 void calc_brush_local_mat(const float rotation,
                           const float special_rotation,
                           const ViewContext &vc,
