@@ -490,11 +490,11 @@ static void socket_data_read_data(BlendDataReader *reader, bNodeTreeInterfaceSoc
       if (pixel_type != nullptr) {
         MEM_SAFE_DELETE(socket.socket_type);
         socket.socket_type = BLI_strdupn(pixel_type->data(), pixel_type->size());
-      }
-      SocketDataType *socket_data = reinterpret_cast<SocketDataType *>(socket.socket_data);
-      if constexpr (requires { socket_data->subtype; }) {
-        if (socket_data) {
-          socket_data->subtype = PROP_PIXEL;
+        SocketDataType *socket_data = reinterpret_cast<SocketDataType *>(socket.socket_data);
+        if constexpr (requires { socket_data->subtype; }) {
+          if (socket_data) {
+            socket_data->subtype = PROP_PIXEL;
+          }
         }
       }
     }
@@ -833,10 +833,6 @@ static void socket_set_subtype(bNodeTreeInterfaceSocket &socket, const PropertyS
 
 static void pixel_subtype_forward_compat(BlendWriter *writer, bNodeTreeInterfaceItem &item)
 {
-  if (BLO_write_is_undo(writer)) {
-    return;
-  }
-
   /* The Pixel subtype is written as None subtype to ensure forward compatibility. */
   bNodeTreeInterfaceSocket &socket = get_item_as<bNodeTreeInterfaceSocket>(item);
   const Map<StringRef, StringRef> &subtype_pixel_to_none_map = subtype_pixel_to_none();
@@ -856,6 +852,7 @@ static void pixel_subtype_forward_compat(BlendWriter *writer, bNodeTreeInterface
   /* Restore type and subtype. */
   StringRef(original_type).copy_unsafe(socket.socket_type);
   socket_set_subtype(socket, PROP_PIXEL);
+  socket.is_pixel_socket_forward_compat = false;
   MEM_SAFE_DELETE(original_type);
 }
 
@@ -870,7 +867,7 @@ void item_write_struct(BlendWriter *writer, bNodeTreeInterfaceItem &item)
                          NODE_INTERFACE_SOCKET_SINGLE_VALUE_ONLY_LEGACY);
 
       /* Todo(#140111): Forward compatible writing of Pixel subtype. To be removed in 6.0. */
-      if (subtype_pixel_to_none().contains(socket.socket_type)) {
+      if (!BLO_write_is_undo(writer) && subtype_pixel_to_none().contains(socket.socket_type)) {
         pixel_subtype_forward_compat(writer, item);
       }
       else {

@@ -265,7 +265,7 @@ void projectFloatViewCenterFallback(TransInfo *t, float adr[2])
             const bool no_shift = true;
             rctf viewborder = {0};
             ED_view3d_calc_camera_border(
-                t->scene, t->depsgraph, region, v3d, rv3d, no_shift, &viewborder);
+                t->scene, t->depsgraph, region, v3d, rv3d, no_shift, true, &viewborder);
             adr[0] = BLI_rctf_cent_x(&viewborder);
             adr[1] = BLI_rctf_cent_y(&viewborder);
             changed = true;
@@ -796,6 +796,9 @@ static bool transform_modal_item_poll(const wmOperator *op, int value)
       return t->vod != nullptr;
     case TFM_MODAL_STRIP_CLAMP:
       if (t->spacetype != SPACE_SEQ) {
+        return false;
+      }
+      if (t->data_type == &TransConvertType_SequencerRetiming) {
         return false;
       }
       break;

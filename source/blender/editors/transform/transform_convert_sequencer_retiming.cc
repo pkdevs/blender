@@ -29,18 +29,16 @@
 
 namespace blender::ed::transform {
 
-/** Used for sequencer transform. */
+namespace {
+
+/** Used for sequencer retiming transform. */
 struct TransDataSeq {
   Strip *strip;
   int orig_timeline_frame;
   int key_index; /* Some actions may need to destroy original data, use index to access it. */
 };
 
-struct TransSeq {
-  TransDataSeq *tdseq;
-  /* Maximum delta allowed before clamping selected retiming keys. Always active. */
-  rcti offset_clamp;
-};
+}  // namespace
 
 static TransData *SeqToTransData(const Scene *scene,
                                  Strip *strip,
@@ -87,7 +85,7 @@ static void freeSeqData(TransInfo *t, TransDataContainer *tc, TransCustomData *c
   }
 
   ListBaseT<Strip> *seqbasep = seq::active_seqbase_get(ed);
-  seq::iterator_set_expand(ed, transformed_strips, seq::query_strip_direct_effect_chain);
+  seq::expand_strips(ed, transformed_strips, seq::StripRelation::Effects);
 
   VectorSet<Strip *> dependant;
   dependant.add_multiple(transformed_strips);
@@ -102,7 +100,7 @@ static void freeSeqData(TransInfo *t, TransDataContainer *tc, TransCustomData *c
 
   if ((custom_data->data != nullptr) && custom_data->use_free) {
     TransSeq *ts = static_cast<TransSeq *>(custom_data->data);
-    MEM_delete(ts->tdseq);
+    MEM_delete(static_cast<TransDataSeq *>(ts->tdseq));
     MEM_delete(ts);
     custom_data->data = nullptr;
   }
@@ -251,7 +249,7 @@ static void recalcData_sequencer_retiming(TransInfo *t)
 
   /* Test overlap, displays red outline. */
   Editing *ed = seq::editing_get(t->scene);
-  seq::iterator_set_expand(ed, transformed_strips, seq::query_strip_direct_effect_chain);
+  seq::expand_strips(ed, transformed_strips, seq::StripRelation::Effects);
   for (Strip *strip : transformed_strips) {
     strip->runtime->flag &= ~seq::StripRuntimeFlag::Overlap;
     if (seq::transform_test_overlap(t->scene, seq::active_seqbase_get(ed), strip)) {
