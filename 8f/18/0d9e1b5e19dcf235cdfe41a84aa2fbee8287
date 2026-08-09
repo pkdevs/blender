@@ -1,1 +1,2 @@
 Referenced by issue #159716, VSE: Movie Audio Strip Not Scaled Correctly When Changing the Output Frame Rate
+Referenced by issue #162501, VSE imports a second corrupted video strip on top, when adding DJI Pocket 3 footage (Likely MP4 attached picture)
