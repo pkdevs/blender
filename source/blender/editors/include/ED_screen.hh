@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include <optional>
+
 #include "DNA_screen_types.h"
 #include "DNA_space_types.h"
 #include "DNA_userdef_types.h"
@@ -180,6 +182,12 @@ void ED_region_info_draw_multiline(ARegion *region,
 void ED_region_image_metadata_panel_draw(ImBuf *ibuf, ui::Layout *layout);
 void ED_region_grid_draw(ARegion *region, float zoomx, float zoomy, float x0, float y0);
 float ED_region_blend_alpha(ARegion *region);
+/**
+ * The region's on-screen rectangle, accounting for its current blend animation slide offset (see
+ * #ED_region_blend_alpha). Equal to `region->winrct` when the region isn't currently blending
+ * in/out.
+ */
+void ED_region_blend_rect(ARegion *region, rcti *r_rect);
 const rcti *ED_region_visible_rect(ARegion *region);
 /**
  * Overlapping regions only in the following restricted cases.
@@ -549,6 +557,26 @@ void ED_update_for_newframe(Main *bmain, Depsgraph *depsgraph);
  */
 void ED_reset_audio_device(bContext *C);
 wmOperatorStatus ED_screen_animation_play(bContext *C, int sync, int mode);
+
+/**
+ * Start scrubbing, returns optional playback state.
+ * \param C: The current context, which is used to find the screen that is currently managing the
+ * animation playback.
+ * \param screen: The screen that is currently being used to scrub.
+ */
+std::optional<PreScrubbingState> ED_screen_scrubbing_enable(bContext &C, bScreen &screen);
+/**
+ * Stop scrubbing, optionally resumes playback.
+ * \param C: The current context, which is used to find the screen that is currently managing the
+ * animation playback.
+ * \param screen: The screen that is currently being used to scrub.
+ * \param resume: Optional saved playback data - if it has a value, playback is started with the
+ * given settings.
+ */
+void ED_screen_scrubbing_disable(bContext &C,
+                                 bScreen &screen,
+                                 const std::optional<PreScrubbingState> &resume);
+
 /**
  * Find window that owns the animation timer.
  */
