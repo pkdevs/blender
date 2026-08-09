@@ -43,15 +43,16 @@ addons = {
     "UV",
 }
 
-# NOTE(@ideasman42): these are just some proposed/dummy values.
+# NOTE(@ideasman42): these values match what we have in the "Essentials" bundle as of (v5.2).
 asset_libraries = {
-    "Wildlife",
-    "Architecture",
-    "Characters",
-    "Furniture",
-    "Nature",
-    "Science",
-    "Transport",
+    "Brush",
+    "Compositor",
+    "Geometry Nodes",
+    "Hair",
+    "Material",
+    "Model",
+    "Shading",
+    "World",
 }
 
 themes = {
