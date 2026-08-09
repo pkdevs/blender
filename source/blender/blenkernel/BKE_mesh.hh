@@ -300,7 +300,7 @@ void mesh_set_custom_normals_from_verts_normalized(Mesh &mesh, MutableSpan<float
 namespace mesh {
 
 /**
- * Find the index of the next corner in the face, looping to the start if necessary.
+ * Find the index of the previous corner in the face, looping to the end if necessary.
  * The indices are into the entire corners array, not just the face's corners.
  */
 inline int face_corner_prev(const IndexRange face, const int corner)
@@ -309,7 +309,7 @@ inline int face_corner_prev(const IndexRange face, const int corner)
 }
 
 /**
- * Find the index of the previous corner in the face, looping to the end if necessary.
+ * Find the index of the next corner in the face, looping to the start if necessary.
  * The indices are into the entire corners array, not just the face's corners.
  */
 inline int face_corner_next(const IndexRange face, const int corner)
