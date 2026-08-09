@@ -207,7 +207,6 @@ static void build_face_to_face_by_edge_map(const OffsetIndices<int> faces,
 static void build_corner_to_corner_by_vert_map(const GroupedSpan<int> vert_to_corner_map,
                                                const OffsetIndices<int> faces,
                                                const Span<int> corner_verts,
-                                               const int verts_num,
                                                const int corners_num,
                                                Array<int> &r_offsets,
                                                Array<int> &r_indices)
@@ -239,7 +238,7 @@ static void build_corner_to_corner_by_vert_map(const GroupedSpan<int> vert_to_co
         MutableSpan<int> vert_neighbors = neighbors.drop_back(1);
         vert_neighbors.copy_from(vert_to_corner_map[vert]);
 
-        auto self_corner = std::find(vert_neighbors.begin(), vert_neighbors.end(), corner);
+        int *self_corner = std::find(vert_neighbors.begin(), vert_neighbors.end(), corner);
         *self_corner = prev_corner;
 
         neighbors.last() = next_corner;
@@ -268,7 +267,6 @@ static GroupedSpan<int> create_mesh_map(const Mesh &mesh,
       build_corner_to_corner_by_vert_map(mesh.vert_to_corner_map(),
                                          mesh.faces(),
                                          mesh.corner_verts(),
-                                         mesh.verts_num,
                                          mesh.corners_num,
                                          r_offsets,
                                          r_indices);
