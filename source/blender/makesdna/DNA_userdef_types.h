@@ -194,7 +194,7 @@ ENUM_OPERATORS(eUserpref_UI_Flag2)
 
 /** #UserDef.gpu_flag */
 enum eUserpref_GPU_Flag : char {
-  USER_GPU_FLAG_UNUSED_0 = (1 << 0), /* Unused. To be removed. */
+  USER_GPU_FLAG_WORKBENCH_RT_SHADOWS = (1 << 0),
   USER_GPU_FLAG_NO_EDIT_MODE_SMOOTH_WIRE = (1 << 1),
   USER_GPU_FLAG_OVERLAY_SMOOTH_WIRE = (1 << 2),
   USER_GPU_FLAG_SUBDIVISION_EVALUATION = (1 << 3),
@@ -564,6 +564,7 @@ enum eUserpref_SeqProxySetup : short {
 enum eUserpref_SeqEditorFlags : int {
   USER_SEQ_ED_UNUSED_0 = (1 << 0), /* Dirty. */
   USER_SEQ_ED_CONNECT_STRIPS_BY_DEFAULT = (1 << 1),
+  USER_SEQ_ED_CLAMP_STRIPS_BY_DEFAULT = (1 << 2),
 };
 ENUM_OPERATORS(eUserpref_SeqEditorFlags)
 
@@ -658,6 +659,11 @@ struct bUserAssetLibrary {
   /** Only for remote asset libraries (#ASSET_LIBRARY_USE_REMOTE_URL is set). Update using
    * #BKE_preferences_remote_asset_library_url_set() only. */
   char remote_url[/*FILE_MAX*/ 1024];
+  /**
+   * Secret access token for remote repositories (allocated).
+   * Only use when #ASSET_LIBRARY_USE_AUTH_TOKEN is set.
+   */
+  char *auth_token = nullptr;
 
   short import_method = ASSET_IMPORT_PACK;  /* eAssetImportMethod */
   short flag = ASSET_LIBRARY_RELATIVE_PATH; /* eAssetLibrary_Flag */
@@ -1105,7 +1111,11 @@ struct UserDef {
   short vbotimeout = 120, vbocollectrate = 60;
   short textimeout = 120, texcollectrate = 60;
   int memcachelimit = 4096;
-  int geometry_nodes_stack_limit = 100;
+  /**
+   * Maximum evaluation depth of node trees (e.g. number of nested node groups, not how many nodes
+   * are in a chain).
+   */
+  int nodes_stack_limit = 100;
   /** Unused. */
   int prefetchframes = 0;
   /** Control the rotation step of the view when PAD2, PAD4, PAD6&PAD8 is use. */

@@ -218,6 +218,8 @@ class GHOST_DeviceVK {
   VkPhysicalDeviceVulkan12Features features_12 = {};
   VkPhysicalDeviceRobustness2FeaturesEXT features_robustness2 = {
       VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ROBUSTNESS_2_FEATURES_EXT};
+  VkPhysicalDeviceAccelerationStructureFeaturesKHR features_acceleration_structure = {
+      VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_FEATURES_KHR};
 
   int users = 0;
 
@@ -241,6 +243,7 @@ class GHOST_DeviceVK {
     features.pNext = &features_11;
     features_11.pNext = &features_12;
     features_12.pNext = &features_robustness2;
+    features_robustness2.pNext = &features_acceleration_structure;
 
     volk::vkGetPhysicalDeviceFeatures2(vk_physical_device, &features);
     init_extensions();
@@ -756,6 +759,26 @@ struct GHOST_InstanceVK {
         VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_HOST_IMAGE_COPY_FEATURES_EXT, nullptr, VK_TRUE};
     if (device.extensions.is_enabled(VK_EXT_HOST_IMAGE_COPY_EXTENSION_NAME)) {
       feature_struct_ptr.push_back(&host_image_copy);
+    }
+
+    /* VK_KHR_acceleration_structure */
+    VkPhysicalDeviceAccelerationStructureFeaturesKHR acceleration_structure = {
+        VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_FEATURES_KHR,
+        nullptr,
+        device.features_acceleration_structure.accelerationStructure,
+        VK_FALSE,
+        VK_FALSE,
+        VK_FALSE,
+        VK_FALSE};
+    if (device.extensions.is_enabled(VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME)) {
+      feature_struct_ptr.push_back(&acceleration_structure);
+    }
+
+    /* VK_KHR_ray_query */
+    VkPhysicalDeviceRayQueryFeaturesKHR ray_query = {
+        VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_QUERY_FEATURES_KHR, nullptr, VK_TRUE};
+    if (device.extensions.is_enabled(VK_KHR_RAY_QUERY_EXTENSION_NAME)) {
+      feature_struct_ptr.push_back(&ray_query);
     }
 
     /* Link all registered feature structs. */
@@ -1533,7 +1556,18 @@ GHOST_TSuccess GHOST_ContextVK::recreateSwapchain(bool use_hdr_swapchain)
   create_info.imageUsage = VK_IMAGE_USAGE_TRANSFER_DST_BIT |
                            (use_hdr_swapchain ? VK_IMAGE_USAGE_STORAGE_BIT : 0);
   create_info.preTransform = capabilities.currentTransform;
-  create_info.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
+  /* Alpha lets the compositor blend the surface against the desktop, needed by CSD for rounded
+   * window corners. Not all surfaces support it, so fall back to opaque in those cases. The caller
+   * handles the lack of transparency by drawing square corners, see #GHOST_Context::hasAlpha. */
+  if (context_params_.use_alpha &&
+      (capabilities.supportedCompositeAlpha & VK_COMPOSITE_ALPHA_PRE_MULTIPLIED_BIT_KHR))
+  {
+    create_info.compositeAlpha = VK_COMPOSITE_ALPHA_PRE_MULTIPLIED_BIT_KHR;
+  }
+  else {
+    create_info.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
+    context_params_.use_alpha = false;
+  }
   create_info.presentMode = present_mode;
   create_info.clipped = VK_TRUE;
   create_info.oldSwapchain = old_swapchain;
@@ -1876,6 +1910,10 @@ GHOST_TSuccess GHOST_ContextVK::initializeDrawingContext()
         /* Has been promoted to VK_EXT_debug_utils */
         VK_EXT_DEBUG_MARKER_EXTENSION_NAME});
 #endif
+
+    optional_device_extensions.append(VK_KHR_RAY_QUERY_EXTENSION_NAME);
+    optional_device_extensions.append(VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME);
+    optional_device_extensions.append(VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME);
 
     if (!instance_vk.select_physical_device(preferred_device_, required_device_extensions)) {
       return GHOST_kFailure;
