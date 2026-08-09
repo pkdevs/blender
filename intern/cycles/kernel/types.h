@@ -1869,6 +1869,11 @@ struct KernelWorkTile {
   int max_x;
   int min_y;
   int max_y;
+
+  int restir_iteration; // New
+  // uint8_t restir_mode;
+  bool setup_restir;
+  bool final_evaluation;
 };
 
 /* Shader Evaluation.

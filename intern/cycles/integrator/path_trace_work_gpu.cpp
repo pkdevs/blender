@@ -306,6 +306,106 @@ void PathTraceWorkGPU::alloc_integrator_path_split()
   }
 }
 
+// bool PathTraceWorkGPU::enqueue_restir_path_iteration(DeviceKernel kernel, // New
+//                                                      const int num_paths_limit)
+// {
+//   const IntegratorQueueCounter *queue_counter = integrator_queue_counter_.data();
+
+//   if (queue_counter->num_queued[kernel] == 0) {
+//     return false;
+//   }
+
+//   enqueue_path_iteration(kernel, num_paths_limit);
+//   return true;
+// }
+
+/*
+Final evaluation
+
+This is different.
+
+We have:
+
+FINAL_EVALUATION
+       ↓
+INTERSECT_SHADOW
+       ↓
+SHADE_SHADOW
+       ↓
+terminated
+
+assuming that is indeed the complete transition chain in the current kernel implementation.
+So we should not use the same run_restir_phase() blindly for final evaluation.
+*/
+bool PathTraceWorkGPU::run_restir_phase(const DeviceKernel kernel) // New
+{
+  while (integrator_queue_counter_.data()->num_queued[kernel] > 0) {
+    enqueue_path_iteration(kernel);
+
+    if (!update_queue_counter_and_cache()) {
+      return false;
+    }
+
+    if (is_cancel_requested()) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+// explicitly drain the entire final-evaluation chain.
+bool PathTraceWorkGPU::run_restir_final_evaluation()
+{
+  // static constexpr DeviceKernel kernels[] = {
+  //     DEVICE_KERNEL_INTEGRATOR_FINAL_EVALUATION,
+  //     DEVICE_KERNEL_INTEGRATOR_INTERSECT_SHADOW,
+  //     DEVICE_KERNEL_INTEGRATOR_SHADE_SHADOW,
+  //     DEVICE_KERNEL_INTEGRATOR_RESTIR_PT_EVALUATION,
+  // };
+
+  while (true) {
+    IntegratorQueueCounter *queue_counter = integrator_queue_counter_.data();
+
+    if (queue_counter->num_queued[DEVICE_KERNEL_INTEGRATOR_FINAL_EVALUATION] == 0 &&
+        queue_counter->num_queued[DEVICE_KERNEL_INTEGRATOR_INTERSECT_SHADOW] == 0 &&
+        queue_counter->num_queued[DEVICE_KERNEL_INTEGRATOR_SHADE_SHADOW] == 0 &&
+        queue_counter->num_queued[DEVICE_KERNEL_INTEGRATOR_RESTIR_PT_EVALUATION] == 0)
+    {
+      break;
+    }
+
+    // const DeviceKernel kernel = get_most_queued_kernel(kernels);
+
+    // if (kernel == DEVICE_KERNEL_NUM) {
+    //   break;
+    // }
+
+    if (queue_counter->num_queued[DEVICE_KERNEL_INTEGRATOR_FINAL_EVALUATION] > 0) {
+      enqueue_path_iteration(DEVICE_KERNEL_INTEGRATOR_FINAL_EVALUATION); // !!!: Potential issue; use enqueue_path_iteration()
+    }
+    else if (queue_counter->num_queued[DEVICE_KERNEL_INTEGRATOR_INTERSECT_SHADOW] > 0) {
+      enqueue_path_iteration(DEVICE_KERNEL_INTEGRATOR_INTERSECT_SHADOW);
+    }
+    else if (queue_counter->num_queued[DEVICE_KERNEL_INTEGRATOR_SHADE_SHADOW] > 0) {
+      enqueue_path_iteration(DEVICE_KERNEL_INTEGRATOR_SHADE_SHADOW);
+    }
+    else {
+      enqueue_path_iteration(DEVICE_KERNEL_INTEGRATOR_RESTIR_PT_EVALUATION);
+    }
+
+    if (!update_queue_counter_and_cache()) {
+      return false;
+    }
+
+    if (is_cancel_requested()) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
 void PathTraceWorkGPU::alloc_work_memory()
 {
   alloc_integrator_soa();
@@ -322,6 +422,8 @@ void PathTraceWorkGPU::init_execution()
   device_->const_copy_to(
       "integrator_state", &integrator_state_gpu_, sizeof(integrator_state_gpu_));
 }
+
+// TODO: ReSTIR
 
 bool PathTraceWorkGPU::update_queue_counter_and_cache()
 {
@@ -347,7 +449,19 @@ bool PathTraceWorkGPU::update_queue_counter_and_cache()
   return true;
 }
 
-void PathTraceWorkGPU::render_samples(RenderStatistics &statistics,
+void PathTraceWorkGPU::reset_work_tile_scheduler(const int start_sample, // New
+                                                 const int samples_num,
+                                                 const int sample_offset)
+{
+  work_tile_scheduler_.reset(effective_buffer_params_,
+                             start_sample,
+                             samples_num,
+                             sample_offset,
+                             device_scene_->data.integrator.scrambling_distance);
+}
+
+// TODO: Have render_samples() iterate over restir_spatial_iterations.
+void PathTraceWorkGPU::render_samples(RenderStatistics &statistics, // !!!
                                       const int start_sample,
                                       const int samples_num,
                                       const int sample_offset)
@@ -359,16 +473,18 @@ void PathTraceWorkGPU::render_samples(RenderStatistics &statistics,
   work_tile_scheduler_.set_max_num_path_states(max_num_paths_ / 8);
   work_tile_scheduler_.set_accelerated_rt(
       (device_->get_bvh_layout_mask(device_scene_->data.kernel_features) & BVH_LAYOUT_OPTIX) != 0);
-  work_tile_scheduler_.reset(effective_buffer_params_,
-                             start_sample,
-                             samples_num,
-                             sample_offset,
-                             device_scene_->data.integrator.scrambling_distance);
+  reset_work_tile_scheduler(start_sample, samples_num, sample_offset);
 
   enqueue_reset();
 
   int num_iterations = 0;
   uint64_t num_busy_accum = 0;
+
+  restir_iteration_ = 0;
+  setup_restir_ = false;
+  final_evaluation_ = false;
+
+  /* MARK: - Initial PT. */
 
   /* TODO: set a hard limit in case of undetected kernel failures? */
   while (true) {
@@ -405,6 +521,128 @@ void PathTraceWorkGPU::render_samples(RenderStatistics &statistics,
     ++num_iterations;
   }
 
+  /* ReSTIR spatial resampling. */
+
+  if (!is_cancel_requested() && device_scene_->data.integrator.use_restir)
+  // if (device_scene_->data.integrator.use_restir)
+  {
+    setup_restir_ = true;
+    final_evaluation_ = false;
+
+    // for (restir_iteration_ = 0;
+    //      restir_iteration_ < device_scene_->data.integrator.restir_spatial_iterations;
+    //      ++restir_iteration_)
+    // {
+    //   /*
+    //    * Schedule one camera path per pixel for this ReSTIR iteration.
+    //    *
+    //    * integrator_init_from_camera() sees setup_restir_ and routes
+    //    * the state into DEVICE_KERNEL_INTEGRATOR_RESTIR.
+    //    */
+    //   bool finished;
+
+    //   if (enqueue_work_tiles(finished)) {
+    //     if (!update_queue_counter_and_cache()) {
+    //       break;
+    //     }
+    //   }
+
+    //   if (is_cancel_requested()) {
+    //     break;
+    //   }
+
+    //   run_restir_phase(DEVICE_KERNEL_INTEGRATOR_RESTIR);
+
+    //   if (is_cancel_requested()) {
+    //     break;
+    //   }
+    // }
+    for (restir_iteration_ = 0;
+        restir_iteration_ < device_scene_->data.integrator.restir_spatial_iterations;
+        ++restir_iteration_)
+    {
+      reset_work_tile_scheduler(start_sample, samples_num, sample_offset);
+
+      // !!!: URGENT FIX
+      // while (true) {
+      //   bool finished;
+
+      //   /*
+      //   * Generate the next batch of pixels.
+      //   * INIT_FROM_CAMERA will put them into RESTIR because
+      //   * setup_restir_ == true.
+      //   */
+      //   if (enqueue_work_tiles(finished)) {
+      //     if (!update_queue_counter_and_cache()) {
+      //       return;
+      //     }
+      //   }
+
+      //   if (is_cancel_requested()) {
+      //     return;
+      //   }
+
+      //   if (finished) {
+      //     break;
+      //   }
+
+      //   /*
+      //   * Drain the complete RESTIR chain for those paths.
+      //   */
+      //   if (!run_restir_phase(DEVICE_KERNEL_INTEGRATOR_RESTIR)) {
+      //     return;
+      //   }
+      // }
+    }
+
+
+    /* MARK: - Final evaluation. */
+
+    // if (!is_cancel_requested()) {
+    //   setup_restir_ = false;
+    //   final_evaluation_ = true;
+
+    //   bool finished;
+
+    //   if (enqueue_work_tiles(finished)) {
+    //     if (!update_queue_counter_and_cache()) {
+    //       return;
+    //     }
+    //   }
+
+    //   if (!is_cancel_requested()) {
+    //     run_restir_final_evaluation();
+    //   }
+    setup_restir_ = false;
+    final_evaluation_ = true;
+
+    reset_work_tile_scheduler(start_sample, samples_num, sample_offset);
+
+    while (true) {
+      bool finished;
+
+      if (enqueue_work_tiles(finished)) {
+        if (!update_queue_counter_and_cache()) {
+          // return;
+          break;
+        }
+      }
+
+      if (is_cancel_requested()) {
+        // return; // !!!: Shouldn't be break?
+        break;
+      }
+
+      if (finished) {
+        break;
+      }
+
+      if (!run_restir_final_evaluation()) {
+        return;
+      }
+    }
+  }
+
   if (num_iterations) {
     statistics.occupancy = float(num_busy_accum) / num_iterations / max_num_paths_;
   }
@@ -412,6 +650,7 @@ void PathTraceWorkGPU::render_samples(RenderStatistics &statistics,
     statistics.occupancy = 0.0f;
   }
 }
+
 
 DeviceKernel PathTraceWorkGPU::get_most_queued_kernel() const
 {
@@ -458,6 +697,8 @@ void PathTraceWorkGPU::enqueue_reset()
   }
 }
 
+// !!!: READ
+// !!!: STUDY
 bool PathTraceWorkGPU::enqueue_path_iteration()
 {
   /* Find kernel to execute, with max number of queued paths. */
@@ -500,6 +741,7 @@ bool PathTraceWorkGPU::enqueue_path_iteration()
         enqueue_path_iteration(DEVICE_KERNEL_INTEGRATOR_SHADE_SHADOW);
         return true;
       }
+      // TODO: Restir queue_counter
     }
     else if (kernel_creates_ao_paths(kernel)) {
       /* AO kernel creates two shadow paths, so limit number of states to schedule. */
@@ -518,22 +760,6 @@ bool PathTraceWorkGPU::enqueue_path_iteration()
   return true;
 }
 
-// !!!
-/** TODO: (Tri)
-DEVICE_KERNEL_INTEGRATOR_SHADE_SURFACE means every new ReSTIR stage will require:
-New DeviceKernel enum value.
-New device kernel implementation.
-New scheduler case.
-New queue transition path.
-
-In other words:
-enum entry
-→ kernel implementation
-→ scheduler support
-→ path transition
-
-is the full pipeline.
-*/
 void PathTraceWorkGPU::enqueue_path_iteration(DeviceKernel kernel, const int num_paths_limit)
 {
   device_ptr d_path_index = 0;
@@ -570,7 +796,7 @@ void PathTraceWorkGPU::enqueue_path_iteration(DeviceKernel kernel, const int num
   DCHECK_LE(work_size, max_num_paths_);
 
   switch (kernel) {
-    case DEVICE_KERNEL_INTEGRATOR_INIT_FROM_CAMERA: {
+    case DEVICE_KERNEL_INTEGRATOR_INIT_FROM_CAMERA: { // !!!
       const int num_path_indices = work_size;
       device_ptr null_tiles = 0;
       int zero = 0;
@@ -610,7 +836,9 @@ void PathTraceWorkGPU::enqueue_path_iteration(DeviceKernel kernel, const int num
       queue_->enqueue(kernel, work_size, args);
       break;
     }
-    case DEVICE_KERNEL_INTEGRATOR_RESTIR:
+    case DEVICE_KERNEL_INTEGRATOR_RESTIR: // !!!
+    case DEVICE_KERNEL_INTEGRATOR_FINAL_EVALUATION: // !!!
+    case DEVICE_KERNEL_INTEGRATOR_RESTIR_PT_EVALUATION: // New
     case DEVICE_KERNEL_INTEGRATOR_SHADE_BACKGROUND:
     case DEVICE_KERNEL_INTEGRATOR_SHADE_LIGHT_NEE:
     case DEVICE_KERNEL_INTEGRATOR_SHADE_LIGHT_FORWARD: {
@@ -754,8 +982,8 @@ void PathTraceWorkGPU::compact_shadow_paths()
   const int num_active_paths =
       queue_counter->num_queued[DEVICE_KERNEL_INTEGRATOR_SHADE_LIGHT_NEE] +
       queue_counter->num_queued[DEVICE_KERNEL_INTEGRATOR_INTERSECT_SHADOW] +
-      // queue_counter->num_queued[DEVICE_KERNEL_INTEGRATOR_SHADE_SHADOW] +
-      queue_counter->num_queued[DEVICE_KERNEL_INTEGRATOR_RESTIR] +
+      // DEVICE_KERNEL_INTEGRATOR_RESTIR is a main path and not a shadow path
+      // queue_counter->num_queued[DEVICE_KERNEL_INTEGRATOR_RESTIR] + // !!!: See if correct; shadow path is created in integrator_evaluate_final_samples 
       queue_counter->num_queued[DEVICE_KERNEL_INTEGRATOR_SHADE_SHADOW] +
       queue_counter->num_queued[DEVICE_KERNEL_INTEGRATOR_SHADOW_PATH_MNEE_PENDING];
 
@@ -844,7 +1072,10 @@ void PathTraceWorkGPU::compact_paths(const int num_active_paths,
   }
 }
 
-bool PathTraceWorkGPU::enqueue_work_tiles(bool &finished)
+
+// MARK: - Tiled Rendering
+
+bool PathTraceWorkGPU::enqueue_work_tiles(bool &finished) //
 {
   /* If there are existing paths wait them to go to intersect closest kernel, which will align the
    * wavefront of the existing and newly added paths. */
@@ -961,6 +1192,11 @@ void PathTraceWorkGPU::enqueue_work_tiles(DeviceKernel kernel,
     work_tile.path_index_offset = path_index_offset;
     work_tile.work_size = tile_work_size;
 
+    // !!!: See if needed here
+    work_tile.restir_iteration = restir_iteration_; // New
+    work_tile.setup_restir = setup_restir_;
+    work_tile.final_evaluation = final_evaluation_;
+
     path_index_offset += tile_work_size;
 
     max_tile_work_size = max(max_tile_work_size, tile_work_size);
@@ -984,7 +1220,7 @@ void PathTraceWorkGPU::enqueue_work_tiles(DeviceKernel kernel,
 
 int PathTraceWorkGPU::num_active_main_paths_paths()
 {
-  IntegratorQueueCounter *queue_counter = integrator_queue_counter_.data();
+  IntegratorQueueCounter *queue_counter = integrator_queue_counter_.data(); // !!!
 
   int num_paths = 0;
   for (int i = 0; i < DEVICE_GPU_KERNEL_INTEGRATOR_NUM; i++) {
@@ -1346,9 +1582,11 @@ bool PathTraceWorkGPU::kernel_uses_sorting(DeviceKernel kernel)
           kernel == DEVICE_KERNEL_INTEGRATOR_SHADE_SURFACE_RAYTRACE);
 }
 
+/* TODO(weizhen): does RESTIR create shadow paths? */ // Final ReSTIR evaluation integrator_evaluate_final_samples() schedules a shadow path; but ensure it matches the sematics required here
 bool PathTraceWorkGPU::kernel_creates_shadow_paths(DeviceKernel kernel)
 {
   return (kernel == DEVICE_KERNEL_INTEGRATOR_SHADE_SURFACE ||
+          // kernel == DEVICE_KERNEL_INTEGRATOR_FINAL_EVALUATION || // !!!: New; See if correct
           kernel == DEVICE_KERNEL_INTEGRATOR_SHADE_SURFACE_RAYTRACE ||
           kernel == DEVICE_KERNEL_INTEGRATOR_INTERSECT_MNEE ||
           kernel == DEVICE_KERNEL_INTEGRATOR_SHADE_VOLUME ||
@@ -1366,9 +1604,8 @@ bool PathTraceWorkGPU::kernel_creates_ao_paths(DeviceKernel kernel)
 bool PathTraceWorkGPU::kernel_is_shadow_path(DeviceKernel kernel)
 {
   return (kernel == DEVICE_KERNEL_INTEGRATOR_INTERSECT_SHADOW ||
-          // kernel == DEVICE_KERNEL_INTEGRATOR_SHADE_SHADOW ||
           kernel == DEVICE_KERNEL_INTEGRATOR_SHADE_SHADOW ||
-          kernel == DEVICE_KERNEL_INTEGRATOR_RESTIR ||
+          // kernel == DEVICE_KERNEL_INTEGRATOR_RESTIR || // !!!
           kernel == DEVICE_KERNEL_INTEGRATOR_SHADE_LIGHT_NEE);
 }
 

@@ -89,6 +89,10 @@ void PathTraceWorkCPU::setup_work_tile(KernelWorkTile &work_tile,
   work_tile.num_samples = 1;
   work_tile.offset = effective_buffer_params_.offset;
   work_tile.stride = effective_buffer_params_.stride;
+
+  work_tile.restir_iteration = 0;
+  work_tile.setup_restir = false;
+  work_tile.final_evaluation = false;
 }
 
 void PathTraceWorkCPU::initial_resampling(const int64_t image_width,
@@ -152,8 +156,6 @@ void PathTraceWorkCPU::evaluate_final_samples(const int64_t image_width,
     KernelWorkTile work_tile;
     setup_work_tile(work_tile, work_index, image_width, image_height, start_sample, sample_offset);
 
-    // CPUKernelThreadGlobals
-    // ThreadKernelGlobalsCPU *kernel_globals = kernel_thread_globals_get(kernel_thread_globals_);
     ThreadKernelGlobalsCPU *kernel_globals = kernel_thread_globals_->data();
 
     render_samples_evaluate_final(kernel_globals, work_tile, iteration);
@@ -168,7 +170,6 @@ void PathTraceWorkCPU::render_samples(RenderStatistics &statistics,
 {
   const int64_t image_width = effective_buffer_params_.width;
   const int64_t image_height = effective_buffer_params_.height;
-  // const int64_t total_pixels_num = image_width * image_height;
 
   if (device_->profiler.active()) {
     for (ThreadKernelGlobalsCPU &kernel_globals : *kernel_thread_globals_) {
@@ -191,7 +192,7 @@ void PathTraceWorkCPU::render_samples(RenderStatistics &statistics,
     }
 
     local_arena.execute([&] {
-      evaluate_final_samples(image_width, image_height, start_sample, sample_offset, i); // New
+      evaluate_final_samples(image_width, image_height, start_sample, sample_offset, i);
     });
   }
 
@@ -214,6 +215,7 @@ void PathTraceWorkCPU::render_samples_full_pipeline(ThreadKernelGlobalsCPU *kern
   IntegratorStateCPU *state = &integrator_states[0];
   IntegratorStateCPU *shadow_catcher_state = nullptr;
 
+  // !!!: KernelWorkTile sample_work_tile = work_tile; should carry the default
   INTEGRATOR_STATE_WRITE(state, path, setup_restir) = false;
   INTEGRATOR_STATE_WRITE(state, path, final_evaluation) = false;
 
@@ -223,6 +225,12 @@ void PathTraceWorkCPU::render_samples_full_pipeline(ThreadKernelGlobalsCPU *kern
   }
 
   KernelWorkTile sample_work_tile = work_tile;
+
+  // New
+  sample_work_tile.restir_iteration = 0;
+  sample_work_tile.setup_restir = false;
+  sample_work_tile.final_evaluation = false;
+
   float *render_buffer = buffers_->buffer.data();
 
   fast_timer render_timer;
@@ -283,18 +291,24 @@ void PathTraceWorkCPU::render_samples_full_pipeline(ThreadKernelGlobalsCPU *kern
 }
 
 void PathTraceWorkCPU::render_samples_direct_illumination(ThreadKernelGlobalsCPU *kernel_globals,
-                                                          const KernelWorkTile &work_tile,
+                                                          const KernelWorkTile &work_tile, // Remove Const?
                                                           const int iteration)
 {
   IntegratorStateCPU integrator_states[2];
 
   IntegratorStateCPU *state = &integrator_states[0];
 
-  INTEGRATOR_STATE_WRITE(state, path, spatial_iteration) = iteration;
+  // !!!: KernelWorkTile sample_work_tile = work_tile; should carry the default
+  INTEGRATOR_STATE_WRITE(state, path, spatial_iteration) = iteration; // !!!: How on GPU
   INTEGRATOR_STATE_WRITE(state, path, setup_restir) = true;
   INTEGRATOR_STATE_WRITE(state, path, final_evaluation) = false;
 
-  KernelWorkTile sample_work_tile = work_tile;
+  KernelWorkTile sample_work_tile = work_tile; // !!!
+  // New
+  sample_work_tile.restir_iteration = iteration;
+  sample_work_tile.setup_restir = true;
+  sample_work_tile.final_evaluation = false;
+
   float *render_buffer = buffers_->buffer.data();
 
   if (is_cancel_requested()) {
@@ -307,6 +321,11 @@ void PathTraceWorkCPU::render_samples_direct_illumination(ThreadKernelGlobalsCPU
     return;
   }
 
+  /* Immediately after init_from_camera(): */
+  assert(INTEGRATOR_STATE(state, path, spatial_iteration) == iteration);
+  assert(INTEGRATOR_STATE(state, path, setup_restir));
+  assert(!INTEGRATOR_STATE(state, path, final_evaluation));
+
   kernels_.integrator_restir(kernel_globals, state, &sample_work_tile, render_buffer);
 }
 
@@ -318,18 +337,25 @@ void PathTraceWorkCPU::render_samples_evaluate_final(ThreadKernelGlobalsCPU *ker
 
   IntegratorStateCPU *state = &integrator_states[0];
 
-  INTEGRATOR_STATE_WRITE(state, path, spatial_iteration) = iteration;
+  // !!!: KernelWorkTile sample_work_tile = work_tile; should carry the default
+  INTEGRATOR_STATE_WRITE(state, path, spatial_iteration) = iteration; // !!!: How on GPU?
   INTEGRATOR_STATE_WRITE(state, path, setup_restir) = false;
   INTEGRATOR_STATE_WRITE(state, path, final_evaluation) = true;
 
   KernelWorkTile sample_work_tile = work_tile;
+
+  // New
+  sample_work_tile.restir_iteration = iteration;
+  sample_work_tile.setup_restir = false;
+  sample_work_tile.final_evaluation = true;
+
   float *render_buffer = buffers_->buffer.data();
 
   if (is_cancel_requested()) {
     return;
   }
 
-  if (!kernels_.integrator_init_from_camera(
+  if (!kernels_.integrator_init_from_camera( // !!!
           kernel_globals, state, &sample_work_tile, render_buffer))
   {
     return;

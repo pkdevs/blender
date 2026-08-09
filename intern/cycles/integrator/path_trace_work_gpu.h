@@ -32,6 +32,8 @@ class PathTraceWorkGPU : public PathTraceWork {
   void alloc_work_memory() override;
   void init_execution() override;
 
+  /* ReSTIR passes. */
+
   void render_samples(RenderStatistics &statistics,
                       const int start_sample,
                       const int samples_num,
@@ -55,6 +57,17 @@ class PathTraceWorkGPU : public PathTraceWork {
   void alloc_integrator_queue();
   void alloc_integrator_sorting();
   void alloc_integrator_path_split();
+
+ /* ReSTIR GPU stages. */
+
+// void enqueue_restir_path_iteration(DeviceKernel kernel, const int num_paths_limit = INT_MAX);
+  bool enqueue_restir_path_iteration(DeviceKernel kernel, const int num_paths_limit);
+  bool run_restir_phase(const DeviceKernel kernel);
+  bool run_until_no_main_work();
+  bool run_restir_final_evaluation();
+  void reset_work_tile_scheduler(const int start_sample,
+                                 const int samples_num,
+                                 const int sample_offset);
 
   /* Returns DEVICE_KERNEL_NUM if there are no scheduled kernels. */
   DeviceKernel get_most_queued_kernel() const;
@@ -119,6 +132,11 @@ class PathTraceWorkGPU : public PathTraceWork {
   bool kernel_creates_ao_paths(DeviceKernel kernel);
   bool kernel_is_shadow_path(DeviceKernel kernel);
   int kernel_max_active_main_path_index(DeviceKernel kernel);
+
+  /* ReSTIR WorkTile. */
+  int restir_iteration_ = 0; // New
+  bool setup_restir_ = false;
+  bool final_evaluation_ = false;
 
   /* Integrator queue. */
   unique_ptr<DeviceQueue> queue_;
