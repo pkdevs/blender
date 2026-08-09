@@ -701,37 +701,21 @@ static void calc_local_from_screen(const ViewContext &vc,
 static void cursor_space_drawing_setup(const PaintCursorContext &pcontext)
 {
   if (BKE_brush_has_cube_tip(pcontext.brush, pcontext.mode)) {
-    float mat[4][4];
-    zero_m4(mat);
+    float local_mat[4][4];
+    float local_mat_inv[4][4];
 
-    const float angle = pcontext.paint->runtime->brush_rotation;
-    float motion_normal_screen[2];
-    motion_normal_screen[0] = cosf(angle);
-    motion_normal_screen[1] = sinf(angle);
-
-    /* Get the motion normal in object space. */
-    float motion_normal_world[3];
-    calc_local_from_screen(
-        pcontext.vc, pcontext.location, motion_normal_screen, motion_normal_world);
-
-    float tangent_y[3];
-
-    /* Project the motion normal onto the tangent space. */
-    cross_v3_v3v3(tangent_y, pcontext.normal, motion_normal_world);
-    normalize_v3_v3(mat[1], tangent_y);
-
-    /* Get other axes. */
-    cross_v3_v3v3(mat[0], mat[1], pcontext.normal);
-    copy_v3_v3(mat[2], pcontext.normal);
-
-    /* Set location. */
-    copy_v3_v3(mat[3], pcontext.location);
-    mat[3][3] = 1.0f;
-
-    normalize_m4(mat);
+    calc_brush_local_mat(0,
+                         pcontext.paint->runtime->brush_rotation,
+                         pcontext.vc,
+                         *pcontext.vc.obact,
+                         pcontext.normal,
+                         pcontext.location,
+                         1.0f,
+                         local_mat,
+                         local_mat_inv);
 
     GPU_matrix_mul(pcontext.vc.obact->object_to_world().ptr());
-    GPU_matrix_mul(mat);
+    GPU_matrix_mul(local_mat_inv);
     return;
   }
 
