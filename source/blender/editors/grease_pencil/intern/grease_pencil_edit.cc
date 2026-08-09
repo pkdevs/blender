@@ -5525,27 +5525,21 @@ static bke::CurvesGeometry bevel_curves(const bke::CurvesGeometry &src_curves,
   bke::copy_attributes(
       src_attributes, bke::AttrDomain::Curve, bke::AttrDomain::Curve, {}, dst_attributes);
 
-  /* Copy/Interpolate point attributes. */
-  for (auto &attribute : bke::retrieve_attributes_for_transfer(
-           src_attributes, dst_attributes, {bke::AttrDomain::Point}, {}))
-  {
-    bke::attribute_math::to_static_type(attribute.dst.span.type(), [&]<typename T>() {
-      if constexpr (!std::is_same_v<T, std::string>) {
-        const Span<T> src_attr = attribute.src.typed<T>();
-        MutableSpan<T> dst_attr = attribute.dst.span.typed<T>();
+  Array<int> dst_to_src_points(dst_curves.points_num());
 
-        threading::parallel_for(src_curves.points_range(), 4096, [&](const IndexRange points) {
-          for (const int i : points) {
-            for (const int j : IndexRange(num_points_per_vertex)) {
-              dst_attr[num_points_per_vertex * i + j] = src_attr[i];
-            }
-          }
-        });
-      }
-    });
-
-    attribute.dst.finish();
+  for (const int src_point_i : src_curves.points_range()) {
+    for (const int j : IndexRange(num_points_per_vertex)) {
+      dst_to_src_points[num_points_per_vertex * src_point_i + j] = src_point_i;
+    }
   }
+
+  /* Copy point attributes. */
+  bke::gather_attributes(src_attributes,
+                         bke::AttrDomain::Point,
+                         bke::AttrDomain::Point,
+                         bke::attribute_filter_from_skip_ref({"position"}),
+                         dst_to_src_points,
+                         dst_attributes);
 
   const Span<float3> src_positions = src_curves.positions();
   MutableSpan<float3> dst_positions = dst_curves.positions_for_write();
