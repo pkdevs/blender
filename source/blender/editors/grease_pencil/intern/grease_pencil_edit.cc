@@ -5493,18 +5493,28 @@ static void GREASE_PENCIL_OT_separate_fills(wmOperatorType *ot)
  * \{ */
 
 static bke::CurvesGeometry bevel_curves(const bke::CurvesGeometry &src_curves,
+                                        const IndexMask &selection,
                                         const float offset,
                                         const int segments)
 {
-  if (offset <= 0.0f) {
+  if (offset <= 0.0f || selection.is_empty()) {
     return src_curves;
   }
 
   const OffsetIndices<int> src_points_by_curve = src_curves.points_by_curve();
+  const Array<int> src_point_to_curve_map = src_curves.point_to_curve_map();
   const int num_points_per_vertex = segments + 1;
 
-  bke::CurvesGeometry dst_curves(src_curves.points_num() * num_points_per_vertex,
-                                 src_curves.curves_num());
+  /* Store one more than the source points so that it can be accumulated. */
+  Array<int> dst_count_by_src_point(src_curves.points_num() + 1, 1);
+
+  index_mask::masked_fill(
+      dst_count_by_src_point.as_mutable_span(), num_points_per_vertex, selection);
+
+  const OffsetIndices<int> dst_points_by_src_point = offset_indices::accumulate_counts_to_offsets(
+      dst_count_by_src_point);
+
+  bke::CurvesGeometry dst_curves(dst_points_by_src_point.total_size(), src_curves.curves_num());
 
   BKE_defgroup_copy_list(&dst_curves.vertex_group_names, &src_curves.vertex_group_names);
 
@@ -5516,63 +5526,58 @@ static bke::CurvesGeometry bevel_curves(const bke::CurvesGeometry &src_curves,
   for (const int curve_i : src_curves.curves_range()) {
     const IndexRange src_points = src_points_by_curve[curve_i];
 
-    dst_curve_offsets[curve_i] = src_points.size() * num_points_per_vertex;
+    dst_curve_offsets[curve_i] = dst_points_by_src_point[src_points.first()].first();
   }
-  dst_curve_offsets.last() = 0;
-
-  offset_indices::accumulate_counts_to_offsets(dst_curve_offsets);
+  dst_curve_offsets.last() = dst_points_by_src_point.total_size();
 
   bke::copy_attributes(
       src_attributes, bke::AttrDomain::Curve, bke::AttrDomain::Curve, {}, dst_attributes);
 
   Array<int> dst_to_src_points(dst_curves.points_num());
-
-  for (const int src_point_i : src_curves.points_range()) {
-    for (const int j : IndexRange(num_points_per_vertex)) {
-      dst_to_src_points[num_points_per_vertex * src_point_i + j] = src_point_i;
-    }
-  }
+  offset_indices::build_reverse_map(dst_points_by_src_point, dst_to_src_points);
 
   /* Copy point attributes. */
   bke::gather_attributes(src_attributes,
                          bke::AttrDomain::Point,
                          bke::AttrDomain::Point,
-                         bke::attribute_filter_from_skip_ref({"position"}),
+                         {},
                          dst_to_src_points,
                          dst_attributes);
 
   const Span<float3> src_positions = src_curves.positions();
   MutableSpan<float3> dst_positions = dst_curves.positions_for_write();
 
-  for (const int curve_i : src_curves.curves_range()) {
+  selection.foreach_index([&](const int src_point_i) {
+    const int curve_i = src_point_to_curve_map[src_point_i];
+    const IndexRange dst_points = dst_points_by_src_point[src_point_i];
     const IndexRange src_points = src_points_by_curve[curve_i];
-    for (const int i : src_points.index_range()) {
-      const int i_prev = (i - 1 + src_points.size()) % src_points.size();
-      const int i_next = (i + 1) % src_points.size();
 
-      const int point_i0 = src_points[i_prev];
-      const int point_i1 = src_points[i];
-      const int point_i2 = src_points[i_next];
+    const int i = src_point_i - src_points.first();
+    const int i_prev = (i - 1 + src_points.size()) % src_points.size();
+    const int i_next = (i + 1) % src_points.size();
 
-      const float3 pos_0 = src_positions[point_i0];
-      const float3 pos_1 = src_positions[point_i1];
-      const float3 pos_2 = src_positions[point_i2];
+    const int point_i0 = src_points[i_prev];
+    const int point_i1 = src_point_i;
+    const int point_i2 = src_points[i_next];
 
-      const float3 dir_1 = pos_0 - pos_1;
-      const float3 dir_2 = pos_2 - pos_1;
+    const float3 pos_0 = src_positions[point_i0];
+    const float3 pos_1 = src_positions[point_i1];
+    const float3 pos_2 = src_positions[point_i2];
 
-      const float factor_1 = math::min(offset / math::length(dir_1), 1.0f);
-      const float factor_2 = math::min(offset / math::length(dir_2), 1.0f);
+    const float3 dir_1 = pos_0 - pos_1;
+    const float3 dir_2 = pos_2 - pos_1;
 
-      const float3 c1 = pos_1 + factor_1 * dir_1;
-      const float3 c2 = pos_1 + factor_2 * dir_2;
+    const float factor_1 = math::min(offset / math::length(dir_1), 1.0f);
+    const float factor_2 = math::min(offset / math::length(dir_2), 1.0f);
 
-      for (const int j : IndexRange(num_points_per_vertex)) {
-        const float t = float(j) / (num_points_per_vertex - 1);
-        dst_positions[num_points_per_vertex * point_i1 + j] = math::interpolate(c1, c2, t);
-      }
+    const float3 c1 = pos_1 + factor_1 * dir_1;
+    const float3 c2 = pos_1 + factor_2 * dir_2;
+
+    for (const int j : IndexRange(num_points_per_vertex)) {
+      const float t = float(j) / (num_points_per_vertex - 1);
+      dst_positions[dst_points[j]] = math::interpolate(c1, c2, t);
     }
-  }
+  });
 
   return dst_curves;
 }
@@ -5581,6 +5586,8 @@ static wmOperatorStatus grease_pencil_bevel_exec(bContext *C, wmOperator *op)
 {
   const Scene *scene = CTX_data_scene(C);
   Object *object = CTX_data_active_object(C);
+  View3D *v3d = CTX_wm_view3d(C);
+  const eHandleDisplay handle_display = view3d_handle_type_or_default(v3d);
   GreasePencil &grease_pencil = *blender::id_cast<GreasePencil *>(object->data);
 
   const float offset = RNA_float_get(op->ptr, "offset");
@@ -5590,14 +5597,14 @@ static wmOperatorStatus grease_pencil_bevel_exec(bContext *C, wmOperator *op)
   const Vector<MutableDrawingInfo> drawings = retrieve_editable_drawings(*scene, grease_pencil);
   threading::parallel_for_each(drawings, [&](const MutableDrawingInfo &info) {
     IndexMaskMemory memory;
-    const IndexMask strokes = ed::greasepencil::retrieve_editable_and_selected_strokes(
-        *object, info.drawing, info.layer_index, memory);
-    if (strokes.is_empty()) {
+    const IndexMask selection = ed::greasepencil::retrieve_editable_and_all_selected_points(
+        *object, info.drawing, info.layer_index, handle_display, memory);
+    if (selection.is_empty()) {
       return;
     }
-    bke::CurvesGeometry &curves = info.drawing.strokes_for_write();
 
-    curves = bevel_curves(curves, offset, segments);
+    bke::CurvesGeometry &curves = info.drawing.strokes_for_write();
+    curves = bevel_curves(curves, selection, offset, segments);
 
     info.drawing.tag_topology_changed();
 
