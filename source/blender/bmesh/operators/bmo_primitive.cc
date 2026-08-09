@@ -1744,6 +1744,7 @@ void bmo_create_cube_exec(BMesh *bm, BMOperator *op)
     for (int y = -1; y < 2; y += 2) {
       for (int z = -1; z < 2; z += 2) {
         float vec[3] = {float(x) * off, float(y) * off, float(z) * off};
+        mul_m4_v3(mat, vec);
         verts[i] = BM_vert_create(bm, vec, nullptr, BM_CREATE_NOP);
         BMO_vert_flag_enable(bm, verts[i], VERT_MARK);
         i++;
