@@ -1926,8 +1926,8 @@ Library *PartialWriteContext::ensure_library(ID *ctx_id)
   const bool is_archive_lib = (src_lib->flag & LIBRARY_FLAG_IS_ARCHIVE) != 0;
   Library *src_base_lib = is_archive_lib ? src_lib->archive_parent_library : src_lib;
   BLI_assert(src_base_lib);
-  BLI_assert((is_archive_lib && src_lib != src_base_lib && ctx_id->deep_hash.has_data()) ||
-             (!is_archive_lib && src_lib == src_base_lib && !ctx_id->deep_hash.has_data()));
+  BLI_assert((is_archive_lib && src_lib != src_base_lib && !ctx_id->deep_hash.is_null()) ||
+             (!is_archive_lib && src_lib == src_base_lib && ctx_id->deep_hash.is_null()));
 
   StringRefNull lib_path = src_base_lib->runtime->filepath_abs;
   Library *ctx_base_lib = this->libraries_map_.lookup_default(lib_path, nullptr);
