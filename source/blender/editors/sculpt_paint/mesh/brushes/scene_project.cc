@@ -55,6 +55,7 @@ inline namespace scene_project_cc {
 
 struct LocalData {
   Vector<float3> positions;
+  Vector<float3> local_positions;
   Vector<float3> ray_origins;
   Vector<float> hit_distances;
   Vector<float> factors;
@@ -235,6 +236,8 @@ static void calc_faces(const Depsgraph &depsgraph,
   const Span<int> verts = node.verts();
 
   if (BKE_brush_has_cube_tip(&brush, PaintMode::Sculpt)) {
+    tls.local_positions.resize(verts.size());
+    const MutableSpan<float3> local_positions = tls.local_positions;
     calc_cube_tip_factors_common_mesh_indexed(depsgraph,
                                               brush,
                                               object,
@@ -242,6 +245,7 @@ static void calc_faces(const Depsgraph &depsgraph,
                                               attribute_data,
                                               position_data.eval,
                                               vert_normals,
+                                              local_positions,
                                               node,
                                               tls.factors,
                                               tls.distances);
@@ -301,8 +305,17 @@ static void calc_grids(const Depsgraph &depsgraph,
   const MutableSpan<float3> positions = gather_grids_positions(subdiv_ccg, grids, tls.positions);
 
   if (BKE_brush_has_cube_tip(&brush, PaintMode::Sculpt)) {
-    calc_cube_tip_factors_common_grids(
-        depsgraph, brush, object, mat, positions, node, tls.factors, tls.distances);
+    tls.local_positions.resize(positions.size());
+    const MutableSpan<float3> local_positions = tls.local_positions;
+    calc_cube_tip_factors_common_grids(depsgraph,
+                                       brush,
+                                       object,
+                                       mat,
+                                       positions,
+                                       local_positions,
+                                       node,
+                                       tls.factors,
+                                       tls.distances);
   }
   else {
     calc_factors_common_grids(
@@ -346,8 +359,17 @@ static void calc_bmesh(const Depsgraph &depsgraph,
   const MutableSpan positions = gather_bmesh_positions(verts, tls.positions);
 
   if (BKE_brush_has_cube_tip(&brush, PaintMode::Sculpt)) {
-    calc_cube_tip_factors_common_bmesh(
-        depsgraph, brush, object, mat, positions, node, tls.factors, tls.distances);
+    tls.local_positions.resize(positions.size());
+    const MutableSpan<float3> local_positions = tls.local_positions;
+    calc_cube_tip_factors_common_bmesh(depsgraph,
+                                       brush,
+                                       object,
+                                       mat,
+                                       positions,
+                                       local_positions,
+                                       node,
+                                       tls.factors,
+                                       tls.distances);
   }
   else {
     calc_factors_common_bmesh(

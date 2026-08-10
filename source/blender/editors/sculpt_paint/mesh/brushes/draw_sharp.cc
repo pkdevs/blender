@@ -32,6 +32,7 @@ namespace blender::ed::sculpt_paint::brushes {
 inline namespace draw_sharp_cc {
 
 struct LocalData {
+  Vector<float3> local_positions;
   Vector<float> factors;
   Vector<float> distances;
   Vector<float3> translations;
@@ -54,6 +55,8 @@ static void calc_faces(const Depsgraph &depsgraph,
   const Span<int> verts = node.verts();
 
   if (BKE_brush_has_cube_tip(&brush, PaintMode::Sculpt)) {
+    tls.local_positions.resize(orig_data.positions.size());
+    const MutableSpan<float3> local_positions = tls.local_positions;
     calc_cube_tip_factors_common_from_orig_data_mesh(depsgraph,
                                                      brush,
                                                      object,
@@ -61,6 +64,7 @@ static void calc_faces(const Depsgraph &depsgraph,
                                                      attribute_data,
                                                      orig_data.positions,
                                                      orig_data.normals,
+                                                     local_positions,
                                                      node,
                                                      tls.factors,
                                                      tls.distances);
@@ -103,12 +107,15 @@ static void calc_grids(const Depsgraph &depsgraph,
   const int grid_verts_num = grids.size() * key.grid_area;
 
   if (BKE_brush_has_cube_tip(&brush, PaintMode::Sculpt)) {
+    tls.local_positions.resize(orig_data.positions.size());
+    const MutableSpan<float3> local_positions = tls.local_positions;
     calc_cube_tip_factors_common_from_orig_data_grids(depsgraph,
                                                       brush,
                                                       object,
                                                       mat,
                                                       orig_data.positions,
                                                       orig_data.normals,
+                                                      local_positions,
                                                       node,
                                                       tls.factors,
                                                       tls.distances);
@@ -150,12 +157,15 @@ static void calc_bmesh(const Depsgraph &depsgraph,
   orig_position_data_gather_bmesh(*ss.bm_log, verts, orig_positions, orig_normals);
 
   if (BKE_brush_has_cube_tip(&brush, PaintMode::Sculpt)) {
+    tls.local_positions.resize(orig_positions.size());
+    const MutableSpan<float3> local_positions = tls.local_positions;
     calc_cube_tip_factors_common_from_orig_data_bmesh(depsgraph,
                                                       brush,
                                                       object,
                                                       mat,
                                                       orig_positions,
                                                       orig_normals,
+                                                      local_positions,
                                                       node,
                                                       tls.factors,
                                                       tls.distances);

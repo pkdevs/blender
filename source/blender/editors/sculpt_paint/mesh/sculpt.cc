@@ -7100,6 +7100,7 @@ void calc_cube_tip_factors_common_mesh_indexed(const Depsgraph &depsgraph,
                                                const MeshAttributeData &attribute_data,
                                                const Span<float3> vert_positions,
                                                const Span<float3> vert_normals,
+                                               const MutableSpan<float3> local_positions,
                                                const bke::pbvh::MeshNode &node,
                                                Vector<float> &r_factors,
                                                Vector<float> &r_distances)
@@ -7115,6 +7116,7 @@ void calc_cube_tip_factors_common_mesh_indexed(const Depsgraph &depsgraph,
                                             attribute_data,
                                             vert_positions,
                                             vert_normals,
+                                            local_positions,
                                             node,
                                             r_factors.as_mutable_span(),
                                             r_distances.as_mutable_span());
@@ -7127,6 +7129,7 @@ void calc_cube_tip_factors_common_mesh_indexed(const Depsgraph &depsgraph,
                                                const MeshAttributeData &attribute_data,
                                                Span<float3> vert_positions,
                                                Span<float3> vert_normals,
+                                               const MutableSpan<float3> local_positions,
                                                const bke::pbvh::MeshNode &node,
                                                MutableSpan<float> factors,
                                                MutableSpan<float> distances)
@@ -7144,8 +7147,6 @@ void calc_cube_tip_factors_common_mesh_indexed(const Depsgraph &depsgraph,
   }
 
   /* Calculate local positions. */
-  Vector<float3> local_positions_storage(verts.size());
-  MutableSpan<float3> local_positions = local_positions_storage;
   calc_local_positions(vert_positions,
                        verts,
                        mat,
@@ -7212,6 +7213,7 @@ void calc_cube_tip_factors_common_grids(const Depsgraph &depsgraph,
                                         const Object &object,
                                         const float4x4 &mat,
                                         Span<float3> positions,
+                                        const MutableSpan<float3> local_positions,
                                         const bke::pbvh::GridsNode &node,
                                         Vector<float> &r_factors,
                                         Vector<float> &r_distances)
@@ -7232,8 +7234,6 @@ void calc_cube_tip_factors_common_grids(const Depsgraph &depsgraph,
   }
 
   /* Calculate local positions. */
-  Vector<float3> local_positions_storage(positions.size());
-  MutableSpan<float3> local_positions = local_positions_storage;
   calc_local_positions(positions,
                        mat,
                        cache.location_symm,
@@ -7298,6 +7298,7 @@ void calc_cube_tip_factors_common_bmesh(const Depsgraph &depsgraph,
                                         const Object &object,
                                         const float4x4 &mat,
                                         Span<float3> positions,
+                                        const MutableSpan<float3> local_positions,
                                         bke::pbvh::BMeshNode &node,
                                         Vector<float> &r_factors,
                                         Vector<float> &r_distances)
@@ -7317,8 +7318,6 @@ void calc_cube_tip_factors_common_bmesh(const Depsgraph &depsgraph,
   }
 
   /* Calculate local positions. */
-  Vector<float3> local_positions_storage(verts.size());
-  MutableSpan<float3> local_positions = local_positions_storage;
   calc_local_positions(positions,
                        mat,
                        cache.location_symm,
@@ -7388,6 +7387,7 @@ void calc_cube_tip_factors_common_from_orig_data_mesh(const Depsgraph &depsgraph
                                                       const MeshAttributeData &attribute_data,
                                                       const Span<float3> positions,
                                                       const Span<float3> normals,
+                                                      const MutableSpan<float3> local_positions,
                                                       const bke::pbvh::MeshNode &node,
                                                       Vector<float> &r_factors,
                                                       Vector<float> &r_distances)
@@ -7406,8 +7406,6 @@ void calc_cube_tip_factors_common_from_orig_data_mesh(const Depsgraph &depsgraph
     calc_front_face(cache.view_normal_symm, normals, factors);
   }
 
-  Vector<float3> local_positions_storage(positions.size());
-  MutableSpan<float3> local_positions = local_positions_storage;
   calc_local_positions(positions,
                        mat,
                        cache.location_symm,
@@ -7472,6 +7470,7 @@ void calc_cube_tip_factors_common_from_orig_data_grids(const Depsgraph &depsgrap
                                                        const float4x4 &mat,
                                                        const Span<float3> positions,
                                                        const Span<float3> normals,
+                                                       const MutableSpan<float3> local_positions,
                                                        const bke::pbvh::GridsNode &node,
                                                        Vector<float> &r_factors,
                                                        Vector<float> &r_distances)
@@ -7490,8 +7489,6 @@ void calc_cube_tip_factors_common_from_orig_data_grids(const Depsgraph &depsgrap
     calc_front_face(cache.view_normal_symm, normals, factors);
   }
 
-  Vector<float3> local_positions_storage(positions.size());
-  MutableSpan<float3> local_positions = local_positions_storage;
   calc_local_positions(positions,
                        mat,
                        cache.location_symm,
@@ -7555,6 +7552,7 @@ void calc_cube_tip_factors_common_from_orig_data_bmesh(const Depsgraph &depsgrap
                                                        const float4x4 &mat,
                                                        const Span<float3> positions,
                                                        const Span<float3> normals,
+                                                       const MutableSpan<float3> local_positions,
                                                        bke::pbvh::BMeshNode &node,
                                                        Vector<float> &r_factors,
                                                        Vector<float> &r_distances)
@@ -7572,8 +7570,6 @@ void calc_cube_tip_factors_common_from_orig_data_bmesh(const Depsgraph &depsgrap
     calc_front_face(cache.view_normal_symm, normals, factors);
   }
 
-  Vector<float3> local_positions_storage(positions.size());
-  MutableSpan<float3> local_positions = local_positions_storage;
   calc_local_positions(positions,
                        mat,
                        cache.location_symm,

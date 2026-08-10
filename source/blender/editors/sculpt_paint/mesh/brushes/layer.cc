@@ -36,6 +36,7 @@ struct LocalData {
   Vector<float3> persistent_positions;
   Vector<float3> persistent_normals;
   Vector<float3> positions;
+  Vector<float3> local_positions;
   Vector<float> factors;
   Vector<float> distances;
   Vector<float> masks;
@@ -156,8 +157,8 @@ static void calc_faces(const Depsgraph &depsgraph,
   const MutableSpan<float> distances = tls.distances;
 
   if (BKE_brush_has_cube_tip(&brush, PaintMode::Sculpt)) {
-    Vector<float3> local_positions_storage(orig_data.positions.size());
-    MutableSpan<float3> local_positions = local_positions_storage;
+    tls.local_positions.resize(verts.size());
+    const MutableSpan<float3> local_positions = tls.local_positions;
     calc_local_positions(orig_data.positions,
                          mat,
                          cache.location_symm,
@@ -280,8 +281,8 @@ static void calc_grids(const Depsgraph &depsgraph,
   const MutableSpan<float> distances = tls.distances;
 
   if (BKE_brush_has_cube_tip(&brush, PaintMode::Sculpt)) {
-    Vector<float3> local_positions_storage(orig_data.positions.size());
-    MutableSpan<float3> local_positions = local_positions_storage;
+    tls.local_positions.resize(orig_data.positions.size());
+    const MutableSpan<float3> local_positions = tls.local_positions;
     calc_local_positions(orig_data.positions,
                          mat,
                          cache.location_symm,
@@ -405,8 +406,8 @@ static void calc_bmesh(const Depsgraph &depsgraph,
   const MutableSpan<float> distances = tls.distances;
 
   if (BKE_brush_has_cube_tip(&brush, PaintMode::Sculpt)) {
-    Vector<float3> local_positions_storage(orig_positions.size());
-    MutableSpan<float3> local_positions = local_positions_storage;
+    tls.local_positions.resize(orig_positions.size());
+    const MutableSpan<float3> local_positions = tls.local_positions;
     calc_local_positions(orig_positions,
                          mat,
                          cache.location_symm,
