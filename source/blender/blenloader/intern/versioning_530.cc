@@ -74,7 +74,7 @@ void do_versions_after_linking_530(FileData * /*fd*/, Main *bmain)
     version_node_socket_index_animdata(
         bmain, NTREE_GEOMETRY, "GeometryNodeSetGreasePencilColor", 5, 1, 6);
   }
-  
+
   if (!MAIN_VERSION_FILE_ATLEAST(bmain, 503, 12)) {
     bool has_alphabet_sort_method = false;
     bool has_skip_alphabet_sort_method = false;
