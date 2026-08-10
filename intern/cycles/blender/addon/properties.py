@@ -396,7 +396,7 @@ class CyclesRenderSettings(bpy.types.PropertyGroup):
 
     preview_pause: BoolProperty(
         name="Pause Preview",
-        description="Deprecated, use RegionView3D.pause_render instead",
+        description="Deprecated, this has no effect anymore. Use RegionView3D.pause_render instead",
     )
 
     use_denoising: BoolProperty(
