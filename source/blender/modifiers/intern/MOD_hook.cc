@@ -457,7 +457,7 @@ static void panel_draw(const bContext * /*C*/, Panel *panel)
 
   ui::Layout &col = layout.column(false);
   col.prop(ptr, "object", UI_ITEM_NONE, std::nullopt, ICON_NONE);
-  if (hook_object_ptr.has_data() &&
+  if (hook_object_ptr &&
       RNA_enum_get(&hook_object_ptr, "type") == OB_ARMATURE)
   {
     PointerRNA hook_object_data_ptr = RNA_pointer_get(&hook_object_ptr, "data");

@@ -924,7 +924,7 @@ static void rna_Window_scene_set(PointerRNA *ptr, PointerRNA value, ReportList *
 {
   wmWindow *win = static_cast<wmWindow *>(ptr->data);
 
-  if (!value.has_data()) {
+  if (!value) {
     return;
   }
 
@@ -974,7 +974,7 @@ static void rna_Window_workspace_set(PointerRNA *ptr, PointerRNA value, ReportLi
   if (WM_window_is_temp_screen(win)) {
     return;
   }
-  if (!value.has_data()) {
+  if (!value) {
     return;
   }
 
@@ -1015,7 +1015,7 @@ static void rna_Window_screen_set(PointerRNA *ptr, PointerRNA value, ReportList 
   if (screen->temp) {
     return;
   }
-  if (!value.has_data()) {
+  if (!value) {
     return;
   }
 

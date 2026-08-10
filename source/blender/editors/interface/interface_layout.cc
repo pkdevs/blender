@@ -3756,7 +3756,7 @@ PointerRNA Layout::op_menu_enum(const bContext *C,
   /* Use the menu button as owner for the operator properties, which will then be passed to the
    * individual menu items. */
   but->opptr = MEM_new<PointerRNA>("uiButOpPtr", WM_operator_properties_create_ptr(ot));
-  BLI_assert(!but->opptr->has_data());
+  BLI_assert(!*but->opptr);
   WM_operator_properties_alloc(
       &but->opptr, reinterpret_cast<IDProperty **>(&but->opptr->data), ot->idname);
 

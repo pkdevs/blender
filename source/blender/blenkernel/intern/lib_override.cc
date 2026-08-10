@@ -4728,7 +4728,7 @@ bool BKE_lib_override_library_property_operation_operands_validate(
     case LIBOVERRIDE_OP_SUBTRACT:
       ATTR_FALLTHROUGH;
     case LIBOVERRIDE_OP_MULTIPLY:
-      if (ptr_storage == nullptr || !ptr_storage->has_data() || prop_storage == nullptr) {
+      if (!ptr_storage || !*ptr_storage || !prop_storage) {
         BLI_assert_msg(0, "Missing data to apply differential override operation.");
         return false;
       }
@@ -4738,8 +4738,8 @@ bool BKE_lib_override_library_property_operation_operands_validate(
     case LIBOVERRIDE_OP_INSERT_BEFORE:
       ATTR_FALLTHROUGH;
     case LIBOVERRIDE_OP_REPLACE:
-      if ((ptr_dst == nullptr || !ptr_dst->has_data() || prop_dst == nullptr) ||
-          (ptr_src == nullptr || !ptr_src->has_data() || prop_src == nullptr))
+      if ((ptr_dst == nullptr || !*ptr_dst || prop_dst == nullptr) ||
+          (ptr_src == nullptr || !*ptr_src || prop_src == nullptr))
       {
         BLI_assert_msg(0, "Missing data to apply override operation.");
         return false;

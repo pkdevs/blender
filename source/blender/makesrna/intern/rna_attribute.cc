@@ -417,7 +417,7 @@ static StructRNA *rna_Attribute_refine(PointerRNA *ptr)
 
 StringRefNull rna_Attribute_name_get(const PointerRNA &ptr)
 {
-  if (!ptr.has_data()) {
+  if (!ptr) {
     return "";
   }
   ID *owner_id = ptr.owner_id;
@@ -636,7 +636,7 @@ void rna_Attribute_data_begin(CollectionPropertyIterator *iter, PointerRNA *ptr)
 
 int rna_Attribute_data_length(PointerRNA *ptr)
 {
-  if (!ptr->has_data()) {
+  if (!*ptr) {
     return 0;
   }
   AttributeOwner owner = owner_from_attribute_pointer_rna(ptr);
@@ -1070,7 +1070,7 @@ PointerRNA rna_AttributeGroup_lookup_string(const PointerRNA &ptr,
 bool rna_AttributeGroup_lookup_string(PointerRNA *ptr, const char *key, PointerRNA *r_ptr)
 {
   *r_ptr = rna_AttributeGroup_lookup_string(*ptr, key, ATTR_DOMAIN_MASK_ALL, CD_MASK_PROP_ALL);
-  return r_ptr->has_data();
+  return *r_ptr;
 }
 
 static int rna_AttributeGroupID_active_index_get(PointerRNA *ptr)
@@ -1178,7 +1178,7 @@ static void rna_AttributeGroupMesh_active_color_set(PointerRNA *ptr,
                                                     PointerRNA attribute_ptr,
                                                     ReportList * /*reports*/)
 {
-  if (!attribute_ptr.has_data()) {
+  if (!attribute_ptr) {
     BKE_id_attributes_active_color_clear(ptr->owner_id);
     return;
   }
@@ -1369,7 +1369,7 @@ static void rna_AttributeGroupGreasePencilDrawing_active_set(PointerRNA *ptr,
 {
   GreasePencilDrawing *drawing = static_cast<GreasePencilDrawing *>(ptr->data);
   AttributeOwner owner = AttributeOwner(AttributeOwnerType::GreasePencilDrawing, drawing);
-  if (!attribute_ptr.has_data()) {
+  if (!attribute_ptr) {
     BKE_attributes_active_clear(owner);
     return;
   }

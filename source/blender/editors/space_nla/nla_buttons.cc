@@ -239,14 +239,14 @@ static bool nla_animdata_panel_poll(const bContext *C, PanelType * /*pt*/)
 {
   PointerRNA ptr;
   PointerRNA strip_ptr;
-  return (nla_panel_context(C, &ptr, nullptr, &strip_ptr) && (ptr.has_data()) &&
+  return (nla_panel_context(C, &ptr, nullptr, &strip_ptr) && ptr &&
           (ptr.owner_id != strip_ptr.owner_id));
 }
 
 static bool nla_strip_panel_poll(const bContext *C, PanelType * /*pt*/)
 {
   PointerRNA ptr;
-  return (nla_panel_context(C, nullptr, nullptr, &ptr) && (ptr.has_data()));
+  return (nla_panel_context(C, nullptr, nullptr, &ptr) && ptr);
 }
 
 static bool nla_strip_actclip_panel_poll(const bContext *C, PanelType * /*pt*/)
@@ -256,7 +256,7 @@ static bool nla_strip_actclip_panel_poll(const bContext *C, PanelType * /*pt*/)
   if (!nla_panel_context(C, nullptr, nullptr, &ptr)) {
     return false;
   }
-  if (!ptr.has_data()) {
+  if (!ptr) {
     return false;
   }
 
@@ -271,7 +271,7 @@ static bool nla_strip_eval_panel_poll(const bContext *C, PanelType * /*pt*/)
   if (!nla_panel_context(C, nullptr, nullptr, &ptr)) {
     return false;
   }
-  if (!ptr.has_data()) {
+  if (!ptr) {
     return false;
   }
 

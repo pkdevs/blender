@@ -140,6 +140,11 @@ struct PointerRNA {
     return PointerRNA(owner_id, ancestors.last().type, ancestors.last().data);
   }
 
+  operator bool() const
+  {
+    return this->has_data();
+  }
+
   /**
    * True when #data is set.
    * If #data is set, #type is expected to be set as well.

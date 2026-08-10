@@ -1788,7 +1788,7 @@ static void rna_Object_active_modifier_set(PointerRNA *ptr, PointerRNA value, Re
 
   WM_main_add_notifier(NC_OBJECT | ND_MODIFIER, ob);
 
-  if (!value.has_data()) {
+  if (!value) {
     BKE_object_modifier_set_active(ob, nullptr);
     return;
   }

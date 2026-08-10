@@ -307,7 +307,7 @@ static std::string ctx_result_brief_repr(const bContextDataResult &result)
 {
   switch (result.type) {
     case ContextDataType::Pointer:
-      if (result.ptr.has_data()) {
+      if (result.ptr) {
         const char *rna_type_name = result.ptr.has_type() ?
                                         RNA_struct_identifier(result.ptr.type) :
                                         "Unknown";
@@ -352,7 +352,7 @@ static std::string ctx_result_brief_repr(const bContextDataResult &result)
       }
 
     case ContextDataType::Property:
-      if (result.prop && result.ptr.has_data()) {
+      if (result.prop && result.ptr) {
         const char *prop_name = RNA_property_identifier(result.prop);
         const char *rna_type_name = result.ptr.has_type() ?
                                         RNA_struct_identifier(result.ptr.type) :
@@ -436,7 +436,7 @@ static void *ctx_wm_python_context_get(const bContext *C,
     if (BPY_context_member_get(const_cast<bContext *>(C), member, &result)) {
       found_member = true;
 
-      if (result.ptr.has_data()) {
+      if (result.ptr) {
         if (RNA_struct_is_a(result.ptr.type, member_type)) {
           return_data = result.ptr.data;
         }
@@ -664,7 +664,7 @@ PointerRNA CTX_data_pointer_get_type(const bContext *C, const char *member, Stru
 {
   PointerRNA ptr = CTX_data_pointer_get(C, member);
 
-  if (ptr.has_data()) {
+  if (ptr) {
     if (RNA_struct_is_a(ptr.type, type)) {
       return ptr;
     }
@@ -683,7 +683,7 @@ PointerRNA CTX_data_pointer_get_type_silent(const bContext *C, const char *membe
 {
   PointerRNA ptr = CTX_data_pointer_get(C, member);
 
-  if (ptr.has_data() && RNA_struct_is_a(ptr.type, type)) {
+  if (ptr && RNA_struct_is_a(ptr.type, type)) {
     return ptr;
   }
 

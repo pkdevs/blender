@@ -307,8 +307,8 @@ bool RNA_struct_equals(Main *bmain, PointerRNA *ptr_a, PointerRNA *ptr_b, eRNACo
     return false;
   }
 
-  if (!ptr_a->has_data()) {
-    if (!ptr_b->has_data()) {
+  if (!*ptr_a) {
+    if (!*ptr_b) {
       return true;
     }
     return false;
@@ -1093,7 +1093,7 @@ static bool rna_property_override_collection_subitem_name_id_lookup(
 
     RNA_property_collection_begin(ptr, prop, &iter);
     for (; iter.valid; RNA_property_collection_next(&iter)) {
-      if (iter.ptr.has_data() && iter.ptr.type->nameproperty) {
+      if (iter.ptr && iter.ptr.type->nameproperty) {
         if (rna_property_override_collection_subitem_name_id_match(
                 item_name, item_name_len, do_id_pointer, item_id, &iter.ptr))
         {
@@ -1320,7 +1320,7 @@ static void rna_property_override_collection_subitem_lookup(
                                                                ignore_index_only_lookup,
                                                                &ptr_item_storage_name,
                                                                &ptr_item_storage_index);
-    if (!ptr_item_storage_name.has_data()) {
+    if (!ptr_item_storage_name) {
       rna_property_override_collection_subitem_name_index_lookup(ptr_storage,
                                                                  prop_storage,
                                                                  opop->subitem_reference_name,
@@ -1330,7 +1330,7 @@ static void rna_property_override_collection_subitem_lookup(
                                                                  &ptr_item_storage_name,
                                                                  &ptr_item_storage_index);
     }
-    if (!ptr_item_storage_name.has_data() && !ptr_item_storage_index.has_data()) {
+    if (!ptr_item_storage_name && !ptr_item_storage_index) {
       rna_property_override_collection_subitem_name_index_lookup(ptr_storage,
                                                                  prop_storage,
                                                                  nullptr,

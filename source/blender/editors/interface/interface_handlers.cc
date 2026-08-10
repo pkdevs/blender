@@ -1717,7 +1717,7 @@ static bool drag_toggle_but_is_supported(const Button *but)
  * then just true or false for toggle buttons with more than 2 states. */
 static int drag_toggle_but_pushed_state(Button *but)
 {
-  if (!but->rnapoin.has_data() && but->poin == nullptr && but->icon) {
+  if (!but->rnapoin && but->poin == nullptr && but->icon) {
     /* Assume icon identifies a unique state, for buttons that
      * work through functions callbacks and don't have an boolean
      * value that indicates the state. */
@@ -1939,7 +1939,7 @@ static bool selectcontext_begin(bContext *C, Button *but, uiSelectContextStore *
   }
 
   /* if there is a valid property that is editable... */
-  if (ptr.has_data() && prop) {
+  if (ptr && prop) {
     bool use_path_from_id;
 
     /* some facts we want to know */
@@ -2945,7 +2945,7 @@ static bool but_copy(bContext *C, Button *but, const bool copy_array)
   /* Left false for copying internal data (color-band for eg). */
   bool is_buf_set = false;
 
-  const bool has_required_data = !(but->poin == nullptr && !but->rnapoin.has_data());
+  const bool has_required_data = !(but->poin == nullptr && !but->rnapoin);
 
   switch (but->type) {
     case ButtonType::Num:
@@ -3046,7 +3046,7 @@ static void but_paste(bContext *C, Button *but, HandleButtonData *data, const bo
   but_get_pasted_text_from_clipboard(
       but_is_utf8(but), &buf_paste, &buf_paste_len, but->type == ButtonType::TextBox);
 
-  const bool has_required_data = !(but->poin == nullptr && !but->rnapoin.has_data());
+  const bool has_required_data = !(but->poin == nullptr && !but->rnapoin);
 
   switch (but->type) {
     case ButtonType::Num:

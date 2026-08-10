@@ -435,7 +435,7 @@ SingleKeyingResult insert_keyframe_direct(PointerRNA &ptr,
                                           const eBezTriple_KeyframeType keytype,
                                           const eInsertKeyFlags flag)
 {
-  if (!ptr.has_data()) {
+  if (!ptr) {
     BLI_assert_unreachable();
     return SingleKeyingResult::UNKNOWN_FAILURE;
   }

@@ -990,7 +990,7 @@ static void bool_layer_begin(CollectionPropertyIterator *iter,
                                                          layername_func(name, buffer),
                                                          ATTR_DOMAIN_MASK_CORNER,
                                                          CD_MASK_PROP_BOOL);
-  if (!bool_ptr.has_data()) {
+  if (!bool_ptr) {
     rna_iterator_array_begin(iter, ptr, nullptr, 0, 0, 0, nullptr);
     return;
   }
@@ -1159,7 +1159,7 @@ static void rna_Mesh_vertex_color_active_set(PointerRNA *ptr,
                                              const PointerRNA value,
                                              ReportList * /*reports*/)
 {
-  if (!value.has_data()) {
+  if (!value) {
     return;
   }
   Mesh *mesh = static_cast<Mesh *>(ptr->data);
