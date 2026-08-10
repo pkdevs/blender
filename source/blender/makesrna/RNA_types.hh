@@ -139,6 +139,26 @@ struct PointerRNA {
 
     return PointerRNA(owner_id, ancestors.last().type, ancestors.last().data);
   }
+
+  bool is_type_or_data_null() const
+  {
+    return !this->type || !this->data;
+  }
+
+  bool is_type_null() const
+  {
+    return !this->type;
+  }
+
+  bool is_data_null() const
+  {
+    return !this->data;
+  }
+
+  bool is_typed_null() const
+  {
+    return this->type && !this->data;
+  }
 };
 
 extern const PointerRNA PointerRNA_NULL;
