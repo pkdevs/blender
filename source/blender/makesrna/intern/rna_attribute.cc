@@ -657,13 +657,13 @@ bool rna_Attribute_data_lookup_int(PointerRNA *ptr, int index, PointerRNA *r_ptr
   CollectionPropertyIterator iter;
   rna_Attribute_data_begin(&iter, ptr);
   if (!iter.valid) {
-    *r_ptr = PointerRNA_NULL;
+    *r_ptr = {};
     return false;
   }
 
   ArrayIterator *internal = &iter.internal.array;
   if (index < 0 || index >= internal->length) {
-    *r_ptr = PointerRNA_NULL;
+    *r_ptr = {};
     return false;
   }
 
@@ -819,7 +819,7 @@ static PointerRNA rna_AttributeGroupID_new(
       CustomDataLayer *layer = BKE_attribute_new(
           *mesh, *em->bm, name, eCustomDataType(type), AttrDomain(domain), reports);
       if (!layer) {
-        return PointerRNA_NULL;
+        return {};
       }
 
       if ((GS(id->name) == ID_ME)) {
@@ -853,7 +853,7 @@ static PointerRNA rna_AttributeGroupID_new(
   const bke::AttributeAccessor accessor = *owner.get_accessor();
   if (!accessor.domain_supported(AttrDomain(domain))) {
     BKE_report(reports, RPT_ERROR, "Attribute domain not supported by this geometry type");
-    return PointerRNA_NULL;
+    return {};
   }
   const int domain_size = accessor.domain_size(AttrDomain(domain));
 
@@ -996,7 +996,7 @@ PointerRNA rna_AttributeGroup_iterator_get(CollectionPropertyIterator *iter)
       CustomDataLayer *layer = *static_cast<CustomDataLayer **>(rna_iterator_array_get(iter));
       StructRNA *type = srna_by_custom_data_layer_type(eCustomDataType(layer->type));
       if (type == nullptr) {
-        return PointerRNA_NULL;
+        return {};
       }
       return RNA_pointer_create_with_parent(iter->parent, type, layer);
     }
@@ -1036,13 +1036,13 @@ PointerRNA rna_AttributeGroup_lookup_string(const PointerRNA &ptr,
     if (BMEditMesh *em = mesh->runtime->edit_mesh.get()) {
       const BMDataLayerLookup attr = BM_data_layer_lookup(*em->bm, key);
       if (!attr) {
-        return PointerRNA_NULL;
+        return {};
       }
       if (!(CD_TYPE_AS_MASK(*bke::attr_type_to_custom_data_type(attr.type)) & cd_type_mask)) {
-        return PointerRNA_NULL;
+        return {};
       }
       if (!(ATTR_DOMAIN_AS_MASK(attr.domain) & domain_mask)) {
-        return PointerRNA_NULL;
+        return {};
       }
       PointerRNA result;
       rna_pointer_create_with_ancestors(
@@ -1054,13 +1054,13 @@ PointerRNA rna_AttributeGroup_lookup_string(const PointerRNA &ptr,
   bke::AttributeStorage &storage = *owner.get_storage();
   bke::Attribute *attr = storage.lookup(key);
   if (!attr) {
-    return PointerRNA_NULL;
+    return {};
   }
   if (!(ATTR_DOMAIN_AS_MASK(attr->domain()) & domain_mask)) {
-    return PointerRNA_NULL;
+    return {};
   }
   if (!(CD_TYPE_AS_MASK(*bke::attr_type_to_custom_data_type(attr->data_type())) & cd_type_mask)) {
-    return PointerRNA_NULL;
+    return {};
   }
   PointerRNA result;
   rna_pointer_create_with_ancestors(ptr, RNA_Attribute, attr, result);
@@ -1084,7 +1084,7 @@ static PointerRNA rna_AttributeGroupID_active_get(PointerRNA *ptr)
   AttributeOwner owner = AttributeOwner::from_id(ptr->owner_id);
   const std::optional<StringRef> name = BKE_attributes_active_name_get(owner);
   if (!name) {
-    return PointerRNA_NULL;
+    return {};
   }
   return rna_AttributeGroup_lookup_string(*ptr, *name, ATTR_DOMAIN_MASK_ALL, CD_MASK_PROP_ALL);
 }
@@ -1312,7 +1312,7 @@ static PointerRNA rna_AttributeGroupGreasePencilDrawing_new(ID *grease_pencil_id
   const bke::AttributeAccessor accessor = *owner.get_accessor();
   if (!accessor.domain_supported(AttrDomain(domain))) {
     BKE_report(reports, RPT_ERROR, "Attribute domain not supported by this geometry type");
-    return PointerRNA_NULL;
+    return {};
   }
   const int domain_size = accessor.domain_size(AttrDomain(domain));
 
@@ -1356,7 +1356,7 @@ static PointerRNA rna_AttributeGroupGreasePencilDrawing_active_get(PointerRNA *p
   AttributeOwner owner = AttributeOwner(AttributeOwnerType::GreasePencilDrawing, drawing);
   const std::optional<StringRef> name = BKE_attributes_active_name_get(owner);
   if (!name) {
-    return PointerRNA_NULL;
+    return {};
   }
   bke::AttributeStorage &storage = *owner.get_storage();
   bke::Attribute *attr = storage.lookup(*name);

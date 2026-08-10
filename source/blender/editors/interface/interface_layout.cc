@@ -73,7 +73,7 @@ struct ButtonItem;
   if (ot == nullptr) { \
     item_disabled(this, _opname); \
     RNA_warning_bare("%s: '%s' unknown operator", _caller_fn_name, _opname); \
-    return PointerRNA_NULL; \
+    return {}; \
   } \
   (void)0
 
@@ -2764,7 +2764,7 @@ void button_configure_search(Button *but,
     }
     else {
       /* Rely on `has_search_fn`. */
-      coll_search->search_ptr = PointerRNA_NULL;
+      coll_search->search_ptr = {};
       coll_search->search_prop = nullptr;
       coll_search->item_search_prop = nullptr;
     }
@@ -3784,7 +3784,7 @@ PointerRNA Layout::op_menu_enum(const bContext *C,
   if (!ot->srna) {
     item_disabled(this, opname.c_str());
     RNA_warning_bare("UILayout.operator_menu_enum(): operator missing srna '%s'", opname.c_str());
-    return PointerRNA_NULL;
+    return {};
   }
 
   return this->op_menu_enum(C, ot, propname, name, icon);

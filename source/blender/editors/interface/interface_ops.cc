@@ -536,7 +536,8 @@ static bool override_add_button_poll(bContext *C)
   const eRNAOverrideStatus override_status = RNA_property_override_library_status(
       CTX_data_main(C), &ptr, prop, index);
 
-  return (!ptr.is_null() && prop && flag_is_set(override_status, eRNAOverrideStatus::LibOverridable));
+  return (!ptr.is_null() && prop &&
+          flag_is_set(override_status, eRNAOverrideStatus::LibOverridable));
 }
 
 static wmOperatorStatus override_add_button_exec(bContext *C, wmOperator *op)
@@ -698,7 +699,7 @@ static void override_idtemplate_ids_get(
   if (owner_ptr.is_null() || prop == nullptr) {
     *r_owner_id = *r_id = nullptr;
     if (r_owner_ptr != nullptr) {
-      *r_owner_ptr = PointerRNA_NULL;
+      *r_owner_ptr = {};
     }
     if (r_prop != nullptr) {
       *r_prop = nullptr;

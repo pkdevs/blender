@@ -877,7 +877,7 @@ static PointerRNA rna_Event_ndof_motion_get(PointerRNA *ptr)
 #  else
   UNUSED_VARS(ptr);
 #  endif
-  return PointerRNA_NULL;
+  return {};
 }
 
 static PointerRNA rna_Event_xr_get(PointerRNA *ptr)
@@ -889,7 +889,7 @@ static PointerRNA rna_Event_xr_get(PointerRNA *ptr)
   return RNA_pointer_create_with_parent(*ptr, RNA_XrEventData, actiondata);
 #  else
   UNUSED_VARS(ptr);
-  return PointerRNA_NULL;
+  return {};
 #  endif
 }
 
@@ -1114,7 +1114,7 @@ static PointerRNA rna_KeyMapItem_properties_get(PointerRNA *ptr)
   }
 
   // return RNA_pointer_create_with_parent(*ptr, RNA_OperatorProperties, op->properties);
-  return PointerRNA_NULL;
+  return {};
 }
 
 static int rna_wmKeyMapItem_map_type_get(PointerRNA *ptr)
@@ -1355,7 +1355,7 @@ static PointerRNA rna_wmKeyConfig_preferences_get(PointerRNA *ptr)
     return RNA_pointer_create_with_parent(*ptr, kpt_rt->rna_ext.srna, kpt->prop);
   }
   else {
-    return PointerRNA_NULL;
+    return {};
   }
 }
 

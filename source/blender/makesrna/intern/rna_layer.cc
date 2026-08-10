@@ -213,7 +213,7 @@ static PointerRNA rna_ViewLayer_depsgraph_get(PointerRNA *ptr)
     Depsgraph *depsgraph = BKE_scene_get_depsgraph(scene, view_layer);
     return RNA_pointer_create_with_parent(*ptr, RNA_Depsgraph, depsgraph);
   }
-  return PointerRNA_NULL;
+  return {};
 }
 
 static void rna_ViewLayer_remove_aov(ViewLayer *view_layer, ReportList *reports, ViewLayerAOV *aov)

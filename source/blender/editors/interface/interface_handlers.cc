@@ -7239,7 +7239,7 @@ static int do_but_COLOR(bContext *C, Button *but, HandleButtonData *data, const 
 
       /* this is risky. it works OK for now,
        * but if it gives trouble we should delay execution */
-      but->rnapoin = PointerRNA_NULL;
+      but->rnapoin = {};
       but->rnaprop = nullptr;
 
       return WM_UI_HANDLER_BREAK;

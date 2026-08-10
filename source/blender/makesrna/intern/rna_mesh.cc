@@ -1100,13 +1100,13 @@ bool rna_MeshUVLoopLayer_data_lookup_int(PointerRNA *ptr, int index, PointerRNA 
   CollectionPropertyIterator iter;
   rna_Attribute_data_begin(&iter, ptr);
   if (!iter.valid) {
-    *r_ptr = PointerRNA_NULL;
+    *r_ptr = {};
     return false;
   }
 
   ArrayIterator *internal = &iter.internal.array;
   if (index < 0 || index >= internal->length) {
-    *r_ptr = PointerRNA_NULL;
+    *r_ptr = {};
     return false;
   }
 

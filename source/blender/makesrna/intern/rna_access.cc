@@ -84,9 +84,6 @@ static CLG_LogRef LOG = {"rna.access"};
 
 /* Init/Exit */
 
-/* NOTE: Initializing this object here is fine for now, as it should not allocate any memory. */
-extern const PointerRNA PointerRNA_NULL = {};
-
 void RNA_init()
 {
   BlenderRNA &brna = RNA_blender_rna_get();
@@ -177,7 +174,7 @@ PointerRNA RNA_id_pointer_create(ID *id)
     return ptr;
   }
 
-  return PointerRNA_NULL;
+  return {};
 }
 
 PointerRNA RNA_pointer_create_discrete(ID *id, StructRNA *type, void *data)
@@ -227,7 +224,6 @@ PointerRNA RNA_pointer_create_from_ancestor(const PointerRNA &ptr, const int anc
 
   return ancestor_ptr;
 }
-
 
 PointerRNA RNA_blender_rna_pointer_create()
 {
@@ -4622,7 +4618,7 @@ static PointerRNA property_pointer_get(PointerRNA *ptr, PropertyRNA *prop, const
     RNA_property_pointer_add(ptr, prop);
     return RNA_property_pointer_get(ptr, prop);
   }
-  return PointerRNA_NULL;
+  return {};
 }
 
 PointerRNA RNA_property_pointer_get(PointerRNA *ptr, PropertyRNA *prop)
@@ -4811,7 +4807,7 @@ PointerRNA RNA_property_pointer_get_default(Main &bmain, PointerRNA & /*ptr*/, P
     }
   }
 
-  return PointerRNA_NULL;
+  return {};
 }
 
 void RNA_property_pointer_add(PointerRNA *ptr, PropertyRNA *prop)
@@ -5328,7 +5324,7 @@ bool RNA_property_collection_lookup_string_index(
 
   if (!key) {
     *r_index = -1;
-    *r_ptr = PointerRNA_NULL;
+    *r_ptr = {};
     return false;
   }
 
@@ -6675,12 +6671,12 @@ PointerRNA rna_array_lookup_int(
     PointerRNA *ptr, StructRNA *type, void *data, size_t itemsize, int64_t length, int64_t index)
 {
   if (index < 0 || index >= length) {
-    return PointerRNA_NULL;
+    return {};
   }
   if (index > std::numeric_limits<uint64_t>::max() / itemsize) [[unlikely]] {
     /* This path is never expected to execute. Assert and trace if it ever does. */
     BLI_assert_unreachable();
-    return PointerRNA_NULL;
+    return {};
   }
 
   return RNA_pointer_create_with_parent(
@@ -7014,7 +7010,7 @@ PointerRNA RNA_pointer_get(PointerRNA *ptr, const char *name)
   }
   printf("%s: %s.%s not found.\n", __func__, ptr->type->identifier.c_str(), name);
 
-  return PointerRNA_NULL;
+  return {};
 }
 
 void RNA_pointer_set(PointerRNA *ptr, const char *name, PointerRNA ptr_value)
@@ -7642,7 +7638,7 @@ ParameterList *RNA_parameter_list_create(ParameterList *parms,
                                          PointerRNA * /*ptr*/,
                                          FunctionRNA *func)
 {
-  PointerRNA null_ptr = PointerRNA_NULL;
+  PointerRNA null_ptr = {};
   void *data;
   int alloc_size = 0, size;
 
@@ -8103,7 +8099,7 @@ bool RNA_property_reset(Main *bmain, PointerRNA *ptr, PropertyRNA *prop, int ind
         value = RNA_property_pointer_get_default(*bmain, *ptr, *prop);
       }
       else {
-        value = PointerRNA_NULL;
+        value = {};
       }
       RNA_property_pointer_set(ptr, prop, value, nullptr);
       return true;

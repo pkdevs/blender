@@ -3439,7 +3439,7 @@ bool button_string_set(bContext *C, Button *but, const char *str)
 
       if (type == PROP_POINTER) {
         if (str[0] == '\0') {
-          RNA_property_pointer_set(&but->rnapoin, but->rnaprop, PointerRNA_NULL, nullptr);
+          RNA_property_pointer_set(&but->rnapoin, but->rnaprop, {}, nullptr);
           return true;
         }
 
@@ -4662,8 +4662,8 @@ static void def_but_rna__menu(bContext *C, Layout *layout, void *but_p)
     rows = totitems;
   }
 
-  const char *title = RNA_property_ui_name(
-      but->rnaprop, but->rnapoin.is_null() ? nullptr : &but->rnapoin);
+  const char *title = RNA_property_ui_name(but->rnaprop,
+                                           but->rnapoin.is_null() ? nullptr : &but->rnapoin);
 
   /* Is there a non-blank label before this button on the same row? */
   Button *but_prev = but->block->prev_but(but);

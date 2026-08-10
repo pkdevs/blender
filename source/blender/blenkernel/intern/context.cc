@@ -308,8 +308,9 @@ static std::string ctx_result_brief_repr(const bContextDataResult &result)
   switch (result.type) {
     case ContextDataType::Pointer:
       if (!result.ptr.is_null()) {
-        const char *rna_type_name = result.ptr.has_type() ? RNA_struct_identifier(result.ptr.type) :
-                                                      "Unknown";
+        const char *rna_type_name = result.ptr.has_type() ?
+                                        RNA_struct_identifier(result.ptr.type) :
+                                        "Unknown";
         /* Try to get the name property if it exists. */
         std::string member_name;
         if (result.ptr.type) {
@@ -353,8 +354,9 @@ static std::string ctx_result_brief_repr(const bContextDataResult &result)
     case ContextDataType::Property:
       if (result.prop && !result.ptr.is_null()) {
         const char *prop_name = RNA_property_identifier(result.prop);
-        const char *rna_type_name = result.ptr.has_type() ? RNA_struct_identifier(result.ptr.type) :
-                                                      "Unknown";
+        const char *rna_type_name = result.ptr.has_type() ?
+                                        RNA_struct_identifier(result.ptr.type) :
+                                        "Unknown";
         if (result.index >= 0) {
           return fmt::format("<Property({}.{}[{}])>", rna_type_name, prop_name, result.index);
         }
@@ -655,7 +657,7 @@ PointerRNA CTX_data_pointer_get(const bContext *C, const char *member)
     return result.ptr;
   }
 
-  return PointerRNA_NULL;
+  return {};
 }
 
 PointerRNA CTX_data_pointer_get_type(const bContext *C, const char *member, StructRNA *type)
@@ -674,7 +676,7 @@ PointerRNA CTX_data_pointer_get_type(const bContext *C, const char *member, Stru
               RNA_struct_identifier(type));
   }
 
-  return PointerRNA_NULL;
+  return {};
 }
 
 PointerRNA CTX_data_pointer_get_type_silent(const bContext *C, const char *member, StructRNA *type)
@@ -685,7 +687,7 @@ PointerRNA CTX_data_pointer_get_type_silent(const bContext *C, const char *membe
     return ptr;
   }
 
-  return PointerRNA_NULL;
+  return {};
 }
 
 Vector<PointerRNA> CTX_data_collection_get(const bContext *C, const char *member)

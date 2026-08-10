@@ -63,7 +63,7 @@ static bool eyedropper_colorband_init(bContext *C, wmOperator *op)
 
   Button *but = context_active_but_get(C);
 
-  PointerRNA rna_update_ptr = PointerRNA_NULL;
+  PointerRNA rna_update_ptr = {};
   PropertyRNA *rna_update_prop = nullptr;
   bool is_undo = true;
 

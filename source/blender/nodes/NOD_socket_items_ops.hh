@@ -37,13 +37,13 @@ inline PointerRNA get_active_node_to_operate_on(bContext *C,
 {
   SpaceNode *snode = CTX_wm_space_node(C);
   if (!snode) {
-    return PointerRNA_NULL;
+    return {};
   }
   if (!snode->edittree) {
-    return PointerRNA_NULL;
+    return {};
   }
   if (!ID_IS_EDITABLE(snode->edittree)) {
-    return PointerRNA_NULL;
+    return {};
   }
 
   bNode *node = nullptr;
@@ -55,13 +55,13 @@ inline PointerRNA get_active_node_to_operate_on(bContext *C,
     node = bke::node_get_active(*snode->edittree);
   }
   if (!node) {
-    return PointerRNA_NULL;
+    return {};
   }
 
   if (bke::zone_type_by_node_type(node->type_legacy) != nullptr) {
     const bke::bNodeTreeZones *zones = snode->edittree->zones();
     if (!zones) {
-      return PointerRNA_NULL;
+      return {};
     }
     if (const bke::bNodeTreeZone *zone = zones->get_zone_by_node(node->identifier)) {
       if (zone->input_node() == node) {
@@ -72,7 +72,7 @@ inline PointerRNA get_active_node_to_operate_on(bContext *C,
   }
 
   if (node->idname != node_idname) {
-    return PointerRNA_NULL;
+    return {};
   }
   return RNA_pointer_create_discrete(&snode->edittree->id, RNA_Node, node);
 }

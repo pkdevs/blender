@@ -421,7 +421,7 @@ static void ED_OT_lib_id_remove_preview(wmOperatorType *ot)
 static wmOperatorStatus lib_id_fake_user_toggle_exec(bContext *C, wmOperator *op)
 {
   PropertyPointerRNA pprop;
-  PointerRNA idptr = PointerRNA_NULL;
+  PointerRNA idptr = {};
 
   ui::context_active_but_prop_get_templateID(C, &pprop.ptr, &pprop.prop);
 

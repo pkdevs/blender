@@ -97,7 +97,7 @@ struct PointerRNA {
   {
   }
 
-  /** Reset the pointer to its initial empty state, such that it equals to PointerRNA_NULL. */
+  /** Reset the pointer to its initial empty state, such that it #is_null. */
   void reset()
   {
     *this = {};
@@ -161,8 +161,6 @@ struct PointerRNA {
     return this->owner_id != nullptr;
   }
 };
-
-extern const PointerRNA PointerRNA_NULL;
 
 struct PropertyPointerRNA {
   PointerRNA ptr = {};

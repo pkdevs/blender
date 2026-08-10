@@ -2139,7 +2139,7 @@ static int pyrna_py_to_prop(
             ReportList reports;
             BKE_reports_init(&reports, RPT_STORE | RPT_PRINT_HANDLED_BY_OWNER);
             RNA_property_pointer_set(
-                ptr, prop, (param == nullptr) ? PointerRNA_NULL : *param->ptr, &reports);
+                ptr, prop, (param == nullptr) ? PointerRNA() : *param->ptr, &reports);
             const int err = BPy_reports_to_error(&reports, PyExc_RuntimeError, true);
             if (err == -1) {
               Py_XDECREF(value_new);
@@ -2503,8 +2503,9 @@ static int pyrna_prop_collection_ass_subscript_int(BPy_PropertyRNA *self,
                                                    PyObject *value)
 {
   Py_ssize_t keynum_abs = keynum;
+  static PointerRNA null_ptr;
   const PointerRNA *ptr = (value == Py_None) ?
-                              (&PointerRNA_NULL) :
+                              &null_ptr :
                               &(reinterpret_cast<BPy_StructRNA *>(value))->ptr.value();
 
   PYRNA_PROP_CHECK_INT(self);
@@ -9355,7 +9356,8 @@ const PointerRNA *pyrna_struct_as_ptr(PyObject *py_obj, const StructRNA *srna)
 const PointerRNA *pyrna_struct_as_ptr_or_null(PyObject *py_obj, const StructRNA *srna)
 {
   if (py_obj == Py_None) {
-    return &PointerRNA_NULL;
+    static PointerRNA null_ptr;
+    return &null_ptr;
   }
   return pyrna_struct_as_ptr(py_obj, srna);
 }

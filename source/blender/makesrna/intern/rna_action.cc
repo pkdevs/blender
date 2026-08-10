@@ -174,7 +174,7 @@ static PointerRNA rna_ActionSlots_active_get(PointerRNA *ptr)
   animrig::Slot *active_slot = action.slot_active_get();
 
   if (!active_slot) {
-    return PointerRNA_NULL;
+    return {};
   }
   return RNA_pointer_create_discrete(&action.id, RNA_ActionSlot, active_slot);
 }

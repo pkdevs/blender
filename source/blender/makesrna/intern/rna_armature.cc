@@ -280,7 +280,7 @@ static PointerRNA rna_BoneCollection_parent_get(PointerRNA *ptr)
   const int parent_index = armature_bonecoll_find_parent_index(arm, bcoll_index);
 
   if (parent_index < 0) {
-    return PointerRNA_NULL;
+    return {};
   }
 
   BoneCollection *parent = arm->collection_array[parent_index];

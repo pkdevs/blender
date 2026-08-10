@@ -998,7 +998,7 @@ static void rna_IntProperty_default_array_get(PointerRNA *ptr, int *values)
   PropertyRNA *prop = static_cast<PropertyRNA *>(ptr->data);
   prop = rna_ensure_property(prop);
   if (prop->totarraylength > 0) {
-    PointerRNA null_ptr = PointerRNA_NULL;
+    PointerRNA null_ptr = {};
     RNA_property_int_get_default_array(&null_ptr, prop, values);
   }
 }
@@ -1008,7 +1008,7 @@ static void rna_BoolProperty_default_array_get(PointerRNA *ptr, bool *values)
   PropertyRNA *prop = static_cast<PropertyRNA *>(ptr->data);
   prop = rna_ensure_property(prop);
   if (prop->totarraylength > 0) {
-    PointerRNA null_ptr = PointerRNA_NULL;
+    PointerRNA null_ptr = {};
     RNA_property_boolean_get_default_array(&null_ptr, prop, values);
   }
 }
@@ -1018,7 +1018,7 @@ static void rna_FloatProperty_default_array_get(PointerRNA *ptr, float *values)
   PropertyRNA *prop = static_cast<PropertyRNA *>(ptr->data);
   prop = rna_ensure_property(prop);
   if (prop->totarraylength > 0) {
-    PointerRNA null_ptr = PointerRNA_NULL;
+    PointerRNA null_ptr = {};
     RNA_property_float_get_default_array(&null_ptr, prop, values);
   }
 }
@@ -1480,7 +1480,7 @@ static void rna_property_override_diff_propptr_validate_diffing(
     BLI_assert(!no_prop_name);
   }
 
-  /* Beware, PointerRNA_NULL has no type and is considered a 'blank page'! */
+  /* Beware, might have no type and is considered a 'blank page'! */
   if (propptr_a->is_null()) {
     if (propptr_b == nullptr || propptr_b->is_null()) {
       ptrdiff_ctx.is_null = true;
@@ -1505,9 +1505,8 @@ static void rna_property_override_diff_propptr_validate_diffing(
    * This helps a lot in library override case, especially to detect inserted items in collections.
    */
   if (!no_prop_name && (ptrdiff_ctx.is_valid_for_diffing || do_force_name)) {
-    PropertyRNA *nameprop_a = (propptr_a->has_type()) ?
-                                  RNA_struct_name_property(propptr_a->type) :
-                                  nullptr;
+    PropertyRNA *nameprop_a = (propptr_a->has_type()) ? RNA_struct_name_property(propptr_a->type) :
+                                                        nullptr;
     PropertyRNA *nameprop_b = (propptr_b != nullptr && propptr_b->has_type()) ?
                                   RNA_struct_name_property(propptr_b->type) :
                                   nullptr;
@@ -1538,10 +1537,12 @@ static void rna_property_override_diff_propptr_validate_diffing(
     /* NOTE: This will always assign nullptr to these lib-pointers in case `do_id_lib` is false,
      * which ensures that they will not affect the result of `ptrdiff_ctx.is_valid_for_diffing` in
      * the last check below. */
-    ID *rna_itemid_a = (do_id_pointer && !propptr_a->is_null()) ? static_cast<ID *>(propptr_a->data) :
-                                                            nullptr;
-    ID *rna_itemid_b = (do_id_pointer && !propptr_b->is_null()) ? static_cast<ID *>(propptr_b->data) :
-                                                            nullptr;
+    ID *rna_itemid_a = (do_id_pointer && !propptr_a->is_null()) ?
+                           static_cast<ID *>(propptr_a->data) :
+                           nullptr;
+    ID *rna_itemid_b = (do_id_pointer && !propptr_b->is_null()) ?
+                           static_cast<ID *>(propptr_b->data) :
+                           nullptr;
     if (do_id_pointer) {
       ptrdiff_ctx.rna_itemid_a = rna_itemid_a;
       ptrdiff_ctx.rna_itemid_b = rna_itemid_b;

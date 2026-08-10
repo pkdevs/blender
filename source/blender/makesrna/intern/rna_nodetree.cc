@@ -3054,7 +3054,7 @@ static PointerRNA rna_NodeInternal_input_template(StructRNA *srna, int index)
       return ptr;
     }
   }
-  return PointerRNA_NULL;
+  return {};
 }
 
 static PointerRNA rna_NodeInternal_output_template(StructRNA *srna, int index)
@@ -3072,7 +3072,7 @@ static PointerRNA rna_NodeInternal_output_template(StructRNA *srna, int index)
       return ptr;
     }
   }
-  return PointerRNA_NULL;
+  return {};
 }
 
 static bool rna_NodeInternal_poll(StructRNA *srna, bNodeTree *ntree)

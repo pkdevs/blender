@@ -495,7 +495,7 @@ static PointerRNA rna_Object_shape_key_add(
   }
   else {
     BKE_reportf(reports, RPT_ERROR, "Object '%s' does not support shapes", ob->id.name + 2);
-    return PointerRNA_NULL;
+    return {};
   }
 }
 
