@@ -595,6 +595,7 @@ FrameBuffer *GLTexture::framebuffer_get(int mip)
   BLI_assert(!(type_ & GPU_TEXTURE_1D));
   framebuffer_ = GPU_framebuffer_create(name_.c_str());
   framebuffer_->attachment_set(this->attachment_type(0), GPU_ATTACHMENT_TEXTURE_MIP(this, mip));
+  framebuffer_mip_ = mip;
   has_pixels_ = true;
   return framebuffer_;
 }
