@@ -78,6 +78,23 @@ struct ExpressionTypeParser
           error(call.parameters(), Diag::ExpectedOneTypename);
           return {table->err_cls, 1, false};
         }
+        if (call.identifier().str() == "interface_get" ||
+            call.identifier().str() == "sampler_get" || call.identifier().str() == "buffer_get")
+        {
+          auto [param1, param2] = call.parameters().splat_2();
+          if (ast::LocalVar var = param1.child_first(), mem = param2.child_first();
+              var.is_valid() && mem.is_valid())
+          {
+            SymbolClass *cls = scope->lookup_class(*table, var.identifier()).unwrap(err);
+            SymbolVariable *v = cls->lookup_variable(*table, mem.identifier());
+            if (v->is_error) {
+              error(mem, Diag::UnknownVariable, string(mem.str()));
+            }
+            return v;
+          }
+          error(call.parameters(), Diag::ExpectedOneTypename);
+          return {table->err_cls, 1, false};
+        }
 
         if (is_reference) {
           error(t, Diag::FunctionCallNotAllowedInReferenceDefinition);
@@ -149,7 +166,10 @@ struct ExpressionTypeParser
       case ast::NodeType::FuncCall: {
         ast::FuncCall call = right;
         /* The exception is for legacy BSL. */
-        if (is_reference && call.identifier().str() != "resource_table_get") {
+        if (is_reference && call.identifier().str() != "resource_table_get" &&
+            call.identifier().str() != "interface_get" &&
+            call.identifier().str() != "sampler_get" && call.identifier().str() != "buffer_get")
+        {
           error(t, Diag::FunctionCallNotAllowedInReferenceDefinition);
         }
         auto sym = l->lookup_function(*table, call.identifier(), call.parameters(), *scope);
