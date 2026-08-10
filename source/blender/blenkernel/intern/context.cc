@@ -313,7 +313,7 @@ static std::string ctx_result_brief_repr(const bContextDataResult &result)
                                         "Unknown";
         /* Try to get the name property if it exists. */
         std::string member_name;
-        if (result.ptr.type) {
+        if (result.ptr.has_type()) {
           PropertyRNA *name_prop = RNA_struct_name_property(result.ptr.type);
           if (name_prop) {
             char name_buf[256];

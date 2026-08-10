@@ -1480,7 +1480,7 @@ static void rna_property_override_diff_propptr_validate_diffing(
     BLI_assert(!no_prop_name);
   }
 
-  /* Beware, might have no type and is considered a 'blank page'! */
+  /* Beware, might be null and is considered a 'blank page'! */
   if (!*propptr_a) {
     if (propptr_b == nullptr || !*propptr_b) {
       ptrdiff_ctx.is_null = true;
@@ -1537,12 +1537,10 @@ static void rna_property_override_diff_propptr_validate_diffing(
     /* NOTE: This will always assign nullptr to these lib-pointers in case `do_id_lib` is false,
      * which ensures that they will not affect the result of `ptrdiff_ctx.is_valid_for_diffing` in
      * the last check below. */
-    ID *rna_itemid_a = (do_id_pointer && *propptr_a) ?
-                           static_cast<ID *>(propptr_a->data) :
-                           nullptr;
-    ID *rna_itemid_b = (do_id_pointer && *propptr_b) ?
-                           static_cast<ID *>(propptr_b->data) :
-                           nullptr;
+    ID *rna_itemid_a = (do_id_pointer && *propptr_a) ? static_cast<ID *>(propptr_a->data) :
+                                                       nullptr;
+    ID *rna_itemid_b = (do_id_pointer && *propptr_b) ? static_cast<ID *>(propptr_b->data) :
+                                                       nullptr;
     if (do_id_pointer) {
       ptrdiff_ctx.rna_itemid_a = rna_itemid_a;
       ptrdiff_ctx.rna_itemid_b = rna_itemid_b;
