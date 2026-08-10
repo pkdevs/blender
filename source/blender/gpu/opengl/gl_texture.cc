@@ -427,9 +427,22 @@ void GLTexture::clear(const double4 data)
 
   gpu::FrameBuffer *prev_fb = GPU_framebuffer_active_get();
 
-  FrameBuffer *fb = this->framebuffer_get();
-  fb->bind(true);
-  fb->clear_attachment(this->attachment_type(0), data);
+  /* By default, fb->clear_attachment only affects the first mip level. */
+  if (mipmaps_ <= 1) {
+    FrameBuffer *fb = this->framebuffer_get();
+    fb->bind(true);
+    fb->clear_attachment(this->attachment_type(0), data);
+  }
+  else {
+    for (int mip = 0; mip < mipmaps_; mip++) {
+      FrameBuffer *fb = GPU_framebuffer_create(name_.c_str());
+      fb->attachment_set(this->attachment_type(0), GPU_ATTACHMENT_TEXTURE_MIP(this, mip));
+      fb->bind(true);
+      fb->clear_attachment(this->attachment_type(0), data);
+      GPU_framebuffer_free(fb);
+      has_pixels_ = true;
+    }
+  }
 
   GPU_framebuffer_bind(prev_fb);
 }
