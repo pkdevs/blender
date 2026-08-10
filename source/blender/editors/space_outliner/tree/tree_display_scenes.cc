@@ -36,7 +36,7 @@ Vector<TreeElement *> TreeDisplayScenes::build_tree(const TreeSourceData &source
   /* On first view we open scenes. */
   const int show_opened = !space_outliner_.treestore ||
                           !BLI_mempool_len(space_outliner_.treestore);
-  Vector<TreeElement *> tree = {nullptr};
+  Vector<TreeElement *> tree;
 
   for (ID *id : List<ID>(source_data.bmain->scenes)) {
     Scene *scene = reinterpret_cast<Scene *>(id);

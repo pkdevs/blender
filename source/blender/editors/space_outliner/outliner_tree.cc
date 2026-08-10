@@ -573,6 +573,9 @@ static void outliner_sort(Vector<TreeElement *> *lb)
    *   with bones coming first (and ARE sorted).
    */
 
+  if (lb->is_empty()) {
+    return;
+  }
   TreeElement *last_te = static_cast<TreeElement *>(lb->last());
   if (last_te == nullptr) {
     return;
@@ -634,12 +637,12 @@ static void outliner_sort(Vector<TreeElement *> *lb)
         }
       }
 
-      //lb->clear_no_delete();
+      // lb->clear_no_delete();
       lb->clear();
       tp = tear;
       while (totelem--) {
         lb->append(tp->te);
-        //BLI_addtail(lb, tp->te);
+        // BLI_addtail(lb, tp->te);
         tp++;
       }
       MEM_delete(tear);
@@ -678,12 +681,12 @@ static void outliner_collections_children_sort(Vector<TreeElement *> *lb)
 
       qsort(tear, totelem, sizeof(tTreeSort), treesort_child_not_in_collection);
 
-      //lb->clear_no_delete();
+      // lb->clear_no_delete();
       lb->clear();
       tp = tear;
       while (totelem--) {
         lb->append(tp->te);
-        //BLI_addtail(lb, tp->te);
+        // BLI_addtail(lb, tp->te);
         tp++;
       }
       MEM_delete(tear);
@@ -788,7 +791,11 @@ static TreeElement *outliner_find_first_desired_element_at_y(const SpaceOutliner
 {
   TreeElement *te = outliner_find_item_at_y(
       space_outliner, &space_outliner->runtime->tree, view_co);
-  
+
+  if (!te) {
+    return nullptr;
+  }
+
   Vector<TreeElement *> &subtree = te->parent->subtree;
   int index = subtree.first_index_of(te);
 
@@ -1065,8 +1072,9 @@ static TreeElement *outliner_extract_children_from_subtree(TreeElement *element,
   TreeElement *te_next = index <= parent_subtree->size() ? (*parent_subtree)[index + 1] : nullptr;
 
   if (outliner_element_is_collection_or_object(element)) {
-    //for (TreeElement *te = static_cast<TreeElement *>(element->subtree.last()); te; te = te_prev) {
-      for (auto te = parent_subtree->rbegin(); te != parent_subtree->rend(); te++) {
+    // for (TreeElement *te = static_cast<TreeElement *>(element->subtree.last()); te; te =
+    // te_prev) {
+    for (auto te = parent_subtree->rbegin(); te != parent_subtree->rend(); te++) {
 
       if (!outliner_element_is_collection_or_object(*te)) {
         continue;

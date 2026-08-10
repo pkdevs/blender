@@ -156,8 +156,7 @@ TreeElement *outliner_find_item_at_x_in_row(const SpaceOutliner *space_outliner,
   return te;
 }
 
-TreeElement *outliner_find_tree_element(Vector<TreeElement *> *lb,
-                                        const TreeStoreElem *store_elem)
+TreeElement *outliner_find_tree_element(Vector<TreeElement *> *lb, const TreeStoreElem *store_elem)
 {
   for (TreeElement *te : *lb) {
     if (te->store_elem == store_elem) {

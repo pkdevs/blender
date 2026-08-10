@@ -45,7 +45,7 @@ Vector<TreeElement *> TreeDisplayOverrideLibraryProperties::build_tree(
 
 Vector<TreeElement *> TreeDisplayOverrideLibraryProperties::add_library_contents(Main &mainvar)
 {
-  Vector<TreeElement *> tree = {nullptr};
+  Vector<TreeElement *> tree;
 
   const short filter_id_type = id_filter_get();
 

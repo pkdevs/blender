@@ -726,8 +726,8 @@ static wmOperatorStatus outliner_id_delete_invoke(bContext *C,
   int id_tagged_num = 0;
   BKE_main_id_tag_all(bmain, ID_TAG_DOIT, false);
   for (TreeElement *te : space_outliner->runtime->tree) {
-    if ((id_tagged_num += outliner_id_delete_tag(
-             C, op->reports, te, fmval, scene_replace_data)) != 0)
+    if ((id_tagged_num += outliner_id_delete_tag(C, op->reports, te, fmval, scene_replace_data)) !=
+        0)
     {
       break;
     }

@@ -2155,7 +2155,8 @@ static TreeElement *outliner_find_previous_element(SpaceOutliner *space_outliner
     const int index = subtree.first_index_of(te);
     if ((index - 1) >= 0) {
       te = outliner_find_rightmost_visible_child(space_outliner, subtree[index - 1]);
-    } else {
+    }
+    else {
       te = te->parent;
     }
   }

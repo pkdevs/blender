@@ -219,8 +219,8 @@ class TreeDisplayOverrideLibraryHierarchies final : public AbstractTreeDisplay {
 
  private:
   Vector<TreeElement *> build_hierarchy_for_lib_or_main(Main *bmain,
-                                                         TreeElement &parent_te,
-                                                         Library *lib = nullptr);
+                                                        TreeElement &parent_te,
+                                                        Library *lib = nullptr);
 };
 
 /* -------------------------------------------------------------------- */

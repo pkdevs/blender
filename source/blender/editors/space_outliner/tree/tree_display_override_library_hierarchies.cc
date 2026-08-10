@@ -38,7 +38,7 @@ TreeDisplayOverrideLibraryHierarchies::TreeDisplayOverrideLibraryHierarchies(
 Vector<TreeElement *> TreeDisplayOverrideLibraryHierarchies::build_tree(
     const TreeSourceData &source_data)
 {
-  Vector<TreeElement *> tree = {nullptr};
+  Vector<TreeElement *> tree;
 
   /* First step: Build "Current File" hierarchy. */
   TreeElement *current_file_te = AbstractTreeDisplay::add_element(
@@ -127,7 +127,7 @@ class OverrideIDHierarchyBuilder {
 Vector<TreeElement *> TreeDisplayOverrideLibraryHierarchies::build_hierarchy_for_lib_or_main(
     Main *bmain, TreeElement &parent_te, Library *lib)
 {
-  Vector<TreeElement *> tree = {nullptr};
+  Vector<TreeElement *> tree;
 
   /* Ensure #Main.relations contains the latest mapping of relations. Must be freed before
    * returning. */

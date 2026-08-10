@@ -30,7 +30,7 @@ TreeDisplayIDOrphans::TreeDisplayIDOrphans(SpaceOutliner &space_outliner)
 
 Vector<TreeElement *> TreeDisplayIDOrphans::build_tree(const TreeSourceData &source_data)
 {
-  Vector<TreeElement *> tree = {nullptr};
+  Vector<TreeElement *> tree;
   short filter_id_type = (space_outliner_.filter & SO_FILTER_ID_TYPE) ?
                              space_outliner_.filter_id_type :
                              0;

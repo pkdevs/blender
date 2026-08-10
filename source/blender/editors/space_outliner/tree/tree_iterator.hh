@@ -40,9 +40,7 @@ void all(Vector<TreeElement *> &subtree, VisitorFn visitor);
  * (but not its tree-store element).
  */
 void all_open(const SpaceOutliner &, ConstVisitorFn visitor);
-void all_open(const SpaceOutliner &,
-              const Vector<TreeElement *> &subtree,
-              ConstVisitorFn visitor);
+void all_open(const SpaceOutliner &, const Vector<TreeElement *> &subtree, ConstVisitorFn visitor);
 void all_open(SpaceOutliner &, VisitorFn visitor);
 void all_open(SpaceOutliner &, Vector<TreeElement *> &subtree, VisitorFn visitor);
 

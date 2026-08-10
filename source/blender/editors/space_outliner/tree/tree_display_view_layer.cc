@@ -68,7 +68,7 @@ bool TreeDisplayViewLayer::supports_mode_column() const
 
 Vector<TreeElement *> TreeDisplayViewLayer::build_tree(const TreeSourceData &source_data)
 {
-  Vector<TreeElement *> tree = {nullptr};
+  Vector<TreeElement *> tree;
   Scene *scene = source_data.scene;
   scene_ = scene;
   bmain_ = source_data.bmain;
@@ -146,7 +146,7 @@ void TreeDisplayViewLayer::add_view_layer(Scene &scene,
 }
 
 void TreeDisplayViewLayer::add_layer_collections_recursive(
-                                                           Vector<TreeElement *> &tree,
+    Vector<TreeElement *> &tree,
     ListBaseT<LayerCollection> &layer_collections,
     TreeElement &parent_ten)
 {
@@ -278,7 +278,8 @@ void ObjectsChildrenBuilder::make_object_parent_hierarchy_collections()
       for (TreeElement *child_ob_tree_element : *child_ob_tree_elements) {
         if (child_ob_tree_element->parent == parent_ob_collection_tree_element) {
           /* Move from the collection subtree into the parent object subtree. */
-          const int index = parent_ob_collection_tree_element->subtree.first_index_of(child_ob_tree_element);
+          const int index = parent_ob_collection_tree_element->subtree.first_index_of(
+              child_ob_tree_element);
           parent_ob_collection_tree_element->subtree.remove(index);
           parent_ob_tree_element->subtree.append(child_ob_tree_element);
           child_ob_tree_element->parent = parent_ob_tree_element;

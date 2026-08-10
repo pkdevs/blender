@@ -33,7 +33,7 @@ TreeDisplayLibraries::TreeDisplayLibraries(SpaceOutliner &space_outliner)
 
 Vector<TreeElement *> TreeDisplayLibraries::build_tree(const TreeSourceData &source_data)
 {
-  Vector<TreeElement *> tree = {nullptr};
+  Vector<TreeElement *> tree;
 
   {
     /* current file first - mainvar provides tselem with unique pointer - not used */
@@ -78,7 +78,7 @@ Vector<TreeElement *> TreeDisplayLibraries::build_tree(const TreeSourceData &sou
     TreeElement *parent = reinterpret_cast<TreeElement *>(
         (lib->archive_parent_library ? lib->archive_parent_library : lib->runtime->parent)
             ->id.newid);
-    
+
     const int index = tree.first_index_of(ten);
     tree.remove(index);
     parent->subtree.append(ten);

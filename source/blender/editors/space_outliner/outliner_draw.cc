@@ -1292,7 +1292,7 @@ static void outliner_draw_restrictbuts(ui::Block *block,
         if (space_outliner->show_restrict_flags & SO_RESTRICT_HIDE) {
           BKE_view_layer_synced_ensure(bmain, scene, view_layer);
           Base *base = (te->directdata) ? static_cast<Base *>(te->directdata) :
-                                         BKE_view_layer_base_find(view_layer, ob);
+                                          BKE_view_layer_base_find(view_layer, ob);
           if (base) {
             PointerRNA base_ptr = RNA_pointer_create_discrete(&scene->id, RNA_ObjectBase, base);
             bt = uiDefIconButR_prop(block,
@@ -3403,8 +3403,14 @@ static void outliner_draw_hierarchy_lines_recursive(uint pos,
         y = *starty;
       }
 
-      outliner_draw_hierarchy_lines_recursive(
-          pos, space_outliner, &te->subtree, tvc, startx + UI_UNIT_X, col, draw_grayed_out, starty);
+      outliner_draw_hierarchy_lines_recursive(pos,
+                                              space_outliner,
+                                              &te->subtree,
+                                              tvc,
+                                              startx + UI_UNIT_X,
+                                              col,
+                                              draw_grayed_out,
+                                              starty);
     }
 
     if (draw_hierarchy_line) {
