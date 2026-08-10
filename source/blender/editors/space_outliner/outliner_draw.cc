@@ -484,25 +484,6 @@ static CollectionData get_collection_from_tree_element(TreeElement *te,
   return {lc, col};
 }
 
-/* Iterate elements belong in same hierarchy as the clicked item */
-static void sibling_iterator(Scene *scene,
-                             TreeElement *te,
-                             PropertyRNA *layer_or_collection_prop,
-                             const bool use_id_collection,
-                             const std::optional<bool> value = std::nullopt)
-{
-  PointerRNA ptr;
-  for (TreeElement &te_child : te->parent->subtree) {
-    if (!outliner_is_collection_tree_element(&te_child)) {
-      continue;
-    }
-    CollectionData data = get_collection_from_tree_element(&te_child, use_id_collection);
-
-    outliner_layer_or_collection_pointer_create(scene, data.lc, data.col, &ptr);
-    RNA_property_boolean_set(&ptr, layer_or_collection_prop, value.value_or(&te_child != te));
-  }
-}
-
 static bool collection_is_isolated(Scene *scene,
                                    TreeElement *te,
                                    const bool value_cmp,
@@ -516,7 +497,7 @@ static bool collection_is_isolated(Scene *scene,
     if (!outliner_is_collection_tree_element(te_parent)) {
       continue;
     }
-    
+
     CollectionData data = get_collection_from_tree_element(te_parent, use_id_collection);
     outliner_layer_or_collection_pointer_create(scene, data.lc, data.col, &ptr);
     const bool value = RNA_property_boolean_get(&ptr, layer_or_collection_prop);
@@ -530,16 +511,16 @@ static bool collection_is_isolated(Scene *scene,
     for (TreeElement &te_child : te_parent->subtree) {
       if (previous_parent_to_skip == &te_child) {
         previous_parent_to_skip = te_parent;
-        continue; 
+        continue;
       }
       if (!outliner_is_collection_tree_element(&te_child)) {
         continue;
       }
-      
+
       if (&te_child == te) {
         continue;
       }
-      
+
       data = get_collection_from_tree_element(&te_child, use_id_collection);
       outliner_layer_or_collection_pointer_create(scene, data.lc, data.col, &ptr);
       const bool value = RNA_property_boolean_get(&ptr, layer_or_collection_prop);
@@ -586,11 +567,10 @@ void outliner_collection_isolate_flag(const Main & /*bmain*/,
     if (!ELEM(te_parent->store_elem->type, TSE_SCENE_COLLECTION_BASE, TSE_VIEW_COLLECTION_BASE)) {
       CollectionData data = get_collection_from_tree_element(te_parent, use_id_collection);
       outliner_layer_or_collection_pointer_create(scene, data.lc, data.col, &ptr);
-      RNA_property_boolean_set(&ptr,
-                               layer_or_collection_prop,
-                               was_isolated ? default_value : !is_hide);
+      RNA_property_boolean_set(
+          &ptr, layer_or_collection_prop, was_isolated ? default_value : !is_hide);
     }
-    
+
     if (previous_parent_to_skip == nullptr) {
       previous_parent_to_skip = te_parent;
     }
@@ -605,13 +585,10 @@ void outliner_collection_isolate_flag(const Main & /*bmain*/,
       CollectionData data = get_collection_from_tree_element(&te_child, use_id_collection);
 
       outliner_layer_or_collection_pointer_create(scene, data.lc, data.col, &ptr);
-      RNA_property_boolean_set(&ptr,
-                               layer_or_collection_prop,
-                               was_isolated ? default_value : (&te_child != te));
+      RNA_property_boolean_set(
+          &ptr, layer_or_collection_prop, was_isolated ? default_value : (&te_child != te));
     }
   }
-
-  //sibling_iterator(scene, te, layer_or_collection_prop, use_id_collection);
 }
 
 static void outliner_collection_set_flag_recursive_fn(bContext *C,
