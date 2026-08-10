@@ -679,25 +679,6 @@ static void object_space_overlays_draw(const PaintCursorContext &pcontext)
   }
 }
 
-static void calc_local_from_screen(const ViewContext &vc,
-                                   const float center[3],
-                                   const float screen_dir[2],
-                                   float r_local_dir[3])
-{
-  Object &ob = *vc.obact;
-  invert_m4_m4(ob.runtime->world_to_object.ptr(), ob.object_to_world().ptr());
-  float loc[3];
-
-  mul_v3_m4v3(loc, ob.object_to_world().ptr(), center);
-  const float zfac = ED_view3d_calc_zfac(vc.rv3d, loc);
-
-  ED_view3d_win_to_delta(vc.region, screen_dir, zfac, r_local_dir);
-  normalize_v3(r_local_dir);
-
-  add_v3_v3(r_local_dir, ob.loc);
-  mul_m4_v3(ob.world_to_object().ptr(), r_local_dir);
-}
-
 static void cursor_space_drawing_setup(const PaintCursorContext &pcontext)
 {
   if (BKE_brush_has_cube_tip(pcontext.brush, pcontext.mode)) {

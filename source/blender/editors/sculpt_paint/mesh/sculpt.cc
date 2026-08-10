@@ -2853,7 +2853,6 @@ void calc_brush_local_mat(const float rotation,
                           float local_mat[4][4],
                           float local_mat_inv[4][4])
 {
-  const StrokeCache *cache = ob.runtime->sculpt_session->cache;
   float tmat[4][4];
   float mat[4][4];
   float scale[4][4];

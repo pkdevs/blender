@@ -1196,7 +1196,7 @@ static bool paint_cursor_is_brush_cursor_enabled(const PaintCursorContext &pcont
   return false;
 }
 
-static void paint_cursor_update_rake_rotation(bContext *C, PaintCursorContext &pcontext)
+static void paint_cursor_update_rake_rotation(PaintCursorContext &pcontext)
 {
   PRF_scope(ProfileCategory::Editor);
   /* Don't calculate rake angles while a stroke is active because the rake variables are global
@@ -1295,7 +1295,7 @@ static void paint_draw_cursor(bContext *C, const int2 &xy, const float2 &tilt, v
     case PaintCursorDrawingType::Cursor2D:
       paint_update_mouse_cursor(pcontext);
 
-      paint_cursor_update_rake_rotation(C, pcontext);
+      paint_cursor_update_rake_rotation(pcontext);
       paint_cursor_check_and_draw_alpha_overlays(pcontext);
       paint_cursor_update_anchored_location(pcontext);
 
@@ -1306,7 +1306,7 @@ static void paint_draw_cursor(bContext *C, const int2 &xy, const float2 &tilt, v
     case PaintCursorDrawingType::Cursor3D:
       paint_update_mouse_cursor(pcontext);
 
-      paint_cursor_update_rake_rotation(C, pcontext);
+      paint_cursor_update_rake_rotation(pcontext);
       paint_cursor_check_and_draw_alpha_overlays(pcontext);
       paint_cursor_update_anchored_location(pcontext);
 
