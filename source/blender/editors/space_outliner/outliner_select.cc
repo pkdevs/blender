@@ -1495,7 +1495,7 @@ static void outliner_set_properties_tab(bContext *C, TreeElement *te, TreeStoreE
     }
   }
 
-  if (!ptr.is_data_null()) {
+  if (!ptr.is_null()) {
     outliner_sync_to_properties_editors(C, &ptr, context);
   }
 }

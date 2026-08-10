@@ -1054,7 +1054,7 @@ static void panel_draw(const bContext * /*C*/, Panel *panel)
   col = &layout.column(false);
   col->prop(ptr, "angle", UI_ITEM_NONE, std::nullopt, ICON_NONE);
   row = &col->row(false);
-  row->active_set(screw_obj_ptr.is_type_or_data_null() ||
+  row->active_set(screw_obj_ptr.is_null() ||
                   !RNA_boolean_get(ptr, "use_object_screw_offset"));
   row->prop(ptr, "screw_offset", UI_ITEM_NONE, std::nullopt, ICON_NONE);
   col->prop(ptr, "iterations", UI_ITEM_NONE, std::nullopt, ICON_NONE);
@@ -1065,7 +1065,7 @@ static void panel_draw(const bContext * /*C*/, Panel *panel)
   row->prop(ptr, "axis", ui::ITEM_R_EXPAND, std::nullopt, ICON_NONE);
   col->prop(ptr, "object", UI_ITEM_NONE, IFACE_("Axis Object"), ICON_NONE);
   sub = &col->column(false);
-  sub->active_set(!screw_obj_ptr.is_type_or_data_null());
+  sub->active_set(!screw_obj_ptr.is_null());
   sub->prop(ptr, "use_object_screw_offset", UI_ITEM_NONE, std::nullopt, ICON_NONE);
 
   layout.separator();

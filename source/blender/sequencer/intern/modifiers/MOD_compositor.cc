@@ -142,7 +142,7 @@ class CompositorModifierContext : public CompositorContext {
 
     node_group.ensure_topology_cache();
     PointerRNA inputs_ptr = RNA_pointer_get(&properties_ptr_, "inputs");
-    BLI_assert(!inputs_ptr.is_data_null());
+    BLI_assert(!inputs_ptr.is_null());
 
     /* Map the inputs to the operation. */
     Vector<std::unique_ptr<Result>> inputs;
@@ -296,7 +296,7 @@ static void compositor_modifier_apply(ModifierApplyContext &context,
 static PointerRNA *modifier_panel_get_property_pointers(Panel *panel)
 {
   PointerRNA *ptr = ui::panel_custom_data_get(panel);
-  BLI_assert(!ptr->is_type_or_data_null());
+  BLI_assert(!ptr->is_null());
   BLI_assert(RNA_struct_is_a(ptr->type, RNA_StripModifier));
   ui::panel_context_pointer_set(panel, "modifier", ptr);
   return ptr;

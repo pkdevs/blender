@@ -3519,7 +3519,7 @@ void uiItemLDrag(Layout *layout, PointerRNA *ptr, StringRef name, int icon)
 {
   Button *but = uiItem_simple(layout, name, icon);
 
-  if (ptr && ptr->is_typed()) {
+  if (ptr && ptr->has_type()) {
     if (RNA_struct_is_ID(ptr->type)) {
       button_drag_set_id(but, ptr->owner_id);
     }
@@ -3756,7 +3756,7 @@ PointerRNA Layout::op_menu_enum(const bContext *C,
   /* Use the menu button as owner for the operator properties, which will then be passed to the
    * individual menu items. */
   but->opptr = MEM_new<PointerRNA>("uiButOpPtr", WM_operator_properties_create_ptr(ot));
-  BLI_assert(but->opptr->is_data_null());
+  BLI_assert(but->opptr->is_null());
   WM_operator_properties_alloc(
       &but->opptr, reinterpret_cast<IDProperty **>(&but->opptr->data), ot->idname);
 

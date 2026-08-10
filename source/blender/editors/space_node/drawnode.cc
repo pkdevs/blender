@@ -488,7 +488,7 @@ static void node_buts_image_views(ui::Layout &layout,
                                   PointerRNA *ptr,
                                   PointerRNA *imaptr)
 {
-  if (imaptr->is_data_null()) {
+  if (imaptr->is_null()) {
     return;
   }
 

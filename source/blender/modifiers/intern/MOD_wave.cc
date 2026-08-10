@@ -373,7 +373,7 @@ static void texture_panel_draw(const bContext *C, Panel *panel)
   if (texture_coords == MOD_DISP_MAP_OBJECT) {
     col.prop(ptr, "texture_coords_object", UI_ITEM_NONE, IFACE_("Object"), ICON_NONE);
     PointerRNA texture_coords_obj_ptr = RNA_pointer_get(ptr, "texture_coords_object");
-    if (!texture_coords_obj_ptr.is_type_or_data_null() &&
+    if (!texture_coords_obj_ptr.is_null() &&
         (RNA_enum_get(&texture_coords_obj_ptr, "type") == OB_ARMATURE))
     {
       PointerRNA texture_coords_obj_data_ptr = RNA_pointer_get(&texture_coords_obj_ptr, "data");

@@ -1481,8 +1481,8 @@ static void rna_property_override_diff_propptr_validate_diffing(
   }
 
   /* Beware, PointerRNA_NULL has no type and is considered a 'blank page'! */
-  if (propptr_a->is_type_or_data_null()) {
-    if (propptr_b == nullptr || propptr_b->is_type_or_data_null()) {
+  if (propptr_a->is_null()) {
+    if (propptr_b == nullptr || propptr_b->is_null()) {
       ptrdiff_ctx.is_null = true;
     }
     else {
@@ -1494,7 +1494,7 @@ static void rna_property_override_diff_propptr_validate_diffing(
   }
   else {
     ptrdiff_ctx.is_id = RNA_struct_is_ID(propptr_a->type);
-    ptrdiff_ctx.is_null = (propptr_b == nullptr || propptr_b->is_type_or_data_null());
+    ptrdiff_ctx.is_null = (propptr_b == nullptr || propptr_b->is_null());
     ptrdiff_ctx.is_type_diff = (propptr_b == nullptr || propptr_b->type != propptr_a->type);
     ptrdiff_ctx.is_valid_for_diffing = !((ptrdiff_ctx.is_id && no_ownership) ||
                                          ptrdiff_ctx.is_null || ptrdiff_ctx.is_type_diff);
@@ -1505,10 +1505,10 @@ static void rna_property_override_diff_propptr_validate_diffing(
    * This helps a lot in library override case, especially to detect inserted items in collections.
    */
   if (!no_prop_name && (ptrdiff_ctx.is_valid_for_diffing || do_force_name)) {
-    PropertyRNA *nameprop_a = (propptr_a->is_typed()) ?
+    PropertyRNA *nameprop_a = (propptr_a->has_type()) ?
                                   RNA_struct_name_property(propptr_a->type) :
                                   nullptr;
-    PropertyRNA *nameprop_b = (propptr_b != nullptr && propptr_b->is_typed()) ?
+    PropertyRNA *nameprop_b = (propptr_b != nullptr && propptr_b->has_type()) ?
                                   RNA_struct_name_property(propptr_b->type) :
                                   nullptr;
     const bool do_id_pointer = ptrdiff_ctx.use_id_pointer && ptrdiff_ctx.is_id;
@@ -1538,9 +1538,9 @@ static void rna_property_override_diff_propptr_validate_diffing(
     /* NOTE: This will always assign nullptr to these lib-pointers in case `do_id_lib` is false,
      * which ensures that they will not affect the result of `ptrdiff_ctx.is_valid_for_diffing` in
      * the last check below. */
-    ID *rna_itemid_a = (do_id_pointer && !propptr_a->is_data_null()) ? static_cast<ID *>(propptr_a->data) :
+    ID *rna_itemid_a = (do_id_pointer && !propptr_a->is_null()) ? static_cast<ID *>(propptr_a->data) :
                                                             nullptr;
-    ID *rna_itemid_b = (do_id_pointer && !propptr_b->is_data_null()) ? static_cast<ID *>(propptr_b->data) :
+    ID *rna_itemid_b = (do_id_pointer && !propptr_b->is_null()) ? static_cast<ID *>(propptr_b->data) :
                                                             nullptr;
     if (do_id_pointer) {
       ptrdiff_ctx.rna_itemid_a = rna_itemid_a;

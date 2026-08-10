@@ -93,7 +93,7 @@ static Base *find_view_layer_base_with_synced_ensure(
 
   Scene *scene;
   ViewLayer *view_layer;
-  if (!view_layer_ptr->is_data_null()) {
+  if (!view_layer_ptr->is_null()) {
     scene = id_cast<Scene *>(view_layer_ptr->owner_id);
     view_layer = static_cast<ViewLayer *>(view_layer_ptr->data);
   }

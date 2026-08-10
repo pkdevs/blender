@@ -731,7 +731,7 @@ void uiTemplateImage(ui::Layout *layout,
                      bool compact,
                      bool multiview)
 {
-  if (ptr->is_data_null()) {
+  if (ptr->is_null()) {
     return;
   }
 

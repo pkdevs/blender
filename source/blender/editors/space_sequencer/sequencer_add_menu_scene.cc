@@ -125,7 +125,7 @@ static void sequencer_add_unassigned_assets_draw(const bContext *C, Menu *menu)
                                          ICON_NONE,
                                          wm::OpCallContext::InvokeRegionWin,
                                          UI_ITEM_NONE);
-    BLI_assert(!op_ptr.is_data_null());
+    BLI_assert(!op_ptr.is_null());
     asset::operator_asset_reference_props_set(*asset, op_ptr);
   }
 }

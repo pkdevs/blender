@@ -129,7 +129,7 @@ inline void remove_active_item(wmOperatorType *ot,
 
   ot->exec = [](bContext *C, wmOperator *op) -> wmOperatorStatus {
     PointerRNA node_ptr = get_active_node_to_operate_on(C, op, Accessor::node_idname);
-    if (node_ptr.is_data_null()) {
+    if (node_ptr.is_null()) {
       return OPERATOR_CANCELLED;
     }
     bNode &node = *static_cast<bNode *>(node_ptr.data);
@@ -159,7 +159,7 @@ inline void remove_item_by_index(wmOperatorType *ot,
 
   ot->exec = [](bContext *C, wmOperator *op) -> wmOperatorStatus {
     PointerRNA node_ptr = get_active_node_to_operate_on(C, op, Accessor::node_idname);
-    if (node_ptr.is_data_null()) {
+    if (node_ptr.is_null()) {
       return OPERATOR_CANCELLED;
     }
     bNode &node = *static_cast<bNode *>(node_ptr.data);
@@ -214,7 +214,7 @@ inline void add_item(wmOperatorType *ot,
 
   ot->exec = [](bContext *C, wmOperator *op) -> wmOperatorStatus {
     PointerRNA node_ptr = get_active_node_to_operate_on(C, op, Accessor::node_idname);
-    if (node_ptr.is_data_null()) {
+    if (node_ptr.is_null()) {
       return OPERATOR_CANCELLED;
     }
     bNodeTree *ntree = reinterpret_cast<bNodeTree *>(node_ptr.owner_id);
@@ -352,7 +352,7 @@ inline void move_active_item(wmOperatorType *ot,
 
   ot->exec = [](bContext *C, wmOperator *op) -> wmOperatorStatus {
     PointerRNA node_ptr = get_active_node_to_operate_on(C, op, Accessor::node_idname);
-    if (node_ptr.is_data_null()) {
+    if (node_ptr.is_null()) {
       return OPERATOR_CANCELLED;
     }
     bNode &node = *static_cast<bNode *>(node_ptr.data);

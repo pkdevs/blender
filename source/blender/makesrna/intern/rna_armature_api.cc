@@ -121,7 +121,7 @@ static bool rna_BoneCollection_assign_abstract(BoneCollection *bcoll,
                                                bonecoll_assign_func_ebone assign_ebone)
 
 {
-  if (bone_ptr->is_type_or_data_null()) {
+  if (bone_ptr->is_null()) {
     return false;
   }
 

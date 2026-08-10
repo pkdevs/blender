@@ -257,7 +257,7 @@ bool button_anim_expression_create(Button *but, const char *str)
   bool ok = false;
 
   /* button must have RNA-pointer to a numeric-capable property */
-  if (but->rnapoin.is_data_null() || but->rnaprop == nullptr) {
+  if (but->rnapoin.is_null() || but->rnaprop == nullptr) {
     if (G.debug & G_DEBUG) {
       printf("ERROR: create expression failed - button has no RNA info attached\n");
     }

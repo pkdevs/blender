@@ -357,7 +357,7 @@ static void rna_uiItemTabsEnumR(Layout *layout,
 
   /* Get the highlight property used to gray out some of the tabs. */
   PropertyRNA *prop_highlight = nullptr;
-  if (!ptr_highlight->is_type_or_data_null()) {
+  if (!ptr_highlight->is_null()) {
     prop_highlight = RNA_struct_find_property(ptr_highlight, propname_highlight);
     if (!prop_highlight) {
       RNA_warning_bare("UILayout.prop_tabs_enum(): property not found: %s.%s",

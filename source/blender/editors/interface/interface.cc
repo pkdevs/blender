@@ -1276,7 +1276,7 @@ static bool but_is_rna_undo(const Button *but)
 
   /* No owner or type known. Assume we do not undo push as it may be a property from
    * the preferences stored outside datablocks. */
-  if (but->rnapoin.owner_id == nullptr || but->rnapoin.is_untyped()) {
+  if (!but->rnapoin.has_owner_id()) {
     return false;
   }
 
@@ -2791,7 +2791,7 @@ double button_value_get(Button *but)
   if (but->editval) {
     return *(but->editval);
   }
-  if (but->poin == nullptr && but->rnapoin.is_data_null()) {
+  if (but->poin == nullptr && but->rnapoin.is_null()) {
     return 0.0;
   }
 
@@ -4663,7 +4663,7 @@ static void def_but_rna__menu(bContext *C, Layout *layout, void *but_p)
   }
 
   const char *title = RNA_property_ui_name(
-      but->rnaprop, but->rnapoin.is_type_or_data_null() ? nullptr : &but->rnapoin);
+      but->rnaprop, but->rnapoin.is_null() ? nullptr : &but->rnapoin);
 
   /* Is there a non-blank label before this button on the same row? */
   Button *but_prev = but->block->prev_but(but);
@@ -5062,7 +5062,7 @@ static Button *def_but_rna(Block *block,
     /* If the button shows an ID, automatically set it as focused in context so operators can
      * access it. */
     const PointerRNA pptr = RNA_property_pointer_get(ptr, prop);
-    if (!pptr.is_data_null() && RNA_struct_is_ID(pptr.type)) {
+    if (!pptr.is_null() && RNA_struct_is_ID(pptr.type)) {
       but->context = CTX_store_add(block->contexts, "id", &pptr);
     }
   }
