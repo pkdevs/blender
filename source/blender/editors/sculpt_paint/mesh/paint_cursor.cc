@@ -681,6 +681,14 @@ static void object_space_overlays_draw(const PaintCursorContext &pcontext)
 
 static void cursor_space_drawing_setup(const PaintCursorContext &pcontext)
 {
+  const float3 normal = bke::brush::supports_tilt(*pcontext.brush) ?
+                            tilt_apply_to_normal(*pcontext.vc.obact,
+                                                 float4x4(pcontext.vc.rv3d->viewinv),
+                                                 pcontext.normal,
+                                                 pcontext.tilt,
+                                                 pcontext.brush->tilt_strength_factor) :
+                            pcontext.normal;
+
   if (BKE_brush_has_cube_tip(pcontext.brush, pcontext.mode)) {
     float local_mat[4][4];
     float local_mat_inv[4][4];
@@ -689,7 +697,7 @@ static void cursor_space_drawing_setup(const PaintCursorContext &pcontext)
                          pcontext.paint->runtime->brush_rotation,
                          pcontext.vc,
                          *pcontext.vc.obact,
-                         pcontext.normal,
+                         normal,
                          pcontext.location,
                          1.0f,
                          local_mat,
@@ -704,14 +712,6 @@ static void cursor_space_drawing_setup(const PaintCursorContext &pcontext)
                                                 pcontext.location);
 
   const float3 z_axis = {0.0f, 0.0f, 1.0f};
-
-  const float3 normal = bke::brush::supports_tilt(*pcontext.brush) ?
-                            tilt_apply_to_normal(*pcontext.vc.obact,
-                                                 float4x4(pcontext.vc.rv3d->viewinv),
-                                                 pcontext.normal,
-                                                 pcontext.tilt,
-                                                 pcontext.brush->tilt_strength_factor) :
-                            pcontext.normal;
 
   const math::AxisAngle between_vecs(z_axis, normal);
   const float4x4 cursor_rot = math::from_rotation<float4x4>(between_vecs);
