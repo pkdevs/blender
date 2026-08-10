@@ -9,145 +9,141 @@
 
 #define vector3 point
 
+float mx_flake_density_to_probability(float x)
+{
+  float a = -26.19771808;
+  float b = 26.39663835;
+  float c = 85.53857017;
+  float d = -102.35069432;
+  float e = -101.42634862;
+  float f = 118.45082288;
+  float xx = x * x;
+  return (a * xx + b * x) / (c * xx * x + d * xx + e * x + f);
+}
+
+vector mx_rotate_flake(vector p, vector rot_noise)
+{
+  float theta = M_PI * 2.0 * rot_noise.x;
+  float phi = M_PI * 2.0 * rot_noise.y;
+  float z = rot_noise.z * 2.0;
+
+  float r = sqrt(z);
+  float vx = sin(phi) * r;
+  float vy = cos(phi) * r;
+  float vz = sqrt(2.0 - z);
+
+  float s_theta = sin(theta);
+  float c_theta = cos(theta);
+  float sx = vx * c_theta - vy * s_theta;
+  float sy = vx * s_theta + vy * c_theta;
+
+  vector result;
+  result.x = (vx * sx - c_theta) * p.x + (vy * sx + s_theta) * p.y + (vz * sx) * p.z;
+  result.y = (vx * sy - s_theta) * p.x + (vy * sy - c_theta) * p.y + (vz * sy) * p.z;
+  result.z = (vx * vz) * p.x + (vy * vz) * p.y + (1.0 - z) * p.z;
+
+  return result;
+}
+
 shader node_flakes_texture(string dimensions = "3D",
                            point Vector = point(0.0, 0.0, 0.0),
                            float W = 0.0,
                            float Scale = 5.0,
-                           float Density = 0.5,
-                           float FlakeSize = 0.5,
-                           float Randomness = 1.0,
+                           float Roughness = 0.2,
+                           float Coverage = 0.5,
                            output color Color = 0.0,
                            output vector Normal = vector(0.0, 0.0, 1.0),
-                           output float Fac = 0.0)
+                           output float Fac = 0.0,
+                           output float Presence = 0.0)
 {
-  float best_fac = 0.0;
-  vector best_normal = vector(0.0, 0.0, 1.0);
-  color best_color = color(0.0);
-  float highest_z = -1000.0;
-
+  point p = point(0.0);
+  
   if (dimensions == "1D") {
-    float p = W * Scale;
-    float cell = floor(p);
-
-    for (int i = -1; i <= 1; i++) {
-      float neighbor = cell + i;
-      float hash_id = noise("hash", neighbor);
-
-      if (hash_id < Density) {
-        float h = noise("hash", neighbor + 0.5);
-        float pos = neighbor + h * Randomness;
-        float dist = abs(p - pos);
-
-        if (dist < FlakeSize / 2.0) {
-          float flake_z = noise("hash", neighbor + 12.34);
-          if (flake_z > highest_z) {
-            highest_z = flake_z;
-            best_fac = 1.0;
-            best_normal = normalize(hash_float_to_vector3(neighbor + 56.78) * 2.0 - vector(1.0));
-            best_color = hash_float_to_color(neighbor + 90.12);
-          }
-        }
-      }
-    }
+    p = point(W * Scale, 0.0, 0.0);
   }
   else if (dimensions == "2D") {
-    vector2 p = vector2(Vector[0], Vector[1]) * Scale;
-    vector2 cell = vector2(floor(p.x), floor(p.y));
-
-    for (int i = -1; i <= 1; i++) {
-      for (int j = -1; j <= 1; j++) {
-        vector2 neighbor = cell + vector2(i, j);
-        float hash_id = noise("hash", neighbor.x, neighbor.y);
-
-        if (hash_id < Density) {
-          vector2 h = vector2(noise("hash", neighbor.x + 0.5, neighbor.y + 0.5),
-                              noise("hash", neighbor.x + 0.6, neighbor.y + 0.6));
-          vector2 pos = neighbor + h * Randomness;
-          float dist = hypot(p.x - pos.x, p.y - pos.y);
-
-          if (dist < FlakeSize / 2.0) {
-            float flake_z = noise("hash", neighbor.x + 12.34, neighbor.y + 12.34);
-            if (flake_z > highest_z) {
-              highest_z = flake_z;
-              best_fac = 1.0;
-              best_normal = normalize(hash_vector2_to_vector3(neighbor + vector2(56.78, 56.78)) * 2.0 - vector(1.0));
-              best_color = hash_vector2_to_color(neighbor + vector2(90.12, 90.12));
-            }
-          }
-        }
-      }
-    }
+    p = point(Vector[0], Vector[1], 0.0) * Scale;
   }
   else if (dimensions == "3D") {
-    point p = Vector * Scale;
-    point cell = point(floor(p[0]), floor(p[1]), floor(p[2]));
-
-    for (int i = -1; i <= 1; i++) {
-      for (int j = -1; j <= 1; j++) {
-        for (int k = -1; k <= 1; k++) {
-          point neighbor = cell + point(i, j, k);
-          float hash_id = noise("hash", neighbor);
-
-          if (hash_id < Density) {
-            point h = point(noise("hash", neighbor + point(0.5, 0.5, 0.5)),
-                            noise("hash", neighbor + point(0.6, 0.6, 0.6)),
-                            noise("hash", neighbor + point(0.7, 0.7, 0.7)));
-            point pos = neighbor + h * Randomness;
-            float dist = distance(p, pos);
-
-            if (dist < FlakeSize / 2.0) {
-              float flake_z = noise("hash", neighbor + point(12.34, 12.34, 12.34));
-              if (flake_z > highest_z) {
-                highest_z = flake_z;
-                best_fac = 1.0;
-                best_normal = normalize(hash_vector3_to_vector3(neighbor + point(56.78, 56.78, 56.78)) * 2.0 - vector(1.0));
-                best_color = hash_vector3_to_color(neighbor + point(90.12, 90.12, 90.12));
-              }
-            }
-          }
-        }
-      }
-    }
+    p = Vector * Scale;
   }
   else if (dimensions == "4D") {
-    vector4 p = vector4(Vector[0], Vector[1], Vector[2], W) * Scale;
-    vector4 cell = vector4(floor(p.x), floor(p.y), floor(p.z), floor(p.w));
-
-    for (int i = -1; i <= 1; i++) {
-      for (int j = -1; j <= 1; j++) {
-        for (int k = -1; k <= 1; k++) {
-          for (int l = -1; l <= 1; l++) {
-            vector4 neighbor = cell + vector4(i, j, k, l);
-            float hash_id = noise("hash", neighbor.x, neighbor.y, neighbor.z, neighbor.w);
-
-            if (hash_id < Density) {
-              vector4 h = vector4(noise("hash", neighbor.x + 0.5, neighbor.y + 0.5, neighbor.z + 0.5, neighbor.w + 0.5),
-                                  noise("hash", neighbor.x + 0.6, neighbor.y + 0.6, neighbor.z + 0.6, neighbor.w + 0.6),
-                                  noise("hash", neighbor.x + 0.7, neighbor.y + 0.7, neighbor.z + 0.7, neighbor.w + 0.7),
-                                  noise("hash", neighbor.x + 0.8, neighbor.y + 0.8, neighbor.z + 0.8, neighbor.w + 0.8));
-              vector4 pos = neighbor + h * Randomness;
-              float dist = sqrt(pow(p.x - pos.x, 2) + pow(p.y - pos.y, 2) + pow(p.z - pos.z, 2) + pow(p.w - pos.w, 2));
-
-              if (dist < FlakeSize / 2.0) {
-                float flake_z = noise("hash", neighbor.x + 12.34, neighbor.y + 12.34, neighbor.z + 12.34, neighbor.w + 12.34);
-                if (flake_z > highest_z) {
-                  highest_z = flake_z;
-                  best_fac = 1.0;
-                  best_normal = normalize(hash_vector4_to_vector3(neighbor + vector4(56.78, 56.78, 56.78, 56.78)) * 2.0 - vector(1.0));
-                  best_color = hash_vector4_to_color(neighbor + vector4(90.12, 90.12, 90.12, 90.12));
-                }
-              }
-            }
-          }
-        }
-      }
-    }
+    p = point(Vector[0], Vector[1], Vector[2] + W) * Scale;
   }
   else {
     warning("%s", "Unknown dimension!");
   }
 
-  Color = best_color;
-  Normal = best_normal;
-  Fac = best_fac;
+  float probability = mx_flake_density_to_probability(Coverage);
+  float flake_diameter = 1.5 / sqrt(3.0);
+  float flake_radius2 = (flake_diameter * flake_diameter) * 3.0;
+
+  point cell_center = point(floor(p[0]), floor(p[1]), floor(p[2])) + point(0.5);
+
+  point closest_flake_pos = point(0.0);
+  vector closest_flake_normal = vector(0.0, 0.0, 1.0);
+  float closest_flake_dist2 = 1e5;
+  float closest_flake_priority = -1.0;
+  int flake_found = 0;
+
+  for (int x = -1; x <= 1; x++) {
+    for (int y = -1; y <= 1; y++) {
+      for (int z = -1; z <= 1; z++) {
+        point current_cell = cell_center + point(x, y, z);
+        
+        float cell_presence = hash_vector3_to_float(current_cell);
+        if (cell_presence > probability) {
+          continue;
+        }
+
+        float priority = hash_vector3_to_float(current_cell + point(3.0));
+        point flake_pos = current_cell + hash_vector3_to_vector3(current_cell + point(1.0)) - point(0.5);
+        
+        vector delta = p - flake_pos;
+        float dist2 = delta[0]*delta[0] + delta[1]*delta[1] + delta[2]*delta[2];
+
+        if (dist2 < flake_radius2) {
+          if (priority > closest_flake_priority) {
+            closest_flake_priority = priority;
+            closest_flake_dist2 = dist2;
+            closest_flake_pos = current_cell;
+            
+            vector rot_noise = hash_vector3_to_vector3(current_cell);
+            closest_flake_normal = mx_rotate_flake(vector(0.0, 0.0, 1.0), rot_noise);
+            flake_found = 1;
+          }
+        }
+      }
+    }
+  }
+
+  if (flake_found) {
+    vector rot_noise = hash_vector3_to_vector3(closest_flake_pos + point(2.0));
+    
+    float alpha2 = Roughness * Roughness;
+    float theta_noise = rot_noise.x;
+    float phi_noise = rot_noise.y;
+    float tan_theta = sqrt(theta_noise * alpha2 / (1.0 - theta_noise));
+    float sin_theta = tan_theta / sqrt(1.0 + tan_theta * tan_theta);
+    float cos_theta = 1.0 / sqrt(1.0 + tan_theta * tan_theta);
+    float phi = 2.0 * M_PI * phi_noise;
+    
+    vector local_dir = vector(cos(phi) * sin_theta, sin(phi) * sin_theta, cos_theta);
+    
+    vector t = vector(1.0, 0.0, 0.0);
+    vector b = vector(0.0, 1.0, 0.0);
+    
+    vector perturbed_normal = local_dir.x * t + local_dir.y * b + local_dir.z * closest_flake_normal;
+    Normal = normalize(perturbed_normal);
+    
+    Fac = hash_vector3_to_float(closest_flake_pos + point(4.0));
+    Color = hash_vector3_to_color(closest_flake_pos + point(5.0));
+    Presence = 1.0;
+  }
+  else {
+    Normal = vector(0.0, 0.0, 1.0);
+    Fac = 0.0;
+    Color = color(0.0);
+    Presence = 0.0;
+  }
 }

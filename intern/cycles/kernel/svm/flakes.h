@@ -11,176 +11,129 @@
 
 CCL_NAMESPACE_BEGIN
 
-ccl_device_noinline void svm_node_tex_flakes_1d(
-    ccl_private float *ccl_restrict stack,
-    const ccl_global SVMNodeTexFlakes &ccl_restrict node,
-    const float w, const float scale, const float density, 
-    const float flake_size, const float randomness)
+ccl_device_inline float mx_flake_density_to_probability(float x)
 {
-  float p = w * scale;
-  float cell = floorf(p);
-
-  float best_fac = 0.0f;
-  float3 best_normal = make_float3(0.0f, 0.0f, 1.0f);
-  float3 best_color = make_float3(0.0f, 0.0f, 0.0f);
-  float highest_z = -1000.0f;
-
-  for (int i = -1; i <= 1; i++) {
-    float neighbor = cell + (float)i;
-    float hash_id = hash_float_to_float(neighbor);
-
-    if (hash_id < density) {
-      float h = hash_float_to_float(neighbor + 0.5f);
-      float pos = neighbor + h * randomness;
-      float dist = fabsf(p - pos);
-
-      if (dist < flake_size / 2.0f) {
-        float flake_z = hash_float_to_float(neighbor + 12.34f);
-        if (flake_z > highest_z) {
-          highest_z = flake_z;
-          best_fac = 1.0f;
-          best_normal = normalize(hash_float_to_float3(neighbor + 56.78f) * 2.0f - make_float3(1.0f, 1.0f, 1.0f));
-          best_color = hash_float_to_float3(neighbor + 90.12f);
-        }
-      }
-    }
-  }
-
-  if (stack_valid(node.color_offset)) stack_store_float3(stack, node.color_offset, best_color);
-  if (stack_valid(node.normal_offset)) stack_store_float3(stack, node.normal_offset, best_normal);
-  if (stack_valid(node.fac_offset)) stack_store_float(stack, node.fac_offset, best_fac);
+  float a = -26.19771808f;
+  float b = 26.39663835f;
+  float c = 85.53857017f;
+  float d = -102.35069432f;
+  float e = -101.42634862f;
+  float f = 118.45082288f;
+  float xx = x * x;
+  return (a * xx + b * x) / (c * xx * x + d * xx + e * x + f);
 }
 
-ccl_device_noinline void svm_node_tex_flakes_2d(
+ccl_device_inline float3 mx_rotate_flake(const float3 p, const float3 rot_noise)
+{
+  float theta = M_PI_F * 2.0f * rot_noise.x;
+  float phi = M_PI_F * 2.0f * rot_noise.y;
+  float z = rot_noise.z * 2.0f;
+
+  float r = sqrtf(z);
+  float vx = sinf(phi) * r;
+  float vy = cosf(phi) * r;
+  float vz = sqrtf(2.0f - z);
+
+  float s_theta = sinf(theta);
+  float c_theta = cosf(theta);
+  float sx = vx * c_theta - vy * s_theta;
+  float sy = vx * s_theta + vy * c_theta;
+
+  float3 result;
+  result.x = (vx * sx - c_theta) * p.x + (vy * sx + s_theta) * p.y + (vz * sx) * p.z;
+  result.y = (vx * sy - s_theta) * p.x + (vy * sy - c_theta) * p.y + (vz * sy) * p.z;
+  result.z = (vx * vz) * p.x + (vy * vz) * p.y + (1.0f - z) * p.z;
+
+  return result;
+}
+
+ccl_device_noinline void svm_node_tex_flakes_math(
     ccl_private float *ccl_restrict stack,
     const ccl_global SVMNodeTexFlakes &ccl_restrict node,
-    const float3 vector, const float scale, const float density, 
-    const float flake_size, const float randomness)
+    const float3 p,
+    const float roughness,
+    const float coverage)
 {
-  float2 p = make_float2(vector.x, vector.y) * scale;
-  float2 cell = floor(p);
+  float probability = mx_flake_density_to_probability(coverage);
+  float flake_diameter = 1.5f / sqrtf(3.0f);
+  float flake_radius2 = (flake_diameter * flake_diameter) * 3.0f;
 
-  float best_fac = 0.0f;
-  float3 best_normal = make_float3(0.0f, 0.0f, 1.0f);
-  float3 best_color = make_float3(0.0f, 0.0f, 0.0f);
-  float highest_z = -1000.0f;
+  float3 cell_center = floor(p) + make_float3(0.5f, 0.5f, 0.5f);
 
-  for (int i = -1; i <= 1; i++) {
-    for (int j = -1; j <= 1; j++) {
-      float2 neighbor = cell + make_float2((float)i, (float)j);
-      float hash_id = hash_float2_to_float(neighbor);
+  float3 closest_flake_pos = make_float3(0.0f, 0.0f, 0.0f);
+  float3 closest_flake_normal = make_float3(0.0f, 0.0f, 1.0f);
+  float closest_flake_dist2 = 1e5f;
+  float closest_flake_priority = -1.0f;
+  int flake_found = 0;
 
-      if (hash_id < density) {
-        float2 h = hash_float2_to_float2(neighbor + make_float2(0.5f, 0.5f));
-        float2 pos = neighbor + h * randomness;
-        float dist = len(p - pos);
+  for (int x = -1; x <= 1; x++) {
+    for (int y = -1; y <= 1; y++) {
+      for (int z = -1; z <= 1; z++) {
+        float3 current_cell = cell_center + make_float3((float)x, (float)y, (float)z);
+        
+        float cell_presence = hash_float3_to_float(current_cell);
+        if (cell_presence > probability) {
+          continue;
+        }
 
-        if (dist < flake_size / 2.0f) {
-          float flake_z = hash_float2_to_float(neighbor + make_float2(12.34f, 12.34f));
-          if (flake_z > highest_z) {
-            highest_z = flake_z;
-            best_fac = 1.0f;
-            best_normal = normalize(hash_float2_to_float3(neighbor + make_float2(56.78f, 56.78f)) * 2.0f - make_float3(1.0f, 1.0f, 1.0f));
-            best_color = hash_float2_to_float3(neighbor + make_float2(90.12f, 90.12f));
+        float priority = hash_float3_to_float(current_cell + make_float3(3.0f, 3.0f, 3.0f));
+        float3 flake_pos = current_cell + hash_float3_to_float3(current_cell + make_float3(1.0f, 1.0f, 1.0f)) - make_float3(0.5f, 0.5f, 0.5f);
+        
+        float3 delta = p - flake_pos;
+        float dist2 = len_squared(delta);
+
+        if (dist2 < flake_radius2) {
+          if (priority > closest_flake_priority) {
+            closest_flake_priority = priority;
+            closest_flake_dist2 = dist2;
+            closest_flake_pos = current_cell;
+            
+            float3 rot_noise = hash_float3_to_float3(current_cell);
+            closest_flake_normal = mx_rotate_flake(make_float3(0.0f, 0.0f, 1.0f), rot_noise);
+            flake_found = 1;
           }
         }
       }
     }
   }
 
-  if (stack_valid(node.color_offset)) stack_store_float3(stack, node.color_offset, best_color);
-  if (stack_valid(node.normal_offset)) stack_store_float3(stack, node.normal_offset, best_normal);
-  if (stack_valid(node.fac_offset)) stack_store_float(stack, node.fac_offset, best_fac);
-}
+  float3 final_color = make_float3(0.0f, 0.0f, 0.0f);
+  float3 final_normal = make_float3(0.0f, 0.0f, 1.0f);
+  float final_fac = 0.0f;
+  float final_presence = 0.0f;
 
-ccl_device_noinline void svm_node_tex_flakes_3d(
-    ccl_private float *ccl_restrict stack,
-    const ccl_global SVMNodeTexFlakes &ccl_restrict node,
-    const float3 vector, const float scale, const float density, 
-    const float flake_size, const float randomness)
-{
-  float3 p = vector * scale;
-  float3 cell = floor(p);
-
-  float best_fac = 0.0f;
-  float3 best_normal = make_float3(0.0f, 0.0f, 1.0f);
-  float3 best_color = make_float3(0.0f, 0.0f, 0.0f);
-  float highest_z = -1000.0f;
-
-  for (int i = -1; i <= 1; i++) {
-    for (int j = -1; j <= 1; j++) {
-      for (int k = -1; k <= 1; k++) {
-        float3 neighbor = cell + make_float3((float)i, (float)j, (float)k);
-        float hash_id = hash_float3_to_float(neighbor);
-
-        if (hash_id < density) {
-          float3 h = hash_float3_to_float3(neighbor + make_float3(0.5f, 0.5f, 0.5f));
-          float3 pos = neighbor + h * randomness;
-          float dist = len(p - pos);
-
-          if (dist < flake_size / 2.0f) {
-            float flake_z = hash_float3_to_float(neighbor + make_float3(12.34f, 12.34f, 12.34f));
-            if (flake_z > highest_z) {
-              highest_z = flake_z;
-              best_fac = 1.0f;
-              best_normal = normalize(hash_float3_to_float3(neighbor + make_float3(56.78f, 56.78f, 56.78f)) * 2.0f - make_float3(1.0f, 1.0f, 1.0f));
-              best_color = hash_float3_to_float3(neighbor + make_float3(90.12f, 90.12f, 90.12f));
-            }
-          }
-        }
-      }
-    }
+  if (flake_found) {
+    float3 rot_noise = hash_float3_to_float3(closest_flake_pos + make_float3(2.0f, 2.0f, 2.0f));
+    
+    float alpha2 = roughness * roughness;
+    float theta_noise = rot_noise.x;
+    float phi_noise = rot_noise.y;
+    float tan_theta = sqrtf(theta_noise * alpha2 / (1.0f - theta_noise));
+    float sin_theta = tan_theta / sqrtf(1.0f + tan_theta * tan_theta);
+    float cos_theta = 1.0f / sqrtf(1.0f + tan_theta * tan_theta);
+    float phi = 2.0f * M_PI_F * phi_noise;
+    
+    float3 local_dir = make_float3(cosf(phi) * sin_theta, sinf(phi) * sin_theta, cos_theta);
+    
+    float3 t = make_float3(1.0f, 0.0f, 0.0f);
+    float3 b = make_float3(0.0f, 1.0f, 0.0f);
+    
+    float3 perturbed_normal = local_dir.x * t + local_dir.y * b + local_dir.z * closest_flake_normal;
+    final_normal = normalize(perturbed_normal);
+    
+    final_fac = hash_float3_to_float(closest_flake_pos + make_float3(4.0f, 4.0f, 4.0f));
+    final_color = hash_float3_to_float3(closest_flake_pos + make_float3(5.0f, 5.0f, 5.0f));
+    final_presence = 1.0f;
   }
 
-  if (stack_valid(node.color_offset)) stack_store_float3(stack, node.color_offset, best_color);
-  if (stack_valid(node.normal_offset)) stack_store_float3(stack, node.normal_offset, best_normal);
-  if (stack_valid(node.fac_offset)) stack_store_float(stack, node.fac_offset, best_fac);
-}
-
-ccl_device_noinline void svm_node_tex_flakes_4d(
-    ccl_private float *ccl_restrict stack,
-    const ccl_global SVMNodeTexFlakes &ccl_restrict node,
-    const float3 vector, const float w, const float scale, const float density, 
-    const float flake_size, const float randomness)
-{
-  float4 p = make_float4(vector.x, vector.y, vector.z, w) * scale;
-  float4 cell = floor(p);
-
-  float best_fac = 0.0f;
-  float3 best_normal = make_float3(0.0f, 0.0f, 1.0f);
-  float3 best_color = make_float3(0.0f, 0.0f, 0.0f);
-  float highest_z = -1000.0f;
-
-  for (int i = -1; i <= 1; i++) {
-    for (int j = -1; j <= 1; j++) {
-      for (int k = -1; k <= 1; k++) {
-        for (int l = -1; l <= 1; l++) {
-          float4 neighbor = cell + make_float4((float)i, (float)j, (float)k, (float)l);
-          float hash_id = hash_float4_to_float(neighbor);
-
-          if (hash_id < density) {
-            float4 h = hash_float4_to_float4(neighbor + make_float4(0.5f, 0.5f, 0.5f, 0.5f));
-            float4 pos = neighbor + h * randomness;
-            float dist = len(p - pos);
-
-            if (dist < flake_size / 2.0f) {
-              float flake_z = hash_float4_to_float(neighbor + make_float4(12.34f, 12.34f, 12.34f, 12.34f));
-              if (flake_z > highest_z) {
-                highest_z = flake_z;
-                best_fac = 1.0f;
-                best_normal = normalize(hash_float4_to_float3(neighbor + make_float4(56.78f, 56.78f, 56.78f, 56.78f)) * 2.0f - make_float3(1.0f, 1.0f, 1.0f));
-                best_color = hash_float4_to_float3(neighbor + make_float4(90.12f, 90.12f, 90.12f, 90.12f));
-              }
-            }
-          }
-        }
-      }
-    }
-  }
-
-  if (stack_valid(node.color_offset)) stack_store_float3(stack, node.color_offset, best_color);
-  if (stack_valid(node.normal_offset)) stack_store_float3(stack, node.normal_offset, best_normal);
-  if (stack_valid(node.fac_offset)) stack_store_float(stack, node.fac_offset, best_fac);
+  if (stack_valid(node.color_offset))
+    stack_store_float3(stack, node.color_offset, final_color);
+  if (stack_valid(node.normal_offset))
+    stack_store_float3(stack, node.normal_offset, final_normal);
+  if (stack_valid(node.fac_offset))
+    stack_store_float(stack, node.fac_offset, final_fac);
+  if (stack_valid(node.presence_offset))
+    stack_store_float(stack, node.presence_offset, final_presence);
 }
 
 ccl_device_noinline void svm_node_tex_flakes(
@@ -190,27 +143,25 @@ ccl_device_noinline void svm_node_tex_flakes(
   const float3 vector = stack_load(stack, node.vector);
   const float w = stack_load(stack, node.w);
   const float scale = stack_load(stack, node.scale);
-  const float density = stack_load(stack, node.density);
-  const float flake_size = stack_load(stack, node.flake_size);
-  const float randomness = stack_load(stack, node.randomness);
+  const float roughness = stack_load(stack, node.roughness);
+  const float coverage = stack_load(stack, node.coverage);
 
-  switch (node.dimensions) {
-    case 1:
-      svm_node_tex_flakes_1d(stack, node, w, scale, density, flake_size, randomness);
-      break;
-    case 2:
-      svm_node_tex_flakes_2d(stack, node, vector, scale, density, flake_size, randomness);
-      break;
-    case 3:
-      svm_node_tex_flakes_3d(stack, node, vector, scale, density, flake_size, randomness);
-      break;
-    case 4:
-      svm_node_tex_flakes_4d(stack, node, vector, w, scale, density, flake_size, randomness);
-      break;
-    default:
-      kernel_assert(0);
-      break;
+  float3 p = make_float3(0.0f, 0.0f, 0.0f);
+
+  if (node.dimensions == 1) {
+    p = make_float3(w * scale, 0.0f, 0.0f);
   }
+  else if (node.dimensions == 2) {
+    p = make_float3(vector.x, vector.y, 0.0f) * scale;
+  }
+  else if (node.dimensions == 3) {
+    p = vector * scale;
+  }
+  else if (node.dimensions == 4) {
+    p = make_float3(vector.x, vector.y, vector.z + w) * scale;
+  }
+
+  svm_node_tex_flakes_math(stack, node, p, roughness, coverage);
 }
 
 CCL_NAMESPACE_END

@@ -6079,6 +6079,12 @@ static void def_sh_tex_flakes(BlenderRNA * /*brna*/, StructRNA *srna)
   RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_ShaderNode_socket_update");
 }
 
+static void def_sh_tex_scratch(BlenderRNA *brna, StructRNA *srna)
+{
+  RNA_def_struct_sdna_from(srna, "NodeTexScratch", "storage");
+  def_sh_tex(brna, srna);
+}
+
 static void def_sh_tex_coord(BlenderRNA * /*brna*/, StructRNA *srna)
 {
   PropertyRNA *prop;
@@ -10664,6 +10670,7 @@ static void rna_def_nodes(BlenderRNA *brna)
   define("ShaderNode", "ShaderNodeTexMagic", def_sh_tex_magic);
   define("ShaderNode", "ShaderNodeTexNoise", def_sh_tex_noise);
   define("ShaderNode", "ShaderNodeTexFlakes", def_sh_tex_flakes);
+  define("ShaderNode", "ShaderNodeTexScratch", def_sh_tex_scratch);
   define("ShaderNode", "ShaderNodeTexSky", def_sh_tex_sky);
   define("ShaderNode", "ShaderNodeTexVoronoi", def_sh_tex_voronoi);
   define("ShaderNode", "ShaderNodeTexWave", def_sh_tex_wave);

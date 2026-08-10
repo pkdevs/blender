@@ -1546,13 +1546,13 @@ NODE_DEFINE(FlakesTextureNode)
   SOCKET_IN_POINT(vector, "Vector", zero_float3());
   SOCKET_IN_FLOAT(w, "W", 0.0f);
   SOCKET_IN_FLOAT(scale, "Scale", 5.0f);
-  SOCKET_IN_FLOAT(density, "Density", 0.5f);
-  SOCKET_IN_FLOAT(flake_size, "Flake Size", 0.5f);
-  SOCKET_IN_FLOAT(randomness, "Randomness", 1.0f);
+  SOCKET_IN_FLOAT(roughness, "Roughness", 0.5f);
+  SOCKET_IN_FLOAT(coverage, "Coverage", 1.0f);
 
   SOCKET_OUT_COLOR(color, "Color");
   SOCKET_OUT_VECTOR(normal, "Normal");
   SOCKET_OUT_FLOAT(fac, "Fac");
+  SOCKET_OUT_FLOAT(presence, "Presence");
 
   return type;
 }
@@ -1568,12 +1568,12 @@ void FlakesTextureNode::compile(SVMCompiler &compiler)
                         .vector = compiler.input_float3("Vector"),
                         .w = compiler.input_float("W"),
                         .scale = compiler.input_float("Scale"),
-                        .density = compiler.input_float("Density"),
-                        .flake_size = compiler.input_float("Flake Size"),
-                        .randomness = compiler.input_float("Randomness"),
+                        .roughness = compiler.input_float("Roughness"),
+                        .coverage = compiler.input_float("Coverage"),
                         .color_offset = compiler.output("Color"),
                         .normal_offset = compiler.output("Normal"),
                         .fac_offset = compiler.output("Fac"),
+                        .presence_offset = compiler.output("Presence"),
                     });
 }
 

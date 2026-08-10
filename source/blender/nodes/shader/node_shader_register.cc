@@ -93,6 +93,7 @@ void register_shader_nodes()
   register_node_type_sh_tex_magic();
   register_node_type_sh_tex_noise();
   register_node_type_sh_tex_flakes();
+  register_node_type_sh_tex_scratch();
   register_node_type_sh_tex_sky();
   register_node_type_sh_tex_voronoi();
   register_node_type_sh_tex_wave();

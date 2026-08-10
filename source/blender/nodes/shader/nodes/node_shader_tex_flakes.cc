@@ -46,28 +46,24 @@ static void sh_node_tex_flakes_declare(NodeDeclarationBuilder &b)
       .default_value(5.0f)
       .description("Scale of the base flakes structure");
 
-  b.add_input<decl::Float>("Density"_ustr)
+  b.add_input<decl::Float>("Roughness"_ustr)
       .min(0.0f)
       .max(1.0f)
-      .default_value(0.5f)
-      .description("Probability of a flake appearing in a cell");
-
-  b.add_input<decl::Float>("Flake Size"_ustr)
-      .min(0.0f)
-      .max(1.0f)
-      .default_value(0.5f)
-      .description("Size of the flakes relative to the cell size");
-
-  b.add_input<decl::Float>("Randomness"_ustr)
-      .min(0.0f)
-      .max(1.0f)
-      .default_value(1.0f)
+      .default_value(0.2f)
       .subtype(PROP_FACTOR)
-      .description("Randomness of the flake positions");
+      .description("Roughness of the flake normal distribution");
+
+  b.add_input<decl::Float>("Coverage"_ustr)
+      .min(0.0f)
+      .max(1.0f)
+      .default_value(0.5f)
+      .subtype(PROP_FACTOR)
+      .description("Density of flake coverage (0 = no flakes, 1 = full coverage)");
 
   b.add_output<decl::Color>("Color"_ustr);
   b.add_output<decl::Vector>("Normal"_ustr);
   b.add_output<decl::Float>("Factor"_ustr, "Fac"_ustr);
+  b.add_output<decl::Float>("Presence"_ustr);
 }
 
 static void node_shader_buts_tex_flakes(ui::Layout &layout, bContext * /*C*/, PointerRNA *ptr)
@@ -99,6 +95,125 @@ static int gpu_shader_tex_flakes(GPUMaterial *mat,
   return GPU_stack_link(mat, node, name, in, out);
 }
 
+static float3 mx_rotate_flake(const float3 &p, const float3 &rot_noise)
+{
+  float theta = M_PI * 2.0f * rot_noise.x;
+  float phi = M_PI * 2.0f * rot_noise.y;
+  float z = rot_noise.z * 2.0f;
+
+  float r = math::sqrt(z);
+  float vx = math::sin(phi) * r;
+  float vy = math::cos(phi) * r;
+  float vz = math::sqrt(2.0f - z);
+
+  float s_theta = math::sin(theta);
+  float c_theta = math::cos(theta);
+  float sx = vx * c_theta - vy * s_theta;
+  float sy = vx * s_theta + vy * c_theta;
+
+  float3 result;
+  result.x = (vx * sx - c_theta) * p.x + (vy * sx + s_theta) * p.y + (vz * sx) * p.z;
+  result.y = (vx * sy - s_theta) * p.x + (vy * sy - c_theta) * p.y + (vz * sy) * p.z;
+  result.z = (vx * vz) * p.x + (vy * vz) * p.y + (1.0f - z) * p.z;
+
+  return result;
+}
+
+static float mx_flake_density_to_probability(float x)
+{
+  float a = -26.19771808f;
+  float b = 26.39663835f;
+  float c = 85.53857017f;
+  float d = -102.35069432f;
+  float e = -101.42634862f;
+  float f = 118.45082288f;
+  float xx = x * x;
+  return (a * xx + b * x) / (c * xx * x + d * xx + e * x + f);
+}
+
+static void compute_flake_3d(const float3 &p,
+                      float roughness,
+                      float coverage,
+                      ColorGeometry4f &r_color,
+                      float3 &r_normal,
+                      float &r_factor,
+                      float &r_presence)
+{
+  float probability = mx_flake_density_to_probability(coverage);
+  float flake_diameter = 1.5f / math::sqrt(3.0f);
+  float flake_radius2 = (flake_diameter * flake_diameter) * 3.0f;
+
+  float3 cell_center = math::floor(p) + float3(0.5f);
+
+  float3 closest_flake_pos = float3(0.0f);
+  float3 closest_flake_normal = float3(0.0f, 0.0f, 1.0f);
+  float closest_flake_dist2 = 1e5f;
+  float closest_flake_priority = -1.0f;
+  bool flake_found = false;
+
+  for (int x = -1; x <= 1; x++) {
+    for (int y = -1; y <= 1; y++) {
+      for (int z = -1; z <= 1; z++) {
+        float3 current_cell = cell_center + float3(x, y, z);
+        
+        float cell_presence = noise::hash_float_to_float(current_cell);
+        if (cell_presence > probability) {
+          continue;
+        }
+
+        float priority = noise::hash_float_to_float(current_cell + float3(3.0f));
+        float3 flake_pos = current_cell + noise::hash_float_to_float3(current_cell + float3(1.0f)) - float3(0.5f);
+        
+        float3 delta = p - flake_pos;
+        float dist2 = math::length_squared(delta);
+
+        if (dist2 < flake_radius2) {
+          if (priority > closest_flake_priority) {
+            closest_flake_priority = priority;
+            closest_flake_dist2 = dist2;
+            closest_flake_pos = current_cell;
+            
+            float3 rot_noise = noise::hash_float_to_float3(current_cell);
+            closest_flake_normal = mx_rotate_flake(float3(0.0f, 0.0f, 1.0f), rot_noise);
+            flake_found = true;
+          }
+        }
+      }
+    }
+  }
+
+  if (flake_found) {
+    float3 rot_noise = noise::hash_float_to_float3(closest_flake_pos + float3(2.0f));
+    
+    float alpha2 = roughness * roughness;
+    float theta_noise = rot_noise.x;
+    float phi_noise = rot_noise.y;
+    float tan_theta = math::sqrt(theta_noise * alpha2 / (1.0f - theta_noise));
+    float sin_theta = tan_theta / math::sqrt(1.0f + tan_theta * tan_theta);
+    float cos_theta = 1.0f / math::sqrt(1.0f + tan_theta * tan_theta);
+    float phi = 2.0f * M_PI * phi_noise;
+    
+    float3 local_dir(math::cos(phi) * sin_theta, math::sin(phi) * sin_theta, cos_theta);
+    
+    float3 n = float3(0.0f, 0.0f, 1.0f);
+    float3 t = float3(1.0f, 0.0f, 0.0f);
+    float3 b = float3(0.0f, 1.0f, 0.0f);
+    
+    float3 perturbed_normal = local_dir.x * t + local_dir.y * b + local_dir.z * closest_flake_normal;
+    r_normal = math::normalize(perturbed_normal);
+    
+    r_factor = noise::hash_float_to_float(closest_flake_pos + float3(4.0f));
+    float3 color_hash = noise::hash_float_to_float3(closest_flake_pos + float3(5.0f));
+    r_color = ColorGeometry4f(color_hash.x, color_hash.y, color_hash.z, 1.0f);
+    r_presence = 1.0f;
+  }
+  else {
+    r_normal = float3(0.0f, 0.0f, 1.0f);
+    r_factor = 0.0f;
+    r_color = ColorGeometry4f(0.0f, 0.0f, 0.0f, 1.0f);
+    r_presence = 0.0f;
+  }
+}
 
 class FlakesFunction : public mf::MultiFunction {
  private:
@@ -128,13 +243,13 @@ class FlakesFunction : public mf::MultiFunction {
       builder.single_input<float>("W");
     }
     builder.single_input<float>("Scale");
-    builder.single_input<float>("Density");
-    builder.single_input<float>("Flake Size");
-    builder.single_input<float>("Randomness");
+    builder.single_input<float>("Roughness");
+    builder.single_input<float>("Coverage");
 
     builder.single_output<ColorGeometry4f>("Color", mf::ParamFlag::SupportsUnusedOutput);
     builder.single_output<float3>("Normal", mf::ParamFlag::SupportsUnusedOutput);
     builder.single_output<float>("Factor", mf::ParamFlag::SupportsUnusedOutput);
+    builder.single_output<float>("Presence", mf::ParamFlag::SupportsUnusedOutput);
 
     return signature;
   }
@@ -144,7 +259,7 @@ class FlakesFunction : public mf::MultiFunction {
     int param = 0;
     if (dimensions_ != 1) param++;
     if (dimensions_ == 1 || dimensions_ == 4) param++;
-    param += 4; // Scale, Density, Flake Size, Randomness
+    param += 3; // Scale, Roughness, Coverage
 
     MutableSpan<ColorGeometry4f> r_color =
         params.uninitialized_single_output_if_required<ColorGeometry4f>(param++, "Color");
@@ -152,144 +267,69 @@ class FlakesFunction : public mf::MultiFunction {
         params.uninitialized_single_output_if_required<float3>(param++, "Normal");
     MutableSpan<float> r_factor =
         params.uninitialized_single_output_if_required<float>(param++, "Factor");
+    MutableSpan<float> r_presence =
+        params.uninitialized_single_output_if_required<float>(param++, "Presence");
 
     const bool compute_color = !r_color.is_empty();
     const bool compute_normal = !r_normal.is_empty();
     const bool compute_factor = !r_factor.is_empty();
+    const bool compute_presence = !r_presence.is_empty();
 
     switch (dimensions_) {
       case 1: {
         const VArray<float> &w = params.readonly_single_input<float>(0, "W");
         const VArray<float> &scale = params.readonly_single_input<float>(1, "Scale");
-        const VArray<float> &density = params.readonly_single_input<float>(2, "Density");
-        const VArray<float> &flake_size = params.readonly_single_input<float>(3, "Flake Size");
-        const VArray<float> &randomness = params.readonly_single_input<float>(4, "Randomness");
+        const VArray<float> &roughness = params.readonly_single_input<float>(2, "Roughness");
+        const VArray<float> &coverage = params.readonly_single_input<float>(3, "Coverage");
         
         mask.foreach_index([&](const int64_t i) {
-          float p = w[i] * scale[i];
-          float cell = math::floor(p);
-
-          float best_fac = 0.0f;
-          float3 best_normal = float3(0.0f, 0.0f, 1.0f);
-          float3 best_color = float3(0.0f, 0.0f, 0.0f);
-          float highest_z = -1000.0f;
-
-          for (int xi = -1; xi <= 1; xi++) {
-            float neighbor = cell + (float)xi;
-            float hash_id = noise::hash_float_to_float(neighbor);
-
-            if (hash_id < density[i]) {
-              float h = noise::hash_float_to_float(neighbor + 0.5f);
-              float pos = neighbor + h * randomness[i];
-              float dist = math::abs(p - pos);
-
-              if (dist < flake_size[i] / 2.0f) {
-                float flake_z = noise::hash_float_to_float(neighbor + 12.34f);
-                if (flake_z > highest_z) {
-                  highest_z = flake_z;
-                  best_fac = 1.0f;
-                  best_normal = math::normalize(noise::hash_float_to_float3(neighbor + 56.78f) * 2.0f - float3(1.0f));
-                  best_color = noise::hash_float_to_float3(neighbor + 90.12f);
-                }
-              }
-            }
-          }
-
-          if (compute_color) r_color[i] = ColorGeometry4f(best_color[0], best_color[1], best_color[2], 1.0f);
-          if (compute_normal) r_normal[i] = best_normal;
-          if (compute_factor) r_factor[i] = best_fac;
+          float3 p = float3(w[i] * scale[i], 0.0f, 0.0f);
+          
+          ColorGeometry4f color; float3 normal; float factor, presence;
+          compute_flake_3d(p, roughness[i], coverage[i], color, normal, factor, presence);
+          
+          if (compute_color) r_color[i] = color;
+          if (compute_normal) r_normal[i] = normal;
+          if (compute_factor) r_factor[i] = factor;
+          if (compute_presence) r_presence[i] = presence;
         });
         break;
       }
       case 2: {
         const VArray<float3> &vector = params.readonly_single_input<float3>(0, "Vector");
         const VArray<float> &scale = params.readonly_single_input<float>(1, "Scale");
-        const VArray<float> &density = params.readonly_single_input<float>(2, "Density");
-        const VArray<float> &flake_size = params.readonly_single_input<float>(3, "Flake Size");
-        const VArray<float> &randomness = params.readonly_single_input<float>(4, "Randomness");
+        const VArray<float> &roughness = params.readonly_single_input<float>(2, "Roughness");
+        const VArray<float> &coverage = params.readonly_single_input<float>(3, "Coverage");
         
         mask.foreach_index([&](const int64_t i) {
-          float2 p = float2(vector[i].x, vector[i].y) * scale[i];
-          float2 cell = math::floor(p);
-
-          float best_fac = 0.0f;
-          float3 best_normal = float3(0.0f, 0.0f, 1.0f);
-          float3 best_color = float3(0.0f, 0.0f, 0.0f);
-          float highest_z = -1000.0f;
-
-          for (int xi = -1; xi <= 1; xi++) {
-            for (int yi = -1; yi <= 1; yi++) {
-              float2 neighbor = cell + float2((float)xi, (float)yi);
-              float hash_id = noise::hash_float_to_float(neighbor);
-
-              if (hash_id < density[i]) {
-                float2 h = noise::hash_float_to_float2(neighbor + float2(0.5f));
-                float2 pos = neighbor + h * randomness[i];
-                float dist = math::length(p - pos);
-
-                if (dist < flake_size[i] / 2.0f) {
-                  float flake_z = noise::hash_float_to_float(neighbor + float2(12.34f));
-                  if (flake_z > highest_z) {
-                    highest_z = flake_z;
-                    best_fac = 1.0f;
-                    best_normal = math::normalize(noise::hash_float_to_float3(neighbor + float2(56.78f)) * 2.0f - float3(1.0f));
-                    best_color = noise::hash_float_to_float3(neighbor + float2(90.12f));
-                  }
-                }
-              }
-            }
-          }
-
-          if (compute_color) r_color[i] = ColorGeometry4f(best_color[0], best_color[1], best_color[2], 1.0f);
-          if (compute_normal) r_normal[i] = best_normal;
-          if (compute_factor) r_factor[i] = best_fac;
+          float3 p = float3(vector[i].x, vector[i].y, 0.0f) * scale[i];
+          
+          ColorGeometry4f color; float3 normal; float factor, presence;
+          compute_flake_3d(p, roughness[i], coverage[i], color, normal, factor, presence);
+          
+          if (compute_color) r_color[i] = color;
+          if (compute_normal) r_normal[i] = normal;
+          if (compute_factor) r_factor[i] = factor;
+          if (compute_presence) r_presence[i] = presence;
         });
         break;
       }
       case 3: {
         const VArray<float3> &vector = params.readonly_single_input<float3>(0, "Vector");
         const VArray<float> &scale = params.readonly_single_input<float>(1, "Scale");
-        const VArray<float> &density = params.readonly_single_input<float>(2, "Density");
-        const VArray<float> &flake_size = params.readonly_single_input<float>(3, "Flake Size");
-        const VArray<float> &randomness = params.readonly_single_input<float>(4, "Randomness");
+        const VArray<float> &roughness = params.readonly_single_input<float>(2, "Roughness");
+        const VArray<float> &coverage = params.readonly_single_input<float>(3, "Coverage");
         
         mask.foreach_index([&](const int64_t i) {
           float3 p = vector[i] * scale[i];
-          float3 cell = math::floor(p);
-
-          float best_fac = 0.0f;
-          float3 best_normal = float3(0.0f, 0.0f, 1.0f);
-          float3 best_color = float3(0.0f, 0.0f, 0.0f);
-          float highest_z = -1000.0f;
-
-          for (int xi = -1; xi <= 1; xi++) {
-            for (int yi = -1; yi <= 1; yi++) {
-              for (int zi = -1; zi <= 1; zi++) {
-                float3 neighbor = cell + float3((float)xi, (float)yi, (float)zi);
-                float hash_id = noise::hash_float_to_float(neighbor);
-
-                if (hash_id < density[i]) {
-                  float3 h = noise::hash_float_to_float3(neighbor + float3(0.5f));
-                  float3 pos = neighbor + h * randomness[i];
-                  float dist = math::length(p - pos);
-
-                  if (dist < flake_size[i] / 2.0f) {
-                    float flake_z = noise::hash_float_to_float(neighbor + float3(12.34f));
-                    if (flake_z > highest_z) {
-                      highest_z = flake_z;
-                      best_fac = 1.0f;
-                      best_normal = math::normalize(noise::hash_float_to_float3(neighbor + float3(56.78f)) * 2.0f - float3(1.0f));
-                      best_color = noise::hash_float_to_float3(neighbor + float3(90.12f));
-                    }
-                  }
-                }
-              }
-            }
-          }
-
-          if (compute_color) r_color[i] = ColorGeometry4f(best_color[0], best_color[1], best_color[2], 1.0f);
-          if (compute_normal) r_normal[i] = best_normal;
-          if (compute_factor) r_factor[i] = best_fac;
+          
+          ColorGeometry4f color; float3 normal; float factor, presence;
+          compute_flake_3d(p, roughness[i], coverage[i], color, normal, factor, presence);
+          
+          if (compute_color) r_color[i] = color;
+          if (compute_normal) r_normal[i] = normal;
+          if (compute_factor) r_factor[i] = factor;
+          if (compute_presence) r_presence[i] = presence;
         });
         break;
       }
@@ -297,49 +337,20 @@ class FlakesFunction : public mf::MultiFunction {
         const VArray<float3> &vector = params.readonly_single_input<float3>(0, "Vector");
         const VArray<float> &w = params.readonly_single_input<float>(1, "W");
         const VArray<float> &scale = params.readonly_single_input<float>(2, "Scale");
-        const VArray<float> &density = params.readonly_single_input<float>(3, "Density");
-        const VArray<float> &flake_size = params.readonly_single_input<float>(4, "Flake Size");
-        const VArray<float> &randomness = params.readonly_single_input<float>(5, "Randomness");
+        const VArray<float> &roughness = params.readonly_single_input<float>(3, "Roughness");
+        const VArray<float> &coverage = params.readonly_single_input<float>(4, "Coverage");
         
         mask.foreach_index([&](const int64_t i) {
-          float4 p = float4(vector[i].x, vector[i].y, vector[i].z, w[i]) * scale[i];
-          float4 cell = math::floor(p);
-
-          float best_fac = 0.0f;
-          float3 best_normal = float3(0.0f, 0.0f, 1.0f);
-          float3 best_color = float3(0.0f, 0.0f, 0.0f);
-          float highest_z = -1000.0f;
-
-          for (int xi = -1; xi <= 1; xi++) {
-            for (int yi = -1; yi <= 1; yi++) {
-              for (int zi = -1; zi <= 1; zi++) {
-                for (int wi = -1; wi <= 1; wi++) {
-                  float4 neighbor = cell + float4((float)xi, (float)yi, (float)zi, (float)wi);
-                  float hash_id = noise::hash_float_to_float(neighbor);
-
-                  if (hash_id < density[i]) {
-                    float4 h = noise::hash_float_to_float4(neighbor + float4(0.5f));
-                    float4 pos = neighbor + h * randomness[i];
-                    float dist = math::length(p - pos);
-
-                    if (dist < flake_size[i] / 2.0f) {
-                      float flake_z = noise::hash_float_to_float(neighbor + float4(12.34f));
-                      if (flake_z > highest_z) {
-                        highest_z = flake_z;
-                        best_fac = 1.0f;
-                        best_normal = math::normalize(noise::hash_float_to_float3(neighbor + float4(56.78f)) * 2.0f - float3(1.0f));
-                        best_color = noise::hash_float_to_float3(neighbor + float4(90.12f));
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          }
-
-          if (compute_color) r_color[i] = ColorGeometry4f(best_color[0], best_color[1], best_color[2], 1.0f);
-          if (compute_normal) r_normal[i] = best_normal;
-          if (compute_factor) r_factor[i] = best_fac;
+          // Flatten 4D to 3D for flake logic as flakes are fundamentally 3D microfacets
+          float3 p = float3(vector[i].x, vector[i].y, vector[i].z + w[i]) * scale[i];
+          
+          ColorGeometry4f color; float3 normal; float factor, presence;
+          compute_flake_3d(p, roughness[i], coverage[i], color, normal, factor, presence);
+          
+          if (compute_color) r_color[i] = color;
+          if (compute_normal) r_normal[i] = normal;
+          if (compute_factor) r_factor[i] = factor;
+          if (compute_presence) r_presence[i] = presence;
         });
         break;
       }

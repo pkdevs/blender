@@ -137,6 +137,7 @@
 #define SH_NODE_RAYCAST 718
 #define SH_NODE_SCENE_TIME 719
 #define SH_NODE_TEX_FLAKES 720
+#define SH_NODE_TEX_SCRATCH 721
 
 /** \} */
 

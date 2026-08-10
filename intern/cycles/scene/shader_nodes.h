@@ -418,9 +418,8 @@ class FlakesTextureNode : public ShaderNode {
   NODE_SOCKET_API(float3, vector)
   NODE_SOCKET_API(float, w)
   NODE_SOCKET_API(float, scale)
-  NODE_SOCKET_API(float, density)
-  NODE_SOCKET_API(float, flake_size)
-  NODE_SOCKET_API(float, randomness)
+  NODE_SOCKET_API(float, roughness)
+  NODE_SOCKET_API(float, coverage)
 };
 
 class MappingNode : public ShaderNode {

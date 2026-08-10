@@ -2736,6 +2736,12 @@ struct NodeTexMagic {
   char _pad[4] = {};
 };
 
+struct NodeTexScratch {
+  DNA_DEFINE_CXX_METHODS(NodeTexScratch)
+
+  NodeTexBase base;
+};
+
 struct NodeShaderAttribute {
   DNA_DEFINE_CXX_METHODS(NodeShaderAttribute)
 

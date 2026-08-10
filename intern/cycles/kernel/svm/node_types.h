@@ -721,13 +721,12 @@ struct SVMNodeTexFlakes {
   SVMInputFloat3 vector;
   SVMInputFloat w;
   SVMInputFloat scale;
-  SVMInputFloat density;
-  SVMInputFloat flake_size;
-  SVMInputFloat randomness;
+  SVMInputFloat roughness;
+  SVMInputFloat coverage;
   SVMStackOffset color_offset;
   SVMStackOffset normal_offset;
   SVMStackOffset fac_offset;
-  uint8_t _pad[2];
+  SVMStackOffset presence_offset;
 };
 static_assert(alignof(SVMNodeTexFlakes) <= alignof(uint));
 static_assert(sizeof(SVMNodeTexFlakes) % sizeof(uint) == 0);
