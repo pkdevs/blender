@@ -26,6 +26,7 @@
 #include "BKE_paint.hh"
 
 #include "ED_object.hh"
+#include "ED_sequencer.hh"
 
 #include "RNA_define.hh"
 #include "RNA_enum_types.hh"
@@ -1172,6 +1173,13 @@ static void rna_Scene_frame_update(Main * /*bmain*/, Scene * /*current_scene*/, 
   Scene *scene = id_cast<Scene *>(ptr->owner_id);
   DEG_id_tag_update(&scene->id, ID_RECALC_FRAME_CHANGE);
   WM_main_add_notifier(NC_SCENE | ND_FRAME, scene);
+}
+
+static void rna_Scene_frame_range_update(Main *bmain, Scene * /*scene*/, PointerRNA *ptr)
+{
+  Scene *scene = id_cast<Scene *>(ptr->owner_id);
+  seq::relations_invalidate_scene_strips(bmain, scene);
+  WM_main_add_notifier(NC_SCENE | ND_SEQUENCER, scene);
 }
 
 static PointerRNA rna_Scene_active_keying_set_get(PointerRNA *ptr)
@@ -3638,6 +3646,13 @@ static void rna_def_tool_settings(BlenderRNA *brna)
       prop, "Transform Parents", "Transform the parents, leaving the children in place");
   RNA_def_property_update(prop, NC_SCENE | ND_TRANSFORM, nullptr);
 
+  prop = RNA_def_property(srna, "use_transform_data_pivot", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, nullptr, "transform_flag", SCE_XFORM_SCULPT_PIVOT);
+  RNA_def_property_flag(prop, PROP_DEG_SYNC_ONLY);
+  RNA_def_property_ui_text(
+      prop, "Transform Pivot", "Transform sculpt pivot, while leaving the shape in place");
+  RNA_def_property_update(prop, NC_SCENE | ND_TRANSFORM, nullptr);
+
   prop = RNA_def_property(srna, "use_transform_correct_face_attributes", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, nullptr, "uvcalc_flag", UVCALC_TRANSFORM_CORRECT);
   RNA_def_property_flag(prop, PROP_DEG_SYNC_ONLY);
@@ -4303,7 +4318,10 @@ static void rna_def_tool_settings(BlenderRNA *brna)
   /* UV */
   prop = RNA_def_property(srna, "uv_select_mode", PROP_ENUM, PROP_NONE);
   RNA_def_property_enum_sdna(prop, nullptr, "uv_selectmode");
-  RNA_def_property_flag(prop, PROP_DEG_SYNC_ONLY);
+  RNA_def_property_flag(prop,
+                        (PROP_DEG_SYNC_ONLY |
+                         /* Tracked by edit-mode undo. */
+                         PROP_FORCE_UNDO));
   RNA_def_property_enum_items(prop, rna_enum_mesh_select_mode_uv_items);
   RNA_def_property_ui_text(prop, "UV Selection Mode", "UV selection and display mode");
   RNA_def_property_flag(prop, PROP_CONTEXT_UPDATE);
@@ -4311,7 +4329,10 @@ static void rna_def_tool_settings(BlenderRNA *brna)
 
   prop = RNA_def_property(srna, "uv_sticky_select_mode", PROP_ENUM, PROP_NONE);
   RNA_def_property_enum_sdna(prop, nullptr, "uv_sticky");
-  RNA_def_property_flag(prop, PROP_DEG_SYNC_ONLY);
+  RNA_def_property_flag(prop,
+                        (PROP_DEG_SYNC_ONLY |
+                         /* Tracked by edit-mode undo. */
+                         PROP_FORCE_UNDO));
   RNA_def_property_enum_items(prop, uv_sticky_mode_items);
   RNA_def_property_ui_text(
       prop, "Sticky Selection Mode", "Method for extending UV vertex selection");
@@ -4321,7 +4342,10 @@ static void rna_def_tool_settings(BlenderRNA *brna)
 
   prop = RNA_def_property(srna, "use_uv_select_sync", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, nullptr, "uv_flag", UV_FLAG_SELECT_SYNC);
-  RNA_def_property_flag(prop, PROP_DEG_SYNC_ONLY);
+  RNA_def_property_flag(prop,
+                        (PROP_DEG_SYNC_ONLY |
+                         /* Tracked by edit-mode undo. */
+                         PROP_FORCE_UNDO));
   RNA_def_property_ui_text(
       prop, "UV Sync Selection", "Keep UV and edit mode mesh selection in sync");
   RNA_def_property_ui_icon(prop, ICON_UV_SYNC_SELECT, 0);
@@ -4330,7 +4354,10 @@ static void rna_def_tool_settings(BlenderRNA *brna)
 
   prop = RNA_def_property(srna, "use_uv_select_island", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, nullptr, "uv_flag", UV_FLAG_SELECT_ISLAND);
-  RNA_def_property_flag(prop, PROP_DEG_SYNC_ONLY);
+  RNA_def_property_flag(prop,
+                        (PROP_DEG_SYNC_ONLY |
+                         /* Tracked by edit-mode undo. */
+                         PROP_FORCE_UNDO));
   RNA_def_property_ui_text(prop, "UV Island Selection", "Island selection");
   RNA_def_property_ui_icon(prop, ICON_UV_ISLANDSEL, 0);
   RNA_def_property_update(prop, NC_SPACE | ND_SPACE_IMAGE, nullptr);
@@ -4351,7 +4378,10 @@ static void rna_def_tool_settings(BlenderRNA *brna)
   /* Mesh */
   prop = RNA_def_property(srna, "mesh_select_mode", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_bitset_array_sdna(prop, nullptr, "selectmode", 1 << 0, 3);
-  RNA_def_property_flag(prop, PROP_DEG_SYNC_ONLY);
+  RNA_def_property_flag(prop,
+                        (PROP_DEG_SYNC_ONLY |
+                         /* Tracked by edit-mode undo. */
+                         PROP_FORCE_UNDO));
   RNA_def_property_boolean_funcs(prop, nullptr, "rna_Scene_editmesh_select_mode_set");
   RNA_def_property_ui_text(prop, "Mesh Selection Mode", "Which mesh elements selection works on");
   RNA_def_property_flag(prop, PROP_CONTEXT_UPDATE);
@@ -6325,7 +6355,8 @@ static void rna_def_render_views(BlenderRNA *brna, PropertyRNA *cprop)
   func = RNA_def_function(srna, "new", "rna_RenderView_new");
   RNA_def_function_ui_description(func, "Add a render view to scene");
   RNA_def_function_flag(func, FUNC_USE_SELF_ID);
-  parm = RNA_def_string(func, "name", "RenderView", 0, "", "New name for the marker (not unique)");
+  parm = RNA_def_string(
+      func, "name", "RenderView", 0, "", "New name for the render view (not unique)");
   RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
   parm = RNA_def_pointer(func, "result", "SceneRenderView", "", "Newly created render view");
   RNA_def_function_return(func, parm);
@@ -8383,6 +8414,12 @@ static void rna_def_scene_eevee(BlenderRNA *brna)
                            "enabled for final renders).");
   RNA_def_property_update(prop, NC_SCENE | ND_RENDER_OPTIONS, nullptr);
 
+  prop = RNA_def_property(srna, "time_limit", PROP_FLOAT, PROP_TIME_ABSOLUTE);
+  RNA_def_property_ui_text(prop, "Time Limit", "Limit the render time. Zero disables the limit.");
+  RNA_def_property_range(prop, 0.0f, FLT_MAX);
+  RNA_def_property_override_flag(prop, PROPOVERRIDE_OVERRIDABLE_LIBRARY);
+  RNA_def_property_update(prop, NC_SCENE | ND_RENDER_OPTIONS, nullptr);
+
   /* Clamping */
   prop = RNA_def_property(srna, "clamp_surface_direct", PROP_FLOAT, PROP_NONE);
   RNA_def_property_ui_text(prop,
@@ -8988,7 +9025,7 @@ void RNA_def_scene(BlenderRNA *brna)
   RNA_def_property_int_funcs(prop, nullptr, "rna_Scene_start_frame_set", nullptr);
   RNA_def_property_range(prop, MINFRAME, MAXFRAME);
   RNA_def_property_ui_text(prop, "Start Frame", "First frame of the playback/rendering range");
-  RNA_def_property_update(prop, NC_SCENE | ND_FRAME_RANGE, nullptr);
+  RNA_def_property_update(prop, NC_SCENE | ND_FRAME_RANGE, "rna_Scene_frame_range_update");
 
   prop = RNA_def_property(srna, "frame_end", PROP_INT, PROP_TIME);
   RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
@@ -8996,7 +9033,7 @@ void RNA_def_scene(BlenderRNA *brna)
   RNA_def_property_int_funcs(prop, nullptr, "rna_Scene_end_frame_set", nullptr);
   RNA_def_property_range(prop, MINFRAME, MAXFRAME);
   RNA_def_property_ui_text(prop, "End Frame", "Final frame of the playback/rendering range");
-  RNA_def_property_update(prop, NC_SCENE | ND_FRAME_RANGE, nullptr);
+  RNA_def_property_update(prop, NC_SCENE | ND_FRAME_RANGE, "rna_Scene_frame_range_update");
 
   prop = RNA_def_property(srna, "frame_step", PROP_INT, PROP_TIME);
   RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);

@@ -201,7 +201,9 @@ class DepsgraphRelationBuilder : public DepsgraphBuilder {
   virtual void build_animation_images(ID *id);
   virtual void build_action(bAction *action);
   virtual void build_driver(ID *id, FCurve *fcurve);
-  virtual void build_driver_data(ID *id, const char *rna_path, const OperationKey &driver_key);
+  virtual void build_driver_data(ID *id,
+                                 const StringRefNull rna_path,
+                                 const OperationKey &driver_key);
   virtual void build_driver_variables(ID *id, FCurve *fcurve);
 
   virtual void build_driver_scene_camera_variable(const OperationKey &driver_key,

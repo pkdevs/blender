@@ -149,7 +149,7 @@ IDNode *DepsgraphNodeBuilder::add_id_node(ID *id)
 {
   BLI_assert(id->session_uid != MAIN_ID_SESSION_UID_UNSET);
 
-  const ID_Type id_type = GS(id->name);
+  const ID_Type id_type = id->id_type();
   IDNode *id_node = nullptr;
   ID *id_cow = nullptr;
   IDComponentsMask previously_visible_components_mask = 0;
@@ -467,7 +467,7 @@ static int foreach_id_cow_detect_need_for_update_callback(LibraryIDLinkCallbackD
   if (id == nullptr) {
     return IDWALK_RET_NOP;
   }
-  if (!ID_TYPE_USE_COPY_ON_EVAL(GS(id->name))) {
+  if (!ID_TYPE_USE_COPY_ON_EVAL(id->id_type())) {
     /* No need to go further if the id never had an evaluated copy in the depsgraph. This function
      * is only concerned with keeping the mapping between original and evaluated IDs intact. */
     return IDWALK_RET_NOP;
@@ -567,7 +567,7 @@ void DepsgraphNodeBuilder::build_id(ID *id, const bool force_be_visible)
     return;
   }
 
-  const ID_Type id_type = GS(id->name);
+  const ID_Type id_type = id->id_type();
   switch (id_type) {
     case ID_AC:
       build_action(id_cast<bAction *>(id));
@@ -1301,7 +1301,7 @@ void DepsgraphNodeBuilder::build_animation_images(ID *id)
   /* GPU materials might use an animated image. However, these materials have no been built yet so
    * we have to check if they might be created during evaluation. */
   bool has_image_animation = false;
-  if (ELEM(GS(id->name), ID_MA, ID_WO)) {
+  if (ELEM(id->id_type(), ID_MA, ID_WO)) {
     bNodeTree *ntree = *bke::node_tree_ptr_from_id(id);
     if (ntree != nullptr && ntree->runtime->runtime_flag & NTREE_RUNTIME_FLAG_HAS_IMAGE_ANIMATION)
     {
@@ -1375,7 +1375,7 @@ void DepsgraphNodeBuilder::build_drivers_and_dynamic_overrides(ID *id)
     for (const auto [driver_index, fcu] : adt->drivers.enumerate()) {
       bool is_overridden = false;
       for (const StringRef overridden_path : overridden_rna_paths) {
-        if (StringRef(fcu.rna_path).startswith(overridden_path)) {
+        if (StringRef(fcu.rna_path()).startswith(overridden_path)) {
           is_overridden = true;
           break;
         }
@@ -1384,7 +1384,7 @@ void DepsgraphNodeBuilder::build_drivers_and_dynamic_overrides(ID *id)
         continue;
       }
       build_driver(id, &fcu, driver_index);
-      needs_unshare = needs_unshare || data_path_maybe_shared(*id, fcu.rna_path);
+      needs_unshare = needs_unshare || data_path_maybe_shared(*id, fcu.rna_path());
     }
   }
   if (needs_unshare) {
@@ -1468,7 +1468,7 @@ void DepsgraphNodeBuilder::build_driver(ID *id, FCurve *fcurve, int driver_index
       [id_cow, driver_index, fcurve](blender::Depsgraph *depsgraph) {
         BKE_animsys_eval_driver(depsgraph, id_cow, driver_index, fcurve);
       },
-      fcurve->rna_path ? fcurve->rna_path : "",
+      fcurve->rna_path().c_str(),
       fcurve->array_index);
   build_driver_variables(id, fcurve);
 }
@@ -1477,7 +1477,7 @@ void DepsgraphNodeBuilder::build_driver_variables(ID *id, FCurve *fcurve)
 {
   PointerRNA id_ptr = RNA_id_pointer_create(id);
 
-  build_driver_id_property(id_ptr, fcurve->rna_path);
+  build_driver_id_property(id_ptr, fcurve->rna_path().c_str());
 
   DriverTargetContext driver_target_context;
   driver_target_context.scene = graph_->scene;
@@ -1573,7 +1573,7 @@ void DepsgraphNodeBuilder::build_parameters(ID *id)
   op_node->set_as_entry();
   /* Generic evaluation node. */
 
-  if (ID_TYPE_SUPPORTS_PARAMS_WITHOUT_COW(GS(id->name))) {
+  if (ID_TYPE_SUPPORTS_PARAMS_WITHOUT_COW(id->id_type())) {
     ID *id_cow = get_cow_id(id);
     add_operation_node(id,
                        NodeType::PARAMETERS,
@@ -1832,8 +1832,9 @@ void DepsgraphNodeBuilder::build_empty_object(Object *object)
   Scene *scene_cow = get_cow_datablock(scene_);
   Object *object_cow = get_cow_datablock(object);
 
-  const bool has_modifiers = !BLI_listbase_is_empty(&object->modifiers);
-  if (!has_modifiers) {
+  const bool can_have_geometry = !BLI_listbase_is_empty(&object->modifiers) ||
+                                 object->instance_collection;
+  if (!can_have_geometry) {
     if (deg_eval_copy_is_expanded(&object_cow->id)) {
       /* The empty might have had modifiers previously, so it might still have cached evaluated
        * geometry. Usually this would be freed by #BKE_object_eval_uber_data during the next
@@ -1914,7 +1915,7 @@ void DepsgraphNodeBuilder::build_object_data_geometry_datablock(ID *obdata)
   }
   /* Nodes for result of obdata's evaluation, and geometry
    * evaluation on object. */
-  const ID_Type id_type = GS(obdata->name);
+  const ID_Type id_type = obdata->id_type();
   switch (id_type) {
     case ID_ME: {
       op_node = add_operation_node(obdata,
@@ -2181,7 +2182,7 @@ void DepsgraphNodeBuilder::build_nodetree(bNodeTree *ntree)
     if (id == nullptr) {
       continue;
     }
-    ID_Type id_type = GS(id->name);
+    ID_Type id_type = id->id_type();
     if (id_type == ID_MA) {
       build_material(id_cast<Material *>(id));
     }
@@ -2597,7 +2598,7 @@ void DepsgraphNodeBuilder::modifier_walk(void *user_data,
   if (id == nullptr) {
     return;
   }
-  switch (GS(id->name)) {
+  switch (id->id_type()) {
     case ID_OB:
       data->builder->build_object(-1, id_cast<Object *>(id), DEG_ID_LINKED_INDIRECTLY, false);
       break;
@@ -2617,7 +2618,7 @@ void DepsgraphNodeBuilder::constraint_walk(bConstraint * /*con*/,
   if (id == nullptr) {
     return;
   }
-  switch (GS(id->name)) {
+  switch (id->id_type()) {
     case ID_OB:
       data->builder->build_object(-1, id_cast<Object *>(id), DEG_ID_LINKED_INDIRECTLY, false);
       break;
