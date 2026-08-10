@@ -860,7 +860,7 @@ static bNodeTreeInterfaceItem *rna_NodeTreeInterfaceItems_copy(ID *id,
                                                                bNodeTreeInterfaceItem *item)
 {
   if (item == &interface->root_panel.item) {
-    BKE_report(reports, RPT_ERROR_INVALID_INPUT, "Root panel could not be copied.");
+    BKE_report(reports, RPT_ERROR_INVALID_INPUT, "Root panel can not be copied.");
     return;
   }
 
@@ -877,7 +877,7 @@ static void rna_NodeTreeInterfaceItems_remove(ID *id,
                                               bool move_content_to_parent)
 {
   if (item == &interface->root_panel.item) {
-    BKE_report(reports, RPT_ERROR_INVALID_INPUT, "Root panel could not be removed.");
+    BKE_report(reports, RPT_ERROR_INVALID_INPUT, "Root panel can not be removed.");
     return;
   }
 
@@ -905,7 +905,7 @@ static void rna_NodeTreeInterfaceItems_move(ID *id,
                                             int to_position)
 {
   if (item == &interface->root_panel.item) {
-    BKE_report(reports, RPT_ERROR_INVALID_INPUT, "Root panel could not be moved.");
+    BKE_report(reports, RPT_ERROR_INVALID_INPUT, "Root panel can not be moved.");
     return;
   }
 
@@ -925,7 +925,7 @@ static void rna_NodeTreeInterfaceItems_move_to_parent(ID *id,
                                                       int to_position)
 {
   if (item == &interface->root_panel.item) {
-    BKE_report(reports, RPT_ERROR_INVALID_INPUT, "Root panel could not be moved.");
+    BKE_report(reports, RPT_ERROR_INVALID_INPUT, "Root panel can not be moved.");
     return;
   }
 
