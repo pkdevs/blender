@@ -70,6 +70,14 @@ void BKE_preferences_remote_asset_library_url_set(bUserAssetLibrary *library,
                                                   StringRef remote_url);
 
 /**
+ * \brief Update the remote URL authentication token.
+ *
+ * - Copies \a auth_token into #bUserAssetLibrary.auth_token, trimming it if necesarily.
+ */
+void BKE_preferences_remote_asset_library_auth_token_set(bUserAssetLibrary *library,
+                                                         StringRef auth_token);
+
+/**
  * Unlink and free a library preference member.
  * \note Free's \a library itself.
  */

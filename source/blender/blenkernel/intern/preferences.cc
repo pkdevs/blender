@@ -222,10 +222,9 @@ bUserAssetLibrary *BKE_preferences_remote_asset_library_add(UserDef *userdef,
 
   BKE_preferences_remote_asset_library_url_set(library, remote_url);
 
-  if (auth_token[0]) {
+  if (auth_token && auth_token[0]) {
     library->flag |= ASSET_LIBRARY_USE_AUTH_TOKEN;
-    const StringRef auth_token_trimmed = StringRef{auth_token}.trim();
-    library->auth_token = BLI_strdupn(auth_token_trimmed.data(), auth_token_trimmed.size());
+    BKE_preferences_remote_asset_library_auth_token_set(library, auth_token);
   }
 
   return library;
@@ -269,6 +268,13 @@ void BKE_preferences_remote_asset_library_url_set(bUserAssetLibrary *library,
           std::string{asset_system::online_essentials_cache_directory_path()} :
           asset_system::remote_library_cache_directory_path_from_url(remote_url);
   BLI_strncpy_utf8(library->dirpath, library_dirpath.c_str(), sizeof(library->dirpath));
+}
+
+void BKE_preferences_remote_asset_library_auth_token_set(bUserAssetLibrary *library,
+                                                         const StringRef auth_token)
+{
+  const StringRef auth_token_trimmed = StringRef{auth_token}.trim();
+  library->auth_token = BLI_strdupn(auth_token_trimmed.data(), auth_token_trimmed.size());
 }
 
 /** \} */
