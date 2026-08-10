@@ -859,13 +859,13 @@ static bNodeTreeInterfaceItem *rna_NodeTreeInterfaceItems_copy(ID *id,
                                                                ReportList *reports,
                                                                bNodeTreeInterfaceItem *item)
 {
-  /* Copy to same parent as the item. */
-  bNodeTreeInterfacePanel *parent = interface->find_item_parent(*item);
-  if (parent == nullptr) {
+  if (item == &interface->root_panel.item) {
     BKE_report(reports, RPT_ERROR_INVALID_INPUT, "Root panel could not be copied.");
-    return nullptr;
+    return;
   }
 
+  /* Copy to same parent as the item. */
+  bNodeTreeInterfacePanel *parent = interface->find_item_parent(*item);
   return rna_NodeTreeInterfaceItems_copy_to_parent(id, interface, bmain, reports, item, parent);
 }
 
@@ -876,7 +876,7 @@ static void rna_NodeTreeInterfaceItems_remove(ID *id,
                                               bNodeTreeInterfaceItem *item,
                                               bool move_content_to_parent)
 {
-  if (item == reinterpret_cast<bNodeTreeInterfaceItem *>(&interface->root_panel)) {
+  if (item == &interface->root_panel.item) {
     BKE_report(reports, RPT_ERROR_INVALID_INPUT, "Root panel could not be removed.");
     return;
   }
@@ -904,7 +904,7 @@ static void rna_NodeTreeInterfaceItems_move(ID *id,
                                             bNodeTreeInterfaceItem *item,
                                             int to_position)
 {
-  if (item == reinterpret_cast<bNodeTreeInterfaceItem *>(&interface->root_panel)) {
+  if (item == &interface->root_panel.item) {
     BKE_report(reports, RPT_ERROR_INVALID_INPUT, "Root panel could not be moved.");
     return;
   }
@@ -924,7 +924,7 @@ static void rna_NodeTreeInterfaceItems_move_to_parent(ID *id,
                                                       bNodeTreeInterfacePanel *parent,
                                                       int to_position)
 {
-  if (item == reinterpret_cast<bNodeTreeInterfaceItem *>(&interface->root_panel)) {
+  if (item == &interface->root_panel.item) {
     BKE_report(reports, RPT_ERROR_INVALID_INPUT, "Root panel could not be moved.");
     return;
   }
