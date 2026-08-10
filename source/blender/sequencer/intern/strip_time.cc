@@ -661,6 +661,23 @@ void Strip::content_length_set(int new_length)
   this->len = new_length;
 }
 
+int Strip::stripdata_len() const
+{
+  return this->anim_startofs + this->content_length() + this->anim_endofs;
+}
+
+void Strip::anim_startofs_set(int new_value)
+{
+  this->content_length_set(this->content_length() + this->anim_startofs - new_value);
+  this->anim_startofs = new_value;
+}
+
+void Strip::anim_endofs_set(int new_value)
+{
+  this->content_length_set(this->content_length() + this->anim_endofs - new_value);
+  this->anim_endofs = new_value;
+}
+
 void Strip::end_offset_set(float new_end_offset)
 {
   if (this->type == STRIP_TYPE_SCENE) {

@@ -544,16 +544,10 @@ void add_reload_new_file(Main *bmain, Scene *scene, Strip *strip, const bool loc
   }
 
   switch (strip->type) {
-    case STRIP_TYPE_IMAGE: {
-      /* Hack? */
-      int olen = MEM_allocN_len(strip->data->stripdata) / sizeof(StripElem);
-
-      olen -= strip->anim_startofs;
-      olen -= strip->anim_endofs;
-      olen = std::max(olen, 0);
-      strip->content_length_set(olen);
+    /* #Strip::content_length() is kept up to date directly by whatever changes
+     * `anim_startofs`/`anim_endofs`/`data->stripdata`, there is nothing to reload here. */
+    case STRIP_TYPE_IMAGE:
       break;
-    }
     case STRIP_TYPE_MOVIE: {
       char filepath[FILE_MAX];
       bool is_multiview_loaded = false;

@@ -476,12 +476,9 @@ static int rna_Strip_elements_length(PointerRNA *ptr)
 {
   Strip *strip = static_cast<Strip *>(ptr->data);
 
-  /* Hack? copied from `sequencer.cc`, #reload_sequence_new_file(). */
-  size_t olen = MEM_allocN_len(strip->data->stripdata) / sizeof(StripElem);
-
-  /* The problem with `strip->data->len` and `strip->len` is that it's discounted from the offset
-   * (hard cut trim). */
-  return int(olen);
+  /* `strip->content_length()` alone is discounted from the content trim offsets
+   * (`anim_startofs`/`anim_endofs`), so it doesn't cover the full `stripdata` array. */
+  return strip->stripdata_len();
 }
 
 static void rna_Strip_elements_begin(CollectionPropertyIterator *iter, PointerRNA *ptr)
@@ -679,7 +676,7 @@ static void rna_Strip_content_trim_start_set(PointerRNA *ptr, int value)
   /* As `anim_startofs` is changed, strip shrinks on the right with left handle position unchanged.
    * To give the appearance as if the strip is trimmed from the left, add move compensation. */
   seq::transform_translate_strip(scene, strip, value - strip->anim_startofs);
-  strip->anim_startofs = value;
+  strip->anim_startofs_set(value);
 
   seq::add_reload_new_file(G.main, scene, strip, false);
   do_strip_frame_change_update(scene, strip);
@@ -690,7 +687,7 @@ static void rna_Strip_content_trim_end_set(PointerRNA *ptr, int value)
   Strip *strip = static_cast<Strip *>(ptr->data);
   Scene *scene = id_cast<Scene *>(ptr->owner_id);
 
-  strip->anim_endofs = value;
+  strip->anim_endofs_set(value);
 
   seq::add_reload_new_file(G.main, scene, strip, false);
   do_strip_frame_change_update(scene, strip);

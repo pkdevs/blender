@@ -2875,6 +2875,10 @@ static wmOperatorStatus sequencer_separate_images_exec(bContext *C, wmOperator *
         strip_new->content_length_set(1);
         strip_new->flag |= SEQ_SINGLE_FRAME_CONTENT;
         strip_new->end_offset_set(1 - step);
+        /* This strip represents a single already-selected image, not a trimmed view into
+         * the original strip's content, so the copied trim offsets no longer apply. */
+        strip_new->anim_startofs = 0;
+        strip_new->anim_endofs = 0;
 
         /* New strip. */
         StripData *data_new = strip_new->data;
@@ -3760,9 +3764,9 @@ static wmOperatorStatus sequencer_change_path_exec(bContext *C, wmOperator *op)
 
     /* Reset these else we won't see all the images. */
     strip->anim_startofs = strip->anim_endofs = 0;
+    strip->content_length_set(len);
 
-    /* Correct start/end frames so we don't move.
-     * Important not to set strip->len = len; allow the function to handle it. */
+    /* Correct start/end frames so we don't move. */
     seq::add_reload_new_file(bmain, scene, strip, true);
   }
   else if (strip->type == STRIP_TYPE_SOUND) {

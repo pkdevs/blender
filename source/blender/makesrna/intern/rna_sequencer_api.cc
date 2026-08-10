@@ -617,9 +617,10 @@ static StripElem *rna_StripElements_append(ID *id, Strip *strip, const char *fil
   Scene *scene = id_cast<Scene *>(id);
   StripElem *se;
 
-  strip->data->stripdata = se = static_cast<StripElem *>(MEM_realloc_uninitialized(
-      strip->data->stripdata, sizeof(StripElem) * (strip->content_length() + 1)));
-  se += strip->content_length();
+  const int old_len = strip->stripdata_len();
+  strip->data->stripdata = se = static_cast<StripElem *>(
+      MEM_realloc_uninitialized(strip->data->stripdata, sizeof(StripElem) * (old_len + 1)));
+  se += old_len;
   STRNCPY(se->filename, filename);
   strip->content_length_set(strip->content_length() + 1);
 
@@ -650,7 +651,10 @@ static void rna_StripElements_pop(ID *id, Strip *strip, ReportList *reports, int
     return;
   }
 
-  new_se = MEM_new_array<StripElem>((strip->content_length() - 1), "StripElements_pop");
+  const int old_len = strip->stripdata_len();
+  const int real_index = strip->anim_startofs + index;
+
+  new_se = MEM_new_array<StripElem>(old_len - 1, "StripElements_pop");
   strip->content_length_set(strip->content_length() - 1);
 
   if (strip->content_length() == 1) {
@@ -658,12 +662,14 @@ static void rna_StripElements_pop(ID *id, Strip *strip, ReportList *reports, int
   }
 
   se = strip->data->stripdata;
-  if (index > 0) {
-    memcpy(new_se, se, sizeof(StripElem) * index);
+  if (real_index > 0) {
+    memcpy(new_se, se, sizeof(StripElem) * real_index);
   }
 
-  if (index < strip->content_length()) {
-    memcpy(&new_se[index], &se[index + 1], sizeof(StripElem) * (strip->content_length() - index));
+  if (real_index < old_len - 1) {
+    memcpy(&new_se[real_index],
+           &se[real_index + 1],
+           sizeof(StripElem) * (old_len - 1 - real_index));
   }
 
   MEM_delete(strip->data->stripdata);

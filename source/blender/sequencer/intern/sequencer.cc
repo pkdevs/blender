@@ -931,8 +931,7 @@ static bool strip_write_data_cb(Strip *strip, void *userdata)
       writer->write_struct(data->proxy);
     }
     if (strip->type == STRIP_TYPE_IMAGE) {
-      writer->write_struct_array(MEM_allocN_len(data->stripdata) / sizeof(StripElem),
-                                 data->stripdata);
+      writer->write_struct_array(strip->stripdata_len(), data->stripdata);
     }
     else if (ELEM(strip->type, STRIP_TYPE_MOVIE, STRIP_TYPE_SOUND)) {
       writer->write_struct(data->stripdata);

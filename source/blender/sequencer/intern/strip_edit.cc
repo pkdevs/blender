@@ -271,10 +271,12 @@ static void seq_split_set_right_hold_offset(Main *bmain,
     strip->end_offset_set(0);
     const float scene_fps = float(scene->r.frs_sec) / float(scene->r.frs_sec_base);
     const float speed_factor = strip->media_playback_rate_factor(scene_fps);
-    strip->anim_endofs += round_fl_to_int((content_end - timeline_frame) * speed_factor);
+    strip->anim_endofs_set(strip->anim_endofs +
+                           round_fl_to_int((content_end - timeline_frame) * speed_factor));
   }
 
-  /* Needed only to set `strip->len`. */
+  /* Needed to set `strip->len` for strip types whose content length is derived from external
+   * media rather than tracked directly (movie/sound/scene/movie-clip/mask strips). */
   add_reload_new_file(bmain, scene, strip, false);
   strip->right_handle_set(scene, timeline_frame);
 }
@@ -291,7 +293,8 @@ static void seq_split_set_left_hold_offset(Main *bmain,
   if ((timeline_frame >= content_start) && (timeline_frame <= content_end)) {
     const float scene_fps = float(scene->r.frs_sec) / float(scene->r.frs_sec_base);
     const float speed_factor = strip->media_playback_rate_factor(scene_fps);
-    strip->anim_startofs += round_fl_to_int((timeline_frame - content_start) * speed_factor);
+    strip->anim_startofs_set(strip->anim_startofs +
+                             round_fl_to_int((timeline_frame - content_start) * speed_factor));
     strip->start = timeline_frame;
     strip->startofs = 0;
   }
@@ -302,7 +305,8 @@ static void seq_split_set_left_hold_offset(Main *bmain,
     strip->end_offset_set(strip->end_offset() + offset);
   }
 
-  /* Needed only to set `strip->len`. */
+  /* Needed to set `strip->len` for strip types whose content length is derived from external
+   * media rather than tracked directly (movie/sound/scene/movie-clip/mask strips). */
   add_reload_new_file(bmain, scene, strip, false);
   strip->left_handle_set(scene, timeline_frame);
 }

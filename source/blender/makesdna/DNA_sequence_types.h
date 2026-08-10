@@ -558,6 +558,19 @@ struct Strip {
   void content_length_set(int new_length);
 
   /**
+   * Number of #StripElem allocated in `data->stripdata`, for #STRIP_TYPE_IMAGE strips.
+   * Content trimming (#anim_startofs, #anim_endofs) does not shrink the array, it only hides
+   * elements at either end, so the full array is always this many elements long.
+   */
+  int stripdata_len() const;
+  /**
+   * Set #anim_startofs / #anim_endofs, compensating #content_length() so #stripdata_len()
+   * (i.e. the underlying content, before any trim) stays the same.
+   */
+  void anim_startofs_set(int new_value);
+  void anim_endofs_set(int new_value);
+
+  /**
    * Frame distance from the right handle to the content end.
    */
   float end_offset() const;
