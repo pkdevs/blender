@@ -975,8 +975,6 @@ static void override_idtemplate_menu()
 /** \name Copy To Selected Operator
  * \{ */
 
-#define NOT_RNA_NULL(assignment) ((assignment).data != nullptr)
-
 /**
  * Construct a PointerRNA that points to pchan->bone_get(*armature).
  *
@@ -1133,7 +1131,8 @@ bool context_copy_to_selected_list(bContext *C,
     std::optional<std::string> idpath;
 
     /* First, check the active PoseBone and PoseBone->Bone. */
-    if (NOT_RNA_NULL(owner_ptr = CTX_data_pointer_get_type(C, "active_pose_bone", RNA_PoseBone))) {
+    owner_ptr = CTX_data_pointer_get_type(C, "active_pose_bone", RNA_PoseBone);
+    if (owner_ptr) {
       idpath = RNA_path_from_struct_to_idproperty(&owner_ptr,
                                                   static_cast<const IDProperty *>(ptr->data));
       if (idpath) {
@@ -1151,9 +1150,8 @@ bool context_copy_to_selected_list(bContext *C,
 
     if (!idpath) {
       /* Check the active EditBone if in edit mode. */
-      if (NOT_RNA_NULL(
-              owner_ptr = CTX_data_pointer_get_type_silent(C, "active_bone", RNA_EditBone)))
-      {
+      owner_ptr = CTX_data_pointer_get_type_silent(C, "active_bone", RNA_EditBone);
+      if (owner_ptr) {
         idpath = RNA_path_from_struct_to_idproperty(&owner_ptr,
                                                     static_cast<const IDProperty *>(ptr->data));
         if (idpath) {

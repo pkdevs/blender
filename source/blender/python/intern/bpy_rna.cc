@@ -2503,7 +2503,7 @@ static int pyrna_prop_collection_ass_subscript_int(BPy_PropertyRNA *self,
                                                    PyObject *value)
 {
   Py_ssize_t keynum_abs = keynum;
-  static PointerRNA null_ptr;
+  static const PointerRNA null_ptr;
   const PointerRNA *ptr = (value == Py_None) ?
                               &null_ptr :
                               &(reinterpret_cast<BPy_StructRNA *>(value))->ptr.value();
@@ -9356,7 +9356,7 @@ const PointerRNA *pyrna_struct_as_ptr(PyObject *py_obj, const StructRNA *srna)
 const PointerRNA *pyrna_struct_as_ptr_or_null(PyObject *py_obj, const StructRNA *srna)
 {
   if (py_obj == Py_None) {
-    static PointerRNA null_ptr;
+    static const PointerRNA null_ptr;
     return &null_ptr;
   }
   return pyrna_struct_as_ptr(py_obj, srna);

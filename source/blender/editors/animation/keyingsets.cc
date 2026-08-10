@@ -383,7 +383,7 @@ static wmOperatorStatus remove_keyingset_button_exec(bContext *C, wmOperator *op
       BLI_findlink(&scene->keyingsets, scene->active_keyingset - 1));
 
   bool changed = false;
-  if (ptr && ptr.has_owner_id() ptr && prop) {
+  if (ptr && ptr.has_owner_id() && ptr && prop) {
     if (const std::optional<std::string> path = RNA_path_from_ID_to_property(&ptr, prop)) {
       /* Try to find a path matching this description. */
       KS_Path *keyingset_path = BKE_keyingset_find_path(

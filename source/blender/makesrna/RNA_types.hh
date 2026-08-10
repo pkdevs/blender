@@ -97,7 +97,7 @@ struct PointerRNA {
   {
   }
 
-  /** Reset the pointer to its initial empty state, such that it #is_null. */
+  /** Reset the pointer to its initial empty state. */
   void reset()
   {
     *this = {};
