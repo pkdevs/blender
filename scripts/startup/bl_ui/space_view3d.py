@@ -93,7 +93,6 @@ class VIEW3D_HT_tool_header(Header):
 
         def draw_3d_brush_settings(layout, tool_mode):
             layout.popover("VIEW3D_PT_tools_brush_settings_advanced", text="Brush")
-
             if tool_mode != 'PAINT_WEIGHT':
                 layout.popover("VIEW3D_PT_tools_brush_texture")
             if tool_mode == 'PAINT_TEXTURE':
@@ -455,7 +454,6 @@ class _draw_tool_settings_context_mode:
         if brush.gpencil_sculpt_brush_type in {'THICKNESS', 'STRENGTH', 'PINCH', 'TWIST'}:
             layout.row().prop(brush, "direction", expand=True, text="")
 
-        # Brush tip
         layout.popover("VIEW3D_PT_tools_brush_shape")
 
         return True

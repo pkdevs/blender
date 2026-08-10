@@ -744,7 +744,7 @@ class ShapePanel(BrushPanel):
                     )
             has_content = True
 
-        if mode == 'SCULPT' and brush.sculpt_brush_type in {'CLAY_STRIPS', 'PAINT'}:
+        if mode == 'SCULPT' and brush.sculpt_capabilities.has_tip_roundness:
             if has_content:
                 layout.separator()
             layout.row(align=True)
