@@ -165,7 +165,7 @@ bool VelocityModule::step_object_sync(const ObjectHandle &ob_handle,
     };
 
     const VelocityGeometryData &data = geometry_map.lookup_or_add_cb(velocity_id, add_cb);
-    has_deform = data;
+    has_deform = data.has_data();
   }
 
   bool any_instance_has_motion = false;
