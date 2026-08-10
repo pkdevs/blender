@@ -250,7 +250,7 @@ void WM_msg_publish_rna_params(wmMsgBus *mbus, const wmMsgParams_RNA *msg_key_pa
   CLOG_DEBUG(
       WM_LOG_MSGBUS_PUB,
       "rna(id='%s', %s.%s)",
-      msg_key_params->ptr.owner_id ? ((ID *)msg_key_params->ptr.owner_id)->name : none,
+      msg_key_params->ptr.has_owner_id() ? ((ID *)msg_key_params->ptr.owner_id)->name : none,
       msg_key_params->ptr.has_type() ? RNA_struct_identifier(msg_key_params->ptr.type) : none,
       msg_key_params->prop ? RNA_property_identifier((PropertyRNA *)msg_key_params->prop) : none);
 
@@ -314,7 +314,7 @@ void WM_msg_subscribe_rna_params(wmMsgBus *mbus,
   CLOG_TRACE(
       WM_LOG_MSGBUS_SUB,
       "rna(id='%s', %s.%s, info='%s')",
-      msg_key_params->ptr.owner_id ? ((ID *)msg_key_params->ptr.owner_id)->name : none,
+      msg_key_params->ptr.has_owner_id() ? ((ID *)msg_key_params->ptr.owner_id)->name : none,
       msg_key_params->ptr.has_type() ? RNA_struct_identifier(msg_key_params->ptr.type) : none,
       msg_key_params->prop ? RNA_property_identifier((PropertyRNA *)msg_key_params->prop) : none,
       id_repr);

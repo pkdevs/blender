@@ -341,7 +341,7 @@ static void panel_draw(const bContext *C, Panel *panel)
   PointerRNA obj_data_ptr = RNA_pointer_get(&ob_ptr, "data");
 
   PointerRNA texture_ptr = RNA_pointer_get(ptr, "texture");
-  bool has_texture = texture_ptr;
+  bool has_texture = texture_ptr.has_data();
   int texture_coords = RNA_enum_get(ptr, "texture_coords");
 
   layout.use_property_split_set(true);
