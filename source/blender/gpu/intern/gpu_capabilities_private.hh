@@ -56,6 +56,7 @@ struct GPUCapabilities {
   bool use_hq_normals_workaround = false;
   bool stencil_clasify_buffer_workaround = false;
   bool texture_pool_workaround = false;
+  bool mipmap_update_workaround = false;
 
   bool use_subprocess_shader_compilations = false;
 

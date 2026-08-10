@@ -474,6 +474,10 @@ def main():
         # Some shadow difference, to be investigated
         report.set_fail_percent(0.09)
         report.set_fail_threshold(6.0 / 255.0)
+    elif test_dir_name.startswith('image_mipmap'):
+        # Texture interpolation can look different (tested on Intel VK&OGL).
+        report.set_fail_percent(0.09)
+        report.set_fail_threshold(9.0 / 255.0)
 
     ok = report.run(args.testdir, args.blender, get_arguments, batch=args.batch)
     sys.exit(not ok)

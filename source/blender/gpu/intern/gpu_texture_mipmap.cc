@@ -8,6 +8,7 @@
 
 #include "BLI_index_range.hh"
 
+#include "GPU_capabilities.hh"
 #include "GPU_compute.hh"
 #include "GPU_debug.hh"
 #include "GPU_shader.hh"
@@ -208,6 +209,11 @@ void GPU_texture_update_mipmap_chain(Texture *tex)
     CLOG_TRACE(&LOG,
                "Texture doesn't have `GPU_TEXTURE_USAGE_SHADER_WRITE` set. Fallback to backend "
                "implementation");
+    use_compute_shaders = false;
+  }
+
+  /* Some GPU drivers have issues with OpenGL texture views used in the mipmap update. */
+  if (GPU_mipmap_update_workaround()) {
     use_compute_shaders = false;
   }
 
