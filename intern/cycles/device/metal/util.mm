@@ -92,7 +92,7 @@ const vector<id<MTLDevice>> &MetalInfo::get_usable_devices()
     string device_name = get_device_name(device);
     bool usable = false;
 
-    if (@available(macos 12.2, *)) {
+    if (@available(macos 14.8, *)) {
       const char *device_name_char = [device.name UTF8String];
       if (!(strstr(device_name_char, "Intel") || strstr(device_name_char, "AMD")) &&
           strstr(device_name_char, "Apple"))
