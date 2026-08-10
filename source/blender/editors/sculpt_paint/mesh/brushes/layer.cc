@@ -155,7 +155,6 @@ static void calc_faces(const Depsgraph &depsgraph,
   tls.distances.resize(verts.size());
   const MutableSpan<float> distances = tls.distances;
 
-  float radius = cache.radius;
   if (BKE_brush_has_cube_tip(&brush, PaintMode::Sculpt)) {
     Vector<float3> local_positions_storage(orig_data.positions.size());
     MutableSpan<float3> local_positions = local_positions_storage;
@@ -166,20 +165,25 @@ static void calc_faces(const Depsgraph &depsgraph,
                          eBrushFalloffShape(brush.falloff_shape),
                          local_positions);
     calc_brush_cube_distances<float3>(brush, local_positions, distances);
-    radius = 1.0f;
+    filter_distances_with_radius(1.0f, distances, factors);
+    apply_hardness_to_distances(1.0f, cache.hardness, distances);
+    BKE_brush_calc_curve_factors(eBrushCurvePreset(brush.curve_distance_falloff_preset),
+                                 brush.curve_distance_falloff,
+                                 distances,
+                                 1.0f,
+                                 factors);
   }
   else {
     calc_brush_distances(
         ss, orig_data.positions, eBrushFalloffShape(brush.falloff_shape), distances);
+    filter_distances_with_radius(cache.radius, distances, factors);
+    apply_hardness_to_distances(cache.radius, cache.hardness, distances);
+    BKE_brush_calc_curve_factors(eBrushCurvePreset(brush.curve_distance_falloff_preset),
+                                 brush.curve_distance_falloff,
+                                 distances,
+                                 cache.radius,
+                                 factors);
   }
-
-  filter_distances_with_radius(radius, distances, factors);
-  apply_hardness_to_distances(radius, cache.hardness, distances);
-  BKE_brush_calc_curve_factors(eBrushCurvePreset(brush.curve_distance_falloff_preset),
-                               brush.curve_distance_falloff,
-                               distances,
-                               radius,
-                               factors);
 
   auto_mask::calc_vert_factors(depsgraph, object, cache.automasking.get(), node, verts, factors);
 
@@ -275,7 +279,6 @@ static void calc_grids(const Depsgraph &depsgraph,
   tls.distances.resize(positions.size());
   const MutableSpan<float> distances = tls.distances;
 
-  float radius = cache.radius;
   if (BKE_brush_has_cube_tip(&brush, PaintMode::Sculpt)) {
     Vector<float3> local_positions_storage(orig_data.positions.size());
     MutableSpan<float3> local_positions = local_positions_storage;
@@ -286,20 +289,25 @@ static void calc_grids(const Depsgraph &depsgraph,
                          eBrushFalloffShape(brush.falloff_shape),
                          local_positions);
     calc_brush_cube_distances<float3>(brush, local_positions, distances);
-    radius = 1.0f;
+    filter_distances_with_radius(1.0f, distances, factors);
+    apply_hardness_to_distances(1.0f, cache.hardness, distances);
+    BKE_brush_calc_curve_factors(eBrushCurvePreset(brush.curve_distance_falloff_preset),
+                                 brush.curve_distance_falloff,
+                                 distances,
+                                 1.0f,
+                                 factors);
   }
   else {
     calc_brush_distances(
         ss, orig_data.positions, eBrushFalloffShape(brush.falloff_shape), distances);
+    filter_distances_with_radius(cache.radius, distances, factors);
+    apply_hardness_to_distances(cache.radius, cache.hardness, distances);
+    BKE_brush_calc_curve_factors(eBrushCurvePreset(brush.curve_distance_falloff_preset),
+                                 brush.curve_distance_falloff,
+                                 distances,
+                                 cache.radius,
+                                 factors);
   }
-
-  filter_distances_with_radius(radius, distances, factors);
-  apply_hardness_to_distances(radius, cache.hardness, distances);
-  BKE_brush_calc_curve_factors(eBrushCurvePreset(brush.curve_distance_falloff_preset),
-                               brush.curve_distance_falloff,
-                               distances,
-                               radius,
-                               factors);
 
   auto_mask::calc_grids_factors(depsgraph, object, cache.automasking.get(), node, grids, factors);
 
@@ -396,7 +404,6 @@ static void calc_bmesh(const Depsgraph &depsgraph,
   tls.distances.resize(verts.size());
   const MutableSpan<float> distances = tls.distances;
 
-  float radius = cache.radius;
   if (BKE_brush_has_cube_tip(&brush, PaintMode::Sculpt)) {
     Vector<float3> local_positions_storage(orig_positions.size());
     MutableSpan<float3> local_positions = local_positions_storage;
@@ -407,19 +414,24 @@ static void calc_bmesh(const Depsgraph &depsgraph,
                          eBrushFalloffShape(brush.falloff_shape),
                          local_positions);
     calc_brush_cube_distances<float3>(brush, local_positions, distances);
-    radius = 1.0f;
+    filter_distances_with_radius(1.0f, distances, factors);
+    apply_hardness_to_distances(1.0f, cache.hardness, distances);
+    BKE_brush_calc_curve_factors(eBrushCurvePreset(brush.curve_distance_falloff_preset),
+                                 brush.curve_distance_falloff,
+                                 distances,
+                                 1.0f,
+                                 factors);
   }
   else {
     calc_brush_distances(ss, orig_positions, eBrushFalloffShape(brush.falloff_shape), distances);
+    filter_distances_with_radius(cache.radius, distances, factors);
+    apply_hardness_to_distances(cache.radius, cache.hardness, distances);
+    BKE_brush_calc_curve_factors(eBrushCurvePreset(brush.curve_distance_falloff_preset),
+                                 brush.curve_distance_falloff,
+                                 distances,
+                                 cache.radius,
+                                 factors);
   }
-
-  filter_distances_with_radius(radius, distances, factors);
-  apply_hardness_to_distances(radius, cache.hardness, distances);
-  BKE_brush_calc_curve_factors(eBrushCurvePreset(brush.curve_distance_falloff_preset),
-                               brush.curve_distance_falloff,
-                               distances,
-                               radius,
-                               factors);
 
   auto_mask::calc_vert_factors(depsgraph, object, cache.automasking.get(), node, verts, factors);
 
