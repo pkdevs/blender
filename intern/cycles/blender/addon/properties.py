@@ -22,6 +22,8 @@ from bpy.app.translations import (
 
 from math import pi
 
+import warnings
+
 # enums
 
 from . import engine
@@ -379,6 +381,16 @@ def update_world(self, context):
     context.scene.world.update_tag()
 
 
+def set_transform_preview_pause(self, value, current_value, is_set):
+    warnings.warn(
+        "'CyclesRenderSettings.preview_pause' has no effect anymore and will "
+        "be removed in a future version, use RegionView3D.pause_render instead",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    return value
+
+
 class CyclesRenderSettings(bpy.types.PropertyGroup):
     __slots__ = ()
 
@@ -397,6 +409,7 @@ class CyclesRenderSettings(bpy.types.PropertyGroup):
     preview_pause: BoolProperty(
         name="Pause Preview",
         description="Deprecated, this has no effect anymore. Use RegionView3D.pause_render instead",
+        set_transform=set_transform_preview_pause,
     )
 
     use_denoising: BoolProperty(
