@@ -151,11 +151,16 @@ struct PointerRNA {
     return this->data == nullptr;
   }
 
+  /**
+   * True when the type is set.
+   * The data may still be null.
+   */
   bool has_type() const
   {
     return this->type != nullptr;
   }
 
+  /** True when #owner_id is set. */
   bool has_owner_id() const
   {
     return this->owner_id != nullptr;

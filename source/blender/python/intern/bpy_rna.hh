@@ -110,8 +110,8 @@ extern PyTypeObject pyrna_func_Type;
   } \
   (void)0
 
-#define PYRNA_STRUCT_IS_VALID(pysrna) (LIKELY(((BPy_StructRNA *)(pysrna))->ptr->type != NULL))
-#define PYRNA_PROP_IS_VALID(pysrna) (LIKELY(((BPy_PropertyRNA *)(pysrna))->ptr->type != NULL))
+#define PYRNA_STRUCT_IS_VALID(pysrna) (LIKELY(((BPy_StructRNA *)(pysrna))->ptr->has_type()))
+#define PYRNA_PROP_IS_VALID(pysrna) (LIKELY(((BPy_PropertyRNA *)(pysrna))->ptr->has_type()))
 
 /* 'in_weakreflist' MUST be aligned */
 

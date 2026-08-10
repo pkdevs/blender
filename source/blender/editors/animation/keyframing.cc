@@ -1283,7 +1283,7 @@ static wmOperatorStatus insert_key_button_exec(bContext *C, wmOperator *op)
     return (OPERATOR_CANCELLED | OPERATOR_PASS_THROUGH);
   }
 
-  if ((ptr.has_owner_id() && prop) && RNA_property_anim_editable(&ptr, prop)) {
+  if ((ptr.has_owner_id() && !ptr.is_null() && prop) && RNA_property_anim_editable(&ptr, prop)) {
     if (ptr.type == RNA_NlaStrip) {
       /* Handle special properties for NLA Strips, whose F-Curves are stored on the
        * strips themselves. These are stored separately or else the properties will
@@ -1444,7 +1444,7 @@ static wmOperatorStatus delete_key_button_exec(bContext *C, wmOperator *op)
     return (OPERATOR_CANCELLED | OPERATOR_PASS_THROUGH);
   }
 
-  if (ptr.has_owner_id() && prop) {
+  if (ptr.has_owner_id() && !ptr.is_null() && prop) {
     if (BKE_nlastrip_has_curves_for_property(&ptr, prop)) {
       /* Handle special properties for NLA Strips, whose F-Curves are stored on the
        * strips themselves. These are stored separately or else the properties will
@@ -1548,7 +1548,7 @@ static wmOperatorStatus clear_key_button_exec(bContext *C, wmOperator *op)
     return (OPERATOR_CANCELLED | OPERATOR_PASS_THROUGH);
   }
 
-  if (ptr.has_owner_id() && prop) {
+  if (ptr.has_owner_id() && !ptr.is_null() && prop) {
     if (const std::optional<std::string> path = RNA_path_from_ID_to_property(&ptr, prop)) {
       RNAPath rna_path = {*path, std::nullopt, index};
       if (all) {

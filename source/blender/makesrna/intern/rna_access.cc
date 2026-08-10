@@ -7203,7 +7203,7 @@ std::string RNA_pointer_as_string_id(bContext *C, PointerRNA *ptr)
 
 static std::optional<std::string> rna_pointer_as_string__bldata(PointerRNA *ptr)
 {
-  if (!ptr->has_owner_id()) {
+  if (!ptr->has_type() || !ptr->has_owner_id()) {
     return "None";
   }
   if (RNA_struct_is_ID(ptr->type)) {

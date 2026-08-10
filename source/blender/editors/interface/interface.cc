@@ -1276,7 +1276,7 @@ static bool but_is_rna_undo(const Button *but)
 
   /* No owner or type known. Assume we do not undo push as it may be a property from
    * the preferences stored outside datablocks. */
-  if (!but->rnapoin.has_owner_id()) {
+  if (!but->rnapoin.has_owner_id() || !but->rnapoin.has_type()) {
     return false;
   }
 

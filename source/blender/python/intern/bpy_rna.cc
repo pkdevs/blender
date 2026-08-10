@@ -8825,8 +8825,8 @@ static PyObject *pyrna_struct_CreatePyObject_from_type(const PointerRNA *ptr,
 PyObject *pyrna_struct_CreatePyObject(PointerRNA *ptr)
 {
   /* NOTE: don't rely on this to return None since nullptr data with a valid type can often crash.
-   */
-  if (ptr->is_null()) { /* Operator RNA has nullptr data. */
+   * Operator RNA can have null data with a type set; only treat untyped pointers as None. */
+  if (!ptr->has_type()) {
     Py_RETURN_NONE;
   }
 

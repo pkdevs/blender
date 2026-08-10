@@ -1076,7 +1076,7 @@ std::optional<std::string> RNA_path_from_ID_to_struct(const PointerRNA *ptr)
 {
   std::optional<std::string> ptrpath;
 
-  if (!ptr->has_owner_id()) {
+  if (!ptr->has_owner_id() || ptr->is_null()) {
     return std::nullopt;
   }
 
@@ -1219,7 +1219,7 @@ std::optional<std::string> RNA_path_from_ID_to_property_index(const PointerRNA *
                                                               int index_dim,
                                                               int index)
 {
-  if (!ptr->has_owner_id()) {
+  if (!ptr->has_owner_id() || ptr->is_null()) {
     return std::nullopt;
   }
   /* Path from ID to the struct holding this property. */
