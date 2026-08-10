@@ -388,9 +388,9 @@ void SymbolTable::register_builtins(LocalScope node)
       {"packed_float2", float_cls, 2, 8, builtin::ClassId::float2_t},
       {"packed_float3", float_cls, 3, 16, builtin::ClassId::float3_t},
       {"packed_float4", float_cls, 4, 16, builtin::ClassId::float4_t},
-      {"packed_int2", float_cls, 2, 8, builtin::ClassId::int2_t},
-      {"packed_int3", float_cls, 3, 16, builtin::ClassId::int3_t},
-      {"packed_int4", float_cls, 4, 16, builtin::ClassId::int4_t},
+      {"packed_int2", int_cls, 2, 8, builtin::ClassId::int2_t},
+      {"packed_int3", int_cls, 3, 16, builtin::ClassId::int3_t},
+      {"packed_int4", int_cls, 4, 16, builtin::ClassId::int4_t},
   };
 
   for (const auto &t : vectors) {
