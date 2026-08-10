@@ -411,7 +411,6 @@ static void detect_workarounds()
     GCaps.depth_blitting_workaround = true;
     GCaps.stencil_clasify_buffer_workaround = true;
     GCaps.texture_pool_workaround = true;
-    GCaps.mipmap_update_workaround = true;
     GLContext::debug_layer_workaround = true;
     /* Turn off Blender features. */
     GCaps.hdr_viewport_support = false;
@@ -586,9 +585,6 @@ static void detect_workarounds()
     {
       GCaps.texture_pool_workaround = true;
     }
-
-    /* Mipmap issue tracked by #162523. */
-    GCaps.mipmap_update_workaround = true;
   }
 #endif
 
@@ -831,15 +827,13 @@ void GLBackend::log_workarounds()
              " - [%c] Depth blitting workaround\n"
              " - [%c] Stencil classify buffer workaround\n"
              " - [%c] High-quality normals\n"
-             " - [%c] Use main context\n"
-             " - [%c] Mipmap update workaround\n",
+             " - [%c] Use main context\n",
              GLContext::debug_layer_workaround ? 'X' : ' ',
              GLContext::unused_fb_slot_workaround ? 'X' : ' ',
              GCaps.depth_blitting_workaround ? 'X' : ' ',
              GCaps.stencil_clasify_buffer_workaround ? 'X' : ' ',
              GCaps.use_hq_normals_workaround ? 'X' : ' ',
-             GCaps.use_main_context_workaround ? 'X' : ' ',
-             GCaps.mipmap_update_workaround ? 'X' : ' ');
+             GCaps.use_main_context_workaround ? 'X' : ' ');
 }
 
 /** \} */
