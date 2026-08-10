@@ -1,2 +1,3 @@
 Referenced by issue #148670, Vulkan: Pixel overlay shader breaking on EEVEE
 Referenced by issue #139935, Vulkan NVIDIA: Low quality mipmap for non power-of-2 texture
+Referenced by issue #162523, Intel Arc Windows OpenGL: EEVEE: Mipmaps broken for large textures
