@@ -146,7 +146,7 @@ class ARMATURE_MT_collection_context_menu(Menu):
         layout.operator("armature.collection_remove_unused", text="Remove Unused")
         layout.separator()
         layout.operator("armature.collections_to_clipboard", text="Copy Collections to Clipboard")
-        layout.operator("armature.collections_from_clipboard", text="Create Collections from Clipboard")
+        layout.operator("armature.collections_from_clipboard", text="Paste Collections from Clipboard")
 
 
 class ARMATURE_MT_collection_tree_context_menu(Menu):
