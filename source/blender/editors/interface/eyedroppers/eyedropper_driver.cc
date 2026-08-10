@@ -51,7 +51,7 @@ static bool driverdropper_init(bContext *C, wmOperator *op)
 
   Button *but = context_active_but_prop_get(C, &ddr->ptr, &ddr->prop, &ddr->index);
 
-  if (ddr->ptr.is_null() || (ddr->prop == nullptr) ||
+  if (!ddr->ptr.has_data() || (ddr->prop == nullptr) ||
       (RNA_property_driver_editable(&ddr->ptr, ddr->prop) == false) || (but->flag & BUT_DRIVEN))
   {
     MEM_delete(ddr);

@@ -388,7 +388,7 @@ static int rna_ensure_property_array_length(PointerRNA *ptr, PropertyRNA *prop)
 {
   if (prop->magic == RNA_MAGIC) {
     int arraylen[RNA_MAX_ARRAY_DIMENSION];
-    if (prop->getlength && !ptr->is_null()) {
+    if (prop->getlength && ptr->has_data()) {
       BLI_assert(rna_property_can_access_pointer_data(*ptr, *prop));
       return prop->getlength(ptr, arraylen);
     }
@@ -568,7 +568,7 @@ void rna_property_rna_or_id_get(PropertyRNA *prop,
       int arraylen[RNA_MAX_ARRAY_DIMENSION];
       /* Do not call actual data callbacks on definition data (i.e. it `ptr` is a struct or
        * property definition, and not the actual data type). See e.g. #161362. */
-      r_prop_rna_or_id->array_len = (prop->getlength && !ptr->is_null() && is_ptr_data_usable) ?
+      r_prop_rna_or_id->array_len = (prop->getlength && ptr->has_data() && is_ptr_data_usable) ?
                                         uint(prop->getlength(ptr, arraylen)) :
                                         prop->totarraylength;
     }
@@ -1143,7 +1143,7 @@ void RNA_struct_blender_type_set(StructRNA *srna, void *blender_type)
 char *RNA_struct_name_get_alloc_ex(
     PointerRNA *ptr, char *fixedbuf, int fixedlen, int *r_len, PropertyRNA **r_nameprop)
 {
-  if (!ptr->is_null()) {
+  if (ptr->has_data()) {
     if (PropertyRNA *nameprop = RNA_struct_name_property(ptr->type)) {
       *r_nameprop = nameprop;
       return RNA_property_string_get_alloc(ptr, nameprop, fixedbuf, fixedlen, r_len);
@@ -1154,7 +1154,7 @@ char *RNA_struct_name_get_alloc_ex(
 
 char *RNA_struct_name_get_alloc(PointerRNA *ptr, char *fixedbuf, int fixedlen, int *r_len)
 {
-  if (!ptr->is_null()) {
+  if (ptr->has_data()) {
     if (PropertyRNA *nameprop = RNA_struct_name_property(ptr->type)) {
       return RNA_property_string_get_alloc(ptr, nameprop, fixedbuf, fixedlen, r_len);
     }
@@ -2754,7 +2754,7 @@ static void rna_property_boolean_get_default_array_values(PointerRNA *ptr,
                                                           BoolPropertyRNA *bprop,
                                                           bool *r_values)
 {
-  if (!ptr->is_null() && bprop->get_default_array) {
+  if (ptr->has_data() && bprop->get_default_array) {
     bprop->get_default_array(ptr, bprop, r_values);
     return;
   }
@@ -3243,7 +3243,7 @@ static void rna_property_int_get_default_array_values(PointerRNA *ptr,
                                                       IntPropertyRNA *iprop,
                                                       int *r_values)
 {
-  if (!ptr->is_null() && iprop->get_default_array) {
+  if (ptr->has_data() && iprop->get_default_array) {
     iprop->get_default_array(ptr, iprop, r_values);
     return;
   }
@@ -3726,7 +3726,7 @@ static void rna_property_float_get_default_array_values(PointerRNA *ptr,
                                                         FloatPropertyRNA *fprop,
                                                         float *r_values)
 {
-  if (!ptr->is_null() && fprop->get_default_array) {
+  if (ptr->has_data() && fprop->get_default_array) {
     fprop->get_default_array(ptr, fprop, r_values);
     return;
   }
@@ -4667,7 +4667,7 @@ void RNA_property_pointer_set(PointerRNA *ptr,
     const bool is_id_refcounting = (prop->flag & PROP_ID_REFCOUNT) != 0;
 
     const PointerRNA old_id_ptr = pprop->get(ptr);
-    BLI_assert_msg(!is_id_refcounting || old_id_ptr.is_null() || RNA_struct_is_ID(old_id_ptr.type),
+    BLI_assert_msg(!is_id_refcounting || !old_id_ptr.has_data() || RNA_struct_is_ID(old_id_ptr.type),
                    "If the property is tagged with ID reference-counting, "
                    "its current value should be null or an ID");
     const ID *old_id = (old_id_ptr.has_type() && RNA_struct_is_ID(old_id_ptr.type)) ?
@@ -4681,7 +4681,7 @@ void RNA_property_pointer_set(PointerRNA *ptr,
     const int new_id_old_refcount = new_id ? ID_REFCOUNTING_USERS(new_id) : 0;
 #endif
 
-    if (!((prop->flag & PROP_NEVER_NULL) && ptr_value.is_null()) &&
+    if (!((prop->flag & PROP_NEVER_NULL) && !ptr_value.has_data()) &&
         !((prop->flag & PROP_ID_SELF_CHECK) && ptr->owner_id == ptr_value.owner_id))
     {
       pprop->set(ptr, ptr_value, reports);
@@ -4696,7 +4696,7 @@ void RNA_property_pointer_set(PointerRNA *ptr,
      * tweaked, e.g. by adding a special 'skip checks' flag to such RNA properties. */
     PointerRNA current_id_ptr = pprop->get(ptr);
     BLI_assert_msg(
-        !is_id_refcounting || current_id_ptr.is_null() || RNA_struct_is_ID(current_id_ptr.type),
+        !is_id_refcounting || !current_id_ptr.has_data() || RNA_struct_is_ID(current_id_ptr.type),
         "If the property is tagged with ID reference-counting, its current value should be "
         "null or an ID");
     ID *current_id = (current_id_ptr.has_type() && RNA_struct_is_ID(current_id_ptr.type)) ?
@@ -5343,7 +5343,7 @@ bool RNA_property_collection_lookup_string_index(
 
   RNA_property_collection_begin(ptr, prop, &iter);
   for (; iter.valid; RNA_property_collection_next(&iter), index++) {
-    if (!iter.ptr.is_null() && iter.ptr.type->nameproperty) {
+    if (iter.ptr.has_data() && iter.ptr.type->nameproperty) {
       nameprop = iter.ptr.type->nameproperty;
 
       name = RNA_property_string_get_alloc(
@@ -5708,7 +5708,7 @@ static int rna_raw_access(ReportList *reports,
     /* no item property pointer, can still be id property, or
      * property of a type derived from the collection pointer type */
     RNA_PROP_BEGIN (ptr, itemptr, prop) {
-      if (!itemptr.is_null()) {
+      if (itemptr.has_data()) {
         if (itemprop) {
           /* we got the property already */
           iprop = itemprop;
@@ -7218,7 +7218,7 @@ std::optional<std::string> RNA_pointer_as_string(bContext *C,
                                                  PointerRNA *ptr_prop)
 {
   IDProperty *prop;
-  if (ptr_prop->is_null()) {
+  if (!ptr_prop->has_data()) {
     return "None";
   }
   if ((prop = rna_idproperty_check(&prop_ptr, ptr)) && prop->type != IDP_ID) {

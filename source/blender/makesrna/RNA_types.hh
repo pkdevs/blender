@@ -141,14 +141,14 @@ struct PointerRNA {
   }
 
   /**
-   * True when #data is null.
+   * True when #data is set.
    * If #data is set, #type is expected to be set as well.
    */
-  bool is_null() const
+  bool has_data() const
   {
     /* If there is data, there should also be a type. */
     BLI_assert(!this->data || this->type);
-    return this->data == nullptr;
+    return this->data != nullptr;
   }
 
   /**

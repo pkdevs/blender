@@ -97,11 +97,11 @@ static void drop_name_copy(bContext *C, wmDrag *drag, wmDropBox *drop)
 static bool drop_material_poll(bContext *C, wmDrag *drag, const wmEvent * /*event*/)
 {
   PointerRNA mat_slot = CTX_data_pointer_get_type(C, "material_slot", RNA_MaterialSlot);
-  if (mat_slot.is_null()) {
+  if (!mat_slot.has_data()) {
     return false;
   }
   PointerRNA ob_ptr = CTX_data_pointer_get_type(C, "object", RNA_Object);
-  if (ob_ptr.is_null()) {
+  if (!ob_ptr.has_data()) {
     return false;
   }
 

@@ -69,7 +69,7 @@ void template_add_button_search_menu(const bContext *C,
                                      ButtonArgNCopy func_argN_copy_fn)
 {
   const PointerRNA active_ptr = RNA_property_pointer_get(ptr, prop);
-  ID *id = (!active_ptr.is_null() && RNA_struct_is_ID(active_ptr.type)) ?
+  ID *id = (active_ptr.has_data() && RNA_struct_is_ID(active_ptr.type)) ?
                static_cast<ID *>(active_ptr.data) :
                nullptr;
   const ID *idfrom = ptr->owner_id;

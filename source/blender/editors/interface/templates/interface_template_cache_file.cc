@@ -32,7 +32,7 @@ namespace blender::ui {
 
 void template_cache_file_velocity(Layout *layout, PointerRNA *fileptr)
 {
-  if (fileptr->is_null()) {
+  if (!fileptr->has_data()) {
     return;
   }
 
@@ -45,7 +45,7 @@ void template_cache_file_velocity(Layout *layout, PointerRNA *fileptr)
 
 void template_cache_file_time_settings(Layout *layout, PointerRNA *fileptr)
 {
-  if (fileptr->is_null()) {
+  if (!fileptr->has_data()) {
     return;
   }
 
@@ -97,7 +97,7 @@ uiListType *UI_UL_cache_file_layers()
 
 void template_uilist_flags(Layout *layout, const bContext *C, PointerRNA *fileptr)
 {
-  if (fileptr->is_null()) {
+  if (!fileptr->has_data()) {
     return;
   }
 
@@ -164,7 +164,7 @@ void template_cache_file(Layout *layout,
                          PointerRNA *ptr,
                          const StringRefNull propname)
 {
-  if (ptr->is_null()) {
+  if (!ptr->has_data()) {
     return;
   }
 

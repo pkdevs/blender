@@ -847,7 +847,7 @@ static void rna_Strip_active_modifier_set(PointerRNA *ptr, PointerRNA value, Rep
 
   WM_main_add_notifier(NC_SCENE | ND_SEQUENCER, ptr->owner_id);
 
-  if (value.is_null()) {
+  if (!value.has_data()) {
     seq::modifier_set_active(strip, nullptr);
     return;
   }

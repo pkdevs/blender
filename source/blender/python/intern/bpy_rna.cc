@@ -1306,7 +1306,7 @@ static Py_hash_t pyrna_struct_hash(BPy_StructRNA *self)
 static long pyrna_prop_hash(BPy_PropertyRNA *self)
 {
   long x, y;
-  if (self->ptr->is_null()) {
+  if (!self->ptr->has_data()) {
     x = 0;
   }
   else {
@@ -1587,7 +1587,7 @@ PyObject *pyrna_prop_to_py(PointerRNA *ptr, PropertyRNA *prop)
     case PROP_POINTER: {
       PointerRNA newptr;
       newptr = RNA_property_pointer_get(ptr, prop);
-      if (!newptr.is_null()) {
+      if (newptr.has_data()) {
         ret = pyrna_struct_CreatePyObject(&newptr);
       }
       else {
@@ -4916,7 +4916,7 @@ static PyObject *pyrna_struct_getattro(BPy_StructRNA *self, PyObject *pyname)
       if (done == CTX_RESULT_OK) {
         switch (newtype) {
           case ContextDataType::Pointer:
-            if (newptr.is_null()) {
+            if (!newptr.has_data()) {
               ret = Py_None;
               Py_INCREF(ret);
             }
@@ -5387,7 +5387,7 @@ static PyObject *pyrna_prop_collection_idprop_add(BPy_PropertyRNA *self)
 #endif /* USE_PEDANTIC_WRITE */
 
   RNA_property_collection_add(&self->ptr.value(), self->prop, &r_ptr);
-  if (r_ptr.is_null()) {
+  if (!r_ptr.has_data()) {
     PyErr_SetString(PyExc_TypeError,
                     "bpy_prop_collection.add(): not supported for this collection");
     return nullptr;
@@ -5615,7 +5615,7 @@ static PyObject *pyrna_prop_collection_items(BPy_PropertyRNA *self)
 
   BPy_NamePropAsPyObject_Cache nameprop_cache = {nullptr};
   RNA_PROP_BEGIN (&self->ptr.value(), itemptr, self->prop) {
-    if (itemptr.is_null()) [[unlikely]] {
+    if (!itemptr.has_data()) [[unlikely]] {
       continue;
     }
     /* Add to Python list. */
@@ -6983,7 +6983,7 @@ static PyObject *pyrna_param_to_py(PointerRNA *ptr, PropertyRNA *prop, void *dat
           newptr_p = &newptr;
         }
 
-        if (!newptr_p->is_null()) {
+        if (newptr_p->has_data()) {
           ret = pyrna_struct_CreatePyObject(newptr_p);
         }
         else {
@@ -9954,7 +9954,7 @@ static int bpy_class_call(bContext *C, PointerRNA *ptr, FunctionRNA *func, Param
 
   if (!(is_staticmethod || is_classmethod)) {
     /* Some data-types (operator, render engine) can store PyObjects for re-use. */
-    if (!ptr->is_null()) {
+    if (ptr->has_data()) {
       void **instance = RNA_struct_instance(ptr);
 
       if (instance) {
@@ -10224,7 +10224,7 @@ static int bpy_class_call(bContext *C, PointerRNA *ptr, FunctionRNA *func, Param
   if (err != 0) {
     ReportList *reports;
     /* Alert the user, else they won't know unless they see the console. */
-    if ((!is_staticmethod) && (!is_classmethod) && (!ptr->is_null()) &&
+    if ((!is_staticmethod) && (!is_classmethod) && (ptr->has_data()) &&
         RNA_struct_is_a(ptr->type, RNA_Operator) &&
         (is_valid_wm == (CTX_wm_manager(C) != nullptr)))
     {

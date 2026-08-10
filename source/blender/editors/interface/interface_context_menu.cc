@@ -113,7 +113,7 @@ static const char *shortcut_get_operator_property(bContext *C, Button *but, IDPr
 {
   if (but->optype) {
     /* Operator */
-    *r_prop = (but->opptr && !but->opptr->is_null()) ?
+    *r_prop = (but->opptr && but->opptr->has_data()) ?
                   IDP_CopyProperty(static_cast<IDProperty *>(but->opptr->data)) :
                   nullptr;
     return but->optype->idname;

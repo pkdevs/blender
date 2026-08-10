@@ -155,7 +155,7 @@ static void compute_deep_hash_recursive(const Main &bmain,
   if (r_hashes.contains(&id)) {
     return;
   }
-  if (!id.deep_hash.is_null()) {
+  if (id.deep_hash.has_data()) {
     r_hashes.add(&id, id.deep_hash);
     return;
   }

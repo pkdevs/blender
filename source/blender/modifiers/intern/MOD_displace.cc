@@ -341,7 +341,7 @@ static void panel_draw(const bContext *C, Panel *panel)
   PointerRNA obj_data_ptr = RNA_pointer_get(&ob_ptr, "data");
 
   PointerRNA texture_ptr = RNA_pointer_get(ptr, "texture");
-  bool has_texture = !texture_ptr.is_null();
+  bool has_texture = texture_ptr.has_data();
   int texture_coords = RNA_enum_get(ptr, "texture_coords");
 
   layout.use_property_split_set(true);
@@ -354,7 +354,7 @@ static void panel_draw(const bContext *C, Panel *panel)
   if (texture_coords == MOD_DISP_MAP_OBJECT) {
     col->prop(ptr, "texture_coords_object", UI_ITEM_NONE, IFACE_("Object"), ICON_NONE);
     PointerRNA texture_coords_obj_ptr = RNA_pointer_get(ptr, "texture_coords_object");
-    if (!texture_coords_obj_ptr.is_null() &&
+    if (texture_coords_obj_ptr.has_data() &&
         (RNA_enum_get(&texture_coords_obj_ptr, "type") == OB_ARMATURE))
     {
       PointerRNA texture_coords_obj_data_ptr = RNA_pointer_get(&texture_coords_obj_ptr, "data");

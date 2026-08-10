@@ -2017,7 +2017,7 @@ int icon_from_rnaptr(const bContext *C, PointerRNA *ptr, int rnaicon, const bool
 {
   ID *id = nullptr;
 
-  if (ptr->is_null()) {
+  if (!ptr->has_data()) {
     return rnaicon;
   }
 

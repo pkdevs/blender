@@ -421,7 +421,7 @@ void template_light_linking_collection(Layout *layout,
                                        PointerRNA *ptr,
                                        const StringRefNull propname)
 {
-  if (ptr->is_null()) {
+  if (!ptr->has_data()) {
     return;
   }
 
@@ -443,7 +443,7 @@ void template_light_linking_collection(Layout *layout,
   }
 
   const PointerRNA collection_ptr = RNA_property_pointer_get(ptr, prop);
-  if (collection_ptr.is_null()) {
+  if (!collection_ptr.has_data()) {
     return;
   }
   if (collection_ptr.type != RNA_Collection) {

@@ -192,7 +192,7 @@ static int depthdropper_init(bContext *C, wmOperator *op)
     }
   }
 
-  if (ddr->ptr.is_null() || (ddr->prop == nullptr) ||
+  if (!ddr->ptr.has_data() || (ddr->prop == nullptr) ||
       (RNA_property_editable(&ddr->ptr, ddr->prop) == false) ||
       (RNA_property_type(ddr->prop) != PROP_FLOAT))
   {

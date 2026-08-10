@@ -1813,7 +1813,7 @@ static char *rna_def_property_lookup_string_func(FILE *f,
           rna_safe_id(prop->identifier));
 
   fprintf(f, "    while (iter.valid) {\n");
-  fprintf(f, "        if (!iter.ptr.is_null()) {\n");
+  fprintf(f, "        if (iter.ptr.has_data()) {\n");
   fprintf(f,
           "            int namelen = %s_%s_length(&iter.ptr);\n",
           item_name_base->identifier.c_str(),
