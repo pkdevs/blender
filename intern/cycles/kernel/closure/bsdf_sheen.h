@@ -12,6 +12,7 @@
 #include "kernel/sample/mapping.h"
 
 #include "kernel/util/lookup_table.h"
+#include "kernel/constants.h"
 
 CCL_NAMESPACE_BEGIN
 
@@ -36,19 +37,19 @@ ccl_device int bsdf_sheen_setup(KernelGlobals kg,
 
   const int offset = kernel_data.tables.sheen_ltc;
   bsdf->transformA = lookup_table_read_2D(
-      kg, cosNI, bsdf->roughness, offset, SHEEN_RES_ROUGH, SHEEN_RES_MU);
+      kg, cosNI, bsdf->roughness, offset, SHEEN_RES_MU, SHEEN_RES_ROUGH);
   bsdf->transformB = lookup_table_read_2D(kg,
                                           cosNI,
                                           bsdf->roughness,
-                                          offset + SHEEN_RES_ROUGH * SHEEN_RES_MU,
-                                          SHEEN_RES_ROUGH,
-                                          SHEEN_RES_MU);
+                                          offset + SHEEN_RES_MU * SHEEN_RES_ROUGH,
+                                          SHEEN_RES_MU,
+                                          SHEEN_RES_ROUGH);
   const float albedo = lookup_table_read_2D(kg,
                                             cosNI,
                                             bsdf->roughness,
-                                            offset + 2 * SHEEN_RES_ROUGH * SHEEN_RES_MU,
-                                            SHEEN_RES_ROUGH,
-                                            SHEEN_RES_MU);
+                                            offset + 2 * SHEEN_RES_MU * SHEEN_RES_ROUGH,
+                                            SHEEN_RES_MU,
+                                            SHEEN_RES_ROUGH);
 
   /* If the given roughness and angle result in an invalid LTC, skip the closure. */
   if (fabsf(bsdf->transformA) < 1e-5f || albedo < 1e-5f) {

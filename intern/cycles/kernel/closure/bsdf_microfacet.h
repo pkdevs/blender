@@ -96,7 +96,7 @@ ccl_device_forceinline float ior_to_z_index(const float ior)
 
 ccl_device_forceinline float mu_to_y_index(const float mu)
 {
-  return sqrtf(mu);
+  return safe_sqrtf(mu);
 }
 
 ccl_device_inline void adjust_thin_film_ior_at_backface(ccl_private float &film_ior,
