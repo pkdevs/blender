@@ -802,8 +802,8 @@ struct GHOST_InstanceVK {
         CLOG_ERROR(
             &LOG,
             "Vulkan: vkCreateDevice resulted in code %s.\n"
-            "Adress Sanitizer has know incompatibilities with Nvidia Vulkan drivers on Linux, see "
-            "https://developer.blender.org/docs/handbook/tooling/asan/"
+            "Address Sanitizer has known incompatibilities with Nvidia Vulkan drivers on Linux,"
+            "see https://developer.blender.org/docs/handbook/tooling/asan/"
             "#shadow-memory-issue-with-vulkan-on-nvidia-linux-drivers for more info.",
             blender::gpu::to_string(result));
         return GHOST_kFailure;
