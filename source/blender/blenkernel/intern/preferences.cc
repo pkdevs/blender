@@ -208,7 +208,8 @@ void BKE_preferences_asset_library_write_data(BlendWriter *writer,
 
 bUserAssetLibrary *BKE_preferences_remote_asset_library_add(UserDef *userdef,
                                                             const char *name,
-                                                            const char *remote_url)
+                                                            const char *remote_url,
+                                                            const char *auth_token)
 {
   bUserAssetLibrary *library = MEM_new<bUserAssetLibrary>(__func__);
 
@@ -220,6 +221,12 @@ bUserAssetLibrary *BKE_preferences_remote_asset_library_add(UserDef *userdef,
   }
 
   BKE_preferences_remote_asset_library_url_set(library, remote_url);
+
+  if (auth_token[0]) {
+    library->flag |= ASSET_LIBRARY_USE_AUTH_TOKEN;
+    const StringRef auth_token_trimmed = StringRef{auth_token}.trim();
+    library->auth_token = BLI_strdupn(auth_token_trimmed.data(), auth_token_trimmed.size());
+  }
 
   return library;
 }

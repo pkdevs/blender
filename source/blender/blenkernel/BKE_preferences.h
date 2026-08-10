@@ -51,7 +51,8 @@ struct bUserAssetLibrary *BKE_preferences_asset_library_add(struct UserDef *user
                                                             const char *dirpath) ATTR_NONNULL(1);
 struct bUserAssetLibrary *BKE_preferences_remote_asset_library_add(struct UserDef *userdef,
                                                                    const char *name,
-                                                                   const char *remote_url)
+                                                                   const char *remote_url,
+                                                                   const char *auth_token)
     ATTR_NONNULL(1, 3);
 
 /**
