@@ -400,7 +400,7 @@ static const char *wm_context_member_from_ptr(bContext *C, const PointerRNA *ptr
     PointerRNA ctx_item_ptr = {};
     // CTX_data_pointer_get(C, identifier);  /* XXX, this isn't working. */
 
-    if (ctx_item_ptr.type == nullptr) {
+    if (ctx_item_ptr.is_untyped()) {
       continue;
     }
 
@@ -839,7 +839,7 @@ bool WM_operator_properties_default(PointerRNA *ptr, const bool do_update)
 
 void WM_operator_properties_reset(wmOperator *op)
 {
-  if (op->ptr->data) {
+  if (!op->ptr->is_data_null()) {
     PropertyRNA *iterprop = RNA_struct_iterator_property(op->type->srna);
 
     RNA_PROP_BEGIN (op->ptr, itemptr, iterprop) {
@@ -2006,7 +2006,7 @@ static wmOperatorStatus wm_operator_defaults_exec(bContext *C, wmOperator *op)
 {
   PointerRNA ptr = CTX_data_pointer_get_type(C, "active_operator", RNA_Operator);
 
-  if (!ptr.data) {
+  if (ptr.is_data_null()) {
     BKE_report(op->reports, RPT_ERROR, "No operator in context");
     return OPERATOR_CANCELLED;
   }
@@ -3163,7 +3163,7 @@ static int radial_control_get_properties(bContext *C, wmOperator *op)
   {
     return 0;
   }
-  if (rc->image_id_ptr.data) {
+  if (!rc->image_id_ptr.is_data_null()) {
     /* Extra check, pointer must be to an ID. */
     if (!RNA_struct_is_ID(rc->image_id_ptr.type)) {
       BKE_report(op->reports, RPT_ERROR, "Pointer from path image_id is not an ID");

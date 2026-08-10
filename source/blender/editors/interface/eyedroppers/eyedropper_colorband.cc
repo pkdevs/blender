@@ -89,7 +89,7 @@ static bool eyedropper_colorband_init(bContext *C, wmOperator *op)
 
   if (!band) {
     const PointerRNA ptr = CTX_data_pointer_get_type(C, "color_ramp", RNA_ColorRamp);
-    if (ptr.data != nullptr) {
+    if (!ptr.is_data_null()) {
       band = static_cast<ColorBand *>(ptr.data);
 
       /* Set this to a sub-member of the property to trigger an update. */
@@ -313,7 +313,7 @@ static bool eyedropper_colorband_poll(bContext *C)
     return true;
   }
   const PointerRNA ptr = CTX_data_pointer_get_type(C, "color_ramp", RNA_ColorRamp);
-  if (ptr.data != nullptr) {
+  if (!ptr.is_data_null()) {
     return true;
   }
   return false;

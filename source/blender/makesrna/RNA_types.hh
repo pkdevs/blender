@@ -140,24 +140,55 @@ struct PointerRNA {
     return PointerRNA(owner_id, ancestors.last().type, ancestors.last().data);
   }
 
+  /**
+   * True when either #type or #data is null.
+   * Matches the historical #RNA_pointer_is_null behavior.
+   */
   bool is_type_or_data_null() const
   {
     return !this->type || !this->data;
   }
 
+  /** True when #type is null. */
   bool is_untyped() const
   {
     return !this->type;
   }
 
+  /** True when #type is non-null. */
+  bool is_typed() const
+  {
+    return this->type != nullptr;
+  }
+
+  /** True when #data is null, regardless of #type. */
   bool is_data_null() const
   {
     return !this->data;
   }
 
+  /** True when #type is set but #data is null (a typed null pointer). */
   bool is_typed_null() const
   {
     return this->type && !this->data;
+  }
+
+  /**
+   * True when the pointer fields form a valid combination:
+   * - #data implies #type is set
+   * - #owner_id implies #data is set
+   *
+   * A typed null (#is_typed_null) with no #owner_id is valid.
+   */
+  bool is_valid() const
+  {
+    if (!this->is_data_null() && this->is_untyped()) {
+      return false;
+    }
+    if (this->owner_id && this->is_data_null()) {
+      return false;
+    }
+    return true;
   }
 };
 

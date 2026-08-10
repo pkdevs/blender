@@ -990,7 +990,7 @@ static void bool_layer_begin(CollectionPropertyIterator *iter,
                                                          layername_func(name, buffer),
                                                          ATTR_DOMAIN_MASK_CORNER,
                                                          CD_MASK_PROP_BOOL);
-  if (RNA_pointer_is_null(&bool_ptr)) {
+  if (bool_ptr.is_type_or_data_null()) {
     rna_iterator_array_begin(iter, ptr, nullptr, 0, 0, 0, nullptr);
     return;
   }
@@ -1159,7 +1159,7 @@ static void rna_Mesh_vertex_color_active_set(PointerRNA *ptr,
                                              const PointerRNA value,
                                              ReportList * /*reports*/)
 {
-  if (RNA_pointer_is_null(&value)) {
+  if (value.is_type_or_data_null()) {
     return;
   }
   Mesh *mesh = static_cast<Mesh *>(ptr->data);
@@ -1955,7 +1955,7 @@ static bool rna_Mesh_materials_override_apply(Main *bmain,
 
   Mesh *mesh_dst = id_cast<Mesh *>(ptr_dst->owner_id);
 
-  if (ptr_item_dst->type == nullptr || ptr_item_src->type == nullptr) {
+  if (ptr_item_dst->is_untyped() || ptr_item_src->is_untyped()) {
     // BLI_assert_msg(0, "invalid source or destination material.");
     return false;
   }

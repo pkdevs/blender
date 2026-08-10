@@ -118,7 +118,7 @@ static void rna_Armature_act_bone_set(PointerRNA *ptr, PointerRNA value, ReportL
 {
   bArmature *arm = static_cast<bArmature *>(ptr->data);
 
-  if (value.owner_id == nullptr && value.data == nullptr) {
+  if (value.owner_id == nullptr && value.is_data_null()) {
     arm->act_bone = nullptr;
   }
   else {
@@ -142,7 +142,7 @@ static void rna_Armature_act_edit_bone_set(PointerRNA *ptr,
 {
   bArmature *arm = static_cast<bArmature *>(ptr->data);
 
-  if (value.owner_id == nullptr && value.data == nullptr) {
+  if (value.owner_id == nullptr && value.is_data_null()) {
     arm->act_edbone = nullptr;
   }
   else {

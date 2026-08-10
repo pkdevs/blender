@@ -307,8 +307,8 @@ static std::string ctx_result_brief_repr(const bContextDataResult &result)
 {
   switch (result.type) {
     case ContextDataType::Pointer:
-      if (result.ptr.data) {
-        const char *rna_type_name = result.ptr.type ? RNA_struct_identifier(result.ptr.type) :
+      if (!result.ptr.is_data_null()) {
+        const char *rna_type_name = result.ptr.is_typed() ? RNA_struct_identifier(result.ptr.type) :
                                                       "Unknown";
         /* Try to get the name property if it exists. */
         std::string member_name;
@@ -351,9 +351,9 @@ static std::string ctx_result_brief_repr(const bContextDataResult &result)
       }
 
     case ContextDataType::Property:
-      if (result.prop && result.ptr.data) {
+      if (result.prop && !result.ptr.is_data_null()) {
         const char *prop_name = RNA_property_identifier(result.prop);
-        const char *rna_type_name = result.ptr.type ? RNA_struct_identifier(result.ptr.type) :
+        const char *rna_type_name = result.ptr.is_typed() ? RNA_struct_identifier(result.ptr.type) :
                                                       "Unknown";
         if (result.index >= 0) {
           return fmt::format("<Property({}.{}[{}])>", rna_type_name, prop_name, result.index);
@@ -434,7 +434,7 @@ static void *ctx_wm_python_context_get(const bContext *C,
     if (BPY_context_member_get(const_cast<bContext *>(C), member, &result)) {
       found_member = true;
 
-      if (result.ptr.data) {
+      if (!result.ptr.is_data_null()) {
         if (RNA_struct_is_a(result.ptr.type, member_type)) {
           return_data = result.ptr.data;
         }
@@ -662,7 +662,7 @@ PointerRNA CTX_data_pointer_get_type(const bContext *C, const char *member, Stru
 {
   PointerRNA ptr = CTX_data_pointer_get(C, member);
 
-  if (ptr.data) {
+  if (!ptr.is_data_null()) {
     if (RNA_struct_is_a(ptr.type, type)) {
       return ptr;
     }
@@ -681,7 +681,7 @@ PointerRNA CTX_data_pointer_get_type_silent(const bContext *C, const char *membe
 {
   PointerRNA ptr = CTX_data_pointer_get(C, member);
 
-  if (ptr.data && RNA_struct_is_a(ptr.type, type)) {
+  if (!ptr.is_data_null() && RNA_struct_is_a(ptr.type, type)) {
     return ptr;
   }
 
