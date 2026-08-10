@@ -861,7 +861,7 @@ static bNodeTreeInterfaceItem *rna_NodeTreeInterfaceItems_copy(ID *id,
 {
   if (item == &interface->root_panel.item) {
     BKE_report(reports, RPT_ERROR_INVALID_INPUT, "Root panel can not be copied.");
-    return;
+    return nullptr;
   }
 
   /* Copy to same parent as the item. */
