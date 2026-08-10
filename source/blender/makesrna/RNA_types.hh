@@ -145,7 +145,7 @@ struct PointerRNA {
     return !this->type || !this->data;
   }
 
-  bool is_type_null() const
+  bool is_untyped() const
   {
     return !this->type;
   }
