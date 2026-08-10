@@ -2870,8 +2870,8 @@ void calc_brush_local_mat(const float rotation,
   /* Read rotation (user angle, rake, etc.) to find the view's movement direction (negative X of
    * the brush). */
   angle = rotation + special_rotation;
-  /* By convention, motion direction points down the brush's Y axis, the angle represents
-   * the X axis, normal is a 90 deg CCW rotation of the motion direction. */
+  /* By convention, motion direction points down the brush's Y axis, the angle represents the X
+   * axis, normal is a 90 deg CCW rotation of the motion direction. */
   float motion_normal_screen[2];
   motion_normal_screen[0] = cosf(angle);
   motion_normal_screen[1] = sinf(angle);
