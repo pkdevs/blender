@@ -701,10 +701,6 @@ class ShapePanel(BrushPanel):
         mode = cls.get_brush_mode(context)
         brush = settings.brush
 
-        if mode == 'SCULPT' and (
-                brush.sculpt_capabilities.has_hardness or brush.sculpt_capabilities.has_tip_roundness):
-            return True
-
         if not (brush and brush.curve_distance_falloff):
             return False
         if mode == 'SCULPT_CURVES':
