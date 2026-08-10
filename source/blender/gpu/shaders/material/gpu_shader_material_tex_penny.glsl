@@ -1875,41 +1875,29 @@ float3 penny_luka_tile(float4 co, float detail, float roughness, int4 period, in
   return result;
 }
 
-/* ---- EEVEE node entry point ----
- * node_tex_penny: main entry point — unpacks parameters, applies Scale
- *   conversion (percentage → factor), assembles coordinate per dimensionality,
- *   dispatches to the appropriate penny_*_tile(), writes Factor and Color. */
 
-void penny_field(float3 co,
-                 float w,
-                 float detail,
-                 float scale_pct,
-                 float scale_x_pct,
-                 float scale_y_pct,
-                 float scale_z_pct,
-                 float scale_w_pct,
-                 float roughness,
-                 float level_min,
-                 float level_mid,
-                 float level_max,
-                 float period_x,
-                 float period_y,
-                 float period_z,
-                 float period_w,
-                 float blend_mode,
-                 float noise_type,
-                 float dimensions,
-                 float tileable,
-                 out float3 out_rgb)
+/* ---- Coordinate setup (shared) ----
+ * penny_field_setup unpacks Scale (percentage -> factor), applies the tileable
+ * period-lattice snapping, and assembles the sampled 4D coordinate per
+ * dimensionality. It references no noise-type function, so sharing it across
+ * every per-type entry point does NOT defeat variant pruning. */
+void penny_field_setup(float3 co,
+                       float w,
+                       float scale_pct,
+                       float scale_x_pct,
+                       float scale_y_pct,
+                       float scale_z_pct,
+                       float scale_w_pct,
+                       float period_x,
+                       float period_y,
+                       float period_z,
+                       float period_w,
+                       float dimensions,
+                       float tileable,
+                       out float4 out_p,
+                       out int4 out_period)
 {
-  g_lvl_lo = level_min;
-  g_lvl_mid = level_mid;
-  g_lvl_hi = level_max;
-
   float3 vec = co;
-
-  detail = clamp(detail, 0.0f, 15.0f);
-  roughness = max(roughness, 0.0f);
 
   float global_factor = scale_pct * 0.01f;
   float fx_scale = max(global_factor * scale_x_pct * 0.01f, 1e-6f) * 0.25f;
@@ -1917,17 +1905,13 @@ void penny_field(float3 co,
   float fz_scale = max(global_factor * scale_z_pct * 0.01f, 1e-6f) * 0.25f;
   float fw_scale = max(global_factor * scale_w_pct * 0.01f, 1e-6f) * 0.25f;
 
-  /* Assemble the sampled coordinate per dimension (matches Blender Noise + GN):
-   * 1D -> (0,0,0,W); 2D -> (X,Y,0,0); 3D -> (X,Y,Z,0); 4D -> (X,Y,Z,W). */
   /* Period is an object-space tile size, independent of Scale. Snap the integer
    * lattice period to round(Period / scale), then sample at vec * (lattice /
-   * Period): the pattern repeats exactly every Period units (exact regardless
-   * of the rounding) while Scale still controls feature size. */
+   * Period): the pattern repeats exactly every Period units while Scale still
+   * controls feature size. */
   float qx, qy, qz, qw;
   int4 period;
   if (tileable > 0.5f) {
-    /* Tileable: snap the lattice period to Period/scale and sample at
-     * vec * (lattice / Period) so the pattern repeats exactly every Period. */
     int Px = clamp(int(period_x), 1, 256);
     int Py = clamp(int(period_y), 1, 256);
     int Pz = clamp(int(period_z), 1, 256);
@@ -1952,6 +1936,7 @@ void penny_field(float3 co,
     period = int4(256, 256, 256, 256);
   }
 
+  /* 1D -> (0,0,0,W); 2D -> (X,Y,0,0); 3D -> (X,Y,Z,0); 4D -> (X,Y,Z,W). */
   int dims = int(dimensions);
   float4 p;
   if (dims == 1) {
@@ -1967,189 +1952,668 @@ void penny_field(float3 co,
     p = float4(qx, qy, qz, qw);
   }
 
-  int nt = int(noise_type);
-  int bm = int(blend_mode);
-  float3 rgb;
-  if (nt == 1) {
-    rgb = penny_turbulence_tile(p, detail, roughness, period, bm);
-  }
-  else if (nt == 2) {
-    rgb = penny_stupl_tile(p, detail, roughness, period, bm);
-  }
-  else if (nt == 3) {
-    rgb = penny_luka_tile(p, detail, roughness, period, bm);
-  }
-  else if (nt == 4) {
-    rgb = penny_blistered_tile(p, detail, roughness, period, bm);
-  }
-  else if (nt == 5) {
-    rgb = penny_box_tile(p, detail, roughness, period, bm);
-  }
-  else if (nt == 6) {
-    rgb = penny_mod_tile(p, detail, roughness, period, bm);
-  }
-  else if (nt == 7) {
-    rgb = penny_nutous_tile(p, detail, roughness, period, bm);
-  }
-  else if (nt == 8) {
-    rgb = penny_cranal_tile(p, detail, roughness, period, bm);
-  }
-  else if (nt == 9) {
-    rgb = penny_buya_tile(p, detail, roughness, period, bm);
-  }
-  else if (nt == 10) {
-    rgb = penny_cell_tile(p, detail, roughness, period, bm);
-  }
-  else if (nt == 11) {
-    rgb = penny_disturb_tile(p, detail, roughness, period, bm);
-  }
-  else if (nt == 12) {
-    rgb = penny_hama_tile(p, detail, roughness, period, bm);
-  }
-  else if (nt == 13) {
-    rgb = penny_naki_tile(p, detail, roughness, period, bm);
-  }
-  else if (nt == 14) {
-    rgb = penny_poxo_tile(p, detail, roughness, period, bm);
-  }
-  else if (nt == 15) {
-    rgb = penny_pezo_tile(p, detail, roughness, period, bm);
-  }
-  else if (nt == 16) {
-    rgb = penny_dents_tile(p, detail, roughness, period, bm, level_min, level_mid, level_max);
-  }
-  else if (nt == 17) {
-    rgb = penny_sema_tile(p, detail, roughness, period, bm);
-  }
-  else if (nt == 18) {
-    rgb = penny_vl_tile(p, detail, roughness, period, bm);
-  }
-  else {
-    rgb = penny_fbm_tile(p, detail, roughness, period, bm, level_min, level_mid, level_max);
-  }
-
-  /* Photoshop-style Levels on final output (identity at 0/0.5/1). */
-  /* final Levels removed - level_min/mid/max now drive per-octave Levels in tiles. */
-  out_rgb = rgb;
+  out_p = p;
+  out_period = period;
 }
 
-[[node]]
-void node_tex_penny(float3 co,
-                    float w,
-                    float detail,
-                    float scale_pct,
-                    float scale_x_pct,
-                    float scale_y_pct,
-                    float scale_z_pct,
-                    float scale_w_pct,
-                    float roughness,
-                    float level_min,
-                    float level_mid,
-                    float level_max,
-                    float period_x,
-                    float period_y,
-                    float period_z,
-                    float period_w,
-                    float blend_mode,
-                    float noise_type,
-                    float dimensions,
-                    float tileable,
-                    float compute_gradient,
-                    out float fac,
-                    out float4 color,
-                    out float3 gradient)
+/* Uniform-signature wrappers so every noise type presents the same
+ * (co, detail, roughness, period, blend_mode) interface to the entry macro.
+ * fBm and Dents take their Levels explicitly; here they read the per-octave
+ * Levels globals (set by the entry point before each call), reproducing the
+ * original behavior exactly (user Levels for Fac/Color, identity for Gradient). */
+float3 penny_fbm_tile_g(float4 co, float detail, float roughness, int4 period, int blend_mode)
 {
-  /* Recenter the default generated coordinate so Scale pivots at the box center
-   * (= object origin for a centered mesh) instead of the corner. */
-  co -= float3(0.5f, 0.5f, 0.5f);
+  return penny_fbm_tile(co, detail, roughness, period, blend_mode, g_lvl_lo, g_lvl_mid, g_lvl_hi);
+}
+float3 penny_dents_tile_g(float4 co, float detail, float roughness, int4 period, int blend_mode)
+{
+  return penny_dents_tile(co, detail, roughness, period, blend_mode, g_lvl_lo, g_lvl_mid, g_lvl_hi);
+}
 
-  /* Fac/Color use the user Levels. */
-  float3 rgb;
-  penny_field(co,
-              w,
-              detail,
-              scale_pct,
-              scale_x_pct,
-              scale_y_pct,
-              scale_z_pct,
-              scale_w_pct,
-              roughness,
-              level_min,
-              level_mid,
-              level_max,
-              period_x,
-              period_y,
-              period_z,
-              period_w,
-              blend_mode,
-              noise_type,
-              dimensions,
-              tileable,
-              rgb);
-  fac = rgb.x;
-  color = float4(rgb.x, rgb.y, rgb.z, 1.0f);
+/* ---- Per-type EEVEE node entry points ----
+ * Penny Noise is split into one [[node]] function per noise type, selected at
+ * link time by gpu_shader_get_name() in node_shader_tex_penny.cc (mirrors the
+ * Noise Texture node). Each entry references exactly one penny_*_tile via
+ * PENNY_NODE_BODY, so the shader compiler only processes the selected type's
+ * call tree instead of all 19 - fixing the Vulkan compile time. Dimensions and
+ * blend mode remain runtime constants inside each variant. */
 
-  /* Gradient: raw pre-Levels field, differentiated numerically.
-   * Identity Levels (0,0.5,1) hit the penny_oct_levels passthrough fast-path, so
-   * every tile collapses to its underlying continuous field - noise-type
-   * agnostic, no analytic derivatives. Central differences on xyz (w held
-   * fixed); per-axis step is a fixed fraction of a cell so finite-difference
-   * accuracy is Scale-independent. Raw and unnormalized: magnitude carries slope. */
-  float gf = scale_pct * 0.01f;
-  float3 eps3 = float3(max(gf * scale_x_pct * 0.01f, 1e-6f),
-                       max(gf * scale_y_pct * 0.01f, 1e-6f),
-                       max(gf * scale_z_pct * 0.01f, 1e-6f)) *
-                0.25f * 0.01f;
-  float3 grad = float3(0.0f);
-  if (compute_gradient > 0.5f) {
-    for (int a = 0; a < 3; a++) {
-      float3 dp = float3(0.0f);
-      dp[a] = eps3[a];
-      float3 fp, fm;
-      penny_field(co + dp,
-                  w,
-                  detail,
-                  scale_pct,
-                  scale_x_pct,
-                  scale_y_pct,
-                  scale_z_pct,
-                  scale_w_pct,
-                  roughness,
-                  0.0f,
-                  0.5f,
-                  1.0f,
-                  period_x,
-                  period_y,
-                  period_z,
-                  period_w,
-                  blend_mode,
-                  noise_type,
-                  dimensions,
-                  tileable,
-                  fp);
-      penny_field(co - dp,
-                  w,
-                  detail,
-                  scale_pct,
-                  scale_x_pct,
-                  scale_y_pct,
-                  scale_z_pct,
-                  scale_w_pct,
-                  roughness,
-                  0.0f,
-                  0.5f,
-                  1.0f,
-                  period_x,
-                  period_y,
-                  period_z,
-                  period_w,
-                  blend_mode,
-                  noise_type,
-                  dimensions,
-                  tileable,
-                  fm);
-      grad[a] = (fp.x - fm.x) / (2.0f * eps3[a]);
-    }
-  }
+/* Shared entry body. TILE is a single tile function (5-arg uniform signature).
+ * Recenters the coordinate so Scale pivots at the box center, evaluates
+ * Fac/Color with the user Levels, then (only if the Gradient output is wired)
+ * differentiates the raw pre-Levels field with identity Levels via central
+ * differences. Mirrors the original monolithic node_tex_penny exactly. */
+#define PENNY_NODE_BODY(TILE) \
+  co -= float3(0.5f, 0.5f, 0.5f); \
+  int bm = int(blend_mode); \
+  float det = clamp(detail, 0.0f, 15.0f); \
+  float rough = max(roughness, 0.0f); \
+\
+  g_lvl_lo = level_min; \
+  g_lvl_mid = level_mid; \
+  g_lvl_hi = level_max; \
+  float4 p; \
+  int4 period; \
+  penny_field_setup(co, \
+                    w, \
+                    scale_pct, \
+                    scale_x_pct, \
+                    scale_y_pct, \
+                    scale_z_pct, \
+                    scale_w_pct, \
+                    period_x, \
+                    period_y, \
+                    period_z, \
+                    period_w, \
+                    dimensions, \
+                    tileable, \
+                    p, \
+                    period); \
+  float3 rgb = TILE(p, det, rough, period, bm); \
+  fac = rgb.x; \
+  color = float4(rgb.x, rgb.y, rgb.z, 1.0f); \
+\
+  float gf = scale_pct * 0.01f; \
+  float3 eps3 = float3(max(gf * scale_x_pct * 0.01f, 1e-6f), \
+                       max(gf * scale_y_pct * 0.01f, 1e-6f), \
+                       max(gf * scale_z_pct * 0.01f, 1e-6f)) * \
+                0.25f * 0.01f; \
+  float3 grad = float3(0.0f); \
+  if (compute_gradient > 0.5f) { \
+    g_lvl_lo = 0.0f; \
+    g_lvl_mid = 0.5f; \
+    g_lvl_hi = 1.0f; \
+    for (int a = 0; a < 3; a++) { \
+      float3 dp = float3(0.0f); \
+      dp[a] = eps3[a]; \
+      float4 pp; \
+      int4 perp; \
+      penny_field_setup(co + dp, \
+                        w, \
+                        scale_pct, \
+                        scale_x_pct, \
+                        scale_y_pct, \
+                        scale_z_pct, \
+                        scale_w_pct, \
+                        period_x, \
+                        period_y, \
+                        period_z, \
+                        period_w, \
+                        dimensions, \
+                        tileable, \
+                        pp, \
+                        perp); \
+      float3 fp = TILE(pp, det, rough, perp, bm); \
+      float4 pm; \
+      int4 perm; \
+      penny_field_setup(co - dp, \
+                        w, \
+                        scale_pct, \
+                        scale_x_pct, \
+                        scale_y_pct, \
+                        scale_z_pct, \
+                        scale_w_pct, \
+                        period_x, \
+                        period_y, \
+                        period_z, \
+                        period_w, \
+                        dimensions, \
+                        tileable, \
+                        pm, \
+                        perm); \
+      float3 fm = TILE(pm, det, rough, perm, bm); \
+      grad[a] = (fp.x - fm.x) / (2.0f * eps3[a]); \
+    } \
+  } \
   gradient = grad;
+
+/* fBm (noise_type 0, default) */
+[[node]]
+void node_tex_penny_fbm(float3 co,
+                        float w,
+                        float detail,
+                        float scale_pct,
+                        float scale_x_pct,
+                        float scale_y_pct,
+                        float scale_z_pct,
+                        float scale_w_pct,
+                        float roughness,
+                        float level_min,
+                        float level_mid,
+                        float level_max,
+                        float period_x,
+                        float period_y,
+                        float period_z,
+                        float period_w,
+                        float blend_mode,
+                        float dimensions,
+                        float tileable,
+                        float compute_gradient,
+                        out float fac,
+                        out float4 color,
+                        out float3 gradient)
+{
+  PENNY_NODE_BODY(penny_fbm_tile_g)
+}
+
+/* Penny Turbulence (noise_type 1) */
+[[node]]
+void node_tex_penny_turbulence(float3 co,
+                               float w,
+                               float detail,
+                               float scale_pct,
+                               float scale_x_pct,
+                               float scale_y_pct,
+                               float scale_z_pct,
+                               float scale_w_pct,
+                               float roughness,
+                               float level_min,
+                               float level_mid,
+                               float level_max,
+                               float period_x,
+                               float period_y,
+                               float period_z,
+                               float period_w,
+                               float blend_mode,
+                               float dimensions,
+                               float tileable,
+                               float compute_gradient,
+                               out float fac,
+                               out float4 color,
+                               out float3 gradient)
+{
+  PENNY_NODE_BODY(penny_turbulence_tile)
+}
+
+/* Stupl (noise_type 2) */
+[[node]]
+void node_tex_penny_stupl(float3 co,
+                          float w,
+                          float detail,
+                          float scale_pct,
+                          float scale_x_pct,
+                          float scale_y_pct,
+                          float scale_z_pct,
+                          float scale_w_pct,
+                          float roughness,
+                          float level_min,
+                          float level_mid,
+                          float level_max,
+                          float period_x,
+                          float period_y,
+                          float period_z,
+                          float period_w,
+                          float blend_mode,
+                          float dimensions,
+                          float tileable,
+                          float compute_gradient,
+                          out float fac,
+                          out float4 color,
+                          out float3 gradient)
+{
+  PENNY_NODE_BODY(penny_stupl_tile)
+}
+
+/* Luka (noise_type 3) */
+[[node]]
+void node_tex_penny_luka(float3 co,
+                         float w,
+                         float detail,
+                         float scale_pct,
+                         float scale_x_pct,
+                         float scale_y_pct,
+                         float scale_z_pct,
+                         float scale_w_pct,
+                         float roughness,
+                         float level_min,
+                         float level_mid,
+                         float level_max,
+                         float period_x,
+                         float period_y,
+                         float period_z,
+                         float period_w,
+                         float blend_mode,
+                         float dimensions,
+                         float tileable,
+                         float compute_gradient,
+                         out float fac,
+                         out float4 color,
+                         out float3 gradient)
+{
+  PENNY_NODE_BODY(penny_luka_tile)
+}
+
+/* Blistered Turbulence (noise_type 4) */
+[[node]]
+void node_tex_penny_blistered(float3 co,
+                              float w,
+                              float detail,
+                              float scale_pct,
+                              float scale_x_pct,
+                              float scale_y_pct,
+                              float scale_z_pct,
+                              float scale_w_pct,
+                              float roughness,
+                              float level_min,
+                              float level_mid,
+                              float level_max,
+                              float period_x,
+                              float period_y,
+                              float period_z,
+                              float period_w,
+                              float blend_mode,
+                              float dimensions,
+                              float tileable,
+                              float compute_gradient,
+                              out float fac,
+                              out float4 color,
+                              out float3 gradient)
+{
+  PENNY_NODE_BODY(penny_blistered_tile)
+}
+
+/* Box (noise_type 5) */
+[[node]]
+void node_tex_penny_box(float3 co,
+                        float w,
+                        float detail,
+                        float scale_pct,
+                        float scale_x_pct,
+                        float scale_y_pct,
+                        float scale_z_pct,
+                        float scale_w_pct,
+                        float roughness,
+                        float level_min,
+                        float level_mid,
+                        float level_max,
+                        float period_x,
+                        float period_y,
+                        float period_z,
+                        float period_w,
+                        float blend_mode,
+                        float dimensions,
+                        float tileable,
+                        float compute_gradient,
+                        out float fac,
+                        out float4 color,
+                        out float3 gradient)
+{
+  PENNY_NODE_BODY(penny_box_tile)
+}
+
+/* Mod (noise_type 6) */
+[[node]]
+void node_tex_penny_mod(float3 co,
+                        float w,
+                        float detail,
+                        float scale_pct,
+                        float scale_x_pct,
+                        float scale_y_pct,
+                        float scale_z_pct,
+                        float scale_w_pct,
+                        float roughness,
+                        float level_min,
+                        float level_mid,
+                        float level_max,
+                        float period_x,
+                        float period_y,
+                        float period_z,
+                        float period_w,
+                        float blend_mode,
+                        float dimensions,
+                        float tileable,
+                        float compute_gradient,
+                        out float fac,
+                        out float4 color,
+                        out float3 gradient)
+{
+  PENNY_NODE_BODY(penny_mod_tile)
+}
+
+/* Nutous (noise_type 7) */
+[[node]]
+void node_tex_penny_nutous(float3 co,
+                           float w,
+                           float detail,
+                           float scale_pct,
+                           float scale_x_pct,
+                           float scale_y_pct,
+                           float scale_z_pct,
+                           float scale_w_pct,
+                           float roughness,
+                           float level_min,
+                           float level_mid,
+                           float level_max,
+                           float period_x,
+                           float period_y,
+                           float period_z,
+                           float period_w,
+                           float blend_mode,
+                           float dimensions,
+                           float tileable,
+                           float compute_gradient,
+                           out float fac,
+                           out float4 color,
+                           out float3 gradient)
+{
+  PENNY_NODE_BODY(penny_nutous_tile)
+}
+
+/* Cranal (noise_type 8) */
+[[node]]
+void node_tex_penny_cranal(float3 co,
+                           float w,
+                           float detail,
+                           float scale_pct,
+                           float scale_x_pct,
+                           float scale_y_pct,
+                           float scale_z_pct,
+                           float scale_w_pct,
+                           float roughness,
+                           float level_min,
+                           float level_mid,
+                           float level_max,
+                           float period_x,
+                           float period_y,
+                           float period_z,
+                           float period_w,
+                           float blend_mode,
+                           float dimensions,
+                           float tileable,
+                           float compute_gradient,
+                           out float fac,
+                           out float4 color,
+                           out float3 gradient)
+{
+  PENNY_NODE_BODY(penny_cranal_tile)
+}
+
+/* Buya (noise_type 9) */
+[[node]]
+void node_tex_penny_buya(float3 co,
+                         float w,
+                         float detail,
+                         float scale_pct,
+                         float scale_x_pct,
+                         float scale_y_pct,
+                         float scale_z_pct,
+                         float scale_w_pct,
+                         float roughness,
+                         float level_min,
+                         float level_mid,
+                         float level_max,
+                         float period_x,
+                         float period_y,
+                         float period_z,
+                         float period_w,
+                         float blend_mode,
+                         float dimensions,
+                         float tileable,
+                         float compute_gradient,
+                         out float fac,
+                         out float4 color,
+                         out float3 gradient)
+{
+  PENNY_NODE_BODY(penny_buya_tile)
+}
+
+/* Cell (noise_type 10) */
+[[node]]
+void node_tex_penny_cell(float3 co,
+                         float w,
+                         float detail,
+                         float scale_pct,
+                         float scale_x_pct,
+                         float scale_y_pct,
+                         float scale_z_pct,
+                         float scale_w_pct,
+                         float roughness,
+                         float level_min,
+                         float level_mid,
+                         float level_max,
+                         float period_x,
+                         float period_y,
+                         float period_z,
+                         float period_w,
+                         float blend_mode,
+                         float dimensions,
+                         float tileable,
+                         float compute_gradient,
+                         out float fac,
+                         out float4 color,
+                         out float3 gradient)
+{
+  PENNY_NODE_BODY(penny_cell_tile)
+}
+
+/* Displaced Turbulence (noise_type 11) */
+[[node]]
+void node_tex_penny_disturb(float3 co,
+                            float w,
+                            float detail,
+                            float scale_pct,
+                            float scale_x_pct,
+                            float scale_y_pct,
+                            float scale_z_pct,
+                            float scale_w_pct,
+                            float roughness,
+                            float level_min,
+                            float level_mid,
+                            float level_max,
+                            float period_x,
+                            float period_y,
+                            float period_z,
+                            float period_w,
+                            float blend_mode,
+                            float dimensions,
+                            float tileable,
+                            float compute_gradient,
+                            out float fac,
+                            out float4 color,
+                            out float3 gradient)
+{
+  PENNY_NODE_BODY(penny_disturb_tile)
+}
+
+/* Hama (noise_type 12) */
+[[node]]
+void node_tex_penny_hama(float3 co,
+                         float w,
+                         float detail,
+                         float scale_pct,
+                         float scale_x_pct,
+                         float scale_y_pct,
+                         float scale_z_pct,
+                         float scale_w_pct,
+                         float roughness,
+                         float level_min,
+                         float level_mid,
+                         float level_max,
+                         float period_x,
+                         float period_y,
+                         float period_z,
+                         float period_w,
+                         float blend_mode,
+                         float dimensions,
+                         float tileable,
+                         float compute_gradient,
+                         out float fac,
+                         out float4 color,
+                         out float3 gradient)
+{
+  PENNY_NODE_BODY(penny_hama_tile)
+}
+
+/* Naki (noise_type 13) */
+[[node]]
+void node_tex_penny_naki(float3 co,
+                         float w,
+                         float detail,
+                         float scale_pct,
+                         float scale_x_pct,
+                         float scale_y_pct,
+                         float scale_z_pct,
+                         float scale_w_pct,
+                         float roughness,
+                         float level_min,
+                         float level_mid,
+                         float level_max,
+                         float period_x,
+                         float period_y,
+                         float period_z,
+                         float period_w,
+                         float blend_mode,
+                         float dimensions,
+                         float tileable,
+                         float compute_gradient,
+                         out float fac,
+                         out float4 color,
+                         out float3 gradient)
+{
+  PENNY_NODE_BODY(penny_naki_tile)
+}
+
+/* Poxo (noise_type 14) */
+[[node]]
+void node_tex_penny_poxo(float3 co,
+                         float w,
+                         float detail,
+                         float scale_pct,
+                         float scale_x_pct,
+                         float scale_y_pct,
+                         float scale_z_pct,
+                         float scale_w_pct,
+                         float roughness,
+                         float level_min,
+                         float level_mid,
+                         float level_max,
+                         float period_x,
+                         float period_y,
+                         float period_z,
+                         float period_w,
+                         float blend_mode,
+                         float dimensions,
+                         float tileable,
+                         float compute_gradient,
+                         out float fac,
+                         out float4 color,
+                         out float3 gradient)
+{
+  PENNY_NODE_BODY(penny_poxo_tile)
+}
+
+/* Pezo (noise_type 15) */
+[[node]]
+void node_tex_penny_pezo(float3 co,
+                         float w,
+                         float detail,
+                         float scale_pct,
+                         float scale_x_pct,
+                         float scale_y_pct,
+                         float scale_z_pct,
+                         float scale_w_pct,
+                         float roughness,
+                         float level_min,
+                         float level_mid,
+                         float level_max,
+                         float period_x,
+                         float period_y,
+                         float period_z,
+                         float period_w,
+                         float blend_mode,
+                         float dimensions,
+                         float tileable,
+                         float compute_gradient,
+                         out float fac,
+                         out float4 color,
+                         out float3 gradient)
+{
+  PENNY_NODE_BODY(penny_pezo_tile)
+}
+
+/* Dents (noise_type 16) */
+[[node]]
+void node_tex_penny_dents(float3 co,
+                          float w,
+                          float detail,
+                          float scale_pct,
+                          float scale_x_pct,
+                          float scale_y_pct,
+                          float scale_z_pct,
+                          float scale_w_pct,
+                          float roughness,
+                          float level_min,
+                          float level_mid,
+                          float level_max,
+                          float period_x,
+                          float period_y,
+                          float period_z,
+                          float period_w,
+                          float blend_mode,
+                          float dimensions,
+                          float tileable,
+                          float compute_gradient,
+                          out float fac,
+                          out float4 color,
+                          out float3 gradient)
+{
+  PENNY_NODE_BODY(penny_dents_tile_g)
+}
+
+/* Sema (noise_type 17) */
+[[node]]
+void node_tex_penny_sema(float3 co,
+                         float w,
+                         float detail,
+                         float scale_pct,
+                         float scale_x_pct,
+                         float scale_y_pct,
+                         float scale_z_pct,
+                         float scale_w_pct,
+                         float roughness,
+                         float level_min,
+                         float level_mid,
+                         float level_max,
+                         float period_x,
+                         float period_y,
+                         float period_z,
+                         float period_w,
+                         float blend_mode,
+                         float dimensions,
+                         float tileable,
+                         float compute_gradient,
+                         out float fac,
+                         out float4 color,
+                         out float3 gradient)
+{
+  PENNY_NODE_BODY(penny_sema_tile)
+}
+
+/* VL Noise (noise_type 18) */
+[[node]]
+void node_tex_penny_vl(float3 co,
+                       float w,
+                       float detail,
+                       float scale_pct,
+                       float scale_x_pct,
+                       float scale_y_pct,
+                       float scale_z_pct,
+                       float scale_w_pct,
+                       float roughness,
+                       float level_min,
+                       float level_mid,
+                       float level_max,
+                       float period_x,
+                       float period_y,
+                       float period_z,
+                       float period_w,
+                       float blend_mode,
+                       float dimensions,
+                       float tileable,
+                       float compute_gradient,
+                       out float fac,
+                       out float4 color,
+                       out float3 gradient)
+{
+  PENNY_NODE_BODY(penny_vl_tile)
 }

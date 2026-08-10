@@ -110,6 +110,58 @@ static void node_shader_init_tex_penny(bNodeTree * /*ntree*/, bNode *node)
   node->storage = tex;
 }
 
+/* Per-noise-type GLSL entry point. Penny Noise is compiled as one shader variant
+ * per noise type (see gpu_shader_material_tex_penny.glsl): linking only the used
+ * variant lets the shader compiler process a single noise type instead of all 19,
+ * which is what makes the Vulkan compile time tractable. This mirrors the Noise
+ * Texture node's gpu_shader_get_name(). Dimensions stays a runtime constant inside
+ * each variant (start with 19 variants; split by dimension later if needed). */
+static const char *gpu_shader_get_name(const int noise_type)
+{
+  switch (noise_type) {
+    case 0:
+      return "node_tex_penny_fbm";
+    case 1:
+      return "node_tex_penny_turbulence";
+    case 2:
+      return "node_tex_penny_stupl";
+    case 3:
+      return "node_tex_penny_luka";
+    case 4:
+      return "node_tex_penny_blistered";
+    case 5:
+      return "node_tex_penny_box";
+    case 6:
+      return "node_tex_penny_mod";
+    case 7:
+      return "node_tex_penny_nutous";
+    case 8:
+      return "node_tex_penny_cranal";
+    case 9:
+      return "node_tex_penny_buya";
+    case 10:
+      return "node_tex_penny_cell";
+    case 11:
+      return "node_tex_penny_disturb";
+    case 12:
+      return "node_tex_penny_hama";
+    case 13:
+      return "node_tex_penny_naki";
+    case 14:
+      return "node_tex_penny_poxo";
+    case 15:
+      return "node_tex_penny_pezo";
+    case 16:
+      return "node_tex_penny_dents";
+    case 17:
+      return "node_tex_penny_sema";
+    case 18:
+      return "node_tex_penny_vl";
+  }
+  /* Default to fBm (noise_type 0) for any out-of-range value. */
+  return "node_tex_penny_fbm";
+}
+
 static int node_shader_gpu_tex_penny(GPUMaterial *mat,
                                      bNode *node,
                                      bNodeExecData * /*execdata*/,
@@ -121,19 +173,20 @@ static int node_shader_gpu_tex_penny(GPUMaterial *mat,
 
   const NodeTexPenny &storage = node_storage(*node);
   float blend_mode = (float)storage.blend_mode;
-  float noise_type = (float)storage.noise_type;
   float dimensions = (float)storage.dimensions;
   float tileable = (float)storage.tileable;
   /* Compile-time flag: skip the gradient taps unless its output is connected. */
   float gradient_connected = out[2].hasoutput ? 1.0f : 0.0f;
 
+  /* Noise type is now implicit in the linked variant name, so it is no longer
+   * passed as a runtime constant. */
+  const char *name = gpu_shader_get_name(storage.noise_type);
   return GPU_stack_link(mat,
                         node,
-                        "node_tex_penny",
+                        name,
                         in,
                         out,
                         GPU_constant(&blend_mode),
-                        GPU_constant(&noise_type),
                         GPU_constant(&dimensions),
                         GPU_constant(&tileable),
                         GPU_constant(&gradient_connected));
