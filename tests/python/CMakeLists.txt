@@ -688,6 +688,12 @@ if(TEST_SRC_DIR_EXISTS)
   )
 
   add_blender_test(
+    physics_particle_legacy_texture_uv
+    ${TEST_SRC_DIR}/physics/particle_legacy_texture_uv.blend
+    --python ${TEST_PYTHON_DIR}/physics_particle_legacy_texture_uv.py
+  )
+
+  add_blender_test(
     physics_particle_instance
     ${TEST_SRC_DIR}/physics/physics_particle_instance.blend
     --python ${TEST_PYTHON_DIR}/physics_particle_instance.py
@@ -776,6 +782,13 @@ if(TEST_SRC_DIR_EXISTS)
     --
     --testdir "${TEST_SRC_DIR}/animation"
     --output-dir "${TEST_OUT_DIR}/bl_animation_action"
+  )
+
+  add_blender_test(
+    bl_animation_convert
+    --python ${CMAKE_CURRENT_LIST_DIR}/bl_animation_convert.py
+    --
+    --testdir "${TEST_SRC_DIR}/animation"
   )
 
   add_blender_test(
@@ -1262,10 +1275,15 @@ if(TEST_SRC_DIR_EXISTS)
     mesh/split_edges
     mesh/triangulate
     points
+    simulation
     texture
     utilities
     vector
   )
+
+  if(WITH_AUDASPACE AND WITH_FFTW3)
+    list(APPEND geo_node_tests sound)
+  endif()
 
   if(WITH_GMP)
     list(APPEND geo_node_tests mesh/boolean)
@@ -1291,15 +1309,6 @@ if(TEST_SRC_DIR_EXISTS)
     endforeach()
   endforeach()
 
-  file(GLOB files "${TEST_SRC_DIR}/modeling/geometry_nodes/simulation/*.blend")
-  foreach(file ${files})
-    get_filename_component(filename ${file} NAME_WE)
-    add_blender_test(
-      geo_node_simulation_test_${filename}
-      ${file}
-      --python ${TEST_PYTHON_DIR}/geo_node_sim_test.py
-    )
-  endforeach()
 endif()
 
 # ------------------------------------------------------------------------------
@@ -1371,6 +1380,14 @@ if(WITH_USD AND TEST_SRC_DIR_EXISTS)
     --
     --testdir "${TEST_SRC_DIR}/usd"
     --outdir "${TEST_OUT_DIR}/io_usd"
+  )
+
+  # The collection IO tests need USD
+  add_blender_test(
+    io_collections
+    --python ${CMAKE_CURRENT_LIST_DIR}/io_collections_test.py
+    --
+    --testdir "${TEST_SRC_DIR}/io_tests/io_collections"
   )
 endif()
 
@@ -1713,14 +1730,17 @@ if(WITH_UI_TESTS)
     test_undo.text_editor_simple
     test_undo.view3d_edit_mode_multi_window
     test_undo.view3d_font_edit_mode_simple
+    test_undo.view3d_mesh_edit_shape_key
     test_undo.view3d_mesh_edit_separate
     test_undo.view3d_mesh_particle_edit_mode_simple
     test_undo.view3d_multi_mode_multi_window
     test_undo.view3d_multi_mode_select
+    test_undo.view3d_particle_edit_undo_from_texture_paint
     test_undo.view3d_sculpt_dyntopo_and_edit
     test_undo.view3d_sculpt_dyntopo_simple
     test_undo.view3d_sculpt_dyntopo_stroke_toggle
     test_undo.view3d_sculpt_with_memfile_step
+    test_undo.view3d_sculpt_with_empty_memfile_step
     test_undo.view3d_sculpt_trim
     test_undo.view3d_simple
     test_undo.view3d_texture_paint_complex
@@ -1742,6 +1762,16 @@ if(WITH_UI_TESTS)
     test_render.interactive_rendering_eevee
     test_render.animation_rendering_and_player
     test_bpy_types.unregister_referenced_type
+    test_sequencer.compositor_modifier_mask_with_single_input
+    test_menu_search_and_exec.view3d_add
+    test_menu_search_and_exec.modifier_add
+    test_menu_search_and_exec.sequencer_add
+    test_menu_search_and_exec.sequencer_modifier_add
+    test_menu_search_and_exec.shader_node_add
+    test_menu_search_and_exec.compositor_node_add
+    test_menu_search_and_exec.geometry_node_add
+    test_menu_search_and_exec.node_swap_search
+    test_menu_search_and_exec.grease_pencil_layer_search
     test_pie_menus.test_object_mode_pie_edit
     test_pie_menus.test_snap_pie_cursor_to_world_origin
     test_pie_menus.test_pivot_pie_cursor
@@ -1768,6 +1798,11 @@ if(WITH_UI_TESTS)
     test_pie_menus.test_clip_view_pie_view_all
     test_pie_menus.test_anim_keyframe_insert_pie_location
     test_pie_menus.test_weight_paint_vgroup_lock_pie
+    test_button_input.test_string_buttons_interactions
+    test_tool_activation.view3d
+    test_tool_activation.image_editor
+    test_tool_activation.node_editor
+    test_tool_activation.sequencer
   )
   foreach(ui_test ${_ui_tests})
     add_blender_test_ui(

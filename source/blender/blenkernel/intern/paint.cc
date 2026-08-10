@@ -2062,10 +2062,6 @@ void BKE_sculptsession_bm_to_me(Object *ob)
 {
   if (ob && ob->runtime->sculpt_session) {
     sculptsession_bm_to_me_update_data_only(ob);
-
-    /* Ensure the objects evaluated mesh doesn't hold onto arrays
-     * now realloc'd in the mesh #34473. */
-    DEG_id_tag_update(&ob->id, ID_RECALC_GEOMETRY);
   }
 }
 
@@ -2093,28 +2089,6 @@ void BKE_sculptsession_free_pbvh(Object &object)
   ss->clear_active_elements(false);
 }
 
-void BKE_sculptsession_bm_to_me_for_render(Object *object)
-{
-  if (object && object->runtime->sculpt_session) {
-    if (object->runtime->sculpt_session->bm) {
-      /* Ensure no points to old arrays are stored in DM
-       *
-       * Apparently, we could not use DEG_id_tag_update
-       * here because this will lead to the while object
-       * surface to disappear, so we'll release DM in place.
-       */
-      BKE_object_free_derived_caches(object);
-
-      sculptsession_bm_to_me_update_data_only(object);
-
-      /* In contrast with sculptsession_bm_to_me no need in
-       * DAG tag update here - derived mesh was freed and
-       * old pointers are nowhere stored.
-       */
-    }
-  }
-}
-
 void BKE_sculptsession_free(Object *ob)
 {
   if (ob && ob->runtime->sculpt_session) {
@@ -2122,6 +2096,7 @@ void BKE_sculptsession_free(Object *ob)
 
     if (ss->bm) {
       BKE_sculptsession_bm_to_me(ob);
+      DEG_id_tag_update(&ob->id, ID_RECALC_GEOMETRY);
       BM_mesh_free(ss->bm);
     }
 
@@ -2356,7 +2331,7 @@ static bool sculpt_modifiers_active(const Scene *scene, const Sculpt *sd, Object
   return false;
 }
 
-static void sculpt_update_object(Depsgraph *depsgraph,
+static void sculptsession_update(Depsgraph *depsgraph,
                                  Object *ob,
                                  Object *ob_eval,
                                  bool is_paint_tool)
@@ -2469,7 +2444,7 @@ static void sculpt_update_object(Depsgraph *depsgraph,
   bke::pbvh::update_normals(*depsgraph, *ob, pbvh);
 }
 
-void BKE_sculpt_update_object_before_eval(Object *ob_eval)
+void BKE_sculptsession_update_before_eval(Object *ob_eval)
 {
   /* Update before mesh evaluation in the dependency graph. */
   Object *ob_orig = DEG_get_original(ob_eval);
@@ -2505,13 +2480,13 @@ void BKE_sculpt_update_object_before_eval(Object *ob_eval)
   }
 }
 
-void BKE_sculpt_update_object_after_eval(Depsgraph *depsgraph, Object *ob_eval)
+void BKE_sculptsession_update_after_eval(Depsgraph *depsgraph, Object *ob_eval)
 {
   /* Update after mesh evaluation in the dependency graph, to rebuild pbvh::Tree or
    * other data when modifiers change the mesh. */
   Object *ob_orig = DEG_get_original(ob_eval);
 
-  sculpt_update_object(depsgraph, ob_orig, ob_eval, false);
+  sculptsession_update(depsgraph, ob_orig, ob_eval, false);
 }
 
 void BKE_sculpt_color_layer_create_if_needed(Object *object)
@@ -2537,14 +2512,14 @@ void BKE_sculpt_color_layer_create_if_needed(Object *object)
   BKE_mesh_tessface_clear(orig_me);
 }
 
-void BKE_sculpt_update_object_for_edit(Depsgraph *depsgraph, Object *ob_orig, bool is_paint_tool)
+void BKE_sculptsession_update_for_edit(Depsgraph *depsgraph, Object *ob_orig, bool is_paint_tool)
 {
   PRF_scope(ProfileCategory::Editor);
   BLI_assert(ob_orig == DEG_get_original(ob_orig));
 
   Object *ob_eval = DEG_get_evaluated(depsgraph, ob_orig);
 
-  sculpt_update_object(depsgraph, ob_orig, ob_eval, is_paint_tool);
+  sculptsession_update(depsgraph, ob_orig, ob_eval, is_paint_tool);
 }
 
 void BKE_sculpt_mask_layers_ensure(Depsgraph *depsgraph,
@@ -2610,41 +2585,6 @@ void BKE_sculpt_mask_layers_ensure(Depsgraph *depsgraph,
   }
   else {
     attributes.add<float>(".sculpt_mask", AttrDomain::Point, AttributeInitDefaultValue());
-  }
-}
-
-void BKE_sculpt_toolsettings_data_ensure(Main *bmain, Scene *scene)
-{
-  BKE_paint_init(bmain, scene, PaintMode::Sculpt, true);
-
-  Sculpt *sd = scene->toolsettings->sculpt;
-
-  const Sculpt defaults = {};
-
-  /* We have file versioning code here for historical
-   * reasons.  Don't add more checks here, do it properly
-   * in blenloader.
-   */
-
-  if (sd->detail_percent == 0.0f) {
-    sd->detail_percent = defaults.detail_percent;
-  }
-  if (sd->constant_detail == 0.0f) {
-    sd->constant_detail = defaults.constant_detail;
-  }
-  if (sd->detail_size == 0.0f) {
-    sd->detail_size = defaults.detail_size;
-  }
-
-  /* Set sane default tiling offsets. */
-  if (!sd->paint.tile_offset[0]) {
-    sd->paint.tile_offset[0] = 1.0f;
-  }
-  if (!sd->paint.tile_offset[1]) {
-    sd->paint.tile_offset[1] = 1.0f;
-  }
-  if (!sd->paint.tile_offset[2]) {
-    sd->paint.tile_offset[2] = 1.0f;
   }
 }
 

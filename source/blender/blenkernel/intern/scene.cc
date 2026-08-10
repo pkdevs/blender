@@ -162,6 +162,15 @@ CurveMapping *BKE_paint_default_curve()
   return cumap;
 }
 
+CurveMapping *BKE_paint_default_curve_inverted()
+{
+  CurveMapping *cumap = BKE_curvemapping_add(1, 0, 0, 1, 1);
+  BKE_curvemap_reset(cumap->cm, &cumap->clipr, CURVE_PRESET_LINE, CurveMapSlopeType::Negative);
+  BKE_curvemapping_init(cumap);
+
+  return cumap;
+}
+
 static void scene_init_data(ID *id)
 {
   Scene *scene = id_cast<Scene *>(id);
@@ -829,6 +838,9 @@ static bool strip_foreach_member_id_cb(Strip *strip, void *user_data)
   if (strip->type == STRIP_TYPE_COMPOSITOR && strip->effectdata) {
     CompositorEffectVars *comp_data = static_cast<CompositorEffectVars *>(strip->effectdata);
     FOREACHID_PROCESS_IDSUPER(data, comp_data->node_group, IDWALK_CB_USER);
+    IDP_foreach_property(comp_data->system_properties, IDP_TYPE_FILTER_ID, [&](IDProperty *prop) {
+      BKE_lib_query_idpropertiesForeachIDLink_callback(prop, data);
+    });
   }
   /* TODO: This could use `seq::foreach_strip_modifier_id`, but because `FOREACHID_PROCESS_IDSUPER`
    * doesn't take IDs but "ID supers", it makes it a bit more cumbersome. */
@@ -838,6 +850,9 @@ static bool strip_foreach_member_id_cb(Strip *strip, void *user_data)
       auto *modifier_data = reinterpret_cast<SequencerCompositorModifierData *>(&smd);
       FOREACHID_PROCESS_IDSUPER(data, modifier_data->node_group, IDWALK_CB_USER);
     }
+    IDP_foreach_property(smd.system_properties, IDP_TYPE_FILTER_ID, [&](IDProperty *prop) {
+      BKE_lib_query_idpropertiesForeachIDLink_callback(prop, data);
+    });
   }
 
   if (strip->type == STRIP_TYPE_TEXT && strip->effectdata) {
@@ -1077,7 +1092,9 @@ static void scene_blend_write_compositor_forward_compat(Scene &scene,
                                                  "Final render output",
                                                  "COMPOSITE",
                                                  NODE_CLASS_OUTPUT,
-                                                 false);
+                                                 140.0f,
+                                                 100.0f,
+                                                 true);
       composite_input = &version_node_add_socket(
           *temp_nodetree_copy, *composite_node, SOCK_IN, "NodeSocketColor", "Image");
 
@@ -1693,7 +1710,7 @@ static void remove_sequencer_fcurves(Scene *sce)
   Vector<FCurve *> fcurves = channelbag->fcurves();
 
   for (FCurve *fcurve : fcurves) {
-    if ((fcurve->rna_path) && strstr(fcurve->rna_path, "sequence_editor.strips_all")) {
+    if (strstr(fcurve->rna_path().c_str(), "sequence_editor.strips_all")) {
       channelbag->fcurve_remove(*fcurve);
     }
   }

@@ -269,6 +269,7 @@ set(SRC
   intern/shrinkwrap.cc
   intern/softbody.cc
   intern/sound.cc
+  intern/sound_reader_cache.cc
   intern/speaker.cc
   intern/studiolight.cc
   intern/subdiv.cc
@@ -563,6 +564,7 @@ set(SRC
   intern/pbvh_intern.hh
   intern/pbvh_pixels_copy.hh
   intern/pbvh_uv_islands.hh
+  intern/sound_reader_cache.hh
   intern/subdiv_converter.hh
   intern/subdiv_inline.hh
   intern/tracking_private.hh
@@ -775,12 +777,13 @@ if(WITH_GTESTS)
     intern/lib_id_test.cc
     intern/lib_query_test.cc
     intern/lib_remap_test.cc
-    intern/main_test.cc
     intern/main_namemap_test.cc
+    intern/main_test.cc
     intern/nla_test.cc
     intern/node_socket_value_iter_test.cc
     intern/path_templates_test.cc
     intern/scene_test.cc
+    intern/sound_reader_cache_test.cc
     intern/subdiv_ccg_test.cc
     intern/tracking_test.cc
     intern/volume_test.cc
