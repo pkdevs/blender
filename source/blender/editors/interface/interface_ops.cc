@@ -124,7 +124,7 @@ static bool copy_data_path_button_poll(bContext *C)
 
   context_active_but_prop_get(C, &ptr, &prop, &index);
 
-  if (ptr.owner_id && !ptr.is_data_null() && prop) {
+  if (ptr.has_owner_data() && prop) {
     if (const std::optional<std::string> path = RNA_path_from_ID_to_property(&ptr, prop)) {
       UNUSED_VARS(path);
       return true;
@@ -210,7 +210,7 @@ static bool copy_as_driver_button_poll(bContext *C)
 
   context_active_but_prop_get(C, &ptr, &prop, &index);
 
-  if (ptr.owner_id && !ptr.is_data_null() && prop &&
+  if (ptr.has_owner_data() && prop &&
       ELEM(RNA_property_type(prop), PROP_BOOLEAN, PROP_INT, PROP_FLOAT, PROP_ENUM) &&
       (index >= 0 || !RNA_property_array_check(prop)))
   {
@@ -233,7 +233,7 @@ static wmOperatorStatus copy_as_driver_button_exec(bContext *C, wmOperator *op)
   /* try to create driver using property retrieved from UI */
   context_active_but_prop_get(C, &ptr, &prop, &index);
 
-  if (ptr.owner_id && !ptr.is_data_null() && prop) {
+  if (ptr.has_owner_data() && prop) {
     ID *id;
     const int dim = RNA_property_array_dimension(&ptr, prop, nullptr);
     if (const std::optional<std::string> path = RNA_path_from_real_ID_to_property_index(
@@ -606,7 +606,7 @@ static bool override_remove_button_poll(bContext *C)
   const eRNAOverrideStatus override_status = RNA_property_override_library_status(
       CTX_data_main(C), &ptr, prop, index);
 
-  return (!ptr.is_data_null() && ptr.owner_id && prop &&
+  return (ptr.has_owner_data() && prop &&
           flag_is_set(override_status, eRNAOverrideStatus::LibOverridden));
 }
 
@@ -1815,7 +1815,7 @@ static bool copy_driver_to_selected_button(bContext *C, bool copy_entire_array, 
 
   /* Get the property of the clicked button. */
   context_active_but_prop_get(C, &ptr, &prop, &index);
-  if (ptr.is_data_null() || !ptr.owner_id || !prop) {
+  if (!ptr.has_owner_data() || !prop) {
     return false;
   }
   copy_entire_array |= index == -1; /* -1 implies `copy_entire_array` for array properties. */

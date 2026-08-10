@@ -179,7 +179,7 @@ bool insert_keyframe_direct(ReportList *reports,
     return false;
   }
 
-  if ((ptr.owner_id == nullptr) && ptr.is_data_null()) {
+  if (ptr.is_none()) {
     BKE_report(
         reports, RPT_ERROR, "No RNA pointer available to retrieve values for keyframing from");
     return false;

@@ -167,6 +167,24 @@ struct PointerRNA {
     return !this->data;
   }
 
+  /**
+   * True when both #owner_id and #data are null.
+   * Covers #PointerRNA_NULL and typed null without an owner.
+   */
+  bool is_none() const
+  {
+    return !this->owner_id && this->is_data_null();
+  }
+
+  /**
+   * True when both #owner_id and #data are set.
+   * This is the usual requirement for ID-rooted path/anim operations.
+   */
+  bool has_owner_data() const
+  {
+    return this->owner_id && !this->is_data_null();
+  }
+
   /** True when #type is set but #data is null (a typed null pointer). */
   bool is_typed_null() const
   {
