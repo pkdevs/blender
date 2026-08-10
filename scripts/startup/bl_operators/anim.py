@@ -752,9 +752,9 @@ class ARMATURE_OT_collections_to_clipboard(Operator):
 
 
 class ARMATURE_OT_collections_from_clipboard(Operator):
-    """Create the bone collection hirarchy from the clipboard"""
+    """Paste the bone collection hirarchy from the clipboard"""
     bl_idname = "armature.collections_from_clipboard"
-    bl_label = "Create Bone Collections from Clipboard"
+    bl_label = "Paste Bone Collections from Clipboard"
     bl_options = {'REGISTER', 'UNDO'}
 
     @classmethod
