@@ -8,6 +8,10 @@ from dataclasses import dataclass, field
 
 import json
 import cattrs
+from dataclasses import dataclass, field
+
+import json
+import cattrs
 
 import bpy
 from bpy.types import Operator
@@ -1032,6 +1036,8 @@ classes = (
     ARMATURE_OT_collection_show_all,
     ARMATURE_OT_collection_unsolo_all,
     ARMATURE_OT_collection_remove_unused,
+    ARMATURE_OT_collections_to_clipboard,
+    ARMATURE_OT_collections_from_clipboard,
     ARMATURE_OT_collections_to_clipboard,
     ARMATURE_OT_collections_from_clipboard,
     ANIM_OT_slot_new_for_id,
