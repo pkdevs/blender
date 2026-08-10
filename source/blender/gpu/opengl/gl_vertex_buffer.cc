@@ -142,4 +142,32 @@ void GLVertBuf::update_sub(uint start, uint len, const void *data)
   glBufferSubData(GL_ARRAY_BUFFER, start, len, data);
 }
 
+void GLVertBuf::copy_sub(VertBuf &source_buf, uint source_start, uint dest_start, uint vertex_len)
+{
+  BLI_assert(format.stride == source_buf.format.stride);
+  BLI_assert_msg(size_t(source_start) + vertex_len <= source_buf.vertex_alloc,
+                 "Copy source range exceeds the source vertex buffer bounds");
+  BLI_assert_msg(size_t(dest_start) + vertex_len <= vertex_alloc,
+                 "Copy destination range exceeds the vertex buffer bounds");
+  GLVertBuf &src = static_cast<GLVertBuf &>(source_buf);
+  BLI_assert_msg(vbo_id_, "Call GPU_vertbuf_use first");
+  BLI_assert_msg(src.vbo_id_, "Call GPU_vertbuf_use first on the source buffer");
+
+  const size_t src_offset = size_t(source_start) * src.format.stride;
+  const size_t dst_offset = size_t(dest_start) * format.stride;
+  const size_t copy_size = size_t(vertex_len) * format.stride;
+
+  if (GLContext::direct_state_access_support) {
+    glCopyNamedBufferSubData(src.vbo_id_, vbo_id_, src_offset, dst_offset, copy_size);
+  }
+  else {
+    glBindBuffer(GL_COPY_READ_BUFFER, src.vbo_id_);
+    glBindBuffer(GL_COPY_WRITE_BUFFER, vbo_id_);
+    glCopyBufferSubData(
+        GL_COPY_READ_BUFFER, GL_COPY_WRITE_BUFFER, src_offset, dst_offset, copy_size);
+    glBindBuffer(GL_COPY_READ_BUFFER, 0);
+    glBindBuffer(GL_COPY_WRITE_BUFFER, 0);
+  }
+}
+
 }  // namespace blender::gpu

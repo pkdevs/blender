@@ -10,6 +10,7 @@
 
 #include "gpu_capabilities_private.hh"
 
+#include "render_graph/nodes/vk_copy_buffer_node.hh"
 #include "vk_data_conversion.hh"
 #include "vk_shader.hh"
 #include "vk_shader_interface.hh"
@@ -90,6 +91,30 @@ void VKVertexBuffer::update_sub(uint start_offset, uint data_size_in_bytes, cons
     memcpy(staging_buffer.host_buffer_get().mapped_memory_get(), data, data_size_in_bytes);
     staging_buffer.copy_to_device(context);
   }
+}
+
+void VKVertexBuffer::copy_sub(VertBuf &source_buf,
+                              uint source_start,
+                              uint dest_start,
+                              uint vertex_len)
+{
+  BLI_assert(format.stride == source_buf.format.stride);
+  BLI_assert_msg(size_t(source_start) + vertex_len <= source_buf.vertex_alloc,
+                 "Copy source range exceeds the source vertex buffer bounds");
+  BLI_assert_msg(size_t(dest_start) + vertex_len <= vertex_alloc,
+                 "Copy destination range exceeds the vertex buffer bounds");
+  VKVertexBuffer &source_vertex_buffer = unwrap(source_buf);
+  BLI_assert_msg(buffer_.is_allocated(), "Call GPU_vertbuf_use first");
+  BLI_assert_msg(source_vertex_buffer.buffer_.is_allocated(),
+                 "Call GPU_vertbuf_use first on the source buffer");
+  VKContext &context = *VKContext::get();
+  render_graph::VKCopyBufferNode::CreateInfo copy_buffer = {};
+  copy_buffer.src_buffer = source_vertex_buffer.buffer_.resource();
+  copy_buffer.dst_buffer = buffer_.resource();
+  copy_buffer.region.srcOffset = source_start * source_vertex_buffer.format.stride;
+  copy_buffer.region.dstOffset = dest_start * format.stride;
+  copy_buffer.region.size = vertex_len * format.stride;
+  context.render_graph().add_node(copy_buffer);
 }
 
 void VKVertexBuffer::read(void *data) const
