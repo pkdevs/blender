@@ -7408,7 +7408,12 @@ void calc_cube_tip_factors_common_from_orig_data_mesh(const Depsgraph &depsgraph
 
   Vector<float3> local_positions_storage(positions.size());
   MutableSpan<float3> local_positions = local_positions_storage;
-  calc_local_positions(positions, mat, local_positions);
+  calc_local_positions(positions,
+                       mat,
+                       cache.location_symm,
+                       cache.view_normal_symm,
+                       eBrushFalloffShape(brush.falloff_shape),
+                       local_positions);
 
   r_distances.resize(verts.size());
   const MutableSpan<float> distances = r_distances;
@@ -7487,7 +7492,12 @@ void calc_cube_tip_factors_common_from_orig_data_grids(const Depsgraph &depsgrap
 
   Vector<float3> local_positions_storage(positions.size());
   MutableSpan<float3> local_positions = local_positions_storage;
-  calc_local_positions(positions, mat, local_positions);
+  calc_local_positions(positions,
+                       mat,
+                       cache.location_symm,
+                       cache.view_normal_symm,
+                       eBrushFalloffShape(brush.falloff_shape),
+                       local_positions);
 
   r_distances.resize(positions.size());
   const MutableSpan<float> distances = r_distances;
@@ -7564,7 +7574,12 @@ void calc_cube_tip_factors_common_from_orig_data_bmesh(const Depsgraph &depsgrap
 
   Vector<float3> local_positions_storage(positions.size());
   MutableSpan<float3> local_positions = local_positions_storage;
-  calc_local_positions(positions, mat, local_positions);
+  calc_local_positions(positions,
+                       mat,
+                       cache.location_symm,
+                       cache.view_normal_symm,
+                       eBrushFalloffShape(brush.falloff_shape),
+                       local_positions);
 
   r_distances.resize(verts.size());
   const MutableSpan<float> distances = r_distances;
