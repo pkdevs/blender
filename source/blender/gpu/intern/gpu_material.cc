@@ -302,11 +302,6 @@ Material *GPU_material_get_material(GPUMaterial *material)
   return material->source_material;
 }
 
-const Material *GPU_material_get_material(const GPUMaterial *material)
-{
-  return material->source_material;
-}
-
 GPUPass *GPU_material_get_pass(GPUMaterial *material)
 {
   /* If an optimized pass variant is available, and optimization is

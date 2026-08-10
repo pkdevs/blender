@@ -164,7 +164,6 @@ const char *GPU_material_get_name(GPUMaterial *material);
  * Return can be null if it's a world material.
  */
 Material *GPU_material_get_material(GPUMaterial *material);
-const Material *GPU_material_get_material(const GPUMaterial *material);
 /**
  * Return true if the material compilation has not yet begin or begin.
  */

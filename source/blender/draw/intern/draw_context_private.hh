@@ -96,8 +96,7 @@ void DRW_mesh_get_attributes(const Object &object,
                              const Mesh &mesh,
                              Span<const GPUMaterial *> materials,
                              VectorSet<std::string> *r_attrs,
-                             DRW_MeshCDMask *r_cd_needed,
-                             Array<int> &r_mat_index_to_uv_index);
+                             DRW_MeshCDMask *r_cd_needed);
 
 }  // namespace draw
 

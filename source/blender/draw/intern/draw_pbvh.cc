@@ -71,7 +71,6 @@ struct OrigMeshData {
   VectorSet<StringRef> uv_map_names;
   StringRef active_uv_map;
   StringRef default_uv_map;
-  int active_uv_map_index;
   int face_set_default;
   int face_set_seed;
   bke::AttributeAccessor attributes;

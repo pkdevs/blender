@@ -105,13 +105,9 @@ static Vector<SculptBatch> sculpt_batches_get_ex(const Object *ob,
                bke::pbvh::node_frustum_contain_aabb(node, draw_frustum_planes);
       });
 
-  /* Ensure the node to material index map is populated early so it can be used to determine which
-   * UV map (FVar channel) needs to be used to correctly calculate multires UV data */
-  const Span<int> material_indices = draw_data.ensure_material_indices(*ob);
   const IndexMask nodes_to_update = update_only_visible ? visible_nodes :
                                                           bke::pbvh::all_leaf_nodes(*pbvh, memory);
 
-  BLI_assert(material_indices.is_empty() || material_indices.size() == pbvh->nodes_num());
   Span<gpu::Batch *> batches;
   if (use_wire) {
     batches = draw_data.ensure_lines_batches(*ob, {{}, fast_mode}, nodes_to_update);
@@ -119,6 +115,8 @@ static Vector<SculptBatch> sculpt_batches_get_ex(const Object *ob,
   else {
     batches = draw_data.ensure_tris_batches(*ob, {attrs, fast_mode}, nodes_to_update);
   }
+
+  const Span<int> material_indices = draw_data.ensure_material_indices(*ob);
 
   const int max_material = std::max(0, BKE_object_material_count_eval(ob) - 1);
   Vector<SculptBatch> result_batches(visible_nodes.size());
@@ -172,8 +170,7 @@ Vector<SculptBatch> sculpt_batches_per_material_get(const Object *ob,
 
   VectorSet<std::string> draw_attrs;
   DRW_MeshCDMask cd_needed;
-  Array<int> mat_index_to_uv_index;
-  DRW_mesh_get_attributes(*ob, mesh, materials, &draw_attrs, &cd_needed, mat_index_to_uv_index);
+  DRW_mesh_get_attributes(*ob, mesh, materials, &draw_attrs, &cd_needed);
 
   Vector<pbvh::AttributeRequest, 16> attrs;
 
