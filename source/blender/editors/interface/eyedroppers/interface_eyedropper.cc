@@ -121,7 +121,7 @@ Button *eyedropper_get_property_button_under_mouse(bContext *C, const wmEvent *e
 
   Button *but = but_find_mouse_over(region, event);
 
-  if (but == nullptr || !but->rnapoin || but->rnaprop == nullptr) {
+  if (!but || !but->rnapoin || !but->rnaprop) {
     return nullptr;
   }
   return but;
