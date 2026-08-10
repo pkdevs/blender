@@ -36,8 +36,14 @@ enum eIDPropertyType : char {
    * be 0 or 1.
    */
   IDP_BOOLEAN = 10,
+  /**
+   * Owned DNA struct instance. #IDProperty.struct_type stores the DNA type name
+   * (e.g. "CurveMapping"), and #IDPropertyData.pointer owns the data.
+   * Behavior is dispatched through #IDPropertyStructTypeInfo.
+   */
+  IDP_STRUCT = 11,
 };
-#define IDP_NUMTYPES 11
+#define IDP_NUMTYPES 12
 
 /** Used by some IDP utils, keep values in sync with type enum above. */
 enum eIDPropertyTypeFilter : int {
@@ -50,6 +56,7 @@ enum eIDPropertyTypeFilter : int {
   IDP_TYPE_FILTER_DOUBLE = 1 << IDP_DOUBLE,
   IDP_TYPE_FILTER_IDPARRAY = 1 << IDP_IDPARRAY,
   IDP_TYPE_FILTER_BOOLEAN = 1 << IDP_BOOLEAN,
+  IDP_TYPE_FILTER_STRUCT = 1 << IDP_STRUCT,
 };
 ENUM_OPERATORS(eIDPropertyTypeFilter)
 

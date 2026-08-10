@@ -429,6 +429,50 @@ void IDP_BlendReadData_impl(BlendDataReader *reader,
                             const char *caller_func_id);
 #define IDP_BlendDataRead(reader, prop) IDP_BlendReadData_impl(reader, prop, __func__)
 
+/* -------------------------------------------------------------------- */
+/** \name IDP_STRUCT type info
+ * \{ */
+
+/**
+ * Type information for #IDP_STRUCT properties.
+ * Register handlers for each supported DNA type (e.g. CurveMapping, ColorBand).
+ */
+struct IDPropertyStructTypeInfo {
+  /** DNA type name written to blend files (e.g. `"CurveMapping"`, `"ColorBand"`). */
+  const char *dna_type_name;
+  /** RNA struct identifier (e.g. `"CurveMapping"`, `"ColorRamp"`). */
+  const char *rna_identifier;
+
+  void *(*create_default)();
+  void *(*copy)(const void *src, int flag);
+  void (*free)(void *data);
+  void (*blend_write)(BlendWriter *writer, const void *data);
+  /** Read the main struct into `*data_p`, then any extra owned data. */
+  void (*blend_read)(BlendDataReader *reader, void **data_p);
+  /** Optional. When null, equality falls back to pointer identity. */
+  bool (*equals)(const void *a, const void *b);
+};
+
+void IDP_struct_type_init();
+void IDP_struct_type_exit();
+void IDP_struct_type_register(const IDPropertyStructTypeInfo *type_info);
+
+const IDPropertyStructTypeInfo *IDP_struct_type_find(StringRef dna_type_name);
+const IDPropertyStructTypeInfo *IDP_struct_type_find_by_rna_identifier(StringRef rna_identifier);
+
+/**
+ * Allocate a new #IDP_STRUCT property owning a default instance of the given type.
+ * \param type_info: Must be a registered type info.
+ */
+IDProperty *IDP_NewStruct(StringRef name,
+                          const IDPropertyStructTypeInfo *type_info,
+                          eIDPropertyFlag flags = {}) ATTR_WARN_UNUSED_RESULT ATTR_NONNULL(2);
+
+/** Owned DNA data for an #IDP_STRUCT property, or null. */
+void *IDP_struct_data_get(const IDProperty *prop);
+
+/** \} */
+
 enum eIDPropertyUIDataType {
   /** Other properties types that don't support RNA UI data. */
   IDP_UI_DATA_TYPE_UNSUPPORTED = -1,
@@ -568,6 +612,16 @@ std::unique_ptr<IDProperty, IDPropertyDeleter> create(StringRef prop_name,
 
 std::unique_ptr<IDProperty, IDPropertyDeleter> create_group(StringRef prop_name,
                                                             eIDPropertyFlag flags = {});
+
+/**
+ * \brief Allocate a new IDProperty of type #IDP_STRUCT.
+ *
+ * \param type_info: Registered type info describing the owned DNA struct.
+ */
+std::unique_ptr<IDProperty, IDPropertyDeleter> create_struct(
+    StringRef prop_name,
+    const IDPropertyStructTypeInfo *type_info,
+    eIDPropertyFlag flags = {});
 
 }  // namespace bke::idprop
 }  // namespace blender

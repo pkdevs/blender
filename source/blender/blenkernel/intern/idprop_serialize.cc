@@ -755,6 +755,11 @@ static const IDPropertySerializer &serializer_for(eIDPropertyType property_type)
     case IDP_GROUP:
       return IDP_SERIALIZER_GROUP;
 
+    case IDP_ID:
+    case IDP_IDPARRAY:
+    case IDP_STRUCT:
+      return IDP_SERIALIZER_UNKNOWN;
+
     default:
       BLI_assert_msg(false, "Trying to convert an unsupported/unknown property type to a string");
       return IDP_SERIALIZER_UNKNOWN;

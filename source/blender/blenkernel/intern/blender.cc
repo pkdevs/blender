@@ -89,6 +89,8 @@ void BKE_blender_free()
   MOV_exit();
 
   bke::node_system_exit();
+
+  IDP_struct_type_exit();
 }
 
 /** \} */
@@ -198,6 +200,8 @@ void BKE_blender_globals_init()
   memset(&G, 0, sizeof(Global));
 
   U.savetime = 1;
+
+  IDP_struct_type_init();
 
   BKE_blender_globals_main_replace(BKE_main_new());
 

@@ -169,12 +169,16 @@ struct IDProperty {
   int totallen = 0;
 
   IDPropertyUIData *ui_data = nullptr;
+
+  /**
+   * For #IDP_STRUCT: DNA type name of the owned data (e.g. `"CurveMapping"`, `"ColorBand"`).
+   * Owned heap string. Null for all other property types.
+   */
+  char *struct_type = nullptr;
 };
 
 #define MAX_IDPROP_NAME 64
 #define DEFAULT_ALLOC_FOR_NULL_STRINGS 64
-
-/* add any future new id property types here. */
 
 /* Static ID override structs. */
 

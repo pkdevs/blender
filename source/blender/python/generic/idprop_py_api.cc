@@ -23,6 +23,9 @@
 
 #include "DNA_ID.h" /* ID property definitions. */
 
+#include "RNA_access.hh"
+#include "RNA_types.hh"
+
 #define USE_STRING_COERCE
 
 #ifdef USE_STRING_COERCE
@@ -36,6 +39,7 @@ namespace blender {
 extern bool pyrna_id_FromPyObject(PyObject *obj, ID **id);
 extern PyObject *pyrna_id_CreatePyObject(ID *id);
 extern bool pyrna_id_CheckPyObject(PyObject *obj);
+extern PyObject *pyrna_struct_CreatePyObject(PointerRNA *ptr);
 
 /* Currently there is no need to expose this publicly. */
 static PyObject *BPy_IDGroup_IterKeys_CreatePyObject(BPy_IDProperty *group, const bool reversed);
@@ -100,6 +104,23 @@ static PyObject *idprop_py_from_idp_group(ID *id, IDProperty *prop, IDProperty *
 static PyObject *idprop_py_from_idp_id(IDProperty *prop)
 {
   return pyrna_id_CreatePyObject(static_cast<ID *>(prop->data.pointer));
+}
+
+static PyObject *idprop_py_from_idp_struct(ID *id, IDProperty *prop)
+{
+  if (prop->data.pointer == nullptr || prop->struct_type == nullptr) {
+    Py_RETURN_NONE;
+  }
+  const IDPropertyStructTypeInfo *info = IDP_struct_type_find(prop->struct_type);
+  if (info == nullptr) {
+    Py_RETURN_NONE;
+  }
+  StructRNA *srna = RNA_struct_find(info->rna_identifier);
+  if (srna == nullptr) {
+    Py_RETURN_NONE;
+  }
+  PointerRNA ptr = RNA_pointer_create_discrete(id, srna, prop->data.pointer);
+  return pyrna_struct_CreatePyObject(&ptr);
 }
 
 static PyObject *idprop_py_from_idp_array(ID *id, IDProperty *prop)
@@ -178,6 +199,8 @@ PyObject *BPy_IDGroup_WrapData(ID *id, IDProperty *prop, IDProperty *parent)
       return idprop_py_from_idp_idparray(id, prop); /* this could be better a internal type */
     case IDP_ID:
       return idprop_py_from_idp_id(prop);
+    case IDP_STRUCT:
+      return idprop_py_from_idp_struct(id, prop);
     default:
       Py_RETURN_NONE;
   }
@@ -474,6 +497,7 @@ static IDProperty *idp_from_PyFloat(IDProperty *prop_exist,
         case IDP_DOUBLE:
         case IDP_IDPARRAY:
         case IDP_BOOLEAN:
+        case IDP_STRUCT:
           break;
       }
     }
@@ -511,6 +535,7 @@ static IDProperty *idp_from_PyBool(IDProperty *prop_exist,
         case IDP_DOUBLE:
         case IDP_IDPARRAY:
         case IDP_BOOLEAN:
+        case IDP_STRUCT:
           break;
       }
     }
@@ -558,6 +583,7 @@ static IDProperty *idp_from_PyLong(IDProperty *prop_exist,
         case IDP_ID:
         case IDP_IDPARRAY:
         case IDP_BOOLEAN:
+        case IDP_STRUCT:
           break;
       }
     }
@@ -1215,6 +1241,9 @@ PyObject *BPy_IDGroup_MapDataToPy(IDProperty *prop)
       return idprop_py_from_idp_bool(prop);
     case IDP_ID:
       return idprop_py_from_idp_id(prop);
+    case IDP_STRUCT:
+      /* Owner ID is unknown here; wrap without an owner. */
+      return idprop_py_from_idp_struct(nullptr, prop);
     case IDP_ARRAY: {
       PyObject *seq = PyList_New(prop->len);
       int i;

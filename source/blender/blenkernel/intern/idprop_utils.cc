@@ -219,6 +219,12 @@ static void idp_repr_fn_recursive(ReprState *state, const IDProperty *prop)
       }
       break;
     }
+    case IDP_STRUCT: {
+      STR_APPEND_STR("<");
+      STR_APPEND_STR(prop->struct_type ? prop->struct_type : "Struct");
+      STR_APPEND_STR(">");
+      break;
+    }
     default: {
       BLI_assert_unreachable();
       break;
@@ -305,6 +311,8 @@ const char *IDP_type_str(const eIDPropertyType type, const short sub_type)
       return "Array of Properties";
     case IDP_BOOLEAN:
       return "Boolean";
+    case IDP_STRUCT:
+      return "Struct";
   }
   BLI_assert_unreachable();
   return "Unknown";
