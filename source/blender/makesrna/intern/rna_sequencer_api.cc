@@ -667,9 +667,8 @@ static void rna_StripElements_pop(ID *id, Strip *strip, ReportList *reports, int
   }
 
   if (real_index < old_len - 1) {
-    memcpy(&new_se[real_index],
-           &se[real_index + 1],
-           sizeof(StripElem) * (old_len - 1 - real_index));
+    memcpy(
+        &new_se[real_index], &se[real_index + 1], sizeof(StripElem) * (old_len - 1 - real_index));
   }
 
   MEM_delete(strip->data->stripdata);
