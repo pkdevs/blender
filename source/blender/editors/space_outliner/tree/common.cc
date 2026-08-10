@@ -37,25 +37,24 @@ const char *outliner_idcode_to_plural(short idcode)
 
 /** \} */
 
-void outliner_make_object_parent_hierarchy(ListBaseT<TreeElement> *lb)
+void outliner_make_object_parent_hierarchy(Vector<TreeElement *> *lb)
 {
   /* build hierarchy */
   /* XXX also, set extents here... */
-  TreeElement *te = static_cast<TreeElement *>(lb->first);
-  while (te) {
-    TreeElement *ten = te->next;
+
+  for (TreeElement *te : *lb) {
     TreeStoreElem *tselem = TREESTORE(te);
 
     if ((tselem->type == TSE_SOME_ID) && te->idcode == ID_OB) {
       Object *ob = id_cast<Object *>(tselem->id);
       if (ob->parent && ob->parent->id.newid) {
-        BLI_remlink(lb, te);
+        const int index = lb->first_index_of(te);
+        lb->remove(index);
         TreeElement *tep = reinterpret_cast<TreeElement *>(ob->parent->id.newid);
-        BLI_addtail(&tep->subtree, te);
+        tep->subtree.append(te);
         te->parent = tep;
       }
     }
-    te = ten;
   }
 }
 

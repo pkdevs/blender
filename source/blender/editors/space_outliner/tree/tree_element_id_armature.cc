@@ -65,22 +65,23 @@ void TreeElementIDArmature::expand_edit_bones() const
   TreeElement *ten = arm_.edbo->first ? static_cast<TreeElement *>(
                                             (static_cast<EditBone *>(arm_.edbo->first))->temp.p) :
                                         nullptr;
-  while (ten) {
-    TreeElement *nten = ten->next, *par;
+
+  for (int index : legacy_te_.subtree.index_range()) {
+    TreeElement *par;
+    TreeElement *ten = legacy_te_.subtree[index];
     EditBone *ebone = static_cast<EditBone *>(ten->directdata);
     if (ebone->parent) {
-      BLI_remlink(&legacy_te_.subtree, ten);
+      legacy_te_.subtree.remove(index);
       par = static_cast<TreeElement *>(ebone->parent->temp.p);
-      BLI_addtail(&par->subtree, ten);
+      par->subtree.append(ten);
       ten->parent = par;
     }
-    ten = nten;
   }
 }
 
 /* special handling of hierarchical non-lib data */
 static void outliner_add_bone(SpaceOutliner *space_outliner,
-                              ListBaseT<TreeElement> *lb,
+                              Vector<TreeElement *> *lb,
                               ID *id,
                               Bone *curBone,
                               TreeElement *parent,

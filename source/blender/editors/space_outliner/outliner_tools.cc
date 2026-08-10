@@ -632,18 +632,18 @@ static void outliner_do_libdata_operation_selection_set(bContext *C,
                                                         ReportList *reports,
                                                         Scene *scene,
                                                         SpaceOutliner *space_outliner,
-                                                        ListBaseT<TreeElement> &subtree,
+                                                        Vector<TreeElement *> &subtree,
                                                         const bool has_parent_selected,
                                                         outliner_operation_fn operation_fn,
                                                         eOutlinerLibOpSelectionSet selection_set)
 {
-  for (TreeElement &element : subtree.items_mutable()) {
+  for (TreeElement *element : subtree) {
     /* Get needed data out in case element gets freed. */
-    TreeStoreElem *tselem = TREESTORE(&element);
-    ListBaseT<TreeElement> subtree = element.subtree;
+    TreeStoreElem *tselem = TREESTORE(element);
+    Vector<TreeElement *> subtree = element->subtree;
 
     const bool is_selected = outliner_do_libdata_operation_selection_set_element(
-        C, reports, scene, &element, tselem, has_parent_selected, operation_fn, selection_set);
+        C, reports, scene, element, tselem, has_parent_selected, operation_fn, selection_set);
 
     /* Don't access element from now on, it may be freed. Note that the open/collapsed state may
      * also have been changed in the visitor callback. */
@@ -670,7 +670,7 @@ static void outliner_do_libdata_operation_selection_set(bContext *C,
     TreeElement *active_element = get_target_element(space_outliner);
     if (active_element != nullptr) {
       TreeStoreElem *tselem = TREESTORE(active_element);
-      ListBaseT<TreeElement> subtree = active_element->subtree;
+      Vector<TreeElement *> subtree = active_element->subtree;
 
       const bool is_selected = outliner_do_libdata_operation_selection_set_element(
           C, reports, scene, active_element, tselem, false, operation_fn, selection_set);
@@ -802,7 +802,7 @@ struct MergedSearchData {
   TreeElement *select_element;
 };
 
-static void merged_element_search_fn_recursive(const ListBaseT<TreeElement> *tree,
+static void merged_element_search_fn_recursive(const Vector<TreeElement *> *tree,
                                                short tselem_type,
                                                short type,
                                                const char *str,
@@ -811,16 +811,16 @@ static void merged_element_search_fn_recursive(const ListBaseT<TreeElement> *tre
   char name[64];
   int iconid;
 
-  for (TreeElement &te : *tree) {
-    TreeStoreElem *tselem = TREESTORE(&te);
+  for (TreeElement *te : *tree) {
+    TreeStoreElem *tselem = TREESTORE(te);
 
-    if (tree_element_id_type_to_index(&te) == type && tselem_type == tselem->type) {
-      if (BLI_strcasestr(te.name, str)) {
-        STRNCPY(name, te.name);
+    if (tree_element_id_type_to_index(te) == type && tselem_type == tselem->type) {
+      if (BLI_strcasestr(te->name, str)) {
+        STRNCPY(name, te->name);
 
-        iconid = tree_element_get_icon(tselem, &te).icon;
-        if (outliner_is_collection_tree_element(&te)) {
-          const Collection &collection = *outliner_collection_from_tree_element(&te);
+        iconid = tree_element_get_icon(tselem, te).icon;
+        if (outliner_is_collection_tree_element(te)) {
+          const Collection &collection = *outliner_collection_from_tree_element(te);
           if (collection.color_tag != COLLECTION_COLOR_NONE) {
             iconid = int(ICON_COLLECTION_COLOR_01) + int(collection.color_tag);
           }
@@ -835,7 +835,7 @@ static void merged_element_search_fn_recursive(const ListBaseT<TreeElement> *tre
       }
     }
 
-    merged_element_search_fn_recursive(&te.subtree, tselem_type, type, str, items);
+    merged_element_search_fn_recursive(&te->subtree, tselem_type, type, str, items);
   }
 }
 
@@ -1732,31 +1732,31 @@ void outliner_do_object_operation_ex(bContext *C,
                                      ReportList *reports,
                                      Scene *scene_act,
                                      SpaceOutliner *space_outliner,
-                                     ListBaseT<TreeElement> *lb,
+                                     Vector<TreeElement *> *lb,
                                      outliner_operation_fn operation_fn,
                                      bool recurse_selected)
 {
-  for (TreeElement &te : *lb) {
-    TreeStoreElem *tselem = TREESTORE(&te);
+  for (TreeElement *te : *lb) {
+    TreeStoreElem *tselem = TREESTORE(te);
     bool select_handled = false;
     if (tselem->flag & TSE_SELECTED) {
-      if ((tselem->type == TSE_SOME_ID) && (te.idcode == ID_OB)) {
+      if ((tselem->type == TSE_SOME_ID) && (te->idcode == ID_OB)) {
         /* When objects selected in other scenes, don't know if that should be allowed. */
-        Scene *scene_owner = id_cast<Scene *>(outliner_search_back(&te, ID_SCE));
+        Scene *scene_owner = id_cast<Scene *>(outliner_search_back(te, ID_SCE));
         if (scene_owner && scene_act != scene_owner) {
           WM_window_set_active_scene(CTX_data_main(C), C, CTX_wm_window(C), scene_owner);
         }
         /* Important to use 'scene_owner' not scene_act else deleting objects can crash.
          * only use 'scene_act' when 'scene_owner' is nullptr, which can happen when the
          * outliner isn't showing scenes: Visible Layer draw mode for eg. */
-        operation_fn(C, reports, scene_owner ? scene_owner : scene_act, &te, nullptr, tselem);
+        operation_fn(C, reports, scene_owner ? scene_owner : scene_act, te, nullptr, tselem);
         select_handled = true;
       }
     }
     if (TSELEM_OPEN(tselem, space_outliner)) {
       if ((select_handled == false) || recurse_selected) {
         outliner_do_object_operation_ex(
-            C, reports, scene_act, space_outliner, &te.subtree, operation_fn, recurse_selected);
+            C, reports, scene_act, space_outliner, &te->subtree, operation_fn, recurse_selected);
       }
     }
   }
@@ -1766,7 +1766,7 @@ void outliner_do_object_operation(bContext *C,
                                   ReportList *reports,
                                   Scene *scene_act,
                                   SpaceOutliner *space_outliner,
-                                  ListBaseT<TreeElement> *lb,
+                                  Vector<TreeElement *> *lb,
                                   outliner_operation_fn operation_fn)
 {
   outliner_do_object_operation_ex(C, reports, scene_act, space_outliner, lb, operation_fn, true);
@@ -2119,20 +2119,20 @@ void OUTLINER_OT_liboverride_troubleshoot_operation(wmOperatorType *ot)
 static void outliner_do_liboverride_property_selection_set(bContext *C,
                                                            ReportList *reports,
                                                            Scene *scene,
-                                                           ListBaseT<TreeElement> &subtree,
+                                                           Vector<TreeElement *> &subtree,
                                                            const bool has_parent_selected,
                                                            outliner_operation_fn operation_fn)
 {
-  for (TreeElement &element : subtree.items_mutable()) {
+  for (TreeElement *element : subtree) {
     /* Get needed data out in case element gets freed. */
-    TreeStoreElem *tselem = TREESTORE(&element);
-    ListBaseT<TreeElement> subtree = element.subtree;
+    TreeStoreElem *tselem = TREESTORE(element);
+    Vector<TreeElement *> subtree = element->subtree;
 
     const bool is_selected = (tselem->flag & TSE_SELECTED) || has_parent_selected;
     if (is_selected) {
       if (ELEM(tselem->type, TSE_LIBRARY_OVERRIDE, TSE_LIBRARY_OVERRIDE_OPERATION)) {
-        TreeStoreElem *tsep = element.parent ? TREESTORE(element.parent) : nullptr;
-        operation_fn(C, reports, scene, &element, tsep, tselem);
+        TreeStoreElem *tsep = element->parent ? TREESTORE(element->parent) : nullptr;
+        operation_fn(C, reports, scene, element, tsep, tselem);
       }
     }
     /* Don't access element from now on, it may be freed. Note that the open/collapsed state may

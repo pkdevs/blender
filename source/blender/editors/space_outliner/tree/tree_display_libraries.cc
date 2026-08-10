@@ -31,9 +31,9 @@ TreeDisplayLibraries::TreeDisplayLibraries(SpaceOutliner &space_outliner)
 {
 }
 
-ListBaseT<TreeElement> TreeDisplayLibraries::build_tree(const TreeSourceData &source_data)
+Vector<TreeElement *> TreeDisplayLibraries::build_tree(const TreeSourceData &source_data)
 {
-  ListBaseT<TreeElement> tree = {nullptr};
+  Vector<TreeElement *> tree = {nullptr};
 
   {
     /* current file first - mainvar provides tselem with unique pointer - not used */
@@ -61,8 +61,8 @@ ListBaseT<TreeElement> TreeDisplayLibraries::build_tree(const TreeSourceData &so
    *
    * Note: `List<T>` template is similar to non-mutable ListBaseT iteration so we need to
    * iterate over an actual copy of the original list here, to avoid missing some items. */
-  for (TreeElement *ten : listbase_to_vector<TreeElement>(tree)) {
-    if (ten == tree.first) {
+  for (TreeElement *ten : tree) {
+    if (ten == tree.first()) {
       /* First item is main, skip. */
       continue;
     }
@@ -78,8 +78,10 @@ ListBaseT<TreeElement> TreeDisplayLibraries::build_tree(const TreeSourceData &so
     TreeElement *parent = reinterpret_cast<TreeElement *>(
         (lib->archive_parent_library ? lib->archive_parent_library : lib->runtime->parent)
             ->id.newid);
-    BLI_remlink(&tree, ten);
-    BLI_addtail(&parent->subtree, ten);
+    
+    const int index = tree.first_index_of(ten);
+    tree.remove(index);
+    parent->subtree.append(ten);
     ten->parent = parent;
   }
   /* restore newid pointers */
@@ -91,7 +93,7 @@ ListBaseT<TreeElement> TreeDisplayLibraries::build_tree(const TreeSourceData &so
 }
 
 TreeElement *TreeDisplayLibraries::add_library_contents(Main &mainvar,
-                                                        ListBaseT<TreeElement> &lb,
+                                                        Vector<TreeElement *> &lb,
                                                         Library *lib)
 {
   const short filter_id_type = id_filter_get();

@@ -1695,24 +1695,24 @@ static bool can_select_recursive(TreeElement *te, Collection *in_collection)
   return false;
 }
 
-static void do_outliner_select_recursive(ListBaseT<TreeElement> *lb,
+static void do_outliner_select_recursive(Vector<TreeElement *> *lb,
                                          bool selecting,
                                          Collection *in_collection)
 {
-  for (TreeElement &te : *lb) {
-    TreeStoreElem *tselem = TREESTORE(&te);
+  for (TreeElement *te : *lb) {
+    TreeStoreElem *tselem = TREESTORE(te);
     /* Recursive selection only on collections or objects. */
-    if (can_select_recursive(&te, in_collection)) {
+    if (can_select_recursive(te, in_collection)) {
       tselem->flag = selecting ? (tselem->flag | TSE_SELECTED) : (tselem->flag & ~TSE_SELECTED);
       if (tselem->type == TSE_LAYER_COLLECTION) {
         /* Restrict sub-tree selections to this collection. This prevents undesirable behavior in
          * the edge-case where there is an object which is part of this collection, but which has
          * children that are part of another collection. */
         do_outliner_select_recursive(
-            &te.subtree, selecting, static_cast<LayerCollection *>(te.directdata)->collection);
+            &te->subtree, selecting, static_cast<LayerCollection *>(te->directdata)->collection);
       }
       else {
-        do_outliner_select_recursive(&te.subtree, selecting, in_collection);
+        do_outliner_select_recursive(&te->subtree, selecting, in_collection);
       }
     }
     else {
@@ -1721,23 +1721,23 @@ static void do_outliner_select_recursive(ListBaseT<TreeElement> *lb,
   }
 }
 
-static bool do_outliner_range_select_recursive(ListBaseT<TreeElement> *lb,
+static bool do_outliner_range_select_recursive(Vector<TreeElement *> *lb,
                                                TreeElement *active,
                                                TreeElement *cursor,
                                                bool selecting,
                                                const bool recurse,
                                                Collection *in_collection)
 {
-  for (TreeElement &te : *lb) {
-    TreeStoreElem *tselem = TREESTORE(&te);
+  for (TreeElement *te : *lb) {
+    TreeStoreElem *tselem = TREESTORE(te);
 
-    bool can_select = !recurse || can_select_recursive(&te, in_collection);
+    bool can_select = !recurse || can_select_recursive(te, in_collection);
 
     /* Remember if we are selecting before we potentially change the selecting state. */
     bool selecting_before = selecting;
 
     /* Set state for selection */
-    if (ELEM(&te, active, cursor)) {
+    if (ELEM(te, active, cursor)) {
       selecting = !selecting;
     }
 
@@ -1751,10 +1751,10 @@ static bool do_outliner_range_select_recursive(ListBaseT<TreeElement> *lb,
        * the precedent for inclusion of its sub-objects. */
       Collection *child_collection = in_collection;
       if (tselem->type == TSE_LAYER_COLLECTION) {
-        child_collection = static_cast<LayerCollection *>(te.directdata)->collection;
+        child_collection = static_cast<LayerCollection *>(te->directdata)->collection;
       }
       selecting = do_outliner_range_select_recursive(
-          &te.subtree, active, cursor, selecting, recurse, child_collection);
+          &te->subtree, active, cursor, selecting, recurse, child_collection);
     }
   }
 
@@ -2135,9 +2135,9 @@ void OUTLINER_OT_select_box(wmOperatorType *ot)
 static TreeElement *outliner_find_rightmost_visible_child(SpaceOutliner *space_outliner,
                                                           TreeElement *te)
 {
-  while (te->subtree.last) {
+  while (te->subtree.last()) {
     if (TSELEM_OPEN(TREESTORE(te), space_outliner)) {
-      te = static_cast<TreeElement *>(te->subtree.last);
+      te = static_cast<TreeElement *>(te->subtree.last());
     }
     else {
       break;
@@ -2149,12 +2149,15 @@ static TreeElement *outliner_find_rightmost_visible_child(SpaceOutliner *space_o
 /* Find previous visible element in the tree. */
 static TreeElement *outliner_find_previous_element(SpaceOutliner *space_outliner, TreeElement *te)
 {
-  if (te->prev) {
-    te = outliner_find_rightmost_visible_child(space_outliner, te->prev);
-  }
-  else if (te->parent) {
+  if (te->parent) {
     /* Use parent if at beginning of list */
-    te = te->parent;
+    Vector<TreeElement *> &subtree = te->parent->subtree;
+    const int index = subtree.first_index_of(te);
+    if ((index - 1) >= 0) {
+      te = outliner_find_rightmost_visible_child(space_outliner, subtree[index - 1]);
+    } else {
+      te = te->parent;
+    }
   }
 
   return te;
@@ -2165,8 +2168,9 @@ static TreeElement *outliner_element_find_successor_in_parents(TreeElement *te)
 {
   TreeElement *successor = te;
   while (successor->parent) {
-    if (successor->parent->next) {
-      te = successor->parent->next;
+    if (TreeElement *te_parent = successor->parent->parent) {
+      const int index = te_parent->subtree.first_index_of(te);
+      te = te_parent->subtree[index + 1];
       break;
     }
     successor = successor->parent;
@@ -2180,11 +2184,8 @@ static TreeElement *outliner_find_next_element(SpaceOutliner *space_outliner, Tr
 {
   TreeStoreElem *tselem = TREESTORE(te);
 
-  if (TSELEM_OPEN(tselem, space_outliner) && te->subtree.first) {
-    te = static_cast<TreeElement *>(te->subtree.first);
-  }
-  else if (te->next) {
-    te = te->next;
+  if (TSELEM_OPEN(tselem, space_outliner) && te->subtree.first()) {
+    te = static_cast<TreeElement *>(te->subtree.first());
   }
   else {
     te = outliner_element_find_successor_in_parents(te);
@@ -2218,7 +2219,7 @@ static TreeElement *outliner_walk_right(SpaceOutliner *space_outliner,
 
   /* Only walk down a level if the element is open and not toggling expand */
   if (!toggle_all && TSELEM_OPEN(tselem, space_outliner) && !te->subtree.is_empty()) {
-    te = static_cast<TreeElement *>(te->subtree.first);
+    te = static_cast<TreeElement *>(te->subtree.first());
   }
   else {
     outliner_item_openclose(te, true, toggle_all);
@@ -2270,7 +2271,7 @@ static TreeElement *find_walk_select_start_element(SpaceOutliner *space_outliner
 
   /* If no active element exists, use the first element in the tree */
   if (!active_te) {
-    active_te = static_cast<TreeElement *>(space_outliner->runtime->tree.first);
+    active_te = static_cast<TreeElement *>(space_outliner->runtime->tree.first());
     *r_changed = true;
   }
 

@@ -28,12 +28,12 @@ TreeDisplayOverrideLibraryProperties::TreeDisplayOverrideLibraryProperties(
 {
 }
 
-ListBaseT<TreeElement> TreeDisplayOverrideLibraryProperties::build_tree(
+Vector<TreeElement *> TreeDisplayOverrideLibraryProperties::build_tree(
     const TreeSourceData &source_data)
 {
-  ListBaseT<TreeElement> tree = add_library_contents(*source_data.bmain);
+  Vector<TreeElement *> tree = add_library_contents(*source_data.bmain);
 
-  for (TreeElement *top_level_te : List<TreeElement>(tree)) {
+  for (TreeElement *top_level_te : tree) {
     TreeStoreElem *tselem = TREESTORE(top_level_te);
     if (!tselem->used) {
       tselem->flag &= ~TSE_CLOSED;
@@ -43,9 +43,9 @@ ListBaseT<TreeElement> TreeDisplayOverrideLibraryProperties::build_tree(
   return tree;
 }
 
-ListBaseT<TreeElement> TreeDisplayOverrideLibraryProperties::add_library_contents(Main &mainvar)
+Vector<TreeElement *> TreeDisplayOverrideLibraryProperties::add_library_contents(Main &mainvar)
 {
-  ListBaseT<TreeElement> tree = {nullptr};
+  Vector<TreeElement *> tree = {nullptr};
 
   const short filter_id_type = id_filter_get();
 
@@ -78,7 +78,7 @@ ListBaseT<TreeElement> TreeDisplayOverrideLibraryProperties::add_library_content
 
     /* Create data-block list parent element on demand. */
     TreeElement *id_base_te = nullptr;
-    ListBaseT<TreeElement> *lb_to_expand = &tree;
+    Vector<TreeElement *> *lb_to_expand = &tree;
 
     if (!filter_id_type) {
       id_base_te = add_element(&tree, nullptr, lbarray[a], nullptr, TSE_ID_BASE, 0);
@@ -101,9 +101,9 @@ ListBaseT<TreeElement> TreeDisplayOverrideLibraryProperties::add_library_content
   }
 
   /* Remove ID base elements that turn out to be empty. */
-  for (TreeElement &te : tree.items_mutable()) {
-    if (te.subtree.is_empty()) {
-      outliner_free_tree_element(&te, &tree);
+  for (TreeElement *te : tree) {
+    if (te->subtree.is_empty()) {
+      outliner_free_tree_element(te, &tree);
     }
   }
 

@@ -28,9 +28,9 @@ TreeDisplayIDOrphans::TreeDisplayIDOrphans(SpaceOutliner &space_outliner)
 {
 }
 
-ListBaseT<TreeElement> TreeDisplayIDOrphans::build_tree(const TreeSourceData &source_data)
+Vector<TreeElement *> TreeDisplayIDOrphans::build_tree(const TreeSourceData &source_data)
 {
-  ListBaseT<TreeElement> tree = {nullptr};
+  Vector<TreeElement *> tree = {nullptr};
   short filter_id_type = (space_outliner_.filter & SO_FILTER_ID_TYPE) ?
                              space_outliner_.filter_id_type :
                              0;

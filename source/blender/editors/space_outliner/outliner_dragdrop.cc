@@ -65,9 +65,9 @@ static TreeElement *outliner_dropzone_element(TreeElement *te,
     }
   }
   /* Not it.  Let's look at its children. */
-  if (children && (TREESTORE(te)->flag & TSE_CLOSED) == 0 && (te->subtree.first)) {
-    for (TreeElement &te_sub : te->subtree) {
-      TreeElement *te_valid = outliner_dropzone_element(&te_sub, fmval, children);
+  if (children && (TREESTORE(te)->flag & TSE_CLOSED) == 0 && (te->subtree.first())) {
+    for (TreeElement *te_sub : te->subtree) {
+      TreeElement *te_valid = outliner_dropzone_element(te_sub, fmval, children);
       if (te_valid) {
         return te_valid;
       }
@@ -81,8 +81,8 @@ static TreeElement *outliner_dropzone_find(const SpaceOutliner *space_outliner,
                                            const float fmval[2],
                                            const bool children)
 {
-  for (TreeElement &te : space_outliner->runtime->tree) {
-    TreeElement *te_valid = outliner_dropzone_element(&te, fmval, children);
+  for (TreeElement *te : space_outliner->runtime->tree) {
+    TreeElement *te_valid = outliner_dropzone_element(te, fmval, children);
     if (te_valid) {
       return te_valid;
     }
@@ -147,7 +147,7 @@ static TreeElement *outliner_drop_insert_find(bContext *C,
           return te_hovered;
         }
         *r_insert_type = TE_INSERT_BEFORE;
-        return static_cast<TreeElement *>(te_hovered->subtree.first);
+        return static_cast<TreeElement *>(te_hovered->subtree.first());
       }
       *r_insert_type = TE_INSERT_AFTER;
       return te_hovered;
@@ -162,8 +162,8 @@ static TreeElement *outliner_drop_insert_find(bContext *C,
 
   /* Mouse doesn't hover any item (ignoring x-axis),
    * so it's either above list bounds or below. */
-  TreeElement *first = static_cast<TreeElement *>(space_outliner->runtime->tree.first);
-  TreeElement *last = static_cast<TreeElement *>(space_outliner->runtime->tree.last);
+  TreeElement *first = static_cast<TreeElement *>(space_outliner->runtime->tree.first());
+  TreeElement *last = static_cast<TreeElement *>(space_outliner->runtime->tree.last());
 
   if (view_mval[1] < last->ys) {
     *r_insert_type = TE_INSERT_AFTER;
@@ -277,23 +277,24 @@ static int outliner_get_insert_index(TreeElement *drag_te,
                                      TreeElementInsertType insert_type,
                                      ListBaseT<T> *listbase)
 {
+  int index = BLI_findindex(listbase, drop_te->directdata);
   /* Find the element to insert after. Null is the start of the list. */
   if (drag_te->index < drop_te->index) {
     if (insert_type == TE_INSERT_BEFORE) {
-      drop_te = drop_te->prev;
+      index--;
     }
   }
   else {
     if (insert_type == TE_INSERT_AFTER) {
-      drop_te = drop_te->next;
+      index++;
     }
   }
 
-  if (drop_te == nullptr) {
+  if (index < 0) {
     return 0;
   }
 
-  return BLI_findindex(listbase, drop_te->directdata);
+  return index;
 }
 
 /** \} */
@@ -1307,17 +1308,24 @@ static std::string collection_drop_tooltip(bContext *C,
                                                TIP_("Move after collection");
 
     TreeElement *te = data.te;
+    Vector<TreeElement *> &subtree = te->parent->subtree;
+    const int index = subtree.first_index_of(te);
+
     switch (data.insert_type) {
-      case TE_INSERT_BEFORE:
-        if (te->prev && outliner_is_collection_tree_element(te->prev)) {
+      case TE_INSERT_BEFORE: {
+        TreeElement *te_prev = subtree[index - 1];
+        if (te_prev && outliner_is_collection_tree_element(te_prev)) {
           return tooltip_between;
         }
         return tooltip_before;
-      case TE_INSERT_AFTER:
-        if (te->next && outliner_is_collection_tree_element(te->next)) {
+      }
+      case TE_INSERT_AFTER: {
+        TreeElement *te_next = subtree[index + 1];
+        if (te_next && outliner_is_collection_tree_element(te_next)) {
           return tooltip_between;
         }
         return tooltip_after;
+      }
       case TE_INSERT_INTO: {
         if (is_link) {
           return TIP_("Link inside collection");

@@ -13,6 +13,7 @@
 #include "DNA_listBase.h"
 
 #include "BLI_function_ref.hh"
+#include "BLI_vector.hh"
 
 #include "RNA_types.hh"
 
@@ -64,7 +65,7 @@ struct SpaceOutliner_Runtime {
   /* Hash table for tree-store elements, using `(id, type, index)` as key. */
   std::unique_ptr<treehash::TreeHash> tree_hash;
 
-  ListBaseT<ed::outliner::TreeElement> tree = {nullptr, nullptr};
+  Vector<ed::outliner::TreeElement *> tree;
 
   SpaceOutliner_Runtime() = default;
   /** Used for copying runtime data to a duplicated space. */
@@ -109,7 +110,7 @@ ENUM_OPERATORS(TreeElementFlag);
 using TreeTraversalFunc = TreeTraversalAction (*)(TreeElement *te, void *customdata);
 
 struct TreeElement {
-  TreeElement *next, *prev, *parent;
+  TreeElement *parent;
 
   /**
    * The new inheritance based representation of the element (a derived type of base
@@ -119,7 +120,7 @@ struct TreeElement {
    */
   std::unique_ptr<AbstractTreeElement> abstract_element;
 
-  ListBaseT<TreeElement> subtree;
+  Vector<TreeElement *> subtree;
   int xs, ys;                /* Do selection. */
   TreeStoreElem *store_elem; /* Element in tree store. */
   TreeElementFlag flag;      /* Flag for non-saved stuff. */
@@ -270,7 +271,7 @@ enum TreeItemSelectAction {
 
 /* `outliner_tree.cc` */
 
-void outliner_free_tree(ListBaseT<TreeElement> *tree);
+void outliner_free_tree(Vector<TreeElement *> *tree);
 void outliner_cleanup_tree(SpaceOutliner *space_outliner);
 /**
  * Free \a element and its sub-tree and remove its link in \a parent_subtree.
@@ -278,7 +279,7 @@ void outliner_cleanup_tree(SpaceOutliner *space_outliner);
  * \note Does not remove the #TreeStoreElem of \a element!
  * \param parent_subtree: Sub-tree of the parent element, so the list containing \a element.
  */
-void outliner_free_tree_element(TreeElement *element, ListBaseT<TreeElement> *parent_subtree);
+void outliner_free_tree_element(TreeElement *element, Vector<TreeElement *> *parent_subtree);
 
 /**
  * Main entry point for building the tree data-structure that the outliner represents.
@@ -408,25 +409,25 @@ void outliner_do_object_operation_ex(bContext *C,
                                      ReportList *reports,
                                      Scene *scene,
                                      SpaceOutliner *space_outliner,
-                                     ListBaseT<TreeElement> *lb,
+                                     Vector<TreeElement *> *lb,
                                      outliner_operation_fn operation_fn,
                                      bool recurse_selected);
 void outliner_do_object_operation(bContext *C,
                                   ReportList *reports,
                                   Scene *scene,
                                   SpaceOutliner *space_outliner,
-                                  ListBaseT<TreeElement> *lb,
+                                  Vector<TreeElement *> *lb,
                                   outliner_operation_fn operation_fn);
 
-int outliner_flag_is_any_test(ListBaseT<TreeElement> *lb, eTreeStoreElem_Flag flag, int curlevel);
+int outliner_flag_is_any_test(Vector<TreeElement *> *lb, eTreeStoreElem_Flag flag, int curlevel);
 /**
  * Set or unset \a flag for all outliner elements in \a lb and sub-trees.
  * \return if any flag was modified.
  */
 bool outliner_flag_set(SpaceOutliner &space_outliner, eTreeStoreElem_Flag flag, short set);
-bool outliner_flag_set(ListBaseT<TreeElement> &lb, eTreeStoreElem_Flag flag, short set);
+bool outliner_flag_set(Vector<TreeElement *> &lb, eTreeStoreElem_Flag flag, short set);
 bool outliner_flag_flip(SpaceOutliner &space_outliner, eTreeStoreElem_Flag flag);
-bool outliner_flag_flip(ListBaseT<TreeElement> &lb, eTreeStoreElem_Flag flag);
+bool outliner_flag_flip(Vector<TreeElement *> &lb, eTreeStoreElem_Flag flag);
 
 void item_rename_fn(bContext *C,
                     ReportList *reports,
@@ -604,7 +605,7 @@ void outliner_viewcontext_init(const bContext *C, TreeViewContext *tvc);
  * \note Recursive
  */
 TreeElement *outliner_find_item_at_y(const SpaceOutliner *space_outliner,
-                                     const ListBaseT<TreeElement> *tree,
+                                     const Vector<TreeElement *> *tree,
                                      float view_co_y);
 /**
  * Collapsed items can show their children as click-able icons. This function tries to find
@@ -620,23 +621,23 @@ TreeElement *outliner_find_item_at_x_in_row(const SpaceOutliner *space_outliner,
 /**
  * Find specific item from the trees-tore.
  */
-TreeElement *outliner_find_tree_element(ListBaseT<TreeElement> *lb,
+TreeElement *outliner_find_tree_element(Vector<TreeElement *> *lb,
                                         const TreeStoreElem *store_elem);
 /**
  * Find parent element of te.
  */
-TreeElement *outliner_find_parent_element(ListBaseT<TreeElement> *lb,
+TreeElement *outliner_find_parent_element(Vector<TreeElement *> *lb,
                                           TreeElement *parent_te,
                                           const TreeElement *child_te);
 /**
  * Find tree-store that refers to given ID.
  */
 TreeElement *outliner_find_id(SpaceOutliner *space_outliner,
-                              ListBaseT<TreeElement> *lb,
+                              Vector<TreeElement *> *lb,
                               const ID *id,
                               TreeElementFlag exclude_flags);
-TreeElement *outliner_find_posechannel(ListBaseT<TreeElement> *lb, const bPoseChannel *pchan);
-TreeElement *outliner_find_editbone(ListBaseT<TreeElement> *lb, const EditBone *ebone);
+TreeElement *outliner_find_posechannel(Vector<TreeElement *> *lb, const bPoseChannel *pchan);
+TreeElement *outliner_find_editbone(Vector<TreeElement *> *lb, const EditBone *ebone);
 TreeElement *outliner_search_back_te(TreeElement *te, short idcode);
 ID *outliner_search_back(TreeElement *te, short idcode);
 /**
@@ -648,7 +649,7 @@ ID *outliner_search_back(TreeElement *te, short idcode);
  * \param func: Custom callback to execute for each visited item.
  */
 bool outliner_tree_traverse(const SpaceOutliner *space_outliner,
-                            ListBaseT<TreeElement> *tree,
+                            Vector<TreeElement *> *tree,
                             int filter_te_flag,
                             int filter_tselem_flag,
                             TreeTraversalFunc func,
@@ -657,7 +658,7 @@ float outliner_right_columns_width(const SpaceOutliner *space_outliner);
 /**
  * Find first tree element in tree with matching tree-store flag.
  */
-TreeElement *outliner_find_element_with_flag(const ListBaseT<TreeElement> *lb, short flag);
+TreeElement *outliner_find_element_with_flag(const Vector<TreeElement *> *lb, short flag);
 /**
  * Find if element is visible in the outliner tree, i.e. if all of its parents are expanded.
  * Doesn't check if the item is in view-bounds, for that use #outliner_is_element_in_view().

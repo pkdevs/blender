@@ -66,9 +66,9 @@ bool TreeDisplayViewLayer::supports_mode_column() const
   return true;
 }
 
-ListBaseT<TreeElement> TreeDisplayViewLayer::build_tree(const TreeSourceData &source_data)
+Vector<TreeElement *> TreeDisplayViewLayer::build_tree(const TreeSourceData &source_data)
 {
-  ListBaseT<TreeElement> tree = {nullptr};
+  Vector<TreeElement *> tree = {nullptr};
   Scene *scene = source_data.scene;
   scene_ = scene;
   bmain_ = source_data.bmain;
@@ -105,7 +105,7 @@ ListBaseT<TreeElement> TreeDisplayViewLayer::build_tree(const TreeSourceData &so
 }
 
 void TreeDisplayViewLayer::add_view_layer(Scene &scene,
-                                          ListBaseT<TreeElement> &tree,
+                                          Vector<TreeElement *> &tree,
                                           TreeElement *parent)
 {
   const bool show_children = (space_outliner_.filter & SO_FILTER_NO_CHILDREN) == 0;
@@ -146,7 +146,7 @@ void TreeDisplayViewLayer::add_view_layer(Scene &scene,
 }
 
 void TreeDisplayViewLayer::add_layer_collections_recursive(
-    ListBaseT<TreeElement> &tree,
+                                                           Vector<TreeElement *> &tree,
     ListBaseT<LayerCollection> &layer_collections,
     TreeElement &parent_ten)
 {
@@ -175,7 +175,7 @@ void TreeDisplayViewLayer::add_layer_collections_recursive(
   }
 }
 
-void TreeDisplayViewLayer::add_layer_collection_objects(ListBaseT<TreeElement> &tree,
+void TreeDisplayViewLayer::add_layer_collection_objects(Vector<TreeElement *> &tree,
                                                         LayerCollection &lc,
                                                         TreeElement &ten)
 {
@@ -221,21 +221,21 @@ void ObjectsChildrenBuilder::operator()(TreeElement &collection_tree_elem)
  */
 void ObjectsChildrenBuilder::object_tree_elements_lookup_create_recursive(TreeElement *te_parent)
 {
-  for (TreeElement &te : te_parent->subtree) {
-    TreeStoreElem *tselem = TREESTORE(&te);
+  for (TreeElement *te : te_parent->subtree) {
+    TreeStoreElem *tselem = TREESTORE(te);
 
     if (tselem->type == TSE_LAYER_COLLECTION) {
-      object_tree_elements_lookup_create_recursive(&te);
+      object_tree_elements_lookup_create_recursive(te);
       continue;
     }
 
-    if ((tselem->type == TSE_SOME_ID) && (te.idcode == ID_OB)) {
+    if ((tselem->type == TSE_SOME_ID) && (te->idcode == ID_OB)) {
       Object *ob = id_cast<Object *>(tselem->id);
       /* Lookup children or add new, empty children vector. */
       Vector<TreeElement *> &tree_elements = object_tree_elements_map_.lookup_or_add(ob, {});
       add_object_and_parents_in_order(ob);
-      tree_elements.append(&te);
-      object_tree_elements_lookup_create_recursive(&te);
+      tree_elements.append(te);
+      object_tree_elements_lookup_create_recursive(te);
     }
   }
 }
@@ -278,8 +278,9 @@ void ObjectsChildrenBuilder::make_object_parent_hierarchy_collections()
       for (TreeElement *child_ob_tree_element : *child_ob_tree_elements) {
         if (child_ob_tree_element->parent == parent_ob_collection_tree_element) {
           /* Move from the collection subtree into the parent object subtree. */
-          BLI_remlink(&parent_ob_collection_tree_element->subtree, child_ob_tree_element);
-          BLI_addtail(&parent_ob_tree_element->subtree, child_ob_tree_element);
+          const int index = parent_ob_collection_tree_element->subtree.first_index_of(child_ob_tree_element);
+          parent_ob_collection_tree_element->subtree.remove(index);
+          parent_ob_tree_element->subtree.append(child_ob_tree_element);
           child_ob_tree_element->parent = parent_ob_tree_element;
           found = true;
           break;

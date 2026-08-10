@@ -35,10 +35,10 @@ TreeDisplayOverrideLibraryHierarchies::TreeDisplayOverrideLibraryHierarchies(
 {
 }
 
-ListBaseT<TreeElement> TreeDisplayOverrideLibraryHierarchies::build_tree(
+Vector<TreeElement *> TreeDisplayOverrideLibraryHierarchies::build_tree(
     const TreeSourceData &source_data)
 {
-  ListBaseT<TreeElement> tree = {nullptr};
+  Vector<TreeElement *> tree = {nullptr};
 
   /* First step: Build "Current File" hierarchy. */
   TreeElement *current_file_te = AbstractTreeDisplay::add_element(
@@ -71,13 +71,13 @@ ListBaseT<TreeElement> TreeDisplayOverrideLibraryHierarchies::build_tree(
   }
 
   /* Remove top level library elements again that don't contain any overrides. */
-  for (TreeElement &top_level_te : tree.items_mutable()) {
-    if (&top_level_te == current_file_te) {
+  for (TreeElement *top_level_te : tree) {
+    if (top_level_te == current_file_te) {
       continue;
     }
 
-    if (top_level_te.subtree.is_empty()) {
-      outliner_free_tree_element(&top_level_te, &tree);
+    if (top_level_te->subtree.is_empty()) {
+      outliner_free_tree_element(top_level_te, &tree);
     }
   }
 
@@ -124,10 +124,10 @@ class OverrideIDHierarchyBuilder {
                                         TreeElement &te_to_expand);
 };
 
-ListBaseT<TreeElement> TreeDisplayOverrideLibraryHierarchies::build_hierarchy_for_lib_or_main(
+Vector<TreeElement *> TreeDisplayOverrideLibraryHierarchies::build_hierarchy_for_lib_or_main(
     Main *bmain, TreeElement &parent_te, Library *lib)
 {
-  ListBaseT<TreeElement> tree = {nullptr};
+  Vector<TreeElement *> tree = {nullptr};
 
   /* Ensure #Main.relations contains the latest mapping of relations. Must be freed before
    * returning. */

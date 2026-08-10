@@ -464,8 +464,11 @@ void OverrideRNAPathTreeBuilder::ensure_entire_collection(
     if (existing_te) {
       /* Reinsert the element to make sure the order is right. It may have been inserted by a
        * previous override. */
-      BLI_remlink(&te_to_expand.subtree, existing_te);
-      BLI_insertlinkafter(&te_to_expand.subtree, previous_te, existing_te);
+      const int index_to_remove = te_to_expand.subtree.first_index_of(existing_te);
+      te_to_expand.subtree.remove(index_to_remove);
+
+      const int insert_index = te_to_expand.subtree.first_index_of(previous_te);
+      te_to_expand.subtree.insert(insert_index + 1, existing_te);
       current_te = existing_te;
     }
     /* Is there an operation for this item (added or removed the item to/from the collection)? If

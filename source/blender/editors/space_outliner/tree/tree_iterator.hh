@@ -30,9 +30,9 @@ using ConstVisitorFn = FunctionRef<void(const TreeElement *)>;
  * For the non-const variations, freeing the currently visited element in \a visitor is fine.
  */
 void all(const SpaceOutliner &space_outliner, ConstVisitorFn visitor);
-void all(const ListBaseT<TreeElement> &subtree, ConstVisitorFn visitor);
+void all(const Vector<TreeElement> &subtree, ConstVisitorFn visitor);
 void all(SpaceOutliner &space_outliner, VisitorFn visitor);
-void all(ListBaseT<TreeElement> &subtree, VisitorFn visitor);
+void all(Vector<TreeElement *> &subtree, VisitorFn visitor);
 
 /**
  * Preorder (meaning depth-first) traversal of all elements not part of a collapsed sub-tree.
@@ -41,10 +41,10 @@ void all(ListBaseT<TreeElement> &subtree, VisitorFn visitor);
  */
 void all_open(const SpaceOutliner &, ConstVisitorFn visitor);
 void all_open(const SpaceOutliner &,
-              const ListBaseT<TreeElement> &subtree,
+              const Vector<TreeElement *> &subtree,
               ConstVisitorFn visitor);
 void all_open(SpaceOutliner &, VisitorFn visitor);
-void all_open(SpaceOutliner &, ListBaseT<TreeElement> &subtree, VisitorFn visitor);
+void all_open(SpaceOutliner &, Vector<TreeElement *> &subtree, VisitorFn visitor);
 
 }  // namespace tree_iterator
 }  // namespace ed::outliner

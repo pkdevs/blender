@@ -286,38 +286,38 @@ static void outliner_sync_selection_from_outliner(WorkSpace *workspace,
                                                   const Main &bmain,
                                                   Scene *scene,
                                                   ViewLayer *view_layer,
-                                                  ListBaseT<TreeElement> *tree,
+                                                  Vector<TreeElement *> *tree,
                                                   const SyncSelectTypes *sync_types,
                                                   SelectedItems *selected_items)
 {
 
-  for (TreeElement &te : *tree) {
-    TreeStoreElem *tselem = TREESTORE(&te);
+  for (TreeElement *te : *tree) {
+    TreeStoreElem *tselem = TREESTORE(te);
 
-    if ((tselem->type == TSE_SOME_ID) && (te.idcode == ID_OB)) {
+    if ((tselem->type == TSE_SOME_ID) && (te->idcode == ID_OB)) {
       if (sync_types->object) {
-        outliner_select_sync_to_object(view_layer, &te, tselem, selected_items->objects);
+        outliner_select_sync_to_object(view_layer, te, tselem, selected_items->objects);
       }
     }
     else if (tselem->type == TSE_EBONE) {
       if (sync_types->edit_bone) {
         outliner_select_sync_to_edit_bone(
-            bmain, scene, view_layer, &te, tselem, selected_items->edit_bones);
+            bmain, scene, view_layer, te, tselem, selected_items->edit_bones);
       }
     }
     else if (tselem->type == TSE_POSE_CHANNEL) {
       if (sync_types->pose_bone) {
-        outliner_select_sync_to_pose_bone(&te, tselem, selected_items->pose_bones);
+        outliner_select_sync_to_pose_bone(te, tselem, selected_items->pose_bones);
       }
     }
     else if (tselem->type == TSE_STRIP) {
       if (sync_types->seq_strip) {
-        outliner_select_sync_to_strip(workspace, &te);
+        outliner_select_sync_to_strip(workspace, te);
       }
     }
 
     outliner_sync_selection_from_outliner(
-        workspace, bmain, scene, view_layer, &te.subtree, sync_types, selected_items);
+        workspace, bmain, scene, view_layer, &te->subtree, sync_types, selected_items);
   }
 }
 
@@ -483,40 +483,40 @@ static void outliner_sync_selection_to_outliner(const Main &bmain,
                                                 ViewLayer *view_layer,
                                                 LayerCollection *layer_collection,
                                                 SpaceOutliner *space_outliner,
-                                                ListBaseT<TreeElement> *tree,
+                                                Vector<TreeElement *> *tree,
                                                 SyncSelectActiveData *active_data,
                                                 const SyncSelectTypes *sync_types,
                                                 bool *r_any_new_active,
                                                 short &idcode)
 {
-  for (TreeElement &te : *tree) {
-    TreeStoreElem *tselem = TREESTORE(&te);
+  for (TreeElement *te : *tree) {
+    TreeStoreElem *tselem = TREESTORE(te);
     const bool is_active_old = (tselem->flag & TSE_ACTIVE) && (tselem->flag & TSE_SELECTED);
 
-    if ((tselem->type == TSE_SOME_ID) && te.idcode == ID_OB) {
+    if ((tselem->type == TSE_SOME_ID) && te->idcode == ID_OB) {
       if (sync_types->object) {
         outliner_select_sync_from_object(
-            bmain, scene, view_layer, active_data->object, &te, tselem);
+            bmain, scene, view_layer, active_data->object, te, tselem);
       }
     }
     else if (tselem->type == TSE_EBONE) {
       if (sync_types->edit_bone) {
-        outliner_select_sync_from_edit_bone(active_data->edit_bone, &te, tselem);
+        outliner_select_sync_from_edit_bone(active_data->edit_bone, te, tselem);
       }
     }
     else if (tselem->type == TSE_POSE_CHANNEL) {
       if (sync_types->pose_bone) {
-        outliner_select_sync_from_pose_bone(active_data->pose_channel, &te, tselem);
+        outliner_select_sync_from_pose_bone(active_data->pose_channel, te, tselem);
       }
     }
     else if (tselem->type == TSE_STRIP) {
       if (sync_types->seq_strip) {
-        outliner_select_sync_from_strip(active_data->strip, &te);
+        outliner_select_sync_from_strip(active_data->strip, te);
       }
     }
-    else if (outliner_is_collection_tree_element(&te)) {
+    else if (outliner_is_collection_tree_element(te)) {
       if (sync_types->collection) {
-        Collection *collection = outliner_collection_from_tree_element(&te);
+        Collection *collection = outliner_collection_from_tree_element(te);
         if (layer_collection && (layer_collection->collection == collection)) {
           tselem->flag |= TSE_ACTIVE | TSE_SELECTED;
           *r_any_new_active = true;
@@ -532,7 +532,7 @@ static void outliner_sync_selection_to_outliner(const Main &bmain,
     const bool is_active_new = (tselem->flag & TSE_ACTIVE) && (tselem->flag & TSE_SELECTED);
     if (is_active_new && !is_active_old) {
       *r_any_new_active = true;
-      idcode = te.idcode;
+      idcode = te->idcode;
     }
     /* Sync subtree elements */
     outliner_sync_selection_to_outliner(bmain,
@@ -540,7 +540,7 @@ static void outliner_sync_selection_to_outliner(const Main &bmain,
                                         view_layer,
                                         layer_collection,
                                         space_outliner,
-                                        &te.subtree,
+                                        &te->subtree,
                                         active_data,
                                         sync_types,
                                         r_any_new_active,
