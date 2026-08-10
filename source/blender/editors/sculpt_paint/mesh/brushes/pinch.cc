@@ -233,7 +233,7 @@ void do_pinch_brush(const Depsgraph &depsgraph,
   mat.y_axis() = math::cross(area_no, mat.x_axis());
   mat.z_axis() = area_no;
   mat.location() = ss.cache->location_symm;
-  normalize_m4(mat.ptr());
+  mat = math::normalize(mat);
 
   const std::array<float3, 2> stroke_xz{math::normalize(mat.x_axis()),
                                         math::normalize(mat.z_axis())};
