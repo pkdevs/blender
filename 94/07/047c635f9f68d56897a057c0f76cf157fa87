@@ -1,1 +1,2 @@
 Referenced by pull request #162480, Fix: Undoing across mode boundaries can leave invalid `SculptSession`
+Referenced by commit 0d4181196ca0bf13ca873e1be66cd28e055ab23a, Fix: Undoing across mode boundaries can leave invalid `SculptSession`
