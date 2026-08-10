@@ -1790,6 +1790,7 @@ struct CodegenContext : NodeErrorHandler {
           break;
         case ResourceType::POSITION:
         case ResourceType::LEGACY_INFO:
+        case ResourceType::LEGACY_IFACE:
         case ResourceType::COMPILATION_CONST:
         case ResourceType::SPECIALIZATION_CONST:
         case ResourceType::PUSH_CONST:

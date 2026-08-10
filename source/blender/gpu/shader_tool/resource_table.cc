@@ -454,6 +454,9 @@ void SourceProcessor::lower_resource_table(Parser &parser)
       else if (type == "legacy_info") {
         resource.res_type = type;
       }
+      else if (type == "legacy_iface") {
+        resource.res_type = type;
+      }
       else {
         report_error(attribute[0], "Invalid attribute in resource table");
       }
@@ -564,7 +567,7 @@ void SourceProcessor::lower_resource_table(Parser &parser)
     return (type == "sampler" || type == "image" || type == "uniform" || type == "storage" ||
             type == "acceleration_structure" || type == "shared" || type == "push_constant" ||
             type == "compilation_constant" || type == "specialization_constant" ||
-            type == "legacy_info" || type == "resource_table");
+            type == "legacy_info" || type == "legacy_iface" || type == "resource_table");
   };
   auto is_vertex_input_attribute = [](Token attr) {
     string_view type = attr.str();

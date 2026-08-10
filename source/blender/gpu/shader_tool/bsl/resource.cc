@@ -70,6 +70,7 @@ Result<ParsedAttribute> resource_type_from_attributes(AttrList list)
         /* Resource table. */
         {"compilation_constant",                    {ResourceTableType::RESOURCE_TABLE, ResourceType::COMPILATION_CONST,       0}},
         {"legacy_info",                             {ResourceTableType::RESOURCE_TABLE, ResourceType::LEGACY_INFO,             0}},
+        {"legacy_iface",                            {ResourceTableType::RESOURCE_TABLE, ResourceType::LEGACY_IFACE,            0}},
         {"push_constant",                           {ResourceTableType::RESOURCE_TABLE, ResourceType::PUSH_CONST,              0}},
         {"resource_table",                          {ResourceTableType::RESOURCE_TABLE, ResourceType::RESOURCE_TABLE,          0}},
         {"shared",                                  {ResourceTableType::RESOURCE_TABLE, ResourceType::SHARED,                  0}},

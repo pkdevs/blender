@@ -21,6 +21,7 @@ enum class ResourceType {
   NONE = 0,
 
   LEGACY_INFO,
+  LEGACY_IFACE,
   COMPILATION_CONST,
   SPECIALIZATION_CONST,
   PUSH_CONST,
@@ -76,6 +77,7 @@ static inline std::string to_str(ResourceType type)
   switch (type) {
     SERIALIZE(NONE);
     SERIALIZE(LEGACY_INFO);
+    SERIALIZE(LEGACY_IFACE);
     SERIALIZE(COMPILATION_CONST);
     SERIALIZE(SPECIALIZATION_CONST);
     SERIALIZE(PUSH_CONST);

@@ -108,6 +108,8 @@
 
 /* Declare a dependency to a legacy create info whose name is the struct member name. */
 #  define legacy_info maybe_unused
+/* Declare a dependency to a legacy interface info whose name is the struct member name. */
+#  define legacy_iface maybe_unused
 /* Declare a sampler at the given slot. */
 #  define sampler(slot) maybe_unused
 /* Declare a uniform buffer at the given slot. */
