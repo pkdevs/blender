@@ -4,11 +4,11 @@
 
 #pragma once
 
-#include "infos/eevee_geom_infos.hh"
 #include "infos/eevee_nodetree_infos.hh"
 
 #include "draw_model.bsl.hh"
 #include "eevee_attributes_mesh_lib.glsl"
+#include "eevee_geom_interp.bsl.hh"
 #include "eevee_nodetree_vert_lib.glsl"
 #include "eevee_pipeline.bsl.hh"
 #include "eevee_reverse_z_lib.bsl.hh"
@@ -58,7 +58,7 @@ struct GeomMeshVertIn {
   auto &interp = interface_get(eevee_geom_iface_info, interp);
 
   if (pipe.is_shadow_pipe) [[static_branch]] {
-    auto &shadow_iface = interface_get(eevee_shadow_iface_info, shadow_iface);
+    ShadowFlat &shadow_iface = interface_get(eevee_shadow_iface_info, shadow_iface);
 
     shadow_iface.shadow_view_id = int(view_id);
     out_viewport = int(shadow.render_view_buf[view_id].viewport_index);
@@ -102,7 +102,7 @@ struct GeomMeshVertIn {
   float3 vs_P = view.point_world_to_view(interp.P);
 
   if (pipe.is_shadow_pipe) [[static_branch]] {
-    auto &shadow_clip = interface_get(eevee_shadow_iface_info, shadow_clip);
+    ShadowSmooth &shadow_clip = interface_get(eevee_shadow_iface_info, shadow_clip);
     ShadowRenderView view = shadow.render_view_buf[view_id];
     shadow_clip.position = shadow_position_vector_get(vs_P, view);
     shadow_clip.vector = shadow_clip_vector_get(vs_P, view.clip_distance_inv);

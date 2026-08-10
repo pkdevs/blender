@@ -10,10 +10,9 @@
  * This is used by alpha blended materials and materials using Shader to RGB nodes.
  */
 
-#include "infos/eevee_geom_infos.hh"
-
 #include "draw_model.bsl.hh"
 #include "eevee_colorspace_lib.bsl.hh"
+#include "eevee_geom_interp.bsl.hh"
 #include "eevee_light_eval.bsl.hh"
 #include "eevee_lightprobe.bsl.hh"
 #include "eevee_lightprobe_plane.bsl.hh"

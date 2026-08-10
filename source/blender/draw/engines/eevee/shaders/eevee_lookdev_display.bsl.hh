@@ -77,8 +77,8 @@ void display_frag([[resource_table]] Display &srt,
                  (1.0f / smooth_size);
   float alpha = clamp(1.0f - factor, 0.0f, 1.0f);
 
-  float4 color = v_out.sphere_id == 0 ? texture(srt.metallic_tx, v_out.uv_coord.xy, 0) :
-                                        texture(srt.diffuse_tx, v_out.uv_coord.xy, 0);
+  float4 color = v_out.sphere_id == 0 ? texture(srt.metallic_tx, v_out.uv_coord.xy) :
+                                        texture(srt.diffuse_tx, v_out.uv_coord.xy);
   color.a = alpha;
   frag_out.color = color;
 

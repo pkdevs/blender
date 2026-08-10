@@ -245,7 +245,11 @@ LightVertices light_shape_corners(LightData light, LightVector lv)
   LightVertices vertices;
 
   if (light.type == LIGHT_RECT) {
+#ifndef __BSL__
     LightAreaData area = light.area();
+#else
+    LightAreaData area = light.area;
+#endif
 
     vertices.v[0] = Px * area.size.x + Py * -area.size.y;
     vertices.v[1] = Px * area.size.x + Py * area.size.y;

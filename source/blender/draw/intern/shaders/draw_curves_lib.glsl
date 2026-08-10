@@ -6,6 +6,7 @@
 
 #include "draw_object_infos_infos.hh"
 
+#include "draw_shader_shared.hh"
 #include "gpu_shader_math_constants_lib.glsl"
 #include "gpu_shader_math_matrix_conversion_lib.glsl"
 #include "gpu_shader_math_matrix_transform_lib.glsl"
@@ -31,7 +32,7 @@ struct Segment {
 /* Indirection buffer indexing. */
 Segment segment_get(uint vertex_id)
 {
-  const auto &drw_curves = buffer_get(draw_curves_infos, drw_curves);
+  const CurvesInfos &drw_curves = buffer_get(draw_curves_infos, drw_curves);
 
   const bool is_cylinder = drw_curves.half_cylinder_face_count > 1u;
   Segment segment;

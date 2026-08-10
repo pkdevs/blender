@@ -4,13 +4,13 @@
 
 #pragma once
 
-#include "infos/eevee_geom_infos.hh"
 #include "infos/eevee_nodetree_infos.hh"
 
 #include "draw_model.bsl.hh"
 #include "draw_pointcloud_lib.glsl"
 #include "draw_view.bsl.hh"
 #include "eevee_attributes_pointcloud_lib.glsl"
+#include "eevee_geom_interp.bsl.hh"
 #include "eevee_nodetree_vert_lib.glsl"
 #include "eevee_pipeline.bsl.hh"
 #include "eevee_reverse_z_lib.bsl.hh"
@@ -59,15 +59,16 @@ struct GeomPointCloud {
   const ObjectMatrices obj = models.get(resource_id);
   const ObjectInfos ob_infos = infos.get(resource_id);
 
-  auto &interp = interface_get(eevee_geom_iface_info, interp);
-  auto &pointcloud_interp = interface_get(eevee_geom_pointcloud_iface_info, pointcloud_interp);
+  SurfSmooth &interp = interface_get(eevee_geom_iface_info, interp);
+  PointCloudSmooth &pointcloud_interp = interface_get(eevee_geom_pointcloud_iface_info,
+                                                      pointcloud_interp);
 
   /* clang-format off */ /* Multi-line macro breaks error line counting. */
-  auto &pointcloud_interp_flat = interface_get(eevee_geom_pointcloud_iface_info, pointcloud_interp_flat);
+  PointCloudFlat &pointcloud_interp_flat = interface_get(eevee_geom_pointcloud_iface_info, pointcloud_interp_flat);
   /* clang-format on */
 
   if (pipe.is_shadow_pipe) [[static_branch]] {
-    auto &shadow_iface = interface_get(eevee_shadow_iface_info, shadow_iface);
+    ShadowFlat &shadow_iface = interface_get(eevee_shadow_iface_info, shadow_iface);
 
     shadow_iface.shadow_view_id = int(view_id);
     out_viewport = int(shadow.render_view_buf[view_id].viewport_index);
@@ -128,7 +129,7 @@ struct GeomPointCloud {
   float3 vs_P = view.point_world_to_view(interp.P);
 
   if (pipe.is_shadow_pipe) [[static_branch]] {
-    auto &shadow_clip = interface_get(eevee_shadow_iface_info, shadow_clip);
+    ShadowSmooth &shadow_clip = interface_get(eevee_shadow_iface_info, shadow_clip);
 
     float3 vs_P = view.point_world_to_view(interp.P);
     ShadowRenderView view = shadow.render_view_buf[view_id];

@@ -13,9 +13,9 @@
 
 #pragma once
 
-#include "infos/eevee_geom_infos.hh"
 #include "infos/eevee_nodetree_infos.hh"
 
+#include "eevee_geom_interp.bsl.hh"
 #include "eevee_nodetree_frag_lib.glsl"
 #include "eevee_sampling_lib.bsl.hh"
 #include "eevee_shadow_shared.hh"
@@ -50,8 +50,8 @@ void surf_shadow([[resource_table]] PipelineConstants &pipe,
                  [[front_facing]] const bool front_face,
                  [[frag_coord]] const float4 frag_co)
 {
-  auto &shadow_iface = interface_get(eevee_shadow_iface_info, shadow_iface);
-  auto &shadow_clip = interface_get(eevee_shadow_iface_info, shadow_clip);
+  ShadowFlat &shadow_iface = interface_get(eevee_shadow_iface_info, shadow_iface);
+  ShadowSmooth &shadow_clip = interface_get(eevee_shadow_iface_info, shadow_clip);
 
   float linear_depth = length(shadow_clip.position);
 

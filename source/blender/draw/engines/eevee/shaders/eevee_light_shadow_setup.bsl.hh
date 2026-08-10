@@ -144,14 +144,21 @@ struct Resources {
 
     float2 clipmap_origin = float2(origin_offset) * tile_size;
 
+#ifndef __BSL__
     LightSunData sun_data = light.sun();
+#else
+    LightSunData sun_data = light.sun;
+#endif
     /* Used as origin for the clipmap_base_offset trick. */
     sun_data.clipmap_origin = clipmap_origin;
     /* Number of levels is limited to 32 by `clipmap_level_range()` for this reason. */
     sun_data.clipmap_base_offset_pos = base_offset_pos;
     sun_data.clipmap_base_offset_neg = int2(0);
-
+#ifndef __BSL__
     light.sun() = sun_data;
+#else
+    light.sun = sun_data;
+#endif
   }
 
   void clipmap_sync(LightData &light)
@@ -162,8 +169,13 @@ struct Resources {
     float3 ls_camera_position = transform_direction_transposed(light.object_to_world,
                                                                ws_camera_position);
 
+#ifndef __BSL__
     int level_min = light.sun().clipmap_lod_min;
     int level_max = light.sun().clipmap_lod_max;
+#else
+    int level_min = light.sun.clipmap_lod_min;
+    int level_max = light.sun.clipmap_lod_max;
+#endif
     int level_len = level_max - level_min + 1;
 
     float2 clipmap_origin;

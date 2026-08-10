@@ -31,9 +31,10 @@
  */
 #pragma once
 
-#include "infos/eevee_geom_infos.hh"
 #include "infos/eevee_nodetree_infos.hh"
 
+#include "eevee_defines.hh"
+#include "eevee_geom_interp.bsl.hh"
 #include "eevee_occupancy_lib.bsl.hh"
 #include "eevee_sampling_lib.bsl.hh"
 #include "eevee_volume_lib.bsl.hh"
@@ -60,7 +61,7 @@ void surf_occupancy([[resource_table]] SurfOccupancy &srt,
                     [[front_facing]] const bool front_facing,
                     [[frag_coord]] const float4 frag_co)
 {
-  FRAGMENT_SHADER_CREATE_INFO(eevee_geom_iface_info);
+  const SurfSmooth &interp = interface_get(eevee_geom_iface_info, interp);
 
   const ViewMatrices view = views.get(0);
   int2 texel = int2(frag_co.xy);

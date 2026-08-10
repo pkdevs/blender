@@ -4,8 +4,8 @@
 
 #pragma once
 
-#include "infos/eevee_geom_infos.hh"
-
+#include "draw_shader_shared.hh"
+#include "eevee_geom_interp.bsl.hh"
 #include "eevee_lightprobe_shared.hh" /* IWYU pragma: export: Needed for resource declaration. */
 #include "eevee_sampling_shared.hh"   /* IWYU pragma: export: Needed for resource declaration. */
 #include "eevee_shadow_shared.hh"
@@ -41,11 +41,13 @@ void init_globals_mesh()
 #endif
 }
 
+namespace eevee {
+
 void init_globals_curves(const ViewMatrices view)
 {
-  auto &interp = interface_get(eevee_geom_iface_info, interp);
-  auto &curve_interp = interface_get(eevee_geom_curves_iface_info, curve_interp);
-  auto &curve_interp_flat = interface_get(eevee_geom_curves_iface_info, curve_interp_flat);
+  SurfSmooth &interp = interface_get(eevee_geom_iface_info, interp);
+  CurveSmooth &curve_interp = interface_get(eevee_geom_curves_iface_info, curve_interp);
+  CurveFlat &curve_interp_flat = interface_get(eevee_geom_curves_iface_info, curve_interp_flat);
   /* Shade as a cylinder. */
   float cos_theta = curve_interp.time_width / curve_interp.radius;
   float sin_theta = sin_from_cos(cos_theta);
@@ -66,11 +68,9 @@ void init_globals_curves(const ViewMatrices view)
 #endif
 }
 
-void init_globals([[resource_table]] const eevee::Uniform &uni,
-                  const ViewMatrices view,
-                  bool front_face)
+void init_globals([[resource_table]] const Uniform &uni, const ViewMatrices view, bool front_face)
 {
-  auto &interp = interface_get(eevee_geom_iface_info, interp);
+  SurfSmooth &interp = interface_get(eevee_geom_iface_info, interp);
   /* Default values. */
   g_data.P = interp.P;
   g_data.Ni = interp.N;
@@ -106,6 +106,8 @@ void init_globals([[resource_table]] const eevee::Uniform &uni,
   init_globals_curves(view);
 #endif
 }
+
+}  // namespace eevee
 
 /* Avoid some compiler issue with non set interface parameters. */
 void init_interface([[maybe_unused]] uint resource_id_raw)
