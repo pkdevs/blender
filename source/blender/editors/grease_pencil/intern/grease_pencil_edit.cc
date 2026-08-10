@@ -3832,24 +3832,47 @@ static bool grease_pencil_snap_compute_centroid(const Scene &scene,
     if (curves.is_empty()) {
       continue;
     }
-    if (!ed::curves::has_anything_selected(curves)) {
-      continue;
-    }
 
-    IndexMaskMemory selected_points_memory;
-    const IndexMask selected_points = ed::curves::retrieve_selected_points(curves,
-                                                                           selected_points_memory);
+    IndexMaskMemory memory;
+    /* Handle selection attributes exist on all points and default to true, so they have to be
+     * restricted to points of Bezier curves. */
+    const IndexMask bezier_points = bke::curves::curve_type_point_selection(
+        curves, CURVE_TYPE_BEZIER, memory);
+    const IndexMask selected_points = ed::curves::retrieve_selected_points(
+        curves, ".selection", bezier_points, memory);
+
     const float4x4 layer_to_world = layer.to_world_space(object);
 
-    Span<float3> positions = curves.positions();
-    selected_points.foreach_index(
-        [&](const int point_i) {
-          const float3 pos_world = math::transform_point(layer_to_world, positions[point_i]);
-          r_centroid += pos_world;
-          math::min_max(pos_world, r_min, r_max);
-        },
-        exec_mode::grain_size(4096));
-    num_selected += selected_points.size();
+    for (const StringRef selection_name : ed::curves::get_curves_selection_attribute_names(curves))
+    {
+      IndexMask selection = ed::curves::retrieve_selected_points(
+          curves, selection_name, bezier_points, memory);
+      Span<float3> positions = curves.positions();
+
+      if (selection_name != ".selection") {
+        /* Match legacy curves: handles are ignored when the control point is selected. */
+        selection = IndexMask::from_difference(selection, selected_points, memory);
+
+        std::optional<Span<float3>> handles;
+        if (selection_name == ".selection_handle_left") {
+          handles = curves.handle_positions_left();
+        }
+        else if (selection_name == ".selection_handle_right") {
+          handles = curves.handle_positions_right();
+        }
+        if (!handles) {
+          continue;
+        }
+        positions = *handles;
+      }
+
+      selection.foreach_index([&](const int point_i) {
+        const float3 pos_world = math::transform_point(layer_to_world, positions[point_i]);
+        r_centroid += pos_world;
+        math::min_max(pos_world, r_min, r_max);
+      });
+      num_selected += selection.size();
+    }
   }
   if (num_selected == 0) {
     r_min = r_max = float3(0.0f);
