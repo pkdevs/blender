@@ -38,24 +38,6 @@ struct LocalData {
   Vector<float3> translations;
 };
 
-static float4x4 calc_local_matrix(const Brush &brush,
-                                  const StrokeCache &cache,
-                                  const float3 &plane_normal,
-                                  const float3 &plane_center)
-{
-  float4x4 mat = float4x4::identity();
-  mat.x_axis() = math::cross(plane_normal, cache.grab_delta_symm);
-  mat.y_axis() = math::cross(plane_normal, mat.x_axis());
-  mat.z_axis() = plane_normal;
-  mat.location() = plane_center;
-  mat = math::normalize(mat);
-
-  const float4x4 scale = math::from_scale<float4x4>(float3(cache.radius));
-  float4x4 tmat = mat * scale;
-  tmat.y_axis() *= brush.tip_scale_x;
-  return math::invert(tmat);
-}
-
 BLI_NOINLINE static void calc_translations(const Span<float3> positions,
                                            const float3 &location,
                                            const std::array<float3, 2> &stroke_xz,
@@ -255,7 +237,9 @@ void do_pinch_brush(const Depsgraph &depsgraph,
 
   const std::array<float3, 2> stroke_xz{math::normalize(mat.x_axis()),
                                         math::normalize(mat.z_axis())};
-  const float4x4 local_mat = calc_local_matrix(brush, *ss.cache, area_no, ss.cache->location_symm);
+
+  float4x4 local_mat;
+  cube_tip_init(sd, object, brush, local_mat.ptr());
 
   threading::EnumerableThreadSpecific<LocalData> all_tls;
   switch (pbvh.type()) {
