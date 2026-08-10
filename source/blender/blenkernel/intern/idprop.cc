@@ -61,7 +61,8 @@ static size_t idp_size_table[] = {
     sizeof(double),    /* #IDP_DOUBLE */
     0,                 /* #IDP_IDPARRAY (no fixed size). */
     sizeof(int8_t),    /* #IDP_BOOLEAN */
-    sizeof(void *),    /* #IDP_STRUCT */
+    sizeof(void *),    /* #IDP_CURVE_MAPPING */
+    sizeof(void *),    /* #IDP_COLOR_BAND */
 };
 
 /**
@@ -962,22 +963,11 @@ float IDP_coerce_to_float_or_zero(const IDProperty *prop)
 
 static IDProperty *IDP_CopyStruct(const IDProperty *prop, const int flag)
 {
-  BLI_assert(prop->type == IDP_STRUCT);
+  const IDPropertyStructTypeInfo *info = IDP_struct_type_info(prop->type);
+  BLI_assert(info != nullptr);
   IDProperty *newp = idp_generic_copy(prop, flag);
-  if (prop->struct_type) {
-    newp->struct_type = BLI_strdup(prop->struct_type);
-  }
-  if (prop->data.pointer && prop->struct_type) {
-    if (const IDPropertyStructTypeInfo *info = IDP_struct_type_find(prop->struct_type)) {
-      newp->data.pointer = info->copy(prop->data.pointer, flag);
-    }
-    else {
-      CLOG_WARN(&LOG,
-                "Cannot copy IDP_STRUCT '%s': unknown DNA type '%s'",
-                prop->name,
-                prop->struct_type);
-      newp->data.pointer = nullptr;
-    }
+  if (prop->data.pointer && info) {
+    newp->data.pointer = info->copy(prop->data.pointer, flag);
   }
   return newp;
 }
@@ -995,7 +985,8 @@ IDProperty *IDP_CopyProperty_ex(const IDProperty *prop, const int flag)
       return IDP_CopyArray(prop, flag);
     case IDP_IDPARRAY:
       return IDP_CopyIDPArray(prop, flag);
-    case IDP_STRUCT:
+    case IDP_CURVE_MAPPING:
+    case IDP_COLOR_BAND:
       return IDP_CopyStruct(prop, flag);
     default:
       return idp_generic_copy(prop, flag);
@@ -1135,16 +1126,12 @@ bool IDP_EqualsProperties_ex(const IDProperty *prop1,
     }
     case IDP_ID:
       return (IDP_ID_get(prop1) == IDP_ID_get(prop2));
-    case IDP_STRUCT: {
-      const char *type1 = prop1->struct_type ? prop1->struct_type : "";
-      const char *type2 = prop2->struct_type ? prop2->struct_type : "";
-      if (!STREQ(type1, type2)) {
-        return false;
-      }
+    case IDP_CURVE_MAPPING:
+    case IDP_COLOR_BAND: {
       if (prop1->data.pointer == prop2->data.pointer) {
         return true;
       }
-      if (const IDPropertyStructTypeInfo *info = IDP_struct_type_find(type1)) {
+      if (const IDPropertyStructTypeInfo *info = IDP_struct_type_info(prop1->type)) {
         if (info->equals) {
           return info->equals(prop1->data.pointer, prop2->data.pointer);
         }
@@ -1415,20 +1402,20 @@ static void idp_free_property_content_recurse(IDProperty *prop,
         id_us_min(IDP_ID_get(prop));
       }
       break;
-    case IDP_STRUCT: {
-      if (prop->data.pointer && prop->struct_type) {
-        if (const IDPropertyStructTypeInfo *info = IDP_struct_type_find(prop->struct_type)) {
+    case IDP_CURVE_MAPPING:
+    case IDP_COLOR_BAND: {
+      if (prop->data.pointer) {
+        if (const IDPropertyStructTypeInfo *info = IDP_struct_type_info(prop->type)) {
           info->free(prop->data.pointer);
         }
         else {
           CLOG_WARN(&LOG,
-                    "Cannot free IDP_STRUCT '%s': unknown DNA type '%s'",
+                    "Cannot free owned-struct IDProperty '%s': unknown type %d",
                     prop->name,
-                    prop->struct_type);
+                    int(prop->type));
         }
         prop->data.pointer = nullptr;
       }
-      MEM_SAFE_DELETE(prop->struct_type);
       break;
     }
   }
@@ -1460,7 +1447,6 @@ void IDP_ClearProperty(IDProperty *prop)
 {
   idp_free_property_content_recurse(prop, true, 0);
   prop->data.pointer = nullptr;
-  prop->struct_type = nullptr;
   prop->len = prop->totallen = 0;
 }
 
@@ -1622,7 +1608,8 @@ static void IDP_WriteArray(const IDProperty *prop, BlendWriter *writer, const in
       case IDP_ARRAY:
       case IDP_ID:
       case IDP_IDPARRAY:
-      case IDP_STRUCT:
+      case IDP_CURVE_MAPPING:
+      case IDP_COLOR_BAND:
         BLI_assert_unreachable();
         break;
     }
@@ -1713,19 +1700,17 @@ static void IDP_WriteProperty_OnlyData(const IDProperty *prop,
     case IDP_IDPARRAY:
       IDP_WriteIDPArray(prop, writer, recursion_depth);
       break;
-    case IDP_STRUCT: {
-      if (prop->struct_type) {
-        writer->write_string(prop->struct_type);
-      }
-      if (prop->data.pointer && prop->struct_type) {
-        if (const IDPropertyStructTypeInfo *info = IDP_struct_type_find(prop->struct_type)) {
+    case IDP_CURVE_MAPPING:
+    case IDP_COLOR_BAND: {
+      if (prop->data.pointer) {
+        if (const IDPropertyStructTypeInfo *info = IDP_struct_type_info(prop->type)) {
           info->blend_write(writer, prop->data.pointer);
         }
         else {
           CLOG_WARN(&LOG,
-                    "Cannot write IDP_STRUCT '%s': unknown DNA type '%s'",
+                    "Cannot write owned-struct IDProperty '%s': unknown type %d",
                     prop->name,
-                    prop->struct_type);
+                    int(prop->type));
         }
       }
       break;
@@ -1909,7 +1894,8 @@ static void IDP_DirectLinkArray(IDProperty *prop,
     case IDP_ARRAY:
     case IDP_ID:
     case IDP_IDPARRAY:
-    case IDP_STRUCT:
+    case IDP_CURVE_MAPPING:
+    case IDP_COLOR_BAND:
       BLI_assert_unreachable();
       break;
   }
@@ -1959,7 +1945,6 @@ static void IDP_DirectLinkProperty(IDProperty *prop,
     idprop->subtype = 0;
     IDP_int_set(idprop, 0);
     idprop->ui_data = nullptr;
-    idprop->struct_type = nullptr;
     idprop->data.pointer = nullptr;
   };
 
@@ -2001,23 +1986,17 @@ static void IDP_DirectLinkProperty(IDProperty *prop,
     case IDP_BOOLEAN:
     case IDP_ID:
       break; /* Nothing special to do here. */
-    case IDP_STRUCT: {
-      BLO_read_string(reader, &prop->struct_type);
-      if (prop->struct_type) {
-        if (const IDPropertyStructTypeInfo *info = IDP_struct_type_find(prop->struct_type)) {
-          info->blend_read(reader, &prop->data.pointer);
-        }
-        else {
-          CLOG_WARN(&LOG,
-                    "Found IDP_STRUCT '%s' with unknown DNA type '%s', clearing data",
-                    prop->name,
-                    prop->struct_type);
-          /* Skip unknown payload; keep type name for forward-compat diagnostics. */
-          BLO_read_raw_address(reader, &prop->data.pointer);
-          prop->data.pointer = nullptr;
-        }
+    case IDP_CURVE_MAPPING:
+    case IDP_COLOR_BAND: {
+      if (const IDPropertyStructTypeInfo *info = IDP_struct_type_info(prop->type)) {
+        info->blend_read(reader, &prop->data.pointer);
       }
       else {
+        CLOG_WARN(&LOG,
+                  "Found owned-struct IDProperty '%s' with unknown type %d, clearing data",
+                  prop->name,
+                  int(prop->type));
+        BLO_read_raw_address(reader, &prop->data.pointer);
         prop->data.pointer = nullptr;
       }
       break;
@@ -2385,11 +2364,9 @@ void hash(const IDProperty &base_prop, XXH3_state_t *hash_state)
         /* Handled by the recursion in #IDP_foreach_property. */
         break;
       }
-      case IDP_STRUCT: {
-        if (prop->struct_type) {
-          XXH3_64bits_update(hash_state, prop->struct_type, strlen(prop->struct_type));
-        }
-        /* Full content hashing is type-specific; type name covers identity of the kind. */
+      case IDP_CURVE_MAPPING:
+      case IDP_COLOR_BAND: {
+        /* Full content hashing is type-specific; the property type covers the kind. */
         break;
       }
     }

@@ -219,9 +219,15 @@ static void idp_repr_fn_recursive(ReprState *state, const IDProperty *prop)
       }
       break;
     }
-    case IDP_STRUCT: {
+    case IDP_CURVE_MAPPING:
+    case IDP_COLOR_BAND: {
       STR_APPEND_STR("<");
-      STR_APPEND_STR(prop->struct_type ? prop->struct_type : "Struct");
+      if (const IDPropertyStructTypeInfo *info = IDP_struct_type_info(prop->type)) {
+        STR_APPEND_STR(info->dna_type_name);
+      }
+      else {
+        STR_APPEND_STR("Struct");
+      }
       STR_APPEND_STR(">");
       break;
     }
@@ -311,8 +317,10 @@ const char *IDP_type_str(const eIDPropertyType type, const short sub_type)
       return "Array of Properties";
     case IDP_BOOLEAN:
       return "Boolean";
-    case IDP_STRUCT:
-      return "Struct";
+    case IDP_CURVE_MAPPING:
+      return "CurveMapping";
+    case IDP_COLOR_BAND:
+      return "ColorBand";
   }
   BLI_assert_unreachable();
   return "Unknown";

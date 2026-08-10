@@ -430,15 +430,20 @@ void IDP_BlendReadData_impl(BlendDataReader *reader,
 #define IDP_BlendDataRead(reader, prop) IDP_BlendReadData_impl(reader, prop, __func__)
 
 /* -------------------------------------------------------------------- */
-/** \name IDP_STRUCT type info
+/** \name Owned DNA struct IDProperty type info
  * \{ */
 
 /**
- * Type information for #IDP_STRUCT properties.
- * Register handlers for each supported DNA type (e.g. CurveMapping, ColorBand).
+ * Type information for IDProperty types that own a DNA struct
+ * (e.g. #IDP_CURVE_MAPPING, #IDP_COLOR_BAND).
+ *
+ * Lookup is by #eIDPropertyType (see #IDP_struct_type_info) so the DNA type name does not need to
+ * be stored on every #IDProperty.
  */
 struct IDPropertyStructTypeInfo {
-  /** DNA type name written to blend files (e.g. `"CurveMapping"`, `"ColorBand"`). */
+  /** Matching #IDProperty.type value. */
+  eIDPropertyType idp_type;
+  /** DNA type name used for blend I/O (e.g. `"CurveMapping"`, `"ColorBand"`). */
   const char *dna_type_name;
   /** RNA struct identifier (e.g. `"CurveMapping"`, `"ColorRamp"`). */
   const char *rna_identifier;
@@ -457,18 +462,22 @@ void IDP_struct_type_init();
 void IDP_struct_type_exit();
 void IDP_struct_type_register(const IDPropertyStructTypeInfo *type_info);
 
-const IDPropertyStructTypeInfo *IDP_struct_type_find(StringRef dna_type_name);
+/**
+ * Return type info for \a type, or null when \a type is not an owned-struct IDProperty type
+ * (e.g. #IDP_INT, #IDP_GROUP).
+ */
+const IDPropertyStructTypeInfo *IDP_struct_type_info(eIDPropertyType type);
 const IDPropertyStructTypeInfo *IDP_struct_type_find_by_rna_identifier(StringRef rna_identifier);
 
 /**
- * Allocate a new #IDP_STRUCT property owning a default instance of the given type.
+ * Allocate a new owned-struct IDProperty of the type described by \a type_info.
  * \param type_info: Must be a registered type info.
  */
 IDProperty *IDP_NewStruct(StringRef name,
                           const IDPropertyStructTypeInfo *type_info,
                           eIDPropertyFlag flags = {}) ATTR_WARN_UNUSED_RESULT ATTR_NONNULL(2);
 
-/** Owned DNA data for an #IDP_STRUCT property, or null. */
+/** Owned DNA data for an owned-struct IDProperty, or null. */
 void *IDP_struct_data_get(const IDProperty *prop);
 
 /** \} */
@@ -614,7 +623,7 @@ std::unique_ptr<IDProperty, IDPropertyDeleter> create_group(StringRef prop_name,
                                                             eIDPropertyFlag flags = {});
 
 /**
- * \brief Allocate a new IDProperty of type #IDP_STRUCT.
+ * \brief Allocate a new owned-struct IDProperty (#IDP_CURVE_MAPPING, #IDP_COLOR_BAND, ...).
  *
  * \param type_info: Registered type info describing the owned DNA struct.
  */

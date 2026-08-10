@@ -5,7 +5,7 @@
 /** \file
  * \ingroup bke
  *
- * #IDP_STRUCT type registry and built-in type handlers (CurveMapping, ColorBand).
+ * Owned DNA struct IDProperty types (#IDP_CURVE_MAPPING, #IDP_COLOR_BAND, ...) and their handlers.
  */
 
 #include "BKE_colorband.hh"
@@ -13,7 +13,6 @@
 #include "BKE_idprop.hh"
 
 #include "BLI_map.hh"
-#include "BLI_string.hh"
 #include "BLI_string_ref.hh"
 
 #include "BLO_read_write.hh"
@@ -31,11 +30,7 @@ namespace blender {
 /** \name Registry
  * \{ */
 
-static Map<StringRefNull, const IDPropertyStructTypeInfo *> &idp_struct_types_by_dna()
-{
-  static Map<StringRefNull, const IDPropertyStructTypeInfo *> map;
-  return map;
-}
+static const IDPropertyStructTypeInfo *g_idp_struct_types[IDP_NUMTYPES] = {};
 
 static Map<StringRefNull, const IDPropertyStructTypeInfo *> &idp_struct_types_by_rna()
 {
@@ -46,6 +41,7 @@ static Map<StringRefNull, const IDPropertyStructTypeInfo *> &idp_struct_types_by
 void IDP_struct_type_register(const IDPropertyStructTypeInfo *type_info)
 {
   BLI_assert(type_info);
+  BLI_assert(uint(type_info->idp_type) < IDP_NUMTYPES);
   BLI_assert(type_info->dna_type_name && type_info->dna_type_name[0]);
   BLI_assert(type_info->rna_identifier && type_info->rna_identifier[0]);
   BLI_assert(type_info->create_default);
@@ -54,13 +50,16 @@ void IDP_struct_type_register(const IDPropertyStructTypeInfo *type_info)
   BLI_assert(type_info->blend_write);
   BLI_assert(type_info->blend_read);
 
-  idp_struct_types_by_dna().add_overwrite(type_info->dna_type_name, type_info);
+  g_idp_struct_types[type_info->idp_type] = type_info;
   idp_struct_types_by_rna().add_overwrite(type_info->rna_identifier, type_info);
 }
 
-const IDPropertyStructTypeInfo *IDP_struct_type_find(const StringRef dna_type_name)
+const IDPropertyStructTypeInfo *IDP_struct_type_info(const eIDPropertyType type)
 {
-  return idp_struct_types_by_dna().lookup_default_as(dna_type_name, nullptr);
+  if (uint(type) >= IDP_NUMTYPES) {
+    return nullptr;
+  }
+  return g_idp_struct_types[type];
 }
 
 const IDPropertyStructTypeInfo *IDP_struct_type_find_by_rna_identifier(
@@ -138,6 +137,7 @@ static bool idp_struct_curvemapping_equals(const void *a_v, const void *b_v)
 }
 
 static const IDPropertyStructTypeInfo idp_struct_type_curvemapping = {
+    /*idp_type*/ IDP_CURVE_MAPPING,
     /*dna_type_name*/ "CurveMapping",
     /*rna_identifier*/ "CurveMapping",
     /*create_default*/ idp_struct_curvemapping_create,
@@ -195,6 +195,7 @@ static bool idp_struct_colorband_equals(const void *a_v, const void *b_v)
 }
 
 static const IDPropertyStructTypeInfo idp_struct_type_colorband = {
+    /*idp_type*/ IDP_COLOR_BAND,
     /*dna_type_name*/ "ColorBand",
     /*rna_identifier*/ "ColorRamp",
     /*create_default*/ idp_struct_colorband_create,
@@ -219,7 +220,9 @@ void IDP_struct_type_init()
 
 void IDP_struct_type_exit()
 {
-  idp_struct_types_by_dna().clear();
+  for (const IDPropertyStructTypeInfo *&info : g_idp_struct_types) {
+    info = nullptr;
+  }
   idp_struct_types_by_rna().clear();
 }
 
@@ -228,20 +231,19 @@ IDProperty *IDP_NewStruct(const StringRef name,
                           const eIDPropertyFlag flags)
 {
   BLI_assert(type_info);
-  BLI_assert(IDP_struct_type_find(type_info->dna_type_name) == type_info);
+  BLI_assert(IDP_struct_type_info(type_info->idp_type) == type_info);
 
   IDProperty *prop = MEM_new<IDProperty>("IDProperty struct");
-  prop->type = IDP_STRUCT;
+  prop->type = type_info->idp_type;
   prop->flag = flags;
   name.copy_utf8_truncated(prop->name);
-  prop->struct_type = BLI_strdup(type_info->dna_type_name);
   prop->data.pointer = type_info->create_default();
   return prop;
 }
 
 void *IDP_struct_data_get(const IDProperty *prop)
 {
-  if (prop == nullptr || prop->type != IDP_STRUCT) {
+  if (prop == nullptr || IDP_struct_type_info(prop->type) == nullptr) {
     return nullptr;
   }
   return prop->data.pointer;

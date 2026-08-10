@@ -82,7 +82,8 @@ void CustomPropertiesExporter::write(const IDProperty *id_property)
       break;
     case IDP_GROUP:
     case IDP_ID:
-    case IDP_STRUCT:
+    case IDP_CURVE_MAPPING:
+    case IDP_COLOR_BAND:
       /* Not supported. */
       break;
   }

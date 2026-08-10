@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 # ./blender.bin --background --python tests/python/bl_pyapi_idprop_struct.py -- --verbose
-"""Tests for IDP_STRUCT properties exposed via PropertyGroup PointerProperty."""
+"""Tests for owned DNA struct IDProperties (CurveMapping/ColorBand) via PropertyGroup PointerProperty."""
 
 import os
 import tempfile

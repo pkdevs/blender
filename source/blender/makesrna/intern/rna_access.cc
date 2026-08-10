@@ -503,7 +503,8 @@ static bool rna_idproperty_verify_valid(PointerRNA *ptr, PropertyRNA *prop, IDPr
         return false;
       }
       break;
-    case IDP_STRUCT: {
+    case IDP_CURVE_MAPPING:
+    case IDP_COLOR_BAND: {
       if (prop->type != PROP_POINTER) {
         return false;
       }
@@ -512,11 +513,10 @@ static bool rna_idproperty_verify_valid(PointerRNA *ptr, PropertyRNA *prop, IDPr
       if (expected_type == nullptr) {
         return false;
       }
-      const IDPropertyStructTypeInfo *info = IDP_struct_type_find_by_rna_identifier(
+      const IDPropertyStructTypeInfo *expected_info = IDP_struct_type_find_by_rna_identifier(
           RNA_struct_identifier(expected_type));
-      if (info == nullptr || idprop->struct_type == nullptr ||
-          !STREQ(idprop->struct_type, info->dna_type_name))
-      {
+      const IDPropertyStructTypeInfo *actual_info = IDP_struct_type_info(idprop->type);
+      if (expected_info == nullptr || actual_info == nullptr || expected_info != actual_info) {
         return false;
       }
       break;
@@ -540,7 +540,8 @@ static PropertyRNA *typemap[IDP_NUMTYPES] = {
     &rna_PropertyGroupItem_double,
     &rna_PropertyGroupItem_idp_array,
     &rna_PropertyGroupItem_bool,
-    nullptr, /* #IDP_STRUCT: accessed via real RNA PointerProperty, not typemap. */
+    nullptr, /* #IDP_CURVE_MAPPING: accessed via real RNA PointerProperty, not typemap. */
+    nullptr, /* #IDP_COLOR_BAND */
 };
 
 static PropertyRNA *arraytypemap[IDP_NUMTYPES] = {
@@ -555,7 +556,8 @@ static PropertyRNA *arraytypemap[IDP_NUMTYPES] = {
     &rna_PropertyGroupItem_double_array,
     nullptr,
     &rna_PropertyGroupItem_bool_array,
-    nullptr, /* #IDP_STRUCT */
+    nullptr, /* #IDP_CURVE_MAPPING */
+    nullptr, /* #IDP_COLOR_BAND */
 };
 
 bool rna_property_can_access_pointer_data(const PointerRNA &ptr, PropertyRNA &prop)
@@ -4629,7 +4631,7 @@ static PointerRNA property_pointer_get(PointerRNA *ptr, PropertyRNA *prop, const
       return RNA_id_pointer_create(idprop->type == IDP_GROUP ? nullptr : IDP_ID_get(idprop));
     }
 
-    if (idprop->type == IDP_STRUCT) {
+    if (IDP_struct_type_info(idprop->type)) {
       return RNA_pointer_create_with_parent(*ptr, type, idprop->data.pointer);
     }
 
@@ -4780,13 +4782,14 @@ void RNA_property_pointer_set(PointerRNA *ptr,
     return;
   }
 
-  /* Assigning to an IDProperty. Owned #IDP_STRUCT data cannot be replaced. */
-  if (idprop && idprop->type == IDP_STRUCT) {
+  /* Assigning to an IDProperty. Owned DNA struct data cannot be replaced. */
+  if (idprop && IDP_struct_type_info(idprop->type)) {
+    const IDPropertyStructTypeInfo *info = IDP_struct_type_info(idprop->type);
     BKE_reportf(reports,
                 RPT_ERROR,
                 "%s: cannot assign to owned IDProperty struct '%s'",
                 __func__,
-                idprop->struct_type ? idprop->struct_type : "");
+                info->dna_type_name);
     return;
   }
   if (IDP_struct_type_find_by_rna_identifier(RNA_struct_identifier(pprop->pointer_type))) {
@@ -6076,7 +6079,8 @@ static void update_idprop_bool(PointerRNA &rna_ptr, PropertyRNA &rna_prop, IDPro
     case IDP_IDPARRAY:
     case IDP_ID:
     case IDP_GROUP:
-    case IDP_STRUCT: {
+    case IDP_CURVE_MAPPING:
+    case IDP_COLOR_BAND: {
       fill_new();
       break;
     }
@@ -6088,7 +6092,8 @@ static void update_idprop_bool(PointerRNA &rna_ptr, PropertyRNA &rna_prop, IDPro
         case IDP_STRING:
         case IDP_ARRAY:
         case IDP_GROUP:
-        case IDP_STRUCT: {
+        case IDP_CURVE_MAPPING:
+        case IDP_COLOR_BAND: {
           BLI_assert_unreachable();
           fill_new();
           break;
@@ -6215,7 +6220,8 @@ static void update_idprop_int(PointerRNA &rna_ptr, PropertyRNA &rna_prop, IDProp
     case IDP_IDPARRAY:
     case IDP_ID:
     case IDP_GROUP:
-    case IDP_STRUCT: {
+    case IDP_CURVE_MAPPING:
+    case IDP_COLOR_BAND: {
       fill_new();
       break;
     }
@@ -6227,7 +6233,8 @@ static void update_idprop_int(PointerRNA &rna_ptr, PropertyRNA &rna_prop, IDProp
         case IDP_STRING:
         case IDP_ARRAY:
         case IDP_GROUP:
-        case IDP_STRUCT: {
+        case IDP_CURVE_MAPPING:
+        case IDP_COLOR_BAND: {
           BLI_assert_unreachable();
           fill_new();
           break;
@@ -6355,7 +6362,8 @@ static void update_idprop_float(PointerRNA &rna_ptr, PropertyRNA &rna_prop, IDPr
     case IDP_IDPARRAY:
     case IDP_ID:
     case IDP_GROUP:
-    case IDP_STRUCT: {
+    case IDP_CURVE_MAPPING:
+    case IDP_COLOR_BAND: {
       fill_new();
       break;
     }
@@ -6367,7 +6375,8 @@ static void update_idprop_float(PointerRNA &rna_ptr, PropertyRNA &rna_prop, IDPr
         case IDP_STRING:
         case IDP_ARRAY:
         case IDP_GROUP:
-        case IDP_STRUCT: {
+        case IDP_CURVE_MAPPING:
+        case IDP_COLOR_BAND: {
           BLI_assert_unreachable();
           fill_new();
           break;
@@ -6558,13 +6567,10 @@ static void sync_system_properties(Main &bmain,
         else if (const IDPropertyStructTypeInfo *info = IDP_struct_type_find_by_rna_identifier(
                      RNA_struct_identifier(prop_srna)))
         {
-          if (idprop->type != IDP_STRUCT || idprop->struct_type == nullptr ||
-              !STREQ(idprop->struct_type, info->dna_type_name) || idprop->data.pointer == nullptr)
-          {
+          if (idprop->type != info->idp_type || idprop->data.pointer == nullptr) {
             IDP_ClearProperty(idprop);
-            idprop->type = IDP_STRUCT;
+            idprop->type = info->idp_type;
             idprop->flag |= IDP_FLAG_STATIC_TYPE;
-            idprop->struct_type = BLI_strdup(info->dna_type_name);
             idprop->data.pointer = info->create_default();
           }
         }
