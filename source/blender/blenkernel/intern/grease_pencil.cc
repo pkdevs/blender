@@ -590,7 +590,7 @@ static void update_triangle_and_offsets_cache(const Span<float3> positions,
             input.vert = verts;
             input.face_offsets = fill_points_by_curve;
             input.face_vert_indices = face_vert_indices;
-            input.need_ids = true;
+            input.needed_ids = CDT_ORIG_VERTS | CDT_ONLY_ONE_ORIG;
 
             meshintersect::CDT_result<double> result = delaunay_2d_calc(input,
                                                                         CDT_INSIDE_WITH_HOLES);
@@ -4367,7 +4367,12 @@ void GreasePencil::rename_node(Main &bmain,
 
   /* Update layer name dependencies. */
   if (node.is_layer()) {
-    BKE_animdata_fix_paths_rename_all(&this->id, "layers", old_name.c_str(), node.name().c_str());
+    BKE_animdata_fix_paths(this->id,
+                           "layers",
+                           RNA_path_name_to_infix(old_name),
+                           RNA_path_name_to_infix(node.name()),
+                           /*verify_paths=*/true,
+                           bmain);
     /* Update names in layer masks. */
     for (bke::greasepencil::Layer *layer : this->layers_for_write()) {
       for (GreasePencilLayerMask &mask : layer->masks) {

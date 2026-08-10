@@ -1,9 +1,9 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 5.2.0 LTS Release Candidate (b'3d8c46ac31f4')\n"
+"Project-Id-Version: Blender 5.3.0 Alpha (b'af4852ed4560')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-07-13 07:34+0000\n"
+"POT-Creation-Date: 2026-08-10 07:54+0000\n"
 "PO-Revision-Date: 2026-06-02 05:12+0000\n"
 "Last-Translator: Fadli Birdie Zeinda <justbirdie00@gmail.com>\n"
 "Language-Team: Indonesian <https://translate.blender.org/projects/blender-ui/ui/id/>\n"
@@ -2463,56 +2463,28 @@ msgid "Point"
 msgstr "Titik"
 
 
-msgid "Attribute on point"
-msgstr "Atribut di titik"
-
-
 msgid "Edge"
 msgstr "Tepi"
-
-
-msgid "Attribute on mesh edge"
-msgstr "Atribut di ujung jaring 3D"
 
 
 msgid "Face"
 msgstr "Bidang"
 
 
-msgid "Attribute on mesh faces"
-msgstr "Atribut di bidang-bidang jaring 3D"
-
-
 msgid "Face Corner"
 msgstr "Ujung Wajah"
-
-
-msgid "Attribute on mesh face corner"
-msgstr "Atribut di pojok bidang jaring 3D"
 
 
 msgid "Spline"
 msgstr "Spline"
 
 
-msgid "Attribute on spline"
-msgstr "Atribut di spline"
-
-
 msgid "Instance"
 msgstr "Contoh"
 
 
-msgid "Attribute on instance"
-msgstr "Atribut di contoh"
-
-
 msgid "Layer"
 msgstr "Lapis"
-
-
-msgid "Attribute on Grease Pencil layer"
-msgstr "Atribut di lapisan Pensil Grease"
 
 
 msgid "Is Internal"
@@ -3764,6 +3736,10 @@ msgid "Source Library"
 msgstr "Sumber Pustaka"
 
 
+msgid "Dirty"
+msgstr "Kotor"
+
+
 msgid "Blender RNA"
 msgstr "RNA Blender"
 
@@ -4780,18 +4756,6 @@ msgstr "Tambah Set Seleksi"
 
 msgid "Add Selection Set for this collection"
 msgstr "Tambah Set Seleksi untuk koleksi ini"
-
-
-msgid "UI Row"
-msgstr "Barisan UI"
-
-
-msgid "If not zero, row of the UI panel where the button for this collection is shown"
-msgstr "Jika bukan nol, barisan panel UI dimana tombol untuk koleksi ini ditampilkan"
-
-
-msgid "UI Title"
-msgstr "Judul UI"
 
 
 msgid "Text to use on the UI panel button instead of the collection name"
@@ -12886,10 +12850,6 @@ msgid "UV Grid"
 msgstr "Grid UV"
 
 
-msgid "Dirty"
-msgstr "Kotor"
-
-
 msgid "True if this image is stored in floating-point buffer"
 msgstr "Benar jika gambar ini disimpan di buffer floating-point"
 
@@ -15740,44 +15700,24 @@ msgid "Use Material Mask"
 msgstr "Gunakan Masker Bahan"
 
 
-msgid "Merge"
-msgstr "Menggabungkan"
-
-
-msgid "Metaball"
-msgstr "Metabola"
-
-
-msgid "Math"
-msgstr "Matematika"
-
-
 msgid "Names"
 msgstr "Nama"
+
+
+msgid "Tracking"
+msgstr "Pelacakan"
 
 
 msgid "Utilities"
 msgstr "Utilitas"
 
 
-msgid "Sample"
-msgstr "Sampel"
+msgid "Math"
+msgstr "Matematika"
 
 
 msgid "Snap"
 msgstr "Jepret"
-
-
-msgid "Gizmo"
-msgstr "Gizmo"
-
-
-msgid "Instances"
-msgstr "Contoh-contoh"
-
-
-msgid "Import"
-msgstr "Impor"
 
 
 msgid "Mirror"
@@ -15788,16 +15728,20 @@ msgid "Navigation"
 msgstr "Navigasi"
 
 
-msgid "UV"
-msgstr "UV"
-
-
 msgid "Select Linked"
 msgstr "Seleksi yang Terhubung"
 
 
 msgid "Assign Material"
 msgstr "Tugaskan Bahan"
+
+
+msgid "Sample"
+msgstr "Sampel"
+
+
+msgid "Metaball"
+msgstr "Metabola"
 
 
 msgid "Light"
@@ -15812,20 +15756,24 @@ msgid "Add Image"
 msgstr "Tambah Gambar"
 
 
+msgid "Gizmo"
+msgstr "Gizmo"
+
+
+msgid "Instances"
+msgstr "Contoh-contoh"
+
+
 msgid "Apply"
 msgstr "Tetapkan"
 
 
+msgid "Import"
+msgstr "Impor"
+
+
 msgid "Track"
 msgstr "Lacak"
-
-
-msgid "Linked"
-msgstr "Terkoleksi"
-
-
-msgid "Layout"
-msgstr "Tata Letak"
 
 
 msgid "Asset"
@@ -15836,8 +15784,20 @@ msgid "Hooks"
 msgstr "Kait"
 
 
-msgid "Tracking"
-msgstr "Pelacakan"
+msgid "UV"
+msgstr "UV"
+
+
+msgid "Merge"
+msgstr "Menggabungkan"
+
+
+msgid "Linked"
+msgstr "Terkoleksi"
+
+
+msgid "Layout"
+msgstr "Tata Letak"
 
 
 msgid "Animals"
@@ -15923,6 +15883,10 @@ msgid "Particle Specials"
 msgstr "Spesial Partikel"
 
 
+msgid "Save & Load"
+msgstr "Simpan & Buka"
+
+
 msgid "Frame Rate Presets"
 msgstr "Preset Frame Rate"
 
@@ -15953,10 +15917,6 @@ msgstr "Masukan"
 
 msgid "Lock/Mute"
 msgstr "Kunci/Mute"
-
-
-msgid "Movie Strip"
-msgstr "Strip Film"
 
 
 msgid "Texture Specials"
@@ -16025,10 +15985,6 @@ msgstr "Preset"
 
 msgid "KeyPresets"
 msgstr "PresetKunci"
-
-
-msgid "Save & Load"
-msgstr "Simpan & Buka"
 
 
 msgctxt "Operator"
@@ -18952,6 +18908,10 @@ msgid "Node Output"
 msgstr "Keluaran Node"
 
 
+msgid "Scalar"
+msgstr "Skalar"
+
+
 msgid "Tooltip"
 msgstr "Alat"
 
@@ -19760,10 +19720,6 @@ msgstr "Setelah Ini"
 
 msgid "Change brush size by a scalar"
 msgstr "Ganti ukuran kuas oleh skalar"
-
-
-msgid "Scalar"
-msgstr "Skalar"
 
 
 msgctxt "Operator"
@@ -24020,24 +23976,12 @@ msgid "Select the strips and their handles"
 msgstr "Pilih strip dan pegangan mereka"
 
 
-msgid "Shared strip type"
-msgstr "Tipe strip yang terbagi"
-
-
-msgid "Global Type"
-msgstr "Tipe Global"
+msgid "Movie"
+msgstr "Film"
 
 
 msgid "Effect"
 msgstr "Efek"
-
-
-msgid "Shared effects"
-msgstr "Efek yang terbagi"
-
-
-msgid "Effect/Linked"
-msgstr "Efek/Terhubung"
 
 
 msgid "Same Channel"
@@ -26453,10 +26397,6 @@ msgid "AO Bounces Render"
 msgstr "AO Memantul Render"
 
 
-msgid "Adaptively blur glossy shaders after blurry bounces, to reduce noise at the cost of accuracy"
-msgstr "Secara adaptif blur shader glossy setelah blur memantul, untuk mengurangi noise dengan mengorbankan akurasi"
-
-
 msgid "GPU Compute"
 msgstr "Tipe"
 
@@ -26539,10 +26479,6 @@ msgstr "Miringkan Y"
 
 msgid "Tiny Prim Culling"
 msgstr "Culling Prim Kecil"
-
-
-msgid "object_color"
-msgstr "benda_warna"
 
 
 msgid "Arm"
@@ -27585,6 +27521,10 @@ msgstr "Ganda"
 msgctxt "Sequence"
 msgid "Clock"
 msgstr "Jam"
+
+
+msgid "Movie Strip"
+msgstr "Strip Film"
 
 
 msgid "Correction for midtones"
@@ -28653,11 +28593,6 @@ msgstr " (tidak terpasang)"
 
 msgid "File:"
 msgstr "Berkas:"
-
-
-msgctxt "Operator"
-msgid "Apply"
-msgstr "Setujui"
 
 
 msgid "Incorrect armature..."
@@ -31200,6 +31135,11 @@ msgid "Quick Edit"
 msgstr "Sunting Cepat"
 
 
+msgctxt "Operator"
+msgid "Apply"
+msgstr "Setujui"
+
+
 msgid "Editing Type"
 msgstr "Tipe Mengedit"
 
@@ -31609,10 +31549,6 @@ msgid "Value: {}"
 msgstr "Nilai: {}"
 
 
-msgid "Movie"
-msgstr "Film"
-
-
 msgid "File not found"
 msgstr "Berkas tidak ditemukan"
 
@@ -31941,6 +31877,10 @@ msgid "Selected faces required"
 msgstr "Wajah yang terseleksi diperlukan"
 
 
+msgid "No edges selected"
+msgstr "Tidak ada tepi yang terseleksi"
+
+
 msgid "No face selected"
 msgstr "Tidak ada wajah yang terseleksi"
 
@@ -31951,10 +31891,6 @@ msgstr "Tidak ada tepi yang terseleksi"
 
 msgid "No vertex group among the selected vertices"
 msgstr "Tidak ada kelompok simpul di antara simpul yang terpilih"
-
-
-msgid "No edges selected"
-msgstr "Tidak ada tepi yang terseleksi"
 
 
 msgid "Invalid selection order"
@@ -32657,10 +32593,6 @@ msgstr "Buat contoh benda dari benda-data"
 
 msgid "Gizmos hidden in this view"
 msgstr "Gizmo-gizmo tidak terlihat di tampilan ini"
-
-
-msgid "Cannot fly an object with constraints"
-msgstr "Data Objek"
 
 
 msgid "Depth too large"
