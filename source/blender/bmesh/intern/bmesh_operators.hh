@@ -165,6 +165,17 @@ enum FlattenMethod {
   FLATTEN_VIEW = 2,
 };
 
+enum CurveInterpolation {
+  CURVE_INTERP_CUBIC = 0,
+  CURVE_INTERP_LINEAR = 1,
+};
+
+enum CurveRestriction {
+  CURVE_RESTRICT_NONE = 0,
+  CURVE_RESTRICT_EXTRUDE = 1,
+  CURVE_RESTRICT_INDENT = 2,
+};
+
 extern const BMOpDefine *bmo_opdefines[];
 extern const int bmo_opdefines_total;
 

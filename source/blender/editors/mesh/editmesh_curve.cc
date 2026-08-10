@@ -32,21 +32,10 @@
 
 namespace blender {
 
-enum CurveInterpolation {
-  CURVE_INTERP_CUBIC = 0,
-  CURVE_INTERP_LINEAR = 1,
-};
-
 static const EnumPropertyItem prop_interpolation_items[] = {
     {CURVE_INTERP_CUBIC, "CUBIC", 0, "Cubic", "Natural cubic spline, smooth results"},
     {CURVE_INTERP_LINEAR, "LINEAR", 0, "Linear", "Simple and fast linear algorithm"},
     {0, nullptr},
-};
-
-enum CurveRestriction {
-  CURVE_RESTRICT_NONE = 0,
-  CURVE_RESTRICT_EXTRUDE = 1,
-  CURVE_RESTRICT_INDENT = 2,
 };
 
 static const EnumPropertyItem prop_restriction_items[] = {
