@@ -7670,7 +7670,7 @@ static void pyrna_struct_dealloc(PyObject *self)
   BPy_StructRNA *self_struct = reinterpret_cast<BPy_StructRNA *>(self);
 
 #ifdef PYRNA_FREE_SUPPORT
-  if (self_struct->freeptr && self_struct->ptr->data) {
+  if (self_struct->freeptr && *self_struct->ptr) {
     IDP_FreeProperty(self_struct->ptr->data);
     self_struct->ptr->data = nullptr;
   }
@@ -8834,7 +8834,7 @@ PyObject *pyrna_struct_CreatePyObject(PointerRNA *ptr)
 
   /* NOTE(@ideasman42): New in 2.8x, since not many types support instancing
    * we may want to use a flag to avoid looping over all classes. */
-  void **instance = ptr->data ? RNA_struct_instance(ptr) : nullptr;
+  void **instance = *ptr ? RNA_struct_instance(ptr) : nullptr;
   if (instance && *instance) {
     pyrna = static_cast<BPy_StructRNA *>(*instance);
 

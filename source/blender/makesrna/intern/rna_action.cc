@@ -185,7 +185,7 @@ static void rna_ActionSlots_active_set(PointerRNA *ptr,
 {
   animrig::Action &action = rna_action(ptr);
 
-  if (value.data) {
+  if (value) {
     animrig::Slot &slot = rna_data_slot(&value);
     action.slot_active_set(slot.handle);
   }

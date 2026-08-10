@@ -97,7 +97,7 @@ static void rna_LayerObjects_active_object_set(PointerRNA *ptr,
 {
   const Scene *scene = id_cast<Scene *>(ptr->owner_id);
   ViewLayer *view_layer = static_cast<ViewLayer *>(ptr->data);
-  if (value.data) {
+  if (value) {
     Object *ob = static_cast<Object *>(value.data);
     /* FIXME Using G_MAIN is very weak here, and may cause random issues when handling data not in
      * the G_MAIN, though in practice this is _probably_ not a very likely issue for now. */

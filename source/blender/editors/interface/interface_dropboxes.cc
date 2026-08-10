@@ -129,7 +129,7 @@ static std::string drop_material_tooltip(bContext *C,
   BLI_assert(ob);
 
   PointerRNA mat_slot = CTX_data_pointer_get_type(C, "material_slot", RNA_MaterialSlot);
-  BLI_assert(mat_slot.data);
+  BLI_assert(mat_slot);
 
   const int target_slot = RNA_int_get(&mat_slot, "slot_index") + 1;
 

@@ -1077,7 +1077,7 @@ int /*eContextResult*/ buttons_context(const bContext *C,
       return CTX_RESULT_NO_DATA;
     }
 
-    if (ct->user && ct->user->ptr.data) {
+    if (ct->user && ct->user->ptr) {
       ButsTextureUser *user = ct->user;
       CTX_data_pointer_set_ptr(result, &user->ptr);
     }
@@ -1091,7 +1091,7 @@ int /*eContextResult*/ buttons_context(const bContext *C,
       return CTX_RESULT_NO_DATA;
     }
 
-    if (ct->user && ct->user->ptr.data) {
+    if (ct->user && ct->user->ptr) {
       ButsTextureUser *user = ct->user;
       CTX_data_pointer_set(result, nullptr, RNA_Property, user->prop);
     }

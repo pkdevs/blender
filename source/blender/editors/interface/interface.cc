@@ -3417,7 +3417,7 @@ bool button_string_eval_number(bContext *C, const Button *but, const char *str, 
 
 bool button_string_set(bContext *C, Button *but, const char *str)
 {
-  if (but->rnaprop && but->rnapoin.data &&
+  if (but->rnaprop && but->rnapoin &&
       ELEM(but->type, ButtonType::Text, ButtonType::TextBox, ButtonType::SearchMenu))
   {
     if (RNA_property_editable(&but->rnapoin, but->rnaprop)) {
@@ -5053,7 +5053,7 @@ static Button *def_but_rna(Block *block,
   }
 
   const char *info;
-  if (but->rnapoin.data && !RNA_property_editable_info(&but->rnapoin, prop, &info)) {
+  if (but->rnapoin && !RNA_property_editable_info(&but->rnapoin, prop, &info)) {
     button_disable(but, info);
   }
 
@@ -6515,7 +6515,7 @@ std::string button_string_get_rna_property_identifier(const Button &but)
 
 std::string button_string_get_rna_struct_identifier(const Button &but)
 {
-  if (but.rnaprop && but.rnapoin.data) {
+  if (but.rnaprop && but.rnapoin) {
     return RNA_struct_identifier(but.rnapoin.type);
   }
   if (but.optype) {
