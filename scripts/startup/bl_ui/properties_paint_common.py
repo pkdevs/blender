@@ -707,8 +707,7 @@ class ShapePanel(BrushPanel):
 
         if not (brush and brush.curve_distance_falloff):
             return False
-        if cls.get_brush_mode(context) == 'SCULPT_CURVES':
-            brush = settings.brush
+        if mode == 'SCULPT_CURVES':
             if brush.curves_sculpt_brush_type in {'ADD', 'DELETE', 'CUT'}:
                 return False
         return True
