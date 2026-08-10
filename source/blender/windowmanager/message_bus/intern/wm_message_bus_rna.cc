@@ -260,7 +260,7 @@ void WM_msg_publish_rna_params(wmMsgBus *mbus, const wmMsgParams_RNA *msg_key_pa
 
   /* Support anonymous subscribers, this may be some extra overhead
    * but we want to be able to be more ambiguous. */
-  if (msg_key_params->ptr) {
+  if (msg_key_params->ptr.has_owner_id() || msg_key_params->ptr.has_data()) {
     wmMsgParams_RNA msg_key_params_anon = *msg_key_params;
 
     /* We might want to enable this later? */
