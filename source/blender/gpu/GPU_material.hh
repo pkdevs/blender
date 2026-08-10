@@ -10,8 +10,10 @@
 
 #include <string>
 
+#include "BLI_assert.hh"
 #include "BLI_enum_flags.hh"
-#include "BLI_math_base.h"
+#include "BLI_math_base_c.hh"
+#include "BLI_math_vector_types.hh"
 #include "BLI_set.hh"
 
 #include "DNA_customdata_types.h" /* for eCustomDataType */
@@ -207,29 +209,106 @@ const ListBaseT<GPULayerAttr> *GPU_material_layer_attributes(const GPUMaterial *
 /* Requested Material Attributes and Textures */
 
 enum GPUType {
-  /* Keep in sync with GPU_DATATYPE_STR */
-  /* The value indicates the number of elements in each type */
-  GPU_NONE = 0,
-  GPU_FLOAT = 1,
-  GPU_VEC2 = 2,
-  GPU_VEC3 = 3,
-  GPU_VEC4 = 4,
-  GPU_MAT3 = 9,
-  GPU_MAT4 = 16,
-  GPU_MAX_CONSTANT_DATA = GPU_MAT4,
+  GPU_NONE,
+  GPU_FLOAT,
+  GPU_VEC2,
+  GPU_VEC3,
+  GPU_VEC4,
+  GPU_MAT3,
+  GPU_MAT4,
 
-  /* Values not in GPU_DATATYPE_STR */
-  GPU_TEX1D_ARRAY = 1001,
-  GPU_TEX2D = 1002,
-  GPU_TEX2D_ARRAY = 1003,
-  GPU_TEX3D = 1004,
+  GPU_INT,
+  GPU_INT2,
+  GPU_INT3,
+  GPU_INT4,
+  GPU_BOOL,
+
+  GPU_TEX1D_ARRAY,
+  GPU_TEX2D,
+  GPU_TEX2D_ARRAY,
+  GPU_TEX3D,
 
   /* GLSL Struct types */
-  GPU_CLOSURE = 1007,
+  GPU_CLOSURE,
 
   /* Opengl Attributes */
-  GPU_ATTR = 3001,
+  GPU_ATTR,
 };
+
+/* Element count of GPU_MAT4. */
+constexpr int GPU_MAX_CONSTANT_DATA = 16;
+
+constexpr int gpu_type_element_count(const GPUType type)
+{
+  switch (type) {
+    case GPU_FLOAT:
+    case GPU_INT:
+    case GPU_BOOL:
+      return 1;
+    case GPU_VEC2:
+    case GPU_INT2:
+      return 2;
+    case GPU_VEC3:
+    case GPU_INT3:
+      return 3;
+    case GPU_VEC4:
+    case GPU_INT4:
+      return 4;
+    case GPU_MAT3:
+      return 9;
+    case GPU_MAT4:
+      return 16;
+    case GPU_NONE:
+    case GPU_TEX1D_ARRAY:
+    case GPU_TEX2D:
+    case GPU_TEX2D_ARRAY:
+    case GPU_TEX3D:
+    case GPU_CLOSURE:
+    case GPU_ATTR:
+      break;
+  }
+
+  BLI_assert_unreachable();
+  return 0;
+}
+
+constexpr GPUType gpu_float_type_from_element_count(const int count)
+{
+  switch (count) {
+    case 1:
+      return GPU_FLOAT;
+    case 2:
+      return GPU_VEC2;
+    case 3:
+      return GPU_VEC3;
+    case 4:
+      return GPU_VEC4;
+    case 9:
+      return GPU_MAT3;
+    case 16:
+      return GPU_MAT4;
+  }
+
+  BLI_assert_unreachable();
+  return GPU_NONE;
+}
+
+constexpr GPUType gpu_int_type_from_element_count(const int count)
+{
+  switch (count) {
+    case 1:
+      return GPU_INT;
+    case 2:
+      return GPU_INT2;
+    case 3:
+      return GPU_INT3;
+    case 4:
+      return GPU_INT4;
+  }
+
+  BLI_assert_unreachable();
+  return GPU_NONE;
+}
 
 enum GPUDefaultValue {
   GPU_DEFAULT_0 = 0,
@@ -305,7 +384,11 @@ const GPUUniformAttrList *GPU_material_uniform_attributes(const GPUMaterial *mat
 
 struct GPUNodeStack {
   GPUType type;
-  float vec[4];
+  union {
+    float vec[4];
+    int4 integer_data;
+    bool boolean_data;
+  };
   GPUNodeLink *link;
   bool hasinput;
   bool hasoutput;
@@ -380,6 +463,10 @@ struct GPUCodegenOutput {
 
 GPUNodeLink *GPU_constant(const float *num);
 GPUNodeLink *GPU_uniform(const float *num);
+GPUNodeLink *GPU_constant(const int *num);
+GPUNodeLink *GPU_uniform(const int *num);
+GPUNodeLink *GPU_constant(const bool *num);
+GPUNodeLink *GPU_uniform(const bool *num);
 GPUNodeLink *GPU_attribute(GPUMaterial *mat, eCustomDataType type, const char *name);
 /**
  * Add a GPU attribute that refers to the default color attribute on a geometry.

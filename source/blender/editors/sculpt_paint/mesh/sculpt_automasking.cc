@@ -8,8 +8,8 @@
 
 #include "BLI_array.hh"
 #include "BLI_index_range.hh"
-#include "BLI_math_base.h"
 #include "BLI_math_base.hh"
+#include "BLI_math_base_c.hh"
 #include "BLI_math_vector.hh"
 #include "BLI_math_vector_types.hh"
 #include "BLI_set.hh"
@@ -639,8 +639,12 @@ void calc_vert_factors(const Depsgraph &depsgraph,
   if (automasking.settings.flags &
       (BRUSH_AUTOMASKING_BRUSH_NORMAL | BRUSH_AUTOMASKING_VIEW_NORMAL))
   {
-    if (std::optional<OrigPositionData> orig_data = orig_position_data_lookup_mesh(object, node)) {
-      orig_normals = orig_data->normals;
+    /* Weight & Vertex paint do not get "original" normals */
+    if (object.mode == OB_MODE_SCULPT) {
+      if (std::optional<OrigPositionData> orig_data = orig_position_data_lookup_mesh(object, node))
+      {
+        orig_normals = orig_data->normals;
+      }
     }
   }
 

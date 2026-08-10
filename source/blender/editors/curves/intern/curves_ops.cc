@@ -7,11 +7,11 @@
  */
 
 #include "BLI_array_utils.hh"
-#include "BLI_listbase.h"
-#include "BLI_math_geom.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_geom_c.hh"
 #include "BLI_math_matrix.hh"
-#include "BLI_string.h"
-#include "BLI_utildefines.h"
+#include "BLI_string.hh"
+#include "BLI_utildefines.hh"
 #include "BLI_vector_set.hh"
 
 #include "BLT_translation.hh"
@@ -363,7 +363,8 @@ static void try_convert_single_object(Object &curves_ob,
 
     ParticleData &particle = particles[new_hair_i];
     const int num_keys = points.size();
-    MutableSpan<HairKey> hair_keys{MEM_new_array_zeroed<HairKey>(num_keys, __func__), num_keys};
+    MutableSpan<HairKey> hair_keys{
+        MEM_new_array_zeroed<HairKey>(num_keys, "try_convert_single_object hair_keys"), num_keys};
 
     particle.hair = hair_keys.data();
     particle.totkey = hair_keys.size();

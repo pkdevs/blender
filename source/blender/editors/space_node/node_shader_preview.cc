@@ -22,9 +22,9 @@
  * the wanted viewlayer/pass for each previewed node.
  */
 
-#include "BLI_listbase.h"
-#include "BLI_math_base.h"
-#include "BLI_string_utf8.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_base_c.hh"
+#include "BLI_string_utf8.hh"
 
 #include "DNA_camera_types.h"
 #include "DNA_material_types.h"
@@ -548,7 +548,7 @@ static bool prepare_viewlayer_update(void *pvl_data, ViewLayer *vl, Depsgraph *d
 }
 
 /* Called by renderer, refresh the UI. */
-static void all_nodes_preview_update(void *npv, RenderResult *rr, rcti * /*rect*/)
+static void all_nodes_preview_update(void *npv, RenderResult *rr)
 {
   ShaderNodesPreviewJob *job_data = static_cast<ShaderNodesPreviewJob *>(npv);
   *job_data->do_update = true;

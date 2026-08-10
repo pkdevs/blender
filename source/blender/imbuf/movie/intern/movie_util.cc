@@ -7,8 +7,8 @@
  */
 
 #include "BLI_path_utils.hh"
-#include "BLI_threads.h"
-#include "BLI_utildefines.h"
+#include "BLI_threads.hh"
+#include "BLI_utildefines.hh"
 
 #include "CLG_log.h"
 #include "DNA_scene_types.h"
@@ -21,7 +21,7 @@
 #include <mutex>
 
 #ifdef WITH_FFMPEG
-#  include "BLI_string.h"
+#  include "BLI_string.hh"
 
 extern "C" {
 #  include "ffmpeg_compat.h"
@@ -125,6 +125,30 @@ static void ffmpeg_log_callback(void * /*ptr*/, int level, const char *format, v
 const char *ffmpeg_last_error()
 {
   return ffmpeg_last_error_buffer;
+}
+
+static bool ffmpeg_container_has_real_video(const AVFormatContext *format_ctx)
+{
+  for (int i = 0; i < format_ctx->nb_streams; i++) {
+    const AVStream *stream = format_ctx->streams[i];
+    if (stream->codecpar->codec_type == AVMEDIA_TYPE_VIDEO &&
+        (stream->disposition & AV_DISPOSITION_ATTACHED_PIC) == 0)
+    {
+      return true;
+    }
+  }
+  return false;
+}
+
+bool ffmpeg_stream_counts_as_video(const AVFormatContext *format_ctx, const AVStream *stream)
+{
+  if (stream->codecpar->codec_type != AVMEDIA_TYPE_VIDEO) {
+    return false;
+  }
+  if ((stream->disposition & AV_DISPOSITION_ATTACHED_PIC) == 0) {
+    return true;
+  }
+  return !ffmpeg_container_has_real_video(format_ctx);
 }
 
 static int isffmpeg(const char *filepath)

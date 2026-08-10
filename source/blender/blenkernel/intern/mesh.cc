@@ -21,21 +21,21 @@
 
 #include "BLI_array_utils.hh"
 #include "BLI_bounds.hh"
-#include "BLI_hash.h"
+#include "BLI_hash_c.hh"
 #include "BLI_implicit_sharing.hh"
 #include "BLI_index_range.hh"
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 #include "BLI_math_matrix.hh"
-#include "BLI_math_vector.h"
 #include "BLI_math_vector.hh"
+#include "BLI_math_vector_c.hh"
 #include "BLI_memory_counter.hh"
 #include "BLI_resource_scope.hh"
 #include "BLI_set.hh"
 #include "BLI_span.hh"
-#include "BLI_string.h"
+#include "BLI_string.hh"
 #include "BLI_task.hh"
-#include "BLI_time.h"
-#include "BLI_utildefines.h"
+#include "BLI_time.hh"
+#include "BLI_utildefines.hh"
 #include "BLI_vector.hh"
 #include "BLI_virtual_array.hh"
 
@@ -388,7 +388,9 @@ static void mesh_blend_write(BlendWriter *writer, ID *id, const void *id_address
 
   BLO_write_generated_pointer_tag(writer, mesh->attribute_storage.dna_attributes);
 
-  writer->write_id_struct(id_address, mesh);
+  writer->write_id_struct(id_address, mesh, [](BlendStructWriter &struct_writer) {
+    struct_writer.generated_ptr(offsetof(Mesh, attribute_storage.dna_attributes));
+  });
   BKE_id_blend_write(writer, &mesh->id);
 
   BKE_defbase_blend_write(writer, &mesh->vertex_group_names);
@@ -1615,7 +1617,7 @@ static void ensure_orig_index_layer(CustomData &data, const int size)
   }
   int *indices = static_cast<int *>(
       CustomData_add_layer(&data, CD_ORIGINDEX, CD_SET_DEFAULT, size));
-  range_vn_i(indices, size, 0);
+  array_utils::fill_index_range<int>({indices, size});
 }
 
 void BKE_mesh_ensure_default_orig_index_customdata(Mesh *mesh)

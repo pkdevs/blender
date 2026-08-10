@@ -4,8 +4,8 @@
 
 #include <fmt/format.h>
 
-#include "BLI_listbase.h"
-#include "BLI_string.h"
+#include "BLI_listbase.hh"
+#include "BLI_string.hh"
 
 #include "NOD_geometry_nodes_srna.hh"
 #include "NOD_socket.hh"
@@ -19,6 +19,8 @@
 #include "RNA_access.hh"
 #include "RNA_define.hh"
 #include "RNA_prototypes.hh"
+
+#include "PRF_profile.hh"
 
 namespace blender::nodes {
 
@@ -200,6 +202,7 @@ static StructRNA *create_panels_srna(const bNodeTree &tree, GeneratedTreeSrnaDat
 std::shared_ptr<GeneratedTreeSrnaData> create_geometry_nodes_rna_for_modifier(
     const bNodeTree &tree)
 {
+  PRF_scope(ProfileCategory::Core);
   auto generated = std::make_unique<GeneratedTreeSrnaData>();
   tree.ensure_interface_cache();
 

@@ -62,6 +62,9 @@ class Context {
   /* True if the compositor should use GPU acceleration. */
   virtual bool use_gpu() const = 0;
 
+  /* Returns the hash of the currently active compute context. */
+  virtual const ComputeContextHash &get_active_compute_context_hash() const = 0;
+
   /* Get the strip that the compositing modifier is applied to. */
   virtual const Strip *get_strip() const;
 
@@ -85,10 +88,6 @@ class Context {
    * appropriate place, which can be directly in the UI or just logged to the output stream. */
   virtual void set_info_message(StringRef message) const;
 
-  /* True if the compositor should treat viewer nodes as group output nodes because it has no
-   * concept of or support for viewers. */
-  virtual bool treat_viewer_as_group_output() const;
-
   /* Populates the given meta data from the render stamp information of the given render pass. */
   virtual void populate_meta_data_for_pass(const Scene *scene,
                                            int view_layer_id,
@@ -99,6 +98,10 @@ class Context {
    * the current render. It might be null if the compositor is not being evaluated as part of a
    * render pipeline. */
   virtual RenderContext *render_context() const;
+
+  /* Returns true if this context is the viewport compositor, as opposed to the interactive
+   * compositor or a final render. */
+  virtual bool is_viewport() const;
 
   /* Returns a pointer to a nodes evaluation log of the context, this can be nullptr for context
    * that does not support logging. */

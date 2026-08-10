@@ -131,7 +131,7 @@ class BrushAssetShelf:
         if not tool or not tool.use_brushes:
             return None
 
-        paint_settings = UnifiedPaintPanel.paint_settings(bpy.context)
+        paint_settings = UnifiedPaintPanel.paint_settings_from_active_tool(bpy.context)
         return paint_settings.brush_asset_reference if paint_settings else None
 
     @classmethod
@@ -255,12 +255,7 @@ class UnifiedPaintPanel:
         return None
 
     @staticmethod
-    def paint_settings(context):
-        tool_settings = context.tool_settings
-
-        mode = UnifiedPaintPanel.get_brush_mode(context)
-
-        # 3D paint settings
+    def _paint_settings(tool_settings, mode):
         if mode == 'SCULPT':
             return tool_settings.sculpt
         elif mode == 'PAINT_VERTEX':
@@ -271,12 +266,10 @@ class UnifiedPaintPanel:
             return tool_settings.image_paint
         elif mode == 'PARTICLE':
             return tool_settings.particle_edit
-        # 2D paint settings
         elif mode == 'PAINT_2D':
             return tool_settings.image_paint
         elif mode == 'SCULPT_CURVES':
             return tool_settings.curves_sculpt
-        # Grease Pencil settings
         elif mode == 'PAINT_GREASE_PENCIL':
             return tool_settings.gpencil_paint
         elif mode == 'SCULPT_GREASE_PENCIL':
@@ -286,6 +279,19 @@ class UnifiedPaintPanel:
         elif mode == 'VERTEX_GREASE_PENCIL':
             return tool_settings.gpencil_vertex_paint
         return None
+
+    @staticmethod
+    def paint_settings_from_active_tool(context):
+        """Retrieve the Paint settings based on the current active tool, may return None for tools with no associated
+        brush"""
+        tool_settings = context.tool_settings
+        mode = UnifiedPaintPanel.get_brush_mode(context)
+        return UnifiedPaintPanel._paint_settings(tool_settings, mode)
+
+    @staticmethod
+    def paint_settings_from_mode(context, mode):
+        """Retrieve the Paint settings based on a hardcoded 'mode' string."""
+        return UnifiedPaintPanel._paint_settings(context.tool_settings, mode)
 
     @staticmethod
     def prop_unified(
@@ -309,7 +315,7 @@ class UnifiedPaintPanel:
         if unified_paint_settings_override:
             ups = unified_paint_settings_override
         else:
-            ups = UnifiedPaintPanel.paint_settings(context).unified_paint_settings
+            ups = UnifiedPaintPanel.paint_settings_from_active_tool(context).unified_paint_settings
         prop_owner = brush
         if unified_name and getattr(ups, unified_name):
             prop_owner = ups
@@ -336,7 +342,7 @@ class UnifiedPaintPanel:
             curve_visibility_name,
             custom_curve_name,
     ):
-        paint = UnifiedPaintPanel.paint_settings(context)
+        paint = UnifiedPaintPanel.paint_settings_from_active_tool(context)
 
         is_active = getattr(paint, curve_visibility_name)
         parent_row.prop(
@@ -353,13 +359,13 @@ class UnifiedPaintPanel:
 
     @staticmethod
     def prop_unified_color(parent, context, brush, prop_name, *, text=None):
-        ups = UnifiedPaintPanel.paint_settings(context).unified_paint_settings
+        ups = UnifiedPaintPanel.paint_settings_from_active_tool(context).unified_paint_settings
         prop_owner = ups if ups.use_unified_color else brush
         parent.prop(prop_owner, prop_name, text=text)
 
     @staticmethod
     def prop_unified_color_picker(parent, context, brush, prop_name, value_slider=True):
-        ups = UnifiedPaintPanel.paint_settings(context).unified_paint_settings
+        ups = UnifiedPaintPanel.paint_settings_from_active_tool(context).unified_paint_settings
         prop_owner = ups if ups.use_unified_color else brush
         parent.template_color_picker(prop_owner, prop_name, value_slider=value_slider)
 
@@ -378,7 +384,7 @@ class BrushSelectPanel(BrushPanel):
     def draw_header_preset(self, context):
         # layout = self.layout  # UNUSED.
 
-        settings = self.paint_settings(context)
+        settings = self.paint_settings_from_active_tool(context)
         if settings is None:
             return
 
@@ -393,7 +399,7 @@ class BrushSelectPanel(BrushPanel):
 
     def draw(self, context):
         layout = self.layout
-        settings = self.paint_settings(context)
+        settings = self.paint_settings_from_active_tool(context)
         if settings is None:
             return
 
@@ -422,7 +428,7 @@ class ColorPalettePanel(BrushPanel):
         if not super().poll(context):
             return False
 
-        settings = cls.paint_settings(context)
+        settings = cls.paint_settings_from_active_tool(context)
         if (brush := settings.brush) is None:
             return False
 
@@ -441,7 +447,7 @@ class ColorPalettePanel(BrushPanel):
 
     def draw(self, context):
         layout = self.layout
-        settings = self.paint_settings(context)
+        settings = self.paint_settings_from_active_tool(context)
 
         layout.template_ID(settings, "palette", new="palette.new")
         if settings.palette:
@@ -457,7 +463,7 @@ class ClonePanel(BrushPanel):
         if not super().poll(context):
             return False
 
-        settings = cls.paint_settings(context)
+        settings = cls.paint_settings_from_active_tool(context)
 
         mode = cls.get_brush_mode(context)
         if mode == 'PAINT_TEXTURE':
@@ -466,12 +472,12 @@ class ClonePanel(BrushPanel):
         return False
 
     def draw_header(self, context):
-        settings = self.paint_settings(context)
+        settings = self.paint_settings_from_active_tool(context)
         self.layout.prop(settings, "use_clone_layer", text="")
 
     def draw(self, context):
         layout = self.layout
-        settings = self.paint_settings(context)
+        settings = self.paint_settings_from_active_tool(context)
 
         layout.active = settings.use_clone_layer
 
@@ -561,7 +567,7 @@ class StrokePanel(BrushPanel):
         layout.use_property_decorate = False
 
         mode = self.get_brush_mode(context)
-        settings = self.paint_settings(context)
+        settings = self.paint_settings_from_active_tool(context)
         brush = settings.brush
 
         col = layout.column()
@@ -579,6 +585,17 @@ class StrokePanel(BrushPanel):
             row = col.row(align=True)
             row.prop(brush, "spacing", text="Spacing")
             row.prop(brush, "use_pressure_spacing", toggle=True, text="")
+            if not self.is_popover:
+                UnifiedPaintPanel.prop_custom_pressure(
+                    layout,
+                    context,
+                    row,
+                    brush,
+                    pressure_name="use_pressure_spacing",
+                    curve_visibility_name="show_spacing_curve",
+                    custom_curve_name="curve_spacing",
+                )
+                col = layout.column()
 
         if brush.stroke_method in {'LINE', 'CURVE'}:
             row = col.row(align=True)
@@ -645,14 +662,14 @@ class SmoothStrokePanel(BrushPanel):
     def poll(cls, context):
         if not super().poll(context):
             return False
-        settings = cls.paint_settings(context)
+        settings = cls.paint_settings_from_active_tool(context)
         brush = settings.brush
         if brush.brush_capabilities.has_smooth_stroke:
             return True
         return False
 
     def draw_header(self, context):
-        settings = self.paint_settings(context)
+        settings = self.paint_settings_from_active_tool(context)
         brush = settings.brush
 
         self.layout.use_property_split = False
@@ -663,7 +680,7 @@ class SmoothStrokePanel(BrushPanel):
         layout.use_property_split = True
         layout.use_property_decorate = False
 
-        settings = self.paint_settings(context)
+        settings = self.paint_settings_from_active_tool(context)
         brush = settings.brush
 
         col = layout.column()
@@ -680,18 +697,18 @@ class FalloffPanel(BrushPanel):
     def poll(cls, context):
         if not super().poll(context):
             return False
-        settings = cls.paint_settings(context)
+        settings = cls.paint_settings_from_active_tool(context)
         if not (settings and settings.brush and settings.brush.curve_distance_falloff):
             return False
         if cls.get_brush_mode(context) == 'SCULPT_CURVES':
             brush = settings.brush
-            if brush.curves_sculpt_brush_type in {'ADD', 'DELETE'}:
+            if brush.curves_sculpt_brush_type in {'ADD', 'DELETE', 'CUT'}:
                 return False
         return True
 
     def draw(self, context):
         layout = self.layout
-        settings = self.paint_settings(context)
+        settings = self.paint_settings_from_active_tool(context)
         mode = self.get_brush_mode(context)
         brush = settings.brush
 
@@ -734,7 +751,7 @@ class DisplayPanel(BrushPanel):
     bl_options = {'DEFAULT_CLOSED'}
 
     def draw_header(self, context):
-        settings = self.paint_settings(context)
+        settings = self.paint_settings_from_active_tool(context)
         if settings and not self.is_popover:
             self.layout.prop(settings, "show_brush", text="")
 
@@ -744,7 +761,7 @@ class DisplayPanel(BrushPanel):
         layout.use_property_decorate = False
 
         mode = self.get_brush_mode(context)
-        settings = self.paint_settings(context)
+        settings = self.paint_settings_from_active_tool(context)
         brush = settings.brush
         tex_slot = brush.texture_slot
         tex_slot_mask = brush.mask_texture_slot
@@ -835,13 +852,26 @@ def brush_settings(layout, context, brush, popover=False):
         if capabilities.has_hardness:
             row.prop(brush, "hardness", slider=True)
             if capabilities.has_hardness_pressure:
-                row.prop(brush, "invert_hardness_pressure", text="")
                 row.prop(brush, "use_hardness_pressure", text="")
+                if not popover:
+                    UnifiedPaintPanel.prop_custom_pressure(
+                        layout,
+                        context,
+                        row,
+                        brush,
+                        pressure_name="use_hardness_pressure",
+                        curve_visibility_name="show_hardness_curve",
+                        custom_curve_name="curve_hardness",
+                    )
 
-        # auto_smooth_factor and use_inverse_smooth_pressure
+        if capabilities.has_tip_roundness:
+            layout.prop(brush, "tip_roundness", slider=True)
+            layout.prop(brush, "tip_scale_x", slider=True)
+
+        # auto_smooth_factor and use_smooth_pressure
         if capabilities.has_auto_smooth:
-            pressure_name = "use_inverse_smooth_pressure" if capabilities.has_auto_smooth_pressure else None
-            UnifiedPaintPanel.prop_unified(
+            pressure_name = "use_smooth_pressure" if capabilities.has_auto_smooth_pressure else None
+            unified_row = UnifiedPaintPanel.prop_unified(
                 layout,
                 context,
                 brush,
@@ -849,6 +879,16 @@ def brush_settings(layout, context, brush, popover=False):
                 pressure_name=pressure_name,
                 slider=True,
             )
+            if capabilities.has_auto_smooth_pressure and not popover:
+                UnifiedPaintPanel.prop_custom_pressure(
+                    layout,
+                    context,
+                    unified_row,
+                    brush,
+                    pressure_name="use_smooth_pressure",
+                    curve_visibility_name="show_auto_smooth_curve",
+                    custom_curve_name="curve_auto_smooth",
+                )
 
         # topology_rake_factor
         if (
@@ -915,7 +955,7 @@ def brush_settings(layout, context, brush, popover=False):
             layout.separator()
 
         if capabilities.has_color:
-            ups = UnifiedPaintPanel.paint_settings(context).unified_paint_settings
+            ups = UnifiedPaintPanel.paint_settings_from_mode(context, 'SCULPT').unified_paint_settings
             row = layout.row(align=True)
             UnifiedPaintPanel.prop_unified_color(row, context, brush, "color", text="")
             UnifiedPaintPanel.prop_unified_color(row, context, brush, "secondary_color", text="")
@@ -926,14 +966,7 @@ def brush_settings(layout, context, brush, popover=False):
 
         # Per sculpt tool options.
 
-        if sculpt_brush_type == 'CLAY_STRIPS':
-            row = layout.row()
-            row.prop(brush, "tip_roundness")
-
-            row = layout.row()
-            row.prop(brush, "tip_scale_x")
-
-        elif sculpt_brush_type == 'ELASTIC_DEFORM':
+        if sculpt_brush_type == 'ELASTIC_DEFORM':
             layout.separator()
             layout.prop(brush, "elastic_deform_type")
             layout.prop(brush, "elastic_deform_volume_preservation", slider=True)
@@ -1026,12 +1059,6 @@ def brush_settings(layout, context, brush, popover=False):
             row.prop(brush, "density")
             row.prop(brush, "invert_density_pressure", text="")
             row.prop(brush, "use_density_pressure", text="")
-
-            row = layout.row()
-            row.prop(brush, "tip_roundness")
-
-            row = layout.row()
-            row.prop(brush, "tip_scale_x")
 
         elif sculpt_brush_type == 'SMEAR':
             col = layout.column()
@@ -1134,7 +1161,7 @@ def brush_settings(layout, context, brush, popover=False):
 def brush_shared_settings(layout, context, brush, popover=False):
     """ Draw simple brush settings that are shared between different paint modes. """
 
-    # paint    paint = UnifiedPaintPanel.paint_settings(context)  # UNUSED.
+    # paint    paint = UnifiedPaintPanel.paint_settings_from_active_tool(context)  # UNUSED.
     mode = UnifiedPaintPanel.get_brush_mode(context)
 
     ### Determine which settings to draw. ###
@@ -1208,7 +1235,7 @@ def brush_shared_settings(layout, context, brush, popover=False):
         size_pressure = True
 
     ### Draw settings. ###
-    ups = UnifiedPaintPanel.paint_settings(context).unified_paint_settings
+    ups = UnifiedPaintPanel.paint_settings_from_active_tool(context).unified_paint_settings
 
     if blend_mode:
         layout.prop(brush, "blend", text="Blend")
@@ -1295,7 +1322,7 @@ def brush_shared_settings(layout, context, brush, popover=False):
 
 
 def draw_color_jitter_panel(layout, context, brush):
-    ups = UnifiedPaintPanel.paint_settings(context).unified_paint_settings
+    ups = UnifiedPaintPanel.paint_settings_from_active_tool(context).unified_paint_settings
 
     prop_owner = ups if ups.use_unified_color else brush
     layout.use_property_split = False
@@ -1361,7 +1388,11 @@ def brush_settings_advanced(layout, context, settings, brush, popover=False):
                 col.prop(brush, "use_original_normal", text="Normal")
                 col.prop(brush, "use_original_plane", text="Plane")
 
-        draw_auto_masking_panel(container, brush)
+        draw_mesh_automasking_settings(
+            container,
+            brush.mesh_automasking_settings,
+            use_face_set=True,
+            use_operators=True)
 
         if capabilities.has_color and popover:
             draw_color_jitter_panel(container, context, brush)
@@ -1380,7 +1411,6 @@ def brush_settings_advanced(layout, context, settings, brush, popover=False):
         container.prop(brush, "image_brush_type")
 
         capabilities = brush.image_paint_capabilities
-        use_accumulate = capabilities.has_accumulate
 
         if mode == 'PAINT_2D':
             container.prop(brush, "use_paint_antialiasing")
@@ -1419,6 +1449,7 @@ def brush_settings_advanced(layout, context, settings, brush, popover=False):
             container.prop(brush, "use_accumulate")
 
         container.prop(brush, "use_frontface", text="Front Faces Only")
+        draw_mesh_automasking_settings(container, brush.mesh_automasking_settings)
         if popover:
             draw_color_jitter_panel(container, context, brush)
 
@@ -1431,102 +1462,114 @@ def brush_settings_advanced(layout, context, settings, brush, popover=False):
             container.prop(brush, "use_accumulate")
 
         container.prop(brush, "use_frontface", text="Front Faces Only")
+        draw_mesh_automasking_settings(container, brush.mesh_automasking_settings)
 
     # Sculpt Curves
     elif mode == 'SCULPT_CURVES':
         container.prop(brush, "curves_sculpt_brush_type")
 
 
-def draw_auto_masking_panel(layout, brush):
-    header, panel = layout.panel("auto_masking_panel", default_closed=True)
-    header.label(text="Auto-Masking")
+def draw_mesh_automasking_settings(layout, settings, *, topbar=False, use_face_set=False, use_operators=False):
+    if topbar:
+        layout.label(text="Auto-Masking")
+        parent = layout.column(align=True)
+    else:
+        header, panel = layout.panel("auto_masking_panel", default_closed=True)
+        header.label(text="Auto-Masking")
 
-    if panel is None:
-        return
+        if panel is None:
+            return
 
-    parent = panel
+        parent = panel
 
-    automasking = brush.mesh_automasking_settings
     col = parent.column(align=True)
 
-    col.prop(automasking, "use_automasking_topology", text="Topology")
-    col.prop(automasking, "use_automasking_face_sets", text="Face Sets")
+    col.prop(settings, "use_automasking_topology", text="Topology")
+    if use_face_set:
+        col.prop(settings, "use_automasking_face_sets", text="Face Sets")
 
     parent.separator()
 
     col = parent.column(align=True)
     row = col.row()
-    row.prop(automasking, "use_automasking_boundary_edges", text="Mesh Boundary")
+    row.prop(settings, "use_automasking_boundary_edges", text="Mesh Boundary")
 
-    if automasking.use_automasking_boundary_edges:
+    if use_operators and settings.use_automasking_boundary_edges:
         props = row.operator("sculpt.mask_from_boundary", text="Create Mask")
         props.settings_source = 'BRUSH'
         props.boundary_mode = 'MESH'
 
     row = col.row()
-    row.prop(automasking, "use_automasking_boundary_face_sets", text="Face Sets Boundary")
+    if use_face_set:
+        row.prop(settings, "use_automasking_boundary_face_sets", text="Face Sets Boundary")
 
-    if automasking.use_automasking_boundary_face_sets:
-        props = row.operator("sculpt.mask_from_boundary", text="Create Mask")
-        props.settings_source = 'BRUSH'
-        props.boundary_mode = 'FACE_SETS'
+        if use_operators and settings.use_automasking_boundary_face_sets:
+            props = row.operator("sculpt.mask_from_boundary", text="Create Mask")
+            props.settings_source = 'BRUSH'
+            props.boundary_mode = 'FACE_SETS'
 
-    if automasking.use_automasking_boundary_edges or automasking.use_automasking_boundary_face_sets:
-        col = parent.column()
-        col.use_property_split = False
-        split = col.split(factor=0.4)
-        col = split.column()
-        split.prop(automasking, "boundary_edges_propagation_steps")
+    if settings.use_automasking_boundary_edges or settings.use_automasking_boundary_face_sets:
+        # Odd hack needed to get this to display consistently...
+        if topbar:
+            col = parent.column()
+            col.use_property_split = False
+            col.prop(settings, "boundary_edges_propagation_steps")
+        else:
+            col = parent.column()
+            col.use_property_split = False
+            split = col.split(factor=0.4)
+            col = split.column()
+            split.prop(settings, "boundary_edges_propagation_steps")
 
     col.separator()
 
     col = parent.column(align=True)
     row = col.row()
-    row.prop(automasking, "use_automasking_cavity", text="Cavity")
+    row.prop(settings, "use_automasking_cavity", text="Cavity")
 
-    is_cavity_active = automasking.use_automasking_cavity or automasking.use_automasking_cavity_inverted
+    is_cavity_active = settings.use_automasking_cavity or settings.use_automasking_cavity_inverted
 
-    if is_cavity_active:
+    if use_operators and is_cavity_active:
         props = row.operator("sculpt.mask_from_cavity", text="Create Mask")
         props.settings_source = 'BRUSH'
 
-    col.prop(automasking, "use_automasking_cavity_inverted", text="Cavity (inverted)")
+    col.prop(settings, "use_automasking_cavity_inverted", text="Cavity (inverted)")
 
     if is_cavity_active:
         col = parent.column(align=True)
-        col.prop(automasking, "cavity_factor", text="Factor")
-        col.prop(automasking, "cavity_blur_steps", text="Blur")
+        col.prop(settings, "cavity_factor", text="Factor")
+        col.prop(settings, "cavity_blur_steps", text="Blur")
 
         col = parent.column()
-        col.prop(automasking, "use_automasking_custom_cavity_curve", text="Custom Curve")
+        col.prop(settings, "use_automasking_custom_cavity_curve", text="Custom Curve")
 
-        if automasking.use_automasking_custom_cavity_curve:
-            col.template_curve_mapping(automasking, "cavity_curve", brush=True)
+        if settings.use_automasking_custom_cavity_curve:
+            col.template_curve_mapping(settings, "cavity_curve", brush=True)
 
     col.separator()
 
     col = parent.column(align=True)
-    col.prop(automasking, "use_automasking_view_normal", text="View Normal")
+    col.prop(settings, "use_automasking_view_normal", text="View Normal")
 
-    if automasking.use_automasking_view_normal:
-        col.prop(automasking, "use_automasking_view_occlusion", text="Occlusion")
+    if settings.use_automasking_view_normal:
+        col.prop(settings, "use_automasking_view_occlusion", text="Occlusion")
         subcol = col.column(align=True)
-        subcol.active = not automasking.use_automasking_view_occlusion
-        subcol.prop(automasking, "view_normal_limit", text="Limit")
-        subcol.prop(automasking, "view_normal_falloff", text="Falloff")
+        subcol.active = not settings.use_automasking_view_occlusion
+        subcol.prop(settings, "view_normal_limit", text="Limit")
+        subcol.prop(settings, "view_normal_falloff", text="Falloff")
 
     col = parent.column()
-    col.prop(automasking, "use_automasking_start_normal", text="Area Normal")
+    col.prop(settings, "use_automasking_start_normal", text="Area Normal")
 
-    if automasking.use_automasking_start_normal:
+    if settings.use_automasking_start_normal:
         col = parent.column(align=True)
-        col.prop(automasking, "start_normal_limit", text="Limit")
-        col.prop(automasking, "start_normal_falloff", text="Falloff")
+        col.prop(settings, "start_normal_limit", text="Limit")
+        col.prop(settings, "start_normal_falloff", text="Falloff")
 
 
 def draw_color_settings(context, layout, brush, color_type=False):
     """Draw color wheel and gradient settings."""
-    ups = UnifiedPaintPanel.paint_settings(context).unified_paint_settings
+    ups = UnifiedPaintPanel.paint_settings_from_active_tool(context).unified_paint_settings
 
     if color_type:
         row = layout.row()

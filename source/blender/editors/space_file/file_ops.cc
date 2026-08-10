@@ -6,14 +6,14 @@
  * \ingroup spfile
  */
 
-#include "BLI_fileops.h"
-#include "BLI_linklist.h"
-#include "BLI_listbase.h"
-#include "BLI_math_base.h"
+#include "BLI_fileops.hh"
+#include "BLI_linklist.hh"
+#include "BLI_listbase.hh"
+#include "BLI_math_base_c.hh"
 #include "BLI_path_utils.hh"
-#include "BLI_string.h"
-#include "BLI_string_utf8.h"
-#include "BLI_utildefines.h"
+#include "BLI_string.hh"
+#include "BLI_string_utf8.hh"
+#include "BLI_utildefines.hh"
 
 #include "BKE_appdir.hh"
 #include "BKE_blendfile.hh"
@@ -25,7 +25,7 @@
 #include "BLT_translation.hh"
 
 #ifdef WIN32
-#  include "BLI_winstuff.h"
+#  include "BLI_winstuff.hh"
 #endif
 
 #include "ED_fileselect.hh"
@@ -1769,7 +1769,7 @@ void file_sfile_filepath_set(SpaceFile *sfile, const char *filepath)
 void file_draw_check_ex(bContext *C, ScrArea *area)
 {
   /* May happen when manipulating non-active spaces. */
-  if (UNLIKELY(area->spacetype != SPACE_FILE)) {
+  if (area->spacetype != SPACE_FILE) [[unlikely]] {
     return;
   }
   SpaceFile *sfile = static_cast<SpaceFile *>(area->spacedata.first);
@@ -2955,7 +2955,7 @@ void file_directory_enter_handle(bContext *C, void * /*arg_unused*/, void *arg_b
 {
   SpaceFile *sfile = CTX_wm_space_file(C);
   FileSelectParams *params = ED_fileselect_get_active_params(sfile);
-  if (UNLIKELY(params == nullptr)) {
+  if (params == nullptr) [[unlikely]] {
     return;
   }
 
@@ -3048,7 +3048,7 @@ void file_filename_enter_handle(bContext *C, void * /*arg_unused*/, void *arg_bu
 {
   SpaceFile *sfile = CTX_wm_space_file(C);
   FileSelectParams *params = ED_fileselect_get_active_params(sfile);
-  if (UNLIKELY(params == nullptr)) {
+  if (params == nullptr) [[unlikely]] {
     return;
   }
 

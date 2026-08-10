@@ -20,7 +20,11 @@ namespace gpu {
 class Texture;
 }
 
-struct ExrHandle;
+namespace bke {
+class BlenderProject;
+}
+
+struct ExrReadHandle;
 struct ImBuf;
 struct Image;
 struct ImageFormatData;
@@ -349,6 +353,7 @@ void RE_init_threadcount(Render *re);
 
 bool RE_WriteRenderViewsMovie(struct ReportList *reports,
                               struct RenderResult *rr,
+                              const bke::BlenderProject *project,
                               struct Scene *scene,
                               struct RenderData *rd,
                               struct MovieWriter **movie_writers,
@@ -410,7 +415,7 @@ void RE_PreviewRender(struct Render *re, struct Main *bmain, struct Scene *scene
 bool RE_ReadRenderResult(struct Scene *scene, struct Scene *scenode);
 
 struct RenderResult *RE_MultilayerConvert(
-    ExrHandle *exrhandle, const char *colorspace, bool predivide, int rectx, int recty);
+    ExrReadHandle *exrhandle, const char *colorspace, bool predivide, int rectx, int recty);
 
 /**
  * Display, event callbacks and GPU contexts
@@ -423,7 +428,7 @@ void RE_display_free(Render *re);
 
 void RE_display_update_cb(struct Render *re,
                           void *handle,
-                          void (*f)(void *handle, RenderResult *rr, struct rcti *rect));
+                          void (*f)(void *handle, RenderResult *rr));
 void RE_stats_draw_cb(struct Render *re, void *handle, void (*f)(void *handle, RenderStats *rs));
 void RE_progress_cb(struct Render *re, void *handle, void (*f)(void *handle, float));
 void RE_draw_lock_cb(struct Render *re, void *handle, void (*f)(void *handle, bool lock));

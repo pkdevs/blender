@@ -15,12 +15,12 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_bitmap_draw_2d.h"
+#include "BLI_bitmap_draw_2d.hh"
 #include "BLI_lasso_2d.hh"
-#include "BLI_listbase.h"
-#include "BLI_math_vector.h"
-#include "BLI_rect.h"
-#include "BLI_utildefines.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_vector_c.hh"
+#include "BLI_rect.hh"
+#include "BLI_utildefines.hh"
 
 #include "WM_api.hh"
 #include "WM_types.hh"
@@ -76,14 +76,14 @@ wmGesture *WM_gesture_new(wmWindow *window, const ARegion *region, const wmEvent
     float *lasso;
     gesture->points_alloc = 1024;
     gesture->customdata = lasso = MEM_new_array_uninitialized<float>(
-        size_t(2 * gesture->points_alloc), "lasso points");
+        size_t(2) * gesture->points_alloc, "lasso points");
     lasso[0] = xy[0] - gesture->winrct.xmin;
     lasso[1] = xy[1] - gesture->winrct.ymin;
     gesture->points = 1;
   }
   else if (ELEM(type, WM_GESTURE_POLYLINE)) {
     gesture->points_alloc = 64;
-    short *border = MEM_new_array_uninitialized<short>(size_t(2 * gesture->points_alloc),
+    short *border = MEM_new_array_uninitialized<short>(size_t(2) * gesture->points_alloc,
                                                        "polyline points");
     gesture->customdata = border;
     border[0] = xy[0] - gesture->winrct.xmin;

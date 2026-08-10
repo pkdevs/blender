@@ -10,7 +10,7 @@
 #define DNA_DEPRECATED_ALLOW
 
 #ifdef WIN32
-#  include "BLI_winstuff.h"
+#  include "BLI_winstuff.hh"
 #endif
 
 #include <fmt/format.h>
@@ -27,13 +27,13 @@
 #include "DNA_userdef_types.h"
 #include "DNA_view3d_types.h"
 
-#include "BLI_listbase.h"
-#include "BLI_math_rotation.h"
-#include "BLI_math_vector.h"
-#include "BLI_rect.h"
-#include "BLI_string.h"
-#include "BLI_string_utf8.h"
-#include "BLI_utildefines.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_rotation_c.hh"
+#include "BLI_math_vector_c.hh"
+#include "BLI_rect.hh"
+#include "BLI_string.hh"
+#include "BLI_string_utf8.hh"
+#include "BLI_utildefines.hh"
 
 #include "BLT_translation.hh"
 
@@ -137,7 +137,6 @@ static void screen_copy_data(Main * /*bmain*/,
   for (ScrEdge &se_dst : screen_dst->edgebase) {
     se_dst.v1 = se_dst.v1->newv;
     se_dst.v2 = se_dst.v2->newv;
-    BKE_screen_sort_scrvert(&(se_dst.v1), &(se_dst.v2));
   }
 
   {
@@ -796,25 +795,29 @@ void BKE_screen_copy_data(bScreen *screen_dst, const bScreen *screen_src)
 /** \name Screen edges & verts
  * \{ */
 
+bool BKE_screen_scredge_equals(const ScrVert *a1,
+                               const ScrVert *a2,
+                               const ScrVert *b1,
+                               const ScrVert *b2)
+{
+  if (a1 == b1 && a2 == b2) {
+    return true;
+  }
+  if (a1 == b2 && a2 == b1) {
+    return true;
+  }
+  return false;
+}
+
 ScrEdge *BKE_screen_find_edge(const bScreen *screen, ScrVert *v1, ScrVert *v2)
 {
-  BKE_screen_sort_scrvert(&v1, &v2);
   for (ScrEdge &se : screen->edgebase) {
-    if (se.v1 == v1 && se.v2 == v2) {
+    if (BKE_screen_scredge_equals(se.v1, se.v2, v1, v2)) {
       return &se;
     }
   }
 
   return nullptr;
-}
-
-void BKE_screen_sort_scrvert(ScrVert **v1, ScrVert **v2)
-{
-  if (*v1 > *v2) {
-    ScrVert *tmp = *v1;
-    *v1 = *v2;
-    *v2 = tmp;
-  }
 }
 
 void BKE_screen_remove_double_scrverts(bScreen *screen)
@@ -842,8 +845,6 @@ void BKE_screen_remove_double_scrverts(bScreen *screen)
     if (se.v2->newv) {
       se.v2 = se.v2->newv;
     }
-    /* edges changed: so.... */
-    BKE_screen_sort_scrvert(&(se.v1), &(se.v2));
   }
   for (ScrArea &area : screen->areabase) {
     if (area.v1->newv) {
@@ -876,7 +877,7 @@ void BKE_screen_remove_double_scredges(bScreen *screen)
     ScrEdge *se = verg.next;
     while (se) {
       ScrEdge *sn = se->next;
-      if (verg.v1 == se->v1 && verg.v2 == se->v2) {
+      if (BKE_screen_scredge_equals(verg.v1, verg.v2, se->v1, se->v2)) {
         BLI_remlink(&screen->edgebase, se);
         MEM_delete(se);
       }
@@ -1086,40 +1087,75 @@ ARegion *BKE_screen_find_region_in_space(const bScreen *screen,
   return nullptr;
 }
 
-std::optional<std::string> BKE_screen_path_from_screen_to_space(const PointerRNA *ptr)
+std::optional<std::string> BKE_screen_path_to_space(const PointerRNA *ptr)
 {
-  if (GS(ptr->owner_id->name) != ID_SCR) {
-    BLI_assert_unreachable();
-    return std::nullopt;
-  }
-
-  const bScreen *screen = reinterpret_cast<const bScreen *>(ptr->owner_id);
   const SpaceLink *link = static_cast<const SpaceLink *>(ptr->data);
 
-  for (const auto [area_index, area] : screen->areabase.enumerate()) {
-    const int space_index = BLI_findindex(&area.spacedata, link);
-    if (space_index != -1) {
-      return fmt::format("areas[{}].spaces[{}]", area_index, space_index);
+  switch (ptr->owner_id->id_type()) {
+    case ID_SCR: {
+      const bScreen *screen = id_cast<const bScreen *>(ptr->owner_id);
+
+      for (const auto [area_index, area] : screen->areabase.enumerate()) {
+        const int space_index = BLI_findindex(&area.spacedata, link);
+        if (space_index != -1) {
+          return fmt::format("areas[{}].spaces[{}]", area_index, space_index);
+        }
+      }
+      break;
     }
+    case ID_WM: {
+      const wmWindowManager *wm = id_cast<const wmWindowManager *>(ptr->owner_id);
+
+      for (const auto [win_index, win] : wm->windows.enumerate()) {
+        for (const auto [area_index, area] : win.global_areas.areabase.enumerate()) {
+          const int space_index = BLI_findindex(&area.spacedata, link);
+          if (space_index != -1) {
+            return fmt::format(
+                "windows[{}].global_areas[{}].spaces[{}]", win_index, area_index, space_index);
+          }
+        }
+      }
+      break;
+    }
+    default:
+      break;
   }
+
+  BLI_assert_unreachable();
   return std::nullopt;
 }
 
-std::optional<std::string> BKE_screen_path_from_screen_to_area(const PointerRNA *ptr)
+std::optional<std::string> BKE_screen_path_to_area(const PointerRNA *ptr)
 {
-  if (GS(ptr->owner_id->name) != ID_SCR) {
-    BLI_assert_unreachable();
-    return std::nullopt;
-  }
-
-  const bScreen *screen = reinterpret_cast<const bScreen *>(ptr->owner_id);
   const ScrArea *area = static_cast<const ScrArea *>(ptr->data);
-  const int area_index = BLI_findindex(&screen->areabase, area);
-  if (area_index == -1) {
-    return std::nullopt;
+
+  switch (ptr->owner_id->id_type()) {
+    case ID_SCR: {
+      const bScreen *screen = id_cast<const bScreen *>(ptr->owner_id);
+      const int area_index = BLI_findindex(&screen->areabase, area);
+      if (area_index == -1) {
+        return std::nullopt;
+      }
+
+      return fmt::format("areas[{}]", area_index);
+    }
+    case ID_WM: {
+      const wmWindowManager *wm = id_cast<const wmWindowManager *>(ptr->owner_id);
+
+      for (const auto [win_index, win] : wm->windows.enumerate()) {
+        const int area_index = BLI_findindex(&win.global_areas.areabase, area);
+        if (area_index != -1) {
+          return fmt::format("windows[{}].global_areas[{}]", win_index, area_index);
+        }
+      }
+      break;
+    }
+    default:
+      break;
   }
 
-  return fmt::format("areas[{}]", area_index);
+  BLI_assert_unreachable();
+  return std::nullopt;
 }
 
 ScrArea *BKE_screen_find_big_area(const bScreen *screen, const int spacetype, const short min)
@@ -1242,14 +1278,26 @@ void BKE_screen_header_alignment_reset(bScreen *screen)
   for (ScrArea &area : screen->areabase) {
     for (ARegion &region : area.regionbase) {
       if (ELEM(region.regiontype, RGN_TYPE_HEADER, RGN_TYPE_TOOL_HEADER)) {
-        if (ELEM(area.spacetype, SPACE_FILE, SPACE_USERPREF, SPACE_OUTLINER, SPACE_PROPERTIES)) {
+        if (ELEM(area.spacetype,
+                 SPACE_FILE,
+                 SPACE_USERPREF,
+                 SPACE_OUTLINER,
+                 SPACE_PROPERTIES,
+                 SPACE_PROJECT))
+        {
           region.alignment = RGN_ALIGN_TOP;
           continue;
         }
         region.alignment = alignment;
       }
       if (region.regiontype == RGN_TYPE_FOOTER) {
-        if (ELEM(area.spacetype, SPACE_FILE, SPACE_USERPREF, SPACE_OUTLINER, SPACE_PROPERTIES)) {
+        if (ELEM(area.spacetype,
+                 SPACE_FILE,
+                 SPACE_USERPREF,
+                 SPACE_OUTLINER,
+                 SPACE_PROPERTIES,
+                 SPACE_PROJECT))
+        {
           region.alignment = RGN_ALIGN_BOTTOM;
           continue;
         }
@@ -1620,7 +1668,6 @@ bool BKE_screen_area_map_blend_read_data(BlendDataReader *reader, ScrAreaMap *ar
   for (ScrEdge &se : area_map->edgebase) {
     BLO_read_struct(reader, ScrVert, &se.v1);
     BLO_read_struct(reader, ScrVert, &se.v2);
-    BKE_screen_sort_scrvert(&se.v1, &se.v2);
 
     if (se.v1 == nullptr) {
       BLI_remlink(&area_map->edgebase, &se);

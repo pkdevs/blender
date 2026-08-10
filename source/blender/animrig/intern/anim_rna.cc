@@ -10,9 +10,9 @@
 
 #include "ANIM_rna.hh"
 
-#include "BLI_listbase.h"
-#include "BLI_math_base.h"
-#include "BLI_string.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_base_c.hh"
+#include "BLI_string.hh"
 #include "BLI_vector.hh"
 
 #include "DNA_object_types.h"
@@ -138,11 +138,11 @@ std::optional<eRotationModes> get_rotation_mode_from_path(const StringRefNull rn
   if (rna_path.endswith("quaternion")) {
     return ROT_MODE_QUAT;
   }
-  else if (rna_path.endswith("euler")) {
+  if (rna_path.endswith("euler")) {
     /* Cannot determine the rotation order from the path alone. */
     return ROT_MODE_EUL;
   }
-  else if (rna_path.endswith("axis_angle")) {
+  if (rna_path.endswith("axis_angle")) {
     return ROT_MODE_AXISANGLE;
   }
   return std::nullopt;

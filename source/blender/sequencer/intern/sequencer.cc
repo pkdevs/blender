@@ -21,12 +21,12 @@
 #include "DNA_sequence_types.h"
 #include "DNA_sound_types.h"
 
-#include "BLI_assert.h"
-#include "BLI_listbase.h"
+#include "BLI_assert.hh"
+#include "BLI_listbase.hh"
 #include "BLI_map.hh"
 #include "BLI_path_utils.hh"
-#include "BLI_string.h"
-#include "BLI_string_utf8.h"
+#include "BLI_string.hh"
+#include "BLI_string_utf8.hh"
 
 #include "BKE_duplilist.hh"
 #include "BKE_fcurve.hh"
@@ -135,7 +135,7 @@ Strip *strip_alloc(ListBaseT<Strip> *lb, int timeline_frame, int channel, StripT
 
   strip->flag = SEQ_SELECT;
   strip->start = timeline_frame;
-  strip_channel_set(strip, channel);
+  strip->channel_set(channel);
   strip->sat = 1.0;
   strip->mul = 1.0;
   strip->blend_opacity = 100.0;
@@ -899,13 +899,19 @@ static bool strip_write_data_cb(Strip *strip, void *userdata)
           }
           writer->write_struct(text);
           writer->write_string(text->text_ptr);
-        } break;
+          break;
+        }
         case STRIP_TYPE_COLORMIX:
           writer->write_struct_cast<ColorMixVars>(strip->effectdata);
           break;
-        case STRIP_TYPE_COMPOSITOR:
+        case STRIP_TYPE_COMPOSITOR: {
+          CompositorEffectVars *comp = static_cast<CompositorEffectVars *>(strip->effectdata);
+          if (comp->system_properties) {
+            IDP_BlendWrite(writer, comp->system_properties);
+          }
           writer->write_struct_cast<CompositorEffectVars>(strip->effectdata);
           break;
+        }
         default:
           break;
       }
@@ -985,7 +991,8 @@ static bool strip_read_data_cb(Strip *strip, void *user_data)
           SpeedControlVars *speed = static_cast<SpeedControlVars *>(strip->effectdata);
           speed->frameMap = nullptr;
         }
-      } break;
+        break;
+      }
       case STRIP_TYPE_WIPE:
         BLO_read_struct_nonnull(reader, WipeVars, &strip->effectdata);
         break;
@@ -1006,13 +1013,18 @@ static bool strip_read_data_cb(Strip *strip, void *user_data)
           text->text_blf_id = STRIP_FONT_NOT_LOADED;
           text->runtime = nullptr;
         }
-      } break;
+        break;
+      }
       case STRIP_TYPE_COLORMIX:
         BLO_read_struct_nonnull(reader, ColorMixVars, &strip->effectdata);
         break;
-      case STRIP_TYPE_COMPOSITOR:
+      case STRIP_TYPE_COMPOSITOR: {
         BLO_read_struct_nonnull(reader, CompositorEffectVars, &strip->effectdata);
+        CompositorEffectVars *comp = static_cast<CompositorEffectVars *>(strip->effectdata);
+        BLO_read_struct(reader, IDProperty, &comp->system_properties);
+        IDP_BlendDataRead(reader, &comp->system_properties);
         break;
+      }
       default:
         BLI_assert_unreachable();
         strip->effectdata = nullptr;

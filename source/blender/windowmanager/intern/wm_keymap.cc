@@ -21,10 +21,11 @@
 #include "CLG_log.h"
 #include "MEM_guardedalloc.h"
 
-#include "BLI_listbase.h"
-#include "BLI_string.h"
-#include "BLI_string_utf8.h"
-#include "BLI_utildefines.h"
+#include "BLI_listbase.hh"
+#include "BLI_string.hh"
+#include "BLI_string_utf8.hh"
+#include "BLI_utildefines.hh"
+#include "BLI_vector.hh"
 
 #include "BLF_api.hh"
 
@@ -208,7 +209,7 @@ static bool wm_keymap_item_equals(const wmKeyMapItem *a, const wmKeyMapItem *b)
 
 void WM_keymap_item_properties_reset(wmKeyMapItem *kmi, IDProperty *properties)
 {
-  if (LIKELY(kmi->ptr)) {
+  if (kmi->ptr) [[likely]] {
     WM_operator_properties_free(kmi->ptr);
     MEM_delete(kmi->ptr);
 
@@ -491,7 +492,7 @@ bool WM_keymap_poll(bContext *C, wmKeyMap *keymap)
     }
   }
 
-  if (UNLIKELY(keymap->items.is_empty())) {
+  if (keymap->items.is_empty()) [[unlikely]] {
     /* Empty key-maps may be missing more there may be a typo in the name.
      * Warn early to avoid losing time investigating each case.
      * When developing a customized Blender though you may want empty keymaps. */
@@ -762,12 +763,18 @@ static wmKeyMap *wm_keymap_patch_update(ListBaseT<wmKeyMap> *lb,
                                         wmKeyMap *usermap)
 {
   eKeyMap_Flag expanded = eKeyMap_Flag{};
+  Vector<short> expanded_item_ids;
 
   /* Get previous keymap in list, we will update it in place to keep iterators valid. */
   wmKeyMap *km = WM_keymap_list_find(
       lb, defaultmap->idname, defaultmap->spaceid, defaultmap->regionid);
   if (km) {
     expanded = (km->flag & (KEYMAP_EXPANDED | KEYMAP_CHILDREN_EXPANDED));
+    for (wmKeyMapItem &kmi : km->items) {
+      if (kmi.flag & KMI_EXPANDED) {
+        expanded_item_ids.append(kmi.id);
+      }
+    }
     WM_keymap_clear(km);
   }
   else {
@@ -816,6 +823,23 @@ static wmKeyMap *wm_keymap_patch_update(ListBaseT<wmKeyMap> *lb,
   /* Apply user changes of diff keymap. */
   if (usermap && (usermap->flag & KEYMAP_DIFF)) {
     wm_keymap_patch(km, usermap);
+  }
+
+  /* Rebuilding the keymap loses the expanded flag from items which aren't being edited,
+   * collapsing them shifts the UI layout, see: #162030. */
+  if (!expanded_item_ids.is_empty()) {
+    /* Items keep their order, so only the next ID needs to be checked. */
+    const short *id = expanded_item_ids.begin();
+    const short *id_end = expanded_item_ids.end();
+    for (wmKeyMapItem &kmi : km->items) {
+      if (kmi.id != *id) {
+        continue;
+      }
+      kmi.flag |= KMI_EXPANDED;
+      if (++id == id_end) {
+        break;
+      }
+    }
   }
 
   return km;

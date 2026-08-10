@@ -7,9 +7,9 @@
 #include "AS_asset_library.hh"
 #include "AS_asset_representation.hh"
 
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 #include "BLI_multi_value_map.hh"
-#include "BLI_string_utf8.h"
+#include "BLI_string_utf8.hh"
 
 #include "DNA_modifier_types.h"
 #include "DNA_screen_types.h"
@@ -203,7 +203,7 @@ static void root_catalogs_draw(const bContext *C, Menu *menu)
   layout.separator();
 
   if (!loading_finished) {
-    layout.label(IFACE_("Loading Asset Libraries"), ICON_INFO);
+    layout.label(IFACE_("Loading Asset Libraries"), ICON_STATUS_INFO);
   }
 
   Set<std::string> all_builtin_menus = [&]() {
@@ -306,7 +306,7 @@ static wmOperatorStatus modifier_add_asset_exec(bContext *C, wmOperator *op)
     changed = true;
     nmd->node_group = node_group;
     id_us_plus(&node_group->id);
-    MOD_nodes_update_interface(object, nmd);
+    MOD_nodes_update_interface(*bmain, object, nmd);
 
     /* Don't show the data-block selector since it's not usually necessary for assets. */
     nmd->flag |= NODES_MODIFIER_HIDE_DATABLOCK_SELECTOR;

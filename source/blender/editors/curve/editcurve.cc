@@ -15,17 +15,17 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_array_utils.h"
-#include "BLI_ghash.h"
+#include "BLI_array_utils_c.hh"
+#include "BLI_ghash.hh"
 #include "BLI_listbase_wrapper.hh"
-#include "BLI_math_geom.h"
-#include "BLI_math_matrix.h"
-#include "BLI_math_rotation.h"
-#include "BLI_math_vector.h"
+#include "BLI_math_geom_c.hh"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_rotation_c.hh"
+#include "BLI_math_vector_c.hh"
 #include "BLI_set.hh"
 #include "BLI_span.hh"
-#include "BLI_string.h"
-#include "BLI_string_utf8.h"
+#include "BLI_string.hh"
+#include "BLI_string_utf8.hh"
 
 #include "BLT_translation.hh"
 
@@ -595,6 +595,12 @@ static void calc_keyHandles(ListBaseT<Nurb> *nurb, float *key)
 
   for (Nurb &nu : *nurb) {
     if (nu.bezt) {
+      if (nu.pntsu < 2) {
+        /* Single point, no need to calculat handles, proceed to th next Nurb. */
+        fp += nu.pntsu * KEYELEM_FLOAT_LEN_BEZTRIPLE;
+        continue;
+      }
+
       BezTriple *prevp, *nextp;
       BezTriple cur, prev, next;
       float *startfp, *prevfp, *nextfp;
@@ -612,14 +618,8 @@ static void calc_keyHandles(ListBaseT<Nurb> *nurb, float *key)
         prevfp = nullptr;
       }
 
-      if (nu.pntsu > 1) {
-        nextp = bezt + 1;
-        nextfp = fp + KEYELEM_FLOAT_LEN_BEZTRIPLE;
-      }
-      else {
-        nextp = nullptr;
-        nextfp = nullptr;
-      }
+      nextp = bezt + 1;
+      nextfp = fp + KEYELEM_FLOAT_LEN_BEZTRIPLE;
 
       while (a--) {
         key_to_bezt(fp, bezt, &cur);
@@ -939,16 +939,15 @@ static void fcurve_path_rename(const char *orig_rna_path,
     if (processed_fcurves.contains(fcu)) {
       continue;
     }
-    if (!STREQLEN(fcu->rna_path, orig_rna_path, len)) {
+    if (!STREQLEN(fcu->rna_path().c_str(), orig_rna_path, len)) {
       continue;
     }
 
     processed_fcurves.add(fcu);
 
-    const char *suffix = fcu->rna_path + len;
+    const char *suffix = fcu->rna_path().c_str() + len;
     char *new_rna_path = BLI_sprintfN("%s%s", rna_path, suffix);
-    MEM_SAFE_DELETE(fcu->rna_path);
-    fcu->rna_path = new_rna_path;
+    fcu->rna_path_set_move(new_rna_path);
   }
 }
 
@@ -1062,8 +1061,8 @@ static void fcurve_path_rename(const char *orig_rna_path,
       continue;
     }
 
-    if (STRPREFIX(fcu->rna_path, "splines")) {
-      const char *ch = strchr(fcu->rna_path, '.');
+    if (STRPREFIX(fcu->rna_path().c_str(), "splines")) {
+      const char *ch = strchr(fcu->rna_path().c_str(), '.');
 
       if (ch && (STRPREFIX(ch, ".bezier_points") || STRPREFIX(ch, ".points"))) {
         fcurves_to_remove.append(fcu);
@@ -1096,7 +1095,7 @@ static void fcurve_path_rename(const char *orig_rna_path,
     if (processed_fcurves.contains(fcu)) {
       continue;
     }
-    if (STRPREFIX(fcu->rna_path, "splines")) {
+    if (STRPREFIX(fcu->rna_path().c_str(), "splines")) {
       fcurves_to_remove.append(fcu);
       /* Not strictly necessary, because `orig_curves` shouldn't contain any duplicates, and this
        * is the last loop that can add anything to `fcurves_to_remove`. However, the line below

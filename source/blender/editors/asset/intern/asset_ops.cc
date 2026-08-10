@@ -28,11 +28,11 @@
 #include "BKE_report.hh"
 #include "BKE_screen.hh"
 
-#include "BLI_fnmatch.h"
+#include "BLI_fnmatch.hh"
 #include "BLI_path_utils.hh"
-#include "BLI_rect.h"
+#include "BLI_rect.hh"
 #include "BLI_set.hh"
-#include "BLI_string.h"
+#include "BLI_string.hh"
 
 #include "ED_asset.hh"
 #include "ED_screen.hh"
@@ -536,8 +536,9 @@ static bool asset_library_reload_listing_poll(bContext *C)
     return false;
   }
 
-  /* Check the flag after checking for the remote library to have an online component. Because if
-   * there is not, then enabling the online access in the prefs isn't going to do anything. */
+  /* Check the flag after checking for the remote library to have an online component.
+   * Because if there is not, then enabling the online access in the preferences
+   * isn't going to do anything. */
   if ((G.f & G_FLAG_INTERNET_ALLOW) == 0) {
     CTX_wm_operator_poll_msg_set(C, "Online access is disabled in the Preferences");
     return false;

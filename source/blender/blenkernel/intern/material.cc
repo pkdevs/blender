@@ -11,7 +11,7 @@
 #include <cstring>
 #include <optional>
 
-#include "BLI_utildefines.h"
+#include "BLI_utildefines.hh"
 #include "CLG_log.h"
 
 #include "MEM_guardedalloc.h"
@@ -34,12 +34,12 @@
 #include "DNA_userdef_types.h"
 #include "DNA_volume_types.h"
 
-#include "BLI_array_utils.h"
+#include "BLI_array_utils_c.hh"
 #include "BLI_enum_flags.hh"
-#include "BLI_listbase.h"
-#include "BLI_math_color.h"
-#include "BLI_math_vector.h"
-#include "BLI_string.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_color_c.hh"
+#include "BLI_math_vector_c.hh"
+#include "BLI_string.hh"
 
 #include "BLT_translation.hh"
 
@@ -986,12 +986,10 @@ MaterialGPencilStyle *BKE_gpencil_material_settings(Object *ob, short act)
  * When materials are assigned, the active material must be in the range of `1..totcol`.
  * see #139182 for details.
  */
-static void object_material_active_index_sanitize(Object *ob)
+void BKE_object_material_active_index_sanitize(Object *ob)
 {
-  if (ob->totcol && ob->actcol == 0) {
-    ob->actcol = 1;
-  }
-  ob->actcol = std::min(ob->actcol, ob->totcol);
+  const int min_index = (ob->totcol) ? 1 : 0;
+  ob->actcol = std::clamp(ob->actcol, min_index, ob->totcol);
 }
 
 void BKE_object_material_resize(Main *bmain, Object *ob, const short totcol, bool do_id_user)
@@ -1056,7 +1054,7 @@ void BKE_object_materials_sync_length(Main *bmain, Object *ob, ID *id)
   else {
     /* Normal case: the use the obdata amount of materials slots to update the object's one. */
     BKE_object_material_resize(bmain, ob, *totcol, false);
-    object_material_active_index_sanitize(ob);
+    BKE_object_material_active_index_sanitize(ob);
   }
 }
 
@@ -1076,7 +1074,7 @@ void BKE_objects_materials_sync_length_all(Main *bmain, ID *id)
   {
     if (ob->data == id) {
       BKE_object_material_resize(bmain, ob, *totcol, false);
-      object_material_active_index_sanitize(ob);
+      BKE_object_material_active_index_sanitize(ob);
       processed_objects++;
       BLI_assert(processed_objects <= id->us && processed_objects > 0);
       if (processed_objects == id->us) {
@@ -1487,7 +1485,7 @@ bool BKE_object_material_slot_remove(Main *bmain, Object *ob)
   }
 
   /* can happen on face selection in editmode */
-  object_material_active_index_sanitize(ob);
+  BKE_object_material_active_index_sanitize(ob);
 
   /* we delete the actcol */
   mao = (*matarar)[ob->actcol - 1];
@@ -1526,7 +1524,7 @@ bool BKE_object_material_slot_remove(Main *bmain, Object *ob)
         obt->matbits[a - 1] = obt->matbits[a];
       }
       obt->totcol--;
-      object_material_active_index_sanitize(ob);
+      BKE_object_material_active_index_sanitize(ob);
 
       if (obt->totcol == 0) {
         MEM_delete(obt->mat);
@@ -1546,6 +1544,59 @@ bool BKE_object_material_slot_remove(Main *bmain, Object *ob)
   }
 
   return true;
+}
+
+int BKE_object_material_remove_unused(Main *bmain, Object *ob)
+{
+  int actcol = ob->actcol;
+  int removed = 0;
+
+  for (int slot = 1; slot <= ob->totcol; slot++) {
+    while (slot <= ob->totcol && !BKE_object_material_slot_used(ob, slot)) {
+      ob->actcol = slot;
+
+      if (!BKE_object_material_slot_remove(bmain, ob)) {
+        break;
+      }
+
+      if (actcol >= slot) {
+        actcol--;
+      }
+
+      removed++;
+    }
+  }
+
+  ob->actcol = actcol;
+  BKE_object_material_active_index_sanitize(ob);
+
+  return removed;
+}
+
+int BKE_object_material_remove_all(Main *bmain, Object *ob)
+{
+  int actcol = ob->actcol;
+  int removed = 0;
+
+  for (int slot = 1; slot <= ob->totcol; slot++) {
+    while (slot <= ob->totcol) {
+      ob->actcol = slot;
+
+      if (!BKE_object_material_slot_remove(bmain, ob)) {
+        break;
+      }
+
+      if (actcol >= slot) {
+        actcol--;
+      }
+
+      removed++;
+    }
+  }
+  ob->actcol = actcol;
+  BKE_object_material_active_index_sanitize(ob);
+
+  return removed;
 }
 
 static bNode *nodetree_uv_node_recursive(bNode *node)

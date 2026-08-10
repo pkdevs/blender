@@ -11,10 +11,10 @@
 #include "DNA_scene_types.h"
 #include "DNA_sequence_types.h"
 
-#include "BLI_listbase.h"
-#include "BLI_math_base.h"
-#include "BLI_session_uid.h"
-#include "BLI_string.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_base_c.hh"
+#include "BLI_session_uid.hh"
+#include "BLI_string.hh"
 
 #include "BKE_layer.hh"
 #include "BKE_main.hh"
@@ -132,7 +132,7 @@ static void update_range_with_effects(const Scene *scene, const Strip *strip, in
 {
   r_range.x = std::min(r_range.x, strip->left_handle());
   r_range.y = std::max(r_range.y, strip->right_handle(scene) - 1);
-  Span<Strip *> effects = SEQ_lookup_effects_by_strip(scene->ed, strip);
+  Span<Strip *> effects = lookup_effects_by_strip(scene->ed, strip);
   for (Strip *effect : effects) {
     update_range_with_effects(scene, effect, r_range);
   }
@@ -160,6 +160,7 @@ void relations_invalidate_cache_raw(Scene *scene, Strip *strip)
   source_image_cache_invalidate_strip(scene, strip);
   media_presence_invalidate_strip(scene, strip);
   relations_invalidate_cache(scene, strip);
+  thumbnail_cache_invalidate_strip(scene, strip);
 }
 
 void relations_invalidate_cache(Scene *scene, Strip *strip)
@@ -429,7 +430,7 @@ static bool get_uids_cb(Strip *strip, void *user_data)
 {
   Set<SessionUID> &used_uids = *static_cast<Set<SessionUID> *>(user_data);
   const SessionUID &session_uid = strip->runtime->session_uid;
-  if (!BLI_session_uid_is_generated(&session_uid)) {
+  if (!session_uid.is_generated()) {
     printf("Sequence %s does not have UID generated.\n", strip->name);
     return true;
   }

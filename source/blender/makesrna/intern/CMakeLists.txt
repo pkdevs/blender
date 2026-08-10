@@ -31,6 +31,7 @@ set(DEFSRC
   rna_armature.cc
   rna_asset.cc
   rna_attribute.cc
+  rna_blender_project.cc
   rna_blendfile_import.cc
   rna_boid.cc
   rna_brush.cc
@@ -96,6 +97,7 @@ set(DEFSRC
   rna_volume.cc
   rna_wm.cc
   rna_wm_gizmo.cc
+  rna_wm_undo.cc
   rna_workspace.cc
   rna_world.cc
   rna_xr.cc
@@ -216,6 +218,7 @@ set(SRC_RNA_INC
   ../RNA_enum_items.hh
   ../RNA_enum_types.hh
   ../RNA_path.hh
+  ../RNA_path_fwd.hh
   ../RNA_types.hh
 
   rna_action_tools.hh
@@ -483,6 +486,7 @@ target_compile_definitions(bf_rna PRIVATE RNA_RUNTIME)
 if(WITH_GTESTS)
   set(TEST_SRC
     makesrna_test.cc
+    rna_path_test.cc
   )
   set(TEST_LIB
     ${LIB}

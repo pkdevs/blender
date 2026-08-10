@@ -4,13 +4,13 @@
 
 #include <cstring>
 
-#include "BLI_assert.h"
+#include "BLI_assert.hh"
 #include "BLI_cpp_type.hh"
 #include "BLI_generic_pointer.hh"
 #include "BLI_index_range.hh"
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 #include "BLI_path_utils.hh"
-#include "BLI_string.h"
+#include "BLI_string.hh"
 
 #include "BLT_translation.hh"
 
@@ -164,6 +164,7 @@ static Vector<bke::path_templates::Error> compute_image_path(const StringRefNull
                                                              const char *view,
                                                              const int frame_number,
                                                              const ImageFormatData &format,
+                                                             const Main &bmain,
                                                              const Scene &scene,
                                                              const bNode &node,
                                                              const bool is_animation_render,
@@ -175,7 +176,9 @@ static Vector<bke::path_templates::Error> compute_image_path(const StringRefNull
   BLI_path_append(base_path, FILE_MAX, full_file_name.c_str());
 
   bke::path_templates::VariableMap template_variables;
-  BKE_add_template_variables_general(template_variables, &node.owner_tree().id);
+  BKE_blender_project_read_callback(&bmain, [&](const bke::BlenderProject *project) {
+    BKE_add_template_variables_general(template_variables, &node.owner_tree().id, project);
+  });
   BKE_add_template_variables_for_render_path(template_variables, scene);
   BKE_add_template_variables_for_node(template_variables, node);
 
@@ -240,6 +243,7 @@ static void output_path_layout(ui::Layout &layout,
                                const StringRefNull file_name_suffix,
                                const char *view,
                                const ImageFormatData &format,
+                               const Main &bmain,
                                const Scene &scene,
                                const bNode &node)
 {
@@ -251,6 +255,7 @@ static void output_path_layout(ui::Layout &layout,
                                                                             view,
                                                                             scene.r.cfra,
                                                                             format,
+                                                                            bmain,
                                                                             scene,
                                                                             node,
                                                                             false,
@@ -261,7 +266,8 @@ static void output_path_layout(ui::Layout &layout,
   }
   else {
     for (const bke::path_templates::Error &error : path_errors) {
-      layout.label(BKE_path_template_error_to_string(error, image_path).c_str(), ICON_ERROR);
+      layout.label(BKE_path_template_error_to_string(error, image_path).c_str(),
+                   ICON_STATUS_ERROR);
     }
   }
 }
@@ -275,6 +281,7 @@ static void output_paths_layout(ui::Layout &layout,
   const NodeCompositorFileOutput &storage = node_storage(node);
   const StringRefNull directory = storage.directory;
   const std::string file_name = storage.file_name ? storage.file_name : "";
+  const Main &main = *CTX_data_main(context);
   const Scene &scene = *CTX_data_scene(context);
 
   if (bool(scene.r.scemode & R_MULTIVIEW) && format.views_format == R_IMF_VIEWS_INDIVIDUAL) {
@@ -284,11 +291,12 @@ static void output_paths_layout(ui::Layout &layout,
       }
 
       output_path_layout(
-          layout, directory, file_name, file_name_suffix, view.name, format, scene, node);
+          layout, directory, file_name, file_name_suffix, view.name, format, main, scene, node);
     }
   }
   else {
-    output_path_layout(layout, directory, file_name, file_name_suffix, "", format, scene, node);
+    output_path_layout(
+        layout, directory, file_name, file_name_suffix, "", format, main, scene, node);
   }
 }
 
@@ -394,7 +402,7 @@ static void node_extra_info(NodeExtraInfoParams &parameters)
     NodeExtraInfoRow row;
     row.text = RPT_("Node Unsupported");
     row.tooltip = TIP_("The File Output node is only supported for scene compositing");
-    row.icon = ICON_ERROR;
+    row.icon = ICON_STATUS_ERROR;
     parameters.rows.append(std::move(row));
   }
 }
@@ -744,6 +752,7 @@ class FileOutputOperation : public NodeOperation {
         view,
         this->context().get_frame_number(),
         format,
+        this->context().get_main(),
         this->context().get_scene(),
         this->node(),
         this->is_animation_render(),

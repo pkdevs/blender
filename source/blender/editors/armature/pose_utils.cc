@@ -8,10 +8,10 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_listbase.h"
-#include "BLI_math_rotation.h"
-#include "BLI_math_vector.h"
-#include "BLI_string.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_rotation_c.hh"
+#include "BLI_math_vector_c.hh"
+#include "BLI_string.hh"
 #include "BLI_vector.hh"
 
 #include "DNA_anim_types.h"
@@ -93,11 +93,7 @@ static eAction_TransformFlags get_item_transform_flags_and_fcurves(ID &id,
   }
 
   animrig::foreach_fcurve_in_action_slot(action, adt->slot_handle, [&](FCurve &fcurve) {
-    if (fcurve.rna_path == nullptr) {
-      return;
-    }
-    StringRefNull fcurve_path(fcurve.rna_path);
-
+    const StringRefNull fcurve_path = fcurve.rna_path();
     if (!base_path.is_empty() && !fcurve_path.startswith(base_path)) {
       return;
     }

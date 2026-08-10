@@ -13,9 +13,9 @@
 
 #include "BKE_screen.hh"
 
-#include "BLI_fnmatch.h"
-#include "BLI_listbase.h"
-#include "BLI_string.h"
+#include "BLI_fnmatch.hh"
+#include "BLI_listbase.hh"
+#include "BLI_string.hh"
 
 #include "BLT_translation.hh"
 
@@ -290,7 +290,8 @@ void AssetViewItem::build_grid_tile(const bContext &C, ui::Layout &layout) const
     button_label_draw_icon_border_set(online_icon, true);
   }
   else if (asset_.needs_download()) {
-    ui::Button *needs_download_icon = uiItemL_ex(&overlay_row, "", ICON_ERROR, false, false);
+    ui::Button *needs_download_icon = uiItemL_ex(
+        &overlay_row, "", ICON_STATUS_WARNING_FILLED, false, false);
     button_label_alpha_factor_set(needs_download_icon, 0.6f);
     button_label_draw_icon_border_set(needs_download_icon, true);
   }

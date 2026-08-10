@@ -24,27 +24,27 @@
 #include "DNA_userdef_types.h"
 
 #include "BLI_bit_vector.hh"
-#include "BLI_bitmap.h"
+#include "BLI_bitmap.hh"
 #include "BLI_index_range.hh"
-#include "BLI_math_color_blend.h"
+#include "BLI_math_color_blend.hh"
 #include "BLI_math_quaternion_types.hh"
 #include "BLI_math_vector.hh"
 #include "BLI_memory_counter.hh"
-#include "BLI_mempool.h"
+#include "BLI_mempool.hh"
 #include "BLI_path_utils.hh"
 #include "BLI_resource_scope.hh"
 #include "BLI_set.hh"
 #include "BLI_span.hh"
-#include "BLI_string.h"
+#include "BLI_string.hh"
 #include "BLI_string_ref.hh"
-#include "BLI_string_utf8.h"
+#include "BLI_string_utf8.hh"
 #include "BLI_string_utils.hh"
-#include "BLI_utildefines.h"
+#include "BLI_utildefines.hh"
 
 #include "PRF_profile.hh"
 
 #ifndef NDEBUG
-#  include "BLI_dynstr.h"
+#  include "BLI_dynstr.hh"
 #endif
 
 #include "BLT_translation.hh"
@@ -637,7 +637,6 @@ static void layerCopy_mdisps(const void *source, void *dest, const int count)
 
     /* still copy even if not in memory, displacement can be external */
     d[i].totdisp = s[i].totdisp;
-    d[i].level = s[i].level;
   }
 }
 
@@ -647,7 +646,6 @@ static void layerFree_mdisps(void *data, const int count)
     MEM_SAFE_DELETE(d.disps);
     MEM_SAFE_DELETE(d.hidden);
     d.totdisp = 0;
-    d.level = 0;
   }
 }
 
@@ -4247,11 +4245,17 @@ static bool CustomData_layer_ensure_data_exists(CustomDataLayer *layer, size_t c
  * \{ */
 
 static void customdata_external_filename(char filepath[FILE_MAX],
+                                         StringRefNull basepath,
                                          ID *id,
                                          CustomDataExternal *external)
 {
   BLI_strncpy(filepath, external->filepath, FILE_MAX);
-  BLI_path_abs(filepath, ID_BLEND_PATH_FROM_GLOBAL(id));
+  if (basepath.is_empty()) {
+    BLI_path_abs(filepath, ID_BLEND_PATH_FROM_GLOBAL(id));
+  }
+  else {
+    BLI_path_abs(filepath, basepath.c_str());
+  }
 }
 
 void CustomData_external_reload(CustomData *data, ID * /*id*/, eCustomDataMask mask, int totelem)
@@ -4272,7 +4276,8 @@ void CustomData_external_reload(CustomData *data, ID * /*id*/, eCustomDataMask m
   }
 }
 
-void CustomData_external_read(CustomData *data, ID *id, eCustomDataMask mask, const int totelem)
+void CustomData_external_read(
+    CustomData *data, StringRefNull basepath, ID *id, eCustomDataMask mask, const int totelem)
 {
   CustomDataExternal *external = data->external;
   CustomDataLayer *layer;
@@ -4302,7 +4307,7 @@ void CustomData_external_read(CustomData *data, ID *id, eCustomDataMask mask, co
     return;
   }
 
-  customdata_external_filename(filepath, id, external);
+  customdata_external_filename(filepath, basepath, id, external);
 
   CDataFile *cdf = cdf_create(CDF_TYPE_MESH);
   if (!cdf_read_open(cdf, filepath)) {
@@ -4348,8 +4353,12 @@ void CustomData_external_read(CustomData *data, ID *id, eCustomDataMask mask, co
   cdf_free(cdf);
 }
 
-void CustomData_external_write(
-    CustomData *data, ID *id, eCustomDataMask mask, const int totelem, const int free)
+void CustomData_external_write(CustomData *data,
+                               StringRefNull basepath,
+                               ID *id,
+                               eCustomDataMask mask,
+                               const int totelem,
+                               const int free)
 {
   CustomDataExternal *external = data->external;
   int update = 0;
@@ -4377,8 +4386,8 @@ void CustomData_external_write(
   }
 
   /* make sure data is read before we try to write */
-  CustomData_external_read(data, id, mask, totelem);
-  customdata_external_filename(filepath, id, external);
+  CustomData_external_read(data, basepath, id, mask, totelem);
+  customdata_external_filename(filepath, basepath, id, external);
 
   CDataFile *cdf = cdf_create(CDF_TYPE_MESH);
 
@@ -4499,7 +4508,8 @@ void CustomData_external_remove(CustomData *data,
 
   if (layer->flag & CD_FLAG_EXTERNAL) {
     if (!(layer->flag & CD_FLAG_IN_MEMORY)) {
-      CustomData_external_read(data, id, CD_TYPE_AS_MASK(eCustomDataType(layer->type)), totelem);
+      CustomData_external_read(
+          data, "", id, CD_TYPE_AS_MASK(eCustomDataType(layer->type)), totelem);
     }
 
     layer->flag &= ~CD_FLAG_EXTERNAL;
@@ -4705,7 +4715,7 @@ void CustomData_data_transfer(const MeshPairRemap *me_remap, CustomDataTransferL
     }
 
     if (tmp_data_src) {
-      if (UNLIKELY(sources_num > tmp_buff_size)) {
+      if (sources_num > tmp_buff_size) [[unlikely]] {
         tmp_buff_size = size_t(sources_num);
         tmp_data_src = static_cast<const void **>(MEM_realloc_uninitialized(
             (void *)tmp_data_src, sizeof(*tmp_data_src) * tmp_buff_size));
@@ -4870,7 +4880,7 @@ void CustomData_blend_write(BlendWriter *writer,
 {
   /* write external customdata (not for undo) */
   if (data->external && !BLO_write_is_undo(writer)) {
-    CustomData_external_write(data, id, cddata_mask, count, 0);
+    CustomData_external_write(data, BLO_write_filepath(writer), id, cddata_mask, count, 0);
   }
 
   for (const CustomDataLayer &layer : layers_to_write) {
@@ -4905,17 +4915,8 @@ static void blend_read_mdisps(BlendDataReader *reader,
                              reinterpret_cast<int8_t **>(&md.hidden),
                              BLI_BITMAP_SIZE(md.totdisp) * sizeof(BLI_bitmap));
       }
-      if (!ok) {
+      if (!external && !ok) {
         md.totdisp = 0;
-      }
-
-      if (md.totdisp && !md.level) {
-        /* this calculation is only correct for loop mdisps;
-         * if loading pre-BMesh face mdisps this will be
-         * overwritten with the correct value in
-         * #bm_corners_to_loops() */
-        float gridsize = sqrtf(md.totdisp);
-        md.level = int(logf(gridsize - 1.0f) / float(M_LN2)) + 1;
       }
 
       if (!external && !md.disps) {
@@ -5002,14 +5003,14 @@ void CustomData_blend_read(BlendDataReader *reader, CustomData *data, const int 
 
   /* Annoying workaround for bug #31079 loading legacy files with
    * no polygons _but_ have stale custom-data. */
-  if (UNLIKELY(count == 0 && data->layers == nullptr && data->totlayer != 0)) {
+  if (count == 0 && data->layers == nullptr && data->totlayer != 0) [[unlikely]] {
     CustomData_reset(data);
     return;
   }
   /* There was a short time (Blender 500 sub 33) where the custom data struct was saved in an
    * invalid state (see @11d2f48882). This check is unfortunate, but avoids crashing when trying to
    * load the invalid data (see e.g. #143720). */
-  if (UNLIKELY(data->layers == nullptr && data->totlayer != 0)) {
+  if (data->layers == nullptr && data->totlayer != 0) [[unlikely]] {
     CustomData_reset(data);
     return;
   }
