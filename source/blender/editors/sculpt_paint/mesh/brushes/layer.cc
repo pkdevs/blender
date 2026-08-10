@@ -159,7 +159,12 @@ static void calc_faces(const Depsgraph &depsgraph,
   if (BKE_brush_has_cube_tip(&brush, PaintMode::Sculpt)) {
     Vector<float3> local_positions_storage(orig_data.positions.size());
     MutableSpan<float3> local_positions = local_positions_storage;
-    calc_local_positions(orig_data.positions, mat, local_positions);
+    calc_local_positions(orig_data.positions,
+                         mat,
+                         cache.location_symm,
+                         cache.view_normal_symm,
+                         eBrushFalloffShape(brush.falloff_shape),
+                         local_positions);
     calc_brush_cube_distances<float3>(brush, local_positions, distances);
     radius = 1.0f;
   }
@@ -274,7 +279,12 @@ static void calc_grids(const Depsgraph &depsgraph,
   if (BKE_brush_has_cube_tip(&brush, PaintMode::Sculpt)) {
     Vector<float3> local_positions_storage(orig_data.positions.size());
     MutableSpan<float3> local_positions = local_positions_storage;
-    calc_local_positions(orig_data.positions, mat, local_positions);
+    calc_local_positions(orig_data.positions,
+                         mat,
+                         cache.location_symm,
+                         cache.view_normal_symm,
+                         eBrushFalloffShape(brush.falloff_shape),
+                         local_positions);
     calc_brush_cube_distances<float3>(brush, local_positions, distances);
     radius = 1.0f;
   }
@@ -390,7 +400,12 @@ static void calc_bmesh(const Depsgraph &depsgraph,
   if (BKE_brush_has_cube_tip(&brush, PaintMode::Sculpt)) {
     Vector<float3> local_positions_storage(orig_positions.size());
     MutableSpan<float3> local_positions = local_positions_storage;
-    calc_local_positions(orig_positions, mat, local_positions);
+    calc_local_positions(orig_positions,
+                         mat,
+                         cache.location_symm,
+                         cache.view_normal_symm,
+                         eBrushFalloffShape(brush.falloff_shape),
+                         local_positions);
     calc_brush_cube_distances<float3>(brush, local_positions, distances);
     radius = 1.0f;
   }

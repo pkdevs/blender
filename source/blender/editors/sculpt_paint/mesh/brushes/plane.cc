@@ -238,7 +238,13 @@ static void calc_faces(const Depsgraph &depsgraph,
 
   tls.positions.resize(verts.size());
   const MutableSpan<float3> local_positions = tls.positions;
-  calc_local_positions(position_data.eval, verts, mat, local_positions);
+  calc_local_positions(position_data.eval,
+                       verts,
+                       mat,
+                       cache.location_symm,
+                       cache.view_normal_symm,
+                       eBrushFalloffShape(brush.falloff_shape),
+                       local_positions);
 
   tls.distances.resize(verts.size());
   const MutableSpan<float> distances = tls.distances;
@@ -295,7 +301,12 @@ static void calc_grids(const Depsgraph &depsgraph,
 
   tls.local_positions.resize(positions.size());
   const MutableSpan<float3> local_positions = tls.local_positions;
-  calc_local_positions(positions, mat, local_positions);
+  calc_local_positions(positions,
+                       mat,
+                       cache.location_symm,
+                       cache.view_normal_symm,
+                       eBrushFalloffShape(brush.falloff_shape),
+                       local_positions);
 
   tls.distances.resize(positions.size());
   const MutableSpan<float> distances = tls.distances;
@@ -350,7 +361,12 @@ static void calc_bmesh(const Depsgraph &depsgraph,
 
   tls.local_positions.resize(positions.size());
   const MutableSpan<float3> local_positions = tls.local_positions;
-  calc_local_positions(positions, mat, local_positions);
+  calc_local_positions(positions,
+                       mat,
+                       cache.location_symm,
+                       cache.view_normal_symm,
+                       eBrushFalloffShape(brush.falloff_shape),
+                       local_positions);
 
   tls.distances.resize(positions.size());
   const MutableSpan<float> distances = tls.distances;
