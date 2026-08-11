@@ -75,7 +75,8 @@ TreeElement *outliner_find_item_at_y(const SpaceOutliner *space_outliner,
                                      const Vector<TreeElement *> *tree,
                                      float view_co_y)
 {
-  for (TreeElement *te_iter : *tree) {
+  for (int index : tree->index_range()) {
+    TreeElement *te_iter = (*tree)[index];
     if (view_co_y < (te_iter->ys + UI_UNIT_Y)) {
       if (view_co_y >= te_iter->ys) {
         /* co_y is inside this element */
@@ -89,10 +90,11 @@ TreeElement *outliner_find_item_at_y(const SpaceOutliner *space_outliner,
 
       /* If the coordinate is lower than the next element, we can continue with that one and skip
        * recursion too. */
-      const int index = tree->first_index_of(te_iter);
-      const TreeElement *te_next = &te_iter[index + 1];
-      if (te_next && (view_co_y < (te_next->ys + UI_UNIT_Y))) {
-        continue;
+      if (index < tree->size() - 1) {
+        const TreeElement *te_next = (*tree)[index + 1];
+        if (te_next && (view_co_y < (te_next->ys + UI_UNIT_Y))) {
+          continue;
+        }
       }
 
       /* co_y is lower than current element (but not lower than the next one), possibly inside

@@ -149,7 +149,8 @@ static void check_persistent(
 
 void outliner_free_tree(Vector<TreeElement *> *tree)
 {
-  for (TreeElement *element : *tree) {
+  while (!tree->is_empty()) {
+    TreeElement *element = tree->first();
     outliner_free_tree_element(element, tree);
   }
 }
