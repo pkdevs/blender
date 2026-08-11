@@ -185,45 +185,8 @@ class GetBundleItemOperation : public NodeOperation {
       return;
     }
 
-    /* Handle a special case where nested bundles might be stored in BundleItemSocketValue as
-     * opposed to BundleItemInternalValue. */
-    std::optional<BundlePtr> child_bundle = item_value->as<BundlePtr>();
-    if (child_bundle.has_value()) {
-      if (item_output.should_compute()) {
-        if (item_output.type() == ResultType::Bundle) {
-          item_output.allocate_single_value();
-          item_output.set_single_value(child_bundle.value());
-        }
-        else {
-          item_output.allocate_invalid();
-          this->add_warning(NodeWarningType::Error,
-                            "Cannot implicitly convert item to the selected type");
-        }
-      }
-
-      if (bundle_output.should_compute()) {
-        if (this->get_input("Remove").get_single_value<bool>()) {
-          bundle.ensure_mutable_inplace().remove_path(split_path.value());
-        }
-        bundle_output.allocate_single_value();
-        bundle_output.set_single_value(std::move(bundle));
-      }
-
-      if (exists_output.should_compute()) {
-        exists_output.allocate_single_value();
-        exists_output.set_single_value(true);
-      }
-
-      return;
-    }
-
-    /* Otherwise, the item value is stored in a BundleItemInternalValue. */
-    BLI_assert(std::get_if<nodes::BundleItemInternalValue>(&item_value->value));
-
-    std::optional<BundleItemPtr> bundle_item = item_value->as<BundleItemPtr>();
-    BLI_assert(bundle_item.has_value());
-
-    const Result &bundle_result = bundle_item.value()->result();
+    Result bundle_result = BundleItem::get_result(this->context(), *item_value);
+    BLI_SCOPED_DEFER([&]() { bundle_result.release(); });
 
     if (item_output.should_compute()) {
       if (item_output.type() == bundle_result.type()) {

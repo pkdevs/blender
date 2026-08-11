@@ -230,34 +230,8 @@ class SeparateBundleOperation : public NodeOperation {
         continue;
       }
 
-      /* Handle a special case where nested bundles might be stored in BundleItemSocketValue as
-       * opposed to BundleItemInternalValue. */
-      std::optional<BundlePtr> child_bundle = item_value->as<BundlePtr>();
-      if (child_bundle.has_value()) {
-        if (result.type() == ResultType::Bundle) {
-          result.allocate_single_value();
-          result.set_single_value(child_bundle.value());
-          continue;
-        }
-
-        result.allocate_invalid();
-        this->add_warning(
-            NodeWarningType::Error,
-            fmt::format("{}: \"{}\" ({} " BLI_STR_UTF8_BLACK_RIGHT_POINTING_SMALL_TRIANGLE " {})",
-                        TIP_("Conversion not supported when separating bundle"),
-                        name,
-                        TIP_(Result::type_name(ResultType::Bundle)),
-                        TIP_(Result::type_name(result.type()))));
-        continue;
-      }
-
-      /* Otherwise, the item value is stored in a BundleItemInternalValue. */
-      BLI_assert(std::get_if<nodes::BundleItemInternalValue>(&item_value->value));
-
-      std::optional<BundleItemPtr> bundle_item = item_value->as<BundleItemPtr>();
-      BLI_assert(bundle_item.has_value());
-
-      const Result &bundle_result = bundle_item.value()->result();
+      Result bundle_result = BundleItem::get_result(this->context(), *item_value);
+      BLI_SCOPED_DEFER([&]() { bundle_result.release(); });
       if (result.type() == bundle_result.type()) {
         result.share_data(bundle_result);
         continue;
