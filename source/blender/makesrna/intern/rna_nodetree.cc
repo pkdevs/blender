@@ -3065,7 +3065,7 @@ static PointerRNA rna_NodeInternal_input_template(StructRNA *srna, int index)
       return ptr;
     }
   }
-  return PointerRNA_NULL;
+  return {};
 }
 
 static PointerRNA rna_NodeInternal_output_template(StructRNA *srna, int index)
@@ -3083,7 +3083,7 @@ static PointerRNA rna_NodeInternal_output_template(StructRNA *srna, int index)
       return ptr;
     }
   }
-  return PointerRNA_NULL;
+  return {};
 }
 
 static bool rna_NodeInternal_poll(StructRNA *srna, bNodeTree *ntree)
@@ -3670,7 +3670,7 @@ static void rna_NodeCryptomatte_image_set(PointerRNA *ptr,
     if (node->id) {
       id_us_min(node->id);
     }
-    if (value.data) {
+    if (value) {
       id_us_plus(static_cast<ID *>(value.data));
     }
     node->id = static_cast<ID *>(value.data);
