@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 # ./blender.bin --background --python tests/python/bl_pyapi_idprop_struct.py -- --verbose
-"""Tests for owned DNA struct IDProperties (CurveMapping/ColorBand) via PropertyGroup PointerProperty."""
+"""Tests for owned DNA struct IDProperties via PropertyGroup PointerProperty."""
 
 import os
 import tempfile
@@ -17,6 +17,7 @@ from bpy.types import PropertyGroup
 class IDPStructTestProps(PropertyGroup):
     curve: PointerProperty(type=bpy.types.CurveMapping)
     ramp: PointerProperty(type=bpy.types.ColorRamp)
+    profile: PointerProperty(type=bpy.types.CurveProfile)
 
 
 class TestIdPropertyStruct(unittest.TestCase):
@@ -39,6 +40,7 @@ class TestIdPropertyStruct(unittest.TestCase):
 
         self.assertIsInstance(props.curve, bpy.types.CurveMapping)
         self.assertIsInstance(props.ramp, bpy.types.ColorRamp)
+        self.assertIsInstance(props.profile, bpy.types.CurveProfile)
 
         # Mutate curve mapping.
         curve = props.curve.curves[0]
@@ -56,13 +58,24 @@ class TestIdPropertyStruct(unittest.TestCase):
         self.assertAlmostEqual(elements[0].color[0], 1.0)
         self.assertAlmostEqual(elements[-1].color[2], 1.0)
 
+        # Mutate curve profile.
+        points = props.profile.points
+        self.assertGreaterEqual(len(points), 2)
+        points[0].location = (0.0, 0.2)
+        points[-1].location = (1.0, 0.8)
+        self.assertAlmostEqual(points[0].location[1], 0.2)
+        self.assertAlmostEqual(points[-1].location[1], 0.8)
+
     def test_owned_pointer_not_assignable(self):
         scene = bpy.context.scene
         props = scene.idp_struct_test
         # Access once so the owned data exists.
         _ = props.curve
+        _ = props.profile
         with self.assertRaises((TypeError, RuntimeError, AttributeError)):
             props.curve = None
+        with self.assertRaises((TypeError, RuntimeError, AttributeError)):
+            props.profile = None
 
     def test_blend_roundtrip(self):
         scene = bpy.context.scene
@@ -72,6 +85,8 @@ class TestIdPropertyStruct(unittest.TestCase):
         props.curve.curves[0].points[-1].location = (1.0, 0.9)
         props.ramp.elements[0].color = (0.2, 0.4, 0.6, 1.0)
         props.ramp.elements[-1].position = 0.8
+        props.profile.points[0].location = (0.0, 0.15)
+        props.profile.points[-1].location = (1.0, 0.85)
 
         with tempfile.TemporaryDirectory() as temp_dir:
             path = os.path.join(temp_dir, "idp_struct.blend")
@@ -85,6 +100,8 @@ class TestIdPropertyStruct(unittest.TestCase):
             self.assertAlmostEqual(props.ramp.elements[0].color[1], 0.4, places=5)
             self.assertAlmostEqual(props.ramp.elements[0].color[2], 0.6, places=5)
             self.assertAlmostEqual(props.ramp.elements[-1].position, 0.8, places=5)
+            self.assertAlmostEqual(props.profile.points[0].location[1], 0.15)
+            self.assertAlmostEqual(props.profile.points[-1].location[1], 0.85)
 
 
 if __name__ == "__main__":

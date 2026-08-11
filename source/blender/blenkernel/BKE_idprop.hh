@@ -435,7 +435,7 @@ void IDP_BlendReadData_impl(BlendDataReader *reader,
 
 /**
  * Type information for IDProperty types that own a DNA struct
- * (e.g. #IDP_CURVE_MAPPING, #IDP_COLOR_BAND).
+ * (e.g. #IDP_CURVE_MAPPING, #IDP_COLOR_BAND, #IDP_CURVE_PROFILE).
  *
  * Lookup is by #eIDPropertyType (see #IDP_struct_type_info) so the DNA type name does not need to
  * be stored on every #IDProperty.
@@ -623,7 +623,7 @@ std::unique_ptr<IDProperty, IDPropertyDeleter> create_group(StringRef prop_name,
                                                             eIDPropertyFlag flags = {});
 
 /**
- * \brief Allocate a new owned-struct IDProperty (#IDP_CURVE_MAPPING, #IDP_COLOR_BAND, ...).
+ * \brief Allocate a new owned-struct IDProperty (#IDP_CURVE_MAPPING, #IDP_COLOR_BAND, #IDP_CURVE_PROFILE, ...).
  *
  * \param type_info: Registered type info describing the owned DNA struct.
  */

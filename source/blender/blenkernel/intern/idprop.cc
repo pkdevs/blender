@@ -63,6 +63,7 @@ static size_t idp_size_table[] = {
     sizeof(int8_t),    /* #IDP_BOOLEAN */
     sizeof(void *),    /* #IDP_CURVE_MAPPING */
     sizeof(void *),    /* #IDP_COLOR_BAND */
+    sizeof(void *),    /* #IDP_CURVE_PROFILE */
 };
 
 /**
@@ -987,6 +988,7 @@ IDProperty *IDP_CopyProperty_ex(const IDProperty *prop, const int flag)
       return IDP_CopyIDPArray(prop, flag);
     case IDP_CURVE_MAPPING:
     case IDP_COLOR_BAND:
+    case IDP_CURVE_PROFILE:
       return IDP_CopyStruct(prop, flag);
     default:
       return idp_generic_copy(prop, flag);
@@ -1127,7 +1129,8 @@ bool IDP_EqualsProperties_ex(const IDProperty *prop1,
     case IDP_ID:
       return (IDP_ID_get(prop1) == IDP_ID_get(prop2));
     case IDP_CURVE_MAPPING:
-    case IDP_COLOR_BAND: {
+    case IDP_COLOR_BAND:
+    case IDP_CURVE_PROFILE: {
       if (prop1->data.pointer == prop2->data.pointer) {
         return true;
       }
@@ -1403,7 +1406,8 @@ static void idp_free_property_content_recurse(IDProperty *prop,
       }
       break;
     case IDP_CURVE_MAPPING:
-    case IDP_COLOR_BAND: {
+    case IDP_COLOR_BAND:
+    case IDP_CURVE_PROFILE: {
       if (prop->data.pointer) {
         if (const IDPropertyStructTypeInfo *info = IDP_struct_type_info(prop->type)) {
           info->free(prop->data.pointer);
@@ -1610,6 +1614,7 @@ static void IDP_WriteArray(const IDProperty *prop, BlendWriter *writer, const in
       case IDP_IDPARRAY:
       case IDP_CURVE_MAPPING:
       case IDP_COLOR_BAND:
+      case IDP_CURVE_PROFILE:
         BLI_assert_unreachable();
         break;
     }
@@ -1701,7 +1706,8 @@ static void IDP_WriteProperty_OnlyData(const IDProperty *prop,
       IDP_WriteIDPArray(prop, writer, recursion_depth);
       break;
     case IDP_CURVE_MAPPING:
-    case IDP_COLOR_BAND: {
+    case IDP_COLOR_BAND:
+    case IDP_CURVE_PROFILE: {
       if (prop->data.pointer) {
         if (const IDPropertyStructTypeInfo *info = IDP_struct_type_info(prop->type)) {
           info->blend_write(writer, prop->data.pointer);
@@ -1896,6 +1902,7 @@ static void IDP_DirectLinkArray(IDProperty *prop,
     case IDP_IDPARRAY:
     case IDP_CURVE_MAPPING:
     case IDP_COLOR_BAND:
+    case IDP_CURVE_PROFILE:
       BLI_assert_unreachable();
       break;
   }
@@ -1987,7 +1994,8 @@ static void IDP_DirectLinkProperty(IDProperty *prop,
     case IDP_ID:
       break; /* Nothing special to do here. */
     case IDP_CURVE_MAPPING:
-    case IDP_COLOR_BAND: {
+    case IDP_COLOR_BAND:
+    case IDP_CURVE_PROFILE: {
       if (const IDPropertyStructTypeInfo *info = IDP_struct_type_info(prop->type)) {
         info->blend_read(reader, &prop->data.pointer);
       }
@@ -2365,7 +2373,8 @@ void hash(const IDProperty &base_prop, XXH3_state_t *hash_state)
         break;
       }
       case IDP_CURVE_MAPPING:
-      case IDP_COLOR_BAND: {
+      case IDP_COLOR_BAND:
+      case IDP_CURVE_PROFILE: {
         /* Full content hashing is type-specific; the property type covers the kind. */
         break;
       }

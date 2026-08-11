@@ -504,7 +504,8 @@ static bool rna_idproperty_verify_valid(PointerRNA *ptr, PropertyRNA *prop, IDPr
       }
       break;
     case IDP_CURVE_MAPPING:
-    case IDP_COLOR_BAND: {
+    case IDP_COLOR_BAND:
+    case IDP_CURVE_PROFILE: {
       if (prop->type != PROP_POINTER) {
         return false;
       }
@@ -542,6 +543,7 @@ static PropertyRNA *typemap[IDP_NUMTYPES] = {
     &rna_PropertyGroupItem_bool,
     nullptr, /* #IDP_CURVE_MAPPING: accessed via real RNA PointerProperty, not typemap. */
     nullptr, /* #IDP_COLOR_BAND */
+    nullptr, /* #IDP_CURVE_PROFILE */
 };
 
 static PropertyRNA *arraytypemap[IDP_NUMTYPES] = {
@@ -558,6 +560,7 @@ static PropertyRNA *arraytypemap[IDP_NUMTYPES] = {
     &rna_PropertyGroupItem_bool_array,
     nullptr, /* #IDP_CURVE_MAPPING */
     nullptr, /* #IDP_COLOR_BAND */
+    nullptr, /* #IDP_CURVE_PROFILE */
 };
 
 bool rna_property_can_access_pointer_data(const PointerRNA &ptr, PropertyRNA &prop)
@@ -6080,7 +6083,8 @@ static void update_idprop_bool(PointerRNA &rna_ptr, PropertyRNA &rna_prop, IDPro
     case IDP_ID:
     case IDP_GROUP:
     case IDP_CURVE_MAPPING:
-    case IDP_COLOR_BAND: {
+    case IDP_COLOR_BAND:
+    case IDP_CURVE_PROFILE: {
       fill_new();
       break;
     }
@@ -6093,7 +6097,8 @@ static void update_idprop_bool(PointerRNA &rna_ptr, PropertyRNA &rna_prop, IDPro
         case IDP_ARRAY:
         case IDP_GROUP:
         case IDP_CURVE_MAPPING:
-        case IDP_COLOR_BAND: {
+        case IDP_COLOR_BAND:
+        case IDP_CURVE_PROFILE: {
           BLI_assert_unreachable();
           fill_new();
           break;
@@ -6221,7 +6226,8 @@ static void update_idprop_int(PointerRNA &rna_ptr, PropertyRNA &rna_prop, IDProp
     case IDP_ID:
     case IDP_GROUP:
     case IDP_CURVE_MAPPING:
-    case IDP_COLOR_BAND: {
+    case IDP_COLOR_BAND:
+    case IDP_CURVE_PROFILE: {
       fill_new();
       break;
     }
@@ -6234,7 +6240,8 @@ static void update_idprop_int(PointerRNA &rna_ptr, PropertyRNA &rna_prop, IDProp
         case IDP_ARRAY:
         case IDP_GROUP:
         case IDP_CURVE_MAPPING:
-        case IDP_COLOR_BAND: {
+        case IDP_COLOR_BAND:
+        case IDP_CURVE_PROFILE: {
           BLI_assert_unreachable();
           fill_new();
           break;
@@ -6363,7 +6370,8 @@ static void update_idprop_float(PointerRNA &rna_ptr, PropertyRNA &rna_prop, IDPr
     case IDP_ID:
     case IDP_GROUP:
     case IDP_CURVE_MAPPING:
-    case IDP_COLOR_BAND: {
+    case IDP_COLOR_BAND:
+    case IDP_CURVE_PROFILE: {
       fill_new();
       break;
     }
@@ -6376,7 +6384,8 @@ static void update_idprop_float(PointerRNA &rna_ptr, PropertyRNA &rna_prop, IDPr
         case IDP_ARRAY:
         case IDP_GROUP:
         case IDP_CURVE_MAPPING:
-        case IDP_COLOR_BAND: {
+        case IDP_COLOR_BAND:
+        case IDP_CURVE_PROFILE: {
           BLI_assert_unreachable();
           fill_new();
           break;

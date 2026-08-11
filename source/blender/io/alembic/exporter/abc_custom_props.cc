@@ -84,6 +84,7 @@ void CustomPropertiesExporter::write(const IDProperty *id_property)
     case IDP_ID:
     case IDP_CURVE_MAPPING:
     case IDP_COLOR_BAND:
+    case IDP_CURVE_PROFILE:
       /* Not supported. */
       break;
   }

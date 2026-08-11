@@ -46,8 +46,13 @@ enum eIDPropertyType : char {
    * Behavior is dispatched through #IDPropertyStructTypeInfo.
    */
   IDP_COLOR_BAND = 12,
+  /**
+   * Owned #CurveProfile. #IDPropertyData.pointer owns the data.
+   * Behavior is dispatched through #IDPropertyStructTypeInfo.
+   */
+  IDP_CURVE_PROFILE = 13,
 };
-#define IDP_NUMTYPES 13
+#define IDP_NUMTYPES 14
 
 /** Used by some IDP utils, keep values in sync with type enum above. */
 enum eIDPropertyTypeFilter : int {
@@ -62,6 +67,7 @@ enum eIDPropertyTypeFilter : int {
   IDP_TYPE_FILTER_BOOLEAN = 1 << IDP_BOOLEAN,
   IDP_TYPE_FILTER_CURVE_MAPPING = 1 << IDP_CURVE_MAPPING,
   IDP_TYPE_FILTER_COLOR_BAND = 1 << IDP_COLOR_BAND,
+  IDP_TYPE_FILTER_CURVE_PROFILE = 1 << IDP_CURVE_PROFILE,
 };
 ENUM_OPERATORS(eIDPropertyTypeFilter)
 

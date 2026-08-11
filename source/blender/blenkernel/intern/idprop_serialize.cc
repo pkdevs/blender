@@ -759,6 +759,7 @@ static const IDPropertySerializer &serializer_for(eIDPropertyType property_type)
     case IDP_IDPARRAY:
     case IDP_CURVE_MAPPING:
     case IDP_COLOR_BAND:
+    case IDP_CURVE_PROFILE:
       return IDP_SERIALIZER_UNKNOWN;
 
     default:

@@ -5,11 +5,13 @@
 /** \file
  * \ingroup bke
  *
- * Owned DNA struct IDProperty types (#IDP_CURVE_MAPPING, #IDP_COLOR_BAND, ...) and their handlers.
+ * Owned DNA struct IDProperty types (#IDP_CURVE_MAPPING, #IDP_COLOR_BAND, #IDP_CURVE_PROFILE, ...)
+ * and their handlers.
  */
 
 #include "BKE_colorband.hh"
 #include "BKE_colortools.hh"
+#include "BKE_curveprofile.h"
 #include "BKE_idprop.hh"
 
 #include "BLI_map.hh"
@@ -19,6 +21,7 @@
 
 #include "DNA_color_types.h"
 #include "DNA_colorband_types.h"
+#include "DNA_curveprofile_types.h"
 
 #include "MEM_guardedalloc.h"
 
@@ -209,6 +212,87 @@ static const IDPropertyStructTypeInfo idp_struct_type_colorband = {
 /** \} */
 
 /* -------------------------------------------------------------------- */
+/** \name CurveProfile
+ * \{ */
+
+static void *idp_struct_curveprofile_create()
+{
+  return BKE_curveprofile_add(PROF_PRESET_LINE);
+}
+
+static void *idp_struct_curveprofile_copy(const void *src, const int /*flag*/)
+{
+  return BKE_curveprofile_copy(static_cast<const CurveProfile *>(src));
+}
+
+static void idp_struct_curveprofile_free(void *data)
+{
+  BKE_curveprofile_free(static_cast<CurveProfile *>(data));
+}
+
+static void idp_struct_curveprofile_blend_write(BlendWriter *writer, const void *data)
+{
+  BKE_curveprofile_blend_write(writer, static_cast<const CurveProfile *>(data));
+}
+
+static void idp_struct_curveprofile_blend_read(BlendDataReader *reader, void **data_p)
+{
+  *data_p = BLO_read_struct_by_name_array(reader, "CurveProfile", 1, *data_p);
+  if (*data_p) {
+    BKE_curveprofile_blend_read(reader, static_cast<CurveProfile *>(*data_p));
+  }
+}
+
+static bool idp_struct_curveprofile_equals(const void *a_v, const void *b_v)
+{
+  const CurveProfile *a = static_cast<const CurveProfile *>(a_v);
+  const CurveProfile *b = static_cast<const CurveProfile *>(b_v);
+  if (a == b) {
+    return true;
+  }
+  if (!a || !b) {
+    return false;
+  }
+  if (a->path_len != b->path_len || a->segments_len != b->segments_len || a->preset != b->preset ||
+      a->flag != b->flag)
+  {
+    return false;
+  }
+  if (memcmp(&a->view_rect, &b->view_rect, sizeof(a->view_rect)) != 0 ||
+      memcmp(&a->clip_rect, &b->clip_rect, sizeof(a->clip_rect)) != 0)
+  {
+    return false;
+  }
+  if (a->path_len > 0) {
+    for (int i = 0; i < a->path_len; i++) {
+      const CurveProfilePoint &pa = a->path[i];
+      const CurveProfilePoint &pb = b->path[i];
+      if (pa.x != pb.x || pa.y != pb.y || pa.flag != pb.flag || pa.h1 != pb.h1 || pa.h2 != pb.h2 ||
+          memcmp(pa.h1_loc, pb.h1_loc, sizeof(pa.h1_loc)) != 0 ||
+          memcmp(pa.h2_loc, pb.h2_loc, sizeof(pa.h2_loc)) != 0)
+      {
+        return false;
+      }
+    }
+  }
+  return true;
+}
+
+static const IDPropertyStructTypeInfo idp_struct_type_curveprofile = {
+    /*idp_type*/ IDP_CURVE_PROFILE,
+    /*dna_type_name*/ "CurveProfile",
+    /*rna_identifier*/ "CurveProfile",
+    /*create_default*/ idp_struct_curveprofile_create,
+    /*copy*/ idp_struct_curveprofile_copy,
+    /*free*/ idp_struct_curveprofile_free,
+    /*blend_write*/ idp_struct_curveprofile_blend_write,
+    /*blend_read*/ idp_struct_curveprofile_blend_read,
+    /*equals*/ idp_struct_curveprofile_equals,
+};
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
 /** \name Init / Create
  * \{ */
 
@@ -216,6 +300,7 @@ void IDP_struct_type_init()
 {
   IDP_struct_type_register(&idp_struct_type_curvemapping);
   IDP_struct_type_register(&idp_struct_type_colorband);
+  IDP_struct_type_register(&idp_struct_type_curveprofile);
 }
 
 void IDP_struct_type_exit()
