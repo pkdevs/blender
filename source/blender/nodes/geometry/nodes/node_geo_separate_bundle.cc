@@ -222,9 +222,17 @@ class SeparateBundleOperation : public NodeOperation {
         continue;
       }
 
+      const BundleItemValue *item_value = bundle->lookup(key.value());
+      if (!item_value) {
+        this->add_warning(
+            NodeWarningType::Error,
+            fmt::format(fmt::runtime(TIP_("Value not found in bundle: \"{}\"")), name));
+        continue;
+      }
+
       /* Handle a special case where nested bundles might be stored in BundleItemSocketValue as
        * opposed to BundleItemInternalValue. */
-      std::optional<BundlePtr> child_bundle = bundle->lookup<BundlePtr>(*key);
+      std::optional<BundlePtr> child_bundle = item_value->as<BundlePtr>();
       if (child_bundle.has_value()) {
         if (result.type() == ResultType::Bundle) {
           result.allocate_single_value();
@@ -243,15 +251,13 @@ class SeparateBundleOperation : public NodeOperation {
         continue;
       }
 
-      std::optional<ImplicitSharingPtr<BundleItem>> bundle_item =
-          bundle->lookup<ImplicitSharingPtr<BundleItem>>(*key);
-      if (!bundle_item.has_value()) {
-        this->add_warning(
-            NodeWarningType::Error,
-            fmt::format(fmt::runtime(TIP_("Value not found in bundle: \"{}\"")), name));
-        continue;
-      }
+      /* Otherwise, the item value is stored in a BundleItemInternalValue. */
+      BLI_assert(std::get_if<nodes::BundleItemInternalValue>(&item_value->value));
 
+      std::optional<ImplicitSharingPtr<BundleItem>> bundle_item =
+          item_value->as<ImplicitSharingPtr<BundleItem>>();
+
+      BLI_assert(bundle_item.has_value());
       const Result &bundle_result = bundle_item.value()->result();
       if (result.type() == bundle_result.type()) {
         result.share_data(bundle_result);

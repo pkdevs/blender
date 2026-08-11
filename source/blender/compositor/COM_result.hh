@@ -46,7 +46,6 @@ struct Mask;
 namespace blender::compositor {
 
 class Context;
-class Result;
 class DerivedResources;
 
 /* Make sure to update the format related static methods in the Result class. */

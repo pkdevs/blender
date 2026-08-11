@@ -121,7 +121,7 @@ class StoreBundleItemOperation : public NodeOperation {
 
     const std::string path = this->get_input("Path").get_single_value<std::string>();
     const std::optional<Vector<BundleKey>> split_path = Bundle::split_path(path);
-    if (!split_path) {
+    if (!split_path.has_value()) {
       if (!path.empty()) {
         this->add_warning(NodeWarningType::Warning, "Invalid bundle path");
       }

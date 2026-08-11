@@ -157,13 +157,18 @@ static destruct_ptr<nodes::eval_log::BundleValueLog> get_bundle_info_log(
      * opposed to BundleItemInternalValue. */
     const nodes::BundleItemSocketValue *socket_value = std::get_if<nodes::BundleItemSocketValue>(
         &item.value.value);
-    if (socket_value && socket_value->type->type == SOCK_BUNDLE) {
+    if (socket_value) {
+      BLI_assert(socket_value->type->type == SOCK_BUNDLE);
       items.append({item.key.ustr(), {Result::type_name(ResultType::Bundle)}});
       continue;
     }
 
+    /* Otherwise, the item value is stored in a BundleItemInternalValue. */
+    BLI_assert(std::get_if<nodes::BundleItemInternalValue>(&item.value.value));
+
     std::optional<ImplicitSharingPtr<BundleItem>> bundle_item =
         item.value.as<ImplicitSharingPtr<BundleItem>>();
+    BLI_assert(bundle_item.has_value());
     const Result &bundle_result = bundle_item.value()->result();
     items.append({item.key.ustr(), {Result::type_name(bundle_result.type())}});
   }
