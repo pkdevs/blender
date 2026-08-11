@@ -131,12 +131,17 @@ class TestIdPropertyStruct(unittest.TestCase):
 
     def test_unsupported_pointer_property_type(self):
         """PointerProperty only allows ID, PropertyGroup, or registered struct types."""
+        import io
+        from contextlib import redirect_stderr
 
         class UnsupportedPointerProps(PropertyGroup):
             bad: PointerProperty(type=bpy.types.Event)
 
-        with self.assertRaises(ValueError):
-            bpy.utils.register_class(UnsupportedPointerProps)
+        # Registration prints the TypeError with PyErr_Print, then raises ValueError.
+        stderr = io.StringIO()
+        with redirect_stderr(stderr):
+            with self.assertRaises(ValueError):
+                bpy.utils.register_class(UnsupportedPointerProps)
 
     def test_blend_roundtrip(self):
         scene = bpy.context.scene
