@@ -76,6 +76,68 @@ class TestIdPropertyStruct(unittest.TestCase):
         with self.assertRaises((TypeError, RuntimeError, AttributeError)):
             props.profile = None
 
+    def test_copy_independence(self):
+        """Deep-copy must duplicate owned DNA structs (not share pointers)."""
+        scene = bpy.context.scene
+        props = scene.idp_struct_test
+
+        props.curve.curves[0].points[0].location = (0.0, 0.25)
+        props.curve.curves[0].points[-1].location = (1.0, 0.75)
+        props.ramp.elements[0].color = (1.0, 0.0, 0.0, 1.0)
+        props.ramp.elements[-1].position = 0.7
+        props.profile.points[0].location = (0.0, 0.3)
+        props.profile.points[-1].location = (1.0, 0.6)
+
+        scene_copy = scene.copy()
+        props_copy = scene_copy.idp_struct_test
+
+        self.assertAlmostEqual(props_copy.curve.curves[0].points[0].location[1], 0.25)
+        self.assertAlmostEqual(props_copy.curve.curves[0].points[-1].location[1], 0.75)
+        self.assertAlmostEqual(props_copy.ramp.elements[0].color[0], 1.0)
+        self.assertAlmostEqual(props_copy.ramp.elements[-1].position, 0.7)
+        self.assertAlmostEqual(props_copy.profile.points[0].location[1], 0.3)
+        self.assertAlmostEqual(props_copy.profile.points[-1].location[1], 0.6)
+
+        # Mutating the original must not affect the copy (and vice versa).
+        props.curve.curves[0].points[0].location = (0.0, 0.9)
+        props.ramp.elements[0].color = (0.0, 1.0, 0.0, 1.0)
+        props.profile.points[0].location = (0.0, 0.05)
+        self.assertAlmostEqual(props_copy.curve.curves[0].points[0].location[1], 0.25)
+        self.assertAlmostEqual(props_copy.ramp.elements[0].color[1], 0.0)
+        self.assertAlmostEqual(props_copy.profile.points[0].location[1], 0.3)
+
+        props_copy.curve.curves[0].points[-1].location = (1.0, 0.1)
+        self.assertAlmostEqual(props.curve.curves[0].points[-1].location[1], 0.75)
+
+    def test_pop_rejection(self):
+        """Owned DNA structs cannot be popped into a detached Python value."""
+        scene = bpy.context.scene
+        props = scene.idp_struct_test
+        _ = props.curve
+        _ = props.ramp
+        _ = props.profile
+
+        with self.assertRaisesRegex(TypeError, "cannot pop IDProperty 'curve'"):
+            props.pop("curve")
+        with self.assertRaisesRegex(TypeError, "cannot pop IDProperty 'ramp'"):
+            props.pop("ramp")
+        with self.assertRaisesRegex(TypeError, "cannot pop IDProperty 'profile'"):
+            scene.bl_system_properties_get()["idp_struct_test"].pop("profile")
+
+        # Properties must still be accessible after failed pops.
+        self.assertIsInstance(props.curve, bpy.types.CurveMapping)
+        self.assertIsInstance(props.ramp, bpy.types.ColorRamp)
+        self.assertIsInstance(props.profile, bpy.types.CurveProfile)
+
+    def test_unsupported_pointer_property_type(self):
+        """PointerProperty only allows ID, PropertyGroup, or registered struct types."""
+
+        class UnsupportedPointerProps(PropertyGroup):
+            bad: PointerProperty(type=bpy.types.Event)
+
+        with self.assertRaises(ValueError):
+            bpy.utils.register_class(UnsupportedPointerProps)
+
     def test_blend_roundtrip(self):
         scene = bpy.context.scene
         props = scene.idp_struct_test

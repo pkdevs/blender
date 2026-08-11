@@ -1223,7 +1223,6 @@ static bool idp_struct_curveprofile_equals(const void *a_v, const void *b_v)
 
 static const IDPropertyStructTypeInfo idp_struct_type_curveprofile = {
     .idp_type = IDP_CURVE_PROFILE,
-    .dna_type_name = "CurveProfile",
     .rna_identifier = "CurveProfile",
     .create_default = idp_struct_curveprofile_create,
     .copy = idp_struct_curveprofile_copy,

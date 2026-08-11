@@ -434,8 +434,6 @@ void IDP_BlendReadData_impl(BlendDataReader *reader,
  */
 struct IDPropertyStructTypeInfo {
   eIDPropertyType idp_type;
-  /** DNA type name used for blend I/O (e.g. CurveMapping or ColorBand). */
-  std::string dna_type_name;
   /** RNA struct identifier (e.g. CurveMapping or ColorRamp). */
   std::string rna_identifier;
 
@@ -447,9 +445,11 @@ struct IDPropertyStructTypeInfo {
   bool (*equals)(const void *a, const void *b) = nullptr;
 };
 
+/** Register struct type. It must have static storage duration. */
+void IDP_struct_type_register(const IDPropertyStructTypeInfo &type_info);
+
 void IDP_struct_type_init();
 void IDP_struct_type_exit();
-void IDP_struct_type_register(const IDPropertyStructTypeInfo &type_info);
 
 /** Get the struct type info for the given type if possible, or null otherwise. */
 const IDPropertyStructTypeInfo *IDP_struct_type_info(eIDPropertyType type);
@@ -501,7 +501,8 @@ namespace bke::idprop {
 /**
  * \brief Convert the given `properties` to `Value` objects for serialization.
  *
- * `IDP_ID` and `IDP_IDPARRAY` are not supported and will be ignored.
+ * `IDP_ID`, `IDP_IDPARRAY`, and struct (e.g. CurveMapping) types are not supported and will be
+ * ignored.
  *
  * UI data such as max/min will not be serialized.
  */

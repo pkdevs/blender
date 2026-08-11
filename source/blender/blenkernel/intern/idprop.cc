@@ -1412,6 +1412,7 @@ static void idp_free_property_content_recurse(IDProperty *prop,
     IDP_ANY_STRUCT_TYPE_CASE: {
       if (prop->data.pointer) {
         const IDPropertyStructTypeInfo *info = IDP_struct_type_info(prop->type);
+        BLI_assert(info);
         info->free(prop->data.pointer);
         prop->data.pointer = nullptr;
       }
@@ -1701,6 +1702,7 @@ static void IDP_WriteProperty_OnlyData(const IDProperty *prop,
     IDP_ANY_STRUCT_TYPE_CASE: {
       if (prop->data.pointer) {
         const IDPropertyStructTypeInfo *info = IDP_struct_type_info(prop->type);
+        BLI_assert(info);
         info->blend_write(writer, prop->data.pointer);
       }
       break;
@@ -1977,6 +1979,7 @@ static void IDP_DirectLinkProperty(IDProperty *prop,
       break; /* Nothing special to do here. */
     IDP_ANY_STRUCT_TYPE_CASE: {
       const IDPropertyStructTypeInfo *info = IDP_struct_type_info(prop->type);
+      BLI_assert(info);
       info->blend_read(reader, &prop->data.pointer);
       break;
     }
@@ -2344,7 +2347,8 @@ void hash(const IDProperty &base_prop, XXH3_state_t *hash_state)
         break;
       }
       IDP_ANY_STRUCT_TYPE_CASE: {
-        /* Full content hashing is type-specific; the property type covers the kind. */
+        /* TODO: Hash struct contents (e.g. via type-info callback). Currently only the property
+         * type is hashed, so mutations are invisible to #bke::idprop::hash. */
         break;
       }
     }
@@ -2380,7 +2384,6 @@ static bool is_idp_struct_type(const eIDPropertyType type)
 void IDP_struct_type_register(const IDPropertyStructTypeInfo &type_info)
 {
   BLI_assert(is_idp_struct_type(type_info.idp_type));
-  BLI_assert(!type_info.dna_type_name.empty());
   BLI_assert(!type_info.rna_identifier.empty());
   BLI_assert(type_info.create_default);
   BLI_assert(type_info.copy);

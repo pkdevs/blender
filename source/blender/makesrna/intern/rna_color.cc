@@ -179,6 +179,9 @@ static void rna_CurveMapping_tone_update(Main * /*bmain*/, Scene * /*scene*/, Po
   seq_notify_curve_update(curve_mapping, ptr->owner_id);
   WM_main_add_notifier(NC_NODE | NA_EDITED, nullptr);
   WM_main_add_notifier(NC_SCENE | ND_SEQUENCER, nullptr);
+  if (ptr->has_owner_id() && GS(ptr->owner_id->name) == ID_OB) {
+    DEG_id_tag_update(&ptr->owner_id, ID_RECALC_GEOMETRY);
+  }
 }
 
 static void rna_CurveMapping_extend_update(Main * /*bmain*/,

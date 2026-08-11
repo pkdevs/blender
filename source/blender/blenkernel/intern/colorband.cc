@@ -718,7 +718,6 @@ static bool idp_struct_colorband_equals(const void *a_v, const void *b_v)
 
 static const IDPropertyStructTypeInfo idp_struct_type_colorband = {
     .idp_type = IDP_COLOR_BAND,
-    .dna_type_name = "ColorBand",
     .rna_identifier = "ColorRamp",
     .create_default = idp_struct_colorband_create,
     .copy = idp_struct_colorband_copy,

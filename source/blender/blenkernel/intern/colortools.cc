@@ -2218,7 +2218,6 @@ static bool idp_struct_curvemapping_equals(const void *a_v, const void *b_v)
 
 static const IDPropertyStructTypeInfo idp_struct_type_curvemapping = {
     .idp_type = IDP_CURVE_MAPPING,
-    .dna_type_name = "CurveMapping",
     .rna_identifier = "CurveMapping",
     .create_default = idp_struct_curvemapping_create,
     .copy = idp_struct_curvemapping_copy,

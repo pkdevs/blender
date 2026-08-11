@@ -116,6 +116,8 @@ static PyObject *idprop_py_from_idp_struct(ID *id, IDProperty *prop)
   if (srna == nullptr) {
     Py_RETURN_NONE;
   }
+  /* Structs id properties must have an owner ID. */
+  BLI_assert(id);
   PointerRNA ptr = RNA_pointer_create_discrete(id, srna, prop->data.pointer);
   return pyrna_struct_CreatePyObject(&ptr);
 }
