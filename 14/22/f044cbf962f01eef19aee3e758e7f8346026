@@ -12,3 +12,4 @@ Referenced by issue #161837, Mesh with shapekey does not display in editmode
 Referenced by issue #161785, Multires viewport display toggle deletes sculpt deformation
 Referenced by issue #161953, Entering edit-mode with a shape-key asserts
 Referenced by pull request #162548, Fix #161785: Multires modifier toggle deletes sculpt deformation
+Referenced by commit 6b63bb0ae9f1465b437130f937c20a757ce4c89b, Fix #161785: Multires modifier toggle deletes sculpt deformation
