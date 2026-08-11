@@ -251,17 +251,65 @@ static void get_curve_input_chains(BMesh *bm, Vector<CurveChainData> &r_chains)
   }
 }
 
+static void find_longest_unselected_gap(Span<BMVert *> verts,
+                                        int &r_longest_gap,
+                                        int &r_best_gap_start)
+{
+  const int verts_num = verts.size();
+  Vector<int> selected_indices;
+
+  for (const int i : verts.index_range()) {
+    if (BM_elem_flag_test(verts[i], BM_ELEM_SELECT)) {
+      selected_indices.append(i);
+    }
+  }
+
+  if (selected_indices.is_empty()) {
+    r_longest_gap = verts_num;
+    r_best_gap_start = 0;
+    return;
+  }
+
+  int longest_gap = -1;
+  int best_gap_start = -1;
+
+  for (const int i : selected_indices.index_range()) {
+    int curr_index = selected_indices[i];
+    int next_index = selected_indices[math::mod_periodic(i + 1, int(selected_indices.size()))];
+    int gap_size = math::mod_periodic(next_index - curr_index - 1, verts_num);
+
+    if (gap_size > longest_gap) {
+      longest_gap = gap_size;
+      best_gap_start = math::mod_periodic(curr_index + 1, verts_num);
+    }
+  }
+
+  r_longest_gap = longest_gap;
+  r_best_gap_start = best_gap_start;
+}
+
 static void trim_chains_to_boundaries(Vector<CurveChainData> &chains)
 {
   for (CurveChainData &chain : chains) {
+    if (chain.is_closed) {
+      int longest_gap, best_gap_start;
+      find_longest_unselected_gap(chain.verts, longest_gap, best_gap_start);
+
+      if (longest_gap > 0) {
+        int shift = math::mod_periodic(best_gap_start + longest_gap, int(chain.verts.size()));
+        std::rotate(chain.verts.begin(), chain.verts.begin() + shift, chain.verts.end());
+      }
+      chain.is_closed = false;
+    }
+
     int first_selected = -1;
     int last_selected = -1;
-    const int num = chain.verts.size();
-
     for (const int i : chain.verts.index_range()) {
       if (BM_elem_flag_test(chain.verts[i], BM_ELEM_SELECT)) {
-        first_selected = i;
-        break;
+        if (first_selected == -1) {
+          first_selected = i;
+        }
+        last_selected = i;
       }
     }
 
@@ -270,25 +318,12 @@ static void trim_chains_to_boundaries(Vector<CurveChainData> &chains)
       continue;
     }
 
-    for (int i = num - 1; i >= 0; i--) {
-      if (BM_elem_flag_test(chain.verts[i], BM_ELEM_SELECT)) {
-        last_selected = i;
-        break;
-      }
-    }
-
-    int trimmed_len = last_selected - first_selected + 1;
-
-    if (chain.is_closed && trimmed_len >= num / 2) {
-      chain.verts.clear();
-    }
-    else {
+    if (first_selected > 0 || last_selected < chain.verts.size() - 1) {
       Vector<BMVert *> trimmed;
       for (int i = first_selected; i <= last_selected; i++) {
         trimmed.append(chain.verts[i]);
       }
       chain.verts = std::move(trimmed);
-      chain.is_closed = false;
     }
   }
 }
@@ -484,38 +519,20 @@ static void execute_curve_chain(Span<BMVert *> in_verts,
   int shift = 0;
 
   if (local_is_closed) {
-    int longest_gap = -1;
-    int best_gap_start = -1;
-    int current_gap = 0;
-    int current_gap_start = -1;
-
-    for (const int i : IndexRange(original_verts_num * 2)) {
-      int index = i % original_verts_num;
-      if (!BM_elem_flag_test(in_verts[index], BM_ELEM_SELECT)) {
-        if (current_gap == 0) {
-          current_gap_start = index;
-        }
-        current_gap++;
-      }
-      else {
-        if (current_gap > longest_gap) {
-          longest_gap = current_gap;
-          best_gap_start = current_gap_start;
-        }
-        current_gap = 0;
-      }
-    }
+    int longest_gap, best_gap_start;
+    find_longest_unselected_gap(in_verts, longest_gap, best_gap_start);
 
     int offset = original_verts_num / 4;
 
     if (longest_gap > 2 * offset) {
       local_is_closed = false;
 
-      int trim_start = (best_gap_start + longest_gap - offset) % original_verts_num;
-      int trim_end = (best_gap_start - 1 + offset + original_verts_num) % original_verts_num;
+      int trim_start = math::mod_periodic(best_gap_start + longest_gap - offset,
+                                          original_verts_num);
+      int trim_end = math::mod_periodic(best_gap_start - 1 + offset, original_verts_num);
 
       shift = trim_start;
-      verts_num = (trim_end - trim_start + original_verts_num) % original_verts_num + 1;
+      verts_num = math::mod_periodic(trim_end - trim_start, original_verts_num) + 1;
     }
     else {
       for (const int i : in_verts.index_range()) {
