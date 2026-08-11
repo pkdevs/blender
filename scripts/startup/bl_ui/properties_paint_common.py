@@ -717,39 +717,32 @@ class ShapePanel(BrushPanel):
         if brush is None:
             return
 
-        has_content = False
-
         layout.use_property_split = True
         layout.use_property_decorate = False
 
-        if mode == 'SCULPT' and brush.sculpt_capabilities.has_hardness:
-            row = layout.row(align=True)
-            row.prop(brush, "hardness", slider=True)
-            if brush.sculpt_capabilities.has_hardness_pressure:
-                row.prop(brush, "use_hardness_pressure", text="")
-                if not self.is_popover:
-                    UnifiedPaintPanel.prop_custom_pressure(
-                        layout,
-                        context,
-                        row,
-                        brush,
-                        pressure_name="use_hardness_pressure",
-                        curve_visibility_name="show_hardness_curve",
-                        custom_curve_name="curve_hardness",
-                    )
-            has_content = True
-
-        if mode == 'SCULPT' and brush.sculpt_capabilities.has_tip_roundness:
-            if has_content:
+        if mode == 'SCULPT':
+            if brush.sculpt_capabilities.has_hardness:
+                row = layout.row(align=True)
+                row.prop(brush, "hardness", slider=True)
+                if brush.sculpt_capabilities.has_hardness_pressure:
+                    row.prop(brush, "use_hardness_pressure", text="")
+                    if not self.is_popover:
+                        UnifiedPaintPanel.prop_custom_pressure(
+                            layout,
+                            context,
+                            row,
+                            brush,
+                            pressure_name="use_hardness_pressure",
+                            curve_visibility_name="show_hardness_curve",
+                            custom_curve_name="curve_hardness",
+                        )
                 layout.separator()
-            layout.row(align=True)
-            layout.prop(brush, "tip_roundness")
 
-            layout.prop(brush, "tip_scale_x")
-            has_content = True
-
-        if has_content:
-            layout.separator()
+            if brush.sculpt_capabilities.has_tip_roundness:
+                layout.row(align=True)
+                layout.prop(brush, "tip_roundness")
+                layout.prop(brush, "tip_scale_x")
+                layout.separator()
 
         layout.use_property_split = False
         col = layout.column(align=True)
