@@ -458,8 +458,9 @@ option(WITH_IO_STL "Enable STL 3D file format support (*.stl)" ON)
 option(WITH_IO_FBX "Enable FBX 3D file format support (*.fbx)" ON)
 option(WITH_IO_GREASE_PENCIL "Enable Grease Pencil file format IO (*.svg, *.pdf)" ON)
 
+# TODO: Set this OFF before merge
 option(WITH_BLENDER_UPDATES_NOTIFICATIONS "Allows Blender to check for updates in non platform package builds."
-  OFF
+  ON
 )
 # Sound output
 option(WITH_SDL_AUDIO "Enable SDL audio support" OFF)
