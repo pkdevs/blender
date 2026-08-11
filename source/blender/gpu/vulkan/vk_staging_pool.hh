@@ -5,9 +5,11 @@
 #pragma once
 
 #include "BLI_mutex.hh"
+#include "BLI_vector.hh"
 
 #include "vk_buffer.hh"
 #include "vk_common.hh"
+#include "vk_resource_pool.hh"
 
 namespace blender::gpu {
 
@@ -28,7 +30,7 @@ class VKStagingPool {
   void free();
 
   VKStagingAllocation sub_allocate(size_t size, size_t alignment = 16);
-  void tag_and_rotate(TimelineValue timeline);
+  void submit(TimelineValue timeline);
   void reclaim(TimelineValue completed_timeline);
 
  private:
@@ -36,19 +38,18 @@ class VKStagingPool {
     VKBuffer buffer;
     size_t capacity = 0;
     size_t offset = 0;
-    TimelineValue timeline_tag = 0;
     void *mapped_base = nullptr;
-    bool in_flight = false;
   };
 
-  static constexpr int pool_buffer_count_ = 2;
-  PoolBuffer buffers_[pool_buffer_count_];
-  int active_index_ = 0;
+  Vector<PoolBuffer *> free_buffers_;
+  PoolBuffer *active_buffer_ = nullptr;
+  /** Buffers filled during the current, not yet submitted generation. */
+  Vector<PoolBuffer *> used_buffers_;
+  TimelineResources<PoolBuffer *> timeline_buffers_;
   size_t buffer_size_ = 0;
   Mutex mutex_;
 
-  bool try_reclaim(PoolBuffer &buf, TimelineValue completed_timeline);
-  void allocate_pool_buffer(PoolBuffer &buf);
+  PoolBuffer *new_pool_buffer();
 };
 
 }  // namespace blender::gpu

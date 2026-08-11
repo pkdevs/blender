@@ -4,92 +4,108 @@
 
 #include "vk_staging_pool.hh"
 
+#include <limits>
+
+#include "MEM_guardedalloc.h"
+
 namespace blender::gpu {
 
 void VKStagingPool::init(size_t buffer_size)
 {
   std::scoped_lock lock(mutex_);
   buffer_size_ = buffer_size;
-  for (int i = 0; i < pool_buffer_count_; i++) {
-    allocate_pool_buffer(buffers_[i]);
-  }
-  active_index_ = 0;
+  free_buffers_.append(new_pool_buffer());
+  free_buffers_.append(new_pool_buffer());
 }
 
 void VKStagingPool::free()
 {
   std::scoped_lock lock(mutex_);
-  for (int i = 0; i < pool_buffer_count_; i++) {
-    buffers_[i].buffer.free();
-    buffers_[i].mapped_base = nullptr;
-    buffers_[i].offset = 0;
-    buffers_[i].in_flight = false;
+  timeline_buffers_.remove_old(std::numeric_limits<TimelineValue>::max(),
+                                [&](PoolBuffer *buf) { free_buffers_.append(buf); });
+  if (active_buffer_) {
+    free_buffers_.append(active_buffer_);
+    active_buffer_ = nullptr;
   }
+  for (PoolBuffer *buf : free_buffers_) {
+    buf->buffer.free();
+    MEM_delete(buf);
+  }
+  free_buffers_.clear();
 }
 
-void VKStagingPool::allocate_pool_buffer(PoolBuffer &buf)
+VKStagingPool::PoolBuffer *VKStagingPool::new_pool_buffer()
 {
-  buf.buffer.create(buffer_size_,
-                    VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-                    VMA_MEMORY_USAGE_AUTO,
-                    VMA_ALLOCATION_CREATE_MAPPED_BIT |
-                        VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT,
-                    0.4f,
-                    false,
-                    "StagingPool");
-  buf.mapped_base = buf.buffer.mapped_memory_get();
-  buf.capacity = buffer_size_;
-  buf.offset = 0;
-  buf.timeline_tag = 0;
-  buf.in_flight = false;
+  PoolBuffer *buf = MEM_new<PoolBuffer>(__func__);
+  buf->buffer.create(buffer_size_,
+                      VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+                      VMA_MEMORY_USAGE_AUTO,
+                      VMA_ALLOCATION_CREATE_MAPPED_BIT |
+                          VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT,
+                      0.4f,
+                      false,
+                      "StagingPool");
+  buf->mapped_base = buf->buffer.mapped_memory_get();
+  buf->capacity = buffer_size_;
+  buf->offset = 0;
+  return buf;
 }
 
 VKStagingAllocation VKStagingPool::sub_allocate(size_t size, size_t alignment)
 {
   std::scoped_lock lock(mutex_);
 
-  PoolBuffer &active = buffers_[active_index_];
-  size_t aligned_offset = (active.offset + alignment - 1) & ~(alignment - 1);
+  if (active_buffer_) {
+    size_t aligned_offset = (active_buffer_->offset + alignment - 1) & ~(alignment - 1);
+    if (aligned_offset + size <= active_buffer_->capacity) {
+      VKStagingAllocation alloc;
+      alloc.vk_buffer = active_buffer_->buffer.vk_handle();
+      alloc.offset = aligned_offset;
+      alloc.mapped_ptr = static_cast<uint8_t *>(active_buffer_->mapped_base) + aligned_offset;
+      active_buffer_->offset = aligned_offset + size;
+      return alloc;
+    }
+    /* Active buffer is full for this generation. It stays alive (not yet submitted) and
+     * will be tagged with a timeline value once submit() is called. */
+    used_buffers_.append(active_buffer_);
+    active_buffer_ = nullptr;
+  }
 
-  if (active.in_flight || aligned_offset + size > active.capacity) {
+  if (size > buffer_size_) {
+    /* Allocation larger than a single pool buffer: caller falls back to a plain allocation. */
     return {VK_NULL_HANDLE, 0, nullptr};
   }
 
+  active_buffer_ = free_buffers_.is_empty() ? new_pool_buffer() : free_buffers_.pop_last();
+
   VKStagingAllocation alloc;
-  alloc.vk_buffer = active.buffer.vk_handle();
-  alloc.offset = aligned_offset;
-  alloc.mapped_ptr = static_cast<uint8_t *>(active.mapped_base) + aligned_offset;
-  active.offset = aligned_offset + size;
+  alloc.vk_buffer = active_buffer_->buffer.vk_handle();
+  alloc.offset = 0;
+  alloc.mapped_ptr = active_buffer_->mapped_base;
+  active_buffer_->offset = size;
   return alloc;
 }
 
-void VKStagingPool::tag_and_rotate(TimelineValue timeline)
+void VKStagingPool::submit(TimelineValue timeline)
 {
   std::scoped_lock lock(mutex_);
-  PoolBuffer &active = buffers_[active_index_];
-  active.timeline_tag = timeline;
-  active.in_flight = true;
-  active_index_ = (active_index_ + 1) % pool_buffer_count_;
+  for (PoolBuffer *buf : used_buffers_) {
+    timeline_buffers_.append_timeline(timeline, buf);
+  }
+  used_buffers_.clear();
+  if (active_buffer_) {
+    timeline_buffers_.append_timeline(timeline, active_buffer_);
+    active_buffer_ = nullptr;
+  }
 }
 
 void VKStagingPool::reclaim(TimelineValue completed_timeline)
 {
   std::scoped_lock lock(mutex_);
-  for (int i = 0; i < pool_buffer_count_; i++) {
-    if (buffers_[i].in_flight) {
-      try_reclaim(buffers_[i], completed_timeline);
-    }
-  }
-}
-
-bool VKStagingPool::try_reclaim(PoolBuffer &buf, TimelineValue completed_timeline)
-{
-  if (completed_timeline >= buf.timeline_tag) {
-    buf.offset = 0;
-    buf.in_flight = false;
-    return true;
-  }
-  return false;
+  timeline_buffers_.remove_old(completed_timeline, [&](PoolBuffer *buf) {
+    buf->offset = 0;
+    free_buffers_.append(buf);
+  });
 }
 
 }  // namespace blender::gpu
