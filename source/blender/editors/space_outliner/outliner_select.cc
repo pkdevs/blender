@@ -2153,7 +2153,7 @@ static TreeElement *outliner_find_previous_element(SpaceOutliner *space_outliner
     /* Use parent if at beginning of list */
     Vector<TreeElement *> &subtree = te->parent->subtree;
     const int index = subtree.first_index_of(te);
-    if ((index - 1) >= 0) {
+    if (index > 0) {
       te = outliner_find_rightmost_visible_child(space_outliner, subtree[index - 1]);
     }
     else {
@@ -2171,8 +2171,10 @@ static TreeElement *outliner_element_find_successor_in_parents(TreeElement *te)
   while (successor->parent) {
     if (TreeElement *te_parent = successor->parent->parent) {
       const int index = te_parent->subtree.first_index_of(te);
-      te = te_parent->subtree[index + 1];
-      break;
+      if (index < te_parent->subtree.size() - 1) {
+        te = te_parent->subtree[index + 1];
+        break;
+      }
     }
     successor = successor->parent;
   }
@@ -2185,7 +2187,7 @@ static TreeElement *outliner_find_next_element(SpaceOutliner *space_outliner, Tr
 {
   TreeStoreElem *tselem = TREESTORE(te);
 
-  if (TSELEM_OPEN(tselem, space_outliner) && te->subtree.first()) {
+  if (TSELEM_OPEN(tselem, space_outliner) && !te->subtree.is_empty()) {
     te = static_cast<TreeElement *>(te->subtree.first());
   }
   else {

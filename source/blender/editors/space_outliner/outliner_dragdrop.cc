@@ -65,7 +65,7 @@ static TreeElement *outliner_dropzone_element(TreeElement *te,
     }
   }
   /* Not it.  Let's look at its children. */
-  if (children && (TREESTORE(te)->flag & TSE_CLOSED) == 0 && (te->subtree.first())) {
+  if (children && (TREESTORE(te)->flag & TSE_CLOSED) == 0 && (!te->subtree.is_empty())) {
     for (TreeElement *te_sub : te->subtree) {
       TreeElement *te_valid = outliner_dropzone_element(te_sub, fmval, children);
       if (te_valid) {
@@ -1308,21 +1308,27 @@ static std::string collection_drop_tooltip(bContext *C,
                                                TIP_("Move after collection");
 
     TreeElement *te = data.te;
-    Vector<TreeElement *> &subtree = te->parent->subtree;
-    const int index = subtree.first_index_of(te);
 
     switch (data.insert_type) {
       case TE_INSERT_BEFORE: {
-        TreeElement *te_prev = subtree[index - 1];
-        if (te_prev && outliner_is_collection_tree_element(te_prev)) {
-          return tooltip_between;
+        Vector<TreeElement *> &subtree = te->parent->subtree;
+        const int index = subtree.first_index_of(te);
+        if (index > 0) {
+          TreeElement *te_prev = subtree[index - 1];
+          if (outliner_is_collection_tree_element(te_prev)) {
+            return tooltip_between;
+          }
         }
         return tooltip_before;
       }
       case TE_INSERT_AFTER: {
-        TreeElement *te_next = subtree[index + 1];
-        if (te_next && outliner_is_collection_tree_element(te_next)) {
-          return tooltip_between;
+        Vector<TreeElement *> &subtree = te->parent->subtree;
+        const int index = subtree.first_index_of(te);
+        if (index < subtree.size() - 1) {
+          TreeElement *te_next = subtree[index + 1];
+          if (outliner_is_collection_tree_element(te_next)) {
+            return tooltip_between;
+          }
         }
         return tooltip_after;
       }

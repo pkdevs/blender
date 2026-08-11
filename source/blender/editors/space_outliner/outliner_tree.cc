@@ -821,7 +821,7 @@ static TreeElement *outliner_find_first_desired_element_at_y(const SpaceOutliner
       return nullptr;
     }
 
-    if (index <= subtree.size()) {
+    if (index < subtree.size() - 1) {
       index++;
       te = subtree[index];
       continue;
@@ -834,7 +834,7 @@ static TreeElement *outliner_find_first_desired_element_at_y(const SpaceOutliner
     while (te->parent) {
       Vector<TreeElement *> &parent_subtree = te->parent->parent->subtree;
       int index = parent_subtree.first_index_of(te->parent);
-      if (index <= subtree.size()) {
+      if (index < subtree.size() - 1) {
         index++;
         te = parent_subtree[index];
         break;
@@ -1070,11 +1070,10 @@ static TreeElement *outliner_extract_children_from_subtree(TreeElement *element,
                                                            Vector<TreeElement *> *parent_subtree)
 {
   int index = parent_subtree->first_index_of(element);
-  TreeElement *te_next = index <= parent_subtree->size() ? (*parent_subtree)[index + 1] : nullptr;
+  TreeElement *te_next = index < parent_subtree->size() - 1 ? (*parent_subtree)[index + 1] :
+                                                              nullptr;
 
   if (outliner_element_is_collection_or_object(element)) {
-    // for (TreeElement *te = static_cast<TreeElement *>(element->subtree.last()); te; te =
-    // te_prev) {
     for (auto te = parent_subtree->rbegin(); te != parent_subtree->rend(); te++) {
 
       if (!outliner_element_is_collection_or_object(*te)) {
