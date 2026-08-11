@@ -214,7 +214,7 @@ KS_Path *BKE_keyingset_add_path(KeyingSet *ks,
 
   /* store additional info for relative paths (just in case user makes the set relative) */
   if (id) {
-    ksp->idtype = GS(id->name);
+    ksp->idtype = id->id_type();
   }
 
   /* just copy path info */
@@ -358,16 +358,11 @@ static bool is_fcurve_evaluatable(const FCurve *fcu)
 
 bool BKE_animsys_rna_path_resolve(
     PointerRNA *ptr, /* typically 'fcu->rna_path()', 'fcu->array_index' */
-    const char *rna_path,
+    const ParsedRNAPathRef rna_path,
     const int array_index,
     PathResolvedRNA *r_result)
 {
-  if (rna_path == nullptr) {
-    return false;
-  }
-
-  const char *path = rna_path;
-  if (!RNA_path_resolve_property(ptr, path, &r_result->ptr, &r_result->prop)) {
+  if (!RNA_path_resolve_property(ptr, rna_path, &r_result->ptr, &r_result->prop)) {
     /* failed to get path */
     /* XXX don't tag as failed yet though, as there are some legit situations (Action Constraint)
      * where some channels will not exist, but shouldn't lock up Action */
@@ -375,7 +370,7 @@ bool BKE_animsys_rna_path_resolve(
       CLOG_WARN(&LOG_ANIM_FCURVE,
                 "Invalid path. ID = '%s',  '%s[%d]'",
                 (ptr->owner_id) ? (ptr->owner_id->name + 2) : "<No ID>",
-                path,
+                rna_path::to_string(rna_path).c_str(),
                 array_index);
     }
     return false;
@@ -391,7 +386,7 @@ bool BKE_animsys_rna_path_resolve(
       CLOG_WARN(&LOG_ANIM_FCURVE,
                 "Invalid array index. ID = '%s',  '%s[%d]', array length is %d",
                 (ptr->owner_id) ? (ptr->owner_id->name + 2) : "<No ID>",
-                path,
+                rna_path::to_string(rna_path).c_str(),
                 array_index,
                 array_len - 1);
     }
@@ -400,6 +395,21 @@ bool BKE_animsys_rna_path_resolve(
 
   r_result->prop_index = array_len ? array_index : -1;
   return true;
+}
+
+bool BKE_animsys_rna_path_resolve(PointerRNA *ptr,
+                                  const char *rna_path,
+                                  const int array_index,
+                                  PathResolvedRNA *r_result)
+{
+  if (rna_path == nullptr) {
+    return false;
+  }
+  const std::optional<ParsedRNAPath<>> path = ParsedRNAPath<>::from_string(rna_path);
+  if (!path) {
+    return false;
+  }
+  return BKE_animsys_rna_path_resolve(ptr, *path, array_index, r_result);
 }
 
 /* less than 1.0 evaluates to false, use epsilon to avoid float error */
@@ -4213,7 +4223,7 @@ void BKE_animsys_eval_driver(Depsgraph *depsgraph, ID *id, int driver_index, FCu
       if (ok == 0) {
         CLOG_WARN(&LOG_ANIM_DRIVER,
                   "Invalid driver on %s '%s' - %s[%d]",
-                  BKE_idtype_idcode_to_name(GS(id->name)),
+                  BKE_idtype_idcode_to_name(id->id_type()),
                   id->name + 2,
                   rna_path.c_str(),
                   fcu->array_index);
