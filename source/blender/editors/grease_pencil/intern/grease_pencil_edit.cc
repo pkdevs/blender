@@ -2992,7 +2992,6 @@ static wmOperatorStatus grease_pencil_paste_strokes_exec(bContext *C, wmOperator
   if (!clipboard.defnames.is_empty()) {
     ListBaseT<bDeformGroup> *deflist = BKE_id_defgroup_list_get_mutable(object->data);
     for (const bDeformGroup &defgroup : clipboard.defnames) {
-      int dindex;
       if (BKE_defgroup_name_index(deflist, defgroup.name) != -1) {
         continue;
       }
