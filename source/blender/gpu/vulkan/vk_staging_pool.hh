@@ -14,7 +14,7 @@
 namespace blender::gpu {
 
 struct VKStagingAllocation {
-  VkBuffer vk_buffer;
+  VKResourceWithHandle<VkBuffer> vk_buffer;
   size_t offset;
   void *mapped_ptr;
 

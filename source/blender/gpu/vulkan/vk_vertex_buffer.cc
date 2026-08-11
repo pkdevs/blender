@@ -218,7 +218,7 @@ void VKVertexBuffer::upload_data()
       VKContext &context = *VKContext::get();
       render_graph::VKCopyBufferNode::CreateInfo copy_info = {};
       copy_info.src_buffer = staging_alloc_.vk_buffer;
-      copy_info.dst_buffer = buffer_.vk_handle();
+      copy_info.dst_buffer = buffer_.resource();
       copy_info.region.srcOffset = staging_alloc_.offset;
       copy_info.region.size = size_used_get();
       context.render_graph().add_node(copy_info);

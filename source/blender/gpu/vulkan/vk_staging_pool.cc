@@ -59,7 +59,7 @@ VKStagingAllocation VKStagingPool::sub_allocate(size_t size, size_t alignment)
     size_t aligned_offset = (active_buffer_->offset + alignment - 1) & ~(alignment - 1);
     if (aligned_offset + size <= active_buffer_->capacity) {
       VKStagingAllocation alloc;
-      alloc.vk_buffer = active_buffer_->buffer.vk_handle();
+      alloc.vk_buffer = active_buffer_->buffer.resource();
       alloc.offset = aligned_offset;
       alloc.mapped_ptr = static_cast<uint8_t *>(active_buffer_->mapped_base) + aligned_offset;
       active_buffer_->offset = aligned_offset + size;
@@ -73,13 +73,13 @@ VKStagingAllocation VKStagingPool::sub_allocate(size_t size, size_t alignment)
 
   if (size > buffer_size_) {
     /* Allocation larger than a single pool buffer: caller falls back to a plain allocation. */
-    return {VK_NULL_HANDLE, 0, nullptr};
+    return {{}, 0, nullptr};
   }
 
   active_buffer_ = free_buffers_.is_empty() ? new_pool_buffer() : free_buffers_.pop_last();
 
   VKStagingAllocation alloc;
-  alloc.vk_buffer = active_buffer_->buffer.vk_handle();
+  alloc.vk_buffer = active_buffer_->buffer.resource();
   alloc.offset = 0;
   alloc.mapped_ptr = active_buffer_->mapped_base;
   active_buffer_->offset = size;
