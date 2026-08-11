@@ -558,14 +558,14 @@ struct Strip {
   void content_length_set(int new_length);
 
   /**
-   * Number of #StripElem allocated in `data->stripdata`, for #STRIP_TYPE_IMAGE strips.
-   * Content trimming (#anim_startofs, #anim_endofs) does not shrink the array, it only hides
-   * elements at either end, so the full array is always this many elements long.
+   * Number of #StripElem allocated in `data->stripdata`.
    */
   int stripdata_len() const;
   /**
-   * Set #anim_startofs / #anim_endofs, compensating #content_length() so #stripdata_len()
-   * (i.e. the underlying content, before any trim) stays the same.
+   * Set #anim_startofs / #anim_endofs, compensating #content_length() so that, for
+   * #STRIP_TYPE_IMAGE strips, #stripdata_len() (i.e. the underlying content, before any trim)
+   * stays the same. For other strip types #content_length() is re-derived from the source media
+   * afterward (see #add_reload_new_file), so this compensation is only a temporary placeholder.
    */
   void anim_startofs_set(int new_value);
   void anim_endofs_set(int new_value);
