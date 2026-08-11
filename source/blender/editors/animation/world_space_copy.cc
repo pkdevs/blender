@@ -478,7 +478,7 @@ static void copy_world_space(Main &bmain,
     Array<FCurve *> fcurves(12);
     for (const int i : fcurves.index_range()) {
       FCurve *fcurve = BKE_fcurve_create();
-      fcurve->rna_path = BLI_strdupn(transformable.name().data(), transformable.name().size());
+      fcurve->rna_path_set(transformable.name());
       fcurve->array_index = i;
       const int vert_count = range.size();
       BLI_assert(vert_count > 0);
@@ -607,7 +607,7 @@ static Array<TransformFCurves> build_fcurves_for_paste(
     FCurve *rotation_mode_fcurve = nullptr;
 
     for (FCurve *fcurve : channelbag.fcurves()) {
-      StringRefNull fcurve_path(fcurve->rna_path);
+      StringRefNull fcurve_path(fcurve->rna_path());
       if (fcurve_path == loc_path) {
         transform_fcurves.location[fcurve->array_index].fcurve = fcurve;
       }
@@ -651,7 +651,7 @@ static Array<TransformFCurves> build_fcurves_for_paste(
   return fcurve_buffer;
 }
 
-static bAction *read_action_from_clipboard(Main *clipboard_bmain,
+static bAction *read_action_from_clipboard(Main &clipboard_bmain,
                                            char filepath[FILE_MAX],
                                            ReportList &reports)
 {
@@ -661,12 +661,12 @@ static bAction *read_action_from_clipboard(Main *clipboard_bmain,
     return nullptr;
   }
 
-  if (clipboard_bmain->actions.is_empty()) {
+  if (clipboard_bmain.actions.is_empty()) {
     BKE_report(&reports, RPT_ERROR, "Clipboard data has no animation");
     return nullptr;
   }
 
-  bAction *clipboard_dna_action = reinterpret_cast<bAction *>(clipboard_bmain->actions.first);
+  bAction *clipboard_dna_action = reinterpret_cast<bAction *>(clipboard_bmain.actions.first);
   ar::Action &clipboard_action = clipboard_dna_action->wrap();
   if (clipboard_action.strip_keyframe_data().is_empty() ||
       clipboard_action.strip_keyframe_data()[0]->channelbags().is_empty())
@@ -695,7 +695,8 @@ static void paste_world_space(Main &bmain,
   ClipboardData clipboard_data;
   for (FCurve *fcurve : channelbag.fcurves()) {
     BLI_assert(fcurve != nullptr);
-    Array<FCurve *> &fcurves = clipboard_data.lookup_or_add(fcurve->rna_path, Array<FCurve *>(12));
+    Array<FCurve *> &fcurves = clipboard_data.lookup_or_add(fcurve->rna_path(),
+                                                            Array<FCurve *>(12));
     fcurves[fcurve->array_index] = fcurve;
   }
 
@@ -962,7 +963,7 @@ static wmOperatorStatus world_space_paste_exec(bContext *C, wmOperator *op)
   BLI_path_join(filepath, sizeof(filepath), BKE_tempdir_base(), clipboard_name);
   Main *clipboard_bmain = BKE_main_new();
   bAction *clipboard_dna_action = read_action_from_clipboard(
-      clipboard_bmain, filepath, *op->reports);
+      *clipboard_bmain, filepath, *op->reports);
 
   if (!clipboard_dna_action) {
     BKE_main_free(clipboard_bmain);

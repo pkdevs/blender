@@ -181,7 +181,8 @@ struct Node {
    * have relationships between these nodes. */
   using Relations = Vector<Relation *>;
 
-  std::string name;   /* Identifier - mainly for debugging purposes. */
+  /* Identifier - mainly for debugging purposes. For bones this matches the bone name. */
+  std::string name;
   NodeType type;      /* Structural type of node. */
   Relations inlinks;  /* Nodes which this one depends on. */
   Relations outlinks; /* Nodes which depend on this one. */
