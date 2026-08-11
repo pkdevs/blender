@@ -3045,7 +3045,7 @@ static void but_paste(bContext *C, Button *but, HandleButtonData *data, const bo
   but_get_pasted_text_from_clipboard(
       but_is_utf8(but), &buf_paste, &buf_paste_len, but->type == ButtonType::TextBox);
 
-  const bool has_required_data = !(but->poin == nullptr && !but->rnapoin);
+  const bool has_required_data = but->poin || but->rnapoin;
 
   switch (but->type) {
     case ButtonType::Num:
