@@ -915,6 +915,7 @@ if((WITH_CYCLES OR WITH_GPU_RENDER_TESTS) AND TEST_SRC_DIR_EXISTS)
     image_colorspace
     image_data_types
     image_mapping
+    image_mipmap
     image_texture_limit
     integrator
     light
@@ -998,7 +999,7 @@ if((WITH_CYCLES OR WITH_GPU_RENDER_TESTS) AND TEST_SRC_DIR_EXISTS)
             "Supported devices are: ${_cycles_all_test_devices}")
       endif()
       string(TOLOWER "${_cycles_device}" _cycles_device_lower)
-      set(_cycles_render_tests bake;bake_raytrace;${render_tests};osl;image_mipmap;updates)
+      set(_cycles_render_tests bake;bake_raytrace;${render_tests};osl;updates)
 
       set(_cycles_osl_test_type none)
       if(WITH_CYCLES_OSL)
@@ -1097,7 +1098,7 @@ if((WITH_CYCLES OR WITH_GPU_RENDER_TESTS) AND TEST_SRC_DIR_EXISTS)
       endif()
     endfunction()
 
-    add_gpu_render_tests(eevee "eevee_render_tests.py" "${gpu_render_tests};image_mipmap_eevee")
+    add_gpu_render_tests(eevee "eevee_render_tests.py" "${gpu_render_tests}")
     add_gpu_render_tests(workbench "workbench_render_tests.py" "${workbench_tests}")
     if(WITH_GPU_RENDER_TESTS_HEADED)
       add_gpu_render_tests(overlay "overlay_render_tests.py" "overlay")

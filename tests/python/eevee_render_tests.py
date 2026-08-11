@@ -67,6 +67,17 @@ BLOCKLIST = [
     "light_path_is_camera_ray.blend",
     # Exhibit non-deterministic (to be fixed).
     "background_scene.blend",
+    # Currently, the only image_mipmap test enabled for EEVEE is image_mipmap_large_tex.blend.
+    "image_cache_evict.blend",
+    "image_mipmap_area_light.blend",
+    "image_mipmap_filter_glossy.blend",
+    "image_mipmap_incomplete_derivs.blend",
+    "image_mipmap_light_tree.blend",
+    "image_mipmap_transparent_shadow.blend",
+    "image_mipmap_volume.blend",
+    "image_mipmap_working_space.blend",
+    "image_mipmap_world.blend",
+    "image_mipmap_world_sun.blend",
 
     ### Cycles only tests go here ###
 ]
