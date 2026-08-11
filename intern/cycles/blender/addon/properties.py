@@ -22,6 +22,8 @@ from bpy.app.translations import (
 
 from math import pi
 
+import warnings
+
 # enums
 
 from . import engine
@@ -234,7 +236,9 @@ enum_view3d_shading_render_pass = (
     ('DENOISING_SPECULAR_ALBEDO', "Denoising Specular Albedo", "Specular albedo pass used by denoiser"),
     ('DENOISING_NORMAL', "Denoising Normal", "Normal pass used by denoiser"),
     ('DENOISING_ROUGHNESS', "Denoising Roughness", "Roughness pass used by denoiser"),
+    ('DENOISING_DEPTH', "Denoising Depth", "Depth pass used by denoiser"),
     ('DENOISING_BACKWARD_MOTION', "Denoising Backward Motion", "Backward motion pass used by denoiser"),
+    ('DENOISING_SPECULAR_MOTION', "Denoising Specular Motion", "Specular motion pass used by denoiser"),
     ('SAMPLE_COUNT', "Sample Count", "Per-pixel number of samples"),
 )
 
@@ -377,8 +381,14 @@ def update_world(self, context):
     context.scene.world.update_tag()
 
 
-def update_pause(self, context):
-    context.area.tag_redraw()
+def set_transform_preview_pause(self, value, current_value, is_set):
+    warnings.warn(
+        "'CyclesRenderSettings.preview_pause' has no effect anymore and will "
+        "be removed in a future version, use RegionView3D.pause_render instead",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    return value
 
 
 class CyclesRenderSettings(bpy.types.PropertyGroup):
@@ -398,9 +408,8 @@ class CyclesRenderSettings(bpy.types.PropertyGroup):
 
     preview_pause: BoolProperty(
         name="Pause Preview",
-        description="Pause all viewport preview renders",
-        default=False,
-        update=update_pause,
+        description="Deprecated, this has no effect anymore. Use RegionView3D.pause_render instead",
+        set_transform=set_transform_preview_pause,
     )
 
     use_denoising: BoolProperty(
@@ -655,8 +664,9 @@ class CyclesRenderSettings(bpy.types.PropertyGroup):
 
     blur_glossy: FloatProperty(
         name="Filter Glossy",
-        description="Adaptively blur glossy shaders after blurry bounces, "
-        "to reduce noise at the cost of accuracy",
+        description="Adaptively blur glossy shaders and image textures after blurry bounces, "
+        "to reduce noise and improve texture cache efficiency at the cost of accuracy. Lower "
+        "this value to render caustics",
         min=0.0, max=10.0,
         default=1.0,
     )
@@ -1613,7 +1623,7 @@ class CyclesRenderLayerSettings(bpy.types.PropertyGroup):
 
 class CyclesDeviceSettings(bpy.types.PropertyGroup):
     # Runtime properties
-    __slots__ = ("is_optimized")
+    __slots__ = ("is_optimized", "meets_driver_requirement")
 
     # Properties saved in preferences
     id: StringProperty(name="ID", description="Unique identifier of the device")
@@ -1751,6 +1761,7 @@ class CyclesPreferences(bpy.types.AddonPreferences):
         for device in device_list:
             entry = self.find_existing_device_entry(device)
             entry.is_optimized = device[7]
+            entry.meets_driver_requirement = device[8]
             if entry.type == compute_device_type:
                 devices.append(entry)
             elif entry.type == 'CPU':
@@ -1789,6 +1800,11 @@ class CyclesPreferences(bpy.types.AddonPreferences):
             for device in self.get_device_list(compute_device_type):
                 if device[1] != compute_device_type:
                     continue
+
+                # Skip devices that do not meet the driver requirement.
+                if not device[8]:
+                    continue
+
                 for dev in self.devices:
                     if dev.use and dev.id == device[2]:
                         num += 1
@@ -1800,6 +1816,11 @@ class CyclesPreferences(bpy.types.AddonPreferences):
             for device in self.get_device_list(compute_device_type):
                 if device[1] == compute_device_type:
                     continue
+
+                # Skip devices that do not meet the driver requirement.
+                if not device[8]:
+                    continue
+
                 for dev in self.devices:
                     if dev.use and dev.id == device[2]:
                         return True
@@ -1819,6 +1840,10 @@ class CyclesPreferences(bpy.types.AddonPreferences):
                 if device_type == 'CPU':
                     continue
 
+                # Skip devices that do not meet the driver requirement.
+                if not device[8]:
+                    continue
+
                 has_device_oidn_support = device[5]
                 if has_device_oidn_support and self.find_existing_device_entry(device).use:
                     return True
@@ -1833,6 +1858,10 @@ class CyclesPreferences(bpy.types.AddonPreferences):
             for device in self.get_device_list(compute_device_type):
                 device_type = device[1]
                 if device_type == 'CPU':
+                    continue
+
+                # Skip devices that do not meet the driver requirement.
+                if not device[8]:
                     continue
 
                 has_device_optixdenoiser_support = device[6]
@@ -1861,9 +1890,17 @@ class CyclesPreferences(bpy.types.AddonPreferences):
                 found_device = True
                 break
 
+        optix_minimum_driver_version = "535"
+        hip_minimum_adrenalin_driver_version = "24.9.1"
+        hip_minimum_pro_driver_version = "24.Q4"
+        hip_minimum_linux_driver_version = "24.30"
+        hip_rocm_minimum_version = "6.3"
+        oneapi_minimum_windows_driver_version = "XX.X.101.8306"
+        oneapi_minimum_linux_driver_version = "XX.XX.37435.3"
+
         if not found_device:
             col = box.column(align=True)
-            col.label(text=rpt_("No compatible GPUs found for Cycles"), icon='INFO', translate=False)
+            col.label(text=rpt_("No compatible GPUs found for Cycles"), icon='STATUS_INFO', translate=False)
 
             if device_type == 'CUDA':
                 compute_capability = "5.0"
@@ -1871,36 +1908,31 @@ class CyclesPreferences(bpy.types.AddonPreferences):
                           icon='BLANK1', translate=False)
             elif device_type == 'OPTIX':
                 compute_capability = "5.0"
-                driver_version = "535"
                 col.label(text=rpt_("Requires NVIDIA GPU with compute capability %s") % compute_capability,
                           icon='BLANK1', translate=False)
-                col.label(text=rpt_("and NVIDIA driver version %s or newer") % driver_version,
+                col.label(text=rpt_("and NVIDIA driver version %s or newer") % optix_minimum_driver_version,
                           icon='BLANK1', translate=False)
             elif device_type == 'HIP':
                 import sys
                 if sys.platform[:3] == "win":
-                    adrenalin_driver_version = "24.9.1"
-                    pro_driver_version = "24.Q4"
                     col.label(
                         text=rpt_("Requires AMD GPU with RDNA architecture"),
                         icon='BLANK1',
                         translate=False)
                     col.label(text=rpt_("and AMD Adrenalin driver %s or newer") %
-                              adrenalin_driver_version, icon='BLANK1', translate=False)
+                              hip_minimum_adrenalin_driver_version, icon='BLANK1', translate=False)
                     col.label(text=rpt_("or AMD Radeon Pro %s driver or newer") %
-                              pro_driver_version, icon='BLANK1', translate=False)
+                              hip_minimum_pro_driver_version, icon='BLANK1', translate=False)
                 elif sys.platform.startswith("linux"):
-                    rocm_version = "6.3"
-                    driver_version = "24.30"
                     col.label(
                         text=rpt_("Requires AMD GPU with RDNA architecture"),
                         icon='BLANK1',
                         translate=False)
                     col.label(
                         text=rpt_("and ROCm HIP Runtime %s or newer") %
-                        rocm_version, icon='BLANK1', translate=False)
+                        hip_rocm_minimum_version, icon='BLANK1', translate=False)
                     col.label(text=rpt_("or AMD driver version %s or newer") %
-                              driver_version, icon='BLANK1', translate=False)
+                              hip_minimum_linux_driver_version, icon='BLANK1', translate=False)
             elif device_type == 'ONEAPI':
                 import sys
                 if sys.platform.startswith("win"):
@@ -1912,16 +1944,14 @@ class CyclesPreferences(bpy.types.AddonPreferences):
                     # and no intermediate versions were publicly available between 8250 and 8331 for Intel® Arc™ GPUs.
                     # As a result, we can safely recommend users to use driver version 8306 or higher, without needing
                     # to distinguish between Intel® Arc™ and Intel® Arc™ Pro users.
-                    driver_version = "XX.X.101.8306"
                     col.label(
                         text=self._format_device_name(
                             rpt_("Requires Intel(R) Arc(TM) GPUs or newer Intel(R) Graphics")),
                         icon='BLANK1',
                         translate=False)
-                    col.label(text=rpt_("with Windows driver version %s or newer") % driver_version,
-                              icon='BLANK1', translate=False)
+                    col.label(text=rpt_("with Windows driver version %s or newer") %
+                              oneapi_minimum_windows_driver_version, icon='BLANK1', translate=False)
                 elif sys.platform.startswith("linux"):
-                    driver_version = "XX.XX.37435.3"
                     col.label(
                         text=self._format_device_name(
                             rpt_("Requires Intel(R) Arc(TM) GPUs or newer Intel(R) Graphics")),
@@ -1931,7 +1961,11 @@ class CyclesPreferences(bpy.types.AddonPreferences):
                         text=rpt_("  - intel-level-zero-gpu or intel-compute-runtime version"),
                         icon='BLANK1',
                         translate=False)
-                    col.label(text=rpt_("    %s or newer") % driver_version, icon='BLANK1', translate=False)
+                    col.label(
+                        text=rpt_("    %s or newer") %
+                        oneapi_minimum_linux_driver_version,
+                        icon='BLANK1',
+                        translate=False)
                     col.label(text=rpt_("  - oneAPI Level-Zero Loader"), icon='BLANK1', translate=False)
             elif device_type == 'METAL':
                 mac_version = "12.2"
@@ -1939,11 +1973,58 @@ class CyclesPreferences(bpy.types.AddonPreferences):
                           icon='BLANK1', translate=False)
             return
 
+        has_usable_gpu_device = False
         for device in devices:
             name = self._format_device_name(device.name)
             if not device.is_optimized:
                 name += rpt_(" (Unoptimized Performance)")
-            box.prop(device, "use", text=name, translate=False)
+
+            col = box.column()
+            row = col.row()
+
+            if not device.meets_driver_requirement:
+                import sys
+                row.active = False
+                name += rpt_(" (Disabled)")
+                row.prop(device, "use", text=name, translate=False)
+
+                details = ""
+                if device.type == 'OPTIX':
+                    details = rpt_("Requires NVIDIA driver version %s or newer") % optix_minimum_driver_version
+                elif device.type == 'HIP':
+                    if sys.platform[:3] == "win":
+                        details = rpt_("Requires AMD Adrenalin driver %s or newer, or AMD Radeon Pro %s driver or newer") % (
+                            hip_minimum_adrenalin_driver_version, hip_minimum_pro_driver_version)
+                    elif sys.platform.startswith("linux"):
+                        details = rpt_("Requires ROCm HIP Runtime %s or newer, or AMD driver version %s or newer") % (
+                            hip_rocm_minimum_version, hip_minimum_linux_driver_version)
+                elif device.type == 'ONEAPI':
+                    if sys.platform.startswith("win"):
+                        details = rpt_(
+                            "Requires Windows driver version %s or newer") % oneapi_minimum_windows_driver_version
+                    elif sys.platform.startswith("linux"):
+                        details = rpt_(
+                            "Requires intel-level-zero-gpu or intel-compute-runtime version %s or newer") % oneapi_minimum_linux_driver_version
+
+                if not details:
+                    details = rpt_("Driver upgrade required")
+
+                sub = col.row()
+                sub.active = False
+                sub.label(icon='BLANK1', text=details, translate=False)
+            else:
+                if device.type != 'CPU':
+                    if device.use:
+                        has_usable_gpu_device = True
+                else:
+                    # CPU is always listed last (by convention in get_devices()),
+                    # see get_devices_for_type implementation.
+                    # Grey it out if no GPU device is enabled, because CPU here
+                    # is meant as a supplement to GPU rendering. For CPU-only
+                    # rendering, select the "None" compute device type instead.
+                    if not has_usable_gpu_device:
+                        row.active = False
+                row.prop(device, "use", text=name, translate=False)
 
     def draw_impl(self, layout, context):
         row = layout.row()
@@ -1966,8 +2047,18 @@ class CyclesPreferences(bpy.types.AddonPreferences):
             if device[1] != compute_device_type:
                 continue
 
+            # device[8] == DeviceInfo.meets_driver_requirement
+            # For more details see available_devices_func function in python.cpp
+            if not device[8]:
+                # Devices that do not meet the driver requirement are not used;
+                # skip them.
+                continue
+
+            # device[3] == DeviceInfo.has_peer_memory
             if device[3]:
                 has_peer_memory = True
+
+            # device[4] == DeviceInfo.use_hardware_raytracing
             if device[4]:
                 has_enabled_hardware_rt = True
             else:

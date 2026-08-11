@@ -68,6 +68,7 @@
 #include "BKE_report.hh"
 #include "BKE_scene.hh"
 #include "BKE_screen.hh" /* #BKE_ST_MAXNAME. */
+#include "BKE_wm_runtime.hh"
 
 #include "BKE_idtype.hh"
 
@@ -399,7 +400,7 @@ static const char *wm_context_member_from_ptr(bContext *C, const PointerRNA *ptr
     PointerRNA ctx_item_ptr = {};
     // CTX_data_pointer_get(C, identifier);  /* XXX, this isn't working. */
 
-    if (ctx_item_ptr.type == nullptr) {
+    if (!ctx_item_ptr.has_type()) {
       continue;
     }
 
@@ -824,7 +825,7 @@ bool WM_operator_properties_default(PointerRNA *ptr, const bool do_update)
       }
       default:
         if ((do_update == false) || (RNA_property_is_set(ptr, prop) == false)) {
-          if (RNA_property_reset(ptr, prop, -1)) {
+          if (RNA_property_reset(nullptr, ptr, prop, -1)) {
             changed = true;
           }
         }
@@ -838,7 +839,7 @@ bool WM_operator_properties_default(PointerRNA *ptr, const bool do_update)
 
 void WM_operator_properties_reset(wmOperator *op)
 {
-  if (op->ptr->data) {
+  if (*op->ptr) {
     PropertyRNA *iterprop = RNA_struct_iterator_property(op->type->srna);
 
     RNA_PROP_BEGIN (op->ptr, itemptr, iterprop) {
@@ -1209,16 +1210,16 @@ wmOperatorStatus WM_operator_confirm_message_ex(bContext *C,
     case ICON_NONE:
       alert_icon = ui::AlertIcon::None;
       break;
-    case ICON_ERROR:
+    case ICON_STATUS_WARNING_FILLED:
       alert_icon = ui::AlertIcon::Warning;
       break;
     case ICON_QUESTION:
       alert_icon = ui::AlertIcon::Question;
       break;
-    case ICON_CANCEL:
+    case ICON_STATUS_ERROR_FILLED:
       alert_icon = ui::AlertIcon::Error;
       break;
-    case ICON_INFO:
+    case ICON_STATUS_INFO_FILLED:
       alert_icon = ui::AlertIcon::Info;
       break;
   }
@@ -1912,10 +1913,54 @@ wmOperatorStatus WM_operator_redo_popup(bContext *C, wmOperator *op)
 
   /* Operator is stored and kept alive in the window manager. So passing a pointer to the UI is
    * fine, it will remain valid. */
-  ui::popup_block_invoke(C, wm_block_create_redo, op, nullptr);
+  ui::popup_block_invoke(C, wm_block_create_redo, op, nullptr, op->type->srna);
 
   return OPERATOR_CANCELLED;
 }
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name IME Operator Helpers
+ * \{ */
+
+#ifdef WITH_INPUT_IME
+std::optional<wmOperatorStatus> WM_operator_IME_insert_maybe(bContext *C,
+                                                             wmOperator *op,
+                                                             const wmEvent *event,
+                                                             const char *prop_id)
+{
+  const wmWindow *win = CTX_wm_window(C);
+  if (win == nullptr) {
+    return std::nullopt;
+  }
+  if (IS_EVENT_IME_ANY(event->type)) {
+    /* Keep the composition preview current, including #WM_IME_COMPOSITE_END which must
+     * erase it (canceling inserts no text so nothing else redraws). */
+    ED_region_tag_redraw(CTX_wm_region(C));
+  }
+  if (event->type == WM_IME_COMPOSITE_EVENT) {
+    const wmIMEData *ime_data = win->runtime->ime_data;
+    if (ime_data && !ime_data->result.empty()) {
+      RNA_string_set(op->ptr, prop_id, ime_data->result.c_str());
+      return op->type->exec(C, op);
+    }
+  }
+  if (win->runtime->ime_data_is_composing) {
+    return OPERATOR_CANCELLED;
+  }
+  return std::nullopt;
+}
+
+std::optional<wmOperatorStatus> WM_operator_IME_edit_maybe(const bContext *C)
+{
+  const wmWindow *win = CTX_wm_window(C);
+  if (win && win->runtime->ime_data_is_composing) {
+    return OPERATOR_CANCELLED;
+  }
+  return std::nullopt;
+}
+#endif /* WITH_INPUT_IME */
 
 /** \} */
 
@@ -1966,7 +2011,7 @@ static wmOperatorStatus wm_operator_defaults_exec(bContext *C, wmOperator *op)
 {
   PointerRNA ptr = CTX_data_pointer_get_type(C, "active_operator", RNA_Operator);
 
-  if (!ptr.data) {
+  if (!ptr) {
     BKE_report(op->reports, RPT_ERROR, "No operator in context");
     return OPERATOR_CANCELLED;
   }
@@ -2479,7 +2524,7 @@ static void WM_OT_console_toggle(wmOperatorType *ot)
 
 wmPaintCursor *WM_paint_cursor_activate(short space_type,
                                         short region_type,
-                                        bool (*poll)(bContext *C),
+                                        wmPaintCursorPoll poll,
                                         wmPaintCursorDraw draw,
                                         void *customdata)
 {
@@ -2512,7 +2557,9 @@ bool WM_paint_cursor_end(wmPaintCursor *handle)
   return false;
 }
 
-void WM_paint_cursor_remove_by_type(wmWindowManager *wm, void *draw_fn, void (*free)(void *))
+void WM_paint_cursor_remove_by_type(wmWindowManager *wm,
+                                    wmPaintCursorDraw draw_fn,
+                                    void (*free)(void *))
 {
   for (wmPaintCursor &pc : wm->runtime->paintcursors.items_mutable()) {
     if (pc.draw == draw_fn) {
@@ -3121,7 +3168,7 @@ static int radial_control_get_properties(bContext *C, wmOperator *op)
   {
     return 0;
   }
-  if (rc->image_id_ptr.data) {
+  if (rc->image_id_ptr) {
     /* Extra check, pointer must be to an ID. */
     if (!RNA_struct_is_ID(rc->image_id_ptr.type)) {
       BKE_report(op->reports, RPT_ERROR, "Pointer from path image_id is not an ID");
@@ -3523,8 +3570,10 @@ static wmOperatorStatus radial_control_modal(bContext *C, wmOperator *op, const 
     wmWindowManager *wm = CTX_wm_manager(C);
     if (wm->op_undo_depth == 0) {
       ID *id = rc->ptr.owner_id;
-      if (ED_undo_is_legacy_compatible_for_property(C, id, rc->ptr)) {
-        ED_undo_push(C, op->type->name);
+      std::optional<UndoEncodeHints> undo_hints_or_none =
+          ED_undo_is_legacy_compatible_for_property(C, id, rc->ptr, *rc->prop);
+      if (undo_hints_or_none) {
+        ED_undo_push(C, op->type->name, *undo_hints_or_none);
       }
     }
   }
@@ -3800,7 +3849,7 @@ static wmOperatorStatus redraw_timer_exec(bContext *C, wmOperator *op)
 
     if (type == eRTAnimationPlay) {
       WorkspaceStatus status(C);
-      status.item(fmt::format("{} / {} {}", a + 1, iter, infostr), ICON_INFO);
+      status.item(fmt::format("{} / {} {}", a + 1, iter, infostr), ICON_STATUS_INFO);
     }
 
     redraw_timer_step(C, scene, depsgraph, win, area, region, type, cfra, a, iter);

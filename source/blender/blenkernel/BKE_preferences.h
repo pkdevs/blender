@@ -19,6 +19,7 @@ struct bUserExtensionRepo;
 struct bUserAssetLibrary;
 struct bUserAssetShelfSettings;
 class StringRef;
+struct EnumPropertyItem;
 
 /* -------------------------------------------------------------------- */
 /** \name Preferences File
@@ -50,7 +51,8 @@ struct bUserAssetLibrary *BKE_preferences_asset_library_add(struct UserDef *user
                                                             const char *dirpath) ATTR_NONNULL(1);
 struct bUserAssetLibrary *BKE_preferences_remote_asset_library_add(struct UserDef *userdef,
                                                                    const char *name,
-                                                                   const char *remote_url)
+                                                                   const char *remote_url,
+                                                                   const char *auth_token)
     ATTR_NONNULL(1, 3);
 
 /**
@@ -66,6 +68,15 @@ struct bUserAssetLibrary *BKE_preferences_remote_asset_library_add(struct UserDe
  */
 void BKE_preferences_remote_asset_library_url_set(bUserAssetLibrary *library,
                                                   StringRef remote_url);
+
+/**
+ * \brief Update the remote URL authentication token.
+ *
+ * - Copies \a auth_token into #bUserAssetLibrary.auth_token, trimming any trailing and leading
+ *   whitespace.
+ */
+void BKE_preferences_remote_asset_library_auth_token_set(bUserAssetLibrary *library,
+                                                         StringRef auth_token);
 
 /**
  * Unlink and free a library preference member.
@@ -120,6 +131,12 @@ bool BKE_preferences_asset_library_is_valid(const UserDef *userdef,
                                             const bool check_directory_exists) ATTR_NONNULL();
 
 void BKE_preferences_asset_library_default_add(struct UserDef *userdef) ATTR_NONNULL();
+
+void BKE_preferences_asset_library_read_data(struct BlendDataReader *reader,
+                                             struct bUserAssetLibrary *library);
+
+void BKE_preferences_asset_library_write_data(struct BlendWriter *writer,
+                                              const struct bUserAssetLibrary *library);
 
 /** \} */
 
@@ -218,6 +235,7 @@ bool BKE_preferences_asset_shelf_settings_ensure_catalog_path_enabled(UserDef *u
                                                                       const char *shelf_idname,
                                                                       const char *catalog_path);
 
+const EnumPropertyItem *BKE_preferences_active_section_itemf(const UserDef *userdef, bool *r_free);
 /** \} */
 
 }  // namespace blender

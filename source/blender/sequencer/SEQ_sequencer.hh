@@ -45,14 +45,13 @@ struct ThumbnailCache;
 
 constexpr int MAX_CHANNELS = 128;
 
-/* RNA enums, just to be more readable */
-enum {
-  SIDE_MOUSE = -1,
-  SIDE_NONE = 0,
-  SIDE_LEFT,
-  SIDE_RIGHT,
-  SIDE_BOTH,
-  SIDE_NO_CHANGE,
+enum class Side : int {
+  Mouse = -1,
+  None = 0,
+  Left,
+  Right,
+  Both,
+  NoChange,
 };
 
 /* strip_duplicate' flags */
@@ -237,6 +236,13 @@ Map<const Scene *, VectorSet<Strip *>> &lookup_strips_by_scene_map_get(Editing *
  * \return Span of strips
  */
 Span<Strip *> lookup_strips_by_compositor_node_group(Editing *ed, const bNodeTree *key);
+
+/**
+ * Find effect strips, that use strip `key` as one of inputs.
+ * If lookup hash doesn't exist, it will be created. If hash is tagged as invalid, it will be
+ * rebuilt.
+ */
+Span<Strip *> lookup_effects_by_strip(Editing *ed, const Strip *key);
 
 /**
  * Find which meta strip the given timeline channel belongs to. Returns nullptr if it is a global

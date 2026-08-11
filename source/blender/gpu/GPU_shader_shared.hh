@@ -121,6 +121,7 @@ enum [[host_shared]] GPUSeqFlags : uint32_t {
   GPU_SEQ_FLAG_SELECTED_RH = (1u << 12u),
   GPU_SEQ_FLAG_OVERLAP = (1u << 15u),
   GPU_SEQ_FLAG_CLAMPED = (1u << 16u),
+  GPU_SEQ_FLAG_THUMBNAILS_BACKGROUND = (1u << 17u),
 
   GPU_SEQ_FLAG_ANY_HANDLE = GPU_SEQ_FLAG_SELECTED_LH | GPU_SEQ_FLAG_SELECTED_RH
 };
@@ -158,9 +159,10 @@ struct [[host_shared]] SeqStripDrawData {
   float _pad0;
   float _pad1;
 };
-/* clang-format off */ /* Keep one line. Avoid issues with shader error line. */
-BLI_STATIC_ASSERT(sizeof(SeqStripDrawData) * GPU_SEQ_STRIP_DRAW_DATA_LEN <= 16384, "SeqStripDrawData UBO must not exceed minspec UBO size (16384)")
-/* clang-format on */
+#ifndef GPU_SHADER
+BLI_STATIC_ASSERT(sizeof(SeqStripDrawData) * GPU_SEQ_STRIP_DRAW_DATA_LEN <= 16384,
+                  "SeqStripDrawData UBO must not exceed minspec UBO size (16384)")
+#endif
 
 /* VSE per-thumbnail data for timeline rendering. */
 struct [[host_shared]] SeqStripThumbData {
@@ -181,9 +183,10 @@ struct [[host_shared]] SeqStripThumbData {
   float v2;
   float4 tint_color;
 };
-/* clang-format off */ /* Keep one line. Avoid issues with shader error line. */
-BLI_STATIC_ASSERT(sizeof(SeqStripThumbData) * GPU_SEQ_STRIP_DRAW_DATA_LEN <= 16384, "SeqStripThumbData UBO must not exceed minspec UBO size (16384)")
-/* clang-format on */
+#ifndef GPU_SHADER
+BLI_STATIC_ASSERT(sizeof(SeqStripThumbData) * GPU_SEQ_STRIP_DRAW_DATA_LEN <= 16384,
+                  "SeqStripThumbData UBO must not exceed minspec UBO size (16384)")
+#endif
 
 /* VSE global data for timeline rendering. */
 struct [[host_shared]] SeqContextDrawData {

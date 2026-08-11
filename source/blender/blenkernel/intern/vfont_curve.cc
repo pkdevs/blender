@@ -501,10 +501,14 @@ void BKE_vfont_char_build(const Curve &cu,
   if (!vfd) {
     return;
   }
-  VCharPlaceHolder che_placeholder = {
-      /*metrics*/ &vfd->metrics,
-  };
-  VChar *che = vfont_char_find_or_placeholder(vfd, charcode, che_placeholder);
+  VChar *che = nullptr;
+  /* C0 control characters should not generate geometry. */
+  if (charcode >= 32) {
+    VCharPlaceHolder che_placeholder = {
+        /*metrics*/ &vfd->metrics,
+    };
+    che = vfont_char_find_or_placeholder(vfd, charcode, che_placeholder);
+  }
   vfont_char_build_impl(cu, nubase, che, info, is_smallcaps, offset, rotate, charidx, fsize);
 }
 
@@ -519,6 +523,19 @@ static float vfont_char_width(const Curve &cu, VChar *che, const bool is_smallca
   }
 
   return che->width;
+}
+
+/**
+ * A combining character, drawn over the previous base character.
+ *
+ * Check the code-point as well as the width since some fonts use
+ * zero-width glyphs for spacing characters (the "." in LCD style digit fonts for e.g.)
+ * which must not be drawn over the previous character, see #162036.
+ * See also: `blf_glyph_is_combining` which also uses this logic.
+ */
+static bool vfont_char_is_combining(const char32_t charcode, const float char_width)
+{
+  return (char_width == 0.0f) && (BLI_wcwidth_or_error(charcode) == 0);
 }
 
 static char32_t vfont_char_apply_smallcaps(char32_t charcode, const bool is_smallcaps)
@@ -1058,7 +1075,7 @@ static bool vfont_to_curve(Object *ob,
       /* Won't have been changed since last assignment, ensure this remains the case. */
       BLI_assert(twidth == vfont_char_width(cu, che, ct->is_smallcaps));
 
-      if (twidth == 0.0f && che != nullptr) {
+      if ((che != nullptr) && vfont_char_is_combining(charcode, twidth)) [[unlikely]] {
         /* Combining character: center the mark over the previous base character.
          * This mirrors the fallback algorithm used by BLF (see #blf_glyph_step)
          * and HarfBuzz when GPOS tables are absent. */
@@ -1878,7 +1895,7 @@ static bool vfont_to_curve(Object *ob,
         che = vfont_char_find_or_placeholder(vfinfo_ctx.vfd, charcode, che_placeholder);
 
         const float charwidth = vfont_char_width(cu, che, info);
-        if (charwidth == 0.0f) {
+        if (vfont_char_is_combining(charcode, charwidth)) [[unlikely]] {
           /* Combining character, skip so the cursor won't be between combining characters. */
           continue;
         }
