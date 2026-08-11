@@ -698,6 +698,8 @@ class ShapePanel(BrushPanel):
         if not super().poll(context):
             return False
         settings = cls.paint_settings_from_active_tool(context)
+        if not settings:
+            return False
         mode = cls.get_brush_mode(context)
         brush = settings.brush
 
