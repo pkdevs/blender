@@ -559,8 +559,7 @@ static PropertyRNA *rna_property_from_idprop_type(const IDProperty *idprop)
 {
   if (IDP_struct_type_info(idprop->type)) {
     /* Should be skipped by property iteration; access only through RNA PointerProperty. */
-    BLI_assert_msg(false,
-                   "Owned DNA struct IDProperty used without an RNA property definition");
+    BLI_assert_msg(false, "Owned DNA struct IDProperty used without an RNA property definition");
     return nullptr;
   }
   if (idprop->type == IDP_ARRAY) {
