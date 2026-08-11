@@ -80,8 +80,17 @@ bool transform_mode_is_changeable(const int mode)
               TFM_TRANSLATION,
               TFM_EDGE_SLIDE,
               TFM_VERT_SLIDE,
-              TFM_BONE_SLIDE,
               TFM_NORMAL_ROTATION);
+}
+
+bool transform_mode_vert_slide_is_supported(const TransInfo *t)
+{
+  return (t->flag & T_EDIT) && t->data_type->vert_slide_data_create != nullptr;
+}
+
+bool transform_mode_edge_slide_is_supported(const TransInfo *t)
+{
+  return (t->flag & T_EDIT) && t->data_type->edge_slide_data_create != nullptr;
 }
 
 bool transform_mode_affect_only_locations(const TransInfo *t)
@@ -1201,8 +1210,6 @@ static TransModeInfo *mode_info_get(TransInfo *t, const int mode)
       return &TransMode_rotatenormal;
     case TFM_GPENCIL_OPACITY:
       return &TransMode_gpopacity;
-    case TFM_BONE_SLIDE:
-      return &TransMode_boneslide;
   }
   return nullptr;
 }

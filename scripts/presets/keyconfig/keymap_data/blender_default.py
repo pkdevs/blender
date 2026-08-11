@@ -6168,7 +6168,6 @@ def km_transform_modal_map(params):
         ("CONS_OFF", {"type": 'C', "value": 'PRESS'}, None),
         ("TRANSLATE", {"type": 'G', "value": 'PRESS'}, None),
         ("VERT_EDGE_SLIDE", {"type": 'G', "value": 'PRESS'}, None),
-        ("BONE_SLIDE", {"type": 'G', "value": 'PRESS'}, None),
         ("ROTATE", {"type": 'R', "value": 'PRESS'}, None),
         ("TRACKBALL", {"type": 'R', "value": 'PRESS'}, None),
         ("RESIZE", {"type": 'S', "value": 'PRESS'}, None),

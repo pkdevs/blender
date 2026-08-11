@@ -38,25 +38,6 @@ class CurvesGeometry;
 
 namespace ed::transform {
 
-struct TransConvertTypeInfo {
-  int flags; /* #eTFlag. */
-
-  /**
-   * Allocate and initialize `t->data`.
-   */
-  void (*create_trans_data)(bContext *C, TransInfo *t);
-
-  /**
-   * Force recalculation of data during transformation.
-   */
-  void (*recalc_data)(TransInfo *t);
-
-  /**
-   * Called when the operation is finished.
-   */
-  void (*special_aftertrans_update)(bContext *C, TransInfo *t);
-};
-
 /**
  * Structure used for Edge Slide operation.
  * The data is filled based on the 'transform_convert_' type.
@@ -94,19 +75,43 @@ struct TransDataVertSlideVert {
 };
 
 /**
- * Structure used for Bone Slide operation.
- * The data is filled based on the 'transform_convert_' type.
+ * NOTE: Declared after the slide structures above because the callbacks below return
+ * #Array of them, and #Array needs a complete type to compute its inline buffer capacity.
  */
-struct TransDataBoneSlideVert {
-  TransData *td;
-  float3 dir_side[2]; /* Directional vectors on the sides. */
-  float bone_len;     /* Distance between vectors. */
-  int loop_nr;        /* Number that identifies the group of connected bones. */
+struct TransConvertTypeInfo {
+  int flags; /* #eTFlag. */
 
-  const float *loc_orig() const
-  {
-    return this->td->iloc;
-  }
+  /**
+   * Allocate and initialize `t->data`.
+   */
+  void (*create_trans_data)(bContext *C, TransInfo *t);
+
+  /**
+   * Force recalculation of data during transformation.
+   */
+  void (*recalc_data)(TransInfo *t);
+
+  /**
+   * Called when the operation is finished.
+   */
+  void (*special_aftertrans_update)(bContext *C, TransInfo *t);
+
+  /**
+   * Enumerate the locations each selected element can slide toward, for Vert Slide.
+   * Null when the type has no notion of connected neighbors, which is what
+   * #transform_mode_vert_slide_is_supported tests.
+   */
+  Array<TransDataVertSlideVert> (*vert_slide_data_create)(const TransInfo *t,
+                                                          TransDataContainer *tc,
+                                                          Vector<float3> &r_loc_dst_buffer);
+
+  /**
+   * As above for the two sided Edge Slide. `r_group_len` receives the number of connected
+   * groups, see #TransDataEdgeSlideVert::loop_nr.
+   */
+  Array<TransDataEdgeSlideVert> (*edge_slide_data_create)(const TransInfo *t,
+                                                          TransDataContainer *tc,
+                                                          int *r_group_len);
 };
 
 /**
@@ -371,9 +376,10 @@ void transform_convert_mesh_crazyspace_transdata_set(const float mtx[3][3],
 void transform_convert_mesh_crazyspace_free(TransMeshDataCrazySpace *r_crazyspace_data);
 
 Array<TransDataVertSlideVert> transform_mesh_vert_slide_data_create(
-    const TransDataContainer *tc, Vector<float3> &r_loc_dst_buffer);
+    const TransInfo *t, TransDataContainer *tc, Vector<float3> &r_loc_dst_buffer);
 
-Array<TransDataEdgeSlideVert> transform_mesh_edge_slide_data_create(const TransDataContainer *tc,
+Array<TransDataEdgeSlideVert> transform_mesh_edge_slide_data_create(const TransInfo *t,
+                                                                    TransDataContainer *tc,
                                                                     int *r_group_len);
 
 /* `transform_convert_mesh_edge.cc` */

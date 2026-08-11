@@ -11,6 +11,7 @@
 #include "BLI_math_matrix.hh"
 #include "BLI_string_utf8.h"
 
+#include "BKE_report.hh"
 #include "BKE_unit.hh"
 
 #include "GPU_immediate.hh"
@@ -199,13 +200,9 @@ static void calcVertSlideCustomPoints(TransInfo *t)
 
 static VertSlideData *createVertSlideVerts(TransInfo *t, TransDataContainer *tc)
 {
+  BLI_assert(t->data_type->vert_slide_data_create != nullptr);
   VertSlideData *sld = MEM_new<VertSlideData>(__func__);
-  if (t->data_type == &TransConvertType_MeshUV) {
-    sld->sv = transform_mesh_uv_vert_slide_data_create(t, tc, sld->targets_buffer);
-  }
-  else {
-    sld->sv = transform_mesh_vert_slide_data_create(tc, sld->targets_buffer);
-  }
+  sld->sv = t->data_type->vert_slide_data_create(t, tc, sld->targets_buffer);
 
   if (sld->sv.is_empty()) {
     MEM_delete(sld);
@@ -312,6 +309,10 @@ static void drawVertSlide(TransInfo *t)
   if (sld) {
     const VertSlideParams *slp = static_cast<const VertSlideParams *>(t->custom.mode.data);
     const bool is_clamp = !(t->flag & T_ALT_TRANSFORM);
+    /* Bone joints slide along the bones meeting at them, and which of those the mouse is about
+     * to pick is not apparent from the armature display. Meshes and UVs draw their own edges,
+     * so the same overlay would only retrace them. */
+    const bool show_all_paths = (t->data_type == &TransConvertType_EditArmature);
 
     /* Non-Prop mode. */
     {
@@ -342,6 +343,27 @@ static void drawVertSlide(TransInfo *t)
           immVertexFormat(), "pos", gpu::VertAttrType::SFLOAT_32_32_32);
 
       immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
+
+      /* Every path the slide could take, drawn under the chosen one below and dimmer than it. */
+      if (show_all_paths) {
+        int path_verts_num = 0;
+        for (const TransDataVertSlideVert &sv : sld->sv) {
+          path_verts_num += sv.co_link_orig_3d.size() * 2;
+        }
+        if (path_verts_num > 0) {
+          immUniformThemeColorShadeAlpha(TH_EDGE_SELECT, 50, alpha_shade - 40);
+
+          immBegin(GPU_PRIM_LINES, path_verts_num);
+          for (const TransDataVertSlideVert &sv : sld->sv) {
+            for (const float3 &co_link : sv.co_link_orig_3d) {
+              immVertex3fv(shdr_pos, sv.co_orig_3d());
+              immVertex3fv(shdr_pos, co_link);
+            }
+          }
+          immEnd();
+        }
+      }
+
       immUniformThemeColorShadeAlpha(TH_EDGE_SELECT, 80, alpha_shade);
 
       immBegin(GPU_PRIM_LINES, sld->sv.size() * 2);
@@ -373,6 +395,20 @@ static void drawVertSlide(TransInfo *t)
       immBindBuiltinProgram(GPU_SHADER_3D_POINT_UNIFORM_COLOR);
 
       GPU_point_size(ctrl_size);
+
+      /* Mark every joint being slid: a slide moves several at once, and unlike mesh vertices
+       * they are hard to pick out against the bones themselves. The active one draws over its
+       * own dot below. */
+      if (show_all_paths) {
+        immUniformThemeColorShadeAlpha(TH_VERTEX_SELECT, 50, alpha_shade);
+
+        immBegin(GPU_PRIM_POINTS, sld->sv.size());
+        for (const TransDataVertSlideVert &sv : sld->sv) {
+          immVertex3fv(shdr_pos, sv.co_orig_3d());
+        }
+        immEnd();
+      }
+
       immUniformThemeColorShadeAlpha(TH_VERTEX_ACTIVE, 80, alpha_shade);
 
       immBegin(GPU_PRIM_POINTS, 1);
@@ -621,6 +657,11 @@ static void vert_slide_transform_matrix_fn(TransInfo *t, float mat_xform[4][4])
 static void initVertSlide_ex(
     TransInfo *t, wmOperator *op, bool use_even, bool flipped, bool use_clamp)
 {
+  if (!transform_mode_vert_slide_is_supported(t)) {
+    BKE_report(t->reports, RPT_ERROR, "'Vertex Slide' is not supported for this object type");
+    t->state = TRANS_CANCEL;
+    return;
+  }
 
   t->mode = TFM_VERT_SLIDE;
 

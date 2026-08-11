@@ -2172,7 +2172,7 @@ static void special_aftertrans_update__mesh(bContext * /*C*/, TransInfo *t)
  * \{ */
 
 Array<TransDataVertSlideVert> transform_mesh_vert_slide_data_create(
-    const TransDataContainer *tc, Vector<float3> &r_loc_dst_buffer)
+    const TransInfo * /*t*/, TransDataContainer *tc, Vector<float3> &r_loc_dst_buffer)
 {
   int td_selected_len = 0;
   tc->foreach_index_selected([&](const int /*i*/) { td_selected_len++; });
@@ -2293,7 +2293,8 @@ static float3 isect_face_dst(const BMLoop *l)
   return isect_co;
 }
 
-Array<TransDataEdgeSlideVert> transform_mesh_edge_slide_data_create(const TransDataContainer *tc,
+Array<TransDataEdgeSlideVert> transform_mesh_edge_slide_data_create(const TransInfo * /*t*/,
+                                                                    TransDataContainer *tc,
                                                                     int *r_group_len)
 {
   BMEditMesh *em = BKE_editmesh_from_object(tc->obedit);
@@ -2748,6 +2749,8 @@ TransConvertTypeInfo TransConvertType_Mesh = {
     /*create_trans_data*/ createTransEditVerts,
     /*recalc_data*/ recalcData_mesh,
     /*special_aftertrans_update*/ special_aftertrans_update__mesh,
+    /*vert_slide_data_create*/ transform_mesh_vert_slide_data_create,
+    /*edge_slide_data_create*/ transform_mesh_edge_slide_data_create,
 };
 
 }  // namespace blender::ed::transform

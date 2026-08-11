@@ -338,7 +338,6 @@ enum {
   TFM_MODAL_NODE_FRAME = 37,
 
   TFM_MODAL_STRIP_CLAMP = 38,
-  TFM_MODAL_BONE_SLIDE = 39,
 };
 
 /** \} */

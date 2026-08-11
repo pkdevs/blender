@@ -712,7 +712,6 @@ static bool transform_modal_item_poll(const wmOperator *op, int value)
     case TFM_MODAL_ROTATE:
     case TFM_MODAL_RESIZE:
     case TFM_MODAL_VERT_EDGE_SLIDE:
-    case TFM_MODAL_BONE_SLIDE:
     case TFM_MODAL_TRACKBALL:
     case TFM_MODAL_ROTATE_NORMALS: {
       if (!transform_mode_is_changeable(t->mode)) {
@@ -732,7 +731,8 @@ static bool transform_modal_item_poll(const wmOperator *op, int value)
         return t->data_type == &TransConvertType_Tracking;
       }
       if (value == TFM_MODAL_VERT_EDGE_SLIDE &&
-          (!ELEM(t->data_type, &TransConvertType_Mesh, &TransConvertType_MeshUV) ||
+          (!(transform_mode_edge_slide_is_supported(t) ||
+             transform_mode_vert_slide_is_supported(t)) ||
            /* WORKAROUND: Avoid repeated keys in status bar.
             *
             * Previously, `Vert/Edge Slide` and `Move` were triggered by the same modal key.
@@ -746,14 +746,6 @@ static bool transform_modal_item_poll(const wmOperator *op, int value)
       {
         return false;
       }
-
-      if (value == TFM_MODAL_BONE_SLIDE &&
-          (!ELEM(t->data_type, &TransConvertType_EditArmature, &TransConvertType_Pose) ||
-           t->mode != TFM_TRANSLATION))
-      {
-        return false;
-      }
-
       if (value == TFM_MODAL_TRACKBALL &&
           /* WORKAROUND: Avoid repeated keys in status bar.
            *
@@ -852,7 +844,6 @@ wmKeyMap *transform_modal_keymap(wmKeyConfig *keyconf)
       {TFM_MODAL_NODE_ATTACH_OFF, "NODE_ATTACH_OFF", 0, "Node Attachment (Off)", ""},
       {TFM_MODAL_TRANSLATE, "TRANSLATE", 0, "Move", ""},
       {TFM_MODAL_VERT_EDGE_SLIDE, "VERT_EDGE_SLIDE", 0, "Vert/Edge Slide", ""},
-      {TFM_MODAL_BONE_SLIDE, "BONE_SLIDE", 0, "Bone Slide", ""},
       {TFM_MODAL_ROTATE, "ROTATE", 0, "Rotate", ""},
       {TFM_MODAL_TRACKBALL, "TRACKBALL", 0, "Trackball", ""},
       {TFM_MODAL_RESIZE, "RESIZE", 0, "Resize", ""},
@@ -1130,7 +1121,6 @@ wmOperatorStatus transformEvent(TransInfo *t, wmOperator *op, const wmEvent *eve
       case TFM_MODAL_TRACKBALL:
       case TFM_MODAL_ROTATE_NORMALS:
       case TFM_MODAL_VERT_EDGE_SLIDE:
-      case TFM_MODAL_BONE_SLIDE:
         /* Only switch when supported. */
         if (!transform_mode_is_changeable(t->mode)) {
           break;
@@ -1152,17 +1142,12 @@ wmOperatorStatus transformEvent(TransInfo *t, wmOperator *op, const wmEvent *eve
             (event->val == TFM_MODAL_TRACKBALL && t->mode == TFM_TRACKBALL) ||
             (event->val == TFM_MODAL_ROTATE_NORMALS && t->mode == TFM_NORMAL_ROTATION) ||
             (event->val == TFM_MODAL_VERT_EDGE_SLIDE &&
-             ELEM(t->mode, TFM_VERT_SLIDE, TFM_EDGE_SLIDE)) ||
-            (event->val == TFM_MODAL_BONE_SLIDE && t->mode == TFM_BONE_SLIDE))
+             ELEM(t->mode, TFM_VERT_SLIDE, TFM_EDGE_SLIDE)))
         {
           break;
         }
 
         if (event->val == TFM_MODAL_ROTATE_NORMALS && t->data_type != &TransConvertType_Mesh) {
-          break;
-        }
-
-        if (event->val == TFM_MODAL_BONE_SLIDE && t->data_type != &TransConvertType_EditArmature) {
           break;
         }
 
@@ -1189,19 +1174,14 @@ wmOperatorStatus transformEvent(TransInfo *t, wmOperator *op, const wmEvent *eve
           }
           transform_mode_init(t, nullptr, TFM_RESIZE);
         }
-        else if (event->val == TFM_MODAL_BONE_SLIDE) {
-          transform_mode_init(t, op, TFM_BONE_SLIDE);
-          /* Bone Slide can fail if no suitable bone chain exists. */
-          if (t->state == TRANS_CANCEL) {
-            resetTransModal(t);
-            t->state = TRANS_STARTING;
-            resetTransRestrictions(t);
-            transform_mode_init(t, nullptr, TFM_TRANSLATION);
-          }
-        }
         else {
           /* First try Edge Slide. */
-          transform_mode_init(t, op, TFM_EDGE_SLIDE);
+          if (transform_mode_edge_slide_is_supported(t)) {
+            transform_mode_init(t, op, TFM_EDGE_SLIDE);
+          }
+          else {
+            t->state = TRANS_CANCEL;
+          }
           /* If that fails, try Vertex Slide. */
           if (t->state == TRANS_CANCEL) {
             resetTransModal(t);

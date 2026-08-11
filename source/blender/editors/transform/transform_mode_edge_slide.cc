@@ -15,6 +15,7 @@
 
 #include "BKE_editmesh.hh"
 #include "BKE_editmesh_bvh.hh"
+#include "BKE_report.hh"
 #include "BKE_unit.hh"
 
 #include "GPU_immediate.hh"
@@ -350,13 +351,9 @@ static EdgeSlideData *createEdgeSlideVerts(TransInfo *t,
                                            const bool use_double_side)
 {
   int group_len;
+  BLI_assert(t->data_type->edge_slide_data_create != nullptr);
   EdgeSlideData *sld = MEM_new<EdgeSlideData>("sld");
-  if (t->data_type == &TransConvertType_MeshUV) {
-    sld->sv = transform_mesh_uv_edge_slide_data_create(t, tc, &group_len);
-  }
-  else {
-    sld->sv = transform_mesh_edge_slide_data_create(tc, &group_len);
-  }
+  sld->sv = t->data_type->edge_slide_data_create(t, tc, &group_len);
 
   if (sld->sv.is_empty()) {
     MEM_delete(sld);
@@ -890,6 +887,12 @@ static void initEdgeSlide_ex(TransInfo *t,
 {
   EdgeSlideData *sld;
   bool ok = false;
+
+  if (!transform_mode_edge_slide_is_supported(t)) {
+    BKE_report(t->reports, RPT_ERROR, "'Edge Slide' is not supported for this object type");
+    t->state = TRANS_CANCEL;
+    return;
+  }
 
   t->mode = TFM_EDGE_SLIDE;
 

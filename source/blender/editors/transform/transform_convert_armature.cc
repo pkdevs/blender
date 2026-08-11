@@ -15,9 +15,11 @@
 #include "MEM_guardedalloc.h"
 
 #include "BLI_listbase.h"
+#include "BLI_map.hh"
 #include "BLI_math_matrix.h"
 #include "BLI_math_rotation.h"
 #include "BLI_math_vector.h"
+#include "BLI_multi_value_map.hh"
 #include "BLI_set.hh"
 
 #include "BKE_action.hh"
@@ -1091,8 +1093,7 @@ static void recalcData_edit_armature(TransInfo *t)
     for (EditBone &ebo : *edbo) {
       ebo_parent = (ebo.flag & BONE_CONNECTED) ? ebo.parent : nullptr;
 
-      /* BYPASS if moving along Bone Slide vector manually. */
-      if (ebo_parent && t->mode != TFM_BONE_SLIDE) {
+      if (ebo_parent) {
         /* If this bone has a parent tip that has been moved. */
         if (animrig::bone_is_visible(arm, ebo_parent) && (ebo_parent->flag & BONE_TIPSEL)) {
           copy_v3_v3(ebo.head, ebo_parent->tail);
@@ -1150,13 +1151,22 @@ static void recalcData_edit_armature(TransInfo *t)
             copy_v3_v3(up_axis, td->axismtx[2]);
 
             sub_v3_v3v3(vec, ebo->tail, ebo->head);
-            normalize_v3(vec);
-            rotation_between_vecs_to_quat(qrot, td->axismtx[1], vec);
-            mul_qt_v3(qrot, up_axis);
+            const float length = normalize_v3(vec);
 
-            /* Roll has a tendency to flip in certain orientations - #34283, #33974. */
-            roll = ED_armature_ebone_roll_to_vector(ebo, up_axis, false);
-            ebo->roll = angle_compat_rad(roll, td->ival);
+            /* Keep the roll when the bone is collapsed or reversed, which sliding a joint past
+             * the far end of its bone can do. #rotation_between_vecs_to_quat picks an arbitrary
+             * axis in both cases, making the derived roll spin wildly. */
+            if (length < FLT_EPSILON || dot_v3v3(td->axismtx[1], vec) < -0.9999f) {
+              ebo->roll = td->ival;
+            }
+            else {
+              rotation_between_vecs_to_quat(qrot, td->axismtx[1], vec);
+              mul_qt_v3(qrot, up_axis);
+
+              /* Roll has a tendency to flip in certain orientations - #34283, #33974. */
+              roll = ED_armature_ebone_roll_to_vector(ebo, up_axis, false);
+              ebo->roll = angle_compat_rad(roll, td->ival);
+            }
           }
         }
       }
@@ -1762,11 +1772,126 @@ static void special_aftertrans_update__pose(bContext *C, TransInfo *t)
 
 /** \} */
 
+/* -------------------------------------------------------------------- */
+/** \name Special After Transform Edit Armature
+ * \{ */
+
+/**
+ * Remove bones that a slide collapsed to nothing, once the modal operation has ended.
+ */
+static void special_aftertrans_update__edit_armature(bContext * /*C*/, TransInfo *t)
+{
+  if (t->state == TRANS_CANCEL || t->mode != TFM_VERT_SLIDE) {
+    return;
+  }
+
+  constexpr float length_threshold = 0.000001f;
+
+  FOREACH_TRANS_DATA_CONTAINER (t, tc) {
+    bArmature *arm = id_cast<bArmature *>(tc->obedit->data);
+
+    Vector<EditBone *> collapsed;
+    for (EditBone &ebo : *arm->edbo) {
+      if (len_squared_v3v3(ebo.head, ebo.tail) <= length_threshold * length_threshold) {
+        collapsed.append(&ebo);
+      }
+    }
+
+    for (EditBone *ebo : collapsed) {
+      const bool was_connected = ebo->parent && (ebo->flag & BONE_CONNECTED);
+      ED_armature_ebone_remove_ex(arm, ebo, !was_connected);
+    }
+  }
+}
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name API for Vert Slide
+ * \{ */
+
+/**
+ * Slide targets for bone joints. Bone heads and tails are already treated as vertices by the
+ * transform code, so a joint slides along the bones meeting at it, targeting their far ends.
+ */
+static Array<TransDataVertSlideVert> armature_vert_slide_data_create(
+    const TransInfo * /*t*/, TransDataContainer *tc, Vector<float3> &r_loc_dst_buffer)
+{
+  const bArmature *arm = id_cast<bArmature *>(tc->obedit->data);
+
+  /* `td->extra` only holds the #EditBone for the entry that owns roll correction, so look the
+   * bone up by address instead: #TransData::loc points straight at `head` or `tail`. */
+  Map<const float *, const EditBone *> bone_by_end;
+  /* Connected children per parent, so the bones meeting at a joint are known without
+   * re-scanning the whole armature for each of them. */
+  MultiValueMap<const EditBone *, const EditBone *> children_by_parent;
+  for (const EditBone &ebo : *arm->edbo) {
+    bone_by_end.add(ebo.head, &ebo);
+    bone_by_end.add(ebo.tail, &ebo);
+    if (ebo.parent && (ebo.flag & BONE_CONNECTED)) {
+      children_by_parent.add(ebo.parent, &ebo);
+    }
+  }
+
+  Vector<TransDataVertSlideVert> sv_vector;
+  sv_vector.reserve(tc->data_len);
+  r_loc_dst_buffer.reserve(tc->data_len * 2);
+
+  for (const int i : IndexRange(tc->data_len)) {
+    TransData *td = &tc->data[i];
+    /* Entries transforming a value such as roll or envelope rather than a location. */
+    const EditBone *ebo = td->loc ? bone_by_end.lookup_default(td->loc, nullptr) : nullptr;
+    if (ebo == nullptr) {
+      continue;
+    }
+
+    const int size_prev = r_loc_dst_buffer.size();
+    if (td->loc == ebo->head) {
+      r_loc_dst_buffer.append(float3(ebo->tail));
+      if (ebo->parent && (ebo->flag & BONE_CONNECTED)) {
+        r_loc_dst_buffer.append(float3(ebo->parent->head));
+        for (const EditBone *sibling : children_by_parent.lookup(ebo->parent)) {
+          if (sibling != ebo) {
+            r_loc_dst_buffer.append(float3(sibling->tail));
+          }
+        }
+      }
+    }
+    else {
+      r_loc_dst_buffer.append(float3(ebo->head));
+      for (const EditBone *child : children_by_parent.lookup(ebo)) {
+        r_loc_dst_buffer.append(float3(child->tail));
+      }
+    }
+
+    TransDataVertSlideVert sv;
+    sv.td = td;
+    /* The buffer address changes as the vector grows, so the #Span cannot be set yet.
+     * Stash the target count in `co_link_curr` and resolve it below. */
+    sv.co_link_curr = r_loc_dst_buffer.size() - size_prev;
+    sv_vector.append(sv);
+  }
+
+  Array<TransDataVertSlideVert> sv_array = sv_vector.as_span();
+  int start = 0;
+  for (TransDataVertSlideVert &sv : sv_array) {
+    const int size = sv.co_link_curr;
+    sv.co_link_orig_3d = r_loc_dst_buffer.as_span().slice(start, size);
+    sv.co_link_curr = 0;
+    start += size;
+  }
+
+  return sv_array;
+}
+
+/** \} */
+
 TransConvertTypeInfo TransConvertType_EditArmature = {
     /*flags*/ (T_EDIT | T_POINTS),
     /*create_trans_data*/ createTransArmatureVerts,
     /*recalc_data*/ recalcData_edit_armature,
-    /*special_aftertrans_update*/ nullptr,
+    /*special_aftertrans_update*/ special_aftertrans_update__edit_armature,
+    /*vert_slide_data_create*/ armature_vert_slide_data_create,
 };
 
 TransConvertTypeInfo TransConvertType_Pose = {

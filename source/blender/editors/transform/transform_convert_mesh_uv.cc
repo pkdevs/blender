@@ -1148,6 +1148,8 @@ TransConvertTypeInfo TransConvertType_MeshUV = {
     /*create_trans_data*/ createTransUVs,
     /*recalc_data*/ recalcData_uv,
     /*special_aftertrans_update*/ nullptr,
+    /*vert_slide_data_create*/ transform_mesh_uv_vert_slide_data_create,
+    /*edge_slide_data_create*/ transform_mesh_uv_edge_slide_data_create,
 };
 
 }  // namespace blender::ed::transform
