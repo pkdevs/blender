@@ -424,7 +424,7 @@ static void draw_histogram(ARegion &region,
    * measurements are accurate. */
   const int font_id = BLF_set_default();
   float text_scale_x, text_scale_y;
-  ui::view2d_scale_get_inverse(&region.v2d, &text_scale_x, &text_scale_y);
+  ui::view2d_pixel_size_get(&region.v2d, &text_scale_x, &text_scale_y);
 
   float prev_label_right = -FLT_MAX;
 
@@ -512,7 +512,7 @@ static void draw_waveform_graticule(ARegion *region,
 
   const int font_id = BLF_set_default();
   float text_scale_x, text_scale_y;
-  ui::view2d_scale_get_inverse(&region->v2d, &text_scale_x, &text_scale_y);
+  ui::view2d_pixel_size_get(&region->v2d, &text_scale_x, &text_scale_y);
 
   float prev_label_top = -FLT_MAX;
 
@@ -671,7 +671,7 @@ static void draw_vectorscope_graticule(ARegion *region,
   /* Calculate size of single text letter. */
   char buf[2] = {'M', 0};
   float text_scale_x, text_scale_y;
-  ui::view2d_scale_get_inverse(&region->v2d, &text_scale_x, &text_scale_y);
+  ui::view2d_pixel_size_get(&region->v2d, &text_scale_x, &text_scale_y);
   float text_width, text_height;
   BLF_width_and_height(BLF_default(), buf, 1, &text_width, &text_height);
   text_width *= text_scale_x;
@@ -1141,7 +1141,6 @@ static void text_selection_draw(const bContext *C, const Strip *strip, uint pos)
     const float line_y = character_start.position.y + runtime->font_descender;
 
     const float2 view_offs{-scene->r.xsch / 2.0f, -scene->r.ysch / 2.0f};
-    const float view_aspect = scene->r.xasp / scene->r.yasp;
     float3x3 transform_mat = seq::image_transform_matrix_get(scene, strip);
     float2 selection_quad[4] = {
         {character_start.position.x, line_y},
@@ -1156,7 +1155,6 @@ static void text_selection_draw(const bContext *C, const Strip *strip, uint pos)
     for (int i : IndexRange(0, 4)) {
       selection_quad[i] += view_offs;
       selection_quad[i] = math::transform_point(transform_mat, selection_quad[i]);
-      selection_quad[i].x *= view_aspect;
     }
     for (int i : {0, 1, 2, 2, 3, 0}) {
       immVertex2f(pos, selection_quad[i][0], selection_quad[i][1]);
@@ -1185,7 +1183,6 @@ static void text_edit_draw_cursor(const bContext *C, const Strip *strip, uint po
   const Scene *scene = CTX_data_sequencer_scene(C);
 
   const float2 view_offs{-scene->r.xsch / 2.0f, -scene->r.ysch / 2.0f};
-  const float view_aspect = scene->r.xasp / scene->r.yasp;
   float3x3 transform_mat = seq::image_transform_matrix_get(scene, strip);
   const int2 cursor_position = strip_text_cursor_offset_to_position(runtime, data->cursor_offset);
   const float cursor_width = 10;
@@ -1214,7 +1211,6 @@ static void text_edit_draw_cursor(const bContext *C, const Strip *strip, uint po
   for (int i : IndexRange(0, 4)) {
     cursor_quad[i] += descender_offs + view_offs;
     cursor_quad[i] = math::transform_point(transform_mat, cursor_quad[i]);
-    cursor_quad[i].x *= view_aspect;
   }
   for (int i : {0, 1, 2, 2, 3, 0}) {
     immVertex2f(pos, cursor_quad[i][0], cursor_quad[i][1]);

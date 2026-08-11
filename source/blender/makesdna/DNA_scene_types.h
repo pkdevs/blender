@@ -714,6 +714,8 @@ enum eRender_Flag : short {
   SCER_ALLOW_PREROLL = 1 << 2,
   /** Show/use sub-frames (for checking motion blur). */
   SCER_SHOW_SUBFRAME = 1 << 3,
+  /** Wrap the playhead within the playback range while navigating timeline. */
+  SCER_WRAP_TIMELINE_NAVIGATION = 1 << 4,
 };
 ENUM_OPERATORS(eRender_Flag)
 
@@ -1074,10 +1076,18 @@ struct TimeMarker {
   struct TimeMarker *next = nullptr, *prev = nullptr;
   int frame = 0;
   char name[64] = "";
+  /* TimeMarkerFlag */
   unsigned int flag = 0;
   struct Object *camera = nullptr;
   struct IDProperty *prop = nullptr;
 };
+
+typedef enum TimeMarkerFlag : unsigned int {
+  /* SELECT = 1 */
+
+  /* Temporarily tag markers as elevated within draw functions. Flag is cleared afterwards. */
+  TIME_MARKER_ELEVATED_TEMP = (1 << 1),
+} TimeMarkerFlag;
 
 /** \} */
 
@@ -1856,6 +1866,7 @@ enum eTool_TransformFlag : int {
   SCE_XFORM_AXIS_ALIGN = (1 << 0),
   SCE_XFORM_DATA_ORIGIN = (1 << 1),
   SCE_XFORM_SKIP_CHILDREN = (1 << 2),
+  SCE_XFORM_SCULPT_PIVOT = (1 << 3),
 };
 ENUM_OPERATORS(eTool_TransformFlag)
 
@@ -2729,6 +2740,9 @@ struct SceneEEVEE {
 
   float overscan = 3.0f;
   float light_threshold = 0.01f;
+
+  float time_limit = 0.0f;
+  char _pad2[12] = {};
 };
 
 struct SceneGpencil {

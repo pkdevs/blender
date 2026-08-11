@@ -3640,6 +3640,13 @@ static void rna_def_tool_settings(BlenderRNA *brna)
       prop, "Transform Parents", "Transform the parents, leaving the children in place");
   RNA_def_property_update(prop, NC_SCENE | ND_TRANSFORM, nullptr);
 
+  prop = RNA_def_property(srna, "use_transform_data_pivot", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, nullptr, "transform_flag", SCE_XFORM_SCULPT_PIVOT);
+  RNA_def_property_flag(prop, PROP_DEG_SYNC_ONLY);
+  RNA_def_property_ui_text(
+      prop, "Transform Pivot", "Transform sculpt pivot, while leaving the shape in place");
+  RNA_def_property_update(prop, NC_SCENE | ND_TRANSFORM, nullptr);
+
   prop = RNA_def_property(srna, "use_transform_correct_face_attributes", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, nullptr, "uvcalc_flag", UVCALC_TRANSFORM_CORRECT);
   RNA_def_property_flag(prop, PROP_DEG_SYNC_ONLY);
@@ -6342,7 +6349,8 @@ static void rna_def_render_views(BlenderRNA *brna, PropertyRNA *cprop)
   func = RNA_def_function(srna, "new", "rna_RenderView_new");
   RNA_def_function_ui_description(func, "Add a render view to scene");
   RNA_def_function_flag(func, FUNC_USE_SELF_ID);
-  parm = RNA_def_string(func, "name", "RenderView", 0, "", "New name for the marker (not unique)");
+  parm = RNA_def_string(
+      func, "name", "RenderView", 0, "", "New name for the render view (not unique)");
   RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
   parm = RNA_def_pointer(func, "result", "SceneRenderView", "", "Newly created render view");
   RNA_def_function_return(func, parm);
@@ -8400,6 +8408,12 @@ static void rna_def_scene_eevee(BlenderRNA *brna)
                            "enabled for final renders).");
   RNA_def_property_update(prop, NC_SCENE | ND_RENDER_OPTIONS, nullptr);
 
+  prop = RNA_def_property(srna, "time_limit", PROP_FLOAT, PROP_TIME_ABSOLUTE);
+  RNA_def_property_ui_text(prop, "Time Limit", "Limit the render time. Zero disables the limit.");
+  RNA_def_property_range(prop, 0.0f, FLT_MAX);
+  RNA_def_property_override_flag(prop, PROPOVERRIDE_OVERRIDABLE_LIBRARY);
+  RNA_def_property_update(prop, NC_SCENE | ND_RENDER_OPTIONS, nullptr);
+
   /* Clamping */
   prop = RNA_def_property(srna, "clamp_surface_direct", PROP_FLOAT, PROP_NONE);
   RNA_def_property_ui_text(prop,
@@ -9099,6 +9113,15 @@ void RNA_def_scene(BlenderRNA *brna)
   RNA_def_property_boolean_negative_sdna(prop, nullptr, "flag", SCE_KEYS_NO_SELONLY);
   RNA_def_property_ui_text(
       prop, "Only Show Selected", "Only include channels relating to selected objects and data");
+  RNA_def_property_update(prop, NC_SCENE | ND_FRAME, nullptr);
+
+  prop = RNA_def_property(srna, "wrap_timeline_navigation", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
+  RNA_def_property_boolean_sdna(prop, nullptr, "r.flag", SCER_WRAP_TIMELINE_NAVIGATION);
+  RNA_def_property_ui_text(
+      prop,
+      "Wrap Timeline",
+      "Wrap the playhead around the playback range when navigating the timeline");
   RNA_def_property_update(prop, NC_SCENE | ND_FRAME, nullptr);
 
   /* Stamp */

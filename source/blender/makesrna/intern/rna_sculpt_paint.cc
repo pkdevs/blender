@@ -155,7 +155,7 @@ static PointerRNA rna_ParticleEdit_brush_get(PointerRNA *ptr)
 
 static PointerRNA rna_ParticleBrush_curve_get(PointerRNA * /*ptr*/)
 {
-  return PointerRNA_NULL;
+  return {};
 }
 
 static void rna_ParticleEdit_redo(bContext *C, PointerRNA * /*ptr*/)
@@ -279,7 +279,7 @@ static PointerRNA rna_Paint_brush_get(PointerRNA *ptr)
   Paint *paint = static_cast<Paint *>(ptr->data);
   Brush *brush = BKE_paint_brush(paint);
   if (!brush) {
-    return PointerRNA_NULL;
+    return {};
   }
   return RNA_id_pointer_create(&brush->id);
 }
@@ -812,6 +812,12 @@ static void rna_def_paint(BlenderRNA *brna)
       srna, "show_size_curve", "Show Size Curve", PAINT_CURVE_SHOW_SIZE);
   rna_def_paint_curve_visibility_flag(
       srna, "show_jitter_curve", "Show Jitter Curve", PAINT_CURVE_SHOW_JITTER);
+  rna_def_paint_curve_visibility_flag(
+      srna, "show_hardness_curve", "Show Hardness Curve", PAINT_CURVE_SHOW_HARDNESS);
+  rna_def_paint_curve_visibility_flag(
+      srna, "show_auto_smooth_curve", "Show Auto-Smooth Curve", PAINT_CURVE_SHOW_AUTO_SMOOTH);
+  rna_def_paint_curve_visibility_flag(
+      srna, "show_spacing_curve", "Show Spacing Curve", PAINT_CURVE_SHOW_SPACING);
 
   /* Unified Paint Settings */
   prop = RNA_def_property(srna, "unified_paint_settings", PROP_POINTER, PROP_NONE);
