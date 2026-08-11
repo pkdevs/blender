@@ -559,8 +559,6 @@ static wmOperatorStatus view3d_set_roll_exec(bContext *C, wmOperator *op)
 
 void VIEW3D_OT_view_roll_set(wmOperatorType *ot)
 {
-  PropertyRNA *prop;
-
   /* identifiers */
   ot->name = "Set View Roll";
   ot->description = "Set the view roll angle";
@@ -571,9 +569,8 @@ void VIEW3D_OT_view_roll_set(wmOperatorType *ot)
   ot->poll = ED_operator_rv3d_user_region_poll;
 
   /* properties */
-  ot->prop = prop = RNA_def_float(
-      ot->srna, "angle", 0, -FLT_MAX, FLT_MAX, "Roll", "", -FLT_MAX, FLT_MAX);
-  RNA_def_property_flag(prop, PROP_SKIP_SAVE);
+  ot->prop = RNA_def_float(ot->srna, "angle", 0, -FLT_MAX, FLT_MAX, "Roll", "", -FLT_MAX, FLT_MAX);
+  RNA_def_property_flag(ot->prop, PROP_SKIP_SAVE);
 }
 
 /** \} */
