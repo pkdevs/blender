@@ -233,7 +233,7 @@ static void draw_active_library_settings(const bContext *C,
                    RNA_NO_INDEX,
                    0,
                    UI_ITEM_NONE,
-                   IFACE_("Secret Super"),
+                   IFACE_("Secret"),
                    library.user_library->auth_token ? ICON_LOCKED : ICON_UNLOCKED,
                    std::nullopt);
         }
