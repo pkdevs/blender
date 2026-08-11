@@ -220,8 +220,8 @@ class GetBundleItemOperation : public NodeOperation {
     /* Otherwise, the item value is stored in a BundleItemInternalValue. */
     BLI_assert(std::get_if<nodes::BundleItemInternalValue>(&item_value->value));
 
-    std::optional<ImplicitSharingPtr<BundleItem>> bundle_item =
-        item_value->as<ImplicitSharingPtr<BundleItem>>();
+    std::optional<BundleItemPtr> bundle_item = item_value->as<BundleItemPtr>();
+    BLI_assert(bundle_item.has_value());
 
     const Result &bundle_result = bundle_item.value()->result();
 

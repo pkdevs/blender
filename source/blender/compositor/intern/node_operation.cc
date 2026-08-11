@@ -166,9 +166,9 @@ static destruct_ptr<nodes::eval_log::BundleValueLog> get_bundle_info_log(
     /* Otherwise, the item value is stored in a BundleItemInternalValue. */
     BLI_assert(std::get_if<nodes::BundleItemInternalValue>(&item.value.value));
 
-    std::optional<ImplicitSharingPtr<BundleItem>> bundle_item =
-        item.value.as<ImplicitSharingPtr<BundleItem>>();
+    std::optional<BundleItemPtr> bundle_item = item.value.as<BundleItemPtr>();
     BLI_assert(bundle_item.has_value());
+
     const Result &bundle_result = bundle_item.value()->result();
     items.append({item.key.ustr(), {Result::type_name(bundle_result.type())}});
   }

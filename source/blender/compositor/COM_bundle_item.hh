@@ -38,4 +38,6 @@ class BundleItem : public nodes::BundleItemInternalValueMixin {
   void delete_self() override;
 };
 
+using BundleItemPtr = ImplicitSharingPtr<BundleItem>;
+
 }  // namespace blender::compositor
