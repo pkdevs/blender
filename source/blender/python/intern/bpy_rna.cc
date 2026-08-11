@@ -226,6 +226,30 @@ static void pyrna_prop_warn_deprecated(const PointerRNA *ptr,
                    deprecated->note);
 }
 
+static bool pyrna_status_ok_or_error(eRNAStatus status, const char *error_prefix)
+{
+  switch (status) {
+    case eRNAStatus::Success: {
+      return true;
+    }
+    case eRNAStatus::IndexOutOfRange: {
+      PyErr_Format(PyExc_IndexError, "%.200s: index out of range", error_prefix);
+      return false;
+    }
+    case eRNAStatus::Immutable: {
+      PyErr_Format(PyExc_TypeError, "%.200s: is not editable", error_prefix);
+      return false;
+    }
+    case eRNAStatus::Unsupported: {
+      PyErr_Format(PyExc_TypeError, "%.200s: not supported for this collection", error_prefix);
+      return false;
+    }
+  }
+
+  BLI_assert_unreachable();
+  return true;
+}
+
 #ifdef USE_PYRNA_INVALIDATE_GC
 #  define FROM_GC(g) ((PyObject *)(((PyGC_Head *)g) + 1))
 
@@ -454,7 +478,7 @@ static bool rna_id_write_error(PointerRNA *ptr, PyObject *key)
 {
   ID *id = ptr->owner_id;
   if (id) {
-    const short idcode = GS(id->name);
+    const short idcode = id->id_type();
     /* May need more ID types added here. */
     if (!ELEM(idcode, ID_WM, ID_SCR, ID_WS)) {
       const char *idtype = BKE_idtype_idcode_to_name(idcode);
@@ -1094,7 +1118,7 @@ static PyObject *pyrna_struct_repr(BPy_StructRNA *self)
 
   if (RNA_struct_is_ID(self->ptr->type) && (id->flag & ID_FLAG_EMBEDDED_DATA) == 0) {
     ret = PyUnicode_FromFormat(
-        "bpy.data.%s[%R]", BKE_idtype_idcode_to_name_plural(GS(id->name)), tmp_str);
+        "bpy.data.%s[%R]", BKE_idtype_idcode_to_name_plural(id->id_type()), tmp_str);
   }
   else {
     ID *real_id = nullptr;
@@ -1110,14 +1134,14 @@ static PyObject *pyrna_struct_repr(BPy_StructRNA *self)
         Py_DECREF(tmp_str);
         tmp_str = PyUnicode_FromString(real_id->name + 2);
         ret = PyUnicode_FromFormat("bpy.data.%s[%R].%s",
-                                   BKE_idtype_idcode_to_name_plural(GS(real_id->name)),
+                                   BKE_idtype_idcode_to_name_plural(real_id->id_type()),
                                    tmp_str,
                                    path->c_str());
       }
       else {
         /* Can't find the path, print something useful as a fallback. */
         ret = PyUnicode_FromFormat("bpy.data.%s[%R]...%s",
-                                   BKE_idtype_idcode_to_name_plural(GS(id->name)),
+                                   BKE_idtype_idcode_to_name_plural(id->id_type()),
                                    tmp_str,
                                    RNA_struct_identifier(self->ptr->type));
       }
@@ -1125,7 +1149,7 @@ static PyObject *pyrna_struct_repr(BPy_StructRNA *self)
     else {
       /* Can't find the path, print something useful as a fallback. */
       ret = PyUnicode_FromFormat("bpy.data.%s[%R]...%s",
-                                 BKE_idtype_idcode_to_name_plural(GS(id->name)),
+                                 BKE_idtype_idcode_to_name_plural(id->id_type()),
                                  tmp_str,
                                  RNA_struct_identifier(self->ptr->type));
     }
@@ -1236,7 +1260,7 @@ static PyObject *pyrna_prop_repr_ex(BPy_PropertyRNA *self, const int index_dim, 
     }
     const char *data_delim = ((*path)[0] == '[') ? "" : ".";
     ret = PyUnicode_FromFormat("bpy.data.%s[%R]%s%s",
-                               BKE_idtype_idcode_to_name_plural(GS(real_id->name)),
+                               BKE_idtype_idcode_to_name_plural(real_id->id_type()),
                                tmp_str,
                                data_delim,
                                path->c_str());
@@ -1244,7 +1268,7 @@ static PyObject *pyrna_prop_repr_ex(BPy_PropertyRNA *self, const int index_dim, 
   else {
     /* Can't find the path, print something useful as a fallback. */
     ret = PyUnicode_FromFormat("bpy.data.%s[%R]...%s",
-                               BKE_idtype_idcode_to_name_plural(GS(id->name)),
+                               BKE_idtype_idcode_to_name_plural(id->id_type()),
                                tmp_str,
                                RNA_property_identifier(self->prop));
   }
@@ -5436,7 +5460,7 @@ PyDoc_STRVAR(
     "   :type dst_index: int\n");
 static PyObject *pyrna_prop_collection_idprop_move(BPy_PropertyRNA *self, PyObject *args)
 {
-  int key = 0, pos = 0;
+  int src_index = 0, dst_index = 0;
 
 #ifdef USE_PEDANTIC_WRITE
   if (rna_disallow_writes && rna_id_write_error(&self->ptr.value(), nullptr)) {
@@ -5448,16 +5472,16 @@ static PyObject *pyrna_prop_collection_idprop_move(BPy_PropertyRNA *self, PyObje
                         "i" /* `src_index` */
                         "i" /* `dst_index` */
                         ":move",
-                        &key,
-                        &pos))
+                        &src_index,
+                        &dst_index))
   {
     PyErr_SetString(PyExc_TypeError, "bpy_prop_collection.move(): expected two ints as arguments");
     return nullptr;
   }
 
-  if (!RNA_property_collection_move(&self->ptr.value(), self->prop, key, pos)) {
-    PyErr_SetString(PyExc_TypeError,
-                    "bpy_prop_collection.move() not supported for this collection");
+  eRNAStatus status = RNA_property_collection_move(
+      &self->ptr.value(), self->prop, src_index, dst_index);
+  if (!pyrna_status_ok_or_error(status, "bpy_prop_collection.move")) {
     return nullptr;
   }
 
@@ -6185,7 +6209,8 @@ static PyObject *foreach_getset(BPy_PropertyRNA *self, PyObject *args, int set)
     buffer_is_compat = false;
     if (PyObject_CheckBuffer(seq)) {
       Py_buffer buf;
-      if (PyObject_GetBuffer(seq, &buf, PyBUF_ND | PyBUF_FORMAT) == -1) {
+      /* Writable, the buffer is filled in below. */
+      if (PyObject_GetBuffer(seq, &buf, PyBUF_ND | PyBUF_FORMAT | PyBUF_WRITABLE) == -1) {
         /* Request failed. A `PyExc_BufferError` will have been raised,
          * so clear it to silently fall back to accessing as a sequence. */
         PyErr_Clear();
@@ -6375,7 +6400,9 @@ static PyObject *pyprop_array_foreach_getset(BPy_PropertyArrayRNA *self,
   }
 
   Py_buffer buf;
-  if (PyObject_GetBuffer(seq, &buf, PyBUF_ND | PyBUF_FORMAT) == -1) {
+  /* Writable when reading into the buffer, `do_set` only reads from it. */
+  if (PyObject_GetBuffer(seq, &buf, PyBUF_ND | PyBUF_FORMAT | (do_set ? 0 : PyBUF_WRITABLE)) == -1)
+  {
     PyErr_Clear();
 
     switch (prop_type) {
@@ -10639,6 +10666,15 @@ static PyObject *pyrna_register_class(PyObject * /*self*/, PyObject *py_class)
         srna_new, RNA_property_identifier(parent_name_prop));
     if (name_prop && name_prop != parent_name_prop && RNA_property_type(name_prop) == PROP_STRING)
     {
+      RNA_def_struct_name_property(srna_new, name_prop, true);
+    }
+    else if (name_prop == RNA_struct_name_property(RNA_PropertyGroup)) {
+      /* The `name` property inherited from 'PropertyGroup' is read-only, to avoid issues
+       * with types that have a fixed set of ID properties. For backwards compatibility,
+       * add a writable property here. */
+      name_prop = RNA_def_property(srna_new, "name", PROP_STRING, PROP_NONE);
+      RNA_def_property_ui_text(name_prop, "Name", "Unique name used in the code and scripting");
+      RNA_def_property_duplicate_pointers(srna_new, name_prop);
       RNA_def_struct_name_property(srna_new, name_prop, true);
     }
   }

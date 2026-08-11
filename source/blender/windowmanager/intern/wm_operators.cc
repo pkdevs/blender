@@ -1934,6 +1934,11 @@ std::optional<wmOperatorStatus> WM_operator_IME_insert_maybe(bContext *C,
   if (win == nullptr) {
     return std::nullopt;
   }
+  if (IS_EVENT_IME_ANY(event->type)) {
+    /* Keep the composition preview current, including #WM_IME_COMPOSITE_END which must
+     * erase it (canceling inserts no text so nothing else redraws). */
+    ED_region_tag_redraw(CTX_wm_region(C));
+  }
   if (event->type == WM_IME_COMPOSITE_EVENT) {
     const wmIMEData *ime_data = win->runtime->ime_data;
     if (ime_data && !ime_data->result.empty()) {
@@ -2519,7 +2524,7 @@ static void WM_OT_console_toggle(wmOperatorType *ot)
 
 wmPaintCursor *WM_paint_cursor_activate(short space_type,
                                         short region_type,
-                                        bool (*poll)(bContext *C),
+                                        wmPaintCursorPoll poll,
                                         wmPaintCursorDraw draw,
                                         void *customdata)
 {
@@ -2552,7 +2557,9 @@ bool WM_paint_cursor_end(wmPaintCursor *handle)
   return false;
 }
 
-void WM_paint_cursor_remove_by_type(wmWindowManager *wm, void *draw_fn, void (*free)(void *))
+void WM_paint_cursor_remove_by_type(wmWindowManager *wm,
+                                    wmPaintCursorDraw draw_fn,
+                                    void (*free)(void *))
 {
   for (wmPaintCursor &pc : wm->runtime->paintcursors.items_mutable()) {
     if (pc.draw == draw_fn) {
@@ -3563,8 +3570,10 @@ static wmOperatorStatus radial_control_modal(bContext *C, wmOperator *op, const 
     wmWindowManager *wm = CTX_wm_manager(C);
     if (wm->op_undo_depth == 0) {
       ID *id = rc->ptr.owner_id;
-      if (ED_undo_is_legacy_compatible_for_property(C, id, rc->ptr, *rc->prop)) {
-        ED_undo_push(C, op->type->name);
+      std::optional<UndoEncodeHints> undo_hints_or_none =
+          ED_undo_is_legacy_compatible_for_property(C, id, rc->ptr, *rc->prop);
+      if (undo_hints_or_none) {
+        ED_undo_push(C, op->type->name, *undo_hints_or_none);
       }
     }
   }
