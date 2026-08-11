@@ -3290,7 +3290,7 @@ static PointerRNA rna_SceneCompositorEffectProperties_get(PointerRNA *effect_ptr
 {
   SceneCompositorEffect *effect = effect_ptr->data_as<SceneCompositorEffect>();
   if (!effect->node_group) {
-    return PointerRNA_NULL;
+    return {};
   }
   return RNA_pointer_create_discrete(
       effect_ptr->owner_id, RNA_SceneCompositorEffectProperties, effect);
