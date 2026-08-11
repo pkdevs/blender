@@ -66,14 +66,13 @@ struct LocalData {
  *
  * The effect of `depth` on vertices below the plane is analogous.
  */
-static void calc_local_distances(const Brush &brush,
+static void calc_local_distances(const float roundness,
                                  const float height,
                                  const float depth,
                                  const MutableSpan<float3> local_positions,
                                  const MutableSpan<float> distances)
 {
   PRF_scope(ProfileCategory::Editor);
-  const float roundness = brush.tip_roundness;
   const float roundness_rcp = math::safe_rcp(roundness);
   const float hardness = 1.0f - roundness;
   const float2 hardness_vec(hardness);
@@ -248,7 +247,7 @@ static void calc_faces(const Depsgraph &depsgraph,
 
   tls.distances.resize(verts.size());
   const MutableSpan<float> distances = tls.distances;
-  calc_local_distances(brush, height, depth, local_positions, distances);
+  calc_local_distances(brush.tip_roundness, height, depth, local_positions, distances);
   filter_distances_with_radius(1.0f, distances, factors);
 
   apply_hardness_to_distances(1.0f, cache.hardness, distances);
@@ -310,7 +309,7 @@ static void calc_grids(const Depsgraph &depsgraph,
 
   tls.distances.resize(positions.size());
   const MutableSpan<float> distances = tls.distances;
-  calc_local_distances(brush, height, depth, local_positions, distances);
+  calc_local_distances(brush.tip_roundness, height, depth, local_positions, distances);
   filter_distances_with_radius(1.0f, distances, factors);
 
   apply_hardness_to_distances(1.0f, cache.hardness, distances);
@@ -370,7 +369,7 @@ static void calc_bmesh(const Depsgraph &depsgraph,
 
   tls.distances.resize(positions.size());
   const MutableSpan<float> distances = tls.distances;
-  calc_local_distances(brush, height, depth, local_positions, distances);
+  calc_local_distances(brush.tip_roundness, height, depth, local_positions, distances);
   filter_distances_with_radius(1.0f, distances, factors);
 
   apply_hardness_to_distances(1.0f, cache.hardness, distances);
