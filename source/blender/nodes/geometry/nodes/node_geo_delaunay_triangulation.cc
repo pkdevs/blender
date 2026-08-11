@@ -580,7 +580,8 @@ static Array<TriangulationResult> calc_triangulations(const Mesh *mesh,
           const meshintersect::CDT_input<double> cdt_input{
               .vert = cdt_verts,
               .face_offsets = cdt_faces,
-              .face_vert_indices = cdt_face_vert_indices};
+              .face_vert_indices = cdt_face_vert_indices,
+              .needed_ids = CDT_ORIG_VERTS | CDT_INTERSECTED_EDGES};
 
           results[i].cdt_result = meshintersect::delaunay_2d_calc(cdt_input, output_type);
 
