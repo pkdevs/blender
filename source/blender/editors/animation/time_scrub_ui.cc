@@ -280,11 +280,16 @@ static void draw_current_frame(const Scene *scene,
 
   float fg_color[4];
   ui::theme::get_color_4fv(TH_CFRAME, fg_color);
+  /* Forcing alpha to 1 for the playhead box itself. Only the stalk should have transparency. */
+  fg_color[3] = 1.0;
+
+  float stalk_color[4];
+  ui::theme::get_color_4fv(TH_CFRAME, stalk_color);
   float bg_color[4];
   ui::theme::get_color_shade_4fv(TH_BACK, -20, bg_color);
 
   if (display_stalk) {
-    draw_playhead_stalk(region_x, dimensions, fg_color, bg_color);
+    draw_playhead_stalk(region_x, dimensions, stalk_color, bg_color);
   }
 
   draw_playhead_box(region_x, frame_str, scrub_region_rect, dimensions, fg_color, bg_color);
