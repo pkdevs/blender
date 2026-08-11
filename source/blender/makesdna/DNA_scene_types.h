@@ -715,6 +715,8 @@ enum eRender_Flag : short {
   SCER_ALLOW_PREROLL = 1 << 2,
   /** Show/use sub-frames (for checking motion blur). */
   SCER_SHOW_SUBFRAME = 1 << 3,
+  /** Wrap the playhead within the playback range while navigating timeline. */
+  SCER_WRAP_TIMELINE_NAVIGATION = 1 << 4,
 };
 ENUM_OPERATORS(eRender_Flag)
 
@@ -2739,6 +2741,9 @@ struct SceneEEVEE {
 
   float overscan = 3.0f;
   float light_threshold = 0.01f;
+
+  float time_limit = 0.0f;
+  char _pad2[12] = {};
 };
 
 struct SceneGpencil {

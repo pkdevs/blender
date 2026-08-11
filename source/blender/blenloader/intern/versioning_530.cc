@@ -91,7 +91,7 @@ void do_versions_after_linking_530(FileData * /*fd*/, Main *bmain)
         bmain, NTREE_GEOMETRY, "GeometryNodeSetGreasePencilColor", 5, 1, 6);
   }
 
-  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 503, 11)) {
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 503, 12)) {
     for (Scene &scene : bmain->scenes) {
       compositing_node_group_to_effect(*bmain, scene);
     }
@@ -260,6 +260,40 @@ void blo_do_versions_530(FileData * /*fd*/, Library * /*lib*/, Main *bmain)
   }
 
   if (!MAIN_VERSION_FILE_ATLEAST(bmain, 503, 11)) {
+    /* This code formerly ran whenever entering Sculpt Mode, it is unlikely that there are any
+     * files that have these settings with invalid values, but since these values have never been
+     * set in versioning, perform this
+     */
+    for (Scene &scene : bmain->scenes) {
+      Sculpt *sd = scene.toolsettings->sculpt;
+      if (sd == nullptr) {
+        continue;
+      }
+
+      const Sculpt defaults = {};
+      if (sd->detail_percent == 0.0f) {
+        sd->detail_percent = defaults.detail_percent;
+      }
+      if (sd->constant_detail == 0.0f) {
+        sd->constant_detail = defaults.constant_detail;
+      }
+      if (sd->detail_size == 0.0f) {
+        sd->detail_size = defaults.detail_size;
+      }
+
+      if (!sd->paint.tile_offset[0]) {
+        sd->paint.tile_offset[0] = 1.0f;
+      }
+      if (!sd->paint.tile_offset[1]) {
+        sd->paint.tile_offset[1] = 1.0f;
+      }
+      if (!sd->paint.tile_offset[2]) {
+        sd->paint.tile_offset[2] = 1.0f;
+      }
+    }
+  }
+
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 503, 12)) {
     for (bNodeTree &node_group : bmain->nodetrees) {
       if (node_group.type != NTREE_COMPOSIT) {
         continue;
