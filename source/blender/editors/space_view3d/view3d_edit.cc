@@ -562,7 +562,7 @@ void VIEW3D_OT_view_roll_set(wmOperatorType *ot)
   PropertyRNA *prop;
 
   /* identifiers */
-  ot->name = "Set Roll";
+  ot->name = "Set View Roll";
   ot->description = "Set the view roll angle";
   ot->idname = "VIEW3D_OT_view_roll_set";
 
