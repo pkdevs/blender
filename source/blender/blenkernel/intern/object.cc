@@ -1720,11 +1720,11 @@ static void object_update_from_subsurf_ccg(Object *object)
     /* Object was never evaluated, so can not have CCG subdivision surface. */
     return;
   }
-  /* Check for GeometryOwnershipType::ReadOnly which may reference the original mesh from before
-   * modifier evaluation. In that case the mesh can't be read, because it's a separately owned ID
-   * that most likely comes from the object's copy-on-eval modifier input mesh which the depsgraph
-   * free destroys in an undefined order. For non read-only ownership types, the GeometrySet will
-   * have a user for the mesh, so it can be safely read here. */
+  /* Check for owns_direct_data() which may reference the original mesh from before modifier
+   * evaluation. In that case the mesh can't be read, because it's a separately owned ID that most
+   * likely comes from the object's copy-on-eval modifier input mesh which the depsgraph free
+   * destroys in an undefined order. For non read-only ownership types, the GeometrySet will have a
+   * user for the mesh, so it can be safely read here. */
   const auto *mesh_component = geometry_set_eval->get_component<bke::MeshComponent>();
   if (mesh_component == nullptr || !mesh_component->owns_direct_data()) {
     return;
