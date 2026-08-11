@@ -1484,9 +1484,16 @@ static wmOperatorStatus object_update_all_paths_exec(bContext *C, wmOperator * /
   }
   Vector<Object *> visible_objects;
   CTX_DATA_BEGIN (C, Object *, ob, visible_objects) {
+    visible_objects.append(ob);
     if (ob->mpath) {
-      visible_objects.append(ob);
       ed::motionpath::tag_for_recalc(*ob->mpath);
+    }
+    if (ob->pose) {
+      for (bPoseChannel &pchan : ob->pose->chanbase) {
+        if (pchan.mpath) {
+          ed::motionpath::tag_for_recalc(*pchan.mpath);
+        }
+      }
     }
   }
   CTX_DATA_END;
