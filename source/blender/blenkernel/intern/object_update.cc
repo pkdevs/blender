@@ -12,10 +12,10 @@
 #include "DNA_modifier_types.h"
 #include "DNA_scene_types.h"
 
-#include "BLI_listbase.h"
-#include "BLI_math_matrix.h"
-#include "BLI_math_vector.h"
-#include "BLI_string.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_vector_c.hh"
+#include "BLI_string.hh"
 
 #include "BKE_armature.hh"
 #include "BKE_constraint.h"
@@ -446,10 +446,8 @@ void BKE_object_eval_eval_base_flags(Depsgraph *depsgraph,
   ViewLayer *view_layer = static_cast<ViewLayer *>(
       BLI_findlink(&scene->view_layers, view_layer_index));
   BLI_assert(view_layer != nullptr);
-  BLI_assert(view_layer->object_bases_array != nullptr);
   BLI_assert(base_index >= 0);
-  BLI_assert(base_index < MEM_allocN_len(view_layer->object_bases_array) / sizeof(Base *));
-  Base *base = view_layer->object_bases_array[base_index];
+  Base *base = view_layer->object_bases_array()[base_index];
   BLI_assert(base->object == object);
 
   DEG_debug_print_eval(depsgraph, __func__, object->id.name, object);

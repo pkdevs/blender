@@ -58,9 +58,6 @@ IndexMask pbvh_gather_generic(const Depsgraph &depsgraph,
                               const Brush &brush,
                               IndexMaskMemory &memory);
 
-void mode_enter_generic(
-    Main &bmain, Depsgraph &depsgraph, Scene &scene, Object &ob, eObjectMode mode_flag);
-void mode_exit_generic(Object &ob, eObjectMode mode_flag);
 bool mode_toggle_poll_test(bContext *C);
 
 void smooth_brush_toggle_off(Paint *paint, StrokeCache *cache);
@@ -68,7 +65,8 @@ void smooth_brush_toggle_on(Main *bmain, Paint *paint, StrokeToggleSettings &tog
 
 void create_stroke_cache();
 /** Initialize the stroke cache variants from operator properties. */
-void update_cache_variants(const Depsgraph &depsgraph, VPaint &vp, Object &ob, PointerRNA *ptr);
+void update_cache_variants(
+    Depsgraph &depsgraph, ViewContext &vc, VPaint &vp, Object &ob, Base &base, PointerRNA *ptr);
 /** Initialize the stroke cache invariants from operator properties. */
 void update_cache_invariants(VPaint &vp, SculptSession &ss, wmOperator *op, const float mval[2]);
 void last_stroke_update(const float location[3], Paint &paint);

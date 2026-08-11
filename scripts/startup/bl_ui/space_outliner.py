@@ -261,7 +261,7 @@ class OUTLINER_MT_collection(Menu):
         space = context.space_data
 
         layout.operator("outliner.collection_new", text="New", text_ctxt=i18n_contexts.id_collection).nested = True
-        layout.operator("outliner.collection_duplicate", text="Duplicate Collection")
+        layout.operator("outliner.collection_duplicate", text="Duplicate Collection", icon='DUPLICATE')
         layout.operator("outliner.collection_duplicate_linked", text="Duplicate Linked")
         layout.operator("outliner.id_copy", text="Copy", icon='COPYDOWN')
         layout.operator("outliner.id_paste", text="Paste", icon='PASTEDOWN')
@@ -470,7 +470,6 @@ class OUTLINER_PT_options_search(Panel):
 
     @classmethod
     def poll(cls, context):
-        st = context.space_data
         space = context.space_data
         display_mode = space.display_mode
 
@@ -484,7 +483,6 @@ class OUTLINER_PT_options_search(Panel):
     def draw(self, context):
         layout = self.layout
         space = context.space_data
-        display_mode = space.display_mode
 
         col = layout.column(align=True)
         col.prop(space, "use_filter_complete", text="Exact Match")
@@ -506,7 +504,6 @@ class OUTLINER_PT_options_filter(Panel):
     def draw(self, context):
         layout = self.layout
         space = context.space_data
-        display_mode = space.display_mode
         col = layout.column(align=True)
 
         row = col.row()

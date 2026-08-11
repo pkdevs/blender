@@ -16,13 +16,13 @@
 #include "DNA_brush_types.h"
 #include "DNA_scene_types.h"
 
-#include "BLI_listbase.h"
-#include "BLI_math_color.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_color_c.hh"
 #include "BLI_math_matrix.hh"
 #include "BLI_math_vector.hh"
-#include "BLI_rect.h"
-#include "BLI_string_utf8.h"
-#include "BLI_utildefines.h"
+#include "BLI_rect.hh"
+#include "BLI_string_utf8.hh"
+#include "BLI_utildefines.hh"
 
 #include "BLT_translation.hh"
 
@@ -333,7 +333,7 @@ static float3 paint_sample_color(bContext *C,
       sampled_color = sample_texture_paint_color(*depsgraph, *scene, vc, ob, mval);
     }
     else if (ELEM(mode, PaintMode::Sculpt, PaintMode::Vertex)) {
-      BKE_sculpt_update_object_for_edit(depsgraph, ob, false);
+      BKE_sculptsession_update_for_edit(depsgraph, ob, false);
       sampled_color = sample_mesh_attribute_color(vc, *ob, mval);
     }
   }

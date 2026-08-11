@@ -21,12 +21,12 @@
 #include "DNA_sdna_type_ids.hh"
 #include "DNA_texture_types.h"
 
-#include "BLI_listbase.h"
-#include "BLI_math_rotation.h"
-#include "BLI_string.h"
-#include "BLI_string_utf8.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_rotation_c.hh"
+#include "BLI_string.hh"
+#include "BLI_string_utf8.hh"
 #include "BLI_string_utils.hh"
-#include "BLI_utildefines.h"
+#include "BLI_utildefines.hh"
 
 #include "BLT_translation.hh"
 
@@ -1609,8 +1609,12 @@ int BKE_linestyle_thickness_modifier_remove(FreestyleLineStyle *linestyle, LineS
     case LS_MODIFIER_NOISE:
       break;
     case LS_MODIFIER_CREASE_ANGLE:
+      BKE_curvemapping_free(
+          (reinterpret_cast<LineStyleThicknessModifier_CreaseAngle *>(m))->curve);
       break;
     case LS_MODIFIER_CURVATURE_3D:
+      BKE_curvemapping_free(
+          (reinterpret_cast<LineStyleThicknessModifier_Curvature_3D *>(m))->curve);
       break;
     default:
       break;

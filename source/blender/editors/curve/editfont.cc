@@ -15,15 +15,15 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_fileops.h"
-#include "BLI_listbase.h"
-#include "BLI_math_geom.h"
-#include "BLI_math_matrix.h"
-#include "BLI_math_vector.h"
+#include "BLI_fileops.hh"
+#include "BLI_listbase.hh"
+#include "BLI_math_geom_c.hh"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_vector_c.hh"
 #include "BLI_path_utils.hh"
-#include "BLI_string.h"
-#include "BLI_string_cursor_utf8.h"
-#include "BLI_utildefines.h"
+#include "BLI_string.hh"
+#include "BLI_string_cursor_utf8.hh"
+#include "BLI_utildefines.hh"
 
 #include "DNA_curve_types.h"
 #include "DNA_object_types.h"
@@ -42,7 +42,7 @@
 #include "BKE_report.hh"
 #include "BKE_vfont.hh"
 
-#include "BLI_string_utf8.h"
+#include "BLI_string_utf8.hh"
 
 #include "BLT_translation.hh"
 
@@ -1731,6 +1731,12 @@ static const EnumPropertyItem delete_type_items[] = {
 
 static wmOperatorStatus delete_exec(bContext *C, wmOperator *op)
 {
+#ifdef WITH_INPUT_IME
+  if (const std::optional<wmOperatorStatus> status = WM_operator_IME_edit_maybe(C)) {
+    return *status;
+  }
+#endif
+
   Object *obedit = CTX_data_edit_object(C);
   Curve *cu = id_cast<Curve *>(obedit->data);
   EditFont *ef = cu->editfont;
@@ -1929,6 +1935,14 @@ static wmOperatorStatus insert_text_invoke(bContext *C, wmOperator *op, const wm
     }
     return OPERATOR_PASS_THROUGH;
   }
+
+#ifdef WITH_INPUT_IME
+  if (const std::optional<wmOperatorStatus> status = WM_operator_IME_insert_maybe(
+          C, op, event, "text"))
+  {
+    return *status;
+  }
+#endif
 
   /* Tab typically exit edit-mode, but we allow it to be typed using modifier keys. */
   if (event->type == EVT_TABKEY) {

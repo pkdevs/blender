@@ -13,15 +13,15 @@
 
 #include "BLI_array.hh"
 #include "BLI_function_ref.hh"
-#include "BLI_heap.h"
-#include "BLI_listbase.h"
-#include "BLI_math_bits.h"
-#include "BLI_math_geom.h"
-#include "BLI_math_matrix.h"
-#include "BLI_math_rotation.h"
-#include "BLI_math_vector.h"
-#include "BLI_rand.h"
-#include "BLI_utildefines_stack.h"
+#include "BLI_heap.hh"
+#include "BLI_listbase.hh"
+#include "BLI_math_bits.hh"
+#include "BLI_math_geom_c.hh"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_rotation_c.hh"
+#include "BLI_math_vector_c.hh"
+#include "BLI_rand_c.hh"
+#include "BLI_utildefines_stack.hh"
 #include "BLI_vector.hh"
 
 #include "BKE_attribute.h"
@@ -3038,10 +3038,18 @@ void EDBM_selectmode_set(BMEditMesh *em, const short selectmode)
   }
 
   if (em->bm->uv_select_sync_valid) {
-    /* NOTE(@ideasman42): this could/should use the "sticky" tool setting.
-     * Although in practice it's OK to assume "connected" sticky in this case. */
-    const int cd_loop_uv_offset = CustomData_get_offset(&em->bm->ldata, CD_PROP_FLOAT2);
-    BM_mesh_uvselect_mode_flush_update(em->bm, selectmode_prev, selectmode, cd_loop_uv_offset);
+    if (em->selectmode & (SCE_SELECT_VERTEX | SCE_SELECT_EDGE)) {
+      /* NOTE(@ideasman42): this could/should use the "sticky" tool setting.
+       * Although in practice it's OK to assume "connected" sticky in this case. */
+      const int cd_loop_uv_offset = CustomData_get_offset(&em->bm->ldata, CD_PROP_FLOAT2);
+      BM_mesh_uvselect_mode_flush_update(em->bm, selectmode_prev, selectmode, cd_loop_uv_offset);
+    }
+    else {
+      /* Always clear for face-only selection, because any discrepancy
+       * between UV/Viewport selection caused by de-selecting verts/edges
+       * can't be represented in face-only selection mode. */
+      BM_mesh_uvselect_clear(em->bm);
+    }
   }
 }
 

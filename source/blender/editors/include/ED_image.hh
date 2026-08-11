@@ -171,6 +171,7 @@ bool ED_space_image_maskedit_mask_poll(bContext *C);
 bool ED_space_image_maskedit_mask_visible_splines_poll(bContext *C);
 
 bool ED_space_image_cursor_poll(bContext *C);
+bool ED_space_image_region_cursor_poll(bContext *C);
 
 /**
  * Used by node view too.
@@ -242,6 +243,5 @@ ListBaseT<ImageFrameRange> ED_image_filesel_detect_sequences(StringRefNull blend
                                                              bool detect_udim);
 
 bool ED_image_tools_paint_poll(bContext *C);
-void ED_paint_cursor_start(Paint *paint, bool (*poll)(bContext *C));
 
 }  // namespace blender

@@ -14,15 +14,15 @@
 #include "BLI_array.hh"
 #include "BLI_bounds.hh"
 #include "BLI_convexhull_2d.hh"
-#include "BLI_ghash.h"
-#include "BLI_math_base_safe.h"
-#include "BLI_math_geom.h"
-#include "BLI_math_matrix.h"
-#include "BLI_math_rotation.h"
-#include "BLI_math_vector.h"
-#include "BLI_polyfill_2d.h"
-#include "BLI_polyfill_2d_beautify.h"
-#include "BLI_rand.h"
+#include "BLI_ghash.hh"
+#include "BLI_math_base_safe.hh"
+#include "BLI_math_geom_c.hh"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_rotation_c.hh"
+#include "BLI_math_vector_c.hh"
+#include "BLI_polyfill_2d.hh"
+#include "BLI_polyfill_2d_beautify.hh"
+#include "BLI_rand_c.hh"
 #include "BLI_vector.hh"
 
 #ifdef WITH_UV_SLIM
@@ -5365,8 +5365,6 @@ void uv_parametrizer_slim_solve(ParamHandle *phandle,
   slim_flush_uvs(phandle, mt, count_changed, count_failed);
   slim_free_matrix_transfer(phandle);
 #else
-  *count_changed = 0;
-  *count_failed = 0;
   UNUSED_VARS(phandle, slim_options, use_original_bounds, count_changed, count_failed);
 #endif /* !WITH_UV_SLIM */
 }

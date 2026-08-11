@@ -264,9 +264,17 @@ const char *ColorSpaceManager::colorspace_interop_id(ustring colorspace)
                                    "srgb_p3d65_scene",
                                    "g22_adobergb_scene"};
       for (const char *interop_id : interop_ids) {
+#  if OCIO_VERSION_MAJOR == 2 && OCIO_VERSION_MINOR == 2
+        for (int i = 0; i < space->getNumAliases(); i++) {
+          if (string_iequals(space->getAlias(i), interop_id)) {
+            return interop_id;
+          }
+        }
+#  else
         if (space->hasAlias(interop_id)) {
           return interop_id;
         }
+#  endif
       }
     }
   }
@@ -299,9 +307,37 @@ ustring ColorSpaceManager::detect_known_colorspace(ustring colorspace,
       colorspace = file_colorspace;
     }
     else {
-      const char *role_colorspace = (is_float) ? config->getRoleColorSpace("default_float") :
-                                                 config->getRoleColorSpace("default_byte");
-      role_colorspace = (role_colorspace) ? role_colorspace : config->getRoleColorSpace("default");
+#  if OCIO_VERSION_MAJOR == 2 && OCIO_VERSION_MINOR == 2
+      /* Roles are looked up by index, where -1 means the role is not defined in the config. */
+      int default_float_id = -1;
+      int default_byte_id = -1;
+      int default_id = -1;
+      for (int i = 0; i < config->getNumRoles(); i++) {
+        const char *role_name = config->getRoleName(i);
+        if (strcmp(role_name, "default_float") == 0) {
+          default_float_id = i;
+        }
+        else if (strcmp(role_name, "default_byte") == 0) {
+          default_byte_id = i;
+        }
+        else if (strcmp(role_name, "default") == 0) {
+          default_id = i;
+        }
+      }
+      const int role_id = (is_float) ? default_float_id : default_byte_id;
+      const char *role_colorspace = (role_id != -1) ? config->getRoleColorSpace(role_id) : nullptr;
+      if (role_colorspace == nullptr && default_id != -1) {
+        role_colorspace = config->getRoleColorSpace(default_id);
+      }
+#  else
+      const char *role_name = (is_float) ? "default_float" : "default_byte";
+      const char *role_colorspace = config->hasRole(role_name) ?
+                                        config->getRoleColorSpace(role_name) :
+                                        nullptr;
+      if (role_colorspace == nullptr && config->hasRole("default")) {
+        role_colorspace = config->getRoleColorSpace("default");
+      }
+#  endif
       if (role_colorspace) {
         colorspace = role_colorspace;
       }
@@ -634,6 +670,7 @@ void ColorSpaceManager::to_scene_linear(ustring colorspace,
   (void)y_stride;
   (void)is_rgba;
   (void)compress_as_srgb;
+  (void)ignore_alpha;
 #endif
 }
 
@@ -791,7 +828,7 @@ Transform ColorSpaceManager::get_xyz_to_scene_linear_rgb()
   return xyz_to_rgb;
 }
 
-const std::string &ColorSpaceManager::get_xyz_to_scene_linear_rgb_string()
+std::string ColorSpaceManager::get_xyz_to_scene_linear_rgb_string()
 {
 #ifdef WITH_OCIO
   /* Clear the cached hash if the scene linear colorspace changed. */
@@ -827,6 +864,7 @@ const std::string &ColorSpaceManager::get_xyz_to_scene_linear_rgb_string()
 
 const char *ColorSpaceManager::get_scene_linear_interop_id(const bool srgb_encoded)
 {
+#ifdef WITH_OCIO
   check_invalidate_caches();
 
   const thread_scoped_lock cache_lock(cache_scene_linear_interop_id_mutex);
@@ -855,6 +893,10 @@ const char *ColorSpaceManager::get_scene_linear_interop_id(const bool srgb_encod
   }
 
   return (srgb_encoded) ? cache_scene_linear_srgb_interop_id : cache_scene_linear_interop_id;
+#else
+  (void)srgb_encoded;
+  return "lin_rec709_scene";
+#endif
 }
 
 /* Template instantiations so we don't have to inline functions. */

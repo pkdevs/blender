@@ -11,8 +11,8 @@
 
 #include "BLI_color.hh"
 #include "BLI_enumerable_thread_specific.hh"
-#include "BLI_hash.h"
-#include "BLI_math_color_blend.h"
+#include "BLI_hash_c.hh"
+#include "BLI_math_color_blend.hh"
 #include "BLI_math_matrix.hh"
 #include "BLI_math_vector.hh"
 #include "BLI_vector.hh"
@@ -26,6 +26,7 @@
 #include "BKE_object_types.hh"
 #include "BKE_paint.hh"
 #include "BKE_paint_bvh.hh"
+#include "BKE_paint_types.hh"
 
 #include "IMB_colormanagement.hh"
 
@@ -40,17 +41,6 @@
 #include <cmath>
 
 namespace blender::ed::sculpt_paint::color {
-
-static void calc_local_positions(const float4x4 &mat,
-                                 const Span<int> verts,
-                                 const Span<float3> positions,
-                                 const MutableSpan<float3> local_positions)
-{
-  PRF_scope(ProfileCategory::Editor);
-  for (const int i : verts.index_range()) {
-    local_positions[i] = math::transform_point(mat, positions[verts[i]]);
-  }
-}
 
 template<typename Func> inline void to_static_color_type(const CPPType &type, const Func &func)
 {
@@ -383,9 +373,15 @@ static void do_paint_brush_task(const Depsgraph &depsgraph,
 
   tls.distances.resize(verts.size());
   const MutableSpan<float> distances = tls.distances;
-  if (brush.tip_roundness < 1.0f) {
+  if (BKE_brush_has_cube_tip(&brush, PaintMode::Sculpt)) {
     tls.positions.resize(verts.size());
-    calc_local_positions(mat, verts, vert_positions, tls.positions);
+    calc_local_positions(vert_positions,
+                         verts,
+                         mat,
+                         cache.location_symm,
+                         cache.view_normal_symm,
+                         eBrushFalloffShape(brush.falloff_shape),
+                         tls.positions);
     calc_brush_cube_distances<float3>(brush, tls.positions, distances);
     radius = 1.0f;
   }
@@ -590,7 +586,7 @@ void do_paint_brush(const Depsgraph &depsgraph,
 
   /* If the brush is round the tip does not need to be aligned to the surface, so this saves a
    * whole iteration over the affected nodes. */
-  if (brush.tip_roundness < 1.0f) {
+  if (BKE_brush_has_cube_tip(&brush, PaintMode::Sculpt)) {
     cube_tip_init(sd, ob, brush, mat.ptr());
 
     if (is_zero_m4(mat.ptr())) {
