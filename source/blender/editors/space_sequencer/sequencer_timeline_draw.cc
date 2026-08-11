@@ -216,7 +216,7 @@ static rctf strip_bounds_get(const Scene *scene,
   bounds.ymin = strip->channel + STRIP_OFSBOTTOM;
   bounds.ymax = strip->channel + STRIP_OFSTOP;
 
-  const float pixely = BLI_rctf_size_y(&v2d->cur) / (BLI_rcti_size_y(&v2d->mask) + 1);
+  const float pixely = ui::view2d_pixel_size_get_y(v2d);
   if (strip->is_same_channel_transition()) {
     if (strip_header_poll(sseq, pixely, bounds.ymax - bounds.ymin)) {
       bounds.ymax -= strip_header_size_get(pixely);

@@ -53,8 +53,8 @@ static bool get_retiming_overlay_visibility(const Scene *scene,
                                             const Strip *strip)
 {
   float2 threshold{15 * UI_SCALE_FAC, 25 * UI_SCALE_FAC};
-  float pixelx = BLI_rctf_size_x(&v2d->cur) / (BLI_rcti_size_x(&v2d->mask) + 1);
-  float pixely = BLI_rctf_size_y(&v2d->cur) / (BLI_rcti_size_y(&v2d->mask) + 1);
+  float pixelx = ui::view2d_pixel_size_get_x(v2d);
+  float pixely = ui::view2d_pixel_size_get_y(v2d);
 
   float top = strip->channel + STRIP_OFSTOP;
   float bottom = strip->channel + STRIP_OFSBOTTOM;
