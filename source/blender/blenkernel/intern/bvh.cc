@@ -7,7 +7,6 @@
 #include "BLI_kdopbvh.hh"
 #include "BLI_math_geom_c.hh"
 #include "BLI_math_vector.hh"
-#include "BLI_simd.hh"
 
 #include "DNA_mesh_types.h"
 
@@ -23,13 +22,14 @@
 
 #endif /* WITH_EMBREE */
 
+/**
+ * \note Embree recommends enabling flush-to-zero and denormals-are-zero. That is done for all
+ * threads in #BLI_task_scheduler_init.
+ */
+
 namespace blender::bke::bvh {
 
-Tree::Tree() {
-#ifdef WITH_EMBREE
-// SIMD_SET_FLUSH_TO_ZERO;
-#endif
-};
+Tree::Tree() = default;
 
 Tree::Tree(Tree &&other)
 {
