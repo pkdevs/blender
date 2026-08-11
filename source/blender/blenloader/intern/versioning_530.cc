@@ -192,41 +192,27 @@ void blo_do_versions_530(FileData * /*fd*/, Library * /*lib*/, Main *bmain)
   }
 
   if (!MAIN_VERSION_FILE_ATLEAST(bmain, 503, 9)) {
-    for (Mesh &mesh : bmain->meshes) {
-      const AttributeOwner owner = AttributeOwner::from_id(&mesh.id);
-      if (mesh.attributes_active_index >= owner.get_storage()->count() ||
-          !bke::allow_procedural_attribute_access(
-              owner.get_storage()->at_index(mesh.attributes_active_index).name()))
+    auto validate_active_index_fn = [](const AttributeOwner &owner, int active_index) -> int {
+      const bke::AttributeStorage *storage = owner.get_storage();
+      if ((active_index < 0) || (active_index >= storage->count()) ||
+          !bke::allow_procedural_attribute_access(storage->at_index(active_index).name()))
       {
-        mesh.attributes_active_index = -1;
+        return -1;
       }
+      return active_index;
+    };
+
+    for (Mesh &mesh : bmain->meshes) {
+      mesh.attributes_active_index = validate_active_index_fn(AttributeOwner::from_id(&mesh.id), mesh.attributes_active_index);
     }
     for (Curves &curves : bmain->hair_curves) {
-      const AttributeOwner owner = AttributeOwner::from_id(&curves.id);
-      if (curves.geometry.attributes_active_index >= owner.get_storage()->count() ||
-          !bke::allow_procedural_attribute_access(
-              owner.get_storage()->at_index(curves.geometry.attributes_active_index).name()))
-      {
-        curves.geometry.attributes_active_index = -1;
-      }
+      curves.geometry.attributes_active_index = validate_active_index_fn(AttributeOwner::from_id(&curves.id), curves.geometry.attributes_active_index);
     }
     for (GreasePencil &grease_pencil : bmain->grease_pencils) {
-      const AttributeOwner owner = AttributeOwner::from_id(&grease_pencil.id);
-      if (grease_pencil.attributes_active_index >= owner.get_storage()->count() ||
-          !bke::allow_procedural_attribute_access(
-              owner.get_storage()->at_index(grease_pencil.attributes_active_index).name()))
-      {
-        grease_pencil.attributes_active_index = -1;
-      }
+      grease_pencil.attributes_active_index = validate_active_index_fn(AttributeOwner::from_id(&grease_pencil.id), grease_pencil.attributes_active_index);
     }
     for (PointCloud &pointcloud : bmain->pointclouds) {
-      const AttributeOwner owner = AttributeOwner::from_id(&pointcloud.id);
-      if (pointcloud.attributes_active_index >= owner.get_storage()->count() ||
-          !bke::allow_procedural_attribute_access(
-              owner.get_storage()->at_index(pointcloud.attributes_active_index).name()))
-      {
-        pointcloud.attributes_active_index = -1;
-      }
+     pointcloud.attributes_active_index = validate_active_index_fn(AttributeOwner::from_id(&pointcloud.id), pointcloud.attributes_active_index);
     }
   }
 
