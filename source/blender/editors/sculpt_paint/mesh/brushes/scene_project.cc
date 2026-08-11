@@ -67,15 +67,6 @@ static inline float absolute_min_distance(const float d1, const float d2)
   return math::abs(d1) < math::abs(d2) ? d1 : d2;
 }
 
-static inline void raycast(const float3 &ray_origin,
-                           const float3 &ray_normal,
-                           const bke::bvh::Tree &tree_data,
-                           std::optional<bke::bvh::RayHit> &hit)
-{
-  const bke::bvh::Ray ray(ray_origin, ray_normal);
-  hit = tree_data.ray_intersect(ray);
-}
-
 /**
  * Casts rays from the vertices of the active object to the target object, using the given
  * normal as the ray direction. Updates `best_hit_distances` with the minimum absolute hit distance
@@ -133,7 +124,8 @@ static void object_raycast(const ProjectBrushTarget &project_target,
           continue;
         }
 
-        raycast(ray_origins[i], ray_direction, *project_target.tree_data, hit);
+        hit = project_target.tree_data->ray_intersect(
+            bke::bvh::Ray(ray_origins[i], ray_direction));
         if (hit) {
           best_hit_distances[i] = absolute_min_distance(best_hit_distances[i], hit->distance);
         }
@@ -145,7 +137,8 @@ static void object_raycast(const ProjectBrushTarget &project_target,
             continue;
           }
 
-          raycast(ray_origins[i], -ray_direction, *project_target.tree_data, hit);
+          hit = project_target.tree_data->ray_intersect(
+              bke::bvh::Ray(ray_origins[i], -ray_direction));
           if (hit) {
             best_hit_distances[i] = absolute_min_distance(best_hit_distances[i], -hit->distance);
           }
