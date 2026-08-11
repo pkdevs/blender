@@ -640,22 +640,15 @@ static bool load_data_init_from_operator(seq::LoadData *load_data, bContext *C, 
   return true;
 }
 
-static bool sequencer_add_generic_exec(
-    bContext *C, wmOperator *op, seq::LoadData *load_data, Scene *scene, const int num_strips)
+static bool sequencer_add_generic_exec(bContext *C,
+                                       wmOperator *op,
+                                       seq::LoadData *load_data,
+                                       const int num_strips)
 {
-  Editing *ed = seq::editing_ensure(scene);
-
   const char *error_msg;
   if (!have_free_channels(C, op, num_strips, &error_msg)) {
     BKE_report(op->reports, RPT_ERROR, error_msg);
     return false;
-  }
-
-  /* Keeping the old selection when moving newly imported strips is unexpected and feels buggy,
-   * so we deselect when `move_strips` is set too. */
-  if (RNA_boolean_get(op->ptr, "move_strips") || RNA_boolean_get(op->ptr, "replace_sel")) {
-    deselect_all_strips(scene);
-    seq::retiming_selection_clear(ed);
   }
 
   if (!load_data_init_from_operator(load_data, C, op)) {
@@ -672,6 +665,13 @@ static void seq_load_apply_generic_options(bContext *C, wmOperator *op, Strip *s
 
   if (strip == nullptr) {
     return;
+  }
+
+  /* Keeping the old selection when moving newly imported strips is unexpected and feels buggy,
+   * so we deselect when `move_strips` is set too. */
+  if (RNA_boolean_get(op->ptr, "move_strips") || RNA_boolean_get(op->ptr, "replace_sel")) {
+    deselect_all_strips(scene);
+    seq::retiming_selection_clear(ed);
   }
 
   if (RNA_boolean_get(op->ptr, "replace_sel")) {
@@ -712,6 +712,13 @@ static bool seq_load_apply_generic_options_only_test_overlap(bContext *C,
 
   if (strip == nullptr) {
     return false;
+  }
+
+  /* Keeping the old selection when moving newly imported strips is unexpected and feels buggy,
+   * so we deselect when `move_strips` is set too. */
+  if (RNA_boolean_get(op->ptr, "move_strips") || RNA_boolean_get(op->ptr, "replace_sel")) {
+    deselect_all_strips(scene);
+    seq::retiming_selection_clear(ed);
   }
 
   if (RNA_boolean_get(op->ptr, "replace_sel")) {
@@ -756,7 +763,7 @@ static wmOperatorStatus sequencer_add_scene_strip_exec(bContext *C, wmOperator *
   }
 
   seq::LoadData load_data;
-  if (!sequencer_add_generic_exec(C, op, &load_data, scene, 1)) {
+  if (!sequencer_add_generic_exec(C, op, &load_data, 1)) {
     return OPERATOR_CANCELLED;
   }
   load_data.scene = sce_seq;
@@ -843,7 +850,7 @@ static wmOperatorStatus sequencer_add_scene_strip_new_exec(bContext *C, wmOperat
   const Editing *ed = seq::editing_ensure(scene);
 
   seq::LoadData load_data;
-  if (!sequencer_add_generic_exec(C, op, &load_data, scene, 1)) {
+  if (!sequencer_add_generic_exec(C, op, &load_data, 1)) {
     return OPERATOR_CANCELLED;
   }
 
@@ -957,7 +964,7 @@ static wmOperatorStatus sequencer_add_scene_asset_invoke(bContext *C,
   }
 
   seq::LoadData load_data;
-  if (!sequencer_add_generic_exec(C, op, &load_data, scene, 1)) {
+  if (!sequencer_add_generic_exec(C, op, &load_data, 1)) {
     return OPERATOR_CANCELLED;
   }
   load_data.scene = scene_asset;
@@ -1026,7 +1033,7 @@ static wmOperatorStatus sequencer_add_movieclip_strip_exec(bContext *C, wmOperat
   }
 
   seq::LoadData load_data;
-  if (!sequencer_add_generic_exec(C, op, &load_data, scene, 1)) {
+  if (!sequencer_add_generic_exec(C, op, &load_data, 1)) {
     return OPERATOR_CANCELLED;
   }
   load_data.clip = clip;
@@ -1098,7 +1105,7 @@ static wmOperatorStatus sequencer_add_mask_strip_exec(bContext *C, wmOperator *o
   }
 
   seq::LoadData load_data;
-  if (!sequencer_add_generic_exec(C, op, &load_data, scene, 1)) {
+  if (!sequencer_add_generic_exec(C, op, &load_data, 1)) {
     return OPERATOR_CANCELLED;
   }
   load_data.mask = mask;
@@ -1402,7 +1409,7 @@ static wmOperatorStatus sequencer_add_movie_strip_exec(bContext *C, wmOperator *
   Scene *scene = CTX_data_sequencer_scene(C);
 
   seq::LoadData load_data;
-  if (!sequencer_add_generic_exec(C, op, &load_data, scene, 2)) {
+  if (!sequencer_add_generic_exec(C, op, &load_data, 2)) {
     return OPERATOR_CANCELLED;
   }
 
@@ -1580,7 +1587,7 @@ static wmOperatorStatus sequencer_add_sound_strip_exec(bContext *C, wmOperator *
   Scene *scene = CTX_data_sequencer_scene(C);
 
   seq::LoadData load_data;
-  if (!sequencer_add_generic_exec(C, op, &load_data, scene, 1)) {
+  if (!sequencer_add_generic_exec(C, op, &load_data, 1)) {
     return OPERATOR_CANCELLED;
   }
 
@@ -1806,7 +1813,7 @@ static wmOperatorStatus sequencer_add_image_strip_exec(bContext *C, wmOperator *
   Scene *scene = CTX_data_sequencer_scene(C);
 
   seq::LoadData load_data;
-  if (!sequencer_add_generic_exec(C, op, &load_data, scene, 1)) {
+  if (!sequencer_add_generic_exec(C, op, &load_data, 1)) {
     return OPERATOR_CANCELLED;
   }
 
@@ -1994,7 +2001,7 @@ static wmOperatorStatus sequencer_add_effect_strip_exec(bContext *C, wmOperator 
   }
 
   seq::LoadData load_data;
-  if (!sequencer_add_generic_exec(C, op, &load_data, scene, 1)) {
+  if (!sequencer_add_generic_exec(C, op, &load_data, 1)) {
     return OPERATOR_CANCELLED;
   }
 
