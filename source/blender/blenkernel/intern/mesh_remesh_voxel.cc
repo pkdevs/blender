@@ -332,10 +332,11 @@ static void find_nearest_tris(const Span<float3> positions,
                               MutableSpan<float3> bary_coords)
 {
   for (const int i : positions.index_range()) {
-    const bvh::ClosestPointResult nearest = *bvhtree.closest_point(positions[i]);
-    tris[i] = nearest.index;
+    const std::optional<bvh::ClosestPointResult> nearest = bvhtree.closest_point(positions[i]);
+    BLI_assert(nearest.has_value());
+    tris[i] = nearest->index;
     if (!bary_coords.is_empty()) {
-      bary_coords[i] = nearest.bary_coord;
+      bary_coords[i] = nearest->bary_coord;
     }
   }
 }
