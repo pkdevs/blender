@@ -6989,6 +6989,7 @@ static void def_cmp_convert_color_space(BlenderRNA * /*brna*/, StructRNA *srna)
                               "rna_NodeConvertColorSpace_from_color_space_set",
                               "rna_NodeConvertColorSpace_color_space_itemf");
   RNA_def_property_ui_text(prop, "From", "Color space of the input image");
+  RNA_def_property_translation_context(prop, BLT_I18NCONTEXT_COLOR_MANAGEMENT);
   RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_update");
 
   prop = RNA_def_property(srna, "to_color_space", PROP_ENUM, PROP_NONE);
@@ -6999,6 +7000,7 @@ static void def_cmp_convert_color_space(BlenderRNA * /*brna*/, StructRNA *srna)
                               "rna_NodeConvertColorSpace_to_color_space_set",
                               "rna_NodeConvertColorSpace_color_space_itemf");
   RNA_def_property_ui_text(prop, "To", "Color space of the output image");
+  RNA_def_property_translation_context(prop, BLT_I18NCONTEXT_COLOR_MANAGEMENT);
   RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_update");
 }
 
@@ -7762,7 +7764,7 @@ static void def_geo_merge_layers(BlenderRNA * /*brna*/, StructRNA *srna)
   RNA_def_property_enum_funcs(
       prop, "rna_MergeLayers_mode_get", "rna_MergeLayers_mode_set", nullptr);
   RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_update");
-  RNA_def_property_deprecated(prop, "Replaced by '.inputs[\"Mode\"]'.", 530, 600);
+  RNA_def_property_deprecated(prop, "Replaced by '.inputs[\"Mode\"]'.", 503, 600);
 }
 
 static void def_geo_set_grease_pencil_color(BlenderRNA * /*brna*/, StructRNA *srna)
@@ -7773,7 +7775,7 @@ static void def_geo_set_grease_pencil_color(BlenderRNA * /*brna*/, StructRNA *sr
   RNA_def_property_enum_funcs(
       prop, "rna_SetGreasePencilColor_mode_get", "rna_SetGreasePencilColor_mode_set", nullptr);
   RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_update");
-  RNA_def_property_deprecated(prop, "Replaced by '.inputs[\"Mode\"]'.", 530, 600);
+  RNA_def_property_deprecated(prop, "Replaced by '.inputs[\"Mode\"]'.", 503, 600);
 }
 
 static void def_geo_set_grease_pencil_depth(BlenderRNA * /*brna*/, StructRNA *srna)
@@ -7786,7 +7788,7 @@ static void def_geo_set_grease_pencil_depth(BlenderRNA * /*brna*/, StructRNA *sr
                               "rna_SetGreasePencilDepth_depth_order_set",
                               nullptr);
   RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_update");
-  RNA_def_property_deprecated(prop, "Replaced by '.inputs[\"Depth Order\"]'.", 530, 600);
+  RNA_def_property_deprecated(prop, "Replaced by '.inputs[\"Depth Order\"]'.", 503, 600);
 }
 
 static void rna_def_geo_repeat_item(BlenderRNA *brna)
@@ -11003,6 +11005,7 @@ static void rna_def_nodes(BlenderRNA *brna)
   define("GeometryNode", "GeometryNodeJoinGeometry");
   define("GeometryNode", "GeometryNodeListGetItem");
   define("GeometryNode", "GeometryNodeListLength");
+  define("GeometryNode", "GeometryNodeGeometryMaterials");
   define("GeometryNode", "GeometryNodeMaterialSelection");
   define("GeometryNode", "GeometryNodeMenuSwitch", def_geo_menu_switch);
   define("GeometryNode", "GeometryNodeMergeByDistance");
