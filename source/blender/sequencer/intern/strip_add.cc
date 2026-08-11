@@ -163,46 +163,50 @@ Strip *add_mask_strip(Scene *scene, ListBaseT<Strip> *seqbase, LoadData *load_da
   return strip;
 }
 
-static bool transition_validate(Scene *scene,
-                                StripType effect_type,
-                                const Strip *input1,
-                                const Strip *input2,
-                                ReportList *reports)
+static std::pair<int, int> transition_max_bounds_get(const Scene *scene,
+                                                     Editing *ed,
+                                                     const Strip *input1,
+                                                     const Strip *input2)
+{
+  const Strip *left_transition = seq::get_transition_on_side(ed, input1, seq::Side::Left);
+  const Strip *right_transition = seq::get_transition_on_side(ed, input2, seq::Side::Right);
+
+  int left_handle_min = input1->left_handle();
+  int right_handle_max = input2->right_handle(scene);
+  if (left_transition) {
+    left_handle_min = max_ii(left_handle_min, left_transition->right_handle(scene));
+  }
+  if (right_transition) {
+    right_handle_max = min_ii(right_handle_max, right_transition->left_handle());
+  }
+
+  return {left_handle_min, right_handle_max};
+}
+
+static bool overlap_transition_validate(
+    Scene *scene, const Strip *input1, const Strip *input2, int length, ReportList *reports)
 {
   Editing *ed = editing_get(scene);
 
-  if (seq::strip_type_can_be_transition(effect_type) && input1 != nullptr && input2 != nullptr) {
-    if (input1->channel != input2->channel) {
-      BKE_report(reports, RPT_ERROR, "Transition strip inputs must be on the same channel");
-      return false;
-    }
-    if (input1->right_handle(scene) != input2->left_handle()) {
-      BKE_report(reports, RPT_ERROR, "Transition strip inputs must be adjacent");
-      return false;
-    }
-    if (seq::get_transition_between(scene, input1, input2) != nullptr) {
-      BKE_report(
-          reports, RPT_ERROR, "Cannot add multiple transitions between the same input strips");
-      return false;
-    }
-    if (input1->is_same_channel_transition() || input2->is_same_channel_transition()) {
-      BKE_report(reports, RPT_ERROR, "Cannot add transitions on other transitions");
-      return false;
-    }
-    const Strip *left_adjacent_transition = seq::get_transition_on_side(
-        ed, input1, seq::Side::Left);
-    const Strip *right_adjacent_transition = seq::get_transition_on_side(
-        ed, input2, seq::Side::Right);
-    const bool no_space_on_left = left_adjacent_transition &&
-                                  left_adjacent_transition->right_handle(scene) >
-                                      input1->right_handle(scene) - 1;
-    const bool no_space_on_right = right_adjacent_transition &&
-                                   right_adjacent_transition->left_handle() <
-                                       input2->left_handle() + 1;
-    if (no_space_on_left || no_space_on_right) {
-      BKE_report(reports, RPT_ERROR, "Not enough space for transition");
-      return false;
-    }
+  if (length < 2) {
+    BKE_report(reports, RPT_ERROR, "Transition length must be at least 2");
+    return false;
+  }
+  if (seq::get_transition_between(scene, input1, input2) != nullptr) {
+    BKE_report(reports, RPT_ERROR, "Cannot add multiple transitions between the same strips");
+    return false;
+  }
+  if (input1->is_same_channel_transition() || input2->is_same_channel_transition()) {
+    BKE_report(reports, RPT_ERROR, "Cannot add transitions on other transitions");
+    return false;
+  }
+  const auto bounds = transition_max_bounds_get(scene, ed, input1, input2);
+  const int cutpoint = input2->left_handle();
+  const bool no_space_left = bounds.first > cutpoint - 1;
+  const bool no_space_right = bounds.second < cutpoint + 1;
+  if (no_space_left || no_space_right) {
+    BKE_report(reports, RPT_ERROR, "Not enough space for transition");
+    return false;
   }
 
   return true;
@@ -215,10 +219,15 @@ Strip *add_effect_strip(Scene *scene,
 {
   Editing *ed = editing_get(scene);
 
+  const int length = load_data->effect.length;
   const Strip *input1 = load_data->effect.input1;
   const Strip *input2 = load_data->effect.input2;
 
-  if (!transition_validate(scene, load_data->effect.type, input1, input2, reports)) {
+  const bool transition = (input1 != nullptr) && (input2 != nullptr) &&
+                          strip_type_can_be_transition(load_data->effect.type);
+  const bool overlap_transition = transition && input1->channel == input2->channel &&
+                                  input1->right_handle(scene) == input2->left_handle();
+  if (overlap_transition && !overlap_transition_validate(scene, input1, input2, length, reports)) {
     return nullptr;
   }
 
@@ -242,30 +251,17 @@ Strip *add_effect_strip(Scene *scene,
   if (strip->input1 == nullptr) {
     strip->content_length_set(1); /* Effect is generator, set non zero length. */
     strip->flag |= SEQ_SINGLE_FRAME_CONTENT;
-    strip->right_handle_set(scene, load_data->start_frame + load_data->effect.length);
+    strip->right_handle_set(scene, load_data->start_frame + length);
   }
 
-  if ((strip->input1 != nullptr) && (strip->input2 != nullptr) &&
-      strip_type_can_be_transition(strip->type))
-  {
+  if (overlap_transition) {
     strip->flag |= SEQ_SAME_CHANNEL_TRANSITION;
 
-    const Strip *input1 = load_data->effect.input1;
-    const Strip *input2 = load_data->effect.input2;
-    const Strip *left_adjacent_transition = get_transition_on_side(ed, input1, Side::Left);
-    const Strip *right_adjacent_transition = get_transition_on_side(ed, input2, Side::Right);
-    const int length = load_data->effect.length;
+    const int cutpoint = input2->left_handle();
+    const auto bounds = transition_max_bounds_get(scene, ed, input1, input2);
 
-    int left_handle = max_ii(input1->right_handle(scene) - floor(length / 2.0),
-                             input1->left_handle());
-    int right_handle = min_ii(input2->left_handle() + ceil(length / 2.0),
-                              input2->right_handle(scene));
-    if (left_adjacent_transition) {
-      left_handle = max_ii(left_handle, left_adjacent_transition->right_handle(scene));
-    }
-    if (right_adjacent_transition) {
-      right_handle = min_ii(right_handle, right_adjacent_transition->left_handle());
-    }
+    const int left_handle = max_ii(cutpoint - floor(length / 2.0), bounds.first);
+    const int right_handle = min_ii(cutpoint + ceil(length / 2.0), bounds.second);
 
     strip->handles_set(scene, left_handle, right_handle);
     strip->channel_set(input1->channel);
