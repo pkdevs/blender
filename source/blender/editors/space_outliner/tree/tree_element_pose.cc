@@ -58,15 +58,14 @@ void TreeElementPoseBase::expand(SpaceOutliner & /*space_outliner*/) const
       }
     }
     /* make hierarchy */
-    for (TreeElement *ten : legacy_te_.subtree) {
-      TreeElement *par;
+    for (int index : legacy_te_.subtree.index_range()) {
+      TreeElement *ten = legacy_te_.subtree[index];
       TreeStoreElem *tselem = TREESTORE(ten);
       if (tselem->type == TSE_POSE_CHANNEL) {
         bPoseChannel *pchan = static_cast<bPoseChannel *>(ten->directdata);
         if (pchan->parent) {
-          const int index = legacy_te_.subtree.first_index_of(ten);
           legacy_te_.subtree.remove(index);
-          par = static_cast<TreeElement *>(pchan->parent->temp);
+          TreeElement *par = static_cast<TreeElement *>(pchan->parent->temp);
           par->subtree.append(ten);
           ten->parent = par;
         }

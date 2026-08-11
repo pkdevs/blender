@@ -638,12 +638,10 @@ static void outliner_sort(Vector<TreeElement *> *lb)
         }
       }
 
-      // lb->clear_no_delete();
       lb->clear();
       tp = tear;
       while (totelem--) {
         lb->append(tp->te);
-        // BLI_addtail(lb, tp->te);
         tp++;
       }
       MEM_delete(tear);
@@ -682,12 +680,10 @@ static void outliner_collections_children_sort(Vector<TreeElement *> *lb)
 
       qsort(tear, totelem, sizeof(tTreeSort), treesort_child_not_in_collection);
 
-      // lb->clear_no_delete();
       lb->clear();
       tp = tear;
       while (totelem--) {
         lb->append(tp->te);
-        // BLI_addtail(lb, tp->te);
         tp++;
       }
       MEM_delete(tear);

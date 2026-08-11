@@ -42,13 +42,13 @@ void outliner_make_object_parent_hierarchy(Vector<TreeElement *> *lb)
   /* build hierarchy */
   /* XXX also, set extents here... */
 
-  for (TreeElement *te : *lb) {
+  for (int index : lb->index_range()) {
+    TreeElement *te = (*lb)[index];
     TreeStoreElem *tselem = TREESTORE(te);
 
     if ((tselem->type == TSE_SOME_ID) && te->idcode == ID_OB) {
       Object *ob = id_cast<Object *>(tselem->id);
       if (ob->parent && ob->parent->id.newid) {
-        const int index = lb->first_index_of(te);
         lb->remove(index);
         TreeElement *tep = reinterpret_cast<TreeElement *>(ob->parent->id.newid);
         tep->subtree.append(te);

@@ -640,7 +640,6 @@ static void outliner_do_libdata_operation_selection_set(bContext *C,
   for (TreeElement *element : subtree) {
     /* Get needed data out in case element gets freed. */
     TreeStoreElem *tselem = TREESTORE(element);
-    Vector<TreeElement *> subtree = element->subtree;
 
     const bool is_selected = outliner_do_libdata_operation_selection_set_element(
         C, reports, scene, element, tselem, has_parent_selected, operation_fn, selection_set);
@@ -651,7 +650,7 @@ static void outliner_do_libdata_operation_selection_set(bContext *C,
                                                 reports,
                                                 scene,
                                                 space_outliner,
-                                                subtree,
+                                                element->subtree,
                                                 is_selected || has_parent_selected,
                                                 operation_fn,
                                                 selection_set);
@@ -670,15 +669,20 @@ static void outliner_do_libdata_operation_selection_set(bContext *C,
     TreeElement *active_element = get_target_element(space_outliner);
     if (active_element != nullptr) {
       TreeStoreElem *tselem = TREESTORE(active_element);
-      Vector<TreeElement *> subtree = active_element->subtree;
 
       const bool is_selected = outliner_do_libdata_operation_selection_set_element(
           C, reports, scene, active_element, tselem, false, operation_fn, selection_set);
 
       /* Don't access element from now on, it may be freed. Note that the open/collapsed state may
        * also have been changed in the visitor callback. */
-      outliner_do_libdata_operation_selection_set(
-          C, reports, scene, space_outliner, subtree, is_selected, operation_fn, selection_set);
+      outliner_do_libdata_operation_selection_set(C,
+                                                  reports,
+                                                  scene,
+                                                  space_outliner,
+                                                  active_element->subtree,
+                                                  is_selected,
+                                                  operation_fn,
+                                                  selection_set);
     }
   }
 
@@ -2126,7 +2130,6 @@ static void outliner_do_liboverride_property_selection_set(bContext *C,
   for (TreeElement *element : subtree) {
     /* Get needed data out in case element gets freed. */
     TreeStoreElem *tselem = TREESTORE(element);
-    Vector<TreeElement *> subtree = element->subtree;
 
     const bool is_selected = (tselem->flag & TSE_SELECTED) || has_parent_selected;
     if (is_selected) {
@@ -2139,7 +2142,7 @@ static void outliner_do_liboverride_property_selection_set(bContext *C,
      * also have been changed in the visitor callback. */
 
     outliner_do_liboverride_property_selection_set(
-        C, reports, scene, subtree, is_selected, operation_fn);
+        C, reports, scene, element->subtree, is_selected, operation_fn);
   }
 }
 

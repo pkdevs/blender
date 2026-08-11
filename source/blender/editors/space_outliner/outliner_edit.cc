@@ -2005,14 +2005,7 @@ static void tree_element_to_path(TreeElement *te,
           }
           else {
             /* otherwise use index */
-            int index = 0;
-
-            for (TreeElement *temsub : tem->subtree) {
-              if (temsub == temnext) {
-                break;
-              }
-              index++;
-            }
+            int index = std::max(0, int(tem->subtree.first_index_of(temnext)));
             newpath = RNA_path_append(*path, nullptr, prop, index, nullptr);
           }
 
