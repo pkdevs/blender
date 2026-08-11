@@ -54,7 +54,7 @@ bool strip_type_is_effect(StripType type);
  * handles and are drawn differently. Use #Strip::is_same_channel_transition to test for
  * this. */
 bool strip_type_can_be_transition(StripType type);
-Strip *get_transition_between(Scene *scene, Strip *input1, Strip *input2);
+Strip *get_transition_between(Scene *scene, const Strip *input1, const Strip *input2);
 Strip *get_transition_on_side(Editing *ed, const Strip *strip, const Side side);
 bool transition_inputs_have_wrong_order(const Scene *scene,
                                         const Strip *input1,

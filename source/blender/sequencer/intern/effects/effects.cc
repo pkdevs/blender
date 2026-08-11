@@ -377,7 +377,7 @@ bool strip_type_can_be_transition(StripType type)
   return ELEM(type, STRIP_TYPE_CROSS, STRIP_TYPE_GAMCROSS, STRIP_TYPE_WIPE, STRIP_TYPE_COMPOSITOR);
 }
 
-Strip *get_transition_between(Scene *scene, Strip *input1, Strip *input2)
+Strip *get_transition_between(Scene *scene, const Strip *input1, const Strip *input2)
 {
   Editing *ed = editing_get(scene);
   if (ed == nullptr) {

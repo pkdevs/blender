@@ -1966,40 +1966,6 @@ static wmOperatorStatus sequencer_add_effect_strip_exec(bContext *C, wmOperator 
     }
   }
 
-  if (seq::strip_type_can_be_transition(effect_type) && inputs.size() == 2) {
-    if (inputs[0]->channel != inputs[1]->channel) {
-      BKE_report(op->reports, RPT_ERROR, "Transition strip inputs must be on the same channel");
-      return OPERATOR_CANCELLED;
-    }
-    if (inputs[0]->right_handle(scene) != inputs[1]->left_handle()) {
-      BKE_report(op->reports, RPT_ERROR, "Transition strip inputs must be adjacent");
-      return OPERATOR_CANCELLED;
-    }
-    if (seq::get_transition_between(scene, inputs[0], inputs[1]) != nullptr) {
-      BKE_report(
-          op->reports, RPT_ERROR, "Cannot add multiple transitions between the same input strips");
-      return OPERATOR_CANCELLED;
-    }
-    if (inputs[0]->is_same_channel_transition() || inputs[1]->is_same_channel_transition()) {
-      BKE_report(op->reports, RPT_ERROR, "Cannot add transitions on other transitions");
-      return OPERATOR_CANCELLED;
-    }
-    const Strip *left_adjacent_transition = seq::get_transition_on_side(
-        ed, inputs[0], seq::Side::Left);
-    const Strip *right_adjacent_transition = seq::get_transition_on_side(
-        ed, inputs[1], seq::Side::Right);
-    const bool no_space_on_left = left_adjacent_transition &&
-                                  left_adjacent_transition->right_handle(scene) >
-                                      inputs[0]->right_handle(scene) - 1;
-    const bool no_space_on_right = right_adjacent_transition &&
-                                   right_adjacent_transition->left_handle() <
-                                       inputs[1]->left_handle() + 1;
-    if (no_space_on_left || no_space_on_right) {
-      BKE_report(op->reports, RPT_ERROR, "Not enough space for transition");
-      return OPERATOR_CANCELLED;
-    }
-  }
-
   seq::LoadData load_data;
   if (!sequencer_add_generic_exec(C, op, &load_data, 1)) {
     return OPERATOR_CANCELLED;
@@ -2021,7 +1987,10 @@ static wmOperatorStatus sequencer_add_effect_strip_exec(bContext *C, wmOperator 
     }
   }
 
-  Strip *strip = seq::add_effect_strip(scene, ed->current_strips(), &load_data);
+  Strip *strip = seq::add_effect_strip(scene, ed->current_strips(), &load_data, op->reports);
+  if (strip == nullptr) {
+    return OPERATOR_CANCELLED;
+  }
   seq_load_apply_generic_options(C, op, strip);
 
   if (strip->type == STRIP_TYPE_COLOR) {

@@ -30,6 +30,7 @@
 #include "BKE_main.hh"
 #include "BKE_mask.hh"
 #include "BKE_movieclip.hh"
+#include "BKE_report.hh"
 #include "BKE_scene.hh"
 #include "BKE_sound.hh"
 
@@ -162,9 +163,64 @@ Strip *add_mask_strip(Scene *scene, ListBaseT<Strip> *seqbase, LoadData *load_da
   return strip;
 }
 
-Strip *add_effect_strip(Scene *scene, ListBaseT<Strip> *seqbase, LoadData *load_data)
+static bool transition_validate(Scene *scene,
+                                StripType effect_type,
+                                const Strip *input1,
+                                const Strip *input2,
+                                ReportList *reports)
 {
   Editing *ed = editing_get(scene);
+
+  if (seq::strip_type_can_be_transition(effect_type) && input1 != nullptr && input2 != nullptr) {
+    if (input1->channel != input2->channel) {
+      BKE_report(reports, RPT_ERROR, "Transition strip inputs must be on the same channel");
+      return false;
+    }
+    if (input1->right_handle(scene) != input2->left_handle()) {
+      BKE_report(reports, RPT_ERROR, "Transition strip inputs must be adjacent");
+      return false;
+    }
+    if (seq::get_transition_between(scene, input1, input2) != nullptr) {
+      BKE_report(
+          reports, RPT_ERROR, "Cannot add multiple transitions between the same input strips");
+      return false;
+    }
+    if (input1->is_same_channel_transition() || input2->is_same_channel_transition()) {
+      BKE_report(reports, RPT_ERROR, "Cannot add transitions on other transitions");
+      return false;
+    }
+    const Strip *left_adjacent_transition = seq::get_transition_on_side(
+        ed, input1, seq::Side::Left);
+    const Strip *right_adjacent_transition = seq::get_transition_on_side(
+        ed, input2, seq::Side::Right);
+    const bool no_space_on_left = left_adjacent_transition &&
+                                  left_adjacent_transition->right_handle(scene) >
+                                      input1->right_handle(scene) - 1;
+    const bool no_space_on_right = right_adjacent_transition &&
+                                   right_adjacent_transition->left_handle() <
+                                       input2->left_handle() + 1;
+    if (no_space_on_left || no_space_on_right) {
+      BKE_report(reports, RPT_ERROR, "Not enough space for transition");
+      return false;
+    }
+  }
+
+  return true;
+}
+
+Strip *add_effect_strip(Scene *scene,
+                        ListBaseT<Strip> *seqbase,
+                        LoadData *load_data,
+                        ReportList *reports)
+{
+  Editing *ed = editing_get(scene);
+
+  const Strip *input1 = load_data->effect.input1;
+  const Strip *input2 = load_data->effect.input2;
+
+  if (!transition_validate(scene, load_data->effect.type, input1, input2, reports)) {
+    return nullptr;
+  }
 
   Strip *strip = strip_alloc(
       seqbase, load_data->start_frame, load_data->channel, load_data->effect.type);

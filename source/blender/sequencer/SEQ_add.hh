@@ -19,6 +19,7 @@ namespace blender {
 struct Main;
 struct Mask;
 struct MovieClip;
+struct ReportList;
 struct Scene;
 struct Strip;
 struct Stereo3dFormat;
@@ -159,7 +160,10 @@ Strip *add_mask_strip(Scene *scene, ListBaseT<Strip> *seqbase, LoadData *load_da
  * \param load_data: SeqLoadData with information necessary to create strip
  * \return created strip
  */
-Strip *add_effect_strip(Scene *scene, ListBaseT<Strip> *seqbase, LoadData *load_data);
+Strip *add_effect_strip(Scene *scene,
+                        ListBaseT<Strip> *seqbase,
+                        LoadData *load_data,
+                        ReportList *reports);
 /**
  * Set directory used by image strip.
  *

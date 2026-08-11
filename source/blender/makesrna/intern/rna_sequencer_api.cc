@@ -531,56 +531,17 @@ static Strip *rna_Strips_new_effect(ID *id,
           min_inputs);
       return nullptr;
   }
-  if (blender::seq::strip_type_can_be_transition(StripType(type)) && input1 != nullptr &&
-      input2 != nullptr)
-  {
-    if (input1->channel != input2->channel) {
-      BKE_report(reports,
-                 RPT_ERROR,
-                 "Strips.new_effect: transition strip inputs must be on the same channel");
-      return nullptr;
-    }
-    if (input1->right_handle(scene) != input2->left_handle()) {
-      BKE_report(reports,
-                 RPT_ERROR,
-                 "Strips.new_effect: transition strip inputs must be adjacent and in "
-                 "chronological order");
-      return nullptr;
-    }
-    if (seq::get_transition_between(scene, input1, input2) != nullptr) {
-      BKE_report(
-          reports,
-          RPT_ERROR,
-          "Strips.new_effect: cannot add multiple transitions between the same input strips");
-      return nullptr;
-    }
-    if (input1->is_same_channel_transition() || input2->is_same_channel_transition()) {
-      BKE_report(
-          reports, RPT_ERROR, "Strips.new_effect: cannot add transitions on other transitions");
-      return nullptr;
-    }
-    const Strip *left_adjacent_transition = seq::get_transition_on_side(
-        ed, input1, seq::Side::Left);
-    const Strip *right_adjacent_transition = seq::get_transition_on_side(
-        ed, input2, seq::Side::Right);
-    const bool no_space_on_left = left_adjacent_transition &&
-                                  left_adjacent_transition->right_handle(scene) >
-                                      input1->right_handle(scene) - 1;
-    const bool no_space_on_right = right_adjacent_transition &&
-                                   right_adjacent_transition->left_handle() <
-                                       input2->left_handle() + 1;
-    if (no_space_on_left || no_space_on_right) {
-      BKE_report(reports, RPT_ERROR, "Strips.new_effect: not enough space for transition");
-      return nullptr;
-    }
-  }
+
   seq::LoadData load_data;
   seq::add_load_data_init(&load_data, name, nullptr, frame_start, channel);
   load_data.effect.length = length;
   load_data.effect.type = StripType(type);
   load_data.effect.input1 = input1;
   load_data.effect.input2 = input2;
-  Strip *strip = seq::add_effect_strip(scene, seqbase, &load_data);
+  Strip *strip = seq::add_effect_strip(scene, seqbase, &load_data, reports);
+  if (strip == nullptr) {
+    return nullptr;
+  }
 
   if (load_data.effect.type == STRIP_TYPE_COLOR) {
     SolidColorVars *colvars = static_cast<SolidColorVars *>(strip->effectdata);
