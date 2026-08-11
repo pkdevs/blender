@@ -149,22 +149,12 @@ static destruct_ptr<nodes::eval_log::ImageInfoLog> get_image_info_log(LinearAllo
 }
 
 static destruct_ptr<nodes::eval_log::BundleValueLog> get_bundle_info_log(
-    LinearAllocator<> *allocator, const Result &result)
+    Context &context, LinearAllocator<> *allocator, const Result &result)
 {
   Vector<nodes::eval_log::BundleValueLog::Item> items;
   for (const auto &item : result.get_single_value<nodes::BundlePtr>()->items()) {
-    /* Handle a special case where nested bundles might be stored in BundleItemSocketValue as
-     * opposed to BundleItemInternalValue. */
-    const nodes::BundleItemSocketValue *socket_value = std::get_if<nodes::BundleItemSocketValue>(
-        &item.value.value);
-    if (socket_value && socket_value->type->type == SOCK_BUNDLE) {
-      items.append({item.key.ustr(), {Result::type_name(ResultType::Bundle)}});
-      continue;
-    }
-
-    std::optional<ImplicitSharingPtr<BundleItem>> bundle_item =
-        item.value.as<ImplicitSharingPtr<BundleItem>>();
-    const Result &bundle_result = bundle_item.value()->result();
+    Result bundle_result = BundleItem::get_result(context, item.value);
+    BLI_SCOPED_DEFER([&]() { bundle_result.release(); });
     items.append({item.key.ustr(), {Result::type_name(bundle_result.type())}});
   }
   return allocator->construct<nodes::eval_log::BundleValueLog>(std::move(items));
@@ -196,7 +186,7 @@ void NodeOperation::log_data()
             *tree_logger.allocator,
             {node_.identifier,
              input_socket->index(),
-             get_bundle_info_log(tree_logger.allocator, input)});
+             get_bundle_info_log(this->context(), tree_logger.allocator, input)});
         continue;
       }
       tree_logger.log_value(this->node(), *input_socket, input.single_value());
@@ -226,7 +216,7 @@ void NodeOperation::log_data()
             *tree_logger.allocator,
             {node_.identifier,
              output_socket->index(),
-             get_bundle_info_log(tree_logger.allocator, result)});
+             get_bundle_info_log(this->context(), tree_logger.allocator, result)});
         continue;
       }
       tree_logger.log_value(this->node(), *output_socket, result.single_value());

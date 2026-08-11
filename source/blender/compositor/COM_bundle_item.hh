@@ -27,15 +27,18 @@ class BundleItem : public nodes::BundleItemInternalValueMixin {
    * around the constructor. */
   static nodes::BundleItemValue new_bundle_item_value(Context &context, Result &result);
 
+  /* Get a copy of the result stored inside the bundle item given a bundle item value. Releasing
+   * the returned result is the caller's responsibility. */
+  static Result get_result(Context &context, const nodes::BundleItemValue &item_value);
+
   /* A name for logging. */
   StringRefNull type_name() const override;
-
-  /* Returns a reference to the stored result. */
-  const compositor::Result &result() const;
 
  private:
   /* Release the stored result and delete self. */
   void delete_self() override;
 };
+
+using BundleItemPtr = ImplicitSharingPtr<BundleItem>;
 
 }  // namespace blender::compositor
