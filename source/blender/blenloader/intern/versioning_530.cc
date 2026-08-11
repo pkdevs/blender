@@ -247,6 +247,13 @@ void blo_do_versions_530(FileData * /*fd*/, Library * /*lib*/, Main *bmain)
     }
     for (GreasePencil &grease_pencil : bmain->grease_pencils) {
       grease_pencil.attributes_active_index = validate_active_index_fn(AttributeOwner::from_id(&grease_pencil.id), grease_pencil.attributes_active_index);
+      /* Also check the attributes_active_index in the individual drawings */
+      for (GreasePencilDrawingBase *drawing_base : grease_pencil.drawings() ) {
+        if (drawing_base->type == GP_DRAWING) {
+          GreasePencilDrawing *drawing = reinterpret_cast<GreasePencilDrawing *>(drawing_base);
+          drawing->geometry.attributes_active_index = validate_active_index_fn(AttributeOwner(AttributeOwnerType::GreasePencilDrawing, drawing), drawing->geometry.attributes_active_index);
+        }
+      }
     }
     for (PointCloud &pointcloud : bmain->pointclouds) {
      pointcloud.attributes_active_index = validate_active_index_fn(AttributeOwner::from_id(&pointcloud.id), pointcloud.attributes_active_index);
