@@ -1472,7 +1472,10 @@ static int trim_end_points(bke::greasepencil::Drawing &drawing,
     }
 
     bke::GSpanAttributeWriter dst = attributes.lookup_for_write_span(iter.name);
-    bke::attribute_math::shift_left(dst.span, last_active_point, curves.points_num(), 0);
+    bke::attribute_math::shift_left(dst.span,
+                                    last_active_point + 1,
+                                    curves.points_num(),
+                                    last_active_point + 1 - num_points_to_remove);
     dst.finish();
   });
 
