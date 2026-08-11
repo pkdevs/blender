@@ -2232,7 +2232,7 @@ static const IDPropertyStructTypeInfo idp_struct_type_curvemapping = {
 
 void BKE_curvemapping_idproperty_type_register()
 {
-  IDP_struct_type_register(&idp_struct_type_curvemapping);
+  IDP_struct_type_register(idp_struct_type_curvemapping);
 }
 
 /** \} */

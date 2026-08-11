@@ -2387,20 +2387,19 @@ static Map<StringRefNull, const IDPropertyStructTypeInfo *> &idp_struct_types_by
   return map;
 }
 
-void IDP_struct_type_register(const IDPropertyStructTypeInfo *type_info)
+void IDP_struct_type_register(const IDPropertyStructTypeInfo &type_info)
 {
-  BLI_assert(type_info);
-  BLI_assert(uint(type_info->idp_type) < IDP_NUMTYPES);
-  BLI_assert(type_info->dna_type_name && type_info->dna_type_name[0]);
-  BLI_assert(type_info->rna_identifier && type_info->rna_identifier[0]);
-  BLI_assert(type_info->create_default);
-  BLI_assert(type_info->copy);
-  BLI_assert(type_info->free);
-  BLI_assert(type_info->blend_write);
-  BLI_assert(type_info->blend_read);
+  BLI_assert(uint(type_info.idp_type) < IDP_NUMTYPES);
+  BLI_assert(type_info.dna_type_name && type_info.dna_type_name[0]);
+  BLI_assert(type_info.rna_identifier && type_info.rna_identifier[0]);
+  BLI_assert(type_info.create_default);
+  BLI_assert(type_info.copy);
+  BLI_assert(type_info.free);
+  BLI_assert(type_info.blend_write);
+  BLI_assert(type_info.blend_read);
 
-  g_idp_struct_types[type_info->idp_type] = type_info;
-  idp_struct_types_by_rna().add_overwrite(type_info->rna_identifier, type_info);
+  g_idp_struct_types[type_info.idp_type] = &type_info;
+  idp_struct_types_by_rna().add_overwrite(type_info.rna_identifier, &type_info);
 }
 
 const IDPropertyStructTypeInfo *IDP_struct_type_info(const eIDPropertyType type)
@@ -2433,26 +2432,17 @@ void IDP_struct_type_exit()
 }
 
 IDProperty *IDP_NewStruct(const StringRef name,
-                          const IDPropertyStructTypeInfo *type_info,
+                          const IDPropertyStructTypeInfo &type_info,
                           const eIDPropertyFlag flags)
 {
-  BLI_assert(type_info);
-  BLI_assert(IDP_struct_type_info(type_info->idp_type) == type_info);
+  BLI_assert(IDP_struct_type_info(type_info.idp_type) == &type_info);
 
   IDProperty *prop = MEM_new<IDProperty>("IDProperty struct");
-  prop->type = type_info->idp_type;
+  prop->type = type_info.idp_type;
   prop->flag = flags;
   name.copy_utf8_truncated(prop->name);
-  prop->data.pointer = type_info->create_default();
+  prop->data.pointer = type_info.create_default();
   return prop;
-}
-
-void *IDP_struct_data_get(const IDProperty *prop)
-{
-  if (prop == nullptr || IDP_struct_type_info(prop->type) == nullptr) {
-    return nullptr;
-  }
-  return prop->data.pointer;
 }
 
 /** \} */

@@ -196,10 +196,6 @@ void BKE_curvemapping_curves_blend_write(BlendWriter *writer, const CurveMapping
  */
 void BKE_curvemapping_blend_read(BlendDataReader *reader, CurveMapping *cumap);
 
-/**
- * Register #IDP_CURVE_MAPPING owned-struct IDProperty type info.
- * Called from #IDP_struct_type_init.
- */
 void BKE_curvemapping_idproperty_type_register();
 
 void BKE_histogram_update_sample_line(Histogram *hist,

@@ -1243,7 +1243,7 @@ static const IDPropertyStructTypeInfo idp_struct_type_curveprofile = {
 
 void BKE_curveprofile_idproperty_type_register()
 {
-  IDP_struct_type_register(&idp_struct_type_curveprofile);
+  IDP_struct_type_register(idp_struct_type_curveprofile);
 }
 
 /** \} */

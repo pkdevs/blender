@@ -429,58 +429,36 @@ void IDP_BlendReadData_impl(BlendDataReader *reader,
                             const char *caller_func_id);
 #define IDP_BlendDataRead(reader, prop) IDP_BlendReadData_impl(reader, prop, __func__)
 
-/* -------------------------------------------------------------------- */
-/** \name Owned DNA struct IDProperty type info
- * \{ */
-
 /**
- * Type information for IDProperty types that own a DNA struct
- * (e.g. #IDP_CURVE_MAPPING, #IDP_COLOR_BAND, #IDP_CURVE_PROFILE).
- *
- * Lookup is by #eIDPropertyType (see #IDP_struct_type_info) so the DNA type name does not need to
- * be stored on every #IDProperty.
+ * Type information for IDProperty types that own a DNA struct (e.g. IDP_CURVE_MAPPING).
  */
 struct IDPropertyStructTypeInfo {
-  /** Matching #IDProperty.type value. */
   eIDPropertyType idp_type;
-  /** DNA type name used for blend I/O (e.g. `"CurveMapping"`, `"ColorBand"`). */
-  const char *dna_type_name;
-  /** RNA struct identifier (e.g. `"CurveMapping"`, `"ColorRamp"`). */
-  const char *rna_identifier;
+  /** DNA type name used for blend I/O (e.g. CurveMapping or ColorBand). */
+  const char *dna_type_name = nullptr;
+  /** RNA struct identifier (e.g. CurveMapping or ColorRamp). */
+  const char *rna_identifier = nullptr;
 
-  void *(*create_default)();
-  void *(*copy)(const void *src, int flag);
-  void (*free)(void *data);
-  void (*blend_write)(BlendWriter *writer, const void *data);
-  /** Read the main struct into `*data_p`, then any extra owned data. */
-  void (*blend_read)(BlendDataReader *reader, void **data_p);
-  /** Optional. When null, equality falls back to pointer identity. */
-  bool (*equals)(const void *a, const void *b);
+  void *(*create_default)() = nullptr;
+  void *(*copy)(const void *src, int flag) = nullptr;
+  void (*free)(void *data) = nullptr;
+  void (*blend_write)(BlendWriter *writer, const void *data) = nullptr;
+  void (*blend_read)(BlendDataReader *reader, void **data_p) = nullptr;
+  bool (*equals)(const void *a, const void *b) = nullptr;
 };
 
 void IDP_struct_type_init();
 void IDP_struct_type_exit();
-void IDP_struct_type_register(const IDPropertyStructTypeInfo *type_info);
+void IDP_struct_type_register(const IDPropertyStructTypeInfo &type_info);
 
-/**
- * Return type info for \a type, or null when \a type is not an owned-struct IDProperty type
- * (e.g. #IDP_INT, #IDP_GROUP).
- */
+/** Get the struct type info for the given type if possible, or null otherwise. */
 const IDPropertyStructTypeInfo *IDP_struct_type_info(eIDPropertyType type);
+/** Get the struct type info based on the rna identifier. */
 const IDPropertyStructTypeInfo *IDP_struct_type_find_by_rna_identifier(StringRef rna_identifier);
 
-/**
- * Allocate a new owned-struct IDProperty of the type described by \a type_info.
- * \param type_info: Must be a registered type info.
- */
-IDProperty *IDP_NewStruct(StringRef name,
-                          const IDPropertyStructTypeInfo *type_info,
-                          eIDPropertyFlag flags = {}) ATTR_WARN_UNUSED_RESULT ATTR_NONNULL(2);
-
-/** Owned DNA data for an owned-struct IDProperty, or null. */
-void *IDP_struct_data_get(const IDProperty *prop);
-
-/** \} */
+[[nodiscard]] IDProperty *IDP_NewStruct(StringRef name,
+                                        const IDPropertyStructTypeInfo &type_info,
+                                        eIDPropertyFlag flags = {});
 
 enum eIDPropertyUIDataType {
   /** Other properties types that don't support RNA UI data. */
@@ -621,16 +599,6 @@ std::unique_ptr<IDProperty, IDPropertyDeleter> create(StringRef prop_name,
 
 std::unique_ptr<IDProperty, IDPropertyDeleter> create_group(StringRef prop_name,
                                                             eIDPropertyFlag flags = {});
-
-/**
- * \brief Allocate a new owned-struct IDProperty (#IDP_CURVE_MAPPING, #IDP_COLOR_BAND, #IDP_CURVE_PROFILE, ...).
- *
- * \param type_info: Registered type info describing the owned DNA struct.
- */
-std::unique_ptr<IDProperty, IDPropertyDeleter> create_struct(
-    StringRef prop_name,
-    const IDPropertyStructTypeInfo *type_info,
-    eIDPropertyFlag flags = {});
 
 }  // namespace bke::idprop
 }  // namespace blender

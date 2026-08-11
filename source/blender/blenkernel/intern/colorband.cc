@@ -722,7 +722,7 @@ static const IDPropertyStructTypeInfo idp_struct_type_colorband = {
 
 void BKE_colorband_idproperty_type_register()
 {
-  IDP_struct_type_register(&idp_struct_type_colorband);
+  IDP_struct_type_register(idp_struct_type_colorband);
 }
 
 /** \} */

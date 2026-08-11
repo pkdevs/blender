@@ -4868,7 +4868,7 @@ void RNA_property_pointer_add(PointerRNA *ptr, PropertyRNA *prop)
       if (const IDPropertyStructTypeInfo *info = IDP_struct_type_find_by_rna_identifier(
               RNA_struct_identifier(type)))
       {
-        IDP_AddToGroup(group, IDP_NewStruct(prop->identifier.ref(), info, IDP_FLAG_STATIC_TYPE));
+        IDP_AddToGroup(group, IDP_NewStruct(prop->identifier.ref(), *info, IDP_FLAG_STATIC_TYPE));
       }
       else {
         IDP_AddToGroup(

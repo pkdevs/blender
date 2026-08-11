@@ -36,24 +36,16 @@ enum eIDPropertyType : char {
    * be 0 or 1.
    */
   IDP_BOOLEAN = 10,
-  /**
-   * Owned #CurveMapping. #IDPropertyData.pointer owns the data.
-   * Behavior is dispatched through #IDPropertyStructTypeInfo.
-   */
+  /** #IDPropertyData.pointer owns a #CurveMapping. */
   IDP_CURVE_MAPPING = 11,
-  /**
-   * Owned #ColorBand (RNA: ColorRamp). #IDPropertyData.pointer owns the data.
-   * Behavior is dispatched through #IDPropertyStructTypeInfo.
-   */
+  /** #IDPropertyData.pointer owns a #ColorBand. */
   IDP_COLOR_BAND = 12,
-  /**
-   * Owned #CurveProfile. #IDPropertyData.pointer owns the data.
-   * Behavior is dispatched through #IDPropertyStructTypeInfo.
-   */
+  /** #IDPropertyData.pointer owns a #CurveProfile. */
   IDP_CURVE_PROFILE = 13,
 };
 #define IDP_NUMTYPES 14
 
+/** Utility to use in switch statements. */
 #define IDP_ANY_STRUCT_TYPE_CASE \
   case IDP_CURVE_MAPPING: \
   case IDP_COLOR_BAND: \
