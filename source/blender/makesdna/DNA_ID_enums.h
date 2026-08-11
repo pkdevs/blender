@@ -54,6 +54,11 @@ enum eIDPropertyType : char {
 };
 #define IDP_NUMTYPES 14
 
+#define IDP_ANY_STRUCT_TYPE_CASE \
+  case IDP_CURVE_MAPPING: \
+  case IDP_COLOR_BAND: \
+  case IDP_CURVE_PROFILE
+
 /** Used by some IDP utils, keep values in sync with type enum above. */
 enum eIDPropertyTypeFilter : int {
   IDP_TYPE_FILTER_STRING = 1 << IDP_STRING,

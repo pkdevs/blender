@@ -539,9 +539,7 @@ void USDAbstractWriter::write_user_properties(const pxr::UsdPrim &prim,
       case IDP_GROUP:
       case IDP_ID:
       case IDP_IDPARRAY:
-      case IDP_CURVE_MAPPING:
-      case IDP_COLOR_BAND:
-      case IDP_CURVE_PROFILE:
+      IDP_ANY_STRUCT_TYPE_CASE:
         /* Not supported. */
         break;
     }

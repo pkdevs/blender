@@ -196,9 +196,7 @@ PyObject *BPy_IDGroup_WrapData(ID *id, IDProperty *prop, IDProperty *parent)
       return idprop_py_from_idp_idparray(id, prop); /* this could be better a internal type */
     case IDP_ID:
       return idprop_py_from_idp_id(prop);
-    case IDP_CURVE_MAPPING:
-    case IDP_COLOR_BAND:
-    case IDP_CURVE_PROFILE:
+    IDP_ANY_STRUCT_TYPE_CASE:
       return idprop_py_from_idp_struct(id, prop);
     default:
       Py_RETURN_NONE;
@@ -496,9 +494,7 @@ static IDProperty *idp_from_PyFloat(IDProperty *prop_exist,
         case IDP_DOUBLE:
         case IDP_IDPARRAY:
         case IDP_BOOLEAN:
-        case IDP_CURVE_MAPPING:
-        case IDP_COLOR_BAND:
-        case IDP_CURVE_PROFILE:
+        IDP_ANY_STRUCT_TYPE_CASE:
           break;
       }
     }
@@ -536,9 +532,7 @@ static IDProperty *idp_from_PyBool(IDProperty *prop_exist,
         case IDP_DOUBLE:
         case IDP_IDPARRAY:
         case IDP_BOOLEAN:
-        case IDP_CURVE_MAPPING:
-        case IDP_COLOR_BAND:
-        case IDP_CURVE_PROFILE:
+        IDP_ANY_STRUCT_TYPE_CASE:
           break;
       }
     }
@@ -586,9 +580,7 @@ static IDProperty *idp_from_PyLong(IDProperty *prop_exist,
         case IDP_ID:
         case IDP_IDPARRAY:
         case IDP_BOOLEAN:
-        case IDP_CURVE_MAPPING:
-        case IDP_COLOR_BAND:
-        case IDP_CURVE_PROFILE:
+        IDP_ANY_STRUCT_TYPE_CASE:
           break;
       }
     }
@@ -1246,9 +1238,7 @@ PyObject *BPy_IDGroup_MapDataToPy(IDProperty *prop)
       return idprop_py_from_idp_bool(prop);
     case IDP_ID:
       return idprop_py_from_idp_id(prop);
-    case IDP_CURVE_MAPPING:
-    case IDP_COLOR_BAND:
-    case IDP_CURVE_PROFILE:
+    IDP_ANY_STRUCT_TYPE_CASE:
       /* Owner ID is unknown here; wrap without an owner. */
       return idprop_py_from_idp_struct(nullptr, prop);
     case IDP_ARRAY: {

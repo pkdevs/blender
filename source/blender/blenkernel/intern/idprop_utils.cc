@@ -219,9 +219,7 @@ static void idp_repr_fn_recursive(ReprState *state, const IDProperty *prop)
       }
       break;
     }
-    case IDP_CURVE_MAPPING:
-    case IDP_COLOR_BAND:
-    case IDP_CURVE_PROFILE: {
+    IDP_ANY_STRUCT_TYPE_CASE: {
       STR_APPEND_STR("<");
       if (const IDPropertyStructTypeInfo *info = IDP_struct_type_info(prop->type)) {
         STR_APPEND_STR(info->dna_type_name);
