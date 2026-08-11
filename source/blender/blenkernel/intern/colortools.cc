@@ -30,6 +30,7 @@
 #include "BKE_colortools.hh"
 #include "BKE_curve.hh"
 #include "BKE_fcurve.hh"
+#include "BKE_idprop.hh"
 
 #include "IMB_colormanagement.hh"
 #include "IMB_imbuf_types.hh"
@@ -2150,5 +2151,90 @@ bool BKE_color_managed_colorspace_settings_equals(const ColorManagedColorspaceSe
 {
   return STREQ(settings1->name, settings2->name);
 }
+
+/* -------------------------------------------------------------------- */
+/** \name IDProperty type (#IDP_CURVE_MAPPING)
+ * \{ */
+
+static void *idp_struct_curvemapping_create()
+{
+  return BKE_curvemapping_add(4, 0.0f, 0.0f, 1.0f, 1.0f);
+}
+
+static void *idp_struct_curvemapping_copy(const void *src, const int /*flag*/)
+{
+  return BKE_curvemapping_copy(static_cast<const CurveMapping *>(src));
+}
+
+static void idp_struct_curvemapping_free(void *data)
+{
+  BKE_curvemapping_free(static_cast<CurveMapping *>(data));
+}
+
+static void idp_struct_curvemapping_blend_write(BlendWriter *writer, const void *data)
+{
+  BKE_curvemapping_blend_write(writer, static_cast<const CurveMapping *>(data));
+}
+
+static void idp_struct_curvemapping_blend_read(BlendDataReader *reader, void **data_p)
+{
+  *data_p = BLO_read_struct_by_name_array(reader, "CurveMapping", 1, *data_p);
+  if (*data_p) {
+    BKE_curvemapping_blend_read(reader, static_cast<CurveMapping *>(*data_p));
+  }
+}
+
+static bool idp_struct_curvemapping_equals(const void *a_v, const void *b_v)
+{
+  const CurveMapping *a = static_cast<const CurveMapping *>(a_v);
+  const CurveMapping *b = static_cast<const CurveMapping *>(b_v);
+  if (a == b) {
+    return true;
+  }
+  if (!a || !b) {
+    return false;
+  }
+  if (a->flag != b->flag || a->tone != b->tone || a->preset != b->preset) {
+    return false;
+  }
+  if (memcmp(a->black, b->black, sizeof(a->black)) != 0 ||
+      memcmp(a->white, b->white, sizeof(a->white)) != 0)
+  {
+    return false;
+  }
+  for (int i = 0; i < CM_TOT; i++) {
+    if (a->cm[i].totpoint != b->cm[i].totpoint) {
+      return false;
+    }
+    if (a->cm[i].totpoint > 0) {
+      if (memcmp(a->cm[i].curve,
+                 b->cm[i].curve,
+                 sizeof(CurveMapPoint) * size_t(a->cm[i].totpoint)) != 0)
+      {
+        return false;
+      }
+    }
+  }
+  return true;
+}
+
+static const IDPropertyStructTypeInfo idp_struct_type_curvemapping = {
+    /*idp_type*/ IDP_CURVE_MAPPING,
+    /*dna_type_name*/ "CurveMapping",
+    /*rna_identifier*/ "CurveMapping",
+    /*create_default*/ idp_struct_curvemapping_create,
+    /*copy*/ idp_struct_curvemapping_copy,
+    /*free*/ idp_struct_curvemapping_free,
+    /*blend_write*/ idp_struct_curvemapping_blend_write,
+    /*blend_read*/ idp_struct_curvemapping_blend_read,
+    /*equals*/ idp_struct_curvemapping_equals,
+};
+
+void BKE_curvemapping_idproperty_type_register()
+{
+  IDP_struct_type_register(&idp_struct_type_curvemapping);
+}
+
+/** \} */
 
 }  // namespace blender

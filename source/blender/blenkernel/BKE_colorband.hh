@@ -30,4 +30,10 @@ void BKE_colorband_update_sort(ColorBand *coba);
 void BKE_colorband_foreach_working_space_color(ColorBand *coba,
                                                const IDTypeForeachColorFunctionCallback &fn);
 
+/**
+ * Register #IDP_COLOR_BAND owned-struct IDProperty type info.
+ * Called from #IDP_struct_type_init.
+ */
+void BKE_colorband_idproperty_type_register();
+
 }  // namespace blender

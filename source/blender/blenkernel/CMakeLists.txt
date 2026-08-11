@@ -146,7 +146,6 @@ set(SRC
   intern/idprop.cc
   intern/idprop_create.cc
   intern/idprop_serialize.cc
-  intern/idprop_struct.cc
   intern/idprop_utils.cc
   intern/idtype.cc
   intern/image.cc

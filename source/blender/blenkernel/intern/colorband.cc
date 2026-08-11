@@ -13,12 +13,16 @@
 #include "BLI_math_vector_c.hh"
 #include "BLI_utildefines.hh"
 
-#include "DNA_key_types.h"
-#include "DNA_texture_types.h"
-
 #include "BKE_colorband.hh"
+#include "BKE_idprop.hh"
 #include "BKE_idtype.hh"
 #include "BKE_key.hh"
+
+#include "BLO_read_write.hh"
+
+#include "DNA_colorband_types.h"
+#include "DNA_key_types.h"
+#include "DNA_texture_types.h"
 
 namespace blender {
 
@@ -659,5 +663,68 @@ void BKE_colorband_foreach_working_space_color(ColorBand *coba,
     fn.single(&coba->data[a].r);
   }
 }
+
+/* -------------------------------------------------------------------- */
+/** \name IDProperty type (#IDP_COLOR_BAND)
+ * \{ */
+
+static void *idp_struct_colorband_create()
+{
+  return BKE_colorband_add(true);
+}
+
+static void *idp_struct_colorband_copy(const void *src, const int /*flag*/)
+{
+  ColorBand *dst = MEM_new<ColorBand>(__func__);
+  *dst = *static_cast<const ColorBand *>(src);
+  return dst;
+}
+
+static void idp_struct_colorband_free(void *data)
+{
+  MEM_delete(static_cast<ColorBand *>(data));
+}
+
+static void idp_struct_colorband_blend_write(BlendWriter *writer, const void *data)
+{
+  writer->write_struct(static_cast<const ColorBand *>(data));
+}
+
+static void idp_struct_colorband_blend_read(BlendDataReader *reader, void **data_p)
+{
+  *data_p = BLO_read_struct_by_name_array(reader, "ColorBand", 1, *data_p);
+}
+
+static bool idp_struct_colorband_equals(const void *a_v, const void *b_v)
+{
+  const ColorBand *a = static_cast<const ColorBand *>(a_v);
+  const ColorBand *b = static_cast<const ColorBand *>(b_v);
+  if (a == b) {
+    return true;
+  }
+  if (!a || !b) {
+    return false;
+  }
+  return memcmp(a, b, sizeof(ColorBand)) == 0;
+}
+
+static const IDPropertyStructTypeInfo idp_struct_type_colorband = {
+    /*idp_type*/ IDP_COLOR_BAND,
+    /*dna_type_name*/ "ColorBand",
+    /*rna_identifier*/ "ColorRamp",
+    /*create_default*/ idp_struct_colorband_create,
+    /*copy*/ idp_struct_colorband_copy,
+    /*free*/ idp_struct_colorband_free,
+    /*blend_write*/ idp_struct_colorband_blend_write,
+    /*blend_read*/ idp_struct_colorband_blend_read,
+    /*equals*/ idp_struct_colorband_equals,
+};
+
+void BKE_colorband_idproperty_type_register()
+{
+  IDP_struct_type_register(&idp_struct_type_colorband);
+}
+
+/** \} */
 
 }  // namespace blender

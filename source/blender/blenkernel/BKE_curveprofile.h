@@ -175,4 +175,10 @@ void BKE_curveprofile_blend_write(struct BlendWriter *writer, const struct Curve
  */
 void BKE_curveprofile_blend_read(struct BlendDataReader *reader, struct CurveProfile *profile);
 
+/**
+ * Register #IDP_CURVE_PROFILE owned-struct IDProperty type info.
+ * Called from #IDP_struct_type_init.
+ */
+void BKE_curveprofile_idproperty_type_register();
+
 }  // namespace blender

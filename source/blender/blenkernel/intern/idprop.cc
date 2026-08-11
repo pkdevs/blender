@@ -18,12 +18,17 @@
 #include <fmt/format.h>
 
 #include "BLI_listbase.hh"
+#include "BLI_map.hh"
 #include "BLI_math_base_c.hh"
 #include "BLI_set.hh"
 #include "BLI_string.hh"
+#include "BLI_string_ref.hh"
 #include "BLI_string_utf8.hh"
 #include "BLI_utildefines.hh"
 
+#include "BKE_colorband.hh"
+#include "BKE_colortools.hh"
+#include "BKE_curveprofile.h"
 #include "BKE_idprop.hh"
 #include "BKE_idprop_hash.hh"
 #include "BKE_lib_id.hh"
@@ -2367,6 +2372,88 @@ void hash(const IDProperty &base_prop, XXH3_state_t *hash_state)
 }
 
 }  // namespace bke::idprop
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Owned DNA struct IDProperty types
+ * \{ */
+
+static const IDPropertyStructTypeInfo *g_idp_struct_types[IDP_NUMTYPES] = {};
+
+static Map<StringRefNull, const IDPropertyStructTypeInfo *> &idp_struct_types_by_rna()
+{
+  static Map<StringRefNull, const IDPropertyStructTypeInfo *> map;
+  return map;
+}
+
+void IDP_struct_type_register(const IDPropertyStructTypeInfo *type_info)
+{
+  BLI_assert(type_info);
+  BLI_assert(uint(type_info->idp_type) < IDP_NUMTYPES);
+  BLI_assert(type_info->dna_type_name && type_info->dna_type_name[0]);
+  BLI_assert(type_info->rna_identifier && type_info->rna_identifier[0]);
+  BLI_assert(type_info->create_default);
+  BLI_assert(type_info->copy);
+  BLI_assert(type_info->free);
+  BLI_assert(type_info->blend_write);
+  BLI_assert(type_info->blend_read);
+
+  g_idp_struct_types[type_info->idp_type] = type_info;
+  idp_struct_types_by_rna().add_overwrite(type_info->rna_identifier, type_info);
+}
+
+const IDPropertyStructTypeInfo *IDP_struct_type_info(const eIDPropertyType type)
+{
+  if (uint(type) >= IDP_NUMTYPES) {
+    return nullptr;
+  }
+  return g_idp_struct_types[type];
+}
+
+const IDPropertyStructTypeInfo *IDP_struct_type_find_by_rna_identifier(
+    const StringRef rna_identifier)
+{
+  return idp_struct_types_by_rna().lookup_default_as(rna_identifier, nullptr);
+}
+
+void IDP_struct_type_init()
+{
+  BKE_curvemapping_idproperty_type_register();
+  BKE_colorband_idproperty_type_register();
+  BKE_curveprofile_idproperty_type_register();
+}
+
+void IDP_struct_type_exit()
+{
+  for (const IDPropertyStructTypeInfo *&info : g_idp_struct_types) {
+    info = nullptr;
+  }
+  idp_struct_types_by_rna().clear();
+}
+
+IDProperty *IDP_NewStruct(const StringRef name,
+                          const IDPropertyStructTypeInfo *type_info,
+                          const eIDPropertyFlag flags)
+{
+  BLI_assert(type_info);
+  BLI_assert(IDP_struct_type_info(type_info->idp_type) == type_info);
+
+  IDProperty *prop = MEM_new<IDProperty>("IDProperty struct");
+  prop->type = type_info->idp_type;
+  prop->flag = flags;
+  name.copy_utf8_truncated(prop->name);
+  prop->data.pointer = type_info->create_default();
+  return prop;
+}
+
+void *IDP_struct_data_get(const IDProperty *prop)
+{
+  if (prop == nullptr || IDP_struct_type_info(prop->type) == nullptr) {
+    return nullptr;
+  }
+  return prop->data.pointer;
+}
 
 /** \} */
 
