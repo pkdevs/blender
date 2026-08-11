@@ -603,7 +603,6 @@ void outliner_collection_isolate_flag(const Main & /*bmain*/,
 }
 
 static void outliner_collection_set_flag_recursive_fn(bContext *C,
-                                                      TreeElement *te,
                                                       const bool use_id_collection,
                                                       const char *propname)
 {
@@ -611,13 +610,25 @@ static void outliner_collection_set_flag_recursive_fn(bContext *C,
   wmWindow *win = CTX_wm_window(C);
   Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
+  ARegion *region = CTX_wm_region(C);
+  SpaceOutliner *space_outliner = CTX_wm_space_outliner(C);
+  wmEvent *event = win->runtime->eventstate;
 
-  bool do_isolate = (win->runtime->eventstate->modifier & KM_CTRL);
-  bool extend = (win->runtime->eventstate->modifier & KM_SHIFT);
+  bool do_isolate = (event->modifier & KM_CTRL);
+  bool extend = (event->modifier & KM_SHIFT);
 
   if (!ELEM(true, do_isolate, extend)) {
     return;
   }
+
+  float view_mval[2];
+
+  ui::view2d_region_to_view(
+      &region->v2d, event->xy[0] - region->winrct.xmin, event->xy[1] - region->winrct.ymin, &view_mval[0], &view_mval[1]);
+
+  TreeElement *te = outliner_find_item_at_y(
+                                            space_outliner, &space_outliner->runtime->tree, view_mval[1]);
+  BLI_assert(te != nullptr);
 
   /* Create PointerRNA and PropertyRNA for either Collection or LayerCollection. */
   CollectionData collection_data = get_collection_from_tree_element(te, use_id_collection);
@@ -677,9 +688,8 @@ static void view_layer__layer_collection_set_flag_recursive_fn(bContext *C,
                                                                void *poin,
                                                                void *poin2)
 {
-  TreeElement *te = static_cast<TreeElement *>(poin);
   const char *propname = static_cast<const char *>(poin2);
-  outliner_collection_set_flag_recursive_fn(C, te, false, propname);
+  outliner_collection_set_flag_recursive_fn(C, false, propname);
 }
 
 /**
@@ -688,9 +698,8 @@ static void view_layer__layer_collection_set_flag_recursive_fn(bContext *C,
  */
 static void view_layer__collection_set_flag_recursive_fn(bContext *C, void *poin, void *poin2)
 {
-  TreeElement *te = static_cast<TreeElement *>(poin);
   const char *propname = static_cast<const char *>(poin2);
-  outliner_collection_set_flag_recursive_fn(C, te, true, propname);
+  outliner_collection_set_flag_recursive_fn(C, true, propname);
 }
 
 /**
@@ -699,9 +708,8 @@ static void view_layer__collection_set_flag_recursive_fn(bContext *C, void *poin
  */
 static void scenes__collection_set_flag_recursive_fn(bContext *C, void *poin, void *poin2)
 {
-  TreeElement *te = static_cast<TreeElement *>(poin);
   const char *propname = static_cast<const char *>(poin2);
-  outliner_collection_set_flag_recursive_fn(C, te, true, propname);
+  outliner_collection_set_flag_recursive_fn(C, true, propname);
 }
 
 static void namebutton_fn(bContext *C, TreeStoreElem *tselem, const char *oldname)
@@ -1606,7 +1614,7 @@ static void outliner_draw_restrictbuts(ui::Block *block,
                                       std::nullopt);
               button_func_set(bt,
                               view_layer__layer_collection_set_flag_recursive_fn,
-                              &te,
+                              nullptr,
                               const_cast<char *>("exclude"));
               button_flag_enable(bt, ui::BUT_DRAG_LOCK);
             }
@@ -1629,7 +1637,7 @@ static void outliner_draw_restrictbuts(ui::Block *block,
                                            " \u2022 Shift to set inside collections and objects"));
               button_func_set(bt,
                               view_layer__layer_collection_set_flag_recursive_fn,
-                              &te,
+                              nullptr,
                               const_cast<char *>("hide_viewport"));
               button_flag_enable(bt, ui::BUT_DRAG_LOCK);
               if (!props_active.layer_collection_hide_viewport) {
@@ -1655,7 +1663,7 @@ static void outliner_draw_restrictbuts(ui::Block *block,
                                            " \u2022 Shift to set inside collections"));
               button_func_set(bt,
                               view_layer__layer_collection_set_flag_recursive_fn,
-                              &te,
+                              nullptr,
                               const_cast<char *>("holdout"));
               button_flag_enable(bt, ui::BUT_DRAG_LOCK);
               if (!props_active.layer_collection_holdout) {
@@ -1683,7 +1691,7 @@ static void outliner_draw_restrictbuts(ui::Block *block,
                        " \u2022 Shift to set inside collections"));
               button_func_set(bt,
                               view_layer__layer_collection_set_flag_recursive_fn,
-                              &te,
+                              nullptr,
                               const_cast<char *>("indirect_only"));
               button_flag_enable(bt, ui::BUT_DRAG_LOCK);
               if (props_active.layer_collection_holdout ||
@@ -1713,13 +1721,13 @@ static void outliner_draw_restrictbuts(ui::Block *block,
             if (layer_collection != nullptr) {
               button_func_set(bt,
                               view_layer__collection_set_flag_recursive_fn,
-                              &te,
+                              nullptr,
                               const_cast<char *>("hide_viewport"));
             }
             else {
               button_func_set(bt,
                               scenes__collection_set_flag_recursive_fn,
-                              &te,
+                              nullptr,
                               const_cast<char *>("hide_viewport"));
             }
             button_flag_enable(bt, ui::BUT_DRAG_LOCK);
@@ -1747,13 +1755,13 @@ static void outliner_draw_restrictbuts(ui::Block *block,
             if (layer_collection != nullptr) {
               button_func_set(bt,
                               view_layer__collection_set_flag_recursive_fn,
-                              &te,
+                              nullptr,
                               const_cast<char *>("hide_render"));
             }
             else {
               button_func_set(bt,
                               scenes__collection_set_flag_recursive_fn,
-                              &te,
+                              nullptr,
                               const_cast<char *>("hide_render"));
             }
             button_flag_enable(bt, ui::BUT_DRAG_LOCK);
@@ -1781,13 +1789,13 @@ static void outliner_draw_restrictbuts(ui::Block *block,
             if (layer_collection != nullptr) {
               button_func_set(bt,
                               view_layer__collection_set_flag_recursive_fn,
-                              &te,
+                              nullptr,
                               const_cast<char *>("hide_select"));
             }
             else {
               button_func_set(bt,
                               scenes__collection_set_flag_recursive_fn,
-                              &te,
+                              nullptr,
                               const_cast<char *>("hide_select"));
             }
             button_flag_enable(bt, ui::BUT_DRAG_LOCK);
