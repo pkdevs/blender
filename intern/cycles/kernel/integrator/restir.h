@@ -441,7 +441,7 @@ ccl_device void integrator_evaluate_final_samples(KernelGlobals kg, // DEVICE_KE
   if (!reservoir_ok || !shader_ok) {
     integrator_path_next(state,
                          DEVICE_KERNEL_INTEGRATOR_FINAL_EVALUATION,
-                         DEVICE_KERNEL_INTEGRATOR_RESTIR_PT_EVALUATION);
+                         DEVICE_KERNEL_INTEGRATOR_RESTIR_PT_EVALUATION); // !!!
     return;
   }
 
@@ -468,7 +468,15 @@ ccl_device void integrator_evaluate_final_samples(KernelGlobals kg, // DEVICE_KE
   /* Load random number state. */
   RNGState rng_state;
   path_state_rng_load(state, &rng_state);
-  integrate_direct_light_create_shadow_path<true>(
+  /*
+                      ┌──────────────► INTERSECT_SHADOW
+                      │                       │
+  FINAL_EVALUATION ───┤                       ▼
+                      │                 SHADE_SHADOW
+                      │
+                      └──────────────► RESTIR_PT_EVALUATION
+  */
+  integrate_direct_light_create_shadow_path<true>( // TODO: create shadow paths in kernel_creates_shadow_paths()?
       kg, state, &rng_state, &current.sd, &current.reservoir.light, &current.reservoir.radiance, 0);
 
   integrator_path_next(state,
@@ -587,6 +595,7 @@ ccl_device bool integrator_restir(KernelGlobals kg,
 
   const uint32_t render_pixel_index = INTEGRATOR_STATE(state, path, render_pixel_index);
   if (!integrator_restir_unpack_shader(kg, &current, render_pixel_index, render_buffer)) {
+    integrator_path_terminate(kg, state, render_buffer, DEVICE_KERNEL_INTEGRATOR_RESTIR);
     return false;
   }
 
@@ -620,6 +629,10 @@ ccl_device bool integrator_restir(KernelGlobals kg,
 
   film_write_pass_reservoir(kg, state, &current.reservoir, render_buffer, write_prev);
   film_write_pass_reservoir_pt(kg, state, &current_pt, render_buffer, write_prev); // light_pass
+
+  /* Spatial RESTIR is a terminal GPU pass.
+   * The next spatial iteration creates fresh states. */
+  integrator_path_terminate(kg, state, render_buffer, DEVICE_KERNEL_INTEGRATOR_RESTIR);
 
   return true;
 }

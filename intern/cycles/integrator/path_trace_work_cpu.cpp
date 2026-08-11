@@ -182,7 +182,7 @@ void PathTraceWorkCPU::render_samples(RenderStatistics &statistics,
   local_arena.execute(
       [&] { initial_resampling(image_width, image_height, start_sample, sample_offset); });
 
-  /* FIXME(weizhen): spatial resampling makes adaptive sampling (noise threshold) fail. */
+  /* TODO(weizhen): spatial resampling makes adaptive sampling (noise threshold) fail. */
   /* Spatial Resampling. */
   int i = 0;
   if (device_scene_->data.integrator.use_restir) {
@@ -215,7 +215,6 @@ void PathTraceWorkCPU::render_samples_full_pipeline(ThreadKernelGlobalsCPU *kern
   IntegratorStateCPU *state = &integrator_states[0];
   IntegratorStateCPU *shadow_catcher_state = nullptr;
 
-  // !!!: KernelWorkTile sample_work_tile = work_tile; should carry the default
   INTEGRATOR_STATE_WRITE(state, path, setup_restir) = false;
   INTEGRATOR_STATE_WRITE(state, path, final_evaluation) = false;
 
@@ -226,7 +225,6 @@ void PathTraceWorkCPU::render_samples_full_pipeline(ThreadKernelGlobalsCPU *kern
 
   KernelWorkTile sample_work_tile = work_tile;
 
-  // New
   sample_work_tile.restir_iteration = 0;
   sample_work_tile.setup_restir = false;
   sample_work_tile.final_evaluation = false;
@@ -291,20 +289,19 @@ void PathTraceWorkCPU::render_samples_full_pipeline(ThreadKernelGlobalsCPU *kern
 }
 
 void PathTraceWorkCPU::render_samples_direct_illumination(ThreadKernelGlobalsCPU *kernel_globals,
-                                                          const KernelWorkTile &work_tile, // Remove Const?
+                                                          const KernelWorkTile &work_tile,
                                                           const int iteration)
 {
   IntegratorStateCPU integrator_states[2];
 
   IntegratorStateCPU *state = &integrator_states[0];
 
-  // !!!: KernelWorkTile sample_work_tile = work_tile; should carry the default
-  INTEGRATOR_STATE_WRITE(state, path, spatial_iteration) = iteration; // !!!: How on GPU
+  INTEGRATOR_STATE_WRITE(state, path, spatial_iteration) = iteration;
   INTEGRATOR_STATE_WRITE(state, path, setup_restir) = true;
   INTEGRATOR_STATE_WRITE(state, path, final_evaluation) = false;
 
-  KernelWorkTile sample_work_tile = work_tile; // !!!
-  // New
+  KernelWorkTile sample_work_tile = work_tile;
+
   sample_work_tile.restir_iteration = iteration;
   sample_work_tile.setup_restir = true;
   sample_work_tile.final_evaluation = false;
@@ -326,7 +323,7 @@ void PathTraceWorkCPU::render_samples_direct_illumination(ThreadKernelGlobalsCPU
   assert(INTEGRATOR_STATE(state, path, setup_restir));
   assert(!INTEGRATOR_STATE(state, path, final_evaluation));
 
-  kernels_.integrator_restir(kernel_globals, state, &sample_work_tile, render_buffer);
+  kernels_.integrator_restir(kernel_globals, state, &sample_work_tile, render_buffer); // !!!
 }
 
 void PathTraceWorkCPU::render_samples_evaluate_final(ThreadKernelGlobalsCPU *kernel_globals,
@@ -337,14 +334,12 @@ void PathTraceWorkCPU::render_samples_evaluate_final(ThreadKernelGlobalsCPU *ker
 
   IntegratorStateCPU *state = &integrator_states[0];
 
-  // !!!: KernelWorkTile sample_work_tile = work_tile; should carry the default
-  INTEGRATOR_STATE_WRITE(state, path, spatial_iteration) = iteration; // !!!: How on GPU?
+  INTEGRATOR_STATE_WRITE(state, path, spatial_iteration) = iteration;
   INTEGRATOR_STATE_WRITE(state, path, setup_restir) = false;
   INTEGRATOR_STATE_WRITE(state, path, final_evaluation) = true;
 
   KernelWorkTile sample_work_tile = work_tile;
 
-  // New
   sample_work_tile.restir_iteration = iteration;
   sample_work_tile.setup_restir = false;
   sample_work_tile.final_evaluation = true;

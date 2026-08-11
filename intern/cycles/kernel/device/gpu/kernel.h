@@ -54,6 +54,12 @@
 
 #include "kernel/film/read.h"
 
+// #include <utility> // Swap
+
+// #include "util/log.h"
+// #include "util/string.h"
+
+
 /* --------------------------------------------------------------------
  * Integrator.
  */
@@ -340,8 +346,9 @@ ccl_gpu_kernel(GPU_KERNEL_BLOCK_NUM_THREADS, GPU_KERNEL_MAX_REGISTERS)
 
     uint x, y, sample;
 
-    ccl_gpu_kernel_call(
-        integrator_restir(nullptr, state, tile, render_buffer, x, y, sample));
+    ccl_gpu_kernel_call(get_work_pixel(tile, tile_work_index, &x, &y, &sample));
+
+    ccl_gpu_kernel_call(integrator_restir(nullptr, state, tile, render_buffer, x, y, sample));
   }
   else {
     if (work_index >= num_active_paths) {
@@ -350,8 +357,7 @@ ccl_gpu_kernel(GPU_KERNEL_BLOCK_NUM_THREADS, GPU_KERNEL_MAX_REGISTERS)
 
     const int state = (path_index_array) ? path_index_array[work_index] : work_index;
 
-    ccl_gpu_kernel_call(
-        integrator_restir(nullptr, state, nullptr, render_buffer, 0, 0, 0));
+    ccl_gpu_kernel_call(integrator_restir(nullptr, state, nullptr, render_buffer, 0, 0, 0));
   }
 }
 ccl_gpu_kernel_postfix

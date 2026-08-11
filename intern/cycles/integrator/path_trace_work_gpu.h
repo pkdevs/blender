@@ -60,10 +60,8 @@ class PathTraceWorkGPU : public PathTraceWork {
 
  /* ReSTIR GPU stages. */
 
-// void enqueue_restir_path_iteration(DeviceKernel kernel, const int num_paths_limit = INT_MAX);
   bool enqueue_restir_path_iteration(DeviceKernel kernel, const int num_paths_limit);
   bool run_restir_phase(const DeviceKernel kernel);
-  bool run_until_no_main_work();
   bool run_restir_final_evaluation();
   void reset_work_tile_scheduler(const int start_sample,
                                  const int samples_num,
@@ -80,6 +78,8 @@ class PathTraceWorkGPU : public PathTraceWork {
                           const int num_work_tiles,
                           const int num_active_paths,
                           const int num_predicted_splits);
+
+  void enqueue_restir_work_tiles();
 
   bool enqueue_path_iteration();
   void enqueue_path_iteration(DeviceKernel kernel, const int num_paths_limit = INT_MAX);
@@ -134,9 +134,10 @@ class PathTraceWorkGPU : public PathTraceWork {
   int kernel_max_active_main_path_index(DeviceKernel kernel);
 
   /* ReSTIR WorkTile. */
-  int restir_iteration_ = 0; // New
+  int restir_iteration_ = 0;
   bool setup_restir_ = false;
   bool final_evaluation_ = false;
+  // device_vector<uint32_t> debug_restir_terminations_; // DEBUG ONLY
 
   /* Integrator queue. */
   unique_ptr<DeviceQueue> queue_;
@@ -167,6 +168,9 @@ class PathTraceWorkGPU : public PathTraceWork {
 
   /* Temporary buffer for passing work tiles to kernel. */
   device_vector<KernelWorkTile> work_tiles_;
+
+  int restir_num_work_tiles_;
+  int restir_max_tile_work_size_;
 
   /* Temporary buffer used by the copy_to_display() whenever graphics interoperability is not
    * available. Is allocated on-demand. */
