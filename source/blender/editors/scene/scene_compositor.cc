@@ -593,7 +593,7 @@ static void catalog_assets_draw(const bContext *C, Menu *menu)
                                             true);
   for (const asset_system::AssetRepresentation *asset : assets) {
     ensure_separator();
-    ed::asset::draw_asset_menu_item(asset, ot->idname, layout);
+    ed::asset::draw_asset_menu_item(asset, ot->idname, wm::OpCallContext::InvokeDefault, layout);
   }
 
   catalog_item->foreach_child([&](const asset_system::AssetCatalogTreeItem &item) {
@@ -625,7 +625,7 @@ static void unassigned_assets_draw(const bContext *C, Menu *menu)
   wmOperatorType *ot = WM_operatortype_find("SCENE_OT_add_compositor_effect_node_group_asset",
                                             true);
   for (const asset_system::AssetRepresentation *asset : tree.unassigned_assets) {
-    ed::asset::draw_asset_menu_item(asset, ot->idname, layout);
+    ed::asset::draw_asset_menu_item(asset, ot->idname, wm::OpCallContext::InvokeDefault, layout);
   }
 
   bool first = true;
