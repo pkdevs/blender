@@ -545,7 +545,7 @@ static wmOperatorStatus view3d_set_roll_exec(bContext *C, wmOperator *op)
   View3D *v3d;
   ARegion *region;
 
-  float angle = RNA_float_get(op->ptr, "angle");
+  const float angle = RNA_float_get(op->ptr, "angle");
 
   /* no nullptr check is needed, poll checks */
   ED_view3d_context_user_region(C, &v3d, &region);
