@@ -379,7 +379,7 @@ static bool bpy_run_string_exec_with_locals_assume_gil(
 {
   /* Set up locals & globals. */
   BLI_assert(locals.type == IDP_GROUP);
-  PyObject *py_locals = BPy_IDGroup_MapDataToPy(&locals);
+  PyObject *py_locals = BPy_IDGroup_MapDataToPy(nullptr, &locals);
   if (!py_locals) {
     /* Leave the printing of the exception to the caller. */
     return false;

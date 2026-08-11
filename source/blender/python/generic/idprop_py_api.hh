@@ -90,7 +90,7 @@ struct BPy_IDGroup_View {
 /**
  * For simple, non nested types this is the same as #BPy_IDGroup_WrapData.
  */
-[[nodiscard]] PyObject *BPy_IDGroup_MapDataToPy(IDProperty *prop);
+[[nodiscard]] PyObject *BPy_IDGroup_MapDataToPy(ID *id, IDProperty *prop);
 [[nodiscard]] PyObject *BPy_IDGroup_WrapData(ID *id, IDProperty *prop, IDProperty *parent);
 /**
  * \note group can be a pointer array or a group.

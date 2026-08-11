@@ -1223,7 +1223,7 @@ static PyObject *BPy_IDGroup_iter(BPy_IDProperty *self)
   return ret;
 }
 
-PyObject *BPy_IDGroup_MapDataToPy(IDProperty *prop)
+PyObject *BPy_IDGroup_MapDataToPy(ID *id, IDProperty *prop)
 {
   switch (prop->type) {
     case IDP_STRING:
@@ -1239,8 +1239,7 @@ PyObject *BPy_IDGroup_MapDataToPy(IDProperty *prop)
     case IDP_ID:
       return idprop_py_from_idp_id(prop);
     IDP_ANY_STRUCT_TYPE_CASE:
-      /* Owner ID is unknown here; wrap without an owner. */
-      return idprop_py_from_idp_struct(nullptr, prop);
+      return idprop_py_from_idp_struct(id, prop);
     case IDP_ARRAY: {
       PyObject *seq = PyList_New(prop->len);
       int i;
@@ -1301,7 +1300,7 @@ PyObject *BPy_IDGroup_MapDataToPy(IDProperty *prop)
       }
 
       for (i = 0; i < prop->len; i++) {
-        PyObject *wrap = BPy_IDGroup_MapDataToPy(array++);
+        PyObject *wrap = BPy_IDGroup_MapDataToPy(id, array++);
 
         /* BPy_IDGroup_MapDataToPy sets the error */
         if (wrap == nullptr) [[unlikely]] {
@@ -1318,7 +1317,7 @@ PyObject *BPy_IDGroup_MapDataToPy(IDProperty *prop)
       IDProperty *loop;
 
       for (loop = static_cast<IDProperty *>(prop->data.group.first); loop; loop = loop->next) {
-        PyObject *wrap = BPy_IDGroup_MapDataToPy(loop);
+        PyObject *wrap = BPy_IDGroup_MapDataToPy(id, loop);
 
         /* BPy_IDGroup_MapDataToPy sets the error */
         if (wrap == nullptr) [[unlikely]] {
@@ -1799,7 +1798,17 @@ static PyObject *BPy_IDGroup_pop(BPy_IDProperty *self, PyObject *args)
     return Py_NewRef(def);
   }
 
-  pyform = BPy_IDGroup_MapDataToPy(idprop);
+  /* Owned DNA structs cannot be converted to a detached Python value; returning a wrap would
+   * dangle once the IDProperty is freed. Use deletion instead if removal is needed. */
+  if (IDP_struct_type_info(idprop->type)) {
+    PyErr_Format(PyExc_TypeError,
+                 "cannot pop IDProperty '%s' of type '%s'",
+                 idprop->name,
+                 IDP_type_str(idprop));
+    return nullptr;
+  }
+
+  pyform = BPy_IDGroup_MapDataToPy(self->owner_id, idprop);
   if (pyform == nullptr) {
     /* Ok something bad happened with the #PyObject, so don't remove the prop from the group.
      * if `pyform` is nullptr, then it already should have raised an exception. */
@@ -2035,7 +2044,7 @@ PyDoc_STRVAR(
     "   :rtype: dict[str, Any]\n");
 static PyObject *BPy_IDGroup_to_dict(BPy_IDProperty *self)
 {
-  return BPy_IDGroup_MapDataToPy(self->prop);
+  return BPy_IDGroup_MapDataToPy(self->owner_id, self->prop);
 }
 
 PyDoc_STRVAR(
@@ -2312,7 +2321,7 @@ PyDoc_STRVAR(
     "   :rtype: list[int] | list[float] | list[bool]\n");
 static PyObject *BPy_IDArray_to_list(BPy_IDArray *self)
 {
-  return BPy_IDGroup_MapDataToPy(self->prop);
+  return BPy_IDGroup_MapDataToPy(self->owner_id, self->prop);
 }
 
 #ifdef __GNUC__

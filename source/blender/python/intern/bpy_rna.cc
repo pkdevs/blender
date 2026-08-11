@@ -5752,8 +5752,17 @@ static PyObject *pyrna_struct_pop(BPy_StructRNA *self, PyObject *args)
     idprop = IDP_GetPropertyFromGroup(group, key);
 
     if (idprop) {
+      /* Owned DNA structs cannot be converted to a detached Python value; returning a wrap would
+       * dangle once the IDProperty is freed. */
+      if (IDP_struct_type_info(idprop->type)) {
+        PyErr_Format(PyExc_TypeError,
+                     "cannot pop IDProperty '%s' of type '%s'",
+                     idprop->name,
+                     IDP_type_str(idprop));
+        return nullptr;
+      }
       /* Don't use #BPy_IDGroup_WrapData as the id-property is being removed from the ID. */
-      PyObject *ret = BPy_IDGroup_MapDataToPy(idprop);
+      PyObject *ret = BPy_IDGroup_MapDataToPy(self->ptr->owner_id, idprop);
       /* Internal error. */
       if (ret == nullptr) [[unlikely]] {
         return nullptr;
