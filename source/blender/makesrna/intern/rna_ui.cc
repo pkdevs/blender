@@ -1728,7 +1728,7 @@ static void rna_def_ui_layout(BlenderRNA *brna)
   RNA_def_property_boolean_funcs(prop, "rna_UILayout_active_get", "rna_UILayout_active_set");
   RNA_def_property_ui_text(prop,
                            "Active",
-                           "When false, every item within this layout are grayed out. Values can "
+                           "When false, all items within this layout are grayed out. Values can "
                            "still be changed and interactions are allowed");
 
   prop = RNA_def_property(srna, "active_default", PROP_BOOLEAN, PROP_NONE);
@@ -1763,7 +1763,7 @@ static void rna_def_ui_layout(BlenderRNA *brna)
   RNA_def_property_ui_text(
       prop,
       "Enabled",
-      "When false, every item within this layout are grayed out. Values could not be changed and interactions are disabled);
+      "When false, all items within this layout are grayed out. Values could not be changed and interactions are disabled);
 
   prop = RNA_def_property(srna, "alert", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_funcs(prop, "rna_UILayout_alert_get", "rna_UILayout_alert_set");
