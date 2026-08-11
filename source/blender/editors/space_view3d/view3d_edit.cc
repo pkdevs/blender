@@ -570,9 +570,6 @@ void VIEW3D_OT_view_roll_set(wmOperatorType *ot)
   ot->exec = view3d_set_roll_exec;
   ot->poll = ED_operator_rv3d_user_region_poll;
 
-  /* flags */
-  ot->flag = 0;
-
   /* properties */
   ot->prop = prop = RNA_def_float(
       ot->srna, "angle", 0, -FLT_MAX, FLT_MAX, "Roll", "", -FLT_MAX, FLT_MAX);
