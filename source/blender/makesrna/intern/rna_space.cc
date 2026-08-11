@@ -2375,9 +2375,6 @@ static void rna_SpaceProperties_pin_id_update(Main * /*bmain*/, Scene * /*scene*
 static void rna_SpaceProperties_use_pin_id_update(bContext *C, PointerRNA *ptr)
 {
   SpaceProperties *sbuts = static_cast<SpaceProperties *>(ptr->data);
-  if (sbuts->flag & SB_PIN_CONTEXT) {
-    sbuts->flag |= SB_SHOW_CONTEXT_PATH;
-  }
   ID *new_id = (sbuts->flag & SB_PIN_CONTEXT) ? ED_buttons_context_id_path(C) : nullptr;
   PointerRNA new_id_ptr = RNA_id_pointer_create(new_id);
   RNA_pointer_set(ptr, "pin_id", new_id_ptr);
@@ -2387,7 +2384,7 @@ static int rna_SpaceProperties_show_context_editable(const PointerRNA *ptr, cons
 {
   const SpaceProperties *sbuts = static_cast<const SpaceProperties *>(ptr->data);
 
-  if (sbuts->flag & SB_PIN_CONTEXT) {
+  if ((sbuts->flag & SB_PIN_CONTEXT) && (sbuts->flag & SB_SHOW_CONTEXT_PATH)) {
     if (r_info) {
       *r_info = N_("Can't be hidden while the context is pinned");
     }

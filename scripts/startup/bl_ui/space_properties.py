@@ -113,6 +113,7 @@ class PROPERTIES_PT_options(Panel):
 
     def draw(self, context):
         layout = self.layout
+
         space = context.space_data
 
         col = layout.column()
