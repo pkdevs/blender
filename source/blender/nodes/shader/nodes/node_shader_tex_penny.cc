@@ -302,10 +302,16 @@ class PennyFunction : public mf::MultiFunction {
     mask.foreach_index([&](const int64_t i) {
       /* actual_scale = (Scale/100) * (Scale_axis/100) * 0.25; input divided by it. */
       const float global_factor = scale[i] * 0.01f;
-      const float fx_scale = math::max(global_factor * scale_x[i] * 0.01f, 1e-6f) * 0.25f;
-      const float fy_scale = math::max(global_factor * scale_y[i] * 0.01f, 1e-6f) * 0.25f;
-      const float fz_scale = math::max(global_factor * scale_z[i] * 0.01f, 1e-6f) * 0.25f;
-      const float fw_scale = math::max(global_factor * scale_w[i] * 0.01f, 1e-6f) * 0.25f;
+      /* Floor the magnitude away from zero but preserve the sign so negative
+       * Scale mirrors the coordinate (e.g. -100% = same size as +100%, flipped). */
+      const float fx_raw = global_factor * scale_x[i] * 0.01f;
+      const float fy_raw = global_factor * scale_y[i] * 0.01f;
+      const float fz_raw = global_factor * scale_z[i] * 0.01f;
+      const float fw_raw = global_factor * scale_w[i] * 0.01f;
+      const float fx_scale = (fx_raw < 0.0f ? math::min(fx_raw, -1e-6f) : math::max(fx_raw, 1e-6f)) * 0.25f;
+      const float fy_scale = (fy_raw < 0.0f ? math::min(fy_raw, -1e-6f) : math::max(fy_raw, 1e-6f)) * 0.25f;
+      const float fz_scale = (fz_raw < 0.0f ? math::min(fz_raw, -1e-6f) : math::max(fz_raw, 1e-6f)) * 0.25f;
+      const float fw_scale = (fw_raw < 0.0f ? math::min(fw_raw, -1e-6f) : math::max(fw_raw, 1e-6f)) * 0.25f;
 
       /* Assemble the sampled coordinate per dimension (matches Blender Noise):
        * 1D -> (0,0,0,W); 2D -> (X,Y,0,0); 3D -> (X,Y,Z,0); 4D -> (X,Y,Z,W). */
@@ -314,27 +320,21 @@ class PennyFunction : public mf::MultiFunction {
       float px = 0.0f, py = 0.0f, pz = 0.0f, pw = 0.0f;
       int4 per_final;
       if (tileable_) {
-        /* Tileable: snap the lattice to round(Period / scale) and sample at
-         * coord * (lattice / Period) so it repeats exactly every Period. */
+        /* Scale the coordinate directly (same as the non-tileable path) while
+         * keeping the tiling period at the user's raw Period values. The previous
+         * approach scaled the lattice period proportionally with the coordinate,
+         * which cancelled out and made Scale have no visual effect. */
         const int Px = math::clamp(int(per_x[i]), 1, 256);
         const int Py = math::clamp(int(per_y[i]), 1, 256);
         const int Pz = math::clamp(int(per_z[i]), 1, 256);
         const int Pw = math::clamp(int(per_w[i]), 1, 256);
-        const int Lx = math::clamp(int(float(Px) / fx_scale + 0.5f), 1, 4096);
-        const int Ly = math::clamp(int(float(Py) / fy_scale + 0.5f), 1, 4096);
-        const int Lz = math::clamp(int(float(Pz) / fz_scale + 0.5f), 1, 4096);
-        const int Lw = math::clamp(int(float(Pw) / fw_scale + 0.5f), 1, 4096);
-        const float kx = float(Lx) / float(Px);
-        const float ky = float(Ly) / float(Py);
-        const float kz = float(Lz) / float(Pz);
-        const float kw = float(Lw) / float(Pw);
         switch (dimensions_) {
-          case 1: pw = wv * kw; break;
-          case 2: px = p.x * kx; py = p.y * ky; break;
-          case 3: px = p.x * kx; py = p.y * ky; pz = p.z * kz; break;
-          default: px = p.x * kx; py = p.y * ky; pz = p.z * kz; pw = wv * kw; break;
+          case 1: pw = wv / fw_scale; break;
+          case 2: px = p.x / fx_scale; py = p.y / fy_scale; break;
+          case 3: px = p.x / fx_scale; py = p.y / fy_scale; pz = p.z / fz_scale; break;
+          default: px = p.x / fx_scale; py = p.y / fy_scale; pz = p.z / fz_scale; pw = wv / fw_scale; break;
         }
-        per_final = int4(Lx, Ly, Lz, Lw);
+        per_final = int4(Px, Py, Pz, Pw);
       }
       else {
         /* Non-tiling: continuous Scale; large fixed lattice (effectively never repeats). */

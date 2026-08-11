@@ -2005,15 +2005,21 @@ shader PENNY_SHADER(int use_mapping = 0,
   float roughness = max(Roughness, 0.0);
 
   float global_factor = Scale * 0.01;
-  float fx_scale = max(global_factor * ScaleX * 0.01, 1e-6) * 0.25;
-  float fy_scale = max(global_factor * ScaleY * 0.01, 1e-6) * 0.25;
-  float fz_scale = max(global_factor * ScaleZ * 0.01, 1e-6) * 0.25;
-  float fw_scale = max(global_factor * ScaleW * 0.01, 1e-6) * 0.25;
+  /* Floor the magnitude away from zero but preserve the sign so negative
+   * Scale mirrors the coordinate (e.g. -100% = same size as +100%, flipped). */
+  float fx_raw = global_factor * ScaleX * 0.01;
+  float fy_raw = global_factor * ScaleY * 0.01;
+  float fz_raw = global_factor * ScaleZ * 0.01;
+  float fw_raw = global_factor * ScaleW * 0.01;
+  float fx_scale = (fx_raw < 0.0 ? min(fx_raw, -1e-6) : max(fx_raw, 1e-6)) * 0.25;
+  float fy_scale = (fy_raw < 0.0 ? min(fy_raw, -1e-6) : max(fy_raw, 1e-6)) * 0.25;
+  float fz_scale = (fz_raw < 0.0 ? min(fz_raw, -1e-6) : max(fz_raw, 1e-6)) * 0.25;
+  float fw_scale = (fw_raw < 0.0 ? min(fw_raw, -1e-6) : max(fw_raw, 1e-6)) * 0.25;
 
-  /* Period is an object-space tile size, independent of Scale. Snap the integer
-   * lattice period to round(Period / scale); sampling at coord * (lattice /
-   * Period) then repeats exactly every Period units while Scale still sets the
-   * feature size. */
+  /* Scale the coordinate directly while keeping the tiling period at the
+   * user's raw Period values. The previous approach scaled the lattice period
+   * proportionally with the coordinate, which cancelled out and made Scale
+   * have no visual effect. */
   float qx, qy, qz, qw;
   vector4 period;
   if (tileable != 0) {
@@ -2021,15 +2027,11 @@ shader PENNY_SHADER(int use_mapping = 0,
     float Py = clamp((int)PeriodY, 1, 256);
     float Pz = clamp((int)PeriodZ, 1, 256);
     float Pw = clamp((int)PeriodW, 1, 256);
-    float Lx = clamp(round(Px / fx_scale), 1.0, 4096.0);
-    float Ly = clamp(round(Py / fy_scale), 1.0, 4096.0);
-    float Lz = clamp(round(Pz / fz_scale), 1.0, 4096.0);
-    float Lw = clamp(round(Pw / fw_scale), 1.0, 4096.0);
-    qx = px * (Lx / Px);
-    qy = py * (Ly / Py);
-    qz = pz * (Lz / Pz);
-    qw = W * (Lw / Pw);
-    period = vector4(Lx, Ly, Lz, Lw);
+    qx = px / fx_scale;
+    qy = py / fy_scale;
+    qz = pz / fz_scale;
+    qw = W / fw_scale;
+    period = vector4(Px, Py, Pz, Pw);
   }
   else {
     qx = px / fx_scale;

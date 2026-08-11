@@ -2416,10 +2416,17 @@ ccl_device_noinline void svm_node_tex_penny(ccl_private float *ccl_restrict stac
    * Bigger Scale = larger features, so divide input by the scale.
    * Avoid div-by-zero with a small floor. */
   const float global_factor = scale_pct * 0.01f;
-  const float fx_scale = fmaxf(global_factor * scale_x_pct * 0.01f, 1e-6f) * 0.25f;
-  const float fy_scale = fmaxf(global_factor * scale_y_pct * 0.01f, 1e-6f) * 0.25f;
-  const float fz_scale = fmaxf(global_factor * scale_z_pct * 0.01f, 1e-6f) * 0.25f;
-  const float fw_scale = fmaxf(global_factor * scale_w_pct * 0.01f, 1e-6f) * 0.25f;
+  /* Floor the magnitude away from zero to avoid div-by-zero, but preserve
+   * the sign so negative Scale mirrors the coordinate (e.g. Scale -100%
+   * produces the same feature size as +100%, flipped). */
+  const float fx_raw = global_factor * scale_x_pct * 0.01f;
+  const float fy_raw = global_factor * scale_y_pct * 0.01f;
+  const float fz_raw = global_factor * scale_z_pct * 0.01f;
+  const float fw_raw = global_factor * scale_w_pct * 0.01f;
+  const float fx_scale = (fx_raw < 0.0f ? fminf(fx_raw, -1e-6f) : fmaxf(fx_raw, 1e-6f)) * 0.25f;
+  const float fy_scale = (fy_raw < 0.0f ? fminf(fy_raw, -1e-6f) : fmaxf(fy_raw, 1e-6f)) * 0.25f;
+  const float fz_scale = (fz_raw < 0.0f ? fminf(fz_raw, -1e-6f) : fmaxf(fz_raw, 1e-6f)) * 0.25f;
+  const float fw_scale = (fw_raw < 0.0f ? fminf(fw_raw, -1e-6f) : fmaxf(fw_raw, 1e-6f)) * 0.25f;
 
   /* Period is an object-space tile size, independent of Scale. Snap the integer
    * lattice period to round(Period / scale); sampling at coord * (lattice /
@@ -2432,39 +2439,35 @@ ccl_device_noinline void svm_node_tex_penny(ccl_private float *ccl_restrict stac
     const int Py = clamp((int)stack_load(stack, node.period_y), 1, 256);
     const int Pz = clamp((int)stack_load(stack, node.period_z), 1, 256);
     const int Pw = clamp((int)stack_load(stack, node.period_w), 1, 256);
-    const int Lx = clamp((int)((float)Px / fx_scale + 0.5f), 1, 4096);
-    const int Ly = clamp((int)((float)Py / fy_scale + 0.5f), 1, 4096);
-    const int Lz = clamp((int)((float)Pz / fz_scale + 0.5f), 1, 4096);
-    const int Lw = clamp((int)((float)Pw / fw_scale + 0.5f), 1, 4096);
-    const float kx = (float)Lx / (float)Px;
-    const float ky = (float)Ly / (float)Py;
-    const float kz = (float)Lz / (float)Pz;
-    const float kw = (float)Lw / (float)Pw;
+    /* Scale the coordinate directly (same as the non-tileable path) while
+     * keeping the tiling period at the user's raw Period values. The previous
+     * approach scaled the lattice period proportionally with the coordinate,
+     * which cancelled out and made Scale have no visual effect. */
     if (dimensions == 1) {
-      w_scaled = w_in * kw;
+      w_scaled = w_in / fw_scale;
       vector.x = 0.0f;
       vector.y = 0.0f;
       vector.z = 0.0f;
     }
     else if (dimensions == 2) {
-      vector.x *= kx;
-      vector.y *= ky;
+      vector.x /= fx_scale;
+      vector.y /= fy_scale;
       vector.z = 0.0f;
       w_scaled = 0.0f;
     }
     else if (dimensions == 3) {
-      vector.x *= kx;
-      vector.y *= ky;
-      vector.z *= kz;
+      vector.x /= fx_scale;
+      vector.y /= fy_scale;
+      vector.z /= fz_scale;
       w_scaled = 0.0f;
     }
     else {
-      vector.x *= kx;
-      vector.y *= ky;
-      vector.z *= kz;
-      w_scaled = w_in * kw;
+      vector.x /= fx_scale;
+      vector.y /= fy_scale;
+      vector.z /= fz_scale;
+      w_scaled = w_in / fw_scale;
     }
-    period = make_int4(Lx, Ly, Lz, Lw);
+    period = make_int4(Px, Py, Pz, Pw);
   }
   else {
     if (dimensions == 1) {

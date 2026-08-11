@@ -1900,10 +1900,16 @@ void penny_field_setup(float3 co,
   float3 vec = co;
 
   float global_factor = scale_pct * 0.01f;
-  float fx_scale = max(global_factor * scale_x_pct * 0.01f, 1e-6f) * 0.25f;
-  float fy_scale = max(global_factor * scale_y_pct * 0.01f, 1e-6f) * 0.25f;
-  float fz_scale = max(global_factor * scale_z_pct * 0.01f, 1e-6f) * 0.25f;
-  float fw_scale = max(global_factor * scale_w_pct * 0.01f, 1e-6f) * 0.25f;
+  /* Floor the magnitude away from zero but preserve the sign so negative
+   * Scale mirrors the coordinate (e.g. -100% = same size as +100%, flipped). */
+  float fx_raw = global_factor * scale_x_pct * 0.01f;
+  float fy_raw = global_factor * scale_y_pct * 0.01f;
+  float fz_raw = global_factor * scale_z_pct * 0.01f;
+  float fw_raw = global_factor * scale_w_pct * 0.01f;
+  float fx_scale = (fx_raw < 0.0f ? min(fx_raw, -1e-6f) : max(fx_raw, 1e-6f)) * 0.25f;
+  float fy_scale = (fy_raw < 0.0f ? min(fy_raw, -1e-6f) : max(fy_raw, 1e-6f)) * 0.25f;
+  float fz_scale = (fz_raw < 0.0f ? min(fz_raw, -1e-6f) : max(fz_raw, 1e-6f)) * 0.25f;
+  float fw_scale = (fw_raw < 0.0f ? min(fw_raw, -1e-6f) : max(fw_raw, 1e-6f)) * 0.25f;
 
   /* Period is an object-space tile size, independent of Scale. Snap the integer
    * lattice period to round(Period / scale), then sample at vec * (lattice /
@@ -1916,15 +1922,15 @@ void penny_field_setup(float3 co,
     int Py = clamp(int(period_y), 1, 256);
     int Pz = clamp(int(period_z), 1, 256);
     int Pw = clamp(int(period_w), 1, 256);
-    int Lx = clamp(int(round(float(Px) / fx_scale)), 1, 4096);
-    int Ly = clamp(int(round(float(Py) / fy_scale)), 1, 4096);
-    int Lz = clamp(int(round(float(Pz) / fz_scale)), 1, 4096);
-    int Lw = clamp(int(round(float(Pw) / fw_scale)), 1, 4096);
-    qx = vec.x * (float(Lx) / float(Px));
-    qy = vec.y * (float(Ly) / float(Py));
-    qz = vec.z * (float(Lz) / float(Pz));
-    qw = w * (float(Lw) / float(Pw));
-    period = int4(Lx, Ly, Lz, Lw);
+    /* Scale the coordinate directly (same as the non-tileable path) while
+     * keeping the tiling period at the user's raw Period values. The previous
+     * approach scaled the lattice period proportionally with the coordinate,
+     * which cancelled out and made Scale have no visual effect. */
+    qx = vec.x / fx_scale;
+    qy = vec.y / fy_scale;
+    qz = vec.z / fz_scale;
+    qw = w / fw_scale;
+    period = int4(Px, Py, Pz, Pw);
   }
   else {
     /* Non-tiling: continuous Scale; large fixed lattice so it effectively never
