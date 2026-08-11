@@ -36,6 +36,7 @@
 #include "vk_texture_pool.hh"
 #include "vk_uniform_buffer.hh"
 #include "vk_vertex_buffer.hh"
+#include "vk_work_in_flight.hh"
 
 #include "vk_backend.hh"
 
@@ -350,6 +351,7 @@ void VKBackend::supported_devices_print(FILE *fp)
     fprintf(fp, "Unable to initialize a Vulkan 1.2 instance.\n");
     return;
   }
+  volkLoadInstanceOnly(vk_instance);
 
   uint32_t physical_devices_count = 0;
   vkEnumeratePhysicalDevices(vk_instance, &physical_devices_count, nullptr);
@@ -749,6 +751,11 @@ Batch *VKBackend::batch_alloc()
 Fence *VKBackend::fence_alloc()
 {
   return new VKFence();
+}
+
+WorkInFlight *VKBackend::work_in_flight_alloc(unsigned int max_in_flight)
+{
+  return new VKWorkInFlight(max_in_flight);
 }
 
 FrameBuffer *VKBackend::framebuffer_alloc(const char *name)

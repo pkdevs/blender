@@ -502,6 +502,18 @@ struct ButtonLabel : public Button {
   float alpha_factor = 1.0f;
   /** When the button draws an icon, also draw a mono-colored border for it. */
   bool draw_icon_border = false;
+
+  bool is_multiline = false;
+  /**
+   * Wrap cache from last layout pass.
+   * This is also referenced in the button owning #Block so it can be looked up and reused in
+   * following layout passes. Wrapped text references an allocated string, so it can't be just
+   * copied/moved around.
+   */
+  std::shared_ptr<TextWrapCache> wrap_cache;
+  /** Maximum lines to be drawn in multi-line labels, 0 means all. */
+  int max_lines = 0;
+  FontStyleAlign text_align = UI_STYLE_TEXT_LEFT;
 };
 
 /** Derived struct for #ButtonType::Scroll. */
@@ -676,6 +688,8 @@ struct Block {
   Block *next = nullptr, *prev = nullptr;
 
   Vector<std::unique_ptr<Button>> buttons_ptrs;
+  Vector<std::shared_ptr<TextWrapCache>> text_wrap_cache;
+
   Panel *panel = nullptr;
   Block *oldblock = nullptr;
 
@@ -1391,7 +1405,7 @@ Button *button_find_new(Block *block_new, const Button *but_old);
 int button_text_padding(const Button *but);
 
 #ifdef WITH_INPUT_IME
-void button_ime_reposition(Button *but, int x, int y, bool complete);
+void button_ime_reposition(Button *but, int x, int y);
 const wmIMEData *button_ime_data_get(Button *but);
 #endif
 
@@ -1716,7 +1730,7 @@ bool popup_context_menu_for_button(bContext *C, Button *but, const wmEvent *even
 /**
  * menu to show when right clicking on the panel header
  */
-void popup_context_menu_for_panel(bContext *C, ARegion *region, Panel *panel);
+int popup_context_menu_for_panel(bContext *C, ARegion *region, Panel *panel);
 
 /* `eyedroppers/interface_eyedropper.cc` */
 
