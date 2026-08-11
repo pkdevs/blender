@@ -500,7 +500,6 @@ static Strip *rna_Strips_new_effect(ID *id,
                                     Strip *input2)
 {
   Scene *scene = id_cast<Scene *>(id);
-  Editing *ed = seq::editing_get(scene);
 
   const int min_inputs = blender::seq::effect_type_get_min_num_inputs(StripType(type));
   const bool compositor_with_inputs = type == STRIP_TYPE_COMPOSITOR && input1 != nullptr;

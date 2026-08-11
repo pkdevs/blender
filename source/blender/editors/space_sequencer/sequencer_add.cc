@@ -640,11 +640,11 @@ static bool load_data_init_from_operator(seq::LoadData *load_data, bContext *C, 
   return true;
 }
 
-static bool sequencer_add_generic_exec(bContext *C,
-                                       wmOperator *op,
-                                       seq::LoadData *load_data,
-                                       const int num_strips)
+static bool sequencer_add_generic_exec(
+    bContext *C, wmOperator *op, seq::LoadData *load_data, Scene *scene, const int num_strips)
 {
+  seq::editing_ensure(scene);
+
   const char *error_msg;
   if (!have_free_channels(C, op, num_strips, &error_msg)) {
     BKE_report(op->reports, RPT_ERROR, error_msg);
@@ -763,7 +763,7 @@ static wmOperatorStatus sequencer_add_scene_strip_exec(bContext *C, wmOperator *
   }
 
   seq::LoadData load_data;
-  if (!sequencer_add_generic_exec(C, op, &load_data, 1)) {
+  if (!sequencer_add_generic_exec(C, op, &load_data, scene, 1)) {
     return OPERATOR_CANCELLED;
   }
   load_data.scene = sce_seq;
@@ -850,7 +850,7 @@ static wmOperatorStatus sequencer_add_scene_strip_new_exec(bContext *C, wmOperat
   const Editing *ed = seq::editing_ensure(scene);
 
   seq::LoadData load_data;
-  if (!sequencer_add_generic_exec(C, op, &load_data, 1)) {
+  if (!sequencer_add_generic_exec(C, op, &load_data, scene, 1)) {
     return OPERATOR_CANCELLED;
   }
 
@@ -964,7 +964,7 @@ static wmOperatorStatus sequencer_add_scene_asset_invoke(bContext *C,
   }
 
   seq::LoadData load_data;
-  if (!sequencer_add_generic_exec(C, op, &load_data, 1)) {
+  if (!sequencer_add_generic_exec(C, op, &load_data, scene, 1)) {
     return OPERATOR_CANCELLED;
   }
   load_data.scene = scene_asset;
@@ -1033,7 +1033,7 @@ static wmOperatorStatus sequencer_add_movieclip_strip_exec(bContext *C, wmOperat
   }
 
   seq::LoadData load_data;
-  if (!sequencer_add_generic_exec(C, op, &load_data, 1)) {
+  if (!sequencer_add_generic_exec(C, op, &load_data, scene, 1)) {
     return OPERATOR_CANCELLED;
   }
   load_data.clip = clip;
@@ -1105,7 +1105,7 @@ static wmOperatorStatus sequencer_add_mask_strip_exec(bContext *C, wmOperator *o
   }
 
   seq::LoadData load_data;
-  if (!sequencer_add_generic_exec(C, op, &load_data, 1)) {
+  if (!sequencer_add_generic_exec(C, op, &load_data, scene, 1)) {
     return OPERATOR_CANCELLED;
   }
   load_data.mask = mask;
@@ -1409,7 +1409,7 @@ static wmOperatorStatus sequencer_add_movie_strip_exec(bContext *C, wmOperator *
   Scene *scene = CTX_data_sequencer_scene(C);
 
   seq::LoadData load_data;
-  if (!sequencer_add_generic_exec(C, op, &load_data, 2)) {
+  if (!sequencer_add_generic_exec(C, op, &load_data, scene, 2)) {
     return OPERATOR_CANCELLED;
   }
 
@@ -1587,7 +1587,7 @@ static wmOperatorStatus sequencer_add_sound_strip_exec(bContext *C, wmOperator *
   Scene *scene = CTX_data_sequencer_scene(C);
 
   seq::LoadData load_data;
-  if (!sequencer_add_generic_exec(C, op, &load_data, 1)) {
+  if (!sequencer_add_generic_exec(C, op, &load_data, scene, 1)) {
     return OPERATOR_CANCELLED;
   }
 
@@ -1813,7 +1813,7 @@ static wmOperatorStatus sequencer_add_image_strip_exec(bContext *C, wmOperator *
   Scene *scene = CTX_data_sequencer_scene(C);
 
   seq::LoadData load_data;
-  if (!sequencer_add_generic_exec(C, op, &load_data, 1)) {
+  if (!sequencer_add_generic_exec(C, op, &load_data, scene, 1)) {
     return OPERATOR_CANCELLED;
   }
 
@@ -1967,7 +1967,7 @@ static wmOperatorStatus sequencer_add_effect_strip_exec(bContext *C, wmOperator 
   }
 
   seq::LoadData load_data;
-  if (!sequencer_add_generic_exec(C, op, &load_data, 1)) {
+  if (!sequencer_add_generic_exec(C, op, &load_data, scene, 1)) {
     return OPERATOR_CANCELLED;
   }
 
