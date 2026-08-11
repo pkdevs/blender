@@ -41,7 +41,7 @@ void draw_node_menu_for_catalog(const asset_system::AssetCatalogTreeItem &item,
                                 StringRefNull menu_name,
                                 ui::Layout &layout);
 void draw_asset_menu_item(const asset_system::AssetRepresentation *asset,
-                          StringRefNull operator_name,
+                          StringRefNull opname,
                           wm::OpCallContext operator_call_context,
                           ui::Layout &layout);
 
