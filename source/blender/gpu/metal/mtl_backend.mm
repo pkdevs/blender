@@ -20,11 +20,13 @@
 #include "mtl_immediate.hh"
 #include "mtl_index_buffer.hh"
 #include "mtl_query.hh"
+#include "mtl_ray_tracing.hh"
 #include "mtl_shader.hh"
 #include "mtl_storage_buffer.hh"
 #include "mtl_texture_pool.hh"
 #include "mtl_uniform_buffer.hh"
 #include "mtl_vertex_buffer.hh"
+#include "mtl_work_in_flight.hh"
 
 #include "gpu_capabilities_private.hh"
 #include "gpu_platform_private.hh"
@@ -69,6 +71,11 @@ Fence *MTLBackend::fence_alloc()
   return new MTLFence();
 };
 
+WorkInFlight *MTLBackend::work_in_flight_alloc(unsigned int max_in_flight)
+{
+  return new MTLWorkInFlight(max_in_flight);
+};
+
 FrameBuffer *MTLBackend::framebuffer_alloc(const char *name)
 {
   return new MTLFrameBuffer(MTLContext::get(), name);
@@ -101,10 +108,12 @@ Texture *MTLBackend::texture_alloc(const char *name)
 
 TexturePool *MTLBackend::texturepool_alloc()
 {
-  if (GCaps.texture_pool_workaround) {
-    return new TexturePoolImpl();
-  }
-  return new MTLTexturePool();
+  /* #162556: Temporarily disabled MTLTexturePool as metal texture views
+   * do not support `update_sub`, while other backends do. */
+  /* if (GCaps.texture_pool_workaround) { */
+  return new TexturePoolImpl();
+  /* }
+  return new MTLTexturePool(); */
 }
 
 UniformBuf *MTLBackend::uniformbuf_alloc(size_t size, const char *name)
@@ -120,6 +129,16 @@ StorageBuf *MTLBackend::storagebuf_alloc(size_t size, GPUUsageType usage, const 
 VertBuf *MTLBackend::vertbuf_alloc()
 {
   return new MTLVertBuf();
+}
+
+TopLevelAS *MTLBackend::tlas_alloc(const char *name)
+{
+  return new MTLTopLevelAS(name);
+}
+
+BottomLevelAS *MTLBackend::blas_alloc(const char *name)
+{
+  return new MTLBottomLevelAS(name);
 }
 
 void MTLBackend::render_begin()
@@ -480,6 +499,15 @@ void MTLBackend::capabilities_init(MTLContext *ctx)
     MTLBackend::capabilities.supports_texture_atomics = true;
   }
 #endif
+
+  /* Ray queries require macOS 13. */
+  MTLBackend::capabilities.supports_ray_tracing = false;
+#if defined(MAC_OS_VERSION_13_0)
+  if (@available(macOS 13.0, *)) {
+    MTLBackend::capabilities.supports_ray_tracing = [device supportsRaytracing];
+  }
+#endif
+  GCaps.ray_query_support = MTLBackend::capabilities.supports_ray_tracing;
 
   /** Identify support for tile inputs. */
   const bool is_tile_based_arch = (GPU_platform_architecture() == GPU_ARCHITECTURE_TBDR);

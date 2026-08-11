@@ -1785,7 +1785,25 @@ void blo_do_versions_userdef(UserDef *userdef)
     userdef->asset_flag |= USER_ASSETS_USE_ONLINE_ESSENTIALS;
   }
 
-  if (!USER_VERSION_ATLEAST(503, 1)) {
+  /* Make Vulkan default on Linux/Windows x64. Keep existing option for Apple and Windows on ARM.*/
+#ifdef __APPLE__
+#elif defined(WIN32) && (defined(_M_ARM64) || defined(__aarch64__))
+#else
+  if (!USER_VERSION_ATLEAST(503, 10)) {
+    userdef->gpu_backend = USER_GPU_BACKEND_DEFAULT;
+  }
+#endif
+
+  /* Make Vulkan default on Linux/Windows x64. Keep existing option for Apple and Windows on ARM.*/
+#ifdef __APPLE__
+#elif defined(WIN32) && (defined(_M_ARM64) || defined(__aarch64__))
+#else
+  if (!USER_VERSION_ATLEAST(503, 10)) {
+    userdef->gpu_backend = USER_GPU_BACKEND_DEFAULT;
+  }
+#endif
+
+   if (!USER_VERSION_ATLEAST(503, 1)) {
     userdef->pref_flag |= USER_PREF_FLAG_PROJECT_SAVE;
   }
 
@@ -1793,7 +1811,7 @@ void blo_do_versions_userdef(UserDef *userdef)
     userdef->asset_flag |= USER_ASSETS_USE_ONLINE_ESSENTIALS;
   }
 
-  if (!USER_VERSION_ATLEAST(503, 9)) {
+  if (!USER_VERSION_ATLEAST(503, 12)) {
     userdef->flag |= USER_BLENDER_UPDATE_LATEST_RELEASE;
     userdef->statusbar_flag |= STATUSBAR_SHOW_BLENDER_UPDATES_DIALOG;
   }

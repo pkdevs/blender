@@ -227,6 +227,9 @@ static wmOperatorStatus screen_render_exec(bContext *C, wmOperator *op)
     return OPERATOR_CANCELLED;
   }
 
+  /* Flush sculpt and editmode changes. */
+  ED_editors_flush_edits(mainp);
+
   re = RE_NewSceneRender(scene);
 
   G.is_break = false;
@@ -680,6 +683,9 @@ static void render_endjob(void *rjv)
     WM_locked_interface_set(static_cast<wmWindowManager *>(G_MAIN->wm.first), false);
     DEG_tag_on_visible_update(G_MAIN, false);
   }
+
+  /* Resume viewport render engines now that the final render is complete. */
+  ED_render_view3d_auto_pause(G_MAIN, false);
 }
 
 /* called by render, check job 'stop' value or the global */
@@ -881,7 +887,7 @@ static wmOperatorStatus screen_render_invoke(bContext *C, wmOperator *op, const 
   /* handle UI stuff */
   WM_cursor_wait(true);
 
-  /* flush sculpt and editmode changes */
+  /* Flush sculpt and editmode changes. */
   ED_editors_flush_edits(bmain);
 
   /* store spare
@@ -990,6 +996,9 @@ static wmOperatorStatus screen_render_invoke(bContext *C, wmOperator *op, const 
    * the reason of this is that active scene could change when rendering
    * several layers from compositor #31800. */
   op->customdata = scene;
+
+  /* Pause viewport render engines for the duration of the final render. */
+  ED_render_view3d_auto_pause(bmain, true);
 
   WM_jobs_start(CTX_wm_manager(C), wm_job);
 
