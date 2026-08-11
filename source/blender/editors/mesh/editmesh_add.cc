@@ -748,7 +748,7 @@ void MESH_OT_primitive_quad_sphere_add(wmOperatorType *ot)
 {
   /* identifiers */
   ot->name = "Add quadsphere";
-  ot->description = "Construct a spherical mesh made by a Subdivided Cube and consists entirely out of quads";
+  ot->description = "Construct a spherical mesh from a subdivided cube, consisting entirely of four-sided faces";
   ot->idname = "MESH_OT_primitive_quad_sphere_add";
   /* API callbacks. */
   ot->exec = add_primitive_quadsphere_exec;
