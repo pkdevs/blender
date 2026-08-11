@@ -636,39 +636,52 @@ static void rna_StripElements_pop(ID *id, Strip *strip, ReportList *reports, int
   Scene *scene = id_cast<Scene *>(id);
   StripElem *new_se, *se;
 
-  if (strip->content_length() == 1) {
-    BKE_report(reports, RPT_ERROR, "StripElements.pop: cannot pop the last element");
-    return;
-  }
+  /* `index` addresses the same full `stripdata` array as #StripElements (see
+   * #rna_Strip_elements_begin), which may include elements hidden by content trim
+   * (#Strip::anim_startofs / #Strip::anim_endofs), not just the visible ones. */
+  const int old_len = strip->stripdata_len();
 
   /* python style negative indexing */
   if (index < 0) {
-    index += strip->content_length();
+    index += old_len;
   }
 
-  if (strip->content_length() <= index || index < 0) {
+  if (old_len <= index || index < 0) {
     BKE_report(reports, RPT_ERROR, "StripElements.pop: index out of range");
     return;
   }
 
-  const int old_len = strip->stripdata_len();
-  const int real_index = strip->anim_startofs + index;
+  const bool is_visible = index >= strip->anim_startofs &&
+                          index < strip->anim_startofs + strip->content_length();
+  if (is_visible && strip->content_length() == 1) {
+    BKE_report(reports, RPT_ERROR, "StripElements.pop: cannot pop the last element");
+    return;
+  }
+
+  /* Remove the popped slot from whichever count currently accounts for it, so the physical
+   * array (#Strip::stripdata_len()) shrinks by exactly one element. */
+  if (index < strip->anim_startofs) {
+    strip->anim_startofs--;
+  }
+  else if (!is_visible) {
+    strip->anim_endofs--;
+  }
+  else {
+    strip->content_length_set(strip->content_length() - 1);
+    if (strip->content_length() == 1) {
+      strip->flag |= SEQ_SINGLE_FRAME_CONTENT;
+    }
+  }
 
   new_se = MEM_new_array<StripElem>(old_len - 1, "StripElements_pop");
-  strip->content_length_set(strip->content_length() - 1);
-
-  if (strip->content_length() == 1) {
-    strip->flag |= SEQ_SINGLE_FRAME_CONTENT;
-  }
 
   se = strip->data->stripdata;
-  if (real_index > 0) {
-    memcpy(new_se, se, sizeof(StripElem) * real_index);
+  if (index > 0) {
+    memcpy(new_se, se, sizeof(StripElem) * index);
   }
 
-  if (real_index < old_len - 1) {
-    memcpy(
-        &new_se[real_index], &se[real_index + 1], sizeof(StripElem) * (old_len - 1 - real_index));
+  if (index < old_len - 1) {
+    memcpy(&new_se[index], &se[index + 1], sizeof(StripElem) * (old_len - 1 - index));
   }
 
   MEM_delete(strip->data->stripdata);
