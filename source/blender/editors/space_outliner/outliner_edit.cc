@@ -1529,8 +1529,7 @@ void outliner_set_coordinates(const ARegion *region, SpaceOutliner *space_outlin
     /* store coord and continue, we need coordinates for elements outside view too */
     te->xs = 0;
     /* Set coordinates to zero for collapsed elements. */
-    const bool is_open = te->ys && te->parent &&
-                         TSELEM_OPEN(te->parent->store_elem, space_outliner);
+    const bool is_open = te->parent && TSELEM_OPEN(te->parent->store_elem, space_outliner);
     te->ys = is_open ? float(starty) : 0;
     starty -= is_open ? UI_UNIT_Y : 0;
   });
