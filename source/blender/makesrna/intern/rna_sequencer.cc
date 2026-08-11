@@ -696,7 +696,7 @@ static void rna_Strip_content_trim_end_set(PointerRNA *ptr, int value)
   Strip *strip = static_cast<Strip *>(ptr->data);
   Scene *scene = id_cast<Scene *>(ptr->owner_id);
 
-  strip->anim_endofs_set(strip_content_trim_max(strip, strip->anim_endofs));
+  strip->anim_endofs_set(std::clamp(value, 0, strip_content_trim_max(strip, strip->anim_startofs));
 
   seq::add_reload_new_file(G.main, scene, strip, false);
   do_strip_frame_change_update(scene, strip);
