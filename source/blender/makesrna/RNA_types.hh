@@ -153,7 +153,10 @@ struct PointerRNA {
     return PointerRNA(owner_id, ancestors.last().type, ancestors.last().data);
   }
 
-  /** Evaluates to true if data is set. In this case, the type must also be set. */
+  /**
+   * Evaluates to true if data is set. In this case, the type must also be set.
+   * This is similar how raw pointers are std::optional cast to bool.
+   */
   operator bool() const
   {
     return this->has_data();
