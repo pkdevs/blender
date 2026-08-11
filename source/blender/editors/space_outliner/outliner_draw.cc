@@ -623,11 +623,19 @@ static void outliner_collection_set_flag_recursive_fn(bContext *C,
 
   float view_mval[2];
 
-  ui::view2d_region_to_view(
-      &region->v2d, event->xy[0] - region->winrct.xmin, event->xy[1] - region->winrct.ymin, &view_mval[0], &view_mval[1]);
+  /* TreeElement couldn't be passed as argument in button function callback. Tree is rebuilt after
+   * changing value of restriction toggle, the pointer to clicked element would be lost. This
+   * breaks click dragging verically over multiple toggle values. Instead retrive TreeElement here
+   * from mouse coordinates, see: !162458
+   */
+  ui::view2d_region_to_view(&region->v2d,
+                            event->xy[0] - region->winrct.xmin,
+                            event->xy[1] - region->winrct.ymin,
+                            &view_mval[0],
+                            &view_mval[1]);
 
   TreeElement *te = outliner_find_item_at_y(
-                                            space_outliner, &space_outliner->runtime->tree, view_mval[1]);
+      space_outliner, &space_outliner->runtime->tree, view_mval[1]);
   BLI_assert(te != nullptr);
 
   /* Create PointerRNA and PropertyRNA for either Collection or LayerCollection. */
