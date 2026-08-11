@@ -663,7 +663,19 @@ void Strip::content_length_set(int new_length)
 
 int Strip::stripdata_len() const
 {
-  return this->anim_startofs + this->content_length() + this->anim_endofs;
+  switch (this->type) {
+    case STRIP_TYPE_IMAGE:
+      /* Every image in the sequence has its own #StripElem. Content trimming (#anim_startofs,
+       * #anim_endofs) hides elements at both ends without shrinking the array, so the full array
+       * is always this many elements long. */
+      return this->anim_startofs + this->content_length() + this->anim_endofs;
+    case STRIP_TYPE_MOVIE:
+    case STRIP_TYPE_SOUND:
+      /* Single #StripElem storing the file path. */
+      return (this->data && this->data->stripdata) ? 1 : 0;
+    default:
+      return 0;
+  }
 }
 
 void Strip::anim_startofs_set(int new_value)
