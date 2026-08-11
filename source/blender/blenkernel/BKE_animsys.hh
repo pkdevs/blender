@@ -16,6 +16,8 @@
 #include "BLI_string.hh"
 #include "BLI_sys_types.hh" /* for bool */
 
+#include "RNA_path_fwd.hh"
+
 #include <string>
 
 namespace blender {
@@ -308,6 +310,10 @@ bool BKE_animsys_rna_path_resolve(PointerRNA *ptr,
                                   const char *rna_path,
                                   int array_index,
                                   PathResolvedRNA *r_result);
+bool BKE_animsys_rna_path_resolve(PointerRNA *ptr,
+                                  ParsedRNAPathRef rna_path,
+                                  int array_index,
+                                  PathResolvedRNA *r_result);
 bool BKE_animsys_read_from_rna_path(PathResolvedRNA *anim_rna, float *r_value);
 /**
  * Write the given value to a setting using RNA, and return success.
@@ -349,15 +355,6 @@ void animsys_evaluate_action(PointerRNA *ptr,
                              int32_t action_slot_handle,
                              const AnimationEvalContext *anim_eval_context,
                              bool flush_to_original);
-
-/**
- * Evaluate action, and blend the result into the current values (instead of overwriting fully).
- */
-void animsys_blend_in_action(PointerRNA *ptr,
-                             bAction *act,
-                             int32_t action_slot_handle,
-                             const AnimationEvalContext *anim_eval_context,
-                             float blend_factor);
 
 /** Evaluate Action Group. */
 void animsys_evaluate_action_group(PointerRNA *ptr,
