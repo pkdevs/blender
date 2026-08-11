@@ -435,9 +435,9 @@ void IDP_BlendReadData_impl(BlendDataReader *reader,
 struct IDPropertyStructTypeInfo {
   eIDPropertyType idp_type;
   /** DNA type name used for blend I/O (e.g. CurveMapping or ColorBand). */
-  const char *dna_type_name = nullptr;
+  std::string dna_type_name;
   /** RNA struct identifier (e.g. CurveMapping or ColorRamp). */
-  const char *rna_identifier = nullptr;
+  std::string rna_identifier;
 
   void *(*create_default)() = nullptr;
   void *(*copy)(const void *src, int flag) = nullptr;

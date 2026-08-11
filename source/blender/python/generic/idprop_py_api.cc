@@ -109,10 +109,10 @@ static PyObject *idprop_py_from_idp_id(IDProperty *prop)
 static PyObject *idprop_py_from_idp_struct(ID *id, IDProperty *prop)
 {
   const IDPropertyStructTypeInfo *info = IDP_struct_type_info(prop->type);
-  if (info == nullptr || prop->data.pointer == nullptr) {
+  if (!info || !prop->data.pointer) {
     Py_RETURN_NONE;
   }
-  StructRNA *srna = RNA_struct_find(info->rna_identifier);
+  StructRNA *srna = RNA_struct_find(info->rna_identifier.c_str());
   if (srna == nullptr) {
     Py_RETURN_NONE;
   }

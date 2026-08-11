@@ -201,8 +201,6 @@ void BKE_blender_globals_init()
 
   U.savetime = 1;
 
-  IDP_struct_type_init();
-
   BKE_blender_globals_main_replace(BKE_main_new());
 
   STRNCPY(G.filepath_last_image, "//");

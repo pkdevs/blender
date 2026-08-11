@@ -5520,7 +5520,7 @@ PyObject *BPy_PointerProperty(PyObject *self, PyObject *args, PyObject *kw)
   {
     PyErr_Format(PyExc_TypeError,
                  "PointerProperty(...) expected an RNA type derived from %.200s or %.200s, "
-                 "or a registered IDProperty struct type (e.g. CurveMapping, ColorRamp)",
+                 "or a supported struct type (e.g. CurveMapping, ColorRamp)",
                  RNA_struct_ui_name(RNA_ID),
                  RNA_struct_ui_name(RNA_PropertyGroup));
     return nullptr;

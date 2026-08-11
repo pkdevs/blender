@@ -2152,10 +2152,6 @@ bool BKE_color_managed_colorspace_settings_equals(const ColorManagedColorspaceSe
   return STREQ(settings1->name, settings2->name);
 }
 
-/* -------------------------------------------------------------------- */
-/** \name IDProperty type (#IDP_CURVE_MAPPING)
- * \{ */
-
 static void *idp_struct_curvemapping_create()
 {
   return BKE_curvemapping_add(4, 0.0f, 0.0f, 1.0f, 1.0f);
@@ -2178,39 +2174,41 @@ static void idp_struct_curvemapping_blend_write(BlendWriter *writer, const void 
 
 static void idp_struct_curvemapping_blend_read(BlendDataReader *reader, void **data_p)
 {
-  *data_p = BLO_read_struct_by_name_array(reader, "CurveMapping", 1, *data_p);
-  if (*data_p) {
-    BKE_curvemapping_blend_read(reader, static_cast<CurveMapping *>(*data_p));
+  CurveMapping **cm = reinterpret_cast<CurveMapping **>(data_p);
+  BLO_read_struct(reader, CurveMapping, cm);
+  if (*cm) {
+    BKE_curvemapping_blend_read(reader, *cm);
   }
 }
 
 static bool idp_struct_curvemapping_equals(const void *a_v, const void *b_v)
 {
-  const CurveMapping *a = static_cast<const CurveMapping *>(a_v);
-  const CurveMapping *b = static_cast<const CurveMapping *>(b_v);
-  if (a == b) {
-    return true;
-  }
-  if (!a || !b) {
+  const CurveMapping &a = *static_cast<const CurveMapping *>(a_v);
+  const CurveMapping &b = *static_cast<const CurveMapping *>(b_v);
+  if (a.flag != b.flag || a.tone != b.tone || a.preset != b.preset) {
     return false;
   }
-  if (a->flag != b->flag || a->tone != b->tone || a->preset != b->preset) {
+  if (float3(a.black) != float3(b.black)) {
     return false;
   }
-  if (memcmp(a->black, b->black, sizeof(a->black)) != 0 ||
-      memcmp(a->white, b->white, sizeof(a->white)) != 0)
-  {
+  if (float3(a.white) != float3(b.white)) {
     return false;
   }
-  for (int i = 0; i < CM_TOT; i++) {
-    if (a->cm[i].totpoint != b->cm[i].totpoint) {
+  if (float3(a.bwmul) != float3(b.bwmul)) {
+    return false;
+  }
+  if (float3(a.sample) != float3(b.sample)) {
+    return false;
+  }
+
+  for (const int curve_i : IndexRange(CM_TOT)) {
+    if (a.cm[curve_i].totpoint != b.cm[curve_i].totpoint) {
       return false;
     }
-    if (a->cm[i].totpoint > 0) {
-      if (memcmp(a->cm[i].curve,
-                 b->cm[i].curve,
-                 sizeof(CurveMapPoint) * size_t(a->cm[i].totpoint)) != 0)
-      {
+    for (const int point_i : IndexRange(a.cm[curve_i].totpoint)) {
+      const CurveMapPoint &a_point = a.cm[curve_i].curve[point_i];
+      const CurveMapPoint &b_point = b.cm[curve_i].curve[point_i];
+      if (a_point.x != b_point.x || a_point.y != b_point.y || a_point.flag != b_point.flag) {
         return false;
       }
     }
@@ -2219,22 +2217,20 @@ static bool idp_struct_curvemapping_equals(const void *a_v, const void *b_v)
 }
 
 static const IDPropertyStructTypeInfo idp_struct_type_curvemapping = {
-    /*idp_type*/ IDP_CURVE_MAPPING,
-    /*dna_type_name*/ "CurveMapping",
-    /*rna_identifier*/ "CurveMapping",
-    /*create_default*/ idp_struct_curvemapping_create,
-    /*copy*/ idp_struct_curvemapping_copy,
-    /*free*/ idp_struct_curvemapping_free,
-    /*blend_write*/ idp_struct_curvemapping_blend_write,
-    /*blend_read*/ idp_struct_curvemapping_blend_read,
-    /*equals*/ idp_struct_curvemapping_equals,
+    .idp_type = IDP_CURVE_MAPPING,
+    .dna_type_name = "CurveMapping",
+    .rna_identifier = "CurveMapping",
+    .create_default = idp_struct_curvemapping_create,
+    .copy = idp_struct_curvemapping_copy,
+    .free = idp_struct_curvemapping_free,
+    .blend_write = idp_struct_curvemapping_blend_write,
+    .blend_read = idp_struct_curvemapping_blend_read,
+    .equals = idp_struct_curvemapping_equals,
 };
 
 void BKE_curvemapping_idproperty_type_register()
 {
   IDP_struct_type_register(idp_struct_type_curvemapping);
 }
-
-/** \} */
 
 }  // namespace blender

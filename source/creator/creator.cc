@@ -48,6 +48,7 @@
 #include "BKE_context.hh"
 #include "BKE_cpp_types.hh"
 #include "BKE_global.hh"
+#include "BKE_idprop.hh"
 #include "BKE_idtype.hh"
 #include "BKE_material.hh"
 #include "BKE_modifier.hh"
@@ -491,6 +492,7 @@ int main(int argc,
   BKE_cpp_types_init();
   fn::multi_function::register_common_functions();
   BKE_idtype_init();
+  IDP_struct_type_init();
   BKE_modifier_init();
   seq::modifiers_init();
   BKE_shaderfx_init();

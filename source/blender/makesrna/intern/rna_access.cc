@@ -501,13 +501,13 @@ static bool rna_idproperty_verify_valid(PointerRNA *ptr, PropertyRNA *prop, IDPr
       }
       const PointerPropertyRNA *pprop = reinterpret_cast<const PointerPropertyRNA *>(prop);
       StructRNA *expected_type = pprop->pointer_type;
-      if (expected_type == nullptr) {
+      if (!expected_type) {
         return false;
       }
       const IDPropertyStructTypeInfo *expected_info = IDP_struct_type_find_by_rna_identifier(
           RNA_struct_identifier(expected_type));
       const IDPropertyStructTypeInfo *actual_info = IDP_struct_type_info(idprop->type);
-      if (expected_info == nullptr || actual_info == nullptr || expected_info != actual_info) {
+      if (!expected_info || !actual_info || expected_info != actual_info) {
         return false;
       }
       break;
@@ -531,9 +531,9 @@ static PropertyRNA *typemap[IDP_NUMTYPES] = {
     &rna_PropertyGroupItem_double,
     &rna_PropertyGroupItem_idp_array,
     &rna_PropertyGroupItem_bool,
-    nullptr, /* #IDP_CURVE_MAPPING: accessed via real RNA PointerProperty, not typemap. */
-    nullptr, /* #IDP_COLOR_BAND */
-    nullptr, /* #IDP_CURVE_PROFILE */
+    nullptr,
+    nullptr,
+    nullptr,
 };
 
 static PropertyRNA *arraytypemap[IDP_NUMTYPES] = {
@@ -548,9 +548,9 @@ static PropertyRNA *arraytypemap[IDP_NUMTYPES] = {
     &rna_PropertyGroupItem_double_array,
     nullptr,
     &rna_PropertyGroupItem_bool_array,
-    nullptr, /* #IDP_CURVE_MAPPING */
-    nullptr, /* #IDP_COLOR_BAND */
-    nullptr, /* #IDP_CURVE_PROFILE */
+    nullptr,
+    nullptr,
+    nullptr,
 };
 
 bool rna_property_can_access_pointer_data(const PointerRNA &ptr, PropertyRNA &prop)
@@ -4775,18 +4775,15 @@ void RNA_property_pointer_set(PointerRNA *ptr,
     return;
   }
 
-  /* Assigning to an IDProperty. Owned DNA struct data cannot be replaced. */
+  /* Assigning to an IDProperty. */
+
   if (idprop && IDP_struct_type_info(idprop->type)) {
     const IDPropertyStructTypeInfo *info = IDP_struct_type_info(idprop->type);
     BKE_reportf(reports,
                 RPT_ERROR,
-                "%s: cannot assign to owned IDProperty struct '%s'",
+                "%s: cannot assign to struct '%s'",
                 __func__,
-                info->dna_type_name);
-    return;
-  }
-  if (IDP_struct_type_find_by_rna_identifier(RNA_struct_identifier(pprop->pointer_type))) {
-    BKE_reportf(reports, RPT_ERROR, "%s: cannot assign to owned IDProperty struct type", __func__);
+                info->rna_identifier.c_str());
     return;
   }
 

@@ -970,9 +970,9 @@ float IDP_coerce_to_float_or_zero(const IDProperty *prop)
 static IDProperty *IDP_CopyStruct(const IDProperty *prop, const int flag)
 {
   const IDPropertyStructTypeInfo *info = IDP_struct_type_info(prop->type);
-  BLI_assert(info != nullptr);
+  BLI_assert(info);
   IDProperty *newp = idp_generic_copy(prop, flag);
-  if (prop->data.pointer && info) {
+  if (prop->data.pointer) {
     newp->data.pointer = info->copy(prop->data.pointer, flag);
   }
   return newp;
@@ -1134,6 +1134,9 @@ bool IDP_EqualsProperties_ex(const IDProperty *prop1,
     IDP_ANY_STRUCT_TYPE_CASE: {
       if (prop1->data.pointer == prop2->data.pointer) {
         return true;
+      }
+      if (!prop1->data.pointer || !prop2->data.pointer) {
+        return false;
       }
       if (const IDPropertyStructTypeInfo *info = IDP_struct_type_info(prop1->type)) {
         if (info->equals) {
@@ -1408,15 +1411,8 @@ static void idp_free_property_content_recurse(IDProperty *prop,
       break;
     IDP_ANY_STRUCT_TYPE_CASE: {
       if (prop->data.pointer) {
-        if (const IDPropertyStructTypeInfo *info = IDP_struct_type_info(prop->type)) {
-          info->free(prop->data.pointer);
-        }
-        else {
-          CLOG_WARN(&LOG,
-                    "Cannot free owned-struct IDProperty '%s': unknown type %d",
-                    prop->name,
-                    int(prop->type));
-        }
+        const IDPropertyStructTypeInfo *info = IDP_struct_type_info(prop->type);
+        info->free(prop->data.pointer);
         prop->data.pointer = nullptr;
       }
       break;
@@ -1704,15 +1700,8 @@ static void IDP_WriteProperty_OnlyData(const IDProperty *prop,
       break;
     IDP_ANY_STRUCT_TYPE_CASE: {
       if (prop->data.pointer) {
-        if (const IDPropertyStructTypeInfo *info = IDP_struct_type_info(prop->type)) {
-          info->blend_write(writer, prop->data.pointer);
-        }
-        else {
-          CLOG_WARN(&LOG,
-                    "Cannot write owned-struct IDProperty '%s': unknown type %d",
-                    prop->name,
-                    int(prop->type));
-        }
+        const IDPropertyStructTypeInfo *info = IDP_struct_type_info(prop->type);
+        info->blend_write(writer, prop->data.pointer);
       }
       break;
     }
@@ -1987,17 +1976,8 @@ static void IDP_DirectLinkProperty(IDProperty *prop,
     case IDP_ID:
       break; /* Nothing special to do here. */
     IDP_ANY_STRUCT_TYPE_CASE: {
-      if (const IDPropertyStructTypeInfo *info = IDP_struct_type_info(prop->type)) {
-        info->blend_read(reader, &prop->data.pointer);
-      }
-      else {
-        CLOG_WARN(&LOG,
-                  "Found owned-struct IDProperty '%s' with unknown type %d, clearing data",
-                  prop->name,
-                  int(prop->type));
-        BLO_read_raw_address(reader, &prop->data.pointer);
-        prop->data.pointer = nullptr;
-      }
+      const IDPropertyStructTypeInfo *info = IDP_struct_type_info(prop->type);
+      info->blend_read(reader, &prop->data.pointer);
       break;
     }
     default:
@@ -2376,10 +2356,10 @@ void hash(const IDProperty &base_prop, XXH3_state_t *hash_state)
 /** \} */
 
 /* -------------------------------------------------------------------- */
-/** \name Owned DNA struct IDProperty types
+/** \name IDProperty types using DNA structs.
  * \{ */
 
-static const IDPropertyStructTypeInfo *g_idp_struct_types[IDP_NUMTYPES] = {};
+static std::array<const IDPropertyStructTypeInfo *, IDP_NUMTYPES> g_idp_struct_types = {};
 
 static Map<StringRefNull, const IDPropertyStructTypeInfo *> &idp_struct_types_by_rna()
 {
@@ -2387,11 +2367,21 @@ static Map<StringRefNull, const IDPropertyStructTypeInfo *> &idp_struct_types_by
   return map;
 }
 
+static bool is_idp_struct_type(const eIDPropertyType type)
+{
+  switch (type) {
+    default:
+      return false;
+    IDP_ANY_STRUCT_TYPE_CASE:
+      return true;
+  }
+}
+
 void IDP_struct_type_register(const IDPropertyStructTypeInfo &type_info)
 {
-  BLI_assert(uint(type_info.idp_type) < IDP_NUMTYPES);
-  BLI_assert(type_info.dna_type_name && type_info.dna_type_name[0]);
-  BLI_assert(type_info.rna_identifier && type_info.rna_identifier[0]);
+  BLI_assert(is_idp_struct_type(type_info.idp_type));
+  BLI_assert(!type_info.dna_type_name.empty());
+  BLI_assert(!type_info.rna_identifier.empty());
   BLI_assert(type_info.create_default);
   BLI_assert(type_info.copy);
   BLI_assert(type_info.free);
@@ -2399,12 +2389,12 @@ void IDP_struct_type_register(const IDPropertyStructTypeInfo &type_info)
   BLI_assert(type_info.blend_read);
 
   g_idp_struct_types[type_info.idp_type] = &type_info;
-  idp_struct_types_by_rna().add_overwrite(type_info.rna_identifier, &type_info);
+  idp_struct_types_by_rna().add_new(type_info.rna_identifier, &type_info);
 }
 
 const IDPropertyStructTypeInfo *IDP_struct_type_info(const eIDPropertyType type)
 {
-  if (uint(type) >= IDP_NUMTYPES) {
+  if (!is_idp_struct_type(type)) {
     return nullptr;
   }
   return g_idp_struct_types[type];
@@ -2425,9 +2415,7 @@ void IDP_struct_type_init()
 
 void IDP_struct_type_exit()
 {
-  for (const IDPropertyStructTypeInfo *&info : g_idp_struct_types) {
-    info = nullptr;
-  }
+  g_idp_struct_types.fill(nullptr);
   idp_struct_types_by_rna().clear();
 }
 
@@ -2437,7 +2425,7 @@ IDProperty *IDP_NewStruct(const StringRef name,
 {
   BLI_assert(IDP_struct_type_info(type_info.idp_type) == &type_info);
 
-  IDProperty *prop = MEM_new<IDProperty>("IDProperty struct");
+  IDProperty *prop = MEM_new<IDProperty>(__func__);
   prop->type = type_info.idp_type;
   prop->flag = flags;
   name.copy_utf8_truncated(prop->name);

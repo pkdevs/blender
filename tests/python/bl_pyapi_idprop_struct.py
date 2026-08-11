@@ -3,7 +3,6 @@
 # SPDX-License-Identifier: Apache-2.0
 
 # ./blender.bin --background --python tests/python/bl_pyapi_idprop_struct.py -- --verbose
-"""Tests for owned DNA struct IDProperties via PropertyGroup PointerProperty."""
 
 import os
 import tempfile
@@ -66,7 +65,7 @@ class TestIdPropertyStruct(unittest.TestCase):
         self.assertAlmostEqual(points[0].location[1], 0.2)
         self.assertAlmostEqual(points[-1].location[1], 0.8)
 
-    def test_owned_pointer_not_assignable(self):
+    def test_struct_not_assignable(self):
         scene = bpy.context.scene
         props = scene.idp_struct_test
         # Access once so the owned data exists.
@@ -96,10 +95,10 @@ class TestIdPropertyStruct(unittest.TestCase):
             props = bpy.context.scene.idp_struct_test
             self.assertAlmostEqual(props.curve.curves[0].points[0].location[1], 0.1)
             self.assertAlmostEqual(props.curve.curves[0].points[-1].location[1], 0.9)
-            self.assertAlmostEqual(props.ramp.elements[0].color[0], 0.2, places=5)
-            self.assertAlmostEqual(props.ramp.elements[0].color[1], 0.4, places=5)
-            self.assertAlmostEqual(props.ramp.elements[0].color[2], 0.6, places=5)
-            self.assertAlmostEqual(props.ramp.elements[-1].position, 0.8, places=5)
+            self.assertAlmostEqual(props.ramp.elements[0].color[0], 0.2)
+            self.assertAlmostEqual(props.ramp.elements[0].color[1], 0.4)
+            self.assertAlmostEqual(props.ramp.elements[0].color[2], 0.6)
+            self.assertAlmostEqual(props.ramp.elements[-1].position, 0.8)
             self.assertAlmostEqual(props.profile.points[0].location[1], 0.15)
             self.assertAlmostEqual(props.profile.points[-1].location[1], 0.85)
 
