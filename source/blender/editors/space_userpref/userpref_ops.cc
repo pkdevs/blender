@@ -196,11 +196,8 @@ static wmOperatorStatus preferences_asset_library_add_exec(bContext *C, wmOperat
       new_library = BKE_preferences_remote_asset_library_add(
           &U, name, remote_url, use_auth_token ? auth_token : nullptr);
 
-      if (auth_token) {
-        MEM_delete(auth_token);
-      }
-
       MEM_delete(remote_url);
+      MEM_delete(auth_token);
       break;
     }
   }
