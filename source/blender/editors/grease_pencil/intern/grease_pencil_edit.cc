@@ -2991,14 +2991,13 @@ static wmOperatorStatus grease_pencil_paste_strokes_exec(bContext *C, wmOperator
 
   if (!clipboard.defnames.is_empty()) {
     ListBaseT<bDeformGroup> *deflist = BKE_id_defgroup_list_get_mutable(object->data);
-    for (bDeformGroup &defgroup : clipboard.defnames) {
+    for (const bDeformGroup &defgroup : clipboard.defnames) {
       int dindex;
-      bDeformGroup *found_group;
-      if (BKE_defgroup_listbase_name_find(deflist, defgroup.name, &dindex, &found_group)) {
+      if (BKE_defgroup_name_index(deflist, defgroup.name) != -1) {
         continue;
       }
-      bDeformGroup *new_group = BKE_object_defgroup_new(object, defgroup.name);
-      new_group->flag = defgroup.flag;
+      bDeformGroup *new_group = BKE_defgroup_duplicate(&defgroup);
+      BLI_addtail(deflist, new_group);
     }
     clipboard.defnames.free_no_destruct();
   }
