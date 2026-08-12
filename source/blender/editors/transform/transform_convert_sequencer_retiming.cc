@@ -159,24 +159,25 @@ static void create_trans_seq_clamp_data(TransInfo *t, const Scene *scene)
 
     /* Transitions are moved when retiming keys for the same frame are selected in adjacent strips
      * (which causes the adjacent strip handles to move). If this is the case, soft clamp the
-     * transition inside input strip bounds. */
-    const Strip *transition = tdseq->attached_transition;
-    if (transition) {
-      const int min_offset = transition->input1->left_handle() - transition->left_handle();
-      const int max_offset = transition->input2->right_handle(scene) -
-                             transition->right_handle(scene);
+     * transition inside input strip bounds, and hard clamp against adjacent transitions. */
+    const Strip *transition_strip = tdseq->attached_transition;
+    if (transition_strip) {
+      const int min_offset = transition_strip->input1->left_handle() -
+                             transition_strip->left_handle();
+      const int max_offset = transition_strip->input2->right_handle(scene) -
+                             transition_strip->right_handle(scene);
       ts->soft_clamp_min = max_ii(ts->soft_clamp_min, min_offset);
       ts->soft_clamp_max = min_ii(ts->soft_clamp_max, max_offset);
 
       /* Prevent the transition from overlapping adjacent transitions. Clamping is done as long as
        * the adjacent transition isn't also moved. */
       Strip *left_adjacent_transition = seq::get_transition_on_side(
-          ed, transition->input1, seq::Side::Left);
+          ed, transition_strip->input1, seq::Side::Left);
       Strip *right_adjacent_transition = seq::get_transition_on_side(
-          ed, transition->input2, seq::Side::Right);
+          ed, transition_strip->input2, seq::Side::Right);
       if (left_adjacent_transition) {
         const int adjacent_offset = left_adjacent_transition->right_handle(scene) -
-                                    transition->left_handle();
+                                    transition_strip->left_handle();
         if (!(retiming_moves_handle(scene, left_adjacent_transition->input1, seq::Side::Right) &&
               retiming_moves_handle(scene, left_adjacent_transition->input2, seq::Side::Left)))
         {
@@ -185,7 +186,7 @@ static void create_trans_seq_clamp_data(TransInfo *t, const Scene *scene)
       }
       if (right_adjacent_transition) {
         const int adjacent_offset = right_adjacent_transition->left_handle() -
-                                    transition->right_handle(scene);
+                                    transition_strip->right_handle(scene);
         if (!(retiming_moves_handle(scene, right_adjacent_transition->input1, seq::Side::Right) &&
               retiming_moves_handle(scene, right_adjacent_transition->input2, seq::Side::Left)))
         {
