@@ -23,8 +23,6 @@ packed_float3 g_diffuse_light;
 packed_float3 g_diffuse_color;
 packed_float3 g_specular_light;
 packed_float3 g_specular_color;
-packed_float3 g_transmission_light;
-packed_float3 g_transmission_color;
 int g_light_accumulation_count;
 
 /* The Closure type is never used. Use float as dummy type. */
@@ -176,7 +174,5 @@ void closure_weights_reset(float closure_rand)
   g_diffuse_color = float3(0.0f);
   g_specular_light = float3(0.0f);
   g_specular_color = float3(0.0f);
-  g_transmission_light = float3(0.0f);
-  g_transmission_color = float3(0.0f);
   g_light_accumulation_count = 0;
 }

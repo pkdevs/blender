@@ -905,8 +905,6 @@ void node_light_accumulation_impl(float4 diffuse_light,
                                   float4 diffuse_color,
                                   float4 glossy_light,
                                   float4 glossy_color,
-                                  float4 transmission_light,
-                                  float4 transmission_color,
                                   float weight,
                                   Closure &result)
 {
@@ -914,8 +912,6 @@ void node_light_accumulation_impl(float4 diffuse_light,
   g_diffuse_color += diffuse_color.rgb * weight;
   g_specular_light += glossy_light.rgb * weight;
   g_specular_color += glossy_color.rgb * weight;
-  g_transmission_light += transmission_light.rgb * weight;
-  g_transmission_color += transmission_color.rgb * weight;
   g_light_accumulation_count++;
 
   result = Closure(0);

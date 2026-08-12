@@ -224,14 +224,6 @@ void surf_hybrid([[resource_table]] PipelineConstants &pipe,
     else {
       g_emission += g_specular_color * g_specular_light * alpha_rcp;
     }
-#if 0
-      //TODO: ???
-    render_passes.store_color(
-        out_texel, uni.uniform_buf.render_pass.emission_id, float4(g_transmission_light, 1.0f));
-    render_passes.store_color(
-        out_texel, uni.uniform_buf.render_pass.emission_id, float4(g_transmission_color, 1.0f));
-#endif
-    g_emission += g_transmission_color * g_transmission_light * alpha_rcp;
   }
 
   /* ----- GBuffer output ----- */
