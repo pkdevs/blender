@@ -8,27 +8,24 @@
 
 #define DNA_DEPRECATED_ALLOW
 
-#include "DNA_ID.h"
-#include "DNA_brush_types.h"
-#include "DNA_mesh_types.h"
-#include "DNA_scene_types.h"
-
 #include "BLI_listbase_iterator.hh"
 #include "BLI_sys_types.hh"
+#include "DNA_ID.h"
+#include "DNA_brush_types.h"
+#include "DNA_curves_types.h"
+#include "DNA_grease_pencil_types.h"
+#include "DNA_mesh_types.h"
+#include "DNA_pointcloud_types.h"
+#include "DNA_scene_types.h"
 
 #include "BKE_attribute.h"
 #include "BKE_attribute.hh"
-#include "BKE_attribute_storage.hh"
-#include "BKE_curves.hh"
-#include "BKE_grease_pencil.hh"
 #include "BKE_main.hh"
-#include "BKE_mesh.hh"
 #include "BKE_mesh_legacy_convert.hh"
 #include "BKE_node.hh"
 #include "BKE_node_runtime.hh"
 #include "BKE_paint.hh"
 #include "BKE_paint_types.hh"
-#include "BKE_pointcloud.hh"
 
 #include "readfile.hh"
 
