@@ -489,11 +489,12 @@ void Tree::ray_intersect_all(const Ray &ray, FunctionRef<void(const RayHit &)> f
 struct ClosestPointUserData {
   RTCScene rtc_scene;
   ClosestPointResult &result;
+  bool has_result = false;
 };
 
 static bool closest_point_fn(RTCPointQueryFunctionArguments *args)
 {
-  const auto &user_data = *static_cast<ClosestPointUserData *>(args->userPtr);
+  auto &user_data = *static_cast<ClosestPointUserData *>(args->userPtr);
   const RTCScene scene = user_data.rtc_scene;
   RTCGeometry geom = rtcGetGeometry(scene, args->geomID);
 
@@ -513,15 +514,33 @@ static bool closest_point_fn(RTCPointQueryFunctionArguments *args)
                              positions[tri[2]]);
 
   const float distance = math::distance(float3(&args->query->x), nearest_position);
-  if (distance < args->query->radius) {
-    args->query->radius = distance;
-    user_data.result.position = nearest_position;
-    user_data.result.bary_coord = bary_coord;
-    user_data.result.index = args->primID;
-    user_data.result.geomID = args->geomID;
-    return true;
+  if (distance > args->query->radius) {
+    return false;
   }
-  return false;
+  if (distance == args->query->radius) {
+    if (!user_data.has_result) {
+      /* The initial search radius is exclusive. */
+      return false;
+    }
+    /* Multiple primitives can be exactly the same distance from the query point. The order can be
+     * platform dependent. Break the tie by primitive so that the result is the same on every
+     * platform. */
+    if (args->geomID > user_data.result.geomID) {
+      return false;
+    }
+    if (args->geomID == uint32_t(user_data.result.geomID) &&
+        args->primID >= uint32_t(user_data.result.index))
+    {
+      return false;
+    }
+  }
+  args->query->radius = distance;
+  user_data.result.position = nearest_position;
+  user_data.result.bary_coord = bary_coord;
+  user_data.result.index = args->primID;
+  user_data.result.geomID = args->geomID;
+  user_data.has_result = true;
+  return true;
 }
 
 #endif /* WITH_EMBREE */
