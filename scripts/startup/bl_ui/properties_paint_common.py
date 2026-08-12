@@ -705,9 +705,8 @@ class ShapePanel(BrushPanel):
 
         if not (brush and brush.curve_distance_falloff):
             return False
-        if mode == 'SCULPT_CURVES':
-            if brush.curves_sculpt_brush_type in {'ADD', 'DELETE', 'CUT'}:
-                return False
+        if mode not in {'SCULPT', 'PAINT_VERTEX', 'PAINT_WEIGHT', 'PAINT_TEXTURE', 'PAINT_2D'}:
+            return False
         return True
 
     def draw(self, context):
@@ -776,6 +775,54 @@ class ShapePanel(BrushPanel):
             row.use_property_split = True
             row.use_property_decorate = False
             row.prop(brush, "falloff_shape", expand=True)
+
+
+class FalloffPanel(BrushPanel):
+    bl_label = "Falloff"
+    bl_options = {'DEFAULT_CLOSED'}
+
+    @classmethod
+    def poll(cls, context):
+        if not super().poll(context):
+            return False
+        settings = cls.paint_settings_from_active_tool(context)
+        if not (settings and settings.brush and settings.brush.curve_distance_falloff):
+            return False
+        # The "Shape" panel is used for mesh painting modes instead.
+        if cls.get_brush_mode(context) in {'SCULPT', 'PAINT_VERTEX', 'PAINT_WEIGHT', 'PAINT_TEXTURE', 'PAINT_2D'}:
+            return False
+        mode = cls.get_brush_mode(context)
+        if mode == 'SCULPT_CURVES':
+            brush = settings.brush
+            if brush.curves_sculpt_brush_type in {'ADD', 'DELETE', 'CUT'}:
+                return False
+        return True
+
+    def draw(self, context):
+        layout = self.layout
+
+        settings = self.paint_settings_from_active_tool(context)
+        brush = settings.brush
+
+        if brush is None:
+            return
+
+        col = layout.column(align=True)
+        if context.region.type == 'TOOL_HEADER':
+            col.prop(brush, "curve_distance_falloff_preset", expand=True)
+        else:
+            row = col.row(align=True)
+            col.prop(brush, "curve_distance_falloff_preset", text="")
+
+        if brush.curve_distance_falloff_preset == 'CUSTOM':
+            layout.template_curve_mapping(
+                brush, "curve_distance_falloff",
+                brush=True,
+                use_negative_slope=True,
+                show_presets=True,
+            )
+            col = layout.column(align=True)
+            row = col.row(align=True)
 
 
 class DisplayPanel(BrushPanel):
@@ -1937,7 +1984,7 @@ def brush_basic_grease_pencil_paint_settings(layout, context, brush, props, *, c
         else:
             layout.prop(gp_settings, "vertex_mode", text="Stroke Mode")
 
-        layout.popover("VIEW3D_PT_tools_brush_shape")
+        layout.popover("VIEW3D_PT_tools_brush_falloff")
         layout.prop(gp_settings, "use_active_layer_only")
 
 

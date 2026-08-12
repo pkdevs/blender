@@ -22,6 +22,7 @@ from bl_ui.properties_paint_common import (
     ColorPalettePanel,
     StrokePanel,
     SmoothStrokePanel,
+    FalloffPanel,
     ShapePanel,
     DisplayPanel,
     brush_texture_settings,
@@ -865,6 +866,13 @@ class VIEW3D_PT_tools_brush_shape(Panel, View3DPaintPanel, ShapePanel):
     bl_label = "Shape"
     bl_options = {'DEFAULT_CLOSED'}
     bl_ui_units_x = 12
+
+
+class VIEW3D_PT_tools_brush_falloff(Panel, View3DPaintPanel, FalloffPanel):
+    bl_context = ".paint_common"  # dot on purpose (access from topbar)
+    bl_parent_id = "VIEW3D_PT_tools_brush_settings"
+    bl_label = "Falloff"
+    bl_options = {'DEFAULT_CLOSED'}
 
 
 class VIEW3D_PT_tools_brush_falloff_frontface(View3DPaintPanel, Panel):
@@ -2370,6 +2378,7 @@ classes = (
     VIEW3D_PT_tools_brush_stroke,
     VIEW3D_PT_tools_brush_stroke_smooth_stroke,
     VIEW3D_PT_tools_brush_shape,
+    VIEW3D_PT_tools_brush_falloff,
     VIEW3D_PT_tools_brush_falloff_frontface,
     VIEW3D_PT_tools_brush_falloff_normal,
     VIEW3D_PT_tools_brush_display,
