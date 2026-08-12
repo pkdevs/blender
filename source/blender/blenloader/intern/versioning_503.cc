@@ -72,7 +72,7 @@ static void do_version_merge_layers_options_to_inputs(bNodeTree &ntree, bNode &n
   socket.default_value_typed<bNodeSocketValueMenu>()->value = storage.mode;
 }
 
-void do_versions_after_linking_530(FileData * /*fd*/, Main *bmain)
+void do_versions_after_linking_503(FileData * /*fd*/, Main *bmain)
 {
   if (!MAIN_VERSION_FILE_ATLEAST(bmain, 503, 8)) {
     version_node_socket_index_animdata(
@@ -87,7 +87,7 @@ void do_versions_after_linking_530(FileData * /*fd*/, Main *bmain)
    */
 }
 
-void blo_do_versions_530(FileData * /*fd*/, Library * /*lib*/, Main *bmain)
+void blo_do_versions_503(FileData * /*fd*/, Library * /*lib*/, Main *bmain)
 {
   if (!MAIN_VERSION_FILE_ATLEAST(bmain, 503, 1)) {
     for (Scene &scene : bmain->scenes) {
@@ -242,6 +242,28 @@ void blo_do_versions_530(FileData * /*fd*/, Library * /*lib*/, Main *bmain)
   }
 
   if (!MAIN_VERSION_FILE_ATLEAST(bmain, 503, 12)) {
+    for (Brush &brush : bmain->brushes) {
+      if (brush.ob_mode & OB_MODE_WEIGHT_PAINT || brush.ob_mode & OB_MODE_VERTEX_PAINT) {
+        if (brush.flag & BRUSH_FRONTFACE_FALLOFF_DEPRECATED && brush.falloff_angle_legacy != 0.0f)
+        {
+          switch (brush.falloff_shape) {
+            case PAINT_FALLOFF_SHAPE_SPHERE:
+              brush.mesh_automasking_settings->flags |= BRUSH_AUTOMASKING_BRUSH_NORMAL;
+              brush.mesh_automasking_settings->start_normal_falloff = 0.5f;
+              brush.mesh_automasking_settings->start_normal_limit = brush.falloff_angle_legacy;
+              break;
+            case PAINT_FALLOFF_SHAPE_TUBE:
+              brush.mesh_automasking_settings->flags |= BRUSH_AUTOMASKING_VIEW_NORMAL;
+              brush.mesh_automasking_settings->view_normal_falloff = 0.5f;
+              brush.mesh_automasking_settings->view_normal_limit = brush.falloff_angle_legacy;
+              break;
+          }
+        }
+      }
+    }
+  }
+
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 503, 13)) {
     auto validate_active_index_fn = [](const AttributeOwner &owner, int &active_index) -> void {
       const bke::AttributeStorage *storage = owner.get_storage();
       if ((active_index < 0) || (active_index >= storage->count()) ||
@@ -277,7 +299,6 @@ void blo_do_versions_530(FileData * /*fd*/, Library * /*lib*/, Main *bmain)
           AttributeOwner::from_id(&pointcloud.id), pointcloud.attributes_active_index);
     }
   }
-
   /**
    * Always bump subversion in BKE_blender_version.h when adding versioning
    * code here, and wrap it inside a MAIN_VERSION_FILE_ATLEAST check.
