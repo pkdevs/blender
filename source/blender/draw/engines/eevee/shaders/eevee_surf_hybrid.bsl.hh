@@ -197,8 +197,6 @@ void surf_hybrid([[resource_table]] PipelineConstants &pipe,
       g_specular_color /= float(g_light_accumulation_count);
     }
     // TODO: Write as fragment output?
-    // TODO: What if only one is enabled?
-    // TODO: Writing it to renderpasses makes it invisible to GI.
     if (uni.uniform_buf.render_pass.diffuse_light_id >= 0 &&
         uni.uniform_buf.render_pass.diffuse_color_id >= 0)
     {
