@@ -455,7 +455,7 @@ gpu::Texture *IMB_create_gpu_texture(const char *name,
 
   /* Correct the smaller size to maintain the original aspect ratio of the image. */
   if (do_rescale && ibuf->x != ibuf->y) {
-    if (size[0] > size[1]) {
+    if (ibuf->x > ibuf->y) {
       size[1] = int(ibuf->y * (float(size[0]) / ibuf->x));
     }
     else {
