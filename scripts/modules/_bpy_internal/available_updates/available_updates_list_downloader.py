@@ -6,7 +6,6 @@ from __future__ import annotations
 
 __all__ = [
     "download_available_updates_list",
-    "read_available_updates_list",
     "downloader_status",
     "DownloadStatus",
 ]
@@ -27,7 +26,6 @@ logger = logging.getLogger(__name__)
 
 class BlenderUpdatesListing:
     downloader: UpdatesDownloader | None = None
-    updates_str: str | None = None
 
 
 _blender_updates_listing: BlenderUpdatesListing = BlenderUpdatesListing()
@@ -41,30 +39,6 @@ def download_available_updates_list() -> None:
         )
         _blender_updates_listing.downloader.start()
         _blender_updates_listing.downloader.download_available_updates_list_file()
-        _blender_updates_listing.updates_str = None
-
-
-import cattrs
-_converter: cattrs.preconf.json.JsonConverter | None = None
-
-
-def read_available_updates_list() -> str | None:
-    global _converter
-    result = _blender_updates_listing.updates_str
-    _blender_updates_listing.updates_str = None
-    from datetime import datetime
-    import json
-    json_doc = json.loads(result)
-
-    if _converter is None:
-        _converter = cattrs.preconf.json.JsonConverter()
-        _converter.register_structure_hook_func(
-            lambda t: t is api_models.TimeStamp, lambda v, _: v if datetime.strptime(v, "%Y-%m-%dT%H:%M:%SZ") else None
-        )
-    # Validate data models
-    if (_converter.structure(json_doc, list[api_models.VersionUpdate])):
-        return result
-    return None
 
 
 def on_download_done_callback(
@@ -72,10 +46,10 @@ def on_download_done_callback(
     _http_req_descr: http_dl.RequestDescription,
     _temp_path: Path,
 ) -> None:
-    _blender_updates_listing.updates_str = None
     try:
         with _temp_path.open() as file:
-            _blender_updates_listing.updates_str = file.read()
+            from _bpy_internal.available_updates import blender_updates as releases
+            releases.load_available_updates_json(file.read())
     finally:
         pass
 

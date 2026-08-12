@@ -82,6 +82,17 @@ void ignore_all_updates();
  * successfully. */
 void check_for_updates_set_finished();
 
+void blender_updates_clear_tracks(bContext *C);
+void blender_updates_add_update_track(bContext *C,
+                                      BlenderVersion version,
+                                      bool is_lts,
+                                      StringRefNull download_url,
+                                      StringRefNull description,
+                                      StringRefNull timestamp,
+                                      TrackType track_type);
+void blender_updates_set_ignored_version(bContext *C,
+                                         BlenderVersion version,
+                                         TrackType track_type);
 /** Sets when the process downloading the file of the latest available updates have encounter any
  * error. */
 void check_for_updates_set_failed();

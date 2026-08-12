@@ -1803,7 +1803,7 @@ void blo_do_versions_userdef(UserDef *userdef)
   }
 #endif
 
-   if (!USER_VERSION_ATLEAST(503, 1)) {
+  if (!USER_VERSION_ATLEAST(503, 1)) {
     userdef->pref_flag |= USER_PREF_FLAG_PROJECT_SAVE;
   }
 

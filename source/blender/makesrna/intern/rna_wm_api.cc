@@ -17,6 +17,7 @@
 #include "DNA_windowmanager_types.h"
 
 #include "BKE_blender_updates.hh"
+#include "BKE_blender_version.h"
 
 #include "ED_screen.hh"
 
@@ -928,6 +929,37 @@ static void rna_check_for_available_updates_status_finished_loading()
   bke::check_for_updates_set_finished();
 }
 
+static void rna_blender_updates_clear_tracks(bContext *C)
+{
+  bke::blender_updates_clear_tracks(C);
+}
+
+static void rna_blender_updates_add_update_track(bContext *C,
+                                                 int version_number,
+                                                 int version_patch,
+                                                 bool is_lts,
+                                                 const char *download_url,
+                                                 const char *description,
+                                                 const char *timestamp,
+                                                 int track_type)
+{
+  bke::blender_updates_add_update_track(C,
+                                        {version_number, version_patch},
+                                        is_lts,
+                                        download_url,
+                                        description,
+                                        timestamp,
+                                        bke::TrackType(track_type));
+}
+
+static void rna_blender_updates_set_ignored_version(bContext *C,
+                                                    int version_number,
+                                                    int version_patch,
+                                                    int track_type)
+{
+  bke::blender_updates_set_ignored_version(
+      C, {version_number, version_patch}, bke::TrackType(track_type));
+}
 static void rna_check_for_available_updates_status_failed_loading()
 {
   bke::check_for_updates_set_failed();
@@ -1936,8 +1968,63 @@ void RNA_api_asset_library_loading_status(StructRNA *srna)
                           "check_for_available_updates_status_finished_loading",
                           "rna_check_for_available_updates_status_finished_loading");
   RNA_def_function_ui_description(
-      func, "Inform that the download of the available updates list was successful.");
+      func, "Inform that the download of the available updates list was successful");
   RNA_def_function_flag(func, FUNC_NO_SELF);
+
+  func = RNA_def_function(
+      srna, "blender_updates_clear_tracks", "rna_blender_updates_clear_tracks");
+  RNA_def_function_flag(func, FUNC_NO_SELF | FUNC_USE_CONTEXT);
+
+  static EnumPropertyItem update_track_type[] = {
+      {int(bke::TrackType::Latest), "LATEST", 0, "Latest", ""},
+      {int(bke::TrackType::LatestLTS), "LATEST_LTS", 0, "Latest LTS", ""},
+      {int(bke::TrackType::CurrentRelease), "CURRENT_RELEASE", 0, "Current Release", ""},
+      {0, nullptr, 0, nullptr, nullptr},
+  };
+  func = RNA_def_function(
+      srna, "blender_updates_add_update_track", "rna_blender_updates_add_update_track");
+  RNA_def_function_ui_description(func, "Loads ignored update versions");
+  RNA_def_function_flag(func, FUNC_NO_SELF | FUNC_USE_CONTEXT);
+  parm = RNA_def_int(func,
+                     "version_number",
+                     BLENDER_VERSION,
+                     BLENDER_VERSION,
+                     INT_MAX,
+                     "",
+                     "",
+                     BLENDER_VERSION,
+                     INT_MAX);
+  RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
+  parm = RNA_def_int(func, "version_patch", 0, 0, INT_MAX, "", "", 0, INT_MAX);
+  RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
+  parm = RNA_def_boolean(func, "is_lts", false, "", "");
+  RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
+  parm = RNA_def_string(func, "download_url", nullptr, 0, "", "");
+  RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
+  parm = RNA_def_string(func, "description", nullptr, 0, "", "");
+  RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
+  parm = RNA_def_string(func, "timestamp", nullptr, 0, "", "");
+  RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
+  parm = RNA_def_enum(func, "track_type", update_track_type, int(bke::TrackType::Latest), "", "");
+  RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
+
+  func = RNA_def_function(
+      srna, "blender_updates_set_ignored_version", "rna_blender_updates_set_ignored_version");
+  RNA_def_function_flag(func, FUNC_NO_SELF | FUNC_USE_CONTEXT);
+  RNA_def_function_ui_description(func, "Loads ignored update versions");
+  parm = RNA_def_int(func,
+                     "version_number",
+                     BLENDER_VERSION,
+                     BLENDER_VERSION,
+                     INT_MAX,
+                     "",
+                     "",
+                     BLENDER_VERSION,
+                     INT_MAX);
+  RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
+  parm = RNA_def_int(func, "version_patch", 0, 0, INT_MAX, "", "", 0, INT_MAX);
+  parm = RNA_def_enum(func, "track_type", update_track_type, int(bke::TrackType::Latest), "", "");
+  RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
 
   func = RNA_def_function(srna,
                           "check_for_available_updates_status_failed_loading",
