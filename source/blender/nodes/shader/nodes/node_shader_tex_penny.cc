@@ -425,8 +425,9 @@ void register_node_type_sh_tex_penny()
   common_node_type_base(&ntype, "ShaderNodeTexPenny"_ustr, SH_NODE_TEX_PENNY);
   ntype.ui_name = "Penny Noise";
   ntype.ui_description =
-      "Tileable 4D Improved Perlin noise. "
-      "X/Y/Z input sockets override Vector components when connected";
+      "19 procedural noise types by David Patrick Farmer, Jamie Halmick, "
+      "and Kent Oberheu. Tileable 4D Improved Perlin with per-axis scale, "
+      "levels, blend modes, and gradient output";
   ntype.enum_name_legacy = "TEX_PENNY";
   ntype.nclass = NODE_CLASS_TEXTURE;
   ntype.declare = file_ns::sh_node_tex_penny_declare;

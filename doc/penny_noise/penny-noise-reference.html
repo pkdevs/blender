@@ -14,9 +14,11 @@
     --border: #e1e4e5;
     --code-bg: #f8f8f8;
     --dl-term: #1a5276;
-    --accent: #d9822b;      /* Blender-orange nod, used sparingly */
+    --accent: #d9822b;
     --note-bg: #eef6fb;
     --note-border: #6ab0de;
+    --tip-bg: #f0faf0;
+    --tip-border: #4caf50;
   }
   * { box-sizing: border-box; }
   html { scroll-behavior: smooth; }
@@ -115,7 +117,7 @@
     font-size: 0.95rem;
   }
 
-  /* Definition lists — the core of Blender-manual reference style */
+  /* Definition lists */
   dl { margin: 1rem 0; }
   dl > dt {
     font-weight: 700;
@@ -126,7 +128,6 @@
   dl > dd {
     margin: 0.2rem 0 0.6rem 1.5rem;
   }
-  /* Nested option lists (the :Value: style) */
   dl.options { margin: 0.4rem 0 0.4rem 0; }
   dl.options > dt {
     font-weight: 700;
@@ -156,10 +157,37 @@
     letter-spacing: 0.05em;
   }
 
+  .tip {
+    background: var(--tip-bg);
+    border-left: 4px solid var(--tip-border);
+    padding: 0.8rem 1rem;
+    margin: 1.4rem 0;
+    border-radius: 2px;
+  }
+  .tip .note-title {
+    font-weight: 700;
+    color: #2e7d32;
+    display: block;
+    margin-bottom: 0.3rem;
+    text-transform: uppercase;
+    font-size: 0.78rem;
+    letter-spacing: 0.05em;
+  }
+
   .type-index {
     color: #999;
     font-weight: 400;
     font-size: 0.85em;
+  }
+
+  .noise-preview {
+    display: block;
+    width: 200px;
+    height: 200px;
+    margin: 0.5rem 0 0.3rem;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    object-fit: cover;
   }
 
   hr { border: none; border-top: 1px solid var(--border); margin: 2.5rem 0; }
@@ -189,12 +217,13 @@
     <li><a class="sub" href="#noise-types">Noise Types</a></li>
     <li><a class="sub" href="#choosing">Choosing a type</a></li>
     <li><a class="sub" href="#notes">Notes</a></li>
+    <li><a class="sub" href="#credits">Credits</a></li>
   </ul>
 </nav>
 
 <main id="top">
   <h1>Penny Noise</h1>
-  <p class="lead">The <strong>Penny Noise</strong> feature evaluates a family of 19 procedural noise types derived from the SLA ("Smells Like Almonds") noise collection. It is available in three contexts that share a single underlying implementation:</p>
+  <p class="lead">The <strong>Penny Noise</strong> feature evaluates a family of 19 procedural noise types derived from the Penny noise collection. It is available in three contexts that share a single underlying implementation:</p>
   <ul class="plain">
     <li><strong>Penny Noise Texture node</strong> — for shading, in EEVEE and Cycles.</li>
     <li><strong>Penny Noise Texture node (Geometry Nodes)</strong> — for geometry fields.</li>
@@ -205,11 +234,11 @@
   <hr>
 
   <h2>Penny Noise Texture Node</h2>
-  <p>The Penny Noise Texture node adds procedural SLA noise to a material or geometry field.</p>
+  <p>The Penny Noise Texture node adds procedural Penny noise to a material or geometry field.</p>
   <div class="path">Shader Editor: Add ‣ Texture ‣ Penny Noise<br>Geometry Node Editor: Add ‣ Texture ‣ Penny Noise</div>
 
   <h3 id="node-inputs">Inputs</h3>
-  <p>The available inputs depend on the <strong>Dimensions</strong> property.</p>
+  <p>The available inputs depend on the <strong>Dimensions</strong> and <strong>Tileable</strong> properties.</p>
   <dl>
     <dt>Coordinate</dt>
     <dd>Texture coordinate to evaluate the noise at. When left unconnected, the noise is evaluated in the object's local space, anchored at the object origin. Connect a <em>Texture Coordinate</em> or <em>Geometry</em> node (or any vector) to sample in a different space. Hidden when <em>Dimensions</em> is set to <em>1D</em>.</dd>
@@ -218,16 +247,16 @@
     <dd>The value used to evaluate the noise in the fourth dimension. Useful for animating an otherwise static pattern, or as an extra degree of variation. Available when <em>Dimensions</em> is <em>1D</em> or <em>4D</em>.</dd>
 
     <dt>Scale</dt>
-    <dd>Overall scaling of the noise, as a percentage. Larger values produce larger features (the input coordinate is divided by the scale), so increasing <em>Scale</em> zooms into broader structure.</dd>
+    <dd>Overall scaling of the noise, as a percentage. Larger values produce larger features (the input coordinate is divided by the scale), so increasing <em>Scale</em> zooms into broader structure. Negative values mirror the pattern along all axes — for example, Scale &minus;100% produces the same feature size as +100% with the coordinates inverted.</dd>
 
     <dt>Scale X, Scale Y, Scale Z, Scale W</dt>
-    <dd>Per-axis scale multipliers applied on top of <em>Scale</em>, allowing the noise to be stretched or compressed independently along each axis for anisotropic patterns. <em>Scale W</em> affects the fourth (animation) axis.</dd>
+    <dd>Per-axis scale multipliers applied on top of <em>Scale</em>, allowing the noise to be stretched or compressed independently along each axis for anisotropic patterns. <em>Scale W</em> affects the fourth (animation) axis. Like the global <em>Scale</em>, negative per-axis values mirror along the corresponding axis.</dd>
 
     <dt>Octaves</dt>
     <dd>The number of noise octaves summed together. Higher values add progressively finer detail on top of the base pattern. Some noise types accept fractional octave counts for smooth transitions. Clamped to the range 1 to 15.</dd>
 
     <dt>Roughness</dt>
-    <dd>Controls how much each successive octave contributes — effectively the amplitude falloff of higher-frequency detail. At the default of 0.5, most noise types reproduce their characteristic SLA appearance. Individual noise types interpret <em>Roughness</em> slightly differently (as octave falloff, gate width, fold sharpness, or displacement magnitude).</dd>
+    <dd>Controls how much each successive octave contributes — effectively the amplitude falloff of higher-frequency detail. At the default of 0.5, most noise types reproduce their characteristic Penny appearance. Individual noise types interpret <em>Roughness</em> slightly differently (as octave falloff, gate width, fold sharpness, or displacement magnitude).</dd>
 
     <dt>Level Min</dt>
     <dd>The input value mapped to black. May be set below 0 for high-dynamic-range headroom.</dd>
@@ -239,7 +268,7 @@
     <dd>The input value mapped to white. May be set above 1 for high-dynamic-range headroom.</dd>
 
     <dt>Period X, Period Y, Period Z, Period W</dt>
-    <dd>The integer tiling period along each axis, in lattice cells. The noise wraps seamlessly at these periods, so the texture tiles. <em>Period W</em> governs tiling in the fourth dimension, which is useful for seamless looping animation. The default is 8 on each axis.</dd>
+    <dd>The integer tiling period along each axis, in lattice cells. The noise wraps seamlessly at these periods, so the texture tiles. <em>Period W</em> governs tiling in the fourth dimension, which is useful for seamless looping animation. The default is 8 on each axis. These inputs are only available when <em>Tileable</em> is enabled.</dd>
   </dl>
 
   <h3 id="node-properties">Properties</h3>
@@ -256,10 +285,13 @@
     </dd>
 
     <dt>Noise Type</dt>
-    <dd>Which of the 19 SLA-derived noise algorithms to evaluate. See <a href="#noise-types">Noise Types</a> below.</dd>
+    <dd>Which of the 19 Penny-derived noise algorithms to evaluate. See <a href="#noise-types">Noise Types</a> below.</dd>
 
     <dt>Blend Mode</dt>
     <dd>How the noise is self-blended. The noise is sampled a second time at a decorrelated offset, and the two samples are combined with the chosen blend mode to produce richer variation. <em>Normal</em> uses the single primary sample with no self-blend. The remaining 24 options are Photoshop-style blend modes (Add, Multiply, Difference, Darken, Lighten, Color Dodge, Color Burn, Overlay, Average, Exclusion, Glow, Hard Light, Hard Mix, Linear Burn, Linear Dodge, Linear Light, Negation, Phoenix, Pin Light, Reflect, Screen, Soft Light, Subtract, Vivid Light), which are consistent across every context.</dd>
+
+    <dt>Tileable</dt>
+    <dd>When enabled, the noise wraps seamlessly at the integer <em>Period</em> along each axis. This allows the texture to tile perfectly for backgrounds, seamless materials, and looping W-axis animations. When disabled, the noise extends continuously without repeating, and the <em>Period</em> inputs are hidden. Enabled by default.</dd>
   </dl>
 
   <h3 id="node-outputs">Outputs</h3>
@@ -268,19 +300,21 @@
     <dd>A single-channel scalar output.</dd>
     <dt>Color</dt>
     <dd>A three-channel (RGB) output. Each channel is a decorrelated sample of the noise, which is useful for color variation or as a vector field.</dd>
+    <dt>Gradient</dt>
+    <dd>A three-channel (XYZ) central-difference gradient of the noise. The gradient points in the direction of steepest intensity increase and its magnitude reflects the local rate of change, making it useful for bump mapping, flow-field effects, and edge detection. Computed only when connected (lazy evaluation avoids the cost when unused).</dd>
   </dl>
 
   <hr>
 
   <h2>Penny Noise F-Curve Modifier</h2>
-  <p>The Penny Noise F-Curve modifier drives an animation channel with one-dimensional SLA noise. It follows the conventions of the built-in <em>Noise</em> modifier and adds the full Penny noise family and tone controls.</p>
+  <p>The Penny Noise F-Curve modifier drives an animation channel with one-dimensional Penny noise. It follows the conventions of the built-in <em>Noise</em> modifier and adds the full Penny noise family and tone controls.</p>
   <div class="path">Graph Editor ‣ Sidebar ‣ Modifiers ‣ Add Modifier ‣ Penny Noise</div>
   <p>The modifier samples the shared Penny noise field along the time axis. A <em>Random Seed</em> offsets the sample position on the non-time axes, so each seed produces a fully independent noise stream from the same settings.</p>
 
   <h3 id="fmod-properties">Properties</h3>
   <dl>
     <dt>Noise Type</dt>
-    <dd>Which of the 19 SLA-derived noise algorithms to evaluate. See <a href="#noise-types">Noise Types</a> below.</dd>
+    <dd>Which of the 19 Penny-derived noise algorithms to evaluate. See <a href="#noise-types">Noise Types</a> below.</dd>
 
     <dt>Blend Mode</dt>
     <dd>The noise self-blend mode, matching the texture node's <em>Blend Mode</em> (the 25 options described above).</dd>
@@ -288,7 +322,7 @@
     <dt>f-Blend</dt>
     <dd>How the generated noise is applied to the F-Curve value:
       <dl class="options">
-        <dt>Replace</dt><dd>Adds centered noise (noise − 0.5, scaled by <em>Strength</em>) on top of the curve. This is the default and produces symmetric variation around the underlying value.</dd>
+        <dt>Replace</dt><dd>Adds centered noise (noise &minus; 0.5, scaled by <em>Strength</em>) on top of the curve. This is the default and produces symmetric variation around the underlying value.</dd>
         <dt>Add</dt><dd>Adds the noise value, scaled by <em>Strength</em>, to the curve.</dd>
         <dt>Subtract</dt><dd>Subtracts the noise value, scaled by <em>Strength</em>, from the curve.</dd>
         <dt>Multiply</dt><dd>Multiplies the curve value by the noise, scaled by <em>Strength</em>.</dd>
@@ -334,43 +368,43 @@
   <p>All contexts expose the same 19 noise types through the <em>Noise Type</em> selector. The internal index of each type is given in parentheses; it is useful when scripting or matching behavior across contexts.</p>
   <dl>
     <dt>fBm <span class="type-index">(0)</span></dt>
-    <dd>Fractional Brownian motion — a smooth, cloud-like fractal noise formed from a signed sum of Perlin octaves. The general-purpose starting point.</dd>
+    <dd><img class="noise-preview" src="images/fbm.png" alt="fBm noise preview">Fractional Brownian motion — a smooth, cloud-like fractal noise formed from a signed sum of Perlin octaves. The general-purpose starting point.</dd>
     <dt>Turbulence <span class="type-index">(1)</span></dt>
-    <dd>Additive turbulence with a billowy, veined, marbled character. More structured and directional than fBm.</dd>
+    <dd><img class="noise-preview" src="images/turbulence.png" alt="Turbulence noise preview">Additive turbulence with a billowy, veined, marbled character. More structured and directional than fBm.</dd>
     <dt>Stupl <span class="type-index">(2)</span></dt>
-    <dd>Domain-warped turbulence. Each channel is displaced by a low-frequency turbulence field before sampling, producing a swirled, flowing structure.</dd>
+    <dd><img class="noise-preview" src="images/stupl.png" alt="Stupl noise preview">Domain-warped turbulence. Each channel is displaced by a low-frequency turbulence field before sampling, producing a swirled, flowing structure.</dd>
     <dt>Luka <span class="type-index">(3)</span></dt>
-    <dd>Displacement-warped absolute-turbulence with a narrow contrast window, producing crisp ridged filaments.</dd>
-    <dt>Blistered <span class="type-index">(4)</span></dt>
-    <dd>Adaptive-contrast blistered turbulence. A per-channel adaptive window gates a higher-frequency inner sample, giving blister-like cells with variable edge width.</dd>
+    <dd><img class="noise-preview" src="images/luka.png" alt="Luka noise preview">Displacement-warped absolute-turbulence with a narrow contrast window, producing crisp ridged filaments.</dd>
+    <dt>Blistered Turbulence <span class="type-index">(4)</span></dt>
+    <dd><img class="noise-preview" src="images/blistered_turbulence.png" alt="Blistered Turbulence noise preview">Adaptive-contrast blistered turbulence. A per-channel adaptive window gates a higher-frequency inner sample, giving blister-like cells with variable edge width.</dd>
     <dt>Box <span class="type-index">(5)</span></dt>
-    <dd>Axis-sliced domain-distortion noise with a boxy grain, suited to fabric, quilting, and structured surface texture.</dd>
+    <dd><img class="noise-preview" src="images/box.png" alt="Box noise preview">Axis-sliced domain-distortion noise with a boxy grain, suited to fabric, quilting, and structured surface texture.</dd>
     <dt>Mod <span class="type-index">(6)</span></dt>
-    <dd>Snapped-coordinate modulation noise with a modular, patchwork character.</dd>
+    <dd><img class="noise-preview" src="images/mod.png" alt="Mod noise preview">Snapped-coordinate modulation noise with a modular, patchwork character.</dd>
     <dt>Nutous <span class="type-index">(7)</span></dt>
-    <dd>Self-displaced turbulence with a baked midtone, producing a nubbly, granular, clustered texture.</dd>
+    <dd><img class="noise-preview" src="images/nutous.png" alt="Nutous noise preview">Self-displaced turbulence with a baked midtone, producing a nubbly, granular, clustered texture.</dd>
     <dt>Cranal <span class="type-index">(8)</span></dt>
-    <dd>Folded cellular turbulence with a contrast stretch, producing bright cell interiors separated by dark edge lines.</dd>
+    <dd><img class="noise-preview" src="images/cranal.png" alt="Cranal noise preview">Folded cellular turbulence with a contrast stretch, producing bright cell interiors separated by dark edge lines.</dd>
     <dt>Buya <span class="type-index">(9)</span></dt>
-    <dd>Ridge-folded, biased pseudo-fBm with an octave-aware remap that recovers high-dynamic-range detail at higher octave counts. Most detailed at moderate-to-high <em>Octaves</em> values.</dd>
+    <dd><img class="noise-preview" src="images/buya.png" alt="Buya noise preview">Ridge-folded, biased pseudo-fBm with an octave-aware remap that recovers high-dynamic-range detail at higher octave counts. Most detailed at moderate-to-high <em>Octaves</em> values.</dd>
     <dt>Cell <span class="type-index">(10)</span></dt>
-    <dd>Quantized cell Perlin, producing hard-edged, blocky, Voronoi-like regions.</dd>
+    <dd><img class="noise-preview" src="images/cell.png" alt="Cell noise preview">Quantized cell Perlin, producing hard-edged, blocky, Voronoi-like regions.</dd>
     <dt>Displaced Turbulence <span class="type-index">(11)</span></dt>
-    <dd>An X-shifted sum of displacement-warped absolute-turbulence, with an octave-calibrated output window. Flowing and directional, like turbulence caught mid-motion.</dd>
+    <dd><img class="noise-preview" src="images/displaced_turbulence.png" alt="Displaced Turbulence noise preview">An X-shifted sum of displacement-warped absolute-turbulence, with an octave-calibrated output window. Flowing and directional, like turbulence caught mid-motion.</dd>
     <dt>Hama <span class="type-index">(12)</span></dt>
-    <dd>A per-octave product of gated signed turbulence, producing sparse, isolated, pinpoint features on a dark field.</dd>
+    <dd><img class="noise-preview" src="images/hama.png" alt="Hama noise preview">A per-octave product of gated signed turbulence, producing sparse, isolated, pinpoint features on a dark field.</dd>
     <dt>Naki <span class="type-index">(13)</span></dt>
-    <dd>Displacement-warped absolute-turbulence with a smoothstep bias, giving soft, rolling, displaced waves.</dd>
+    <dd><img class="noise-preview" src="images/naki.png" alt="Naki noise preview">Displacement-warped absolute-turbulence with a smoothstep bias, giving soft, rolling, displaced waves.</dd>
     <dt>Poxo <span class="type-index">(14)</span></dt>
-    <dd>Recursive absolute-turbulence accumulated as a running blend, with support for fractional octaves. Layered and fibrous.</dd>
+    <dd><img class="noise-preview" src="images/poxo.png" alt="Poxo noise preview">Recursive absolute-turbulence accumulated as a running blend, with support for fractional octaves. Layered and fibrous.</dd>
     <dt>Pezo <span class="type-index">(15)</span></dt>
-    <dd>Gated turbulence masked and dithered by a fine high-frequency detail layer, combining large soft shapes with fine surface grain.</dd>
+    <dd><img class="noise-preview" src="images/pezo.png" alt="Pezo noise preview">Gated turbulence masked and dithered by a fine high-frequency detail layer, combining large soft shapes with fine surface grain.</dd>
     <dt>Dents <span class="type-index">(16)</span></dt>
-    <dd>A maximum-of-octaves folded turbulence with fractional-octave support, producing dented, pitted, gouged impressions.</dd>
+    <dd><img class="noise-preview" src="images/dents.png" alt="Dents noise preview">A maximum-of-octaves folded turbulence with fractional-octave support, producing dented, pitted, gouged impressions.</dd>
     <dt>Sema <span class="type-index">(17)</span></dt>
-    <dd>Tightly gated turbulence with a fine dither, producing sparse, sharp-edged features on a clean field.</dd>
+    <dd><img class="noise-preview" src="images/sema.png" alt="Sema noise preview">Tightly gated turbulence with a fine dither, producing sparse, sharp-edged features on a clean field.</dd>
     <dt>VL <span class="type-index">(18)</span></dt>
-    <dd>Variable-lacunarity noise — Perlin warped by Perlin — giving a rich, turbulent, marbled distortion.</dd>
+    <dd><img class="noise-preview" src="images/vl.png" alt="VL noise preview">Variable-lacunarity noise — Perlin warped by Perlin — giving a rich, turbulent, marbled distortion.</dd>
   </dl>
 
   <h3 id="choosing">Choosing a noise type</h3>
@@ -379,7 +413,7 @@
     <li><strong>Smooth / fractal:</strong> fBm, Turbulence, VL</li>
     <li><strong>Warped / flowing:</strong> Stupl, Naki, Displaced Turbulence, VL</li>
     <li><strong>Ridged / crisp:</strong> Luka, Buya</li>
-    <li><strong>Cellular / blocky:</strong> Cell, Cranal, Blistered</li>
+    <li><strong>Cellular / blocky:</strong> Cell, Cranal, Blistered Turbulence</li>
     <li><strong>Sparse / spotted:</strong> Hama, Sema</li>
     <li><strong>Damaged / pitted:</strong> Dents, Nutous</li>
     <li><strong>Structured / modular:</strong> Box, Mod</li>
@@ -392,16 +426,36 @@
   <h2 id="notes">Notes</h2>
   <div class="note">
     <span class="note-title">Tiling</span>
-    The noise is tileable in all four dimensions via the integer <em>Period</em> values, so textures wrap seamlessly and animations along <em>W</em> can be made to loop.
+    When <em>Tileable</em> is enabled (the default), the noise wraps seamlessly in all four dimensions via the integer <em>Period</em> values. Textures tile perfectly and animations along <em>W</em> can be made to loop by matching the animation range to the <em>Period W</em> value. When <em>Tileable</em> is disabled, the noise extends continuously without repeating.
   </div>
   <div class="note">
     <span class="note-title">Consistency across contexts</span>
-    Results are consistent across EEVEE, Cycles (CPU and GPU), Cycles OSL, and Geometry Nodes, because these share the same 4D hash and transform chain. The F-Curve modifier and the Geometry Nodes node use a common core, so noise sampled on geometry and noise driving a curve agree exactly.
+    Results are consistent across EEVEE, Cycles (CPU and GPU), Cycles OSL, and Geometry Nodes, because these share the same 4D hash and transform chain. The F-Curve modifier and the Geometry Nodes node use a common C++ core, so noise sampled on geometry and noise driving a curve agree exactly.
   </div>
   <div class="note">
     <span class="note-title">Default coordinate</span>
     When the texture node's <em>Coordinate</em> input is unconnected, the noise is evaluated in the object's local space, so it is anchored at the object origin and scales from there rather than from a bounding-box corner.
   </div>
+  <div class="note">
+    <span class="note-title">Negative Scale</span>
+    Negative <em>Scale</em> values (global or per-axis) mirror the noise pattern along the corresponding axes while preserving the same feature size. For example, <em>Scale</em> &minus;100% produces the same pattern as +100%, reflected. This is useful for creating symmetric or mirrored variations.
+  </div>
+  <div class="tip">
+    <span class="note-title">Tip</span>
+    The <em>Gradient</em> output is computed lazily — connecting it enables the central-difference computation, and leaving it unconnected costs nothing. Use it for bump/normal mapping by feeding it into a <em>Bump</em> node, or for directional effects by treating it as a flow field.
+  </div>
+
+  <hr>
+
+  <h2 id="credits">Credits</h2>
+  <dl>
+    <dt>David Patrick Farmer</dt>
+    <dd>Co-creator and developer of the Penny noise collection and Blender integration (1999–present).</dd>
+    <dt>Jamie Halmick</dt>
+    <dd>Co-creator of the original procedural noise collection (1999–2002).</dd>
+    <dt>Kent Oberheu</dt>
+    <dd>Senior Designer on the noise projects (2003–present).</dd>
+  </dl>
 
 </main>
 </div>
