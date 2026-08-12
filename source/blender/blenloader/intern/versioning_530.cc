@@ -193,7 +193,6 @@ void blo_do_versions_530(FileData * /*fd*/, Library * /*lib*/, Main *bmain)
     FOREACH_NODETREE_END;
   }
 
-
   if (!MAIN_VERSION_FILE_ATLEAST(bmain, 503, 11)) {
     /* This code formerly ran whenever entering Sculpt Mode, it is unlikely that there are any
      * files that have these settings with invalid values, but since these values have never been
@@ -240,23 +239,29 @@ void blo_do_versions_530(FileData * /*fd*/, Library * /*lib*/, Main *bmain)
     };
 
     for (Mesh &mesh : bmain->meshes) {
-      mesh.attributes_active_index = validate_active_index_fn(AttributeOwner::from_id(&mesh.id), mesh.attributes_active_index);
+      mesh.attributes_active_index = validate_active_index_fn(AttributeOwner::from_id(&mesh.id),
+                                                              mesh.attributes_active_index);
     }
     for (Curves &curves : bmain->hair_curves) {
-      curves.geometry.attributes_active_index = validate_active_index_fn(AttributeOwner::from_id(&curves.id), curves.geometry.attributes_active_index);
+      curves.geometry.attributes_active_index = validate_active_index_fn(
+          AttributeOwner::from_id(&curves.id), curves.geometry.attributes_active_index);
     }
     for (GreasePencil &grease_pencil : bmain->grease_pencils) {
-      grease_pencil.attributes_active_index = validate_active_index_fn(AttributeOwner::from_id(&grease_pencil.id), grease_pencil.attributes_active_index);
+      grease_pencil.attributes_active_index = validate_active_index_fn(
+          AttributeOwner::from_id(&grease_pencil.id), grease_pencil.attributes_active_index);
       /* Also check the attributes_active_index in the individual drawings */
-      for (GreasePencilDrawingBase *drawing_base : grease_pencil.drawings() ) {
+      for (GreasePencilDrawingBase *drawing_base : grease_pencil.drawings()) {
         if (drawing_base->type == GP_DRAWING) {
           GreasePencilDrawing *drawing = reinterpret_cast<GreasePencilDrawing *>(drawing_base);
-          drawing->geometry.attributes_active_index = validate_active_index_fn(AttributeOwner(AttributeOwnerType::GreasePencilDrawing, drawing), drawing->geometry.attributes_active_index);
+          drawing->geometry.attributes_active_index = validate_active_index_fn(
+              AttributeOwner(AttributeOwnerType::GreasePencilDrawing, drawing),
+              drawing->geometry.attributes_active_index);
         }
       }
     }
     for (PointCloud &pointcloud : bmain->pointclouds) {
-     pointcloud.attributes_active_index = validate_active_index_fn(AttributeOwner::from_id(&pointcloud.id), pointcloud.attributes_active_index);
+      pointcloud.attributes_active_index = validate_active_index_fn(
+          AttributeOwner::from_id(&pointcloud.id), pointcloud.attributes_active_index);
     }
 
     for (Brush &brush : bmain->brushes) {
