@@ -908,11 +908,13 @@ void node_light_accumulation_impl(float4 diffuse_light,
                                   float weight,
                                   Closure &result)
 {
+#if defined(GPU_FRAGMENT_SHADER) && defined(MAT_LIGHT_ITER)
   g_diffuse_light += diffuse_light.rgb * weight;
   g_diffuse_color += diffuse_color.rgb * weight;
   g_specular_light += glossy_light.rgb * weight;
   g_specular_color += glossy_color.rgb * weight;
   g_light_accumulation_count++;
+#endif
 
   result = Closure(0);
 }

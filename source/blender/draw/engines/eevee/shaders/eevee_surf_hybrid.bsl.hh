@@ -192,6 +192,7 @@ void surf_hybrid([[resource_table]] PipelineConstants &pipe,
     render_passes.store_color(
         out_texel, uni.uniform_buf.render_pass.emission_id, float4(g_emission, 1.0f));
 
+#if defined(MAT_LIGHT_ITER)
     if (g_light_accumulation_count > 0) {
       g_diffuse_color /= float(g_light_accumulation_count);
       g_specular_color /= float(g_light_accumulation_count);
@@ -222,6 +223,7 @@ void surf_hybrid([[resource_table]] PipelineConstants &pipe,
     else {
       g_emission += g_specular_color * g_specular_light * alpha_rcp;
     }
+#endif
   }
 
   /* ----- GBuffer output ----- */

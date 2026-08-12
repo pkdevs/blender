@@ -18,12 +18,13 @@ float g_volume_anisotropy;
 packed_float3 g_volume_absorption;
 
 /* For Light Accumulation. */
-// TODO: Put these behind optional macros?
+#if defined(GPU_FRAGMENT_SHADER) && defined(MAT_LIGHT_ITER)
 packed_float3 g_diffuse_light;
 packed_float3 g_diffuse_color;
 packed_float3 g_specular_light;
 packed_float3 g_specular_color;
 int g_light_accumulation_count;
+#endif
 
 /* The Closure type is never used. Use float as dummy type. */
 #define Closure float
@@ -170,9 +171,11 @@ void closure_weights_reset(float closure_rand)
   g_volume_absorption = float3(0.0f);
   g_holdout = 0.0f;
 
+#if defined(GPU_FRAGMENT_SHADER) && defined(MAT_LIGHT_ITER)
   g_diffuse_light = float3(0.0f);
   g_diffuse_color = float3(0.0f);
   g_specular_light = float3(0.0f);
   g_specular_color = float3(0.0f);
   g_light_accumulation_count = 0;
+#endif
 }
