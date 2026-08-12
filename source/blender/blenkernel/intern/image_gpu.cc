@@ -26,7 +26,6 @@
 #include "IMB_imbuf.hh"
 #include "IMB_imbuf_types.hh"
 
-#include "BKE_global.hh"
 #include "BKE_image.hh"
 #include "BKE_image_gpu.hh"
 #include "BKE_main.hh"
@@ -395,28 +394,11 @@ static ImBuf *image_gpu_error_imbuf_ensure()
   return g_error_imbuf;
 }
 
-/* Reason an image failed to be displayed, to give a more helpful error message. */
 enum class ImageLoadError {
-  /* The image buffer could not be acquired. */
   LoadFailed,
-  /* The image buffer could not be acquired, and the file is not on disk. */
   FileMissing,
-  /* The image buffer is valid, but no GPU texture could be created from it. */
   GPUTextureFailed,
 };
-
-/* Whether a file is expected to exist on disk for this image, so that a missing
- * file is a meaningful thing to report. */
-static bool image_gpu_file_expected_on_disk(const Image *ima)
-{
-  if (!ELEM(ima->source, IMA_SRC_FILE, IMA_SRC_SEQUENCE, IMA_SRC_MOVIE, IMA_SRC_TILED)) {
-    return false;
-  }
-  if (BKE_image_has_packedfile(ima)) {
-    return false;
-  }
-  return ima->filepath[0] != '\0';
-}
 
 static void image_gpu_log_load_error_once(Image *ima, ImageUser *iuser, ImageLoadError error)
 {
@@ -428,18 +410,19 @@ static void image_gpu_log_load_error_once(Image *ima, ImageUser *iuser, ImageLoa
   }
   ima->runtime->gpu_load_error_logged = true;
 
-  /* Resolves UDIM tile and sequence frame numbers, and makes the path absolute. Multi-view
-   * lookup requires an image user, so it is only resolved when one is available. */
   char filepath[FILE_MAX];
-  BKE_image_user_file_path_ex(G_MAIN, iuser, ima, filepath, true, iuser != nullptr);
+  BKE_image_user_file_path(iuser, ima, filepath);
 
-  /* Report a missing file separately, matching the Cycles message for the same situation.
-   * This only runs on the error path, once per image, so the file system access is not
-   * performance relevant. */
-  if (error == ImageLoadError::LoadFailed && image_gpu_file_expected_on_disk(ima) &&
-      !BLI_exists(filepath))
+  /* Report a missing file separately, matching the Cycles message. */
+  if (BKE_image_source_is_file(ima) && !BKE_image_has_packedfile(ima) &&
+      BKE_image_has_filepath(ima))
   {
-    error = ImageLoadError::FileMissing;
+    if (error == ImageLoadError::LoadFailed && !BLI_exists(filepath)) {
+      error = ImageLoadError::FileMissing;
+    }
+  }
+  else {
+    STRNCPY(filepath, ima->id.name + 2);
   }
 
   switch (error) {
