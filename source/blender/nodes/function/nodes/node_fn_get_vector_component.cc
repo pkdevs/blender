@@ -2,6 +2,8 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+#include "FN_multi_function_registry.hh"
+
 #include "GPU_material.hh"
 
 #include "node_function_util.hh"
@@ -19,13 +21,7 @@ static void node_declare(NodeDeclarationBuilder &b)
 
 static void node_build_multi_function(NodeMultiFunctionBuilder &builder)
 {
-  static auto fn = mf::build::SI2_SO<float3, int, float>("get_vector_component",
-                                                         [](const float3 &vec, const int index) {
-                                                           if (index >= 0 && index <= 2) {
-                                                             return vec[index];
-                                                           }
-                                                           return 0.0f;
-                                                         });
+  const mf::MultiFunction &fn = fn::multi_function::registry::lookup("float3[int]"_ustr);
   builder.set_matching_fn(&fn);
 }
 
