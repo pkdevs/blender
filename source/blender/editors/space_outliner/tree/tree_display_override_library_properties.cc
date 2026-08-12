@@ -91,7 +91,7 @@ Vector<TreeElement *> TreeDisplayOverrideLibraryProperties::add_library_contents
     for (ID *id : List<ID>(lbarray[a])) {
       if (ID_IS_OVERRIDE_LIBRARY_REAL(id) && !ID_IS_LINKED(id)) {
         TreeElement *override_tree_element = add_element(
-                                                         tree_to_expand, id, nullptr, id_base_te, TSE_LIBRARY_OVERRIDE_BASE, 0);
+            tree_to_expand, id, nullptr, id_base_te, TSE_LIBRARY_OVERRIDE_BASE, 0);
 
         if (override_tree_element->subtree.is_empty()) {
           outliner_free_tree_element(override_tree_element, tree_to_expand);

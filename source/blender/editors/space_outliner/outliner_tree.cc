@@ -787,8 +787,7 @@ static TreeElement *outliner_find_first_desired_element_at_y(const SpaceOutliner
                                                              const float view_co_limit)
 {
   TreeElement *te = outliner_find_item_at_y(
-                                            space_outliner, space_outliner->runtime->tree
-                                            .as_span(), view_co);
+      space_outliner, space_outliner->runtime->tree.as_span(), view_co);
 
   if (!te) {
     return nullptr;

@@ -130,8 +130,7 @@ static wmOperatorStatus outliner_highlight_update_invoke(bContext *C,
       &region->v2d, event->mval[0], event->mval[1], &view_mval[0], &view_mval[1]);
 
   TreeElement *hovered_te = outliner_find_item_at_y(
-                                                    space_outliner, space_outliner->runtime->tree
-                                                    .as_span(), view_mval[1]);
+      space_outliner, space_outliner->runtime->tree.as_span(), view_mval[1]);
 
   TreeElement *icon_te = nullptr;
   bool is_over_icon = false;
@@ -226,8 +225,7 @@ static wmOperatorStatus outliner_item_openclose_modal(bContext *C,
 
   if (event->type == MOUSEMOVE) {
     TreeElement *te = outliner_find_item_at_y(
-                                              space_outliner, space_outliner->runtime->tree
-                                              .as_span(), view_mval[1]);
+        space_outliner, space_outliner->runtime->tree.as_span(), view_mval[1]);
 
     /* Only openclose if mouse is not over the previously toggled element */
     if (te && TREESTORE(te) != data->prev_tselem) {
@@ -273,14 +271,14 @@ static wmOperatorStatus outliner_item_openclose_invoke(bContext *C,
   ui::view2d_region_to_view(&region->v2d, mval[0], mval[1], &view_mval[0], &view_mval[1]);
 
   TreeElement *te = outliner_find_item_at_y(
-                                            space_outliner, space_outliner->runtime->tree
-                                            .as_span(), view_mval[1]);
+      space_outliner, space_outliner->runtime->tree.as_span(), view_mval[1]);
 
   if (te && outliner_item_is_co_within_close_toggle(te, view_mval[0])) {
     TreeStoreElem *tselem = TREESTORE(te);
 
     const bool open = (tselem->flag & TSE_CLOSED) ||
-    (toggle_all && outliner_flag_is_any_test(te->subtree.as_span(), TSE_CLOSED, 1));
+                      (toggle_all &&
+                       outliner_flag_is_any_test(te->subtree.as_span(), TSE_CLOSED, 1));
 
     outliner_item_openclose(te, open, toggle_all);
     outliner_tag_redraw_avoid_rebuild_on_open_change(space_outliner, region);
@@ -408,8 +406,8 @@ void item_rename_fn(bContext *C,
 static TreeElement *outliner_item_rename_find_active(const SpaceOutliner *space_outliner,
                                                      ReportList *reports)
 {
-  TreeElement *active_element = outliner_find_element_with_flag(space_outliner->runtime->tree.as_span(),
-                                                                TSE_ACTIVE);
+  TreeElement *active_element = outliner_find_element_with_flag(
+      space_outliner->runtime->tree.as_span(), TSE_ACTIVE);
 
   if (!active_element) {
     BKE_report(reports, RPT_WARNING, "No active item to rename");
@@ -427,8 +425,7 @@ static TreeElement *outliner_item_rename_find_hovered(const SpaceOutliner *space
   ui::view2d_region_to_view(&region->v2d, event->mval[0], event->mval[1], &fmval[0], &fmval[1]);
 
   TreeElement *hovered = outliner_find_item_at_y(
-                                                 space_outliner, space_outliner->runtime->tree
-                                                 .as_span(), fmval[1]);
+      space_outliner, space_outliner->runtime->tree.as_span(), fmval[1]);
   if (hovered && outliner_item_is_co_over_name(hovered, fmval[0])) {
     return hovered;
   }
@@ -981,8 +978,7 @@ static wmOperatorStatus outliner_id_copy_exec(bContext *C, wmOperator *op)
   PartialWriteContext copybuffer{*bmain};
 
   const int num_ids = outliner_id_copy_tag(
-                                           space_outliner, space_outliner->runtime->tree
-                                           .as_span(), copybuffer, op->reports);
+      space_outliner, space_outliner->runtime->tree.as_span(), copybuffer, op->reports);
   if (num_ids == 0) {
     BKE_report(op->reports, RPT_INFO, "No selected data-blocks to copy");
     return OPERATOR_CANCELLED;
@@ -1573,9 +1569,10 @@ static TreeElement *outliner_show_active_get_element(const bContext *C,
     return nullptr;
   }
 
-  te = outliner_find_id(
-                        space_outliner, space_outliner->runtime->tree
-                        .as_span(), &obact->id, TE_CHILD_NOT_IN_COLLECTION);
+  te = outliner_find_id(space_outliner,
+                        space_outliner->runtime->tree.as_span(),
+                        &obact->id,
+                        TE_CHILD_NOT_IN_COLLECTION);
 
   if (te != nullptr && obact->type == OB_ARMATURE) {
     /* traverse down the bone hierarchy in case of armature */

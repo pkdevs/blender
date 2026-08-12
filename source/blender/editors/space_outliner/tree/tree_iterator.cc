@@ -71,9 +71,7 @@ void all_open(const SpaceOutliner &space_outliner,
   }
 }
 
-void all_open(SpaceOutliner &space_outliner,
-              Span<TreeElement *> subtree,
-              const VisitorFn visitor)
+void all_open(SpaceOutliner &space_outliner, Span<TreeElement *> subtree, const VisitorFn visitor)
 {
   for (TreeElement *element : subtree) {
     /* Get needed data out in case element gets freed. */

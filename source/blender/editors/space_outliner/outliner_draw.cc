@@ -123,10 +123,8 @@ void outliner_tree_dimensions(SpaceOutliner *space_outliner, int *r_width, int *
 {
   *r_width = 0;
   *r_height = 0;
-  outliner_tree_dimensions_impl(space_outliner,
-                                space_outliner->runtime->tree.as_span(),
-                                r_width,
-                                r_height);
+  outliner_tree_dimensions_impl(
+      space_outliner, space_outliner->runtime->tree.as_span(), r_width, r_height);
 }
 
 /**
@@ -1851,9 +1849,14 @@ static void outliner_draw_restrictbuts(ui::Block *block,
     }
 
     if (TSELEM_OPEN(tselem, space_outliner)) {
-      outliner_draw_restrictbuts(
-                                 block, bmain, scene, view_layer, region, space_outliner, te->subtree
-                                 .as_span(), props_active);
+      outliner_draw_restrictbuts(block,
+                                 bmain,
+                                 scene,
+                                 view_layer,
+                                 region,
+                                 space_outliner,
+                                 te->subtree.as_span(),
+                                 props_active);
     }
   }
 }
@@ -2060,12 +2063,8 @@ static void outliner_draw_overrides_restrictbuts(Main *bmain,
   for (const TreeElement *te : tree) {
     const TreeStoreElem *tselem = TREESTORE(te);
     if (TSELEM_OPEN(tselem, space_outliner)) {
-      outliner_draw_overrides_restrictbuts(bmain,
-                                           block,
-                                           region,
-                                           space_outliner,
-                                           te->subtree.as_span(),
-                                           x);
+      outliner_draw_overrides_restrictbuts(
+          bmain, block, region, space_outliner, te->subtree.as_span(), x);
     }
 
     if (!outliner_is_element_in_view(te, &region->v2d)) {
@@ -3645,10 +3644,8 @@ static void outliner_draw_tree(ui::Block *block,
   if (space_outliner->outlinevis == SO_DATA_API) {
     /* struct marks */
     int starty = int(region->v2d.tot.ymax) - UI_UNIT_Y - OL_Y_OFFSET;
-    outliner_draw_struct_marks(region,
-                               space_outliner,
-                               space_outliner->runtime->tree.as_span(),
-                               &starty);
+    outliner_draw_struct_marks(
+        region, space_outliner, space_outliner->runtime->tree.as_span(), &starty);
   }
 
   /* Draw highlights before hierarchy. */
@@ -3673,8 +3670,7 @@ static void outliner_draw_tree(ui::Block *block,
     int starty = int(region->v2d.tot.ymax) - OL_Y_OFFSET;
     int startx = columns_offset + UI_UNIT_X / 2 - (U.pixelsize + 1) / 2;
     outliner_draw_hierarchy_lines(
-                                  space_outliner, space_outliner->runtime->tree
-                                  .as_span(), tvc, startx, &starty);
+        space_outliner, space_outliner->runtime->tree.as_span(), tvc, startx, &starty);
   }
 
   /* Items themselves. */
@@ -3876,14 +3872,12 @@ void draw_outliner(const bContext *C, bool do_rebuild)
       block_emboss_set(block, ui::EmbossType::Emboss);
       block_flag_enable(block, ui::BLOCK_NO_DRAW_OVERRIDDEN_STATE);
       outliner_draw_overrides_rna_buts(
-                                       block, region, space_outliner, space_outliner->runtime->tree
-                                       .as_span(), x);
+          block, region, space_outliner, space_outliner->runtime->tree.as_span(), x);
       block_emboss_set(block, ui::EmbossType::NoneOrStatus);
     }
     else if (space_outliner->lib_override_view_mode == SO_LIB_OVERRIDE_VIEW_HIERARCHIES) {
       outliner_draw_overrides_restrictbuts(
-                                           mainvar, block, region, space_outliner, space_outliner->runtime->tree
-                                           .as_span(), x);
+          mainvar, block, region, space_outliner, space_outliner->runtime->tree.as_span(), x);
     }
   }
   else if (right_column_width > 0.0f) {

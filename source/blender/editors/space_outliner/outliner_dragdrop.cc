@@ -131,8 +131,7 @@ static TreeElement *outliner_drop_insert_find(bContext *C,
 
   ui::view2d_region_to_view(&region->v2d, mval[0], mval[1], &view_mval[0], &view_mval[1]);
   te_hovered = outliner_find_item_at_y(
-                                       space_outliner, space_outliner->runtime->tree
-                                       .as_span(), view_mval[1]);
+      space_outliner, space_outliner->runtime->tree.as_span(), view_mval[1]);
 
   if (te_hovered) {
     /* Mouse hovers an element (ignoring x-axis),
@@ -399,8 +398,7 @@ static void parent_drop_set_parents(bContext *C,
   SpaceOutliner *space_outliner = CTX_wm_space_outliner(C);
 
   TreeElement *te = outliner_find_id(
-                                     space_outliner, space_outliner->runtime->tree
-                                     .as_span(), &parent->id, TreeElementFlag(0));
+      space_outliner, space_outliner->runtime->tree.as_span(), &parent->id, TreeElementFlag(0));
   Scene *scene = id_cast<Scene *>(outliner_search_back(te, ID_SCE));
 
   if (scene == nullptr) {
@@ -1383,8 +1381,7 @@ static wmOperatorStatus collection_drop_invoke(bContext *C,
     relative_after = (data.insert_type == TE_INSERT_AFTER);
 
     TreeElement *parent_te = outliner_find_parent_element(
-                                                          space_outliner->runtime->tree
-                                                          .as_span(), nullptr, data.te);
+        space_outliner->runtime->tree.as_span(), nullptr, data.te);
     data.to = (parent_te) ? outliner_collection_from_tree_element(parent_te) : nullptr;
   }
 

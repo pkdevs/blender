@@ -621,8 +621,7 @@ TreeElement *outliner_find_item_at_x_in_row(const SpaceOutliner *space_outliner,
 /**
  * Find specific item from the trees-tore.
  */
-TreeElement *outliner_find_tree_element(Span<TreeElement *> tree,
-                                        const TreeStoreElem *store_elem);
+TreeElement *outliner_find_tree_element(Span<TreeElement *> tree, const TreeStoreElem *store_elem);
 /**
  * Find parent element of te.
  */

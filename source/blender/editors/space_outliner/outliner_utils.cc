@@ -99,9 +99,8 @@ TreeElement *outliner_find_item_at_y(const SpaceOutliner *space_outliner,
 
       /* co_y is lower than current element (but not lower than the next one), possibly inside
        * children */
-      TreeElement *te_sub = outliner_find_item_at_y(space_outliner,
-                                                    te_iter->subtree.as_span(),
-                                                    view_co_y);
+      TreeElement *te_sub = outliner_find_item_at_y(
+          space_outliner, te_iter->subtree.as_span(), view_co_y);
       if (te_sub) {
         return te_sub;
       }
@@ -319,10 +318,8 @@ bool outliner_tree_traverse(const SpaceOutliner *space_outliner,
     if (func_retval == TRAVERSE_SKIP_CHILDS) {
       /* skip */
     }
-    else if (!outliner_tree_traverse(
-                                     space_outliner,
- te->subtree
-                                     .as_span(),
+    else if (!outliner_tree_traverse(space_outliner,
+                                     te->subtree.as_span(),
                                      filter_te_flag,
                                      filter_tselem_flag,
                                      func,
@@ -498,9 +495,8 @@ Base *ED_outliner_give_base_under_cursor(bContext *C, const int mval[2])
 
   ui::view2d_region_to_view(&region->v2d, mval[0], mval[1], &view_mval[0], &view_mval[1]);
 
-  te = outliner_find_item_at_y(space_outliner,
-                               space_outliner->runtime->tree.as_span(),
-                               view_mval[1]);
+  te = outliner_find_item_at_y(
+      space_outliner, space_outliner->runtime->tree.as_span(), view_mval[1]);
   if (te) {
     TreeStoreElem *tselem = TREESTORE(te);
     if ((tselem->type == TSE_SOME_ID) && (te->idcode == ID_OB)) {
@@ -523,8 +519,7 @@ bool ED_outliner_give_rna_under_cursor(bContext *C, const int mval[2], PointerRN
   ui::view2d_region_to_view(&region->v2d, mval[0], mval[1], &view_mval[0], &view_mval[1]);
 
   TreeElement *te = outliner_find_item_at_y(
-                                            space_outliner, space_outliner->runtime->tree
-                                            .as_span(), view_mval[1]);
+      space_outliner, space_outliner->runtime->tree.as_span(), view_mval[1]);
   if (!te) {
     return false;
   }

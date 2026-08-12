@@ -857,11 +857,8 @@ static void merged_element_search_update_fn(const bContext * /*C*/,
 
   int type = tree_element_id_type_to_index(te);
 
-  merged_element_search_fn_recursive(parent->subtree.as_span(),
-                                     TREESTORE(te)->type,
-                                     type,
-                                     str,
-                                     items);
+  merged_element_search_fn_recursive(
+      parent->subtree.as_span(), TREESTORE(te)->type, type, str, items);
 }
 
 /* Activate an element from the merged element search menu */
@@ -1764,9 +1761,13 @@ void outliner_do_object_operation_ex(bContext *C,
     }
     if (TSELEM_OPEN(tselem, space_outliner)) {
       if ((select_handled == false) || recurse_selected) {
-        outliner_do_object_operation_ex(
-                                        C, reports, scene_act, space_outliner, te->subtree
-                                        .as_span(), operation_fn, recurse_selected);
+        outliner_do_object_operation_ex(C,
+                                        reports,
+                                        scene_act,
+                                        space_outliner,
+                                        te->subtree.as_span(),
+                                        operation_fn,
+                                        recurse_selected);
       }
     }
   }
@@ -2148,8 +2149,7 @@ static void outliner_do_liboverride_property_selection_set(bContext *C,
      * also have been changed in the visitor callback. */
 
     outliner_do_liboverride_property_selection_set(
-                                                   C, reports, scene, element->subtree
-                                                   .as_span(), is_selected, operation_fn);
+        C, reports, scene, element->subtree.as_span(), is_selected, operation_fn);
   }
 }
 
@@ -2798,9 +2798,12 @@ static wmOperatorStatus outliner_object_operation_exec(bContext *C, wmOperator *
   switch (event) {
     case OL_OP_SELECT: {
       Scene *sce = scene; /* To be able to delete, scenes are set... */
-      outliner_do_object_operation(
-                                   C, op->reports, scene, space_outliner, space_outliner->runtime->tree
-                                   .as_span(), object_select_fn);
+      outliner_do_object_operation(C,
+                                   op->reports,
+                                   scene,
+                                   space_outliner,
+                                   space_outliner->runtime->tree.as_span(),
+                                   object_select_fn);
       /* FIXME: This is most certainly broken, maybe check should rather be
        * `if (CTX_data_scene(C) != scene)` ? */
       if (scene != sce) {
@@ -2849,9 +2852,12 @@ static wmOperatorStatus outliner_object_operation_exec(bContext *C, wmOperator *
       break;
     }
     case OL_OP_RENAME:
-      outliner_do_object_operation(
-                                   C, op->reports, scene, space_outliner, space_outliner->runtime->tree
-                                   .as_span(), item_rename_fn);
+      outliner_do_object_operation(C,
+                                   op->reports,
+                                   scene,
+                                   space_outliner,
+                                   space_outliner->runtime->tree.as_span(),
+                                   item_rename_fn);
       str = CTX_N_(BLT_I18NCONTEXT_OPERATOR_DEFAULT, "Rename Object");
       break;
     default:
@@ -4085,8 +4091,7 @@ static wmOperatorStatus outliner_operation_invoke(bContext *C,
       &region->v2d, event->mval[0], event->mval[1], &view_mval[0], &view_mval[1]);
 
   TreeElement *hovered_te = outliner_find_item_at_y(
-                                                    space_outliner, space_outliner->runtime->tree
-                                                    .as_span(), view_mval[1]);
+      space_outliner, space_outliner->runtime->tree.as_span(), view_mval[1]);
   if (!hovered_te) {
     /* Let this fall through to 'OUTLINER_MT_context_menu'. */
     return OPERATOR_PASS_THROUGH;

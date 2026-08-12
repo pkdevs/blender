@@ -317,8 +317,7 @@ static void outliner_sync_selection_from_outliner(WorkSpace *workspace,
     }
 
     outliner_sync_selection_from_outliner(
-                                          workspace, bmain, scene, view_layer, te->subtree
-                                          .as_span(), sync_types, selected_items);
+        workspace, bmain, scene, view_layer, te->subtree.as_span(), sync_types, selected_items);
   }
 }
 
