@@ -37,6 +37,7 @@ class Sampling {
   static constexpr uint64_t interactive_sample_max_ = interactive_sample_aa_ *
                                                       interactive_sample_raytrace_ *
                                                       interactive_sample_volume_;
+  static constexpr float unclamped_max = 1e20;
 
   /** 0 based current sample. Might not increase sequentially in viewport. */
   uint64_t sample_ = 0;
@@ -68,6 +69,7 @@ class Sampling {
    */
   float time_limit_ = 0.0f;
   float start_render_time_ = 0.0f;
+  float current_time_ = 0.0f;
   /**
    * For overwriting pixel jitter sample position.
    */
@@ -156,6 +158,10 @@ class Sampling {
     return sample_;
   }
 
+  /* Updates the current progress towards the time limit. Must be called after a sample has been
+   * rendered and before `finished` or `finished_viewport` are called. */
+  void update_time();
+
   /* Returns true if a custom pixel jitter sample position is set. */
   bool use_custom_pixel_jitter_sample() const
   {
@@ -164,12 +170,12 @@ class Sampling {
 
   bool use_clamp_direct() const
   {
-    return clamp_data_.surface_direct != 0.0f;
+    return clamp_data_.surface_direct != unclamped_max;
   }
 
   bool use_clamp_indirect() const
   {
-    return clamp_data_.surface_indirect != 0.0f;
+    return clamp_data_.surface_indirect != unclamped_max;
   }
 
   bool use_direct_scale() const
