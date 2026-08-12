@@ -45,21 +45,23 @@ Tree::Tree(Tree &&other)
 Tree &Tree::operator=(Tree &&other)
 {
   if (this != &other) {
-#ifdef WITH_EMBREE
-    this->free();
-    rtc_device_ = std::exchange(other.rtc_device_, nullptr);
-    rtc_scene_ = std::exchange(other.rtc_scene_, nullptr);
-    index_map_by_geom_ = std::move(other.index_map_by_geom_);
-#else /* WITH_EMBREE */
-    this->fallback_tree_ = std::move(other.fallback_tree_);
-#endif
+    this->~Tree();
+    new (this) Tree(std::move(other));
   }
   return *this;
 }
 
 Tree::~Tree()
 {
-  this->free();
+#ifdef WITH_EMBREE
+  rtcReleaseScene(this->rtc_scene_);
+  this->rtc_scene_ = nullptr;
+  rtcReleaseDevice(this->rtc_device_);
+  this->rtc_device_ = nullptr;
+  index_map_by_geom_.clear_and_shrink();
+#else /* WITH_EMBREE */
+  this->fallback_tree_.reset();
+#endif
 }
 
 #ifdef WITH_EMBREE
@@ -87,19 +89,6 @@ static float3 bary_coord_embree_to_blender(const float u, const float v)
 }
 
 #endif /* WITH_EMBREE */
-
-void Tree::free()
-{
-#ifdef WITH_EMBREE
-  rtcReleaseScene(this->rtc_scene_);
-  this->rtc_scene_ = nullptr;
-  rtcReleaseDevice(this->rtc_device_);
-  this->rtc_device_ = nullptr;
-  index_map_by_geom_.clear_and_shrink();
-#else /* WITH_EMBREE */
-  this->fallback_tree_.reset();
-#endif
-}
 
 #ifdef WITH_EMBREE
 

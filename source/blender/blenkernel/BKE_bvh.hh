@@ -116,9 +116,6 @@ class Tree {
 
   /** Call a callback for every element within a given radius. */
   void range_query(const float3 &point, const float radius, FunctionRef<bool(int)> fn) const;
-
- private:
-  void free();
 };
 
 }  // namespace bke::bvh
