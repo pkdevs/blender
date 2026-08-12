@@ -31,7 +31,10 @@ static int node_gpu_material(GPUMaterial *mat,
                              GPUNodeStack *in,
                              GPUNodeStack *out)
 {
-  return GPU_stack_link(mat, node, "node_get_vector_component", in, out);
+  /* EEVEE represents integer sockets as floats, while the compositor uses native integers. */
+  const char *function_name = in[1].type == GPU_FLOAT ? "node_vector_component_float" :
+                                                        "node_vector_component";
+  return GPU_stack_link(mat, node, function_name, in, out);
 }
 
 NODE_SHADER_MATERIALX_BEGIN
