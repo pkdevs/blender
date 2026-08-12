@@ -65,6 +65,7 @@ struct SearchItems {
 
   /** Is there any item with an icon? */
   bool has_icon;
+  bool align_icons;
 
   AutoComplete *autocpl;
   void *active;
@@ -106,7 +107,8 @@ bool search_item_add(SearchItems *items,
                      void *poin,
                      int iconid,
                      const int64_t but_flag,
-                     const uint8_t name_prefix_offset)
+                     const uint8_t name_prefix_offset,
+                     bool align_icons)
 {
   /* hijack for autocomplete */
   if (items->autocpl) {
@@ -116,6 +118,7 @@ bool search_item_add(SearchItems *items,
 
   if (iconid) {
     items->has_icon = true;
+    items->align_icons = false;
   }
 
   /* hijack for finding active item */
@@ -746,7 +749,7 @@ static void searchbox_region_draw_fn(const bContext *C, ARegion *region)
         if ((search_sep_len == 0) ||
             !(name_sep_test = strstr(data->items.names[a], data->sep_string)))
         {
-          if (!icon && data->items.has_icon) {
+          if (!icon && data->items.has_icon && data->items.align_icons) {
             /* If there is any icon item, make sure all items line up. */
             icon = ICON_BLANK1;
           }

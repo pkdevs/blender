@@ -267,6 +267,63 @@ static void gather_search_link_ops_for_all_assets(const bContext &C,
   });
 }
 
+BIFIconID socket_to_icon(const eNodeSocketDatatype socket_type)
+{
+  switch (socket_type) {
+    case SOCK_FLOAT:
+      return ICON_NODE_SOCKET_FLOAT;
+    case SOCK_INT:
+      return ICON_NODE_SOCKET_INT;
+    case SOCK_BOOLEAN:
+      return ICON_NODE_SOCKET_BOOLEAN;
+    case SOCK_ROTATION:
+      return ICON_NODE_SOCKET_ROTATION;
+    case SOCK_VECTOR:
+      return ICON_NODE_SOCKET_VECTOR;
+    case SOCK_RGBA:
+      return ICON_NODE_SOCKET_RGBA;
+    case SOCK_STRING:
+      return ICON_NODE_SOCKET_STRING;
+    case SOCK_OBJECT:
+      return ICON_NODE_SOCKET_OBJECT;
+    case SOCK_IMAGE:
+      return ICON_NODE_SOCKET_IMAGE;
+    case SOCK_COLLECTION:
+      return ICON_NODE_SOCKET_COLLECTION;
+    case SOCK_TEXTURE:
+      return ICON_NODE_SOCKET_TEXTURE;
+    case SOCK_MATERIAL:
+      return ICON_NODE_SOCKET_MATERIAL;
+    case SOCK_FONT:
+      return ICON_NODE_SOCKET_FONT;
+    case SOCK_SCENE:
+      return ICON_NODE_SOCKET_SCENE;
+    case SOCK_TEXT_ID:
+      return ICON_NODE_SOCKET_TEXT;
+    case SOCK_MASK:
+      return ICON_NODE_SOCKET_MASK;
+    case SOCK_SOUND:
+      return ICON_NODE_SOCKET_SOUND;
+    case SOCK_MENU:
+      return ICON_NODE_SOCKET_MENU;
+    case SOCK_INT_VECTOR:
+      return ICON_NODE_SOCKET_INT_VECTOR;
+    case SOCK_SHADER:
+      return ICON_NODE_SOCKET_SHADER;
+    case SOCK_MATRIX:
+      return ICON_NODE_SOCKET_MATRIX;
+    case SOCK_GEOMETRY:
+      return ICON_NODE_SOCKET_GEOMETRY;
+    case SOCK_BUNDLE:
+      return ICON_NODE_SOCKET_BUNDLE;
+    case SOCK_CLOSURE:
+      return ICON_NODE_SOCKET_CLOSURE;
+    case SOCK_CUSTOM:
+      return ICON_NONE;
+  }
+  return ICON_NONE;
+}
+
 /**
  * Call the callback to gather compatible socket connections for all node types, and the operations
  * that will actually make the connections. Also add some custom operations like connecting a group
@@ -322,12 +379,16 @@ static void gather_socket_link_operations(const bContext &C,
           return true;
         }
       }
+      const bke::bNodeSocketType *from_typeinfo = bke::node_socket_type_find(
+          interface_socket.socket_type);
+      const eNodeSocketDatatype from = from_typeinfo ? from_typeinfo->type : SOCK_CUSTOM;
       search_link_ops.append({std::string(IFACE_("Group Input")) + " " + UI_MENU_ARROW_SEP +
                                   (interface_socket.name ? interface_socket.name : ""),
                               [interface_socket](nodes::LinkSearchOpParams &params) {
                                 add_existing_group_input_fn(params, interface_socket);
                               },
-                              weight});
+                              weight,
+                              socket_to_icon(from)});
       weight--;
       return true;
     });
@@ -360,7 +421,7 @@ static void link_drag_search_update_fn(
   const Vector<SocketLinkOperation *> filtered_items = search.query(string);
 
   for (SocketLinkOperation *item : filtered_items) {
-    if (!search_item_add(items, item->name, item, ICON_NONE, 0, 0)) {
+    if (!search_item_add(items, item->name, item, item->icon, 0, 0)) {
       break;
     }
   }

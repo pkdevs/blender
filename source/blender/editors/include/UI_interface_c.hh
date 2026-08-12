@@ -1860,7 +1860,8 @@ bool search_item_add(SearchItems *items,
                      void *poin,
                      int iconid,
                      int64_t but_flag,
-                     uint8_t name_prefix_offset);
+                     uint8_t name_prefix_offset,
+                     bool align_icons = true);
 
 /**
  * \note The item-pointer (referred to below) is a per search item user pointer
