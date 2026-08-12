@@ -97,6 +97,8 @@ class Tree {
   /**
    * Create a BVH tree from a subset of the mesh faces. #from_single_mesh should be used when all
    * faces are contained in the mask.
+   * \param map_global_indices: Record and later return the indices from the full mesh rather than
+   * the index in the masked faces.
    */
   static Tree from_tris(const Mesh &mesh, const IndexMask &mask, bool map_global_indices);
   /** Create a BVH tree from the entire mesh. */

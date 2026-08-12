@@ -60,6 +60,8 @@ BVHTreeFromMesh bvhtree_from_mesh_edges_ex(Span<float3> vert_positions,
 
 /**
  * Builds a BVH-tree where nodes are the triangle faces (#Mesh::corner_tris()) of the given mesh.
+ * \param map_global_indices: Record and later return the indices from the full mesh rather than
+ * the index in the masked faces.
  */
 BVHTreeFromMesh bvhtree_from_mesh_corner_tris_ex(Span<float3> vert_positions,
                                                  OffsetIndices<int> faces,
