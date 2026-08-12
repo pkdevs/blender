@@ -699,6 +699,59 @@ vector<SymbolTable::BuiltinFunc> SymbolTable::generate_all_builtin_functions()
   functions.push_back({void_cls, "printf", {str_cls}});
   functions.push_back({void_cls, "static_assert", {bool_cls}});
 
+  functions.push_back({bool_cls, "in_range_inclusive", {bool_cls, bool_cls, bool_cls}});
+  functions.push_back({bool_cls, "in_range_exclusive", {bool_cls, bool_cls, bool_cls}});
+
+  /* TODO replace by texelFetchSafe. */
+  for (SymbolClass *sampler_t : {root->lookup_class("sampler2DDepth"),
+                                 root->lookup_class("sampler2D"),
+                                 root->lookup_class("isampler2D"),
+                                 root->lookup_class("usampler2D")})
+  {
+    functions.push_back({bool_cls, "in_texture_range", {int2_cls, sampler_t}});
+  }
+
+  /* TODO replace by texelFetchSafe. */
+  for (SymbolClass *sampler_t : {root->lookup_class("sampler2DArray"),
+                                 root->lookup_class("isampler2DArray"),
+                                 root->lookup_class("usampler2DArray"),
+                                 root->lookup_class("sampler3D"),
+                                 root->lookup_class("isampler3D"),
+                                 root->lookup_class("usampler3D"),
+                                 root->lookup_class("isampler3DAtomic"),
+                                 root->lookup_class("usampler3DAtomic"),
+                                 root->lookup_class("isampler2DArrayAtomic"),
+                                 root->lookup_class("usampler2DArrayAtomic")})
+  {
+    functions.push_back({bool_cls, "in_texture_range", {int3_cls, sampler_t}});
+  }
+
+  /* TODO replace by texelFetchSafe. */
+  for (SymbolClass *image_t : {root->lookup_class("iimage1DArray"),
+                               root->lookup_class("uimage1DArray"),
+                               root->lookup_class("image2D"),
+                               root->lookup_class("iimage2D"),
+                               root->lookup_class("uimage2D"),
+                               root->lookup_class("iimage2DAtomic"),
+                               root->lookup_class("uimage2DAtomic")})
+  {
+    functions.push_back({bool_cls, "in_image_range", {int2_cls, image_t}});
+  }
+
+  for (SymbolClass *image_t : {root->lookup_class("image2DArray"),
+                               root->lookup_class("iimage2DArray"),
+                               root->lookup_class("uimage2DArray"),
+                               root->lookup_class("image3D"),
+                               root->lookup_class("iimage3D"),
+                               root->lookup_class("uimage3D"),
+                               root->lookup_class("iimage3DAtomic"),
+                               root->lookup_class("uimage3DAtomic"),
+                               root->lookup_class("iimage2DArrayAtomic"),
+                               root->lookup_class("uimage2DArrayAtomic")})
+  {
+    functions.push_back({bool_cls, "in_image_range", {int3_cls, image_t}});
+  }
+
   /* There are many other overloads but we don't use them currently. */
   functions.push_back({uint_cls, "simd_broadcast_first", {uint_cls}});
   functions.push_back({uint_cls, "simd_min", {uint_cls}});
