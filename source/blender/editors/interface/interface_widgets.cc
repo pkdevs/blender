@@ -1421,7 +1421,19 @@ static void widget_draw_icon(
     else {
       xs = (rect->xmin + rect->xmax - height) / 2.0f;
     }
-    ys = (rect->ymin + rect->ymax - height) / 2.0f;
+
+    /* Align icon to the top. */
+    if (button_label_is_multiline(but)) {
+      if (but->emboss == EmbossType::None || but->type == ButtonType::Label) {
+        ys = rect->ymax - height - 2.0f * ofs;
+      }
+      else {
+        ys = rect->ymax - height - 4.0f * ofs;
+      }
+    }
+    else {
+      ys = (rect->ymin + rect->ymax - height) / 2.0f;
+    }
 
     /* force positions to integers, for zoom levels near 1. draws icons crisp. */
     if (aspect > 0.95f && aspect < 1.05f) {
