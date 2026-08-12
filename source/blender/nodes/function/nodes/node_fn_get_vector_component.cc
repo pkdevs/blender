@@ -69,6 +69,7 @@ static void node_register()
   ntype.build_multi_function = node_build_multi_function;
   ntype.gpu_fn = node_gpu_material;
   ntype.materialx_fn = node_shader_materialx;
+  ntype.default_width = bke::NodeWidth::_160;
   bke::node_register_type(ntype);
 }
 NOD_REGISTER_NODE(node_register)
