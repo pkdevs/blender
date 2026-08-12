@@ -1179,6 +1179,8 @@ static void drw_render_border_mask(const DRWContext &ctx)
 
   /* Draw 4 quads to mask out the area outside the rotated border. */
   const float extend = 2.0f * (ctx.size.x + ctx.size.y);
+  /* Blender/OpenGL orthographic convention has far plane at a negative Z value. */
+  const float far_z = -1.0f;
 
   immBegin(GPU_PRIM_TRIS, 6 * 4);
   for (const int i : IndexRange(4)) {
@@ -1193,7 +1195,7 @@ static void drw_render_border_mask(const DRWContext &ctx)
         v0 - tangent * extend + normal * extend,
     };
     for (const int j : {0, 1, 2, 0, 2, 3}) {
-      immVertex3f(pos, quad[j].x, quad[j].y, 1.0f);
+      immVertex3f(pos, quad[j].x, quad[j].y, far_z);
     }
   }
   immEnd();
