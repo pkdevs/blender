@@ -72,7 +72,7 @@ struct GeomMeshVertIn {
     /* clang-format off */ /* Multi-line define messes up line index. */
     [[resource_table]] const GeometryVelocity &geo_vel = resource_table_get(eevee::GeometryVelocity);
     /* clang-format on */
-    auto &motion = interface_get(eevee_velocity_iface_info, motion);
+    SurfVelocity &motion = interface_get(eevee_velocity_iface_info, motion);
     float3 prv, nxt;
     geo_vel.local_position_deltas(vert_in.pos, vert_id, prv, nxt, resource_id);
     /* FIXME(fclem): Evaluating before displacement avoid displacement being treated as motion but

@@ -4,8 +4,6 @@
 
 #pragma once
 
-#include "infos/eevee_common_infos.hh"
-
 #include "eevee_lightprobe_volume.bsl.hh"
 #include "eevee_spherical_harmonics.bsl.hh"
 #include "gpu_shader_math_base_lib.glsl"

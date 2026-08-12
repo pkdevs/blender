@@ -18,6 +18,7 @@
 #include "eevee_gbuffer_write.bsl.hh"
 #include "eevee_geom_interp.bsl.hh"
 #include "eevee_nodetree_frag_lib.glsl"
+#include "eevee_nodetree_type_lib.glsl"
 #include "eevee_sampling_lib.bsl.hh"
 #include "eevee_surf_common.bsl.hh"
 #include "eevee_thickness_lib.bsl.hh"

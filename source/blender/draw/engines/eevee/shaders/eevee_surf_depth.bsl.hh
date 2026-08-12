@@ -64,9 +64,8 @@ void surf_depth([[resource_table]] PipelineConstants &pipe,
                 [[out]] SurfaceDepthFragOut<with_velocity> &frag_out,
                 [[front_facing]] const bool front_face)
 {
-  FRAGMENT_SHADER_CREATE_INFO(eevee_nodetree);
-  FRAGMENT_SHADER_CREATE_INFO(eevee_clip_plane);
-  FRAGMENT_SHADER_CREATE_INFO(eevee_geom_iface_info);
+  const SurfSmooth &interp = interface_get(eevee_geom_iface_info, interp);
+  const SurfFlat &interp_flat = interface_get(eevee_geom_iface_info, interp_flat);
 
   if (pipe.use_transparency) [[static_branch]] {
     const ViewMatrices view = views.get(0);
@@ -87,7 +86,7 @@ void surf_depth([[resource_table]] PipelineConstants &pipe,
   }
 
   if (pipe.use_clip_plane) [[static_branch]] {
-    auto &clip_interp = interface_get(eevee_clip_plane, clip_interp);
+    const ClipSmooth &clip_interp = interface_get(eevee_clip_plane, clip_interp);
     /* Do not use hardware clip planes as they modify the rasterization (some GPUs add vertices).
      * This would in turn create a discrepancy between the pre-pass depth and the G-buffer depth
      * which exhibits missing pixels data. */

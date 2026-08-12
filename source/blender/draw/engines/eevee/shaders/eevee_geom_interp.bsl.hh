@@ -67,6 +67,14 @@ struct ClipSmooth {
   [[smooth]] float clip_distance;
 };
 
+/* Pass world space deltas to the fragment shader.
+ * This is to make sure that the resulting motion vectors are valid even with displacement.
+ * WARNING: The next value is invalid when rendering the viewport. */
+struct SurfVelocity {
+  [[smooth]] float3 prev;
+  [[smooth]] float3 next;
+};
+
 }  // namespace eevee
 
 /* WORKAROUND: Until we get condition support for interfaces. */
@@ -98,3 +106,17 @@ struct eevee_clip_plane {
   [[legacy_iface]] static eevee::ClipSmooth clip_interp;
   [[uniform(CLIP_PLANE_BUF)]] static const ClipPlaneData &clip_plane;
 };
+
+/* -------------------------------------------------------------------- */
+/** \name Surface Velocity
+ *
+ * Combined with the depth pre-pass shader.
+ * Outputs the view motion vectors for animated objects.
+ * \{ */
+
+/* WORKAROUND: Until we get condition support for interfaces. */
+struct eevee_velocity_iface_info {
+  [[legacy_iface]] static eevee::SurfVelocity motion;
+};
+
+/** \} */

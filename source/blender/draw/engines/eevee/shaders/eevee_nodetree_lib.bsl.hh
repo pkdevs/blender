@@ -4,8 +4,6 @@
 
 #pragma once
 
-#include "infos/eevee_common_infos.hh"
-
 #include "draw_intersect_lib.glsl"
 #include "draw_model.bsl.hh"
 #include "draw_view.bsl.hh"
@@ -496,7 +494,7 @@ void brdf_f82_tint_lut(float3 F0,
                        bool do_multiscatter,
                        float3 &reflectance)
 {
-  [[resource_table]] const UtilityTexture util_tx = resource_table_get(UtilityTexture);
+  [[resource_table]] const UtilityTexture &util_tx = resource_table_get(UtilityTexture);
   eevee::lut::GGXBrdfData lut = eevee::lut::GGXBrdfData::sample_utility_tx(
       util_tx, cos_theta, roughness);
 
@@ -530,7 +528,7 @@ void bsdf_lut(float3 F0,
               float3 &reflectance,
               float3 &transmittance)
 {
-  [[resource_table]] const UtilityTexture util_tx = resource_table_get(UtilityTexture);
+  [[resource_table]] const UtilityTexture &util_tx = resource_table_get(UtilityTexture);
   if (ior == 1.0f) {
     reflectance = float3(0.0f);
     transmittance = transmission_tint;
@@ -795,14 +793,19 @@ float4 attr_load_color_post(float4 attr)
  *
  * \{ */
 
+struct ObjectAttributes {
+  [[legacy_info]] ShaderCreateInfo draw_object_infos;
+  [[storage(DRW_OBJ_ATTR_SLOT, read)]] ObjectAttribute (&drw_attrs)[];
+};
+
 float4 attr_load_uniform(float4 /*attr*/, const uint attr_hash)
 {
-  const ObjectAttribute(&attrs_buf)[] = buffer_get(draw_object_attributes, drw_attrs);
+  const ObjectAttributes &attrs = resource_table_get(ObjectAttributes);
 
   ObjectInfos infos = object_infos_get();
   uint index = infos.object_attrs_offset;
   for (uint i = 0; i < infos.object_attrs_len; i++, index++) {
-    ObjectAttribute attr = attrs_buf[index];
+    ObjectAttribute attr = attrs.drw_attrs[index];
     if (attr.hash_code == attr_hash) {
       return float4(attr.data_x, attr.data_y, attr.data_z, attr.data_w);
     }

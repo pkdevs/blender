@@ -8,15 +8,9 @@
 void node_point_info(float3 &position, float &radius, float &random)
 {
 #ifdef MAT_GEOM_POINTCLOUD
-  /* EEVEE-Next case. */
   position = pointcloud_interp.position;
   radius = pointcloud_interp.radius;
   random = wang_hash_noise(uint(pointcloud_interp_flat.id));
-#elif defined(POINTCLOUD_SHADER)
-  /* EEVEE-Legacy case. */
-  position = pointPosition;
-  radius = pointRadius;
-  random = wang_hash_noise(uint(pointID));
 #else
   position = float3(0.0f, 0.0f, 0.0f);
   radius = 0.0f;

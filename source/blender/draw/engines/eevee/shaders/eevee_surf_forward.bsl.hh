@@ -122,9 +122,7 @@ void surf_forward([[resource_table]] PipelineConstants & /*pipe*/,
                   [[out]] SurfaceForwardFragOut &frag_out,
                   [[front_facing]] const bool front_face)
 {
-  FRAGMENT_SHADER_CREATE_INFO(eevee_geom_iface_info);
-
-  auto &interp_flat = interface_get(eevee_geom_iface_info, interp_flat);
+  SurfFlat &interp_flat = interface_get(eevee_geom_iface_info, interp_flat);
   draw::ID id{interp_flat.resource_id_raw};
   const uint resource_id = id.resource_id<1>();
 
@@ -132,7 +130,7 @@ void surf_forward([[resource_table]] PipelineConstants & /*pipe*/,
 
   init_globals(uni, view, front_face);
 
-  float noise = util_tx.fetch(gl_FragCoord.xy, UTIL_BLUE_NOISE_LAYER).r;
+  float noise = util_tx.fetch(frag_co.xy, UTIL_BLUE_NOISE_LAYER).r;
   float closure_rand = fract(noise + sampling.rng_1D_get(SAMPLING_CLOSURE));
 
   fragment_displacement();
@@ -143,10 +141,10 @@ void surf_forward([[resource_table]] PipelineConstants & /*pipe*/,
 
   float3 radiance, transmittance;
   eevee::forward_lighting_eval(
-      view, resource_id, g_thickness_forward, gl_FragCoord.xy, radiance, transmittance);
+      view, resource_id, g_thickness_forward, frag_co.xy, radiance, transmittance);
 
   /* Volumetric resolve and compositing. */
-  float2 uvs = gl_FragCoord.xy * uni.uniform_buf.volumes.main_view_extent_inv;
+  float2 uvs = frag_co.xy * uni.uniform_buf.volumes.main_view_extent_inv;
   VolumeResolveSample vol = volumes.resolve(float3(uvs, reverse_z::read(frag_co.z)));
   /* Removes the part of the volume scattering that has
    * already been added to the destination pixels by the opaque resolve.

@@ -59,14 +59,14 @@ using namespace math;
 
 #define DRW_SHADER_SHARED_H
 
-#define DRW_RESOURCE_CHUNK_LEN 512
+static constexpr int DRW_RESOURCE_CHUNK_LEN = 512;
 
 /* Define the maximum number of grid we allow in a volume UBO. */
-#define DRW_GRID_PER_VOLUME_MAX 16
+static constexpr int DRW_GRID_PER_VOLUME_MAX = 16;
 
 /* Define the maximum number of attribute we allow in a curves UBO.
  * This should be kept in sync with `GPU_ATTR_MAX` */
-#define DRW_ATTRIBUTE_PER_CURVES_MAX 15
+static constexpr int DRW_ATTRIBUTE_PER_CURVES_MAX = 15;
 
 /* -------------------------------------------------------------------- */
 /** \name Views

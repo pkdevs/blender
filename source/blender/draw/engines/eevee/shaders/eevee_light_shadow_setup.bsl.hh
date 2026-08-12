@@ -215,14 +215,22 @@ struct Resources {
     light.object_to_world.y.w = ls_camera_position.y;
     light.object_to_world.z.w = ls_camera_position.z;
 
+#ifndef __BSL__
     LightSunData sun_data = light.sun();
+#else
+    LightSunData sun_data = light.sun;
+#endif
     /* Used as origin for the clipmap_base_offset trick. */
     sun_data.clipmap_origin = clipmap_origin;
     /* Number of levels is limited to 32 by `clipmap_level_range()` for this reason. */
     sun_data.clipmap_base_offset_pos = pos_offset;
     sun_data.clipmap_base_offset_neg = neg_offset;
 
+#ifndef __BSL__
     light.sun() = sun_data;
+#else
+    light.sun = sun_data;
+#endif
   }
 
   void cubeface_sync(int tilemap_id,
@@ -311,7 +319,11 @@ void shadow_setup_main([[resource_table]] Resources &srt,
 
     if (light.shadow_jitter && uni.uniform_buf.shadow.use_jitter) {
       /* TODO(fclem): Remove atan here. We only need the cosine of the angle. */
+#ifndef __BSL__
       float shape_angle = atan_fast(light.sun().shape_radius);
+#else
+      float shape_angle = atan_fast(light.sun.shape_radius);
+#endif
 
       /* Reverse to that first sample is straight up. */
       float2 rand = 1.0f - sampling.rng_2D_get(SAMPLING_SHADOW_I);
@@ -319,6 +331,7 @@ void shadow_setup_main([[resource_table]] Resources &srt,
 
       shadow_direction = transform_direction(light.object_to_world, shadow_direction);
 
+#ifndef __BSL__
       if (light.sun().shadow_angle == 0.0f) {
         /* The shape is a point. There is nothing to jitter.
          * `shape_radius` is clamped to a minimum for precision reasons, so `shadow_angle` is
@@ -327,6 +340,16 @@ void shadow_setup_main([[resource_table]] Resources &srt,
       else {
         light.object_to_world = transform_from_matrix(to_float4x4(from_up_axis(shadow_direction)));
       }
+#else
+      if (light.sun.shadow_angle == 0.0f) {
+        /* The shape is a point. There is nothing to jitter.
+         * `shape_radius` is clamped to a minimum for precision reasons, so `shadow_angle` is
+         * set to 0 only when the light radius is also 0 to detect this case. */
+      }
+      else {
+        light.object_to_world = transform_from_matrix(to_float4x4(from_up_axis(shadow_direction)));
+      }
+#endif
     }
 
     if (light.type == LIGHT_SUN_ORTHO) {
@@ -340,6 +363,7 @@ void shadow_setup_main([[resource_table]] Resources &srt,
     /* Local lights. */
     float3 position_on_light = float3(0.0f);
 
+#ifndef __BSL__
     if (light.shadow_jitter && uni.uniform_buf.shadow.use_jitter) {
       float3 rand = sampling.rng_3D_get(SAMPLING_SHADOW_I);
 
@@ -369,6 +393,37 @@ void shadow_setup_main([[resource_table]] Resources &srt,
     LightLocalData local_data = light.local();
     local_data.local.shadow_position = position_on_light;
     light.local() = local_data;
+#else
+    if (light.shadow_jitter && uni.uniform_buf.shadow.use_jitter) {
+      float3 rand = sampling.rng_3D_get(SAMPLING_SHADOW_I);
+
+      if (is_area_light(light.type)) {
+        float2 point_on_unit_shape = (light.type == LIGHT_RECT) ? rand.xy * 2.0f - 1.0f :
+                                                                  sample_disk(rand.xy);
+        position_on_light = float3(point_on_unit_shape * light.area.size, 0.0f);
+      }
+      else {
+        if (light.local.local.shadow_radius == 0.0f) {
+          /* The shape is a point. There is nothing to jitter.
+           * `shape_radius` is clamped to a minimum for precision reasons, so `shadow_radius` is
+           * set to 0 only when the light radius is also 0 to detect this case. */
+        }
+        else {
+          position_on_light = sample_ball(rand) * light.local.local.shape_radius;
+        }
+      }
+    }
+
+    int tilemap_count = light.local_tilemap_count();
+    for (int i = 0; i < tilemap_count; i++) {
+      srt.cubeface_sync(
+          light.tilemap_index + i, light.object_to_world, eCubeFace(i), position_on_light);
+    }
+
+    LightLocalData local_data = light.local;
+    local_data.local.shadow_position = position_on_light;
+    light.local = local_data;
+#endif
   }
 
   srt.light_buf[l_idx] = light;

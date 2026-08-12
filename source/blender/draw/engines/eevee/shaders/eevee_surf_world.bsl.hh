@@ -53,7 +53,7 @@ void surf_world([[resource_table]] PipelineConstants & /*pipe*/,
                 [[out]] SurfWorldFragOut &frag_out,
                 [[front_facing]] const bool front_face)
 {
-  FRAGMENT_SHADER_CREATE_INFO(eevee_geom_iface_info);
+  SurfSmooth &interp = interface_get(eevee_geom_iface_info, interp);
 
   const ViewMatrices view = views.get(0);
   init_globals(uni, view, front_face);
