@@ -933,10 +933,12 @@ void Film::accumulate(View &view, gpu::Texture *combined_final_tx)
 
   display_only_ = false;
   inst_.manager->submit(accumulate_ps_, view);
-  inst_.manager->submit(copy_ps_, view);
 
   combined_tx_.swap();
   weight_tx_.swap();
+
+  /* copy_ps_ reads in_combined_tx so it must run after the swap. */
+  inst_.manager->submit(copy_ps_, view);
 
   /* Use history after first sample. */
   if (data_.use_history == 0) {
