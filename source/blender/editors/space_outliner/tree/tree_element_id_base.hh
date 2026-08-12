@@ -12,8 +12,6 @@
 
 namespace blender {
 
-struct ID;
-
 namespace ed::outliner {
 
 struct TreeElementIDBase final : public AbstractTreeElement {

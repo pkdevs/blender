@@ -8,7 +8,6 @@
 
 #include "tree_element_id_base.hh"
 #include "../outliner_intern.hh"
-#include "DNA_ID.h"
 #include "DNA_outliner_types.h"
 
 namespace blender::ed::outliner {
