@@ -77,7 +77,13 @@ static Shader *get_update_mipmap_shader(TextureFormat texture_format, bool is_la
 
 constexpr int max_levels_per_dispatch = 2;
 
-uint get_mipmap_dispatch_group_len(Texture &texture, int mip_start)
+/**
+ * Compute the number of work groups required to dispatch a single pass of the mipmap update
+ * shader.
+ *
+ * \param mip_start: The first mipmap level that is processed by the dispatch.
+ */
+uint mipmap_dispatch_group_len(Texture &texture, int mip_start)
 {
   const int num_mipmaps = texture.mip_count();
   if (mip_start >= num_mipmaps - 1) {
@@ -124,7 +130,7 @@ static void update_mipmaps(Texture &texture, Shader &shader, int layer)
     int num_levels = min_ii(views.size() - mip_start - 1, max_levels_per_dispatch);
     GPU_shader_uniform_1i(&shader, "num_levels", num_levels);
 
-    uint group_len = get_mipmap_dispatch_group_len(texture, mip_start);
+    uint group_len = mipmap_dispatch_group_len(texture, mip_start);
     GPU_compute_dispatch(&shader, group_len, 1, 1);
   }
 
@@ -222,10 +228,14 @@ void GPU_texture_update_mipmap_chain(Texture *tex)
     use_compute_shaders = false;
   }
 
-  /* Switch to generate_mipmap if the dispatch group length exceeds the maximum work group count.
-   */
-  if (get_mipmap_dispatch_group_len(*tex, 0) >= GPU_max_work_group_count(0)) {
+  /* The number of work groups is bounded by `GPU_max_work_group_count()`. Only the dispatch of
+   * the largest mipmap levels has to be checked, as each subsequent dispatch covers halved
+   * dimensions and the required work group count only decreases. */
+  if (use_compute_shaders && mipmap_dispatch_group_len(*tex, 0) > GPU_max_work_group_count(0)) {
     use_compute_shaders = false;
+    CLOG_INFO(&LOG,
+              "Texture size exceeds `maxComputeWorkGroupCount[0]`. Fallback to backend "
+              "implementation, this could lead to different results between platforms.");
   }
 
   if (use_compute_shaders) {
