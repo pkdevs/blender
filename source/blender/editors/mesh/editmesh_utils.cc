@@ -333,8 +333,14 @@ void EDBM_mesh_make_from_mesh(Object *ob,
   /* Conversion to edit-mesh may have modified the attribute layers.
    * Re-resolve the active attribute by name to keep it stable. */
   if (!attributes_active_name.empty()) {
-    BLI_assert(bke::allow_procedural_attribute_access(attributes_active_name));
-    BKE_attributes_active_set(owner, attributes_active_name);
+    /* The active index may point at an internal attribute, for example when it was set from
+     * Python or copied from a mesh with a different set of attributes. */
+    if (bke::allow_procedural_attribute_access(attributes_active_name)) {
+      BKE_attributes_active_set(owner, attributes_active_name);
+    }
+    else {
+      mesh->attributes_active_index = -1;
+    }
   }
   else {
     BLI_assert(mesh->attributes_active_index == -1);
