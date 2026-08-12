@@ -1,2 +1,3 @@
 Referenced by issue #62016, Outliner visibility icons drag behaviour broken
 Referenced by issue #61505, Tab dragging in Properties Editor skips over first clicked tab
+Referenced by pull request #162592, Refactor: remove drag toggle support for 3+ states
