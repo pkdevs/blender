@@ -10,12 +10,14 @@
 
 #include "DNA_ID.h"
 #include "DNA_brush_types.h"
+#include "DNA_mesh_types.h"
 #include "DNA_scene_types.h"
 
 #include "BLI_listbase_iterator.hh"
 #include "BLI_sys_types.hh"
 
 #include "BKE_main.hh"
+#include "BKE_mesh_legacy_convert.hh"
 #include "BKE_node.hh"
 #include "BKE_node_runtime.hh"
 #include "BKE_paint.hh"
@@ -199,12 +201,56 @@ void blo_do_versions_530(FileData * /*fd*/, Library * /*lib*/, Main *bmain)
       }
     }
   }
+
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 503, 11)) {
+    /* This code formerly ran whenever entering Sculpt Mode, it is unlikely that there are any
+     * files that have these settings with invalid values, but since these values have never been
+     * set in versioning, perform this
+     */
+    for (Scene &scene : bmain->scenes) {
+      Sculpt *sd = scene.toolsettings->sculpt;
+      if (sd == nullptr) {
+        continue;
+      }
+
+      const Sculpt defaults = {};
+      if (sd->detail_percent == 0.0f) {
+        sd->detail_percent = defaults.detail_percent;
+      }
+      if (sd->constant_detail == 0.0f) {
+        sd->constant_detail = defaults.constant_detail;
+      }
+      if (sd->detail_size == 0.0f) {
+        sd->detail_size = defaults.detail_size;
+      }
+
+      if (!sd->paint.tile_offset[0]) {
+        sd->paint.tile_offset[0] = 1.0f;
+      }
+      if (!sd->paint.tile_offset[1]) {
+        sd->paint.tile_offset[1] = 1.0f;
+      }
+      if (!sd->paint.tile_offset[2]) {
+        sd->paint.tile_offset[2] = 1.0f;
+      }
+    }
+  }
   /**
    * Always bump subversion in BKE_blender_version.h when adding versioning
    * code here, and wrap it inside a MAIN_VERSION_FILE_ATLEAST check.
    *
    * \note Keep this message at the bottom of the function.
    */
+
+  /* Keep this versioning always enabled at the bottom of the function; it can only be moved
+   * behind a subversion bump when the file format is changed (#mesh_skin_to_legacy is removed from
+   * #mesh_blend_write). Since that function keeps writing the old-format #CD_MVERT_SKIN layer for
+   * forward compatibility, files saved by *this* version also need
+   * this conversion to run unconditionally on read, not just for files older than this subversion.
+   */
+  for (Mesh &mesh : bmain->meshes) {
+    bke::mesh_skin_to_generic(mesh);
+  }
 }
 
 }  // namespace blender
