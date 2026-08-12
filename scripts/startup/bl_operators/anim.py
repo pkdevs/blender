@@ -5,8 +5,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+import functools
 
-import json
 import cattrs
 
 import bpy
@@ -693,6 +693,10 @@ class ARMATURE_OT_collection_remove_unused(Operator):
         )
 
 
+@functools.lru_cache(maxsize=1)
+def _json_converter():
+    return cattrs.preconf.json.JsonConverter(omit_if_default=True)
+
 @dataclass
 class BoneCollection:
     name: str
@@ -712,9 +716,10 @@ class ARMATURE_OT_collections_to_clipboard(Operator):
         armature = _armature_from_context(context)
         if not armature:
             return False
-        if has_collections := len(armature.collections) > 0:
+        if not len(armature.collections) > 0:
             cls.poll_message_set("Armature has no bone collections")
-        return has_collections
+            return False
+        return True
 
     def _populate_bone_collections(self, parent) -> list[BoneCollection]:
         if not parent.children:
@@ -745,8 +750,7 @@ class ARMATURE_OT_collections_to_clipboard(Operator):
             bone_collection.children = self._populate_bone_collections(collection)
             collection_hierarchy.append(bone_collection)
 
-        converter = cattrs.preconf.json.JsonConverter(omit_if_default=True)
-        context.window_manager.clipboard = converter.dumps(collection_hierarchy, indent=2)
+        context.window_manager.clipboard = _json_converter().dumps(collection_hierarchy, indent=2)
 
         return {'FINISHED'}
 
@@ -765,23 +769,10 @@ class ARMATURE_OT_collections_from_clipboard(Operator):
         if not context.window_manager.clipboard:
             cls.poll_message_set("Clipboard is empty")
             return False
-        if not cls._check_clipboard_supported(cls):
-            cls.poll_message_set("Clipboard does not contain a valid bone collection hierarchy")
-            return False
         return True
 
-    def _check_clipboard_supported(self):
-        try:
-            collections_hierarchy = json.loads(bpy.context.window_manager.clipboard)
-            converter = cattrs.preconf.json.JsonConverter(omit_if_default=True)
-            self.loaded = converter.structure(collections_hierarchy, list[BoneCollection])
-            return True
-        except Exception:
-            return False
-
-    def _recursive_dict_to_collection(self, bone_collections: list[BoneCollection], parent_collection=None):
+    def _recursive_dict_to_collection(self, armature, bone_collections: list[BoneCollection], parent_collection=None):
         """Recursively create collections from a list of BoneCollection"""
-        armature = _armature_from_context(bpy.context)
         for collection in bone_collections:
             # Create a new collection if it doesn't exist
             new_collection = None
@@ -794,14 +785,16 @@ class ARMATURE_OT_collections_from_clipboard(Operator):
                 new_collection.parent = parent_collection
             
             # Recursively create child collections
-            if collection.children:
-                self._recursive_dict_to_collection(collection.children, parent_collection=new_collection)
+            self._recursive_dict_to_collection(armature, collection.children, parent_collection=new_collection)
 
             new_collection.is_visible = collection.is_visible
             new_collection.is_solo = collection.is_solo
 
     def execute(self, context):
-        self._recursive_dict_to_collection(self.loaded, parent_collection=None)
+
+        loaded_collections = _json_converter().loads(context.window_manager.clipboard, list[BoneCollection])
+
+        self._recursive_dict_to_collection(_armature_from_context(context), loaded_collections)
 
         return {'FINISHED'}
 
