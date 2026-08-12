@@ -9633,15 +9633,13 @@ void GHOST_SystemWayland::getClipboardImage(std::function<void(GHOST_ImageData)>
 
   GWL_Seat *seat = gwl_display_seat_active_get(display_);
   if (!seat) [[unlikely]] {
-    return nullptr;
+    return;
   }
 
   uint *rgba = nullptr;
 
   GWL_DataOffer *data_offer = seat->data_offer_copy_paste;
   if (data_offer) {
-    blender::ImBuf *ibuf = nullptr;
-
     /* Check if the source offers a supported mime type.
      * This check could be skipped, because the paste option is not supposed to be enabled
      * otherwise. */

@@ -2111,10 +2111,6 @@ GHOST_TSuccess GHOST_SystemCocoa::hasClipboardImage(
 
 void GHOST_SystemCocoa::getClipboardImage(std::function<void(GHOST_ImageData)> load_fn) const
 {
-  if (!hasClipboardImage()) {
-    return;
-  }
-
   @autoreleasepool {
     NSPasteboard *pasteboard = [NSPasteboard generalPasteboard];
 
