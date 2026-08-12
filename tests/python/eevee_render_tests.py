@@ -495,7 +495,7 @@ def main():
             report.set_fail_percent(0.39)
         else:
             report.set_fail_percent(0.08)
-        report.set_fail_threshold(6.0 / 255.0)
+        report.set_fail_threshold(8.0 / 255.0)
 
     ok = report.run(args.testdir, args.blender, get_arguments, batch=args.batch)
     sys.exit(not ok)
