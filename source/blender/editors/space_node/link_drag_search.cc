@@ -370,18 +370,15 @@ static void gather_socket_link_operations(const bContext &C,
       if (!(interface_socket.flag & NODE_INTERFACE_SOCKET_INPUT)) {
         return true;
       }
+      const bke::bNodeSocketType *from_typeinfo = bke::node_socket_type_find(
+          interface_socket.socket_type);
+      const eNodeSocketDatatype from = from_typeinfo ? from_typeinfo->type : SOCK_CUSTOM;
       {
-        const bke::bNodeSocketType *from_typeinfo = bke::node_socket_type_find(
-            interface_socket.socket_type);
-        const eNodeSocketDatatype from = from_typeinfo ? from_typeinfo->type : SOCK_CUSTOM;
         const eNodeSocketDatatype to = socket.typeinfo->type;
         if (node_tree.typeinfo->validate_link && !node_tree.typeinfo->validate_link(from, to)) {
           return true;
         }
       }
-      const bke::bNodeSocketType *from_typeinfo = bke::node_socket_type_find(
-          interface_socket.socket_type);
-      const eNodeSocketDatatype from = from_typeinfo ? from_typeinfo->type : SOCK_CUSTOM;
       search_link_ops.append({std::string(IFACE_("Group Input")) + " " + UI_MENU_ARROW_SEP +
                                   (interface_socket.name ? interface_socket.name : ""),
                               [interface_socket](nodes::LinkSearchOpParams &params) {
