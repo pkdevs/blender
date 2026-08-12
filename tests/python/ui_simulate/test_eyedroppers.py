@@ -124,6 +124,7 @@ def _eyedropper_test(
     yield
 
     e, t, window = ui.test_window()
+    bpy.context.preferences.view.ui_scale = 1.0
 
     _set_viewport_shading(window, shading)
     yield
