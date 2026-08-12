@@ -17,6 +17,7 @@
 #include "DNA_scene_types.h"
 
 #include "BLI_listbase_iterator.hh"
+#include "BLI_sys_types.hh"
 
 #include "BKE_attribute.h"
 #include "BKE_attribute.hh"
