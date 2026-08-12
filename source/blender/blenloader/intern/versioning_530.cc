@@ -190,6 +190,22 @@ void blo_do_versions_530(FileData * /*fd*/, Library * /*lib*/, Main *bmain)
     FOREACH_NODETREE_END;
   }
 
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 503, 9)) {
+    for (Brush &brush : bmain->brushes) {
+      if (brush.curve_hardness == nullptr) {
+        brush.curve_hardness = brush.paint_flags & BRUSH_PAINT_HARDNESS_PRESSURE_INVERT ?
+                                   BKE_paint_default_curve_inverted() :
+                                   BKE_paint_default_curve();
+      }
+      if (brush.curve_auto_smooth == nullptr) {
+        brush.curve_auto_smooth = BKE_paint_default_curve_inverted();
+      }
+      if (brush.curve_spacing == nullptr) {
+        brush.curve_spacing = BKE_paint_default_curve();
+      }
+    }
+  }
+
   if (!MAIN_VERSION_FILE_ATLEAST(bmain, 503, 11)) {
     /* This code formerly ran whenever entering Sculpt Mode, it is unlikely that there are any
      * files that have these settings with invalid values, but since these values have never been
@@ -259,20 +275,6 @@ void blo_do_versions_530(FileData * /*fd*/, Library * /*lib*/, Main *bmain)
     for (PointCloud &pointcloud : bmain->pointclouds) {
       pointcloud.attributes_active_index = validate_active_index_fn(
           AttributeOwner::from_id(&pointcloud.id), pointcloud.attributes_active_index);
-    }
-
-    for (Brush &brush : bmain->brushes) {
-      if (brush.curve_hardness == nullptr) {
-        brush.curve_hardness = brush.paint_flags & BRUSH_PAINT_HARDNESS_PRESSURE_INVERT ?
-                                   BKE_paint_default_curve_inverted() :
-                                   BKE_paint_default_curve();
-      }
-      if (brush.curve_auto_smooth == nullptr) {
-        brush.curve_auto_smooth = BKE_paint_default_curve_inverted();
-      }
-      if (brush.curve_spacing == nullptr) {
-        brush.curve_spacing = BKE_paint_default_curve();
-      }
     }
   }
 
