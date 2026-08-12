@@ -1727,7 +1727,6 @@ static int drag_toggle_but_pushed_state(Button *but)
 struct uiDragToggleHandle {
   /* init */
   int pushed_state;
-  ButtonType pushed_type;
   float but_cent_start[2];
 
   bool is_xy_lock_init;
@@ -1740,7 +1739,6 @@ struct uiDragToggleHandle {
 static bool drag_toggle_set_xy_xy(bContext *C,
                                   ARegion *region,
                                   const int pushed_state,
-                                  const ButtonType pushed_type,
                                   const int xy_src[2],
                                   const int xy_dst[2],
                                   const bool drag_lock[2])
@@ -1773,12 +1771,6 @@ static bool drag_toggle_set_xy_xy(bContext *C,
       if (!drag_toggle_but_is_supported(&but)) {
         continue;
       }
-
-      /* Don't mix decorators with other button types. */
-      if ((pushed_type == ButtonType::Decorator) != (but.type == ButtonType::Decorator)) {
-        continue;
-      }
-
       /* is it pressed? */
       const int pushed_state_but = drag_toggle_but_pushed_state(&but);
       if (pushed_state_but == pushed_state) {
@@ -1853,13 +1845,8 @@ static void drag_toggle_set(bContext *C, uiDragToggleHandle *drag_info, const in
   xy[1] = (drag_info->xy_lock[1] == false) ? xy_input[1] : drag_info->xy_last[1];
 
   /* touch all buttons between last mouse coord and this one */
-  do_draw = drag_toggle_set_xy_xy(C,
-                                  region,
-                                  drag_info->pushed_state,
-                                  drag_info->pushed_type,
-                                  drag_info->xy_last,
-                                  xy,
-                                  drag_info->xy_lock);
+  do_draw = drag_toggle_set_xy_xy(
+      C, region, drag_info->pushed_state, drag_info->xy_last, xy, drag_info->xy_lock);
 
   if (do_draw) {
     ED_region_tag_redraw(region);
@@ -2207,7 +2194,6 @@ static bool but_drag_init(bContext *C, Button *but, HandleButtonData *data, cons
       apply_but_autokey(C, but);
 
       drag_info->pushed_state = drag_toggle_but_pushed_state(but);
-      drag_info->pushed_type = but->type;
       drag_info->but_cent_start[0] = BLI_rctf_cent_x(&but->rect);
       drag_info->but_cent_start[1] = BLI_rctf_cent_y(&but->rect);
       if ((but->flag & BUT_DRAG_LOCK_X) == BUT_DRAG_LOCK_X) {
