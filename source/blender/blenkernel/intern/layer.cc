@@ -24,6 +24,7 @@
 
 #include "BKE_animsys.hh"
 #include "BKE_collection.hh"
+#include "BKE_dynamic_override.hh"
 #include "BKE_freestyle.h"
 #include "BKE_idprop.hh"
 #include "BKE_layer.hh"
@@ -591,13 +592,24 @@ void BKE_view_layer_rename(Main *bmain, Scene *scene, ViewLayer *view_layer, con
     }
   }
 
-  /* Fix all the animation data and windows which may link to this. */
+  /* Fix all the animation data, dynoverrides and windows which may link to this. */
+  std::string old_infix = RNA_path_name_to_infix(oldname);
+  std::string new_infix = RNA_path_name_to_infix(view_layer->name);
   BKE_animdata_fix_paths(scene->id,
                          "view_layers",
-                         RNA_path_name_to_infix(oldname),
-                         RNA_path_name_to_infix(view_layer->name),
+                         old_infix,
+                         new_infix,
                          /*verify_paths=*/true,
                          *bmain);
+  bke::dynoverride::fix_rna_paths_rename(*bmain,
+                                         scene->id,
+                                         "view_layers",
+                                         old_infix,
+                                         new_infix,
+                                         0,
+                                         0,
+                                         /*verify_paths=*/true,
+                                         /*infix_is_name=*/false);
 
   /* WM can be missing on startup. */
   wmWindowManager *wm = static_cast<wmWindowManager *>(bmain->wm.first);

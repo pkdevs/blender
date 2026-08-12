@@ -163,6 +163,7 @@ const EnumPropertyItem rna_enum_pitch_quality_items[] = {
 
 #  include "BKE_anim_data.hh"
 #  include "BKE_context.hh"
+#  include "BKE_dynamic_override.hh"
 #  include "BKE_global.hh"
 #  include "BKE_node_runtime.hh"
 #  include "BKE_report.hh"
@@ -1030,13 +1031,24 @@ static void rna_Strip_name_set(PointerRNA *ptr, const char *value)
   /* make sure the name is unique */
   seq::strip_unique_name_set(scene, &scene->ed->seqbase, strip);
 
-  /* Fix all the animation data which may link to this. */
+  /* Fix all the animation data and dynoverrides which may link to this. */
+  std::string old_infix = RNA_path_name_to_infix(oldname);
+  std::string new_infix = RNA_path_name_to_infix(strip->name + 2);
   BKE_animdata_fix_paths(scene->id,
                          "sequence_editor.strips_all",
-                         RNA_path_name_to_infix(oldname),
-                         RNA_path_name_to_infix(strip->name + 2),
+                         old_infix,
+                         new_infix,
                          /*verify_paths=*/true,
                          *G_MAIN);
+  bke::dynoverride::fix_rna_paths_rename(*G_MAIN,
+                                         scene->id,
+                                         "sequence_editor.strips_all",
+                                         old_infix,
+                                         new_infix,
+                                         0,
+                                         0,
+                                         /*verify_paths=*/true,
+                                         /*infix_is_name=*/false);
 }
 
 static int rna_Strip_text_length(PointerRNA *ptr)
@@ -1689,15 +1701,26 @@ static void rna_StripModifier_name_set(PointerRNA *ptr, const char *value)
   /* make sure the name is truly unique */
   seq::modifier_unique_name(strip, smd);
 
-  /* fix all the animation data which may link to this */
+  /* fix all the animation data and dynoverrides which may link to this */
   std::string rna_path_prefix = fmt::format("sequence_editor.strips_all{}.modifiers",
                                             RNA_path_name_to_infix(strip->name + 2));
+  std::string old_infix = RNA_path_name_to_infix(oldname);
+  std::string new_infix = RNA_path_name_to_infix(smd->name);
   BKE_animdata_fix_paths(scene->id,
                          rna_path_prefix,
-                         RNA_path_name_to_infix(oldname),
-                         RNA_path_name_to_infix(smd->name),
+                         old_infix,
+                         new_infix,
                          /* verify_paths= */ true,
                          *G_MAIN);
+  bke::dynoverride::fix_rna_paths_rename(*G_MAIN,
+                                         scene->id,
+                                         rna_path_prefix,
+                                         old_infix,
+                                         new_infix,
+                                         0,
+                                         0,
+                                         /*verify_paths=*/true,
+                                         /*infix_is_name=*/false);
 }
 
 static void rna_StripModifier_is_active_set(PointerRNA *ptr, bool value)

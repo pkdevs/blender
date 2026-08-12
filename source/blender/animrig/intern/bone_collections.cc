@@ -20,6 +20,7 @@
 #include "MEM_guardedalloc.h"
 
 #include "BKE_animsys.hh"
+#include "BKE_dynamic_override.hh"
 #include "BKE_global.hh"
 #include "BKE_idprop.hh"
 #include "BKE_lib_id.hh"
@@ -608,21 +609,29 @@ void ANIM_armature_bonecoll_name_set(Main &bmain,
 
   bonecoll_ensure_name_unique(armature, bcoll);
 
+  /* Fix all the animation data and dynoverrides which may link to this. */
+  const DriverMap driver_map = BKE_animdata_build_driver_target_map(bmain);
+  std::string old_infix = RNA_path_name_to_infix(old_name);
+  std::string new_infix = RNA_path_name_to_infix(bcoll->name);
   /* Bone collections can be reached via .collections (4.0+) and .collections_all (4.1+).
    * Animation data from 4.0 should have been versioned to only use `.collections_all`. */
-  const DriverMap driver_map = BKE_animdata_build_driver_target_map(bmain);
-  BKE_animdata_fix_paths(armature->id,
-                         "collections",
-                         RNA_path_name_to_infix(old_name),
-                         RNA_path_name_to_infix(bcoll->name),
-                         /*verify_paths=*/true,
-                         driver_map);
-  BKE_animdata_fix_paths(armature->id,
-                         "collections_all",
-                         RNA_path_name_to_infix(old_name),
-                         RNA_path_name_to_infix(bcoll->name),
-                         /*verify_paths=*/true,
-                         driver_map);
+  for (StringRef prefix : {"collections", "collections_all"}) {
+    BKE_animdata_fix_paths(armature->id,
+                           prefix,
+                           old_infix,
+                           new_infix,
+                           /*verify_paths=*/true,
+                           driver_map);
+    bke::dynoverride::fix_rna_paths_rename(bmain,
+                                           armature->id,
+                                           prefix,
+                                           old_infix,
+                                           new_infix,
+                                           0,
+                                           0,
+                                           /*verify_paths=*/true,
+                                           /*infix_is_name=*/false);
+  }
 }
 
 void ANIM_armature_bonecoll_remove_from_index(bArmature *armature, int index)

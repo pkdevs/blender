@@ -31,6 +31,7 @@
 #  include "BLI_string_utils.hh"
 
 #  include "BKE_animsys.hh"
+#  include "BKE_dynamic_override.hh"
 #  include "BKE_global.hh"
 #  include "BKE_gpencil_geom_legacy.h"
 #  include "BKE_gpencil_legacy.h"
@@ -172,14 +173,25 @@ static void rna_annotation_layer_info_set(PointerRNA *ptr, const char *value)
   BLI_uniquename(
       &gpd->layers, gpl, DATA_("GP_Layer"), '.', offsetof(bGPDlayer, info), sizeof(gpl->info));
 
-  /* now fix animation paths */
+  /* Now fix animation and dynoverride paths. */
   if (ptr->owner_id) {
+    std::string old_infix = RNA_path_name_to_infix(oldname);
+    std::string new_infix = RNA_path_name_to_infix(gpl->info);
     BKE_animdata_fix_paths(*ptr->owner_id,
                            "layers",
-                           RNA_path_name_to_infix(oldname),
-                           RNA_path_name_to_infix(gpl->info),
+                           old_infix,
+                           new_infix,
                            /*verify_paths=*/true,
                            *G_MAIN);
+    bke::dynoverride::fix_rna_paths_rename(*G_MAIN,
+                                           *ptr->owner_id,
+                                           "layers",
+                                           old_infix,
+                                           new_infix,
+                                           0,
+                                           0,
+                                           /*verify_paths=*/true,
+                                           /*infix_is_name=*/false);
   }
 
   /* Fix mask layers. */

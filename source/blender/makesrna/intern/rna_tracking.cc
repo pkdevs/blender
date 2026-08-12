@@ -34,6 +34,7 @@
 
 #  include "BKE_anim_data.hh"
 #  include "BKE_animsys.hh"
+#  include "BKE_dynamic_override.hh"
 #  include "BKE_global.hh"
 #  include "BKE_movieclip.hh"
 #  include "BKE_node_tree_update.hh"
@@ -274,16 +275,27 @@ static void rna_trackingTrack_name_set(PointerRNA *ptr, const char *value)
   /* Update the name, */
   STRNCPY_UTF8(track->name, value);
   BKE_tracking_track_unique_name(&tracking_object->tracks, track);
-  /* Fix animation paths. */
+  /* Fix animation and dynoverride paths. */
   char rna_path_prefix[MAX_NAME * 2 + 64];
   BKE_tracking_get_rna_path_prefix_for_track(
       &clip->tracking, track, rna_path_prefix, sizeof(rna_path_prefix));
+  std::string old_infix = RNA_path_name_to_infix(old_name);
+  std::string new_infix = RNA_path_name_to_infix(track->name);
   BKE_animdata_fix_paths(clip->id,
                          rna_path_prefix,
-                         RNA_path_name_to_infix(old_name),
-                         RNA_path_name_to_infix(track->name),
+                         old_infix,
+                         new_infix,
                          /* verify_paths= */ true,
                          *G_MAIN);
+  bke::dynoverride::fix_rna_paths_rename(*G_MAIN,
+                                         clip->id,
+                                         rna_path_prefix,
+                                         old_infix,
+                                         new_infix,
+                                         0,
+                                         0,
+                                         /*verify_paths=*/true,
+                                         /*infix_is_name=*/false);
 }
 
 static bool rna_trackingTrack_select_get(PointerRNA *ptr)
@@ -363,16 +375,27 @@ static void rna_trackingPlaneTrack_name_set(PointerRNA *ptr, const char *value)
   /* Update the name, */
   STRNCPY(plane_track->name, value);
   BKE_tracking_plane_track_unique_name(&tracking_object->plane_tracks, plane_track);
-  /* Fix animation paths. */
+  /* Fix animation and dynoverrides paths. */
   char rna_path[MAX_NAME * 2 + 64];
   BKE_tracking_get_rna_path_prefix_for_plane_track(
       &clip->tracking, plane_track, rna_path, sizeof(rna_path));
+  std::string old_infix = RNA_path_name_to_infix(old_name);
+  std::string new_infix = RNA_path_name_to_infix(plane_track->name);
   BKE_animdata_fix_paths(clip->id,
                          rna_path,
-                         RNA_path_name_to_infix(old_name),
-                         RNA_path_name_to_infix(plane_track->name),
+                         old_infix,
+                         new_infix,
                          /* verify_paths= */ true,
                          *G_MAIN);
+  bke::dynoverride::fix_rna_paths_rename(*G_MAIN,
+                                         clip->id,
+                                         rna_path,
+                                         old_infix,
+                                         new_infix,
+                                         0,
+                                         0,
+                                         /*verify_paths=*/true,
+                                         /*infix_is_name=*/false);
 }
 
 static std::optional<std::string> rna_trackingCamera_path(const PointerRNA * /*ptr*/)

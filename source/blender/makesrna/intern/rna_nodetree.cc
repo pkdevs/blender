@@ -654,6 +654,7 @@ static const EnumPropertyItem node_cryptomatte_layer_name_items[] = {
 
 #  include "BKE_context.hh"
 #  include "BKE_cryptomatte.hh"
+#  include "BKE_dynamic_override.hh"
 #  include "BKE_global.hh"
 #  include "BKE_image.hh"
 #  include "BKE_layer.hh"
@@ -2748,13 +2749,24 @@ static void rna_Node_name_set(PointerRNA *ptr, const char *value)
 
   bke::node_unique_name(*ntree, *node);
 
-  /* fix all the animation data which may link to this */
+  /* fix all the animation data and dynoverrides which may link to this */
+  std::string old_infix = RNA_path_name_to_infix(oldname);
+  std::string new_infix = RNA_path_name_to_infix(node->name);
   BKE_animdata_fix_paths(ntree->id,
                          "nodes",
-                         RNA_path_name_to_infix(oldname),
-                         RNA_path_name_to_infix(node->name),
+                         old_infix,
+                         new_infix,
                          /*verify_paths=*/true,
                          *G_MAIN);
+  bke::dynoverride::fix_rna_paths_rename(*G_MAIN,
+                                         ntree->id,
+                                         "nodes",
+                                         old_infix,
+                                         new_infix,
+                                         0,
+                                         0,
+                                         /*verify_paths=*/true,
+                                         /*infix_is_name=*/false);
 }
 
 static int rna_Node_color_tag_get(PointerRNA *ptr)

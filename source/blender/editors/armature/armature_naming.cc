@@ -31,6 +31,7 @@
 #include "BKE_constraint.h"
 #include "BKE_context.hh"
 #include "BKE_deform.hh"
+#include "BKE_dynamic_override.hh"
 #include "BKE_grease_pencil.hh"
 #include "BKE_layer.hh"
 #include "BKE_main.hh"
@@ -244,6 +245,15 @@ void ED_armature_bone_rename(Main *bmain,
 
           BKE_animdata_fix_paths(
               ob->id, "pose.bones", old_name_esc, new_name_esc, /*verify_paths=*/true, driver_map);
+          bke::dynoverride::fix_rna_paths_rename(*bmain,
+                                                 ob->id,
+                                                 "pose.bones",
+                                                 old_name_esc,
+                                                 new_name_esc,
+                                                 0,
+                                                 0,
+                                                 /*verify_paths=*/true,
+                                                 /*infix_is_name=*/false);
         }
 
         BLI_assert(BKE_pose_channels_is_valid(ob->pose));
@@ -369,6 +379,15 @@ void ED_armature_bone_rename(Main *bmain,
    * caught by the rename function. */
   BKE_animdata_fix_paths(
       arm->id, "bones", old_name_esc, new_name_esc, /*verify_paths=*/true, driver_map);
+  bke::dynoverride::fix_rna_paths_rename(*bmain,
+                                         arm->id,
+                                         "bones",
+                                         old_name_esc,
+                                         new_name_esc,
+                                         0,
+                                         0,
+                                         /*verify_paths=*/true,
+                                         /*infix_is_name=*/false);
 
   /* correct view locking */
   {

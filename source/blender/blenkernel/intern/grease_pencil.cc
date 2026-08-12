@@ -20,6 +20,7 @@
 #include "BKE_curves.hh"
 #include "BKE_customdata.hh"
 #include "BKE_deform.hh"
+#include "BKE_dynamic_override.hh"
 #include "BKE_fcurve.hh"
 #include "BKE_geometry_set.hh"
 #include "BKE_grease_pencil.h"
@@ -4367,12 +4368,23 @@ void GreasePencil::rename_node(Main &bmain,
 
   /* Update layer name dependencies. */
   if (node.is_layer()) {
+    std::string old_infix = RNA_path_name_to_infix(old_name);
+    std::string new_infix = RNA_path_name_to_infix(node.name());
     BKE_animdata_fix_paths(this->id,
                            "layers",
-                           RNA_path_name_to_infix(old_name),
-                           RNA_path_name_to_infix(node.name()),
+                           old_infix,
+                           new_infix,
                            /*verify_paths=*/true,
                            bmain);
+    bke::dynoverride::fix_rna_paths_rename(bmain,
+                                           this->id,
+                                           "layers",
+                                           old_infix,
+                                           new_infix,
+                                           0,
+                                           0,
+                                           /*verify_paths=*/true,
+                                           /*infix_is_name=*/false);
     /* Update names in layer masks. */
     for (bke::greasepencil::Layer *layer : this->layers_for_write()) {
       for (GreasePencilLayerMask &mask : layer->masks) {

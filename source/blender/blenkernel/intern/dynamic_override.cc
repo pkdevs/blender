@@ -785,11 +785,194 @@ void rule_rna_property_update_from_target(DynamicOverride &dynamic_override,
   }
 }
 
+bool rule_rna_property_path_set(DynamicOverrideRule &rule,
+                                DynamicOverrideRuleProperty &rule_property,
+                                StringRef rna_path)
+{
+  if (rule.type != DynamicOverrideRuleType::IDData) {
+    return false;
+  }
+  DynamicOverrideRuleIDData &rule_iddata = reinterpret_cast<DynamicOverrideRuleIDData &>(rule);
+  for (DynamicOverrideRuleProperty &rule_prop : rule_iddata.properties) {
+    if (rule_prop.rna_path == rna_path) {
+      return false;
+    }
+  }
+
+  std::string old_identifier = rule_property_rna_identifier(rule_property);
+  MEM_SAFE_DELETE(rule_property.rna_path);
+  rule_property.rna_path = BLI_strdupn(rna_path.data(), size_t(rna_path.size()));
+  std::string new_identifier = rule_property_rna_identifier(rule_property);
+
+  auto rename_idproperty = [&old_identifier, &new_identifier](IDProperty *group_container) {
+    BLI_assert(group_container->type == IDP_GROUP);
+    if (!group_container) {
+      return;
+    }
+    if (IDP_GetPropertyFromGroup(group_container, new_identifier.c_str())) {
+      /* Do not overwrite another existing property. Should never happen in practice though. */
+      BLI_assert_unreachable();
+      return;
+    }
+    IDProperty *id_prop = IDP_GetPropertyFromGroup(group_container, old_identifier.c_str());
+    IDP_RemoveFromGroup(group_container, id_prop);
+    STRNCPY(id_prop->name, new_identifier.c_str());
+    const bool success = IDP_AddToGroup(group_container, id_prop);
+    BLI_assert(success);
+    UNUSED_VARS_NDEBUG(success);
+  };
+  rename_idproperty(rule_iddata.override_values);
+  rename_idproperty(rule_iddata.original_values);
+
+  return true;
+}
+
 std::string rule_property_rna_identifier(const DynamicOverrideRuleProperty &rule_property)
 {
   std::string safe_property_name = rule_property.rna_path ? rule_property.rna_path : "";
   RNA_identifier_sanitize(safe_property_name, true);
   return safe_property_name;
+}
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Various utils.
+ * \{ */
+
+/* Path Validation -------------------------------------------- */
+
+/**
+ * Replace `old_infix` with `new_infix` which has to occur immediately after `prefix`.
+ *
+ * \param verify_paths: If true, the paths will be resolved, and only if it *doesn't* resolve to a
+ * property before, but *does* resolve after, is the new path accepted.
+ */
+static std::optional<std::string> rna_path_rename_fix(ID &target_id,
+                                                      const StringRef prefix,
+                                                      const StringRef old_infix,
+                                                      const StringRef new_infix,
+                                                      const StringRefNull old_path,
+                                                      const bool verify_paths)
+{
+  /* Make initial RNA pointer to start resolving from */
+  PointerRNA target_id_ptr = verify_paths ? RNA_id_pointer_create(&target_id) : PointerRNA();
+  auto rna_path_is_valid = [&target_id_ptr](StringRefNull rna_path) -> bool {
+    PointerRNA ptr;
+    PropertyRNA *prop = nullptr;
+    return RNA_path_resolve_property(&target_id_ptr, rna_path.c_str(), &ptr, &prop);
+  };
+
+  const int64_t prefix_offset = old_path.find(prefix);
+  if (prefix_offset == StringRefBase::not_found) {
+    return std::nullopt;
+  }
+
+  const int64_t old_infix_offset = old_path.find(old_infix);
+  if (old_infix_offset == StringRefBase::not_found) {
+    return std::nullopt;
+  }
+
+  /* Only modify paths if the prefix and old_name feature in the path,
+   * and prefix occurs immediately before old_name. */
+  if (prefix_offset + prefix.size() != old_infix_offset) {
+    return std::nullopt;
+  }
+
+  /* Only modify a path that is invalid. */
+  if (verify_paths && rna_path_is_valid(old_path)) {
+    return std::nullopt;
+  }
+
+  std::string modified_path;
+  const int64_t postfix_offset = old_infix_offset + old_infix.size();
+
+  /* Add the part of the string that goes up to the start of the prefix. */
+  if (prefix_offset > 0) {
+    modified_path.append(old_path.substr(0, prefix_offset));
+  }
+
+  modified_path.append(prefix);
+  modified_path.append(new_infix);
+  modified_path.append(old_path.substr(postfix_offset));
+
+  /* If the new path is not valid, the renaming failed. */
+  if (verify_paths && !rna_path_is_valid(modified_path)) {
+    return std::nullopt;
+  }
+
+  return modified_path;
+}
+
+void fix_rna_paths_rename(Main &bmain,
+                          DynamicOverride &dynamic_override,
+                          ID &target_id,
+                          StringRef prefix,
+                          StringRefNull old_infix,
+                          StringRefNull new_infix,
+                          int old_subscript,
+                          int new_subscript,
+                          bool verify_paths,
+                          bool infix_is_name)
+{
+  auto &&[old_key, new_key] = RNA_generate_keys_for_path_rename(
+      old_infix, new_infix, old_subscript, new_subscript, infix_is_name);
+
+  bool is_changed = false;
+
+  for (DynamicOverrideRule &rule : dynamic_override.rules) {
+    if (rule.type != DynamicOverrideRuleType::IDData) {
+      continue;
+    }
+    if (rule.target_filter.type != DynamicOverrideRuleTargetFilterType::IDSingle) {
+      continue;
+    }
+    if (rule.target_filter.target_id != &target_id) {
+      continue;
+    }
+    DynamicOverrideRuleIDData &rule_iddata = reinterpret_cast<DynamicOverrideRuleIDData &>(rule);
+    for (DynamicOverrideRuleProperty &rule_prop : rule_iddata.properties) {
+      std::optional<std::string> new_path = rna_path_rename_fix(
+          target_id, prefix, old_key, new_key, rule_prop.rna_path, verify_paths);
+      if (!new_path.has_value()) {
+        continue;
+      }
+      if (rule_rna_property_path_set(rule, rule_prop, *new_path)) {
+        is_changed = true;
+      }
+    }
+  }
+
+  /* Tag dynoverride and target ID if needed. */
+  if (is_changed) {
+    DEG_id_tag_update(&target_id, ID_RECALC_DYNAMIC_OVERRIDE);
+    DEG_id_tag_update(&dynamic_override.id, ID_RECALC_SYNC_TO_EVAL);
+    BKE_main_ensure_invariants(bmain, dynamic_override.id);
+  }
+}
+
+void fix_rna_paths_rename(Main &bmain,
+                          ID &target_id,
+                          StringRef prefix,
+                          StringRefNull old_infix,
+                          StringRefNull new_infix,
+                          int old_subscript,
+                          int new_subscript,
+                          bool verify_paths,
+                          bool infix_is_name)
+{
+  for (DynamicOverride &dynamic_override : bmain.dynamic_overrides) {
+    fix_rna_paths_rename(bmain,
+                         dynamic_override,
+                         target_id,
+                         prefix,
+                         old_infix,
+                         new_infix,
+                         old_subscript,
+                         new_subscript,
+                         verify_paths,
+                         infix_is_name);
+  }
 }
 
 /** \} */

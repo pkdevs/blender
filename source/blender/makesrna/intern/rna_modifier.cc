@@ -861,9 +861,11 @@ static const EnumPropertyItem grease_pencil_build_time_mode_items[] = {
 #  include "BKE_context.hh"
 #  include "BKE_curveprofile.h"
 #  include "BKE_deform.hh"
+#  include "BKE_dynamic_override.hh"
 #  include "BKE_fluid.h"
 #  include "BKE_lib_id.hh"
 #  include "BKE_lib_override.hh"
+#  include "BKE_main_invariants.hh"
 #  include "BKE_material.hh"
 #  include "BKE_mesh_runtime.hh"
 #  include "BKE_modifier.hh"
@@ -929,12 +931,23 @@ static void rna_Modifier_name_set(PointerRNA *ptr, const char *value)
     Object *ob = id_cast<Object *>(ptr->owner_id);
     BKE_modifier_unique_name(&ob->modifiers, md);
 
+    std::string old_infix = RNA_path_name_to_infix(oldname);
+    std::string new_infix = RNA_path_name_to_infix(md->name);
     BKE_animdata_fix_paths(ob->id,
                            "modifiers",
-                           RNA_path_name_to_infix(oldname),
-                           RNA_path_name_to_infix(md->name),
+                           old_infix,
+                           new_infix,
                            /*verify_paths=*/true,
                            *G_MAIN);
+    bke::dynoverride::fix_rna_paths_rename(*G_MAIN,
+                                           ob->id,
+                                           "modifiers",
+                                           old_infix,
+                                           new_infix,
+                                           0,
+                                           0,
+                                           /*verify_paths=*/true,
+                                           /*infix_is_name=*/false);
   }
 }
 
@@ -2522,17 +2535,28 @@ static void rna_GreasePencilDashModifierSegment_name_set(PointerRNA *ptr, const 
       '.',
       dash_segment->name);
 
-  /* Fix all the animation data which may link to this. */
+  /* Fix all the animation data and dynoverrides which may link to this. */
   char name_esc[sizeof(dmd->modifier.name) * 2];
   BLI_str_escape(name_esc, dmd->modifier.name, sizeof(name_esc));
   char rna_path_prefix[36 + sizeof(name_esc) + 1];
   SNPRINTF_UTF8(rna_path_prefix, "modifiers[\"%s\"].segments", name_esc);
+  std::string old_infix = RNA_path_name_to_infix(oldname);
+  std::string new_infix = RNA_path_name_to_infix(dash_segment->name);
   BKE_animdata_fix_paths(*ptr->owner_id,
                          rna_path_prefix,
-                         RNA_path_name_to_infix(oldname),
-                         RNA_path_name_to_infix(dash_segment->name),
+                         old_infix,
+                         new_infix,
                          /*verify_paths=*/true,
                          *G_MAIN);
+  bke::dynoverride::fix_rna_paths_rename(*G_MAIN,
+                                         *ptr->owner_id,
+                                         rna_path_prefix,
+                                         old_infix,
+                                         new_infix,
+                                         0,
+                                         0,
+                                         /*verify_paths=*/true,
+                                         /*infix_is_name=*/false);
 }
 
 static void rna_GreasePencilDashModifier_segments_begin(CollectionPropertyIterator *iter,
@@ -2631,17 +2655,28 @@ static void rna_GreasePencilTimeModifierSegment_name_set(PointerRNA *ptr, const 
       '.',
       segment->name);
 
-  /* Fix all the animation data which may link to this. */
+  /* Fix all the animation data and dynoverrides which may link to this. */
   char name_esc[sizeof(tmd->modifier.name) * 2];
   BLI_str_escape(name_esc, tmd->modifier.name, sizeof(name_esc));
   char rna_path_prefix[36 + sizeof(name_esc) + 1];
   SNPRINTF_UTF8(rna_path_prefix, "modifiers[\"%s\"].segments", name_esc);
+  std::string old_infix = RNA_path_name_to_infix(oldname);
+  std::string new_infix = RNA_path_name_to_infix(segment->name);
   BKE_animdata_fix_paths(*ptr->owner_id,
                          rna_path_prefix,
-                         RNA_path_name_to_infix(oldname),
-                         RNA_path_name_to_infix(segment->name),
+                         old_infix,
+                         new_infix,
                          /*verify_paths=*/true,
                          *G_MAIN);
+  bke::dynoverride::fix_rna_paths_rename(*G_MAIN,
+                                         *ptr->owner_id,
+                                         rna_path_prefix,
+                                         old_infix,
+                                         new_infix,
+                                         0,
+                                         0,
+                                         /*verify_paths=*/true,
+                                         /*infix_is_name=*/false);
 }
 
 static void rna_GreasePencilTimeModifier_segments_begin(CollectionPropertyIterator *iter,

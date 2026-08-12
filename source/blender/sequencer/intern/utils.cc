@@ -28,6 +28,7 @@
 #include "BLT_translation.hh"
 
 #include "BKE_animsys.hh"
+#include "BKE_dynamic_override.hh"
 #include "BKE_global.hh"
 #include "BKE_image.hh"
 #include "BKE_library.hh"
@@ -505,12 +506,24 @@ void ensure_unique_name(Main &bmain, Strip *strip, Scene *scene)
 
   STRNCPY_UTF8(name, strip->name + 2);
   strip_unique_name_set(scene, &scene->ed->seqbase, strip);
+
+  std::string old_infix = RNA_path_name_to_infix(name);
+  std::string new_infix = RNA_path_name_to_infix(strip->name + 2);
   BKE_animdata_fix_paths(scene->id,
                          "sequence_editor.strips_all",
-                         RNA_path_name_to_infix(name),
-                         RNA_path_name_to_infix(strip->name + 2),
+                         old_infix,
+                         new_infix,
                          /*verify_paths=*/false,
                          bmain);
+  bke::dynoverride::fix_rna_paths_rename(bmain,
+                                         scene->id,
+                                         "sequence_editor.strips_all",
+                                         old_infix,
+                                         new_infix,
+                                         0,
+                                         0,
+                                         /*verify_paths=*/false,
+                                         /*infix_is_name=*/false);
 
   if (strip->type == STRIP_TYPE_META) {
     for (Strip &strip_child : strip->seqbase) {

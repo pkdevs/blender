@@ -91,10 +91,60 @@ void rule_rna_property_update_from_target(DynamicOverride &dynamic_override,
                                           RNAPath &rna_path);
 
 /**
+ * Set the rna path of the given `rule_property`.
+ *
+ * \return true on success, false otherwise (e.g. because given rna path is already used by another
+ * property in the same dynoverride rule).
+ */
+bool rule_rna_property_path_set(DynamicOverrideRule &rule,
+                                DynamicOverrideRuleProperty &rule_property,
+                                StringRef rna_path);
+
+/**
  * Return an identifier representing the RNA path of the property, that is usable as a RNA
  * property identifier.
  */
 std::string rule_property_rna_identifier(const DynamicOverrideRuleProperty &rule_property);
+
+/** \} */
+
+/** \name Various utils.
+ * \{ */
+
+/**
+ * Fix/update RNA paths, typically when renaming a sub-data item (a bone, modifier, ...) in the
+ * given `target_id`.
+ *
+ * This version takes a a single dynamic_override ID, use the one taking a Main parameter instead
+ * for global updates.
+ */
+void fix_rna_paths_rename(Main &bmain,
+                          DynamicOverride &dynamic_override,
+                          ID &target_id,
+                          StringRef prefix,
+                          StringRefNull old_infix,
+                          StringRefNull new_infix,
+                          int old_subscript,
+                          int new_subscript,
+                          bool verify_paths,
+                          bool infix_is_name);
+
+/**
+ * Fix/update RNA paths, typically when renaming a sub-data item (a bone, modifier, ...) in the
+ * given `target_id`.
+ *
+ * This version will update all dynamic overrides present in the given ID, that have rule(s)
+ * affecting the given `target_id`.
+ */
+void fix_rna_paths_rename(Main &bmain,
+                          ID &target_id,
+                          StringRef prefix,
+                          StringRefNull old_infix,
+                          StringRefNull new_infix,
+                          int old_subscript,
+                          int new_subscript,
+                          bool verify_paths,
+                          bool infix_is_name);
 
 /** \} */
 

@@ -29,6 +29,7 @@
 #  include "BKE_collection.hh"
 #  include "BKE_curve.hh"
 #  include "BKE_curves.h"
+#  include "BKE_dynamic_override.hh"
 #  include "BKE_gpencil_legacy.h"
 #  include "BKE_grease_pencil.hh"
 #  include "BKE_idtype.hh"
@@ -170,6 +171,20 @@ static void rna_Main_ID_remove(Main *bmain,
         id->name + 2,
         ID_REAL_USERS(id));
   }
+}
+
+void rna_Main_ID_DynamicOverride_fix_paths_rename_all(
+    Main *bmain, ID *target_id, const char *prefix, const char *old_name, const char *new_name)
+{
+  bke::dynoverride::fix_rna_paths_rename(*bmain,
+                                         *target_id,
+                                         prefix,
+                                         old_name,
+                                         new_name,
+                                         0,
+                                         0,
+                                         /*verify_paths=*/true,
+                                         /*infix_is_name=*/true);
 }
 
 static ID *rna_Main_pack_linked_ids_hierarchy(struct BlendData *blenddata,
@@ -2586,6 +2601,23 @@ void RNA_def_main_dynamic_overrides(BlenderRNA *brna, PropertyRNA *cprop)
   func = RNA_def_function(srna, "tag", "rna_Main_dynamic_overrides_tag");
   parm = RNA_def_boolean(func, "value", false, "Value", "");
   RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
+
+  func = RNA_def_function(
+      srna, "fix_paths_rename_all", "rna_Main_ID_DynamicOverride_fix_paths_rename_all");
+  RNA_def_function_ui_description(
+      func,
+      "Rename the property paths in all dynamic override data. Since properties are overridden "
+      "via string paths, it's needed to keep their dynamic overrides valid after they have been "
+      "renamed");
+  RNA_def_function_flag(func, FUNC_USE_MAIN | FUNC_NO_SELF);
+  parm = RNA_def_pointer(func, "target_id", "ID", "Target ID", "ID owning the renamed data");
+  RNA_def_parameter_flags(parm, PROP_NEVER_NULL, PARM_REQUIRED);
+  parm = RNA_def_string(func, "prefix", nullptr, MAX_ID_NAME, "Prefix", "RNA path prefix");
+  RNA_def_parameter_flags(parm, {}, PARM_REQUIRED);
+  parm = RNA_def_string(func, "old_name", nullptr, MAX_ID_NAME, "Old Name", "Old name");
+  RNA_def_parameter_flags(parm, {}, PARM_REQUIRED);
+  parm = RNA_def_string(func, "new_name", nullptr, MAX_ID_NAME, "New Name", "New name");
+  RNA_def_parameter_flags(parm, {}, PARM_REQUIRED);
 }
 
 }  // namespace blender

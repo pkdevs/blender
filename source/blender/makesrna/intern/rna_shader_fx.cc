@@ -90,6 +90,7 @@ static const EnumPropertyItem rna_enum_glow_blend_modes_items[] = {
 #  include "BLI_string.hh"
 #  include "BLI_string_utf8.hh"
 
+#  include "BKE_dynamic_override.hh"
 #  include "BKE_global.hh"
 #  include "BKE_lib_id.hh"
 #  include "BKE_shader_fx.hh"
@@ -148,13 +149,24 @@ static void rna_ShaderFx_name_set(PointerRNA *ptr, const char *value)
     Object *ob = id_cast<Object *>(ptr->owner_id);
     BKE_shaderfx_unique_name(&ob->shader_fx, gmd);
 
-    /* Fix all the animation data which may link to this. */
+    /* Fix all the animation data and dynoverrides which may link to this. */
+    std::string old_infix = RNA_path_name_to_infix(oldname);
+    std::string new_infix = RNA_path_name_to_infix(gmd->name);
     BKE_animdata_fix_paths(ob->id,
                            "shader_effects",
-                           RNA_path_name_to_infix(oldname),
-                           RNA_path_name_to_infix(gmd->name),
+                           old_infix,
+                           new_infix,
                            /*verify_paths=*/true,
                            *G_MAIN);
+    bke::dynoverride::fix_rna_paths_rename(*G_MAIN,
+                                           ob->id,
+                                           "shader_effects",
+                                           old_infix,
+                                           new_infix,
+                                           0,
+                                           0,
+                                           /*verify_paths=*/true,
+                                           /*infix_is_name=*/false);
   }
 }
 

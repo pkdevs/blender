@@ -34,9 +34,9 @@
 
 #include "BKE_animsys.hh"
 #include "BKE_curve.hh"
-#include "BKE_idtype.hh"
-
+#include "BKE_dynamic_override.hh"
 #include "BKE_global.hh"
+#include "BKE_idtype.hh"
 #include "BKE_image.hh"
 #include "BKE_lib_id.hh"
 #include "BKE_lib_query.hh"
@@ -371,13 +371,24 @@ void BKE_mask_layer_rename(
 
   BKE_mask_layer_unique_name(mask, masklay);
 
-  /* now fix animation paths */
+  /* Now fix animation & dynoverride paths. */
+  std::string old_infix = RNA_path_name_to_infix(oldname);
+  std::string new_infix = RNA_path_name_to_infix(masklay->name);
   BKE_animdata_fix_paths(mask->id,
                          "layers",
-                         RNA_path_name_to_infix(oldname),
-                         RNA_path_name_to_infix(masklay->name),
+                         old_infix,
+                         new_infix,
                          /*verify_paths=*/true,
                          bmain);
+  bke::dynoverride::fix_rna_paths_rename(bmain,
+                                         mask->id,
+                                         "layers",
+                                         old_infix,
+                                         new_infix,
+                                         0,
+                                         0,
+                                         /*verify_paths=*/true,
+                                         /*infix_is_name=*/false);
 }
 
 MaskLayer *BKE_mask_layer_copy(const MaskLayer *masklay)

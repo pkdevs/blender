@@ -42,6 +42,7 @@
 #include "BKE_curve.hh"
 #include "BKE_customdata.hh"
 #include "BKE_deform.hh"
+#include "BKE_dynamic_override.hh"
 #include "BKE_editmesh.hh"
 #include "BKE_global.hh"
 #include "BKE_idtype.hh"
@@ -1927,12 +1928,23 @@ void BKE_keyblock_rename(Main &bmain, Key *key, KeyBlock *kb, const char *newnam
                  offsetof(KeyBlock, name),
                  sizeof(kb->name));
 
-  /* Fix all the animation data which may link to this. */
+  /* Fix all the animation data and dynoverrides which may link to this. */
+  std::string old_infix = RNA_path_name_to_infix(oldname);
+  std::string new_infix = RNA_path_name_to_infix(kb->name);
   BKE_animdata_fix_paths(key->id,
                          "key_blocks",
-                         RNA_path_name_to_infix(oldname),
-                         RNA_path_name_to_infix(kb->name),
+                         old_infix,
+                         new_infix,
                          /*verify_paths=*/true,
                          bmain);
+  bke::dynoverride::fix_rna_paths_rename(bmain,
+                                         key->id,
+                                         "key_blocks",
+                                         old_infix,
+                                         new_infix,
+                                         0,
+                                         0,
+                                         /*verify_paths=*/true,
+                                         /*infix_is_name=*/false);
 }
 }  // namespace blender

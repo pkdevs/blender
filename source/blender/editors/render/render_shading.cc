@@ -40,6 +40,7 @@
 #include "BKE_brush.hh"
 #include "BKE_context.hh"
 #include "BKE_curve.hh"
+#include "BKE_dynamic_override.hh"
 #include "BKE_editmesh.hh"
 #include "BKE_global.hh"
 #include "BKE_image.hh"
@@ -2625,7 +2626,8 @@ static wmOperatorStatus texture_slot_move_exec(bContext *C, wmOperator *op)
 {
   ID *id = CTX_data_pointer_get_type(C, "texture_slot", RNA_TextureSlot).owner_id;
   if (id) {
-    const DriverMap driver_map = BKE_animdata_build_driver_target_map(*CTX_data_main(C));
+    Main &bmain = *CTX_data_main(C);
+    const DriverMap driver_map = BKE_animdata_build_driver_target_map(bmain);
     MTex **mtex_ar, *mtexswap;
     short act;
     int type = RNA_enum_get(op->ptr, "type");
@@ -2637,25 +2639,30 @@ static wmOperatorStatus texture_slot_move_exec(bContext *C, wmOperator *op)
         mtexswap = mtex_ar[act];
         mtex_ar[act] = mtex_ar[act - 1];
         mtex_ar[act - 1] = mtexswap;
-
-        BKE_animdata_fix_paths(*id,
-                               "texture_slots",
-                               RNA_path_number_to_infix(act - 1),
-                               RNA_path_number_to_infix(-1),
-                               /*verify_paths=*/false,
-                               driver_map);
-        BKE_animdata_fix_paths(*id,
-                               "texture_slots",
-                               RNA_path_number_to_infix(act),
-                               RNA_path_number_to_infix(act - 1),
-                               /*verify_paths=*/false,
-                               driver_map);
-        BKE_animdata_fix_paths(*id,
-                               "texture_slots",
-                               RNA_path_number_to_infix(-1),
-                               RNA_path_number_to_infix(act),
-                               /*verify_paths=*/false,
-                               driver_map);
+        const std::string old_act_infix = RNA_path_number_to_infix(act);
+        const std::string new_act_infix = RNA_path_number_to_infix(act - 1);
+        const std::string tmp_infix = RNA_path_number_to_infix(-1);
+        const std::array<std::pair<const std::string &, const std::string &>, 3> infixes_swap{
+            {{new_act_infix, tmp_infix},
+             {old_act_infix, new_act_infix},
+             {tmp_infix, old_act_infix}}};
+        for (const auto [old_infix, new_infix] : infixes_swap) {
+          BKE_animdata_fix_paths(*id,
+                                 "texture_slots",
+                                 old_infix,
+                                 new_infix,
+                                 /*verify_paths=*/false,
+                                 driver_map);
+          bke::dynoverride::fix_rna_paths_rename(bmain,
+                                                 *id,
+                                                 "texture_slots",
+                                                 old_infix,
+                                                 new_infix,
+                                                 0,
+                                                 0,
+                                                 /*verify_paths=*/false,
+                                                 /*infix_is_name=*/false);
+        }
 
         set_active_mtex(id, act - 1);
       }
@@ -2666,24 +2673,30 @@ static wmOperatorStatus texture_slot_move_exec(bContext *C, wmOperator *op)
         mtex_ar[act] = mtex_ar[act + 1];
         mtex_ar[act + 1] = mtexswap;
 
-        BKE_animdata_fix_paths(*id,
-                               "texture_slots",
-                               RNA_path_number_to_infix(act + 1),
-                               RNA_path_number_to_infix(-1),
-                               /*verify_paths=*/false,
-                               driver_map);
-        BKE_animdata_fix_paths(*id,
-                               "texture_slots",
-                               RNA_path_number_to_infix(act),
-                               RNA_path_number_to_infix(act + 1),
-                               /*verify_paths=*/false,
-                               driver_map);
-        BKE_animdata_fix_paths(*id,
-                               "texture_slots",
-                               RNA_path_number_to_infix(-1),
-                               RNA_path_number_to_infix(act),
-                               /*verify_paths=*/false,
-                               driver_map);
+        const std::string old_act_infix = RNA_path_number_to_infix(act);
+        const std::string new_act_infix = RNA_path_number_to_infix(act + 1);
+        const std::string tmp_infix = RNA_path_number_to_infix(-1);
+        const std::array<std::pair<const std::string &, const std::string &>, 3> infixes_swap{
+            {{new_act_infix, tmp_infix},
+             {old_act_infix, new_act_infix},
+             {tmp_infix, old_act_infix}}};
+        for (const auto [old_infix, new_infix] : infixes_swap) {
+          BKE_animdata_fix_paths(*id,
+                                 "texture_slots",
+                                 old_infix,
+                                 new_infix,
+                                 /*verify_paths=*/false,
+                                 driver_map);
+          bke::dynoverride::fix_rna_paths_rename(bmain,
+                                                 *id,
+                                                 "texture_slots",
+                                                 old_infix,
+                                                 new_infix,
+                                                 0,
+                                                 0,
+                                                 /*verify_paths=*/false,
+                                                 /*infix_is_name=*/false);
+        }
 
         set_active_mtex(id, act + 1);
       }
