@@ -173,8 +173,12 @@ static void rna_Main_ID_remove(Main *bmain,
   }
 }
 
-void rna_Main_ID_DynamicOverride_fix_paths_rename_all(
-    Main *bmain, ID *target_id, const char *prefix, const char *old_name, const char *new_name)
+void rna_Main_ID_DynamicOverride_fix_paths_rename_all(Main *bmain,
+                                                      ID *target_id,
+                                                      const char *prefix,
+                                                      const char *old_name,
+                                                      const char *new_name,
+                                                      bool verify_path)
 {
   bke::dynoverride::fix_rna_paths_rename(*bmain,
                                          *target_id,
@@ -183,7 +187,7 @@ void rna_Main_ID_DynamicOverride_fix_paths_rename_all(
                                          new_name,
                                          0,
                                          0,
-                                         /*verify_paths=*/true,
+                                         /*verify_paths=*/verify_path,
                                          /*infix_is_name=*/true);
 }
 
@@ -2612,12 +2616,27 @@ void RNA_def_main_dynamic_overrides(BlenderRNA *brna, PropertyRNA *cprop)
   RNA_def_function_flag(func, FUNC_USE_MAIN | FUNC_NO_SELF);
   parm = RNA_def_pointer(func, "target_id", "ID", "Target ID", "ID owning the renamed data");
   RNA_def_parameter_flags(parm, PROP_NEVER_NULL, PARM_REQUIRED);
-  parm = RNA_def_string(func, "prefix", nullptr, MAX_ID_NAME, "Prefix", "RNA path prefix");
+  parm = RNA_def_string(func,
+                        "prefix",
+                        nullptr,
+                        MAX_ID_NAME,
+                        "Prefix",
+                        "RNA path prefix to the collection property or IDProperty containing the "
+                        "data that got renamed");
   RNA_def_parameter_flags(parm, {}, PARM_REQUIRED);
-  parm = RNA_def_string(func, "old_name", nullptr, MAX_ID_NAME, "Old Name", "Old name");
+  parm = RNA_def_string(
+      func, "old_name", nullptr, MAX_ID_NAME, "Old Name", "Old name of the data that got renamed");
   RNA_def_parameter_flags(parm, {}, PARM_REQUIRED);
-  parm = RNA_def_string(func, "new_name", nullptr, MAX_ID_NAME, "New Name", "New name");
+  parm = RNA_def_string(
+      func, "new_name", nullptr, MAX_ID_NAME, "New Name", "New name of the data that got renamed");
   RNA_def_parameter_flags(parm, {}, PARM_REQUIRED);
+  parm = RNA_def_boolean(
+      func,
+      "verify_path",
+      true,
+      "Verify Path",
+      "Check if the path generated with the given new name is valid, i.e. can "
+      "be resolved to a valid RNA property. If the test fails, no rename will happen");
 }
 
 }  // namespace blender
