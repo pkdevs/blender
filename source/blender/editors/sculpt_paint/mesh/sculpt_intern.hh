@@ -66,6 +66,9 @@ struct ReportList;
 struct wmKeyConfig;
 struct wmKeyMap;
 struct wmOperatorType;
+namespace bke::bvh {
+class Tree;
+}
 
 /* -------------------------------------------------------------------- */
 /** \name Sculpt Types
@@ -153,7 +156,7 @@ enum class TransformDisplacementMode {
 static constexpr int plane_brush_max_rolling_average_num = 20;
 
 struct ProjectBrushTarget {
-  bke::BVHTreeFromMesh tree_data;
+  const bke::bvh::Tree *tree_data;
   float4x4 active_to_target_matrix;
 };
 
@@ -166,11 +169,14 @@ struct TileColorspaceProcessor : NonCopyable {
   bool is_srgb_byte = false;
 };
 
+using BufferType = std::variant<std::monostate, MutableSpan<float4>, MutableSpan<uchar4>>;
+
 struct ImageData : NonCopyable {
   Image *image = nullptr;
   ImageUser *image_user = nullptr;
 
-  Map<bke::image::TileNumber, ImBuf *> buffers = {};
+  Map<bke::image::TileNumber, ImBuf *> image_buffers = {};
+  Map<bke::image::TileNumber, BufferType> data_buffers = {};
   Map<bke::image::TileNumber, TileColorspaceProcessor> processors = {};
 
   /** Per undo tile, to quickly check if it was already pushed. */
@@ -786,11 +792,18 @@ bool node_in_cylinder(const DistRayAABB_Precalc &ray_dist_precalc,
                       const bke::pbvh::Node &node,
                       float radius_sq,
                       bool original);
-/** Calculates whether node intersects the [-1,1] x [-1,1] x [-1,1] volume in local space. */
+/**
+ * Calculates whether the node intersects a local-space volume.
+ * By default, this is the [-1, 1] x [-1, 1] x [-1, 1] cube centered at the origin, but the
+ * dimensions can be specified.
+ * If test_z_axis is false, then the brush is treated as an infinite cuboid along the view
+ * direction.
+ */
 bool node_in_box(const float4x4 &mat,
                  const Bounds<float3> &bounds,
-                 const float3 brush_center = float3(0.0f, 0.0f, 0.0f),
-                 const float3 brush_half_lengths = float3(1.0f, 1.0f, 1.0f));
+                 const float3 &brush_center = float3(0.0f, 0.0f, 0.0f),
+                 const float3 &brush_half_lengths = float3(1.0f, 1.0f, 1.0f),
+                 const bool test_z_axis = true);
 /**
  * Calculates whether node intersects the [-1,1] x [-1,1] x [0,1] volume in local space.
  *
@@ -799,7 +812,7 @@ bool node_in_box(const float4x4 &mat,
  * The local coordinate system is oriented so that the vertices below the plane have positive
  * local z-coordinates.
  */
-bool node_in_box_positive_z(const Bounds<float3> &bounds, const float4x4 &mat);
+bool node_in_box_positive_z(const float4x4 &mat, const Bounds<float3> &bounds);
 IndexMask gather_nodes(const bke::pbvh::Tree &pbvh,
                        eBrushFalloffShape falloff_shape,
                        bool use_original,
@@ -937,8 +950,6 @@ inline bool brush_uses_vector_displacement(const Brush &brush)
          brush.flag2 & BRUSH_USE_COLOR_AS_DISPLACEMENT &&
          brush.mtex.brush_map_mode == MTEX_MAP_MODE_AREA;
 }
-
-void ensure_valid_pivot(const Object &ob, Paint &paint);
 
 /** Retrieve or calculate the object space radius depending on brush settings. */
 float object_space_radius_get(const ViewContext &vc,
