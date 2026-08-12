@@ -26,15 +26,15 @@ void all(SpaceOutliner &space_outliner, const VisitorFn visitor)
   all_open(space_outliner, space_outliner.runtime->tree, visitor);
 }
 
-void all(const Vector<TreeElement *> &subtree, const ConstVisitorFn visitor)
+void all(const Span<TreeElement *> subtree, const ConstVisitorFn visitor)
 {
   for (const TreeElement *element : subtree) {
     visitor(element);
-    all(element->subtree, visitor);
+    all(element->subtree.as_span(), visitor);
   }
 }
 
-void all(Vector<TreeElement *> &subtree, const VisitorFn visitor)
+void all(Span<TreeElement *> subtree, const VisitorFn visitor)
 {
   for (TreeElement *element : subtree) {
     /* Get needed data out in case element gets freed. */
@@ -54,11 +54,11 @@ void all_open(const SpaceOutliner &space_outliner, const ConstVisitorFn visitor)
 
 void all_open(SpaceOutliner &space_outliner, const VisitorFn visitor)
 {
-  all_open(space_outliner, space_outliner.runtime->tree, visitor);
+  all_open(space_outliner, space_outliner.runtime->tree.as_span(), visitor);
 }
 
 void all_open(const SpaceOutliner &space_outliner,
-              const Vector<TreeElement *> &subtree,
+              const Span<TreeElement *> subtree,
               const ConstVisitorFn visitor)
 {
   for (const TreeElement *element : subtree) {
@@ -66,19 +66,19 @@ void all_open(const SpaceOutliner &space_outliner,
 
     const TreeStoreElem *tselem = TREESTORE(element);
     if (TSELEM_OPEN(tselem, &space_outliner)) {
-      all_open(space_outliner, element->subtree, visitor);
+      all_open(space_outliner, element->subtree.as_span(), visitor);
     }
   }
 }
 
 void all_open(SpaceOutliner &space_outliner,
-              Vector<TreeElement *> &subtree,
+              Span<TreeElement *> subtree,
               const VisitorFn visitor)
 {
   for (TreeElement *element : subtree) {
     /* Get needed data out in case element gets freed. */
     const TreeStoreElem *tselem = TREESTORE(element);
-    Vector<TreeElement *> subtree = element->subtree;
+    Span<TreeElement *> subtree = element->subtree.as_span();
 
     visitor(element);
     /* Don't access element from now on, it may be freed. Note that the open/collapsed state may

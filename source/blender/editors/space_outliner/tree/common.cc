@@ -37,19 +37,19 @@ const char *outliner_idcode_to_plural(short idcode)
 
 /** \} */
 
-void outliner_make_object_parent_hierarchy(Vector<TreeElement *> *lb)
+void outliner_make_object_parent_hierarchy(Vector<TreeElement *> *tree)
 {
   /* build hierarchy */
   /* XXX also, set extents here... */
 
-  for (int index : lb->index_range()) {
-    TreeElement *te = (*lb)[index];
+  for (int index : tree->index_range()) {
+    TreeElement *te = (*tree)[index];
     TreeStoreElem *tselem = TREESTORE(te);
 
     if ((tselem->type == TSE_SOME_ID) && te->idcode == ID_OB) {
       Object *ob = id_cast<Object *>(tselem->id);
       if (ob->parent && ob->parent->id.newid) {
-        lb->remove(index);
+        tree->remove(index);
         TreeElement *tep = reinterpret_cast<TreeElement *>(ob->parent->id.newid);
         tep->subtree.append(te);
         te->parent = tep;

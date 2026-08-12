@@ -286,12 +286,12 @@ static void outliner_sync_selection_from_outliner(WorkSpace *workspace,
                                                   const Main &bmain,
                                                   Scene *scene,
                                                   ViewLayer *view_layer,
-                                                  Vector<TreeElement *> *tree,
+                                                  Span<TreeElement *> tree,
                                                   const SyncSelectTypes *sync_types,
                                                   SelectedItems *selected_items)
 {
 
-  for (TreeElement *te : *tree) {
+  for (TreeElement *te : tree) {
     TreeStoreElem *tselem = TREESTORE(te);
 
     if ((tselem->type == TSE_SOME_ID) && (te->idcode == ID_OB)) {
@@ -317,7 +317,8 @@ static void outliner_sync_selection_from_outliner(WorkSpace *workspace,
     }
 
     outliner_sync_selection_from_outliner(
-        workspace, bmain, scene, view_layer, &te->subtree, sync_types, selected_items);
+                                          workspace, bmain, scene, view_layer, te->subtree
+                                          .as_span(), sync_types, selected_items);
   }
 }
 
@@ -350,7 +351,7 @@ void ED_outliner_select_sync_from_outliner(bContext *C, SpaceOutliner *space_out
                                         *bmain,
                                         scene,
                                         view_layer,
-                                        &space_outliner->runtime->tree,
+                                        space_outliner->runtime->tree.as_span(),
                                         &sync_types,
                                         &selected_items);
 
@@ -483,13 +484,13 @@ static void outliner_sync_selection_to_outliner(const Main &bmain,
                                                 ViewLayer *view_layer,
                                                 LayerCollection *layer_collection,
                                                 SpaceOutliner *space_outliner,
-                                                Vector<TreeElement *> *tree,
+                                                Span<TreeElement *> tree,
                                                 SyncSelectActiveData *active_data,
                                                 const SyncSelectTypes *sync_types,
                                                 bool *r_any_new_active,
                                                 short &idcode)
 {
-  for (TreeElement *te : *tree) {
+  for (TreeElement *te : tree) {
     TreeStoreElem *tselem = TREESTORE(te);
     const bool is_active_old = (tselem->flag & TSE_ACTIVE) && (tselem->flag & TSE_SELECTED);
 
@@ -540,7 +541,7 @@ static void outliner_sync_selection_to_outliner(const Main &bmain,
                                         view_layer,
                                         layer_collection,
                                         space_outliner,
-                                        &te->subtree,
+                                        te->subtree.as_span(),
                                         active_data,
                                         sync_types,
                                         r_any_new_active,
@@ -583,7 +584,7 @@ bool outliner_sync_selection(const bContext *C,
                                         tvc.view_layer,
                                         tvc.layer_collection,
                                         space_outliner,
-                                        &space_outliner->runtime->tree,
+                                        space_outliner->runtime->tree.as_span(),
                                         &active_data,
                                         &sync_types,
                                         &r_any_new_active,

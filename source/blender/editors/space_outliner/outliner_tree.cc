@@ -190,7 +190,7 @@ bool outliner_requires_rebuild_on_select_or_active_change(const SpaceOutliner *s
 
 #ifdef WITH_FREESTYLE
 static void outliner_add_line_styles(SpaceOutliner *space_outliner,
-                                     Vector<TreeElement *> *lb,
+                                     Vector<TreeElement *> *tree,
                                      Scene *sce,
                                      TreeElement *te)
 {
@@ -214,7 +214,7 @@ static void outliner_add_line_styles(SpaceOutliner *space_outliner,
         }
         linestyle->id.tag &= ~ID_TAG_DOIT;
         AbstractTreeDisplay::add_element(
-            space_outliner, lb, reinterpret_cast<ID *>(linestyle), nullptr, te, TSE_SOME_ID, 0);
+            space_outliner, tree, reinterpret_cast<ID *>(linestyle), nullptr, te, TSE_SOME_ID, 0);
       }
     }
   }
@@ -222,7 +222,7 @@ static void outliner_add_line_styles(SpaceOutliner *space_outliner,
 #endif
 
 TreeElement *AbstractTreeDisplay::add_element(SpaceOutliner *space_outliner,
-                                              Vector<TreeElement *> *lb,
+                                              Vector<TreeElement *> *tree,
                                               ID *owner_id,
                                               void *create_data,
                                               TreeElement *parent,
@@ -236,10 +236,10 @@ TreeElement *AbstractTreeDisplay::add_element(SpaceOutliner *space_outliner,
   }
 
   return space_outliner->runtime->tree_display->add_element(
-      lb, owner_id, create_data, parent, type, index, expand);
+      tree, owner_id, create_data, parent, type, index, expand);
 }
 
-TreeElement *AbstractTreeDisplay::add_element(Vector<TreeElement *> *lb,
+TreeElement *AbstractTreeDisplay::add_element(Vector<TreeElement *> *tree,
                                               ID *owner_id,
                                               void *create_data,
                                               TreeElement *parent,
@@ -277,7 +277,7 @@ TreeElement *AbstractTreeDisplay::add_element(Vector<TreeElement *> *lb,
 
   TreeElement *te = MEM_new<TreeElement>(__func__);
   /* add to the visual tree */
-  lb->append(te);
+  tree->append(te);
   /* add to the storage */
   check_persistent(&space_outliner_, te, persistent_dataptr, type, index);
   TreeStoreElem *tselem = TREESTORE(te);
@@ -561,7 +561,7 @@ static int treesort_obtype_alpha(const void *v1, const void *v2)
 #endif
 
 /* sort happens on each subtree individual */
-static void outliner_sort(Vector<TreeElement *> *lb)
+static void outliner_sort(Vector<TreeElement *> *tree)
 {
   /* Sorting trying to handle these cases:
    * - contents of collections (where contained collections
@@ -574,17 +574,17 @@ static void outliner_sort(Vector<TreeElement *> *lb)
    *   with bones coming first (and ARE sorted).
    */
 
-  if (lb->is_empty()) {
+  if (tree->is_empty()) {
     return;
   }
-  TreeElement *last_te = static_cast<TreeElement *>(lb->last());
+  TreeElement *last_te = static_cast<TreeElement *>(tree->last());
   if (last_te == nullptr) {
     return;
   }
   TreeStoreElem *last_tselem = TREESTORE(last_te);
 
   /* Check if we are expanding Armature data and if there are bone collections. */
-  const TreeElement *first_te = static_cast<TreeElement *>(lb->first());
+  const TreeElement *first_te = static_cast<TreeElement *>(tree->first());
   const TreeStoreElem *first_tselem = TREESTORE(first_te);
   const bool inside_armature_data = ELEM(
       first_tselem->type, TSE_BONE, TSE_EBONE, TSE_POSE_CHANNEL);
@@ -595,13 +595,13 @@ static void outliner_sort(Vector<TreeElement *> *lb)
   if (inside_armature_data || ELEM(last_tselem->type, TSE_DEFGROUP, TSE_ID_BASE) ||
       ((last_tselem->type == TSE_SOME_ID) && (last_te->idcode == ID_OB)))
   {
-    int totelem = lb->size();
+    int totelem = tree->size();
 
     if (totelem > 1) {
       tTreeSort *tear = MEM_new_array_uninitialized<tTreeSort>(totelem, "tree sort array");
       tTreeSort *tp = tear;
 
-      for (TreeElement *te : *lb) {
+      for (TreeElement *te : *tree) {
         TreeStoreElem *tselem = TREESTORE(te);
         tp->te = te;
         tp->name = te->name;
@@ -638,24 +638,24 @@ static void outliner_sort(Vector<TreeElement *> *lb)
         }
       }
 
-      lb->clear();
+      tree->clear();
       tp = tear;
       while (totelem--) {
-        lb->append(tp->te);
+        tree->append(tp->te);
         tp++;
       }
       MEM_delete(tear);
     }
   }
 
-  for (TreeElement *te_iter : *lb) {
+  for (TreeElement *te_iter : *tree) {
     outliner_sort(&te_iter->subtree);
   }
 }
 
-static void outliner_collections_children_sort(Vector<TreeElement *> *lb)
+static void outliner_collections_children_sort(Vector<TreeElement *> *tree)
 {
-  TreeElement *last_te = static_cast<TreeElement *>(lb->last());
+  TreeElement *last_te = static_cast<TreeElement *>(tree->last());
   if (last_te == nullptr) {
     return;
   }
@@ -663,13 +663,13 @@ static void outliner_collections_children_sort(Vector<TreeElement *> *lb)
 
   /* Sorting rules: only object lists. */
   if ((last_tselem->type == TSE_SOME_ID) && (last_te->idcode == ID_OB)) {
-    int totelem = lb->size();
+    int totelem = tree->size();
 
     if (totelem > 1) {
       tTreeSort *tear = MEM_new_array_uninitialized<tTreeSort>(totelem, "tree sort array");
       tTreeSort *tp = tear;
 
-      for (TreeElement *te : *lb) {
+      for (TreeElement *te : *tree) {
         TreeStoreElem *tselem = TREESTORE(te);
         tp->te = te;
         tp->name = te->name;
@@ -680,17 +680,17 @@ static void outliner_collections_children_sort(Vector<TreeElement *> *lb)
 
       qsort(tear, totelem, sizeof(tTreeSort), treesort_child_not_in_collection);
 
-      lb->clear();
+      tree->clear();
       tp = tear;
       while (totelem--) {
-        lb->append(tp->te);
+        tree->append(tp->te);
         tp++;
       }
       MEM_delete(tear);
     }
   }
 
-  for (TreeElement *te_iter : *lb) {
+  for (TreeElement *te_iter : *tree) {
     outliner_collections_children_sort(&te_iter->subtree);
   }
 }
@@ -719,7 +719,7 @@ static void outliner_restore_scrolling_position(SpaceOutliner *space_outliner,
   if (focus->tselem != nullptr) {
     outliner_set_coordinates(region, space_outliner);
 
-    TreeElement *te_new = outliner_find_tree_element(&space_outliner->runtime->tree,
+    TreeElement *te_new = outliner_find_tree_element(space_outliner->runtime->tree.as_span(),
                                                      focus->tselem);
 
     if (te_new != nullptr) {
@@ -787,7 +787,8 @@ static TreeElement *outliner_find_first_desired_element_at_y(const SpaceOutliner
                                                              const float view_co_limit)
 {
   TreeElement *te = outliner_find_item_at_y(
-      space_outliner, &space_outliner->runtime->tree, view_co);
+                                            space_outliner, space_outliner->runtime->tree
+                                            .as_span(), view_co);
 
   if (!te) {
     return nullptr;
@@ -1094,20 +1095,20 @@ static int outliner_filter_subtree(SpaceOutliner *space_outliner,
                                    const Main &bmain,
                                    const Scene *scene,
                                    ViewLayer *view_layer,
-                                   Vector<TreeElement *> *lb,
+                                   Vector<TreeElement *> *tree,
                                    const char *search_string,
                                    const eSpaceOutliner_Filter exclude_filter)
 {
   TreeElement *te_next;
   TreeStoreElem *tselem;
 
-  for (TreeElement *te : *lb) {
+  for (TreeElement *te : *tree) {
     if (outliner_element_visible_get(bmain, scene, view_layer, te, exclude_filter) == false) {
       /* Don't free the tree, but extract the children from the parent and add to this tree. */
       /* This also needs filtering the subtree prior (see #69246). */
       outliner_filter_subtree(
           space_outliner, bmain, scene, view_layer, &te->subtree, search_string, exclude_filter);
-      te_next = outliner_extract_children_from_subtree(te, lb);
+      te_next = outliner_extract_children_from_subtree(te, tree);
       if (te_next == nullptr) {
         break;
       }
@@ -1140,7 +1141,7 @@ static int outliner_filter_subtree(SpaceOutliner *space_outliner,
                                                                           search_string,
                                                                           exclude_filter) == 0)
       {
-        outliner_free_tree_element(te, lb);
+        outliner_free_tree_element(te, tree);
       }
     }
     else {
@@ -1156,7 +1157,7 @@ static int outliner_filter_subtree(SpaceOutliner *space_outliner,
   }
 
   /* if there are still items in the list, that means that there were still some matches */
-  return (lb->is_empty() == false);
+  return (tree->is_empty() == false);
 }
 
 static void outliner_filter_tree(const Main &bmain,

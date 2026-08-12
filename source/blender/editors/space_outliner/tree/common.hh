@@ -17,7 +17,7 @@ namespace ed::outliner {
 
 const char *outliner_idcode_to_plural(short idcode);
 
-void outliner_make_object_parent_hierarchy(Vector<TreeElement *> *lb);
+void outliner_make_object_parent_hierarchy(Vector<TreeElement *> *tree);
 bool outliner_animdata_test(const AnimData *adt);
 
 }  // namespace ed::outliner

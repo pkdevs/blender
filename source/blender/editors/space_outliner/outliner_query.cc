@@ -26,15 +26,15 @@ bool outliner_shows_mode_column(const SpaceOutliner &space_outliner)
 
 bool outliner_has_element_warnings(const SpaceOutliner &space_outliner)
 {
-  std::function<bool(const Vector<TreeElement *> &)> recursive_fn;
+  std::function<bool(const Span<TreeElement *>)> recursive_fn;
 
-  recursive_fn = [&](const Vector<TreeElement *> &lb) {
-    for (const TreeElement *te : lb) {
+  recursive_fn = [&](const Span<TreeElement *> tree) {
+    for (const TreeElement *te : tree) {
       if (te->abstract_element && !te->abstract_element->get_warning().is_empty()) {
         return true;
       }
 
-      if (recursive_fn(te->subtree)) {
+      if (recursive_fn(te->subtree.as_span())) {
         return true;
       }
     }
@@ -42,7 +42,7 @@ bool outliner_has_element_warnings(const SpaceOutliner &space_outliner)
     return false;
   };
 
-  return recursive_fn(space_outliner.runtime->tree);
+  return recursive_fn(space_outliner.runtime->tree.as_span());
 }
 
 }  // namespace blender::ed::outliner

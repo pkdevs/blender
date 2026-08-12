@@ -131,7 +131,8 @@ static TreeElement *outliner_drop_insert_find(bContext *C,
 
   ui::view2d_region_to_view(&region->v2d, mval[0], mval[1], &view_mval[0], &view_mval[1]);
   te_hovered = outliner_find_item_at_y(
-      space_outliner, &space_outliner->runtime->tree, view_mval[1]);
+                                       space_outliner, space_outliner->runtime->tree
+                                       .as_span(), view_mval[1]);
 
   if (te_hovered) {
     /* Mouse hovers an element (ignoring x-axis),
@@ -398,7 +399,8 @@ static void parent_drop_set_parents(bContext *C,
   SpaceOutliner *space_outliner = CTX_wm_space_outliner(C);
 
   TreeElement *te = outliner_find_id(
-      space_outliner, &space_outliner->runtime->tree, &parent->id, TreeElementFlag(0));
+                                     space_outliner, space_outliner->runtime->tree
+                                     .as_span(), &parent->id, TreeElementFlag(0));
   Scene *scene = id_cast<Scene *>(outliner_search_back(te, ID_SCE));
 
   if (scene == nullptr) {
@@ -1054,7 +1056,7 @@ static void datastack_drop_reorder(bContext *C, ReportList *reports, StackDropDa
 {
   SpaceOutliner *space_outliner = CTX_wm_space_outliner(C);
 
-  TreeElement *drag_te = outliner_find_tree_element(&space_outliner->runtime->tree,
+  TreeElement *drag_te = outliner_find_tree_element(space_outliner->runtime->tree.as_span(),
                                                     drop_data->drag_tselem);
   if (!drag_te) {
     return;
@@ -1310,8 +1312,8 @@ static std::string collection_drop_tooltip(bContext *C,
 
     switch (data.insert_type) {
       case TE_INSERT_BEFORE: {
-        Vector<TreeElement *> &subtree = te->parent->subtree;
-        const int index = subtree.first_index_of(te);
+        Span<TreeElement *> subtree = te->parent->subtree.as_span();
+        const int index = subtree.first_index(te);
         if (index > 0) {
           TreeElement *te_prev = subtree[index - 1];
           if (outliner_is_collection_tree_element(te_prev)) {
@@ -1321,8 +1323,8 @@ static std::string collection_drop_tooltip(bContext *C,
         return tooltip_before;
       }
       case TE_INSERT_AFTER: {
-        Vector<TreeElement *> &subtree = te->parent->subtree;
-        const int index = subtree.first_index_of(te);
+        Span<TreeElement *> subtree = te->parent->subtree.as_span();
+        const int index = subtree.first_index(te);
         if (index < subtree.size() - 1) {
           TreeElement *te_next = subtree[index + 1];
           if (outliner_is_collection_tree_element(te_next)) {
@@ -1381,7 +1383,8 @@ static wmOperatorStatus collection_drop_invoke(bContext *C,
     relative_after = (data.insert_type == TE_INSERT_AFTER);
 
     TreeElement *parent_te = outliner_find_parent_element(
-        &space_outliner->runtime->tree, nullptr, data.te);
+                                                          space_outliner->runtime->tree
+                                                          .as_span(), nullptr, data.te);
     data.to = (parent_te) ? outliner_collection_from_tree_element(parent_te) : nullptr;
   }
 
@@ -1473,7 +1476,7 @@ static TreeElement *outliner_item_drag_element_find(SpaceOutliner *space_outline
   WM_event_drag_start_mval(event, region, mval);
 
   const float my = ui::view2d_region_to_view_y(&region->v2d, mval[1]);
-  return outliner_find_item_at_y(space_outliner, &space_outliner->runtime->tree, my);
+  return outliner_find_item_at_y(space_outliner, space_outliner->runtime->tree.as_span(), my);
 }
 
 static wmOperatorStatus outliner_item_drag_drop_invoke(bContext *C,
@@ -1547,7 +1550,7 @@ static wmOperatorStatus outliner_item_drag_drop_invoke(bContext *C,
 
     if (GS(data.drag_id->name) == ID_OB) {
       outliner_tree_traverse(space_outliner,
-                             &space_outliner->runtime->tree,
+                             space_outliner->runtime->tree.as_span(),
                              0,
                              TSE_SELECTED,
                              outliner_collect_selected_objects,
@@ -1555,7 +1558,7 @@ static wmOperatorStatus outliner_item_drag_drop_invoke(bContext *C,
     }
     else {
       outliner_tree_traverse(space_outliner,
-                             &space_outliner->runtime->tree,
+                             space_outliner->runtime->tree.as_span(),
                              0,
                              TSE_SELECTED,
                              outliner_collect_selected_collections,

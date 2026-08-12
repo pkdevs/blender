@@ -79,7 +79,7 @@ class AbstractTreeDisplay {
    * have access to the #SpaceOutliner instance but not the tree-display directly. Should be
    * avoided and instead use the tree-display. */
   static TreeElement *add_element(SpaceOutliner *space_outliner,
-                                  Vector<TreeElement *> *lb,
+                                  Vector<TreeElement *> *tree,
                                   ID *owner_id,
                                   void *create_data,
                                   TreeElement *parent,
@@ -130,7 +130,7 @@ class AbstractTreeDisplay {
    *                noise, and can be expensive to add in big scenes. So prefer setting this to
    *                false.
    */
-  TreeElement *add_element(Vector<TreeElement *> *lb,
+  TreeElement *add_element(Vector<TreeElement *> *tree,
                            ID *owner_id,
                            void *create_data,
                            TreeElement *parent,

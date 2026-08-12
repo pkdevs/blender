@@ -110,7 +110,7 @@ class AbstractTreeElement {
   virtual void expand(SpaceOutliner & /*soops*/) const {}
 
   /** See #AbstractTreeDisplay::add_element() (which this forwards to). */
-  TreeElement *add_element(Vector<TreeElement *> *lb,
+  TreeElement *add_element(Vector<TreeElement *> *tree,
                            ID *owner_id,
                            void *create_data,
                            TreeElement *parent,

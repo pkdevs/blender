@@ -246,7 +246,7 @@ void AbstractTreeElement::uncollapse_by_default(TreeElement *legacy_te)
   }
 }
 
-TreeElement *AbstractTreeElement::add_element(Vector<TreeElement *> *lb,
+TreeElement *AbstractTreeElement::add_element(Vector<TreeElement *> *tree,
                                               ID *owner_id,
                                               void *create_data,
                                               TreeElement *parent,
@@ -261,7 +261,7 @@ TreeElement *AbstractTreeElement::add_element(Vector<TreeElement *> *lb,
     return nullptr;
   }
 
-  return display_->add_element(lb, owner_id, create_data, parent, type, index, expand);
+  return display_->add_element(tree, owner_id, create_data, parent, type, index, expand);
 }
 
 void tree_element_expand(const AbstractTreeElement &tree_element, SpaceOutliner &space_outliner)

@@ -72,11 +72,11 @@ void outliner_viewcontext_init(const bContext *C, TreeViewContext *tvc)
 /** \} */
 
 TreeElement *outliner_find_item_at_y(const SpaceOutliner *space_outliner,
-                                     const Vector<TreeElement *> *tree,
+                                     const Span<TreeElement *> tree,
                                      float view_co_y)
 {
-  for (int index : tree->index_range()) {
-    TreeElement *te_iter = (*tree)[index];
+  for (int index : tree.index_range()) {
+    TreeElement *te_iter = tree[index];
     if (view_co_y < (te_iter->ys + UI_UNIT_Y)) {
       if (view_co_y >= te_iter->ys) {
         /* co_y is inside this element */
@@ -90,8 +90,8 @@ TreeElement *outliner_find_item_at_y(const SpaceOutliner *space_outliner,
 
       /* If the coordinate is lower than the next element, we can continue with that one and skip
        * recursion too. */
-      if (index < tree->size() - 1) {
-        const TreeElement *te_next = (*tree)[index + 1];
+      if (index < tree.size() - 1) {
+        const TreeElement *te_next = tree[index + 1];
         if (te_next && (view_co_y < (te_next->ys + UI_UNIT_Y))) {
           continue;
         }
@@ -99,7 +99,9 @@ TreeElement *outliner_find_item_at_y(const SpaceOutliner *space_outliner,
 
       /* co_y is lower than current element (but not lower than the next one), possibly inside
        * children */
-      TreeElement *te_sub = outliner_find_item_at_y(space_outliner, &te_iter->subtree, view_co_y);
+      TreeElement *te_sub = outliner_find_item_at_y(space_outliner,
+                                                    te_iter->subtree.as_span(),
+                                                    view_co_y);
       if (te_sub) {
         return te_sub;
       }
@@ -158,13 +160,13 @@ TreeElement *outliner_find_item_at_x_in_row(const SpaceOutliner *space_outliner,
   return te;
 }
 
-TreeElement *outliner_find_tree_element(Vector<TreeElement *> *lb, const TreeStoreElem *store_elem)
+TreeElement *outliner_find_tree_element(Span<TreeElement *> tree, const TreeStoreElem *store_elem)
 {
-  for (TreeElement *te : *lb) {
+  for (TreeElement *te : tree) {
     if (te->store_elem == store_elem) {
       return te;
     }
-    TreeElement *tes = outliner_find_tree_element(&te->subtree, store_elem);
+    TreeElement *tes = outliner_find_tree_element(te->subtree.as_span(), store_elem);
     if (tes) {
       return tes;
     }
@@ -172,16 +174,16 @@ TreeElement *outliner_find_tree_element(Vector<TreeElement *> *lb, const TreeSto
   return nullptr;
 }
 
-TreeElement *outliner_find_parent_element(Vector<TreeElement *> *lb,
+TreeElement *outliner_find_parent_element(Span<TreeElement *> tree,
                                           TreeElement *parent_te,
                                           const TreeElement *child_te)
 {
-  for (TreeElement *te : *lb) {
+  for (TreeElement *te : tree) {
     if (te == child_te) {
       return parent_te;
     }
 
-    TreeElement *find_te = outliner_find_parent_element(&te->subtree, te, child_te);
+    TreeElement *find_te = outliner_find_parent_element(te->subtree.as_span(), te, child_te);
     if (find_te) {
       return find_te;
     }
@@ -190,11 +192,11 @@ TreeElement *outliner_find_parent_element(Vector<TreeElement *> *lb,
 }
 
 TreeElement *outliner_find_id(SpaceOutliner *space_outliner,
-                              Vector<TreeElement *> *lb,
+                              Span<TreeElement *> tree,
                               const ID *id,
                               TreeElementFlag exclude_flags)
 {
-  for (TreeElement *te : *lb) {
+  for (TreeElement *te : tree) {
     TreeStoreElem *tselem = TREESTORE(te);
     if (tselem->type == TSE_SOME_ID) {
       if (tselem->id == id && !(te->flag & exclude_flags)) {
@@ -215,7 +217,7 @@ TreeElement *outliner_find_id(SpaceOutliner *space_outliner,
       }
     }
 
-    TreeElement *tes = outliner_find_id(space_outliner, &te->subtree, id, exclude_flags);
+    TreeElement *tes = outliner_find_id(space_outliner, te->subtree.as_span(), id, exclude_flags);
     if (tes) {
       return tes;
     }
@@ -223,16 +225,16 @@ TreeElement *outliner_find_id(SpaceOutliner *space_outliner,
   return nullptr;
 }
 
-TreeElement *outliner_find_posechannel(Vector<TreeElement *> *lb, const bPoseChannel *pchan)
+TreeElement *outliner_find_posechannel(Span<TreeElement *> tree, const bPoseChannel *pchan)
 {
-  for (TreeElement *te : *lb) {
+  for (TreeElement *te : tree) {
     if (te->directdata == pchan) {
       return te;
     }
 
     TreeStoreElem *tselem = TREESTORE(te);
     if (ELEM(tselem->type, TSE_POSE_BASE, TSE_POSE_CHANNEL)) {
-      TreeElement *tes = outliner_find_posechannel(&te->subtree, pchan);
+      TreeElement *tes = outliner_find_posechannel(te->subtree.as_span(), pchan);
       if (tes) {
         return tes;
       }
@@ -241,16 +243,16 @@ TreeElement *outliner_find_posechannel(Vector<TreeElement *> *lb, const bPoseCha
   return nullptr;
 }
 
-TreeElement *outliner_find_editbone(Vector<TreeElement *> *lb, const EditBone *ebone)
+TreeElement *outliner_find_editbone(Span<TreeElement *> tree, const EditBone *ebone)
 {
-  for (TreeElement *te : *lb) {
+  for (TreeElement *te : tree) {
     if (te->directdata == ebone) {
       return te;
     }
 
     TreeStoreElem *tselem = TREESTORE(te);
     if (ELEM(tselem->type, TSE_SOME_ID, TSE_EBONE)) {
-      TreeElement *tes = outliner_find_editbone(&te->subtree, ebone);
+      TreeElement *tes = outliner_find_editbone(te->subtree.as_span(), ebone);
       if (tes) {
         return tes;
       }
@@ -288,17 +290,16 @@ ID *outliner_search_back(TreeElement *te, short idcode)
 }
 
 bool outliner_tree_traverse(const SpaceOutliner *space_outliner,
-                            Vector<TreeElement *> *tree,
+                            Span<TreeElement *> tree,
                             int filter_te_flag,
                             int filter_tselem_flag,
                             TreeTraversalFunc func,
                             void *customdata)
 {
-  for (TreeElement *te : *tree) {
+  for (TreeElement *te : tree) {
     TreeTraversalAction func_retval = TRAVERSE_CONTINUE;
     /* in case te is freed in callback */
     TreeStoreElem *tselem = TREESTORE(te);
-    Vector<TreeElement *> subtree = te->subtree;
 
     if (filter_te_flag && (te->flag & filter_te_flag) == 0) {
       /* skip */
@@ -319,7 +320,13 @@ bool outliner_tree_traverse(const SpaceOutliner *space_outliner,
       /* skip */
     }
     else if (!outliner_tree_traverse(
-                 space_outliner, &subtree, filter_te_flag, filter_tselem_flag, func, customdata))
+                                     space_outliner,
+ te->subtree
+                                     .as_span(),
+                                     filter_te_flag,
+                                     filter_tselem_flag,
+                                     func,
+                                     customdata))
     {
       return false;
     }
@@ -379,13 +386,13 @@ float outliner_right_columns_width(const SpaceOutliner *space_outliner)
   return (num_columns * UI_UNIT_X + V2D_SCROLL_WIDTH);
 }
 
-TreeElement *outliner_find_element_with_flag(const Vector<TreeElement *> *lb, short flag)
+TreeElement *outliner_find_element_with_flag(const Span<TreeElement *> tree, short flag)
 {
-  for (TreeElement *te : *lb) {
+  for (TreeElement *te : tree) {
     if ((TREESTORE(te)->flag & flag) == flag) {
       return te;
     }
-    TreeElement *active_element = outliner_find_element_with_flag(&te->subtree, flag);
+    TreeElement *active_element = outliner_find_element_with_flag(te->subtree.as_span(), flag);
     if (active_element) {
       return active_element;
     }
@@ -491,7 +498,9 @@ Base *ED_outliner_give_base_under_cursor(bContext *C, const int mval[2])
 
   ui::view2d_region_to_view(&region->v2d, mval[0], mval[1], &view_mval[0], &view_mval[1]);
 
-  te = outliner_find_item_at_y(space_outliner, &space_outliner->runtime->tree, view_mval[1]);
+  te = outliner_find_item_at_y(space_outliner,
+                               space_outliner->runtime->tree.as_span(),
+                               view_mval[1]);
   if (te) {
     TreeStoreElem *tselem = TREESTORE(te);
     if ((tselem->type == TSE_SOME_ID) && (te->idcode == ID_OB)) {
@@ -514,7 +523,8 @@ bool ED_outliner_give_rna_under_cursor(bContext *C, const int mval[2], PointerRN
   ui::view2d_region_to_view(&region->v2d, mval[0], mval[1], &view_mval[0], &view_mval[1]);
 
   TreeElement *te = outliner_find_item_at_y(
-      space_outliner, &space_outliner->runtime->tree, view_mval[1]);
+                                            space_outliner, space_outliner->runtime->tree
+                                            .as_span(), view_mval[1]);
   if (!te) {
     return false;
   }

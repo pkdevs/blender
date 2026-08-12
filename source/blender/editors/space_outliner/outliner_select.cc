@@ -1695,11 +1695,11 @@ static bool can_select_recursive(TreeElement *te, Collection *in_collection)
   return false;
 }
 
-static void do_outliner_select_recursive(Vector<TreeElement *> *lb,
+static void do_outliner_select_recursive(Span<TreeElement *> tree,
                                          bool selecting,
                                          Collection *in_collection)
 {
-  for (TreeElement *te : *lb) {
+  for (TreeElement *te : tree) {
     TreeStoreElem *tselem = TREESTORE(te);
     /* Recursive selection only on collections or objects. */
     if (can_select_recursive(te, in_collection)) {
@@ -1709,10 +1709,13 @@ static void do_outliner_select_recursive(Vector<TreeElement *> *lb,
          * the edge-case where there is an object which is part of this collection, but which has
          * children that are part of another collection. */
         do_outliner_select_recursive(
-            &te->subtree, selecting, static_cast<LayerCollection *>(te->directdata)->collection);
+                                     te->subtree
+                                     .as_span(),
+                                     selecting,
+                                     static_cast<LayerCollection *>(te->directdata)->collection);
       }
       else {
-        do_outliner_select_recursive(&te->subtree, selecting, in_collection);
+        do_outliner_select_recursive(te->subtree.as_span(), selecting, in_collection);
       }
     }
     else {
@@ -1721,14 +1724,14 @@ static void do_outliner_select_recursive(Vector<TreeElement *> *lb,
   }
 }
 
-static bool do_outliner_range_select_recursive(Vector<TreeElement *> *lb,
+static bool do_outliner_range_select_recursive(Span<TreeElement *> tree,
                                                TreeElement *active,
                                                TreeElement *cursor,
                                                bool selecting,
                                                const bool recurse,
                                                Collection *in_collection)
 {
-  for (TreeElement *te : *lb) {
+  for (TreeElement *te : tree) {
     TreeStoreElem *tselem = TREESTORE(te);
 
     bool can_select = !recurse || can_select_recursive(te, in_collection);
@@ -1754,7 +1757,13 @@ static bool do_outliner_range_select_recursive(Vector<TreeElement *> *lb,
         child_collection = static_cast<LayerCollection *>(te->directdata)->collection;
       }
       selecting = do_outliner_range_select_recursive(
-          &te->subtree, active, cursor, selecting, recurse, child_collection);
+                                                     te->subtree
+                                                     .as_span() ,
+                                                     active,
+                                                     cursor,
+                                                     selecting,
+                                                     recurse,
+                                                     child_collection);
     }
   }
 
@@ -1769,7 +1778,7 @@ static void do_outliner_range_select(bContext *C,
                                      const bool recurse,
                                      Collection *in_collection)
 {
-  TreeElement *active = outliner_find_element_with_flag(&space_outliner->runtime->tree,
+  TreeElement *active = outliner_find_element_with_flag(space_outliner->runtime->tree.as_span(),
                                                         TSE_ACTIVE);
 
   /* If no active element exists, activate the element under the cursor */
@@ -1789,7 +1798,7 @@ static void do_outliner_range_select(bContext *C,
   if (active == cursor) {
     outliner_item_select(C, space_outliner, cursor, OL_ITEM_SELECT);
     if (recurse) {
-      do_outliner_select_recursive(&cursor->subtree, true, in_collection);
+      do_outliner_select_recursive(cursor->subtree.as_span(), true, in_collection);
     }
     return;
   }
@@ -1801,14 +1810,15 @@ static void do_outliner_range_select(bContext *C,
   }
 
   do_outliner_range_select_recursive(
-      &space_outliner->runtime->tree, active, cursor, false, recurse, in_collection);
+                                     space_outliner->runtime->tree
+                                     .as_span(), active, cursor, false, recurse, in_collection);
 
   if (recurse) {
-    do_outliner_select_recursive(&cursor->subtree, true, in_collection);
+    do_outliner_select_recursive(cursor->subtree.as_span(), true, in_collection);
     /* Select children of active tree element. This is required when
      * range selecting from bottom to top, see #117224. */
     in_collection = outliner_collection_get_for_recursive(C, active);
-    do_outliner_select_recursive(&active->subtree, true, in_collection);
+    do_outliner_select_recursive(active->subtree.as_span(), true, in_collection);
   }
 }
 
@@ -1870,7 +1880,8 @@ static wmOperatorStatus outliner_item_do_activate_from_cursor(bContext *C,
   }
 
   if (!(te = outliner_find_item_at_y(
-            space_outliner, &space_outliner->runtime->tree, view_mval[1])))
+                                     space_outliner, space_outliner->runtime->tree
+                                     .as_span(), view_mval[1])))
   {
     if (deselect_all) {
       changed |= outliner_flag_set(*space_outliner, TSE_SELECTED, false);
@@ -1937,7 +1948,7 @@ static wmOperatorStatus outliner_item_do_activate_from_cursor(bContext *C,
         if (is_over_icon) {
           /* Select or deselect object hierarchy recursively. */
           outliner_item_select(C, space_outliner, activate_te, select_flag);
-          do_outliner_select_recursive(&activate_te->subtree, select, parent_collection);
+          do_outliner_select_recursive(activate_te->subtree.as_span(), select, parent_collection);
         }
         else {
           /* Double-clicked, but it wasn't on the icon. */
@@ -2082,7 +2093,8 @@ static wmOperatorStatus outliner_box_select_invoke(bContext *C,
 
   /* Find element clicked on */
   TreeElement *te = outliner_find_item_at_y(
-      space_outliner, &space_outliner->runtime->tree, view_mval[1]);
+                                            space_outliner, space_outliner->runtime->tree
+                                            .as_span(), view_mval[1]);
 
   /* Pass through if click is over name or icons, or not tweak event */
   if (te && tweak && outliner_item_is_co_over_name_icons(te, view_mval[0])) {
@@ -2151,8 +2163,8 @@ static TreeElement *outliner_find_previous_element(SpaceOutliner *space_outliner
 {
   if (te->parent) {
     /* Use parent if at beginning of list */
-    Vector<TreeElement *> &subtree = te->parent->subtree;
-    const int index = subtree.first_index_of(te);
+    Span<TreeElement *> subtree = te->parent->subtree.as_span();
+    const int index = subtree.first_index(te);
     if (index > 0) {
       te = outliner_find_rightmost_visible_child(space_outliner, subtree[index - 1]);
     }
@@ -2268,7 +2280,7 @@ static TreeElement *do_outliner_select_walk(SpaceOutliner *space_outliner,
  * Changed is set to true if the active element is found, or false if it was set */
 static TreeElement *find_walk_select_start_element(SpaceOutliner *space_outliner, bool *r_changed)
 {
-  TreeElement *active_te = outliner_find_element_with_flag(&space_outliner->runtime->tree,
+  TreeElement *active_te = outliner_find_element_with_flag(space_outliner->runtime->tree.as_span(),
                                                            TSE_ACTIVE);
   *r_changed = false;
 

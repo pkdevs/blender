@@ -202,7 +202,8 @@ static void get_element_operation_type(
 
 static TreeElement *get_target_element(const SpaceOutliner *space_outliner)
 {
-  TreeElement *te = outliner_find_element_with_flag(&space_outliner->runtime->tree, TSE_ACTIVE);
+  TreeElement *te = outliner_find_element_with_flag(space_outliner->runtime->tree.as_span(),
+                                                    TSE_ACTIVE);
 
   return te;
 }
@@ -632,7 +633,7 @@ static void outliner_do_libdata_operation_selection_set(bContext *C,
                                                         ReportList *reports,
                                                         Scene *scene,
                                                         SpaceOutliner *space_outliner,
-                                                        Vector<TreeElement *> &subtree,
+                                                        Span<TreeElement *> subtree,
                                                         const bool has_parent_selected,
                                                         outliner_operation_fn operation_fn,
                                                         eOutlinerLibOpSelectionSet selection_set)
@@ -650,7 +651,7 @@ static void outliner_do_libdata_operation_selection_set(bContext *C,
                                                 reports,
                                                 scene,
                                                 space_outliner,
-                                                element->subtree,
+                                                element->subtree.as_span(),
                                                 is_selected || has_parent_selected,
                                                 operation_fn,
                                                 selection_set);
@@ -806,7 +807,7 @@ struct MergedSearchData {
   TreeElement *select_element;
 };
 
-static void merged_element_search_fn_recursive(const Vector<TreeElement *> *tree,
+static void merged_element_search_fn_recursive(const Span<TreeElement *> tree,
                                                short tselem_type,
                                                short type,
                                                const char *str,
@@ -815,7 +816,7 @@ static void merged_element_search_fn_recursive(const Vector<TreeElement *> *tree
   char name[64];
   int iconid;
 
-  for (TreeElement *te : *tree) {
+  for (TreeElement *te : tree) {
     TreeStoreElem *tselem = TREESTORE(te);
 
     if (tree_element_id_type_to_index(te) == type && tselem_type == tselem->type) {
@@ -839,7 +840,7 @@ static void merged_element_search_fn_recursive(const Vector<TreeElement *> *tree
       }
     }
 
-    merged_element_search_fn_recursive(&te->subtree, tselem_type, type, str, items);
+    merged_element_search_fn_recursive(te->subtree.as_span(), tselem_type, type, str, items);
   }
 }
 
@@ -856,7 +857,11 @@ static void merged_element_search_update_fn(const bContext * /*C*/,
 
   int type = tree_element_id_type_to_index(te);
 
-  merged_element_search_fn_recursive(&parent->subtree, TREESTORE(te)->type, type, str, items);
+  merged_element_search_fn_recursive(parent->subtree.as_span(),
+                                     TREESTORE(te)->type,
+                                     type,
+                                     str,
+                                     items);
 }
 
 /* Activate an element from the merged element search menu */
@@ -1736,11 +1741,11 @@ void outliner_do_object_operation_ex(bContext *C,
                                      ReportList *reports,
                                      Scene *scene_act,
                                      SpaceOutliner *space_outliner,
-                                     Vector<TreeElement *> *lb,
+                                     Span<TreeElement *> tree,
                                      outliner_operation_fn operation_fn,
                                      bool recurse_selected)
 {
-  for (TreeElement *te : *lb) {
+  for (TreeElement *te : tree) {
     TreeStoreElem *tselem = TREESTORE(te);
     bool select_handled = false;
     if (tselem->flag & TSE_SELECTED) {
@@ -1760,7 +1765,8 @@ void outliner_do_object_operation_ex(bContext *C,
     if (TSELEM_OPEN(tselem, space_outliner)) {
       if ((select_handled == false) || recurse_selected) {
         outliner_do_object_operation_ex(
-            C, reports, scene_act, space_outliner, &te->subtree, operation_fn, recurse_selected);
+                                        C, reports, scene_act, space_outliner, te->subtree
+                                        .as_span(), operation_fn, recurse_selected);
       }
     }
   }
@@ -1770,10 +1776,10 @@ void outliner_do_object_operation(bContext *C,
                                   ReportList *reports,
                                   Scene *scene_act,
                                   SpaceOutliner *space_outliner,
-                                  Vector<TreeElement *> *lb,
+                                  Span<TreeElement *> tree,
                                   outliner_operation_fn operation_fn)
 {
-  outliner_do_object_operation_ex(C, reports, scene_act, space_outliner, lb, operation_fn, true);
+  outliner_do_object_operation_ex(C, reports, scene_act, space_outliner, tree, operation_fn, true);
 }
 
 /** \} */
@@ -2123,7 +2129,7 @@ void OUTLINER_OT_liboverride_troubleshoot_operation(wmOperatorType *ot)
 static void outliner_do_liboverride_property_selection_set(bContext *C,
                                                            ReportList *reports,
                                                            Scene *scene,
-                                                           Vector<TreeElement *> &subtree,
+                                                           Span<TreeElement *> subtree,
                                                            const bool has_parent_selected,
                                                            outliner_operation_fn operation_fn)
 {
@@ -2142,7 +2148,8 @@ static void outliner_do_liboverride_property_selection_set(bContext *C,
      * also have been changed in the visitor callback. */
 
     outliner_do_liboverride_property_selection_set(
-        C, reports, scene, element->subtree, is_selected, operation_fn);
+                                                   C, reports, scene, element->subtree
+                                                   .as_span(), is_selected, operation_fn);
   }
 }
 
@@ -2792,7 +2799,8 @@ static wmOperatorStatus outliner_object_operation_exec(bContext *C, wmOperator *
     case OL_OP_SELECT: {
       Scene *sce = scene; /* To be able to delete, scenes are set... */
       outliner_do_object_operation(
-          C, op->reports, scene, space_outliner, &space_outliner->runtime->tree, object_select_fn);
+                                   C, op->reports, scene, space_outliner, space_outliner->runtime->tree
+                                   .as_span(), object_select_fn);
       /* FIXME: This is most certainly broken, maybe check should rather be
        * `if (CTX_data_scene(C) != scene)` ? */
       if (scene != sce) {
@@ -2809,7 +2817,7 @@ static wmOperatorStatus outliner_object_operation_exec(bContext *C, wmOperator *
                                       op->reports,
                                       scene,
                                       space_outliner,
-                                      &space_outliner->runtime->tree,
+                                      space_outliner->runtime->tree.as_span(),
                                       object_select_hierarchy_fn,
                                       false);
       /* FIXME: This is most certainly broken, maybe check should rather be
@@ -2826,7 +2834,7 @@ static wmOperatorStatus outliner_object_operation_exec(bContext *C, wmOperator *
                                    op->reports,
                                    scene,
                                    space_outliner,
-                                   &space_outliner->runtime->tree,
+                                   space_outliner->runtime->tree.as_span(),
                                    object_deselect_fn);
       str = CTX_N_(BLT_I18NCONTEXT_OPERATOR_DEFAULT, "Deselect Objects");
       selection_changed = true;
@@ -2842,7 +2850,8 @@ static wmOperatorStatus outliner_object_operation_exec(bContext *C, wmOperator *
     }
     case OL_OP_RENAME:
       outliner_do_object_operation(
-          C, op->reports, scene, space_outliner, &space_outliner->runtime->tree, item_rename_fn);
+                                   C, op->reports, scene, space_outliner, space_outliner->runtime->tree
+                                   .as_span(), item_rename_fn);
       str = CTX_N_(BLT_I18NCONTEXT_OPERATOR_DEFAULT, "Rename Object");
       break;
     default:
@@ -2970,7 +2979,7 @@ static wmOperatorStatus outliner_delete_exec(bContext *C, wmOperator *op)
   object_delete_data.is_liboverride_allowed = false;
   object_delete_data.is_liboverride_hierarchy_root_allowed = delete_hierarchy;
   outliner_tree_traverse(space_outliner,
-                         &space_outliner->runtime->tree,
+                         space_outliner->runtime->tree.as_span(),
                          0,
                          TSE_SELECTED,
                          outliner_collect_objects_to_delete,
@@ -4076,7 +4085,8 @@ static wmOperatorStatus outliner_operation_invoke(bContext *C,
       &region->v2d, event->mval[0], event->mval[1], &view_mval[0], &view_mval[1]);
 
   TreeElement *hovered_te = outliner_find_item_at_y(
-      space_outliner, &space_outliner->runtime->tree, view_mval[1]);
+                                                    space_outliner, space_outliner->runtime->tree
+                                                    .as_span(), view_mval[1]);
   if (!hovered_te) {
     /* Let this fall through to 'OUTLINER_MT_context_menu'. */
     return OPERATOR_PASS_THROUGH;

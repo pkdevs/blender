@@ -81,14 +81,14 @@ void TreeElementIDArmature::expand_edit_bones() const
 
 /* special handling of hierarchical non-lib data */
 static void outliner_add_bone(SpaceOutliner *space_outliner,
-                              Vector<TreeElement *> *lb,
+                              Vector<TreeElement *> *tree,
                               ID *id,
                               Bone *curBone,
                               TreeElement *parent,
                               int *a)
 {
   TreeElement *te = AbstractTreeDisplay::add_element(
-      space_outliner, lb, id, curBone, parent, TSE_BONE, *a);
+      space_outliner, tree, id, curBone, parent, TSE_BONE, *a);
 
   (*a)++;
 
