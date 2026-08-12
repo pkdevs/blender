@@ -274,16 +274,15 @@ void blo_do_versions_503(FileData * /*fd*/, Library * /*lib*/, Main *bmain)
     };
 
     for (Mesh &mesh : bmain->meshes) {
-      validate_active_index_fn(AttributeOwner::from_id(&mesh.id),
-                                                              mesh.attributes_active_index);
+      validate_active_index_fn(AttributeOwner::from_id(&mesh.id), mesh.attributes_active_index);
     }
     for (Curves &curves : bmain->hair_curves) {
-      validate_active_index_fn(
-          AttributeOwner::from_id(&curves.id), curves.geometry.attributes_active_index);
+      validate_active_index_fn(AttributeOwner::from_id(&curves.id),
+                               curves.geometry.attributes_active_index);
     }
     for (GreasePencil &grease_pencil : bmain->grease_pencils) {
-      validate_active_index_fn(
-          AttributeOwner::from_id(&grease_pencil.id), grease_pencil.attributes_active_index);
+      validate_active_index_fn(AttributeOwner::from_id(&grease_pencil.id),
+                               grease_pencil.attributes_active_index);
       /* Also check the attributes_active_index in the individual drawings */
       for (GreasePencilDrawingBase *drawing_base : grease_pencil.drawings()) {
         if (drawing_base->type == GP_DRAWING) {
@@ -295,8 +294,8 @@ void blo_do_versions_503(FileData * /*fd*/, Library * /*lib*/, Main *bmain)
       }
     }
     for (PointCloud &pointcloud : bmain->pointclouds) {
-      validate_active_index_fn(
-          AttributeOwner::from_id(&pointcloud.id), pointcloud.attributes_active_index);
+      validate_active_index_fn(AttributeOwner::from_id(&pointcloud.id),
+                               pointcloud.attributes_active_index);
     }
   }
   /**
