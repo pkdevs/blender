@@ -731,8 +731,7 @@ class _defs_view3d_add:
             widget="VIEW3D_GGT_placement",
             keymap="3D View Tool: Object, Add Primitive",
             draw_settings=draw_settings,
-            )
-
+        )
 
     @ToolDef.from_fn
     def ico_sphere_add():

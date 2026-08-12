@@ -891,7 +891,7 @@ void bmo_create_quadsphere_exec(BMesh *bm, BMOperator *op)
     BMIter liter;
     BMLoop *l;
     BM_ITER_ELEM (l, &liter, f, BM_LOOPS_OF_FACE) {
-    BMO_edge_flag_enable(bm, l->e, EDGE_MARK);
+      BMO_edge_flag_enable(bm, l->e, EDGE_MARK);
     }
 
     if (calc_uvs) {
@@ -901,45 +901,48 @@ void bmo_create_quadsphere_exec(BMesh *bm, BMOperator *op)
   if (calc_uvs) {
     BM_mesh_calc_uvs_cube(bm, FACE_MARK);
   }
-    BMOperator bmop;
-    BMO_op_initf(bm,
-                 &bmop,
-                 op->flag,
-                 "subdivide_edges edges=%fe "
-                 "cuts=%i "
-                 "use_grid_fill=%b",
-                 EDGE_MARK,
-                 (1 << (subdiv - 1)) - 1,
-                 true);
-    BMO_op_exec(bm, &bmop);
-    BMO_slot_buffer_flag_enable(bm, bmop.slots_out, "geom.out", BM_VERT, VERT_MARK);
-    BMO_slot_buffer_flag_enable(bm, bmop.slots_out, "geom.out", BM_EDGE, EDGE_MARK);
-    BMO_op_finish(bm, &bmop);
-    BMVert *v;
-    BMIter viter;
-    BM_ITER_MESH(v, &viter, bm, BM_VERTS_OF_MESH) {
-      float co[3];
-      copy_v3_v3(co, v->co);
-      // Source https://mathoverflow.net/questions/446657/mapping-a-cube-to-a-sphere
-      float x = co[0];
-      float y = co[1];
-      float z = co[2];
-      int p = 500;
-      float xc = std::sqrt(std::pow(x, p) + y * y + z * z) * std::tan(x * std::atan(1 / std::sqrt(std::pow(x, p) + y * y + z * z)));
-      float yc = std::sqrt(x * x + std::pow(y, p) + z * z) * std::tan(y * std::atan(1 / std::sqrt(x * x + std::pow(y, p) + z * z)));
-      float zc = std::sqrt(x * x + y * y + std::pow(z, p)) * std::tan(z * std::atan(1 / std::sqrt(x * x + y * y + std::pow(z, p))));
-      float n = std::sqrt(xc * xc + yc * yc + zc * zc);
-      co[0] = xc / n;
-      co[1] = yc / n;
-      co[2] = zc / n;
-      // Apply the radius
-      co[0] = co[0] * rad;
-      co[1] = co[1] * rad;
-      co[2] = co[2] * rad;
-      mul_m4_v3(mat, co);
-      copy_v3_v3(v->co, co);
-    }
-    BMO_slot_buffer_from_enabled_flag(bm, op, op->slots_out, "verts.out", BM_VERT, VERT_MARK);
+  BMOperator bmop;
+  BMO_op_initf(bm,
+               &bmop,
+               op->flag,
+               "subdivide_edges edges=%fe "
+               "cuts=%i "
+               "use_grid_fill=%b",
+               EDGE_MARK,
+               (1 << (subdiv - 1)) - 1,
+               true);
+  BMO_op_exec(bm, &bmop);
+  BMO_slot_buffer_flag_enable(bm, bmop.slots_out, "geom.out", BM_VERT, VERT_MARK);
+  BMO_slot_buffer_flag_enable(bm, bmop.slots_out, "geom.out", BM_EDGE, EDGE_MARK);
+  BMO_op_finish(bm, &bmop);
+  BMVert *v;
+  BMIter viter;
+  BM_ITER_MESH (v, &viter, bm, BM_VERTS_OF_MESH) {
+    float co[3];
+    copy_v3_v3(co, v->co);
+    // Source https://mathoverflow.net/questions/446657/mapping-a-cube-to-a-sphere
+    float x = co[0];
+    float y = co[1];
+    float z = co[2];
+    int p = 500;
+    float xc = std::sqrt(std::pow(x, p) + y * y + z * z) *
+               std::tan(x * std::atan(1 / std::sqrt(std::pow(x, p) + y * y + z * z)));
+    float yc = std::sqrt(x * x + std::pow(y, p) + z * z) *
+               std::tan(y * std::atan(1 / std::sqrt(x * x + std::pow(y, p) + z * z)));
+    float zc = std::sqrt(x * x + y * y + std::pow(z, p)) *
+               std::tan(z * std::atan(1 / std::sqrt(x * x + y * y + std::pow(z, p))));
+    float n = std::sqrt(xc * xc + yc * yc + zc * zc);
+    co[0] = xc / n;
+    co[1] = yc / n;
+    co[2] = zc / n;
+    // Apply the radius
+    co[0] = co[0] * rad;
+    co[1] = co[1] * rad;
+    co[2] = co[2] * rad;
+    mul_m4_v3(mat, co);
+    copy_v3_v3(v->co, co);
+  }
+  BMO_slot_buffer_from_enabled_flag(bm, op, op->slots_out, "verts.out", BM_VERT, VERT_MARK);
 }
 
 void bmo_create_uvsphere_exec(BMesh *bm, BMOperator *op)

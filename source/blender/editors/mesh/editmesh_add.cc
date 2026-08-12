@@ -704,7 +704,8 @@ void MESH_OT_primitive_monkey_add(wmOperatorType *ot)
   ed::object::add_generic_props(ot, true);
 }
 
-static wmOperatorStatus add_primitive_quadsphere_exec(bContext *C, wmOperator *op) {
+static wmOperatorStatus add_primitive_quadsphere_exec(bContext *C, wmOperator *op)
+{
   MakePrimitiveData creation_data;
   Object *obedit;
   float loc[3], rot[3], scale[3];
@@ -724,16 +725,17 @@ static wmOperatorStatus add_primitive_quadsphere_exec(bContext *C, wmOperator *o
                           local_view_bits,
                           &creation_data);
 
-  if (!make_prim_from_bmo_args(C,
-                               op,
-                               obedit,
-                               &creation_data,
-                               calc_uvs,
-                               "create_quadsphere subdivisions=%i radius=%f matrix=%m4 calc_uvs=%b",
-                               RNA_int_get(op->ptr, "subdivisions"),
-                               RNA_float_get(op->ptr, "radius"),
-                               creation_data.mat,
-                               calc_uvs))
+  if (!make_prim_from_bmo_args(
+          C,
+          op,
+          obedit,
+          &creation_data,
+          calc_uvs,
+          "create_quadsphere subdivisions=%i radius=%f matrix=%m4 calc_uvs=%b",
+          RNA_int_get(op->ptr, "subdivisions"),
+          RNA_float_get(op->ptr, "radius"),
+          creation_data.mat,
+          calc_uvs))
   {
     return OPERATOR_CANCELLED;
   }
@@ -748,7 +750,8 @@ void MESH_OT_primitive_quad_sphere_add(wmOperatorType *ot)
 {
   /* identifiers */
   ot->name = "Add quadsphere";
-  ot->description = "Construct a spherical mesh from a subdivided cube, consisting entirely of four-sided faces";
+  ot->description =
+      "Construct a spherical mesh from a subdivided cube, consisting entirely of four-sided faces";
   ot->idname = "MESH_OT_primitive_quad_sphere_add";
   /* API callbacks. */
   ot->exec = add_primitive_quadsphere_exec;
