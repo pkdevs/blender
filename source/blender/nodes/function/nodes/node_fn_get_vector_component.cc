@@ -7,7 +7,7 @@
 #include "node_function_util.hh"
 #include "node_shader_util.hh"
 
-namespace blender::nodes::node_fn_vector_component_cc {
+namespace blender::nodes::node_fn_get_vector_component_cc {
 
 static void node_declare(NodeDeclarationBuilder &b)
 {
@@ -19,7 +19,7 @@ static void node_declare(NodeDeclarationBuilder &b)
 
 static void node_build_multi_function(NodeMultiFunctionBuilder &builder)
 {
-  static auto fn = mf::build::SI2_SO<float3, int, float>("vector_component",
+  static auto fn = mf::build::SI2_SO<float3, int, float>("get_vector_component",
                                                          [](const float3 &vec, const int index) {
                                                            if (index >= 0 && index <= 2) {
                                                              return vec[index];
@@ -35,7 +35,7 @@ static int node_gpu_material(GPUMaterial *mat,
                              GPUNodeStack *in,
                              GPUNodeStack *out)
 {
-  return GPU_stack_link(mat, node, "node_vector_component", in, out);
+  return GPU_stack_link(mat, node, "node_get_vector_component", in, out);
 }
 
 NODE_SHADER_MATERIALX_BEGIN
@@ -61,8 +61,8 @@ static void node_register()
 {
   static bke::bNodeType ntype;
 
-  common_node_type_base(&ntype, "FunctionNodeVectorComponent"_ustr);
-  ntype.ui_name = "Vector Component";
+  common_node_type_base(&ntype, "FunctionNodeGetVectorComponent"_ustr);
+  ntype.ui_name = "Get Vector Component";
   ntype.ui_description = "Get the X, Y or Z component of a vector by index";
   ntype.nclass = NODE_CLASS_CONVERTER;
   ntype.declare = node_declare;
@@ -73,4 +73,4 @@ static void node_register()
 }
 NOD_REGISTER_NODE(node_register)
 
-}  // namespace blender::nodes::node_fn_vector_component_cc
+}  // namespace blender::nodes::node_fn_get_vector_component_cc

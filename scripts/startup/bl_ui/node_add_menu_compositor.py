@@ -325,6 +325,7 @@ class NODE_MT_compositor_node_vector_base(node_add_menu.NodeMenu):
     def draw(self, context):
         layout = self.layout
         self.node_operator(layout, "ShaderNodeCombineXYZ")
+        self.node_operator(layout, "FunctionNodeGetVectorComponent")
         props = self.node_operator(layout, "ShaderNodeMapRange")
         ops = props.settings.add()
         ops.name = "data_type"
@@ -334,7 +335,6 @@ class NODE_MT_compositor_node_vector_base(node_add_menu.NodeMenu):
         ops.name = "data_type"
         ops.value = "'VECTOR'"
         self.node_operator(layout, "ShaderNodeSeparateXYZ")
-        self.node_operator(layout, "FunctionNodeVectorComponent")
         layout.separator()
         self.node_operator(layout, "ShaderNodeRadialTiling")
         self.node_operator(layout, "ShaderNodeVectorCurve")

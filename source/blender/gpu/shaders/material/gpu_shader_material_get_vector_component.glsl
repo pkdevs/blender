@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
 [[node]]
-void node_vector_component(float3 vector, int index, float &result)
+void node_get_vector_component(float3 vector, int index, float &result)
 {
   if (index >= 0 && index <= 2) {
     result = vector[index];

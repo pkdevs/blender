@@ -63,9 +63,9 @@ ccl_device void svm_node_separate_vector(ccl_private float *ccl_restrict stack,
 }
 
 template<typename Float3Type>
-ccl_device void svm_node_vector_component(ccl_private float *ccl_restrict stack,
-                                          const ccl_global SVMNodeVectorComponent &ccl_restrict
-                                              node)
+ccl_device void svm_node_get_vector_component(
+    ccl_private float *ccl_restrict stack,
+    const ccl_global SVMNodeGetVectorComponent &ccl_restrict node)
 {
   const Float3Type vector = stack_load<Float3Type>(stack, node.vector);
   const int index = stack_load(stack, node.index);

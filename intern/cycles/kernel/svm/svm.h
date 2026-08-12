@@ -537,13 +537,15 @@ ccl_device void svm_eval_nodes(KernelGlobals kg,
         svm_node_combine_vector<dual3>(stack, svm_node_get<SVMNodeCombineVector>(kg, &offset));
       }
       break;
-      SVM_CASE(NODE_VECTOR_COMPONENT)
-      svm_node_vector_component<float3>(stack, svm_node_get<SVMNodeVectorComponent>(kg, &offset));
+      SVM_CASE(NODE_GET_VECTOR_COMPONENT)
+      svm_node_get_vector_component<float3>(stack,
+                                            svm_node_get<SVMNodeGetVectorComponent>(kg, &offset));
       break;
-      SVM_CASE(NODE_VECTOR_COMPONENT_DERIVATIVE)
+      SVM_CASE(NODE_GET_VECTOR_COMPONENT_DERIVATIVE)
       IF_NOT_KERNEL_NODES_FEATURE(VOLUME)
       {
-        svm_node_vector_component<dual3>(stack, svm_node_get<SVMNodeVectorComponent>(kg, &offset));
+        svm_node_get_vector_component<dual3>(stack,
+                                             svm_node_get<SVMNodeGetVectorComponent>(kg, &offset));
       }
       break;
       SVM_CASE(NODE_VECTOR_ROTATE)
