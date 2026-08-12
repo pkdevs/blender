@@ -5,3 +5,4 @@ Referenced by issue #64572, Blender cant find my gpu for cycles cuda
 Referenced by issue #64530, Blender 2.8 crashes on de-selecting verts in mesh edit mode
 Referenced by issue #64503, Crash when switching between uv editor and 3d view
 Referenced by issue #64464, App crashes when navigating between UV Editor and Viewport and selecting via A or Alt-A or clicking.
+Referenced by pull request #162592, Refactor: remove drag toggle support for 3+ states
