@@ -36,12 +36,8 @@ namespace blender {
  * Used after transform operations.
  * \{ */
 
-static bool edbm_automerge_impl(Object *obedit,
-                                bool update,
-                                const char hflag,
-                                const float dist,
-                                const bool use_connected,
-                                const bool use_centroid)
+static bool edbm_automerge_impl(
+    Object *obedit, bool update, const char hflag, const float dist, const bool use_connected)
 {
   BMEditMesh *em = BKE_editmesh_from_object(obedit);
   BMesh *bm = em->bm;
@@ -62,7 +58,7 @@ static bool edbm_automerge_impl(Object *obedit,
   BMO_op_exec(bm, &findop);
 
   /* weld the vertices */
-  BMO_op_initf(bm, &weldop, BMO_FLAG_DEFAULTS, "weld_verts use_centroid=%b", use_centroid);
+  BMO_op_init(bm, &weldop, BMO_FLAG_DEFAULTS, "weld_verts");
   BMO_slot_copy(&findop, slots_out, "targetmap.out", &weldop, slots_in, "targetmap");
   BMO_op_exec(bm, &weldop);
 
@@ -80,15 +76,14 @@ static bool edbm_automerge_impl(Object *obedit,
   return changed;
 }
 
-bool EDBM_automerge(
-    Object *obedit, bool update, const char hflag, const float dist, const bool use_centroid)
+bool EDBM_automerge(Object *obedit, bool update, const char hflag, const float dist)
 {
-  return edbm_automerge_impl(obedit, update, hflag, dist, false, use_centroid);
+  return edbm_automerge_impl(obedit, update, hflag, dist, false);
 }
 
 bool EDBM_automerge_connected(Object *obedit, bool update, const char hflag, const float dist)
 {
-  return edbm_automerge_impl(obedit, update, hflag, dist, true, false);
+  return edbm_automerge_impl(obedit, update, hflag, dist, true);
 }
 
 /** \} */

@@ -2151,7 +2151,7 @@ static void special_aftertrans_update__mesh(bContext * /*C*/, TransInfo *t)
             tc->obedit, true, true, true, hflag, t->scene->toolsettings->doublimit);
       }
       else {
-        EDBM_automerge(tc->obedit, true, hflag, t->scene->toolsettings->doublimit, false);
+        EDBM_automerge(tc->obedit, true, hflag, t->scene->toolsettings->doublimit);
       }
 
       /* Special case, this is needed or faces won't re-select.
