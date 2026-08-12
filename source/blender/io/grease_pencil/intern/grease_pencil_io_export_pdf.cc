@@ -53,7 +53,8 @@ class PDFExporter : public GreasePencilExporter {
                   const VArray<bool> &cyclic,
                   const VArray<int8_t> &types,
                   const ColorGeometry4f &color,
-                  const float opacity,
+                  const float stroke_opacity,
+                  const float fill_opacity,
                   std::optional<float> width,
                   std::optional<float> miter_limit_angle);
   bool write_to_file(StringRefNull filepath);
@@ -180,7 +181,8 @@ void PDFExporter::export_grease_pencil_layer(const Object &object,
                          const VArray<bool> &cyclic,
                          const VArray<int8_t> &types,
                          const ColorGeometry4f &color,
-                         const float opacity,
+                         const float stroke_opacity,
+                         const float fill_opacity,
                          const std::optional<float> width,
                          const std::optional<float> miter_limit_angle,
                          const bool /*round_cap*/,
@@ -192,7 +194,8 @@ void PDFExporter::export_grease_pencil_layer(const Object &object,
                cyclic,
                types,
                color,
-               opacity,
+               stroke_opacity,
+               fill_opacity,
                width,
                miter_limit_angle);
   };
@@ -254,7 +257,8 @@ void PDFExporter::write_path(const float4x4 &transform,
                              const VArray<bool> &cyclic,
                              const VArray<int8_t> & /*types*/,
                              const ColorGeometry4f &color,
-                             const float opacity,
+                             const float stroke_opacity,
+                             const float fill_opacity,
                              std::optional<float> width,
                              std::optional<float> miter_limit_angle)
 {
@@ -278,10 +282,13 @@ void PDFExporter::write_path(const float4x4 &transform,
     HPDF_Page_SetLineWidth(page_, std::max(*width, 1.0f));
   }
 
-  const float total_opacity = color.a * opacity;
+  const float total_stroke_opacity = color.a * stroke_opacity;
+  const float total_fill_opacity = color.a * fill_opacity;
 
   HPDF_Page_GSave(page_);
-  HPDF_ExtGState gstate = (total_opacity < 1.0f) ? HPDF_CreateExtGState(pdf_) : nullptr;
+  HPDF_ExtGState gstate = (total_stroke_opacity < 1.0f || total_fill_opacity < 1.0f) ?
+                              HPDF_CreateExtGState(pdf_) :
+                              nullptr;
 
   ColorGeometry4f srgb;
   linearrgb_to_srgb_v3_v3(srgb, color);
@@ -289,14 +296,14 @@ void PDFExporter::write_path(const float4x4 &transform,
     HPDF_Page_SetRGBFill(page_, srgb.r, srgb.g, srgb.b);
     HPDF_Page_SetRGBStroke(page_, srgb.r, srgb.g, srgb.b);
     if (gstate) {
-      HPDF_ExtGState_SetAlphaFill(gstate, std::clamp(total_opacity, 0.0f, 1.0f));
-      HPDF_ExtGState_SetAlphaStroke(gstate, std::clamp(total_opacity, 0.0f, 1.0f));
+      HPDF_ExtGState_SetAlphaFill(gstate, std::clamp(total_fill_opacity, 0.0f, 1.0f));
+      HPDF_ExtGState_SetAlphaStroke(gstate, std::clamp(total_stroke_opacity, 0.0f, 1.0f));
     }
   }
   else {
     HPDF_Page_SetRGBFill(page_, srgb.r, srgb.g, srgb.b);
     if (gstate) {
-      HPDF_ExtGState_SetAlphaFill(gstate, std::clamp(total_opacity, 0.0f, 1.0f));
+      HPDF_ExtGState_SetAlphaFill(gstate, std::clamp(total_fill_opacity, 0.0f, 1.0f));
     }
   }
   if (gstate) {

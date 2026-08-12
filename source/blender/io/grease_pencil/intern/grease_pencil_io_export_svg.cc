@@ -339,7 +339,8 @@ void SVGExporter::export_grease_pencil_layer(pugi::xml_node layer_node,
                          const VArray<bool> &cyclic,
                          const VArray<int8_t> &types,
                          const ColorGeometry4f &color,
-                         const float opacity,
+                         const float stroke_opacity,
+                         const float fill_opacity,
                          const std::optional<float> width,
                          const std::optional<float> miter_limit_angle,
                          const bool round_cap,
@@ -356,17 +357,18 @@ void SVGExporter::export_grease_pencil_layer(pugi::xml_node layer_node,
                                              width);
 
     if (is_outline) {
-      write_fill_color_attribute(element_node, color, opacity);
+      write_fill_color_attribute(element_node, color, fill_opacity);
       /* Outlines might self-overlap which creates visual holes with the `even-odd` fill rule. */
       element_node.append_attribute("fill-rule").set_value("nonzero");
     }
     else {
       element_node.append_attribute("fill-rule").set_value("evenodd");
       if (width) {
-        write_stroke_color_attribute(element_node, color, opacity, miter_limit_angle, round_cap);
+        write_stroke_color_attribute(
+            element_node, color, stroke_opacity, miter_limit_angle, round_cap);
       }
       else {
-        write_fill_color_attribute(element_node, color, opacity);
+        write_fill_color_attribute(element_node, color, fill_opacity);
       }
     }
   };
