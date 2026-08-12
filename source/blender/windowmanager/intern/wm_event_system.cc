@@ -2619,34 +2619,34 @@ static void wm_event_modalkeymap_end(wmEvent *event, const wmEvent_ModalMapStore
 }
 
 /**
- * Return the last operator handler with OPTYPE_MODAL_PRIORITY, or nullptr if none exists.
- */
-static wmEventHandler *wm_handler_last_priority_find(ListBaseT<wmEventHandler> *handlers)
-{
-  wmEventHandler *last_priority_handler = nullptr;
-  for (wmEventHandler &handler_iter : *handlers) {
-    if (handler_iter.type == WM_HANDLER_TYPE_OP) {
-      wmEventHandler_Op *handler_iter_op = reinterpret_cast<wmEventHandler_Op *>(&handler_iter);
-      if (handler_iter_op->op != nullptr) {
-        if (handler_iter_op->op->type->flag & OPTYPE_MODAL_PRIORITY) {
-          last_priority_handler = &handler_iter;
-        }
-      }
-    }
-  }
-  return last_priority_handler;
-}
-
-/**
  * Insert modal operator into list of modal handlers, respecting priority.
  */
 static void wm_handler_operator_insert(wmWindow *win, wmEventHandler_Op *handler)
 {
   if (!(handler->op->type->flag & OPTYPE_MODAL_PRIORITY)) {
     /* Keep priority operators in front. */
-    wmEventHandler *last_priority_handler = wm_handler_last_priority_find(
-        &win->runtime->modalhandlers);
-    if (last_priority_handler != nullptr) {
+    wmEventHandler *last_priority_handler = nullptr;
+    for (wmEventHandler &handler_iter : win->runtime->modalhandlers) {
+      if (handler_iter.type == WM_HANDLER_TYPE_OP) {
+        wmEventHandler_Op *handler_iter_op = reinterpret_cast<wmEventHandler_Op *>(&handler_iter);
+        if (handler_iter_op->op != nullptr) {
+          if (handler_iter_op->op->type->flag & OPTYPE_MODAL_PRIORITY) {
+            last_priority_handler = &handler_iter;
+            continue;
+          }
+        }
+      }
+
+      /* Stop at other UI handlers like popups. We don't want to disturb the relative
+       * order of modal operators from those popups, e.g. dragging in the color picker.
+       * Otherwise the popup UI handler may free data used by the modal operator.
+       *
+       * This means modal operator priority order is not strictly preserved in those
+       * cases, but menus and popups are intentionally excluded from this order. */
+      break;
+    }
+
+    if (last_priority_handler) {
       BLI_insertlinkafter(&win->runtime->modalhandlers, last_priority_handler, handler);
       return;
     }
@@ -5225,13 +5225,7 @@ wmEventHandler_UI *WM_event_add_ui_handler(const bContext *C,
   BLI_assert((flag & WM_HANDLER_DO_FREE) == 0);
   handler->head.flag = flag;
 
-  wmEventHandler *last_priority_handler = wm_handler_last_priority_find(handlers);
-  if (last_priority_handler != nullptr) {
-    BLI_insertlinkafter(handlers, last_priority_handler, handler);
-  }
-  else {
-    BLI_addhead(handlers, handler);
-  }
+  BLI_addhead(handlers, handler);
 
   return handler;
 }
