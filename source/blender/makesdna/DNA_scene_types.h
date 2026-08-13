@@ -2885,7 +2885,8 @@ struct Scene {
   char autocycle_renderslot = 0;
 
   eScenePlaybackLoopMode playback_loop_mode = SCE_LOOP_MODE_INFINITE;
-  char _pad7[3] = {};
+
+  char _pad7[2] = {};
 
   /* User-Defined KeyingSets. */
   /**
