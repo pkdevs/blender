@@ -1,1 +1,2 @@
 Referenced by commit f26d7268bf8, Silence warning introduced in f7f3b2d31823
+Referenced by commit 18c68e69c3b8b9abe98e7f60560f519b65640132, Fix: VSE: Images show multi-view even when "Use Multi-View" is unset
