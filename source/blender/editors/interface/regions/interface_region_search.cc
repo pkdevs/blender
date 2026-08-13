@@ -101,6 +101,11 @@ struct uiSearchboxData {
 
 #define SEARCH_ITEMS 10
 
+int search_items()
+{
+  return U.search_menu_items;
+}
+
 bool search_item_add(SearchItems *items,
                      const StringRef name,
                      void *poin,
@@ -170,7 +175,7 @@ bool search_item_add(SearchItems *items,
 
 int searchbox_size_y()
 {
-  return SEARCH_ITEMS * UI_UNIT_Y + 2 * UI_SEARCHBOX_TRIA_H;
+  return search_items() * UI_UNIT_Y + 2 * UI_SEARCHBOX_TRIA_H;
 }
 
 int searchbox_size_x()
@@ -307,7 +312,7 @@ static void searchbox_butrect(rcti *r_rect, uiSearchboxData *data, int itemnr)
   }
   /* list view */
   else {
-    const float buth = (BLI_rcti_size_y(&data->bbox) - 2.0f * tria_h) / SEARCH_ITEMS;
+    const float buth = (BLI_rcti_size_y(&data->bbox) - 2.0f * tria_h) / search_items();
 
     *r_rect = data->bbox;
 
@@ -1046,7 +1051,7 @@ static ARegion *searchbox_create_generic_ex(bContext *C,
     data->items.maxitem = data->prv_rows * data->prv_cols;
   }
   else {
-    data->items.maxitem = SEARCH_ITEMS;
+    data->items.maxitem = search_items();
   }
   /* In case the button's string is dynamic, make sure there are buffers available. */
   data->items.maxstrlen = but->hardmax == 0 ? UI_MAX_NAME_STR : but->hardmax;

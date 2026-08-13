@@ -1154,7 +1154,7 @@ struct UserDef {
   /** eUserpref_ShaderCompileMethod (OpenGL only). */
   eUserpref_ShaderCompileMethod shader_compilation_method = USER_SHADER_COMPILE_THREAD;
 
-  char _pad16[2] = {};
+  short search_menu_items = 10;
 
   /** #GPUBackendType */
   eUserPref_GPUBackendType gpu_backend = USER_GPU_BACKEND_DEFAULT;

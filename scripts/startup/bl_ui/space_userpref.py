@@ -412,6 +412,15 @@ class USERPREF_PT_interface_menus_pie(InterfacePanel, CenterAlignMixIn, Panel):
         flow.prop(view, "pie_menu_threshold")
         flow.prop(view, "pie_menu_confirm")
 
+class USERPREF_PT_interface_menus_search(InterfacePanel, CenterAlignMixIn, Panel):
+    bl_label = "Search Menu"
+    bl_parent_id = "USERPREF_PT_interface_menus"
+
+    def draw_centered(self, context, layout):
+        prefs = context.preferences
+        view = prefs.view
+
+        layout.prop(view, "search_menu_items", text="Items")
 
 # -----------------------------------------------------------------------------
 # Editing Panels
@@ -3082,6 +3091,7 @@ classes = (
     USERPREF_PT_interface_menus,
     USERPREF_PT_interface_menus_mouse_over,
     USERPREF_PT_interface_menus_pie,
+    USERPREF_PT_interface_menus_search,
 
     USERPREF_PT_viewport_display,
     USERPREF_PT_viewport_quality,
