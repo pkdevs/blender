@@ -175,7 +175,7 @@ static void add_this_collection(Collection &collection,
   int base_flag = (mode == DAG_EVAL_VIEWPORT) ? BASE_ENABLED_VIEWPORT : BASE_ENABLED_RENDER;
   int object_visibility_flag = (mode == DAG_EVAL_VIEWPORT) ? OB_HIDE_VIEWPORT : OB_HIDE_RENDER;
   FOREACH_COLLECTION_OBJECT_RECURSIVE_BEGIN (&collection, ob) {
-    if ((_base->flag & base_flag) || (ob->visibility_flag & object_visibility_flag)) {
+    if ((!(_base->flag & base_flag)) || (ob->visibility_flag & object_visibility_flag)) {
       /* If an object is hidden, we check if they have animated visibility flag so it can be
        * visible some point later, that way the object will still be taken into account when
        * calculating lines without re-building dependencies with the modifier. */
