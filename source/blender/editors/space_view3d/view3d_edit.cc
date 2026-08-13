@@ -511,33 +511,14 @@ static void view3d_set_view_angle(ARegion *region, View3D *v3d, const float inpu
     }
   }
 
-  /* Get the 3x3 matrix inverse from the quaternion. */
-  const float3x3 m_inv = math::invert(
-      math::from_rotation<float3x3>(math::Quaternion(rv3d->viewquat)));
+  const float horizon_plane[3] = {0.0f, 0.0f, 1.0f};
+  /* Match the top & bottom axis-views, without this the angle
+   * would be relative and repeated runs would accumulate. */
+  const float axis_fallback[3] = {1.0f, 0.0f, 0.0f};
 
-  const float3 z_up_global = float3(0.0f, 0.0f, 1.0f);
-  const float3 z_up_local = m_inv[1];
-  const float3 pivot_axis_local = m_inv[2];
+  view3d_horizon_correct_quat(rv3d->viewquat, horizon_plane, false, axis_fallback, angle, 1.0f);
 
-  float3 alignment_vector = z_up_global;
-
-  constexpr float axis_align_eps = 1e-4f;
-
-  /* Use the Positive Y-Axis when on the top view.*/
-  if (math::distance(pivot_axis_local, alignment_vector) < axis_align_eps) {
-    alignment_vector = float3(0.0f, 1.0f, 0.0f);
-  }
-
-  /* Use the negative Y-Axis when on the bottom view. */
-  if (math::distance(pivot_axis_local, -alignment_vector) < axis_align_eps) {
-    alignment_vector = float3(0.0f, -1.0f, 0.0f);
-  }
-
-  const float offset_angle = angle - angle_signed_on_axis_v3v3_v3(
-                                         alignment_vector, z_up_local, pivot_axis_local);
-
-  const math::AxisAngle axis_angle = math::AxisAngle(z_up_global, offset_angle);
-  copy_qt_qt(rv3d->viewquat, math::to_quaternion(axis_angle) * math::Quaternion(rv3d->viewquat));
+  rv3d->view = RV3D_VIEW_USER;
 }
 
 static wmOperatorStatus view3d_set_roll_exec(bContext *C, wmOperator *op)
