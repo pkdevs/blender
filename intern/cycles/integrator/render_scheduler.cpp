@@ -46,6 +46,10 @@ bool RenderScheduler::is_background() const
 void RenderScheduler::set_denoiser_params(const DenoiseParams &params)
 {
   denoiser_params_ = params;
+
+  if (is_denoiser_interactive()) {
+    state_.resolution_divider = pixel_size_;
+  }
 }
 
 bool RenderScheduler::is_denoiser_gpu_used() const
@@ -91,7 +95,7 @@ void RenderScheduler::set_sample_params(const int num_samples,
 int RenderScheduler::get_num_samples() const
 {
   /* Do continuous rendering when DLSS is active. */
-  if (denoiser_params_.use && denoiser_params_.type == DENOISER_DLSS) {
+  if (is_denoiser_interactive()) {
     return Integrator::MAX_SAMPLES;
   }
 
@@ -349,10 +353,9 @@ RenderWork RenderScheduler::get_render_work()
   render_work.denoised_resolution_divider = state_.resolution_divider;
   if (denoiser_params_.use) {
     render_work.resolution_divider *= denoiser_params_.upscale_factor;
-
-    if (denoiser_params_.type == DENOISER_DLSS) {
-      state_.num_rendered_samples = 0;
-    }
+  }
+  if (is_denoiser_interactive()) {
+    state_.num_rendered_samples = 0;
   }
 
   render_work.path_trace.start_sample = get_start_sample_to_path_trace();
@@ -968,9 +971,7 @@ int RenderScheduler::get_num_samples_to_path_trace() const
                                 min(num_samples_to_occupy, max_num_samples_to_render));
   }
 
-  if (limit_samples_per_update_ &&
-      !(denoiser_params_.use && denoiser_params_.type == DENOISER_DLSS))
-  {
+  if (limit_samples_per_update_ && !is_denoiser_interactive()) {
     num_samples_to_render = min(limit_samples_per_update_, num_samples_to_render);
   }
 
@@ -1056,7 +1057,7 @@ bool RenderScheduler::work_need_denoise(bool &delayed, bool &ready_to_display)
 
   /* Viewport render. */
 
-  if (denoiser_params_.type == DENOISER_DLSS) {
+  if (is_denoiser_interactive()) {
     return true;
   }
 
@@ -1167,7 +1168,7 @@ bool RenderScheduler::work_need_rebalance()
 
 void RenderScheduler::update_start_resolution_divider()
 {
-  if (denoiser_params_.use && denoiser_params_.type == DENOISER_DLSS) {
+  if (is_denoiser_interactive()) {
     start_resolution_divider_ = 1;
     return;
   }
@@ -1251,6 +1252,11 @@ bool RenderScheduler::is_denoise_active_during_update() const
   }
 
   return true;
+}
+
+bool RenderScheduler::is_denoiser_interactive() const
+{
+  return denoiser_params_.use && denoiser_params_.type == DENOISER_DLSS;
 }
 
 bool RenderScheduler::work_is_usable_for_first_render_estimation(const RenderWork &render_work)
