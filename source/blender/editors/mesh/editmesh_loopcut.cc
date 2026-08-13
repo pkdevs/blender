@@ -157,17 +157,27 @@ static void ringsel_find_edge(RingSelOpData *lcd, const int previewlines)
 }
 
 /**
- * Gather the four spline control points for new loop cut vertex. 
- * p2 and p3 are original endpoints, p1 and p4 are one quad past p2 and p3 to calculate the curve tangents.
+ * Gather the four spline control points for new loop cut vertex.
+ * p2 and p3 are original endpoints, p1 and p4 are one quad past p2 and p3 to calculate the curve
+ * tangents.
  */
-static bool loopcut_find_control_points(BMVert *v, int cuts, float min_angle, float3 &p1, float3 &p2, float3 &p3, float3 &p4, int &r_idx, int &r_span) {
+static bool loopcut_find_control_points(BMVert *v,
+                                        int cuts,
+                                        float min_angle,
+                                        float3 &p1,
+                                        float3 &p2,
+                                        float3 &p3,
+                                        float3 &p4,
+                                        int &r_idx,
+                                        int &r_span)
+{
   /* Split edge halves; far vert is original vert. */
   BMEdge *e_rail[2] = {nullptr, nullptr};
   int rail_count = 0;
 
   BMIter e_iter;
   BMEdge *e;
-  BM_ITER_ELEM(e, &e_iter, v, BM_EDGES_OF_VERT) {
+  BM_ITER_ELEM (e, &e_iter, v, BM_EDGES_OF_VERT) {
     if (!BM_elem_flag_test(e, BM_ELEM_SELECT)) {
       if (rail_count < 2) {
         e_rail[rail_count] = e;
@@ -202,7 +212,7 @@ static bool loopcut_find_control_points(BMVert *v, int cuts, float min_angle, fl
       int nv_rail_count = 0;
       BMIter iter;
       BMEdge *ne;
-      BM_ITER_ELEM(ne, &iter, nv, BM_EDGES_OF_VERT) {
+      BM_ITER_ELEM (ne, &iter, nv, BM_EDGES_OF_VERT) {
         if (!BM_elem_flag_test(ne, BM_ELEM_SELECT)) {
           nv_rail_count++;
           if (ne != e) {
@@ -230,9 +240,13 @@ static bool loopcut_find_control_points(BMVert *v, int cuts, float min_angle, fl
   }
   p2 = endA->co;
   p3 = endB->co;
-  
+
   /* Walk one quad past v_end to next ring vert. Anchor / opposite are p2 / p3 for phantom. */
-  auto walk = [&](BMEdge *edge, BMVert *v_end, const float3 &anchor, const float3 &opposite, float3 &r_outer) -> bool {
+  auto walk = [&](BMEdge *edge,
+                  BMVert *v_end,
+                  const float3 &anchor,
+                  const float3 &opposite,
+                  float3 &r_outer) -> bool {
     if (edge->l == nullptr) {
       return false;
     }
@@ -287,7 +301,9 @@ static bool loopcut_find_control_points(BMVert *v, int cuts, float min_angle, fl
 /**
  *  Compute spline position for new loopcut vertex v.
  */
-static bool loopcut_calc_curve_target(BMVert *v, int cuts, float tension, float min_angle, float3 &r_co) {
+static bool loopcut_calc_curve_target(
+    BMVert *v, int cuts, float tension, float min_angle, float3 &r_co)
+{
   float3 p1, p2, p3, p4;
   int idx, span;
   if (!loopcut_find_control_points(v, cuts, min_angle, p1, p2, p3, p4, idx, span)) {
@@ -311,13 +327,14 @@ static bool loopcut_calc_curve_target(BMVert *v, int cuts, float tension, float 
 /**
  * Move each loopcut vert onto spline target. Find all targets first, then copy to positions.
  */
-static void loopcut_apply_curvature(BMesh *bm, int cuts, float tension, float min_angle) {
+static void loopcut_apply_curvature(BMesh *bm, int cuts, float tension, float min_angle)
+{
   Vector<BMVert *> verts;
   Vector<float3> targets;
 
-  BMVert *v; 
+  BMVert *v;
   BMIter iter;
-  BM_ITER_MESH(v, &iter, bm, BM_VERTS_OF_MESH) {
+  BM_ITER_MESH (v, &iter, bm, BM_VERTS_OF_MESH) {
     if (!BM_elem_flag_test(v, BM_ELEM_SELECT)) {
       continue;
     }
