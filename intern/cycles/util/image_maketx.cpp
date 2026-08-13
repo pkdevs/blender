@@ -609,7 +609,7 @@ static void convert_srgb_tx(OIIO::ImageBuf &buf, const bool from_srgb)
     float4 *pixels = static_cast<float4 *>(buf.localpixels());
     for (int64_t i = 0; i < num_pixels; i++) {
       float4 value = pixels[i];
-      const bool has_alpha = !(value.w <= 0.0f || value.w == 1.0f);
+      const bool has_alpha = alpha_needs_unpremultiply(value.w);
 
       if (has_alpha) {
         const float inv_alpha = 1.0f / value.w;

@@ -31,7 +31,7 @@ void LibOCIOCPUProcessor::apply_rgba(float rgba[4]) const
 
 void LibOCIOCPUProcessor::apply_rgba_predivide(float rgba[4]) const
 {
-  if (ELEM(rgba[3], 1.0f, 0.0f)) {
+  if (!needs_predivide(rgba[3])) {
     apply_rgba(rgba);
     return;
   }
@@ -78,7 +78,7 @@ void LibOCIOCPUProcessor::apply_predivide(const PackedImage &image) const
     const size_t pixel_count = image.get_width() * image.get_height();
     for (size_t i = 0; i < pixel_count; i++, pixel += 4) {
       const float alpha = pixel[3];
-      if (!ELEM(alpha, 0.0f, 1.0f)) {
+      if (needs_predivide(alpha)) {
         const float inv_alpha = 1.0f / alpha;
         pixel[0] *= inv_alpha;
         pixel[1] *= inv_alpha;
@@ -95,7 +95,7 @@ void LibOCIOCPUProcessor::apply_predivide(const PackedImage &image) const
     const size_t pixel_count = image.get_width() * image.get_height();
     for (size_t i = 0; i < pixel_count; i++, pixel += 4) {
       const float alpha = pixel[3];
-      if (!ELEM(alpha, 0.0f, 1.0f)) {
+      if (needs_predivide(alpha)) {
         pixel[0] *= alpha;
         pixel[1] *= alpha;
         pixel[2] *= alpha;

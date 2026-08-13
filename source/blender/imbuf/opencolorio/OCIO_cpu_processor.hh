@@ -4,9 +4,25 @@
 
 #pragma once
 
+#include <limits>
+
 namespace blender::ocio {
 
 class PackedImage;
+
+/**
+ * Whether the color channels need to be divided by alpha before a transform is applied, and
+ * multiplied by it again afterwards.
+ *
+ * Alpha values below the smallest normal float are treated as zero. Comparing against zero
+ * exactly would make the result depend on whether denormals are flushed to zero: with
+ * flush-to-zero enabled a denormal alpha compares equal to zero and the division is skipped,
+ * while without it the division by a denormal overflows to infinity.
+ */
+inline bool needs_predivide(const float alpha)
+{
+  return alpha >= std::numeric_limits<float>::min() && alpha != 1.0f;
+}
 
 class CPUProcessor {
  public:

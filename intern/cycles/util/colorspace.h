@@ -7,7 +7,23 @@
 #include "util/param.h"
 #include "util/string.h"
 
+#include <limits>
+
 CCL_NAMESPACE_BEGIN
+
+/**
+ * Whether the color channels need to be divided by alpha to un-premultiply them, and multiplied
+ * by it again afterwards.
+ *
+ * Alpha values below the smallest normal float are treated as zero. Comparing against zero
+ * exactly would make the result depend on whether denormals are flushed to zero: with
+ * flush-to-zero enabled a denormal alpha compares equal to zero and the division is skipped,
+ * while without it the division by a denormal overflows to infinity.
+ */
+inline bool alpha_needs_unpremultiply(const float alpha)
+{
+  return alpha >= std::numeric_limits<float>::min() && alpha != 1.0f;
+}
 
 /* Automatically determine colorspace. */
 extern ustring u_colorspace_auto;
