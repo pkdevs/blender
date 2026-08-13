@@ -574,6 +574,7 @@ class _draw_tool_settings_context_mode:
             )
 
         curves_tool = brush.curves_sculpt_brush_type
+
         if curves_tool == 'COMB':
             layout.prop(brush, "falloff_shape", expand=True)
             layout.popover("VIEW3D_PT_tools_brush_falloff", text="Brush Falloff")
