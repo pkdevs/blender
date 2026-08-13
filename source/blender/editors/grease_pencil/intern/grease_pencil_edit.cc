@@ -5598,13 +5598,32 @@ static bke::CurvesGeometry bevel_curves(const bke::CurvesGeometry &src_curves,
       }
     }
     else if (profile_type == ProfileType::Circular) {
-      const float3 d1 = dir_1 * factor_1;
-      const float3 d2 = dir_2 * factor_2;
+      const float3 d1 = math::normalize(dir_1);
+      const float3 d2 = math::normalize(dir_2);
+
+      const float3 D1 = dir_1 * factor_1;
+      const float3 D2 = dir_2 * factor_2;
+
+      /* Cosine of the angle. */
+      const float C = math::dot(d1, d2);
+
+      /* Sine of the angle. */
+      const float D = math::length(math::cross(d1, d2));
+
+      /* Cotangent of half the angle. */
+      const float G = math::sqrt((1.0f + C) / (1.0f - C));
+
+      /* Angle of the arc. */
+      const float A = M_PI - math::acos(C);
+
+      /* Orthogonal direction. */
+      const float3 B = D2 / D - D1 * C / D;
+
       for (const int j : IndexRange(num_points_per_vertex)) {
         const float t = float(j) / (num_points_per_vertex - 1);
-        const float s = math::sin(t * M_PI / 2.0f);
-        const float c = math::cos(t * M_PI / 2.0f);
-        dst_positions[dst_points[j]] = d1 * (1.0f - s) + d2 * (1.0f - c) + pos_1;
+        const float s = math::sin(t * A);
+        const float c = math::cos(t * A);
+        dst_positions[dst_points[j]] = D1 * (G - s) / G + B * (1.0f - c) / G + pos_1;
       }
     }
   });
