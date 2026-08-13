@@ -174,6 +174,9 @@ class BaseSpineRig(TweakChainRig):
             description="Create a rotation pivot control that can be repositioned arbitrarily"
         )
 
+        # Deliberately not the `bbones` parameter shared by the limb and chain
+        # rigs: Rigify parameters all live in one shared property group, so
+        # keeping the spine default at 8 instead of 10 requires its own name.
         params.spine_bbones = bpy.props.IntProperty(
             name='B-Bone Segments',
             default=8,
@@ -295,6 +298,10 @@ class BaseHeadTailRig(ConnectingChainRig):
     def add_parameters(cls, params):
         super().add_parameters(params)
 
+        # Deliberately not the `bbones` parameter shared by the limb and chain
+        # rigs: Rigify parameters all live in one shared property group, so
+        # keeping the head and tail default at 8 instead of 10 requires its
+        # own name. Must stay identical to the definition in BaseSpineRig.
         params.spine_bbones = bpy.props.IntProperty(
             name='B-Bone Segments',
             default=8,
