@@ -297,7 +297,7 @@ static PointerRNA rna_SceneStrip_view_layer_get(PointerRNA *ptr)
   const Strip *strip = static_cast<const Strip *>(ptr->data);
   Scene *scene = strip->scene;
   if (scene == nullptr) {
-    return PointerRNA_NULL;
+    return {};
   }
   ViewLayer *view_layer = BKE_view_layer_find(scene, strip->scene_view_layer_name);
   return RNA_pointer_create_id_subdata(scene->id, RNA_ViewLayer, view_layer);
@@ -884,7 +884,7 @@ static void rna_Strip_active_modifier_set(PointerRNA *ptr, PointerRNA value, Rep
 
   WM_main_add_notifier(NC_SCENE | ND_SEQUENCER, ptr->owner_id);
 
-  if (RNA_pointer_is_null(&value)) {
+  if (!value) {
     seq::modifier_set_active(strip, nullptr);
     return;
   }
@@ -1188,17 +1188,17 @@ static bool rna_MovieStrip_reload_if_needed(ID *scene_id, Strip *strip, Main *bm
 static PointerRNA rna_MovieStrip_metadata_get(ID *scene_id, Strip *strip)
 {
   if (strip == nullptr || strip->runtime->movie_readers.is_empty()) {
-    return PointerRNA_NULL;
+    return {};
   }
 
   MovieReader *anim = strip->runtime->movie_readers.first();
   if (anim == nullptr) {
-    return PointerRNA_NULL;
+    return {};
   }
 
   IDProperty *metadata = MOV_load_metadata(anim);
   if (metadata == nullptr) {
-    return PointerRNA_NULL;
+    return {};
   }
 
   PointerRNA ptr = RNA_pointer_create_discrete(scene_id, RNA_IDPropertyWrapPtr, metadata);
@@ -2097,7 +2097,7 @@ static PointerRNA rna_SequencerCompositorModifierProperties_get(PointerRNA *ptr)
 {
   auto *cmd = ptr->data_as<SequencerCompositorModifierData>();
   if (!cmd->node_group) {
-    return PointerRNA_NULL;
+    return {};
   }
   return RNA_pointer_create_discrete(
       ptr->owner_id, RNA_SequencerCompositorModifierProperties, cmd);
@@ -2130,7 +2130,7 @@ static PointerRNA rna_SequencerCompositorEffectProperties_get(PointerRNA *ptr)
   Strip *strip = ptr->data_as<Strip>();
   CompositorEffectVars *comp = static_cast<CompositorEffectVars *>(strip->effectdata);
   if (!comp || !comp->node_group) {
-    return PointerRNA_NULL;
+    return {};
   }
   return RNA_pointer_create_discrete(ptr->owner_id, RNA_SequencerCompositorEffectProperties, comp);
 }
