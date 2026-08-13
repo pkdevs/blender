@@ -216,7 +216,8 @@ MovieReaderAccessor MovieReaderCache::acquire_any(const MovieReaderKey &key)
 {
   /* Property queries do not seek, so any free matching reader is suitable even if it was used by
    * another strip during the current rendered frame. Prefer an initialized reader, then the most
-   * recently used one. */
+   * recently used one. Do not evict unrelated readers here; render-frame acquisition handles
+   * stale-entry cleanup. */
   std::unique_lock lock(mutex_);
   MovieReaderCacheEntry *best = nullptr;
   bool best_is_initialized = false;
@@ -236,9 +237,6 @@ MovieReaderAccessor MovieReaderCache::acquire_any(const MovieReaderKey &key)
   }
 
   if (best == nullptr) {
-    if (entries_.size() >= max_entries) {
-      remove_oldest_stale_entry();
-    }
     auto entry = std::make_unique<MovieReaderCacheEntry>();
     entry->key = key;
     best = entry.get();
@@ -417,21 +415,23 @@ const MovieReader *MovieReaderAccessor::reader() const
   return entry_ ? entry_->reader : nullptr;
 }
 
-MovieReaderAccessor movie_reader_cache_acquire(const Scene &scene,
+MovieReaderAccessor movie_reader_cache_acquire(Scene &cache_scene,
+                                               const Scene &key_scene,
                                                const Strip &strip,
                                                const int frame_index)
 {
-  return scene.ed->runtime->movie_reader_cache->acquire(
-      movie_reader_key_get(scene, strip, std::nullopt), frame_index, current_timestamp);
+  return cache_scene.ed->runtime->movie_reader_cache->acquire(
+      movie_reader_key_get(key_scene, strip, std::nullopt), frame_index, current_timestamp);
 }
 
-MovieReaderAccessor movie_reader_cache_acquire_view(const Scene &scene,
+MovieReaderAccessor movie_reader_cache_acquire_view(Scene &cache_scene,
+                                                    const Scene &key_scene,
                                                     const Strip &strip,
                                                     const int view_id,
                                                     const int frame_index)
 {
-  return scene.ed->runtime->movie_reader_cache->acquire(
-      movie_reader_key_get(scene, strip, view_id), frame_index, current_timestamp);
+  return cache_scene.ed->runtime->movie_reader_cache->acquire(
+      movie_reader_key_get(key_scene, strip, view_id), frame_index, current_timestamp);
 }
 
 static MovieReaderAccessor movie_reader_cache_acquire_any_base(const Scene &scene,

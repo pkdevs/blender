@@ -1106,12 +1106,17 @@ static ImBuf *seq_render_movie_strip(const RenderData *context,
   const int frame_index = round_fl_to_int(
                               give_frame_index(context->scene, strip, timeline_frame)) +
                           strip->anim_startofs;
+  /* Prefetch renders a scene copy, but movie readers should still get cached into
+   * the original scene. This way invalidation & cleanup affects entries cached
+   * by prefetch too. */
+  Scene &cache_scene = *prefetch_get_original_scene(context);
   float source_fps = 0.0f;
 
   Vector<MovieReaderAccessor> readers;
   bool is_multiview_render = false;
   if (use_multiview && totfiles > 0) {
-    readers.append(movie_reader_cache_acquire_view(*context->scene, *strip, 0, frame_index));
+    readers.append(
+        movie_reader_cache_acquire_view(cache_scene, *context->scene, *strip, 0, frame_index));
 
     is_multiview_render = strip->views_format == R_IMF_VIEWS_STEREO_3D ||
                           readers[0].uses_multiview_filepath();
@@ -1121,8 +1126,8 @@ static ImBuf *seq_render_movie_strip(const RenderData *context,
     if (is_multiview_render && strip->views_format == R_IMF_VIEWS_INDIVIDUAL) {
       bool all_readers_open = static_cast<bool>(readers[0]);
       for (int view_id = 1; view_id < totfiles && all_readers_open; view_id++) {
-        readers.append(
-            movie_reader_cache_acquire_view(*context->scene, *strip, view_id, frame_index));
+        readers.append(movie_reader_cache_acquire_view(
+            cache_scene, *context->scene, *strip, view_id, frame_index));
         all_readers_open = static_cast<bool>(readers.last());
       }
       if (!all_readers_open) {
@@ -1170,7 +1175,7 @@ static ImBuf *seq_render_movie_strip(const RenderData *context,
   else {
     MovieReaderAccessor reader;
     if (readers.is_empty()) {
-      reader = movie_reader_cache_acquire(*context->scene, *strip, frame_index);
+      reader = movie_reader_cache_acquire(cache_scene, *context->scene, *strip, frame_index);
     }
     else {
       reader = std::move(readers[0]);

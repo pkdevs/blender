@@ -13,7 +13,8 @@
  * - From the available matching readers, prefer the one closest to the requested source frame,
  *   with a penalty for readers that need to seek backwards.
  * - Frame-independent queries can reuse any free matching reader. Querying an initialized reader
- *   does not change its decode position.
+ *   does not change its decode position. Such queries may temporarily grow the cache beyond its
+ *   soft size limit; stale entries are removed when subsequent frames are rendered.
  * - Cache size uses #MovieReaderCache::max_entries as a soft limit. Readers above it are removed
  *   after they have not been used for #MovieReaderCache::stale_after_timestamps render timestamps.
  */
@@ -70,13 +71,13 @@ class MovieReaderAccessor {
   void release();
 };
 
-MovieReaderAccessor movie_reader_cache_acquire(const Scene &scene,
+/** Acquire from `cache_scene`, using `key_scene` and `strip` to build the reader key. */
+MovieReaderAccessor movie_reader_cache_acquire(Scene &cache_scene,
+                                               const Scene &key_scene,
                                                const Strip &strip,
                                                int frame_index);
-MovieReaderAccessor movie_reader_cache_acquire_view(const Scene &scene,
-                                                    const Strip &strip,
-                                                    int view_id,
-                                                    int frame_index);
+MovieReaderAccessor movie_reader_cache_acquire_view(
+    Scene &cache_scene, const Scene &key_scene, const Strip &strip, int view_id, int frame_index);
 /** Acquire an initialized free primary reader, falling back to the strip's base filepath. */
 MovieReaderAccessor movie_reader_cache_acquire_any(const Scene &scene, const Strip &strip);
 /** Return whether all required movie readers can be opened. */
