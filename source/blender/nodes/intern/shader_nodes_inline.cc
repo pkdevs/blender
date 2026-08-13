@@ -242,7 +242,7 @@ class ShaderNodesInliner {
    * Sometimes the inliner first attempts to preserve a repeat zone without knowing whether it
    * will succeed. In the general case (with passed in bundles and closures) that cannot be
    * determined in advance with 100% certainty. Since preserved repeat zones are an important
-   * optimization, it's not enough to only have them when we can "proof" beforehand that it will
+   * optimization, it's not enough to only have them when we can "prove" beforehand that it will
    * work. This proof might not be possible or expensive in some cases where preserving the repeat
    * zone would be possible.
    *
@@ -773,6 +773,7 @@ class ShaderNodesInliner {
 
   bool is_inliner_evaluation_node(const bNode &node) const
   {
+    /* This check may need to become tighter in the future. */
     return node.typeinfo->gpu_fn == nullptr;
   }
 
