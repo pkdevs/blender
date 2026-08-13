@@ -169,6 +169,7 @@ class NODE_MT_shader_node_input_constant_base(node_add_menu.NodeMenu):
         self.node_operator(layout, "ShaderNodeRGB")
         self.node_operator(layout, "FunctionNodeInputInt")
         self.node_operator(layout, "FunctionNodeInputMenu")
+        self.node_operator(layout, "FunctionNodeInputString")
         self.node_operator(layout, "ShaderNodeValue")
         self.node_operator(layout, "FunctionNodeInputVector")
 
