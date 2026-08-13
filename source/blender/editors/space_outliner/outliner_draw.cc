@@ -600,6 +600,11 @@ void outliner_collection_isolate_flag(const Main & /*bmain*/,
         RNA_property_boolean_set(&ptr, prop, was_isolated ? default_value : (te_cmp == te) ? !is_hide : is_hide);
         return std::nullopt;
       });
+
+  if (STREQ(propname, "exclude")) {
+    BKE_layer_collection_set_flag(static_cast<LayerCollection *>(te->directdata),
+                                  LAYER_COLLECTION_EXCLUDE, !is_hide);
+  }
 }
 
 static void outliner_collection_set_flag_recursive_fn(bContext *C,
