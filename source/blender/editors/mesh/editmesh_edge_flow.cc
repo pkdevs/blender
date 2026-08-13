@@ -31,26 +31,35 @@
 
 namespace blender {
 
-static bool edbm_edge_flow_poll_property(const bContext * /*C*/, wmOperator *op, const PropertyRNA *prop)
+static bool edbm_edge_flow_poll_property(const bContext * /*C*/,
+                                         wmOperator *op,
+                                         const PropertyRNA *prop)
 {
   const char *prop_id = RNA_property_identifier(prop);
   const int mode = RNA_enum_get(op->ptr, "mode");
 
-  if (STR_ELEM(prop_id, "iterations", "min_angle", "blend_mode", "blend_start_int", "blend_end_int", "blend_start_float", 
-    "blend_end_float")) {
-      if (mode != EDGE_FLOW_FLOW) {
-        return false;
-      }
-      const int blend_mode = RNA_enum_get(op->ptr, "blend_mode");
-      if (blend_mode == 0 && STR_ELEM(prop_id, "blend_start_float", "blend_end_float")) {
-        return false;
-      }
-      if (blend_mode == 1 && STR_ELEM(prop_id, "blend_start_int", "blend_end_int")) {
-        return false;
-      }
-      return true;
+  if (STR_ELEM(prop_id,
+               "iterations",
+               "min_angle",
+               "blend_mode",
+               "blend_start_int",
+               "blend_end_int",
+               "blend_start_float",
+               "blend_end_float"))
+  {
+    if (mode != EDGE_FLOW_FLOW) {
+      return false;
+    }
+    const int blend_mode = RNA_enum_get(op->ptr, "blend_mode");
+    if (blend_mode == 0 && STR_ELEM(prop_id, "blend_start_float", "blend_end_float")) {
+      return false;
+    }
+    if (blend_mode == 1 && STR_ELEM(prop_id, "blend_start_int", "blend_end_int")) {
+      return false;
+    }
+    return true;
   }
-  
+
   if (STREQ(prop_id, "tension")) {
     return mode != EDGE_FLOW_LINEAR;
   }
@@ -84,7 +93,7 @@ static wmOperatorStatus edbm_edge_flow_exec(bContext *C, wmOperator *op)
     const int mode = RNA_enum_get(op->ptr, "mode");
     const float mix = RNA_float_get(op->ptr, "mix");
     const bool space_evenly = RNA_boolean_get(op->ptr, "space_evenly");
-    const int tension    = RNA_int_get(op->ptr, "tension");
+    const int tension = RNA_int_get(op->ptr, "tension");
     const int iterations = RNA_int_get(op->ptr, "iterations");
     const int blend_mode = RNA_enum_get(op->ptr, "blend_mode");
     float blend_start, blend_end;
@@ -106,7 +115,9 @@ static wmOperatorStatus edbm_edge_flow_exec(bContext *C, wmOperator *op)
 
     if (!EDBM_op_callf(em,
                        op,
-                       "edge_flow edges=%he mode=%i mix=%f space_evenly=%b tension=%i iterations=%i blend_mode=%i blend_start=%f blend_end=%f blend_type=%i min_angle=%i use_rail=%b rail_mode=%i rail_start=%f rail_end=%f",
+                       "edge_flow edges=%he mode=%i mix=%f space_evenly=%b tension=%i "
+                       "iterations=%i blend_mode=%i blend_start=%f blend_end=%f blend_type=%i "
+                       "min_angle=%i use_rail=%b rail_mode=%i rail_start=%f rail_end=%f",
                        BM_ELEM_SELECT,
                        mode,
                        mix,
@@ -139,7 +150,7 @@ static wmOperatorStatus edbm_edge_flow_exec(bContext *C, wmOperator *op)
 
 static wmOperatorStatus edbm_edge_flow_invoke(bContext *C,
                                               wmOperator *op,
-                                              const wmEvent */*event*/)
+                                              const wmEvent * /*event*/)
 {
   PropertyRNA *prop = RNA_struct_find_property(op->ptr, "tension");
   if (!RNA_property_is_set(op->ptr, prop)) {
@@ -199,22 +210,100 @@ void MESH_OT_edge_flow(wmOperatorType *ot)
                 0.0f,
                 1.0f);
 
-  RNA_def_boolean( ot->srna, "space_evenly", false, "Space Evenly", "Space edges evenly along the loop");
-  RNA_def_int(ot->srna, "tension", 180, -500, 500, "Tension", "Tension of curve for flow mode", -250, 250);
-  RNA_def_int(ot->srna, "iterations", 8, 1, 32, "Iterations", "Number of iterations for flow algorithm", 1, 32);
+  RNA_def_boolean(
+      ot->srna, "space_evenly", false, "Space Evenly", "Space edges evenly along the loop");
+  RNA_def_int(
+      ot->srna, "tension", 180, -500, 500, "Tension", "Tension of curve for flow mode", -250, 250);
+  RNA_def_int(ot->srna,
+              "iterations",
+              8,
+              1,
+              32,
+              "Iterations",
+              "Number of iterations for flow algorithm",
+              1,
+              32);
 
-  RNA_def_enum(ot->srna, "blend_mode", blend_mode_items, 0, "Blend Mode", "Blend start/end as vertex counts or loop fractions");
-  RNA_def_int(ot->srna, "blend_start_int", 0, 0, INT_MAX, "Blend Start", "Vertices from the loop start to blend", 0, 100);
-  RNA_def_int(ot->srna, "blend_end_int", 0, 0, INT_MAX, "Blend End", "Vertices from the loop end to blend", 0, 100);
-  RNA_def_float(ot->srna, "blend_start_float", 0.0f, 0.0f, 1.0f, "Blend Start", "Loop fraction from the start to blend", 0.0f, 1.0f);
-  RNA_def_float(ot->srna, "blend_end_float", 0.0f, 0.0f, 1.0f, "Blend End", "Loop fraction from the end to blend", 0.0f, 1.0f);
-  RNA_def_enum(ot->srna, "blend_type", blend_type_items, 0, "Blend Curve", "Falloff used when blending");
-  RNA_def_int(ot->srna, "min_angle", 0, 0, 180, "Min Angle", "Angle below which loop curvature is ignored", 0, 180);
+  RNA_def_enum(ot->srna,
+               "blend_mode",
+               blend_mode_items,
+               0,
+               "Blend Mode",
+               "Blend start/end as vertex counts or loop fractions");
+  RNA_def_int(ot->srna,
+              "blend_start_int",
+              0,
+              0,
+              INT_MAX,
+              "Blend Start",
+              "Vertices from the loop start to blend",
+              0,
+              100);
+  RNA_def_int(ot->srna,
+              "blend_end_int",
+              0,
+              0,
+              INT_MAX,
+              "Blend End",
+              "Vertices from the loop end to blend",
+              0,
+              100);
+  RNA_def_float(ot->srna,
+                "blend_start_float",
+                0.0f,
+                0.0f,
+                1.0f,
+                "Blend Start",
+                "Loop fraction from the start to blend",
+                0.0f,
+                1.0f);
+  RNA_def_float(ot->srna,
+                "blend_end_float",
+                0.0f,
+                0.0f,
+                1.0f,
+                "Blend End",
+                "Loop fraction from the end to blend",
+                0.0f,
+                1.0f);
+  RNA_def_enum(
+      ot->srna, "blend_type", blend_type_items, 0, "Blend Curve", "Falloff used when blending");
+  RNA_def_int(ot->srna,
+              "min_angle",
+              0,
+              0,
+              180,
+              "Min Angle",
+              "Angle below which loop curvature is ignored",
+              0,
+              180);
 
-  RNA_def_boolean(ot->srna, "use_rail", false, "Use Rail", "Use first and last edge to control curvature");
-  RNA_def_enum(ot->srna, "rail_mode", rail_mode_items, 1, "Rail Mode", "Rail length as absolute or factor of end edge");
-  RNA_def_float(ot->srna, "rail_start", 1.0f, -FLT_MAX, FLT_MAX, "Rail Start", "Rail length at start of loop", -10.0f, 10.0f);
-  RNA_def_float(ot->srna, "rail_end", 1.0f, -FLT_MAX, FLT_MAX, "Rail End", "Rail length at end of loop", -10.0f, 10.0f);
+  RNA_def_boolean(
+      ot->srna, "use_rail", false, "Use Rail", "Use first and last edge to control curvature");
+  RNA_def_enum(ot->srna,
+               "rail_mode",
+               rail_mode_items,
+               1,
+               "Rail Mode",
+               "Rail length as absolute or factor of end edge");
+  RNA_def_float(ot->srna,
+                "rail_start",
+                1.0f,
+                -FLT_MAX,
+                FLT_MAX,
+                "Rail Start",
+                "Rail length at start of loop",
+                -10.0f,
+                10.0f);
+  RNA_def_float(ot->srna,
+                "rail_end",
+                1.0f,
+                -FLT_MAX,
+                FLT_MAX,
+                "Rail End",
+                "Rail length at end of loop",
+                -10.0f,
+                10.0f);
 }
 
 }  // namespace blender

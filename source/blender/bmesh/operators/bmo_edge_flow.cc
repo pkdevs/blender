@@ -30,7 +30,10 @@ struct EdgeFlowLoop {
 };
 
 /* Walkers only step onto tagged edges unless limit_to_tagged is off, which walks the full loop. */
-static void walk_edge_loop(BMEdge *start_edge, const bool limit_to_tagged, Vector<BMEdge *> &r_edges) {
+static void walk_edge_loop(BMEdge *start_edge,
+                           const bool limit_to_tagged,
+                           Vector<BMEdge *> &r_edges)
+{
   Vector<BMEdge *> side[2];
   int dir = 0;
 
@@ -75,7 +78,8 @@ static void walk_edge_loop(BMEdge *start_edge, const bool limit_to_tagged, Vecto
   }
 }
 
-static void walk_ngon(BMEdge *start_edge, const bool limit_to_tagged, Vector<BMEdge *> &r_edges) {
+static void walk_ngon(BMEdge *start_edge, const bool limit_to_tagged, Vector<BMEdge *> &r_edges)
+{
   BMLoop *start_loop = nullptr;
   int max_valence = 0;
 
@@ -107,7 +111,9 @@ static void walk_ngon(BMEdge *start_edge, const bool limit_to_tagged, Vector<BME
 
   /* Backward walk around face while other vert is non-junction. */
   l = start_loop->prev;
-  while (BM_vert_edge_count(BM_edge_other_vert(l->e, l->v)) < 4 && l->e != start_edge && !forward.contains(l->e) && !backward.contains(l->e)) {
+  while (BM_vert_edge_count(BM_edge_other_vert(l->e, l->v)) < 4 && l->e != start_edge &&
+         !forward.contains(l->e) && !backward.contains(l->e))
+  {
     if (limit_to_tagged && !BM_elem_flag_test(l->e, BM_ELEM_TAG)) {
       break;
     }
@@ -128,7 +134,9 @@ static void walk_ngon(BMEdge *start_edge, const bool limit_to_tagged, Vector<BME
   }
 }
 
-static void walk_boundary(BMEdge *start_edge, const bool limit_to_tagged, Vector<BMEdge *> &r_edges)
+static void walk_boundary(BMEdge *start_edge,
+                          const bool limit_to_tagged,
+                          Vector<BMEdge *> &r_edges)
 {
   /* collect boundary edges reachable from start_edge through junction verts valence > 2 */
   Vector<BMEdge *> edge_loop;
@@ -199,13 +207,15 @@ static void walk_boundary(BMEdge *start_edge, const bool limit_to_tagged, Vector
   }
 
   r_edges.append(start_edge);
-  
+
   for (BMEdge *fe : forward) {
     r_edges.append(fe);
   }
 }
 
-static void edge_flow_walk_loop(BMEdge *start_edge, const bool limit_to_tagged, Vector<BMEdge *> &r_edges)
+static void edge_flow_walk_loop(BMEdge *start_edge,
+                                const bool limit_to_tagged,
+                                Vector<BMEdge *> &r_edges)
 {
   bool is_ngon = false;
   BMIter l_iter;
@@ -369,7 +379,10 @@ static void edge_flow_collect_crossing_loops(const Span<EdgeFlowLoop> chains,
   }
 }
 
-static bool edge_flow_calc_spline_target(BMLoop *l, const float tension, const float min_angle, float3 &r_target)
+static bool edge_flow_calc_spline_target(BMLoop *l,
+                                         const float tension,
+                                         const float min_angle,
+                                         float3 &r_target)
 {
   if (l->f->len != 4 || l->radial_prev->f->len != 4) {
     return false;
@@ -446,7 +459,12 @@ static bool edge_flow_calc_spline_target(BMLoop *l, const float tension, const f
   return true;
 }
 
-static void edge_flow_blend_range(const EdgeFlowLoop &loop, const Array<float3> &orig_cos, int range, const bool reverse, const bool smooth) {
+static void edge_flow_blend_range(const EdgeFlowLoop &loop,
+                                  const Array<float3> &orig_cos,
+                                  int range,
+                                  const bool reverse,
+                                  const bool smooth)
+{
   const int count = int(loop.verts.size());
   range = std::min(range, count - 1);
   if (range <= 0) {
@@ -479,7 +497,12 @@ static void edge_flow_blend_range(const EdgeFlowLoop &loop, const Array<float3> 
 }
 
 /* Apply blend_start / blend_end to verts of each loop back towards original positions. */
-static void edge_flow_blend_ends(const EdgeFlowLoop &loop, const Array<float3> &orig_cos, int blend_start, int blend_end, const bool smooth) {
+static void edge_flow_blend_ends(const EdgeFlowLoop &loop,
+                                 const Array<float3> &orig_cos,
+                                 int blend_start,
+                                 int blend_end,
+                                 const bool smooth)
+{
   if (loop.is_cyclic) {
     return;
   }
@@ -488,14 +511,18 @@ static void edge_flow_blend_ends(const EdgeFlowLoop &loop, const Array<float3> &
   edge_flow_blend_range(loop, orig_cos, blend_end, true, smooth);
 }
 
-static void edge_flow_sample_bezier(const float3 &p1, const float3 &p2, const float3 &p3, const float3 &p4, MutableSpan<float3> r_result)
+static void edge_flow_sample_bezier(const float3 &p1,
+                                    const float3 &p2,
+                                    const float3 &p3,
+                                    const float3 &p4,
+                                    MutableSpan<float3> r_result)
 {
   BLI_assert(int(r_result.size()) >= 2);
   bke::curves::bezier::evaluate_segment(p1, p2, p3, p4, r_result.drop_back(1));
   r_result.last() = p4;
 }
 
-static void edge_flow_map_onto_spline(Span<BMVert *> loop_verts, Span<float3> spline) 
+static void edge_flow_map_onto_spline(Span<BMVert *> loop_verts, Span<float3> spline)
 {
   const int count = int(loop_verts.size());
   if (count <= 2 || spline.size() < 2) {
@@ -527,8 +554,8 @@ void bmo_edge_flow_exec(BMesh *bm, BMOperator *op)
   const float mix = BMO_slot_float_get(op->slots_in, "mix");
   const bool space_evenly = BMO_slot_bool_get(op->slots_in, "space_evenly");
   const int tension_int = BMO_slot_int_get(op->slots_in, "tension");
-  const int iterations  = BMO_slot_int_get(op->slots_in, "iterations");
-  const float tension   = float(tension_int) / 100.0f;
+  const int iterations = BMO_slot_int_get(op->slots_in, "iterations");
+  const float tension = float(tension_int) / 100.0f;
   const float min_angle = DEG2RADF(float(BMO_slot_int_get(op->slots_in, "min_angle")));
   const bool use_rail = BMO_slot_bool_get(op->slots_in, "use_rail");
   const int rail_mode = BMO_slot_int_get(op->slots_in, "rail_mode");
@@ -628,7 +655,8 @@ void bmo_edge_flow_exec(BMesh *bm, BMOperator *op)
     for (const int j : loops.index_range()) {
       const EdgeFlowLoop &loop = loops[j];
       const int count = int(loop.verts.size());
-      const int start = (blend_mode == 1) ? int(roundf(float(count) * blend_start)) : int(blend_start);
+      const int start = (blend_mode == 1) ? int(roundf(float(count) * blend_start)) :
+                                            int(blend_start);
       const int end = (blend_mode == 1) ? int(roundf(float(count) * blend_end)) : int(blend_end);
       edge_flow_blend_ends(loop, orig_cos[j], start, end, blend_smooth);
     }
