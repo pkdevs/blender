@@ -492,7 +492,7 @@ string path_make_relative(const string &path_, const string &base_)
 
   /* Also don't make relative if root directories are different. This prevents
    * typical cases like making relative to /tmp. */
-  if (root_name.empty() && path.root_directory() != path.root_directory()) {
+  if (root_name.empty() && path.root_directory() != base.root_directory()) {
     return path_;
   }
 
@@ -717,7 +717,7 @@ bool path_write_binary(const string &path, const vector<uint8_t> &binary)
   return true;
 }
 
-bool path_write_text(const string &path, string &text)
+bool path_write_text(const string &path, const string &text)
 {
   vector<uint8_t> binary(text.length(), 0);
   std::copy(text.begin(), text.end(), binary.begin());
@@ -912,7 +912,7 @@ static string path_source_replace_includes_recursive(const string &_source,
 
   auto pragma_once = _source.find("#pragma once");
   if (pragma_once != string::npos) {
-    if (state->pragma_onced.find(source_filepath) != state->pragma_onced.end()) {
+    if (state->pragma_onced.contains(source_filepath)) {
       return "";
     }
     state->pragma_onced.insert(source_filepath);

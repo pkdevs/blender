@@ -23,6 +23,8 @@ struct TooltipData;
 #define UI_MAX_NAME_STR 256
 #define UI_MAX_SHORTCUT_STR 64
 
+#define RNA_NO_INDEX -1
+
 /* Menu Callbacks */
 
 using MenuCreateFunc = void (*)(bContext *C, Layout *layout, void *arg1);
@@ -49,6 +51,13 @@ using ButtonToolTipFunc = std::string (*)(bContext *C, void *argN, StringRef tip
  *   Mostly useful when using #uiLayoutSetTooltipCustomFunc.
  */
 using ButtonToolTipCustomFunc = void (*)(bContext &C, TooltipData &data, Button *but, void *argN);
+
+/** #uiFontStyle.align */
+enum FontStyleAlign {
+  UI_STYLE_TEXT_LEFT = 0,
+  UI_STYLE_TEXT_CENTER = 1,
+  UI_STYLE_TEXT_RIGHT = 2,
+};
 
 }  // namespace ui
 

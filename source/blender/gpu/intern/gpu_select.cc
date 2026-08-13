@@ -13,9 +13,9 @@
 
 #include "GPU_select.hh"
 
-#include "BLI_rect.h"
+#include "BLI_rect.hh"
 
-#include "BLI_utildefines.h"
+#include "BLI_utildefines.hh"
 
 #include "gpu_select_private.hh"
 
@@ -71,6 +71,7 @@ static GPUSelectState g_select_state = {false};
 
 static void gpu_select_begin_ex(GPUSelectBuffer *buffer,
                                 const rcti *input,
+                                const int radius,
                                 GPUSelectMode mode,
                                 int oldhits,
                                 bool use_select_next)
@@ -116,7 +117,7 @@ static void gpu_select_begin_ex(GPUSelectBuffer *buffer,
 
   switch (g_select_state.algorithm) {
     case ALGO_SELECT_NEXT: {
-      gpu_select_next_begin(buffer, input, mode);
+      gpu_select_next_begin(buffer, input, radius, mode);
       break;
     }
     case ALGO_SAMPLE_QUERY: {
@@ -131,17 +132,15 @@ static void gpu_select_begin_ex(GPUSelectBuffer *buffer,
   }
 }
 
-void GPU_select_begin_next(GPUSelectBuffer *buffer,
-                           const rcti *input,
-                           GPUSelectMode mode,
-                           int oldhits)
+void GPU_select_begin_next(
+    GPUSelectBuffer *buffer, const rcti *input, const int radius, GPUSelectMode mode, int oldhits)
 {
-  gpu_select_begin_ex(buffer, input, mode, oldhits, true);
+  gpu_select_begin_ex(buffer, input, radius, mode, oldhits, true);
 }
 
 void GPU_select_begin(GPUSelectBuffer *buffer, const rcti *input, GPUSelectMode mode, int oldhits)
 {
-  gpu_select_begin_ex(buffer, input, mode, oldhits, false);
+  gpu_select_begin_ex(buffer, input, 0, mode, oldhits, false);
 }
 
 bool GPU_select_load_id(uint id)
@@ -241,6 +240,32 @@ bool GPU_select_is_cached()
 /* -------------------------------------------------------------------- */
 /** \name Utilities
  * \{ */
+int gpu_select_buffer_depth_id_cmp(const void *sel_a_p, const void *sel_b_p)
+{
+  GPUSelectResult *a = static_cast<GPUSelectResult *>(const_cast<void *>(sel_a_p));
+  GPUSelectResult *b = static_cast<GPUSelectResult *>(const_cast<void *>(sel_b_p));
+
+  if (a->depth < b->depth) {
+    return -1;
+  }
+  if (a->depth > b->depth) {
+    return 1;
+  }
+
+  /* Depths match, sort by id. */
+  /* NOTE: this is endianness-sensitive.
+   * GPUSelectResult values are always expected to be little-endian. */
+  uint sel_a = a->id;
+  uint sel_b = b->id;
+
+  if (sel_a < sel_b) {
+    return -1;
+  }
+  if (sel_a > sel_b) {
+    return 1;
+  }
+  return 0;
+}
 
 const GPUSelectResult *GPU_select_buffer_near(const Span<GPUSelectResult> hit_results)
 {

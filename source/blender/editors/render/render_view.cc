@@ -10,8 +10,8 @@
 #include <cstddef>
 #include <cstring>
 
-#include "BLI_listbase.h"
-#include "BLI_rect.h"
+#include "BLI_listbase.hh"
+#include "BLI_rect.hh"
 
 #include "DNA_scene_types.h"
 #include "DNA_userdef_types.h"
@@ -186,7 +186,7 @@ ScrArea *render_view_open(bContext *C, int mx, int my, ReportList *reports)
     }
 
     area = CTX_wm_area(C);
-    if (BLI_listbase_is_single(&area->spacedata) == false) {
+    if (area->spacedata.is_single() == false) {
       sima = static_cast<SpaceImage *>(area->spacedata.first);
       sima->flag |= SI_PREVSPACE;
     }
@@ -317,7 +317,7 @@ static wmOperatorStatus render_view_cancel_exec(bContext *C, wmOperator * /*op*/
     return OPERATOR_FINISHED;
   }
   if (WM_window_is_temp_screen(win)) {
-    wm_window_close(C, CTX_wm_manager(C), win);
+    wm_window_close_request(C, CTX_wm_manager(C), win);
     return OPERATOR_FINISHED;
   }
 

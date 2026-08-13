@@ -16,8 +16,8 @@
 
 #include "BKE_context.hh"
 
-#include "BLI_math_vector.h"
-#include "BLI_utildefines.h"
+#include "BLI_math_vector_c.hh"
+#include "BLI_utildefines.hh"
 
 #include "WM_api.hh"
 #include "WM_types.hh"
@@ -442,7 +442,7 @@ void initMouseInputMode(TransInfo *t, MouseInput *mi, MouseInputMode mode)
       }
       /* Only use special cursor, when tweaking strips with mouse. */
       if (t->mode == TFM_SEQ_SLIDE) {
-        if (transform_mode_edge_seq_slide_use_restore_handle_selection(t)) {
+        if ((t->flag & T_MODAL) && transform_mode_edge_seq_slide_use_restore_handle_selection(t)) {
           WM_cursor_modal_set(win, transform_seq_slide_cursor_get(t));
         }
         else {

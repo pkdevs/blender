@@ -10,6 +10,9 @@
 #include <cstring>
 
 #ifdef WIN32
+#  ifdef WIN32_LEAN_AND_MEAN
+#    undef WIN32_LEAN_AND_MEAN
+#  endif
 #  include "utfconv.hh"
 #  include <windows.h>
 #  ifdef WITH_CPU_CHECK
@@ -28,14 +31,14 @@
 
 #include "DNA_genfile.h"
 
-#include "BLI_endian_defines.h"
+#include "BLI_endian_defines.hh"
 #include "BLI_fftw.hh"
 #include "BLI_path_utils.hh"
-#include "BLI_string.h"
-#include "BLI_system.h"
-#include "BLI_task.h"
-#include "BLI_threads.h"
-#include "BLI_utildefines.h"
+#include "BLI_string.hh"
+#include "BLI_system.hh"
+#include "BLI_task_c.hh"
+#include "BLI_threads.hh"
+#include "BLI_utildefines.hh"
 
 /* Mostly initialization functions. */
 #include "BKE_appdir.hh"
@@ -56,7 +59,7 @@
 #include "BKE_volume.hh"
 
 #ifndef WITH_PYTHON_MODULE
-#  include "BLI_args.h"
+#  include "BLI_args.hh"
 #endif
 
 #include "DEG_depsgraph.hh"
@@ -75,6 +78,8 @@
 #include "WM_api.hh"
 
 #include "RNA_define.hh"
+
+#include "FN_init.hh"
 
 #ifdef WITH_OPENGL_BACKEND
 #  include "GPU_compilation_subprocess.hh"
@@ -174,6 +179,7 @@ namespace blender {
 ApplicationState app_state = []() {
   ApplicationState app_state{};
   app_state.signal.use_crash_handler = true;
+  app_state.signal.use_console_crash_handler = false;
   app_state.signal.use_abort_handler = true;
   app_state.exit_code_on_error.python = 0;
   app_state.main_arg_deferred = nullptr;
@@ -251,8 +257,6 @@ static void callback_main_atexit(void *user_data)
 
     BKE_blender_globals_clear();
     BKE_appdir_exit();
-
-    DNA_sdna_current_free();
 
     CLG_exit();
   }
@@ -385,7 +389,7 @@ int main(int argc,
 #endif
 
 #if defined(WITH_TBB_MALLOC) && defined(__linux__)
-  /* Enable huge pages for performance .*/
+  /* Enable huge pages for performance. */
   scalable_allocation_mode(TBBMALLOC_USE_HUGE_PAGES, 1);
 #endif
 
@@ -412,7 +416,7 @@ int main(int argc,
   {
     const time_t temp_time = build_commit_timestamp;
     const tm *tm = gmtime(&temp_time);
-    if (LIKELY(tm)) {
+    if (tm) [[likely]] {
       strftime(build_commit_date, sizeof(build_commit_date), "%Y-%m-%d", tm);
       strftime(build_commit_time, sizeof(build_commit_time), "%H:%M", tm);
     }
@@ -482,11 +486,10 @@ int main(int argc,
 
   BLI_threadapi_init();
 
-  DNA_sdna_current_init();
-
   BKE_blender_globals_init(); /* `blender.cc` */
 
   BKE_cpp_types_init();
+  fn::multi_function::register_common_functions();
   BKE_idtype_init();
   BKE_modifier_init();
   seq::modifiers_init();
@@ -543,7 +546,12 @@ int main(int argc,
 
 #ifdef WITH_CYCLES
   CCL_log_init();
+  CCL_implicit_sharing_init();
 #endif
+
+  /* Set max open files to better handle production files that may use many
+   * open geometry or texture cache file handles. After logging since it's used .*/
+  BLI_system_max_open_files_ensure();
 
   /* Must be initialized after #BKE_appdir_init to account for color-management paths. */
   IMB_init();

@@ -72,6 +72,10 @@ static void update_depsgraph(ModifierData *md, const ModifierUpdateDepsgraphCont
 {
   auto *mmd = reinterpret_cast<GreasePencilHookModifierData *>(md);
   if (mmd->object != nullptr) {
+    if (mmd->subtarget[0]) {
+      DEG_add_bone_relation(
+          ctx->node, mmd->object, mmd->subtarget, DEG_OB_COMP_BONE, "Hook Modifier");
+    }
     DEG_add_object_relation(ctx->node, mmd->object, DEG_OB_COMP_TRANSFORM, "Hook Modifier");
   }
   DEG_add_object_relation(ctx->node, ctx->object, DEG_OB_COMP_TRANSFORM, "Hook Modifier");
@@ -166,7 +170,8 @@ static void deform_drawing(const ModifierData &md,
       curves, mmd.influence);
 
   const int falloff_type = mmd.falloff_type;
-  const float falloff = (mmd.falloff_type == eHook_Falloff_None) ? 0.0f : mmd.falloff;
+  const float falloff = (mmd.falloff_type == MOD_GREASE_PENCIL_HOOK_Falloff_None) ? 0.0f :
+                                                                                    mmd.falloff;
   const float falloff_sq = square_f(falloff);
   const float fac_orig = mmd.force;
   const bool use_falloff = falloff_sq != 0.0f;
@@ -191,38 +196,40 @@ static void deform_drawing(const ModifierData &md,
   const OffsetIndices<int> points_by_curve = curves.points_by_curve();
   MutableSpan<float3> positions = curves.positions_for_write();
 
-  strokes.foreach_index(GrainSize(128), [&](const int stroke) {
-    const IndexRange points_range = points_by_curve[stroke].index_range();
-    for (const int point_i : points_range) {
-      const int point = point_i + points_by_curve[stroke].first();
-      const float weight = input_weights[point];
-      if (weight < 0.0f) {
-        continue;
-      }
+  strokes.foreach_index(
+      [&](const int stroke) {
+        const IndexRange points_range = points_by_curve[stroke].index_range();
+        for (const int point_i : points_range) {
+          const int point = point_i + points_by_curve[stroke].first();
+          const float weight = input_weights[point];
+          if (weight < 0.0f) {
+            continue;
+          }
 
-      float fac;
-      if (use_falloff) {
-        float len_sq;
-        if (use_uniform) {
-          const float3 co_uniform = math::transform_point(mat_uniform, positions[point]);
-          len_sq = math::distance(cent, co_uniform);
-        }
-        else {
-          len_sq = math::distance(cent, positions[point]);
-        }
-        fac = hook_falloff(
-            falloff, falloff_type, falloff_sq, fac_orig, mmd.influence.custom_curve, len_sq);
-      }
-      else {
-        fac = fac_orig;
-      }
+          float fac;
+          if (use_falloff) {
+            float len_sq;
+            if (use_uniform) {
+              const float3 co_uniform = math::transform_point(mat_uniform, positions[point]);
+              len_sq = math::distance(cent, co_uniform);
+            }
+            else {
+              len_sq = math::distance(cent, positions[point]);
+            }
+            fac = hook_falloff(
+                falloff, falloff_type, falloff_sq, fac_orig, mmd.influence.custom_curve, len_sq);
+          }
+          else {
+            fac = fac_orig;
+          }
 
-      if (fac != 0.0f) {
-        const float3 co_tmp = math::transform_point(use_mat, positions[point]);
-        positions[point] = math::interpolate(positions[point], co_tmp, fac * weight);
-      }
-    }
-  });
+          if (fac != 0.0f) {
+            const float3 co_tmp = math::transform_point(use_mat, positions[point]);
+            positions[point] = math::interpolate(positions[point], co_tmp, fac * weight);
+          }
+        }
+      },
+      exec_mode::grain_size(128));
 
   drawing.tag_positions_changed();
 }
@@ -265,9 +272,7 @@ static void panel_draw(const bContext *C, Panel *panel)
 
   ui::Layout &col = layout.column(false);
   col.prop(ptr, "object", UI_ITEM_NONE, std::nullopt, ICON_NONE);
-  if (!RNA_pointer_is_null(&hook_object_ptr) &&
-      RNA_enum_get(&hook_object_ptr, "type") == OB_ARMATURE)
-  {
+  if (hook_object_ptr && RNA_enum_get(&hook_object_ptr, "type") == OB_ARMATURE) {
     PointerRNA hook_object_data_ptr = RNA_pointer_get(&hook_object_ptr, "data");
     col.prop_search(ptr, "subtarget", &hook_object_data_ptr, "bones", IFACE_("Bone"), ICON_NONE);
   }

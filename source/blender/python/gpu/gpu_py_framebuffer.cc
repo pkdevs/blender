@@ -37,7 +37,7 @@ namespace blender {
 
 static int pygpu_framebuffer_valid_check(BPyGPUFrameBuffer *bpygpu_fb)
 {
-  if (UNLIKELY(bpygpu_fb->fb == nullptr)) {
+  if (bpygpu_fb->fb == nullptr) [[unlikely]] {
     PyErr_SetString(PyExc_ReferenceError, "GPU framebuffer was freed, no further access is valid");
     return -1;
   }
@@ -46,7 +46,7 @@ static int pygpu_framebuffer_valid_check(BPyGPUFrameBuffer *bpygpu_fb)
 
 #define PYGPU_FRAMEBUFFER_CHECK_OBJ(bpygpu) \
   { \
-    if (UNLIKELY(pygpu_framebuffer_valid_check(bpygpu) == -1)) { \
+    if (pygpu_framebuffer_valid_check(bpygpu) == -1) [[unlikely]] { \
       return nullptr; \
     } \
   } \
@@ -349,7 +349,7 @@ static PyObject *pygpu_framebuffer__tp_new(PyTypeObject * /*self*/, PyObject *ar
   PyObject *color_attachements = nullptr;
   static const char *_keywords[] = {"depth_slot", "color_slots", nullptr};
   static _PyArg_Parser _parser = {
-      "|$" /* Optional keyword only arguments. */
+      "|$" /* Optional, keyword only arguments. */
       "O"  /* `depth_slot` */
       "O"  /* `color_slots` */
       ":GPUFrameBuffer.__new__",
@@ -412,7 +412,9 @@ static PyObject *pygpu_framebuffer__tp_new(PyTypeObject * /*self*/, PyObject *ar
 PyDoc_STRVAR(
     /* Wrap. */
     pygpu_framebuffer_is_bound_doc,
-    "Checks if this is the active frame-buffer in the context.");
+    "Checks if this is the active frame-buffer in the context.\n"
+    "\n"
+    ":type: bool\n");
 static PyObject *pygpu_framebuffer_is_bound(BPyGPUFrameBuffer *self, void * /*type*/)
 {
   PYGPU_FRAMEBUFFER_CHECK_OBJ(self);
@@ -447,7 +449,7 @@ static PyObject *pygpu_framebuffer_clear(BPyGPUFrameBuffer *self, PyObject *args
 
   static const char *_keywords[] = {"color", "depth", "stencil", nullptr};
   static _PyArg_Parser _parser = {
-      "|$" /* Optional keyword only arguments. */
+      "|$" /* Optional, keyword only arguments. */
       "O"  /* `color` */
       "O"  /* `depth` */
       "O"  /* `stencil` */
@@ -488,7 +490,7 @@ static PyObject *pygpu_framebuffer_clear(BPyGPUFrameBuffer *self, PyObject *args
     buffers |= GPU_STENCIL_BIT;
   }
 
-  GPU_framebuffer_clear(self->fb, buffers, col, depth, stencil);
+  GPU_framebuffer_clear(self->fb, buffers, double4(UNPACK4(col)), depth, stencil);
   Py_RETURN_NONE;
 }
 
@@ -511,7 +513,17 @@ PyDoc_STRVAR(
 static PyObject *pygpu_framebuffer_viewport_set(BPyGPUFrameBuffer *self, PyObject *args)
 {
   int x, y, xsize, ysize;
-  if (!PyArg_ParseTuple(args, "iiii:viewport_set", &x, &y, &xsize, &ysize)) {
+  if (!PyArg_ParseTuple(args,
+                        "i" /* `x` */
+                        "i" /* `y` */
+                        "i" /* `xsize` */
+                        "i" /* `ysize` */
+                        ":viewport_set",
+                        &x,
+                        &y,
+                        &xsize,
+                        &ysize))
+  {
     return nullptr;
   }
 
@@ -592,7 +604,7 @@ static PyObject *pygpu_framebuffer_read_color(BPyGPUFrameBuffer *self,
       "i"  /* `channels` */
       "I"  /* `slot` */
       "O&" /* `format` */
-      "|$" /* Optional keyword only arguments. */
+      "|$" /* Optional, keyword only arguments. */
       "O&" /* `data` */
       ":read_color",
       _keywords,
@@ -708,7 +720,7 @@ static PyObject *pygpu_framebuffer_read_depth(BPyGPUFrameBuffer *self,
       "i"  /* `y` */
       "i"  /* `xsize` */
       "i"  /* `ysize` */
-      "|$" /* Optional keyword only arguments. */
+      "|$" /* Optional, keyword only arguments. */
       "O&" /* `data` */
       ":read_depth",
       _keywords,
@@ -834,24 +846,26 @@ static PyMethodDef pygpu_framebuffer__tp_methods[] = {
 #endif
 
 /* Ideally type aliases would de-duplicate:
- * `GPUTexture | dict[str, int | GPUTexture]` in this doc-string. */
+ * `GPUTexture | dict[str, int | GPUTexture]` in this docstring. */
 PyDoc_STRVAR(
     /* Wrap. */
     pygpu_framebuffer__tp_doc,
-    ".. class:: GPUFrameBuffer(*, depth_slot=None, color_slots=None)\n"
+    ".. class:: GPUFrameBuffer\n"
     "\n"
     "   This object gives access to framebuffer functionalities.\n"
     "   When a 'layer' is specified in a argument, a single layer of a 3D or array "
     "texture is attached to the frame-buffer.\n"
     "   For cube map textures, layer is translated into a cube map face.\n"
     "\n"
-    "   :param depth_slot: GPUTexture to attach or a ``dict`` containing keywords: "
+    "   .. method:: __init__(*, depth_slot=None, color_slots=None)\n"
+    "\n"
+    "      :param depth_slot: GPUTexture to attach or a ``dict`` containing keywords: "
     "'texture', 'layer' and 'mip'.\n"
-    "   :type depth_slot: :class:`gpu.types.GPUTexture` | dict[str, int | "
+    "      :type depth_slot: :class:`gpu.types.GPUTexture` | dict[str, int | "
     ":class:`gpu.types.GPUTexture`] | None\n"
-    "   :param color_slots: Tuple where each item can be a GPUTexture or a ``dict`` "
+    "      :param color_slots: Tuple where each item can be a GPUTexture or a ``dict`` "
     "containing keywords: 'texture', 'layer' and 'mip'.\n"
-    "   :type color_slots: :class:`gpu.types.GPUTexture` | "
+    "      :type color_slots: :class:`gpu.types.GPUTexture` | "
     "dict[str, int | :class:`gpu.types.GPUTexture`] | "
     "Sequence[:class:`gpu.types.GPUTexture` | dict[str, int | "
     ":class:`gpu.types.GPUTexture`]] | "

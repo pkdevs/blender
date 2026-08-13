@@ -16,6 +16,9 @@ import shutil
 import subprocess
 import time
 import multiprocessing
+import traceback
+import re
+import json
 
 from pathlib import Path
 
@@ -113,6 +116,7 @@ class TestResult:
         self.filepath = filepath
         self.name = name
         self.error = None
+        self.stats = None
         self.tmp_out_img_base = os.path.join(report.output_dir, "tmp_" + name)
         self.tmp_out_img = self.tmp_out_img_base + '0001.png'
         self.old_img, self.ref_img, self.new_img, self.diff_color_img, self.diff_alpha_img = test_get_images(
@@ -141,12 +145,30 @@ def diff_output(test, oiiotool, fail_threshold, fail_percent, verbose, update):
             "--diff",
         )
         try:
-            subprocess.check_output(command)
+            output = subprocess.check_output(command)
             failed = False
         except subprocess.CalledProcessError as e:
+            output = e.output
             if verbose:
-                print_message(e.output.decode("utf-8", 'ignore'))
+                print_message(output.decode("utf-8", 'ignore'))
             failed = e.returncode != 0
+
+        try:
+            output = output.decode("utf-8", 'ignore')
+            # Only print max error and number of pixels over threshold.
+            # Max error is not present if the images are a perfect match.
+            max_error = re.search(r"Max error *= *(\S+)", output)
+            over_threshold = re.findall(r"\S+ pixels .* over \S+", output)
+            if max_error or over_threshold:
+                test.stats = ""
+                if max_error:
+                    test.stats += "Max error = {:.3f}\n".format(float(max_error.group(1)))
+                if over_threshold:
+                    test.stats += over_threshold[-1]
+        except Exception as e:
+            print("Error parsing oiiotool output: \n", output, "\n", traceback.format_exc())
+            test.error = "STATS ERROR"
+            return test
     else:
         if not update:
             test.error = "VERIFY"
@@ -208,23 +230,38 @@ def diff_output(test, oiiotool, fail_threshold, fail_percent, verbose, update):
     return test
 
 
-def get_gpu_device_vendor(blender):
+def get_gpu_device_info(blender, gpu_backend):
     command = [
         blender,
         "--background",
         "--factory-startup",
+        "--gpu-backend",
+        gpu_backend,
         "--python",
         str(pathlib.Path(__file__).parent / "gpu_info.py")
     ]
-    try:
-        completed_process = subprocess.run(command, stdout=subprocess.PIPE, universal_newlines=True)
-        for line in completed_process.stdout.splitlines():
-            if line.startswith("GPU_DEVICE_TYPE:"):
-                vendor = line.split(':')[1].upper()
-                return vendor
-    except Exception:
-        return None
-    return None
+
+    completed_process = subprocess.run(command, stdout=subprocess.PIPE, universal_newlines=True)
+    info = completed_process.stdout.split("<GPU_INFO>")[1].split("</GPU_INFO>")[0]
+    return json.loads(info)
+
+
+def get_gpu_device_vendor(blender, gpu_backend):
+    return get_gpu_device_info(blender, gpu_backend)["DEVICE_TYPE"]
+
+
+def get_gpu_device_ray_queries_support(blender, gpu_backend):
+    command = [
+        blender,
+        "--background",
+        "--factory-startup",
+        "--gpu-backend",
+        gpu_backend,
+        "--python-expr",
+        'import gpu; gpu.init(); print("GPU_RAY_QUERIES_SUPPORT:", gpu.capabilities.ray_query_support_get())'
+    ]
+    completed_process = subprocess.run(command, stdout=subprocess.PIPE, universal_newlines=True)
+    return "GPU_RAY_QUERIES_SUPPORT: True" in completed_process.stdout
 
 
 class Report:
@@ -235,6 +272,7 @@ class Report:
         'global_dir',
         'reference_dir',
         'reference_override_dir',
+        "test_name_suffix",
         'oiiotool',
         'pixelated',
         'fail_threshold',
@@ -259,6 +297,7 @@ class Report:
 
         self.reference_dir = 'reference_renders'
         self.reference_override_dir = None
+        self.test_name_suffix = ""
         self.oiiotool = oiiotool
         self.compare_engine = None
         self.fail_threshold = 0.016
@@ -304,6 +343,9 @@ class Report:
 
     def set_engine_name(self, engine_name):
         self.engine_name = engine_name
+
+    def set_test_name_suffix(self, suffix):
+        self.test_name_suffix = suffix
 
     def run(self, dirpath, blender, arguments_cb, batch=False, fail_silently=False):
         # Run tests and output report.
@@ -486,9 +528,11 @@ class Report:
         return pathlib.Path(relpath).as_posix()
 
     def _write_test_html(self, test_category, test_result):
-        name = test_result.name.replace('_', ' ')
+        name = test_result.name + self.test_name_suffix
 
-        status = test_result.error if test_result.error else ""
+        status = "<strong>" + test_result.error + "</strong><br>" if test_result.error else ""
+        if test_result.stats:
+            status += "<i>" + "<br>".join(test_result.stats.splitlines()) + "</i>"
         tr_style = """ class="table-danger" """ if test_result.error else ""
 
         new_url = self._relative_url(test_result.new_img)

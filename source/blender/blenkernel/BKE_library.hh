@@ -52,7 +52,7 @@ struct LibraryRuntime {
    * Use #BKE_library_filepath_set() rather than setting `filepath`
    * directly and it will be kept in sync - campbell
    */
-  char filepath_abs[1024] = "";
+  char filepath_abs[/*FILE_MAX*/ 1024] = "";
 
   /** Set for indirectly linked libraries, used in the outliner and while reading. */
   Library *parent = nullptr;
@@ -114,6 +114,8 @@ void main_cleanup_parent_archives(Main &bmain);
  */
 Library *ensure_archive_library(
     Main &bmain, ID &id, Library &reference_library, const IDHash &id_deep_hash, bool &is_new);
+
+Library *create_external_archive_library(Main &bmain, Library &external_library);
 
 };  // namespace bke::library
 

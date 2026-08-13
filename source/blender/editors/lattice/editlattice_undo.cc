@@ -13,9 +13,9 @@
 
 #include "CLG_log.h"
 
-#include "BLI_array_utils.h"
-#include "BLI_listbase.h"
-#include "BLI_string.h"
+#include "BLI_array_utils_c.hh"
+#include "BLI_listbase.hh"
+#include "BLI_string.hh"
 
 #include "DNA_curve_types.h"
 #include "DNA_lattice_types.h"
@@ -107,7 +107,7 @@ static void undolatt_to_editlatt(UndoLattice *ult,
 
   STRNCPY(editlatt->latt->vgroup, ult->vgroup);
 
-  BLI_freelistN(vertex_group_names);
+  vertex_group_names->free_no_destruct();
   BKE_defgroup_copy_list(vertex_group_names, &ult->vertex_group_names);
   *vertex_group_active_index = ult->vertex_group_active_index;
 
@@ -166,7 +166,7 @@ static void undolatt_free_data(UndoLattice *ult)
     BKE_defvert_array_free(ult->dvert, ult->pntsu * ult->pntsv * ult->pntsw);
     ult->dvert = nullptr;
   }
-  BLI_freelistN(&ult->vertex_group_names);
+  ult->vertex_group_names.free_no_destruct();
 }
 
 #if 0
@@ -182,9 +182,10 @@ static int validate_undoLatt(void *data, void *edata)
 
 static Object *editlatt_object_from_context(bContext *C)
 {
+  const Main *bmain = CTX_data_main(C);
   Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
-  BKE_view_layer_synced_ensure(scene, view_layer);
+  BKE_view_layer_synced_ensure(*bmain, scene, view_layer);
   Object *obedit = BKE_view_layer_edit_object_get(view_layer);
   if (obedit && obedit->type == OB_LATTICE) {
     Lattice *lt = id_cast<Lattice *>(obedit->data);
@@ -230,7 +231,7 @@ static bool lattice_undosys_step_encode(bContext *C, Main *bmain, UndoStep *us_p
    * outside of this list will be moved out of edit-mode when reading back undo steps. */
   Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
-  Vector<Object *> objects = ED_undo_editmode_objects_from_view_layer(scene, view_layer);
+  Vector<Object *> objects = ED_undo_editmode_objects_from_view_layer(*bmain, scene, view_layer);
 
   us->scene_ref.ptr = scene;
   us->elems = MEM_new_array_zeroed<LatticeUndoStep_Elem>(objects.size(), __func__);
@@ -308,7 +309,7 @@ static void lattice_undosys_step_decode(
 
   /* The first element is always active */
   ED_undo_object_set_active_or_warn(
-      scene, view_layer, us->elems[0].obedit_ref.ptr, us_p->name, &LOG);
+      *bmain, scene, view_layer, us->elems[0].obedit_ref.ptr, us_p->name, &LOG);
 
   /* Check after setting active (unless undoing into another scene). */
   BLI_assert(lattice_undosys_poll(C) || (scene != CTX_data_scene(C)));
@@ -344,7 +345,7 @@ static void lattice_undosys_foreach_ID_ref(UndoStep *us_p,
 
 void ED_lattice_undosys_type(UndoType *ut)
 {
-  ut->name = "Edit Lattice";
+  ut->identifier = "EDIT_LATTICE";
   ut->poll = lattice_undosys_poll;
   ut->step_encode = lattice_undosys_step_encode;
   ut->step_decode = lattice_undosys_step_decode;
@@ -352,7 +353,7 @@ void ED_lattice_undosys_type(UndoType *ut)
 
   ut->step_foreach_ID_ref = lattice_undosys_foreach_ID_ref;
 
-  ut->flags = UNDOTYPE_FLAG_NEED_CONTEXT_FOR_ENCODE;
+  ut->flags = UNDOTYPE_FLAG_NEED_CONTEXT_FOR_ENCODE | UNDOTYPE_FLAG_ENCODE_PRE_MEMFILE_SUPPORTED;
 
   ut->step_size = sizeof(LatticeUndoStep);
 }

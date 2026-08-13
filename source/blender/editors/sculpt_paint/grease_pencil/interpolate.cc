@@ -10,12 +10,12 @@
 #include "BKE_paint.hh"
 
 #include "BLI_array_utils.hh"
-#include "BLI_easing.h"
+#include "BLI_easing.hh"
 #include "BLI_index_mask.hh"
 #include "BLI_math_angle_types.hh"
-#include "BLI_math_geom.h"
-#include "BLI_math_rotation.h"
+#include "BLI_math_geom_c.hh"
 #include "BLI_math_rotation.hh"
+#include "BLI_math_rotation_c.hh"
 #include "BLI_math_vector.hh"
 #include "BLI_offset_indices.hh"
 #include "BLI_task.hh"
@@ -350,7 +350,6 @@ InterpolateOpData *InterpolateOpData::from_operator(const bContext &C, const wmO
     case InterpolateLayerMode::All:
       data->layer_mask = IndexMask::from_predicate(
           grease_pencil.layers().index_range(),
-          GrainSize(1024),
           data->layer_mask_memory,
           [&](const int layer_index) { return grease_pencil.layer(layer_index).is_editable(); });
       break;

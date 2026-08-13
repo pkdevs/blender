@@ -22,7 +22,7 @@
 #include "BKE_scene.hh"
 
 #include "BLI_path_utils.hh"
-#include "BLI_string.h"
+#include "BLI_string.hh"
 #include "BLI_task.hh"
 #include "BLI_vector.hh"
 
@@ -363,7 +363,7 @@ void export_frame(Depsgraph *depsgraph, const OBJExportParams &export_params, co
 
 bool append_frame_to_filename(const char *filepath,
                               const int frame,
-                              char r_filepath_with_frames[1024])
+                              char r_filepath_with_frames[FILE_MAX])
 {
   BLI_strncpy(r_filepath_with_frames, filepath, FILE_MAX);
   BLI_path_extension_strip(r_filepath_with_frames);

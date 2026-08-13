@@ -14,14 +14,14 @@
 #include "DNA_screen_types.h"
 #include "DNA_space_types.h"
 
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 #ifdef WIN32
-#  include "BLI_winstuff.h"
+#  include "BLI_winstuff.hh"
 #endif
-#include "BLI_fileops.h"
+#include "BLI_fileops.hh"
 #include "BLI_path_utils.hh"
-#include "BLI_string.h"
-#include "BLI_string_utf8.h"
+#include "BLI_string.hh"
+#include "BLI_string_utf8.hh"
 
 #include "BKE_callbacks.hh"
 #include "BKE_context.hh"
@@ -66,6 +66,7 @@ static wmOperatorStatus preferences_reset_default_theme_exec(bContext *C, wmOper
   ui::style_init_default();
   WM_reinit_gizmomap_all(bmain);
   WM_event_add_notifier(C, NC_WINDOW, nullptr);
+  WM_event_add_notifier(C, NC_UI | ND_UI_FONT, nullptr);
   U.runtime.is_dirty = true;
   return OPERATOR_FINISHED;
 }
@@ -182,6 +183,8 @@ static wmOperatorStatus preferences_asset_library_add_exec(bContext *C, wmOperat
     }
     case bUserAssetLibraryAddType::Remote: {
       char *remote_url = RNA_string_get_alloc(op->ptr, "remote_url", nullptr, 0, nullptr);
+      char *auth_token = RNA_string_get_alloc(op->ptr, "auth_token", nullptr, 0, nullptr);
+      const bool use_auth_token = RNA_boolean_get(op->ptr, "use_auth_token");
 
       if (!name[0]) {
         BKE_preferences_remote_to_name(remote_url, name);
@@ -190,15 +193,21 @@ static wmOperatorStatus preferences_asset_library_add_exec(bContext *C, wmOperat
         STRNCPY(name, DATA_("Remote Asset Library"));
       }
 
-      new_library = BKE_preferences_remote_asset_library_add(&U, name, remote_url);
+      new_library = BKE_preferences_remote_asset_library_add(
+          &U, name, remote_url, use_auth_token ? auth_token : nullptr);
 
       MEM_delete(remote_url);
+      MEM_delete(auth_token);
       break;
     }
   }
 
   /* Activate new library in the UI for further setup. */
-  U.active_asset_library = BLI_findindex(&U.asset_libraries, new_library);
+  if (const std::optional<int> new_active_idx =
+          userpref_ui_asset_libraries_index_from_user_library(*new_library))
+  {
+    U.active_asset_library = *new_active_idx;
+  }
   U.runtime.is_dirty = true;
 
   if (new_library->flag & ASSET_LIBRARY_USE_REMOTE_URL) {
@@ -242,10 +251,22 @@ static void preferences_asset_library_add_ui(bContext * /*C*/, wmOperator *op)
   switch (library_type) {
     case bUserAssetLibraryAddType::Remote: {
       layout->prop(op->ptr, "remote_url", ui::ITEM_R_IMMEDIATE, std::nullopt, ICON_NONE);
+
+      const bool use_auth_token = RNA_boolean_get(ptr, "use_auth_token");
+      const int token_icon = (use_auth_token && RNA_string_length(ptr, "auth_token")) ?
+                                 ICON_LOCKED :
+                                 ICON_UNLOCKED;
+
+      ui::Layout &col = layout->column(true, IFACE_("Authentication"));
+      col.prop(ptr, "use_auth_token", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+      if (use_auth_token) {
+        ui::Layout &row = col.row(false);
+        /* Use "immediate" flag to refresh the icon. */
+        row.prop(ptr, "auth_token", ui::ITEM_R_IMMEDIATE, IFACE_("Secret"), token_icon);
+      }
       break;
     }
     case bUserAssetLibraryAddType::Local: {
-      BLI_assert_unreachable();
       layout->prop(op->ptr, "name", ui::ITEM_R_IMMEDIATE, std::nullopt, ICON_NONE);
       break;
     }
@@ -332,9 +353,35 @@ static void PREFERENCES_OT_asset_library_add(wmOperatorType *ot)
                                        RNA_property_ui_description_raw(prop_ref));
     RNA_def_property_flag(prop, PROP_SKIP_SAVE);
   }
+  { /* Use Authentication Token. */
+    const char *prop_id = "use_auth_token";
+    const PropertyRNA *prop_ref = RNA_struct_type_find_property(type_ref, prop_id);
+    PropertyRNA *prop = RNA_def_boolean(ot->srna,
+                                        prop_id,
+                                        false,
+                                        RNA_property_ui_name_raw(prop_ref),
+                                        RNA_property_ui_description_raw(prop_ref));
+    RNA_def_property_flag(prop, PROP_SKIP_SAVE);
+  }
+  { /* Authentication Token (dynamic length). */
+    const char *prop_id = "auth_token";
+    const PropertyRNA *prop_ref = RNA_struct_type_find_property(type_ref, prop_id);
+    PropertyRNA *prop = RNA_def_string(ot->srna,
+                                       prop_id,
+                                       nullptr,
+                                       0,
+                                       RNA_property_ui_name_raw(prop_ref),
+                                       RNA_property_ui_description_raw(prop_ref));
+    RNA_def_property_flag(prop, PROP_SKIP_SAVE);
+    RNA_def_property_subtype(prop, PROP_PASSWORD);
+  }
 
-  ot->prop = RNA_def_enum(
-      ot->srna, "type", custom_library_type_items, 0, "Type", "The kind of asset library to add");
+  ot->prop = RNA_def_enum(ot->srna,
+                          "type",
+                          custom_library_type_items,
+                          int(bUserAssetLibraryAddType::Local),
+                          "Type",
+                          "The kind of asset library to add");
   RNA_def_enum_funcs(ot->prop, custom_library_type_itemf);
   RNA_def_property_flag(ot->prop, PROP_SKIP_SAVE | PROP_HIDDEN);
 }
@@ -347,7 +394,7 @@ static void PREFERENCES_OT_asset_library_add(wmOperatorType *ot)
 
 static bool preferences_asset_library_remove_poll(bContext *C)
 {
-  if (BLI_listbase_is_empty(&U.asset_libraries)) {
+  if (U.asset_libraries.is_empty()) {
     CTX_wm_operator_poll_msg_set(C, "There is no asset library to remove");
     return false;
   }
@@ -377,27 +424,8 @@ static wmOperatorStatus preferences_asset_library_remove_exec(bContext *C, wmOpe
     BKE_preferences_asset_library_remove(&U, library);
   }
 
-  /* If the experimental flag was disabled, make sure the newly activated asset
-   * library is not a remote one. */
-  if (!use_remote_libraries) {
-    int nonremote_index = 0;
-    for (auto [index, lib] : U.asset_libraries.enumerate()) {
-      if (lib.flag & ASSET_LIBRARY_USE_REMOTE_URL) {
-        /* Ignore remote libraries. */
-        continue;
-      }
-
-      nonremote_index = index;
-      if (index >= U.active_asset_library) {
-        /* We've found the first usable library above the deleted one, the search can stop. */
-        break;
-      }
-    }
-    U.active_asset_library = nonremote_index;
-  }
-
   /* Update active library index to be in range. */
-  const int count_remaining = BLI_listbase_count(&U.asset_libraries);
+  const int count_remaining = userpref_ui_asset_libraries_count();
   CLAMP(U.active_asset_library, 0, count_remaining - 1);
   U.runtime.is_dirty = true;
 
@@ -625,11 +653,12 @@ static void preferences_extension_repo_add_ui(bContext * /*C*/, wmOperator *op)
 
       ui::Layout &row = layout.row(true, IFACE_("Authentication"));
       row.prop(op->ptr, "use_access_token", UI_ITEM_NONE, std::nullopt, ICON_NONE);
-      ui::Layout &col = layout.row(false);
-      col.active_set(use_access_token);
-      /* Use "immediate" flag to refresh the icon. */
-      col.prop(op->ptr, "access_token", ui::ITEM_R_IMMEDIATE, std::nullopt, token_icon);
-
+      if (use_access_token) {
+        ui::Layout &col = layout.row(false);
+        col.active_set(use_access_token);
+        /* Use "immediate" flag to refresh the icon. */
+        col.prop(op->ptr, "access_token", ui::ITEM_R_IMMEDIATE, std::nullopt, token_icon);
+      }
       layout.separator(0.2f, ui::LayoutSeparatorType::Line);
 
       break;
@@ -781,7 +810,7 @@ static void PREFERENCES_OT_extension_repo_add(wmOperatorType *ot)
 
 static bool preferences_extension_repo_remove_poll(bContext *C)
 {
-  if (BLI_listbase_is_empty(&U.extension_repos)) {
+  if (U.extension_repos.is_empty()) {
     CTX_wm_operator_poll_msg_set(C, "There is no extension repository to remove");
     return false;
   }
@@ -918,7 +947,7 @@ static wmOperatorStatus preferences_extension_repo_remove_exec(bContext *C, wmOp
   }
 
   BKE_preferences_extension_repo_remove(&U, repo);
-  const int count_remaining = BLI_listbase_count(&U.extension_repos);
+  const int count_remaining = U.extension_repos.count();
   /* Update active repo index to be in range. */
   CLAMP(U.active_extension_repo, 0, count_remaining - 1);
   U.runtime.is_dirty = true;

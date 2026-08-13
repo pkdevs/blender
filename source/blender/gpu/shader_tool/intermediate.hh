@@ -96,6 +96,14 @@ struct MutableString {
     return substr_range_inclusive_view(start.str_index_start(), end.str_index_last());
   }
 
+  std::string last_substitution_failure;
+
+  bool report_failure()
+  {
+    std::cerr << last_substitution_failure << std::endl;
+    return false;
+  }
+
   /* Replace everything from `from` to `to` (inclusive).
    * Return true on success. */
   bool replace_try(size_t from, size_t to, const std::string &replacement)
@@ -103,6 +111,13 @@ struct MutableString {
     IndexRange range = IndexRange(from, to + 1 - from);
     for (const Mutation &mut : mutations_) {
       if (mut.src_range.overlaps(range)) {
+#ifndef NDEBUG
+        last_substitution_failure = "Trying to substitute \n\"" +
+                                    str_.substr(range.start, range.size) + "\"\nwith \n\"" +
+                                    replacement + "\"\nbut it overlaps with substituting \n\"" +
+                                    str_.substr(mut.src_range.start, mut.src_range.size) +
+                                    "\"\nwith \n\"" + mut.replacement + "\"";
+#endif
         return false;
       }
     }
@@ -127,7 +142,7 @@ struct MutableString {
   {
 #ifndef NDEBUG
     bool success = replace_try(from, to, replacement);
-    assert(success);
+    assert(success || report_failure());
     (void)success;
 #else
     /* No check in release. */
@@ -148,6 +163,7 @@ struct MutableString {
       replace(from.str_index_start(), to.str_index_last(), replacement);
     }
   }
+
   /* Replace token by string. */
   void replace(Token tok, const std::string &replacement, bool keep_trailing_whitespaces = false)
   {
@@ -170,10 +186,24 @@ struct MutableString {
       replace(scope.front(), scope.back(), replacement);
     }
   }
+  /* Replace Scope by string. */
+  void replace(ast::Node node,
+               const std::string &replacement,
+               bool keep_trailing_whitespaces = false)
+  {
+    if (keep_trailing_whitespaces) {
+      replace(Token(node.front()).str_index_start(),
+              Token(node.back()).str_index_last_no_whitespace(),
+              replacement);
+    }
+    else {
+      replace(node.front(), node.back(), replacement);
+    }
+  }
 
   /* Replace the content from `from` to `to` (inclusive) by whitespaces without changing
    * line count and keep the remaining indentation spaces. */
-  void erase(size_t from, size_t to)
+  bool erase_try(size_t from, size_t to)
   {
     IndexRange range = IndexRange(from, to + 1 - from);
     std::string content = str_.substr(range.start, range.size);
@@ -185,32 +215,68 @@ struct MutableString {
     else {
       spaces = content.length();
     }
-    replace(from, to, std::string(lines, '\n') + std::string(spaces, ' '));
+    return replace_try(from, to, std::string(lines, '\n') + std::string(spaces, ' '));
+  }
+  void erase(size_t from, size_t to)
+  {
+    bool result = erase_try(from, to);
+    assert(result || report_failure());
+    (void)result;
   }
   /* Replace the content from `from` to `to` (inclusive) by whitespaces without changing
    * line count and keep the remaining indentation spaces. */
+  bool erase_try(Token from, Token to)
+  {
+    if (from.is_invalid() || to.is_invalid()) {
+      return true;
+    }
+    assert(from.index_ <= to.index_);
+    return erase_try(from.str_index_start(), to.str_index_last());
+  }
   void erase(Token from, Token to)
   {
-    if (from.is_invalid() && to.is_invalid()) {
-      return;
-    }
-    assert(from.index <= to.index);
-    erase(from.str_index_start(), to.str_index_last());
+    bool result = erase_try(from, to);
+    assert(result || report_failure());
+    (void)result;
   }
   /* Replace the content from `from` to `to` (inclusive) by whitespaces without changing
    * line count and keep the remaining indentation spaces. */
-  void erase(Token tok)
+  bool erase_try(Token tok)
   {
     if (tok.is_invalid()) {
-      return;
+      return true;
     }
-    erase(tok, tok);
+    return erase_try(tok, tok);
+  }
+  void erase(Token tok)
+  {
+    bool result = erase_try(tok);
+    assert(result || report_failure());
+    (void)result;
   }
   /* Replace the content of the scope by whitespaces without changing
    * line count and keep the remaining indentation spaces. */
+  bool erase_try(Scope scope)
+  {
+    return erase_try(scope.front(), scope.back());
+  }
   void erase(Scope scope)
   {
-    erase(scope.front(), scope.back());
+    bool result = erase_try(scope);
+    assert(result || report_failure());
+    (void)result;
+  }
+  /* Replace the content of the scope by whitespaces without changing
+   * line count and keep the remaining indentation spaces. */
+  bool erase_try(ast::Node node)
+  {
+    return erase_try(node.front(), node.back());
+  }
+  void erase(ast::Node node)
+  {
+    bool result = erase_try(node);
+    assert(result || report_failure());
+    (void)result;
   }
 
   /* If prepend is true, will prepend the new content to the list of modifications.
@@ -240,13 +306,17 @@ struct MutableString {
     insert_after(at.str_index_last(), content);
   }
 
-  void insert_line_number(size_t at, int line)
+  void insert_line_number(size_t at, int line, std::string_view filename = "")
   {
-    insert_after(at, "#line " + std::to_string(line) + "\n");
+    std::string str = "\n#line " + std::to_string(line);
+    if (!filename.empty()) {
+      str = str + " \"" + std::string(filename) + "\"";
+    }
+    insert_after(at, str + "\n");
   }
-  void insert_line_number(Token at, int line)
+  void insert_line_number(Token at, int line, std::string_view filename = "")
   {
-    insert_line_number(at.str_index_last(), line);
+    insert_line_number(at.str_index_last(), line, filename);
   }
 
   /* Insert a preprocessor directive after the given token.
@@ -254,9 +324,7 @@ struct MutableString {
   void insert_directive(Token at, const std::string directive)
   {
     insert_after(at, "\n" + directive + "\n");
-    std::string_view content = at.str_view_with_whitespace();
-    size_t lines = std::count(content.begin(), content.end(), '\n');
-    insert_line_number(at, at.line_number() + lines);
+    insert_line_number(at, at.line_number(true));
     size_t line_break = str_.find_last_of("\n", at.str_index_last() + 1);
     size_t spaces = at.str_index_last() - line_break;
     insert_after(at, std::string(spaces, ' '));
@@ -291,35 +359,60 @@ struct MutableString {
   }
 };
 
+inline std::ostream &operator<<(std::ostream &out, const std::vector<int> &v)
+{
+  if (!v.empty()) {
+    out << '[';
+    for (auto val : v) {
+      out << val << ',';
+    }
+    out << "\b]";
+  }
+  return out;
+}
+
+class ParserException : public std::exception {};
+
 /* Structure holding an intermediate form of the source code.
  * It is made for fast traversal and mutation of source code. */
-template<typename LexerClass, typename ParserClass> struct IntermediateForm : MutableString {
+template<typename LexerFn, typename ParserFn>
+struct IntermediateForm : MutableString, Parser<LexerFn, ParserFn> {
  protected:
-  LexerClass lex_;
-  ParserClass parser_;
-
-  report_callback &report_error;
+  ErrorHandler &report_error;
 
  public:
-  IntermediateForm(const std::string_view input, report_callback &report_error)
-      : MutableString(input), parser_(lex_), report_error(report_error)
+  Language language = Language::BLENDER_GLSL;
+
+  IntermediateForm(const std::string_view input, ErrorHandler &report_error)
+      : MutableString(input), report_error(report_error)
   {
+    parse(report_error);
+  }
+
+  IntermediateForm(ErrorHandler &report_error) : MutableString(""), report_error(report_error)
+  {
+    parse(report_error);
+  }
+
+  void set_str(const std::string_view input)
+  {
+    str_ = input;
     parse(report_error);
   }
 
   /* Main access operator. Returns the root scope (aka global scope). */
   Scope operator()() const
   {
-    if (parser_.scope_types.empty()) {
-      return Scope::invalid();
+    if (this->scope_types.empty()) {
+      return Scope(*this);
     }
-    return Scope::from_position(parser_, 0);
+    return Scope(*this, 0);
   }
 
   /* Return true if any mutation was applied. */
   bool only_apply_mutations(const bool all_mutation_ordered = false)
   {
-    return static_cast<MutableString *>(this)->apply_mutations(lex_, all_mutation_ordered);
+    return static_cast<MutableString *>(this)->apply_mutations(*this, all_mutation_ordered);
   }
 
   /* Apply pending mutation and parse the resulting string.
@@ -340,23 +433,40 @@ template<typename LexerClass, typename ParserClass> struct IntermediateForm : Mu
     return str_;
   }
 
-  /* For testing. */
-  const ParserBase &data_get()
+  void parse(ErrorHandler &report_error)
   {
-    return parser_;
-  }
-
-  void parse(report_callback &report_error)
-  {
-    lex_.lexical_analysis(str_);
-    parser_.semantic_analysis(report_error);
+    this->lexical_analysis(str_);
+    this->semantic_analysis(report_error);
+    switch (language) {
+      case Language::BSL:
+        this->parse_bsl(report_error);
+        break;
+      default:
+        break;
+    }
+    if (report_error.err.has_value()) {
+      throw ParserException();
+    }
   }
 
   void debug_print()
   {
     std::cout << "Input: \n" << str_ << " \nEnd of Input\n" << std::endl;
-    std::cout << "Token Types: \"" << lex_.token_types_str << "\"" << std::endl;
-    std::cout << "Scope Types: \"" << parser_.scope_types_str << "\"" << std::endl;
+    std::cout << "Token Types: \"" << this->token_types_str() << "\"" << std::endl;
+    std::cout << "Token scopes: \"" << this->token_scope << "\"" << std::endl;
+    std::cout << "Scope Types: \"" << this->scope_types_str << "\"" << std::endl;
+  }
+
+  void debug_print_tokens()
+  {
+    for (auto tok : *this) {
+      std::cout << "id:" << int(tok) << " start:" << this->offsets_[int(tok)]
+                << " end:" << this->offsets_end_[int(tok)] << " type:" << tok.type()
+                << " scope:" << this->token_scope[int(tok)] << "("
+                << this->scope_types_str[this->token_scope[int(tok)]] << ")"
+                << " atom:" << tok.atom() << " str:\"" << tok.str() << "\""
+                << " followed_by_whitespace:" << tok.followed_by_whitespace() << "\n";
+    }
   }
 };
 

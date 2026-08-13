@@ -7,6 +7,9 @@
  */
 
 #ifdef WIN32
+#  ifdef WIN32_LEAN_AND_MEAN
+#    undef WIN32_LEAN_AND_MEAN
+#  endif
 #  include <Windows.h>
 
 #  include <KnownFolders.h>
@@ -17,7 +20,7 @@
 #  include <wrl.h>
 
 #  include "BLI_path_utils.hh"
-#  include "BLI_winstuff.h"
+#  include "BLI_winstuff.hh"
 #  include "BLI_winstuff_com.hh"
 
 #  include "utf_winfunc.hh"

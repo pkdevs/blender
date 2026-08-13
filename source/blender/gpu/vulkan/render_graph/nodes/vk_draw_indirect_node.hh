@@ -19,52 +19,63 @@ namespace blender::gpu::render_graph {
 struct VKDrawIndirectData {
   VKPipelineDataGraphics graphics;
   VKVertexBufferBindings vertex_buffers;
-  VkBuffer indirect_buffer;
+  VKResourceWithHandle<VkBuffer> indirect_buffer;
   VkDeviceSize offset;
   uint32_t draw_count;
   uint32_t stride;
+
+  void reset()
+  {
+    graphics.reset();
+    vertex_buffers = {};
+    indirect_buffer = {};
+    offset = 0;
+    draw_count = 0;
+    stride = 0;
+  }
 };
 
 struct VKDrawIndirectCreateInfo {
-  VKDrawIndirectData node_data = {};
   const VKResourceAccessInfo &resources;
   VKDrawIndirectCreateInfo(const VKResourceAccessInfo &resources) : resources(resources) {}
 };
 
-class VKDrawIndirectNode : public VKNodeInfo<VKNodeType::DRAW_INDIRECT,
-                                             VKDrawIndirectCreateInfo,
-                                             VKDrawIndirectData,
-                                             VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT,
-                                             VKResourceType::IMAGE | VKResourceType::BUFFER> {
+class VKDrawIndirectNode : public VKDrawNodeInfo<VKNodeType::DRAW_INDIRECT,
+                                                 VKDrawIndirectCreateInfo,
+                                                 VKDrawIndirectData,
+                                                 VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT,
+                                                 VKResourceType::IMAGE | VKResourceType::BUFFER> {
  public:
-  /**
-   * Update the node data with the data inside create_info.
-   *
-   * Has been implemented as a template to ensure all node specific data
-   * (`VK*Data`/`VK*CreateInfo`) types can be included in the same header file as the logic. The
-   * actual node data (`VKRenderGraphNode` includes all header files.)
-   */
-  template<typename Node, typename Storage>
-  static void set_node_data(Node &node, Storage &storage, const CreateInfo &create_info)
+  static void reset_data(Data &data)
   {
-    node.storage_index = storage.draw_indirect.append_and_get_index(create_info.node_data);
-    vk_pipeline_data_copy(storage.draw_indirect[node.storage_index].graphics,
-                          create_info.node_data.graphics);
+    data.reset();
+  }
+
+  template<typename Storage>
+  static Data &alloc_node_data(Storage &storage, int64_t &r_storage_index)
+  {
+    Data &data = storage.draw_indirect.alloc(r_storage_index);
+    reset_data(data);
+    return data;
+  }
+
+  template<typename Storage> static Data &storage_data(Storage &storage, int64_t storage_index)
+  {
+    return storage.draw_indirect[storage_index];
   }
 
   /**
    * Extract read/write resource dependencies from `create_info` and add them to `node_links`.
    */
   void build_links(VKResourceStateTracker &resources,
-                   VKRenderGraphNodeLinks &node_links,
-                   const CreateInfo &create_info) override
+                   VKRenderGraphLinks &links,
+                   const CreateInfo &create_info,
+                   Data &data) override
   {
-    create_info.resources.build_links(resources, node_links);
-    vk_vertex_buffer_bindings_build_links(
-        resources, node_links, create_info.node_data.vertex_buffers);
-    ResourceWithStamp buffer_resource = resources.get_buffer(
-        create_info.node_data.indirect_buffer);
-    node_links.inputs.append({buffer_resource, VK_ACCESS_INDIRECT_COMMAND_READ_BIT});
+    create_info.resources.build_links(resources, links);
+    vk_vertex_buffer_bindings_build_links(resources, links, data.vertex_buffers);
+    ResourceWithStamp buffer_resource = resources.get_buffer(data.indirect_buffer);
+    links.buffers.append({buffer_resource, VK_ACCESS_INDIRECT_COMMAND_READ_BIT});
   }
 
   /**
@@ -72,11 +83,13 @@ class VKDrawIndirectNode : public VKNodeInfo<VKNodeType::DRAW_INDIRECT,
    */
   void build_commands(VKCommandBufferInterface &command_buffer,
                       Data &data,
+                      Span<uint8_t> storage_push_constants,
                       VKBoundPipelines &r_bound_pipelines) override
   {
     vk_pipeline_dynamic_graphics_build_commands(command_buffer, data.graphics, r_bound_pipelines);
     vk_pipeline_data_build_commands(command_buffer,
                                     data.graphics.pipeline_data,
+                                    storage_push_constants,
                                     r_bound_pipelines.graphics.pipeline,
                                     VK_PIPELINE_BIND_POINT_GRAPHICS,
                                     VK_SHADER_STAGE_ALL_GRAPHICS);
@@ -84,11 +97,6 @@ class VKDrawIndirectNode : public VKNodeInfo<VKNodeType::DRAW_INDIRECT,
         command_buffer, data.vertex_buffers, r_bound_pipelines.graphics.vertex_buffers);
 
     command_buffer.draw_indirect(data.indirect_buffer, data.offset, data.draw_count, data.stride);
-  }
-
-  void free_data(Data &data)
-  {
-    vk_pipeline_data_free(data.graphics);
   }
 };
 }  // namespace blender::gpu::render_graph

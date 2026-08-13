@@ -24,12 +24,14 @@ struct VKSynchronizationCreateInfo {
   VkImage vk_image;
   VkImageLayout vk_image_layout;
   VkImageAspectFlags vk_image_aspect;
+  /** Access flags the synchronization node waits for. */
+  VkAccessFlags vk_access_flags;
 };
 
 class VKSynchronizationNode : public VKNodeInfo<VKNodeType::SYNCHRONIZATION,
                                                 VKSynchronizationCreateInfo,
                                                 VKSynchronizationData,
-                                                VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+                                                VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
                                                 VKResourceType::IMAGE | VKResourceType::BUFFER> {
  public:
   /**
@@ -40,9 +42,10 @@ class VKSynchronizationNode : public VKNodeInfo<VKNodeType::SYNCHRONIZATION,
    * actual node data (`VKRenderGraphNode` includes all header files.)
    */
   template<typename Node, typename Storage>
-  static void set_node_data(Node &node, Storage & /* storage */, const CreateInfo &create_info)
+  static void set_node_data(Node &node,
+                            Storage & /* storage */,
+                            const CreateInfo & /*create_info*/)
   {
-    UNUSED_VARS(create_info);
     node.synchronization = {};
   }
 
@@ -50,12 +53,13 @@ class VKSynchronizationNode : public VKNodeInfo<VKNodeType::SYNCHRONIZATION,
    * Extract read/write resource dependencies from `create_info` and add them to `node_links`.
    */
   void build_links(VKResourceStateTracker &resources,
-                   VKRenderGraphNodeLinks &node_links,
+                   VKRenderGraphLinks &links,
                    const CreateInfo &create_info) override
   {
     ResourceWithStamp resource = resources.get_image_and_increase_stamp(create_info.vk_image);
-    node_links.outputs.append(
-        {resource, VK_ACCESS_NONE, create_info.vk_image_layout, create_info.vk_image_aspect});
+    links.images.append({{resource, create_info.vk_access_flags},
+                         create_info.vk_image_layout,
+                         create_info.vk_image_aspect});
   }
 
   /**
@@ -63,6 +67,7 @@ class VKSynchronizationNode : public VKNodeInfo<VKNodeType::SYNCHRONIZATION,
    */
   void build_commands(VKCommandBufferInterface &command_buffer,
                       Data &data,
+                      Span<uint8_t> /*storage_push_constants*/,
                       VKBoundPipelines & /*r_bound_pipelines*/) override
   {
     UNUSED_VARS(command_buffer, data);

@@ -9,8 +9,8 @@
 #pragma once
 
 #include "BLI_bounds.hh"
-#include "BLI_math_matrix.h"
 #include "BLI_math_matrix.hh"
+#include "BLI_math_matrix_c.hh"
 
 #include "BKE_curves.hh"
 #include "BKE_grease_pencil.hh"
@@ -275,7 +275,7 @@ class GreasePencil : Overlay {
     for (auto i : IndexRange(res.depth_planes_count)) {
       GreasePencilDepthPlane &plane = res.depth_planes[i];
       const float4x4 &object_to_world =
-          manager.matrix_buf.current().get_or_resize(plane.handle.resource_index()).model;
+          manager.matrix_buf.current().get_or_resize(plane.handle.index()).model;
       plane.plane = GreasePencil::depth_plane_get(object_to_world, plane.bounds, view);
     }
   }

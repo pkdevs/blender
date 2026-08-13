@@ -8,9 +8,9 @@
  * Connect verts across faces (splits faces) and bridge tool.
  */
 
-#include "BLI_listbase.h"
-#include "BLI_math_vector.h"
-#include "BLI_utildefines.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_vector_c.hh"
+#include "BLI_utildefines.hh"
 
 #include "bmesh.hh"
 
@@ -128,11 +128,6 @@ static void bm_face_edges_tag_out(BMesh *bm, BMFace *f)
   } while ((l_iter = l_iter->next) != l_first);
 }
 
-static bool bm_edge_test_cb(BMEdge *e, void *bm_v)
-{
-  return BMO_edge_flag_test((BMesh *)bm_v, e, EDGE_MARK);
-}
-
 static void bridge_loop_pair(BMesh *bm,
                              BMEdgeLoopStore *el_store_a,
                              BMEdgeLoopStore *el_store_b,
@@ -195,7 +190,7 @@ static void bridge_loop_pair(BMesh *bm,
     cross_v3_v3v3(no, dir_b_orig, el_dir);
     cross_v3_v3v3(dir_b, no, el_dir);
 
-    if (LIKELY(!is_zero_v3(dir_a) && !is_zero_v3(dir_b))) {
+    if (!is_zero_v3(dir_a) && !is_zero_v3(dir_b)) [[likely]] {
       test_a = dir_a;
       test_b = dir_b;
     }
@@ -230,7 +225,9 @@ static void bridge_loop_pair(BMesh *bm,
   dot_a = dot_v3v3(BM_edgeloop_normal_get(el_store_a), el_dir);
   dot_b = dot_v3v3(BM_edgeloop_normal_get(el_store_b), el_dir);
 
-  if (UNLIKELY((len_squared_v3(el_dir) < eps) || ((fabsf(dot_a) < eps) && (fabsf(dot_b) < eps)))) {
+  if ((len_squared_v3(el_dir) < eps) || ((fabsf(dot_a) < eps) && (fabsf(dot_b) < eps)))
+      [[unlikely]]
+  {
     /* in this case there is no depth between the two loops,
      * eg: 2x 2d circles, one scaled smaller,
      * in this case 'el_dir' can't be used, just ensure we have matching flipping. */
@@ -399,7 +396,7 @@ static void bridge_loop_pair(BMesh *bm,
       if (v_b != v_b_next) {
 #ifdef USE_DUPLICATE_FACE_VERT_CHECK /* Only check for duplicates between loops. */
         BLI_assert((v_b != v_b_next) && (v_a_next != v_a));
-        if (UNLIKELY(ELEM(v_b, v_a_next, v_a) || ELEM(v_b_next, v_a_next, v_a))) {
+        if (ELEM(v_b, v_a_next, v_a) || ELEM(v_b_next, v_a_next, v_a)) [[unlikely]] {
           f = nullptr;
         }
         else
@@ -433,7 +430,7 @@ static void bridge_loop_pair(BMesh *bm,
       else {
 #ifdef USE_DUPLICATE_FACE_VERT_CHECK /* Only check for duplicates between loops. */
         BLI_assert(v_a_next != v_a);
-        if (UNLIKELY(ELEM(v_b, v_a_next, v_a))) {
+        if (ELEM(v_b, v_a_next, v_a)) [[unlikely]] {
           f = nullptr;
         }
         else
@@ -589,7 +586,8 @@ void bmo_bridge_loops_exec(BMesh *bm, BMOperator *op)
 
   BMO_slot_buffer_flag_enable(bm, op->slots_in, "edges", BM_EDGE, EDGE_MARK);
 
-  count = BM_mesh_edgeloops_find(bm, &eloops, bm_edge_test_cb, bm);
+  count = BM_mesh_edgeloops_find(
+      bm, &eloops, [&](BMEdge *e) { return BMO_edge_flag_test(bm, e, EDGE_MARK); });
 
   BM_mesh_edgeloops_calc_center(bm, &eloops);
 

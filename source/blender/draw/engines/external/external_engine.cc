@@ -13,7 +13,7 @@
 #include "DRW_engine.hh"
 #include "DRW_render.hh"
 
-#include "BLI_string.h"
+#include "BLI_string.hh"
 
 #include "BLT_translation.hh"
 
@@ -251,6 +251,11 @@ class Instance : public DrawEngine {
 
       rv3d->view_render = RE_NewViewRender(engine_type);
       render_engine = RE_view_engine_get(rv3d->view_render);
+
+      if (ScrArea *area = CTX_wm_area(draw_ctx->evil_C)) {
+        ED_area_tag_redraw_regiontype(area, RGN_TYPE_HEADER);
+      }
+
       engine_type->view_update(render_engine, draw_ctx->evil_C, draw_ctx->depsgraph);
     }
     else {
@@ -406,11 +411,10 @@ class Instance : public DrawEngine {
      * OpenGL render is used for quick preview (thumbnails or sequencer preview)
      * where using the rendering engine to preview doesn't make so much sense. */
     if (draw_ctx->evil_C) {
-      const float clear_col[4] = {0, 0, 0, 0};
       /* This is to keep compatibility with external engine. */
       /* TODO(fclem): remove it eventually. */
       GPU_framebuffer_bind(dfbl->default_fb);
-      GPU_framebuffer_clear_color(dfbl->default_fb, clear_col);
+      GPU_framebuffer_clear_color(dfbl->default_fb, {0.0, 0.0, 0.0, 0.0});
 
       DRW_submission_start();
       draw_scene_do(manager, view);
@@ -444,6 +448,8 @@ RenderEngineType DRW_engine_viewport_external_type = {
     /*bake*/ nullptr,
     /*view_update*/ nullptr,
     /*view_draw*/ nullptr,
+    /*view_pause*/ nullptr,
+    /*view_resume*/ nullptr,
     /*update_script_node*/ nullptr,
     /*update_render_passes*/ nullptr,
     /*update_custom_camera*/ nullptr,

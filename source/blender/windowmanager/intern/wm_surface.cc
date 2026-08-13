@@ -6,9 +6,9 @@
  * \ingroup wm
  */
 
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 #ifndef NDEBUG
-#  include "BLI_threads.h"
+#  include "BLI_threads.hh"
 #endif
 
 #include "BKE_global.hh"
@@ -78,18 +78,6 @@ void wm_surface_clear_drawable()
     }
 
     g_drawable = nullptr;
-
-    /* Workaround: For surface drawing, the Userdef runtime DPI/pixelsize values are set to
-     * base constants in #wm_surface_constant_dpi_set_userpref called in #wm_surface_make_drawable.
-     * This does not affect window rendering as #WM_window_dpi_set_userdef is called in
-     * #wm_window_make_drawable. However, some handlers called before window re-draw (such as
-     * window popups) call drawing code and thus rely on correct system DPI runtime values.
-     *
-     * Workaround this issue by restoring the DPI runtime value on surface drawable clear.
-     * To match the previous value, the last window is used (as windows are iterated and set in
-     * order in #wm_draw_update before drawing surfaces). */
-    wmWindowManager *wm = static_cast<wmWindowManager *>(G_MAIN->wm.first);
-    WM_window_dpi_set_userdef(static_cast<wmWindow *>(wm->windows.last));
   }
 }
 
@@ -151,7 +139,7 @@ void wm_surfaces_free()
     wm_surface_remove(&surf);
   }
 
-  BLI_assert(BLI_listbase_is_empty(&global_surface_list));
+  BLI_assert(global_surface_list.is_empty());
 }
 
 }  // namespace blender

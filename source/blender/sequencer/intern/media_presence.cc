@@ -6,12 +6,12 @@
  * \ingroup sequencer
  */
 
-#include "BLI_fileops.h"
-#include "BLI_listbase.h"
+#include "BLI_fileops.hh"
+#include "BLI_listbase.hh"
 #include "BLI_map.hh"
 #include "BLI_mutex.hh"
 #include "BLI_path_utils.hh"
-#include "BLI_string.h"
+#include "BLI_string.hh"
 
 #include "DNA_scene_types.h"
 #include "DNA_sequence_types.h"
@@ -20,6 +20,7 @@
 #include "BKE_library.hh"
 #include "BKE_main.hh"
 
+#include "SEQ_sequencer.hh"
 #include "SEQ_utils.hh"
 
 namespace blender::seq {
@@ -85,7 +86,7 @@ struct MediaPresence {
 
 static MediaPresence *get_media_presence_cache(Scene *scene)
 {
-  MediaPresence **presence = &scene->ed->runtime.media_presence;
+  MediaPresence **presence = &scene->ed->runtime->media_presence;
   if (*presence == nullptr) {
     *presence = MEM_new<MediaPresence>(__func__);
   }
@@ -109,6 +110,10 @@ bool media_presence_is_missing(Scene *scene, const Strip *strip)
    * block. Since it can be used by multiple strips. */
   if (strip->type == STRIP_TYPE_SOUND) {
     const bSound *sound = strip->sound;
+    if (sound && sound->packedfile != nullptr) {
+      /* The sound file has been packed, don't look up the path. */
+      return false;
+    }
     const bool *val = presence->map_sound.lookup_ptr(sound);
     if (val != nullptr) {
       missing = *val;
@@ -155,25 +160,25 @@ void media_presence_set_missing(Scene *scene, const Strip *strip, bool missing)
 void media_presence_invalidate_strip(Scene *scene, const Strip *strip)
 {
   std::scoped_lock lock(presence_lock);
-  if (scene != nullptr && scene->ed != nullptr && scene->ed->runtime.media_presence != nullptr) {
-    scene->ed->runtime.media_presence->map_seq.remove(strip);
+  if (scene != nullptr && scene->ed != nullptr && scene->ed->runtime->media_presence != nullptr) {
+    scene->ed->runtime->media_presence->map_seq.remove(strip);
   }
 }
 
 void media_presence_invalidate_sound(Scene *scene, const bSound *sound)
 {
   std::scoped_lock lock(presence_lock);
-  if (scene != nullptr && scene->ed != nullptr && scene->ed->runtime.media_presence != nullptr) {
-    scene->ed->runtime.media_presence->map_sound.remove(sound);
+  if (scene != nullptr && scene->ed != nullptr && scene->ed->runtime->media_presence != nullptr) {
+    scene->ed->runtime->media_presence->map_sound.remove(sound);
   }
 }
 
 void media_presence_free(Scene *scene)
 {
   std::scoped_lock lock(presence_lock);
-  if (scene != nullptr && scene->ed != nullptr && scene->ed->runtime.media_presence != nullptr) {
-    MEM_delete(scene->ed->runtime.media_presence);
-    scene->ed->runtime.media_presence = nullptr;
+  if (scene != nullptr && scene->ed != nullptr && scene->ed->runtime->media_presence != nullptr) {
+    MEM_delete(scene->ed->runtime->media_presence);
+    scene->ed->runtime->media_presence = nullptr;
   }
 }
 

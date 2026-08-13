@@ -8,17 +8,19 @@
 
 #pragma once
 
+#include "GPU_texture.hh"
 #include <typeinfo>
 
 #ifdef _WIN32
-#  include "BLI_winstuff.h"
+#  include "BLI_winstuff.hh"
+#  define VK_USE_PLATFORM_WIN32_KHR
 #endif
 
-#include <vulkan/vulkan.h>
-#ifdef _WIN32
-#  include <vulkan/vulkan_win32.h>
-#endif
+#define VOLK_NAMESPACE
+#define VOLK_NO_DEVICE_PROTOTYPES
+#include "volk.h"
 
+#define VMA_VULKAN_VERSION 1002000  // Vulkan 1.2
 #if !defined(_WIN32) or defined(_M_ARM64)
 /* Silence compilation warning on non-windows x64 systems. */
 #  define VMA_EXTERNAL_MEMORY_WIN32 0
@@ -26,6 +28,7 @@
 #include "vk_mem_alloc.h"
 
 #include "GPU_index_buffer.hh"
+#include "GPU_ray_tracing.hh"
 #include "GPU_state.hh"
 #include "gpu_query.hh"
 #include "gpu_shader_create_info.hh"
@@ -62,6 +65,30 @@ struct VKSubImageRange {
   uint32_t layer_count = VK_REMAINING_ARRAY_LAYERS;
 };
 
+using ResourceHandle = uint64_t;
+template<typename HandleType> struct VKResourceWithHandle {
+  ResourceHandle resource_handle = 0;
+  HandleType vk_handle = VK_NULL_HANDLE;
+
+  operator ResourceHandle() const
+  {
+    return resource_handle;
+  }
+  operator HandleType() const
+  {
+    return vk_handle;
+  }
+
+  bool operator==(const VKResourceWithHandle<HandleType> &other) const
+  {
+    return other.resource_handle == resource_handle && other.vk_handle == vk_handle;
+  }
+  uint64_t hash() const
+  {
+    return get_default_hash(resource_handle, vk_handle);
+  }
+};
+
 VkImageAspectFlags to_vk_image_aspect_flag_bits(const TextureFormat format);
 VkImageAspectFlags to_vk_image_aspect_flag_bits(const GPUFrameBufferBits buffers);
 VkFormat to_vk_format(const TextureFormat format);
@@ -82,7 +109,7 @@ VkImageViewType to_vk_image_view_type(const GPUTextureType type,
                                       eImageViewUsage view_type,
                                       VKImageViewArrayed arrayed);
 VkImageType to_vk_image_type(const GPUTextureType type);
-VkClearColorValue to_vk_clear_color_value(const eGPUDataFormat format, const void *data);
+VkClearColorValue to_vk_clear_color_value(const eGPUDataFormat format, const double4 data);
 VkIndexType to_vk_index_type(const GPUIndexBufType index_type);
 VkPrimitiveTopology to_vk_primitive_topology(const GPUPrimType prim_type);
 VkCullModeFlags to_vk_cull_mode_flags(const GPUFaceCullTest cull_test);

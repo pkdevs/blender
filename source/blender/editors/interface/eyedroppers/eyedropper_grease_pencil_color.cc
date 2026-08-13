@@ -13,7 +13,7 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 #include "BLI_math_vector_types.hh"
 
 #include "BLT_translation.hh"
@@ -107,7 +107,7 @@ static void eyedropper_grease_pencil_status_indicators(bContext *C,
       break;
     }
     case MaterialMode::Both: {
-      header += IFACE_("Both");
+      header += CTX_IFACE_(BLT_I18NCONTEXT_ID_GPENCIL, "Both");
       break;
     }
   }
@@ -260,7 +260,7 @@ static void eyedropper_add_palette_color(bContext *C, const float3 color)
   /* Create Colors. */
   PaletteColor *palcol = BKE_palette_color_add(palette);
   if (palcol) {
-    palette->active_color = BLI_listbase_count(&palette->colors) - 1;
+    palette->active_color = palette->colors.count() - 1;
     BKE_palette_color_set(palcol, color);
   }
 }
@@ -475,6 +475,7 @@ void UI_OT_eyedropper_grease_pencil_color(wmOperatorType *ot)
                           int(greasepencil::MaterialMode::Stroke),
                           "Material Mode",
                           "");
+  RNA_def_property_translation_context(ot->prop, BLT_I18NCONTEXT_ID_GPENCIL);
 }
 
 }  // namespace blender::ui

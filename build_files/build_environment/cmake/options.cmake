@@ -38,6 +38,7 @@ set(DOWNLOAD_DIR "${CMAKE_CURRENT_BINARY_DIR}/downloads" CACHE STRING "Path for 
 
 set(PACKAGE_DIR "${CMAKE_CURRENT_BINARY_DIR}/packages" CACHE PATH "default path for downloaded packages")
 option(PACKAGE_USE_UPSTREAM_SOURCES "Use sources upstream to download the package sources, when OFF the blender mirror will be used" ON)
+option(PACKAGE_DOWNLOAD_ONLY "Only download the package sources, do not compile dependencies" OFF)
 
 file(TO_CMAKE_PATH ${DOWNLOAD_DIR} DOWNLOAD_DIR)
 file(TO_CMAKE_PATH ${PACKAGE_DIR} PACKAGE_DIR)
@@ -246,6 +247,12 @@ else()
     set(PLATFORM_LDFLAGS "")
     set(PLATFORM_BUILD_TARGET "")
     set(PLATFORM_CMAKE_FLAGS -DCMAKE_INSTALL_LIBDIR=lib)
+
+    # Target ARMv8.2-A with dot product and half float.
+    if(BLENDER_PLATFORM_ARM)
+      set(PLATFORM_CFLAGS "${PLATFORM_CFLAGS} -march=armv8.2-a+dotprod+fp16+lse")
+      set(PLATFORM_CXXFLAGS "${PLATFORM_CXXFLAGS} -fPIC -march=armv8.2-a+dotprod+fp16+lse")
+    endif()
   endif()
 
   if(WITH_OPTIMIZED_DEBUG)

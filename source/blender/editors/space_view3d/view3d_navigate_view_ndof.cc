@@ -6,11 +6,11 @@
  * \ingroup spview3d
  */
 #include "BLI_bounds.hh"
-#include "BLI_math_geom.h"
+#include "BLI_math_geom_c.hh"
 #include "BLI_math_matrix.hh"
-#include "BLI_math_rotation.h"
-#include "BLI_math_vector.h"
-#include "BLI_rect.h"
+#include "BLI_math_rotation_c.hh"
+#include "BLI_math_vector_c.hh"
+#include "BLI_rect.hh"
 
 #include "BKE_layer.hh"
 
@@ -681,7 +681,8 @@ static std::optional<float3> ndof_orbit_center_calc_from_zbuf(Depsgraph *depsgra
   Scene *scene = DEG_get_input_scene(depsgraph);
   ViewLayer *view_layer = DEG_get_evaluated_view_layer(depsgraph);
 
-  if (!BKE_layer_collection_has_selected_objects(scene, view_layer, view_layer->active_collection))
+  if (!BKE_layer_collection_has_selected_objects(
+          *DEG_get_bmain(depsgraph), scene, view_layer, view_layer->active_collection))
   {
     return zbuf_center;
   }
@@ -1108,7 +1109,7 @@ static wmOperatorStatus ndof_all_invoke_impl(bContext *C,
   wmOperatorStatus ret;
 
   /* weak!, but it works */
-  const uint8_t ndof_navigation_mode_backup = U.ndof_navigation_mode;
+  const eNdof_Navigation_Mode ndof_navigation_mode_backup = U.ndof_navigation_mode;
   U.ndof_navigation_mode = NDOF_NAVIGATION_MODE_FLY;
 
   ret = ndof_orbit_zoom_invoke_impl(C, vod, event, nullptr);

@@ -27,25 +27,34 @@ static void node_declare(NodeDeclarationBuilder &b)
 {
   b.use_custom_socket_order();
   b.allow_any_socket_order();
-  b.add_input<decl::Color>("Image")
+  b.add_input<decl::Color>("Image"_ustr)
       .default_value({1.0f, 1.0f, 1.0f, 1.0f})
       .hide_value()
       .structure_type(StructureType::Dynamic);
-  b.add_output<decl::Color>("Image").structure_type(StructureType::Dynamic).align_with_previous();
+  b.add_output<decl::Color>("Image"_ustr)
+      .structure_type(StructureType::Dynamic)
+      .align_with_previous();
 
-  b.add_input<decl::Vector>("Speed")
+  b.add_input<decl::Vector>("Speed"_ustr)
       .dimensions(4)
       .default_value({0.0f, 0.0f, 0.0f})
       .min(0.0f)
       .max(1.0f)
       .subtype(PROP_VELOCITY)
       .structure_type(StructureType::Dynamic);
-  b.add_input<decl::Float>("Z").default_value(0.0f).min(0.0f).structure_type(
-      StructureType::Dynamic);
-  b.add_input<decl::Int>("Samples").default_value(32).min(1).max(256).description(
-      "The number of samples used to approximate the motion blur");
-  b.add_input<decl::Float>("Shutter").default_value(0.5f).min(0.0f).description(
-      "Time between shutter opening and closing in frames");
+  b.add_input<decl::Float>("Depth"_ustr, "Z"_ustr)
+      .default_value(0.0f)
+      .min(0.0f)
+      .structure_type(StructureType::Dynamic);
+  b.add_input<decl::Int>("Samples"_ustr)
+      .default_value(32)
+      .min(1)
+      .max(256)
+      .description("The number of samples used to approximate the motion blur");
+  b.add_input<decl::Float>("Shutter"_ustr)
+      .default_value(0.5f)
+      .min(0.0f)
+      .description("Time between shutter opening and closing in frames");
 }
 
 using namespace blender::compositor;
@@ -181,7 +190,8 @@ static Result dilate_max_velocity_cpu(Context &context,
   if (max_tile_velocity.is_single_value()) {
     Result output = context.create_result(ResultType::Float4);
     output.allocate_single_value();
-    output.set_single_value(max_tile_velocity.get_single_value<float4>());
+    output.set_single_value(max_tile_velocity.get_single_value<float4>() *
+                            float4(float2(shutter_speed), float2(-shutter_speed)));
     return output;
   }
 
@@ -311,11 +321,11 @@ static void gather_sample(const Result &input_image,
                           Accumulator &accum)
 {
   float2 sample_uv = screen_uv - offset / float2(size);
-  float4 sample_vectors = input_velocity.sample_bilinear_extended<float4>(sample_uv) *
+  float4 sample_vectors = input_velocity.sample_bilinear_extended<float4, true>(sample_uv) *
                           float4(float2(shutter_speed), float2(-shutter_speed));
   float2 sample_motion = (next) ? sample_vectors.zw() : sample_vectors.xy();
   float sample_motion_len = math::length(sample_motion);
-  float sample_depth = input_depth.sample_bilinear_extended<float>(sample_uv);
+  float sample_depth = input_depth.sample_bilinear_extended<float, true>(sample_uv);
   float4 sample_color = float4(input_image.sample_bilinear_extended<Color>(sample_uv));
 
   float2 direct_weights = sample_weights(
@@ -515,8 +525,8 @@ class VectorBlurOperation : public NodeOperation {
 
   void execute_gpu()
   {
-    Result max_tile_velocity = this->compute_max_tile_velocity();
-    gpu::StorageBuf *tile_indirection_buffer = this->dilate_max_velocity(max_tile_velocity);
+    Result max_tile_velocity = this->compute_max_tile_velocity_gpu();
+    gpu::StorageBuf *tile_indirection_buffer = this->dilate_max_velocity_gpu(max_tile_velocity);
     this->compute_motion_blur(max_tile_velocity, tile_indirection_buffer);
     max_tile_velocity.release();
     GPU_storagebuf_free(tile_indirection_buffer);
@@ -524,25 +534,32 @@ class VectorBlurOperation : public NodeOperation {
 
   /* Reduces each 32x32 block of velocity pixels into a single velocity whose magnitude is largest.
    * Each of the previous and next velocities are reduces independently. */
-  Result compute_max_tile_velocity()
+  Result compute_max_tile_velocity_gpu()
   {
+    Result &velocity = get_input("Speed");
+    if (velocity.is_single_value()) {
+      Result output = this->context().create_result(ResultType::Float4);
+      output.allocate_single_value();
+      output.set_single_value(velocity.get_single_value<float4>());
+      return output;
+    }
+
     gpu::Shader *shader = context().get_shader("compositor_max_velocity");
     GPU_shader_bind(shader);
 
     GPU_shader_uniform_1b(shader, "is_initial_reduction", true);
 
-    Result &input = get_input("Speed");
-    input.bind_as_texture(shader, "input_tx");
+    velocity.bind_as_texture(shader, "input_tx");
 
     Result output = context().create_result(ResultType::Float4);
-    const int2 tiles_count = math::divide_ceil(input.domain().data_size, int2(32));
+    const int2 tiles_count = math::divide_ceil(velocity.domain().data_size, int2(32));
     output.allocate_texture(Domain(tiles_count));
     output.bind_as_image(shader, "output_img");
 
     GPU_compute_dispatch(shader, tiles_count.x, tiles_count.y, 1);
 
     GPU_shader_unbind();
-    input.unbind_as_texture();
+    velocity.unbind_as_texture();
     output.unbind_as_image();
 
     return output;
@@ -554,7 +571,7 @@ class VectorBlurOperation : public NodeOperation {
    * the output will be an indirection buffer that points to a particular tile in the original max
    * tile velocity image. This is done as a form of performance optimization, see the shader for
    * more information. */
-  gpu::StorageBuf *dilate_max_velocity(Result &max_tile_velocity)
+  gpu::StorageBuf *dilate_max_velocity_gpu(Result &max_tile_velocity)
   {
     gpu::Shader *shader = context().get_shader("compositor_motion_blur_max_velocity_dilate");
     GPU_shader_bind(shader);
@@ -669,7 +686,7 @@ static void node_register()
 {
   static bke::bNodeType ntype;
 
-  cmp_node_type_base(&ntype, "CompositorNodeVecBlur", CMP_NODE_VECBLUR);
+  cmp_node_type_base(&ntype, "CompositorNodeVecBlur"_ustr, CMP_NODE_VECBLUR);
   ntype.ui_name = "Vector Blur";
   ntype.ui_description = "Uses the vector speed render pass to blur the image pixels in 2D";
   ntype.enum_name_legacy = "VECBLUR";

@@ -8,7 +8,7 @@
 
 #include <cstring>
 
-#include "BLI_threads.h"
+#include "BLI_threads.hh"
 
 #include "BKE_global.hh"
 
@@ -20,11 +20,13 @@
 #include "mtl_immediate.hh"
 #include "mtl_index_buffer.hh"
 #include "mtl_query.hh"
+#include "mtl_ray_tracing.hh"
 #include "mtl_shader.hh"
 #include "mtl_storage_buffer.hh"
 #include "mtl_texture_pool.hh"
 #include "mtl_uniform_buffer.hh"
 #include "mtl_vertex_buffer.hh"
+#include "mtl_work_in_flight.hh"
 
 #include "gpu_capabilities_private.hh"
 #include "gpu_platform_private.hh"
@@ -54,10 +56,6 @@ void MTLBackend::delete_resources()
   MEM_delete(compiler_);
 }
 
-void MTLBackend::samplers_update() {
-  /* Placeholder -- Handled in MTLContext. */
-};
-
 Context *MTLBackend::context_alloc(GHOST_IWindow *ghost_window, GHOST_IContext *ghost_context)
 {
   return new MTLContext(ghost_window, ghost_context);
@@ -71,6 +69,11 @@ Batch *MTLBackend::batch_alloc()
 Fence *MTLBackend::fence_alloc()
 {
   return new MTLFence();
+};
+
+WorkInFlight *MTLBackend::work_in_flight_alloc(unsigned int max_in_flight)
+{
+  return new MTLWorkInFlight(max_in_flight);
 };
 
 FrameBuffer *MTLBackend::framebuffer_alloc(const char *name)
@@ -105,10 +108,12 @@ Texture *MTLBackend::texture_alloc(const char *name)
 
 TexturePool *MTLBackend::texturepool_alloc()
 {
-  if (G.debug & G_DEBUG_GPU_NO_TEXTURE_POOL) {
-    return new TexturePoolImpl();
-  }
-  return new MTLTexturePool();
+  /* #162556: Temporarily disabled MTLTexturePool as metal texture views
+   * do not support `update_sub`, while other backends do. */
+  /* if (GCaps.texture_pool_workaround) { */
+  return new TexturePoolImpl();
+  /* }
+  return new MTLTexturePool(); */
 }
 
 UniformBuf *MTLBackend::uniformbuf_alloc(size_t size, const char *name)
@@ -124,6 +129,16 @@ StorageBuf *MTLBackend::storagebuf_alloc(size_t size, GPUUsageType usage, const 
 VertBuf *MTLBackend::vertbuf_alloc()
 {
   return new MTLVertBuf();
+}
+
+TopLevelAS *MTLBackend::tlas_alloc(const char *name)
+{
+  return new MTLTopLevelAS(name);
+}
+
+BottomLevelAS *MTLBackend::blas_alloc(const char *name)
+{
+  return new MTLBottomLevelAS(name);
 }
 
 void MTLBackend::render_begin()
@@ -266,6 +281,9 @@ void MTLBackend::platform_init(MTLContext *ctx)
            renderer,
            version,
            architecture_type);
+
+  GPG.devices.append(
+      {.identifier = "METAL", .index = 0, .vendor_id = 0, .device_id = 0, .name = renderer});
 
   /* UUID is not supported on Metal. */
   GPG.device_uuid.reinitialize(0);
@@ -482,6 +500,15 @@ void MTLBackend::capabilities_init(MTLContext *ctx)
   }
 #endif
 
+  /* Ray queries require macOS 13. */
+  MTLBackend::capabilities.supports_ray_tracing = false;
+#if defined(MAC_OS_VERSION_13_0)
+  if (@available(macOS 13.0, *)) {
+    MTLBackend::capabilities.supports_ray_tracing = [device supportsRaytracing];
+  }
+#endif
+  GCaps.ray_query_support = MTLBackend::capabilities.supports_ray_tracing;
+
   /** Identify support for tile inputs. */
   const bool is_tile_based_arch = (GPU_platform_architecture() == GPU_ARCHITECTURE_TBDR);
   if (is_tile_based_arch) {
@@ -507,14 +534,8 @@ void MTLBackend::capabilities_init(MTLContext *ctx)
   GCaps.max_textures = (MTLBackend::capabilities.supports_family_mac1) ?
                            128 :
                            (([device supportsFamily:MTLGPUFamilyApple4]) ? 96 : 31);
-  if (GCaps.max_textures <= 32) {
-    BLI_assert(false);
-  }
-  GCaps.max_samplers = (MTLBackend::capabilities.supports_argument_buffers_tier2) ? 1024 : 16;
-
-  GCaps.max_textures_vert = GCaps.max_textures;
-  GCaps.max_textures_geom = 0; /* N/A geometry shaders not supported. */
-  GCaps.max_textures_frag = GCaps.max_textures;
+  /* Hardcoded limit due to ShaderInterface::enabled_tex_mask_. */
+  GCaps.max_textures = std::min(GCaps.max_textures, 64);
 
   GCaps.max_images = GCaps.max_textures;
 
@@ -583,6 +604,11 @@ void MTLBackend::capabilities_init(MTLContext *ctx)
     MTLBackend::capabilities.supports_texture_gather = false;
     MTLBackend::capabilities.supports_texture_atomics = false;
     MTLBackend::capabilities.supports_native_tile_inputs = false;
+    GCaps.texture_pool_workaround = true;
+  }
+
+  if (G.debug & G_DEBUG_GPU_NO_TEXTURE_POOL) {
+    GCaps.texture_pool_workaround = true;
   }
 }
 

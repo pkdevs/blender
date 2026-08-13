@@ -12,7 +12,7 @@
 
 #include "DNA_particle_types.h"
 
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 
 #include "BKE_boids.h"
 #include "BKE_context.hh"
@@ -37,7 +37,7 @@ static wmOperatorStatus rule_add_exec(bContext *C, wmOperator *op)
 {
   PointerRNA ptr = CTX_data_pointer_get_type(C, "particle_settings", RNA_ParticleSettings);
   ParticleSettings *part = static_cast<ParticleSettings *>(ptr.data);
-  int type = RNA_enum_get(op->ptr, "type");
+  eBoidRuleType type = eBoidRuleType(RNA_enum_get(op->ptr, "type"));
 
   BoidRule *rule;
   BoidState *state;

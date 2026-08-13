@@ -8,6 +8,12 @@
  * \ingroup sequencer
  */
 
+#include "DNA_object_enums.h"
+#include "DNA_sequence_types.h"
+#include "DNA_view3d_enums.h"
+
+#include "IMB_imbuf_types.hh"
+
 namespace blender {
 
 struct Depsgraph;
@@ -18,9 +24,6 @@ struct Object;
 struct Scene;
 struct View3DShading;
 
-enum eDrawType;
-enum eV3DOffscreenDrawFlag;
-
 namespace seq {
 using DrawViewFn = ImBuf *(*)(Depsgraph *,
                               Scene *,
@@ -29,7 +32,7 @@ using DrawViewFn = ImBuf *(*)(Depsgraph *,
                               Object *,
                               int,
                               int,
-                              eImBufFlags,
+                              ImBufFlags,
                               eV3DOffscreenDrawFlag,
                               int,
                               const char *,

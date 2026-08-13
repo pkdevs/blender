@@ -18,10 +18,10 @@
 #include "BKE_main.hh"
 #include "BKE_screen.hh"
 
-#include "BLI_listbase.h"
-#include "BLI_math_geom.h"
-#include "BLI_math_matrix.h"
-#include "BLI_math_vector.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_geom_c.hh"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_vector_c.hh"
 
 #include "RNA_access.hh"
 
@@ -175,7 +175,7 @@ bool gizmo_window_project_2d(
   float mat[4][4], imat[4][4];
   {
     float mat_identity[4][4];
-    WM_GizmoMatrixParams params = {nullptr};
+    wmGizmoMatrixParams params = {nullptr};
     if (use_offset == false) {
       unit_m4(mat_identity);
       params.matrix_offset = mat_identity;
@@ -220,7 +220,7 @@ bool gizmo_window_project_3d(
   float mat[4][4], imat[4][4];
   {
     float mat_identity[4][4];
-    WM_GizmoMatrixParams params = {nullptr};
+    wmGizmoMatrixParams params = {nullptr};
     if (use_offset == false) {
       unit_m4(mat_identity);
       params.matrix_offset = mat_identity;

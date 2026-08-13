@@ -1,9 +1,9 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 5.1.0 Beta (b'1fa1b22043cd')\n"
+"Project-Id-Version: Blender 5.3.0 Alpha (b'af4852ed4560')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-02-16 10:28+0000\n"
+"POT-Creation-Date: 2026-08-10 07:54+0000\n"
 "PO-Revision-Date: 2025-07-23 15:19+0000\n"
 "Last-Translator: Anonymous <noreply@weblate.org>\n"
 "Language-Team: Greek <https://translate.blender.org/projects/blender-ui/ui/el/>\n"
@@ -85,6 +85,14 @@ msgstr "Κενό"
 
 msgid "Active Bone"
 msgstr "Ενεργό Οστό"
+
+
+msgid "Link"
+msgstr "Σύνδεση"
+
+
+msgid "Append"
+msgstr "Συγχώνευση"
 
 
 msgid "Point"
@@ -189,14 +197,6 @@ msgstr "Γάμμα"
 
 msgid "View"
 msgstr "View"
-
-
-msgid "Mix"
-msgstr "Μείξη"
-
-
-msgid "Screen"
-msgstr "Οθόνη"
 
 
 msgid "Near"
@@ -319,14 +319,6 @@ msgid "Save"
 msgstr "Αποθήκευση"
 
 
-msgid "Link"
-msgstr "Σύνδεση"
-
-
-msgid "Append"
-msgstr "Συγχώνευση"
-
-
 msgid "End"
 msgstr "Τέλος"
 
@@ -359,6 +351,10 @@ msgid "Grid"
 msgstr "Πλέγμα"
 
 
+msgid "Dynamic"
+msgstr "Δυναμικό"
+
+
 msgid "Repeat"
 msgstr "Repeat"
 
@@ -373,10 +369,6 @@ msgstr "Μπλε"
 
 msgid "Library"
 msgstr "Βιβλιοθήκη"
-
-
-msgid "Dynamic"
-msgstr "Δυναμικό"
 
 
 msgid "Draw"
@@ -523,8 +515,12 @@ msgid "Keyboard"
 msgstr "Πληκτρολόγιο"
 
 
-msgid "Metaball"
-msgstr "Μετα-σφαίρα"
+msgid "Mix"
+msgstr "Μείξη"
+
+
+msgid "Screen"
+msgstr "Οθόνη"
 
 
 msgid "Snap"
@@ -539,6 +535,10 @@ msgid "Select Linked"
 msgstr "Επιλογή Συνδεδεμένων"
 
 
+msgid "Metaball"
+msgstr "Μετα-σφαίρα"
+
+
 msgid "Light"
 msgstr "Φως"
 
@@ -551,6 +551,10 @@ msgid "Apply"
 msgstr "Εφαρμογή"
 
 
+msgid "Import"
+msgstr "Εισαγωγή"
+
+
 msgid "Track"
 msgstr "Ανίχνευση"
 
@@ -559,12 +563,12 @@ msgid "Make Single User"
 msgstr "Ορισμός Ενός Χρήστη"
 
 
-msgid "Import"
-msgstr "Εισαγωγή"
-
-
 msgid "Merge"
 msgstr "Συγχώνευση"
+
+
+msgid "Linked"
+msgstr "Συνδεδεμένο/α"
 
 
 msgid "Cache"
@@ -654,10 +658,6 @@ msgstr "Nor"
 
 msgid "Bake"
 msgstr "Φτιάξε"
-
-
-msgid "Linked"
-msgstr "Συνδεδεμένο/α"
 
 
 msgid "Shadow"
@@ -855,6 +855,10 @@ msgid "Join"
 msgstr "Ένωσε"
 
 
+msgid "Movie"
+msgstr "Βίντεο"
+
+
 msgctxt "Operator"
 msgid "Save"
 msgstr "Αποθήκευση"
@@ -981,6 +985,15 @@ msgid "Viewport Shading"
 msgstr "Σκίαση Παραθύρου Οπτικής"
 
 
+msgid "Cancel"
+msgstr "Ακύρωση"
+
+
+msgctxt "Operator"
+msgid "Clear"
+msgstr "Καθαρισμός"
+
+
 msgid "Torus"
 msgstr "Δαχτυλίδι"
 
@@ -989,21 +1002,8 @@ msgid "Assign"
 msgstr "Ανάθεση"
 
 
-msgctxt "Operator"
-msgid "Clear"
-msgstr "Καθαρισμός"
-
-
-msgid "Cancel"
-msgstr "Ακύρωση"
-
-
 msgid "Esc"
 msgstr "Esc"
-
-
-msgid "Movie"
-msgstr "Βίντεο"
 
 
 msgid "Fields"

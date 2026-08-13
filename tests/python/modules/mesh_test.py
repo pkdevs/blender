@@ -139,44 +139,55 @@ class OperatorSpecEditMode:
                ("and loading bmesh selection history" if (self.select_history) else "")
 
 
-class OperatorSpecObjectMode:
+class OperatorSpec:
     """
-    Holds an object operator and its parameters. Helper class for DeformModifierSpec.
-    Needed to support operations in Object Mode and not Edit Mode which is supported by OperatorSpecEditMode.
+    Holds an operator and its parameters.
     """
 
-    def __init__(self, operator_name: str, operator_parameters: dict):
+    def __init__(self, mode: str, operator_name: str, operator_parameters: dict):
         """
-        :param operator_name: str - name of the object operator from bpy.ops.object, e.g. "shade_smooth" or "shape_keys"
+        :param mode: str - the mode to be switched to prior to executing this operator
+        :param operator_name: str - name of the operator, along with its containing module , e.g. "object.shade_smooth" or "object.shape_keys"
         :param operator_parameters: dict - contains operator parameters.
         """
+
+        self.mode = mode
         self.operator_name = operator_name
         self.operator_parameters = operator_parameters
 
     def __str__(self):
-        return "Operator: " + self.operator_name + " with parameters: " + str(self.operator_parameters)
+        return "Mode: " + self.mode + " Operator: " + self.operator_name + \
+            " with parameters: " + str(self.operator_parameters)
+
+
+class SelectObjectSpec:
+    def __init__(self, object_name: str):
+        self.object_name = object_name
+
+    def __str__(self):
+        return "Selecting: " + self.object_name
 
 
 class DeformModifierSpec:
     """
-    Holds a list of deform modifier and OperatorSpecObjectMode.
+    Holds a list of deform modifier and OperatorSpec.
     For deform modifiers which have an object operator
     """
 
-    def __init__(self, frame_number: int, modifier_list: list, object_operator_spec: OperatorSpecObjectMode = None):
+    def __init__(self, frame_number: int, modifier_list: list, operator_spec: OperatorSpec = None):
         """
         Constructs a Deform Modifier spec (for user input).
 
         :param frame_number: int - the frame at which animated keyframe is inserted
         :param modifier_list: ModifierSpec - contains modifiers
-        :param object_operator_spec: OperatorSpecObjectMode - contains object operators
+        :param operator_spec: OperatorSpec - contains operators
         """
         self.frame_number = frame_number
         self.modifier_list = modifier_list
-        self.object_operator_spec = object_operator_spec
+        self.operator_spec = operator_spec
 
     def __str__(self):
-        return "Modifier: " + str(self.modifier_list) + " with object operator " + str(self.object_operator_spec)
+        return "Modifier: " + str(self.modifier_list) + " with object operator " + str(self.operator_spec)
 
 
 class MeshTest(ABC):
@@ -398,12 +409,9 @@ class MeshTest(ABC):
         """
         self.evaluated_object.location = self.expected_object.location
         expected_object_name = self.expected_object.name
-        evaluated_selection = {
-            v.index for v in self.evaluated_object.data.vertices if v.select}
 
         bpy.data.objects.remove(self.expected_object, do_unlink=True)
         self.evaluated_object.name = expected_object_name
-        self.do_selection(self.evaluated_object.data, "VERT", evaluated_selection, False)
 
         self.activate_test_object()
 
@@ -536,8 +544,11 @@ class SpecMeshTest(MeshTest):
                 self._apply_operator_edit_mode(
                     evaluated_test_object, operation)
 
-            elif isinstance(operation, OperatorSpecObjectMode):
-                self._apply_operator_object_mode(operation)
+            elif isinstance(operation, OperatorSpec):
+                self._apply_operator(operation)
+
+            elif isinstance(operation, SelectObjectSpec):
+                self._select_other_object(operation)
 
             elif isinstance(operation, DeformModifierSpec):
                 self._apply_deform_modifier(evaluated_test_object, operation)
@@ -548,7 +559,7 @@ class SpecMeshTest(MeshTest):
             else:
                 raise ValueError("Expected operation of type {} or {} or {} or {}. Got {}".
                                  format(type(ModifierSpec), type(OperatorSpecEditMode),
-                                        type(OperatorSpecObjectMode), type(ParticleSystemSpec), type(operation)))
+                                        type(OperatorSpec), type(ParticleSystemSpec), type(operation)))
 
     def _set_parameters_impl(self, modifier, modifier_parameters, nested_settings_path, modifier_name):
         """
@@ -746,15 +757,18 @@ class SpecMeshTest(MeshTest):
 
         bpy.ops.object.mode_set(mode='OBJECT')
 
-    def _apply_operator_object_mode(self, operator: OperatorSpecObjectMode):
+    def _apply_operator(self, operator: OperatorSpec):
         """
         Applies the object operator.
         """
-        bpy.ops.object.mode_set(mode='OBJECT')
-        object_operator = getattr(bpy.ops.object, operator.operator_name)
+        from operator import attrgetter
+
+        bpy.ops.object.mode_set(mode=operator.mode)
+
+        operator_fn = attrgetter(operator.operator_name)(bpy.ops)
 
         try:
-            retval = object_operator(**operator.operator_parameters)
+            retval = operator_fn(**operator.operator_parameters)
         except AttributeError:
             raise AttributeError("bpy.ops.object has no attribute {}".format(operator.operator_name))
         except TypeError as ex:
@@ -765,9 +779,15 @@ class SpecMeshTest(MeshTest):
         if self.verbose:
             print("Applied operator {}".format(operator))
 
-    def _apply_deform_modifier(self, test_object, operation: list):
+        if operator.mode != 'OBJECT':
+            bpy.ops.object.mode_set(mode='OBJECT')
+
+    def _select_other_object(self, operator: SelectObjectSpec):
+        bpy.data.objects[operator.object_name].select_set(True)
+
+    def _apply_deform_modifier(self, test_object, operation: DeformModifierSpec):
         """
-        arg: operation: list: List of modifiers or combination of modifier and object operator.
+        arg: operation: DeformModifierSpec: the modifier spec
         """
 
         scene = bpy.context.scene
@@ -775,14 +795,14 @@ class SpecMeshTest(MeshTest):
         bpy.ops.object.mode_set(mode='OBJECT')
         modifier_operations_list = operation.modifier_list
         modifier_names = []
-        object_operations = operation.object_operator_spec
+        object_operations = operation.operator_spec
         for modifier_operations in modifier_operations_list:
             if isinstance(modifier_operations, ModifierSpec):
                 self._add_modifier(test_object, modifier_operations)
                 modifier_names.append(modifier_operations.modifier_name)
 
-        if isinstance(object_operations, OperatorSpecObjectMode):
-            self._apply_operator_object_mode(object_operations)
+        if isinstance(object_operations, OperatorSpec):
+            self._apply_operator(object_operations)
 
         scene.frame_set(operation.frame_number)
 
@@ -799,43 +819,33 @@ class BlendFileTest(MeshTest):
 
     def __init__(self, test_object_name, exp_object_name, threshold=None):
         super().__init__(test_object_name, exp_object_name, threshold=threshold)
-        if bpy.data.objects[test_object_name].get("allow_index_change"):
+        test_object = bpy.data.objects[test_object_name]
+        if test_object.get("allow_index_change"):
             self.allow_index_change = True
+        # Some tests need a looser comparison than the default, for example simulations where
+        # tiny floating point differences between platforms are amplified over many solver
+        # iterations. Those files can override the threshold with a custom property.
+        threshold_override = test_object.get("threshold")
+        if threshold_override is not None:
+            self.threshold = float(threshold_override)
 
     def apply_operations(self, evaluated_test_object_name):
-
         BlendFileTest.apply_operations.__doc__ = MeshTest.apply_operations.__doc__
+
         evaluated_test_object = bpy.data.objects[evaluated_test_object_name]
         modifiers_list = evaluated_test_object.modifiers
         if not modifiers_list:
             raise Exception("No modifiers are added to test object.")
-        for modifier in modifiers_list:
-            bpy.ops.object.modifier_apply(modifier=modifier.name)
-
-
-class GeoNodesSimulationTest(MeshTest):
-    """
-    A mesh test that works similar to BlendFileTest but evaluates the scene at multiple
-    frames so that simulations can run.
-    """
-
-    def __init__(self, test_object_name, exp_object_name, *, frames_num, **kwargs):
-        super().__init__(test_object_name, exp_object_name, **kwargs)
-        self.frames_num = frames_num
-
-    def apply_operations(self, evaluated_test_object_name):
-        GeoNodesSimulationTest.apply_operations.__doc__ = MeshTest.apply_operations.__doc__
-
-        evaluated_test_object = bpy.data.objects[evaluated_test_object_name]
-        modifiers_list = evaluated_test_object.modifiers
-        if not modifiers_list:
-            raise Exception("The object has no modifiers.")
 
         scene = bpy.context.scene
-        for frame in range(1, self.frames_num + 1):
-            scene.frame_set(frame)
+        if scene.get("use_playback"):
+            frame_start = scene.frame_start
+            frame_end = scene.frame_end
+            for frame in range(frame_start, frame_end + 1):
+                scene.frame_set(frame)
 
         for modifier in modifiers_list:
+            print(modifier.name)
             bpy.ops.object.modifier_apply(modifier=modifier.name)
 
 

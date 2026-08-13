@@ -42,9 +42,9 @@ namespace blender::ed::sculpt_paint {
 class DensityAddOperation : public CurvesSculptStrokeOperation {
  private:
   /** Used when some data should be interpolated from existing curves. */
-  KDTree_3d *original_curve_roots_kdtree_ = nullptr;
+  KDTree<float3> *original_curve_roots_kdtree_ = nullptr;
   /** Contains curve roots of all curves that existed before the brush started. */
-  KDTree_3d *deformed_curve_roots_kdtree_ = nullptr;
+  KDTree<float3> *deformed_curve_roots_kdtree_ = nullptr;
   /** Root positions of curves that have been added in the current brush stroke. */
   Vector<float3> new_deformed_root_positions_;
   int original_curve_num_ = 0;
@@ -55,10 +55,10 @@ class DensityAddOperation : public CurvesSculptStrokeOperation {
   ~DensityAddOperation() override
   {
     if (original_curve_roots_kdtree_ != nullptr) {
-      kdtree_3d_free(original_curve_roots_kdtree_);
+      kdtree_free<float3>(original_curve_roots_kdtree_);
     }
     if (deformed_curve_roots_kdtree_ != nullptr) {
-      kdtree_3d_free(deformed_curve_roots_kdtree_);
+      kdtree_free<float3>(deformed_curve_roots_kdtree_);
     }
   }
 
@@ -81,7 +81,7 @@ struct DensityAddOperationExecutor {
   Mesh *surface_eval_ = nullptr;
   Span<int3> surface_corner_tris_eval_;
   VArraySpan<float2> surface_uv_map_eval_;
-  bke::BVHTreeFromMesh surface_bvh_eval_;
+  const bke::bvh::Tree *surface_bvh_eval_ = nullptr;
 
   CurvesSculpt *curves_sculpt_ = nullptr;
   const Brush *brush_ = nullptr;
@@ -128,7 +128,7 @@ struct DensityAddOperationExecutor {
       return;
     }
 
-    surface_bvh_eval_ = surface_eval_->bvh_corner_tris();
+    surface_bvh_eval_ = &surface_eval_->bvh_tris();
     surface_corner_tris_eval_ = surface_eval_->corner_tris();
     /* Find UV map. */
     VArraySpan<float2> surface_uv_map;
@@ -179,8 +179,9 @@ struct DensityAddOperationExecutor {
     }
 
     const int already_added_curves = self_->new_deformed_root_positions_.size();
-    KDTree_3d *new_roots_kdtree = kdtree_3d_new(already_added_curves + new_positions_cu.size());
-    BLI_SCOPED_DEFER([&]() { kdtree_3d_free(new_roots_kdtree); });
+    KDTree<float3> *new_roots_kdtree = kdtree_new<float3>(already_added_curves +
+                                                          new_positions_cu.size());
+    BLI_SCOPED_DEFER([&]() { kdtree_free<float3>(new_roots_kdtree); });
 
     /* Used to tag all curves that are too close to existing curves or too close to other new
      * curves. */
@@ -190,13 +191,13 @@ struct DensityAddOperationExecutor {
         /* Build kdtree from root points created by the current stroke. */
         [&]() {
           for (const int i : IndexRange(already_added_curves)) {
-            kdtree_3d_insert(new_roots_kdtree, -1, self_->new_deformed_root_positions_[i]);
+            kdtree_insert<float3>(new_roots_kdtree, -1, self_->new_deformed_root_positions_[i]);
           }
           for (const int new_i : new_positions_cu.index_range()) {
             const float3 &root_pos_cu = new_positions_cu[new_i];
-            kdtree_3d_insert(new_roots_kdtree, new_i, root_pos_cu);
+            kdtree_insert<float3>(new_roots_kdtree, new_i, root_pos_cu);
           }
-          kdtree_3d_balance(new_roots_kdtree);
+          kdtree_balance<float3>(new_roots_kdtree);
         },
         /* Check which new root points are close to roots that existed before the current stroke
          * started. */
@@ -205,9 +206,9 @@ struct DensityAddOperationExecutor {
               new_positions_cu.index_range(), 128, [&](const IndexRange range) {
                 for (const int new_i : range) {
                   const float3 &new_root_pos_cu = new_positions_cu[new_i];
-                  KDTreeNearest_3d nearest;
+                  KDTreeNearest<float3> nearest;
                   nearest.dist = FLT_MAX;
-                  kdtree_3d_find_nearest(
+                  kdtree_find_nearest<float3>(
                       self_->deformed_curve_roots_kdtree_, new_root_pos_cu, &nearest);
                   if (nearest.dist < brush_settings_->minimum_distance) {
                     new_curve_skipped[new_i] = true;
@@ -222,7 +223,7 @@ struct DensityAddOperationExecutor {
         continue;
       }
       const float3 &root_pos_cu = new_positions_cu[new_i];
-      kdtree_range_search_cb_cpp<float3>(
+      kdtree_range_search_cb<float3>(
           new_roots_kdtree,
           root_pos_cu,
           brush_settings_->minimum_distance,
@@ -311,12 +312,12 @@ struct DensityAddOperationExecutor {
     BLI_assert(original_positions.size() == deformed_positions.size());
 
     auto roots_kdtree_from_positions = [&](const Span<float3> positions) {
-      KDTree_3d *kdtree = kdtree_3d_new(curves_orig_->curves_num());
+      KDTree<float3> *kdtree = kdtree_new<float3>(curves_orig_->curves_num());
       for (const int curve_i : curves_orig_->curves_range()) {
         const int root_point_i = curve_offsets[curve_i];
-        kdtree_3d_insert(kdtree, curve_i, positions[root_point_i]);
+        kdtree_insert<float3>(kdtree, curve_i, positions[root_point_i]);
       }
-      kdtree_3d_balance(kdtree);
+      kdtree_balance<float3>(kdtree);
       return kdtree;
     };
 
@@ -348,7 +349,7 @@ struct DensityAddOperationExecutor {
       const int new_points = bke::mesh_surface_sample::sample_surface_points_projected(
           rng,
           *surface_eval_,
-          surface_bvh_eval_,
+          *surface_bvh_eval_,
           brush_pos_re_,
           brush_radius_re_,
           [&](const float2 &pos_re, float3 &r_start_su, float3 &r_end_su) {
@@ -395,13 +396,14 @@ struct DensityAddOperationExecutor {
                                       Vector<float2> &r_uvs,
                                       Vector<float3> &r_positions_su)
   {
-    const std::optional<CurvesBrush3D> brush_3d = sample_curves_surface_3d_brush(*ctx_.depsgraph,
-                                                                                 *ctx_.region,
-                                                                                 *ctx_.v3d,
-                                                                                 transforms_,
-                                                                                 surface_bvh_eval_,
-                                                                                 brush_pos_re_,
-                                                                                 brush_radius_re_);
+    const std::optional<CurvesBrush3D> brush_3d = sample_curves_surface_3d_brush(
+        *ctx_.depsgraph,
+        *ctx_.region,
+        *ctx_.v3d,
+        transforms_,
+        *surface_bvh_eval_,
+        brush_pos_re_,
+        brush_radius_re_);
     if (!brush_3d.has_value()) {
       return;
     }
@@ -417,13 +419,10 @@ struct DensityAddOperationExecutor {
       const float brush_radius_sq_su = pow2f(brush_radius_su);
 
       Vector<int> selected_corner_tri_indices;
-      BLI_bvhtree_range_query_cpp(
-          *surface_bvh_eval_.tree,
-          brush_pos_su,
-          brush_radius_su,
-          [&](const int index, const float3 & /*co*/, const float /*dist_sq*/) {
-            selected_corner_tri_indices.append(index);
-          });
+      surface_bvh_eval_->range_query(brush_pos_su, brush_radius_su, [&](const int index) {
+        selected_corner_tri_indices.append(index);
+        return true;
+      });
 
       const float brush_plane_area_su = M_PI * brush_radius_sq_su;
       const float approximate_density_su = brush_settings_->density_add_attempts /
@@ -511,7 +510,7 @@ struct DensitySubtractOperationExecutor {
 
   Object *surface_ob_eval_ = nullptr;
   Mesh *surface_eval_ = nullptr;
-  bke::BVHTreeFromMesh surface_bvh_eval_;
+  const bke::bvh::Tree *surface_bvh_eval_ = nullptr;
 
   const CurvesSculpt *curves_sculpt_ = nullptr;
   const Brush *brush_ = nullptr;
@@ -524,7 +523,7 @@ struct DensitySubtractOperationExecutor {
 
   CurvesSurfaceTransforms transforms_;
 
-  KDTree_3d *root_points_kdtree_;
+  KDTree<float3> *root_points_kdtree_;
 
   DensitySubtractOperationExecutor(const PaintStroke &stroke) : ctx_(stroke) {}
 
@@ -552,7 +551,7 @@ struct DensitySubtractOperationExecutor {
     }
     surface_eval_ = BKE_object_get_evaluated_mesh(surface_ob_eval_);
 
-    surface_bvh_eval_ = surface_eval_->bvh_corner_tris();
+    surface_bvh_eval_ = &surface_eval_->bvh_tris();
 
     curves_sculpt_ = ctx_.scene->toolsettings->curves_sculpt;
     brush_ = BKE_paint_brush_for_read(&curves_sculpt_->paint);
@@ -577,13 +576,13 @@ struct DensitySubtractOperationExecutor {
       }
     }
 
-    root_points_kdtree_ = kdtree_3d_new(curve_selection_.size());
-    BLI_SCOPED_DEFER([&]() { kdtree_3d_free(root_points_kdtree_); });
+    root_points_kdtree_ = kdtree_new<float3>(curve_selection_.size());
+    BLI_SCOPED_DEFER([&]() { kdtree_free<float3>(root_points_kdtree_); });
     curve_selection_.foreach_index([&](const int curve_i) {
       const float3 &pos_cu = self_->deformed_root_positions_[curve_i];
-      kdtree_3d_insert(root_points_kdtree_, curve_i, pos_cu);
+      kdtree_insert<float3>(root_points_kdtree_, curve_i, pos_cu);
     });
-    kdtree_3d_balance(root_points_kdtree_);
+    kdtree_balance<float3>(root_points_kdtree_);
 
     /* Find all curves that should be deleted. */
     Array<bool> curves_to_keep(curves_->curves_num(), true);
@@ -677,7 +676,7 @@ struct DensitySubtractOperationExecutor {
         if (dist_to_brush_sq_re > brush_radius_sq_re) {
           continue;
         }
-        kdtree_range_search_cb_cpp<float3>(
+        kdtree_range_search_cb<float3>(
             root_points_kdtree_,
             orig_pos_cu,
             minimum_distance_,
@@ -697,13 +696,14 @@ struct DensitySubtractOperationExecutor {
   void reduce_density_spherical_with_symmetry(MutableSpan<bool> curves_to_keep)
   {
     const float brush_radius_re = brush_radius_base_re_ * brush_radius_factor_;
-    const std::optional<CurvesBrush3D> brush_3d = sample_curves_surface_3d_brush(*ctx_.depsgraph,
-                                                                                 *ctx_.region,
-                                                                                 *ctx_.v3d,
-                                                                                 transforms_,
-                                                                                 surface_bvh_eval_,
-                                                                                 brush_pos_re_,
-                                                                                 brush_radius_re);
+    const std::optional<CurvesBrush3D> brush_3d = sample_curves_surface_3d_brush(
+        *ctx_.depsgraph,
+        *ctx_.region,
+        *ctx_.v3d,
+        transforms_,
+        *surface_bvh_eval_,
+        brush_pos_re_,
+        brush_radius_re);
     if (!brush_3d.has_value()) {
       return;
     }
@@ -764,7 +764,7 @@ struct DensitySubtractOperationExecutor {
           continue;
         }
 
-        kdtree_range_search_cb_cpp<float3>(
+        kdtree_range_search_cb<float3>(
             root_points_kdtree_,
             pos_cu,
             minimum_distance_,
@@ -834,7 +834,7 @@ static bool use_add_density_mode(const BrushStrokeMode brush_mode,
   }
 
   const CurvesSurfaceTransforms transforms(curves_ob_orig, curves_id_orig.surface);
-  bke::BVHTreeFromMesh surface_bvh_eval = surface_mesh_eval->bvh_corner_tris();
+  const bke::bvh::Tree &surface_bvh_eval = surface_mesh_eval->bvh_tris();
 
   const float2 brush_pos_re = stroke_start.mouse_position;
   /* Reduce radius so that only an inner circle is used to determine the existing density. */

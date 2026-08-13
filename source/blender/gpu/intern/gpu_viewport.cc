@@ -10,9 +10,9 @@
 
 #include <cstring>
 
-#include "BLI_math_vector.h"
+#include "BLI_math_vector_c.hh"
 #include "BLI_math_vector_types.hh"
-#include "BLI_rect.h"
+#include "BLI_rect.hh"
 
 #include "BKE_colortools.hh"
 
@@ -179,8 +179,8 @@ static void gpu_viewport_textures_create(GPUViewport *viewport)
                                                usage | GPU_TEXTURE_USAGE_HOST_READ |
                                                    GPU_TEXTURE_USAGE_FORMAT_VIEW,
                                                nullptr);
-    const int depth_clear = 0;
-    GPU_texture_clear(viewport->depth_tx, GPU_DATA_UINT_24_8_DEPRECATED, &depth_clear);
+    const float depth_clear = 0.0f;
+    GPU_texture_clear(viewport->depth_tx, GPU_DATA_FLOAT, &depth_clear);
   }
 
   if (!viewport->depth_tx || !viewport->color_render_tx[0] || !viewport->color_overlay_tx[0]) {

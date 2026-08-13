@@ -13,8 +13,8 @@
 
 #include "CLG_log.h"
 
-#include "BLI_array_utils.h" /* For #BLI_array_is_zeroed. */
-#include "BLI_utildefines.h"
+#include "BLI_array_utils_c.hh" /* For #BLI_array_is_zeroed. */
+#include "BLI_utildefines.hh"
 
 #include "DNA_curve_types.h"
 #include "DNA_object_types.h"
@@ -37,9 +37,9 @@
 
 #ifdef USE_ARRAY_STORE
 // #  define DEBUG_PRINT
-#  include "BLI_array_store.h"
-#  include "BLI_array_store_utils.h"
-#  include "BLI_listbase.h"
+#  include "BLI_array_store.hh"
+#  include "BLI_array_store_utils.hh"
+#  include "BLI_listbase.hh"
 #  define ARRAY_CHUNK_SIZE 32
 #endif
 
@@ -67,6 +67,8 @@ struct UndoFont {
 
   size_t undo_size;
 };
+
+/** \} */
 
 #ifdef USE_ARRAY_STORE
 
@@ -219,6 +221,10 @@ static void uf_arraystore_free(UndoFont *uf)
 
 #endif /* USE_ARRAY_STORE */
 
+/* -------------------------------------------------------------------- */
+/** \name Undo/Redo Helper Functions
+ * \{ */
+
 static void undofont_to_editfont(UndoFont *uf, Curve *cu)
 {
   EditFont *ef = cu->editfont;
@@ -310,9 +316,10 @@ static void undofont_free_data(UndoFont *uf)
 
 static Object *editfont_object_from_context(bContext *C)
 {
+  const Main *bmain = CTX_data_main(C);
   Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
-  BKE_view_layer_synced_ensure(scene, view_layer);
+  BKE_view_layer_synced_ensure(*bmain, scene, view_layer);
   Object *obedit = BKE_view_layer_edit_object_get(view_layer);
   if (obedit && obedit->type == OB_FONT) {
     const Curve *cu = id_cast<Curve *>(obedit->data);
@@ -376,7 +383,7 @@ static void font_undosys_step_decode(
   undofont_to_editfont(&us->data, cu);
   DEG_id_tag_update(&cu->id, ID_RECALC_GEOMETRY);
 
-  ED_undo_object_set_active_or_warn(scene, view_layer, obedit, us_p->name, &LOG);
+  ED_undo_object_set_active_or_warn(*bmain, scene, view_layer, obedit, us_p->name, &LOG);
 
   /* Check after setting active (unless undoing into another scene). */
   BLI_assert(font_undosys_poll(C) || (scene != CTX_data_scene(C)));
@@ -403,7 +410,7 @@ static void font_undosys_foreach_ID_ref(UndoStep *us_p,
 
 void ED_font_undosys_type(UndoType *ut)
 {
-  ut->name = "Edit Font";
+  ut->identifier = "EDIT_FONT";
   ut->poll = font_undosys_poll;
   ut->step_encode = font_undosys_step_encode;
   ut->step_decode = font_undosys_step_decode;
@@ -411,7 +418,7 @@ void ED_font_undosys_type(UndoType *ut)
 
   ut->step_foreach_ID_ref = font_undosys_foreach_ID_ref;
 
-  ut->flags = UNDOTYPE_FLAG_NEED_CONTEXT_FOR_ENCODE;
+  ut->flags = UNDOTYPE_FLAG_NEED_CONTEXT_FOR_ENCODE | UNDOTYPE_FLAG_ENCODE_PRE_MEMFILE_SUPPORTED;
 
   ut->step_size = sizeof(FontUndoStep);
 }

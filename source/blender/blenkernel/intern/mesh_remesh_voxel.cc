@@ -17,7 +17,7 @@
 #include "BLI_array_utils.hh"
 #include "BLI_enumerable_thread_specific.hh"
 #include "BLI_index_range.hh"
-#include "BLI_math_vector.h"
+#include "BLI_math_vector_c.hh"
 #include "BLI_span.hh"
 #include "BLI_task.hh"
 
@@ -201,7 +201,7 @@ static Mesh *remesh_voxel_volume_to_mesh(const openvdb::FloatGrid::Ptr level_set
   openvdb::tools::volumeToMesh<openvdb::FloatGrid>(
       *level_set_grid, vertices, tris, quads, isovalue, adaptivity, relax_disoriented_triangles);
 
-  if (vertices.size() == 0 || quads.size() + tris.size() == 0) {
+  if (vertices.empty() || quads.size() + tris.size() == 0) {
     return nullptr;
   }
 
@@ -327,49 +327,30 @@ static void calc_face_centers(const Span<float3> positions,
 }
 
 static void find_nearest_tris(const Span<float3> positions,
-                              BVHTreeFromMesh &bvhtree,
-                              MutableSpan<int> tris)
+                              const bvh::Tree &bvhtree,
+                              MutableSpan<int> tris,
+                              MutableSpan<float3> bary_coords)
 {
   for (const int i : positions.index_range()) {
-    BVHTreeNearest nearest;
-    nearest.index = -1;
-    nearest.dist_sq = FLT_MAX;
-    BLI_bvhtree_find_nearest(
-        bvhtree.tree, positions[i], &nearest, bvhtree.nearest_callback, &bvhtree);
-    tris[i] = nearest.index;
+    const std::optional<bvh::ClosestPointResult> nearest = bvhtree.closest_point(positions[i]);
+    BLI_assert(nearest.has_value());
+    tris[i] = nearest->index;
+    if (!bary_coords.is_empty()) {
+      bary_coords[i] = nearest->bary_coord;
+    }
   }
 }
 
 static void find_nearest_tris_parallel(const Span<float3> positions,
-                                       BVHTreeFromMesh &bvhtree,
-                                       MutableSpan<int> tris)
+                                       const bvh::Tree &bvhtree,
+                                       MutableSpan<int> tris,
+                                       MutableSpan<float3> bary_coords)
 {
   threading::parallel_for(tris.index_range(), 512, [&](const IndexRange range) {
-    find_nearest_tris(positions.slice(range), bvhtree, tris.slice(range));
-  });
-}
-
-static void find_nearest_verts(const Span<float3> positions,
-                               const Span<int> corner_verts,
-                               const Span<int3> src_corner_tris,
-                               const Span<float3> dst_positions,
-                               const Span<int> nearest_vert_tris,
-                               MutableSpan<int> nearest_verts)
-{
-  threading::parallel_for(dst_positions.index_range(), 512, [&](const IndexRange range) {
-    for (const int dst_vert : range) {
-      const float3 &dst_position = dst_positions[dst_vert];
-      const int3 &src_tri = src_corner_tris[nearest_vert_tris[dst_vert]];
-
-      std::array<float, 3> distances;
-      for (const int i : IndexRange(3)) {
-        const int src_vert = corner_verts[src_tri[i]];
-        distances[i] = math::distance_squared(positions[src_vert], dst_position);
-      }
-
-      const int min = std::min_element(distances.begin(), distances.end()) - distances.begin();
-      nearest_verts[dst_vert] = corner_verts[src_tri[min]];
-    }
+    find_nearest_tris(positions.slice(range),
+                      bvhtree,
+                      tris.slice(range),
+                      bary_coords.is_empty() ? MutableSpan<float3>() : bary_coords.slice(range));
   });
 }
 
@@ -377,7 +358,7 @@ static void find_nearest_faces(const Span<int> src_tri_faces,
                                const Span<float3> dst_positions,
                                const OffsetIndices<int> dst_faces,
                                const Span<int> dst_corner_verts,
-                               BVHTreeFromMesh &bvhtree,
+                               const bvh::Tree &bvhtree,
                                MutableSpan<int> nearest_faces)
 {
   struct TLS {
@@ -394,42 +375,10 @@ static void find_nearest_faces(const Span<int> src_tri_faces,
 
       Vector<int> &tri_indices = tls.tri_indices;
       tri_indices.reinitialize(range.size());
-      find_nearest_tris(face_centers, bvhtree, tri_indices);
+      find_nearest_tris(face_centers, bvhtree, tri_indices, {});
 
       array_utils::gather(src_tri_faces, tri_indices.as_span(), nearest_faces.slice(range));
     });
-  });
-}
-
-static void find_nearest_corners(const Span<float3> src_positions,
-                                 const OffsetIndices<int> src_faces,
-                                 const Span<int> src_corner_verts,
-                                 const Span<int> src_tri_faces,
-                                 const Span<float3> dst_positions,
-                                 const Span<int> dst_corner_verts,
-                                 const Span<int> nearest_vert_tris,
-                                 MutableSpan<int> nearest_corners)
-{
-  threading::parallel_for(nearest_corners.index_range(), 512, [&](const IndexRange range) {
-    Vector<float, 64> distances;
-    for (const int dst_corner : range) {
-      const int dst_vert = dst_corner_verts[dst_corner];
-      const float3 &dst_position = dst_positions[dst_vert];
-
-      const int src_tri = nearest_vert_tris[dst_vert];
-      const IndexRange src_face = src_faces[src_tri_faces[src_tri]];
-      const Span<int> src_face_verts = src_corner_verts.slice(src_face);
-
-      /* Find the corner in the face that's closest in the closest face. */
-      distances.reinitialize(src_face_verts.size());
-      for (const int i : src_face_verts.index_range()) {
-        const int src_vert = src_face_verts[i];
-        distances[i] = math::distance_squared(src_positions[src_vert], dst_position);
-      }
-
-      const int min = std::min_element(distances.begin(), distances.end()) - distances.begin();
-      nearest_corners[dst_corner] = src_face[min];
-    }
   });
 }
 
@@ -440,7 +389,7 @@ static void find_nearest_edges(const Span<float3> src_positions,
                                const Span<int> src_tri_faces,
                                const Span<float3> dst_positions,
                                const Span<int2> dst_edges,
-                               BVHTreeFromMesh &bvhtree,
+                               const bvh::Tree &bvhtree,
                                MutableSpan<int> nearest_edges)
 {
   struct TLS {
@@ -459,7 +408,7 @@ static void find_nearest_edges(const Span<float3> src_positions,
 
       Vector<int> &tri_indices = tls.tri_indices;
       tri_indices.reinitialize(range.size());
-      find_nearest_tris_parallel(edge_centers, bvhtree, tri_indices);
+      find_nearest_tris_parallel(edge_centers, bvhtree, tri_indices, {});
 
       Vector<int> &face_indices = tls.face_indices;
       face_indices.reinitialize(range.size());
@@ -491,23 +440,70 @@ static void find_nearest_edges(const Span<float3> src_positions,
   });
 }
 
-static void gather_attributes(const Span<StringRef> ids,
+static void gather_attributes(const Span<StringRef> names,
                               const AttributeAccessor src_attributes,
                               const AttrDomain domain,
                               const Span<int> index_map,
                               MutableAttributeAccessor dst_attributes)
 {
-  for (const StringRef id : ids) {
-    const GVArraySpan src = *src_attributes.lookup(id, domain);
+  for (const StringRef name : names) {
+    const GVArraySpan src = *src_attributes.lookup(name, domain);
     const AttrType type = cpp_type_to_attribute_type(src.type());
-    GSpanAttributeWriter dst = dst_attributes.lookup_or_add_for_write_only_span(id, domain, type);
+    GSpanAttributeWriter dst = dst_attributes.lookup_or_add_for_write_only_span(
+        name, domain, type);
     attribute_math::gather(src, index_map, dst.span);
     dst.finish();
   }
 }
 
+static void sample_vertex_attributes(const Span<StringRef> names,
+                                     Span<int> corner_verts,
+                                     Span<int3> corner_tris,
+                                     Span<int> tri_indices,
+                                     Span<float3> bary_coords,
+                                     const AttributeAccessor src_attributes,
+                                     MutableAttributeAccessor dst_attributes)
+{
+  for (const StringRef name : names) {
+    const GVArray src = *src_attributes.lookup(name, AttrDomain::Point);
+    const AttrType type = cpp_type_to_attribute_type(src.type());
+    GSpanAttributeWriter dst = dst_attributes.lookup_or_add_for_write_only_span(
+        name, AttrDomain::Point, type);
+    mesh_surface_sample::sample_point_attribute(corner_verts,
+                                                corner_tris,
+                                                tri_indices,
+                                                bary_coords,
+                                                src,
+                                                IndexMask(dst.span.size()),
+                                                dst.span);
+    dst.finish();
+  }
+}
+
+static void sample_corner_attributes(const Span<StringRef> names,
+                                     Span<int3> corner_tris,
+                                     Span<int> tri_indices,
+                                     Span<float3> bary_coords,
+                                     const AttributeAccessor src_attributes,
+                                     MutableAttributeAccessor dst_attributes)
+{
+  for (const StringRef name : names) {
+    const GVArray src = *src_attributes.lookup(name, AttrDomain::Corner);
+    const AttrType type = cpp_type_to_attribute_type(src.type());
+
+    GArray<> dst_point(src.type(), bary_coords.size());
+    mesh_surface_sample::sample_corner_attribute(
+        corner_tris, tri_indices, bary_coords, src, IndexMask(dst_point.size()), dst_point);
+
+    GVArray dst_corner = dst_attributes.adapt_domain(
+        GVArray::from_span(dst_point.as_span()), AttrDomain::Point, AttrDomain::Corner);
+    dst_attributes.add(name, AttrDomain::Corner, type, AttributeInitVArray(std::move(dst_corner)));
+  }
+}
+
 void mesh_remesh_reproject_attributes(const Mesh &src, Mesh &dst)
 {
+  BLI_assert(src.faces_num > 0);
   MutableAttributeAccessor dst_attributes = dst.attributes_for_write();
 
   /* Gather attributes to transfer for each domain. This makes it possible to skip
@@ -571,7 +567,7 @@ void mesh_remesh_reproject_attributes(const Mesh &src, Mesh &dst)
    * the decisions made here, which mainly results in easier refactoring, more generic code, and
    * possibly improved performance from lower cache usage in the "complex" sampling part of the
    * algorithm and the copying itself. */
-  BVHTreeFromMesh bvhtree = src.bvh_corner_tris();
+  const bvh::Tree &bvhtree = src.bvh_tris();
 
   const Span<float3> dst_positions = dst.vert_positions();
   const OffsetIndices dst_faces = dst.faces();
@@ -579,31 +575,30 @@ void mesh_remesh_reproject_attributes(const Mesh &src, Mesh &dst)
 
   if (!point_ids.is_empty() || !corner_ids.is_empty()) {
     Array<int> vert_nearest_tris(dst_positions.size());
-    find_nearest_tris_parallel(dst_positions, bvhtree, vert_nearest_tris);
+    Array<float3> bary_coords(dst_positions.size());
+    find_nearest_tris_parallel(dst_positions, bvhtree, vert_nearest_tris, bary_coords);
 
     if (!point_ids.is_empty()) {
-      Array<int> map(dst.verts_num);
-      find_nearest_verts(
-          src_positions, src_corner_verts, src_corner_tris, dst_positions, vert_nearest_tris, map);
       /* Copy vertex group names (otherwise `MeshVertexGroupsAttributeProvider` wont find them -
        * and these would show up as regular attributes afterwards). "vertex_group_active_index" is
        * taken care of via #BKE_mesh_copy_parameters(). */
       BKE_defgroup_copy_list(&dst.vertex_group_names, &src.vertex_group_names);
-      gather_attributes(point_ids, src_attributes, AttrDomain::Point, map, dst_attributes);
+      sample_vertex_attributes(point_ids,
+                               src_corner_verts,
+                               src_corner_tris,
+                               vert_nearest_tris,
+                               bary_coords,
+                               src_attributes,
+                               dst_attributes);
     }
 
     if (!corner_ids.is_empty()) {
-      const Span<int> src_tri_faces = src.corner_tri_faces();
-      Array<int> map(dst.corners_num);
-      find_nearest_corners(src_positions,
-                           src_faces,
-                           src_corner_verts,
-                           src_tri_faces,
-                           dst_positions,
-                           dst_corner_verts,
-                           vert_nearest_tris,
-                           map);
-      gather_attributes(corner_ids, src_attributes, AttrDomain::Corner, map, dst_attributes);
+      sample_corner_attributes(corner_ids,
+                               src_corner_tris,
+                               vert_nearest_tris,
+                               bary_coords,
+                               src_attributes,
+                               dst_attributes);
     }
   }
 

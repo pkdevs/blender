@@ -33,16 +33,25 @@ struct SequencerToolSettings;
 
 namespace seq {
 
+class CompositorCache;
+struct FinalImageCache;
+struct IntraFrameCache;
+struct MediaPresence;
+struct PrefetchJob;
+struct PreviewCache;
+struct SourceImageCache;
+struct StripLookup;
+struct ThumbnailCache;
+
 constexpr int MAX_CHANNELS = 128;
 
-/* RNA enums, just to be more readable */
-enum {
-  SIDE_MOUSE = -1,
-  SIDE_NONE = 0,
-  SIDE_LEFT,
-  SIDE_RIGHT,
-  SIDE_BOTH,
-  SIDE_NO_CHANGE,
+enum class Side : int {
+  Mouse = -1,
+  None = 0,
+  Left,
+  Right,
+  Both,
+  NoChange,
 };
 
 /* strip_duplicate' flags */
@@ -94,6 +103,27 @@ struct StripRuntime {
   void remove_scene_sound(Scene *scene);
 };
 
+struct EditingRuntime {
+  ~EditingRuntime();
+
+  StripLookup *strip_lookup = nullptr;
+  MediaPresence *media_presence = nullptr;
+  ThumbnailCache *thumbnail_cache = nullptr;
+  IntraFrameCache *intra_frame_cache = nullptr;
+  SourceImageCache *source_image_cache = nullptr;
+  FinalImageCache *final_image_cache = nullptr;
+  PreviewCache *preview_cache = nullptr;
+  PrefetchJob *prefetch_job = nullptr;
+  CompositorCache *compositor_cache = nullptr;
+
+  /** Used for rendering a different frame using sequencer_draw_get_transform_preview from the box
+   * blade tool. */
+  int transform_preview_frame = 0;
+  bool show_transform_preview = false;
+
+  CompositorCache &ensure_compositor_cache();
+};
+
 SequencerToolSettings *tool_settings_init();
 SequencerToolSettings *tool_settings_ensure(Scene *scene);
 void tool_settings_free(SequencerToolSettings *tool_settings);
@@ -126,7 +156,7 @@ MetaStack *meta_stack_active_get(const Editing *ed);
 /**
  * Open Meta strip content for editing.
  *
- * \param ed: sequence editor data
+ * \param scene: Scene containing the sequence editor data.
  * \param dst: meta strip or NULL for top level view
  */
 void meta_stack_set(const Scene *scene, Strip *dst);
@@ -198,7 +228,7 @@ Span<Strip *> lookup_strips_by_scene(Editing *ed, const Scene *key);
 Map<const Scene *, VectorSet<Strip *>> &lookup_strips_by_scene_map_get(Editing *ed);
 
 /**
- * Find all strips using provided compositor node tree as a modifier
+ * Find all strips using provided compositor node tree
  *
  * \param ed: Editing that owns lookup hash
  * \param key: Node tree pointer
@@ -206,6 +236,13 @@ Map<const Scene *, VectorSet<Strip *>> &lookup_strips_by_scene_map_get(Editing *
  * \return Span of strips
  */
 Span<Strip *> lookup_strips_by_compositor_node_group(Editing *ed, const bNodeTree *key);
+
+/**
+ * Find effect strips, that use strip `key` as one of inputs.
+ * If lookup hash doesn't exist, it will be created. If hash is tagged as invalid, it will be
+ * rebuilt.
+ */
+Span<Strip *> lookup_effects_by_strip(Editing *ed, const Strip *key);
 
 /**
  * Find which meta strip the given timeline channel belongs to. Returns nullptr if it is a global

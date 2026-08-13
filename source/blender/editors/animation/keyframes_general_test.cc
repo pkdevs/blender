@@ -6,12 +6,13 @@
 
 #include "keyframes_general_intern.hh"
 
-#include "BLI_listbase.h"
-#include "BLI_string.h"
-#include "BLI_string_utf8.h"
+#include "BLI_listbase.hh"
+#include "BLI_string.hh"
+#include "BLI_string_utf8.hh"
 
 #include "BKE_armature.hh"
 #include "BKE_fcurve.hh"
+#include "BKE_gtest_base.hh"
 #include "BKE_idtype.hh"
 #include "BKE_lib_id.hh"
 #include "BKE_main.hh"
@@ -19,8 +20,6 @@
 
 #include "DNA_anim_types.h"
 #include "DNA_object_types.h"
-
-#include "RNA_define.hh"
 
 #include "ED_keyframes_edit.hh"
 
@@ -53,7 +52,7 @@ FCurvePtr fake_fcurve(const char *rna_path, const int array_index)
   FCurve *fcurve = BKE_fcurve_create();
 
   if (rna_path) {
-    fcurve->rna_path = BLI_strdup(rna_path);
+    fcurve->rna_path_set(rna_path);
   }
   fcurve->array_index = array_index;
 
@@ -95,14 +94,14 @@ FCurvePtr fake_fcurve_in_buffer(const char *rna_path,
 struct keyframes_paste : public testing::Test {
   static void SetUpTestSuite()
   {
+    bke::gtest_setup();
     ANIM_fcurves_copybuf_reset();
-    RNA_init();
   }
 
   static void TearDownTestSuite()
   {
     ANIM_fcurves_copybuf_free();
-    RNA_exit();
+    bke::gtest_teardown();
   }
 };
 
@@ -524,8 +523,6 @@ TEST_F(keyframes_paste, pastebuf_match_path_property)
   ID *arm_ob_id;
 
   { /* Set up an armature, to test matching on property names. */
-    BKE_idtype_init();
-
     bArmature *armature = BKE_armature_add(bmain, "Armature");
     for (const auto &bone_name : {"hand.L", "hand.R", "middle"}) {
       Bone *bone = MEM_new<Bone>(__func__);

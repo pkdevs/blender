@@ -4,7 +4,7 @@
 
 #include <memory>
 
-#include "BLI_assert.h"
+#include "BLI_assert.hh"
 #include "BLI_vector.hh"
 
 #include "DNA_node_types.h"
@@ -27,17 +27,12 @@ class GroupNodeOperation : public NodeOperation {
  private:
   /* The node group outputs needed by the caller. */
   const NodeGroupOutputTypes needed_outputs_;
-  /* The node instance key of the active group node. */
-  const bNodeInstanceKey active_node_group_instance_key_ = bke::NODE_INSTANCE_KEY_BASE;
 
  public:
   GroupNodeOperation(Context &context,
                      const bNode &node,
-                     const NodeGroupOutputTypes needed_outputs,
-                     const bNodeInstanceKey active_node_group_instance_key)
-      : NodeOperation(context, node),
-        needed_outputs_(needed_outputs),
-        active_node_group_instance_key_(active_node_group_instance_key)
+                     const NodeGroupOutputTypes needed_outputs)
+      : NodeOperation(context, node), needed_outputs_(needed_outputs)
   {
     for (const bNodeSocket *input : node.input_sockets()) {
       if (!is_socket_available(input)) {
@@ -58,16 +53,13 @@ class GroupNodeOperation : public NodeOperation {
   {
     const bNodeTree *node_group = this->get_node_group();
     if (!node_group) {
-      this->execute_invalid();
+      this->allocate_default_remaining_outputs();
       return;
     }
 
-    NodeGroupOperation operation(this->context(),
-                                 *node_group,
-                                 needed_outputs_,
-                                 this->get_node_previews(),
-                                 active_node_group_instance_key_,
-                                 this->get_instance_key());
+    const bke::GroupNodeComputeContext compute_context(
+        &this->get_compute_context(), this->node().identifier, &this->node().owner_tree());
+    NodeGroupOperation operation(this->context(), *node_group, needed_outputs_, compute_context);
 
     this->set_reference_counts(operation);
     Vector<std::unique_ptr<Result>> temporary_inputs = this->map_inputs(operation);
@@ -97,10 +89,10 @@ class GroupNodeOperation : public NodeOperation {
     node_group->ensure_interface_cache();
     for (const bNodeTreeInterfaceSocket *input_socket : node_group->interface_inputs()) {
       const Result &input_result = this->get_input(input_socket->identifier);
-      Result temporary_input = this->context().create_result(input_result.type(),
-                                                             input_result.precision());
-      temporary_input.share_data(input_result);
-      temporary_inputs.append(std::make_unique<Result>(temporary_input));
+      std::unique_ptr<Result> temporary_input = std::make_unique<Result>(
+          this->context().create_result(input_result.type(), input_result.precision()));
+      temporary_input->share_data(input_result);
+      temporary_inputs.append(std::move(temporary_input));
       operation.map_input_to_result(input_socket->identifier, temporary_inputs.last().get());
     }
     return temporary_inputs;
@@ -122,18 +114,6 @@ class GroupNodeOperation : public NodeOperation {
     }
   }
 
-  void execute_invalid()
-  {
-    const bNodeTree *node_group = this->get_node_group();
-    node_group->ensure_interface_cache();
-    for (const bNodeTreeInterfaceSocket *output : node_group->interface_outputs()) {
-      Result &group_node_result = this->get_result(output->identifier);
-      if (group_node_result.should_compute()) {
-        group_node_result.allocate_invalid();
-      }
-    }
-  }
-
   const bNodeTree *get_node_group()
   {
     BLI_assert(this->node().is_group());
@@ -143,10 +123,9 @@ class GroupNodeOperation : public NodeOperation {
 
 NodeOperation *get_group_node_operation(Context &context,
                                         const bNode &node,
-                                        const NodeGroupOutputTypes &needed_outputs,
-                                        const bNodeInstanceKey active_node_group_instance_key)
+                                        const NodeGroupOutputTypes &needed_outputs)
 {
-  return new GroupNodeOperation(context, node, needed_outputs, active_node_group_instance_key);
+  return new GroupNodeOperation(context, node, needed_outputs);
 }
 
 }  // namespace blender::compositor

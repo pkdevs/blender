@@ -58,7 +58,14 @@ static int py_parse_optional_region(PyObject *o, void *p)
     return 1;
   }
   TextRegion region;
-  if (!PyArg_Parse(o, "((ii)(ii))", &region.curl, &region.curc, &region.sell, &region.selc)) {
+  if (!PyArg_Parse(o,
+                   "((ii)(ii))" /* `range` */
+                   ":range",
+                   &region.curl,
+                   &region.curc,
+                   &region.sell,
+                   &region.selc))
+  {
     return 0;
   }
   *region_p = region;
@@ -76,7 +83,7 @@ PyDoc_STRVAR(
     "((start_line, start_column), (end_line, end_column))\n"
     "      The values match Python's slicing logic "
     "(negative values count backwards from the end, the end value is not inclusive).\n"
-    "   :type range: tuple[tuple[int, int], tuple[int, int]]\n"
+    "   :type range: tuple[tuple[int, int], tuple[int, int]] | None\n"
     "   :return: The specified region as a string.\n"
     "   :rtype: str\n");
 /* Receive a Python Tuple as parameter to represent the region range. */
@@ -89,7 +96,7 @@ static PyObject *bpy_rna_region_as_string(PyObject *self, PyObject *args, PyObje
 
   static const char *_keywords[] = {"range", nullptr};
   static _PyArg_Parser _parser = {
-      "|$" /* Optional keyword only arguments. */
+      "|$" /* Optional, keyword only arguments. */
       "O&" /* `range` */
       ":region_as_string",
       _keywords,
@@ -152,7 +159,7 @@ PyDoc_STRVAR(
     "((start_line, start_column), (end_line, end_column))\n"
     "      The values match Python's slicing logic "
     "(negative values count backwards from the end, the end value is not inclusive).\n"
-    "   :type range: tuple[tuple[int, int], tuple[int, int]]\n");
+    "   :type range: tuple[tuple[int, int], tuple[int, int]] | None\n");
 static PyObject *bpy_rna_region_from_string(PyObject *self, PyObject *args, PyObject *kwds)
 {
   BPy_StructRNA *pyrna = reinterpret_cast<BPy_StructRNA *>(self);
@@ -166,7 +173,7 @@ static PyObject *bpy_rna_region_from_string(PyObject *self, PyObject *args, PyOb
   static const char *_keywords[] = {"", "range", nullptr};
   static _PyArg_Parser _parser = {
       "s#" /* `buf` (positional). */
-      "|$" /* Optional keyword only arguments. */
+      "|$" /* Optional, keyword only arguments. */
       "O&" /* `range` */
       ":region_from_string",
       _keywords,

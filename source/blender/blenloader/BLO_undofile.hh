@@ -9,7 +9,7 @@
  * External write-file function prototypes.
  */
 
-#include "BLI_filereader.h"
+#include "BLI_filereader.hh"
 #include "BLI_implicit_sharing.hh"
 #include "BLI_map.hh"
 
@@ -55,12 +55,6 @@ struct MemFile {
    * without making a copy. This is faster and requires less memory.
    */
   MemFileSharedStorage *shared_storage;
-
-  /**
-   * Partial storage of the WriteData's generated stable pointers data, to be re-used when writing
-   * the next undo step.
-   */
-  WriteDataStableAddressIDs *stable_address_ids;
 };
 
 struct MemFileWriteData {

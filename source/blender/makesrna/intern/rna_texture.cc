@@ -117,7 +117,7 @@ static const EnumPropertyItem blend_type_items[] = {
 
 #  include "RNA_access.hh"
 
-#  include "BLI_string.h"
+#  include "BLI_string.hh"
 
 #  include "BKE_brush.hh"
 #  include "BKE_colorband.hh"
@@ -229,7 +229,7 @@ static void rna_Texture_type_set(PointerRNA *ptr, int value)
 {
   Tex *tex = static_cast<Tex *>(ptr->data);
 
-  BKE_texture_type_set(tex, value);
+  BKE_texture_type_set(tex, eTex_Type(value));
 }
 
 void rna_TextureSlotTexture_update(bContext *C, PointerRNA *ptr)
@@ -257,10 +257,11 @@ void rna_TextureSlot_update(bContext *C, PointerRNA *ptr)
       WM_main_add_notifier(NC_LAMP | ND_LIGHTING_DRAW, id);
       break;
     case ID_BR: {
+      const Main *bmain = CTX_data_main(C);
       Scene *scene = CTX_data_scene(C);
       MTex *mtex = static_cast<MTex *>(ptr->data);
       ViewLayer *view_layer = CTX_data_view_layer(C);
-      BKE_paint_invalidate_overlay_tex(scene, view_layer, mtex->tex);
+      BKE_paint_invalidate_overlay_tex(*bmain, scene, view_layer, mtex->tex);
       BKE_brush_tag_unsaved_changes(reinterpret_cast<Brush *>(id));
       WM_main_add_notifier(NC_BRUSH, id);
       break;
@@ -435,7 +436,7 @@ static void rna_Texture_use_nodes_update(bContext *C, PointerRNA *ptr)
   Tex *tex = static_cast<Tex *>(ptr->data);
 
   if (tex->use_nodes) {
-    tex->type = 0;
+    tex->type = eTex_Type{};
 
     if (tex->nodetree == nullptr) {
       ED_node_texture_default(C, tex);
@@ -586,6 +587,7 @@ static void rna_def_colormapping(BlenderRNA *brna)
   prop = RNA_def_property(srna, "blend_type", PROP_ENUM, PROP_NONE);
   RNA_def_property_enum_items(prop, blend_type_items);
   RNA_def_property_ui_text(prop, "Blend Type", "Mode used to mix with texture output color");
+  RNA_def_property_translation_context(prop, BLT_I18NCONTEXT_COLOR);
   RNA_def_property_update(prop, 0, "rna_Color_mapping_update");
 
   prop = RNA_def_property(srna, "blend_color", PROP_FLOAT, PROP_COLOR);
@@ -658,6 +660,7 @@ static void rna_def_mtex(BlenderRNA *brna)
   RNA_def_property_enum_items(prop, blend_type_items);
   RNA_def_property_flag(prop, PROP_CONTEXT_UPDATE);
   RNA_def_property_ui_text(prop, "Blend Type", "Mode used to apply the texture");
+  RNA_def_property_translation_context(prop, BLT_I18NCONTEXT_COLOR);
   RNA_def_property_update(prop, 0, "rna_TextureSlot_update");
 
   prop = RNA_def_property(srna, "default_value", PROP_FLOAT, PROP_NONE);

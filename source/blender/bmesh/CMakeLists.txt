@@ -17,6 +17,7 @@ set(SRC
   operators/bmo_bevel.cc
   operators/bmo_bisect_plane.cc
   operators/bmo_bridge.cc
+  operators/bmo_circularize.cc
   operators/bmo_connect.cc
   operators/bmo_connect_concave.cc
   operators/bmo_connect_nonplanar.cc
@@ -30,6 +31,7 @@ set(SRC
   operators/bmo_fill_edgeloop.cc
   operators/bmo_fill_grid.cc
   operators/bmo_fill_holes.cc
+  operators/bmo_flatten.cc
   operators/bmo_hull.cc
   operators/bmo_inset.cc
   operators/bmo_join_triangles.cc
@@ -40,9 +42,11 @@ set(SRC
   operators/bmo_planar_faces.cc
   operators/bmo_poke.cc
   operators/bmo_primitive.cc
+  operators/bmo_relax_edge_loops.cc
   operators/bmo_removedoubles.cc
   operators/bmo_rotate_edges.cc
   operators/bmo_smooth_laplacian.cc
+  operators/bmo_space_edge_loops_evenly.cc
   operators/bmo_split_edges.cc
   operators/bmo_subdivide.cc
   operators/bmo_subdivide_edgering.cc

@@ -7,6 +7,7 @@
 #include <optional>
 
 #include "BLI_map.hh"
+#include "BLI_set.hh"
 #include "BLI_vector_set.hh"
 
 #include "COM_context.hh"
@@ -15,6 +16,8 @@
 #include "COM_pixel_operation.hh"
 
 namespace blender::compositor {
+
+struct Schedule;
 
 /* ------------------------------------------------------------------------------------------------
  * Compile State
@@ -119,7 +122,7 @@ class CompileState {
   /* A reference to the compositor context. */
   const Context &context_;
   /* A reference to the node execution schedule that is being compiled. */
-  const VectorSet<const bNode *> &schedule_;
+  const Schedule &schedule_;
   /* Those two maps associate each node with the operation it was compiled into. Each node is
    * either compiled into a node operation and added to node_operations, or compiled into a pixel
    * operation and added to pixel_operations. Those maps are used to retrieve the results of
@@ -140,10 +143,10 @@ class CompileState {
 
  public:
   /* Construct a compile state from the node group execution schedule being compiled. */
-  CompileState(const Context &context, const VectorSet<const bNode *> &schedule);
+  CompileState(const Context &context, const Schedule &schedule);
 
   /* Get a reference to the node execution schedule being compiled. */
-  const VectorSet<const bNode *> &get_schedule();
+  const Schedule &get_schedule();
 
   /* Add an association between the given node and the give node operation that the node was
    * compiled into in the node_operations_ map. */
@@ -176,11 +179,15 @@ class CompileState {
    * currently being processed. See the class description for a description of the method. */
   bool should_compile_pixel_compile_unit(const bNode &node);
 
-  /* Computes the number of pixel operation outputs that will be added for this node in the current
-   * pixel compile unit. This is essentially the number of outputs that will be added for the node
-   * in PixelOperation::populate_results_for_node. */
-  int compute_pixel_node_operation_outputs_count(const bNode &node,
-                                                 const bool is_node_preview_needed);
+  /* Identify of the number of outputs of the pixel compile unit surpass what is possible. This is
+   * essentially the number of outputs that will be added for the nodes in the pixel compile unit
+   * in ShaderOperation::populate_results_for_node. */
+  bool pixel_compile_unit_has_too_many_outputs(const bool are_node_previews_needed);
+
+  /* Identify of the number of inputs of the pixel compile unit surpass what is possible. This is
+   * essentially the number of inputs that will be added for the nodes in the pixel compile unit in
+   * ShaderOperation::link_node_inputs. */
+  bool pixel_compile_unit_has_too_many_inputs();
 
  private:
   /* Determines if the given pixel node operates on single values or not. The node operates on

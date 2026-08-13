@@ -14,9 +14,11 @@
 #include <string>
 #include <type_traits>
 
-#include "BLI_compiler_attrs.h"
+#include "BLI_compiler_attrs.hh"
 #include "BLI_span.hh"
-#include "BLI_sys_types.h"
+#include "BLI_sys_types.hh"
+
+#include "DNA_vec_types.h"
 
 namespace blender {
 
@@ -48,7 +50,19 @@ void PyC_StackSpit();
  */
 [[nodiscard]] PyObject *PyC_ExceptionBuffer_Simple() ATTR_RETURNS_NONNULL;
 
-[[nodiscard]] PyObject *PyC_Object_GetAttrStringArgs(PyObject *o, Py_ssize_t n, ...);
+/**
+ * Get exit code `sys.exit(..)` was called with.
+ */
+[[nodiscard]] std::optional<int> PyC_ExceptionSystemExitCode();
+
+/**
+ * Capture exit code from current python exception.
+ *
+ * If the current exception is `SystemExit`, capture the exit code and return true.
+ * Otherwise return false;
+ */
+bool PyC_Err_CaptureSystemExitCode();
+
 [[nodiscard]] PyObject *PyC_FrozenSetFromStrings(const char **strings);
 
 /**
@@ -68,7 +82,11 @@ PyObject *PyC_Err_SetString_Prefix(PyObject *exception_type_prefix, const char *
 void PyC_Err_PrintWithFunc(PyObject *py_func);
 
 void PyC_FileAndNum(const char **r_filename, int *r_lineno);
-void PyC_FileAndNum_Safe(const char **r_filename, int *r_lineno); /* checks python is running */
+/**
+ * The "safe" version checks Python is running first.
+ * Typically the caller should know this but there are times it's impractical.
+ */
+void PyC_FileAndNum_Safe(const char **r_filename, int *r_lineno);
 [[nodiscard]] int PyC_AsArray_FAST(void *array,
                                    size_t array_item_size,
                                    PyObject *value_fast,
@@ -345,6 +363,18 @@ struct PyC_TypeOrNone {
 [[nodiscard]] int PyC_ParseOptionalBool(PyObject *o, void *p);
 
 /**
+ * Use with PyArg_ParseTuple's "O&" formatting.
+ *
+ * Parse `((x1, y1), (x2, y2))` into an `rcti`.
+ */
+[[nodiscard]] int PyC_ParseRectI(PyObject *o, void *p);
+/**
+ * A version of #PyC_ParseRectI that accepts None
+ * (leaving the `std::optional<rcti>` empty).
+ */
+[[nodiscard]] int PyC_ParseOptionalRectI(PyObject *o, void *p);
+
+/**
  * Cast a pointer of a PyObject-derived type to `PyObject *`.
  *
  * A type-safe alternative to the C/Python API's `_PyObject_CAST` which is
@@ -394,6 +424,7 @@ struct PyC_StringEnum {
 [[nodiscard]] int PyC_CheckArgs_DeepCopy(PyObject *args);
 
 /* Integer parsing (with overflow checks), -1 on error. */
+
 /**
  * Comparison with #PyObject_IsTrue
  * ================================
@@ -444,7 +475,7 @@ struct PyC_StringEnum {
  */
 [[nodiscard]] uint64_t PyC_Long_AsU64(PyObject *value);
 
-/* inline so type signatures match as expected */
+/** Inline so type signatures match as expected. */
 [[nodiscard]] Py_LOCAL_INLINE(int32_t) PyC_Long_AsI32(PyObject *value)
 {
   return int32_t(PyLong_AsInt(value));
@@ -454,7 +485,8 @@ struct PyC_StringEnum {
   return int64_t(PyLong_AsLongLong(value));
 }
 
-/* utils for format string in `struct` module style syntax */
+/* Utils for format string in `struct` module style syntax. */
+
 [[nodiscard]] char PyC_StructFmt_type_from_str(const char *typestr);
 [[nodiscard]] bool PyC_StructFmt_type_is_float_any(char format);
 [[nodiscard]] bool PyC_StructFmt_type_is_int_any(char format);
@@ -486,5 +518,27 @@ struct PyC_StringEnum {
 {
   return PyC_Tuple_PackArray_Bool(values.data(), values.size());
 }
+
+/**
+ * Check that all keys in `dict` are Python strings.
+ *
+ * Use this to validate keyword arguments from `tp_call` which,
+ * unlike regular Python function calls, does not enforce string keys.
+ */
+[[nodiscard]] bool PyC_Dict_CheckKeysAreStrings(PyObject *dict);
+
+/**
+ * Create a `memoryview` from the contents of `info`,
+ * similar to #PyMemoryView_FromBuffer.
+ *
+ * Unlike #PyMemoryView_FromBuffer the returned `memoryview` takes ownership of `info->buf`:
+ * when the last reference to the `memoryview`
+ * (or any `memoryview` derived from it via `cast()` / slicing) is released,
+ * the buffer is freed with #MEM_delete_void.
+ *
+ * \return A new `memoryview` reference, or null with an exception set on failure.
+ * `info->buf` is freed even when the function returns null.
+ */
+[[nodiscard]] PyObject *PyC_MemoryView_FromBufferOwned(const Py_buffer *info);
 
 }  // namespace blender

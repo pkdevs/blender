@@ -4,9 +4,11 @@
 
 #include "DNA_space_types.h"
 
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
+#include "BLI_string_utf8.hh"
 
 #include "BKE_appdir.hh"
+#include "BKE_blender_copybuffer.hh"
 #include "BKE_blendfile.hh"
 #include "BKE_context.hh"
 #include "BKE_global.hh"
@@ -35,9 +37,7 @@
 
 #include "node_intern.hh"
 
-namespace blender {
-
-namespace ed::space_node {
+namespace blender::ed::space_node {
 
 /* -------------------------------------------------------------------- */
 /** \name Local Utilities
@@ -52,6 +52,7 @@ static void node_copybuffer_filepath_get(char filepath[FILE_MAX], size_t filepat
 static int node_copy_local(bNodeTree &from_tree,
                            bNodeTree &to_tree,
                            const bool allow_duplicate_names,
+                           const bool do_user_count,
                            const float2 offset,
                            const bool snap_to_grid,
                            ReportList *reports)
@@ -66,13 +67,13 @@ static int node_copy_local(bNodeTree &from_tree,
     if (!node->typeinfo->poll_instance ||
         node->typeinfo->poll_instance(node, &to_tree, &disabled_hint))
     {
-      bNode *new_node = bke::node_copy_with_mapping(&to_tree,
-                                                    *node,
-                                                    LIB_ID_COPY_DEFAULT,
-                                                    std::nullopt,
-                                                    std::nullopt,
-                                                    socket_map,
-                                                    allow_duplicate_names);
+      int flags = LIB_ID_COPY_DEFAULT;
+      if (!do_user_count) {
+        flags |= LIB_ID_CREATE_NO_USER_REFCOUNT;
+      }
+
+      bNode *new_node = bke::node_copy_with_mapping(
+          &to_tree, *node, flags, std::nullopt, std::nullopt, socket_map, allow_duplicate_names);
       node_map.add_new(node, new_node);
       new_node->location[0] += offset.x;
       new_node->location[1] += offset.y;
@@ -101,7 +102,7 @@ static int node_copy_local(bNodeTree &from_tree,
   }
 
   if (node_map.is_empty()) {
-    return false;
+    return 0;
   }
 
   for (bNode *new_node : node_map.values()) {
@@ -130,8 +131,9 @@ static int node_copy_local(bNodeTree &from_tree,
       bNode *from_node = node_map.lookup(link.fromnode);
       bNode *to_node = node_map.lookup(link.tonode);
 
-      bNodeSocket *from = bke::node_find_socket(*from_node, SOCK_OUT, link.fromsock->identifier);
-      bNodeSocket *to = bke::node_find_socket(*to_node, SOCK_IN, link.tosock->identifier);
+      bNodeSocket *from = bke::node_find_socket(
+          *from_node, SOCK_OUT, link.fromsock->identifier_ustr());
+      bNodeSocket *to = bke::node_find_socket(*to_node, SOCK_IN, link.tosock->identifier_ustr());
       if (!from || !to) {
         continue;
       }
@@ -172,7 +174,7 @@ static wmOperatorStatus node_clipboard_copy_exec(bContext *C, wmOperator *op)
                             {(PartialWriteContext::IDAddOperations::SET_FAKE_USER |
                               PartialWriteContext::IDAddOperations::SET_CLIPBOARD_MARK)}));
 
-  strcpy(copy_tree->idname, node_tree->typeinfo->idname.c_str());
+  STRNCPY_UTF8(copy_tree->idname, node_tree->typeinfo->idname.c_str());
   bke::node_tree_set_type(*copy_tree);
 
   /* Copy node interface to avoid losing links to Group Input and Group Output nodes.
@@ -183,7 +185,7 @@ static wmOperatorStatus node_clipboard_copy_exec(bContext *C, wmOperator *op)
   copy_tree->tree_interface.copy_data(node_tree->tree_interface, LIB_ID_COPY_DEFAULT);
 
   const int num_copied = node_copy_local(
-      *node_tree, *copy_tree, true, float2(0), false, op->reports);
+      *node_tree, *copy_tree, true, false, float2(0), false, op->reports);
   if (num_copied == 0) {
     return OPERATOR_CANCELLED;
   }
@@ -209,7 +211,7 @@ static wmOperatorStatus node_clipboard_copy_exec(bContext *C, wmOperator *op)
     auto partial_write_dependencies_filter_cb = [](LibraryIDLinkCallbackData *cb_deps_data,
                                                    PartialWriteContext::IDAddOptions /*options*/) {
       ID *id_deps_src = *cb_deps_data->id_pointer;
-      const ID_Type id_type = GS((id_deps_src)->name);
+      const ID_Type id_type = id_deps_src->id_type();
       if (id_type == ID_SCE) {
         /* Note: Scenes referenced in the Render Layers node are cleared. At this stage, we
          * don't know if the target blender instance will have a scene with identical name, so
@@ -233,7 +235,7 @@ static wmOperatorStatus node_clipboard_copy_exec(bContext *C, wmOperator *op)
 
   char filepath[FILE_MAX];
   node_copybuffer_filepath_get(filepath, sizeof(filepath));
-  if (!copy_buffer.write(filepath, *op->reports)) {
+  if (!copy_buffer.write_as_copypaste_buffer(filepath, *op->reports)) {
     BLI_assert_unreachable();
     BKE_report(op->reports, RPT_ERROR, "Unable to write to copy buffer on disk.");
     return OPERATOR_CANCELLED;
@@ -251,8 +253,6 @@ void NODE_OT_clipboard_copy(wmOperatorType *ot)
 
   ot->exec = node_clipboard_copy_exec;
   ot->poll = ED_operator_node_active;
-
-  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 }
 
 /** \} */
@@ -272,28 +272,20 @@ static StringRef scene_lib_filepath(const Scene &scene)
 static wmOperatorStatus node_clipboard_paste_exec(bContext *C, wmOperator *op)
 {
   SpaceNode *snode = CTX_wm_space_node(C);
+  Main *bmain_dst = CTX_data_main(C);
 
   char filepath[FILE_MAX];
   node_copybuffer_filepath_get(filepath, sizeof(filepath));
-
-  const BlendFileReadParams params{};
-  BlendFileReadReport bf_reports{};
-  BlendFileData *bfd = BKE_blendfile_read(filepath, &params, &bf_reports);
-
-  if (bfd == nullptr) {
-    BKE_report(op->reports, RPT_INFO, "No data to paste");
+  Main *bmain_src = BKE_copybuffer_read(*bmain_dst, filepath, op->reports, FILTER_ID_NT);
+  if (!bmain_src) {
+    BKE_report(op->reports, RPT_ERROR, "No data to paste");
     return OPERATOR_CANCELLED;
   }
 
   ED_preview_kill_jobs(CTX_wm_manager(C), CTX_data_main(C));
 
-  Main *bmain_src = bfd->main;
-  bfd->main = nullptr;
-  BLO_blendfiledata_free(bfd);
-
   /* We don't want to paste scenes referenced by the Render Layers node if they don't exist in the
    * destination bmain. */
-  Main *bmain_dst = CTX_data_main(C);
   Set<std::pair<StringRef, StringRef>> dst_scenes;
   for (Scene &scene : bmain_dst->scenes) {
     /* Packed scenes are currently not needed so they are skipped.
@@ -314,19 +306,27 @@ static wmOperatorStatus node_clipboard_paste_exec(bContext *C, wmOperator *op)
     }
   }
 
-  MainMergeReport merge_reports = {};
-  /* Frees bmain_src. */
-  BKE_main_merge(bmain_dst, &bmain_src, merge_reports);
-
   bNodeTree *from_tree = nullptr;
-  FOREACH_NODETREE_BEGIN (bmain_dst, node_tree, id) {
+  FOREACH_NODETREE_BEGIN (bmain_src, node_tree, id) {
     if (node_tree->id.flag & ID_FLAG_CLIPBOARD_MARK) {
       from_tree = node_tree;
       break;
     }
   }
   FOREACH_NODETREE_END;
-  BLI_assert(from_tree != nullptr);
+  if (from_tree == nullptr) {
+    BKE_report(op->reports, RPT_ERROR, "No data to paste");
+    BKE_main_free(bmain_src);
+    return OPERATOR_CANCELLED;
+  }
+
+  MainMergeReport merge_reports = {};
+  /* We need to ensure that the source 'clipboard marked' main NodeTree is always merged into
+   * destination Main, even in case there would be a name collision with an existing ID (see also
+   * #158049). */
+  Set<ID *> force_merge_ids = {id_cast<ID *>(from_tree)};
+  /* Frees bmain_src. */
+  BKE_main_merge(bmain_dst, &force_merge_ids, &bmain_src, merge_reports);
 
   bNodeTree *to_tree = snode->edittree;
   node_deselect_all(*to_tree);
@@ -354,7 +354,7 @@ static wmOperatorStatus node_clipboard_paste_exec(bContext *C, wmOperator *op)
 
   const bool snap_to_grid = CTX_data_scene(C)->toolsettings->snap_flag_node & SCE_SNAP;
   const int num_copied = node_copy_local(
-      *from_tree, *snode->edittree, false, offset, snap_to_grid, op->reports);
+      *from_tree, *snode->edittree, false, true, offset, snap_to_grid, op->reports);
   if (num_copied == 0) {
     /* Note: we don't return OPERATOR_CANCELLED here although the copy fails to avoid corrupting
      * the undo stack after merging two bmains. */
@@ -408,5 +408,4 @@ void NODE_OT_clipboard_paste(wmOperatorType *ot)
 
 /** \} */
 
-}  // namespace ed::space_node
-}  // namespace blender
+}  // namespace blender::ed::space_node

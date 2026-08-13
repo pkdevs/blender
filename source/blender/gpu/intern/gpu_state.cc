@@ -13,8 +13,8 @@
 #  define PIXELSIZE (1.0f)
 #endif
 
-#include "BLI_math_vector.h"
-#include "BLI_utildefines.h"
+#include "BLI_math_vector_c.hh"
+#include "BLI_utildefines.hh"
 
 #include "GPU_state.hh"
 
@@ -278,12 +278,6 @@ bool GPU_depth_mask_get()
 {
   const GPUState &state = Context::get()->state_manager->state;
   return (state.write_mask & GPU_WRITE_DEPTH) != 0;
-}
-
-bool GPU_mipmap_enabled()
-{
-  /* TODO(fclem): this used to be a userdef option. */
-  return true;
 }
 
 /** \} */

@@ -57,6 +57,11 @@ enum GPUBuiltinShader {
   GPU_SHADER_GPENCIL_STROKE,
   /** Draw rounded area borders with silky smooth anti-aliasing without any over-draw. */
   GPU_SHADER_2D_AREA_BORDERS,
+  /**
+   * Draw the area that rounded corners cut away from the corners of a rectangle. Instanced, with
+   * one instance per corner.
+   */
+  GPU_SHADER_2D_ROUNDED_CORNER_MASK,
   /** Multi usage widget shaders for drawing buttons and other UI elements. */
   GPU_SHADER_2D_WIDGET_BASE,
   GPU_SHADER_2D_WIDGET_BASE_INST,
@@ -96,6 +101,22 @@ enum GPUBuiltinShader {
   GPU_SHADER_INDEXBUF_POINTS,
   GPU_SHADER_INDEXBUF_LINES,
   GPU_SHADER_INDEXBUF_TRIS,
+
+  /** Compute shaders to generate mipmaps. */
+  GPU_SHADER_2D_UPDATE_MIPMAPS_UNORM_8,
+  GPU_SHADER_2D_UPDATE_MIPMAPS_UNORM_8_LAYERED,
+  GPU_SHADER_2D_UPDATE_MIPMAPS_UNORM_8_8_8_8,
+  GPU_SHADER_2D_UPDATE_MIPMAPS_UNORM_8_8_8_8_LAYERED,
+  GPU_SHADER_2D_UPDATE_MIPMAPS_SFLOAT_16,
+  GPU_SHADER_2D_UPDATE_MIPMAPS_SFLOAT_16_LAYERED,
+  GPU_SHADER_2D_UPDATE_MIPMAPS_SFLOAT_16_16_16_16,
+  GPU_SHADER_2D_UPDATE_MIPMAPS_SFLOAT_16_16_16_16_LAYERED,
+  GPU_SHADER_2D_UPDATE_MIPMAPS_SFLOAT_32,
+  GPU_SHADER_2D_UPDATE_MIPMAPS_SFLOAT_32_LAYERED,
+  GPU_SHADER_2D_UPDATE_MIPMAPS_SFLOAT_32_32_32_32,
+  GPU_SHADER_2D_UPDATE_MIPMAPS_SFLOAT_32_32_32_32_LAYERED,
+  GPU_SHADER_2D_UPDATE_MIPMAPS_SRGBA_8_8_8_8,
+  GPU_SHADER_2D_UPDATE_MIPMAPS_SRGBA_8_8_8_8_LAYERED,
 
   /**
    * ----------------------- Shaders exposed through pyGPU module -----------------------

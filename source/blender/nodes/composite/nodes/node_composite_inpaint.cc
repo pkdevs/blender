@@ -19,14 +19,19 @@ static void node_declare(NodeDeclarationBuilder &b)
 {
   b.use_custom_socket_order();
   b.allow_any_socket_order();
-  b.add_input<decl::Color>("Image")
+  b.add_input<decl::Color>("Image"_ustr)
       .default_value({1.0f, 1.0f, 1.0f, 1.0f})
       .hide_value()
       .structure_type(StructureType::Dynamic);
-  b.add_output<decl::Color>("Image").structure_type(StructureType::Dynamic).align_with_previous();
+  b.add_output<decl::Color>("Image"_ustr)
+      .structure_type(StructureType::Dynamic)
+      .align_with_previous();
 
-  b.add_input<decl::Int>("Size").default_value(0).min(0).description(
-      "The size of the inpaint in pixels");
+  b.add_input<decl::Int>("Size"_ustr)
+      .default_value(0)
+      .subtype(PROP_PIXEL)
+      .min(0)
+      .description("The size of the inpaint in pixels");
 }
 
 using namespace blender::compositor;
@@ -123,13 +128,14 @@ class InpaintOperation : public NodeOperation {
     parallel_for(domain.data_size, [&](const int2 texel) {
       /* Identify if any of the 8 neighbors around the center pixel are transparent. */
       bool has_transparent_neighbors = false;
+      constexpr float alpha_threshold = 1.0f - 1e-3f;
       for (int j = -1; j <= 1; j++) {
         for (int i = -1; i <= 1; i++) {
           int2 offset = int2(i, j);
 
           /* Exempt the center pixel. */
           if (offset != int2(0)) {
-            if (input.load_pixel_extended<Color>(texel + offset).a < 1.0f) {
+            if (input.load_pixel_extended<Color>(texel + offset).a < alpha_threshold) {
               has_transparent_neighbors = true;
               break;
             }
@@ -138,7 +144,7 @@ class InpaintOperation : public NodeOperation {
       }
 
       /* The pixels at the boundary are those that are opaque and have transparent neighbors. */
-      bool is_opaque = input.load_pixel<Color>(texel).a == 1.0f;
+      bool is_opaque = input.load_pixel<Color>(texel).a >= alpha_threshold;
       bool is_boundary_pixel = is_opaque && has_transparent_neighbors;
 
       /* Encode the boundary information in the format expected by the jump flooding algorithm. */
@@ -349,7 +355,7 @@ static void node_register()
 {
   static bke::bNodeType ntype;
 
-  cmp_node_type_base(&ntype, "CompositorNodeInpaint", CMP_NODE_INPAINT);
+  cmp_node_type_base(&ntype, "CompositorNodeInpaint"_ustr, CMP_NODE_INPAINT);
   ntype.ui_name = "Inpaint";
   ntype.ui_description = "Extend borders of an image into transparent or masked regions";
   ntype.enum_name_legacy = "INPAINT";

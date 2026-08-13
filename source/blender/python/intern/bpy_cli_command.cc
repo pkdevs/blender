@@ -9,7 +9,7 @@
  */
 #include <Python.h>
 
-#include "BLI_utildefines.h"
+#include "BLI_utildefines.hh"
 
 #include "bpy_capi_utils.hh"
 
@@ -39,7 +39,7 @@ static PyObject *py_argv_from_bytes(const int argc, const char **argv)
   PyConfig_InitPythonConfig(&config);
   PyStatus status = PyConfig_SetBytesArgv(&config, argc, const_cast<char *const *>(argv));
   PyObject *py_argv = nullptr;
-  if (UNLIKELY(PyStatus_Exception(status))) {
+  if (PyStatus_Exception(status)) [[unlikely]] {
     PyErr_Format(PyExc_ValueError, "%s", status.err_msg);
   }
   else {
@@ -205,7 +205,8 @@ PyDoc_STRVAR(
     "\n"
     "      This uses Python's capsule type "
     "however the result should be considered an opaque handle only used for unregistering.\n"
-    "   :rtype: capsule\n");
+    /* No exposed type for "Capsule", use "Any". */
+    "   :rtype: Any\n");
 static PyObject *bpy_cli_command_register(PyObject * /*self*/, PyObject *args, PyObject *kw)
 {
   PyObject *py_id;
@@ -255,7 +256,8 @@ PyDoc_STRVAR(
     "   Unregister a CLI command.\n"
     "\n"
     "   :param handle: The return value of :func:`register_cli_command`.\n"
-    "   :type handle: capsule\n");
+    /* No exposed type for "Capsule", use "Any". */
+    "   :type handle: Any\n");
 static PyObject *bpy_cli_command_unregister(PyObject * /*self*/, PyObject *value)
 {
   if (!PyCapsule_CheckExact(value)) {

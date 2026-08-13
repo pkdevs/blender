@@ -99,6 +99,26 @@ class TestBlendFileOpenLinkSaveAllTestFiles(TestHelper):
         # Directories to exclude relative to `./tests/files/`.
         self.excluded_save_reload_dirs = ()
 
+        # Some files are known broken currently for opening or linking.
+        # They cannot be opened, or will generate some error (e.g. memleaks).
+        # Each file in this list should either be the source of a bug report,
+        # or removed from tests repo.
+        self.excluded_global_undo_paths = {
+            # depsgraph/deg_anim_camera_dof_driving_material.blend
+            # ERROR (bke.fcurve):
+            # source/blender/blenkernel/intern/fcurve_driver.cc:188 dtar_get_prop_val:
+            # Driver Evaluation Error: cannot resolve target for OBCamera ->
+            # data.dof_distance
+            "deg_anim_camera_dof_driving_material.blend",
+
+            # physics/fluidsim.blend
+            # Error: Not freed memory blocks: 3, total unfreed memory 0.003548 MB
+            "fluidsim.blend",
+        }
+
+        # Directories to exclude relative to `./tests/files/`.
+        self.excluded_global_undo_dirs = ()
+
         # Some files are expected to be invalid.
         # This mapping stores filenames as keys, and expected error message as value.
         self.invalid_paths = {
@@ -278,6 +298,37 @@ class TestBlendFileOpenLinkSaveAllTestFiles(TestHelper):
                 (OSError, RuntimeError),
                 "created by a Big Endian version of Blender, support for these files has been removed in Blender 5.0"
             ),
+
+            # invalid_blendfiles/invalid_sdna_struct_size.blend
+            # A struct's DNA size no longer matches the sum of its members.
+            "invalid_sdna_struct_size.blend": (
+                (OSError, RuntimeError),
+                "Invalid struct size in SDNA file"
+            ),
+            # invalid_blendfiles/invalid_block_count.blend
+            # A file-block declares an out-of-range array element count.
+            "invalid_block_count.blend": (
+                (OSError, RuntimeError),
+                "Corrupt .blend file, invalid block count"
+            ),
+            # invalid_blendfiles/invalid_block_struct_index.blend
+            # A file-block references an out-of-range SDNA struct index.
+            "invalid_block_struct_index.blend": (
+                (OSError, RuntimeError),
+                "Corrupt .blend file, invalid block struct index"
+            ),
+            # invalid_blendfiles/invalid_global_block.blend
+            # The required global block references an out-of-range SDNA struct index.
+            "invalid_global_block.blend": (
+                (OSError, RuntimeError),
+                "is corrupt, unable to read"
+            ),
+            # invalid_blendfiles/invalid_window_workspace_hook.blend
+            # A window's sub-block references an out-of-range SDNA struct index.
+            "invalid_window_workspace_hook.blend": (
+                (OSError, RuntimeError),
+                "Corrupt .blend file, invalid block struct index"
+            ),
         }
 
         assert all(p.endswith("/") for p in self.excluded_open_link_dirs)
@@ -331,6 +382,9 @@ class TestBlendFileOpenLinkSaveAllTestFiles(TestHelper):
 
     def skip_save_reload_path_check(self, bfp):
         return self.skip_path_check(bfp, self.excluded_save_reload_paths, self.excluded_save_reload_dirs)
+
+    def skip_global_undo_path_check(self, bfp):
+        return self.skip_path_check(bfp, self.excluded_global_undo_paths, self.excluded_global_undo_dirs)
 
     def invalid_path_exception_process(self, bfp, exception):
         expected_failure = self.invalid_paths.get(os.path.basename(bfp), None)
@@ -400,6 +454,29 @@ class TestBlendFileOpenLinkSaveAllTestFiles(TestHelper):
     def test_append(self):
         self.link_append(do_link=False)
 
+    def test_global_undo(self):
+        for bfp in self.blendfile_paths:
+            if self.skip_global_undo_path_check(bfp):
+                continue
+            if not self.args.is_quiet:
+                print(f"Trying to perform basic global undo in {bfp}", flush=True)
+            bpy.ops.wm.read_homefile(use_empty=True, use_factory_startup=True)
+            try:
+                bpy.ops.wm.open_mainfile(filepath=bfp, load_ui=False)
+                # NOTE: The two undo pushes are necessary to be able to undo, since the first undo push creates the
+                # initial state for memfile undo (it is not initialized by default in background mode).
+                bpy.ops.ed.undo_push()
+                bpy.ops.ed.undo_push()
+                bpy.ops.ed.undo()
+                bpy.ops.ed.redo()
+                if bpy.context.object:
+                    bpy.context.object.location.x += 1.0
+                    bpy.ops.ed.undo_push()
+                    bpy.ops.ed.undo()
+                    bpy.ops.ed.redo()
+            except BaseException as e:
+                self.invalid_path_exception_process(bfp, e)
+
 
 TESTS = (
     TestBlendFileOpenLinkSaveAllTestFiles,
@@ -423,9 +500,8 @@ def argparse_create():
     parser.add_argument(
         "--output-dir",
         dest="output_dir",
-        default=".",
         help="Where to output temp saved blendfiles",
-        required=False,
+        required=True,
     )
 
     parser.add_argument(

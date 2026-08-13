@@ -15,7 +15,9 @@
 #include <Python.h>
 #include <frameobject.h>
 
-#include "BLI_utildefines.h" /* for bool */
+#include "BLI_utildefines.hh" /* for bool */
+
+#include "DNA_vec_types.h" /* for rcti */
 
 #include "py_capi_utils.hh"
 
@@ -24,11 +26,11 @@
 #ifndef MATH_STANDALONE
 #  include "MEM_guardedalloc.h"
 
-#  include "BLI_string_utf8.h"
+#  include "BLI_string_utf8.hh"
 #endif
 
 #ifdef _WIN32
-#  include "BLI_math_base.h" /* isfinite() */
+#  include "BLI_math_base_c.hh" /* isfinite() */
 #endif
 
 namespace blender {
@@ -37,7 +39,6 @@ namespace blender {
 /** \name Fast Python to C Array Conversion for Primitive Types
  * \{ */
 
-/* array utility function */
 int PyC_AsArray_FAST(void *array,
                      const size_t array_item_size,
                      PyObject *value_fast,
@@ -299,7 +300,6 @@ int PyC_AsArray_Multi(void *array,
  * \note See #PyC_Tuple_Pack_* macros that take multiple arguments.
  * \{ */
 
-/* array utility function */
 PyObject *PyC_Tuple_PackArray_F32(const float *array, uint len)
 {
   PyObject *tuple = PyTuple_New(len);
@@ -606,6 +606,38 @@ int PyC_ParseOptionalBool(PyObject *o, void *p)
   return 1;
 }
 
+int PyC_ParseRectI(PyObject *o, void *p)
+{
+  rcti *rect = static_cast<rcti *>(p);
+  if (!PyArg_ParseTuple(o,
+                        "(ii)" /* `min` */
+                        "(ii)" /* `max` */
+                        ":rect",
+                        &rect->xmin,
+                        &rect->ymin,
+                        &rect->xmax,
+                        &rect->ymax))
+  {
+    return 0;
+  }
+  return 1;
+}
+
+int PyC_ParseOptionalRectI(PyObject *o, void *p)
+{
+  std::optional<rcti> *value_p = static_cast<std::optional<rcti> *>(p);
+  if (o == Py_None) {
+    value_p->reset();
+    return 1;
+  }
+  rcti rect;
+  if (!PyC_ParseRectI(o, &rect)) {
+    return 0;
+  }
+  *value_p = rect;
+  return 1;
+}
+
 int PyC_ParseStringEnum(PyObject *o, void *p)
 {
   PyC_StringEnum *e = static_cast<PyC_StringEnum *>(p);
@@ -647,7 +679,12 @@ const char *PyC_StringEnum_FindIDFromValue(const PyC_StringEnumItems *items, con
 int PyC_CheckArgs_DeepCopy(PyObject *args)
 {
   PyObject *dummy_pydict;
-  return PyArg_ParseTuple(args, "|O!:__deepcopy__", &PyDict_Type, &dummy_pydict) != 0;
+  return PyArg_ParseTuple(args,
+                          "|"  /* Optional arguments. */
+                          "O!" /* `memo` */
+                          ":__deepcopy__",
+                          &PyDict_Type,
+                          &dummy_pydict) != 0;
 }
 
 /** \} */
@@ -812,41 +849,6 @@ void PyC_FileAndNum_Safe(const char **r_filename, int *r_lineno)
 /** \} */
 
 /* -------------------------------------------------------------------- */
-/** \name Object Access Utilities
- * \{ */
-
-PyObject *PyC_Object_GetAttrStringArgs(PyObject *o, Py_ssize_t n, ...)
-{
-  /* NOTE: Would be nice if python had this built in. */
-
-  Py_ssize_t i;
-  PyObject *item = o;
-  const char *attr;
-
-  va_list vargs;
-
-  va_start(vargs, n);
-  for (i = 0; i < n; i++) {
-    attr = va_arg(vargs, char *);
-    item = PyObject_GetAttrString(item, attr);
-
-    if (item) {
-      Py_DECREF(item);
-    }
-    else {
-      /* python will set the error value here */
-      break;
-    }
-  }
-  va_end(vargs);
-
-  Py_XINCREF(item); /* final value has is increfed, to match PyObject_GetAttrString */
-  return item;
-}
-
-/** \} */
-
-/* -------------------------------------------------------------------- */
 /** \name Frozen Set Creation
  * \{ */
 
@@ -944,6 +946,32 @@ void PyC_Err_PrintWithFunc(PyObject *py_func)
  * \{ */
 
 /**
+ * Get exit code `sys.exit(..)` was called with, see #pyc_exception_buffer_handle_system_exit.
+ */
+static std::optional<int> g_system_exit_code;
+std::optional<int> PyC_ExceptionSystemExitCode()
+{
+  return g_system_exit_code;
+}
+
+bool PyC_Err_CaptureSystemExitCode()
+{
+  if (!PyErr_ExceptionMatches(PyExc_SystemExit)) {
+    return false;
+  }
+
+  /* Get exit code and put back exception. */
+  PyObject *exc_obj = PyErr_GetRaisedException();
+  PyObject *code_obj = ((PySystemExitObject *)exc_obj)->code;
+  g_system_exit_code = 0;
+  if (code_obj && code_obj != Py_None) {
+    g_system_exit_code = PyLong_Check(code_obj) ? int(PyLong_AsLong(code_obj)) : 1;
+  }
+  PyErr_SetRaisedException(exc_obj);
+  return true;
+}
+
+/**
  * When a script calls `sys.exit(..)` it is expected that Blender quits,
  * internally this raises as `SystemExit` exception which this function detects.
  *
@@ -961,10 +989,10 @@ void PyC_Err_PrintWithFunc(PyObject *py_func)
  */
 static void pyc_exception_buffer_handle_system_exit()
 {
-  if (!PyErr_ExceptionMatches(PyExc_SystemExit)) {
+  if (!PyC_Err_CaptureSystemExitCode()) {
     return;
   }
-/* Inspecting, follow Python's logic in #_Py_HandleSystemExit & treat as a regular exception. */
+  /* Inspecting, follow Python's logic in #_Py_HandleSystemExit & treat as a regular exception. */
 #  if 0 /* FIXME: */
   if (_Py_GetConfig()->inspect) {
     return;
@@ -1024,7 +1052,7 @@ PyObject *PyC_ExceptionBuffer()
   }
   else {
     PySys_WriteStderr("Internal error creating: io.StringIO()!\n");
-    if (UNLIKELY(PyErr_Occurred())) {
+    if (PyErr_Occurred()) [[unlikely]] {
       PyErr_Print(); /* Show the error accessing `io.StringIO`. */
     }
     PyErr_Display(error_type, error_value, error_traceback);
@@ -1037,7 +1065,7 @@ PyObject *PyC_ExceptionBuffer()
   if (result == nullptr) {
     result = PyObject_Str(error_value);
     /* Python does this too. */
-    if (UNLIKELY(result == nullptr)) {
+    if (result == nullptr) [[unlikely]] {
       result = PyUnicode_FromFormat("<unprintable %s object>", Py_TYPE(error_value)->tp_name);
     }
   }
@@ -1072,7 +1100,7 @@ PyObject *PyC_ExceptionBuffer_Simple()
   if (result == nullptr) {
     result = PyObject_Str(error_value);
     /* Python does this too. */
-    if (UNLIKELY(result == nullptr)) {
+    if (result == nullptr) [[unlikely]] {
       result = PyUnicode_FromFormat("<unprintable %s object>", Py_TYPE(error_value)->tp_name);
     }
   }
@@ -1170,7 +1198,7 @@ PyObject *PyC_UnicodeFromStdStr(const std::string &str)
 int PyC_ParseUnicodeAsBytesAndSize(PyObject *o, void *p)
 {
   PyC_UnicodeAsBytesAndSize_Data *data = static_cast<PyC_UnicodeAsBytesAndSize_Data *>(p);
-  if (UNLIKELY(o == nullptr)) {
+  if (o == nullptr) [[unlikely]] {
     /* Signal to cleanup. */
     Py_CLEAR(data->value_coerce);
     return 1;
@@ -1362,16 +1390,15 @@ void PyC_RunQuicky(const char *filepath, int n, ...)
     fclose(fp);
 
     if (py_result) {
+      /* don't use the result */
+      Py_DECREF(py_result);
+      py_result = nullptr;
 
       /* we could skip this but then only slice assignment would work
        * better not be so strict */
       values = PyDict_GetItemString(py_dict, "values");
 
       if (values && PyList_Check(values)) {
-
-        /* don't use the result */
-        Py_DECREF(py_result);
-        py_result = nullptr;
 
         /* now get the values back */
         va_start(vargs, n);
@@ -1606,7 +1633,7 @@ static PyObject *pyc_run_string_as_py_object(const char *imports[],
 
   if (imports_star) {
     for (int i = 0; imports_star[i]; i++) {
-      PyObject *mod = PyImport_ImportModule("math");
+      PyObject *mod = PyImport_ImportModule(imports_star[i]);
       if (mod) {
         /* Don't overwrite existing values (override=0). */
         PyDict_Merge(py_dict, PyModule_GetDict(mod), 0);
@@ -1761,7 +1788,7 @@ bool PyC_RunString_AsStringAndSizeOrNone(const char *imports[],
       }
       else {
         char *val_alloc = MEM_new_array_uninitialized<char>(size_t(val_len) + 1, __func__);
-        memcpy(val_alloc, val, (size_t(val_len) + 1) * sizeof(val_alloc));
+        memcpy(val_alloc, val, (size_t(val_len) + 1) * sizeof(*val_alloc));
         *r_value = val_alloc;
         *r_value_size = val_len;
         ok = true;
@@ -1872,10 +1899,10 @@ static ulong pyc_Long_AsUnsignedLong(PyObject *value)
 int PyC_Long_AsBool(PyObject *value)
 {
   const int test = PyLong_AsInt(value);
-  if (UNLIKELY(test == -1 && PyErr_Occurred())) {
+  if (test == -1 && PyErr_Occurred()) [[unlikely]] {
     return -1;
   }
-  if (UNLIKELY(uint(test) > 1)) {
+  if (uint(test) > 1) [[unlikely]] {
     PyErr_SetString(PyExc_TypeError, "Python number not a bool (0/1)");
     return -1;
   }
@@ -1885,10 +1912,10 @@ int PyC_Long_AsBool(PyObject *value)
 int8_t PyC_Long_AsI8(PyObject *value)
 {
   const int test = PyLong_AsInt(value);
-  if (UNLIKELY(test == -1 && PyErr_Occurred())) {
+  if (test == -1 && PyErr_Occurred()) [[unlikely]] {
     return -1;
   }
-  if (UNLIKELY(test < INT8_MIN || test > INT8_MAX)) {
+  if (test < INT8_MIN || test > INT8_MAX) [[unlikely]] {
     PyErr_SetString(PyExc_OverflowError, "Python int too large to convert to C int8");
     return -1;
   }
@@ -1898,10 +1925,10 @@ int8_t PyC_Long_AsI8(PyObject *value)
 int16_t PyC_Long_AsI16(PyObject *value)
 {
   const int test = PyLong_AsInt(value);
-  if (UNLIKELY(test == -1 && PyErr_Occurred())) {
+  if (test == -1 && PyErr_Occurred()) [[unlikely]] {
     return -1;
   }
-  if (UNLIKELY(test < INT16_MIN || test > INT16_MAX)) {
+  if (test < INT16_MIN || test > INT16_MAX) [[unlikely]] {
     PyErr_SetString(PyExc_OverflowError, "Python int too large to convert to C int16");
     return -1;
   }
@@ -1916,10 +1943,10 @@ int16_t PyC_Long_AsI16(PyObject *value)
 uint8_t PyC_Long_AsU8(PyObject *value)
 {
   const ulong test = pyc_Long_AsUnsignedLong(value);
-  if (UNLIKELY(test == ulong(-1) && PyErr_Occurred())) {
+  if (test == ulong(-1) && PyErr_Occurred()) [[unlikely]] {
     return uint8_t(-1);
   }
-  if (UNLIKELY(test > UINT8_MAX)) {
+  if (test > UINT8_MAX) [[unlikely]] {
     PyErr_SetString(PyExc_OverflowError, "Python int too large to convert to C uint8");
     return uint8_t(-1);
   }
@@ -1929,10 +1956,10 @@ uint8_t PyC_Long_AsU8(PyObject *value)
 uint16_t PyC_Long_AsU16(PyObject *value)
 {
   const ulong test = pyc_Long_AsUnsignedLong(value);
-  if (UNLIKELY(test == ulong(-1) && PyErr_Occurred())) {
+  if (test == ulong(-1) && PyErr_Occurred()) [[unlikely]] {
     return uint16_t(-1);
   }
-  if (UNLIKELY(test > UINT16_MAX)) {
+  if (test > UINT16_MAX) [[unlikely]] {
     PyErr_SetString(PyExc_OverflowError, "Python int too large to convert to C uint16");
     return uint16_t(-1);
   }
@@ -1942,10 +1969,10 @@ uint16_t PyC_Long_AsU16(PyObject *value)
 uint32_t PyC_Long_AsU32(PyObject *value)
 {
   const ulong test = pyc_Long_AsUnsignedLong(value);
-  if (UNLIKELY(test == ulong(-1) && PyErr_Occurred())) {
+  if (test == ulong(-1) && PyErr_Occurred()) [[unlikely]] {
     return uint32_t(-1);
   }
-  if (UNLIKELY(test > UINT32_MAX)) {
+  if (test > UINT32_MAX) [[unlikely]] {
     PyErr_SetString(PyExc_OverflowError, "Python int too large to convert to C uint32");
     return uint32_t(-1);
   }
@@ -2054,6 +2081,156 @@ bool PyC_StructFmt_type_is_bool(char format)
       return false;
   }
 }
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Dict Utilities
+ * \{ */
+
+bool PyC_Dict_CheckKeysAreStrings(PyObject *dict)
+{
+  PyObject *key;
+  Py_ssize_t pos = 0;
+  while (PyDict_Next(dict, &pos, &key, nullptr)) {
+    if (!PyUnicode_Check(key)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Owned MemoryView
+ *
+ * A memory view where the memory is owned.
+ * NOTE(@ideasman42): Python doesn't provide a convenient zero-copy way
+ * for owned memory to be returned from a `memoryview`.
+ *
+ * This types only purpose is to expose a `memoryview` which our own custom free.
+ * The type itself is not expected to be exposed to users.
+ * So we could switch to an alternative API if it is ever supported.
+ * \{ */
+
+#ifndef MATH_STANDALONE
+
+struct BPyMemoryViewOwned {
+  PyObject_VAR_HEAD;
+  /**
+   * Snapshot of the caller's #Py_buffer.
+   * - `info.shape` and `info.strides` point into `shape_and_stride`.
+   * - `info.obj` is always null.
+   */
+  Py_buffer info;
+  /**
+   * Flexible array of `2 * info.ndim`.
+   * Layout:
+   * - `shape_and_stride[0..ndim]`: shape.
+   * - `shape_and_stride[ndim..2 * ndim]`: strides.
+   */
+  Py_ssize_t shape_and_stride[];
+};
+
+static void bpy_memoryview_buffer_dealloc(BPyMemoryViewOwned *self)
+{
+  /* `info.buf` is asserted non-null at construction.
+   * #MEM_delete_void also accepts null defensively. */
+  MEM_delete_void(self->info.buf);
+  Py_TYPE(self)->tp_free(self);
+}
+
+static int bpy_memoryview_buffer_getbuffer(BPyMemoryViewOwned *self, Py_buffer *view, int flags)
+{
+  if (self->info.readonly && (flags & PyBUF_WRITABLE) == PyBUF_WRITABLE) {
+    PyErr_SetString(PyExc_BufferError, "BPyMemoryViewOwned: object is not writable");
+    return -1;
+  }
+  *view = self->info;
+  view->obj = Py_NewRef(reinterpret_cast<PyObject *>(self));
+  /* Honor what the caller actually requested. */
+  if ((flags & PyBUF_FORMAT) != PyBUF_FORMAT) {
+    view->format = nullptr;
+  }
+  if ((flags & PyBUF_ND) != PyBUF_ND) {
+    view->shape = nullptr;
+  }
+  if ((flags & PyBUF_STRIDES) != PyBUF_STRIDES) {
+    view->strides = nullptr;
+  }
+  return 0;
+}
+
+static PyBufferProcs bpy_memoryview_buffer_as_buffer = {
+    /*bf_getbuffer*/ reinterpret_cast<getbufferproc>(bpy_memoryview_buffer_getbuffer),
+    /*bf_releasebuffer*/ nullptr,
+};
+
+static PyTypeObject BPyMemoryViewOwned_Type = {
+    PyVarObject_HEAD_INIT(nullptr, 0)
+    /*tp_name*/ "BPyMemoryViewOwned",
+    /*tp_basicsize*/ sizeof(BPyMemoryViewOwned),
+    /*tp_itemsize*/ sizeof(Py_ssize_t),
+    /*tp_dealloc*/ reinterpret_cast<destructor>(bpy_memoryview_buffer_dealloc),
+    /*tp_vectorcall_offset*/ 0,
+    /*tp_getattr*/ nullptr,
+    /*tp_setattr*/ nullptr,
+    /*tp_as_async*/ nullptr,
+    /*tp_repr*/ nullptr,
+    /*tp_as_number*/ nullptr,
+    /*tp_as_sequence*/ nullptr,
+    /*tp_as_mapping*/ nullptr,
+    /*tp_hash*/ nullptr,
+    /*tp_call*/ nullptr,
+    /*tp_str*/ nullptr,
+    /*tp_getattro*/ nullptr,
+    /*tp_setattro*/ nullptr,
+    /*tp_as_buffer*/ &bpy_memoryview_buffer_as_buffer,
+    /* `Py_TPFLAGS_HAVE_GC` (and the matching `tp_traverse` / `tp_clear`) is not
+     * needed: the wrapper holds no Python references - `info.obj` /
+     * `info.suboffsets` / `info.internal` are explicitly nulled at construction
+     * and the buffer is plain memory. */
+    /*tp_flags*/ Py_TPFLAGS_DEFAULT,
+    /*tp_doc*/ nullptr,
+};
+
+PyObject *PyC_MemoryView_FromBufferOwned(const Py_buffer *info)
+{
+  BLI_assert(info->buf != nullptr);
+  BLI_assert(info->ndim >= 1);
+  BLI_assert(info->itemsize > 0);
+  BLI_assert(info->format != nullptr);
+  BLI_assert(info->shape != nullptr);
+  BLI_assert(info->strides != nullptr);
+
+  if (PyType_Ready(&BPyMemoryViewOwned_Type) < 0) [[unlikely]] {
+    MEM_delete_void(info->buf);
+    return nullptr;
+  }
+  BPyMemoryViewOwned *wrapper = PyObject_NewVar(
+      BPyMemoryViewOwned, &BPyMemoryViewOwned_Type, Py_ssize_t(2) * info->ndim);
+  if (wrapper == nullptr) [[unlikely]] {
+    MEM_delete_void(info->buf);
+    return nullptr;
+  }
+  wrapper->info = *info;
+  wrapper->info.obj = nullptr;
+  wrapper->info.shape = wrapper->shape_and_stride;
+  wrapper->info.strides = wrapper->shape_and_stride + info->ndim;
+  wrapper->info.suboffsets = nullptr;
+  wrapper->info.internal = nullptr;
+  const size_t dim_size = size_t(info->ndim) * sizeof(Py_ssize_t);
+  memcpy(wrapper->shape_and_stride, info->shape, dim_size);
+  memcpy(wrapper->shape_and_stride + info->ndim, info->strides, dim_size);
+  /* `wrapper` now owns `info->buf`, its `tp_dealloc` will free it. */
+
+  PyObject *mv = PyMemoryView_FromObject(reinterpret_cast<PyObject *>(wrapper));
+  Py_DECREF(wrapper);
+  return mv;
+}
+
+#endif /* !MATH_STANDALONE */
 
 /** \} */
 

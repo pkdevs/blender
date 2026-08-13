@@ -10,12 +10,12 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_color.hh"
-#include "BLI_listbase.h"
-#include "BLI_math_rotation.h"
+#include "BLI_color_types.hh"
+#include "BLI_listbase.hh"
+#include "BLI_math_rotation_c.hh"
 #include "BLI_math_vector_types.hh"
 #include "BLI_span.hh"
-#include "BLI_utildefines.h"
+#include "BLI_utildefines.hh"
 
 #include "DNA_curve_types.h"
 #include "DNA_object_types.h"
@@ -605,14 +605,14 @@ static void curve_create_edit_curves_nor(CurveRenderData *rdata,
         GPU_vertbuf_attr_set(&vbo_curves_nor, tan_id, vbo_len_used, &ptan);
       }
       else {
-        const gpu::PackedNormal pnor = gpu::convert_normal<gpu::PackedNormal>(nor);
-        const gpu::PackedNormal ptan = gpu::convert_normal<gpu::PackedNormal>(bevp->dir);
+        const int1010102_norm pnor = gpu::convert_normal<int1010102_norm>(nor);
+        const int1010102_norm ptan = gpu::convert_normal<int1010102_norm>(bevp->dir);
         GPU_vertbuf_attr_set(&vbo_curves_nor, nor_id, vbo_len_used, &pnor);
         GPU_vertbuf_attr_set(&vbo_curves_nor, tan_id, vbo_len_used, &ptan);
       }
       vbo_len_used++;
 
-      /* Skip the other vertex (it does not need to be offsetted). */
+      /* Skip the other vertex (it does not need to be offset). */
       GPU_vertbuf_attr_set(&vbo_curves_nor, attr_id.pos, vbo_len_used, bevp->vec);
       vbo_len_used++;
 

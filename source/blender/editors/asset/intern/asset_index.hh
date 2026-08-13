@@ -57,7 +57,7 @@ template<typename T = std::monostate> class ReadingResult {
   std::optional<T> success_value;
 
   /**
-   * Even when an operation was performed succesfully, there could have been
+   * Even when an operation was performed successfully, there could have been
    * warnings. These are only intended to be used on success status; on failure,
    * only `failure_reason` is expected to be set. On cancellation, no reason
    * needs to be given (as it is in response to the user cancelling the
@@ -243,7 +243,7 @@ std::optional<bool> file_older_than_timestamp(const char *filepath, Timestamp ti
 
 /**
  * Reading of API schema version 1. See #read_remote_listing() on \a process_fn.
- * \param version_root_dirpath: Absolute path to the remote listing root directory.
+ * \param listing_root_dirpath: Absolute path to the remote listing root directory.
  */
 ReadingResult<> read_remote_listing_v1(
     StringRefNull listing_root_dirpath,

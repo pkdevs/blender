@@ -19,14 +19,15 @@
 #include "DNA_space_types.h"
 #include "DNA_view3d_types.h"
 
-#include "BLI_math_vector.h"
-#include "BLI_string_utf8.h"
+#include "BLI_math_vector_c.hh"
+#include "BLI_string_utf8.hh"
 
 #include "BLT_translation.hh"
 
 #include "BKE_context.hh"
 #include "BKE_lib_id.hh"
 #include "BKE_report.hh"
+#include "BKE_scene.hh"
 #include "BKE_screen.hh"
 #include "BKE_unit.hh"
 
@@ -44,6 +45,8 @@
 
 #include "eyedropper_intern.hh"
 #include "interface_intern.hh"
+
+#include "ANIM_keyframing.hh"
 
 namespace blender::ui {
 
@@ -137,7 +140,7 @@ static bool depthdropper_test(bContext *C, wmOperator *op)
     RegionView3D *rv3d = CTX_wm_region_view3d(C);
     if (rv3d && rv3d->persp == RV3D_CAMOB) {
       View3D *v3d = CTX_wm_view3d(C);
-      if (v3d->camera && v3d->camera->data &&
+      if (v3d->camera && v3d->camera->type == OB_CAMERA && v3d->camera->data &&
           BKE_id_is_editable(CTX_data_main(C), static_cast<const ID *>(v3d->camera->data)))
       {
         return true;
@@ -174,7 +177,7 @@ static int depthdropper_init(bContext *C, wmOperator *op)
       RegionView3D *rv3d = CTX_wm_region_view3d(C);
       if (rv3d && rv3d->persp == RV3D_CAMOB) {
         View3D *v3d = CTX_wm_view3d(C);
-        if (v3d->camera && v3d->camera->data &&
+        if (v3d->camera && v3d->camera->type == OB_CAMERA && v3d->camera->data &&
             BKE_id_is_editable(CTX_data_main(C), static_cast<const ID *>(v3d->camera->data)))
         {
           Camera *camera = id_cast<Camera *>(v3d->camera->data);
@@ -189,7 +192,7 @@ static int depthdropper_init(bContext *C, wmOperator *op)
     }
   }
 
-  if ((ddr->ptr.data == nullptr) || (ddr->prop == nullptr) ||
+  if (!ddr->ptr || (ddr->prop == nullptr) ||
       (RNA_property_editable(&ddr->ptr, ddr->prop) == false) ||
       (RNA_property_type(ddr->prop) != PROP_FLOAT))
   {
@@ -287,7 +290,8 @@ static void depthdropper_depth_sample_pt(bContext *C,
                                    -4,
                                    B_UNIT_LENGTH,
                                    scene->unit,
-                                   false);
+                                   false,
+                                   true);
         }
         else {
           STRNCPY_UTF8(ddr->name, RPT_("Nothing under cursor"));
@@ -306,6 +310,10 @@ static void depthdropper_depth_set(bContext *C, DepthDropper *ddr, const float d
   RNA_property_float_set(&ddr->ptr, ddr->prop, depth);
   ddr->is_set = true;
   RNA_property_update(C, &ddr->ptr, ddr->prop);
+  Scene *scene = CTX_data_scene(C);
+  const bool only_when_keyed = animrig::is_keying_flag(scene, AUTOKEY_FLAG_INSERTAVAILABLE);
+  animrig::autokeyframe_property(
+      C, scene, &ddr->ptr, ddr->prop, 0, BKE_scene_frame_get(scene), only_when_keyed);
 }
 
 /* set sample from accumulated values */
@@ -460,7 +468,7 @@ static bool depthdropper_poll(bContext *C)
     RegionView3D *rv3d = CTX_wm_region_view3d(C);
     if (rv3d && rv3d->persp == RV3D_CAMOB) {
       View3D *v3d = CTX_wm_view3d(C);
-      if (v3d->camera && v3d->camera->data &&
+      if (v3d->camera && v3d->camera->type == OB_CAMERA && v3d->camera->data &&
           BKE_id_is_editable(CTX_data_main(C), static_cast<const ID *>(v3d->camera->data)))
       {
         return true;

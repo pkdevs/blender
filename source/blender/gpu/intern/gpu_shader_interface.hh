@@ -15,8 +15,8 @@
 
 #include <cstring> /* required for STREQ later on. */
 
-#include "BLI_hash.h"
-#include "BLI_sys_types.h"
+#include "BLI_hash_c.hh"
+#include "BLI_sys_types.hh"
 
 #include "GPU_format.hh"
 #include "GPU_shader.hh"
@@ -59,6 +59,7 @@ class ShaderInterface {
   uint ubo_len_ = 0;
   uint uniform_len_ = 0;
   uint ssbo_len_ = 0;
+  uint tlas_len_ = 0;
   uint constant_len_ = 0;
   /** Enabled bind-points that needs to be fed with data. */
   uint16_t enabled_attr_mask_ = 0;
@@ -124,10 +125,22 @@ class ShaderInterface {
     return input_lookup(inputs_ + attr_len_ + ubo_len_ + uniform_len_, ssbo_len_, binding);
   }
 
-  const ShaderInput *constant_get(const StringRefNull name) const
+  const ShaderInput *tlas_get(const StringRefNull name) const
   {
     return input_lookup(
-        inputs_ + attr_len_ + ubo_len_ + uniform_len_ + ssbo_len_, constant_len_, name);
+        inputs_ + attr_len_ + ubo_len_ + uniform_len_ + ssbo_len_, tlas_len_, name);
+  }
+  const ShaderInput *tlas_get(const int binding) const
+  {
+    return input_lookup(
+        inputs_ + attr_len_ + ubo_len_ + uniform_len_ + ssbo_len_, tlas_len_, binding);
+  }
+
+  const ShaderInput *constant_get(const StringRefNull name) const
+  {
+    return input_lookup(inputs_ + attr_len_ + ubo_len_ + uniform_len_ + ssbo_len_ + tlas_len_,
+                        constant_len_,
+                        name);
   }
 
   const char *input_name_get(const ShaderInput *input) const
@@ -239,10 +252,6 @@ inline const char *ShaderInterface::builtin_uniform_name(GPUUniformBuiltin u)
       return "color";
     case GPU_UNIFORM_BASE_INSTANCE:
       return "gpu_BaseInstance";
-    case GPU_UNIFORM_RESOURCE_CHUNK:
-      return "drw_resourceChunk";
-    case GPU_UNIFORM_RESOURCE_ID:
-      return "drw_ResourceID";
     case GPU_UNIFORM_SRGB_TRANSFORM:
       return "srgbTarget";
     case GPU_UNIFORM_SCENE_LINEAR_XFORM:

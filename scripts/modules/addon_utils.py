@@ -36,7 +36,23 @@ _extensions_warnings = {}
 _stale_filename = ".~stale~"
 
 
-# called only once at startup, avoids calling 'reset_all', correct but slower.
+# Don't display these in the UI, unless extension development is enabled.
+#
+# NOTE: these add-ons will *not* be included in `bpy.context.preferences.addons`,
+# therefore they cannot have saved preferences. Ideally this would be supported,
+# which could be part of an improvement to store preferences for disabled add-ons.
+# This is the reason we can't include "cycles".
+# See #71486 and follow up discussion on #151863.
+_addons_hidden_core = {
+    "bl_pkg",
+    "io_anim_bvh",
+    "io_curve_svg",
+    "io_mesh_uv_layout",
+    "io_scene_fbx",
+}
+
+
+# Called only once at startup, avoids calling 'reset_all', correct but slower.
 def _initialize_once():
     for path in paths():
         _bpy.utils._sys_path_ensure_append(path)
@@ -45,14 +61,24 @@ def _initialize_once():
 
     _initialize_extensions_repos_once()
 
-    for addon in _preferences.addons:
+    # Enable "core" add-ons first as other add-ons may import them, see: #161928.
+    for module_name in _addons_hidden_core:
         enable(
-            addon.module,
+            module_name,
+            # Ensured by `_initialize_extensions_repos_once`.
+            refresh_handled=True,
+            default_set=False,
+            persistent=True,
+        )
+
+    for addon in _preferences.addons:
+        if (module_name := addon.module) in _addons_hidden_core:
+            continue
+        enable(
+            module_name,
             # Ensured by `_initialize_extensions_repos_once`.
             refresh_handled=True,
         )
-
-    _initialize_ensure_extensions_addon()
 
 
 def paths():
@@ -369,7 +395,12 @@ def enable(module_name, *, default_set=False, persistent=False, refresh_handled=
         # NOTE: from now on, before returning None, `extensions_refresh()` must be called
         # to ensure wheels setup in anticipation for this extension being used are removed upon failure.
 
-    # reload if the mtime changes
+    # Reload if the `mtime` changes.
+    #
+    # NOTE(@ideasman42): This isn't intended to be comprehensive add-on change detection.
+    # Add-ons may use many files, depend on libraries, data-files etc.
+    # This is only intended to detect the add-on being fully replaced where checking the files `mtime` is sufficient.
+    # A more robust change detection is possible but adds overhead for situations users are unlikely to face.
     mod = sys.modules.get(module_name)
     # chances of the file _not_ existing are low, but it could be removed
 
@@ -506,9 +537,12 @@ def enable(module_name, *, default_set=False, persistent=False, refresh_handled=
         # 2) Try register collected modules.
         # Removed register_module, addons need to handle their own registration now.
 
+        # Core add-ons are unconditionally enabled and don't support being filtered out.
+        use_owner = is_extension or (module_name not in _addons_hidden_core)
+
         from _bpy import _bl_owner_id_get, _bl_owner_id_set
         owner_id_prev = _bl_owner_id_get()
-        _bl_owner_id_set(module_name)
+        _bl_owner_id_set(module_name if use_owner else "")
 
         # 3) Try run the modules register function.
         try:
@@ -1395,12 +1429,6 @@ def _extension_sync_wheels(
 # -----------------------------------------------------------------------------
 # Extensions
 
-def _initialize_ensure_extensions_addon():
-    module_name = "bl_pkg"
-    if module_name not in _preferences.addons:
-        enable(module_name, default_set=True, persistent=True)
-
-
 # Module-like class, store singletons.
 class _ext_global:
     __slots__ = ()
@@ -1636,9 +1664,6 @@ def _initialize_extension_repos_pre(*_):
 
 @_bpy.app.handlers.persistent
 def _initialize_extension_repos_post(*_, is_first=False):
-
-    # When enabling extensions for the first time, ensure the add-on is enabled.
-    _initialize_ensure_extensions_addon()
 
     do_addons = not is_first
 
