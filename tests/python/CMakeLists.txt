@@ -915,6 +915,7 @@ if((WITH_CYCLES OR WITH_GPU_RENDER_TESTS) AND TEST_SRC_DIR_EXISTS)
     image_colorspace
     image_data_types
     image_mapping
+    image_mipmap
     image_texture_limit
     integrator
     light
@@ -998,7 +999,7 @@ if((WITH_CYCLES OR WITH_GPU_RENDER_TESTS) AND TEST_SRC_DIR_EXISTS)
             "Supported devices are: ${_cycles_all_test_devices}")
       endif()
       string(TOLOWER "${_cycles_device}" _cycles_device_lower)
-      set(_cycles_render_tests bake;bake_raytrace;${render_tests};osl;image_mipmap;updates)
+      set(_cycles_render_tests bake;bake_raytrace;${render_tests};osl;updates)
 
       set(_cycles_osl_test_type none)
       if(WITH_CYCLES_OSL)
@@ -1280,6 +1281,10 @@ if(TEST_SRC_DIR_EXISTS)
     utilities
     vector
   )
+
+  if(WITH_AUDASPACE AND WITH_FFTW3)
+    list(APPEND geo_node_tests sound)
+  endif()
 
   if(WITH_GMP)
     list(APPEND geo_node_tests mesh/boolean)
@@ -1725,7 +1730,9 @@ if(WITH_UI_TESTS)
     test_undo.text_editor_edit_mode_mix
     test_undo.text_editor_simple
     test_undo.view3d_edit_mode_multi_window
+    test_undo.view3d_font_edit_mode_object_mix
     test_undo.view3d_font_edit_mode_simple
+    test_undo.view3d_mesh_edit_mode_object_mix
     test_undo.view3d_mesh_edit_shape_key
     test_undo.view3d_mesh_edit_separate
     test_undo.view3d_mesh_particle_edit_mode_simple
