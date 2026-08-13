@@ -2255,27 +2255,6 @@ static void direct_link_id_common(BlendDataReader *reader,
     id->session_uid = MAIN_ID_SESSION_UID_UNSET;
   }
 
-  if (id->flag & ID_FLAG_LINKED_AND_PACKED) {
-    if (!current_library) {
-      CLOG_ERROR(&LOG,
-                 "Data-block '%s' flagged as packed, but without a valid library, fixing by "
-                 "making fully local...",
-                 id->name);
-      id->tag &= ~(ID_TAG_INDIRECT | ID_TAG_EXTERN);
-      id->flag &= ~(ID_FLAG_INDIRECT_WEAK_LINK | ID_FLAG_LINKED_AND_PACKED);
-    }
-    else if ((current_library->flag & LIBRARY_FLAG_IS_ARCHIVE) == 0) {
-      CLOG_ERROR(&LOG,
-                 "Data-block '%s' flagged as packed, but using a regular library, fixing by "
-                 "making fully indirectly linked...",
-                 id->name);
-      id->flag &= ~ID_FLAG_LINKED_AND_PACKED;
-      if (id->tag & ID_TAG_EXTERN) {
-        id->tag &= ~ID_TAG_EXTERN;
-        id->tag |= ID_TAG_INDIRECT;
-      }
-    }
-  }
   id->lib = current_library;
   if (id->lib) {
     /* Always fully clear fake user flag for linked data. */
@@ -2293,6 +2272,28 @@ static void direct_link_id_common(BlendDataReader *reader,
   }
   else {
     id->tag = id_tag;
+  }
+
+  if (id->flag & ID_FLAG_LINKED_AND_PACKED) {
+    if (!id->lib) {
+      CLOG_ERROR(&LOG,
+                 "Data-block '%s' flagged as packed, but without a valid library, fixing by "
+                 "making fully local...",
+                 id->name);
+      id->tag &= ~(ID_TAG_INDIRECT | ID_TAG_EXTERN);
+      id->flag &= ~(ID_FLAG_INDIRECT_WEAK_LINK | ID_FLAG_LINKED_AND_PACKED);
+    }
+    else if ((id->lib->flag & LIBRARY_FLAG_IS_ARCHIVE) == 0) {
+      CLOG_ERROR(&LOG,
+                 "Data-block '%s' flagged as packed, but using a regular library, fixing by "
+                 "making fully indirectly linked...",
+                 id->name);
+      id->flag &= ~ID_FLAG_LINKED_AND_PACKED;
+      if (id->tag & ID_TAG_EXTERN) {
+        id->tag &= ~ID_TAG_EXTERN;
+        id->tag |= ID_TAG_INDIRECT;
+      }
+    }
   }
 
   readfile_id_runtime_data_ensure(*id);
@@ -3806,31 +3807,31 @@ static void do_versions(FileData *fd, Library *lib, Main *main)
     blo_do_versions_400(fd, lib, main);
   }
   if (!main->is_read_invalid) {
-    blo_do_versions_410(fd, lib, main);
+    blo_do_versions_401(fd, lib, main);
   }
   if (!main->is_read_invalid) {
-    blo_do_versions_420(fd, lib, main);
+    blo_do_versions_402(fd, lib, main);
   }
   if (!main->is_read_invalid) {
-    blo_do_versions_430(fd, lib, main);
+    blo_do_versions_403(fd, lib, main);
   }
   if (!main->is_read_invalid) {
-    blo_do_versions_440(fd, lib, main);
+    blo_do_versions_404(fd, lib, main);
   }
   if (!main->is_read_invalid) {
-    blo_do_versions_450(fd, lib, main);
+    blo_do_versions_405(fd, lib, main);
   }
   if (!main->is_read_invalid) {
     blo_do_versions_500(fd, lib, main);
   }
   if (!main->is_read_invalid) {
-    blo_do_versions_510(fd, lib, main);
+    blo_do_versions_501(fd, lib, main);
   }
   if (!main->is_read_invalid) {
-    blo_do_versions_520(fd, lib, main);
+    blo_do_versions_502(fd, lib, main);
   }
   if (!main->is_read_invalid) {
-    blo_do_versions_530(fd, lib, main);
+    blo_do_versions_503(fd, lib, main);
   }
 
   /* WATCH IT!!!: pointers from libdata have not been converted yet here! */
@@ -3877,31 +3878,31 @@ static void do_versions_after_linking(FileData *fd, Main *main)
     do_versions_after_linking_400(fd, main);
   }
   if (!main->is_read_invalid) {
-    do_versions_after_linking_410(fd, main);
+    do_versions_after_linking_401(fd, main);
   }
   if (!main->is_read_invalid) {
-    do_versions_after_linking_420(fd, main);
+    do_versions_after_linking_402(fd, main);
   }
   if (!main->is_read_invalid) {
-    do_versions_after_linking_430(fd, main);
+    do_versions_after_linking_403(fd, main);
   }
   if (!main->is_read_invalid) {
-    do_versions_after_linking_440(fd, main);
+    do_versions_after_linking_404(fd, main);
   }
   if (!main->is_read_invalid) {
-    do_versions_after_linking_450(fd, main);
+    do_versions_after_linking_405(fd, main);
   }
   if (!main->is_read_invalid) {
     do_versions_after_linking_500(fd, main);
   }
   if (!main->is_read_invalid) {
-    do_versions_after_linking_510(fd, main);
+    do_versions_after_linking_501(fd, main);
   }
   if (!main->is_read_invalid) {
-    do_versions_after_linking_520(fd, main);
+    do_versions_after_linking_502(fd, main);
   }
   if (!main->is_read_invalid) {
-    do_versions_after_linking_530(fd, main);
+    do_versions_after_linking_503(fd, main);
   }
 
   main->is_locked_for_linking = false;
@@ -4136,6 +4137,10 @@ static BHead *read_userdef(BlendFileData *bfd, FileData *fd, BHead *bhead)
   for (bAddon &addon : user->addons) {
     BLO_read_struct(reader, IDProperty, &addon.prop);
     IDP_BlendDataRead(reader, &addon.prop);
+  }
+
+  for (bUserAssetLibrary &asset_library_ref : user->asset_libraries) {
+    BKE_preferences_asset_library_read_data(reader, &asset_library_ref);
   }
 
   for (bUserExtensionRepo &repo_ref : user->extension_repos) {
@@ -4633,6 +4638,9 @@ BlendFileData *blo_read_file_internal(FileData *fd, const char *filepath)
       /* Update invariants after re-generating overrides. */
       BKE_main_ensure_invariants(*bfd->main);
 
+      /* Some versioning code can leave some ID link status tags in invalid state, due to low-level
+       * manipulations of these instead of using API like `id_lib_extern`, which will be also fixed
+       * by this call. */
       BKE_main_id_indirect_linked_update(*bfd->main);
 
       fd->reports->duration.lib_overrides = BLI_time_now_seconds() -
