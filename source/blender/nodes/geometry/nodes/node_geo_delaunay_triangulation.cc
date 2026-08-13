@@ -525,7 +525,7 @@ static Array<TriangulationResult> calc_triangulations(const Mesh *mesh,
                 break;
               case SourceComponent::Curve:
                 offset_indices::gather_group_sizes(
-                    curves->evaluated_points_by_curve(), group.curves, dst_face_sizes);
+                    curves->evaluated_points_by_curve(), face_curves, dst_face_sizes);
                 break;
               case SourceComponent::PointCloud:
                 break;
