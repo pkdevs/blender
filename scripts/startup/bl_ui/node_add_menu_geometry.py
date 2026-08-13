@@ -59,6 +59,8 @@ class NODE_MT_gn_curve_base(node_add_menu.NodeMenu):
         self.draw_menu(layout, path="Curve/Operations")
         self.draw_menu(layout, path="Curve/Primitives")
         self.draw_menu(layout, path="Curve/Topology")
+        layout.separator()
+        self.draw_menu(layout, path="Curve/Deprecated")
 
         self.draw_assets_for_catalog(layout, self.bl_label)
 
@@ -126,7 +128,6 @@ class NODE_MT_gn_curve_operations_base(node_add_menu.NodeMenu):
         self.node_operator(layout, "GeometryNodeCurveToPoints")
         self.node_operator(layout, "GeometryNodeCurvesToGreasePencil")
         self.node_operator(layout, "GeometryNodeDeformCurvesOnSurface")
-        self.node_operator(layout, "GeometryNodeFillCurve")
         self.node_operator(layout, "GeometryNodeFilletCurve")
         self.node_operator(layout, "GeometryNodeInterpolateCurves")
         self.node_operator(layout, "GeometryNodeResampleCurve")
@@ -167,6 +168,13 @@ class NODE_MT_gn_curve_topology_base(node_add_menu.NodeMenu):
 
         self.draw_assets_for_catalog(layout, self.menu_path)
 
+class NODE_MT_gn_curve_deprecated_base(node_add_menu.NodeMenu):
+    bl_label = "Deprecated"
+    menu_path = "Curve/Deprecated"
+
+    def draw(self, _context):
+        layout = self.layout
+        self.node_operator(layout, "GeometryNodeFillCurve")
 
 class NODE_MT_gn_grease_pencil_read_base(node_add_menu.NodeMenu):
     bl_label = "Read"
@@ -1119,6 +1127,7 @@ add_menus = {
     "NODE_MT_geometry_node_GEO_CURVE_OPERATIONS": NODE_MT_gn_curve_operations_base,
     "NODE_MT_geometry_node_GEO_PRIMITIVES_CURVE": NODE_MT_gn_curve_primitives_base,
     "NODE_MT_geometry_node_curve_topology": NODE_MT_gn_curve_topology_base,
+    "NODE_MT_geometry_node_GEO_CURVE_DEPRECATED": NODE_MT_gn_curve_deprecated_base,
     "NODE_MT_geometry_node_grease_pencil": NODE_MT_gn_grease_pencil_base,
     "NODE_MT_geometry_node_grease_pencil_read": NODE_MT_gn_grease_pencil_read_base,
     "NODE_MT_geometry_node_grease_pencil_write": NODE_MT_gn_grease_pencil_write_base,
