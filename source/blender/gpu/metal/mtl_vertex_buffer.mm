@@ -250,15 +250,18 @@ void MTLVertBuf::update_sub(uint start, uint len, const void *data)
   }
 }
 
-void MTLVertBuf::copy_sub(VertBuf &source_buf, uint source_start, uint dest_start, uint vertex_len)
+void MTLVertBuf::copy_sub(VertBuf &source_buf,
+                          uint source_first_vertex,
+                          uint dest_first_vertex,
+                          uint vertex_len)
 {
   BLI_assert(format.stride == source_buf.format.stride);
   MTLVertBuf &src = static_cast<MTLVertBuf &>(source_buf);
   BLI_assert_msg(vbo_, "Call GPU_vertbuf_use first");
   BLI_assert_msg(src.vbo_, "Call GPU_vertbuf_use first on the source buffer");
 
-  const size_t src_offset = size_t(source_start) * src.format.stride;
-  const size_t dst_offset = size_t(dest_start) * format.stride;
+  const size_t src_offset = size_t(source_first_vertex) * src.format.stride;
+  const size_t dst_offset = size_t(dest_first_vertex) * format.stride;
   const size_t copy_size = size_t(vertex_len) * format.stride;
 
   if (copy_size == 0) {

@@ -23,8 +23,8 @@ class DummyVertexBuffer : public VertBuf {
 
   void update_sub(uint /*start*/, uint /*len*/, const void * /*data*/) override {}
   void copy_sub(VertBuf & /*source_buf*/,
-                uint /*source_start*/,
-                uint /*dest_start*/,
+                uint /*source_first_vertex*/,
+                uint /*dest_first_vertex*/,
                 uint /*vertex_len*/) override
   {
   }

@@ -230,13 +230,13 @@ class VertBuf {
    * \note: asserts when the copy range exceeds the bounds of either vertex buffer.
    *
    * \param source_buf: source vertex buffer to copy data from.
-   * \param source_start: starting vertex index to start copying the data from.
-   * \param dest_start: starting vertex index to copy the data to.
+   * \param source_first_vertex: starting vertex index to start copying the data from.
+   * \param dest_first_vertex: starting vertex index to copy the data to.
    * \param vertex_len: the number of vertices to copy.
    */
   virtual void copy_sub(VertBuf &source_buf,
-                        uint source_start,
-                        uint dest_start,
+                        uint source_first_vertex,
+                        uint dest_first_vertex,
                         uint vertex_len) = 0;
   virtual void read(void *data) const = 0;
 
