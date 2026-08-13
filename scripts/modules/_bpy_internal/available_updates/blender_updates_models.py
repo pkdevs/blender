@@ -40,7 +40,7 @@ class VersionUpdate:
 
 
 @dataclasses.dataclass
-class AvailableUpdates:
+class Tracks:
     latest: VersionUpdate | None = None
     latest_lts: VersionUpdate | None = None
     current_release: VersionUpdate | None = None
@@ -49,5 +49,5 @@ class AvailableUpdates:
 @dataclasses.dataclass
 class UpdatesCache:
     ignored_versions: IgnoredVersions
-    updates: AvailableUpdates
+    tracks: Tracks
     last_time_check: datetime

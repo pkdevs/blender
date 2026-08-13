@@ -46,7 +46,7 @@ struct VersionUpdate {
   std::time_t time;
 
   BlenderVersion version;
-  TrackType track_type;
+  TrackType ui_track_type;
 
   /** UI string representation of #VersionUpdate::time. */
   std::string date() const;
@@ -71,12 +71,12 @@ Vector<const VersionUpdate *> available_updates();
  * Ignores an specific update, the update and prior updates from the same type will not be listed
  * again.
  */
-void ignore_update(const VersionUpdate *update_info);
+void ignore_update(bContext &C, const VersionUpdate *update_info);
 
 /**
  * Ignores all available updates, see #ignore_update.
  */
-void ignore_all_updates();
+void ignore_all_updates(bContext &C);
 
 /** Sets when the process downloading the file of the latest updates have beed finished
  * successfully. */

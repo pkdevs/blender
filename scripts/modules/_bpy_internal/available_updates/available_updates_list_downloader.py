@@ -16,10 +16,7 @@ from pathlib import Path
 from typing import Callable
 
 import bpy
-
-
 from _bpy_internal.http import downloader as http_dl
-from _bpy_internal.available_updates import blender_releases_openapi as api_models
 
 logger = logging.getLogger(__name__)
 
@@ -41,6 +38,12 @@ def download_available_updates_list() -> None:
         _blender_updates_listing.downloader.download_available_updates_list_file()
 
 
+def download_available_updates_if_expired() -> None:
+    from _bpy_internal.available_updates import blender_updates as updates
+    if updates.is_cache_expired():
+        download_available_updates_list()
+
+
 def on_download_done_callback(
     downloader: UpdatesDownloader,
     _http_req_descr: http_dl.RequestDescription,
@@ -49,7 +52,7 @@ def on_download_done_callback(
     try:
         with _temp_path.open() as file:
             from _bpy_internal.available_updates import blender_updates as releases
-            releases.load_available_updates_json(file.read())
+            releases.load_json_updates_to_tracks(file.read())
     finally:
         pass
 

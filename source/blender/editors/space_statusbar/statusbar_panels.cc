@@ -65,7 +65,7 @@ static void version_update_draw_body(const bke::VersionUpdate &update,
       0,
       "");
   ui::button_func_set(button, [update_info = &update, block = layout.block()](bContext &C) {
-    bke::ignore_update(update_info);
+    bke::ignore_update(C, update_info);
     WM_event_add_notifier(&C, NC_WINDOW, nullptr);
     if (!bke::have_available_updates(C) && ui::block_is_popup(block)) {
       ui::popup_block_close(&C, CTX_wm_window(&C), block);
@@ -121,7 +121,7 @@ static void panel_blender_updates_draw(const bContext *C, Panel *panel)
                                 0,
                                 "");
   ui::button_func_set(button, [block = layout.block()](bContext &C) {
-    bke::ignore_all_updates();
+    bke::ignore_all_updates(C);
     WM_event_add_notifier(&C, NC_WINDOW, nullptr);
     if (ui::block_is_popup(block)) {
       ui::popup_block_close(&C, CTX_wm_window(&C), block);
@@ -130,9 +130,9 @@ static void panel_blender_updates_draw(const bContext *C, Panel *panel)
   ui::button_drawflag_disable(button, ui::BUT_TEXT_RIGHT);
   for (const bke::VersionUpdate *update : available_updates) {
     ui::PanelLayout panel_layout = layout.panel(C, "Update_" + update->version_str, false);
-    std::string version_type = update->track_type == bke::TrackType::CurrentRelease ?
+    std::string version_type = update->ui_track_type == bke::TrackType::CurrentRelease ?
                                    "current release" :
-                                   (update->track_type == bke::TrackType::LatestLTS ?
+                                   (update->ui_track_type == bke::TrackType::LatestLTS ?
                                         "latest LTS" :
                                         "latest");
     panel_layout.header->label(

@@ -161,19 +161,18 @@ void blender_updates_set_ignored_version(bContext *C, BlenderVersion version, Tr
 enum class CheckForUpdatesState {
   None,
   Loading,
-  Done,
   Failed,
 };
 
 static CheckForUpdatesState &check_for_updates_state()
 {
-  static CheckForUpdatesState check_for_updates_state;
+  static CheckForUpdatesState check_for_updates_state = CheckForUpdatesState::None;
   return check_for_updates_state;
 }
 
 void check_for_updates_set_finished()
 {
-  check_for_updates_state() = CheckForUpdatesState::Done;
+  check_for_updates_state() = CheckForUpdatesState::None;
 }
 
 void check_for_updates_set_failed()
@@ -193,14 +192,15 @@ bool is_looking_for_updates_failed()
 
 static void download_available_updates_list(bContext &C)
 {
+  check_for_updates_state() = CheckForUpdatesState::Loading;
 
   const std::string expr =
       R"(
-import _bpy_internal.available_updates.available_updates_list_downloader as downloader
 import _bpy_internal.available_updates.blender_updates as updates
 updates.reset_cache()
 updates.write_cache_file()
-import _bpy_internal.available_updates.blender_updates as updates
+
+import _bpy_internal.available_updates.available_updates_list_downloader as downloader
 downloader.download_available_updates_list()
 )";
   std::unique_ptr locals = bke::idprop::create_group("locals");
@@ -209,8 +209,6 @@ downloader.download_available_updates_list()
 
 static void load_available_updates_cache_file_impl(bContext &C)
 {
-  check_for_updates_state() = CheckForUpdatesState::None;
-
   constexpr const char *expr =
       R"(
 import _bpy_internal.available_updates.blender_updates as updates
@@ -250,10 +248,8 @@ void check_for_available_updates_if_expired(bContext &C)
 {
   constexpr const char *expr =
       R"(
-import _bpy_internal.available_updates.blender_updates as updates
 import _bpy_internal.available_updates.available_updates_list_downloader as downloader
-if updates.is_cache_expired():
-  downloader.download_available_updates_list()
+downloader.download_available_updates_if_expired()
 )";
   std::unique_ptr locals = bke::idprop::create_group("locals");
   std::optional<blender::IDProperty *> updates_ptr = BPY_run_string_exec_with_locals_return_idprop(
@@ -283,9 +279,6 @@ bool have_available_updates(bContext &C)
   if (!updates_notifications_flags()) {
     return false;
   }
-  if (check_for_updates_state() == CheckForUpdatesState::Done) {
-    check_for_updates_state() = CheckForUpdatesState::None;
-  }
   return !available_updates().is_empty();
 }
 
@@ -308,7 +301,7 @@ Vector<const VersionUpdate *> available_updates()
       return;
     }
     result.append(&*updates.latest);
-    result.last()->track_type = TrackType::Latest;
+    result.last()->ui_track_type = TrackType::Latest;
   }();
   /** Add Latest LTS Release. */
   [&]() -> void {
@@ -320,14 +313,14 @@ Vector<const VersionUpdate *> available_updates()
         updates.latest_lts->version > ignored_updates.latest)
     {
       result.append(&*updates.latest_lts);
-      result.last()->track_type = TrackType::Latest;
+      result.last()->ui_track_type = TrackType::Latest;
       return;
     }
     if (!(notifications_flags & USER_BLENDER_UPDATE_LATEST_LTS_RELEASE)) {
       return;
     }
     result.append(&*updates.latest_lts);
-    result.last()->track_type = TrackType::LatestLTS;
+    result.last()->ui_track_type = TrackType::LatestLTS;
   }();
   [&]() -> void {
     if (!updates.current_release) {
@@ -335,7 +328,7 @@ Vector<const VersionUpdate *> available_updates()
     }
     if (notifications_flags & USER_BLENDER_UPDATE_CURRENT_RELEASE) {
       result.append(&*updates.current_release);
-      result.last()->track_type = TrackType::CurrentRelease;
+      result.last()->ui_track_type = TrackType::CurrentRelease;
       return;
     }
     /* Add current Release Update as Latest Release when there is no Latest Release or Latest LTS
@@ -344,7 +337,7 @@ Vector<const VersionUpdate *> available_updates()
         (updates.current_release->version > ignored_updates.latest))
     {
       result.append(&*updates.current_release);
-      result.last()->track_type = TrackType::Latest;
+      result.last()->ui_track_type = TrackType::Latest;
       return;
     }
     /* Add current Release Update as Latest LTS Release when the update is LTS and there is no
@@ -354,21 +347,41 @@ Vector<const VersionUpdate *> available_updates()
         updates.current_release->version > ignored_updates.latest_lts)
     {
       result.append(&*updates.current_release);
-      result.last()->track_type = TrackType::LatestLTS;
+      result.last()->ui_track_type = TrackType::LatestLTS;
       return;
     }
   }();
   return result.as_span();
 }
 
-static void ignore_update_impl(const VersionUpdate *update) {}
-
-void ignore_update(const VersionUpdate *update)
+void ignore_update(bContext &C, const VersionUpdate *update)
 {
-  ignore_update_impl(update);
+  const std::string expr =
+      R"(
+import _bpy_internal.available_updates.blender_updates as updates
+from _bpy_internal.available_updates import blender_updates_models as  models
+updates.ignore_update(models.BlenderVersion(version_number,version_patch),is_lts)
+)";
+  std::unique_ptr locals = bke::idprop::create_group("locals");
+  IDP_AddToGroup(locals.get(), IDP_NewInt(update->version.version, "version_number"));
+  IDP_AddToGroup(locals.get(), IDP_NewInt(update->version.patch, "version_patch"));
+  IDP_AddToGroup(locals.get(), IDP_NewInt(update->is_lts, "is_lts"));
+  BPY_run_string_exec_with_locals(&C, expr, *locals);
 }
 
-void ignore_all_updates() {}
+void ignore_all_updates(bContext &C)
+{
+  BlenderUpdates &updates = available_blender_updates();
+  if (updates.latest) {
+    ignore_update(C, &*updates.latest);
+  }
+  if (updates.latest_lts) {
+    ignore_update(C, &*updates.latest_lts);
+  }
+  if (updates.current_release) {
+    ignore_update(C, &*updates.current_release);
+  }
+}
 
 }  // namespace blender::bke
 
