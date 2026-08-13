@@ -6735,14 +6735,6 @@ void cube_tip_init(const Sculpt & /*sd*/, const Object &ob, const Brush &brush, 
   float unused[4][4];
 
   zero_m4(mat);
-  printf("sculpt normal: %f %f %f\n",
-         ss.cache->sculpt_normal_symm[0],
-         ss.cache->sculpt_normal_symm[1],
-         ss.cache->sculpt_normal_symm[2]);
-  printf("view normal: %f %f %f\n",
-         ss.cache->view_normal_symm[0],
-         ss.cache->view_normal_symm[1],
-         ss.cache->view_normal_symm[2]);
   calc_brush_local_mat(0.0,
                        ob,
                        eBrushFalloffShape(brush.falloff_shape) == PAINT_FALLOFF_SHAPE_SPHERE ?
