@@ -1746,6 +1746,11 @@ class ShaderNodesInliner {
                    std::get<ColorGeometry4f>(value.value));
         break;
       }
+      case SOCK_MENU: {
+        socket.default_value_typed<bNodeSocketValueMenu>()->value =
+            std::get<nodes::MenuValue>(value.value).value;
+        break;
+      }
       case SOCK_STRING: {
         STRNCPY(socket.default_value_typed<bNodeSocketValueString>()->value,
                 std::get<std::string>(value.value).c_str());
