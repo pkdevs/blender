@@ -1517,7 +1517,7 @@ class ShaderNodesInliner {
 
     /* Setup input sockets for the copied node. */
     for (const bNodeSocket *src_input_socket : node->input_sockets()) {
-      if (!src_input_socket->is_available()) {
+      if (this->socket_is_ignored(*src_input_socket)) {
         continue;
       }
       bNodeSocket &dst_input_socket = *socket_map.lookup(src_input_socket);
@@ -1526,7 +1526,7 @@ class ShaderNodesInliner {
       this->set_input_socket_value(node, copied_node, dst_input_socket, value);
     }
     for (const bNodeSocket *src_output_socket : node->output_sockets()) {
-      if (!src_output_socket->is_available()) {
+      if (this->socket_is_ignored(*src_output_socket)) {
         continue;
       }
       bNodeSocket &dst_output_socket = *socket_map.lookup(src_output_socket);
