@@ -4229,7 +4229,7 @@ static void brush_delta_update(const Depsgraph &depsgraph,
             SCULPT_BRUSH_TYPE_BOUNDARY,
             SCULPT_BRUSH_TYPE_SMEAR,
             SCULPT_BRUSH_TYPE_THUMB) &&
-      !brush_uses_topology_rake(ss, brush))
+      !brush_uses_topology_rake(ss, brush) && !BKE_brush_has_cube_tip(&brush, PaintMode::Sculpt))
   {
     return;
   }
