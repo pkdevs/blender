@@ -139,6 +139,10 @@ VectorSet<Strip *> query_rendered_strips(const Scene *scene,
                                          int displayed_channel);
 
 /**
+ * \return true if #a is drawn below #b, assuming both strips are drawn.
+ */
+bool strip_draw_order_compare(const Strip *a, const Strip *b);
+/**
  * Strips are sorted from lowest to highest channel.
  * \copydoc #query_rendered_strips
  */

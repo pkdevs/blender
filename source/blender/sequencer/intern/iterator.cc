@@ -246,6 +246,14 @@ VectorSet<Strip *> query_rendered_strips(const Scene *scene,
   return strips;
 }
 
+bool strip_draw_order_compare(const Strip *a, const Strip *b)
+{
+  if (a->channel == b->channel) {
+    return b->is_same_channel_transition();
+  }
+  return (a->channel < b->channel);
+}
+
 Vector<Strip *> query_rendered_strips_sorted(const Scene *scene,
                                              ListBaseT<SeqTimelineChannel> *channels,
                                              ListBaseT<Strip> *seqbase,
@@ -256,12 +264,7 @@ Vector<Strip *> query_rendered_strips_sorted(const Scene *scene,
 
   Vector<Strip *> strips_vec = strips.extract_vector();
   /* Sort strips by channel. */
-  std::ranges::sort(strips_vec, [](const Strip *a, const Strip *b) {
-    if (a->channel == b->channel) {
-      return b->is_same_channel_transition();
-    }
-    return (a->channel < b->channel);
-  });
+  std::ranges::sort(strips_vec, strip_draw_order_compare);
   return strips_vec;
 }
 

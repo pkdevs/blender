@@ -2928,7 +2928,7 @@ static bool select_grouped_visual_overlap(const Scene *scene,
   VectorSet<Strip *> strips_to_select;
 
   for (Strip *strip : strips) {
-    if (strip->channel > act_strip->channel) {
+    if (seq::strip_draw_order_compare(act_strip, strip)) {
       continue;
     }
     if (act_strip->right_handle(scene) <= strip->left_handle() ||
