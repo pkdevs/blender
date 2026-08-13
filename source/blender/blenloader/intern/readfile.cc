@@ -3807,31 +3807,31 @@ static void do_versions(FileData *fd, Library *lib, Main *main)
     blo_do_versions_400(fd, lib, main);
   }
   if (!main->is_read_invalid) {
-    blo_do_versions_410(fd, lib, main);
+    blo_do_versions_401(fd, lib, main);
   }
   if (!main->is_read_invalid) {
-    blo_do_versions_420(fd, lib, main);
+    blo_do_versions_402(fd, lib, main);
   }
   if (!main->is_read_invalid) {
-    blo_do_versions_430(fd, lib, main);
+    blo_do_versions_403(fd, lib, main);
   }
   if (!main->is_read_invalid) {
-    blo_do_versions_440(fd, lib, main);
+    blo_do_versions_404(fd, lib, main);
   }
   if (!main->is_read_invalid) {
-    blo_do_versions_450(fd, lib, main);
+    blo_do_versions_405(fd, lib, main);
   }
   if (!main->is_read_invalid) {
     blo_do_versions_500(fd, lib, main);
   }
   if (!main->is_read_invalid) {
-    blo_do_versions_510(fd, lib, main);
+    blo_do_versions_501(fd, lib, main);
   }
   if (!main->is_read_invalid) {
-    blo_do_versions_520(fd, lib, main);
+    blo_do_versions_502(fd, lib, main);
   }
   if (!main->is_read_invalid) {
-    blo_do_versions_530(fd, lib, main);
+    blo_do_versions_503(fd, lib, main);
   }
 
   /* WATCH IT!!!: pointers from libdata have not been converted yet here! */
@@ -3878,31 +3878,31 @@ static void do_versions_after_linking(FileData *fd, Main *main)
     do_versions_after_linking_400(fd, main);
   }
   if (!main->is_read_invalid) {
-    do_versions_after_linking_410(fd, main);
+    do_versions_after_linking_401(fd, main);
   }
   if (!main->is_read_invalid) {
-    do_versions_after_linking_420(fd, main);
+    do_versions_after_linking_402(fd, main);
   }
   if (!main->is_read_invalid) {
-    do_versions_after_linking_430(fd, main);
+    do_versions_after_linking_403(fd, main);
   }
   if (!main->is_read_invalid) {
-    do_versions_after_linking_440(fd, main);
+    do_versions_after_linking_404(fd, main);
   }
   if (!main->is_read_invalid) {
-    do_versions_after_linking_450(fd, main);
+    do_versions_after_linking_405(fd, main);
   }
   if (!main->is_read_invalid) {
     do_versions_after_linking_500(fd, main);
   }
   if (!main->is_read_invalid) {
-    do_versions_after_linking_510(fd, main);
+    do_versions_after_linking_501(fd, main);
   }
   if (!main->is_read_invalid) {
-    do_versions_after_linking_520(fd, main);
+    do_versions_after_linking_502(fd, main);
   }
   if (!main->is_read_invalid) {
-    do_versions_after_linking_530(fd, main);
+    do_versions_after_linking_503(fd, main);
   }
 
   main->is_locked_for_linking = false;
@@ -5595,12 +5595,6 @@ static void library_link_end(Main *mainl, FileData **fd, const int flag, ReportL
   if ((flag & BLO_LIBLINK_COLLECTION_NO_HIERARCHY_REBUILD) == 0) {
     BKE_main_collections_parent_relations_rebuild(mainvar);
   }
-
-  /* Linking may have changed some data link status.
-   * Further more, some versioning code can leave some ID link status tags in invalid state, due to
-   * low-level manipulations of these instead of using API like `id_lib_extern`, which will be also
-   * fixed by this call. */
-  BKE_main_id_indirect_linked_update(*mainvar);
 
   /* Make all relative paths, relative to the open blend file. */
   fix_relpaths_library(BKE_main_blendfile_path(mainvar), mainvar);
