@@ -6750,10 +6750,6 @@ void cube_tip_init(const Sculpt & /*sd*/, const Object &ob, const Brush &brush, 
                            ss.cache->view_normal_symm,
                        unused,
                        mat);
-  // print mat
-  for (int i = 0; i < 4; i++) {
-    printf("%f %f %f %f\n", mat[i][0], mat[i][1], mat[i][2], mat[i][3]);
-  }
   /* NOTE: we ignore the radius scaling done inside of calc_brush_local_mat to
    * duplicate prior behavior.
    *
