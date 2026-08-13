@@ -720,12 +720,10 @@ static void create_mesh(Scene *scene,
     int *shader = mesh->get_shader().data();
 
     const blender::Span<blender::int3> b_corner_tris = b_mesh.corner_tris();
-    for (const int i : b_corner_tris.index_range()) {
-      const blender::int3 &tri = b_corner_tris[i];
-      triangles[i * 3 + 0] = corner_verts[tri[0]];
-      triangles[i * 3 + 1] = corner_verts[tri[1]];
-      triangles[i * 3 + 2] = corner_verts[tri[2]];
-    }
+    blender::bke::mesh::vert_tris_from_corner_tris(
+        corner_verts,
+        b_corner_tris,
+        blender::MutableSpan<int>(triangles, numtris * 3).cast<blender::int3>());
 
     if (!material_indices.is_empty()) {
       for (const int face : faces.index_range()) {
@@ -779,13 +777,16 @@ static void create_mesh(Scene *scene,
     int *subd_ptex_offset = mesh->get_subd_ptex_offset().data();
     int *subd_face_corners = mesh->get_subd_face_corners().data();
 
-    if (!sharp_faces.is_empty() && !use_corner_normals) {
+    if (!sharp_faces.is_empty()) {
       for (int i = 0; i < numfaces; i++) {
         subd_smooth[i] = !sharp_faces[i];
       }
     }
     else {
-      std::fill(subd_smooth, subd_smooth + numfaces, true);
+      /* All faces are sharp or smooth. */
+      std::fill(subd_smooth,
+                subd_smooth + numfaces,
+                normals_domain != blender::bke::MeshNormalDomain::Face);
     }
 
     if (!material_indices.is_empty()) {

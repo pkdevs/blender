@@ -24,6 +24,12 @@ except ImportError:
     # this script is run during preparation steps.
     pass
 
+BLOCKLIST = [
+    # Currently, image_mipmap tests are not enabled for storm-usd
+    "image_cache_evict.blend",
+    "image_mipmap_.*.blend",
+]
+
 # Unsupported or broken scenarios for the Storm render engine
 BLOCKLIST_HYDRA = [
     # Corrupted output around borders
@@ -40,6 +46,8 @@ BLOCKLIST_HYDRA = [
     "principled_bsdf_thin_glass.blend",
     # Custom OSL camera not supported.
     "osl_camera_.*.blend",
+    # The result doesn't match storm-usd
+    "many_lights.blend",
 ]
 
 BLOCKLIST_USD = [
@@ -233,7 +241,7 @@ def main():
     parser = create_argparse()
     args = parser.parse_args()
 
-    blocklist = []
+    blocklist = BLOCKLIST
     if args.gpu_backend == "metal":
         blocklist += BLOCKLIST_METAL
     elif args.gpu_backend == "vulkan":

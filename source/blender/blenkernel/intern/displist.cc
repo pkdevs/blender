@@ -21,6 +21,7 @@
 #include "BLI_listbase.hh"
 #include "BLI_map.hh"
 #include "BLI_math_rotation_c.hh"
+#include "BLI_math_vector.hh"
 #include "BLI_math_vector_c.hh"
 #include "BLI_memarena.hh"
 #include "BLI_scanfill.hh"
@@ -531,7 +532,7 @@ static DispList *displist_fill_cdt_process_group(const CDTFillGroup &group,
   input.face_offsets = face_offsets;
   input.face_vert_indices = face_vert_indices_data;
   input.epsilon = 1e-8;
-  input.need_ids = true;
+  input.needed_ids = CDT_ORIG_VERTS | CDT_ORIG_EDGES;
 
   meshintersect::CDT_result<double> result = meshintersect::delaunay_2d_calc(input,
                                                                              cdt_output_type);
