@@ -457,7 +457,7 @@ static bool create_strip_clamp_data(TransInfo *t, const Scene *scene, Strip *str
   if (clamp_default && (strip->startofs < 0 || strip->end_offset() < 0) &&
       !seq::transform_single_image_check(strip))
   {
-    t->modifiers &= ~MOD_STRIP_CLAMP_HOLDS;
+    t->modifiers &= ~MOD_STRIP_SOFT_CLAMP;
   }
 
   /* If both handles are selected, there must be enough underlying content to clamp holds. */
@@ -503,7 +503,7 @@ static void create_trans_seq_clamp_data(TransInfo *t, const Scene *scene)
   TransSeq *ts = static_cast<TransSeq *>(tc->custom.type.data);
 
   if (U.sequencer_editor_flag & USER_SEQ_ED_CLAMP_STRIPS_BY_DEFAULT) {
-    t->modifiers |= MOD_STRIP_CLAMP_HOLDS;
+    t->modifiers |= MOD_STRIP_SOFT_CLAMP;
   }
 
   /* Prevent snaps and change in `values` past `hard_clamp` for all selected strips. */
@@ -882,7 +882,7 @@ bool transform_convert_sequencer_clamp(const TransInfo *t, float r_val[2])
   }
 
   /* Optional clamping of handles to underlying holds. Can be disabled by the user. */
-  if (t->modifiers & MOD_STRIP_CLAMP_HOLDS) {
+  if (t->modifiers & MOD_STRIP_SOFT_CLAMP) {
     if (val[0] < ts->soft_clamp_min) {
       r_val[0] = float(ts->soft_clamp_min);
       clamped = true;

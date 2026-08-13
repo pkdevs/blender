@@ -1416,7 +1416,7 @@ wmOperatorStatus transformEvent(TransInfo *t, wmOperator *op, const wmEvent *eve
         }
         break;
       case TFM_MODAL_STRIP_CLAMP:
-        t->modifiers ^= MOD_STRIP_CLAMP_HOLDS;
+        t->modifiers ^= MOD_STRIP_SOFT_CLAMP;
         t->redraw |= TREDRAW_HARD;
         break;
       default:
