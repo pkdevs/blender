@@ -597,7 +597,7 @@ void outliner_collection_isolate_flag(const Main & /*bmain*/,
         return std::nullopt;
       },
       [&](TreeElement *te_cmp, PointerRNA &ptr, PropertyRNA *prop) -> std::optional<bool> {
-        RNA_property_boolean_set(&ptr, prop, was_isolated ? default_value : (te_cmp != te));
+        RNA_property_boolean_set(&ptr, prop, was_isolated ? default_value : (te_cmp == te) ? !is_hide : is_hide);
         return std::nullopt;
       });
 }
