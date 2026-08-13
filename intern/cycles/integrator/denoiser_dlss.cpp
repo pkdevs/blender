@@ -128,6 +128,8 @@ CCL_NAMESPACE_BEGIN
 
 static const int ApplicationId = 100334311;
 
+static thread_mutex ngx_mutex;
+
 void DLSSDenoiser::CUDATexture::init(Device *device, int width, int height, int num_components)
 {
   CUDA_ARRAY_DESCRIPTOR desc = {};
@@ -202,6 +204,8 @@ DLSSDenoiser::DLSSDenoiser(Device *denoiser_device, const DenoiseParams &params)
   ngx_device_ = new NVSDK_NGX_CUDADevice{
       cuda_device->cuContext, static_cast<CUDADeviceQueue *>(denoiser_queue_.get())->stream()};
 
+  thread_scoped_lock ngx_lock(ngx_mutex);
+
   const NVSDK_NGX_Result result = NVSDK_NGX_CUDA.Init_Ext1(
       ApplicationId, user_path.c_str(), ngx_device_, NVSDK_NGX_Version_API, &feature_info);
 
@@ -227,6 +231,8 @@ DLSSDenoiser::~DLSSDenoiser()
   if (!NVSDK_NGX_CUDA) {
     return;
   }
+
+  thread_scoped_lock ngx_lock(ngx_mutex);
 
   if (handle_ != nullptr) {
     NVSDK_NGX_CUDA.ReleaseFeature(handle_);
@@ -266,6 +272,8 @@ bool DLSSDenoiser::is_device_supported(const DeviceInfo &device)
   if (supported_cache[device.num] != NVSDK_NGX_FeatureSupportResult_CheckNotPresent) {
     return supported_cache[device.num] == NVSDK_NGX_FeatureSupportResult_Supported;
   }
+
+  thread_scoped_lock ngx_lock(ngx_mutex);
 
   if (!NVSDK_NGX_CUDA.init() || NVSDK_NGX_CUDA.GetFeatureRequirements == nullptr) {
     /* NVIDIA driver is too old (requires 590+). */
