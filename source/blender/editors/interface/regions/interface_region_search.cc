@@ -99,8 +99,6 @@ struct uiSearchboxData {
   ButtonSearchListenFn search_listener;
 };
 
-#define SEARCH_ITEMS 10
-
 int search_items()
 {
   return U.search_menu_items;

@@ -412,6 +412,7 @@ class USERPREF_PT_interface_menus_pie(InterfacePanel, CenterAlignMixIn, Panel):
         flow.prop(view, "pie_menu_threshold")
         flow.prop(view, "pie_menu_confirm")
 
+
 class USERPREF_PT_interface_menus_search(InterfacePanel, CenterAlignMixIn, Panel):
     bl_label = "Search Menu"
     bl_parent_id = "USERPREF_PT_interface_menus"
@@ -424,6 +425,7 @@ class USERPREF_PT_interface_menus_search(InterfacePanel, CenterAlignMixIn, Panel
 
 # -----------------------------------------------------------------------------
 # Editing Panels
+
 
 class EditingPanel:
     bl_space_type = 'PREFERENCES'
