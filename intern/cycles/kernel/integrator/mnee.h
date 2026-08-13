@@ -644,7 +644,8 @@ ccl_device_inline Spectrum mnee_eval_bsdf_contribution(KernelGlobals kg,
     G = bsdf_G<MicrofacetType::GGX>(alpha2, cosNI, cosNO);
   }
 
-  const FresnelCoeff fresnel = microfacet_fresnel(kg, bsdf, cosHI, nullptr);
+  FresnelCoeff fresnel;
+  microfacet_fresnel(kg, bsdf, cosHI, nullptr, &fresnel.reflectance, &fresnel.transmittance);
 
   /*
    * bsdf_do = (1 - F) * D_do * G * |h.wi| / (n.wi * n.wo)

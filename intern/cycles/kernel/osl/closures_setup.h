@@ -315,9 +315,10 @@ ccl_device void osl_closure_dielectric_bsdf_setup(KernelGlobals kg,
   const bool multiggx = closure->distribution == make_string("multi_ggx", 16842698693386468366ull);
 
   fresnel->thin_film = {closure->thinfilm_thickness, closure->thinfilm_ior};
-  fresnel->tint = {rgb_to_spectrum(closure->reflection_tint),
-                   rgb_to_spectrum(closure->transmission_tint)};
-  bsdf_dielectric_tint_setup(kg, bsdf, sd, fresnel, beckmann, multiggx);
+  const Spectrum reflection_tint = rgb_to_spectrum(closure->reflection_tint);
+  const Spectrum transmission_tint = rgb_to_spectrum(closure->transmission_tint);
+  bsdf_dielectric_tint_setup(
+      kg, bsdf, sd, fresnel, reflection_tint, transmission_tint, beckmann, multiggx);
 
   if (layer_albedo != nullptr) {
     if (!(sd->runtime_flag & SR_BSDF_HAS_TRANSMISSION)) {
@@ -519,24 +520,26 @@ ccl_device void osl_closure_thin_glass_setup(KernelGlobals kg,
   const float3 valid_reflection_N = maybe_ensure_valid_specular_reflection(
       sd, safe_normalize_fallback(closure->N, sd->N));
   const FresnelThinFilm thinfilm = {closure->thinfilm_thickness, closure->thinfilm_ior};
-  const FresnelCoeff tint = {rgb_to_spectrum(closure->reflection_tint),
-                             rgb_to_spectrum(closure->transmission_tint)};
-  const FresnelCoeff fresnel = bsdf_thin_glass_setup(kg,
-                                                     sd,
-                                                     reflective_caustics,
-                                                     refractive_caustics,
-                                                     tint,
-                                                     rgb_to_spectrum(weight),
-                                                     valid_reflection_N,
-                                                     closure->roughness,
-                                                     closure->ior,
-                                                     thinfilm,
-                                                     path_visibility,
-                                                     path_flag);
+
+  Spectrum reflectance, transmittance;
+  bsdf_thin_glass_setup(kg,
+                        sd,
+                        reflective_caustics,
+                        refractive_caustics,
+                        closure->reflection_tint,
+                        closure->transmission_tint,
+                        rgb_to_spectrum(weight),
+                        valid_reflection_N,
+                        closure->roughness,
+                        closure->ior,
+                        thinfilm,
+                        &reflectance,
+                        &transmittance,
+                        path_visibility,
+                        path_flag);
 
   if (layer_albedo != nullptr) {
-    *layer_albedo = fresnel.transmittance * !!has_transmission +
-                    fresnel.reflectance * !!has_reflection;
+    *layer_albedo = transmittance * !!has_transmission + reflectance * !!has_reflection;
   }
 }
 
