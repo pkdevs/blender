@@ -2637,12 +2637,12 @@ static void wm_handler_operator_insert(wmWindow *win, wmEventHandler_Op *handler
         }
       }
 
-      /* Stop at other UI handlers like popups. We don't want to disturb the relative
-       * order of modal operators from those popups, e.g. dragging in the color picker.
+      /* Stop at other UI handlers like popups. We don't want to disturb the relative order
+       * of modal operators from those popups, e.g. dragging in the color picker. See #162498.
        * Otherwise the popup UI handler may free data used by the modal operator.
        *
-       * This means modal operator priority order is not strictly preserved in those
-       * cases, but menus and popups are intentionally excluded from this order. */
+       * This means modal operator priority order is only preserved relative to other modal
+       * operators, to prevent them from interfering with menus and popups. */
       break;
     }
 
