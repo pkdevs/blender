@@ -149,20 +149,25 @@ Strip *strip_under_mouse_get(const Scene *scene,
 {
   float mouse_co[2];
   ui::view2d_region_to_view(v2d, mval[0], mval[1], &mouse_co[0], &mouse_co[1]);
+  const int mouse_channel = int(mouse_co[1]);
 
+  Strip *intersecting_strip = nullptr;
   Vector<Strip *> visible = sequencer_visible_strips_get(scene, v2d);
-  int mouse_channel = int(mouse_co[1]);
   for (Strip *strip : visible) {
     if (strip->channel != mouse_channel) {
       continue;
     }
     rctf body = strip_bounds_get(scene, sseq, v2d, strip);
     if (BLI_rctf_isect_pt_v(&body, mouse_co)) {
-      return strip;
+      if (strip->is_same_channel_transition()) {
+        return strip;
+      }
+      /* Keep looking in case there is a transition on top. */
+      intersecting_strip = strip;
     }
   }
 
-  return nullptr;
+  return intersecting_strip;
 }
 
 VectorSet<Strip *> all_strips_from_context(bContext *C)

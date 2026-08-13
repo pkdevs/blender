@@ -298,8 +298,8 @@ void sequencer_select_do_updates(const bContext *C, Scene *scene);
 /**
  * Returns the strip that intersects with the mouse cursor in the timeline, if applicable.
  *
- * This check is more robust than simply comparing the timeline frame and channel, since strips do
- * not take up the full height of their channels (see #STRIP_OFSBOTTOM, #STRIP_OFSTOP).
+ * This should be used instead of comparing the timeline frame and channel, since
+ * transitions can overlap other strips.
  * Does not consider padded handles.
  *
  * \param mval: Mouse cursor location in region-space.
