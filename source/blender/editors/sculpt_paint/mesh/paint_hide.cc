@@ -13,7 +13,7 @@
 #include "BLI_array_utils.hh"
 #include "BLI_bit_span_ops.hh"
 #include "BLI_enumerable_thread_specific.hh"
-#include "BLI_utildefines.h"
+#include "BLI_utildefines.hh"
 #include "BLI_vector.hh"
 
 #include "DNA_object_types.h"
@@ -701,7 +701,7 @@ void PAINT_OT_hide_show_masked(wmOperatorType *ot)
 
   ot->exec = hide_show_masked_exec;
   /* Sculpt-only for now. */
-  ot->poll = SCULPT_mode_poll_view3d;
+  ot->poll = sculpt_mode_poll_view3d;
 
   ot->flag = OPTYPE_REGISTER;
 
@@ -716,7 +716,7 @@ void PAINT_OT_hide_show_all(wmOperatorType *ot)
 
   ot->exec = hide_show_all_exec;
   /* Sculpt-only for now. */
-  ot->poll = SCULPT_mode_poll_view3d;
+  ot->poll = sculpt_mode_poll_view3d;
 
   ot->flag = OPTYPE_REGISTER;
 
@@ -838,7 +838,7 @@ void PAINT_OT_visibility_invert(wmOperatorType *ot)
   ot->description = "Invert the visibility of all vertices";
 
   ot->exec = visibility_invert_exec;
-  ot->poll = SCULPT_mode_poll_view3d;
+  ot->poll = sculpt_mode_poll_view3d;
 
   ot->flag = OPTYPE_REGISTER;
 }
@@ -1149,7 +1149,7 @@ static wmOperatorStatus visibility_filter_exec(bContext *C, wmOperator *op)
   IndexMaskMemory memory;
   const IndexMask node_mask = bke::pbvh::all_leaf_nodes(pbvh, memory);
 
-  int num_verts = SCULPT_vertex_count_get(object);
+  int num_verts = vertex_count_get(object);
 
   int iterations = RNA_int_get(op->ptr, "iterations");
 
@@ -1200,7 +1200,7 @@ void PAINT_OT_visibility_filter(wmOperatorType *ot)
   ot->description = "Edit the visibility of the current mesh";
 
   ot->exec = visibility_filter_exec;
-  ot->poll = SCULPT_mode_poll_view3d;
+  ot->poll = sculpt_mode_poll_view3d;
 
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 
@@ -1432,7 +1432,7 @@ void PAINT_OT_hide_show(wmOperatorType *ot)
   ot->modal = WM_gesture_box_modal;
   ot->exec = hide_show_gesture_box_exec;
   /* Sculpt-only for now. */
-  ot->poll = SCULPT_mode_poll_view3d;
+  ot->poll = sculpt_mode_poll_view3d;
 
   ot->flag = OPTYPE_REGISTER;
 
@@ -1452,7 +1452,7 @@ void PAINT_OT_hide_show_lasso_gesture(wmOperatorType *ot)
   ot->modal = WM_gesture_lasso_modal;
   ot->exec = hide_show_gesture_lasso_exec;
   /* Sculpt-only for now. */
-  ot->poll = SCULPT_mode_poll_view3d;
+  ot->poll = sculpt_mode_poll_view3d;
 
   ot->flag = OPTYPE_REGISTER | OPTYPE_DEPENDS_ON_CURSOR;
 
@@ -1472,7 +1472,7 @@ void PAINT_OT_hide_show_line_gesture(wmOperatorType *ot)
   ot->modal = WM_gesture_straightline_oneshot_modal;
   ot->exec = hide_show_gesture_line_exec;
   /* Sculpt-only for now. */
-  ot->poll = SCULPT_mode_poll_view3d;
+  ot->poll = sculpt_mode_poll_view3d;
 
   ot->flag = OPTYPE_REGISTER;
 
@@ -1492,7 +1492,7 @@ void PAINT_OT_hide_show_polyline_gesture(wmOperatorType *ot)
   ot->modal = WM_gesture_polyline_modal;
   ot->exec = hide_show_gesture_polyline_exec;
   /* Sculpt-only for now. */
-  ot->poll = SCULPT_mode_poll_view3d;
+  ot->poll = sculpt_mode_poll_view3d;
 
   ot->flag = OPTYPE_REGISTER | OPTYPE_DEPENDS_ON_CURSOR;
 

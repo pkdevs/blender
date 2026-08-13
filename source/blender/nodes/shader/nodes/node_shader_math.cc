@@ -27,8 +27,11 @@ namespace nodes::node_shader_math_cc {
 static void sh_node_math_declare(NodeDeclarationBuilder &b)
 {
   b.is_function_node();
-  b.add_input<decl::Float>("Value").default_value(0.5f).min(-10000.0f).max(10000.0f).label_fn(
-      [](bNode node) {
+  b.add_input<decl::Float>("Value"_ustr)
+      .default_value(0.5f)
+      .min(-10000.0f)
+      .max(10000.0f)
+      .label_fn([](const bNode &node) {
         switch (node.custom1) {
           case NODE_MATH_POWER:
             return IFACE_("Base");
@@ -40,11 +43,11 @@ static void sh_node_math_declare(NodeDeclarationBuilder &b)
             return IFACE_("Value");
         }
       });
-  b.add_input<decl::Float>("Value", "Value_001")
+  b.add_input<decl::Float>("Value"_ustr, "Value_001"_ustr)
       .default_value(0.5f)
       .min(-10000.0f)
       .max(10000.0f)
-      .label_fn([](bNode node) {
+      .label_fn([](const bNode &node) {
         switch (node.custom1) {
           case NODE_MATH_WRAP:
             return IFACE_("Max");
@@ -65,11 +68,11 @@ static void sh_node_math_declare(NodeDeclarationBuilder &b)
             return IFACE_("Value");
         }
       });
-  b.add_input<decl::Float>("Value", "Value_002")
+  b.add_input<decl::Float>("Value"_ustr, "Value_002"_ustr)
       .default_value(0.5f)
       .min(-10000.0f)
       .max(10000.0f)
-      .label_fn([](bNode node) {
+      .label_fn([](const bNode &node) {
         switch (node.custom1) {
           case NODE_MATH_WRAP:
             return IFACE_("Min");
@@ -84,16 +87,16 @@ static void sh_node_math_declare(NodeDeclarationBuilder &b)
             return IFACE_("Value");
         }
       });
-  b.add_output<decl::Float>("Value");
+  b.add_output<decl::Float>("Value"_ustr);
 }
 
 static void math_input_defaults(bNode &node, const NodeMathOperation mode)
 {
-  bNodeSocket *socket_2 = bke::node_find_socket(node, SOCK_IN, "Value_001");
+  bNodeSocket *socket_2 = bke::node_find_socket(node, SOCK_IN, "Value_001"_ustr);
   BLI_assert(socket_2 != nullptr);
   float &value_2 = socket_2->default_value_typed<bNodeSocketValueFloat>()->value;
 
-  bNodeSocket *socket_3 = bke::node_find_socket(node, SOCK_IN, "Value_002");
+  bNodeSocket *socket_3 = bke::node_find_socket(node, SOCK_IN, "Value_002"_ustr);
   BLI_assert(socket_3 != nullptr);
   float &value_3 = socket_3->default_value_typed<bNodeSocketValueFloat>()->value;
 
@@ -123,11 +126,11 @@ static void math_input_defaults(bNode &node, const NodeMathOperation mode)
 
 class SocketSearchOp {
  public:
-  std::string socket_name;
+  UString socket_name;
   NodeMathOperation mode = NODE_MATH_ADD;
   void operator()(LinkSearchOpParams &params)
   {
-    bNode &node = params.add_node("ShaderNodeMath");
+    bNode &node = params.add_node("ShaderNodeMath"_ustr);
     node.custom1 = mode;
     math_input_defaults(node, mode);
     params.update_and_connect_available_socket(node, socket_name);
@@ -136,27 +139,27 @@ class SocketSearchOp {
 
 static void sh_node_math_gather_link_searches(GatherLinkSearchOpParams &params)
 {
-  if (!params.node_tree().typeinfo->validate_link(eNodeSocketDatatype(params.other_socket().type),
-                                                  SOCK_FLOAT))
-  {
+  if (!params.node_tree().typeinfo->validate_link(params.other_socket().type, SOCK_FLOAT)) {
     return;
   }
 
-  const bool is_geometry_node_tree = params.node_tree().type == NTREE_GEOMETRY;
+  const bool is_compare_node_supported = ELEM(
+      params.node_tree().type, NTREE_GEOMETRY, NTREE_COMPOSIT);
   const int weight = ELEM(params.other_socket().type, SOCK_FLOAT, SOCK_INT, SOCK_BOOLEAN) ? 0 : -1;
 
   for (const EnumPropertyItem *item = rna_enum_node_math_items; item->identifier != nullptr;
        item++)
   {
     if (item->name != nullptr && item->identifier[0] != '\0') {
-      const int gn_weight =
-          (is_geometry_node_tree &&
-           ELEM(item->value, NODE_MATH_COMPARE, NODE_MATH_GREATER_THAN, NODE_MATH_LESS_THAN)) ?
-              -1 :
-              weight;
+      if (is_compare_node_supported &&
+          ELEM(item->value, NODE_MATH_COMPARE, NODE_MATH_GREATER_THAN, NODE_MATH_LESS_THAN))
+      {
+        /* Hide compare operations from the Math node if the Compare node is supported. */
+        continue;
+      }
       params.add_item(CTX_IFACE_(BLT_I18NCONTEXT_ID_NODETREE, item->name),
-                      SocketSearchOp{"Value", NodeMathOperation(item->value)},
-                      gn_weight);
+                      SocketSearchOp{"Value"_ustr, NodeMathOperation(item->value)},
+                      weight);
     }
   }
 }
@@ -204,9 +207,9 @@ static void node_eval_elem(value_elem::ElemEvalParams &params)
     case NODE_MATH_SUBTRACT:
     case NODE_MATH_MULTIPLY:
     case NODE_MATH_DIVIDE: {
-      FloatElem output_elem = params.get_input_elem<FloatElem>("Value");
-      output_elem.merge(params.get_input_elem<FloatElem>("Value_001"));
-      params.set_output_elem("Value", output_elem);
+      FloatElem output_elem = params.get_input_elem<FloatElem>("Value"_ustr);
+      output_elem.merge(params.get_input_elem<FloatElem>("Value_001"_ustr));
+      params.set_output_elem("Value"_ustr, output_elem);
       break;
     }
     default:
@@ -222,7 +225,8 @@ static void node_eval_inverse_elem(value_elem::InverseElemEvalParams &params)
     case NODE_MATH_SUBTRACT:
     case NODE_MATH_MULTIPLY:
     case NODE_MATH_DIVIDE: {
-      params.set_input_elem("Value", params.get_output_elem<value_elem::FloatElem>("Value"));
+      params.set_input_elem("Value"_ustr,
+                            params.get_output_elem<value_elem::FloatElem>("Value"_ustr));
       break;
     }
     default:
@@ -233,9 +237,9 @@ static void node_eval_inverse_elem(value_elem::InverseElemEvalParams &params)
 static void node_eval_inverse(inverse_eval::InverseEvalParams &params)
 {
   const NodeMathOperation op = NodeMathOperation(params.node.custom1);
-  const StringRef first_input_id = "Value";
-  const StringRef second_input_id = "Value_001";
-  const StringRef output_id = "Value";
+  const UString first_input_id = "Value"_ustr;
+  const UString second_input_id = "Value_001"_ustr;
+  const UString output_id = "Value"_ustr;
   switch (op) {
     case NODE_MATH_ADD: {
       params.set_input(first_input_id,
@@ -454,7 +458,7 @@ void register_node_type_sh_math()
 
   static bke::bNodeType ntype;
 
-  common_node_type_base(&ntype, "ShaderNodeMath", SH_NODE_MATH);
+  common_node_type_base(&ntype, "ShaderNodeMath"_ustr, SH_NODE_MATH);
   ntype.ui_name = "Math";
   ntype.ui_description = "Perform math operations";
   ntype.enum_name_legacy = "MATH";

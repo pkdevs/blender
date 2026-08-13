@@ -17,14 +17,14 @@
 #include "DNA_world_types.h"
 
 #include "BLI_array.hh"
-#include "BLI_linklist.h"
-#include "BLI_listbase.h"
+#include "BLI_linklist.hh"
+#include "BLI_listbase.hh"
 #include "BLI_map.hh"
-#include "BLI_math_vector.h"
+#include "BLI_math_vector_c.hh"
 #include "BLI_set.hh"
 #include "BLI_stack.hh"
-#include "BLI_threads.h"
-#include "BLI_utildefines.h"
+#include "BLI_threads.hh"
+#include "BLI_utildefines.hh"
 #include "BLI_vector.hh"
 
 #include "BKE_context.hh"
@@ -70,9 +70,10 @@ static void shader_get_from_context(const bContext *C,
                                     ID **r_from)
 {
   SpaceNode *snode = CTX_wm_space_node(C);
+  const Main *bmain = CTX_data_main(C);
   Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
-  BKE_view_layer_synced_ensure(scene, view_layer);
+  BKE_view_layer_synced_ensure(*bmain, scene, view_layer);
   Object *ob = BKE_view_layer_active_object_get(view_layer);
 
   if (snode->shaderfrom == SNODE_SHADER_OBJECT) {
@@ -188,11 +189,12 @@ void register_node_tree_type_sh()
   bke::bNodeTreeType *tt = ntreeType_Shader = MEM_new<bke::bNodeTreeType>(__func__);
 
   tt->type = NTREE_SHADER;
-  tt->idname = "ShaderNodeTree";
-  tt->group_idname = "ShaderNodeGroup";
+  tt->idname = "ShaderNodeTree"_ustr;
+  tt->group_idname = "ShaderNodeGroup"_ustr;
   tt->ui_name = N_("Shader Editor");
   tt->ui_icon = ICON_NODE_MATERIAL;
   tt->ui_description = N_("Edit materials, lights, and world shading using nodes");
+  tt->asset_catalog_path_prefix = "Shading";
 
   tt->foreach_nodeclass = foreach_nodeclass;
   tt->localize = localize;
@@ -480,7 +482,9 @@ static bool ntree_weight_tree_tag_nodes(bNode *fromnode, bNode *tonode, void *us
     fromnode->runtime->tmp_flag = *node_count;
     *node_count += (fromnode->type_legacy == SH_NODE_MIX_SHADER) ? 4 : 1;
   }
-  return to_node_from_weight_tree;
+  /* Note: We do not continue recursing after a shader-to-rgb node as they get processed
+   * independently/ */
+  return to_node_from_weight_tree && fromnode->type_legacy != SH_NODE_SHADERTORGB;
 }
 
 /* Invert evaluation order of the weight tree (add & mix closure nodes) to feed the closure nodes
@@ -692,9 +696,6 @@ static void ntree_shader_weight_tree_invert(bNodeTree *ntree, bNode *output_node
             case SH_NODE_VOLUME_SCATTER:
             case SH_NODE_VOLUME_COEFFICIENTS:
               fromsock = ntree_shader_node_find_input(fromnode, "Weight");
-              /* Make "weight" sockets available so that links to it are available as well and are
-               * not ignored in other places. */
-              fromsock->flag &= ~SOCK_UNAVAIL;
               if (fromsock->link) {
                 ntree_weight_tree_merge_weight(ntree, fromnode, fromsock, &tonode, &tosock);
               }

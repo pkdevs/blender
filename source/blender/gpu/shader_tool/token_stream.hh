@@ -9,6 +9,7 @@
 
 #pragma once
 
+#include "ast.hh"
 #include "enums.hh"
 #include "utils.hh"
 
@@ -93,11 +94,17 @@ struct ParserBase : LexerBase {
   /** Index of bottom most scope per token. */
   std::vector<int> token_scope;
 
+  std::vector<ast::NodeData> ast_nodes;
+
   /* Return the i'th token. */
   Token operator[](int i) const;
 
-  void build_scope_tree(report_callback &report_error);
+  void build_scope_tree(ErrorHandler &err_handler);
   void build_token_to_scope_map();
+  void parse_bsl(ErrorHandler &err_handler);
+
+  ast::Namespace root() const;
+  void print_ast() const;
 
  private:
   void update_string_view();
@@ -105,7 +112,7 @@ struct ParserBase : LexerBase {
 
 /* Don't do anything. No access to scopes is allowed. */
 struct NullParser {
-  static void semantic_analysis(ParserBase &parser, report_callback & /*report_error*/)
+  static void semantic_analysis(ParserBase &parser, ErrorHandler & /*err_handler*/)
   {
     parser.scope_types = {};
     parser.scope_ranges = {};
@@ -114,7 +121,7 @@ struct NullParser {
 
 /* Do not parse. Creates a single global scope containing all tokens. */
 struct DummyParser {
-  static void semantic_analysis(ParserBase &parser, report_callback & /*report_error*/)
+  static void semantic_analysis(ParserBase &parser, ErrorHandler & /*err_handler*/)
   {
     parser.scope_types = {ScopeType::Global};
     parser.scope_ranges = {IndexRange(0, parser.size())};
@@ -123,9 +130,9 @@ struct DummyParser {
 };
 
 struct FullParser {
-  static void semantic_analysis(ParserBase &parser, report_callback &report_error)
+  static void semantic_analysis(ParserBase &parser, ErrorHandler &err_handler)
   {
-    parser.build_scope_tree(report_error);
+    parser.build_scope_tree(err_handler);
     parser.build_token_to_scope_map();
   }
 };
@@ -136,9 +143,9 @@ template<typename LexerFn, typename ParserFn> struct Parser : ParserBase {
     LexerFn::lexical_analysis(*this, input);
   }
 
-  void semantic_analysis(report_callback &report_error)
+  void semantic_analysis(ErrorHandler &err_handler)
   {
-    ParserFn::semantic_analysis(*this, report_error);
+    ParserFn::semantic_analysis(*this, err_handler);
   }
 };
 

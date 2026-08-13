@@ -89,6 +89,17 @@ class QuickFur(ObjectModeOperator, Operator):
         default=True,
     )
 
+    @classmethod
+    def poll(cls, context):
+        if not super().poll(context):
+            return False
+
+        if context.active_object is None or context.active_object.type != 'MESH':
+            cls.poll_message_set("No active mesh object.")
+            return False
+
+        return True
+
     def execute(self, context):
         import os
         from collections import namedtuple
@@ -170,25 +181,21 @@ class QuickFur(ObjectModeOperator, Operator):
 
             generate_modifier = curves_object.modifiers.new(name=data_("Generate"), type='NODES')
             generate_modifier.node_group = node_groups.generate
-            generate_modifier["Input_2"] = mesh_object
-            generate_modifier["Input_18_attribute_name"] = curves.surface_uv_map
-            generate_modifier["Input_12"] = True
-            generate_modifier["Input_20"] = self.length
-            generate_modifier["Input_22"] = material
-            generate_modifier["Input_15"] = density * 0.01
+            generate_modifier.properties.inputs.Input_12.value = True
+            generate_modifier.properties.inputs.Input_20.value = self.length
+            generate_modifier.properties.inputs.Input_22.value = material
+            generate_modifier.properties.inputs.Input_15.value = density * 0.01
 
             radius_modifier = curves_object.modifiers.new(name=data_("Set Hair Curve Profile"), type='NODES')
             radius_modifier.node_group = node_groups.radius
-            radius_modifier["Input_3"] = self.radius
+            radius_modifier.properties.inputs.Input_3.value = self.radius
 
             interpolate_modifier = curves_object.modifiers.new(name=data_("Interpolate Hair Curves"), type='NODES')
             interpolate_modifier.node_group = node_groups.interpolate
-            interpolate_modifier["Input_2"] = mesh_object
-            interpolate_modifier["Input_18_attribute_name"] = curves.surface_uv_map
-            interpolate_modifier["Input_12"] = True
-            interpolate_modifier["Input_15"] = density
-            interpolate_modifier["Input_17"] = self.view_percentage
-            interpolate_modifier["Input_24"] = True
+            interpolate_modifier.properties.inputs.Input_12.value = True
+            interpolate_modifier.properties.inputs.Input_15.value = density
+            interpolate_modifier.properties.inputs.Input_17.value = self.view_percentage
+            interpolate_modifier.properties.inputs.Input_24.value = True
 
             if self.use_noise:
                 noise_modifier = curves_object.modifiers.new(name=data_("Hair Curves Noise"), type='NODES')
@@ -449,7 +456,6 @@ class QuickSmoke(ObjectModeOperator, Operator):
             self.report({'ERROR'}, "Built without Fluid modifier")
             return {'CANCELLED'}
 
-        context_override = context.copy()
         mesh_objects = [
             obj for obj in context.selected_objects
             if obj.type == 'MESH'
@@ -462,7 +468,7 @@ class QuickSmoke(ObjectModeOperator, Operator):
             return {'CANCELLED'}
 
         for obj in mesh_objects:
-            fluid = obj.modifiers.new(name=data_("FLUID"), type='FLUID')
+            fluid = obj.modifiers.new(name=data_("Fluid"), type='FLUID')
             fluid.fluid_type = 'FLOW'
 
             # set type
@@ -490,7 +496,7 @@ class QuickSmoke(ObjectModeOperator, Operator):
         obj.scale = 0.5 * (max_co - min_co) + Vector((1.0, 1.0, 2.0))
 
         # setup smoke domain
-        fluid = obj.modifiers.new(name=data_("FLUID"), type='FLUID')
+        fluid = obj.modifiers.new(name=data_("Fluid"), type='FLUID')
         fluid.fluid_type = 'DOMAIN'
         # The default value leads to unstable simulations (see #126924).
         fluid.domain_settings.cfl_condition = 4.0
@@ -552,7 +558,6 @@ class QuickLiquid(Operator):
             self.report({'ERROR'}, "Built without Fluid modifier")
             return {'CANCELLED'}
 
-        context_override = context.copy()
         mesh_objects = [
             obj for obj in context.selected_objects
             if obj.type == 'MESH'
@@ -572,7 +577,7 @@ class QuickLiquid(Operator):
                         space.shading.type = 'WIREFRAME'
 
         for obj in mesh_objects:
-            fluid = obj.modifiers.new(name=data_("FLUID"), type='FLUID')
+            fluid = obj.modifiers.new(name=data_("Fluid"), type='FLUID')
             fluid.fluid_type = 'FLOW'
 
             # set type
@@ -600,7 +605,7 @@ class QuickLiquid(Operator):
         obj.scale = 0.5 * (max_co - min_co) + Vector((1.0, 1.0, 2.0))
 
         # setup liquid domain
-        fluid = obj.modifiers.new(name=data_("FLUID"), type='FLUID')
+        fluid = obj.modifiers.new(name=data_("Fluid"), type='FLUID')
         fluid.fluid_type = 'DOMAIN'
         # set all domain borders to obstacle
         fluid.domain_settings.use_collision_border_front = True

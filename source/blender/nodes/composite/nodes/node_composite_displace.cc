@@ -7,7 +7,7 @@
 #include "BLI_math_matrix.hh"
 #include "BLI_math_vector.hh"
 #include "BLI_math_vector_types.hh"
-#include "BLI_utildefines.h"
+#include "BLI_utildefines.hh"
 
 #include "DNA_node_types.h"
 
@@ -31,29 +31,31 @@ static void node_declare(NodeDeclarationBuilder &b)
   b.use_custom_socket_order();
   b.allow_any_socket_order();
 
-  b.add_input<decl::Color>("Image")
+  b.add_input<decl::Color>("Image"_ustr)
       .default_value({1.0f, 1.0f, 1.0f, 1.0f})
       .hide_value()
       .structure_type(StructureType::Dynamic);
-  b.add_output<decl::Color>("Image").structure_type(StructureType::Dynamic).align_with_previous();
+  b.add_output<decl::Color>("Image"_ustr)
+      .structure_type(StructureType::Dynamic)
+      .align_with_previous();
 
-  b.add_input<decl::Vector>("Displacement")
+  b.add_input<decl::Vector>("Displacement"_ustr)
       .dimensions(2)
       .default_value({0.0f, 0.0f})
       .structure_type(StructureType::Dynamic);
 
   PanelDeclarationBuilder &sampling_panel = b.add_panel("Sampling"_ustr).default_closed(true);
-  sampling_panel.add_input<decl::Menu>("Interpolation")
+  sampling_panel.add_input<decl::Menu>("Interpolation"_ustr)
       .default_value(CMP_NODE_INTERPOLATION_BILINEAR)
       .static_items(rna_enum_node_compositor_interpolation_items)
       .description("Interpolation method")
       .optional_label();
-  sampling_panel.add_input<decl::Menu>("Extension X")
+  sampling_panel.add_input<decl::Menu>("Extension X"_ustr)
       .default_value(CMP_NODE_EXTENSION_MODE_CLIP)
       .static_items(rna_enum_node_compositor_extension_items)
       .description("The extension mode applied to the X axis")
       .optional_label();
-  sampling_panel.add_input<decl::Menu>("Extension Y")
+  sampling_panel.add_input<decl::Menu>("Extension Y"_ustr)
       .default_value(CMP_NODE_EXTENSION_MODE_CLIP)
       .static_items(rna_enum_node_compositor_extension_items)
       .description("The extension mode applied to the Y axis")
@@ -332,7 +334,7 @@ static void node_register()
 {
   static bke::bNodeType ntype;
 
-  cmp_node_type_base(&ntype, "CompositorNodeDisplace", CMP_NODE_DISPLACE);
+  cmp_node_type_base(&ntype, "CompositorNodeDisplace"_ustr, CMP_NODE_DISPLACE);
   ntype.ui_name = "Displace";
   ntype.ui_description = "Displace pixel position using an offset vector";
   ntype.enum_name_legacy = "DISPLACE";

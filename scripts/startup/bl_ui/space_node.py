@@ -35,6 +35,7 @@ from bl_ui.properties_data_light import (
     DATA_PT_light,
     DATA_PT_EEVEE_light,
 )
+from bl_operators.geometry_nodes import geometry_modifier_poll
 
 
 class NODE_HT_header(Header):
@@ -193,6 +194,8 @@ class NODE_HT_header(Header):
                     row.enabled = False
                     row.template_ID(snode, "node_tree", new="node.new_geometry_node_group_assign")
                 elif ob:
+                    row.enabled = geometry_modifier_poll(context)
+
                     active_modifier = ob.modifiers.active
                     if active_modifier and active_modifier.type == 'NODES':
                         if active_modifier.node_group:
@@ -450,10 +453,6 @@ class NODE_MT_node(Menu):
         props.NODE_OT_translate_attach.TRANSFORM_OT_translate.view2d_edge_pan = True
 
         layout.separator()
-        layout.operator("node.delete", icon='X')
-        layout.operator("node.delete_reconnect")
-
-        layout.separator()
         layout.operator("node.join", text="Join in New Frame")
         layout.operator("node.detach", text="Remove from Frame")
         layout.operator("node.join_nodes", text="Join Group Inputs")
@@ -485,6 +484,10 @@ class NODE_MT_node(Menu):
         if is_compositor:
             layout.separator()
             layout.operator("node.read_viewlayers", icon='RENDERLAYERS')
+
+        layout.separator()
+        layout.operator("node.delete_reconnect")
+        layout.operator("node.delete", icon='X')
 
 
 class NODE_MT_view_pie(Menu):
@@ -543,8 +546,9 @@ class NODE_PT_material_slots(Panel):
         if ob.mode == 'EDIT':
             row = layout.row(align=True)
             row.operator("object.material_slot_assign", text="Assign")
-            row.operator("object.material_slot_select", text="Select")
-            row.operator("object.material_slot_deselect", text="Deselect")
+            if ob.type != 'FONT':
+                row.operator("object.material_slot_select", text="Select")
+                row.operator("object.material_slot_deselect", text="Deselect")
 
 
 class NODE_PT_geometry_node_tool_object_types(Panel):
@@ -623,7 +627,7 @@ class NODE_PT_geometry_node_tool_options(Panel):
         layout.prop(group, "node_tool_idname", text="Identifier")
         layout.template_node_operator_registration_errors(idname=group.node_tool_idname)
         if len(group.node_tool_idname) == 0:
-            layout.label(icon='ERROR', text="Missing operator identifier")
+            layout.label(icon='STATUS_ERROR', text="Missing operator identifier")
 
 
 class NODE_PT_node_color_presets(PresetPanel, Panel):
@@ -692,6 +696,7 @@ class NODE_MT_context_menu(Menu):
     def draw(self, context):
         snode = context.space_data
         is_nested = (len(snode.path) > 1)
+        parent_tree_index = len(snode.path) - 2
         is_geometrynodes = snode.tree_type == 'GeometryNodeTree'
         group = snode.edit_tree
 
@@ -721,8 +726,10 @@ class NODE_MT_context_menu(Menu):
 
             if is_nested:
                 layout.separator()
-
-                layout.operator("node.tree_path_parent", text="Exit Group", icon='FILE_PARENT')
+                layout.operator(
+                    "node.tree_path_parent",
+                    text="Exit Group",
+                    icon='FILE_PARENT').parent_tree_index = parent_tree_index
 
             return
 
@@ -741,9 +748,11 @@ class NODE_MT_context_menu(Menu):
 
         layout.separator()
 
-        layout.operator("node.delete", icon='X')
-        layout.operator_context = 'EXEC_REGION_WIN'
-        layout.operator("node.delete_reconnect", text="Dissolve")
+        props = layout.operator("wm.call_panel", text="Rename Active Node...")
+        props.name = "TOPBAR_PT_name"
+        props.keep_open = False
+
+        layout.separator()
 
         if selected_nodes_len > 1:
             layout.separator()
@@ -763,7 +772,10 @@ class NODE_MT_context_menu(Menu):
                 layout.operator("node.group_ungroup", text="Ungroup")
 
             if is_nested:
-                layout.operator("node.tree_path_parent", text="Exit Group", icon='FILE_PARENT')
+                layout.operator(
+                    "node.tree_path_parent",
+                    text="Exit Group",
+                    icon='FILE_PARENT').parent_tree_index = parent_tree_index
 
             layout.separator()
 
@@ -772,14 +784,14 @@ class NODE_MT_context_menu(Menu):
 
         layout.separator()
 
-        props = layout.operator("wm.call_panel", text="Rename...")
-        props.name = "TOPBAR_PT_name"
-        props.keep_open = False
+        layout.menu("NODE_MT_context_menu_select_menu")
+        layout.menu("NODE_MT_context_menu_show_hide_menu")
 
         layout.separator()
 
-        layout.menu("NODE_MT_context_menu_select_menu")
-        layout.menu("NODE_MT_context_menu_show_hide_menu")
+        layout.operator_context = 'EXEC_REGION_WIN'
+        layout.operator("node.delete_reconnect", text="Dissolve")
+        layout.operator("node.delete", icon='X')
 
         if active_node:
             layout.separator()
@@ -827,7 +839,7 @@ class NODE_PT_active_node_generic(Panel):
         col.prop(node, "show_options")
         col.prop(node, "mute")
 
-        if tree.type == 'GEOMETRY':
+        if tree.type in ('GEOMETRY', 'COMPOSITING'):
             layout.prop(node, "warning_propagation", text="Propagate")
 
 
@@ -958,6 +970,10 @@ class NODE_PT_quality(Panel):
         col.prop(rd, "compositor_device", text="Device")
         if rd.compositor_device == 'GPU':
             col.prop(rd, "compositor_precision", text="Precision")
+
+        if snode.node_tree_sub_type == 'SCENE':
+            col = layout.column(heading="Cache", align=True)
+            col.prop(rd, "use_compositor_frames_cache", text="Frames")
 
 
 class NODE_PT_overlay(Panel):
@@ -1091,6 +1107,12 @@ class NODE_PT_node_tree_properties(Panel):
                 col = body.column(align=True)
                 col.prop(group, "is_modifier")
                 col.prop(group, "is_tool")
+        elif group.bl_idname == "CompositorNodeTree":
+            header, body = col.panel("group_usage")
+            header.label(text="Usage")
+            if body:
+                col = body.column(align=True)
+                col.prop(group, "is_strip_modifier")
 
 
 class NODE_PT_node_tree_animation(Panel):
@@ -1186,6 +1208,10 @@ class NODE_AST_compositor(bpy.types.AssetShelf):
             "Combine Spherical",
             "Separate Cylindrical",
             "Separate Spherical",
+            "3D to Screen Space",
+            "Screen to 3D Space",
+            "Project with Depth",
+            "Transform and Project",
         }
 
         compositor_essentials_path = Path(os.path.join(

@@ -12,7 +12,7 @@
 #include "BKE_key.hh"
 #include "BKE_object.hh"
 
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 #include "BLT_translation.hh"
 
 #include "UI_interface_layout.hh"
@@ -213,6 +213,7 @@ class ShapeKeyItem : public ui::AbstractTreeViewItem {
   {
     uiItemL_ex(&row, this->label_, ICON_SHAPEKEY_DATA, false, false);
     ui::Layout &sub = row.row(true);
+    sub.alignment_set(ui::LayoutAlign::Right);
     sub.use_property_decorate_set(false);
     PointerRNA shapekey_ptr = RNA_pointer_create_discrete(
         &shape_key_.key->id, RNA_ShapeKey, shape_key_.kb);
@@ -269,7 +270,9 @@ class ShapeKeyItem : public ui::AbstractTreeViewItem {
   {
     PointerRNA shapekey_ptr = RNA_pointer_create_discrete(
         &shape_key_.key->id, RNA_ShapeKey, shape_key_.kb);
-    RNA_string_set(&shapekey_ptr, "name", new_name.c_str());
+    PropertyRNA *prop = RNA_struct_find_property(&shapekey_ptr, "name");
+    RNA_property_string_set(&shapekey_ptr, prop, new_name.c_str());
+    RNA_property_update(&const_cast<bContext &>(C), &shapekey_ptr, prop);
     ED_undo_push(const_cast<bContext *>(&C), "Rename shape key");
     return true;
   }

@@ -29,10 +29,10 @@
 
 #include "DNA_userdef_types.h"
 
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 
-#include "BLI_math_vector.h"
-#include "BLI_rect.h"
+#include "BLI_math_vector_c.hh"
+#include "BLI_rect.hh"
 
 #include "BKE_context.hh"
 #include "BKE_report.hh"
@@ -136,8 +136,11 @@ static Block *block_func_POPOVER(bContext *C, PopupBlockHandle *handle, void *ar
   }
 
   block_layout_resolve(block);
-  const int direction = (pup->panel_type && (pup->panel_type->popup_draw_direction ==
-                                             PopupAttachDirection::Horizontal)) ?
+  const ButtonMenu *popover_button = pup->but && pup->but->type == ButtonType::Popover ?
+                                         static_cast<ButtonMenu *>(pup->but) :
+                                         nullptr;
+  const int direction = (popover_button && (popover_button->popup_attach_direction ==
+                                            PopupAttachDirection::Horizontal)) ?
                             UI_DIR_LEFT :
                             UI_DIR_DOWN | UI_DIR_CENTER_X;
   block_direction_set(block, direction);
@@ -299,7 +302,7 @@ PopupBlockHandle *popover_panel_create(bContext *C,
     WM_event_add_mousemove(window);
     handle->popup = true;
   }
-
+  handle->srna_owner = panel_type->rna_ext.srna;
   return handle;
 }
 

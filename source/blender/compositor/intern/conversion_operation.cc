@@ -6,7 +6,7 @@
 
 #include "BLI_generic_span.hh"
 #include "BLI_math_vector_types.hh"
-#include "BLI_utildefines.h"
+#include "BLI_utildefines.hh"
 
 #include "GPU_shader.hh"
 
@@ -28,60 +28,7 @@ ConversionOperation::ConversionOperation(Context &context,
     : SimpleOperation(context)
 {
   this->declare_input_descriptor(InputDescriptor{input_type});
-  this->populate_result(context.create_result(expected_type));
-}
-
-/* Returns true if conversion between the given from and to types is supported. This should be
- * consistent and up to date with the compositor node tree's validate_link fallback. */
-static bool is_conversion_supported(const ResultType from_type, const ResultType to_type)
-{
-  switch (from_type) {
-    case ResultType::Float:
-    case ResultType::Float2:
-    case ResultType::Float3:
-    case ResultType::Float4:
-    case ResultType::Color:
-    case ResultType::Int:
-    case ResultType::Int2:
-    case ResultType::Int3:
-    case ResultType::Bool:
-      switch (to_type) {
-        case ResultType::Float:
-        case ResultType::Float2:
-        case ResultType::Float3:
-        case ResultType::Float4:
-        case ResultType::Color:
-        case ResultType::Int:
-        case ResultType::Int2:
-        case ResultType::Int3:
-        case ResultType::Bool:
-          return true;
-        case ResultType::Float4x4:
-        case ResultType::Menu:
-        case ResultType::String:
-        case ResultType::Object:
-        case ResultType::Image:
-        case ResultType::Font:
-        case ResultType::Scene:
-        case ResultType::Text:
-        case ResultType::Mask:
-          return false;
-      }
-      break;
-    case ResultType::Float4x4:
-    case ResultType::Menu:
-    case ResultType::String:
-    case ResultType::Object:
-    case ResultType::Image:
-    case ResultType::Font:
-    case ResultType::Scene:
-    case ResultType::Text:
-    case ResultType::Mask:
-      return to_type == from_type;
-  }
-
-  BLI_assert_unreachable();
-  return false;
+  this->populate_result(expected_type);
 }
 
 void ConversionOperation::execute()
@@ -89,7 +36,8 @@ void ConversionOperation::execute()
   Result &result = this->get_result();
   const Result &input = this->get_input();
 
-  if (!is_conversion_supported(input.type(), result.type())) {
+  const bke::DataTypeConversions &conversions = bke::get_implicit_type_conversions();
+  if (!conversions.is_convertible(input.get_cpp_type(), result.get_cpp_type())) {
     this->allocate_default_remaining_outputs();
     return;
   }
@@ -158,7 +106,7 @@ void ConversionOperation::execute_single(const Result &input, Result &output)
 void ConversionOperation::execute_cpu(const Result &input, Result &output)
 {
   const bke::DataTypeConversions &conversions = bke::get_implicit_type_conversions();
-  conversions.convert_to_initialized_n(input.cpu_data(), output.cpu_data());
+  conversions.convert_to_initialized_n(input.cpu_data(), output.cpu_data_for_write());
 }
 
 }  // namespace blender::compositor

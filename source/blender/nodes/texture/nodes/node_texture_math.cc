@@ -6,8 +6,8 @@
  * \ingroup texnodes
  */
 
-#include "BLI_listbase.h"
-#include "BLI_math_rotation.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_rotation_c.hh"
 #include "node_texture_util.hh"
 #include "node_util.hh"
 
@@ -388,7 +388,7 @@ void register_node_type_tex_math()
 {
   static bke::bNodeType ntype;
 
-  tex_node_type_base(&ntype, "TextureNodeMath", TEX_NODE_MATH);
+  tex_node_type_base(&ntype, "TextureNodeMath"_ustr, TEX_NODE_MATH);
   ntype.ui_name = "Math";
   ntype.enum_name_legacy = "MATH";
   ntype.nclass = NODE_CLASS_CONVERTER;

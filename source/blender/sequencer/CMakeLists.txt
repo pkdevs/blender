@@ -6,8 +6,10 @@ set(INC
   PUBLIC .
   intern
   ../compositor
+  ../compositor/algorithms
   ../compositor/cached_resources
   ../compositor/derived_resources
+  ../functions
   ../editors/include
   ../animrig
   ../makesrna
@@ -130,6 +132,7 @@ set(LIB
   PRIVATE bf::intern::atomic
   PRIVATE bf::intern::clog
   PRIVATE bf::intern::guardedalloc
+  PRIVATE bf::intern::profile
   PRIVATE bf::nodes
   PRIVATE bf::render
   PRIVATE bf::windowmanager

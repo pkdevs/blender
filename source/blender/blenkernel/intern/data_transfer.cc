@@ -14,10 +14,10 @@
 #include "DNA_meshdata_types.h"
 #include "DNA_object_types.h"
 
-#include "BLI_math_base.h"
-#include "BLI_math_matrix.h"
-#include "BLI_string.h"
-#include "BLI_utildefines.h"
+#include "BLI_math_base_c.hh"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_string.hh"
+#include "BLI_utildefines.hh"
 
 #include "BKE_attribute.h"
 #include "BKE_attribute.hh"
@@ -187,7 +187,7 @@ int BKE_object_data_transfer_dttype_to_cdtype(const int dtdata_type)
     case DT_TYPE_MDEFORMVERT:
       return CD_FAKE_MDEFORMVERT;
     case DT_TYPE_SKIN:
-      return CD_MVERT_SKIN;
+      return CD_FAKE_SKIN_RADIUS;
     case DT_TYPE_BWEIGHT_VERT:
       return CD_FAKE_BWEIGHT;
 
@@ -720,6 +720,10 @@ static bool data_transfer_layersmapping_cdlayers_multisrc_to_dst(
                                                   nullptr,
                                                   nullptr);
         }
+        else {
+          /* Layout-only transfer, the writer isn't moved into the map so finish it. */
+          std::get<bke::GSpanAttributeWriter>(data_dst).finish();
+        }
       }
 
       /* NOTE:
@@ -889,6 +893,10 @@ static bool data_transfer_layersmapping_cdlayers(Vector<CustomDataTransferLayerM
                                               nullptr,
                                               nullptr);
     }
+    else {
+      /* Layout-only transfer, the writer isn't moved into the map so finish it. */
+      std::get<bke::GSpanAttributeWriter>(data_dst).finish();
+    }
   }
   else if (fromlayers == DT_LAYERS_ALL_SRC) {
     int num_src = src_names.size();
@@ -966,6 +974,10 @@ static void data_transfer_layersmapping_add_item_attr(Vector<CustomDataTransferL
                                               nullptr,
                                               nullptr);
     }
+    else if (data_dst) {
+      /* The writer wasn't moved into the map (layout-only transfer or mismatched domain/type). */
+      data_dst.finish();
+    }
   }
   else {
     if (use_delete) {
@@ -991,35 +1003,7 @@ static bool data_transfer_layersmapping_generate(Vector<CustomDataTransferLayerM
                                                  SpaceTransform *space_transform)
 {
   if (elem_type == ME_VERT) {
-    if (cddata_type == CD_MVERT_SKIN) {
-      const void *data_src = CustomData_get_layer(&me_src->vert_data, CD_MVERT_SKIN);
-      if (data_src) {
-        void *data_dst = CustomData_get_layer_for_write(
-            &me_dst->vert_data, CD_MVERT_SKIN, me_dst->verts_num);
-        if (!data_dst && use_create) {
-          data_dst = CustomData_add_layer(
-              &me_dst->vert_data, CD_MVERT_SKIN, CD_SET_DEFAULT, me_dst->verts_num);
-        }
-
-        if (r_map && data_dst) {
-          data_transfer_layersmapping_add_item_cd(r_map,
-                                                  CD_MVERT_SKIN,
-                                                  mix_mode,
-                                                  mix_factor,
-                                                  mix_weights,
-                                                  data_src,
-                                                  data_dst,
-                                                  nullptr,
-                                                  nullptr);
-        }
-      }
-      else {
-        if (use_delete) {
-          CustomData_free_layer(&me_dst->vert_data, CD_MVERT_SKIN, 0);
-        }
-      }
-    }
-    else if (cddata_type == CD_PROP_BYTE_COLOR) {
+    if (cddata_type == CD_PROP_BYTE_COLOR) {
       if (!data_transfer_layersmapping_cdlayers(r_map,
                                                 CD_PROP_BYTE_COLOR,
                                                 bke::AttrDomain::Point,
@@ -1075,6 +1059,20 @@ static bool data_transfer_layersmapping_generate(Vector<CustomDataTransferLayerM
                                                 CD_PROP_FLOAT,
                                                 bke::AttrDomain::Point,
                                                 "bevel_weight_vert",
+                                                mix_mode,
+                                                mix_factor,
+                                                mix_weights,
+                                                use_create,
+                                                use_delete,
+                                                *me_src,
+                                                *me_dst);
+      return true;
+    }
+    if (cddata_type == CD_FAKE_SKIN_RADIUS) {
+      data_transfer_layersmapping_add_item_attr(r_map,
+                                                CD_PROP_FLOAT2,
+                                                bke::AttrDomain::Point,
+                                                "skin_modifier_radius",
                                                 mix_mode,
                                                 mix_factor,
                                                 mix_weights,
@@ -1477,7 +1475,13 @@ bool BKE_object_data_transfer_ex(Depsgraph *depsgraph,
       space_transform = &auto_space_transform;
     }
 
-    BKE_mesh_remap_find_best_match_from_mesh(me_dst->vert_positions(), me_src, space_transform);
+    if ((me_src->verts_num != 0) && (me_dst->verts_num != 0)) {
+      BKE_mesh_remap_find_best_match_from_mesh(me_dst->vert_positions(), me_src, space_transform);
+    }
+    else {
+      /* Just use the object matrices if there is no geometry, #160022. */
+      BLI_SPACE_TRANSFORM_SETUP(space_transform, ob_dst, ob_src);
+    }
   }
 
   /* Check all possible data types.

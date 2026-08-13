@@ -13,8 +13,8 @@ namespace blender::nodes::node_fn_matrix_determinant_cc {
 static void node_declare(NodeDeclarationBuilder &b)
 {
   b.is_function_node();
-  b.add_input<decl::Matrix>("Matrix");
-  b.add_output<decl::Float>("Determinant");
+  b.add_input<decl::Matrix>("Matrix"_ustr);
+  b.add_output<decl::Float>("Determinant"_ustr);
 }
 
 static void node_build_multi_function(NodeMultiFunctionBuilder &builder)
@@ -36,7 +36,7 @@ static int node_gpu_material(GPUMaterial *material,
 static void node_register()
 {
   static bke::bNodeType ntype;
-  fn_cmp_node_type_base(&ntype, "FunctionNodeMatrixDeterminant", FN_NODE_MATRIX_DETERMINANT);
+  fn_cmp_node_type_base(&ntype, "FunctionNodeMatrixDeterminant"_ustr, FN_NODE_MATRIX_DETERMINANT);
   ntype.ui_name = "Matrix Determinant";
   ntype.ui_description = "Compute the determinant of the given matrix";
   ntype.enum_name_legacy = "MATRIX_DETERMINANT";

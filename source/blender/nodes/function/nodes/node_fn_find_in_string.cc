@@ -2,7 +2,7 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#include "BLI_string_utf8.h"
+#include "BLI_string_utf8.hh"
 
 #include "node_function_util.hh"
 
@@ -17,20 +17,24 @@ static const EnumPropertyItem mode_items[] = {
     {int(Mode::FirstFromStart),
      "FROM_START",
      0,
-     "From Start",
-     "Find the first occurrence of the string"},
-    {int(Mode::FirstFromEnd), "FROM_END", 0, "From End", "Find the last occurrence of the string"},
+     N_("From Start"),
+     N_("Find the first occurrence of the string")},
+    {int(Mode::FirstFromEnd),
+     "FROM_END",
+     0,
+     N_("From End"),
+     N_("Find the last occurrence of the string")},
     {},
 };
 
 static void node_declare(NodeDeclarationBuilder &b)
 {
   b.is_function_node();
-  b.add_input<decl::String>("String").optional_label();
-  b.add_input<decl::String>("Search");
-  b.add_input<decl::Menu>("Mode").static_items(mode_items).optional_label();
-  b.add_output<decl::Int>("First Found");
-  b.add_output<decl::Int>("Count");
+  b.add_input<decl::String>("String"_ustr).optional_label();
+  b.add_input<decl::String>("Search"_ustr);
+  b.add_input<decl::Menu>("Mode"_ustr).static_items(mode_items).optional_label();
+  b.add_output<decl::Int>("First Found"_ustr);
+  b.add_output<decl::Int>("Count"_ustr);
 }
 
 static int string_find(const StringRef text, const StringRef token, const bool from_end)
@@ -80,7 +84,7 @@ static void node_register()
 {
   static bke::bNodeType ntype;
 
-  fn_node_type_base(&ntype, "FunctionNodeFindInString", FN_NODE_FIND_IN_STRING);
+  fn_cmp_node_type_base(&ntype, "FunctionNodeFindInString"_ustr, FN_NODE_FIND_IN_STRING);
   ntype.ui_name = "Find in String";
   ntype.ui_description =
       "Find the number of times a given string occurs in another string and the position of the "

@@ -219,18 +219,45 @@ void update_mask_mesh(const Depsgraph &depsgraph,
   Array<bool> node_changed(node_mask.min_array_size(), false);
 
   threading::EnumerableThreadSpecific<LocalData> all_tls;
+  /* Even if only shared vertices of a node are updated it needs to be marked dirty, The mask
+   * values for the shared vertices are written by the thread processing the owning node, so
+   * cache the values before the main update loop to avoid nondeterministic read/write ordering.
+   */
+  Array<Vector<float>> old_masks(node_mask.min_array_size());
   node_mask.foreach_index(
       [&](const int i) {
         LocalData &tls = all_tls.local();
-        const Span<int> verts = hide::node_visible_verts(nodes[i], hide_vert, tls.visible_verts);
-        tls.mask.resize(verts.size());
-        gather_data_mesh(mask.span.as_span(), verts, tls.mask.as_mutable_span());
-        update_fn(tls.mask, verts);
-        if (array_utils::indexed_data_equal<float>(mask.span, verts, tls.mask)) {
-          return;
+        const Span<int> shared_visible_verts = hide::node_visible_shared_verts(
+            nodes[i], hide_vert, tls.visible_verts);
+        old_masks[i].resize(shared_visible_verts.size());
+        gather_data_mesh(
+            mask.span.as_span(), shared_visible_verts, old_masks[i].as_mutable_span());
+      },
+      exec_mode::grain_size(1));
+
+  node_mask.foreach_index(
+      [&](const int i) {
+        LocalData &tls = all_tls.local();
+        int unique_visible_verts_num = 0;
+        const Span<int> all_visible_verts = hide::node_visible_all_verts(
+            nodes[i], hide_vert, tls.visible_verts, unique_visible_verts_num);
+        const Span<int> unique_verts = all_visible_verts.take_front(unique_visible_verts_num);
+        const Span<int> shared_verts = all_visible_verts.drop_front(unique_visible_verts_num);
+        tls.mask.resize(all_visible_verts.size());
+        gather_data_mesh(mask.span.as_span(), all_visible_verts, tls.mask.as_mutable_span());
+        update_fn(tls.mask, all_visible_verts);
+        if (array_utils::indexed_data_equal<float>(
+                mask.span, unique_verts, tls.mask.as_span().take_front(unique_verts.size())))
+        {
+          if (shared_verts.is_empty() ||
+              old_masks[i].as_span() == tls.mask.as_span().drop_front(unique_verts.size()))
+          {
+            return;
+          }
         }
         undo::push_node(depsgraph, object, &nodes[i], undo::Type::Mask);
-        scatter_data_mesh(tls.mask.as_span(), verts, mask.span);
+        scatter_data_mesh(
+            tls.mask.as_span().take_front(unique_verts.size()), unique_verts, mask.span);
         bke::pbvh::node_update_mask_mesh(mask.span, nodes[i]);
         node_changed[i] = true;
       },
@@ -683,7 +710,7 @@ static wmOperatorStatus mask_flood_fill_exec(bContext *C, wmOperator *op)
   const FloodFillMode mode = FloodFillMode(RNA_enum_get(op->ptr, "mode"));
   const float value = RNA_float_get(op->ptr, "value");
 
-  BKE_sculpt_update_object_for_edit(&depsgraph, &object, false);
+  BKE_sculptsession_update_for_edit(&depsgraph, &object, false);
 
   ed::sculpt_paint::mask_overlay_check(*C, *op);
 
@@ -702,7 +729,7 @@ static wmOperatorStatus mask_flood_fill_exec(bContext *C, wmOperator *op)
 
   undo::push_end(object);
 
-  SCULPT_tag_update_overlays(C);
+  tag_update_overlays(C);
 
   return OPERATOR_FINISHED;
 }
@@ -716,7 +743,7 @@ void PAINT_OT_mask_flood_fill(wmOperatorType *ot)
 
   /* API callbacks. */
   ot->exec = mask_flood_fill_exec;
-  ot->poll = SCULPT_mode_poll;
+  ot->poll = sculpt_mode_poll;
 
   ot->flag = OPTYPE_REGISTER;
 
@@ -752,7 +779,7 @@ static void gesture_begin(bContext &C, wmOperator &op, gesture::GestureData &ges
 {
   const Scene &scene = *CTX_data_scene(&C);
   Depsgraph *depsgraph = CTX_data_depsgraph_pointer(&C);
-  BKE_sculpt_update_object_for_edit(depsgraph, gesture_data.vc.obact, false);
+  BKE_sculptsession_update_for_edit(depsgraph, gesture_data.vc.obact, false);
   undo::push_begin(scene, *gesture_data.vc.obact, &op);
 }
 
@@ -971,7 +998,7 @@ void PAINT_OT_mask_lasso_gesture(wmOperatorType *ot)
   ot->modal = WM_gesture_lasso_modal;
   ot->exec = gesture_lasso_exec;
 
-  ot->poll = SCULPT_mode_poll_view3d;
+  ot->poll = sculpt_mode_poll_view3d;
 
   ot->flag = OPTYPE_REGISTER | OPTYPE_DEPENDS_ON_CURSOR;
 
@@ -991,7 +1018,7 @@ void PAINT_OT_mask_box_gesture(wmOperatorType *ot)
   ot->modal = WM_gesture_box_modal;
   ot->exec = gesture_box_exec;
 
-  ot->poll = SCULPT_mode_poll_view3d;
+  ot->poll = sculpt_mode_poll_view3d;
 
   ot->flag = OPTYPE_REGISTER;
 
@@ -1011,7 +1038,7 @@ void PAINT_OT_mask_line_gesture(wmOperatorType *ot)
   ot->modal = WM_gesture_straightline_oneshot_modal;
   ot->exec = gesture_line_exec;
 
-  ot->poll = SCULPT_mode_poll_view3d;
+  ot->poll = sculpt_mode_poll_view3d;
 
   ot->flag = OPTYPE_REGISTER;
 
@@ -1031,7 +1058,7 @@ void PAINT_OT_mask_polyline_gesture(wmOperatorType *ot)
   ot->modal = WM_gesture_polyline_modal;
   ot->exec = gesture_polyline_exec;
 
-  ot->poll = SCULPT_mode_poll_view3d;
+  ot->poll = sculpt_mode_poll_view3d;
 
   ot->flag = OPTYPE_REGISTER | OPTYPE_DEPENDS_ON_CURSOR;
 

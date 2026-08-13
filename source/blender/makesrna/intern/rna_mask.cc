@@ -28,11 +28,12 @@
 
 #  include "DNA_movieclip_types.h"
 
-#  include "BLI_listbase.h"
-#  include "BLI_math_vector.h"
-#  include "BLI_string.h"
-#  include "BLI_string_utf8.h"
+#  include "BLI_listbase.hh"
+#  include "BLI_math_vector_c.hh"
+#  include "BLI_string.hh"
+#  include "BLI_string_utf8.hh"
 
+#  include "BKE_global.hh"
 #  include "BKE_mask.hh"
 #  include "BKE_movieclip.hh"
 #  include "BKE_tracking.hh"
@@ -199,7 +200,7 @@ static void rna_MaskLayer_name_set(PointerRNA *ptr, const char *value)
   STRNCPY(oldname, masklay->name);
   STRNCPY_UTF8(newname, value);
 
-  BKE_mask_layer_rename(mask, masklay, oldname, newname);
+  BKE_mask_layer_rename(*G_MAIN, mask, masklay, oldname, newname);
 }
 
 static PointerRNA rna_MaskLayer_active_spline_get(PointerRNA *ptr)
@@ -335,7 +336,7 @@ static void rna_MaskSplinePoint_handle_type_set(PointerRNA *ptr, int value)
   BezTriple *bezt = &point->bezt;
   MaskSpline *spline = mask_spline_from_point(id_cast<Mask *>(ptr->owner_id), point);
 
-  bezt->h1 = bezt->h2 = value;
+  bezt->h1 = bezt->h2 = eBezTriple_Handle(value);
   mask_point_check_stick(point);
   BKE_mask_calc_handle_point(spline, point);
 }
@@ -354,7 +355,7 @@ static void rna_MaskSplinePoint_handle_left_type_set(PointerRNA *ptr, int value)
   BezTriple *bezt = &point->bezt;
   MaskSpline *spline = mask_spline_from_point(id_cast<Mask *>(ptr->owner_id), point);
 
-  bezt->h1 = value;
+  bezt->h1 = eBezTriple_Handle(value);
   mask_point_check_stick(point);
   BKE_mask_calc_handle_point(spline, point);
 }
@@ -373,7 +374,7 @@ static void rna_MaskSplinePoint_handle_right_type_set(PointerRNA *ptr, int value
   BezTriple *bezt = &point->bezt;
   MaskSpline *spline = mask_spline_from_point(id_cast<Mask *>(ptr->owner_id), point);
 
-  bezt->h2 = value;
+  bezt->h2 = eBezTriple_Handle(value);
   mask_point_check_stick(point);
   BKE_mask_calc_handle_point(spline, point);
 }
@@ -992,6 +993,20 @@ static void rna_def_mask_layer(BlenderRNA *brna)
       {0, nullptr, 0, nullptr, nullptr},
   };
 
+  static const EnumPropertyItem fill_solver_items[] = {
+      {MASK_FILL_SOLVER_SWEEP_LINE,
+       "SWEEP_LINE",
+       0,
+       "Sweep Line",
+       "Fast without support for self-intersection"},
+      {MASK_FILL_SOLVER_CDT,
+       "CDT",
+       0,
+       "Delaunay",
+       "Constrained Delaunay Triangulation (CDT), robust with support for self-intersections"},
+      {0, nullptr, 0, nullptr, nullptr},
+  };
+
   StructRNA *srna;
   PropertyRNA *prop;
 
@@ -1080,6 +1095,12 @@ static void rna_def_mask_layer(BlenderRNA *brna)
   RNA_def_property_update(prop, NC_MASK | NA_EDITED, nullptr);
 
   /* filling options */
+  prop = RNA_def_property(srna, "fill_solver", PROP_ENUM, PROP_NONE);
+  RNA_def_property_enum_sdna(prop, nullptr, "fill_solver");
+  RNA_def_property_enum_items(prop, fill_solver_items);
+  RNA_def_property_ui_text(prop, "Fill Solver", "Triangulation solver for filling 2D curves");
+  RNA_def_property_update(prop, NC_MASK | ND_DRAW, nullptr);
+
   prop = RNA_def_property(srna, "use_fill_holes", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_negative_sdna(prop, nullptr, "flag", MASK_LAYERFLAG_FILL_DISCRETE);
   RNA_def_property_ui_text(
@@ -1088,8 +1109,10 @@ static void rna_def_mask_layer(BlenderRNA *brna)
 
   prop = RNA_def_property(srna, "use_fill_overlap", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, nullptr, "flag", MASK_LAYERFLAG_FILL_OVERLAP);
-  RNA_def_property_ui_text(
-      prop, "Calculate Overlap", "Calculate self intersections and overlap before filling");
+  RNA_def_property_ui_text(prop,
+                           "Calculate Overlap",
+                           "Calculate self intersections and overlap before filling "
+                           "(only for the sweep-line solver)");
   RNA_def_property_update(prop, NC_MASK | NA_EDITED, nullptr);
 }
 

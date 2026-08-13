@@ -14,8 +14,8 @@
 #include "BKE_object.hh"
 #include "BKE_report.hh"
 
-#include "BLI_fileops.h"
-#include "BLI_math_rotation.h"
+#include "BLI_fileops.hh"
+#include "BLI_math_rotation_c.hh"
 #include "BLI_task.hh"
 
 #include "DEG_depsgraph.hh"
@@ -445,8 +445,8 @@ void importer_main(Main *bmain, Scene *scene, ViewLayer *view_layer, const FBXIm
   }
 
   /* Select objects, sync layers etc. */
-  BKE_view_layer_base_deselect_all(scene, view_layer);
-  BKE_view_layer_synced_ensure(scene, view_layer);
+  BKE_view_layer_base_deselect_all(*bmain, scene, view_layer);
+  BKE_view_layer_synced_ensure(*bmain, scene, view_layer);
   bool has_instantiated_object = false;
   bool has_uninstantiated_object = false;
   for (Object *obj : ctx.mapping.imported_objects) {

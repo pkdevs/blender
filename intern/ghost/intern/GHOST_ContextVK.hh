@@ -18,6 +18,7 @@
 #  include "GHOST_SystemWin32.hh"
 #elif defined(__APPLE__)
 #  include "GHOST_SystemCocoa.hh"
+#  include <vulkan/vulkan_metal.h>
 #else
 #  ifdef WITH_GHOST_X11
 #    include "GHOST_SystemX11.hh"
@@ -49,6 +50,9 @@ class StringRefNull;
 #ifndef GHOST_OPENGL_VK_RESET_NOTIFICATION_STRATEGY
 #  define GHOST_OPENGL_VK_RESET_NOTIFICATION_STRATEGY 0
 #endif
+namespace volk {
+struct VolkDeviceTable;
+}
 
 enum GHOST_TVulkanPlatformType {
   GHOST_kVulkanPlatformHeadless = 0,
@@ -68,7 +72,7 @@ struct GHOST_FrameDiscard {
   std::vector<VkSwapchainKHR> swapchains;
   std::vector<VkSemaphore> semaphores;
 
-  void destroy(VkDevice vk_device);
+  void destroy(VkDevice vk_device, const volk::VolkDeviceTable &functions);
 };
 
 struct GHOST_SwapchainImage {
@@ -80,7 +84,7 @@ struct GHOST_SwapchainImage {
    */
   VkSemaphore present_semaphore = VK_NULL_HANDLE;
 
-  void destroy(VkDevice vk_device);
+  void destroy(VkDevice vk_device, const volk::VolkDeviceTable &functions);
 };
 
 struct GHOST_Frame {
@@ -94,7 +98,7 @@ struct GHOST_Frame {
 
   GHOST_FrameDiscard discard_pile;
 
-  void destroy(VkDevice vk_device);
+  void destroy(VkDevice vk_device, const volk::VolkDeviceTable &functions);
 };
 
 class GHOST_ContextVK : public GHOST_Context {
@@ -178,6 +182,16 @@ class GHOST_ContextVK : public GHOST_Context {
       std::function<void(GHOST_VulkanOpenXRData *)> openxr_acquire_framebuffer_image_callback,
       std::function<void(GHOST_VulkanOpenXRData *)> openxr_release_framebuffer_image_callback)
       override;
+
+#ifdef WITH_GHOST_WAYLAND
+  /**
+   * \brief Check if the active driver supports wayland color management.
+   *
+   * NVIDIA driver before 595 don't support wayland color management protocol as expected resulting
+   * in to bright output.
+   */
+  static GHOST_TSuccess supportsWaylandColorManagement();
+#endif
 
   /**
    * Sets the swap interval for `swapBuffers`.

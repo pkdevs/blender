@@ -2,7 +2,8 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#include "BLI_string.h"
+#include "BLI_string.hh"
+#include "BLI_string_utf8.hh"
 
 #include "RNA_enum_types.hh"
 
@@ -12,7 +13,10 @@
 #include "NOD_rna_define.hh"
 #include "NOD_socket_search_link.hh"
 
+#include "FN_multi_function_registry.hh"
+
 #include "node_function_util.hh"
+#include "node_shader_util.hh"
 
 namespace blender {
 
@@ -71,10 +75,10 @@ constexpr static int32_t min_shift = -max_shift;
 static void node_declare(NodeDeclarationBuilder &b)
 {
   b.is_function_node();
-  b.add_input<decl::Int>("A");
-  auto &b_socket = b.add_input<decl::Int>("B");
-  auto &shift = b.add_input<decl::Int>("Shift").min(min_shift).max(max_shift);
-  b.add_output<decl::Int>("Value");
+  b.add_input<decl::Int>("A"_ustr);
+  auto &b_socket = b.add_input<decl::Int>("B"_ustr);
+  auto &shift = b.add_input<decl::Int>("Shift"_ustr).min(min_shift).max(max_shift);
+  b.add_output<decl::Int>("Value"_ustr);
 
   if (const bNode *node = b.node_or_null()) {
     const BitMathOperation operation = BitMathOperation(node->custom1);
@@ -91,11 +95,11 @@ static void node_layout(ui::Layout &layout, bContext * /*C*/, PointerRNA *ptr)
 
 class SocketSearchOp {
  public:
-  std::string socket_name;
+  UString socket_name;
   BitMathOperation operation;
   void operator()(LinkSearchOpParams &params)
   {
-    bNode &node = params.add_node("FunctionNodeBitMath");
+    bNode &node = params.add_node("FunctionNodeBitMath"_ustr);
     node.custom1 = int16_t(operation);
     params.update_and_connect_available_socket(node, socket_name);
   }
@@ -103,16 +107,14 @@ class SocketSearchOp {
 
 static void node_gather_link_searches(GatherLinkSearchOpParams &params)
 {
-  if (!params.node_tree().typeinfo->validate_link(eNodeSocketDatatype(params.other_socket().type),
-                                                  SOCK_INT))
-  {
+  if (!params.node_tree().typeinfo->validate_link(params.other_socket().type, SOCK_INT)) {
     return;
   }
 
   const bool is_integer = params.other_socket().type == SOCK_INT;
   const int weight = is_integer ? 0 : -1;
 
-  const StringRef socket_name = (params.in_out() == SOCK_OUT) ? "Value" : "A";
+  const UString socket_name = (params.in_out() == SOCK_OUT) ? "Value"_ustr : "A"_ustr;
 
   for (const auto &item : bit_math_operation_items) {
     if (item.name != nullptr && item.identifier[0] != '\0') {
@@ -127,61 +129,30 @@ static void node_label(const bNodeTree * /*ntree*/,
                        char *label,
                        int label_maxncpy)
 {
-  char name[64] = {0};
   const char *operation_name = IFACE_("Unknown");
   /* NOTE: This assumes that the matching RNA enum property also uses the default i18n context, and
    * needs to be kept manually in sync. */
   RNA_enum_name_gettexted(
       bit_math_operation_items.data(), node->custom1, BLT_I18NCONTEXT_DEFAULT, &operation_name);
-  SNPRINTF(name, IFACE_("Bitwise %s"), operation_name);
-  BLI_strncpy(label, name, label_maxncpy);
+  BLI_snprintf_utf8(label, label_maxncpy, IFACE_("Bitwise %s"), operation_name);
 }
 
 static const mf::MultiFunction *get_multi_function(const bNode &bnode)
 {
   const BitMathOperation operation = BitMathOperation(bnode.custom1);
-  static auto exec_preset = mf::build::exec_presets::AllSpanOrSingle();
-  static auto and_fn = mf::build::SI2_SO<int, int, int>(
-      "And", [](int a, int b) { return a & b; }, exec_preset);
-  static auto or_fn = mf::build::SI2_SO<int, int, int>(
-      "Or", [](int a, int b) { return a | b; }, exec_preset);
-  static auto xor_fn = mf::build::SI2_SO<int, int, int>(
-      "Xor", [](int a, int b) { return a ^ b; }, exec_preset);
-  static auto not_fn = mf::build::SI1_SO<int, int>("Not", [](int a) { return ~a; }, exec_preset);
-  static auto shift_fn = mf::build::SI2_SO<int, int, int>(
-      "Shift",
-      [](int a, int b) {
-        const uint32_t value = a;
-        const int shift = math::clamp(b, -32, 32);
-        const uint64_t wide_value = uint64_t(value) << 16;
-        const uint64_t wide_result = shift > 0 ? wide_value << shift : wide_value >> -shift;
-        return uint32_t(wide_result >> 16);
-      },
-      exec_preset);
-  static auto rotate_fn = mf::build::SI2_SO<int, int, int>(
-      "Rotate",
-      [](int a, int b) {
-        const uint32_t value = a;
-        const int shift = math::mod_periodic(b, 32);
-        const uint64_t wide_value = uint64_t(value) | (uint64_t(value) << 32);
-        const uint64_t double_result = (wide_value << shift);
-        return uint32_t((double_result | (double_result >> 32)) & ((uint64_t(1) << 33) - 1));
-      },
-      exec_preset);
-
   switch (operation) {
     case BitMathOperation::And:
-      return &and_fn;
+      return &fn::multi_function::registry::lookup("int & int"_ustr);
     case BitMathOperation::Or:
-      return &or_fn;
+      return &fn::multi_function::registry::lookup("int | int"_ustr);
     case BitMathOperation::Xor:
-      return &xor_fn;
+      return &fn::multi_function::registry::lookup("int ^ int"_ustr);
     case BitMathOperation::Not:
-      return &not_fn;
+      return &fn::multi_function::registry::lookup("~int"_ustr);
     case BitMathOperation::Shift:
-      return &shift_fn;
+      return &fn::multi_function::registry::lookup("shift(int, int)"_ustr);
     case BitMathOperation::Rotate:
-      return &rotate_fn;
+      return &fn::multi_function::registry::lookup("rotate(int, int)"_ustr);
   }
   BLI_assert_unreachable();
   return nullptr;
@@ -191,6 +162,68 @@ static void node_build_multi_function(NodeMultiFunctionBuilder &builder)
 {
   const mf::MultiFunction *fn = get_multi_function(builder.node());
   builder.set_matching_fn(fn);
+}
+
+static const char *gpu_shader_get_name(const BitMathOperation operation)
+{
+  switch (operation) {
+    case BitMathOperation::And:
+      return "bit_math_and";
+    case BitMathOperation::Or:
+      return "bit_math_or";
+    case BitMathOperation::Xor:
+      return "bit_math_xor";
+    case BitMathOperation::Not:
+      return "bit_math_not";
+    case BitMathOperation::Shift:
+      return "bit_math_shift";
+    case BitMathOperation::Rotate:
+      return "bit_math_rotate";
+  }
+
+  BLI_assert_unreachable();
+  return nullptr;
+}
+
+static int node_gpu_material(GPUMaterial *mat,
+                             bNode *node,
+                             bNodeExecData * /*execdata*/,
+                             GPUNodeStack *in,
+                             GPUNodeStack *out)
+{
+  const BitMathOperation operation = BitMathOperation(node->custom1);
+  const char *name = gpu_shader_get_name(operation);
+
+  if (name == nullptr) {
+    return 0;
+  }
+
+  /* Avoid GPU_stack_link here because it creates uniforms for unavailable sockets. */
+  switch (operation) {
+    case BitMathOperation::And:
+    case BitMathOperation::Or:
+    case BitMathOperation::Xor:
+      return GPU_link(mat,
+                      name,
+                      GPU_node_get_input_link(*node, in, "A"),
+                      GPU_node_get_input_link(*node, in, "B"),
+                      &GPU_node_get_output(*node, out, "Value").link);
+    case BitMathOperation::Not:
+      return GPU_link(mat,
+                      name,
+                      GPU_node_get_input_link(*node, in, "A"),
+                      &GPU_node_get_output(*node, out, "Value").link);
+    case BitMathOperation::Shift:
+    case BitMathOperation::Rotate:
+      return GPU_link(mat,
+                      name,
+                      GPU_node_get_input_link(*node, in, "A"),
+                      GPU_node_get_input_link(*node, in, "Shift"),
+                      &GPU_node_get_output(*node, out, "Value").link);
+  }
+
+  BLI_assert_unreachable();
+  return 0;
 }
 
 static void node_rna(StructRNA *srna)
@@ -209,12 +242,13 @@ static void node_register()
 {
   static bke::bNodeType ntype;
 
-  fn_node_type_base(&ntype, "FunctionNodeBitMath");
+  fn_cmp_node_type_base(&ntype, "FunctionNodeBitMath"_ustr);
   ntype.ui_name = "Bit Math";
   ntype.nclass = NODE_CLASS_CONVERTER;
   ntype.declare = node_declare;
   ntype.labelfunc = node_label;
   ntype.build_multi_function = node_build_multi_function;
+  ntype.gpu_fn = node_gpu_material;
   ntype.draw_buttons = node_layout;
   ntype.gather_link_search_ops = node_gather_link_searches;
   ntype.ui_description = "Perform bitwise operations on 32-bit integers";

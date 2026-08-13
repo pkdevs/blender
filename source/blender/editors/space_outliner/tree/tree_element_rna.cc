@@ -6,8 +6,8 @@
  * \ingroup spoutliner
  */
 
-#include "BLI_string.h"
-#include "BLI_string_utf8.h"
+#include "BLI_string.hh"
+#include "BLI_string_utf8.hh"
 
 #include "BLT_translation.hh"
 
@@ -43,7 +43,7 @@ TreeElementRNACommon::TreeElementRNACommon(TreeElement &legacy_te, PointerRNA &r
 
 bool TreeElementRNACommon::is_rna_valid() const
 {
-  return rna_ptr_.data != nullptr;
+  return rna_ptr_;
 }
 
 bool TreeElementRNACommon::expand_poll(const SpaceOutliner & /*space_outliner*/) const
@@ -121,6 +121,21 @@ void TreeElementRNAStruct::expand(SpaceOutliner &space_outliner) const
   }
 }
 
+std::optional<BIFIconID> TreeElementRNAStruct::get_icon() const
+{
+  if (RNA_struct_is_ID(rna_ptr_.type)) {
+    ID *id = static_cast<ID *>(rna_ptr_.data);
+    if (id && GS(id->name) == ID_LI && id_cast<Library *>(id)->flag & LIBRARY_FLAG_IS_ARCHIVE) {
+      return ICON_PACKAGE;
+    }
+    else {
+      return RNA_struct_ui_icon(rna_ptr_.type);
+    }
+  }
+  else {
+    return RNA_struct_ui_icon(rna_ptr_.type);
+  }
+}
 /* -------------------------------------------------------------------- */
 /* RNA Property */
 
@@ -159,7 +174,7 @@ void TreeElementRNAProperty::expand(SpaceOutliner &space_outliner) const
   if (proptype == PROP_POINTER) {
     PointerRNA pptr = RNA_property_pointer_get(&rna_ptr, rna_prop_);
 
-    if (pptr.data) {
+    if (pptr) {
       if (TSELEM_OPEN(&tselem, &space_outliner)) {
         add_element(&legacy_te_.subtree, pptr.owner_id, &pptr, &legacy_te_, TSE_RNA_STRUCT, -1);
       }

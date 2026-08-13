@@ -6,7 +6,8 @@
 
 #include "BLI_enumerable_thread_specific.hh"
 #include "BLI_index_mask.hh"
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
+#include "PRF_profile.hh"
 
 #include "BKE_attribute.hh"
 #include "BKE_deform.hh"
@@ -77,7 +78,7 @@ static void remap_edges(const OffsetIndices<int> src_faces,
 static void copy_loose_vert_hint(const Mesh &src, Mesh &dst)
 {
   const auto &src_cache = src.runtime->loose_verts_cache;
-  if (src_cache.is_cached() && src_cache.data().count == 0) {
+  if (src_cache.is_cached() && src_cache.data().mask.is_empty()) {
     dst.tag_loose_verts_none();
   }
 }
@@ -85,7 +86,7 @@ static void copy_loose_vert_hint(const Mesh &src, Mesh &dst)
 static void copy_loose_edge_hint(const Mesh &src, Mesh &dst)
 {
   const auto &src_cache = src.runtime->loose_edges_cache;
-  if (src_cache.is_cached() && src_cache.data().count == 0) {
+  if (src_cache.is_cached() && src_cache.data().mask.is_empty()) {
     dst.tag_loose_edges_none();
   }
 }
@@ -127,6 +128,7 @@ std::optional<Mesh *> mesh_copy_selection(const Mesh &src_mesh,
                                           const bke::AttrDomain selection_domain,
                                           const bke::AttributeFilter &attribute_filter)
 {
+  PRF_scope(ProfileCategory::Default);
   const Span<int2> src_edges = src_mesh.edges();
   const OffsetIndices src_faces = src_mesh.faces();
   const Span<int> src_corner_verts = src_mesh.corner_verts();

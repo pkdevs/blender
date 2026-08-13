@@ -10,9 +10,9 @@
 #include "BKE_curveprofile.h"
 #include "BKE_library.hh"
 
-#include "BLI_math_base.h"
+#include "BLI_math_base_c.hh"
 #include "BLI_math_vector_types.hh"
-#include "BLI_rect.h"
+#include "BLI_rect.hh"
 #include "BLI_string_ref.hh"
 
 #include "BLT_translation.hh"
@@ -28,8 +28,6 @@
 #include "interface_templates_intern.hh"
 
 namespace blender::ui {
-
-using blender::Vector;
 
 struct CurveRuntimeProperties {
   CurveProfilePoint *last_pt = nullptr;
@@ -462,7 +460,7 @@ static void CurveProfile_buttons_layout(Layout &layout, PointerRNA *ptr, const R
     const float axis_min[2] = {slider_bounds.xmin, slider_bounds.ymin};
     const float axis_max[2] = {slider_bounds.xmax, slider_bounds.ymax};
     for (int axis = 0; axis < 2; axis++) {
-      bt = uiDefButF(block,
+      bt = uiDefButV(block,
                      ButtonType::Num,
                      axis_labels[axis],
                      0,
@@ -545,7 +543,7 @@ void template_curve_profile(Layout *layout, PointerRNA *ptr, const StringRefNull
   }
 
   PointerRNA cptr = RNA_property_pointer_get(ptr, prop);
-  if (!cptr.data || !RNA_struct_is_a(cptr.type, RNA_CurveProfile)) {
+  if (!cptr || !RNA_struct_is_a(cptr.type, RNA_CurveProfile)) {
     return;
   }
 

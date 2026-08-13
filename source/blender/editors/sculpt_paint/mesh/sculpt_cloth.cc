@@ -11,13 +11,13 @@
 
 #include "BLI_array_utils.hh"
 #include "BLI_enumerable_thread_specific.hh"
-#include "BLI_math_geom.h"
-#include "BLI_math_matrix.h"
+#include "BLI_math_geom_c.hh"
 #include "BLI_math_matrix.hh"
-#include "BLI_math_rotation.h"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_rotation_c.hh"
 #include "BLI_math_vector.hh"
 #include "BLI_ordered_edge.hh"
-#include "BLI_utildefines.h"
+#include "BLI_utildefines.hh"
 #include "BLI_vector.hh"
 
 #include "BLT_translation.hh"
@@ -72,6 +72,7 @@ static MutableSpan<int> calc_vert_indices_grids(const CCGKey &key,
                                                 const Span<int> grids,
                                                 Vector<int> &indices)
 {
+  PRF_scope(ProfileCategory::Editor);
   const int grid_verts_num = grids.size() * key.grid_area;
   indices.resize(grid_verts_num);
   for (const int i : grids.index_range()) {
@@ -85,6 +86,7 @@ static MutableSpan<int> calc_vert_indices_grids(const CCGKey &key,
 static MutableSpan<int> calc_vert_indices_bmesh(const Set<BMVert *, 0> &verts,
                                                 Vector<int> &indices)
 {
+  PRF_scope(ProfileCategory::Editor);
   indices.resize(verts.size());
   int i = 0;
   for (const BMVert *vert : verts) {
@@ -99,6 +101,7 @@ static MutableSpan<int> calc_visible_vert_indices_grids(const CCGKey &key,
                                                         const Span<int> grids,
                                                         Vector<int> &indices)
 {
+  PRF_scope(ProfileCategory::Editor);
   if (grid_hidden.is_empty()) {
     return calc_vert_indices_grids(key, grids, indices);
   }
@@ -115,6 +118,7 @@ static MutableSpan<int> calc_visible_vert_indices_grids(const CCGKey &key,
 static MutableSpan<int> calc_visible_vert_indices_bmesh(const Set<BMVert *, 0> &verts,
                                                         Vector<int> &indices)
 {
+  PRF_scope(ProfileCategory::Editor);
   indices.reserve(verts.size());
   for (const BMVert *vert : verts) {
     if (!BM_elem_flag_test(vert, BM_ELEM_HIDDEN)) {
@@ -129,6 +133,7 @@ static GroupedSpan<int> calc_vert_neighbor_indices_grids(const SubdivCCG &subdiv
                                                          Vector<int> &r_offset_data,
                                                          Vector<int> &r_data)
 {
+  PRF_scope(ProfileCategory::Editor);
   const CCGKey key = BKE_subdiv_ccg_key_top_level(subdiv_ccg);
 
   r_offset_data.resize(verts.size() + 1);
@@ -154,6 +159,7 @@ static GroupedSpan<int> calc_vert_neighbor_indices_bmesh(const BMesh &bm,
                                                          Vector<int> &r_offset_data,
                                                          Vector<int> &r_data)
 {
+  PRF_scope(ProfileCategory::Editor);
   BMeshNeighborVerts neighbors;
 
   r_offset_data.resize(verts.size() + 1);
@@ -491,6 +497,7 @@ void ensure_nodes_constraints(const Sculpt &sd,
                               const float3 &initial_location,
                               const float radius)
 {
+  PRF_scope(ProfileCategory::Editor);
   SculptSession &ss = *object.runtime->sculpt_session;
   bke::pbvh::Tree &pbvh = *bke::object::pbvh_get(object);
   const Brush *brush = BKE_paint_brush_for_read(&sd.paint);
@@ -633,6 +640,7 @@ BLI_NOINLINE static void apply_forces(SimulationData &cloth_sim,
                                       const Span<float3> forces,
                                       const Span<int> verts)
 {
+  PRF_scope(ProfileCategory::Editor);
   const float mass_inv = math::rcp(cloth_sim.mass);
   for (const int i : verts.index_range()) {
     cloth_sim.acceleration[verts[i]] += forces[i] * mass_inv;
@@ -643,6 +651,7 @@ BLI_NOINLINE static void expand_length_constraints(SimulationData &cloth_sim,
                                                    const Span<int> verts,
                                                    const Span<float> factors)
 {
+  PRF_scope(ProfileCategory::Editor);
   MutableSpan<float> length_constraint_tweak = cloth_sim.length_constraint_tweak;
   for (const int i : verts.index_range()) {
     length_constraint_tweak[verts[i]] += factors[i] * 0.01f;
@@ -653,6 +662,7 @@ BLI_NOINLINE static void calc_distances_to_plane(const Span<float3> positions,
                                                  const float4 &plane,
                                                  const MutableSpan<float> distances)
 {
+  PRF_scope(ProfileCategory::Editor);
   for (const int i : positions.index_range()) {
     distances[i] = dist_to_plane_v3(positions[i], plane);
   }
@@ -662,6 +672,7 @@ BLI_NOINLINE static void clamp_factors(const MutableSpan<float> factors,
                                        const float min,
                                        const float max)
 {
+  PRF_scope(ProfileCategory::Editor);
   for (float &factor : factors) {
     factor = std::clamp(factor, min, max);
   }
@@ -673,6 +684,7 @@ BLI_NOINLINE static void apply_grab_brush(SimulationData &cloth_sim,
                                           const bool use_falloff_plane,
                                           const float3 &grab_delta_symmetry)
 {
+  PRF_scope(ProfileCategory::Editor);
   for (const int i : verts.index_range()) {
     cloth_sim.deformation_pos[verts[i]] = cloth_sim.init_pos[verts[i]] +
                                           grab_delta_symmetry * factors[i];
@@ -691,6 +703,7 @@ BLI_NOINLINE static void apply_snake_hook_brush(SimulationData &cloth_sim,
                                                 const MutableSpan<float> factors,
                                                 const float3 &grab_delta_symmetry)
 {
+  PRF_scope(ProfileCategory::Editor);
   for (const int i : verts.index_range()) {
     const int vert = verts[i];
     cloth_sim.deformation_pos[vert] = cloth_sim.pos[vert] + grab_delta_symmetry * factors[i];
@@ -702,6 +715,7 @@ BLI_NOINLINE static void calc_pinch_forces(const Span<float3> positions,
                                            const float3 &location,
                                            const MutableSpan<float3> forces)
 {
+  PRF_scope(ProfileCategory::Editor);
   for (const int i : forces.index_range()) {
     forces[i] = math::normalize(location - positions[i]);
   }
@@ -712,6 +726,7 @@ BLI_NOINLINE static void calc_plane_pinch_forces(const Span<float3> positions,
                                                  const float3 &plane_normal,
                                                  const MutableSpan<float3> forces)
 {
+  PRF_scope(ProfileCategory::Editor);
   for (const int i : positions.index_range()) {
     const float distance = dist_signed_to_plane_v3(positions[i], plane);
     forces[i] = math::normalize(plane_normal * -distance);
@@ -723,6 +738,7 @@ BLI_NOINLINE static void calc_perpendicular_pinch_forces(const Span<float3> posi
                                                          const float3 &location,
                                                          const MutableSpan<float3> forces)
 {
+  PRF_scope(ProfileCategory::Editor);
   const float3 x_object_space = math::normalize(imat.x_axis());
   const float3 z_object_space = math::normalize(imat.z_axis());
   for (const int i : positions.index_range()) {
@@ -1207,6 +1223,7 @@ BLI_NOINLINE static void solve_verts_simulation(const Object &object,
                                                 LocalData &tls,
                                                 SimulationData &cloth_sim)
 {
+  PRF_scope(ProfileCategory::Editor);
   const SculptSession &ss = *object.runtime->sculpt_session;
 
   tls.diffs.resize(verts.size());
@@ -1347,12 +1364,13 @@ static void cloth_brush_satisfy_constraints(const Depsgraph &depsgraph,
                                             const Brush *brush,
                                             SimulationData &cloth_sim)
 {
+  PRF_scope(ProfileCategory::Editor);
   const SculptSession &ss = *object.runtime->sculpt_session;
 
   const float3 sim_location = cloth_brush_simulation_location_get(ss, brush);
 
   /* Precalculate factors into an array since we need random access to specific vertex values. */
-  Array<float> factors(SCULPT_vertex_count_get(object));
+  Array<float> factors(vertex_count_get(object));
   calc_constraint_factors(depsgraph, object, brush, sim_location, cloth_sim.init_pos, factors);
 
   for (int constraint_it = 0; constraint_it < CLOTH_SIMULATION_ITERATIONS; constraint_it++) {
@@ -1419,6 +1437,7 @@ void do_simulation_step(const Depsgraph &depsgraph,
                         SimulationData &cloth_sim,
                         const IndexMask &node_mask)
 {
+  PRF_scope(ProfileCategory::Editor);
   SculptSession &ss = *object.runtime->sculpt_session;
   bke::pbvh::Tree &pbvh = *bke::object::pbvh_get(object);
   const Brush *brush = BKE_paint_brush_for_read(&sd.paint);
@@ -1762,7 +1781,8 @@ std::unique_ptr<SimulationData> brush_simulation_create(const Depsgraph &depsgra
                                                         const bool use_collisions,
                                                         const bool needs_deform_coords)
 {
-  const int totverts = SCULPT_vertex_count_get(ob);
+  PRF_scope(ProfileCategory::Editor);
+  const int totverts = vertex_count_get(ob);
   std::unique_ptr<SimulationData> cloth_sim = std::make_unique<SimulationData>();
 
   cloth_sim->length_constraints.reserve(CLOTH_LENGTH_CONSTRAINTS_BLOCK);
@@ -1806,11 +1826,13 @@ void brush_store_simulation_state(const Depsgraph &depsgraph,
                                   const Object &object,
                                   SimulationData &cloth_sim)
 {
+  PRF_scope(ProfileCategory::Editor);
   copy_positions_to_array(depsgraph, object, cloth_sim.pos);
 }
 
 void sim_activate_nodes(Object &object, SimulationData &cloth_sim, const IndexMask &node_mask)
 {
+  PRF_scope(ProfileCategory::Editor);
   bke::pbvh::Tree &pbvh = *bke::object::pbvh_get(object);
 
   /* Activate the nodes inside the simulation area. */
@@ -1859,6 +1881,7 @@ void do_cloth_brush(const Depsgraph &depsgraph,
                     Object &ob,
                     const IndexMask &node_mask)
 {
+  PRF_scope(ProfileCategory::Editor);
   SculptSession &ss = *ob.runtime->sculpt_session;
   const Brush *brush = BKE_paint_brush_for_read(&sd.paint);
 
@@ -1872,7 +1895,7 @@ void do_cloth_brush(const Depsgraph &depsgraph,
                                                   is_cloth_deform_brush(*brush));
   }
 
-  if (SCULPT_stroke_is_first_brush_step_of_symmetry_pass(*ss.cache)) {
+  if (stroke_is_first_brush_step_of_symmetry_pass(*ss.cache)) {
     if (brush->cloth_simulation_area_type == BRUSH_CLOTH_SIMULATION_AREA_LOCAL) {
       /* When using simulation a fixed local simulation area, constraints are created only using
        * the initial stroke position and initial radius (per symmetry pass) instead of per node.
@@ -1938,13 +1961,14 @@ void simulation_limits_draw(const uint gpuattr,
 }
 
 void plane_falloff_preview_draw(const uint gpuattr,
+                                Brush &brush,
                                 SculptSession &ss,
                                 const float outline_col[3],
                                 float outline_alpha)
 {
   float4x4 local_mat = ss.cache->stroke_local_mat;
 
-  if (ss.cache->brush->cloth_deform_type == BRUSH_CLOTH_DEFORM_GRAB) {
+  if (brush.cloth_deform_type == BRUSH_CLOTH_DEFORM_GRAB) {
     add_v3_v3v3(local_mat[3], ss.cache->location, ss.cache->grab_delta);
   }
 
@@ -2321,13 +2345,13 @@ static wmOperatorStatus sculpt_cloth_filter_modal(bContext *C,
 
   vert_random_access_ensure(object);
 
-  BKE_sculpt_update_object_for_edit(depsgraph, &object, false);
+  BKE_sculptsession_update_for_edit(depsgraph, &object, false);
 
   brush_store_simulation_state(*depsgraph, object, *ss.filter_cache->cloth_sim);
 
   const IndexMask &node_mask = ss.filter_cache->node_mask;
 
-  if (auto_mask::is_enabled(sd, object, nullptr) && ss.filter_cache->automasking &&
+  if (auto_mask::is_enabled(sd.paint, object, nullptr) && ss.filter_cache->automasking &&
       ss.filter_cache->automasking->settings.flags & BRUSH_AUTOMASKING_CAVITY_ALL)
   {
     ss.filter_cache->automasking->calc_cavity_factor(*depsgraph, object, node_mask);
@@ -2442,11 +2466,10 @@ static wmOperatorStatus sculpt_cloth_filter_invoke(bContext *C,
 
   /* Update the active vertex */
   float2 mval_fl{float(event->mval[0]), float(event->mval[1])};
-  CursorGeometryInfo cgi;
-  cursor_geometry_info_update(C, &cgi, mval_fl, false);
+  cursor_geometry_info_update(C, mval_fl, false);
 
   /* Needs mask data to be available as it is used when solving the constraints. */
-  BKE_sculpt_update_object_for_edit(depsgraph, &ob, false);
+  BKE_sculptsession_update_for_edit(depsgraph, &ob, false);
 
   if (!shape_key_check(ob, op->reports)) {
     return OPERATOR_CANCELLED;
@@ -2461,8 +2484,8 @@ static wmOperatorStatus sculpt_cloth_filter_invoke(bContext *C,
                      RNA_float_get(op->ptr, "area_normal_radius"),
                      RNA_float_get(op->ptr, "strength"));
 
-  if (auto_mask::is_enabled(sd, ob, nullptr)) {
-    auto_mask::filter_cache_ensure(*depsgraph, sd, ob);
+  if (auto_mask::is_enabled(sd.paint, ob, nullptr)) {
+    auto_mask::filter_cache_ensure(*depsgraph, sd.paint, ob);
   }
 
   const float cloth_mass = RNA_float_get(op->ptr, "cloth_mass");
@@ -2510,7 +2533,7 @@ void SCULPT_OT_cloth_filter(wmOperatorType *ot)
 
   ot->invoke = sculpt_cloth_filter_invoke;
   ot->modal = sculpt_cloth_filter_modal;
-  ot->poll = SCULPT_mode_poll;
+  ot->poll = sculpt_mode_poll;
 
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 

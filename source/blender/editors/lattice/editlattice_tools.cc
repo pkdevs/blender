@@ -6,7 +6,7 @@
  * \ingroup edlattice
  */
 
-#include "BLI_math_vector.h"
+#include "BLI_math_vector_c.hh"
 
 #include "DNA_curve_types.h"
 #include "DNA_lattice_types.h"
@@ -50,6 +50,7 @@ static bool make_regular_poll(bContext *C)
 
 static wmOperatorStatus make_regular_exec(bContext *C, wmOperator *op)
 {
+  const Main *bmain = CTX_data_main(C);
   const Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
   View3D *v3d = CTX_wm_view3d(C);
@@ -57,7 +58,7 @@ static wmOperatorStatus make_regular_exec(bContext *C, wmOperator *op)
 
   if (is_editmode) {
     Vector<Object *> objects = BKE_view_layer_array_from_objects_in_edit_mode_unique_data(
-        scene, view_layer, CTX_wm_view3d(C));
+        *bmain, scene, view_layer, CTX_wm_view3d(C));
     for (Object *ob : objects) {
       Lattice *lt = id_cast<Lattice *>(ob->data);
 
@@ -198,13 +199,14 @@ static void lattice_swap_point_pairs(
 
 static wmOperatorStatus lattice_flip_exec(bContext *C, wmOperator *op)
 {
+  const Main *bmain = CTX_data_main(C);
   const Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
   bool changed = false;
   const eLattice_FlipAxes axis = eLattice_FlipAxes(RNA_enum_get(op->ptr, "axis"));
 
   Vector<Object *> objects = BKE_view_layer_array_from_objects_in_edit_mode_unique_data(
-      scene, view_layer, CTX_wm_view3d(C));
+      *bmain, scene, view_layer, CTX_wm_view3d(C));
   for (Object *obedit : objects) {
     Lattice *lt;
 

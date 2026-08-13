@@ -9,12 +9,13 @@
 #include "GEO_join_geometries.hh"
 #include "GEO_mesh_boolean.hh"
 
-#include "BLI_math_geom.h"
-#include "BLI_math_matrix.h"
+#include "BLI_math_geom_c.hh"
 #include "BLI_math_matrix.hh"
-#include "BLI_math_vector.h"
+#include "BLI_math_matrix_c.hh"
 #include "BLI_math_vector.hh"
-#include "BLI_polyfill_2d.h"
+#include "BLI_math_vector_c.hh"
+#include "BLI_polyfill_2d.hh"
+#include "BLI_rect.hh"
 
 #include "BKE_brush.hh"
 #include "BKE_context.hh"
@@ -283,6 +284,54 @@ static void calculate_depth(gesture::GestureData &gesture_data,
 
   r_depth_front = depth_front;
   r_depth_back = depth_back;
+}
+
+/**
+ * Convert the object-space axis-aligned bounding box (expressed as
+ * its minimum and maximum corners) into a screen-space rectangle,
+ * returns zero if the result is empty.
+ */
+static bool paint_convert_bb_to_rect(rcti *rect,
+                                     const float bb_min[3],
+                                     const float bb_max[3],
+                                     const ARegion &region,
+                                     const RegionView3D &rv3d,
+                                     const Object &ob)
+{
+  int i, j, k;
+
+  BLI_rcti_init_minmax(rect);
+
+  /* return zero if the bounding box has non-positive volume */
+  if (bb_min[0] > bb_max[0] || bb_min[1] > bb_max[1] || bb_min[2] > bb_max[2]) {
+    return false;
+  }
+
+  const float4x4 projection = ED_view3d_ob_project_mat_get(&rv3d, &ob);
+
+  for (i = 0; i < 2; i++) {
+    for (j = 0; j < 2; j++) {
+      for (k = 0; k < 2; k++) {
+        float vec[3];
+        int proj_i[2];
+        vec[0] = i ? bb_min[0] : bb_max[0];
+        vec[1] = j ? bb_min[1] : bb_max[1];
+        vec[2] = k ? bb_min[2] : bb_max[2];
+        /* convert corner to screen space */
+        const float2 proj = ED_view3d_project_float_v2_m4(&region, vec, projection);
+        /* expand 2D rectangle */
+
+        /* we could project directly to int? */
+        proj_i[0] = proj[0];
+        proj_i[1] = proj[1];
+
+        BLI_rcti_do_minmax_v(rect, proj_i);
+      }
+    }
+  }
+
+  /* return false if the rectangle has non-positive area */
+  return rect->xmin < rect->xmax && rect->ymin < rect->ymax;
 }
 
 /* Calculates a scalar factor to use to ensure a drawn line gesture
@@ -756,14 +805,15 @@ static void initialize_cursor_info(bContext &C,
   int mval[2];
   RNA_int_get_array(op.ptr, "location", mval);
 
-  CursorGeometryInfo cgi;
   const float mval_fl[2] = {float(mval[0]), float(mval[1])};
 
   TrimOperation *trim_operation = reinterpret_cast<TrimOperation *>(gesture_data.operation);
-  trim_operation->initial_hit = cursor_geometry_info_update(&C, &cgi, mval_fl, false);
+  const std::optional<CursorGeometryInfo> cgi = cursor_geometry_info_update(&C, mval_fl, false);
+
+  trim_operation->initial_hit = cgi.has_value();
   if (trim_operation->initial_hit) {
-    copy_v3_v3(trim_operation->initial_location, cgi.location);
-    copy_v3_v3(trim_operation->initial_normal, cgi.normal);
+    copy_v3_v3(trim_operation->initial_location, cgi->location);
+    copy_v3_v3(trim_operation->initial_normal, cgi->normal);
   }
 }
 
@@ -901,7 +951,7 @@ void SCULPT_OT_trim_lasso_gesture(wmOperatorType *ot)
   ot->modal = WM_gesture_lasso_modal;
   ot->exec = gesture_lasso_exec;
 
-  ot->poll = SCULPT_mode_poll_view3d;
+  ot->poll = sculpt_mode_poll_view3d;
 
   ot->flag = OPTYPE_REGISTER | OPTYPE_DEPENDS_ON_CURSOR;
 
@@ -923,7 +973,7 @@ void SCULPT_OT_trim_box_gesture(wmOperatorType *ot)
   ot->modal = WM_gesture_box_modal;
   ot->exec = gesture_box_exec;
 
-  ot->poll = SCULPT_mode_poll_view3d;
+  ot->poll = sculpt_mode_poll_view3d;
 
   ot->flag = OPTYPE_REGISTER;
 
@@ -944,7 +994,7 @@ void SCULPT_OT_trim_line_gesture(wmOperatorType *ot)
   ot->modal = WM_gesture_straightline_oneshot_modal;
   ot->exec = gesture_line_exec;
 
-  ot->poll = SCULPT_mode_poll_view3d;
+  ot->poll = sculpt_mode_poll_view3d;
 
   ot->flag = OPTYPE_REGISTER;
 
@@ -966,7 +1016,7 @@ void SCULPT_OT_trim_polyline_gesture(wmOperatorType *ot)
   ot->modal = WM_gesture_polyline_modal;
   ot->exec = gesture_polyline_exec;
 
-  ot->poll = SCULPT_mode_poll_view3d;
+  ot->poll = sculpt_mode_poll_view3d;
 
   ot->flag = OPTYPE_REGISTER;
 

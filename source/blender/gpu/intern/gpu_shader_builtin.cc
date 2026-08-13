@@ -6,8 +6,9 @@
  * \ingroup gpu
  */
 
+#include "GPU_shader_builtin.hh"
 #include "BKE_global.hh"
-#include "BLI_utildefines.h"
+#include "BLI_utildefines.hh"
 
 #include "GPU_capabilities.hh"
 #include "GPU_shader.hh"
@@ -95,6 +96,8 @@ static const char *builtin_shader_create_info_name(GPUBuiltinShader shader)
       return "gpu_shader_3D_point_uniform_color";
     case GPU_SHADER_2D_AREA_BORDERS:
       return "gpu_shader_2D_area_borders";
+    case GPU_SHADER_2D_ROUNDED_CORNER_MASK:
+      return "gpu_shader_2D_rounded_corner_mask";
     case GPU_SHADER_2D_WIDGET_BASE:
       return "gpu_shader_2D_widget_base";
     case GPU_SHADER_2D_WIDGET_BASE_INST:
@@ -125,6 +128,35 @@ static const char *builtin_shader_create_info_name(GPUBuiltinShader shader)
       return "gpu_shader_index_2d_array_lines";
     case GPU_SHADER_INDEXBUF_TRIS:
       return "gpu_shader_index_2d_array_tris";
+
+    case GPU_SHADER_2D_UPDATE_MIPMAPS_UNORM_8:
+      return "gpu_shader_2D_update_mipmaps_unorm_8";
+    case GPU_SHADER_2D_UPDATE_MIPMAPS_UNORM_8_LAYERED:
+      return "gpu_shader_2D_update_mipmaps_unorm_8_layered";
+    case GPU_SHADER_2D_UPDATE_MIPMAPS_UNORM_8_8_8_8:
+      return "gpu_shader_2D_update_mipmaps_unorm_8_8_8_8";
+    case GPU_SHADER_2D_UPDATE_MIPMAPS_UNORM_8_8_8_8_LAYERED:
+      return "gpu_shader_2D_update_mipmaps_unorm_8_8_8_8_layered";
+    case GPU_SHADER_2D_UPDATE_MIPMAPS_SFLOAT_16:
+      return "gpu_shader_2D_update_mipmaps_sfloat_16";
+    case GPU_SHADER_2D_UPDATE_MIPMAPS_SFLOAT_16_LAYERED:
+      return "gpu_shader_2D_update_mipmaps_sfloat_16_layered";
+    case GPU_SHADER_2D_UPDATE_MIPMAPS_SFLOAT_16_16_16_16:
+      return "gpu_shader_2D_update_mipmaps_sfloat_16_16_16_16";
+    case GPU_SHADER_2D_UPDATE_MIPMAPS_SFLOAT_16_16_16_16_LAYERED:
+      return "gpu_shader_2D_update_mipmaps_sfloat_16_16_16_16_layered";
+    case GPU_SHADER_2D_UPDATE_MIPMAPS_SFLOAT_32:
+      return "gpu_shader_2D_update_mipmaps_sfloat_32";
+    case GPU_SHADER_2D_UPDATE_MIPMAPS_SFLOAT_32_LAYERED:
+      return "gpu_shader_2D_update_mipmaps_sfloat_32_layered";
+    case GPU_SHADER_2D_UPDATE_MIPMAPS_SFLOAT_32_32_32_32:
+      return "gpu_shader_2D_update_mipmaps_sfloat_32_32_32_32";
+    case GPU_SHADER_2D_UPDATE_MIPMAPS_SFLOAT_32_32_32_32_LAYERED:
+      return "gpu_shader_2D_update_mipmaps_sfloat_32_32_32_32_layered";
+    case GPU_SHADER_2D_UPDATE_MIPMAPS_SRGBA_8_8_8_8:
+      return "gpu_shader_2D_update_mipmaps_srgba_8_8_8_8";
+    case GPU_SHADER_2D_UPDATE_MIPMAPS_SRGBA_8_8_8_8_LAYERED:
+      return "gpu_shader_2D_update_mipmaps_srgba_8_8_8_8_layered";
     default:
       BLI_assert_unreachable();
       return "";
@@ -279,6 +311,7 @@ void GPU_shader_builtin_warm_up()
   gpu_shader_warm_builtin_shader_async(GPU_SHADER_2D_DIAG_STRIPES, GPU_SHADER_CFG_DEFAULT);
   gpu_shader_warm_builtin_shader_async(GPU_SHADER_2D_IMAGE_RECT_COLOR, GPU_SHADER_CFG_DEFAULT);
   gpu_shader_warm_builtin_shader_async(GPU_SHADER_2D_AREA_BORDERS, GPU_SHADER_CFG_DEFAULT);
+  gpu_shader_warm_builtin_shader_async(GPU_SHADER_2D_ROUNDED_CORNER_MASK, GPU_SHADER_CFG_DEFAULT);
 }
 
 void GPU_shader_free_builtin_shaders()
