@@ -170,7 +170,7 @@ static void add_mesh_faces(const BvhBuildContext &ctx, const int id, const Mesh 
 }
 
 static void add_mesh_faces(const BvhBuildContext &ctx,
-                           Vector<Array<int, 0>> &index_map_by_geom,
+                           Vector<Array<int, 0>, 1> &index_map_by_geom,
                            const int id,
                            const Mesh &mesh,
                            const IndexMask &face_mask,

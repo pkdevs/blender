@@ -73,7 +73,6 @@ class Tree {
     virtual ~FallbackTree() = default;
   };
 
- private:
   /** The type of element the tree is built from, which query results refer to. */
   enum class ElemType : int8_t {
     Tris,
@@ -100,8 +99,9 @@ class Tree {
     }
   };
 
+ private:
   /**
-   * Geomettry type for the tree
+   * Geometry type for the tree.
    * \note Eventually the tree should be able to contain more than one geometry, in which case this
    * would be stored as an array. For now the tree only handles one geometry, so a single value is
    * enough and simplifies code switching behavior based on the tree type.
