@@ -153,8 +153,8 @@ void GLVertBuf::copy_sub(VertBuf &source_buf,
   BLI_assert_msg(size_t(dest_first_vertex) + vertex_len <= vertex_alloc,
                  "Copy destination range exceeds the vertex buffer bounds");
   GLVertBuf &src = static_cast<GLVertBuf &>(source_buf);
-  BLI_assert_msg(vbo_id_, "Call GPU_vertbuf_use first");
-  BLI_assert_msg(src.vbo_id_, "Call GPU_vertbuf_use first on the source buffer");
+  BLI_assert_msg(vbo_id_, "GPU_vertbuf_use() not called on this buffer");
+  BLI_assert_msg(src.vbo_id_, "GPU_vertbuf_use() not called on the source buffer");
 
   const size_t src_offset = size_t(source_first_vertex) * src.format.stride;
   const size_t dst_offset = size_t(dest_first_vertex) * format.stride;

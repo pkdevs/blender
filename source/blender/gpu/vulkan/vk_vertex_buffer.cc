@@ -104,9 +104,9 @@ void VKVertexBuffer::copy_sub(VertBuf &source_buf,
   BLI_assert_msg(size_t(dest_first_vertex) + vertex_len <= vertex_alloc,
                  "Copy destination range exceeds the vertex buffer bounds");
   VKVertexBuffer &source_vertex_buffer = unwrap(source_buf);
-  BLI_assert_msg(buffer_.is_allocated(), "Call GPU_vertbuf_use first");
+  BLI_assert_msg(buffer_.is_allocated(), "GPU_vertbuf_use() not called on this buffer");
   BLI_assert_msg(source_vertex_buffer.buffer_.is_allocated(),
-                 "Call GPU_vertbuf_use first on the source buffer");
+                 "GPU_vertbuf_use() not called on the source buffer");
   VKContext &context = *VKContext::get();
   render_graph::VKCopyBufferNode::CreateInfo copy_buffer = {};
   copy_buffer.src_buffer = source_vertex_buffer.buffer_.resource();

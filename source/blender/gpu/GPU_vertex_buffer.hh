@@ -228,6 +228,7 @@ class VertBuf {
    *
    * \note: format of the vertex buffers should be identical.
    * \note: asserts when the copy range exceeds the bounds of either vertex buffer.
+   * \note: both vertex buffers must be uploaded to the GPU with GPU_vertbuf_use before calling.
    *
    * \param source_buf: source vertex buffer to copy data from.
    * \param source_first_vertex: starting vertex index to start copying the data from.
