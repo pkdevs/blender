@@ -94,7 +94,8 @@ static void calc_local_distances(const float roundness,
 
         const float2 excess = math::max(xy_position - hardness_vec, zero);
 
-        distances[i] = math::length(float3(excess.x, excess.y, position.z * height_rcp));
+        distances[i] = math::length(
+            float3(excess.x * roundness_rcp, excess.y * roundness_rcp, position.z * height_rcp));
       }
     }
   }
@@ -122,7 +123,8 @@ static void calc_local_distances(const float roundness,
 
         const float2 excess = math::max(xy_position - hardness_vec, zero);
 
-        distances[i] = math::length(float3(excess.x, excess.y, position.z * depth_rcp));
+        distances[i] = math::length(
+            float3(excess.x * roundness_rcp, excess.y * roundness_rcp, position.z * depth_rcp));
       }
     }
   }
