@@ -12,6 +12,9 @@
 #include "BLI_span.hh"
 #include "BLI_vector_set.hh"
 
+#include <type_traits>
+#include <variant>
+
 namespace blender {
 
 struct Depsgraph;
@@ -26,6 +29,15 @@ struct RNAPath;
 struct StructRNA;
 struct Scene;
 struct ViewLayer;
+
+template<typename T> class Span;
+namespace rna_path {
+struct Member;
+struct LookupIndex;
+struct LookupKey;
+using Item = std::variant<Member, LookupIndex, LookupKey>;
+}  // namespace rna_path
+using ParsedRNAPathRef = Span<rna_path::Item>;
 
 namespace bke::dynoverride {
 
@@ -96,9 +108,18 @@ void rule_rna_property_update_from_target(DynamicOverride &dynamic_override,
  * \return true on success, false otherwise (e.g. because given rna path is already used by another
  * property in the same dynoverride rule).
  */
-bool rule_rna_property_path_set(DynamicOverrideRule &rule,
+bool rule_property_rna_path_set(DynamicOverrideRule &rule,
                                 DynamicOverrideRuleProperty &rule_property,
                                 StringRef rna_path);
+
+/**
+ * Retrieve a pre-parsed version of the rule property's RNA path, owned by the property itself. The
+ * referenced memory is only valid as long as the rule property's path is not changed. Due to its
+ * use of specialized RNA path storage types, this can be much more efficient to work with than the
+ * string representation.
+ * \note This may return empty when an invalid RNA path that cannot be parsed is set.
+ */
+ParsedRNAPathRef rule_property_rna_path_parsed(const blender::DynamicOverrideRuleProperty &rule_property);
 
 /**
  * Return an identifier representing the RNA path of the property, that is usable as a RNA

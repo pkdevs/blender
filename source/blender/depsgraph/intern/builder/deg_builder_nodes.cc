@@ -1418,7 +1418,10 @@ void DepsgraphNodeBuilder::build_dynamic_property_override_rule(
         PointerRNA id_cow_ptr = RNA_id_pointer_create(id_cow);
         PointerRNA data_cow_ptr;
         PropertyRNA *data_cow_rna_prop;
-        RNA_path_resolve(&id_cow_ptr, property.rna_path, &data_cow_ptr, &data_cow_rna_prop);
+        RNA_path_resolve(&id_cow_ptr,
+                         bke::dynoverride::rule_property_rna_path_parsed(property),
+                         &data_cow_ptr,
+                         &data_cow_rna_prop);
         if (!data_cow_ptr.data || !data_cow_rna_prop) {
           return;
         }

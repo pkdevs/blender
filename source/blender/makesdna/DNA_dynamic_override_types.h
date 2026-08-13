@@ -16,6 +16,7 @@ struct IDProperty;
 namespace bke::dynoverride {
 struct Runtime;
 struct RuleIDDataRuntime;
+struct RulePropertyRuntime;
 }  // namespace bke::dynoverride
 
 /** Types of target filtering to select which data a given dynoverride rule applies to. */
@@ -93,6 +94,8 @@ struct DynamicOverrideRuleProperty {
 
   DynamicOverrideRulePropertyFlag flag = {};
   int8_t _pad[6] = {};
+
+  bke::dynoverride::RulePropertyRuntime *runtime = nullptr;
 };
 
 struct DynamicOverrideRuleIDData {

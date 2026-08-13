@@ -64,6 +64,11 @@ struct RuleIDDataRuntime {
   std::shared_ptr<GeneratedRuleSrnaData> rule_srna_data = {};
 };
 
+struct RulePropertyRuntime {
+  /** Cached parsed RNA path, computed eagerly when the string path is changed. */
+  std::optional<ParsedRNAPath<>> parsed_rna_path;
+};
+
 static void rule_copy(DynamicOverrideRule &dynoverride_rule_dst,
                       DynamicOverrideRule &dynoverride_rule_src,
                       const int flag);
@@ -220,6 +225,9 @@ static void rule_property_copy(DynamicOverrideRuleProperty &dynoverride_rule_pro
    * using `BLI_duplicatelist`). */
 
   dynoverride_rule_property_dst.rna_path = MEM_dupalloc(dynoverride_rule_property_src.rna_path);
+  dynoverride_rule_property_dst.runtime = MEM_new<RulePropertyRuntime>(__func__);
+  dynoverride_rule_property_dst.runtime->parsed_rna_path =
+      dynoverride_rule_property_src.runtime->parsed_rna_path;
 }
 
 static void rule_copy(DynamicOverrideRule &dynoverride_rule_dst,
@@ -274,6 +282,7 @@ static void rule_copy(DynamicOverrideRule &dynoverride_rule_dst,
 
 static void rule_property_free(DynamicOverrideRuleProperty &dynoverride_rule_property)
 {
+  MEM_delete(dynoverride_rule_property.runtime);
   MEM_delete(dynoverride_rule_property.rna_path);
 }
 
@@ -377,6 +386,9 @@ static void rule_property_read_data(BlendDataReader &reader,
                                     DynamicOverrideRuleProperty &dynoverride_rule_property)
 {
   BLO_read_string(&reader, &dynoverride_rule_property.rna_path);
+  dynoverride_rule_property.runtime = MEM_new<RulePropertyRuntime>(__func__);
+  dynoverride_rule_property.runtime->parsed_rna_path = ParsedRNAPath<>::from_string(
+      dynoverride_rule_property.rna_path);
 }
 
 static void rule_read_data(BlendDataReader &reader, DynamicOverrideRule &dynoverride_rule)
@@ -566,7 +578,7 @@ DynamicOverrideRuleProperty *rule_rna_property_add(Main &bmain,
   PropertyRNA *target_prop;
 
   target_id_ptr = RNA_id_pointer_create(rule_iddata.base.target_filter.target_id);
-  RNA_path_resolve(&target_id_ptr, rna_path.path.c_str(), &target_data_ptr, &target_prop);
+  RNA_path_resolve_property(&target_id_ptr, rna_path.path.c_str(), &target_data_ptr, &target_prop);
 
   if (!target_data_ptr.data || !target_prop) {
     return nullptr;
@@ -574,7 +586,10 @@ DynamicOverrideRuleProperty *rule_rna_property_add(Main &bmain,
 
   BLI_assert(rule_rna_property_lookup(rule, rna_path) == nullptr);
   DynamicOverrideRuleProperty *rule_property = MEM_new<DynamicOverrideRuleProperty>(__func__);
-  rule_property->rna_path = BLI_strdup(rna_path.path.c_str());
+  rule_property->runtime = MEM_new<RulePropertyRuntime>(__func__);
+  if (!rule_property_rna_path_set(rule, *rule_property, rna_path.path)) {
+    BLI_assert_unreachable();
+  }
   /* Sub-item data (e.g. collection item names or array indices) are not supported currently for
    * dynamic overrides. */
   BLI_assert(!rna_path.key);
@@ -708,9 +723,10 @@ void rule_rna_property_apply_to_target(DynamicOverride &dynamic_override,
   DynamicOverrideRuleIDData &rule_iddata = reinterpret_cast<DynamicOverrideRuleIDData &>(rule);
   PointerRNA target_id_ptr, target_data_ptr;
   PropertyRNA *target_prop;
+  ParsedRNAPathRef parsed_rna_path_ref = rule_property_rna_path_parsed(rule_property);
 
   target_id_ptr = RNA_id_pointer_create(rule_iddata.base.target_filter.target_id);
-  RNA_path_resolve(&target_id_ptr, rule_property.rna_path, &target_data_ptr, &target_prop);
+  RNA_path_resolve_property(&target_id_ptr, parsed_rna_path_ref, &target_data_ptr, &target_prop);
 
   if (!target_data_ptr.data || !target_prop) {
     return;
@@ -754,7 +770,10 @@ void rule_rna_property_update_from_target(DynamicOverride &dynamic_override,
   PropertyRNA *target_prop;
 
   target_id_ptr = RNA_id_pointer_create(rule_iddata.base.target_filter.target_id);
-  RNA_path_resolve(&target_id_ptr, rule_property.rna_path, &target_data_ptr, &target_prop);
+  RNA_path_resolve_property(&target_id_ptr,
+                            rule_property_rna_path_parsed(rule_property),
+                            &target_data_ptr,
+                            &target_prop);
 
   if (!target_data_ptr.data || !target_prop) {
     return;
@@ -785,7 +804,7 @@ void rule_rna_property_update_from_target(DynamicOverride &dynamic_override,
   }
 }
 
-bool rule_rna_property_path_set(DynamicOverrideRule &rule,
+bool rule_property_rna_path_set(DynamicOverrideRule &rule,
                                 DynamicOverrideRuleProperty &rule_property,
                                 StringRef rna_path)
 {
@@ -799,9 +818,16 @@ bool rule_rna_property_path_set(DynamicOverrideRule &rule,
     }
   }
 
+  const bool has_old_path = rule_property.rna_path != nullptr;
   std::string old_identifier = rule_property_rna_identifier(rule_property);
   MEM_SAFE_DELETE(rule_property.rna_path);
   rule_property.rna_path = BLI_strdupn(rna_path.data(), size_t(rna_path.size()));
+  rule_property.runtime->parsed_rna_path = ParsedRNAPath<>::from_string(
+      {rna_path.data(), rna_path.size()});
+
+  if (!has_old_path) {
+    return true;
+  }
   std::string new_identifier = rule_property_rna_identifier(rule_property);
 
   auto rename_idproperty = [&old_identifier, &new_identifier](IDProperty *group_container) {
@@ -827,6 +853,14 @@ bool rule_rna_property_path_set(DynamicOverrideRule &rule,
   return true;
 }
 
+ParsedRNAPathRef rule_property_rna_path_parsed(const DynamicOverrideRuleProperty &rule_property)
+{
+  if (!rule_property.runtime->parsed_rna_path) {
+    return {};
+  }
+  return *rule_property.runtime->parsed_rna_path;
+}
+
 std::string rule_property_rna_identifier(const DynamicOverrideRuleProperty &rule_property)
 {
   std::string safe_property_name = rule_property.rna_path ? rule_property.rna_path : "";
@@ -848,19 +882,21 @@ std::string rule_property_rna_identifier(const DynamicOverrideRuleProperty &rule
  * \param verify_paths: If true, the paths will be resolved, and only if it *doesn't* resolve to a
  * property before, but *does* resolve after, is the new path accepted.
  */
-static std::optional<std::string> rna_path_rename_fix(ID &target_id,
-                                                      const StringRef prefix,
-                                                      const StringRef old_infix,
-                                                      const StringRef new_infix,
-                                                      const StringRefNull old_path,
-                                                      const bool verify_paths)
+static std::optional<std::string> rna_path_rename_fix(
+    ID &target_id,
+    const StringRef prefix,
+    const StringRef old_infix,
+    const StringRef new_infix,
+    const StringRefNull old_path,
+    const ParsedRNAPathRef old_parsed_rna_path_ref,
+    const bool verify_paths)
 {
   /* Make initial RNA pointer to start resolving from */
   PointerRNA target_id_ptr = verify_paths ? RNA_id_pointer_create(&target_id) : PointerRNA();
-  auto rna_path_is_valid = [&target_id_ptr](StringRefNull rna_path) -> bool {
+  auto rna_path_is_valid = [&target_id_ptr](ParsedRNAPathRef parsed_rna_path_ref) -> bool {
     PointerRNA ptr;
     PropertyRNA *prop = nullptr;
-    return RNA_path_resolve_property(&target_id_ptr, rna_path.c_str(), &ptr, &prop);
+    return RNA_path_resolve_property(&target_id_ptr, parsed_rna_path_ref, &ptr, &prop);
   };
 
   const int64_t prefix_offset = old_path.find(prefix);
@@ -880,7 +916,7 @@ static std::optional<std::string> rna_path_rename_fix(ID &target_id,
   }
 
   /* Only modify a path that is invalid. */
-  if (verify_paths && rna_path_is_valid(old_path)) {
+  if (verify_paths && rna_path_is_valid(old_parsed_rna_path_ref)) {
     return std::nullopt;
   }
 
@@ -896,8 +932,12 @@ static std::optional<std::string> rna_path_rename_fix(ID &target_id,
   modified_path.append(new_infix);
   modified_path.append(old_path.substr(postfix_offset));
 
+  std::optional<ParsedRNAPath<>> new_parsed_rna_path_ref = ParsedRNAPath<>::from_string(
+      modified_path);
+  BLI_assert(new_parsed_rna_path_ref.has_value());
+
   /* If the new path is not valid, the renaming failed. */
-  if (verify_paths && !rna_path_is_valid(modified_path)) {
+  if (verify_paths && !rna_path_is_valid(*new_parsed_rna_path_ref)) {
     return std::nullopt;
   }
 
@@ -933,11 +973,17 @@ void fix_rna_paths_rename(Main &bmain,
     DynamicOverrideRuleIDData &rule_iddata = reinterpret_cast<DynamicOverrideRuleIDData &>(rule);
     for (DynamicOverrideRuleProperty &rule_prop : rule_iddata.properties) {
       std::optional<std::string> new_path = rna_path_rename_fix(
-          target_id, prefix, old_key, new_key, rule_prop.rna_path, verify_paths);
+          target_id,
+          prefix,
+          old_key,
+          new_key,
+          rule_prop.rna_path,
+          rule_property_rna_path_parsed(rule_prop),
+          verify_paths);
       if (!new_path.has_value()) {
         continue;
       }
-      if (rule_rna_property_path_set(rule, rule_prop, *new_path)) {
+      if (rule_property_rna_path_set(rule, rule_prop, *new_path)) {
         is_changed = true;
       }
     }
@@ -1175,7 +1221,8 @@ static void dynamic_override_update_rules_srna(Main & /*bmain*/, DynamicOverride
       PointerRNA ptr;
       PropertyRNA *prop_orig;
 
-      RNA_path_resolve(&owner_id_ptr, rule_property.rna_path, &ptr, &prop_orig);
+      RNA_path_resolve_property(
+          &owner_id_ptr, rule_property_rna_path_parsed(rule_property), &ptr, &prop_orig);
 
       if (!ptr.data || !prop_orig) {
         continue;

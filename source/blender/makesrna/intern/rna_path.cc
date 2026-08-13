@@ -524,6 +524,18 @@ static bool rna_path_parse(const PointerRNA *ptr,
 }
 
 bool RNA_path_resolve(const PointerRNA *ptr,
+                      ParsedRNAPathRef path,
+                      PointerRNA *r_ptr,
+                      PropertyRNA **r_prop)
+{
+  if (!rna_path_parse(ptr, path, r_ptr, r_prop, nullptr, nullptr, nullptr, true)) {
+    return false;
+  }
+
+  return *r_ptr;
+}
+
+bool RNA_path_resolve(const PointerRNA *ptr,
                       const char *path,
                       PointerRNA *r_ptr,
                       PropertyRNA **r_prop)
@@ -535,11 +547,7 @@ bool RNA_path_resolve(const PointerRNA *ptr,
   if (!parsed_path) {
     return false;
   }
-  if (!rna_path_parse(ptr, *parsed_path, r_ptr, r_prop, nullptr, nullptr, nullptr, true)) {
-    return false;
-  }
-
-  return *r_ptr;
+  return RNA_path_resolve(ptr, *parsed_path, r_ptr, r_prop);
 }
 
 bool RNA_path_resolve_full(
@@ -584,11 +592,7 @@ bool RNA_path_resolve_property(const PointerRNA *ptr,
   if (!parsed_path) {
     return false;
   }
-  if (!rna_path_parse(ptr, *parsed_path, r_ptr, r_prop, nullptr, nullptr, nullptr, false)) {
-    return false;
-  }
-
-  return *r_ptr && *r_prop != nullptr;
+  return RNA_path_resolve_property(ptr, *parsed_path, r_ptr, r_prop);
 }
 
 bool RNA_path_resolve_property(const PointerRNA *ptr,

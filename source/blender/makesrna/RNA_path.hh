@@ -200,6 +200,10 @@ bool RNA_path_resolve(const PointerRNA *ptr,
                       const char *path,
                       PointerRNA *r_ptr,
                       PropertyRNA **r_prop);
+bool RNA_path_resolve(const PointerRNA *ptr,
+                      ParsedRNAPathRef path,
+                      PointerRNA *r_ptr,
+                      PropertyRNA **r_prop);
 
 /**
  * Resolve the given RNA Path to find the pointer and/or property + array index
