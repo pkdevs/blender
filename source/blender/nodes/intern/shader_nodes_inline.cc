@@ -187,6 +187,11 @@ struct PreservedZone {
   bNode *output_node = nullptr;
 };
 
+/**
+ * When a repeat zone is preserved, the corresponding #RepeatZoneComputeContext will use this
+ * iteration. It should be a value that is not a valid iteration index. This allows optionally
+ * inlining the repeat zone later without reusing the same context for different values.
+ */
 constexpr int preserved_repeat_zone_iteration = -1;
 
 class ShaderNodesInliner {
@@ -220,8 +225,36 @@ class ShaderNodesInliner {
   /** This is used to generate unique names and ids. */
   int dst_node_counter_ = 0;
 
-  Set<NodeInContext> repeat_zones_to_force_inline_;
-  Set<NodeInContext> failed_preserved_repeat_zones_;
+  struct FailedToInlineRepeatZone {
+    const ComputeContext *parent_ctx = nullptr;
+    int output_node_id = 0;
+
+    friend bool operator==(const FailedToInlineRepeatZone &a,
+                           const FailedToInlineRepeatZone &b) = default;
+
+    uint64_t hash() const
+    {
+      return get_default_hash(this->parent_ctx, this->output_node_id);
+    }
+  };
+
+  /**
+   * Sometimes the inliner first attempts to preserve a repeat zone without knowing whether it
+   * will succeed. In the general case (with passed in bundles and closures) that cannot be
+   * determined in advance with 100% certainty. Since preserved repeat zones are an important
+   * optimization, it's not enough to only have them when we can "proof" beforehand that it will
+   * work. This proof might not be possible or expensive in some cases where preserving the repeat
+   * zone would be possible.
+   *
+   * To solve this, the inliner can "backtrack" an earlier decision to preserve a repeat zone.
+   * Basically, when it notices later that there is a specific error in the preserved repeat zone,
+   * it can switch to inlining it instead.
+   *
+   * The backtracking is not perfect currently, it could leave behind some nodes in the generated
+   * tree, but those are not connected to the final output. Those could still be removed in a
+   * separate pass.
+   */
+  Set<FailedToInlineRepeatZone> repeat_zones_to_force_inline_;
 
  public:
   ShaderNodesInliner(const bNodeTree &src_tree,
@@ -532,7 +565,7 @@ class ShaderNodesInliner {
       return;
     }
     if (node->is_type("GeometryNodeRepeatOutput"_ustr)) {
-      if (this->should_preserve_repeat_zone_node(node)) {
+      if (this->should_preserve_repeat_zone_node(node.context, *node)) {
         this->handle_output_socket__preserved_repeat_output(socket);
         return;
       }
@@ -540,7 +573,12 @@ class ShaderNodesInliner {
       return;
     }
     if (node->is_type("GeometryNodeRepeatInput"_ustr)) {
-      if (this->should_preserve_repeat_zone_node(node)) {
+      if (!socket.context) {
+        /* This socket is expected to be in the repeat zone, so it should have a context. */
+        this->store_socket_value_fallback(socket);
+        return;
+      }
+      if (this->should_preserve_repeat_zone_node(socket.context->parent(), *node)) {
         this->handle_output_socket__preserved_repeat_input(socket);
         return;
       }
@@ -689,19 +727,27 @@ class ShaderNodesInliner {
     this->store_socket_value_fallback(socket);
   }
 
-  bool should_preserve_repeat_zone_node(const NodeInContext &repeat_zone_node) const
+  /**
+   * Returns whether the given repeat zone should be preserved, which is an important optimization
+   * for render engines that support it (currently only EEVEE).
+   *
+   * \note A repeat zone may first be preserved and can later change to be inlined anyway if it
+   * failed. Also see #repeat_zones_to_force_inline_.
+   */
+  bool should_preserve_repeat_zone_node(const ComputeContext *outer_ctx,
+                                        const bNode &repeat_zone_node) const
   {
-    BLI_assert(repeat_zone_node->is_type("GeometryNodeRepeatOutput"_ustr) ||
-               repeat_zone_node->is_type("GeometryNodeRepeatInput"_ustr));
+    BLI_assert(repeat_zone_node.is_type("GeometryNodeRepeatOutput"_ustr) ||
+               repeat_zone_node.is_type("GeometryNodeRepeatInput"_ustr));
     if (!params_.allow_preserving_repeat_zones) {
       return false;
     }
-    const bNodeTree &tree = repeat_zone_node->owner_tree();
+    const bNodeTree &tree = repeat_zone_node.owner_tree();
     const bke::bNodeTreeZones *zones = tree.zones();
     if (!zones) {
       return false;
     }
-    const bke::bNodeTreeZone *zone = zones->get_zone_by_node(repeat_zone_node->identifier);
+    const bke::bNodeTreeZone *zone = zones->get_zone_by_node(repeat_zone_node.identifier);
     if (!zone) {
       return false;
     }
@@ -710,9 +756,7 @@ class ShaderNodesInliner {
     if (!repeat_zone_input_node || !repeat_zone_output_node) {
       return false;
     }
-    if (repeat_zones_to_force_inline_.contains(
-            {repeat_zone_node.context, repeat_zone_output_node}))
-    {
+    if (repeat_zones_to_force_inline_.contains({outer_ctx, *zone->output_node_id})) {
       return false;
     }
     const auto &storage = *static_cast<const NodeGeometryRepeatOutput *>(
@@ -789,7 +833,8 @@ class ShaderNodesInliner {
 
     const ComputeContext *out_context = socket.context;
     const ComputeContext &in_context = compute_context_cache_.for_repeat_zone(
-        socket.context, repeat_output_node, preserved_repeat_zone_iteration);
+        socket.context, repeat_output_node->identifier, preserved_repeat_zone_iteration);
+    parent_zone_contexts_.add(&in_context, out_context);
 
     const EnsureInputsResult ensured_inputs = this->ensure_node_inputs(
         {&in_context, &socket->owner_node()});
@@ -1437,8 +1482,23 @@ class ShaderNodesInliner {
       this->handle_output_socket__eval_multi_function(node);
       return;
     }
+    /* Check if this node is supported by the renderer. If not, either try inlining it harder to
+     * eliminate the node, or report an error and skip it. */
     if (this->is_inliner_evaluation_node(*node)) {
-      this->report_error(node, TIP_("Node requires constant input values"));
+      bool found_repeat_zone_to_force_inline = false;
+      for (const ComputeContext *ctx = node.context; ctx; ctx = ctx->parent()) {
+        if (const auto *repeat_zone_ctx = dynamic_cast<const bke::RepeatZoneComputeContext *>(ctx))
+        {
+          if (repeat_zone_ctx->iteration() == preserved_repeat_zone_iteration) {
+            repeat_zones_to_force_inline_.add(
+                {repeat_zone_ctx->parent(), repeat_zone_ctx->output_node_id()});
+            found_repeat_zone_to_force_inline = true;
+          }
+        }
+      }
+      if (!found_repeat_zone_to_force_inline) {
+        this->report_error(node, TIP_("Node requires constant input values"));
+      }
       this->store_socket_value_fallback(socket);
       return;
     }
