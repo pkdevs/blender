@@ -802,8 +802,8 @@ static void gesture_apply_for_symmetry_pass(bContext & /*C*/, gesture::GestureDa
   const View3D *v3d = gesture_data.vc.v3d;
   RegionView3D *rv3d = gesture_data.vc.rv3d;
   Object &object = *gesture_data.vc.obact;
-  const bool is_clipping = RV3D_CLIPPING_ENABLED(v3d, rv3d);
-  if (is_clipping) {
+  const bool clipping_enabled = RV3D_CLIPPING_ENABLED(v3d, rv3d);
+  if (clipping_enabled) {
     ED_view3d_clipping_local(rv3d, object.object_to_world().ptr());
   }
   const IndexMask &node_mask = gesture_data.node_mask;
@@ -817,10 +817,8 @@ static void gesture_apply_for_symmetry_pass(bContext & /*C*/, gesture::GestureDa
           depsgraph, object, node_mask, [&](MutableSpan<float> node_mask, const Span<int> verts) {
             for (const int i : verts.index_range()) {
               const int vert = verts[i];
-              if (is_clipping) {
-                if (ED_view3d_clipping_test(rv3d, positions[vert], true)) {
-                  continue;
-                }
+              if (clipping_enabled && ED_view3d_clipping_test(rv3d, positions[vert], true)) {
+                continue;
               }
               if (gesture::is_affected(gesture_data, positions[vert], normals[vert])) {
                 node_mask[i] = mask_gesture_get_new_value(node_mask[i], op.mode, op.value);
@@ -849,10 +847,8 @@ static void gesture_apply_for_symmetry_pass(bContext & /*C*/, gesture::GestureDa
               const int vert_start = grid * key.grid_area;
               BKE_subdiv_ccg_foreach_visible_grid_vert(key, grid_hidden, grid, [&](const int i) {
                 const int vert = vert_start + i;
-                if (is_clipping) {
-                  if (ED_view3d_clipping_test(rv3d, positions[vert], true)) {
-                    return;
-                  }
+                if (clipping_enabled && ED_view3d_clipping_test(rv3d, positions[vert], true)) {
+                  return;
                 }
                 if (gesture::is_affected(gesture_data, positions[vert], normals[vert])) {
                   float &mask = masks[vert];
@@ -887,10 +883,8 @@ static void gesture_apply_for_symmetry_pass(bContext & /*C*/, gesture::GestureDa
           [&](const int i) {
             bool any_changed = false;
             for (BMVert *vert : BKE_pbvh_bmesh_node_unique_verts(&nodes[i])) {
-              if (is_clipping) {
-                if (ED_view3d_clipping_test(rv3d, vert->co, true)) {
-                  continue;
-                }
+              if (clipping_enabled && ED_view3d_clipping_test(rv3d, vert->co, true)) {
+                continue;
               }
               if (gesture::is_affected(gesture_data, vert->co, vert->no)) {
                 const float old_mask = BM_ELEM_CD_GET_FLOAT(vert, offset);
