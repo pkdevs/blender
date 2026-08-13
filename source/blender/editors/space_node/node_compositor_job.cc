@@ -280,7 +280,7 @@ void ED_node_compositor_job(Main *bmain,
   }
 
   Image *render_result_image = BKE_image_ensure_viewer(bmain, IMA_TYPE_R_RESULT, "Render Result");
-  BKE_image_backup_render(scene, render_result_image, false);
+  BKE_image_backup_render(scene, render_result_image, false, true);
 
   wmWindow *window = window_manager->runtime->winactive ?
                          window_manager->runtime->winactive :
