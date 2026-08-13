@@ -2777,9 +2777,7 @@ static void update_sculpt_normal(const Depsgraph &depsgraph,
   StrokeCache &cache = *ob.runtime->sculpt_session->cache;
   /* Grab brush does not update the sculpt normal during a stroke. */
   const bool update_normal = !(brush.flag & BRUSH_ORIGINAL_NORMAL) &&
-                             !(brush.sculpt_brush_type == SCULPT_BRUSH_TYPE_GRAB) &&
-                             !(brush.sculpt_brush_type == SCULPT_BRUSH_TYPE_THUMB &&
-                               !(brush.stroke_method == BRUSH_STROKE_ANCHORED)) &&
+                             !(brush.stroke_method == BRUSH_STROKE_ANCHORED) &&
                              !(brush.sculpt_brush_type == SCULPT_BRUSH_TYPE_ELASTIC_DEFORM) &&
                              !(brush.sculpt_brush_type == SCULPT_BRUSH_TYPE_SNAKE_HOOK &&
                                bke::brush::normal_weight_get(brush, cache.toggle_settings.invert) >
@@ -3569,7 +3567,7 @@ static void do_brush_action(const Depsgraph &depsgraph,
     bke::pbvh::Tree &pbvh = *bke::object::pbvh_get(ob);
     bke::pbvh::update_normals(depsgraph, ob, pbvh);
   }
-  if (sculpt_brush_needs_normal(ss, brush)) {
+  if (sculpt_brush_needs_normal(ss, brush) || BKE_brush_has_cube_tip(&brush, PaintMode::Sculpt)) {
     update_sculpt_normal(depsgraph, sd, ob, cursor_sample_result);
   }
 
