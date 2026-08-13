@@ -256,14 +256,17 @@ struct Film {
 
     const float3 camera_direction = panoramic_direction_get(texel_film);
 
+    /* if view_id is not the owner, throw the pixel out */
     if (!panoramic_texel_is_owned_by_view(camera_direction, view_id)) {
       return float2(-1.0f);
     }
 
-    const float2 face_uv = panoramic_face_uv_from_direction(camera_direction, view_id);
-    if (any(lessThan(face_uv, float2(0.0f))) || any(greaterThanEqual(face_uv, float2(1.0f)))) {
-      return float2(-1.0f);
-    }
+    /* Now that we're sure view_id is the owner, the pixel must be in [0,1)
+     * However, on edges between two faces, rounding error can produce out of bound values,
+     * so we need to clamp it. */
+    const float2 face_uv = clamp(panoramic_face_uv_from_direction(camera_direction, view_id),
+                                 float2(0.0f),
+                                 float2(0.999999f));
 
     const float overscan = max(uni.uniform_buf.camera.panoramic_view_overscan, 1.0f);
     const float2 render_uv = (face_uv - 0.5f) / overscan + 0.5f;
