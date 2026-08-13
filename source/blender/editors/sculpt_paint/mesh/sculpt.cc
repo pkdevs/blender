@@ -2777,6 +2777,8 @@ static void update_sculpt_normal(const Depsgraph &depsgraph,
   StrokeCache &cache = *ob.runtime->sculpt_session->cache;
   /* Grab brush does not update the sculpt normal during a stroke. */
   const bool update_normal = !(brush.flag & BRUSH_ORIGINAL_NORMAL) &&
+                             !(brush.sculpt_brush_type == SCULPT_BRUSH_TYPE_GRAB) &&
+                             !(brush.sculpt_brush_type == SCULPT_BRUSH_TYPE_THUMB) &&
                              !(brush.stroke_method == BRUSH_STROKE_ANCHORED) &&
                              !(brush.sculpt_brush_type == SCULPT_BRUSH_TYPE_ELASTIC_DEFORM) &&
                              !(brush.sculpt_brush_type == SCULPT_BRUSH_TYPE_SNAKE_HOOK &&
@@ -2784,7 +2786,8 @@ static void update_sculpt_normal(const Depsgraph &depsgraph,
                                    0.0f);
 
   if (cache.mirror_symmetry_pass == 0 && cache.radial_symmetry_pass == 0 &&
-      (stroke_is_first_brush_step_of_symmetry_pass(cache) || update_normal))
+      (stroke_is_first_brush_step_of_symmetry_pass(cache) || update_normal ||
+       is_zero_v3(cache.sculpt_normal)))
   {
     if (cursor_sample_result.plane_normal) {
       cache.sculpt_normal = *cursor_sample_result.plane_normal;
@@ -6726,6 +6729,14 @@ void cube_tip_init(const Sculpt & /*sd*/, const Object &ob, const Brush &brush, 
   float unused[4][4];
 
   zero_m4(mat);
+  printf("sculpt normal: %f %f %f\n",
+         ss.cache->sculpt_normal_symm[0],
+         ss.cache->sculpt_normal_symm[1],
+         ss.cache->sculpt_normal_symm[2]);
+  printf("view normal: %f %f %f\n",
+         ss.cache->view_normal_symm[0],
+         ss.cache->view_normal_symm[1],
+         ss.cache->view_normal_symm[2]);
   calc_brush_local_mat(0.0,
                        ob,
                        eBrushFalloffShape(brush.falloff_shape) == PAINT_FALLOFF_SHAPE_SPHERE ?
@@ -6733,7 +6744,10 @@ void cube_tip_init(const Sculpt & /*sd*/, const Object &ob, const Brush &brush, 
                            ss.cache->view_normal_symm,
                        unused,
                        mat);
-
+  // print mat
+  for (int i = 0; i < 4; i++) {
+    printf("%f %f %f %f\n", mat[i][0], mat[i][1], mat[i][2], mat[i][3]);
+  }
   /* NOTE: we ignore the radius scaling done inside of calc_brush_local_mat to
    * duplicate prior behavior.
    *
