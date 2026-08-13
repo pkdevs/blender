@@ -453,7 +453,6 @@ class _draw_tool_settings_context_mode:
         # direction
         if brush.gpencil_sculpt_brush_type in {'THICKNESS', 'STRENGTH', 'PINCH', 'TWIST'}:
             layout.row().prop(brush, "direction", expand=True, text="")
-        print("brush.gpencil_sculpt_brush_type", brush.gpencil_sculpt_brush_type)
         layout.popover("VIEW3D_PT_tools_brush_falloff")
 
         return True
@@ -575,7 +574,6 @@ class _draw_tool_settings_context_mode:
             )
 
         curves_tool = brush.curves_sculpt_brush_type
-        print("curves_tool", curves_tool)
         if curves_tool == 'COMB':
             layout.prop(brush, "falloff_shape", expand=True)
             layout.popover("VIEW3D_PT_tools_brush_falloff", text="Brush Falloff")
