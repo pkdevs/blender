@@ -43,7 +43,7 @@ void RealizeOnDomainOperation::execute()
   const Domain &output_domain = target_domain_;
 
   /* Translate the input such that it is centered in the virtual compositing space. */
-  float2 input_translation = float2(-float2(input_domain.data_size) / 2.0f);
+  float2 input_translation = float2(input_domain.data_offset) - float2(input_domain.data_size) / 2.0f;
 
   /* Add any corrective translation if necessary */
   if (realization_options.interpolation == Interpolation::Nearest) {
@@ -71,7 +71,7 @@ void RealizeOnDomainOperation::execute()
                                                         input_translation);
 
   /* Translate the output such that it is centered in the virtual compositing space. */
-  const float2 output_translation = -float2(output_domain.data_size) / 2.0f;
+  const float2 output_translation = float2(output_domain.data_offset) - float2(output_domain.data_size) / 2.0f;
   const float3x3 output_transformation = math::translate(output_domain.transformation,
                                                          output_translation);
 
