@@ -1657,15 +1657,17 @@ class ShaderNodesInliner {
       }
     }
     if (src_primitive_value && to_socket_type.type == SOCK_SHADER) {
-      if (data_type_conversions_.is_convertible(*from_socket_type.base_cpp_type,
-                                                CPPType::get<ColorGeometry4f>()))
+      const CPPType &from_cpp_type = *from_socket_type.base_cpp_type;
+      const CPPType &to_cpp_type = CPPType::get<ColorGeometry4f>();
+      if (from_cpp_type == to_cpp_type ||
+          data_type_conversions_.is_convertible(from_cpp_type, to_cpp_type))
       {
         /* Insert a Color node when converting a primitive value to a shader. */
         bNode *color_node = this->add_node("ShaderNodeRGB"_ustr);
         const void *src_buffer = src_primitive_value->buffer();
         ColorGeometry4f color;
         data_type_conversions_.convert_to_uninitialized(
-            *from_socket_type.base_cpp_type, CPPType::get<ColorGeometry4f>(), src_buffer, &color);
+            from_cpp_type, to_cpp_type, src_buffer, &color);
         bNodeSocket *output_socket = static_cast<bNodeSocket *>(color_node->outputs.first);
         auto *socket_storage = static_cast<bNodeSocketValueRGBA *>(output_socket->default_value);
         copy_v3_v3(socket_storage->value, color);
