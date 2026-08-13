@@ -597,13 +597,18 @@ void outliner_collection_isolate_flag(const Main & /*bmain*/,
         return std::nullopt;
       },
       [&](TreeElement *te_cmp, PointerRNA &ptr, PropertyRNA *prop) -> std::optional<bool> {
-        RNA_property_boolean_set(&ptr, prop, was_isolated ? default_value : (te_cmp == te) ? !is_hide : is_hide);
+        RNA_property_boolean_set(&ptr,
+                                 prop,
+                                 was_isolated   ? default_value :
+                                 (te_cmp == te) ? !is_hide :
+                                                  is_hide);
         return std::nullopt;
       });
 
   if (STREQ(propname, "exclude")) {
-    BKE_layer_collection_set_flag(static_cast<LayerCollection *>(te->directdata),
-                                  LAYER_COLLECTION_EXCLUDE, !is_hide);
+    /* RNA_property_update excludes children of clicked collection. Restore back values of them. */
+    BKE_layer_collection_set_flag(
+        static_cast<LayerCollection *>(te->directdata), LAYER_COLLECTION_EXCLUDE, !is_hide);
   }
 }
 
@@ -698,7 +703,7 @@ static void outliner_collection_set_flag_recursive_fn(bContext *C,
  * Change the (non-excluded) collection children, and the objects nested to them all.
  */
 static void view_layer__layer_collection_set_flag_recursive_fn(bContext *C,
-                                                               void *poin,
+                                                               void * /*poin*/,
                                                                void *poin2)
 {
   const char *propname = static_cast<const char *>(poin2);
@@ -709,7 +714,7 @@ static void view_layer__layer_collection_set_flag_recursive_fn(bContext *C,
  * Collection properties called from the ViewLayer mode.
  * Change the (non-excluded) collection children, and the objects nested to them all.
  */
-static void view_layer__collection_set_flag_recursive_fn(bContext *C, void *poin, void *poin2)
+static void view_layer__collection_set_flag_recursive_fn(bContext *C, void * /*poin*/, void *poin2)
 {
   const char *propname = static_cast<const char *>(poin2);
   outliner_collection_set_flag_recursive_fn(C, true, propname);
@@ -719,7 +724,7 @@ static void view_layer__collection_set_flag_recursive_fn(bContext *C, void *poin
  * Collection properties called from the Scenes mode.
  * Change the collection children but no objects.
  */
-static void scenes__collection_set_flag_recursive_fn(bContext *C, void *poin, void *poin2)
+static void scenes__collection_set_flag_recursive_fn(bContext *C, void * /*poin*/, void *poin2)
 {
   const char *propname = static_cast<const char *>(poin2);
   outliner_collection_set_flag_recursive_fn(C, true, propname);
