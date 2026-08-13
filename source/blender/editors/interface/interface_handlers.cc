@@ -1708,6 +1708,10 @@ static bool drag_toggle_but_is_supported(const Button *but)
  * then just true or false for toggle buttons with more than 2 states. */
 static int drag_toggle_but_pushed_state(Button *but)
 {
+  BLI_assert(drag_toggle_but_is_supported(but));
+  if (button_is_decorator(but)) {
+    return button_anim_decorate_pushed_state(static_cast<ButtonDecorator *>(but));
+  }
   if (!but->rnapoin && but->poin == nullptr && but->icon) {
     /* Assume icon identifies a unique state, for buttons that
      * work through functions callbacks and don't have an boolean
@@ -5414,16 +5418,8 @@ static int do_but_TEX(
       return WM_UI_HANDLER_BREAK;
     }
     else if (ELEM(event->type, WHEELUPMOUSE, WHEELDOWNMOUSE) && (event->modifier & KM_CTRL)) {
-      if (but->type == ButtonType::SearchMenu) {
-        /* Disable value cycling for search buttons. This causes issues because the search data is
-         * moved to the `afterfuncs`, but search updating requires it again or sometimes this
-         * event can be triggered twice in row without the button being refreshed. See #147539 and
-         * #152976. */
-      }
-      else {
-        const int inc_value = (event->type == WHEELUPMOUSE) ? 1 : -1;
-        return do_but_text_value_cycle(C, but, data, inc_value);
-      }
+      const int inc_value = (event->type == WHEELUPMOUSE) ? 1 : -1;
+      return do_but_text_value_cycle(C, but, data, inc_value);
     }
   }
   else if (data->state == BUTTON_STATE_TEXT_EDITING) {
