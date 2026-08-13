@@ -577,7 +577,6 @@ class NODE_MT_gn_mesh_primitives_base(node_add_menu.NodeMenu):
         self.node_operator(layout, "GeometryNodeMeshCone")
         self.node_operator(layout, "GeometryNodeMeshCube")
         self.node_operator(layout, "GeometryNodeMeshCylinder")
-        self.node_operator(layout, "GeometryNodeMeshQuadSphere")
         self.node_operator(layout, "GeometryNodeMeshGrid")
         self.node_operator(layout, "GeometryNodeMeshIcoSphere")
         self.node_operator(layout, "GeometryNodeMeshCircle")
