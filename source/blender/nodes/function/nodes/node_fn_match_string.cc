@@ -8,6 +8,7 @@
 #include "BKE_node_runtime.hh"
 
 #include "node_function_util.hh"
+#include "node_shader_util.hh"
 
 #include "NOD_socket_search_link.hh"
 
@@ -116,7 +117,7 @@ static void node_register()
 {
   static bke::bNodeType ntype;
 
-  fn_cmp_node_type_base(&ntype, "FunctionNodeMatchString"_ustr);
+  common_node_type_base(&ntype, "FunctionNodeMatchString"_ustr);
   ntype.ui_name = "Match String";
   ntype.ui_description = "Check if a given string exists within another string";
   ntype.nclass = NODE_CLASS_CONVERTER;

@@ -39,7 +39,7 @@ struct NodeAndSocket {
 };
 
 struct PrimitiveSocketValue {
-  std::variant<int, float, bool, ColorGeometry4f, float3, MenuValue> value;
+  std::variant<int, float, bool, ColorGeometry4f, float3, MenuValue, std::string> value;
 
   const void *buffer() const
   {
@@ -71,6 +71,9 @@ struct PrimitiveSocketValue {
     }
     if (type.is<MenuValue>()) {
       return {*static_cast<const MenuValue *>(value.get())};
+    }
+    if (type.is<std::string>()) {
+      return {*static_cast<const std::string *>(value.get())};
     }
     BLI_assert_unreachable();
     return {};
@@ -145,6 +148,9 @@ struct SocketValue {
         case SOCK_MENU:
           return PrimitiveSocketValue{
               MenuValue(socket.default_value_typed<bNodeSocketValueMenu>()->value)};
+        case SOCK_STRING:
+          return PrimitiveSocketValue{
+              std::string(socket.default_value_typed<bNodeSocketValueString>()->value)};
         default:
           return std::nullopt;
       }
@@ -1425,7 +1431,7 @@ class ShaderNodesInliner {
     result.has_missing_inputs = false;
     result.all_inputs_primitive = true;
     for (const bNodeSocket *input_socket : node->input_sockets()) {
-      if (!input_socket->is_available()) {
+      if (this->socket_is_ignored(*input_socket)) {
         continue;
       }
       const SocketInContext input_socket_ctx = {node.context, input_socket};
@@ -1453,7 +1459,7 @@ class ShaderNodesInliner {
 
     /* Prepare inputs to the multi-function evaluation. */
     for (const bNodeSocket *input_socket : node->input_sockets()) {
-      if (!input_socket->is_available()) {
+      if (this->socket_is_ignored(*input_socket)) {
         continue;
       }
       const SocketInContext input_socket_ctx = {node.context, input_socket};
@@ -1466,7 +1472,7 @@ class ShaderNodesInliner {
     /* Prepare output buffers. */
     Vector<void *> output_values;
     for (const bNodeSocket *output_socket : node->output_sockets()) {
-      if (!output_socket->is_available()) {
+      if (this->socket_is_ignored(*output_socket)) {
         continue;
       }
       void *value = scope_.allocate_owned(*output_socket->typeinfo->base_cpp_type);
@@ -1480,7 +1486,7 @@ class ShaderNodesInliner {
     /* Store constant-folded values for the output sockets. */
     int current_output_i = 0;
     for (const bNodeSocket *output_socket : node->output_sockets()) {
-      if (!output_socket->is_available()) {
+      if (this->socket_is_ignored(*output_socket)) {
         continue;
       }
       const void *value = output_values[current_output_i++];
@@ -1562,17 +1568,21 @@ class ShaderNodesInliner {
       }
     }
     if (src_primitive_value && to_socket_type.type == SOCK_SHADER) {
-      /* Insert a Color node when converting a primitive value to a shader. */
-      bNode *color_node = this->add_node("ShaderNodeRGB"_ustr);
-      const void *src_buffer = src_primitive_value->buffer();
-      ColorGeometry4f color;
-      data_type_conversions_.convert_to_uninitialized(
-          *from_socket_type.base_cpp_type, CPPType::get<ColorGeometry4f>(), src_buffer, &color);
-      bNodeSocket *output_socket = static_cast<bNodeSocket *>(color_node->outputs.first);
-      auto *socket_storage = static_cast<bNodeSocketValueRGBA *>(output_socket->default_value);
-      copy_v3_v3(socket_storage->value, color);
-      socket_storage->value[3] = 1.0f;
-      return {LinkedSocketValue{color_node, output_socket}};
+      if (data_type_conversions_.is_convertible(*from_socket_type.base_cpp_type,
+                                                CPPType::get<ColorGeometry4f>()))
+      {
+        /* Insert a Color node when converting a primitive value to a shader. */
+        bNode *color_node = this->add_node("ShaderNodeRGB"_ustr);
+        const void *src_buffer = src_primitive_value->buffer();
+        ColorGeometry4f color;
+        data_type_conversions_.convert_to_uninitialized(
+            *from_socket_type.base_cpp_type, CPPType::get<ColorGeometry4f>(), src_buffer, &color);
+        bNodeSocket *output_socket = static_cast<bNodeSocket *>(color_node->outputs.first);
+        auto *socket_storage = static_cast<bNodeSocketValueRGBA *>(output_socket->default_value);
+        copy_v3_v3(socket_storage->value, color);
+        socket_storage->value[3] = 1.0f;
+        return {LinkedSocketValue{color_node, output_socket}};
+      }
     }
 
     return SocketValue{FallbackValue{}};
@@ -1736,6 +1746,11 @@ class ShaderNodesInliner {
                    std::get<ColorGeometry4f>(value.value));
         break;
       }
+      case SOCK_STRING: {
+        STRNCPY(socket.default_value_typed<bNodeSocketValueString>()->value,
+                std::get<std::string>(value.value).c_str());
+        break;
+      }
       default: {
         BLI_assert_unreachable();
         break;
@@ -1825,6 +1840,11 @@ class ShaderNodesInliner {
   {
     const bool use_refcounting = !(dst_tree_.id.tag & ID_TAG_NO_MAIN);
     return use_refcounting ? 0 : LIB_ID_CREATE_NO_USER_REFCOUNT;
+  }
+
+  bool socket_is_ignored(const bNodeSocket &socket) const
+  {
+    return !socket.is_available() || socket.typeinfo->idname == "NodeSocketVirtual"_ustr;
   }
 
   void report_error(const NodeInContext &node, const StringRef message)
