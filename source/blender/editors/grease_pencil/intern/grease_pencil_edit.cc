@@ -5507,8 +5507,11 @@ static void GREASE_PENCIL_OT_separate_fills(wmOperatorType *ot)
 /** \name Bevel Operator
  * \{ */
 
+enum class ProfileType : int8_t { Circular = 0, Flat = 1 };
+
 static bke::CurvesGeometry bevel_curves(const bke::CurvesGeometry &src_curves,
                                         const IndexMask &selection,
+                                        const ProfileType profile_type,
                                         const float offset,
                                         const int segments)
 {
@@ -5588,9 +5591,21 @@ static bke::CurvesGeometry bevel_curves(const bke::CurvesGeometry &src_curves,
     const float3 c1 = pos_1 + factor_1 * dir_1;
     const float3 c2 = pos_1 + factor_2 * dir_2;
 
-    for (const int j : IndexRange(num_points_per_vertex)) {
-      const float t = float(j) / (num_points_per_vertex - 1);
-      dst_positions[dst_points[j]] = math::interpolate(c1, c2, t);
+    if (profile_type == ProfileType::Flat) {
+      for (const int j : IndexRange(num_points_per_vertex)) {
+        const float t = float(j) / (num_points_per_vertex - 1);
+        dst_positions[dst_points[j]] = math::interpolate(c1, c2, t);
+      }
+    }
+    else if (profile_type == ProfileType::Circular) {
+      const float3 d1 = dir_1 * factor_1;
+      const float3 d2 = dir_2 * factor_2;
+      for (const int j : IndexRange(num_points_per_vertex)) {
+        const float t = float(j) / (num_points_per_vertex - 1);
+        const float s = math::sin(t * M_PI / 2.0f);
+        const float c = math::cos(t * M_PI / 2.0f);
+        dst_positions[dst_points[j]] = d1 * (1.0f - s) + d2 * (1.0f - c) + pos_1;
+      }
     }
   });
 
@@ -5607,6 +5622,7 @@ static wmOperatorStatus grease_pencil_bevel_exec(bContext *C, wmOperator *op)
 
   const float offset = RNA_float_get(op->ptr, "offset");
   const int segments = RNA_int_get(op->ptr, "segments");
+  const ProfileType profile_type = ProfileType(RNA_enum_get(op->ptr, "type"));
 
   std::atomic<bool> changed = false;
   const Vector<MutableDrawingInfo> drawings = retrieve_editable_drawings(*scene, grease_pencil);
@@ -5619,7 +5635,7 @@ static wmOperatorStatus grease_pencil_bevel_exec(bContext *C, wmOperator *op)
     }
 
     bke::CurvesGeometry &curves = info.drawing.strokes_for_write();
-    curves = bevel_curves(curves, selection, offset, segments);
+    curves = bevel_curves(curves, selection, profile_type, offset, segments);
 
     info.drawing.tag_topology_changed();
 
@@ -5636,6 +5652,12 @@ static wmOperatorStatus grease_pencil_bevel_exec(bContext *C, wmOperator *op)
 
 static void GREASE_PENCIL_OT_bevel(wmOperatorType *ot)
 {
+  static const EnumPropertyItem prop_profile_type_types[] = {
+      {int(ProfileType::Circular), "CIRCULAR", 0, "Circular", ""},
+      {int(ProfileType::Flat), "FLAT", 0, "Flat", ""},
+      {0, nullptr, 0, nullptr, nullptr},
+  };
+
   PropertyRNA *prop;
 
   ot->name = "Bevel";
@@ -5653,6 +5675,10 @@ static void GREASE_PENCIL_OT_bevel(wmOperatorType *ot)
 
   prop = RNA_def_int(
       ot->srna, "segments", 1, 1, 1000, "Segments", "Segments for curved edge", 1, 100);
+
+  prop = RNA_def_enum(
+      ot->srna, "type", prop_profile_type_types, int(ProfileType::Circular), "Type", "");
+  RNA_def_property_translation_context(prop, BLT_I18NCONTEXT_ID_GPENCIL);
 }
 
 /** \} */
