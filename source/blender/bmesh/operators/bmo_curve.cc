@@ -328,112 +328,20 @@ static void trim_chains_to_boundaries(Vector<CurveChainData> &chains)
   }
 }
 
-static float3 project_point_onto_line(const float3 &line_a, const float3 &line_b, const float3 &p)
-{
-  const float3 line_dir = line_b - line_a;
-  return line_a + math::project(p - line_a, line_dir);
-}
-
-static void project_knots(Span<BMVert *> verts,
-                          Span<int> knot_indices,
-                          const bool is_closed,
-                          MutableSpan<float3> r_knot_positions)
-{
-  const int knots_num = knot_indices.size();
-
-  for (const int ki : IndexRange(knots_num)) {
-    const int vert_index = knot_indices[ki];
-    const float3 knot_co(verts[vert_index]->co);
-
-    if (!is_closed && (ki == 0 || ki == knots_num - 1)) {
-      r_knot_positions[ki] = knot_co;
-      continue;
-    }
-
-    if (!BM_elem_flag_test(verts[vert_index], BM_ELEM_SELECT)) {
-      r_knot_positions[ki] = knot_co;
-      continue;
-    }
-
-    float3 left_co = knot_co;
-    bool found_left = false;
-    {
-      const int verts_num = verts.size();
-      for (const int step : IndexRange(1, verts_num - 1)) {
-        int index = vert_index - step;
-        if (is_closed) {
-          index = math::mod_periodic(index, verts_num);
-        }
-        else if (index < 0) {
-          break;
-        }
-        if (!knot_indices.contains(index)) {
-          left_co = float3(verts[index]->co);
-          found_left = true;
-          break;
-        }
-      }
-    }
-
-    float3 right_co = knot_co;
-    bool found_right = false;
-    {
-      const int verts_num = verts.size();
-      for (const int step : IndexRange(1, verts_num - 1)) {
-        int index = vert_index + step;
-        if (is_closed) {
-          index = math::mod_periodic(index, verts_num);
-        }
-        else if (index >= verts_num) {
-          break;
-        }
-        if (!knot_indices.contains(index)) {
-          right_co = float3(verts[index]->co);
-          found_right = true;
-          break;
-        }
-      }
-    }
-
-    if (found_left && found_right && math::distance_squared(left_co, right_co) > CURVE_EPSILON) {
-      r_knot_positions[ki] = project_point_onto_line(left_co, right_co, knot_co);
-    }
-    else {
-      r_knot_positions[ki] = knot_co;
-    }
-  }
-}
-
 static void calculate_curve_distances(Span<BMVert *> verts,
                                       Span<int> knot_indices,
-                                      Span<float3> knot_positions,
+                                      Span<int> point_indices,
                                       const bool is_closed,
                                       const bool regular,
                                       Array<float> &r_knot_distances,
-                                      Array<float> &r_point_distances,
-                                      Array<int> &r_point_vert_indices)
+                                      Array<float> &r_point_distances)
 {
   const int verts_num = verts.size();
-  Set<int> knot_set;
-  for (const int ki : knot_indices) {
-    knot_set.add(ki);
-  }
 
   Array<float3> positions(verts_num);
   for (const int i : IndexRange(verts_num)) {
-    if (knot_set.contains(i)) {
-      for (const int ki : knot_indices.index_range()) {
-        if (knot_indices[ki] == i) {
-          positions[i] = knot_positions[ki];
-          break;
-        }
-      }
-    }
-    else {
-      positions[i] = float3(verts[i]->co);
-    }
+    positions[i] = float3(verts[i]->co);
   }
-
   const int dist_size = verts_num + (is_closed ? 1 : 0);
   Array<float> cumulative(dist_size);
   cumulative[0] = 0.0f;
@@ -441,33 +349,32 @@ static void calculate_curve_distances(Span<BMVert *> verts,
       positions, is_closed, cumulative.as_mutable_span().drop_front(1));
 
   r_knot_distances = Array<float>(knot_indices.size() + (is_closed ? 1 : 0));
-  r_point_distances = Array<float>(verts_num - knot_indices.size());
-  r_point_vert_indices = Array<int>(verts_num - knot_indices.size());
+  r_point_distances = Array<float>(point_indices.size());
 
   int knot_index = 0;
   int point_index = 0;
   for (const int i : IndexRange(verts_num)) {
-    if (knot_set.contains(i)) {
-      r_knot_distances[knot_index++] = cumulative[i];
+    if (knot_index < knot_indices.size() && knot_indices[knot_index] == i) {
+      r_knot_distances[knot_index] = cumulative[i];
+      knot_index++;
     }
     else {
       r_point_distances[point_index] = cumulative[i];
-      r_point_vert_indices[point_index] = i;
       point_index++;
     }
   }
 
-  if (is_closed && !r_knot_distances.is_empty()) {
+  if (is_closed) {
     const float total_length = cumulative.last();
     r_knot_distances[knot_index++] = total_length;
   }
 
-  if (regular && r_knot_distances.size() >= 2) {
+  if (regular) {
     const float total = cumulative.last();
     if (total > CURVE_EPSILON) {
       const float spacing = total / float(is_closed ? verts_num : verts_num - 1);
-      for (const int i : r_point_vert_indices.index_range()) {
-        const int vert_index = r_point_vert_indices[i];
+      for (const int i : point_indices.index_range()) {
+        const int vert_index = point_indices[i];
         r_point_distances[i] = float(vert_index) * spacing;
       }
       for (const int ki : knot_indices.index_range()) {
@@ -510,7 +417,6 @@ static void execute_curve_chain(Span<BMVert *> in_verts,
                                 const bool lock_x,
                                 const bool lock_y,
                                 const bool lock_z,
-                                const bool do_project_knots,
                                 Map<BMVert *, float3> &r_moves)
 {
   int verts_num = in_verts.size();
@@ -570,37 +476,33 @@ static void execute_curve_chain(Span<BMVert *> in_verts,
   }
 
   Array<float3> knot_positions(knot_indices.size());
-  if (do_project_knots) {
-    project_knots(verts, knot_indices, local_is_closed, knot_positions);
-  }
-  else {
-    for (const int ki : knot_indices.index_range()) {
-      knot_positions[ki] = float3(verts[knot_indices[ki]]->co);
-    }
-  }
-
-  Array<float3> original_knot_pos(knot_indices.size());
   for (const int ki : knot_indices.index_range()) {
-    original_knot_pos[ki] = float3(verts[knot_indices[ki]]->co);
+    knot_positions[ki] = float3(verts[knot_indices[ki]]->co);
   }
 
   Array<float> knot_distances;
   Array<float> point_distances;
-  Array<int> point_vert_indices;
+  Array<int> point_indices(verts_num - knot_indices.size());
+
+  std::set_difference(IndexRange(verts_num).begin(),
+                      IndexRange(verts_num).end(),
+                      knot_indices.data(),
+                      knot_indices.data() + knot_indices.size(),
+                      point_indices.data());
+
   calculate_curve_distances(verts,
                             knot_indices,
-                            original_knot_pos,
+                            point_indices,
                             local_is_closed,
                             regular,
                             knot_distances,
-                            point_distances,
-                            point_vert_indices);
+                            point_distances);
 
-  if (point_vert_indices.is_empty()) {
+  if (point_indices.is_empty()) {
     return;
   }
 
-  const int points_num = point_vert_indices.size();
+  const int points_num = point_indices.size();
   Array<float3> new_positions(points_num);
   Array<int> segment_indices(points_num);
   Array<float> factors(points_num);
@@ -613,10 +515,10 @@ static void execute_curve_chain(Span<BMVert *> in_verts,
                                                    int(knot_indices.size());
     Array<float3> spline_knot_pos(spline_knots_num);
     for (const int ki : knot_indices.index_range()) {
-      spline_knot_pos[ki] = original_knot_pos[ki];
+      spline_knot_pos[ki] = knot_positions[ki];
     }
     if (local_is_closed) {
-      spline_knot_pos[knot_indices.size()] = original_knot_pos[0];
+      spline_knot_pos[knot_indices.size()] = knot_positions[0];
     }
 
     std::array<Array<SplineCoeffs>, 3> axis_coeffs;
@@ -637,11 +539,11 @@ static void execute_curve_chain(Span<BMVert *> in_verts,
   }
   else if (interpolation == CURVE_INTERP_LINEAR) {
     length_parameterize::interpolate<float3>(
-        original_knot_pos, segment_indices, factors, new_positions);
+        knot_positions, segment_indices, factors, new_positions);
   }
 
-  for (const int i : point_vert_indices.index_range()) {
-    const int vert_index = point_vert_indices[i];
+  for (const int i : point_indices.index_range()) {
+    const int vert_index = point_indices[i];
     BMVert *vert = verts[vert_index];
     float3 new_pos = new_positions[i];
 
@@ -713,7 +615,6 @@ void bmo_curve_exec(BMesh *bm, BMOperator *op)
                         lock_x,
                         lock_y,
                         lock_z,
-                        true,
                         moves);
   }
 
