@@ -16,7 +16,7 @@
 
 namespace blender {
 
-#define GLA_PIXEL_OFS 0.375f
+#define GLA_PIXEL_OFS 0.3750f
 
 struct DRWData;
 struct GPUViewport;
