@@ -773,8 +773,21 @@ class ShaderNodesInliner {
 
   bool is_inliner_evaluation_node(const bNode &node) const
   {
-    /* This check may need to become tighter in the future. */
-    return node.typeinfo->gpu_fn == nullptr;
+    const UString idname = node.typeinfo->idname;
+    return ELEM(idname,
+                "FunctionNodeFindInString"_ustr,
+                "FunctionNodeFormatString"_ustr,
+                "FunctionNodeInputSpecialCharacters"_ustr,
+                "FunctionNodeInputString"_ustr,
+                "FunctionNodeMatchString"_ustr,
+                "FunctionNodeReplaceString"_ustr,
+                "FunctionNodeReverseString"_ustr,
+                "FunctionNodeSetStringCase"_ustr,
+                "FunctionNodeSliceString"_ustr,
+                "FunctionNodeStringLength"_ustr,
+                "FunctionNodeStringToValue"_ustr,
+                "FunctionNodeTrimString"_ustr,
+                "FunctionNodeValueToString"_ustr);
   }
 
   void handle_output_socket__repeat_output(const SocketInContext &socket)
