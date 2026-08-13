@@ -571,14 +571,16 @@ static void create_transition_clamp_data(TransInfo *t, const Scene *scene, Strip
 {
   TransSeq *ts = static_cast<TransSeq *>(TRANS_DATA_CONTAINER_FIRST_SINGLE(t)->custom.type.data);
 
-  bool left_sel = (strip->flag & SEQ_LEFTSEL);
-  bool right_sel = (strip->flag & SEQ_RIGHTSEL);
+  const bool left_sel = flag_is_set(strip->flag, SEQ_LEFTSEL);
+  const bool right_sel = flag_is_set(strip->flag, SEQ_RIGHTSEL);
 
-  Strip *left_input = strip->input1;
-  Strip *right_input = strip->input2;
+  const Strip *left_input = strip->input1;
+  const Strip *right_input = strip->input2;
 
-  left_input->runtime->flag |= seq::StripRuntimeFlag::ShowOffsets;
-  right_input->runtime->flag |= seq::StripRuntimeFlag::ShowOffsets;
+  if (left_sel || right_sel) {
+    left_input->runtime->flag |= seq::StripRuntimeFlag::ShowOffsets;
+    right_input->runtime->flag |= seq::StripRuntimeFlag::ShowOffsets;
+  }
 
   /* If the transition is already past the content start/end, disable clamping. */
   if ((!right_input->is_effect() && strip->left_handle() < right_input->content_start()) ||
