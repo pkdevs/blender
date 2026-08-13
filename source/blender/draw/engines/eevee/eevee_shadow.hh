@@ -203,6 +203,13 @@ class ShadowModule {
   /* Used to call caster_update_ps_ only once per sync (Initialized on begin_sync). */
   bool update_casters_ = false;
 
+  /* When rendering shadows in a loop, we only tag for usage once and setup multiple times.
+   * In this case `run_tagging_` is set to false after the first iteration. */
+  bool32_t run_tagging_ = false;
+
+  /* Number of shadow view needed until we have finished the shadow updates. Render only. */
+  int needed_views_ = 0;
+
   /* -------------------------------------------------------------------- */
   /** \name Tile-map Management
    * \{ */

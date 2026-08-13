@@ -10,12 +10,19 @@
 
 #include "DNA_ID.h"
 #include "DNA_brush_types.h"
+#include "DNA_curves_types.h"
+#include "DNA_grease_pencil_types.h"
+#include "DNA_mesh_types.h"
+#include "DNA_pointcloud_types.h"
 #include "DNA_scene_types.h"
 
 #include "BLI_listbase_iterator.hh"
 #include "BLI_sys_types.hh"
 
+#include "BKE_attribute.h"
+#include "BKE_attribute.hh"
 #include "BKE_main.hh"
+#include "BKE_mesh_legacy_convert.hh"
 #include "BKE_node.hh"
 #include "BKE_node_runtime.hh"
 #include "BKE_paint.hh"
@@ -65,7 +72,7 @@ static void do_version_merge_layers_options_to_inputs(bNodeTree &ntree, bNode &n
   socket.default_value_typed<bNodeSocketValueMenu>()->value = storage.mode;
 }
 
-void do_versions_after_linking_530(FileData * /*fd*/, Main *bmain)
+void do_versions_after_linking_503(FileData * /*fd*/, Main *bmain)
 {
   if (!MAIN_VERSION_FILE_ATLEAST(bmain, 503, 8)) {
     version_node_socket_index_animdata(
@@ -80,7 +87,7 @@ void do_versions_after_linking_530(FileData * /*fd*/, Main *bmain)
    */
 }
 
-void blo_do_versions_530(FileData * /*fd*/, Library * /*lib*/, Main *bmain)
+void blo_do_versions_503(FileData * /*fd*/, Library * /*lib*/, Main *bmain)
 {
   if (!MAIN_VERSION_FILE_ATLEAST(bmain, 503, 1)) {
     for (Scene &scene : bmain->scenes) {
@@ -184,12 +191,129 @@ void blo_do_versions_530(FileData * /*fd*/, Library * /*lib*/, Main *bmain)
     FOREACH_NODETREE_END;
   }
 
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 503, 9)) {
+    for (Brush &brush : bmain->brushes) {
+      if (brush.curve_hardness == nullptr) {
+        brush.curve_hardness = brush.paint_flags & BRUSH_PAINT_HARDNESS_PRESSURE_INVERT ?
+                                   BKE_paint_default_curve_inverted() :
+                                   BKE_paint_default_curve();
+      }
+      if (brush.curve_auto_smooth == nullptr) {
+        brush.curve_auto_smooth = BKE_paint_default_curve_inverted();
+      }
+      if (brush.curve_spacing == nullptr) {
+        brush.curve_spacing = BKE_paint_default_curve();
+      }
+    }
+  }
+
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 503, 11)) {
+    /* This code formerly ran whenever entering Sculpt Mode, it is unlikely that there are any
+     * files that have these settings with invalid values, but since these values have never been
+     * set in versioning, perform this
+     */
+    for (Scene &scene : bmain->scenes) {
+      Sculpt *sd = scene.toolsettings->sculpt;
+      if (sd == nullptr) {
+        continue;
+      }
+
+      const Sculpt defaults = {};
+      if (sd->detail_percent == 0.0f) {
+        sd->detail_percent = defaults.detail_percent;
+      }
+      if (sd->constant_detail == 0.0f) {
+        sd->constant_detail = defaults.constant_detail;
+      }
+      if (sd->detail_size == 0.0f) {
+        sd->detail_size = defaults.detail_size;
+      }
+
+      if (!sd->paint.tile_offset[0]) {
+        sd->paint.tile_offset[0] = 1.0f;
+      }
+      if (!sd->paint.tile_offset[1]) {
+        sd->paint.tile_offset[1] = 1.0f;
+      }
+      if (!sd->paint.tile_offset[2]) {
+        sd->paint.tile_offset[2] = 1.0f;
+      }
+    }
+  }
+
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 503, 12)) {
+    for (Brush &brush : bmain->brushes) {
+      if (brush.ob_mode & OB_MODE_WEIGHT_PAINT || brush.ob_mode & OB_MODE_VERTEX_PAINT) {
+        if (brush.flag & BRUSH_FRONTFACE_FALLOFF_DEPRECATED && brush.falloff_angle_legacy != 0.0f)
+        {
+          switch (brush.falloff_shape) {
+            case PAINT_FALLOFF_SHAPE_SPHERE:
+              brush.mesh_automasking_settings->flags |= BRUSH_AUTOMASKING_BRUSH_NORMAL;
+              brush.mesh_automasking_settings->start_normal_falloff = 0.5f;
+              brush.mesh_automasking_settings->start_normal_limit = brush.falloff_angle_legacy;
+              break;
+            case PAINT_FALLOFF_SHAPE_TUBE:
+              brush.mesh_automasking_settings->flags |= BRUSH_AUTOMASKING_VIEW_NORMAL;
+              brush.mesh_automasking_settings->view_normal_falloff = 0.5f;
+              brush.mesh_automasking_settings->view_normal_limit = brush.falloff_angle_legacy;
+              break;
+          }
+        }
+      }
+    }
+  }
+
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 503, 13)) {
+    auto validate_active_index_fn = [](const AttributeOwner &owner, int &active_index) -> void {
+      const bke::AttributeStorage *storage = owner.get_storage();
+      if ((active_index < 0) || (active_index >= storage->count()) ||
+          !bke::allow_procedural_attribute_access(storage->at_index(active_index).name()))
+      {
+        active_index = -1;
+      }
+    };
+
+    for (Mesh &mesh : bmain->meshes) {
+      validate_active_index_fn(AttributeOwner::from_id(&mesh.id), mesh.attributes_active_index);
+    }
+    for (Curves &curves : bmain->hair_curves) {
+      validate_active_index_fn(AttributeOwner::from_id(&curves.id),
+                               curves.geometry.attributes_active_index);
+    }
+    for (GreasePencil &grease_pencil : bmain->grease_pencils) {
+      validate_active_index_fn(AttributeOwner::from_id(&grease_pencil.id),
+                               grease_pencil.attributes_active_index);
+      /* Also check the attributes_active_index in the individual drawings */
+      for (GreasePencilDrawingBase *drawing_base : grease_pencil.drawings()) {
+        if (drawing_base->type == GP_DRAWING) {
+          GreasePencilDrawing *drawing = reinterpret_cast<GreasePencilDrawing *>(drawing_base);
+          validate_active_index_fn(
+              AttributeOwner(AttributeOwnerType::GreasePencilDrawing, drawing),
+              drawing->geometry.attributes_active_index);
+        }
+      }
+    }
+    for (PointCloud &pointcloud : bmain->pointclouds) {
+      validate_active_index_fn(AttributeOwner::from_id(&pointcloud.id),
+                               pointcloud.attributes_active_index);
+    }
+  }
   /**
    * Always bump subversion in BKE_blender_version.h when adding versioning
    * code here, and wrap it inside a MAIN_VERSION_FILE_ATLEAST check.
    *
    * \note Keep this message at the bottom of the function.
    */
+
+  /* Keep this versioning always enabled at the bottom of the function; it can only be moved
+   * behind a subversion bump when the file format is changed (#mesh_skin_to_legacy is removed from
+   * #mesh_blend_write). Since that function keeps writing the old-format #CD_MVERT_SKIN layer for
+   * forward compatibility, files saved by *this* version also need
+   * this conversion to run unconditionally on read, not just for files older than this subversion.
+   */
+  for (Mesh &mesh : bmain->meshes) {
+    bke::mesh_skin_to_generic(mesh);
+  }
 }
 
 }  // namespace blender
