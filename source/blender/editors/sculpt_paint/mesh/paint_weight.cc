@@ -1176,8 +1176,7 @@ static void do_wpaint_brush_blur(const Depsgraph &depsgraph,
   const bool use_face_sel = (mesh.editflag & ME_EDIT_PAINT_FACE_SEL) != 0;
   const bool use_vert_sel = (mesh.editflag & ME_EDIT_PAINT_VERT_SEL) != 0;
 
-  const float *sculpt_normal_frontface = brush_frontface_normal_from_falloff_shape(
-      ss, brush.falloff_shape);
+  const float3 view_normal = ss.cache->view_normal_symm;
 
   const Span<float3> vert_positions = bke::pbvh::vert_positions_eval(depsgraph, ob);
   const OffsetIndices faces = mesh.faces();
@@ -1239,7 +1238,7 @@ static void do_wpaint_brush_blur(const Depsgraph &depsgraph,
 
         float brush_strength = cache.bstrength;
         const float angle_cos = use_normal ?
-                                    dot_v3v3(sculpt_normal_frontface, vert_normals[vert]) :
+                                    dot_v3v3(view_normal, vert_normals[vert]) :
                                     1.0f;
         if (!vwpaint::test_brush_angle_falloff(brush, angle_cos)) {
           continue;
@@ -1305,8 +1304,7 @@ static void do_wpaint_brush_smear(const Depsgraph &depsgraph,
     select_vert = *attributes.lookup<bool>(".select_vert", bke::AttrDomain::Point);
   }
 
-  const float *sculpt_normal_frontface = brush_frontface_normal_from_falloff_shape(
-      ss, brush.falloff_shape);
+  const float3 view_normal = ss.cache->view_normal_symm;
 
   struct LocalData {
     Vector<float> factors;
@@ -1343,7 +1341,7 @@ static void do_wpaint_brush_smear(const Depsgraph &depsgraph,
 
         float brush_strength = cache.bstrength;
         const float angle_cos = use_normal ?
-                                    dot_v3v3(sculpt_normal_frontface, vert_normals[vert]) :
+                                    dot_v3v3(view_normal, vert_normals[vert]) :
                                     1.0f;
         if (!vwpaint::test_brush_angle_falloff(brush, angle_cos)) {
           continue;
@@ -1413,8 +1411,7 @@ static void do_wpaint_brush_draw(const Depsgraph &depsgraph,
   const bool use_face_sel = (mesh.editflag & ME_EDIT_PAINT_FACE_SEL) != 0;
   const bool use_vert_sel = (mesh.editflag & ME_EDIT_PAINT_VERT_SEL) != 0;
 
-  const float *sculpt_normal_frontface = brush_frontface_normal_from_falloff_shape(
-      ss, brush.falloff_shape);
+  const float3 view_normal = ss.cache->view_normal_symm;
 
   const Span<float3> vert_positions = bke::pbvh::vert_positions_eval(depsgraph, ob);
   const Span<float3> vert_normals = bke::pbvh::vert_normals_eval(depsgraph, ob);
@@ -1467,7 +1464,7 @@ static void do_wpaint_brush_draw(const Depsgraph &depsgraph,
         }
         float brush_strength = cache.bstrength;
         const float angle_cos = use_normal ?
-                                    dot_v3v3(sculpt_normal_frontface, vert_normals[vert]) :
+                                    dot_v3v3(view_normal, vert_normals[vert]) :
                                     1.0f;
         if (!vwpaint::test_brush_angle_falloff(brush, angle_cos)) {
           continue;
@@ -1506,8 +1503,7 @@ static float calculate_average_weight(const Depsgraph &depsgraph,
   const bool use_face_sel = (mesh.editflag & ME_EDIT_PAINT_FACE_SEL) != 0;
   const bool use_vert_sel = (mesh.editflag & ME_EDIT_PAINT_VERT_SEL) != 0;
 
-  const float *sculpt_normal_frontface = brush_frontface_normal_from_falloff_shape(
-      ss, brush.falloff_shape);
+  const float3 view_normal = ss.cache->view_normal_symm;
 
   const Span<float3> vert_positions = bke::pbvh::vert_positions_eval(depsgraph, ob);
   const Span<float3> vert_normals = bke::pbvh::vert_normals_eval(depsgraph, ob);
@@ -1555,7 +1551,7 @@ static float calculate_average_weight(const Depsgraph &depsgraph,
               continue;
             }
             const float angle_cos = use_normal ?
-                                        dot_v3v3(sculpt_normal_frontface, vert_normals[vert]) :
+                                        dot_v3v3(view_normal, vert_normals[vert]) :
                                         1.0f;
             if (angle_cos <= 0.0f) {
               continue;

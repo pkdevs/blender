@@ -1338,15 +1338,6 @@ static void restore_from_undo_step(const Depsgraph &depsgraph, const Sculpt &sd,
 
 }  // namespace undo
 
-const float *brush_frontface_normal_from_falloff_shape(const SculptSession &ss, char falloff_shape)
-{
-  if (falloff_shape == PAINT_FALLOFF_SHAPE_SPHERE) {
-    return ss.cache->sculpt_normal_symm;
-  }
-  BLI_assert(falloff_shape == PAINT_FALLOFF_SHAPE_TUBE);
-  return ss.cache->view_normal_symm;
-}
-
 /* ===== Sculpting =====
  */
 

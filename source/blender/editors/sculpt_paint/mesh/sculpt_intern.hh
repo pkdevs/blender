@@ -838,8 +838,6 @@ IndexMask gather_nodes(const bke::pbvh::Tree &pbvh,
                        const std::optional<float3> &ray_direction,
                        IndexMaskMemory &memory);
 
-const float *brush_frontface_normal_from_falloff_shape(const SculptSession &ss,
-                                                       char falloff_shape);
 void cube_tip_init(const Sculpt &sd, const Object &ob, const Brush &brush, float mat[4][4]);
 
 /** Sample the brush's texture value. */
