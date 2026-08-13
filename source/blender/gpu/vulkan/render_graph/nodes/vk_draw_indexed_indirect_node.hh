@@ -110,7 +110,7 @@ class VKDrawIndexedIndirectNode
           data.indirect_buffer, data.offset, data.draw_count, data.stride);
     }
     else {
-      for (uint32_t i = 0; i < data.draw_count; i++) {
+      for (uint32_t i : IndexRange(data.draw_count)) {
         command_buffer.draw_indexed_indirect(
             data.indirect_buffer, data.offset + i * data.stride, 1, data.stride);
       }
