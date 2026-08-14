@@ -101,7 +101,6 @@ static void freeSeqData(TransInfo *t, TransDataContainer *tc, TransCustomData *c
   const TransData *const td = tc->data;
   Scene *scene = t->scene;
   Editing *ed = seq::editing_get(t->scene);
-  ListBaseT<Strip> *seqbasep = seq::active_seqbase_get(ed);
 
   /* Handle overlapping strips. */
 
@@ -111,6 +110,7 @@ static void freeSeqData(TransInfo *t, TransDataContainer *tc, TransCustomData *c
     transformed_strips.add(strip);
   }
 
+  ListBaseT<Strip> *seqbasep = seq::active_seqbase_get(ed);
   seq::expand_strips(ed, transformed_strips, seq::StripRelation::Effects);
 
   VectorSet<Strip *> dependant;

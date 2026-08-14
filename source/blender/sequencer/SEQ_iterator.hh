@@ -52,16 +52,16 @@ void foreach_strip(ListBaseT<Strip> *seqbase, FunctionRef<bool(Strip *)> callbac
 enum class StripRelation {
   None = 0,
 
-  /** Effects of this strip, including same channel transitions. */
+  /** Effects of this strip, including overlap transitions. */
   Effects = (1 << 0),
-  /** Same channel transitions that have this strip as input. */
-  Transitions = (1 << 1),
   /** If the strip is an effect, the inputs of this strip. */
-  Inputs = (1 << 2),
+  Inputs = (1 << 1),
   /** If the strip is a meta, the strips nested inside this strip. */
-  MetaContents = (1 << 3),
+  MetaContents = (1 << 2),
   /** Strips connected to this strip. */
-  Connected = (1 << 4),
+  Connected = (1 << 3),
+  /** Overlap transitions that have this strip as input. */
+  Transitions = (1 << 4),
 
   /** The entire effect chain a strip participates in, followed in both directions. */
   EffectChain = Effects | Inputs,

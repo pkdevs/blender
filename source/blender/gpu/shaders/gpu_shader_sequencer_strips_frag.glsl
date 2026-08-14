@@ -67,8 +67,9 @@ float4 draw_transition(float sdf, float sdf_inner, float4 col_contents)
 
 void main()
 {
-  SeqStripDrawData strip = strip_data[strip_id];
   float2 co = co_interp;
+
+  SeqStripDrawData strip = strip_data[strip_id];
 
   float2 pos1, pos2, size, center, pos;
   float radius = 0.0f;
@@ -206,6 +207,11 @@ void main()
       float4 hcol = selected_handle ? col_outline : float4(0, 0, 0, 0.2f);
       hcol.a *= clamp(sdf_inner, 0.0f, 1.0f);
       col = blend_color(col, hcol);
+    }
+    /* For an unselected handle, no longer take it into account
+     * for the "inner" distance. */
+    if (!selected_handle) {
+      sdf_inner = sdf;
     }
   }
 
