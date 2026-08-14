@@ -288,15 +288,15 @@ void BLI_listbase_rotate_last(ListBase *lb, void *vlink) ATTR_NONNULL(1, 2);
  */
 BLI_INLINE bool BLI_listbase_is_single(const ListBase *lb)
 {
-  return (lb->first && lb->first == lb->last);
+  return (lb->first_ && lb->first_ == lb->last);
 }
 BLI_INLINE bool BLI_listbase_is_empty(const ListBase *lb)
 {
-  return (lb->first == static_cast<void *>(nullptr));
+  return (lb->first_ == static_cast<void *>(nullptr));
 }
 BLI_INLINE void BLI_listbase_clear(ListBase *lb)
 {
-  lb->first = lb->last = static_cast<void *>(nullptr);
+  lb->first_ = lb->last = static_cast<void *>(nullptr);
 }
 
 /**
@@ -319,7 +319,7 @@ BLI_INLINE bool BLI_listbase_equal(const ListBase *a, const ListBase *b)
   if (b == nullptr) {
     return false;
   }
-  return a->first == b->first && a->last == b->last;
+  return a->first_ == b->first_ && a->last == b->last;
 }
 
 /**
@@ -342,12 +342,12 @@ LinkData *BLI_genericNodeN(void *data);
  * \endcode
  */
 #define LISTBASE_CIRCULAR_FORWARD_BEGIN(type, lb, lb_iter, lb_init) \
-  if ((lb)->first && (lb_init || (lb_init = (type)(lb)->first))) { \
+  if ((lb)->first_ && (lb_init || (lb_init = (type)(lb)->first_))) { \
     lb_iter = (type)(lb_init); \
     do {
 #define LISTBASE_CIRCULAR_FORWARD_END(type, lb, lb_iter, lb_init) \
   } \
-  while ((lb_iter = (lb_iter)->next ? (type)(lb_iter)->next : (type)(lb)->first), \
+  while ((lb_iter = (lb_iter)->next ? (type)(lb_iter)->next : (type)(lb)->first_), \
          (lb_iter != lb_init)) \
     ; \
   } \

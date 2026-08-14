@@ -197,7 +197,7 @@ static void ui_imageuser_layer_menu(bContext * /*C*/, ui::Layout *layout, void *
   }
 
   int nr = fake_name ? 1 : 0;
-  for (RenderLayer *rl = static_cast<RenderLayer *>(rr->layers.first); rl; rl = rl->next, nr++) {
+  for (RenderLayer *rl = static_cast<RenderLayer *>(rr->layers.first_); rl; rl = rl->next, nr++) {
     ui::Button *but = uiDefButV(block,
                                 ui::ButtonType::ButMenu,
                                 rl->name,
@@ -260,7 +260,7 @@ static void ui_imageuser_pass_menu(bContext * /*C*/, ui::Layout *layout, void *r
 
   /* rendered results don't have a Combined pass */
   /* multiview: the ordering must be ascending, so the left-most pass is always the one picked */
-  for (rpass = static_cast<RenderPass *>(rl ? rl->passes.first : nullptr); rpass;
+  for (rpass = static_cast<RenderPass *>(rl ? rl->passes.first_ : nullptr); rpass;
        rpass = rpass->next, nr++)
   {
     /* just show one pass of each kind */
@@ -516,7 +516,7 @@ static bool ui_imageuser_pass_menu_step(bContext *C, int direction, void *rnd_pt
       return false;
     }
 
-    for (rp = static_cast<RenderPass *>(rl->passes.first); rp; rp = rp->next, rp_index++) {
+    for (rp = static_cast<RenderPass *>(rl->passes.first_); rp; rp = rp->next, rp_index++) {
       if (STREQ(rp->name, rpass->name)) {
         iuser->pass = rp_index - 1;
         changed = true;
@@ -1266,7 +1266,7 @@ void uiTemplateImageInfo(ui::Layout *layout, bContext *C, Image *ima, ImageUser 
     int duration = 0;
 
     if (ima->source == IMA_SRC_MOVIE && BKE_image_has_anim(ima)) {
-      MovieReader *anim = (static_cast<ImageAnim *>(ima->anims.first))->anim;
+      MovieReader *anim = (static_cast<ImageAnim *>(ima->anims.first_))->anim;
       if (anim) {
         duration = MOV_get_duration_frames(anim);
       }

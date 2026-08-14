@@ -2472,7 +2472,7 @@ static wmOperatorStatus sequencer_add_duplicate_exec(bContext *C, wmOperator *op
       bmain, scene, scene, &duplicated_strips, ed->current_strips(), dupe_flag, 0);
   deselect_all_strips(scene);
 
-  if (duplicated_strips.first == nullptr) {
+  if (duplicated_strips.first_ == nullptr) {
     return OPERATOR_CANCELLED;
   }
 
@@ -2769,7 +2769,7 @@ static wmOperatorStatus sequencer_offset_clear_exec(bContext *C, wmOperator * /*
       seq::editing_get(scene));
 
   /* For effects, try to find a replacement input. */
-  for (strip = static_cast<Strip *>(ed->current_strips()->first); strip;
+  for (strip = static_cast<Strip *>(ed->current_strips()->first_); strip;
        strip = static_cast<Strip *>(strip->next))
   {
     if (seq::transform_is_locked(channels, strip)) {
@@ -2783,13 +2783,13 @@ static wmOperatorStatus sequencer_offset_clear_exec(bContext *C, wmOperator * /*
   }
 
   /* Update lengths, etc. */
-  strip = static_cast<Strip *>(ed->current_strips()->first);
+  strip = static_cast<Strip *>(ed->current_strips()->first_);
   while (strip) {
     seq::relations_invalidate_cache(scene, strip);
     strip = strip->next;
   }
 
-  for (strip = static_cast<Strip *>(ed->current_strips()->first); strip;
+  for (strip = static_cast<Strip *>(ed->current_strips()->first_); strip;
        strip = static_cast<Strip *>(strip->next))
   {
     if (!strip->is_effect() && (strip->flag & SEQ_SELECT)) {
@@ -2837,7 +2837,7 @@ static wmOperatorStatus sequencer_separate_images_exec(bContext *C, wmOperator *
   int start_ofs, timeline_frame, frame_end;
   int step = RNA_int_get(op->ptr, "length");
 
-  strip = static_cast<Strip *>(seqbase->first); /* Poll checks this is valid. */
+  strip = static_cast<Strip *>(seqbase->first_); /* Poll checks this is valid. */
 
   seq::prefetch_stop(scene);
 
@@ -3264,7 +3264,7 @@ static Strip *find_next_prev_strip(Scene *scene, Strip *test, seq::Side lr, int 
     return nullptr;
   }
 
-  strip = static_cast<Strip *>(ed->current_strips()->first);
+  strip = static_cast<Strip *>(ed->current_strips()->first_);
   while (strip) {
     if ((strip != test) && (test->channel == strip->channel) &&
         ((sel == -1) || (sel == (strip->flag & SEQ_SELECT))))
@@ -4056,7 +4056,7 @@ static wmOperatorStatus sequencer_export_subtitles_exec(bContext *C, wmOperator 
   /* Open and write file. */
   file = BLI_fopen(filepath, "w");
 
-  for (strip = static_cast<Strip *>(text_seq.first); strip; strip = strip_next) {
+  for (strip = static_cast<Strip *>(text_seq.first_); strip; strip = strip_next) {
     TextVars *data = static_cast<TextVars *>(strip->effectdata);
     char timecode_str_start[32];
     char timecode_str_end[32];

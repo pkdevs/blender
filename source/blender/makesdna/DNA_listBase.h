@@ -34,7 +34,7 @@ struct LinkData {
  * function (from dna_genfile.cc) uses it to compute the #pointer_size.
  */
 struct ListBase {
-  void *first, *last;
+  void *first_, *last;
 };
 
 #ifdef __cplusplus
@@ -53,13 +53,13 @@ template<typename T> struct ListBaseT : public ListBase {
   /** True when there is no item in the list. */
   bool is_empty() const
   {
-    return this->first == nullptr;
+    return this->first_ == nullptr;
   }
 
   /** True when there is exactly one item in the list. */
   bool is_single() const
   {
-    return this->first != nullptr && this->last == this->first;
+    return this->first_ != nullptr && this->last == this->first_;
   }
 
   /**
@@ -67,7 +67,7 @@ template<typename T> struct ListBaseT : public ListBase {
    */
   void clear_no_delete()
   {
-    this->first = nullptr;
+    this->first_ = nullptr;
     this->last = nullptr;
   }
 
@@ -79,7 +79,7 @@ template<typename T> struct ListBaseT : public ListBase {
     for ([[maybe_unused]] T &item : this->items_mutable()) {
       MEM_delete_void(static_cast<void *>(&item));
     }
-    this->first = nullptr;
+    this->first_ = nullptr;
     this->last = nullptr;
   }
 
@@ -99,7 +99,7 @@ template<typename T> struct ListBaseT : public ListBase {
    * as some places rely on being able to get a mutable list element from a const list. */
   ListBaseTIterator<T> begin() const
   {
-    return ListBaseTIterator<T>{static_cast<T *>(this->first)};
+    return ListBaseTIterator<T>{static_cast<T *>(this->first_)};
   }
 
   ListBaseTIterator<T> end() const
@@ -114,18 +114,18 @@ template<typename T> struct ListBaseT : public ListBase {
    * Usage: `for(auto [index, item] : list.enumerate())` */
   ListBaseEnumerateWrapper<T> enumerate()
   {
-    return {this->first};
+    return {this->first_};
   }
 
   ListBaseEnumerateWrapper<const T> enumerate() const
   {
-    return {this->first};
+    return {this->first_};
   }
 
   /** Iterator that supports removing the item we're looping over. */
   ListBaseMutableWrapper<T> items_mutable()
   {
-    return {this->first};
+    return {this->first_};
   }
 
   /** Iterator that runs in reverse order. */

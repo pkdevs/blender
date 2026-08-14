@@ -547,7 +547,7 @@ static void version_geometry_nodes_add_realize_instance_nodes(bNodeTree *ntree)
              GEO_NODE_SUBDIVIDE_MESH,
              GEO_NODE_TRIANGULATE))
     {
-      bNodeSocket *geometry_socket = static_cast<bNodeSocket *>(node.inputs.first);
+      bNodeSocket *geometry_socket = static_cast<bNodeSocket *>(node.inputs.first_);
       add_realize_instances_before_socket(ntree, &node, geometry_socket);
     }
     /* Also realize instances for the profile input of the curve to mesh node. */
@@ -594,44 +594,44 @@ static bNodeTree *add_realize_node_tree(Main *bmain)
 
   bke::node_add_link(*node_tree,
                      *group_input,
-                     *static_cast<bNodeSocket *>(group_input->outputs.first),
+                     *static_cast<bNodeSocket *>(group_input->outputs.first_),
                      *realize,
-                     *static_cast<bNodeSocket *>(realize->inputs.first));
+                     *static_cast<bNodeSocket *>(realize->inputs.first_));
   bke::node_add_link(*node_tree,
                      *realize,
-                     *static_cast<bNodeSocket *>(realize->outputs.first),
+                     *static_cast<bNodeSocket *>(realize->outputs.first_),
                      *separate,
-                     *static_cast<bNodeSocket *>(separate->inputs.first));
+                     *static_cast<bNodeSocket *>(separate->inputs.first_));
   bke::node_add_link(*node_tree,
                      *conv,
-                     *static_cast<bNodeSocket *>(conv->outputs.first),
+                     *static_cast<bNodeSocket *>(conv->outputs.first_),
                      *join,
-                     *static_cast<bNodeSocket *>(join->inputs.first));
+                     *static_cast<bNodeSocket *>(join->inputs.first_));
   bke::node_add_link(*node_tree,
                      *separate,
                      *static_cast<bNodeSocket *>(BLI_findlink(&separate->outputs, 3)),
                      *join,
-                     *static_cast<bNodeSocket *>(join->inputs.first));
+                     *static_cast<bNodeSocket *>(join->inputs.first_));
   bke::node_add_link(*node_tree,
                      *separate,
                      *static_cast<bNodeSocket *>(BLI_findlink(&separate->outputs, 1)),
                      *conv,
-                     *static_cast<bNodeSocket *>(conv->inputs.first));
+                     *static_cast<bNodeSocket *>(conv->inputs.first_));
   bke::node_add_link(*node_tree,
                      *separate,
                      *static_cast<bNodeSocket *>(BLI_findlink(&separate->outputs, 2)),
                      *join,
-                     *static_cast<bNodeSocket *>(join->inputs.first));
+                     *static_cast<bNodeSocket *>(join->inputs.first_));
   bke::node_add_link(*node_tree,
                      *separate,
-                     *static_cast<bNodeSocket *>(separate->outputs.first),
+                     *static_cast<bNodeSocket *>(separate->outputs.first_),
                      *join,
-                     *static_cast<bNodeSocket *>(join->inputs.first));
+                     *static_cast<bNodeSocket *>(join->inputs.first_));
   bke::node_add_link(*node_tree,
                      *join,
-                     *static_cast<bNodeSocket *>(join->outputs.first),
+                     *static_cast<bNodeSocket *>(join->outputs.first_),
                      *group_output,
-                     *static_cast<bNodeSocket *>(group_output->inputs.first));
+                     *static_cast<bNodeSocket *>(group_output->inputs.first_));
 
   for (bNode &node : node_tree->nodes) {
     bke::node_set_selected(node, false);
@@ -1246,7 +1246,7 @@ void do_versions_after_linking_300(FileData * /*fd*/, Main *bmain)
       if (ntree.type == NTREE_GEOMETRY) {
         for (bNode &node : ntree.nodes.items_mutable()) {
           if (node.type_legacy == GEO_NODE_BOUNDING_BOX) {
-            bNodeSocket *geometry_socket = static_cast<bNodeSocket *>(node.inputs.first);
+            bNodeSocket *geometry_socket = static_cast<bNodeSocket *>(node.inputs.first_);
             add_realize_instances_before_socket(&ntree, &node, geometry_socket);
           }
         }
@@ -1298,8 +1298,8 @@ void do_versions_after_linking_300(FileData * /*fd*/, Main *bmain)
             continue;
           }
           SpaceSeq *sseq = reinterpret_cast<SpaceSeq *>(&sl);
-          ListBaseT<ARegion> *regionbase = (&sl == area.spacedata.first) ? &area.regionbase :
-                                                                           &sl.regionbase;
+          ListBaseT<ARegion> *regionbase = (&sl == area.spacedata.first_) ? &area.regionbase :
+                                                                            &sl.regionbase;
           sseq->flag |= SEQ_CLAMP_VIEW;
 
           if (ELEM(sseq->view, SEQ_VIEW_PREVIEW, SEQ_VIEW_SEQUENCE_PREVIEW)) {
@@ -1346,7 +1346,7 @@ void do_versions_after_linking_300(FileData * /*fd*/, Main *bmain)
             continue;
           }
 
-          const bool is_first_space = &sl == area.spacedata.first;
+          const bool is_first_space = &sl == area.spacedata.first_;
           ListBaseT<ARegion> *regionbase = is_first_space ? &area.regionbase : &sl.regionbase;
           ARegion *region = BKE_region_find_in_listbase_by_type(regionbase, RGN_TYPE_UI);
           if (region == nullptr) {
@@ -1389,7 +1389,7 @@ static void version_switch_node_input_prefix(Main *bmain)
         if (node.type_legacy == GEO_NODE_SWITCH) {
           for (bNodeSocket &socket : node.inputs) {
             /* Skip the "switch" socket. */
-            if (&socket == node.inputs.first) {
+            if (&socket == node.inputs.first_) {
               continue;
             }
             STRNCPY_UTF8(socket.name, socket.name[0] == 'A' ? "False" : "True");
@@ -1816,7 +1816,7 @@ static void version_liboverride_rnacollections_insertion_object_constraints(
                                           opop.subitem_local_index));
     bConstraint *constraint_src = constraint_anchor != nullptr ?
                                       constraint_anchor->next :
-                                      static_cast<bConstraint *>(constraints->first);
+                                      static_cast<bConstraint *>(constraints->first_);
 
     if (constraint_src == nullptr) {
       /* Invalid case, just remove that override property operation. */
@@ -1850,7 +1850,7 @@ static void version_liboverride_rnacollections_insertion_object(Object *object)
                                             opop.subitem_local_index));
       ModifierData *mod_src = mod_anchor != nullptr ?
                                   mod_anchor->next :
-                                  static_cast<ModifierData *>(object->modifiers.first);
+                                  static_cast<ModifierData *>(object->modifiers.first_);
 
       if (mod_src == nullptr) {
         /* Invalid case, just remove that override property operation. */
@@ -1880,7 +1880,7 @@ static void version_liboverride_rnacollections_insertion_object(Object *object)
       GpencilModifierData *gp_mod_src = gp_mod_anchor != nullptr ?
                                             gp_mod_anchor->next :
                                             static_cast<GpencilModifierData *>(
-                                                object->greasepencil_modifiers.first);
+                                                object->greasepencil_modifiers.first_);
 
       if (gp_mod_src == nullptr) {
         /* Invalid case, just remove that override property operation. */
@@ -1996,8 +1996,8 @@ static void version_fix_image_format_copy(Main *bmain, ImageFormatData *format)
  */
 static void version_ensure_missing_regions(ScrArea *area, SpaceLink *sl)
 {
-  ListBaseT<ARegion> *regionbase = (sl == area->spacedata.first) ? &area->regionbase :
-                                                                   &sl->regionbase;
+  ListBaseT<ARegion> *regionbase = (sl == area->spacedata.first_) ? &area->regionbase :
+                                                                    &sl->regionbase;
 
   switch (sl->spacetype) {
     case SPACE_FILE: {
@@ -2184,8 +2184,8 @@ void blo_do_versions_300(FileData *fd, Library * /*lib*/, Main *bmain)
       for (ScrArea &area : screen.areabase) {
         for (SpaceLink &sl : area.spacedata) {
           if (sl.spacetype == SPACE_SPREADSHEET) {
-            ListBaseT<ARegion> *regionbase = (&sl == area.spacedata.first) ? &area.regionbase :
-                                                                             &sl.regionbase;
+            ListBaseT<ARegion> *regionbase = (&sl == area.spacedata.first_) ? &area.regionbase :
+                                                                              &sl.regionbase;
             ARegion *new_sidebar = do_versions_add_region_if_not_found(
                 regionbase, RGN_TYPE_UI, "sidebar for spreadsheet", RGN_TYPE_FOOTER);
             if (new_sidebar != nullptr) {
@@ -2269,8 +2269,8 @@ void blo_do_versions_300(FileData *fd, Library * /*lib*/, Main *bmain)
       for (ScrArea &area : screen.areabase) {
         for (SpaceLink &sl : area.spacedata) {
           if (sl.spacetype == SPACE_SPREADSHEET) {
-            ListBaseT<ARegion> *regionbase = (&sl == area.spacedata.first) ? &area.regionbase :
-                                                                             &sl.regionbase;
+            ListBaseT<ARegion> *regionbase = (&sl == area.spacedata.first_) ? &area.regionbase :
+                                                                              &sl.regionbase;
             ARegion *spreadsheet_dataset_region = do_versions_add_region_if_not_found(
                 regionbase, RGN_TYPE_CHANNELS, "spreadsheet dataset region", RGN_TYPE_FOOTER);
 
@@ -2717,8 +2717,8 @@ void blo_do_versions_300(FileData *fd, Library * /*lib*/, Main *bmain)
       for (ScrArea &area : screen.areabase) {
         for (SpaceLink &sl : area.spacedata) {
           if (sl.spacetype == SPACE_SEQ) {
-            ListBaseT<ARegion> *regionbase = (&sl == area.spacedata.first) ? &area.regionbase :
-                                                                             &sl.regionbase;
+            ListBaseT<ARegion> *regionbase = (&sl == area.spacedata.first_) ? &area.regionbase :
+                                                                              &sl.regionbase;
             for (ARegion &region : *regionbase) {
               if (region.regiontype == RGN_TYPE_WINDOW) {
                 region.v2d.min[1] = 4.0f;
@@ -2808,8 +2808,8 @@ void blo_do_versions_300(FileData *fd, Library * /*lib*/, Main *bmain)
         for (SpaceLink &sl : area.spacedata) {
           switch (sl.spacetype) {
             case SPACE_SEQ: {
-              ListBaseT<ARegion> *regionbase = (&sl == area.spacedata.first) ? &area.regionbase :
-                                                                               &sl.regionbase;
+              ListBaseT<ARegion> *regionbase = (&sl == area.spacedata.first_) ? &area.regionbase :
+                                                                                &sl.regionbase;
               for (ARegion &region : *regionbase) {
                 if (region.regiontype == RGN_TYPE_WINDOW) {
                   region.v2d.max[1] = seq::MAX_CHANNELS;
@@ -2828,8 +2828,8 @@ void blo_do_versions_300(FileData *fd, Library * /*lib*/, Main *bmain)
     for (bScreen &screen : bmain->screens) {
       for (ScrArea &area : screen.areabase) {
         for (SpaceLink &sl : area.spacedata) {
-          ListBaseT<ARegion> *regionbase = (&sl == area.spacedata.first) ? &area.regionbase :
-                                                                           &sl.regionbase;
+          ListBaseT<ARegion> *regionbase = (&sl == area.spacedata.first_) ? &area.regionbase :
+                                                                            &sl.regionbase;
           ARegion *region_tool = nullptr, *region_head = nullptr;
           int region_tool_index = -1, region_head_index = -1;
           for (const auto [i, region] : (regionbase)->enumerate()) {
@@ -3038,8 +3038,8 @@ void blo_do_versions_300(FileData *fd, Library * /*lib*/, Main *bmain)
       for (ScrArea &area : screen.areabase) {
         for (SpaceLink &sl : area.spacedata) {
           if (sl.spacetype == SPACE_SEQ) {
-            ListBaseT<ARegion> *regionbase = (&sl == area.spacedata.first) ? &area.regionbase :
-                                                                             &sl.regionbase;
+            ListBaseT<ARegion> *regionbase = (&sl == area.spacedata.first_) ? &area.regionbase :
+                                                                              &sl.regionbase;
             for (ARegion &region : *regionbase) {
               if (region.regiontype == RGN_TYPE_WINDOW) {
                 region.v2d.min[1] = 1.0f;
@@ -3055,8 +3055,8 @@ void blo_do_versions_300(FileData *fd, Library * /*lib*/, Main *bmain)
       for (ScrArea &area : screen.areabase) {
         for (SpaceLink &sl : area.spacedata) {
           if (sl.spacetype == SPACE_NODE) {
-            ListBaseT<ARegion> *regionbase = (&sl == area.spacedata.first) ? &area.regionbase :
-                                                                             &sl.regionbase;
+            ListBaseT<ARegion> *regionbase = (&sl == area.spacedata.first_) ? &area.regionbase :
+                                                                              &sl.regionbase;
             for (ARegion &region : *regionbase) {
               if (region.regiontype == RGN_TYPE_WINDOW) {
                 region.v2d.minzoom = std::min(region.v2d.minzoom, 0.05f);
@@ -3158,8 +3158,8 @@ void blo_do_versions_300(FileData *fd, Library * /*lib*/, Main *bmain)
       for (ScrArea &area : screen.areabase) {
         for (SpaceLink &sl : area.spacedata) {
           if (sl.spacetype == SPACE_SPREADSHEET) {
-            ListBaseT<ARegion> *regionbase = (&sl == area.spacedata.first) ? &area.regionbase :
-                                                                             &sl.regionbase;
+            ListBaseT<ARegion> *regionbase = (&sl == area.spacedata.first_) ? &area.regionbase :
+                                                                              &sl.regionbase;
             for (ARegion &region : *regionbase) {
               if (region.regiontype == RGN_TYPE_CHANNELS) {
                 region.regiontype = RGN_TYPE_TOOLS;
@@ -3413,8 +3413,8 @@ void blo_do_versions_300(FileData *fd, Library * /*lib*/, Main *bmain)
             continue;
           }
 
-          ListBaseT<ARegion> *regionbase = (&sl == area.spacedata.first) ? &area.regionbase :
-                                                                           &sl.regionbase;
+          ListBaseT<ARegion> *regionbase = (&sl == area.spacedata.first_) ? &area.regionbase :
+                                                                            &sl.regionbase;
           ARegion *region = BKE_region_find_in_listbase_by_type(regionbase, RGN_TYPE_CHANNELS);
           if (!region) {
             /* Find sequencer tools region. */
@@ -3749,8 +3749,8 @@ void blo_do_versions_300(FileData *fd, Library * /*lib*/, Main *bmain)
             continue;
           }
 
-          ListBaseT<ARegion> *regionbase = (&sl == area.spacedata.first) ? &area.regionbase :
-                                                                           &sl.regionbase;
+          ListBaseT<ARegion> *regionbase = (&sl == area.spacedata.first_) ? &area.regionbase :
+                                                                            &sl.regionbase;
           ARegion *channels_region = BKE_region_find_in_listbase_by_type(regionbase,
                                                                          RGN_TYPE_CHANNELS);
           if (channels_region) {
@@ -3880,8 +3880,8 @@ void blo_do_versions_300(FileData *fd, Library * /*lib*/, Main *bmain)
     for (bScreen &screen : bmain->screens) {
       for (ScrArea &area : screen.areabase) {
         for (SpaceLink &sl : area.spacedata) {
-          ListBaseT<ARegion> *regionbase = (&sl == area.spacedata.first) ? &area.regionbase :
-                                                                           &sl.regionbase;
+          ListBaseT<ARegion> *regionbase = (&sl == area.spacedata.first_) ? &area.regionbase :
+                                                                            &sl.regionbase;
           if (sl.spacetype == SPACE_SEQ) {
             for (ARegion &region : *regionbase) {
               if (region.regiontype == RGN_TYPE_TOOLS) {
@@ -4140,8 +4140,9 @@ void blo_do_versions_300(FileData *fd, Library * /*lib*/, Main *bmain)
 
           /* Ensure expected region state. Previously this was modified to hide/unhide regions. */
 
-          const ListBaseT<ARegion> *regionbase = (&sl == area.spacedata.first) ? &area.regionbase :
-                                                                                 &sl.regionbase;
+          const ListBaseT<ARegion> *regionbase = (&sl == area.spacedata.first_) ?
+                                                     &area.regionbase :
+                                                     &sl.regionbase;
           if (sl.spacetype == SPACE_SEQ) {
             ARegion *region_main = BKE_region_find_in_listbase_by_type(regionbase,
                                                                        RGN_TYPE_WINDOW);
@@ -4260,7 +4261,7 @@ void blo_do_versions_300(FileData *fd, Library * /*lib*/, Main *bmain)
         for (SpaceLink &sl : area.spacedata) {
           /* #107870: Movie Clip Editor hangs in "Clip" view */
           if (sl.spacetype == SPACE_CLIP) {
-            const ListBaseT<ARegion> *regionbase = (&sl == area.spacedata.first) ?
+            const ListBaseT<ARegion> *regionbase = (&sl == area.spacedata.first_) ?
                                                        &area.regionbase :
                                                        &sl.regionbase;
             ARegion *region_main = BKE_region_find_in_listbase_by_type(regionbase,

@@ -372,7 +372,7 @@ static bSound *sound_new_file_exists_ex(Main *bmain, const char *filepath, short
   BLI_path_abs(filepath_abs, BKE_main_blendfile_path(bmain));
 
   /* Search for an existing sound matching both filepath and stream index. */
-  for (sound = static_cast<bSound *>(bmain->sounds.first); sound;
+  for (sound = static_cast<bSound *>(bmain->sounds.first_); sound;
        sound = static_cast<bSound *>(sound->id.next))
   {
     if (sound->stream_index != stream_index) {
@@ -1103,7 +1103,7 @@ void BKE_sound_update_sequencer(Main *main, bSound *sound)
 
   Scene *scene;
 
-  for (scene = static_cast<Scene *>(main->scenes.first); scene;
+  for (scene = static_cast<Scene *>(main->scenes.first_); scene;
        scene = static_cast<Scene *>(scene->id.next))
   {
     seq::sound_update(scene, sound);
@@ -1195,7 +1195,7 @@ void BKE_sound_seek_scene(Main *bmain, Scene *scene)
 {
   std::lock_guard lock(g_state.sound_device_mutex);
   bool animation_playing = false;
-  for (bScreen *screen = static_cast<bScreen *>(bmain->screens.first); screen;
+  for (bScreen *screen = static_cast<bScreen *>(bmain->screens.first_); screen;
        screen = static_cast<bScreen *>(screen->id.next))
   {
     if (screen->animtimer) {

@@ -1132,7 +1132,7 @@ class ViewerPathTreeView : public ui::AbstractTreeView {
     const ViewerPath &viewer_path = sspreadsheet_.geometry_id.viewer_path;
 
     for (const auto [index, elem] : viewer_path.path.enumerate()) {
-      if (&elem == viewer_path.path.first) {
+      if (&elem == viewer_path.path.first_) {
         /* The root item is drawn above the tree view already. */
         continue;
       }

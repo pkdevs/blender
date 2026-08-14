@@ -355,7 +355,7 @@ void BKE_mball_properties_copy(Main *bmain, MetaBall *metaball_src)
    * Solving this case would drastically increase the complexity of this code though, so don't
    * think it would be worth it.
    */
-  for (Object *ob_src = static_cast<Object *>(bmain->objects.first);
+  for (Object *ob_src = static_cast<Object *>(bmain->objects.first_);
        ob_src != nullptr && ID_IS_EDITABLE(ob_src);)
   {
     if (ob_src->data != id_cast<const ID *>(metaball_src)) {

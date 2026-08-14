@@ -227,7 +227,7 @@ static wmOperatorStatus new_particle_target_exec(bContext *C, wmOperator * /*op*
     return OPERATOR_CANCELLED;
   }
 
-  pt = static_cast<ParticleTarget *>(psys->targets.first);
+  pt = static_cast<ParticleTarget *>(psys->targets.first_);
   for (; pt; pt = pt->next) {
     pt->flag &= ~PTARGET_CURRENT;
   }
@@ -274,7 +274,7 @@ static wmOperatorStatus remove_particle_target_exec(bContext *C, wmOperator * /*
     return OPERATOR_CANCELLED;
   }
 
-  pt = static_cast<ParticleTarget *>(psys->targets.first);
+  pt = static_cast<ParticleTarget *>(psys->targets.first_);
   for (; pt; pt = pt->next) {
     if (pt->flag & PTARGET_CURRENT) {
       BLI_remlink(&psys->targets, pt);
@@ -323,7 +323,7 @@ static wmOperatorStatus target_move_up_exec(bContext *C, wmOperator * /*op*/)
     return OPERATOR_CANCELLED;
   }
 
-  pt = static_cast<ParticleTarget *>(psys->targets.first);
+  pt = static_cast<ParticleTarget *>(psys->targets.first_);
   for (; pt; pt = pt->next) {
     if (pt->flag & PTARGET_CURRENT && pt->prev) {
       BLI_remlink(&psys->targets, pt);
@@ -362,7 +362,7 @@ static wmOperatorStatus target_move_down_exec(bContext *C, wmOperator * /*op*/)
   if (!psys) {
     return OPERATOR_CANCELLED;
   }
-  pt = static_cast<ParticleTarget *>(psys->targets.first);
+  pt = static_cast<ParticleTarget *>(psys->targets.first_);
   for (; pt; pt = pt->next) {
     if (pt->flag & PTARGET_CURRENT && pt->next) {
       BLI_remlink(&psys->targets, pt);
@@ -1058,7 +1058,7 @@ static void remove_particle_systems_from_object(Object *ob_to)
     return;
   }
 
-  for (md = static_cast<ModifierData *>(ob_to->modifiers.first); md; md = md_next) {
+  for (md = static_cast<ModifierData *>(ob_to->modifiers.first_); md; md = md_next) {
     md_next = md->next;
 
     /* remove all particle system modifiers as well,
@@ -1113,7 +1113,7 @@ static bool copy_particle_systems_to_object(const bContext *C,
  */
 #define PSYS_FROM_FIRST \
   static_cast<ParticleSystem *>( \
-      (single_psys_from ? single_psys_from : ob_from->particlesystem.first))
+      (single_psys_from ? single_psys_from : ob_from->particlesystem.first_))
 #define PSYS_FROM_NEXT(cur) (single_psys_from ? nullptr : (cur)->next)
   totpsys = single_psys_from ? 1 : ob_from->particlesystem.count();
 

@@ -189,7 +189,7 @@ static void rna_ParticleHairKey_location_object_info(PointerRNA *ptr,
    * hair-key belongs.
    */
 
-  for (md = static_cast<ModifierData *>(ob->modifiers.first); md; md = md->next) {
+  for (md = static_cast<ModifierData *>(ob->modifiers.first_); md; md = md->next) {
     if (md->type == eModifierType_ParticleSystem) {
       psmd = reinterpret_cast<ParticleSystemModifierData *>(md);
       if (psmd && psmd->mesh_final && psmd->psys) {
@@ -449,7 +449,7 @@ static const EnumPropertyItem *rna_Particle_Material_itemf(bContext *C,
 
     if (ob_found == nullptr) {
       /* Iterating over all object is slow, but no better solution exists at the moment. */
-      for (Object *ob = static_cast<Object *>(CTX_data_main(C)->objects.first);
+      for (Object *ob = static_cast<Object *>(CTX_data_main(C)->objects.first_);
            ob && (ob_found == nullptr);
            ob = static_cast<Object *>(ob->id.next))
       {
@@ -550,7 +550,7 @@ static void rna_Particle_change_type(Main *bmain, Scene * /*scene*/, PointerRNA 
   ParticleSettings *part = id_cast<ParticleSettings *>(ptr->owner_id);
 
   /* Iterating over all object is slow, but no better solution exists at the moment. */
-  for (Object *ob = static_cast<Object *>(bmain->objects.first); ob;
+  for (Object *ob = static_cast<Object *>(bmain->objects.first_); ob;
        ob = static_cast<Object *>(ob->id.next))
   {
     for (ParticleSystem &psys : ob->particlesystem) {
@@ -582,7 +582,7 @@ static void rna_Particle_change_physics_type(Main *bmain, Scene *scene, PointerR
     BLI_addtail(&state->rules, boid_new_rule(eBoidRuleType_Separate));
     BLI_addtail(&state->rules, boid_new_rule(eBoidRuleType_Flock));
 
-    (static_cast<BoidRule *>(state->rules.first))->flag |= BOIDRULE_CURRENT;
+    (static_cast<BoidRule *>(state->rules.first_))->flag |= BOIDRULE_CURRENT;
 
     state->flag |= BOIDSTATE_CURRENT;
     BLI_addtail(&part->boids->states, state);
@@ -613,8 +613,8 @@ static ParticleSystem *rna_particle_system_for_target(Object *ob, ParticleTarget
   ParticleSystem *psys;
   ParticleTarget *pt;
 
-  for (psys = static_cast<ParticleSystem *>(ob->particlesystem.first); psys; psys = psys->next) {
-    for (pt = static_cast<ParticleTarget *>(psys->targets.first); pt; pt = pt->next) {
+  for (psys = static_cast<ParticleSystem *>(ob->particlesystem.first_); psys; psys = psys->next) {
+    for (pt = static_cast<ParticleTarget *>(psys->targets.first_); pt; pt = pt->next) {
       if (pt == target) {
         return psys;
       }
@@ -913,7 +913,7 @@ static void rna_ParticleSystem_name_set(PointerRNA *ptr, const char *value)
 static PointerRNA rna_ParticleSystem_active_particle_target_get(PointerRNA *ptr)
 {
   ParticleSystem *psys = static_cast<ParticleSystem *>(ptr->data);
-  ParticleTarget *pt = static_cast<ParticleTarget *>(psys->targets.first);
+  ParticleTarget *pt = static_cast<ParticleTarget *>(psys->targets.first_);
 
   for (; pt; pt = pt->next) {
     if (pt->flag & PTARGET_CURRENT) {
@@ -933,7 +933,7 @@ static void rna_ParticleSystem_active_particle_target_index_range(
 static int rna_ParticleSystem_active_particle_target_index_get(PointerRNA *ptr)
 {
   ParticleSystem *psys = static_cast<ParticleSystem *>(ptr->data);
-  ParticleTarget *pt = static_cast<ParticleTarget *>(psys->targets.first);
+  ParticleTarget *pt = static_cast<ParticleTarget *>(psys->targets.first_);
   int i = 0;
 
   for (; pt; pt = pt->next, i++) {
@@ -948,7 +948,7 @@ static int rna_ParticleSystem_active_particle_target_index_get(PointerRNA *ptr)
 static void rna_ParticleSystem_active_particle_target_index_set(PointerRNA *ptr, int value)
 {
   ParticleSystem *psys = static_cast<ParticleSystem *>(ptr->data);
-  ParticleTarget *pt = static_cast<ParticleTarget *>(psys->targets.first);
+  ParticleTarget *pt = static_cast<ParticleTarget *>(psys->targets.first_);
   int i = 0;
 
   for (; pt; pt = pt->next, i++) {
@@ -1032,7 +1032,7 @@ static bool rna_ParticleSystem_multiple_caches_get(PointerRNA *ptr)
 {
   ParticleSystem *psys = static_cast<ParticleSystem *>(ptr->data);
 
-  return (psys->ptcaches.first != psys->ptcaches.last);
+  return (psys->ptcaches.first_ != psys->ptcaches.last);
 }
 static bool rna_ParticleSystem_editable_get(PointerRNA *ptr)
 {
@@ -1054,7 +1054,7 @@ static bool rna_ParticleSystem_edited_get(PointerRNA *ptr)
 static PointerRNA rna_ParticleDupliWeight_active_get(PointerRNA *ptr)
 {
   ParticleSettings *part = id_cast<ParticleSettings *>(ptr->owner_id);
-  ParticleDupliWeight *dw = static_cast<ParticleDupliWeight *>(part->instance_weights.first);
+  ParticleDupliWeight *dw = static_cast<ParticleDupliWeight *>(part->instance_weights.first_);
 
   for (; dw; dw = dw->next) {
     if (dw->flag & PART_DUPLIW_CURRENT) {
@@ -1074,7 +1074,7 @@ static void rna_ParticleDupliWeight_active_index_range(
 static int rna_ParticleDupliWeight_active_index_get(PointerRNA *ptr)
 {
   ParticleSettings *part = id_cast<ParticleSettings *>(ptr->owner_id);
-  ParticleDupliWeight *dw = static_cast<ParticleDupliWeight *>(part->instance_weights.first);
+  ParticleDupliWeight *dw = static_cast<ParticleDupliWeight *>(part->instance_weights.first_);
   int i = 0;
 
   for (; dw; dw = dw->next, i++) {
@@ -1089,7 +1089,7 @@ static int rna_ParticleDupliWeight_active_index_get(PointerRNA *ptr)
 static void rna_ParticleDupliWeight_active_index_set(PointerRNA *ptr, int value)
 {
   ParticleSettings *part = id_cast<ParticleSettings *>(ptr->owner_id);
-  ParticleDupliWeight *dw = static_cast<ParticleDupliWeight *>(part->instance_weights.first);
+  ParticleDupliWeight *dw = static_cast<ParticleDupliWeight *>(part->instance_weights.first_);
   int i = 0;
 
   for (; dw; dw = dw->next, i++) {

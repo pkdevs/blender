@@ -179,7 +179,7 @@ Vector<Object *> objects_in_mode_or_selected(bContext *C,
   bool use_ob = true;
 
   if (space_type == SPACE_PROPERTIES) {
-    SpaceProperties *sbuts = static_cast<SpaceProperties *>(area->spacedata.first);
+    SpaceProperties *sbuts = static_cast<SpaceProperties *>(area->spacedata.first_);
     id_pin = sbuts->pinid;
   }
 
@@ -212,7 +212,7 @@ Vector<Object *> objects_in_mode_or_selected(bContext *C,
     return ob ? Vector<Object *>({ob}) : Vector<Object *>();
   }
   const View3D *v3d = (space_type == SPACE_VIEW3D) ?
-                          static_cast<const View3D *>(area->spacedata.first) :
+                          static_cast<const View3D *>(area->spacedata.first_) :
                           nullptr;
 
   /* When in a mode that supports multiple active objects, use "objects in mode"
@@ -467,7 +467,7 @@ void collection_hide_menu_draw(const bContext *C, ui::Layout &layout)
   const Main *bmain = CTX_data_main(C);
   const Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
-  LayerCollection *lc_scene = static_cast<LayerCollection *>(view_layer->layer_collections.first);
+  LayerCollection *lc_scene = static_cast<LayerCollection *>(view_layer->layer_collections.first_);
 
   /* Use the "invoke" operator context so the "Shift" modifier is used to extend. */
   layout.operator_context_set(wm::OpCallContext::InvokeRegionWin);
@@ -2255,7 +2255,7 @@ static wmOperatorStatus move_to_collection_exec(bContext *C, wmOperator *op)
 
   Object *single_object = objects.is_single() ?
                               static_cast<Object *>(
-                                  (static_cast<LinkData *>(objects.first))->data) :
+                                  (static_cast<LinkData *>(objects.first_))->data) :
                               nullptr;
 
   if ((single_object != nullptr) && is_link &&

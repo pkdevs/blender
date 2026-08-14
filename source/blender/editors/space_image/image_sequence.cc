@@ -135,7 +135,7 @@ static void image_detect_frame_range(ImageFrameRange *range, const bool detect_u
   /* Image Sequence */
   BLI_listbase_sort(&range->frames, image_cmp_frame);
 
-  ImageFrame *frame = static_cast<ImageFrame *>(range->frames.first);
+  ImageFrame *frame = static_cast<ImageFrame *>(range->frames.first_);
   if (frame != nullptr) {
     int frame_curr = frame->framenr;
     range->offset = frame_curr;

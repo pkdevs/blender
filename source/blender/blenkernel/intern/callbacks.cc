@@ -124,7 +124,7 @@ void BKE_callback_global_finalize()
     ListBaseT<bCallbackFuncStore> *lb = &callback_slots[evt];
     bCallbackFuncStore *funcstore;
     bCallbackFuncStore *funcstore_next;
-    for (funcstore = static_cast<bCallbackFuncStore *>(lb->first); funcstore;
+    for (funcstore = static_cast<bCallbackFuncStore *>(lb->first_); funcstore;
          funcstore = funcstore_next)
     {
       funcstore_next = funcstore->next;

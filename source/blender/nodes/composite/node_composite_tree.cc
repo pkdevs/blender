@@ -195,7 +195,7 @@ void ntreeCompositTagRender(Scene *scene)
    * This is still rather weak though,
    * ideally render struct would store its own main AND original G_MAIN. */
 
-  for (Scene *sce_iter = static_cast<Scene *>(G_MAIN->scenes.first); sce_iter;
+  for (Scene *sce_iter = static_cast<Scene *>(G_MAIN->scenes.first_); sce_iter;
        sce_iter = static_cast<Scene *>(sce_iter->id.next))
   {
     if (sce_iter->compositing_node_group) {

@@ -319,7 +319,7 @@ static void ruler_state_set(RulerInfo *ruler_info, int state)
 
 static void view3d_ruler_item_project(RulerInfo *ruler_info, float3 &r_co, const int xy[2])
 {
-  ED_view3d_win_to_3d_int(static_cast<const View3D *>(ruler_info->area->spacedata.first),
+  ED_view3d_win_to_3d_int(static_cast<const View3D *>(ruler_info->area->spacedata.first_),
                           ruler_info->region,
                           r_co,
                           xy,
@@ -350,7 +350,7 @@ static bool view3d_ruler_item_mousemove(const bContext *C,
     view3d_ruler_item_project(ruler_info, co, mval);
     if (do_thickness && inter->co_index != 1) {
       Scene *scene = DEG_get_input_scene(depsgraph);
-      View3D *v3d = static_cast<View3D *>(ruler_info->area->spacedata.first);
+      View3D *v3d = static_cast<View3D *>(ruler_info->area->spacedata.first_);
       ed::transform::SnapObjectContext *snap_context = ED_gizmotypes_snap_3d_context_ensure(
           scene, snap_gizmo);
       const float2 mval_fl = {float(mval[0]), float(mval[1])};
@@ -389,7 +389,7 @@ static bool view3d_ruler_item_mousemove(const bContext *C,
       }
     }
     else {
-      View3D *v3d = static_cast<View3D *>(ruler_info->area->spacedata.first);
+      View3D *v3d = static_cast<View3D *>(ruler_info->area->spacedata.first_);
       if (do_snap) {
         float3 *prev_point = nullptr;
         eSnapMode snap_type;
@@ -505,9 +505,9 @@ static RulerItem *gzgroup_ruler_item_first_get(wmGizmoGroup *gzgroup)
 {
 #ifndef NDEBUG
   RulerInfo *ruler_info = static_cast<RulerInfo *>(gzgroup->customdata);
-  BLI_assert(gzgroup->gizmos.first == ruler_info->snap_data.gizmo);
+  BLI_assert(gzgroup->gizmos.first_ == ruler_info->snap_data.gizmo);
 #endif
-  return reinterpret_cast<RulerItem *>((static_cast<wmGizmo *>(gzgroup->gizmos.first))->next);
+  return reinterpret_cast<RulerItem *>((static_cast<wmGizmo *>(gzgroup->gizmos.first_))->next);
 }
 
 #define RULER_ID "RulerData3D"

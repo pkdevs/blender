@@ -610,7 +610,7 @@ static void um_arraystore_compact(UndoMesh *um, const UndoMesh *um_ref)
           um->store.keyblocks = MEM_new_array_uninitialized<BArrayState *>(
               mesh->key->totkey, "um_arraystore_compact keyblocks");
 
-          KeyBlock *keyblock = static_cast<KeyBlock *>(mesh->key->block.first);
+          KeyBlock *keyblock = static_cast<KeyBlock *>(mesh->key->block.first_);
           for (int i = 0; i < mesh->key->totkey; i++, keyblock = keyblock->next) {
             const BArrayState *state_reference = (um_ref && um_ref->mesh->key &&
                                                   (i < um_ref->mesh->key->totkey)) ?
@@ -667,7 +667,7 @@ static void um_arraystore_expand_clear(UndoMesh *um)
                                        &mesh->runtime->face_offsets_sharing_info);
   }
   if (mesh->key && mesh->key->totkey) {
-    KeyBlock *keyblock = static_cast<KeyBlock *>(mesh->key->block.first);
+    KeyBlock *keyblock = static_cast<KeyBlock *>(mesh->key->block.first_);
     for (int i = 0; i < mesh->key->totkey; i++, keyblock = keyblock->next) {
       if (keyblock->data) {
         MEM_delete_void(keyblock->data);
@@ -774,7 +774,7 @@ static void um_arraystore_expand(UndoMesh *um)
 
   if (um->store.keyblocks) {
     const size_t stride = mesh->key->elemsize;
-    KeyBlock *keyblock = static_cast<KeyBlock *>(mesh->key->block.first);
+    KeyBlock *keyblock = static_cast<KeyBlock *>(mesh->key->block.first_);
     for (int i = 0; i < mesh->key->totkey; i++, keyblock = keyblock->next) {
       const BArrayState *state = um->store.keyblocks[i];
       size_t state_len;

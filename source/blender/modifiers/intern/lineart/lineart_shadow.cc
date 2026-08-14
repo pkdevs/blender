@@ -162,7 +162,7 @@ static LineartShadowSegment *lineart_give_shadow_segment(LineartData *ld)
   BLI_spin_lock(&ld->lock_cuts);
 
   /* See if there is any already allocated memory we can reuse. */
-  if (ld->wasted_shadow_cuts.first) {
+  if (ld->wasted_shadow_cuts.first_) {
     LineartShadowSegment *es = static_cast<LineartShadowSegment *>(
         BLI_pophead(&ld->wasted_shadow_cuts));
     BLI_spin_unlock(&ld->lock_cuts);
@@ -514,7 +514,7 @@ static void lineart_shadow_edge_cut(LineartData *ld,
 {
   LineartShadowSegment *seg, *i_seg;
   LineartShadowSegment *cut_start_after = static_cast<LineartShadowSegment *>(
-                           e->shadow_segments.first),
+                           e->shadow_segments.first_),
                        *cut_end_before = static_cast<LineartShadowSegment *>(
                            e->shadow_segments.last);
   LineartShadowSegment *new_seg_1 = nullptr, *new_seg_2 = nullptr, *seg_1 = nullptr,
@@ -1273,7 +1273,7 @@ bool lineart_main_try_generate_shadow_v3(
                                nullptr,
                                included_objects);
 
-  if (!ld->geom.vertex_buffer_pointers.first) {
+  if (!ld->geom.vertex_buffer_pointers.first_) {
     /* No geometry loaded, return early. */
     lineart_destroy_render_data_keep_init(ld);
     MEM_delete(ld);

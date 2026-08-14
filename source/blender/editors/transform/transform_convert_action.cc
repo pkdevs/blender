@@ -996,7 +996,7 @@ static void invert_snap(eSnapMode &snap_mode)
 static void recalcData_actedit(TransInfo *t)
 {
   ViewLayer *view_layer = t->view_layer;
-  SpaceAction *saction = static_cast<SpaceAction *>(t->area->spacedata.first);
+  SpaceAction *saction = static_cast<SpaceAction *>(t->area->spacedata.first_);
 
   bAnimContext ac = {nullptr};
   ListBaseT<bAnimListElem> anim_data = {nullptr, nullptr};
@@ -1012,7 +1012,7 @@ static void recalcData_actedit(TransInfo *t)
   ac.obact = BKE_view_layer_active_object_get(view_layer);
   ac.area = t->area;
   ac.region = t->region;
-  ac.sl = static_cast<SpaceLink *>((t->area) ? t->area->spacedata.first : nullptr);
+  ac.sl = static_cast<SpaceLink *>((t->area) ? t->area->spacedata.first_ : nullptr);
   ac.spacetype = eSpace_Type((t->area) ? t->area->spacetype : 0);
   ac.regiontype = eRegion_Type((t->region) ? t->region->regiontype : 0);
 
@@ -1120,7 +1120,7 @@ static void posttrans_mask_clean(Mask *mask)
     BLI_listbase_sort_r(&masklay.splines_shapes, masklay_shape_cmp_frame, &is_double);
 
     if (is_double) {
-      for (masklay_shape = static_cast<MaskLayerShape *>(masklay.splines_shapes.first);
+      for (masklay_shape = static_cast<MaskLayerShape *>(masklay.splines_shapes.first_);
            masklay_shape;
            masklay_shape = masklay_shape_next)
       {
@@ -1132,7 +1132,7 @@ static void posttrans_mask_clean(Mask *mask)
     }
 
 #ifndef NDEBUG
-    for (masklay_shape = static_cast<MaskLayerShape *>(masklay.splines_shapes.first);
+    for (masklay_shape = static_cast<MaskLayerShape *>(masklay.splines_shapes.first_);
          masklay_shape;
          masklay_shape = masklay_shape->next)
     {
@@ -1158,7 +1158,7 @@ static void posttrans_gpd_clean(bGPdata *gpd)
     BKE_gpencil_layer_frames_sort(&gpl, &is_double);
 
     if (is_double) {
-      for (gpf = static_cast<bGPDframe *>(gpl.frames.first); gpf; gpf = gpfn) {
+      for (gpf = static_cast<bGPDframe *>(gpl.frames.first_); gpf; gpf = gpfn) {
         gpfn = gpf->next;
         if (gpfn && gpf->framenum == gpfn->framenum) {
           BKE_gpencil_layer_frame_delete(&gpl, gpf);
@@ -1167,7 +1167,7 @@ static void posttrans_gpd_clean(bGPdata *gpd)
     }
 
 #ifndef NDEBUG
-    for (gpf = static_cast<bGPDframe *>(gpl.frames.first); gpf; gpf = gpf->next) {
+    for (gpf = static_cast<bGPDframe *>(gpl.frames.first_); gpf; gpf = gpf->next) {
       BLI_assert(!gpf->next || gpf->framenum < gpf->next->framenum);
     }
 #endif
@@ -1211,7 +1211,7 @@ static void posttrans_action_clean(bAnimContext *ac, bAction *act)
 
 static void special_aftertrans_update__actedit(bContext *C, TransInfo *t)
 {
-  SpaceAction *saction = static_cast<SpaceAction *>(t->area->spacedata.first);
+  SpaceAction *saction = static_cast<SpaceAction *>(t->area->spacedata.first_);
   bAnimContext ac;
 
   const bool canceled = (t->state == TRANS_CANCEL);

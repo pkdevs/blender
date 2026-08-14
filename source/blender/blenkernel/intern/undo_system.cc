@@ -343,7 +343,7 @@ static void undosys_stack_clear_all_first(UndoStack *ustack, UndoStep *us, UndoS
     bool is_not_empty = true;
     UndoStep *us_iter;
     do {
-      us_iter = static_cast<UndoStep *>(ustack->steps.first);
+      us_iter = static_cast<UndoStep *>(ustack->steps.first_);
       if (us_iter == us_exclude) {
         us_iter = us_iter->next;
       }

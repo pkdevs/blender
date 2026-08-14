@@ -253,7 +253,7 @@ static bNodeSocket *best_socket_output(bNodeTree *ntree,
   /* Always allow linking to an reroute node. The socket type of the reroute sockets might change
    * after the link has been created. */
   if (node->is_reroute()) {
-    return static_cast<bNodeSocket *>(node->outputs.first);
+    return static_cast<bNodeSocket *>(node->outputs.first_);
   }
 
   return nullptr;
@@ -543,7 +543,7 @@ static bNodeSocket *node_link_viewer_get_socket(bNodeTree &ntree,
 {
   if (viewer_node.type_legacy != GEO_NODE_VIEWER) {
     /* In viewer nodes in the compositor, only the first input should be linked to. */
-    return static_cast<bNodeSocket *>(viewer_node.inputs.first);
+    return static_cast<bNodeSocket *>(viewer_node.inputs.first_);
   }
   if (!nodes::GeoViewerItemsAccessor::supports_socket_type(src_socket.typeinfo->type, ntree.type))
   {
@@ -1138,8 +1138,8 @@ static bNodeSocket *node_find_linkable_socket(const bNodeTree &ntree,
                                               bNodeSocket *socket_to_match)
 {
   bNodeSocket *first_socket = socket_to_match->in_out == SOCK_IN ?
-                                  static_cast<bNodeSocket *>(node->inputs.first) :
-                                  static_cast<bNodeSocket *>(node->outputs.first);
+                                  static_cast<bNodeSocket *>(node->inputs.first_) :
+                                  static_cast<bNodeSocket *>(node->outputs.first_);
 
   bNodeSocket *socket = socket_to_match->next ? socket_to_match->next : first_socket;
   while (socket != socket_to_match) {

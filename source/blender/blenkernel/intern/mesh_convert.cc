@@ -402,8 +402,8 @@ void BKE_mesh_to_curve_nurblist(const Mesh *mesh,
   }
   MEM_delete(edge_users);
 
-  if (edges.first) {
-    while (edges.first) {
+  if (edges.first_) {
+    while (edges.first_) {
       /* each iteration find a polyline and add this as a nurbs poly spline */
 
       ListBaseT<VertLink> polyline = {nullptr, nullptr}; /* store a list of VertLink's */
@@ -487,7 +487,7 @@ void BKE_mesh_to_curve_nurblist(const Mesh *mesh,
         nu->bp = MEM_new_array_zeroed<BPoint>(faces_num, "bpoints");
 
         /* add points */
-        vl = static_cast<VertLink *>(polyline.first);
+        vl = static_cast<VertLink *>(polyline.first_);
         int i;
         for (i = 0, bp = nu->bp; i < faces_num;
              i++, bp++, vl = reinterpret_cast<VertLink *>(vl->next))
@@ -523,7 +523,7 @@ void BKE_mesh_to_curve(Main *bmain, Depsgraph *depsgraph, Scene * /*scene*/, Obj
   BKE_mesh_to_curve_nurblist(mesh_eval, &nurblist, 0);
   BKE_mesh_to_curve_nurblist(mesh_eval, &nurblist, 1);
 
-  if (nurblist.first) {
+  if (nurblist.first_) {
     Curve *cu = BKE_curve_add(bmain, ob->id.name + 2, OB_CURVES_LEGACY);
     cu->flag |= CU_3D;
 

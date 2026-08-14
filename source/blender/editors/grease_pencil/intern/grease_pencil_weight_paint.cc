@@ -221,7 +221,7 @@ static int foreach_bone_in_armature_ex(
     count += bone_callback(ob, bone) ? 1 : 0;
     /* Try to execute `bone_callback` for the first child. */
     count += foreach_bone_in_armature_ex(
-        ob, static_cast<Bone *>(bone->childbase.first), bone_callback);
+        ob, static_cast<Bone *>(bone->childbase.first_), bone_callback);
     /* Try to execute `bone_callback` for the next bone at this depth of the recursion. */
     count += foreach_bone_in_armature_ex(ob, bone->next, bone_callback);
   }
@@ -234,7 +234,7 @@ static int foreach_bone_in_armature(Object &ob,
                                     const FunctionRef<bool(Object &, const Bone *)> bone_callback)
 {
   return foreach_bone_in_armature_ex(
-      ob, static_cast<const Bone *>(armature.bonebase.first), bone_callback);
+      ob, static_cast<const Bone *>(armature.bonebase.first_), bone_callback);
 }
 
 bool add_armature_vertex_groups(Object &object, const Object &ob_armature)

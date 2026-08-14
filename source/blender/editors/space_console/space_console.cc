@@ -85,12 +85,12 @@ static void console_free(SpaceLink *sl)
 {
   SpaceConsole *sc = reinterpret_cast<SpaceConsole *>(sl);
 
-  while (sc->scrollback.first) {
-    console_scrollback_free(sc, static_cast<ConsoleLine *>(sc->scrollback.first));
+  while (sc->scrollback.first_) {
+    console_scrollback_free(sc, static_cast<ConsoleLine *>(sc->scrollback.first_));
   }
 
-  while (sc->history.first) {
-    console_history_free(sc, static_cast<ConsoleLine *>(sc->history.first));
+  while (sc->history.first_) {
+    console_history_free(sc, static_cast<ConsoleLine *>(sc->history.first_));
   }
 
   MEM_delete(sc->runtime);
@@ -228,7 +228,7 @@ static std::optional<ARegionIMECursorState> console_main_region_cursor_ime(
   if (region->v2d.flag & V2D_IS_NAVIGATING) {
     return ARegionIMECursorState::PositionPending;
   }
-  SpaceConsole *sc = static_cast<SpaceConsole *>(area->spacedata.first);
+  SpaceConsole *sc = static_cast<SpaceConsole *>(area->spacedata.first_);
   /* Font metrics are cached during draw; zero means the region hasn't been drawn yet. */
   const int line_height = sc->runtime->line_height_px;
   if (line_height == 0) {
@@ -347,7 +347,7 @@ static void console_main_region_listener(const wmRegionListenerParams *params)
     case NC_SPACE: {
       if (wmn->data == ND_SPACE_CONSOLE) {
         if (wmn->action == NA_EDITED) {
-          if ((wmn->reference && area) && (wmn->reference == area->spacedata.first)) {
+          if ((wmn->reference && area) && (wmn->reference == area->spacedata.first_)) {
             /* we've modified the geometry (font size), re-calculate rect */
             console_textview_update_rect(static_cast<SpaceConsole *>(wmn->reference), region);
             ED_region_tag_redraw(region);

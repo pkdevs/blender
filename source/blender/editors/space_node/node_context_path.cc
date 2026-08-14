@@ -88,7 +88,7 @@ static void context_path_add_node_tree_and_node_groups(const SpaceNode &snode,
 {
 
   for (const auto [i, path_item] : snode.treepath.enumerate()) {
-    if (skip_base && &path_item == snode.treepath.first) {
+    if (skip_base && &path_item == snode.treepath.first_) {
       continue;
     }
     if (path_item.nodetree == nullptr) {

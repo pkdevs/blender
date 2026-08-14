@@ -90,8 +90,8 @@ bool ED_view3d_area_user_region(const ScrArea *area, const View3D *v3d, ARegion 
   RegionView3D *rv3d = nullptr;
   ARegion *region_unlock_user = nullptr;
   ARegion *region_unlock = nullptr;
-  const ListBaseT<ARegion> *region_list = (v3d == area->spacedata.first) ? &area->regionbase :
-                                                                           &v3d->regionbase;
+  const ListBaseT<ARegion> *region_list = (v3d == area->spacedata.first_) ? &area->regionbase :
+                                                                            &v3d->regionbase;
 
   BLI_assert(v3d->spacetype == SPACE_VIEW3D);
 
@@ -181,7 +181,7 @@ void ED_view3d_stop_render_preview(wmWindowManager *wm, ARegion *region)
 
 void ED_view3d_shade_update(Main *bmain, View3D *v3d, ScrArea *area)
 {
-  wmWindowManager *wm = static_cast<wmWindowManager *>(bmain->wm.first);
+  wmWindowManager *wm = static_cast<wmWindowManager *>(bmain->wm.first_);
 
   if (v3d->shading.type != OB_RENDER) {
     for (ARegion &region : area->regionbase) {
@@ -293,7 +293,7 @@ static void view3d_init(wmWindowManager * /*wm*/, ScrArea * /*area*/) {}
 static void view3d_exit(wmWindowManager * /*wm*/, ScrArea *area)
 {
   BLI_assert(area->spacetype == SPACE_VIEW3D);
-  View3D *v3d = static_cast<View3D *>(area->spacedata.first);
+  View3D *v3d = static_cast<View3D *>(area->spacedata.first_);
   ED_view3d_local_stats_free(v3d);
 }
 
@@ -617,7 +617,7 @@ static void view3d_main_region_listener(const wmRegionListenerParams *params)
   ARegion *region = params->region;
   const wmNotifier *wmn = params->notifier;
   const Scene *scene = params->scene;
-  View3D *v3d = static_cast<View3D *>(area->spacedata.first);
+  View3D *v3d = static_cast<View3D *>(area->spacedata.first_);
   RegionView3D *rv3d = static_cast<RegionView3D *>(region->regiondata);
   wmGizmoMap *gzmap = region->runtime->gizmo_map;
 
@@ -1477,7 +1477,7 @@ static void space_view3d_listener(const wmSpaceTypeListenerParams *params)
 {
   ScrArea *area = params->area;
   const wmNotifier *wmn = params->notifier;
-  View3D *v3d = static_cast<View3D *>(area->spacedata.first);
+  View3D *v3d = static_cast<View3D *>(area->spacedata.first_);
 
   /* context changes */
   switch (wmn->category) {
@@ -1516,7 +1516,7 @@ static void space_view3d_listener(const wmSpaceTypeListenerParams *params)
 
 static void space_view3d_refresh(const bContext *C, ScrArea *area)
 {
-  View3D *v3d = static_cast<View3D *>(area->spacedata.first);
+  View3D *v3d = static_cast<View3D *>(area->spacedata.first_);
   ED_view3d_local_stats_free(v3d);
 
   if (v3d->localvd && v3d->localvd->runtime.flag & V3D_RUNTIME_LOCAL_MAYBE_EMPTY) {
@@ -1553,8 +1553,8 @@ static void view3d_id_remap_v3d(ScrArea *area,
       ID_REMAP_RESULT_SOURCE_UNASSIGNED)
   {
     /* 3D view might be inactive, in that case needs to use slink->regionbase */
-    ListBaseT<ARegion> *regionbase = (slink == area->spacedata.first) ? &area->regionbase :
-                                                                        &slink->regionbase;
+    ListBaseT<ARegion> *regionbase = (slink == area->spacedata.first_) ? &area->regionbase :
+                                                                         &slink->regionbase;
     for (ARegion &region : *regionbase) {
       if (region.regiontype == RGN_TYPE_WINDOW) {
         RegionView3D *rv3d = is_local ? (static_cast<RegionView3D *>(region.regiondata))->localvd :

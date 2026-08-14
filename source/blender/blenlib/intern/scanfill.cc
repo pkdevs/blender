@@ -386,7 +386,7 @@ static void testvertexnearedge(ScanFillContext *sf_ctx)
       /* find the edge which has vertex eve,
        * NOTE: we _know_ this will crash if 'ed1' becomes nullptr
        * but this will never happen. */
-      ScanFillEdge *ed1 = static_cast<ScanFillEdge *>(sf_ctx->filledgebase.first);
+      ScanFillEdge *ed1 = static_cast<ScanFillEdge *>(sf_ctx->filledgebase.first_);
       for (; !(ed1->v1 == &eve || ed1->v2 == &eve); ed1 = ed1->next) {
         /* do nothing */
       }
@@ -921,7 +921,7 @@ uint BLI_scanfill_calc_ex(ScanFillContext *sf_ctx, const int flag, const float n
 
           toggle++;
           ScanFillEdge *eed = static_cast<ScanFillEdge *>(
-              (toggle & 1) ? sf_ctx->filledgebase.first : sf_ctx->filledgebase.last);
+              (toggle & 1) ? sf_ctx->filledgebase.first_ : sf_ctx->filledgebase.last);
           for (; eed; eed = (toggle & 1) ? eed->next : eed->prev) {
             if (eed->v1->poly_nr == SF_POLY_UNSET && eed->v2->poly_nr == poly) {
               eed->v1->poly_nr = poly;
@@ -988,7 +988,7 @@ uint BLI_scanfill_calc_ex(ScanFillContext *sf_ctx, const int flag, const float n
 
       toggle++;
 
-      ScanFillEdge *eed = static_cast<ScanFillEdge *>((toggle & 1) ? sf_ctx->filledgebase.first :
+      ScanFillEdge *eed = static_cast<ScanFillEdge *>((toggle & 1) ? sf_ctx->filledgebase.first_ :
                                                                      sf_ctx->filledgebase.last);
       ScanFillEdge *eed_next;
       for (; eed; eed = eed_next) {
@@ -1113,9 +1113,9 @@ uint BLI_scanfill_calc_ex(ScanFillContext *sf_ctx, const int flag, const float n
 
   /* STEP 5: MAKE TRIANGLES */
 
-  tempve.first = sf_ctx->fillvertbase.first;
+  tempve.first_ = sf_ctx->fillvertbase.first_;
   tempve.last = sf_ctx->fillvertbase.last;
-  temped.first = sf_ctx->filledgebase.first;
+  temped.first_ = sf_ctx->filledgebase.first_;
   temped.last = sf_ctx->filledgebase.last;
   sf_ctx->fillvertbase.clear_no_delete();
   sf_ctx->filledgebase.clear_no_delete();

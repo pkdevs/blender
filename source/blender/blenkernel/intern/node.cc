@@ -4427,7 +4427,7 @@ bNode *node_copy_with_mapping(bNodeTree *dst_tree,
       return true;
     case SH_NODE_VALUE:
       /* The value is stored in the default value of the first output socket. */
-      static_cast<bNodeSocket *>(node.outputs.first)
+      static_cast<bNodeSocket *>(node.outputs.first_)
           ->default_value_typed<bNodeSocketValueFloat>()
           ->value = *static_cast<const float *>(value);
       return true;
@@ -5375,8 +5375,8 @@ bNodeTree *node_tree_localize(bNodeTree *ntree, std::optional<ID *> new_owner_id
   /* Ensures only a single output node is enabled. */
   node_tree_set_output(*ntree);
 
-  bNode *node_src = reinterpret_cast<bNode *>(ntree->nodes.first);
-  bNode *node_local = reinterpret_cast<bNode *>(ltree->nodes.first);
+  bNode *node_src = reinterpret_cast<bNode *>(ntree->nodes.first_);
+  bNode *node_local = reinterpret_cast<bNode *>(ltree->nodes.first_);
   while (node_src != nullptr) {
     node_local->runtime->original = node_src;
     node_src = node_src->next;
@@ -6218,13 +6218,13 @@ void node_system_exit()
 
 void node_tree_iterator_init(NodeTreeIterStore *ntreeiter, Main *bmain)
 {
-  ntreeiter->ngroup = static_cast<bNodeTree *>(bmain->nodetrees.first);
-  ntreeiter->scene = static_cast<Scene *>(bmain->scenes.first);
-  ntreeiter->mat = static_cast<Material *>(bmain->materials.first);
-  ntreeiter->tex = static_cast<Tex *>(bmain->textures.first);
-  ntreeiter->light = static_cast<Light *>(bmain->lights.first);
-  ntreeiter->world = static_cast<World *>(bmain->worlds.first);
-  ntreeiter->linestyle = static_cast<FreestyleLineStyle *>(bmain->linestyles.first);
+  ntreeiter->ngroup = static_cast<bNodeTree *>(bmain->nodetrees.first_);
+  ntreeiter->scene = static_cast<Scene *>(bmain->scenes.first_);
+  ntreeiter->mat = static_cast<Material *>(bmain->materials.first_);
+  ntreeiter->tex = static_cast<Tex *>(bmain->textures.first_);
+  ntreeiter->light = static_cast<Light *>(bmain->lights.first_);
+  ntreeiter->world = static_cast<World *>(bmain->worlds.first_);
+  ntreeiter->linestyle = static_cast<FreestyleLineStyle *>(bmain->linestyles.first_);
 }
 bool node_tree_iterator_step(NodeTreeIterStore *ntreeiter, bNodeTree **r_nodetree, ID **r_id)
 {

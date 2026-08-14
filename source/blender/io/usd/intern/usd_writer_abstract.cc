@@ -455,7 +455,7 @@ void USDAbstractWriter::write_user_properties(const pxr::UsdPrim &prim,
   const std::string default_namespace(
       usd_export_context_.export_params.custom_properties_namespace);
 
-  for (IDProperty *prop = static_cast<IDProperty *>(properties->data.group.first); prop;
+  for (IDProperty *prop = static_cast<IDProperty *>(properties->data.group.first_); prop;
        prop = prop->next)
   {
     if (displayName_identifier == prop->name) {

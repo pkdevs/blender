@@ -117,7 +117,7 @@ bAction *ANIM_active_action_from_area(const Main &bmain,
     return nullptr;
   }
 
-  const SpaceAction *saction = static_cast<const SpaceAction *>(area->spacedata.first);
+  const SpaceAction *saction = static_cast<const SpaceAction *>(area->spacedata.first_);
   switch (eAnimEdit_Context(saction->mode)) {
     case SACTCONT_ACTION: {
       bAction *active_action = ob->adt ? ob->adt->action : nullptr;
@@ -502,10 +502,10 @@ bool ANIM_animdata_can_have_greasepencil(const eAnimCont_Types type)
 #define ANIMDATA_HAS_ACTION(id) ((id)->adt && (id)->adt->action)
 
 /* quick macro to test if AnimData is usable for drivers */
-#define ANIMDATA_HAS_DRIVERS(id) ((id)->adt && (id)->adt->drivers.first)
+#define ANIMDATA_HAS_DRIVERS(id) ((id)->adt && (id)->adt->drivers.first_)
 
 /* quick macro to test if AnimData is usable for NLA */
-#define ANIMDATA_HAS_NLA(id) ((id)->adt && (id)->adt->nla_tracks.first)
+#define ANIMDATA_HAS_NLA(id) ((id)->adt && (id)->adt->nla_tracks.first_)
 
 /**
  * Quick macro to test for all three above usability tests, performing the appropriate provided
@@ -1789,7 +1789,7 @@ static size_t animfilter_nla(bAnimContext *ac,
   }
   else {
     /* first track to include will the first one (as per normal) */
-    first = static_cast<NlaTrack *>(adt->nla_tracks.first);
+    first = static_cast<NlaTrack *>(adt->nla_tracks.first_);
   }
 
   /* loop over NLA Tracks -
@@ -1869,7 +1869,7 @@ static size_t animfilter_nla_controls(bAnimContext *ac,
          * is the same as owner of animation data. */
         tmp_items += animfilter_fcurves(ac,
                                         &tmp_data,
-                                        static_cast<FCurve *>(strip.fcurves.first),
+                                        static_cast<FCurve *>(strip.fcurves.first_),
                                         ANIMTYPE_NLACURVE,
                                         filter_mode,
                                         &strip,
@@ -1932,7 +1932,7 @@ static size_t animfilter_block_data(bAnimContext *ac,
         { /* Drivers */
           items += animfilter_fcurves(ac,
                                       anim_data,
-                                      static_cast<FCurve *>(adt->drivers.first),
+                                      static_cast<FCurve *>(adt->drivers.first_),
                                       ANIMTYPE_FCURVE,
                                       filter_mode,
                                       nullptr,
@@ -1984,7 +1984,7 @@ static size_t animdata_filter_shapekey(bAnimContext *ac,
       /* loop through the channels adding ShapeKeys as appropriate */
       for (KeyBlock &kb : key->block) {
         /* skip the first one, since that's the non-animatable basis */
-        if (&kb == key->block.first) {
+        if (&kb == key->block.first_) {
           continue;
         }
 
@@ -3268,7 +3268,7 @@ static size_t animdata_filter_dopesheet_ob(bAnimContext *ac,
     }
 
     /* modifiers */
-    if ((ob->modifiers.first) && !(ads_filterflag & ADS_FILTER_NOMODIFIERS)) {
+    if ((ob->modifiers.first_) && !(ads_filterflag & ADS_FILTER_NOMODIFIERS)) {
       tmp_items += animdata_filter_ds_modifiers(ac, &tmp_data, ob, filter_mode);
     }
 
@@ -3283,7 +3283,7 @@ static size_t animdata_filter_dopesheet_ob(bAnimContext *ac,
     }
 
     /* particles */
-    if ((ob->particlesystem.first) && !(ads_filterflag & ADS_FILTER_NOPART)) {
+    if ((ob->particlesystem.first_) && !(ads_filterflag & ADS_FILTER_NOPART)) {
       tmp_items += animdata_filter_ds_particles(ac, &tmp_data, ob, filter_mode);
     }
 
@@ -3758,7 +3758,7 @@ static size_t animdata_filter_dopesheet(bAnimContext *ac,
   BKE_view_layer_synced_ensure(*ac->bmain, scene, view_layer);
   ListBaseT<Base> *object_bases = BKE_view_layer_object_bases_get(view_layer);
   if ((filter_mode & ANIMFILTER_LIST_CHANNELS) && !(ads->flag & ADS_FLAG_NO_DB_SORT) &&
-      (object_bases->first != object_bases->last))
+      (object_bases->first_ != object_bases->last))
   {
     /* Filter list of bases (i.e. objects), sort them, then add their contents normally... */
     /* TODO: Cache the old sorted order - if the set of bases hasn't changed, don't re-sort... */

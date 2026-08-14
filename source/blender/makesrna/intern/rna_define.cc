@@ -99,8 +99,8 @@ void rna_addtail(ListBase *listbase, void *vlink)
   if (listbase->last) {
     (static_cast<Link *>(listbase->last))->next = link;
   }
-  if (listbase->first == nullptr) {
-    listbase->first = link;
+  if (listbase->first_ == nullptr) {
+    listbase->first_ = link;
   }
   listbase->last = link;
 }
@@ -119,8 +119,8 @@ static void rna_remlink(ListBase *listbase, void *vlink)
   if (listbase->last == link) {
     listbase->last = link->prev;
   }
-  if (listbase->first == link) {
-    listbase->first = link->next;
+  if (listbase->first_ == link) {
+    listbase->first_ = link->next;
   }
 }
 
@@ -134,12 +134,12 @@ void rna_freelistN(ListBase *listbase)
 {
   Link *link, *next;
 
-  for (link = static_cast<Link *>(listbase->first); link; link = next) {
+  for (link = static_cast<Link *>(listbase->first_); link; link = next) {
     next = link->next;
     MEM_delete(link);
   }
 
-  listbase->first = listbase->last = nullptr;
+  listbase->first_ = listbase->last = nullptr;
 }
 
 static void rna_brna_structs_add(BlenderRNA *brna, std::unique_ptr<StructRNA> srna_ptr)
@@ -621,10 +621,10 @@ void RNA_define_free(BlenderRNA * /*brna*/)
   }
   rna_freelistN(&DefRNA.allocs);
 
-  for (ds = static_cast<StructDefRNA *>(DefRNA.structs.first); ds;
+  for (ds = static_cast<StructDefRNA *>(DefRNA.structs.first_); ds;
        ds = static_cast<StructDefRNA *>(ds->cont.next))
   {
-    for (dfunc = static_cast<FunctionDefRNA *>(ds->functions.first); dfunc;
+    for (dfunc = static_cast<FunctionDefRNA *>(ds->functions.first_); dfunc;
          dfunc = static_cast<FunctionDefRNA *>(dfunc->cont.next))
     {
       rna_freelistN(&dfunc->cont.properties);
@@ -701,7 +701,7 @@ void RNA_struct_free(BlenderRNA *brna, StructRNA *srna)
     }
   }
   MEM_SAFE_DELETE(srna->cont.prop_lookup_set);
-  for (prop = static_cast<PropertyRNA *>(srna->cont.properties.first); prop; prop = nextprop) {
+  for (prop = static_cast<PropertyRNA *>(srna->cont.properties.first_); prop; prop = nextprop) {
     nextprop = prop->next;
 
     RNA_def_property_free_pointers(prop);
@@ -712,7 +712,7 @@ void RNA_struct_free(BlenderRNA *brna, StructRNA *srna)
   }
 
   for (const std::unique_ptr<FunctionRNA> &func : srna->functions) {
-    for (parm = static_cast<PropertyRNA *>(func->cont.properties.first); parm; parm = nextparm) {
+    for (parm = static_cast<PropertyRNA *>(func->cont.properties.first_); parm; parm = nextparm) {
       nextparm = parm->next;
 
       RNA_def_property_free_pointers(parm);
@@ -794,7 +794,7 @@ static StructDefRNA *rna_find_def_struct(StructRNA *srna)
 {
   StructDefRNA *ds;
 
-  for (ds = static_cast<StructDefRNA *>(DefRNA.structs.first); ds;
+  for (ds = static_cast<StructDefRNA *>(DefRNA.structs.first_); ds;
        ds = static_cast<StructDefRNA *>(ds->cont.next))
   {
     if (ds->srna == srna) {
@@ -5171,7 +5171,7 @@ static void rna_def_property_free(StructOrFunctionRNA *cont_, PropertyRNA *prop)
 static PropertyRNA *rna_def_property_find_py_id(ContainerRNA *cont, const char *identifier_c_str)
 {
   const UString identifier(identifier_c_str);
-  for (PropertyRNA *prop = static_cast<PropertyRNA *>(cont->properties.first); prop;
+  for (PropertyRNA *prop = static_cast<PropertyRNA *>(cont->properties.first_); prop;
        prop = prop->next)
   {
     if (prop->identifier == identifier) {

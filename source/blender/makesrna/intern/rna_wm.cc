@@ -713,7 +713,7 @@ static int rna_Operator_name_length(PointerRNA *ptr)
 static bool rna_Operator_has_reports_get(PointerRNA *ptr)
 {
   wmOperator *op = static_cast<wmOperator *>(ptr->data);
-  return (op->reports && op->reports->list.first);
+  return (op->reports && op->reports->list.first_);
 }
 
 static PointerRNA rna_Operator_layout_get(PointerRNA *ptr)
@@ -1206,16 +1206,16 @@ static const EnumPropertyItem *rna_KeyMapItem_propvalue_itemf(bContext * /*C*/,
                                                               PropertyRNA * /*prop*/,
                                                               bool * /*r_free*/)
 {
-  wmWindowManager *wm = static_cast<wmWindowManager *>(G_MAIN->wm.first);
+  wmWindowManager *wm = static_cast<wmWindowManager *>(G_MAIN->wm.first_);
   wmKeyConfig *kc;
   wmKeyMap *km;
 
-  for (kc = static_cast<wmKeyConfig *>(wm->runtime->keyconfigs.first); kc; kc = kc->next) {
-    for (km = static_cast<wmKeyMap *>(kc->keymaps.first); km; km = km->next) {
+  for (kc = static_cast<wmKeyConfig *>(wm->runtime->keyconfigs.first_); kc; kc = kc->next) {
+    for (km = static_cast<wmKeyMap *>(kc->keymaps.first_); km; km = km->next) {
       /* only check if it's a modal keymap */
       if (km->modal_items) {
         wmKeyMapItem *kmi;
-        for (kmi = static_cast<wmKeyMapItem *>(km->items.first); kmi; kmi = kmi->next) {
+        for (kmi = static_cast<wmKeyMapItem *>(km->items.first_); kmi; kmi = kmi->next) {
           if (kmi == ptr->data) {
             return static_cast<const EnumPropertyItem *>(km->modal_items);
           }
@@ -1948,7 +1948,7 @@ static bool rna_Operator_unregister(Main *bmain, StructRNA *type)
   ui::refresh_for_srna_unregister(bmain, ot->srna);
   ui::refresh_for_srna_unregister(bmain, type);
   /* update while blender is running */
-  wm = static_cast<wmWindowManager *>(bmain->wm.first);
+  wm = static_cast<wmWindowManager *>(bmain->wm.first_);
   if (wm) {
     WM_operator_stack_clear(wm);
 

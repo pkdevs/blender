@@ -1995,7 +1995,7 @@ void LayerGroup::move_node_top(TreeNode &node)
 void LayerGroup::move_node_bottom(TreeNode &node)
 {
   BLI_remlink(&this->children, &node);
-  BLI_insertlinkbefore(&this->children, this->children.first, &node);
+  BLI_insertlinkbefore(&this->children, this->children.first_, &node);
   this->tag_nodes_cache_dirty();
 }
 
@@ -2021,7 +2021,7 @@ bool LayerGroup::unlink_node(TreeNode &link, const bool keep_children)
      * children. */
     ListBaseT<GreasePencilLayerTreeNode> link_children = link.as_group().children;
     GreasePencilLayerTreeNode *first = static_cast<GreasePencilLayerTreeNode *>(
-        link_children.first);
+        link_children.first_);
     GreasePencilLayerTreeNode *last = static_cast<GreasePencilLayerTreeNode *>(link_children.last);
 
     /* Rewrite the parent pointers. */
@@ -2043,8 +2043,8 @@ bool LayerGroup::unlink_node(TreeNode &link, const bool keep_children)
     if (this->children.last == &link) {
       this->children.last = last;
     }
-    if (this->children.first == &link) {
-      this->children.first = first;
+    if (this->children.first_ == &link) {
+      this->children.first_ = first;
     }
 
     /* Listbase has been inserted in `this->children` we can clear the pointers in `link`. */

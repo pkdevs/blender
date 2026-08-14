@@ -1957,7 +1957,7 @@ void Armatures::draw_armature_edit(Armatures::DrawContext *ctx)
 
   const eArmature_Drawtype arm_drawtype = eArmature_Drawtype(arm.drawtype);
 
-  for (eBone = static_cast<EditBone *>(arm.edbo->first),
+  for (eBone = static_cast<EditBone *>(arm.edbo->first_),
       /* Note: Selection Next handles the object id merging later. */
        index = ctx->bone_buf ? 0x0 : ob_orig->runtime->select_id;
        eBone;
@@ -2085,7 +2085,7 @@ void Armatures::draw_armature_pose(Armatures::DrawContext *ctx)
 
   const eArmature_Drawtype arm_drawtype = eArmature_Drawtype(arm.drawtype);
 
-  for (bPoseChannel *pchan = static_cast<bPoseChannel *>(ob->pose->chanbase.first); pchan;
+  for (bPoseChannel *pchan = static_cast<bPoseChannel *>(ob->pose->chanbase.first_); pchan;
        pchan = pchan->next, index += 0x10000)
   {
     if (!animrig::bone_is_visible(&arm, {pchan, pchan->bone_get(*ob)})) {

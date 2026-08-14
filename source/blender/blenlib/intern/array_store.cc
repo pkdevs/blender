@@ -461,7 +461,7 @@ static void bchunk_list_decref(BArrayMemory *bs_mem, BChunkList *chunk_list)
 {
   BLI_assert(chunk_list->users > 0);
   if (chunk_list->users == 1) {
-    for (BChunkRef *cref = static_cast<BChunkRef *>(chunk_list->chunk_refs.first), *cref_next;
+    for (BChunkRef *cref = static_cast<BChunkRef *>(chunk_list->chunk_refs.first_), *cref_next;
          cref;
          cref = cref_next)
     {
@@ -522,7 +522,7 @@ static void bchunk_list_ensure_min_size_last(const BArrayInfo *info,
         /* We have enough space to merge. */
 
         /* Remove last from the linked-list. */
-        BLI_assert(chunk_list->chunk_refs.last != chunk_list->chunk_refs.first);
+        BLI_assert(chunk_list->chunk_refs.last != chunk_list->chunk_refs.first_);
         cref->prev->next = nullptr;
         chunk_list->chunk_refs.last = cref->prev;
         chunk_list->chunk_refs_len -= 1;
@@ -1295,7 +1295,8 @@ static BChunkList *bchunk_list_from_data_merge(const BArrayInfo *info,
   {
     bool full_match = true;
 
-    const BChunkRef *cref = static_cast<const BChunkRef *>(chunk_list_reference->chunk_refs.first);
+    const BChunkRef *cref = static_cast<const BChunkRef *>(
+        chunk_list_reference->chunk_refs.first_);
     while (i_prev < data_len_original) {
       if (cref != nullptr && bchunk_data_compare(cref->link, data, data_len_original, i_prev)) {
         cref_match_first = cref;
@@ -1326,7 +1327,8 @@ static BChunkList *bchunk_list_from_data_merge(const BArrayInfo *info,
   BChunkList *chunk_list = bchunk_list_new(bs_mem, data_len_original);
   if (cref_match_first != nullptr) {
     size_t chunk_size_step = 0;
-    const BChunkRef *cref = static_cast<const BChunkRef *>(chunk_list_reference->chunk_refs.first);
+    const BChunkRef *cref = static_cast<const BChunkRef *>(
+        chunk_list_reference->chunk_refs.first_);
     while (true) {
       BChunk *chunk = cref->link;
       chunk_size_step += chunk->data_len;
@@ -1420,7 +1422,7 @@ static BChunkList *bchunk_list_from_data_merge(const BArrayInfo *info,
     /* Copy matching chunks, creates using the same 'layout' as the reference. */
     const BChunkRef *cref = cref_match_first ? cref_match_first->next :
                                                static_cast<const BChunkRef *>(
-                                                   chunk_list_reference->chunk_refs.first);
+                                                   chunk_list_reference->chunk_refs.first_);
     while (i_prev != data_len) {
       const size_t i = i_prev + cref->link->data_len;
       BLI_assert(i != i_prev);
@@ -1445,7 +1447,7 @@ static BChunkList *bchunk_list_from_data_merge(const BArrayInfo *info,
   }
   else if ((data_len - i_prev >= info->chunk_byte_size) &&
            (chunk_list_reference->chunk_refs_len >= chunk_list_reference_skip_len) &&
-           (chunk_list_reference->chunk_refs.first != nullptr))
+           (chunk_list_reference->chunk_refs.first_ != nullptr))
   {
 
     /* --------------------------------------------------------------------
@@ -1497,7 +1499,7 @@ static BChunkList *bchunk_list_from_data_merge(const BArrayInfo *info,
         chunk_list_reference_bytes_remaining += cref->link->data_len;
       }
       else {
-        cref = static_cast<const BChunkRef *>(chunk_list_reference->chunk_refs.first);
+        cref = static_cast<const BChunkRef *>(chunk_list_reference->chunk_refs.first_);
       }
 
 #ifdef USE_PARANOID_CHECKS
@@ -1778,7 +1780,7 @@ static void array_store_free_data(BArrayStore *bs)
   }
 
   /* Free states. */
-  for (BArrayState *state = static_cast<BArrayState *>(bs->states.first), *state_next; state;
+  for (BArrayState *state = static_cast<BArrayState *>(bs->states.first_), *state_next; state;
        state = state_next)
   {
     state_next = state->next;

@@ -186,12 +186,12 @@ static Scene *preview_prepare_scene(const Main *bmain,
   if (pr_main == nullptr) {
     return nullptr;
   }
-  scene_preview = static_cast<Scene *>(pr_main->scenes.first);
+  scene_preview = static_cast<Scene *>(pr_main->scenes.first_);
   if (scene_preview == nullptr) {
     return nullptr;
   }
 
-  ViewLayer *view_layer = static_cast<ViewLayer *>(scene_preview->view_layers.first);
+  ViewLayer *view_layer = static_cast<ViewLayer *>(scene_preview->view_layers.first_);
 
   /* Only enable the combined render-pass. */
   view_layer->passflag = SCE_PASS_COMBINED;
@@ -289,7 +289,7 @@ static ImBuf *get_image_from_viewlayer_and_pass(RenderResult &rr,
     rl = RE_GetRenderLayer(&rr, layer_name);
   }
   else {
-    rl = static_cast<RenderLayer *>(rr.layers.first);
+    rl = static_cast<RenderLayer *>(rr.layers.first_);
   }
   if (rl == nullptr) {
     return nullptr;
@@ -299,7 +299,7 @@ static ImBuf *get_image_from_viewlayer_and_pass(RenderResult &rr,
     rp = RE_pass_find_by_name(rl, pass_name, nullptr);
   }
   else {
-    rp = static_cast<RenderPass *>(rl->passes.first);
+    rp = static_cast<RenderPass *>(rl->passes.first_);
   }
   ImBuf *ibuf = rp ? rp->ibuf : nullptr;
   return ibuf;
@@ -601,7 +601,7 @@ static void preview_render(ShaderNodesPreviewJob &job_data)
   connect_nodes_to_aovs(treepath, job_data.AOV_nodes);
 
   /* Create the AOV passes for the viewlayer. */
-  ViewLayer *AOV_layer = static_cast<ViewLayer *>(scene->view_layers.first);
+  ViewLayer *AOV_layer = static_cast<ViewLayer *>(scene->view_layers.first_);
   for (const NodeSocketPair &nodesocket_iter : job_data.shader_nodes) {
     ViewLayer *vl = BKE_view_layer_add(
         job_data.bmain, scene, nodesocket_iter.first->name, AOV_layer, VIEWLAYER_ADD_COPY);
@@ -811,7 +811,7 @@ static void ensure_nodetree_previews(const bContext &C,
   bNodeTreePath *root_path = MEM_new<bNodeTreePath>(__func__);
   root_path->nodetree = job_data->mat_copy->nodetree;
   job_data->treepath_copy.append(root_path);
-  for (bNodeTreePath *original_path = static_cast<bNodeTreePath *>(treepath.first)->next;
+  for (bNodeTreePath *original_path = static_cast<bNodeTreePath *>(treepath.first_)->next;
        original_path;
        original_path = original_path->next)
   {

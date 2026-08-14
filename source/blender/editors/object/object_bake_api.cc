@@ -178,7 +178,7 @@ static bool bake_break(void * /*rjv*/)
 static void bake_update_image(ScrArea *area, Image *image)
 {
   if (area && area->spacetype == SPACE_IMAGE) { /* in case the user changed while baking */
-    SpaceImage *sima = static_cast<SpaceImage *>(area->spacedata.first);
+    SpaceImage *sima = static_cast<SpaceImage *>(area->spacedata.first_);
     if (sima) {
       sima->image = image;
     }
@@ -1536,7 +1536,7 @@ static wmOperatorStatus bake(const BakeAPIRender *bkr,
     else if (bkr->is_cage) {
       bool is_changed = false;
 
-      ModifierData *md = static_cast<ModifierData *>(ob_low_eval->modifiers.first);
+      ModifierData *md = static_cast<ModifierData *>(ob_low_eval->modifiers.first_);
       while (md) {
         ModifierData *md_next = md->next;
 

@@ -496,7 +496,7 @@ static bool wm_window_is_last_main_window(wmWindowManager *wm, wmWindow *win)
     return false;
   }
   wmWindow *win_other;
-  for (win_other = static_cast<wmWindow *>(wm->windows.first); win_other;
+  for (win_other = static_cast<wmWindow *>(wm->windows.first_); win_other;
        win_other = win_other->next)
   {
     if (win_other != win && win_other->parent == nullptr && !WM_window_is_temp_screen(win_other)) {
@@ -521,7 +521,7 @@ void wm_window_close_request(bContext *C, wmWindowManager *wm, wmWindow *win)
   {
     bScreen *screen = WM_window_get_active_screen(win);
     if (screen && screen->temp && BLI_listbase_is_single(&screen->areabase)) {
-      const ScrArea *area = static_cast<const ScrArea *>(screen->areabase.first);
+      const ScrArea *area = static_cast<const ScrArea *>(screen->areabase.first_);
       rctf *stored_bounds = stored_window_bounds(eSpace_Type(area->spacetype));
 
       if (stored_bounds) {
@@ -606,7 +606,7 @@ static std::string wm_window_title_text(
     /* Not a main window. */
     bScreen *screen = WM_window_get_active_screen(win);
     const bool is_single = screen && BLI_listbase_is_single(&screen->areabase);
-    ScrArea *area = (screen) ? static_cast<ScrArea *>(screen->areabase.first) : nullptr;
+    ScrArea *area = (screen) ? static_cast<ScrArea *>(screen->areabase.first_) : nullptr;
     if (is_single && area && area->spacetype != SPACE_EMPTY) {
       return IFACE_(ED_area_name(area).c_str());
     }
@@ -843,7 +843,7 @@ void wm_window_titlebar_theme_context_set(const wmWindow *win, const bScreen *sc
   }
   /* For single editor floating windows, use the editor header color. */
   else if (screen && BLI_listbase_is_single(&screen->areabase)) {
-    const ScrArea *main_area = static_cast<ScrArea *>(screen->areabase.first);
+    const ScrArea *main_area = static_cast<ScrArea *>(screen->areabase.first_);
     ui::theme::theme_set(main_area->spacetype, RGN_TYPE_HEADER);
   }
   /* For floating window with multiple editors/areas, use the default space color. */
@@ -1343,7 +1343,7 @@ wmWindow *WM_window_open(bContext *C,
     for (wmWindow &win_iter : wm->windows) {
       const bScreen *screen = WM_window_get_active_screen(&win_iter);
       if (screen && screen->temp && BLI_listbase_is_single(&screen->areabase)) {
-        ScrArea *area = static_cast<ScrArea *>(screen->areabase.first);
+        ScrArea *area = static_cast<ScrArea *>(screen->areabase.first_);
         if (space_type == (area->butspacetype ? area->butspacetype : area->spacetype)) {
           win = &win_iter;
           break;
@@ -1409,13 +1409,13 @@ wmWindow *WM_window_open(bContext *C,
      * otherwise it will attempt to make the empty area usable via #ED_area_init.
      * While refreshing the window could be postponed this makes the state of the
      * window less predictable to the caller. */
-    ScrArea *area = static_cast<ScrArea *>(screen->areabase.first);
+    ScrArea *area = static_cast<ScrArea *>(screen->areabase.first_);
     area_setup_fn(screen, area, area_setup_user_data);
     CTX_wm_area_set(C, area);
   }
   else if (space_type != SPACE_EMPTY) {
     /* Ensure it shows the right space-type editor. */
-    ScrArea *area = static_cast<ScrArea *>(screen->areabase.first);
+    ScrArea *area = static_cast<ScrArea *>(screen->areabase.first_);
     CTX_wm_area_set(C, area);
     ED_area_newspace(C, area, space_type, false);
   }
@@ -1689,7 +1689,7 @@ void wm_window_reset_drawable()
 {
   BLI_assert(BLI_thread_is_main());
   BLI_assert(GPU_framebuffer_active_get() == GPU_framebuffer_back_get());
-  wmWindowManager *wm = static_cast<wmWindowManager *>(G_MAIN->wm.first);
+  wmWindowManager *wm = static_cast<wmWindowManager *>(G_MAIN->wm.first_);
 
   if (wm == nullptr) {
     return;
@@ -2438,7 +2438,7 @@ void wm_test_gpu_backend_fallback(bContext *C)
 
   wmWindowManager *wm = CTX_wm_manager(C);
   wmWindow *win = static_cast<wmWindow *>((wm->runtime->winactive) ? wm->runtime->winactive :
-                                                                     wm->windows.first);
+                                                                     wm->windows.first_);
 
   if (win) {
     /* We want this warning on the Main window, not a child window even if active. See #118765. */
@@ -3374,7 +3374,7 @@ void WM_window_set_active_view_layer(wmWindow *win, ViewLayer *view_layer)
   BLI_assert(BKE_view_layer_find(WM_window_get_active_scene(win), view_layer->name) != nullptr);
   Main *bmain = G_MAIN;
 
-  wmWindowManager *wm = static_cast<wmWindowManager *>(bmain->wm.first);
+  wmWindowManager *wm = static_cast<wmWindowManager *>(bmain->wm.first_);
   wmWindow *win_parent = (win->parent) ? win->parent : win;
 
   /* Set view layer in parent and child windows. */

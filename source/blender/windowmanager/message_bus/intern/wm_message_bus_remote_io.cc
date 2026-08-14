@@ -53,7 +53,7 @@ static void wm_msg_remote_io_gset_key_free(void *key_p)
   MEM_delete(key->msg.params.remote_url);
   wmMsgSubscribeValueLink *msg_lnk_next;
   for (wmMsgSubscribeValueLink *msg_lnk =
-           static_cast<wmMsgSubscribeValueLink *>(key->head.values.first);
+           static_cast<wmMsgSubscribeValueLink *>(key->head.values.first_);
        msg_lnk;
        msg_lnk = msg_lnk_next)
   {

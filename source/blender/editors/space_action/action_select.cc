@@ -486,7 +486,7 @@ static void box_select_elem(
     case ANIMTYPE_MASKDATABLOCK: {
       Mask *mask = static_cast<Mask *>(ale->data);
       MaskLayer *masklay;
-      for (masklay = static_cast<MaskLayer *>(mask->masklayers.first); masklay;
+      for (masklay = static_cast<MaskLayer *>(mask->masklayers.first_); masklay;
            masklay = masklay->next)
       {
         ED_masklayer_frames_select_box(masklay, xmin, xmax, sel_data->selectmode);
@@ -566,7 +566,7 @@ static void box_select_action(bAnimContext *ac,
   const float channel_step = ANIM_UI_get_channel_step();
 
   /* loop over data, doing box select */
-  for (ale = static_cast<bAnimListElem *>(anim_data.first); ale;
+  for (ale = static_cast<bAnimListElem *>(anim_data.first_); ale;
        ale = ale->next, ymax -= channel_step)
   {
     /* get new vertical minimum extent of channel */
@@ -762,7 +762,7 @@ static void region_select_elem(RegionSelectData *sel_data, bAnimListElem *ale, b
     case ANIMTYPE_MASKDATABLOCK: {
       Mask *mask = static_cast<Mask *>(ale->data);
       MaskLayer *masklay;
-      for (masklay = static_cast<MaskLayer *>(mask->masklayers.first); masklay;
+      for (masklay = static_cast<MaskLayer *>(mask->masklayers.first_); masklay;
            masklay = masklay->next)
       {
         ED_masklayer_frames_select_region(
@@ -852,7 +852,7 @@ static void region_select_action_keys(bAnimContext *ac,
   const float channel_step = ANIM_UI_get_channel_step();
 
   /* loop over data, doing region select */
-  for (ale = static_cast<bAnimListElem *>(anim_data.first); ale;
+  for (ale = static_cast<bAnimListElem *>(anim_data.first_); ale;
        ale = ale->next, ymax -= channel_step)
   {
     /* get new vertical minimum extent of channel */
