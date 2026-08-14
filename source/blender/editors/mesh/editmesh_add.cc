@@ -760,7 +760,7 @@ void MESH_OT_primitive_quad_sphere_add(wmOperatorType *ot)
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 
   /* props */
-  RNA_def_int(ot->srna, "segments", 3, 0, MESH_ADD_SUBD_MAXI, "Segments", "", 0, 182);
+  RNA_def_int(ot->srna, "segments", 3, 1, MESH_ADD_SUBD_MAXI, "Segments", "", 1, 182);
   ed::object::add_unit_props_radius(ot);
   ed::object::add_mesh_props(ot);
   ed::object::add_generic_props(ot, true);

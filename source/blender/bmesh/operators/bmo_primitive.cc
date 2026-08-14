@@ -909,7 +909,7 @@ void bmo_create_quadsphere_exec(BMesh *bm, BMOperator *op)
                "cuts=%i "
                "use_grid_fill=%b",
                EDGE_MARK,
-               segments,
+               segments - 1,
                true);
   BMO_op_exec(bm, &bmop);
   BMO_slot_buffer_flag_enable(bm, bmop.slots_out, "geom.out", BM_VERT, VERT_MARK);
