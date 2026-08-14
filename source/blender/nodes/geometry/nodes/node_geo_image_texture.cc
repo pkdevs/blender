@@ -323,6 +323,38 @@ class ImageFieldsFunction : public mf::MultiFunction {
     }
   }
 
+  template<typename BufferT>
+  void sample_buffer(const BufferT *buffer,
+                     const IndexMask &mask,
+                     const VArray<float3> &vectors,
+                     int width,
+                     int height,
+                     MutableSpan<float4> &color_data) const
+  {
+    /* Sample image texture. */
+    switch (interpolation_) {
+      case SHD_INTERP_LINEAR:
+        mask.foreach_index([&](const int64_t i) {
+          const float3 p = vectors[i];
+          color_data[i] = image_linear_texture_lookup(buffer, width, height, p.xy(), extension_);
+        });
+        break;
+      case SHD_INTERP_CLOSEST:
+        mask.foreach_index([&](const int64_t i) {
+          const float3 p = vectors[i];
+          color_data[i] = image_closest_texture_lookup(buffer, width, height, p.xy(), extension_);
+        });
+        break;
+      case SHD_INTERP_CUBIC:
+      case SHD_INTERP_SMART:
+        mask.foreach_index([&](const int64_t i) {
+          const float3 p = vectors[i];
+          color_data[i] = image_cubic_texture_lookup(buffer, width, height, p.xy(), extension_);
+        });
+        break;
+    }
+  }
+
   void call(const IndexMask &mask, mf::Params params, mf::Context /*context*/) const override
   {
     const VArray<float3> &vectors = params.readonly_single_input<float3>(0, "Vector");
@@ -335,36 +367,11 @@ class ImageFieldsFunction : public mf::MultiFunction {
     const int width = image_buffer_->x;
     const int height = image_buffer_->y;
 
-    auto sample_buffer = [&](const auto *buffer) {
-      /* Sample image texture. */
-      switch (interpolation_) {
-        case SHD_INTERP_LINEAR:
-          mask.foreach_index([&](const int64_t i) {
-            const float3 p = vectors[i];
-            color_data[i] = image_linear_texture_lookup(buffer, width, height, p.xy(), extension_);
-          });
-          break;
-        case SHD_INTERP_CLOSEST:
-          mask.foreach_index([&](const int64_t i) {
-            const float3 p = vectors[i];
-            color_data[i] = image_closest_texture_lookup(
-                buffer, width, height, p.xy(), extension_);
-          });
-          break;
-        case SHD_INTERP_CUBIC:
-        case SHD_INTERP_SMART:
-          mask.foreach_index([&](const int64_t i) {
-            const float3 p = vectors[i];
-            color_data[i] = image_cubic_texture_lookup(buffer, width, height, p.xy(), extension_);
-          });
-          break;
-      }
-    };
     if (image_buffer_->float_data()) {
-      sample_buffer(image_buffer_->float_data());
+      sample_buffer(image_buffer_->float_data(), mask, vectors, width, height, color_data);
     }
     else if (image_buffer_->byte_data()) {
-      sample_buffer(image_buffer_->byte_data());
+      sample_buffer(image_buffer_->byte_data(), mask, vectors, width, height, color_data);
     }
 
     int alpha_mode = image_.alpha_mode;
