@@ -5610,6 +5610,16 @@ static bke::CurvesGeometry bevel_curves(const bke::CurvesGeometry &src_curves,
       /* Sine of the angle. */
       const float D = math::length(math::cross(d1, d2));
 
+      /* Use linear interpolation if the angle is to low. */
+      if (math::abs(D) < 1e-5f) {
+        for (const int j : IndexRange(num_points_per_vertex)) {
+          const float t = float(j) / (num_points_per_vertex - 1);
+          dst_positions[dst_points[j]] = math::interpolate(c1, c2, t);
+        }
+
+        return;
+      }
+
       /* Cotangent of half the angle. */
       const float G = math::sqrt((1.0f + C) / (1.0f - C));
 
