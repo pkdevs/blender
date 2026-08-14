@@ -51,13 +51,12 @@ struct FresnelCoeff {
   {
     return {this->reflectance * other.reflectance, this->transmittance * other.transmittance};
   }
-  /*
-          template<class T> ccl_device_inline_method FresnelCoeff operator*(const T reflectance_)
-       const
-          {
-            return {this->reflectance * reflectance_, this->transmittance * (1.0f - reflectance_)};
-          }
-  */
+
+  template<class T> ccl_device_inline_method FresnelCoeff operator*(const T reflectance_) const
+  {
+    return {this->reflectance * reflectance_, this->transmittance * (1.0f - reflectance_)};
+  }
+
   template<class T> ccl_device_inline_method FresnelCoeff &operator*=(const T &other)
   {
     *this = *this * other;
@@ -304,14 +303,12 @@ ccl_device_forceinline float3 microfacet_ggx_sample_vndf(const float3 wi,
 }
 
 /* Computes Fresnel reflectance and transmittance of the Generalized Schlick Model. */
-ccl_device_forceinline void generalized_schlick_fresnel(
-    KernelGlobals kg,
-    const ccl_private FresnelGeneralizedSchlick *fresnel,
-    const float ior,
-    const float cos_theta_i,
-    ccl_private float *r_cos_theta_t,
-    ccl_private Spectrum *r_reflectance,
-    ccl_private Spectrum *r_transmittance)
+ccl_device_forceinline FresnelCoeff
+generalized_schlick_fresnel(KernelGlobals kg,
+                            const ccl_private FresnelGeneralizedSchlick *fresnel,
+                            const float ior,
+                            const float cos_theta_i,
+                            ccl_private float *r_cos_theta_t)
 {
   Spectrum F;
   if (fresnel->thin_film.thickness > THINFILM_THICKNESS_CUTOFF) {
@@ -352,9 +349,7 @@ ccl_device_forceinline void generalized_schlick_fresnel(
     const float cos_theta_t_sq = 1.0f - (1.0f - sqr(cos_theta_i)) / sqr(ior);
     if (cos_theta_t_sq <= 0.0f) {
       /* Total internal reflection */
-      *r_reflectance = fresnel->tint.reflectance;
-      *r_transmittance = zero_spectrum();
-      return;
+      return {fresnel->tint.reflectance, zero_spectrum()};
     }
     const float cos_theta_t = sqrtf(cos_theta_t_sq);
     if (r_cos_theta_t) {
@@ -367,8 +362,7 @@ ccl_device_forceinline void generalized_schlick_fresnel(
     const float s = powf(1.0f - fresnel_angle, fresnel->exponent);
     F = mix(fresnel->f0, fresnel->f90, s);
   }
-  *r_reflectance = F * fresnel->tint.reflectance;
-  *r_transmittance = (one_spectrum() - F) * fresnel->tint.transmittance;
+  return fresnel->tint * F;
 }
 
 /* Computes the Fresnel reflectance and transmittance given the Microfacet BSDF and the cosine of
@@ -443,13 +437,7 @@ ccl_device_forceinline FresnelCoeff microfacet_fresnel(KernelGlobals kg,
   else if (bsdf->fresnel_type == MicrofacetFresnel::GENERALIZED_SCHLICK) {
     ccl_private FresnelGeneralizedSchlick *fresnel = (ccl_private FresnelGeneralizedSchlick *)
                                                          bsdf->fresnel;
-    generalized_schlick_fresnel(kg,
-                                fresnel,
-                                bsdf->ior,
-                                cos_theta_i,
-                                r_cos_theta_t,
-                                &coeff.reflectance,
-                                &coeff.transmittance);
+    coeff *= generalized_schlick_fresnel(kg, fresnel, bsdf->ior, cos_theta_i, r_cos_theta_t);
   }
   else if (bsdf->fresnel_type == MicrofacetFresnel::NONE) {
     /* No Fresnel used, this is either purely reflective or purely refractive closure. */
@@ -1268,52 +1256,49 @@ ccl_device void bsdf_dielectric_tint_setup(KernelGlobals kg,
  *
  * \{ */
 
-ccl_device_inline void bsdf_thin_glass_fresnel(KernelGlobals kg,
-                                               const bool reflective,
-                                               const bool refractive,
-                                               const Spectrum reflection_tint,
-                                               const Spectrum transmission_tint,
-                                               FresnelThinFilm thinfilm,
-                                               const float ior,
-                                               const float cos_theta_i,
-                                               ccl_private Spectrum *r_reflectance,
-                                               ccl_private Spectrum *r_transmittance)
+ccl_device_inline FresnelCoeff bsdf_thin_glass_fresnel(KernelGlobals kg,
+                                                       const bool reflective,
+                                                       const bool refractive,
+                                                       const FresnelCoeff tint,
+                                                       FresnelThinFilm thinfilm,
+                                                       const float ior,
+                                                       const float cos_theta_i)
 {
   /* Fresnel coefficients at the front side. */
   float cos_theta_t;
-  Spectrum r1, t1;
   const FresnelGeneralizedSchlick fresnel = generalized_schlick_setup(
-      ior, reflective, refractive, reflection_tint, one_spectrum(), thinfilm);
-  generalized_schlick_fresnel(kg, &fresnel, ior, cos_theta_i, &cos_theta_t, &r1, &t1);
-  if (is_zero(r1) && is_zero(t1)) {
-    *r_reflectance = *r_transmittance = zero_spectrum();
-    return;
+      ior, reflective, refractive, tint.reflectance, one_spectrum(), thinfilm);
+  const FresnelCoeff front = generalized_schlick_fresnel(
+      kg, &fresnel, ior, cos_theta_i, &cos_theta_t);
+  if (iszero(front)) {
+    return front;
   }
 
+  /* transmission_tint gives the transmittance through the thin glass at normal incidence due to
+   * absorption. Compute the transmittance at oblique angle according to Beer-Lambert law. */
+  const Spectrum color = is_zero(cos_theta_t) ? zero_spectrum() :
+                                                power(tint.transmittance, -1.0f / cos_theta_t);
+
   /* Fresnel coefficients at the back side. */
-  Spectrum r2, t2;
+  FresnelCoeff back;
   if (thinfilm.thickness > THINFILM_THICKNESS_CUTOFF) {
     const float inv_ior = 1.0f / ior;
     adjust_thin_film_ior_at_backface(thinfilm.ior, inv_ior);
     const FresnelGeneralizedSchlick fresnel2 = generalized_schlick_setup(
-        ior, reflective, refractive, reflection_tint, one_spectrum(), thinfilm);
-    float unused;
-    generalized_schlick_fresnel(kg, &fresnel2, inv_ior, -cos_theta_t, &unused, &r2, &t2);
+        ior, reflective, refractive, tint.reflectance, one_spectrum(), thinfilm);
+    back = generalized_schlick_fresnel(kg, &fresnel2, inv_ior, -cos_theta_t, &cos_theta_t);
   }
   else {
-    r2 = r1;
-    t2 = t1;
+    back = front;
   }
 
-  /* `transmission_tint` gives the transmittance through the thin glass at normal incidence due to
-   * absorption. Compute the transmittance at oblique angle according to Beer-Lambert law. */
-  const Spectrum c = is_zero(cos_theta_t) ? zero_spectrum() :
-                                            power(transmission_tint, -1.0f / cos_theta_t);
-
   /* Account for internal reflections, t' = ct1t2 + ct1(r2c)^2t2 + ct1(r2c)^4t2 + ... */
-  *r_transmittance = safe_divide(c * t1 * t2, 1.0f - sqr(r2 * c));
+  const Spectrum transmittance = safe_divide(color * front.transmittance * back.transmittance,
+                                             1.0f - sqr(back.reflectance * color));
   /* r' = r1 + ct1r2ct2 + ct1(r2c)^3t2 + ... */
-  *r_reflectance = r1 + *r_transmittance * r2 * c;
+  const Spectrum reflectance = front.reflectance + transmittance * back.reflectance * color;
+
+  return {reflectance, transmittance};
 }
 
 ccl_device_inline void bsdf_thin_glass_reflection_setup(KernelGlobals kg,
@@ -1438,26 +1423,14 @@ ccl_device FresnelCoeff bsdf_thin_glass_setup(KernelGlobals kg,
                                               const uint32_t path_flag)
 {
   const float cos_theta_i = dot(N, sd->wi);
-  FresnelCoeff fresnel;
-  bsdf_thin_glass_fresnel(kg,
-                          reflective,
-                          refractive,
-                          tint.reflectance,
-                          tint.transmittance,
-                          thinfilm,
-                          ior,
-                          cos_theta_i,
-                          &fresnel.reflectance,
-                          &fresnel.transmittance);
+  const FresnelCoeff fresnel = bsdf_thin_glass_fresnel(
+      kg, reflective, refractive, tint, thinfilm, ior, cos_theta_i);
 
-  if (!is_zero(fresnel.reflectance)) {
-    bsdf_thin_glass_reflection_setup(
-        kg, sd, tint.reflectance, fresnel.reflectance * weight, N, roughness);
-  }
-  if (!is_zero(fresnel.transmittance)) {
-    bsdf_thin_glass_transmission_setup(
-        kg, sd, fresnel.transmittance * weight, N, roughness, ior, ray_visibility, path_flag);
-  }
+  bsdf_thin_glass_reflection_setup(
+      kg, sd, tint.reflectance, fresnel.reflectance * weight, N, roughness);
+  bsdf_thin_glass_transmission_setup(
+      kg, sd, fresnel.transmittance * weight, N, roughness, ior, ray_visibility, path_flag);
+
   return fresnel;
 }
 
