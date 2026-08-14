@@ -80,6 +80,7 @@
 #endif
 
 #include "BKE_bpath.hh"
+#include "BKE_fcurve.hh"
 #include "BKE_global.hh"
 #include "BKE_idtype.hh"
 #include "BKE_lib_id.hh"
@@ -96,6 +97,9 @@
 
 #include "BLO_read_write.hh"
 
+#include "RNA_prototypes.hh"
+
+#include "SEQ_iterator.hh"
 #include "SEQ_sequencer.hh"
 #include "SEQ_sound.hh"
 
@@ -357,6 +361,77 @@ static bSound *sound_new_file_exists_ex(Main *bmain, const char *filepath, short
 bSound *BKE_sound_new_file_exists(Main *bmain, const char *filepath, short stream_index)
 {
   return sound_new_file_exists_ex(bmain, filepath, stream_index);
+}
+
+static void sound_update_animation_flags(Scene *scene);
+
+static bool sound_update_animation_flags_fn(Strip *strip, void *user_data)
+{
+  const FCurve *fcu;
+  Scene *scene = static_cast<Scene *>(user_data);
+  bool driven;
+
+  fcu = id_data_find_fcurve(&scene->id, strip, RNA_Strip, "volume", 0, &driven);
+  if (fcu || driven) {
+    strip->flag |= SEQ_AUDIO_VOLUME_ANIMATED;
+  }
+  else {
+    strip->flag &= ~SEQ_AUDIO_VOLUME_ANIMATED;
+  }
+
+  fcu = id_data_find_fcurve(&scene->id, strip, RNA_Strip, "pitch", 0, &driven);
+  if (fcu || driven) {
+    strip->flag |= SEQ_AUDIO_PITCH_ANIMATED;
+  }
+  else {
+    strip->flag &= ~SEQ_AUDIO_PITCH_ANIMATED;
+  }
+
+  fcu = id_data_find_fcurve(&scene->id, strip, RNA_Strip, "pan", 0, &driven);
+  if (fcu || driven) {
+    strip->flag |= SEQ_AUDIO_PAN_ANIMATED;
+  }
+  else {
+    strip->flag &= ~SEQ_AUDIO_PAN_ANIMATED;
+  }
+
+  if (strip->type == STRIP_TYPE_SCENE) {
+    /* TODO(sergey): For now we do manual recursion into the scene strips,
+     * but perhaps it should be covered by recursive_apply?
+     */
+    sound_update_animation_flags(strip->scene);
+  }
+
+  return true;
+}
+
+static void sound_update_animation_flags(Scene *scene)
+{
+  const FCurve *fcu;
+  bool driven;
+
+  if (scene->id.tag & ID_TAG_DOIT) {
+    return;
+  }
+  scene->id.tag |= ID_TAG_DOIT;
+
+  if (scene->ed != nullptr) {
+    seq::foreach_strip(&scene->ed->seqbase, sound_update_animation_flags_fn, scene);
+  }
+
+  fcu = id_data_find_fcurve(&scene->id, scene, RNA_Scene, "audio_volume", 0, &driven);
+  if (fcu || driven) {
+    scene->audio.flag |= AUDIO_VOLUME_ANIMATED;
+  }
+  else {
+    scene->audio.flag &= ~AUDIO_VOLUME_ANIMATED;
+  }
+}
+
+void BKE_sound_update_animation_flags(Main *bmain, Scene *scene)
+{
+  BKE_main_id_tag_idcode(bmain, ID_SCE, ID_TAG_DOIT, false);
+  sound_update_animation_flags(scene);
 }
 
 static void sound_free_audio(bSound *sound)

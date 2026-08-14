@@ -23,7 +23,6 @@
 #include "DNA_space_types.h"
 
 #include "BKE_context.hh"
-#include "BKE_fcurve.hh"
 #include "BKE_global.hh"
 #include "BKE_lib_id.hh"
 #include "BKE_library.hh"
@@ -37,9 +36,7 @@
 #include "RNA_access.hh"
 #include "RNA_define.hh"
 #include "RNA_enum_types.hh"
-#include "RNA_prototypes.hh"
 
-#include "SEQ_iterator.hh"
 #include "SEQ_sequencer.hh"
 
 #include "UI_interface.hh"
@@ -193,79 +190,11 @@ static void SOUND_OT_open_mono(wmOperatorType *ot)
   RNA_def_boolean(ot->srna, "mono", true, "Mono", "Mixdown the sound to mono");
 }
 
-/* ******************************************************* */
-
-static void sound_update_animation_flags(Scene *scene);
-
-static bool sound_update_animation_flags_fn(Strip *strip, void *user_data)
-{
-  const FCurve *fcu;
-  Scene *scene = static_cast<Scene *>(user_data);
-  bool driven;
-
-  fcu = id_data_find_fcurve(&scene->id, strip, RNA_Strip, "volume", 0, &driven);
-  if (fcu || driven) {
-    strip->flag |= SEQ_AUDIO_VOLUME_ANIMATED;
-  }
-  else {
-    strip->flag &= ~SEQ_AUDIO_VOLUME_ANIMATED;
-  }
-
-  fcu = id_data_find_fcurve(&scene->id, strip, RNA_Strip, "pitch", 0, &driven);
-  if (fcu || driven) {
-    strip->flag |= SEQ_AUDIO_PITCH_ANIMATED;
-  }
-  else {
-    strip->flag &= ~SEQ_AUDIO_PITCH_ANIMATED;
-  }
-
-  fcu = id_data_find_fcurve(&scene->id, strip, RNA_Strip, "pan", 0, &driven);
-  if (fcu || driven) {
-    strip->flag |= SEQ_AUDIO_PAN_ANIMATED;
-  }
-  else {
-    strip->flag &= ~SEQ_AUDIO_PAN_ANIMATED;
-  }
-
-  if (strip->type == STRIP_TYPE_SCENE) {
-    /* TODO(sergey): For now we do manual recursion into the scene strips,
-     * but perhaps it should be covered by recursive_apply?
-     */
-    sound_update_animation_flags(strip->scene);
-  }
-
-  return true;
-}
-
-static void sound_update_animation_flags(Scene *scene)
-{
-  const FCurve *fcu;
-  bool driven;
-
-  if (scene->id.tag & ID_TAG_DOIT) {
-    return;
-  }
-  scene->id.tag |= ID_TAG_DOIT;
-
-  if (scene->ed != nullptr) {
-    seq::foreach_strip(&scene->ed->seqbase, sound_update_animation_flags_fn, scene);
-  }
-
-  fcu = id_data_find_fcurve(&scene->id, scene, RNA_Scene, "audio_volume", 0, &driven);
-  if (fcu || driven) {
-    scene->audio.flag |= AUDIO_VOLUME_ANIMATED;
-  }
-  else {
-    scene->audio.flag &= ~AUDIO_VOLUME_ANIMATED;
-  }
-}
-
 static wmOperatorStatus sound_update_animation_flags_exec(bContext *C, wmOperator * /*op*/)
 {
   Scene *scene = CTX_data_scene(C);
 
-  BKE_main_id_tag_idcode(CTX_data_main(C), ID_SCE, ID_TAG_DOIT, false);
-  sound_update_animation_flags(CTX_data_scene(C));
+  BKE_sound_update_animation_flags(CTX_data_main(C), scene);
   DEG_id_tag_update(&scene->id, ID_RECALC_SEQUENCER_STRIPS);
   return OPERATOR_FINISHED;
 }
