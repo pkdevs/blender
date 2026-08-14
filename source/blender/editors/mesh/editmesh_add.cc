@@ -725,17 +725,16 @@ static wmOperatorStatus add_primitive_quadsphere_exec(bContext *C, wmOperator *o
                           local_view_bits,
                           &creation_data);
 
-  if (!make_prim_from_bmo_args(
-          C,
-          op,
-          obedit,
-          &creation_data,
-          calc_uvs,
-          "create_quadsphere arcs=%i radius=%f matrix=%m4 calc_uvs=%b",
-          RNA_int_get(op->ptr, "arcs"),
-          RNA_float_get(op->ptr, "radius"),
-          creation_data.mat,
-          calc_uvs))
+  if (!make_prim_from_bmo_args(C,
+                               op,
+                               obedit,
+                               &creation_data,
+                               calc_uvs,
+                               "create_quadsphere arcs=%i radius=%f matrix=%m4 calc_uvs=%b",
+                               RNA_int_get(op->ptr, "arcs"),
+                               RNA_float_get(op->ptr, "radius"),
+                               creation_data.mat,
+                               calc_uvs))
   {
     return OPERATOR_CANCELLED;
   }
