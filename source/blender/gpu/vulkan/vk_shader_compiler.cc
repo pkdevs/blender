@@ -232,8 +232,6 @@ static void spirv_inject_op_string(const Span<uint32_t> &spirv_in,
   /* Literal string: UTF-8, null-terminated, packed 4 bytes/word, zero-padded. */
   const size_t byte_len = name.size() + 1; /* +1 for null terminator. */
   const uint32_t num_string_words = divide_ceil_u(byte_len, 4);
-  Vector<uint32_t> string_words(num_string_words, 0u);
-  memcpy(string_words.data(), name.data(), name.size());
 
   /* Compute the number of words to inject; OpString (2 + string) + OpSource (4). */
   const uint32_t num_words_inject = 2u + num_string_words + 4u;
@@ -246,7 +244,9 @@ static void spirv_inject_op_string(const Span<uint32_t> &spirv_in,
   const uint32_t op_string_word_count = 2u + num_string_words;
   spirv_out.append((op_string_word_count << SpvWordCountShift) | SpvOpString);
   spirv_out.append(header_in->bound);
-  spirv_out.extend(string_words);
+  const int64_t string_offset = spirv_out.size();
+  spirv_out.resize(spirv_out.size() + num_string_words, 0u);
+  memcpy(spirv_out.data() + string_offset, name.data(), name.size());
 
   /* Inject OpSource referencing the OpString above as the source file so tools can associate the
    * shader name with this module. */
