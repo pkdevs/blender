@@ -798,7 +798,7 @@ void blo_do_versions_502(FileData * /*fd*/, Library * /*lib*/, Main *bmain)
             continue;
           }
           ListBaseT<ARegion> *regionbase = (&sl == area.spacedata.first_) ? &area.regionbase :
-                                                                           &sl.regionbase;
+                                                                            &sl.regionbase;
           ARegion *scrubbing_region = do_versions_add_region_if_not_found(
               regionbase, RGN_TYPE_SCRUBBING, "Scrubbing Region", RGN_TYPE_FOOTER);
           if (scrubbing_region) {

@@ -991,7 +991,7 @@ void blo_do_versions_404(FileData *fd, Library * /*lib*/, Main *bmain)
         for (SpaceLink &sl : area.spacedata) {
           if (ELEM(sl.spacetype, SPACE_ACTION, SPACE_INFO, SPACE_CONSOLE)) {
             ListBaseT<ARegion> *regionbase = (&sl == area.spacedata.first_) ? &area.regionbase :
-                                                                             &sl.regionbase;
+                                                                              &sl.regionbase;
             for (ARegion &region : *regionbase) {
               if (region.regiontype == RGN_TYPE_WINDOW) {
                 region.v2d.scroll |= V2D_SCROLL_RIGHT | V2D_SCROLL_VERTICAL_HIDE;
