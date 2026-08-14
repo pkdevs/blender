@@ -11,6 +11,7 @@
 
 #include "DNA_anim_types.h"
 #include "DNA_armature_types.h"
+#include "DNA_dynamic_override_types.h"
 #include "DNA_gpencil_legacy_types.h"
 #include "DNA_grease_pencil_types.h"
 #include "DNA_object_types.h"
@@ -62,6 +63,7 @@ namespace blender {
 const char *screen_context_dir[] = {
     "scene",
     "view_layer",
+    "dynamic_override",
     "visible_objects",
     "selectable_objects",
     "selected_objects",
@@ -128,6 +130,17 @@ static eContextResult screen_ctx_scene(const bContext *C, bContextDataResult *re
   Scene *scene = WM_window_get_active_scene(win);
   CTX_data_id_pointer_set(result, &scene->id);
   return CTX_RESULT_OK;
+}
+static eContextResult screen_ctx_dynamic_override(const bContext *C, bContextDataResult *result)
+{
+  wmWindow *win = CTX_wm_window(C);
+  /* In future: Add active collection, active view layer. */
+  Scene *scene = WM_window_get_active_scene(win);
+  if (scene->dynamic_override) {
+    CTX_data_id_pointer_set(result, &scene->dynamic_override->id);
+    return CTX_RESULT_OK;
+  }
+  return CTX_RESULT_NO_DATA;
 }
 static eContextResult screen_ctx_visible_objects(const bContext *C, bContextDataResult *result)
 {
@@ -1198,6 +1211,7 @@ static const Map<StringRef, context_callback> &ensure_ed_screen_context_function
   static Map<StringRef, context_callback> screen_context_functions = []() {
     Map<StringRef, context_callback> map;
     map.add("scene", screen_ctx_scene);
+    map.add("dynamic_override", screen_ctx_dynamic_override);
     map.add("visible_objects", screen_ctx_visible_objects);
     map.add("selectable_objects", screen_ctx_selectable_objects);
     map.add("selected_objects", screen_ctx_selected_objects);

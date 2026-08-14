@@ -15,6 +15,7 @@
 #include "MEM_guardedalloc.h"
 
 #include "DNA_collection_types.h"
+#include "DNA_dynamic_override_types.h"
 #include "DNA_object_types.h"
 #include "DNA_scene_types.h"
 #include "DNA_screen_types.h"
@@ -1343,6 +1344,17 @@ Scene *CTX_data_sequencer_scene(const bContext *C)
     return workspace->sequencer_scene;
   }
   return nullptr;
+}
+
+DynamicOverride *CTX_data_dynamic_override(const bContext *C)
+{
+  DynamicOverride *dynoverride;
+  if (ctx_data_pointer_verify(C, "dynamic_override", reinterpret_cast<void **>(&dynoverride))) {
+    return dynoverride;
+  }
+
+  /* TODO: Check active collection first, and active viewlayer, in the future. */
+  return C->data.scene->dynamic_override;
 }
 
 ViewLayer *CTX_data_view_layer(const bContext *C)

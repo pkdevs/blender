@@ -20,6 +20,7 @@
 
 #include "DNA_armature_types.h"
 #include "DNA_collection_types.h"
+#include "DNA_dynamic_override_types.h"
 #include "DNA_linestyle_types.h"
 #include "DNA_material_types.h"
 #include "DNA_node_types.h"
@@ -894,6 +895,7 @@ void ED_buttons_set_context(const bContext *C,
 const char *buttons_context_dir[] = {
     "texture_slot",
     "scene",
+    "dynamic_override",
     "world",
     "object",
     "mesh",
@@ -971,6 +973,21 @@ int /*eContextResult*/ buttons_context(const bContext *C,
     /* Do not return one here if scene is not found in path,
      * in this case we want to get default context scene! */
     return set_pointer_type(path, result, RNA_Scene);
+  }
+  if (CTX_data_equals(member, "dynamic_override")) {
+    /* TODO: in future, first check collection, then view layer, then scene. */
+    PointerRNA *ptr = get_pointer_type(path, RNA_Scene);
+
+    if (ptr) {
+      Scene *scene = ptr->data_as<Scene>();
+      BLI_assert(scene);
+
+      if (scene->dynamic_override) {
+        CTX_data_id_pointer_set(result, &scene->dynamic_override->id);
+        return CTX_RESULT_OK;
+      }
+    }
+    return CTX_RESULT_NO_DATA;
   }
   if (CTX_data_equals(member, "world")) {
     set_pointer_type(path, result, RNA_World);
