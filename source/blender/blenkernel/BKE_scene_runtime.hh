@@ -57,6 +57,7 @@ struct SceneAudioRuntime {
   AUD_Handle sound_scrub_handle;
   Set<AUD_SequenceEntry> speaker_handles;
   bool volume_update_needed = false;
+  /* Owned by the original Scene runtime; evaluated runtimes use it only through that owner. */
   bool animation_data_stale = true;
 };
 

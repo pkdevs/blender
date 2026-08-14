@@ -6859,6 +6859,7 @@ static wmOperatorStatus start_playback(bContext *C, int sync, int mode)
 
   /* Only play sound when playing forward. Reverse sound playback is not implemented. */
   if (mode == 1) {
+    BKE_sound_ensure_scene_audio_animation(bmain, scene, depsgraph);
     BKE_sound_play_scene(scene_eval);
   }
 
