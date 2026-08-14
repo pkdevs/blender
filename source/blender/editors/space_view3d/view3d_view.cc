@@ -1412,7 +1412,7 @@ void ED_view3d_local_collections_reset(const bContext *C, const bool reset_all)
 static void view3d_xr_mirror_begin(RegionView3D *rv3d)
 {
   /* If there is no session yet, changes below should not be applied! */
-  BLI_assert(WM_xr_session_exists(&((wmWindowManager *)G_MAIN->wm.first)->xr));
+  BLI_assert(WM_xr_session_exists(&((wmWindowManager *)G_MAIN->wm.first_)->xr));
 
   rv3d->runtime_viewlock |= RV3D_LOCK_ANY_TRANSFORM;
   /* Force perspective view. This isn't reset but that's not really an issue. */

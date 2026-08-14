@@ -4085,7 +4085,7 @@ static void wm_event_handle_xrevent(wmWindowManager *wm,
   ScrArea *xr_area = CTX_wm_area(xr_context);
   ARegion *xr_region = CTX_wm_region(xr_context);
 
-  BLI_assert(xr_area && xr_area->spacetype == SPACE_VIEW3D && xr_area->spacedata.first);
+  BLI_assert(xr_area && xr_area->spacetype == SPACE_VIEW3D && xr_area->spacedata.first_);
 
   /* For operators using GPU-based selection. */
   BLI_assert(WM_region_use_viewport(xr_area, xr_region));
