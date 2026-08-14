@@ -88,6 +88,7 @@
 #include "BKE_library.hh"
 #include "BKE_main.hh"
 #include "BKE_packedFile.hh"
+#include "BKE_scene.hh"
 #include "BKE_scene_runtime.hh"
 #include "BKE_sound.hh"
 #include "BKE_sound_sample.hh"
@@ -449,6 +450,25 @@ void BKE_sound_update_animation_flags(Main *bmain, Scene *scene)
 {
   BKE_main_id_tag_idcode(bmain, ID_SCE, ID_TAG_DOIT, false);
   sound_update_animation_flags(scene);
+}
+
+void BKE_sound_bake_animation(Main *bmain, Scene *scene, Depsgraph *depsgraph)
+{
+  const int oldfra = scene->r.cfra;
+
+  BKE_sound_update_animation_flags(bmain, scene);
+  DEG_id_tag_update(&scene->id, ID_RECALC_SEQUENCER_STRIPS);
+
+  for (int cfra = (scene->r.sfra > 0) ? (scene->r.sfra - 1) : 0; cfra <= scene->r.efra + 1; cfra++)
+  {
+    scene->r.cfra = cfra;
+    /* Make sure the camera is updated, since it will affect stereo/surround output. */
+    BKE_scene_camera_switch_update(scene);
+    BKE_scene_graph_update_for_newframe(depsgraph);
+  }
+
+  scene->r.cfra = oldfra;
+  BKE_scene_graph_update_for_newframe(depsgraph);
 }
 
 static void sound_free_audio(bSound *sound)

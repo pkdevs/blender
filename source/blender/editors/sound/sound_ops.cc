@@ -224,24 +224,11 @@ static void SOUND_OT_update_animation_flags(wmOperatorType *ot)
 
 static wmOperatorStatus sound_bake_animation_exec(bContext *C, wmOperator * /*op*/)
 {
+  Main *bmain = CTX_data_main(C);
   Scene *scene = CTX_data_scene(C);
-  /* NOTE: We will be forcefully evaluating dependency graph at every frame, so no need to ensure
-   * current scene state is evaluated as it will be lost anyway. */
   Depsgraph *depsgraph = CTX_data_depsgraph_pointer(C);
-  int oldfra = scene->r.cfra;
-  int cfra;
 
-  sound_update_animation_flags_exec(C, nullptr);
-
-  for (cfra = (scene->r.sfra > 0) ? (scene->r.sfra - 1) : 0; cfra <= scene->r.efra + 1; cfra++) {
-    scene->r.cfra = cfra;
-    /* Make sure the camera is updated, since it will affect stereo/surround output. */
-    BKE_scene_camera_switch_update(scene);
-    BKE_scene_graph_update_for_newframe(depsgraph);
-  }
-
-  scene->r.cfra = oldfra;
-  BKE_scene_graph_update_for_newframe(depsgraph);
+  BKE_sound_bake_animation(bmain, scene, depsgraph);
 
   return OPERATOR_FINISHED;
 }
