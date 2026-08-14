@@ -101,7 +101,7 @@ def _animated_cube():
     return cube
 
 
-def select_keyframe(action, fcurve, index=0):
+def _select_keyframe(action, fcurve, index=0):
     """
     Select only the requested keyframe on an F-Curve.
     """
@@ -112,7 +112,7 @@ def select_keyframe(action, fcurve, index=0):
     return keyframe
 
 
-def _uv_vertex_selected(mesh):
+def _prepare_uv_vertex_selection(mesh):
     import bmesh
     import bpy
 
@@ -273,7 +273,7 @@ def dopesheet_keyframe_drag():
 
     cube = _animated_cube()
     action, fcurve = _get_fcurve(cube, "location", index=0)
-    keyframe = select_keyframe(action, fcurve, index=1)
+    keyframe = _select_keyframe(action, fcurve, index=1)
     yield
 
     before = tuple(keyframe.co)
@@ -308,7 +308,7 @@ def graph_editor_drag():
 
     cube = _animated_cube()
     action, fcurve = _get_fcurve(cube, "location", index=0)
-    keyframe = select_keyframe(action, fcurve, index=1)
+    keyframe = _select_keyframe(action, fcurve, index=1)
     yield
 
     before = tuple(keyframe.co)
@@ -350,6 +350,7 @@ def uv_editor_drag():
     window.view_layer.objects.active = plane
 
     yield e.tab()
+    t.assertEqual(plane.mode, 'EDIT', "Object should be in Edit Mode after pressing Tab")
 
     mesh = plane.data
 
@@ -357,7 +358,7 @@ def uv_editor_drag():
     if mesh.uv_layers.active is None:
         mesh.uv_layers.new(name="UVMap")
 
-    _uv_vertex_selected(mesh)
+    _prepare_uv_vertex_selection(mesh)
     yield
 
     bm = bmesh.from_edit_mesh(mesh)
