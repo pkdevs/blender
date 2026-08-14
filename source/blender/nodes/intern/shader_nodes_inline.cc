@@ -404,9 +404,7 @@ class ShaderNodesInliner {
 
     const bNodeLink *used_link = nullptr;
     for (const bNodeLink *link : socket->directly_linked_links()) {
-      if (!link->is_used() || link->fromnode == nullptr || link->fromnode->is_undefined() ||
-          !(link->flag & NODE_LINK_VALID))
-      {
+      if (!link->is_used() || link->fromnode == nullptr || link->fromnode->is_undefined()) {
         continue;
       }
       used_link = link;
