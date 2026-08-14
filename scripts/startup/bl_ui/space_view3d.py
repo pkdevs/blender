@@ -5957,6 +5957,7 @@ class VIEW3D_MT_edit_greasepencil_point(Menu):
         layout = self.layout
 
         layout.operator("grease_pencil.extrude_move", text="Extrude")
+        layout.operator("grease_pencil.bevel")
 
         layout.separator()
 
