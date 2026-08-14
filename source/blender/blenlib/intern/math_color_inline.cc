@@ -12,7 +12,6 @@
 #include "BLI_math_color_c.hh"
 
 #include <cmath>
-#include <limits>
 
 namespace blender {
 
@@ -57,7 +56,7 @@ MINLINE void srgb_to_linearrgb_predivide_v4(float linear[4], const float srgb[4]
 {
   float alpha, inv_alpha;
 
-  if (!alpha_needs_unpremultiply(srgb[3])) {
+  if (srgb[3] == 1.0f || srgb[3] == 0.0f) {
     alpha = 1.0f;
     inv_alpha = 1.0f;
   }
@@ -80,7 +79,7 @@ MINLINE void linearrgb_to_srgb_predivide_v4(float srgb[4], const float linear[4]
 {
   float alpha, inv_alpha;
 
-  if (!alpha_needs_unpremultiply(linear[3])) {
+  if (linear[3] == 1.0f || linear[3] == 0.0f) {
     alpha = 1.0f;
     inv_alpha = 1.0f;
   }
@@ -281,22 +280,9 @@ MINLINE void float_to_byte_dither_v3(
 /** \name Alpha Transformations
  * \{ */
 
-/**
- * Whether the color channels need to be divided by alpha to un-premultiply them.
- *
- * Alpha values below the smallest normal float are treated as zero. Comparing against zero
- * exactly would make the result depend on whether denormals are flushed to zero: with
- * flush-to-zero enabled a denormal alpha compares equal to zero and the division is skipped,
- * while without it the division by a denormal overflows to infinity.
- */
-MINLINE bool alpha_needs_unpremultiply(const float alpha)
-{
-  return alpha >= std::numeric_limits<float>::min() && alpha != 1.0f;
-}
-
 MINLINE void premul_to_straight_v4_v4(float straight[4], const float premul[4])
 {
-  if (!alpha_needs_unpremultiply(premul[3])) {
+  if (premul[3] == 0.0f || premul[3] == 1.0f) {
     straight[0] = premul[0];
     straight[1] = premul[1];
     straight[2] = premul[2];
@@ -343,7 +329,7 @@ MINLINE void straight_uchar_to_premul_float(float result[4], const unsigned char
 
 MINLINE void premul_float_to_straight_uchar(unsigned char *result, const float color[4])
 {
-  if (!alpha_needs_unpremultiply(color[3])) {
+  if (color[3] == 0.0f || color[3] == 1.0f) {
     result[0] = unit_float_to_uchar_clamp(color[0]);
     result[1] = unit_float_to_uchar_clamp(color[1]);
     result[2] = unit_float_to_uchar_clamp(color[2]);

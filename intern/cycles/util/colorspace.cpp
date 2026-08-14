@@ -531,7 +531,7 @@ inline void processor_apply_pixels_rgba(const OCIO::Processor *processor,
       for (int64_t i = 0; i < width; i++, pixel += 4, float_pixel++) {
         float4 value = cast_to_float4(pixel);
 
-        if (!ignore_alpha && alpha_needs_unpremultiply(value.w)) {
+        if (!ignore_alpha && !(value.w <= 0.0f || value.w == 1.0f)) {
           const float inv_alpha = 1.0f / value.w;
           value.x *= inv_alpha;
           value.y *= inv_alpha;
@@ -557,7 +557,7 @@ inline void processor_apply_pixels_rgba(const OCIO::Processor *processor,
           value = color_linear_to_srgb_v4(value);
         }
 
-        if (!ignore_alpha && alpha_needs_unpremultiply(value.w)) {
+        if (!ignore_alpha && !(value.w <= 0.0f || value.w == 1.0f)) {
           value.x *= value.w;
           value.y *= value.w;
           value.z *= value.w;
