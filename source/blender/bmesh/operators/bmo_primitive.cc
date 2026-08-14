@@ -851,7 +851,7 @@ void bmo_create_quadsphere_exec(BMesh *bm, BMOperator *op)
   float off = 1.0f;
 
   const float rad = BMO_slot_float_get(op->slots_in, "radius");
-  const int arcs = BMO_slot_int_get(op->slots_in, "arcs");
+  const int segments = BMO_slot_int_get(op->slots_in, "segments");
   const int cd_loop_uv_offset = CustomData_get_offset(&bm->ldata, CD_PROP_FLOAT2);
   const bool calc_uvs = (cd_loop_uv_offset != -1) && BMO_slot_bool_get(op->slots_in, "calc_uvs");
   const char faces[6][4] = {
@@ -909,7 +909,7 @@ void bmo_create_quadsphere_exec(BMesh *bm, BMOperator *op)
                "cuts=%i "
                "use_grid_fill=%b",
                EDGE_MARK,
-               arcs,
+               segments,
                true);
   BMO_op_exec(bm, &bmop);
   BMO_slot_buffer_flag_enable(bm, bmop.slots_out, "geom.out", BM_VERT, VERT_MARK);
