@@ -6250,7 +6250,7 @@ def km_transform_modal_map(params):
         ("PRECISION", {"type": 'LEFT_SHIFT', "value": 'ANY', "any": True}, None),
         ("PRECISION", {"type": 'RIGHT_SHIFT', "value": 'ANY', "any": True}, None),
         ("STRIP_CLAMP_TOGGLE", {"type": 'C', "value": 'PRESS', "any": True}, None),
-        ("STRIP_ASYMMETRIC", {"type": 'S', "value": 'PRESS'}, None),
+        ("STRIP_SYMMETRIC_TOGGLE", {"type": 'S', "value": 'PRESS'}, None),
     ])
 
     if params.use_alt_navigation:

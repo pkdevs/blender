@@ -571,6 +571,8 @@ static void create_transition_clamp_data(TransInfo *t, const Scene *scene, Strip
 {
   TransSeq *ts = static_cast<TransSeq *>(TRANS_DATA_CONTAINER_FIRST_SINGLE(t)->custom.type.data);
 
+  t->modifiers |= MOD_STRIP_SYMMETRIC;
+
   const bool left_sel = flag_is_set(strip->flag, SEQ_LEFTSEL);
   const bool right_sel = flag_is_set(strip->flag, SEQ_RIGHTSEL);
 
@@ -969,7 +971,7 @@ static void flush_transition_transforms(TransInfo *t,
 
   /* New value for the handle opposite of #tdsq->sel_flag. */
   int opposite_new = tdsq->opposite_handle;
-  if (!flag_is_set(t->modifiers, MOD_STRIP_ASYMMETRIC)) {
+  if (flag_is_set(t->modifiers, MOD_STRIP_SYMMETRIC)) {
     opposite_new -= x_offset;
   }
   /* If both handles are selected the entire transition is moved. In this case update the handles
@@ -1242,7 +1244,7 @@ bool transform_convert_sequencer_clamp(const TransInfo *t, float r_val[2])
   }
 
   /* Clamping of symmetric transitions. */
-  if ((t->modifiers & MOD_STRIP_ASYMMETRIC) == 0) {
+  if ((t->modifiers & MOD_STRIP_SYMMETRIC) != 0) {
     clamp_x(ts->symmetric_hard_clamp_min, ts->symmetric_hard_clamp_max);
     /* Optional clamping of handles to content range of inputs. Can be disabled by the user. */
     if (t->modifiers & MOD_STRIP_CLAMP_HOLDS) {
