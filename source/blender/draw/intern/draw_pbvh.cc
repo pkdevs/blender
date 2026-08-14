@@ -1199,6 +1199,53 @@ BLI_NOINLINE static void fill_uvs_grids(const Object &object,
       },
       exec_mode::grain_size(1));
 }
+void calc_node_generic_attribute_for_flat_layout(
+    const Object &object,
+    const SubdivCCG &subdiv_ccg,
+    const bke::GAttributeReader &attr,
+    const bke::pbvh::GridsNode &node,
+    gpu::VertBuf &vbo)
+{
+  bke::attribute_math::to_static_type(attr.varray.type(), [&]<typename T>() {
+    if constexpr (!std::is_void_v<typename AttributeConverter<T>::VBOType>) {
+      using Converter = AttributeConverter<T>;
+      using VBOType = typename Converter::VBOType;
+
+      VBOType *data = vbo.data<VBOType>().data();
+    }
+  });
+}
+void calc_node_generic_attribute_for_standard_layout(
+    const Object &object,
+    const SubdivCCG &subdiv_ccg,
+    const bke::GAttributeReader &attr,
+    const bke::pbvh::GridsNode &node,
+    gpu::VertBuf &vbo)
+{
+
+}
+BLI_NOINLINE static void fill_generic_attribute_grids(const Object &object,
+                                                      const OrigMeshData &orig_mesh_data,
+                                                      const BitSpan &use_flat_layout,
+                                                      const IndexMask &node_mask,
+                                                      const StringRef name,
+                                                      const MutableSpan<gpu::VertBufPtr> vbos)
+{
+  const bke::pbvh::Tree &pbvh = *bke::object::pbvh_get(object);
+  const Span<bke::pbvh::GridsNode> nodes = pbvh.nodes<bke::pbvh::GridsNode>();
+  const SubdivCCG &subdiv_ccg = *object.runtime->sculpt_session->subdiv_ccg;
+  const bke::AttributeAccessor attributes = orig_mesh_data.attributes;
+  const bke::GAttributeReader attr = attributes.lookup(name);
+
+  node_mask.foreach_index([&](const int i) {
+    if (use_flat_layout[i]) {
+      calc_node_generic_attribute_for_flat_layout(object, subdiv_ccg, attr, nodes[i], vbos[i]);
+    }
+    else {
+      calc_node_generic_attribute_for_standard_layout(object, subdiv_ccg, attr, nodes[i], vbos[i]);
+    }
+  }, exec_mode::grain_size(1));
+}
 
 BLI_NOINLINE static void update_generic_attribute_grids(const Object &object,
                                                         const OrigMeshData &orig_mesh_data,
@@ -1232,10 +1279,11 @@ BLI_NOINLINE static void update_generic_attribute_grids(const Object &object,
   }
 
   ensure_vbos_allocated_grids(object,
-                              attribute_format(orig_mesh_data, "Dummy", bke::AttrType::Float3),
+                              attribute_format(orig_mesh_data, name, data_type),
                               use_flat_layout,
                               node_mask,
                               vbos);
+  fill_generic_attribute_grids(object, orig_mesh_data, use_flat_layout, node_mask, name, vbos);
   node_mask.foreach_index([&](const int i) { vbos[i]->data<float3>().fill(float3(0.0f)); },
                           exec_mode::grain_size(1));
 }
