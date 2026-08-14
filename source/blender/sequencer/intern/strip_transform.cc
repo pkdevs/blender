@@ -66,7 +66,7 @@ bool transform_test_overlap(const Scene *scene, Strip *strip1, Strip *strip2)
            (strip1->left_handle() >= strip2->right_handle(scene))) == 0);
 }
 
-bool transform_test_invalid_overlap(const Scene *scene, ListBaseT<Strip> *seqbasep, Strip *test)
+bool transform_test_overlap(const Scene *scene, ListBaseT<Strip> *seqbasep, Strip *test)
 {
   /* Don't shuffle transitions. */
   if (test->is_same_channel_transition()) {
@@ -123,7 +123,7 @@ void transform_set_overlap_flags(const Scene *scene,
     if (strip->is_same_channel_transition()) {
       continue;
     }
-    if (!transform_test_invalid_overlap(scene, seqbasep, strip)) {
+    if (!transform_test_overlap(scene, seqbasep, strip)) {
       continue;
     }
 
@@ -184,7 +184,7 @@ bool transform_seqbase_shuffle_ex(ListBaseT<Strip> *seqbasep,
 
   bool use_fallback_translation = false;
 
-  while (transform_test_invalid_overlap(evil_scene, seqbasep, test) || channel->is_muted() ||
+  while (transform_test_overlap(evil_scene, seqbasep, test) || channel->is_muted() ||
          channel->is_locked())
   {
     if ((channel_delta > 0) ? (test->channel + channel_delta >= MAX_CHANNELS) :
@@ -568,7 +568,7 @@ void transform_handle_overlap(Scene *scene,
    * strip on top of its effect, on top of a locked strip, or inside a transition (split fails).
    */
   for (Strip *strip : source_strips) {
-    if (transform_test_invalid_overlap(scene, seqbasep, strip)) {
+    if (transform_test_overlap(scene, seqbasep, strip)) {
       transform_seqbase_shuffle(seqbasep, strip, scene);
     }
     strip->runtime->flag &= ~StripRuntimeFlag::Overlap;

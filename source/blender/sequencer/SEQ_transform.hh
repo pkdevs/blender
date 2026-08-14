@@ -32,7 +32,7 @@ bool transform_strip_can_be_translated(const Strip *strip);
  * This includes non-sequence image strips and all effect strips with no inputs (e.g. color, text).
  */
 bool transform_single_image_check(const Strip *strip);
-bool transform_test_invalid_overlap(const Scene *scene, ListBaseT<Strip> *seqbasep, Strip *test);
+bool transform_test_overlap(const Scene *scene, ListBaseT<Strip> *seqbasep, Strip *test);
 bool transform_test_overlap(const Scene *scene, Strip *strip1, Strip *strip2);
 /**
  * First clears the #StripRuntimeFlag::Overlap flag and cancels old deletion, then updates overlap

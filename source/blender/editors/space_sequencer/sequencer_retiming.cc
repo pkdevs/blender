@@ -614,7 +614,7 @@ static void strip_speed_set(Scene *scene, Strip *strip, const float speed)
   seq::retiming_key_speed_set(scene, strip, right_key, speed / 100.0f);
 
   ListBaseT<Strip> *seqbase = seq::active_seqbase_get(seq::editing_get(scene));
-  if (seq::transform_test_invalid_overlap(scene, seqbase, strip)) {
+  if (seq::transform_test_overlap(scene, seqbase, strip)) {
     seq::transform_seqbase_shuffle(seqbase, strip, scene);
   }
 }
@@ -630,7 +630,7 @@ static void segment_speed_set(Scene *scene,
 
     seq::retiming_key_speed_set(scene, item.value, item.key, speed / 100.0f);
 
-    if (seq::transform_test_invalid_overlap(scene, seqbase, item.value)) {
+    if (seq::transform_test_overlap(scene, seqbase, item.value)) {
       seq::transform_seqbase_shuffle(seqbase, item.value, scene);
     }
   }

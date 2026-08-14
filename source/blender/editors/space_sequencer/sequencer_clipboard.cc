@@ -537,7 +537,7 @@ wmOperatorStatus sequencer_clipboard_paste_exec(bContext *C, wmOperator *op)
      * strip. */
     seq::transform_translate_strip(scene_dst, &istrip, ofs);
     /* Ensure, that pasted strips don't overlap. */
-    if (seq::transform_test_invalid_overlap(scene_dst, ed_dst->current_strips(), &istrip)) {
+    if (seq::transform_test_overlap(scene_dst, ed_dst->current_strips(), &istrip)) {
       seq::transform_seqbase_shuffle(ed_dst->current_strips(), &istrip, scene_dst);
     }
   }

@@ -680,7 +680,7 @@ static void seq_load_apply_generic_options(bContext *C, wmOperator *op, Strip *s
   }
 
   if (RNA_boolean_get(op->ptr, "overlap") == true ||
-      !seq::transform_test_invalid_overlap(scene, ed->current_strips(), strip))
+      !seq::transform_test_overlap(scene, ed->current_strips(), strip))
   {
     /* No overlap should be handled or the strip is not overlapping, exit early. */
     return;
@@ -726,7 +726,7 @@ static bool seq_load_apply_generic_options_only_test_overlap(bContext *C,
     seq::select_active_set(scene, strip);
   }
 
-  return seq::transform_test_invalid_overlap(scene, ed->current_strips(), strip);
+  return seq::transform_test_overlap(scene, ed->current_strips(), strip);
 }
 
 static void sequencer_disable_one_time_properties(bContext *C, wmOperator *op)

@@ -588,7 +588,7 @@ static void do_strip_frame_change_update(Scene *scene, Strip *strip)
 {
   ListBaseT<Strip> *seqbase = seq::get_seqbase_by_strip(scene, strip);
 
-  if (seq::transform_test_invalid_overlap(scene, seqbase, strip)) {
+  if (seq::transform_test_overlap(scene, seqbase, strip)) {
     seq::transform_seqbase_shuffle(seqbase, strip, scene);
   }
 
@@ -848,7 +848,7 @@ static void rna_Strip_channel_set(PointerRNA *ptr, int value)
   const int channel_delta = (value >= strip->channel) ? 1 : -1;
   strip->channel_set(value);
 
-  if (seq::transform_test_invalid_overlap(scene, seqbase, strip)) {
+  if (seq::transform_test_overlap(scene, seqbase, strip)) {
     seq::transform_seqbase_shuffle_ex(seqbase, strip, scene, channel_delta);
   }
   seq::relations_invalidate_cache(scene, strip);
