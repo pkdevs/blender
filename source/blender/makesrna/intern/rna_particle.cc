@@ -1032,7 +1032,7 @@ static bool rna_ParticleSystem_multiple_caches_get(PointerRNA *ptr)
 {
   ParticleSystem *psys = static_cast<ParticleSystem *>(ptr->data);
 
-  return (psys->ptcaches.first_ != psys->ptcaches.last);
+  return (psys->ptcaches.first_ != psys->ptcaches.last_);
 }
 static bool rna_ParticleSystem_editable_get(PointerRNA *ptr)
 {

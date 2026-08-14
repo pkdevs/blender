@@ -1785,7 +1785,7 @@ static size_t animfilter_nla(bAnimContext *ac,
     }
 
     /* first track to include will be the last one if we're filtering by channels */
-    first = static_cast<NlaTrack *>(adt->nla_tracks.last);
+    first = static_cast<NlaTrack *>(adt->nla_tracks.last_);
   }
   else {
     /* first track to include will the first one (as per normal) */
@@ -3758,7 +3758,7 @@ static size_t animdata_filter_dopesheet(bAnimContext *ac,
   BKE_view_layer_synced_ensure(*ac->bmain, scene, view_layer);
   ListBaseT<Base> *object_bases = BKE_view_layer_object_bases_get(view_layer);
   if ((filter_mode & ANIMFILTER_LIST_CHANNELS) && !(ads->flag & ADS_FLAG_NO_DB_SORT) &&
-      (object_bases->first_ != object_bases->last))
+      (object_bases->first_ != object_bases->last_))
   {
     /* Filter list of bases (i.e. objects), sort them, then add their contents normally... */
     /* TODO: Cache the old sorted order - if the set of bases hasn't changed, don't re-sort... */

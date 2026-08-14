@@ -1993,7 +1993,7 @@ static void snap_action_keys(bAnimContext *ac, short mode)
   ked.scene = ac->scene;
   if (mode == ACTKEYS_SNAP_NEAREST_MARKER) {
     ked.time_marker_list.first_ = (ac->markers) ? ac->markers->first_ : nullptr;
-    ked.time_marker_list.last = (ac->markers) ? ac->markers->last : nullptr;
+    ked.time_marker_list.last_ = (ac->markers) ? ac->markers->last_ : nullptr;
   }
 
   /* snap keyframes */

@@ -129,7 +129,7 @@ void edit_update_muting(Editing *ed)
 {
   if (ed) {
     /* mute all sounds up to current metastack list */
-    MetaStack *ms = static_cast<MetaStack *>(ed->metastack.last);
+    MetaStack *ms = static_cast<MetaStack *>(ed->metastack.last_);
 
     if (ms) {
       strip_update_muting_recursive(&ed->channels, &ed->seqbase, ms->parent_strip, true);

@@ -195,12 +195,12 @@ struct tGPsdata {
 
 static bool annotation_stroke_added_check(tGPsdata *p)
 {
-  return (p->gpf && p->gpf->strokes.last && p->flags & GP_PAINTFLAG_STROKEADDED);
+  return (p->gpf && p->gpf->strokes.last_ && p->flags & GP_PAINTFLAG_STROKEADDED);
 }
 
 static void annotation_stroke_added_enable(tGPsdata *p)
 {
-  BLI_assert(p->gpf->strokes.last != nullptr);
+  BLI_assert(p->gpf->strokes.last_ != nullptr);
   p->flags |= GP_PAINTFLAG_STROKEADDED;
 }
 
@@ -626,7 +626,7 @@ static short annotation_stroke_addpoint(tGPsdata *p,
      * during mouse slide, e.g.)
      */
     if (annotation_stroke_added_check(p)) {
-      bGPDstroke *gps = static_cast<bGPDstroke *>(p->gpf->strokes.last);
+      bGPDstroke *gps = static_cast<bGPDstroke *>(p->gpf->strokes.last_);
       bGPDspoint *pts;
 
       /* first time point is adding to temporary buffer -- need to allocate new point in stroke */

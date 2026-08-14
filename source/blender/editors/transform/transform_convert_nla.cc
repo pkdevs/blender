@@ -784,7 +784,7 @@ static void recalcData_nla(TransInfo *t)
         new_track->flag |= NLATRACK_TEMPORARILY_ADDED;
 
         BKE_nlatrack_insert_after(
-            nla_tracks, static_cast<NlaTrack *>(nla_tracks->last), new_track, is_liboverride);
+            nla_tracks, static_cast<NlaTrack *>(nla_tracks->last_), new_track, is_liboverride);
         dst_track = new_track;
       }
 

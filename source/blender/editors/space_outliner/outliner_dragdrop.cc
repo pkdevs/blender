@@ -163,7 +163,7 @@ static TreeElement *outliner_drop_insert_find(bContext *C,
   /* Mouse doesn't hover any item (ignoring x-axis),
    * so it's either above list bounds or below. */
   TreeElement *first = static_cast<TreeElement *>(space_outliner->runtime->tree.first_);
-  TreeElement *last = static_cast<TreeElement *>(space_outliner->runtime->tree.last);
+  TreeElement *last = static_cast<TreeElement *>(space_outliner->runtime->tree.last_);
 
   if (view_mval[1] < last->ys) {
     *r_insert_type = TE_INSERT_AFTER;

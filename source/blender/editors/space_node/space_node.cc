@@ -127,7 +127,7 @@ void ED_node_tree_start(ARegion *region, SpaceNode *snode, bNodeTree *ntree, ID 
 void ED_node_tree_push(ARegion *region, SpaceNode *snode, bNodeTree *ntree, bNode *gnode)
 {
   bNodeTreePath *path = MEM_new<bNodeTreePath>("node tree path");
-  bNodeTreePath *prev_path = static_cast<bNodeTreePath *>(snode->treepath.last);
+  bNodeTreePath *prev_path = static_cast<bNodeTreePath *>(snode->treepath.last_);
   path->nodetree = ntree;
   if (gnode) {
     if (prev_path) {
@@ -169,7 +169,7 @@ void ED_node_tree_push(ARegion *region, SpaceNode *snode, bNodeTree *ntree, bNod
 
 void ED_node_tree_pop(ARegion *region, SpaceNode *snode)
 {
-  bNodeTreePath *path = static_cast<bNodeTreePath *>(snode->treepath.last);
+  bNodeTreePath *path = static_cast<bNodeTreePath *>(snode->treepath.last_);
 
   /* don't remove root */
   if (path == snode->treepath.first_) {
@@ -180,7 +180,7 @@ void ED_node_tree_pop(ARegion *region, SpaceNode *snode)
   MEM_delete(path);
 
   /* update current tree */
-  path = static_cast<bNodeTreePath *>(snode->treepath.last);
+  path = static_cast<bNodeTreePath *>(snode->treepath.last_);
   snode->edittree = path->nodetree;
 
   /* Set view center and zoom from node tree path. */
@@ -206,7 +206,7 @@ bNodeTree *ED_node_tree_get(SpaceNode *snode, int level)
 {
   bNodeTreePath *path;
   int i;
-  for (path = static_cast<bNodeTreePath *>(snode->treepath.last), i = 0; path;
+  for (path = static_cast<bNodeTreePath *>(snode->treepath.last_), i = 0; path;
        path = path->prev, i++)
   {
     if (i == level) {
@@ -250,7 +250,7 @@ void ED_node_tree_path_get(SpaceNode *snode, char *value)
 
 void ED_node_set_active_viewer_key(SpaceNode *snode)
 {
-  bNodeTreePath *path = static_cast<bNodeTreePath *>(snode->treepath.last);
+  bNodeTreePath *path = static_cast<bNodeTreePath *>(snode->treepath.last_);
   if (snode->nodetree && path) {
     /* A change in active viewer may result in the change of the output node used by the
      * compositor, so we need to get notified about such changes. */
@@ -279,7 +279,7 @@ namespace ed::space_node {
 
 float2 space_node_group_offset(const SpaceNode &snode)
 {
-  const bNodeTreePath *path = static_cast<bNodeTreePath *>(snode.treepath.last);
+  const bNodeTreePath *path = static_cast<bNodeTreePath *>(snode.treepath.last_);
 
   if (path && path->prev) {
     return float2(path->view_center) - float2(path->prev->view_center);
@@ -1494,8 +1494,8 @@ static void node_id_remap(ID *old_id, ID *new_id, SpaceNode *snode)
 
     /* edittree is just the last in the path,
      * set this directly since the path may have been shortened above */
-    if (snode->treepath.last) {
-      path = static_cast<bNodeTreePath *>(snode->treepath.last);
+    if (snode->treepath.last_) {
+      path = static_cast<bNodeTreePath *>(snode->treepath.last_);
       snode->edittree = path->nodetree;
       ED_node_set_active_viewer_key(snode);
     }
@@ -1612,8 +1612,8 @@ static void node_foreach_id(SpaceLink *space_link, LibraryForeachIDData *data)
   if (!is_readonly) {
     /* `edittree` is just the last in the path, set this directly since the path may have
      * been shortened above. */
-    if (snode->treepath.last != nullptr) {
-      path = static_cast<bNodeTreePath *>(snode->treepath.last);
+    if (snode->treepath.last_ != nullptr) {
+      path = static_cast<bNodeTreePath *>(snode->treepath.last_);
       snode->edittree = path->nodetree;
     }
     else {

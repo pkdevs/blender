@@ -1233,7 +1233,7 @@ static bool rearrange_island_bottom(ListBaseT<tReorderChannelIsland> *list,
                                     tReorderChannelIsland *island)
 {
   if (rearrange_island_ok(island)) {
-    tReorderChannelIsland *last = static_cast<tReorderChannelIsland *>(list->last);
+    tReorderChannelIsland *last = static_cast<tReorderChannelIsland *>(list->last_);
 
     /* remove island from current position */
     BLI_remlink(list, island);
@@ -1311,7 +1311,7 @@ static void rearrange_animchannel_add_to_islands(ListBaseT<tReorderChannelIsland
                                                  const bool is_hidden)
 {
   /* always try to add to last island if possible */
-  tReorderChannelIsland *island = static_cast<tReorderChannelIsland *>(islands->last);
+  tReorderChannelIsland *island = static_cast<tReorderChannelIsland *>(islands->last_);
   bool is_sel = false, is_untouchable = false;
 
   /* get flags - selected and untouchable from the channel */
@@ -1471,9 +1471,9 @@ static bool rearrange_animchannel_islands(ListBaseT<T> *list,
    *   to the direction we're moving things,
    *   so that we shouldn't need to encounter items we've moved already.
    */
-  if (islands.first_ != islands.last) {
+  if (islands.first_ != islands.last_) {
     tReorderChannelIsland *first = static_cast<tReorderChannelIsland *>(
-        (mode > 0) ? islands.last : islands.first_);
+        (mode > 0) ? islands.last_ : islands.first_);
     tReorderChannelIsland *island, *isn = nullptr;
 
     for (island = first; island; island = isn) {
@@ -1533,7 +1533,7 @@ static void rearrange_nla_tracks(bAnimContext *ac, AnimData *adt, eRearrangeAnim
     }
     if (nla_track != nullptr && nla_track->prev != nullptr) {
       extracted_nonlocal_nla_tracks.first_ = adt->nla_tracks.first_;
-      extracted_nonlocal_nla_tracks.last = nla_track->prev;
+      extracted_nonlocal_nla_tracks.last_ = nla_track->prev;
       adt->nla_tracks.first_ = nla_track;
       nla_track->prev->next = nullptr;
       nla_track->prev = nullptr;
@@ -1550,10 +1550,10 @@ static void rearrange_nla_tracks(bAnimContext *ac, AnimData *adt, eRearrangeAnim
   /* Add back non-local NLA tracks at the beginning of the animation data's list. */
   if (!extracted_nonlocal_nla_tracks.is_empty()) {
     BLI_assert(is_liboverride);
-    static_cast<NlaTrack *>(extracted_nonlocal_nla_tracks.last)->next = static_cast<NlaTrack *>(
+    static_cast<NlaTrack *>(extracted_nonlocal_nla_tracks.last_)->next = static_cast<NlaTrack *>(
         adt->nla_tracks.first_);
     static_cast<NlaTrack *>(adt->nla_tracks.first_)->prev = static_cast<NlaTrack *>(
-        extracted_nonlocal_nla_tracks.last);
+        extracted_nonlocal_nla_tracks.last_);
     adt->nla_tracks.first_ = extracted_nonlocal_nla_tracks.first_;
   }
 

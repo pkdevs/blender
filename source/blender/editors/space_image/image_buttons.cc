@@ -337,7 +337,7 @@ static void ui_imageuser_view_menu_rr(bContext * /*C*/, ui::Layout *layout, void
   layout->separator();
 
   nr = (rr ? rr->views.count() : 0) - 1;
-  for (rview = static_cast<RenderView *>(rr ? rr->views.last : nullptr); rview;
+  for (rview = static_cast<RenderView *>(rr ? rr->views.last_ : nullptr); rview;
        rview = rview->prev, nr--)
   {
     ui::Button *but = uiDefButV(block,
@@ -383,7 +383,7 @@ static void ui_imageuser_view_menu_multiview(bContext * /*C*/, ui::Layout *layou
   layout->separator();
 
   nr = image->views.count() - 1;
-  for (iv = static_cast<ImageView *>(image->views.last); iv; iv = iv->prev, nr--) {
+  for (iv = static_cast<ImageView *>(image->views.last_); iv; iv = iv->prev, nr--) {
     ui::Button *but = uiDefButV(block,
                                 ui::ButtonType::ButMenu,
                                 IFACE_(iv->name),

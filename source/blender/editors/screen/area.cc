@@ -3516,7 +3516,7 @@ void ED_region_panels_layout_ex(const bContext *C,
     /* XXX, only single panel support at the moment.
      * Can't use x/y values calculated above because they're not using the real height of panels,
      * instead they calculate offsets for the next panel to start drawing. */
-    Panel *panel = static_cast<Panel *>(region->panels.last);
+    Panel *panel = static_cast<Panel *>(region->panels.last_);
     if (panel != nullptr) {
       const int size_dyn[2] = {
           int(UI_UNIT_X * (ui::panel_is_closed(panel) ? 8 : 14) / UI_SCALE_FAC),

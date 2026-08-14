@@ -587,8 +587,8 @@ static void do_version_bbone_scale_fcurve_fix(ListBaseT<FCurve> *curves, FCurve 
     /* Add to the curve group. */
     second->grp = fcu->grp;
 
-    if (fcu->grp != nullptr && fcu->grp->channels.last == fcu) {
-      fcu->grp->channels.last = second;
+    if (fcu->grp != nullptr && fcu->grp->channels.last_ == fcu) {
+      fcu->grp->channels.last_ = second;
     }
   }
 }
@@ -650,7 +650,7 @@ static void do_versions_material_convert_legacy_blend_mode(bNodeTree *ntree, cha
 
   /* Iterate backwards from end so we don't encounter newly added links. */
   bNodeLink *prevlink;
-  for (bNodeLink *link = static_cast<bNodeLink *>(ntree->links.last); link; link = prevlink) {
+  for (bNodeLink *link = static_cast<bNodeLink *>(ntree->links.last_); link; link = prevlink) {
     prevlink = static_cast<bNodeLink *>(link->prev);
 
     /* Detect link to replace. */
@@ -681,7 +681,7 @@ static void do_versions_material_convert_legacy_blend_mode(bNodeTree *ntree, cha
       add_node->locy_legacy = 0.5f * (fromnode->locy_legacy + tonode->locy_legacy);
 
       bNodeSocket *shader1_socket = static_cast<bNodeSocket *>(add_node->inputs.first_);
-      bNodeSocket *shader2_socket = static_cast<bNodeSocket *>(add_node->inputs.last);
+      bNodeSocket *shader2_socket = static_cast<bNodeSocket *>(add_node->inputs.last_);
       bNodeSocket *add_socket = bke::node_find_socket(*add_node, SOCK_OUT, "Shader"_ustr);
 
       bNode *transp_node = bke::node_add_static_node(nullptr, *ntree, SH_NODE_BSDF_TRANSPARENT);
@@ -1099,7 +1099,7 @@ static void square_roughness_node_insert(bNodeTree *ntree)
     node->locy_legacy = 0.5f * (fromnode->locy_legacy + tonode->locy_legacy);
 
     /* Link to input and material output node. */
-    *version_cycles_node_socket_float_value(static_cast<bNodeSocket *>(node->inputs.last)) = 0.5f;
+    *version_cycles_node_socket_float_value(static_cast<bNodeSocket *>(node->inputs.last_)) = 0.5f;
     bke::node_add_link(
         *ntree, *fromnode, *fromsock, *node, *static_cast<bNodeSocket *>(node->inputs.first_));
     bke::node_add_link(

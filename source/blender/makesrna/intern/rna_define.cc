@@ -94,15 +94,15 @@ void rna_addtail(ListBase *listbase, void *vlink)
   Link *link = static_cast<Link *>(vlink);
 
   link->next = nullptr;
-  link->prev = static_cast<Link *>(listbase->last);
+  link->prev = static_cast<Link *>(listbase->last_);
 
-  if (listbase->last) {
-    (static_cast<Link *>(listbase->last))->next = link;
+  if (listbase->last_) {
+    (static_cast<Link *>(listbase->last_))->next = link;
   }
   if (listbase->first_ == nullptr) {
     listbase->first_ = link;
   }
-  listbase->last = link;
+  listbase->last_ = link;
 }
 
 static void rna_remlink(ListBase *listbase, void *vlink)
@@ -116,8 +116,8 @@ static void rna_remlink(ListBase *listbase, void *vlink)
     link->prev->next = link->next;
   }
 
-  if (listbase->last == link) {
-    listbase->last = link->prev;
+  if (listbase->last_ == link) {
+    listbase->last_ = link->prev;
   }
   if (listbase->first_ == link) {
     listbase->first_ = link->next;
@@ -139,7 +139,7 @@ void rna_freelistN(ListBase *listbase)
     MEM_delete(link);
   }
 
-  listbase->first_ = listbase->last = nullptr;
+  listbase->first_ = listbase->last_ = nullptr;
 }
 
 static void rna_brna_structs_add(BlenderRNA *brna, std::unique_ptr<StructRNA> srna_ptr)
@@ -185,7 +185,7 @@ StructDefRNA *rna_find_struct_def(StructRNA *srna)
 {
   StructDefRNA *dsrna;
 
-  dsrna = static_cast<StructDefRNA *>(DefRNA.structs.last);
+  dsrna = static_cast<StructDefRNA *>(DefRNA.structs.last_);
   for (; dsrna; dsrna = static_cast<StructDefRNA *>(dsrna->cont.prev)) {
     if (dsrna->srna == srna) {
       return dsrna;
@@ -201,16 +201,16 @@ PropertyDefRNA *rna_find_struct_property_def(StructRNA *srna, PropertyRNA *prop)
   PropertyDefRNA *dprop;
 
   dsrna = rna_find_struct_def(srna);
-  dprop = static_cast<PropertyDefRNA *>(dsrna->cont.properties.last);
+  dprop = static_cast<PropertyDefRNA *>(dsrna->cont.properties.last_);
   for (; dprop; dprop = dprop->prev) {
     if (dprop->prop == prop) {
       return dprop;
     }
   }
 
-  dsrna = static_cast<StructDefRNA *>(DefRNA.structs.last);
+  dsrna = static_cast<StructDefRNA *>(DefRNA.structs.last_);
   for (; dsrna; dsrna = static_cast<StructDefRNA *>(dsrna->cont.prev)) {
-    dprop = static_cast<PropertyDefRNA *>(dsrna->cont.properties.last);
+    dprop = static_cast<PropertyDefRNA *>(dsrna->cont.properties.last_);
     for (; dprop; dprop = dprop->prev) {
       if (dprop->prop == prop) {
         return dprop;
@@ -227,16 +227,16 @@ FunctionDefRNA *rna_find_function_def(FunctionRNA *func)
   FunctionDefRNA *dfunc;
 
   dsrna = rna_find_struct_def(DefRNA.laststruct);
-  dfunc = static_cast<FunctionDefRNA *>(dsrna->functions.last);
+  dfunc = static_cast<FunctionDefRNA *>(dsrna->functions.last_);
   for (; dfunc; dfunc = static_cast<FunctionDefRNA *>(dfunc->cont.prev)) {
     if (dfunc->func == func) {
       return dfunc;
     }
   }
 
-  dsrna = static_cast<StructDefRNA *>(DefRNA.structs.last);
+  dsrna = static_cast<StructDefRNA *>(DefRNA.structs.last_);
   for (; dsrna; dsrna = static_cast<StructDefRNA *>(dsrna->cont.prev)) {
-    dfunc = static_cast<FunctionDefRNA *>(dsrna->functions.last);
+    dfunc = static_cast<FunctionDefRNA *>(dsrna->functions.last_);
     for (; dfunc; dfunc = static_cast<FunctionDefRNA *>(dfunc->cont.prev)) {
       if (dfunc->func == func) {
         return dfunc;
@@ -254,9 +254,9 @@ PropertyDefRNA *rna_find_parameter_def(PropertyRNA *parm)
   PropertyDefRNA *dparm;
 
   dsrna = rna_find_struct_def(DefRNA.laststruct);
-  dfunc = static_cast<FunctionDefRNA *>(dsrna->functions.last);
+  dfunc = static_cast<FunctionDefRNA *>(dsrna->functions.last_);
   for (; dfunc; dfunc = static_cast<FunctionDefRNA *>(dfunc->cont.prev)) {
-    dparm = static_cast<PropertyDefRNA *>(dfunc->cont.properties.last);
+    dparm = static_cast<PropertyDefRNA *>(dfunc->cont.properties.last_);
     for (; dparm; dparm = dparm->prev) {
       if (dparm->prop == parm) {
         return dparm;
@@ -264,11 +264,11 @@ PropertyDefRNA *rna_find_parameter_def(PropertyRNA *parm)
     }
   }
 
-  dsrna = static_cast<StructDefRNA *>(DefRNA.structs.last);
+  dsrna = static_cast<StructDefRNA *>(DefRNA.structs.last_);
   for (; dsrna; dsrna = static_cast<StructDefRNA *>(dsrna->cont.prev)) {
-    dfunc = static_cast<FunctionDefRNA *>(dsrna->functions.last);
+    dfunc = static_cast<FunctionDefRNA *>(dsrna->functions.last_);
     for (; dfunc; dfunc = static_cast<FunctionDefRNA *>(dfunc->cont.prev)) {
-      dparm = static_cast<PropertyDefRNA *>(dfunc->cont.properties.last);
+      dparm = static_cast<PropertyDefRNA *>(dfunc->cont.properties.last_);
       for (; dparm; dparm = dparm->prev) {
         if (dparm->prop == parm) {
           return dparm;

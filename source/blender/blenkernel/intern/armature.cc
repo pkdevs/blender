@@ -384,7 +384,7 @@ static void armature_blend_write(BlendWriter *writer, ID *id, const void *id_add
       arm->collection_array[i + 1]->prev = arm->collection_array[i];
     }
     arm->collections_legacy.first_ = arm->collection_array[0];
-    arm->collections_legacy.last = arm->collection_array[arm->collection_array_num - 1];
+    arm->collections_legacy.last_ = arm->collection_array[arm->collection_array_num - 1];
     arm->collection_array = nullptr;
   }
 

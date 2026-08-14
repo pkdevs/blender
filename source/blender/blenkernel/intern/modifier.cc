@@ -1342,8 +1342,8 @@ static ModifierData *modifier_replace_with_fluid(BlendDataReader *reader,
   if (modifiers->first_ == old_modifier_data) {
     modifiers->first_ = new_modifier_data;
   }
-  if (modifiers->last == old_modifier_data) {
-    modifiers->last = new_modifier_data;
+  if (modifiers->last_ == old_modifier_data) {
+    modifiers->last_ = new_modifier_data;
   }
 
   /* Free old modifier data. */

@@ -25,7 +25,7 @@
 #define LISTBASE_FOREACH(type, var, list) \
   for (type var = (type)((list)->first_); var != nullptr; var = (type)(((Link *)(var))->next))
 #define LISTBASE_FOREACH_BACKWARD(type, var, list) \
-  for (type var = (type)((list)->last); var != nullptr; var = (type)(((Link *)(var))->prev))
+  for (type var = (type)((list)->last_); var != nullptr; var = (type)(((Link *)(var))->prev))
 
 namespace blender {
 
@@ -37,14 +37,14 @@ void BLI_movelisttolist(ListBase *dst, ListBase *src)
 
   if (dst->first_ == nullptr) {
     dst->first_ = src->first_;
-    dst->last = src->last;
+    dst->last_ = src->last_;
   }
   else {
-    (static_cast<Link *>(dst->last))->next = static_cast<Link *>(src->first_);
-    (static_cast<Link *>(src->first_))->prev = static_cast<Link *>(dst->last);
-    dst->last = src->last;
+    (static_cast<Link *>(dst->last_))->next = static_cast<Link *>(src->first_);
+    (static_cast<Link *>(src->first_))->prev = static_cast<Link *>(dst->last_);
+    dst->last_ = src->last_;
   }
-  src->first_ = src->last = nullptr;
+  src->first_ = src->last_ = nullptr;
 }
 
 void BLI_movelisttolist_reverse(ListBase *dst, ListBase *src)
@@ -55,15 +55,15 @@ void BLI_movelisttolist_reverse(ListBase *dst, ListBase *src)
 
   if (dst->first_ == nullptr) {
     dst->first_ = src->first_;
-    dst->last = src->last;
+    dst->last_ = src->last_;
   }
   else {
-    (static_cast<Link *>(src->last))->next = static_cast<Link *>(dst->first_);
-    (static_cast<Link *>(dst->first_))->prev = static_cast<Link *>(src->last);
+    (static_cast<Link *>(src->last_))->next = static_cast<Link *>(dst->first_);
+    (static_cast<Link *>(dst->first_))->prev = static_cast<Link *>(src->last_);
     dst->first_ = src->first_;
   }
 
-  src->first_ = src->last = nullptr;
+  src->first_ = src->last_ = nullptr;
 }
 
 void BLI_listbase_split_after(ListBase *original_listbase, ListBase *split_listbase, void *vlink)
@@ -71,7 +71,7 @@ void BLI_listbase_split_after(ListBase *original_listbase, ListBase *split_listb
   BLI_assert(BLI_listbase_is_empty(split_listbase));
   BLI_assert(vlink == nullptr || BLI_findindex(original_listbase, vlink) >= 0);
 
-  if (vlink == original_listbase->last) {
+  if (vlink == original_listbase->last_) {
     /* Nothing to split, and `split_listbase` is assumed already empty (see assert above). */
     return;
   }
@@ -85,11 +85,11 @@ void BLI_listbase_split_after(ListBase *original_listbase, ListBase *split_listb
   Link *link = static_cast<Link *>(vlink);
   Link *next_link = link->next;
   BLI_assert(next_link != nullptr);
-  Link *last_link = static_cast<Link *>(original_listbase->last);
+  Link *last_link = static_cast<Link *>(original_listbase->last_);
 
-  original_listbase->last = link;
+  original_listbase->last_ = link;
   split_listbase->first_ = next_link;
-  split_listbase->last = last_link;
+  split_listbase->last_ = last_link;
 
   link->next = nullptr;
   next_link->prev = nullptr;
@@ -109,8 +109,8 @@ void BLI_addhead(ListBase *listbase, void *vlink)
   if (listbase->first_) {
     (static_cast<Link *>(listbase->first_))->prev = link;
   }
-  if (listbase->last == nullptr) {
-    listbase->last = link;
+  if (listbase->last_ == nullptr) {
+    listbase->last_ = link;
   }
   listbase->first_ = link;
 }
@@ -124,15 +124,15 @@ void BLI_addtail(ListBase *listbase, void *vlink)
   }
 
   link->next = nullptr;
-  link->prev = static_cast<Link *>(listbase->last);
+  link->prev = static_cast<Link *>(listbase->last_);
 
-  if (listbase->last) {
-    (static_cast<Link *>(listbase->last))->next = link;
+  if (listbase->last_) {
+    (static_cast<Link *>(listbase->last_))->next = link;
   }
   if (listbase->first_ == nullptr) {
     listbase->first_ = link;
   }
-  listbase->last = link;
+  listbase->last_ = link;
 }
 
 void BLI_remlink(ListBase *listbase, void *vlink)
@@ -150,8 +150,8 @@ void BLI_remlink(ListBase *listbase, void *vlink)
     link->prev->next = link->next;
   }
 
-  if (listbase->last == link) {
-    listbase->last = link->prev;
+  if (listbase->last_ == link) {
+    listbase->last_ = link->prev;
   }
   if (listbase->first_ == link) {
     listbase->first_ = link->next;
@@ -206,11 +206,11 @@ void BLI_listbase_swaplinks(ListBase *listbase, void *vlinka, void *vlinkb)
     linkb->next->prev = linkb;
   }
 
-  if (listbase->last == linka) {
-    listbase->last = linkb;
+  if (listbase->last_ == linka) {
+    listbase->last_ = linkb;
   }
-  else if (listbase->last == linkb) {
-    listbase->last = linka;
+  else if (listbase->last_ == linkb) {
+    listbase->last_ = linka;
   }
 
   if (listbase->first_ == linka) {
@@ -267,7 +267,7 @@ void *BLI_pophead(ListBase *listbase)
 
 void *BLI_poptail(ListBase *listbase)
 {
-  Link *link = static_cast<Link *>(listbase->last);
+  Link *link = static_cast<Link *>(listbase->last_);
   if (link) {
     BLI_remlink(listbase, link);
   }
@@ -297,7 +297,7 @@ static void listbase_double_from_single(Link *iter, ListBase *listbase)
     iter->prev = prev;
     prev = iter;
   } while ((iter = iter->next));
-  listbase->last = prev;
+  listbase->last_ = prev;
 }
 
 #define SORT_IMPL_LINKTYPE Link
@@ -318,7 +318,7 @@ static void listbase_double_from_single(Link *iter, ListBase *listbase)
 
 void BLI_listbase_sort(ListBase *listbase, int (*cmp)(const void *, const void *))
 {
-  if (listbase->first_ != listbase->last) {
+  if (listbase->first_ != listbase->last_) {
     Link *head = static_cast<Link *>(listbase->first_);
     head = listbase_sort_fn(head, cmp);
     listbase_double_from_single(head, listbase);
@@ -329,7 +329,7 @@ void BLI_listbase_sort_r(ListBase *listbase,
                          int (*cmp)(void *, const void *, const void *),
                          void *thunk)
 {
-  if (listbase->first_ != listbase->last) {
+  if (listbase->first_ != listbase->last_) {
     Link *head = static_cast<Link *>(listbase->first_);
     head = listbase_sort_fn_r(head, cmp, thunk);
     listbase_double_from_single(head, listbase);
@@ -349,7 +349,7 @@ void BLI_insertlinkafter(ListBase *listbase, void *vprevlink, void *vnewlink)
   /* empty list */
   if (listbase->first_ == nullptr) {
     listbase->first_ = newlink;
-    listbase->last = newlink;
+    listbase->last_ = newlink;
     return;
   }
 
@@ -363,8 +363,8 @@ void BLI_insertlinkafter(ListBase *listbase, void *vprevlink, void *vnewlink)
   }
 
   /* at end of list */
-  if (listbase->last == prevlink) {
-    listbase->last = newlink;
+  if (listbase->last_ == prevlink) {
+    listbase->last_ = newlink;
   }
 
   newlink->next = prevlink->next;
@@ -388,16 +388,16 @@ void BLI_insertlinkbefore(ListBase *listbase, void *vnextlink, void *vnewlink)
   /* empty list */
   if (listbase->first_ == nullptr) {
     listbase->first_ = newlink;
-    listbase->last = newlink;
+    listbase->last_ = newlink;
     return;
   }
 
   /* insert at end of list */
   if (nextlink == nullptr) {
-    newlink->prev = static_cast<Link *>(listbase->last);
+    newlink->prev = static_cast<Link *>(listbase->last_);
     newlink->next = nullptr;
-    (static_cast<Link *>(listbase->last))->next = newlink;
-    listbase->last = newlink;
+    (static_cast<Link *>(listbase->last_))->next = newlink;
+    listbase->last_ = newlink;
     return;
   }
 
@@ -435,8 +435,8 @@ void BLI_insertlinkreplace(ListBase *listbase, void *vreplacelink, void *vnewlin
   if (listbase->first_ == l_old) {
     listbase->first_ = l_new;
   }
-  if (listbase->last == l_old) {
-    listbase->last = l_new;
+  if (listbase->last_ == l_old) {
+    listbase->last_ = l_new;
   }
 }
 
@@ -558,7 +558,7 @@ void *BLI_rfindlink(const ListBase *listbase, int number)
   Link *link = nullptr;
 
   if (number >= 0) {
-    link = static_cast<Link *>(listbase->last);
+    link = static_cast<Link *>(listbase->last_);
     while (link != nullptr && number != 0) {
       number--;
       link = link->prev;
@@ -824,8 +824,8 @@ ListBase BLI_listbase_from_link(Link *some_link)
   }
 
   /* Find the last element. */
-  while ((static_cast<Link *>(list.last))->next != nullptr) {
-    list.last = (static_cast<Link *>(list.last))->next;
+  while ((static_cast<Link *>(list.last_))->next != nullptr) {
+    list.last_ = (static_cast<Link *>(list.last_))->next;
   }
 
   return list;
@@ -837,7 +837,7 @@ void BLI_duplicatelist(ListBase *dst, const ListBase *src)
 
   /* in this order, to ensure it works if dst == src */
   src_link = static_cast<Link *>(src->first_);
-  dst->first_ = dst->last = nullptr;
+  dst->first_ = dst->last_ = nullptr;
 
   while (src_link) {
     dst_link = MEM_dupalloc(src_link);
@@ -862,43 +862,43 @@ void BLI_listbase_reverse(ListBase *lb)
 
   /* swap first/last */
   curr = static_cast<Link *>(lb->first_);
-  lb->first_ = lb->last;
-  lb->last = curr;
+  lb->first_ = lb->last_;
+  lb->last_ = curr;
 }
 
 void BLI_listbase_rotate_first(ListBase *lb, void *vlink)
 {
   /* make circular */
-  (static_cast<Link *>(lb->first_))->prev = static_cast<Link *>(lb->last);
-  (static_cast<Link *>(lb->last))->next = static_cast<Link *>(lb->first_);
+  (static_cast<Link *>(lb->first_))->prev = static_cast<Link *>(lb->last_);
+  (static_cast<Link *>(lb->last_))->next = static_cast<Link *>(lb->first_);
 
   lb->first_ = vlink;
-  lb->last = (static_cast<Link *>(vlink))->prev;
+  lb->last_ = (static_cast<Link *>(vlink))->prev;
 
   (static_cast<Link *>(lb->first_))->prev = nullptr;
-  (static_cast<Link *>(lb->last))->next = nullptr;
+  (static_cast<Link *>(lb->last_))->next = nullptr;
 }
 
 void BLI_listbase_rotate_last(ListBase *lb, void *vlink)
 {
   /* make circular */
-  (static_cast<Link *>(lb->first_))->prev = static_cast<Link *>(lb->last);
-  (static_cast<Link *>(lb->last))->next = static_cast<Link *>(lb->first_);
+  (static_cast<Link *>(lb->first_))->prev = static_cast<Link *>(lb->last_);
+  (static_cast<Link *>(lb->last_))->next = static_cast<Link *>(lb->first_);
 
   lb->first_ = (static_cast<Link *>(vlink))->next;
-  lb->last = vlink;
+  lb->last_ = vlink;
 
   (static_cast<Link *>(lb->first_))->prev = nullptr;
-  (static_cast<Link *>(lb->last))->next = nullptr;
+  (static_cast<Link *>(lb->last_))->next = nullptr;
 }
 
 bool BLI_listbase_validate(ListBase *lb)
 {
-  if (lb->first_ == nullptr && lb->last == nullptr) {
+  if (lb->first_ == nullptr && lb->last_ == nullptr) {
     /* Empty list. */
     return true;
   }
-  if (ELEM(nullptr, lb->first_, lb->last)) {
+  if (ELEM(nullptr, lb->first_, lb->last_)) {
     /* If one of the pointer is null, but not this other, this is a corrupted listbase. */
     return false;
   }
@@ -911,14 +911,14 @@ bool BLI_listbase_validate(ListBase *lb)
         return false;
       }
     }
-    if (lb_link == lb->last) {
+    if (lb_link == lb->last_) {
       if (lb_link->next != nullptr) {
         return false;
       }
     }
   }
   LISTBASE_FOREACH_BACKWARD (Link *, lb_link, lb) {
-    if (lb_link == lb->last) {
+    if (lb_link == lb->last_) {
       if (lb_link->next != nullptr) {
         return false;
       }

@@ -225,7 +225,7 @@ bool BKE_screen_blend_read_data(BlendDataReader *reader, bScreen *screen)
 {
   bool success = true;
 
-  screen->regionbase.first_ = screen->regionbase.last = nullptr;
+  screen->regionbase.first_ = screen->regionbase.last_ = nullptr;
   screen->context = nullptr;
   screen->active_region = nullptr;
   screen->animtimer = nullptr; /* saved in rare cases */

@@ -1244,7 +1244,7 @@ static void rna_Scene_all_keyingsets_next(CollectionPropertyIterator *iter)
 
   /* If we've run out of links in Scene list,
    * jump over to the builtins list unless we're there already. */
-  if ((ks->next == nullptr) && (ks != builtin_keyingsets.last)) {
+  if ((ks->next == nullptr) && (ks != builtin_keyingsets.last_)) {
     internal->link = static_cast<Link *>(builtin_keyingsets.first_);
   }
   else {

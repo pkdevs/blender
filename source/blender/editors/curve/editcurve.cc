@@ -4311,7 +4311,7 @@ static void make_selection_list_nurb(View3D *v3d,
         headdist = dist;
         headdo = nustest;
       }
-      dist = len_v3v3(nustest->vec, (static_cast<NurbSort *>(nsortbase->last))->vec);
+      dist = len_v3v3(nustest->vec, (static_cast<NurbSort *>(nsortbase->last_))->vec);
 
       if (dist < taildist) {
         taildist = dist;
@@ -4507,7 +4507,7 @@ static int merge_nurb(View3D *v3d, Object *obedit)
 
   make_selection_list_nurb(v3d, editnurb, &nsortbase);
 
-  if (nsortbase.first_ == nsortbase.last) {
+  if (nsortbase.first_ == nsortbase.last_) {
     nsortbase.free_no_destruct();
     return CURVE_MERGE_ERR_FEW_SELECTION;
   }

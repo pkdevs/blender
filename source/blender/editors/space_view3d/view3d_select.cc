@@ -1815,7 +1815,7 @@ static bool object_mouse_select_menu(bContext *C,
   });
 
   while (base_count > SEL_MENU_SIZE) {
-    BLI_freelinkN(&base_ref_list, base_ref_list.last);
+    BLI_freelinkN(&base_ref_list, base_ref_list.last_);
     base_count -= 1;
   }
 
@@ -2053,7 +2053,7 @@ static bool bone_mouse_select_menu(bContext *C,
   });
 
   while (bone_count > SEL_MENU_SIZE) {
-    BLI_freelinkN(&bone_ref_list, bone_ref_list.last);
+    BLI_freelinkN(&bone_ref_list, bone_ref_list.last_);
     bone_count -= 1;
   }
 

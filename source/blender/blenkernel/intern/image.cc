@@ -220,8 +220,8 @@ static void image_foreach_cache(ID *id,
 
   key.identifier = offsetof(Image, anims.first_);
   function_callback(id, &key, &image->anims.first_, 0, user_data);
-  key.identifier = offsetof(Image, anims.last);
-  function_callback(id, &key, &image->anims.last, 0, user_data);
+  key.identifier = offsetof(Image, anims.last_);
+  function_callback(id, &key, &image->anims.last_, 0, user_data);
 
   key.identifier = offsetof(Image, rr);
   function_callback(id, &key, reinterpret_cast<void **>(&image->rr), 0, user_data);
@@ -620,8 +620,8 @@ static void image_free_cached_frames(Image *image)
 
 static void image_free_packedfiles(Image *ima)
 {
-  while (ima->packedfiles.last) {
-    ImagePackedFile *imapf = static_cast<ImagePackedFile *>(ima->packedfiles.last);
+  while (ima->packedfiles.last_) {
+    ImagePackedFile *imapf = static_cast<ImagePackedFile *>(ima->packedfiles.last_);
     if (imapf->packedfile) {
       BKE_packedfile_free(imapf->packedfile);
     }
@@ -637,8 +637,8 @@ void BKE_image_free_packedfiles(Image *ima)
 
 static void image_free_autosave_packedfiles(Image *ima)
 {
-  while (ima->autosave_packedfiles.last) {
-    ImagePackedFile *imapf = static_cast<ImagePackedFile *>(ima->autosave_packedfiles.last);
+  while (ima->autosave_packedfiles.last_) {
+    ImagePackedFile *imapf = static_cast<ImagePackedFile *>(ima->autosave_packedfiles.last_);
     if (imapf->packedfile) {
       BKE_packedfile_free(imapf->packedfile);
     }
@@ -660,8 +660,8 @@ void BKE_image_free_views(Image *image)
 
 static void image_free_anims(Image *ima)
 {
-  while (ima->anims.last) {
-    ImageAnim *ia = static_cast<ImageAnim *>(ima->anims.last);
+  while (ima->anims.last_) {
+    ImageAnim *ia = static_cast<ImageAnim *>(ima->anims.last_);
     if (ia->anim) {
       MOV_close(ia->anim);
       ia->anim = nullptr;
@@ -3326,7 +3326,7 @@ static bool image_remove_tile(Image *ima, ImageTile *tile)
 static void image_remove_all_tiles(Image *ima)
 {
   /* Remove all but the final tile. */
-  while (image_remove_tile(ima, static_cast<ImageTile *>(ima->tiles.last))) {
+  while (image_remove_tile(ima, static_cast<ImageTile *>(ima->tiles.last_))) {
     ;
   }
 }
@@ -5828,7 +5828,7 @@ static void image_update_views_format(Image *ima, ImageUser *iuser)
     }
 
     /* check if the files are all available */
-    iv = static_cast<ImageView *>(ima->views.last);
+    iv = static_cast<ImageView *>(ima->views.last_);
     while (iv) {
       int file;
       char filepath[FILE_MAX];

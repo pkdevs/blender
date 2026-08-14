@@ -1289,7 +1289,7 @@ static PointerRNA rna_SpaceView3D_region_3d_get(PointerRNA *ptr)
   if (area) {
     ListBaseT<ARegion> *regionbase = (area->spacedata.first_ == v3d) ? &area->regionbase :
                                                                        &v3d->regionbase;
-    ARegion *region = static_cast<ARegion *>(regionbase->last); /* always last in list, weak. */
+    ARegion *region = static_cast<ARegion *>(regionbase->last_); /* always last in list, weak. */
     regiondata = region->regiondata;
   }
 
@@ -1337,7 +1337,7 @@ static void rna_SpaceView3D_region_quadviews_begin(CollectionPropertyIterator *i
   int i = 3;
 
   ARegion *region = static_cast<ARegion *>(
-      ((area && area->spacedata.first_ == v3d) ? &area->regionbase : &v3d->regionbase)->last);
+      ((area && area->spacedata.first_ == v3d) ? &area->regionbase : &v3d->regionbase)->last_);
   ListBaseT<ARegion> lb = {nullptr, nullptr};
 
   if (region && region->alignment == RGN_ALIGN_QSPLIT) {

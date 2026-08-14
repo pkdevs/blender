@@ -1891,7 +1891,7 @@ void id_sort_by_name(ListBaseT<ID> *lb, ID *id, ID *id_sorting_hint)
   ID *idtest;
 
   /* insert alphabetically */
-  if (lb->first_ == lb->last) {
+  if (lb->first_ == lb->last_) {
     return;
   }
 
@@ -1930,7 +1930,7 @@ void id_sort_by_name(ListBaseT<ID> *lb, ID *id, ID *id_sorting_hint)
    * (higher extension numbers). */
   bool is_in_library = false;
   item_array_index = ID_SORT_STEP_SIZE - 1;
-  for (idtest = static_cast<ID *>(lb->last); idtest != nullptr;
+  for (idtest = static_cast<ID *>(lb->last_); idtest != nullptr;
        idtest = static_cast<ID *>(idtest->prev))
   {
     if (is_in_library) {

@@ -5679,7 +5679,7 @@ static wmOperatorStatus spacedata_cleanup_exec(bContext *C, wmOperator *op)
 
   for (bScreen &screen : bmain->screens) {
     for (ScrArea &area : screen.areabase) {
-      if (area.spacedata.first_ != area.spacedata.last) {
+      if (area.spacedata.first_ != area.spacedata.last_) {
         SpaceLink *sl = static_cast<SpaceLink *>(area.spacedata.first_);
 
         BLI_remlink(&area.spacedata, sl);
@@ -5724,7 +5724,7 @@ static bool repeat_history_poll(bContext *C)
 static wmOperatorStatus repeat_last_exec(bContext *C, wmOperator * /*op*/)
 {
   wmWindowManager *wm = CTX_wm_manager(C);
-  wmOperator *lastop = static_cast<wmOperator *>(wm->runtime->operators.last);
+  wmOperator *lastop = static_cast<wmOperator *>(wm->runtime->operators.last_);
 
   /* Seek last registered operator */
   while (lastop) {
@@ -5779,7 +5779,7 @@ static wmOperatorStatus repeat_history_invoke(bContext *C,
 
   wmOperator *lastop;
   int i;
-  for (i = items - 1, lastop = static_cast<wmOperator *>(wm->runtime->operators.last); lastop;
+  for (i = items - 1, lastop = static_cast<wmOperator *>(wm->runtime->operators.last_); lastop;
        lastop = lastop->prev, i--)
   {
     if ((lastop->type->flag & OPTYPE_REGISTER) && WM_operator_repeat_check(C, lastop)) {

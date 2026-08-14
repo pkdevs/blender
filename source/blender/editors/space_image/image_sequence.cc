@@ -152,7 +152,7 @@ static void image_detect_frame_range(ImageFrameRange *range, const bool detect_u
     range->offset = 0;
   }
 
-  ImageFrame *frame_last = static_cast<ImageFrame *>(range->frames.last);
+  ImageFrame *frame_last = static_cast<ImageFrame *>(range->frames.last_);
   if (frame_last != nullptr) {
     range->max_framenr = frame_last->framenr;
   }

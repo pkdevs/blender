@@ -6075,7 +6075,7 @@ bool BKE_constraint_apply_for_pose(
   bConstraint *new_con = BKE_constraint_duplicate_ex(con_eval, 0, ID_IS_EDITABLE(ob));
   ListBaseT<bConstraint> single_con;
   single_con.first_ = new_con;
-  single_con.last = new_con;
+  single_con.last_ = new_con;
 
   float vec[3];
   copy_v3_v3(vec, pchan_eval->pose_mat[3]);
@@ -6604,7 +6604,7 @@ void BKE_constraint_targets_flush(bConstraint *con,
   }
 
   /* Remove the custom target. */
-  bConstraintTarget *ct = static_cast<bConstraintTarget *>(targets->last);
+  bConstraintTarget *ct = static_cast<bConstraintTarget *>(targets->last_);
 
   if (ct && (ct->flag & CONSTRAINT_TAR_CUSTOM_SPACE)) {
     BLI_assert(is_custom_space_needed(con));

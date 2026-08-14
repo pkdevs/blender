@@ -38,7 +38,7 @@ static PyObject *bpy_bmeditselseq_active_get(BPy_BMEditSelSeq *self, void * /*cl
   BMEditSelection *ese;
   BPY_BM_CHECK_OBJ(self);
 
-  if ((ese = static_cast<BMEditSelection *>(self->bm->selected.last))) {
+  if ((ese = static_cast<BMEditSelection *>(self->bm->selected.last_))) {
     return BPy_BMElem_CreatePyObject(self->bm, &ese->ele->head);
   }
 

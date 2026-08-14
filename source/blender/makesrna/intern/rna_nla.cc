@@ -658,7 +658,7 @@ static NlaStrip *rna_NlaStrip_new(ID *id,
     while ((nlt = nlt->next) != nullptr) {
       nlt_p = nlt;
     }
-    adt.nla_tracks.last = nlt_p;
+    adt.nla_tracks.last_ = nlt_p;
 
     STRNCPY(strip->name, name);
     BKE_nlastrip_validate_name(&adt, strip);

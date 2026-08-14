@@ -1420,7 +1420,7 @@ static void do_particle_interpolation(ParticleSystem *psys,
         }
       }
       else {
-        real_t = pa->time + (static_cast<ParticleTarget *>(psys->targets.last))->time;
+        real_t = pa->time + (static_cast<ParticleTarget *>(psys->targets.last_))->time;
       }
     }
 
@@ -5706,7 +5706,7 @@ void BKE_particle_system_blend_read_after_liblink(BlendLibReader * /*reader*/,
         /* XXX(@ideasman42): from reading existing code this seems correct but intended usage
          * of point-cache with cloth should be added in #ParticleSystem. */
         psys.clmd->point_cache = psys.pointcache;
-        psys.clmd->ptcaches.first_ = psys.clmd->ptcaches.last = nullptr;
+        psys.clmd->ptcaches.first_ = psys.clmd->ptcaches.last_ = nullptr;
         psys.clmd->modifier.error = nullptr;
       }
     }

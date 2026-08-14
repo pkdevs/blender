@@ -571,7 +571,7 @@ static void outliner_sort(ListBaseT<TreeElement> *lb)
    *   with bones coming first (and ARE sorted).
    */
 
-  TreeElement *last_te = static_cast<TreeElement *>(lb->last);
+  TreeElement *last_te = static_cast<TreeElement *>(lb->last_);
   if (last_te == nullptr) {
     return;
   }
@@ -649,7 +649,7 @@ static void outliner_sort(ListBaseT<TreeElement> *lb)
 
 static void outliner_collections_children_sort(ListBaseT<TreeElement> *lb)
 {
-  TreeElement *last_te = static_cast<TreeElement *>(lb->last);
+  TreeElement *last_te = static_cast<TreeElement *>(lb->last_);
   if (last_te == nullptr) {
     return;
   }
@@ -1052,7 +1052,7 @@ static TreeElement *outliner_extract_children_from_subtree(TreeElement *element,
 
   if (outliner_element_is_collection_or_object(element)) {
     TreeElement *te_prev = nullptr;
-    for (TreeElement *te = static_cast<TreeElement *>(element->subtree.last); te; te = te_prev) {
+    for (TreeElement *te = static_cast<TreeElement *>(element->subtree.last_); te; te = te_prev) {
       te_prev = te->prev;
 
       if (!outliner_element_is_collection_or_object(te)) {

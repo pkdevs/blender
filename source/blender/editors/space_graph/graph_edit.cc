@@ -2372,7 +2372,7 @@ static void snap_graph_keys(bAnimContext *ac, short mode)
   ked.scene = ac->scene;
   if (mode == GRAPHKEYS_SNAP_NEAREST_MARKER) {
     ked.time_marker_list.first_ = (ac->markers) ? ac->markers->first_ : nullptr;
-    ked.time_marker_list.last = (ac->markers) ? ac->markers->last : nullptr;
+    ked.time_marker_list.last_ = (ac->markers) ? ac->markers->last_ : nullptr;
   }
   else if (mode == GRAPHKEYS_SNAP_VALUE) {
     cursor_value = (sipo) ? sipo->cursorVal : 0.0f;

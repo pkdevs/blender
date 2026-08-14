@@ -1248,7 +1248,7 @@ static bool foreach_object_ptcache(Scene *scene,
 
 void BKE_ptcache_ids_from_object(ListBaseT<PTCacheID> *lb, Object *ob, Scene *scene, int duplis)
 {
-  lb->first_ = lb->last = nullptr;
+  lb->first_ = lb->last_ = nullptr;
   foreach_object_ptcache(scene, ob, duplis, [&](PTCacheID &pid, ModifierData * /*md*/) -> bool {
     PTCacheID *own_pid = MEM_new_uninitialized<PTCacheID>("PTCacheID");
     *own_pid = pid;
@@ -1861,7 +1861,7 @@ static void ptcache_find_frames_around(PTCacheID *pid, uint frame, int *r_fra1, 
   }
   else if (pid->cache->mem_cache.first_) {
     PTCacheMem *pm = static_cast<PTCacheMem *>(pid->cache->mem_cache.first_);
-    PTCacheMem *pm2 = static_cast<PTCacheMem *>(pid->cache->mem_cache.last);
+    PTCacheMem *pm2 = static_cast<PTCacheMem *>(pid->cache->mem_cache.last_);
 
     while (pm->next && pm->next->frame <= frame) {
       pm = pm->next;
@@ -2366,7 +2366,7 @@ static int ptcache_write(PTCacheID *pid, int cfra, int overwrite)
       pm2 = ptcache_disk_frame_to_mem(pid, fra);
     }
     else {
-      pm2 = static_cast<PTCacheMem *>(cache->mem_cache.last);
+      pm2 = static_cast<PTCacheMem *>(cache->mem_cache.last_);
     }
   }
 
@@ -2441,7 +2441,7 @@ static int ptcache_write_needed(PTCacheID *pid, int cfra, int *overwrite)
     }
   }
   else {
-    PTCacheMem *pm = static_cast<PTCacheMem *>(cache->mem_cache.last);
+    PTCacheMem *pm = static_cast<PTCacheMem *>(cache->mem_cache.last_);
     /* don't write info file in memory */
     if (cfra == 0) {
       return 0;
@@ -3866,7 +3866,7 @@ void BKE_ptcache_blend_read_data(BlendDataReader *reader,
         (*ocache)->step = 1;
       }
 
-      ptcaches->first_ = ptcaches->last = *ocache;
+      ptcaches->first_ = ptcaches->last_ = *ocache;
     }
   }
 }

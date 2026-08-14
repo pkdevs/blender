@@ -900,7 +900,7 @@ void blo_do_versions_270(FileData *fd, Library * /*lib*/, Main *bmain)
       STRNCPY_UTF8(srv->suffix, STEREO_LEFT_SUFFIX);
 
       BKE_scene_add_render_view(&scene, STEREO_RIGHT_NAME);
-      srv = static_cast<SceneRenderView *>(scene.r.views.last);
+      srv = static_cast<SceneRenderView *>(scene.r.views.last_);
       STRNCPY_UTF8(srv->suffix, STEREO_RIGHT_SUFFIX);
 
       if (scene.ed) {

@@ -2429,7 +2429,7 @@ static wmOperatorStatus text_jump_exec(bContext *C, wmOperator *op)
   Text *text = CTX_data_edit_text(C);
   int line = RNA_int_get(op->ptr, "line");
   short nlines = txt_get_span(static_cast<TextLine *>(text->lines.first_),
-                              static_cast<TextLine *>(text->lines.last)) +
+                              static_cast<TextLine *>(text->lines.last_)) +
                  1;
 
   if (line < 1) {
@@ -3227,7 +3227,7 @@ static void space_text_cursor_set_to_pos_wrapped(
     charp = 0;
   }
   else { /* Beyond end of text. */
-    linep = static_cast<TextLine *>(st->text->lines.last);
+    linep = static_cast<TextLine *>(st->text->lines.last_);
     charp = linep->len;
   }
 

@@ -640,20 +640,20 @@ void txt_clean_text(Text *text)
   TextLine **top, **bot;
 
   if (!text->lines.first_) {
-    if (text->lines.last) {
-      text->lines.first_ = text->lines.last;
+    if (text->lines.last_) {
+      text->lines.first_ = text->lines.last_;
     }
     else {
-      text->lines.first_ = text->lines.last = txt_new_line("");
+      text->lines.first_ = text->lines.last_ = txt_new_line("");
     }
   }
 
-  if (!text->lines.last) {
-    text->lines.last = text->lines.first_;
+  if (!text->lines.last_) {
+    text->lines.last_ = text->lines.first_;
   }
 
   top = reinterpret_cast<TextLine **>(&text->lines.first_);
-  bot = reinterpret_cast<TextLine **>(&text->lines.last);
+  bot = reinterpret_cast<TextLine **>(&text->lines.last_);
 
   while ((*top)->prev) {
     *top = (*top)->prev;
@@ -1088,7 +1088,7 @@ void txt_move_eof(Text *text, const bool sel)
     return;
   }
 
-  *linep = static_cast<TextLine *>(text->lines.last);
+  *linep = static_cast<TextLine *>(text->lines.last_);
   *charp = (*linep)->len;
 
   if (!sel) {
@@ -1261,7 +1261,7 @@ void txt_sel_all(Text *text)
   text->curl = static_cast<TextLine *>(text->lines.first_);
   text->curc = 0;
 
-  text->sell = static_cast<TextLine *>(text->lines.last);
+  text->sell = static_cast<TextLine *>(text->lines.last_);
   text->selc = text->sell->len;
 }
 
@@ -1303,7 +1303,7 @@ void txt_sel_set(Text *text, int startl, int startc, int endl, int endc)
 
   froml = static_cast<TextLine *>(BLI_findlink(&text->lines, startl));
   if (froml == nullptr) {
-    froml = static_cast<TextLine *>(text->lines.last);
+    froml = static_cast<TextLine *>(text->lines.last_);
   }
   if (startl == endl) {
     tol = froml;
@@ -1311,7 +1311,7 @@ void txt_sel_set(Text *text, int startl, int startc, int endl, int endc)
   else {
     tol = static_cast<TextLine *>(BLI_findlink(&text->lines, endl));
     if (tol == nullptr) {
-      tol = static_cast<TextLine *>(text->lines.last);
+      tol = static_cast<TextLine *>(text->lines.last_);
     }
   }
 

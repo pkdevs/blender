@@ -2135,9 +2135,9 @@ void OUTLINER_OT_select_box(wmOperatorType *ot)
 static TreeElement *outliner_find_rightmost_visible_child(SpaceOutliner *space_outliner,
                                                           TreeElement *te)
 {
-  while (te->subtree.last) {
+  while (te->subtree.last_) {
     if (TSELEM_OPEN(TREESTORE(te), space_outliner)) {
-      te = static_cast<TreeElement *>(te->subtree.last);
+      te = static_cast<TreeElement *>(te->subtree.last_);
     }
     else {
       break;

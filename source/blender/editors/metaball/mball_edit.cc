@@ -552,7 +552,7 @@ static wmOperatorStatus duplicate_metaelems_exec(bContext *C, wmOperator * /*op*
       continue;
     }
 
-    ml = static_cast<MetaElem *>(mb->editelems->last);
+    ml = static_cast<MetaElem *>(mb->editelems->last_);
     if (ml) {
       while (ml) {
         if (ml->flag & SELECT) {

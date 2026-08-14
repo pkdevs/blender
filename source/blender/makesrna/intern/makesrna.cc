@@ -3950,7 +3950,7 @@ static void rna_generate_struct_register_func(BlenderRNA * /*brna*/, StructRNA *
     fprintf(f, "\tsrna->cont.properties = {nullptr, ");
   }
 
-  prop = static_cast<PropertyRNA *>(srna->cont.properties.last);
+  prop = static_cast<PropertyRNA *>(srna->cont.properties.last_);
   if (prop) {
     fprintf(f, "&rna_%s_%s};\n", srna->identifier.c_str(), prop->identifier.c_str());
   }
@@ -4050,7 +4050,7 @@ static void rna_generate_struct_register_func(BlenderRNA * /*brna*/, StructRNA *
               static_cast<PropertyRNA *>(func->cont.properties.first_)->identifier.c_str(),
               srna->identifier.c_str(),
               func->identifier.c_str(),
-              static_cast<PropertyRNA *>(func->cont.properties.last)->identifier.c_str());
+              static_cast<PropertyRNA *>(func->cont.properties.last_)->identifier.c_str());
     }
     fprintf(f, "\t\tfunc->identifier = ");
     rna_print_c_string(f, func->identifier.c_str());

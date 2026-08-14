@@ -201,7 +201,7 @@ static bool view_layer_remove_poll(const Scene *scene, const ViewLayer *layer)
   if (act == -1) {
     return false;
   }
-  if ((scene->view_layers.first_ == scene->view_layers.last) &&
+  if ((scene->view_layers.first_ == scene->view_layers.last_) &&
       (scene->view_layers.first_ == layer))
   {
     /* ensure 1 layer is kept */

@@ -245,7 +245,7 @@ static void scene_init_data(ID *id)
   STRNCPY(srv->suffix, STEREO_LEFT_SUFFIX);
 
   BKE_scene_add_render_view(scene, STEREO_RIGHT_NAME);
-  srv = static_cast<SceneRenderView *>(scene->r.views.last);
+  srv = static_cast<SceneRenderView *>(scene->r.views.last_);
   STRNCPY(srv->suffix, STEREO_RIGHT_SUFFIX);
 
   /* color management */
@@ -2466,7 +2466,7 @@ const char *BKE_scene_find_marker_name(const Scene *scene, int frame)
 
   /* search through markers for match */
   for (m1 = static_cast<const TimeMarker *>(markers->first_),
-      m2 = static_cast<const TimeMarker *>(markers->last);
+      m2 = static_cast<const TimeMarker *>(markers->last_);
        m1 && m2;
        m1 = m1->next, m2 = m2->prev)
   {
@@ -2963,7 +2963,7 @@ bool BKE_scene_remove_render_view(Scene *scene, SceneRenderView *srv)
   if (act == -1) {
     return false;
   }
-  if (scene->r.views.first_ == scene->r.views.last) {
+  if (scene->r.views.first_ == scene->r.views.last_) {
     /* ensure 1 view is kept */
     return false;
   }

@@ -1989,7 +1989,7 @@ void LayerGroup::move_node_down(TreeNode &node, const int step)
 void LayerGroup::move_node_top(TreeNode &node)
 {
   BLI_remlink(&this->children, &node);
-  BLI_insertlinkafter(&this->children, this->children.last, &node);
+  BLI_insertlinkafter(&this->children, this->children.last_, &node);
   this->tag_nodes_cache_dirty();
 }
 void LayerGroup::move_node_bottom(TreeNode &node)
@@ -2022,7 +2022,8 @@ bool LayerGroup::unlink_node(TreeNode &link, const bool keep_children)
     ListBaseT<GreasePencilLayerTreeNode> link_children = link.as_group().children;
     GreasePencilLayerTreeNode *first = static_cast<GreasePencilLayerTreeNode *>(
         link_children.first_);
-    GreasePencilLayerTreeNode *last = static_cast<GreasePencilLayerTreeNode *>(link_children.last);
+    GreasePencilLayerTreeNode *last = static_cast<GreasePencilLayerTreeNode *>(
+        link_children.last_);
 
     /* Rewrite the parent pointers. */
     for (GreasePencilLayerTreeNode &child : link_children) {
@@ -2040,8 +2041,8 @@ bool LayerGroup::unlink_node(TreeNode &link, const bool keep_children)
     }
 
     /* Update first and/or last link(s). */
-    if (this->children.last == &link) {
-      this->children.last = last;
+    if (this->children.last_ == &link) {
+      this->children.last_ = last;
     }
     if (this->children.first_ == &link) {
       this->children.first_ = first;
@@ -4503,7 +4504,7 @@ void GreasePencil::remove_group(bke::greasepencil::LayerGroup &group, const bool
   if (&group.as_node() == this->get_active_node()) {
     /* If we keep the children and there is at least one child, make it the active node. */
     if (keep_children && !group.is_empty()) {
-      this->set_active_node(reinterpret_cast<TreeNode *>(group.children.last));
+      this->set_active_node(reinterpret_cast<TreeNode *>(group.children.last_));
     }
     else {
       update_active_node_from_node_to_remove(*this, group.as_node());

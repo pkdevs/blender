@@ -457,17 +457,17 @@ BMLog *BM_log_from_existing_entries_create(BMesh *bm, BMLogEntry *entry)
   }
 
   /* Let BMLog manage the entry list again */
-  log->entries.first_ = log->entries.last = entry;
+  log->entries.first_ = log->entries.last_ = entry;
 
   {
     while (entry->prev) {
       entry = entry->prev;
       log->entries.first_ = entry;
     }
-    entry = static_cast<BMLogEntry *>(log->entries.last);
+    entry = static_cast<BMLogEntry *>(log->entries.last_);
     while (entry->next) {
       entry = entry->next;
-      log->entries.last = entry;
+      log->entries.last_ = entry;
     }
   }
 

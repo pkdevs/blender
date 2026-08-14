@@ -195,7 +195,7 @@ void ED_markers_get_minmax(ListBaseT<TimeMarker> *markers,
 
   /* sanity check */
   // printf("markers = %p -  %p, %p\n", markers, markers->first, markers->last);
-  if (ELEM(nullptr, markers, markers->first_, markers->last)) {
+  if (ELEM(nullptr, markers, markers->first_, markers->last_)) {
     *r_first = 0.0f;
     *r_last = 0.0f;
     return;
@@ -335,7 +335,7 @@ void ED_markers_make_cfra_list(ListBaseT<TimeMarker> *markers,
      * whether this terminated early otherwise. This may lead
      * to crashes if the user didn't clear the memory first.
      */
-    lb->first_ = lb->last = nullptr;
+    lb->first_ = lb->last_ = nullptr;
   }
   else {
     return;

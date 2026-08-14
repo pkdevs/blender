@@ -374,7 +374,7 @@ static void rna_Cache_list_begin(CollectionPropertyIterator *iter, PointerRNA *p
   }
 
   lb.first_ = cache;
-  lb.last = nullptr; /* not used by listbase_begin */
+  lb.last_ = nullptr; /* not used by listbase_begin */
 
   rna_iterator_listbase_begin(iter, ptr, &lb, nullptr);
 }

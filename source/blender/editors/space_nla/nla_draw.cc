@@ -582,7 +582,7 @@ static void nla_draw_strip(SpaceNla *snla,
   }
   /* or if meta-strip, draw lines delimiting extents of sub-strips
    * (in same color as outline, if more than 1 exists) */
-  else if ((strip->type == NLASTRIP_TYPE_META) && (strip->strips.first_ != strip->strips.last)) {
+  else if ((strip->type == NLASTRIP_TYPE_META) && (strip->strips.first_ != strip->strips.last_)) {
     const float y = (ymaxc - yminc) * 0.5f + yminc;
 
     /* up to 2 lines per strip */
@@ -746,7 +746,7 @@ static ListBaseT<NlaStrip> get_visible_nla_strips(NlaTrack *nlt, View2D *v2d)
      * rendered.
      */
     NlaStrip *first_strip = static_cast<NlaStrip *>(nlt->strips.first_);
-    NlaStrip *last_strip = static_cast<NlaStrip *>(nlt->strips.last);
+    NlaStrip *last_strip = static_cast<NlaStrip *>(nlt->strips.last_);
     if (first_strip && v2d->cur.xmax < first_strip->start &&
         first_strip->extendmode == NLASTRIP_EXTEND_HOLD)
     {

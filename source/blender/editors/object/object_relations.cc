@@ -1238,7 +1238,7 @@ static wmOperatorStatus object_track_clear_exec(bContext *C, wmOperator *op)
     DEG_id_tag_update(&ob->id, ID_RECALC_TRANSFORM | ID_RECALC_GEOMETRY | ID_RECALC_ANIMATION);
 
     /* also remove all tracking constraints */
-    for (con = static_cast<bConstraint *>(ob->constraints.last); con; con = pcon) {
+    for (con = static_cast<bConstraint *>(ob->constraints.last_); con; con = pcon) {
       pcon = con->prev;
       if (ELEM(con->type,
                CONSTRAINT_TYPE_TRACKTO,
@@ -1887,7 +1887,7 @@ static Collection *single_object_users_collection(Main *bmain,
    * otherwise their parent lists are empty (which will lead to crashes, see #63101). */
   CollectionChild *child_next,
       *child = static_cast<CollectionChild *>(collection->children.first_);
-  CollectionChild *orig_child_last = static_cast<CollectionChild *>(collection->children.last);
+  CollectionChild *orig_child_last = static_cast<CollectionChild *>(collection->children.last_);
   for (; child != nullptr; child = child_next) {
     child_next = child->next;
     Collection *collection_child_new = single_object_users_collection(

@@ -2375,7 +2375,7 @@ bool panel_category_is_visible(const ARegion *region)
   /* Check for more than one category. */
   return region->runtime->panels_category.first_ &&
          (!bool(region->runtime->type->flag & ARegionTypeFlag::HideSinglePanelCategories) ||
-          region->runtime->panels_category.first_ != region->runtime->panels_category.last);
+          region->runtime->panels_category.first_ != region->runtime->panels_category.last_);
 }
 
 bool panel_category_tabs_is_visible(const ARegion *region)
@@ -2566,7 +2566,7 @@ static int handle_panel_category_cycling(const wmEvent *event,
           if (!pc_dyn) {
             /* Proper cyclic behavior, back to first/last category (only used for ctrl+tab). */
             pc_dyn = backwards ?
-                         static_cast<PanelCategoryDyn *>(region->runtime->panels_category.last) :
+                         static_cast<PanelCategoryDyn *>(region->runtime->panels_category.last_) :
                          static_cast<PanelCategoryDyn *>(region->runtime->panels_category.first_);
           }
         }

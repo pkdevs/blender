@@ -927,7 +927,7 @@ bGPDframe *BKE_gpencil_layer_frame_get(bGPDlayer *gpl, int cframe, eGP_GetFrame_
         gpl->actframe = gpf;
       }
       else {
-        gpl->actframe = static_cast<bGPDframe *>(gpl->frames.last);
+        gpl->actframe = static_cast<bGPDframe *>(gpl->frames.last_);
       }
     }
     else {
@@ -964,11 +964,11 @@ bGPDframe *BKE_gpencil_layer_frame_get(bGPDlayer *gpl, int cframe, eGP_GetFrame_
   else if (gpl->frames.first_) {
     /* check which of the ends to start checking from */
     const int first = (static_cast<bGPDframe *>(gpl->frames.first_))->framenum;
-    const int last = (static_cast<bGPDframe *>(gpl->frames.last))->framenum;
+    const int last = (static_cast<bGPDframe *>(gpl->frames.last_))->framenum;
 
     if (abs(cframe - first) > abs(cframe - last)) {
       /* find gp-frame which is less than or equal to cframe */
-      for (gpf = static_cast<bGPDframe *>(gpl->frames.last); gpf; gpf = gpf->prev) {
+      for (gpf = static_cast<bGPDframe *>(gpl->frames.last_); gpf; gpf = gpf->prev) {
         if (gpf->framenum <= cframe) {
           found = true;
           break;

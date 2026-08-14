@@ -804,7 +804,7 @@ static wmOperatorStatus nlaedit_add_transition_exec(bContext *C, wmOperator *op)
     NlaStrip *s1, *s2;
 
     /* get initial pair of strips */
-    if (ELEM(nlt->strips.first_, nullptr, nlt->strips.last)) {
+    if (ELEM(nlt->strips.first_, nullptr, nlt->strips.last_)) {
       continue;
     }
     s1 = static_cast<NlaStrip *>(nlt->strips.first_);

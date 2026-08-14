@@ -1104,7 +1104,7 @@ bool rna_NLA_tracks_override_apply(Main *bmain, RNAPropertyOverrideApplyContext 
   }
   /* Otherwise we just insert in first position. */
 #  else
-  nla_track_anchor = static_cast<NlaTrack *>(anim_data_dst->nla_tracks.last);
+  nla_track_anchor = static_cast<NlaTrack *>(anim_data_dst->nla_tracks.last_);
 #  endif
 
   NlaTrack *nla_track_src = nullptr;

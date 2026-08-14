@@ -600,11 +600,11 @@ static void testbuffer_list_state_random_data(ListBaseT<TestBuffer> *lb,
   size_t data_len = rand_range_i(rng, data_min_len, data_max_len + stride, stride);
   char *data = MEM_new_array_uninitialized<char>(data_len, __func__);
 
-  if (lb->last == nullptr) {
+  if (lb->last_ == nullptr) {
     BLI_rng_get_char_n(rng, data, data_len);
   }
   else {
-    TestBuffer *tb_last = static_cast<TestBuffer *>(lb->last);
+    TestBuffer *tb_last = static_cast<TestBuffer *>(lb->last_);
     if (tb_last->data_len >= data_len) {
       memcpy(data, tb_last->data, data_len);
     }

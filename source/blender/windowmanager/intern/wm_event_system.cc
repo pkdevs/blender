@@ -1104,8 +1104,8 @@ static intptr_t wm_operator_undo_active_id(const wmWindowManager *wm)
 
 static intptr_t wm_operator_register_active_id(const wmWindowManager *wm)
 {
-  if (wm->runtime->operators.last) {
-    return intptr_t(wm->runtime->operators.last);
+  if (wm->runtime->operators.last_) {
+    return intptr_t(wm->runtime->operators.last_);
   }
   return -1;
 }
@@ -1502,7 +1502,7 @@ bool WM_operator_is_repeat(const bContext *C, const wmOperator *op)
   wmOperator *op_prev;
   if (op->prev == nullptr && op->next == nullptr) {
     wmWindowManager *wm = CTX_wm_manager(C);
-    op_prev = static_cast<wmOperator *>(wm->runtime->operators.last);
+    op_prev = static_cast<wmOperator *>(wm->runtime->operators.last_);
   }
   else {
     op_prev = op->prev;
@@ -5794,7 +5794,7 @@ static wmWindow *wm_event_cursor_other_windows(wmWindowManager *wm, wmWindow *wi
     return nullptr;
   }
 
-  if (wm->windows.first_ == wm->windows.last) {
+  if (wm->windows.first_ == wm->windows.last_) {
     return nullptr;
   }
 
@@ -5867,7 +5867,7 @@ static void wm_event_prev_click_set(uint64_t event_time_ms,
 
 static wmEvent *wm_event_add_mousemove(wmWindow *win, const wmEvent *event)
 {
-  wmEvent *event_last = static_cast<wmEvent *>(win->runtime->event_queue.last);
+  wmEvent *event_last = static_cast<wmEvent *>(win->runtime->event_queue.last_);
 
   /* Some painting operators want accurate mouse events, they can
    * handle in between mouse move moves, others can happily ignore
@@ -5922,7 +5922,7 @@ static wmEvent *wm_event_add_trackpad(wmWindow *win, const wmEvent *event, int d
 {
   /* Ignore in between trackpad events for performance, we only need high accuracy
    * for painting with mouse moves, for navigation using the accumulated value is ok. */
-  const wmEvent *event_last = static_cast<wmEvent *>(win->runtime->event_queue.last);
+  const wmEvent *event_last = static_cast<wmEvent *>(win->runtime->event_queue.last_);
   if (event_last && event_last->type == event->type) {
     deltax += event_last->xy[0] - event_last->prev_xy[0];
     deltay += event_last->xy[1] - event_last->prev_xy[1];
@@ -6044,7 +6044,7 @@ static bool wm_event_is_ignorable_key_press(const wmWindow *win, const wmEvent &
     return false;
   }
 
-  const wmEvent &last_event = *static_cast<const wmEvent *>(win->runtime->event_queue.last);
+  const wmEvent &last_event = *static_cast<const wmEvent *>(win->runtime->event_queue.last_);
 
   return wm_event_is_same_key_press(last_event, event);
 }

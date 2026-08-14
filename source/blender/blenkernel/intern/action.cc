@@ -163,8 +163,8 @@ static void action_copy_data(Main * /*bmain*/,
         if (group_dst->channels.first_ == fcurve_src) {
           group_dst->channels.first_ = fcurve_dst;
         }
-        if (group_dst->channels.last == fcurve_src) {
-          group_dst->channels.last = fcurve_dst;
+        if (group_dst->channels.last_ == fcurve_src) {
+          group_dst->channels.last_ = fcurve_dst;
         }
         break;
       }
@@ -432,7 +432,7 @@ static void action_blend_write_make_legacy_channel_groups_listbase(
   }
 
   listbase.first_ = channel_groups[0];
-  listbase.last = channel_groups[last_index];
+  listbase.last_ = channel_groups[last_index];
 }
 
 static void action_blend_write_clear_legacy_channel_groups_listbase(
@@ -477,7 +477,7 @@ static void action_blend_write_make_legacy_fcurves_listbase(ListBaseT<FCurve> &l
   }
 
   listbase.first_ = fcurves[0];
-  listbase.last = fcurves[last_index];
+  listbase.last_ = fcurves[last_index];
 }
 
 static void action_blend_write_clear_legacy_fcurves_listbase(ListBaseT<FCurve> &listbase)
@@ -700,7 +700,7 @@ static void action_blend_read_data(BlendDataReader *reader, ID *id)
 
     for (bActionGroup &agrp : action.groups) {
       BLO_read_struct(reader, FCurve, &agrp.channels.first_);
-      BLO_read_struct(reader, FCurve, &agrp.channels.last);
+      BLO_read_struct(reader, FCurve, &agrp.channels.last_);
     }
   }
 
@@ -1077,7 +1077,7 @@ void BKE_pose_copy_data_ex(bPose **dst,
    * BUT this will have the penalty that the ghash will be built twice
    * if BKE_pose_rebuild() gets called after this...
    */
-  if (outPose->chanbase.first_ != outPose->chanbase.last) {
+  if (outPose->chanbase.first_ != outPose->chanbase.last_) {
     outPose->chanhash = nullptr;
     BKE_pose_channels_hash_ensure(outPose);
   }
@@ -1811,7 +1811,7 @@ void what_does_obaction(Object *ob,
   workob->par3 = ob->par3;
 
   workob->constraints.first_ = ob->constraints.first_;
-  workob->constraints.last = ob->constraints.last;
+  workob->constraints.last_ = ob->constraints.last_;
 
   /* Need to set pose too, since this is used for both types of Action Constraint. */
   workob->pose = pose;
@@ -1820,7 +1820,7 @@ void what_does_obaction(Object *ob,
      * For such cases it makes no sense to create hash since it'll only waste CPU ticks on memory
      * allocation and also will make lookup slower.
      */
-    if (pose->chanbase.first_ != pose->chanbase.last) {
+    if (pose->chanbase.first_ != pose->chanbase.last_) {
       BKE_pose_channels_hash_ensure(pose);
     }
     if (pose->flag & POSE_CONSTRAINTS_NEED_UPDATE_FLAGS) {

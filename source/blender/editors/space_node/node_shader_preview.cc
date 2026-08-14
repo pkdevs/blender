@@ -770,7 +770,7 @@ static void ensure_nodetree_previews(const bContext &C,
     return;
   }
 
-  bNodeTree *displayed_nodetree = static_cast<bNodeTreePath *>(treepath.last)->nodetree;
+  bNodeTree *displayed_nodetree = static_cast<bNodeTreePath *>(treepath.last_)->nodetree;
   ePreviewType preview_type = MA_FLAT;
   if (CTX_wm_space_node(&C)->overlay.preview_shape == SN_OVERLAY_PREVIEW_3D) {
     preview_type = ePreviewType(material.pr_type);

@@ -721,11 +721,11 @@ static void bm_edgering_pair_interpolate(BMesh *bm,
         LinkData *v_iter;
 
         BMVert *v_a = static_cast<BMVert *>((static_cast<LinkData *>(lb_ring->first_))->data);
-        BMVert *v_b = static_cast<BMVert *>((static_cast<LinkData *>(lb_ring->last))->data);
+        BMVert *v_b = static_cast<BMVert *>((static_cast<LinkData *>(lb_ring->last_))->data);
 
         /* skip first and last */
         for (v_iter = (static_cast<LinkData *>(lb_ring->first_))->next, i = 1;
-             v_iter != lb_ring->last;
+             v_iter != lb_ring->last_;
              v_iter = v_iter->next, i++)
         {
           float co_a[3], co_b[3];
@@ -756,7 +756,7 @@ static void bm_edgering_pair_interpolate(BMesh *bm,
         LinkData *v_iter;
 
         BMVert *v_a = static_cast<BMVert *>((static_cast<LinkData *>(lb_ring->first_))->data);
-        BMVert *v_b = static_cast<BMVert *>((static_cast<LinkData *>(lb_ring->last))->data);
+        BMVert *v_b = static_cast<BMVert *>((static_cast<LinkData *>(lb_ring->last_))->data);
 
         float co_a[3], no_a[3], handle_a[3], co_b[3], no_b[3], handle_b[3];
         float handle_len;
@@ -798,7 +798,7 @@ static void bm_edgering_pair_interpolate(BMesh *bm,
 
         /* skip first and last */
         for (v_iter = (static_cast<LinkData *>(lb_ring->first_))->next, i = 1;
-             v_iter != lb_ring->last;
+             v_iter != lb_ring->last_;
              v_iter = v_iter->next, i++)
         {
           if (i > 0 && i < resolu - 1) {
@@ -882,8 +882,8 @@ static bool bm_edgering_pair_order_is_flipped(BMesh * /*bm*/,
                              BM_edge_exists(static_cast<BMVert *>(v_iter_b_step->data),
                                             static_cast<BMVert *>(v_iter_a_first->next->data))));
 
-  v_iter_a_step = static_cast<LinkData *>(v_iter_a_step ? v_iter_a_step->prev : lb_a->last);
-  v_iter_b_step = static_cast<LinkData *>(v_iter_b_step ? v_iter_b_step->prev : lb_b->last);
+  v_iter_a_step = static_cast<LinkData *>(v_iter_a_step ? v_iter_a_step->prev : lb_a->last_);
+  v_iter_b_step = static_cast<LinkData *>(v_iter_b_step ? v_iter_b_step->prev : lb_b->last_);
 
   return !(BM_edge_exists(static_cast<BMVert *>(v_iter_a_step->data),
                           static_cast<BMVert *>(v_iter_b_step->data)) ||
@@ -1168,7 +1168,7 @@ void bmo_subdivide_edgering_exec(BMesh *bm, BMOperator *op)
     /* this case could be removed,
      * but simple to avoid 'bm_edgering_pair_calc' in this case since there's only one. */
     BMEdgeLoopStore *el_store_a = static_cast<BMEdgeLoopStore *>(eloops_rim.first_);
-    BMEdgeLoopStore *el_store_b = static_cast<BMEdgeLoopStore *>(eloops_rim.last);
+    BMEdgeLoopStore *el_store_b = static_cast<BMEdgeLoopStore *>(eloops_rim.last_);
     LoopPairStore *lpair;
 
     if (bm_edgeloop_check_overlap_all(bm, el_store_a, el_store_b)) {

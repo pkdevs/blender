@@ -34,7 +34,7 @@ struct LinkData {
  * function (from dna_genfile.cc) uses it to compute the #pointer_size.
  */
 struct ListBase {
-  void *first_, *last;
+  void *first_, *last_;
 };
 
 #ifdef __cplusplus
@@ -59,7 +59,7 @@ template<typename T> struct ListBaseT : public ListBase {
   /** True when there is exactly one item in the list. */
   bool is_single() const
   {
-    return this->first_ != nullptr && this->last == this->first_;
+    return this->first_ != nullptr && this->last_ == this->first_;
   }
 
   /**
@@ -68,7 +68,7 @@ template<typename T> struct ListBaseT : public ListBase {
   void clear_no_delete()
   {
     this->first_ = nullptr;
-    this->last = nullptr;
+    this->last_ = nullptr;
   }
 
   /**
@@ -80,7 +80,7 @@ template<typename T> struct ListBaseT : public ListBase {
       MEM_delete_void(static_cast<void *>(&item));
     }
     this->first_ = nullptr;
-    this->last = nullptr;
+    this->last_ = nullptr;
   }
 
   /**
@@ -131,18 +131,18 @@ template<typename T> struct ListBaseT : public ListBase {
   /** Iterator that runs in reverse order. */
   ListBaseBackwardWrapper<T> items_reversed()
   {
-    return {this->last};
+    return {this->last_};
   }
 
   ListBaseBackwardWrapper<const T> items_reversed() const
   {
-    return {this->last};
+    return {this->last_};
   }
 
   /** Iterator that runs in reverse order and supports removing the item we're looping over. */
   ListBaseMutableBackwardWrapper<T> items_reversed_mutable()
   {
-    return {this->last};
+    return {this->last_};
   }
 
   /* Cast for opaque types and C style subclasses. */

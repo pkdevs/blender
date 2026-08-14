@@ -882,7 +882,7 @@ uint BLI_scanfill_calc_ex(ScanFillContext *sf_ctx, const int flag, const float n
     const float *v_prev;
 
     zero_v3(n);
-    v_prev = static_cast<ScanFillVert *>(sf_ctx->fillvertbase.last)->co;
+    v_prev = static_cast<ScanFillVert *>(sf_ctx->fillvertbase.last_)->co;
 
     for (ScanFillVert &eve : sf_ctx->fillvertbase) {
       if (!compare_v3v3(v_prev, eve.co, SF_EPSILON)) [[likely]] {
@@ -921,7 +921,7 @@ uint BLI_scanfill_calc_ex(ScanFillContext *sf_ctx, const int flag, const float n
 
           toggle++;
           ScanFillEdge *eed = static_cast<ScanFillEdge *>(
-              (toggle & 1) ? sf_ctx->filledgebase.first_ : sf_ctx->filledgebase.last);
+              (toggle & 1) ? sf_ctx->filledgebase.first_ : sf_ctx->filledgebase.last_);
           for (; eed; eed = (toggle & 1) ? eed->next : eed->prev) {
             if (eed->v1->poly_nr == SF_POLY_UNSET && eed->v2->poly_nr == poly) {
               eed->v1->poly_nr = poly;
@@ -989,7 +989,7 @@ uint BLI_scanfill_calc_ex(ScanFillContext *sf_ctx, const int flag, const float n
       toggle++;
 
       ScanFillEdge *eed = static_cast<ScanFillEdge *>((toggle & 1) ? sf_ctx->filledgebase.first_ :
-                                                                     sf_ctx->filledgebase.last);
+                                                                     sf_ctx->filledgebase.last_);
       ScanFillEdge *eed_next;
       for (; eed; eed = eed_next) {
         eed_next = (toggle & 1) ? eed->next : eed->prev;
@@ -1114,9 +1114,9 @@ uint BLI_scanfill_calc_ex(ScanFillContext *sf_ctx, const int flag, const float n
   /* STEP 5: MAKE TRIANGLES */
 
   tempve.first_ = sf_ctx->fillvertbase.first_;
-  tempve.last = sf_ctx->fillvertbase.last;
+  tempve.last_ = sf_ctx->fillvertbase.last_;
   temped.first_ = sf_ctx->filledgebase.first_;
-  temped.last = sf_ctx->filledgebase.last;
+  temped.last_ = sf_ctx->filledgebase.last_;
   sf_ctx->fillvertbase.clear_no_delete();
   sf_ctx->filledgebase.clear_no_delete();
 

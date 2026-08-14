@@ -516,7 +516,7 @@ static void lineart_shadow_edge_cut(LineartData *ld,
   LineartShadowSegment *cut_start_after = static_cast<LineartShadowSegment *>(
                            e->shadow_segments.first_),
                        *cut_end_before = static_cast<LineartShadowSegment *>(
-                           e->shadow_segments.last);
+                           e->shadow_segments.last_);
   LineartShadowSegment *new_seg_1 = nullptr, *new_seg_2 = nullptr, *seg_1 = nullptr,
                        *seg_2 = nullptr;
   int untouched = 0;

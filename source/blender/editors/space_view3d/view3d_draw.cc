@@ -1825,7 +1825,7 @@ void ED_view3d_draw_offscreen_simple(Depsgraph *depsgraph,
   region.runtime = &region_runtime;
   RegionView3D rv3d;
 
-  v3d.regionbase.first_ = v3d.regionbase.last = &region;
+  v3d.regionbase.first_ = v3d.regionbase.last_ = &region;
   region.regiondata = &rv3d;
   region.regiontype = RGN_TYPE_WINDOW;
 
@@ -2108,7 +2108,7 @@ ImBuf *ED_view3d_draw_offscreen_imbuf_simple(Depsgraph *depsgraph,
   RegionView3D rv3d;
 
   /* connect data */
-  v3d.regionbase.first_ = v3d.regionbase.last = &region;
+  v3d.regionbase.first_ = v3d.regionbase.last_ = &region;
   region.regiondata = &rv3d;
   region.regiontype = RGN_TYPE_WINDOW;
 

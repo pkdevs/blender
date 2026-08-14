@@ -858,7 +858,7 @@ NlaEvalStrip *nlastrips_ctime_get_strip(ListBaseT<NlaEvalStrip> *list,
     /* if time occurred after current strip... */
     if (ctime > strip.end) {
       /* only if this is the last strip should we do anything, and only if that is being held */
-      if (&strip == strips->last) {
+      if (&strip == strips->last_) {
         if (strip.extendmode != NLASTRIP_EXTEND_NOTHING) {
           estrip = &strip;
         }
@@ -952,7 +952,7 @@ static NlaEvalStrip *nlastrips_ctime_get_strip_single(
     const bool flush_to_original)
 {
   ListBaseT<NlaStrip> single_tracks_list;
-  single_tracks_list.first_ = single_tracks_list.last = single_strip;
+  single_tracks_list.first_ = single_tracks_list.last_ = single_strip;
 
   return nlastrips_ctime_get_strip(
       dst_list, &single_tracks_list, -1, anim_eval_context, flush_to_original);
@@ -2363,13 +2363,13 @@ static void nlaeval_fmodifiers_join_stacks(ListBaseT<FModifier> *result,
   if (ELEM(nullptr, list1, list1->first_)) {
     if (list2 && list2->first_) {
       result->first_ = list2->first_;
-      result->last = list2->last;
+      result->last_ = list2->last_;
     }
   }
   /* if list 2 is invalid... */
   else if (ELEM(nullptr, list2, list2->first_)) {
     result->first_ = list1->first_;
-    result->last = list1->last;
+    result->last_ = list1->last_;
   }
   else {
     /* list1 should be added first, and list2 second,
@@ -2377,9 +2377,9 @@ static void nlaeval_fmodifiers_join_stacks(ListBaseT<FModifier> *result,
      * - the original lists must be left unchanged though, as we need that fact for restoring.
      */
     result->first_ = list1->first_;
-    result->last = list2->last;
+    result->last_ = list2->last_;
 
-    fcm1 = static_cast<FModifier *>(list1->last);
+    fcm1 = static_cast<FModifier *>(list1->last_);
     fcm2 = static_cast<FModifier *>(list2->first_);
 
     fcm1->next = fcm2;
@@ -2402,7 +2402,7 @@ static void nlaeval_fmodifiers_split_stacks(ListBaseT<FModifier> *list1,
   }
 
   /* get endpoints */
-  fcm1 = static_cast<FModifier *>(list1->last);
+  fcm1 = static_cast<FModifier *>(list1->last_);
   fcm2 = static_cast<FModifier *>(list2->first_);
 
   /* clear their links */

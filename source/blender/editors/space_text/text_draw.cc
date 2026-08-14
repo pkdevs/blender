@@ -1573,7 +1573,7 @@ void draw_text_main(SpaceText *st, ARegion *region)
   space_text_update_drawcache(st, region);
 
   /* Make sure all the positional pointers exist. */
-  if (!text->curl || !text->sell || !text->lines.first_ || !text->lines.last) {
+  if (!text->curl || !text->sell || !text->lines.first_ || !text->lines.last_) {
     txt_clean_text(text);
   }
 

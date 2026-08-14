@@ -145,7 +145,7 @@ static void keylist_runtime_init_listbase(AnimKeylist *keylist)
   }
 
   keylist->runtime.list_wrapper.first_ = keylist->runtime.key_columns.data();
-  keylist->runtime.list_wrapper.last = &keylist->runtime.key_columns[keylist->column_len - 1];
+  keylist->runtime.list_wrapper.last_ = &keylist->runtime.key_columns[keylist->column_len - 1];
 }
 
 static void keylist_runtime_init(AnimKeylist *keylist)
@@ -359,7 +359,7 @@ static void keylist_first_last(const AnimKeylist *keylist,
   }
   else {
     *first_column = static_cast<const ActKeyColumn *>(keylist->key_columns.first_);
-    *last_column = static_cast<const ActKeyColumn *>(keylist->key_columns.last);
+    *last_column = static_cast<const ActKeyColumn *>(keylist->key_columns.last_);
   }
 }
 

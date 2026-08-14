@@ -1270,7 +1270,7 @@ static RenderLayer *duplicate_render_layer(RenderLayer *rl)
 {
   RenderLayer *new_rl = MEM_new<RenderLayer>("new render layer", *rl);
   new_rl->next = new_rl->prev = nullptr;
-  new_rl->passes.first_ = new_rl->passes.last = nullptr;
+  new_rl->passes.first_ = new_rl->passes.last_ = nullptr;
   for (RenderPass &rpass : rl->passes) {
     RenderPass *new_rpass = duplicate_render_pass(&rpass);
     BLI_addtail(&new_rl->passes, new_rpass);
@@ -1291,8 +1291,8 @@ RenderResult *RE_DuplicateRenderResult(RenderResult *rr)
 {
   RenderResult *new_rr = MEM_new<RenderResult>("new duplicated render result", *rr);
   new_rr->next = new_rr->prev = nullptr;
-  new_rr->layers.first_ = new_rr->layers.last = nullptr;
-  new_rr->views.first_ = new_rr->views.last = nullptr;
+  new_rr->layers.first_ = new_rr->layers.last_ = nullptr;
+  new_rr->views.first_ = new_rr->views.last_ = nullptr;
   for (RenderLayer &rl : rr->layers) {
     RenderLayer *new_rl = duplicate_render_layer(&rl);
     BLI_addtail(&new_rr->layers, new_rl);
