@@ -913,24 +913,29 @@ static ImBuf *seq_render_image_strip_view(const RenderData *context,
   return ibuf;
 }
 
-bool seq_image_strip_is_multiview_render(const Scene *scene,
-                                         const Strip *strip,
-                                         int totfiles,
-                                         const char *filepath,
-                                         char *r_prefix,
-                                         const char *r_ext)
+bool seq_strip_do_multiview_render(const Scene *scene,
+                                   const Strip *strip,
+                                   const char *filepath,
+                                   char *r_prefix)
 {
-  if (totfiles > 1) {
-    BKE_scene_multiview_view_prefix_get(scene, filepath, r_prefix, &r_ext);
-    if (r_prefix[0] == '\0') {
-      return false;
-    }
-  }
-  else {
-    r_prefix[0] = '\0';
+  r_prefix[0] = '\0';
+
+  if ((strip->flag & SEQ_USE_VIEWS) == 0 || (scene->r.scemode & R_MULTIVIEW) == 0 ||
+      BKE_scene_multiview_num_views_get(&scene->r) <= 1)
+  {
+    return false;
   }
 
-  return (strip->flag & SEQ_USE_VIEWS) != 0 && (scene->r.scemode & R_MULTIVIEW) != 0;
+  if (strip->views_format != R_IMF_VIEWS_INDIVIDUAL) {
+    /* Strips interpreted as a single stereo file always force multiview. */
+    return true;
+  }
+
+  /* For "Individual" view, if strip's file suffix does not match any view suffix,
+   * (implying no common prefix), fallback to mono render. */
+  const char *ext = nullptr;
+  BKE_scene_multiview_view_prefix_get(scene, filepath, r_prefix, &ext);
+  return r_prefix[0] != '\0';
 }
 
 static ImBuf *create_missing_media_image(const RenderData *context, int width, int height)
@@ -978,12 +983,12 @@ static ImBuf *seq_render_image_strip(const RenderData *context,
   }
 
   /* Proxy not found, render original. */
-  const int totfiles = seq_num_files(context->scene, strip->views_format, true);
-  bool is_multiview_render = seq_image_strip_is_multiview_render(
-      context->scene, strip, totfiles, filepath, prefix, ext);
+  const bool do_multiview_render = seq_strip_do_multiview_render(
+      context->scene, strip, filepath, prefix);
 
-  if (is_multiview_render) {
-    int totviews = BKE_scene_multiview_num_views_get(&context->scene->r);
+  if (do_multiview_render) {
+    const int totfiles = seq_multiview_num_files_get(context->scene, strip->views_format);
+    const int totviews = BKE_scene_multiview_num_views_get(&context->scene->r);
     Array<ImBuf *> ibufs_arr(totviews, nullptr);
 
     for (int view_id = 0; view_id < totfiles; view_id++) {
@@ -1107,13 +1112,13 @@ static ImBuf *seq_render_movie_strip(const RenderData *context,
 
   ImBuf *ibuf = nullptr;
   MovieReader *first_reader = strip->runtime->movie_reader_get();
-  const int totfiles = seq_num_files(context->scene, strip->views_format, true);
-  bool is_multiview_render = (strip->flag & SEQ_USE_VIEWS) != 0 &&
-                             (context->scene->r.scemode & R_MULTIVIEW) != 0 &&
-                             totfiles == strip->runtime->movie_readers.size();
+  const int totfiles = seq_multiview_num_files_get(context->scene, strip->views_format);
+  const bool do_multiview_render = (strip->flag & SEQ_USE_VIEWS) != 0 &&
+                                   (context->scene->r.scemode & R_MULTIVIEW) != 0 &&
+                                   totfiles == strip->runtime->movie_readers.size();
 
-  if (is_multiview_render) {
-    int totviews = BKE_scene_multiview_num_views_get(&context->scene->r);
+  if (do_multiview_render) {
+    const int totviews = BKE_scene_multiview_num_views_get(&context->scene->r);
     Array<ImBuf *> ibuf_arr(totviews, nullptr);
 
     int ibuf_view_id = 0;
@@ -1745,6 +1750,7 @@ static SeqResult do_render_strip_uncached(const RenderData *context,
   float frame_index = give_frame_index(context->scene, strip, timeline_frame);
   if (strip->type == STRIP_TYPE_META) {
     out = do_render_strip_seqbase(context, state, strip, frame_index);
+    out.is_opaque_before_transform = out.image && !out.image->can_contain_alpha();
   }
   else if (strip->type == STRIP_TYPE_SCENE) {
     /* Recursive check. */
@@ -1760,6 +1766,10 @@ static SeqResult do_render_strip_uncached(const RenderData *context,
           local_context.skip_cache = true;
 
           out = do_render_strip_seqbase(&local_context, state, strip, frame_index);
+
+          /* We have just rendered timeline of another scene; make sure movie decoding
+           * contexts no longer needed by the current frame are freed. */
+          relations_free_all_anim_ibufs(local_context.scene, frame_index);
         }
       }
       else {
@@ -2164,21 +2174,20 @@ float get_render_scale_factor(const RenderData &context)
 
 bool render_begin_gpu(const RenderData &rd)
 {
+  /* Use GPU context from VSE render data (e.g. prefetch render). */
   if (rd.gpu_context.ghost_context != nullptr) {
-    /* Use GPU context from VSE render data. */
     gpu::GPU_activate_secondary_context(rd.gpu_context);
     GPU_render_begin();
     return true;
   }
 
-  if (BLI_thread_is_main()) {
-    /* Use main GPU context. */
+  /* Use main GPU context (regular preview area drawing, or "render sequence preview" operator). */
+  if (BLI_thread_is_main() || rd.render == nullptr) {
     DRW_gpu_context_enable();
     return DRW_gpu_context_is_enabled();
   }
 
   /* Use GPU context from Render. */
-  BLI_assert(rd.render != nullptr);
   GHOST_IContext *render_ghost_context = RE_system_gpu_context_get(rd.render);
   if (!render_ghost_context) {
     return false;
@@ -2193,24 +2202,25 @@ bool render_begin_gpu(const RenderData &rd)
 
 void render_end_gpu(const RenderData &rd)
 {
+  /* Use GPU context from VSE render data (e.g. prefetch render). */
   if (rd.gpu_context.ghost_context != nullptr) {
-    /* Use GPU context from VSE render data. */
     GPU_render_end();
     gpu::GPU_deactivate_secondary_context(rd.gpu_context);
+    return;
   }
-  else if (BLI_thread_is_main()) {
-    /* Use main GPU context. */
+
+  /* Use main GPU context (regular preview area drawing, or "render sequence preview" operator). */
+  if (BLI_thread_is_main() || rd.render == nullptr) {
     DRW_gpu_context_disable();
+    return;
   }
-  else {
-    /* Use GPU context from Render. */
-    BLI_assert(rd.render != nullptr);
-    GHOST_IContext *render_ghost_context = RE_system_gpu_context_get(rd.render);
-    BLI_assert(render_ghost_context != nullptr);
-    GPU_context_active_set(nullptr);
-    GPU_render_end();
-    WM_system_gpu_context_release(render_ghost_context);
-  }
+
+  /* Use GPU context from Render. */
+  GHOST_IContext *render_ghost_context = RE_system_gpu_context_get(rd.render);
+  BLI_assert(render_ghost_context != nullptr);
+  GPU_context_active_set(nullptr);
+  GPU_render_end();
+  WM_system_gpu_context_release(render_ghost_context);
 }
 
 }  // namespace blender::seq
