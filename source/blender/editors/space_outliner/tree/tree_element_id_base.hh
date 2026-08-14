@@ -15,10 +15,9 @@ namespace blender {
 namespace ed::outliner {
 
 struct TreeElementIDBase final : public AbstractTreeElement {
-  void *data_;
 
  public:
-  TreeElementIDBase(TreeElement &legacy_te, void *data);
+  TreeElementIDBase(TreeElement &legacy_te);
 };
 }  // namespace ed::outliner
 }  // namespace blender

@@ -12,11 +12,10 @@
 
 namespace blender::ed::outliner {
 
-TreeElementIDBase::TreeElementIDBase(TreeElement &legacy_te, void *data)
-    : AbstractTreeElement(legacy_te), data_(data)
+TreeElementIDBase::TreeElementIDBase(TreeElement &legacy_te)
+    : AbstractTreeElement(legacy_te)
 {
   BLI_assert(legacy_te.store_elem->type == TSE_ID_BASE);
-  legacy_te.directdata = data_;
   legacy_te.name = "";
 }
 }  // namespace blender::ed::outliner

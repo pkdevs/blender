@@ -213,7 +213,7 @@ std::unique_ptr<AbstractTreeElement> AbstractTreeElement::create_from_type(const
       return std::make_unique<TreeElementShapeKeyBase>(legacy_te,
                                                        *reinterpret_cast<Key *>(owner_id));
     case TSE_ID_BASE:
-      return std::make_unique<TreeElementIDBase>(legacy_te, static_cast<ID *>(create_data));
+      return std::make_unique<TreeElementIDBase>(legacy_te);
     default:
       break;
   }
