@@ -890,7 +890,7 @@ void node_light_info_impl(const int light_index,
 
   LightData light = lrd.light_buf[light_index];
   color = float4(light.color, 1.0f);
-  power = eevee::light::power_get(light, LIGHT_VOLUME);
+  power = light.point_power;
   light_position = light.object_to_world.location();
   const bool is_directional = (light.type == LIGHT_SUN) || (light.type == LIGHT_SUN_ORTHO);
   LightVector lv = light_vector_get(light, is_directional, position);
@@ -901,17 +901,22 @@ void node_light_info_impl(const int light_index,
   is_sun = is_directional ? 1.0f : 0.0f;
 }
 
-void node_light_accumulation_impl(float4 diffuse_light,
+void node_light_accumulation_impl(const int light_index,
+                                  float4 diffuse_light,
                                   float4 diffuse_color,
                                   float4 glossy_light,
                                   float4 glossy_color,
                                   float weight,
                                   Closure &result)
 {
+  /* clang-format off */ /* Multiline macros would break line count. */
+  [[resource_table]] const eevee::LightRenderData &lrd = resource_table_get(eevee::LightRenderData);
+/* clang-format on */
 #if defined(GPU_FRAGMENT_SHADER) && defined(MAT_LIGHT_ITER)
-  g_diffuse_light += diffuse_light.rgb * weight;
+  LightData light = lrd.light_buf[light_index];
+  g_diffuse_light += diffuse_light.rgb * weight * light.power_factor[LIGHT_DIFFUSE];
   g_diffuse_color += diffuse_color.rgb * weight;
-  g_specular_light += glossy_light.rgb * weight;
+  g_specular_light += glossy_light.rgb * weight * light.power_factor[LIGHT_SPECULAR];
   g_specular_color += glossy_color.rgb * weight;
   g_light_accumulation_count++;
 #endif
@@ -952,8 +957,7 @@ void node_light_evaluation_impl(const int light_index,
   factor = cosine_integral * M_PI;
   energy_scale = form_factor * M_1_PI;
 
-  energy_scale *= eevee::light::power_get(light,
-                                          roughness == 1.0f ? LIGHT_DIFFUSE : LIGHT_SPECULAR);
+  energy_scale *= light.shape_power;
 
   const bool is_transmission = false;  // TODO: Expose.
   energy_scale *= light_attenuation_facing(light, lv.L, lv.dist, normal, is_transmission);

@@ -3,7 +3,8 @@
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
 [[node]]
-void node_light_accumulation(float4 diffuse_light,
+void node_light_accumulation(const float light_index,
+                             float4 diffuse_light,
                              float4 diffuse_color,
                              float4 glossy_light,
                              float4 glossy_color,
@@ -20,5 +21,5 @@ void node_light_accumulation(float4 diffuse_light,
 #endif
 
   node_light_accumulation_impl(
-      diffuse_light, diffuse_color, glossy_light, glossy_color, weight, result);
+      int(light_index), diffuse_light, diffuse_color, glossy_light, glossy_color, weight, result);
 }

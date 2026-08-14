@@ -13,6 +13,8 @@ static void node_declare(NodeDeclarationBuilder &b)
   const bNodeTree *ntree = b.tree_or_null();
   const bool is_gpu_internal = ntree && (ntree->flag & NTREE_IS_GPU_SHADER_INTERNAL);
 
+  b.add_input<decl::Int>("LightIndex"_ustr).available(is_gpu_internal);
+
   b.add_input<decl::Color>("Diffuse Light"_ustr)
       .default_value({0.0f, 0.0f, 0.0f, 1.0f})
       .hide_value();

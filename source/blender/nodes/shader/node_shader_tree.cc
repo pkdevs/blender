@@ -989,6 +989,7 @@ static void ntree_shader_setup_custom_lighting_zone(bNodeTree *ntree)
 
   for (bNode &node : ntree->nodes) {
     if (ELEM(node.type_legacy,
+             SH_NODE_LIGHT_ACCUMULATION,
              SH_NODE_LIGHT_INFO,
              SH_NODE_LIGHT_EVALUATION,
              SH_NODE_SHADOW_RAYCAST) ||
@@ -996,20 +997,22 @@ static void ntree_shader_setup_custom_lighting_zone(bNodeTree *ntree)
          static_cast<NodeShaderAttribute *>(node.storage)->type == SHD_ATTRIBUTE_LIGHT))
     {
       ensure_nodes();
+      /* Connect LightIndex socket */
       bke::node_add_link(*ntree,
                          *zone_input,
                          *ntree_shader_node_output_get(zone_input, 0),
                          node,
                          *ntree_shader_node_input_get(&node, 0));
-    }
-    else if (node.type_legacy == SH_NODE_LIGHT_ACCUMULATION) {
-      ensure_nodes();
-      /** WATCH: This can add multiple links into the same input socket. */
-      bke::node_add_link(*ntree,
-                         node,
-                         *ntree_shader_node_output_get(&node, 0),
-                         *zone_output,
-                         *ntree_shader_node_input_get(zone_output, 0));
+
+      if (node.type_legacy == SH_NODE_LIGHT_ACCUMULATION) {
+        /* Connect accumulation result to the zone output node. */
+        /** WATCH: This can add multiple links into the same input socket. */
+        bke::node_add_link(*ntree,
+                           node,
+                           *ntree_shader_node_output_get(&node, 0),
+                           *zone_output,
+                           *ntree_shader_node_input_get(zone_output, 0));
+      }
     }
   }
 

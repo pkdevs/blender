@@ -180,7 +180,13 @@ struct [[host_shared]] LightData {
   struct Transform object_to_world;
 
   /** Power depending on shader type. Referenced by LightingType. */
-  float4 power;
+  float4 power_factor;
+  float shape_power;
+  float point_power;
+
+  uint resource_id;
+  uint pad0_;
+
   /** Light Color. */
   packed_float3 color;
   /** Light Type. */
@@ -208,11 +214,6 @@ struct [[host_shared]] LightData {
   /* TODO(fclem): this should be part of #eevee::Light struct. But for some reason it gets cleared
    * to zero after each sync cycle. */
   uint2 shadow_set_membership;
-
-  uint resource_id;
-  uint pad0_;
-  uint pad1_;
-  uint pad2_;
 
   union {
     union_t<struct LightLocalData> local;

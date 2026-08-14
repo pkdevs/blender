@@ -93,12 +93,12 @@ void Light::sync(ShadowModule &shadows,
   const bool transmission_visibility = (visibility_flag & OB_HIDE_TRANSMISSION) == 0;
   const bool volume_visibility = (visibility_flag & OB_HIDE_VOLUME_SCATTER) == 0;
 
-  float shape_power = base_power * shape_radiance_get();
-  float point_power = base_power * point_radiance_get();
-  this->power[LIGHT_DIFFUSE] = la->diff_fac * shape_power * diffuse_visibility;
-  this->power[LIGHT_SPECULAR] = la->spec_fac * shape_power * glossy_visibility;
-  this->power[LIGHT_TRANSMISSION] = la->transmission_fac * shape_power * transmission_visibility;
-  this->power[LIGHT_VOLUME] = la->volume_fac * point_power * volume_visibility;
+  this->shape_power = base_power * shape_radiance_get();
+  this->point_power = base_power * point_radiance_get();
+  this->power_factor[LIGHT_DIFFUSE] = la->diff_fac * diffuse_visibility;
+  this->power_factor[LIGHT_SPECULAR] = la->spec_fac * glossy_visibility;
+  this->power_factor[LIGHT_TRANSMISSION] = la->transmission_fac * transmission_visibility;
+  this->power_factor[LIGHT_VOLUME] = la->volume_fac * volume_visibility;
 
   this->lod_bias = shadows.global_lod_bias();
   this->lod_min = shadow_lod_min_get(la);
