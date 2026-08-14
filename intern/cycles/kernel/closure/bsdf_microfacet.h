@@ -58,9 +58,10 @@ struct FresnelCoeff {
             return {this->reflectance * reflectance_, this->transmittance * (1.0f - reflectance_)};
           }
   */
-  template<class T> ccl_device_inline_method FresnelCoeff operator*=(const T other)
+  template<class T> ccl_device_inline_method FresnelCoeff &operator*=(const T &other)
   {
-    return *this = *this * other;
+    *this = *this * other;
+    return *this;
   }
 
   ccl_device_inline_method Spectrum sum() const
