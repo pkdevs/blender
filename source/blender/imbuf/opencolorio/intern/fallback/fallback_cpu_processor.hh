@@ -53,7 +53,7 @@ class FallbackCustomCPUProcessor : public CPUProcessor {
 
   void apply_rgba_predivide(float rgba[4]) const override
   {
-    if (!needs_predivide(rgba[3])) {
+    if (!alpha_needs_unpremultiply(rgba[3])) {
       pixel_processor(rgba, rgba);
       return;
     }

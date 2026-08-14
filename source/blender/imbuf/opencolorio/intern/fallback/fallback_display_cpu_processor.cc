@@ -74,7 +74,7 @@ class DisplayCPUProcessor : public BaseDisplayCPUProcessor {
 
   void apply_rgba_predivide(float rgba[4]) const override
   {
-    if (ELEM(rgba[3], 1.0f, 0.0f)) {
+    if (!alpha_needs_unpremultiply(rgba[3])) {
       process_rgb(rgba);
       return;
     }

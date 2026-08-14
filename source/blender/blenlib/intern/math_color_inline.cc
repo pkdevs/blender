@@ -57,7 +57,7 @@ MINLINE void srgb_to_linearrgb_predivide_v4(float linear[4], const float srgb[4]
 {
   float alpha, inv_alpha;
 
-  if (srgb[3] == 1.0f || srgb[3] == 0.0f) {
+  if (!alpha_needs_unpremultiply(srgb[3])) {
     alpha = 1.0f;
     inv_alpha = 1.0f;
   }
@@ -80,7 +80,7 @@ MINLINE void linearrgb_to_srgb_predivide_v4(float srgb[4], const float linear[4]
 {
   float alpha, inv_alpha;
 
-  if (linear[3] == 1.0f || linear[3] == 0.0f) {
+  if (!alpha_needs_unpremultiply(linear[3])) {
     alpha = 1.0f;
     inv_alpha = 1.0f;
   }
