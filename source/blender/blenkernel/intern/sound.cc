@@ -1148,6 +1148,33 @@ void BKE_sound_set_scene_sound_pan_at_frame(AUD_SequenceEntry handle,
   set_audaspace_anim_property(handle, aud::AP_PANNING, frame, &pan, animated);
 }
 
+void BKE_sound_reset_scene_audio_animation(Scene *scene)
+{
+  sound_verify_evaluated_id(&scene->id);
+
+  BKE_sound_lock();
+
+  if (scene->runtime->audio.sound_scene != nullptr) {
+    scene->runtime->audio.sound_scene->getAnimProperty(aud::AP_VOLUME)->reset();
+  }
+
+  if (scene->ed != nullptr) {
+    seq::foreach_strip(&scene->ed->seqbase, [&](Strip *strip) {
+      if (strip->runtime == nullptr || strip->runtime->scene_sound == nullptr) {
+        return true;
+      }
+
+      AUD_SequenceEntry handle = strip->runtime->scene_sound;
+      handle->getAnimProperty(aud::AP_VOLUME)->reset();
+      handle->getAnimProperty(aud::AP_PANNING)->reset();
+      handle->getAnimProperty(aud::AP_PITCH)->reset();
+      return true;
+    });
+  }
+
+  BKE_sound_unlock();
+}
+
 void BKE_sound_update_sequencer(Main *main, bSound *sound)
 {
   BLI_assert_msg(0, "is not supposed to be used, is weird function.");
@@ -2047,6 +2074,7 @@ void BKE_sound_set_scene_sound_pan_at_frame(AUD_SequenceEntry /*handle*/,
 {
 }
 void BKE_sound_set_scene_volume(Scene * /*scene*/, float /*volume*/) {}
+void BKE_sound_reset_scene_audio_animation(Scene * /*scene*/) {}
 void BKE_sound_set_scene_sound_pitch_at_frame(AUD_SequenceEntry /*handle*/,
                                               int /*frame*/,
                                               float /*pitch*/,
