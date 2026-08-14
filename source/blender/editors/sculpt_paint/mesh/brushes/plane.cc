@@ -84,18 +84,23 @@ static void calc_local_distances(const float roundness,
     for (const int i : local_positions.index_range()) {
       const float3 &position = local_positions[i];
       if (position.z >= 0.0f) {
-        float2 xy_position = math::abs(float2(position.x, position.y));
-
-        /* Position is outside brush radius on the XY plane. */
-        if (math::reduce_max(xy_position) > 1.0f) {
-          distances[i] = 1.0f;
-          continue;
+        if (roundness == 1.0f) {
+          distances[i] = math::length(float3(position.x, position.y, position.z * height_rcp));
         }
+        else {
+          float2 xy_position = math::abs(float2(position.x, position.y));
 
-        const float2 excess = math::max(xy_position - hardness_vec, zero);
+          /* Position is outside brush radius on the XY plane. */
+          if (math::reduce_max(xy_position) > 1.0f) {
+            distances[i] = 1.0f;
+            continue;
+          }
 
-        distances[i] = math::length(
-            float3(excess.x * roundness_rcp, excess.y * roundness_rcp, position.z * height_rcp));
+          const float2 excess = math::max(xy_position - hardness_vec, zero);
+
+          distances[i] = math::length(
+              float3(excess.x * roundness_rcp, excess.y * roundness_rcp, position.z * height_rcp));
+        }
       }
     }
   }
@@ -113,18 +118,23 @@ static void calc_local_distances(const float roundness,
     for (const int i : local_positions.index_range()) {
       const float3 &position = local_positions[i];
       if (position.z < 0.0f) {
-        float2 xy_position = math::abs(float2(position.x, position.y));
-
-        /* Position is outside brush radius on the XY plane. */
-        if (math::reduce_max(xy_position) > 1.0f) {
-          distances[i] = 1.0f;
-          continue;
+        if (roundness == 1.0f) {
+          distances[i] = math::length(float3(position.x, position.y, position.z * depth_rcp));
         }
+        else {
+          float2 xy_position = math::abs(float2(position.x, position.y));
 
-        const float2 excess = math::max(xy_position - hardness_vec, zero);
+          /* Position is outside brush radius on the XY plane. */
+          if (math::reduce_max(xy_position) > 1.0f) {
+            distances[i] = 1.0f;
+            continue;
+          }
 
-        distances[i] = math::length(
-            float3(excess.x * roundness_rcp, excess.y * roundness_rcp, position.z * depth_rcp));
+          const float2 excess = math::max(xy_position - hardness_vec, zero);
+
+          distances[i] = math::length(
+              float3(excess.x * roundness_rcp, excess.y * roundness_rcp, position.z * depth_rcp));
+        }
       }
     }
   }
