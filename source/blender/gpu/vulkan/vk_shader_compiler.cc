@@ -183,49 +183,36 @@ static StringRef to_stage_name(shaderc_shader_kind stage)
  * This way, the human-readable shader name can be found/referenced when inspecting the binary or
  * debugging even when not using the flag G_DEBUG_GPU_SHADER_DEBUG_INFO.
  */
-static void spirv_inject_op_string(Vector<uint32_t> &spirv, StringRef name, uint32_t glsl_version)
+static void spirv_inject_op_string(const Span<uint32_t> &spirv_in,
+                                   Vector<uint32_t> &spirv_out,
+                                   StringRef name,
+                                   uint32_t glsl_version)
 {
-  /* The SPIR-V header contains: Magic, Version, Generator, Bound, Schema */
-  constexpr uint32_t SPIRV_HEADER_WORD_COUNT = 5u;
-  constexpr uint32_t SPIRV_BOUND_INDEX = 3u;
-
-  if (spirv.size() < SPIRV_HEADER_WORD_COUNT || spirv[0] != SpvMagicNumber) {
+  struct SpirvHeader {
+    uint32_t magic_number;
+    uint32_t version;
+    uint32_t generator;
+    uint32_t bound; /* Indicates the next available result ID. */
+    uint32_t schema;
+  };
+  constexpr uint32_t SPIRV_HEADER_WORD_COUNT = sizeof(SpirvHeader) / sizeof(uint32_t);
+  const SpirvHeader *header_in = reinterpret_cast<const SpirvHeader *>(spirv_in.data());
+  if (spirv_in.size() < SPIRV_HEADER_WORD_COUNT || header_in->magic_number != SpvMagicNumber) {
+    spirv_out.extend(spirv_in); /* pass through unmodified */
+    BLI_assert_msg(false, "Invalid SPIR-V header");
     return;
   }
 
-  /* The "Bound" header entry indicates the next available result ID. */
-  const uint32_t result_id = spirv[SPIRV_BOUND_INDEX];
-
-  /* Literal string: UTF-8, null-terminated, packed 4 bytes/word, zero-padded. */
-  const size_t byte_len = name.size() + 1; /* +1 for null terminator. */
-  const uint32_t num_string_words = uint32_t((byte_len + 3) / 4);
-  Vector<uint32_t> string_words(num_string_words, 0u);
-  memcpy(string_words.data(), name.data(), name.size());
-
-  Vector<uint32_t> instructions;
-
-  /* Inject OpString holding the shader name. */
-  const uint32_t op_string_word_count = 2u + num_string_words;
-  instructions.append((op_string_word_count << SpvWordCountShift) | SpvOpString);
-  instructions.append(result_id);
-  instructions.extend(string_words);
-
-  /* Inject OpSource referencing the OpString above as the source file so tools can associate the
-   * shader name with this module. */
-  constexpr uint32_t op_source_word_count = 4u;
-  instructions.append((op_source_word_count << SpvWordCountShift) | SpvOpSource);
-  instructions.append(SpvSourceLanguageGLSL);
-  instructions.append(glsl_version);
-  instructions.append(result_id);
-
   /* Insertion point = start of the debug section: After all OpCapability / OpExtension /
    * OpExtInstImport / OpMemoryModel / OpEntryPoint / OpExecutionMode instructions. */
-  int64_t pos = SPIRV_HEADER_WORD_COUNT;
-  while (pos < spirv.size()) {
-    const uint32_t opcode = spirv[pos] & SpvOpCodeMask;
-    const uint32_t length = spirv[pos] >> SpvWordCountShift;
+  int64_t pos_inject = SPIRV_HEADER_WORD_COUNT;
+  while (pos_inject < spirv_in.size()) {
+    const uint32_t opcode = spirv_in[pos_inject] & SpvOpCodeMask;
+    const uint32_t length = spirv_in[pos_inject] >> SpvWordCountShift;
     if (length == 0) {
       /* Invalid SPIR-V binary. */
+      spirv_out.extend(spirv_in); /* pass through unmodified */
+      BLI_assert_msg(false, "Invalid SPIR-V code word length");
       return;
     }
     const bool pre_debug = ELEM(opcode,
@@ -239,11 +226,42 @@ static void spirv_inject_op_string(Vector<uint32_t> &spirv, StringRef name, uint
     if (!pre_debug) {
       break;
     }
-    pos += length;
+    pos_inject += length;
   }
 
-  spirv.insert(pos, instructions.as_span());
-  spirv[SPIRV_BOUND_INDEX] = result_id + 1u;
+  /* Literal string: UTF-8, null-terminated, packed 4 bytes/word, zero-padded. */
+  const size_t byte_len = name.size() + 1; /* +1 for null terminator. */
+  const uint32_t num_string_words = divide_ceil_u(byte_len, 4);
+  Vector<uint32_t> string_words(num_string_words, 0u);
+  memcpy(string_words.data(), name.data(), name.size());
+
+  /* Compute the number of words to inject; OpString (2 + string) + OpSource (4). */
+  const uint32_t num_words_inject = 2u + num_string_words + 4u;
+
+  /* Compute the size of the SPIR-V output binary and add the part until the injection point. */
+  spirv_out.reserve(spirv_in.size() + num_words_inject);
+  spirv_out.extend(spirv_in.take_front(pos_inject));
+
+  /* Inject OpString holding the shader name. */
+  const uint32_t op_string_word_count = 2u + num_string_words;
+  spirv_out.append((op_string_word_count << SpvWordCountShift) | SpvOpString);
+  spirv_out.append(header_in->bound);
+  spirv_out.extend(string_words);
+
+  /* Inject OpSource referencing the OpString above as the source file so tools can associate the
+   * shader name with this module. */
+  constexpr uint32_t op_source_word_count = 4u;
+  spirv_out.append((op_source_word_count << SpvWordCountShift) | SpvOpSource);
+  spirv_out.append(SpvSourceLanguageGLSL);
+  spirv_out.append(glsl_version);
+  spirv_out.append(header_in->bound);
+
+  /* Add the part from the source binary after the injection position to the output. */
+  spirv_out.extend(spirv_in.drop_front(pos_inject));
+
+  /* Raise the result ID bound in the output binary by one due to adding OpString. */
+  SpirvHeader *header_out = reinterpret_cast<SpirvHeader *>(spirv_out.data());
+  header_out->bound = header_in->bound + 1u;
 }
 
 static std::string patch_line_directives(std::string source)
@@ -338,13 +356,17 @@ static bool compile_ex(shaderc::Compiler &compiler,
      * The function VKShaderModule::finalize prefers spirv_binary when it is not empty. */
     const uint32_t *begin = shader_module.compilation_result.begin();
     const uint32_t *end = shader_module.compilation_result.end();
-    shader_module.spirv_binary = Vector<uint32_t>(Span<uint32_t>(begin, end - begin));
+    Span<uint32_t> compilation_result_span(begin, end - begin);
     if ((G.debug & G_DEBUG_GPU_SHADER_DEBUG_INFO) == 0) {
       const VKDevice &device = VKBackend::get().device;
       const bool stage_use_ray_query = stage != shaderc_geometry_shader &&
                                        shader.use_ray_query_get();
       const uint32_t glsl_version = device.glsl_patch_version_get(stage_use_ray_query);
-      spirv_inject_op_string(shader_module.spirv_binary, full_name, glsl_version);
+      spirv_inject_op_string(
+          compilation_result_span, shader_module.spirv_binary, full_name, glsl_version);
+    }
+    else {
+      shader_module.spirv_binary = Vector<uint32_t>(compilation_result_span);
     }
     write_spirv_to_disk(shader_module);
   }
