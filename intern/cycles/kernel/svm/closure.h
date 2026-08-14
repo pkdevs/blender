@@ -367,20 +367,16 @@ ccl_device
         if (reflective_caustics || refractive_caustics) {
           FresnelThinFilm thinfilm = {thinfilm_thickness, thinfilm_ior};
           if (thin_wall) {
-            Spectrum reflectance, transmittance;
             bsdf_thin_glass_setup(kg,
                                   sd,
                                   reflective_caustics,
                                   refractive_caustics,
-                                  specular_tint,
-                                  clamped_base_color,
+                                  {specular_tint, clamped_base_color},
                                   transmission_weight * weight,
                                   valid_reflection_N,
                                   sqr(roughness),
                                   ior,
                                   thinfilm,
-                                  &reflectance,
-                                  &transmittance,
                                   ray_visibility,
                                   path_flag);
           }

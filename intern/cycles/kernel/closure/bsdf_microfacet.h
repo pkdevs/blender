@@ -1431,42 +1431,41 @@ ccl_device int bsdf_thin_glass_transmission_sample(KernelGlobals kg,
   return LABEL_TRANSMIT | LABEL_GLOSSY;
 }
 
-ccl_device void bsdf_thin_glass_setup(KernelGlobals kg,
-                                      ccl_private ShaderData *sd,
-                                      const bool reflective_caustics,
-                                      const bool refractive_caustics,
-                                      const Spectrum reflection_tint,
-                                      const Spectrum transmission_tint,
-                                      const Spectrum weight,
-                                      const float3 N,
-                                      const float roughness,
-                                      const float ior,
-                                      const FresnelThinFilm thinfilm,
-                                      ccl_private Spectrum *r_reflectance,
-                                      ccl_private Spectrum *r_transmittance,
-                                      const PathRayVisibility ray_visibility,
-                                      const uint32_t path_flag)
+ccl_device FresnelCoeff bsdf_thin_glass_setup(KernelGlobals kg,
+                                              ccl_private ShaderData *sd,
+                                              const bool reflective,
+                                              const bool refractive,
+                                              const FresnelCoeff tint,
+                                              const Spectrum weight,
+                                              const float3 N,
+                                              const float roughness,
+                                              const float ior,
+                                              const FresnelThinFilm thinfilm,
+                                              const PathRayVisibility ray_visibility,
+                                              const uint32_t path_flag)
 {
   const float cos_theta_i = dot(N, sd->wi);
+  FresnelCoeff fresnel;
   bsdf_thin_glass_fresnel(kg,
-                          reflective_caustics,
-                          refractive_caustics,
-                          reflection_tint,
-                          transmission_tint,
+                          reflective,
+                          refractive,
+                          tint.reflectance,
+                          tint.transmittance,
                           thinfilm,
                           ior,
                           cos_theta_i,
-                          r_reflectance,
-                          r_transmittance);
+                          &fresnel.reflectance,
+                          &fresnel.transmittance);
 
-  if (!is_zero(*r_reflectance)) {
+  if (!is_zero(fresnel.reflectance)) {
     bsdf_thin_glass_reflection_setup(
-        kg, sd, reflection_tint, *r_reflectance * weight, N, roughness);
+        kg, sd, tint.reflectance, fresnel.reflectance * weight, N, roughness);
   }
-  if (!is_zero(*r_transmittance)) {
+  if (!is_zero(fresnel.transmittance)) {
     bsdf_thin_glass_transmission_setup(
-        kg, sd, *r_transmittance * weight, N, roughness, ior, ray_visibility, path_flag);
+        kg, sd, fresnel.transmittance * weight, N, roughness, ior, ray_visibility, path_flag);
   }
+  return fresnel;
 }
 
 /** \} */
