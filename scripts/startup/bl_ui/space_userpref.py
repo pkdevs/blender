@@ -426,7 +426,6 @@ class USERPREF_PT_interface_menus_search(InterfacePanel, CenterAlignMixIn, Panel
 # -----------------------------------------------------------------------------
 # Editing Panels
 
-
 class EditingPanel:
     bl_space_type = 'PREFERENCES'
     bl_region_type = 'WINDOW'
