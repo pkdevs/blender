@@ -12,8 +12,7 @@
 
 namespace blender::ed::outliner {
 
-TreeElementIDBase::TreeElementIDBase(TreeElement &legacy_te)
-    : AbstractTreeElement(legacy_te)
+TreeElementIDBase::TreeElementIDBase(TreeElement &legacy_te) : AbstractTreeElement(legacy_te)
 {
   BLI_assert(legacy_te.store_elem->type == TSE_ID_BASE);
   legacy_te.name = "";
