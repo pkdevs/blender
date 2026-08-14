@@ -144,7 +144,7 @@ static void create_trans_seq_clamp_data(TransInfo *t, const Scene *scene)
   const TransDataContainer *tc = TRANS_DATA_CONTAINER_FIRST_SINGLE(t);
   TransSeq *ts = static_cast<TransSeq *>(tc->custom.type.data);
 
-  t->modifiers |= MOD_STRIP_CLAMP_HOLDS;
+  t->modifiers |= MOD_STRIP_SOFT_CLAMP;
 
   /* Prevent snaps and change in `values` past `hard_clamp` for all selected
      retiming keys. */

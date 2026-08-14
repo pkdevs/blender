@@ -207,7 +207,7 @@ enum eTModifier {
   MOD_SNAP_FORCED = 1 << 6,
   MOD_EDIT_SNAP_SOURCE = 1 << 7,
   MOD_NODE_FRAME = 1 << 8,
-  MOD_STRIP_CLAMP_HOLDS = 1 << 9,
+  MOD_STRIP_SOFT_CLAMP = 1 << 9,
   MOD_STRIP_SYMMETRIC = 1 << 10,
 };
 ENUM_OPERATORS(eTModifier)
