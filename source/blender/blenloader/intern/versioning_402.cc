@@ -60,15 +60,14 @@ namespace blender {
  */
 static void version_bonecollection_anim(FCurve *fcurve)
 {
-  const StringRef rna_path(fcurve->rna_path);
+  const StringRef rna_path = fcurve->rna_path();
   constexpr char const *rna_path_prefix = "collections[";
   if (!rna_path.startswith(rna_path_prefix)) {
     return;
   }
 
   const std::string path_remainder(rna_path.drop_known_prefix(rna_path_prefix));
-  MEM_delete(fcurve->rna_path);
-  fcurve->rna_path = BLI_sprintfN("collections_all[%s", path_remainder.c_str());
+  fcurve->rna_path_set_move(BLI_sprintfN("collections_all[%s", path_remainder.c_str()));
 }
 
 static void versioning_eevee_shadow_settings(Object *object)
@@ -491,7 +490,7 @@ static void versioning_eevee_material_shadow_none(Material *material)
   bke::node_add_link(*ntree, *bsdf_node, *bsdf_out, *mix_node, *mix_in_2);
 }
 
-void do_versions_after_linking_420(FileData *fd, Main *bmain)
+void do_versions_after_linking_402(FileData *fd, Main *bmain)
 {
   if (!MAIN_VERSION_FILE_ATLEAST(bmain, 402, 15)) {
     /* Change drivers and animation on "armature.collections" to
@@ -749,7 +748,7 @@ static void convert_grease_pencil_stroke_hardness_to_softness(GreasePencil *grea
   }
 }
 
-void blo_do_versions_420(FileData *fd, Library * /*lib*/, Main *bmain)
+void blo_do_versions_402(FileData *fd, Library * /*lib*/, Main *bmain)
 {
   /* Keep point/spot light soft falloff for files created before 4.0. */
   if (!MAIN_VERSION_FILE_ATLEAST(bmain, 400, 0)) {

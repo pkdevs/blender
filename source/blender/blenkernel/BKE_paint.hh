@@ -316,7 +316,8 @@ bool paint_calculate_rake_rotation(Paint &paint,
                                    const Brush &brush,
                                    const float mouse_pos[2],
                                    PaintMode paint_mode,
-                                   bool stroke_has_started);
+                                   bool in_stroke,
+                                   bool is_first_dab);
 void paint_update_brush_rake_rotation(Paint &paint, const Brush &brush, float rotation);
 
 void BKE_paint_stroke_get_average(const Paint *paint, const Object *ob, float stroke[3]);
@@ -612,7 +613,6 @@ void BKE_sculpt_mask_layers_ensure(Depsgraph *depsgraph,
                                    Main *bmain,
                                    Object *ob,
                                    MultiresModifierData *mmd);
-void BKE_sculpt_toolsettings_data_ensure(Main *bmain, Scene *scene);
 
 void BKE_sculpt_sync_face_visibility_to_grids(const Mesh &mesh, SubdivCCG &subdiv_ccg);
 
