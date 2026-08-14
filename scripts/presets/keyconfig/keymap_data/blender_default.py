@@ -4256,6 +4256,9 @@ def km_grease_pencil_edit_mode(params):
             (op_tool_cycle, "builtin.interpolate"), params),
         ("grease_pencil.interpolate_sequence", {"type": 'E', "value": 'PRESS',
          "shift": True, "ctrl": True}, {"properties": [("use_selection", True)]}),
+
+        # Bevel
+        ("grease_pencil.bevel", {"type": 'B', "value": 'PRESS', "ctrl": True}, None),
     ])
 
     return keymap
