@@ -40,7 +40,7 @@ bool fcurve_matches(const Strip &strip, const FCurve &fcurve)
 }
 
 static void transform_animdata(const Scene *scene,
-                               Strip *strip,
+                               const Strip *strip,
                                FunctionRef<void(float &)> callback)
 {
   if (!animation_keyframes_exist(scene)) {
@@ -74,7 +74,7 @@ static void transform_animdata(const Scene *scene,
 }
 
 void transform_transition_animdata(const Scene *scene,
-                                   Strip *strip,
+                                   const Strip *strip,
                                    float left_old,
                                    float right_old,
                                    float left_new,
@@ -89,7 +89,7 @@ void transform_transition_animdata(const Scene *scene,
   transform_animdata(scene, strip, [=](float &x) { x = x * scale + offset; });
 }
 
-void offset_animdata(const Scene *scene, Strip *strip, float ofs)
+void offset_animdata(const Scene *scene, const Strip *strip, float ofs)
 {
   if (ofs != 0.0f) {
     transform_animdata(scene, strip, [=](float &x) { x += ofs; });

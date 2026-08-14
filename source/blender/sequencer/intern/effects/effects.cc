@@ -313,7 +313,7 @@ EffectHandle strip_blend_mode_handle_get(Strip *strip)
 static float transition_fader_calc(const Scene *scene, const Strip *strip, float timeline_frame)
 {
   float fac = float(timeline_frame - strip->left_handle());
-  /* Same channel transitions and compositor with no inputs can have strip->len not be updated,
+  /* Overlap transitions and compositor strips with no inputs can have strip->len not be updated,
    * since most of existing editing code assumes no-input effects never need the length.
    * So for the fader, just calculated it here directly. */
   fac /= strip->right_handle(scene) - strip->left_handle();
