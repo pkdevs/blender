@@ -114,6 +114,7 @@ AUD_Device BKE_sound_mixdown(const Scene *scene,
 void BKE_sound_create_scene(Scene *scene);
 void BKE_sound_ensure_scene(Scene *scene);
 
+void BKE_sound_mark_scene_audio_animation_stale(const Scene *scene);
 void BKE_sound_update_animation_flags(Main *bmain, Scene *scene);
 
 void BKE_sound_destroy_scene(Scene *scene);

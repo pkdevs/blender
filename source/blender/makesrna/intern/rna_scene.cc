@@ -24,6 +24,7 @@
 #include "BLT_translation.hh"
 
 #include "BKE_paint.hh"
+#include "BKE_sound.hh"
 
 #include "ED_object.hh"
 #include "ED_sequencer.hh"
@@ -1018,6 +1019,7 @@ static void rna_Scene_listener_update(Main * /*bmain*/, Scene * /*scene*/, Point
 static void rna_Scene_volume_update(Main * /*bmain*/, Scene * /*scene*/, PointerRNA *ptr)
 {
   Scene *scene = id_cast<Scene *>(ptr->owner_id);
+  BKE_sound_mark_scene_audio_animation_stale(scene);
   DEG_id_tag_update(&scene->id, ID_RECALC_AUDIO_VOLUME | ID_RECALC_SEQUENCER_STRIPS);
 }
 

@@ -369,6 +369,7 @@ static bool sound_update_animation_flags_fn(Strip *strip, void *user_data)
 {
   const FCurve *fcu;
   Scene *scene = static_cast<Scene *>(user_data);
+  const int old_flag = strip->flag;
   bool driven;
 
   fcu = id_data_find_fcurve(&scene->id, strip, RNA_Strip, "volume", 0, &driven);
@@ -395,6 +396,12 @@ static bool sound_update_animation_flags_fn(Strip *strip, void *user_data)
     strip->flag &= ~SEQ_AUDIO_PAN_ANIMATED;
   }
 
+  if ((strip->flag ^ old_flag) &
+      (SEQ_AUDIO_VOLUME_ANIMATED | SEQ_AUDIO_PITCH_ANIMATED | SEQ_AUDIO_PAN_ANIMATED))
+  {
+    BKE_sound_mark_scene_audio_animation_stale(scene);
+  }
+
   if (strip->type == STRIP_TYPE_SCENE) {
     /* TODO(sergey): For now we do manual recursion into the scene strips,
      * but perhaps it should be covered by recursive_apply?
@@ -408,6 +415,7 @@ static bool sound_update_animation_flags_fn(Strip *strip, void *user_data)
 static void sound_update_animation_flags(Scene *scene)
 {
   const FCurve *fcu;
+  const int old_audio_flag = scene->audio.flag;
   bool driven;
 
   if (scene->id.tag & ID_TAG_DOIT) {
@@ -426,6 +434,15 @@ static void sound_update_animation_flags(Scene *scene)
   else {
     scene->audio.flag &= ~AUDIO_VOLUME_ANIMATED;
   }
+
+  if ((scene->audio.flag ^ old_audio_flag) & AUDIO_VOLUME_ANIMATED) {
+    BKE_sound_mark_scene_audio_animation_stale(scene);
+  }
+}
+
+void BKE_sound_mark_scene_audio_animation_stale(const Scene *scene)
+{
+  scene->runtime->audio.animation_data_stale = true;
 }
 
 void BKE_sound_update_animation_flags(Main *bmain, Scene *scene)
@@ -884,6 +901,7 @@ void BKE_sound_create_scene(Scene *scene)
   audio.playback_handle = nullptr;
   audio.sound_scrub_handle = nullptr;
   audio.speaker_handles.clear();
+  audio.animation_data_stale = true;
 }
 
 void BKE_sound_destroy_scene(Scene *scene)
@@ -902,6 +920,7 @@ void BKE_sound_destroy_scene(Scene *scene)
   }
   audio.speaker_handles.clear();
   audio.sound_scene.reset();
+  audio.animation_data_stale = true;
 }
 
 void BKE_sound_lock()
