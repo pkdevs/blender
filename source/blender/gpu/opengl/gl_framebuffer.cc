@@ -328,8 +328,9 @@ void GLFrameBuffer::attachment_set_loadstore_op(GPUAttachmentType type, GPULoadS
         glDrawBuffers(ARRAY_SIZE(gl_attachments_), gl_attachments_);
       }
       else {
-        tmp_detached_[type] = GPU_ATTACHMENT_NONE;
+        /* Re-attach previous read attachment. */
         this->attachment_set(type, tmp_detached_[type]);
+        tmp_detached_[type] = GPU_ATTACHMENT_NONE;
         this->update_attachments();
       }
     }
@@ -396,6 +397,10 @@ void GLFrameBuffer::bind(bool enabled_srgb)
 
   if (!GLContext::texture_barrier_support && !GLContext::framebuffer_fetch_support) {
     for (int index : IndexRange(GPU_FB_MAX_ATTACHMENT)) {
+      if (tmp_detached_[index].tex != nullptr) {
+        /* Re-attach previous read attachment. */
+        this->attachment_set(GPUAttachmentType(index), tmp_detached_[index]);
+      }
       tmp_detached_[index] = GPU_ATTACHMENT_NONE;
     }
   }
