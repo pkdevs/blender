@@ -11,6 +11,7 @@
 #include "BKE_sound_types.hh"
 #include "BLI_enum_flags.hh"
 #include "BLI_map.hh"
+#include "BLI_set.hh"
 #include "BLI_vector.hh"
 #include "BLI_vector_set.hh"
 #include "DNA_scene_types.h"
@@ -123,8 +124,7 @@ struct EditingRuntime {
   /**
    * Deletion data stored between calls to #edit_flag_for_removal and #edit_remove_flagged_strips
    */
-  VectorSet<Strip *> strips_to_delete;
-  VectorSet<Strip **> pointers_to_clear;
+  Set<Strip *> strips_to_remove;
 
   CompositorCache &ensure_compositor_cache();
 };
