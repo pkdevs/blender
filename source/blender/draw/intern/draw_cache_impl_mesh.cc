@@ -193,7 +193,6 @@ static void mesh_cd_calc_used_gpu_layers(const Object &object,
   constexpr bke::AttributeMetaData UV_METADATA{bke::AttrDomain::Corner, bke::AttrType::Float2};
   const Mesh &me_final = editmesh_final_or_this(object, mesh);
 
-
   for (const GPUMaterial *gpumat : materials) {
     if (gpumat == nullptr) {
       continue;
