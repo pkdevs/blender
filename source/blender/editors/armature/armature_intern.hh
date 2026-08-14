@@ -117,6 +117,7 @@ void POSE_OT_select_linked_pick(wmOperatorType *ot);
 void POSE_OT_select_scaled(wmOperatorType *ot);
 void POSE_OT_select_deform(wmOperatorType *ot);
 void POSE_OT_select_constraint_target(wmOperatorType *ot);
+void POSE_OT_select_constrained_by_selection(wmOperatorType *ot);
 void POSE_OT_select_grouped(wmOperatorType *ot);
 void POSE_OT_select_mirror(wmOperatorType *ot);
 

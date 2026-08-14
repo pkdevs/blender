@@ -889,6 +889,109 @@ void POSE_OT_select_parent(wmOperatorType *ot)
 
 /* -------------------------------------- */
 
+static wmOperatorStatus pose_select_constrained_by_selection_exec(bContext *C, wmOperator * /*op*/)
+{
+  bool found = false;
+
+  const Main *bmain = CTX_data_main(C);
+  const Scene *scene = CTX_data_scene(C);
+  ViewLayer *view_layer = CTX_data_view_layer(C);
+
+  Vector<Object *> objects = BKE_object_pose_array_get_unique(
+      *bmain, scene, view_layer, CTX_wm_view3d(C));
+
+  /* Store currently selected bones and the armature they belong to. */
+  struct SelectedBone {
+    Object *ob;
+    bPoseChannel *pchan;
+  };
+
+  Vector<SelectedBone> starting_bone_selection;
+
+  for (Object *ob : objects) {
+    for (bPoseChannel &pchan : ob->pose->chanbase) {
+      if (pchan.flag & POSE_SELECTED) {
+        starting_bone_selection.append(SelectedBone{ob, &pchan});
+      }
+    }
+  }
+
+  /* Loop through all the bone constraints looking for a match. */
+  for (Object *ob : objects) {
+    bArmature *arm = id_cast<bArmature *>(ob->data);
+    BLI_assert(arm);
+    for (bPoseChannel &pchan : ob->pose->chanbase) {
+      if (!animrig::bone_is_selectable(arm, &pchan)) {
+        continue;
+      }
+
+      for (bConstraint &con : pchan.constraints) {
+        ListBaseT<bConstraintTarget> targets = {nullptr, nullptr};
+
+        if (!BKE_constraint_targets_get(&con, &targets)) {
+          continue;
+        }
+
+        bool matched = false;
+
+        for (bConstraintTarget &ct : targets) {
+          if (!ct.tar || ct.subtarget[0] == '\0') {
+            continue;
+          }
+
+          for (const SelectedBone &selected : starting_bone_selection) {
+            if (ct.tar == selected.ob && STREQ(ct.subtarget, selected.pchan->name)) {
+              matched = true;
+              break;
+            }
+          }
+
+          if (matched) {
+            break;
+          }
+        }
+
+        BKE_constraint_targets_flush(&con, &targets, true);
+
+        if (!matched) {
+          continue;
+        }
+
+        animrig::bone_select(&pchan);
+        found = true;
+        break;
+      }
+    }
+
+    ED_pose_bone_select_tag_update(ob);
+  }
+
+  if (!found) {
+    return OPERATOR_CANCELLED;
+  }
+
+  ED_outliner_select_sync_from_pose_bone_tag(C);
+
+  return OPERATOR_FINISHED;
+}
+
+void POSE_OT_select_constrained_by_selection(wmOperatorType *ot)
+{
+  /* identifiers */
+  ot->name = "Select Constraint Owners";
+  ot->idname = "POSE_OT_select_constrained_by_selection";
+  ot->description = "Select bones that use the currently selected bones as constraint targets";
+
+  /* API callbacks. */
+  ot->exec = pose_select_constrained_by_selection_exec;
+  ot->poll = ED_operator_posemode;
+
+  /* flags */
+  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
+}
+
+/* -------------------------------------- */
+
 static wmOperatorStatus pose_select_constraint_target_exec(bContext *C, wmOperator * /*op*/)
 {
   bool found = false;
