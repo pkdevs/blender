@@ -73,6 +73,7 @@ void BPY_text_free_code(Text *text);
 void BPY_modules_update();
 void BPY_modules_load_user(bContext *C);
 
+[[nodiscard]] bool BPY_app_handlers_has_frame_change();
 void BPY_app_handlers_reset(bool do_all);
 
 /**

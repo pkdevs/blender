@@ -373,6 +373,14 @@ PyObject *BPY_app_handlers_struct()
   return ret;
 }
 
+bool BPY_app_handlers_has_frame_change()
+{
+  return (py_cb_array[BKE_CB_EVT_FRAME_CHANGE_PRE] != nullptr &&
+          PyList_GET_SIZE(py_cb_array[BKE_CB_EVT_FRAME_CHANGE_PRE]) != 0) ||
+         (py_cb_array[BKE_CB_EVT_FRAME_CHANGE_POST] != nullptr &&
+          PyList_GET_SIZE(py_cb_array[BKE_CB_EVT_FRAME_CHANGE_POST]) != 0);
+}
+
 void BPY_app_handlers_reset(const bool do_all)
 {
   PyGILState_STATE gilstate = PyGILState_Ensure();

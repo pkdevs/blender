@@ -79,6 +79,7 @@
 
 #endif
 
+#include "BKE_animsys.hh"
 #include "BKE_bpath.hh"
 #include "BKE_fcurve.hh"
 #include "BKE_global.hh"
@@ -107,6 +108,10 @@
 #include "BLI_concurrent_map.hh"
 
 #include "CLG_log.h"
+
+#ifdef WITH_PYTHON
+#  include "BPY_extern.hh"
+#endif
 
 namespace blender {
 
@@ -452,12 +457,84 @@ void BKE_sound_update_animation_flags(Main *bmain, Scene *scene)
   sound_update_animation_flags(scene);
 }
 
+static bool sound_animation_can_use_fast_bake(const Scene *scene, const Depsgraph *depsgraph)
+{
+#ifdef WITH_PYTHON
+  if (BPY_app_handlers_has_frame_change()) {
+    return false;
+  }
+#endif
+
+  if (scene->camera != nullptr || DEG_id_type_any_exists(depsgraph, ID_SPK)) {
+    return false;
+  }
+
+  if (scene->adt != nullptr &&
+      (scene->adt->drivers.first || scene->adt->nla_tracks.first ||
+       scene->adt->tmpact != nullptr || scene->adt->act_track != nullptr ||
+       scene->adt->actstrip != nullptr))
+  {
+    return false;
+  }
+
+  if (scene->ed == nullptr) {
+    return true;
+  }
+
+  bool can_use_fast_bake = true;
+  seq::foreach_strip(&scene->ed->seqbase, [&](Strip *strip) {
+    if (strip->type == STRIP_TYPE_META || strip->type == STRIP_TYPE_SCENE) {
+      can_use_fast_bake = false;
+      return false;
+    }
+    if (strip->type != STRIP_TYPE_SOUND) {
+      return true;
+    }
+    if (strip->sound == nullptr || !strip->modifiers.is_empty() || strip->retiming_keys_num != 0) {
+      can_use_fast_bake = false;
+      return false;
+    }
+    return true;
+  });
+  return can_use_fast_bake;
+}
+
+static void sound_bake_animation_fast(Scene *scene, Depsgraph *depsgraph)
+{
+  BKE_scene_graph_update_for_newframe(depsgraph);
+
+  Scene *scene_eval = DEG_get_evaluated_scene(depsgraph);
+  BKE_sound_reset_scene_audio_animation(scene_eval);
+
+  const int frame_start = (scene->r.sfra > 0) ? (scene->r.sfra - 1) : 0;
+  const int frame_end = scene->r.efra + 1;
+  for (int cfra = frame_start; cfra <= frame_end; cfra++) {
+    scene_eval->r.cfra = cfra;
+    const AnimationEvalContext anim_eval_context = BKE_animsys_eval_context_construct(
+        depsgraph, BKE_scene_frame_get(scene_eval));
+    BKE_animsys_evaluate_animdata(
+        &scene_eval->id, scene_eval->adt, &anim_eval_context, ADT_RECALC_ANIM, false);
+
+    if (scene_eval->ed != nullptr) {
+      seq::eval_strips(depsgraph, scene_eval, &scene_eval->ed->seqbase);
+    }
+    BKE_sound_set_scene_volume(scene_eval, scene_eval->audio.volume);
+  }
+
+  BKE_scene_graph_update_for_newframe(depsgraph);
+}
+
 void BKE_sound_bake_animation(Main *bmain, Scene *scene, Depsgraph *depsgraph)
 {
   const int oldfra = scene->r.cfra;
 
   BKE_sound_update_animation_flags(bmain, scene);
   DEG_id_tag_update(&scene->id, ID_RECALC_SEQUENCER_STRIPS);
+
+  if (sound_animation_can_use_fast_bake(scene, depsgraph)) {
+    sound_bake_animation_fast(scene, depsgraph);
+    return;
+  }
 
   for (int cfra = (scene->r.sfra > 0) ? (scene->r.sfra - 1) : 0; cfra <= scene->r.efra + 1; cfra++)
   {
