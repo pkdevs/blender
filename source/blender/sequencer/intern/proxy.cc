@@ -103,7 +103,7 @@ static Vector<MovieReaderPtr> movie_readers_open(Scene &scene, Strip &strip, con
   const bool use_multiview = (strip.flag & SEQ_USE_VIEWS) != 0 &&
                              (scene.r.scemode & R_MULTIVIEW) != 0;
   if (use_multiview && strip.views_format == R_IMF_VIEWS_INDIVIDUAL) {
-    const int files_num = seq_num_files(&scene, strip.views_format, true);
+    const int files_num = seq_multiview_num_files_get(&scene, strip.views_format);
     for (int view_id = 0; view_id < files_num; view_id++) {
       char filepath_view[FILE_MAX];
       const char *suffix = nullptr;
@@ -416,7 +416,7 @@ static int seq_proxy_context_count(Strip *strip, Scene *scene)
   switch (strip->type) {
     case STRIP_TYPE_MOVIE: {
       const bool use_multiview = (strip->flag & SEQ_USE_VIEWS) != 0;
-      num_views = seq_num_files(scene, strip->views_format, use_multiview);
+      num_views = use_multiview ? seq_multiview_num_files_get(scene, strip->views_format) : 1;
       break;
     }
     case STRIP_TYPE_IMAGE: {
@@ -664,11 +664,11 @@ static void image_proxy_builder_process(ProxyBuildContext &context,
     BLI_path_join(filepath, sizeof(filepath), strip.data->dirpath, s_elem.filename);
     BLI_path_abs(filepath, base_path);
 
-    const int totfiles = seq_num_files(context.scene, strip.views_format, true);
-    bool is_multiview_render = seq_image_strip_is_multiview_render(
-        context.scene, &strip, totfiles, filepath, prefix);
+    const bool do_multiview_render = seq_strip_do_multiview_render(
+        context.scene, &strip, filepath, prefix);
 
-    if (is_multiview_render) {
+    if (do_multiview_render) {
+      const int totfiles = seq_multiview_num_files_get(context.scene, strip.views_format);
       Array<ImBuf *> ibufs_arr(tot_views, nullptr);
 
       for (int view_id = 0; view_id < totfiles; view_id++) {

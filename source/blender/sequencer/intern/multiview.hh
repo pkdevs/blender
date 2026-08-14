@@ -10,6 +10,8 @@
 
 #include <cstdlib>
 
+#include "DNA_scene_enums.h"
+
 namespace blender {
 
 struct MovieReader;
@@ -33,9 +35,10 @@ bool seq_multiview_view_filepath_get(const Scene &scene,
                                      size_t filepath_size,
                                      const char **r_suffix);
 /**
- * The number of files will vary according to the stereo format.
+ * The number of files that a multi-view enabled strip needs to resolve the requested
+ * \a views_format.
  */
-int seq_num_files(const Scene *scene, char views_format, bool is_multiview);
+int seq_multiview_num_files_get(const Scene *scene, eImageFormat_ViewsFormat views_format);
 
 }  // namespace seq
 }  // namespace blender

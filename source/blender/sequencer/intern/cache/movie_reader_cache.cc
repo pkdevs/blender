@@ -465,7 +465,7 @@ bool movie_reader_cache_can_produce_frames(const Scene &scene, const Strip &stri
                              (scene.r.scemode & R_MULTIVIEW) != 0;
   if (use_multiview && strip.views_format == R_IMF_VIEWS_INDIVIDUAL) {
     Vector<MovieReaderAccessor> readers;
-    const int files_num = seq_num_files(&scene, strip.views_format, true);
+    const int files_num = seq_multiview_num_files_get(&scene, strip.views_format);
     if (files_num <= 0) {
       return bool(movie_reader_cache_acquire_any_base(scene, strip));
     }

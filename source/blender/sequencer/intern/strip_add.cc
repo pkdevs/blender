@@ -392,7 +392,9 @@ Strip *add_movie_strip(Main *bmain, Scene *scene, ListBaseT<Strip> *seqbase, Loa
 
   char colorspace[/*MAX_COLORSPACE_NAME*/ 64] = "\0";
   bool is_multiview_loaded = false;
-  const int totfiles = seq_num_files(scene, load_data->views_format, load_data->use_multiview);
+  const int totfiles = load_data->use_multiview ?
+                           seq_multiview_num_files_get(scene, load_data->views_format) :
+                           1;
   Array<MovieReaderPtr> anim_arr(totfiles);
 
   int orig_width = 0;
