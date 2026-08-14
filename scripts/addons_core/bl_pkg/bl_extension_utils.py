@@ -1216,9 +1216,18 @@ class PkgBlock_Normalized(NamedTuple):
         )
 
 
+# Sub-table of `PkgAssetLibrary_Normalized`, None when authentication is unsupported.
+class PkgAssetLibraryAuth_Normalized(NamedTuple):
+    required: bool
+    # Not constrained to methods this version of Blender knows about,
+    # the value is validated at build time.
+    auth_method: str
+
+
 # Sub-table of `PkgManifest_Normalized` when `type == "asset-library"`.
 class PkgAssetLibrary_Normalized(NamedTuple):
     remote_url: str
+    auth: PkgAssetLibraryAuth_Normalized | None
 
 
 # See similar named tuple: `bl_pkg.cli.blender_ext.PkgManifest`.
@@ -1373,13 +1382,38 @@ class PkgManifest_Normalized(NamedTuple):
                     raise TypeError(
                         "{:s}: \"asset_library.remote_url\" must be a non-empty string".format(pkg_idname))
 
+                field_asset_library_auth = field_asset_library.get("auth")
+                if field_asset_library_auth is not None:
+                    if not isinstance(field_asset_library_auth, dict):
+                        raise TypeError("{:s}: \"asset_library.auth\" must be a table".format(pkg_idname))
+                    field_asset_library_auth_required = field_asset_library_auth.get("required")
+                    if not isinstance(field_asset_library_auth_required, bool):
+                        raise TypeError(
+                            "{:s}: \"asset_library.auth.required\" must be a boolean".format(pkg_idname))
+                    field_asset_library_auth_method = field_asset_library_auth.get("auth_method", "")
+                    if not (
+                            isinstance(field_asset_library_auth_method, str) and
+                            field_asset_library_auth_method
+                    ):
+                        raise TypeError(
+                            "{:s}: \"asset_library.auth.auth_method\" must be a non-empty string".format(pkg_idname))
+
         except TypeError as ex:
             error_fn(ex)
             return None
 
         if field_asset_library is not None:
+            if field_asset_library_auth is not None:
+                assert isinstance(field_asset_library_auth_required, bool)
+                asset_library_auth = PkgAssetLibraryAuth_Normalized(
+                    required=field_asset_library_auth_required,
+                    auth_method=field_asset_library_auth_method,
+                )
+            else:
+                asset_library_auth = None
             asset_library = PkgAssetLibrary_Normalized(
                 remote_url=field_asset_library_remote_url,
+                auth=asset_library_auth,
             )
         else:
             asset_library = None

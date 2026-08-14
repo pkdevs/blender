@@ -298,6 +298,9 @@ def create_package_asset_library(
         blender_version_max: str | None = None,
         file_contents: dict[str, bytes] | None = None,
         remote_url: str | None = None,
+        # Raw TOML values keyed by field name, written as the `[asset_library.auth]` sub-table.
+        # Raw values so malformed types can be tested.
+        asset_library_auth: dict[str, str] | None = None,
 ) -> None:
     pkg_name = pkg_idname.replace("_", " ").title()
 
@@ -316,6 +319,10 @@ def create_package_asset_library(
         if remote_url is not None:
             fh.write('''\n[asset_library]\n''')
             fh.write('''remote_url = "{:s}"\n'''.format(remote_url))
+        if asset_library_auth is not None:
+            fh.write('''\n[asset_library.auth]\n''')
+            for key, value in asset_library_auth.items():
+                fh.write('''{:s} = {:s}\n'''.format(key, value))
 
     if file_contents is not None:
         contents_to_filesystem(file_contents, pkg_src_dir)
@@ -522,6 +529,7 @@ class TestWithTempBlenderUser_MixIn(unittest.TestCase):
             python_script: str | None = None,
             file_contents: dict[str, bytes] | None = None,
             remote_url: str | None = None,
+            asset_library_auth: dict[str, str] | None = None,
     ) -> str:
         if pkg_filename is None:
             pkg_filename = pkg_idname
@@ -566,6 +574,7 @@ class TestWithTempBlenderUser_MixIn(unittest.TestCase):
                     blender_version_max=blender_version_max,
                     file_contents=file_contents,
                     remote_url=remote_url,
+                    asset_library_auth=asset_library_auth,
                 )
             else:
                 raise AssertionError("No create_package_* helper for pkg_type={!r}".format(pkg_type))
@@ -1452,6 +1461,18 @@ class TestUnknownType(TestWithTempBlenderUser_MixIn, unittest.TestCase):
         self.assertNotIn("keymap", stdout)
         self.assertNotIn("brush-set", stdout)
 
+        # Repository information skips the unknown types too.
+        stdout = run_blender_extensions_no_errors(("repo-info", repo_id))
+        self.assertEqual(
+            stdout, (
+                "version: v1\n"
+                "blocklist: 0\n"
+                "packages: 2\n"
+                "  add-on: 2\n"
+                "assetlib_auth_method: PER_LIBRARY\n"
+            )
+        )
+
 
 class TestVariousTypes(TestWithTempBlenderUser_MixIn, unittest.TestCase):
 
@@ -1503,6 +1524,58 @@ class TestVariousTypes(TestWithTempBlenderUser_MixIn, unittest.TestCase):
                 ("my_asset_library", "asset-library"),
                 ("my_theme", "theme"),
             ],
+        )
+
+    def test_repo_info_various_types(self) -> None:
+        """
+        Show high level information for a repository holding a mix of
+        add-on, theme and asset-library packages, using the listing from ``sync``.
+        """
+        repo_id = "test_repo_info_various_types"
+        repo_name = "MyTestRepoInfoVariousTypes"
+
+        self.repo_add(repo_id=repo_id, repo_name=repo_name)
+
+        # Create a package contents, a mix of add-on, theme and asset-library packages.
+        self.build_package(pkg_idname="my_addon")
+        self.build_package(
+            pkg_idname="my_theme",
+            pkg_type="theme",
+            file_contents={"my_theme.xml": b'''<?xml version="1.0" encoding="UTF-8"?>\n<bpy/>\n'''},
+        )
+        self.build_package(
+            pkg_idname="my_asset_library",
+            pkg_type="asset-library",
+            remote_url="https://example.org/various-types-info",
+        )
+
+        stdout = run_blender_extensions_no_errors((
+            "server-generate",
+            "--repo-dir", TEMP_DIR_REMOTE,
+            "--assetlib-auth-method", "FROM_REPOSITORY",
+        ))
+        self.assertEqual(stdout, "found 3 packages.\n")
+
+        run_blender_extensions_no_errors(("sync",))
+
+        expected_info = (
+            "version: v1\n"
+            "blocklist: 0\n"
+            "packages: 3\n"
+            "  add-on: 1\n"
+            "  asset-library: 1\n"
+            "  theme: 1\n"
+            "assetlib_auth_method: FROM_REPOSITORY\n"
+        )
+
+        stdout = run_blender_extensions_no_errors(("repo-info", repo_id))
+        self.assertEqual(stdout, expected_info)
+
+        # With `--sync` the download runs first, its output precedes the information.
+        stdout = run_blender_extensions_no_errors(("repo-info", "--sync", repo_id))
+        self.assertTrue(
+            stdout.endswith(expected_info),
+            "Expected output to end with {!r}, got {!r}".format(expected_info, stdout),
         )
 
     @staticmethod
@@ -1631,6 +1704,35 @@ class TestAssetLibrary(TestWithTempBlenderUser_MixIn, unittest.TestCase):
             ))
             self.assertNotEqual(returncode, 0)
             self.assertIn("expected URL to start with", stdout)
+
+    def test_build_asset_library_package_with_auth(self) -> None:
+        """
+        Build an extension with an ``[asset_library.auth]`` sub-table.
+        The sub-table is optional, when absent authentication is unsupported.
+        """
+        self.build_package(
+            pkg_idname="my_asset_library_auth",
+            pkg_type="asset-library",
+            remote_url="https://example.org/assets",
+            asset_library_auth={"required": "false", "auth_method": '"TOKEN"'},
+        )
+
+    def test_validate_asset_library_auth_invalid(self) -> None:
+        """A single ``[asset_library.auth]`` with a bad value in every field reports each of them."""
+        create_package_asset_library(
+            TEMP_DIR_LOCAL,
+            pkg_idname="my_asset_library_auth_invalid",
+            remote_url="https://example.org/assets",
+            asset_library_auth={"required": '"yes"', "auth_method": '"OAUTH2"'},
+        )
+        returncode, stdout, _stderr = run_blender_extensions(("validate", TEMP_DIR_LOCAL))
+        self.assertNotEqual(returncode, 0)
+        self.assertEqual(stdout, (
+            "Error parsing TOML \"{:s}\"\n"
+            "key \"asset_library\" invalid: \"auth\": "
+            "\"required\" must be a boolean, not a str, "
+            "\"auth_method\" must be one of (TOKEN), found 'OAUTH2'\n"
+        ).format(os.path.join(TEMP_DIR_LOCAL, PKG_MANIFEST_FILENAME_TOML)))
 
 
 class TestRemoteAssetLibrary(TestWithTempBlenderUser_MixIn, unittest.TestCase):

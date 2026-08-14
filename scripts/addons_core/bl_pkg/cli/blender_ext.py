@@ -75,6 +75,9 @@ URL_KNOWN_PREFIX = ("http://", "https://", "file://")
 # Unknown types are skipped, allowing repositories to contain future extension types.
 PKG_MANIFEST_TYPE_SUPPORTED = {"add-on", "asset-library", "theme"}
 
+# Authentication methods accepted in the `[asset_library.auth]` sub-table.
+PKG_MANIFEST_ASSET_LIBRARY_AUTH_METHODS = {"TOKEN"}
+
 
 def pkg_manifest_skip_for_future_compat(item: dict[str, Any]) -> bool:
     """
@@ -314,6 +317,7 @@ class CleanupPathsContext:
 class PkgRepoData(NamedTuple):
     version: str
     blocklist: list[dict[str, Any]]
+    assetlib_auth_method: str
     data: list[dict[str, Any]]
 
 
@@ -1790,14 +1794,51 @@ def pkg_manifest_validate_field_remote_url(value: Any, strict: bool) -> str | No
     return None
 
 
+def pkg_manifest_validate_field_asset_library_auth(value: Any, strict: bool) -> str | None:
+    if not isinstance(value, dict):
+        return "must be a table, not a {:s}".format(type(value).__name__)
+
+    # Report every problem at once, so a manifest doesn't need repeat fix & re-validate cycles.
+    errors = []
+
+    required = value.get("required")
+    if required is None:
+        errors.append("missing \"required\"")
+    elif not isinstance(required, bool):
+        errors.append("\"required\" must be a boolean, not a {:s}".format(type(required).__name__))
+
+    auth_method = value.get("auth_method")
+    if auth_method is None:
+        errors.append("missing \"auth_method\"")
+    elif not isinstance(auth_method, str):
+        errors.append("\"auth_method\" must be a string, not a {:s}".format(type(auth_method).__name__))
+    elif strict and (auth_method not in PKG_MANIFEST_ASSET_LIBRARY_AUTH_METHODS):
+        # NOTE: only check the method when building, an extension built by a newer version of
+        # Blender may use a method this version doesn't know of, which must not prevent installing it.
+        errors.append("\"auth_method\" must be one of ({:s}), found {!r}".format(
+            ", ".join(sorted(PKG_MANIFEST_ASSET_LIBRARY_AUTH_METHODS)),
+            auth_method,
+        ))
+
+    if errors:
+        return ", ".join(errors)
+    return None
+
+
 def pkg_manifest_validate_field_asset_library(value: dict[str, Any], strict: bool) -> str | None:
     # The `[asset_library]` sub-table. Schema presence (required-for-type) is enforced by
     # `subcmd_author.build`; here we validate shape whenever the field is set.
-    remote_url = value.get("remote_url")
-    if remote_url is None:
+
+    if (remote_url := value.get("remote_url")) is None:
         return "missing \"remote_url\""
     if (err := pkg_manifest_validate_field_remote_url(remote_url, strict)) is not None:
         return "\"remote_url\": {:s}".format(err)
+
+    # The `[asset_library.auth]` sub-table is optional, when absent authentication is unsupported.
+    if (auth := value.get("auth")) is not None:
+        if (err := pkg_manifest_validate_field_asset_library_auth(auth, strict)) is not None:
+            return "\"auth\": {:s}".format(err)
+
     return None
 
 
@@ -3129,6 +3170,10 @@ def pkg_repo_data_from_json_or_error(json_data: dict[str, Any]) -> PkgRepoData |
         if not isinstance(item, dict):
             return "expected \"blocklist\" contain dictionary items"
 
+    # An unknown method is intentionally not an error, newer servers may use methods this client doesn't know of.
+    if not isinstance((assetlib_auth_method := json_data.get("assetlib_auth_method", "PER_LIBRARY")), str):
+        return "expected \"assetlib_auth_method\" to be a string"
+
     if not isinstance((data := json_data.get("data", [])), list):
         return "expected \"data\" to be a list"
     for item in data:
@@ -3138,6 +3183,7 @@ def pkg_repo_data_from_json_or_error(json_data: dict[str, Any]) -> PkgRepoData |
     result_new = PkgRepoData(
         version=version,
         blocklist=blocklist,
+        assetlib_auth_method=assetlib_auth_method,
         data=data,
     )
     return result_new
@@ -3147,6 +3193,94 @@ def repo_pkginfo_from_local_or_none(*, local_dir: str) -> PkgRepoData | str:
     if isinstance((result := repo_pkginfo_from_local_as_dict_or_error(local_dir=local_dir)), str):
         return result
     return pkg_repo_data_from_json_or_error(result)
+
+
+def repo_pkginfo_from_remote_url_or_none(
+        msglog: MessageLogger,
+        *,
+        remote_url: str,
+        online_user_agent: str,
+        access_token: str,
+        timeout_in_seconds: float,
+        demote_connection_errors_to_status: bool,
+        error_prefix: str,
+) -> PkgRepoData | None:
+    """
+    Download the repository listing, reporting any error via ``msglog``.
+    """
+    # Validate arguments.
+    if (error := remote_url_validate_or_error(remote_url)) is not None:
+        msglog.fatal_error(error)
+        return None
+
+    remote_json_url = remote_url_get(remote_url)
+
+    try:
+        result = io.BytesIO()
+        for block in url_retrieve_to_data_iter_or_filesystem(
+                remote_json_url,
+                headers=url_request_headers_create(
+                    accept_json=True,
+                    user_agent=online_user_agent,
+                    access_token=access_token,
+                ),
+                chunk_size=CHUNK_SIZE_DEFAULT,
+                timeout_in_seconds=timeout_in_seconds,
+                retrieve_info=DataRetrieveInfo(),  # Unused.
+        ):
+            result.write(block)
+
+    except (Exception, KeyboardInterrupt) as ex:
+        msg = url_retrieve_exception_as_message(ex, prefix=error_prefix, url=remote_json_url)
+        if demote_connection_errors_to_status and url_retrieve_exception_is_connectivity(ex):
+            msglog.status(msg)
+        else:
+            msglog.fatal_error(msg)
+        return None
+
+    result_bytes = result.getvalue()
+    del result
+
+    try:
+        result_dict = json.loads(result_bytes)
+    except Exception as ex:
+        msglog.fatal_error("error loading JSON {:s}".format(str(ex)))
+        return None
+
+    if isinstance((repo_gen_dict := pkg_repo_data_from_json_or_error(result_dict)), str):
+        msglog.fatal_error("unexpected contents in JSON {:s}".format(repo_gen_dict))
+        return None
+
+    return repo_gen_dict
+
+
+def pkg_repo_data_as_info_lines(repo_gen_dict: PkgRepoData) -> list[str]:
+    """
+    High level repository information, one line per value.
+    """
+    # A package split by platform has an entry for each platform, count unique ID's.
+    pkg_type_from_id: dict[str, str] = {}
+    for elem in repo_gen_dict.data:
+        # Skip unknown types, as accessing the listing does.
+        if pkg_manifest_skip_for_future_compat(elem):
+            continue
+        pkg_type_from_id.setdefault(elem.get("id", ""), elem.get("type", ""))
+
+    # Only count the types in use, so types added in the future are included.
+    pkg_type_count: dict[str, int] = {}
+    for pkg_type in pkg_type_from_id.values():
+        pkg_type_count[pkg_type] = pkg_type_count.get(pkg_type, 0) + 1
+
+    lines = [
+        "version: {:s}".format(repo_gen_dict.version),
+        "blocklist: {:d}".format(len(repo_gen_dict.blocklist)),
+        "packages: {:d}".format(len(pkg_type_from_id)),
+    ]
+    for pkg_type, pkg_type_len in sorted(pkg_type_count.items()):
+        lines.append("  {:s}: {:d}".format(pkg_type, pkg_type_len))
+    lines.append("assetlib_auth_method: {:s}".format(repo_gen_dict.assetlib_auth_method))
+
+    return lines
 
 
 def url_has_known_prefix(path: str) -> bool:
@@ -3276,6 +3410,23 @@ def generic_arg_server_generate_repo_config(subparse: argparse.ArgumentParser) -
             "   reason = \"Another reason for why this is blocked\"\n"
             "\n"
         ),
+    )
+
+
+def generic_arg_server_generate_assetlib_auth_method(subparse: argparse.ArgumentParser) -> None:
+    subparse.add_argument(
+        "--assetlib-auth-method",
+        dest="assetlib_auth_method",
+        type=str,
+        choices=('PER_LIBRARY', 'FROM_REPOSITORY'),
+        default='PER_LIBRARY',
+        help=(
+            "How asset libraries provided by this repository's extensions authenticate:\n"
+            "\n"
+            "- PER_LIBRARY: Each asset library uses its own access token (default).\n"
+            "- FROM_REPOSITORY: Asset libraries use the access token of this repository.\n"
+        ),
+        required=False,
     )
 
 
@@ -3779,6 +3930,7 @@ class subcmd_server:
             *,
             repo_dir: str,
             repo_config_filepath: str,
+            assetlib_auth_method: str,
             html: bool,
             html_template: str,
     ) -> bool:
@@ -3823,6 +3975,7 @@ class subcmd_server:
         repo_gen_dict = {
             "version": "v1",
             "blocklist": [] if repo_config is None else repo_config.blocklist,
+            "assetlib_auth_method": assetlib_auth_method,
             "data": repo_data,
         }
 
@@ -3954,50 +4107,16 @@ class subcmd_client:
             demote_connection_errors_to_status: bool,
     ) -> bool:
 
-        # Validate arguments.
-        if (error := remote_url_validate_or_error(remote_url)) is not None:
-            msglog.fatal_error(error)
+        if (repo_gen_dict := repo_pkginfo_from_remote_url_or_none(
+                msglog,
+                remote_url=remote_url,
+                online_user_agent=online_user_agent,
+                access_token=access_token,
+                timeout_in_seconds=timeout_in_seconds,
+                demote_connection_errors_to_status=demote_connection_errors_to_status,
+                error_prefix="list",
+        )) is None:
             return False
-
-        remote_json_url = remote_url_get(remote_url)
-
-        # TODO: validate JSON content.
-        try:
-            result = io.BytesIO()
-            for block in url_retrieve_to_data_iter_or_filesystem(
-                    remote_json_url,
-                    headers=url_request_headers_create(
-                        accept_json=True,
-                        user_agent=online_user_agent,
-                        access_token=access_token,
-                    ),
-                    chunk_size=CHUNK_SIZE_DEFAULT,
-                    timeout_in_seconds=timeout_in_seconds,
-                    retrieve_info=DataRetrieveInfo(),  # Unused.
-            ):
-                result.write(block)
-
-        except (Exception, KeyboardInterrupt) as ex:
-            msg = url_retrieve_exception_as_message(ex, prefix="list", url=remote_json_url)
-            if demote_connection_errors_to_status and url_retrieve_exception_is_connectivity(ex):
-                msglog.status(msg)
-            else:
-                msglog.fatal_error(msg)
-            return False
-
-        result_bytes = result.getvalue()
-        del result
-
-        try:
-            result_dict = json.loads(result_bytes)
-        except Exception as ex:
-            msglog.fatal_error("error loading JSON {:s}".format(str(ex)))
-            return False
-
-        if isinstance((repo_gen_dict := pkg_repo_data_from_json_or_error(result_dict)), str):
-            msglog.fatal_error("unexpected contents in JSON {:s}".format(repo_gen_dict))
-            return False
-        del result_dict
 
         items: list[dict[str, Any]] = repo_gen_dict.data
         items.sort(key=lambda elem: elem.get("id", ""))
@@ -4007,6 +4126,36 @@ class subcmd_client:
             request_exit |= msglog.status(
                 "{:s}({:s}): {:s}".format(elem.get("id"), elem.get("version"), elem.get("name")),
             )
+            if request_exit:
+                return False
+
+        return True
+
+    @staticmethod
+    def repo_info(
+            msglog: MessageLogger,
+            *,
+            remote_url: str,
+            online_user_agent: str,
+            access_token: str,
+            timeout_in_seconds: float,
+            demote_connection_errors_to_status: bool,
+    ) -> bool:
+
+        if (repo_gen_dict := repo_pkginfo_from_remote_url_or_none(
+                msglog,
+                remote_url=remote_url,
+                online_user_agent=online_user_agent,
+                access_token=access_token,
+                timeout_in_seconds=timeout_in_seconds,
+                demote_connection_errors_to_status=demote_connection_errors_to_status,
+                error_prefix="repo-info",
+        )) is None:
+            return False
+
+        request_exit = False
+        for line in pkg_repo_data_as_info_lines(repo_gen_dict):
+            request_exit |= msglog.status(line)
             if request_exit:
                 return False
 
@@ -5195,6 +5344,7 @@ def unregister():
             MessageLogger(msg_fn_no_done),
             repo_dir=repo_dir,
             repo_config_filepath="",
+            assetlib_auth_method='PER_LIBRARY',
             html=True,
             html_template="",
         ):
@@ -5256,6 +5406,7 @@ def argparse_create_server_generate(
 
     generic_arg_repo_dir(subparse)
     generic_arg_server_generate_repo_config(subparse)
+    generic_arg_server_generate_assetlib_auth_method(subparse)
     generic_arg_server_generate_html(subparse)
     generic_arg_server_generate_html_template(subparse)
     if args_internal:
@@ -5266,6 +5417,7 @@ def argparse_create_server_generate(
             msglog_from_args(args),
             repo_dir=args.repo_dir,
             repo_config_filepath=args.repo_config,
+            assetlib_auth_method=args.assetlib_auth_method,
             html=args.html,
             html_template=args.html_template,
         ),
@@ -5294,6 +5446,34 @@ def argparse_create_client_list(subparsers: "argparse._SubParsersAction[argparse
 
     subparse.set_defaults(
         func=lambda args: subcmd_client.list_packages(
+            msglog_from_args(args),
+            remote_url=args.remote_url,
+            online_user_agent=args.online_user_agent,
+            access_token=args.access_token,
+            timeout_in_seconds=args.timeout,
+            demote_connection_errors_to_status=args.demote_connection_errors_to_status,
+        ),
+    )
+
+
+def argparse_create_client_repo_info(subparsers: "argparse._SubParsersAction[argparse.ArgumentParser]") -> None:
+    subparse = subparsers.add_parser(
+        "repo-info",
+        help="Show repository information.",
+        description="Show high level information about a repository.",
+        formatter_class=argparse.RawTextHelpFormatter,
+    )
+
+    generic_arg_remote_url(subparse)
+    generic_arg_online_user_agent(subparse)
+    generic_arg_access_token(subparse)
+
+    generic_arg_output_type(subparse)
+    generic_arg_timeout(subparse)
+    generic_arg_demote_connection_failure_to_status(subparse)
+
+    subparse.set_defaults(
+        func=lambda args: subcmd_client.repo_info(
             msglog_from_args(args),
             remote_url=args.remote_url,
             online_user_agent=args.online_user_agent,
@@ -5612,6 +5792,7 @@ def argparse_create(
     if args_internal:
         # Queries.
         argparse_create_client_list(subparsers)
+        argparse_create_client_repo_info(subparsers)
 
         # Manipulating Actions.
         argparse_create_client_sync(subparsers)
