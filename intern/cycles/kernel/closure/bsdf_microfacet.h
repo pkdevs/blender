@@ -51,12 +51,13 @@ struct FresnelCoeff {
   {
     return {this->reflectance * other.reflectance, this->transmittance * other.transmittance};
   }
-
-  template<class T> ccl_device_inline_method FresnelCoeff operator*(const T reflectance_) const
-  {
-    return {this->reflectance * reflectance_, this->transmittance * (1.0f - reflectance_)};
-  }
-
+  /*
+          template<class T> ccl_device_inline_method FresnelCoeff operator*(const T reflectance_)
+       const
+          {
+            return {this->reflectance * reflectance_, this->transmittance * (1.0f - reflectance_)};
+          }
+  */
   template<class T> ccl_device_inline_method FresnelCoeff operator*=(const T other)
   {
     return *this = *this * other;
@@ -458,7 +459,10 @@ ccl_device_forceinline FresnelCoeff microfacet_fresnel(KernelGlobals kg,
   }
   else {
     /* Transmissive dielectric. */
-    coeff *= fresnel_dielectric(cos_theta_i, bsdf->ior, r_cos_theta_t);
+    float F = fresnel_dielectric(cos_theta_i, bsdf->ior, r_cos_theta_t);
+
+    coeff.reflectance *= F;
+    coeff.transmittance *= (1.0f - F);
 
     if (bsdf->fresnel_type == MicrofacetFresnel::DIELECTRIC_TINT) {
       coeff *= ((ccl_private FresnelDielectricTint *)bsdf->fresnel)->tint;
@@ -570,7 +574,10 @@ ccl_device Spectrum bsdf_microfacet_estimate_albedo(KernelGlobals kg,
         s = lookup_table_read_3D(
             kg, rough, cos_NI, z, kernel_data.tables.ggx_gen_schlick_s, 16, 16, 16);
       }
-      coeff *= fresnel->tint * mix(fresnel->f0, fresnel->f90, s);
+      // coeff *= fresnel->tint * mix(fresnel->f0, fresnel->f90, s);
+      coeff.reflectance *= fresnel->tint.reflectance * mix(fresnel->f0, fresnel->f90, s);
+      coeff.transmittance *= fresnel->tint.transmittance *
+                             (1.0f - mix(fresnel->f0, fresnel->f90, s));
       return coeff.sum();
     }
   }
@@ -600,8 +607,9 @@ ccl_device Spectrum bsdf_microfacet_estimate_albedo(KernelGlobals kg,
     const float z = sqrtf(fabsf((bsdf->ior - 1.0f) / (bsdf->ior + 1.0f)));
     const float s = lookup_table_read_3D(
         kg, rough, cos_NI, z, kernel_data.tables.ggx_gen_schlick_ior_s, 16, 16, 16);
-
-    coeff *= mix(F0_from_ior(bsdf->ior), 1.0f, s);
+    const float F = mix(F0_from_ior(bsdf->ior), 1.0f, s);
+    coeff.reflectance *= make_spectrum(F);
+    coeff.transmittance *= make_spectrum(1.0f - F);
 
     /* Tinted dielectric. */
     if (bsdf->fresnel_type == MicrofacetFresnel::DIELECTRIC_TINT) {
