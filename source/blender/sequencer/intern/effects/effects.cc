@@ -386,7 +386,7 @@ Strip *get_transition_between(Scene *scene, const Strip *input1, const Strip *in
   Span<Strip *> effect_strips = lookup_effects_by_strip(ed, input1);
   for (Strip *effect : effect_strips) {
     /* Inputs should never be in the reverse order, but check anyway. */
-    if (effect->is_same_channel_transition() && ELEM(input2, effect->input1, effect->input2)) {
+    if (effect->is_overlap_transition() && ELEM(input2, effect->input1, effect->input2)) {
       return effect;
     }
   }
@@ -397,7 +397,7 @@ Strip *get_transition_on_side(Editing *ed, const Strip *strip, const Side side)
 {
   Span<Strip *> effects = lookup_effects_by_strip(ed, strip);
   for (Strip *transition : effects) {
-    if (!transition->is_same_channel_transition()) {
+    if (!transition->is_overlap_transition()) {
       continue;
     }
     if (side == Side::Left && transition->input2 == strip) {
@@ -423,7 +423,7 @@ bool transition_inputs_have_wrong_order(const Scene *scene,
 
 }  // namespace seq
 
-bool Strip::is_same_channel_transition() const
+bool Strip::is_overlap_transition() const
 {
   return (this->input1 != nullptr) && (this->input2 != nullptr) &&
          seq::strip_type_can_be_transition(this->type) &&

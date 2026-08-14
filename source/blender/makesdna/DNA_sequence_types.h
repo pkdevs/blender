@@ -475,11 +475,11 @@ struct Strip {
 
 #ifdef __cplusplus
   /**
-   * Transitions can be on top of the input strips on the same channel, or on a separate channel as
-   * an effect strip (the old type of transition). Same channel transitions have handles and are
-   * drawn in a different way.
+   * Transitions can overlap the input strips or not. Overlap transitions have handles and are
+   * drawn in a different way. Non-overlap transitions behave the same as the old transition effect
+   * strips.
    */
-  bool is_same_channel_transition() const;
+  bool is_overlap_transition() const;
 
   bool is_effect() const;
   int effect_num_inputs_get() const;

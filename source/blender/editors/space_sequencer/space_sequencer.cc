@@ -706,7 +706,7 @@ static void sequencer_main_cursor(wmWindow *win, ScrArea *area, ARegion *region)
       }
       else {
         wmcursor = (locked || seq::transform_single_image_check(strip) ||
-                    strip->is_same_channel_transition()) ?
+                    strip->is_overlap_transition()) ?
                        WM_CURSOR_STOP :
                        WM_CURSOR_SLIP;
       }

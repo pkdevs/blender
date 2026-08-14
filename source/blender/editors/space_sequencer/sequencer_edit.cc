@@ -953,7 +953,7 @@ static SlipData *slip_data_init(bContext *C, const wmOperator *op, const wmEvent
   const ListBaseT<SeqTimelineChannel> *channels = seq::channels_displayed_get(
       seq::editing_get(scene));
   strips.remove_if([&](Strip *strip) {
-    return (seq::transform_single_image_check(strip) || strip->is_same_channel_transition() ||
+    return (seq::transform_single_image_check(strip) || strip->is_overlap_transition() ||
             seq::transform_is_locked(channels, strip));
   });
   if (strips.is_empty()) {
@@ -1514,7 +1514,7 @@ static wmOperatorStatus sequencer_connect_exec(bContext *C, wmOperator *op)
   bool has_transition = false;
   bool has_non_transition = false;
   for (Strip *strip : selected) {
-    if (strip->is_same_channel_transition()) {
+    if (strip->is_overlap_transition()) {
       has_transition = true;
     }
     else {
@@ -1809,7 +1809,7 @@ static bool sequencer_reassign_inputs_poll(bContext *C)
   const Strip *active_strip = seq::select_active_get(scene);
 
   if (active_strip && active_strip->is_effect()) {
-    if (active_strip->is_same_channel_transition()) {
+    if (active_strip->is_overlap_transition()) {
       CTX_wm_operator_poll_msg_set(C, "Cannot reassign same channel transition inputs");
       return false;
     }
@@ -3650,7 +3650,7 @@ static wmOperatorStatus sequencer_change_effect_type_exec(bContext *C, wmOperato
     return OPERATOR_CANCELLED;
   }
 
-  if (strip->is_same_channel_transition() && !seq::strip_type_can_be_transition(new_type)) {
+  if (strip->is_overlap_transition() && !seq::strip_type_can_be_transition(new_type)) {
     BKE_report(op->reports, RPT_ERROR, "Cannot change transition to non-transition type");
     return OPERATOR_CANCELLED;
   }

@@ -457,7 +457,7 @@ static void query_time_dependent_strips_strips(TransInfo *t,
 
   /* Remove all non-effects. */
   time_dependent_strips.remove_if([&](Strip *strip) {
-    return seq::transform_strip_can_be_translated(strip) || strip->is_same_channel_transition();
+    return seq::transform_strip_can_be_translated(strip) || strip->is_overlap_transition();
   });
 }
 
@@ -729,7 +729,7 @@ static void create_trans_seq_clamp_data(TransInfo *t, const Scene *scene)
     ts->hard_clamp.ymin = max_ii(ts->hard_clamp.ymin, 1 - strip->channel);
     ts->hard_clamp.ymax = min_ii(ts->hard_clamp.ymax, seq::MAX_CHANNELS - strip->channel);
 
-    if (strip->is_same_channel_transition()) {
+    if (strip->is_overlap_transition()) {
       if ((strip->flag & (SEQ_LEFTSEL | SEQ_RIGHTSEL)) != 0) {
         has_transition_handles = true;
       }
@@ -1002,7 +1002,7 @@ static void flush_strip_transforms(TransInfo *t,
   const TransDataSeq *tdsq = static_cast<TransDataSeq *>(td->extra);
   Strip *strip = tdsq->strip;
 
-  if (strip->is_same_channel_transition()) {
+  if (strip->is_overlap_transition()) {
     flush_transition_transforms(t, td, offset_clamped, r_left_new, r_right_new);
     return;
   }
@@ -1118,7 +1118,7 @@ static void flushTransSeq(TransInfo *t)
     }
 
     /* Move transition keyframes to match the new bounds. */
-    if (strip->is_same_channel_transition()) {
+    if (strip->is_overlap_transition()) {
       seq::transform_transition_animdata(scene,
                                          strip,
                                          left_old,

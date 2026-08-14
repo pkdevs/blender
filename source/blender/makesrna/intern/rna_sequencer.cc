@@ -858,7 +858,7 @@ static int rna_Strip_channel_editable(const PointerRNA *ptr, const char ** /*r_i
 {
   Strip *strip = static_cast<Strip *>(ptr->data);
   /* The channel of same channel transitions is determined by its inputs. */
-  return strip->is_same_channel_transition() ? PropertyFlag(0) : PROP_EDITABLE;
+  return strip->is_overlap_transition() ? PropertyFlag(0) : PROP_EDITABLE;
 }
 
 static bool rna_Strip_lock_get(PointerRNA *ptr)

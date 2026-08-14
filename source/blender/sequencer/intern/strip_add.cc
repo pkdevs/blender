@@ -196,7 +196,7 @@ static bool overlap_transition_validate(
     BKE_report(reports, RPT_ERROR, "Cannot add multiple transitions between the same strips");
     return false;
   }
-  if (input1->is_same_channel_transition() || input2->is_same_channel_transition()) {
+  if (input1->is_overlap_transition() || input2->is_overlap_transition()) {
     BKE_report(reports, RPT_ERROR, "Cannot add transitions on other transitions");
     return false;
   }
