@@ -4,7 +4,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+import dataclasses
 import functools
 
 import cattrs
@@ -697,12 +697,13 @@ class ARMATURE_OT_collection_remove_unused(Operator):
 def _json_converter():
     return cattrs.preconf.json.JsonConverter(omit_if_default=True)
 
-@dataclass
-class BoneCollection:
+
+@dataclasses.dataclass
+class JSONBoneCollection:
     name: str
     is_visible: bool = True
     is_solo: bool = False
-    children: list["BoneCollection"] = field(default_factory=list)
+    children: list["JSONBoneCollection"] = dataclasses.field(default_factory=list)
 
 
 class ARMATURE_OT_collections_to_clipboard(Operator):
@@ -716,39 +717,30 @@ class ARMATURE_OT_collections_to_clipboard(Operator):
         armature = _armature_from_context(context)
         if not armature:
             return False
-        if not len(armature.collections) > 0:
+        if not armature.collections:
             cls.poll_message_set("Armature has no bone collections")
             return False
         return True
 
-    def _populate_bone_collections(self, parent) -> list[BoneCollection]:
-        if not parent.children:
-            return []
-        
+    def _populate_json_bone_collections(self, collections) -> list[JSONBoneCollection]:
+
         children = []
-        for child in parent.children:
-            collection = BoneCollection(name=child.name)
-            collection.is_solo = child.is_solo
-            collection.is_visible = child.is_visible
-            if child.children:
-                collection.children = self._populate_bone_collections(child)
-            children.append(collection)
+        for collection in collections:
+            json_collection = JSONBoneCollection(name=collection.name,
+                                                 is_solo=collection.is_solo,
+                                                 is_visible=collection.is_visible,
+                                                 children=self._populate_json_bone_collections(collection.children))
+            children.append(json_collection)
 
         return children
 
     def execute(self, context):
         armature = _armature_from_context(context)
 
-        # Get the root collections (those without a parent) and populate the hierarchy
+        # Get the root collections (those without a parent) and populate the hierarchy.
         collections = armature.collections
 
-        collection_hierarchy = []
-        for collection in collections:
-            bone_collection = BoneCollection(name=collection.name)
-            bone_collection.is_visible = collection.is_visible
-            bone_collection.is_solo = collection.is_solo
-            bone_collection.children = self._populate_bone_collections(collection)
-            collection_hierarchy.append(bone_collection)
+        collection_hierarchy = self._populate_json_bone_collections(collections)
 
         context.window_manager.clipboard = _json_converter().dumps(collection_hierarchy, indent=2)
 
@@ -771,8 +763,12 @@ class ARMATURE_OT_collections_from_clipboard(Operator):
             return False
         return True
 
-    def _recursive_dict_to_collection(self, armature, bone_collections: list[BoneCollection], parent_collection=None):
-        """Recursively create collections from a list of BoneCollection"""
+    def _recursive_dict_to_collection(
+            self,
+            armature,
+            bone_collections: list[JSONBoneCollection],
+            parent_collection=None):
+        """Recursively create collections from a list of JSONBoneCollection"""
         for collection in bone_collections:
             # Create a new collection if it doesn't exist
             new_collection = None
@@ -780,11 +776,10 @@ class ARMATURE_OT_collections_from_clipboard(Operator):
                 new_collection = armature.collections.new(collection.name)
             else:
                 new_collection = armature.collections_all[collection.name]
-            
+
             if parent_collection:
                 new_collection.parent = parent_collection
-            
-            # Recursively create child collections
+
             self._recursive_dict_to_collection(armature, collection.children, parent_collection=new_collection)
 
             new_collection.is_visible = collection.is_visible
@@ -792,7 +787,7 @@ class ARMATURE_OT_collections_from_clipboard(Operator):
 
     def execute(self, context):
 
-        loaded_collections = _json_converter().loads(context.window_manager.clipboard, list[BoneCollection])
+        loaded_collections = _json_converter().loads(context.window_manager.clipboard, list[JSONBoneCollection])
 
         self._recursive_dict_to_collection(_armature_from_context(context), loaded_collections)
 
