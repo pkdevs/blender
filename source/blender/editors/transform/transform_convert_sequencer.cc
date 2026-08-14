@@ -161,8 +161,6 @@ static TransData *SeqToTransData(Scene *scene,
 {
   int start_left;
 
-  tdsq->opposite_handle = 0;
-
   switch (sel_flag) {
     case SEQ_SELECT:
       /* Use seq_tx_get_final_left() and an offset here
