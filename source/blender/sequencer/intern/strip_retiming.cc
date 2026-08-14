@@ -174,6 +174,22 @@ bool retiming_has_keys(const Strip *strip)
   return strip->retiming_keys_num > 0;
 }
 
+bool retiming_strip_has_audio(const Strip *strip)
+{
+  if (ELEM(strip->type, STRIP_TYPE_SOUND, STRIP_TYPE_SCENE)) {
+    return true;
+  }
+  if (strip->type != STRIP_TYPE_META) {
+    return false;
+  }
+  for (const Strip &child : strip->seqbase) {
+    if (retiming_strip_has_audio(&child)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 static Bounds<float> strip_retiming_clamp_bounds_get(const Scene *scene,
                                                      const Strip *strip,
                                                      SeqRetimingKey *key)
@@ -325,6 +341,9 @@ SeqRetimingKey *retiming_add_freeze_frame(const Scene *scene,
   freeze_keys.second->flag |= SEQ_FREEZE_FRAME_OUT;
   freeze_keys.first->retiming_factor = orig_retiming_factor;
   freeze_keys.second->retiming_factor = orig_retiming_factor;
+  if (retiming_strip_has_audio(strip)) {
+    BKE_sound_mark_scene_audio_animation_stale(scene);
+  }
   return freeze_keys.second;
 }
 
@@ -399,6 +418,15 @@ void retiming_data_clear(Strip *strip)
   }
 }
 
+void retiming_data_clear(const Scene *scene, Strip *strip)
+{
+  const bool had_keys = retiming_has_keys(strip);
+  retiming_data_clear(strip);
+  if (had_keys && retiming_strip_has_audio(strip)) {
+    BKE_sound_mark_scene_audio_animation_stale(scene);
+  }
+}
+
 static void retiming_key_overlap(Scene *scene, Strip *strip)
 {
   ListBaseT<Strip> *seqbase = active_seqbase_get(editing_get(scene));
@@ -417,7 +445,7 @@ void retiming_reset(Scene *scene, Strip *strip)
     return;
   }
 
-  retiming_data_clear(strip);
+  retiming_data_clear(scene, strip);
 
   Span<Strip *> effects = lookup_effects_by_strip(scene->ed, strip);
   strip_time_update_effects_strip_range(scene, effects);
@@ -499,7 +527,11 @@ SeqRetimingKey *retiming_key_add_new_for_strip(const Scene *scene,
   }
 
   ensure_left_and_right_keys(scene, strip);
-  return retiming_add_key(scene, strip, frame);
+  SeqRetimingKey *new_key = retiming_add_key(scene, strip, frame);
+  if (new_key != nullptr && retiming_strip_has_audio(strip)) {
+    BKE_sound_mark_scene_audio_animation_stale(scene);
+  }
+  return new_key;
 }
 
 SeqRetimingKey *retiming_add_key(const Scene *scene, Strip *strip, const int frame)
@@ -508,8 +540,12 @@ SeqRetimingKey *retiming_add_key(const Scene *scene, Strip *strip, const int fra
   return strip_retiming_add_key(strip, frame_index);
 }
 
-void retiming_remove_multiple_keys(Strip *strip, Vector<SeqRetimingKey *> &keys_to_remove)
+void retiming_remove_multiple_keys(const Scene *scene,
+                                   Strip *strip,
+                                   Vector<SeqRetimingKey *> &keys_to_remove)
 {
+  const bool has_keys_to_remove = !keys_to_remove.is_empty();
+
   /* Transitions need special treatment, so separate these from `keys_to_remove`. */
   Vector<SeqRetimingKey *> transitions;
 
@@ -559,6 +595,10 @@ void retiming_remove_multiple_keys(Strip *strip, Vector<SeqRetimingKey *> &keys_
   MEM_delete(strip->retiming_keys);
   strip->retiming_keys = new_keys;
   strip->retiming_keys_num = new_keys_count;
+
+  if (has_keys_to_remove && retiming_strip_has_audio(strip)) {
+    BKE_sound_mark_scene_audio_animation_stale(scene);
+  }
 }
 
 static void strip_retiming_remove_key_ex(Strip *strip, SeqRetimingKey *key)
@@ -606,15 +646,21 @@ static SeqRetimingKey *strip_retiming_remove_transition(Strip *strip, SeqRetimin
   return orig_key;
 }
 
-void retiming_remove_key(Strip *strip, SeqRetimingKey *key)
+void retiming_remove_key(const Scene *scene, Strip *strip, SeqRetimingKey *key)
 {
+  const bool can_remove = retiming_key_is_transition_type(key) ||
+                          (key->strip_frame_index != 0 && !retiming_is_last_key(strip, key));
 
   if (retiming_key_is_transition_type(key)) {
     strip_retiming_remove_transition(strip, key);
-    return;
+  }
+  else {
+    strip_retiming_remove_key_ex(strip, key);
   }
 
-  strip_retiming_remove_key_ex(strip, key);
+  if (can_remove && retiming_strip_has_audio(strip)) {
+    BKE_sound_mark_scene_audio_animation_stale(scene);
+  }
 }
 
 /** \} */
@@ -750,6 +796,10 @@ void retiming_transition_key_frame_set(const Scene *scene,
   const float offset = key_start->strip_frame_index - start_frame_index;
   key_start->retiming_factor += offset * prev_segment_step;
   key_end->retiming_factor -= offset * next_segment_step;
+
+  if (retiming_strip_has_audio(strip)) {
+    BKE_sound_mark_scene_audio_animation_stale(scene);
+  }
 }
 
 float strip_retiming_evaluate(const Strip *strip, const float frame_index)
@@ -815,6 +865,9 @@ SeqRetimingKey *retiming_add_transition(const Scene *scene,
   transition_in->original_retiming_factor = orig_retiming_factor;
 
   strip_retiming_remove_key_ex(strip, strip->retiming_keys + orig_key_index + 1);
+  if (retiming_strip_has_audio(strip)) {
+    BKE_sound_mark_scene_audio_animation_stale(scene);
+  }
   return strip->retiming_keys + orig_key_index + 1;
 }
 
@@ -977,6 +1030,10 @@ void retiming_key_frame_set(const Scene *scene, Strip *strip, SeqRetimingKey *ke
   Span<Strip *> effects = lookup_effects_by_strip(scene->ed, strip);
   strip_time_update_effects_strip_range(scene, effects);
   time_update_meta_strip_range(scene, lookup_meta_by_strip(scene->ed, strip));
+
+  if (retiming_strip_has_audio(strip)) {
+    BKE_sound_mark_scene_audio_animation_stale(scene);
+  }
 }
 
 /** \} */

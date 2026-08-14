@@ -101,6 +101,7 @@
 #include "RNA_prototypes.hh"
 
 #include "SEQ_iterator.hh"
+#include "SEQ_retiming.hh"
 #include "SEQ_sequencer.hh"
 #include "SEQ_sound.hh"
 
@@ -527,7 +528,7 @@ static bool sound_scene_has_audio_animation(const Scene *scene, Set<const Scene 
       return false;
     }
 
-    if (strip->type == STRIP_TYPE_SOUND && strip->retiming_keys_num != 0) {
+    if (strip->retiming_keys_num != 0 && seq::retiming_strip_has_audio(strip)) {
       has_audio_animation = true;
       return false;
     }

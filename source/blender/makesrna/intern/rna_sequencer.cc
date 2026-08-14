@@ -541,7 +541,7 @@ static void rna_Strip_retiming_key_remove(ID *id, SeqRetimingKey *key)
     return;
   }
 
-  seq::retiming_remove_key(strip, key);
+  seq::retiming_remove_key(scene, strip, key);
 
   seq::relations_invalidate_cache_raw(scene, strip);
   WM_main_add_notifier(NC_SCENE | ND_SEQUENCER, nullptr);

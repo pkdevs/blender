@@ -2746,11 +2746,47 @@ static void mark_scene_audio_animation_stale_for_action_edits(Depsgraph *depsgra
   }
 }
 
+static bool scene_has_audio_animation(const Scene *scene)
+{
+  if (scene->audio.flag & AUDIO_VOLUME_ANIMATED) {
+    return true;
+  }
+  if (scene->ed == nullptr) {
+    return false;
+  }
+
+  bool has_audio_animation = false;
+  seq::foreach_strip(&scene->ed->seqbase, [&](Strip *strip) {
+    if (ELEM(strip->type, STRIP_TYPE_SOUND, STRIP_TYPE_SCENE) &&
+        (strip->flag &
+         (SEQ_AUDIO_VOLUME_ANIMATED | SEQ_AUDIO_PITCH_ANIMATED | SEQ_AUDIO_PAN_ANIMATED)))
+    {
+      has_audio_animation = true;
+      return false;
+    }
+    return true;
+  });
+  return has_audio_animation;
+}
+
+static void mark_scene_audio_animation_stale_for_driver_target_edits(Depsgraph *depsgraph,
+                                                                     Scene *scene)
+{
+  /* Driver target edits are flushed to the Scene parameters operation, not to an Action. */
+  if (!DEG_id_is_user_modified(depsgraph, &scene->id) ||
+      (scene->id.recalc & ID_RECALC_PARAMETERS) == 0 || !scene_has_audio_animation(scene))
+  {
+    return;
+  }
+  BKE_sound_mark_scene_audio_animation_stale(scene);
+}
+
 void BKE_scene_update_sound(Depsgraph *depsgraph, Main *bmain)
 {
   mark_scene_audio_animation_stale_for_action_edits(depsgraph, bmain);
 
   Scene *scene = DEG_get_evaluated_scene(depsgraph);
+  mark_scene_audio_animation_stale_for_driver_target_edits(depsgraph, scene);
   const int recalc = scene->id.recalc;
   const bool volume_update_needed = (recalc & ID_RECALC_AUDIO_VOLUME) != 0 ||
                                     scene->runtime->audio.volume_update_needed;
