@@ -567,7 +567,7 @@ static void wm_region_test_xr_do_draw(const wmWindowManager *wm,
 {
   if ((area->spacetype == SPACE_VIEW3D) && (region->regiontype == RGN_TYPE_WINDOW)) {
     if (ED_view3d_is_region_xr_mirror_active(
-            wm, static_cast<const View3D *>(area->spacedata.first), region))
+            wm, static_cast<const View3D *>(area->spacedata.first_), region))
     {
       ED_region_tag_redraw_no_rebuild(region);
     }

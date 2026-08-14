@@ -851,7 +851,7 @@ static void view3d_main_region_listener(const wmRegionListenerParams *params)
         else if (wmn->subtype == NS_VIEW3D_SHADING) {
 #ifdef WITH_XR_OPENXR
           ED_view3d_xr_shading_update(
-              static_cast<wmWindowManager *>(G_MAIN->wm.first), v3d, scene);
+              static_cast<wmWindowManager *>(G_MAIN->wm.first_), v3d, scene);
 #endif
 
           ViewLayer *view_layer = WM_window_get_active_view_layer(window);
