@@ -2222,7 +2222,7 @@ static BMOpDefine bmo_create_quadsphere_def = {
     /*slot_types_in*/
     {
         /* How many times to recursively subdivide the sphere. */
-        {"subdivisions", BMO_OP_SLOT_INT},
+        {"arcs", BMO_OP_SLOT_INT},
         /* Radius. */
         {"radius", BMO_OP_SLOT_FLT},
         /* Matrix to multiply the new geometry with. */

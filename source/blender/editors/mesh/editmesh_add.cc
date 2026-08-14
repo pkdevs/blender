@@ -731,8 +731,8 @@ static wmOperatorStatus add_primitive_quadsphere_exec(bContext *C, wmOperator *o
           obedit,
           &creation_data,
           calc_uvs,
-          "create_quadsphere subdivisions=%i radius=%f matrix=%m4 calc_uvs=%b",
-          RNA_int_get(op->ptr, "subdivisions"),
+          "create_quadsphere arcs=%i radius=%f matrix=%m4 calc_uvs=%b",
+          RNA_int_get(op->ptr, "arcs"),
           RNA_float_get(op->ptr, "radius"),
           creation_data.mat,
           calc_uvs))
@@ -761,7 +761,7 @@ void MESH_OT_primitive_quad_sphere_add(wmOperatorType *ot)
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 
   /* props */
-  RNA_def_int(ot->srna, "subdivisions", 3, 1, MESH_ADD_SUBD_MAXI, "Subdivisions", "", 1, 16);
+  RNA_def_int(ot->srna, "arcs", 3, 0, MESH_ADD_SUBD_MAXI, "Arcs", "", 0, 182);
   ed::object::add_unit_props_radius(ot);
   ed::object::add_mesh_props(ot);
   ed::object::add_generic_props(ot, true);
