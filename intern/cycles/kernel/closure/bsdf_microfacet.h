@@ -609,22 +609,21 @@ ccl_device Spectrum bsdf_microfacet_estimate_albedo(KernelGlobals kg,
     const float s = lookup_table_read_3D(
         kg, rough, cos_NI, z, kernel_data.tables.ggx_gen_schlick_ior_s, 16, 16, 16);
     const float F = mix(F0_from_ior(bsdf->ior), 1.0f, s);
-    Spectrum reflectance = make_spectrum(F) * float(eval_reflection);
+    coeff.reflectance = make_spectrum(F) * float(eval_reflection);
+    coeff.transmittance *= make_spectrum(1.0f - F) * float(eval_transmission);
+
     /* Tinted dielectric. */
     if (bsdf->fresnel_type == MicrofacetFresnel::DIELECTRIC_TINT) {
-      ccl_private FresnelDielectricTint *fresnel = (ccl_private FresnelDielectricTint *)
-                                                       bsdf->fresnel;
-      reflectance *= fresnel->tint.reflectance;
-      const Spectrum transmittance = (1.0f - F) * fresnel->tint.transmittance *
-                                     float(eval_transmission);
-      return reflectance + transmittance;
+      coeff *= ((ccl_private FresnelDielectricTint *)bsdf->fresnel)->tint;
+      return coeff.sum();
     }
+
     /* Untinted dielectric. */
     if (CLOSURE_IS_GLASS(bsdf->type)) {
-      const Spectrum transmittance = make_spectrum(1.0f - F) * float(eval_transmission);
-      return reflectance + transmittance;
+      coeff.transmittance = make_spectrum(1.0f - F) * float(eval_transmission);
+      return coeff.sum();
     }
-    return reflectance;
+    return coeff.reflectance;
   }
   else if (bsdf->type == CLOSURE_BSDF_THIN_GLASS_TRANSMISSION_ID) {
     return eval_transmission ? one_spectrum() : zero_spectrum();
