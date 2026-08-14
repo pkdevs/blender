@@ -317,14 +317,7 @@ ccl_device void osl_closure_dielectric_bsdf_setup(KernelGlobals kg,
   fresnel->thin_film = {closure->thinfilm_thickness, closure->thinfilm_ior};
   fresnel->tint = {rgb_to_spectrum(closure->reflection_tint),
                    rgb_to_spectrum(closure->transmission_tint)};
-  bsdf_dielectric_tint_setup(kg,
-                             bsdf,
-                             sd,
-                             fresnel,
-                             fresnel->tint.reflectance,
-                             fresnel->tint.transmittance,
-                             beckmann,
-                             multiggx);
+  bsdf_dielectric_tint_setup(kg, bsdf, sd, fresnel, beckmann, multiggx);
 
   if (layer_albedo != nullptr) {
     if (!(sd->runtime_flag & SR_BSDF_HAS_TRANSMISSION)) {
