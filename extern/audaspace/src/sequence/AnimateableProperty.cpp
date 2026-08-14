@@ -57,6 +57,15 @@ int AnimateableProperty::getCount() const
 	return m_count;
 }
 
+void AnimateableProperty::reset()
+{
+	std::lock_guard<std::recursive_mutex> lock(m_mutex);
+
+	resize(m_count * sizeof(float), true);
+	m_isAnimated = false;
+	m_unknown.clear();
+}
+
 void AnimateableProperty::write(const float* data)
 {
 	std::lock_guard<std::recursive_mutex> lock(m_mutex);

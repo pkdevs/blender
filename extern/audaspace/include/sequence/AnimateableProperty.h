@@ -102,6 +102,11 @@ public:
 	int getCount() const;
 
 	/**
+	 * Resets the property and marks it non-animated.
+	 */
+	void reset();
+
+	/**
 	 * Writes the properties value and marks it non-animated.
 	 * \param data The new value.
 	 */
