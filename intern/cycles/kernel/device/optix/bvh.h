@@ -70,7 +70,7 @@ ccl_device_forceinline Intersection get_intersection()
     isect.type = kernel_data_fetch(objects, isect.object).primitive_type;
   }
 #ifdef __HAIR__
-  else if (optixGetHitKind() == OPTIX_HIT_KIND_CURVE) {
+  else if (optixGetHitKind() != OPTIX_HIT_KIND_POINT) {
     /* Curve. */
     isect.u = __uint_as_float(optixGetAttribute_0());
     isect.v = __uint_as_float(optixGetAttribute_1());
@@ -245,7 +245,7 @@ extern "C" __global__ void __anyhit__kernel_optix_visibility_test()
     /* Triangle. */
   }
 #ifdef __HAIR__
-  else if (optixGetHitKind() == OPTIX_HIT_KIND_CURVE) {
+  else if (optixGetHitKind() != OPTIX_HIT_KIND_POINT) {
     /* Curve. */
     prim = kernel_data_fetch(curve_segments, prim).prim;
   }
@@ -290,7 +290,7 @@ extern "C" __global__ void __closesthit__kernel_optix_hit()
     optixSetPayload_3(prim);
     optixSetPayload_5(kernel_data_fetch(objects, object).primitive_type);
   }
-  else if (optixGetHitKind() == OPTIX_HIT_KIND_CURVE) {
+  else if (optixGetHitKind() != OPTIX_HIT_KIND_POINT) {
     const KernelCurveSegment segment = kernel_data_fetch(curve_segments, prim);
     optixSetPayload_1(optixGetAttribute_0()); /* Same as 'optixGetCurveParameter()' */
     optixSetPayload_2(optixGetAttribute_1());
