@@ -47,26 +47,28 @@ struct FresnelCoeff {
   {
   }
   /*
-      ccl_device_inline_method FresnelCoeff operator*(ccl_private const FresnelCoeff &other) const
-      {
-        return {this->reflectance * other.reflectance, this->transmittance * other.transmittance};
-      }
+        ccl_device_inline_method FresnelCoeff operator*(ccl_private const FresnelCoeff &other)
+     const
+        {
+          return {this->reflectance * other.reflectance, this->transmittance *
+     other.transmittance};
+        }
 
-      template<class T> ccl_device_inline_method FresnelCoeff operator*(const T reflectance_) const
-      {
-        return {this->reflectance * reflectance_, this->transmittance * (1.0f - reflectance_)};
-      }
+        template<class T> ccl_device_inline_method FresnelCoeff operator*(const T reflectance_)
+     const
+        {
+          return {this->reflectance * reflectance_, this->transmittance * (1.0f - reflectance_)};
+        }
 
-      template<class T> ccl_device_inline_method FresnelCoeff operator*=(const T other)
-      {
-        return *this = *this * other;
-      }
-
-      ccl_device_inline_method Spectrum sum() const
-      {
-        return reflectance + transmittance;
-      }
-    */
+        template<class T> ccl_device_inline_method FresnelCoeff operator*=(const T other)
+        {
+          return *this = *this * other;
+        }
+  */
+  ccl_device_inline_method Spectrum sum() const
+  {
+    return reflectance + transmittance;
+  }
 };
 
 ccl_device_inline bool iszero(ccl_private const FresnelCoeff &coeff)
@@ -156,10 +158,10 @@ generalized_schlick_setup(const float ior,
                           const Spectrum transmission_tint,
                           FresnelThinFilm thinfilm)
 {
+  FresnelCoeff tint(reflective_caustics, refractive_caustics);
+  tint.transmittance *= transmission_tint;
   return {/* .thin_film = */ thinfilm,
-          /* .tint = */
-          {reflective_caustics ? one_spectrum() : zero_spectrum(),
-           refractive_caustics ? transmission_tint : zero_spectrum()},
+          /* .tint = */ tint,
           /* .f0 = */ F0_from_ior(ior) * reflection_tint,
           /* .f90 = */ one_spectrum(),
           /* .exponent = */ -ior};
@@ -550,6 +552,7 @@ ccl_device Spectrum bsdf_microfacet_estimate_albedo(KernelGlobals kg,
                                                     const bool eval_transmission)
 {
   const float cos_NI = dot(wi, bsdf->N);
+  FresnelCoeff coeff(eval_reflection, eval_transmission);
 
   /* Use lookup tables for generalized Schlick reflection, otherwise assume smooth surface.
    * Note that even if the reflectance or tranmissitance would evaluate to zero for
@@ -575,11 +578,11 @@ ccl_device Spectrum bsdf_microfacet_estimate_albedo(KernelGlobals kg,
         s = lookup_table_read_3D(
             kg, rough, cos_NI, z, kernel_data.tables.ggx_gen_schlick_s, 16, 16, 16);
       }
-      const Spectrum F = mix(fresnel->f0, fresnel->f90, s);
-      const Spectrum reflectance = F * fresnel->tint.reflectance * float(eval_reflection);
-      const Spectrum transmittance = (one_spectrum() - F) * fresnel->tint.transmittance *
-                                     float(eval_transmission);
-      return reflectance + transmittance;
+      // coeff *= fresnel->tint * mix(fresnel->f0, fresnel->f90, s);
+      coeff.reflectance *= fresnel->tint.reflectance * mix(fresnel->f0, fresnel->f90, s);
+      coeff.transmittance *= fresnel->tint.transmittance *
+                             (1.0f - mix(fresnel->f0, fresnel->f90, s));
+      return coeff.sum();
     }
   }
   else if (bsdf->fresnel_type == MicrofacetFresnel::F82_TINT) {
@@ -631,12 +634,12 @@ ccl_device Spectrum bsdf_microfacet_estimate_albedo(KernelGlobals kg,
   }
 
   /* Simpler case without the lookup tables. */
-  FresnelCoeff coeff = microfacet_fresnel(kg, bsdf, cos_NI, nullptr);
+  FresnelCoeff coeff2 = microfacet_fresnel(kg, bsdf, cos_NI, nullptr);
 
-  coeff.reflectance *= float(eval_reflection);
-  coeff.transmittance *= float(eval_transmission);
+  coeff2.reflectance *= float(eval_reflection);
+  coeff2.transmittance *= float(eval_transmission);
 
-  return coeff.reflectance + coeff.transmittance;
+  return coeff2.sum();
 }
 
 /* Smith shadowing-masking term, here in the non-separable form.
@@ -812,8 +815,7 @@ ccl_device Spectrum bsdf_microfacet_eval(KernelGlobals kg,
                        (is_transmission ? sqr(bsdf->ior * inv_len_H) * fabsf(cos_HI * dot(H, wo)) :
                                           0.25f);
 
-  const float pdf_reflect = average(coeff.reflectance) /
-                            average(coeff.reflectance + coeff.transmittance);
+  const float pdf_reflect = average(coeff.reflectance) / average(coeff.sum());
   const float lobe_pdf = is_transmission ? 1.0f - pdf_reflect : pdf_reflect;
 
   *pdf = common * lobe_pdf / (1.0f + lambdaI);
@@ -891,8 +893,7 @@ ccl_device int bsdf_microfacet_sample(KernelGlobals kg,
   }
 
   /* Decide between refraction and reflection based on the energy. */
-  const float pdf_reflect = average(coeff.reflectance) /
-                            average(coeff.reflectance + coeff.transmittance);
+  const float pdf_reflect = average(coeff.reflectance) / average(coeff.sum());
   const bool do_refract = (rand.z >= pdf_reflect);
 
   /* Compute actual reflected or refracted direction. */
