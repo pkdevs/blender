@@ -3663,6 +3663,14 @@ static wmOperatorStatus sequencer_change_effect_type_exec(bContext *C, wmOperato
     }
   }
 
+  /* Sort by timeline frame so 2-input transitions go "from" earlier "to" later. This is for
+   * non-overlapping transitions. */
+  if (seq::strip_type_can_be_transition(new_type) && have_inputs == 2 &&
+      seq::transition_inputs_have_wrong_order(scene, strip->input1, strip->input2))
+  {
+    std::swap(strip->input1, strip->input2);
+  }
+
   /* Free previous effect. */
   seq::effect_free(strip);
 
