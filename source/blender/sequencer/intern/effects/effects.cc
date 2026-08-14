@@ -393,7 +393,7 @@ Strip *get_transition_between(Scene *scene, const Strip *input1, const Strip *in
   return nullptr;
 }
 
-Strip *get_transition_on_side(Editing *ed, const Strip *strip, const Side side)
+Strip *get_transition_on_side(Editing *ed, const Strip *strip, Side side)
 {
   Span<Strip *> effects = lookup_effects_by_strip(ed, strip);
   for (Strip *transition : effects) {

@@ -44,7 +44,6 @@ bool edit_move_strip_to_meta(Scene *scene,
                              Strip *src_strip,
                              Strip *dst_stripm,
                              const char **r_error_str);
-
 /**
  * Flag strip and its users (effects) for removal.
  */
