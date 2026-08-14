@@ -3314,44 +3314,6 @@ static void rna_Node_image_layer_view_update(Main *bmain, Scene *scene, PointerR
   rna_Node_update(bmain, scene, ptr);
 }
 
-/* LayerType is either ViewLayer or RenderLayer. */
-template<typename LayerType>
-static const EnumPropertyItem *generic_layers_add_enum(LayerType *layer)
-{
-  EnumPropertyItem *item = nullptr;
-  EnumPropertyItem tmp = {0};
-  int i = 0, totitem = 0;
-
-  while (layer) {
-    tmp.identifier = layer->name;
-    /* Little trick: using space char instead empty string
-     * makes the item selectable in the drop-down. */
-    if (layer->name[0] == '\0') {
-      tmp.name = " ";
-    }
-    else {
-      tmp.name = layer->name;
-    }
-    tmp.value = i++;
-    RNA_enum_item_add(&item, &totitem, &tmp);
-    layer = layer->next;
-  }
-
-  RNA_enum_item_end(&item, &totitem);
-
-  return item;
-}
-
-static const EnumPropertyItem *renderresult_layers_add_enum(RenderLayer *rl)
-{
-  return generic_layers_add_enum(rl);
-}
-
-static const EnumPropertyItem *view_layers_add_enum(ViewLayer *vl)
-{
-  return generic_layers_add_enum(vl);
-}
-
 static const EnumPropertyItem *rna_ShaderNodeMix_data_type_itemf(bContext * /*C*/,
                                                                  PointerRNA *ptr,
                                                                  PropertyRNA * /*prop*/,
@@ -3394,8 +3356,22 @@ static const EnumPropertyItem *rna_Node_image_layer_itemf(bContext * /*C*/,
     return rna_enum_dummy_NULL_items;
   }
 
-  rl = static_cast<RenderLayer *>(ima->rr->layers.first);
-  item = renderresult_layers_add_enum(rl);
+  const auto &item_from_render_layer = [&](const RenderLayer &rl,
+                                           const int index) -> EnumPropertyItem {
+    EnumPropertyItem tmp;
+    tmp.identifier = rl.name;
+    /* Little trick: using space char instead empty string
+     * makes the item selectable in the drop-down. */
+    if (rl.name[0] == '\0') {
+      tmp.name = " ";
+    }
+    else {
+      tmp.name = rl.name;
+    }
+    tmp.value = index;
+    return tmp;
+  };
+  item = rna_enum_property_items_from_listbase(ima->rr->layers, item_from_render_layer);
 
   *r_free = true;
 
@@ -3510,8 +3486,22 @@ static const EnumPropertyItem *rna_Node_view_layer_itemf(bContext * /*C*/,
     return rna_enum_dummy_NULL_items;
   }
 
-  ViewLayer *vl = static_cast<ViewLayer *>(sce->view_layers.first);
-  item = view_layers_add_enum(vl);
+  const auto &item_from_view_layer = [&](const ViewLayer &vl,
+                                         const int index) -> EnumPropertyItem {
+    EnumPropertyItem tmp;
+    tmp.identifier = vl.name;
+    /* Little trick: using space char instead empty string
+     * makes the item selectable in the drop-down. */
+    if (vl.name[0] == '\0') {
+      tmp.name = " ";
+    }
+    else {
+      tmp.name = vl.name;
+    }
+    tmp.value = index;
+    return tmp;
+  };
+  item = rna_enum_property_items_from_listbase(sce->view_layers, item_from_view_layer);
 
   *r_free = true;
 
