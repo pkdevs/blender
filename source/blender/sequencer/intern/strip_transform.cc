@@ -103,13 +103,13 @@ void transform_set_overlap_flags(const Scene *scene,
     if (!transition->is_same_channel_transition()) {
       continue;
     }
-    Strip *left = transition->input1;
-    Strip *right = transition->input2;
+    const Strip *left = transition->input1;
+    const Strip *right = transition->input2;
     if (left->right_handle(scene) != right->left_handle() || left->channel != right->channel ||
         transition->left_handle() < left->left_handle() ||
         transition->right_handle(scene) > right->right_handle(scene) ||
-        transition->left_handle() > left->right_handle(scene) ||
-        transition->right_handle(scene) < right->left_handle())
+        transition->left_handle() >= left->right_handle(scene) ||
+        transition->right_handle(scene) <= right->left_handle())
     {
       edit_flag_for_removal(scene, transition);
     }
