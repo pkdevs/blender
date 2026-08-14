@@ -267,6 +267,7 @@ void light_ltc(sampler2DArray utility_tx,
     /* Inside the sphere light, integrate over the hemisphere. */
     r_cosine_integral = M_1_PI;
     r_form_factor = M_PI;
+    return;
   }
 
   if (light.type == LIGHT_RECT) {
