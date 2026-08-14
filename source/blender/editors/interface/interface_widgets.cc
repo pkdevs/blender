@@ -4811,16 +4811,7 @@ static void widget_icon_has_anim(Button *but,
   }
   else if (but->type == ButtonType::Text && static_cast<ButtonText *>(but)->use_label_style) {
     if (state->but_flag & UI_HOVER && !(state->but_flag & UI_SELECT)) {
-      /* Brighten dark text, darken light text for subtle hover feedback. */
-      const uchar lightness = srgb_to_grayscale_byte(wcol->text);
-      if (lightness <= 96) {
-        const uchar white[3] = {255, 255, 255};
-        color_blend_v3_v3(wcol->text, white, 0.3f);
-      }
-      else {
-        const uchar dark[3] = {0, 0, 0};
-        color_blend_v3_v3(wcol->text, dark, 0.3f);
-      }
+      theme::get_color_3ubv(TH_TEXT_HI, wcol->text);
     }
   }
 }
