@@ -590,14 +590,9 @@ ccl_device Spectrum bsdf_microfacet_estimate_albedo(KernelGlobals kg,
     const float z = sqrtf(fabsf((bsdf->ior - 1.0f) / (bsdf->ior + 1.0f)));
     const float s = lookup_table_read_3D(
         kg, rough, cos_NI, z, kernel_data.tables.ggx_gen_schlick_ior_s, 16, 16, 16);
-
-#if defined(__KERNEL_HIPRT__)
     const float F = mix(F0_from_ior(bsdf->ior), 1.0f, s);
     coeff.reflectance = make_spectrum(F) * float(eval_reflection);
     coeff.transmittance = make_spectrum(1.0f - F) * float(eval_transmission);
-#else
-    coeff *= mix(F0_from_ior(bsdf->ior), 1.0f, s);
-#endif
 
     /* Tinted dielectric. */
     if (bsdf->fresnel_type == MicrofacetFresnel::DIELECTRIC_TINT) {
@@ -607,6 +602,7 @@ ccl_device Spectrum bsdf_microfacet_estimate_albedo(KernelGlobals kg,
 
     /* Untinted dielectric. */
     if (CLOSURE_IS_GLASS(bsdf->type)) {
+      // coeff.transmittance = make_spectrum(1.0f - F) * float(eval_transmission);
       return coeff.sum();
     }
     return coeff.reflectance;
