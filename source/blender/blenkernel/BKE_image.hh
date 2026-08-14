@@ -584,7 +584,7 @@ bool BKE_image_has_anim(Image *image);
 bool BKE_image_has_packedfile(const Image *image);
 bool BKE_image_has_filepath(const Image *ima);
 /**
- * Checks if the image is loaded from files on disk.
+ * Checks if the image is loaded from a file, on disk or packed.
  */
 bool BKE_image_source_is_file(const Image *ima);
 /**

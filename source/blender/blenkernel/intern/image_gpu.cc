@@ -414,10 +414,10 @@ static void image_gpu_log_load_error_once(Image *ima, ImageUser *iuser, ImageLoa
   BKE_image_user_file_path(iuser, ima, filepath);
 
   /* Report a missing file separately, matching the Cycles message. */
-  if (BKE_image_source_is_file(ima) && !BKE_image_has_packedfile(ima) &&
-      BKE_image_has_filepath(ima))
-  {
-    if (error == ImageLoadError::LoadFailed && !BLI_exists(filepath)) {
+  if (BKE_image_source_is_file(ima) && BKE_image_has_filepath(ima)) {
+    if (!BKE_image_has_packedfile(ima) && error == ImageLoadError::LoadFailed &&
+        !BLI_exists(filepath))
+    {
       error = ImageLoadError::FileMissing;
     }
   }

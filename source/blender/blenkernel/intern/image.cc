@@ -5465,7 +5465,7 @@ void BKE_image_user_file_path_ex(const Main *bmain,
 {
   if (resolve_multiview && BKE_image_is_multiview(ima) && iuser) {
     ImageView *iv = static_cast<ImageView *>(BLI_findlink(&ima->views, iuser->view));
-    if (iv->filepath[0]) {
+    if (iv && iv->filepath[0]) {
       BLI_strncpy(filepath, iv->filepath, FILE_MAX);
     }
     else {
