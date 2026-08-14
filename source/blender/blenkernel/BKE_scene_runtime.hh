@@ -56,6 +56,7 @@ struct SceneAudioRuntime {
   AUD_Handle playback_handle;
   AUD_Handle sound_scrub_handle;
   Set<AUD_SequenceEntry> speaker_handles;
+  bool volume_update_needed = false;
 };
 
 class SceneRuntime : NonCopyable, NonMovable {

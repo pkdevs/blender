@@ -2726,6 +2726,8 @@ void BKE_scene_update_sound(Depsgraph *depsgraph, Main *bmain)
 {
   Scene *scene = DEG_get_evaluated_scene(depsgraph);
   const int recalc = scene->id.recalc;
+  const bool volume_update_needed = (recalc & ID_RECALC_AUDIO_VOLUME) != 0 ||
+                                    scene->runtime->audio.volume_update_needed;
   BKE_sound_ensure_scene(scene);
   if (recalc & ID_RECALC_FRAME_CHANGE) {
     BKE_sound_seek_scene(bmain, scene);
@@ -2733,8 +2735,9 @@ void BKE_scene_update_sound(Depsgraph *depsgraph, Main *bmain)
   if (recalc & ID_RECALC_AUDIO_FPS) {
     BKE_sound_update_fps(bmain, scene);
   }
-  if (recalc & ID_RECALC_AUDIO_VOLUME) {
+  if (volume_update_needed) {
     BKE_sound_set_scene_volume(scene, scene->audio.volume);
+    scene->runtime->audio.volume_update_needed = false;
   }
   if (recalc & ID_RECALC_AUDIO_MUTE) {
     const bool is_mute = (DEG_get_mode(depsgraph) == DAG_EVAL_VIEWPORT) &&
@@ -2750,9 +2753,7 @@ void BKE_scene_update_sound(Depsgraph *depsgraph, Main *bmain)
 void BKE_scene_update_tag_audio_volume(Depsgraph * /*depsgraph*/, Scene *scene)
 {
   BLI_assert(DEG_is_evaluated(scene));
-  /* The volume is actually updated in BKE_scene_update_sound(), from either
-   * scene_graph_update_tagged() or from BKE_scene_graph_update_for_newframe(). */
-  scene->id.recalc |= ID_RECALC_AUDIO_VOLUME;
+  scene->runtime->audio.volume_update_needed = true;
 }
 
 /* TODO(sergey): This actually should become view_layer_graph or so.
