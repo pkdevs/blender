@@ -3650,6 +3650,11 @@ static wmOperatorStatus sequencer_change_effect_type_exec(bContext *C, wmOperato
     return OPERATOR_CANCELLED;
   }
 
+  if (strip->is_same_channel_transition() && !seq::strip_type_can_be_transition(new_type)) {
+    BKE_report(op->reports, RPT_ERROR, "Cannot change transition to non-transition type");
+    return OPERATOR_CANCELLED;
+  }
+
   /* Note: allow changing to compositor effect; it can have any number of inputs. */
   if (new_type != STRIP_TYPE_COMPOSITOR) {
     if (have_inputs != seq::effect_type_get_min_num_inputs(new_type)) {
