@@ -233,12 +233,13 @@ std::optional<BIFIconID> AbstractTreeElement::get_icon() const
 
 void *AbstractTreeElement::data() const
 {
-  return data_;
+  /* Do Nothing. */
+  return nullptr;
 }
 
-void AbstractTreeElement::set_data(void *data)
+void AbstractTreeElement::set_data(void * /*data*/)
 {
-  data_ = data;
+  /* Do nothing */
 }
 
 void AbstractTreeElement::print_path()
