@@ -1126,6 +1126,16 @@ class VIEW3D_HT_header(Header):
         # sub.enabled = shading.type != 'RENDERED'
         sub.popover(panel="VIEW3D_PT_shading", text="")
 
+        # Pause the rendered viewport, for render engines that support it.
+        if shading.type == 'RENDERED':
+            rv3d = view.region_3d
+            if rv3d.support_pause_render:
+                layout.prop(
+                    rv3d, "pause_render",
+                    icon='PLAY' if rv3d.pause_render else 'PAUSE',
+                    text="",
+                )
+
     @staticmethod
     def _mesh_paint_automasking_icon(paint):
         automask_enabled = (
@@ -1608,6 +1618,7 @@ class VIEW3D_MT_view_navigation(Menu):
 
         layout.operator("view3d.view_roll", text="Roll Left").type = 'LEFT'
         layout.operator("view3d.view_roll", text="Roll Right").type = 'RIGHT'
+        layout.operator("view3d.view_roll_set", text="Reset Roll")
 
         layout.separator()
 
