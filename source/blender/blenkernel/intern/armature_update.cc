@@ -45,8 +45,10 @@ struct tSplineIK_Tree {
   short chainlen;  /* number of bones in the chain */
   float totlength; /* total length of bones in the chain */
 
-  const float *points;  /* parametric positions for the joints along the curve */
-  Array<bPoseChannel *> chain; /* Chain of bones to affect using Spline IK (ordered from the tip). */
+  const float *points; /* parametric positions for the joints along the curve */
+
+  /* Chain of bones to affect using Spline IK (ordered from the tip). */
+  Array<bPoseChannel *> chain;
 
   bPoseChannel *root; /* bone that is the root node of the chain */
 
