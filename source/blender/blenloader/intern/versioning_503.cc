@@ -191,21 +191,6 @@ void blo_do_versions_503(FileData * /*fd*/, Library * /*lib*/, Main *bmain)
     FOREACH_NODETREE_END;
   }
 
-  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 503, 100)) {
-    /* Note: Setting version number high to avoid conflicts during review. It'll be adjusted before
-     * final merge. */
-    for (bScreen &screen : bmain->screens) {
-      for (ScrArea &area : screen.areabase) {
-        for (SpaceLink &space : area.spacedata) {
-          if (space.spacetype == SPACE_OUTLINER) {
-            SpaceOutliner *space_outliner = reinterpret_cast<SpaceOutliner *>(&space);
-            space_outliner->flag |= SO_EXPAND_ON_FOCUS;
-          }
-        }
-      }
-    }
-  }
-
   if (!MAIN_VERSION_FILE_ATLEAST(bmain, 503, 9)) {
     for (Brush &brush : bmain->brushes) {
       if (brush.curve_hardness == nullptr) {
@@ -311,6 +296,19 @@ void blo_do_versions_503(FileData * /*fd*/, Library * /*lib*/, Main *bmain)
     for (PointCloud &pointcloud : bmain->pointclouds) {
       validate_active_index_fn(AttributeOwner::from_id(&pointcloud.id),
                                pointcloud.attributes_active_index);
+    }
+  }
+
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 503, 14)) {
+    for (bScreen &screen : bmain->screens) {
+      for (ScrArea &area : screen.areabase) {
+        for (SpaceLink &space : area.spacedata) {
+          if (space.spacetype == SPACE_OUTLINER) {
+            SpaceOutliner *space_outliner = reinterpret_cast<SpaceOutliner *>(&space);
+            space_outliner->flag |= SO_EXPAND_ON_FOCUS;
+          }
+        }
+      }
     }
   }
   /**
