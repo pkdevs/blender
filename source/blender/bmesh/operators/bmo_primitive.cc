@@ -924,7 +924,7 @@ void bmo_create_quadsphere_exec(BMesh *bm, BMOperator *op)
     float x = co[0];
     float y = co[1];
     float z = co[2];
-    int p = 500;
+    int p = 50;
     float xc = std::sqrt(std::pow(x, p) + y * y + z * z) *
                std::tan(x * std::atan(1 / std::sqrt(std::pow(x, p) + y * y + z * z)));
     float yc = std::sqrt(x * x + std::pow(y, p) + z * z) *
