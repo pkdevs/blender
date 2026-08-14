@@ -448,10 +448,7 @@ ccl_device_forceinline FresnelCoeff microfacet_fresnel(KernelGlobals kg,
   }
   else {
     /* Transmissive dielectric. */
-    float F = fresnel_dielectric(cos_theta_i, bsdf->ior, r_cos_theta_t);
-
-    coeff.reflectance *= F;
-    coeff.transmittance *= (1.0f - F);
+    coeff *= fresnel_dielectric(cos_theta_i, bsdf->ior, r_cos_theta_t);
 
     if (bsdf->fresnel_type == MicrofacetFresnel::DIELECTRIC_TINT) {
       coeff *= ((ccl_private FresnelDielectricTint *)bsdf->fresnel)->tint;
@@ -563,10 +560,7 @@ ccl_device Spectrum bsdf_microfacet_estimate_albedo(KernelGlobals kg,
         s = lookup_table_read_3D(
             kg, rough, cos_NI, z, kernel_data.tables.ggx_gen_schlick_s, 16, 16, 16);
       }
-      // coeff *= fresnel->tint * mix(fresnel->f0, fresnel->f90, s);
-      coeff.reflectance *= fresnel->tint.reflectance * mix(fresnel->f0, fresnel->f90, s);
-      coeff.transmittance *= fresnel->tint.transmittance *
-                             (1.0f - mix(fresnel->f0, fresnel->f90, s));
+      coeff *= fresnel->tint * mix(fresnel->f0, fresnel->f90, s);
       return coeff.sum();
     }
   }
