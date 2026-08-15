@@ -58,9 +58,9 @@ struct SceneAudioRuntime {
   AUD_Handle sound_scrub_handle;
   Set<AUD_SequenceEntry> speaker_handles;
   bool volume_update_needed = false;
-  /* Incremented on original Scenes and compared with the generation cached by each evaluated
-   * Scene. */
+  /* Generation of the source audio animation on the original Scene. */
   uint64_t animation_data_generation = 1;
+  /* Generation currently stored in this evaluated Scene's audio cache. */
   uint64_t cached_animation_data_generation = 0;
 };
 

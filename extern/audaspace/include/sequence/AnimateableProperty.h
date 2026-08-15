@@ -102,7 +102,7 @@ public:
 	int getCount() const;
 
 	/**
-	 * Resets the property and marks it non-animated.
+	 * Clears animation data and marks the property non-animated.
 	 */
 	void reset();
 
