@@ -423,7 +423,7 @@ static bool sound_update_animation_flags_fn(Strip *strip, void *user_data)
     BKE_sound_mark_scene_audio_animation_stale(scene);
   }
 
-  if (strip->type == STRIP_TYPE_SCENE) {
+  if (strip->type == STRIP_TYPE_SCENE && strip->scene != nullptr) {
     /* TODO(sergey): For now we do manual recursion into the scene strips,
      * but perhaps it should be covered by recursive_apply?
      */
@@ -466,7 +466,8 @@ static bool sound_update_animation_flags(Scene *scene)
 
 void BKE_sound_mark_scene_audio_animation_stale(const Scene *scene)
 {
-  sound_original_scene(scene)->runtime->audio.animation_data_stale = true;
+  Scene *scene_orig = sound_original_scene(scene);
+  scene_orig->runtime->audio.animation_data_generation++;
 }
 
 bool BKE_sound_update_animation_flags(Main *bmain, Scene *scene)
@@ -521,12 +522,8 @@ static bool sound_animation_can_use_fast_bake(const Scene *scene, const Depsgrap
   return can_use_fast_bake;
 }
 
-static bool sound_scene_has_audio_animation(const Scene *scene, Set<const Scene *> &visited_scenes)
+static bool sound_scene_has_audio_animation(const Scene *scene)
 {
-  if (!visited_scenes.add(scene)) {
-    return false;
-  }
-
   if (scene->audio.flag & AUDIO_VOLUME_ANIMATED) {
     return true;
   }
@@ -550,41 +547,50 @@ static bool sound_scene_has_audio_animation(const Scene *scene, Set<const Scene 
       return false;
     }
 
-    if (strip->type == STRIP_TYPE_SCENE && strip->scene != nullptr &&
-        sound_scene_has_audio_animation(strip->scene, visited_scenes))
-    {
-      has_audio_animation = true;
-      return false;
-    }
     return true;
   });
   return has_audio_animation;
 }
 
-static bool sound_scene_has_audio_animation(const Scene *scene)
+static void sound_collect_scene_audio_animation_updates(Scene *scene,
+                                                        Depsgraph *depsgraph,
+                                                        const bool force,
+                                                        Set<const Scene *> &visited_scenes,
+                                                        Vector<Scene *> &r_scenes)
 {
-  Set<const Scene *> visited_scenes;
-  return sound_scene_has_audio_animation(scene, visited_scenes);
-}
-
-static void sound_update_scene_audio_animation_at_current_frame(Depsgraph *depsgraph)
-{
-  Scene *scene_eval = DEG_get_evaluated_scene(depsgraph);
-  if (scene_eval->ed != nullptr) {
-    seq::eval_strips(depsgraph, scene_eval, &scene_eval->ed->seqbase);
+  if (!visited_scenes.add(scene)) {
+    return;
   }
-  BKE_sound_set_scene_volume(scene_eval, scene_eval->audio.volume);
+
+  if (scene->ed != nullptr) {
+    seq::foreach_strip(&scene->ed->seqbase, [&](Strip *strip) {
+      if (strip->type == STRIP_TYPE_SCENE && strip->scene != nullptr) {
+        sound_collect_scene_audio_animation_updates(
+            sound_original_scene(strip->scene), depsgraph, force, visited_scenes, r_scenes);
+      }
+      return true;
+    });
+  }
+
+  Scene *scene_eval = DEG_get_evaluated(depsgraph, scene);
+  if (force || !DEG_is_evaluated(scene_eval) ||
+      scene_eval->runtime->audio.cached_animation_data_generation !=
+          scene->runtime->audio.animation_data_generation)
+  {
+    r_scenes.append(scene);
+  }
 }
 
 static void sound_update_scene_audio_animation_at_frame(Depsgraph *depsgraph,
                                                         Scene *scene_eval,
-                                                        const int frame)
+                                                        const int frame,
+                                                        const eAnimData_Recalc recalc)
 {
   scene_eval->r.cfra = frame;
   const AnimationEvalContext anim_eval_context = BKE_animsys_eval_context_construct(
       depsgraph, BKE_scene_frame_get(scene_eval));
   BKE_animsys_evaluate_animdata(
-      &scene_eval->id, scene_eval->adt, &anim_eval_context, ADT_RECALC_ALL, false);
+      &scene_eval->id, scene_eval->adt, &anim_eval_context, recalc, false);
 
   if (scene_eval->ed != nullptr) {
     seq::eval_strips(depsgraph, scene_eval, &scene_eval->ed->seqbase);
@@ -592,222 +598,133 @@ static void sound_update_scene_audio_animation_at_frame(Depsgraph *depsgraph,
   BKE_sound_set_scene_volume(scene_eval, scene_eval->audio.volume);
 }
 
-static void sound_update_nested_scene_audio_animation_at_frame(Depsgraph *depsgraph,
-                                                               Scene *scene_eval,
-                                                               const int frame,
-                                                               Set<Scene *> &visited_scenes)
+static void sound_bake_animation_impl(Scene *scene, Depsgraph *depsgraph)
 {
-  if (!visited_scenes.add(scene_eval) || scene_eval->ed == nullptr) {
+  const int oldfra = scene->r.cfra;
+  const bool is_root_scene = scene == sound_original_scene(DEG_get_input_scene(depsgraph));
+
+  Scene *scene_eval = DEG_get_evaluated(depsgraph, scene);
+  if (!DEG_is_evaluated(scene_eval)) {
     return;
   }
-
-  seq::foreach_strip(&scene_eval->ed->seqbase, [&](Strip *strip) {
-    if (strip->type != STRIP_TYPE_SCENE || strip->scene == nullptr) {
-      return true;
-    }
-
-    sound_update_scene_audio_animation_at_frame(depsgraph, strip->scene, frame);
-    sound_update_nested_scene_audio_animation_at_frame(
-        depsgraph, strip->scene, frame, visited_scenes);
-    return true;
-  });
-}
-
-static void sound_reset_scene_audio_animation_recursive(Scene *scene_eval,
-                                                        Set<Scene *> &visited_scenes)
-{
-  if (!visited_scenes.add(scene_eval)) {
-    return;
-  }
-
+  const int oldfra_eval = scene_eval->r.cfra;
   sound_reset_scene_audio_animation(scene_eval);
-  if (scene_eval->ed == nullptr) {
+
+  if (sound_animation_can_use_fast_bake(scene, depsgraph)) {
+    const int frame_start = (scene->r.sfra > 0) ? (scene->r.sfra - 1) : 0;
+    const int frame_end = scene->r.efra + 1;
+    for (int cfra = frame_start; cfra <= frame_end; cfra++) {
+      sound_update_scene_audio_animation_at_frame(depsgraph, scene_eval, cfra, ADT_RECALC_ANIM);
+    }
+    if (is_root_scene) {
+      BKE_scene_graph_update_for_newframe(depsgraph);
+    }
+    else {
+      DEG_evaluate_on_framechange(depsgraph, BKE_scene_frame_get(DEG_get_input_scene(depsgraph)));
+    }
+  }
+  else {
+    for (int cfra = (scene->r.sfra > 0) ? (scene->r.sfra - 1) : 0; cfra <= scene->r.efra + 1;
+         cfra++)
+    {
+      scene->r.cfra = cfra;
+      /* Make sure the camera is updated, since it will affect stereo/surround output. */
+      BKE_scene_camera_switch_update(scene);
+
+      if (is_root_scene) {
+        BKE_scene_graph_update_for_newframe(depsgraph);
+      }
+      else {
+        DEG_evaluate_on_framechange(depsgraph, cfra);
+        scene_eval = DEG_get_evaluated(depsgraph, scene);
+        if (DEG_is_evaluated(scene_eval)) {
+          sound_update_scene_audio_animation_at_frame(depsgraph, scene_eval, cfra, ADT_RECALC_ALL);
+        }
+      }
+    }
+
+    scene->r.cfra = oldfra;
+    if (is_root_scene) {
+      BKE_scene_graph_update_for_newframe(depsgraph);
+    }
+    else {
+      DEG_evaluate_on_framechange(depsgraph, BKE_scene_frame_get(DEG_get_input_scene(depsgraph)));
+    }
+  }
+
+  scene_eval = DEG_get_evaluated(depsgraph, scene);
+  if (DEG_is_evaluated(scene_eval)) {
+    scene_eval->r.cfra = oldfra_eval;
+    scene_eval->runtime->audio.cached_animation_data_generation =
+        scene->runtime->audio.animation_data_generation;
+  }
+}
+
+static void sound_bake_scene_audio_animation(Main *bmain,
+                                             Scene *scene,
+                                             Depsgraph *depsgraph,
+                                             const bool force)
+{
+  Set<const Scene *> visited_scenes;
+  Vector<Scene *> scenes;
+  sound_collect_scene_audio_animation_updates(scene, depsgraph, force, visited_scenes, scenes);
+  if (scenes.is_empty()) {
     return;
   }
 
-  seq::foreach_strip(&scene_eval->ed->seqbase, [&](Strip *strip) {
-    if (strip->type == STRIP_TYPE_SCENE && strip->scene != nullptr) {
-      sound_reset_scene_audio_animation_recursive(strip->scene, visited_scenes);
+  BKE_sound_update_animation_flags(bmain, scene);
+  DEG_id_tag_update(&scene->id, ID_RECALC_SEQUENCER_STRIPS);
+  for (Scene *scene_update : scenes) {
+    if (scene_update != scene) {
+      DEG_id_tag_update(&scene_update->id, ID_RECALC_SEQUENCER_STRIPS | ID_RECALC_ANIMATION);
     }
-    return true;
-  });
-}
+  }
+  BKE_scene_graph_evaluated_ensure(depsgraph, bmain);
 
-static void sound_bake_animation_fast(Scene *scene, Scene *scene_eval, Depsgraph *depsgraph)
-{
-  const int frame_start = (scene->r.sfra > 0) ? (scene->r.sfra - 1) : 0;
-  const int frame_end = scene->r.efra + 1;
-  for (int cfra = frame_start; cfra <= frame_end; cfra++) {
-    scene_eval->r.cfra = cfra;
-    const AnimationEvalContext anim_eval_context = BKE_animsys_eval_context_construct(
-        depsgraph, BKE_scene_frame_get(scene_eval));
-    BKE_animsys_evaluate_animdata(
-        &scene_eval->id, scene_eval->adt, &anim_eval_context, ADT_RECALC_ANIM, false);
+  for (Scene *scene_update : scenes) {
+    Scene *scene_eval = DEG_get_evaluated(depsgraph, scene_update);
+    if (!DEG_is_evaluated(scene_eval)) {
+      continue;
+    }
 
+    bool can_update_audio = true;
+    if (scene_eval->ed != nullptr) {
+      seq::foreach_strip(&scene_eval->ed->seqbase, [&](Strip *strip) {
+        can_update_audio = strip->type != STRIP_TYPE_SCENE || strip->scene == nullptr ||
+                           DEG_is_evaluated(strip->scene);
+        return can_update_audio;
+      });
+    }
+    if (!can_update_audio) {
+      continue;
+    }
+
+    const bool is_animated = sound_scene_has_audio_animation(scene_update);
+    if (is_animated) {
+      sound_bake_animation_impl(scene_update, depsgraph);
+      continue;
+    }
+
+    sound_reset_scene_audio_animation(scene_eval);
     if (scene_eval->ed != nullptr) {
       seq::eval_strips(depsgraph, scene_eval, &scene_eval->ed->seqbase);
     }
     BKE_sound_set_scene_volume(scene_eval, scene_eval->audio.volume);
+    scene_eval->runtime->audio.cached_animation_data_generation =
+        scene_update->runtime->audio.animation_data_generation;
   }
-}
-
-static void sound_bake_animation_impl(Main *bmain,
-                                      Scene *scene,
-                                      Scene *scene_eval,
-                                      Depsgraph *depsgraph)
-{
-  const int oldfra = scene->r.cfra;
-  const int oldfra_eval = scene_eval->r.cfra;
-  const bool is_root_scene = scene_eval == DEG_get_evaluated_scene(depsgraph);
-
-  const int recalc = ID_RECALC_SEQUENCER_STRIPS | (is_root_scene ? 0 : ID_RECALC_ANIMATION);
-  DEG_id_tag_update(&scene->id, recalc);
-
-  /* The evaluated handles need to exist before their cached animation is reset. */
-  BKE_scene_graph_evaluated_ensure(depsgraph, bmain);
-  Set<Scene *> visited_scenes;
-  sound_reset_scene_audio_animation_recursive(scene_eval, visited_scenes);
-
-  if (sound_animation_can_use_fast_bake(scene, depsgraph)) {
-    sound_bake_animation_fast(scene, scene_eval, depsgraph);
-    if (is_root_scene) {
-      BKE_scene_graph_update_for_newframe(depsgraph);
-    }
-    else {
-      scene_eval->r.cfra = oldfra_eval;
-      DEG_evaluate_on_framechange(depsgraph, BKE_scene_frame_get(DEG_get_input_scene(depsgraph)));
-    }
-    return;
-  }
-
-  for (int cfra = (scene->r.sfra > 0) ? (scene->r.sfra - 1) : 0; cfra <= scene->r.efra + 1; cfra++)
-  {
-    scene->r.cfra = cfra;
-    /* Make sure the camera is updated, since it will affect stereo/surround output. */
-    BKE_scene_camera_switch_update(scene);
-
-    if (is_root_scene) {
-      BKE_scene_graph_update_for_newframe(depsgraph);
-      Set<Scene *> nested_scenes;
-      sound_update_nested_scene_audio_animation_at_frame(
-          depsgraph, scene_eval, cfra, nested_scenes);
-    }
-    else {
-      DEG_evaluate_on_framechange(depsgraph, cfra);
-      sound_update_scene_audio_animation_at_frame(depsgraph, scene_eval, cfra);
-      Set<Scene *> nested_scenes;
-      sound_update_nested_scene_audio_animation_at_frame(
-          depsgraph, scene_eval, cfra, nested_scenes);
-    }
-  }
-
-  scene->r.cfra = oldfra;
-  scene_eval->r.cfra = oldfra_eval;
-  if (is_root_scene) {
-    BKE_scene_graph_update_for_newframe(depsgraph);
-  }
-  else {
-    DEG_evaluate_on_framechange(depsgraph, BKE_scene_frame_get(DEG_get_input_scene(depsgraph)));
-  }
-}
-
-static bool sound_bake_stale_nested_scene_audio_animation(Main *bmain,
-                                                          Scene *scene,
-                                                          Depsgraph *depsgraph,
-                                                          Set<const Scene *> &visited_scenes,
-                                                          const bool animation_flags_current)
-{
-  if (!visited_scenes.add(scene) || scene->ed == nullptr) {
-    return true;
-  }
-
-  bool success = true;
-  seq::foreach_strip(&scene->ed->seqbase, [&](Strip *strip) {
-    if (strip->type != STRIP_TYPE_SCENE || strip->scene == nullptr) {
-      return true;
-    }
-
-    Scene *child = sound_original_scene(strip->scene);
-    const bool child_flags_current = animation_flags_current;
-    if (!sound_bake_stale_nested_scene_audio_animation(
-            bmain, child, depsgraph, visited_scenes, child_flags_current))
-    {
-      success = false;
-    }
-
-    if (!child->runtime->audio.animation_data_stale) {
-      return true;
-    }
-
-    if (!child_flags_current) {
-      BKE_sound_update_animation_flags(bmain, child);
-    }
-
-    Scene *child_eval = DEG_get_evaluated(depsgraph, child);
-    if (child_eval == nullptr) {
-      BKE_scene_graph_evaluated_ensure(depsgraph, bmain);
-      child_eval = DEG_get_evaluated(depsgraph, child);
-    }
-    if (child_eval == nullptr) {
-      success = false;
-      return true;
-    }
-
-    if (sound_scene_has_audio_animation(child)) {
-      sound_bake_animation_impl(bmain, child, child_eval, depsgraph);
-    }
-    else {
-      Set<Scene *> reset_scenes;
-      sound_reset_scene_audio_animation_recursive(child_eval, reset_scenes);
-      sound_update_scene_audio_animation_at_frame(depsgraph, child_eval, child_eval->r.cfra);
-    }
-    /* A child evaluated in the parent's graph has a different audio cache from its original Scene.
-     * Keep the original stale so independent playback can rebuild its own cache. */
-    if (child_eval == DEG_get_evaluated_scene(depsgraph)) {
-      child->runtime->audio.animation_data_stale = false;
-    }
-    return true;
-  });
-  return success;
 }
 
 void BKE_sound_bake_animation(Main *bmain, Scene *scene, Depsgraph *depsgraph)
 {
   scene = sound_original_scene(scene);
-  BKE_sound_update_animation_flags(bmain, scene);
-  sound_bake_animation_impl(bmain, scene, DEG_get_evaluated_scene(depsgraph), depsgraph);
-  scene->runtime->audio.animation_data_stale = false;
+  sound_bake_scene_audio_animation(bmain, scene, depsgraph, true);
 }
 
 void BKE_sound_ensure_scene_audio_animation(Main *bmain, Scene *scene, Depsgraph *depsgraph)
 {
   scene = sound_original_scene(scene);
-  if (!scene->runtime->audio.animation_data_stale) {
-    Set<const Scene *> visited_scenes;
-    sound_bake_stale_nested_scene_audio_animation(bmain, scene, depsgraph, visited_scenes, false);
-    return;
-  }
-
-  BKE_sound_update_animation_flags(bmain, scene);
-  Set<const Scene *> visited_scenes;
-  sound_bake_stale_nested_scene_audio_animation(bmain, scene, depsgraph, visited_scenes, true);
-  if (sound_scene_has_audio_animation(scene)) {
-    sound_bake_animation_impl(bmain, scene, DEG_get_evaluated_scene(depsgraph), depsgraph);
-    scene->runtime->audio.animation_data_stale = false;
-    return;
-  }
-
-  const bool needs_evaluated_animation_sync = scene->ed != nullptr || scene->adt != nullptr;
-  if (needs_evaluated_animation_sync) {
-    DEG_id_tag_update(&scene->id, ID_RECALC_SEQUENCER_STRIPS);
-  }
-  if (needs_evaluated_animation_sync || !DEG_is_fully_evaluated(depsgraph)) {
-    BKE_scene_graph_evaluated_ensure(depsgraph, bmain);
-  }
-
-  sound_reset_scene_audio_animation(DEG_get_evaluated_scene(depsgraph));
-  sound_update_scene_audio_animation_at_current_frame(depsgraph);
-  scene->runtime->audio.animation_data_stale = false;
+  sound_bake_scene_audio_animation(bmain, scene, depsgraph, false);
 }
 
 static void sound_free_audio(bSound *sound)
@@ -1260,7 +1177,7 @@ void BKE_sound_create_scene(Scene *scene)
   audio.playback_handle = nullptr;
   audio.sound_scrub_handle = nullptr;
   audio.speaker_handles.clear();
-  BKE_sound_mark_scene_audio_animation_stale(scene);
+  audio.cached_animation_data_generation = 0;
 }
 
 void BKE_sound_destroy_scene(Scene *scene)
@@ -1279,7 +1196,7 @@ void BKE_sound_destroy_scene(Scene *scene)
   }
   audio.speaker_handles.clear();
   audio.sound_scene.reset();
-  BKE_sound_mark_scene_audio_animation_stale(scene);
+  audio.cached_animation_data_generation = 0;
 }
 
 void BKE_sound_lock()

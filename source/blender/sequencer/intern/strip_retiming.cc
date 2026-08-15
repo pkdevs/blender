@@ -190,6 +190,13 @@ bool retiming_strip_has_audio(const Strip *strip)
   return false;
 }
 
+static void retiming_audio_animation_changed(const Scene *scene, const Strip *strip)
+{
+  if (retiming_strip_has_audio(strip)) {
+    BKE_sound_mark_scene_audio_animation_stale(scene);
+  }
+}
+
 static Bounds<float> strip_retiming_clamp_bounds_get(const Scene *scene,
                                                      const Strip *strip,
                                                      SeqRetimingKey *key)
@@ -341,9 +348,7 @@ SeqRetimingKey *retiming_add_freeze_frame(const Scene *scene,
   freeze_keys.second->flag |= SEQ_FREEZE_FRAME_OUT;
   freeze_keys.first->retiming_factor = orig_retiming_factor;
   freeze_keys.second->retiming_factor = orig_retiming_factor;
-  if (retiming_strip_has_audio(strip)) {
-    BKE_sound_mark_scene_audio_animation_stale(scene);
-  }
+  retiming_audio_animation_changed(scene, strip);
   return freeze_keys.second;
 }
 
@@ -422,8 +427,8 @@ void retiming_data_clear(const Scene *scene, Strip *strip)
 {
   const bool had_keys = retiming_has_keys(strip);
   retiming_data_clear(strip);
-  if (had_keys && retiming_strip_has_audio(strip)) {
-    BKE_sound_mark_scene_audio_animation_stale(scene);
+  if (had_keys) {
+    retiming_audio_animation_changed(scene, strip);
   }
 }
 
@@ -528,8 +533,8 @@ SeqRetimingKey *retiming_key_add_new_for_strip(const Scene *scene,
 
   ensure_left_and_right_keys(scene, strip);
   SeqRetimingKey *new_key = retiming_add_key(scene, strip, frame);
-  if (new_key != nullptr && retiming_strip_has_audio(strip)) {
-    BKE_sound_mark_scene_audio_animation_stale(scene);
+  if (new_key != nullptr) {
+    retiming_audio_animation_changed(scene, strip);
   }
   return new_key;
 }
@@ -596,8 +601,8 @@ void retiming_remove_multiple_keys(const Scene *scene,
   strip->retiming_keys = new_keys;
   strip->retiming_keys_num = new_keys_count;
 
-  if (has_keys_to_remove && retiming_strip_has_audio(strip)) {
-    BKE_sound_mark_scene_audio_animation_stale(scene);
+  if (has_keys_to_remove) {
+    retiming_audio_animation_changed(scene, strip);
   }
 }
 
@@ -658,8 +663,8 @@ void retiming_remove_key(const Scene *scene, Strip *strip, SeqRetimingKey *key)
     strip_retiming_remove_key_ex(strip, key);
   }
 
-  if (can_remove && retiming_strip_has_audio(strip)) {
-    BKE_sound_mark_scene_audio_animation_stale(scene);
+  if (can_remove) {
+    retiming_audio_animation_changed(scene, strip);
   }
 }
 
@@ -797,9 +802,7 @@ void retiming_transition_key_frame_set(const Scene *scene,
   key_start->retiming_factor += offset * prev_segment_step;
   key_end->retiming_factor -= offset * next_segment_step;
 
-  if (retiming_strip_has_audio(strip)) {
-    BKE_sound_mark_scene_audio_animation_stale(scene);
-  }
+  retiming_audio_animation_changed(scene, strip);
 }
 
 float strip_retiming_evaluate(const Strip *strip, const float frame_index)
@@ -865,9 +868,7 @@ SeqRetimingKey *retiming_add_transition(const Scene *scene,
   transition_in->original_retiming_factor = orig_retiming_factor;
 
   strip_retiming_remove_key_ex(strip, strip->retiming_keys + orig_key_index + 1);
-  if (retiming_strip_has_audio(strip)) {
-    BKE_sound_mark_scene_audio_animation_stale(scene);
-  }
+  retiming_audio_animation_changed(scene, strip);
   return strip->retiming_keys + orig_key_index + 1;
 }
 
@@ -1031,9 +1032,7 @@ void retiming_key_frame_set(const Scene *scene, Strip *strip, SeqRetimingKey *ke
   strip_time_update_effects_strip_range(scene, effects);
   time_update_meta_strip_range(scene, lookup_meta_by_strip(scene->ed, strip));
 
-  if (retiming_strip_has_audio(strip)) {
-    BKE_sound_mark_scene_audio_animation_stale(scene);
-  }
+  retiming_audio_animation_changed(scene, strip);
 }
 
 /** \} */

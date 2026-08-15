@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include <cstdint>
 #include <memory>
 
 #include "BKE_compositor.hh"
@@ -57,8 +58,10 @@ struct SceneAudioRuntime {
   AUD_Handle sound_scrub_handle;
   Set<AUD_SequenceEntry> speaker_handles;
   bool volume_update_needed = false;
-  /* Owned by the original Scene runtime; evaluated runtimes use it only through that owner. */
-  bool animation_data_stale = true;
+  /* Incremented on original Scenes and compared with the generation cached by each evaluated
+   * Scene. */
+  uint64_t animation_data_generation = 1;
+  uint64_t cached_animation_data_generation = 0;
 };
 
 class SceneRuntime : NonCopyable, NonMovable {
