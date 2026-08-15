@@ -381,7 +381,7 @@ class GRAPH_MT_channel(Menu):
         layout.operator("graph.euler_filter", text="Discontinuity (Euler) Filter")
 
         layout.separator()
-        layout.operator("anim.channels_view_selected")
+        layout.operator("graph.view_selected", text ="Frame Selected Channels")
 
 
 class GRAPH_MT_key_density(Menu):
