@@ -43,6 +43,16 @@ inline bool collaborative_once_flag_is_done(const CollaborativeOnceFlag &flag)
   return is_done;
 }
 
+/**
+ * Set the flag back to its initial state. This should never be done while the flag is in use by
+ * #collaborative_call_once.
+ */
+inline void collaborative_once_flag_reset(CollaborativeOnceFlag &flag)
+{
+  std::destroy_at(&flag);
+  new (&flag) CollaborativeOnceFlag();
+}
+
 #else
 
 struct CollaborativeOnceFlag : NonCopyable, NonMovable {
@@ -68,6 +78,11 @@ inline void collaborative_call_once(CollaborativeOnceFlag &flag, Fn &&fn, Args &
 inline bool collaborative_once_flag_is_done(const CollaborativeOnceFlag &flag)
 {
   return flag.has_run.load(std::memory_order_acquire);
+}
+
+inline void collaborative_once_flag_reset(CollaborativeOnceFlag &flag)
+{
+  flag.has_run.store(false, std::memory_order_release);
 }
 
 #endif

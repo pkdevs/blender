@@ -89,7 +89,8 @@ class CacheMutex {
   }
 
   /**
-   * Reset the cache. The next time #ensure is called, it will recompute that code.
+   * Reset the cache. The next time #ensure is called, it will recompute the cache.
+   * Must not be called while #ensure is running.
    */
   void tag_dirty();
 

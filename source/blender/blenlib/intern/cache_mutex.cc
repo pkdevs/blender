@@ -17,8 +17,7 @@ void CacheMutex::ensure_impl(const FunctionRef<void()> compute_cache)
 
 void CacheMutex::tag_dirty()
 {
-  std::destroy_at(&once_flag_);
-  new (&once_flag_) threading::CollaborativeOnceFlag();
+  threading::collaborative_once_flag_reset(once_flag_);
 }
 
 }  // namespace blender
