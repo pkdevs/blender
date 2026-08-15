@@ -2826,15 +2826,15 @@ static void calc_local_from_screen(const ViewContext &vc,
 }
 
 static void calc_brush_local_mat(const float rotation,
+                                 const float special_rotation,
                                  const Object &ob,
                                  const float3 &tip_normal,
                                  float local_mat[4][4],
                                  float local_mat_inv[4][4])
 {
   const StrokeCache *cache = ob.runtime->sculpt_session->cache;
-
   calc_brush_local_mat(rotation,
-                       cache->special_rotation,
+                       special_rotation,
                        *cache->vc,
                        ob,
                        tip_normal,
@@ -2951,6 +2951,7 @@ static void update_brush_local_mat(const Sculpt &sd, Object &ob)
     const Brush *brush = BKE_paint_brush_for_read(&sd.paint);
     const MTex *mask_tex = BKE_brush_mask_texture_get(brush, OB_MODE_SCULPT);
     calc_brush_local_mat(mask_tex->rot,
+                         cache->special_rotation,
                          ob,
                          eBrushFalloffShape(brush->falloff_shape) == PAINT_FALLOFF_SHAPE_SPHERE ?
                              cache->sculpt_normal_symm :
@@ -3399,9 +3400,13 @@ static brushes::CursorSampleResult calc_brush_node_mask(const Depsgraph &depsgra
 
     tip_normal = tilt_apply_to_normal(tip_normal, *ss.cache, brush.tilt_strength_factor);
 
+    const float special_rotation = brush_needs_rake_rotation(brush) ?
+                                       ss.cache->special_rotation :
+                                       BKE_brush_mask_texture_get(&brush, OB_MODE_SCULPT)->rot;
     float4x4 brush_local_mat;
     float4x4 brush_local_mat_inv;
-    calc_brush_local_mat(0, ob, tip_normal, brush_local_mat.ptr(), brush_local_mat_inv.ptr());
+    calc_brush_local_mat(
+        0, special_rotation, ob, tip_normal, brush_local_mat.ptr(), brush_local_mat_inv.ptr());
 
     std::optional<float3> plane_normal = brush.falloff_shape == PAINT_FALLOFF_SHAPE_SPHERE ?
                                              std::optional{tip_normal} :
@@ -6734,8 +6739,12 @@ void cube_tip_init(const Sculpt & /*sd*/, const Object &ob, const Brush &brush, 
   float tmat[4][4];
   float unused[4][4];
 
+  const float special_rotation = brush_needs_rake_rotation(brush) ?
+                                     ss.cache->special_rotation :
+                                     BKE_brush_mask_texture_get(&brush, OB_MODE_SCULPT)->rot;
   zero_m4(mat);
   calc_brush_local_mat(0.0,
+                       special_rotation,
                        ob,
                        eBrushFalloffShape(brush.falloff_shape) == PAINT_FALLOFF_SHAPE_SPHERE ?
                            ss.cache->sculpt_normal_symm :
