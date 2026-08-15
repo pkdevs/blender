@@ -194,8 +194,9 @@ static wmOperatorStatus sound_update_animation_flags_exec(bContext *C, wmOperato
 {
   Scene *scene = CTX_data_scene(C);
 
-  BKE_sound_update_animation_flags(CTX_data_main(C), scene);
-  DEG_id_tag_update(&scene->id, ID_RECALC_SEQUENCER_STRIPS);
+  if (BKE_sound_update_animation_flags(CTX_data_main(C), scene)) {
+    DEG_id_tag_update(&scene->id, ID_RECALC_SEQUENCER_STRIPS);
+  }
   return OPERATOR_FINISHED;
 }
 
