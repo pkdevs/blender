@@ -641,6 +641,24 @@ static void view2d_edge_pan_loc_compensate(TransInfo *t, float r_offset[2])
   }
 }
 
+static void get_strip_offsets(TransInfo *t,
+                              TransData *td,
+                              const float edge_pan_offset[2],
+                              float r_offset[2],
+                              float r_offset_clamped[2])
+{
+  /* Apply extra offset caused by edge panning. */
+  float loc[2];
+  add_v2_v2v2(loc, td->loc, edge_pan_offset);
+
+  sub_v2_v2v2(r_offset, td->loc, td->iloc);
+  copy_v2_v2(r_offset_clamped, r_offset);
+
+  if (t->state != TRANS_CANCEL) {
+    transform_convert_sequencer_clamp(t, r_offset_clamped);
+  }
+}
+
 /* Flushes the translation and channel updates. Possible updates to the handle locations are
  * returned and handled outside this function. This is to avoid unexpected handle clamping when
  * both handles are selected and the `new_frame` is right of the old one. See #126191. */
@@ -736,11 +754,7 @@ static void flushTransSeq(TransInfo *t)
 
     auto flush_transforms{[&](TransData *td) {
       float offset[2], offset_clamped[2];
-      /* Apply extra offset caused by edge panning. */
-      add_v2_v2(td->loc, edge_pan_offset);
-
-      sub_v2_v2v2(offset, td->loc, td->iloc);
-      copy_v2_v2(offset_clamped, offset);
+      get_strip_offsets(t, td, edge_pan_offset, offset, offset_clamped);
 
       const int delta = flush_strip_transforms(
           scene, td, offset, offset_clamped, left_new, right_new);
