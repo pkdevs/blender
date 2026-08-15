@@ -54,12 +54,6 @@
  *   }
  * };
  * \endcode
- *
- * Possible future improvements:
- * - Avoid task isolation when we know that the cache computation does not use threading.
- * - Try to use a smaller mutex. The mutex does not have to be fair for this use case.
- * - Try to join the cache computation instead of blocking if another thread is computing the cache
- *   already.
  */
 
 #include "BLI_collaborative_once_call.hh"
