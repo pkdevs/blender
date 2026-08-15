@@ -12,7 +12,6 @@
 #include "BLI_enumerable_thread_specific.hh"
 #include "BLI_map.hh"
 #include "BLI_math_geom_c.hh"
-#include "BLI_math_vector.hh"
 #include "BLI_math_vector_types.hh"
 #include "BLI_utildefines.hh"
 #include "BLI_vector.hh"
@@ -1275,7 +1274,6 @@ static void interpolate_grids_for_flat_layout(const SubdivCCG &subdiv_ccg,
       }
     }
     else {
-      /* TODO: Much more annoying calculation... */
     }
   }
 }
@@ -1297,7 +1295,6 @@ BLI_NOINLINE static void fill_generic_attribute_grids(const Object &object,
                                                       const StringRef name,
                                                       const MutableSpan<gpu::VertBufPtr> vbos)
 {
-  printf("%s\n", __func__);
   const bke::pbvh::Tree &pbvh = *bke::object::pbvh_get(object);
   const Span<bke::pbvh::GridsNode> nodes = pbvh.nodes<bke::pbvh::GridsNode>();
   const SubdivCCG &subdiv_ccg = *object.runtime->sculpt_session->subdiv_ccg;
