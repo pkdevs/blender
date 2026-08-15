@@ -12,6 +12,7 @@
 #include "BLI_enumerable_thread_specific.hh"
 #include "BLI_map.hh"
 #include "BLI_math_geom_c.hh"
+#include "BLI_math_vector.hh"
 #include "BLI_math_vector_types.hh"
 #include "BLI_utildefines.hh"
 #include "BLI_vector.hh"
@@ -1199,31 +1200,88 @@ BLI_NOINLINE static void fill_uvs_grids(const Object &object,
       },
       exec_mode::grain_size(1));
 }
-void calc_node_generic_attribute_for_flat_layout(
-    const Object &object,
-    const SubdivCCG &subdiv_ccg,
-    const bke::GAttributeReader &attr,
-    const bke::pbvh::GridsNode &node,
-    gpu::VertBuf &vbo)
-{
-  bke::attribute_math::to_static_type(attr.varray.type(), [&]<typename T>() {
-    if constexpr (!std::is_void_v<typename AttributeConverter<T>::VBOType>) {
-      using Converter = AttributeConverter<T>;
-      using VBOType = typename Converter::VBOType;
 
-      VBOType *data = vbo.data<VBOType>().data();
+static float4 quad_weights_from_uv(const float u, const float v)
+{
+  return {(1.0f - u) * (1.0f - v), u * (1.0f - v), u * v, (1.0f - u) * v};
+}
+
+static float4 quad_weights_from_grid(const int corner, const int x, const int y, const float grid_size_1_inv)
+{
+  const float grid_u = x * grid_size_1_inv;
+  const float grid_v = y * grid_size_1_inv;
+  float u;
+  float v;
+  bke::subdiv::rotate_grid_to_quad(corner, grid_u, grid_v, &u, &v);
+  return quad_weights_from_uv(u, v);
+}
+
+template<typename T>
+static void interpolate_grids_for_flat_layout(const SubdivCCG& subdiv_ccg, Span<int> grids, gpu::VertBuf& vbo, Span<T> src)
+{
+  using Converter = AttributeConverter<T>;
+  using VBOType = typename Converter::VBOType;
+
+  const CCGKey key = BKE_subdiv_ccg_key_top_level(subdiv_ccg);
+  const int grid_size_1 = key.grid_size - 1;
+  const float grid_size_1_inv = 1.0f / (key.grid_size - 1);
+
+  VBOType *data = vbo.data<VBOType>().data();
+  for (const int i : grids.index_range()) {
+    const int grid = grids[i];
+    const int face_index = subdiv_ccg.grid_to_face_map[grid];
+    const IndexRange face = subdiv_ccg.faces[face_index];
+    const int corner = grid - face.start();
+    if (face.size() == 4) {
+      for (int y = 0; y < grid_size_1; y++) {
+        for (int x = 0; x < grid_size_1; x++) {
+          *data = bke::attribute_math::mix4(
+              quad_weights_from_grid(corner, x, y, grid_size_1_inv),
+              src[face[0]],
+              src[face[1]],
+              src[face[2]],
+              src[face[3]]);
+          data++;
+          *data = bke::attribute_math::mix4(
+              quad_weights_from_grid(corner, x + 1, y, grid_size_1_inv),
+              src[face[0]],
+              src[face[1]],
+              src[face[2]],
+              src[face[3]]);
+          data++;
+          *data = bke::attribute_math::mix4(
+              quad_weights_from_grid(corner, x + 1 , y + 1, grid_size_1_inv),
+              src[face[0]],
+              src[face[1]],
+              src[face[2]],
+              src[face[3]]);
+          data++;
+          *data = bke::attribute_math::mix4(
+              quad_weights_from_grid(corner, x, y + 1, grid_size_1_inv),
+              src[face[0]],
+              src[face[1]],
+              src[face[2]],
+              src[face[3]]);
+          data++;
+        }
+      }
     }
-  });
+    else {
+      /* TODO: Much more annoying calculation... */
+    }
+  }
 }
-void calc_node_generic_attribute_for_standard_layout(
-    const Object &object,
+
+/*
+static void calc_node_generic_attribute_for_standard_layout(
     const SubdivCCG &subdiv_ccg,
     const bke::GAttributeReader &attr,
-    const bke::pbvh::GridsNode &node,
+    const Span<int> grids,
     gpu::VertBuf &vbo)
 {
 
 }
+*/
 BLI_NOINLINE static void fill_generic_attribute_grids(const Object &object,
                                                       const OrigMeshData &orig_mesh_data,
                                                       const BitSpan &use_flat_layout,
@@ -1239,10 +1297,17 @@ BLI_NOINLINE static void fill_generic_attribute_grids(const Object &object,
 
   node_mask.foreach_index([&](const int i) {
     if (use_flat_layout[i]) {
-      calc_node_generic_attribute_for_flat_layout(object, subdiv_ccg, attr, nodes[i], vbos[i]);
+      bke::attribute_math::to_static_type(attr.varray.type(), [&]<typename T>() {
+        if constexpr (!std::is_void_v<typename AttributeConverter<T>::VBOType>) {
+          const VArraySpan<T> src = attr.varray.typed<T>();
+          interpolate_grids_for_flat_layout<T>(subdiv_ccg, nodes[i].grids(), *vbos[i], src);
+        }
+      });
     }
     else {
-      calc_node_generic_attribute_for_standard_layout(object, subdiv_ccg, attr, nodes[i], vbos[i]);
+      /*
+      calc_node_generic_attribute_for_standard_layout(subdiv_ccg, attr, nodes[i].grids(), *vbos[i]);
+      */
     }
   }, exec_mode::grain_size(1));
 }
