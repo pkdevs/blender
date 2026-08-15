@@ -33,8 +33,9 @@ using tbb::collaborative_call_once;
  */
 inline bool collaborative_once_flag_is_done(const CollaborativeOnceFlag &flag)
 {
-  /* This is a copy of the start of #tbb::collaborative_call_once. There is otherwise not public
-   * API for it. */
+  /* This is a copy of the start of #tbb::collaborative_call_once. There is otherwise no public
+   * API for it. It relies on TBB internals. Asserts in #CacheMutex::ensure_impl should fail if
+   * tbb internals changed in an incompatible way. */
   static_assert(sizeof(CollaborativeOnceFlag) == sizeof(std::atomic<uintptr_t>));
   const std::atomic<uintptr_t> &state = *reinterpret_cast<const std::atomic<uintptr_t> *>(&flag);
   /* Matches tbb::collaborative_once_flag::state::done. */
@@ -49,12 +50,18 @@ inline bool collaborative_once_flag_is_done(const CollaborativeOnceFlag &flag)
  */
 inline void collaborative_once_flag_reset(CollaborativeOnceFlag &flag)
 {
-  std::destroy_at(&flag);
-  new (&flag) CollaborativeOnceFlag();
+  /* This relies on the same TBB internals as #collaborative_once_flag_is_done. */
+  std::atomic<uintptr_t> &state = *reinterpret_cast<std::atomic<uintptr_t> *>(&flag);
+  constexpr uintptr_t init_state = 0;
+  state.store(init_state, std::memory_order_release);
 }
 
 #else
 
+/**
+ * This is just a fallback when building without TBB. It's not actually collaborative but should
+ * still be fine correctness-wise.
+ */
 struct CollaborativeOnceFlag : NonCopyable, NonMovable {
   Mutex mutex;
   std::atomic<bool> has_run = false;

@@ -14,8 +14,8 @@
  * - Avoid common pitfalls like forgetting to use task isolation or a double checked lock.
  * - Cleaner and less redundant code because the same locking patterns don't have to be repeated
  *   everywhere.
- * - One can benefit from potential future improvements to #CacheMutex of which there are a few
- *   mentioned below.
+ * - No unnecessary blocking when multiple threads want to access the cache while it is still being
+ *   computed.
  *
  * The data protected by #CacheMutex is not part of #CacheMutex. Instead, the #CacheMutex and its
  * protected data should generally be placed next to each other.
