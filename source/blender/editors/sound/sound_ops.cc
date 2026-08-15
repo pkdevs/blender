@@ -332,7 +332,6 @@ static wmOperatorStatus sound_mixdown_exec(bContext *C, wmOperator *op)
 #ifdef WITH_AUDASPACE
   char filepath[FILE_MAX];
   Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
-  Scene *scene_eval = DEG_get_evaluated_scene(depsgraph);
   Main *bmain = CTX_data_main(C);
   wmWindowManager *wm = CTX_wm_manager(C);
 
@@ -340,6 +339,7 @@ static wmOperatorStatus sound_mixdown_exec(bContext *C, wmOperator *op)
   aud::DeviceSpecs specs;
 
   sound_bake_animation_exec(C, op);
+  Scene *scene_eval = DEG_get_evaluated_scene(depsgraph);
 
   RNA_string_get(op->ptr, "filepath", filepath);
   bitrate = RNA_int_get(op->ptr, "bitrate") * 1000;

@@ -116,7 +116,7 @@ void BKE_sound_ensure_scene(Scene *scene);
 
 void BKE_sound_mark_scene_audio_animation_stale(const Scene *scene);
 void BKE_sound_reset_scene_audio_animation(Scene *scene);
-void BKE_sound_update_animation_flags(Main *bmain, Scene *scene);
+bool BKE_sound_update_animation_flags(Main *bmain, Scene *scene);
 void BKE_sound_bake_animation(Main *bmain, Scene *scene, Depsgraph *depsgraph);
 void BKE_sound_ensure_scene_audio_animation(Main *bmain, Scene *scene, Depsgraph *depsgraph);
 

@@ -369,7 +369,12 @@ bSound *BKE_sound_new_file_exists(Main *bmain, const char *filepath, short strea
   return sound_new_file_exists_ex(bmain, filepath, stream_index);
 }
 
-static void sound_update_animation_flags(Scene *scene);
+struct SoundAnimationFlagsUpdateContext {
+  Scene *scene;
+  bool flags_changed = false;
+};
+
+static bool sound_update_animation_flags(Scene *scene);
 
 static Scene *sound_original_scene(const Scene *scene)
 {
@@ -378,8 +383,10 @@ static Scene *sound_original_scene(const Scene *scene)
 
 static bool sound_update_animation_flags_fn(Strip *strip, void *user_data)
 {
+  SoundAnimationFlagsUpdateContext *context = static_cast<SoundAnimationFlagsUpdateContext *>(
+      user_data);
   const FCurve *fcu;
-  Scene *scene = static_cast<Scene *>(user_data);
+  Scene *scene = context->scene;
   const int old_flag = strip->flag;
   bool driven;
 
@@ -410,6 +417,7 @@ static bool sound_update_animation_flags_fn(Strip *strip, void *user_data)
   if ((strip->flag ^ old_flag) &
       (SEQ_AUDIO_VOLUME_ANIMATED | SEQ_AUDIO_PITCH_ANIMATED | SEQ_AUDIO_PAN_ANIMATED))
   {
+    context->flags_changed = true;
     BKE_sound_mark_scene_audio_animation_stale(scene);
   }
 
@@ -417,25 +425,26 @@ static bool sound_update_animation_flags_fn(Strip *strip, void *user_data)
     /* TODO(sergey): For now we do manual recursion into the scene strips,
      * but perhaps it should be covered by recursive_apply?
      */
-    sound_update_animation_flags(strip->scene);
+    context->flags_changed |= sound_update_animation_flags(strip->scene);
   }
 
   return true;
 }
 
-static void sound_update_animation_flags(Scene *scene)
+static bool sound_update_animation_flags(Scene *scene)
 {
   const FCurve *fcu;
   const int old_audio_flag = scene->audio.flag;
   bool driven;
 
   if (scene->id.tag & ID_TAG_DOIT) {
-    return;
+    return false;
   }
   scene->id.tag |= ID_TAG_DOIT;
 
+  SoundAnimationFlagsUpdateContext context{scene};
   if (scene->ed != nullptr) {
-    seq::foreach_strip(&scene->ed->seqbase, sound_update_animation_flags_fn, scene);
+    seq::foreach_strip(&scene->ed->seqbase, sound_update_animation_flags_fn, &context);
   }
 
   fcu = id_data_find_fcurve(&scene->id, scene, RNA_Scene, "audio_volume", 0, &driven);
@@ -447,8 +456,10 @@ static void sound_update_animation_flags(Scene *scene)
   }
 
   if ((scene->audio.flag ^ old_audio_flag) & AUDIO_VOLUME_ANIMATED) {
+    context.flags_changed = true;
     BKE_sound_mark_scene_audio_animation_stale(scene);
   }
+  return context.flags_changed;
 }
 
 void BKE_sound_mark_scene_audio_animation_stale(const Scene *scene)
@@ -456,10 +467,14 @@ void BKE_sound_mark_scene_audio_animation_stale(const Scene *scene)
   sound_original_scene(scene)->runtime->audio.animation_data_stale = true;
 }
 
-void BKE_sound_update_animation_flags(Main *bmain, Scene *scene)
+bool BKE_sound_update_animation_flags(Main *bmain, Scene *scene)
 {
   BKE_main_id_tag_idcode(bmain, ID_SCE, ID_TAG_DOIT, false);
-  sound_update_animation_flags(scene);
+  const bool flags_changed = sound_update_animation_flags(scene);
+  if (flags_changed) {
+    DEG_relations_tag_update(bmain);
+  }
+  return flags_changed;
 }
 
 static bool sound_animation_can_use_fast_bake(const Scene *scene, const Depsgraph *depsgraph)
