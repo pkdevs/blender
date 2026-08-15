@@ -26,12 +26,10 @@ namespace blender {
 /* ensure we get at least this many elems per chunk */
 #define CHUNK_ELEM_MIN 32
 
-namespace {
 struct StackChunk {
   StackChunk *next;
   char data[0];
 };
-}  // namespace
 
 struct BLI_Stack {
   StackChunk *chunk_curr; /* currently active chunk */
