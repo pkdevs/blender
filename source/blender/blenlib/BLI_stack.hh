@@ -79,7 +79,7 @@ class Stack {
   using size_type = int64_t;
 
  private:
-  using Chunk = detail::StackChunk<T>;
+  using Chunk = ::blender::detail::StackChunk<T>;
 
   /**
    * Points to one element after top-most value in the stack.
