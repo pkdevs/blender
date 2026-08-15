@@ -6,8 +6,8 @@
 
 #include "BLI_enumerable_thread_specific.hh"
 #include "BLI_multi_value_map.hh"
-#include "BLI_set.hh"
 #include "BLI_ordered_edge.hh"
+#include "BLI_set.hh"
 #include "BLI_task_size_hints.hh"
 
 #include "BKE_mesh_mapping.hh"
@@ -135,7 +135,7 @@ static void foreach_isolated_edges_set_imp(const int total_verts,
   };
   const auto chunk_to_index = [&](const int2 chunk) { return chunk.y * chunks_num + chunk.x; };
 
-  IndexMaskMemory memory;
+  LinearAllocator<> memory;
   Array<IndexMask> chunk_partition(chunks_num * chunks_num);
   IndexMask::from_groups<int>(
       edges.index_range(),
@@ -180,22 +180,24 @@ static void foreach_isolated_edges_set_imp(const int total_verts,
   for ([[maybe_unused]] const int pass_i : IndexRange(chunks_num * chunks_num)) {
     Vector<int2> chunks_for_pass;
     Array<bool> to_process = chunk_processed;
-    
+
     const int pass_first_chunk_index = [&]() {
       int pass_first_chunk_index = 0;
-      while (pass_first_chunk_index + 1 < to_process.size() && to_process[pass_first_chunk_index]) {
+      while (pass_first_chunk_index + 1 < to_process.size() && to_process[pass_first_chunk_index])
+      {
         pass_first_chunk_index++;
       }
       return pass_first_chunk_index;
     }();
-    
+
     for ([[maybe_unused]] const int chunk_i : IndexRange(chunks_num - 1)) {
-      const int i_to_process = to_process.as_span().drop_front(pass_first_chunk_index).first_index_try(false);
+      const int i_to_process =
+          to_process.as_span().drop_front(pass_first_chunk_index).first_index_try(false);
       if (i_to_process == -1) {
         break;
       }
       const int index_to_process = pass_first_chunk_index + i_to_process;
-      
+
       BLI_assert(!to_process[index_to_process]);
       BLI_assert(!to_process.as_span().take_front(index_to_process).contains(false));
 
@@ -260,20 +262,20 @@ static void foreach_isolated_edges_set_imp(const int total_verts,
         [&](const IndexRange range) {
           for (const int i : range) {
             const int2 chunk_a = chunks_for_pass[i];
-            const int2 chunk_b = {chunk_a.y, chunk_a.x};
+            const int2 chunk_b = chunk_a.yx();
             func(chunk_partition[chunk_to_index(chunk_a)]);
             func(chunk_partition[chunk_to_index(chunk_b)]);
           }
         },
         threading::individual_task_sizes([&](const int i) {
           const int2 chunk_a = chunks_for_pass[i];
-          const int2 chunk_b = {chunk_a.y, chunk_a.x};
+          const int2 chunk_b = chunk_a.yx();
           return chunk_partition[chunk_to_index(chunk_a)].size() +
                  chunk_partition[chunk_to_index(chunk_b)].size();
         }));
 
     for (const int2 chunk_a : chunks_for_pass) {
-      const int2 chunk_b = {chunk_a.y, chunk_a.x};
+      const int2 chunk_b = chunk_a.yx();
       BLI_assert(!chunk_processed[chunk_to_index(chunk_a)]);
       BLI_assert(!chunk_processed[chunk_to_index(chunk_b)] ||
                  chunk_partition[chunk_to_index(chunk_b)].is_empty());
@@ -322,7 +324,7 @@ static bool is_valid_binary_coloring(const int total_verts,
   return true;
 }
 
-ConstraintColoring color_constraints__binary(const Span<int2> edges, IndexMaskMemory &memory)
+ConstraintColoring color_constraints__binary(const Span<int2> edges, LinearAllocator<> &memory)
 {
   ConstraintColoring coloring;
   {
@@ -355,7 +357,8 @@ ConstraintColoring color_constraints__binary(const Span<int2> edges, IndexMaskMe
               continue;
             }
 
-            color_is_used.resize(std::max<int>(color_is_used.size(), colors[other_edge_i] + 1), false);
+            color_is_used.resize(std::max<int>(color_is_used.size(), colors[other_edge_i] + 1),
+                                 false);
             color_is_used[colors[other_edge_i]] = true;
           }
         }
