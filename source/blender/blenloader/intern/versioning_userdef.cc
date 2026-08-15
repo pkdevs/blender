@@ -1170,7 +1170,7 @@ void blo_do_versions_userdef(UserDef *userdef)
 
     copy_v3_fl3(userdef->light_ambient, 0.025000, 0.025000, 0.025000);
 
-    userdef->flag &= ~USER_FLAG_UNUSED_4;
+    userdef->flag &= ~USER_FLAG_PANEL_TABS_HORIZONTAL_TEXT;
 
     userdef->uiflag &= ~(USER_HEADER_FROM_PREF | USER_REGISTER_ALL_USERS);
   }

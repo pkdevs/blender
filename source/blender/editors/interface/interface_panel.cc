@@ -790,11 +790,43 @@ void panel_header_buttons_end(Panel *panel)
   }
 }
 
+float panel_category_tabs_width(const ARegion *region)
+{
+  if ((U.flag & USER_FLAG_PANEL_TABS_HORIZONTAL_TEXT) == 0) {
+    return UI_PANEL_CATEGORY_MARGIN_WIDTH;
+  }
+
+  /* Keep useful panel content visible for unusually long category names. */
+  constexpr float min_width_units = 5.0f;
+  constexpr float max_width_units = 12.0f;
+  float width = min_width_units * U.widget_unit;
+
+  if (region) {
+    const uiFontStyle *fstyle = &style_get()->widget;
+    for (const PanelCategoryDyn &category : region->runtime->panels_category) {
+      const float text_width = fontstyle_string_width(fstyle, IFACE_(category.idname));
+      const float icon_width = category.icon != ICON_NONE ? UI_UNIT_X : 0.0f;
+      const float horizontal_padding = 0.75f * UI_UNIT_X;
+      width = std::max(width, text_width + icon_width + horizontal_padding);
+    }
+  }
+
+  return std::min(width, max_width_units * U.widget_unit);
+}
+
+float panel_category_tabs_min_width(const ARegion *region)
+{
+  if ((U.flag & USER_FLAG_PANEL_TABS_HORIZONTAL_TEXT) == 0) {
+    return UI_PANEL_CATEGORY_MIN_WIDTH;
+  }
+  return panel_category_tabs_width(region) / UI_SCALE_FAC;
+}
+
 static float panel_region_offset_x_get(const ARegion *region)
 {
   if (panel_category_tabs_is_visible(region)) {
     if (RGN_ALIGN_ENUM_FROM_MASK(region->alignment) != RGN_ALIGN_RIGHT) {
-      return UI_PANEL_CATEGORY_MARGIN_WIDTH;
+      return panel_category_tabs_width(region);
     }
   }
 
@@ -1423,8 +1455,9 @@ static void expand_panel_region(bContext &C, ARegion *region)
 {
   const float aspect = BLI_rctf_size_y(&region->v2d.cur) /
                        (BLI_rcti_size_y(&region->v2d.mask) + 1);
+  const float category_tabs_min_width = panel_category_tabs_min_width(region);
   const bool too_narrow = BLI_rcti_size_x(&region->winrct) <=
-                          int((UI_PANEL_CATEGORY_MIN_WIDTH + PANEL_MIN_DRAW_WIDTH) * UI_SCALE_FAC /
+                          int((category_tabs_min_width + PANEL_MIN_DRAW_WIDTH) * UI_SCALE_FAC /
                               aspect);
   if (!too_narrow) {
     return;
@@ -1432,7 +1465,7 @@ static void expand_panel_region(bContext &C, ARegion *region)
   /* Enlarge region. */
   int new_width = region->runtime->type->prefsizex ? region->runtime->type->prefsizex : 250;
 
-  if (new_width < int(UI_PANEL_CATEGORY_MIN_WIDTH + PANEL_MIN_DRAW_WIDTH)) {
+  if (new_width < int(category_tabs_min_width + PANEL_MIN_DRAW_WIDTH)) {
     region->runtime->type->prefsizex = UI_SIDEBAR_PANEL_WIDTH;
     new_width = UI_SIDEBAR_PANEL_WIDTH;
   }
@@ -1469,9 +1502,9 @@ void panel_category_tabs_draw_all(const bContext *C,
                        (BLI_rcti_size_y(&region->v2d.mask) + 1);
   const float zoom = 1.0f / aspect;
   const int px = U.pixelsize;
-  const int category_tabs_width = std::round(UI_PANEL_CATEGORY_MARGIN_WIDTH * zoom);
+  const int category_tabs_width = std::round(panel_category_tabs_width(region) * zoom);
   const float dpi_fac = UI_SCALE_FAC;
-  /* Padding of tabs around text. */
+  /* Padding of vertical tabs around text. */
   const int tab_v_pad_text = round_fl_to_int(TABS_PADDING_TEXT_FACTOR * dpi_fac * zoom) + 2 * px;
   /* Padding between tabs. */
   const int tab_v_pad = round_fl_to_int(TABS_PADDING_BETWEEN_FACTOR * dpi_fac * zoom);
@@ -1519,8 +1552,9 @@ void panel_category_tabs_draw_all(const bContext *C,
     immUnbindProgram();
   }
   /* If the area is too small to show panels, then don't show any tabs as active. */
+  const float category_tabs_min_width = panel_category_tabs_min_width(region);
   const bool too_narrow = BLI_rcti_size_x(&region->winrct) <
-                          int((UI_PANEL_CATEGORY_MIN_WIDTH + PANEL_MIN_DRAW_WIDTH) * UI_SCALE_FAC /
+                          int((category_tabs_min_width + PANEL_MIN_DRAW_WIDTH) * UI_SCALE_FAC /
                               aspect);
   /* #widget_roundbox_set has this correction, keep in sync. */
   const int align_pad = (!region->overlap && !is_left) ? px : 0;
@@ -1547,6 +1581,7 @@ void panel_category_tabs_draw_all(const bContext *C,
 
   uiDefBut(block, ButtonType::Sepr, "", 0, 0, w, tab_v_pad, nullptr, 0.0, 0.0, "");
 
+  const bool readable = U.flag & USER_FLAG_PANEL_TABS_HORIZONTAL_TEXT;
   const bool compact = U.uiflag2 & USER_UIFLAG2_PANEL_TABS_COMPACT;
 
   /* Check the region type supports categories to avoid an assert
@@ -1565,50 +1600,71 @@ void panel_category_tabs_draw_all(const bContext *C,
     Button *button = nullptr;
     const char *category_id = pc_dyn.idname;
     const char *category_id_draw = IFACE_(category_id);
-    const int category_width = round_fl_to_int(
-        compact ? 0 : BLF_width(fontid, category_id_draw, BLF_DRAW_STR_DUMMY_MAX));
-
-    const int h = compact ? w + align_pad : category_width + tab_v_pad_text * 2;
-
-    if (compact && pc_dyn.icon != ICON_NONE) {
-      button = uiDefIconButR_prop(
-          block, ButtonType::Tab, pc_dyn.icon, 0, 0, w, h, &ptr, prop, -1, 0, i, nullptr);
+    if (readable) {
+      const int h = round_fl_to_int(UI_UNIT_Y * zoom);
+      button = uiDefIconTextButR_prop(block,
+                                      ButtonType::Tab,
+                                      pc_dyn.icon,
+                                      category_id_draw,
+                                      0,
+                                      0,
+                                      w,
+                                      h,
+                                      &ptr,
+                                      prop,
+                                      -1,
+                                      0,
+                                      i,
+                                      nullptr);
+      button->text_direction = TextDirection::Default;
+      button->drawflag |= BUT_TEXT_LEFT | BUT_ICON_LEFT;
     }
     else {
-      std::string title = category_id_draw;
-      if (compact) {
-        size_t category_draw_len = BLF_DRAW_STR_DUMMY_MAX;
+      const int category_width = round_fl_to_int(
+          compact ? 0 : BLF_width(fontid, category_id_draw, BLF_DRAW_STR_DUMMY_MAX));
+      const int h = compact ? w + align_pad : category_width + tab_v_pad_text * 2;
 
-        int char_offset1 = BLI_str_utf8_offset_from_index(category_id_draw, category_draw_len, 1);
-        if (char_offset1 > 2) {
-          /* Only a single complex character, symbol, or emoji. */
-          title = std::string(category_id_draw, char_offset1);
-        }
-        else {
-          int char_offset2 = BLI_str_utf8_offset_from_index(
-              category_id_draw, category_draw_len, 2);
-          char *space = BLI_strcasestr(category_id_draw, " ");
-          if (char_offset2 == 2 && isupper(category_id_draw[1])) {
-            /* First two characters are Latin with second uppercase. */
-            title = std::string(category_id_draw, char_offset2);
-          }
-          else if (space && category_draw_len > (space - category_id_draw)) {
-            /* First characters from each of the first two words. */
-            title = std::string(category_id_draw, char_offset1) + std::string(space + 1, 1);
+      if (compact && pc_dyn.icon != ICON_NONE) {
+        button = uiDefIconButR_prop(
+            block, ButtonType::Tab, pc_dyn.icon, 0, 0, w, h, &ptr, prop, -1, 0, i, nullptr);
+      }
+      else {
+        std::string title = category_id_draw;
+        if (compact) {
+          size_t category_draw_len = BLF_DRAW_STR_DUMMY_MAX;
+
+          int char_offset1 = BLI_str_utf8_offset_from_index(
+              category_id_draw, category_draw_len, 1);
+          if (char_offset1 > 2) {
+            /* Only a single complex character, symbol, or emoji. */
+            title = std::string(category_id_draw, char_offset1);
           }
           else {
-            /* First two characters of a single word. */
-            title = std::string(category_id_draw, char_offset2);
+            int char_offset2 = BLI_str_utf8_offset_from_index(
+                category_id_draw, category_draw_len, 2);
+            char *space = BLI_strcasestr(category_id_draw, " ");
+            if (char_offset2 == 2 && isupper(category_id_draw[1])) {
+              /* First two characters are Latin with second uppercase. */
+              title = std::string(category_id_draw, char_offset2);
+            }
+            else if (space && category_draw_len > (space - category_id_draw)) {
+              /* First characters from each of the first two words. */
+              title = std::string(category_id_draw, char_offset1) + std::string(space + 1, 1);
+            }
+            else {
+              /* First two characters of a single word. */
+              title = std::string(category_id_draw, char_offset2);
+            }
           }
         }
+        button = uiDefIconTextButR_prop(
+            block, ButtonType::Tab, ICON_NONE, title, 0, 0, w, h, &ptr, prop, -1, 0, i, nullptr);
+        button->text_direction = compact ? TextDirection::Default :
+                                           (is_left ? TextDirection::Up : TextDirection::Down);
       }
-      button = uiDefIconTextButR_prop(
-          block, ButtonType::Tab, ICON_NONE, title, 0, 0, w, h, &ptr, prop, -1, 0, i, nullptr);
-      button->text_direction = compact ? TextDirection::Default :
-                                         (is_left ? TextDirection::Up : TextDirection::Down);
     }
     button->flag |= ui::BUT_DRAG_LOCK_X;
-    if (compact) {
+    if (compact || readable) {
       button_func_quick_tooltip_set(
           button, [category = std::string(category_id)](const blender::ui::Button * /*but*/) {
             return TIP_(category);
@@ -1649,7 +1705,7 @@ void panel_category_tabs_draw_all(const bContext *C,
 
   block_translate(block, 0, region->category_scroll);
 
-  /* Align buttons the panel content when region overlap is disabled. */
+  /* Align buttons with the panel content when region overlap is disabled. */
   if (!is_alpha) {
     for (Button &button : block->buttons()) {
       button.drawflag |= is_left ? BUT_ALIGN_RIGHT : BUT_ALIGN_LEFT;
@@ -2509,7 +2565,7 @@ static bool panel_categories_tab_is_mouse_over(ARegion *region, const wmEvent *e
   const float aspect = BLI_rctf_size_y(&region->v2d.cur) /
                        (BLI_rcti_size_y(&region->v2d.mask) + 1);
   const float zoom = 1.0f / aspect;
-  const int category_tabs_width = round_fl_to_int(UI_PANEL_CATEGORY_MARGIN_WIDTH * zoom);
+  const int category_tabs_width = round_fl_to_int(panel_category_tabs_width(region) * zoom);
   const bool is_left = RGN_ALIGN_ENUM_FROM_MASK(region->alignment) != RGN_ALIGN_RIGHT;
 
   const View2D *v2d = &region->v2d;
@@ -2632,10 +2688,10 @@ int handler_panel_region(bContext *C,
       if (active_button && active_button->hardmax == val) {
         const float aspect = BLI_rctf_size_y(&region->v2d.cur) /
                              (BLI_rcti_size_y(&region->v2d.mask) + 1);
+        const float category_tabs_min_width = panel_category_tabs_min_width(region);
         const bool too_narrow = BLI_rcti_size_x(&region->winrct) <
-                                int(std::floor(
-                                    (UI_PANEL_CATEGORY_MIN_WIDTH + PANEL_MIN_DRAW_WIDTH) *
-                                    UI_SCALE_FAC / aspect));
+                                int(std::floor((category_tabs_min_width + PANEL_MIN_DRAW_WIDTH) *
+                                               UI_SCALE_FAC / aspect));
         if (too_narrow) {
           expand_panel_region(*C, region);
         }
@@ -2643,7 +2699,7 @@ int handler_panel_region(bContext *C,
           /* Minimize region. */
           region->runtime->type->prefsizex = int(float(BLI_rcti_size_x(&region->winrct) + 1) /
                                                  UI_SCALE_FAC * aspect);
-          panel_region_width_set(region, aspect, UI_PANEL_CATEGORY_MIN_WIDTH);
+          panel_region_width_set(region, aspect, category_tabs_min_width);
           WM_event_add_notifier(C, NC_SCREEN | NA_EDITED, nullptr);
           ED_region_tag_redraw(region);
           /* Reset scroll to the top (#38348). */

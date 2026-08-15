@@ -3506,7 +3506,8 @@ static wmOperatorStatus region_scale_modal(bContext *C, wmOperator *op, const wm
         }
         BLI_assert(rmd->region->sizex <= rmd->maxsize);
         const int collapse_size = BKE_regiontype_uses_category_tabs(rmd->region->runtime->type) ?
-                                      (UI_PANEL_CATEGORY_MIN_WIDTH / aspect_x) * 0.75f :
+                                      (ui::panel_category_tabs_min_width(rmd->region) / aspect_x) *
+                                          0.75f :
                                       UI_UNIT_X / aspect_x;
         if (size_no_snap < collapse_size) {
           rmd->region->sizex = rmd->origval;
@@ -3618,7 +3619,7 @@ static wmOperatorStatus region_scale_modal(bContext *C, wmOperator *op, const wm
                                  (BLI_rctf_size_x(&rmd->region->v2d.cur) /
                                   (BLI_rcti_size_x(&rmd->region->v2d.mask) + 1)) :
                                  1.0f;
-        if (float(rmd->region->sizex) * aspect > UI_PANEL_CATEGORY_MIN_WIDTH) {
+        if (float(rmd->region->sizex) * aspect > ui::panel_category_tabs_min_width(rmd->region)) {
           /* Save this as new runtime preferred size. */
           rmd->region->runtime->type->prefsizex = int(float(rmd->region->sizex) * aspect);
         }

@@ -34,7 +34,7 @@ enum eUserPref_Flag : int {
   USER_FLAG_NUMINPUT_ADVANCED = (1 << 1),
   USER_FLAG_RECENT_SEARCHES_DISABLE = (1 << 2),
   USER_MENU_CLOSE_LEAVE = (1 << 3),
-  USER_FLAG_UNUSED_4 = (1 << 4), /* cleared */
+  USER_FLAG_PANEL_TABS_HORIZONTAL_TEXT = (1 << 4), /* Cleared from preferences before 2.80.38. */
   USER_TRACKBALL = (1 << 5),
   USER_FLAG_UNUSED_6 = (1 << 6), /* cleared */
   USER_FLAG_UNUSED_7 = (1 << 7), /* cleared */

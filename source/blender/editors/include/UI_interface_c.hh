@@ -2244,6 +2244,10 @@ bool panel_can_be_pinned(const Panel *panel);
 
 bool panel_category_is_visible(const ARegion *region);
 bool panel_category_tabs_is_visible(const ARegion *region);
+/** Category gutter width in UI coordinates, including UI scaling. */
+float panel_category_tabs_width(const ARegion *region);
+/** Minimum category-only region width before UI scaling. */
+float panel_category_tabs_min_width(const ARegion *region);
 void panel_category_add(ARegion *region, const char *name, int icon = 0);
 PanelCategoryDyn *panel_category_find(const ARegion *region, const char *idname);
 int panel_category_index_find(ARegion *region, const char *idname);

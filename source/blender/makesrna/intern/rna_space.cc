@@ -1085,7 +1085,7 @@ static void rna_Space_show_region_ui_set(PointerRNA *ptr, bool value)
                               (BLI_rcti_size_x(&region->v2d.mask) + 1)) :
                              1.0f;
     if (region->runtime->type && BKE_regiontype_uses_category_tabs(region->runtime->type) &&
-        (float(region->sizex) <= (UI_PANEL_CATEGORY_MIN_WIDTH / aspect)))
+        (float(region->sizex) <= (blender::ui::panel_category_tabs_min_width(region) / aspect)))
     {
       /* If the region is showing only tabs, increase to full width. */
       const int new_width = region->runtime->type->prefsizex ? region->runtime->type->prefsizex :

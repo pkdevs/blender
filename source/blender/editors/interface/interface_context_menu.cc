@@ -1402,7 +1402,14 @@ int popup_context_menu_for_panel(bContext *C, ARegion *region, Panel *panel)
   }
 
   PointerRNA prefs_ptr = RNA_pointer_create_discrete(nullptr, RNA_PreferencesSystem, &U);
-  layout.prop(
+  layout.prop(&prefs_ptr,
+              "show_panel_tabs_horizontal_text",
+              UI_ITEM_NONE,
+              IFACE_("Readable Labels"),
+              ICON_NONE);
+  Layout &compact_row = layout.row(false);
+  compact_row.enabled_set((U.flag & USER_FLAG_PANEL_TABS_HORIZONTAL_TEXT) == 0);
+  compact_row.prop(
       &prefs_ptr, "show_panel_tabs_compact", UI_ITEM_NONE, IFACE_("Compact Tabs"), ICON_NONE);
 
   popup_menu_end(C, pup);

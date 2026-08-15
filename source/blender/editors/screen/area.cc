@@ -1812,7 +1812,7 @@ static void region_rect_recursive(
       }
       else if (has_tabs) {
         /* Too narrow for content so show only the category tabs. */
-        const int cat_min = int(UI_PANEL_CATEGORY_MIN_WIDTH * UI_SCALE_FAC / aspect);
+        const int cat_min = int(ui::panel_category_tabs_min_width(region) * UI_SCALE_FAC / aspect);
         region->winrct = *winrct;
         if (alignment == RGN_ALIGN_RIGHT) {
           region->winrct.xmin = region->winrct.xmax - cat_min + 1;
@@ -1828,15 +1828,16 @@ static void region_rect_recursive(
     }
     else {
       if (BKE_regiontype_uses_category_tabs(region->runtime->type)) {
-        /* Update category tab width when #USER_UIFLAG2_PANEL_TABS_COMPACT flag is set/unset. */
+        /* Update category-tab width when its display preference changes. */
         const float aspect = (region->v2d.flag & V2D_IS_INIT) ?
                                  (BLI_rctf_size_y(&region->v2d.cur) /
                                   (BLI_rcti_size_y(&region->v2d.mask) + 1)) :
                                  1.0f;
-        const int tab_auto_snap_width = (UI_PANEL_CATEGORY_MIN_WIDTH + ui::PANEL_MIN_DRAW_WIDTH) *
+        const float category_tabs_min_width = ui::panel_category_tabs_min_width(region);
+        const int tab_auto_snap_width = (category_tabs_min_width + ui::PANEL_MIN_DRAW_WIDTH) *
                                         UI_SCALE_FAC / aspect;
         if (prefsizex < tab_auto_snap_width) {
-          prefsizex = UI_PANEL_CATEGORY_MIN_WIDTH * UI_SCALE_FAC / aspect;
+          prefsizex = category_tabs_min_width * UI_SCALE_FAC / aspect;
         }
       }
       int fac = rct_fits(winrct, SCREEN_AXIS_H, prefsizex);
@@ -3398,7 +3399,6 @@ void ED_region_panels_layout_ex(const bContext *C,
                            BKE_regiontype_uses_category_tabs(region->runtime->type);
   /* offset panels for small vertical tab area */
   const char *category = nullptr;
-  const int category_tabs_width = UI_PANEL_CATEGORY_MARGIN_WIDTH;
   int margin_x = 0;
   const bool region_layout_based = region->flag & RGN_FLAG_DYNAMIC_SIZE;
   bool update_tot_size = true;
@@ -3425,7 +3425,7 @@ void ED_region_panels_layout_ex(const bContext *C,
     }
   }
   if (use_category_tabs) {
-    margin_x = category_tabs_width;
+    margin_x = round_fl_to_int(ui::panel_category_tabs_width(region));
   }
 
   const int max_panel_width = round_fl_to_int(BLI_rctf_size_x(&v2d->cur)) - margin_x;
@@ -3697,10 +3697,10 @@ void ED_region_panels_draw(const bContext *C, ARegion *region)
 
   /* draw panels if they are large enough. */
   const bool has_category_tabs = ui::panel_category_tabs_is_visible(region);
-  const short min_draw_size = has_category_tabs ?
-                                  short(UI_PANEL_CATEGORY_MIN_WIDTH + ui::PANEL_MIN_DRAW_WIDTH) :
-                                  std::min(region->runtime->type->prefsizex,
-                                           ui::PANEL_MIN_DRAW_WIDTH);
+  const short min_draw_size = has_category_tabs ? short(ui::panel_category_tabs_min_width(region) +
+                                                        ui::PANEL_MIN_DRAW_WIDTH) :
+                                                  std::min(region->runtime->type->prefsizex,
+                                                           ui::PANEL_MIN_DRAW_WIDTH);
   if (region->winx >= (min_draw_size * UI_SCALE_FAC / aspect)) {
     ui::panels_draw(C, region);
   }
@@ -3723,7 +3723,7 @@ void ED_region_panels_draw(const bContext *C, ARegion *region)
     use_mask = true;
     ui::view2d_mask_from_win(v2d, &mask);
     const int category_width = round_fl_to_int(ui::view2d_scale_get_x(&region->v2d) *
-                                               UI_PANEL_CATEGORY_MARGIN_WIDTH);
+                                               ui::panel_category_tabs_width(region));
     if (alignment == RGN_ALIGN_RIGHT) {
       mask.xmax -= category_width;
     }
