@@ -41,13 +41,12 @@ static thread_local uint64_t current_timestamp = 0;
 
 struct MovieReaderKey {
   std::string source_filepath;
-  std::string filepath;
+  std::string multiview_filepath;
   std::string colorspace;
   std::string proxy_dir;
   std::string multiview_suffix;
   ImBufFlags flags = ImBufFlags::Zero;
   int stream_index = 0;
-  bool uses_multiview_filepath = false;
 
   bool operator==(const MovieReaderKey &other) const = default;
 };
@@ -146,13 +145,9 @@ static MovieReaderKey movie_reader_key_get(const Scene &scene,
     if (seq_multiview_view_filepath_get(
             scene, filepath, *view_id, filepath_view, sizeof(filepath_view), &suffix))
     {
-      key.filepath = filepath_view;
+      key.multiview_filepath = filepath_view;
       key.multiview_suffix = suffix;
-      key.uses_multiview_filepath = true;
     }
-  }
-  if (key.filepath.empty()) {
-    key.filepath = filepath;
   }
 
   key.flags = (strip.flag & SEQ_DEINTERLACE) ? ImBufFlags::Deinterlace : ImBufFlags::Zero;
@@ -267,8 +262,9 @@ void MovieReaderCache::reader_open(MovieReaderCacheEntry &entry)
   const MovieReaderKey &key = entry.key;
   char colorspace[IM_MAX_SPACE];
   STRNCPY(colorspace, key.colorspace.c_str());
-  entry.reader = MOV_open_file(
-      key.filepath.c_str(), key.flags, key.stream_index, true, colorspace);
+  const std::string &filepath = key.multiview_filepath.empty() ? key.source_filepath :
+                                                                 key.multiview_filepath;
+  entry.reader = MOV_open_file(filepath.c_str(), key.flags, key.stream_index, true, colorspace);
   if (entry.reader == nullptr) {
     return;
   }
@@ -279,7 +275,7 @@ void MovieReaderCache::reader_open(MovieReaderCacheEntry &entry)
     MOV_set_multiview_suffix(entry.reader, key.multiview_suffix.c_str());
   }
 
-  if (key.uses_multiview_filepath && !reader_ensure_initialized(entry)) {
+  if (!key.multiview_filepath.empty() && !reader_ensure_initialized(entry)) {
     MOV_close(entry.reader);
     entry.reader = nullptr;
   }
@@ -402,7 +398,7 @@ ImBuf *MovieReaderAccessor::decode_frame(const int frame_index, const IMB_Proxy_
 
 bool MovieReaderAccessor::uses_multiview_filepath() const
 {
-  return entry_ != nullptr && entry_->key.uses_multiview_filepath;
+  return entry_ != nullptr && !entry_->key.multiview_filepath.empty();
 }
 
 MovieReader *MovieReaderAccessor::reader()
