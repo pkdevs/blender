@@ -1,1 +1,2 @@
 Referenced by commit 6bb10e8412f79f9a964dfb1d38c664efdddc2f6e, Cleanup: Remove unused variable in subdiv paint overlay shader
+Referenced by issue #162691, GPU subdivision: corner normals overlay in edit mode with "On Cage" option is corrupted
