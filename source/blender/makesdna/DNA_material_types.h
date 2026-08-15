@@ -292,7 +292,7 @@ struct MaterialGPencilStyle {
   /** Color that should be used for drawing "fills" for strokes (alpha included). */
   float fill_rgba[4] = {};
   /** Secondary color used for gradients and other stuff. */
-  float mix_rgba[4] = {};
+  DNA_DEPRECATED float mix_rgba[4] = {};
   /** Settings. */
   eMaterialGPencilStyle_Flag flag = {};
   /** Pass index (only used for modifiers to restrict their influence). */
@@ -353,6 +353,9 @@ struct MaterialGPencilStyle {
 
   float random_noise_scale = 0;
   char _pad3[4] = {};
+
+  /** Color gradient. */
+  struct ColorBand *gradient = nullptr;
 };
 
 struct MaterialLineArt {

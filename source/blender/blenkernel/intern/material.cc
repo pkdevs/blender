@@ -47,6 +47,7 @@
 #include "BKE_attribute.h"
 #include "BKE_attribute.hh"
 #include "BKE_brush.hh"
+#include "BKE_colorband.hh"
 #include "BKE_curve.hh"
 #include "BKE_curves.hh"
 #include "BKE_displist.h"
@@ -139,6 +140,11 @@ static void material_copy_data(Main *bmain,
   if (material_src->gp_style != nullptr) {
     material_dst->gp_style = static_cast<MaterialGPencilStyle *>(
         MEM_dupalloc(material_src->gp_style));
+
+    if (material_src->gp_style->gradient != nullptr) {
+      material_dst->gp_style->gradient = static_cast<ColorBand *>(
+          MEM_dupalloc(material_src->gp_style->gradient));
+    }
   }
 
   material_dst->gpumaterial.clear_no_delete();
@@ -161,6 +167,10 @@ static void material_free_data(ID *id)
   }
 
   MEM_SAFE_DELETE(material->texpaintslot);
+
+  if (material->gp_style) {
+    MEM_SAFE_DELETE(material->gp_style->gradient);
+  }
 
   MEM_SAFE_DELETE(material->gp_style);
 
@@ -197,7 +207,9 @@ static void material_foreach_working_space_color(ID *id,
   if (material->gp_style) {
     fn.single(material->gp_style->stroke_rgba);
     fn.single(material->gp_style->fill_rgba);
-    fn.single(material->gp_style->mix_rgba);
+    if (material->gp_style->gradient) {
+      BKE_colorband_foreach_working_space_color(material->gp_style->gradient, fn);
+    }
   }
 }
 
@@ -229,6 +241,10 @@ static void material_blend_write(BlendWriter *writer, ID *id, const void *id_add
   /* grease pencil settings */
   if (ma->gp_style) {
     writer->write_struct(ma->gp_style);
+
+    if (ma->gp_style->gradient) {
+      writer->write_struct(ma->gp_style->gradient);
+    }
   }
 }
 
@@ -244,6 +260,10 @@ static void material_blend_read_data(BlendDataReader *reader, ID *id)
   ma->gpumaterial.clear_no_delete();
 
   BLO_read_struct(reader, MaterialGPencilStyle, &ma->gp_style);
+
+  if (ma->gp_style) {
+    BLO_read_struct(reader, ColorBand, &ma->gp_style->gradient);
+  }
 }
 
 IDTypeInfo IDType_ID_MA = {
@@ -286,7 +306,6 @@ void BKE_gpencil_material_attr_init(Material *ma)
     /* set basic settings */
     gp_style->stroke_rgba[3] = 1.0f;
     gp_style->fill_rgba[3] = 1.0f;
-    ARRAY_SET_ITEMS(gp_style->mix_rgba, 1.0f, 1.0f, 1.0f, 1.0f);
     ARRAY_SET_ITEMS(gp_style->texture_scale, 1.0f, 1.0f);
     gp_style->texture_offset[0] = -0.5f;
     gp_style->texture_pixsize = 100.0f;

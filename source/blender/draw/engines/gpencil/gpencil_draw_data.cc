@@ -338,8 +338,17 @@ MaterialPool *gpencil_material_pool_create(Instance *inst,
                                gp_style->texture_angle,
                                reinterpret_cast<float (*)[2]>(&mat_data->fill_uv_rot_scale),
                                mat_data->fill_uv_offset);
-      copy_v4_v4(mat_data->fill_color, gp_style->fill_rgba);
-      copy_v4_v4(mat_data->fill_mix_color, gp_style->mix_rgba);
+
+      BLI_assert(gp_style->gradient != nullptr);
+
+      copy_v4_v4(mat_data->fill_color, &gp_style->gradient->data[0].r);
+      if (gp_style->gradient->tot < 2) {
+        copy_v4_v4(mat_data->fill_mix_color, &gp_style->gradient->data[0].r);
+      }
+      else {
+        copy_v4_v4(mat_data->fill_mix_color, &gp_style->gradient->data[1].r);
+      }
+
       mat_data->fill_texture_mix = 1.0f - gp_style->mix_factor;
       if (gp_style->flag & GP_MATERIAL_FLIP_FILL) {
         swap_v4_v4(mat_data->fill_color, mat_data->fill_mix_color);

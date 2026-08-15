@@ -422,6 +422,16 @@ static bool rna_is_grease_pencil_get(PointerRNA *ptr)
   return false;
 }
 
+static void rna_grease_pencil_fill_style_set(PointerRNA *ptr, int value)
+{
+  MaterialGPencilStyle *pcolor = static_cast<MaterialGPencilStyle *>(ptr->data);
+  pcolor->fill_style = eMaterialGPencilStyle_FillStyle(value);
+
+  if ((pcolor->fill_style == GP_MATERIAL_FILL_STYLE_GRADIENT) && pcolor->gradient == nullptr) {
+    pcolor->gradient = BKE_colorband_add(true);
+  }
+}
+
 static std::optional<std::string> rna_GpencilColorData_path(const PointerRNA * /*ptr*/)
 {
   return "grease_pencil";
@@ -626,6 +636,13 @@ static void rna_def_material_greasepencil(BlenderRNA *brna)
   RNA_def_property_range(prop, 0.0f, FLT_MAX);
   RNA_def_property_ui_range(prop, 0.0f, 1.0f, 0.1f, 3);
   RNA_def_property_ui_text(prop, "Mix Color", "Color for mixing with primary filling color");
+  RNA_def_property_update(prop, NC_GPENCIL | ND_SHADING, "rna_MaterialGpencil_update");
+
+  /* Gradient */
+  prop = RNA_def_property(srna, "gradient", PROP_POINTER, PROP_NEVER_NULL);
+  RNA_def_property_pointer_sdna(prop, nullptr, "gradient");
+  RNA_def_property_struct_type(prop, "ColorRamp");
+  RNA_def_property_ui_text(prop, "Gradient", "");
   RNA_def_property_update(prop, NC_GPENCIL | ND_SHADING, "rna_MaterialGpencil_update");
 
   /* Mix factor */
@@ -887,6 +904,7 @@ static void rna_def_material_greasepencil(BlenderRNA *brna)
   prop = RNA_def_property(srna, "fill_style", PROP_ENUM, PROP_NONE);
   RNA_def_property_enum_bitflag_sdna(prop, nullptr, "fill_style");
   RNA_def_property_enum_items(prop, fill_style_items);
+  RNA_def_property_enum_funcs(prop, nullptr, "rna_grease_pencil_fill_style_set", nullptr);
   RNA_def_property_ui_text(prop, "Fill Style", "Select style used to fill strokes");
   RNA_def_property_translation_context(prop, BLT_I18NCONTEXT_ID_GPENCIL);
   RNA_def_property_update(prop, NC_GPENCIL | ND_SHADING, "rna_MaterialGpencil_update");

@@ -17,10 +17,12 @@
 #include "DNA_scene_types.h"
 
 #include "BLI_listbase_iterator.hh"
+#include "BLI_math_vector_c.hh"
 #include "BLI_sys_types.hh"
 
 #include "BKE_attribute.h"
 #include "BKE_attribute.hh"
+#include "BKE_colorband.hh"
 #include "BKE_main.hh"
 #include "BKE_mesh_legacy_convert.hh"
 #include "BKE_node.hh"
@@ -307,6 +309,19 @@ void blo_do_versions_503(FileData * /*fd*/, Library * /*lib*/, Main *bmain)
             SpaceOutliner *space_outliner = reinterpret_cast<SpaceOutliner *>(&space);
             space_outliner->flag |= SO_EXPAND_ON_FOCUS;
           }
+        }
+      }
+    }
+  }
+
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 503, 15)) {
+    for (Material &materials : bmain->materials) {
+      if (materials.gp_style != nullptr) {
+        if (materials.gp_style->fill_style == GP_MATERIAL_FILL_STYLE_GRADIENT) {
+          materials.gp_style->gradient = BKE_colorband_add(true);
+
+          copy_v4_v4(&materials.gp_style->gradient->data[0].r, materials.gp_style->fill_rgba);
+          copy_v4_v4(&materials.gp_style->gradient->data[1].r, materials.gp_style->mix_rgba);
         }
       }
     }
