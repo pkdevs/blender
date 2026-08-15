@@ -10,7 +10,6 @@
 #define DNA_DEPRECATED_ALLOW
 
 #include <cstddef>
-#include <cstdio>
 #include <cstring>
 #include <optional>
 
@@ -46,6 +45,7 @@
 #include "BLI_math_base_c.hh"
 #include "BLI_math_rotation_c.hh"
 #include "BLI_path_utils.hh"
+#include "BLI_set.hh"
 #include "BLI_string_utf8.hh"
 #include "BLI_string_utils.hh"
 #include "BLI_threads.hh"
@@ -67,6 +67,7 @@
 #include "BKE_editmesh.hh"
 #include "BKE_effect.h"
 #include "BKE_fcurve.hh"
+#include "BKE_fcurve_driver.h"
 #include "BKE_idprop.hh"
 #include "BKE_idtype.hh"
 #include "BKE_image.hh"
@@ -102,6 +103,7 @@
 #include "RE_engine.h"
 
 #include "RNA_access.hh"
+#include "RNA_prototypes.hh"
 
 #include "SEQ_iterator.hh"
 #include "SEQ_sequencer.hh"
@@ -2746,27 +2748,93 @@ static void mark_scene_audio_animation_stale_for_action_edits(Depsgraph *depsgra
   }
 }
 
-static bool scene_has_audio_animation(const Scene *scene)
+static FCurve *scene_audio_driver_fcurve(Scene *scene,
+                                         void *data,
+                                         StructRNA *type,
+                                         const char *property_name)
 {
-  if (scene->audio.flag & AUDIO_VOLUME_ANIMATED) {
+  AnimData *adt = BKE_animdata_from_id(&scene->id);
+  if (adt == nullptr || adt->action == nullptr) {
+    return nullptr;
+  }
+
+  PointerRNA ptr = RNA_pointer_create_discrete(&scene->id, type, data);
+  PropertyRNA *property = RNA_struct_find_property(&ptr, property_name);
+  if (property == nullptr) {
+    return nullptr;
+  }
+
+  bool driven = false;
+  FCurve *fcu = BKE_fcurve_find_by_rna(&ptr, property, 0, nullptr, nullptr, &driven, nullptr);
+  return driven ? fcu : nullptr;
+}
+
+static bool audio_driver_targets_user_modified(const Depsgraph *depsgraph, const FCurve *fcu)
+{
+  if (fcu == nullptr || fcu->driver == nullptr) {
+    return false;
+  }
+
+  for (const DriverVar &dvar : fcu->driver->variables) {
+    DRIVER_TARGETS_USED_LOOPER_BEGIN (&dvar) {
+      if (dtar->id != nullptr && dtar->id->recalc != 0 &&
+          DEG_id_is_user_modified(depsgraph, dtar->id))
+      {
+        return true;
+      }
+    }
+    DRIVER_TARGETS_LOOPER_END;
+  }
+  return false;
+}
+
+static bool scene_audio_driver_targets_user_modified(Depsgraph *depsgraph,
+                                                     Scene *scene,
+                                                     Set<const Scene *> &visited_scenes,
+                                                     bool &r_has_audio_driver)
+{
+  if (!visited_scenes.add(scene)) {
+    return false;
+  }
+
+  auto driver_target_was_modified = [&](void *data, StructRNA *type, const char *property_name) {
+    FCurve *fcu = scene_audio_driver_fcurve(scene, data, type, property_name);
+    if (fcu == nullptr) {
+      return false;
+    }
+
+    r_has_audio_driver = true;
+    return audio_driver_targets_user_modified(depsgraph, fcu);
+  };
+
+  if (driver_target_was_modified(scene, RNA_Scene, "audio_volume")) {
     return true;
   }
+
   if (scene->ed == nullptr) {
     return false;
   }
 
-  bool has_audio_animation = false;
+  bool target_was_modified = false;
   seq::foreach_strip(&scene->ed->seqbase, [&](Strip *strip) {
-    if (ELEM(strip->type, STRIP_TYPE_SOUND, STRIP_TYPE_SCENE) &&
-        (strip->flag &
-         (SEQ_AUDIO_VOLUME_ANIMATED | SEQ_AUDIO_PITCH_ANIMATED | SEQ_AUDIO_PAN_ANIMATED)))
+    if (ELEM(strip->type, STRIP_TYPE_SOUND, STRIP_TYPE_SCENE)) {
+      target_was_modified |= driver_target_was_modified(strip, RNA_Strip, "volume");
+      target_was_modified |= driver_target_was_modified(strip, RNA_Strip, "pitch");
+      target_was_modified |= driver_target_was_modified(strip, RNA_Strip, "pan");
+    }
+    if (target_was_modified) {
+      return false;
+    }
+    if (strip->type == STRIP_TYPE_SCENE &&
+        scene_audio_driver_targets_user_modified(
+            depsgraph, strip->scene, visited_scenes, r_has_audio_driver))
     {
-      has_audio_animation = true;
+      target_was_modified = true;
       return false;
     }
     return true;
   });
-  return has_audio_animation;
+  return target_was_modified;
 }
 
 static void mark_scene_audio_animation_stale_for_driver_target_edits(Depsgraph *depsgraph,
@@ -2774,8 +2842,20 @@ static void mark_scene_audio_animation_stale_for_driver_target_edits(Depsgraph *
 {
   /* Driver target edits are flushed to the Scene parameters operation, not to an Action. */
   if (!DEG_id_is_user_modified(depsgraph, &scene->id) ||
-      (scene->id.recalc & ID_RECALC_PARAMETERS) == 0 || !scene_has_audio_animation(scene))
+      (scene->id.recalc & ID_RECALC_PARAMETERS) == 0)
   {
+    return;
+  }
+
+  Scene *scene_orig = DEG_get_original(scene);
+  Set<const Scene *> visited_scenes;
+  bool has_audio_driver = false;
+  const bool target_was_modified = scene_audio_driver_targets_user_modified(
+      depsgraph, scene_orig, visited_scenes, has_audio_driver);
+  const bool audio_driver_was_modified = has_audio_driver &&
+                                         (scene->id.recalc &
+                                          (ID_RECALC_TRANSFORM | ID_RECALC_GEOMETRY));
+  if (!target_was_modified && !audio_driver_was_modified) {
     return;
   }
   BKE_sound_mark_scene_audio_animation_stale(scene);
