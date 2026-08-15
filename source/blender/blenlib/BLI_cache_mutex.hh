@@ -64,14 +64,14 @@
 
 #include <atomic>
 
+#include "BLI_collaborative_once_call.hh"
 #include "BLI_function_ref.hh"
-#include "BLI_mutex.hh"
 
 namespace blender {
 
 class CacheMutex {
  private:
-  Mutex mutex_;
+  threading::CollaborativeOnceFlag once_flag_;
   std::atomic<bool> cache_valid_ = false;
 
  public:
@@ -94,10 +94,7 @@ class CacheMutex {
   /**
    * Reset the cache. The next time #ensure is called, it will recompute that code.
    */
-  void tag_dirty()
-  {
-    cache_valid_.store(false);
-  }
+  void tag_dirty();
 
   /**
    * Return true if the cache currently does not exist or has been invalidated.
