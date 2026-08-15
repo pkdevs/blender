@@ -297,7 +297,7 @@ static void seq_split_set_right_hold_offset(Main *bmain,
   }
 
   /* Needed only to set `strip->len`. */
-  add_reload_new_file(bmain, scene, strip, false);
+  add_update_content_length(bmain, scene, strip);
   strip->right_handle_set(scene, timeline_frame);
 }
 
@@ -325,7 +325,7 @@ static void seq_split_set_left_hold_offset(Main *bmain,
   }
 
   /* Needed only to set `strip->len`. */
-  add_reload_new_file(bmain, scene, strip, false);
+  add_update_content_length(bmain, scene, strip);
   strip->left_handle_set(scene, timeline_frame);
 }
 
