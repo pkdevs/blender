@@ -10,6 +10,7 @@
 #define DNA_DEPRECATED_ALLOW
 
 #include <cstddef>
+#include <cstdio>
 #include <cstring>
 #include <optional>
 
