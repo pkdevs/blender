@@ -44,6 +44,7 @@
 #include "BKE_main.hh"
 #include "BKE_report.hh"
 #include "BKE_scene.hh"
+#include "BKE_sound.hh"
 
 #include "DEG_depsgraph.hh"
 #include "DEG_depsgraph_query.hh"
@@ -976,6 +977,10 @@ static bool screen_opengl_render_anim_init(wmOperator *op)
   oglrender->reports = op->reports;
 
   if (BKE_imtype_is_movie(image_format.imtype)) {
+    if (scene->r.ffcodecdata.audio_codec_id_get() != FFMPEG_CODEC_ID_NONE) {
+      BKE_sound_ensure_scene_audio_animation(oglrender->bmain, scene, oglrender->depsgraph);
+    }
+
     size_t width, height;
     int i;
 

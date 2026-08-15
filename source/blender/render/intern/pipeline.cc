@@ -2409,6 +2409,11 @@ void RE_RenderAnim(Render *re,
   render_init_depsgraph(re);
 
   if (is_movie && do_write_file) {
+    if (re->r.ffcodecdata.audio_codec_id_get() != FFMPEG_CODEC_ID_NONE) {
+      BKE_sound_ensure_scene_audio_animation(bmain, scene, re->pipeline_depsgraph);
+      re->pipeline_scene_eval = DEG_get_evaluated_scene(re->pipeline_depsgraph);
+    }
+
     size_t width, height;
     get_videos_dimensions(re, &rd, &image_format, &width, &height);
 
