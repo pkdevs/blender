@@ -17,8 +17,8 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_listbase.h"
-#include "BLI_math_base.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_base_c.hh"
 
 #include "DEG_depsgraph.hh"
 #include "DNA_anim_types.h"
@@ -1278,7 +1278,7 @@ void GRAPH_OT_blend_to_ease(wmOperatorType *ot)
   ot->poll = graphop_editable_keyframes_poll;
 
   /* Flags. */
-  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
+  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO | OPTYPE_BLOCKING | OPTYPE_GRAB_CURSOR_X;
 
   RNA_def_float_factor(ot->srna,
                        "factor",
@@ -1403,7 +1403,7 @@ void GRAPH_OT_match_slope(wmOperatorType *ot)
   ot->poll = graphop_editable_keyframes_poll;
 
   /* Flags. */
-  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
+  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO | OPTYPE_BLOCKING | OPTYPE_GRAB_CURSOR_X;
 
   RNA_def_float_factor(ot->srna,
                        "factor",
@@ -2003,7 +2003,7 @@ void GRAPH_OT_gaussian_smooth(wmOperatorType *ot)
   ot->poll = graphop_editable_keyframes_poll;
 
   /* Flags. */
-  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
+  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO | OPTYPE_BLOCKING | OPTYPE_GRAB_CURSOR_X;
 
   RNA_def_float_factor(ot->srna,
                        "factor",

@@ -18,10 +18,10 @@
 
 #include "ED_screen.hh"
 
-#include "BLI_listbase.h"
-#include "BLI_string.h"
-#include "BLI_string_utf8.h"
-#include "BLI_utildefines.h"
+#include "BLI_listbase.hh"
+#include "BLI_string.hh"
+#include "BLI_string_utf8.hh"
+#include "BLI_utildefines.hh"
 
 #include "BLT_translation.hh"
 
@@ -427,7 +427,7 @@ static bool add_collection_search_item(CollItemSearch &cis,
                          cis.name,
                          cis.data,
                          cis.iconid,
-                         cis.has_sep_char ? int(BUT_HAS_SEP_CHAR) : 0,
+                         cis.has_sep_char ? int64_t(BUT_HAS_SEP_CHAR) : 0,
                          name_prefix_offset);
 }
 
@@ -471,6 +471,15 @@ void rna_collection_search_update_fn(
 
       char *name;
       if (is_id) {
+        const ID *id = static_cast<ID *>(itemptr.data);
+
+        /* Hide dot prefixed data-blocks, but only if filter does not force them visible. */
+        if (U.flag & USER_HIDE_DOT_DATABLOCK) {
+          if ((id->name[2] == '.') && (str[0] != '.')) {
+            continue;
+          }
+        }
+
         iconid = id_icon_get(C, static_cast<ID *>(itemptr.data), false);
         if (!ELEM(iconid, 0, ICON_BLANK1)) {
           has_id_icon = true;
@@ -480,7 +489,6 @@ void rna_collection_search_update_fn(
           name = RNA_struct_name_get_alloc(&itemptr, name_buf, sizeof(name_buf), nullptr);
         }
         else {
-          const ID *id = static_cast<ID *>(itemptr.data);
           BKE_id_full_name_ui_prefix_get(name_buf, id, true, UI_SEP_CHAR, &name_prefix_offset);
           BLI_STATIC_ASSERT(sizeof(name_buf) >= MAX_ID_FULL_NAME_UI,
                             "Name string buffer should be big enough to hold full UI ID name");
@@ -635,13 +643,13 @@ int icon_from_id(const ID *id)
 int icon_from_report_type(int type)
 {
   if (type & RPT_ERROR_ALL) {
-    return ICON_CANCEL;
+    return ICON_STATUS_ERROR_FILLED;
   }
   if (type & RPT_WARNING_ALL) {
-    return ICON_ERROR;
+    return ICON_STATUS_WARNING_FILLED;
   }
   if (type & RPT_INFO_ALL) {
-    return ICON_INFO;
+    return ICON_STATUS_INFO_FILLED;
   }
   if (type & RPT_DEBUG_ALL) {
     return ICON_SYSTEM;
@@ -652,7 +660,7 @@ int icon_from_report_type(int type)
   if (type & RPT_OPERATOR) {
     return ICON_CHECKMARK;
   }
-  return ICON_INFO;
+  return ICON_STATUS_INFO_FILLED;
 }
 
 int icon_colorid_from_report_type(int type)
@@ -755,7 +763,7 @@ int calc_float_precision(int prec, double value)
 
 std::optional<std::string> button_online_manual_id(const Button *but)
 {
-  if (but->rnapoin.data && but->rnaprop) {
+  if (but->rnapoin && but->rnaprop) {
     return fmt::format(
         "{}.{}", RNA_struct_identifier(but->rnapoin.type), RNA_property_identifier(but->rnaprop));
   }
@@ -988,7 +996,7 @@ void butstore_update(Block *block)
     }
   }
 
-  if (LIKELY(block->butstore.first == nullptr)) {
+  if (block->butstore.first == nullptr) [[likely]] {
     return;
   }
 

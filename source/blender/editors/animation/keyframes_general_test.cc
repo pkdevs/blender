@@ -6,9 +6,9 @@
 
 #include "keyframes_general_intern.hh"
 
-#include "BLI_listbase.h"
-#include "BLI_string.h"
-#include "BLI_string_utf8.h"
+#include "BLI_listbase.hh"
+#include "BLI_string.hh"
+#include "BLI_string_utf8.hh"
 
 #include "BKE_armature.hh"
 #include "BKE_fcurve.hh"
@@ -52,7 +52,7 @@ FCurvePtr fake_fcurve(const char *rna_path, const int array_index)
   FCurve *fcurve = BKE_fcurve_create();
 
   if (rna_path) {
-    fcurve->rna_path = BLI_strdup(rna_path);
+    fcurve->rna_path_set(rna_path);
   }
   fcurve->array_index = array_index;
 

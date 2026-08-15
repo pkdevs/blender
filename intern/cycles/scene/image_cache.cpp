@@ -179,7 +179,10 @@ void ImageCache::free_tiled_image(DeviceScene &dscene, const KernelImageTexture 
     if (kernel_tile_descriptor_loaded(descriptors[i])) {
       free_tile(descriptors[i]);
     }
+    descriptors[i] = KERNEL_TILE_LOAD_NONE;
   }
+
+  dscene.image_texture_tile_descriptors.tag_modified();
 
   /* Clear eviction statistics bits for this image's tile descriptor range. */
   const size_t begin = size_t(tex.tile_descriptor_offset) + size_t(tex.tile_levels);
@@ -348,7 +351,6 @@ device_image &ImageCache::alloc_tile(Device &device,
                                      ImageDataType type,
                                      InterpolationType interpolation,
                                      const int tile_size_padded,
-                                     const bool for_cpu_cache_miss,
                                      KernelTileDescriptor &r_tile_descriptor)
 {
   thread_scoped_lock device_lock(device_mutex);
@@ -401,10 +403,16 @@ device_image &ImageCache::alloc_tile(Device &device,
 
     stats.add_tiled_bytes(img->memory_size());
 
-    images_first_free[key] = std::min(size_t(image_info_id), images_first_free[key]);
+    auto it_first_free = images_first_free.find(key);
+    if (it_first_free == images_first_free.end()) {
+      images_first_free[key] = size_t(image_info_id);
+    }
+    else {
+      it_first_free->second = std::min(size_t(image_info_id), it_first_free->second);
+    }
   }
 
-  if (alloc_image && device.has_unified_memory()) {
+  if (alloc_image && device.has_unified_memory_any()) {
     /* If we allocated a new image and one of the devices is CPU or Metal
      * that uses unified memory, we need to allocate the image immediately
      * as the tile descriptor will be updated and rendering kernels can start
@@ -412,17 +420,10 @@ device_image &ImageCache::alloc_tile(Device &device,
     img->copy_to_device();
     deferred_updates.erase(img);
   }
-  else if (for_cpu_cache_miss) {
-    if (device.info.type == DEVICE_MULTI) {
-      /* For CPU cache miss we don't need to update anything for CPU rendering but
-       * other GPUs will need an update the next time they load requested tiles. */
-      deferred_gpu_updates.insert(img);
-    }
-  }
-  else {
-    /* For GPU cache miss, we defer to copy all tiles packed in the same image together. */
-    deferred_updates.insert(img);
-  }
+
+  /* Note: deferred update insertion is delayed until after the tile pixels
+   * have been copied, so another device will not finalize its update before
+   * pixels are in device memory. */
 
   /* Mark tile as occupied and compute descriptor. */
   img->occupancy |= (uint64_t(1) << tile_offset);
@@ -459,7 +460,13 @@ void ImageCache::free_tile(const KernelTileDescriptor tile)
   /* Reconstruct key to update first_free map. */
   const DeviceImageKey key = img->key();
 
-  images_first_free[key] = std::min(size_t(image_info_id), images_first_free[key]);
+  auto it_first_free = images_first_free.find(key);
+  if (it_first_free == images_first_free.end()) {
+    images_first_free[key] = size_t(image_info_id);
+  }
+  else {
+    it_first_free->second = std::min(size_t(image_info_id), it_first_free->second);
+  }
 
   if (img->occupancy == 0) {
     /* All tiles free, remove the device image entirely. */
@@ -485,9 +492,7 @@ void ImageCache::free_tile(const KernelTileDescriptor tile)
 
 /* Tile descriptor management. */
 
-void ImageCache::load_image_tiled(DeviceScene &dscene,
-                                  const ImageMetaData &metadata,
-                                  KernelImageTexture &tex)
+void ImageCache::load_image_tiled(const ImageMetaData &metadata, KernelImageTexture &tex)
 {
   assert(is_power_of_two(metadata.tile_size));
 
@@ -498,15 +503,14 @@ void ImageCache::load_image_tiled(DeviceScene &dscene,
   const InterpolationType interpolation = InterpolationType(tex.interpolation);
   const int max_miplevels = interpolation != INTERPOLATION_CLOSEST ? 1 : INT_MAX;
 
-  vector<KernelTileDescriptor> levels;
+  int num_levels = 0;
   int num_tiles = 0;
 
   for (int miplevel = 0; max_miplevels; miplevel++) {
     const int mip_width = std::max(1, tex.width >> miplevel);
     const int mip_height = std::max(1, tex.height >> miplevel);
 
-    levels.push_back(num_tiles);
-
+    num_levels++;
     num_tiles += divide_up(mip_width, tile_size) * divide_up(mip_height, tile_size);
 
     if (mip_width <= tile_size && mip_height <= tile_size) {
@@ -514,37 +518,76 @@ void ImageCache::load_image_tiled(DeviceScene &dscene,
     }
   }
 
-  {
-    /* TODO: Make this more efficient with geometric growth or other methods. */
-    const thread_scoped_lock device_lock(device_mutex);
+  /* The descriptor range is assigned later in #load_image_tiled_descriptors,
+   * to avoid lock contention. */
+  tex.tile_descriptor_offset = KERNEL_TILE_LOAD_NONE;
+  tex.tile_levels = num_levels;
+  tex.tile_num = num_tiles;
+}
 
-    device_vector<KernelTileDescriptor> &tile_descriptors = dscene.image_texture_tile_descriptors;
-    device_vector<uint8_t> &tile_access = dscene.image_texture_tile_access_state;
+void ImageCache::load_image_tiled_descriptors(DeviceScene &dscene,
+                                              std::span<KernelImageTexture> image_textures)
+{
+  /* Find which image textures need tile descriptors filled. */
+  size_t num_descriptors = 0;
+  for (const KernelImageTexture &tex : image_textures) {
+    if (tex.tile_num > 0 && tex.tile_descriptor_offset == KERNEL_TILE_LOAD_NONE) {
+      num_descriptors += tex.tile_levels + tex.tile_num;
+    }
+  }
 
-    const int tile_descriptor_offset = tile_descriptors.size();
-    tile_descriptors.resize(tile_descriptor_offset + levels.size() + num_tiles);
+  if (num_descriptors == 0) {
+    return;
+  }
 
-    /* Resize access state to match tile descriptors. */
-    const size_t old_size = tile_access.size();
-    if (tile_descriptors.size() > old_size) {
-      tile_access.resize(tile_descriptors.size());
-      memset(tile_access.data() + old_size,
-             KERNEL_TILE_ACCESS_NONE,
-             tile_descriptors.size() - old_size);
+  /* Resize device vector. */
+  const thread_scoped_lock device_lock(device_mutex);
+
+  device_vector<KernelTileDescriptor> &tile_descriptors = dscene.image_texture_tile_descriptors;
+  device_vector<uint8_t> &tile_access = dscene.image_texture_tile_access_state;
+
+  size_t offset = tile_descriptors.size();
+  tile_descriptors.resize(offset + num_descriptors);
+
+  /* Initialize with a single memset, with assumption about KERNEL_TILE_LOAD_NONE value.
+   * This is the bulk of memory that needs to be set. */
+  static_assert(KERNEL_TILE_LOAD_NONE == ~KernelTileDescriptor(0),
+                "KERNEL_TILE_LOAD_NONE must be all 0xFF bytes for memset initialization");
+  memset(tile_descriptors.data() + offset, 0xFF, num_descriptors * sizeof(KernelTileDescriptor));
+
+  const size_t tile_access_old_size = tile_access.size();
+  if (tile_descriptors.size() > tile_access_old_size) {
+    tile_access.resize(tile_descriptors.size());
+    memset(tile_access.data() + tile_access_old_size,
+           KERNEL_TILE_ACCESS_NONE,
+           tile_descriptors.size() - tile_access_old_size);
+  }
+
+  stats.resize(tile_descriptors.size());
+
+  /* Fill mip level information in tile descriptors. */
+  for (KernelImageTexture &tex : image_textures) {
+    if (!(tex.tile_num > 0 && tex.tile_descriptor_offset == KERNEL_TILE_LOAD_NONE)) {
+      continue;
     }
 
-    stats.resize(tile_descriptors.size());
+    tex.tile_descriptor_offset = offset;
 
-    KernelTileDescriptor *descr_data = tile_descriptors.data() + tile_descriptor_offset;
+    KernelTileDescriptor *descr_data = tile_descriptors.data() + offset;
+    const int tile_size = 1 << tex.tile_size_shift;
+    int num_tiles = 0;
 
-    for (int i = 0; i < levels.size(); i++) {
-      descr_data[i] = levels.size() + levels[i];
+    for (int miplevel = 0; miplevel < tex.tile_levels; miplevel++) {
+      descr_data[miplevel] = tex.tile_levels + num_tiles;
+
+      const int mip_width = std::max(1, tex.width >> miplevel);
+      const int mip_height = std::max(1, tex.height >> miplevel);
+      num_tiles += divide_up(mip_width, tile_size) * divide_up(mip_height, tile_size);
     }
-    std::fill_n(descr_data + levels.size(), num_tiles, KERNEL_TILE_LOAD_NONE);
 
-    tex.tile_descriptor_offset = tile_descriptor_offset;
-    tex.tile_levels = levels.size();
-    tex.tile_num = num_tiles;
+    assert(num_tiles == tex.tile_num);
+
+    offset += tex.tile_levels + tex.tile_num;
   }
 }
 
@@ -572,7 +615,7 @@ KernelTileDescriptor ImageCache::load_tile(Device &device,
   KernelTileDescriptor tile_descriptor;
 
   device_image &mem = alloc_tile(
-      device, metadata.type, interpolation, tile_size_padded, for_cpu_cache_miss, tile_descriptor);
+      device, metadata.type, interpolation, tile_size_padded, tile_descriptor);
 
   const size_t pixel_bytes = mem.data_elements * datatype_size(mem.data_type);
   const size_t x_stride = pixel_bytes;
@@ -606,6 +649,19 @@ KernelTileDescriptor ImageCache::load_tile(Device &device,
   }
 
   if (ok) {
+    /* Mark image for deferred GPU update, after pixels have been loaded to all devices. */
+    if (!device.has_unified_image_memory_all()) {
+      const thread_scoped_lock device_lock(device_mutex);
+      if (for_cpu_cache_miss) {
+        if (device.info.type == DEVICE_MULTI) {
+          deferred_gpu_updates.insert(&mem);
+        }
+      }
+      else {
+        deferred_updates.insert(&mem);
+      }
+    }
+
     stats.load_tile(bit_index);
   }
 
@@ -934,8 +990,9 @@ void ImageCache::copy_to_device(DeviceScene &dscene, DeviceQueue &queue)
 
 void ImageCache::copy_images_to_device(const bool for_cpu_cache_miss)
 {
-  /* For CPU cache miss we skip deferred updates that were only meant for the GPU,
-   * to avoid repeated copies to the GPU. */
+  /* For CPU cache miss we skip deferred updates that were only meant for the GPU. CPU cache
+   * misses are resolved immediately for each tile, in every thread. So it would be inefficient
+   * to copy data to the GPU every time. */
   thread_scoped_lock device_lock(device_mutex);
   if (!for_cpu_cache_miss) {
     deferred_updates.merge(deferred_gpu_updates);

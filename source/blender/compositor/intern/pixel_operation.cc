@@ -27,13 +27,11 @@
 namespace blender::compositor {
 
 PixelOperation::PixelOperation(Context &context,
-                               PixelCompileUnit &compile_unit,
-                               const Schedule &schedule,
+                               CompileState &compile_state,
                                const ComputeContext &compute_context,
                                const bool is_single_value)
     : Operation(context),
-      compile_unit_(compile_unit),
-      schedule_(schedule),
+      compile_state_(compile_state),
       compute_context_(compute_context),
       is_single_value_(is_single_value)
 {
@@ -80,7 +78,7 @@ void PixelOperation::log_data()
   /* All inputs and outputs of pixel operations operate in the same domain, so the operation domain
    * should be logged for all. The exception is inputs that are single values, in which case, their
    * value is simply logged. */
-  for (const bNode *node : compile_unit_) {
+  for (const bNode *node : compile_state_.get_pixel_compile_unit()) {
     /* Log output values. */
     for (const bNodeSocket *output_socket : node->output_sockets()) {
       if (!is_socket_available(output_socket)) {
@@ -104,6 +102,30 @@ void PixelOperation::log_data()
         continue;
       }
 
+      if (compile_state_.get_schedule().unneeded_inputs.contains(input_socket)) {
+        continue;
+      }
+
+      /* The input has an implicit value. Get the input that corresponds to it, if it is a single
+       * value, log that single value, if not, we log the operation domain. */
+      const InputDescriptor input_descriptor = input_descriptor_from_input_socket(input_socket);
+      if (!input_socket->is_logically_linked() && input_descriptor.implicit_input.has_value()) {
+        const std::string &input_identifier = implicit_inputs_to_input_identifiers_map_.lookup(
+            input_descriptor.implicit_input.value());
+        const Result &input = this->get_input(input_identifier);
+        if (input.is_single_value()) {
+          tree_logger.log_value(*node, *input_socket, input.single_value());
+          continue;
+        }
+
+        tree_logger.input_socket_values.append(
+            *tree_logger.allocator,
+            {node->identifier,
+             input_socket->index(),
+             get_image_info_log(tree_logger.allocator, domain, this->context().get_precision())});
+        continue;
+      }
+
       if (!input_socket->is_logically_linked()) {
         continue;
       }
@@ -111,16 +133,15 @@ void PixelOperation::log_data()
       /* The input is linked to a node that is inside the pixel operation, so skip it since it will
        * inherit its value from an output that was logged above. */
       const bNodeSocket &linked_output = *input_socket->logically_linked_sockets()[0];
-      if (compile_unit_.contains(&linked_output.owner_node())) {
+      if (compile_state_.get_pixel_compile_unit().contains(&linked_output.owner_node())) {
         continue;
       }
 
       /* Otherwise, it is linked to a node that is outside of the compile unit. If it is a single
-       * value, log that single value, if not, we log the operation domain. */
-      const std::string &input_identifier = outputs_to_declared_inputs_map_.lookup(&linked_output);
-      const Result &input = this->get_input(input_identifier);
+       * value, skip it since it will inherit its value from an output that was logged before, if
+       * not, we log the operation domain. */
+      const Result &input = compile_state_.get_result_from_output_socket(linked_output);
       if (input.is_single_value()) {
-        tree_logger.log_value(*node, *input_socket, input.single_value());
         continue;
       }
 
@@ -175,7 +196,7 @@ void PixelOperation::compute_results_reference_counts(const Schedule &schedule)
            * directly. */
           return schedule.nodes.contains(&input.owner_node()) &&
                  !schedule.unneeded_inputs.contains(&input) &&
-                 !compile_unit_.contains(&input.owner_node());
+                 !compile_state_.get_pixel_compile_unit().contains(&input.owner_node());
         });
 
     if (preview_outputs_.contains(item.key)) {

@@ -226,16 +226,127 @@ AbstractViewItem *AbstractGridView::navigate_down(AbstractViewItem *from)
   return next_item ? next_item : from;
 }
 
-void AbstractGridView::scroll_active_into_view(bContext *C)
+void AbstractGridView::page_scroll(bContext *C, PageScrollDirection direction)
 {
+  ARegion *region = CTX_wm_region(C);
+  View2D &v2d = region->v2d;
+
+  const IndexRange &visible_range = this->get_visible_range(v2d, nullptr);
+  const int first_idx_in_view = visible_range.first();
+
+  const int cur_height = BLI_rctf_size_y(&v2d.cur);
+  const int view_height = BLI_rcti_size_y(&v2d.mask);
+  const int tot_height = BLI_rctf_size_y(&v2d.tot);
+  const int count_rows_in_view = std::max(view_height / style_.tile_height, 1);
+  const int tot_rows = std::max(tot_height / style_.tile_height, 1);
+
+  switch (direction) {
+    case PageScrollDirection::Up: {
+      const int target_row = std::max(0, (first_idx_in_view / cols_per_row_) - count_rows_in_view);
+      v2d.cur.ymax = v2d.tot.ymax - target_row * style_.tile_height;
+      v2d.cur.ymin = v2d.cur.ymax - cur_height;
+      break;
+    }
+    case PageScrollDirection::Down: {
+      const int target_row = std::min(tot_rows,
+                                      (first_idx_in_view / cols_per_row_) + count_rows_in_view);
+      v2d.cur.ymax = v2d.tot.ymax - target_row * style_.tile_height;
+      v2d.cur.ymin = v2d.cur.ymax - cur_height;
+      break;
+    }
+    case PageScrollDirection::Top: {
+      v2d.cur.ymax = v2d.tot.ymax;
+      v2d.cur.ymin = v2d.cur.ymax - cur_height;
+      break;
+    }
+    case PageScrollDirection::Bottom: {
+      v2d.cur.ymin = v2d.tot.ymin;
+      v2d.cur.ymax = v2d.cur.ymin + cur_height;
+      break;
+    }
+  }
+}
+
+IndexRange AbstractGridView::get_visible_range(
+    const View2D &v2d, const AbstractGridViewItem *force_visible_item) const
+{
+  BLI_assert(v2d.flag & V2D_IS_INIT);
+
+  int first_idx_in_view = 0;
+
+  const float scroll_ofs_y = std::abs(v2d.cur.ymax - v2d.tot.ymax);
+  if (!IS_EQF(scroll_ofs_y, 0)) {
+    const int scrolled_away_rows = int(scroll_ofs_y) / style_.tile_height;
+
+    first_idx_in_view = scrolled_away_rows * cols_per_row_;
+  }
+
+  const int view_height = BLI_rcti_size_y(&v2d.mask);
+  const int count_rows_in_view = std::max(view_height / style_.tile_height, 1);
+  const int max_items_in_view = (count_rows_in_view + 1) * cols_per_row_;
+  BLI_assert(max_items_in_view > 0);
+
+  IndexRange visible_items(first_idx_in_view, max_items_in_view);
+
+  /* Ensure #visible_items contains #force_visible_item, adjust if necessary. */
+  if (force_visible_item && force_visible_item->is_filtered_visible()) {
+    if (std::optional<int> item_idx = find_filtered_item_index(*force_visible_item)) {
+      if (!visible_items.contains(*item_idx)) {
+        /* Move range so the first row contains #force_visible_item. */
+        return IndexRange((item_idx == 0) ? 0 : *item_idx % cols_per_row_, max_items_in_view);
+      }
+    }
+  }
+
+  return visible_items;
+}
+
+void AbstractGridView::scroll_active_into_view(bContext *C, bool scroll_active_to_center)
+{
+  int index = 0;
   this->foreach_filtered_item([&](AbstractViewItem &item) {
     if (item.is_active()) {
       Button *but = reinterpret_cast<Button *>(item.view_item_button());
       ARegion *region = CTX_wm_region(C);
-      if (but && region) {
-        but_ensure_in_view(C, region, but);
+      rctf rect;
+      View2D &v2d = region->v2d;
+      if (but) {
+        rctf region_rect;
+        block_to_region_rctf(region, but->block, &region_rect, &but->rect);
+
+        view2d_region_to_view_rctf(&v2d, &region_rect, &rect);
+      }
+
+      const IndexRange &visible_range = this->get_visible_range(v2d, nullptr);
+      int first_idx_in_view = visible_range.first();
+      int last_idx_in_view = visible_range.last();
+
+      if (but) {
+        /* When button is slightly outside the view, clamp region to button's height, see: !159566
+         */
+        first_idx_in_view += rect.ymax > v2d.cur.ymax ? cols_per_row_ : 0;
+        last_idx_in_view -= rect.ymin < v2d.cur.ymin ? cols_per_row_ : 0;
+      }
+
+      const int view_height = BLI_rcti_size_y(&v2d.mask);
+      const int count_rows_in_view = std::max(view_height / style_.tile_height, 1);
+
+      if (index < first_idx_in_view) {
+        int target_row = index / cols_per_row_;
+        target_row -= scroll_active_to_center ? count_rows_in_view / 2 : 0;
+        const int cur_height = BLI_rctf_size_y(&v2d.cur);
+        v2d.cur.ymax = v2d.tot.ymax - target_row * style_.tile_height;
+        v2d.cur.ymin = v2d.cur.ymax - cur_height;
+      }
+      else if (index >= last_idx_in_view) {
+        int target_row = (index / cols_per_row_) + 1;
+        target_row += scroll_active_to_center ? count_rows_in_view / 2 : 0;
+        const int cur_height = BLI_rctf_size_y(&v2d.cur);
+        v2d.cur.ymin = v2d.tot.ymax - target_row * style_.tile_height - 2 * U.pixelsize;
+        v2d.cur.ymax = v2d.cur.ymin + cur_height;
       }
     }
+    index++;
   });
 }
 
@@ -276,7 +387,7 @@ std::optional<std::string> AbstractGridViewItem::debug_name() const
 
 AbstractGridView &AbstractGridViewItem::get_view() const
 {
-  if (UNLIKELY(!view_)) {
+  if (!view_) [[unlikely]] {
     throw std::runtime_error(
         "Invalid state, item must be added through AbstractGridView::add_item()");
   }
@@ -347,42 +458,8 @@ BuildOnlyVisibleButtonsHelper::BuildOnlyVisibleButtonsHelper(
     : grid_view_(grid_view), style_(grid_view.get_style()), cols_per_row_(cols_per_row)
 {
   if (v2d.flag & V2D_IS_INIT && grid_view.get_item_count_filtered()) {
-    visible_items_range_ = this->get_visible_range(v2d, force_visible_item);
+    visible_items_range_ = this->grid_view_.get_visible_range(v2d, force_visible_item);
   }
-}
-
-IndexRange BuildOnlyVisibleButtonsHelper::get_visible_range(
-    const View2D &v2d, const AbstractGridViewItem *force_visible_item) const
-{
-  BLI_assert(v2d.flag & V2D_IS_INIT);
-
-  int first_idx_in_view = 0;
-
-  const float scroll_ofs_y = std::abs(v2d.cur.ymax - v2d.tot.ymax);
-  if (!IS_EQF(scroll_ofs_y, 0)) {
-    const int scrolled_away_rows = int(scroll_ofs_y) / style_.tile_height;
-
-    first_idx_in_view = scrolled_away_rows * cols_per_row_;
-  }
-
-  const int view_height = BLI_rcti_size_y(&v2d.mask);
-  const int count_rows_in_view = std::max(view_height / style_.tile_height, 1);
-  const int max_items_in_view = (count_rows_in_view + 1) * cols_per_row_;
-  BLI_assert(max_items_in_view > 0);
-
-  IndexRange visible_items(first_idx_in_view, max_items_in_view);
-
-  /* Ensure #visible_items contains #force_visible_item, adjust if necessary. */
-  if (force_visible_item && force_visible_item->is_filtered_visible()) {
-    if (std::optional<int> item_idx = find_filtered_item_index(*force_visible_item)) {
-      if (!visible_items.contains(*item_idx)) {
-        /* Move range so the first row contains #force_visible_item. */
-        return IndexRange((item_idx == 0) ? 0 : *item_idx % cols_per_row_, max_items_in_view);
-      }
-    }
-  }
-
-  return visible_items;
 }
 
 bool BuildOnlyVisibleButtonsHelper::is_item_visible(const int item_idx) const

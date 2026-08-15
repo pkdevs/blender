@@ -52,7 +52,7 @@ template<typename PointID, typename GetConstraintPointIdsFn>
 inline ConstraintColoring generic_constraint_coloring(
     GetConstraintPointIdsFn &&get_constraint_points_fn,
     const int constraints_num,
-    IndexMaskMemory &memory)
+    LinearAllocator<> &memory)
 {
   if (constraints_num == 0) {
     return {};
@@ -72,7 +72,7 @@ inline ConstraintColoring generic_constraint_coloring(
 }
 
 ConstraintColoring color_constraints__unary(const Span<int> affected_points,
-                                            IndexMaskMemory &memory)
+                                            LinearAllocator<> &memory)
 {
   SCOPED_TIMER(__func__);
   return generic_constraint_coloring<int>(
@@ -392,7 +392,7 @@ ConstraintColoring color_constraints__binary(const Span<int2> edges, IndexMaskMe
 }
 
 ConstraintColoring color_constraints__n_ary(const GroupedSpan<int> affected_points,
-                                            IndexMaskMemory &memory)
+                                            LinearAllocator<> &memory)
 {
   SCOPED_TIMER(__func__);
   return generic_constraint_coloring<int>(

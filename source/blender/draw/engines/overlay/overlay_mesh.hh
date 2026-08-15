@@ -12,6 +12,7 @@
 
 #include "BKE_customdata.hh"
 #include "BKE_editmesh.hh"
+#include "BKE_image_gpu.hh"
 #include "BKE_mask.hh"
 #include "BKE_mesh.hh"
 #include "BKE_mesh_types.hh"
@@ -412,7 +413,7 @@ class Meshes : Overlay {
     GPU_debug_group_end();
   }
 
-  void draw_color_only(Framebuffer &framebuffer, Manager &manager, View &view) final
+  void draw_line_only(Framebuffer &framebuffer, Manager &manager, View &view) final
   {
     if (!enabled_) {
       return;
@@ -430,7 +431,7 @@ class Meshes : Overlay {
       return;
     }
 
-    GPU_debug_group_begin("Mesh Edit Color Only");
+    GPU_debug_group_begin("Mesh Edit Line Only");
 
     GPU_framebuffer_bind(framebuffer);
     manager.submit(edit_mesh_normals_ps_, view);
@@ -473,7 +474,15 @@ class Meshes : Overlay {
   {
     Mesh &mesh = DRW_object_get_data_for_drawing<Mesh>(*ob);
     if (BMEditMesh *em = mesh.runtime->edit_mesh.get()) {
-      return CustomData_get_offset(&em->bm->vdata, CD_MVERT_SKIN) != -1;
+      if (CustomData_get_offset_named(&em->bm->vdata, CD_PROP_FLOAT2, "skin_modifier_radius") ==
+          -1)
+      {
+        return false;
+      }
+      if (CustomData_get_offset_named(&em->bm->vdata, CD_PROP_BOOL, "skin_modifier_root") == -1) {
+        return false;
+      }
+      return true;
     }
     return false;
   }
@@ -994,8 +1003,10 @@ class MeshUVs : Overlay {
 
       const ImagePaintSettings &image_paint_settings = tool_setting->imapaint;
       blender::Image *stencil_image = image_paint_settings.clone;
+      gpu::Texture *stencil_gpu_texture = BKE_image_acquire_gpu_texture(stencil_image, nullptr);
+      DRW_manager_get()->hold_texture(stencil_gpu_texture);
       TextureRef stencil_texture;
-      stencil_texture.wrap(BKE_image_get_gpu_texture(stencil_image, nullptr));
+      stencil_texture.wrap(stencil_gpu_texture);
 
       if (stencil_texture.is_valid()) {
         float2 size_image;

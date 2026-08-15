@@ -22,12 +22,12 @@
 #include "MEM_guardedalloc.h"
 
 #include "BLI_array.hh"
-#include "BLI_listbase.h"
-#include "BLI_math_geom.h"
-#include "BLI_math_rotation.h"
-#include "BLI_math_vector.h"
-#include "BLI_utildefines.h"
-#include "BLI_utildefines_stack.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_geom_c.hh"
+#include "BLI_math_rotation_c.hh"
+#include "BLI_math_vector_c.hh"
+#include "BLI_utildefines.hh"
+#include "BLI_utildefines_stack.hh"
 
 #include "BKE_curve.hh"
 
@@ -328,7 +328,7 @@ static void bm_vert_calc_surface_tangent(BMesh *bm, BMVert *v, float r_no[3])
 
   /* first find rim edges, typically we will only add 2 normals */
   BM_ITER_ELEM (e, &eiter, v, BM_EDGES_OF_VERT) {
-    if (UNLIKELY(BM_edge_is_wire(e))) {
+    if (BM_edge_is_wire(e)) [[unlikely]] {
       /* pass - this may confuse things */
     }
     else if (BMO_edge_flag_test(bm, e, EDGE_RIM)) {
@@ -1077,12 +1077,6 @@ static void bm_edgering_pair_ringsubd(BMesh *bm,
   BM_mesh_edgeloops_free(&eloops_ring);
 }
 
-static bool bm_edge_rim_test_cb(BMEdge *e, void *bm_v)
-{
-  BMesh *bm = static_cast<BMesh *>(bm_v);
-  return BMO_edge_flag_test_bool(bm, e, EDGE_RIM);
-}
-
 void bmo_subdivide_edgering_exec(BMesh *bm, BMOperator *op)
 {
   /* NOTE: keep this operator fast, its used in a modifier. */
@@ -1163,7 +1157,8 @@ void bmo_subdivide_edgering_exec(BMesh *bm, BMOperator *op)
   /* -------------------------------------------------------------------- */
   /* Execute subdivision on all ring pairs */
 
-  count = BM_mesh_edgeloops_find(bm, &eloops_rim, bm_edge_rim_test_cb, static_cast<void *>(bm));
+  count = BM_mesh_edgeloops_find(
+      bm, &eloops_rim, [&](BMEdge *e) { return BMO_edge_flag_test_bool(bm, e, EDGE_RIM); });
 
   if (count < 2) {
     BMO_error_raise(bm, op, BMO_ERROR_CANCEL, "No edge rings found");

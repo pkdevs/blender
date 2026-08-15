@@ -26,13 +26,13 @@ static const EnumPropertyItem mode_items[] = {
     {int(Mode::BundleType),
      "BUNDLE_TYPE",
      ICON_NONE,
-     "Bundle Type",
-     "Find paths to bundles of a specific type"},
+     N_("Bundle Type"),
+     N_("Find paths to bundles of a specific type")},
     {int(Mode::DataType),
      "DATA_TYPE",
      ICON_NONE,
-     "Data Type",
-     "Find paths to values of a specific data type"},
+     N_("Data Type"),
+     N_("Find paths to values of a specific data type")},
     {0},
 };
 
@@ -71,10 +71,10 @@ static void node_geo_exec(GeoNodeExecParams params)
   Vector<std::string> paths;
   switch (mode) {
     case Mode::All: {
-      foreach_nested_bundle_item(bundle,
-                                 [&](const Span<UString> path, const BundleItemValue & /*value*/) {
-                                   paths.append(Bundle::combine_path(path));
-                                 });
+      foreach_nested_bundle_item(
+          bundle, [&](const Span<BundleKey> path, const BundleItemValue & /*value*/) {
+            paths.append(Bundle::combine_path(path));
+          });
       break;
     }
     case Mode::BundleType: {
@@ -82,7 +82,7 @@ static void node_geo_exec(GeoNodeExecParams params)
       const StringPatternMode pattern_mode = params.extract_input<StringPatternMode>(
           "Pattern Mode"_ustr);
       std::string pattern_error;
-      std::optional<StringPattern> pattern_fn = StringPattern::from_string(
+      std::optional<StringPattern> pattern_fn = StringPattern::from_str(
           pattern_mode, type_pattern, pattern_error);
       if (!pattern_fn) {
         params.error_message_add(NodeWarningType::Error, pattern_error);

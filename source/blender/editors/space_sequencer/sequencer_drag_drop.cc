@@ -11,11 +11,11 @@
 #include "DNA_scene_types.h"
 #include "DNA_sound_types.h"
 
-#include "BLI_math_base.h"
+#include "BLI_math_base_c.hh"
 #include "BLI_path_utils.hh"
-#include "BLI_string.h"
+#include "BLI_string.hh"
 #include "BLI_string_ref.hh"
-#include "BLI_string_utf8.h"
+#include "BLI_string_utf8.hh"
 #include "BLI_string_utils.hh"
 
 #include "BKE_context.hh"
@@ -23,6 +23,7 @@
 #include "BKE_image.hh"
 #include "BKE_main.hh"
 
+#include "SEQ_add.hh"
 #include "SEQ_channels.hh"
 #include "SEQ_iterator.hh"
 #include "SEQ_sequencer.hh"
@@ -236,9 +237,9 @@ static float update_overlay_strip_position_data(bContext *C, const int mval[2])
   /* Check if there is a strip that would intersect with the new strip(s). */
   coords->is_intersecting = false;
   Strip dummy_strip{};
-  seq::strip_channel_set(&dummy_strip, coords->channel);
+  dummy_strip.channel_set(coords->channel);
   dummy_strip.start = coords->start_frame;
-  dummy_strip.len = coords->strip_length;
+  dummy_strip.content_length_set(coords->strip_length);
   dummy_strip.speed_factor = 1.0f;
   dummy_strip.media_playback_rate = coords->playback_rate;
   dummy_strip.flag = SEQ_AUTO_PLAYBACK_RATE;
@@ -247,7 +248,7 @@ static float update_overlay_strip_position_data(bContext *C, const int mval[2])
   for (int i = 0; i < coords->num_channels && !coords->is_intersecting; i++) {
     coords->is_intersecting = seq::transform_test_overlap(
         scene, ed->current_strips(), &dummy_strip);
-    seq::strip_channel_set(&dummy_strip, dummy_strip.channel + 1);
+    dummy_strip.channel_set(dummy_strip.channel + 1);
   }
 
   return strip_len;
@@ -416,8 +417,6 @@ static void draw_strip_in_view(bContext *C, wmWindow * /*win*/, wmDrag *drag, co
   uchar strip_color[4];
   strip_color[3] = 255;
   uchar text_color[4] = {255, 255, 255, 255};
-  float pixelx = BLI_rctf_size_x(&region->v2d.cur) / (BLI_rcti_size_x(&region->v2d.mask) + 1);
-  float pixely = BLI_rctf_size_y(&region->v2d.cur) / (BLI_rcti_size_y(&region->v2d.mask) + 1);
 
   StripsDrawBatch batch(&region->v2d);
 
@@ -454,6 +453,9 @@ static void draw_strip_in_view(bContext *C, wmWindow * /*win*/, wmDrag *drag, co
     }
     strip_color[3] = 204;
     data.col_outline = color_pack(strip_color);
+
+    const float pixelx = ui::view2d_pixel_size_get_x(&region->v2d);
+    const float pixely = ui::view2d_pixel_size_get_y(&region->v2d);
 
     /* Taken from strip_handle_draw_size_get(). */
     const float handle_size = pixelx * (5.0f * U.pixelsize);
@@ -564,7 +566,8 @@ static void prefetch_data_fn(void *custom_data, wmJobWorkerStatus * /*worker_sta
         g_drop_coords.num_channels = audio_streams;
         g_drop_coords.num_audio = g_drop_coords.num_channels;
       }
-      catch (aud::Exception &) {
+      catch (aud::Exception &ex) {
+        (void)ex;
       }
       /* The playback rate is defined by the scene. This will be computed later in
        * #update_overlay_strip_position_data, when we know the scene from the context. So set it to
@@ -592,7 +595,8 @@ static void prefetch_data_fn(void *custom_data, wmJobWorkerStatus * /*worker_sta
     try {
       audio_streams = int(aud::FileManager::queryStreams(job_data->path).size());
     }
-    catch (aud::Exception &) {
+    catch (aud::Exception &ex) {
+      (void)ex;
     }
 #endif
     g_drop_coords.num_channels = video_streams + audio_streams;
@@ -665,7 +669,7 @@ static void image_drop_on_enter(wmDropBox *drop, wmDrag * /*drag*/)
   }
 
   SeqDropCoords *coords = static_cast<SeqDropCoords *>(drop->draw_data);
-  coords->strip_length = DEFAULT_IMG_STRIP_LENGTH;
+  coords->strip_length = seq::DEFAULT_STRIP_LENGTH;
   coords->num_channels = 1;
 }
 

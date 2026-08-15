@@ -10,8 +10,12 @@
 
 #pragma once
 
+#include <cstdarg>
+
+#include "BLI_array.hh"
+#include "BLI_math_vector_types.hh"
 #include "BLI_span.hh"
-#include "BLI_sys_types.h"
+#include "BLI_sys_types.hh"
 
 namespace blender {
 
@@ -23,7 +27,6 @@ struct BMFace;
 struct BMVert;
 struct BMOperator;
 struct EnumPropertyItem;
-struct LinkNode;
 struct Main;
 struct Object;
 struct Scene;
@@ -50,6 +53,13 @@ bool EDBM_op_call_and_selectf(BMEditMesh *em,
                               bool select_extend,
                               const char *fmt,
                               ...);
+/** A `va_list` version of #EDBM_op_call_and_selectf. */
+bool EDBM_op_vcall_and_selectf(BMEditMesh *em,
+                               wmOperator *op,
+                               const char *select_slot_out,
+                               bool select_extend,
+                               const char *fmt,
+                               va_list list);
 /**
  * Same as above, but doesn't report errors.
  */
@@ -139,6 +149,10 @@ void MESH_OT_circularize(wmOperatorType *ot);
 
 void MESH_OT_flatten(wmOperatorType *ot);
 
+/* *** `editmesh_relax_edge_loops.cc` *** */
+
+void MESH_OT_relax_edge_loops(wmOperatorType *ot);
+
 /* *** `editmesh_extrude.cc` *** */
 
 void MESH_OT_extrude_repeat(wmOperatorType *ot);
@@ -187,8 +201,11 @@ void MESH_OT_knife_project(wmOperatorType *ot);
 /**
  * \param use_tag: When set, tag all faces inside the polylines.
  */
-void EDBM_mesh_knife(
-    ViewContext *vc, Span<Object *> objects, LinkNode *polys, bool use_tag, bool cut_through);
+void EDBM_mesh_knife(ViewContext *vc,
+                     Span<Object *> objects,
+                     Span<Array<float2>> polys,
+                     bool use_tag,
+                     bool cut_through);
 
 wmKeyMap *knifetool_modal_keymap(wmKeyConfig *keyconf);
 

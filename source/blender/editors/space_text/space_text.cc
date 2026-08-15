@@ -13,13 +13,14 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_listbase.h"
-#include "BLI_string_utf8.h"
+#include "BLI_listbase.hh"
+#include "BLI_string_utf8.hh"
 
 #include "BKE_context.hh"
 #include "BKE_lib_query.hh"
 #include "BKE_lib_remap.hh"
 #include "BKE_screen.hh"
+#include "BKE_text.h"
 
 #include "ED_screen.hh"
 #include "ED_space_api.hh"
@@ -53,7 +54,7 @@ static SpaceLink *text_create(const ScrArea * /*area*/, const Scene * /*scene*/)
   stext = MEM_new<SpaceText>("inittext");
   stext->spacetype = SPACE_TEXT;
 
-  stext->lheight = 12;
+  stext->line_height = 12;
   stext->tabnumber = 4;
   stext->margin_column = 80;
   stext->showsyntax = true;
@@ -113,6 +114,50 @@ static SpaceLink *text_duplicate(SpaceLink *sl)
 
   return reinterpret_cast<SpaceLink *>(stextn);
 }
+
+#ifdef WITH_INPUT_IME
+static std::optional<ARegionIMECursorState> text_main_region_cursor_ime(wmWindow * /*win*/,
+                                                                        const ScrArea *area,
+                                                                        const ARegion *region,
+                                                                        ARegionIMECursor *r_cursor)
+{
+  SpaceText *st = static_cast<SpaceText *>(area->spacedata.first);
+  /* Pending while scrolling, since the position is valid again once it ends.
+   * This must *not* cancel the composition. */
+  if (st->flags & ST_SCROLL_SELECT) {
+    return ARegionIMECursorState::PositionPending;
+  }
+
+  /* Font metrics are cached during draw; zero means the region hasn't been drawn yet. */
+  if (st->runtime->line_height_px == 0) {
+    return ARegionIMECursorState::PositionPending;
+  }
+
+  const std::optional<int2> cursor_xy = space_text_cursor_region_xy_get(st, region);
+  if (!cursor_xy) {
+    return std::nullopt;
+  }
+  const int x = (*cursor_xy)[0];
+  const int y = (*cursor_xy)[1];
+
+  /* Report the glyph extent, not the line cell: the preview sits its baseline a descender
+   * above `ymin` (see #region_overlay_draw) while the editor draws text one line height
+   * below the cell top, both use the same font & size so the descender matches. */
+  const int line_height = st->runtime->line_height_px;
+  const int baseline_y = y - line_height;
+  const int ymin = baseline_y + st->runtime->descender_px;
+
+  r_cursor->rect = {
+      .xmin = x,
+      .xmax = x,
+      .ymin = ymin,
+      .ymax = ymin + line_height,
+  };
+  r_cursor->font_size = line_height;
+  return ARegionIMECursorState::PositionSet;
+}
+
+#endif
 
 static void text_listener(const wmSpaceTypeListenerParams *params)
 {
@@ -473,6 +518,9 @@ void ED_spacetype_text()
   art->draw = text_main_region_draw;
   art->cursor = text_cursor;
   art->event_cursor = true;
+#ifdef WITH_INPUT_IME
+  art->cursor_ime = text_main_region_cursor_ime;
+#endif
 
   BLI_addhead(&st->regiontypes, art);
 

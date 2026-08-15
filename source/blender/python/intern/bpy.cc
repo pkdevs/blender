@@ -16,9 +16,9 @@
 #include <Python.h>
 #include <optional>
 
-#include "BLI_string.h"
+#include "BLI_string.hh"
 #include "BLI_string_utils.hh"
-#include "BLI_utildefines.h"
+#include "BLI_utildefines.hh"
 
 #include "BKE_appdir.hh"
 #include "BKE_blender_version.h"
@@ -45,6 +45,7 @@
 #include "bpy_rna.hh"
 #include "bpy_rna_data.hh"
 #include "bpy_rna_gizmo.hh"
+#include "bpy_rna_id_collection.hh"
 #include "bpy_rna_types_capi.hh"
 #include "bpy_utils_previews.hh"
 #include "bpy_utils_units.hh"
@@ -128,7 +129,7 @@ static PyObject *bpy_blend_paths(PyObject * /*self*/, PyObject *args, PyObject *
 
   static const char *_keywords[] = {"absolute", "packed", "local", nullptr};
   static _PyArg_Parser _parser = {
-      "|$" /* Optional keyword only arguments. */
+      "|$" /* Optional, keyword only arguments. */
       "O&" /* `absolute` */
       "O&" /* `packed` */
       "O&" /* `local` */
@@ -235,7 +236,7 @@ static PyObject *bpy_user_resource(PyObject * /*self*/, PyObject *args, PyObject
   static const char *_keywords[] = {"type", "path", nullptr};
   static _PyArg_Parser _parser = {
       "O&" /* `type` */
-      "|$" /* Optional keyword only arguments. */
+      "|$" /* Optional, keyword only arguments. */
       "O&" /* `path` */
       ":user_resource",
       _keywords,
@@ -288,7 +289,7 @@ static PyObject *bpy_system_resource(PyObject * /*self*/, PyObject *args, PyObje
   static const char *_keywords[] = {"type", "path", nullptr};
   static _PyArg_Parser _parser = {
       "O&" /* `type` */
-      "|$" /* Optional keyword only arguments. */
+      "|$" /* Optional, keyword only arguments. */
       "O&" /* `path` */
       ":system_resource",
       _keywords,
@@ -319,19 +320,28 @@ PyDoc_STRVAR(
     "   Return the base path for storing system files.\n"
     "\n"
     "   :param type: The resource type.\n"
-    "   :type type: Literal['USER', 'LOCAL', 'SYSTEM']\n"
+    "   :type type: Literal['USER', 'LOCAL', 'SYSTEM', 'SYSTEM_LIBS']\n"
     "   :param major: Major version. None (the default) uses ``bpy.app.version[0]``.\n"
     "   :type major: int | None\n"
     "   :param minor: Minor version. None (the default) uses ``bpy.app.version[1]``.\n"
     "   :type minor: int | None\n"
     "   :return: the resource path (not necessarily existing).\n"
-    "   :rtype: str\n");
+    "   :rtype: str\n"
+    "\n"
+    "   .. note::\n"
+    "\n"
+    "      ``SYSTEM_LIBS`` mirrors ``SYSTEM`` "
+    "but resolves to the directory for architecture-dependent libraries "
+    "(typically under ``/usr/lib/...`` rather than ``/usr/share/...``). "
+    "It is an empty string on builds without a separate library directory, "
+    "such as portable builds and the Python module.\n");
 static PyObject *bpy_resource_path(PyObject * /*self*/, PyObject *args, PyObject *kw)
 {
   const PyC_StringEnumItems type_items[] = {
       {BLENDER_RESOURCE_PATH_USER, "USER"},
       {BLENDER_RESOURCE_PATH_LOCAL, "LOCAL"},
       {BLENDER_RESOURCE_PATH_SYSTEM, "SYSTEM"},
+      {BLENDER_RESOURCE_PATH_SYSTEM_LIBS, "SYSTEM_LIBS"},
       {0, nullptr},
   };
   PyC_StringEnum type = {type_items};
@@ -342,7 +352,7 @@ static PyObject *bpy_resource_path(PyObject * /*self*/, PyObject *args, PyObject
   static const char *_keywords[] = {"type", "major", "minor", nullptr};
   static _PyArg_Parser _parser = {
       "O&" /* `type` */
-      "|$" /* Optional keyword only arguments. */
+      "|$" /* Optional, keyword only arguments. */
       "O&" /* `major` */
       "O&" /* `minor` */
       ":resource_path",
@@ -396,8 +406,8 @@ static PyObject *bpy_driver_secure_code_test(PyObject * /*self*/, PyObject *args
   bool verbose = false;
   static const char *_keywords[] = {"code", "namespace", "verbose", nullptr};
   static _PyArg_Parser _parser = {
-      "O!" /* `expression` */
-      "|$" /* Optional keyword only arguments. */
+      "O!" /* `code` */
+      "|$" /* Optional, keyword only arguments. */
       "O&" /* `namespace` */
       "O&" /* `verbose` */
       ":driver_secure_code_test",
@@ -634,7 +644,7 @@ static PyObject *bpy_wm_capabilities(PyObject *self)
       const eWM_CapabilitiesFlag flag = WM_capabilities_flag();
 
 #define SetFlagItem(x) \
-  PyDict_SetItemString(result, STRINGIFY(x), PyBool_FromLong((WM_CAPABILITY_##x) & flag));
+  PyDict_SetItemString(result, STRINGIFY(x), ((WM_CAPABILITY_##x) & flag) ? Py_True : Py_False);
 
       /* Only exposed flags which are used, by Blender's built-in scripts
        * since this is a private API. */
@@ -781,6 +791,7 @@ void BPy_init_modules(bContext *C)
   PyObject *bpy_types = BPY_rna_types();
   PyModule_AddObject(bpy_types, "GeometrySet", BPyInit_geometry_set_type());
   PyModule_AddObject(bpy_types, "InlineShaderNodes", BPyInit_inline_shader_nodes_type());
+  PyModule_AddObject(bpy_types, "BlendDataPathMeta", BPyInit_blend_data_path_meta_type());
   PyModule_AddObject(mod, "types", bpy_types);
 
   /* Needs to be first so `_bpy_types` can run. */

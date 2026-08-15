@@ -4,7 +4,7 @@
 
 #include <optional>
 
-#include "BLI_assert.h"
+#include "BLI_assert.hh"
 #include "BLI_math_vector.hh"
 #include "BLI_math_vector_types.hh"
 
@@ -90,6 +90,8 @@ ResultType socket_data_type_to_result_type(const eNodeSocketDatatype data_type,
       return ResultType::Text;
     case SOCK_MASK:
       return ResultType::Mask;
+    case SOCK_BUNDLE:
+      return ResultType::Bundle;
     default:
       BLI_assert_unreachable();
       return ResultType::Float;
@@ -118,6 +120,11 @@ ResultType get_node_socket_result_type(const bNodeSocket *socket)
 
 ResultType get_node_interface_socket_result_type(const bNodeTreeInterfaceSocket &socket)
 {
+  /* Gracefully handle undefined interface sockets, falling back to a float. */
+  if (socket.socket_typeinfo() == &bke::NodeSocketTypeUndefined) {
+    return ResultType::Float;
+  }
+
   const eNodeSocketDatatype socket_type = socket.socket_typeinfo()->type;
   if (socket_type == SOCK_VECTOR) {
     return socket_data_type_to_result_type(
@@ -131,11 +138,11 @@ ResultType get_node_interface_socket_result_type(const bNodeTreeInterfaceSocket 
   return socket_data_type_to_result_type(socket_type);
 }
 
-bool is_output_linked_to_node_conditioned(const bNodeSocket &output,
-                                          FunctionRef<bool(const bNode &)> condition)
+bool is_output_linked_to_input_conditioned(const bNodeSocket &output,
+                                           FunctionRef<bool(const bNodeSocket &)> condition)
 {
   for (const bNodeSocket *input : output.logically_linked_sockets()) {
-    if (condition(input->owner_node())) {
+    if (condition(*input)) {
       return true;
     }
   }
@@ -169,16 +176,18 @@ static std::optional<ImplicitInputType> get_implicit_input(
   switch (node_default_input_type) {
     case NodeDefaultInputType::NODE_DEFAULT_INPUT_VALUE:
       return std::nullopt;
-    case NodeDefaultInputType::NODE_DEFAULT_INPUT_POSITION_FIELD:
-      return ImplicitInputType::UniformTextureCoordinates;
+    case NodeDefaultInputType::NODE_DEFAULT_INPUT_UNIFORM_IMAGE_COORDINATES:
+      return ImplicitInputType::UniformImageCoordinates;
     case NodeDefaultInputType::NODE_DEFAULT_INPUT_SCENE_FRAME:
       return ImplicitInputType::SceneFrame;
     case NodeDefaultInputType::NODE_DEFAULT_INPUT_INDEX_FIELD:
     case NodeDefaultInputType::NODE_DEFAULT_INPUT_ID_INDEX_FIELD:
     case NodeDefaultInputType::NODE_DEFAULT_INPUT_NORMAL_FIELD:
+    case NodeDefaultInputType::NODE_DEFAULT_INPUT_POSITION_FIELD:
     case NodeDefaultInputType::NODE_DEFAULT_INPUT_INSTANCE_TRANSFORM_FIELD:
     case NodeDefaultInputType::NODE_DEFAULT_INPUT_HANDLE_LEFT_FIELD:
     case NodeDefaultInputType::NODE_DEFAULT_INPUT_HANDLE_RIGHT_FIELD:
+    case NodeDefaultInputType::NODE_DEFAULT_INPUT_SELF_OBJECT:
       break;
   }
 

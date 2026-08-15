@@ -250,6 +250,7 @@ struct MaterialKey {
     options = (options << 1) | (visibility_flags & OB_HIDE_SHADOW ? 0 : 1);
     options = (options << 1) | (visibility_flags & OB_HIDE_PROBE_CUBEMAP ? 0 : 1);
     options = (options << 1) | (visibility_flags & OB_HIDE_PROBE_PLANAR ? 0 : 1);
+    options = (options << 1) | (visibility_flags & OB_HIDE_RAYCAST ? 0 : 1);
   }
 
   uint64_t hash() const
@@ -280,12 +281,16 @@ struct ShaderKey {
   gpu::Shader *shader;
   uint64_t options;
 
-  ShaderKey(GPUMaterial *gpumat, blender::Material *blender_mat, eMaterialProbe probe_capture)
+  ShaderKey(GPUMaterial *gpumat,
+            blender::Material *blender_mat,
+            eMaterialProbe probe_capture,
+            bool hide_from_raycast)
   {
     shader = GPU_material_get_shader(gpumat);
     options = uint64_t(shader_closure_bits_from_flag(gpumat));
     options = (options << 8) | blender_mat->blend_flag;
     options = (options << 2) | uint64_t(probe_capture);
+    options = (options << 1) | (hide_from_raycast ? 1 : 0);
   }
 
   uint64_t hash() const
@@ -316,7 +321,6 @@ struct Material {
   bool has_transparent_shadows;
   bool has_surface;
   bool has_volume;
-  bool use_scene_time;
   MaterialPass shadow;
   MaterialPass shading;
   MaterialPass prepass;
@@ -369,14 +373,11 @@ class MaterialModule {
   uint64_t gpu_pass_last_update_ = 0;
   uint64_t gpu_pass_next_update_ = 0;
 
-  Vector<GPUMaterialTexture *> texture_loading_queue_;
-
  public:
   MaterialModule(Instance &inst);
   ~MaterialModule();
 
   void begin_sync();
-  void end_sync();
 
   /**
    * Returned Material references are valid until the next call to this function or material_get().
@@ -414,9 +415,6 @@ class MaterialModule {
                                  eMaterialPipeline pipeline_type,
                                  eMaterialGeometry geometry_type,
                                  eMaterialProbe probe_capture = MAT_PROBE_NONE);
-
-  /* Push unloaded texture used by this material to the texture loading queue. */
-  void queue_texture_loading(GPUMaterial *material);
 
   ShaderGroups default_materials_load(bool block_until_ready = false);
 };

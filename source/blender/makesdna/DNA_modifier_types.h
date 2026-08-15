@@ -9,8 +9,8 @@
 #pragma once
 
 #include "BLI_enum_flags.hh"
-#include "BLI_implicit_sharing.h"
-#include "BLI_math_constants.h"
+#include "BLI_implicit_sharing.hh"
+#include "BLI_math_constants.hh"
 #include "BLI_span.hh"
 
 #include "DNA_armature_types.h"
@@ -1196,7 +1196,8 @@ ENUM_OPERATORS(ExplodeModifierFlag);
 struct ExplodeModifierData {
   ModifierData modifier;
 
-  int *facepa = nullptr;
+  /** Runtime pointer to `blender::Array<int, 0>`, or null. */
+  void *facepa = nullptr;
   ExplodeModifierFlag flag = eExplodeFlag_Unborn | eExplodeFlag_Alive | eExplodeFlag_Dead;
   short vgroup = 0;
   float protect = 0.0f;
@@ -2538,12 +2539,6 @@ struct NodesModifierBake {
   int64_t bake_size = 0;
 };
 
-struct NodesModifierPanel {
-  /** ID of the corresponding panel from #bNodeTreeInterfacePanel::identifier. */
-  int id = 0;
-  NodesModifierPanelFlag flag = {};
-};
-
 struct NodesModifierData {
   ModifierData modifier;
   struct bNodeTree *node_group = nullptr;
@@ -2558,10 +2553,6 @@ struct NodesModifierData {
   char _pad[2] = {};
   int bakes_num = 0;
   NodesModifierBake *bakes = nullptr;
-
-  char _pad2[4] = {};
-  int panels_num = 0;
-  NodesModifierPanel *panels = nullptr;
 
   NodesModifierRuntime *runtime = nullptr;
 

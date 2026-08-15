@@ -154,6 +154,7 @@ enum eSpaceOutliner_Flag : short {
   SO_SYNC_SELECT = (1 << 5),
   SO_MODE_COLUMN = (1 << 6),
   SO_SCROLL_TO_ACTIVE = (1 << 7),
+  SO_EXPAND_ON_FOCUS = (1 << 8),
 };
 ENUM_OPERATORS(eSpaceOutliner_Flag)
 
@@ -375,6 +376,7 @@ enum eSpaceSeq_SequencerPreviewOverlay_Flag : int {
   SEQ_PREVIEW_SHOW_GPENCIL = (1 << 4),
   SEQ_PREVIEW_SHOW_SAFE_CENTER = (1 << 9),
   SEQ_PREVIEW_SHOW_METADATA = (1 << 10),
+  SEQ_PREVIEW_SHOW_COMPOSITION_GUIDES = (1 << 11),
 };
 ENUM_OPERATORS(eSpaceSeq_SequencerPreviewOverlay_Flag)
 
@@ -1178,9 +1180,10 @@ enum eSpace_Type : char {
   SPACE_CLIP = 20,
   SPACE_TOPBAR = 21,
   SPACE_STATUSBAR = 22,
-  SPACE_SPREADSHEET = 23
+  SPACE_SPREADSHEET = 23,
+  SPACE_PROJECT = 24
 
-#define SPACE_TYPE_NUM (SPACE_SPREADSHEET + 1)
+#define SPACE_TYPE_NUM (SPACE_PROJECT + 1)
 };
 
 /* use for function args */

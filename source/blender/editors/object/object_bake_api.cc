@@ -21,11 +21,11 @@
 #include "RNA_define.hh"
 #include "RNA_enum_types.hh"
 
-#include "BLI_listbase.h"
-#include "BLI_math_geom.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_geom_c.hh"
 #include "BLI_path_utils.hh"
 #include "BLI_string_ref.hh"
-#include "BLI_string_utf8.h"
+#include "BLI_string_utf8.hh"
 
 #include "BLT_translation.hh"
 
@@ -37,6 +37,7 @@
 #include "BKE_global.hh"
 #include "BKE_image.hh"
 #include "BKE_image_format.hh"
+#include "BKE_image_gpu.hh"
 #include "BKE_layer.hh"
 #include "BKE_lib_id.hh"
 #include "BKE_main.hh"
@@ -59,12 +60,14 @@
 #include "IMB_colormanagement.hh"
 #include "IMB_imbuf.hh"
 #include "IMB_imbuf_types.hh"
+#include "IMB_partial_update.hh"
 
 #include "WM_api.hh"
 #include "WM_types.hh"
 
 #include "ED_mesh.hh"
 #include "ED_object.hh"
+#include "ED_render.hh"
 #include "ED_screen.hh"
 #include "ED_uvedit.hh"
 
@@ -310,12 +313,8 @@ static bool write_internal_bake_pixels(Image *image,
     RE_bake_margin(ibuf, mask_buffer, margin, margin_type, mesh_eval, uv_layer, uv_offset);
   }
 
-  ibuf->userflags |= IB_DISPLAY_BUFFER_INVALID;
-  BKE_image_mark_dirty(image, ibuf);
-
-  if (ibuf->float_data()) {
-    ibuf->userflags |= IB_RECT_INVALID;
-  }
+  IMB_partial_update_mark_full(ibuf);
+  IMB_mark_dirty(ibuf);
 
   BKE_image_release_ibuf(image, ibuf, nullptr);
 
@@ -333,8 +332,6 @@ static void bake_targets_refresh(BakeTargets *targets)
     Image *ima = targets->images[i].image;
 
     if (ima) {
-      BKE_image_partial_update_mark_full_update(ima);
-      BKE_image_free_gputextures(ima);
       DEG_id_tag_update(&ima->id, 0);
     }
   }
@@ -1625,7 +1622,7 @@ static wmOperatorStatus bake(const BakeAPIRender *bkr,
        * Use an error here instead of a warning so users don't accidentally perform
        * a bake which seems to succeed with invalid results.
        * If visibility could be forced/overridden - it would help avoid the problem. */
-      if (UNLIKELY(mesh_eval == nullptr)) {
+      if (mesh_eval == nullptr) [[unlikely]] {
         BKE_reportf(
             reports,
             RPT_ERROR,
@@ -1950,6 +1947,8 @@ static wmOperatorStatus bake_exec(bContext *C, wmOperator *op)
     return result;
   }
 
+  ED_render_view3d_auto_pause(CTX_data_main(C), true);
+
   if (bkr.is_clear) {
     const bool is_tangent = ((bkr.pass_type == SCE_PASS_NORMAL) &&
                              (bkr.normal_space == R_BAKE_SPACE_TANGENT));
@@ -1972,6 +1971,7 @@ static wmOperatorStatus bake_exec(bContext *C, wmOperator *op)
   RE_SetReports(re, nullptr);
 
   G.is_rendering = false;
+  ED_render_view3d_auto_pause(CTX_data_main(C), false);
   return result;
 }
 
@@ -2045,6 +2045,8 @@ static void bake_freejob(void *bkv)
   MEM_delete(bkr);
 
   G.is_rendering = false;
+
+  ED_render_view3d_auto_pause(G_MAIN, false);
 }
 
 static void bake_set_props(wmOperator *op, Scene *scene)
@@ -2194,6 +2196,8 @@ static wmOperatorStatus bake_invoke(bContext *C, wmOperator *op, const wmEvent *
 
   G.is_break = false;
   G.is_rendering = true;
+
+  ED_render_view3d_auto_pause(CTX_data_main(C), true);
 
   WM_jobs_start(CTX_wm_manager(C), wm_job);
 

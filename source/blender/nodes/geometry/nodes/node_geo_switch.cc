@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
 #include "node_geometry_util.hh"
+#include "shader/node_shader_util.hh"
 
 #include "BKE_node_tree_reference_lifetimes.hh"
 
@@ -39,8 +40,7 @@ static void node_declare(NodeDeclarationBuilder &b)
 
   auto &false_decl = b.add_input(socket_type, "False"_ustr);
   auto &true_decl = b.add_input(socket_type, "True"_ustr);
-  auto &output_decl =
-      b.add_output(socket_type, "Output"_ustr).propagate_all().inferred_structure_type();
+  auto &output_decl = b.add_output(socket_type, "Output"_ustr).propagate_all();
 
   StructureType value_structure_type = StructureType::Dynamic;
   StructureType condition_structure_type = StructureType::Dynamic;
@@ -56,6 +56,14 @@ static void node_declare(NodeDeclarationBuilder &b)
     false_decl.compositor_realization_mode(CompositorInputRealizationMode::None);
     true_decl.compositor_realization_mode(CompositorInputRealizationMode::None);
   }
+  if (node_tree->type == NTREE_GEOMETRY) {
+    if (socket_type_supports_fields(socket_type)) {
+      output_decl.inferred_structure_type();
+    }
+    else {
+      output_decl.inferred_structure_type({false_decl.index(), true_decl.index()});
+    }
+  }
 
   switch_decl.structure_type(condition_structure_type);
   false_decl.structure_type(value_structure_type);
@@ -68,10 +76,10 @@ static void node_layout(ui::Layout &layout, bContext * /*C*/, PointerRNA *ptr)
   layout.prop(ptr, "input_type", UI_ITEM_NONE, "", ICON_NONE);
 }
 
-static void node_init(bNodeTree * /*tree*/, bNode *node)
+static void node_init(bNodeTree *tree, bNode *node)
 {
   NodeSwitch *data = MEM_new<NodeSwitch>(__func__);
-  data->input_type = SOCK_FLOAT;
+  data->input_type = tree->type == NTREE_GEOMETRY ? SOCK_FLOAT : SOCK_RGBA;
   node->storage = data;
 }
 
@@ -296,7 +304,7 @@ static void register_node()
 {
   static bke::bNodeType ntype;
 
-  geo_cmp_node_type_base(&ntype, "GeometryNodeSwitch"_ustr, GEO_NODE_SWITCH);
+  common_node_type_base(&ntype, "GeometryNodeSwitch"_ustr, GEO_NODE_SWITCH);
   ntype.ui_name = "Switch";
   ntype.ui_description = "Switch between two inputs";
   ntype.enum_name_legacy = "SWITCH";

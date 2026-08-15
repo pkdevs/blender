@@ -100,15 +100,19 @@ class RuntimeToBakeValue {
   Map<std::string, std::string> referenced_anonymous_attributes_;
   int attribute_field_count_ = 0;
   BakeDataBlockMap *data_block_map_ = nullptr;
+  bool is_for_cache_;
 
  public:
-  RuntimeToBakeValue(Vector<BakeValues::InputValue> &root_values, BakeDataBlockMap *data_block_map)
-      : root_values_(root_values), data_block_map_(data_block_map)
+  RuntimeToBakeValue(Vector<BakeValues::InputValue> &root_values,
+                     BakeDataBlockMap *data_block_map,
+                     const bool is_for_cache)
+      : root_values_(root_values), data_block_map_(data_block_map), is_for_cache_(is_for_cache)
   {
   }
 
   void convert()
   {
+    PRF_scope_with_name("RuntimeToBakeValue::convert", ProfileCategory::Default);
     for (BakeValues::InputValue &input_value : root_values_) {
       input_value.value.ensure_owns_direct_data();
     }
@@ -303,12 +307,18 @@ class RuntimeToBakeValue {
       instances.ensure_geometry_instances();
       this->runtime_to_bake__AttributeStorage(instances.attribute_storage());
       for (bke::InstanceReference &reference : instances.references_for_write()) {
-        GeometrySet &geometry = reference.geometry_set();
-        this->runtime_to_bake__GeometrySet(geometry);
+        if (reference.type() == InstanceReference::Type::GeometrySet) {
+          GeometrySet &geometry = reference.geometry_set();
+          this->runtime_to_bake__GeometrySet(geometry);
+        }
       }
     }
     if (geometry.has_mesh()) {
       Mesh &mesh = *geometry.get_mesh_for_write();
+      if (is_for_cache_) {
+        /* This contains a weak raw pointer to a #BMesh which may become dangling. */
+        mesh.runtime->edit_mesh.reset();
+      }
       this->runtime_to_bake__AttributeStorage(mesh.attribute_storage.wrap());
       mesh.runtime->bake_materials = materials_to_weak_references(
           &mesh.mat, &mesh.totcol, data_block_map_);
@@ -370,7 +380,7 @@ class RuntimeToBakeValue {
 
   void runtime_to_bake__Bundle(nodes::Bundle &bundle)
   {
-    Vector<UString> values_to_remove;
+    Vector<nodes::BundleKey> values_to_remove;
     for (const auto &item : bundle.items()) {
       if (auto *socket_value = std::get_if<nodes::BundleItemSocketValue>(&item.value.value)) {
         if (!this->runtime_to_bake__SocketValueVariant(socket_value->value)) {
@@ -378,7 +388,7 @@ class RuntimeToBakeValue {
         }
       }
     }
-    for (const UString &value_to_remove : values_to_remove) {
+    for (const nodes::BundleKey &value_to_remove : values_to_remove) {
       bundle.remove(value_to_remove);
     }
   }
@@ -511,8 +521,10 @@ class BakeToRuntimeValue {
       Instances &instances = *geometry.get_instances_for_write();
       instances.ensure_geometry_instances();
       for (bke::InstanceReference &reference : instances.references_for_write()) {
-        GeometrySet &geometry = reference.geometry_set();
-        this->bake_to_runtime__GeometrySet(geometry);
+        if (reference.type() == InstanceReference::Type::GeometrySet) {
+          GeometrySet &geometry = reference.geometry_set();
+          this->bake_to_runtime__GeometrySet(geometry);
+        }
       }
       this->bake_to_runtime__AttributeStorage(instances.attribute_storage());
     }
@@ -580,7 +592,7 @@ class BakeToRuntimeValue {
   {
     for (auto &&item : bundle.items()) {
       if (auto *socket_value = std::get_if<nodes::BundleItemSocketValue>(&item.value.value)) {
-        this->bake_to_runtime__SocketValueVariant(socket_value->value, item.key.ref());
+        this->bake_to_runtime__SocketValueVariant(socket_value->value, item.key.ustr().ref());
       }
     }
   }
@@ -614,9 +626,10 @@ class BakeToRuntimeValue {
 };
 
 BakeValues BakeValues::from_runtime_values(Vector<InputValue> runtime_values,
-                                           BakeDataBlockMap *data_block_map)
+                                           BakeDataBlockMap *data_block_map,
+                                           const bool is_for_cache)
 {
-  RuntimeToBakeValue preparation{runtime_values, data_block_map};
+  RuntimeToBakeValue preparation{runtime_values, data_block_map, is_for_cache};
   /* This may also remove runtime values that can't be baked. */
   preparation.convert();
 

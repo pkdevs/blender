@@ -197,14 +197,14 @@ struct SlideSubject {
  * Build up a list of SlideSubject. The items put into the list depend on the mode of
  * the context.
  */
-void slide_subjects_get(bContext *C, ListBaseT<SlideSubject> *slide_subjects);
+void slide_subjects_get(bContext *C, ListBaseT<SlideSubject> *r_transformable_list);
 /** Free all slide subjects. */
 void slide_subjects_free(ListBaseT<SlideSubject> *slide_subjects);
 
 /**
  * Helper for apply() / reset() - refresh the data.
  */
-void slide_subjects_refresh(bContext *C, ID *id);
+void slide_subjects_refresh(bContext *C, const SlideSubject &slide_subject);
 /**
  * Reset changes made to current slide subjects back to their stored values.
  */
@@ -212,8 +212,7 @@ void slide_subjects_reset(ListBaseT<SlideSubject> *slide_subjects);
 /** Perform auto-key-framing after changes were made + confirmed. */
 void slide_subjects_autokey(bContext *C,
                             Scene *scene,
-                            const ListBaseT<SlideSubject> *slide_subjects,
-                            float cframe);
+                            const ListBaseT<SlideSubject> *slide_subjects);
 
 /** \} */
 

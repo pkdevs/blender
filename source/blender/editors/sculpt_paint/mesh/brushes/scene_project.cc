@@ -31,6 +31,7 @@
 #include "DNA_object_types.h"
 #include "DNA_scene_types.h"
 
+#include "BKE_bvh.hh"
 #include "BKE_mesh.hh"
 #include "BKE_object_types.hh"
 #include "BKE_paint.hh"
@@ -64,21 +65,6 @@ struct LocalData {
 static inline float absolute_min_distance(const float d1, const float d2)
 {
   return math::abs(d1) < math::abs(d2) ? d1 : d2;
-}
-
-static inline void raycast(const float3 &ray_origin,
-                           const float3 &ray_normal,
-                           const bke::BVHTreeFromMesh &tree_data,
-                           BVHTreeRayHit &hit)
-{
-  hit.dist = BVH_RAYCAST_DIST_MAX;
-  BLI_bvhtree_ray_cast(tree_data.tree,
-                       ray_origin,
-                       ray_normal,
-                       0.0f,
-                       &hit,
-                       tree_data.raycast_callback,
-                       const_cast<bke::BVHTreeFromMesh *>(&tree_data));
 }
 
 /**
@@ -121,6 +107,7 @@ static void object_raycast(const ProjectBrushTarget &project_target,
                            const MutableSpan<float3> ray_origins,
                            const MutableSpan<float> best_hit_distances)
 {
+  PRF_scope(ProfileCategory::Editor);
   /* Positions and normal are in the coordinate system of the active object. Convert them to the
    * coordinate system of the target. */
   const float3 ray_direction = math::transform_direction(project_target.active_to_target_matrix,
@@ -130,15 +117,18 @@ static void object_raycast(const ProjectBrushTarget &project_target,
 
   threading::isolate_task([&]() {
     threading::parallel_for(positions.index_range(), 256, [&](IndexRange range) {
-      BVHTreeRayHit hit;
+      std::optional<bke::bvh::RayHit> hit;
 
       for (const int i : range) {
         if (factors[i] == 0.0f) {
           continue;
         }
 
-        raycast(ray_origins[i], ray_direction, project_target.tree_data, hit);
-        best_hit_distances[i] = absolute_min_distance(best_hit_distances[i], hit.dist);
+        hit = project_target.tree_data->ray_intersect(
+            bke::bvh::Ray(ray_origins[i], ray_direction));
+        if (hit) {
+          best_hit_distances[i] = absolute_min_distance(best_hit_distances[i], hit->distance);
+        }
       }
 
       if (bidirectional) {
@@ -147,8 +137,11 @@ static void object_raycast(const ProjectBrushTarget &project_target,
             continue;
           }
 
-          raycast(ray_origins[i], -ray_direction, project_target.tree_data, hit);
-          best_hit_distances[i] = absolute_min_distance(best_hit_distances[i], -hit.dist);
+          hit = project_target.tree_data->ray_intersect(
+              bke::bvh::Ray(ray_origins[i], -ray_direction));
+          if (hit) {
+            best_hit_distances[i] = absolute_min_distance(best_hit_distances[i], -hit->distance);
+          }
         }
       }
     });
@@ -168,6 +161,7 @@ static void scene_raycast(const Span<ProjectBrushTarget> project_targets,
                           const MutableSpan<float3> ray_origins,
                           const MutableSpan<float> r_hit_distances)
 {
+  PRF_scope(ProfileCategory::Editor);
   r_hit_distances.fill(BVH_RAYCAST_DIST_MAX);
 
   for (const int i : project_targets.index_range()) {
@@ -196,6 +190,7 @@ static void calc_translations(const float3 &normal,
                               const Span<float> hit_distances,
                               const MutableSpan<float3> r_translations)
 {
+  PRF_scope(ProfileCategory::Editor);
   for (const int i : factors.index_range()) {
     r_translations[i] = normal * hit_distances[i] * factors[i];
   }
@@ -347,6 +342,7 @@ void do_scene_project_brush(const Depsgraph &depsgraph,
                             Object &object,
                             const IndexMask &node_mask)
 {
+  PRF_scope(ProfileCategory::Editor);
   bke::pbvh::Tree &pbvh = *bke::object::pbvh_get(object);
   const Brush &brush = *BKE_paint_brush_for_read(&sd.paint);
   const StrokeCache &cache = *object.runtime->sculpt_session->cache;

@@ -12,9 +12,9 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_listbase.h"
-#include "BLI_string_utf8.h"
-#include "BLI_utildefines.h"
+#include "BLI_listbase.hh"
+#include "BLI_string_utf8.hh"
+#include "BLI_utildefines.hh"
 
 #include "BLT_translation.hh"
 
@@ -283,6 +283,13 @@ static bool buttons_context_path_data(ButsContextPath *path, int type)
     Object *ob = static_cast<Object *>(path->ptr[path->len - 1].data);
 
     if (ob && ELEM(type, -1, ob->type)) {
+      if (ob->type == OB_EMPTY && ob->empty_drawtype != OB_EMPTY_IMAGE) {
+        if (ID *id = ob->data; id && GS(id->name) == ID_IM) {
+          path->ptr[path->len] = {};
+          path->len++;
+          return true;
+        }
+      }
       path->ptr[path->len] = RNA_id_pointer_create(ob->data);
       path->len++;
 
@@ -300,6 +307,7 @@ static bool buttons_context_path_modifier(ButsContextPath *path)
     Object *ob = static_cast<Object *>(path->ptr[path->len - 1].data);
 
     if (ELEM(ob->type,
+             OB_EMPTY,
              OB_MESH,
              OB_CURVES_LEGACY,
              OB_FONT,
@@ -789,7 +797,7 @@ void buttons_context_compute(const bContext *C, SpaceProperties *sbuts)
       if (i == BCONTEXT_DATA) {
         PointerRNA *ptr = &path->ptr[path->len - 1];
 
-        if (ptr->type) {
+        if (ptr->has_type()) {
           if (RNA_struct_is_a(ptr->type, RNA_Light)) {
             sbuts->dataicon = ICON_OUTLINER_DATA_LIGHT;
           }
@@ -1069,7 +1077,7 @@ int /*eContextResult*/ buttons_context(const bContext *C,
       return CTX_RESULT_NO_DATA;
     }
 
-    if (ct->user && ct->user->ptr.data) {
+    if (ct->user && ct->user->ptr) {
       ButsTextureUser *user = ct->user;
       CTX_data_pointer_set_ptr(result, &user->ptr);
     }
@@ -1083,7 +1091,7 @@ int /*eContextResult*/ buttons_context(const bContext *C,
       return CTX_RESULT_NO_DATA;
     }
 
-    if (ct->user && ct->user->ptr.data) {
+    if (ct->user && ct->user->ptr) {
       ButsTextureUser *user = ct->user;
       CTX_data_pointer_set(result, nullptr, RNA_Property, user->prop);
     }
@@ -1158,7 +1166,7 @@ int /*eContextResult*/ buttons_context(const bContext *C,
     /* only available when pinned */
     PointerRNA *ptr = get_pointer_type(path, RNA_ParticleSettings);
 
-    if (ptr && ptr->data) {
+    if (ptr && *ptr) {
       CTX_data_pointer_set_ptr(result, ptr);
       return CTX_RESULT_OK;
     }
@@ -1166,7 +1174,7 @@ int /*eContextResult*/ buttons_context(const bContext *C,
     /* get settings from active particle system instead */
     ptr = get_pointer_type(path, RNA_ParticleSystem);
 
-    if (ptr && ptr->data) {
+    if (ptr && *ptr) {
       ParticleSettings *part = (static_cast<ParticleSystem *>(ptr->data))->part;
       CTX_data_pointer_set(result, ptr->owner_id, RNA_ParticleSettings, part);
       return CTX_RESULT_OK;
@@ -1178,7 +1186,7 @@ int /*eContextResult*/ buttons_context(const bContext *C,
   if (CTX_data_equals(member, "cloth")) {
     PointerRNA *ptr = get_pointer_type(path, RNA_Object);
 
-    if (ptr && ptr->data) {
+    if (ptr && *ptr) {
       Object *ob = static_cast<Object *>(ptr->data);
       ModifierData *md = BKE_modifiers_findby_type(ob, eModifierType_Cloth);
       CTX_data_pointer_set(result, &ob->id, RNA_ClothModifier, md);
@@ -1189,7 +1197,7 @@ int /*eContextResult*/ buttons_context(const bContext *C,
   if (CTX_data_equals(member, "soft_body")) {
     PointerRNA *ptr = get_pointer_type(path, RNA_Object);
 
-    if (ptr && ptr->data) {
+    if (ptr && *ptr) {
       Object *ob = static_cast<Object *>(ptr->data);
       ModifierData *md = BKE_modifiers_findby_type(ob, eModifierType_Softbody);
       CTX_data_pointer_set(result, &ob->id, RNA_SoftBodyModifier, md);
@@ -1201,7 +1209,7 @@ int /*eContextResult*/ buttons_context(const bContext *C,
   if (CTX_data_equals(member, "fluid")) {
     PointerRNA *ptr = get_pointer_type(path, RNA_Object);
 
-    if (ptr && ptr->data) {
+    if (ptr && *ptr) {
       Object *ob = static_cast<Object *>(ptr->data);
       ModifierData *md = BKE_modifiers_findby_type(ob, eModifierType_Fluid);
       CTX_data_pointer_set(result, &ob->id, RNA_FluidModifier, md);
@@ -1212,7 +1220,7 @@ int /*eContextResult*/ buttons_context(const bContext *C,
   if (CTX_data_equals(member, "collision")) {
     PointerRNA *ptr = get_pointer_type(path, RNA_Object);
 
-    if (ptr && ptr->data) {
+    if (ptr && *ptr) {
       Object *ob = static_cast<Object *>(ptr->data);
       ModifierData *md = BKE_modifiers_findby_type(ob, eModifierType_Collision);
       CTX_data_pointer_set(result, &ob->id, RNA_CollisionModifier, md);
@@ -1227,7 +1235,7 @@ int /*eContextResult*/ buttons_context(const bContext *C,
   if (CTX_data_equals(member, "dynamic_paint")) {
     PointerRNA *ptr = get_pointer_type(path, RNA_Object);
 
-    if (ptr && ptr->data) {
+    if (ptr && *ptr) {
       Object *ob = static_cast<Object *>(ptr->data);
       ModifierData *md = BKE_modifiers_findby_type(ob, eModifierType_DynamicPaint);
       CTX_data_pointer_set(result, &ob->id, RNA_DynamicPaintModifier, md);
@@ -1306,7 +1314,7 @@ static void buttons_panel_context_draw(const bContext *C, Panel *panel)
       continue;
     }
 
-    if (ptr->data == nullptr) {
+    if (!*ptr) {
       continue;
     }
 
@@ -1368,7 +1376,7 @@ ID *buttons_context_id_path(const bContext *C)
 
     /* Pin particle settings instead of system, since only settings are an ID-block. */
     if (sbuts->mainb == BCONTEXT_PARTICLE && sbuts->flag & SB_PIN_CONTEXT) {
-      if (ptr->type == RNA_ParticleSystem && ptr->data) {
+      if (ptr->type == RNA_ParticleSystem && *ptr) {
         ParticleSystem *psys = static_cast<ParticleSystem *>(ptr->data);
         return &psys->part->id;
       }
@@ -1376,7 +1384,7 @@ ID *buttons_context_id_path(const bContext *C)
 
     /* There is no valid image ID panel, Image Empty objects need this workaround. */
     if (sbuts->mainb == BCONTEXT_DATA && sbuts->flag & SB_PIN_CONTEXT) {
-      if (ptr->type == RNA_Image && ptr->data) {
+      if (ptr->type == RNA_Image && *ptr) {
         continue;
       }
     }

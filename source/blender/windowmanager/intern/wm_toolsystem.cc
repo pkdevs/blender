@@ -22,10 +22,10 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_listbase.h"
-#include "BLI_string.h"
-#include "BLI_string_utf8.h"
-#include "BLI_utildefines.h"
+#include "BLI_listbase.hh"
+#include "BLI_string.hh"
+#include "BLI_string_utf8.hh"
+#include "BLI_utildefines.hh"
 
 #include "DNA_ID.h"
 #include "DNA_brush_types.h"
@@ -748,7 +748,7 @@ int WM_toolsystem_mode_from_spacetype(
       Object *obact = BKE_view_layer_active_object_get(view_layer);
       if (obact != nullptr) {
         Object *obedit = OBEDIT_FROM_OBACT(obact);
-        mode = CTX_data_mode_enum_ex(obedit, obact, eObjectMode(obact->mode));
+        mode = CTX_data_mode_enum_ex(obedit, obact, obact->mode);
       }
       else {
         mode = CTX_MODE_OBJECT;
@@ -1323,7 +1323,7 @@ void WM_toolsystem_ref_properties_init_for_keymap(bToolRef *tref,
                                                   wmOperatorType *ot)
 {
   *dst_ptr = *src_ptr;
-  if (dst_ptr->data) {
+  if (*dst_ptr) {
     dst_ptr->data = IDP_CopyProperty(static_cast<const IDProperty *>(dst_ptr->data));
   }
   else {

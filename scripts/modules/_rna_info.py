@@ -561,7 +561,7 @@ class InfoPropertyRNA:
         # since any parameter defaulting to `None` must accept it.
         if as_arg and self.default_str == "None":
             type_str += " | None"
-        elif not (as_arg or as_ret) and self.type == "pointer" and not self.is_never_none:
+        elif not as_arg and self.type == "pointer" and not self.is_never_none:
             type_str += " | None"
 
         if not (as_arg or as_ret):
@@ -806,6 +806,7 @@ def BuildRNAInfo():
     def _bpy_types_iterator():
         # Don't report when these types are ignored.
         suppress_warning = {
+            "BlendDataPathMeta",
             "ContextTempOverride",
             "GeometrySet",
             "InlineShaderNodes",

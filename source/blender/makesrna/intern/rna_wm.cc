@@ -11,7 +11,8 @@
 #include "DNA_scene_types.h"
 #include "DNA_windowmanager_types.h"
 
-#include "BLI_string_utf8_symbols.h"
+#include "BLI_path_utils.hh"
+#include "BLI_string_utf8_symbols.hh"
 
 #include "BLT_translation.hh"
 
@@ -22,6 +23,7 @@
 
 #include "rna_internal.hh"
 
+#include "UI_interface_c.hh"
 #include "UI_interface_layout.hh"
 
 #include "WM_api.hh"
@@ -32,10 +34,10 @@
 
 #  include "DNA_userdef_types.h"
 
-#  include "BLI_listbase.h"
-#  include "BLI_math_vector.h"
-#  include "BLI_string.h"
-#  include "BLI_string_utf8.h"
+#  include "BLI_listbase.hh"
+#  include "BLI_math_vector_c.hh"
+#  include "BLI_string.hh"
+#  include "BLI_string_utf8.hh"
 
 #  include "BKE_keyconfig.h"
 #  include "BKE_main.hh"
@@ -875,7 +877,7 @@ static PointerRNA rna_Event_ndof_motion_get(PointerRNA *ptr)
 #  else
   UNUSED_VARS(ptr);
 #  endif
-  return PointerRNA_NULL;
+  return {};
 }
 
 static PointerRNA rna_Event_xr_get(PointerRNA *ptr)
@@ -887,7 +889,7 @@ static PointerRNA rna_Event_xr_get(PointerRNA *ptr)
   return RNA_pointer_create_with_parent(*ptr, RNA_XrEventData, actiondata);
 #  else
   UNUSED_VARS(ptr);
-  return PointerRNA_NULL;
+  return {};
 #  endif
 }
 
@@ -922,7 +924,7 @@ static void rna_Window_scene_set(PointerRNA *ptr, PointerRNA value, ReportList *
 {
   wmWindow *win = static_cast<wmWindow *>(ptr->data);
 
-  if (value.data == nullptr) {
+  if (!value) {
     return;
   }
 
@@ -972,7 +974,7 @@ static void rna_Window_workspace_set(PointerRNA *ptr, PointerRNA value, ReportLi
   if (WM_window_is_temp_screen(win)) {
     return;
   }
-  if (value.data == nullptr) {
+  if (!value) {
     return;
   }
 
@@ -1013,7 +1015,7 @@ static void rna_Window_screen_set(PointerRNA *ptr, PointerRNA value, ReportList 
   if (screen->temp) {
     return;
   }
-  if (value.data == nullptr) {
+  if (!value) {
     return;
   }
 
@@ -1112,7 +1114,7 @@ static PointerRNA rna_KeyMapItem_properties_get(PointerRNA *ptr)
   }
 
   // return RNA_pointer_create_with_parent(*ptr, RNA_OperatorProperties, op->properties);
-  return PointerRNA_NULL;
+  return {};
 }
 
 static int rna_wmKeyMapItem_map_type_get(PointerRNA *ptr)
@@ -1353,7 +1355,7 @@ static PointerRNA rna_wmKeyConfig_preferences_get(PointerRNA *ptr)
     return RNA_pointer_create_with_parent(*ptr, kpt_rt->rna_ext.srna, kpt->prop);
   }
   else {
-    return PointerRNA_NULL;
+    return {};
   }
 }
 
@@ -1362,7 +1364,7 @@ static IDProperty **rna_wmKeyConfigPref_idprops(PointerRNA *ptr)
   return reinterpret_cast<IDProperty **>(&ptr->data);
 }
 
-static bool rna_wmKeyConfigPref_unregister(Main * /*bmain*/, StructRNA *type)
+static bool rna_wmKeyConfigPref_unregister(Main *bmain, StructRNA *type)
 {
   wmKeyConfigPrefType_Runtime *kpt_rt = static_cast<wmKeyConfigPrefType_Runtime *>(
       RNA_struct_blender_type_get(type));
@@ -1370,7 +1372,7 @@ static bool rna_wmKeyConfigPref_unregister(Main * /*bmain*/, StructRNA *type)
   if (!kpt_rt) {
     return false;
   }
-
+  ui::refresh_for_srna_unregister(bmain, type);
   RNA_struct_free_extension(type, &kpt_rt->rna_ext);
   RNA_struct_free(&RNA_blender_rna_get(), type);
 
@@ -1579,6 +1581,12 @@ static PointerRNA rna_WindowManager_xr_session_state_get(PointerRNA *ptr)
   return RNA_pointer_create_with_parent(*ptr, RNA_XrSessionState, state);
 }
 
+static PointerRNA rna_WindowManager_undo_stack_get(PointerRNA *ptr)
+{
+  wmWindowManager *wm = static_cast<wmWindowManager *>(ptr->data);
+  return RNA_pointer_create_with_parent(*ptr, RNA_UndoStack, wm->runtime->undo_stack);
+}
+
 #  ifdef WITH_PYTHON
 
 static bool rna_operator_poll_cb(bContext *C, wmOperatorType *ot)
@@ -1626,7 +1634,7 @@ static wmOperatorStatus rna_operator_exec_cb(bContext *C, wmOperator *op)
 
   RNA_parameter_list_free(&list);
 
-  if (UNLIKELY(has_error)) {
+  if (has_error) [[unlikely]] {
     /* A modal handler may have been added, ensure this is removed, see: #113479. */
     WM_event_remove_modal_handler_all(op, false);
   }
@@ -1683,7 +1691,7 @@ static wmOperatorStatus rna_operator_invoke_cb(bContext *C, wmOperator *op, cons
 
   RNA_parameter_list_free(&list);
 
-  if (UNLIKELY(has_error)) {
+  if (has_error) [[unlikely]] {
     /* A modal handler may have been added, ensure this is removed, see: #113479. */
     WM_event_remove_modal_handler_all(op, false);
   }
@@ -1937,7 +1945,8 @@ static bool rna_Operator_unregister(Main *bmain, StructRNA *type)
   if (!ot) {
     return false;
   }
-
+  ui::refresh_for_srna_unregister(bmain, ot->srna);
+  ui::refresh_for_srna_unregister(bmain, type);
   /* update while blender is running */
   wm = static_cast<wmWindowManager *>(bmain->wm.first);
   if (wm) {
@@ -2432,6 +2441,7 @@ static void rna_def_operator_filelist_element(BlenderRNA *brna)
   RNA_def_struct_ui_text(srna, "Operator File List Element", "");
 
   prop = RNA_def_property(srna, "name", PROP_STRING, PROP_FILENAME);
+  RNA_def_property_string_maxlength(prop, FILE_MAX);
   RNA_def_property_flag(prop, PROP_IDPROPERTY);
   RNA_def_property_ui_text(prop, "Name", "Name of a file or directory within a file list");
 }
@@ -2786,6 +2796,14 @@ static void rna_def_window(BlenderRNA *brna)
   RNA_def_property_flag(prop, PROP_CONTEXT_UPDATE);
   RNA_def_property_update(prop, 0, "rna_Window_scene_update");
 
+  prop = RNA_def_property(srna, "global_areas", PROP_COLLECTION, PROP_NONE);
+  RNA_def_property_collection_sdna(prop, nullptr, "global_areas.areabase", nullptr);
+  RNA_def_property_struct_type(prop, "Area");
+  RNA_def_property_ui_text(prop,
+                           "Areas",
+                           "Areas at the edges of the window that are not part of the flexible "
+                           "screen layout (such as top and status bar)");
+
   prop = RNA_def_property(srna, "workspace", PROP_POINTER, PROP_NONE);
   RNA_def_property_flag(prop, PROP_NEVER_NULL);
   RNA_def_property_struct_type(prop, "WorkSpace");
@@ -3013,6 +3031,13 @@ static void rna_def_windowmanager(BlenderRNA *brna)
                                     nullptr);
   RNA_def_property_ui_text(prop, "Key Configurations", "Registered key configurations");
   rna_def_wm_keyconfigs(brna, prop);
+
+  prop = RNA_def_property(srna, "undo_stack", PROP_POINTER, PROP_NONE);
+  RNA_def_property_struct_type(prop, "UndoStack");
+  RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+  RNA_def_property_ui_text(prop, "Undo Stack", "Read-only access to the undo stack");
+  RNA_def_property_pointer_funcs(
+      prop, "rna_WindowManager_undo_stack_get", nullptr, nullptr, nullptr);
 
   prop = RNA_def_property(srna, "xr_session_settings", PROP_POINTER, PROP_NONE);
   RNA_def_property_pointer_sdna(prop, nullptr, "xr.session_settings");

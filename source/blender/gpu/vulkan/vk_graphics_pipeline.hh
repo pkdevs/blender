@@ -54,7 +54,7 @@ struct VKGraphicsPipelineCreateInfoBuilder {
    * VkRenderingInputAttachmentIndexInfo to satisfy the input attachment index constraint.
    */
   VkRenderingInputAttachmentIndexInfo vk_rendering_input_attachment_index_info_;
-  Vector<VkFormat> dummy_color_attachment_formats_;
+  Vector<VkFormat, GPU_FB_MAX_COLOR_ATTACHMENT> dummy_color_attachment_formats_;
 
   /**
    * Initialize graphics pipeline create info and related structs for a full pipeline build.
@@ -379,23 +379,24 @@ struct VKGraphicsPipelineCreateInfoBuilder {
   void build_rasterization_state(const VKGraphicsInfo::Shaders &shaders_info,
                                  const VKExtensions &extensions)
   {
-    vk_pipeline_rasterization_provoking_vertex_state_info = {};
-    vk_pipeline_rasterization_provoking_vertex_state_info.sType =
-        VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_PROVOKING_VERTEX_STATE_CREATE_INFO_EXT;
-    vk_pipeline_rasterization_provoking_vertex_state_info.provokingVertexMode =
-        VK_PROVOKING_VERTEX_MODE_LAST_VERTEX_EXT;
-    vk_pipeline_rasterization_provoking_vertex_state_info.provokingVertexMode =
-        shaders_info.state.provoking_vert == GPU_VERTEX_LAST ?
-            VK_PROVOKING_VERTEX_MODE_LAST_VERTEX_EXT :
-            VK_PROVOKING_VERTEX_MODE_FIRST_VERTEX_EXT;
-
     vk_pipeline_rasterization_state_create_info = {};
     vk_pipeline_rasterization_state_create_info.sType =
         VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
     vk_pipeline_rasterization_state_create_info.lineWidth = 1.0f;
     vk_pipeline_rasterization_state_create_info.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
-    vk_pipeline_rasterization_state_create_info.pNext =
-        &vk_pipeline_rasterization_provoking_vertex_state_info;
+
+    if (extensions.provoking_vertex) {
+      vk_pipeline_rasterization_provoking_vertex_state_info = {};
+      vk_pipeline_rasterization_provoking_vertex_state_info.sType =
+          VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_PROVOKING_VERTEX_STATE_CREATE_INFO_EXT;
+      vk_pipeline_rasterization_provoking_vertex_state_info.provokingVertexMode =
+          shaders_info.state.provoking_vert == GPU_VERTEX_LAST ?
+              VK_PROVOKING_VERTEX_MODE_LAST_VERTEX_EXT :
+              VK_PROVOKING_VERTEX_MODE_FIRST_VERTEX_EXT;
+
+      vk_pipeline_rasterization_state_create_info.pNext =
+          &vk_pipeline_rasterization_provoking_vertex_state_info;
+    }
 
     vk_pipeline_rasterization_state_create_info.cullMode = to_vk_cull_mode_flags(
         static_cast<GPUFaceCullTest>(shaders_info.state.culling_test));

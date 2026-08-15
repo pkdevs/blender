@@ -297,9 +297,11 @@ bool CompileState::pixel_compile_unit_has_too_many_outputs(const bool are_node_p
 
       /* If any of the nodes linked to the output are not part of the pixel compile unit but are
        * part of the execution schedule, then an operation output will exist for it. */
-      const bool is_operation_output = is_output_linked_to_node_conditioned(
-          *output, [&](const bNode &node) {
-            return schedule_.nodes.contains(&node) && !pixel_compile_unit_.contains(&node);
+      const bool is_operation_output = is_output_linked_to_input_conditioned(
+          *output, [&](const bNodeSocket &input) {
+            return schedule_.nodes.contains(&input.owner_node()) &&
+                   !schedule_.unneeded_inputs.contains(&input) &&
+                   !pixel_compile_unit_.contains(&input.owner_node());
           });
 
       if (is_operation_output || is_preview_output) {
@@ -328,6 +330,10 @@ bool CompileState::pixel_compile_unit_has_too_many_inputs()
   for (const bNode *node : pixel_compile_unit_) {
     for (const bNodeSocket *input : node->input_sockets()) {
       if (!is_socket_available(input)) {
+        continue;
+      }
+
+      if (this->get_schedule().unneeded_inputs.contains(input)) {
         continue;
       }
 
@@ -361,6 +367,12 @@ bool CompileState::pixel_compile_unit_has_too_many_inputs()
       /* All inputs linked to the same output share the same input, and this one was counted
        * before, so no need to count it again. */
       if (referenced_output_sockets.contains(output)) {
+        continue;
+      }
+
+      /* Single values are folded into the shader so they do not count toward inputs count. */
+      const Result &result = this->get_result_from_output_socket(*output);
+      if (result.is_single_value()) {
         continue;
       }
 

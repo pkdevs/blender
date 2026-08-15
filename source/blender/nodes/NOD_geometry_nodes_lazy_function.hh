@@ -455,6 +455,8 @@ struct GeometryNodesLazyFunctionGraphInfo {
    * This can be used as a simple heuristic for the complexity of the node group.
    */
   int num_inline_nodes_approximate = 0;
+
+  GeometryNodesLazyFunctionGraphInfo(const char *debug_name);
 };
 
 std::unique_ptr<LazyFunction> get_simulation_output_lazy_function(
@@ -469,6 +471,8 @@ std::unique_ptr<LazyFunction> get_index_switch_node_lazy_function(
 std::unique_ptr<LazyFunction> get_bake_lazy_function(
     const bNode &node, GeometryNodesLazyFunctionGraphInfo &own_lf_graph_info);
 std::unique_ptr<LazyFunction> get_menu_switch_node_lazy_function(
+    const bNode &node, GeometryNodesLazyFunctionGraphInfo &lf_graph_info);
+std::unique_ptr<LazyFunction> get_menu_switch_node_boolean_outputs_lazy_function(
     const bNode &node, GeometryNodesLazyFunctionGraphInfo &lf_graph_info);
 std::unique_ptr<LazyFunction> get_menu_switch_node_socket_usage_lazy_function(const bNode &node);
 std::unique_ptr<LazyFunction> get_warning_node_lazy_function(const bNode &node);

@@ -8,10 +8,10 @@
 
 #include "BLI_array.hh"
 #include "BLI_hash.hh"
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 #include "BLI_rand.hh"
 #include "BLI_set.hh"
-#include "BLI_string_utf8.h"
+#include "BLI_string_utf8.hh"
 #include "BLI_string_utils.hh"
 #include "BLI_task.hh"
 
@@ -353,8 +353,11 @@ ImBuf *modifier_render_mask_input(const ModifierApplyContext &context,
 
   if (smd.mask_input_type == STRIP_MASK_INPUT_STRIP) {
     if (smd.mask_strip) {
-      mask = seq_render_strip(
-          &context.render_data, &context.render_state, smd.mask_strip, context.timeline_frame);
+      mask = seq_render_strip(&context.render_data,
+                              &context.render_state,
+                              smd.mask_strip,
+                              context.timeline_frame)
+                 .image;
     }
   }
   else if (smd.mask_input_type == STRIP_MASK_INPUT_ID) {

@@ -9,9 +9,9 @@
 #include <string>
 #include <variant>
 
-#include "BLI_assert.h"
+#include "BLI_assert.hh"
 #include "BLI_color_types.hh"
-#include "BLI_compiler_compat.h"
+#include "BLI_compiler_compat.hh"
 #include "BLI_cpp_type.hh"
 #include "BLI_generic_pointer.hh"
 #include "BLI_generic_span.hh"
@@ -19,8 +19,8 @@
 #include "BLI_math_interp.hh"
 #include "BLI_math_matrix_types.hh"
 #include "BLI_math_quaternion_types.hh"
-#include "BLI_math_vector.h"
 #include "BLI_math_vector.hh"
+#include "BLI_math_vector_c.hh"
 #include "BLI_math_vector_types.hh"
 #include "BLI_memory_utils.hh"
 #include "BLI_string_ref.hh"
@@ -28,6 +28,7 @@
 #include "GPU_shader.hh"
 #include "GPU_texture.hh"
 
+#include "NOD_geometry_nodes_bundle.hh"
 #include "NOD_menu_value.hh"
 
 #include "COM_domain.hh"
@@ -71,6 +72,7 @@ enum class ResultType : uint8_t {
   Scene,
   Text,
   Mask,
+  Bundle,
 };
 
 /* The precision of the data. CPU data is always stored using full precision at the moment. */
@@ -179,7 +181,8 @@ class Result {
                VFont *,
                Scene *,
                Text *,
-               Mask *>
+               Mask *,
+               nodes::BundlePtr>
       single_value_ = 0.0f;
   /* The domain of the result. This only matters if the result was not a single value. See the
    * discussion in COM_domain.hh for more information. */

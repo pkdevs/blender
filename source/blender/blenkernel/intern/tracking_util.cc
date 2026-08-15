@@ -15,13 +15,13 @@
 
 #include "DNA_movieclip_types.h"
 
-#include "BLI_ghash.h"
-#include "BLI_listbase.h"
-#include "BLI_math_color.h"
-#include "BLI_math_vector.h"
-#include "BLI_string.h"
+#include "BLI_ghash.hh"
+#include "BLI_listbase.hh"
+#include "BLI_math_color_c.hh"
+#include "BLI_math_vector_c.hh"
+#include "BLI_string.hh"
 #include "BLI_string_utils.hh"
-#include "BLI_threads.h"
+#include "BLI_threads.hh"
 
 #include "BLT_translation.hh"
 
@@ -699,14 +699,16 @@ static ImBuf *accessor_get_ibuf(TrackingImageAccessor *accessor,
     final_ibuf = IMB_allocImBuf(width, height, ImBufFlags::FloatData);
 
     if (orig_ibuf->float_data() != nullptr) {
-      IMB_copy_rect(final_ibuf->float_data_for_write(),
-                    int2(final_ibuf->x, final_ibuf->y),
-                    orig_ibuf->float_data(),
-                    int2(orig_ibuf->x, orig_ibuf->y),
-                    orig_ibuf->channels,
-                    int2(clamped_origin_x, clamped_origin_y),
-                    int2(dst_offset_x, dst_offset_y),
-                    int2(clamped_width, clamped_height));
+      if (clamped_width > 0 && clamped_height > 0) {
+        IMB_copy_rect(final_ibuf->float_data_for_write(),
+                      int2(final_ibuf->x, final_ibuf->y),
+                      orig_ibuf->float_data(),
+                      int2(orig_ibuf->x, orig_ibuf->y),
+                      orig_ibuf->channels,
+                      int2(clamped_origin_x, clamped_origin_y),
+                      int2(dst_offset_x, dst_offset_y),
+                      int2(clamped_width, clamped_height));
+      }
     }
     else {
       /* TODO(sergey): We don't do any color space or alpha conversion

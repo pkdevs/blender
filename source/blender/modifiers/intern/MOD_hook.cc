@@ -6,11 +6,11 @@
  * \ingroup modifiers
  */
 
-#include "BLI_utildefines.h"
+#include "BLI_utildefines.hh"
 
-#include "BLI_bitmap.h"
-#include "BLI_math_matrix.h"
-#include "BLI_math_vector.h"
+#include "BLI_bitmap.hh"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_vector_c.hh"
 
 #include "BLT_translation.hh"
 
@@ -457,9 +457,7 @@ static void panel_draw(const bContext * /*C*/, Panel *panel)
 
   ui::Layout &col = layout.column(false);
   col.prop(ptr, "object", UI_ITEM_NONE, std::nullopt, ICON_NONE);
-  if (!RNA_pointer_is_null(&hook_object_ptr) &&
-      RNA_enum_get(&hook_object_ptr, "type") == OB_ARMATURE)
-  {
+  if (hook_object_ptr && RNA_enum_get(&hook_object_ptr, "type") == OB_ARMATURE) {
     PointerRNA hook_object_data_ptr = RNA_pointer_get(&hook_object_ptr, "data");
     col.prop_search(ptr, "subtarget", &hook_object_data_ptr, "bones", IFACE_("Bone"), ICON_NONE);
   }

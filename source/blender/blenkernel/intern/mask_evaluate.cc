@@ -13,11 +13,11 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_listbase.h"
-#include "BLI_math_geom.h"
-#include "BLI_math_matrix.h"
-#include "BLI_math_vector.h"
-#include "BLI_utildefines.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_geom_c.hh"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_vector_c.hh"
+#include "BLI_utildefines.hh"
 
 #include "DNA_mask_types.h"
 
@@ -885,7 +885,7 @@ void BKE_mask_layer_evaluate_deform(MaskLayer *masklay, const float ctime)
     BKE_mask_spline_ensure_deform(&spline);
     for (int i = 0; i < spline.tot_point; i++) {
       MaskSplinePoint *point = &spline.points[i];
-      MaskSplinePoint *point_deform = &spline.points_deform[i];
+      MaskSplinePoint *point_deform = &spline.runtime->points_deform[i];
       BKE_mask_point_free(point_deform);
       *point_deform = *point;
       point_deform->uw = point->uw ? MEM_dupalloc(point->uw) : nullptr;
@@ -899,7 +899,7 @@ void BKE_mask_layer_evaluate_deform(MaskLayer *masklay, const float ctime)
      */
     if (need_handle_recalc) {
       for (int i = 0; i < spline.tot_point; i++) {
-        MaskSplinePoint *point_deform = &spline.points_deform[i];
+        MaskSplinePoint *point_deform = &spline.runtime->points_deform[i];
         if (ELEM(point_deform->bezt.h1, HD_AUTO, HD_VECT)) {
           BKE_mask_calc_handle_point(&spline, point_deform);
         }

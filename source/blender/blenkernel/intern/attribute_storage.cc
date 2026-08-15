@@ -5,13 +5,15 @@
 #include "CLG_log.h"
 
 #include "BLI_array_utils.hh"
-#include "BLI_assert.h"
+#include "BLI_assert.hh"
 #include "BLI_color_types.hh"
 #include "BLI_implicit_sharing.hh"
 #include "BLI_memory_counter.hh"
 #include "BLI_resource_scope.hh"
 #include "BLI_string_utils.hh"
 #include "BLI_vector_set.hh"
+
+#include "PRF_profile.hh"
 
 #include "BLT_translation.hh"
 
@@ -375,6 +377,7 @@ void AttributeStorage::rename(const Map<Attribute *, StringRef> &renames)
 
 void AttributeStorage::resize(const AttrDomain domain, const int64_t new_size)
 {
+  PRF_scope_with_name("AttributeStorage::resize", ProfileCategory::Default);
   for (Attribute &attr : *this) {
     if (attr.domain() != domain) {
       continue;
@@ -699,8 +702,13 @@ void AttributeStorage::blend_write(BlendWriter &writer,
                                    const AttributeStorage::BlendWriteData &write_data)
 {
   /* Use string argument to avoid confusion with the C++ class with the same name. */
-  writer.write_struct_array_by_name(
-      "Attribute", write_data.attributes.size(), write_data.attributes.data());
+  writer.write_struct_array_by_name("Attribute",
+                                    write_data.attributes.size(),
+                                    write_data.attributes.data(),
+                                    [](BlendStructWriter &struct_writer) {
+                                      struct_writer.generated_ptr(
+                                          offsetof(blender::Attribute, data));
+                                    });
   for (const blender::Attribute &attr_dna : write_data.attributes) {
     writer.write_string(attr_dna.name);
     switch (AttrStorageType(attr_dna.storage_type)) {

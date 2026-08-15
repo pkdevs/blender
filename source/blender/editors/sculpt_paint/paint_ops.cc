@@ -12,11 +12,11 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_ghash.h"
-#include "BLI_listbase.h"
-#include "BLI_math_color.h"
-#include "BLI_math_vector.h"
-#include "BLI_utildefines.h"
+#include "BLI_ghash.hh"
+#include "BLI_listbase.hh"
+#include "BLI_math_color_c.hh"
+#include "BLI_math_vector_c.hh"
+#include "BLI_utildefines.hh"
 
 #include "IMB_interp.hh"
 
@@ -670,6 +670,24 @@ void ED_operatortypes_paint()
   WM_operatortype_append(mask::PAINT_OT_mask_box_gesture);
   WM_operatortype_append(mask::PAINT_OT_mask_line_gesture);
   WM_operatortype_append(mask::PAINT_OT_mask_polyline_gesture);
+}
+
+static wmKeyMap *paint_stroke_modal_keymap(wmKeyConfig *keyconf)
+{
+  static const EnumPropertyItem modal_items[] = {
+      {PAINT_STROKE_MODAL_CANCEL, "CANCEL", 0, "Cancel", "Cancel and undo a stroke in progress"},
+      {0}};
+
+  static const char *name = "Paint Stroke Modal";
+
+  wmKeyMap *keymap = WM_modalkeymap_find(keyconf, name);
+
+  /* This function is called for each space-type, only needs to add map once. */
+  if (!keymap) {
+    keymap = WM_modalkeymap_ensure(keyconf, name, modal_items);
+  }
+
+  return keymap;
 }
 
 void ED_keymap_paint(wmKeyConfig *keyconf)
