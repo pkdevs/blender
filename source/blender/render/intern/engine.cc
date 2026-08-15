@@ -399,7 +399,7 @@ void RE_engine_update_result(RenderEngine *engine, RenderResult *result)
     render_result_merge(re->result, result);
     result->renlay = static_cast<RenderLayer *>(
         result->layers.first); /* weak, draws first layer always */
-    re->display->display_update(result, nullptr);
+    re->display->display_update(result);
   }
 }
 
@@ -459,7 +459,7 @@ void RE_engine_end_result(
     if (!re->display->test_break()) {
       result->renlay = static_cast<RenderLayer *>(
           result->layers.first); /* weak, draws first layer always */
-      re->display->display_update(result, nullptr);
+      re->display->display_update(result);
     }
   }
 
@@ -1445,6 +1445,47 @@ void RE_engine_gpu_context_unlock(RenderEngine *engine)
       BLI_mutex_unlock(&engine->blender_gpu_context_mutex);
     }
   }
+}
+
+void RE_engine_view_pause_set(RenderEngine *engine, const bool pause)
+{
+  SET_FLAG_FROM_TEST(engine->flag, pause, RE_ENGINE_VIEW_PAUSED);
+}
+
+bool RE_engine_view_pause_get(const RenderEngine *engine)
+{
+  return (engine->flag & RE_ENGINE_VIEW_PAUSED) != 0;
+}
+
+void RE_engine_view_auto_pause_set(RenderEngine *engine, const bool pause)
+{
+  SET_FLAG_FROM_TEST(engine->flag, pause, RE_ENGINE_VIEW_PAUSED_AUTO);
+}
+
+bool RE_engine_view_pause_notify(RenderEngine *engine, const bContext *context)
+{
+  const bool is_paused = (engine->flag & (RE_ENGINE_VIEW_PAUSED | RE_ENGINE_VIEW_PAUSED_AUTO)) !=
+                         0;
+  const bool was_paused = (engine->flag & RE_ENGINE_VIEW_PAUSED_NOTIFIED) != 0;
+
+  if (is_paused == was_paused) {
+    return false;
+  }
+
+  SET_FLAG_FROM_TEST(engine->flag, is_paused, RE_ENGINE_VIEW_PAUSED_NOTIFIED);
+
+  if (is_paused) {
+    if (engine->type->view_pause) {
+      engine->type->view_pause(engine, context);
+    }
+  }
+  else {
+    if (engine->type->view_resume) {
+      engine->type->view_resume(engine, context);
+    }
+  }
+
+  return true;
 }
 
 /** \} */

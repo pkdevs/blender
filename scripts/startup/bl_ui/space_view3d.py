@@ -98,7 +98,7 @@ class VIEW3D_HT_tool_header(Header):
             if tool_mode == 'PAINT_TEXTURE':
                 layout.popover("VIEW3D_PT_tools_mask_texture")
             layout.popover("VIEW3D_PT_tools_brush_stroke")
-            layout.popover("VIEW3D_PT_tools_brush_falloff")
+            layout.popover("VIEW3D_PT_tools_brush_shape")
             layout.popover("VIEW3D_PT_tools_brush_display")
 
         # NOTE: general mode options should be added to `draw_mode_settings`.
@@ -453,8 +453,6 @@ class _draw_tool_settings_context_mode:
         # direction
         if brush.gpencil_sculpt_brush_type in {'THICKNESS', 'STRENGTH', 'PINCH', 'TWIST'}:
             layout.row().prop(brush, "direction", expand=True, text="")
-
-        # Brush falloff
         layout.popover("VIEW3D_PT_tools_brush_falloff")
 
         return True
@@ -625,6 +623,8 @@ class _draw_tool_settings_context_mode:
             layout.popover("VIEW3D_PT_curves_sculpt_add_shape", text="Curve Shape")
         elif curves_tool == 'SLIDE':
             layout.popover("VIEW3D_PT_tools_brush_falloff")
+        elif curves_tool == 'CUT':
+            layout.prop(brush, "falloff_shape", expand=True)
 
         return True
 
@@ -1124,6 +1124,16 @@ class VIEW3D_HT_header(Header):
         # sub.enabled = shading.type != 'RENDERED'
         sub.popover(panel="VIEW3D_PT_shading", text="")
 
+        # Pause the rendered viewport, for render engines that support it.
+        if shading.type == 'RENDERED':
+            rv3d = view.region_3d
+            if rv3d.support_pause_render:
+                layout.prop(
+                    rv3d, "pause_render",
+                    icon='PLAY' if rv3d.pause_render else 'PAUSE',
+                    text="",
+                )
+
     @staticmethod
     def _mesh_paint_automasking_icon(paint):
         automask_enabled = (
@@ -1606,6 +1616,7 @@ class VIEW3D_MT_view_navigation(Menu):
 
         layout.operator("view3d.view_roll", text="Roll Left").type = 'LEFT'
         layout.operator("view3d.view_roll", text="Roll Right").type = 'RIGHT'
+        layout.operator("view3d.view_roll_set", text="Reset Roll")
 
         layout.separator()
 
@@ -2241,6 +2252,7 @@ class VIEW3D_MT_select_edit_grease_pencil(Menu):
         layout.operator_menu_enum("grease_pencil.select_similar", "mode")
         layout.operator("grease_pencil.select_fill")
         layout.operator("grease_pencil.select_linked")
+        layout.operator("grease_pencil.select_linked", text="Deselect Linked").deselect = True
 
         layout.separator()
 
@@ -2926,6 +2938,11 @@ class VIEW3D_MT_object_animation(Menu):
         layout.operator("grease_pencil.bake_grease_pencil_animation", text="Bake Object Transform to Grease Pencil...")
         layout.operator("anim.replace_action")
         layout.operator("anim.replace_action_new")
+        layout.operator("anim.replace_action_duplicate")
+
+        layout.separator()
+
+        layout.operator("anim.rotation_mode_convert")
 
 
 class VIEW3D_MT_object_rigid_body(Menu):
@@ -3765,10 +3782,6 @@ class VIEW3D_MT_sculpt(Menu):
 
         layout.separator()
 
-        layout.menu("VIEW3D_MT_add_object", text="Add Primitive")
-
-        layout.separator()
-
         sculpt_filters_types = [
             ('SMOOTH', iface_("Smooth", i18n_contexts.operator_default)),
             ('SURFACE_SMOOTH', iface_("Surface Smooth")),
@@ -3888,33 +3901,6 @@ class VIEW3D_MT_sculpt_trim(Menu):
 
         props = layout.operator("sculpt.trim_polyline_gesture", text="Polyline Add")
         props.trim_mode = 'JOIN'
-
-
-class VIEW3D_MT_add_object(Menu):
-    bl_label = "Add Primitive"
-
-    def draw(self, _context):
-        layout = self.layout
-
-        props = layout.operator("wm.tool_set_by_id", text="Add Cube")
-        props.name = "builtin.primitive_cube_add"
-        props.space_type = 'VIEW_3D'
-
-        props = layout.operator("wm.tool_set_by_id", text="Add Cylinder")
-        props.name = "builtin.primitive_cylinder_add"
-        props.space_type = 'VIEW_3D'
-
-        props = layout.operator("wm.tool_set_by_id", text="Add Cone")
-        props.name = "builtin.primitive_cone_add"
-        props.space_type = 'VIEW_3D'
-
-        props = layout.operator("wm.tool_set_by_id", text="Add UV Sphere")
-        props.name = "builtin.primitive_uv_sphere_add"
-        props.space_type = 'VIEW_3D'
-
-        props = layout.operator("wm.tool_set_by_id", text="Add Ico Sphere")
-        props.name = "builtin.primitive_ico_sphere_add"
-        props.space_type = 'VIEW_3D'
 
 
 class VIEW3D_MT_sculpt_curves(Menu):
@@ -9326,7 +9312,6 @@ classes = (
     VIEW3D_MT_sculpt_transform,
     VIEW3D_MT_sculpt_showhide,
     VIEW3D_MT_sculpt_trim,
-    VIEW3D_MT_add_object,
     VIEW3D_MT_mask,
     VIEW3D_MT_face_sets,
     VIEW3D_MT_face_sets_init,
