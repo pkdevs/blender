@@ -124,47 +124,29 @@ ccl_device bool integrator_init_from_camera(KernelGlobals kg,
                          DEVICE_KERNEL_INTEGRATOR_INIT_FROM_CAMERA,
                          kernel_data.cam.is_inside_volume ?
                              DEVICE_KERNEL_INTEGRATOR_INTERSECT_VOLUME_STACK :
-                             DEVICE_KERNEL_INTEGRATOR_INTERSECT_CLOSEST); // !!!
+                             DEVICE_KERNEL_INTEGRATOR_INTERSECT_CLOSEST);
   }
   else {
     /* Initialize path state for path integration. */
     path_state_init_integrator(kg, state, sample, rng_pixel, T);
 
-    /*
-    For ordinary Cycles tiles:
-      setup_restir       = false
-      final_evaluation   = false
-      restir_iteration   = 0
-
-    For the ReSTIR spatial iteration:
-      setup_restir       = true
-      final_evaluation   = false
-      restir_iteration   = N
-
-    For final evaluation:
-      setup_restir       = false
-      final_evaluation   = true
-      restir_iteration   = N
-    */
-    INTEGRATOR_STATE_WRITE(state, path, spatial_iteration) = tile->restir_iteration; // New
+    INTEGRATOR_STATE_WRITE(state, path, spatial_iteration) = tile->restir_iteration;
     INTEGRATOR_STATE_WRITE(state, path, setup_restir) = tile->setup_restir;
     INTEGRATOR_STATE_WRITE(state, path, final_evaluation) = tile->final_evaluation;
 
     if (INTEGRATOR_STATE(state, path, final_evaluation)) {
-    // if (tile->final_evaluation) {
-      integrator_path_init(state, DEVICE_KERNEL_INTEGRATOR_FINAL_EVALUATION); // !!!
+      integrator_path_init(state, DEVICE_KERNEL_INTEGRATOR_FINAL_EVALUATION);
 
       return true;
     }
 
     if (INTEGRATOR_STATE(state, path, setup_restir)) {
-    // if (tile->setup_restir) {
-      integrator_path_init(state, DEVICE_KERNEL_INTEGRATOR_RESTIR); // CPU: Set the queued kernel to ReSTIR and return.
+      integrator_path_init(state, DEVICE_KERNEL_INTEGRATOR_RESTIR);
 
       return true;
     }
 
-    film_clear_pass_reservoir(kg, state, render_buffer); // !!!
+    film_clear_pass_reservoir(kg, state, render_buffer);
 
     /* Continue with intersect_closest kernel, optionally initializing volume
      * stack before that if the camera may be inside a volume. */

@@ -110,7 +110,6 @@ void PathTraceWorkCPU::initial_resampling(const int64_t image_width,
     KernelWorkTile work_tile;
     setup_work_tile(work_tile, work_index, image_width, image_height, start_sample, sample_offset);
 
-    // ThreadKernelGlobalsCPU *kernel_globals = kernel_thread_globals_get(kernel_thread_globals_);
     ThreadKernelGlobalsCPU *kernel_globals = kernel_thread_globals_->data();
 
     render_samples_full_pipeline(kernel_globals, work_tile);
@@ -133,7 +132,6 @@ void PathTraceWorkCPU::spatial_resampling(const int64_t image_width,
     KernelWorkTile work_tile;
     setup_work_tile(work_tile, work_index, image_width, image_height, start_sample, sample_offset);
 
-    // ThreadKernelGlobalsCPU *kernel_globals = kernel_thread_globals_get(kernel_thread_globals_);
     ThreadKernelGlobalsCPU *kernel_globals = kernel_thread_globals_->data();
 
     render_samples_direct_illumination(kernel_globals, work_tile, iteration);
@@ -318,12 +316,11 @@ void PathTraceWorkCPU::render_samples_direct_illumination(ThreadKernelGlobalsCPU
     return;
   }
 
-  /* Immediately after init_from_camera(): */
   assert(INTEGRATOR_STATE(state, path, spatial_iteration) == iteration);
   assert(INTEGRATOR_STATE(state, path, setup_restir));
   assert(!INTEGRATOR_STATE(state, path, final_evaluation));
 
-  kernels_.integrator_restir(kernel_globals, state, &sample_work_tile, render_buffer); // !!!
+  kernels_.integrator_restir(kernel_globals, state, &sample_work_tile, render_buffer);
 }
 
 void PathTraceWorkCPU::render_samples_evaluate_final(ThreadKernelGlobalsCPU *kernel_globals,
@@ -350,7 +347,7 @@ void PathTraceWorkCPU::render_samples_evaluate_final(ThreadKernelGlobalsCPU *ker
     return;
   }
 
-  if (!kernels_.integrator_init_from_camera( // !!!
+  if (!kernels_.integrator_init_from_camera(
           kernel_globals, state, &sample_work_tile, render_buffer))
   {
     return;

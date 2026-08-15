@@ -476,7 +476,7 @@ ccl_device void integrator_evaluate_final_samples(KernelGlobals kg, // DEVICE_KE
                       │
                       └──────────────► RESTIR_PT_EVALUATION
   */
-  integrate_direct_light_create_shadow_path<true>( // TODO: create shadow paths in kernel_creates_shadow_paths()?
+  integrate_direct_light_create_shadow_path<true>(
       kg, state, &rng_state, &current.sd, &current.reservoir.light, &current.reservoir.radiance, 0);
 
   integrator_path_next(state,

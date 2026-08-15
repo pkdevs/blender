@@ -137,7 +137,6 @@ class PathTraceWorkGPU : public PathTraceWork {
   int restir_iteration_ = 0;
   bool setup_restir_ = false;
   bool final_evaluation_ = false;
-  // device_vector<uint32_t> debug_restir_terminations_; // DEBUG ONLY
 
   /* Integrator queue. */
   unique_ptr<DeviceQueue> queue_;
