@@ -962,11 +962,6 @@ static int sculpt_brush_needs_normal(const SculptSession &ss, const Brush &brush
          brush_uses_topology_rake(ss, brush) || BKE_brush_has_cube_tip(&brush, PaintMode::Sculpt);
 }
 
-static bool brush_needs_rake_rotation(const Brush &brush)
-{
-  return bke::brush::supports_rake_factor(brush) && (brush.rake_factor != 0.0f);
-}
-
 /** \} */
 
 static void rake_data_update(SculptRakeData *srd, const float co[3])
@@ -3400,7 +3395,7 @@ static brushes::CursorSampleResult calc_brush_node_mask(const Depsgraph &depsgra
 
     tip_normal = tilt_apply_to_normal(tip_normal, *ss.cache, brush.tilt_strength_factor);
 
-    const float special_rotation = brush_needs_rake_rotation(brush) ?
+    const float special_rotation = BKE_brush_needs_rake_rotation(brush) ?
                                        ss.cache->special_rotation :
                                        BKE_brush_mask_texture_get(&brush, OB_MODE_SCULPT)->rot;
     float4x4 brush_local_mat;
@@ -4328,7 +4323,7 @@ static void brush_delta_update(const Depsgraph &depsgraph,
     copy_v3_v3(cache->rake_data.follow_co, grab_location);
   }
 
-  if (!brush_needs_rake_rotation(brush)) {
+  if (!BKE_brush_needs_rake_rotation(brush)) {
     return;
   }
   cache->rake_data.follow_dist = cache->radius * SCULPT_RAKE_BRUSH_FACTOR;
@@ -6739,7 +6734,7 @@ void cube_tip_init(const Sculpt & /*sd*/, const Object &ob, const Brush &brush, 
   float tmat[4][4];
   float unused[4][4];
 
-  const float special_rotation = brush_needs_rake_rotation(brush) ?
+  const float special_rotation = BKE_brush_needs_rake_rotation(brush) ?
                                      ss.cache->special_rotation :
                                      BKE_brush_mask_texture_get(&brush, OB_MODE_SCULPT)->rot;
   zero_m4(mat);

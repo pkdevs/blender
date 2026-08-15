@@ -1799,6 +1799,11 @@ bool BKE_brush_has_cube_tip(const Brush *brush, PaintMode paint_mode)
   return false;
 }
 
+bool BKE_brush_needs_rake_rotation(const Brush &brush)
+{
+  return bke::brush::supports_rake_factor(brush) && (brush.rake_factor != 0.0f);
+}
+
 namespace bke::brush {
 float normal_weight_get(const Brush &brush, const bool invert)
 {

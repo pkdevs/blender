@@ -681,7 +681,8 @@ static void object_space_overlays_draw(const PaintCursorContext &pcontext)
 
 static void cursor_space_drawing_setup(const PaintCursorContext &pcontext)
 {
-  const float3 normal = bke::brush::supports_tilt(*pcontext.brush) ?
+  const Brush *brush = pcontext.brush;
+  const float3 normal = bke::brush::supports_tilt(*brush) ?
                             tilt_apply_to_normal(*pcontext.vc.obact,
                                                  float4x4(pcontext.vc.rv3d->viewinv),
                                                  pcontext.normal,
@@ -689,12 +690,14 @@ static void cursor_space_drawing_setup(const PaintCursorContext &pcontext)
                                                  pcontext.brush->tilt_strength_factor) :
                             pcontext.normal;
 
-  if (BKE_brush_has_cube_tip(pcontext.brush, pcontext.mode)) {
+  if (BKE_brush_has_cube_tip(brush, pcontext.mode)) {
     float local_mat[4][4];
     float local_mat_inv[4][4];
 
+    const bool needs_rake = BKE_brush_needs_rake_rotation(*brush);
     calc_brush_local_mat(0,
-                         pcontext.paint->runtime->brush_rotation,
+                         needs_rake ? pcontext.paint->runtime->brush_rotation :
+                                      BKE_brush_mask_texture_get(brush, OB_MODE_SCULPT)->rot,
                          pcontext.vc,
                          *pcontext.vc.obact,
                          normal,
