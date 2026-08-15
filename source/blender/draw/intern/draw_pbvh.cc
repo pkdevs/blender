@@ -1218,6 +1218,16 @@ static float4 quad_weights_from_grid(const int corner,
   return quad_weights_from_uv(u, v);
 }
 
+static float4 quad_weights_from_irregular_corner(const int x,
+                                                 const int y,
+                                                 const float grid_size_1_inv)
+{
+  const float u = 1.0f - (y * grid_size_1_inv);
+  const float v = 1.0f - (x * grid_size_1_inv);
+
+  return quad_weights_from_uv(u, v);
+}
+
 template<typename T>
 static void interpolate_grids_for_flat_layout(const SubdivCCG &subdiv_ccg,
                                               const Span<int> corner_verts,
@@ -1241,7 +1251,7 @@ static void interpolate_grids_for_flat_layout(const SubdivCCG &subdiv_ccg,
     if (face.size() == 4) {
       for (int y = 0; y < grid_size_1; y++) {
         for (int x = 0; x < grid_size_1; x++) {
-          Span <int> face_verts = corner_verts.slice(face);
+          Span<int> face_verts = corner_verts.slice(face);
           *data = Converter::convert(
               bke::attribute_math::mix4(quad_weights_from_grid(corner, x, y, grid_size_1_inv),
                                         src[face_verts[0]],
@@ -1274,6 +1284,55 @@ static void interpolate_grids_for_flat_layout(const SubdivCCG &subdiv_ccg,
       }
     }
     else {
+      std::array<T, 4> values;
+      values[0] = src[corner_verts[grid]];
+      /* Calculate attribute value at center of polygon */
+      Array<float, 32> weights(face.size());
+      const float weight = math::rcp(float(face.size()));
+      weights.fill(weight);
+
+      values[2] = bke::attribute_math::mix_indices(src, corner_verts.slice(face), weights);
+      /* Calculate attribute value at midpoint of connecting edges */
+      const int next = bke::mesh::face_corner_next(face, grid);
+      values[1] = bke::attribute_math::mix2(
+          0.5f, src[corner_verts[grid]], src[corner_verts[next]]);
+
+      const int prev = bke::mesh::face_corner_prev(face, grid);
+      values[3] = bke::attribute_math::mix2(
+          0.5f, src[corner_verts[grid]], src[corner_verts[prev]]);
+      /* Interpolate attribute */
+      for (int y = 0; y < grid_size_1; y++) {
+        for (int x = 0; x < grid_size_1; x++) {
+          *data = Converter::convert(
+              bke::attribute_math::mix4(quad_weights_from_irregular_corner(x, y, grid_size_1_inv),
+                                        values[0],
+                                        values[1],
+                                        values[2],
+                                        values[3]));
+          data++;
+          *data = Converter::convert(bke::attribute_math::mix4(
+              quad_weights_from_irregular_corner(x + 1, y, grid_size_1_inv),
+              values[0],
+              values[1],
+              values[2],
+              values[3]));
+          data++;
+          *data = Converter::convert(bke::attribute_math::mix4(
+              quad_weights_from_irregular_corner(x + 1, y + 1, grid_size_1_inv),
+              values[0],
+              values[1],
+              values[2],
+              values[3]));
+          data++;
+          *data = Converter::convert(bke::attribute_math::mix4(
+              quad_weights_from_irregular_corner(x, y + 1, grid_size_1_inv),
+              values[0],
+              values[1],
+              values[2],
+              values[3]));
+          data++;
+        }
+      }
     }
   }
 }
@@ -1310,7 +1369,8 @@ BLI_NOINLINE static void fill_generic_attribute_grids(const Object &object,
           bke::attribute_math::to_static_type(attr.varray.type(), [&]<typename T>() {
             if constexpr (!std::is_void_v<typename AttributeConverter<T>::VBOType>) {
               const VArraySpan<T> src = attr.varray.typed<T>();
-              interpolate_grids_for_flat_layout<T>(subdiv_ccg, corner_verts, nodes[i].grids(), *vbos[i], src);
+              interpolate_grids_for_flat_layout<T>(
+                  subdiv_ccg, corner_verts, nodes[i].grids(), *vbos[i], src);
             }
           });
         }
