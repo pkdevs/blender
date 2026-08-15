@@ -1206,7 +1206,10 @@ static float4 quad_weights_from_uv(const float u, const float v)
   return {(1.0f - u) * (1.0f - v), u * (1.0f - v), u * v, (1.0f - u) * v};
 }
 
-static float4 quad_weights_from_grid(const int corner, const int x, const int y, const float grid_size_1_inv)
+static float4 quad_weights_from_grid(const int corner,
+                                     const int x,
+                                     const int y,
+                                     const float grid_size_1_inv)
 {
   const float grid_u = x * grid_size_1_inv;
   const float grid_v = y * grid_size_1_inv;
@@ -1217,7 +1220,11 @@ static float4 quad_weights_from_grid(const int corner, const int x, const int y,
 }
 
 template<typename T>
-static void interpolate_grids_for_flat_layout(const SubdivCCG& subdiv_ccg, Span<int> grids, gpu::VertBuf& vbo, Span<T> src)
+static void interpolate_grids_for_flat_layout(const SubdivCCG &subdiv_ccg,
+                                              const Span<int> corner_verts,
+                                              Span<int> grids,
+                                              gpu::VertBuf &vbo,
+                                              Span<T> src)
 {
   using Converter = AttributeConverter<T>;
   using VBOType = typename Converter::VBOType;
@@ -1235,33 +1242,34 @@ static void interpolate_grids_for_flat_layout(const SubdivCCG& subdiv_ccg, Span<
     if (face.size() == 4) {
       for (int y = 0; y < grid_size_1; y++) {
         for (int x = 0; x < grid_size_1; x++) {
-          *data = bke::attribute_math::mix4(
-              quad_weights_from_grid(corner, x, y, grid_size_1_inv),
-              src[face[0]],
-              src[face[1]],
-              src[face[2]],
-              src[face[3]]);
+          Span <int> face_verts = corner_verts.slice(face);
+          *data = Converter::convert(
+              bke::attribute_math::mix4(quad_weights_from_grid(corner, x, y, grid_size_1_inv),
+                                        src[face_verts[0]],
+                                        src[face_verts[1]],
+                                        src[face_verts[2]],
+                                        src[face_verts[3]]));
           data++;
-          *data = bke::attribute_math::mix4(
-              quad_weights_from_grid(corner, x + 1, y, grid_size_1_inv),
-              src[face[0]],
-              src[face[1]],
-              src[face[2]],
-              src[face[3]]);
+          *data = Converter::convert(
+              bke::attribute_math::mix4(quad_weights_from_grid(corner, x + 1, y, grid_size_1_inv),
+                                        src[face_verts[0]],
+                                        src[face_verts[1]],
+                                        src[face_verts[2]],
+                                        src[face_verts[3]]));
           data++;
-          *data = bke::attribute_math::mix4(
-              quad_weights_from_grid(corner, x + 1 , y + 1, grid_size_1_inv),
-              src[face[0]],
-              src[face[1]],
-              src[face[2]],
-              src[face[3]]);
+          *data = Converter::convert(bke::attribute_math::mix4(
+              quad_weights_from_grid(corner, x + 1, y + 1, grid_size_1_inv),
+              src[face_verts[0]],
+              src[face_verts[1]],
+              src[face_verts[2]],
+              src[face_verts[3]]));
           data++;
-          *data = bke::attribute_math::mix4(
-              quad_weights_from_grid(corner, x, y + 1, grid_size_1_inv),
-              src[face[0]],
-              src[face[1]],
-              src[face[2]],
-              src[face[3]]);
+          *data = Converter::convert(
+              bke::attribute_math::mix4(quad_weights_from_grid(corner, x, y + 1, grid_size_1_inv),
+                                        src[face_verts[0]],
+                                        src[face_verts[1]],
+                                        src[face_verts[2]],
+                                        src[face_verts[3]]));
           data++;
         }
       }
@@ -1289,27 +1297,34 @@ BLI_NOINLINE static void fill_generic_attribute_grids(const Object &object,
                                                       const StringRef name,
                                                       const MutableSpan<gpu::VertBufPtr> vbos)
 {
+  printf("%s\n", __func__);
   const bke::pbvh::Tree &pbvh = *bke::object::pbvh_get(object);
   const Span<bke::pbvh::GridsNode> nodes = pbvh.nodes<bke::pbvh::GridsNode>();
   const SubdivCCG &subdiv_ccg = *object.runtime->sculpt_session->subdiv_ccg;
   const bke::AttributeAccessor attributes = orig_mesh_data.attributes;
   const bke::GAttributeReader attr = attributes.lookup(name);
 
-  node_mask.foreach_index([&](const int i) {
-    if (use_flat_layout[i]) {
-      bke::attribute_math::to_static_type(attr.varray.type(), [&]<typename T>() {
-        if constexpr (!std::is_void_v<typename AttributeConverter<T>::VBOType>) {
-          const VArraySpan<T> src = attr.varray.typed<T>();
-          interpolate_grids_for_flat_layout<T>(subdiv_ccg, nodes[i].grids(), *vbos[i], src);
+  const Mesh &mesh = DRW_object_get_data_for_drawing<Mesh>(object);
+  const Span<int> corner_verts = mesh.corner_verts();
+
+  node_mask.foreach_index(
+      [&](const int i) {
+        if (use_flat_layout[i]) {
+          bke::attribute_math::to_static_type(attr.varray.type(), [&]<typename T>() {
+            if constexpr (!std::is_void_v<typename AttributeConverter<T>::VBOType>) {
+              const VArraySpan<T> src = attr.varray.typed<T>();
+              interpolate_grids_for_flat_layout<T>(subdiv_ccg, corner_verts, nodes[i].grids(), *vbos[i], src);
+            }
+          });
         }
-      });
-    }
-    else {
-      /*
-      calc_node_generic_attribute_for_standard_layout(subdiv_ccg, attr, nodes[i].grids(), *vbos[i]);
-      */
-    }
-  }, exec_mode::grain_size(1));
+        else {
+          /*
+          calc_node_generic_attribute_for_standard_layout(subdiv_ccg, attr, nodes[i].grids(),
+          *vbos[i]);
+          */
+        }
+      },
+      exec_mode::grain_size(1));
 }
 
 BLI_NOINLINE static void update_generic_attribute_grids(const Object &object,
@@ -1343,14 +1358,9 @@ BLI_NOINLINE static void update_generic_attribute_grids(const Object &object,
     return;
   }
 
-  ensure_vbos_allocated_grids(object,
-                              attribute_format(orig_mesh_data, name, data_type),
-                              use_flat_layout,
-                              node_mask,
-                              vbos);
+  ensure_vbos_allocated_grids(
+      object, attribute_format(orig_mesh_data, name, data_type), use_flat_layout, node_mask, vbos);
   fill_generic_attribute_grids(object, orig_mesh_data, use_flat_layout, node_mask, name, vbos);
-  node_mask.foreach_index([&](const int i) { vbos[i]->data<float3>().fill(float3(0.0f)); },
-                          exec_mode::grain_size(1));
 }
 
 BLI_NOINLINE static void update_positions_bmesh(const Object &object,
