@@ -2826,7 +2826,7 @@ static bool scene_audio_driver_targets_user_modified(Depsgraph *depsgraph,
     if (target_was_modified) {
       return false;
     }
-    if (strip->type == STRIP_TYPE_SCENE &&
+    if (strip->type == STRIP_TYPE_SCENE && strip->scene != nullptr &&
         scene_audio_driver_targets_user_modified(
             depsgraph, strip->scene, visited_scenes, r_has_audio_driver))
     {
