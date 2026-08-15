@@ -62,8 +62,6 @@
  *   already.
  */
 
-#include <atomic>
-
 #include "BLI_collaborative_once_call.hh"
 #include "BLI_function_ref.hh"
 
@@ -72,7 +70,6 @@ namespace blender {
 class CacheMutex {
  private:
   threading::CollaborativeOnceFlag once_flag_;
-  std::atomic<bool> cache_valid_ = false;
 
  public:
   /**
@@ -85,7 +82,7 @@ class CacheMutex {
   void ensure(const FunctionRef<void()> compute_cache)
   {
     /* Handle fast case when the cache is up-to-date. */
-    if (cache_valid_.load(std::memory_order_acquire)) {
+    if (this->is_cached()) {
       return;
     }
     this->ensure_impl(compute_cache);
@@ -109,7 +106,7 @@ class CacheMutex {
    */
   bool is_cached() const
   {
-    return cache_valid_.load(std::memory_order_relaxed);
+    return threading::collaborative_once_flag_is_done(once_flag_);
   }
 
  private:

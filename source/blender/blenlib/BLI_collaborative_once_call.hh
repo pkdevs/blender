@@ -19,8 +19,29 @@ namespace blender::threading {
 
 #ifdef WITH_TBB
 
+/**
+ * #CollaborativeOnceFlag allows a function to be called just once in a thread-safe manner. With
+ * it, a thread-safe cache can be implemented. Importantly, it's "collaborative" in the sense that
+ * threads waiting for the cache to be computed can do other work while waiting.
+ */
 using CollaborativeOnceFlag = tbb::collaborative_once_flag;
 using tbb::collaborative_call_once;
+
+/**
+ * Returns true when the flag is in the done state. Importantly, this does not allow checking
+ * whether the function is being computed currently, only whether it is done.
+ */
+inline bool collaborative_once_flag_is_done(const CollaborativeOnceFlag &flag)
+{
+  /* This is a copy of the start of #tbb::collaborative_call_once. There is otherwise not public
+   * API for it. */
+  static_assert(sizeof(CollaborativeOnceFlag) == sizeof(std::atomic<uintptr_t>));
+  const std::atomic<uintptr_t> &state = *reinterpret_cast<const std::atomic<uintptr_t> *>(&flag);
+  /* Matches tbb::collaborative_once_flag::state::done. */
+  constexpr uintptr_t done_state = 1;
+  const bool is_done = state.load(std::memory_order_acquire) == done_state;
+  return is_done;
+}
 
 #else
 
@@ -42,6 +63,11 @@ inline void collaborative_call_once(CollaborativeOnceFlag &flag, Fn &&fn, Args &
   /* Isolate because mutex is locked. */
   threading::isolate_task([&]() { fn(std::forward<Args>(args)...); });
   flag.has_run.store(true, std::memory_order_release);
+}
+
+inline bool collaborative_once_flag_is_done(const CollaborativeOnceFlag &flag)
+{
+  return flag.has_run.load(std::memory_order_acquire);
 }
 
 #endif
