@@ -648,8 +648,7 @@ static void get_strip_offsets(TransInfo *t,
                               float r_offset_clamped[2])
 {
   /* Apply extra offset caused by edge panning. */
-  float loc[2];
-  add_v2_v2v2(loc, td->loc, edge_pan_offset);
+  add_v2_v2(td->loc, edge_pan_offset);
 
   sub_v2_v2v2(r_offset, td->loc, td->iloc);
   copy_v2_v2(r_offset_clamped, r_offset);
