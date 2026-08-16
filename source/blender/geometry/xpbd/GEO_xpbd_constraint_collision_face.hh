@@ -4,7 +4,7 @@
 
 #pragma once
 
-#include "GEO_xpbd_constraint_coloring_utils.hh"
+#include "BLI_coloring.hh"
 #include "GEO_xpbd_constraint_set_templated.hh"
 
 namespace blender::xpbd {
@@ -121,9 +121,9 @@ class CollisionFaceConstraintSet : public TemplatedConstraintSet<CollisionFaceCo
     updater.add_residual_error(geo_i_, error_squared * error_scales_[constraint_i]);
   }
 
-  ConstraintColoring color_constraints(LinearAllocator<> &memory) const override
+  Vector<IndexMask> color_constraints(LinearAllocator<> &memory) const override
   {
-    return color_constraints__unary(points_, memory);
+    return color_verts_by_groups(points_, memory);
   }
 };
 

@@ -49,6 +49,7 @@ set(SRC
   intern/bitmap_draw_2d.cc
   intern/boxpack_2d.cc
   intern/cache_mutex.cc
+  intern/coloring.cc
   intern/compression.cc
   intern/compute_context.cc
   intern/convexhull_2d.cc
@@ -199,6 +200,7 @@ set(SRC
   BLI_color.hh
   BLI_color_mix.hh
   BLI_color_types.hh
+  BLI_coloring.hh
   BLI_colorspace.hh
   BLI_compiler_attrs.hh
   BLI_compiler_compat.hh
@@ -521,6 +523,7 @@ if(WITH_GTESTS)
     tests/BLI_bounds_test.cc
     tests/BLI_build_config_test.cc
     tests/BLI_color_test.cc
+    tests/BLI_coloring_test.cc
     tests/BLI_compression_test.cc
     tests/BLI_convexhull_2d_test.cc
     tests/BLI_cpp_type_test.cc

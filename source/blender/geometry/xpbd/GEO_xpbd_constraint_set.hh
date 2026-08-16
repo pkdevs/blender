@@ -8,7 +8,6 @@
 #include "BLI_string_ref.hh"
 #include "BLI_vector.hh"
 
-#include "GEO_xpbd_constraint_coloring.hh"
 #include "GEO_xpbd_constraint_set_params.hh"
 #include "GEO_xpbd_updater_gauss_seidel.hh"
 #include "GEO_xpbd_updater_velocity.hh"
@@ -41,7 +40,7 @@ class ConstraintSet {
                                 GaussSeidelUpdater &updater,
                                 const IndexMask &mask) = 0;
   virtual void reset_forces() = 0;
-  virtual ConstraintColoring color_constraints(LinearAllocator<> &memory) const = 0;
+  virtual Vector<IndexMask> color_constraints(LinearAllocator<> &memory) const = 0;
 
   void solve_sequential_all(const ConstraintSetParams &params, GaussSeidelUpdater &updater)
   {

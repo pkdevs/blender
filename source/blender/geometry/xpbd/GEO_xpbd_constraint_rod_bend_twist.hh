@@ -5,7 +5,7 @@
 #pragma once
 
 #include "GEO_xpbd_constraint_align_rotations.hh"
-#include "GEO_xpbd_constraint_coloring_utils.hh"
+#include "BLI_coloring.hh"
 #include "GEO_xpbd_constraint_set_templated.hh"
 
 namespace blender::xpbd {
@@ -86,9 +86,9 @@ class RodBendAndTwistConstraintSet : public TemplatedConstraintSet<RodBendAndTwi
     }
   }
 
-  ConstraintColoring color_constraints(LinearAllocator<> & /*memory*/) const override
+  Vector<IndexMask> color_constraints(LinearAllocator<> & /*memory*/) const override
   {
-    return color_constraints__all_independent(constraints_num_);
+    return {IndexMask(constraints_num_)};
   }
 };
 

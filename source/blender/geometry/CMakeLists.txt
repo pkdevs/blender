@@ -61,8 +61,6 @@ set(SRC
   intern/uv_parametrizer.cc
   intern/volume_grid_resample.cc
 
-  xpbd/intern/xpbd_constraint_coloring.cc
-
   GEO_add_curves_on_mesh.hh
   GEO_curve_constraints.hh
   GEO_curves_remove_and_split.hh
@@ -112,7 +110,6 @@ set(SRC
   xpbd/GEO_xpbd_constraint_align_rotations.hh
   xpbd/GEO_xpbd_constraint_collision_edge.hh
   xpbd/GEO_xpbd_constraint_collision_face.hh
-  xpbd/GEO_xpbd_constraint_coloring.hh
   xpbd/GEO_xpbd_constraint_damping_angular.hh
   xpbd/GEO_xpbd_constraint_damping_linear.hh
   xpbd/GEO_xpbd_constraint_distance.hh

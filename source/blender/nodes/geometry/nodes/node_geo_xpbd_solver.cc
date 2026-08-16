@@ -263,7 +263,7 @@ struct EdgeLengthConstraintUsage {
   VArraySpan<float> compliances;
   MutableSpan<float> lambdas;
 
-  xpbd::ConstraintColoring coloring;
+  Vector<IndexMask> coloring;
 };
 
 struct CrossEdgeLengthConstraint {
@@ -279,7 +279,7 @@ struct CrossEdgeLengthConstraintUsage {
   Vector<float> compliances;
   MutableSpan<float> lambdas;
 
-  xpbd::ConstraintColoring coloring;
+  Vector<IndexMask> coloring;
 };
 
 struct StaticMeshInfo {
@@ -324,7 +324,7 @@ struct CollisionContacts {
 
 struct ConstraintWithColoring {
   xpbd::ConstraintSet *constraint;
-  xpbd::ConstraintColoring coloring;
+  Vector<IndexMask> coloring;
 };
 
 struct GeometryData {
@@ -1869,7 +1869,7 @@ class XpbdSolverStep {
             constraint_usage.compliances,
             error_scale_from_threshold(constraint.error_threshold),
             constraint_usage.lambdas);
-        xpbd::ConstraintColoring coloring = constraint_set.color_constraints(tls.allocator);
+        Vector<IndexMask> coloring = constraint_set.color_constraints(tls.allocator);
         geo_data.static_constraints.append({&constraint_set, std::move(coloring)});
       }
     }
@@ -1943,7 +1943,7 @@ class XpbdSolverStep {
             cross_edge_compliances,
             error_scale_from_threshold(constraint.error_threshold),
             constraint_usage.lambdas);
-        xpbd::ConstraintColoring coloring = constraint_set.color_constraints(tls.allocator);
+        Vector<IndexMask> coloring = constraint_set.color_constraints(tls.allocator);
         geo_data.static_constraints.append({&constraint_set, std::move(coloring)});
       }
     }
@@ -2665,8 +2665,7 @@ class XpbdSolverStep {
     for (const int data_key_i : geometries_.data_keys.index_range()) {
       const GeometryData &geo_data = *geometries_.data[data_key_i];
       for (const ConstraintWithColoring &constraint : geo_data.static_constraints) {
-        for (const int color_i : constraint.coloring.colors.index_range()) {
-          const IndexMask &mask = constraint.coloring.colors[color_i];
+        for (const IndexMask &mask : constraint.coloring) {
           threading::parallel_for(mask.index_range(), 512, [&](const IndexRange range) {
             const IndexMask sliced_mask = mask.slice(range);
             xpbd::GaussSeidelUpdater updater{solver_refs};

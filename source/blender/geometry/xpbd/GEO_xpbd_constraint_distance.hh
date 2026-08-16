@@ -4,7 +4,7 @@
 
 #pragma once
 
-#include "GEO_xpbd_constraint_coloring_utils.hh"
+#include "BLI_coloring.hh"
 #include "GEO_xpbd_constraint_set_templated.hh"
 
 namespace blender::xpbd {
@@ -98,9 +98,10 @@ class DistanceConstraintSet : public TemplatedConstraintSet<DistanceConstraintSe
     updater.add_residual_error(geo_i, result.residual_error_squared * error_scale_);
   }
 
-  ConstraintColoring color_constraints(LinearAllocator<> &memory) const override
+  Vector<IndexMask> color_constraints(LinearAllocator<> &memory) const override
   {
-    return color_constraints__binary(point_pairs_, memory);
+    const int total_verts = *std::max_element(point_pairs_.cast<int>().begin(), point_pairs_.cast<int>().end());
+    return color_edges_by_verts(total_verts, point_pairs_, memory);
   }
 };
 
