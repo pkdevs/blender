@@ -502,18 +502,14 @@ Array<float> view_radii_from_point_selection(const GreasePencilStrokeParams &par
 
 bool do_vertex_color_points(const Brush &brush)
 {
-  return brush.gpencil_settings != nullptr && ELEM(brush.gpencil_settings->vertex_mode,
-                                                   GPPAINT_MODE_STROKE,
-                                                   GPPAINT_MODE_BOTH,
-                                                   GPPAINT_MODE_SPLIT);
+  return brush.gpencil_settings != nullptr &&
+         ELEM(brush.gpencil_settings->vertex_mode, GPPAINT_MODE_STROKE, GPPAINT_MODE_BOTH);
 }
 
 bool do_vertex_color_fill(const Brush &brush)
 {
-  return brush.gpencil_settings != nullptr && ELEM(brush.gpencil_settings->vertex_mode,
-                                                   GPPAINT_MODE_FILL,
-                                                   GPPAINT_MODE_BOTH,
-                                                   GPPAINT_MODE_SPLIT);
+  return brush.gpencil_settings != nullptr &&
+         ELEM(brush.gpencil_settings->vertex_mode, GPPAINT_MODE_FILL, GPPAINT_MODE_BOTH);
 }
 
 bool GreasePencilStrokeOperationCommon::is_inverted(const Brush &brush) const

@@ -231,10 +231,11 @@ void TintOperation::tint_fills(const bke::CurvesGeometry &strokes,
         alpha = math::max(alpha, 0.0f);
       }
       else {
-        const ColorGeometry4f &fill_color = brush->gpencil_settings->vertex_mode ==
-                                                    GPPAINT_MODE_SPLIT ?
-                                                secondary_color_ :
-                                                main_color_;
+        const ColorGeometry4f &fill_color =
+            (((brush->gpencil_settings->flag2 & GP_BRUSH_USE_SPLIT_COLORS) != 0) &&
+             (brush->gpencil_settings->vertex_mode == GPPAINT_MODE_BOTH)) ?
+                secondary_color_ :
+                main_color_;
 
         float4 premultiplied;
         straight_to_premul_v4_v4(premultiplied, fill_colors[curve]);
@@ -281,14 +282,10 @@ void TintOperation::execute_tint(const bContext &C, const InputSample &extension
   strength = math::clamp(strength, 0.0f, 1.0f);
   fill_strength = math::clamp(fill_strength, 0.0f, 1.0f);
 
-  const bool tint_strokes = ELEM(brush->gpencil_settings->vertex_mode,
-                                 GPPAINT_MODE_STROKE,
-                                 GPPAINT_MODE_BOTH,
-                                 GPPAINT_MODE_SPLIT);
-  const bool tint_fills = ELEM(brush->gpencil_settings->vertex_mode,
-                               GPPAINT_MODE_FILL,
-                               GPPAINT_MODE_BOTH,
-                               GPPAINT_MODE_SPLIT);
+  const bool tint_strokes = ELEM(
+      brush->gpencil_settings->vertex_mode, GPPAINT_MODE_STROKE, GPPAINT_MODE_BOTH);
+  const bool tint_fills = ELEM(
+      brush->gpencil_settings->vertex_mode, GPPAINT_MODE_FILL, GPPAINT_MODE_BOTH);
 
   GreasePencil &grease_pencil = *id_cast<GreasePencil *>(obact->data);
 

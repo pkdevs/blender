@@ -49,9 +49,21 @@ void VertexPaintOperation::on_stroke_extended(const bContext &C,
   const bool do_points = do_vertex_color_points(brush);
   const bool do_fill = do_vertex_color_fill(brush);
 
-  float color_linear[3];
-  copy_v3_v3(color_linear, BKE_brush_color_get(&paint, &brush));
-  const ColorPaint4f mix_color(color_linear[0], color_linear[1], color_linear[2], 1.0f);
+  const float3 color_linear_stroke = BKE_brush_color_get(&paint, &brush);
+  float3 color_linear_fill;
+  if (((brush.gpencil_settings->flag2 & GP_BRUSH_USE_SPLIT_COLORS) != 0) &&
+      (brush.gpencil_settings->vertex_mode == GPPAINT_MODE_BOTH))
+  {
+    color_linear_fill = BKE_brush_secondary_color_get(&paint, &brush);
+  }
+  else {
+    color_linear_fill = color_linear_stroke;
+  }
+
+  const ColorPaint4f mix_color_stroke(
+      color_linear_stroke.x, color_linear_stroke.y, color_linear_stroke.z, 1.0f);
+  const ColorPaint4f mix_color_fill(
+      color_linear_fill.x, color_linear_fill.y, color_linear_fill.z, 1.0f);
 
   this->foreach_editable_drawing(C, [&](const GreasePencilStrokeParams &params) {
     IndexMaskMemory memory;
@@ -95,7 +107,7 @@ void VertexPaintOperation::on_stroke_extended(const bContext &C,
               const Color linearrgb_color = color::unpremultiply_alpha(color);
 
               color = color::premultiply_alpha(color::BLI_mix_colors<Color, Traits>(
-                  blend_mode, linearrgb_color, mix_color, Traits::range * influence));
+                  blend_mode, linearrgb_color, mix_color_stroke, Traits::range * influence));
             },
             exec_mode::grain_size(4096));
       }
@@ -165,7 +177,7 @@ void VertexPaintOperation::on_stroke_extended(const bContext &C,
               const Color linearrgb_color = color::unpremultiply_alpha(color);
 
               color = color::premultiply_alpha(color::BLI_mix_colors<Color, Traits>(
-                  blend_mode, linearrgb_color, mix_color, Traits::range * influence));
+                  blend_mode, linearrgb_color, mix_color_fill, Traits::range * influence));
 
               index_mask::masked_fill(fill_colors, color, fill_curve_mask);
             },

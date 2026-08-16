@@ -1403,11 +1403,6 @@ static void rna_def_gpencil_options(BlenderRNA *brna)
        ICON_GP_DRAW_BOTH,
        "Both",
        "Painting affects both strokes and fills"},
-      {GPPAINT_MODE_BOTH,
-       "SPLIT",
-       ICON_GP_DRAW_BOTH,
-       "Stroke & Fill Split",
-       "Main Vertex Color affects strokes, Secondary Vertex Color affects the fills"},
       {0, nullptr, 0, nullptr, nullptr},
   };
 
@@ -1903,6 +1898,12 @@ static void rna_def_gpencil_options(BlenderRNA *brna)
   RNA_def_property_enum_items(prop, rna_enum_gpencil_brush_stroke_type_items);
   RNA_def_property_ui_text(prop, "Stroke Mode", "Mode to use when creating strokes");
   RNA_def_property_translation_context(prop, BLT_I18NCONTEXT_ID_GPENCIL);
+  RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
+  RNA_def_property_update(prop, NC_GPENCIL | ND_DATA, "rna_BrushGpencilSettings_update");
+
+  prop = RNA_def_property(srna, "split_colors", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, nullptr, "flag2", GP_BRUSH_USE_SPLIT_COLORS);
+  RNA_def_property_ui_text(prop, "Split Colors", "Use different colors for the fill and stroke");
   RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
   RNA_def_property_update(prop, NC_GPENCIL | ND_DATA, "rna_BrushGpencilSettings_update");
 

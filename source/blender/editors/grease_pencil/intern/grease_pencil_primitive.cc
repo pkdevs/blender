@@ -825,11 +825,13 @@ static wmOperatorStatus grease_pencil_primitive_invoke(bContext *C,
   const bool use_vertex_color = (vc.scene->toolsettings->gp_paint->mode ==
                                  GPPAINT_FLAG_USE_VERTEXCOLOR);
   if (use_vertex_color) {
-    if (ptd.settings->vertex_mode == GPPAINT_MODE_SPLIT) {
+    if (((ptd.settings->flag2 & GP_BRUSH_USE_SPLIT_COLORS) != 0) &&
+        (ptd.settings->flag2 & GP_BRUSH_USE_STROKE) && (ptd.settings->flag2 & GP_BRUSH_USE_FILL))
+    {
       ColorGeometry4f main_color;
       ColorGeometry4f secondary_color;
-      copy_v3_v3(main_color, ptd.brush->color);
-      copy_v3_v3(secondary_color, ptd.brush->secondary_color);
+      copy_v3_v3(main_color, BKE_brush_color_get(paint, ptd.brush));
+      copy_v3_v3(secondary_color, BKE_brush_secondary_color_get(paint, ptd.brush));
       main_color.a = ptd.settings->vertex_factor;
       secondary_color.a = ptd.settings->vertex_factor;
 
@@ -838,7 +840,7 @@ static wmOperatorStatus grease_pencil_primitive_invoke(bContext *C,
     }
     else {
       ColorGeometry4f color_base;
-      copy_v3_v3(color_base, ptd.brush->color);
+      copy_v3_v3(color_base, BKE_brush_color_get(paint, ptd.brush));
       color_base.a = ptd.settings->vertex_factor;
 
       ptd.vertex_color = (ptd.settings->flag2 & GP_BRUSH_USE_STROKE) ?

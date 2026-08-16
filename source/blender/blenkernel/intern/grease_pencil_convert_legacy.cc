@@ -2522,9 +2522,6 @@ static void legacy_object_modifier_tint(ConversionData &conversion_data,
     case GPPAINT_MODE_FILL:
       md_tint.color_mode = MOD_GREASE_PENCIL_COLOR_FILL;
       break;
-    case GPPAINT_MODE_SPLIT:
-      BLI_assert_unreachable();
-      break;
   }
   switch (eTintGpencil_Type(legacy_md_tint.type)) {
     case GP_TINT_UNIFORM:

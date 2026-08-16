@@ -492,6 +492,8 @@ class _draw_tool_settings_context_mode:
             ups = paint.unified_paint_settings
             prop_owner = ups if ups.use_unified_color else brush
             layout.prop_with_popover(prop_owner, "color", text="", panel="TOPBAR_PT_grease_pencil_vertex_color")
+            if brush.gpencil_settings.vertex_mode == 'BOTH' and brush.gpencil_settings.split_colors:
+                layout.prop_with_popover(brush, "secondary_color", text="", panel="TOPBAR_PT_grease_pencil_vertex_color")
 
         brush_basic_grease_pencil_vertex_settings(layout, context, brush, compact=True)
 
@@ -666,7 +668,7 @@ class _draw_tool_settings_context_mode:
         if grease_pencil_tool == 'TINT':
             row.separator(factor=0.4)
             row.prop_with_popover(brush, "color", text="", panel="TOPBAR_PT_grease_pencil_vertex_color")
-            if brush.gpencil_settings.vertex_mode == "SPLIT":
+            if brush.gpencil_settings.vertex_mode == 'BOTH' and brush.gpencil_settings.split_colors:
                 row.prop_with_popover(brush, "secondary_color", text="", panel="TOPBAR_PT_grease_pencil_vertex_color")
 
         from bl_ui.properties_paint_common import (
@@ -8706,6 +8708,8 @@ class VIEW3D_PT_greasepencil_vertex_paint_context_menu(Panel):
             col = layout.column()
             col.separator()
             col.prop(gp_settings, "vertex_mode", text="")
+            if gp_settings.vertex_mode == 'BOTH':
+                col.prop(gp_settings, "split_colors")
             col.separator()
 
         row = col.row(align=True)
@@ -9053,6 +9057,9 @@ class TOPBAR_PT_grease_pencil_vertex_color(Panel):
             if ob.mode == 'VERTEX_GREASE_PENCIL':
                 row = layout.row(align=True)
                 row.prop(gp_settings, "vertex_mode", text="Mode")
+                if gp_settings.vertex_mode == 'BOTH':
+                    row = layout.row(align=True)
+                    row.prop(gp_settings, "split_colors")
             row = layout.row(align=True)
             row.prop(gp_settings, "vertex_color_factor", slider=True, text="Mix Factor")
 

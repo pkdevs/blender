@@ -2,6 +2,8 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+#include "DNA_brush_types.h"
+
 #include "BKE_brush.hh"
 #include "BKE_context.hh"
 #include "BKE_curves.hh"
@@ -40,9 +42,21 @@ void VertexReplaceOperation::on_stroke_extended(const bContext &C,
   const bool do_points = do_vertex_color_points(brush);
   const bool do_fill = do_vertex_color_fill(brush);
 
-  float3 color_linear;
-  copy_v3_v3(color_linear, BKE_brush_color_get(&paint, &brush));
-  const ColorGeometry4f replace_color(color_linear.x, color_linear.y, color_linear.z, 1.0f);
+  const float3 color_linear_stroke = BKE_brush_color_get(&paint, &brush);
+  float3 color_linear_fill;
+  if (((brush.gpencil_settings->flag2 & GP_BRUSH_USE_SPLIT_COLORS) != 0) &&
+      (brush.gpencil_settings->vertex_mode == GPPAINT_MODE_BOTH))
+  {
+    color_linear_fill = BKE_brush_secondary_color_get(&paint, &brush);
+  }
+  else {
+    color_linear_fill = color_linear_stroke;
+  }
+
+  const ColorGeometry4f replace_color_stroke(
+      color_linear_stroke.x, color_linear_stroke.y, color_linear_stroke.z, 1.0f);
+  const ColorGeometry4f replace_color_fill(
+      color_linear_fill.x, color_linear_fill.y, color_linear_fill.z, 1.0f);
 
   this->foreach_editable_drawing(
       C,
@@ -62,7 +76,7 @@ void VertexReplaceOperation::on_stroke_extended(const bContext &C,
                                                               extension_sample,
                                                               params.multi_frame_falloff);
                 if (influence > 0.0f && vertex_colors[point_i].a > 0.0f) {
-                  vertex_colors[point_i] = replace_color;
+                  vertex_colors[point_i] = replace_color_stroke;
                 }
               },
               exec_mode::grain_size(4096));
@@ -102,7 +116,7 @@ void VertexReplaceOperation::on_stroke_extended(const bContext &C,
                 color.a = math::max(color.a, 0.0f);
 
                 if (influence > 0.0f && color.a > 0.0f) {
-                  color = replace_color;
+                  color = replace_color_fill;
                 }
 
                 index_mask::masked_fill(fill_colors, color, fill_curve_mask);

@@ -299,7 +299,9 @@ struct PaintOperationExecutor {
     use_settings_random_ = (settings_->flag & GP_BRUSH_GROUP_RANDOM) != 0;
     use_vertex_color_ = brush_using_vertex_color(scene_->toolsettings->gp_paint, brush_);
     if (use_vertex_color_) {
-      if (settings_->vertex_mode == GPPAINT_MODE_SPLIT) {
+      if (((settings_->flag2 & GP_BRUSH_USE_SPLIT_COLORS) != 0) &&
+          (settings_->flag2 & GP_BRUSH_USE_STROKE) && (settings_->flag2 & GP_BRUSH_USE_FILL))
+      {
         ColorGeometry4f main_color;
         ColorGeometry4f secondary_color;
         copy_v3_v3(main_color, brush_->color);
