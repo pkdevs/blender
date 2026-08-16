@@ -157,29 +157,29 @@ static bool seq_draw_waveforms_poll(const SpaceSeq *sseq, const Strip *strip)
   return false;
 }
 
-static bool strip_hides_text_overlay_first(const TimelineDrawContext &ctx,
-                                           const StripDrawContext &strip_ctx)
+static bool strip_hides_text_overlay_first(const SpaceSeq *sseq, const Strip *strip)
 {
-  return seq_draw_waveforms_poll(ctx.sseq, strip_ctx.strip) ||
-         ELEM(strip_ctx.strip->type, STRIP_TYPE_COLOR, STRIP_TYPE_TEXT) ||
-         strip_ctx.strip->is_overlap_transition();
+  return seq_draw_waveforms_poll(sseq, strip) ||
+         ELEM(strip->type, STRIP_TYPE_COLOR, STRIP_TYPE_TEXT) || strip->is_overlap_transition();
 }
 
-static void strip_draw_context_set_text_overlay_visibility(const TimelineDrawContext &ctx,
-                                                           StripDrawContext &strip_ctx)
+static bool strip_text_overlay_visibility_get(const SpaceSeq *sseq,
+                                              float pixely,
+                                              const Strip *strip,
+                                              float strip_height)
 {
   float threshold = 8 * UI_SCALE_FAC;
-  if (strip_hides_text_overlay_first(ctx, strip_ctx)) {
+  if (strip_hides_text_overlay_first(sseq, strip)) {
     threshold = 20 * UI_SCALE_FAC;
   }
 
-  const bool overlays_enabled = (ctx.sseq->timeline_overlay.flag &
+  const bool has_space = strip_height / pixely >= threshold;
+  const bool overlays_enabled = (sseq->timeline_overlay.flag &
                                  (SEQ_TIMELINE_SHOW_STRIP_NAME | SEQ_TIMELINE_SHOW_STRIP_SOURCE |
                                   SEQ_TIMELINE_SHOW_STRIP_DURATION)) != 0 &&
-                                (ctx.sseq->flag & SEQ_SHOW_OVERLAY) != 0;
+                                (sseq->flag & SEQ_SHOW_OVERLAY) != 0;
 
-  strip_ctx.can_draw_text_overlay = (strip_ctx.top - strip_ctx.bottom) / ctx.pixely >= threshold;
-  strip_ctx.can_draw_text_overlay &= overlays_enabled;
+  return overlays_enabled && has_space;
 }
 
 static float strip_header_size_get(float pixely, float strip_height)
@@ -258,15 +258,17 @@ bool strip_overlaps_retiming_region(const Scene *scene,
   return false;
 }
 
-static void strip_draw_context_set_strip_content_visibility(const TimelineDrawContext &ctx,
-                                                            StripDrawContext &strip_ctx)
+static bool strip_content_visibility_get(const SpaceSeq *sseq,
+                                         float pixely,
+                                         const Strip *strip,
+                                         float strip_height)
 {
   float threshold = 20 * UI_SCALE_FAC;
-  if (strip_hides_text_overlay_first(ctx, strip_ctx)) {
+  if (strip_hides_text_overlay_first(sseq, strip)) {
     threshold = 8 * UI_SCALE_FAC;
   }
 
-  strip_ctx.can_draw_strip_content = ((strip_ctx.top - strip_ctx.bottom) / ctx.pixely) > threshold;
+  return strip_height / pixely > threshold;
 }
 
 static StripDrawContext strip_draw_context_get(const TimelineDrawContext &ctx, Strip *strip)
@@ -300,8 +302,10 @@ static StripDrawContext strip_draw_context_get(const TimelineDrawContext &ctx, S
   strip_ctx.strip_length = strip_ctx.right_handle - strip_ctx.left_handle;
   strip_ctx.strip_height = strip_ctx.top - strip_ctx.bottom;
 
-  strip_draw_context_set_text_overlay_visibility(ctx, strip_ctx);
-  strip_draw_context_set_strip_content_visibility(ctx, strip_ctx);
+  strip_ctx.can_draw_text_overlay = strip_text_overlay_visibility_get(
+      ctx.sseq, ctx.pixely, strip_ctx.strip, strip_ctx.strip_height);
+  strip_ctx.can_draw_strip_content = strip_content_visibility_get(
+      ctx.sseq, ctx.pixely, strip_ctx.strip, strip_ctx.strip_height);
   strip_ctx.strip_is_too_small = (!strip_ctx.can_draw_text_overlay &&
                                   !strip_ctx.can_draw_strip_content);
   strip_ctx.is_active_strip = strip == select_active_get(scene);
