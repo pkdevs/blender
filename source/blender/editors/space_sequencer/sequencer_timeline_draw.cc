@@ -1414,7 +1414,9 @@ static void draw_strips_background(const TimelineDrawContext &ctx,
                                  (ctx.sseq->timeline_overlay.flag &
                                   SEQ_TIMELINE_CONTINUOUS_THUMBNAILS);
     /* Darker color band for thumbnail strips. */
-    if (show_overlay && seq::strip_can_have_thumbnail(scene, strip.strip) && show_thumbnails) {
+    if (show_overlay && seq::strip_can_have_thumbnail(scene, strip.strip) && show_thumbnails &&
+        strip.can_draw_strip_content)
+    {
       /* The more negative the offset, darker the color. */
       const int color_offset = -15;
       uchar col_in[3] = {col[0], col[1], col[2]};
