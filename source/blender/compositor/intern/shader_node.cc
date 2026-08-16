@@ -112,19 +112,19 @@ static void populate_gpu_node_stack(const bNodeSocket &socket, GPUNodeStack &sta
     case GPU_VEC2:
     case GPU_VEC3:
     case GPU_VEC4:
-      zero_v4(stack.vec);
+      stack.value = float4(0);
       break;
     case GPU_INT:
     case GPU_INT2:
     case GPU_INT3:
     case GPU_INT4:
-      stack.integer_data = int4(0);
+      stack.value = int4(0);
       break;
     case GPU_BOOL:
-      stack.boolean_data = false;
+      stack.value = false;
       break;
     default:
-      zero_v4(stack.vec);
+      stack.value = float4(0);
       break;
   }
 
