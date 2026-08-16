@@ -577,12 +577,13 @@ class ShaderNodesInliner {
       return;
     }
     if (node->is_type("GeometryNodeRepeatInput"_ustr)) {
-      if (!socket.context) {
+      const auto *context = dynamic_cast<const bke::RepeatZoneComputeContext *>(socket.context);
+      if (!context) {
         /* This socket is expected to be in the repeat zone, so it should have a context. */
         this->store_socket_value_fallback(socket);
         return;
       }
-      if (this->should_preserve_repeat_zone_node(socket.context->parent(), *node)) {
+      if (context->iteration() == preserved_repeat_zone_iteration) {
         this->handle_output_socket__preserved_repeat_input(socket);
         return;
       }
