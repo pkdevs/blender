@@ -309,7 +309,8 @@ struct PaintOperationExecutor {
 
         vertex_color_ = main_color;
         fill_color_ = secondary_color;
-      }else{
+      }
+      else {
         ColorGeometry4f color_base;
         copy_v3_v3(color_base, brush_->color);
         color_base.a = settings_->vertex_factor;

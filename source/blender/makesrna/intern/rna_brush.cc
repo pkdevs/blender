@@ -1403,7 +1403,7 @@ static void rna_def_gpencil_options(BlenderRNA *brna)
        ICON_GP_DRAW_BOTH,
        "Both",
        "Painting affects both strokes and fills"},
-       {GPPAINT_MODE_BOTH,
+      {GPPAINT_MODE_BOTH,
        "SPLIT",
        ICON_GP_DRAW_BOTH,
        "Stroke & Fill Split",

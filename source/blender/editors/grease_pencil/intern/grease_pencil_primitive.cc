@@ -835,7 +835,8 @@ static wmOperatorStatus grease_pencil_primitive_invoke(bContext *C,
 
       ptd.vertex_color = std::make_optional(main_color);
       ptd.fill_color = std::make_optional(secondary_color);
-    else{
+    }
+    else {
       ColorGeometry4f color_base;
       copy_v3_v3(color_base, ptd.brush->color);
       color_base.a = ptd.settings->vertex_factor;
