@@ -228,7 +228,7 @@ static std::optional<ARegionIMECursorState> console_main_region_cursor_ime(
   if (region->v2d.flag & V2D_IS_NAVIGATING) {
     return ARegionIMECursorState::PositionPending;
   }
-  SpaceConsole *sc = static_cast<SpaceConsole *>(area->spacedata.first_);
+  SpaceConsole *sc = area->spacedata.first_as<SpaceConsole>();
   /* Font metrics are cached during draw; zero means the region hasn't been drawn yet. */
   const int line_height = sc->runtime->line_height_px;
   if (line_height == 0) {

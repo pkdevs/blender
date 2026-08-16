@@ -386,7 +386,7 @@ static void update_window_matrix(const wmWindow *window, const ARegion *region, 
 
 void region_winrct_get_no_margin(const ARegion *region, rcti *r_rect)
 {
-  Block *block = static_cast<Block *>(region->runtime->uiblocks.first_);
+  Block *block = region->runtime->uiblocks.first();
   if (block && (block->flag & BLOCK_LOOP) && (block->flag & BLOCK_PIE_MENU) == 0) {
     BLI_rcti_rctf_copy_floor(r_rect, &block->rect);
     BLI_rcti_translate(r_rect, region->winrct.xmin, region->winrct.ymin);
@@ -6713,7 +6713,7 @@ void update_text_styles()
     return;
   }
 
-  uiStyle *style = static_cast<uiStyle *>(U.uistyles.first_);
+  uiStyle *style = U.uistyles.first();
   const int weight = BLF_default_weight(0);
   style->paneltitle.character_weight = weight;
   style->grouplabel.character_weight = weight;

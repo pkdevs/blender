@@ -621,10 +621,8 @@ void RNA_define_free(BlenderRNA * /*brna*/)
   }
   rna_freelistN(&DefRNA.allocs);
 
-  for (ds = static_cast<StructDefRNA *>(DefRNA.structs.first_); ds;
-       ds = static_cast<StructDefRNA *>(ds->cont.next))
-  {
-    for (dfunc = static_cast<FunctionDefRNA *>(ds->functions.first_); dfunc;
+  for (ds = DefRNA.structs.first(); ds; ds = static_cast<StructDefRNA *>(ds->cont.next)) {
+    for (dfunc = ds->functions.first(); dfunc;
          dfunc = static_cast<FunctionDefRNA *>(dfunc->cont.next))
     {
       rna_freelistN(&dfunc->cont.properties);
@@ -701,7 +699,7 @@ void RNA_struct_free(BlenderRNA *brna, StructRNA *srna)
     }
   }
   MEM_SAFE_DELETE(srna->cont.prop_lookup_set);
-  for (prop = static_cast<PropertyRNA *>(srna->cont.properties.first_); prop; prop = nextprop) {
+  for (prop = srna->cont.properties.first(); prop; prop = nextprop) {
     nextprop = prop->next;
 
     RNA_def_property_free_pointers(prop);
@@ -712,7 +710,7 @@ void RNA_struct_free(BlenderRNA *brna, StructRNA *srna)
   }
 
   for (const std::unique_ptr<FunctionRNA> &func : srna->functions) {
-    for (parm = static_cast<PropertyRNA *>(func->cont.properties.first_); parm; parm = nextparm) {
+    for (parm = func->cont.properties.first(); parm; parm = nextparm) {
       nextparm = parm->next;
 
       RNA_def_property_free_pointers(parm);
@@ -794,9 +792,7 @@ static StructDefRNA *rna_find_def_struct(StructRNA *srna)
 {
   StructDefRNA *ds;
 
-  for (ds = static_cast<StructDefRNA *>(DefRNA.structs.first_); ds;
-       ds = static_cast<StructDefRNA *>(ds->cont.next))
-  {
+  for (ds = DefRNA.structs.first(); ds; ds = static_cast<StructDefRNA *>(ds->cont.next)) {
     if (ds->srna == srna) {
       return ds;
     }
@@ -5171,9 +5167,7 @@ static void rna_def_property_free(StructOrFunctionRNA *cont_, PropertyRNA *prop)
 static PropertyRNA *rna_def_property_find_py_id(ContainerRNA *cont, const char *identifier_c_str)
 {
   const UString identifier(identifier_c_str);
-  for (PropertyRNA *prop = static_cast<PropertyRNA *>(cont->properties.first_); prop;
-       prop = prop->next)
-  {
+  for (PropertyRNA *prop = cont->properties.first(); prop; prop = prop->next) {
     if (prop->identifier == identifier) {
       return prop;
     }

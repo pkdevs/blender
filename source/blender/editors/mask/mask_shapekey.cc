@@ -242,8 +242,7 @@ static wmOperatorStatus mask_shape_key_rekey_exec(bContext *C, wmOperator *op)
       MaskLayerShape *mask_layer_shape, *mask_layer_shape_next;
       MaskLayerShape *mask_layer_shape_lastsel = nullptr;
 
-      for (mask_layer_shape = static_cast<MaskLayerShape *>(mask_layer.splines_shapes.first_);
-           mask_layer_shape;
+      for (mask_layer_shape = mask_layer.splines_shapes.first(); mask_layer_shape;
            mask_layer_shape = mask_layer_shape_next)
       {
         MaskLayerShape *mask_layer_shape_a = nullptr;
@@ -288,8 +287,7 @@ static wmOperatorStatus mask_shape_key_rekey_exec(bContext *C, wmOperator *op)
           }
 
           /* re-key, NOTE: can't modify the keys here since it messes up. */
-          for (mask_layer_shape_tmp = static_cast<MaskLayerShape *>(shapes_tmp.first_);
-               mask_layer_shape_tmp;
+          for (mask_layer_shape_tmp = shapes_tmp.first(); mask_layer_shape_tmp;
                mask_layer_shape_tmp = mask_layer_shape_tmp->next)
           {
             BKE_mask_layer_evaluate(&mask_layer, mask_layer_shape_tmp->frame, true);
@@ -300,8 +298,7 @@ static wmOperatorStatus mask_shape_key_rekey_exec(bContext *C, wmOperator *op)
           }
 
           /* restore unselected points and free copies */
-          for (mask_layer_shape_tmp = static_cast<MaskLayerShape *>(shapes_tmp.first_);
-               mask_layer_shape_tmp;
+          for (mask_layer_shape_tmp = shapes_tmp.first(); mask_layer_shape_tmp;
                mask_layer_shape_tmp = mask_layer_shape_tmp_next)
           {
             /* restore */

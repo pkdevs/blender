@@ -284,7 +284,7 @@ static bool bm_loop_path_build_step(BLI_mempool *vs_pool,
   VertStep *vs, *vs_next;
   BLI_assert(abs(dir) == 1);
 
-  for (vs = static_cast<VertStep *>(lb->first_); vs; vs = vs_next) {
+  for (vs = lb->first(); vs; vs = vs_next) {
     BMIter iter;
     BMEdge *e;
     /* these values will be the same every iteration */
@@ -640,9 +640,7 @@ void BM_edgeloop_edges_get(BMEdgeLoopStore *el_store, BMEdge **e_arr)
 {
   LinkData *node;
   int i = 0;
-  for (node = static_cast<LinkData *>(el_store->verts.first_); node && node->next;
-       node = node->next)
-  {
+  for (node = el_store->verts.first(); node && node->next; node = node->next) {
     e_arr[i++] = BM_edge_exists(NODE_AS_V(node), NODE_AS_V(node->next));
     BLI_assert(e_arr[i - 1] != nullptr);
   }
@@ -787,7 +785,7 @@ void BM_edgeloop_expand(
 
   /* first double until we are more than half as big */
   while ((el_store->len * 2) < el_store_len) {
-    LinkData *node_curr = static_cast<LinkData *>(el_store->verts.first_);
+    LinkData *node_curr = el_store->verts.first();
     while (node_curr) {
       LinkData *node_curr_copy = MEM_dupalloc(node_curr);
       if (split == false) {
@@ -814,7 +812,7 @@ void BM_edgeloop_expand(
   }
 
   if (el_store->len < el_store_len) {
-    LinkData *node_curr = static_cast<LinkData *>(el_store->verts.first_);
+    LinkData *node_curr = el_store->verts.first();
 
     int iter_prev = 0;
     BLI_FOREACH_SPARSE_RANGE (el_store->len, (el_store_len - el_store->len), iter) {

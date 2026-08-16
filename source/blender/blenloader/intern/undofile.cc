@@ -205,7 +205,7 @@ static int64_t undo_read(FileReader *reader, void *buffer, size_t size)
   }
 
   if (seek != size_t(undo->reader.offset)) {
-    chunk = static_cast<MemFileChunk *>(undo->memfile->chunks.first_);
+    chunk = undo->memfile->chunks.first();
     seek = 0;
 
     while (chunk) {

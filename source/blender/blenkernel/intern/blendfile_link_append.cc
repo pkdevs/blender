@@ -615,8 +615,7 @@ static void loose_data_instantiate_obdata_preprocess(
  * (return false). */
 static bool loose_data_instantiate_collection_parents_check_recursive(Collection *collection)
 {
-  for (CollectionParent *parent_collection =
-           static_cast<CollectionParent *>(collection->runtime->parents.first_);
+  for (CollectionParent *parent_collection = collection->runtime->parents.first();
        parent_collection != nullptr;
        parent_collection = parent_collection->next)
   {
@@ -2262,7 +2261,7 @@ void BKE_blendfile_library_relocate(BlendfileLinkAppendContext *lapp_context,
   MainListsArray lbarray = BKE_main_lists_get(*bmain);
   int lba_idx = lbarray.size();
   while (lba_idx--) {
-    ID *id = static_cast<ID *>(lbarray[lba_idx]->first_);
+    ID *id = lbarray[lba_idx]->first();
     const short idcode = id ? id->id_type() : 0;
 
     if (!id || !BKE_idtype_idcode_is_linkable(idcode)) {

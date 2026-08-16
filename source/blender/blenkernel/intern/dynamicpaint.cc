@@ -1941,9 +1941,7 @@ static Mesh *dynamicPaint_Modifier_apply(DynamicPaintModifierData *pmd, Object *
     DynamicPaintSurface *surface;
 
     /* loop through surfaces */
-    for (surface = static_cast<DynamicPaintSurface *>(pmd->canvas->surfaces.first_); surface;
-         surface = surface->next)
-    {
+    for (surface = pmd->canvas->surfaces.first(); surface; surface = surface->next) {
       PaintSurfaceData *sData = surface->data;
 
       if (surface->format != MOD_DPAINT_SURFACE_F_IMAGESEQ && sData) {
@@ -2114,7 +2112,7 @@ static void dynamicPaint_frameUpdate(
 {
   if (pmd->canvas) {
     DynamicPaintCanvasSettings *canvas = pmd->canvas;
-    DynamicPaintSurface *surface = static_cast<DynamicPaintSurface *>(canvas->surfaces.first_);
+    DynamicPaintSurface *surface = canvas->surfaces.first();
 
     /* update evaluated-mesh copy */
     canvas_copyMesh(canvas, mesh);

@@ -9699,7 +9699,7 @@ static void button_activate_init(bContext *C,
     /* activate first button in submenu */
     if (data->menu && data->menu->region) {
       ARegion *subar = data->menu->region;
-      Block *subblock = static_cast<Block *>(subar->runtime->uiblocks.first_);
+      Block *subblock = subar->runtime->uiblocks.first();
       Button *subbut;
 
       if (subblock) {
@@ -11096,7 +11096,7 @@ static bool mouse_motion_towards_check(Block *block,
     /* Test if this is the last menu. */
     ARegion *region = menu->region->next;
     do {
-      Block *block_iter = static_cast<Block *>(region->runtime->uiblocks.first_);
+      Block *block_iter = region->runtime->uiblocks.first();
       if (block_iter && block_is_menu(block_iter)) {
         return true;
       }
@@ -11459,7 +11459,7 @@ static int handle_menu_mmb_event(bContext *C,
                                  const bool is_parent_menu)
 {
   ARegion *region = menu->region;
-  Block *block = static_cast<Block *>(region->runtime->uiblocks.first_);
+  Block *block = region->runtime->uiblocks.first();
   wmWindow *win = CTX_wm_window(C);
   Button *but = region_find_active_but(region);
   int mx = event->xy[0];
@@ -11557,7 +11557,7 @@ static int handle_menu_event(bContext *C,
 {
   Button *but;
   ARegion *region = menu->region;
-  Block *block = static_cast<Block *>(region->runtime->uiblocks.first_);
+  Block *block = region->runtime->uiblocks.first();
 
   int retval = WM_UI_HANDLER_CONTINUE;
 
@@ -12079,7 +12079,7 @@ static int handle_menu_event(bContext *C,
        * don't overwrite them, see: #61015.
        */
       if ((inside == false) && (menu->menuretval == 0)) {
-        SafetyRect *saferct = static_cast<SafetyRect *>(block->saferct.first_);
+        SafetyRect *saferct = block->saferct.first();
 
         if (event->type == MOUSEMOVE) {
           WM_tooltip_clear(C, win);
@@ -12181,15 +12181,11 @@ static int handle_menu_event(bContext *C,
           mouse_motion_towards_check(block, menu, event->xy, is_parent_inside == false);
 
           /* Check for all parent rects, enables arrow-keys to be used. */
-          for (saferct = static_cast<SafetyRect *>(block->saferct.first_); saferct;
-               saferct = saferct->next)
-          {
+          for (saferct = block->saferct.first(); saferct; saferct = saferct->next) {
             /* for mouse move we only check our own rect, for other
              * events we check all preceding block rects too to make
              * arrow keys navigation work */
-            if (event->type != MOUSEMOVE ||
-                saferct == static_cast<SafetyRect *>(block->saferct.first_))
-            {
+            if (event->type != MOUSEMOVE || saferct == block->saferct.first()) {
               if (BLI_rctf_isect_pt(&saferct->parent, float(event->xy[0]), float(event->xy[1]))) {
                 break;
               }
@@ -12260,7 +12256,7 @@ static int handle_menu_event(bContext *C,
 static int handle_menu_return_submenu(bContext *C, const wmEvent *event, PopupBlockHandle *menu)
 {
   ARegion *region = menu->region;
-  Block *block = static_cast<Block *>(region->runtime->uiblocks.first_);
+  Block *block = region->runtime->uiblocks.first();
 
   Button *but = region_find_active_but(region);
 
@@ -12385,7 +12381,7 @@ static int pie_handler(bContext *C, const wmEvent *event, PopupBlockHandle *menu
   }
 
   ARegion *region = menu->region;
-  Block *block = static_cast<Block *>(region->runtime->uiblocks.first_);
+  Block *block = region->runtime->uiblocks.first();
 
   const bool is_click_style = (block->pie_data->flags & PIE_CLICK_STYLE);
 
@@ -12656,7 +12652,7 @@ static int handle_menus_recursive(bContext *C,
   PopupBlockHandle *submenu = (data) ? data->menu : nullptr;
 
   if (submenu) {
-    Block *block = static_cast<Block *>(menu->region->runtime->uiblocks.first_);
+    Block *block = menu->region->runtime->uiblocks.first();
     const bool is_menu = block_is_menu(block);
     bool inside = false;
     /* root pie menus accept the key that spawned
@@ -12723,7 +12719,7 @@ static int handle_menus_recursive(bContext *C,
     }
 
     if (do_but_search) {
-      Block *block = static_cast<Block *>(menu->region->runtime->uiblocks.first_);
+      Block *block = menu->region->runtime->uiblocks.first();
 
       retval = handle_menu_button(C, event, menu);
 
@@ -12736,7 +12732,7 @@ static int handle_menus_recursive(bContext *C,
       }
     }
     else {
-      Block *block = static_cast<Block *>(menu->region->runtime->uiblocks.first_);
+      Block *block = menu->region->runtime->uiblocks.first();
 
       if (block->flag & BLOCK_PIE_MENU) {
         retval = pie_handler(C, event, menu);
@@ -13092,7 +13088,7 @@ static int popup_handler(bContext *C, const wmEvent *event, void *userdata)
     wmWindow *win = CTX_wm_window(C);
     /* copy values, we have to free first (closes region) */
     const PopupBlockHandle temp = *menu;
-    Block *block = static_cast<Block *>(menu->region->runtime->uiblocks.first_);
+    Block *block = menu->region->runtime->uiblocks.first();
 
     /* set last pie event to allow chained pie spawning */
     if (block->flag & BLOCK_PIE_MENU) {

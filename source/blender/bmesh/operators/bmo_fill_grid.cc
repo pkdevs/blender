@@ -539,9 +539,7 @@ static void bm_grid_fill(BMesh *bm,
 
     for (i = 0; i < 4; i++) {
       LinkData *el_next;
-      for (el = static_cast<LinkData *>(lb_iter[i]->first_); el && (el_next = el->next);
-           el = el->next)
-      {
+      for (el = lb_iter[i]->first(); el && (el_next = el->next); el = el->next) {
         BMEdge *e = BM_edge_exists(static_cast<BMVert *>(el->data),
                                    static_cast<BMVert *>(el_next->data));
         if (BM_edge_is_boundary(e)) {
@@ -562,7 +560,7 @@ static void bm_grid_fill(BMesh *bm,
 static void bm_edgeloop_flag_set(BMEdgeLoopStore *estore, char hflag, bool set)
 {
   /* only handle closed loops in this case */
-  LinkData *link = static_cast<LinkData *>(BM_edgeloop_verts_get(estore)->first_);
+  LinkData *link = BM_edgeloop_verts_get(estore)->first();
   link = link->next;
   while (link) {
     BMEdge *e = BM_edge_exists(static_cast<BMVert *>(link->data),

@@ -403,7 +403,7 @@ void WM_event_add_notifier(const bContext *C, uint type, void *reference)
 void WM_main_add_notifier(uint type, void *reference)
 {
   Main *bmain = G_MAIN;
-  wmWindowManager *wm = static_cast<wmWindowManager *>(bmain->wm.first_);
+  wmWindowManager *wm = bmain->wm.first();
 
   WM_event_add_notifier_ex(wm, nullptr, type, reference);
 }
@@ -411,7 +411,7 @@ void WM_main_add_notifier(uint type, void *reference)
 void WM_main_remove_notifier_reference(const void *reference)
 {
   Main *bmain = G_MAIN;
-  wmWindowManager *wm = static_cast<wmWindowManager *>(bmain->wm.first_);
+  wmWindowManager *wm = bmain->wm.first();
 
   if (wm) {
     for (wmNotifier &note : wm->runtime->notifier_queue.items_mutable()) {
@@ -457,7 +457,7 @@ void WM_main_remap_editor_id_reference(const bke::id::IDRemapper &mappings)
 
   mappings.iter([](ID *old_id, ID *new_id) { ed::asset::list::storage_id_remap(old_id, new_id); });
 
-  if (wmWindowManager *wm = static_cast<wmWindowManager *>(bmain->wm.first_)) {
+  if (wmWindowManager *wm = bmain->wm.first()) {
     if (wmMsgBus *mbus = wm->runtime->message_bus) {
       mappings.iter([&](ID *old_id, ID *new_id) {
         if (new_id != nullptr) {
@@ -573,7 +573,7 @@ static void wm_event_timers_execute(bContext *C)
   /* Set the first window as context, so that there is some minimal context. This avoids crashes
    * when calling code that assumes that there is always a window in the context (which many
    * operators do). */
-  CTX_wm_window_set(C, static_cast<wmWindow *>(wm->windows.first_));
+  CTX_wm_window_set(C, wm->windows.first());
   BLI_timer_execute();
   CTX_wm_window_set(C, nullptr);
 }
@@ -619,9 +619,7 @@ void wm_event_do_notifiers(bContext *C)
     CTX_wm_window_set(C, &win);
 
     BLI_assert(wm->runtime->notifier_current == nullptr);
-    for (const wmNotifier *
-             note = static_cast<const wmNotifier *>(wm->runtime->notifier_queue.first_),
-            *note_next = nullptr;
+    for (const wmNotifier *note = wm->runtime->notifier_queue.first(), *note_next = nullptr;
          note;
          note = note_next)
     {
@@ -1008,7 +1006,7 @@ void WM_report_banner_show(wmWindowManager *wm, wmWindow *win)
   if (win == nullptr) {
     win = wm->runtime->winactive;
     if (win == nullptr) {
-      win = static_cast<wmWindow *>(wm->windows.first_);
+      win = wm->windows.first();
     }
   }
 
@@ -1026,7 +1024,7 @@ void WM_report_banner_show(wmWindowManager *wm, wmWindow *win)
 
 void WM_report_banners_cancel(Main *bmain)
 {
-  wmWindowManager *wm = static_cast<wmWindowManager *>(bmain->wm.first_);
+  wmWindowManager *wm = bmain->wm.first();
   BKE_reports_clear(&wm->runtime->reports);
   WM_event_timer_remove(wm, nullptr, wm->runtime->reports.reporttimer);
 }
@@ -1047,7 +1045,7 @@ void WM_reports_from_reports_move(wmWindowManager *wm, ReportList *reports)
   }
 
   if (!wm) {
-    wm = static_cast<wmWindowManager *>(G_MAIN->wm.first_);
+    wm = G_MAIN->wm.first();
   }
 
   /* Add reports to the global list, otherwise they are not seen. */
@@ -1220,7 +1218,7 @@ static void wm_operator_reports(bContext *C,
       ARegion *region_prev = CTX_wm_region(C);
 
       if (win_prev == nullptr) {
-        CTX_wm_window_set(C, static_cast<wmWindow *>(CTX_wm_manager(C)->windows.first_));
+        CTX_wm_window_set(C, CTX_wm_manager(C)->windows.first());
       }
 
       ui::popup_menu_reports(C, op->reports);
@@ -1555,7 +1553,7 @@ static wmOperator *wm_operator_create(wmWindowManager *wm,
 
     /* If properties exist, it will contain everything needed. */
     if (properties) {
-      wmOperatorTypeMacro *otmacro = static_cast<wmOperatorTypeMacro *>(ot->macro.first_);
+      wmOperatorTypeMacro *otmacro = ot->macro.first();
 
       RNA_STRUCT_BEGIN (properties, prop) {
 
@@ -1986,7 +1984,7 @@ wmOperatorStatus WM_operator_name_call_with_properties(bContext *C,
 {
   wmOperatorType *ot = WM_operatortype_find(opstring, false);
   PointerRNA props_ptr = RNA_pointer_create_discrete(
-      &static_cast<wmWindowManager *>(G_MAIN->wm.first_)->id, ot->srna, properties);
+      &G_MAIN->wm.first()->id, ot->srna, properties);
   return WM_operator_name_call_ptr(C, ot, context, &props_ptr, event);
 }
 
@@ -2860,7 +2858,7 @@ static void wm_operator_free_for_fileselect(wmOperator *file_operator)
   for (bScreen &screen : G_MAIN->screens) {
     for (ScrArea &area : screen.areabase) {
       if (area.spacetype == SPACE_FILE) {
-        SpaceFile *sfile = static_cast<SpaceFile *>(area.spacedata.first_);
+        SpaceFile *sfile = area.spacedata.first_as<SpaceFile>();
         if (sfile->op == file_operator) {
           sfile->op = nullptr;
         }
@@ -2900,7 +2898,7 @@ static eHandlerActionFlag wm_handler_fileselect_do(bContext *C,
       region_header->alignment = RGN_ALIGN_BOTTOM;
 
       /* Settings for file-browser, #sfile is not operator owner but sends events. */
-      SpaceFile *sfile = static_cast<SpaceFile *>(area->spacedata.first_);
+      SpaceFile *sfile = area->spacedata.first_as<SpaceFile>();
       sfile->op = handler->op;
 
       ED_fileselect_set_params_from_userdef(sfile);
@@ -2932,7 +2930,7 @@ static eHandlerActionFlag wm_handler_fileselect_do(bContext *C,
         wmWindow *temp_win = nullptr;
         for (wmWindow &win : wm->windows) {
           bScreen *screen = WM_window_get_active_screen(&win);
-          ScrArea *file_area = static_cast<ScrArea *>(screen->areabase.first_);
+          ScrArea *file_area = screen->areabase.first();
 
           if ((file_area->spacetype != SPACE_FILE) || !WM_window_is_temp_screen(&win)) {
             continue;
@@ -2945,7 +2943,7 @@ static eHandlerActionFlag wm_handler_fileselect_do(bContext *C,
             continue;
           }
 
-          ED_fileselect_params_to_userdef(static_cast<SpaceFile *>(file_area->spacedata.first_));
+          ED_fileselect_params_to_userdef(file_area->spacedata.first_as<SpaceFile>());
 
           if (file_area->spacedata.is_single()) {
             BLI_assert(root_win != &win);
@@ -2977,7 +2975,7 @@ static eHandlerActionFlag wm_handler_fileselect_do(bContext *C,
         }
 
         if (!temp_win && ctx_area->full) {
-          ED_fileselect_params_to_userdef(static_cast<SpaceFile *>(ctx_area->spacedata.first_));
+          ED_fileselect_params_to_userdef(ctx_area->spacedata.first_as<SpaceFile>());
           ED_screen_full_prevspace(C, ctx_area);
         }
       }
@@ -3032,7 +3030,7 @@ static eHandlerActionFlag wm_handler_fileselect_do(bContext *C,
           ARegion *region_prev = CTX_wm_region(C);
 
           if (win_prev == nullptr) {
-            CTX_wm_window_set(C, static_cast<wmWindow *>(CTX_wm_manager(C)->windows.first_));
+            CTX_wm_window_set(C, CTX_wm_manager(C)->windows.first());
           }
 
           BKE_report_print_level_set(handler->op->reports, RPT_WARNING);
@@ -4262,7 +4260,7 @@ void wm_event_do_handlers(bContext *C)
     }
 
     wmEvent *event;
-    while ((event = static_cast<wmEvent *>(win.runtime->event_queue.first_))) {
+    while ((event = win.runtime->event_queue.first())) {
       /* Do the check at the start of the next iteration, to avoid by-passing it in case the
        * previous iteration has been early-terminated (using `continue;` e.g.). */
       if (wm->runtime->break_events_handling) {
@@ -4564,9 +4562,8 @@ static wmWindow *wm_event_find_fileselect_root_window_from_context(const bContex
 
   /* Fall back to the first window. */
   const wmWindowManager *wm = CTX_wm_manager(C);
-  BLI_assert(!ED_fileselect_handler_area_find_any_with_op(
-      static_cast<const wmWindow *>(wm->windows.first_)));
-  return static_cast<wmWindow *>(wm->windows.first_);
+  BLI_assert(!ED_fileselect_handler_area_find_any_with_op(wm->windows.first()));
+  return wm->windows.first();
 }
 
 /* Operator is supposed to have a filled "path" property. */
@@ -4835,7 +4832,7 @@ void WM_event_remove_modal_handler(ListBaseT<wmEventHandler> *handlers,
 void WM_event_remove_modal_handler_all(const wmOperator *op, const bool postpone)
 {
   Main *bmain = G_MAIN;
-  wmWindowManager *wm = static_cast<wmWindowManager *>(bmain->wm.first_);
+  wmWindowManager *wm = bmain->wm.first();
   for (wmWindow &win : wm->windows) {
     WM_event_remove_modal_handler(&win.runtime->modalhandlers, op, postpone);
   }

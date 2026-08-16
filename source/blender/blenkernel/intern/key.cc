@@ -72,9 +72,7 @@ static void shapekey_copy_data(Main * /*bmain*/,
   BLI_duplicatelist(&key_dst->block, &key_src->block);
 
   KeyBlock *kb_dst, *kb_src;
-  for (kb_src = static_cast<KeyBlock *>(key_src->block.first_),
-      kb_dst = static_cast<KeyBlock *>(key_dst->block.first_);
-       kb_dst;
+  for (kb_src = key_src->block.first_item(), kb_dst = key_dst->block.first(); kb_dst;
        kb_src = kb_src->next, kb_dst = kb_dst->next)
   {
     if (kb_dst->data) {
@@ -279,7 +277,7 @@ void BKE_key_sort(Key *key)
   KeyBlock *kb;
 
   /* Locate the key which is out of position. */
-  for (kb = static_cast<KeyBlock *>(key->block.first_); kb; kb = kb->next) {
+  for (kb = key->block.first(); kb; kb = kb->next) {
     if ((kb->next) && (kb->pos > kb->next->pos)) {
       break;
     }
@@ -300,7 +298,7 @@ void BKE_key_sort(Key *key)
   }
 
   /* New rule; first key is refkey, this to match drawing channels... */
-  key->refkey = static_cast<KeyBlock *>(key->block.first_);
+  key->refkey = key->block.first();
 }
 
 /**************** do the key ****************/
@@ -1065,7 +1063,7 @@ float *BKE_key_evaluate_object_ex(Object *ob,
     }
 
     if (kb == nullptr) {
-      kb = static_cast<KeyBlock *>(key->block.first_);
+      kb = key->block.first();
       ob->shapenr = 1;
     }
 
@@ -1527,7 +1525,7 @@ int BKE_keyblock_curve_element_count(const ListBaseT<Nurb> *nurb)
   const Nurb *nu;
   int tot = 0;
 
-  nu = static_cast<const Nurb *>(nurb->first_);
+  nu = nurb->first();
   while (nu) {
     if (nu->bezt) {
       tot += KEYELEM_ELEM_LEN_BEZTRIPLE * nu->pntsu;
@@ -1626,7 +1624,7 @@ void BKE_keyblock_convert_from_curve(const Curve *cu, KeyBlock *kb, const ListBa
 
 static void keyblock_data_convert_to_curve(const float *fp, ListBaseT<Nurb> *nurb, int totpoint)
 {
-  for (Nurb *nu = static_cast<Nurb *>(nurb->first_); nu && totpoint > 0; nu = nu->next) {
+  for (Nurb *nu = nurb->first(); nu && totpoint > 0; nu = nu->next) {
     if (nu->bezt != nullptr) {
       BezTriple *bezt = nu->bezt;
       for (int i = nu->pntsu; i && (totpoint -= KEYELEM_ELEM_LEN_BEZTRIPLE) >= 0;
@@ -1848,7 +1846,7 @@ bool BKE_keyblock_move(Object *ob, int org_index, int new_index)
   }
 
   /* First key is always refkey, matches interface and BKE_key_sort. */
-  key->refkey = static_cast<KeyBlock *>(key->block.first_);
+  key->refkey = key->block.first();
 
   return true;
 }
@@ -1859,7 +1857,7 @@ bool BKE_keyblock_is_basis(const Key *key, const int index)
   int i;
 
   if (key->type == KEY_RELATIVE) {
-    for (i = 0, kb = static_cast<const KeyBlock *>(key->block.first_); kb; i++, kb = kb->next) {
+    for (i = 0, kb = key->block.first(); kb; i++, kb = kb->next) {
       if ((i != index) && (kb->relative == index)) {
         return true;
       }

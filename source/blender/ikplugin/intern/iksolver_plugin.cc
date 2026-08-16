@@ -102,9 +102,8 @@ static void initialize_posetree(Object * /*ob*/, bPoseChannel *pchan_tip)
 
     /* setup the chain data */
     /* we make tree-IK, unless all existing targets are in this chain */
-    for (tree = static_cast<PoseTree *>(pchan_root->iktree.first_); tree; tree = tree->next) {
-      for (target = static_cast<PoseTarget *>(tree->targets.first_); target; target = target->next)
-      {
+    for (tree = pchan_root->iktree.first(); tree; tree = tree->next) {
+      for (target = tree->targets.first(); target; target = target->next) {
         curchan = tree->pchan[target->tip];
         if (curchan->flag & POSE_CHAIN) {
           curchan->flag &= ~POSE_CHAIN;

@@ -1069,9 +1069,7 @@ void BKE_objects_materials_sync_length_all(Main *bmain, ID *id)
 
   BKE_main_lock(bmain);
   int processed_objects = 0;
-  for (ob = static_cast<Object *>(bmain->objects.first_); ob;
-       ob = static_cast<Object *>(ob->id.next))
-  {
+  for (ob = bmain->objects.first(); ob; ob = static_cast<Object *>(ob->id.next)) {
     if (ob->data == id) {
       BKE_object_material_resize(bmain, ob, *totcol, false);
       BKE_object_material_active_index_sanitize(ob);
@@ -1505,9 +1503,7 @@ bool BKE_object_material_slot_remove(Main *bmain, Object *ob)
 
   const int actcol = ob->actcol;
 
-  for (Object *obt = static_cast<Object *>(bmain->objects.first_); obt;
-       obt = static_cast<Object *>(obt->id.next))
-  {
+  for (Object *obt = bmain->objects.first(); obt; obt = static_cast<Object *>(obt->id.next)) {
     if (obt->data == ob->data) {
       /* Can happen when object material lists are used, see: #52953 */
       if (actcol > obt->totcol) {

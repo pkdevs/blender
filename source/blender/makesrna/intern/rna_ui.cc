@@ -92,9 +92,7 @@ static ARegionType *region_type_find(ReportList *reports, int space_type, int re
 
   st = BKE_spacetype_from_id(space_type);
 
-  for (art = (st) ? static_cast<ARegionType *>(st->regiontypes.first_) : nullptr; art;
-       art = art->next)
-  {
+  for (art = (st) ? st->regiontypes.first() : nullptr; art; art = art->next) {
     if (art->regionid == region_type) {
       break;
     }
@@ -323,7 +321,7 @@ static StructRNA *rna_Panel_register(Main *bmain,
   }
 
   /* check if we have registered this panel type before, and remove it */
-  for (pt = static_cast<PanelType *>(art->paneltypes.first_); pt; pt = pt->next) {
+  for (pt = art->paneltypes.first(); pt; pt = pt->next) {
     if (STREQ(pt->idname, dummy_pt.idname)) {
       PanelType *pt_next = pt->next;
       StructRNA *srna = pt->rna_ext.srna;

@@ -72,7 +72,7 @@ Mask *ED_mask_new(bContext *C, const char *name)
         break;
       }
       case SPACE_IMAGE: {
-        SpaceImage *sima = static_cast<SpaceImage *>(area->spacedata.first_);
+        SpaceImage *sima = area->spacedata.first_as<SpaceImage>();
         ED_space_image_set_mask(C, sima, mask);
         break;
       }
@@ -324,16 +324,16 @@ static bool spline_under_mouse_get(const bContext *C,
                 (sc->user.render_flag & MCLIP_PROXY_RENDER_UNDISTORT) != 0;
   }
 
-  for (MaskLayer *mask_layer_orig = static_cast<MaskLayer *>(mask_orig->masklayers.first_),
-                 *mask_layer_eval = static_cast<MaskLayer *>(mask_eval->masklayers.first_);
+  for (MaskLayer *mask_layer_orig = mask_orig->masklayers.first(),
+                 *mask_layer_eval = mask_eval->masklayers.first();
        mask_layer_orig != nullptr;
        mask_layer_orig = mask_layer_orig->next, mask_layer_eval = mask_layer_eval->next)
   {
     if (mask_layer_orig->visibility_flag & (MASK_HIDE_VIEW | MASK_HIDE_SELECT)) {
       continue;
     }
-    for (MaskSpline *spline_orig = static_cast<MaskSpline *>(mask_layer_orig->splines.first_),
-                    *spline_eval = static_cast<MaskSpline *>(mask_layer_eval->splines.first_);
+    for (MaskSpline *spline_orig = mask_layer_orig->splines.first(),
+                    *spline_eval = mask_layer_eval->splines.first();
          spline_orig != nullptr;
          spline_orig = spline_orig->next, spline_eval = spline_eval->next)
     {
@@ -1469,7 +1469,7 @@ static wmOperatorStatus delete_exec(bContext *C, wmOperator * /*op*/)
       continue;
     }
 
-    spline = static_cast<MaskSpline *>(mask_layer.splines.first_);
+    spline = mask_layer.splines.first();
 
     while (spline) {
       const int tot_point_orig = spline->tot_point;

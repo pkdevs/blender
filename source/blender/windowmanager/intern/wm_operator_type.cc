@@ -404,7 +404,7 @@ static wmOperatorStatus wm_macro_invoke_internal(bContext *C,
 static wmOperatorStatus wm_macro_invoke(bContext *C, wmOperator *op, const wmEvent *event)
 {
   wm_macro_start(op);
-  return wm_macro_invoke_internal(C, op, event, static_cast<wmOperator *>(op->macro.first_));
+  return wm_macro_invoke_internal(C, op, event, op->macro.first());
 }
 
 static wmOperatorStatus wm_macro_modal(bContext *C, wmOperator *op, const wmEvent *event)

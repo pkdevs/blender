@@ -64,7 +64,7 @@ static CLG_LogRef LOG = {"wm.xr"};
 static void wm_xr_session_create_cb()
 {
   Main *bmain = G_MAIN;
-  wmWindowManager *wm = static_cast<wmWindowManager *>(bmain->wm.first_);
+  wmWindowManager *wm = bmain->wm.first();
   wmXrData *xr_data = &wm->xr;
   wmXrSessionState *state = &xr_data->runtime->session_state;
   XrSessionSettings *settings = &xr_data->session_settings;
@@ -253,7 +253,7 @@ wmWindow *wm_xr_session_root_window_or_fallback_get(const wmWindowManager *wm,
     return xr_win;
   }
   /* Otherwise, fall back. */
-  return static_cast<wmWindow *>(wm->windows.first_);
+  return wm->windows.first();
 }
 
 enum wmXrSessionStateEvent {

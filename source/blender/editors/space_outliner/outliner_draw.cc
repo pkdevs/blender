@@ -298,7 +298,7 @@ static void outliner_object_set_flag_recursive_fn(bContext *C,
 
   Object *ob_parent = ob ? ob : base->object;
 
-  for (Object *ob_iter = static_cast<Object *>(bmain->objects.first_); ob_iter;
+  for (Object *ob_iter = bmain->objects.first(); ob_iter;
        ob_iter = static_cast<Object *>(ob_iter->id.next))
   {
     if (BKE_object_is_child_recursive(ob_parent, ob_iter)) {
@@ -636,7 +636,7 @@ void outliner_collection_isolate_flag(const Main &bmain,
   else {
     CollectionParent *parent;
     Collection *child = collection;
-    while ((parent = static_cast<CollectionParent *>(child->runtime->parents.first_))) {
+    while ((parent = child->runtime->parents.first())) {
       if (parent->collection->flag & COLLECTION_IS_MASTER) {
         break;
       }

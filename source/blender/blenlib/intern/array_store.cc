@@ -461,9 +461,7 @@ static void bchunk_list_decref(BArrayMemory *bs_mem, BChunkList *chunk_list)
 {
   BLI_assert(chunk_list->users > 0);
   if (chunk_list->users == 1) {
-    for (BChunkRef *cref = static_cast<BChunkRef *>(chunk_list->chunk_refs.first_), *cref_next;
-         cref;
-         cref = cref_next)
+    for (BChunkRef *cref = chunk_list->chunk_refs.first(), *cref_next; cref; cref = cref_next)
     {
       cref_next = cref->next;
       bchunk_decref(bs_mem, cref->link);
@@ -1499,7 +1497,7 @@ static BChunkList *bchunk_list_from_data_merge(const BArrayInfo *info,
         chunk_list_reference_bytes_remaining += cref->link->data_len;
       }
       else {
-        cref = static_cast<const BChunkRef *>(chunk_list_reference->chunk_refs.first_);
+        cref = chunk_list_reference->chunk_refs.first();
       }
 
 #ifdef USE_PARANOID_CHECKS
@@ -1780,9 +1778,7 @@ static void array_store_free_data(BArrayStore *bs)
   }
 
   /* Free states. */
-  for (BArrayState *state = static_cast<BArrayState *>(bs->states.first_), *state_next; state;
-       state = state_next)
-  {
+  for (BArrayState *state = bs->states.first(), *state_next; state; state = state_next) {
     state_next = state->next;
     MEM_delete(state);
   }

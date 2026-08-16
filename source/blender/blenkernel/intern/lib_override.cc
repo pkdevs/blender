@@ -600,7 +600,7 @@ bool BKE_lib_override_library_create_from_tag(Main *bmain,
   ID *reference_id;
   bool success = true;
 
-  ListBaseT<ID> todo_ids = {nullptr};
+  ListBaseT<LinkData> todo_ids = {nullptr};
   LinkData *todo_id_iter;
 
   /* Get all IDs we want to override. */
@@ -616,7 +616,7 @@ bool BKE_lib_override_library_create_from_tag(Main *bmain,
   FOREACH_MAIN_ID_END;
 
   /* Override the IDs. */
-  for (todo_id_iter = static_cast<LinkData *>(todo_ids.first_); todo_id_iter != nullptr;
+  for (todo_id_iter = todo_ids.first(); todo_id_iter != nullptr;
        todo_id_iter = todo_id_iter->next)
   {
     reference_id = static_cast<ID *>(todo_id_iter->data);
@@ -724,7 +724,7 @@ bool BKE_lib_override_library_create_from_tag(Main *bmain,
     }
     FOREACH_MAIN_ID_END;
 
-    for (todo_id_iter = static_cast<LinkData *>(todo_ids.first_); todo_id_iter != nullptr;
+    for (todo_id_iter = todo_ids.first(); todo_id_iter != nullptr;
          todo_id_iter = todo_id_iter->next)
     {
       reference_id = static_cast<ID *>(todo_id_iter->data);
@@ -749,7 +749,7 @@ bool BKE_lib_override_library_create_from_tag(Main *bmain,
   }
   else {
     /* We need to cleanup potentially already created data. */
-    for (todo_id_iter = static_cast<LinkData *>(todo_ids.first_); todo_id_iter != nullptr;
+    for (todo_id_iter = todo_ids.first(); todo_id_iter != nullptr;
          todo_id_iter = todo_id_iter->next)
     {
       reference_id = static_cast<ID *>(todo_id_iter->data);
@@ -1128,8 +1128,7 @@ static bool lib_override_linked_group_tag_collections_keep_tagged_check_recursiv
    * is not usable here, as it may have become invalid from some previous operation and it should
    * not be updated here. So instead only use collections' reliable 'raw' data to check if some
    * object in the hierarchy of the given collection is still tagged for override. */
-  for (CollectionObject *collection_object =
-           static_cast<CollectionObject *>(collection->gobject.first_);
+  for (CollectionObject *collection_object = collection->gobject.first();
        collection_object != nullptr;
        collection_object = collection_object->next)
   {
@@ -1144,8 +1143,7 @@ static bool lib_override_linked_group_tag_collections_keep_tagged_check_recursiv
     }
   }
 
-  for (CollectionChild *collection_child =
-           static_cast<CollectionChild *>(collection->children.first_);
+  for (CollectionChild *collection_child = collection->children.first();
        collection_child != nullptr;
        collection_child = collection_child->next)
   {
@@ -1173,8 +1171,7 @@ static void lib_override_linked_group_tag_clear_boneshapes_objects(LibOverrideGr
     if (ob.type == OB_ARMATURE && ob.pose != nullptr &&
         ((ob.id.tag & data->tag) || data->linked_ids_hierarchy_default_override.contains(&ob.id)))
     {
-      for (bPoseChannel *pchan = static_cast<bPoseChannel *>(ob.pose->chanbase.first_);
-           pchan != nullptr;
+      for (bPoseChannel *pchan = ob.pose->chanbase.first(); pchan != nullptr;
            pchan = pchan->next)
       {
         if (pchan->custom != nullptr && &pchan->custom->id != id_root) {
@@ -4012,7 +4009,7 @@ void BKE_lib_override_library_main_resync(
         view_layer = BKE_view_layer_find(new_scene, view_layer->name);
       }
       if (!view_layer) {
-        view_layer = static_cast<ViewLayer *>(new_scene->view_layers.first_);
+        view_layer = new_scene->view_layers.first();
       }
       if (view_layer) {
         CLOG_WARN(&LOG_RESYNC,
@@ -4288,9 +4285,7 @@ static Map<StringRefNull, IDOverrideLibraryProperty *> &override_library_rna_pat
   if (!liboverride_runtime->rna_path_to_override_properties) [[unlikely]] {
     liboverride_runtime->rna_path_to_override_properties =
         std::make_optional<Map<StringRefNull, IDOverrideLibraryProperty *>>();
-    for (IDOverrideLibraryProperty *op =
-             static_cast<IDOverrideLibraryProperty *>(liboverride->properties.first_);
-         op != nullptr;
+    for (IDOverrideLibraryProperty *op = liboverride->properties.first(); op != nullptr;
          op = op->next)
     {
       liboverride_runtime->rna_path_to_override_properties->add(op->rna_path, op);
@@ -4353,9 +4348,8 @@ void lib_override_library_property_copy(IDOverrideLibraryProperty *op_dst,
   op_dst->rna_path = BLI_strdup(op_src->rna_path);
   BLI_duplicatelist(&op_dst->operations, &op_src->operations);
 
-  for (IDOverrideLibraryPropertyOperation *
-           opop_dst = static_cast<IDOverrideLibraryPropertyOperation *>(op_dst->operations.first_),
-          *opop_src = static_cast<IDOverrideLibraryPropertyOperation *>(op_src->operations.first_);
+  for (IDOverrideLibraryPropertyOperation *opop_dst = op_dst->operations.first(),
+                                          *opop_src = op_src->operations.first();
        opop_dst;
        opop_dst = opop_dst->next, opop_src = opop_src->next)
   {

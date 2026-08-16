@@ -483,7 +483,7 @@ void modifier_clear(Strip *strip)
 {
   StripModifierData *smd, *smd_next;
 
-  for (smd = static_cast<StripModifierData *>(strip->modifiers.first_); smd; smd = smd_next) {
+  for (smd = strip->modifiers.first(); smd; smd = smd_next) {
     smd_next = smd->next;
     modifier_free(smd);
   }

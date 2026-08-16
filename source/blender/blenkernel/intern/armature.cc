@@ -166,10 +166,8 @@ static void armature_copy_data(Main * /*bmain*/,
   BLI_duplicatelist(&armature_dst->bonebase, &armature_src->bonebase);
 
   /* Duplicate the children's lists. */
-  bone_dst = static_cast<Bone *>(armature_dst->bonebase.first_);
-  for (bone_src = static_cast<Bone *>(armature_src->bonebase.first_); bone_src;
-       bone_src = bone_src->next)
-  {
+  bone_dst = armature_dst->bonebase.first();
+  for (bone_src = armature_src->bonebase.first(); bone_src; bone_src = bone_src->next) {
     bone_dst->parent = nullptr;
     copy_bonechildren(bone_dst, bone_src, armature_src->act_bone, &bone_dst_act, flag_subdata);
     bone_dst = bone_dst->next;
@@ -195,9 +193,7 @@ static void armature_copy_data(Main * /*bmain*/,
   BKE_armature_bone_hash_make(armature_dst);
 
   /* Fix custom handle references. */
-  for (bone_dst = static_cast<Bone *>(armature_dst->bonebase.first_); bone_dst;
-       bone_dst = bone_dst->next)
-  {
+  for (bone_dst = armature_dst->bonebase.first(); bone_dst; bone_dst = bone_dst->next) {
     copy_bonechildren_custom_handles(bone_dst, armature_dst);
   }
 
@@ -702,8 +698,8 @@ static void copy_bonechildren(Bone *bone_dst,
   BLI_duplicatelist(&bone_dst->childbase, &bone_src->childbase);
 
   /* For each child in the list, update its children */
-  for (bone_src_child = static_cast<Bone *>(bone_src->childbase.first_),
-      bone_dst_child = static_cast<Bone *>(bone_dst->childbase.first_);
+  for (bone_src_child = bone_src->childbase.first(),
+      bone_dst_child = bone_dst->childbase.first();
        bone_src_child;
        bone_src_child = bone_src_child->next, bone_dst_child = bone_dst_child->next)
   {
@@ -723,7 +719,7 @@ static void copy_bonechildren_custom_handles(Bone *bone_dst, bArmature *arm_dst)
     bone_dst->bbone_next = BKE_armature_find_bone_name(arm_dst, bone_dst->bbone_next->name);
   }
 
-  for (bone_dst_child = static_cast<Bone *>(bone_dst->childbase.first_); bone_dst_child;
+  for (bone_dst_child = bone_dst->childbase.first(); bone_dst_child;
        bone_dst_child = bone_dst_child->next)
   {
     copy_bonechildren_custom_handles(bone_dst_child, arm_dst);
@@ -755,8 +751,8 @@ static void copy_bone_transform(Bone *bone_dst, const Bone *bone_src)
 
 void BKE_armature_copy_bone_transforms(bArmature *armature_dst, const bArmature *armature_src)
 {
-  Bone *bone_dst = static_cast<Bone *>(armature_dst->bonebase.first_);
-  const Bone *bone_src = static_cast<const Bone *>(armature_src->bonebase.first_);
+  Bone *bone_dst = armature_dst->bonebase.first();
+  const Bone *bone_src = armature_src->bonebase.first();
   while (bone_dst != nullptr) {
     BLI_assert(bone_src != nullptr);
     copy_bone_transform(bone_dst, bone_src);
@@ -2917,7 +2913,7 @@ void BKE_armature_where_is_bone(Bone *bone, const Bone *bone_parent, const bool 
   /* and the kiddies */
   if (use_recursion) {
     bone_parent = bone;
-    for (bone = static_cast<Bone *>(bone->childbase.first_); bone; bone = bone->next) {
+    for (bone = bone->childbase.first(); bone; bone = bone->next) {
       BKE_armature_where_is_bone(bone, bone_parent, use_recursion);
     }
   }

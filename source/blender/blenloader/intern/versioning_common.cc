@@ -601,9 +601,9 @@ void add_realize_instances_before_socket(bNodeTree *ntree,
                        *link->fromnode,
                        *link->fromsock,
                        *realize_node,
-                       *static_cast<bNodeSocket *>(realize_node->inputs.first_));
+                       *realize_node->inputs.first());
     link->fromnode = realize_node;
-    link->fromsock = static_cast<bNodeSocket *>(realize_node->outputs.first_);
+    link->fromsock = realize_node->outputs.first();
   }
 }
 

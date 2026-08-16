@@ -725,7 +725,7 @@ static void rna_KeyingSet_name_set(PointerRNA *ptr, const char *value)
   if (!STREQ(ks->name, value)) {
     KS_Path *ksp;
 
-    for (ksp = static_cast<KS_Path *>(ks->paths.first_); ksp; ksp = ksp->next) {
+    for (ksp = ks->paths.first(); ksp; ksp = ksp->next) {
       if ((ksp->groupmode == KSP_GROUP_KSNAME) && (ksp->id)) {
         AnimData *adt = BKE_animdata_from_id(ksp->id);
 
@@ -867,7 +867,7 @@ static void rna_KeyingSet_paths_clear(KeyingSet *keyingset, ReportList *reports)
     KS_Path *ksp, *kspn;
 
     /* free each path as we go to avoid looping twice */
-    for (ksp = static_cast<KS_Path *>(keyingset->paths.first_); ksp; ksp = kspn) {
+    for (ksp = keyingset->paths.first(); ksp; ksp = kspn) {
       kspn = ksp->next;
       BKE_keyingset_free_path(keyingset, ksp);
     }

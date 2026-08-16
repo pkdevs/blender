@@ -385,7 +385,7 @@ void BKE_gpencil_free_frames(bGPDlayer *gpl)
   }
 
   /* free frames */
-  for (bGPDframe *gpf = static_cast<bGPDframe *>(gpl->frames.first_); gpf; gpf = gpf_next) {
+  for (bGPDframe *gpf = gpl->frames.first(); gpf; gpf = gpf_next) {
     gpf_next = gpf->next;
 
     /* free strokes and their associated memory */
@@ -399,9 +399,7 @@ void BKE_gpencil_free_layer_masks(bGPDlayer *gpl)
 {
   /* Free masks. */
   bGPDlayer_Mask *mask_next = nullptr;
-  for (bGPDlayer_Mask *mask = static_cast<bGPDlayer_Mask *>(gpl->mask_layers.first_); mask;
-       mask = mask_next)
-  {
+  for (bGPDlayer_Mask *mask = gpl->mask_layers.first(); mask; mask = mask_next) {
     mask_next = mask->next;
     BLI_freelinkN(&gpl->mask_layers, mask);
   }
@@ -416,7 +414,7 @@ void BKE_gpencil_free_layers(ListBaseT<bGPDlayer> *list)
   }
 
   /* delete layers */
-  for (bGPDlayer *gpl = static_cast<bGPDlayer *>(list->first_); gpl; gpl = gpl_next) {
+  for (bGPDlayer *gpl = list->first(); gpl; gpl = gpl_next) {
     gpl_next = gpl->next;
 
     /* free layers and their data */
@@ -977,7 +975,7 @@ bGPDframe *BKE_gpencil_layer_frame_get(bGPDlayer *gpl, int cframe, eGP_GetFrame_
     }
     else {
       /* find gp-frame which is less than or equal to cframe */
-      for (gpf = static_cast<bGPDframe *>(gpl->frames.first_); gpf; gpf = gpf->next) {
+      for (gpf = gpl->frames.first(); gpf; gpf = gpf->next) {
         if (gpf->framenum <= cframe) {
           found = true;
           break;
@@ -1193,7 +1191,7 @@ void BKE_gpencil_palette_ensure(Main *bmain, Scene *scene)
 
   if (palette == nullptr) {
     /* Fall back to the first palette. */
-    palette = static_cast<Palette *>(bmain->palettes.first_);
+    palette = bmain->palettes.first();
   }
 
   if (palette == nullptr) {

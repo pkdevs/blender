@@ -233,8 +233,7 @@ ViewLayer *BKE_view_layer_add(const Main *bmain,
 
       /* Initialize layer-collections. */
       BKE_layer_collection_sync(*bmain, scene, view_layer_new);
-      layer_collection_exclude_all(
-          static_cast<LayerCollection *>(view_layer_new->layer_collections.first_));
+      layer_collection_exclude_all(view_layer_new->layer_collections.first());
 
       /* Update collections after changing visibility */
       BKE_layer_collection_sync(*bmain, scene, view_layer_new);
@@ -442,8 +441,8 @@ static void layer_aov_copy_data(ViewLayer *view_layer_dst,
 {
   BLI_duplicatelist(aovs_dst, aovs_src);
 
-  ViewLayerAOV *aov_dst = static_cast<ViewLayerAOV *>(aovs_dst->first_);
-  const ViewLayerAOV *aov_src = static_cast<const ViewLayerAOV *>(aovs_src->first_);
+  ViewLayerAOV *aov_dst = aovs_dst->first();
+  const ViewLayerAOV *aov_src = aovs_src->first();
 
   while (aov_dst != nullptr) {
     BLI_assert(aov_src);
@@ -601,7 +600,7 @@ void BKE_view_layer_rename(Main *bmain, Scene *scene, ViewLayer *view_layer, con
                          *bmain);
 
   /* WM can be missing on startup. */
-  wmWindowManager *wm = static_cast<wmWindowManager *>(bmain->wm.first_);
+  wmWindowManager *wm = bmain->wm.first();
   if (wm) {
     for (wmWindow &win : wm->windows) {
       if (win.scene == scene && STREQ(win.view_layer_name, oldname)) {
@@ -710,7 +709,7 @@ LayerCollection *BKE_layer_collection_activate_parent(ViewLayer *view_layer, Lay
   }
 
   if (!lc) {
-    lc = static_cast<LayerCollection *>(view_layer->layer_collections.first_);
+    lc = view_layer->layer_collections.first();
   }
 
   view_layer->active_collection = lc;
@@ -1069,7 +1068,7 @@ bool BKE_scene_view_layers_synced_ensure(const Main &bmain, const Scene *scene)
 bool BKE_main_view_layers_synced_ensure(const Main *bmain)
 {
   bool is_all_resynced = true;
-  for (const Scene *scene = static_cast<const Scene *>(bmain->scenes.first_); scene;
+  for (const Scene *scene = bmain->scenes.first(); scene;
        scene = static_cast<const Scene *>(scene->id.next))
   {
     if (!BKE_scene_view_layers_synced_ensure(*bmain, scene)) {
@@ -1316,7 +1315,7 @@ static bool view_layer_objects_base_cache_validate(ViewLayer *view_layer, LayerC
   bool is_valid = true;
 
   if (layer == nullptr) {
-    layer = static_cast<LayerCollection *>(view_layer->layer_collections.first_);
+    layer = view_layer->layer_collections.first();
   }
 
   /* Only check for a collection's objects if its layer is not excluded. */
@@ -1426,9 +1425,7 @@ bool BKE_layer_collection_sync(const Main &bmain, const Scene *scene, ViewLayer 
   BLI_mempool *layer_resync_mempool = BLI_mempool_create(
       sizeof(LayerCollectionResync), 1024, 1024, BLI_MEMPOOL_NOP);
   LayerCollectionResync *master_layer_resync = layer_collection_resync_create_recurse(
-      nullptr,
-      static_cast<LayerCollection *>(view_layer->layer_collections.first_),
-      layer_resync_mempool);
+      nullptr, view_layer->layer_collections.first(), layer_resync_mempool);
 
   /* Clear the cached flag indicating if the view layer has a collection exporter set. */
   view_layer->flag &= ~VIEW_LAYER_HAS_EXPORT_COLLECTIONS;
@@ -1514,7 +1511,7 @@ bool BKE_main_collection_sync(const Main *bmain)
   /* TODO: optimize for file load so only linked collections get checked? */
 
   bool is_all_resynced = true;
-  for (const Scene *scene = static_cast<const Scene *>(bmain->scenes.first_); scene;
+  for (const Scene *scene = bmain->scenes.first(); scene;
        scene = static_cast<const Scene *>(scene->id.next))
   {
     if (!BKE_scene_collection_sync(*bmain, scene)) {
@@ -1539,7 +1536,7 @@ bool BKE_main_collection_sync_remap(const Main *bmain)
 
   BKE_main_collections_object_cache_free(bmain);
 
-  for (Scene *scene = static_cast<Scene *>(bmain->scenes.first_); scene;
+  for (Scene *scene = bmain->scenes.first(); scene;
        scene = static_cast<Scene *>(scene->id.next))
   {
     for (ViewLayer &view_layer : scene->view_layers) {
@@ -1558,7 +1555,7 @@ bool BKE_main_collection_sync_remap(const Main *bmain)
     DEG_id_tag_update_ex(const_cast<Main *>(bmain), &scene->id, ID_RECALC_SYNC_TO_EVAL);
   }
 
-  for (Collection *collection = static_cast<Collection *>(bmain->collections.first_); collection;
+  for (Collection *collection = bmain->collections.first(); collection;
        collection = static_cast<Collection *>(collection->id.next))
   {
     DEG_id_tag_update_ex(const_cast<Main *>(bmain), &collection->id, ID_RECALC_SYNC_TO_EVAL);
@@ -1902,7 +1899,7 @@ bool BKE_layer_collection_local_sync_all(const Main *bmain)
           if (area.spacetype != SPACE_VIEW3D) {
             continue;
           }
-          View3D *v3d = static_cast<View3D *>(area.spacedata.first_);
+          View3D *v3d = area.spacedata.first_as<View3D>();
           if (v3d->flag & V3D_LOCAL_COLLECTIONS) {
             if (!BKE_layer_collection_local_sync(*bmain, &scene, &view_layer, v3d)) {
               is_all_resynced = false;
@@ -2150,7 +2147,7 @@ static void object_bases_iterator_begin(BLI_Iterator *iter, void *data_in_v, con
   ObjectsVisibleIteratorData *data_in = static_cast<ObjectsVisibleIteratorData *>(data_in_v);
   ViewLayer *view_layer = data_in->view_layer;
   const View3D *v3d = data_in->v3d;
-  Base *base = static_cast<Base *>(BKE_view_layer_object_bases_get(view_layer)->first_);
+  Base *base = BKE_view_layer_object_bases_get(view_layer)->first();
 
   /* when there are no objects */
   if (base == nullptr) {
@@ -2388,7 +2385,7 @@ void BKE_view_layer_bases_in_mode_iterator_next(BLI_Iterator *iter)
 
   if (base == data->base_active) {
     /* first step */
-    base = static_cast<Base *>(data->view_layer->object_bases.first_);
+    base = data->view_layer->object_bases.first();
     if ((base == data->base_active) && BKE_base_is_visible(data->v3d, base)) {
       base = base->next;
     }

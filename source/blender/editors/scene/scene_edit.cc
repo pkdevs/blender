@@ -125,7 +125,7 @@ bool ED_scene_replace_active_for_deletion(bContext &C, Main &bmain, Scene &scene
   }
 
   /* Kill running jobs. */
-  wmWindowManager *wm = static_cast<wmWindowManager *>(bmain.wm.first_);
+  wmWindowManager *wm = bmain.wm.first();
   WM_jobs_kill_all_from_owner(wm, &scene);
 
   for (wmWindow &win : wm->windows) {
@@ -215,9 +215,7 @@ static void view_layer_remove_unset_nodetrees(const Main *bmain, Scene *scene, V
 {
   int act_layer_index = BLI_findindex(&scene->view_layers, layer);
 
-  for (Scene *sce = static_cast<Scene *>(bmain->scenes.first_); sce;
-       sce = static_cast<Scene *>(sce->id.next))
-  {
+  for (Scene *sce = bmain->scenes.first(); sce; sce = static_cast<Scene *>(sce->id.next)) {
     if (sce->compositing_node_group) {
       bke::node_tree_remove_layer_n(sce->compositing_node_group, scene, act_layer_index);
     }
@@ -249,7 +247,7 @@ bool ED_scene_view_layer_delete(Main *bmain, Scene *scene, ViewLayer *layer, Rep
 
   /* Stop animation playback of this layer before removing it, as the ScreenAnimData struct
    * has a pointer to it. */
-  wmWindowManager *wm = static_cast<wmWindowManager *>(bmain->wm.first_);
+  wmWindowManager *wm = bmain->wm.first();
   ED_screen_animation_stop(bmain, wm, is_using_view_layer);
 
   BLI_remlink(&scene->view_layers, layer);

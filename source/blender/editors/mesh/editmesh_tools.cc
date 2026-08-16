@@ -1404,7 +1404,7 @@ static bool bm_vert_connect_select_history(BMesh *bm)
     // bool all_verts;
 
     /* ensure all verts have history */
-    for (ese = static_cast<BMEditSelection *>(bm->selected.first_); ese; ese = ese->next, tot++) {
+    for (ese = bm->selected.first(); ese; ese = ese->next, tot++) {
       BMVert *v;
       if (ese->htype != BM_VERT) {
         break;
@@ -1427,15 +1427,13 @@ static bool bm_vert_connect_select_history(BMesh *bm)
          * later before connecting. See #154197 */
         const bool is_multi_cut = (bm->totvertsel > 2);
         if (is_multi_cut) {
-          for (ese_last = static_cast<BMEditSelection *>(bm->selected.first_); ese_last;
-               ese_last = ese_last->next)
-          {
+          for (ese_last = bm->selected.first(); ese_last; ese_last = ese_last->next) {
             BMVert *v = reinterpret_cast<BMVert *>(ese_last->ele);
             BM_vert_normal_update(v);
             orig_normals.add(v, v->no);
           }
         }
-        ese_last = static_cast<BMEditSelection *>(bm->selected.first_);
+        ese_last = bm->selected.first();
         ese = ese_last->next;
 
         do {
@@ -1484,7 +1482,7 @@ static bool bm_vert_connect_select_history(BMesh *bm)
     else {
       /* no faces, simply connect the verts by edges */
       BMEditSelection *ese_prev;
-      ese_prev = static_cast<BMEditSelection *>(bm->selected.first_);
+      ese_prev = bm->selected.first();
       ese = ese_prev->next;
 
       do {
@@ -3398,13 +3396,11 @@ static bool merge_firstlast(BMEditMesh *em,
     mergevert = reinterpret_cast<BMVert *>(ese->ele);
   }
   else {
-    if (!em->bm->selected.first_ ||
-        (static_cast<BMEditSelection *>(em->bm->selected.first_))->htype != BM_VERT)
-    {
+    if (!em->bm->selected.first || (em->bm->selected.first())->htype != BM_VERT) {
       return false;
     }
 
-    ese = static_cast<BMEditSelection *>(em->bm->selected.first_);
+    ese = em->bm->selected.first();
     mergevert = reinterpret_cast<BMVert *>(ese->ele);
   }
 
@@ -4800,7 +4796,7 @@ static bool edbm_fill_grid_prepare(BMesh *bm, int offset, int *span_p, const boo
 
   count = BM_mesh_edgeloops_find(
       bm, &eloops, [](BMEdge *e) { return BM_elem_flag_test_bool(e, BM_ELEM_SELECT); });
-  el_store = static_cast<BMEdgeLoopStore *>(eloops.first_);
+  el_store = eloops.first();
 
   if (count != 1) {
     /* Let the operator use the selection flags,
@@ -4880,9 +4876,7 @@ static bool edbm_fill_grid_prepare(BMesh *bm, int offset, int *span_p, const boo
        * vert, but advantage of de-duplicating is minimal. */
       SortPtrByFloat *ele_sort = MEM_new_array_uninitialized<SortPtrByFloat>(verts_len, __func__);
       LinkData *v_link;
-      for (v_link = static_cast<LinkData *>(verts->first_), i = 0; v_link;
-           v_link = v_link->next, i++)
-      {
+      for (v_link = verts->first(), i = 0; v_link; v_link = v_link->next, i++) {
         BMVert *v = static_cast<BMVert *>(v_link->data);
         const float angle = edbm_fill_grid_vert_tag_angle(v);
         ele_sort[i].sort_value = angle;

@@ -908,7 +908,7 @@ static void add_keyblock_info(ActKeyColumn *col, const ActKeyBlockInfo *block)
 
 static void add_bezt_to_keyblocks_list(AnimKeylist *keylist, BezTriple *bezt, const int bezt_len)
 {
-  ActKeyColumn *col = static_cast<ActKeyColumn *>(keylist->key_columns.first_);
+  ActKeyColumn *col = keylist->key_columns.first();
 
   if (bezt && bezt_len >= 2) {
     ActKeyBlockInfo block;

@@ -485,7 +485,7 @@ static bool ed_undo_push_check_id_changes_outside_mode(Main *bmain)
   Vector<const ID *> ids;
   const MainListsArray lbarray = BKE_main_lists_get(*bmain);
   for (const ListBaseT<ID> *lb : lbarray) {
-    const ID *id_first = static_cast<const ID *>(lb->first_);
+    const ID *id_first = lb->first();
     if ((id_first == nullptr) || !ID_CHECK_UNDO(id_first)) {
       continue;
     }
@@ -688,7 +688,7 @@ std::optional<UndoEncodeHints> ED_undo_is_legacy_compatible_for_property(bContex
 
 UndoStack *ED_undo_stack_get()
 {
-  wmWindowManager *wm = static_cast<wmWindowManager *>(G_MAIN->wm.first_);
+  wmWindowManager *wm = G_MAIN->wm.first();
   return wm->runtime->undo_stack;
 }
 
@@ -1120,7 +1120,7 @@ Vector<Object *> ED_undo_editmode_objects_from_view_layer(const Main &bmain,
   /* Base iteration, starting with the active-base to ensure it's the first item in the array.
    * Looping over the active-base twice is OK as the tag check prevents it being handled twice. */
   for (Base *base = baseact,
-            *base_next = static_cast<Base *>(BKE_view_layer_object_bases_get(view_layer)->first_);
+            *base_next = BKE_view_layer_object_bases_get(view_layer)->first();
        base;
        base = base_next, base_next = base_next ? base_next->next : nullptr)
   {
@@ -1151,7 +1151,7 @@ Vector<Base *> ED_undo_editmode_bases_from_view_layer(const Main &bmain,
   /* Base iteration, starting with the active-base to ensure it's the first item in the array.
    * Looping over the active-base twice is OK as the tag check prevents it being handled twice. */
   for (Base *base = BKE_view_layer_active_base_get(view_layer),
-            *base_next = static_cast<Base *>(BKE_view_layer_object_bases_get(view_layer)->first_);
+            *base_next = BKE_view_layer_object_bases_get(view_layer)->first();
        base;
        base = base_next, base_next = base_next ? base_next->next : nullptr)
   {

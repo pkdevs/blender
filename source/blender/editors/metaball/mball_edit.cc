@@ -72,7 +72,7 @@ void ED_mball_editmball_make(Object *obedit)
   MetaBall *mb = id_cast<MetaBall *>(obedit->data);
   MetaElem *ml; /*, *newml;*/
 
-  ml = static_cast<MetaElem *>(mb->elems.first_);
+  ml = mb->elems.first();
 
   while (ml) {
     if (ml->flag & SELECT) {
@@ -114,7 +114,7 @@ MetaElem *ED_mball_add_primitive(
   MetaElem *ml;
 
   /* Deselect all existing metaelems */
-  ml = static_cast<MetaElem *>(mball->editelems->first_);
+  ml = mball->editelems->first();
   while (ml) {
     ml->flag &= ~MB_SELECT;
     ml = ml->next;
@@ -608,7 +608,7 @@ static wmOperatorStatus delete_metaelems_exec(bContext *C, wmOperator * /*op*/)
       continue;
     }
 
-    ml = static_cast<MetaElem *>(mb->editelems->first_);
+    ml = mb->editelems->first();
     if (ml) {
       while (ml) {
         next = ml->next;
@@ -674,7 +674,7 @@ static wmOperatorStatus hide_metaelems_exec(bContext *C, wmOperator *op)
   MetaElem *ml;
   const bool invert = RNA_boolean_get(op->ptr, "unselected") ? SELECT : false;
 
-  ml = static_cast<MetaElem *>(mb->editelems->first_);
+  ml = mb->editelems->first();
 
   if (ml) {
     while (ml) {

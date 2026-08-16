@@ -434,7 +434,7 @@ bool ED_gpencil_anim_copybuf_paste(bAnimContext *ac, const short offset_mode)
     bGPDframe *gpf;
 
     /* find suitable layer from buffer to use to paste from */
-    for (gpls = static_cast<bGPDlayer *>(gpencil_anim_copybuf.first_); gpls; gpls = gpls->next) {
+    for (gpls = gpencil_anim_copybuf.first(); gpls; gpls = gpls->next) {
       /* check if layer name matches */
       if ((no_name) || STREQ(gpls->info, gpld->info)) {
         break;

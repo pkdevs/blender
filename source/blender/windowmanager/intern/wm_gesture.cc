@@ -572,7 +572,7 @@ static void wm_gesture_draw_cross(const wmWindow *win, const wmGesture *gt)
 
 void wm_gesture_draw(wmWindow *win)
 {
-  wmGesture *gt = static_cast<wmGesture *>(win->runtime->gesture.first_);
+  wmGesture *gt = win->runtime->gesture.first();
 
   GPU_line_width(1.0f);
   for (; gt; gt = gt->next) {

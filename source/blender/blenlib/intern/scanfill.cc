@@ -386,7 +386,7 @@ static void testvertexnearedge(ScanFillContext *sf_ctx)
       /* find the edge which has vertex eve,
        * NOTE: we _know_ this will crash if 'ed1' becomes nullptr
        * but this will never happen. */
-      ScanFillEdge *ed1 = static_cast<ScanFillEdge *>(sf_ctx->filledgebase.first_);
+      ScanFillEdge *ed1 = sf_ctx->filledgebase.first();
       for (; !(ed1->v1 == &eve || ed1->v2 == &eve); ed1 = ed1->next) {
         /* do nothing */
       }

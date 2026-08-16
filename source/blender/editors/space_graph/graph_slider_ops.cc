@@ -198,9 +198,7 @@ static void reset_bezts(tGraphSliderOp *gso)
       ac, &anim_data, OPERATOR_DATA_FILTER, ac->data, eAnimCont_Types(ac->datatype));
 
   /* Loop through filtered data and reset bezts. */
-  for (ale = static_cast<bAnimListElem *>(anim_data.first_),
-      link_bezt = static_cast<LinkData *>(gso->bezt_arr_list.first_);
-       ale;
+  for (ale = anim_data.first_item(), link_bezt = gso->bezt_arr_list.first(); ale;
        ale = ale->next)
   {
     FCurve *fcu = static_cast<FCurve *>(ale->key_data);
@@ -262,9 +260,7 @@ static void graph_slider_exit(bContext *C, wmOperator *op)
 
   ED_slider_destroy(C, gso->slider);
 
-  for (link = static_cast<LinkData *>(gso->bezt_arr_list.first_); link != nullptr;
-       link = link->next)
-  {
+  for (link = gso->bezt_arr_list.first(); link != nullptr; link = link->next) {
     tBeztCopyData *copy = static_cast<tBeztCopyData *>(link->data);
     MEM_delete(copy->bezt);
     MEM_delete_void(link->data);

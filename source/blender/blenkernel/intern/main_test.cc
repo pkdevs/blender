@@ -200,7 +200,7 @@ TEST_F(BMainMergeTest, basics)
   /* `Coll_src_2` should have been remapped to using `Ob_src` in `bmain_dst`, instead of `Ob_src`
    * in `bmain_src`. */
   EXPECT_EQ(1, coll_2->gobject.count());
-  EXPECT_EQ(ob, static_cast<CollectionObject *>(coll_2->gobject.first_)->ob);
+  EXPECT_EQ(ob, coll_2->gobject.first()->ob);
 
   Collection *coll_3;
   Object *ob_3;
@@ -226,7 +226,7 @@ TEST_F(BMainMergeTest, basics)
   /* `Coll_src_2` should not have been modified here (Ob_3 is not instantiated at all in
    * destination Main). */
   EXPECT_EQ(1, coll_2->gobject.count());
-  EXPECT_EQ(ob, static_cast<CollectionObject *>(coll_2->gobject.first_)->ob);
+  EXPECT_EQ(ob, coll_2->gobject.first()->ob);
 }
 
 TEST_F(BMainMergeTest, linked_data)

@@ -240,7 +240,7 @@ static wmGizmo *rna_GizmoProperties_find_operator(PointerRNA *ptr)
 #  endif
 
   /* We could try workaround this lookup, but not trivial. */
-  for (bScreen *screen = static_cast<bScreen *>(G_MAIN->screens.first_); screen;
+  for (bScreen *screen = G_MAIN->screens.first(); screen;
        screen = static_cast<bScreen *>(screen->id.next))
   {
     IDProperty *properties = static_cast<IDProperty *>(ptr->data);

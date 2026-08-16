@@ -108,7 +108,7 @@ void BKE_fcurves_free(ListBaseT<FCurve> *list)
   /* Free data, no need to call #BLI_remlink before freeing each curve,
    * as we store reference to next, and freeing only touches the curve it's given. */
   FCurve *fcn = nullptr;
-  for (FCurve *fcu = static_cast<FCurve *>(list->first_); fcu; fcu = fcn) {
+  for (FCurve *fcu = list->first(); fcu; fcu = fcn) {
     fcn = fcu->next;
     BKE_fcurve_free(fcu);
   }
@@ -1115,7 +1115,7 @@ void fcurve_samples_to_keyframes(FCurve *fcu, const int start, const int end)
 
 eFCU_Cycle_Type BKE_fcurve_get_cycle_type(const FCurve &fcu)
 {
-  FModifier *fcm = static_cast<FModifier *>(fcu.modifiers.first_);
+  FModifier *fcm = fcu.modifiers.first();
 
   if (!fcm || fcm->type != FMODIFIER_TYPE_CYCLES) {
     return FCU_CYCLE_NONE;

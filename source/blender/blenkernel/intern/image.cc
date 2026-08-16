@@ -330,10 +330,7 @@ static void image_foreach_path(ID *id, BPathForeachPathData *bpath_data)
     eUDIM_TILE_FORMAT tile_format;
     char *udim_pattern = BKE_image_get_tile_strformat(temp_path, &tile_format);
     BKE_image_set_filepath_from_tile_number(
-        temp_path,
-        udim_pattern,
-        tile_format,
-        (static_cast<ImageTile *>(ima->tiles.first_))->tile_number);
+        temp_path, udim_pattern, tile_format, (ima->tiles.first())->tile_number);
     MEM_SAFE_DELETE(udim_pattern);
 
     result = BKE_bpath_foreach_path_fixed_process(bpath_data, temp_path, sizeof(temp_path));
@@ -876,9 +873,7 @@ static void copy_image_packedfiles(ListBaseT<ImagePackedFile> *lb_dst,
   const ImagePackedFile *imapf_src;
 
   lb_dst->clear_no_delete();
-  for (imapf_src = static_cast<const ImagePackedFile *>(lb_src->first_); imapf_src;
-       imapf_src = imapf_src->next)
-  {
+  for (imapf_src = lb_src->first(); imapf_src; imapf_src = imapf_src->next) {
     ImagePackedFile *imapf_dst = MEM_new<ImagePackedFile>("Image Packed Files (copy)");
 
     imapf_dst->view = imapf_src->view;
@@ -954,7 +949,7 @@ ImageTile *BKE_image_get_tile(Image *ima, int tile_number)
   /* Tiles 0 and 1001 are a special case and refer to the first tile, typically
    * coming from non-UDIM-aware code. */
   if (ELEM(tile_number, 0, 1001)) {
-    return static_cast<ImageTile *>(ima->tiles.first_);
+    return ima->tiles.first();
   }
 
   /* Must have a tiled image and a valid tile number at this point. */
@@ -1226,9 +1221,7 @@ Image *BKE_image_load_exists_in_lib(Main *bmain,
   image_abs_path(bmain, owner_lib, filepath, filepath_abs);
 
   /* First search an identical filepath. */
-  for (ima = static_cast<Image *>(bmain->images.first_); ima;
-       ima = static_cast<Image *>(ima->id.next))
-  {
+  for (ima = bmain->images.first(); ima; ima = static_cast<Image *>(ima->id.next)) {
     if (!ELEM(ima->source, IMA_SRC_VIEWER, IMA_SRC_GENERATED)) {
       STRNCPY(filepath_test, ima->filepath);
       BLI_path_abs(filepath_test, ID_BLEND_PATH(bmain, &ima->id));
@@ -1403,7 +1396,7 @@ Image *BKE_image_add_generated(Main *bmain,
 
   /* The generation info is always stored in the tiles. The first tile
    * will be used for non-tiled images. */
-  ImageTile *tile = static_cast<ImageTile *>(ima->tiles.first_);
+  ImageTile *tile = ima->tiles.first();
   tile->gen_x = width;
   tile->gen_y = height;
   tile->gen_type = eImageGenType(gen_type);
@@ -1823,17 +1816,13 @@ void BKE_image_print_memlist(Main *bmain)
   Image *ima;
   uintptr_t size, totsize = 0;
 
-  for (ima = static_cast<Image *>(bmain->images.first_); ima;
-       ima = static_cast<Image *>(ima->id.next))
-  {
+  for (ima = bmain->images.first(); ima; ima = static_cast<Image *>(ima->id.next)) {
     totsize += image_mem_size(ima);
   }
 
   printf("\ntotal image memory len: %.3f MB\n", double(totsize) / double(1024 * 1024));
 
-  for (ima = static_cast<Image *>(bmain->images.first_); ima;
-       ima = static_cast<Image *>(ima->id.next))
-  {
+  for (ima = bmain->images.first(); ima; ima = static_cast<Image *>(ima->id.next)) {
     size = image_mem_size(ima);
 
     if (size) {
@@ -1860,23 +1849,17 @@ void BKE_image_free_all_textures(Main *bmain)
   uintptr_t tot_freed_size = 0;
 #endif
 
-  for (ima = static_cast<Image *>(bmain->images.first_); ima;
-       ima = static_cast<Image *>(ima->id.next))
-  {
+  for (ima = bmain->images.first(); ima; ima = static_cast<Image *>(ima->id.next)) {
     ima->id.tag &= ~ID_TAG_DOIT;
   }
 
-  for (tex = static_cast<Tex *>(bmain->textures.first_); tex;
-       tex = static_cast<Tex *>(tex->id.next))
-  {
+  for (tex = bmain->textures.first(); tex; tex = static_cast<Tex *>(tex->id.next)) {
     if (tex->ima) {
       tex->ima->id.tag |= ID_TAG_DOIT;
     }
   }
 
-  for (ima = static_cast<Image *>(bmain->images.first_); ima;
-       ima = static_cast<Image *>(ima->id.next))
-  {
+  for (ima = bmain->images.first(); ima; ima = static_cast<Image *>(ima->id.next)) {
     if (ima->runtime->cache && (ima->id.tag & ID_TAG_DOIT)) {
 #ifdef CHECK_FREED_SIZE
       uintptr_t old_size = image_mem_size(ima);
@@ -1912,9 +1895,7 @@ void BKE_image_all_free_anim_ibufs(Main *bmain, int except_frame)
 {
   Image *ima;
 
-  for (ima = static_cast<Image *>(bmain->images.first_); ima;
-       ima = static_cast<Image *>(ima->id.next))
-  {
+  for (ima = bmain->images.first(); ima; ima = static_cast<Image *>(ima->id.next)) {
     if (BKE_image_is_animated(ima)) {
       std::scoped_lock lock(ima->runtime->cache_mutex);
       if (ima->runtime->cache != nullptr) {
@@ -2931,9 +2912,7 @@ Image *BKE_image_ensure_viewer(Main *bmain, int type, const char *name)
 {
   Image *ima;
 
-  for (ima = static_cast<Image *>(bmain->images.first_); ima;
-       ima = static_cast<Image *>(ima->id.next))
-  {
+  for (ima = bmain->images.first(); ima; ima = static_cast<Image *>(ima->id.next)) {
     if (ima->source == IMA_SRC_VIEWER) {
       if (ima->type == type) {
         break;
@@ -2984,7 +2963,7 @@ static bool image_views_match_render_views(const Image *image, const RenderData 
    * otherwise, the views don't match. We don't have to check that a single view exist, since this
    * is handled by the check above for the number of views. */
   if (!(render_data->scemode & R_MULTIVIEW)) {
-    const ImageView *image_view = static_cast<ImageView *>(image->views.first_);
+    const ImageView *image_view = image->views.first();
     /* If the view is unnamed, the views match, otherwise, they don't. */
     return image_view->name[0] == '\0';
   }
@@ -3171,7 +3150,7 @@ static void image_walk_id_all_users(
 
         for (ScrArea &area : screen->areabase) {
           if (area.spacetype == SPACE_IMAGE) {
-            SpaceImage *sima = static_cast<SpaceImage *>(area.spacedata.first_);
+            SpaceImage *sima = area.spacedata.first_as<SpaceImage>();
             callback(sima->image, nullptr, &sima->iuser, customdata);
           }
         }
@@ -3188,55 +3167,48 @@ void BKE_image_walk_all_users(
     void *customdata,
     void callback(Image *ima, ID *iuser_id, ImageUser *iuser, void *customdata))
 {
-  for (Scene *scene = static_cast<Scene *>(mainp->scenes.first_); scene;
+  for (Scene *scene = mainp->scenes.first(); scene;
        scene = static_cast<Scene *>(scene->id.next))
   {
     image_walk_id_all_users(&scene->id, false, customdata, callback);
   }
 
-  for (Object *ob = static_cast<Object *>(mainp->objects.first_); ob;
-       ob = static_cast<Object *>(ob->id.next))
-  {
+  for (Object *ob = mainp->objects.first(); ob; ob = static_cast<Object *>(ob->id.next)) {
     image_walk_id_all_users(&ob->id, false, customdata, callback);
   }
 
-  for (bNodeTree *ntree = static_cast<bNodeTree *>(mainp->nodetrees.first_); ntree;
+  for (bNodeTree *ntree = mainp->nodetrees.first(); ntree;
        ntree = static_cast<bNodeTree *>(ntree->id.next))
   {
     image_walk_id_all_users(&ntree->id, false, customdata, callback);
   }
 
-  for (Material *ma = static_cast<Material *>(mainp->materials.first_); ma;
-       ma = static_cast<Material *>(ma->id.next))
+  for (Material *ma = mainp->materials.first(); ma; ma = static_cast<Material *>(ma->id.next))
   {
     image_walk_id_all_users(&ma->id, false, customdata, callback);
   }
 
-  for (Light *light = static_cast<Light *>(mainp->lights.first_); light;
+  for (Light *light = mainp->lights.first(); light;
        light = static_cast<Light *>(light->id.next))
   {
     image_walk_id_all_users(&light->id, false, customdata, callback);
   }
 
-  for (World *world = static_cast<World *>(mainp->worlds.first_); world;
+  for (World *world = mainp->worlds.first(); world;
        world = static_cast<World *>(world->id.next))
   {
     image_walk_id_all_users(&world->id, false, customdata, callback);
   }
 
-  for (Tex *tex = static_cast<Tex *>(mainp->textures.first_); tex;
-       tex = static_cast<Tex *>(tex->id.next))
-  {
+  for (Tex *tex = mainp->textures.first(); tex; tex = static_cast<Tex *>(tex->id.next)) {
     image_walk_id_all_users(&tex->id, false, customdata, callback);
   }
 
-  for (Camera *cam = static_cast<Camera *>(mainp->cameras.first_); cam;
-       cam = static_cast<Camera *>(cam->id.next))
-  {
+  for (Camera *cam = mainp->cameras.first(); cam; cam = static_cast<Camera *>(cam->id.next)) {
     image_walk_id_all_users(&cam->id, false, customdata, callback);
   }
   /* Only ever 1 `wm`. */
-  for (wmWindowManager *wm = static_cast<wmWindowManager *>(mainp->wm.first_); wm;
+  for (wmWindowManager *wm = mainp->wm.first(); wm;
        wm = static_cast<wmWindowManager *>(wm->id.next))
   {
     image_walk_id_all_users(&wm->id, false, customdata, callback);
@@ -3563,7 +3535,7 @@ static RenderPass *image_render_pass_get(RenderLayer *rl,
   /* fall back to the first pass in the layer */
   if (rpass_ret == nullptr) {
     rp_index = 0;
-    rpass_ret = static_cast<RenderPass *>(rl->passes.first_);
+    rpass_ret = rl->passes.first();
   }
 
   if (r_passindex) {
@@ -3656,9 +3628,7 @@ ImageTile *BKE_image_add_tile(Image *ima, int tile_number, const char *label)
   /* Search the first tile that has a higher number.
    * We then insert before that to keep the list sorted. */
   ImageTile *next_tile;
-  for (next_tile = static_cast<ImageTile *>(ima->tiles.first_); next_tile;
-       next_tile = next_tile->next)
-  {
+  for (next_tile = ima->tiles.first(); next_tile; next_tile = next_tile->next) {
     if (next_tile->tile_number == tile_number) {
       /* Tile already exists. */
       return nullptr;
@@ -3925,7 +3895,7 @@ RenderPass *BKE_image_multilayer_index(RenderResult *rr, ImageUser *iuser)
       rl_index += 1;
     }
 
-    for (rl = static_cast<RenderLayer *>(rr->layers.first_); rl; rl = rl->next, rl_index++) {
+    for (rl = rr->layers.first(); rl; rl = rl->next, rl_index++) {
       if (iuser->layer == rl_index) {
         int rp_index;
         rpass = image_render_pass_get(rl, iuser->pass, rv_index, &rp_index);
@@ -3980,7 +3950,7 @@ bool BKE_image_is_multilayer(const Image *ima)
 
 bool BKE_image_is_multiview(const Image *ima)
 {
-  ImageView *view = static_cast<ImageView *>(ima->views.first_);
+  ImageView *view = ima->views.first();
   return (view && (view->next || view->name[0]));
 }
 
@@ -3998,8 +3968,8 @@ static void image_init_multilayer_multiview(Image *ima, RenderResult *rr)
    * be acquired with a mutex along with the render result, but there are still
    * some places with just an image pointer that need to access views */
   if (rr && ima->views.count() == rr->views.count()) {
-    ImageView *iv = static_cast<ImageView *>(ima->views.first_);
-    RenderView *rv = static_cast<RenderView *>(rr->views.first_);
+    ImageView *iv = ima->views.first();
+    RenderView *rv = rr->views.first();
     bool modified = false;
     for (; rv; rv = rv->next, iv = iv->next) {
       modified |= !STREQ(rv->name, iv->name);
@@ -4666,7 +4636,7 @@ static ImBuf *image_get_render_result(Image *ima, ImageUser *iuser, void **r_loc
   }
   else if ((slot = BKE_image_get_renderslot(ima, ima->render_slot))->render) {
     rres = *(slot->render);
-    rres.have_combined = (static_cast<RenderView *>(rres.views.first_))->ibuf != nullptr;
+    rres.have_combined = (rres.views.first())->ibuf != nullptr;
   }
 
   if (!(rres.rectx > 0 && rres.recty > 0)) {
@@ -4685,7 +4655,7 @@ static ImBuf *image_get_render_result(Image *ima, ImageUser *iuser, void **r_loc
   else {
     rv = static_cast<RenderView *>(BLI_findlink(&rres.views, actview));
     if (rv == nullptr) {
-      rv = static_cast<RenderView *>(rres.views.first_);
+      rv = rres.views.first();
     }
   }
 
@@ -5193,8 +5163,7 @@ void BKE_image_pool_free(ImagePool *pool)
   /* Use single lock to dereference all the image buffers. */
   {
     std::scoped_lock lock(pool->mutex);
-    for (ImagePoolItem *item = static_cast<ImagePoolItem *>(pool->image_buffers.first_);
-         item != nullptr;
+    for (ImagePoolItem *item = pool->image_buffers.first(); item != nullptr;
          item = item->next)
     {
       if (item->ibuf != nullptr) {
@@ -5399,7 +5368,7 @@ void BKE_image_editors_update_frame(const Main *bmain, int cfra)
 {
   /* This only updates images used by the user interface. For others the
    * dependency graph will call BKE_image_user_id_eval_animation. */
-  wmWindowManager *wm = static_cast<wmWindowManager *>(bmain->wm.first_);
+  wmWindowManager *wm = bmain->wm.first();
   image_walk_id_all_users(&wm->id, false, &cfra, image_editors_update_frame);
 }
 

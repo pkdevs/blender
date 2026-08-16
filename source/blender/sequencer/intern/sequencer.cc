@@ -267,7 +267,7 @@ void seq_free_strip_recurse(Scene *scene, Strip *strip, const bool do_id_user)
 {
   Strip *istrip_next;
 
-  for (Strip *istrip = static_cast<Strip *>(strip->seqbase.first_); istrip; istrip = istrip_next) {
+  for (Strip *istrip = strip->seqbase.first(); istrip; istrip = istrip_next) {
     istrip_next = istrip->next;
     seq_free_strip_recurse(scene, istrip, do_id_user);
   }

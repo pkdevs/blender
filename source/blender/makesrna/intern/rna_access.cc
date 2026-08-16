@@ -7612,7 +7612,7 @@ PropertyRNA *RNA_function_find_parameter(PointerRNA * /*ptr*/,
 {
   PropertyRNA *parm;
 
-  parm = static_cast<PropertyRNA *>(func->cont.properties.first_);
+  parm = func->cont.properties.first();
   for (; parm; parm = parm->next) {
     if (STREQ(RNA_property_identifier(parm), identifier)) {
       break;
@@ -7741,7 +7741,7 @@ void RNA_parameter_list_free(ParameterList *parms)
 {
   PropertyRNA *parm;
 
-  parm = static_cast<PropertyRNA *>(parms->func->cont.properties.first_);
+  parm = parms->func->cont.properties.first();
   void *data = parms->data;
   for (; parm; parm = parm->next) {
     if (parm->type == PROP_COLLECTION) {
@@ -7792,7 +7792,7 @@ void RNA_parameter_list_begin(ParameterList *parms, ParameterIterator *iter)
   // RNA_pointer_create_discrete(nullptr, RNA_Function, parms->func, &iter->funcptr); /* UNUSED */
 
   iter->parms = parms;
-  iter->parm = static_cast<PropertyRNA *>(parms->func->cont.properties.first_);
+  iter->parm = parms->func->cont.properties.first();
   iter->valid = iter->parm != nullptr;
   iter->offset = 0;
 
@@ -7852,7 +7852,7 @@ void RNA_parameter_get_lookup(ParameterList *parms, const char *identifier, void
 {
   PropertyRNA *parm;
 
-  parm = static_cast<PropertyRNA *>(parms->func->cont.properties.first_);
+  parm = parms->func->cont.properties.first();
   for (; parm; parm = parm->next) {
     if (STREQ(RNA_property_identifier(parm), identifier)) {
       break;
@@ -7922,7 +7922,7 @@ void RNA_parameter_set_lookup(ParameterList *parms, const char *identifier, cons
 {
   PropertyRNA *parm;
 
-  parm = static_cast<PropertyRNA *>(parms->func->cont.properties.first_);
+  parm = parms->func->cont.properties.first();
   for (; parm; parm = parm->next) {
     if (STREQ(RNA_property_identifier(parm), identifier)) {
       break;

@@ -692,7 +692,7 @@ static void seq_load_apply_generic_options(bContext *C, wmOperator *op, Strip *s
     strip_col.add(strip);
 
     ScrArea *area = CTX_wm_area(C);
-    const bool use_sync_markers = ((static_cast<SpaceSeq *>(area->spacedata.first_))->flag &
+    const bool use_sync_markers = ((area->spacedata.first_as<SpaceSeq>())->flag &
                                    SEQ_MARKER_TRANS) != 0;
     seq::transform_handle_overlap(scene, ed->current_strips(), strip_col, use_sync_markers);
   }

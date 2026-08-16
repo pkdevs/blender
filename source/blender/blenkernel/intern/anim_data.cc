@@ -1064,7 +1064,7 @@ static bool fcurves_path_remove_from_listbase(const char *prefix, ListBaseT<FCur
   }
 
   /* we need to check every curve... */
-  for (fcu = static_cast<FCurve *>(curves->first_); fcu; fcu = fcn) {
+  for (fcu = curves->first(); fcu; fcu = fcn) {
     fcn = fcu->next;
     const StringRefNull rna_path = fcu->rna_path();
     if (rna_path.startswith(prefix)) {

@@ -280,7 +280,7 @@ void BKE_keyingset_free_paths(KeyingSet *ks)
   }
 
   /* free each path as we go to avoid looping twice */
-  for (ksp = static_cast<KS_Path *>(ks->paths.first_); ksp; ksp = kspn) {
+  for (ksp = ks->paths.first(); ksp; ksp = kspn) {
     kspn = ksp->next;
     BKE_keyingset_free_path(ks, ksp);
   }
@@ -298,7 +298,7 @@ void BKE_keyingsets_free(ListBaseT<KeyingSet> *list)
   /* loop over KeyingSets freeing them
    * - BKE_keyingset_free_paths() doesn't free the set itself, but it frees its sub-data
    */
-  for (ks = static_cast<KeyingSet *>(list->first_); ks; ks = ksn) {
+  for (ks = list->first(); ks; ks = ksn) {
     ksn = ks->next;
     BKE_keyingset_free_paths(ks);
     BLI_freelinkN(list, ks);
@@ -3911,8 +3911,8 @@ void BKE_animsys_eval_driver(Depsgraph *depsgraph, ID *id, int driver_index, FCu
           driver_orig->curval = fcu->driver->curval;
           driver_orig->flag = fcu->driver->flag;
 
-          DriverVar *dvar_orig = static_cast<DriverVar *>(driver_orig->variables.first_);
-          DriverVar *dvar = static_cast<DriverVar *>(fcu->driver->variables.first_);
+          DriverVar *dvar_orig = driver_orig->variables.first();
+          DriverVar *dvar = fcu->driver->variables.first();
           for (; dvar_orig && dvar; dvar_orig = dvar_orig->next, dvar = dvar->next) {
             DriverTarget *dtar_orig = &dvar_orig->targets[0];
             DriverTarget *dtar = &dvar->targets[0];

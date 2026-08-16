@@ -117,9 +117,7 @@ static int curve_render_normal_len_get(const ListBaseT<Nurb> *lb, const CurveCac
   int normal_len = 0;
   const BevList *bl;
   const Nurb *nu;
-  for (bl = static_cast<const BevList *>(ob_curve_cache->bev.first_),
-      nu = static_cast<const Nurb *>(lb->first_);
-       nu && bl;
+  for (bl = ob_curve_cache->bev.first_item(), nu = lb->first(); nu && bl;
        bl = bl->next, nu = nu->next)
   {
     int nr = bl->nr;
@@ -582,9 +580,7 @@ static void curve_create_edit_curves_nor(CurveRenderData *rdata,
   const uint tan_id = do_hq_normals ? attr_id.tan_hq : attr_id.tan;
   const uint rad_id = do_hq_normals ? attr_id.rad_hq : attr_id.rad;
 
-  for (bl = static_cast<const BevList *>(rdata->ob_curve_cache->bev.first_),
-      nu = static_cast<const Nurb *>(rdata->nurbs->first_);
-       nu && bl;
+  for (bl = rdata->ob_curve_cache->bev.first_item(), nu = rdata->nurbs->first(); nu && bl;
        bl = bl->next, nu = nu->next)
   {
     const BevPoint *bevp = bl->bevpoints;
@@ -710,7 +706,7 @@ static void curve_create_edit_data_and_handles(CurveRenderData *rdata,
 #undef DRW_TEST_ASSIGN_IBO
 
   int nu_id = 0;
-  for (Nurb *nu = static_cast<Nurb *>(rdata->nurbs->first_); nu; nu = nu->next, nu_id++) {
+  for (Nurb *nu = rdata->nurbs->first(); nu; nu = nu->next, nu_id++) {
     const BezTriple *bezt = nu->bezt;
     const BPoint *bp = nu->bp;
 

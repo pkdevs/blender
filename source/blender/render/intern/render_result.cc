@@ -774,8 +774,7 @@ void render_result_merge(RenderResult *rr, RenderResult *rrpart)
 
     if (rlp) {
       /* Passes are allocated in sync. */
-      for (RenderPass *rpass = static_cast<RenderPass *>(rl.passes.first_),
-                      *rpassp = static_cast<RenderPass *>(rlp->passes.first_);
+      for (RenderPass *rpass = rl.passes.first_item(), *rpassp = rlp->passes.first();
            rpass && rpassp;
            rpass = rpass->next)
       {
@@ -837,7 +836,7 @@ void render_result_single_layer_end(Render *re)
   if (re->pushedresult->rectx == re->result->rectx && re->pushedresult->recty == re->result->recty)
   {
     /* find which layer in re->pushedresult should be replaced */
-    RenderLayer *rl = static_cast<RenderLayer *>(re->result->layers.first_);
+    RenderLayer *rl = re->result->layers.first();
 
     /* render result should be empty after this */
     BLI_remlink(&re->result->layers, rl);
@@ -1205,7 +1204,7 @@ bool RE_HasCombinedLayer(const RenderResult *result)
     return false;
   }
 
-  const RenderView *rv = static_cast<RenderView *>(result->views.first_);
+  const RenderView *rv = result->views.first();
   if (rv == nullptr) {
     return false;
   }

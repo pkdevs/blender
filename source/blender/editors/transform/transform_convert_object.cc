@@ -181,7 +181,7 @@ static void ObjectToTransData(TransInfo *t, TransData *td, TransDataExtension *t
     }
   }
 
-  td->con = static_cast<bConstraint *>(ob->constraints.first_);
+  td->con = ob->constraints.first();
 
   /* HACK: temporarily disable tracking and/or constraints when getting
    * object matrix, if tracking is on, or if constraints don't need

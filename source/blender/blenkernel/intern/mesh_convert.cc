@@ -487,7 +487,7 @@ void BKE_mesh_to_curve_nurblist(const Mesh *mesh,
         nu->bp = MEM_new_array_zeroed<BPoint>(faces_num, "bpoints");
 
         /* add points */
-        vl = static_cast<VertLink *>(polyline.first_);
+        vl = polyline.first();
         int i;
         for (i = 0, bp = nu->bp; i < faces_num;
              i++, bp++, vl = reinterpret_cast<VertLink *>(vl->next))

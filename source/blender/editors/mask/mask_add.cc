@@ -178,7 +178,7 @@ static void finSelectedSplinePoint(MaskLayer *mask_layer,
                                    MaskSplinePoint **point,
                                    bool check_active)
 {
-  MaskSpline *cur_spline = static_cast<MaskSpline *>(mask_layer->splines.first_);
+  MaskSpline *cur_spline = mask_layer->splines.first();
 
   *spline = nullptr;
   *point = nullptr;

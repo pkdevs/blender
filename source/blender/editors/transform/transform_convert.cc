@@ -1122,7 +1122,7 @@ void create_trans_data(bContext *C, TransInfo *t)
 void transform_convert_clip_mirror_modifier_apply(TransDataContainer *tc)
 {
   Object *ob = tc->obedit;
-  ModifierData *md = static_cast<ModifierData *>(ob->modifiers.first_);
+  ModifierData *md = ob->modifiers.first();
 
   for (; md; md = md->next) {
     if ((md->type == eModifierType_Mirror) && (md->mode & eModifierMode_Realtime)) {

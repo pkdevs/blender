@@ -1383,7 +1383,7 @@ static bool ghost_event_proc(const GHOST_IEvent *ghost_event, GHOST_TUserDataPtr
             playanim_audio_stop(ps);
 
             if (ps.ghost_data.qual & WS_QUAL_SHIFT) {
-              ps.picture = static_cast<PlayAnimPict *>(ps.picsbase.first_);
+              ps.picture = ps.picsbase.first();
               ps.next_frame = 0;
             }
             else {
@@ -2083,7 +2083,7 @@ static std::optional<int> wm_main_playanim_intern(int argc, const char **argv, P
 #ifdef WITH_AUDASPACE
   g_audaspace.source = AUD_Sound(new aud::File(filepath));
   if (!BLI_listbase_is_empty(&ps.picsbase)) {
-    const MovieReader *anim_movie = static_cast<PlayAnimPict *>(ps.picsbase.first_)->anim;
+    const MovieReader *anim_movie = ps.picsbase.first()->anim;
     if (anim_movie) {
       g_playanim.fps_movie = MOV_get_fps(anim_movie);
       /* Enforce same fps for movie as sound. */

@@ -433,7 +433,7 @@ static void multiresbake_freejob(void *bkv)
   MultiresBakeJob *bkj = static_cast<MultiresBakeJob *>(bkv);
   MultiresBakerJobData *data, *next;
 
-  data = static_cast<MultiresBakerJobData *>(bkj->data.first_);
+  data = bkj->data.first();
   while (data) {
     next = data->next;
     /* delete here, since this delete will be called from main thread */

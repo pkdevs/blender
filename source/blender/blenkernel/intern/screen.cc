@@ -127,8 +127,8 @@ static void screen_copy_data(Main * /*bmain*/,
   screen_dst->regionbase.clear_no_delete();
 
   {
-    ScrVert *sv_dst = static_cast<ScrVert *>(screen_dst->vertbase.first_);
-    ScrVert *sv_src = static_cast<ScrVert *>(screen_src->vertbase.first_);
+    ScrVert *sv_dst = screen_dst->vertbase.first();
+    ScrVert *sv_src = screen_src->vertbase.first();
     for (; sv_dst && sv_src; sv_dst = sv_dst->next, sv_src = sv_src->next) {
       sv_src->newv = sv_dst;
     }
@@ -140,8 +140,8 @@ static void screen_copy_data(Main * /*bmain*/,
   }
 
   {
-    ScrArea *area_dst = static_cast<ScrArea *>(screen_dst->areabase.first_);
-    ScrArea *area_src = static_cast<ScrArea *>(screen_src->areabase.first_);
+    ScrArea *area_dst = screen_dst->areabase.first();
+    ScrArea *area_src = screen_src->areabase.first();
     for (; area_dst && area_src; area_dst = area_dst->next, area_src = area_src->next) {
       area_dst->v1 = area_dst->v1->newv;
       area_dst->v2 = area_dst->v2->newv;
@@ -1624,8 +1624,7 @@ static void direct_link_area(BlendDataReader *reader, ScrArea *area)
   }
   /* add local view3d too */
   else if (area->spacetype == SPACE_VIEW3D) {
-    BKE_screen_view3d_do_versions_250(static_cast<View3D *>(area->spacedata.first_),
-                                      &area->regionbase);
+    BKE_screen_view3d_do_versions_250(area->spacedata.first_as<View3D>(), &area->regionbase);
   }
 
   for (SpaceLink &sl : area->spacedata) {

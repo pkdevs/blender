@@ -63,7 +63,7 @@ namespace blender {
 
 void ED_editors_init_for_undo(Main *bmain)
 {
-  wmWindowManager *wm = static_cast<wmWindowManager *>(bmain->wm.first_);
+  wmWindowManager *wm = bmain->wm.first();
   for (wmWindow &win : wm->windows) {
     Scene *scene = WM_window_get_active_scene(&win);
     ViewLayer *view_layer = WM_window_get_active_view_layer(&win);

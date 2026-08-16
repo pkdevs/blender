@@ -327,7 +327,7 @@ static void seq_prefetch_update_area(PrefetchJob *pfjob)
 void prefetch_stop_all()
 {
   /* TODO(Richard): Use wm_jobs for prefetch, or pass main. */
-  for (Scene *scene = static_cast<Scene *>(G.main->scenes.first_); scene;
+  for (Scene *scene = G.main->scenes.first(); scene;
        scene = static_cast<Scene *>(scene->id.next))
   {
     prefetch_stop(scene);

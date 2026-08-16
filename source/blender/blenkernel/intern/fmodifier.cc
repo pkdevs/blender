@@ -1329,7 +1329,7 @@ void free_fmodifiers(ListBaseT<FModifier> *modifiers)
   }
 
   /* free each modifier in order - modifier is unlinked from list and freed */
-  for (fcm = static_cast<FModifier *>(modifiers->first_); fcm; fcm = fmn) {
+  for (fcm = modifiers->first(); fcm; fcm = fmn) {
     fmn = fcm->next;
     remove_fmodifier(modifiers, fcm);
   }
@@ -1559,7 +1559,7 @@ void evaluate_value_fmodifiers(FModifiersStackStorage *storage,
 
   /* evaluate modifiers */
   uint fcm_index = 0;
-  for (fcm = static_cast<FModifier *>(modifiers->first_); fcm; fcm = fcm->next, fcm_index++) {
+  for (fcm = modifiers->first(); fcm; fcm = fcm->next, fcm_index++) {
     const FModifierTypeInfo *fmi = fmodifier_get_typeinfo(fcm);
 
     if (fmi == nullptr) {

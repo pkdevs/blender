@@ -163,8 +163,8 @@ static CVKeyIndex *init_cvKeyIndex(
 
 static void init_editNurb_keyIndex(EditNurb *editnurb, ListBaseT<Nurb> *origBase)
 {
-  Nurb *nu = static_cast<Nurb *>(editnurb->nurbs.first_);
-  Nurb *orignu = static_cast<Nurb *>(origBase->first_);
+  Nurb *nu = editnurb->nurbs.first();
+  Nurb *orignu = origBase->first();
   BezTriple *bezt, *origbezt;
   BPoint *bp, *origbp;
   CVKeyIndex *keyIndex;
@@ -752,11 +752,11 @@ static void calc_shapeKeys(Object *obedit, ListBaseT<Nurb> *newnurbs)
         MEM_new_zeroed(cu->key->elemsize * totvert, "currkey->data"));
     ofp = oldkey = static_cast<float *>(currkey.data);
 
-    Nurb *nu = static_cast<Nurb *>(editnurb->nurbs.first_);
+    Nurb *nu = editnurb->nurbs.first();
     /* We need to restore to original curve into newnurb, *not* editcurve's nurbs.
      * Otherwise, in case we update obdata *without* leaving editmode (e.g. viewport render),
      * we would invalidate editcurve. */
-    newnu = static_cast<Nurb *>(newnurbs->first_);
+    newnu = newnurbs->first();
     i = 0;
     while (nu) {
       if (&currkey == actkey) {
@@ -4293,7 +4293,7 @@ static void make_selection_list_nurb(View3D *v3d,
   }
 
   /* just add the first one */
-  nus = static_cast<NurbSort *>(nbase.first_);
+  nus = nbase.first();
   BLI_remlink(&nbase, nus);
   BLI_addtail(nsortbase, nus);
 
@@ -4303,9 +4303,9 @@ static void make_selection_list_nurb(View3D *v3d,
     headdist = taildist = 1.0e30;
     headdo = taildo = nullptr;
 
-    nustest = static_cast<NurbSort *>(nbase.first_);
+    nustest = nbase.first();
     while (nustest) {
-      dist = len_v3v3(nustest->vec, (static_cast<NurbSort *>(nsortbase->first_))->vec);
+      dist = len_v3v3(nustest->vec, (nsortbase->first())->vec);
 
       if (dist < headdist) {
         headdist = dist;
@@ -4512,7 +4512,7 @@ static int merge_nurb(View3D *v3d, Object *obedit)
     return CURVE_MERGE_ERR_FEW_SELECTION;
   }
 
-  nus1 = static_cast<NurbSort *>(nsortbase.first_);
+  nus1 = nsortbase.first();
   nus2 = nus1->next;
 
   /* resolution match, to avoid uv rotations */
@@ -4592,7 +4592,7 @@ static wmOperatorStatus make_segment_exec(bContext *C, wmOperator *op)
 
     /* first decide if this is a surface merge! */
     if (obedit->type == OB_SURF) {
-      nu = static_cast<Nurb *>(nubase->first_);
+      nu = nubase->first();
     }
     else {
       nu = nullptr;

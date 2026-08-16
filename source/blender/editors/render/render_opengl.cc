@@ -189,7 +189,7 @@ static void screen_opengl_views_setup(OGLRender *oglrender)
 
   if (!is_multiview) {
     /* we only have one view when multiview is off */
-    rv = static_cast<RenderView *>(rr->views.first_);
+    rv = rr->views.first();
 
     if (rv == nullptr) {
       rv = MEM_new<RenderView>("new opengl render view");
@@ -505,8 +505,7 @@ static void screen_opengl_render_apply(const bke::BlenderProject *project, OGLRe
   }
 
   rr = RE_AcquireResultRead(oglrender->re);
-  for (rv = static_cast<RenderView *>(rr->views.first_), view_id = 0; rv; rv = rv->next, view_id++)
-  {
+  for (rv = rr->views.first(), view_id = 0; rv; rv = rv->next, view_id++) {
     BLI_assert(view_id < oglrender->views_len);
     RE_SetActiveRenderView(oglrender->re, rv->name);
     oglrender->view_id = view_id;

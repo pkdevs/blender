@@ -790,14 +790,11 @@ static void fix_geometry_nodes_object_info_scale(bNodeTree &ntree)
     absolute_value->parent = node.parent;
     absolute_value->locx_legacy = node.locx_legacy + 100;
     absolute_value->locy_legacy = node.locy_legacy - 50;
-    bke::node_add_link(*&ntree,
-                       node,
-                       *scale,
-                       *absolute_value,
-                       *static_cast<bNodeSocket *>(absolute_value->inputs.first_));
+    bke::node_add_link(
+        *&ntree, node, *scale, *absolute_value, *absolute_value->inputs.first());
     for (bNodeLink *link : links) {
       link->fromnode = absolute_value;
-      link->fromsock = static_cast<bNodeSocket *>(absolute_value->outputs.first_);
+      link->fromsock = absolute_value->outputs.first();
     }
   }
 }

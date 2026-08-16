@@ -2467,15 +2467,8 @@ void ED_view3d_depth_override(Depsgraph *depsgraph,
   ui::theme::theme_store(&theme_state);
   ui::theme::theme_set(SPACE_VIEW3D, RGN_TYPE_WINDOW);
 
-  ED_view3d_draw_setup_view(static_cast<wmWindowManager *>(G_MAIN->wm.first_),
-                            nullptr,
-                            depsgraph,
-                            scene,
-                            region,
-                            v3d,
-                            nullptr,
-                            nullptr,
-                            nullptr);
+  ED_view3d_draw_setup_view(
+      G_MAIN->wm.first(), nullptr, depsgraph, scene, region, v3d, nullptr, nullptr, nullptr);
 
   /* get surface depth without bias */
   rv3d->rflag |= RV3D_ZOFFSET_DISABLED;
@@ -2630,7 +2623,7 @@ void ED_view3d_screen_datamask(const Main &bmain,
   for (const ScrArea &area : screen->areabase) {
     if (area.spacetype == SPACE_VIEW3D) {
       ED_view3d_datamask(
-          bmain, scene, view_layer, static_cast<View3D *>(area.spacedata.first_), r_cddata_masks);
+          bmain, scene, view_layer, area.spacedata.first_as<View3D>(), r_cddata_masks);
     }
   }
 }

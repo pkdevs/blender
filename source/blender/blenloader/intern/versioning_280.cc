@@ -466,7 +466,7 @@ static void do_versions_remove_region(ListBaseT<ARegion> *regionbase, ARegion *r
 static void do_versions_remove_regions_by_type(ListBaseT<ARegion> *regionbase, int regiontype)
 {
   ARegion *region, *region_next;
-  for (region = static_cast<ARegion *>(regionbase->first_); region; region = region_next) {
+  for (region = regionbase->first(); region; region = region_next) {
     region_next = static_cast<ARegion *>(region->next);
     if (region->regiontype == regiontype) {
       do_versions_remove_region(regionbase, region);
@@ -895,8 +895,7 @@ static void do_version_curvemapping_walker(Main *bmain, void (*callback)(CurveMa
     }
     /* Grease pencil modifiers.
      * No ListBaseT iterator because the type does not match current DNA. */
-    for (ModifierData *md = static_cast<ModifierData *>(ob.greasepencil_modifiers.first_); md;
-         md = md->next)
+    for (ModifierData *md = ob.greasepencil_modifiers.first_as<ModifierData>(); md; md = md->next)
     {
       if (GpencilModifierType(md->type) == eGpencilModifierType_Thick) {
         ThickGpencilModifierData *gpmd = reinterpret_cast<ThickGpencilModifierData *>(md);
@@ -2215,9 +2214,7 @@ void do_versions_after_linking_280(FileData *fd, Main *bmain)
       }
 
       Collection *hidden_collection_array[20] = {nullptr};
-      for (CollectionObject *cob = static_cast<CollectionObject *>(collection.gobject.first_),
-                            *cob_next = nullptr;
-           cob;
+      for (CollectionObject *cob = collection.gobject.first(), *cob_next = nullptr; cob;
            cob = cob_next)
       {
         cob_next = cob->next;
@@ -2277,7 +2274,7 @@ void do_versions_after_linking_280(FileData *fd, Main *bmain)
 
       /* same render-layer as do_version_workspaces_after_lib_link will activate,
        * so same layer as BKE_view_layer_default_view would return */
-      ViewLayer *layer = static_cast<ViewLayer *>(screen.scene->view_layers.first_);
+      ViewLayer *layer = screen.scene->view_layers.first();
 
       for (ScrArea &area : screen.areabase) {
         for (SpaceLink &space : area.spacedata) {
@@ -2298,8 +2295,7 @@ void do_versions_after_linking_280(FileData *fd, Main *bmain)
               TreeStoreElem *tselem = static_cast<TreeStoreElem *>(
                   BLI_mempool_calloc(space_outliner->treestore));
               tselem->type = TSE_LAYER_COLLECTION;
-              tselem->id = &(static_cast<LayerCollection *>(layer->layer_collections.first_))
-                                ->collection->id;
+              tselem->id = &(layer->layer_collections.first())->collection->id;
               tselem->nr = tselem->used = 0;
               tselem->flag &= ~TSE_CLOSED;
             }
@@ -2392,8 +2388,8 @@ void do_versions_after_linking_280(FileData *fd, Main *bmain)
 
   /* SpaceTime & SpaceLogic removal/replacing */
   if (!MAIN_VERSION_FILE_ATLEAST(bmain, 280, 9)) {
-    const wmWindowManager *wm = static_cast<wmWindowManager *>(bmain->wm.first_);
-    const Scene *scene = static_cast<Scene *>(bmain->scenes.first_);
+    const wmWindowManager *wm = bmain->wm.first();
+    const Scene *scene = bmain->scenes.first();
 
     if (wm != nullptr) {
       /* Action editors need a scene for creation. First, update active
@@ -2677,7 +2673,7 @@ void do_versions_after_linking_280(FileData *fd, Main *bmain)
 
   if (!MAIN_VERSION_FILE_ATLEAST(bmain, 280, 64)) {
     /* Unify Cycles and Eevee settings. */
-    Scene *scene = static_cast<Scene *>(bmain->scenes.first_);
+    Scene *scene = bmain->scenes.first();
     const char *engine = (scene) ? scene->r.engine : "CYCLES";
 
     for (Light &light : bmain->lights) {
@@ -2687,7 +2683,7 @@ void do_versions_after_linking_280(FileData *fd, Main *bmain)
 
   if (!MAIN_VERSION_FILE_ATLEAST(bmain, 280, 69)) {
     /* Unify Cycles and Eevee depth of field. */
-    Scene *scene = static_cast<Scene *>(bmain->scenes.first_);
+    Scene *scene = bmain->scenes.first();
     const char *engine = (scene) ? scene->r.engine : "CYCLES";
 
     if (STREQ(engine, RE_engine_id_CYCLES)) {
@@ -3295,9 +3291,7 @@ void blo_do_versions_280(FileData *fd, Library * /*lib*/, Main *bmain)
         win_height = std::max<int>(win_height, vert.vec.y);
       }
 
-      for (ScrArea *area = static_cast<ScrArea *>(screen.areabase.first_), *area_next; area;
-           area = area_next)
-      {
+      for (ScrArea *area = screen.areabase.first(), *area_next; area; area = area_next) {
         area_next = static_cast<ScrArea *>(area->next);
 
         if (area->spacetype == SPACE_INFO) {
@@ -4219,8 +4213,7 @@ void blo_do_versions_280(FileData *fd, Library * /*lib*/, Main *bmain)
             ARegion *region = BKE_area_region_new();
             ARegion *region_header = nullptr;
 
-            for (region_header = static_cast<ARegion *>(regionbase->first_);
-                 region_header != nullptr;
+            for (region_header = regionbase->first(); region_header != nullptr;
                  region_header = static_cast<ARegion *>(region_header->next))
             {
               if (region_header->regiontype == RGN_TYPE_HEADER) {
@@ -4851,7 +4844,7 @@ void blo_do_versions_280(FileData *fd, Library * /*lib*/, Main *bmain)
     /* All tool names changed, reset to defaults. */
     for (WorkSpace &workspace : bmain->workspaces) {
       while (!workspace.tools.is_empty()) {
-        BKE_workspace_tool_remove(&workspace, static_cast<bToolRef *>(workspace.tools.first_));
+        BKE_workspace_tool_remove(&workspace, workspace.tools.first());
       }
     }
   }

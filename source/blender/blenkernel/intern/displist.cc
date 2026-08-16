@@ -811,11 +811,11 @@ static float displist_calc_taper(Depsgraph *depsgraph,
   }
 
   DispList *dl = taperobj->runtime->curve_cache ?
-                     static_cast<DispList *>(taperobj->runtime->curve_cache->disp.first_) :
+                     taperobj->runtime->curve_cache->disp.first() :
                      nullptr;
   if (dl == nullptr) {
     BKE_displist_make_curveTypes(depsgraph, scene, taperobj, false);
-    dl = static_cast<DispList *>(taperobj->runtime->curve_cache->disp.first_);
+    dl = taperobj->runtime->curve_cache->disp.first();
   }
   if (dl) {
     float minx, dx, *fp;
@@ -1487,8 +1487,8 @@ static bke::GeometrySet evaluate_curve_type_object(Depsgraph *depsgraph,
   else {
     const float widfac = cu->offset - 1.0f;
 
-    const BevList *bl = static_cast<BevList *>(ob->runtime->curve_cache->bev.first_);
-    const Nurb *nu = static_cast<Nurb *>(deformed_nurbs->first_);
+    const BevList *bl = ob->runtime->curve_cache->bev.first();
+    const Nurb *nu = deformed_nurbs->first();
     for (; bl && nu; bl = bl->next, nu = nu->next) {
       float *data;
 

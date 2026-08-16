@@ -120,7 +120,7 @@ static wmOperatorStatus act_markers_make_local_exec(bContext *C, wmOperator * /*
   }
 
   /* migrate markers */
-  for (marker = static_cast<TimeMarker *>(markers->first_); marker; marker = markern) {
+  for (marker = markers->first(); marker; marker = markern) {
     markern = marker->next;
 
     /* move if marker is selected */
@@ -345,9 +345,7 @@ static bool actkeys_channels_get_selected_extents(bAnimContext *ac, float *r_min
   /* loop through all channels, finding the first one that's selected */
   float ymax = ANIM_UI_get_first_channel_top(&ac->region->v2d);
   const float channel_step = ANIM_UI_get_channel_step();
-  for (ale = static_cast<bAnimListElem *>(anim_data.first_); ale;
-       ale = ale->next, ymax -= channel_step)
-  {
+  for (ale = anim_data.first(); ale; ale = ale->next, ymax -= channel_step) {
     const bAnimChannelType *acf = ANIM_channel_get_typeinfo(ale);
 
     /* must be selected... */
@@ -1468,7 +1466,7 @@ static void setexpo_action_keys(bAnimContext *ac, short mode)
         /* remove all the modifiers fitting this description */
         FModifier *fcm, *fcn = nullptr;
 
-        for (fcm = static_cast<FModifier *>(fcu->modifiers.first_); fcm; fcm = fcn) {
+        for (fcm = fcu->modifiers.first(); fcm; fcm = fcn) {
           fcn = fcm->next;
 
           if (fcm->type == FMODIFIER_TYPE_CYCLES) {

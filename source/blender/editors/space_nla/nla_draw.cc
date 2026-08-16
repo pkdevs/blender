@@ -807,7 +807,7 @@ void draw_nla_main_data(bAnimContext *ac, SpaceNla *snla, ARegion *region)
   /* Loop through tracks, and set up drawing depending on their type. */
   float ymax = NLATRACK_FIRST_TOP(ac);
 
-  for (bAnimListElem *ale = static_cast<bAnimListElem *>(anim_data.first_); ale;
+  for (bAnimListElem *ale = anim_data.first(); ale;
        ale = ale->next, ymax -= NLATRACK_STEP(snla))
   {
     float ymin = ymax - NLATRACK_HEIGHT(snla);
@@ -987,7 +987,7 @@ void draw_nla_track_list(const bContext *C,
     size_t track_index = 0;
     float ymax = NLATRACK_FIRST_TOP(ac);
 
-    for (bAnimListElem *ale = static_cast<bAnimListElem *>(anim_data.first_); ale;
+    for (bAnimListElem *ale = anim_data.first(); ale;
          ale = ale->next, ymax -= NLATRACK_STEP(snla), track_index++)
     {
       float ymin = ymax - NLATRACK_HEIGHT(snla);
@@ -1010,7 +1010,7 @@ void draw_nla_track_list(const bContext *C,
     GPU_blend(GPU_BLEND_ALPHA);
 
     /* Loop through tracks, and set up drawing depending on their type. */
-    for (bAnimListElem *ale = static_cast<bAnimListElem *>(anim_data.first_); ale;
+    for (bAnimListElem *ale = anim_data.first(); ale;
          ale = ale->next, ymax -= NLATRACK_STEP(snla), track_index++)
     {
       float ymin = ymax - NLATRACK_HEIGHT(snla);

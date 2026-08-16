@@ -470,19 +470,16 @@ static void render_image_update_pass_and_layer(RenderJob *rj, RenderResult *rr, 
   /* image window, compo node users */
 
   /* Only ever 1 `wm`. */
-  for (wmWindowManager *wm = static_cast<wmWindowManager *>(rj->main->wm.first_);
-       wm && matched_area == nullptr;
+  for (wmWindowManager *wm = rj->main->wm.first(); wm && matched_area == nullptr;
        wm = static_cast<wmWindowManager *>(wm->id.next))
   {
     wmWindow *win;
-    for (win = static_cast<wmWindow *>(wm->windows.first_); win && matched_area == nullptr;
-         win = win->next)
-    {
+    for (win = wm->windows.first(); win && matched_area == nullptr; win = win->next) {
       const bScreen *screen = WM_window_get_active_screen(win);
 
       for (ScrArea &area : screen->areabase) {
         if (area.spacetype == SPACE_IMAGE) {
-          SpaceImage *sima = static_cast<SpaceImage *>(area.spacedata.first_);
+          SpaceImage *sima = area.spacedata.first_as<SpaceImage>();
           /* area->spacedata might be empty when toggling full-screen mode. */
           if (sima != nullptr && sima->image == rj->image) {
             if (first_area == nullptr) {
@@ -503,7 +500,7 @@ static void render_image_update_pass_and_layer(RenderJob *rj, RenderResult *rr, 
   }
 
   if (matched_area) {
-    SpaceImage *sima = static_cast<SpaceImage *>(matched_area->spacedata.first_);
+    SpaceImage *sima = matched_area->spacedata.first_as<SpaceImage>();
     RenderResult *main_rr = RE_AcquireResultRead(rj->re);
 
     /* TODO(sergey): is there faster way to get the layer index? */
@@ -605,7 +602,7 @@ static void render_image_restore_scene_and_layer(RenderJob *rj)
       for (ScrArea &area : screen->areabase) {
         if (&area == rj->area) {
           if (area.spacetype == SPACE_IMAGE) {
-            SpaceImage *sima = static_cast<SpaceImage *>(area.spacedata.first_);
+            SpaceImage *sima = area.spacedata.first_as<SpaceImage>();
 
             /* Automatically show scene we just rendered. */
             SET_FLAG_FROM_TEST(
@@ -684,7 +681,7 @@ static void render_endjob(void *rjv)
      * and using one from Global will unlock exactly the same manager as
      * was locked before running the job.
      */
-    WM_locked_interface_set(static_cast<wmWindowManager *>(G_MAIN->wm.first_), false);
+    WM_locked_interface_set(G_MAIN->wm.first(), false);
     DEG_tag_on_visible_update(G_MAIN, false);
   }
 
@@ -924,7 +921,7 @@ static wmOperatorStatus screen_render_invoke(bContext *C, wmOperator *op, const 
   BKE_color_managed_view_settings_copy(&rj->view_settings, &scene->view_settings);
 
   if (area) {
-    SpaceImage *sima = static_cast<SpaceImage *>(area->spacedata.first_);
+    SpaceImage *sima = area->spacedata.first_as<SpaceImage>();
     rj->orig_layer = sima->iuser.layer;
   }
 

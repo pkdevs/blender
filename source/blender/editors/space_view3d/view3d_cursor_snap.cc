@@ -538,7 +538,7 @@ static bool v3d_cursor_is_snap_invert(SnapCursorDataIntern *data_intern, uint8_t
 
   const int snap_on = data_intern->snap_on;
 
-  const wmWindowManager *wm = static_cast<wmWindowManager *>(G.main->wm.first_);
+  const wmWindowManager *wm = G.main->wm.first();
   wmKeyMap *keymap = WM_keymap_active(wm, data_intern->keymap);
   for (const wmKeyMapItem &kmi : keymap->items) {
     if (kmi.flag & KMI_INACTIVE) {
@@ -978,8 +978,7 @@ static void v3d_cursor_snap_activate()
        * TODO: ED_view3d_cursor_snap_init */
 
 #ifdef USE_SNAP_DETECT_FROM_KEYMAP_HACK
-      wmKeyConfig *keyconf =
-          (static_cast<wmWindowManager *>(G.main->wm.first_))->runtime->defaultconf;
+      wmKeyConfig *keyconf = (G.main->wm.first())->runtime->defaultconf;
 
       data_intern->keymap = WM_modalkeymap_find(keyconf, "Generic Gizmo Tweak Modal Map");
       RNA_enum_value_from_id(

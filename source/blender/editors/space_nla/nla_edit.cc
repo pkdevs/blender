@@ -454,7 +454,7 @@ static bool nla_tracks_get_selected_extents(bAnimContext *ac, float *r_min, floa
   /* loop through all tracks, finding the first one that's selected */
   float ymax = NLATRACK_FIRST_TOP(ac);
 
-  for (bAnimListElem *ale = static_cast<bAnimListElem *>(anim_data.first_); ale;
+  for (bAnimListElem *ale = anim_data.first(); ale;
        ale = ale->next, ymax -= NLATRACK_STEP(snla))
   {
     const bAnimChannelType *acf = ANIM_channel_get_typeinfo(ale);
@@ -1172,7 +1172,7 @@ static wmOperatorStatus nlaedit_duplicate_exec(bContext *C, wmOperator *op)
      * strip ends up in a valid (local) track. */
 
     const bool is_liboverride = ID_IS_OVERRIDE_LIBRARY(ale.id);
-    for (strip = static_cast<NlaStrip *>(nlt->strips.first_); strip; strip = next) {
+    for (strip = nlt->strips.first(); strip; strip = next) {
       next = strip->next;
 
       /* if selected, split the strip at its midpoint */
@@ -1286,7 +1286,7 @@ static wmOperatorStatus nlaedit_delete_exec(bContext *C, wmOperator * /*op*/)
       continue;
     }
 
-    for (strip = static_cast<NlaStrip *>(nlt->strips.first_); strip; strip = nstrip) {
+    for (strip = nlt->strips.first(); strip; strip = nstrip) {
       nstrip = strip->next;
 
       /* if selected, delete */
@@ -1455,7 +1455,7 @@ static wmOperatorStatus nlaedit_split_exec(bContext *C, wmOperator * /*op*/)
       continue;
     }
 
-    for (strip = static_cast<NlaStrip *>(nlt->strips.first_); strip; strip = next) {
+    for (strip = nlt->strips.first(); strip; strip = next) {
       next = strip->next;
 
       /* if selected, split the strip at its midpoint */
@@ -1619,7 +1619,7 @@ static wmOperatorStatus nlaedit_swap_exec(bContext *C, wmOperator *op)
      * and this island has two strips inside it, then we should be able to just swap these still...
      */
     if (nlt->strips.is_empty() == false) {
-      NlaStrip *mstrip = static_cast<NlaStrip *>(nlt->strips.first_);
+      NlaStrip *mstrip = nlt->strips.first();
 
       if ((mstrip->flag & NLASTRIP_FLAG_TEMP_META) &&
           BLI_listbase_count_is_equal_to(&mstrip->strips, 2))
@@ -1632,7 +1632,7 @@ static wmOperatorStatus nlaedit_swap_exec(bContext *C, wmOperator *op)
     /* get two selected strips only (these will be metas due to prev step) to operate on
      * - only allow swapping 2, as with more the context becomes unclear
      */
-    for (strip = static_cast<NlaStrip *>(nlt->strips.first_); strip; strip = stripN) {
+    for (strip = nlt->strips.first(); strip; strip = stripN) {
       stripN = strip->next;
 
       if (strip->flag & NLASTRIP_FLAG_SELECT) {
@@ -1810,7 +1810,7 @@ static wmOperatorStatus nlaedit_move_up_exec(bContext *C, wmOperator * /*op*/)
     }
 
     /* for every selected strip, try to move */
-    for (NlaStrip *strip = static_cast<NlaStrip *>(nlt->strips.first_); strip; strip = stripn) {
+    for (NlaStrip *strip = nlt->strips.first(); strip; strip = stripn) {
       stripn = strip->next;
 
       if (strip->flag & NLASTRIP_FLAG_SELECT) {
@@ -1901,7 +1901,7 @@ static wmOperatorStatus nlaedit_move_down_exec(bContext *C, wmOperator * /*op*/)
     }
 
     /* for every selected strip, try to move */
-    for (NlaStrip *strip = static_cast<NlaStrip *>(nlt->strips.first_); strip; strip = stripn) {
+    for (NlaStrip *strip = nlt->strips.first(); strip; strip = stripn) {
       stripn = strip->next;
 
       if (strip->flag & NLASTRIP_FLAG_SELECT) {
@@ -2410,7 +2410,7 @@ static wmOperatorStatus nlaedit_snap_exec(bContext *C, wmOperator *op)
     /* apply the snapping to all the temp meta-strips, then put them in a separate list to be added
      * back to the original only if they still fit
      */
-    for (NlaStrip *strip = static_cast<NlaStrip *>(nlt->strips.first_); strip; strip = stripn) {
+    for (NlaStrip *strip = nlt->strips.first(); strip; strip = stripn) {
       stripn = strip->next;
 
       if (strip->flag & NLASTRIP_FLAG_TEMP_META) {
@@ -2452,7 +2452,7 @@ static wmOperatorStatus nlaedit_snap_exec(bContext *C, wmOperator *op)
     }
 
     /* try adding each meta-strip back to the track one at a time, to make sure they'll fit */
-    for (NlaStrip *strip = static_cast<NlaStrip *>(tmp_strips.first_); strip; strip = stripn) {
+    for (NlaStrip *strip = tmp_strips.first(); strip; strip = stripn) {
       stripn = strip->next;
 
       /* remove from temp-strips list */

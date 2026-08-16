@@ -3950,7 +3950,7 @@ static void reroute_node_draw_body(const bContext &C,
 {
   BLI_assert(node.is_reroute());
 
-  bNodeSocket &sock = *static_cast<bNodeSocket *>(node.inputs.first_);
+  bNodeSocket &sock = *node.inputs.first();
 
   PointerRNA nodeptr = RNA_pointer_create_discrete(
       const_cast<ID *>(&ntree.id), RNA_Node, const_cast<bNode *>(&node));

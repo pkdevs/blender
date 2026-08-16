@@ -11,6 +11,7 @@
 #include <fmt/format.h>
 #include <optional>
 
+#include "DNA_space_types.h"
 #include "MEM_guardedalloc.h"
 
 #include "BLI_build_config.hh"
@@ -1066,7 +1067,7 @@ static AZone *area_actionzone_refresh_xy(ScrArea *area, const int xy[2], const b
 {
   AZone *az = nullptr;
 
-  for (az = static_cast<AZone *>(area->actionzones.first_); az; az = az->next) {
+  for (az = area->actionzones.first(); az; az = az->next) {
     rcti az_rect;
     area_actionzone_get_rect(az, &az_rect);
     if (BLI_rcti_isect_pt_v(&az_rect, xy)) {
@@ -2259,12 +2260,12 @@ static int area_snap_calc_location(sAreaMoveData *md, const int delta)
 
         if (md->area2 && md->area2->spacetype == SPACE_CONSOLE) {
           /* Minimal snap for Console below. */
-          SpaceConsole *console = static_cast<SpaceConsole *>(md->area2->spacedata.first_);
+          SpaceConsole *console = md->area2->spacedata.first_as<SpaceConsole>();
           snaps.append(m_min + int(float(console->line_height) * UI_SCALE_FAC * 1.5f));
         }
         if (md->area1 && md->area1->spacetype == SPACE_CONSOLE) {
           /* Maximal snap for Console above. */
-          SpaceConsole *console = static_cast<SpaceConsole *>(md->area1->spacedata.first_);
+          SpaceConsole *console = md->area1->spacedata.first_as<SpaceConsole>();
           snaps.append(md->origval + md->bigger -
                        int(float(console->line_height) * UI_SCALE_FAC * 1.5f));
         }
@@ -5975,7 +5976,7 @@ static wmOperatorStatus region_quadview_exec(bContext *C, wmOperator *op)
 
     /* lock views and set them */
     if (area->spacetype == SPACE_VIEW3D) {
-      View3D *v3d = static_cast<View3D *>(area->spacedata.first_);
+      View3D *v3d = area->spacedata.first_as<View3D>();
       int index_qsplit = 0;
 
       /* run ED_view3d_lock() so the correct 'rv3d->viewquat' is set,
@@ -6445,7 +6446,7 @@ static bool match_region_with_redraws(const ScrArea *area,
   else if (regiontype == RGN_TYPE_HEADER) {
     /* The Timeline mode of the Dope Sheet shows playback controls in the header. */
     if (spacetype == SPACE_ACTION) {
-      SpaceAction *saction = static_cast<SpaceAction *>(area->spacedata.first_);
+      SpaceAction *saction = area->spacedata.first_as<SpaceAction>();
       return saction->mode == SACTCONT_TIMELINE;
     }
   }
@@ -6523,7 +6524,7 @@ static void screen_animation_region_tag_redraw(
      * which has significant overhead which needs to be avoided in the overlay which is redrawn on
      * every UI interaction. */
     if (area->spacetype == SPACE_GRAPH) {
-      const SpaceGraph *sipo = static_cast<const SpaceGraph *>(area->spacedata.first_);
+      const SpaceGraph *sipo = area->spacedata.first_as<SpaceGraph>();
       if (sipo->mode != SIPO_MODE_DRIVERS) {
         return;
       }

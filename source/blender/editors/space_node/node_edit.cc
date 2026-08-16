@@ -179,8 +179,8 @@ void ED_node_texture_default(const bContext *C, Tex *tex)
   in->location[1] = 300.0f;
   bke::node_set_active(*tex->nodetree, *in);
 
-  bNodeSocket *fromsock = static_cast<bNodeSocket *>(in->outputs.first_);
-  bNodeSocket *tosock = static_cast<bNodeSocket *>(out->inputs.first_);
+  bNodeSocket *fromsock = in->outputs.first();
+  bNodeSocket *tosock = out->inputs.first();
   bke::node_add_link(*tex->nodetree, *in, *fromsock, *out, *tosock);
 
   BKE_ntree_update_after_single_tree_change(*CTX_data_main(C), *tex->nodetree);

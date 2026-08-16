@@ -159,7 +159,7 @@ static void node_remove_linked(Main *bmain, bNodeTree *ntree, bNode *rem_node)
   }
 
   /* remove nodes */
-  for (node = static_cast<bNode *>(ntree->nodes.first_); node; node = next) {
+  for (node = ntree->nodes.first(); node; node = next) {
     next = node->next;
 
     if (node->flag & NODE_TEST) {
@@ -219,9 +219,7 @@ static void node_socket_add_replace(const bContext *C,
   }
 
   /* find existing node that we can use */
-  for (node_from = static_cast<bNode *>(ntree->nodes.first_); node_from;
-       node_from = node_from->next)
-  {
+  for (node_from = ntree->nodes.first(); node_from; node_from = node_from->next) {
     if (node_from->type_legacy == type) {
       break;
     }

@@ -949,9 +949,7 @@ static void rna_Bone_bbone_handle_update(Main *bmain, Scene *scene, PointerRNA *
   Bone *bone = static_cast<Bone *>(ptr->data);
 
   /* Update all users of this armature after changing B-Bone handles. */
-  for (Object *obt = static_cast<Object *>(bmain->objects.first_); obt;
-       obt = static_cast<Object *>(obt->id.next))
-  {
+  for (Object *obt = bmain->objects.first(); obt; obt = static_cast<Object *>(obt->id.next)) {
     if (obt->data == id_cast<ID *>(arm) && obt->pose) {
       bPoseChannel *pchan = BKE_pose_channel_find_name(obt->pose, bone->name);
 
@@ -1044,7 +1042,7 @@ static void rna_Armature_editbone_transform_update(Main *bmain, Scene *scene, Po
   }
 
   /* update our children if necessary */
-  for (child = static_cast<EditBone *>(arm->edbo->first_); child; child = child->next) {
+  for (child = arm->edbo->first(); child; child = child->next) {
     if (child->parent == ebone && (child->flag & BONE_CONNECTED)) {
       copy_v3_v3(child->head, ebone->tail);
       child->rad_head = ebone->rad_tail;

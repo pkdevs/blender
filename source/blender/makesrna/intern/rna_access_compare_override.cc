@@ -1522,8 +1522,7 @@ static bool override_apply_property_check_skip(Main *bmain,
 
   switch (op->rna_prop_type) {
     case PROP_POINTER: {
-      if ((static_cast<IDOverrideLibraryPropertyOperation *>(op->operations.first_)->flag &
-           LIBOVERRIDE_OP_FLAG_IDPOINTER_MATCH_REFERENCE) == 0)
+      if ((op->operations.first()->flag & LIBOVERRIDE_OP_FLAG_IDPOINTER_MATCH_REFERENCE) == 0)
       {
         BLI_assert(id_ptr_src->owner_id == rna_property_override_property_real_id_owner(
                                                bmain, &rnaapply_ctx.ptr_src, nullptr, nullptr));

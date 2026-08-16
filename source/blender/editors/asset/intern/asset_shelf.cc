@@ -321,8 +321,7 @@ static bool asset_shelf_space_poll(const bContext *C, const SpaceLink *space_lin
 
 bool regions_poll(const RegionPollParams *params)
 {
-  return asset_shelf_space_poll(params->context,
-                                static_cast<SpaceLink *>(params->area->spacedata.first_));
+  return asset_shelf_space_poll(params->context, params->area->spacedata.first());
 }
 
 static void asset_shelf_region_listen(const wmRegionListenerParams *params)

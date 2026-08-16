@@ -294,7 +294,7 @@ Strip *strip_from_strip_elem(ListBaseT<Strip> *seqbase, StripElem *se)
 {
   Strip *istrip;
 
-  for (istrip = static_cast<Strip *>(seqbase->first_); istrip; istrip = istrip->next) {
+  for (istrip = seqbase->first(); istrip; istrip = istrip->next) {
     Strip *strip_found;
     if ((istrip->data && istrip->data->stripdata) &&
         ARRAY_HAS_ITEM(se, istrip->data->stripdata, istrip->content_length()))

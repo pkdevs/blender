@@ -105,7 +105,7 @@ static float bezier_handle_calc_length_v3(const float co_a[3],
 
 static void bm_edgeloop_vert_tag(BMEdgeLoopStore *el_store, const bool tag)
 {
-  LinkData *node = static_cast<LinkData *>(BM_edgeloop_verts_get(el_store)->first_);
+  LinkData *node = BM_edgeloop_verts_get(el_store)->first();
   do {
     BM_elem_flag_set((BMVert *)node->data, BM_ELEM_TAG, tag);
   } while ((node = node->next));
@@ -116,7 +116,7 @@ static void bmo_edgeloop_vert_tag(BMesh *bm,
                                   const short oflag,
                                   const bool tag)
 {
-  LinkData *node = static_cast<LinkData *>(BM_edgeloop_verts_get(el_store)->first_);
+  LinkData *node = BM_edgeloop_verts_get(el_store)->first();
   do {
     BMO_vert_flag_set(bm, (BMVert *)node->data, oflag, tag);
   } while ((node = node->next));
@@ -221,24 +221,19 @@ static VectorSet<BMEdgeLoopStorePair> bm_edgering_pair_calc(BMesh *bm,
   BMEdgeLoopStore *el_store;
 
   /* create vert -> eloop map */
-  for (el_store = static_cast<BMEdgeLoopStore *>(eloops_rim->first_); el_store;
-       el_store = BM_EDGELOOP_NEXT(el_store))
-  {
-    LinkData *node = static_cast<LinkData *>(BM_edgeloop_verts_get(el_store)->first_);
+  for (el_store = eloops_rim->first(); el_store; el_store = BM_EDGELOOP_NEXT(el_store)) {
+    LinkData *node = BM_edgeloop_verts_get(el_store)->first();
     do {
       vert_eloop_map.add(static_cast<BMVert *>(node->data), el_store);
     } while ((node = node->next));
   }
 
   /* collect eloop pairs */
-  for (el_store = static_cast<BMEdgeLoopStore *>(eloops_rim->first_); el_store;
-       el_store = BM_EDGELOOP_NEXT(el_store))
-  {
+  for (el_store = eloops_rim->first(); el_store; el_store = BM_EDGELOOP_NEXT(el_store)) {
     BMIter eiter;
     BMEdge *e;
 
-    BMVert *v = static_cast<BMVert *>(
-        (static_cast<LinkData *>(BM_edgeloop_verts_get(el_store)->first_))->data);
+    BMVert *v = static_cast<BMVert *>((BM_edgeloop_verts_get(el_store)->first())->data);
 
     BM_ITER_ELEM (e, &eiter, (BMVert *)v, BM_EDGES_OF_VERT) {
       if (BMO_edge_flag_test(bm, e, EDGE_RING)) {
@@ -493,8 +488,7 @@ static LoopPairStore *bm_edgering_pair_store_create(BMesh *bm,
 
       LinkData *v_iter;
 
-      for (v_iter = static_cast<LinkData *>(lb->first_), i = 0; v_iter; v_iter = v_iter->next, i++)
-      {
+      for (v_iter = lb->first(), i = 0; v_iter; v_iter = v_iter->next, i++) {
         BMVert *v = static_cast<BMVert *>(v_iter->data);
         bm_vert_calc_surface_tangent(bm, v, nor[i]);
         nors_gh_iter->add(v, i);
@@ -626,15 +620,13 @@ static void bm_edgering_pair_interpolate(BMesh *bm,
               coord_array[i], el_store_a_co, el_store_b_co, float(i) / float(resolu - 1));
         }
 
-        for (el_store_ring = static_cast<BMEdgeLoopStore *>(eloops_ring->first_); el_store_ring;
+        for (el_store_ring = eloops_ring->first(); el_store_ring;
              el_store_ring = BM_EDGELOOP_NEXT(el_store_ring))
         {
           ListBaseT<LinkData> *lb_ring = BM_edgeloop_verts_get(el_store_ring);
           LinkData *v_iter;
 
-          for (v_iter = static_cast<LinkData *>(lb_ring->first_), i = 0; v_iter;
-               v_iter = v_iter->next, i++)
-          {
+          for (v_iter = lb_ring->first(), i = 0; v_iter; v_iter = v_iter->next, i++) {
             if (i > 0 && i < resolu - 1) {
               /* shape */
               if (falloff_cache) {
@@ -797,8 +789,7 @@ static void bm_edgering_pair_interpolate(BMesh *bm,
         }
 
         /* skip first and last */
-        for (v_iter = (static_cast<LinkData *>(lb_ring->first_))->next, i = 1;
-             v_iter != lb_ring->last_;
+        for (v_iter = (lb_ring->first())->next, i = 1; v_iter != lb_ring->last_;
              v_iter = v_iter->next, i++)
         {
           if (i > 0 && i < resolu - 1) {
@@ -858,8 +849,8 @@ static bool bm_edgering_pair_order_is_flipped(BMesh * /*bm*/,
   ListBaseT<LinkData> *lb_a = BM_edgeloop_verts_get(el_store_a);
   ListBaseT<LinkData> *lb_b = BM_edgeloop_verts_get(el_store_b);
 
-  LinkData *v_iter_a_first = static_cast<LinkData *>(lb_a->first_);
-  LinkData *v_iter_b_first = static_cast<LinkData *>(lb_b->first_);
+  LinkData *v_iter_a_first = lb_a->first();
+  LinkData *v_iter_b_first = lb_b->first();
 
   LinkData *v_iter_a_step = v_iter_a_first;
   LinkData *v_iter_b_step = v_iter_b_first;
@@ -917,7 +908,7 @@ static void bm_edgering_pair_order(BMesh *bm,
     BMEdge *e;
     BMVert *v_other;
 
-    node = static_cast<LinkData *>(lb_a->first_);
+    node = lb_a->first();
 
     BM_ITER_ELEM (e, &eiter, (BMVert *)node->data, BM_EDGES_OF_VERT) {
       if (BMO_edge_flag_test(bm, e, EDGE_RING)) {
@@ -930,7 +921,7 @@ static void bm_edgering_pair_order(BMesh *bm,
     }
     BLI_assert(v_other != nullptr);
 
-    for (node = static_cast<LinkData *>(lb_b->first_); node; node = node->next) {
+    for (node = lb_b->first(); node; node = node->next) {
       if (node->data == v_other) {
         break;
       }
@@ -951,9 +942,8 @@ static void bm_edgering_pair_order(BMesh *bm,
   }
   else {
     /* If we don't share and edge - flip. */
-    BMEdge *e = BM_edge_exists(
-        static_cast<BMVert *>((static_cast<LinkData *>(lb_a->first_))->data),
-        static_cast<BMVert *>((static_cast<LinkData *>(lb_b->first_))->data));
+    BMEdge *e = BM_edge_exists((static_cast<BMVert *>(lb_a->first()->data)),
+                               (static_cast<BMVert *>(lb_b->first()->data)));
     if (e == nullptr || !BMO_edge_flag_test(bm, e, EDGE_RING)) {
       BM_edgeloop_flip(bm, el_store_b);
     }
@@ -1050,7 +1040,7 @@ static void bm_edgering_pair_subdiv(BMesh *bm,
   }
 
   /* Clear tags so subdiv verts don't get tagged too. */
-  for (el_store_ring = static_cast<BMEdgeLoopStore *>(eloops_ring->first_); el_store_ring;
+  for (el_store_ring = eloops_ring->first(); el_store_ring;
        el_store_ring = BM_EDGELOOP_NEXT(el_store_ring))
   {
     bm_edgeloop_vert_tag(el_store_ring, false);

@@ -748,7 +748,7 @@ std::optional<std::string> WM_prop_pystring_assign(bContext *C,
 PointerRNA WM_operator_properties_create_ptr(wmOperatorType *ot)
 {
   /* Set the ID so the context can be accessed: see #STRUCT_NO_CONTEXT_WITHOUT_OWNER_ID. */
-  return RNA_pointer_create_discrete(static_cast<ID *>(G_MAIN->wm.first_), ot->srna, nullptr);
+  return RNA_pointer_create_discrete(&G_MAIN->wm.first()->id, ot->srna, nullptr);
 }
 
 PointerRNA WM_operator_properties_create(const char *opstring)
@@ -760,7 +760,7 @@ PointerRNA WM_operator_properties_create(const char *opstring)
   }
   /* Set the ID so the context can be accessed: see #STRUCT_NO_CONTEXT_WITHOUT_OWNER_ID. */
   return RNA_pointer_create_discrete(
-      static_cast<ID *>(G_MAIN->wm.first_), RNA_OperatorProperties, nullptr);
+      &G_MAIN->wm.first()->id, RNA_OperatorProperties, nullptr);
 }
 
 void WM_operator_properties_alloc(PointerRNA **ptr, IDProperty **properties, const char *opstring)
@@ -1316,7 +1316,7 @@ IDProperty *WM_operator_last_properties_ensure_idprops(wmOperatorType *ot)
 void WM_operator_last_properties_ensure(wmOperatorType *ot, PointerRNA *ptr)
 {
   IDProperty *props = WM_operator_last_properties_ensure_idprops(ot);
-  *ptr = RNA_pointer_create_discrete(static_cast<ID *>(G_MAIN->wm.first_), ot->srna, props);
+  *ptr = RNA_pointer_create_discrete(&G_MAIN->wm.first()->id, ot->srna, props);
 }
 
 ID *WM_operator_drop_load_path(bContext *C, wmOperator *op, const short idcode)
@@ -2529,7 +2529,7 @@ wmPaintCursor *WM_paint_cursor_activate(short space_type,
                                         wmPaintCursorDraw draw,
                                         void *customdata)
 {
-  wmWindowManager *wm = static_cast<wmWindowManager *>(G_MAIN->wm.first_);
+  wmWindowManager *wm = G_MAIN->wm.first();
 
   wmPaintCursor *pc = MEM_new_zeroed<wmPaintCursor>("paint cursor");
 
@@ -2547,7 +2547,7 @@ wmPaintCursor *WM_paint_cursor_activate(short space_type,
 
 bool WM_paint_cursor_end(wmPaintCursor *handle)
 {
-  wmWindowManager *wm = static_cast<wmWindowManager *>(G_MAIN->wm.first_);
+  wmWindowManager *wm = G_MAIN->wm.first();
   for (wmPaintCursor &pc : wm->runtime->paintcursors) {
     if (&pc == handle) {
       BLI_remlink(&wm->runtime->paintcursors, &pc);
@@ -4158,7 +4158,7 @@ static wmOperatorStatus previews_clear_exec(bContext *C, wmOperator *op)
       PreviewFilterID(RNA_enum_get(op->ptr, "id_type")));
 
   for (int i = 0; lb[i]; i++) {
-    ID *id = static_cast<ID *>(lb[i]->first_);
+    ID *id = lb[i]->first();
     if (!id) {
       continue;
     }

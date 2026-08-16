@@ -1687,8 +1687,8 @@ void blo_do_versions_400(FileData *fd, Library * /*lib*/, Main *bmain)
     FOREACH_NODETREE_BEGIN (bmain, ntree, id) {
       for (bNode &node : ntree->nodes) {
         if (node.is_reroute()) {
-          static_cast<bNodeSocket *>(node.inputs.first_)->flag &= ~SOCK_HIDDEN;
-          static_cast<bNodeSocket *>(node.outputs.first_)->flag &= ~SOCK_HIDDEN;
+          node.inputs.first()->flag &= ~SOCK_HIDDEN;
+          node.outputs.first()->flag &= ~SOCK_HIDDEN;
         }
       }
     }

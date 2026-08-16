@@ -125,7 +125,7 @@ void BKE_reports_clear(ReportList *reports)
 
   std::scoped_lock lock(*reports->lock);
 
-  report = static_cast<Report *>(reports->list.first_);
+  report = reports->list.first();
 
   while (report) {
     report_next = report->next;

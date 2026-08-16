@@ -1893,7 +1893,7 @@ static void view3d_panel_vgroup(const bContext *C, Panel *panel)
     const int vgroup_num = defbase->count();
     tfp->vertex_weights.resize(vgroup_num);
 
-    for (i = 0, dg = static_cast<bDeformGroup *>(defbase->first_); dg; i++, dg = dg->next) {
+    for (i = 0, dg = defbase->first(); dg; i++, dg = dg->next) {
       bool locked = (dg->flag & DG_LOCK_WEIGHT) != 0;
       if (vgroup_validmap[i]) {
         MDeformWeight *dw = BKE_defvert_find_index(dv, i);

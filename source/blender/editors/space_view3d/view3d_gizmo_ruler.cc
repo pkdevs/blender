@@ -319,11 +319,8 @@ static void ruler_state_set(RulerInfo *ruler_info, int state)
 
 static void view3d_ruler_item_project(RulerInfo *ruler_info, float3 &r_co, const int xy[2])
 {
-  ED_view3d_win_to_3d_int(static_cast<const View3D *>(ruler_info->area->spacedata.first_),
-                          ruler_info->region,
-                          r_co,
-                          xy,
-                          r_co);
+  ED_view3d_win_to_3d_int(
+      ruler_info->area->spacedata.first_as<View3D>(), ruler_info->region, r_co, xy, r_co);
 }
 
 /**
@@ -350,7 +347,7 @@ static bool view3d_ruler_item_mousemove(const bContext *C,
     view3d_ruler_item_project(ruler_info, co, mval);
     if (do_thickness && inter->co_index != 1) {
       Scene *scene = DEG_get_input_scene(depsgraph);
-      View3D *v3d = static_cast<View3D *>(ruler_info->area->spacedata.first_);
+      View3D *v3d = ruler_info->area->spacedata.first_as<View3D>();
       ed::transform::SnapObjectContext *snap_context = ED_gizmotypes_snap_3d_context_ensure(
           scene, snap_gizmo);
       const float2 mval_fl = {float(mval[0]), float(mval[1])};
@@ -389,7 +386,7 @@ static bool view3d_ruler_item_mousemove(const bContext *C,
       }
     }
     else {
-      View3D *v3d = static_cast<View3D *>(ruler_info->area->spacedata.first_);
+      View3D *v3d = ruler_info->area->spacedata.first_as<View3D>();
       if (do_snap) {
         float3 *prev_point = nullptr;
         eSnapMode snap_type;

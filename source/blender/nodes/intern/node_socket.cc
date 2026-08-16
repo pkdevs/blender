@@ -137,7 +137,7 @@ static bNodeSocket *verify_socket_template(bNodeTree *ntree,
 {
   bNodeSocket *sock;
 
-  for (sock = static_cast<bNodeSocket *>(socklist->first_); sock; sock = sock->next) {
+  for (sock = socklist->first(); sock; sock = sock->next) {
     if (STREQLEN(sock->name, stemp->name, NODE_MAXSTR)) {
       break;
     }
@@ -171,7 +171,7 @@ static void verify_socket_template_list(bNodeTree *ntree,
 
   /* no inputs anymore? */
   if (stemp_first == nullptr) {
-    for (sock = static_cast<bNodeSocket *>(socklist->first_); sock; sock = nextsock) {
+    for (sock = socklist->first(); sock; sock = nextsock) {
       nextsock = sock->next;
       bke::node_remove_socket(*ntree, *node, *sock);
     }
@@ -184,7 +184,7 @@ static void verify_socket_template_list(bNodeTree *ntree,
       stemp++;
     }
     /* leftovers are removed */
-    for (sock = static_cast<bNodeSocket *>(socklist->first_); sock; sock = nextsock) {
+    for (sock = socklist->first(); sock; sock = nextsock) {
       nextsock = sock->next;
       bke::node_remove_socket(*ntree, *node, *sock);
     }

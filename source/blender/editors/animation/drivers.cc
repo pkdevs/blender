@@ -529,7 +529,7 @@ bool ANIM_remove_driver(ID *id, const char rna_path[], int array_index)
 
   /* Step through all drivers, removing all of those with the same RNA path. */
   bool any_driver_removed = false;
-  FCurve *fcu_iter = static_cast<FCurve *>(adt->drivers.first_);
+  FCurve *fcu_iter = adt->drivers.first();
   FCurve *fcu;
   while ((fcu = BKE_fcurve_iter_step(fcu_iter, rna_path)) != nullptr) {
     /* Store the next fcurve for looping. */
@@ -665,7 +665,7 @@ void ANIM_driver_vars_copybuf_free()
     DriverVar *dvar, *dvarn;
 
     /* Free variables (and any data they use) */
-    for (dvar = static_cast<DriverVar *>(driver_vars_copybuf.first_); dvar; dvar = dvarn) {
+    for (dvar = driver_vars_copybuf.first(); dvar; dvar = dvarn) {
       dvarn = dvar->next;
       driver_free_variable(&driver_vars_copybuf, dvar);
     }
@@ -727,7 +727,7 @@ bool ANIM_driver_vars_paste(ReportList *reports, FCurve *fcu, bool replace)
     DriverVar *dvar, *dvarn;
 
     /* Free all existing vars first - We aren't retaining anything */
-    for (dvar = static_cast<DriverVar *>(driver->variables.first_); dvar; dvar = dvarn) {
+    for (dvar = driver->variables.first(); dvar; dvar = dvarn) {
       dvarn = dvar->next;
       driver_free_variable_ex(driver, dvar);
     }

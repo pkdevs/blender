@@ -1371,7 +1371,7 @@ static void rna_NodeTree_node_remove(bNodeTree *ntree,
 
 static void rna_NodeTree_node_clear(bNodeTree *ntree, Main *bmain, ReportList *reports)
 {
-  bNode *node = static_cast<bNode *>(ntree->nodes.first_);
+  bNode *node = ntree->nodes.first();
 
   if (!rna_NodeTree_check(ntree, reports)) {
     return;
@@ -1566,7 +1566,7 @@ static void rna_NodeTree_link_remove(bNodeTree *ntree,
 
 static void rna_NodeTree_link_clear(bNodeTree *ntree, Main *bmain, ReportList *reports)
 {
-  bNodeLink *link = static_cast<bNodeLink *>(ntree->links.first_);
+  bNodeLink *link = ntree->links.first();
 
   if (!rna_NodeTree_check(ntree, reports)) {
     return;
@@ -1787,7 +1787,7 @@ std::optional<std::string> rna_Node_ImageUser_path(const PointerRNA *ptr)
     return std::nullopt;
   }
 
-  for (bNode *node = static_cast<bNode *>(ntree->nodes.first_); node; node = node->next) {
+  for (bNode *node = ntree->nodes.first(); node; node = node->next) {
     switch (node->type_legacy) {
       case SH_NODE_TEX_ENVIRONMENT: {
         NodeTexEnvironment *data = static_cast<NodeTexEnvironment *>(node->storage);
@@ -2877,7 +2877,7 @@ static void rna_Node_inputs_clear(ID *id, bNode *node, Main *bmain, ReportList *
   bNodeTree *ntree = reinterpret_cast<bNodeTree *>(id);
   bNodeSocket *sock, *nextsock;
 
-  for (sock = static_cast<bNodeSocket *>(node->inputs.first_); sock; sock = nextsock) {
+  for (sock = node->inputs.first(); sock; sock = nextsock) {
     nextsock = sock->next;
     bke::node_remove_socket(*ntree, *node, *sock);
   }
@@ -2896,7 +2896,7 @@ static void rna_Node_outputs_clear(ID *id, bNode *node, Main *bmain, ReportList 
   bNodeTree *ntree = reinterpret_cast<bNodeTree *>(id);
   bNodeSocket *sock, *nextsock;
 
-  for (sock = static_cast<bNodeSocket *>(node->outputs.first_); sock; sock = nextsock) {
+  for (sock = node->outputs.first(); sock; sock = nextsock) {
     nextsock = sock->next;
     bke::node_remove_socket(*ntree, *node, *sock);
   }
@@ -3463,7 +3463,7 @@ static const EnumPropertyItem *rna_Node_image_view_itemf(bContext * /*C*/,
     return rna_enum_dummy_NULL_items;
   }
 
-  rv = static_cast<RenderView *>(ima->rr->views.first_);
+  rv = ima->rr->views.first();
   item = renderresult_views_add_enum(rv);
 
   *r_free = true;
@@ -4466,7 +4466,7 @@ const EnumPropertyItem *rna_NodeInputMenu_menu_itemf(bContext * /*C*/,
                                                      bool *r_free)
 {
   const bNode *node = static_cast<bNode *>(ptr->data);
-  const bNodeSocket *socket = static_cast<bNodeSocket *>(node->outputs.first_);
+  const bNodeSocket *socket = node->outputs.first();
   if (!socket) {
     *r_free = false;
     return rna_enum_dummy_NULL_items;

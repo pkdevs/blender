@@ -39,9 +39,7 @@ bool BKE_autoexec_match(const char *path)
   /* Auto-execution must be enabled by the preference or trusted for this session. */
   BLI_assert((U.flag & USER_SCRIPT_AUTOEXEC_DISABLE) == 0 || (G.f & G_FLAG_SCRIPT_AUTOEXEC));
 
-  for (path_cmp = static_cast<bPathCompare *>(U.autoexec_paths.first_); path_cmp;
-       path_cmp = path_cmp->next)
-  {
+  for (path_cmp = U.autoexec_paths.first(); path_cmp; path_cmp = path_cmp->next) {
     if (path_cmp->path[0] == '\0') {
       /* pass */
     }

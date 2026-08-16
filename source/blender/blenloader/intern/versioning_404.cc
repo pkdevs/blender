@@ -434,7 +434,7 @@ void do_versions_after_linking_404(FileData *fd, Main *bmain)
     /* The above loop versioned all node trees used in a scene, but other node trees might exist
      * that are not used in a scene. For those, assume the first scene in the file, as this is
      * better than not doing versioning at all. */
-    Scene *scene = static_cast<Scene *>(bmain->scenes.first_);
+    Scene *scene = bmain->scenes.first();
     for (bNodeTree &node_tree : bmain->nodetrees) {
       if (node_trees_already_versioned.contains(&node_tree)) {
         continue;
@@ -473,7 +473,7 @@ void do_versions_after_linking_404(FileData *fd, Main *bmain)
     /* The above loop versioned all node trees used in a scene, but other node trees might exist
      * that are not used in a scene. For those, assume the first scene in the file, as this is
      * better than not doing versioning at all. */
-    Scene *scene = static_cast<Scene *>(bmain->scenes.first_);
+    Scene *scene = bmain->scenes.first();
     for (bNodeTree &node_tree : bmain->nodetrees) {
       if (node_trees_already_versioned.contains(&node_tree)) {
         continue;

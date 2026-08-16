@@ -99,7 +99,7 @@ static wmOperatorStatus rule_del_exec(bContext *C, wmOperator * /*op*/)
       break;
     }
   }
-  rule = static_cast<BoidRule *>(state->rules.first_);
+  rule = state->rules.first();
 
   if (rule) {
     rule->flag |= BOIDRULE_CURRENT;
@@ -259,7 +259,7 @@ static wmOperatorStatus state_del_exec(bContext *C, wmOperator * /*op*/)
     BLI_addtail(&part->boids->states, state);
   }
   else {
-    state = static_cast<BoidState *>(part->boids->states.first_);
+    state = part->boids->states.first();
   }
 
   state->flag |= BOIDSTATE_CURRENT;

@@ -122,7 +122,7 @@ static SpaceNode *find_active_node_editor(const bContext *C)
   for (wmWindow &window : window_manager->windows) {
     bScreen *screen = WM_window_get_active_screen(&window);
     for (ScrArea &area : screen->areabase) {
-      SpaceLink *space_link = static_cast<SpaceLink *>(area.spacedata.first_);
+      SpaceLink *space_link = area.spacedata.first();
       if (!space_link || space_link->spacetype != SPACE_NODE) {
         continue;
       }
@@ -235,7 +235,7 @@ void box_mask_setup(const bContext * /*C*/, wmGizmoGroup *gzgroup)
 void bbox_draw_prepare_space_node(const bContext *C, wmGizmoGroup *gzgroup)
 {
   ARegion *region = CTX_wm_region(C);
-  wmGizmo *gz = static_cast<wmGizmo *>(gzgroup->gizmos.first_);
+  wmGizmo *gz = gzgroup->gizmos.first();
 
   SpaceNode *snode = CTX_wm_space_node(C);
 
@@ -246,7 +246,7 @@ void bbox_draw_prepare_space_node(const bContext *C, wmGizmoGroup *gzgroup)
 void bbox_draw_prepare_space_image(const bContext *C, wmGizmoGroup *gzgroup)
 {
   ARegion *region = CTX_wm_region(C);
-  wmGizmo *gz = static_cast<wmGizmo *>(gzgroup->gizmos.first_);
+  wmGizmo *gz = gzgroup->gizmos.first();
 
   SpaceImage *sima = CTX_wm_space_image(C);
   const float2 offset = float2{sima->xof, sima->yof} * sima->zoom;
@@ -597,7 +597,7 @@ bool crop_poll_space_image(const bContext *C, wmGizmoGroupType * /*gzgt*/)
 void crop_draw_prepare_space_node(const bContext *C, wmGizmoGroup *gzgroup)
 {
   ARegion *region = CTX_wm_region(C);
-  wmGizmo *gz = static_cast<wmGizmo *>(gzgroup->gizmos.first_);
+  wmGizmo *gz = gzgroup->gizmos.first();
 
   SpaceNode *snode = CTX_wm_space_node(C);
 
@@ -756,7 +756,7 @@ void glare_draw_prepare_space_image(const bContext *C, wmGizmoGroup *gzgroup)
 
   NodeGlareWidgetGroup *glare_group = static_cast<NodeGlareWidgetGroup *>(gzgroup->customdata);
   ARegion *region = CTX_wm_region(C);
-  wmGizmo *gz = static_cast<wmGizmo *>(gzgroup->gizmos.first_);
+  wmGizmo *gz = gzgroup->gizmos.first();
 
   SpaceImage *sima = CTX_wm_space_image(C);
   const float2 offset = float2{-sima->xof, -sima->yof} * sima->zoom;
@@ -793,7 +793,7 @@ void glare_draw_prepare_space_node(const bContext *C, wmGizmoGroup *gzgroup)
 
   NodeGlareWidgetGroup *glare_group = static_cast<NodeGlareWidgetGroup *>(gzgroup->customdata);
   ARegion *region = CTX_wm_region(C);
-  wmGizmo *gz = static_cast<wmGizmo *>(gzgroup->gizmos.first_);
+  wmGizmo *gz = gzgroup->gizmos.first();
 
   SpaceNode *snode = CTX_wm_space_node(C);
 
@@ -999,9 +999,7 @@ void corner_pin_refresh(const bContext *C, wmGizmoGroup *gzgroup)
 
   /* need to set property here for undo. TODO: would prefer to do this in _init. */
   int i = 0;
-  for (bNodeSocket *sock = static_cast<bNodeSocket *>(node->inputs.first_); sock && i < 4;
-       sock = sock->next)
-  {
+  for (bNodeSocket *sock = node->inputs.first(); sock && i < 4; sock = sock->next) {
     if (sock->type == SOCK_VECTOR) {
       wmGizmo *gz = cpin_group->gizmos[i++];
 

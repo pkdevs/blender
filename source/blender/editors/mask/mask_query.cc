@@ -70,8 +70,8 @@ bool ED_mask_find_nearest_diff_point(const bContext *C,
   co[0] = normal_co[0] * scalex;
   co[1] = normal_co[1] * scaley;
 
-  for (MaskLayer *mask_layer_orig = static_cast<MaskLayer *>(mask_orig->masklayers.first_),
-                 *mask_layer_eval = static_cast<MaskLayer *>(mask_eval->masklayers.first_);
+  for (MaskLayer *mask_layer_orig = mask_orig->masklayers.first(),
+                 *mask_layer_eval = mask_eval->masklayers.first();
        mask_layer_orig != nullptr;
        mask_layer_orig = mask_layer_orig->next, mask_layer_eval = mask_layer_eval->next)
   {
@@ -79,8 +79,8 @@ bool ED_mask_find_nearest_diff_point(const bContext *C,
       continue;
     }
 
-    for (MaskSpline *spline_orig = static_cast<MaskSpline *>(mask_layer_orig->splines.first_),
-                    *spline_eval = static_cast<MaskSpline *>(mask_layer_eval->splines.first_);
+    for (MaskSpline *spline_orig = mask_layer_orig->splines.first(),
+                    *spline_eval = mask_layer_eval->splines.first();
          spline_orig != nullptr;
          spline_orig = spline_orig->next, spline_eval = spline_eval->next)
     {
@@ -235,8 +235,8 @@ MaskSplinePoint *ED_mask_point_find_nearest(const bContext *C,
   co[0] = normal_co[0] * scalex;
   co[1] = normal_co[1] * scaley;
 
-  for (MaskLayer *mask_layer_orig = static_cast<MaskLayer *>(mask_orig->masklayers.first_),
-                 *mask_layer_eval = static_cast<MaskLayer *>(mask_eval->masklayers.first_);
+  for (MaskLayer *mask_layer_orig = mask_orig->masklayers.first(),
+                 *mask_layer_eval = mask_eval->masklayers.first();
        mask_layer_orig != nullptr;
        mask_layer_orig = mask_layer_orig->next, mask_layer_eval = mask_layer_eval->next)
   {
@@ -245,8 +245,8 @@ MaskSplinePoint *ED_mask_point_find_nearest(const bContext *C,
       continue;
     }
 
-    for (MaskSpline *spline_orig = static_cast<MaskSpline *>(mask_layer_orig->splines.first_),
-                    *spline_eval = static_cast<MaskSpline *>(mask_layer_eval->splines.first_);
+    for (MaskSpline *spline_orig = mask_layer_orig->splines.first(),
+                    *spline_eval = mask_layer_eval->splines.first();
          spline_orig != nullptr;
          spline_orig = spline_orig->next, spline_eval = spline_eval->next)
     {
@@ -392,14 +392,14 @@ bool ED_mask_feather_find_nearest(const bContext *C,
   co[0] = normal_co[0] * scalex;
   co[1] = normal_co[1] * scaley;
 
-  for (MaskLayer *mask_layer_orig = static_cast<MaskLayer *>(mask_orig->masklayers.first_),
-                 *mask_layer_eval = static_cast<MaskLayer *>(mask_eval->masklayers.first_);
+  for (MaskLayer *mask_layer_orig = mask_orig->masklayers.first(),
+                 *mask_layer_eval = mask_eval->masklayers.first();
        mask_layer_orig != nullptr;
        mask_layer_orig = mask_layer_orig->next, mask_layer_eval = mask_layer_eval->next)
   {
 
-    for (MaskSpline *spline_orig = static_cast<MaskSpline *>(mask_layer_orig->splines.first_),
-                    *spline_eval = static_cast<MaskSpline *>(mask_layer_eval->splines.first_);
+    for (MaskSpline *spline_orig = mask_layer_orig->splines.first(),
+                    *spline_eval = mask_layer_eval->splines.first();
          spline_orig != nullptr;
          spline_orig = spline_orig->next, spline_eval = spline_eval->next)
     {
@@ -493,7 +493,7 @@ void ED_mask_mouse_pos(ScrArea *area, ARegion *region, const int mval[2], float 
   if (area) {
     switch (area->spacetype) {
       case SPACE_CLIP: {
-        SpaceClip *sc = static_cast<SpaceClip *>(area->spacedata.first_);
+        SpaceClip *sc = area->spacedata.first_as<SpaceClip>();
         ED_clip_mouse_pos(sc, region, mval, r_co);
         BKE_mask_coord_from_movieclip(sc->clip, &sc->user, r_co, r_co);
         break;
@@ -503,7 +503,7 @@ void ED_mask_mouse_pos(ScrArea *area, ARegion *region, const int mval[2], float 
         break;
       }
       case SPACE_IMAGE: {
-        SpaceImage *sima = static_cast<SpaceImage *>(area->spacedata.first_);
+        SpaceImage *sima = area->spacedata.first_as<SpaceImage>();
         ED_image_mouse_pos(sima, region, mval, r_co);
         BKE_mask_coord_from_image(sima->image, &sima->iuser, r_co, r_co);
         break;
@@ -528,7 +528,7 @@ void ED_mask_point_pos(ScrArea *area, ARegion *region, float x, float y, float *
   if (area) {
     switch (area->spacetype) {
       case SPACE_CLIP: {
-        SpaceClip *sc = static_cast<SpaceClip *>(area->spacedata.first_);
+        SpaceClip *sc = area->spacedata.first_as<SpaceClip>();
         ED_clip_point_stable_pos(sc, region, x, y, &co[0], &co[1]);
         BKE_mask_coord_from_movieclip(sc->clip, &sc->user, co, co);
         break;
@@ -537,7 +537,7 @@ void ED_mask_point_pos(ScrArea *area, ARegion *region, float x, float y, float *
         zero_v2(co); /* MASKTODO */
         break;
       case SPACE_IMAGE: {
-        SpaceImage *sima = static_cast<SpaceImage *>(area->spacedata.first_);
+        SpaceImage *sima = area->spacedata.first_as<SpaceImage>();
         ED_image_point_pos(sima, region, x, y, &co[0], &co[1]);
         BKE_mask_coord_from_image(sima->image, &sima->iuser, co, co);
         break;
@@ -566,7 +566,7 @@ void ED_mask_point_pos__reverse(
   if (area) {
     switch (area->spacetype) {
       case SPACE_CLIP: {
-        SpaceClip *sc = static_cast<SpaceClip *>(area->spacedata.first_);
+        SpaceClip *sc = area->spacedata.first_as<SpaceClip>();
         co[0] = x;
         co[1] = y;
         BKE_mask_coord_to_movieclip(sc->clip, &sc->user, co, co);
@@ -577,7 +577,7 @@ void ED_mask_point_pos__reverse(
         zero_v2(co); /* MASKTODO */
         break;
       case SPACE_IMAGE: {
-        SpaceImage *sima = static_cast<SpaceImage *>(area->spacedata.first_);
+        SpaceImage *sima = area->spacedata.first_as<SpaceImage>();
         co[0] = x;
         co[1] = y;
         BKE_mask_coord_to_image(sima->image, &sima->iuser, co, co);
@@ -724,7 +724,7 @@ void ED_mask_get_size(ScrArea *area, int *r_width, int *r_height)
         break;
       }
       case SPACE_IMAGE: {
-        SpaceImage *sima = static_cast<SpaceImage *>(area->spacedata.first_);
+        SpaceImage *sima = area->spacedata.first_as<SpaceImage>();
         ED_space_image_get_size(sima, r_width, r_height);
         break;
       }
@@ -757,7 +757,7 @@ void ED_mask_zoom(ScrArea *area, ARegion *region, float *r_zoomx, float *r_zoomy
         break;
       }
       case SPACE_IMAGE: {
-        SpaceImage *sima = static_cast<SpaceImage *>(area->spacedata.first_);
+        SpaceImage *sima = area->spacedata.first_as<SpaceImage>();
         ED_space_image_get_zoom(sima, region, r_zoomx, r_zoomy);
         break;
       }
@@ -788,7 +788,7 @@ void ED_mask_get_aspect(ScrArea *area, ARegion * /*region*/, float *r_aspx, floa
         break;
       }
       case SPACE_IMAGE: {
-        SpaceImage *sima = static_cast<SpaceImage *>(area->spacedata.first_);
+        SpaceImage *sima = area->spacedata.first_as<SpaceImage>();
         ED_space_image_get_aspect(sima, r_aspx, r_aspy);
         break;
       }
@@ -825,7 +825,7 @@ void ED_mask_pixelspace_factor(ScrArea *area, ARegion *region, float *r_scalex, 
         break;
       }
       case SPACE_IMAGE: {
-        SpaceImage *sima = static_cast<SpaceImage *>(area->spacedata.first_);
+        SpaceImage *sima = area->spacedata.first_as<SpaceImage>();
         float aspx, aspy;
 
         ui::view2d_scale_get(&region->v2d, r_scalex, r_scaley);
@@ -853,7 +853,7 @@ void ED_mask_cursor_location_get(ScrArea *area, float cursor[2])
   if (area) {
     switch (area->spacetype) {
       case SPACE_CLIP: {
-        SpaceClip *space_clip = static_cast<SpaceClip *>(area->spacedata.first_);
+        SpaceClip *space_clip = area->spacedata.first_as<SpaceClip>();
         copy_v2_v2(cursor, space_clip->cursor);
         break;
       }
@@ -862,7 +862,7 @@ void ED_mask_cursor_location_get(ScrArea *area, float cursor[2])
         break;
       }
       case SPACE_IMAGE: {
-        SpaceImage *space_image = static_cast<SpaceImage *>(area->spacedata.first_);
+        SpaceImage *space_image = area->spacedata.first_as<SpaceImage>();
         copy_v2_v2(cursor, space_image->cursor);
         break;
       }

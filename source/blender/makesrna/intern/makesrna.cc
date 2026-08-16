@@ -397,9 +397,7 @@ static StructRNA *rna_find_struct(const char *identifier)
 {
   StructDefRNA *ds;
 
-  for (ds = static_cast<StructDefRNA *>(DefRNA.structs.first_); ds;
-       ds = static_cast<StructDefRNA *>(ds->cont.next))
-  {
+  for (ds = DefRNA.structs.first(); ds; ds = static_cast<StructDefRNA *>(ds->cont.next)) {
     if (ds->srna->identifier == identifier) {
       return ds->srna;
     }
@@ -412,9 +410,7 @@ static const char *rna_find_type(const StringRef type)
 {
   StructDefRNA *ds;
 
-  for (ds = static_cast<StructDefRNA *>(DefRNA.structs.first_); ds;
-       ds = static_cast<StructDefRNA *>(ds->cont.next))
-  {
+  for (ds = DefRNA.structs.first(); ds; ds = static_cast<StructDefRNA *>(ds->cont.next)) {
     if (ds->dnaname == type) {
       return ds->srna->identifier.c_str();
     }
@@ -427,9 +423,7 @@ static const char *rna_find_dna_type(const char *type)
 {
   StructDefRNA *ds;
 
-  for (ds = static_cast<StructDefRNA *>(DefRNA.structs.first_); ds;
-       ds = static_cast<StructDefRNA *>(ds->cont.next))
-  {
+  for (ds = DefRNA.structs.first(); ds; ds = static_cast<StructDefRNA *>(ds->cont.next)) {
     if (ds->srna->identifier == type) {
       return ds->dnaname.c_str();
     }
@@ -2342,7 +2336,7 @@ static void rna_def_function_wrapper_funcs(FILE *f, StructDefRNA *dsrna, Functio
     WRITE_PARAM("reports");
   }
 
-  dparm = static_cast<PropertyDefRNA *>(dfunc->cont.properties.first_);
+  dparm = dfunc->cont.properties.first();
   for (; dparm; dparm = dparm->next) {
     if (dparm->prop == func->c_ret) {
       continue;
@@ -2413,7 +2407,7 @@ static void rna_def_function_funcs(FILE *f, StructDefRNA *dsrna, FunctionDefRNA 
     fprintf(f, "\tStructRNA *_type;\n");
   }
 
-  dparm = static_cast<PropertyDefRNA *>(dfunc->cont.properties.first_);
+  dparm = dfunc->cont.properties.first();
   for (; dparm; dparm = dparm->next) {
     type = dparm->prop->type;
     flag = dparm->prop->flag;
@@ -2500,7 +2494,7 @@ static void rna_def_function_funcs(FILE *f, StructDefRNA *dsrna, FunctionDefRNA 
     fprintf(f, "\t_data = (char *)_parms->data;\n");
   }
 
-  dparm = static_cast<PropertyDefRNA *>(dfunc->cont.properties.first_);
+  dparm = dfunc->cont.properties.first();
   for (; dparm; dparm = dparm->next) {
     type = dparm->prop->type;
     flag = dparm->prop->flag;
@@ -2625,7 +2619,7 @@ static void rna_def_function_funcs(FILE *f, StructDefRNA *dsrna, FunctionDefRNA 
       fprintf(f, "reports");
     }
 
-    dparm = static_cast<PropertyDefRNA *>(dfunc->cont.properties.first_);
+    dparm = dfunc->cont.properties.first();
     for (; dparm; dparm = dparm->next) {
       if (dparm->prop == func->c_ret) {
         continue;
@@ -2713,9 +2707,7 @@ static void rna_auto_types()
 {
   StructDefRNA *ds;
 
-  for (ds = static_cast<StructDefRNA *>(DefRNA.structs.first_); ds;
-       ds = static_cast<StructDefRNA *>(ds->cont.next))
-  {
+  for (ds = DefRNA.structs.first(); ds; ds = static_cast<StructDefRNA *>(ds->cont.next)) {
     /* DNA name for Screen is patched in 2.5, we do the reverse here. */
     if (!ds->dnaname.is_empty()) {
       if (ds->dnaname == "Screen") {
@@ -3939,7 +3931,7 @@ static void rna_generate_struct_register_func(BlenderRNA * /*brna*/, StructRNA *
           "\tStructRNA *srna = RNA_%s;\n",
           srna->identifier.c_str());
 
-  prop = static_cast<PropertyRNA *>(srna->cont.properties.first_);
+  prop = srna->cont.properties.first();
   if (prop) {
     fprintf(f,
             "\tsrna->cont.properties = {&rna_%s_%s, ",
@@ -4243,18 +4235,14 @@ static void rna_generate(BlenderRNA *brna, FILE *f, const char *filename, const 
   fprintf(f, "/* Auto-generated Functions. */\n\n");
   fprintf(f, "namespace blender {\n\n");
 
-  for (ds = static_cast<StructDefRNA *>(DefRNA.structs.first_); ds;
-       ds = static_cast<StructDefRNA *>(ds->cont.next))
-  {
+  for (ds = DefRNA.structs.first(); ds; ds = static_cast<StructDefRNA *>(ds->cont.next)) {
     if (!filename || ds->filename == filename) {
       rna_generate_internal_property_prototypes(brna, ds->srna, f);
       rna_generate_function_prototypes(brna, ds->srna, f);
     }
   }
 
-  for (ds = static_cast<StructDefRNA *>(DefRNA.structs.first_); ds;
-       ds = static_cast<StructDefRNA *>(ds->cont.next))
-  {
+  for (ds = DefRNA.structs.first(); ds; ds = static_cast<StructDefRNA *>(ds->cont.next)) {
     if (!filename || ds->filename == filename) {
       for (PropertyDefRNA &dp : ds->cont.properties) {
         rna_def_property_funcs(f, ds->srna, &dp);
@@ -4262,15 +4250,13 @@ static void rna_generate(BlenderRNA *brna, FILE *f, const char *filename, const 
     }
   }
 
-  for (ds = static_cast<StructDefRNA *>(DefRNA.structs.first_); ds;
-       ds = static_cast<StructDefRNA *>(ds->cont.next))
-  {
+  for (ds = DefRNA.structs.first(); ds; ds = static_cast<StructDefRNA *>(ds->cont.next)) {
     if (!filename || ds->filename == filename) {
       for (PropertyDefRNA &dp : ds->cont.properties) {
         rna_def_property_wrapper_funcs(f, ds, &dp);
       }
 
-      for (dfunc = static_cast<FunctionDefRNA *>(ds->functions.first_); dfunc;
+      for (dfunc = ds->functions.first(); dfunc;
            dfunc = static_cast<FunctionDefRNA *>(dfunc->cont.next))
       {
         rna_def_function_wrapper_funcs(f, ds, dfunc);
@@ -4281,9 +4267,7 @@ static void rna_generate(BlenderRNA *brna, FILE *f, const char *filename, const 
     }
   }
 
-  for (ds = static_cast<StructDefRNA *>(DefRNA.structs.first_); ds;
-       ds = static_cast<StructDefRNA *>(ds->cont.next))
-  {
+  for (ds = DefRNA.structs.first(); ds; ds = static_cast<StructDefRNA *>(ds->cont.next)) {
     if (!filename || ds->filename == filename) {
       rna_generate_struct_register_func(brna, ds->srna, f);
     }
@@ -4338,9 +4322,7 @@ static int rna_preprocess(const char *outfile, const char *public_header_outfile
         fprintf(stderr, "Error: DefRNA.animate left disabled in %s\n", PROCESS_ITEMS[i].filename);
       }
 
-      for (ds = static_cast<StructDefRNA *>(DefRNA.structs.first_); ds;
-           ds = static_cast<StructDefRNA *>(ds->cont.next))
-      {
+      for (ds = DefRNA.structs.first(); ds; ds = static_cast<StructDefRNA *>(ds->cont.next)) {
         if (ds->filename.is_empty()) {
           ds->filename = PROCESS_ITEMS[i].filename;
         }

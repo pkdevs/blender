@@ -222,9 +222,7 @@ void ED_armature_bone_rename(Main *bmain,
   Object *ob;
   /* Find all uses of the bone name in Main. Bones are usually referred to by name which is why we
    * need to fix the string in all possible places.  */
-  for (ob = static_cast<Object *>(bmain->objects.first_); ob;
-       ob = static_cast<Object *>(ob->id.next))
-  {
+  for (ob = bmain->objects.first(); ob; ob = static_cast<Object *>(ob->id.next)) {
     /* We have an object using the armature. */
     if (id_cast<const ID *>(arm) == ob->data) {
       /* Rename the pose channel, if it exists */
@@ -373,7 +371,7 @@ void ED_armature_bone_rename(Main *bmain,
   /* correct view locking */
   {
     bScreen *screen;
-    for (screen = static_cast<bScreen *>(bmain->screens.first_); screen;
+    for (screen = bmain->screens.first(); screen;
          screen = static_cast<bScreen *>(screen->id.next))
     {
       /* add regions */

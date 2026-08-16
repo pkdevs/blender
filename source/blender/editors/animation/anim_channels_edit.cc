@@ -253,7 +253,7 @@ void ANIM_set_active_channel(bAnimContext *ac,
   }
 
   /* only clear the 'active' flag for the channels of the same type */
-  for (ale = static_cast<bAnimListElem *>(anim_data.first_); ale; ale = ale->next) {
+  for (ale = anim_data.first(); ale; ale = ale->next) {
     /* skip if types don't match */
     if (channel_type != ale->type) {
       continue;
@@ -1391,7 +1391,7 @@ static void rearrange_animchannel_flatten_islands(ListBaseT<tReorderChannelIslan
   BLI_assert(srcList->is_empty());
 
   /* go through merging islands */
-  for (island = static_cast<tReorderChannelIsland *>(islands->first_); island; island = isn) {
+  for (island = islands->first(); island; island = isn) {
     isn = island->next;
 
     /* merge island channels back to main list, then delete the island */
@@ -1456,7 +1456,7 @@ static bool rearrange_animchannel_islands(ListBaseT<T> *list,
   }
 
   /* group channels into islands */
-  for (channel = static_cast<Link *>(list->first_); channel; channel = chanNext) {
+  for (channel = list->template first_as<Link>(); channel; channel = chanNext) {
     /* find out whether this channel is present in anim_data_visible or not! */
     const bool is_hidden =
         (BLI_findptr(anim_data_visible, channel, offsetof(bAnimListElem, data)) == nullptr);
@@ -1524,7 +1524,7 @@ static void rearrange_nla_tracks(bAnimContext *ac, AnimData *adt, eRearrangeAnim
   ListBaseT<NlaTrack> extracted_nonlocal_nla_tracks = {nullptr, nullptr};
   if (is_liboverride) {
     NlaTrack *nla_track;
-    for (nla_track = static_cast<NlaTrack *>(adt->nla_tracks.first_); nla_track != nullptr;
+    for (nla_track = adt->nla_tracks.first(); nla_track != nullptr;
          nla_track = nla_track->next)
     {
       if (!BKE_nlatrack_is_nonlocal_in_liboverride(&ac->obact->id, nla_track)) {
@@ -4173,9 +4173,7 @@ static int click_select_channel_group(bAnimContext *ac,
     }
 
     /* only select channels in group and group itself */
-    for (fcu = static_cast<FCurve *>(agrp->channels.first_); fcu && fcu->grp == agrp;
-         fcu = fcu->next)
-    {
+    for (fcu = agrp->channels.first(); fcu && fcu->grp == agrp; fcu = fcu->next) {
       fcu->flag |= FCURVE_SELECTED;
     }
     agrp->flag |= AGRP_SELECTED;
