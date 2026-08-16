@@ -226,6 +226,90 @@ def split_area(area, direction='VERTICAL', factor=0.5):
         )
 
 
+def split_area(area, direction='VERTICAL', factor=0.5):
+    """
+    Split an area using Blender's screen split operator.
+
+    :param area: Area to split.
+    :param direction: Split direction: 'VERTICAL' or 'HORIZONTAL'.
+    :param factor: Split ratio in normalized coordinates.
+        Default 0.5 creates an even split.
+    """
+    import bpy
+
+    with bpy.context.temp_override(area=area):
+        bpy.ops.screen.area_split(
+            direction=direction,
+            factor=factor,
+        )
+
+
+def join_area(source, target):
+    """
+    Join two adjacent screen areas.
+
+    :param source: Area from which the join operation starts.
+    :param target: Adjacent area to join with.
+    """
+    import bpy
+
+    with bpy.context.temp_override(area=source):
+        bpy.ops.screen.area_join(
+            source_xy=(
+                source.x + source.width // 2,
+                source.y + source.height // 2,
+            ),
+            target_xy=(
+                target.x + target.width // 2,
+                target.y + target.height // 2,
+            ),
+        )
+
+
+def swap_area(source, target):
+    """
+    Swap two screen areas.
+
+    :param source: Area from which the swap operation starts.
+    :param target: Area to swap with.
+    """
+    import bpy
+
+    with bpy.context.temp_override(area=source):
+        bpy.ops.screen.area_swap(
+            cursor=(
+                target.x + target.width // 2,
+                target.y + target.height // 2,
+            ),
+        )
+
+
+def split_area_pair(screen):
+    """
+    Split the largest area.
+
+    Returns the original areas before the split and the source area.
+    Caller must yield after this operation.
+    """
+    old_areas = set(screen.areas)
+    source = largest_area(screen)
+
+    split_area(source, "VERTICAL", 0.5)
+
+    return old_areas, source
+
+
+def get_new_area(screen, old_areas):
+    """
+    Return the area created by the last split.
+    """
+    return next(
+        area
+        for area in screen.areas
+        if area not in old_areas
+    )
+
+
 def build_grid(screen, target_count):
     """
     Dynamically construct a visible grid of areas.
