@@ -176,7 +176,7 @@ class BaseSpineRig(TweakChainRig):
 
         # Deliberately not the `bbones` parameter shared by the limb and chain
         # rigs: Rigify parameters all live in one shared property group, so
-        # keeping the spine default at 8 instead of 10 requires its own name.
+        # separate default values require separate property names.
         params.spine_bbones = bpy.props.IntProperty(
             name='B-Bone Segments',
             default=8,
@@ -300,8 +300,8 @@ class BaseHeadTailRig(ConnectingChainRig):
 
         # Deliberately not the `bbones` parameter shared by the limb and chain
         # rigs: Rigify parameters all live in one shared property group, so
-        # keeping the head and tail default at 8 instead of 10 requires its
-        # own name. Must stay identical to the definition in BaseSpineRig.
+        # separate default values require separate property names.
+        # Must stay identical to the definition in BaseSpineRig.
         params.spine_bbones = bpy.props.IntProperty(
             name='B-Bone Segments',
             default=8,
