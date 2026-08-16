@@ -12,7 +12,7 @@
 #include <string>
 
 #include "BLI_set.hh"
-#include "BLI_string.h"
+#include "BLI_string.hh"
 #include "BLI_vector.hh"
 
 #include "BKE_context.hh"
@@ -26,6 +26,9 @@
 #include "IMB_colormanagement.hh"
 
 #include "BLT_translation.hh"
+
+#include "OCIO_colorspace.hh"
+#include "OCIO_config.hh"
 
 namespace blender::ui {
 
@@ -98,25 +101,21 @@ static void colorspaces_menu_draw(const bContext *C, Menu *menu)
   std::optional<StringRefNull> parent_path = colorspace_rna_details_from_context(C, &ptr, &prop);
 
   /* In case menu is invoked from invalid context. */
-  if (ptr.data == nullptr || prop == nullptr) {
+  if (!ptr || prop == nullptr) {
     return;
   }
-
-  /* Loop through items in enum */
-  const EnumPropertyItem *item_array = nullptr;
-  int item_len = 0;
-  bool free_items = false;
-  RNA_property_enum_items(nullptr, &ptr, prop, &item_array, &item_len, &free_items);
 
   Set<StringRef> subdirs_set;
   Vector<const ColorSpace *> colorspaces_at_this_level;
 
-  for (int i = 0; i < item_len; ++i) {
-    const ColorSpace *cs = IMB_colormanagement_space_get_named(item_array[i].identifier);
-    if (!cs) {
+  /* Loop through color spaces in the config. */
+  ColorManagedConfig &config = IMB_colormanagement_get_config();
+  for (const int colorspace_index : IndexRange(config.get_num_color_spaces())) {
+    const ColorSpace *colorspace = config.get_sorted_color_space_by_index(colorspace_index);
+    if (!colorspace) {
       continue;
     }
-    const char *family_cstr = IMB_colormanagement_colorspace_get_family(cs);
+    const char *family_cstr = colorspace->family().c_str();
     StringRef remaining(family_cstr ? family_cstr : "");
 
     if (parent_path) {
@@ -128,7 +127,7 @@ static void colorspaces_menu_draw(const bContext *C, Menu *menu)
     }
 
     if (remaining.is_empty()) {
-      colorspaces_at_this_level.append(cs);
+      colorspaces_at_this_level.append(colorspace);
       continue;
     }
 
@@ -173,7 +172,7 @@ static void colorspaces_menu_draw(const bContext *C, Menu *menu)
   for (const StringRef &dir : subdirs) {
     std::string path = root + std::string(dir);
     col.context_string_set("colorspace_parent_path", path);
-    col.menu(COLORSPACE_MENU_ID, dir, ICON_NONE);
+    col.menu(COLORSPACE_MENU_ID, CTX_IFACE_(BLT_I18NCONTEXT_COLOR_MANAGEMENT, dir), ICON_NONE);
   }
 
   if (!subdirs.is_empty() && !colorspaces_at_this_level.is_empty()) {
@@ -181,12 +180,13 @@ static void colorspaces_menu_draw(const bContext *C, Menu *menu)
   }
 
   for (const ColorSpace *cs : colorspaces_at_this_level) {
-    colorspaces_menu_add_button(col,
-                                ptr,
-                                prop,
-                                IMB_colormanagement_colorspace_get_name(cs),
-                                IMB_colormanagement_colorspace_get_name(cs),
-                                IMB_colormanagement_colorspace_get_description(cs));
+    colorspaces_menu_add_button(
+        col,
+        ptr,
+        prop,
+        IMB_colormanagement_colorspace_get_name(cs),
+        CTX_IFACE_(BLT_I18NCONTEXT_COLOR_MANAGEMENT, IMB_colormanagement_colorspace_get_name(cs)),
+        TIP_(IMB_colormanagement_colorspace_get_description(cs)));
   }
 
   if (!parent_path) {
@@ -194,12 +194,8 @@ static void colorspaces_menu_draw(const bContext *C, Menu *menu)
                                 ptr,
                                 prop,
                                 "scene_linear",
-                                IFACE_("Working Space"),
+                                CTX_IFACE_(BLT_I18NCONTEXT_COLOR_MANAGEMENT, "Working Space"),
                                 TIP_("Working color space of the current file"));
-  }
-
-  if (free_items) {
-    MEM_delete(const_cast<EnumPropertyItem *>(item_array));
   }
 }
 

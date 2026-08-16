@@ -13,7 +13,7 @@
 #include "BLI_array_utils.hh"
 #include "BLI_bit_span_ops.hh"
 #include "BLI_enumerable_thread_specific.hh"
-#include "BLI_utildefines.h"
+#include "BLI_utildefines.hh"
 #include "BLI_vector.hh"
 
 #include "DNA_object_types.h"
@@ -701,7 +701,7 @@ void PAINT_OT_hide_show_masked(wmOperatorType *ot)
 
   ot->exec = hide_show_masked_exec;
   /* Sculpt-only for now. */
-  ot->poll = SCULPT_mode_poll_view3d;
+  ot->poll = sculpt_mode_poll_view3d;
 
   ot->flag = OPTYPE_REGISTER;
 
@@ -716,7 +716,7 @@ void PAINT_OT_hide_show_all(wmOperatorType *ot)
 
   ot->exec = hide_show_all_exec;
   /* Sculpt-only for now. */
-  ot->poll = SCULPT_mode_poll_view3d;
+  ot->poll = sculpt_mode_poll_view3d;
 
   ot->flag = OPTYPE_REGISTER;
 
@@ -838,7 +838,7 @@ void PAINT_OT_visibility_invert(wmOperatorType *ot)
   ot->description = "Invert the visibility of all vertices";
 
   ot->exec = visibility_invert_exec;
-  ot->poll = SCULPT_mode_poll_view3d;
+  ot->poll = sculpt_mode_poll_view3d;
 
   ot->flag = OPTYPE_REGISTER;
 }
@@ -1149,7 +1149,7 @@ static wmOperatorStatus visibility_filter_exec(bContext *C, wmOperator *op)
   IndexMaskMemory memory;
   const IndexMask node_mask = bke::pbvh::all_leaf_nodes(pbvh, memory);
 
-  int num_verts = SCULPT_vertex_count_get(object);
+  int num_verts = vertex_count_get(object);
 
   int iterations = RNA_int_get(op->ptr, "iterations");
 
@@ -1200,7 +1200,7 @@ void PAINT_OT_visibility_filter(wmOperatorType *ot)
   ot->description = "Edit the visibility of the current mesh";
 
   ot->exec = visibility_filter_exec;
-  ot->poll = SCULPT_mode_poll_view3d;
+  ot->poll = sculpt_mode_poll_view3d;
 
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 
@@ -1251,12 +1251,21 @@ static void partialvis_gesture_update_mesh(gesture::GestureData &gesture_data)
     return;
   }
 
+  const View3D *v3d = gesture_data.vc.v3d;
+  RegionView3D *rv3d = gesture_data.vc.rv3d;
+  const bool clipping_enabled = RV3D_CLIPPING_ENABLED(v3d, rv3d);
+  if (clipping_enabled) {
+    ED_view3d_clipping_local(rv3d, object->object_to_world().ptr());
+  }
   const bool value = action_to_hide(action);
   const Span<float3> positions = bke::pbvh::vert_positions_eval(depsgraph, *object);
   const Span<float3> normals = bke::pbvh::vert_normals_eval(depsgraph, *object);
   vert_hide_update(
       depsgraph, *object, node_mask, [&](const Span<int> verts, MutableSpan<bool> hide) {
         for (const int i : verts.index_range()) {
+          if (clipping_enabled && ED_view3d_clipping_test(rv3d, positions[verts[i]], true)) {
+            continue;
+          }
           if (gesture::is_affected(gesture_data, positions[verts[i]], normals[verts[i]])) {
             hide[i] = value;
           }
@@ -1274,6 +1283,13 @@ static void partialvis_gesture_update_grids(Depsgraph &depsgraph,
 
   SubdivCCG &subdiv_ccg = *object->runtime->sculpt_session->subdiv_ccg;
 
+  const View3D *v3d = gesture_data.vc.v3d;
+  RegionView3D *rv3d = gesture_data.vc.rv3d;
+  const bool clipping_enabled = RV3D_CLIPPING_ENABLED(v3d, rv3d);
+  if (clipping_enabled) {
+    ED_view3d_clipping_local(rv3d, object->object_to_world().ptr());
+  }
+
   const bool value = action_to_hide(action);
   const CCGKey key = BKE_subdiv_ccg_key_top_level(subdiv_ccg);
   const Span<float3> positions = subdiv_ccg.positions;
@@ -1282,6 +1298,9 @@ static void partialvis_gesture_update_grids(Depsgraph &depsgraph,
     const Span<float3> grid_positions = positions.slice(bke::ccg::grid_range(key, grid));
     const Span<float3> grid_normals = normals.slice(bke::ccg::grid_range(key, grid));
     for (const int i : grid_positions.index_range()) {
+      if (clipping_enabled && ED_view3d_clipping_test(rv3d, grid_positions[i], true)) {
+        continue;
+      }
       if (gesture::is_affected(gesture_data, grid_positions[i], grid_normals[i])) {
         hide[i].set(value);
       }
@@ -1291,7 +1310,19 @@ static void partialvis_gesture_update_grids(Depsgraph &depsgraph,
 
 static void partialvis_gesture_update_bmesh(gesture::GestureData &gesture_data)
 {
+  const View3D *v3d = gesture_data.vc.v3d;
+  RegionView3D *rv3d = gesture_data.vc.rv3d;
+  Object *object = gesture_data.vc.obact;
+
+  const bool clipping_enabled = RV3D_CLIPPING_ENABLED(v3d, rv3d);
+  if (clipping_enabled) {
+    ED_view3d_clipping_local(rv3d, object->object_to_world().ptr());
+  }
+
   const auto selection_test_fn = [&](const BMVert *v) {
+    if (clipping_enabled && ED_view3d_clipping_test(rv3d, v->co, true)) {
+      return false;
+    }
     return gesture::is_affected(gesture_data, v->co, v->no);
   };
 
@@ -1432,7 +1463,7 @@ void PAINT_OT_hide_show(wmOperatorType *ot)
   ot->modal = WM_gesture_box_modal;
   ot->exec = hide_show_gesture_box_exec;
   /* Sculpt-only for now. */
-  ot->poll = SCULPT_mode_poll_view3d;
+  ot->poll = sculpt_mode_poll_view3d;
 
   ot->flag = OPTYPE_REGISTER;
 
@@ -1452,7 +1483,7 @@ void PAINT_OT_hide_show_lasso_gesture(wmOperatorType *ot)
   ot->modal = WM_gesture_lasso_modal;
   ot->exec = hide_show_gesture_lasso_exec;
   /* Sculpt-only for now. */
-  ot->poll = SCULPT_mode_poll_view3d;
+  ot->poll = sculpt_mode_poll_view3d;
 
   ot->flag = OPTYPE_REGISTER | OPTYPE_DEPENDS_ON_CURSOR;
 
@@ -1472,7 +1503,7 @@ void PAINT_OT_hide_show_line_gesture(wmOperatorType *ot)
   ot->modal = WM_gesture_straightline_oneshot_modal;
   ot->exec = hide_show_gesture_line_exec;
   /* Sculpt-only for now. */
-  ot->poll = SCULPT_mode_poll_view3d;
+  ot->poll = sculpt_mode_poll_view3d;
 
   ot->flag = OPTYPE_REGISTER;
 
@@ -1492,7 +1523,7 @@ void PAINT_OT_hide_show_polyline_gesture(wmOperatorType *ot)
   ot->modal = WM_gesture_polyline_modal;
   ot->exec = hide_show_gesture_polyline_exec;
   /* Sculpt-only for now. */
-  ot->poll = SCULPT_mode_poll_view3d;
+  ot->poll = sculpt_mode_poll_view3d;
 
   ot->flag = OPTYPE_REGISTER | OPTYPE_DEPENDS_ON_CURSOR;
 

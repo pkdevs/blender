@@ -79,9 +79,9 @@ const EnumPropertyItem rna_enum_nla_mode_extend_items[] = {
 #  include <math.h>
 #  include <stdio.h>
 
-#  include "BLI_listbase.h"
-#  include "BLI_string.h"
-#  include "BLI_string_utf8.h"
+#  include "BLI_listbase.hh"
+#  include "BLI_string.hh"
+#  include "BLI_string_utf8.hh"
 
 /* needed for some of the validation stuff... */
 #  include "BKE_anim_data.hh"
@@ -445,7 +445,7 @@ static void rna_NlaStrip_action_set(PointerRNA *ptr, PointerRNA value, ReportLis
 {
   using namespace animrig;
   BLI_assert(ptr->owner_id);
-  BLI_assert(ptr->data);
+  BLI_assert(*ptr);
 
   ID &animated_id = *ptr->owner_id;
   NlaStrip &strip = *static_cast<NlaStrip *>(ptr->data);

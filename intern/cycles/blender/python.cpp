@@ -14,9 +14,11 @@
 #include "session/denoising.h"
 #include "session/merge.h"
 
+#include "util/colorspace.h"
 #include "util/debug.h"
-
 #include "util/guiding.h"
+#include "util/image_maketx.h"
+#include "util/image_metadata.h"
 #include "util/log.h"
 #include "util/openimagedenoise.h"
 #include "util/path.h"
@@ -73,6 +75,9 @@ void debug_flags_sync_from_scene(blender::Scene &b_scene)
   flags.metal.adaptive_compile = get_boolean(cscene, "debug_use_metal_adaptive_compile");
   /* Synchronize OptiX flags. */
   flags.optix.use_debug = get_boolean(cscene, "debug_use_optix_debug");
+  /* Synchronize Texture Cache flags. */
+  flags.texture_cache.use_eviction = get_boolean(cscene, "debug_use_texture_cache_eviction");
+  flags.texture_cache.preserve_unused = get_int(cscene, "debug_texture_cache_preserve_unused");
 }
 
 /* Reset debug flags to default values.
@@ -128,7 +133,14 @@ static PyObject *init_func(PyObject * /*self*/, PyObject *args)
   PyObject *user_path;
   int headless;
 
-  if (!PyArg_ParseTuple(args, "OOi", &path, &user_path, &headless)) {
+  if (!PyArg_ParseTuple(args,
+                        "O" /* `path` */
+                        "O" /* `user_path` */
+                        "i" /* `headless` */,
+                        &path,
+                        &user_path,
+                        &headless))
+  {
     return nullptr;
   }
 
@@ -169,7 +181,14 @@ static PyObject *create_func(PyObject * /*self*/, PyObject *args)
   int preview_osl;
 
   if (!PyArg_ParseTuple(args,
-                        "OOOOOOOi",
+                        "O" /* `engine` */
+                        "O" /* `preferences` */
+                        "O" /* `data` */
+                        "O" /* `screen` */
+                        "O" /* `region` */
+                        "O" /* `v3d` */
+                        "O" /* `rv3d` */
+                        "i" /* `preview_osl` */,
                         &pyengine,
                         &pypreferences,
                         &pydata,
@@ -229,7 +248,12 @@ static PyObject *render_func(PyObject * /*self*/, PyObject *args)
   PyObject *pysession;
   PyObject *pydepsgraph;
 
-  if (!PyArg_ParseTuple(args, "OO", &pysession, &pydepsgraph)) {
+  if (!PyArg_ParseTuple(args,
+                        "O" /* `session` */
+                        "O" /* `depsgraph` */,
+                        &pysession,
+                        &pydepsgraph))
+  {
     return nullptr;
   }
 
@@ -251,7 +275,7 @@ static PyObject *render_frame_finish_func(PyObject * /*self*/, PyObject *args)
 {
   PyObject *pysession;
 
-  if (!PyArg_ParseTuple(args, "O", &pysession)) {
+  if (!PyArg_ParseTuple(args, "O" /* `session` */, &pysession)) {
     return nullptr;
   }
 
@@ -274,7 +298,16 @@ static PyObject *draw_func(PyObject * /*self*/, PyObject *args)
   PyObject *py_screen;
   PyObject *py_space_image;
 
-  if (!PyArg_ParseTuple(args, "OOOO", &py_session, &py_graph, &py_screen, &py_space_image)) {
+  if (!PyArg_ParseTuple(args,
+                        "O" /* `session` */
+                        "O" /* `graph` */
+                        "O" /* `screen` */
+                        "O" /* `space_image` */,
+                        &py_session,
+                        &py_graph,
+                        &py_screen,
+                        &py_space_image))
+  {
     return nullptr;
   }
 
@@ -302,7 +335,13 @@ static PyObject *bake_func(PyObject * /*self*/, PyObject *args)
   int height;
 
   if (!PyArg_ParseTuple(args,
-                        "OOOsiii",
+                        "O" /* `session` */
+                        "O" /* `depsgraph` */
+                        "O" /* `object` */
+                        "s" /* `pass_type` */
+                        "i" /* `pass_filter` */
+                        "i" /* `width` */
+                        "i" /* `height` */,
                         &pysession,
                         &pydepsgraph,
                         &pyobject,
@@ -336,7 +375,16 @@ static PyObject *view_draw_func(PyObject * /*self*/, PyObject *args)
   PyObject *pyv3d;
   PyObject *pyrv3d;
 
-  if (!PyArg_ParseTuple(args, "OOOO", &pysession, &pygraph, &pyv3d, &pyrv3d)) {
+  if (!PyArg_ParseTuple(args,
+                        "O" /* `session` */
+                        "O" /* `graph` */
+                        "O" /* `v3d` */
+                        "O" /* `rv3d` */,
+                        &pysession,
+                        &pygraph,
+                        &pyv3d,
+                        &pyrv3d))
+  {
     return nullptr;
   }
 
@@ -353,13 +401,35 @@ static PyObject *view_draw_func(PyObject * /*self*/, PyObject *args)
   Py_RETURN_NONE;
 }
 
+static PyObject *view_pause_func(PyObject * /*self*/, PyObject *args)
+{
+  PyObject *pysession;
+  int pause;
+
+  if (!PyArg_ParseTuple(args, "Op", &pysession, &pause)) {
+    return nullptr;
+  }
+
+  BlenderSession *session = (BlenderSession *)PyLong_AsVoidPtr(pysession);
+  session->view_pause(pause);
+
+  Py_RETURN_NONE;
+}
+
 static PyObject *reset_func(PyObject * /*self*/, PyObject *args)
 {
   PyObject *pysession;
   PyObject *pydata;
   PyObject *pydepsgraph;
 
-  if (!PyArg_ParseTuple(args, "OOO", &pysession, &pydata, &pydepsgraph)) {
+  if (!PyArg_ParseTuple(args,
+                        "O" /* `session` */
+                        "O" /* `data` */
+                        "O" /* `depsgraph` */,
+                        &pysession,
+                        &pydata,
+                        &pydepsgraph))
+  {
     return nullptr;
   }
 
@@ -383,7 +453,12 @@ static PyObject *sync_func(PyObject * /*self*/, PyObject *args)
   PyObject *pysession;
   PyObject *pydepsgraph;
 
-  if (!PyArg_ParseTuple(args, "OO", &pysession, &pydepsgraph)) {
+  if (!PyArg_ParseTuple(args,
+                        "O" /* `session` */
+                        "O" /* `depsgraph` */,
+                        &pysession,
+                        &pydepsgraph))
+  {
     return nullptr;
   }
 
@@ -404,7 +479,7 @@ static PyObject *sync_func(PyObject * /*self*/, PyObject *args)
 static PyObject *available_devices_func(PyObject * /*self*/, PyObject *args)
 {
   const char *type_name;
-  if (!PyArg_ParseTuple(args, "s", &type_name)) {
+  if (!PyArg_ParseTuple(args, "s" /* `type_name` */, &type_name)) {
     return nullptr;
   }
 
@@ -424,7 +499,7 @@ static PyObject *available_devices_func(PyObject * /*self*/, PyObject *args)
   for (size_t i = 0; i < devices.size(); i++) {
     const DeviceInfo &device = devices[i];
     const string type_name = Device::string_from_type(device.type);
-    PyObject *device_tuple = PyTuple_New(8);
+    PyObject *device_tuple = PyTuple_New(9);
     PyTuple_SET_ITEM(device_tuple, 0, pyunicode_from_string(device.description.c_str()));
     PyTuple_SET_ITEM(device_tuple, 1, pyunicode_from_string(type_name.c_str()));
     PyTuple_SET_ITEM(device_tuple, 2, pyunicode_from_string(device.id.c_str()));
@@ -434,6 +509,7 @@ static PyObject *available_devices_func(PyObject * /*self*/, PyObject *args)
         device_tuple, 5, PyBool_FromLong(device.denoisers & DENOISER_OPENIMAGEDENOISE));
     PyTuple_SET_ITEM(device_tuple, 6, PyBool_FromLong(device.denoisers & DENOISER_OPTIX));
     PyTuple_SET_ITEM(device_tuple, 7, PyBool_FromLong(device.has_execution_optimization));
+    PyTuple_SET_ITEM(device_tuple, 8, PyBool_FromLong(device.meets_driver_requirement));
     PyTuple_SET_ITEM(ret, i, device_tuple);
   }
 
@@ -447,7 +523,12 @@ static PyObject *osl_compile_func(PyObject * /*self*/, PyObject *args)
   const char *inputfile = nullptr;
   const char *outputfile = nullptr;
 
-  if (!PyArg_ParseTuple(args, "ss", &inputfile, &outputfile)) {
+  if (!PyArg_ParseTuple(args,
+                        "s" /* `inputfile` */
+                        "s" /* `outputfile` */,
+                        &inputfile,
+                        &outputfile))
+  {
     return nullptr;
   }
 
@@ -507,7 +588,12 @@ static PyObject *denoise_func(PyObject * /*self*/, PyObject *args, PyObject *key
 
   if (!PyArg_ParseTupleAndKeywords(args,
                                    keywords,
-                                   "OOOO|O",
+                                   "O" /* `preferences` */
+                                   "O" /* `scene` */
+                                   "O" /* `view_layer` */
+                                   "O" /* `input` */
+                                   "|" /* Optional arguments. */
+                                   "O" /* `output` */,
                                    (char **)keyword_list,
                                    &pypreferences,
                                    &pyscene,
@@ -584,8 +670,13 @@ static PyObject *merge_func(PyObject * /*self*/, PyObject *args, PyObject *keywo
   PyObject *pyinput;
   PyObject *pyoutput = nullptr;
 
-  if (!PyArg_ParseTupleAndKeywords(
-          args, keywords, "OO", (char **)keyword_list, &pyinput, &pyoutput))
+  if (!PyArg_ParseTupleAndKeywords(args,
+                                   keywords,
+                                   "O" /* `input` */
+                                   "O" /* `output` */,
+                                   (char **)keyword_list,
+                                   &pyinput,
+                                   &pyoutput))
   {
     return nullptr;
   }
@@ -619,7 +710,7 @@ static PyObject *merge_func(PyObject * /*self*/, PyObject *args, PyObject *keywo
 static PyObject *debug_flags_update_func(PyObject * /*self*/, PyObject *args)
 {
   PyObject *pyscene;
-  if (!PyArg_ParseTuple(args, "O", &pyscene)) {
+  if (!PyArg_ParseTuple(args, "O" /* `scene` */, &pyscene)) {
     return nullptr;
   }
 
@@ -718,6 +809,92 @@ static PyObject *set_device_override_func(PyObject * /*self*/, PyObject *arg)
   Py_RETURN_TRUE;
 }
 
+static PyObject *maketx_func(PyObject * /*self*/, PyObject *args, PyObject *keywords)
+{
+  static const char *keyword_list[] = {
+      "filepath", "colorspace", "alpha_type", "cache_dir", nullptr};
+
+  const char *filepath = nullptr;
+  const char *colorspace = "auto";
+  const char *alpha_type_str = "auto";
+  const char *cache_dir = "";
+
+  if (!PyArg_ParseTupleAndKeywords(args,
+                                   keywords,
+                                   "s" /* `filepath` */
+                                   "|" /* Optional arguments. */
+                                   "s" /* `colorspace` */
+                                   "s" /* `alpha_type` */
+                                   "s" /* `cache_dir` */,
+                                   (char **)keyword_list,
+                                   &filepath,
+                                   &colorspace,
+                                   &alpha_type_str,
+                                   &cache_dir))
+  {
+    return nullptr;
+  }
+
+  /* Alpha type. */
+  ImageAlphaType alpha_type;
+  if (strcmp(alpha_type_str, "straight") == 0) {
+    alpha_type = IMAGE_ALPHA_UNASSOCIATED;
+  }
+  else if (strcmp(alpha_type_str, "premultiplied") == 0) {
+    alpha_type = IMAGE_ALPHA_ASSOCIATED;
+  }
+  else if (strcmp(alpha_type_str, "channel_packed") == 0) {
+    alpha_type = IMAGE_ALPHA_CHANNEL_PACKED;
+  }
+  else if (strcmp(alpha_type_str, "none") == 0) {
+    alpha_type = IMAGE_ALPHA_IGNORE;
+  }
+  else if (strcmp(alpha_type_str, "auto") == 0) {
+    alpha_type = IMAGE_ALPHA_AUTO;
+  }
+  else {
+    PyErr_Format(PyExc_ValueError, "Unknown alpha type: %s", alpha_type_str);
+    return nullptr;
+  }
+
+  /* Colorspace. */
+  const ustring colorspace_ustring = (strcmp(colorspace, "auto") == 0) ? u_colorspace_auto :
+                                                                         ustring(colorspace);
+
+  /* Resolve output path, and check if tx file is already up to date. */
+  string out_filepath;
+  ccl::ImageMetaData out_metadata;
+  const bool up_to_date = resolve_tx(filepath,
+                                     cache_dir,
+                                     colorspace_ustring,
+                                     alpha_type,
+                                     IMAGE_FORMAT_PLAIN,
+                                     out_filepath,
+                                     out_metadata);
+
+  if (out_filepath.empty()) {
+    LOG_ERROR << "Source image not found: " << filepath;
+    PyErr_Format(PyExc_RuntimeError, "Source image not found");
+    return nullptr;
+  }
+
+  /* Generate tx file if needed. */
+  if (!up_to_date) {
+    bool ok;
+    Py_BEGIN_ALLOW_THREADS;
+    ok = make_tx(filepath, out_filepath, colorspace_ustring, alpha_type, IMAGE_FORMAT_PLAIN);
+    Py_END_ALLOW_THREADS;
+
+    if (!ok) {
+      LOG_ERROR << "Failed to generate tx file";
+      PyErr_Format(PyExc_RuntimeError, "Failed to generate tx file");
+      return nullptr;
+    }
+  }
+
+  return pyunicode_from_string(out_filepath.c_str());
+}
+
 #ifdef __GNUC__
 #  ifdef __clang__
 #    pragma clang diagnostic push
@@ -738,6 +915,7 @@ static PyMethodDef methods[] = {
     {"draw", draw_func, METH_VARARGS, ""},
     {"bake", bake_func, METH_VARARGS, ""},
     {"view_draw", view_draw_func, METH_VARARGS, ""},
+    {"view_pause", view_pause_func, METH_VARARGS, ""},
     {"sync", sync_func, METH_VARARGS, ""},
     {"reset", reset_func, METH_VARARGS, ""},
 #ifdef WITH_OSL
@@ -760,6 +938,9 @@ static PyMethodDef methods[] = {
     /* Compute Device selection */
     {"get_device_types", get_device_types_func, METH_VARARGS, ""},
     {"set_device_override", set_device_override_func, METH_O, ""},
+
+    /* Texture cache */
+    {"maketx", (PyCFunction)maketx_func, METH_VARARGS | METH_KEYWORDS, ""},
 
     {nullptr, nullptr, 0, nullptr},
 };
@@ -786,7 +967,7 @@ static struct PyModuleDef module = {
 
 CCL_NAMESPACE_END
 
-void *CCL_python_module_init()
+void *blender::CCL_python_module_init()
 {
   PyObject *mod = PyModule_Create(&ccl::module);
 

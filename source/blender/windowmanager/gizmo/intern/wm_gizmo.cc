@@ -8,9 +8,9 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_listbase.h"
-#include "BLI_math_matrix.h"
-#include "BLI_math_vector.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_vector_c.hh"
 
 #include "BKE_context.hh"
 
@@ -209,7 +209,7 @@ PointerRNA *WM_gizmo_operator_set(wmGizmo *gz,
   wmGizmoOpElem &gzop = gz->op_data[part_index];
   gzop.type = ot;
 
-  if (gzop.ptr.data) {
+  if (gzop.ptr) {
     WM_operator_properties_free(&gzop.ptr);
   }
   gzop.ptr = WM_operator_properties_create_ptr(ot);
@@ -231,7 +231,7 @@ wmOperatorStatus WM_gizmo_operator_invoke(bContext *C,
     PointerRNA tref_ptr;
     bToolRef *tref = WM_toolsystem_ref_from_context(C);
     if (tref && WM_toolsystem_ref_properties_get_from_operator(tref, gzop->type, &tref_ptr)) {
-      if (gzop->ptr.data == nullptr) {
+      if (!gzop->ptr) {
         gzop->ptr.data = bke::idprop::create_group("wmOperatorProperties").release();
       }
       IDP_MergeGroup(static_cast<IDProperty *>(gzop->ptr.data),
@@ -517,7 +517,7 @@ int wm_gizmo_is_visible(wmGizmo *gz)
 }
 
 void WM_gizmo_calc_matrix_final_params(const wmGizmo *gz,
-                                       const WM_GizmoMatrixParams *params,
+                                       const wmGizmoMatrixParams *params,
                                        float r_mat[4][4])
 {
   const float (*const matrix_space)[4] = params->matrix_space ? params->matrix_space :
@@ -558,7 +558,7 @@ void WM_gizmo_calc_matrix_final_no_offset(const wmGizmo *gz, float r_mat[4][4])
   float mat_identity[4][4];
   unit_m4(mat_identity);
 
-  WM_GizmoMatrixParams params{};
+  wmGizmoMatrixParams params{};
   params.matrix_space = nullptr;
   params.matrix_basis = nullptr;
   params.matrix_offset = mat_identity;
@@ -568,7 +568,7 @@ void WM_gizmo_calc_matrix_final_no_offset(const wmGizmo *gz, float r_mat[4][4])
 
 void WM_gizmo_calc_matrix_final(const wmGizmo *gz, float r_mat[4][4])
 {
-  WM_GizmoMatrixParams params{};
+  wmGizmoMatrixParams params{};
   params.matrix_space = nullptr;
   params.matrix_basis = nullptr;
   params.matrix_offset = nullptr;
@@ -658,7 +658,7 @@ bool WM_gizmo_properties_default(PointerRNA *ptr, const bool do_update)
       }
       default:
         if ((do_update == false) || (RNA_property_is_set(ptr, prop) == false)) {
-          if (RNA_property_reset(ptr, prop, -1)) {
+          if (RNA_property_reset(nullptr, ptr, prop, -1)) {
             changed = true;
           }
         }
@@ -672,7 +672,7 @@ bool WM_gizmo_properties_default(PointerRNA *ptr, const bool do_update)
 
 void WM_gizmo_properties_reset(wmGizmo *gz)
 {
-  if (gz->ptr->data) {
+  if (*gz->ptr) {
     PropertyRNA *iterprop;
     iterprop = RNA_struct_iterator_property(gz->type->srna);
 

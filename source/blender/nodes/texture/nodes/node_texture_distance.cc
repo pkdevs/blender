@@ -6,7 +6,7 @@
  * \ingroup texnodes
  */
 
-#include "BLI_math_vector.h"
+#include "BLI_math_vector_c.hh"
 #include "node_texture_util.hh"
 
 namespace blender {
@@ -46,7 +46,7 @@ void register_node_type_tex_distance()
 {
   static bke::bNodeType ntype;
 
-  tex_node_type_base(&ntype, "TextureNodeDistance", TEX_NODE_DISTANCE);
+  tex_node_type_base(&ntype, "TextureNodeDistance"_ustr, TEX_NODE_DISTANCE);
   ntype.ui_name = "Distance";
   ntype.enum_name_legacy = "DISTANCE";
   ntype.nclass = NODE_CLASS_CONVERTER;

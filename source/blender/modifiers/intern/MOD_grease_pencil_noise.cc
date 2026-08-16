@@ -6,7 +6,7 @@
  * \ingroup modifiers
  */
 
-#include "BLI_hash.h"
+#include "BLI_hash_c.hh"
 #include "BLI_math_vector.hh"
 
 #include "BLT_translation.hh"
@@ -145,8 +145,8 @@ static void deform_drawing(const GreasePencilNoiseModifierData &mmd,
   };
 
   auto get_noise = [](const Span<float> noise_table, const float value) {
-    return math::interpolate(noise_table[int(math::ceil(value))],
-                             noise_table[int(math::floor(value))],
+    return math::interpolate(noise_table[int(math::floor(value))],
+                             noise_table[int(math::ceil(value))],
                              math::fract(value));
   };
 

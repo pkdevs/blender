@@ -4,6 +4,7 @@
 #include "ANIM_action.hh"
 #include "ANIM_action_iterators.hh"
 
+#include "BKE_gtest_base.hh"
 #include "BKE_idtype.hh"
 #include "BKE_lib_id.hh"
 #include "BKE_main.hh"
@@ -13,34 +14,15 @@
 #include "DNA_object_types.h"
 
 #include "RNA_access.hh"
-#include "RNA_define.hh"
 #include "RNA_prototypes.hh"
 
-#include "CLG_log.h"
 #include "testing/testing.h"
 
 namespace blender::animrig::tests {
-class ActionIteratorsTest : public testing::Test {
+class ActionIteratorsTest : public bke::BlenderGTestBase {
  public:
   Main *bmain;
   Action *action;
-
-  static void SetUpTestSuite()
-  {
-    /* BKE_id_free() hits a code path that uses CLOG, which crashes if not initialized properly. */
-    CLG_init();
-
-    /* To make id_can_have_animdata() and friends work, the `id_types` array needs to be set up. */
-    BKE_idtype_init();
-
-    RNA_init();
-  }
-
-  static void TearDownTestSuite()
-  {
-    CLG_exit();
-    RNA_exit();
-  }
 
   void SetUp() override
   {
@@ -91,7 +73,7 @@ TEST_F(ActionIteratorsTest, iterate_all_fcurves_of_slot)
 
   ASSERT_EQ(cube_fcurves.size(), 3);
   for (const FCurve *fcurve : cube_fcurves) {
-    ASSERT_STREQ(fcurve->rna_path, "location");
+    ASSERT_EQ(fcurve->rna_path(), "location");
   }
 
   /* Get only FCurves with index 0 which should be 1. */
@@ -103,7 +85,7 @@ TEST_F(ActionIteratorsTest, iterate_all_fcurves_of_slot)
   });
 
   ASSERT_EQ(monkey_fcurves.size(), 1);
-  ASSERT_STREQ(monkey_fcurves[0]->rna_path, "rotation");
+  ASSERT_EQ(monkey_fcurves[0]->rna_path(), "rotation");
 
   /* Slots handles are just numbers. Passing in a slot handle that doesn't exist should return
    * nothing. */

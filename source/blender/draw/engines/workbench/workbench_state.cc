@@ -96,6 +96,7 @@ void SceneState::init(const DRWContext *context,
                       bool scene_updated,
                       Object *camera_ob /*=nullptr*/)
 {
+  updated = scene_updated;
   bool reset_taa = reset_taa_next_sample || scene_updated;
   reset_taa_next_sample = false;
 
@@ -174,7 +175,12 @@ void SceneState::init(const DRWContext *context,
 
   background_color = float4(0.0f);
   if (is_render_mode && scene->r.alphamode != R_ALPHAPREMUL) {
-    if (World *w = scene->world) {
+    if (shading.background_type == V3D_SHADING_BACKGROUND_VIEWPORT) {
+      /* NOTE: Only there to support world color override from Sequencer Edit Scene override.
+       * (see #149656) */
+      background_color = float4(UNPACK3(shading.background_color), 1.0f);
+    }
+    else if (World *w = scene->world) {
       background_color = float4(w->horr, w->horg, w->horb, 1.0f);
     }
   }
@@ -226,14 +232,6 @@ void SceneState::init(const DRWContext *context,
     reset_taa = true;
   }
 
-  if (reset_taa || samples_len <= 1) {
-    sample = 0;
-  }
-  else {
-    sample++;
-  }
-  render_finished = sample >= samples_len && samples_len > 1;
-
   /* TODO(@pragma37): volumes_do */
 
   draw_cavity = shading.flag & V3D_SHADING_CAVITY &&
@@ -248,38 +246,60 @@ void SceneState::init(const DRWContext *context,
 
   draw_object_id = (draw_outline || draw_curvature);
 
+  const bool shadows_use_rt_new = draw_shadows &&
+                                  (U.gpu_flag & USER_GPU_FLAG_WORKBENCH_RT_SHADOWS) &&
+                                  GPU_ray_query_support();
+  if (assign_if_different(shadows_use_rt, shadows_use_rt_new)) {
+    reset_taa = true;
+  }
+
   show_paint_bvh_debug = scene->toolsettings->sculpt ?
-                             scene->toolsettings->sculpt->paint.debug_flags &
-                                 PAINT_DEBUG_SHOW_BVH_NODES :
+                             (scene->toolsettings->sculpt->paint.debug_flags &
+                              PAINT_DEBUG_SHOW_BVH_NODES) != 0 :
                              false;
+
+  if (reset_taa || samples_len <= 1) {
+    sample = 0;
+  }
+  else {
+    sample++;
+  }
+  render_finished = sample >= samples_len && samples_len > 1;
 };
 
 static bool mesh_has_color_attribute(const Mesh &mesh)
 {
+  const StringRef name = mesh.active_color_attribute ? mesh.active_color_attribute :
+                                                       mesh.default_color_attribute;
+  if (name.is_empty()) {
+    return false;
+  }
   if (mesh.runtime->wrapper_type == ME_WRAPPER_TYPE_BMESH) {
     const BMesh &bm = *mesh.runtime->edit_mesh->bm;
-    const BMDataLayerLookup attr = BM_data_layer_lookup(bm, mesh.active_color_attribute);
+    const BMDataLayerLookup attr = BM_data_layer_lookup(bm, name);
     return attr && bke::mesh::is_color_attribute(bke::AttributeMetaData{attr.domain, attr.type});
   }
   const bke::AttributeAccessor attributes = mesh.attributes();
-  return bke::mesh::is_color_attribute(attributes.lookup_meta_data(mesh.active_color_attribute));
+  return bke::mesh::is_color_attribute(attributes.lookup_meta_data(name));
 }
 
 static bool mesh_has_uv_map_attribute(const Mesh &mesh)
 {
+  StringRef active_uv_map = mesh.active_or_default_uv_map_name();
   if (mesh.runtime->wrapper_type == ME_WRAPPER_TYPE_BMESH) {
     const BMesh &bm = *mesh.runtime->edit_mesh->bm;
-    const BMDataLayerLookup attr = BM_data_layer_lookup(bm, mesh.active_uv_map_name());
+    const BMDataLayerLookup attr = BM_data_layer_lookup(bm, active_uv_map);
     return attr && bke::mesh::is_uv_map(bke::AttributeMetaData{attr.domain, attr.type});
   }
   const bke::AttributeAccessor attributes = mesh.attributes();
-  return bke::mesh::is_uv_map(attributes.lookup_meta_data(mesh.active_uv_map_name()));
+  return bke::mesh::is_uv_map(attributes.lookup_meta_data(active_uv_map));
 }
 
 ObjectState::ObjectState(const DRWContext *draw_ctx,
                          const SceneState &scene_state,
                          const SceneResources &resources,
-                         Object *ob)
+                         Object *ob,
+                         Manager &manager)
 {
   const bool is_active = (ob == draw_ctx->obact);
 
@@ -316,7 +336,7 @@ ObjectState::ObjectState(const DRWContext *draw_ctx,
 
   if (sculpt_pbvh) {
     if (color_type == V3D_SHADING_TEXTURE_COLOR &&
-        bke::object::pbvh_get(*ob)->type() != bke::pbvh::Type::Mesh)
+        !ELEM(bke::object::pbvh_get(*ob)->type(), bke::pbvh::Type::Mesh, bke::pbvh::Type::Grids))
     {
       /* Force use of material color for sculpt. */
       color_type = V3D_SHADING_MATERIAL_COLOR;
@@ -336,7 +356,7 @@ ObjectState::ObjectState(const DRWContext *draw_ctx,
       if (override_material && has_uv()) {
         show_missing_texture = true;
         if (paint_mode->canvas_image) {
-          image_paint_override = MaterialTexture(paint_mode->canvas_image);
+          image_paint_override = MaterialTexture(manager, paint_mode->canvas_image);
           image_paint_override.sampler_state.extend_x = GPU_SAMPLER_EXTEND_MODE_REPEAT;
           image_paint_override.sampler_state.extend_yz = GPU_SAMPLER_EXTEND_MODE_REPEAT;
           /* TODO: Add an image texture interpolation variable to PaintModeSettings, similar to
@@ -362,7 +382,7 @@ ObjectState::ObjectState(const DRWContext *draw_ctx,
       const ImagePaintSettings *imapaint = &scene_state.scene->toolsettings->imapaint;
       if (imapaint->mode == IMAGEPAINT_MODE_IMAGE) {
         if (imapaint->canvas) {
-          image_paint_override = MaterialTexture(imapaint->canvas);
+          image_paint_override = MaterialTexture(manager, imapaint->canvas);
           image_paint_override.sampler_state.extend_x = GPU_SAMPLER_EXTEND_MODE_REPEAT;
           image_paint_override.sampler_state.extend_yz = GPU_SAMPLER_EXTEND_MODE_REPEAT;
           const bool use_linear_filter = imapaint->interp == IMAGEPAINT_INTERP_LINEAR;

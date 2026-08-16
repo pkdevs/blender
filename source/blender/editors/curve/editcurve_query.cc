@@ -9,8 +9,8 @@
 #include "DNA_curve_types.h"
 #include "DNA_object_types.h"
 
-#include "BLI_listbase.h"
-#include "BLI_math_vector.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_vector_c.hh"
 
 #include "BKE_curve.hh"
 #include "BKE_layer.hh"
@@ -106,7 +106,7 @@ bool ED_curve_pick_vert_ex(ViewContext *vc,
   data.mval_fl[1] = vc->mval[1];
 
   Vector<Base *> bases = BKE_view_layer_array_from_bases_in_edit_mode_unique_data(
-      vc->scene, vc->view_layer, vc->v3d);
+      *vc->bmain, vc->scene, vc->view_layer, vc->v3d);
   for (Base *base : bases) {
     data.is_changed = false;
 

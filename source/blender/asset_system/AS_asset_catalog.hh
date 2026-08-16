@@ -16,7 +16,7 @@
 #include "BLI_function_ref.hh"
 #include "BLI_map.hh"
 #include "BLI_set.hh"
-#include "BLI_uuid.h"
+#include "BLI_uuid.hh"
 #include "BLI_vector.hh"
 
 #include "AS_asset_catalog_path.hh"
@@ -64,6 +64,7 @@ class AssetCatalogService {
   explicit AssetCatalogService(const CatalogFilePath &asset_library_root = {},
                                std::optional<read_only_tag> read_only_tag = std::nullopt);
   explicit AssetCatalogService(read_only_tag);
+  ~AssetCatalogService();
 
   /**
    * Set tag indicating that some catalog modifications are unsaved, which could

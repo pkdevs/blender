@@ -10,8 +10,10 @@
 #include <cstring>
 
 #include "BLI_path_utils.hh"
-
 #include "BLI_string_ref.hh"
+
+#include "BLT_translation.hh"
+
 #include "RNA_define.hh"
 #include "RNA_enum_types.hh"
 
@@ -23,6 +25,7 @@
 
 #  include "DNA_windowmanager_types.h"
 
+#  include "BKE_blender_project.hh"
 #  include "BKE_global.hh"
 #  include "BKE_main.hh"
 #  include "BKE_mesh.hh"
@@ -140,6 +143,17 @@ static bool rna_MainColorspace_is_missing_opencolorio_config_get(PointerRNA *ptr
   return colorspace->is_missing_opencolorio_config;
 }
 
+static PointerRNA rna_Main_blender_project_get(PointerRNA *ptr)
+{
+  Main *bmain = reinterpret_cast<Main *>(ptr->data);
+
+  /* Needs to be the `write_callback` variant instead of `read_callback` because
+   * `RNA_pointer_create_discrete()` expects a non-const pointer. */
+  return BKE_blender_project_write_callback(bmain, [&](bke::BlenderProject *project) {
+    return RNA_pointer_create_discrete(nullptr, RNA_BlenderProject, project);
+  });
+}
+
 #  define RNA_MAIN_LISTBASE_FUNCS_DEF(_listbase_name) \
     static void rna_Main_##_listbase_name##_begin(CollectionPropertyIterator *iter, \
                                                   PointerRNA *ptr) \
@@ -197,6 +211,45 @@ static void rna_Main_version_get(PointerRNA *ptr, int *value)
   value[2] = bmain->subversionfile;
 }
 
+static int rna_iterator_BlendData_all_ids_length(PointerRNA *ptr)
+{
+  Main &bmain = *static_cast<Main *>(ptr->data);
+
+  MainAllIDsIterator internal_iter{bmain};
+  return int(internal_iter.size());
+}
+
+static void rna_iterator_BlendData_all_ids_begin(CollectionPropertyIterator *iter, PointerRNA *ptr)
+{
+  Main &bmain = *static_cast<Main *>(ptr->data);
+
+  iter->parent = *ptr;
+  MainAllIDsIterator *internal_iter = MEM_new<MainAllIDsIterator>(__func__, bmain);
+  iter->internal.custom = internal_iter;
+  iter->valid = (*internal_iter != internal_iter->end());
+}
+
+static void rna_iterator_BlendData_all_ids_next(CollectionPropertyIterator *iter)
+{
+  MainAllIDsIterator *internal_iter = static_cast<MainAllIDsIterator *>(iter->internal.custom);
+  (*internal_iter)++;
+  iter->valid = (*internal_iter != internal_iter->end());
+}
+
+static void rna_iterator_BlendData_all_ids_end(CollectionPropertyIterator *iter)
+{
+  MainAllIDsIterator *internal_iter = static_cast<MainAllIDsIterator *>(iter->internal.custom);
+  MEM_delete(internal_iter);
+  iter->internal.custom = nullptr;
+}
+
+static PointerRNA rna_iterator_BlendData_all_ids_get(CollectionPropertyIterator *iter)
+{
+  MainAllIDsIterator *internal_iter = static_cast<MainAllIDsIterator *>(iter->internal.custom);
+  ID &id = **internal_iter;
+  return RNA_id_pointer_create(&id);
+}
+
 #  ifdef UNIT_TEST
 
 static PointerRNA rna_Test_test_get(PointerRNA *ptr)
@@ -245,6 +298,7 @@ static void rna_def_main_colorspace(BlenderRNA *brna)
                            "Working Space",
                            "Color space used for all scene linear colors in this file, and "
                            "for compositing, shader and geometry nodes processing");
+  RNA_def_property_translation_context(prop, BLT_I18NCONTEXT_COLOR_MANAGEMENT);
   RNA_def_property_enum_funcs(prop,
                               "rna_MainColorspace_working_space_get",
                               nullptr,
@@ -587,6 +641,32 @@ void RNA_def_main(BlenderRNA *brna)
       prop,
       "Color Space",
       "Information about the color space used for data-blocks in a blend file");
+
+  prop = RNA_def_property(srna, "all_ids", PROP_COLLECTION, PROP_NONE);
+  RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+  RNA_def_property_override_clear_flag(prop, PROPOVERRIDE_NO_COMPARISON);
+  RNA_def_property_struct_type(prop, "ID");
+  RNA_def_property_collection_funcs(prop,
+                                    "rna_iterator_BlendData_all_ids_begin",
+                                    "rna_iterator_BlendData_all_ids_next",
+                                    "rna_iterator_BlendData_all_ids_end",
+                                    "rna_iterator_BlendData_all_ids_get",
+                                    "rna_iterator_BlendData_all_ids_length",
+                                    nullptr,
+                                    nullptr,
+                                    nullptr);
+  RNA_def_property_ui_text(
+      prop,
+      "All Data-Blocks",
+      "Read-only list of all IDs listed in Blender data-base. Warning: Order is not guaranteed "
+      "and should be considered an internal implementation detail");
+
+  prop = RNA_def_property(srna, "project", PROP_POINTER, PROP_NONE);
+  RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+  RNA_def_property_struct_type(prop, "BlenderProject");
+  RNA_def_property_pointer_funcs(prop, "rna_Main_blender_project_get", nullptr, nullptr, nullptr);
+  RNA_def_property_ui_text(prop, "Project", "The currently active Blender project, if any");
+  RNA_def_property_translation_context(prop, BLT_I18NCONTEXT_EDITOR_PREFERENCES);
 
   RNA_api_main(srna);
 

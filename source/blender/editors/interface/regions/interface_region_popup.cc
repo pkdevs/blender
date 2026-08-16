@@ -19,10 +19,10 @@
 
 #include "BLF_api.hh"
 
-#include "BLI_listbase.h"
-#include "BLI_math_vector.h"
-#include "BLI_rect.h"
-#include "BLI_utildefines.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_vector_c.hh"
+#include "BLI_rect.hh"
+#include "BLI_utildefines.hh"
 #include "BLI_vector_set.hh"
 
 #include "BKE_context.hh"
@@ -398,7 +398,7 @@ static void popup_block_position(wmWindow *window, ARegion *butregion, Button *b
   SafetyRect *saferct = MEM_new<SafetyRect>(__func__);
   saferct->parent = butrct;
   saferct->safety = block->safety;
-  BLI_freelistN(&block->saferct);
+  block->saferct.free_no_destruct();
   BLI_duplicatelist(&block->saferct, &but->block->saferct);
   BLI_addhead(&block->saferct, saferct);
 }
@@ -521,25 +521,22 @@ void popup_block_scrolltest(Block *block)
   if (block->buttons_ptrs.size() < 2) {
     return;
   }
+  if (block->handle->scrolloffset != block->handle->scrollmin) {
+    block->flag |= BLOCK_CLIPTOP;
+  }
+  if (block->handle->scrolloffset != block->handle->scrollmax) {
+    block->flag |= BLOCK_CLIPBOTTOM;
+  }
 
-  /* mark buttons that are outside boundary */
   for (Button &bt : block->buttons()) {
+    /* Tag buttons that are outside boundary */
     if (bt.rect.ymax < block->rect.ymin) {
       bt.flag |= UI_SCROLLED;
     }
     if (bt.rect.ymin > block->rect.ymax) {
       bt.flag |= UI_SCROLLED;
     }
-    if (bt.rect.ymin < block->rect.ymin) {
-      block->flag |= BLOCK_CLIPBOTTOM;
-    }
-    if (bt.rect.ymax > block->rect.ymax) {
-      block->flag |= BLOCK_CLIPTOP;
-    }
-  }
-
-  /* mark buttons overlapping arrows, if we have them */
-  for (Button &bt : block->buttons()) {
+    /* Tag buttons overlapping arrows, if we have them */
     if (block->flag & BLOCK_CLIPBOTTOM) {
       if (bt.rect.ymax < block->rect.ymin + UI_MENU_SCROLL_MOUSE / block->aspect) {
         bt.flag |= UI_SCROLLED;
@@ -586,7 +583,7 @@ static void popup_block_remove(bContext *C, PopupBlockHandle *handle)
   CTX_wm_region_set(C, ctx_region);
 
   /* reset to region cursor (only if there's not another menu open) */
-  if (BLI_listbase_is_empty(&screen->regionbase)) {
+  if (screen->regionbase.is_empty()) {
     win->tag_cursor_refresh = true;
   }
 
@@ -595,6 +592,13 @@ static void popup_block_remove(bContext *C, PopupBlockHandle *handle)
   }
   if (handle->dimtimer) {
     WM_event_timer_remove(wm, win, handle->dimtimer);
+  }
+  if (handle->keep_open_timer) {
+    WM_event_timer_remove(wm, win, handle->keep_open_timer);
+  }
+  if (handle->mmb_panning) {
+    WM_cursor_set(win, WM_CURSOR_DEFAULT);
+    WM_cursor_grab_disable(win, nullptr);
   }
 }
 
@@ -668,7 +672,7 @@ void popup_dummy_panel_set(ARegion *region, Block *block, StringRef idname)
     panel = BKE_panel_new(&panel_type);
   }
   panel->runtime->layout_panels.clear();
-  panel->runtime->popup_layout_panel_states = &popup_persistent_layout_panel_states(idname);
+  panel->runtime->layout_panel_states_storage = &popup_persistent_layout_panel_states(idname);
   block->panel = panel;
   panel->runtime->block = block;
 }
@@ -872,11 +876,12 @@ Block *popup_block_refresh(bContext *C, PopupBlockHandle *handle, ARegion *butre
       ymin = min_ff(ymin, bt.rect.ymin);
       ymax = max_ff(ymax, bt.rect.ymax);
     }
-    const float scroll_pad = (block_is_menu(block) ? UI_MENU_SCROLL_PAD : UI_UNIT_Y * 0.5f) /
-                             block->aspect;
-    const float scroll_min = std::min(block->rect.ymax - ymax - scroll_pad, 0.0f);
-    const float scroll_max = std::max(block->rect.ymin - ymin + scroll_pad, 0.0f);
-    handle->scrolloffset = std::clamp(handle->scrolloffset, scroll_min, scroll_max);
+    const float bounds = block->bounds / block->aspect;
+
+    handle->scrollmin = std::round(std::min(block->rect.ymax - (ymax + bounds), 0.0f));
+    handle->scrollmax = std::round(std::max(block->rect.ymin - (ymin - bounds), 0.0f));
+    handle->scrolloffset = std::clamp(handle->scrolloffset, handle->scrollmin, handle->scrollmax);
+
     /* apply scroll offset */
     if (handle->scrolloffset != 0.0f) {
       for (Button &bt : block->buttons()) {
@@ -886,7 +891,7 @@ Block *popup_block_refresh(bContext *C, PopupBlockHandle *handle, ARegion *butre
     }
     /* Layout panels are relative to `block->rect.ymax`. Rather than a
      * scroll, this is a offset applied due to the overflow at the top. */
-    layout_panel_popup_scroll_apply(block->panel, -scroll_min - scroll_pad);
+    layout_panel_popup_scroll_apply(block->panel, -handle->scrollmin - bounds);
   }
   SET_FLAG_FROM_TEST(block->flag, handle->reduce_shadow_offset, BLOCK_MENU_REDUCED_SHADOW_OFFSET);
   block->dim_factor = handle->dim_factor;
@@ -1049,6 +1054,10 @@ void popup_block_free(bContext *C, PopupBlockHandle *handle)
   popup_block_remove(C, handle);
 
   MEM_delete(handle);
+
+#ifdef WITH_INPUT_IME
+  WM_window_IME_region_refresh(CTX_wm_window(C), CTX_wm_area(C), CTX_wm_region(C));
+#endif
 }
 
 struct AlertData {

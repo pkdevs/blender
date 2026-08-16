@@ -55,7 +55,7 @@ static bool step_encode(bContext *C, Main *bmain, UndoStep *us_p)
 
   Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
-  Vector<Object *> objects = ED_undo_editmode_objects_from_view_layer(scene, view_layer);
+  Vector<Object *> objects = ED_undo_editmode_objects_from_view_layer(*bmain, scene, view_layer);
 
   us->scene_ref.ptr = scene;
   new (&us->objects) Array<StepObject>(objects.size());
@@ -103,7 +103,7 @@ static void step_decode(
   }
 
   ED_undo_object_set_active_or_warn(
-      scene, view_layer, us->objects.first().obedit_ref.ptr, us_p->name, &LOG);
+      *bmain, scene, view_layer, us->objects.first().obedit_ref.ptr, us_p->name, &LOG);
 
   bmain->is_memfile_undo_flush_needed = true;
 
@@ -136,7 +136,7 @@ static void foreach_ID_ref(UndoStep *us_p,
 
 void undosys_type_register(UndoType *ut)
 {
-  ut->name = "Edit Curves";
+  ut->identifier = "EDIT_CURVES";
   ut->poll = editable_curves_in_edit_mode_poll;
   ut->step_encode = undo::step_encode;
   ut->step_decode = undo::step_decode;
@@ -144,7 +144,7 @@ void undosys_type_register(UndoType *ut)
 
   ut->step_foreach_ID_ref = undo::foreach_ID_ref;
 
-  ut->flags = UNDOTYPE_FLAG_NEED_CONTEXT_FOR_ENCODE;
+  ut->flags = UNDOTYPE_FLAG_NEED_CONTEXT_FOR_ENCODE | UNDOTYPE_FLAG_ENCODE_PRE_MEMFILE_SUPPORTED;
 
   ut->step_size = sizeof(undo::CurvesUndoStep);
 }

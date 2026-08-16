@@ -12,9 +12,12 @@ endif()
 if(WIN32)
   set(PYTHON_BINARY ${LIBDIR}/python/python${PYTHON_POSTFIX}.exe)
   set(PYTHON_SRC ${BUILD_DIR}/python/src/external_python/)
-  macro(cmake_to_dos_path MsysPath ResultingPath)
-    string(REPLACE "/" "\\" ${ResultingPath} "${MsysPath}")
-  endmacro()
+  # Return values:
+  # - `${ResultingPath}`: the DOS-style path.
+  function(cmake_to_dos_path MsysPath ResultingPath)
+    string(REPLACE "/" "\\" _result "${MsysPath}")
+    set(${ResultingPath} "${_result}" PARENT_SCOPE)
+  endfunction()
 
   if(BLENDER_PLATFORM_ARM)
     set(PYTHON_BINARY_INTERNAL ${BUILD_DIR}/python/src/external_python/PCBuild/arm64/python${PYTHON_POSTFIX}.exe)
@@ -55,7 +58,7 @@ if(WIN32)
     PATCH_COMMAND mkdir ${PYTHON_EXTERNALS_FOLDER_DOS} &&
       mklink /J ${PYTHON_EXTERNALS_FOLDER_DOS}\\libffi-3.4.4 ${FFI_SOURCE_FOLDER_DOS} &&
       mklink /J ${PYTHON_EXTERNALS_FOLDER_DOS}\\zlib-1.3.1 ${ZLIB_SOURCE_FOLDER_DOS} &&
-      mklink /J ${PYTHON_EXTERNALS_FOLDER_DOS}\\openssl-3.0.18 ${SSL_SOURCE_FOLDER_DOS} &&
+      mklink /J ${PYTHON_EXTERNALS_FOLDER_DOS}\\openssl-3.0.19 ${SSL_SOURCE_FOLDER_DOS} &&
       mklink /J ${PYTHON_EXTERNALS_FOLDER_DOS}\\sqlite-3.50.4.0 ${SQLITE_SOURCE_FOLDER_DOS} &&
       ${CMAKE_COMMAND} -E copy
         ${ZLIB_SOURCE_FOLDER}/../external_zlib-build/zconf.h

@@ -64,17 +64,6 @@ LineData decode_axis_data(uint vertex_id)
   return line;
 }
 
-/* Test if the current line falls under an active axis line which occludes it. */
-bool is_occluded_by_axis(float3 vertex_pos_global)
-{
-  if (flag_test(grid_flag, SHOW_GRID)) {
-    return (flag_test(grid_flag, AXIS_X) && grid::is_zero(vertex_pos_global.yz, 1e-4f)) ||
-           (flag_test(grid_flag, AXIS_Y) && grid::is_zero(vertex_pos_global.xz, 1e-4f)) ||
-           (flag_test(grid_flag, AXIS_Z) && grid::is_zero(vertex_pos_global.xy, 1e-4f));
-  }
-  return false;
-}
-
 /* Test if the current line falls under another line on a higher level, which occludes it. */
 bool is_occluded_by_higher_level(LineData line, uint level)
 {
@@ -114,10 +103,24 @@ void main()
 
   /* Compute per-level size, camera offset for lines. Offset is rounded to the nearest
    * level-dependent line position for grid, while axes simply move with the camera. */
-  float step_size = grid_buf.steps[level][line.axis];
-  float2 step_offs = flag_test(grid_flag, SHOW_GRID) ?
-                         round(grid_buf.offset / step_size) * step_size :
-                         float2(drw_view_position()[line.axis], 0.0f); /* Store value on X-axis. */
+  uint step_axis = flag_test(grid_flag, GRID_SIMA) ? 1u - line.axis : line.axis;
+  float step_size = grid_buf.steps[level][step_axis];
+
+  float2 step_offs = grid_buf.offset;
+  /* TODO(not_mark): remove all this horrible axis-swapping BS in BSL port. */
+  if (flag_test(grid_flag, SHOW_GRID)) {
+    /* Line moves with offset along its axis, but snaps to the rounded offset on the other axis. */
+    if (line.axis == 0) {
+      step_offs.y = round(grid_buf.offset.y / step_size) * step_size;
+    }
+    else {
+      step_offs.x = round(grid_buf.offset.x / step_size) * step_size;
+    }
+  }
+  else if (flag_test(grid_flag, SHOW_AXES)) {
+    /* Store axis value on X-axis for now, it is swapped later. */
+    step_offs = float2(drw_view_position()[line.axis], 0.0f);
+  } /* else: GRID_SIMA, do nothing. */
 
   /* Output vertex position in [-1,1], which we use to fade level boundaries. */
   vertex_out.coord = line.P / max(float(grid_buf.num_lines >> 1), 1.0f);
@@ -135,36 +138,39 @@ void main()
   line.P = step_offs + step_size * line.P;
 
   /* Compute clipping rectangle. */
-  float2 clip_min, clip_max;
+  /* TODO(not_mark): remove all this horrible axis-swapping BS in BSL port. */
+  float2 clip_min = float2(-FLT_MAX), clip_max = float2(FLT_MAX);
   if (flag_test(grid_flag, GRID_SIMA)) {
-    /* Clipping rectangle is [-1, 1]. */
+    /* SpaceImage view has user-specified clipping rectangle */
     clip_min = float2(-1.0f);
     clip_max = grid_buf.clip_rect * 2.0f - 1.0f;
   }
   else if (flag_test(grid_flag, SHOW_GRID)) {
-    /* Clipping rectangle is simply forwarded. */
-    clip_min = grid_buf.offset - grid_buf.clip_rect;
-    clip_max = grid_buf.offset + grid_buf.clip_rect;
+    clip_min = step_offs - grid_buf.clip_rect;
+    clip_max = step_offs + grid_buf.clip_rect;
   }
-  else { /* SHOW_AXES */
-    /* Clipping is applied to X-axis; line is moved to the correct axis below. */
-    float offset = grid::unpack_xy_to_axis(grid_buf.offset, grid_flag, line.axis);
-    float clip_rect = grid::unpack_xy_to_axis(grid_buf.clip_rect, grid_flag, line.axis);
-    clip_min = float2(offset - clip_rect, 0.0f);
-    clip_max = float2(offset + clip_rect, 0.0f);
+  else /* SHOW_AXES */ {
+    /* Z-axis does not have a clip value to unpack. */
+    float clip_rect = (line.axis == 2) ?
+                          grid_buf.clip_rect.x :
+                          grid::unpack_xy_to_axis(grid_buf.clip_rect, grid_flag, line.axis);
+
+    /* Clipping is applied to the x-axis, where vertex data is stored.
+     * It is swapped to the correct axis below. */
+    clip_min = float2(step_offs.x - clip_rect, 0.0f);
+    clip_max = float2(step_offs.x + clip_rect, 0.0f);
   }
 
-  /* Clip/clamp; lines entirely outside the rectangle get discarded; others get brought
-   * inside the rectangle to avoid precision problems with large lines. Z-axis ignores this. */
-  if (line.axis != 2) {
-    bool line_outside_rect = all(lessThan(line.P, clip_min)) || all(greaterThan(line.P, clip_max));
-    if (line_outside_rect) {
-      return; /* Discard line. */
-    }
-    line.P = clamp(line.P, clip_min, clip_max);
+  /* Clip/clamp; lines entirely outside the rectangle get discarded; others are brought
+   * inside the rectangle to avoid precision problems with large lines. */
+  bool line_outside_rect = all(lessThan(line.P, clip_min)) || all(greaterThan(line.P, clip_max));
+  if (line_outside_rect) {
+    return; /* Discard line. */
   }
+  line.P = clamp(line.P, clip_min, clip_max);
 
   /* Output world-space position. */
+  /* TODO(not_mark): remove all this horrible axis-swapping BS in BSL port. */
   vertex_out.pos = float3(0.0f);
   if (flag_test(grid_flag, SHOW_GRID)) {
     /* Position is placed on the correct plane. */
@@ -178,9 +184,9 @@ void main()
       vertex_out.pos.yz = line.P;
     }
     else { /* GRID_SIMA */
-      /* Set z to place the grid in front of/behind image, and always behind the UV mesh.
+      /* Set z to place the grid in front of/behind images/UDIMS, and always behind the UV mesh.
        * See `overlay_edit_uv_edges_vert.glsl` for the full z-order. */
-      float z = flag_test(grid_flag, GRID_OVER_IMAGE) ? 0.74f : 0.76f;
+      float z = flag_test(grid_flag, GRID_OVER_IMAGE) ? 0.45f : 0.76f;
       vertex_out.pos = float3(line.P * 0.5f + 0.5f, z);
     }
   }
@@ -194,7 +200,7 @@ void main()
   }
 
   /* Additional culling steps to discard occluded lines. */
-  if (is_occluded_by_axis(vertex_out.pos) || is_occluded_by_higher_level(line, level)) {
+  if (is_occluded_by_higher_level(line, level)) {
     return; /* Discard line. */
   }
 

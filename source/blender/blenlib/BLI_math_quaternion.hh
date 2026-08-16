@@ -262,7 +262,7 @@ template<typename T> [[nodiscard]] inline QuaternionBase<T> normalize(const Quat
 }
 
 /**
- * Generic function for implementing slerp
+ * Generic function for implementing slerp on the [0, 1] interval
  * (quaternions and spherical vector coords).
  *
  * \param t: factor in [0..1]
@@ -274,12 +274,13 @@ template<typename T>
 {
   const T eps = T(1e-4);
 
+  BLI_assert(IN_RANGE(t, 0.0, 1.0));
   BLI_assert(IN_RANGE_INCL(cosom, T(-1.0001), T(1.0001)));
 
   VecBase<T, 2> w;
   T abs_cosom = math::abs(cosom);
   /* Within [-1..1] range, avoid aligned axis. */
-  if (LIKELY(abs_cosom < (T(1) - eps))) {
+  if (abs_cosom < (T(1) - eps)) [[likely]] {
     const T omega = math::acos(abs_cosom);
     const T sinom = math::sin(omega);
 
@@ -304,11 +305,14 @@ template<typename T>
                                                    const QuaternionBase<T> &b,
                                                    T t)
 {
-  using Vec4T = VecBase<T, 4>;
   BLI_assert(is_unit_scale(a));
   BLI_assert(is_unit_scale(b));
-  VecBase<T, 2> w = interpolate_dot_slerp(t, dot(a, b));
-  return QuaternionBase<T>(w[0] * Vec4T(a) + w[1] * Vec4T(b));
+
+  /* Quaternion slerp for arbitrary interpolation factors. */
+  if (math::dot(a, b) < 0.0f) {
+    return a * math::pow(-math::invert_normalized(a) * b, t);
+  }
+  return a * math::pow(math::invert_normalized(a) * b, t);
 }
 
 template<typename T>
@@ -685,7 +689,7 @@ template<typename T> QuaternionBase<T> QuaternionBase<T>::expmap(const VecBase<T
   /* Obtain axis/angle representation. */
   T angle;
   const VecBase<T, 3> axis = normalize_and_get_length(expmap, angle);
-  if (LIKELY(angle != T(0))) {
+  if (angle != T(0)) [[likely]] {
     return to_quaternion(AxisAngleT(axis, AngleRadianBase<T>(angle).wrapped()));
   }
   return QuaternionBase<T>::identity();

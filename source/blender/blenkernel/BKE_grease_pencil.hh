@@ -997,7 +997,7 @@ class GreasePencilRuntime {
    * Temporarily enable the eraser. Used by the draw tool.
    */
   bool temp_use_eraser = false;
-  float temp_eraser_size = 0.0f;
+  float temp_eraser_radius = 0.0f;
 
   std::unique_ptr<bake::BakeMaterialsList> bake_materials;
 
@@ -1066,7 +1066,7 @@ inline const bke::greasepencil::DrawingReference &GreasePencilDrawingReference::
 
 inline GreasePencilFrame GreasePencilFrame::end()
 {
-  return GreasePencilFrame{-1, 0, 0};
+  return GreasePencilFrame{-1, {}, 0};
 }
 
 inline bool GreasePencilFrame::is_end() const

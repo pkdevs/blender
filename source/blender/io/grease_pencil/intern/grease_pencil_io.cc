@@ -3,11 +3,11 @@
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
 #include "BLI_bounds.hh"
-#include "BLI_color.hh"
-#include "BLI_listbase.h"
+#include "BLI_color_types.hh"
+#include "BLI_listbase.hh"
 #include "BLI_math_matrix.hh"
-#include "BLI_math_vector.h"
 #include "BLI_math_vector.hh"
+#include "BLI_math_vector_c.hh"
 
 #include "BKE_attribute.hh"
 #include "BKE_camera.h"
@@ -204,7 +204,9 @@ std::optional<Bounds<float2>> GreasePencilExporter::compute_objects_bounds(
   }
 
   /* Add small gap. */
-  full_bounds->pad(gap);
+  if (full_bounds) {
+    full_bounds->pad(gap);
+  }
 
   return full_bounds;
 }
@@ -243,14 +245,15 @@ void GreasePencilExporter::prepare_render_params(Scene &scene, const int frame_n
 
   if (use_camera_view) {
     /* Camera rectangle (in screen space). */
-    rctf camera_rect;
-    ED_view3d_calc_camera_border(&scene,
-                                 context_.depsgraph,
-                                 context_.region,
-                                 context_.v3d,
-                                 context_.rv3d,
-                                 true,
-                                 &camera_rect);
+    const rctf camera_rect = BKE_camera_view_border(&scene,
+                                                    context_.depsgraph,
+                                                    context_.v3d,
+                                                    context_.rv3d,
+                                                    context_.region->winx,
+                                                    context_.region->winy,
+                                                    true,
+                                                    false,
+                                                    true);
     screen_rect_ = {{camera_rect.xmin, camera_rect.ymin}, {camera_rect.xmax, camera_rect.ymax}};
     camera_persmat_ = persmat_from_camera_object(scene);
 
@@ -309,11 +312,12 @@ Vector<GreasePencilExporter::ObjectInfo> GreasePencilExporter::retrieve_objects(
 {
   using SelectMode = ExportParams::SelectMode;
 
+  const Main *bmain = CTX_data_main(&context_.C);
   Scene &scene = *CTX_data_scene(&context_.C);
   ViewLayer *view_layer = CTX_data_view_layer(&context_.C);
   const float3 camera_z_axis = float3(context_.rv3d->viewinv[2]);
 
-  BKE_view_layer_synced_ensure(&scene, view_layer);
+  BKE_view_layer_synced_ensure(*bmain, &scene, view_layer);
 
   Vector<ObjectInfo> objects;
   auto add_object = [&](Object *object) {
@@ -358,6 +362,36 @@ Vector<GreasePencilExporter::ObjectInfo> GreasePencilExporter::retrieve_objects(
   return objects;
 }
 
+static float get_miter_limit_angle(const VArray<float> miter_angles,
+                                   const IndexRange points,
+                                   const bool is_cyclic)
+{
+  /* Because the SVG file format only supports `linejoin` type per stroke. We use priority
+   * system to decide what type to use.
+   * The order from lowest to highest is `Round`, `Bevel` then `Miter` */
+  float miter_limit_angle = GP_STROKE_MITER_ANGLE_ROUND;
+
+  /* Don't check the ends unless cyclical. */
+  for (const int point_i : points.drop_back(is_cyclic ? 0 : 1).drop_front(is_cyclic ? 0 : 1)) {
+    const float point_miter_angle = miter_angles[point_i];
+
+    /* Miter should take priority over Round. */
+    if (point_miter_angle <= GP_STROKE_MITER_ANGLE_ROUND) {
+      continue;
+    }
+
+    /* This point's limit should replace the round type. */
+    if (miter_limit_angle <= GP_STROKE_MITER_ANGLE_ROUND) {
+      miter_limit_angle = point_miter_angle;
+    }
+
+    /* Sharp corners (Lower angles) should take priority. */
+    miter_limit_angle = math::min(miter_limit_angle, point_miter_angle);
+  }
+
+  return miter_limit_angle;
+}
+
 void GreasePencilExporter::foreach_shape_in_layer(const Object &object,
                                                   const bke::greasepencil::Layer &layer,
                                                   const bke::greasepencil::Drawing &drawing,
@@ -385,6 +419,8 @@ void GreasePencilExporter::foreach_shape_in_layer(const Object &object,
       "hide_stroke", bke::AttrDomain::Curve, false);
   const VArray<int> fill_ids = *attributes.lookup_or_default<int>(
       "fill_id", bke::AttrDomain::Curve, 0);
+  const VArray<float> miter_angles = *attributes.lookup_or_default<float>(
+      "miter_angle", bke::AttrDomain::Point, GP_STROKE_MITER_ANGLE_ROUND);
   /* Point attributes. */
   const Span<float3> positions = curves.positions();
   const Span<float3> positions_left = *curves.handle_positions_left();
@@ -467,6 +503,7 @@ void GreasePencilExporter::foreach_shape_in_layer(const Object &object,
                fill_color,
                layer.opacity,
                std::nullopt,
+               std::nullopt,
                false,
                false);
     }
@@ -486,10 +523,13 @@ void GreasePencilExporter::foreach_shape_in_layer(const Object &object,
                                                          radii.slice(points)) :
                                                      std::nullopt;
       if (uniform_width) {
+        const bool is_cyclic = cyclic[i_curve];
         const GreasePencilStrokeCapType start_cap = GreasePencilStrokeCapType(start_caps[i_curve]);
         const GreasePencilStrokeCapType end_cap = GreasePencilStrokeCapType(end_caps[i_curve]);
         const bool round_cap = start_cap == GP_STROKE_CAP_TYPE_ROUND ||
                                end_cap == GP_STROKE_CAP_TYPE_ROUND;
+
+        const float miter_limit_angle = get_miter_limit_angle(miter_angles, points, is_cyclic);
 
         shape_fn(positions,
                  positions_left,
@@ -501,6 +541,7 @@ void GreasePencilExporter::foreach_shape_in_layer(const Object &object,
                  stroke_color,
                  stroke_opacity,
                  uniform_width,
+                 miter_limit_angle,
                  round_cap,
                  false);
       }
@@ -546,6 +587,7 @@ void GreasePencilExporter::foreach_shape_in_layer(const Object &object,
                  outline_types,
                  stroke_color,
                  stroke_opacity,
+                 std::nullopt,
                  std::nullopt,
                  false,
                  true);

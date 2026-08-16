@@ -1,10 +1,22 @@
+/* SPDX-FileCopyrightText: 2026 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
+
+/** \file
+ * \ingroup animrig
+ */
+
 #include "ANIM_rna.hh"
+
+#include "BKE_gtest_base.hh"
 
 #include "testing/testing.h"
 
 namespace blender::animrig::tests {
 
-TEST(ANIM_rna, is_rotation_path)
+class AnimRnaTest : public bke::BlenderGTestBase {};
+
+TEST_F(AnimRnaTest, is_rotation_path)
 {
   EXPECT_TRUE(is_rotation_path("rotation_euler"));
   EXPECT_TRUE(is_rotation_path("pose.bones[\"test\"].rotation_euler"));
@@ -15,7 +27,7 @@ TEST(ANIM_rna, is_rotation_path)
   EXPECT_FALSE(is_rotation_path("pose.bones[\"test\"][\"rotation_euler\"]"));
 }
 
-TEST(ANIM_rna, rotation_mode_from_path)
+TEST_F(AnimRnaTest, rotation_mode_from_path)
 {
   EXPECT_EQ(ROT_MODE_QUAT, get_rotation_mode_from_path("rotation_quaternion").value());
   EXPECT_EQ(ROT_MODE_EUL, get_rotation_mode_from_path("rotation_euler").value());

@@ -11,6 +11,7 @@ from bpy.app.translations import (
     pgettext_rpt as rpt_,
 )
 from rna_prop_ui import PropertyPanel
+from bl_ui.utils import PresetPanel
 
 
 class StripButtonsPanel:
@@ -31,6 +32,13 @@ class StripColorTagPicker:
     @classmethod
     def poll(cls, context):
         return context.active_strip is not None
+
+
+class STRIP_PT_effect_text_style_presets(PresetPanel, Panel):
+    bl_label = "Text Style Presets"
+    preset_subdir = "sequencer/text_style"
+    preset_operator = "script.execute_preset"
+    preset_add_operator = "sequencer.text_strip_style_preset_add"
 
 
 class STRIP_PT_color_tag_picker(StripColorTagPicker, Panel):
@@ -86,7 +94,7 @@ class STRIP_PT_strip(StripButtonsPanel, Panel):
         elif strip_type == 'META':
             icon_header = 'SEQ_STRIP_META'
         else:
-            icon_header = 'SEQ_SEQUENCER'
+            icon_header = 'SEQ_STRIP'
 
         row = layout.row(align=True)
         row.use_property_decorate = False
@@ -130,6 +138,47 @@ class STRIP_PT_adjust_crop(StripButtonsPanel, Panel):
         col.prop(strip.crop, "min_y")
 
 
+def draw_compositor_effect_node_group_errors(layout, node_tree, strip_input_num):
+    if not node_tree or not node_tree.interface:
+        return
+    float_input_sockets_num = 0
+    color_input_sockets_num = 0
+    output_sockets = []
+    for socket in node_tree.interface.items_tree:
+        if socket.item_type == 'SOCKET':
+            if socket.in_out == 'INPUT' and socket.socket_type == 'NodeSocketColor':
+                color_input_sockets_num += 1
+            elif socket.in_out == 'INPUT' and socket.socket_type == 'NodeSocketFloat':
+                float_input_sockets_num += 1
+            elif socket.in_out == 'OUTPUT':
+                output_sockets.append(socket)
+
+    if color_input_sockets_num < strip_input_num:
+        layout.label(
+            text=rpt_("Node group must have at least {:d} Color input(s).").format(strip_input_num),
+            icon='STATUS_ERROR',
+            translate=False,
+        )
+    if float_input_sockets_num == 0:
+        layout.label(
+            text=rpt_("Node group does not have an input of type Float. Fade is unused."),
+            icon='STATUS_ERROR',
+            translate=False,
+        )
+    if len(output_sockets) < 1:
+        layout.label(
+            text=rpt_("Node group must have an output."),
+            icon='STATUS_ERROR',
+            translate=False,
+        )
+    elif output_sockets[0].socket_type != 'NodeSocketColor':
+        layout.label(
+            text=rpt_("The first node group output must have the Color type."),
+            icon='STATUS_ERROR',
+            translate=False,
+        )
+
+
 class STRIP_PT_effect(StripButtonsPanel, Panel):
     bl_label = "Effect Strip"
 
@@ -158,6 +207,12 @@ class STRIP_PT_effect(StripButtonsPanel, Panel):
             'COLORMIX',
         }
 
+    def draw_header_preset(self, context):
+        strip = context.active_strip
+
+        if strip.type == 'TEXT':
+            STRIP_PT_effect_text_style_presets.draw_panel_header(self.layout)
+
     def draw(self, context):
         layout = self.layout
         layout.use_property_split = True
@@ -170,6 +225,7 @@ class STRIP_PT_effect(StripButtonsPanel, Panel):
 
         if strip_type == 'COMPOSITOR':
             layout.template_ID(strip, "node_group", new="node.new_compositor_sequencer_node_group")
+            draw_compositor_effect_node_group_errors(layout, strip.node_group, strip.input_count)
 
         if strip.input_count > 0:
             col = layout.column()
@@ -177,10 +233,13 @@ class STRIP_PT_effect(StripButtonsPanel, Panel):
             row.prop(strip, "input_1")
 
             if strip.input_count > 1:
-                row.operator("sequencer.swap_inputs", text="", icon='SORT_ASC')
+                is_transition = strip_type in {'CROSS', 'GAMMA_CROSS', 'WIPE', 'COMPOSITOR'}
+                if not is_transition:
+                    row.operator("sequencer.swap_inputs", text="", icon='SORT_ASC')
                 row = col.row()
                 row.prop(strip, "input_2")
-                row.operator("sequencer.swap_inputs", text="", icon='SORT_DESC')
+                if not is_transition:
+                    row.operator("sequencer.swap_inputs", text="", icon='SORT_DESC')
 
         if strip_type == 'COLOR':
             layout.template_color_picker(strip, "color", value_slider=True, cubic=True)
@@ -252,16 +311,12 @@ class STRIP_PT_effect(StripButtonsPanel, Panel):
                         row.label(text="")
             else:
                 col.separator()
-                col.label(text="Two or more channels are needed below this strip", icon='INFO')
+                col.label(text="Two or more channels are needed below this strip", icon='STATUS_INFO')
 
         elif strip_type == 'TEXT':
             layout = self.layout
             col = layout.column()
-            col.scale_x = 1.3
-            col.scale_y = 1.3
-            col.use_property_split = False
-            col.prop(strip, "text", text="")
-            col.use_property_split = True
+            col.textbox_with_state(strip, "text", textbox_state=strip.textbox_state)
             layout.prop(strip, "wrap_width", text="Wrap Width")
 
         col = layout.column(align=True)
@@ -277,6 +332,9 @@ class STRIP_PT_effect(StripButtonsPanel, Panel):
             layout.prop(strip, "blend_effect", text="Blend Mode")
             row = layout.row(align=True)
             row.prop(strip, "factor", slider=True)
+
+        if strip_type == 'COMPOSITOR':
+            layout.template_compositor_strip_inputs(strip)
 
 
 class STRIP_PT_effect_text_layout(StripButtonsPanel, Panel):
@@ -321,6 +379,13 @@ class STRIP_PT_effect_text_style(StripButtonsPanel, Panel):
         row.prop(strip, "use_italic", text="", icon='ITALIC')
 
         col.prop(strip, "font_size")
+        row = col.row()
+        if strip.use_absolute_line_spacing:
+            row.prop(strip, "abs_space_line", text="Line Spacing")
+        else:
+            row.prop(strip, "space_line", text="Line Spacing")
+
+        row.prop(strip, "use_absolute_line_spacing", text="", icon='FIXED_SIZE')
         col.prop(strip, "color")
 
 
@@ -483,7 +548,11 @@ class STRIP_PT_source(StripButtonsPanel, Panel):
                 if elem:
                     col.prop(elem, "filename", text="")  # strip.elements[0] could be a fallback
 
-                col.prop(strip.colorspace_settings, "name", text="Color Space")
+                col.prop_with_menu(
+                    strip.colorspace_settings,
+                    "name",
+                    text="Color Space",
+                    menu="UI_MT_color_space_select")
 
                 col.prop(strip, "alpha_mode", text="Alpha")
                 sub = col.column(align=True)
@@ -493,7 +562,11 @@ class STRIP_PT_source(StripButtonsPanel, Panel):
 
                 col = layout.column()
                 col.prop(strip, "filepath", text="")
-                col.prop(strip.colorspace_settings, "name", text="Color Space")
+                col.prop_with_menu(
+                    strip.colorspace_settings,
+                    "name",
+                    text="Color Space",
+                    menu="UI_MT_color_space_select")
                 col.prop(strip, "stream_index")
                 col.prop(strip, "use_deinterlace")
 
@@ -587,6 +660,12 @@ class STRIP_PT_scene(StripButtonsPanel, Panel):
         layout.active = not strip.mute
 
         layout.template_ID(strip, "scene", text="Scene", new="scene.new_sequencer")
+
+        if scene:
+            row = layout.row()
+            row.enabled = (strip.scene_input == 'CAMERA')
+            row.template_search(strip, "view_layer", scene, "view_layers", text="View Layer")
+
         layout.prop(strip, "scene_input", text="Input")
 
         if strip.scene_input == 'CAMERA':
@@ -702,18 +781,18 @@ class STRIP_PT_time(StripButtonsPanel, Panel):
         right_handle = strip.right_handle
 
         length_list = (
-            str(round(content_start, 0)),
-            str(round(content_duration, 0)),
-            str(round(content_end, 0)),
+            str(round(left_handle, 0)),
+            str(round(duration, 0)),
+            str(round(right_handle, 0)),
         )
 
         if not is_effect:
             length_list = length_list + (
-                str(round(left_handle, 0)),
-                str(round(duration, 0)),
-                str(round(right_handle, 0)),
                 str(round(strip.content_trim_start, 0)),
                 str(round(strip.content_trim_end, 0)),
+                str(round(content_start, 0)),
+                str(round(content_duration, 0)),
+                str(round(content_end, 0)),
             )
 
         max_length = max(len(x) for x in length_list)
@@ -729,42 +808,40 @@ class STRIP_PT_time(StripButtonsPanel, Panel):
         split.label(text="Channel")
         split.prop(strip, "channel", text="")
 
-        if not is_effect or strip.input_count == 0:
-            layout.alignment = 'RIGHT'
-            sub = layout.column(align=True)
-
-            split = sub.split(factor=factor + max_factor, align=True)
-            split.alignment = 'RIGHT'
-            split.label(text="Left Handle")
-            split.prop(strip, "left_handle", text=smpte_from_frame(left_handle))
-
-            split = sub.split(factor=factor + max_factor, align=True)
-            split.alignment = 'RIGHT'
-            split.label(text="Strip Duration")
-            split.prop(strip, "duration", text=smpte_from_frame(duration))
-
-            split = sub.split(factor=factor + max_factor, align=True)
-            split.alignment = 'RIGHT'
-            split.label(text="Right Handle")
-            split.prop(strip, "right_handle", text=smpte_from_frame(right_handle))
-
+        layout.alignment = 'RIGHT'
         sub = layout.column(align=True)
-        split = sub.split(factor=factor + max_factor, align=True)
-        split.alignment = 'RIGHT'
-        split.label(text="Content Start")
-        split.prop(strip, "content_start", text=smpte_from_frame(content_start))
 
         split = sub.split(factor=factor + max_factor, align=True)
         split.alignment = 'RIGHT'
-        split.label(text="Duration")
-        split.prop(strip, "content_duration", text=smpte_from_frame(content_duration))
+        split.label(text="Left Handle")
+        split.prop(strip, "left_handle", text=smpte_from_frame(left_handle))
 
         split = sub.split(factor=factor + max_factor, align=True)
         split.alignment = 'RIGHT'
-        split.label(text="End")
-        split.prop(strip, "content_end", text=smpte_from_frame(content_end))
+        split.label(text="Strip Duration")
+        split.prop(strip, "duration", text=smpte_from_frame(duration))
+
+        split = sub.split(factor=factor + max_factor, align=True)
+        split.alignment = 'RIGHT'
+        split.label(text="Right Handle")
+        split.prop(strip, "right_handle", text=smpte_from_frame(right_handle))
 
         if not is_effect:
+            sub = layout.column(align=True)
+            split = sub.split(factor=factor + max_factor, align=True)
+            split.alignment = 'RIGHT'
+            split.label(text="Content Start")
+            split.prop(strip, "content_start", text=smpte_from_frame(content_start))
+
+            split = sub.split(factor=factor + max_factor, align=True)
+            split.alignment = 'RIGHT'
+            split.label(text="Duration")
+            split.prop(strip, "content_duration", text=smpte_from_frame(content_duration))
+
+            split = sub.split(factor=factor + max_factor, align=True)
+            split.alignment = 'RIGHT'
+            split.label(text="End")
+            split.prop(strip, "content_end", text=smpte_from_frame(content_end))
 
             layout.alignment = 'RIGHT'
             sub = layout.column(align=True)
@@ -814,11 +891,12 @@ class STRIP_PT_time(StripButtonsPanel, Panel):
                 split.alignment = 'LEFT'
                 split.label(text="{:d}-{:d} ({:d})".format(sta, end, end - sta + 1), translate=False)
 
-        sub = layout.row(align=True)
-        split = sub.split(factor=factor + max_factor)
-        split.alignment = 'RIGHT'
-        split.label(text="")
-        split.prop(strip, "show_retiming_keys")
+        if not is_effect:
+            sub = layout.row(align=True)
+            split = sub.split(factor=factor + max_factor)
+            split.alignment = 'RIGHT'
+            split.label(text="")
+            split.prop(strip, "show_retiming_keys")
 
 
 class STRIP_PT_adjust_sound(StripButtonsPanel, Panel):
@@ -941,6 +1019,11 @@ class STRIP_PT_adjust_transform(StripButtonsPanel, Panel):
         col.prop(strip.transform, "offset_x", text="Position X")
         col.prop(strip.transform, "offset_y", text="Y")
 
+        if strip.type == 'COLOR':
+            col = layout.column(align=True)
+            col.prop(strip, "width", text="Width")
+            col.prop(strip, "height", text="Height")
+
         col = layout.column(align=True)
         col.prop(strip.transform, "scale_x", text="Scale X")
         col.prop(strip.transform, "scale_y", text="Y")
@@ -967,10 +1050,7 @@ class STRIP_PT_adjust_video(StripButtonsPanel, Panel):
             return False
 
         return strip.type in {
-            'MOVIE', 'IMAGE', 'SCENE', 'MOVIECLIP', 'MASK',
-            'META', 'ADD', 'SUBTRACT', 'ALPHA_OVER',
-            'ALPHA_UNDER', 'CROSS', 'GAMMA_CROSS', 'MULTIPLY', 'COMPOSITOR',
-            'WIPE', 'GLOW', 'COLOR', 'MULTICAM', 'SPEED', 'ADJUSTMENT', 'COLORMIX',
+            'MOVIE', 'IMAGE', 'SCENE', 'MOVIECLIP', 'MASK', 'META',
         }
 
     def draw(self, context):
@@ -1038,6 +1118,7 @@ classes = (
     STRIP_PT_scene_sound,
     STRIP_PT_mask,
     STRIP_PT_effect_text_style,
+    STRIP_PT_effect_text_style_presets,
     STRIP_PT_effect_text_outline,
     STRIP_PT_effect_text_shadow,
     STRIP_PT_effect_text_box,

@@ -11,9 +11,9 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_listbase.h"
-#include "BLI_math_matrix.h"
-#include "BLI_math_vector.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_vector_c.hh"
 
 #include "BKE_context.hh"
 #include "BKE_mask.hh"
@@ -40,7 +40,7 @@ struct TransDataMasking {
   MaskSplinePoint *point;
   float parent_matrix[3][3];
   float parent_inverse_matrix[3][3];
-  char orig_handle_type;
+  eBezTriple_Handle orig_handle_type;
 
   eMaskWhichHandle which_handle;
 };

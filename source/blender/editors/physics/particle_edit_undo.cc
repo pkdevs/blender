@@ -16,8 +16,8 @@
 #include "DNA_scene_types.h"
 #include "DNA_windowmanager_types.h"
 
-#include "BLI_listbase.h"
-#include "BLI_utildefines.h"
+#include "BLI_listbase.hh"
+#include "BLI_utildefines.hh"
 
 #include "BKE_context.hh"
 #include "BKE_layer.hh"
@@ -210,22 +210,23 @@ struct ParticleUndoStep {
 static bool particle_undosys_poll(bContext *C)
 {
   Depsgraph *depsgraph = CTX_data_depsgraph_pointer(C);
+  const Main *bmain = CTX_data_main(C);
   Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
-  BKE_view_layer_synced_ensure(scene, view_layer);
+  BKE_view_layer_synced_ensure(*bmain, scene, view_layer);
   Object *ob = BKE_view_layer_active_object_get(view_layer);
   PTCacheEdit *edit = PE_get_current(depsgraph, scene, ob);
 
   return (edit != nullptr);
 }
 
-static bool particle_undosys_step_encode(bContext *C, Main * /*bmain*/, UndoStep *us_p)
+static bool particle_undosys_step_encode(bContext *C, Main *bmain, UndoStep *us_p)
 {
   Depsgraph *depsgraph = CTX_data_depsgraph_pointer(C);
   ParticleUndoStep *us = reinterpret_cast<ParticleUndoStep *>(us_p);
   ViewLayer *view_layer = CTX_data_view_layer(C);
   us->scene_ref.ptr = CTX_data_scene(C);
-  BKE_view_layer_synced_ensure(us->scene_ref.ptr, view_layer);
+  BKE_view_layer_synced_ensure(*bmain, us->scene_ref.ptr, view_layer);
   us->object_ref.ptr = BKE_view_layer_active_object_get(view_layer);
   PTCacheEdit *edit = PE_get_current(depsgraph, us->scene_ref.ptr, us->object_ref.ptr);
   undoptcache_from_editcache(&us->data, edit);
@@ -233,7 +234,7 @@ static bool particle_undosys_step_encode(bContext *C, Main * /*bmain*/, UndoStep
 }
 
 static void particle_undosys_step_decode(
-    bContext *C, Main * /*bmain*/, UndoStep *us_p, const eUndoStepDir /*dir*/, bool /*is_final*/)
+    bContext *C, Main *bmain, UndoStep *us_p, const eUndoStepDir /*dir*/, bool /*is_final*/)
 {
   Depsgraph *depsgraph = CTX_data_depsgraph_pointer(C);
 
@@ -247,13 +248,18 @@ static void particle_undosys_step_decode(
       CTX_wm_manager(C), us->scene_ref.ptr, &scene, &view_layer);
 
   Object *ob = us->object_ref.ptr;
+  if (ob->mode != OB_MODE_PARTICLE_EDIT) {
+    /* Exit the current mode before restoring Particle Edit to clean up its runtime data and avoid
+     * combining incompatible mode bits. */
+    ed::object::mode_generic_exit(bmain, depsgraph, scene, ob);
+  }
   ED_object_particle_edit_mode_enter_ex(depsgraph, scene, ob);
 
   PTCacheEdit *edit = PE_get_current(depsgraph, scene, ob);
 
   /* While this shouldn't happen, entering particle edit-mode uses a more complex
    * setup compared to most other modes which we can't ensure succeeds. */
-  if (UNLIKELY(edit == nullptr)) {
+  if (edit == nullptr) [[unlikely]] {
     BLI_assert(0);
     return;
   }
@@ -266,7 +272,7 @@ static void particle_undosys_step_decode(
   }
   DEG_id_tag_update(&ob->id, ID_RECALC_GEOMETRY);
 
-  ED_undo_object_set_active_or_warn(scene, view_layer, ob, us_p->name, &LOG);
+  ED_undo_object_set_active_or_warn(*bmain, scene, view_layer, ob, us_p->name, &LOG);
 
   /* Check after setting active (unless undoing into another scene). */
   BLI_assert(particle_undosys_poll(C) || (scene != CTX_data_scene(C)));
@@ -289,7 +295,7 @@ static void particle_undosys_foreach_ID_ref(UndoStep *us_p,
 
 void ED_particle_undosys_type(UndoType *ut)
 {
-  ut->name = "Edit Particle";
+  ut->identifier = "EDIT_PARTICLE";
   ut->poll = particle_undosys_poll;
   ut->step_encode = particle_undosys_step_encode;
   ut->step_decode = particle_undosys_step_decode;
@@ -297,7 +303,7 @@ void ED_particle_undosys_type(UndoType *ut)
 
   ut->step_foreach_ID_ref = particle_undosys_foreach_ID_ref;
 
-  ut->flags = UNDOTYPE_FLAG_NEED_CONTEXT_FOR_ENCODE;
+  ut->flags = UNDOTYPE_FLAG_NEED_CONTEXT_FOR_ENCODE | UNDOTYPE_FLAG_ENCODE_PRE_MEMFILE_SUPPORTED;
 
   ut->step_size = sizeof(ParticleUndoStep);
 }

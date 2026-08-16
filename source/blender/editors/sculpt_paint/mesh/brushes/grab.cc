@@ -45,6 +45,7 @@ BLI_NOINLINE static void calc_silhouette_factors(const StrokeCache &cache,
                                                  const Span<float3> normals,
                                                  const MutableSpan<float> factors)
 {
+  PRF_scope(ProfileCategory::Editor);
   BLI_assert(normals.size() == factors.size());
 
   const float sign = math::sign(math::dot(cache.initial_normal_symm, cache.grab_delta_symm));
@@ -169,17 +170,12 @@ void do_grab_brush(const Depsgraph &depsgraph,
                    Object &object,
                    const IndexMask &node_mask)
 {
+  PRF_scope(ProfileCategory::Editor);
   const SculptSession &ss = *object.runtime->sculpt_session;
   bke::pbvh::Tree &pbvh = *bke::object::pbvh_get(object);
   const Brush &brush = *BKE_paint_brush_for_read(&sd.paint);
 
-  float3 grab_delta = ss.cache->grab_delta_symm;
-
-  if (ss.cache->normal_weight > 0.0f) {
-    sculpt_project_v3_normal_align(ss, ss.cache->normal_weight, grab_delta);
-  }
-
-  grab_delta *= ss.cache->bstrength;
+  const float3 grab_delta = grab_delta_get(brush, *ss.cache) * ss.cache->bstrength;
 
   threading::EnumerableThreadSpecific<LocalData> all_tls;
   switch (pbvh.type()) {
@@ -258,7 +254,7 @@ void geometry_preview_lines_update(Depsgraph &depsgraph,
     return;
   }
 
-  BKE_sculpt_update_object_for_edit(&depsgraph, &object, false);
+  BKE_sculptsession_update_for_edit(&depsgraph, &object, false);
 
   const Mesh &mesh = *id_cast<const Mesh *>(object.data);
   /* Always grab active shape key if the sculpt happens on shapekey. */

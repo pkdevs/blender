@@ -24,7 +24,8 @@ enum [[host_shared]] eFilmWeightLayerIndex : uint32_t {
 enum [[host_shared]] ePassStorageType : uint32_t {
   PASS_STORAGE_COLOR,
   PASS_STORAGE_VALUE,
-  PASS_STORAGE_CRYPTOMATTE
+  PASS_STORAGE_CRYPTOMATTE,
+  PASS_STORAGE_DENOISING_DEPTH
 };
 
 enum [[host_shared]] PassCategory : uint32_t {
@@ -34,8 +35,11 @@ enum [[host_shared]] PassCategory : uint32_t {
   PASS_CATEGORY_COLOR_3 = 1u << 3,
   PASS_CATEGORY_AOV = 1u << 4,
   PASS_CATEGORY_CRYPTOMATTE = 1u << 5,
+  PASS_CATEGORY_DENOISE = 1u << 6,
 };
+#ifndef GPU_SHADER
 ENUM_OPERATORS(PassCategory)
+#endif
 
 struct [[host_shared]] FilmSample {
   int2 texel;
@@ -88,6 +92,11 @@ struct [[host_shared]] FilmData {
   int shadow_id;
   int ambient_occlusion_id;
   int transparent_id;
+  int denoising_depth_id;
+  int denoising_normal_id;
+  int denoising_roughness_id;
+  int denoising_diffuse_albedo_id;
+  int denoising_specular_albedo_id;
   /** Not indexed but still not -1 if enabled. */
   int depth_id;
   int combined_id;
@@ -95,8 +104,6 @@ struct [[host_shared]] FilmData {
   int display_id;
   /** Storage type of the render-pass to be displayed. */
   enum ePassStorageType display_storage_type;
-  /** True if we bypass the accumulation and directly output the accumulation buffer. */
-  bool32_t display_only;
   /** Start of AOVs and number of aov. */
   int aov_color_id;
   int aov_color_len;
@@ -124,7 +131,7 @@ struct [[host_shared]] FilmData {
   int samples_len;
   /** Sum of the weights of all samples in the sample table. */
   float samples_weight_total;
-  int _pad2;
+  int _pad0;
   struct FilmSample samples[FILM_PRECOMP_SAMPLE_MAX];
 };
 

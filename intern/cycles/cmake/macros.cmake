@@ -10,7 +10,7 @@ function(cycles_set_solution_folder target)
   endif()
 endfunction()
 
-macro(cycles_add_library target library_deps)
+function(cycles_add_library target library_deps)
   add_library(${target} ${ARGN})
 
   # On Windows certain libraries have two sets of binaries: one for debug builds and one for
@@ -83,17 +83,19 @@ macro(cycles_add_library target library_deps)
   endif()
 
   cycles_set_solution_folder(${target})
-endmacro()
+endfunction()
 
-macro(cycles_external_libraries_append libraries)
+# Modifies in parent scope:
+# - `${libraries}`: appended with external library dependencies.
+function(cycles_external_libraries_append libraries)
   # Dependencies with modern targets, these always exist even when optional deps are disabled.
   list(APPEND ${libraries}
     bf::dependencies::openimageio
     bf::dependencies::pthreads
     bf::dependencies::zlib
     bf::dependencies::optional::embree
-    bf::dependencies::optional::opencolorio
-    bf::dependencies::optional::openexr
+    bf::dependencies::opencolorio
+    bf::dependencies::openexr
     bf::dependencies::optional::openimagedenoise
     bf::dependencies::optional::openpgl
     bf::dependencies::optional::opensubdiv
@@ -101,7 +103,6 @@ macro(cycles_external_libraries_append libraries)
     bf::dependencies::optional::osl
     bf::dependencies::optional::pugixml
     bf::dependencies::optional::python
-    bf::dependencies::optional::webp
     ${CMAKE_DL_LIBS}
     ${PLATFORM_LINKLIBS}
   )
@@ -112,10 +113,9 @@ macro(cycles_external_libraries_append libraries)
     if(WITH_USD)
       list(APPEND ${libraries} "-framework CoreVideo -framework Cocoa -framework OpenGL")
     endif()
-    if(WITH_OPENCOLORIO)
-      list(APPEND ${libraries} "-framework IOKit")
-      list(APPEND ${libraries} "-framework Carbon")
-    endif()
+    # OpenColorIO
+    list(APPEND ${libraries} "-framework IOKit")
+    list(APPEND ${libraries} "-framework Carbon")
     if(WITH_OPENIMAGEDENOISE)
       if("${CMAKE_OSX_ARCHITECTURES}" STREQUAL "arm64")
         list(APPEND ${libraries} "-framework Accelerate")
@@ -143,7 +143,7 @@ macro(cycles_external_libraries_append libraries)
     list(APPEND ${libraries} extern_hipew)
   endif()
 
-  if(WITH_CYCLES_DEVICE_ONEAPI AND WITH_CYCLES_EMBREE  AND EMBREE_SYCL_SUPPORT)
+  if(WITH_CYCLES_DEVICE_ONEAPI AND WITH_EMBREE  AND EMBREE_SYCL_SUPPORT)
     list(APPEND ${libraries} ${SYCL_LIBRARIES})
   endif()
 
@@ -162,9 +162,10 @@ macro(cycles_external_libraries_append libraries)
   if(NOT CYCLES_STANDALONE_REPOSITORY)
     list(APPEND ${libraries} bf_intern_guardedalloc)
   endif()
-endmacro()
+  set(${libraries} "${${libraries}}" PARENT_SCOPE)
+endfunction()
 
-macro(cycles_install_libraries target)
+function(cycles_install_libraries target)
   # Copy DLLs for dynamically linked libraries.
   if(WIN32)
     if(CMAKE_BUILD_TYPE STREQUAL "Debug")
@@ -181,4 +182,4 @@ macro(cycles_install_libraries target)
         DESTINATION ${CMAKE_INSTALL_PREFIX})
     endif()
   endif()
-endmacro()
+endfunction()

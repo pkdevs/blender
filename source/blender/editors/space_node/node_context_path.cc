@@ -7,7 +7,7 @@
  * \brief Node breadcrumbs drawing
  */
 
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 #include "BLI_vector.hh"
 
 #include "DNA_node_types.h"
@@ -179,7 +179,7 @@ static void get_context_path_node_compositor(const bContext &C,
       ui::context_path_add_generic(path, *RNA_Scene, sequencer_scene, ICON_SCENE);
       Strip *strip = seq::select_active_get(sequencer_scene);
       if (strip) {
-        ui::context_path_add_generic(path, *RNA_Strip, strip, ICON_SEQ_STRIP_DUPLICATE);
+        ui::context_path_add_generic(path, *RNA_Strip, strip, ICON_SEQ_STRIP);
         bNodeTree *node_group = nullptr;
         if (strip->type == STRIP_TYPE_COMPOSITOR && strip->effectdata) {
           CompositorEffectVars *comp_data = static_cast<CompositorEffectVars *>(strip->effectdata);

@@ -18,14 +18,15 @@
 #include "DNA_screen_types.h"
 #include "DNA_space_types.h"
 
-#include "BLI_listbase.h"
-#include "BLI_math_vector.h"
-#include "BLI_string.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_vector_c.hh"
+#include "BLI_string.hh"
 #include "BLI_string_ref.hh"
 
 #include "BKE_context.hh"
 #include "BKE_cryptomatte.h"
 #include "BKE_image.hh"
+#include "BKE_layer.hh"
 #include "BKE_material.hh"
 #include "BKE_report.hh"
 #include "BKE_screen.hh"
@@ -119,7 +120,7 @@ static bool eyedropper_init(bContext *C, wmOperator *op)
   const enum PropertySubType prop_subtype = eye->prop ? RNA_property_subtype(eye->prop) :
                                                         PropertySubType(0);
 
-  if ((eye->ptr.data == nullptr) || (eye->prop == nullptr) ||
+  if (!eye->ptr || (eye->prop == nullptr) ||
       (RNA_property_editable(&eye->ptr, eye->prop) == false) ||
       (RNA_property_array_length(&eye->ptr, eye->prop) < 3) ||
       (RNA_property_type(eye->prop) != PROP_FLOAT) ||
@@ -133,6 +134,7 @@ static bool eyedropper_init(bContext *C, wmOperator *op)
   float col[4];
   RNA_property_float_get_array_at_most(&eye->ptr, eye->prop, col, ARRAY_SIZE(col));
   if (eye->ptr.type == RNA_CompositorNodeCryptomatteV2) {
+    BKE_main_view_layers_synced_ensure(CTX_data_main(C));
     eye->crypto_node = static_cast<bNode *>(eye->ptr.data);
     eye->cryptomatte_session = ntreeCompositCryptomatteSession(eye->crypto_node);
     eye->cb_win = CTX_wm_window(C);
@@ -258,7 +260,7 @@ static bool eyedropper_cryptomatte_sample_renderlayer_fl(RenderLayer *render_lay
       const int y = int(fpos[1] * render_pass.recty);
       const int offset = 4 * (y * render_pass.rectx + x);
       zero_v3(r_col);
-      r_col[0] = render_pass.ibuf->float_buffer.data[offset];
+      r_col[0] = render_pass.ibuf->float_data()[offset];
       return true;
     }
   }
@@ -641,7 +643,7 @@ static wmOperatorStatus eyedropper_modal(bContext *C, wmOperator *op, const wmEv
       status.opmodal(IFACE_("Confirm"), op->type, EYE_MODAL_SAMPLE_CONFIRM);
       status.opmodal(IFACE_("Cancel"), op->type, EYE_MODAL_CANCEL);
 #ifdef __APPLE__
-      status.item(TIP_("Press 'Enter' to sample outside of a Blender window"), ICON_INFO);
+      status.item(TIP_("Press 'Enter' to sample outside of a Blender window"), ICON_STATUS_INFO);
 #endif
     }
 

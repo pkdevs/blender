@@ -44,7 +44,7 @@ static uint32_t divide_ceil(uint32_t a, uint32_t b)
 template<typename T>
 void realloc_aligned_array(AlignedArrayPtr<T> &ptr, size_t elem_count, size_t new_size)
 {
-  assert(new_size > elem_count);
+  assert(new_size >= elem_count);
   AlignedArrayPtr<T> new_ptr(new_size);
   if (ptr.get()) {
     std::memcpy(new_ptr.get(), ptr.get(), elem_count * sizeof(T));
@@ -491,7 +491,7 @@ void TokenBuffer::tokenize(const CharClass char_class_table[128])
    * This is done in order to avoid allocation and check inside the hot loop. */
   reserve(str_.size());
 
-  if (str_.size() == 0) {
+  if (str_.empty()) {
     size_ = 0;
     types_[0] = EndOfFile;
     return;
@@ -504,7 +504,7 @@ void TokenBuffer::tokenize(const CharClass char_class_table[128])
    * preceding character if the classes are compatible (see `CharClass::CanMerge`).
    *
    * The offsets define the boundaries of the tokens.
-   * If whitespaces are treated as tokens, one offset is emitted for the begining of each token.
+   * If whitespaces are treated as tokens, one offset is emitted for the beginning of each token.
    *
    * str:      i n t   a = 0 ;   EndOfFile
    * emit:     1 0 0 0 1 1 1 1 1 1
@@ -955,7 +955,7 @@ void TokenBuffer::merge_complex_literals()
     *out_offset_end = in_offset_end[i];
   }
 
-  assert(in_types < out_type);
+  assert(in_types <= out_type);
   assert(out_type - in_types < 0xFFFFFFFFu);
   size_ = out_type - in_types;
   types_[size_] = EndOfFile;

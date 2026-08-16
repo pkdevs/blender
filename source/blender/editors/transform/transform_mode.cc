@@ -13,15 +13,16 @@
 #include "DNA_space_types.h"
 #include "DNA_windowmanager_types.h"
 
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 #include "BLI_math_base.hh"
-#include "BLI_math_matrix.h"
-#include "BLI_math_rotation.h"
-#include "BLI_math_vector.h"
-#include "BLI_string_utf8.h"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_rotation_c.hh"
+#include "BLI_math_vector_c.hh"
+#include "BLI_string_utf8.hh"
 
 #include "BKE_constraint.h"
 #include "BKE_context.hh"
+#include "BKE_layer.hh"
 
 #include "BLT_translation.hh"
 
@@ -39,14 +40,15 @@ namespace blender::ed::transform {
 eTfmMode transform_mode_really_used(bContext *C, eTfmMode mode)
 {
   if (mode == TFM_BONESIZE) {
-    Object *ob = CTX_data_active_object(C);
+    /* Use context here as `TransInfo` scene/view_layer members aren't yet initialized. */
+    Main &bmain = *CTX_data_main(C);
+    Scene *scene = CTX_data_scene(C);
+    ViewLayer *view_layer = CTX_data_view_layer(C);
+    BKE_view_layer_synced_ensure(bmain, scene, view_layer);
+    const Object *ob = BKE_view_layer_active_object_get(view_layer);
     BLI_assert(ob);
     if (ob->type != OB_ARMATURE) {
       return TFM_RESIZE;
-    }
-    bArmature *arm = id_cast<bArmature *>(ob->data);
-    if (arm->drawtype == ARM_DRAW_TYPE_ENVELOPE) {
-      return TFM_BONE_ENVELOPE_DIST;
     }
   }
 
@@ -261,7 +263,7 @@ void constraintTransLim(const TransInfo *t, const TransDataContainer *tc, TransD
     float ctime = float(t->scene->r.cfra);
 
     /* Make a temporary bConstraintOb for using these limit constraints
-     * - They only care that cob->matrix is correctly set ;-).
+     * - They only care that cob->matrix is correctly set.
      * - Current space should be local.
      */
     unit_m4(cob.matrix);
@@ -269,16 +271,12 @@ void constraintTransLim(const TransInfo *t, const TransDataContainer *tc, TransD
 
     /* Evaluate valid constraints. */
     for (con = td->con; con; con = con->next) {
+      if (!BKE_constraint_has_influence(con)) {
+        continue;
+      }
+
       const bConstraintTypeInfo *cti = nullptr;
       ListBaseT<bConstraintTarget> targets = {nullptr, nullptr};
-
-      /* Only consider constraint if enabled. */
-      if (con->flag & (CONSTRAINT_DISABLE | CONSTRAINT_OFF)) {
-        continue;
-      }
-      if (con->enforce == 0.0f) {
-        continue;
-      }
 
       /* Only use it if it's tagged for this purpose (and the right type). */
       if (con->type == CONSTRAINT_TYPE_LOCLIMIT) {
@@ -338,7 +336,7 @@ void constraintTransLim(const TransInfo *t, const TransDataContainer *tc, TransD
         }
 
         /* Free targets list. */
-        BLI_freelistN(&targets);
+        targets.free_no_destruct();
       }
     }
 
@@ -350,8 +348,8 @@ void constraintTransLim(const TransInfo *t, const TransDataContainer *tc, TransD
 static void constraintob_from_transdata(bConstraintOb *cob, TransDataExtension *td_ext)
 {
   /* Make a temporary bConstraintOb for use by limit constraints
-   * - they only care that cob->matrix is correctly set ;-)
-   * - current space should be local
+   * - They only care that cob->matrix is correctly set.
+   * - Current space should be local
    */
   memset(cob, 0, sizeof(bConstraintOb));
   if (!td_ext) {
@@ -386,11 +384,7 @@ static void constraintRotLim(const TransInfo * /*t*/, TransData *td, TransDataEx
 
     /* Evaluate valid constraints. */
     for (con = td->con; con; con = con->next) {
-      /* Only consider constraint if enabled. */
-      if (con->flag & (CONSTRAINT_DISABLE | CONSTRAINT_OFF)) {
-        continue;
-      }
-      if (con->enforce == 0.0f) {
+      if (!BKE_constraint_has_influence(con)) {
         continue;
       }
 
@@ -492,11 +486,7 @@ void constraintScaleLim(const TransInfo *t, const TransDataContainer *tc, int td
 
   /* Evaluate valid constraints. */
   for (con = td->con; con; con = con->next) {
-    /* Only consider constraint if enabled. */
-    if (con->flag & (CONSTRAINT_DISABLE | CONSTRAINT_OFF)) {
-      continue;
-    }
-    if (con->enforce == 0.0f) {
+    if (!BKE_constraint_has_influence(con)) {
       continue;
     }
 
@@ -1251,7 +1241,8 @@ void transform_mode_default_modal_orientation_set(TransInfo *t, int type)
     rv3d = static_cast<RegionView3D *>(t->region->regiondata);
   }
 
-  t->orient[O_DEFAULT].type = calc_orientation_from_type_ex(t->scene,
+  t->orient[O_DEFAULT].type = calc_orientation_from_type_ex(*t->bmain,
+                                                            t->scene,
                                                             t->view_layer,
                                                             v3d,
                                                             rv3d,
@@ -1274,10 +1265,10 @@ void transform_mode_rotation_axis_get(const TransInfo *t, float3 &r_axis)
   }
   else {
     r_axis = t->spacemtx[t->orient_axis];
-    /* For unconstrained rotation in the 3D viewport, flip the axis so the rotation direction
-     * matches the mouse movement in view space. */
+    /* For unconstrained rotation in the 3D viewport and UV editor, flip the axis so the rotation
+     * direction matches the mouse movement in view space. */
     if ((t->mode == TFM_ROTATION) && (t->con.mode & CON_APPLY) == 0 &&
-        (t->spacetype == SPACE_VIEW3D))
+        ELEM(t->spacetype, SPACE_VIEW3D, SPACE_IMAGE))
     {
       r_axis = -r_axis;
     }

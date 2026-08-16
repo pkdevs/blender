@@ -5,9 +5,9 @@
 #include <limits>
 #include <utility>
 
-#include "BLI_assert.h"
-#include "BLI_math_base.h"
+#include "BLI_assert.hh"
 #include "BLI_math_base.hh"
+#include "BLI_math_base_c.hh"
 #include "BLI_math_vector.hh"
 #include "BLI_math_vector_types.hh"
 
@@ -141,7 +141,8 @@ void jump_flooding(Context &context, Result &input, Result &output)
   /* Notice that the output of the last pass is stored in result_to_flood due to the last swap, so
    * steal the data from it and release the other buffer. */
   result_after_flooding->release();
-  output.steal_data(*result_to_flood);
+  output.share_data(*result_to_flood);
+  result_to_flood->release();
 }
 
 }  // namespace blender::compositor

@@ -44,7 +44,7 @@ LANGUAGES = (
     (13, "Chinese (Simplified) - 简体中文", "zh_HANS"),
     (14, "Chinese (Traditional) - 繁體中文", "zh_HANT"),
     (15, "Russian - Русский", "ru_RU"),
-    # 16 is free, used to be "Croatian - Hrvatski" ("hr_HR").
+    (16, "Croatian - Hrvatski", "hr"),
     (17, "Serbian (Cyrillic) - Српски", "sr_RS"),
     (18, "Ukrainian - Українська", "uk_UA"),
     (19, "Polish - Polski", "pl_PL"),
@@ -342,16 +342,14 @@ PYGETTEXT_KEYWORDS = (() +
 
 # autopep8: on
 
-
-# Check printf mismatches between msgid and msgstr.
-CHECK_PRINTF_FORMAT = (
-    r"(?!<%)(?:%%)*%"          # Beginning, with handling for crazy things like '%%%%%s'
-    r"[-+#0]?"                 # Flags (note: do not add the ' ' (space) flag here, generates too much false positives!)
-    r"(?:\*|[0-9]+)?"          # Width
-    r"(?:\.(?:\*|[0-9]+))?"    # Precision
-    r"(?:[hljztL]|hh|ll)?"     # Length
-    r"[tldiuoxXfFeEgGaAcspn]"  # Specifiers (note we have Blender-specific %t and %l ones too)
-)
+# The few rare message strings that use a 'format-like' syntax outside of formatting context.
+# Ensure that they are skipped when checkking for valid formatting tokens and order in the translated strings.
+MSGID_FORMATTING_VALIDATION_SKIP = {
+    "Property is a path which supports the \"{variable_name}\" variable expression syntax, "
+    "which substitutes the value of the referenced variable in place of the expression",
+    "Empty identifier cannot be used when explicit identifier was used before. For "
+    "example, \"{} {x}\" is ok but \"{x} {}\" is not.",
+}
 
 # Should po parser warn when finding a first letter not capitalized?
 WARN_MSGID_NOT_CAPITALIZED = True

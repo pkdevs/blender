@@ -530,7 +530,7 @@ struct TokenStream {
   TokenStream &operator<<(Token tok)
   {
     bool followed_by_space = tok.followed_by_whitespace();
-    if (UNLIKELY(concat_next_)) {
+    if (concat_next_) [[unlikely]] {
       tok = paste_token(tokens.last().str(), tok.str(), followed_by_space);
       tok.flag = followed_by_space;
       tokens.last() = tok;
@@ -1471,7 +1471,7 @@ struct Preprocessor {
     if (visited_macros.contains(macro.id)) {
       /* Recursion. Do not expand. */
       /* Currently still replace by the original token (noop).
-       * Would be better to not bypass replacement alltogether. */
+       * Would be better to not bypass replacement altogether. */
       TokenStreamPtr expanded = stream_pool.alloc();
       *expanded << expanded_tok;
       return {std::move(expanded), expanded_tok};

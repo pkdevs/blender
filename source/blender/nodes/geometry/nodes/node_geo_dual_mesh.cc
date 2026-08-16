@@ -20,11 +20,11 @@ static void node_declare(NodeDeclarationBuilder &b)
 {
   b.use_custom_socket_order();
   b.allow_any_socket_order();
-  b.add_input<decl::Geometry>("Mesh")
+  b.add_input<decl::Geometry>("Mesh"_ustr)
       .supported_type(GeometryComponent::Type::Mesh)
       .description("Mesh to compute the dual of");
-  b.add_output<decl::Geometry>("Dual Mesh").propagate_all().align_with_previous();
-  b.add_input<decl::Bool>("Keep Boundaries")
+  b.add_output<decl::Geometry>("Dual Mesh"_ustr).propagate_all_geometry().align_with_previous();
+  b.add_input<decl::Bool>("Keep Boundaries"_ustr)
       .default_value(false)
       .description(
           "Keep non-manifold boundaries of the input mesh in place by avoiding the dual "
@@ -116,11 +116,11 @@ static void transfer_attributes(
 
   Array<int> new_face_to_old_vert;
   const auto ensure_vert_map = [&]() {
-    const int src_size = src_attributes.domain_size(bke::AttrDomain::Point);
-    const int dst_size = dst_attributes.domain_size(bke::AttrDomain::Face);
     if (!new_face_to_old_vert.is_empty()) {
       return;
     }
+    const int src_size = src_attributes.domain_size(bke::AttrDomain::Point);
+    const int dst_size = dst_attributes.domain_size(bke::AttrDomain::Face);
     new_face_to_old_vert.reinitialize(dst_size);
     if (keep_boundaries) {
       int out_i = 0;
@@ -146,6 +146,9 @@ static void transfer_attributes(
   IndexMask boundary_vert_mask;
   Array<int> boundary_vert_src_face;
   const auto ensure_face_map = [&]() {
+    if (!boundary_vert_src_face.is_empty()) {
+      return;
+    }
     Array<int> boundary_verts(boundary_vertex_to_relevant_face_map.size());
     for (const int i : boundary_vertex_to_relevant_face_map.index_range()) {
       boundary_verts[i] = boundary_vertex_to_relevant_face_map[i].first;
@@ -931,23 +934,23 @@ static Mesh *calc_dual_mesh(const Mesh &src_mesh,
 
 static void node_geo_exec(GeoNodeExecParams params)
 {
-  GeometrySet geometry_set = params.extract_input<GeometrySet>("Mesh");
-  const bool keep_boundaries = params.extract_input<bool>("Keep Boundaries");
+  GeometrySet geometry_set = params.extract_input<GeometrySet>("Mesh"_ustr);
+  const bool keep_boundaries = params.extract_input<bool>("Keep Boundaries"_ustr);
   geometry::foreach_real_geometry(geometry_set, [&](GeometrySet &geometry_set) {
     if (const Mesh *mesh = geometry_set.get_mesh()) {
       Mesh *new_mesh = calc_dual_mesh(
-          *mesh, keep_boundaries, params.get_attribute_filter("Dual Mesh"));
+          *mesh, keep_boundaries, params.get_attribute_filter("Dual Mesh"_ustr));
       geometry::debug_randomize_mesh_order(new_mesh);
       geometry_set.replace_mesh(new_mesh);
     }
   });
-  params.set_output("Dual Mesh", std::move(geometry_set));
+  params.set_output("Dual Mesh"_ustr, std::move(geometry_set));
 }
 
 static void node_register()
 {
   static bke::bNodeType ntype;
-  geo_node_type_base(&ntype, "GeometryNodeDualMesh", GEO_NODE_DUAL_MESH);
+  geo_node_type_base(&ntype, "GeometryNodeDualMesh"_ustr, GEO_NODE_DUAL_MESH);
   ntype.ui_name = "Dual Mesh";
   ntype.ui_description = "Convert Faces into vertices and vertices into faces";
   ntype.enum_name_legacy = "DUAL_MESH";

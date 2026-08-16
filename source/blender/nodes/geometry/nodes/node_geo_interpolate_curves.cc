@@ -9,12 +9,12 @@
 #include "BLI_kdtree.hh"
 #include "BLI_length_parameterize.hh"
 #include "BLI_math_quaternion.hh"
-#include "BLI_math_rotation.h"
+#include "BLI_math_rotation_c.hh"
 #include "BLI_task.hh"
 
 #include "BKE_curves.hh"
 
-#include "FN_multi_function_builder.hh"
+#include "FN_multi_function_registry.hh"
 
 #include "GEO_randomize.hh"
 
@@ -22,39 +22,39 @@ namespace blender::nodes::node_geo_interpolate_curves_cc {
 
 static void node_declare(NodeDeclarationBuilder &b)
 {
-  b.add_input<decl::Geometry>("Guide Curves")
+  b.add_input<decl::Geometry>("Guide Curves"_ustr)
       .description("Base curves that new curves are interpolated between");
-  b.add_input<decl::Vector>("Guide Up")
-      .field_on({0})
+  b.add_input<decl::Vector>("Guide Up"_ustr)
+      .evaluated_geometry_field({0})
       .hide_value()
       .description("Optional up vector that is typically a surface normal");
-  b.add_input<decl::Int>("Guide Group ID")
-      .field_on({0})
+  b.add_input<decl::Int>("Guide Group ID"_ustr)
+      .evaluated_geometry_field({0})
       .hide_value()
       .description(
           "Splits guides into separate groups. New curves interpolate existing curves "
           "from a single group");
-  b.add_input<decl::Geometry>("Points").description(
-      "First control point positions for new interpolated curves");
-  b.add_input<decl::Vector>("Point Up")
-      .field_on({3})
+  b.add_input<decl::Geometry>("Points"_ustr)
+      .description("First control point positions for new interpolated curves");
+  b.add_input<decl::Vector>("Point Up"_ustr)
+      .evaluated_geometry_field({3})
       .hide_value()
       .description("Optional up vector that is typically a surface normal");
-  b.add_input<decl::Int>("Point Group ID")
-      .field_on({3})
+  b.add_input<decl::Int>("Point Group ID"_ustr)
+      .evaluated_geometry_field({3})
       .hide_value()
       .description("The curve group to interpolate in");
-  b.add_input<decl::Int>("Max Neighbors")
+  b.add_input<decl::Int>("Max Neighbors"_ustr)
       .default_value(4)
       .min(1)
       .description(
           "Maximum amount of close guide curves that are taken into account for interpolation");
-  b.add_output<decl::Geometry>("Curves").propagate_all();
-  b.add_output<decl::Int>("Closest Index")
-      .field_on_all()
+  b.add_output<decl::Geometry>("Curves"_ustr).propagate_all_geometry();
+  b.add_output<decl::Int>("Closest Index"_ustr)
+      .anonymous_attribute_output()
       .description("Index of the closest guide curve for each generated curve");
-  b.add_output<decl::Float>("Closest Weight")
-      .field_on_all()
+  b.add_output<decl::Float>("Closest Weight"_ustr)
+      .anonymous_attribute_output()
       .description("Weight of the closest guide curve for each generated curve");
 }
 
@@ -100,10 +100,10 @@ static Map<int, int> compute_points_per_curve_by_group(
 /**
  * Build a kdtree for every guide group.
  */
-static Map<int, KDTree_3d *> build_kdtrees_for_root_positions(
+static Map<int, KDTree<float3> *> build_kdtrees_for_root_positions(
     const MultiValueMap<int, int> &guides_by_group, const bke::CurvesGeometry &guide_curves)
 {
-  Map<int, KDTree_3d *> kdtrees;
+  Map<int, KDTree<float3> *> kdtrees;
   const Span<float3> positions = guide_curves.positions();
   const Span<int> offsets = guide_curves.offsets();
 
@@ -111,18 +111,19 @@ static Map<int, KDTree_3d *> build_kdtrees_for_root_positions(
     const int group = item.key;
     const Span<int> guide_indices = item.value;
 
-    KDTree_3d *kdtree = kdtree_3d_new(guide_indices.size());
+    KDTree<float3> *kdtree = kdtree_new<float3>(guide_indices.size());
     kdtrees.add_new(group, kdtree);
 
     for (const int curve_i : guide_indices) {
       const int first_point_i = offsets[curve_i];
       const float3 &root_pos = positions[first_point_i];
-      kdtree_3d_insert(kdtree, curve_i, root_pos);
+      kdtree_insert<float3>(kdtree, curve_i, root_pos);
     }
   }
-  Vector<KDTree_3d *> kdtrees_vec;
+  Vector<KDTree<float3> *> kdtrees_vec;
   kdtrees_vec.extend(kdtrees.values().begin(), kdtrees.values().end());
-  threading::parallel_for_each(kdtrees_vec, [](KDTree_3d *kdtree) { kdtree_3d_balance(kdtree); });
+  threading::parallel_for_each(kdtrees_vec,
+                               [](KDTree<float3> *kdtree) { kdtree_balance<float3>(kdtree); });
   return kdtrees;
 }
 
@@ -132,7 +133,7 @@ static Map<int, KDTree_3d *> build_kdtrees_for_root_positions(
  */
 static void find_neighbor_guides(const Span<float3> positions,
                                  const VArray<int> point_group_ids,
-                                 const Map<int, KDTree_3d *> kdtrees,
+                                 const Map<int, KDTree<float3> *> kdtrees,
                                  const MultiValueMap<int, int> &guides_by_group,
                                  const int max_neighbor_count,
                                  MutableSpan<int> r_all_neighbor_indices,
@@ -143,7 +144,7 @@ static void find_neighbor_guides(const Span<float3> positions,
     for (const int child_curve_i : range) {
       const float3 &position = positions[child_curve_i];
       const int group = point_group_ids[child_curve_i];
-      const KDTree_3d *kdtree = kdtrees.lookup_default(group, nullptr);
+      const KDTree<float3> *kdtree = kdtrees.lookup_default(group, nullptr);
       if (kdtree == nullptr) {
         r_all_neighbor_counts[child_curve_i] = 0;
         continue;
@@ -156,8 +157,8 @@ static void find_neighbor_guides(const Span<float3> positions,
       const bool use_extra_neighbor = num_guides_in_group > max_neighbor_count;
       const int neighbors_to_find = max_neighbor_count + use_extra_neighbor;
 
-      Vector<KDTreeNearest_3d, 16> nearest_n(neighbors_to_find);
-      const int num_neighbors = kdtree_3d_find_nearest_n(
+      Vector<KDTreeNearest<float3>, 16> nearest_n(neighbors_to_find);
+      const int num_neighbors = kdtree_find_nearest_n<float3>(
           kdtree, position, nearest_n.data(), neighbors_to_find);
       if (num_neighbors == 0) {
         r_all_neighbor_counts[child_curve_i] = 0;
@@ -173,12 +174,12 @@ static void find_neighbor_guides(const Span<float3> positions,
       if (use_extra_neighbor) {
         /* Find the distance to the guide with the largest distance. At this distance, the weight
          * should become zero. */
-        const float max_distance = std::max_element(
-                                       nearest_n.begin(),
-                                       nearest_n.begin() + num_neighbors,
-                                       [](const KDTreeNearest_3d &a, const KDTreeNearest_3d &b) {
-                                         return a.dist < b.dist;
-                                       })
+        const float max_distance = std::max_element(nearest_n.begin(),
+                                                    nearest_n.begin() + num_neighbors,
+                                                    [](const KDTreeNearest<float3> &a,
+                                                       const KDTreeNearest<float3> &b) {
+                                                      return a.dist < b.dist;
+                                                    })
                                        ->dist;
         if (max_distance == 0.0f) {
           r_all_neighbor_counts[child_curve_i] = 1;
@@ -189,7 +190,7 @@ static void find_neighbor_guides(const Span<float3> positions,
 
         int neighbor_counter = 0;
         for (const int neighbor_i : IndexRange(num_neighbors)) {
-          const KDTreeNearest_3d &nearest = nearest_n[neighbor_i];
+          const KDTreeNearest<float3> &nearest = nearest_n[neighbor_i];
           /* Goal for this weight calculation:
            * - As distance gets closer to zero, it should become very large.
            * - At `max_distance` the weight should be zero. */
@@ -206,7 +207,7 @@ static void find_neighbor_guides(const Span<float3> positions,
       else {
         int neighbor_counter = 0;
         for (const int neighbor_i : IndexRange(num_neighbors)) {
-          const KDTreeNearest_3d &nearest = nearest_n[neighbor_i];
+          const KDTreeNearest<float3> &nearest = nearest_n[neighbor_i];
           /* Goal for this weight calculation:
            * - As the distance gets closer to zero, it should become very large.
            * - As the distance gets larger, the weight should become zero. */
@@ -700,10 +701,11 @@ static GeometrySet generate_interpolated_curves(
   const Map<int, int> points_per_curve_by_group = compute_points_per_curve_by_group(
       guides_by_group, guide_curves);
 
-  Map<int, KDTree_3d *> kdtrees = build_kdtrees_for_root_positions(guides_by_group, guide_curves);
+  Map<int, KDTree<float3> *> kdtrees = build_kdtrees_for_root_positions(guides_by_group,
+                                                                        guide_curves);
   BLI_SCOPED_DEFER([&]() {
-    for (KDTree_3d *kdtree : kdtrees.values()) {
-      kdtree_3d_free(kdtree);
+    for (KDTree<float3> *kdtree : kdtrees.values()) {
+      kdtree_free<float3>(kdtree);
     }
   });
 
@@ -793,8 +795,8 @@ static GeometrySet generate_interpolated_curves(
 
 static void node_geo_exec(GeoNodeExecParams params)
 {
-  GeometrySet guide_curves_geometry = params.extract_input<GeometrySet>("Guide Curves");
-  const GeometrySet points_geometry = params.extract_input<GeometrySet>("Points");
+  GeometrySet guide_curves_geometry = params.extract_input<GeometrySet>("Guide Curves"_ustr);
+  const GeometrySet points_geometry = params.extract_input<GeometrySet>("Points"_ustr);
 
   if (!guide_curves_geometry.has_curves() ||
       guide_curves_geometry.get_curves()->geometry.curve_num == 0)
@@ -811,21 +813,19 @@ static void node_geo_exec(GeoNodeExecParams params)
     return;
   }
 
-  const int max_neighbors = std::max<int>(1, params.extract_input<int>("Max Neighbors"));
+  const int max_neighbors = std::max<int>(1, params.extract_input<int>("Max Neighbors"_ustr));
 
-  static auto normalize_fn = mf::build::SI1_SO<float3, float3>(
-      "Normalize",
-      [](const float3 &v) { return math::normalize(v); },
-      mf::build::exec_presets::AllSpanOrSingle());
+  static const mf::MultiFunction &normalize_fn = fn::multi_function::registry::lookup(
+      "normalize(float3)"_ustr);
 
   /* Normalize up fields so that is done as part of field evaluation. */
   Field<float3> guides_up_field(
-      FieldOperation::from(normalize_fn, {params.extract_input<Field<float3>>("Guide Up")}));
+      FieldOperation::from(normalize_fn, {params.extract_input<Field<float3>>("Guide Up"_ustr)}));
   Field<float3> points_up_field(
-      FieldOperation::from(normalize_fn, {params.extract_input<Field<float3>>("Point Up")}));
+      FieldOperation::from(normalize_fn, {params.extract_input<Field<float3>>("Point Up"_ustr)}));
 
-  Field<int> guide_group_field = params.extract_input<Field<int>>("Guide Group ID");
-  Field<int> point_group_field = params.extract_input<Field<int>>("Point Group ID");
+  Field<int> guide_group_field = params.extract_input<Field<int>>("Guide Group ID"_ustr);
+  Field<int> point_group_field = params.extract_input<Field<int>>("Point Group ID"_ustr);
 
   const Curves &guide_curves_id = *guide_curves_geometry.get_curves();
 
@@ -846,12 +846,12 @@ static void node_geo_exec(GeoNodeExecParams params)
   const VArray<float3> points_up = points_evaluator.get_evaluated<float3>(0);
   const VArray<int> point_group_ids = points_evaluator.get_evaluated<int>(1);
 
-  const NodeAttributeFilter &attribute_filter = params.get_attribute_filter("Curves");
+  const NodeAttributeFilter &attribute_filter = params.get_attribute_filter("Curves"_ustr);
 
   std::optional<std::string> index_attribute_id =
-      params.get_output_anonymous_attribute_id_if_needed("Closest Index");
+      params.get_output_anonymous_attribute_id_if_needed("Closest Index"_ustr);
   std::optional<std::string> weight_attribute_id =
-      params.get_output_anonymous_attribute_id_if_needed("Closest Weight");
+      params.get_output_anonymous_attribute_id_if_needed("Closest Weight"_ustr);
 
   GeometrySet new_curves = generate_interpolated_curves(guide_curves_id,
                                                         *points_component->attributes(),
@@ -870,17 +870,17 @@ static void node_geo_exec(GeoNodeExecParams params)
   {
     new_curves.add(*curve_edit_data);
   }
-  new_curves.name = guide_curves_geometry.name;
+  new_curves.set_name(guide_curves_geometry.name());
   new_curves.copy_bundle_from(guide_curves_geometry);
 
-  params.set_output("Curves", std::move(new_curves));
+  params.set_output("Curves"_ustr, std::move(new_curves));
 }
 
 static void node_register()
 {
   static bke::bNodeType ntype;
 
-  geo_node_type_base(&ntype, "GeometryNodeInterpolateCurves", GEO_NODE_INTERPOLATE_CURVES);
+  geo_node_type_base(&ntype, "GeometryNodeInterpolateCurves"_ustr, GEO_NODE_INTERPOLATE_CURVES);
   ntype.ui_name = "Interpolate Curves";
   ntype.ui_description = "Generate new curves on points by interpolating between existing curves";
   ntype.enum_name_legacy = "INTERPOLATE_CURVES";

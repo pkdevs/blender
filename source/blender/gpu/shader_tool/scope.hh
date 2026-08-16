@@ -16,7 +16,11 @@
 
 namespace blender::gpu::shader::parser {
 
+struct ScopeParser;
+
 struct Scope {
+  friend ScopeParser;
+
  private:
 #ifndef NDEBUG
   /* String view for nicer debugging experience. Isn't actually used. */
@@ -116,6 +120,40 @@ struct Scope {
     return scope;
   }
 
+  /* Returns the parent node.
+   * Equivalent to scope(). Should ultimately replace it. */
+  Scope parent() const
+  {
+    if (is_invalid()) {
+      return Scope(*parser_);
+    }
+    return Scope(*parser_, parser_->scope_links[index_].parent_);
+  }
+
+  Scope prev_neighbor() const
+  {
+    if (is_invalid()) {
+      return Scope(*parser_);
+    }
+    return Scope(*parser_, parser_->scope_links[index_].prev_);
+  }
+
+  Scope next_neighbor() const
+  {
+    if (is_invalid()) {
+      return Scope(*parser_);
+    }
+    return Scope(*parser_, parser_->scope_links[index_].next_);
+  }
+
+  Scope child_first() const
+  {
+    if (is_invalid()) {
+      return Scope(*parser_);
+    }
+    return Scope(*parser_, parser_->scope_links[index_].child_first_);
+  }
+
   /* Returns the previous scope before this scope. Can be either the container scope or the
    * previous scope inside the same container. */
   Scope prev() const
@@ -210,10 +248,11 @@ struct Scope {
    *
    * If `include_preprocessor` is true, try to match any token. Otherwise ignore tokens in
    * preprocessor scopes.
+   *
+   * Callback should have this signature `void(const std::vector<Token>)`.
    */
-  template<bool include_preprocessor = false>
-  void foreach_match(const std::string &pattern,
-                     std::function<void(const std::vector<Token>)> callback) const
+  template<bool include_preprocessor = false, typename CallbackFn>
+  void foreach_match(const std::string &pattern, CallbackFn callback) const
   {
     assert(!pattern.empty());
     if (this->is_invalid()) {
@@ -293,8 +332,11 @@ struct Scope {
     }
   }
 
-  /* Will iterate over all the scopes that are direct children. */
-  void foreach_scope(ScopeType type, std::function<void(Scope)> callback) const
+  /**
+   * Will iterate over all the scopes that are direct children.
+   * Callback should have this signature `void(Scope)`.
+   */
+  template<typename CallbackFn> void foreach_scope(ScopeType type, CallbackFn callback) const
   {
     /* Makes no sense to iterate on global scope since it is the top level. */
     assert(type != ScopeType::Global);
@@ -318,9 +360,11 @@ struct Scope {
     }
   }
 
-  /* Will iterate over all the attribute if this scope is an ScopeType::Attributes. */
-  void foreach_attribute(
-      std::function<void(Token attribute_name, Scope attribute_props)> callback) const
+  /**
+   * Will iterate over all the attribute if this scope is an ScopeType::Attributes.
+   * Callback should have this signature `void(Token attribute_name, Scope attribute_parameters)`.
+   */
+  template<typename CallbackFn> void foreach_attribute(CallbackFn callback) const
   {
     assert(this->type() == ScopeType::Attributes);
     this->foreach_scope(ScopeType::Attribute, [&](Scope attr) {
@@ -328,6 +372,10 @@ struct Scope {
     });
   }
 
+  /**
+   * Will iterate over all tokens of the scope (and its contained scopes).
+   * Callback should have this signature `void(Token)`.
+   */
   template<typename Callback>
   void foreach_token(const TokenType token_type, Callback callback) const
   {
@@ -343,11 +391,12 @@ struct Scope {
     }
   }
 
-  /* Run a callback for all existing function scopes. */
-  void foreach_function(
-      std::function<void(
-          bool is_static, Token type, Token name, Scope args, bool is_const, Scope body)> callback)
-      const
+  /**
+   * Run a callback for all the function scopes that are direct children of this scope.
+   * Callback should have this signature
+   * `void(bool is_static, Token type, Token name, Scope args, bool is_const, Scope body)`.
+   */
+  template<typename Callback> void foreach_function(Callback callback) const
   {
     foreach_match("m?AA(..)c?{..}", [&](const std::vector<Token> matches) {
       callback(matches[0] == Static,
@@ -356,6 +405,14 @@ struct Scope {
                matches[4].scope(),
                matches[8] == Const,
                matches[10].scope());
+    });
+    foreach_match("m?A<..>A(..)c?{..}", [&](const std::vector<Token> matches) {
+      callback(matches[0] == Static,
+               matches[2],
+               matches[7],
+               matches[8].scope(),
+               matches[12] == Const,
+               matches[14].scope());
     });
     foreach_match("m?AA::A(..)c?{..}", [&](const std::vector<Token> matches) {
       callback(matches[0] == Static,
@@ -375,10 +432,12 @@ struct Scope {
     });
   }
 
-  /* Run a callback for all existing struct scopes. */
-  void foreach_struct(
-      std::function<void(Token struct_tok, Scope attributes, Token name, Scope body)> callback)
-      const
+  /**
+   * Run a callback for all the struct scopes that are direct children of this scope.
+   * Callback should have this signature
+   * `void(Token struct_tok, Scope attributes, Token name, Scope body)`.
+   */
+  template<typename Callback> void foreach_struct(Callback callback) const
   {
     foreach_match("sA{..}", [&](const std::vector<Token> matches) {
       callback(matches[0], Scope(*parser_), matches[1], matches[2].scope());
@@ -394,14 +453,18 @@ struct Scope {
     });
   }
 
-  /* Run a callback for all existing variable declaration (without assignment). */
-  void foreach_declaration(std::function<void(Scope attributes,
-                                              Token const_tok,
-                                              Token type,
-                                              Scope template_scope,
-                                              Token name,
-                                              Scope array,
-                                              Token decl_end)> callback) const
+  /**
+   * Run a callback for all the variable declarations (without assignment) that are direct children
+   * Callback should have this signature
+   * `void(Scope attributes,
+   *       Token const_tok,
+   *       Token type,
+   *       Scope template_scope,
+   *       Token name,
+   *       Scope array,
+   *       Token decl_end)`.
+   */
+  template<typename Callback> void foreach_declaration(Callback callback) const
   {
     auto attrs = [&](const std::vector<Token> &tokens) {
       Token first = tokens[0].is_valid() ? tokens[0] : tokens[2];

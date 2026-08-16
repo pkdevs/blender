@@ -53,8 +53,8 @@ struct Token : lexit::Token {
     /* Scan back identifier that could contain namespaces. */
     Token tok = *this;
     while (tok.is_valid()) {
-      if (tok.prev() == ':') {
-        tok = tok.prev().prev().prev();
+      if (tok.prev() == ':' && tok.prev(2) == ':') {
+        tok = tok.prev(3);
       }
       else {
         return tok;
@@ -139,6 +139,15 @@ struct Token : lexit::Token {
       return 0;
     }
     return parser::char_number(buf_->str_, str_index_start());
+  }
+
+  /* Return the name of the file containing the token. */
+  std::string filename() const
+  {
+    if (is_invalid()) {
+      return "";
+    }
+    return parser::filename(buf_->str_, str_index_start());
   }
 
   /* Return the line the token is at. */

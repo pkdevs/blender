@@ -12,9 +12,9 @@
 
 /* Based on https://github.com/jarikomppa/ipc (Unlicense) */
 
-#  include "BLI_assert.h"
+#  include "BLI_assert.hh"
 #  include "BLI_path_utils.hh"
-#  include "BLI_string_utf8.h"
+#  include "BLI_string_utf8.hh"
 #  include <iostream>
 
 namespace blender {
@@ -70,7 +70,8 @@ class ProcessGroup {
   {
     handle_ = CreateJobObject(nullptr, nullptr);
     CHECK(handle_);
-    JOBOBJECT_EXTENDED_LIMIT_INFORMATION info = {0};
+    JOBOBJECT_EXTENDED_LIMIT_INFORMATION info;
+    memset(&info, 0, sizeof(info));
     info.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
     CHECK(
         SetInformationJobObject(handle_, JobObjectExtendedLimitInformation, &info, sizeof(info)));
@@ -234,7 +235,7 @@ bool SharedSemaphore::try_decrement(int wait_ms)
 
 #  elif defined(__linux__)
 
-#    include "BLI_time.h"
+#    include "BLI_time.hh"
 #    include "BLI_vector.hh"
 #    include <fcntl.h>
 #    include <linux/limits.h>

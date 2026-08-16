@@ -23,6 +23,7 @@ from bpy.types import (
 from bpy.app.translations import (
     pgettext_iface as iface_,
     pgettext_tip as tip_,
+    contexts as i18n_contexts,
 )
 
 from bl_ui.space_toolsystem_common import (
@@ -234,7 +235,7 @@ class _defs_annotate:
                 row.ui_units_x = 15
                 row.prop(props, "arrowstyle_start", text="Start")
                 row.separator()
-                row.prop(props, "arrowstyle_end", text="End")
+                row.prop(props, "arrowstyle_end", text="End", text_ctxt=i18n_contexts.id_curve)
             else:
                 col = layout.row().column(align=True)
                 col.prop(props, "arrowstyle_start", text="Style Start")
@@ -762,7 +763,7 @@ class _defs_edit_armature:
     def bone_size():
         return dict(
             idname="builtin.bone_size",
-            label="Bone Size",
+            label="B-Bone Size",
             icon="ops.transform.bone_size",
             widget="VIEW3D_GGT_tool_generic_handle_free",
             keymap=(),
@@ -1429,7 +1430,7 @@ class _defs_pose:
             label="Breakdowner",
             icon="ops.pose.breakdowner",
             widget=None,
-            keymap=(),
+            keymap="3D View Tool: Breakdowner",
         )
 
     @ToolDef.from_fn
@@ -1439,7 +1440,7 @@ class _defs_pose:
             label="Push",
             icon="ops.pose.push",
             widget=None,
-            keymap=(),
+            keymap="3D View Tool: Push",
         )
 
     @ToolDef.from_fn
@@ -1449,7 +1450,7 @@ class _defs_pose:
             label="Relax",
             icon="ops.pose.relax",
             widget=None,
-            keymap=(),
+            keymap="3D View Tool: Relax",
         )
 
 
@@ -1934,11 +1935,25 @@ class _defs_sculpt:
 
     @ToolDef.from_fn
     def color_filter():
-        def draw_settings(_context, layout, tool):
+        def draw_settings(context, layout, tool):
             props = tool.operator_properties("sculpt.color_filter")
+            settings = context.tool_settings.sculpt
+            ups = settings.unified_paint_settings if settings else None
+            region_is_header = context.region.type == 'TOOL_HEADER'
+
             layout.prop(props, "type", expand=False)
-            if props.type == 'FILL':
-                layout.prop(props, "fill_color", expand=False)
+
+            if props.type == 'FILL' and ups:
+                row = layout.row(align=True)
+                if region_is_header:
+                    row.ui_units_x = 4
+                    row.prop(ups, "color", text="")
+                    row.prop(ups, "secondary_color", text="")
+                else:
+                    row.prop(ups, "color", text="")
+                    row.prop(ups, "secondary_color", text="")
+                    row.operator("paint.brush_colors_flip", icon='FILE_REFRESH', text="")
+
             layout.prop(props, "strength")
 
         return dict(
@@ -2440,7 +2455,7 @@ class _defs_grease_pencil_paint:
                 row = col.row(align=True)
                 row.template_ID(settings, "palette", new="palette.new")
                 if settings.palette:
-                    col.template_palette(settings, "palette", color=True)
+                    col.template_palette(settings, "palette")
 
         return dict(
             idname="builtin.eyedropper",
@@ -3755,6 +3770,12 @@ class VIEW3D_PT_tools_active(ToolSelectPanelHelper, Panel):
         _defs_view3d_add.ico_sphere_add,
     )
 
+    _tools_pose = (
+        _defs_pose.breakdown,
+        _defs_pose.push,
+        _defs_pose.relax,
+    )
+
     _tools_default = (
         *_tools_select,
         _defs_view3d_generic.cursor,
@@ -3778,15 +3799,13 @@ class VIEW3D_PT_tools_active(ToolSelectPanelHelper, Panel):
             *_tools_default,
             None,
             _tools_view3d_add,
+            None,
+            _tools_pose,
         ],
         'POSE': [
             *_tools_default,
             None,
-            (
-                _defs_pose.breakdown,
-                _defs_pose.push,
-                _defs_pose.relax,
-            ),
+            _tools_pose,
         ],
         'EDIT_ARMATURE': [
             *_tools_default,
