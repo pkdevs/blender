@@ -372,7 +372,7 @@ static void do_versions_compositor_render_passes_storage(bNode *node)
 {
   int pass_index = 0;
   const char *sockname;
-  for (bNodeSocket *sock = static_cast<bNodeSocket *>(node->outputs.first);
+  for (bNodeSocket *sock = static_cast<bNodeSocket *>(node->outputs.first_);
        sock && pass_index < 31;
        sock = static_cast<bNodeSocket *>(sock->next), pass_index++)
   {
@@ -449,7 +449,7 @@ static void do_version_bbone_easing_fcurve_fix(ID * /*id*/, FCurve *fcu)
   }
 
   /* FModifiers -> Stepped (for frame_start/end) */
-  if (fcu->modifiers.first) {
+  if (fcu->modifiers.first_) {
     for (FModifier &fcm : fcu->modifiers) {
       if (fcm.type == FMODIFIER_TYPE_STEPPED) {
         FMod_Stepped *data = static_cast<FMod_Stepped *>(fcm.data);
@@ -588,8 +588,8 @@ void blo_do_versions_270(FileData *fd, Library * /*lib*/, Main *bmain)
     for (bScreen &screen : bmain->screens) {
       for (ScrArea &area : screen.areabase) {
         for (SpaceLink &sl : area.spacedata) {
-          ListBaseT<ARegion> *lb = (&sl == area.spacedata.first) ? &area.regionbase :
-                                                                   &sl.regionbase;
+          ListBaseT<ARegion> *lb = (&sl == area.spacedata.first_) ? &area.regionbase :
+                                                                    &sl.regionbase;
           for (ARegion &region : *lb) {
             region.ui_previews.clear_no_delete();
           }
@@ -896,11 +896,11 @@ void blo_do_versions_270(FileData *fd, Library * /*lib*/, Main *bmain)
   if (!MAIN_VERSION_FILE_ATLEAST(bmain, 274, 4)) {
     for (Scene &scene : bmain->scenes) {
       BKE_scene_add_render_view(&scene, STEREO_LEFT_NAME);
-      SceneRenderView *srv = static_cast<SceneRenderView *>(scene.r.views.first);
+      SceneRenderView *srv = static_cast<SceneRenderView *>(scene.r.views.first_);
       STRNCPY_UTF8(srv->suffix, STEREO_LEFT_SUFFIX);
 
       BKE_scene_add_render_view(&scene, STEREO_RIGHT_NAME);
-      srv = static_cast<SceneRenderView *>(scene.r.views.last);
+      srv = static_cast<SceneRenderView *>(scene.r.views.last_);
       STRNCPY_UTF8(srv->suffix, STEREO_RIGHT_SUFFIX);
 
       if (scene.ed) {
@@ -1017,8 +1017,8 @@ void blo_do_versions_270(FileData *fd, Library * /*lib*/, Main *bmain)
       for (ScrArea &area : screen.areabase) {
         for (SpaceLink &sl : area.spacedata) {
           if (sl.spacetype == SPACE_VIEW3D) {
-            ListBaseT<ARegion> *lb = (&sl == area.spacedata.first) ? &area.regionbase :
-                                                                     &sl.regionbase;
+            ListBaseT<ARegion> *lb = (&sl == area.spacedata.first_) ? &area.regionbase :
+                                                                      &sl.regionbase;
             for (ARegion &region : *lb) {
               if (region.regiontype == RGN_TYPE_WINDOW) {
                 if (region.regiondata) {
@@ -1130,8 +1130,8 @@ void blo_do_versions_270(FileData *fd, Library * /*lib*/, Main *bmain)
     for (bScreen &screen : bmain->screens) {
       for (ScrArea &area : screen.areabase) {
         for (SpaceLink &sl : area.spacedata) {
-          ListBaseT<ARegion> *regionbase = (&sl == area.spacedata.first) ? &area.regionbase :
-                                                                           &sl.regionbase;
+          ListBaseT<ARegion> *regionbase = (&sl == area.spacedata.first_) ? &area.regionbase :
+                                                                            &sl.regionbase;
           /* Bug: Was possible to add preview region to sequencer view by using AZones. */
           if (sl.spacetype == SPACE_SEQ) {
             SpaceSeq *sseq = reinterpret_cast<SpaceSeq *>(&sl);

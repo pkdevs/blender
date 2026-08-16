@@ -1345,8 +1345,8 @@ void MESH_OT_vert_connect(wmOperatorType *ot)
  */
 static bool bm_vert_is_select_history_open(BMesh *bm)
 {
-  BMEditSelection *ele_a = static_cast<BMEditSelection *>(bm->selected.first);
-  BMEditSelection *ele_b = static_cast<BMEditSelection *>(bm->selected.last);
+  BMEditSelection *ele_a = static_cast<BMEditSelection *>(bm->selected.first_);
+  BMEditSelection *ele_b = static_cast<BMEditSelection *>(bm->selected.last_);
   if ((ele_a->htype == BM_VERT) && (ele_b->htype == BM_VERT)) {
     if ((BM_iter_elem_count_flag(
              BM_EDGES_OF_VERT, reinterpret_cast<BMVert *>(ele_a->ele), BM_ELEM_SELECT, true) ==
@@ -1404,7 +1404,7 @@ static bool bm_vert_connect_select_history(BMesh *bm)
     // bool all_verts;
 
     /* ensure all verts have history */
-    for (ese = static_cast<BMEditSelection *>(bm->selected.first); ese; ese = ese->next, tot++) {
+    for (ese = static_cast<BMEditSelection *>(bm->selected.first_); ese; ese = ese->next, tot++) {
       BMVert *v;
       if (ese->htype != BM_VERT) {
         break;
@@ -1427,7 +1427,7 @@ static bool bm_vert_connect_select_history(BMesh *bm)
          * later before connecting. See #154197 */
         const bool is_multi_cut = (bm->totvertsel > 2);
         if (is_multi_cut) {
-          for (ese_last = static_cast<BMEditSelection *>(bm->selected.first); ese_last;
+          for (ese_last = static_cast<BMEditSelection *>(bm->selected.first_); ese_last;
                ese_last = ese_last->next)
           {
             BMVert *v = reinterpret_cast<BMVert *>(ese_last->ele);
@@ -1435,7 +1435,7 @@ static bool bm_vert_connect_select_history(BMesh *bm)
             orig_normals.add(v, v->no);
           }
         }
-        ese_last = static_cast<BMEditSelection *>(bm->selected.first);
+        ese_last = static_cast<BMEditSelection *>(bm->selected.first_);
         ese = ese_last->next;
 
         do {
@@ -1470,9 +1470,9 @@ static bool bm_vert_connect_select_history(BMesh *bm)
           changed |= bm_vert_connect_pair(
               bm,
               reinterpret_cast<BMVert *>(
-                  (static_cast<BMEditSelection *>(bm->selected.first))->ele),
+                  (static_cast<BMEditSelection *>(bm->selected.first_))->ele),
               reinterpret_cast<BMVert *>(
-                  (static_cast<BMEditSelection *>(bm->selected.last))->ele));
+                  (static_cast<BMEditSelection *>(bm->selected.last_))->ele));
 
           if (changed) {
             return true;
@@ -1484,7 +1484,7 @@ static bool bm_vert_connect_select_history(BMesh *bm)
     else {
       /* no faces, simply connect the verts by edges */
       BMEditSelection *ese_prev;
-      ese_prev = static_cast<BMEditSelection *>(bm->selected.first);
+      ese_prev = static_cast<BMEditSelection *>(bm->selected.first_);
       ese = ese_prev->next;
 
       do {
@@ -1509,8 +1509,8 @@ static bool bm_vert_connect_select_history(BMesh *bm)
         /* existing loops: close the selection */
         if (bm_vert_is_select_history_open(bm)) {
           BMEdge *e;
-          ese_prev = static_cast<BMEditSelection *>(bm->selected.first);
-          ese = static_cast<BMEditSelection *>(bm->selected.last);
+          ese_prev = static_cast<BMEditSelection *>(bm->selected.first_);
+          ese = static_cast<BMEditSelection *>(bm->selected.last_);
           e = BM_edge_create(bm,
                              reinterpret_cast<BMVert *>(ese_prev->ele),
                              reinterpret_cast<BMVert *>(ese->ele),
@@ -1575,15 +1575,16 @@ static bool bm_vert_connect_select_history_edge_to_vert_path(
     }
 
     v = (&e_curr->v1)[side];
-    if (!bm->selected.last ||
-        reinterpret_cast<BMVert *>((static_cast<BMEditSelection *>(bm->selected.last))->ele) != v)
+    if (!bm->selected.last_ ||
+        reinterpret_cast<BMVert *>((static_cast<BMEditSelection *>(bm->selected.last_))->ele) != v)
     {
       BM_select_history_store_notest(bm, v);
     }
 
     v = (&e_curr->v1)[!side];
-    if (!bm->selected.first ||
-        reinterpret_cast<BMVert *>((static_cast<BMEditSelection *>(bm->selected.first))->ele) != v)
+    if (!bm->selected.first_ ||
+        reinterpret_cast<BMVert *>((static_cast<BMEditSelection *>(bm->selected.first_))->ele) !=
+            v)
     {
       BM_select_history_store_head_notest(bm, v);
     }
@@ -1641,8 +1642,8 @@ static wmOperatorStatus edbm_vert_connect_path_exec(bContext *C, wmOperator *op)
       continue;
     }
 
-    if (bm->selected.first) {
-      BMEditSelection *ese = static_cast<BMEditSelection *>(bm->selected.first);
+    if (bm->selected.first_) {
+      BMEditSelection *ese = static_cast<BMEditSelection *>(bm->selected.first_);
       if (ese->htype == BM_EDGE) {
         if (bm_vert_connect_select_history_edge_to_vert_path(bm, &selected_orig)) {
           std::swap(bm->selected, selected_orig);
@@ -3387,23 +3388,23 @@ static bool merge_firstlast(BMEditMesh *em,
   /* While #merge_type_itemf does a sanity check, this operation runs on all edit-mode objects.
    * Some of them may not have the expected selection state. */
   if (use_first == false) {
-    if (!em->bm->selected.last ||
-        (static_cast<BMEditSelection *>(em->bm->selected.last))->htype != BM_VERT)
+    if (!em->bm->selected.last_ ||
+        (static_cast<BMEditSelection *>(em->bm->selected.last_))->htype != BM_VERT)
     {
       return false;
     }
 
-    ese = static_cast<BMEditSelection *>(em->bm->selected.last);
+    ese = static_cast<BMEditSelection *>(em->bm->selected.last_);
     mergevert = reinterpret_cast<BMVert *>(ese->ele);
   }
   else {
-    if (!em->bm->selected.first ||
-        (static_cast<BMEditSelection *>(em->bm->selected.first))->htype != BM_VERT)
+    if (!em->bm->selected.first_ ||
+        (static_cast<BMEditSelection *>(em->bm->selected.first_))->htype != BM_VERT)
     {
       return false;
     }
 
-    ese = static_cast<BMEditSelection *>(em->bm->selected.first);
+    ese = static_cast<BMEditSelection *>(em->bm->selected.first_);
     mergevert = reinterpret_cast<BMVert *>(ese->ele);
   }
 
@@ -3588,20 +3589,20 @@ static const EnumPropertyItem *merge_type_itemf(bContext *C,
      * since selecting will activate - we could have a separate code-path for these but it's a
      * hassle for now just apply to the active (first) object. */
     if (em->selectmode & SCE_SELECT_VERTEX) {
-      if (em->bm->selected.first && em->bm->selected.last &&
-          (static_cast<BMEditSelection *>(em->bm->selected.first))->htype == BM_VERT &&
-          (static_cast<BMEditSelection *>(em->bm->selected.last))->htype == BM_VERT)
+      if (em->bm->selected.first_ && em->bm->selected.last_ &&
+          (static_cast<BMEditSelection *>(em->bm->selected.first_))->htype == BM_VERT &&
+          (static_cast<BMEditSelection *>(em->bm->selected.last_))->htype == BM_VERT)
       {
         RNA_enum_items_add_value(&item, &totitem, merge_type_items, MESH_MERGE_FIRST);
         RNA_enum_items_add_value(&item, &totitem, merge_type_items, MESH_MERGE_LAST);
       }
-      else if (em->bm->selected.first &&
-               (static_cast<BMEditSelection *>(em->bm->selected.first))->htype == BM_VERT)
+      else if (em->bm->selected.first_ &&
+               (static_cast<BMEditSelection *>(em->bm->selected.first_))->htype == BM_VERT)
       {
         RNA_enum_items_add_value(&item, &totitem, merge_type_items, MESH_MERGE_FIRST);
       }
-      else if (em->bm->selected.last &&
-               (static_cast<BMEditSelection *>(em->bm->selected.last))->htype == BM_VERT)
+      else if (em->bm->selected.last_ &&
+               (static_cast<BMEditSelection *>(em->bm->selected.last_))->htype == BM_VERT)
       {
         RNA_enum_items_add_value(&item, &totitem, merge_type_items, MESH_MERGE_LAST);
       }
@@ -4799,7 +4800,7 @@ static bool edbm_fill_grid_prepare(BMesh *bm, int offset, int *span_p, const boo
 
   count = BM_mesh_edgeloops_find(
       bm, &eloops, [](BMEdge *e) { return BM_elem_flag_test_bool(e, BM_ELEM_SELECT); });
-  el_store = static_cast<BMEdgeLoopStore *>(eloops.first);
+  el_store = static_cast<BMEdgeLoopStore *>(eloops.first_);
 
   if (count != 1) {
     /* Let the operator use the selection flags,
@@ -4879,7 +4880,7 @@ static bool edbm_fill_grid_prepare(BMesh *bm, int offset, int *span_p, const boo
        * vert, but advantage of de-duplicating is minimal. */
       SortPtrByFloat *ele_sort = MEM_new_array_uninitialized<SortPtrByFloat>(verts_len, __func__);
       LinkData *v_link;
-      for (v_link = static_cast<LinkData *>(verts->first), i = 0; v_link;
+      for (v_link = static_cast<LinkData *>(verts->first_), i = 0; v_link;
            v_link = v_link->next, i++)
       {
         BMVert *v = static_cast<BMVert *>(v_link->data);

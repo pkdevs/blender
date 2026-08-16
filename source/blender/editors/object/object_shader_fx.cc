@@ -147,7 +147,7 @@ bool shaderfx_remove(ReportList *reports, Main *bmain, Object *ob, ShaderFxData 
 
 void shaderfx_clear(Main *bmain, Object *ob)
 {
-  ShaderFxData *fx = static_cast<ShaderFxData *>(ob->shader_fx.first);
+  ShaderFxData *fx = static_cast<ShaderFxData *>(ob->shader_fx.first_);
   bool sort_depsgraph = false;
 
   if (!fx) {

@@ -235,7 +235,7 @@ static void idproperties_fix_groups_lengths_recurse(IDProperty *prop)
   IDProperty *loop;
   int i;
 
-  for (loop = static_cast<IDProperty *>(prop->data.group.first), i = 0; loop;
+  for (loop = static_cast<IDProperty *>(prop->data.group.first_), i = 0; loop;
        loop = loop->next, i++)
   {
     if (loop->type == IDP_GROUP) {
@@ -461,7 +461,7 @@ void blo_do_versions_pre250(FileData *fd, Library *lib, Main *bmain)
 
   if (bmain->versionfile == 100) {
     /* tex->extend and tex->imageflag have changed: */
-    Tex *tex = static_cast<Tex *>(bmain->textures.first);
+    Tex *tex = static_cast<Tex *>(bmain->textures.first_);
     while (tex) {
       if (BLO_readfile_id_runtime_tags(tex->id).needs_linking) {
         if (tex->extend == 0) {
@@ -480,7 +480,7 @@ void blo_do_versions_pre250(FileData *fd, Library *lib, Main *bmain)
 
   if (bmain->versionfile <= 101) {
     /* frame mapping */
-    Scene *sce = static_cast<Scene *>(bmain->scenes.first);
+    Scene *sce = static_cast<Scene *>(bmain->scenes.first_);
     while (sce) {
       sce->r.framapto = 100;
       sce->r.images = 100;
@@ -491,7 +491,7 @@ void blo_do_versions_pre250(FileData *fd, Library *lib, Main *bmain)
 
   if (bmain->versionfile <= 103) {
     /* new variable in object: colbits */
-    Object *ob = static_cast<Object *>(bmain->objects.first);
+    Object *ob = static_cast<Object *>(bmain->objects.first_);
     int a;
     while (ob) {
       ob->colbits = 0;
@@ -508,7 +508,7 @@ void blo_do_versions_pre250(FileData *fd, Library *lib, Main *bmain)
 
   if (bmain->versionfile <= 104) {
     /* timeoffs moved */
-    Object *ob = static_cast<Object *>(bmain->objects.first);
+    Object *ob = static_cast<Object *>(bmain->objects.first_);
     while (ob) {
       if (ob->transflag & 1) {
         ob->transflag &= ~eObject_TransFlag(1);
@@ -519,7 +519,7 @@ void blo_do_versions_pre250(FileData *fd, Library *lib, Main *bmain)
 
   if (bmain->versionfile <= 106) {
     /* mcol changed */
-    Mesh *mesh = static_cast<Mesh *>(bmain->meshes.first);
+    Mesh *mesh = static_cast<Mesh *>(bmain->meshes.first_);
     while (mesh) {
       if (mesh->mcol) {
         vcol_to_fcol(mesh);
@@ -530,7 +530,7 @@ void blo_do_versions_pre250(FileData *fd, Library *lib, Main *bmain)
 
   if (bmain->versionfile <= 107) {
     Object *ob;
-    ob = static_cast<Object *>(bmain->objects.first);
+    ob = static_cast<Object *>(bmain->objects.first_);
     while (ob) {
       if (ob->dt == 0) {
         ob->dt = OB_SOLID;
@@ -541,11 +541,11 @@ void blo_do_versions_pre250(FileData *fd, Library *lib, Main *bmain)
 
   if (bmain->versionfile <= 109) {
     /* New variable: `gridlines`. */
-    bScreen *screen = static_cast<bScreen *>(bmain->screens.first);
+    bScreen *screen = static_cast<bScreen *>(bmain->screens.first_);
     while (screen) {
-      ScrArea *area = static_cast<ScrArea *>(screen->areabase.first);
+      ScrArea *area = static_cast<ScrArea *>(screen->areabase.first_);
       while (area) {
-        SpaceLink *sl = static_cast<SpaceLink *>(area->spacedata.first);
+        SpaceLink *sl = static_cast<SpaceLink *>(area->spacedata.first_);
         while (sl) {
           if (sl->spacetype == SPACE_VIEW3D) {
             View3D *v3d = reinterpret_cast<View3D *>(sl);
@@ -563,7 +563,7 @@ void blo_do_versions_pre250(FileData *fd, Library *lib, Main *bmain)
   }
 
   if (bmain->versionfile <= 134) {
-    Tex *tex = static_cast<Tex *>(bmain->textures.first);
+    Tex *tex = static_cast<Tex *>(bmain->textures.first_);
     while (tex) {
       if ((tex->rfac == 0.0f) && (tex->gfac == 0.0f) && (tex->bfac == 0.0f)) {
         tex->rfac = 1.0f;
@@ -577,7 +577,7 @@ void blo_do_versions_pre250(FileData *fd, Library *lib, Main *bmain)
 
   if (bmain->versionfile <= 140) {
     /* r-g-b-fac in texture */
-    Tex *tex = static_cast<Tex *>(bmain->textures.first);
+    Tex *tex = static_cast<Tex *>(bmain->textures.first_);
     while (tex) {
       if ((tex->rfac == 0.0f) && (tex->gfac == 0.0f) && (tex->bfac == 0.0f)) {
         tex->rfac = 1.0f;
@@ -590,7 +590,7 @@ void blo_do_versions_pre250(FileData *fd, Library *lib, Main *bmain)
   }
 
   if (bmain->versionfile <= 153) {
-    Scene *sce = static_cast<Scene *>(bmain->scenes.first);
+    Scene *sce = static_cast<Scene *>(bmain->scenes.first_);
     while (sce) {
       if (sce->r.motion_blur_shutter == 0.0f) {
         sce->r.motion_blur_shutter = 1.0f;
@@ -600,7 +600,7 @@ void blo_do_versions_pre250(FileData *fd, Library *lib, Main *bmain)
   }
 
   if (bmain->versionfile <= 163) {
-    Scene *sce = static_cast<Scene *>(bmain->scenes.first);
+    Scene *sce = static_cast<Scene *>(bmain->scenes.first_);
     while (sce) {
       if (sce->r.frs_sec == 0) {
         sce->r.frs_sec = 25;
@@ -610,7 +610,7 @@ void blo_do_versions_pre250(FileData *fd, Library *lib, Main *bmain)
   }
 
   if (bmain->versionfile <= 164) {
-    Mesh *mesh = static_cast<Mesh *>(bmain->meshes.first);
+    Mesh *mesh = static_cast<Mesh *>(bmain->meshes.first_);
     while (mesh) {
       mesh->smoothresh_legacy = 30;
       mesh = static_cast<Mesh *>(mesh->id.next);
@@ -618,7 +618,7 @@ void blo_do_versions_pre250(FileData *fd, Library *lib, Main *bmain)
   }
 
   if (bmain->versionfile <= 165) {
-    Mesh *mesh = static_cast<Mesh *>(bmain->meshes.first);
+    Mesh *mesh = static_cast<Mesh *>(bmain->meshes.first_);
     TFace *tface;
     int nr;
     char *cp;
@@ -645,7 +645,7 @@ void blo_do_versions_pre250(FileData *fd, Library *lib, Main *bmain)
   }
 
   if (bmain->versionfile <= 169) {
-    Mesh *mesh = static_cast<Mesh *>(bmain->meshes.first);
+    Mesh *mesh = static_cast<Mesh *>(bmain->meshes.first_);
     while (mesh) {
       if (mesh->subdiv == 0) {
         mesh->subdiv = 1;
@@ -655,11 +655,11 @@ void blo_do_versions_pre250(FileData *fd, Library *lib, Main *bmain)
   }
 
   if (bmain->versionfile <= 169) {
-    bScreen *screen = static_cast<bScreen *>(bmain->screens.first);
+    bScreen *screen = static_cast<bScreen *>(bmain->screens.first_);
     while (screen) {
-      ScrArea *area = static_cast<ScrArea *>(screen->areabase.first);
+      ScrArea *area = static_cast<ScrArea *>(screen->areabase.first_);
       while (area) {
-        SpaceLink *sl = static_cast<SpaceLink *>(area->spacedata.first);
+        SpaceLink *sl = static_cast<SpaceLink *>(area->spacedata.first_);
         while (sl) {
           if (sl->spacetype == SPACE_GRAPH) {
             SpaceGraph *sipo = reinterpret_cast<SpaceGraph *>(sl);
@@ -674,7 +674,7 @@ void blo_do_versions_pre250(FileData *fd, Library *lib, Main *bmain)
   }
 
   if (bmain->versionfile <= 170) {
-    Object *ob = static_cast<Object *>(bmain->objects.first);
+    Object *ob = static_cast<Object *>(bmain->objects.first_);
     PartEff *paf;
     while (ob) {
       paf = BKE_object_do_version_give_parteff_245(ob);
@@ -688,11 +688,11 @@ void blo_do_versions_pre250(FileData *fd, Library *lib, Main *bmain)
   }
 
   if (bmain->versionfile <= 171) {
-    bScreen *screen = static_cast<bScreen *>(bmain->screens.first);
+    bScreen *screen = static_cast<bScreen *>(bmain->screens.first_);
     while (screen) {
-      ScrArea *area = static_cast<ScrArea *>(screen->areabase.first);
+      ScrArea *area = static_cast<ScrArea *>(screen->areabase.first_);
       while (area) {
-        SpaceLink *sl = static_cast<SpaceLink *>(area->spacedata.first);
+        SpaceLink *sl = static_cast<SpaceLink *>(area->spacedata.first_);
         while (sl) {
           if (sl->spacetype == SPACE_TEXT) {
             SpaceText *st = reinterpret_cast<SpaceText *>(sl);
@@ -708,7 +708,7 @@ void blo_do_versions_pre250(FileData *fd, Library *lib, Main *bmain)
 
   if (bmain->versionfile <= 173) {
     int a, b;
-    Mesh *mesh = static_cast<Mesh *>(bmain->meshes.first);
+    Mesh *mesh = static_cast<Mesh *>(bmain->meshes.first_);
     while (mesh) {
       if (mesh->tface) {
         TFace *tface = mesh->tface;
@@ -726,7 +726,7 @@ void blo_do_versions_pre250(FileData *fd, Library *lib, Main *bmain)
   if (bmain->versionfile <= 204) {
     bSound *sound;
 
-    sound = static_cast<bSound *>(bmain->sounds.first);
+    sound = static_cast<bSound *>(bmain->sounds.first_);
     while (sound) {
       if (sound->volume < 0.01f) {
         sound->volume = 1.0f;
@@ -739,7 +739,7 @@ void blo_do_versions_pre250(FileData *fd, Library *lib, Main *bmain)
     bSound *sound;
     Mesh *mesh;
 
-    sound = static_cast<bSound *>(bmain->sounds.first);
+    sound = static_cast<bSound *>(bmain->sounds.first_);
     while (sound) {
       sound->max_gain = 1.0;
       sound->min_gain = 0.0;
@@ -759,7 +759,7 @@ void blo_do_versions_pre250(FileData *fd, Library *lib, Main *bmain)
      * better, and S-meshes were removed - if it was a S-mesh make
      * it a subsurf, and reset the subdivision level because subsurf
      * takes a lot more work to calculate. */
-    for (mesh = static_cast<Mesh *>(bmain->meshes.first); mesh;
+    for (mesh = static_cast<Mesh *>(bmain->meshes.first_); mesh;
          mesh = static_cast<Mesh *>(mesh->id.next))
     {
       constexpr eMesh_Flag ME_SMESH = eMesh_Flag(1 << 6);
@@ -788,7 +788,7 @@ void blo_do_versions_pre250(FileData *fd, Library *lib, Main *bmain)
      * old file vertex colors are undefined, reset them
      * to be fully opaque. -zr
      */
-    for (mesh = static_cast<Mesh *>(bmain->meshes.first); mesh;
+    for (mesh = static_cast<Mesh *>(bmain->meshes.first_); mesh;
          mesh = static_cast<Mesh *>(mesh->id.next))
     {
       if (mesh->mcol) {
@@ -817,7 +817,8 @@ void blo_do_versions_pre250(FileData *fd, Library *lib, Main *bmain)
 
   if (bmain->versionfile <= 223) {
     VFont *vf;
-    for (vf = static_cast<VFont *>(bmain->fonts.first); vf; vf = static_cast<VFont *>(vf->id.next))
+    for (vf = static_cast<VFont *>(bmain->fonts.first_); vf;
+         vf = static_cast<VFont *>(vf->id.next))
     {
       if (BLI_str_endswith(vf->filepath, ".Bfont")) {
         STRNCPY(vf->filepath, FO_BUILTIN_NAME);
@@ -830,7 +831,7 @@ void blo_do_versions_pre250(FileData *fd, Library *lib, Main *bmain)
     Mesh *mesh;
     bScreen *screen;
 
-    for (sound = static_cast<bSound *>(bmain->sounds.first); sound;
+    for (sound = static_cast<bSound *>(bmain->sounds.first_); sound;
          sound = static_cast<bSound *>(sound->id.next))
     {
       if (sound->packedfile) {
@@ -841,7 +842,7 @@ void blo_do_versions_pre250(FileData *fd, Library *lib, Main *bmain)
       }
     }
     /* Make sure that old subsurf meshes don't have zero subdivision level for rendering */
-    for (mesh = static_cast<Mesh *>(bmain->meshes.first); mesh;
+    for (mesh = static_cast<Mesh *>(bmain->meshes.first_); mesh;
          mesh = static_cast<Mesh *>(mesh->id.next))
     {
       constexpr eMesh_Flag ME_SUBSURF = eMesh_Flag(1 << 7);
@@ -851,7 +852,7 @@ void blo_do_versions_pre250(FileData *fd, Library *lib, Main *bmain)
     }
 
     /* some oldfile patch, moved from set_func_space */
-    for (screen = static_cast<bScreen *>(bmain->screens.first); screen;
+    for (screen = static_cast<bScreen *>(bmain->screens.first_); screen;
          screen = static_cast<bScreen *>(screen->id.next))
     {
       for (ScrArea &area : screen->areabase) {
@@ -872,7 +873,7 @@ void blo_do_versions_pre250(FileData *fd, Library *lib, Main *bmain)
 
     /* NOTE(@theeth): As of now, this insures that the transition from the old Track system
      * to the new full constraint Track is painless for everyone. */
-    ob = static_cast<Object *>(bmain->objects.first);
+    ob = static_cast<Object *>(bmain->objects.first_);
 
     while (ob) {
       ListBaseT<bConstraint> &list = ob->constraints;
@@ -909,7 +910,7 @@ void blo_do_versions_pre250(FileData *fd, Library *lib, Main *bmain)
       ob = static_cast<Object *>(ob->id.next);
     }
 
-    for (sce = static_cast<Scene *>(bmain->scenes.first); sce;
+    for (sce = static_cast<Scene *>(bmain->scenes.first_); sce;
          sce = static_cast<Scene *>(sce->id.next))
     {
       sce->audio.mixrate = 48000;
@@ -917,7 +918,7 @@ void blo_do_versions_pre250(FileData *fd, Library *lib, Main *bmain)
     }
 
     /* patch for old wrong max view2d settings, allows zooming out more */
-    for (screen = static_cast<bScreen *>(bmain->screens.first); screen;
+    for (screen = static_cast<bScreen *>(bmain->screens.first_); screen;
          screen = static_cast<bScreen *>(screen->id.next))
     {
       for (ScrArea &area : screen->areabase) {
@@ -942,7 +943,7 @@ void blo_do_versions_pre250(FileData *fd, Library *lib, Main *bmain)
     /* As of now, this insures that the transition from the old Track system
      * to the new full constraint Track is painless for everyone.
      */
-    ob = static_cast<Object *>(bmain->objects.first);
+    ob = static_cast<Object *>(bmain->objects.first_);
 
     while (ob) {
       ListBaseT<bConstraint> &list = ob->constraints;
@@ -976,7 +977,7 @@ void blo_do_versions_pre250(FileData *fd, Library *lib, Main *bmain)
     }
 
     /* convert old mainb values for new button panels */
-    for (screen = static_cast<bScreen *>(bmain->screens.first); screen;
+    for (screen = static_cast<bScreen *>(bmain->screens.first_); screen;
          screen = static_cast<bScreen *>(screen->id.next))
     {
       for (ScrArea &area : screen->areabase) {
@@ -1043,7 +1044,7 @@ void blo_do_versions_pre250(FileData *fd, Library *lib, Main *bmain)
     bScreen *screen;
 
     /* New variable block-scale, for panels in any area. */
-    for (screen = static_cast<bScreen *>(bmain->screens.first); screen;
+    for (screen = static_cast<bScreen *>(bmain->screens.first_); screen;
          screen = static_cast<bScreen *>(screen->id.next))
     {
       for (ScrArea &area : screen->areabase) {
@@ -1059,14 +1060,14 @@ void blo_do_versions_pre250(FileData *fd, Library *lib, Main *bmain)
   }
 
   if (bmain->versionfile <= 231) {
-    bScreen *screen = static_cast<bScreen *>(bmain->screens.first);
+    bScreen *screen = static_cast<bScreen *>(bmain->screens.first_);
 
     /* new bit flags for showing/hiding grid floor and axes */
 
     while (screen) {
-      ScrArea *area = static_cast<ScrArea *>(screen->areabase.first);
+      ScrArea *area = static_cast<ScrArea *>(screen->areabase.first_);
       while (area) {
-        SpaceLink *sl = static_cast<SpaceLink *>(area->spacedata.first);
+        SpaceLink *sl = static_cast<SpaceLink *>(area->spacedata.first_);
         while (sl) {
           if (sl->spacetype == SPACE_VIEW3D) {
             View3D *v3d = reinterpret_cast<View3D *>(sl);
@@ -1087,8 +1088,8 @@ void blo_do_versions_pre250(FileData *fd, Library *lib, Main *bmain)
   }
 
   if (bmain->versionfile <= 232) {
-    Tex *tex = static_cast<Tex *>(bmain->textures.first);
-    World *wrld = static_cast<World *>(bmain->worlds.first);
+    Tex *tex = static_cast<Tex *>(bmain->textures.first_);
+    World *wrld = static_cast<World *>(bmain->worlds.first_);
     bScreen *screen;
 
     while (tex) {
@@ -1125,7 +1126,7 @@ void blo_do_versions_pre250(FileData *fd, Library *lib, Main *bmain)
 
     /* New variable block-scale, for panels in any area, do again because new
      * areas didn't initialize it to 0.7 yet. */
-    for (screen = static_cast<bScreen *>(bmain->screens.first); screen;
+    for (screen = static_cast<bScreen *>(bmain->screens.first_); screen;
          screen = static_cast<bScreen *>(screen->id.next))
     {
       for (ScrArea &area : screen->areabase) {
@@ -1143,7 +1144,7 @@ void blo_do_versions_pre250(FileData *fd, Library *lib, Main *bmain)
   if (bmain->versionfile <= 233) {
     bScreen *screen;
 
-    for (screen = static_cast<bScreen *>(bmain->screens.first); screen;
+    for (screen = static_cast<bScreen *>(bmain->screens.first_); screen;
          screen = static_cast<bScreen *>(screen->id.next))
     {
       for (ScrArea &area : screen->areabase) {
@@ -1160,7 +1161,7 @@ void blo_do_versions_pre250(FileData *fd, Library *lib, Main *bmain)
   if (bmain->versionfile <= 234) {
     bScreen *screen;
 
-    for (screen = static_cast<bScreen *>(bmain->screens.first); screen;
+    for (screen = static_cast<bScreen *>(bmain->screens.first_); screen;
          screen = static_cast<bScreen *>(screen->id.next))
     {
       for (ScrArea &area : screen->areabase) {
@@ -1177,8 +1178,8 @@ void blo_do_versions_pre250(FileData *fd, Library *lib, Main *bmain)
   }
 
   if (bmain->versionfile <= 235) {
-    Tex *tex = static_cast<Tex *>(bmain->textures.first);
-    Scene *sce = static_cast<Scene *>(bmain->scenes.first);
+    Tex *tex = static_cast<Tex *>(bmain->textures.first_);
+    Scene *sce = static_cast<Scene *>(bmain->scenes.first_);
     Editing *ed;
 
     while (tex) {
@@ -1199,7 +1200,7 @@ void blo_do_versions_pre250(FileData *fd, Library *lib, Main *bmain)
 
   if (bmain->versionfile <= 236) {
     Object *ob;
-    Camera *cam = static_cast<Camera *>(bmain->cameras.first);
+    Camera *cam = static_cast<Camera *>(bmain->cameras.first_);
 
     while (cam) {
       if (cam->ortho_scale == 0.0f) {
@@ -1214,7 +1215,7 @@ void blo_do_versions_pre250(FileData *fd, Library *lib, Main *bmain)
     /* Set time line var. */
 
     /* softbody init new vars */
-    for (ob = static_cast<Object *>(bmain->objects.first); ob;
+    for (ob = static_cast<Object *>(bmain->objects.first_); ob;
          ob = static_cast<Object *>(ob->id.next))
     {
       if (ob->soft) {
@@ -1240,7 +1241,7 @@ void blo_do_versions_pre250(FileData *fd, Library *lib, Main *bmain)
     Object *ob;
 
     /* armature recode checks */
-    for (arm = static_cast<bArmature *>(bmain->armatures.first); arm;
+    for (arm = static_cast<bArmature *>(bmain->armatures.first_); arm;
          arm = static_cast<bArmature *>(arm->id.next))
     {
       BKE_armature_where_is(arm);
@@ -1249,7 +1250,7 @@ void blo_do_versions_pre250(FileData *fd, Library *lib, Main *bmain)
         do_version_bone_head_tail_237(&bone);
       }
     }
-    for (ob = static_cast<Object *>(bmain->objects.first); ob;
+    for (ob = static_cast<Object *>(bmain->objects.first_); ob;
          ob = static_cast<Object *>(ob->id.next))
     {
       if (ob->parent) {
@@ -1335,7 +1336,7 @@ void blo_do_versions_pre250(FileData *fd, Library *lib, Main *bmain)
     bArmature *arm;
     Mesh *mesh;
     Key *key;
-    Scene *sce = static_cast<Scene *>(bmain->scenes.first);
+    Scene *sce = static_cast<Scene *>(bmain->scenes.first_);
 
     while (sce) {
       if (sce->toolsettings == nullptr) {
@@ -1345,7 +1346,7 @@ void blo_do_versions_pre250(FileData *fd, Library *lib, Main *bmain)
       sce = static_cast<Scene *>(sce->id.next);
     }
 
-    for (lt = static_cast<Lattice *>(bmain->lattices.first); lt;
+    for (lt = static_cast<Lattice *>(bmain->lattices.first_); lt;
          lt = static_cast<Lattice *>(lt->id.next))
     {
       if (lt->fu == 0.0f && lt->fv == 0.0f && lt->fw == 0.0f) {
@@ -1355,7 +1356,7 @@ void blo_do_versions_pre250(FileData *fd, Library *lib, Main *bmain)
       }
     }
 
-    for (ob = static_cast<Object *>(bmain->objects.first); ob;
+    for (ob = static_cast<Object *>(bmain->objects.first_); ob;
          ob = static_cast<Object *>(ob->id.next))
     {
       PartEff *paf;
@@ -1371,7 +1372,7 @@ void blo_do_versions_pre250(FileData *fd, Library *lib, Main *bmain)
       if ((ob->softflag & OB_SB_ENABLE) && !BKE_modifiers_findby_type(ob, eModifierType_Softbody))
       {
         if (ob->softflag & OB_SB_POSTDEF) {
-          ModifierData *md = static_cast<ModifierData *>(ob->modifiers.first);
+          ModifierData *md = static_cast<ModifierData *>(ob->modifiers.first_);
 
           while (md && BKE_modifier_get_info(md->type)->type == ModifierTypeType::OnlyDeform) {
             md = md->next;
@@ -1424,14 +1425,14 @@ void blo_do_versions_pre250(FileData *fd, Library *lib, Main *bmain)
       }
     }
 
-    for (arm = static_cast<bArmature *>(bmain->armatures.first); arm;
+    for (arm = static_cast<bArmature *>(bmain->armatures.first_); arm;
          arm = static_cast<bArmature *>(arm->id.next))
     {
       bone_version_238(&arm->bonebase);
       arm->deformflag |= ARM_DEF_VGROUP;
     }
 
-    for (mesh = static_cast<Mesh *>(bmain->meshes.first); mesh;
+    for (mesh = static_cast<Mesh *>(bmain->meshes.first_); mesh;
          mesh = static_cast<Mesh *>(mesh->id.next))
     {
       if (!mesh->medge) {
@@ -1442,7 +1443,7 @@ void blo_do_versions_pre250(FileData *fd, Library *lib, Main *bmain)
       }
     }
 
-    for (key = static_cast<Key *>(bmain->shapekeys.first); key;
+    for (key = static_cast<Key *>(bmain->shapekeys.first_); key;
          key = static_cast<Key *>(key->id.next))
     {
       int index = 1;
@@ -1466,12 +1467,12 @@ void blo_do_versions_pre250(FileData *fd, Library *lib, Main *bmain)
   if (bmain->versionfile <= 239) {
     bArmature *arm;
     Object *ob;
-    Scene *sce = static_cast<Scene *>(bmain->scenes.first);
-    Camera *cam = static_cast<Camera *>(bmain->cameras.first);
+    Scene *sce = static_cast<Scene *>(bmain->scenes.first_);
+    Camera *cam = static_cast<Camera *>(bmain->cameras.first_);
     int set_passepartout = 0;
 
     /* deformflag is local in modifier now */
-    for (ob = static_cast<Object *>(bmain->objects.first); ob;
+    for (ob = static_cast<Object *>(bmain->objects.first_); ob;
          ob = static_cast<Object *>(ob->id.next))
     {
       for (ModifierData &md : ob->modifiers) {
@@ -1488,7 +1489,7 @@ void blo_do_versions_pre250(FileData *fd, Library *lib, Main *bmain)
       }
     }
 
-    for (arm = static_cast<bArmature *>(bmain->armatures.first); arm;
+    for (arm = static_cast<bArmature *>(bmain->armatures.first_); arm;
          arm = static_cast<bArmature *>(arm->id.next))
     {
       bone_version_239(&arm->bonebase);
@@ -1528,7 +1529,7 @@ void blo_do_versions_pre250(FileData *fd, Library *lib, Main *bmain)
     bNodeTree *ntree;
 
     /* updating layers still */
-    for (arm = static_cast<bArmature *>(bmain->armatures.first); arm;
+    for (arm = static_cast<bArmature *>(bmain->armatures.first_); arm;
          arm = static_cast<bArmature *>(arm->id.next))
     {
       bone_version_239(&arm->bonebase);
@@ -1536,7 +1537,7 @@ void blo_do_versions_pre250(FileData *fd, Library *lib, Main *bmain)
         arm->layer = 1;
       }
     }
-    for (sce = static_cast<Scene *>(bmain->scenes.first); sce;
+    for (sce = static_cast<Scene *>(bmain->scenes.first_); sce;
          sce = static_cast<Scene *>(sce->id.next))
     {
       if (sce->audio.mixrate == 0) {
@@ -1567,14 +1568,14 @@ void blo_do_versions_pre250(FileData *fd, Library *lib, Main *bmain)
       }
     }
 
-    for (ntree = static_cast<bNodeTree *>(bmain->nodetrees.first); ntree;
+    for (ntree = static_cast<bNodeTree *>(bmain->nodetrees.first_); ntree;
          ntree = static_cast<bNodeTree *>(ntree->id.next))
     {
       ntree_version_241(ntree);
     }
 
     /* for empty drawsize and drawtype */
-    for (ob = static_cast<Object *>(bmain->objects.first); ob;
+    for (ob = static_cast<Object *>(bmain->objects.first_); ob;
          ob = static_cast<Object *>(ob->id.next))
     {
       if (ob->empty_drawsize == 0.0f) {
@@ -1586,7 +1587,7 @@ void blo_do_versions_pre250(FileData *fd, Library *lib, Main *bmain)
     /* during 2.41 images with this name were used for viewer node output, lets fix that */
     if (bmain->versionfile == 241) {
       Image *ima;
-      for (ima = static_cast<Image *>(bmain->images.first); ima;
+      for (ima = static_cast<Image *>(bmain->images.first_); ima;
            ima = static_cast<Image *>(ima->id.next))
       {
         if (STREQ(ima->filepath, "Compositor")) {
@@ -1610,11 +1611,11 @@ void blo_do_versions_pre250(FileData *fd, Library *lib, Main *bmain)
     bNodeTree *ntree;
     int a;
 
-    for (screen = static_cast<bScreen *>(bmain->screens.first); screen;
+    for (screen = static_cast<bScreen *>(bmain->screens.first_); screen;
          screen = static_cast<bScreen *>(screen->id.next))
     {
       ScrArea *area;
-      area = static_cast<ScrArea *>(screen->areabase.first);
+      area = static_cast<ScrArea *>(screen->areabase.first_);
       while (area) {
         for (SpaceLink &sl : area->spacedata) {
           if (sl.spacetype == SPACE_VIEW3D) {
@@ -1628,7 +1629,7 @@ void blo_do_versions_pre250(FileData *fd, Library *lib, Main *bmain)
       }
     }
 
-    for (sce = static_cast<Scene *>(bmain->scenes.first); sce;
+    for (sce = static_cast<Scene *>(bmain->scenes.first_); sce;
          sce = static_cast<Scene *>(sce->id.next))
     {
       enum {
@@ -1650,14 +1651,14 @@ void blo_do_versions_pre250(FileData *fd, Library *lib, Main *bmain)
       }
     }
 
-    for (ntree = static_cast<bNodeTree *>(bmain->nodetrees.first); ntree;
+    for (ntree = static_cast<bNodeTree *>(bmain->nodetrees.first_); ntree;
          ntree = static_cast<bNodeTree *>(ntree->id.next))
     {
       ntree_version_242(ntree);
     }
 
     /* add default radius values to old curve points */
-    for (cu = static_cast<Curve *>(bmain->curves.first); cu;
+    for (cu = static_cast<Curve *>(bmain->curves.first_); cu;
          cu = static_cast<Curve *>(cu->id.next))
     {
       for (Nurb &nu : cu->nurb) {
@@ -1678,7 +1679,7 @@ void blo_do_versions_pre250(FileData *fd, Library *lib, Main *bmain)
       }
     }
 
-    for (ob = static_cast<Object *>(bmain->objects.first); ob;
+    for (ob = static_cast<Object *>(bmain->objects.first_); ob;
          ob = static_cast<Object *>(ob->id.next))
     {
       ListBaseT<bConstraint> &list = ob->constraints;
@@ -1745,7 +1746,7 @@ void blo_do_versions_pre250(FileData *fd, Library *lib, Main *bmain)
       }
     }
 
-    for (ma = static_cast<Material *>(bmain->materials.first); ma;
+    for (ma = static_cast<Material *>(bmain->materials.first_); ma;
          ma = static_cast<Material *>(ma->id.next))
     {
       if (ma->nodetree) {
@@ -1753,13 +1754,13 @@ void blo_do_versions_pre250(FileData *fd, Library *lib, Main *bmain)
       }
     }
 
-    for (mesh = static_cast<Mesh *>(bmain->meshes.first); mesh;
+    for (mesh = static_cast<Mesh *>(bmain->meshes.first_); mesh;
          mesh = static_cast<Mesh *>(mesh->id.next))
     {
       customdata_version_242(mesh);
     }
 
-    for (collection = static_cast<Collection *>(bmain->collections.first); collection;
+    for (collection = static_cast<Collection *>(bmain->collections.first_); collection;
          collection = static_cast<Collection *>(collection->id.next))
     {
       if (collection->layer == 0) {
@@ -1773,7 +1774,7 @@ void blo_do_versions_pre250(FileData *fd, Library *lib, Main *bmain)
       Tex *tex;
 
       /* Image refactor initialize */
-      for (ima = static_cast<Image *>(bmain->images.first); ima;
+      for (ima = static_cast<Image *>(bmain->images.first_); ima;
            ima = static_cast<Image *>(ima->id.next))
       {
         ima->source = IMA_SRC_FILE;
@@ -1792,7 +1793,7 @@ void blo_do_versions_pre250(FileData *fd, Library *lib, Main *bmain)
           ima->type = IMA_TYPE_R_RESULT;
         }
       }
-      for (tex = static_cast<Tex *>(bmain->textures.first); tex;
+      for (tex = static_cast<Tex *>(bmain->textures.first_); tex;
            tex = static_cast<Tex *>(tex->id.next))
       {
         enum {
@@ -1812,19 +1813,19 @@ void blo_do_versions_pre250(FileData *fd, Library *lib, Main *bmain)
         tex->iuser.sfra = tex->sfra;
         tex->iuser.cycl = (tex->imaflag & eTex_ImaFlag(TEX_ANIMCYCLIC)) != 0;
       }
-      for (sce = static_cast<Scene *>(bmain->scenes.first); sce;
+      for (sce = static_cast<Scene *>(bmain->scenes.first_); sce;
            sce = static_cast<Scene *>(sce->id.next))
       {
         if (sce->nodetree) {
           do_version_ntree_242_2(sce->nodetree);
         }
       }
-      for (ntree = static_cast<bNodeTree *>(bmain->nodetrees.first); ntree;
+      for (ntree = static_cast<bNodeTree *>(bmain->nodetrees.first_); ntree;
            ntree = static_cast<bNodeTree *>(ntree->id.next))
       {
         do_version_ntree_242_2(ntree);
       }
-      for (ma = static_cast<Material *>(bmain->materials.first); ma;
+      for (ma = static_cast<Material *>(bmain->materials.first_); ma;
            ma = static_cast<Material *>(ma->id.next))
       {
         if (ma->nodetree) {
@@ -1835,7 +1836,7 @@ void blo_do_versions_pre250(FileData *fd, Library *lib, Main *bmain)
   }
 
   if (bmain->versionfile <= 243) {
-    Object *ob = static_cast<Object *>(bmain->objects.first);
+    Object *ob = static_cast<Object *>(bmain->objects.first_);
 
     for (; ob; ob = static_cast<Object *>(ob->id.next)) {
       for (bDeformGroup &curdef : ob->defbase) {
@@ -1872,7 +1873,7 @@ void blo_do_versions_pre250(FileData *fd, Library *lib, Main *bmain)
     /* render layer added, this is not the active layer */
     if (bmain->versionfile <= 243 || bmain->subversionfile < 2) {
       Mesh *mesh;
-      for (mesh = static_cast<Mesh *>(bmain->meshes.first); mesh;
+      for (mesh = static_cast<Mesh *>(bmain->meshes.first_); mesh;
            mesh = static_cast<Mesh *>(mesh->id.next))
       {
         customdata_version_243(mesh);
@@ -1885,11 +1886,11 @@ void blo_do_versions_pre250(FileData *fd, Library *lib, Main *bmain)
 
     if (bmain->versionfile != 244 || bmain->subversionfile < 2) {
       /* correct older action editors - incorrect scrolling */
-      for (screen = static_cast<bScreen *>(bmain->screens.first); screen;
+      for (screen = static_cast<bScreen *>(bmain->screens.first_); screen;
            screen = static_cast<bScreen *>(screen->id.next))
       {
         ScrArea *area;
-        area = static_cast<ScrArea *>(screen->areabase.first);
+        area = static_cast<ScrArea *>(screen->areabase.first_);
         while (area) {
           for (SpaceLink &sl : area->spacedata) {
             if (sl.spacetype == SPACE_ACTION) {
@@ -1921,7 +1922,7 @@ void blo_do_versions_pre250(FileData *fd, Library *lib, Main *bmain)
     if (!(bmain->versionfile == 244 && bmain->subversionfile == 3) &&
         ((bmain->versionfile < 245) || (bmain->versionfile == 245 && bmain->subversionfile == 0)))
     {
-      for (ob = static_cast<Object *>(bmain->objects.first); ob;
+      for (ob = static_cast<Object *>(bmain->objects.first_); ob;
            ob = static_cast<Object *>(ob->id.next))
       {
         ListBaseT<bConstraint> &list = ob->constraints;
@@ -1990,7 +1991,7 @@ void blo_do_versions_pre250(FileData *fd, Library *lib, Main *bmain)
     if (bmain->versionfile != 245) {
 
       /* Repair preview from 242 - 244. */
-      for (ima = static_cast<Image *>(bmain->images.first); ima;
+      for (ima = static_cast<Image *>(bmain->images.first_); ima;
            ima = static_cast<Image *>(ima->id.next))
       {
         ima->preview = nullptr;
@@ -1998,7 +1999,7 @@ void blo_do_versions_pre250(FileData *fd, Library *lib, Main *bmain)
     }
 
     /* add point caches */
-    for (ob = static_cast<Object *>(bmain->objects.first); ob;
+    for (ob = static_cast<Object *>(bmain->objects.first_); ob;
          ob = static_cast<Object *>(ob->id.next))
     {
       if (ob->soft && !ob->soft->pointcache) {
@@ -2030,7 +2031,7 @@ void blo_do_versions_pre250(FileData *fd, Library *lib, Main *bmain)
       }
     }
 
-    for (ma = static_cast<Material *>(bmain->materials.first); ma;
+    for (ma = static_cast<Material *>(bmain->materials.first_); ma;
          ma = static_cast<Material *>(ma->id.next))
     {
       if (ma->gloss_mir == 0.0f) {
@@ -2038,7 +2039,7 @@ void blo_do_versions_pre250(FileData *fd, Library *lib, Main *bmain)
       }
     }
 
-    for (part = static_cast<ParticleSettings *>(bmain->particles.first); part;
+    for (part = static_cast<ParticleSettings *>(bmain->particles.first_); part;
          part = static_cast<ParticleSettings *>(part->id.next))
     {
       if (part->child_render_percent == 0) {
@@ -2046,7 +2047,7 @@ void blo_do_versions_pre250(FileData *fd, Library *lib, Main *bmain)
       }
     }
 
-    for (sce = static_cast<Scene *>(bmain->scenes.first); sce;
+    for (sce = static_cast<Scene *>(bmain->scenes.first_); sce;
          sce = static_cast<Scene *>(sce->id.next))
     {
       if (sce->nodetree) {
@@ -2059,14 +2060,14 @@ void blo_do_versions_pre250(FileData *fd, Library *lib, Main *bmain)
       }
     }
 
-    for (ntree = static_cast<bNodeTree *>(bmain->nodetrees.first); ntree;
+    for (ntree = static_cast<bNodeTree *>(bmain->nodetrees.first_); ntree;
          ntree = static_cast<bNodeTree *>(ntree->id.next))
     {
       ntree_version_245(fd, lib, ntree);
     }
 
     /* fix for temporary flag changes during 245 cycle */
-    for (ima = static_cast<Image *>(bmain->images.first); ima;
+    for (ima = static_cast<Image *>(bmain->images.first_); ima;
          ima = static_cast<Image *>(ima->id.next))
     {
       if (ima->flag & IMA_OLD_PREMUL) {
@@ -2075,7 +2076,7 @@ void blo_do_versions_pre250(FileData *fd, Library *lib, Main *bmain)
       }
     }
 
-    for (tex = static_cast<Tex *>(bmain->textures.first); tex;
+    for (tex = static_cast<Tex *>(bmain->textures.first_); tex;
          tex = static_cast<Tex *>(tex->id.next))
     {
       if (int(tex->iuser.flag) & int(IMA_OLD_PREMUL)) {
@@ -2095,7 +2096,7 @@ void blo_do_versions_pre250(FileData *fd, Library *lib, Main *bmain)
     Image *ima;
 
     /* initialize 1:1 Aspect */
-    for (ima = static_cast<Image *>(bmain->images.first); ima;
+    for (ima = static_cast<Image *>(bmain->images.first_); ima;
          ima = static_cast<Image *>(ima->id.next))
     {
       ima->aspx = ima->aspy = 1.0f;
@@ -2106,13 +2107,13 @@ void blo_do_versions_pre250(FileData *fd, Library *lib, Main *bmain)
     bArmature *arm;
     Object *ob;
 
-    for (arm = static_cast<bArmature *>(bmain->armatures.first); arm;
+    for (arm = static_cast<bArmature *>(bmain->armatures.first_); arm;
          arm = static_cast<bArmature *>(arm->id.next))
     {
       arm->deformflag |= ARM_DEF_B_BONE_REST;
     }
 
-    for (ob = static_cast<Object *>(bmain->objects.first); ob;
+    for (ob = static_cast<Object *>(bmain->objects.first_); ob;
          ob = static_cast<Object *>(ob->id.next))
     {
       for (ModifierData &md : ob->modifiers) {
@@ -2126,7 +2127,7 @@ void blo_do_versions_pre250(FileData *fd, Library *lib, Main *bmain)
   if (!MAIN_VERSION_FILE_ATLEAST(bmain, 245, 5)) {
     /* foreground color needs to be something other than black */
     Scene *sce;
-    for (sce = static_cast<Scene *>(bmain->scenes.first); sce;
+    for (sce = static_cast<Scene *>(bmain->scenes.first_); sce;
          sce = static_cast<Scene *>(sce->id.next))
     {
       sce->r.fg_stamp[0] = sce->r.fg_stamp[1] = sce->r.fg_stamp[2] = 0.8f;
@@ -2138,7 +2139,7 @@ void blo_do_versions_pre250(FileData *fd, Library *lib, Main *bmain)
   if (!MAIN_VERSION_FILE_ATLEAST(bmain, 245, 6)) {
     Scene *sce;
     /* fix frs_sec_base */
-    for (sce = static_cast<Scene *>(bmain->scenes.first); sce;
+    for (sce = static_cast<Scene *>(bmain->scenes.first_); sce;
          sce = static_cast<Scene *>(sce->id.next))
     {
       if (sce->r.frs_sec_base == 0) {
@@ -2150,7 +2151,7 @@ void blo_do_versions_pre250(FileData *fd, Library *lib, Main *bmain)
   if (!MAIN_VERSION_FILE_ATLEAST(bmain, 245, 7)) {
     Object *ob;
 
-    for (ob = static_cast<Object *>(bmain->objects.first); ob;
+    for (ob = static_cast<Object *>(bmain->objects.first_); ob;
          ob = static_cast<Object *>(ob->id.next))
     {
       if (ob->pose) {
@@ -2182,7 +2183,7 @@ void blo_do_versions_pre250(FileData *fd, Library *lib, Main *bmain)
     Scene *sce;
     Object *ob;
 
-    for (ob = static_cast<Object *>(bmain->objects.first); ob;
+    for (ob = static_cast<Object *>(bmain->objects.first_); ob;
          ob = static_cast<Object *>(ob->id.next))
     {
       if (ob->soft && ob->soft->keys) {
@@ -2298,7 +2299,7 @@ void blo_do_versions_pre250(FileData *fd, Library *lib, Main *bmain)
 
         /* Dupli-objects. */
         if (ob->transflag & OB_DUPLIVERTS) {
-          Object *dup = static_cast<Object *>(bmain->objects.first);
+          Object *dup = static_cast<Object *>(bmain->objects.first_);
 
           for (; dup; dup = static_cast<Object *>(dup->id.next)) {
             if (ob == blo_do_versions_newlibadr(fd, &dup->id, ID_IS_LINKED(dup), dup->parent)) {
@@ -2328,7 +2329,7 @@ void blo_do_versions_pre250(FileData *fd, Library *lib, Main *bmain)
       }
     }
 
-    for (sce = static_cast<Scene *>(bmain->scenes.first); sce;
+    for (sce = static_cast<Scene *>(bmain->scenes.first_); sce;
          sce = static_cast<Scene *>(sce->id.next))
     {
       ParticleEditSettings *pset = &sce->toolsettings->particle;
@@ -2355,7 +2356,7 @@ void blo_do_versions_pre250(FileData *fd, Library *lib, Main *bmain)
     Object *ob;
 
     /* dupliface scale */
-    for (ob = static_cast<Object *>(bmain->objects.first); ob;
+    for (ob = static_cast<Object *>(bmain->objects.first_); ob;
          ob = static_cast<Object *>(ob->id.next))
     {
       ob->instance_faces_scale = 1.0f;
@@ -2365,7 +2366,7 @@ void blo_do_versions_pre250(FileData *fd, Library *lib, Main *bmain)
   if (!MAIN_VERSION_FILE_ATLEAST(bmain, 245, 14)) {
     Scene *sce;
 
-    for (sce = static_cast<Scene *>(bmain->scenes.first); sce;
+    for (sce = static_cast<Scene *>(bmain->scenes.first_); sce;
          sce = static_cast<Scene *>(sce->id.next))
     {
       if (sce->ed) {
@@ -2406,7 +2407,7 @@ void blo_do_versions_pre250(FileData *fd, Library *lib, Main *bmain)
   if (!MAIN_VERSION_FILE_ATLEAST(bmain, 246, 1)) {
     Object *ob;
 
-    for (ob = static_cast<Object *>(bmain->objects.first); ob;
+    for (ob = static_cast<Object *>(bmain->objects.first_); ob;
          ob = static_cast<Object *>(ob->id.next))
     {
       if (ob->fluidsimSettings) {
@@ -2427,7 +2428,7 @@ void blo_do_versions_pre250(FileData *fd, Library *lib, Main *bmain)
 
   if (!MAIN_VERSION_FILE_ATLEAST(bmain, 246, 1)) {
     Object *ob;
-    for (ob = static_cast<Object *>(bmain->objects.first); ob;
+    for (ob = static_cast<Object *>(bmain->objects.first_); ob;
          ob = static_cast<Object *>(ob->id.next))
     {
       if (ob->pd && (ob->pd->forcefield == PFIELD_WIND)) {
@@ -2440,7 +2441,7 @@ void blo_do_versions_pre250(FileData *fd, Library *lib, Main *bmain)
   if (!MAIN_VERSION_FILE_ATLEAST(bmain, 247, 6)) {
     Curve *cu;
 
-    for (cu = static_cast<Curve *>(bmain->curves.first); cu;
+    for (cu = static_cast<Curve *>(bmain->curves.first_); cu;
          cu = static_cast<Curve *>(cu->id.next))
     {
       for (Nurb &nu : cu->nurb) {
@@ -2462,7 +2463,7 @@ void blo_do_versions_pre250(FileData *fd, Library *lib, Main *bmain)
     Scene *sce;
 
     /* NOTE: these will need to be added for painting. */
-    for (sce = static_cast<Scene *>(bmain->scenes.first); sce;
+    for (sce = static_cast<Scene *>(bmain->scenes.first_); sce;
          sce = static_cast<Scene *>(sce->id.next))
     {
       sce->toolsettings->imapaint.seam_bleed = 2;
@@ -2474,7 +2475,7 @@ void blo_do_versions_pre250(FileData *fd, Library *lib, Main *bmain)
     bScreen *screen;
 
     /* adjust default settings for Animation Editors */
-    for (screen = static_cast<bScreen *>(bmain->screens.first); screen;
+    for (screen = static_cast<bScreen *>(bmain->screens.first_); screen;
          screen = static_cast<bScreen *>(screen->id.next))
     {
       for (ScrArea &area : screen->areabase) {
@@ -2506,7 +2507,7 @@ void blo_do_versions_pre250(FileData *fd, Library *lib, Main *bmain)
   /* correct introduce of seed for wind force */
   if (bmain->versionfile < 249 && bmain->subversionfile < 1) {
     Object *ob;
-    for (ob = static_cast<Object *>(bmain->objects.first); ob;
+    for (ob = static_cast<Object *>(bmain->objects.first_); ob;
          ob = static_cast<Object *>(ob->id.next))
     {
       if (ob->pd) {
@@ -2516,7 +2517,7 @@ void blo_do_versions_pre250(FileData *fd, Library *lib, Main *bmain)
   }
 
   if (bmain->versionfile < 249 && bmain->subversionfile < 2) {
-    Scene *sce = static_cast<Scene *>(bmain->scenes.first);
+    Scene *sce = static_cast<Scene *>(bmain->scenes.first_);
     Editing *ed;
 
     while (sce) {

@@ -1378,7 +1378,7 @@ bNode *create_proxy_const_input_node(const eNodeSocketDatatype socket_type,
 
     case SOCK_FLOAT: {
       bNode *node = bke::node_add_node(&C, dst_tree, "ShaderNodeValue"_ustr);
-      bNodeSocket *socket = static_cast<bNodeSocket *>(node->outputs.first);
+      bNodeSocket *socket = static_cast<bNodeSocket *>(node->outputs.first_);
       socket_value_copy_content(SOCK_FLOAT, socket->default_value, value, true);
       anim_basepaths.append(
           {src_property_path, get_socket_property_path(dst_tree, *socket, "default_value")});
@@ -1408,7 +1408,7 @@ bNode *create_proxy_const_input_node(const eNodeSocketDatatype socket_type,
       switch (dst_tree.type) {
         case NTREE_COMPOSIT: {
           bNode *node = bke::node_add_node(&C, dst_tree, "CompositorNodeRGB"_ustr);
-          bNodeSocket *socket = static_cast<bNodeSocket *>(node->outputs.first);
+          bNodeSocket *socket = static_cast<bNodeSocket *>(node->outputs.first_);
           *socket->default_value_typed<bNodeSocketValueFloat>() =
               *static_cast<const bNodeSocketValueFloat *>(value);
           anim_basepaths.append(
@@ -1417,7 +1417,7 @@ bNode *create_proxy_const_input_node(const eNodeSocketDatatype socket_type,
         }
         case NTREE_SHADER: {
           bNode *node = bke::node_add_node(&C, dst_tree, "ShaderNodeRGB"_ustr);
-          bNodeSocket *socket = static_cast<bNodeSocket *>(node->outputs.first);
+          bNodeSocket *socket = static_cast<bNodeSocket *>(node->outputs.first_);
           *socket->default_value_typed<bNodeSocketValueFloat>() =
               *static_cast<const bNodeSocketValueFloat *>(value);
           anim_basepaths.append(
@@ -1656,13 +1656,13 @@ bNode *create_proxy_converter_node(const eNodeSocketDatatype socket_type,
   BKE_ntree_update_tag_node_property(&dst_tree, proxy_node);
   BKE_ntree_update_after_single_tree_change(*CTX_data_main(&C), dst_tree);
 
-  bNodeSocket *socket = static_cast<bNodeSocket *>(proxy_node->inputs.first);
+  bNodeSocket *socket = static_cast<bNodeSocket *>(proxy_node->inputs.first_);
   bke::socket_value_copy_content(socket->type, socket->default_value, src_value, true);
 
   proxy_node->flag |= NODE_COLLAPSED;
 
   if (src_socket) {
-    bNodeSocket &proxy_socket = *static_cast<bNodeSocket *>(proxy_node->inputs.first);
+    bNodeSocket &proxy_socket = *static_cast<bNodeSocket *>(proxy_node->inputs.first_);
     anim_basepaths.append(
         {socket_basepath(src_tree, *src_socket), socket_basepath(dst_tree, proxy_socket)});
   }

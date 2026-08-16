@@ -531,7 +531,7 @@ static bool snap_selected_to_location_rotation(bContext *C,
     BKE_scene_graph_evaluated_ensure(depsgraph, bmain);
 
     /* Reset flags. */
-    for (Object *ob = static_cast<Object *>(bmain->objects.first); ob;
+    for (Object *ob = static_cast<Object *>(bmain->objects.first_); ob;
          ob = static_cast<Object *>(ob->id.next))
     {
       ob->flag &= ~OB_DONE;

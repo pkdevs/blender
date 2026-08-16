@@ -826,7 +826,7 @@ void BPY_modules_load_user(bContext *C)
 
   bpy_context_set(C, &gilstate);
 
-  for (text = static_cast<Text *>(bmain->texts.first); text;
+  for (text = static_cast<Text *>(bmain->texts.first_); text;
        text = static_cast<Text *>(text->id.next))
   {
     if (text->flags & TXT_ISSCRIPT) {

@@ -2428,8 +2428,8 @@ static wmOperatorStatus text_jump_exec(bContext *C, wmOperator *op)
 {
   Text *text = CTX_data_edit_text(C);
   int line = RNA_int_get(op->ptr, "line");
-  short nlines = txt_get_span(static_cast<TextLine *>(text->lines.first),
-                              static_cast<TextLine *>(text->lines.last)) +
+  short nlines = txt_get_span(static_cast<TextLine *>(text->lines.first_),
+                              static_cast<TextLine *>(text->lines.last_)) +
                  1;
 
   if (line < 1) {
@@ -3097,7 +3097,7 @@ static TextLine *space_text_get_line_pos_wrapped(const SpaceText *st,
                                                  const ARegion *region,
                                                  int *y)
 {
-  TextLine *linep = static_cast<TextLine *>(st->text->lines.first);
+  TextLine *linep = static_cast<TextLine *>(st->text->lines.first_);
   int i, lines;
 
   if (*y < -st->top) {
@@ -3223,11 +3223,11 @@ static void space_text_cursor_set_to_pos_wrapped(
     }
   }
   else if (y < 0) { /* Before start of text. */
-    linep = static_cast<TextLine *>(st->text->lines.first);
+    linep = static_cast<TextLine *>(st->text->lines.first_);
     charp = 0;
   }
   else { /* Beyond end of text. */
-    linep = static_cast<TextLine *>(st->text->lines.last);
+    linep = static_cast<TextLine *>(st->text->lines.last_);
     charp = linep->len;
   }
 
@@ -3271,7 +3271,7 @@ static void text_cursor_set_to_pos(
       charp = &text->curc;
     }
 
-    y -= txt_get_span(static_cast<TextLine *>(text->lines.first), *linep) - st->top;
+    y -= txt_get_span(static_cast<TextLine *>(text->lines.first_), *linep) - st->top;
 
     if (y > 0) {
       while (y-- != 0) {
@@ -3392,7 +3392,7 @@ static wmOperatorStatus text_selection_set_invoke(bContext *C,
   ssel->mval_prev[0] = event->mval[0];
   ssel->mval_prev[1] = event->mval[1];
 
-  ssel->sell = txt_get_span(static_cast<TextLine *>(st->text->lines.first), st->text->sell);
+  ssel->sell = txt_get_span(static_cast<TextLine *>(st->text->lines.first_), st->text->sell);
   ssel->selc = st->text->selc;
 
   WM_event_add_modal_handler(C, op);
@@ -3836,7 +3836,7 @@ static wmOperatorStatus text_find_and_replace(bContext *C, wmOperator *op, short
       text = st->text = static_cast<Text *>(text->id.next);
     }
     else {
-      text = st->text = static_cast<Text *>(bmain->texts.first);
+      text = st->text = static_cast<Text *>(bmain->texts.first_);
     }
     txt_move_toline(text, 0, false);
     space_text_update_cursor_moved(C);

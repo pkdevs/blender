@@ -120,7 +120,7 @@ static void rna_MaterialGpencil_update(Main *bmain, Scene *scene, PointerRNA *pt
   rna_Material_update(bmain, scene, ptr);
 
   /* Need set all caches as dirty. */
-  for (Object *ob = static_cast<Object *>(bmain->objects.first); ob;
+  for (Object *ob = static_cast<Object *>(bmain->objects.first_); ob;
        ob = static_cast<Object *>(ob->id.next))
   {
     if (ob->type == OB_GREASE_PENCIL) {

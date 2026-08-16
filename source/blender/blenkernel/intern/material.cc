@@ -1069,7 +1069,7 @@ void BKE_objects_materials_sync_length_all(Main *bmain, ID *id)
 
   BKE_main_lock(bmain);
   int processed_objects = 0;
-  for (ob = static_cast<Object *>(bmain->objects.first); ob;
+  for (ob = static_cast<Object *>(bmain->objects.first_); ob;
        ob = static_cast<Object *>(ob->id.next))
   {
     if (ob->data == id) {
@@ -1505,7 +1505,7 @@ bool BKE_object_material_slot_remove(Main *bmain, Object *ob)
 
   const int actcol = ob->actcol;
 
-  for (Object *obt = static_cast<Object *>(bmain->objects.first); obt;
+  for (Object *obt = static_cast<Object *>(bmain->objects.first_); obt;
        obt = static_cast<Object *>(obt->id.next))
   {
     if (obt->data == ob->data) {
@@ -2276,7 +2276,7 @@ void BKE_material_defaults_free_gpu()
 {
   for (int i = 0; default_materials[i]; i++) {
     Material *ma = *default_materials[i];
-    if (ma && ma->gpumaterial.first) {
+    if (ma && ma->gpumaterial.first_) {
       GPU_material_free(&ma->gpumaterial);
     }
   }

@@ -304,8 +304,11 @@ static void initBend(TransInfo *t, wmOperator * /*op*/)
   curs = t->scene->cursor.location;
   copy_v3_v3(data->warp_sta, curs);
   if (t->spacetype == SPACE_VIEW3D) {
-    ED_view3d_win_to_3d(
-        static_cast<View3D *>(t->area->spacedata.first), t->region, curs, t->mval, data->warp_end);
+    ED_view3d_win_to_3d(static_cast<View3D *>(t->area->spacedata.first_),
+                        t->region,
+                        curs,
+                        t->mval,
+                        data->warp_end);
   }
   else {
     copy_v3_v3(data->warp_end, curs); /* Dummy value. */

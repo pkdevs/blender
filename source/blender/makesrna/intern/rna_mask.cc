@@ -243,7 +243,8 @@ static void rna_MaskLayer_active_spline_point_set(PointerRNA *ptr,
 
   masklay->act_point = nullptr;
 
-  for (spline = static_cast<MaskSpline *>(masklay->splines.first); spline; spline = spline->next) {
+  for (spline = static_cast<MaskSpline *>(masklay->splines.first_); spline; spline = spline->next)
+  {
     if (point >= spline->points && point < spline->points + spline->tot_point) {
       masklay->act_point = point;
 
@@ -305,11 +306,11 @@ static int rna_MaskSplinePoint_handle_type_get(PointerRNA *ptr)
 static MaskSpline *mask_spline_from_point(Mask *mask, MaskSplinePoint *point)
 {
   MaskLayer *mask_layer;
-  for (mask_layer = static_cast<MaskLayer *>(mask->masklayers.first); mask_layer;
+  for (mask_layer = static_cast<MaskLayer *>(mask->masklayers.first_); mask_layer;
        mask_layer = mask_layer->next)
   {
     MaskSpline *spline;
-    for (spline = static_cast<MaskSpline *>(mask_layer->splines.first); spline;
+    for (spline = static_cast<MaskSpline *>(mask_layer->splines.first_); spline;
          spline = spline->next)
     {
       if (point >= spline->points && point < spline->points + spline->tot_point) {
@@ -498,7 +499,7 @@ static void rna_MaskSpline_points_add(ID *id, MaskSpline *spline, int count)
     return;
   }
 
-  for (layer = static_cast<MaskLayer *>(mask->masklayers.first); layer; layer = layer->next) {
+  for (layer = static_cast<MaskLayer *>(mask->masklayers.first_); layer; layer = layer->next) {
     if (BLI_findindex(&layer->splines, spline) != -1) {
       break;
     }
@@ -551,7 +552,7 @@ static void rna_MaskSpline_point_remove(ID *id,
   int active_point_index = -1;
   int point_index;
 
-  for (layer = static_cast<MaskLayer *>(mask->masklayers.first); layer; layer = layer->next) {
+  for (layer = static_cast<MaskLayer *>(mask->masklayers.first_); layer; layer = layer->next) {
     if (BLI_findindex(&layer->splines, spline) != -1) {
       break;
     }

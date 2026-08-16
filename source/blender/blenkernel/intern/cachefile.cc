@@ -348,7 +348,7 @@ void BKE_cachefile_eval(Main *bmain, Depsgraph *depsgraph, CacheFile *cache_file
     cache_file->handle = ABC_create_handle(
         bmain,
         filepath,
-        static_cast<const CacheFileLayer *>(cache_file->layers.first),
+        static_cast<const CacheFileLayer *>(cache_file->layers.first_),
         &cache_file->object_paths);
     STRNCPY(cache_file->handle_filepath, filepath);
   }

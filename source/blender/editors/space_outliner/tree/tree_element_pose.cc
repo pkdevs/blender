@@ -58,7 +58,7 @@ void TreeElementPoseBase::expand(SpaceOutliner & /*space_outliner*/) const
       }
     }
     /* make hierarchy */
-    TreeElement *ten = static_cast<TreeElement *>(legacy_te_.subtree.first);
+    TreeElement *ten = static_cast<TreeElement *>(legacy_te_.subtree.first_);
     while (ten) {
       TreeElement *nten = ten->next, *par;
       TreeStoreElem *tselem = TREESTORE(ten);

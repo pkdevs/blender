@@ -141,7 +141,7 @@ static void nla_free(SpaceLink *sl)
 /* spacetype; init callback */
 static void nla_init(wmWindowManager *wm, ScrArea *area)
 {
-  SpaceNla *snla = static_cast<SpaceNla *>(area->spacedata.first);
+  SpaceNla *snla = static_cast<SpaceNla *>(area->spacedata.first_);
 
   /* init dope-sheet data if non-existent (i.e. for old files). */
   if (snla->ads == nullptr) {

@@ -1707,7 +1707,7 @@ void *paint_2d_new_stroke(bContext *C, wmOperator *op, const BrushStrokeMode mod
   /* Initialize offsets here, they're needed for the uv space clip test before lazy-loading the
    * tile properly. */
   int tile_idx = 0;
-  for (ImageTile *tile = static_cast<ImageTile *>(s->image->tiles.first); tile;
+  for (ImageTile *tile = static_cast<ImageTile *>(s->image->tiles.first_); tile;
        tile = tile->next, tile_idx++)
   {
     s->tiles[tile_idx].iuser.tile = tile->tile_number;

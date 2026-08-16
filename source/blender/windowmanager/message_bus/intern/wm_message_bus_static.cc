@@ -49,7 +49,7 @@ static void wm_msg_static_gset_key_free(void *key_p)
   wmMsgSubscribeKey *key = static_cast<wmMsgSubscribeKey *>(key_p);
   wmMsgSubscribeValueLink *msg_lnk_next;
   for (wmMsgSubscribeValueLink *msg_lnk =
-           static_cast<wmMsgSubscribeValueLink *>(key->values.first);
+           static_cast<wmMsgSubscribeValueLink *>(key->values.first_);
        msg_lnk;
        msg_lnk = msg_lnk_next)
   {

@@ -80,7 +80,7 @@ static void add_reroute_node_fn(nodes::LinkSearchOpParams &params)
   if (params.socket.in_out == SOCK_IN) {
     bke::node_add_link(params.node_tree,
                        reroute,
-                       *static_cast<bNodeSocket *>(reroute.outputs.first),
+                       *static_cast<bNodeSocket *>(reroute.outputs.first_),
                        params.node,
                        params.socket);
   }
@@ -89,7 +89,7 @@ static void add_reroute_node_fn(nodes::LinkSearchOpParams &params)
                        params.node,
                        params.socket,
                        reroute,
-                       *static_cast<bNodeSocket *>(reroute.inputs.first));
+                       *static_cast<bNodeSocket *>(reroute.inputs.first_));
   }
 }
 

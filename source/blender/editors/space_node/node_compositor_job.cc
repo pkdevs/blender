@@ -214,7 +214,7 @@ static compositor::NodeGroupOutputTypes get_compositor_needed_outputs(
   for (wmWindow &window : window_manager->windows) {
     bScreen *screen = WM_window_get_active_screen(&window);
     for (ScrArea &area : screen->areabase) {
-      SpaceLink *space_link = static_cast<SpaceLink *>(area.spacedata.first);
+      SpaceLink *space_link = static_cast<SpaceLink *>(area.spacedata.first_);
       if (!space_link || !ELEM(space_link->spacetype, SPACE_NODE, SPACE_IMAGE)) {
         continue;
       }
@@ -272,7 +272,7 @@ void ED_node_compositor_job(Main *bmain,
     return;
   }
 
-  wmWindowManager *window_manager = static_cast<wmWindowManager *>(bmain->wm.first);
+  wmWindowManager *window_manager = static_cast<wmWindowManager *>(bmain->wm.first_);
   const compositor::NodeGroupOutputTypes needed_outputs = get_compositor_needed_outputs(
       window_manager);
   if (needed_outputs == compositor::NodeGroupOutputTypes::None) {
@@ -284,7 +284,7 @@ void ED_node_compositor_job(Main *bmain,
 
   wmWindow *window = window_manager->runtime->winactive ?
                          window_manager->runtime->winactive :
-                         static_cast<wmWindow *>(window_manager->windows.first);
+                         static_cast<wmWindow *>(window_manager->windows.first_);
   wmJob *job = WM_jobs_get(window_manager,
                            window,
                            scene,

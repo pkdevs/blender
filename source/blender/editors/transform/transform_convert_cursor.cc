@@ -86,7 +86,7 @@ static void recalcData_cursor_2D_impl(TransInfo *t)
 
 static void createTransCursor_image(bContext * /*C*/, TransInfo *t)
 {
-  SpaceImage *sima = static_cast<SpaceImage *>(t->area->spacedata.first);
+  SpaceImage *sima = static_cast<SpaceImage *>(t->area->spacedata.first_);
   createTransCursor_2D_impl(t, sima->cursor);
 }
 
@@ -103,7 +103,7 @@ static void recalcData_cursor_image(TransInfo *t)
 
 static void createTransCursor_sequencer(bContext * /*C*/, TransInfo *t)
 {
-  SpaceSeq *sseq = static_cast<SpaceSeq *>(t->area->spacedata.first);
+  SpaceSeq *sseq = static_cast<SpaceSeq *>(t->area->spacedata.first_);
   if (sseq->mainb != SEQ_DRAW_IMG_IMBUF) {
     return;
   }

@@ -1005,7 +1005,7 @@ void DRW_cache_free_old_batches(Main *bmain)
 
   lasttime = ctime;
 
-  for (scene = static_cast<Scene *>(bmain->scenes.first); scene;
+  for (scene = static_cast<Scene *>(bmain->scenes.first_); scene;
        scene = static_cast<Scene *>(scene->id.next))
   {
     for (ViewLayer &view_layer : scene->view_layers) {
@@ -1789,7 +1789,7 @@ void DRW_render_gpencil(RenderEngine *engine, Depsgraph *depsgraph)
     BLI_rcti_init(&render_rect, 0, draw_ctx.size[0], 0, draw_ctx.size[1]);
   }
 
-  for (RenderView *render_view = static_cast<RenderView *>(render_result->views.first);
+  for (RenderView *render_view = static_cast<RenderView *>(render_result->views.first_);
        render_view != nullptr;
        render_view = render_view->next)
   {
@@ -1855,8 +1855,8 @@ void DRW_render_to_image(
                                                        draw_ctx.size[1],
                                                        view_layer->name,
                                                        /*RR_ALL_VIEWS*/ nullptr);
-  RenderLayer *render_layer = static_cast<RenderLayer *>(render_result->layers.first);
-  for (RenderView *render_view = static_cast<RenderView *>(render_result->views.first);
+  RenderLayer *render_layer = static_cast<RenderLayer *>(render_result->layers.first_);
+  for (RenderView *render_view = static_cast<RenderView *>(render_result->views.first_);
        render_view != nullptr;
        render_view = render_view->next)
   {

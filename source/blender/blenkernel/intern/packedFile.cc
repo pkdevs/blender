@@ -129,7 +129,7 @@ PackedFileCount BKE_packedfile_count_all(Main *bmain)
   PackedFileCount count;
 
   /* let's check if there are packed files... */
-  for (ima = static_cast<Image *>(bmain->images.first); ima;
+  for (ima = static_cast<Image *>(bmain->images.first_); ima;
        ima = static_cast<Image *>(ima->id.next))
   {
     if (BKE_image_has_packedfile(ima) && !ID_IS_LINKED(ima)) {
@@ -137,13 +137,14 @@ PackedFileCount BKE_packedfile_count_all(Main *bmain)
     }
   }
 
-  for (vf = static_cast<VFont *>(bmain->fonts.first); vf; vf = static_cast<VFont *>(vf->id.next)) {
+  for (vf = static_cast<VFont *>(bmain->fonts.first_); vf; vf = static_cast<VFont *>(vf->id.next))
+  {
     if (vf->packedfile && !ID_IS_LINKED(vf)) {
       count.individual_files++;
     }
   }
 
-  for (sound = static_cast<bSound *>(bmain->sounds.first); sound;
+  for (sound = static_cast<bSound *>(bmain->sounds.first_); sound;
        sound = static_cast<bSound *>(sound->id.next))
   {
     if (sound->packedfile && !ID_IS_LINKED(sound)) {
@@ -151,7 +152,7 @@ PackedFileCount BKE_packedfile_count_all(Main *bmain)
     }
   }
 
-  for (volume = static_cast<Volume *>(bmain->volumes.first); volume;
+  for (volume = static_cast<Volume *>(bmain->volumes.first_); volume;
        volume = static_cast<Volume *>(volume->id.next))
   {
     if (volume->packedfile && !ID_IS_LINKED(volume)) {
@@ -284,7 +285,7 @@ void BKE_packedfile_pack_all(Main *bmain, ReportList *reports, bool verbose)
   Volume *volume;
   int tot = 0;
 
-  for (ima = static_cast<Image *>(bmain->images.first); ima;
+  for (ima = static_cast<Image *>(bmain->images.first_); ima;
        ima = static_cast<Image *>(ima->id.next))
   {
     if (BKE_image_has_packedfile(ima) == false && ID_IS_EDITABLE(ima)) {
@@ -301,7 +302,7 @@ void BKE_packedfile_pack_all(Main *bmain, ReportList *reports, bool verbose)
     }
   }
 
-  for (vfont = static_cast<VFont *>(bmain->fonts.first); vfont;
+  for (vfont = static_cast<VFont *>(bmain->fonts.first_); vfont;
        vfont = static_cast<VFont *>(vfont->id.next))
   {
     if (vfont->packedfile == nullptr && ID_IS_EDITABLE(vfont) &&
@@ -313,7 +314,7 @@ void BKE_packedfile_pack_all(Main *bmain, ReportList *reports, bool verbose)
     }
   }
 
-  for (sound = static_cast<bSound *>(bmain->sounds.first); sound;
+  for (sound = static_cast<bSound *>(bmain->sounds.first_); sound;
        sound = static_cast<bSound *>(sound->id.next))
   {
     if (sound->packedfile == nullptr && ID_IS_EDITABLE(sound)) {
@@ -323,7 +324,7 @@ void BKE_packedfile_pack_all(Main *bmain, ReportList *reports, bool verbose)
     }
   }
 
-  for (volume = static_cast<Volume *>(bmain->volumes.first); volume;
+  for (volume = static_cast<Volume *>(bmain->volumes.first_); volume;
        volume = static_cast<Volume *>(volume->id.next))
   {
     if (volume->packedfile == nullptr && ID_IS_EDITABLE(volume)) {
@@ -564,7 +565,7 @@ static void unpack_generate_paths(const char *filepath,
      * a file extension based on the file magic. */
     if (id_type == ID_IM) {
       Image *ima = id_cast<Image *>(id);
-      ImagePackedFile *imapf = static_cast<ImagePackedFile *>(ima->packedfiles.last);
+      ImagePackedFile *imapf = static_cast<ImagePackedFile *>(ima->packedfiles.last_);
       if (imapf != nullptr && imapf->packedfile != nullptr) {
         const PackedFile *pf = imapf->packedfile;
         enum eImbFileType ftype = eImbFileType(
@@ -695,8 +696,8 @@ int BKE_packedfile_unpack_image(Main *bmain,
   int ret_value = RET_ERROR;
 
   if (ima != nullptr) {
-    while (ima->packedfiles.last) {
-      ImagePackedFile *imapf = static_cast<ImagePackedFile *>(ima->packedfiles.last);
+    while (ima->packedfiles.last_) {
+      ImagePackedFile *imapf = static_cast<ImagePackedFile *>(ima->packedfiles.last_);
       char *new_file_path = BKE_packedfile_unpack(
           bmain, reports, id_cast<ID *>(ima), imapf->filepath, imapf->packedfile, how);
 
@@ -772,7 +773,7 @@ int BKE_packedfile_unpack_all_libraries(Main *bmain, ReportList *reports)
   char *newname;
   int ret_value = RET_ERROR;
 
-  for (lib = static_cast<Library *>(bmain->libraries.first); lib;
+  for (lib = static_cast<Library *>(bmain->libraries.first_); lib;
        lib = static_cast<Library *>(lib->id.next))
   {
     if (lib->packedfile && lib->filepath[0]) {
@@ -806,7 +807,7 @@ void BKE_packedfile_pack_all_libraries(Main *bmain, ReportList *reports)
   /* Only allow libraries with relative paths (to avoid issues when unpacking, a limitation that we
    * might want to lift since the "relativeness" does not really ensure sanity significantly more).
    */
-  for (lib = static_cast<Library *>(bmain->libraries.first); lib;
+  for (lib = static_cast<Library *>(bmain->libraries.first_); lib;
        lib = static_cast<Library *>(lib->id.next))
   {
     /* Exception to the above: essential assets have an absolute path and should not prevent to
@@ -825,7 +826,7 @@ void BKE_packedfile_pack_all_libraries(Main *bmain, ReportList *reports)
     return;
   }
 
-  for (lib = static_cast<Library *>(bmain->libraries.first); lib;
+  for (lib = static_cast<Library *>(bmain->libraries.first_); lib;
        lib = static_cast<Library *>(lib->id.next))
   {
     /* Do not really pack essential assets though (see above). */
@@ -845,7 +846,7 @@ void BKE_packedfile_unpack_all(Main *bmain, ReportList *reports, enum ePF_FileSt
   bSound *sound;
   Volume *volume;
 
-  for (ima = static_cast<Image *>(bmain->images.first); ima;
+  for (ima = static_cast<Image *>(bmain->images.first_); ima;
        ima = static_cast<Image *>(ima->id.next))
   {
     if (BKE_image_has_packedfile(ima) && !ID_IS_LINKED(ima)) {
@@ -853,13 +854,14 @@ void BKE_packedfile_unpack_all(Main *bmain, ReportList *reports, enum ePF_FileSt
     }
   }
 
-  for (vf = static_cast<VFont *>(bmain->fonts.first); vf; vf = static_cast<VFont *>(vf->id.next)) {
+  for (vf = static_cast<VFont *>(bmain->fonts.first_); vf; vf = static_cast<VFont *>(vf->id.next))
+  {
     if (vf->packedfile && !ID_IS_LINKED(vf)) {
       BKE_packedfile_unpack_vfont(bmain, reports, vf, how);
     }
   }
 
-  for (sound = static_cast<bSound *>(bmain->sounds.first); sound;
+  for (sound = static_cast<bSound *>(bmain->sounds.first_); sound;
        sound = static_cast<bSound *>(sound->id.next))
   {
     if (sound->packedfile && !ID_IS_LINKED(sound)) {
@@ -867,7 +869,7 @@ void BKE_packedfile_unpack_all(Main *bmain, ReportList *reports, enum ePF_FileSt
     }
   }
 
-  for (volume = static_cast<Volume *>(bmain->volumes.first); volume;
+  for (volume = static_cast<Volume *>(bmain->volumes.first_); volume;
        volume = static_cast<Volume *>(volume->id.next))
   {
     if (volume->packedfile && !ID_IS_LINKED(volume)) {

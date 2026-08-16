@@ -99,8 +99,8 @@ static void bm_bridge_best_rotation(BMEdgeLoopStore *el_store_a, BMEdgeLoopStore
 {
   ListBaseT<LinkData> *lb_a = BM_edgeloop_verts_get(el_store_a);
   ListBaseT<LinkData> *lb_b = BM_edgeloop_verts_get(el_store_b);
-  LinkData *el_a = static_cast<LinkData *>(lb_a->first);
-  LinkData *el_b = static_cast<LinkData *>(lb_b->first);
+  LinkData *el_a = static_cast<LinkData *>(lb_a->first_);
+  LinkData *el_b = static_cast<LinkData *>(lb_b->first_);
   LinkData *el_b_first = el_b;
   LinkData *el_b_best = nullptr;
 
@@ -178,11 +178,11 @@ static void bridge_loop_pair(BMesh *bm,
     const float *test_a, *test_b;
 
     sub_v3_v3v3(dir_a_orig,
-                (static_cast<BMVert *>((static_cast<LinkData *>(lb_a->first))->data))->co,
-                (static_cast<BMVert *>((static_cast<LinkData *>(lb_a->last))->data))->co);
+                (static_cast<BMVert *>((static_cast<LinkData *>(lb_a->first_))->data))->co,
+                (static_cast<BMVert *>((static_cast<LinkData *>(lb_a->last_))->data))->co);
     sub_v3_v3v3(dir_b_orig,
-                (static_cast<BMVert *>((static_cast<LinkData *>(lb_b->first))->data))->co,
-                (static_cast<BMVert *>((static_cast<LinkData *>(lb_b->last))->data))->co);
+                (static_cast<BMVert *>((static_cast<LinkData *>(lb_b->first_))->data))->co,
+                (static_cast<BMVert *>((static_cast<LinkData *>(lb_b->last_))->data))->co);
 
     /* make the directions point out from the normals, 'no' is used as a temp var */
     cross_v3_v3v3(no, dir_a_orig, el_dir);
@@ -328,8 +328,8 @@ static void bridge_loop_pair(BMesh *bm,
   }
 
   /* Assign after flipping is finalized */
-  el_a_first = static_cast<LinkData *>(BM_edgeloop_verts_get(el_store_a)->first);
-  el_b_first = static_cast<LinkData *>(BM_edgeloop_verts_get(el_store_b)->first);
+  el_a_first = static_cast<LinkData *>(BM_edgeloop_verts_get(el_store_a)->first_);
+  el_b_first = static_cast<LinkData *>(BM_edgeloop_verts_get(el_store_b)->first_);
 
   if (use_merge) {
     bm_bridge_splice_loops(bm, el_a_first, el_b_first, merge_factor);
@@ -603,7 +603,7 @@ void bmo_bridge_loops_exec(BMesh *bm, BMOperator *op)
 
   if (use_merge) {
     bool match = true;
-    const int eloop_len = BM_edgeloop_length_get(static_cast<BMEdgeLoopStore *>(eloops.first));
+    const int eloop_len = BM_edgeloop_length_get(static_cast<BMEdgeLoopStore *>(eloops.first_));
     for (BMEdgeLoopStore &el_store : eloops) {
       if (eloop_len != BM_edgeloop_length_get(&el_store)) {
         match = false;
@@ -624,14 +624,14 @@ void bmo_bridge_loops_exec(BMesh *bm, BMOperator *op)
   }
 
   /* No ListBaseT iterator because of incomplete type. */
-  for (const Link *el_store = static_cast<const Link *>(eloops.first); el_store;
+  for (const Link *el_store = static_cast<const Link *>(eloops.first_); el_store;
        el_store = el_store->next)
   {
     Link *el_store_next = el_store->next;
 
     if (el_store_next == nullptr) {
       if (use_cyclic && (count > 2)) {
-        el_store_next = static_cast<Link *>(eloops.first);
+        el_store_next = static_cast<Link *>(eloops.first_);
       }
       else {
         break;

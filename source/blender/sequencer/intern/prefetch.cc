@@ -327,7 +327,7 @@ static void seq_prefetch_update_area(PrefetchJob *pfjob)
 void prefetch_stop_all()
 {
   /* TODO(Richard): Use wm_jobs for prefetch, or pass main. */
-  for (Scene *scene = static_cast<Scene *>(G.main->scenes.first); scene;
+  for (Scene *scene = static_cast<Scene *>(G.main->scenes.first_); scene;
        scene = static_cast<Scene *>(scene->id.next))
   {
     prefetch_stop(scene);
@@ -679,7 +679,7 @@ void seq_prefetch_start(const RenderData *context, float timeline_frame)
 {
   Scene *scene = context->scene;
   Editing *ed = scene->ed;
-  bool has_strips = bool(ed->current_strips()->first);
+  bool has_strips = bool(ed->current_strips()->first_);
 
   if (!context->is_prefetch_render) {
     bool playing = context->is_playing;

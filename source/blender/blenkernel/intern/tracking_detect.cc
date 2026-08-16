@@ -50,10 +50,10 @@ static bool check_point_in_stroke(bGPDstroke *stroke, float x, float y)
 /* Check whether point is inside any stroke of grease pencil layer. */
 static bool check_point_in_layer(bGPDlayer *layer, float x, float y)
 {
-  bGPDframe *frame = static_cast<bGPDframe *>(layer->frames.first);
+  bGPDframe *frame = static_cast<bGPDframe *>(layer->frames.first_);
 
   while (frame) {
-    bGPDstroke *stroke = static_cast<bGPDstroke *>(frame->strokes.first);
+    bGPDstroke *stroke = static_cast<bGPDstroke *>(frame->strokes.first_);
 
     while (stroke) {
       if (check_point_in_stroke(stroke, x, y)) {

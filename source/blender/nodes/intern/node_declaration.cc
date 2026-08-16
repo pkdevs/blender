@@ -226,8 +226,8 @@ void NodeDeclaration::assert_valid() const
 
 bool NodeDeclaration::matches(const bNode &node) const
 {
-  const bNodeSocket *current_input = static_cast<bNodeSocket *>(node.inputs.first);
-  const bNodeSocket *current_output = static_cast<bNodeSocket *>(node.outputs.first);
+  const bNodeSocket *current_input = static_cast<bNodeSocket *>(node.inputs.first_);
+  const bNodeSocket *current_output = static_cast<bNodeSocket *>(node.outputs.first_);
   const bNodePanelState *current_panel = node.panel_states_array;
   for (const ItemDeclarationPtr &item_decl : this->all_items) {
     if (const SocketDeclaration *socket_decl = dynamic_cast<const SocketDeclaration *>(

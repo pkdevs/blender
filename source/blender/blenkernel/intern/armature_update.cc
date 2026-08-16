@@ -69,7 +69,7 @@ static void splineik_init_tree_from_pchan(Scene * /*scene*/, Object *ob, bPoseCh
   int segcount = 0;
 
   /* Find the SplineIK constraint. */
-  for (con = static_cast<bConstraint *>(pchan_tip->constraints.first); con; con = con->next) {
+  for (con = static_cast<bConstraint *>(pchan_tip->constraints.first_); con; con = con->next) {
     if (con->type == CONSTRAINT_TYPE_SPLINEIK) {
       ik_data = static_cast<bSplineIKConstraint *>(con->data);
 
@@ -311,7 +311,7 @@ static int position_tail_on_spline(bSplineIKConstraint *ik_data,
    */
   int bp_idx = cur_seg_idx + 1;
 
-  const BevList *bl = static_cast<const BevList *>(cache->bev.first);
+  const BevList *bl = static_cast<const BevList *>(cache->bev.first_);
   bool is_cyclic = bl->poly >= 0;
   BevPoint *bp = bl->bevpoints;
   BevPoint *prev_bp;
@@ -751,7 +751,7 @@ static void splineik_execute_tree(
   tSplineIK_Tree *tree;
 
   /* for each pose-tree, execute it if it is spline, otherwise just free it */
-  while ((tree = static_cast<tSplineIK_Tree *>(pchan_root->siktree.first)) != nullptr) {
+  while ((tree = static_cast<tSplineIK_Tree *>(pchan_root->siktree.first_)) != nullptr) {
     /* Firstly, calculate the bone matrix the standard way,
      * since this is needed for roll control. */
     for (int i = tree->chainlen - 1; i >= 0; i--) {
@@ -802,7 +802,7 @@ void BKE_pose_pchan_index_rebuild(bPose *pose)
   pose->chan_array = MEM_new_array_uninitialized<bPoseChannel *>(size_t(num_channels),
                                                                  "pose->chan_array");
   int pchan_index = 0;
-  for (bPoseChannel *pchan = static_cast<bPoseChannel *>(pose->chanbase.first); pchan != nullptr;
+  for (bPoseChannel *pchan = static_cast<bPoseChannel *>(pose->chanbase.first_); pchan != nullptr;
        pchan = pchan->next)
   {
     pose->chan_array[pchan_index++] = pchan;
@@ -836,7 +836,7 @@ void BKE_pose_eval_init(Depsgraph *depsgraph, Scene * /*scene*/, Object *object)
   invert_m4_m4(object->runtime->world_to_object.ptr(), object->object_to_world().ptr());
 
   /* clear flags */
-  for (bPoseChannel *pchan = static_cast<bPoseChannel *>(pose->chanbase.first); pchan != nullptr;
+  for (bPoseChannel *pchan = static_cast<bPoseChannel *>(pose->chanbase.first_); pchan != nullptr;
        pchan = pchan->next)
   {
     pchan->flag &= ~(POSE_DONE | POSE_CHAIN | POSE_IKTREE | POSE_IKSPLINE);
@@ -889,7 +889,7 @@ void BKE_pose_eval_bone(Depsgraph *depsgraph, Scene *scene, Object *object, int 
   else {
     /* TODO(sergey): Currently if there are constraints full transform is
      * being evaluated in BKE_pose_constraints_evaluate. */
-    if (pchan->constraints.first == nullptr) {
+    if (pchan->constraints.first_ == nullptr) {
       if (pchan->flag & POSE_IKTREE || pchan->flag & POSE_IKSPLINE) {
         /* pass */
       }

@@ -173,7 +173,7 @@ static bool transdata_get_track_shuffle_offset_side(ListBaseT<LinkData> *trans_d
     return false;
   }
 
-  LinkData *first_link = static_cast<LinkData *>(trans_datas->first);
+  LinkData *first_link = static_cast<LinkData *>(trans_datas->first_);
   TransDataNla *first_transdata = static_cast<TransDataNla *>(first_link->data);
   AnimData *adt = BKE_animdata_from_id(first_transdata->id);
   ListBaseT<NlaTrack> *tracks = &adt->nla_tracks;
@@ -268,7 +268,7 @@ static void nlatrack_truncate_temporary_tracks(bAnimContext *ac)
       if (!(track.flag & NLATRACK_TEMPORARILY_ADDED)) {
         break;
       }
-      if (track.strips.first != nullptr) {
+      if (track.strips.first_ != nullptr) {
         break;
       }
       BKE_nlatrack_remove_and_free(nla_tracks, &track, true);
@@ -284,7 +284,7 @@ static void nlatrack_truncate_temporary_tracks(bAnimContext *ac)
       if (!(track.flag & NLATRACK_TEMPORARILY_ADDED)) {
         break;
       }
-      if (track.strips.first != nullptr) {
+      if (track.strips.first_ != nullptr) {
         break;
       }
       BKE_nlatrack_remove_and_free(nla_tracks, &track, true);
@@ -641,7 +641,7 @@ static void createTransNlaData(bContext *C, TransInfo *t)
 
 static void recalcData_nla(TransInfo *t)
 {
-  SpaceNla *snla = static_cast<SpaceNla *>(t->area->spacedata.first);
+  SpaceNla *snla = static_cast<SpaceNla *>(t->area->spacedata.first_);
 
   TransDataContainer *tc = TRANS_DATA_CONTAINER_FIRST_SINGLE(t);
 
@@ -775,7 +775,7 @@ static void recalcData_nla(TransInfo *t)
         NlaTrack *new_track = BKE_nlatrack_new();
         new_track->flag |= NLATRACK_TEMPORARILY_ADDED;
         BKE_nlatrack_insert_before(
-            nla_tracks, static_cast<NlaTrack *>(nla_tracks->first), new_track, is_liboverride);
+            nla_tracks, static_cast<NlaTrack *>(nla_tracks->first_), new_track, is_liboverride);
         dst_track = new_track;
       }
 
@@ -784,7 +784,7 @@ static void recalcData_nla(TransInfo *t)
         new_track->flag |= NLATRACK_TEMPORARILY_ADDED;
 
         BKE_nlatrack_insert_after(
-            nla_tracks, static_cast<NlaTrack *>(nla_tracks->last), new_track, is_liboverride);
+            nla_tracks, static_cast<NlaTrack *>(nla_tracks->last_), new_track, is_liboverride);
         dst_track = new_track;
       }
 
