@@ -264,10 +264,13 @@ static GPUNodeLink *get_input_value_link(const bNodeSocket &input, GPUNodeStack 
   /* Use a constant for socket types that rarely change like booleans and menus, and use a
    * uniform for socket types that might change a lot to avoid excessive shader recompilation. */
   switch (input.type) {
-    case SOCK_INT:
-    case SOCK_MENU: {
+    case SOCK_INT: {
       stack.value = int4(input.default_value_typed<bNodeSocketValueInt>()->value, 0, 0, 0);
       return GPU_uniform(std::get<int4>(stack.value));
+    }
+    case SOCK_MENU: {
+      stack.value = int4(input.default_value_typed<bNodeSocketValueMenu>()->value, 0, 0, 0);
+      return GPU_constant(std::get<int4>(stack.value));
     }
     case SOCK_INT_VECTOR: {
       const bNodeSocketValueIntVector *storage =
