@@ -14,6 +14,7 @@
 #include "BLI_math_vector_c.hh"
 #include "BLI_stack.hh"
 #include "BLI_string.hh"
+#include "BLI_string_utf8.hh"
 
 #include "NOD_menu_value.hh"
 #include "NOD_multi_function.hh"
@@ -1865,8 +1866,8 @@ class ShaderNodesInliner {
         break;
       }
       case SOCK_STRING: {
-        STRNCPY(socket.default_value_typed<bNodeSocketValueString>()->value,
-                std::get<std::string>(value.value).c_str());
+        STRNCPY_UTF8(socket.default_value_typed<bNodeSocketValueString>()->value,
+                     std::get<std::string>(value.value).c_str());
         break;
       }
       default: {
