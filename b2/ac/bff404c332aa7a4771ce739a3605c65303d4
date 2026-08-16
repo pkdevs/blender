@@ -1,2 +1,2 @@
 Referenced by issue #153722, Store Named Attribute ignores Selection input when attribute already exists
-Referenced by issue #162709, Edges created with Geometry Nodes node Triangulate inheriting Attribute value
+Referenced by issue #162709, Edges created with Geometry Nodes node Triangulate inheriting Attribute value in single value attribute situation
