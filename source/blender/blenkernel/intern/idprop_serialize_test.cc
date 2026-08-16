@@ -431,7 +431,7 @@ TEST_F(IDPropertySerializeTest, convert_idp_group_from_value)
   EXPECT_EQ(id_property->type, IDP_GROUP);
   EXPECT_EQ(id_property->data.group.count(), 1);
 
-  test_idprop(static_cast<IDProperty *>(id_property->data.group.first),
+  test_idprop(static_cast<IDProperty *>(id_property->data.group.first_),
               "dimensions",
               Vector<float>{2.0f, 2.0f, 2.0f});
 

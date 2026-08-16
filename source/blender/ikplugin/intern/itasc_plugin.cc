@@ -286,7 +286,7 @@ static int initialize_chain(Object * /*ob*/, bPoseChannel *pchan_tip, bConstrain
   target->con = con;
   /* by construction there can be only one tree per channel
    * and each channel can be part of at most one tree. */
-  tree = static_cast<PoseTree *>(pchan_root->iktree.first);
+  tree = static_cast<PoseTree *>(pchan_root->iktree.first_);
 
   if (tree == nullptr) {
     /* make new tree */
@@ -1145,7 +1145,7 @@ static void pose_rest(IK_Scene *ikscene)
 static IK_Scene *convert_tree(
     Depsgraph *depsgraph, Scene *blscene, Object *ob, bPoseChannel *pchan, float ctime)
 {
-  PoseTree *tree = static_cast<PoseTree *>(pchan->iktree.first);
+  PoseTree *tree = static_cast<PoseTree *>(pchan->iktree.first_);
   PoseTarget *target;
   bKinematicConstraint *condata;
   bConstraint *polarcon;
@@ -1449,7 +1449,7 @@ static IK_Scene *convert_tree(
   for (numtarget = 0,
       polarcon = nullptr,
       ret = true,
-      target = static_cast<PoseTarget *>(tree->targets.first);
+      target = static_cast<PoseTarget *>(tree->targets.first_);
        target;
        target = target->next)
   {
@@ -1664,7 +1664,7 @@ static void create_scene(Depsgraph *depsgraph, Scene *scene, Object *ob, float c
   /* create the IK scene */
   for (bPoseChannel &pchan : ob->pose->chanbase) {
     /* by construction there is only one tree */
-    PoseTree *tree = (PoseTree *)pchan.iktree.first;
+    PoseTree *tree = (PoseTree *)pchan.iktree.first_;
     if (tree) {
       IK_Data *ikdata = get_ikdata(ob->pose);
       /* convert tree in iTaSC::Scene */
@@ -1687,7 +1687,7 @@ static void create_scene(Depsgraph *depsgraph, Scene *scene, Object *ob, float c
           MEM_delete(tree->basis_change);
         }
         MEM_delete(tree);
-        tree = (PoseTree *)pchan.iktree.first;
+        tree = (PoseTree *)pchan.iktree.first_;
       }
     }
   }

@@ -294,7 +294,7 @@ void BKE_blender_userdef_data_set_and_free(UserDef *userdef)
 
 static void userdef_free_keymaps(UserDef *userdef)
 {
-  for (wmKeyMap *km = static_cast<wmKeyMap *>(userdef->user_keymaps.first), *km_next; km;
+  for (wmKeyMap *km = static_cast<wmKeyMap *>(userdef->user_keymaps.first_), *km_next; km;
        km = km_next)
   {
     km_next = km->next;
@@ -323,7 +323,7 @@ static void userdef_free_keymaps(UserDef *userdef)
 
 static void userdef_free_keyconfig_prefs(UserDef *userdef)
 {
-  for (wmKeyConfigPref *kpt = static_cast<wmKeyConfigPref *>(userdef->user_keyconfig_prefs.first),
+  for (wmKeyConfigPref *kpt = static_cast<wmKeyConfigPref *>(userdef->user_keyconfig_prefs.first_),
                        *kpt_next;
        kpt;
        kpt = kpt_next)
@@ -337,7 +337,7 @@ static void userdef_free_keyconfig_prefs(UserDef *userdef)
 
 static void userdef_free_user_menus(UserDef *userdef)
 {
-  for (bUserMenu *um = static_cast<bUserMenu *>(userdef->user_menus.first), *um_next; um;
+  for (bUserMenu *um = static_cast<bUserMenu *>(userdef->user_menus.first_), *um_next; um;
        um = um_next)
   {
     um_next = um->next;
@@ -348,7 +348,7 @@ static void userdef_free_user_menus(UserDef *userdef)
 
 static void userdef_free_addons(UserDef *userdef)
 {
-  for (bAddon *addon = static_cast<bAddon *>(userdef->addons.first), *addon_next; addon;
+  for (bAddon *addon = static_cast<bAddon *>(userdef->addons.first_), *addon_next; addon;
        addon = addon_next)
   {
     addon_next = addon->next;

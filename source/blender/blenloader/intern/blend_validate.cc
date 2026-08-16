@@ -53,7 +53,7 @@ bool BLO_main_validate_libraries(Main *bmain, ReportList *reports)
   MainListsArray lbarray = BKE_main_lists_get(*bmain);
   int i = lbarray.size();
   while (i--) {
-    for (ID *id = static_cast<ID *>(lbarray[i]->first); id != nullptr;
+    for (ID *id = static_cast<ID *>(lbarray[i]->first_); id != nullptr;
          id = static_cast<ID *>(id->next))
     {
       if (ID_IS_LINKED(id)) {
@@ -94,7 +94,7 @@ bool BLO_main_validate_libraries(Main *bmain, ReportList *reports)
     lbarray = BKE_main_lists_get(*curmain);
     i = lbarray.size();
     while (i--) {
-      ID *id = static_cast<ID *>(lbarray[i]->first);
+      ID *id = static_cast<ID *>(lbarray[i]->first_);
       if (id == nullptr) {
         continue;
       }

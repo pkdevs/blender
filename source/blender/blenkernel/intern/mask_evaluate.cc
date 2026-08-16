@@ -930,13 +930,13 @@ void BKE_mask_eval_update(Depsgraph *depsgraph, Mask *mask)
 
   if (is_depsgraph_active) {
     Mask *mask_orig = DEG_get_original(mask);
-    for (MaskLayer *masklay_orig = static_cast<MaskLayer *>(mask_orig->masklayers.first),
-                   *masklay_eval = static_cast<MaskLayer *>(mask->masklayers.first);
+    for (MaskLayer *masklay_orig = static_cast<MaskLayer *>(mask_orig->masklayers.first_),
+                   *masklay_eval = static_cast<MaskLayer *>(mask->masklayers.first_);
          masklay_orig != nullptr;
          masklay_orig = masklay_orig->next, masklay_eval = masklay_eval->next)
     {
-      for (MaskSpline *spline_orig = static_cast<MaskSpline *>(masklay_orig->splines.first),
-                      *spline_eval = static_cast<MaskSpline *>(masklay_eval->splines.first);
+      for (MaskSpline *spline_orig = static_cast<MaskSpline *>(masklay_orig->splines.first_),
+                      *spline_eval = static_cast<MaskSpline *>(masklay_eval->splines.first_);
            spline_orig != nullptr;
            spline_orig = spline_orig->next, spline_eval = spline_eval->next)
       {

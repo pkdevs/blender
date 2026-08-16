@@ -910,7 +910,7 @@ bool BKE_image_render_write_exr(ReportList *reports,
   }
 
   /* First add views since IMB_exr_add_channels checks number of views. */
-  const RenderView *first_rview = static_cast<const RenderView *>(rr->views.first);
+  const RenderView *first_rview = static_cast<const RenderView *>(rr->views.first_);
   if (first_rview && (first_rview->next || first_rview->name[0])) {
     for (RenderView &rview : rr->views) {
       if (!view || STREQ(view, rview.name)) {
@@ -1156,7 +1156,7 @@ bool BKE_image_render_write(ReportList *reports,
   /* mono, legacy code */
   else if (is_mono || (image_format.views_format == R_IMF_VIEWS_INDIVIDUAL)) {
     int view_id = 0;
-    for (const RenderView *rv = static_cast<const RenderView *>(rr->views.first); rv;
+    for (const RenderView *rv = static_cast<const RenderView *>(rr->views.first_); rv;
          rv = rv->next, view_id++)
     {
       char filepath[FILE_MAX];

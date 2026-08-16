@@ -1114,7 +1114,7 @@ static void writelist_nr(WriteData *wd,
                          const ListBase *lb,
                          const BlendStructWriterFn fn)
 {
-  const Link *link = static_cast<Link *>(lb->first);
+  const Link *link = static_cast<Link *>(lb->first_);
 
   while (link) {
     writestruct_nr(wd, filecode, struct_nr, 1, link, fn);
@@ -1171,12 +1171,12 @@ static void current_screen_compat(Main *mainvar,
 
   /* Find a global current screen in the first open window, to have
    * a reasonable default for reading in older versions. */
-  wm = static_cast<wmWindowManager *>(mainvar->wm.first);
+  wm = static_cast<wmWindowManager *>(mainvar->wm.first_);
 
   if (wm) {
     if (use_active_win) {
       /* Write the active window into the file, needed for multi-window undo #43424. */
-      for (window = static_cast<wmWindow *>(wm->windows.first); window; window = window->next) {
+      for (window = static_cast<wmWindow *>(wm->windows.first_); window; window = window->next) {
         if (window->active) {
           break;
         }
@@ -1184,11 +1184,11 @@ static void current_screen_compat(Main *mainvar,
 
       /* Fallback. */
       if (window == nullptr) {
-        window = static_cast<wmWindow *>(wm->windows.first);
+        window = static_cast<wmWindow *>(wm->windows.first_);
       }
     }
     else {
-      window = static_cast<wmWindow *>(wm->windows.first);
+      window = static_cast<wmWindow *>(wm->windows.first_);
     }
   }
 

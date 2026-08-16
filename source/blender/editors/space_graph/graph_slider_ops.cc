@@ -198,8 +198,8 @@ static void reset_bezts(tGraphSliderOp *gso)
       ac, &anim_data, OPERATOR_DATA_FILTER, ac->data, eAnimCont_Types(ac->datatype));
 
   /* Loop through filtered data and reset bezts. */
-  for (ale = static_cast<bAnimListElem *>(anim_data.first),
-      link_bezt = static_cast<LinkData *>(gso->bezt_arr_list.first);
+  for (ale = static_cast<bAnimListElem *>(anim_data.first_),
+      link_bezt = static_cast<LinkData *>(gso->bezt_arr_list.first_);
        ale;
        ale = ale->next)
   {
@@ -262,7 +262,7 @@ static void graph_slider_exit(bContext *C, wmOperator *op)
 
   ED_slider_destroy(C, gso->slider);
 
-  for (link = static_cast<LinkData *>(gso->bezt_arr_list.first); link != nullptr;
+  for (link = static_cast<LinkData *>(gso->bezt_arr_list.first_); link != nullptr;
        link = link->next)
   {
     tBeztCopyData *copy = static_cast<tBeztCopyData *>(link->data);
@@ -410,7 +410,7 @@ static wmOperatorStatus graph_slider_invoke(bContext *C, wmOperator *op, const w
   gso->slider = ED_slider_create(C);
   ED_slider_init(gso->slider, event);
 
-  if (gso->bezt_arr_list.first == nullptr) {
+  if (gso->bezt_arr_list.first_ == nullptr) {
     BKE_report(op->reports, RPT_ERROR, "Cannot find keys to operate on");
     graph_slider_exit(C, op);
     return OPERATOR_CANCELLED;

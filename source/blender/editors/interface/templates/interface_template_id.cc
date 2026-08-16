@@ -362,7 +362,7 @@ static void template_id_liboverride_hierarchy_collection_root_find_recursive(
     }
   }
   for (CollectionParent *iter =
-           static_cast<CollectionParent *>(collection->runtime->parents.first);
+           static_cast<CollectionParent *>(collection->runtime->parents.first_);
        iter != nullptr;
        iter = iter->next)
   {
@@ -383,7 +383,7 @@ static void template_id_liboverride_hierarchy_collections_tag_recursive(
    * linked ones can be replaced by the local overrides in those parents too. */
   if (do_parents) {
     for (CollectionParent *iter =
-             static_cast<CollectionParent *>(root_collection->runtime->parents.first);
+             static_cast<CollectionParent *>(root_collection->runtime->parents.first_);
          iter != nullptr;
          iter = iter->next)
     {
@@ -394,7 +394,7 @@ static void template_id_liboverride_hierarchy_collections_tag_recursive(
     }
   }
 
-  for (CollectionChild *iter = static_cast<CollectionChild *>(root_collection->children.first);
+  for (CollectionChild *iter = static_cast<CollectionChild *>(root_collection->children.first_);
        iter != nullptr;
        iter = iter->next)
   {

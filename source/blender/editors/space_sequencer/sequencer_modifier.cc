@@ -250,7 +250,7 @@ static wmOperatorStatus strip_modifier_copy_exec(bContext *C, wmOperator *op)
   Strip *active_strip = seq::select_active_get(scene);
   const int type = RNA_enum_get(op->ptr, "type");
 
-  if (!active_strip || !active_strip->modifiers.first) {
+  if (!active_strip || !active_strip->modifiers.first_) {
     return OPERATOR_CANCELLED;
   }
 
@@ -278,9 +278,9 @@ static wmOperatorStatus strip_modifier_copy_exec(bContext *C, wmOperator *op)
     }
 
     if (type == SEQ_MODIFIER_COPY_REPLACE) {
-      if (strip_iter->modifiers.first) {
+      if (strip_iter->modifiers.first_) {
         StripModifierData *smd_tmp,
-            *smd = static_cast<StripModifierData *>(strip_iter->modifiers.first);
+            *smd = static_cast<StripModifierData *>(strip_iter->modifiers.first_);
         while (smd) {
           smd_tmp = smd->next;
           BLI_remlink(&strip_iter->modifiers, smd);

@@ -1148,7 +1148,7 @@ static void draw_fcurve(bAnimContext *ac, SpaceGraph *sipo, ARegion *region, bAn
    */
 
   /* 1) draw curve line */
-  if (((fcu->modifiers.first) || (fcu->flag & FCURVE_INT_VALUES)) ||
+  if (((fcu->modifiers.first_) || (fcu->flag & FCURVE_INT_VALUES)) ||
       (((fcu->bezt) || (fcu->fpt)) && (fcu->totvert)))
   {
     /* set color/drawing style for curve itself */
@@ -1201,7 +1201,7 @@ static void draw_fcurve(bAnimContext *ac, SpaceGraph *sipo, ARegion *region, bAn
 
     const bool draw_extrapolation = (sipo->flag & SIPO_NO_DRAW_EXTRAPOLATION) == 0;
     /* draw F-Curve */
-    if ((fcu->modifiers.first) || (fcu->flag & FCURVE_INT_VALUES)) {
+    if ((fcu->modifiers.first_) || (fcu->flag & FCURVE_INT_VALUES)) {
       /* draw a curve affected by modifiers or only allowed to have integer values
        * by sampling it at various small-intervals over the visible region
        */
@@ -1529,7 +1529,7 @@ void graph_draw_channel_names(bContext *C,
     size_t channel_index = 0;
     float ymax = ANIM_UI_get_first_channel_top(v2d);
 
-    for (ale = static_cast<bAnimListElem *>(anim_data.first); ale;
+    for (ale = static_cast<bAnimListElem *>(anim_data.first_); ale;
          ale = ale->next, ymax -= channel_step, channel_index++)
     {
       const float ymin = ymax - ANIM_UI_get_channel_height();
@@ -1551,7 +1551,7 @@ void graph_draw_channel_names(bContext *C,
     /* set blending again, as may not be set in previous step */
     GPU_blend(GPU_BLEND_ALPHA);
 
-    for (ale = static_cast<bAnimListElem *>(anim_data.first); ale;
+    for (ale = static_cast<bAnimListElem *>(anim_data.first_); ale;
          ale = ale->next, ymax -= channel_step, channel_index++)
     {
       const float ymin = ymax - ANIM_UI_get_channel_height();

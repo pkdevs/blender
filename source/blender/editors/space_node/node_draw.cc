@@ -3950,7 +3950,7 @@ static void reroute_node_draw_body(const bContext &C,
 {
   BLI_assert(node.is_reroute());
 
-  bNodeSocket &sock = *static_cast<bNodeSocket *>(node.inputs.first);
+  bNodeSocket &sock = *static_cast<bNodeSocket *>(node.inputs.first_);
 
   PointerRNA nodeptr = RNA_pointer_create_discrete(
       const_cast<ID *>(&ntree.id), RNA_Node, const_cast<bNode *>(&node));
@@ -4753,8 +4753,8 @@ void node_draw_space(const bContext &C, ARegion &region)
   ui::view2d_dot_grid_draw(&v2d, TH_GRID, NODE_GRID_STEP_SIZE, grid_levels);
 
   /* Draw parent node trees. */
-  if (snode.treepath.last) {
-    bNodeTreePath *path = static_cast<bNodeTreePath *>(snode.treepath.last);
+  if (snode.treepath.last_) {
+    bNodeTreePath *path = static_cast<bNodeTreePath *>(snode.treepath.last_);
 
     /* Update tree path name (drawn in the bottom left). */
     ID *name_id = (path->nodetree && path->nodetree != snode.nodetree) ? &path->nodetree->id :
@@ -4855,7 +4855,7 @@ void node_draw_space(const bContext &C, ARegion &region)
   ui::view2d_view_restore(&C);
 
   if (snode.overlay.flag & SN_OVERLAY_SHOW_OVERLAYS) {
-    if (snode.flag & SNODE_SHOW_GPENCIL && snode.treepath.last) {
+    if (snode.flag & SNODE_SHOW_GPENCIL && snode.treepath.last_) {
       /* Draw grease-pencil (screen strokes, and also paint-buffer). */
       ED_annotation_draw_view2d(&C, false);
     }

@@ -1503,7 +1503,7 @@ void blo_do_versions_userdef(UserDef *userdef)
     /* Reset repositories. */
     while (!userdef->extension_repos.is_empty()) {
       BKE_preferences_extension_repo_remove(
-          userdef, static_cast<bUserExtensionRepo *>(userdef->extension_repos.first));
+          userdef, static_cast<bUserExtensionRepo *>(userdef->extension_repos.first_));
     }
 
     BKE_preferences_extension_repo_add_default_remote(userdef);

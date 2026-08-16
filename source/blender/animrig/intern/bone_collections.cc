@@ -1113,7 +1113,7 @@ void ANIM_armature_bonecoll_show_from_bone(bArmature *armature, const Bone *bone
    * Since bones without collection are considered visible,
    * bone->runtime.collections.first is certainly a valid pointer. */
   BoneCollectionReference *ref = static_cast<BoneCollectionReference *>(
-      bone->runtime.collections.first);
+      bone->runtime.collections.first_);
   ref->bcoll->flags |= BONE_COLLECTION_VISIBLE;
 }
 
@@ -1128,7 +1128,7 @@ void ANIM_armature_bonecoll_show_from_ebone(bArmature *armature, const EditBone 
    * Since bones without collection are considered visible,
    * ebone->bone_collections.first is certainly a valid pointer. */
   BoneCollectionReference *ref = static_cast<BoneCollectionReference *>(
-      ebone->bone_collections.first);
+      ebone->bone_collections.first_);
   ref->bcoll->flags |= BONE_COLLECTION_VISIBLE;
 }
 

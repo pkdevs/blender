@@ -41,7 +41,7 @@ void outliner_make_object_parent_hierarchy(ListBaseT<TreeElement> *lb)
 {
   /* build hierarchy */
   /* XXX also, set extents here... */
-  TreeElement *te = static_cast<TreeElement *>(lb->first);
+  TreeElement *te = static_cast<TreeElement *>(lb->first_);
   while (te) {
     TreeElement *ten = te->next;
     TreeStoreElem *tselem = TREESTORE(te);
@@ -62,7 +62,7 @@ void outliner_make_object_parent_hierarchy(ListBaseT<TreeElement> *lb)
 bool outliner_animdata_test(const AnimData *adt)
 {
   if (adt) {
-    return (adt->action || adt->drivers.first || adt->nla_tracks.first);
+    return (adt->action || adt->drivers.first_ || adt->nla_tracks.first_);
   }
   return false;
 }

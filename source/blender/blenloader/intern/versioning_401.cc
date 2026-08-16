@@ -794,10 +794,10 @@ static void fix_geometry_nodes_object_info_scale(bNodeTree &ntree)
                        node,
                        *scale,
                        *absolute_value,
-                       *static_cast<bNodeSocket *>(absolute_value->inputs.first));
+                       *static_cast<bNodeSocket *>(absolute_value->inputs.first_));
     for (bNodeLink *link : links) {
       link->fromnode = absolute_value;
-      link->fromsock = static_cast<bNodeSocket *>(absolute_value->outputs.first);
+      link->fromsock = static_cast<bNodeSocket *>(absolute_value->outputs.first_);
     }
   }
 }
@@ -902,8 +902,9 @@ void blo_do_versions_401(FileData *fd, Library * /*lib*/, Main *bmain)
     for (bScreen &screen : bmain->screens) {
       for (ScrArea &area : screen.areabase) {
         for (SpaceLink &sl : area.spacedata) {
-          const ListBaseT<ARegion> *regionbase = (&sl == area.spacedata.first) ? &area.regionbase :
-                                                                                 &sl.regionbase;
+          const ListBaseT<ARegion> *regionbase = (&sl == area.spacedata.first_) ?
+                                                     &area.regionbase :
+                                                     &sl.regionbase;
           for (ARegion &region : *regionbase) {
             if (region.regiontype != RGN_TYPE_ASSET_SHELF_HEADER) {
               continue;

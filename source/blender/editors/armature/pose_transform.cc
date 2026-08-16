@@ -100,7 +100,7 @@ static void applyarmature_fix_boneparents(const bContext *C, Scene *scene, Objec
   Main *bmain = CTX_data_main(C);
 
   /* go through all objects in database */
-  for (Object *ob = static_cast<Object *>(bmain->objects.first); ob;
+  for (Object *ob = static_cast<Object *>(bmain->objects.first_); ob;
        ob = static_cast<Object *>(ob->id.next))
   {
     /* if parent is bone in this armature, apply corrections */

@@ -437,11 +437,11 @@ static void special_aftertrans_update__mask(bContext *C, TransInfo *t)
   Mask *mask = nullptr;
 
   if (t->spacetype == SPACE_CLIP) {
-    SpaceClip *sc = static_cast<SpaceClip *>(t->area->spacedata.first);
+    SpaceClip *sc = static_cast<SpaceClip *>(t->area->spacedata.first_);
     mask = ED_space_clip_get_mask(sc);
   }
   else if (t->spacetype == SPACE_IMAGE) {
-    SpaceImage *sima = static_cast<SpaceImage *>(t->area->spacedata.first);
+    SpaceImage *sima = static_cast<SpaceImage *>(t->area->spacedata.first_);
     mask = ED_space_image_get_mask(sima);
   }
   else {

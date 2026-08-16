@@ -149,7 +149,7 @@ void BKE_keyconfig_keymap_filter_item(wmKeyMap *keymap,
                                       void *user_data)
 {
   if (params->check_diff_item_add || params->check_diff_item_remove) {
-    for (wmKeyMapDiffItem *kmdi = static_cast<wmKeyMapDiffItem *>(keymap->diff_items.first),
+    for (wmKeyMapDiffItem *kmdi = static_cast<wmKeyMapDiffItem *>(keymap->diff_items.first_),
                           *kmdi_next;
          kmdi;
          kmdi = kmdi_next)
@@ -181,7 +181,7 @@ void BKE_keyconfig_keymap_filter_item(wmKeyMap *keymap,
   }
 
   if (params->check_item) {
-    for (wmKeyMapItem *kmi = static_cast<wmKeyMapItem *>(keymap->items.first), *kmi_next; kmi;
+    for (wmKeyMapItem *kmi = static_cast<wmKeyMapItem *>(keymap->items.first_), *kmi_next; kmi;
          kmi = kmi_next)
     {
       kmi_next = kmi->next;

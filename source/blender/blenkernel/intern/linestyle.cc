@@ -124,21 +124,23 @@ static void linestyle_free_data(ID *id)
     linestyle->nodetree = nullptr;
   }
 
-  while ((linestyle_modifier = static_cast<LineStyleModifier *>(linestyle->color_modifiers.first)))
+  while (
+      (linestyle_modifier = static_cast<LineStyleModifier *>(linestyle->color_modifiers.first_)))
   {
     BKE_linestyle_color_modifier_remove(linestyle, linestyle_modifier);
   }
-  while ((linestyle_modifier = static_cast<LineStyleModifier *>(linestyle->alpha_modifiers.first)))
+  while (
+      (linestyle_modifier = static_cast<LineStyleModifier *>(linestyle->alpha_modifiers.first_)))
   {
     BKE_linestyle_alpha_modifier_remove(linestyle, linestyle_modifier);
   }
-  while ((
-      linestyle_modifier = static_cast<LineStyleModifier *>(linestyle->thickness_modifiers.first)))
+  while ((linestyle_modifier = static_cast<LineStyleModifier *>(
+              linestyle->thickness_modifiers.first_)))
   {
     BKE_linestyle_thickness_modifier_remove(linestyle, linestyle_modifier);
   }
-  while (
-      (linestyle_modifier = static_cast<LineStyleModifier *>(linestyle->geometry_modifiers.first)))
+  while ((
+      linestyle_modifier = static_cast<LineStyleModifier *>(linestyle->geometry_modifiers.first_)))
   {
     BKE_linestyle_geometry_modifier_remove(linestyle, linestyle_modifier);
   }

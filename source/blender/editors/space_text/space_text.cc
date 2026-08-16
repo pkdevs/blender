@@ -121,7 +121,7 @@ static std::optional<ARegionIMECursorState> text_main_region_cursor_ime(wmWindow
                                                                         const ARegion *region,
                                                                         ARegionIMECursor *r_cursor)
 {
-  SpaceText *st = static_cast<SpaceText *>(area->spacedata.first);
+  SpaceText *st = static_cast<SpaceText *>(area->spacedata.first_);
   /* Pending while scrolling, since the position is valid again once it ends.
    * This must *not* cancel the composition. */
   if (st->flags & ST_SCROLL_SELECT) {
@@ -163,7 +163,7 @@ static void text_listener(const wmSpaceTypeListenerParams *params)
 {
   ScrArea *area = params->area;
   const wmNotifier *wmn = params->notifier;
-  SpaceText *st = static_cast<SpaceText *>(area->spacedata.first);
+  SpaceText *st = static_cast<SpaceText *>(area->spacedata.first_);
 
   /* context changes. */
   switch (wmn->category) {
@@ -343,7 +343,7 @@ static void text_main_region_draw(const bContext *C, ARegion *region)
 
 static void text_cursor(wmWindow *win, ScrArea *area, ARegion *region)
 {
-  SpaceText *st = static_cast<SpaceText *>(area->spacedata.first);
+  SpaceText *st = static_cast<SpaceText *>(area->spacedata.first_);
   int wmcursor = WM_CURSOR_TEXT_EDIT;
 
   if (st->text && BLI_rcti_isect_pt(&st->runtime->scroll_region_handle,

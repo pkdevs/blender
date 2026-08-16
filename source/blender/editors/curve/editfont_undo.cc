@@ -276,8 +276,8 @@ static void *undofont_from_editfont(UndoFont *uf, Curve *cu)
 #ifdef USE_ARRAY_STORE
   {
     const UndoFont *uf_ref = static_cast<const UndoFont *>(
-        uf_arraystore.local_links.last ?
-            (static_cast<LinkData *>(uf_arraystore.local_links.last))->data :
+        uf_arraystore.local_links.last_ ?
+            (static_cast<LinkData *>(uf_arraystore.local_links.last_))->data :
             nullptr);
 
     /* Add ourselves. */
