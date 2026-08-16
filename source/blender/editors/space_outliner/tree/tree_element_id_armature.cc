@@ -62,9 +62,9 @@ void TreeElementIDArmature::expand_edit_bones() const
     ebone.temp.p = ten;
   }
   /* make hierarchy */
-  TreeElement *ten = arm_.edbo->first ? static_cast<TreeElement *>(
-                                            (static_cast<EditBone *>(arm_.edbo->first))->temp.p) :
-                                        nullptr;
+  TreeElement *ten = arm_.edbo->first ?
+                         static_cast<TreeElement *>((arm_.edbo->first_item())->temp.p) :
+                         nullptr;
   while (ten) {
     TreeElement *nten = ten->next, *par;
     EditBone *ebone = static_cast<EditBone *>(ten->directdata);

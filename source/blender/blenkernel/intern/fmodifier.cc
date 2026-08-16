@@ -1261,8 +1261,7 @@ void copy_fmodifiers(ListBaseT<FModifier> *dst, const ListBaseT<FModifier> *src)
   dst->clear_no_delete();
   BLI_duplicatelist(dst, src);
 
-  for (fcm = static_cast<FModifier *>(dst->first), srcfcm = static_cast<FModifier *>(src->first);
-       fcm && srcfcm;
+  for (fcm = dst->first_item(), srcfcm = src->first_item(); fcm && srcfcm;
        srcfcm = srcfcm->next, fcm = fcm->next)
   {
     const FModifierTypeInfo *fmi = fmodifier_get_typeinfo(fcm);
@@ -1329,7 +1328,7 @@ void free_fmodifiers(ListBaseT<FModifier> *modifiers)
   }
 
   /* free each modifier in order - modifier is unlinked from list and freed */
-  for (fcm = static_cast<FModifier *>(modifiers->first); fcm; fcm = fmn) {
+  for (fcm = modifiers->first_item(); fcm; fcm = fmn) {
     fmn = fcm->next;
     remove_fmodifier(modifiers, fcm);
   }
@@ -1559,7 +1558,7 @@ void evaluate_value_fmodifiers(FModifiersStackStorage *storage,
 
   /* evaluate modifiers */
   uint fcm_index = 0;
-  for (fcm = static_cast<FModifier *>(modifiers->first); fcm; fcm = fcm->next, fcm_index++) {
+  for (fcm = modifiers->first_item(); fcm; fcm = fcm->next, fcm_index++) {
     const FModifierTypeInfo *fmi = fmodifier_get_typeinfo(fcm);
 
     if (fmi == nullptr) {

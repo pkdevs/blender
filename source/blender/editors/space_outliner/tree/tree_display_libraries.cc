@@ -110,7 +110,7 @@ TreeElement *TreeDisplayLibraries::add_library_contents(Main &mainvar,
       continue;
     }
 
-    ID *id = static_cast<ID *>(lbarray[a]->first);
+    ID *id = lbarray[a]->first_item();
     const bool is_library = (GS(id->name) == ID_LI) && (lib != nullptr);
 
     /* Don't show deprecated types. */

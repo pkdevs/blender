@@ -85,7 +85,7 @@ void BKE_nlastrip_free(NlaStrip *strip, const bool do_id_user)
   }
 
   /* free child-strips */
-  for (cs = static_cast<NlaStrip *>(strip->strips.first); cs; cs = csn) {
+  for (cs = strip->strips.first_item(); cs; cs = csn) {
     csn = cs->next;
     BKE_nlastrip_remove_and_free(&strip->strips, cs, do_id_user);
   }
@@ -116,7 +116,7 @@ void BKE_nlatrack_free(NlaTrack *nlt, const bool do_id_user)
   }
 
   /* free strips */
-  for (strip = static_cast<NlaStrip *>(nlt->strips.first); strip; strip = stripn) {
+  for (strip = nlt->strips.first_item(); strip; strip = stripn) {
     stripn = strip->next;
     BKE_nlastrip_remove_and_free(&nlt->strips, strip, do_id_user);
   }
@@ -135,7 +135,7 @@ void BKE_nla_tracks_free(ListBaseT<NlaTrack> *tracks, bool do_id_user)
   }
 
   /* free tracks one by one */
-  for (nlt = static_cast<NlaTrack *>(tracks->first); nlt; nlt = nltn) {
+  for (nlt = tracks->first_item(); nlt; nlt = nltn) {
     nltn = nlt->next;
     BKE_nlatrack_remove_and_free(tracks, nlt, do_id_user);
   }
@@ -260,7 +260,7 @@ static NlaStrip *find_active_strip_from_listbase(const NlaStrip *active_strip,
   BLI_assert_msg(strips_source->count() == strips_dest->count(),
                  "Expecting the same number of source and destination strips");
 
-  NlaStrip *strip_dest = static_cast<NlaStrip *>(strips_dest->first);
+  NlaStrip *strip_dest = strips_dest->first_item();
   for (const NlaStrip &strip_source : *strips_source) {
     if (strip_dest == nullptr) {
       /* The tracks are assumed to have an equal number of strips, but this is
@@ -316,7 +316,7 @@ static void update_active_track(AnimData *adt_dest, const AnimData *adt_source)
 
   BLI_assert(adt_source->nla_tracks.count() == adt_dest->nla_tracks.count());
 
-  NlaTrack *track_dest = static_cast<NlaTrack *>(adt_dest->nla_tracks.first);
+  NlaTrack *track_dest = adt_dest->nla_tracks.first_item();
   for (NlaTrack &track_source : adt_source->nla_tracks) {
     if (&track_source == adt_source->act_track) {
       adt_dest->act_track = track_dest;
@@ -405,7 +405,7 @@ void BKE_nlatrack_insert_after(ListBaseT<NlaTrack> *nla_tracks,
   /* If nullptr, then caller intends to insert a new head. But, tracks are not allowed to be
    * placed before library overrides. So it must inserted after the last override. */
   if (prev == nullptr) {
-    NlaTrack *first_track = static_cast<NlaTrack *>(nla_tracks->first);
+    NlaTrack *first_track = nla_tracks->first_item();
     if (first_track != nullptr && (first_track->flag & NLATRACK_OVERRIDELIBRARY_LOCAL) == 0) {
       prev = first_track;
     }
@@ -459,8 +459,7 @@ NlaTrack *BKE_nlatrack_new_after(ListBaseT<NlaTrack> *nla_tracks,
 
 NlaTrack *BKE_nlatrack_new_head(ListBaseT<NlaTrack> *nla_tracks, bool is_liboverride)
 {
-  return BKE_nlatrack_new_before(
-      nla_tracks, static_cast<NlaTrack *>(nla_tracks->first), is_liboverride);
+  return BKE_nlatrack_new_before(nla_tracks, nla_tracks->first_item(), is_liboverride);
 }
 
 NlaTrack *BKE_nlatrack_new_tail(ListBaseT<NlaTrack> *nla_tracks, const bool is_liboverride)
@@ -901,7 +900,7 @@ void BKE_nlastrips_sort_strips(ListBaseT<NlaStrip> *strips)
   /* we simply perform insertion sort on this list, since it is assumed that per track,
    * there are only likely to be at most 5-10 strips
    */
-  for (strip = static_cast<NlaStrip *>(strips->first); strip; strip = stripn) {
+  for (strip = strips->first_item(); strip; strip = stripn) {
     short not_added = 1;
 
     stripn = strip->next;
@@ -980,7 +979,7 @@ void BKE_nlastrips_make_metas(ListBaseT<NlaStrip> *strips, bool is_temp)
   }
 
   /* group all continuous chains of selected strips into meta-strips */
-  for (strip = static_cast<NlaStrip *>(strips->first); strip; strip = stripn) {
+  for (strip = strips->first_item(); strip; strip = stripn) {
     stripn = strip->next;
 
     if (strip->flag & NLASTRIP_FLAG_SELECT) {
@@ -1034,7 +1033,7 @@ void BKE_nlastrips_clear_metastrip(ListBaseT<NlaStrip> *strips, NlaStrip *strip)
   /* move each one of the meta-strip's children before the meta-strip
    * in the list of strips after unlinking them from the meta-strip
    */
-  for (cs = static_cast<NlaStrip *>(strip->strips.first); cs; cs = csn) {
+  for (cs = strip->strips.first_item(); cs; cs = csn) {
     csn = cs->next;
     BLI_remlink(&strip->strips, cs);
     BLI_insertlinkbefore(strips, strip, cs);
@@ -1054,7 +1053,7 @@ void BKE_nlastrips_clear_metas(ListBaseT<NlaStrip> *strips, bool only_sel, bool 
   }
 
   /* remove meta-strips fitting the criteria of the arguments */
-  for (strip = static_cast<NlaStrip *>(strips->first); strip; strip = stripn) {
+  for (strip = strips->first_item(); strip; strip = stripn) {
     stripn = strip->next;
 
     /* check if strip is a meta-strip */
@@ -1138,7 +1137,7 @@ void BKE_nlameta_flush_transforms(NlaStrip *mstrip)
    * - these are simply the start/end frames of the child strips,
    *   since we assume they weren't transformed yet
    */
-  oStart = (static_cast<NlaStrip *>(mstrip->strips.first))->start;
+  oStart = (mstrip->strips.first_item())->start;
   oEnd = (static_cast<NlaStrip *>(mstrip->strips.last))->end;
   offset = mstrip->start - oStart;
 
@@ -1401,7 +1400,7 @@ bool BKE_nlatrack_get_bounds(NlaTrack *nlt, float bounds[2])
   }
 
   /* lower bound is first strip's start frame */
-  strip = static_cast<NlaStrip *>(nlt->strips.first);
+  strip = nlt->strips.first_item();
   bounds[0] = strip->start;
 
   /* upper bound is last strip's end frame */

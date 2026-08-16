@@ -71,8 +71,7 @@ void draw_channel_names(bContext *C,
     size_t channel_index = 0;
     float ymax = ANIM_UI_get_first_channel_top(v2d);
 
-    for (ale = static_cast<bAnimListElem *>(anim_data.first); ale;
-         ale = ale->next, ymax -= channel_step, channel_index++)
+    for (ale = anim_data.first_item(); ale; ale = ale->next, ymax -= channel_step, channel_index++)
     {
       const float ymin = ymax - ANIM_UI_get_channel_height();
 
@@ -90,8 +89,7 @@ void draw_channel_names(bContext *C,
     size_t channel_index = 0;
     float ymax = ANIM_UI_get_first_channel_top(v2d);
 
-    for (ale = static_cast<bAnimListElem *>(anim_data.first); ale;
-         ale = ale->next, ymax -= channel_step, channel_index++)
+    for (ale = anim_data.first_item(); ale; ale = ale->next, ymax -= channel_step, channel_index++)
     {
       const float ymin = ymax - ANIM_UI_get_channel_height();
 
@@ -133,7 +131,7 @@ static void draw_channel_action_ranges(ListBaseT<bAnimListElem> *anim_data, View
   const float ystep = ANIM_UI_get_channel_step();
   float ymin = ymax - ystep;
 
-  for (bAnimListElem *ale = static_cast<bAnimListElem *>(anim_data->first); ale;
+  for (bAnimListElem *ale = anim_data->first_item(); ale;
        ale = ale->next, ymax = ymin, ymin -= ystep)
   {
     bAction *action = nullptr;
@@ -195,9 +193,7 @@ static void draw_backdrops(bAnimContext *ac,
   float ymax = ANIM_UI_get_first_channel_top(v2d);
   const float channel_step = ANIM_UI_get_channel_step();
   bAnimListElem *ale;
-  for (ale = static_cast<bAnimListElem *>(anim_data.first); ale;
-       ale = ale->next, ymax -= channel_step)
-  {
+  for (ale = anim_data.first_item(); ale; ale = ale->next, ymax -= channel_step) {
     const float ymin = ymax - ANIM_UI_get_channel_height();
 
     /* check if visible */
@@ -341,9 +337,7 @@ static void draw_keyframes(bAnimContext *ac,
   const float scale_factor = ANIM_UI_get_keyframe_scale_factor();
 
   bAnimListElem *ale;
-  for (ale = static_cast<bAnimListElem *>(anim_data.first); ale;
-       ale = ale->next, ymax -= channel_step)
-  {
+  for (ale = anim_data.first_item(); ale; ale = ale->next, ymax -= channel_step) {
     const float ymin = ymax - ANIM_UI_get_channel_height();
     float ycenter = (ymin + ymax) / 2.0f;
 

@@ -1026,7 +1026,7 @@ void dynamicPaint_freeCanvas(DynamicPaintModifierData *pmd)
 {
   if (pmd->canvas) {
     /* Free surface data */
-    DynamicPaintSurface *surface = static_cast<DynamicPaintSurface *>(pmd->canvas->surfaces.first);
+    DynamicPaintSurface *surface = pmd->canvas->surfaces.first_item();
     DynamicPaintSurface *next_surface = nullptr;
 
     while (surface) {
@@ -1242,16 +1242,13 @@ void dynamicPaint_Modifier_copy(const DynamicPaintModifierData *pmd,
     tpmd->canvas->pmd = tpmd;
     /* free default surface */
     if (tpmd->canvas->surfaces.first) {
-      dynamicPaint_freeSurface(tpmd,
-                               static_cast<DynamicPaintSurface *>(tpmd->canvas->surfaces.first));
+      dynamicPaint_freeSurface(tpmd, tpmd->canvas->surfaces.first_item());
     }
 
     tpmd->canvas->active_sur = pmd->canvas->active_sur;
 
     /* copy existing surfaces */
-    for (surface = static_cast<DynamicPaintSurface *>(pmd->canvas->surfaces.first); surface;
-         surface = surface->next)
-    {
+    for (surface = pmd->canvas->surfaces.first_item(); surface; surface = surface->next) {
       DynamicPaintSurface *t_surface = dynamicPaint_createNewSurface(tpmd->canvas, nullptr);
       if (flag & LIB_ID_COPY_SET_COPIED_ON_WRITE) {
         /* TODO(sergey): Consider passing some tips to the surface
@@ -1940,9 +1937,7 @@ static Mesh *dynamicPaint_Modifier_apply(DynamicPaintModifierData *pmd, Object *
     DynamicPaintSurface *surface;
 
     /* loop through surfaces */
-    for (surface = static_cast<DynamicPaintSurface *>(pmd->canvas->surfaces.first); surface;
-         surface = surface->next)
-    {
+    for (surface = pmd->canvas->surfaces.first_item(); surface; surface = surface->next) {
       PaintSurfaceData *sData = surface->data;
 
       if (surface->format != MOD_DPAINT_SURFACE_F_IMAGESEQ && sData) {
@@ -2113,7 +2108,7 @@ static void dynamicPaint_frameUpdate(
 {
   if (pmd->canvas) {
     DynamicPaintCanvasSettings *canvas = pmd->canvas;
-    DynamicPaintSurface *surface = static_cast<DynamicPaintSurface *>(canvas->surfaces.first);
+    DynamicPaintSurface *surface = canvas->surfaces.first_item();
 
     /* update evaluated-mesh copy */
     canvas_copyMesh(canvas, mesh);

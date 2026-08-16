@@ -782,7 +782,7 @@ static void curve_to_filledpoly(const Curve *cu, ListBaseT<DispList> *dispbase)
     return;
   }
 
-  if (dispbase->first && (static_cast<DispList *>(dispbase->first))->type == DL_SURF) {
+  if (dispbase->first && (dispbase->first_item())->type == DL_SURF) {
     bevels_to_filledpoly(cu, dispbase);
   }
   else {
@@ -811,11 +811,11 @@ static float displist_calc_taper(Depsgraph *depsgraph,
   }
 
   DispList *dl = taperobj->runtime->curve_cache ?
-                     static_cast<DispList *>(taperobj->runtime->curve_cache->disp.first) :
+                     taperobj->runtime->curve_cache->disp.first_item() :
                      nullptr;
   if (dl == nullptr) {
     BKE_displist_make_curveTypes(depsgraph, scene, taperobj, false);
-    dl = static_cast<DispList *>(taperobj->runtime->curve_cache->disp.first);
+    dl = taperobj->runtime->curve_cache->disp.first_item();
   }
   if (dl) {
     float minx, dx, *fp;
@@ -1487,8 +1487,8 @@ static bke::GeometrySet evaluate_curve_type_object(Depsgraph *depsgraph,
   else {
     const float widfac = cu->offset - 1.0f;
 
-    const BevList *bl = static_cast<BevList *>(ob->runtime->curve_cache->bev.first);
-    const Nurb *nu = static_cast<Nurb *>(deformed_nurbs->first);
+    const BevList *bl = ob->runtime->curve_cache->bev.first_item();
+    const Nurb *nu = deformed_nurbs->first_item();
     for (; bl && nu; bl = bl->next, nu = nu->next) {
       float *data;
 

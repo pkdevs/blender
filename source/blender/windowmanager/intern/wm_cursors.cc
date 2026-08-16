@@ -492,7 +492,7 @@ void WM_cursor_modal_restore(wmWindow *win)
 void WM_cursor_wait(bool val)
 {
   if (!G.background) {
-    wmWindowManager *wm = static_cast<wmWindowManager *>(G_MAIN->wm.first);
+    wmWindowManager *wm = G_MAIN->wm.first_item();
     wmWindow *win = static_cast<wmWindow *>(wm ? wm->windows.first : nullptr);
 
     for (; win; win = win->next) {

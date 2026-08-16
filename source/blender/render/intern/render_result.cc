@@ -53,7 +53,7 @@ namespace blender {
 static void render_result_views_free(RenderResult *rr)
 {
   while (rr->views.first) {
-    RenderView *rv = static_cast<RenderView *>(rr->views.first);
+    RenderView *rv = rr->views.first_item();
     BLI_remlink(&rr->views, rv);
 
     IMB_freeImBuf(rv->ibuf);
@@ -80,10 +80,10 @@ void render_result_free(RenderResult *rr)
   }
 
   while (rr->layers.first) {
-    RenderLayer *rl = static_cast<RenderLayer *>(rr->layers.first);
+    RenderLayer *rl = rr->layers.first_item();
 
     while (rl->passes.first) {
-      RenderPass *rpass = static_cast<RenderPass *>(rl->passes.first);
+      RenderPass *rpass = rl->passes.first_item();
 
       IMB_freeImBuf(rpass->ibuf);
 
@@ -164,7 +164,7 @@ void render_result_views_shallowdelete(RenderResult *rr)
   }
 
   while (rr->views.first) {
-    RenderView *rv = static_cast<RenderView *>(rr->views.first);
+    RenderView *rv = rr->views.first_item();
     BLI_remlink(&rr->views, rv);
     MEM_delete(rv);
   }
@@ -774,8 +774,7 @@ void render_result_merge(RenderResult *rr, RenderResult *rrpart)
 
     if (rlp) {
       /* Passes are allocated in sync. */
-      for (RenderPass *rpass = static_cast<RenderPass *>(rl.passes.first),
-                      *rpassp = static_cast<RenderPass *>(rlp->passes.first);
+      for (RenderPass *rpass = rl.passes.first_item(), *rpassp = rlp->passes.first_item();
            rpass && rpassp;
            rpass = rpass->next)
       {
@@ -837,7 +836,7 @@ void render_result_single_layer_end(Render *re)
   if (re->pushedresult->rectx == re->result->rectx && re->pushedresult->recty == re->result->recty)
   {
     /* find which layer in re->pushedresult should be replaced */
-    RenderLayer *rl = static_cast<RenderLayer *>(re->result->layers.first);
+    RenderLayer *rl = re->result->layers.first_item();
 
     /* render result should be empty after this */
     BLI_remlink(&re->result->layers, rl);
@@ -1205,7 +1204,7 @@ bool RE_HasCombinedLayer(const RenderResult *result)
     return false;
   }
 
-  const RenderView *rv = static_cast<RenderView *>(result->views.first);
+  const RenderView *rv = result->views.first_item();
   if (rv == nullptr) {
     return false;
   }
@@ -1245,7 +1244,7 @@ RenderView *RE_RenderViewGetById(RenderResult *rr, const int view_id)
 {
   RenderView *rv = static_cast<RenderView *>(BLI_findlink(&rr->views, view_id));
   BLI_assert(rr->views.first);
-  return rv ? rv : static_cast<RenderView *>(rr->views.first);
+  return rv ? rv : rr->views.first_item();
 }
 
 RenderView *RE_RenderViewGetByName(RenderResult *rr, const char *viewname)
@@ -1253,7 +1252,7 @@ RenderView *RE_RenderViewGetByName(RenderResult *rr, const char *viewname)
   RenderView *rv = static_cast<RenderView *>(
       BLI_findstring(&rr->views, viewname, offsetof(RenderView, name)));
   BLI_assert(rr->views.first);
-  return rv ? rv : static_cast<RenderView *>(rr->views.first);
+  return rv ? rv : rr->views.first_item();
 }
 
 static RenderPass *duplicate_render_pass(RenderPass *rpass)

@@ -695,7 +695,7 @@ void popup_block_invoke_ex(bContext *C,
 
   popup_handlers_add(C, &window->runtime->modalhandlers, handle, 0);
   block_active_only_flagged_buttons(
-      C, handle->region, static_cast<Block *>(handle->region->runtime->uiblocks.first));
+      C, handle->region, handle->region->runtime->uiblocks.first_item());
   WM_event_add_mousemove(window);
 }
 
@@ -734,7 +734,7 @@ void popup_block_ex(bContext *C,
 
   popup_handlers_add(C, &window->runtime->modalhandlers, handle, 0);
   block_active_only_flagged_buttons(
-      C, handle->region, static_cast<Block *>(handle->region->runtime->uiblocks.first));
+      C, handle->region, handle->region->runtime->uiblocks.first_item());
   WM_event_add_mousemove(window);
 }
 

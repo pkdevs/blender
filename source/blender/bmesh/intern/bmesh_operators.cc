@@ -589,7 +589,7 @@ void BMO_mesh_selected_remap(BMesh *bm,
     BMEditSelection *ese, *ese_next;
     BMOpSlot *slot_elem_map;
 
-    for (ese = static_cast<BMEditSelection *>(bm->selected.first); ese; ese = ese_next) {
+    for (ese = bm->selected.first_item(); ese; ese = ese_next) {
       ese_next = ese->next;
 
       switch (ese->htype) {
@@ -1498,9 +1498,7 @@ void BMO_error_raise(BMesh *bm, BMOperator *owner, eBMOpErrorLevel level, const 
 
 bool BMO_error_occurred_at_level(BMesh *bm, eBMOpErrorLevel level)
 {
-  for (const BMOpError *err = static_cast<const BMOpError *>(bm->errorstack.first); err;
-       err = err->next)
-  {
+  for (const BMOpError *err = bm->errorstack.first_item(); err; err = err->next) {
     if (err->level == level) {
       return true;
     }
@@ -1510,7 +1508,7 @@ bool BMO_error_occurred_at_level(BMesh *bm, eBMOpErrorLevel level)
 
 bool BMO_error_get(BMesh *bm, const char **r_msg, BMOperator **r_op, eBMOpErrorLevel *r_level)
 {
-  BMOpError *err = static_cast<BMOpError *>(bm->errorstack.first);
+  BMOpError *err = bm->errorstack.first_item();
   if (err == nullptr) {
     return false;
   }
@@ -1553,7 +1551,7 @@ bool BMO_error_pop(BMesh *bm, const char **r_msg, BMOperator **r_op, eBMOpErrorL
   bool result = BMO_error_get(bm, r_msg, r_op, r_level);
 
   if (result) {
-    BMOpError *err = static_cast<BMOpError *>(bm->errorstack.first);
+    BMOpError *err = bm->errorstack.first_item();
 
     BLI_remlink(&bm->errorstack, bm->errorstack.first);
     MEM_delete(err);

@@ -171,7 +171,7 @@ static wmOperatorStatus vertex_parent_set_exec(bContext *C, wmOperator *op)
   else if (ELEM(obedit->type, OB_SURF, OB_CURVES_LEGACY)) {
     ListBaseT<Nurb> *editnurb = object_editcurve_get(obedit);
     int curr_index = 0;
-    for (Nurb *nu = static_cast<Nurb *>(editnurb->first); nu != nullptr; nu = nu->next) {
+    for (Nurb *nu = editnurb->first_item(); nu != nullptr; nu = nu->next) {
       if (nu->type == CU_BEZIER) {
         BezTriple *bezt = nu->bezt;
         for (int nurb_index = 0; nurb_index < nu->pntsu; nurb_index++, bezt++, curr_index++) {
@@ -340,7 +340,7 @@ static void object_remove_parent_deform_modifiers(Object *ob, const Object *par)
     ModifierData *md, *mdn;
 
     /* assume that we only need to remove the first instance of matching deform modifier here */
-    for (md = static_cast<ModifierData *>(ob->modifiers.first); md; md = mdn) {
+    for (md = ob->modifiers.first_item(); md; md = mdn) {
       bool free = false;
 
       mdn = md->next;
@@ -1840,10 +1840,7 @@ static void libblock_relink_collection(Main *bmain,
     BKE_libblock_relink_to_newid(bmain, &collection->id, 0);
   }
 
-  for (CollectionObject *cob = static_cast<CollectionObject *>(collection->gobject.first);
-       cob != nullptr;
-       cob = cob->next)
-  {
+  for (CollectionObject *cob = collection->gobject.first_item(); cob != nullptr; cob = cob->next) {
     BKE_libblock_relink_to_newid(bmain, &cob->ob->id, 0);
   }
 
@@ -1885,7 +1882,7 @@ static Collection *single_object_users_collection(Main *bmain,
   /* Since master collection has already be duplicated as part of scene copy,    * we do not
    * duplicate it here. However, this means its children need to be re-added manually here,    *
    * otherwise their parent lists are empty (which will lead to crashes, see #63101). */
-  CollectionChild *child_next, *child = static_cast<CollectionChild *>(collection->children.first);
+  CollectionChild *child_next, *child = collection->children.first_item();
   CollectionChild *orig_child_last = static_cast<CollectionChild *>(collection->children.last);
   for (; child != nullptr; child = child_next) {
     child_next = child->next;
@@ -2084,7 +2081,7 @@ static void single_obdata_users(
   }
   FOREACH_OBJECT_FLAG_END;
 
-  Mesh *mesh = static_cast<Mesh *>(bmain->meshes.first);
+  Mesh *mesh = bmain->meshes.first_item();
   while (mesh) {
     ID_NEW_REMAP(mesh->texcomesh);
     mesh = static_cast<Mesh *>(mesh->id.next);
@@ -2222,7 +2219,7 @@ static void tag_localizable_objects(bContext *C, const int mode)
    * FIXME This is ignoring all other linked ID types potentially using the selected tagged
    * objects! Probably works fine in most 'usual' cases though.
    */
-  for (Object *object = static_cast<Object *>(bmain->objects.first); object;
+  for (Object *object = bmain->objects.first_item(); object;
        object = static_cast<Object *>(object->id.next))
   {
     if ((object->id.tag & ID_TAG_DOIT) == 0 && ID_IS_LINKED(object)) {
@@ -2253,9 +2250,7 @@ static bool make_local_all__instance_indirect_unused(Main *bmain,
   Object *ob;
   bool changed = false;
 
-  for (ob = static_cast<Object *>(bmain->objects.first); ob;
-       ob = static_cast<Object *>(ob->id.next))
-  {
+  for (ob = bmain->objects.first_item(); ob; ob = static_cast<Object *>(ob->id.next)) {
     if (ID_IS_LINKED(ob) && (ob->id.us == 0)) {
       Base *base;
 

@@ -557,9 +557,7 @@ short psys_get_current_num(Object *ob)
     return 0;
   }
 
-  for (psys = static_cast<ParticleSystem *>(ob->particlesystem.first), i = 0; psys;
-       psys = psys->next, i++)
-  {
+  for (psys = ob->particlesystem.first_item(), i = 0; psys; psys = psys->next, i++) {
     if (psys->flag & PSYS_CURRENT) {
       return i;
     }
@@ -576,9 +574,7 @@ void psys_set_current_num(Object *ob, int index)
     return;
   }
 
-  for (psys = static_cast<ParticleSystem *>(ob->particlesystem.first), i = 0; psys;
-       psys = psys->next, i++)
-  {
+  for (psys = ob->particlesystem.first_item(), i = 0; psys; psys = psys->next, i++) {
     if (i == index) {
       psys->flag |= PSYS_CURRENT;
     }
@@ -641,7 +637,7 @@ void psys_sim_data_free(ParticleSimulationData *sim)
 
 void psys_disable_all(Object *ob)
 {
-  ParticleSystem *psys = static_cast<ParticleSystem *>(ob->particlesystem.first);
+  ParticleSystem *psys = ob->particlesystem.first_item();
 
   for (; psys; psys = psys->next) {
     psys->flag |= PSYS_DISABLED;
@@ -649,7 +645,7 @@ void psys_disable_all(Object *ob)
 }
 void psys_enable_all(Object *ob)
 {
-  ParticleSystem *psys = static_cast<ParticleSystem *>(ob->particlesystem.first);
+  ParticleSystem *psys = ob->particlesystem.first_item();
 
   for (; psys; psys = psys->next) {
     psys->flag &= ~PSYS_DISABLED;
@@ -670,7 +666,7 @@ ParticleSystem *psys_eval_get(Depsgraph *depsgraph, Object *object, ParticleSyst
   if (object_eval == object) {
     return psys;
   }
-  ParticleSystem *psys_eval = static_cast<ParticleSystem *>(object_eval->particlesystem.first);
+  ParticleSystem *psys_eval = object_eval->particlesystem.first_item();
   while (psys_eval != nullptr) {
     if (psys_eval->orig_psys == psys) {
       return psys_eval;
@@ -775,7 +771,7 @@ void psys_check_group_weights(ParticleSettings *part)
   psys_find_group_weights(part);
 
   /* Remove nullptr objects, that were removed from the collection. */
-  dw = static_cast<ParticleDupliWeight *>(part->instance_weights.first);
+  dw = part->instance_weights.first_item();
   while (dw) {
     if (dw->ob == nullptr ||
         !BKE_collection_has_object_recursive(part->instance_collection, dw->ob))
@@ -792,7 +788,7 @@ void psys_check_group_weights(ParticleSettings *part)
   /* Add new objects in the collection. */
   int index = 0;
   FOREACH_COLLECTION_OBJECT_RECURSIVE_BEGIN (part->instance_collection, object) {
-    dw = static_cast<ParticleDupliWeight *>(part->instance_weights.first);
+    dw = part->instance_weights.first_item();
     while (dw && dw->ob != object) {
       dw = dw->next;
     }
@@ -818,7 +814,7 @@ void psys_check_group_weights(ParticleSettings *part)
   }
 
   if (!current) {
-    dw = static_cast<ParticleDupliWeight *>(part->instance_weights.first);
+    dw = part->instance_weights.first_item();
     if (dw) {
       dw->flag |= PART_DUPLIW_CURRENT;
     }
@@ -1208,7 +1204,7 @@ static void get_pointcache_keys_for_time(Object * /*ob*/,
   int index1, index2;
 
   if (index < 0) { /* initialize */
-    *cur = static_cast<PTCacheMem *>(cache->mem_cache.first);
+    *cur = cache->mem_cache.first_item();
 
     if (*cur) {
       *cur = (*cur)->next;
@@ -1237,7 +1233,7 @@ static void get_pointcache_keys_for_time(Object * /*ob*/,
       }
     }
     else if (cache->mem_cache.first) {
-      pm = static_cast<PTCacheMem *>(cache->mem_cache.first);
+      pm = cache->mem_cache.first_item();
       index2 = BKE_ptcache_mem_index_find(pm, index);
       if (index2 < 0) {
         return;
@@ -1404,7 +1400,7 @@ static void do_particle_interpolation(ParticleSystem *psys,
     }
 
     if (psys->part->phystype == PART_PHYS_KEYED && psys->flag & PSYS_KEYED_TIMING) {
-      ParticleTarget *pt = static_cast<ParticleTarget *>(psys->targets.first);
+      ParticleTarget *pt = psys->targets.first_item();
 
       pt = pt->next;
 
@@ -3942,7 +3938,7 @@ static ModifierData *object_add_or_copy_particle_system(
     name = (psys_orig != nullptr) ? psys_orig->name : DATA_("ParticleSystem");
   }
 
-  psys = static_cast<ParticleSystem *>(ob->particlesystem.first);
+  psys = ob->particlesystem.first_item();
   for (; psys; psys = psys->next) {
     psys->flag &= ~PSYS_CURRENT;
   }
@@ -4089,7 +4085,7 @@ void object_remove_particle_system(Main *bmain,
   psys_free(ob, psys);
 
   if (ob->particlesystem.first) {
-    (static_cast<ParticleSystem *>(ob->particlesystem.first))->flag |= PSYS_CURRENT;
+    (ob->particlesystem.first_item())->flag |= PSYS_CURRENT;
   }
   else {
     ob->mode &= ~OB_MODE_PARTICLE_EDIT;

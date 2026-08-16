@@ -4427,9 +4427,8 @@ bNode *node_copy_with_mapping(bNodeTree *dst_tree,
       return true;
     case SH_NODE_VALUE:
       /* The value is stored in the default value of the first output socket. */
-      static_cast<bNodeSocket *>(node.outputs.first)
-          ->default_value_typed<bNodeSocketValueFloat>()
-          ->value = *static_cast<const float *>(value);
+      node.outputs.first_item()->default_value_typed<bNodeSocketValueFloat>()->value =
+          *static_cast<const float *>(value);
       return true;
     case FN_NODE_INPUT_INT:
       reinterpret_cast<NodeInputInt *>(node.storage)->integer = *static_cast<const int *>(value);
@@ -6218,13 +6217,13 @@ void node_system_exit()
 
 void node_tree_iterator_init(NodeTreeIterStore *ntreeiter, Main *bmain)
 {
-  ntreeiter->ngroup = static_cast<bNodeTree *>(bmain->nodetrees.first);
-  ntreeiter->scene = static_cast<Scene *>(bmain->scenes.first);
-  ntreeiter->mat = static_cast<Material *>(bmain->materials.first);
-  ntreeiter->tex = static_cast<Tex *>(bmain->textures.first);
-  ntreeiter->light = static_cast<Light *>(bmain->lights.first);
-  ntreeiter->world = static_cast<World *>(bmain->worlds.first);
-  ntreeiter->linestyle = static_cast<FreestyleLineStyle *>(bmain->linestyles.first);
+  ntreeiter->ngroup = bmain->nodetrees.first_item();
+  ntreeiter->scene = bmain->scenes.first_item();
+  ntreeiter->mat = bmain->materials.first_item();
+  ntreeiter->tex = bmain->textures.first_item();
+  ntreeiter->light = bmain->lights.first_item();
+  ntreeiter->world = bmain->worlds.first_item();
+  ntreeiter->linestyle = bmain->linestyles.first_item();
 }
 bool node_tree_iterator_step(NodeTreeIterStore *ntreeiter, bNodeTree **r_nodetree, ID **r_id)
 {

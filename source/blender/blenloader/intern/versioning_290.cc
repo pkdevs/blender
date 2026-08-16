@@ -571,7 +571,7 @@ void do_versions_after_linking_290(FileData * /*fd*/, Main *bmain)
     }
 
     /* Patch first frame for old files. */
-    Scene *scene = static_cast<Scene *>(bmain->scenes.first);
+    Scene *scene = bmain->scenes.first_item();
     if (scene != nullptr) {
       for (Object &ob : bmain->objects) {
         if (ob.type != OB_GPENCIL_LEGACY) {
@@ -579,7 +579,7 @@ void do_versions_after_linking_290(FileData * /*fd*/, Main *bmain)
         }
         bGPdata *gpd = id_cast<bGPdata *>(ob.data);
         for (bGPDlayer &gpl : gpd->layers) {
-          bGPDframe *gpf = static_cast<bGPDframe *>(gpl.frames.first);
+          bGPDframe *gpf = gpl.frames.first_item();
           if (gpf && gpf->framenum > scene->r.sfra) {
             bGPDframe *gpf_dup = BKE_gpencil_frame_duplicate(gpf, true);
             gpf_dup->framenum = scene->r.sfra;
@@ -799,12 +799,12 @@ static void version_node_join_geometry_for_multi_input_socket(bNodeTree *ntree)
     if (link.tonode->type_legacy == GEO_NODE_JOIN_GEOMETRY &&
         !(link.tosock->flag & SOCK_MULTI_INPUT))
     {
-      link.tosock = static_cast<bNodeSocket *>(link.tonode->inputs.first);
+      link.tosock = link.tonode->inputs.first_item();
     }
   }
   for (bNode &node : ntree->nodes) {
     if (node.type_legacy == GEO_NODE_JOIN_GEOMETRY) {
-      bNodeSocket *socket = static_cast<bNodeSocket *>(node.inputs.first);
+      bNodeSocket *socket = node.inputs.first_item();
       socket->flag |= SOCK_MULTI_INPUT;
       socket->limit = 4095;
       bke::node_remove_socket(*ntree, node, *socket->next);

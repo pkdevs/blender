@@ -151,7 +151,7 @@ static wmOperatorStatus armature_click_extrude_exec(bContext *C, wmOperator * /*
   arm = id_cast<bArmature *>(obedit->data);
 
   /* find the active or selected bone */
-  for (ebone = static_cast<EditBone *>(arm->edbo->first); ebone; ebone = ebone->next) {
+  for (ebone = arm->edbo->first_item(); ebone; ebone = ebone->next) {
     if (!animrig::bone_is_visible(arm, ebone)) {
       continue;
     }
@@ -161,7 +161,7 @@ static wmOperatorStatus armature_click_extrude_exec(bContext *C, wmOperator * /*
   }
 
   if (ebone == nullptr) {
-    for (ebone = static_cast<EditBone *>(arm->edbo->first); ebone; ebone = ebone->next) {
+    for (ebone = arm->edbo->first_item(); ebone; ebone = ebone->next) {
       if (!animrig::bone_is_visible(arm, ebone)) {
         continue;
       }
@@ -1150,8 +1150,7 @@ static wmOperatorStatus armature_duplicate_selected(bContext *C,
     }
 
     /* Find the selected bones and duplicate them as needed */
-    for (ebone_iter = static_cast<EditBone *>(arm->edbo->first);
-         ebone_iter && ebone_iter != ebone_first_dupe;
+    for (ebone_iter = arm->edbo->first_item(); ebone_iter && ebone_iter != ebone_first_dupe;
          ebone_iter = ebone_iter->next)
     {
       if (animrig::bone_is_selected(arm, ebone_iter)) {
@@ -1184,8 +1183,7 @@ static wmOperatorStatus armature_duplicate_selected(bContext *C,
     }
 
     /* Run though the list and fix the pointers */
-    for (ebone_iter = static_cast<EditBone *>(arm->edbo->first);
-         ebone_iter && ebone_iter != ebone_first_dupe;
+    for (ebone_iter = arm->edbo->first_item(); ebone_iter && ebone_iter != ebone_first_dupe;
          ebone_iter = ebone_iter->next)
     {
       if (animrig::bone_is_selected(arm, ebone_iter)) {
@@ -1230,8 +1228,7 @@ static wmOperatorStatus armature_duplicate_selected(bContext *C,
     }
 
     /* Deselect the old bones and select the new ones */
-    for (ebone_iter = static_cast<EditBone *>(arm->edbo->first);
-         ebone_iter && ebone_iter != ebone_first_dupe;
+    for (ebone_iter = arm->edbo->first_item(); ebone_iter && ebone_iter != ebone_first_dupe;
          ebone_iter = ebone_iter->next)
     {
       if (animrig::bone_is_visible(arm, ebone_iter)) {
@@ -1443,8 +1440,7 @@ static wmOperatorStatus armature_symmetrize_exec(bContext *C, wmOperator *op)
     }
 
     /* Find the selected bones and duplicate them as needed, with mirrored name. */
-    for (ebone_iter = static_cast<EditBone *>(arm->edbo->first);
-         ebone_iter && ebone_iter != ebone_first_dupe;
+    for (ebone_iter = arm->edbo->first_item(); ebone_iter && ebone_iter != ebone_first_dupe;
          ebone_iter = ebone_iter->next)
     {
       if (animrig::bone_is_selected(arm, ebone_iter)) {
@@ -1481,8 +1477,7 @@ static wmOperatorStatus armature_symmetrize_exec(bContext *C, wmOperator *op)
     }
 
     /* Run through the list and fix the pointers. */
-    for (ebone_iter = static_cast<EditBone *>(arm->edbo->first);
-         ebone_iter && ebone_iter != ebone_first_dupe;
+    for (ebone_iter = arm->edbo->first_item(); ebone_iter && ebone_iter != ebone_first_dupe;
          ebone_iter = ebone_iter->next)
     {
       if (ebone_iter->temp.ebone) {
@@ -1564,8 +1559,7 @@ static wmOperatorStatus armature_symmetrize_exec(bContext *C, wmOperator *op)
      * so we don't need this anymore */
 
     /* Deselect the old bones and select the new ones */
-    for (ebone_iter = static_cast<EditBone *>(arm->edbo->first);
-         ebone_iter && ebone_iter != ebone_first_dupe;
+    for (ebone_iter = arm->edbo->first_item(); ebone_iter && ebone_iter != ebone_first_dupe;
          ebone_iter = ebone_iter->next)
     {
       if (animrig::bone_is_visible(arm, ebone_iter)) {
@@ -1574,8 +1568,7 @@ static wmOperatorStatus armature_symmetrize_exec(bContext *C, wmOperator *op)
     }
 
     /* New bones will be selected, but some of the bones may already exist */
-    for (ebone_iter = static_cast<EditBone *>(arm->edbo->first);
-         ebone_iter && ebone_iter != ebone_first_dupe;
+    for (ebone_iter = arm->edbo->first_item(); ebone_iter && ebone_iter != ebone_first_dupe;
          ebone_iter = ebone_iter->next)
     {
       EditBone *ebone = ebone_iter->temp.ebone;
@@ -1674,9 +1667,7 @@ static wmOperatorStatus armature_extrude_exec(bContext *C, wmOperator *op)
     }
 
     /* Duplicate the necessary bones */
-    for (ebone = static_cast<EditBone *>(arm->edbo->first); ((ebone) && (ebone != first));
-         ebone = ebone->next)
-    {
+    for (ebone = arm->edbo->first_item(); ((ebone) && (ebone != first)); ebone = ebone->next) {
       if (!animrig::bone_is_visible(arm, ebone)) {
         continue;
       }

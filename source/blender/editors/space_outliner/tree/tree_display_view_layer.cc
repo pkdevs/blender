@@ -130,7 +130,7 @@ void TreeDisplayViewLayer::add_view_layer(Scene &scene,
     TREESTORE(&ten)->flag &= ~TSE_CLOSED;
 
     /* First layer collection is for master collection, don't show it. */
-    LayerCollection *lc = static_cast<LayerCollection *>(view_layer_->layer_collections.first);
+    LayerCollection *lc = view_layer_->layer_collections.first_item();
     if (lc == nullptr) {
       return;
     }

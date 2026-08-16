@@ -124,7 +124,7 @@ void ABCNurbsWriter::do_write(HierarchyContext &context)
   }
 
   size_t count = 0;
-  for (Nurb *nu = static_cast<Nurb *>(nulb->first); nu; nu = nu->next, count++) {
+  for (Nurb *nu = nulb->first_item(); nu; nu = nu->next, count++) {
     std::vector<float> knotsU;
     get_knots(knotsU, KNOTSU(nu), nu->knotsu);
 

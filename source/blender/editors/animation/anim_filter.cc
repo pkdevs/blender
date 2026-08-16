@@ -117,7 +117,7 @@ bAction *ANIM_active_action_from_area(const Main &bmain,
     return nullptr;
   }
 
-  const SpaceAction *saction = static_cast<const SpaceAction *>(area->spacedata.first);
+  const SpaceAction *saction = area->spacedata.first_as<SpaceAction>();
   switch (eAnimEdit_Context(saction->mode)) {
     case SACTCONT_ACTION: {
       bAction *active_action = ob->adt ? ob->adt->action : nullptr;
@@ -549,7 +549,8 @@ bool ANIM_animdata_can_have_greasepencil(const eAnimCont_Types type)
   { \
     if ((id)->adt) { \
       if (!(filter_mode & ANIMFILTER_CURVE_VISIBLE) || \
-          !((id)->adt->flag & ADT_CURVES_NOT_VISIBLE)) { \
+          !((id)->adt->flag & ADT_CURVES_NOT_VISIBLE)) \
+      { \
         if (filter_mode & ANIMFILTER_ANIMDATA) { \
           adtOk \
         } \
@@ -1789,7 +1790,7 @@ static size_t animfilter_nla(bAnimContext *ac,
   }
   else {
     /* first track to include will the first one (as per normal) */
-    first = static_cast<NlaTrack *>(adt->nla_tracks.first);
+    first = adt->nla_tracks.first_item();
   }
 
   /* loop over NLA Tracks -
@@ -1869,7 +1870,7 @@ static size_t animfilter_nla_controls(bAnimContext *ac,
          * is the same as owner of animation data. */
         tmp_items += animfilter_fcurves(ac,
                                         &tmp_data,
-                                        static_cast<FCurve *>(strip.fcurves.first),
+                                        strip.fcurves.first_item(),
                                         ANIMTYPE_NLACURVE,
                                         filter_mode,
                                         &strip,
@@ -1932,7 +1933,7 @@ static size_t animfilter_block_data(bAnimContext *ac,
         { /* Drivers */
           items += animfilter_fcurves(ac,
                                       anim_data,
-                                      static_cast<FCurve *>(adt->drivers.first),
+                                      adt->drivers.first_item(),
                                       ANIMTYPE_FCURVE,
                                       filter_mode,
                                       nullptr,

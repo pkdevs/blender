@@ -175,7 +175,7 @@ static std::optional<std::string> rna_PointCache_path(const PointerRNA *ptr)
   }
 
   ModifierData *md;
-  for (md = static_cast<ModifierData *>(ob->modifiers.first); md; md = md->next) {
+  for (md = ob->modifiers.first_item(); md; md = md->next) {
     const ModifierTypeInfo *mti = BKE_modifier_get_info(md->type);
 
     if (!(mti->flags & eModifierTypeFlag_UsesPointCache)) {
@@ -333,7 +333,7 @@ static void rna_Cache_idname_change(Main * /*bmain*/, Scene * /*scene*/, Pointer
 
     BKE_ptcache_ids_from_object(&pidlist, ob, scene, 0);
 
-    for (pid = static_cast<PTCacheID *>(pidlist.first); pid; pid = pid->next) {
+    for (pid = pidlist.first_item(); pid; pid = pid->next) {
       if (pid->cache == cache) {
         pid2 = pid;
       }

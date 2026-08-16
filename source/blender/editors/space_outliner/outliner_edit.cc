@@ -1975,7 +1975,7 @@ static void tree_element_to_path(TreeElement *te,
 
   /* step 2: step down hierarchy building the path
    * (NOTE: addhead in previous loop was needed so that we can loop like this) */
-  for (const LinkData *ld = static_cast<const LinkData *>(hierarchy.first); ld; ld = ld->next) {
+  for (const LinkData *ld = hierarchy.first_item(); ld; ld = ld->next) {
     /* get data */
     TreeElement *tem = static_cast<TreeElement *>(ld->data);
     TreeElementRNACommon *tem_rna = tree_element_cast<TreeElementRNACommon>(tem);

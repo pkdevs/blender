@@ -516,9 +516,7 @@ static void object_foreach_id(ID *id, LibraryForeachIDData *data)
 static void object_foreach_path_pointcache(ListBaseT<PointCache> *ptcache_list,
                                            BPathForeachPathData *bpath_data)
 {
-  for (PointCache *cache = static_cast<PointCache *>(ptcache_list->first); cache != nullptr;
-       cache = cache->next)
-  {
+  for (PointCache *cache = ptcache_list->first_item(); cache != nullptr; cache = cache->next) {
     if (cache->flag & PTCACHE_DISK_CACHE) {
       BKE_bpath_foreach_path_fixed_process(bpath_data, cache->path, sizeof(cache->path));
     }
@@ -922,7 +920,7 @@ static void object_blend_read_data(BlendDataReader *reader, ID *id)
   BKE_shaderfx_blend_read_data(reader, &ob->shader_fx, ob);
 
   BLO_read_struct_list(reader, PartEff, &ob->effect);
-  paf = static_cast<PartEff *>(ob->effect.first);
+  paf = ob->effect.first_as<PartEff>();
   while (paf) {
     if (paf->type == EFF_PARTICLE) {
       paf->keys = nullptr;
@@ -1032,7 +1030,7 @@ static void object_blend_read_data(BlendDataReader *reader, ID *id)
 
   BLO_read_struct_list(reader, ObHook, &ob->hooks);
   while (ob->hooks.first) {
-    ObHook *hook = static_cast<ObHook *>(ob->hooks.first);
+    ObHook *hook = ob->hooks.first_item();
     HookModifierData *hmd = reinterpret_cast<HookModifierData *>(
         BKE_modifier_new(eModifierType_Hook));
 
@@ -1165,7 +1163,7 @@ PartEff *BKE_object_do_version_give_parteff_245(Object *ob)
 {
   PartEff *paf;
 
-  paf = static_cast<PartEff *>(ob->effect.first);
+  paf = ob->effect.first_as<PartEff>();
   while (paf) {
     if (paf->type == EFF_PARTICLE) {
       return paf;
@@ -1199,9 +1197,7 @@ static void object_lib_override_apply_post(ID *id_dst, ID *id_src)
    * (maybe a new flag to allow override code to set values of some read-only properties?).
    */
   PTCacheID *pid_src, *pid_dst;
-  for (pid_dst = static_cast<PTCacheID *>(pidlist_dst.first),
-      pid_src = static_cast<PTCacheID *>(pidlist_src.first);
-       pid_dst != nullptr;
+  for (pid_dst = pidlist_dst.first_item(), pid_src = pidlist_src.first_item(); pid_dst != nullptr;
        pid_dst = pid_dst->next, pid_src = (pid_src != nullptr) ? pid_src->next : nullptr)
   {
     /* If pid's do not match, just tag info of caches in dst as dirty and continue. */
@@ -1219,8 +1215,8 @@ static void object_lib_override_apply_post(ID *id_dst, ID *id_src)
     }
 
     PointCache *point_cache_dst, *point_cache_src;
-    for (point_cache_dst = static_cast<PointCache *>(pid_dst->ptcaches->first),
-        point_cache_src = static_cast<PointCache *>(pid_src->ptcaches->first);
+    for (point_cache_dst = pid_dst->ptcaches->first_item(),
+        point_cache_src = pid_src->ptcaches->first_item();
          point_cache_dst != nullptr;
          point_cache_dst = point_cache_dst->next,
         point_cache_src = (point_cache_src != nullptr) ? point_cache_src->next : nullptr)
@@ -4563,7 +4559,7 @@ int BKE_object_insert_ptcache(Object *ob)
 
   BLI_listbase_sort(&ob->pc_ids, pc_cmp);
 
-  for (link = static_cast<LinkData *>(ob->pc_ids.first), i = 0; link; link = link->next, i++) {
+  for (link = ob->pc_ids.first_item(), i = 0; link; link = link->next, i++) {
     int index = POINTER_AS_INT(link->data);
 
     if (i < index) {
@@ -4586,7 +4582,7 @@ static int pc_findindex(ListBaseT<LinkData> *listbase, int index)
     return -1;
   }
 
-  LinkData *link = static_cast<LinkData *>(listbase->first);
+  LinkData *link = listbase->first_item();
   while (link) {
     if (POINTER_AS_INT(link->data) == index) {
       return number;
@@ -4661,7 +4657,7 @@ static KeyBlock *insert_lattkey(Main *bmain, Object *ob, const char *name, const
   if (newkey || from_mix == false) {
     kb = BKE_keyblock_add_ctime(key, name, false);
     if (!newkey) {
-      KeyBlock *basekb = static_cast<KeyBlock *>(key->block.first);
+      KeyBlock *basekb = key->block.first_item();
       kb->data = MEM_dupalloc_void(basekb->data);
       kb->totelem = basekb->totelem;
     }
@@ -4701,7 +4697,7 @@ static KeyBlock *insert_curvekey(Main *bmain, Object *ob, const char *name, cons
     /* create from curve */
     kb = BKE_keyblock_add_ctime(key, name, false);
     if (!newkey) {
-      KeyBlock *basekb = static_cast<KeyBlock *>(key->block.first);
+      KeyBlock *basekb = key->block.first_item();
       kb->data = MEM_dupalloc_void(basekb->data);
       kb->totelem = basekb->totelem;
     }
@@ -4806,7 +4802,7 @@ bool BKE_object_shapekey_remove(Main *bmain, Object *ob, KeyBlock *kb)
   BLI_remlink(&key->block, kb);
   key->totkey--;
   if (key->refkey == kb) {
-    key->refkey = static_cast<KeyBlock *>(key->block.first);
+    key->refkey = key->block.first_item();
 
     if (key->refkey) {
       /* apply new basis key on original data */
@@ -5116,7 +5112,7 @@ int BKE_object_scenes_users_get(Main *bmain, Object *ob)
 MovieClip *BKE_object_movieclip_get(Scene *scene, const Object *ob, bool use_default)
 {
   MovieClip *clip = use_default ? scene->clip : nullptr;
-  bConstraint *con = static_cast<bConstraint *>(ob->constraints.first), *scon = nullptr;
+  bConstraint *con = ob->constraints.first_item(), *scon = nullptr;
 
   while (con) {
     if (con->type == CONSTRAINT_TYPE_CAMERASOLVER) {
@@ -5398,7 +5394,7 @@ KDTree<float3> *BKE_object_as_kdtree(Object *ob, int *r_tot)
       tree = kdtree_new<float3>(tot);
       i = 0;
 
-      nu = static_cast<Nurb *>(cu->nurb.first);
+      nu = cu->nurb.first_item();
       while (nu) {
         if (nu->bezt) {
           BezTriple *bezt;
@@ -5637,7 +5633,7 @@ void BKE_object_modifier_update_subframe(Depsgraph *depsgraph,
 
 void BKE_object_update_select_id(Main *bmain)
 {
-  Object *ob = static_cast<Object *>(bmain->objects.first);
+  Object *ob = bmain->objects.first_item();
   int select_id = 1;
   while (ob) {
     ob->runtime->select_id = select_id++;

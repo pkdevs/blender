@@ -479,7 +479,7 @@ int BKE_modifiers_get_cage_index(const Scene *scene,
   VirtualModifierData virtual_modifier_data;
   ModifierData *md = (is_virtual) ?
                          BKE_modifiers_get_virtual_modifierlist(ob, &virtual_modifier_data) :
-                         static_cast<ModifierData *>(ob->modifiers.first);
+                         ob->modifiers.first_item();
 
   if (r_lastPossibleCageIndex) {
     /* ensure the value is initialized */
@@ -620,7 +620,7 @@ CDMaskLink *BKE_modifier_calc_data_masks(const Scene *scene,
 ModifierData *BKE_modifiers_get_virtual_modifierlist(const Object *ob,
                                                      VirtualModifierData *virtual_modifier_data)
 {
-  ModifierData *md = static_cast<ModifierData *>(ob->modifiers.first);
+  ModifierData *md = ob->modifiers.first_item();
 
   *virtual_modifier_data = virtualModifierCommonData;
 
@@ -873,7 +873,7 @@ void BKE_modifiers_add_at_end_if_possible(Object *ob, ModifierData *new_md)
   const bool check_deform_only = (mti->flags & eModifierTypeFlag_RequiresOriginalData) ||
                                  (mt == eModifierType_Hook);
   if (check_deform_only) {
-    next_md = static_cast<ModifierData *>(ob->modifiers.first);
+    next_md = ob->modifiers.first_item();
 
     while (next_md && BKE_modifier_get_info(next_md->type)->type == ModifierTypeType::OnlyDeform) {
       if (next_md->next && (next_md->next->flag & eModifierFlag_PinLast) != 0) {

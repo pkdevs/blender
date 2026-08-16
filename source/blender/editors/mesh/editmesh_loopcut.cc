@@ -503,7 +503,7 @@ static wmOperatorStatus ringcut_invoke(bContext *C, wmOperator *op, const wmEven
                                                            "VIEW3D_GGT_mesh_preselect_edgering") :
                                     nullptr;
     if ((gzgroup != nullptr) && gzgroup->gizmos.first) {
-      wmGizmo *gz = static_cast<wmGizmo *>(gzgroup->gizmos.first);
+      wmGizmo *gz = gzgroup->gizmos.first_item();
       const int object_index = RNA_int_get(gz->ptr, "object_index");
       const int edge_index = RNA_int_get(gz->ptr, "edge_index");
 

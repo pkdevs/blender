@@ -140,9 +140,7 @@ static void action_copy_data(Main * /*bmain*/,
   /* Copy F-Curves, fixing up the links as we go. */
   action_dst.curves.clear_no_delete();
 
-  for (fcurve_src = static_cast<FCurve *>(action_src.curves.first); fcurve_src;
-       fcurve_src = fcurve_src->next)
-  {
+  for (fcurve_src = action_src.curves.first_item(); fcurve_src; fcurve_src = fcurve_src->next) {
     /* Duplicate F-Curve. */
 
     /* XXX TODO: pass sub-data flag?
@@ -152,8 +150,7 @@ static void action_copy_data(Main * /*bmain*/,
     BLI_addtail(&action_dst.curves, fcurve_dst);
 
     /* Fix group links (kind of bad list-in-list search, but this is the most reliable way). */
-    for (group_dst = static_cast<bActionGroup *>(action_dst.groups.first),
-        group_src = static_cast<bActionGroup *>(action_src.groups.first);
+    for (group_dst = action_dst.groups.first_item(), group_src = action_src.groups.first_item();
          group_dst && group_src;
          group_dst = group_dst->next, group_src = group_src->next)
     {
@@ -793,7 +790,7 @@ void action_group_colors_sync(bActionGroup *grp)
   }
   if (grp->customCol > 0) {
     /* Copy theme colors on-to group's custom color in case user tries to edit color. */
-    const bTheme *btheme = static_cast<const bTheme *>(U.themes.first);
+    const bTheme *btheme = U.themes.first_item();
     const ThemeWireColor *col_set = &btheme->tarm[(grp->customCol - 1)];
 
     memcpy(&grp->cs, col_set, sizeof(ThemeWireColor));
@@ -960,7 +957,7 @@ bool BKE_pose_channels_is_valid(const bPose *pose)
 {
   if (pose->chanhash) {
     bPoseChannel *pchan;
-    for (pchan = static_cast<bPoseChannel *>(pose->chanbase.first); pchan; pchan = pchan->next) {
+    for (pchan = pose->chanbase.first_item(); pchan; pchan = pchan->next) {
       if (BLI_ghash_lookup(pose->chanhash, pchan->name) != pchan) {
         return false;
       }
@@ -1281,8 +1278,7 @@ void BKE_pose_channels_remove(Object *ob,
   if (ob->pose) {
     bPoseChannel *pchan, *pchan_next;
 
-    for (pchan = static_cast<bPoseChannel *>(ob->pose->chanbase.first); pchan; pchan = pchan_next)
-    {
+    for (pchan = ob->pose->chanbase.first_item(); pchan; pchan = pchan_next) {
       pchan_next = pchan->next;
 
       if (filter_fn(pchan->name, user_data)) {

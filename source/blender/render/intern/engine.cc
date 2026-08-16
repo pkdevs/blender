@@ -79,7 +79,7 @@ void RE_engines_exit()
     DRW_gpu_context_disable();
   }
 
-  for (type = static_cast<RenderEngineType *>(R_engines.first); type; type = next) {
+  for (type = R_engines.first_item(); type; type = next) {
     next = type->next;
 
     BLI_remlink(&R_engines, type);
@@ -271,7 +271,7 @@ static RenderResult *render_result_from_bake(
 
 static void render_result_to_bake(RenderEngine *engine, RenderResult *rr)
 {
-  RenderLayer *rl = static_cast<RenderLayer *>(rr->layers.first);
+  RenderLayer *rl = rr->layers.first_item();
   RenderPass *rpass = RE_pass_find_by_name(rl, RE_PASSNAME_COMBINED, "");
   if (!rpass) {
     return;
@@ -1138,8 +1138,7 @@ bool RE_engine_render(Render *re, bool do_all)
   /* Clear tile data */
   engine->flag &= ~RE_ENGINE_RENDERING;
 
-  render_result_free_list(&engine->fullresult,
-                          static_cast<RenderResult *>(engine->fullresult.first));
+  render_result_free_list(&engine->fullresult, engine->fullresult.first_item());
 
   /* re->engine becomes zero if user changed active render engine during render */
   if (!engine_keep_depsgraph(engine) || !re->engine) {

@@ -538,11 +538,11 @@ void ED_animedit_unlink_action(
       NlaTrack *nlt, *nlt_next;
       NlaStrip *strip, *nstrip;
 
-      for (nlt = static_cast<NlaTrack *>(adt->nla_tracks.first); nlt; nlt = nlt_next) {
+      for (nlt = adt->nla_tracks.first_item(); nlt; nlt = nlt_next) {
         nlt_next = nlt->next;
 
         if (strstr(nlt->name, DATA_("[Action Stash]"))) {
-          for (strip = static_cast<NlaStrip *>(nlt->strips.first); strip; strip = nstrip) {
+          for (strip = nlt->strips.first_item(); strip; strip = nstrip) {
             nstrip = strip->next;
 
             if (strip->act == act) {

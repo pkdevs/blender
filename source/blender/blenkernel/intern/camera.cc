@@ -1432,7 +1432,7 @@ void BKE_camera_background_image_remove(Camera *cam, CameraBGImage *bgpic)
 
 void BKE_camera_background_image_clear(Camera *cam)
 {
-  CameraBGImage *bgpic = static_cast<CameraBGImage *>(cam->bg_images.first);
+  CameraBGImage *bgpic = cam->bg_images.first_item();
 
   while (bgpic) {
     CameraBGImage *next_bgpic = bgpic->next;

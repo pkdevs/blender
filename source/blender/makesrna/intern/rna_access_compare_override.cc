@@ -1522,8 +1522,7 @@ static bool override_apply_property_check_skip(Main *bmain,
 
   switch (op->rna_prop_type) {
     case PROP_POINTER: {
-      if ((static_cast<IDOverrideLibraryPropertyOperation *>(op->operations.first)->flag &
-           LIBOVERRIDE_OP_FLAG_IDPOINTER_MATCH_REFERENCE) == 0)
+      if ((op->operations.first_item()->flag & LIBOVERRIDE_OP_FLAG_IDPOINTER_MATCH_REFERENCE) == 0)
       {
         BLI_assert(id_ptr_src->owner_id == rna_property_override_property_real_id_owner(
                                                bmain, &rnaapply_ctx.ptr_src, nullptr, nullptr));
@@ -1628,8 +1627,8 @@ void RNA_struct_override_apply(Main *bmain,
           (id_ptr_dst->owner_id->tag & ID_TAG_LIBOVERRIDE_NEED_RESYNC) == 0)
       {
         if (op.rna_prop_type == PROP_POINTER && op.operations.first != nullptr &&
-            (static_cast<IDOverrideLibraryPropertyOperation *>(op.operations.first)->flag &
-             LIBOVERRIDE_OP_FLAG_IDPOINTER_MATCH_REFERENCE) != 0)
+            (op.operations.first_item()->flag & LIBOVERRIDE_OP_FLAG_IDPOINTER_MATCH_REFERENCE) !=
+                0)
         {
           BLI_assert(RNA_struct_is_ID(
               RNA_property_pointer_type(&rnaapply_ctx.ptr_src, rnaapply_ctx.prop_src)));

@@ -1216,7 +1216,7 @@ void BM_select_history_validate(BMesh *bm)
 {
   BMEditSelection *ese, *ese_next;
 
-  for (ese = static_cast<BMEditSelection *>(bm->selected.first); ese; ese = ese_next) {
+  for (ese = bm->selected.first_item(); ese; ese = ese_next) {
     ese_next = ese->next;
     if (!BM_elem_flag_test(ese->ele, BM_ELEM_SELECT)) {
       BLI_freelinkN(&(bm->selected), ese);
@@ -1343,9 +1343,7 @@ void BM_select_history_merge_from_targetmap(BMesh *bm,
   }
 
   /* Remove overlapping duplicates. */
-  for (BMEditSelection *ese = static_cast<BMEditSelection *>(bm->selected.first), *ese_next; ese;
-       ese = ese_next)
-  {
+  for (BMEditSelection *ese = bm->selected.first_item(), *ese_next; ese; ese = ese_next) {
     ese_next = ese->next;
     if (BM_ELEM_API_FLAG_TEST(ese->ele, _FLAG_OVERLAP)) {
       BM_ELEM_API_FLAG_DISABLE(ese->ele, _FLAG_OVERLAP);

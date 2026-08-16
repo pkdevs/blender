@@ -403,8 +403,7 @@ static void do_versions_windowmanager_2_50(bScreen *screen)
       area_add_header_region(&area, &area.regionbase);
     }
 
-    area_add_window_regions(
-        &area, static_cast<SpaceLink *>(area.spacedata.first), &area.regionbase);
+    area_add_window_regions(&area, area.spacedata.first_item(), &area.regionbase);
 
     /* Space image-select is deprecated. */
     for (SpaceLink &sl : area.spacedata) {
@@ -422,7 +421,7 @@ static void do_versions_windowmanager_2_50(bScreen *screen)
 
     /* pushed back spaces also need regions! */
     if (area.spacedata.first) {
-      SpaceLink *sl = static_cast<SpaceLink *>(area.spacedata.first);
+      SpaceLink *sl = area.spacedata.first_as<SpaceLink>();
       for (sl = sl->next; sl; sl = sl->next) {
         if (area.headertype) {
           area_add_header_region(&area, &sl->regionbase);
@@ -1010,7 +1009,7 @@ void blo_do_versions_250(FileData *fd, Library * /*lib*/, Main *bmain)
 
   if (!MAIN_VERSION_FILE_ATLEAST(bmain, 250, 8)) {
     {
-      Scene *sce = static_cast<Scene *>(bmain->scenes.first);
+      Scene *sce = bmain->scenes.first_item();
       while (sce) {
         if (sce->r.frame_step == 0) {
           sce->r.frame_step = 1;
@@ -1022,9 +1021,9 @@ void blo_do_versions_250(FileData *fd, Library * /*lib*/, Main *bmain)
 
     {
       /* ensure all nodes have unique names */
-      bNodeTree *ntree = static_cast<bNodeTree *>(bmain->nodetrees.first);
+      bNodeTree *ntree = bmain->nodetrees.first_item();
       while (ntree) {
-        bNode *node = static_cast<bNode *>(ntree->nodes.first);
+        bNode *node = ntree->nodes.first_item();
 
         while (node) {
           bke::node_unique_name(*ntree, *node);
@@ -1036,7 +1035,7 @@ void blo_do_versions_250(FileData *fd, Library * /*lib*/, Main *bmain)
     }
 
     {
-      Object *ob = static_cast<Object *>(bmain->objects.first);
+      Object *ob = bmain->objects.first_item();
       while (ob) {
         /* shaded mode disabled for now */
         if (ob->dt == OB_MATERIAL) {
@@ -1063,9 +1062,9 @@ void blo_do_versions_250(FileData *fd, Library * /*lib*/, Main *bmain)
 
     /* only convert old 2.50 files with color management */
     if (bmain->versionfile == 250) {
-      Scene *sce = static_cast<Scene *>(bmain->scenes.first);
-      Material *ma = static_cast<Material *>(bmain->materials.first);
-      Tex *tex = static_cast<Tex *>(bmain->textures.first);
+      Scene *sce = bmain->scenes.first_item();
+      Material *ma = bmain->materials.first_item();
+      Tex *tex = bmain->textures.first_item();
       int i, convert = 0;
 
       /* convert to new color management system:
@@ -1419,7 +1418,7 @@ void blo_do_versions_250(FileData *fd, Library * /*lib*/, Main *bmain)
     /* adjustment to color balance node values */
     for (Scene &scene : bmain->scenes) {
       if (scene.nodetree) {
-        bNode *node = static_cast<bNode *>(scene.nodetree->nodes.first);
+        bNode *node = scene.nodetree->nodes.first_item();
 
         while (node) {
           if (node->type_legacy == CMP_NODE_COLORBALANCE) {
@@ -1436,7 +1435,7 @@ void blo_do_versions_250(FileData *fd, Library * /*lib*/, Main *bmain)
     }
     /* check inside node groups too */
     for (bNodeTree &ntree : bmain->nodetrees) {
-      bNode *node = static_cast<bNode *>(ntree.nodes.first);
+      bNode *node = ntree.nodes.first_item();
 
       while (node) {
         if (node->type_legacy == CMP_NODE_COLORBALANCE) {
@@ -1766,7 +1765,7 @@ void blo_do_versions_250(FileData *fd, Library * /*lib*/, Main *bmain)
 
     /* Fix for sample line scope initializing with no height */
     for (bScreen &screen : bmain->screens) {
-      area = static_cast<ScrArea *>(screen.areabase.first);
+      area = screen.areabase.first_item();
       while (area) {
         for (SpaceLink &sl : area->spacedata) {
           if (sl.spacetype == SPACE_IMAGE) {
@@ -1963,7 +1962,7 @@ void blo_do_versions_250(FileData *fd, Library * /*lib*/, Main *bmain)
     for (bScreen &screen : bmain->screens) {
       /* add regions */
       for (ScrArea &area : screen.areabase) {
-        SpaceLink *sl_first = static_cast<SpaceLink *>(area.spacedata.first);
+        SpaceLink *sl_first = area.spacedata.first_item();
         if (sl_first->spacetype == SPACE_IMAGE) {
           for (ARegion &region : area.regionbase) {
             if (region.regiontype == RGN_TYPE_WINDOW) {
@@ -2014,7 +2013,7 @@ void blo_do_versions_250(FileData *fd, Library * /*lib*/, Main *bmain)
     for (bScreen &screen : bmain->screens) {
       /* add regions */
       for (ScrArea &area : screen.areabase) {
-        SpaceLink *sl_first = static_cast<SpaceLink *>(area.spacedata.first);
+        SpaceLink *sl_first = area.spacedata.first_item();
         if (sl_first->spacetype == SPACE_SEQ) {
           for (ARegion &region : area.regionbase) {
             if (region.regiontype == RGN_TYPE_WINDOW) {

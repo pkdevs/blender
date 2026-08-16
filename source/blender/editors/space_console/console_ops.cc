@@ -184,7 +184,7 @@ static void console_scrollback_limit(SpaceConsole *sc)
   int tot;
 
   for (tot = sc->scrollback.count(); tot > U.scrollback; tot--) {
-    console_scrollback_free(sc, static_cast<ConsoleLine *>(sc->scrollback.first));
+    console_scrollback_free(sc, sc->scrollback.first_item());
   }
 }
 
@@ -921,13 +921,13 @@ static wmOperatorStatus console_clear_exec(bContext *C, wmOperator *op)
 
   if (scrollback) { /* Last item in history. */
     while (sc->scrollback.first) {
-      console_scrollback_free(sc, static_cast<ConsoleLine *>(sc->scrollback.first));
+      console_scrollback_free(sc, sc->scrollback.first_item());
     }
   }
 
   if (history) {
     while (sc->history.first) {
-      console_history_free(sc, static_cast<ConsoleLine *>(sc->history.first));
+      console_history_free(sc, sc->history.first_item());
     }
     console_history_verify(C);
   }

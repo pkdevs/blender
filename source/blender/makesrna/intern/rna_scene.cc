@@ -990,7 +990,7 @@ void rna_Scene_set_update(Main *bmain, Scene * /*scene*/, PointerRNA *ptr)
 
 static void rna_Scene_camera_update(Main *bmain, Scene * /*scene_unused*/, PointerRNA *ptr)
 {
-  wmWindowManager *wm = static_cast<wmWindowManager *>(bmain->wm.first);
+  wmWindowManager *wm = bmain->wm.first_item();
   Scene *scene = static_cast<Scene *>(ptr->data);
 
   WM_windows_scene_data_sync(&wm->windows, scene);
@@ -1875,7 +1875,7 @@ static const EnumPropertyItem *rna_RenderSettings_engine_itemf(bContext * /*C*/,
   EnumPropertyItem tmp = {0, "", 0, "", ""};
   int a = 0, totitem = 0;
 
-  for (type = static_cast<RenderEngineType *>(R_engines.first); type; type = type->next, a++) {
+  for (type = R_engines.first_item(); type; type = type->next, a++) {
     tmp.value = a;
     tmp.identifier = type->idname;
     tmp.name = type->name;
@@ -1894,7 +1894,7 @@ static int rna_RenderSettings_engine_get(PointerRNA *ptr)
   RenderEngineType *type;
   int a = 0;
 
-  for (type = static_cast<RenderEngineType *>(R_engines.first); type; type = type->next, a++) {
+  for (type = R_engines.first_item(); type; type = type->next, a++) {
     if (STREQ(type->idname, rd->engine)) {
       return a;
     }
@@ -2163,7 +2163,7 @@ static void rna_Scene_editmesh_select_mode_set(PointerRNA *ptr, const bool *valu
     ts->selectmode = selectmode;
 
     /* Update select mode in all the workspaces in mesh edit mode. */
-    wmWindowManager *wm = static_cast<wmWindowManager *>(G_MAIN->wm.first);
+    wmWindowManager *wm = G_MAIN->wm.first_item();
     for (wmWindow &win : wm->windows) {
       const Scene *scene = WM_window_get_active_scene(&win);
       ViewLayer *view_layer = WM_window_get_active_view_layer(&win);
@@ -2238,7 +2238,7 @@ static void object_simplify_update(Scene *scene,
 
   ob->id.tag &= ~ID_TAG_DOIT;
 
-  for (md = static_cast<ModifierData *>(ob->modifiers.first); md; md = md->next) {
+  for (md = ob->modifiers.first_item(); md; md = md->next) {
     if (md->type == eModifierType_Nodes && depsgraph != nullptr) {
       Object *ob_eval = DEG_get_evaluated(depsgraph, ob);
       const bke::GeometrySet *geometry_set = ob_eval->runtime->geometry_set_eval;
@@ -2254,7 +2254,7 @@ static void object_simplify_update(Scene *scene,
     }
   }
 
-  for (psys = static_cast<ParticleSystem *>(ob->particlesystem.first); psys; psys = psys->next) {
+  for (psys = ob->particlesystem.first_item(); psys; psys = psys->next) {
     psys->recalc |= ID_RECALC_PSYS_CHILD;
   }
 

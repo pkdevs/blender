@@ -123,8 +123,8 @@ static std::optional<std::string> rna_NlaStrip_path(const PointerRNA *ptr)
     NlaTrack *nlt;
     NlaStrip *nls;
 
-    for (nlt = static_cast<NlaTrack *>(adt->nla_tracks.first); nlt; nlt = nlt->next) {
-      for (nls = static_cast<NlaStrip *>(nlt->strips.first); nls; nls = nls->next) {
+    for (nlt = adt->nla_tracks.first_item(); nlt; nlt = nlt->next) {
+      for (nls = nlt->strips.first_item(); nls; nls = nls->next) {
         if (nls == strip) {
           /* XXX but if we animate like this, the control will never work... */
           char name_esc_nlt[sizeof(nlt->name) * 2];

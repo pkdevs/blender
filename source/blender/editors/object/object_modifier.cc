@@ -267,7 +267,7 @@ bool iter_other(Main *bmain,
     Object *ob;
     int totfound = include_orig ? 0 : 1;
 
-    for (ob = static_cast<Object *>(bmain->objects.first); ob && totfound < users;
+    for (ob = bmain->objects.first_item(); ob && totfound < users;
          ob = reinterpret_cast<Object *>(ob->id.next))
     {
       if (((ob != orig_ob) || include_orig) && (ob->data == orig_ob->data)) {
@@ -395,7 +395,7 @@ bool modifier_remove(ReportList *reports, Main *bmain, Scene *scene, Object *ob,
 
 void modifiers_clear(Main *bmain, Scene *scene, Object *ob)
 {
-  ModifierData *md = static_cast<ModifierData *>(ob->modifiers.first);
+  ModifierData *md = ob->modifiers.first_item();
   bool sort_depsgraph = false;
 
   if (!md) {

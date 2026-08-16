@@ -439,7 +439,7 @@ static bool wm_draw_region_stereo_set(Main *bmain,
   switch (area->spacetype) {
     case SPACE_IMAGE: {
       if (region->regiontype == RGN_TYPE_WINDOW) {
-        SpaceImage *sima = static_cast<SpaceImage *>(area->spacedata.first);
+        SpaceImage *sima = area->spacedata.first_as<SpaceImage>();
         sima->iuser.multiview_eye = sview;
         return true;
       }
@@ -457,7 +457,7 @@ static bool wm_draw_region_stereo_set(Main *bmain,
           }
 
           Camera *cam = id_cast<Camera *>(v3d->camera->data);
-          CameraBGImage *bgpic = static_cast<CameraBGImage *>(cam->bg_images.first);
+          CameraBGImage *bgpic = cam->bg_images.first_item();
           v3d->multiview_eye = sview;
           if (bgpic) {
             bgpic->iuser.multiview_eye = sview;
@@ -469,7 +469,7 @@ static bool wm_draw_region_stereo_set(Main *bmain,
     }
     case SPACE_NODE: {
       if (region->regiontype == RGN_TYPE_WINDOW) {
-        SpaceNode *snode = static_cast<SpaceNode *>(area->spacedata.first);
+        SpaceNode *snode = area->spacedata.first_as<SpaceNode>();
         if ((snode->flag & SNODE_BACKDRAW) && ED_node_is_compositor(snode)) {
           Image *ima = BKE_image_ensure_viewer(bmain, IMA_TYPE_COMPOSITE, "Viewer Node");
           ima->eye = sview;
@@ -479,7 +479,7 @@ static bool wm_draw_region_stereo_set(Main *bmain,
       break;
     }
     case SPACE_SEQ: {
-      SpaceSeq *sseq = static_cast<SpaceSeq *>(area->spacedata.first);
+      SpaceSeq *sseq = area->spacedata.first_as<SpaceSeq>();
       sseq->multiview_eye = sview;
 
       if (region->regiontype == RGN_TYPE_PREVIEW) {

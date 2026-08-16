@@ -358,7 +358,7 @@ static bool versioning_eevee_material_blend_mode_settings(bNodeTree *ntree, floa
 
       bNodeSocket *input_1 = static_cast<bNodeSocket *>(BLI_findlink(&math_node->inputs, 0));
       bNodeSocket *input_2 = static_cast<bNodeSocket *>(BLI_findlink(&math_node->inputs, 1));
-      bNodeSocket *output = static_cast<bNodeSocket *>(math_node->outputs.first);
+      bNodeSocket *output = math_node->outputs.first_item();
       bNodeSocket *alpha_sock = input_1;
       bNodeSocket *threshold_sock = input_2;
 

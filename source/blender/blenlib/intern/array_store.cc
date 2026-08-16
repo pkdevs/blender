@@ -461,9 +461,7 @@ static void bchunk_list_decref(BArrayMemory *bs_mem, BChunkList *chunk_list)
 {
   BLI_assert(chunk_list->users > 0);
   if (chunk_list->users == 1) {
-    for (BChunkRef *cref = static_cast<BChunkRef *>(chunk_list->chunk_refs.first), *cref_next;
-         cref;
-         cref = cref_next)
+    for (BChunkRef *cref = chunk_list->chunk_refs.first_item(), *cref_next; cref; cref = cref_next)
     {
       cref_next = cref->next;
       bchunk_decref(bs_mem, cref->link);
@@ -1295,7 +1293,7 @@ static BChunkList *bchunk_list_from_data_merge(const BArrayInfo *info,
   {
     bool full_match = true;
 
-    const BChunkRef *cref = static_cast<const BChunkRef *>(chunk_list_reference->chunk_refs.first);
+    const BChunkRef *cref = chunk_list_reference->chunk_refs.first_item();
     while (i_prev < data_len_original) {
       if (cref != nullptr && bchunk_data_compare(cref->link, data, data_len_original, i_prev)) {
         cref_match_first = cref;
@@ -1326,7 +1324,7 @@ static BChunkList *bchunk_list_from_data_merge(const BArrayInfo *info,
   BChunkList *chunk_list = bchunk_list_new(bs_mem, data_len_original);
   if (cref_match_first != nullptr) {
     size_t chunk_size_step = 0;
-    const BChunkRef *cref = static_cast<const BChunkRef *>(chunk_list_reference->chunk_refs.first);
+    const BChunkRef *cref = chunk_list_reference->chunk_refs.first_item();
     while (true) {
       BChunk *chunk = cref->link;
       chunk_size_step += chunk->data_len;
@@ -1497,7 +1495,7 @@ static BChunkList *bchunk_list_from_data_merge(const BArrayInfo *info,
         chunk_list_reference_bytes_remaining += cref->link->data_len;
       }
       else {
-        cref = static_cast<const BChunkRef *>(chunk_list_reference->chunk_refs.first);
+        cref = chunk_list_reference->chunk_refs.first_item();
       }
 
 #ifdef USE_PARANOID_CHECKS
@@ -1778,9 +1776,7 @@ static void array_store_free_data(BArrayStore *bs)
   }
 
   /* Free states. */
-  for (BArrayState *state = static_cast<BArrayState *>(bs->states.first), *state_next; state;
-       state = state_next)
-  {
+  for (BArrayState *state = bs->states.first_item(), *state_next; state; state = state_next) {
     state_next = state->next;
     MEM_delete(state);
   }

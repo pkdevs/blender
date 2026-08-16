@@ -185,7 +185,7 @@ static void set_constraint_nth_target(bConstraint *con,
       index = targets_num - 1;
     }
 
-    for (ct = static_cast<bConstraintTarget *>(targets.first), i = 0; ct; ct = ct->next, i++) {
+    for (ct = targets.first_item(), i = 0; ct; ct = ct->next, i++) {
       if (i == index) {
         ct->tar = target;
         STRNCPY_UTF8(ct->subtarget, subtarget);
@@ -2637,7 +2637,7 @@ static wmOperatorStatus pose_ik_add_invoke(bContext *C, wmOperator *op, const wm
   }
 
   /* bone must not have any constraints already */
-  for (con = static_cast<bConstraint *>(pchan->constraints.first); con; con = con->next) {
+  for (con = pchan->constraints.first_item(); con; con = con->next) {
     if (con->type == CONSTRAINT_TYPE_KINEMATIC) {
       break;
     }
@@ -2733,7 +2733,7 @@ static wmOperatorStatus pose_ik_clear_exec(bContext *C, wmOperator * /*op*/)
 
     /* TODO: should we be checking if these constraints were local
      * before we try and remove them? */
-    for (con = static_cast<bConstraint *>(pchan->constraints.first); con; con = next) {
+    for (con = pchan->constraints.first_item(); con; con = next) {
       next = con->next;
       if (con->type == CONSTRAINT_TYPE_KINEMATIC) {
         BKE_constraint_remove_ex(&pchan->constraints, ob, con);

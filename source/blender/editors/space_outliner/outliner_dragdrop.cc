@@ -147,7 +147,7 @@ static TreeElement *outliner_drop_insert_find(bContext *C,
           return te_hovered;
         }
         *r_insert_type = TE_INSERT_BEFORE;
-        return static_cast<TreeElement *>(te_hovered->subtree.first);
+        return te_hovered->subtree.first_item();
       }
       *r_insert_type = TE_INSERT_AFTER;
       return te_hovered;
@@ -162,7 +162,7 @@ static TreeElement *outliner_drop_insert_find(bContext *C,
 
   /* Mouse doesn't hover any item (ignoring x-axis),
    * so it's either above list bounds or below. */
-  TreeElement *first = static_cast<TreeElement *>(space_outliner->runtime->tree.first);
+  TreeElement *first = space_outliner->runtime->tree.first_item();
   TreeElement *last = static_cast<TreeElement *>(space_outliner->runtime->tree.last);
 
   if (view_mval[1] < last->ys) {
@@ -466,11 +466,11 @@ static wmOperatorStatus parent_drop_invoke(bContext *C, wmOperator *op, const wm
   }
 
   ListBaseT<wmDrag> *lb = static_cast<ListBaseT<wmDrag> *>(event->customdata);
-  wmDrag *drag = static_cast<wmDrag *>(lb->first);
+  wmDrag *drag = lb->first_item();
 
   parent_drop_set_parents(C,
                           op->reports,
-                          static_cast<wmDragID *>(drag->ids.first),
+                          drag->ids.first_item(),
                           par,
                           object::PAR_OBJECT,
                           !(event->modifier & KM_ALT));
@@ -549,7 +549,7 @@ static wmOperatorStatus parent_clear_invoke(bContext *C, wmOperator * /*op*/, co
   }
 
   ListBaseT<wmDrag> *lb = static_cast<ListBaseT<wmDrag> *>(event->customdata);
-  wmDrag *drag = static_cast<wmDrag *>(lb->first);
+  wmDrag *drag = lb->first_item();
 
   for (wmDragID &drag_id : drag->ids) {
     if (GS(drag_id.id->name) == ID_OB) {
@@ -1105,7 +1105,7 @@ static wmOperatorStatus datastack_drop_invoke(bContext *C, wmOperator *op, const
   }
 
   ListBaseT<wmDrag> *lb = static_cast<ListBaseT<wmDrag> *>(event->customdata);
-  wmDrag *drag = static_cast<wmDrag *>(lb->first);
+  wmDrag *drag = lb->first_item();
   StackDropData *drop_data = static_cast<StackDropData *>(drag->poin);
 
   switch (drop_data->drop_action) {
@@ -1192,7 +1192,7 @@ static bool collection_drop_init(bContext *C, wmDrag *drag, const int xy[2], Col
     return false;
   }
 
-  wmDragID *drag_id = static_cast<wmDragID *>(drag->ids.first);
+  wmDragID *drag_id = drag->ids.first_item();
   if (drag_id == nullptr) {
     return false;
   }
@@ -1326,7 +1326,7 @@ static std::string collection_drop_tooltip(bContext *C,
         /* Check the type of the drag IDs to avoid the incorrect "Shift to parent"
          * for collections. Checking the type of the first ID works fine here since
          * all drag IDs are the same type. */
-        wmDragID *drag_id = static_cast<wmDragID *>(drag->ids.first);
+        wmDragID *drag_id = drag->ids.first_item();
         const bool is_object = (GS(drag_id->id->name) == ID_OB);
         if (is_object) {
           return TIP_("Move inside collection (Ctrl to link, Shift to parent)");
@@ -1350,7 +1350,7 @@ static wmOperatorStatus collection_drop_invoke(bContext *C,
   }
 
   ListBaseT<wmDrag> *lb = static_cast<ListBaseT<wmDrag> *>(event->customdata);
-  wmDrag *drag = static_cast<wmDrag *>(lb->first);
+  wmDrag *drag = lb->first_item();
 
   CollectionDrop data;
   if (!collection_drop_init(C, drag, event->xy, &data)) {

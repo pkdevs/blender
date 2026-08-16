@@ -100,7 +100,7 @@ static void do_versions_nodetree_image_default_alpha_output(bNodeTree *ntree)
   for (bNode &node : ntree->nodes) {
     if (ELEM(node.type_legacy, CMP_NODE_IMAGE, CMP_NODE_R_LAYERS)) {
       /* default Image output value should have 0 alpha */
-      bNodeSocket *sock = static_cast<bNodeSocket *>(node.outputs.first);
+      bNodeSocket *sock = node.outputs.first_item();
       (static_cast<bNodeSocketValueRGBA *>(sock->default_value))->value[3] = 0.0f;
     }
   }
@@ -111,7 +111,7 @@ static void do_versions_nodetree_convert_angle(bNodeTree *ntree)
   for (bNode &node : ntree->nodes) {
     if (node.type_legacy == CMP_NODE_ROTATE) {
       /* Convert degrees to radians. */
-      bNodeSocket *sock = static_cast<bNodeSocket *>(node.inputs.first)->next;
+      bNodeSocket *sock = node.inputs.first_item()->next;
       (static_cast<bNodeSocketValueFloat *>(sock->default_value))->value = DEG2RADF(
           ((bNodeSocketValueFloat *)sock->default_value)->value);
     }
@@ -2459,8 +2459,7 @@ void blo_do_versions_260(FileData *fd, Library * /*lib*/, Main *bmain)
        * If the fromnode/tonode pointers are nullptr, this means a link from/to
        * the ntree interface sockets, which need to be redirected to new interface nodes.
        */
-      for (link = static_cast<bNodeLink *>(ntree->links.first); link != nullptr; link = next_link)
-      {
+      for (link = ntree->links.first_item(); link != nullptr; link = next_link) {
         bool free_link = false;
         next_link = link->next;
 
@@ -2524,8 +2523,7 @@ void blo_do_versions_260(FileData *fd, Library * /*lib*/, Main *bmain)
     FOREACH_NODETREE_BEGIN (bmain, ntree, id) {
       bNodeLink *link, *next_link;
 
-      for (link = static_cast<bNodeLink *>(ntree->links.first); link != nullptr; link = next_link)
-      {
+      for (link = ntree->links.first_item(); link != nullptr; link = next_link) {
         next_link = link->next;
         if (link->fromnode == nullptr || link->tonode == nullptr) {
           bke::node_remove_link(ntree, *link);

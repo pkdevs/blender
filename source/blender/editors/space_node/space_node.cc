@@ -687,7 +687,7 @@ static void node_init(wmWindowManager * /*wm*/, ScrArea * /*area*/) {}
 
 static void node_exit(wmWindowManager *wm, ScrArea *area)
 {
-  SpaceNode *snode = static_cast<SpaceNode *>(area->spacedata.first);
+  SpaceNode *snode = area->spacedata.first_as<SpaceNode>();
   free_previews(*wm, *snode);
 }
 
@@ -721,7 +721,7 @@ static void node_area_listener(const wmSpaceTypeListenerParams *params)
   const wmNotifier *wmn = params->notifier;
 
   /* NOTE: #ED_area_tag_refresh will re-execute compositor. */
-  SpaceNode *snode = static_cast<SpaceNode *>(area->spacedata.first);
+  SpaceNode *snode = area->spacedata.first_as<SpaceNode>();
   /* shaderfrom is only used for new shading nodes, otherwise all shaders are from objects */
   short shader_type = snode->shaderfrom;
 
@@ -922,7 +922,7 @@ static void node_toolbar_region_draw(const bContext *C, ARegion *region)
 
 static void node_cursor(wmWindow *win, ScrArea *area, ARegion *region)
 {
-  SpaceNode *snode = static_cast<SpaceNode *>(area->spacedata.first);
+  SpaceNode *snode = area->spacedata.first_as<SpaceNode>();
 
   /* convert mouse coordinates to v2d space */
   ui::view2d_region_to_view(&region->v2d,
@@ -1470,7 +1470,7 @@ static void node_id_remap(ID *old_id, ID *new_id, SpaceNode *snode)
 
     bNodeTreePath *path, *path_next;
 
-    for (path = static_cast<bNodeTreePath *>(snode->treepath.first); path; path = path->next) {
+    for (path = snode->treepath.first_item(); path; path = path->next) {
       if (id_cast<ID *>(path->nodetree) == old_id) {
         path->nodetree = id_cast<bNodeTree *>(new_id);
         id_us_ensure_real(new_id);
@@ -1537,7 +1537,7 @@ static void node_foreach_id(SpaceLink *space_link, LibraryForeachIDData *data)
   BKE_LIB_FOREACHID_PROCESS_ID(data, snode->id, IDWALK_CB_DIRECT_WEAK_LINK);
   BKE_LIB_FOREACHID_PROCESS_ID(data, snode->from, IDWALK_CB_DIRECT_WEAK_LINK);
 
-  bNodeTreePath *path = static_cast<bNodeTreePath *>(snode->treepath.first);
+  bNodeTreePath *path = snode->treepath.first_item();
   BLI_assert(path == nullptr || path->nodetree == snode->nodetree);
 
   if (is_embedded_nodetree) {
@@ -1634,13 +1634,13 @@ static void node_foreach_id(SpaceLink *space_link, LibraryForeachIDData *data)
 
 static int node_space_subtype_get(ScrArea *area)
 {
-  SpaceNode *snode = static_cast<SpaceNode *>(area->spacedata.first);
+  SpaceNode *snode = area->spacedata.first_as<SpaceNode>();
   return rna_node_tree_idname_to_enum(snode->tree_idname);
 }
 
 static void node_space_subtype_set(ScrArea *area, int value)
 {
-  SpaceNode *snode = static_cast<SpaceNode *>(area->spacedata.first);
+  SpaceNode *snode = area->spacedata.first_as<SpaceNode>();
   ED_node_set_tree_type(snode, rna_node_tree_type_from_enum(value));
 }
 
@@ -1656,7 +1656,7 @@ static void node_space_subtype_item_extend(bContext *C, EnumPropertyItem **item,
 
 static StringRefNull node_space_name_get(const ScrArea *area)
 {
-  SpaceNode *snode = static_cast<SpaceNode *>(area->spacedata.first);
+  SpaceNode *snode = area->spacedata.first_as<SpaceNode>();
   bke::bNodeTreeType *tree_type = bke::node_tree_type_find(snode->tree_idname);
   if (tree_type == nullptr) {
     return IFACE_("Node Editor");
@@ -1666,7 +1666,7 @@ static StringRefNull node_space_name_get(const ScrArea *area)
 
 static int node_space_icon_get(const ScrArea *area)
 {
-  SpaceNode *snode = static_cast<SpaceNode *>(area->spacedata.first);
+  SpaceNode *snode = area->spacedata.first_as<SpaceNode>();
   bke::bNodeTreeType *tree_type = bke::node_tree_type_find(snode->tree_idname);
   if (tree_type == nullptr) {
     return ICON_NODETREE;

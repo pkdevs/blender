@@ -154,10 +154,8 @@ static LineartEdgeChainItem *lineart_chain_prepend_point(LineartData *ld,
 {
   LineartEdgeChainItem *eci;
 
-  if (lineart_point_overlapping(
-          static_cast<LineartEdgeChainItem *>(ec->chain.first), fbcoord[0], fbcoord[1], 1e-5))
-  {
-    return static_cast<LineartEdgeChainItem *>(ec->chain.first);
+  if (lineart_point_overlapping(ec->chain.first_item(), fbcoord[0], fbcoord[1], 1e-5)) {
+    return ec->chain.first_item();
   }
 
   eci = static_cast<LineartEdgeChainItem *>(
@@ -243,7 +241,7 @@ void MOD_lineart_chain_feature_lines(LineartData *ld)
     /* Step 1: grow left. */
     ba = MOD_lineart_get_bounding_area(ld, e->v1->fbcoord[0], e->v1->fbcoord[1]);
     new_vt = e->v1;
-    es = static_cast<LineartEdgeSegment *>(e->segments.first);
+    es = e->segments.first_item();
     VERT_COORD_TO_FLOAT(new_vt);
     lineart_chain_prepend_point(ld,
                                 ec,
@@ -300,7 +298,7 @@ void MOD_lineart_chain_feature_lines(LineartData *ld)
         }
       }
       else if (new_vt == new_e->v2) {
-        es = static_cast<LineartEdgeSegment *>(new_e->segments.first);
+        es = new_e->segments.first_item();
         last_occlusion = es->occlusion;
         last_transparency = es->material_mask_bits;
         last_shadow = es->shadow_mask_bits;
@@ -359,7 +357,7 @@ void MOD_lineart_chain_feature_lines(LineartData *ld)
     }
     /* Step 2: Adding all cuts from the given line, so we can continue connecting the right side
      * of the line. */
-    es = static_cast<LineartEdgeSegment *>(e->segments.first);
+    es = e->segments.first_item();
     last_occlusion = es->occlusion;
     last_transparency = es->material_mask_bits;
     last_shadow = es->shadow_mask_bits;
@@ -457,7 +455,7 @@ void MOD_lineart_chain_feature_lines(LineartData *ld)
         }
       }
       else if (new_vt == new_e->v2) {
-        es = static_cast<LineartEdgeSegment *>(new_e->segments.first);
+        es = new_e->segments.first_item();
         last_occlusion = es->occlusion;
         last_transparency = es->material_mask_bits;
         last_shadow = es->shadow_mask_bits;
@@ -599,7 +597,7 @@ static void lineart_bounding_area_link_point_recursive(LineartData *ld,
 
 static void lineart_bounding_area_link_chain(LineartData *ld, LineartEdgeChain *ec)
 {
-  LineartEdgeChainItem *pl = static_cast<LineartEdgeChainItem *>(ec->chain.first);
+  LineartEdgeChainItem *pl = ec->chain.first_item();
   LineartEdgeChainItem *pr = static_cast<LineartEdgeChainItem *>(ec->chain.last);
   LineartBoundingArea *ba1 = MOD_lineart_get_parent_bounding_area(ld, pl->pos[0], pl->pos[1]);
   LineartBoundingArea *ba2 = MOD_lineart_get_parent_bounding_area(ld, pr->pos[0], pr->pos[1]);
@@ -687,7 +685,7 @@ void MOD_lineart_chain_split_for_fixed_occlusion(LineartData *ld)
     ec->loop_id = loop_id;
     loop_id++;
 
-    LineartEdgeChainItem *first_eci = static_cast<LineartEdgeChainItem *>(ec->chain.first);
+    LineartEdgeChainItem *first_eci = ec->chain.first_item();
     int fixed_occ = first_eci->occlusion;
     uint8_t fixed_mask = first_eci->material_mask_bits;
     uint32_t fixed_shadow = first_eci->shadow_mask_bits;
@@ -788,7 +786,7 @@ static void lineart_chain_connect(LineartData * /*ld*/,
     if (reverse_2) { /* L--R R-L. */
       BLI_listbase_reverse(&sub->chain);
     }
-    eci = static_cast<LineartEdgeChainItem *>(sub->chain.first);
+    eci = sub->chain.first_item();
     if (lineart_point_overlapping(
             static_cast<LineartEdgeChainItem *>(onto->chain.last), eci->pos[0], eci->pos[1], 1e-5))
     {
@@ -797,17 +795,15 @@ static void lineart_chain_connect(LineartData * /*ld*/,
         return;
       }
     }
-    (static_cast<LineartEdgeChainItem *>(onto->chain.last))->next =
-        static_cast<LineartEdgeChainItem *>(sub->chain.first);
-    (static_cast<LineartEdgeChainItem *>(sub->chain.first))->prev =
-        static_cast<LineartEdgeChainItem *>(onto->chain.last);
+    (static_cast<LineartEdgeChainItem *>(onto->chain.last))->next = sub->chain.first_item();
+    (sub->chain.first_item())->prev = static_cast<LineartEdgeChainItem *>(onto->chain.last);
     onto->chain.last = sub->chain.last;
   }
   else {              /* L-R L--R. */
     if (!reverse_2) { /* R-L L--R. */
       BLI_listbase_reverse(&sub->chain);
     }
-    eci = static_cast<LineartEdgeChainItem *>(onto->chain.first);
+    eci = onto->chain.first_item();
     if (lineart_point_overlapping(
             static_cast<LineartEdgeChainItem *>(sub->chain.last), eci->pos[0], eci->pos[1], 1e-5))
     {
@@ -816,10 +812,8 @@ static void lineart_chain_connect(LineartData * /*ld*/,
         return;
       }
     }
-    (static_cast<LineartEdgeChainItem *>(sub->chain.last))->next =
-        static_cast<LineartEdgeChainItem *>(onto->chain.first);
-    (static_cast<LineartEdgeChainItem *>(onto->chain.first))->prev =
-        static_cast<LineartEdgeChainItem *>(sub->chain.last);
+    (static_cast<LineartEdgeChainItem *>(sub->chain.last))->next = onto->chain.first_item();
+    (onto->chain.first_item())->prev = static_cast<LineartEdgeChainItem *>(sub->chain.last);
     onto->chain.first = sub->chain.first;
   }
 }
@@ -974,7 +968,7 @@ void MOD_lineart_chain_connect(LineartData *ld)
     isec_mask = ec->intersection_mask;
     shadow_mask = ec->shadow_mask_bits;
 
-    eci_l = static_cast<LineartEdgeChainItem *>(ec->chain.first);
+    eci_l = ec->chain.first_item();
     eci_r = static_cast<LineartEdgeChainItem *>(ec->chain.last);
     while ((ba_l = lineart_bounding_area_get_end_point(ld, eci_l)) &&
            (ba_r = lineart_bounding_area_get_end_point(ld, eci_r)))
@@ -1034,7 +1028,7 @@ void MOD_lineart_chain_connect(LineartData *ld)
         lineart_chain_connect(ld, ec, closest_cre->ec, reverse_main, 1);
       }
       BLI_remlink(&swap, closest_cre->ec);
-      eci_l = static_cast<LineartEdgeChainItem *>(ec->chain.first);
+      eci_l = ec->chain.first_item();
       eci_r = static_cast<LineartEdgeChainItem *>(ec->chain.last);
     }
     ec->picked = 1;
@@ -1048,7 +1042,7 @@ float MOD_lineart_chain_compute_length(LineartEdgeChain *ec)
   float dist;
   float last_point[2];
 
-  eci = static_cast<LineartEdgeChainItem *>(ec->chain.first);
+  eci = ec->chain.first_item();
   if (!eci) {
     return 0;
   }
@@ -1066,7 +1060,7 @@ void MOD_lineart_chain_discard_unused(LineartData *ld,
                                       uint8_t max_occlusion)
 {
   LineartEdgeChain *ec, *next_ec;
-  for (ec = static_cast<LineartEdgeChain *>(ld->chains.first); ec; ec = next_ec) {
+  for (ec = ld->chains.first_item(); ec; ec = next_ec) {
     next_ec = ec->next;
     if (ec->level > max_occlusion || MOD_lineart_chain_compute_length(ec) < threshold) {
       BLI_remlink(&ld->chains, ec);
@@ -1128,9 +1122,7 @@ void MOD_lineart_smooth_chains(LineartData *ld, float tolerance)
   for (LineartEdgeChain &ec : ld->chains) {
     /* Go through the chain two times, once from each direction. */
     for (int times = 0; times < 2; times++) {
-      for (LineartEdgeChainItem *eci = static_cast<LineartEdgeChainItem *>(ec.chain.first),
-                                *next_eci = eci->next;
-           eci;
+      for (LineartEdgeChainItem *eci = ec.chain.first_item(), *next_eci = eci->next; eci;
            eci = next_eci)
       {
         LineartEdgeChainItem *eci2, *eci3, *eci4;
@@ -1252,7 +1244,7 @@ void MOD_lineart_chain_clip_at_border(LineartData *ld)
   ld->chains.last = ld->chains.first = nullptr;
   while (LineartEdgeChain *ec = static_cast<LineartEdgeChain *>(BLI_pophead(&swap))) {
     bool ec_added = false;
-    LineartEdgeChainItem *first_eci = static_cast<LineartEdgeChainItem *>(ec->chain.first);
+    LineartEdgeChainItem *first_eci = ec->chain.first_item();
     is_inside = LRT_ECI_INSIDE(first_eci) ? true : false;
     if (!is_inside) {
       ec->picked = 1;
@@ -1319,7 +1311,7 @@ void MOD_lineart_chain_split_angle(LineartData *ld, float angle_threshold_rad)
   while (LineartEdgeChain *ec = static_cast<LineartEdgeChain *>(BLI_pophead(&swap))) {
     ec->next = ec->prev = nullptr;
     BLI_addtail(&ld->chains, ec);
-    LineartEdgeChainItem *first_eci = static_cast<LineartEdgeChainItem *>(ec->chain.first);
+    LineartEdgeChainItem *first_eci = ec->chain.first_item();
     for (eci = first_eci->next; eci; eci = next_eci) {
       next_eci = eci->next;
       prev_eci = eci->prev;

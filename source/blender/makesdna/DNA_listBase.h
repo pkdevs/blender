@@ -95,11 +95,29 @@ template<typename T> struct ListBaseT : public ListBase {
     return count;
   }
 
+  /* Some places require getting a mutable first item from a const list. */
+  T *first_item() const
+  {
+    return static_cast<T *>(this->first);
+  }
+  T *first_item()
+  {
+    return static_cast<T *>(this->first);
+  }
+  template<typename U> U *first_as() const
+  {
+    return reinterpret_cast<U *>(this->first_item());
+  }
+  template<typename U> U *first_as()
+  {
+    return reinterpret_cast<U *>(this->first_item());
+  }
+
   /* TODO: Add const and non-const iterators. However this will require some refactoring
    * as some places rely on being able to get a mutable list element from a const list. */
   ListBaseTIterator<T> begin() const
   {
-    return ListBaseTIterator<T>{static_cast<T *>(this->first)};
+    return ListBaseTIterator<T>{this->first_item()};
   }
 
   ListBaseTIterator<T> end() const

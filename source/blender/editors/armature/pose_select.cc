@@ -208,7 +208,7 @@ static Bone *get_new_active_child(Bone &parent_bone)
       return &child;
     }
   }
-  return static_cast<Bone *>(parent_bone.childbase.first);
+  return parent_bone.childbase.first_item();
 }
 
 /**

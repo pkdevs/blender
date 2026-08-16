@@ -100,7 +100,7 @@ static void wm_uilisttype_unlink_from_area(const uiListType *ult, ScrArea *area)
  */
 static void wm_uilisttype_unlink(Main *bmain, const uiListType *ult)
 {
-  for (wmWindowManager *wm = static_cast<wmWindowManager *>(bmain->wm.first); wm != nullptr;
+  for (wmWindowManager *wm = bmain->wm.first_item(); wm != nullptr;
        wm = static_cast<wmWindowManager *>(wm->id.next))
   {
     for (wmWindow &win : wm->windows) {
@@ -110,7 +110,7 @@ static void wm_uilisttype_unlink(Main *bmain, const uiListType *ult)
     }
   }
 
-  for (bScreen *screen = static_cast<bScreen *>(bmain->screens.first); screen != nullptr;
+  for (bScreen *screen = bmain->screens.first_item(); screen != nullptr;
        screen = static_cast<bScreen *>(screen->id.next))
   {
     for (ScrArea &area : screen->areabase) {

@@ -185,7 +185,7 @@ static bool panel_active_animation_changed(ListBaseT<Panel> *lb,
 static bool properties_space_needs_realign(const ScrArea *area, const ARegion *region)
 {
   if (area->spacetype == SPACE_PROPERTIES && region->regiontype == RGN_TYPE_WINDOW) {
-    const SpaceProperties *sbuts = static_cast<SpaceProperties *>(area->spacedata.first);
+    const SpaceProperties *sbuts = area->spacedata.first_as<SpaceProperties>();
 
     if (sbuts->mainbo != sbuts->mainb) {
       return true;
@@ -725,7 +725,7 @@ Panel *panel_begin(
 
   /* If a new panel is added, we insert it right after the panel that was last added.
    * This way new panels are inserted in the right place between versions. */
-  for (panel_last = static_cast<Panel *>(lb->first); panel_last; panel_last = panel_last->next) {
+  for (panel_last = lb->first_item(); panel_last; panel_last = panel_last->next) {
     if (panel_last->runtime_flag & PANEL_LAST_ADDED) {
       BLI_remlink(lb, panel);
       BLI_insertlinkafter(lb, panel_last, panel);
@@ -2320,7 +2320,7 @@ static void handle_panel_header(const bContext *C,
       else {
         /* If a panel has sub-panels and it's open, toggle the expansion
          * of the sub-panels (based on the expansion of the first sub-panel). */
-        Panel *first_child = static_cast<Panel *>(panel->children.first);
+        Panel *first_child = panel->children.first_item();
         BLI_assert(first_child != nullptr);
         panel_set_flag_recursive(panel, PNL_CLOSED, !panel_is_closed(first_child));
         panel->flag |= PNL_CLOSED;
@@ -2567,7 +2567,7 @@ static int handle_panel_category_cycling(const wmEvent *event,
             /* Proper cyclic behavior, back to first/last category (only used for ctrl+tab). */
             pc_dyn = backwards ?
                          static_cast<PanelCategoryDyn *>(region->runtime->panels_category.last) :
-                         static_cast<PanelCategoryDyn *>(region->runtime->panels_category.first);
+                         region->runtime->panels_category.first_item();
           }
         }
 

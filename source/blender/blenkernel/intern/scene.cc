@@ -241,7 +241,7 @@ static void scene_init_data(ID *id)
 
   /* multiview - stereo */
   BKE_scene_add_render_view(scene, STEREO_LEFT_NAME);
-  srv = static_cast<SceneRenderView *>(scene->r.views.first);
+  srv = scene->r.views.first_item();
   STRNCPY(srv->suffix, STEREO_LEFT_SUFFIX);
 
   BKE_scene_add_render_view(scene, STEREO_RIGHT_NAME);
@@ -310,8 +310,8 @@ static void scene_copy_data(Main *bmain,
     }
   }
   BLI_duplicatelist(&scene_dst->view_layers, &scene_src->view_layers);
-  for (ViewLayer *view_layer_src = static_cast<ViewLayer *>(scene_src->view_layers.first),
-                 *view_layer_dst = static_cast<ViewLayer *>(scene_dst->view_layers.first);
+  for (ViewLayer *view_layer_src = scene_src->view_layers.first_item(),
+                 *view_layer_dst = scene_dst->view_layers.first_item();
        view_layer_src;
        view_layer_src = view_layer_src->next, view_layer_dst = view_layer_dst->next)
   {
@@ -1100,7 +1100,7 @@ static void scene_blend_write_compositor_forward_compat(Scene &scene,
 
       composite_node->location[0] = node.location[0] - 20.0f;
       composite_node->location[1] = node.location[1];
-      group_output_first_input = static_cast<bNodeSocket *>(node.inputs.first);
+      group_output_first_input = node.inputs.first_item();
       break;
     }
   }
@@ -2266,7 +2266,7 @@ int BKE_scene_base_iter_next(
         else {
           BLI_assert(BKE_view_layer_is_synced(*view_layer));
         }
-        *base = static_cast<Base *>(BKE_view_layer_object_bases_get(view_layer)->first);
+        *base = BKE_view_layer_object_bases_get(view_layer)->first_item();
         if (*base) {
           *ob = (*base)->object;
           iter->phase = F_SCENE;
@@ -2284,7 +2284,7 @@ int BKE_scene_base_iter_next(
             }
             ListBaseT<Base> *object_bases = BKE_view_layer_object_bases_get(view_layer_set);
             if (object_bases->first) {
-              *base = static_cast<Base *>(object_bases->first);
+              *base = object_bases->first_item();
               *ob = (*base)->object;
               iter->phase = F_SCENE;
               break;
@@ -2312,7 +2312,7 @@ int BKE_scene_base_iter_next(
                 }
                 ListBaseT<Base> *object_bases = BKE_view_layer_object_bases_get(view_layer_set);
                 if (object_bases->first) {
-                  *base = static_cast<Base *>(object_bases->first);
+                  *base = object_bases->first_item();
                   *ob = (*base)->object;
                   break;
                 }
@@ -2465,9 +2465,7 @@ const char *BKE_scene_find_marker_name(const Scene *scene, int frame)
   const TimeMarker *m1, *m2;
 
   /* search through markers for match */
-  for (m1 = static_cast<const TimeMarker *>(markers->first),
-      m2 = static_cast<const TimeMarker *>(markers->last);
-       m1 && m2;
+  for (m1 = markers->first_item(), m2 = static_cast<const TimeMarker *>(markers->last); m1 && m2;
        m1 = m1->next, m2 = m2->prev)
   {
     if (m1->frame == frame) {
@@ -2666,7 +2664,7 @@ int BKE_scene_orientation_get_index_from_flag(Scene *scene, int flag)
 
 static bool check_rendered_viewport_visible(Main *bmain)
 {
-  wmWindowManager *wm = static_cast<wmWindowManager *>(bmain->wm.first);
+  wmWindowManager *wm = bmain->wm.first_item();
   for (const wmWindow &window : wm->windows) {
     const bScreen *screen = BKE_workspace_active_screen_get(window.workspace_hook);
     Scene *scene = window.scene;
@@ -2677,7 +2675,7 @@ static bool check_rendered_viewport_visible(Main *bmain)
     }
 
     for (ScrArea &area : screen->areabase) {
-      View3D *v3d = static_cast<View3D *>(area.spacedata.first);
+      View3D *v3d = area.spacedata.first_as<View3D>();
       if (area.spacetype != SPACE_VIEW3D) {
         continue;
       }
@@ -3016,7 +3014,7 @@ Base *_setlooper_base_step(const Main &bmain, Scene **sce_iter, ViewLayer *view_
     BKE_view_layer_synced_ensure(bmain, *sce_iter, view_layer);
     ListBaseT<Base> *object_bases = BKE_view_layer_object_bases_get(view_layer);
     if (object_bases->first) {
-      return static_cast<Base *>(object_bases->first);
+      return object_bases->first_item();
     }
     /* No base on this scene layer. */
     goto next_set;
@@ -3026,7 +3024,7 @@ Base *_setlooper_base_step(const Main &bmain, Scene **sce_iter, ViewLayer *view_
     /* Reached the end, get the next base in the set. */
     while ((*sce_iter = (*sce_iter)->set)) {
       ViewLayer *view_layer_set = BKE_view_layer_default_render(*sce_iter);
-      base = static_cast<Base *>(BKE_view_layer_object_bases_get(view_layer_set)->first);
+      base = BKE_view_layer_object_bases_get(view_layer_set)->first_item();
 
       if (base) {
         return base;
@@ -3286,7 +3284,7 @@ SceneRenderView *BKE_scene_multiview_render_view_findindex(const RenderData *rd,
     return nullptr;
   }
 
-  for (srv = static_cast<SceneRenderView *>(rd->views.first), nr = 0; srv; srv = srv->next) {
+  for (srv = rd->views.first_item(), nr = 0; srv; srv = srv->next) {
     if (BKE_scene_multiview_is_render_view_active(rd, srv)) {
       if (nr++ == view_id) {
         return srv;
@@ -3320,7 +3318,7 @@ int BKE_scene_multiview_view_id_get(const RenderData *rd, const char *viewname)
     return 0;
   }
 
-  for (srv = static_cast<SceneRenderView *>(rd->views.first), nr = 0; srv; srv = srv->next) {
+  for (srv = rd->views.first_item(), nr = 0; srv; srv = srv->next) {
     if (BKE_scene_multiview_is_render_view_active(rd, srv)) {
       if (STREQ(viewname, srv->name)) {
         return nr;

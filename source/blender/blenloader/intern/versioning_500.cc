@@ -1596,7 +1596,7 @@ static bNode *do_version_composite_node_in_scene_tree(bNodeTree &node_tree, bNod
   group_output_node->location[0] = node.location[0];
   group_output_node->location[1] = node.location[1];
 
-  bNodeSocket *image_input = static_cast<bNodeSocket *>(group_output_node->inputs.first);
+  bNodeSocket *image_input = group_output_node->inputs.first_item();
   BLI_assert(StringRef(image_input->name) == "Image");
   copy_v4_v4(image_input->default_value_typed<bNodeSocketValueRGBA>()->value,
              old_image_input->default_value_typed<bNodeSocketValueRGBA>()->value);
@@ -4078,8 +4078,7 @@ void blo_do_versions_500(FileData *fd, Library * /*lib*/, Main *bmain)
       if (scene.ed != nullptr) {
         /* Set the first strip modifier as the active one and uncollapse the root panel. */
         seq::foreach_strip(&scene.ed->seqbase, [&](Strip *strip) -> bool {
-          seq::modifier_set_active(strip,
-                                   static_cast<StripModifierData *>(strip->modifiers.first));
+          seq::modifier_set_active(strip, strip->modifiers.first_item());
           for (StripModifierData &smd : strip->modifiers) {
             smd.layout_panel_open_flag |= UI_PANEL_DATA_EXPAND_ROOT;
           }

@@ -373,7 +373,7 @@ bool BLI_scanfill_calc_self_isect(ScanFillContext *sf_ctx,
 
   /* get the polygon span */
   if (sf_ctx->poly_nr == 0) {
-    poly_info->edge_first = static_cast<ScanFillEdge *>(sf_ctx->filledgebase.first);
+    poly_info->edge_first = sf_ctx->filledgebase.first_item();
     poly_info->edge_last = static_cast<ScanFillEdge *>(sf_ctx->filledgebase.last);
   }
   else {

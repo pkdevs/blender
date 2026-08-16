@@ -855,7 +855,7 @@ static uint free_localview_bit(Main *bmain)
    * Check all areas: which local-views are in use? */
   for (bScreen &screen : bmain->screens) {
     for (ScrArea &area : screen.areabase) {
-      SpaceLink *sl = static_cast<SpaceLink *>(area.spacedata.first);
+      SpaceLink *sl = area.spacedata.first_as<SpaceLink>();
       for (; sl; sl = sl->next) {
         if (sl->spacetype == SPACE_VIEW3D) {
           View3D *v3d = reinterpret_cast<View3D *>(sl);
@@ -887,7 +887,7 @@ static bool view3d_localview_init(const Depsgraph *depsgraph,
                                   const int smooth_viewtx,
                                   ReportList *reports)
 {
-  View3D *v3d = static_cast<View3D *>(area->spacedata.first);
+  View3D *v3d = area->spacedata.first_as<View3D>();
   float3 min, max, box;
   float size = 0.0f;
   uint local_view_bit;
@@ -1031,7 +1031,7 @@ static bool view3d_localview_exit(const Depsgraph *depsgraph,
                                   const bool frame_selected,
                                   const int smooth_viewtx)
 {
-  View3D *v3d = static_cast<View3D *>(area->spacedata.first);
+  View3D *v3d = area->spacedata.first_as<View3D>();
   bool changed = false;
 
   if (v3d->localvd == nullptr) {

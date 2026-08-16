@@ -622,7 +622,7 @@ void WM_jobs_kill_all(wmWindowManager *wm)
 {
   wmJob *wm_job;
 
-  while ((wm_job = static_cast<wmJob *>(wm->runtime->jobs.first))) {
+  while ((wm_job = wm->runtime->jobs.first_item())) {
     wm_jobs_kill_job(wm, wm_job);
   }
 

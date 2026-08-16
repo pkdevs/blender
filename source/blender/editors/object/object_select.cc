@@ -101,7 +101,7 @@ void base_active_refresh(Main *bmain, Scene *scene, ViewLayer *view_layer)
 {
   WM_main_add_notifier(NC_SCENE | ND_OB_ACTIVE, scene);
   DEG_id_tag_update(&scene->id, ID_RECALC_SELECT);
-  wmMsgBus *mbus = (static_cast<wmWindowManager *>(bmain->wm.first))->runtime->message_bus;
+  wmMsgBus *mbus = (bmain->wm.first_item())->runtime->message_bus;
   if (mbus != nullptr) {
     WM_msg_publish_rna_prop(mbus, &scene->id, view_layer, LayerObjects, active);
   }
@@ -813,7 +813,7 @@ static bool select_grouped_collection(bContext *C, Object *ob)
   Collection *collection, *ob_collections[COLLECTION_MENU_MAX];
   int collection_count = 0, i;
 
-  for (collection = static_cast<Collection *>(bmain->collections.first);
+  for (collection = bmain->collections.first_item();
        collection && (collection_count < COLLECTION_MENU_MAX);
        collection = static_cast<Collection *>(collection->id.next))
   {

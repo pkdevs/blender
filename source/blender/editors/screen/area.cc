@@ -620,7 +620,7 @@ void ED_region_do_draw(bContext *C, ARegion *region)
      */
     if (ELEM(region->regiontype, RGN_TYPE_WINDOW, RGN_TYPE_CHANNELS, RGN_TYPE_UI, RGN_TYPE_TOOLS))
     {
-      SpaceLink *sl = static_cast<SpaceLink *>(area->spacedata.first);
+      SpaceLink *sl = area->spacedata.first_as<SpaceLink>();
 
       PointerRNA ptr = RNA_pointer_create_discrete(&screen->id, RNA_Space, sl);
 
@@ -879,13 +879,13 @@ int ED_area_max_regionsize(const ScrArea *area, const ARegion *scale_region, con
 const char *ED_area_region_search_filter_get(const ScrArea *area, const ARegion *region)
 {
   if (area->spacetype == SPACE_PROPERTIES) {
-    SpaceProperties *sbuts = static_cast<SpaceProperties *>(area->spacedata.first);
+    SpaceProperties *sbuts = area->spacedata.first_as<SpaceProperties>();
     if (region->regiontype == RGN_TYPE_WINDOW) {
       return ED_buttons_search_string_get(sbuts);
     }
   }
   else if (area->spacetype == SPACE_USERPREF) {
-    SpaceUserPref *sprefs = static_cast<SpaceUserPref *>(area->spacedata.first);
+    SpaceUserPref *sprefs = area->spacedata.first_as<SpaceUserPref>();
     if (region->regiontype == RGN_TYPE_WINDOW) {
       return ED_userpref_search_string_get(sprefs);
     }
@@ -2220,8 +2220,7 @@ void ED_area_update_region_sizes(wmWindowManager *wm, wmWindow *win, ScrArea *ar
   /* region rect sizes */
   rcti rect = area->totrct;
   rcti overlap_rect = rect;
-  region_rect_recursive(
-      area, static_cast<ARegion *>(area->regionbase.first), &rect, &overlap_rect, 0);
+  region_rect_recursive(area, area->regionbase.first_item(), &rect, &overlap_rect, 0);
 
   /* Dynamically sized regions may have changed region sizes, so we have to force azone update. */
   area_azone_init(win, screen, area);
@@ -2267,7 +2266,7 @@ static void area_init_type_fallback(ScrArea *area, eSpace_Type space_type)
     }
   }
   if (sl) {
-    SpaceLink *sl_old = static_cast<SpaceLink *>(area->spacedata.first);
+    SpaceLink *sl_old = area->spacedata.first_item();
     if (sl != sl_old) [[likely]] {
       BLI_remlink(&area->spacedata, sl);
       BLI_addhead(&area->spacedata, sl);
@@ -2326,8 +2325,7 @@ void ED_area_init(bContext *C, const wmWindow *win, ScrArea *area)
   /* region rect sizes */
   rcti rect = area->totrct;
   rcti overlap_rect = rect;
-  region_rect_recursive(
-      area, static_cast<ARegion *>(area->regionbase.first), &rect, &overlap_rect, 0);
+  region_rect_recursive(area, area->regionbase.first_item(), &rect, &overlap_rect, 0);
   area->flag &= ~AREA_FLAG_REGION_SIZE_UPDATE;
 
   /* default area handlers */
@@ -2844,7 +2842,7 @@ void ED_area_newspace(bContext *C, ScrArea *area, int type, const bool skip_regi
   SpaceType *st = BKE_spacetype_from_id(type);
 
   if (area->spacetype != type) {
-    SpaceLink *slold = static_cast<SpaceLink *>(area->spacedata.first);
+    SpaceLink *slold = area->spacedata.first_as<SpaceLink>();
     /* store area->type->exit callback */
     void (*area_exit)(wmWindowManager *, ScrArea *) = area->type ? area->type->exit : nullptr;
     /* When the user switches between space-types from the type-selector,
@@ -2993,7 +2991,7 @@ void ED_area_newspace(bContext *C, ScrArea *area, int type, const bool skip_regi
 
 static SpaceLink *area_get_prevspace(ScrArea *area)
 {
-  SpaceLink *sl = static_cast<SpaceLink *>(area->spacedata.first);
+  SpaceLink *sl = area->spacedata.first_as<SpaceLink>();
 
   /* First toggle to the next temporary space in the list. */
   for (SpaceLink *sl_iter = sl->next; sl_iter; sl_iter = sl_iter->next) {
@@ -3015,7 +3013,7 @@ static SpaceLink *area_get_prevspace(ScrArea *area)
 
 void ED_area_prevspace(bContext *C, ScrArea *area)
 {
-  SpaceLink *sl = static_cast<SpaceLink *>(area->spacedata.first);
+  SpaceLink *sl = area->spacedata.first_as<SpaceLink>();
   SpaceLink *prevspace = sl ? area_get_prevspace(area) : nullptr;
 
   if (prevspace) {
@@ -4146,10 +4144,10 @@ ScrArea *ED_area_find_under_cursor(const bContext *C, int spacetype, const int e
 
 ScrArea *ED_screen_areas_iter_first(const wmWindow *win, const bScreen *screen)
 {
-  ScrArea *global_area = static_cast<ScrArea *>(win->global_areas.areabase.first);
+  ScrArea *global_area = win->global_areas.areabase.first_item();
 
   if (!global_area) {
-    return static_cast<ScrArea *>(screen->areabase.first);
+    return screen->areabase.first_item();
   }
   if ((global_area->global->flag & GLOBAL_AREA_IS_HIDDEN) == 0) {
     return global_area;
@@ -4169,7 +4167,7 @@ ScrArea *ED_screen_areas_iter_next(const bScreen *screen, const ScrArea *area)
     }
   }
   /* No visible next global area found, start iterating over layout areas. */
-  return static_cast<ScrArea *>(screen->areabase.first);
+  return screen->areabase.first_item();
 }
 
 int ED_region_global_size_y()

@@ -923,7 +923,7 @@ void ANIM_fmodifier_panels(const bContext *C,
   }
   else {
     /* Assuming there's only one group of instanced panels, update the custom data pointers. */
-    Panel *panel = static_cast<Panel *>(region->panels.first);
+    Panel *panel = region->panels.first_item();
     for (FModifier &fcm : *fmodifiers) {
 
       /* Move to the next instanced panel corresponding to the next modifier. */

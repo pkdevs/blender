@@ -216,7 +216,7 @@ void create_blend_shapes(pxr::UsdStageRefPtr stage,
   std::vector<pxr::SdfPath> blendshape_paths;
 
   /* Get the basis, which we'll use to calculate offsets. */
-  KeyBlock *basis_key = static_cast<KeyBlock *>(key->block.first);
+  KeyBlock *basis_key = key->block.first_item();
 
   if (!basis_key) {
     return;

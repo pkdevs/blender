@@ -1802,7 +1802,7 @@ static bool object_mouse_select_menu(bContext *C,
     return false;
   }
   if (base_count == 1) {
-    Base *base = (static_cast<BaseRefWithDepth *>(base_ref_list.first))->base;
+    Base *base = (base_ref_list.first_item())->base;
     base_ref_list.free_no_destruct();
     *r_basact = base;
     return false;
@@ -2432,7 +2432,7 @@ static Base *mouse_select_object_center(const ViewContext *vc, Base *startbase, 
     base = base->next;
 
     if (base == nullptr) {
-      base = static_cast<Base *>(BKE_view_layer_object_bases_get(view_layer)->first);
+      base = BKE_view_layer_object_bases_get(view_layer)->first_item();
     }
     if (base == startbase) {
       break;
@@ -2703,7 +2703,7 @@ static bool ed_object_select_pick(bContext *C,
   /* Always start list from `basact` when cycling the selection. */
   Base *startbase = (oldbasact && oldbasact->next) ?
                         oldbasact->next :
-                        static_cast<Base *>(BKE_view_layer_object_bases_get(view_layer)->first);
+                        BKE_view_layer_object_bases_get(view_layer)->first_item();
 
   /* The next object's base to make active. */
   Base *basact = nullptr;
@@ -4174,9 +4174,7 @@ static bool do_meta_box_select(const ViewContext *vc, const rcti *rect, const eS
   }
 
   int metaelem_id = 0;
-  for (ml = static_cast<MetaElem *>(mb->editelems->first); ml;
-       ml = ml->next, metaelem_id += 0x10000)
-  {
+  for (ml = mb->editelems->first_item(); ml; ml = ml->next, metaelem_id += 0x10000) {
     bool is_inside_radius = false;
     bool is_inside_stiff = false;
 
@@ -4363,7 +4361,7 @@ static bool do_object_box_select(bContext *C,
     }
   }
 
-  for (Base *base = static_cast<Base *>(object_bases->first); base && hits; base = base->next) {
+  for (Base *base = object_bases->first_item(); base && hits; base = base->next) {
     if (BASE_SELECTABLE(v3d, base)) {
       const bool is_select = base->flag & BASE_SELECTED;
       const bool is_inside = bases_inside.contains(base);

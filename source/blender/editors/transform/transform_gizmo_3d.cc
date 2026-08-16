@@ -548,7 +548,7 @@ static int gizmo_3d_foreach_selected(const bContext *C,
    * Is it fine to possibly evaluate dependency graph here? */
   Depsgraph *depsgraph = CTX_data_expect_evaluated_depsgraph(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
-  View3D *v3d = static_cast<View3D *>(area->spacedata.first);
+  View3D *v3d = area->spacedata.first_as<View3D>();
   int a, totsel = 0;
 
   Object *ob = gizmo_3d_transform_space_object_get(*bmain, scene, view_layer);
@@ -649,7 +649,7 @@ static int gizmo_3d_foreach_selected(const bContext *C,
               mat_local, obedit->world_to_object().ptr(), ob_iter->object_to_world().ptr());
         }
 
-        Nurb *nu = static_cast<Nurb *>(nurbs->first);
+        Nurb *nu = nurbs->first_item();
         while (nu) {
           if (nu->type == CU_BEZIER) {
             bezt = nu->bezt;
@@ -992,7 +992,7 @@ int calc_gizmo_stats(const bContext *C,
   ScrArea *area = CTX_wm_area(C);
   Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
-  View3D *v3d = static_cast<View3D *>(area->spacedata.first);
+  View3D *v3d = area->spacedata.first_as<View3D>();
   int totsel = 0;
 
   const int pivot_point = scene->toolsettings->transform_pivot_point;
@@ -1976,7 +1976,7 @@ static void WIDGETGROUP_gizmo_refresh(const bContext *C, wmGizmoGroup *gzgroup)
   GizmoGroup *ggd = static_cast<GizmoGroup *>(gzgroup->customdata);
   Scene *scene = CTX_data_scene(C);
   ScrArea *area = CTX_wm_area(C);
-  View3D *v3d = static_cast<View3D *>(area->spacedata.first);
+  View3D *v3d = area->spacedata.first_as<View3D>();
   RegionView3D *rv3d = static_cast<RegionView3D *>(region->regiondata);
   TransformBounds tbounds;
 
@@ -2236,7 +2236,7 @@ static bool WIDGETGROUP_gizmo_poll_generic(View3D *v3d)
 static bool WIDGETGROUP_gizmo_poll_context(const bContext *C, wmGizmoGroupType * /*gzgt*/)
 {
   ScrArea *area = CTX_wm_area(C);
-  View3D *v3d = static_cast<View3D *>(area->spacedata.first);
+  View3D *v3d = area->spacedata.first_as<View3D>();
   if (!WIDGETGROUP_gizmo_poll_generic(v3d)) {
     return false;
   }
@@ -2265,7 +2265,7 @@ static bool WIDGETGROUP_gizmo_poll_tool(const bContext *C, wmGizmoGroupType *gzg
   }
 
   ScrArea *area = CTX_wm_area(C);
-  View3D *v3d = static_cast<View3D *>(area->spacedata.first);
+  View3D *v3d = area->spacedata.first_as<View3D>();
   if (!WIDGETGROUP_gizmo_poll_generic(v3d)) {
     return false;
   }

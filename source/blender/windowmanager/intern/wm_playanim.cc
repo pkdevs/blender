@@ -903,7 +903,7 @@ static void playanim_toscreen(PlayState &ps, const PlayAnimPict *picture, const 
   float frame_indicator_factor = -1.0f;
   if (ps.show_frame_indicator) {
     const int frame_range = static_cast<const PlayAnimPict *>(ps.picsbase.last)->frame -
-                            static_cast<const PlayAnimPict *>(ps.picsbase.first)->frame;
+                            ps.picsbase.first_item()->frame;
     if (frame_range > 0) {
       frame_indicator_factor = float(double(picture->frame) / double(frame_range));
     }
@@ -1383,7 +1383,7 @@ static bool ghost_event_proc(const GHOST_IEvent *ghost_event, GHOST_TUserDataPtr
             playanim_audio_stop(ps);
 
             if (ps.ghost_data.qual & WS_QUAL_SHIFT) {
-              ps.picture = static_cast<PlayAnimPict *>(ps.picsbase.first);
+              ps.picture = ps.picsbase.first_item();
               ps.next_frame = 0;
             }
             else {
@@ -2083,7 +2083,7 @@ static std::optional<int> wm_main_playanim_intern(int argc, const char **argv, P
 #ifdef WITH_AUDASPACE
   g_audaspace.source = AUD_Sound(new aud::File(filepath));
   if (!BLI_listbase_is_empty(&ps.picsbase)) {
-    const MovieReader *anim_movie = static_cast<PlayAnimPict *>(ps.picsbase.first)->anim;
+    const MovieReader *anim_movie = ps.picsbase.first_item()->anim;
     if (anim_movie) {
       g_playanim.fps_movie = MOV_get_fps(anim_movie);
       /* Enforce same fps for movie as sound. */
@@ -2118,7 +2118,7 @@ static std::optional<int> wm_main_playanim_intern(int argc, const char **argv, P
     }
 
     if (ps.direction == 1) {
-      ps.picture = static_cast<PlayAnimPict *>(ps.picsbase.first);
+      ps.picture = ps.picsbase.first_item();
     }
     else {
       ps.picture = static_cast<PlayAnimPict *>(ps.picsbase.last);

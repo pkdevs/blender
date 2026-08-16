@@ -1481,7 +1481,7 @@ static void setexpo_graph_keys(bAnimContext *ac, short mode)
         /* Remove all the modifiers fitting this description. */
         FModifier *fcm, *fcn = nullptr;
 
-        for (fcm = static_cast<FModifier *>(fcu->modifiers.first); fcm; fcm = fcn) {
+        for (fcm = fcu->modifiers.first_item(); fcm; fcm = fcn) {
           fcn = fcm->next;
 
           if (fcm->type == FMODIFIER_TYPE_CYCLES) {
@@ -2999,7 +2999,7 @@ static wmOperatorStatus graph_fmodifier_delete_exec(bContext *C, wmOperator *op)
     }
 
     if (mode == RemovalMode::FIRST) {
-      if (FModifier *first = static_cast<FModifier *>(fcu->modifiers.first)) {
+      if (FModifier *first = fcu->modifiers.first_item()) {
         fmods_to_delete.append(first);
       }
     }

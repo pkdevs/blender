@@ -197,7 +197,7 @@ static void ui_imageuser_layer_menu(bContext * /*C*/, ui::Layout *layout, void *
   }
 
   int nr = fake_name ? 1 : 0;
-  for (RenderLayer *rl = static_cast<RenderLayer *>(rr->layers.first); rl; rl = rl->next, nr++) {
+  for (RenderLayer *rl = rr->layers.first_item(); rl; rl = rl->next, nr++) {
     ui::Button *but = uiDefButV(block,
                                 ui::ButtonType::ButMenu,
                                 rl->name,
@@ -516,7 +516,7 @@ static bool ui_imageuser_pass_menu_step(bContext *C, int direction, void *rnd_pt
       return false;
     }
 
-    for (rp = static_cast<RenderPass *>(rl->passes.first); rp; rp = rp->next, rp_index++) {
+    for (rp = rl->passes.first_item(); rp; rp = rp->next, rp_index++) {
       if (STREQ(rp->name, rpass->name)) {
         iuser->pass = rp_index - 1;
         changed = true;
@@ -1266,7 +1266,7 @@ void uiTemplateImageInfo(ui::Layout *layout, bContext *C, Image *ima, ImageUser 
     int duration = 0;
 
     if (ima->source == IMA_SRC_MOVIE && BKE_image_has_anim(ima)) {
-      MovieReader *anim = (static_cast<ImageAnim *>(ima->anims.first))->anim;
+      MovieReader *anim = (ima->anims.first_item())->anim;
       if (anim) {
         duration = MOV_get_duration_frames(anim);
       }

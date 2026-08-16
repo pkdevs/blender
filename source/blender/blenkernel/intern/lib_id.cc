@@ -1289,13 +1289,13 @@ void BKE_main_id_tag_listbase(ListBaseT<ID> *lb, const int tag, const bool value
 {
   ID *id;
   if (value) {
-    for (id = static_cast<ID *>(lb->first); id; id = static_cast<ID *>(id->next)) {
+    for (id = lb->first_item(); id; id = static_cast<ID *>(id->next)) {
       id->tag |= tag;
     }
   }
   else {
     const int ntag = ~tag;
-    for (id = static_cast<ID *>(lb->first); id; id = static_cast<ID *>(id->next)) {
+    for (id = lb->first_item(); id; id = static_cast<ID *>(id->next)) {
       id->tag &= ntag;
     }
   }
@@ -1321,13 +1321,13 @@ void BKE_main_id_flag_listbase(ListBaseT<ID> *lb, const int flag, const bool val
 {
   ID *id;
   if (value) {
-    for (id = static_cast<ID *>(lb->first); id; id = static_cast<ID *>(id->next)) {
+    for (id = lb->first_item(); id; id = static_cast<ID *>(id->next)) {
       id->tag |= flag;
     }
   }
   else {
     const int nflag = ~flag;
-    for (id = static_cast<ID *>(lb->first); id; id = static_cast<ID *>(id->next)) {
+    for (id = lb->first_item(); id; id = static_cast<ID *>(id->next)) {
       id->tag &= nflag;
     }
   }
@@ -1378,9 +1378,7 @@ void BKE_main_lib_objects_recalc_all(Main *bmain)
   Object *ob;
 
   /* flag for full recalc */
-  for (ob = static_cast<Object *>(bmain->objects.first); ob;
-       ob = static_cast<Object *>(ob->id.next))
-  {
+  for (ob = bmain->objects.first_item(); ob; ob = static_cast<Object *>(ob->id.next)) {
     if (ID_IS_LINKED(ob)) {
       DEG_id_tag_update(&ob->id, ID_RECALC_TRANSFORM | ID_RECALC_GEOMETRY | ID_RECALC_ANIMATION);
     }
@@ -2424,7 +2422,7 @@ void BKE_library_make_local(Main *bmain,
 
   /* Step 1: Detect data-blocks to make local. */
   for (int a = lbarray.size(); a--;) {
-    ID *id = static_cast<ID *>(lbarray[a]->first);
+    ID *id = lbarray[a]->first_item();
 
     /* Do not explicitly make local non-linkable IDs (shape-keys, in fact),
      * they are assumed to be handled by real data-blocks responsible of them. */
@@ -2603,9 +2601,7 @@ void BKE_library_make_local(Main *bmain,
    * recomputed, but this does not seems to be enough in some cases, and evaluation code ends up
    * trying to evaluate a not-yet-updated armature object's deformations.
    * Try "make all local" in 04_01_H.lighting.blend from Agent327 without this, e.g. */
-  for (Object *ob = static_cast<Object *>(bmain->objects.first); ob;
-       ob = static_cast<Object *>(ob->id.next))
-  {
+  for (Object *ob = bmain->objects.first_item(); ob; ob = static_cast<Object *>(ob->id.next)) {
     if (ob->data != nullptr && ob->type == OB_ARMATURE && ob->pose != nullptr &&
         ob->pose->flag & POSE_RECALC)
     {

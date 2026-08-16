@@ -547,7 +547,7 @@ static void version_geometry_nodes_add_realize_instance_nodes(bNodeTree *ntree)
              GEO_NODE_SUBDIVIDE_MESH,
              GEO_NODE_TRIANGULATE))
     {
-      bNodeSocket *geometry_socket = static_cast<bNodeSocket *>(node.inputs.first);
+      bNodeSocket *geometry_socket = node.inputs.first_item();
       add_realize_instances_before_socket(ntree, &node, geometry_socket);
     }
     /* Also realize instances for the profile input of the curve to mesh node. */
@@ -594,44 +594,38 @@ static bNodeTree *add_realize_node_tree(Main *bmain)
 
   bke::node_add_link(*node_tree,
                      *group_input,
-                     *static_cast<bNodeSocket *>(group_input->outputs.first),
+                     *group_input->outputs.first_item(),
                      *realize,
-                     *static_cast<bNodeSocket *>(realize->inputs.first));
+                     *realize->inputs.first_item());
   bke::node_add_link(*node_tree,
                      *realize,
-                     *static_cast<bNodeSocket *>(realize->outputs.first),
+                     *realize->outputs.first_item(),
                      *separate,
-                     *static_cast<bNodeSocket *>(separate->inputs.first));
-  bke::node_add_link(*node_tree,
-                     *conv,
-                     *static_cast<bNodeSocket *>(conv->outputs.first),
-                     *join,
-                     *static_cast<bNodeSocket *>(join->inputs.first));
+                     *separate->inputs.first_item());
+  bke::node_add_link(
+      *node_tree, *conv, *conv->outputs.first_item(), *join, *join->inputs.first_item());
   bke::node_add_link(*node_tree,
                      *separate,
                      *static_cast<bNodeSocket *>(BLI_findlink(&separate->outputs, 3)),
                      *join,
-                     *static_cast<bNodeSocket *>(join->inputs.first));
+                     *join->inputs.first_item());
   bke::node_add_link(*node_tree,
                      *separate,
                      *static_cast<bNodeSocket *>(BLI_findlink(&separate->outputs, 1)),
                      *conv,
-                     *static_cast<bNodeSocket *>(conv->inputs.first));
+                     *conv->inputs.first_item());
   bke::node_add_link(*node_tree,
                      *separate,
                      *static_cast<bNodeSocket *>(BLI_findlink(&separate->outputs, 2)),
                      *join,
-                     *static_cast<bNodeSocket *>(join->inputs.first));
-  bke::node_add_link(*node_tree,
-                     *separate,
-                     *static_cast<bNodeSocket *>(separate->outputs.first),
-                     *join,
-                     *static_cast<bNodeSocket *>(join->inputs.first));
+                     *join->inputs.first_item());
+  bke::node_add_link(
+      *node_tree, *separate, *separate->outputs.first_item(), *join, *join->inputs.first_item());
   bke::node_add_link(*node_tree,
                      *join,
-                     *static_cast<bNodeSocket *>(join->outputs.first),
+                     *join->outputs.first_item(),
                      *group_output,
-                     *static_cast<bNodeSocket *>(group_output->inputs.first));
+                     *group_output->inputs.first_item());
 
   for (bNode &node : node_tree->nodes) {
     bke::node_set_selected(node, false);
@@ -1246,7 +1240,7 @@ void do_versions_after_linking_300(FileData * /*fd*/, Main *bmain)
       if (ntree.type == NTREE_GEOMETRY) {
         for (bNode &node : ntree.nodes.items_mutable()) {
           if (node.type_legacy == GEO_NODE_BOUNDING_BOX) {
-            bNodeSocket *geometry_socket = static_cast<bNodeSocket *>(node.inputs.first);
+            bNodeSocket *geometry_socket = node.inputs.first_item();
             add_realize_instances_before_socket(&ntree, &node, geometry_socket);
           }
         }
@@ -1814,9 +1808,8 @@ static void version_liboverride_rnacollections_insertion_object_constraints(
                                           opop.subitem_local_name,
                                           offsetof(bConstraint, name),
                                           opop.subitem_local_index));
-    bConstraint *constraint_src = constraint_anchor != nullptr ?
-                                      constraint_anchor->next :
-                                      static_cast<bConstraint *>(constraints->first);
+    bConstraint *constraint_src = constraint_anchor != nullptr ? constraint_anchor->next :
+                                                                 constraints->first_item();
 
     if (constraint_src == nullptr) {
       /* Invalid case, just remove that override property operation. */
@@ -1848,9 +1841,8 @@ static void version_liboverride_rnacollections_insertion_object(Object *object)
                                             opop.subitem_local_name,
                                             offsetof(ModifierData, name),
                                             opop.subitem_local_index));
-      ModifierData *mod_src = mod_anchor != nullptr ?
-                                  mod_anchor->next :
-                                  static_cast<ModifierData *>(object->modifiers.first);
+      ModifierData *mod_src = mod_anchor != nullptr ? mod_anchor->next :
+                                                      object->modifiers.first_item();
 
       if (mod_src == nullptr) {
         /* Invalid case, just remove that override property operation. */

@@ -358,7 +358,7 @@ static void fix_single_point_curves_custom_knots(Main *bmain)
    * CU_NURB_CUSTOM was set alongside other flags and knotsu/knotsv was left null,
    * causing a crash when opening these files in newer versions. */
   for (Curve &cu : bmain->curves) {
-    for (Nurb *nu = static_cast<Nurb *>(cu.nurb.first); nu != nullptr; nu = nu->next) {
+    for (Nurb *nu = cu.nurb.first_item(); nu != nullptr; nu = nu->next) {
       if (nu->knotsu == nullptr && (nu->flagu & CU_NURB_CUSTOM)) {
         nu->flagu &= (CU_NURB_CYCLIC | CU_NURB_BEZIER | CU_NURB_ENDPOINT);
       }

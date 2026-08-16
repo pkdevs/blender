@@ -400,8 +400,7 @@ static bool rna_idproperty_known(CollectionPropertyIterator *iter, void *data)
    * RNA property, they are different data. */
   const UString idprop_name(idprop->name);
   do {
-    for (prop = static_cast<PropertyRNA *>(ptype->cont.properties.first); prop; prop = prop->next)
-    {
+    for (prop = ptype->cont.properties.first_item(); prop; prop = prop->next) {
       if ((prop->flag_internal & PROP_INTERN_BUILTIN) == 0 &&
           (prop->flag & PROP_IDPROPERTY) != 0 && prop->identifier == idprop_name)
       {
@@ -617,8 +616,7 @@ bool rna_builtin_properties_lookup_string(PointerRNA *ptr,
       }
     }
     else {
-      for (prop = static_cast<PropertyRNA *>(srna->cont.properties.first); prop; prop = prop->next)
-      {
+      for (prop = srna->cont.properties.first_item(); prop; prop = prop->next) {
         if (!(prop->flag_internal & PROP_INTERN_BUILTIN) && prop->identifier == key) {
           *r_ptr = {nullptr, RNA_Property, prop};
           return true;

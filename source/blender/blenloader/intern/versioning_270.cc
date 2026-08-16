@@ -372,8 +372,7 @@ static void do_versions_compositor_render_passes_storage(bNode *node)
 {
   int pass_index = 0;
   const char *sockname;
-  for (bNodeSocket *sock = static_cast<bNodeSocket *>(node->outputs.first);
-       sock && pass_index < 31;
+  for (bNodeSocket *sock = node->outputs.first_item(); sock && pass_index < 31;
        sock = static_cast<bNodeSocket *>(sock->next), pass_index++)
   {
     if (sock->storage == nullptr) {
@@ -896,7 +895,7 @@ void blo_do_versions_270(FileData *fd, Library * /*lib*/, Main *bmain)
   if (!MAIN_VERSION_FILE_ATLEAST(bmain, 274, 4)) {
     for (Scene &scene : bmain->scenes) {
       BKE_scene_add_render_view(&scene, STEREO_LEFT_NAME);
-      SceneRenderView *srv = static_cast<SceneRenderView *>(scene.r.views.first);
+      SceneRenderView *srv = scene.r.views.first_item();
       STRNCPY_UTF8(srv->suffix, STEREO_LEFT_SUFFIX);
 
       BKE_scene_add_render_view(&scene, STEREO_RIGHT_NAME);
