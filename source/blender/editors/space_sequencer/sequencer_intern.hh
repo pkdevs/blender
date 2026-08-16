@@ -103,7 +103,7 @@ struct StripDrawContext {
   float left_handle, right_handle; /* Position in frames. */
   float strip_content_top; /* Position in timeline space without content and text overlay. */
   float handle_width;      /* Width of strip handle in frames. */
-  float strip_length;
+  float strip_length, strip_height;
 
   bool can_draw_text_overlay;
   bool can_draw_strip_content;

@@ -161,17 +161,15 @@ static bool strip_hides_text_overlay_first(const TimelineDrawContext &ctx,
                                            const StripDrawContext &strip_ctx)
 {
   return seq_draw_waveforms_poll(ctx.sseq, strip_ctx.strip) ||
-         ELEM(strip_ctx.strip->type, STRIP_TYPE_COLOR, STRIP_TYPE_TEXT);
+         ELEM(strip_ctx.strip->type, STRIP_TYPE_COLOR, STRIP_TYPE_TEXT) ||
+         strip_ctx.strip->is_overlap_transition();
 }
 
 static void strip_draw_context_set_text_overlay_visibility(const TimelineDrawContext &ctx,
                                                            StripDrawContext &strip_ctx)
 {
   float threshold = 8 * UI_SCALE_FAC;
-  if (strip_ctx.strip->is_overlap_transition()) {
-    threshold = 40 * UI_SCALE_FAC;
-  }
-  else if (strip_hides_text_overlay_first(ctx, strip_ctx)) {
+  if (strip_hides_text_overlay_first(ctx, strip_ctx)) {
     threshold = 20 * UI_SCALE_FAC;
   }
 
@@ -184,9 +182,11 @@ static void strip_draw_context_set_text_overlay_visibility(const TimelineDrawCon
   strip_ctx.can_draw_text_overlay &= overlays_enabled;
 }
 
-static float strip_header_size_get(float pixely)
+static float strip_header_size_get(float pixely, float strip_height)
 {
-  return min_ff(0.40f, 20 * UI_SCALE_FAC * pixely);
+  /* Header size is 20px, unless capped to 40% of strip height. */
+  const float max_size = strip_height * 0.40f;
+  return min_ff(max_size, 20 * UI_SCALE_FAC * pixely);
 }
 
 static bool strip_header_poll(const SpaceSeq *sseq, float pixely, float strip_height)
@@ -219,7 +219,7 @@ static rctf strip_bounds_get(const Scene *scene,
   const float pixely = ui::view2d_pixel_size_get_y(v2d);
   if (strip->is_overlap_transition()) {
     if (strip_header_poll(sseq, pixely, bounds.ymax - bounds.ymin)) {
-      bounds.ymax -= strip_header_size_get(pixely);
+      bounds.ymax -= strip_header_size_get(pixely, bounds.ymax - bounds.ymin);
     }
     float retiming_size = (retiming_key_size() + RETIMING_KEY_PIXEL_OFFSET) * pixely;
     if ((can_draw_retiming(scene, sseq, v2d, strip->input1) ||
@@ -298,6 +298,7 @@ static StripDrawContext strip_draw_context_get(const TimelineDrawContext &ctx, S
   strip_ctx.content_end = max_ff(strip_ctx.content_end, strip_ctx.left_handle);
 
   strip_ctx.strip_length = strip_ctx.right_handle - strip_ctx.left_handle;
+  strip_ctx.strip_height = strip_ctx.top - strip_ctx.bottom;
 
   strip_draw_context_set_text_overlay_visibility(ctx, strip_ctx);
   strip_draw_context_set_strip_content_visibility(ctx, strip_ctx);
@@ -327,7 +328,8 @@ static StripDrawContext strip_draw_context_get(const TimelineDrawContext &ctx, S
   }
 
   if (strip_ctx.can_draw_text_overlay) {
-    strip_ctx.strip_content_top = strip_ctx.top - strip_header_size_get(ctx.pixely);
+    strip_ctx.strip_content_top = strip_ctx.top -
+                                  strip_header_size_get(ctx.pixely, strip_ctx.strip_height);
   }
   else {
     strip_ctx.strip_content_top = strip_ctx.top;
@@ -1041,7 +1043,7 @@ static void draw_strip_icons(const TimelineDrawContext &ctx,
       const float icon_indent = 2.0f * strip.handle_width - 4 * ctx.pixelx * UI_SCALE_FAC;
       const float icon_spacing = 3.0f * ctx.pixelx * UI_SCALE_FAC;
       rctf rect;
-      rect.ymin = strip.top - strip_header_size_get(ctx.pixely);
+      rect.ymin = strip.top - strip_header_size_get(ctx.pixely, strip.strip_height);
       rect.ymax = strip.top;
       rect.xmin = max_ff(strip.left_handle, ctx.v2d->cur.xmin) + icon_indent;
       if (missing_data) {
