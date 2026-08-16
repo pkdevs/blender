@@ -16,6 +16,7 @@
 #include "BKE_image_gpu.hh"
 #include "BKE_material.hh"
 
+#include "BLI_math_color_c.hh"
 #include "BLI_math_matrix_c.hh"
 #include "BLI_math_vector_c.hh"
 #include "BLI_memblock.hh"
@@ -64,6 +65,11 @@ static gpu::Texture *gpencil_gradient_texture_create(const ColorBand *coba)
   int size;
 
   BKE_colorband_evaluate_table_rgba(coba, &data, &size);
+
+  for (const int i : IndexRange(size)) {
+    linearrgb_to_srgb_v4(&data[i * 4], &data[i * 4]);
+  }
+
   gpu_tex = GPU_texture_create_1d("color_gradient",
                                   size,
                                   1,
