@@ -163,6 +163,7 @@ set(SRC
   NOD_rna_define.hh
   NOD_shader.h
   NOD_shader_nodes_inline.hh
+  NOD_shader_nodes_multi_function.hh
   NOD_socket.hh
   NOD_socket_declarations.hh
   NOD_socket_declarations_geometry.hh

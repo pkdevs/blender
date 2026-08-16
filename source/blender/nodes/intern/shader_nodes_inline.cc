@@ -20,6 +20,7 @@
 #include "NOD_node_declaration.hh"
 #include "NOD_node_in_compute_context.hh"
 #include "NOD_shader_nodes_inline.hh"
+#include "NOD_shader_nodes_multi_function.hh"
 
 namespace blender::nodes {
 namespace {
@@ -1554,6 +1555,8 @@ class ShaderNodesInliner {
     node->typeinfo->build_multi_function(builder);
     const mf::MultiFunction &fn = builder.function();
     mf::ContextBuilder context;
+    ShaderNodesMultiFunctionUserData user_data;
+    context.user_data(&user_data);
     IndexMask mask(1);
     mf::ParamsBuilder params{fn, &mask};
 
@@ -1593,6 +1596,10 @@ class ShaderNodesInliner {
       this->store_socket_value(
           {node.context, output_socket},
           {PrimitiveSocketValue::from_value({output_socket->typeinfo->base_cpp_type, value})});
+    }
+
+    for (const StringRef message : user_data.error_messages) {
+      this->report_error(node, message);
     }
   }
 
