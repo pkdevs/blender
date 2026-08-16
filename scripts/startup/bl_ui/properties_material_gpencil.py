@@ -247,8 +247,6 @@ class MATERIAL_PT_gpencil_fillcolor(GPMaterialButtonsPanel, Panel):
             col.separator()
 
             col.prop(gpcolor, "use_fill_holdout")
-            col.prop(gpcolor, "mix_factor", text="Blend", slider=True)
-            col.prop(gpcolor, "flip", text="Flip Colors")
 
             col.prop(gpcolor, "texture_offset", text="Location")
 
