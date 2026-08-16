@@ -226,24 +226,6 @@ def split_area(area, direction='VERTICAL', factor=0.5):
         )
 
 
-def split_area(area, direction='VERTICAL', factor=0.5):
-    """
-    Split an area using Blender's screen split operator.
-
-    :param area: Area to split.
-    :param direction: Split direction: 'VERTICAL' or 'HORIZONTAL'.
-    :param factor: Split ratio in normalized coordinates.
-        Default 0.5 creates an even split.
-    """
-    import bpy
-
-    with bpy.context.temp_override(area=area):
-        bpy.ops.screen.area_split(
-            direction=direction,
-            factor=factor,
-        )
-
-
 def join_area(source, target):
     """
     Join two adjacent screen areas.
