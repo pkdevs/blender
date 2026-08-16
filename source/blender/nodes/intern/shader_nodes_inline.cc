@@ -163,6 +163,8 @@ struct SocketValue {
         case SOCK_VECTOR:
         case SOCK_RGBA:
         case SOCK_FLOAT:
+        case SOCK_STRING:
+        case SOCK_MENU:
           return PrimitiveSocketValue::from_value(
               {type.base_cpp_type, type.base_cpp_type->default_value()});
         default:
