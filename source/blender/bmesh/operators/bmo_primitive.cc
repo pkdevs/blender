@@ -917,7 +917,11 @@ void bmo_create_quadsphere_exec(BMesh *bm, BMOperator *op)
   BMO_op_finish(bm, &bmop);
   BMVert *v;
   BMIter viter;
+
   BM_ITER_MESH (v, &viter, bm, BM_VERTS_OF_MESH) {
+    if (!BMO_vert_flag_test(bm, v, VERT_MARK)) {
+    continue;
+  }
     float co[3];
     copy_v3_v3(co, v->co);
     // Source https://mathoverflow.net/questions/446657/mapping-a-cube-to-a-sphere
