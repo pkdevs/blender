@@ -283,17 +283,17 @@ static GPUNodeLink *gpu_node_stack_constant_link(const GPUNodeStack &stack)
     case GPU_VEC2:
     case GPU_VEC3:
     case GPU_VEC4:
-      return GPU_constant(stack.vec);
+      return GPU_constant(std::get<float4>(stack.value));
     case GPU_INT:
     case GPU_INT2:
     case GPU_INT3:
     case GPU_INT4:
-      return GPU_constant(&stack.integer_data.x);
+      return GPU_constant(std::get<int4>(stack.value));
     case GPU_BOOL:
-      return GPU_constant(&stack.boolean_data);
+      return GPU_constant(&std::get<bool>(stack.value));
     default:
-      /* Fallback for unhandled types. Not meant to expose real stack.vec values. */
-      return GPU_constant(stack.vec);
+      /* Fallback for unhandled types. Not meant to expose real stack values. */
+      return GPU_constant(std::get<float4>(stack.value));
   }
 }
 
@@ -304,17 +304,17 @@ static GPUNodeLink *gpu_node_stack_uniform_link(const GPUNodeStack &stack)
     case GPU_VEC2:
     case GPU_VEC3:
     case GPU_VEC4:
-      return GPU_uniform(stack.vec);
+      return GPU_uniform(std::get<float4>(stack.value));
     case GPU_INT:
     case GPU_INT2:
     case GPU_INT3:
     case GPU_INT4:
-      return GPU_uniform(&stack.integer_data.x);
+      return GPU_uniform(std::get<int4>(stack.value));
     case GPU_BOOL:
-      return GPU_uniform(&stack.boolean_data);
+      return GPU_uniform(&std::get<bool>(stack.value));
     default:
-      /* Fallback for unhandled types. Not meant to expose real stack.vec values. */
-      return GPU_uniform(stack.vec);
+      /* Fallback for unhandled types. Not meant to expose real stack values. */
+      return GPU_uniform(std::get<float4>(stack.value));
   }
 }
 

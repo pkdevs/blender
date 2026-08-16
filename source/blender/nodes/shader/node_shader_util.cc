@@ -176,12 +176,12 @@ static void nodestack_get_vec(float *in, short type_in, bNodeStack *ns)
 
 void node_gpu_stack_from_data(GPUNodeStack *gs, bNodeSocket *socket, bNodeStack *ns)
 {
-  memset(gs, 0, sizeof(*gs));
+  *gs = GPUNodeStack{};
 
   if (ns == nullptr) {
     /* node_get_stack() will generate nullptr bNodeStack pointers
      * for unknown/unsupported types of sockets. */
-    zero_v4(gs->vec);
+    gs->value = float4(0);
     gs->link = nullptr;
     gs->type = GPU_NONE;
     gs->hasinput = false;
@@ -189,7 +189,7 @@ void node_gpu_stack_from_data(GPUNodeStack *gs, bNodeSocket *socket, bNodeStack 
     gs->sockettype = socket->type;
   }
   else {
-    nodestack_get_vec(gs->vec, socket->type, ns);
+    nodestack_get_vec(std::get<float4>(gs->value), socket->type, ns);
     gs->link = static_cast<GPUNodeLink *>(ns->data);
 
     if (socket->type == SOCK_FLOAT) {
@@ -240,7 +240,7 @@ void node_gpu_stack_from_data(GPUNodeStack *gs, bNodeSocket *socket, bNodeStack 
 
 void node_data_from_gpu_stack(bNodeStack *ns, GPUNodeStack *gs)
 {
-  copy_v4_v4(ns->vec, gs->vec);
+  copy_v4_v4(ns->vec, std::get<float4>(gs->value));
   ns->data = gs->link;
   ns->sockettype = gs->sockettype;
 }

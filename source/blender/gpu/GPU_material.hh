@@ -9,6 +9,7 @@
 #pragma once
 
 #include <string>
+#include <variant>
 
 #include "BLI_assert.hh"
 #include "BLI_enum_flags.hh"
@@ -382,46 +383,47 @@ const GPUUniformAttrList *GPU_material_uniform_attributes(const GPUMaterial *mat
 /* Functions to create GPU Materials nodes. */
 /* TODO: Move to its own header. */
 
+using GPUNodeStackValue = std::variant<float4, int4, bool>;
+
 struct GPUNodeStack {
-  GPUType type;
-  union {
-    float vec[4];
-    int4 integer_data;
-    bool boolean_data;
-  };
-  GPUNodeLink *link;
-  bool hasinput;
-  bool hasoutput;
-  short sockettype;
-  bool end;
+  GPUType type = GPU_NONE;
+  GPUNodeStackValue value{};
+  GPUNodeLink *link = nullptr;
+  bool hasinput = false;
+  bool hasoutput = false;
+  short sockettype = 0;
+  bool end = false;
 
   /* Return true if the socket might contain a polychromatic value.
    * This is a conservative heuristic that allows for optimization. */
   bool might_be_tinted() const
   {
-    return this->link || (this->vec[0] != this->vec[1]) || (this->vec[1] != this->vec[2]);
+    const float4 &vec = std::get<float4>(this->value);
+    return this->link || (vec[0] != vec[1]) || (vec[1] != vec[2]);
   }
 
   bool socket_not_zero() const
   {
-    return this->link || (saturate_f(this->vec[0]) > near_zero);
+    return this->link || (saturate_f(std::get<float4>(this->value)[0]) > near_zero);
   }
 
   bool socket_not_one() const
   {
-    return this->link || (saturate_f(this->vec[0]) < near_one);
+    return this->link || (saturate_f(std::get<float4>(this->value)[0]) < near_one);
   }
 
   bool socket_not_black() const
   {
-    return this->link || saturate_f(this->vec[0]) > near_zero ||
-           saturate_f(this->vec[1]) > near_zero || saturate_f(this->vec[2]) > near_zero;
+    const float4 &vec = std::get<float4>(this->value);
+    return this->link || saturate_f(vec[0]) > near_zero || saturate_f(vec[1]) > near_zero ||
+           saturate_f(vec[2]) > near_zero;
   }
 
   bool socket_not_white() const
   {
-    return this->link || saturate_f(this->vec[0]) < near_one ||
-           saturate_f(this->vec[1]) < near_one || saturate_f(this->vec[2]) < near_one;
+    const float4 &vec = std::get<float4>(this->value);
+    return this->link || saturate_f(vec[0]) < near_one || saturate_f(vec[1]) < near_one ||
+           saturate_f(vec[2]) < near_one;
   }
 
  private:
