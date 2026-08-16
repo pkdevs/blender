@@ -141,6 +141,7 @@ static std::optional<StringRef> find_format_specifier(const StringRef format)
   return std::nullopt;
 }
 
+/** Returns the index of the next unescaped '{', the string size, or -1 on error.*/
 static int64_t find_next_format_start_or_end(const StringRef format,
                                              const int64_t start,
                                              std::string &r_out,
@@ -173,8 +174,8 @@ static int64_t find_next_format_start_or_end(const StringRef format,
             continue;
           }
         }
-        r_error = fmt::format("{}: {}", TIP_("Invalid '}'"), format);
-        return 0;
+        r_error = fmt::format("{}: \"{}\"", TIP_("Unescaped '}' in format string"), format);
+        return -1;
       }
       default: {
         r_out += c;
@@ -652,7 +653,8 @@ static bool format_strings(const StringRef format,
     std::string copy_str;
     const int64_t next_format_start_or_end = find_next_format_start_or_end(
         format, current_index, copy_str, r_error);
-    if (r_error) {
+    if (next_format_start_or_end < 0) {
+      BLI_assert(r_error);
       return false;
     }
 
