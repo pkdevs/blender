@@ -6,6 +6,22 @@
 
 #include "gpu_shader_compat.hh"
 
+/* There are two common ways of implementing a linear interpolation: result = a + t * (b - a) and
+ * result = (1 - t) * a + t * b. The former variant is called "mix" in our code and it ensures that
+ * result always changes monotonically when t increases monotonically. This comes at the cost of
+ * the fact that generally result != b when t == 1, which becomes particularly noticeable when the
+ * magnitudes of a and b are vastly different. The latter variant is called
+ * "endvalue_preserving_mix" in our code ensures that result == b when t == 1. This comes at the
+ * cost of an additional multiplication step compared to the former version and the fact that
+ * result may not change monotonically when a and b have different signs and t increases
+ * monotonically, which however isn't noticeable in most cases as long as monotony isn't explicitly
+ * required. In general, "endvalue_preserving_mix" should be preferred over "mix" when it is
+ * important that result == b when t == 1 or when a and b may have vastly different magnitudes.*/
+float endvalue_preserving_mix(float a, float b, float t)
+{
+  return (1.0f - t) * a + t * b;
+}
+
 /* `powf` is really slow for raising to integer powers. */
 
 float pow2f(float x)
@@ -98,7 +114,7 @@ uint divide_ceil(uint a, uint b)
 /**
  * Component wise, use vector to replace min if it is smaller and max if bigger.
  */
-void min_max(float value, inout float min_v, inout float max_v)
+void min_max(float value, float &min_v, float &max_v)
 {
   min_v = min(value, min_v);
   max_v = max(value, max_v);
@@ -114,10 +130,26 @@ bool is_equal(float a, float b, const float epsilon)
 
 float sin_from_cos(float c)
 {
-  return sqrt(max(0.0, 1.0f - square(c)));
+  return sqrt(max(0.0f, 1.0f - square(c)));
 }
 
 float cos_from_sin(float s)
 {
-  return sqrt(max(0.0, 1.0f - square(s)));
+  return sqrt(max(0.0f, 1.0f - square(s)));
+}
+
+float cos_from_tan(float t)
+{
+  return inversesqrt(1.0f + square(t));
+}
+
+/**
+ * Matches std::midpoint from C++20.
+ */
+int midpoint(int a, int b)
+{
+  uint smaller = uint(min(a, b));
+  uint larger = uint(max(a, b));
+  int sign = (b > a) ? 1 : -1;
+  return a + sign * int((larger - smaller) / 2u);
 }

@@ -13,8 +13,10 @@
 #include <cstdlib>
 #include <cstring>
 #include <forward_list>
+#include <memory>
 
 #include "DNA_anim_types.h"
+#include "DNA_defs.h"
 #include "DNA_image_types.h"
 #include "DNA_node_types.h"
 #include "DNA_object_types.h"
@@ -25,46 +27,42 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_fileops.h"
-#include "BLI_listbase.h"
+#include "BLI_fileops.hh"
+#include "BLI_listbase.hh"
 #include "BLI_map.hh"
 #include "BLI_mutex.hh"
-#include "BLI_rect.h"
-#include "BLI_set.hh"
-#include "BLI_string_utf8.h"
-#include "BLI_threads.h"
-#include "BLI_time.h"
-#include "BLI_timecode.h"
+#include "BLI_rect.hh"
+#include "BLI_string_utf8.hh"
+#include "BLI_threads.hh"
+#include "BLI_time.hh"
+#include "BLI_timecode.hh"
 #include "BLI_vector.hh"
+#include "BLI_vector_set.hh"
 
 #include "BLT_translation.hh"
 
 #include "BKE_anim_data.hh"
-#include "BKE_animsys.h" /* <------ should this be here?, needed for sequencer update */
+#include "BKE_animsys.hh" /* <------ should this be here?, needed for sequencer update */
 #include "BKE_callbacks.hh"
 #include "BKE_camera.h"
 #include "BKE_colortools.hh"
+#include "BKE_compositor.hh"
 #include "BKE_global.hh"
 #include "BKE_image.hh"
 #include "BKE_image_format.hh"
 #include "BKE_image_save.hh"
 #include "BKE_layer.hh"
-#include "BKE_lib_id.hh"
-#include "BKE_lib_remap.hh"
 #include "BKE_main.hh"
-#include "BKE_mask.h"
-#include "BKE_modifier.hh"
 #include "BKE_node_legacy_types.hh"
 #include "BKE_node_runtime.hh"
 #include "BKE_pointcache.h"
 #include "BKE_report.hh"
 #include "BKE_scene.hh"
-#include "BKE_sound.h"
+#include "BKE_sound.hh"
 
 #include "NOD_composite.hh"
 
-#include "COM_compositor.hh"
-#include "COM_context.hh"
+#include "COM_node_group_operation.hh"
 #include "COM_render_context.hh"
 
 #include "DEG_depsgraph.hh"
@@ -76,12 +74,13 @@
 #include "IMB_imbuf.hh"
 #include "IMB_imbuf_types.hh"
 #include "IMB_metadata.hh"
+#include "IMB_partial_update.hh"
 
 #include "MOV_write.hh"
 
+#include "RE_compositor.hh"
 #include "RE_engine.h"
 #include "RE_pipeline.h"
-#include "RE_texture.h"
 
 #include "SEQ_relations.hh"
 #include "SEQ_render.hh"
@@ -89,7 +88,6 @@
 #include "GPU_capabilities.hh"
 #include "GPU_context.hh"
 #include "WM_api.hh"
-#include "wm_window.hh"
 
 #ifdef WITH_FREESTYLE
 #  include "FRS_freestyle.h"
@@ -102,9 +100,11 @@
 
 #include "CLG_log.h"
 
+namespace blender {
+
 static CLG_LogRef LOG = {"render"};
 
-namespace path_templates = blender::bke::path_templates;
+namespace path_templates = bke::path_templates;
 
 /* render flow
  *
@@ -144,7 +144,7 @@ static struct {
    * bound for compositing and rendering at the same time, so those renders are essentially used to
    * get a persistent dedicated GPU context to interactive compositor execution.
    */
-  blender::Map<std::string, Render *> interactive_compositor_renders;
+  Map<const void *, Render *> interactive_compositor_renders;
 } RenderGlobal;
 
 /** \} */
@@ -158,7 +158,7 @@ static void render_callback_exec_string(Render *re, Main *bmain, eCbEvent evt, c
   if (re->r.scemode & R_BUTS_PREVIEW) {
     return;
   }
-  BKE_callback_exec_string(bmain, evt, str);
+  BKE_callback_exec_string(bmain, str, evt);
 }
 
 static void render_callback_exec_id(Render *re, Main *bmain, ID *id, eCbEvent evt)
@@ -175,47 +175,47 @@ static void render_callback_exec_id(Render *re, Main *bmain, ID *id, eCbEvent ev
 /** \name Allocation & Free
  * \{ */
 
-static bool do_write_image_or_movie(
-    Render *re, Main *bmain, Scene *scene, const int totvideos, const char *filepath_override);
+static bool do_write_image_or_movie(Render *re,
+                                    Main *bmain,
+                                    Scene *scene,
+                                    const int totvideos,
+                                    const char *filepath_override,
+                                    const bool write_anim_or_still);
 
 /* default callbacks, set in each new render */
-static void result_nothing(void * /*arg*/, RenderResult * /*rr*/) {}
-static void result_rcti_nothing(void * /*arg*/, RenderResult * /*rr*/, rcti * /*rect*/) {}
+static void result_rcti_nothing(void * /*arg*/, RenderResult * /*rr*/) {}
 static void current_scene_nothing(void * /*arg*/, Scene * /*scene*/) {}
-static bool prepare_viewlayer_nothing(void * /*arg*/,
-                                      ViewLayer * /*vl*/,
-                                      Depsgraph * /*depsgraph*/)
-{
-  return true;
-}
-static void stats_nothing(void * /*arg*/, RenderStats * /*rs*/) {}
 static void float_nothing(void * /*arg*/, float /*val*/) {}
 static bool default_break(void * /*arg*/)
 {
   return G.is_break == true;
 }
 
-static void stats_background(void * /*arg*/, RenderStats *rs)
+static void stats_update(void *arg, RenderStats *rs)
 {
   if (rs->infostr == nullptr) {
     return;
   }
 
+  Render *re = static_cast<Render *>(arg);
+
   /* Compositor calls this from multiple threads, mutex lock to ensure we don't
    * get garbled output. */
-  static blender::Mutex mutex;
+  static Mutex mutex;
   std::scoped_lock lock(mutex);
 
-  const bool show_info = CLOG_CHECK(&LOG, CLG_LEVEL_INFO);
+  /* Only print render process to stdout when blender is running headless, because the same
+   * progress string will be displayed on the UI. */
+  const bool show_info = G.background && CLOG_CHECK(&LOG, CLG_LEVEL_INFO);
   if (show_info) {
-    CLOG_STR_INFO(&LOG, rs->infostr);
+    CLOG_INFO(&LOG, "Fra: %d | %s", rs->cfra, rs->infostr);
     /* Flush stdout to be sure python callbacks are printing stuff after blender. */
     fflush(stdout);
   }
 
   /* NOTE: using G_MAIN seems valid here???
    * Not sure it's actually even used anyway, we could as well pass nullptr? */
-  BKE_callback_exec_string(G_MAIN, BKE_CB_EVT_RENDER_STATS, rs->infostr);
+  render_callback_exec_string(re, G_MAIN, BKE_CB_EVT_RENDER_STATS, rs->infostr);
 
   if (show_info) {
     fflush(stdout);
@@ -242,8 +242,8 @@ ImBuf *RE_RenderLayerGetPassImBuf(RenderLayer *rl, const char *name, const char 
 
 float *RE_RenderLayerGetPass(RenderLayer *rl, const char *name, const char *viewname)
 {
-  const ImBuf *ibuf = RE_RenderLayerGetPassImBuf(rl, name, viewname);
-  return ibuf ? ibuf->float_buffer.data : nullptr;
+  ImBuf *ibuf = RE_RenderLayerGetPassImBuf(rl, name, viewname);
+  return ibuf ? ibuf->float_data_for_write() : nullptr;
 }
 
 RenderLayer *RE_GetRenderLayer(RenderResult *rr, const char *name)
@@ -262,7 +262,7 @@ bool RE_HasSingleLayer(Render *re)
 }
 
 RenderResult *RE_MultilayerConvert(
-    void *exrhandle, const char *colorspace, bool predivide, int rectx, int recty)
+    ExrReadHandle *exrhandle, const char *colorspace, bool predivide, int rectx, int recty)
 {
   return render_result_new_from_exr(exrhandle, colorspace, predivide, rectx, recty);
 }
@@ -286,8 +286,8 @@ static bool render_scene_has_layers_to_render(Scene *scene, ViewLayer *single_la
     return true;
   }
 
-  LISTBASE_FOREACH (ViewLayer *, view_layer, &scene->view_layers) {
-    if (view_layer->flag & VIEW_LAYER_RENDER) {
+  for (ViewLayer &view_layer : scene->view_layers) {
+    if (view_layer.flag & VIEW_LAYER_RENDER) {
       return true;
     }
   }
@@ -300,11 +300,11 @@ static bool render_scene_has_layers_to_render(Scene *scene, ViewLayer *single_la
 /** \name Public Render API
  * \{ */
 
-Render *RE_GetRender(const char *name)
+Render *RE_GetRender(const void *owner)
 {
   /* search for existing renders */
   for (Render *re : RenderGlobal.render_list) {
-    if (STREQLEN(re->name, name, RE_MAXNAME)) {
+    if (re->owner == owner) {
       return re;
     }
   }
@@ -374,7 +374,7 @@ void RE_SetScene(Render *re, Scene *sce)
 
 void RE_AcquireResultImageViews(Render *re, RenderResult *rr)
 {
-  memset(rr, 0, sizeof(RenderResult));
+  *rr = RenderResult();
 
   if (re) {
     BLI_rw_mutex_lock(&re->resultmutex, THREAD_LOCK_READ);
@@ -399,15 +399,13 @@ void RE_AcquireResultImageViews(Render *re, RenderResult *rr)
 
       if (rl) {
         if (rv->ibuf == nullptr) {
-          LISTBASE_FOREACH (RenderView *, rview, &rr->views) {
-            rview->ibuf = RE_RenderLayerGetPassImBuf(rl, RE_PASSNAME_COMBINED, rview->name);
+          for (RenderView &rview : rr->views) {
+            rview.ibuf = RE_RenderLayerGetPassImBuf(rl, RE_PASSNAME_COMBINED, rview.name);
           }
         }
       }
 
       rr->layers = re->result->layers;
-      rr->xof = re->disprect.xmin;
-      rr->yof = re->disprect.ymin;
       rr->stamp_data = re->result->stamp_data;
     }
   }
@@ -425,7 +423,7 @@ void RE_ReleaseResultImageViews(Render *re, RenderResult *rr)
 
 void RE_AcquireResultImage(Render *re, RenderResult *rr, const int view_id)
 {
-  memset(rr, 0, sizeof(RenderResult));
+  *rr = RenderResult();
 
   if (re) {
     BLI_rw_mutex_lock(&re->resultmutex, THREAD_LOCK_READ);
@@ -460,10 +458,6 @@ void RE_AcquireResultImage(Render *re, RenderResult *rr, const int view_id)
 
       rr->layers = re->result->layers;
       rr->views = re->result->views;
-
-      rr->xof = re->disprect.xmin;
-      rr->yof = re->disprect.ymin;
-
       rr->stamp_data = re->result->stamp_data;
     }
   }
@@ -476,14 +470,14 @@ void RE_ReleaseResultImage(Render *re)
   }
 }
 
-void RE_ResultGet32(Render *re, uint *rect)
+void RE_ResultGet32(Render *re, uint8_t *dst)
 {
   RenderResult rres;
   const int view_id = BKE_scene_multiview_view_id_get(&re->r, re->viewname);
 
   RE_AcquireResultImageViews(re, &rres);
   render_result_rect_get_pixels(&rres,
-                                rect,
+                                dst,
                                 re->rectx,
                                 re->recty,
                                 &re->scene->view_settings,
@@ -503,21 +497,21 @@ RenderStats *RE_GetStats(Render *re)
   return &re->i;
 }
 
-Render *RE_NewRender(const char *name)
+Render *RE_NewRender(const void *owner)
 {
   Render *re;
 
   /* only one render per name exists */
-  re = RE_GetRender(name);
+  re = RE_GetRender(owner);
   if (re == nullptr) {
 
     /* new render data struct */
     re = MEM_new<Render>("new render");
     RenderGlobal.render_list.push_front(re);
-    STRNCPY_UTF8(re->name, name);
+    re->owner = owner;
   }
 
-  RE_InitRenderCB(re);
+  RE_display_init(re);
 
   return re;
 }
@@ -529,68 +523,25 @@ ViewRender *RE_NewViewRender(RenderEngineType *engine_type)
   return view_render;
 }
 
-/* MAX_ID_NAME + sizeof(Library->name) + space + null-terminator. */
-#define MAX_SCENE_RENDER_NAME (MAX_ID_NAME + 1024 + 2)
-
-static void scene_render_name_get(const Scene *scene,
-                                  char *render_name,
-                                  const size_t render_name_maxncpy)
-{
-  if (ID_IS_LINKED(scene)) {
-    BLI_snprintf_utf8(
-        render_name, render_name_maxncpy, "%s %s", scene->id.lib->id.name, scene->id.name);
-  }
-  else {
-    BLI_strncpy_utf8(render_name, scene->id.name, render_name_maxncpy);
-  }
-}
-
 Render *RE_GetSceneRender(const Scene *scene)
 {
-  char render_name[MAX_SCENE_RENDER_NAME];
-  scene_render_name_get(scene, render_name, sizeof(render_name));
-  return RE_GetRender(render_name);
+  return RE_GetRender(DEG_get_original_id(&scene->id));
 }
 
 Render *RE_NewSceneRender(const Scene *scene)
 {
-  char render_name[MAX_SCENE_RENDER_NAME];
-  scene_render_name_get(scene, render_name, sizeof(render_name));
-  return RE_NewRender(render_name);
+  return RE_NewRender(DEG_get_original_id(&scene->id));
 }
 
 Render *RE_NewInteractiveCompositorRender(const Scene *scene)
 {
-  char render_name[MAX_SCENE_RENDER_NAME];
-  scene_render_name_get(scene, render_name, sizeof(render_name));
+  const void *owner = DEG_get_original_id(&scene->id);
 
-  return RenderGlobal.interactive_compositor_renders.lookup_or_add_cb(render_name, [&]() {
+  return RenderGlobal.interactive_compositor_renders.lookup_or_add_cb(owner, [&]() {
     Render *render = MEM_new<Render>("New Interactive Compositor Render");
-    STRNCPY_UTF8(render->name, render_name);
-    RE_InitRenderCB(render);
+    render->owner = owner;
     return render;
   });
-}
-
-void RE_InitRenderCB(Render *re)
-{
-  /* set default empty callbacks */
-  re->display_init_cb = result_nothing;
-  re->display_clear_cb = result_nothing;
-  re->display_update_cb = result_rcti_nothing;
-  re->current_scene_update_cb = current_scene_nothing;
-  re->prepare_viewlayer_cb = prepare_viewlayer_nothing;
-  re->progress_cb = float_nothing;
-  re->test_break_cb = default_break;
-  if (G.background) {
-    re->stats_draw_cb = stats_background;
-  }
-  else {
-    re->stats_draw_cb = stats_nothing;
-  }
-  re->draw_lock_cb = nullptr;
-  /* clear callback handles */
-  re->dih = re->dch = re->duh = re->sdh = re->prh = re->tbh = re->dlh = nullptr;
 }
 
 void RE_FreeRender(Render *re)
@@ -684,20 +635,25 @@ void RE_FreeUnusedGPUResources()
   for (Render *re : RenderGlobal.render_list) {
     bool do_free = true;
 
-    LISTBASE_FOREACH (const wmWindow *, win, &wm->windows) {
-      const Scene *scene = WM_window_get_active_scene(win);
-      if (re != RE_GetSceneRender(scene)) {
-        continue;
+    /* Don't free scenes being rendered or composited. Note there is no
+     * race condition here because we are on the main thread and new jobs can only
+     * be started from the main thread. */
+    if (WM_jobs_test(wm, re->owner, WM_JOB_TYPE_RENDER) ||
+        WM_jobs_test(wm, re->owner, WM_JOB_TYPE_COMPOSITE) ||
+        WM_jobs_test(wm, re->owner, WM_JOB_TYPE_OBJECT_BAKE))
+    {
+      do_free = false;
+    }
+
+    for (const wmWindow &win : wm->windows) {
+      if (!do_free) {
+        /* No need to do further checks. */
+        break;
       }
 
-      /* Don't free if this scene is being rendered or composited. Note there is no
-       * race condition here because we are on the main thread and new jobs can only
-       * be started from the main thread. */
-      if (WM_jobs_test(wm, scene, WM_JOB_TYPE_RENDER) ||
-          WM_jobs_test(wm, scene, WM_JOB_TYPE_COMPOSITE))
-      {
-        do_free = false;
-        break;
+      const Scene *scene = WM_window_get_active_scene(&win);
+      if (scene != re->owner) {
+        continue;
       }
 
       /* Detect if scene is using GPU compositing, and if either a node editor is
@@ -708,9 +664,9 @@ void RE_FreeUnusedGPUResources()
         continue;
       }
 
-      const bScreen *screen = WM_window_get_active_screen(win);
-      LISTBASE_FOREACH (const ScrArea *, area, &screen->areabase) {
-        const SpaceLink &space = *static_cast<const SpaceLink *>(area->spacedata.first);
+      const bScreen *screen = WM_window_get_active_screen(&win);
+      for (const ScrArea &area : screen->areabase) {
+        const SpaceLink &space = *static_cast<const SpaceLink *>(area.spacedata.first);
 
         if (space.spacetype == SPACE_NODE) {
           const SpaceNode &snode = reinterpret_cast<const SpaceNode &>(space);
@@ -729,17 +685,21 @@ void RE_FreeUnusedGPUResources()
 
     if (do_free) {
       re_gpu_texture_caches_free(re);
-      RE_blender_gpu_context_free(re);
-      RE_system_gpu_context_free(re);
+      if (re->display && !re->display_shared) {
+        re->display->free_gpu_context();
+      }
 
       /* We also free the resources from the interactive compositor render of the scene if one
        * exists. */
       Render *interactive_compositor_render =
-          RenderGlobal.interactive_compositor_renders.lookup_default(re->name, nullptr);
+          RenderGlobal.interactive_compositor_renders.lookup_default(re->owner, nullptr);
       if (interactive_compositor_render) {
         re_gpu_texture_caches_free(interactive_compositor_render);
-        RE_blender_gpu_context_free(interactive_compositor_render);
-        RE_system_gpu_context_free(interactive_compositor_render);
+        if (interactive_compositor_render->display &&
+            !interactive_compositor_render->display_shared)
+        {
+          interactive_compositor_render->display->free_gpu_context();
+        }
       }
     }
   }
@@ -813,20 +773,20 @@ static void re_init_resolution(
   }
 }
 
-void render_copy_renderdata(RenderData *to, RenderData *from)
+void render_copy_renderdata(RenderData *to, const RenderData *from)
 {
   /* Mostly shallow copy referencing pointers in scene renderdata. */
   BKE_curvemapping_free_data(&to->mblur_shutter_curve);
 
-  memcpy(to, from, sizeof(*to));
+  *to = dna::shallow_copy(*from);
 
   BKE_curvemapping_copy_data(&to->mblur_shutter_curve, &from->mblur_shutter_curve);
 }
 
 void RE_InitState(Render *re,
                   Render *source,
-                  RenderData *rd,
-                  ListBase * /*render_layers*/,
+                  const RenderData *rd,
+                  ListBaseT<ViewLayer> * /*render_layers*/,
                   ViewLayer *single_layer,
                   int winx,
                   int winy,
@@ -894,8 +854,8 @@ void RE_InitState(Render *re,
         have_layer = true;
       }
       else {
-        LISTBASE_FOREACH (RenderLayer *, rl, &re->result->layers) {
-          if (STREQ(rl->name, re->single_view_layer)) {
+        for (RenderLayer &rl : re->result->layers) {
+          if (STREQ(rl.name, re->single_view_layer)) {
             have_layer = true;
           }
         }
@@ -916,7 +876,7 @@ void RE_InitState(Render *re,
 
     /* make empty render result, so display callbacks can initialize */
     render_result_free(re->result);
-    re->result = MEM_callocN<RenderResult>("new render result");
+    re->result = MEM_new<RenderResult>("new render result");
     re->result->rectx = re->rectx;
     re->result->recty = re->recty;
     BKE_scene_ppm_get(&re->r, re->result->ppm);
@@ -928,49 +888,37 @@ void RE_InitState(Render *re,
   RE_init_threadcount(re);
 }
 
-void RE_display_init_cb(Render *re, void *handle, void (*f)(void *handle, RenderResult *rr))
+void RE_display_update_cb(Render *re, void *handle, void (*f)(void *handle, RenderResult *rr))
 {
-  re->display_init_cb = f;
-  re->dih = handle;
-}
-void RE_display_clear_cb(Render *re, void *handle, void (*f)(void *handle, RenderResult *rr))
-{
-  re->display_clear_cb = f;
-  re->dch = handle;
-}
-void RE_display_update_cb(Render *re,
-                          void *handle,
-                          void (*f)(void *handle, RenderResult *rr, rcti *rect))
-{
-  re->display_update_cb = f;
-  re->duh = handle;
+  re->display->display_update_cb = f;
+  re->display->duh = handle;
 }
 void RE_current_scene_update_cb(Render *re, void *handle, void (*f)(void *handle, Scene *scene))
 {
-  re->current_scene_update_cb = f;
-  re->suh = handle;
+  re->display->current_scene_update_cb = f;
+  re->display->suh = handle;
 }
 void RE_stats_draw_cb(Render *re, void *handle, void (*f)(void *handle, RenderStats *rs))
 {
-  re->stats_draw_cb = f;
-  re->sdh = handle;
+  re->display->stats_draw_cb = f;
+  re->display->sdh = handle;
 }
 void RE_progress_cb(Render *re, void *handle, void (*f)(void *handle, float))
 {
-  re->progress_cb = f;
-  re->prh = handle;
+  re->display->progress_cb = f;
+  re->display->prh = handle;
 }
 
 void RE_draw_lock_cb(Render *re, void *handle, void (*f)(void *handle, bool lock))
 {
-  re->draw_lock_cb = f;
-  re->dlh = handle;
+  re->display->draw_lock_cb = f;
+  re->display->dlh = handle;
 }
 
 void RE_test_break_cb(Render *re, void *handle, bool (*f)(void *handle))
 {
-  re->test_break_cb = f;
-  re->tbh = handle;
+  re->display->test_break_cb = f;
+  re->display->tbh = handle;
 }
 
 void RE_prepare_viewlayer_cb(Render *re,
@@ -984,66 +932,55 @@ void RE_prepare_viewlayer_cb(Render *re,
 /** \} */
 
 /* -------------------------------------------------------------------- */
-/** \name GPU Context
+/** \name Display and GPU context
  * \{ */
 
-void RE_system_gpu_context_ensure(Render *re)
+void RE_display_init(Render *re)
 {
-  BLI_assert(BLI_thread_is_main());
+  re->display_shared = false;
+  re->display = std::make_shared<RenderDisplay>();
 
-  if (re->system_gpu_context == nullptr) {
-    /* Needs to be created in the main thread. */
-    re->system_gpu_context = WM_system_gpu_context_create();
-    /* The context is activated during creation, so release it here since the function should not
-     * have context activation as a side effect. Then activate the drawable's context below. */
-    if (re->system_gpu_context) {
-      WM_system_gpu_context_release(re->system_gpu_context);
-    }
-    wm_window_reset_drawable();
-  }
+  re->display->display_update_cb = result_rcti_nothing;
+  re->display->current_scene_update_cb = current_scene_nothing;
+  re->display->progress_cb = float_nothing;
+  re->display->test_break_cb = default_break;
+  re->display->stats_draw_cb = stats_update;
+  re->display->sdh = re;
 }
 
-void RE_system_gpu_context_free(Render *re)
+void RE_display_ensure_gpu_context(Render *re)
 {
-  if (re->system_gpu_context) {
-    if (re->blender_gpu_context) {
-      WM_system_gpu_context_activate(re->system_gpu_context);
-      GPU_context_active_set(static_cast<GPUContext *>(re->blender_gpu_context));
-      GPU_context_discard(static_cast<GPUContext *>(re->blender_gpu_context));
-      re->blender_gpu_context = nullptr;
-    }
-
-    WM_system_gpu_context_dispose(re->system_gpu_context);
-    re->system_gpu_context = nullptr;
-
-    /* If in main thread, reset window context. */
-    if (BLI_thread_is_main()) {
-      wm_window_reset_drawable();
-    }
-  }
+  re->display->ensure_system_gpu_context();
 }
 
-void *RE_system_gpu_context_get(Render *re)
+void RE_display_share(Render *re, const Render *parent_re)
 {
-  return re->system_gpu_context;
+  /* Use for compositor and sequencer, which can render scenes recursively.
+   * It more efficient, and we can only create this context on the main thread. */
+  if (ELEM(parent_re, nullptr, re)) {
+    return;
+  }
+
+  re->display_shared = true;
+  re->display = parent_re->display;
+}
+
+void RE_display_free(Render *re)
+{
+  /* Re-initializing with a new RenderDisplay will free the GPU contexts and all callbacks. */
+  RE_display_init(re);
+}
+
+GHOST_IContext *RE_system_gpu_context_get(Render *re)
+{
+  RenderDisplay *display = re->display.get();
+  return display->system_gpu_context;
 }
 
 void *RE_blender_gpu_context_ensure(Render *re)
 {
-  if (re->blender_gpu_context == nullptr) {
-    re->blender_gpu_context = GPU_context_create(nullptr, re->system_gpu_context);
-  }
-  return re->blender_gpu_context;
-}
-
-void RE_blender_gpu_context_free(Render *re)
-{
-  if (re->blender_gpu_context) {
-    WM_system_gpu_context_activate(re->system_gpu_context);
-    GPU_context_active_set(static_cast<GPUContext *>(re->blender_gpu_context));
-    GPU_context_discard(static_cast<GPUContext *>(re->blender_gpu_context));
-    re->blender_gpu_context = nullptr;
-  }
+  RenderDisplay *display = re->display.get();
+  return display->ensure_blender_gpu_context();
 }
 
 /** \} */
@@ -1103,18 +1040,12 @@ static void render_result_uncrop(Render *re)
 
       BLI_rw_mutex_unlock(&re->resultmutex);
 
-      re->display_init(re->result);
-      re->display_update(re->result, nullptr);
+      re->display->display_update(re->result);
 
       /* restore the disprect from border */
       re->disprect = orig_disprect;
       re->rectx = orig_rectx;
       re->recty = orig_recty;
-    }
-    else {
-      /* set offset (again) for use in compositor, disprect was manipulated. */
-      re->result->xof = 0;
-      re->result->yof = 0;
     }
   }
 }
@@ -1133,7 +1064,7 @@ static void do_render_engine(Render *re)
   /* now use renderdata and camera to set viewplane */
   RE_SetCamera(re, camera);
 
-  re->current_scene_update(re->scene);
+  re->display->current_scene_update(re->scene);
   RE_engine_render(re, false);
 
   /* when border render, check if we have to insert it in black */
@@ -1166,61 +1097,120 @@ static void do_render_compositor_scene(Render *re, Scene *sce, int cfra)
   resc->main = re->main;
   resc->scene = sce;
 
-  /* copy callbacks */
-  resc->display_update_cb = re->display_update_cb;
-  resc->duh = re->duh;
-  resc->test_break_cb = re->test_break_cb;
-  resc->tbh = re->tbh;
-  resc->stats_draw_cb = re->stats_draw_cb;
-  resc->sdh = re->sdh;
-  resc->current_scene_update_cb = re->current_scene_update_cb;
-  resc->suh = re->suh;
+  RE_display_share(resc, re);
 
   do_render_engine(resc);
+
+  RE_display_free(resc);
 }
 
-/* Get the scene referenced by the given node if the node uses its render. Returns nullptr
- * otherwise. */
-static Scene *get_scene_referenced_by_node(const bNode *node)
+/* Get the set of all scenes that needs to be rendered by the given compositor node group in the
+ * given pipeline scene. If the node group is the root one, is_root_node_group will be true. */
+static VectorSet<Scene *> get_scenes_that_needs_render_by_node_group(
+    Scene &pipeline_scene,
+    const bNodeTree &node_group,
+    const bool is_root_node_group,
+    VectorSet<const bNodeTree *> &node_trees_already_searched)
 {
-  if (node->is_muted()) {
-    return nullptr;
-  }
+  VectorSet<Scene *> needed_scenes_to_render;
+  node_group.ensure_topology_cache();
 
-  if (node->type_legacy == CMP_NODE_R_LAYERS) {
-    return reinterpret_cast<Scene *>(node->id);
-  }
-  if (node->type_legacy == CMP_NODE_CRYPTOMATTE &&
-      node->custom1 == CMP_NODE_CRYPTOMATTE_SOURCE_RENDER)
-  {
-    return reinterpret_cast<Scene *>(node->id);
-  }
-
-  return nullptr;
-}
-
-/* Returns true if the given scene needs a render, either because it doesn't use the compositor
- * pipeline and thus needs a simple render, or that its compositor node tree requires the scene to
- * be rendered. */
-static bool compositor_needs_render(Scene *scene)
-{
-  bNodeTree *ntree = scene->compositing_node_group;
-
-  if (ntree == nullptr) {
-    return true;
-  }
-  if ((scene->r.scemode & R_DOCOMP) == 0) {
-    return true;
-  }
-
-  for (const bNode *node : ntree->all_nodes()) {
-    Scene *node_scene = get_scene_referenced_by_node(node);
-    if (node_scene && node_scene == scene) {
-      return true;
+  /* Group Input nodes. */
+  if (is_root_node_group) {
+    for (const bNode *node : node_group.group_input_nodes()) {
+      if (!node->is_muted()) {
+        needed_scenes_to_render.add(&pipeline_scene);
+      }
     }
   }
 
-  return false;
+  /* Render Layers nodes. */
+  for (const bNode *node : node_group.nodes_by_type("CompositorNodeRLayers"_ustr)) {
+    if (!node->is_muted() && node->id) {
+      needed_scenes_to_render.add(id_cast<Scene *>(node->id));
+    }
+  }
+
+  /* Cryptomatte nodes. */
+  for (const bNode *node : node_group.nodes_by_type("CompositorNodeCryptomatteV2"_ustr)) {
+    if (!node->is_muted() && node->custom1 == CMP_NODE_CRYPTOMATTE_SOURCE_RENDER && node->id) {
+      needed_scenes_to_render.add(id_cast<Scene *>(node->id));
+    }
+  }
+
+  /* Group nodes. */
+  for (const bNode *node : node_group.group_nodes()) {
+    if (node->is_muted() || !node->id) {
+      continue;
+    }
+
+    const bNodeTree &child_node_group = *id_cast<const bNodeTree *>(node->id);
+    if (node_trees_already_searched.contains(&child_node_group)) {
+      continue;
+    }
+    node_trees_already_searched.add_new(&child_node_group);
+
+    needed_scenes_to_render.add_multiple(get_scenes_that_needs_render_by_node_group(
+        pipeline_scene, child_node_group, false, node_trees_already_searched));
+  }
+
+  return needed_scenes_to_render;
+}
+
+static bool is_compositor_enabled(Scene &pipeline_scene)
+{
+  bNodeTree *node_group = pipeline_scene.compositing_node_group;
+  if (!node_group) {
+    return false;
+  }
+
+  if (!(pipeline_scene.r.scemode & R_DOCOMP)) {
+    return false;
+  }
+
+  return true;
+}
+
+/* Get the set of all scenes that needs to be rendered by the compositor of the given pipeline
+ * scene. */
+static VectorSet<Scene *> get_scenes_that_needs_render_by_compositor(Scene &pipeline_scene)
+{
+  if (!is_compositor_enabled(pipeline_scene)) {
+    return VectorSet<Scene *>();
+  }
+
+  VectorSet<const bNodeTree *> node_trees_already_searched;
+  return get_scenes_that_needs_render_by_node_group(
+      pipeline_scene, *pipeline_scene.compositing_node_group, true, node_trees_already_searched);
+}
+
+/* Render all scenes needed by the compositor. */
+static void do_render_compositor_scenes(Render *re, VectorSet<Scene *> &needed_scenes_to_render)
+{
+  bool a_scene_was_rendered = false;
+  for (Scene *scene : needed_scenes_to_render) {
+    /* The provided needed_scenes_to_render might contain evaluated scenes, so get the original
+     * scene instead, because we will be doing raw pointer comparison below and the render function
+     * expects original scenes. */
+    Scene *original_scene = DEG_get_original(scene);
+
+    /* The pipeline scene was already rendered. */
+    if (original_scene == re->scene) {
+      continue;
+    }
+
+    if (!render_scene_has_layers_to_render(scene, nullptr)) {
+      continue;
+    }
+
+    do_render_compositor_scene(re, original_scene, re->scene->r.cfra);
+    a_scene_was_rendered = true;
+  }
+
+  /* If a scene was rendered, switch back to the current scene. */
+  if (a_scene_was_rendered) {
+    re->display->current_scene_update(re->scene);
+  }
 }
 
 /** Returns true if the node tree has a group output node. */
@@ -1231,65 +1221,13 @@ static bool node_tree_has_group_output(const bNodeTree *node_tree)
   }
 
   node_tree->ensure_topology_cache();
-  for (const bNode *node : node_tree->nodes_by_type("NodeGroupOutput")) {
+  for (const bNode *node : node_tree->nodes_by_type("NodeGroupOutput"_ustr)) {
     if (node->flag & NODE_DO_OUTPUT && !node->is_muted()) {
       return true;
     }
   }
 
   return false;
-}
-
-/* Render all scenes references by the compositor of the given render's scene. */
-static void do_render_compositor_scenes(Render *re)
-{
-  if (re->scene->compositing_node_group == nullptr) {
-    return;
-  }
-
-  /* For each node that requires a scene we do a full render. Results are stored in a way
-   * compositor will find it. */
-  blender::Set<Scene *> scenes_rendered;
-  for (bNode *node : re->scene->compositing_node_group->all_nodes()) {
-    Scene *node_scene = get_scene_referenced_by_node(node);
-    if (!node_scene) {
-      continue;
-    }
-
-    /* References the current scene, which was already rendered. */
-    if (node_scene == re->scene) {
-      continue;
-    }
-
-    /* Scene already rendered as required by another node. */
-    if (scenes_rendered.contains(node_scene)) {
-      continue;
-    }
-
-    if (!render_scene_has_layers_to_render(node_scene, nullptr)) {
-      continue;
-    }
-
-    scenes_rendered.add_new(node_scene);
-    do_render_compositor_scene(re, node_scene, re->scene->r.cfra);
-    node->typeinfo->updatefunc(re->scene->compositing_node_group, node);
-  }
-
-  /* If another scene was rendered, switch back to the current scene. */
-  if (!scenes_rendered.is_empty()) {
-    re->current_scene_update(re->scene);
-  }
-}
-
-/* bad call... need to think over proper method still */
-static void render_compositor_stats(void *arg, const char *str)
-{
-  Render *re = (Render *)arg;
-
-  RenderStats i;
-  memcpy(&i, &re->i, sizeof(i));
-  i.infostr = str;
-  re->stats_draw(&i);
 }
 
 /* Render compositor nodes, along with any scenes required for them.
@@ -1299,7 +1237,14 @@ static void do_render_compositor(Render *re)
   bNodeTree *ntree = re->pipeline_scene_eval->compositing_node_group;
   bool update_newframe = false;
 
-  if (compositor_needs_render(re->pipeline_scene_eval)) {
+  VectorSet<Scene *> needed_scenes_to_render = get_scenes_that_needs_render_by_compositor(
+      *re->pipeline_scene_eval);
+
+  /* Render the pipeline scene because the compositor is disabled and thus we do a simple render,
+   * or the compositor is enabled and requires the scene to be rendered. */
+  if (!is_compositor_enabled(*re->pipeline_scene_eval) ||
+      needed_scenes_to_render.contains(re->pipeline_scene_eval))
+  {
     /* render the frames
      * it could be optimized to render only the needed view
      * but what if a scene has a different number of views
@@ -1337,52 +1282,45 @@ static void do_render_compositor(Render *re)
     BLI_rw_mutex_unlock(&re->resultmutex);
   }
 
-  if (!re->test_break()) {
+  if (!re->display->test_break()) {
     if (ntree && re->r.scemode & R_DOCOMP) {
       /* checks if there are render-result nodes that need scene */
       if ((re->r.scemode & R_SINGLE_LAYER) == 0) {
-        do_render_compositor_scenes(re);
+        do_render_compositor_scenes(re, needed_scenes_to_render);
       }
 
-      if (!re->test_break()) {
-        ntree->runtime->stats_draw = render_compositor_stats;
-        ntree->runtime->test_break = re->test_break_cb;
-        ntree->runtime->progress = re->progress_cb;
-        ntree->runtime->sdh = re;
-        ntree->runtime->tbh = re->tbh;
-        ntree->runtime->prh = re->prh;
-
+      if (!re->display->test_break()) {
         if (update_newframe) {
           /* If we have consistent depsgraph now would be a time to update them. */
         }
 
-        blender::compositor::OutputTypes needed_outputs =
-            blender::compositor::OutputTypes::Composite |
-            blender::compositor::OutputTypes::FileOutput;
+        compositor::NodeGroupOutputTypes needed_outputs =
+            compositor::NodeGroupOutputTypes::FileOutputNode;
         if (!G.background) {
-          needed_outputs |= blender::compositor::OutputTypes::Viewer |
-                            blender::compositor::OutputTypes::Previews;
+          needed_outputs |= compositor::NodeGroupOutputTypes::ViewerNode |
+                            compositor::NodeGroupOutputTypes::NodePreviews;
         }
 
         CLOG_STR_INFO(&LOG, "Executing compositor");
-        blender::compositor::RenderContext compositor_render_context;
+
+        re->i.infostr = IFACE_("Compositing");
+        re->display->stats_draw(&re->i);
+        re->i.infostr = nullptr;
+
+        compositor::RenderContext compositor_render_context;
         compositor_render_context.is_animation_render = re->flag & R_ANIMATION;
-        LISTBASE_FOREACH (RenderView *, rv, &re->result->views) {
-          COM_execute(re,
-                      &re->r,
-                      re->pipeline_scene_eval,
-                      ntree,
-                      rv->name,
-                      &compositor_render_context,
-                      nullptr,
-                      needed_outputs);
+        for (RenderView &rv : re->result->views) {
+          RE_compositor_execute(render::CompositorInputData(*re,
+                                                            *re->main,
+                                                            *re->pipeline_scene_eval,
+                                                            re->r,
+                                                            *ntree,
+                                                            rv.name,
+                                                            &compositor_render_context,
+                                                            needed_outputs,
+                                                            false));
         }
         compositor_render_context.save_file_outputs(re->pipeline_scene_eval);
-
-        ntree->runtime->stats_draw = nullptr;
-        ntree->runtime->test_break = nullptr;
-        ntree->runtime->progress = nullptr;
-        ntree->runtime->tbh = ntree->runtime->sdh = ntree->runtime->prh = nullptr;
       }
     }
   }
@@ -1390,7 +1328,7 @@ static void do_render_compositor(Render *re)
   /* Weak: the display callback wants an active render-layer pointer. */
   if (re->result != nullptr) {
     re->result->renlay = render_get_single_layer(re, re->result);
-    re->display_update(re->result, nullptr);
+    re->display->display_update(re->result);
   }
 }
 
@@ -1400,10 +1338,10 @@ static void renderresult_set_passes_metadata(Render *re)
 
   BLI_rw_mutex_lock(&re->resultmutex, THREAD_LOCK_WRITE);
 
-  LISTBASE_FOREACH (RenderLayer *, render_layer, &render_result->layers) {
-    LISTBASE_FOREACH_BACKWARD (RenderPass *, render_pass, &render_layer->passes) {
-      if (render_pass->ibuf) {
-        BKE_imbuf_stamp_info(render_result, render_pass->ibuf);
+  for (RenderLayer &render_layer : render_result->layers) {
+    for (RenderPass &render_pass : render_layer.passes.items_reversed()) {
+      if (render_pass.ibuf) {
+        BKE_imbuf_stamp_info(render_result, render_pass.ibuf);
       }
     }
   }
@@ -1417,8 +1355,8 @@ static void renderresult_stampinfo(Render *re)
   int nr = 0;
 
   /* this is the basic trick to get the displayed float or char rect from render result */
-  LISTBASE_FOREACH (RenderView *, rv, &re->result->views) {
-    RE_SetActiveRenderView(re, rv->name);
+  for (RenderView &rv : re->result->views) {
+    RE_SetActiveRenderView(re, rv.name);
     RE_AcquireResultImage(re, &rres, nr);
 
     if (rres.ibuf != nullptr) {
@@ -1434,7 +1372,7 @@ static void renderresult_stampinfo(Render *re)
   }
 }
 
-bool RE_seq_render_active(Scene *scene, RenderData *rd)
+bool RE_seq_render_active(Scene *scene, const RenderData *rd)
 {
   Editing *ed = scene->ed;
 
@@ -1442,10 +1380,8 @@ bool RE_seq_render_active(Scene *scene, RenderData *rd)
     return false;
   }
 
-  LISTBASE_FOREACH (Strip *, strip, &ed->seqbase) {
-    if (strip->type != STRIP_TYPE_SOUND_RAM &&
-        !blender::seq::render_is_muted(&ed->channels, strip))
-    {
+  for (Strip &strip : ed->seqbase) {
+    if (strip.type != STRIP_TYPE_SOUND && !seq::render_is_muted(&ed->channels, &strip)) {
       return true;
     }
   }
@@ -1458,50 +1394,13 @@ static bool seq_result_needs_float(const ImageFormatData &im_format)
   return ELEM(im_format.depth, R_IMF_CHAN_DEPTH_10, R_IMF_CHAN_DEPTH_12);
 }
 
-static ImBuf *seq_process_render_image(ImBuf *src,
-                                       const ImageFormatData &im_format,
-                                       const Scene *scene)
-{
-  if (src == nullptr) {
-    return nullptr;
-  }
-
-  ImBuf *dst = nullptr;
-  if (seq_result_needs_float(im_format) && src->float_buffer.data == nullptr) {
-    /* If render output needs >8-BPP input and we only have 8-BPP, convert to float. */
-    dst = IMB_allocImBuf(src->x, src->y, src->planes, 0);
-    IMB_alloc_float_pixels(dst, src->channels, false);
-    /* Transform from sequencer space to scene linear. */
-    const char *from_colorspace = IMB_colormanagement_get_rect_colorspace(src);
-    const char *to_colorspace = IMB_colormanagement_role_colorspace_name_get(
-        COLOR_ROLE_SCENE_LINEAR);
-    IMB_colormanagement_transform_byte_to_float(dst->float_buffer.data,
-                                                src->byte_buffer.data,
-                                                src->x,
-                                                src->y,
-                                                src->channels,
-                                                from_colorspace,
-                                                to_colorspace);
-  }
-  else {
-    /* Duplicate sequencer output and ensure it is in needed color space. */
-    dst = IMB_dupImBuf(src);
-    blender::seq::render_imbuf_from_sequencer_space(scene, dst);
-  }
-  IMB_metadata_copy(dst, src);
-  IMB_freeImBuf(src);
-
-  return dst;
-}
-
 /* Render sequencer strips into render result. */
 static void do_render_sequencer(Render *re)
 {
   static int recurs_depth = 0;
-  ImBuf *out;
   RenderResult *rr; /* don't assign re->result here as it might change during give_ibuf_seq */
   int cfra = re->r.cfra;
-  blender::seq::RenderData context;
+  seq::RenderData context;
   int view_id, tot_views;
   int re_x, re_y;
 
@@ -1523,7 +1422,7 @@ static void do_render_sequencer(Render *re)
   }
 
   tot_views = BKE_scene_multiview_num_views_get(&re->r);
-  blender::Vector<ImBuf *> ibuf_arr(tot_views);
+  Vector<ImBuf *> ibuf_arr(tot_views);
 
   render_new_render_data(re->main,
                          re->pipeline_depsgraph,
@@ -1531,7 +1430,7 @@ static void do_render_sequencer(Render *re)
                          re_x,
                          re_y,
                          SEQ_RENDER_SIZE_SCENE,
-                         true,
+                         re,
                          &context);
 
   /* The render-result gets destroyed during the rendering, so we first collect all ibufs
@@ -1539,8 +1438,13 @@ static void do_render_sequencer(Render *re)
 
   for (view_id = 0; view_id < tot_views; view_id++) {
     context.view_id = view_id;
-    out = render_give_ibuf(&context, cfra, 0);
-    ibuf_arr[view_id] = seq_process_render_image(out, re->r.im_format, re->pipeline_scene_eval);
+    ImBuf *out = render_give_ibuf(&context, cfra, 0);
+    if (out != nullptr) {
+      bool make_float = seq_result_needs_float(re->r.im_format);
+      out = IMB_makeSingleUser(out);
+      seq::ensure_ibuf_is_linear_space(out, make_float);
+    }
+    ibuf_arr[view_id] = out;
   }
 
   rr = re->result;
@@ -1557,7 +1461,7 @@ static void do_render_sequencer(Render *re)
       /* copy ibuf into combined pixel rect */
       RE_render_result_rect_from_ibuf(rr, ibuf_arr[view_id], view_id);
 
-      if (ibuf_arr[view_id]->metadata && (re->scene->r.stamp & R_STAMP_STRIPMETA)) {
+      if (ibuf_arr[view_id]->metadata() && (re->scene->r.stamp & R_STAMP_STRIPMETA)) {
         /* ensure render stamp info first */
         BKE_render_result_stamp_info(nullptr, nullptr, rr, true);
         BKE_stamp_info_from_imbuf(rr, ibuf_arr[view_id]);
@@ -1566,7 +1470,8 @@ static void do_render_sequencer(Render *re)
       if (recurs_depth == 0) { /* With nested scenes, only free on top-level. */
         Editing *ed = re->pipeline_scene_eval->ed;
         if (ed) {
-          blender::seq::relations_free_imbuf(re->pipeline_scene_eval, &ed->seqbase, true);
+          seq::relations_free_imbuf(re->pipeline_scene_eval, &ed->seqbase, true);
+          seq::cache_cleanup(re->pipeline_scene_eval, seq::CacheCleanup::FinalAndIntra);
         }
       }
       IMB_freeImBuf(ibuf_arr[view_id]);
@@ -1580,7 +1485,7 @@ static void do_render_sequencer(Render *re)
 
     /* would mark display buffers as invalid */
     RE_SetActiveRenderView(re, rv->name);
-    re->display_update(re->result, nullptr);
+    re->display->display_update(re->result);
   }
 
   recurs_depth--;
@@ -1590,10 +1495,10 @@ static void do_render_sequencer(Render *re)
 
   /* set overall progress of sequence rendering */
   if (re->r.efra != re->r.sfra) {
-    re->progress(float(cfra - re->r.sfra) / (re->r.efra - re->r.sfra));
+    re->display->progress(float(cfra - re->r.sfra) / (re->r.efra - re->r.sfra));
   }
   else {
-    re->progress(1.0f);
+    re->display->progress(1.0f);
   }
 }
 
@@ -1604,28 +1509,27 @@ static void do_render_full_pipeline(Render *re)
 {
   bool render_seq = false;
 
-  re->current_scene_update_cb(re->suh, re->scene);
+  re->display->current_scene_update_cb(re->display->suh, re->scene);
 
   BKE_scene_camera_switch_update(re->scene);
 
   re->i.starttime = BLI_time_now_seconds();
 
-  /* ensure no images are in memory from previous animated sequences */
+  /* ensure no rendered results are cached from previous animated sequences */
   BKE_image_all_free_anim_ibufs(re->main, re->r.cfra);
-  blender::seq::cache_cleanup(re->scene);
 
   if (RE_engine_render(re, true)) {
     /* in this case external render overrides all */
   }
   else if (RE_seq_render_active(re->scene, &re->r)) {
     /* NOTE: do_render_sequencer() frees rect32 when sequencer returns float images. */
-    if (!re->test_break()) {
+    if (!re->display->test_break()) {
       do_render_sequencer(re);
       render_seq = true;
     }
 
-    re->stats_draw(&re->i);
-    re->display_update(re->result, nullptr);
+    re->display->stats_draw(&re->i);
+    re->display->display_update(re->result);
   }
   else {
     do_render_compositor(re);
@@ -1633,7 +1537,7 @@ static void do_render_full_pipeline(Render *re)
 
   re->i.lastframetime = BLI_time_now_seconds() - re->i.starttime;
 
-  re->stats_draw(&re->i);
+  re->display->stats_draw(&re->i);
 
   /* save render result stamp if needed */
   if (re->result != nullptr) {
@@ -1648,21 +1552,22 @@ static void do_render_full_pipeline(Render *re)
     /* stamp image info here */
     if ((re->scene->r.stamp & R_STAMP_ALL) && (re->scene->r.stamp & R_STAMP_DRAW)) {
       renderresult_stampinfo(re);
-      re->display_update(re->result, nullptr);
+      re->display->display_update(re->result);
     }
   }
 }
 
-static bool check_valid_compositing_camera(Scene *scene,
+static bool check_valid_compositing_camera(const Main &bmain,
+                                           Scene *scene,
                                            Object *camera_override,
                                            ReportList *reports)
 {
   if (scene->r.scemode & R_DOCOMP && scene->compositing_node_group) {
     for (bNode *node : scene->compositing_node_group->all_nodes()) {
       if (node->type_legacy == CMP_NODE_R_LAYERS && !node->is_muted()) {
-        Scene *sce = node->id ? (Scene *)node->id : scene;
+        Scene *sce = node->id ? id_cast<Scene *>(node->id) : scene;
         if (sce->camera == nullptr) {
-          sce->camera = BKE_view_layer_camera_find(sce, BKE_view_layer_default_render(sce));
+          sce->camera = BKE_view_layer_camera_find(bmain, sce, BKE_view_layer_default_render(sce));
         }
         if (sce->camera == nullptr) {
           /* all render layers nodes need camera */
@@ -1687,7 +1592,10 @@ static bool check_valid_compositing_camera(Scene *scene,
   return ok;
 }
 
-static bool check_valid_camera_multiview(Scene *scene, Object *camera, ReportList *reports)
+static bool check_valid_camera_multiview(const Main &bmain,
+                                         Scene *scene,
+                                         Object *camera,
+                                         ReportList *reports)
 {
   bool active_view = false;
 
@@ -1695,17 +1603,17 @@ static bool check_valid_camera_multiview(Scene *scene, Object *camera, ReportLis
     return true;
   }
 
-  LISTBASE_FOREACH (SceneRenderView *, srv, &scene->r.views) {
-    if (BKE_scene_multiview_is_render_view_active(&scene->r, srv)) {
+  for (SceneRenderView &srv : scene->r.views) {
+    if (BKE_scene_multiview_is_render_view_active(&scene->r, &srv)) {
       active_view = true;
 
       if (scene->r.views_format == SCE_VIEWS_FORMAT_MULTIVIEW) {
         Object *view_camera;
-        view_camera = BKE_camera_multiview_render(scene, camera, srv->name);
+        view_camera = BKE_camera_multiview_render(bmain, scene, camera, srv.name);
 
         if (view_camera == camera) {
           /* if the suffix is not in the camera, means we are using the fallback camera */
-          if (!BLI_str_endswith(view_camera->id.name + 2, srv->suffix)) {
+          if (!BLI_str_endswith(view_camera->id.name + 2, srv.suffix)) {
             BKE_reportf(reports,
                         RPT_ERROR,
                         "Camera \"%s\" is not a multi-view camera",
@@ -1725,77 +1633,64 @@ static bool check_valid_camera_multiview(Scene *scene, Object *camera, ReportLis
   return true;
 }
 
-static int check_valid_camera(Scene *scene, Object *camera_override, ReportList *reports)
+static int check_valid_camera(const Main &bmain,
+                              Scene *scene,
+                              Object *camera_override,
+                              ReportList *reports)
 {
   if (camera_override == nullptr && scene->camera == nullptr) {
-    scene->camera = BKE_view_layer_camera_find(scene, BKE_view_layer_default_render(scene));
+    scene->camera = BKE_view_layer_camera_find(bmain, scene, BKE_view_layer_default_render(scene));
   }
 
-  if (!check_valid_camera_multiview(scene, scene->camera, reports)) {
+  if (!check_valid_camera_multiview(bmain, scene, scene->camera, reports)) {
     return false;
   }
 
   if (RE_seq_render_active(scene, &scene->r)) {
     if (scene->ed) {
-      LISTBASE_FOREACH (Strip *, strip, &scene->ed->seqbase) {
-        if ((strip->type == STRIP_TYPE_SCENE) && ((strip->flag & SEQ_SCENE_STRIPS) == 0) &&
-            (strip->scene != nullptr))
+      for (Strip &strip : scene->ed->seqbase) {
+        if ((strip.type == STRIP_TYPE_SCENE) && ((strip.flag & SEQ_SCENE_STRIPS) == 0) &&
+            (strip.scene != nullptr))
         {
-          if (!strip->scene_camera) {
-            if (!strip->scene->camera &&
-                !BKE_view_layer_camera_find(strip->scene,
-                                            BKE_view_layer_default_render(strip->scene)))
+          if (!strip.scene_camera) {
+            if (!strip.scene->camera &&
+                !BKE_view_layer_camera_find(
+                    bmain, strip.scene, BKE_view_layer_default_render(strip.scene)))
             {
               /* camera could be unneeded due to composite nodes */
-              Object *override = (strip->scene == scene) ? camera_override : nullptr;
+              Object *override = (strip.scene == scene) ? camera_override : nullptr;
 
-              if (!check_valid_compositing_camera(strip->scene, override, reports)) {
+              if (!check_valid_compositing_camera(bmain, strip.scene, override, reports)) {
                 return false;
               }
             }
           }
-          else if (!check_valid_camera_multiview(strip->scene, strip->scene_camera, reports)) {
+          else if (!check_valid_camera_multiview(bmain, strip.scene, strip.scene_camera, reports))
+          {
             return false;
           }
         }
       }
     }
   }
-  else if (!check_valid_compositing_camera(scene, camera_override, reports)) {
+  else if (!check_valid_compositing_camera(bmain, scene, camera_override, reports)) {
     return false;
   }
 
   return true;
 }
 
-static bool node_tree_has_file_output(const bNodeTree *node_tree)
-{
-  node_tree->ensure_topology_cache();
-  for (const bNode *node : node_tree->nodes_by_type("CompositorNodeOutputFile")) {
-    if (!node->is_muted()) {
-      return true;
-    }
-  }
-
-  for (const bNode *node : node_tree->group_nodes()) {
-    if (node->is_muted() || !node->id) {
-      continue;
-    }
-
-    if (node_tree_has_file_output(reinterpret_cast<const bNodeTree *>(node->id))) {
-      return true;
-    }
-  }
-
-  return false;
-}
-
 static bool scene_has_compositor_output(Scene *scene)
 {
+  if (scene->compositing_node_group == nullptr) {
+    return false;
+  }
+
   if (node_tree_has_group_output(scene->compositing_node_group)) {
     return true;
   }
-  return node_tree_has_file_output(scene->compositing_node_group);
+
+  return bke::compositor::node_tree_has_linked_file_output(scene->compositing_node_group);
 }
 
 /* Identify if the compositor can run on the GPU. Currently, this only checks if the compositor is
@@ -1809,12 +1704,7 @@ static bool is_compositing_possible_on_gpu(Scene *scene, ReportList *reports)
 
   int width, height;
   BKE_render_resolution(&scene->r, false, &width, &height);
-  const int max_texture_size = GPU_max_texture_size();
-
-  /* There is no way to know if the render size is too large except if we actually allocate a test
-   * texture, which we want to avoid due its cost. So we employ a heuristic that so far has worked
-   * with all known GPU drivers. */
-  if (size_t(width) * height > (size_t(max_texture_size) * max_texture_size) / 4) {
+  if (width > 8192 || height > 8192) {
     BKE_report(reports, RPT_ERROR, "Render size too large for GPU, use CPU compositor instead");
     return false;
   }
@@ -1822,7 +1712,37 @@ static bool is_compositing_possible_on_gpu(Scene *scene, ReportList *reports)
   return true;
 }
 
-bool RE_is_rendering_allowed(Scene *scene,
+bool RE_disable_save_output_allowed(const bool is_animation, Scene &scene, ReportList *reports)
+{
+  const bool save_output = (scene.r.mode & R_SAVE_OUTPUT) != 0;
+  const bool do_compositing = (scene.r.scemode & R_DOCOMP) != 0;
+  const bool do_sequencer = RE_seq_render_active(&scene, &scene.r);
+
+  if (is_animation && do_sequencer && !save_output) {
+    BKE_report(reports, RPT_ERROR, "Render output disabled in Output properties");
+    return false;
+  }
+
+  if (is_animation && !save_output && !do_compositing) {
+    BKE_report(reports, RPT_ERROR, "Render output and compositing disabled in Output properties");
+    return false;
+  }
+
+  if (is_animation && !save_output && do_compositing) {
+    if (!bke::compositor::node_tree_has_linked_file_output(scene.compositing_node_group)) {
+      BKE_report(reports,
+                 RPT_ERROR,
+                 "Render output disabled in Output properties and no active compositing File "
+                 "Output nodes");
+      return false;
+    }
+  }
+
+  return true;
+}
+
+bool RE_is_rendering_allowed(const Main &bmain,
+                             Scene *scene,
                              ViewLayer *single_layer,
                              Object *camera_override,
                              ReportList *reports)
@@ -1865,7 +1785,7 @@ bool RE_is_rendering_allowed(Scene *scene,
   }
 
   /* check valid camera, without camera render is OK (compo, seq) */
-  if (!check_valid_camera(scene, camera_override, reports)) {
+  if (!check_valid_camera(bmain, scene, camera_override, reports)) {
     return false;
   }
 
@@ -1975,9 +1895,6 @@ static bool render_init_from_main(Render *re,
     return false;
   }
 
-  re->display_init(re->result);
-  re->display_clear(re->result);
-
   return true;
 }
 
@@ -1989,6 +1906,7 @@ void RE_SetReports(Render *re, ReportList *reports)
 static void render_update_depsgraph(Render *re)
 {
   Scene *scene = re->scene;
+  BKE_scene_camera_switch_update(re->scene);
   DEG_evaluate_on_framechange(re->pipeline_depsgraph, BKE_scene_frame_get(scene));
   BKE_scene_update_sound(re->pipeline_depsgraph, re->main);
 }
@@ -2029,8 +1947,7 @@ static void render_pipeline_free(Render *re)
   }
 
   /* Destroy the opengl context in the correct thread. */
-  RE_blender_gpu_context_free(re);
-  RE_system_gpu_context_free(re);
+  RE_display_free(re);
 }
 
 void RE_RenderFrame(Render *re,
@@ -2042,6 +1959,8 @@ void RE_RenderFrame(Render *re,
                     const float subframe,
                     const bool write_still)
 {
+  CLOG_INFO(&LOG, "Rendering frame %d", frame);
+
   render_callback_exec_id(re, re->main, &scene->id, BKE_CB_EVT_RENDER_INIT);
 
   /* Ugly global still...
@@ -2054,8 +1973,7 @@ void RE_RenderFrame(Render *re,
   if (render_init_from_main(
           re, &scene->r, bmain, scene, single_layer, camera_override, false, false))
   {
-    RenderData rd;
-    memcpy(&rd, &scene->r, sizeof(rd));
+    RenderData rd = dna::shallow_copy(scene->r);
     MEM_reset_peak_memory();
 
     render_callback_exec_id(re, re->main, &scene->id, BKE_CB_EVT_RENDER_PRE);
@@ -2077,10 +1995,12 @@ void RE_RenderFrame(Render *re,
         char filepath_override[FILE_MAX];
         const char *relbase = BKE_main_blendfile_path(bmain);
         path_templates::VariableMap template_variables;
-        BKE_add_template_variables_general(template_variables, &scene->id);
+        BKE_blender_project_read_callback(bmain, [&](const bke::BlenderProject *project) {
+          BKE_add_template_variables_general(template_variables, &scene->id, project);
+        });
         BKE_add_template_variables_for_render_path(template_variables, *scene);
 
-        const blender::Vector<path_templates::Error> errors = BKE_image_path_from_imformat(
+        const Vector<path_templates::Error> errors = BKE_image_path_from_imformat(
             filepath_override,
             rd.pic,
             relbase,
@@ -2092,7 +2012,7 @@ void RE_RenderFrame(Render *re,
             nullptr);
 
         if (errors.is_empty()) {
-          do_write_image_or_movie(re, bmain, scene, 0, filepath_override);
+          do_write_image_or_movie(re, bmain, scene, 0, filepath_override, write_still);
         }
         else {
           BKE_report_path_template_errors(re->reports, RPT_ERROR, rd.pic, errors);
@@ -2157,24 +2077,24 @@ void RE_RenderFreestyleStrokes(Render *re, Main *bmain, Scene *scene, const bool
 
 void RE_RenderFreestyleExternal(Render *re)
 {
-  if (re->test_break()) {
+  if (re->display->test_break()) {
     return;
   }
 
   FRS_init_stroke_renderer(re);
 
-  LISTBASE_FOREACH (RenderView *, rv, &re->result->views) {
-    RE_SetActiveRenderView(re, rv->name);
+  for (RenderView &rv : re->result->views) {
+    RE_SetActiveRenderView(re, rv.name);
 
     FRS_begin_stroke_rendering(re);
 
-    LISTBASE_FOREACH (ViewLayer *, view_layer, &re->scene->view_layers) {
-      if ((re->r.scemode & R_SINGLE_LAYER) && !STREQ(view_layer->name, re->single_view_layer)) {
+    for (ViewLayer &view_layer : re->scene->view_layers) {
+      if ((re->r.scemode & R_SINGLE_LAYER) && !STREQ(view_layer.name, re->single_view_layer)) {
         continue;
       }
 
-      if (FRS_is_freestyle_enabled(view_layer)) {
-        FRS_do_stroke_rendering(re, view_layer);
+      if (FRS_is_freestyle_enabled(&view_layer)) {
+        FRS_do_stroke_rendering(re, &view_layer);
       }
     }
 
@@ -2191,8 +2111,9 @@ void RE_RenderFreestyleExternal(Render *re)
 
 bool RE_WriteRenderViewsMovie(ReportList *reports,
                               RenderResult *rr,
+                              const bke::BlenderProject *project,
                               Scene *scene,
-                              RenderData *rd,
+                              const RenderData *rd,
                               MovieWriter **movie_writers,
                               const int totvideos,
                               bool preview)
@@ -2220,6 +2141,7 @@ bool RE_WriteRenderViewsMovie(ReportList *reports,
       BLI_assert(movie_writers[view_id] != nullptr);
       if (!MOV_write_append(movie_writers[view_id],
                             scene,
+                            project,
                             rd,
                             &image_format,
                             preview ? scene->r.psfra : scene->r.sfra,
@@ -2234,7 +2156,7 @@ bool RE_WriteRenderViewsMovie(ReportList *reports,
       /* imbuf knows which rects are not part of ibuf */
       IMB_freeImBuf(ibuf);
     }
-    CLOG_INFO(&LOG, "Video append frame %d", scene->r.cfra);
+    CLOG_INFO_NOCHECK(&LOG, "Video append frame %d", scene->r.cfra);
   }
   else { /* R_IMF_VIEWS_STEREO_3D */
     const char *names[2] = {STEREO_LEFT_NAME, STEREO_RIGHT_NAME};
@@ -2256,6 +2178,7 @@ bool RE_WriteRenderViewsMovie(ReportList *reports,
       BLI_assert(movie_writers[0] != nullptr);
       if (!MOV_write_append(movie_writers[0],
                             scene,
+                            project,
                             rd,
                             &image_format,
                             preview ? scene->r.psfra : scene->r.sfra,
@@ -2285,8 +2208,12 @@ bool RE_WriteRenderViewsMovie(ReportList *reports,
   return ok;
 }
 
-static bool do_write_image_or_movie(
-    Render *re, Main *bmain, Scene *scene, const int totvideos, const char *filepath_override)
+static bool do_write_image_or_movie(Render *re,
+                                    Main *bmain,
+                                    Scene *scene,
+                                    const int totvideos,
+                                    const char *filepath_override,
+                                    const bool write_anim_or_still)
 {
   char filepath[FILE_MAX];
   RenderResult rres;
@@ -2295,16 +2222,25 @@ static bool do_write_image_or_movie(
   RenderEngineType *re_type = RE_engines_find(re->r.engine);
 
   /* Only disable file writing if postprocessing is also disabled. */
-  const bool do_write_file = !(re_type->flag & RE_USE_NO_IMAGE_SAVE) ||
-                             (re_type->flag & RE_USE_POSTPROCESS);
+  const bool do_write_file = (!(re_type->flag & RE_USE_NO_IMAGE_SAVE) ||
+                              (re_type->flag & RE_USE_POSTPROCESS)) &&
+                             write_anim_or_still;
 
   if (do_write_file) {
     RE_AcquireResultImageViews(re, &rres);
 
     /* write movie or image */
     if (BKE_imtype_is_movie(scene->r.im_format.imtype)) {
-      RE_WriteRenderViewsMovie(
-          re->reports, &rres, scene, &re->r, re->movie_writers.data(), totvideos, false);
+      BKE_blender_project_read_callback(bmain, [&](const bke::BlenderProject *project) {
+        RE_WriteRenderViewsMovie(re->reports,
+                                 &rres,
+                                 project,
+                                 scene,
+                                 &re->r,
+                                 re->movie_writers.data(),
+                                 totvideos,
+                                 false);
+      });
     }
     else {
       if (filepath_override) {
@@ -2313,10 +2249,12 @@ static bool do_write_image_or_movie(
       else {
         const char *relbase = BKE_main_blendfile_path(bmain);
         path_templates::VariableMap template_variables;
-        BKE_add_template_variables_general(template_variables, &scene->id);
+        BKE_blender_project_read_callback(bmain, [&](const bke::BlenderProject *project) {
+          BKE_add_template_variables_general(template_variables, &scene->id, project);
+        });
         BKE_add_template_variables_for_render_path(template_variables, *scene);
 
-        const blender::Vector<path_templates::Error> errors = BKE_image_path_from_imformat(
+        const Vector<path_templates::Error> errors = BKE_image_path_from_imformat(
             filepath,
             scene->r.pic,
             relbase,
@@ -2430,7 +2368,7 @@ void RE_RenderAnim(Render *re,
                    int tfra)
 {
   if (sfra == efra) {
-    CLOG_INFO(&LOG, "Rendering single frame (frame %d)", sfra);
+    CLOG_INFO(&LOG, "Rendering single frame");
   }
   else {
     CLOG_INFO(&LOG, "Rendering animation (frames %d..%d)", sfra, efra);
@@ -2440,8 +2378,7 @@ void RE_RenderAnim(Render *re,
    * copying (e.g. alter the output path). */
   render_callback_exec_id(re, re->main, &scene->id, BKE_CB_EVT_RENDER_INIT);
 
-  RenderData rd;
-  memcpy(&rd, &scene->r, sizeof(rd));
+  RenderData rd = dna::shallow_copy(scene->r);
   const int cfra_old = rd.cfra;
   const float subframe_old = rd.subframe;
   int nfra, totrendered = 0, totskipped = 0;
@@ -2461,10 +2398,13 @@ void RE_RenderAnim(Render *re,
   const bool is_movie = BKE_imtype_is_movie(image_format.imtype);
   const bool is_multiview_name = ((rd.scemode & R_MULTIVIEW) != 0 &&
                                   (image_format.views_format == R_IMF_VIEWS_INDIVIDUAL));
+  const bool write_anim = (scene->r.mode & R_SAVE_OUTPUT);
 
-  /* Only disable file writing if postprocessing is also disabled. */
-  const bool do_write_file = !(re_type->flag & RE_USE_NO_IMAGE_SAVE) ||
-                             (re_type->flag & RE_USE_POSTPROCESS);
+  /* Disable file writing if postprocessing is also disabled or if it's explicitly disabled by the
+   * user. */
+  const bool do_write_file = (!(re_type->flag & RE_USE_NO_IMAGE_SAVE) ||
+                              (re_type->flag & RE_USE_POSTPROCESS)) &&
+                             write_anim;
 
   render_init_depsgraph(re);
 
@@ -2475,15 +2415,20 @@ void RE_RenderAnim(Render *re,
     bool is_error = false;
     re->movie_writers.reserve(totvideos);
     for (int i = 0; i < totvideos; i++) {
-      const char *suffix = BKE_scene_multiview_view_id_suffix_get(&re->r, i);
-      MovieWriter *writer = MOV_write_begin(re->pipeline_scene_eval,
-                                            &re->r,
-                                            &image_format,
-                                            width,
-                                            height,
-                                            re->reports,
-                                            false,
-                                            suffix);
+      const char *suffix = is_multiview_name ? BKE_scene_multiview_view_id_suffix_get(&re->r, i) :
+                                               "";
+      MovieWriter *writer = BKE_blender_project_read_callback(
+          bmain, [&](const bke::BlenderProject *project) {
+            return MOV_write_begin(re->pipeline_scene_eval,
+                                   project,
+                                   &re->r,
+                                   &image_format,
+                                   width,
+                                   height,
+                                   re->reports,
+                                   false,
+                                   suffix);
+          });
       if (writer == nullptr) {
         is_error = true;
         break;
@@ -2508,6 +2453,8 @@ void RE_RenderAnim(Render *re,
 
   scene->r.subframe = 0.0f;
   for (nfra = sfra, scene->r.cfra = sfra; scene->r.cfra <= efra; scene->r.cfra++) {
+    CLOG_INFO(&LOG, "Rendering frame %d", nfra);
+
     char filepath[FILE_MAX];
 
     /* Reduce GPU memory usage so renderer has more space. */
@@ -2547,10 +2494,12 @@ void RE_RenderAnim(Render *re,
     /* Touch/NoOverwrite options are only valid for image's */
     if (is_movie == false && do_write_file) {
       path_templates::VariableMap template_variables;
-      BKE_add_template_variables_general(template_variables, &scene->id);
+      BKE_blender_project_read_callback(bmain, [&](const bke::BlenderProject *project) {
+        BKE_add_template_variables_general(template_variables, &scene->id, project);
+      });
       BKE_add_template_variables_for_render_path(template_variables, *scene);
 
-      const blender::Vector<path_templates::Error> errors = BKE_image_path_from_imformat(
+      const Vector<path_templates::Error> errors = BKE_image_path_from_imformat(
           filepath,
           rd.pic,
           BKE_main_blendfile_path(bmain),
@@ -2583,18 +2532,16 @@ void RE_RenderAnim(Render *re,
           bool is_skip = false;
           char filepath_view[FILE_MAX];
 
-          LISTBASE_FOREACH (SceneRenderView *, srv, &scene->r.views) {
-            if (!BKE_scene_multiview_is_render_view_active(&scene->r, srv)) {
+          for (SceneRenderView &srv : scene->r.views) {
+            if (!BKE_scene_multiview_is_render_view_active(&scene->r, &srv)) {
               continue;
             }
 
-            BKE_scene_multiview_filepath_get(srv, filepath, filepath_view);
+            BKE_scene_multiview_filepath_get(&srv, filepath, filepath_view);
             if (BLI_exists(filepath_view)) {
               is_skip = true;
-              CLOG_INFO(&LOG,
-                        "Skipping existing frame \"%s\" for view \"%s\"",
-                        filepath_view,
-                        srv->name);
+              CLOG_INFO(
+                  &LOG, "Skipping existing frame \"%s\" for view \"%s\"", filepath_view, srv.name);
             }
           }
 
@@ -2612,12 +2559,12 @@ void RE_RenderAnim(Render *re,
         else {
           char filepath_view[FILE_MAX];
 
-          LISTBASE_FOREACH (SceneRenderView *, srv, &scene->r.views) {
-            if (!BKE_scene_multiview_is_render_view_active(&scene->r, srv)) {
+          for (SceneRenderView &srv : scene->r.views) {
+            if (!BKE_scene_multiview_is_render_view_active(&scene->r, &srv)) {
               continue;
             }
 
-            BKE_scene_multiview_filepath_get(srv, filepath, filepath_view);
+            BKE_scene_multiview_filepath_get(&srv, filepath, filepath_view);
 
             touch_file(filepath);
           }
@@ -2635,9 +2582,9 @@ void RE_RenderAnim(Render *re,
     totrendered++;
 
     const bool should_write = !(re->flag & R_SKIP_WRITE);
-    if (re->test_break_cb(re->tbh) == 0) {
+    if (re->display->test_break() == 0) {
       if (!G.is_break && should_write) {
-        if (!do_write_image_or_movie(re, bmain, scene, totvideos, nullptr)) {
+        if (!do_write_image_or_movie(re, bmain, scene, totvideos, nullptr, write_anim)) {
           G.is_break = true;
         }
       }
@@ -2659,12 +2606,12 @@ void RE_RenderAnim(Render *re,
           else {
             char filepath_view[FILE_MAX];
 
-            LISTBASE_FOREACH (SceneRenderView *, srv, &scene->r.views) {
-              if (!BKE_scene_multiview_is_render_view_active(&scene->r, srv)) {
+            for (SceneRenderView &srv : scene->r.views) {
+              if (!BKE_scene_multiview_is_render_view_active(&scene->r, &srv)) {
                 continue;
               }
 
-              BKE_scene_multiview_filepath_get(srv, filepath, filepath_view);
+              BKE_scene_multiview_filepath_get(&srv, filepath, filepath_view);
 
               if (BLI_file_size(filepath_view) == 0) {
                 /* BLI_exists(filepath_view) is implicit */
@@ -2804,7 +2751,7 @@ void RE_layer_load_from_file(
   }
 
   /* OCIO_TODO: assume layer was saved in default color space */
-  ImBuf *ibuf = IMB_load_image_from_filepath(filepath, IB_byte_data);
+  ImBuf *ibuf = IMB_load_image_from_filepath(filepath, ImBufFlags::ByteData);
   RenderPass *rpass = nullptr;
 
   /* multi-view: since the API takes no 'view', we use the first combined pass found */
@@ -2822,37 +2769,22 @@ void RE_layer_load_from_file(
                 filepath);
   }
 
-  if (ibuf && (ibuf->byte_buffer.data || ibuf->float_buffer.data)) {
+  if (ibuf && (ibuf->byte_data() || ibuf->float_data())) {
     if (ibuf->x == layer->rectx && ibuf->y == layer->recty) {
-      if (ibuf->float_buffer.data == nullptr) {
+      if (ibuf->float_data() == nullptr) {
         IMB_float_from_byte(ibuf);
       }
 
-      memcpy(rpass->ibuf->float_buffer.data,
-             ibuf->float_buffer.data,
-             sizeof(float[4]) * layer->rectx * layer->recty);
+      rpass->ibuf->float_buffer = ibuf->float_buffer;
+      IMB_partial_update_mark_full(rpass->ibuf);
     }
     else {
       if ((ibuf->x - x >= layer->rectx) && (ibuf->y - y >= layer->recty)) {
-        ImBuf *ibuf_clip;
-
-        if (ibuf->float_buffer.data == nullptr) {
+        if (ibuf->float_data() == nullptr) {
           IMB_float_from_byte(ibuf);
         }
-
-        ibuf_clip = IMB_allocImBuf(layer->rectx, layer->recty, 32, IB_float_data);
-        if (ibuf_clip) {
-          IMB_rectcpy(ibuf_clip, ibuf, 0, 0, x, y, layer->rectx, layer->recty);
-
-          memcpy(rpass->ibuf->float_buffer.data,
-                 ibuf_clip->float_buffer.data,
-                 sizeof(float[4]) * layer->rectx * layer->recty);
-          IMB_freeImBuf(ibuf_clip);
-        }
-        else {
-          BKE_reportf(
-              reports, RPT_ERROR, "%s: failed to allocate clip buffer '%s'", __func__, filepath);
-        }
+        IMB_copy_rect(rpass->ibuf, ibuf, int2(x, y), int2(0, 0), int2(layer->rectx, layer->recty));
+        IMB_partial_update_mark_full(rpass->ibuf);
       }
       else {
         BKE_reportf(reports,
@@ -2884,7 +2816,7 @@ bool RE_layers_have_name(RenderResult *result)
     case 0:
       return false;
     case 1:
-      return (((RenderLayer *)result->layers.first)->name[0] != '\0');
+      return ((static_cast<RenderLayer *>(result->layers.first))->name[0] != '\0');
     default:
       return true;
   }
@@ -2892,8 +2824,8 @@ bool RE_layers_have_name(RenderResult *result)
 
 bool RE_passes_have_name(RenderLayer *rl)
 {
-  LISTBASE_FOREACH (RenderPass *, rp, &rl->passes) {
-    if (!STREQ(rp->name, "Combined")) {
+  for (RenderPass &rp : rl->passes) {
+    if (!STREQ(rp.name, "Combined")) {
       return true;
     }
   }
@@ -2903,54 +2835,16 @@ bool RE_passes_have_name(RenderLayer *rl)
 
 RenderPass *RE_pass_find_by_name(RenderLayer *rl, const char *name, const char *viewname)
 {
-  LISTBASE_FOREACH_BACKWARD (RenderPass *, rp, &rl->passes) {
-    if (STREQ(rp->name, name)) {
+  for (RenderPass &rp : rl->passes.items_reversed()) {
+    if (STREQ(rp.name, name)) {
       if (viewname == nullptr || viewname[0] == '\0') {
-        return rp;
+        return &rp;
       }
-      if (STREQ(rp->view, viewname)) {
-        return rp;
+      if (STREQ(rp.view, viewname)) {
+        return &rp;
       }
     }
   }
-  return nullptr;
-}
-
-RenderPass *RE_pass_find_by_type(RenderLayer *rl, int passtype, const char *viewname)
-{
-#define CHECK_PASS(NAME) \
-  if (passtype == SCE_PASS_##NAME) { \
-    return RE_pass_find_by_name(rl, RE_PASSNAME_##NAME, viewname); \
-  } \
-  ((void)0)
-
-  CHECK_PASS(COMBINED);
-  CHECK_PASS(DEPTH);
-  CHECK_PASS(VECTOR);
-  CHECK_PASS(NORMAL);
-  CHECK_PASS(UV);
-  CHECK_PASS(EMIT);
-  CHECK_PASS(SHADOW);
-  CHECK_PASS(AO);
-  CHECK_PASS(ENVIRONMENT);
-  CHECK_PASS(INDEXOB);
-  CHECK_PASS(INDEXMA);
-  CHECK_PASS(MIST);
-  CHECK_PASS(DIFFUSE_DIRECT);
-  CHECK_PASS(DIFFUSE_INDIRECT);
-  CHECK_PASS(DIFFUSE_COLOR);
-  CHECK_PASS(GLOSSY_DIRECT);
-  CHECK_PASS(GLOSSY_INDIRECT);
-  CHECK_PASS(GLOSSY_COLOR);
-  CHECK_PASS(TRANSM_DIRECT);
-  CHECK_PASS(TRANSM_INDIRECT);
-  CHECK_PASS(TRANSM_COLOR);
-  CHECK_PASS(SUBSURFACE_DIRECT);
-  CHECK_PASS(SUBSURFACE_INDIRECT);
-  CHECK_PASS(SUBSURFACE_COLOR);
-
-#undef CHECK_PASS
-
   return nullptr;
 }
 
@@ -2959,7 +2853,7 @@ RenderPass *RE_create_gp_pass(RenderResult *rr, const char *layername, const cha
   RenderLayer *rl = RE_GetRenderLayer(rr, layername);
   /* only create render layer if not exist */
   if (!rl) {
-    rl = MEM_callocN<RenderLayer>(layername);
+    rl = MEM_new<RenderLayer>(layername);
     BLI_addtail(&rr->layers, rl);
     STRNCPY(rl->name, layername);
     rl->layflag = SCE_LAY_SOLID;
@@ -3002,3 +2896,5 @@ void RE_init_threadcount(Render *re)
 }
 
 /** \} */
+
+}  // namespace blender

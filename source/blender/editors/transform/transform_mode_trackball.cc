@@ -8,10 +8,10 @@
 
 #include <cstdlib>
 
-#include "BLI_math_matrix.h"
-#include "BLI_math_rotation.h"
-#include "BLI_math_vector.h"
-#include "BLI_string_utf8.h"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_rotation_c.hh"
+#include "BLI_math_vector_c.hh"
+#include "BLI_string_utf8.hh"
 #include "BLI_task.hh"
 
 #include "BKE_unit.hh"
@@ -43,7 +43,7 @@ static void transdata_elem_trackball(const TransInfo *t,
                                      const float mat_final[3][3])
 {
   float mat_buf[3][3];
-  const float(*mat)[3] = mat_final;
+  const float (*mat)[3] = mat_final;
   if (t->flag & T_PROP_EDIT) {
     axis_angle_normalized_to_mat3(mat_buf, axis, td->factor * angle);
     mat = mat_buf;
@@ -155,7 +155,7 @@ static void initTrackball(TransInfo *t, wmOperator * /*op*/)
 
   if (transform_mode_affect_only_locations(t)) {
     WorkspaceStatus status(t->context);
-    status.item(TIP_("Transform is set to only affect location"), ICON_ERROR);
+    status.item(TIP_("Transform is set to only affect location"), ICON_STATUS_WARNING_FILLED);
     initMouseInputMode(t, &t->mouse, INPUT_ERROR);
   }
   else {

@@ -26,6 +26,9 @@
 #include "BKE_object.hh"
 
 #include "CLG_log.h"
+
+namespace blender {
+
 static CLG_LogRef LOG = {"io.alembic"};
 
 using Alembic::AbcGeom::OCompoundProperty;
@@ -35,7 +38,7 @@ using Alembic::AbcGeom::OInt16Property;
 using Alembic::AbcGeom::ON3fGeomParam;
 using Alembic::AbcGeom::OV2fGeomParam;
 
-namespace blender::io::alembic {
+namespace io::alembic {
 
 const std::string ABC_CURVE_RESOLUTION_U_PROPNAME("blender:resolution");
 
@@ -61,16 +64,18 @@ void ABCCurveWriter::create_alembic_objects(const HierarchyContext *context)
   int resolution_u = 1;
   switch (context->object->type) {
     case OB_CURVES_LEGACY: {
-      Curve *curves_id = static_cast<Curve *>(context->object->data);
+      Curve *curves_id = id_cast<Curve *>(context->object->data);
       resolution_u = curves_id->resolu;
       break;
     }
     case OB_CURVES: {
-      Curves *curves_id = static_cast<Curves *>(context->object->data);
+      Curves *curves_id = id_cast<Curves *>(context->object->data);
       const bke::CurvesGeometry &curves = curves_id->geometry.wrap();
       resolution_u = curves.resolution().first();
       break;
     }
+    default:
+      break;
   }
 
   OCompoundProperty user_props = abc_curve_schema_.getUserProperties();
@@ -95,14 +100,14 @@ void ABCCurveWriter::do_write(HierarchyContext &context)
 
   switch (context.object->type) {
     case OB_CURVES_LEGACY: {
-      const Curve *legacy_curve = static_cast<Curve *>(context.object->data);
+      const Curve *legacy_curve = id_cast<Curve *>(context.object->data);
       converted_curves = std::unique_ptr<Curves, std::function<void(Curves *)>>(
           bke::curve_legacy_to_curves(*legacy_curve), [](Curves *c) { BKE_id_free(nullptr, c); });
       curves_id = converted_curves.get();
       break;
     }
     case OB_CURVES:
-      curves_id = static_cast<Curves *>(context.object->data);
+      curves_id = id_cast<Curves *>(context.object->data);
       break;
     default:
       BLI_assert_unreachable();
@@ -272,13 +277,17 @@ Mesh *ABCCurveMeshWriter::get_export_mesh(Object *object_eval, bool &r_needsfree
       return BKE_mesh_new_nomain_from_curve(object_eval);
     }
 
-    case OB_CURVES:
-      Curves *curves = static_cast<Curves *>(object_eval->data);
+    case OB_CURVES: {
+      Curves *curves = id_cast<Curves *>(object_eval->data);
       r_needsfree = true;
       return bke::curve_to_wire_mesh(curves->geometry.wrap());
+    }
+    default:
+      break;
   }
 
   return nullptr;
 }
 
-}  // namespace blender::io::alembic
+}  // namespace io::alembic
+}  // namespace blender

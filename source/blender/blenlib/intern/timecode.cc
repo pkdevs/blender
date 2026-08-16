@@ -10,14 +10,16 @@
 
 #include <cstdio>
 
-#include "BLI_math_base.h"
-#include "BLI_string.h"
+#include "BLI_math_base_c.hh"
+#include "BLI_string.hh"
 
-#include "BLI_timecode.h" /* own include */
+#include "BLI_timecode.hh" /* own include */
 
 #include "DNA_userdef_types.h" /* for eTimecodeStyles only */
 
-#include "BLI_strict_flags.h" /* IWYU pragma: keep. Keep last. */
+#include "BLI_strict_flags.hh" /* IWYU pragma: keep. Keep last. */
+
+namespace blender {
 
 size_t BLI_timecode_string_from_time(char *str,
                                      const size_t maxncpy,
@@ -206,3 +208,5 @@ size_t BLI_timecode_string_from_time_seconds(char *str,
 
   return rlen;
 }
+
+}  // namespace blender

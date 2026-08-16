@@ -6,15 +6,16 @@
  * \ingroup spview3d
  */
 
-#include "BLI_math_matrix.h"
-#include "BLI_math_vector.h"
-#include "BLI_utildefines.h"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_vector_c.hh"
+#include "BLI_utildefines.hh"
 
 #include "BKE_action.hh"
 #include "BKE_context.hh"
 #include "BKE_layer.hh"
 #include "BKE_lib_id.hh"
 #include "BKE_object.hh"
+#include "BKE_pose.hh"
 
 #include "DNA_armature_types.h"
 #include "DNA_object_types.h"
@@ -30,6 +31,8 @@
 #include "WM_types.hh"
 
 #include "view3d_intern.hh" /* own include */
+
+namespace blender {
 
 /* -------------------------------------------------------------------- */
 /** \name Armature Spline Gizmo
@@ -48,7 +51,12 @@
 
 struct BoneSplineHandle {
   wmGizmo *gizmo;
+
+  /* These cannot be packed into a bke::PChanBone, as this struct is allocated with
+   * MEM_new_zeroed() and therefore must be trivial. */
   bPoseChannel *pchan;
+  Bone *pchan_bone;
+
   /* We could remove, keep since at the moment for checking the conversion. */
   float co[3];
   int index;
@@ -62,17 +70,18 @@ static void gizmo_bbone_offset_get(const wmGizmo * /*gz*/, wmGizmoProperty *gz_p
 {
   BoneSplineHandle *bh = static_cast<BoneSplineHandle *>(gz_prop->custom_func.user_data);
   bPoseChannel *pchan = bh->pchan;
+  Bone *pchan_bone = bh->pchan_bone;
 
   float *value = static_cast<float *>(value_p);
   BLI_assert(gz_prop->type->array_length == 3);
 
   if (bh->index == 0) {
-    bh->co[1] = pchan->bone->ease1 / BBONE_SCALE_Y;
+    bh->co[1] = pchan_bone->ease1 / BBONE_SCALE_Y;
     bh->co[0] = pchan->curve_in_x;
     bh->co[2] = pchan->curve_in_z;
   }
   else {
-    bh->co[1] = -pchan->bone->ease2 / BBONE_SCALE_Y;
+    bh->co[1] = -pchan_bone->ease2 / BBONE_SCALE_Y;
     bh->co[0] = pchan->curve_out_x;
     bh->co[2] = pchan->curve_out_z;
   }
@@ -85,6 +94,7 @@ static void gizmo_bbone_offset_set(const wmGizmo * /*gz*/,
 {
   BoneSplineHandle *bh = static_cast<BoneSplineHandle *>(gz_prop->custom_func.user_data);
   bPoseChannel *pchan = bh->pchan;
+  Bone *pchan_bone = bh->pchan_bone;
 
   const float *value = static_cast<const float *>(value_p);
 
@@ -92,12 +102,12 @@ static void gizmo_bbone_offset_set(const wmGizmo * /*gz*/,
   copy_v3_v3(bh->co, value);
 
   if (bh->index == 0) {
-    pchan->bone->ease1 = max_ff(0.0f, bh->co[1] * BBONE_SCALE_Y);
+    pchan_bone->ease1 = max_ff(0.0f, bh->co[1] * BBONE_SCALE_Y);
     pchan->curve_in_x = bh->co[0];
     pchan->curve_in_z = bh->co[2];
   }
   else {
-    pchan->bone->ease2 = max_ff(0.0f, -bh->co[1] * BBONE_SCALE_Y);
+    pchan_bone->ease2 = max_ff(0.0f, -bh->co[1] * BBONE_SCALE_Y);
     pchan->curve_out_x = bh->co[0];
     pchan->curve_out_z = bh->co[2];
   }
@@ -110,17 +120,18 @@ static bool WIDGETGROUP_armature_spline_poll(const bContext *C, wmGizmoGroupType
     return false;
   }
 
+  const Main *bmain = CTX_data_main(C);
   const Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
-  BKE_view_layer_synced_ensure(scene, view_layer);
+  BKE_view_layer_synced_ensure(*bmain, scene, view_layer);
   Base *base = BKE_view_layer_active_base_get(view_layer);
   if (base && BASE_SELECTABLE(v3d, base)) {
     Object *ob = BKE_object_pose_armature_get(base->object);
     if (ob) {
-      const bArmature *arm = static_cast<const bArmature *>(ob->data);
+      const bArmature *arm = id_cast<const bArmature *>(ob->data);
       if (arm->drawtype == ARM_DRAW_TYPE_B_BONE) {
         bPoseChannel *pchan = BKE_pose_channel_active_if_bonecoll_visible(ob);
-        if (pchan && pchan->bone->segments > 1) {
+        if (pchan && pchan->bone_get(*ob)->segments > 1) {
           if (BKE_id_is_editable(CTX_data_main(C), &arm->id)) {
             return true;
           }
@@ -133,15 +144,16 @@ static bool WIDGETGROUP_armature_spline_poll(const bContext *C, wmGizmoGroupType
 
 static void WIDGETGROUP_armature_spline_setup(const bContext *C, wmGizmoGroup *gzgroup)
 {
+  const Main *bmain = CTX_data_main(C);
   const Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
-  BKE_view_layer_synced_ensure(scene, view_layer);
+  BKE_view_layer_synced_ensure(*bmain, scene, view_layer);
   Object *ob = BKE_object_pose_armature_get(BKE_view_layer_active_object_get(view_layer));
   bPoseChannel *pchan = BKE_pose_channel_active_if_bonecoll_visible(ob);
 
   const wmGizmoType *gzt_move = WM_gizmotype_find("GIZMO_GT_move_3d", true);
 
-  BoneSplineWidgetGroup *bspline_group = MEM_callocN<BoneSplineWidgetGroup>(__func__);
+  BoneSplineWidgetGroup *bspline_group = MEM_new_zeroed<BoneSplineWidgetGroup>(__func__);
   gzgroup->customdata = bspline_group;
 
   /* Handles */
@@ -154,8 +166,8 @@ static void WIDGETGROUP_armature_spline_setup(const bContext *C, wmGizmoGroup *g
                  ED_GIZMO_MOVE_DRAW_FLAG_FILL | ED_GIZMO_MOVE_DRAW_FLAG_ALIGN_VIEW);
     WM_gizmo_set_flag(gz, WM_GIZMO_DRAW_VALUE, true);
 
-    UI_GetThemeColor3fv(TH_GIZMO_PRIMARY, gz->color);
-    UI_GetThemeColor3fv(TH_GIZMO_HI, gz->color_hi);
+    ui::theme::get_color_3fv(TH_GIZMO_PRIMARY, gz->color);
+    ui::theme::get_color_3fv(TH_GIZMO_HI, gz->color_hi);
 
     gz->scale_basis = 0.06f;
 
@@ -167,9 +179,10 @@ static void WIDGETGROUP_armature_spline_setup(const bContext *C, wmGizmoGroup *g
 
 static void WIDGETGROUP_armature_spline_refresh(const bContext *C, wmGizmoGroup *gzgroup)
 {
+  const Main *bmain = CTX_data_main(C);
   const Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
-  BKE_view_layer_synced_ensure(scene, view_layer);
+  BKE_view_layer_synced_ensure(*bmain, scene, view_layer);
   Object *ob = BKE_object_pose_armature_get(BKE_view_layer_active_object_get(view_layer));
 
   if (!gzgroup->customdata) {
@@ -178,11 +191,13 @@ static void WIDGETGROUP_armature_spline_refresh(const bContext *C, wmGizmoGroup 
 
   BoneSplineWidgetGroup *bspline_group = static_cast<BoneSplineWidgetGroup *>(gzgroup->customdata);
   bPoseChannel *pchan = BKE_pose_channel_active_if_bonecoll_visible(ob);
+  Bone *pchan_bone = pchan ? pchan->bone_get(*ob) : nullptr;
 
   /* Handles */
   for (int i = 0; i < ARRAY_SIZE(bspline_group->handles); i++) {
     wmGizmo *gz = bspline_group->handles[i].gizmo;
     bspline_group->handles[i].pchan = pchan;
+    bspline_group->handles[i].pchan_bone = pchan_bone;
     bspline_group->handles[i].index = i;
 
     float mat[4][4];
@@ -214,3 +229,5 @@ void VIEW3D_GGT_armature_spline(wmGizmoGroupType *gzgt)
 }
 
 /** \} */
+
+}  // namespace blender

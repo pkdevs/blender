@@ -2,23 +2,23 @@
  *
  * SPDX-License-Identifier: Apache-2.0 */
 
-#include "BLI_ressource_strings.h"
+#include "BLI_resource_strings.h"
 #include "testing/testing.h"
 
 #define GHASH_INTERNAL_API
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_fileops.h"
-#include "BLI_ghash.h"
+#include "BLI_fileops.hh"
+#include "BLI_ghash.hh"
 #include "BLI_map.hh"
 #include "BLI_math_vector_types.hh"
-#include "BLI_rand.h"
-#include "BLI_string.h"
+#include "BLI_rand_c.hh"
+#include "BLI_string.hh"
 #include "BLI_timeit.hh"
-#include "BLI_utildefines.h"
+#include "BLI_utildefines.hh"
 
-using namespace blender;
+namespace blender {
 
 /* Using https://downloads.wortschatz-leipzig.de/corpora/eng_wikipedia_2010_1M.tar.gz
  * (1 million of words, about 122MB of text) from
@@ -64,7 +64,7 @@ static char *read_text_corpus()
 
 #ifdef TEXT_CORPUS_PATH
   size_t data_size;
-  data = static_cast<char *>(BLI_file_read_text_as_mem(TEXT_CORPUS_PATH, 1, &data_size));
+  data = BLI_file_read_text_as_mem(TEXT_CORPUS_PATH, 1, &data_size);
   if (data != nullptr) {
     data[data_size] = 0;
   }
@@ -145,10 +145,10 @@ static void str_ghash_tests(GHash *ghash, const char *id)
   }
 
   BLI_ghash_free(ghash, nullptr, nullptr);
-  MEM_freeN(data);
-  MEM_freeN(data_p);
-  MEM_freeN(data_w);
-  MEM_freeN(data_bis);
+  MEM_delete(data);
+  MEM_delete(data_p);
+  MEM_delete(data_w);
+  MEM_delete(data_bis);
 
   printf("========== ENDED %s ==========\n\n", id);
 }
@@ -215,10 +215,10 @@ template<typename MapType> static void str_map_tests(MapType &map, const char *i
     }
   }
 
-  MEM_freeN(data);
-  MEM_freeN(data_p);
-  MEM_freeN(data_w);
-  MEM_freeN(data_bis);
+  MEM_delete(data);
+  MEM_delete(data_p);
+  MEM_delete(data_w);
+  MEM_delete(data_bis);
 
   printf("========== ENDED %s ==========\n\n", id);
 }
@@ -673,7 +673,7 @@ TEST(ghash, Int4Map20000000)
 
 static void multi_small_ghash_tests_one(GHash *ghash, RNG *rng, const uint count)
 {
-  uint *data = MEM_malloc_arrayN<uint>(size_t(count), __func__);
+  uint *data = MEM_new_array_uninitialized<uint>(size_t(count), __func__);
   uint *dt;
   uint i;
 
@@ -695,7 +695,7 @@ static void multi_small_ghash_tests_one(GHash *ghash, RNG *rng, const uint count
   }
 
   BLI_ghash_clear(ghash, nullptr, nullptr);
-  MEM_freeN(data);
+  MEM_delete(data);
 }
 
 static void multi_small_ghash_tests(GHash *ghash, const char *id, const uint count)
@@ -756,3 +756,5 @@ TEST(ghash, MultiRandIntMurmur2a200000)
 
   multi_small_ghash_tests(ghash, "MultiSmall RandIntGHash - Murmur2a - 200000", 200000);
 }
+
+}  // namespace blender

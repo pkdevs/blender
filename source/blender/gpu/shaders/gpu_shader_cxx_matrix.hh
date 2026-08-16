@@ -10,6 +10,7 @@
 
 #pragma once
 
+#include "gpu_shader_cxx_builtin.hh"
 #include "gpu_shader_cxx_vector.hh"
 
 /* Some compilers complain about lack of return values. Keep it short. */
@@ -34,6 +35,14 @@ template<int C, int R> struct MatOp {
     return *reinterpret_cast<const ColT *>(this);
   }
   ColT &operator[](int)
+  {
+    return *reinterpret_cast<ColT *>(this);
+  }
+  const ColT &operator[](uint) const
+  {
+    return *reinterpret_cast<const ColT *>(this);
+  }
+  ColT &operator[](uint)
   {
     return *reinterpret_cast<ColT *>(this);
   }

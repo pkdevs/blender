@@ -2,21 +2,24 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#include "BLI_bounds.hh"
-#include "BLI_math_vector.hh"
-
 #include "DNA_node_types.h"
 
 #include "GPU_shader.hh"
 
-#include "BKE_node_runtime.hh"
-
 #include "COM_context.hh"
-#include "COM_profiler.hh"
 #include "COM_render_context.hh"
 #include "COM_static_cache_manager.hh"
 
 namespace blender::compositor {
+
+Context::Context(StaticCacheManager &cache_manager) : cache_manager_(cache_manager) {};
+
+Result Context::get_pass(const Scene * /*scene*/, int /*view_layer*/, const char * /*name*/)
+{
+  compositor::Result invalid_pass = this->create_result(compositor::ResultType::Color);
+  invalid_pass.allocate_invalid();
+  return invalid_pass;
+}
 
 const RenderData &Context::get_render_data() const
 {
@@ -35,11 +38,6 @@ ResultPrecision Context::get_precision() const
 
 void Context::set_info_message(StringRef /*message*/) const {}
 
-bool Context::treat_viewer_as_compositor_output() const
-{
-  return false;
-}
-
 void Context::populate_meta_data_for_pass(const Scene * /*scene*/,
                                           int /*view_layer_id*/,
                                           const char * /*pass_name*/,
@@ -52,7 +50,12 @@ RenderContext *Context::render_context() const
   return nullptr;
 }
 
-Profiler *Context::profiler() const
+bool Context::is_viewport() const
+{
+  return false;
+}
+
+nodes::eval_log::NodesEvalLog *Context::nodes_evaluation_log() const
 {
   return nullptr;
 }
@@ -61,25 +64,7 @@ void Context::evaluate_operation_post() const {}
 
 bool Context::is_canceled() const
 {
-  if (!this->get_node_tree().runtime->test_break) {
-    return false;
-  }
-  return this->get_node_tree().runtime->test_break(get_node_tree().runtime->tbh);
-}
-
-void Context::reset()
-{
-  cache_manager_.reset();
-}
-
-int2 Context::get_compositing_region_size() const
-{
-  return math::max(int2(1), this->get_compositing_region().size());
-}
-
-bool Context::is_valid_compositing_region() const
-{
-  return !this->get_compositing_region().is_empty();
+  return false;
 }
 
 float Context::get_render_percentage() const
@@ -134,6 +119,11 @@ Result Context::create_result(ResultType type)
 StaticCacheManager &Context::cache_manager()
 {
   return cache_manager_;
+}
+
+const Strip *Context::get_strip() const
+{
+  return nullptr;
 }
 
 }  // namespace blender::compositor

@@ -9,15 +9,18 @@
 #include "abc_custom_props.h"
 
 #include "abc_writer_abstract.h"
+#include "intern/abc_axis_conversion.h"
 
 #include <string>
 
 #include <Alembic/Abc/OTypedArrayProperty.h>
 
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 
 #include "BKE_idprop.hh"
 #include "DNA_ID.h"
+
+namespace blender {
 
 using Alembic::Abc::ArraySample;
 using Alembic::Abc::OArrayProperty;
@@ -28,7 +31,7 @@ using Alembic::Abc::OFloatArrayProperty;
 using Alembic::Abc::OInt32ArrayProperty;
 using Alembic::Abc::OStringArrayProperty;
 
-namespace blender::io::alembic {
+namespace io::alembic {
 
 CustomPropertiesExporter::CustomPropertiesExporter(ABCAbstractWriter *owner) : owner_(owner) {}
 
@@ -40,8 +43,8 @@ void CustomPropertiesExporter::write_all(const IDProperty *group)
   BLI_assert(group->type == IDP_GROUP);
 
   /* Loop over the properties, just like IDP_foreach_property() does, but without the recursion. */
-  LISTBASE_FOREACH (IDProperty *, id_property, &group->data.group) {
-    write(id_property);
+  for (IDProperty &id_property : group->data.group) {
+    write(&id_property);
   }
 }
 
@@ -77,6 +80,10 @@ void CustomPropertiesExporter::write(const IDProperty *id_property)
       break;
     case IDP_IDPARRAY:
       write_idparray(id_property);
+      break;
+    case IDP_GROUP:
+    case IDP_ID:
+      /* Not supported. */
       break;
   }
 }
@@ -139,6 +146,9 @@ void CustomPropertiesExporter::write_idparray(const IDProperty *idp_array)
       break;
     case IDP_ARRAY:
       write_idparray_of_numbers(idp_array);
+      break;
+    default:
+      /* Other types not supported. */
       break;
   }
 }
@@ -207,7 +217,8 @@ void CustomPropertiesExporter::write_idparray_flattened_typed(const IDProperty *
   const uint64_t num_rows = idp_array->len;
   std::vector<BlenderValueType> matrix_values;
   for (size_t row_idx = 0; row_idx < num_rows; ++row_idx) {
-    const BlenderValueType *row = (BlenderValueType *)IDP_array_voidp_get(&idp_rows[row_idx]);
+    const BlenderValueType *row = static_cast<BlenderValueType *> IDP_array_voidp_get(
+        &idp_rows[row_idx]);
     for (size_t col_idx = 0; col_idx < idp_rows[row_idx].len; col_idx++) {
       matrix_values.push_back(row[col_idx]);
     }
@@ -252,4 +263,34 @@ OArrayProperty CustomPropertiesExporter::create_abc_property(const StringRef pro
   return abc_property;
 }
 
-}  // namespace blender::io::alembic
+void get_positions(const Span<float3> positions, std::vector<Imath::V3f> &points)
+{
+  points.clear();
+  points.resize(positions.size());
+
+  for (const int i : positions.index_range()) {
+    copy_yup_from_zup(points[i].getValue(), positions[i]);
+  }
+}
+
+bool get_velocities(const bke::AttributeAccessor &attributes, std::vector<Imath::V3f> &velocities)
+{
+  /* Export velocity attribute output by fluid sim, sequence cache modifier
+   * and geometry nodes. */
+  const VArraySpan attr = *attributes.lookup<float3>("velocity", bke::AttrDomain::Point);
+  if (attr.is_empty()) {
+    return false;
+  }
+
+  velocities.clear();
+  velocities.resize(attr.size());
+
+  for (const int i : attr.index_range()) {
+    copy_yup_from_zup(velocities[i].getValue(), attr[i]);
+  }
+
+  return true;
+}
+
+}  // namespace io::alembic
+}  // namespace blender

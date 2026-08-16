@@ -19,6 +19,9 @@
 
 #ifdef RNA_RUNTIME
 
+#  include "BLI_string.hh"
+#  include "BLI_string_utf8.hh"
+
 #  include "BKE_action.hh"
 #  include "BKE_armature.hh"
 #  include "BKE_brush.hh"
@@ -26,36 +29,35 @@
 #  include "BKE_collection.hh"
 #  include "BKE_curve.hh"
 #  include "BKE_curves.h"
-#  include "BKE_displist.h"
 #  include "BKE_gpencil_legacy.h"
 #  include "BKE_grease_pencil.hh"
-#  include "BKE_icons.h"
 #  include "BKE_idtype.hh"
 #  include "BKE_image.hh"
 #  include "BKE_lattice.hh"
+#  include "BKE_lib_id.hh"
 #  include "BKE_lib_remap.hh"
+#  include "BKE_library.hh"
 #  include "BKE_light.h"
 #  include "BKE_lightprobe.h"
 #  include "BKE_linestyle.h"
 #  include "BKE_main_invariants.hh"
-#  include "BKE_mask.h"
+#  include "BKE_mask.hh"
 #  include "BKE_material.hh"
 #  include "BKE_mball.hh"
 #  include "BKE_mesh.hh"
-#  include "BKE_movieclip.h"
+#  include "BKE_movieclip.hh"
 #  include "BKE_node.hh"
 #  include "BKE_object.hh"
 #  include "BKE_paint.hh"
 #  include "BKE_particle.h"
 #  include "BKE_pointcloud.hh"
 #  include "BKE_scene.hh"
-#  include "BKE_sound.h"
-#  include "BKE_speaker.h"
+#  include "BKE_sound.hh"
+#  include "BKE_speaker.hh"
 #  include "BKE_text.h"
 #  include "BKE_texture.h"
 #  include "BKE_vfont.hh"
 #  include "BKE_volume.hh"
-#  include "BKE_workspace.hh"
 #  include "BKE_world.h"
 
 #  include "DEG_depsgraph_build.hh"
@@ -89,7 +91,9 @@
 #  include "DNA_world_types.h"
 
 #  include "ED_node.hh"
-#  include "ED_screen.hh"
+#  include "ED_scene.hh"
+
+#  include "NOD_defaults.hh"
 
 #  include "BLT_translation.hh"
 
@@ -99,6 +103,8 @@
 
 #  include "WM_api.hh"
 #  include "WM_types.hh"
+
+namespace blender {
 
 static void rna_idname_validate(const char *name, char *r_name)
 {
@@ -122,11 +128,30 @@ static void rna_Main_ID_remove(Main *bmain,
                 id->name + 2);
     return;
   }
+
+  /* Volume light probes being baked cannot be removed. */
+  if (GS(id->name) == ID_OB) {
+    Object *ob = reinterpret_cast<Object *>(id);
+    if (ob->type == OB_LIGHTPROBE &&
+        (reinterpret_cast<LightProbe *>(ob->data))->type == LIGHTPROBE_TYPE_VOLUME)
+    {
+      wmWindowManager *wm = static_cast<wmWindowManager *>(bmain->wm.first);
+      if (wm && WM_jobs_test(wm, nullptr, WM_JOB_TYPE_LIGHT_BAKE)) {
+        BKE_reportf(reports,
+                    RPT_ERROR,
+                    "Cannot remove volume light probes while light probe baking is running");
+        return;
+      }
+    }
+  }
+
   if (do_unlink) {
     BKE_id_delete(bmain, id);
     id_ptr->invalidate();
     /* Force full redraw, mandatory to avoid crashes when running this from UI... */
     WM_main_add_notifier(NC_WINDOW, nullptr);
+    WM_main_add_notifier(NC_SCENE | ND_OB_ACTIVE, nullptr);
+    WM_main_add_notifier(NC_SCENE | ND_LAYER_CONTENT, nullptr);
   }
   else if (ID_REAL_USERS(id) <= 0) {
     const int flag = (do_id_user ? 0 : LIB_ID_FREE_NO_USER_REFCOUNT) |
@@ -144,6 +169,53 @@ static void rna_Main_ID_remove(Main *bmain,
         id->name + 2,
         ID_REAL_USERS(id));
   }
+}
+
+static ID *rna_Main_pack_linked_ids_hierarchy(struct BlendData *blenddata,
+                                              ReportList *reports,
+                                              ID *root_id)
+{
+  if (!ID_IS_LINKED(root_id)) {
+    BKE_reportf(reports, RPT_ERROR, "Only linked IDs can be packed");
+    return nullptr;
+  }
+  if (ID_IS_PACKED(root_id)) {
+    /* Nothing to do. */
+    return root_id;
+  }
+
+  Main *bmain = reinterpret_cast<Main *>(blenddata);
+  bke::library::pack_linked_id_hierarchy(*bmain, *root_id);
+
+  ID *packed_root_id = root_id->newid;
+  BKE_main_id_newptr_and_tag_clear(bmain);
+
+  return packed_root_id;
+}
+
+static void rna_Main_blender_project_init(struct BlendData * /* blenddata */,
+                                          ReportList *reports,
+                                          const char *name,
+                                          const char *project_root)
+{
+  if (!BKE_blender_project_init(name, project_root)) {
+    BKE_reportf(reports,
+                RPT_ERROR,
+                "Failed to initialize project. Ensure that both the name and project_root "
+                "parameters are non-empty.");
+  }
+
+  /* Force full redraw of all windows. */
+  WM_main_add_notifier(NC_WINDOW, nullptr);
+}
+
+static void rna_Main_blender_project_clear(struct BlendData * /* blenddata */,
+                                           ReportList * /* reports */)
+{
+  BKE_blender_project_clear();
+
+  /* Force full redraw of all windows. */
+  WM_main_add_notifier(NC_WINDOW, nullptr);
 }
 
 static Camera *rna_Main_cameras_new(Main *bmain, const char *name)
@@ -177,44 +249,23 @@ static void rna_Main_scenes_remove(
   Scene *scene = static_cast<Scene *>(scene_ptr->data);
 
   if (BKE_scene_can_be_removed(bmain, scene)) {
-    Scene *scene_new = static_cast<Scene *>(scene->id.prev ? scene->id.prev : scene->id.next);
     if (do_unlink) {
-      /* Don't rely on `CTX_wm_window(C)` as it may have been cleared,
-       * yet windows may still be open that reference this scene. */
-      wmWindowManager *wm = static_cast<wmWindowManager *>(bmain->wm.first);
-      LISTBASE_FOREACH (wmWindow *, win, &wm->windows) {
-        if (WM_window_get_active_scene(win) == scene) {
-#  ifdef WITH_PYTHON
-          BPy_BEGIN_ALLOW_THREADS;
-#  endif
-
-          WM_window_set_active_scene(bmain, C, win, scene_new);
-
-#  ifdef WITH_PYTHON
-          BPy_END_ALLOW_THREADS;
-#  endif
-        }
-      }
-      if (CTX_data_scene(C) == scene) {
-#  ifdef WITH_PYTHON
-        BPy_BEGIN_ALLOW_THREADS;
-#  endif
-
-        CTX_data_scene_set(C, scene_new);
-
-#  ifdef WITH_PYTHON
-        BPy_END_ALLOW_THREADS;
-#  endif
+      Scene *scene_new = BKE_scene_find_replacement(*bmain, *scene);
+      if (scene_new && ED_scene_replace_active_for_deletion(*C, *bmain, *scene, scene_new)) {
+        rna_Main_ID_remove(bmain, reports, scene_ptr, do_unlink, true, true);
+        return;
       }
     }
-    rna_Main_ID_remove(bmain, reports, scene_ptr, do_unlink, true, true);
+    else {
+      rna_Main_ID_remove(bmain, reports, scene_ptr, do_unlink, true, true);
+      return;
+    }
   }
-  else {
-    BKE_reportf(reports,
-                RPT_ERROR,
-                "Scene '%s' is the last local one, cannot be removed",
-                scene->id.name + 2);
-  }
+
+  BKE_reportf(reports,
+              RPT_ERROR,
+              "Scene '%s' is the last local one, cannot be removed",
+              scene->id.name + 2);
 }
 
 static Object *rna_Main_objects_new(Main *bmain, ReportList *reports, const char *name, ID *data)
@@ -247,10 +298,10 @@ static Object *rna_Main_objects_new(Main *bmain, ReportList *reports, const char
     id_us_plus(data);
   }
 
-  ob = BKE_object_add_only_object(bmain, type, safe_name);
+  ob = BKE_object_add_only_object(bmain, ObjectType(type), safe_name);
 
   ob->data = data;
-  BKE_object_materials_sync_length(bmain, ob, static_cast<ID *>(ob->data));
+  BKE_object_materials_sync_length(bmain, ob, ob->data);
 
   WM_main_add_notifier(NC_ID | NA_ADDED, nullptr);
 
@@ -265,8 +316,7 @@ static Material *rna_Main_materials_new(Main *bmain, const char *name)
   Material *material = BKE_material_add(bmain, safe_name);
   id_us_min(&material->id);
 
-  material->nodetree = blender::bke::node_tree_add_tree_embedded(
-      bmain, &material->id, "Material Node Tree", "ShaderNodeTree");
+  nodes::node_tree_shader_default(nullptr, bmain, &material->id);
 
   WM_main_add_notifier(NC_ID | NA_ADDED, nullptr);
 
@@ -276,16 +326,16 @@ static Material *rna_Main_materials_new(Main *bmain, const char *name)
 static void rna_Main_materials_gpencil_data(Main * /*bmain*/, PointerRNA *id_ptr)
 {
   ID *id = static_cast<ID *>(id_ptr->data);
-  Material *ma = (Material *)id;
+  Material *ma = id_cast<Material *>(id);
   BKE_gpencil_material_attr_init(ma);
 }
 
 static void rna_Main_materials_gpencil_remove(Main * /*bmain*/, PointerRNA *id_ptr)
 {
   ID *id = static_cast<ID *>(id_ptr->data);
-  Material *ma = (Material *)id;
+  Material *ma = id_cast<Material *>(id);
   if (ma->gp_style) {
-    MEM_SAFE_FREE(ma->gp_style);
+    MEM_SAFE_DELETE(ma->gp_style);
   }
 }
 
@@ -301,9 +351,9 @@ static bNodeTree *rna_Main_nodetree_new(Main *bmain, const char *name, int type)
   char safe_name[MAX_ID_NAME - 2];
   rna_idname_validate(name, safe_name);
 
-  blender::bke::bNodeTreeType *typeinfo = rna_node_tree_type_from_enum(type);
+  bke::bNodeTreeType *typeinfo = rna_node_tree_type_from_enum(type);
   if (typeinfo) {
-    bNodeTree *ntree = blender::bke::node_tree_add_tree(bmain, safe_name, typeinfo->idname);
+    bNodeTree *ntree = bke::node_tree_add_tree(bmain, safe_name, typeinfo->idname.ref());
     BKE_main_ensure_invariants(*bmain);
 
     id_us_min(&ntree->id);
@@ -360,7 +410,7 @@ static Light *rna_Main_lights_new(Main *bmain, const char *name, int type)
   rna_idname_validate(name, safe_name);
 
   Light *lamp = BKE_light_add(bmain, safe_name);
-  lamp->type = type;
+  lamp->type = eLightType(type);
   id_us_min(&lamp->id);
 
   WM_main_add_notifier(NC_ID | NA_ADDED, nullptr);
@@ -422,7 +472,7 @@ static Image *rna_Main_images_load(Main *bmain,
                 errno ? strerror(errno) : RPT_("unsupported image format"));
   }
 
-  id_us_min((ID *)ima);
+  id_us_min(id_cast<ID *>(ima));
 
   WM_main_add_notifier(NC_ID | NA_ADDED, nullptr);
 
@@ -447,7 +497,7 @@ static Curve *rna_Main_curves_new(Main *bmain, const char *name, int type)
   char safe_name[MAX_ID_NAME - 2];
   rna_idname_validate(name, safe_name);
 
-  Curve *cu = BKE_curve_add(bmain, safe_name, type);
+  Curve *cu = BKE_curve_add(bmain, safe_name, ObjectType(type));
   id_us_min(&cu->id);
 
   WM_main_add_notifier(NC_ID | NA_ADDED, nullptr);
@@ -502,7 +552,7 @@ static Tex *rna_Main_textures_new(Main *bmain, const char *name, int type)
   rna_idname_validate(name, safe_name);
 
   Tex *tex = BKE_texture_add(bmain, safe_name);
-  BKE_texture_type_set(tex, type);
+  BKE_texture_type_set(tex, eTex_Type(type));
   id_us_min(&tex->id);
 
   WM_main_add_notifier(NC_ID | NA_ADDED, nullptr);
@@ -538,8 +588,7 @@ static World *rna_Main_worlds_new(Main *bmain, const char *name)
   World *world = BKE_world_add(bmain, safe_name);
   id_us_min(&world->id);
 
-  world->nodetree = blender::bke::node_tree_add_tree_embedded(
-      bmain, &world->id, "World Node Tree", "ShaderNodeTree");
+  nodes::node_tree_shader_default(nullptr, bmain, &world->id);
 
   WM_main_add_notifier(NC_ID | NA_ADDED, nullptr);
 
@@ -674,7 +723,7 @@ static Palette *rna_Main_palettes_new(Main *bmain, const char *name)
 
   WM_main_add_notifier(NC_ID | NA_ADDED, nullptr);
 
-  return (Palette *)palette;
+  return static_cast<Palette *>(palette);
 }
 
 static MovieClip *rna_Main_movieclip_load(Main *bmain,
@@ -704,7 +753,7 @@ static MovieClip *rna_Main_movieclip_load(Main *bmain,
                 errno ? strerror(errno) : RPT_("unable to load movie clip"));
   }
 
-  id_us_min((ID *)clip);
+  id_us_min(id_cast<ID *>(clip));
 
   WM_main_add_notifier(NC_ID | NA_ADDED, nullptr);
 
@@ -744,7 +793,7 @@ static LightProbe *rna_Main_lightprobe_new(Main *bmain, const char *name, int ty
 
   LightProbe *probe = BKE_lightprobe_add(bmain, safe_name);
 
-  BKE_lightprobe_type_set(probe, type);
+  BKE_lightprobe_type_set(probe, eLightProbeType(type));
 
   id_us_min(&probe->id);
 
@@ -822,7 +871,7 @@ static Volume *rna_Main_volumes_new(Main *bmain, const char *name)
 #  define RNA_MAIN_ID_TAG_FUNCS_DEF(_func_name, _listbase_name, _id_type) \
     static void rna_Main_##_func_name##_tag(Main *bmain, bool value) \
     { \
-      BKE_main_id_tag_listbase(&bmain->_listbase_name, ID_TAG_DOIT, value); \
+      BKE_main_id_tag_listbase(&bmain->_listbase_name.cast<ID>(), ID_TAG_DOIT, value); \
     }
 
 RNA_MAIN_ID_TAG_FUNCS_DEF(cameras, cameras, ID_CA)
@@ -867,14 +916,18 @@ RNA_MAIN_ID_TAG_FUNCS_DEF(volumes, volumes, ID_VO)
 
 #  undef RNA_MAIN_ID_TAG_FUNCS_DEF
 
+}  // namespace blender
+
 #else
 
-void RNA_api_main(StructRNA * /*srna*/)
+namespace blender {
+
+void RNA_api_main(StructRNA *srna)
 {
-#  if 0
   FunctionRNA *func;
   PropertyRNA *parm;
 
+#  if 0
   /* maybe we want to add functions in 'bpy.data' still?
    * for now they are all in collections bpy.data.images.new(...) */
   func = RNA_def_function(srna, "add_image", "rna_Main_add_image");
@@ -885,6 +938,28 @@ void RNA_api_main(StructRNA * /*srna*/)
   parm = RNA_def_pointer(func, "image", "Image", "", "New image");
   RNA_def_function_return(func, parm);
 #  endif
+
+  func = RNA_def_function(srna, "pack_linked_ids_hierarchy", "rna_Main_pack_linked_ids_hierarchy");
+  RNA_def_function_ui_description(
+      func, "Pack the given linked ID and its dependencies into current blendfile");
+  RNA_def_function_flag(func, FUNC_USE_REPORTS);
+  parm = RNA_def_pointer(func, "root_id", "ID", "", "Root linked ID to pack");
+  RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
+  parm = RNA_def_pointer(func, "packed_id", "ID", "", "The packed ID matching the given root ID");
+  RNA_def_function_return(func, parm);
+
+  func = RNA_def_function(srna, "project_init", "rna_Main_blender_project_init");
+  RNA_def_function_ui_description(func, "Initialize a new active project");
+  RNA_def_function_flag(func, FUNC_USE_REPORTS);
+  parm = RNA_def_string(func, "name", nullptr, 0, nullptr, "The project's name");
+  RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
+  parm = RNA_def_string_dir_path(
+      func, "project_root", nullptr, 0, nullptr, "The filepath of the project's root folder");
+  RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
+
+  func = RNA_def_function(srna, "project_clear", "rna_Main_blender_project_clear");
+  RNA_def_function_ui_description(func, "Clear the currently active project");
+  RNA_def_function_flag(func, FUNC_USE_REPORTS);
 }
 
 void RNA_def_main_cameras(BlenderRNA *brna, PropertyRNA *cprop)
@@ -2099,14 +2174,14 @@ void RNA_def_main_grease_pencil(BlenderRNA *brna, PropertyRNA *cprop)
   RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
   /* return type */
   parm = RNA_def_pointer(
-      func, "grease_pencil", "GreasePencilv3", "", "New Grease Pencil data-block");
+      func, "grease_pencil", "GreasePencil", "", "New Grease Pencil data-block");
   RNA_def_function_return(func, parm);
 
   func = RNA_def_function(srna, "remove", "rna_Main_ID_remove");
   RNA_def_function_flag(func, FUNC_USE_REPORTS);
   RNA_def_function_ui_description(func,
                                   "Remove a Grease Pencil instance from the current blendfile");
-  parm = RNA_def_pointer(func, "grease_pencil", "GreasePencilv3", "", "Grease Pencil to remove");
+  parm = RNA_def_pointer(func, "grease_pencil", "GreasePencil", "", "Grease Pencil to remove");
   RNA_def_parameter_flags(parm, PROP_NEVER_NULL, PARM_REQUIRED | PARM_RNAPTR);
   RNA_def_parameter_clear_flags(parm, PROP_THICK_WRAP, ParameterFlag(0));
   RNA_def_boolean(
@@ -2449,5 +2524,7 @@ void RNA_def_main_volumes(BlenderRNA *brna, PropertyRNA *cprop)
   parm = RNA_def_boolean(func, "value", false, "Value", "");
   RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
 }
+
+}  // namespace blender
 
 #endif

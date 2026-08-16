@@ -8,9 +8,9 @@
 
 #include <cstdlib>
 
-#include "BLI_math_matrix.h"
-#include "BLI_math_vector.h"
-#include "BLI_string_utf8.h"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_vector_c.hh"
+#include "BLI_string_utf8.hh"
 #include "BLI_task.hh"
 
 #include "MEM_guardedalloc.h"
@@ -212,7 +212,7 @@ static void initToSphere(TransInfo *t, wmOperator * /*op*/)
 
   t->num.val_flag[0] |= NUM_NULL_ONE | NUM_NO_NEGATIVE;
 
-  ToSphereInfo *data = MEM_callocN<ToSphereInfo>(__func__);
+  ToSphereInfo *data = MEM_new_zeroed<ToSphereInfo>(__func__);
   t->custom.mode.data = data;
   t->custom.mode.use_free = true;
 

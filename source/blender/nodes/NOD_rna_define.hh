@@ -8,17 +8,22 @@
 
 #include "BLI_function_ref.hh"
 
+#include "DNA_node_types.h"
+
 #include "RNA_define.hh"
 
 #include "WM_types.hh" /* For notifier defines */
+
+namespace blender {
 
 void rna_Node_update(Main *bmain, Scene *scene, PointerRNA *ptr);
 void rna_Node_socket_update(Main *bmain, Scene *scene, PointerRNA *ptr);
 void rna_Node_update_relations(Main *bmain, Scene *scne, PointerRNA *ptr);
 void rna_Node_Viewer_shortcut_node_set(PointerRNA *ptr, PropertyRNA *prop, int value);
-int rna_Node_Viewer_shortcut_node_get(PointerRNA *ptr, PropertyRNA *prop);
+const EnumPropertyItem *rna_NodeSocket_structure_type_item_filter(
+    const bNodeTree *ntree, const eNodeSocketDatatype socket_type, bool *r_free);
 
-namespace blender::nodes {
+namespace nodes {
 
 struct EnumRNAAccessors {
   EnumPropertyGetFunc getter;
@@ -42,7 +47,7 @@ struct EnumRNAAccessors {
       }, \
       [](PointerRNA *ptr, PropertyRNA * /*prop*/, const int value) { \
         bNode &node = *static_cast<bNode *>(ptr->data); \
-        node.member = value; \
+        node.member = static_cast<std::remove_reference_t<decltype(node.member)>>(value); \
       })
 
 /**
@@ -53,11 +58,12 @@ struct EnumRNAAccessors {
   EnumRNAAccessors( \
       [](PointerRNA *ptr, PropertyRNA * /*prop*/) -> int { \
         const bNode &node = *static_cast<const bNode *>(ptr->data); \
-        return node_storage(node).member; \
+        return int(node_storage(node).member); \
       }, \
       [](PointerRNA *ptr, PropertyRNA * /*prop*/, const int value) { \
         bNode &node = *static_cast<bNode *>(ptr->data); \
-        node_storage(node).member = value; \
+        node_storage(node).member = \
+            static_cast<std::remove_reference_t<decltype(node_storage(node).member)>>(value); \
       })
 
 struct BooleanRNAAccessors {
@@ -121,4 +127,5 @@ PropertyRNA *RNA_def_node_boolean(StructRNA *srna,
                                   std::optional<bool> default_value = std::nullopt,
                                   bool allow_animation = false);
 
-}  // namespace blender::nodes
+}  // namespace nodes
+}  // namespace blender

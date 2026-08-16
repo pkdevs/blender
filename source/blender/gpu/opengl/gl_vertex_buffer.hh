@@ -14,8 +14,7 @@
 
 #include "GPU_vertex_buffer.hh"
 
-namespace blender {
-namespace gpu {
+namespace blender::gpu {
 
 class GLVertBuf : public VertBuf {
   friend class GLTexture;    /* For buffer texture. */
@@ -36,6 +35,10 @@ class GLVertBuf : public VertBuf {
   void bind();
 
   void update_sub(uint start, uint len, const void *data) override;
+  void copy_sub(VertBuf &source_buf,
+                uint source_first_vertex,
+                uint dest_first_vertex,
+                uint vertex_len) override;
 
   void read(void *data) const override;
 
@@ -96,5 +99,4 @@ static inline GLenum to_gl(GPUVertCompType type)
   }
 }
 
-}  // namespace gpu
-}  // namespace blender
+}  // namespace blender::gpu

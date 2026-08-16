@@ -6,6 +6,7 @@
 
 #include <cstddef>
 #include <cstdlib>
+#include <memory>
 #include <new>
 
 #ifdef WITH_BLENDER_GUARDEDALLOC
@@ -47,7 +48,7 @@ template<typename T> class GuardedAllocator {
      * far as i concerned. We might over-align on 32bit here, but that should
      * be all safe actually.
      */
-    mem = (T *)MEM_mallocN_aligned(size, 16, "Cycles Alloc");
+    mem = (T *)MEM_new_uninitialized_aligned(size, 16, "Cycles Alloc");
 #else
     mem = (T *)malloc(size);
 #endif
@@ -62,7 +63,7 @@ template<typename T> class GuardedAllocator {
     util_guarded_mem_free(n * sizeof(T));
     if (p != nullptr) {
 #ifdef WITH_BLENDER_GUARDEDALLOC
-      MEM_freeN(const_cast<void *>(static_cast<const void *>(p)));
+      MEM_delete_void(const_cast<void *>(static_cast<const void *>(p)));
 #else
       free(p);
 #endif
@@ -106,7 +107,7 @@ template<typename T> class GuardedAllocator {
     return !operator==(other);
   }
 
-#ifdef _MSC_VER
+#if defined(_MSC_VER) && _ITERATOR_DEBUG_LEVEL
   /* Welcome to the black magic here.
    *
    * The issue is that MSVC C++ allocates container proxy on any
@@ -122,6 +123,9 @@ template<typename T> class GuardedAllocator {
    *
    * Here we work this around by making it so container proxy does
    * not use guarded allocation. A bit fragile, unfortunately.
+   *
+   * Note: _Container_proxy only exists when _ITERATOR_DEBUG_LEVEL != 0,
+   * which is typically only in Debug builds with newer MSVC versions.
    */
   template<> struct rebind<std::_Container_proxy> {
     typedef std::allocator<std::_Container_proxy> other;

@@ -6,7 +6,9 @@
  * \ingroup draw
  */
 
-#include "BLI_sys_types.h"
+#include "BLI_sys_types.hh"
+
+namespace blender {
 
 #pragma once
 
@@ -48,3 +50,5 @@ enum {
   /* reference the string by pointer */
   DRW_TEXT_CACHE_STRING_PTR = (1 << 3),
 };
+
+}  // namespace blender

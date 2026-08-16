@@ -20,6 +20,7 @@ float3 fresnel_conductor(float cosi, float3 eta, float3 k)
   return (Rparl2 + Rperp2) * 0.5f;
 }
 
+[[node]]
 void node_bsdf_metallic(float4 base_color,
                         float4 edge_tint,
                         float3 ior,
@@ -30,9 +31,11 @@ void node_bsdf_metallic(float4 base_color,
                         float3 N,
                         float3 T,
                         float weight,
+                        float thin_film_thickness,
+                        float thin_film_ior,
                         const float do_multiscatter,
                         const float use_complex_ior,
-                        out Closure result)
+                        Closure &result)
 {
   float3 F0 = base_color.rgb;
   float3 F82 = edge_tint.rgb;
@@ -59,8 +62,7 @@ void node_bsdf_metallic(float4 base_color,
 
   float3 metallic_brdf;
   brdf_f82_tint_lut(F0, F82, NV, roughness, do_multiscatter != 0.0f, metallic_brdf);
-  reflection_data.color = metallic_brdf;
-  reflection_data.weight = weight;
+  reflection_data.color = metallic_brdf * weight;
 
   result = closure_eval(reflection_data);
 }

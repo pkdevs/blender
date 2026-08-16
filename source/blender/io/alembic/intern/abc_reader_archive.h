@@ -13,9 +13,25 @@
 #include <fstream>
 #include <vector>
 
+namespace blender {
+
 struct Main;
 
-namespace blender::io::alembic {
+namespace io::alembic {
+
+/* Represents the time range in seconds for animated data inside of an Alembic archive. The time
+ * range is [min, max]. */
+struct TimeInfo {
+  Alembic::Abc::chrono_t min_time = std::numeric_limits<Alembic::Abc::chrono_t>::max();
+  Alembic::Abc::chrono_t max_time = -std::numeric_limits<Alembic::Abc::chrono_t>::max();
+
+  bool is_valid() const
+  {
+    return min_time <= max_time &&
+           min_time != std::numeric_limits<Alembic::Abc::chrono_t>::max() &&
+           max_time != -std::numeric_limits<Alembic::Abc::chrono_t>::max();
+  }
+};
 
 /**
  * Wrappers around input and output archives. The goal is to be able to use
@@ -44,6 +60,9 @@ class ArchiveReader {
 
   /* Detect if the Archive was written by Blender prior to 4.4. */
   bool is_blender_archive_version_prior_44();
+
+  TimeInfo getTimeInfo();
 };
 
-}  // namespace blender::io::alembic
+}  // namespace io::alembic
+}  // namespace blender

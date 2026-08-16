@@ -27,8 +27,8 @@ ShaderInterface::ShaderInterface()
 ShaderInterface::~ShaderInterface()
 {
   /* Free memory used by name_buffer. */
-  MEM_SAFE_FREE(name_buffer_);
-  MEM_SAFE_FREE(inputs_);
+  MEM_SAFE_DELETE(name_buffer_);
+  MEM_SAFE_DELETE(inputs_);
 }
 
 static void sort_input_list(MutableSpan<ShaderInput> dst)
@@ -68,6 +68,8 @@ void ShaderInterface::sort_inputs()
   offset += uniform_len_;
   sort_input_list(MutableSpan<ShaderInput>(inputs_ + offset, ssbo_len_));
   offset += ssbo_len_;
+  sort_input_list(MutableSpan<ShaderInput>(inputs_ + offset, tlas_len_));
+  offset += tlas_len_;
   sort_input_list(MutableSpan<ShaderInput>(inputs_ + offset, constant_len_));
   offset += constant_len_;
 }

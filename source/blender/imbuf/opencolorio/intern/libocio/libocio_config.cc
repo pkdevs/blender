@@ -4,26 +4,24 @@
 
 #include "libocio_config.hh"
 
-#if defined(WITH_OPENCOLORIO)
+#include <algorithm>
+#include <numeric>
 
-#  include <algorithm>
-#  include <numeric>
+#include <fmt/format.h>
 
-#  include <fmt/format.h>
+#include "BLI_array.hh"
+#include "BLI_assert.hh"
+#include "BLI_index_range.hh"
+#include "BLI_math_matrix.hh"
 
-#  include "BLI_array.hh"
-#  include "BLI_assert.h"
-#  include "BLI_index_range.hh"
-#  include "BLI_math_matrix.hh"
+#include "OCIO_matrix.hh"
+#include "OCIO_role_names.hh"
 
-#  include "OCIO_matrix.hh"
-#  include "OCIO_role_names.hh"
-
-#  include "error_handling.hh"
-#  include "libocio_colorspace.hh"
-#  include "libocio_cpu_processor.hh"
-#  include "libocio_display_processor.hh"
-#  include "libocio_processor.hh"
+#include "error_handling.hh"
+#include "libocio_colorspace.hh"
+#include "libocio_cpu_processor.hh"
+#include "libocio_display_processor.hh"
+#include "libocio_processor.hh"
 
 namespace blender::ocio {
 
@@ -48,23 +46,8 @@ std::unique_ptr<Config> LibOCIOConfig::create_from_environment()
   return nullptr;
 }
 
-std::unique_ptr<Config> LibOCIOConfig::create_from_file(const StringRefNull filename)
-{
-  try {
-    OCIO_NAMESPACE::ConstConfigRcPtr ocio_config = OCIO_NAMESPACE::Config::CreateFromFile(
-        filename.c_str());
-    if (!ocio_config) {
-      return nullptr;
-    }
-
-    return std::unique_ptr<LibOCIOConfig>(new LibOCIOConfig(ocio_config));
-  }
-  catch (OCIO_NAMESPACE::Exception &exception) {
-    report_exception(exception);
-  }
-
-  return nullptr;
-}
+/* Note there is no CreateFromFile based method here, as it has issues with paths
+ * containing "$" due to the variable expansion feature. */
 
 LibOCIOConfig::LibOCIOConfig(const OCIO_NAMESPACE::ConstConfigRcPtr &ocio_config)
 {
@@ -80,11 +63,12 @@ LibOCIOConfig::LibOCIOConfig(const OCIO_NAMESPACE::ConstConfigRcPtr &ocio_config
 
   initialize_active_color_spaces();
   initialize_inactive_color_spaces();
+  initialize_hdr_color_spaces();
   initialize_looks();
   initialize_displays();
 }
 
-LibOCIOConfig::~LibOCIOConfig() {}
+LibOCIOConfig::~LibOCIOConfig() = default;
 
 void LibOCIOConfig::initialize_active_color_spaces()
 {
@@ -121,7 +105,7 @@ void LibOCIOConfig::initialize_active_color_spaces()
   /* Create index array for access to the color space in alphabetic order. */
   sorted_color_space_index_.resize(num_color_spaces);
   std::iota(sorted_color_space_index_.begin(), sorted_color_space_index_.end(), 0);
-  std::sort(sorted_color_space_index_.begin(), sorted_color_space_index_.end(), [&](int a, int b) {
+  std::ranges::sort(sorted_color_space_index_, [&](int a, int b) {
     return color_spaces_[a].name() < color_spaces_[b].name();
   });
 }
@@ -350,18 +334,77 @@ const ColorSpace *LibOCIOConfig::get_sorted_color_space_by_index(const int index
 const ColorSpace *LibOCIOConfig::get_color_space_by_interop_id(StringRefNull interop_id) const
 {
   for (const LibOCIOColorSpace &color_space : color_spaces_) {
-    if (color_space.interop_id() == interop_id) {
+    if (color_space.interop_id() == interop_id && color_space.is_primary_interop_id()) {
       return &color_space;
     }
   }
 
   for (const LibOCIOColorSpace &color_space : inactive_color_spaces_) {
-    if (color_space.interop_id() == interop_id) {
+    if (color_space.interop_id() == interop_id && color_space.is_primary_interop_id()) {
       return &color_space;
     }
   }
 
   return nullptr;
+}
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name HDR image API
+ * \{ */
+
+const ColorSpace *LibOCIOConfig::get_color_space_for_hdr_image(StringRefNull name) const
+{
+  /* Based on empirical testing, video works with 100 nits diffuse white, while
+   * images need 203 nits diffuse whites to show matching results. */
+  const ColorSpace *colorspece = get_color_space(name);
+  if (colorspece == nullptr) {
+    return nullptr;
+  }
+  if (colorspece->interop_id() == "pq_rec2020_display") {
+    return get_color_space("blender:pq_rec2020_display_203nits");
+  }
+  if (colorspece->interop_id() == "hlg_rec2020_display") {
+    return get_color_space("blender:hlg_rec2020_display_203nits");
+  }
+  return nullptr;
+}
+
+void LibOCIOConfig::initialize_hdr_color_spaces()
+{
+  for (StringRefNull interop_id : {"pq_rec2020_display", "hlg_rec2020_display"}) {
+    const auto *colorspace = static_cast<const LibOCIOColorSpace *>(
+        get_color_space_by_interop_id(interop_id));
+    if (!colorspace || !colorspace->is_display_referred()) {
+      continue;
+    }
+
+    /* Create colorspace that uses 203 nits diffuse white instead of 100 nits. */
+    const auto hdr_100_colorspace = ocio_config_->getColorSpace(colorspace->name().c_str());
+    const auto hdr_colorspace = OCIO_NAMESPACE::ColorSpace::Create(
+        OCIO_NAMESPACE::REFERENCE_SPACE_DISPLAY);
+    const auto group = OCIO_NAMESPACE::GroupTransform::Create();
+
+    hdr_colorspace->setName(("blender:" + interop_id + "_203nits").c_str());
+
+    const auto to_203_nits = OCIO_NAMESPACE::MatrixTransform::Create();
+    to_203_nits->setMatrix(double4x4(double3x3::diagonal(203.0 / 100.0)).base_ptr());
+    group->appendTransform(to_203_nits);
+
+    const auto to_display = hdr_100_colorspace
+                                ->getTransform(OCIO_NAMESPACE::COLORSPACE_DIR_FROM_REFERENCE)
+                                ->createEditableCopy();
+    group->appendTransform(to_display);
+
+    hdr_colorspace->setTransform(group, OCIO_NAMESPACE::COLORSPACE_DIR_FROM_REFERENCE);
+
+    OCIO_NAMESPACE::Config *mutable_ocio_config = const_cast<OCIO_NAMESPACE::Config *>(
+        ocio_config_.get());
+    mutable_ocio_config->addColorSpace(hdr_colorspace);
+
+    inactive_color_spaces_.append_as(inactive_color_spaces_.size(), ocio_config_, hdr_colorspace);
+  }
 }
 
 /** \} */
@@ -407,7 +450,7 @@ const Display *LibOCIOConfig::get_default_display() const
   }
   /* Matches the behavior of OpenColorIO, but avoids using API which potentially throws exception
    * and requires string lookups. */
-  return &displays_[0];
+  return &displays_[0];  // NOLINT(readability-container-data-pointer)
 }
 
 const Display *LibOCIOConfig::get_display_by_name(const StringRefNull name) const
@@ -533,5 +576,3 @@ const GPUShaderBinder &LibOCIOConfig::get_gpu_shader_binder() const
 /** \} */
 
 }  // namespace blender::ocio
-
-#endif

@@ -9,11 +9,11 @@
 #pragma once
 
 #include "GHOST_SystemWin32.hh"
+#include "GHOST_Types.hh"
 #include "GHOST_WindowWin32.hh"
-#include <GHOST_Types.h>
 #include <string.h>
 
-class GHOST_DropTargetWin32 : public IDropTarget {
+class GHOST_DropTargetWin32 final : public IDropTarget {
  public:
   /* IUnknownd implementation.
    * Enables clients to get pointers to other interfaces on a given object
@@ -77,7 +77,7 @@ class GHOST_DropTargetWin32 : public IDropTarget {
 
   /**
    * Base the effect on those allowed by the drop-source.
-   * \param dwAllowed: Drop sources allowed drop effect.
+   * \param dw_allowed: Drop sources allowed drop effect.
    * \return The allowed drop effect.
    */
   DWORD allowedDropEffect(DWORD dw_allowed);

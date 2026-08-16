@@ -11,10 +11,11 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_math_vector.h"
-#include "BLI_string_utf8.h"
+#include "BLI_math_vector_c.hh"
+#include "BLI_string_utf8.hh"
 
 #include "BKE_nla.hh"
+#include "BKE_scene.hh"
 #include "BKE_unit.hh"
 
 #include "ED_screen.hh"
@@ -68,7 +69,7 @@ static void applyTimeSlideValue(TransInfo *t, float sval, float cval)
 
   /* Set value for drawing black line. */
   if (t->spacetype == SPACE_ACTION) {
-    SpaceAction *saction = (SpaceAction *)t->area->spacedata.first;
+    SpaceAction *saction = static_cast<SpaceAction *>(t->area->spacedata.first);
     saction->timeslide = cval;
   }
 
@@ -130,7 +131,7 @@ static void applyTimeSlideValue(TransInfo *t, float sval, float cval)
 
 static void applyTimeSlide(TransInfo *t)
 {
-  View2D *v2d = (View2D *)t->view;
+  View2D *v2d = static_cast<View2D *>(t->view);
   float cval[2], sval[2];
   const float *range = static_cast<const float *>(t->custom.mode.data);
   float minx = range[0];
@@ -138,8 +139,8 @@ static void applyTimeSlide(TransInfo *t)
   char str[UI_MAX_DRAW_STR];
 
   /* Calculate mouse co-ordinates. */
-  UI_view2d_region_to_view(v2d, t->mval[0], t->mval[1], &cval[0], &cval[1]);
-  UI_view2d_region_to_view(v2d, t->mouse.imval[0], t->mouse.imval[1], &sval[0], &sval[1]);
+  ui::view2d_region_to_view(v2d, t->mval[0], t->mval[1], &cval[0], &cval[1]);
+  ui::view2d_region_to_view(v2d, t->mouse.imval[0], t->mouse.imval[1], &sval[0], &sval[1]);
 
   /* `t->values_final[0]` stores `cval[0]`,
    * which is the current mouse-pointer location (in frames). */
@@ -163,7 +164,7 @@ static void initTimeSlide(TransInfo *t, wmOperator * /*op*/)
 {
   /* This tool is only really available in the Action Editor. */
   if (t->spacetype == SPACE_ACTION) {
-    SpaceAction *saction = (SpaceAction *)t->area->spacedata.first;
+    SpaceAction *saction = static_cast<SpaceAction *>(t->area->spacedata.first);
 
     /* Set flag for drawing stuff. */
     saction->flag |= SACTION_MOVING;
@@ -179,8 +180,7 @@ static void initTimeSlide(TransInfo *t, wmOperator * /*op*/)
   {
     Scene *scene = t->scene;
     float *range;
-    t->custom.mode.data = range = static_cast<float *>(
-        MEM_mallocN(sizeof(float[2]), "TimeSlide Min/Max"));
+    t->custom.mode.data = range = MEM_new_array_uninitialized<float>(2, "TimeSlide Min/Max");
     t->custom.mode.use_free = true;
 
     float min = 999999999.0f, max = -999999999.0f;
@@ -203,8 +203,8 @@ static void initTimeSlide(TransInfo *t, wmOperator * /*op*/)
 
     if (min == max) {
       /* Just use the current frame ranges. */
-      min = float(PSFRA);
-      max = float(PEFRA);
+      min = float(scene->playback_start());
+      max = float(scene->playback_end());
     }
 
     range[0] = min;

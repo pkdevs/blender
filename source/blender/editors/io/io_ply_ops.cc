@@ -13,8 +13,8 @@
 #  include "BKE_main.hh"
 #  include "BKE_report.hh"
 
-#  include "BLI_string.h"
-#  include "BLI_string_utf8.h"
+#  include "BLI_string.hh"
+#  include "BLI_string_utf8.hh"
 
 #  include "WM_api.hh"
 #  include "WM_types.hh"
@@ -39,6 +39,8 @@
 #  include "io_ply_ops.hh"
 #  include "io_utils.hh"
 
+namespace blender {
+
 static const EnumPropertyItem ply_vertex_colors_mode[] = {
     {int(ePLYVertexColorMode::None), "NONE", 0, "None", "Do not import/export color attributes"},
     {int(ePLYVertexColorMode::sRGB),
@@ -51,6 +53,16 @@ static const EnumPropertyItem ply_vertex_colors_mode[] = {
      0,
      "Linear",
      "Vertex colors in the file are in linear color space"},
+    {0, nullptr, 0, nullptr, nullptr}};
+
+static const EnumPropertyItem io_ply_export_evaluation_mode[] = {
+    {DAG_EVAL_RENDER, "DAG_EVAL_RENDER", 0, "Render", "Export objects as they appear in render"},
+    {DAG_EVAL_VIEWPORT,
+     "DAG_EVAL_VIEWPORT",
+     0,
+     "Viewport",
+     "Export objects as they appear in the viewport (Multiresolution modifiers in Sculpt Mode "
+     "will not be evaluated)"},
     {0, nullptr, 0, nullptr, nullptr}};
 
 static wmOperatorStatus wm_ply_export_invoke(bContext *C,
@@ -78,6 +90,7 @@ static wmOperatorStatus wm_ply_export_exec(bContext *C, wmOperator *op)
   export_params.up_axis = eIOAxis(RNA_enum_get(op->ptr, "up_axis"));
   export_params.global_scale = RNA_float_get(op->ptr, "global_scale");
   export_params.apply_modifiers = RNA_boolean_get(op->ptr, "apply_modifiers");
+  export_params.evaluation_mode = eEvaluationMode(RNA_enum_get(op->ptr, "evaluation_mode"));
 
   export_params.export_selected_objects = RNA_boolean_get(op->ptr, "export_selected_objects");
   export_params.export_uv = RNA_boolean_get(op->ptr, "export_uv");
@@ -103,40 +116,42 @@ static wmOperatorStatus wm_ply_export_exec(bContext *C, wmOperator *op)
 
 static void wm_ply_export_draw(bContext *C, wmOperator *op)
 {
-  uiLayout *layout = op->layout;
+  ui::Layout &layout = *op->layout;
   PointerRNA *ptr = op->ptr;
 
-  layout->use_property_split_set(true);
-  layout->use_property_decorate_set(false);
+  layout.use_property_split_set(true);
+  layout.use_property_decorate_set(false);
 
-  if (uiLayout *panel = layout->panel(C, "PLY_export_general", false, IFACE_("General"))) {
-    uiLayout *col = &panel->column(false);
+  if (ui::Layout *panel = layout.panel(C, "PLY_export_general", false, IFACE_("General"))) {
+    ui::Layout &col = panel->column(false);
 
-    uiLayout *sub = &col->column(false, IFACE_("Format"));
-    sub->prop(ptr, "ascii_format", UI_ITEM_NONE, IFACE_("ASCII"), ICON_NONE);
-
+    {
+      ui::Layout &sub = col.column(false, IFACE_("Format"));
+      sub.prop(ptr, "ascii_format", UI_ITEM_NONE, IFACE_("ASCII"), ICON_NONE);
+    }
     /* The Selection only options only make sense when using regular export. */
     if (CTX_wm_space_file(C)) {
-      sub = &col->column(false, IFACE_("Include"));
-      sub->prop(ptr, "export_selected_objects", UI_ITEM_NONE, IFACE_("Selection Only"), ICON_NONE);
+      ui::Layout &sub = col.column(false, IFACE_("Include"));
+      sub.prop(ptr, "export_selected_objects", UI_ITEM_NONE, IFACE_("Selection Only"), ICON_NONE);
     }
 
-    col->prop(ptr, "global_scale", UI_ITEM_NONE, std::nullopt, ICON_NONE);
-    col->prop(ptr, "forward_axis", UI_ITEM_NONE, IFACE_("Forward Axis"), ICON_NONE);
-    col->prop(ptr, "up_axis", UI_ITEM_NONE, IFACE_("Up Axis"), ICON_NONE);
+    col.prop(ptr, "global_scale", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+    col.prop(ptr, "forward_axis", UI_ITEM_NONE, IFACE_("Forward Axis"), ICON_NONE);
+    col.prop(ptr, "up_axis", UI_ITEM_NONE, IFACE_("Up Axis"), ICON_NONE);
   }
 
-  if (uiLayout *panel = layout->panel(C, "PLY_export_geometry", false, IFACE_("Geometry"))) {
-    uiLayout *col = &panel->column(false);
+  if (ui::Layout *panel = layout.panel(C, "PLY_export_geometry", false, IFACE_("Geometry"))) {
+    ui::Layout &col = panel->column(false);
 
-    col->prop(ptr, "export_uv", UI_ITEM_NONE, IFACE_("UV Coordinates"), ICON_NONE);
-    col->prop(ptr, "export_normals", UI_ITEM_NONE, IFACE_("Vertex Normals"), ICON_NONE);
-    col->prop(ptr, "export_attributes", UI_ITEM_NONE, IFACE_("Vertex Attributes"), ICON_NONE);
-    col->prop(ptr, "export_colors", UI_ITEM_NONE, IFACE_("Vertex Colors"), ICON_NONE);
+    col.prop(ptr, "export_uv", UI_ITEM_NONE, IFACE_("UV Coordinates"), ICON_NONE);
+    col.prop(ptr, "export_normals", UI_ITEM_NONE, IFACE_("Vertex Normals"), ICON_NONE);
+    col.prop(ptr, "export_attributes", UI_ITEM_NONE, IFACE_("Vertex Attributes"), ICON_NONE);
+    col.prop(ptr, "export_colors", UI_ITEM_NONE, IFACE_("Vertex Colors"), ICON_NONE);
 
-    col->prop(
+    col.prop(
         ptr, "export_triangulated_mesh", UI_ITEM_NONE, IFACE_("Triangulated Mesh"), ICON_NONE);
-    col->prop(ptr, "apply_modifiers", UI_ITEM_NONE, IFACE_("Apply Modifiers"), ICON_NONE);
+    col.prop(ptr, "apply_modifiers", UI_ITEM_NONE, IFACE_("Apply Modifiers"), ICON_NONE);
+    col.prop(ptr, "evaluation_mode", UI_ITEM_NONE, IFACE_("Properties"), ICON_NONE);
   }
 }
 
@@ -199,6 +214,13 @@ void WM_OT_ply_export(wmOperatorType *ot)
   /* File Writer options. */
   RNA_def_boolean(
       ot->srna, "apply_modifiers", true, "Apply Modifiers", "Apply modifiers to exported meshes");
+  RNA_def_enum(ot->srna,
+               "evaluation_mode",
+               io_ply_export_evaluation_mode,
+               DAG_EVAL_RENDER,
+               "Object Properties",
+               "Determines properties like object visibility, modifiers etc., where they differ "
+               "for Render and Viewport");
   RNA_def_boolean(ot->srna,
                   "export_selected_objects",
                   false,
@@ -261,7 +283,7 @@ static wmOperatorStatus wm_ply_import_exec(bContext *C, wmOperator *op)
 
   params.reports = op->reports;
 
-  const auto paths = blender::ed::io::paths_from_operator_properties(op->ptr);
+  const auto paths = ed::io::paths_from_operator_properties(op->ptr);
 
   if (paths.is_empty()) {
     BKE_report(op->reports, RPT_ERROR, "No filepath given");
@@ -281,29 +303,29 @@ static wmOperatorStatus wm_ply_import_exec(bContext *C, wmOperator *op)
   return OPERATOR_FINISHED;
 }
 
-static void ui_ply_import_settings(const bContext *C, uiLayout *layout, PointerRNA *ptr)
+static void ui_ply_import_settings(const bContext *C, ui::Layout &layout, PointerRNA *ptr)
 {
-  layout->use_property_split_set(true);
-  layout->use_property_decorate_set(false);
+  layout.use_property_split_set(true);
+  layout.use_property_decorate_set(false);
 
-  if (uiLayout *panel = layout->panel(C, "PLY_import_general", false, IFACE_("General"))) {
-    uiLayout *col = &panel->column(false);
-    col->prop(ptr, "global_scale", UI_ITEM_NONE, std::nullopt, ICON_NONE);
-    col->prop(ptr, "use_scene_unit", UI_ITEM_NONE, std::nullopt, ICON_NONE);
-    col->prop(ptr, "forward_axis", UI_ITEM_NONE, std::nullopt, ICON_NONE);
-    col->prop(ptr, "up_axis", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+  if (ui::Layout *panel = layout.panel(C, "PLY_import_general", false, IFACE_("General"))) {
+    ui::Layout &col = panel->column(false);
+    col.prop(ptr, "global_scale", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+    col.prop(ptr, "use_scene_unit", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+    col.prop(ptr, "forward_axis", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+    col.prop(ptr, "up_axis", UI_ITEM_NONE, std::nullopt, ICON_NONE);
   }
 
-  if (uiLayout *panel = layout->panel(C, "PLY_import_options", false, IFACE_("Options"))) {
-    uiLayout *col = &panel->column(false);
-    col->prop(ptr, "merge_verts", UI_ITEM_NONE, std::nullopt, ICON_NONE);
-    col->prop(ptr, "import_colors", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+  if (ui::Layout *panel = layout.panel(C, "PLY_import_options", false, IFACE_("Options"))) {
+    ui::Layout &col = panel->column(false);
+    col.prop(ptr, "merge_verts", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+    col.prop(ptr, "import_colors", UI_ITEM_NONE, std::nullopt, ICON_NONE);
   }
 }
 
 static void wm_ply_import_draw(bContext *C, wmOperator *op)
 {
-  ui_ply_import_settings(C, op->layout, op->ptr);
+  ui_ply_import_settings(C, *op->layout, op->ptr);
 }
 
 void WM_OT_ply_import(wmOperatorType *ot)
@@ -314,7 +336,7 @@ void WM_OT_ply_import(wmOperatorType *ot)
   ot->description = "Import an PLY file as an object";
   ot->idname = "WM_OT_ply_import";
 
-  ot->invoke = blender::ed::io::filesel_drop_import_invoke;
+  ot->invoke = ed::io::filesel_drop_import_invoke;
   ot->exec = wm_ply_import_exec;
   ot->ui = wm_ply_import_draw;
   ot->poll = WM_operator_winactive;
@@ -354,10 +376,10 @@ void WM_OT_ply_import(wmOperatorType *ot)
   RNA_def_property_flag(prop, PROP_HIDDEN);
 }
 
-namespace blender::ed::io {
+namespace ed::io {
 void ply_file_handler_add()
 {
-  auto fh = std::make_unique<blender::bke::FileHandlerType>();
+  auto fh = std::make_unique<bke::FileHandlerType>();
   STRNCPY_UTF8(fh->idname, "IO_FH_ply");
   STRNCPY_UTF8(fh->import_operator, "WM_OT_ply_import");
   STRNCPY_UTF8(fh->export_operator, "WM_OT_ply_export");
@@ -366,6 +388,6 @@ void ply_file_handler_add()
   fh->poll_drop = poll_file_object_drop;
   bke::file_handler_add(std::move(fh));
 }
-}  // namespace blender::ed::io
-
+}  // namespace ed::io
+}  // namespace blender
 #endif /* WITH_IO_PLY */

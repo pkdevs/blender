@@ -8,7 +8,7 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_dynstr.h"
+#include "BLI_dynstr.hh"
 #include "BLI_vector.hh"
 
 #include "GPU_storage_buffer.hh"
@@ -19,11 +19,14 @@
 
 #include "CLG_log.h"
 
-#include "fmt/format.h"
+#include <fmt/format.h>
+#include <fmt/ranges.h>
+
+namespace blender {
 
 static CLG_LogRef LOG = {"gpu.shader"};
 
-namespace blender::gpu {
+namespace gpu {
 
 /* -------------------------------------------------------------------- */
 /** \name Debug functions
@@ -127,6 +130,14 @@ void Shader::print_log(Span<StringRefNull> sources,
     }
 
     const char *src_line = sources_combined.c_str();
+
+    std::string log_line_str(log_line, (line_end + 1) - log_line);
+    if (log_line_str.ends_with(" used uninitialized\n")) {
+      /* Mesa GLSL compiler warns about uninitialized variables are mostly false positive.
+       * Avoid noise. */
+      log_line = line_end + 1;
+      continue;
+    }
 
     /* Separate from previous block. */
     if (previous_location.source != log_item.cursor.source ||
@@ -256,7 +267,7 @@ void Shader::print_log(Span<StringRefNull> sources,
     }
     const char *_str = BLI_dynstr_get_cstring(dynstr);
     CLOG_AT_LEVEL(&LOG, level, "%s %s: %s", this->name, stage, _str);
-    MEM_freeN(_str);
+    MEM_delete(_str);
   }
 
   BLI_dynstr_free(dynstr);
@@ -370,6 +381,9 @@ size_t GPULogParser::source_line_get(StringRefNull source_combined, size_t pos)
 
 void printf_begin(Context *ctx)
 {
+#if GPU_SHADER_PRINTF_ENABLE == 0
+  return;
+#endif
   if (ctx == nullptr) {
     return;
   }
@@ -384,6 +398,9 @@ void printf_begin(Context *ctx)
 
 void printf_end(Context *ctx)
 {
+#if GPU_SHADER_PRINTF_ENABLE == 0
+  return;
+#endif
   if (ctx == nullptr) {
     return;
   }
@@ -401,6 +418,7 @@ void printf_end(Context *ctx)
     return;
   }
 
+  /* data[0] contains the length of the data. */
   int cursor = 1;
   while (cursor < data_len + 1) {
     uint32_t format_hash = data[cursor++];
@@ -418,6 +436,13 @@ void printf_end(Context *ctx)
         case shader::PrintfFormat::Block::NONE:
           printf("%s", block.fmt.c_str());
           break;
+        case shader::PrintfFormat::Block::STRING: {
+          /* This is actually just the string that is referenced, not a format. */
+          const shader::PrintfFormat &str = shader::gpu_shader_dependency_get_printf_format(
+              *reinterpret_cast<uint32_t *>(&data[cursor++]));
+          printf(block.fmt.c_str(), str.format_str.c_str());
+          break;
+        }
         case shader::PrintfFormat::Block::UINT:
           printf(block.fmt.c_str(), *reinterpret_cast<uint32_t *>(&data[cursor++]));
           break;
@@ -437,4 +462,5 @@ void printf_end(Context *ctx)
 
 /** \} */
 
-}  // namespace blender::gpu
+}  // namespace gpu
+}  // namespace blender

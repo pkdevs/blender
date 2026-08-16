@@ -6,6 +6,7 @@
 
 #include "IO_subdiv_disabler.hh"
 #include "usd.hh"
+#include "usd_colorspace_utils.hh"
 #include "usd_hierarchy_iterator.hh"
 #include "usd_hook.hh"
 #include "usd_instancing_utils.hh"
@@ -23,6 +24,7 @@
 #include <pxr/usd/usdGeom/tokens.h>
 #include <pxr/usd/usdGeom/xform.h>
 #include <pxr/usd/usdGeom/xformCommonAPI.h>
+#include <pxr/usd/usdUI/accessibilityAPI.h>
 #include <pxr/usd/usdUtils/usdzPackage.h>
 
 #include "MEM_guardedalloc.h"
@@ -44,13 +46,16 @@
 #include "BKE_report.hh"
 #include "BKE_scene.hh"
 
-#include "BLI_fileops.h"
-#include "BLI_math_matrix.h"
-#include "BLI_math_rotation.h"
-#include "BLI_math_vector.h"
+#include "BLI_fileops.hh"
+#include "BLI_math_matrix.hh"
+#include "BLI_math_matrix_types.hh"
+#include "BLI_math_rotation_c.hh"
+#include "BLI_math_vector_c.hh"
 #include "BLI_path_utils.hh"
-#include "BLI_string.h"
+#include "BLI_string.hh"
 #include "BLI_timeit.hh"
+
+#include "ED_util.hh"
 
 #include <IMB_imbuf.hh>
 #include <IMB_imbuf_types.hh>
@@ -59,9 +64,12 @@
 #include "WM_types.hh"
 
 #include "CLG_log.h"
+
+namespace blender {
+
 static CLG_LogRef LOG = {"io.usd"};
 
-namespace blender::io::usd {
+namespace io::usd {
 
 struct ExportJobData {
   Main *bmain = nullptr;
@@ -170,28 +178,56 @@ static void ensure_root_prim(pxr::UsdStageRefPtr stage, const USDExportParams &p
     return;
   }
 
-  if (params.convert_scene_units) {
+  if (params.convert_scene_units != SceneUnits::Meters) {
     xf_api.SetScale(pxr::GfVec3f(float(1.0 / get_meters_per_unit(params))));
   }
 
   if (params.convert_orientation) {
-    float mrot[3][3];
-    mat3_from_axis_conversion(IO_AXIS_Y, IO_AXIS_Z, params.forward_axis, params.up_axis, mrot);
-    transpose_m3(mrot);
+    float3x3 mrot;
+    mat3_from_axis_conversion(
+        IO_AXIS_Y, IO_AXIS_Z, params.forward_axis, params.up_axis, mrot.ptr());
 
-    float eul[3];
-    mat3_to_eul(eul, mrot);
-
-    /* Convert radians to degrees. */
-    mul_v3_fl(eul, 180.0f / M_PI);
-
-    xf_api.SetRotate(pxr::GfVec3f(eul[0], eul[1], eul[2]));
+    const math::EulerXYZ eul = math::to_euler(math::transpose(mrot));
+    xf_api.SetRotate(pxr::GfVec3f(eul.x().degree(), eul.y().degree(), eul.z().degree()));
   }
+
+  /* Color-space on the root prim. It's also applied on all individual prims that need
+   * it, but perhaps this is useful to signal the overall color-space of the file. */
+  colorspace_apply_to_prim(root_xf.GetPrim());
 
   for (const auto &path : pxr::SdfPath(params.root_prim_path).GetPrefixes()) {
     auto xform = pxr::UsdGeomXform::Define(stage, path);
     /* Tag generated primitives to allow filtering on import. */
     xform.GetPrim().SetCustomDataByKey(pxr::TfToken("Blender:generated"), pxr::VtValue(true));
+  }
+}
+
+/**
+ * If the user has provided an accessibility label and description for the export,
+ * write that information to the exported stage's default prim. This information
+ * will be written with the `UsdUIAccessibilityAPI` under the `default`
+ * namespace. Note: The information will only be added if the label is non-empty.
+ */
+static void write_root_accessibility_information(pxr::UsdStageRefPtr stage,
+                                                 const USDExportParams &params)
+{
+  /* Don't apply the API if both the label and description are empty. */
+  if (params.accessibility_label.empty() && params.accessibility_description.empty()) {
+    return;
+  }
+
+  pxr::UsdUIAccessibilityAPI accessibility_api = pxr::UsdUIAccessibilityAPI::ApplyDefaultAPI(
+      stage->GetDefaultPrim());
+  if (!accessibility_api) {
+    return;
+  }
+
+  if (!params.accessibility_label.empty()) {
+    accessibility_api.CreateLabelAttr().Set(params.accessibility_label);
+  }
+
+  if (!params.accessibility_description.empty()) {
+    accessibility_api.CreateDescriptionAttr().Set(params.accessibility_description);
   }
 }
 
@@ -206,14 +242,14 @@ static void report_job_duration(const ExportJobData *data)
 
 static void process_usdz_textures(const ExportJobData *data, const char *path)
 {
-  const eUSDZTextureDownscaleSize enum_value = data->params.usdz_downscale_size;
-  if (enum_value == USD_TEXTURE_SIZE_KEEP) {
+  const TextureDownscaleSize enum_value = data->params.usdz_downscale_size;
+  if (enum_value == TextureDownscaleSize::Keep) {
     return;
   }
 
-  const int image_size = (enum_value == USD_TEXTURE_SIZE_CUSTOM) ?
+  const int image_size = (enum_value == TextureDownscaleSize::Custom) ?
                              data->params.usdz_downscale_custom_size :
-                             enum_value;
+                             int(enum_value);
 
   char texture_path[FILE_MAX];
   STRNCPY(texture_path, path);
@@ -270,7 +306,7 @@ static void process_usdz_textures(const ExportJobData *data, const char *path)
 
       /* Make sure to free the image so it doesn't stick
        * around in the library of the open file. */
-      BKE_id_free(data->bmain, (void *)im);
+      BKE_id_free(data->bmain, static_cast<void *>(im));
     }
   }
 
@@ -368,12 +404,12 @@ std::string cache_image_color(const float color[4])
     return file_path;
   }
 
-  ImBuf *ibuf = IMB_allocImBuf(1, 1, 32, IB_float_data);
+  ImBuf *ibuf = IMB_allocImBuf(1, 1, ImBufFlags::FloatData);
   IMB_rectfill(ibuf, color);
   ibuf->ftype = IMB_FTYPE_OPENEXR;
   ibuf->foptions.flag = R_IMF_EXR_CODEC_RLE;
 
-  if (IMB_save_image(ibuf, file_path.c_str(), IB_float_data)) {
+  if (IMB_save_image(ibuf, file_path.c_str(), ImBufFlags::FloatData)) {
     CLOG_INFO(&LOG, "%s", file_path.c_str());
   }
   else {
@@ -486,7 +522,7 @@ pxr::UsdStageRefPtr export_to_stage(const USDExportParams &params,
 
   /* If we want to set the subdiv scheme, then we need to the export the mesh
    * without the subdiv modifier applied. */
-  if (ELEM(params.export_subdiv, USD_SUBDIV_BEST_MATCH, USD_SUBDIV_IGNORE)) {
+  if (ELEM(params.export_subdiv, SubdivExportMode::Match, SubdivExportMode::Ignore)) {
     mod_disabler.disable_modifiers();
     BKE_scene_graph_update_tagged(depsgraph, bmain);
   }
@@ -538,6 +574,7 @@ pxr::UsdStageRefPtr export_to_stage(const USDExportParams &params,
   if (params.export_animation) {
     /* Writing the animated frames is not 100% of the work, here it's assumed to be 75% of it. */
     float progress_per_frame = 0.75f / std::max(1, (scene->r.efra - scene->r.sfra + 1));
+    int exported_frame_count = 0;
 
     for (float frame = scene->r.sfra; frame <= scene->r.efra; frame++) {
       if (G.is_break || worker_status->stop) {
@@ -551,6 +588,13 @@ pxr::UsdStageRefPtr export_to_stage(const USDExportParams &params,
 
       iter.set_export_frame(frame);
       iter.iterate_and_write();
+
+      /* Check if we need to perform an incremental save. A value of 0 will never trigger. */
+      exported_frame_count++;
+      if (exported_frame_count == params.incremental_frames) {
+        usd_stage->GetRootLayer()->Save();
+        exported_frame_count = 0;
+      }
 
       worker_status->progress += progress_per_frame;
       worker_status->do_update = true;
@@ -587,11 +631,14 @@ pxr::UsdStageRefPtr export_to_stage(const USDExportParams &params,
     }
   }
 
+  /* Write accessibility information to the default prim. */
+  write_root_accessibility_information(usd_stage, params);
+
   if (params.use_instancing) {
     process_scene_graph_instances(params, usd_stage);
   }
 
-  call_export_hooks(usd_stage, depsgraph, params.worker_status->reports);
+  call_export_hooks(depsgraph, &iter, params.worker_status->reports);
 
   worker_status->progress = 0.88f;
   worker_status->do_update = true;
@@ -734,8 +781,7 @@ static void export_endjob(void *customdata)
  * The temporary files will be created in Blender's temporary session storage.
  * The `.usdz` file will then be moved to `job->usdz_filepath`.
  */
-static void create_temp_path_for_usdz_export(const char *filepath,
-                                             blender::io::usd::ExportJobData *job)
+static void create_temp_path_for_usdz_export(const char *filepath, io::usd::ExportJobData *job)
 {
   char usdc_file[FILE_MAX];
   STRNCPY(usdc_file, BLI_path_basename(filepath));
@@ -751,7 +797,7 @@ static void create_temp_path_for_usdz_export(const char *filepath,
   STRNCPY(job->usdz_filepath, filepath);
 }
 
-static void set_job_filepath(blender::io::usd::ExportJobData *job, const char *filepath)
+static void set_job_filepath(io::usd::ExportJobData *job, const char *filepath)
 {
   if (BLI_path_extension_check_n(filepath, ".usdz", nullptr)) {
     create_temp_path_for_usdz_export(filepath, job);
@@ -768,20 +814,22 @@ bool USD_export(const bContext *C,
                 bool as_background_job,
                 ReportList *reports)
 {
-  if (!blender::io::usd::export_params_valid(*params)) {
+  if (!io::usd::export_params_valid(*params)) {
     return false;
   }
 
   ViewLayer *view_layer = CTX_data_view_layer(C);
   Scene *scene = CTX_data_scene(C);
 
-  blender::io::usd::ExportJobData *job = MEM_new<blender::io::usd::ExportJobData>("ExportJobData");
+  io::usd::ExportJobData *job = MEM_new<io::usd::ExportJobData>("ExportJobData");
 
   job->bmain = CTX_data_main(C);
   job->wm = CTX_wm_manager(C);
   job->scene = scene;
   job->export_ok = false;
   set_job_filepath(job, filepath);
+
+  ED_editors_flush_edits(job->bmain);
 
   job->depsgraph = DEG_graph_new(job->bmain, scene, view_layer, params->evaluation_mode);
   job->params = *params;
@@ -803,11 +851,8 @@ bool USD_export(const bContext *C,
 
     DEG_graph_build_from_collection(job->depsgraph, collection);
   }
-  else if (job->params.visible_objects_only) {
-    DEG_graph_build_from_view_layer(job->depsgraph);
-  }
   else {
-    DEG_graph_build_for_all_objects(job->depsgraph);
+    DEG_graph_build_from_view_layer(job->depsgraph);
   }
 
   bool export_ok = false;
@@ -820,15 +865,10 @@ bool USD_export(const bContext *C,
                                 WM_JOB_TYPE_USD_EXPORT);
 
     /* setup job */
-    WM_jobs_customdata_set(wm_job, job, [](void *j) {
-      MEM_delete(static_cast<blender::io::usd::ExportJobData *>(j));
-    });
+    WM_jobs_customdata_set(
+        wm_job, job, [](void *j) { MEM_delete(static_cast<io::usd::ExportJobData *>(j)); });
     WM_jobs_timer(wm_job, 0.1, NC_SCENE | ND_FRAME, NC_SCENE | ND_FRAME);
-    WM_jobs_callbacks(wm_job,
-                      blender::io::usd::export_startjob,
-                      nullptr,
-                      nullptr,
-                      blender::io::usd::export_endjob);
+    WM_jobs_callbacks(wm_job, io::usd::export_startjob, nullptr, nullptr, io::usd::export_endjob);
 
     WM_jobs_start(CTX_wm_manager(C), wm_job);
   }
@@ -837,8 +877,8 @@ bool USD_export(const bContext *C,
     /* Use the operator's reports in non-background case. */
     worker_status.reports = reports;
 
-    blender::io::usd::export_startjob(job, &worker_status);
-    blender::io::usd::export_endjob(job);
+    io::usd::export_startjob(job, &worker_status);
+    io::usd::export_endjob(job);
     export_ok = job->export_ok;
 
     MEM_delete(job);
@@ -865,25 +905,25 @@ double get_meters_per_unit(const USDExportParams &params)
 {
   double result;
   switch (params.convert_scene_units) {
-    case USD_SCENE_UNITS_CENTIMETERS:
+    case SceneUnits::Centimeters:
       result = 0.01;
       break;
-    case USD_SCENE_UNITS_MILLIMETERS:
+    case SceneUnits::Millimeters:
       result = 0.001;
       break;
-    case USD_SCENE_UNITS_KILOMETERS:
+    case SceneUnits::Kilometers:
       result = 1000.0;
       break;
-    case USD_SCENE_UNITS_INCHES:
+    case SceneUnits::Inches:
       result = 0.0254;
       break;
-    case USD_SCENE_UNITS_FEET:
+    case SceneUnits::Feet:
       result = 0.3048;
       break;
-    case USD_SCENE_UNITS_YARDS:
+    case SceneUnits::Yards:
       result = 0.9144;
       break;
-    case USD_SCENE_UNITS_CUSTOM:
+    case SceneUnits::Custom:
       result = double(params.custom_meters_per_unit);
       break;
     default:
@@ -894,4 +934,5 @@ double get_meters_per_unit(const USDExportParams &params)
   return result;
 }
 
-}  // namespace blender::io::usd
+}  // namespace io::usd
+}  // namespace blender

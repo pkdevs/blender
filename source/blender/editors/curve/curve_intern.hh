@@ -8,7 +8,12 @@
 
 #pragma once
 
-#include "BLI_sys_types.h"
+#include "BLI_sys_types.hh"
+
+#include "DNA_curve_types.h"
+#include "DNA_listBase.h"
+
+namespace blender {
 
 /* internal exports only */
 struct BPoint;
@@ -16,8 +21,6 @@ struct Base;
 struct BezTriple;
 struct Curve;
 struct EditNurb;
-struct GHash;
-struct ListBase;
 struct Nurb;
 struct Object;
 struct View3D;
@@ -72,11 +75,14 @@ enum eCurveElem_Types {
 /**
  * Returns 1 in case (de)selection was successful.
  */
-bool select_beztriple(BezTriple *bezt, bool selstatus, uint8_t flag, eVisible_Types hidden);
+bool select_beztriple(BezTriple *bezt,
+                      bool selstatus,
+                      eBezTriple_Flag flag,
+                      eVisible_Types hidden);
 /**
  * Returns 1 in case (de)selection was successful.
  */
-bool select_bpoint(BPoint *bp, bool selstatus, uint8_t flag, bool hidden);
+bool select_bpoint(BPoint *bp, bool selstatus, eBezTriple_Flag flag, bool hidden);
 
 void FONT_OT_text_insert(wmOperatorType *ot);
 void FONT_OT_line_break(wmOperatorType *ot);
@@ -148,13 +154,13 @@ void CURVE_OT_match_texture_space(wmOperatorType *ot);
 
 /* exported for editcurve_undo.cc */
 
-GHash *ED_curve_keyindex_hash_duplicate(GHash *keyindex);
+CVKeyIndexMap *ED_curve_keyindex_hash_duplicate(CVKeyIndexMap *keyindex);
 void ED_curve_keyindex_update_nurb(EditNurb *editnurb, Nurb *nu, Nurb *newnu);
 
 /* exported for `editcurve_pen.cc` */
 
 int ed_editcurve_addvert(Curve *cu, EditNurb *editnurb, View3D *v3d, const float location_init[3]);
-bool curve_toggle_cyclic(View3D *v3d, ListBase *editnurb, int direction);
+bool curve_toggle_cyclic(View3D *v3d, ListBaseT<Nurb> *editnurb, int direction);
 void ed_dissolve_bez_segment(BezTriple *bezt_prev,
                              BezTriple *bezt_next,
                              const Nurb *nu,
@@ -163,11 +169,14 @@ void ed_dissolve_bez_segment(BezTriple *bezt_prev,
                              const uint span_step[2]);
 
 /* helper functions */
-void ed_editnurb_translate_flag(ListBase *editnurb, uint8_t flag, const float vec[3], bool is_2d);
+void ed_editnurb_translate_flag(ListBaseT<Nurb> *editnurb,
+                                eBezTriple_Flag flag,
+                                const float vec[3],
+                                bool is_2d);
 /**
  * Only for #OB_SURF.
  */
-bool ed_editnurb_extrude_flag(EditNurb *editnurb, uint8_t flag);
+bool ed_editnurb_extrude_flag(EditNurb *editnurb, eBezTriple_Flag flag);
 /**
  * \param axis: is in world-space.
  * \param cent: is in object-space.
@@ -219,7 +228,7 @@ bool ED_curve_pick_vert(ViewContext *vc,
 /**
  * Pick the nearest `r_nurb` and `r_bezt` or `r_bp`.
  * \param select: selected vertices have a disadvantage.
- * \param sel_dist_mul: A multiplier on the default select distance.
+ * \param dist_px: The selection distance in pixels.
  * \param r_handle: For bezier triples, set the handle index [0, 1, 2].
  */
 bool ED_curve_pick_vert_ex(ViewContext *vc,
@@ -241,3 +250,5 @@ void CURVE_OT_draw(wmOperatorType *ot);
 
 void CURVE_OT_pen(wmOperatorType *ot);
 wmKeyMap *curve_pen_modal_keymap(wmKeyConfig *keyconf);
+
+}  // namespace blender

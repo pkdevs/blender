@@ -5,6 +5,7 @@
 #pragma once
 
 #include "gpu_shader_compat.hh"
+#include "gpu_shader_math_vector_reduce_lib.glsl"
 
 float3 calc_barycentric_distances(float3 pos0, float3 pos1, float3 pos2)
 {
@@ -34,27 +35,21 @@ float2 calc_barycentric_co(int vertid)
 }
 
 /* Assumes GPU_VEC4 is color data, special case that needs luminance coefficients from OCIO. */
-#define float_from_vec4(v, luminance_coefficients) dot(v.rgb, luminance_coefficients)
-#define float_from_vec3(v) ((v.r + v.g + v.b) * (1.0f / 3.0f))
-#define float_from_vec2(v) v.r
+#define float_from_float4(v, luminance_coefficients) dot(v.rgb, luminance_coefficients)
+#define float_from_float3(v) ((v.r + v.g + v.b) * (1.0f / 3.0f))
+#define float_from_float2(v) ((v.x + v.y) * (1.0f / 2.0f))
 
-#define vec2_from_vec4(v) float2(((v.r + v.g + v.b) * (1.0f / 3.0f)), v.a)
-#define vec2_from_vec3(v) float2(((v.r + v.g + v.b) * (1.0f / 3.0f)), 1.0f)
-#define vec2_from_float(v) float2(v)
+#define float2_from_float4(v) v.xy
+#define float2_from_float3(v) v.xy
+#define float2_from_float(v) float2(v)
 
-#define vec3_from_vec4(v) v.rgb
-#define vec3_from_vec2(v) v.rrr
-#define vec3_from_float(v) float3(v)
+#define float3_from_float4(v) v.rgb
+#define float3_from_float2(v) float3(v.xy, 0.0f)
+#define float3_from_float(v) float3(v)
 
-#define vec4_from_vec3(v) float4(v, 1.0f)
-#define vec4_from_vec2(v) v.rrrg
-#define vec4_from_float(v) float4(float3(v), 1.0f)
-
-/* TODO: Move to shader_shared. */
-#define RAY_TYPE_CAMERA 0
-#define RAY_TYPE_SHADOW 1
-#define RAY_TYPE_DIFFUSE 2
-#define RAY_TYPE_GLOSSY 3
+#define float4_from_float3(v) float4(v, 1.0f)
+#define float4_from_float2(v) float4(v.xy, 0.0f, 1.0f)
+#define float4_from_float(v) float4(float3(v), 1.0f)
 
 #ifdef GPU_FRAGMENT_SHADER
 #  define FrontFacing gl_FrontFacing
@@ -62,7 +57,6 @@ float2 calc_barycentric_co(int vertid)
 #  define FrontFacing true
 #endif
 
-/* Can't use enum here because not a header file. But would be great to do. */
 enum ClosureType : uchar {
   CLOSURE_NONE_ID = 0u,
   /* Diffuse */
@@ -81,22 +75,34 @@ enum ClosureType : uchar {
 
   /* Transmission */
   CLOSURE_BSDF_MICROFACET_GGX_REFRACTION_ID = 12u,
+  CLOSURE_BSDF_THIN_GLASS_TRANSMISSION_ID = 13u,
 
   /* Glass */
-  // CLOSURE_BSDF_HAIR_HUANG_ID = 13u, /* TODO */
+  // CLOSURE_BSDF_HAIR_HUANG_ID = 14u, /* TODO */
 
   /* BSSRDF */
-  CLOSURE_BSSRDF_BURLEY_ID = 14u,
+  CLOSURE_BSSRDF_BURLEY_ID = 15u,
 };
 
 struct ClosureUndetermined {
   packed_float3 color;
-  float weight;
   packed_float3 N;
   ClosureType type;
   /* Additional data different for each closure type. */
   packed_float4 data;
+
+  float weight() const
+  {
+    return reduce_add(abs(color));
+  }
 };
+
+bool closure_has_transmission(const ClosureType closure)
+{
+  return closure == CLOSURE_BSDF_TRANSLUCENT_ID ||
+         closure == CLOSURE_BSDF_MICROFACET_GGX_REFRACTION_ID ||
+         closure == CLOSURE_BSDF_THIN_GLASS_TRANSMISSION_ID;
+}
 
 ClosureUndetermined closure_new(ClosureType type)
 {
@@ -111,33 +117,28 @@ struct ClosureOcclusion {
 
 struct ClosureDiffuse {
   packed_float3 color;
-  float weight;
   packed_float3 N;
 };
 
 struct ClosureSubsurface {
   packed_float3 color;
-  float weight;
   packed_float3 N;
   packed_float3 sss_radius;
 };
 
 struct ClosureTranslucent {
   packed_float3 color;
-  float weight;
   packed_float3 N;
 };
 
 struct ClosureReflection {
   packed_float3 color;
-  float weight;
   packed_float3 N;
   float roughness;
 };
 
 struct ClosureRefraction {
   packed_float3 color;
-  float weight;
   packed_float3 N;
   float roughness;
   float ior;
@@ -145,7 +146,6 @@ struct ClosureRefraction {
 
 struct ClosureHair {
   packed_float3 color;
-  float weight;
   packed_float3 T;
   float offset;
   packed_float2 roughness;
@@ -153,24 +153,26 @@ struct ClosureHair {
 
 struct ClosureVolumeScatter {
   packed_float3 scattering;
-  float weight;
   float anisotropy;
 };
 
 struct ClosureVolumeAbsorption {
   packed_float3 absorption;
-  float weight;
 };
 
 struct ClosureEmission {
   packed_float3 emission;
-  float weight;
 };
 
 struct ClosureTransparency {
   packed_float3 transmittance;
-  float weight;
   float holdout;
+};
+
+struct ClosureThinRefraction {
+  packed_float3 color;
+  packed_float3 N;
+  float roughness;
 };
 
 ClosureDiffuse to_closure_diffuse(ClosureUndetermined cl)
@@ -217,6 +219,15 @@ ClosureRefraction to_closure_refraction(ClosureUndetermined cl)
   return closure;
 }
 
+ClosureThinRefraction to_closure_thin_refraction(ClosureUndetermined cl)
+{
+  ClosureThinRefraction closure;
+  closure.N = cl.N;
+  closure.color = cl.color;
+  closure.roughness = cl.data.x;
+  return closure;
+}
+
 struct GlobalData {
   /** World position. */
   packed_float3 P;
@@ -259,7 +270,7 @@ float3 dF_impl(float3 v)
   return float3(0.0f);
 }
 
-void dF_branch(float fn, out float2 result)
+void dF_branch(float fn, float2 &result)
 {
   /* NOTE: this function is currently unused, once it is used we need to check if
    * `g_derivative_filter_width` needs to be applied. */
@@ -287,7 +298,7 @@ float3 dF_impl(float3 v)
 
 #  define dF_branch(fn, filter_width, result) \
     if (true) { \
-      g_derivative_filter_width = filter_width; \
+      g_derivative_filter_width = filter_width * derivative_scale_get(); \
       g_derivative_flag = 1; \
       result.x = (fn); \
       g_derivative_flag = -1; \
@@ -299,7 +310,7 @@ float3 dF_impl(float3 v)
 /* Used when the non-offset value is already computed elsewhere */
 #  define dF_branch_incomplete(fn, filter_width, result) \
     if (true) { \
-      g_derivative_filter_width = filter_width; \
+      g_derivative_filter_width = filter_width * derivative_scale_get(); \
       g_derivative_flag = 1; \
       result.x = (fn); \
       g_derivative_flag = -1; \
@@ -307,6 +318,3 @@ float3 dF_impl(float3 v)
       g_derivative_flag = 0; \
     }
 #endif
-
-/* TODO(fclem): Remove. */
-#define CODEGEN_LIB

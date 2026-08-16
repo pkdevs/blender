@@ -11,7 +11,7 @@
 #include "../../BPy_Convert.h"
 #include "../../Interface0D/BPy_SVertex.h"
 
-#include "BLI_sys_types.h"
+#include "BLI_sys_types.hh"
 
 using namespace Freestyle;
 
@@ -31,18 +31,22 @@ PyDoc_STRVAR(
     "border edge, then it doesn't have any face on its right, and thus Face\n"
     "a is None.\n"
     "\n"
-    ".. method:: __init__()\n"
-    "            __init__(brother)\n"
-    "            __init__(first_vertex, second_vertex)\n"
+    ".. method:: __init__(*args)\n"
+    "\n"
+    "   Accepted call signatures:\n"
+    "\n"
+    "   - ``__init__()``\n"
+    "   - ``__init__(brother)``\n"
+    "   - ``__init__(first_vertex, second_vertex)``\n"
     "\n"
     "   Builds an :class:`FEdgeSharp` using the default constructor,\n"
     "   copy constructor, or between two :class:`SVertex` objects.\n"
     "\n"
-    "   :arg brother: An FEdgeSharp object.\n"
+    "   :param brother: An FEdgeSharp object.\n"
     "   :type brother: :class:`FEdgeSharp`\n"
-    "   :arg first_vertex: The first SVertex object.\n"
+    "   :param first_vertex: The first SVertex object.\n"
     "   :type first_vertex: :class:`SVertex`\n"
-    "   :arg second_vertex: The second SVertex object.\n"
+    "   :param second_vertex: The second SVertex object.\n"
     "   :type second_vertex: :class:`SVertex`\n");
 static int FEdgeSharp_init(BPy_FEdgeSharp *self, PyObject *args, PyObject *kwds)
 {
@@ -50,7 +54,15 @@ static int FEdgeSharp_init(BPy_FEdgeSharp *self, PyObject *args, PyObject *kwds)
   static const char *kwlist_2[] = {"first_vertex", "second_vertex", nullptr};
   PyObject *obj1 = nullptr, *obj2 = nullptr;
 
-  if (PyArg_ParseTupleAndKeywords(args, kwds, "|O!", (char **)kwlist_1, &FEdgeSharp_Type, &obj1)) {
+  if (PyArg_ParseTupleAndKeywords(args,
+                                  kwds,
+                                  "|"  /* Optional arguments. */
+                                  "O!" /* `brother` */
+                                  ":__init__",
+                                  (char **)kwlist_1,
+                                  &FEdgeSharp_Type,
+                                  &obj1))
+  {
     if (!obj1) {
       self->fes = new FEdgeSharp();
     }
@@ -59,8 +71,16 @@ static int FEdgeSharp_init(BPy_FEdgeSharp *self, PyObject *args, PyObject *kwds)
     }
   }
   else if ((void)PyErr_Clear(),
-           PyArg_ParseTupleAndKeywords(
-               args, kwds, "O!O!", (char **)kwlist_2, &SVertex_Type, &obj1, &SVertex_Type, &obj2))
+           PyArg_ParseTupleAndKeywords(args,
+                                       kwds,
+                                       "O!" /* `first_vertex` */
+                                       "O!" /* `second_vertex` */
+                                       ":__init__",
+                                       (char **)kwlist_2,
+                                       &SVertex_Type,
+                                       &obj1,
+                                       &SVertex_Type,
+                                       &obj2))
   {
     self->fes = new FEdgeSharp(((BPy_SVertex *)obj1)->sv, ((BPy_SVertex *)obj2)->sv);
   }
@@ -80,7 +100,7 @@ static int FEdgeSharp_init(BPy_FEdgeSharp *self, PyObject *args, PyObject *kwds)
 #define MATHUTILS_SUBTYPE_NORMAL_A 1
 #define MATHUTILS_SUBTYPE_NORMAL_B 2
 
-static int FEdgeSharp_mathutils_check(BaseMathObject *bmo)
+static int FEdgeSharp_mathutils_check(blender::BaseMathObject *bmo)
 {
   if (!BPy_FEdgeSharp_Check(bmo->cb_user)) {
     return -1;
@@ -88,7 +108,7 @@ static int FEdgeSharp_mathutils_check(BaseMathObject *bmo)
   return 0;
 }
 
-static int FEdgeSharp_mathutils_get(BaseMathObject *bmo, int subtype)
+static int FEdgeSharp_mathutils_get(blender::BaseMathObject *bmo, int subtype)
 {
   BPy_FEdgeSharp *self = (BPy_FEdgeSharp *)bmo->cb_user;
   switch (subtype) {
@@ -112,7 +132,7 @@ static int FEdgeSharp_mathutils_get(BaseMathObject *bmo, int subtype)
   return 0;
 }
 
-static int FEdgeSharp_mathutils_set(BaseMathObject *bmo, int subtype)
+static int FEdgeSharp_mathutils_set(blender::BaseMathObject *bmo, int subtype)
 {
   BPy_FEdgeSharp *self = (BPy_FEdgeSharp *)bmo->cb_user;
   switch (subtype) {
@@ -132,7 +152,7 @@ static int FEdgeSharp_mathutils_set(BaseMathObject *bmo, int subtype)
   return 0;
 }
 
-static int FEdgeSharp_mathutils_get_index(BaseMathObject *bmo, int subtype, int index)
+static int FEdgeSharp_mathutils_get_index(blender::BaseMathObject *bmo, int subtype, int index)
 {
   BPy_FEdgeSharp *self = (BPy_FEdgeSharp *)bmo->cb_user;
   switch (subtype) {
@@ -152,7 +172,7 @@ static int FEdgeSharp_mathutils_get_index(BaseMathObject *bmo, int subtype, int 
   return 0;
 }
 
-static int FEdgeSharp_mathutils_set_index(BaseMathObject *bmo, int subtype, int index)
+static int FEdgeSharp_mathutils_set_index(blender::BaseMathObject *bmo, int subtype, int index)
 {
   BPy_FEdgeSharp *self = (BPy_FEdgeSharp *)bmo->cb_user;
   switch (subtype) {
@@ -174,7 +194,7 @@ static int FEdgeSharp_mathutils_set_index(BaseMathObject *bmo, int subtype, int 
   return 0;
 }
 
-static Mathutils_Callback FEdgeSharp_mathutils_cb = {
+static blender::Mathutils_Callback FEdgeSharp_mathutils_cb = {
     FEdgeSharp_mathutils_check,
     FEdgeSharp_mathutils_get,
     FEdgeSharp_mathutils_set,
@@ -200,14 +220,15 @@ PyDoc_STRVAR(
     ":type: :class:`mathutils.Vector`\n");
 static PyObject *FEdgeSharp_normal_right_get(BPy_FEdgeSharp *self, void * /*closure*/)
 {
-  return Vector_CreatePyObject_cb(
+  return blender::Vector_CreatePyObject_cb(
       (PyObject *)self, 3, FEdgeSharp_mathutils_cb_index, MATHUTILS_SUBTYPE_NORMAL_A);
 }
 
 static int FEdgeSharp_normal_right_set(BPy_FEdgeSharp *self, PyObject *value, void * /*closure*/)
 {
   float v[3];
-  if (mathutils_array_parse(v, 3, 3, value, "value must be a 3-dimensional vector") == -1) {
+  if (blender::mathutils_array_parse(v, 3, 3, value, "value must be a 3-dimensional vector") == -1)
+  {
     return -1;
   }
   Vec3r p(v[0], v[1], v[2]);
@@ -223,14 +244,15 @@ PyDoc_STRVAR(
     ":type: :class:`mathutils.Vector`\n");
 static PyObject *FEdgeSharp_normal_left_get(BPy_FEdgeSharp *self, void * /*closure*/)
 {
-  return Vector_CreatePyObject_cb(
+  return blender::Vector_CreatePyObject_cb(
       (PyObject *)self, 3, FEdgeSharp_mathutils_cb_index, MATHUTILS_SUBTYPE_NORMAL_B);
 }
 
 static int FEdgeSharp_normal_left_set(BPy_FEdgeSharp *self, PyObject *value, void * /*closure*/)
 {
   float v[3];
-  if (mathutils_array_parse(v, 3, 3, value, "value must be a 3-dimensional vector") == -1) {
+  if (blender::mathutils_array_parse(v, 3, 3, value, "value must be a 3-dimensional vector") == -1)
+  {
     return -1;
   }
   Vec3r p(v[0], v[1], v[2]);

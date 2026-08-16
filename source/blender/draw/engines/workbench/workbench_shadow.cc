@@ -103,6 +103,11 @@ void ShadowPass::ShadowView::setup(View &view, float3 light_direction, bool forc
   std::array<float3, 8> frustum_corners = this->frustum_corners_get();
   std::array<float4, 6> frustum_planes = this->frustum_planes_get();
 
+  float3 frustum_center = float3(0.0f);
+  for (float3 corner : frustum_corners) {
+    frustum_center += corner / float(frustum_corners.size());
+  }
+
   Vector<float4> faces_result;
   Vector<float3> corners_result;
 
@@ -131,20 +136,12 @@ void ShadowPass::ShadowView::setup(View &view, float3 light_direction, bool forc
       float3 corner_b = frustum_corners[edge_corners[i][1]];
       float3 edge_direction = math::normalize(corner_b - corner_a);
       float3 normal = math::normalize(math::cross(light_direction_, edge_direction));
-
-      float4 extruded_face = float4(UNPACK3(normal), math::dot(normal, corner_a));
-
       /* Ensure the plane faces outwards */
-      bool flipped = false;
-      for (float3 corner : frustum_corners) {
-        if (math::dot(float3(extruded_face), corner) > (extruded_face.w + 0.1)) {
-          BLI_assert(!flipped);
-          UNUSED_VARS_NDEBUG(flipped);
-          flipped = true;
-          extruded_face *= -1;
-        }
+      if (dot(corner_a - frustum_center, normal) < 0.0f) {
+        normal *= -1.0f;
       }
 
+      float4 extruded_face = float4(normal, math::dot(normal, corner_a));
       faces_result.append(extruded_face);
     }
   }
@@ -295,6 +292,15 @@ PassMain::Sub *&ShadowPass::get_pass_ptr(PassType type, bool manifold, bool cap 
 void ShadowPass::init(const SceneState &scene_state, SceneResources &resources)
 {
   enabled_ = scene_state.draw_shadows;
+  use_raytracing_ = scene_state.shadows_use_rt;
+  needs_rt_update_ = use_raytracing_ && (!shadow_as_ || scene_state.updated);
+  if (!use_raytracing_) {
+    shadow_as_ = nullptr;
+  }
+  else if (needs_rt_update_) {
+    shadow_as_ = gpu::TopLevelASPtr(GPU_ray_tracing_tlas_alloc("WorkbenchShadowTLAS"));
+  }
+
   if (!enabled_) {
     resources.world_buf.shadow_mul = 0.0f;
     resources.world_buf.shadow_add = 1.0f;
@@ -314,7 +320,7 @@ void ShadowPass::init(const SceneState &scene_state, SceneResources &resources)
   pass_data_.push_update();
 
   /* Shadow direction. */
-  float4x4 view_matrix = blender::draw::View::default_get().viewmat();
+  float4x4 view_matrix = draw::View::default_get().viewmat();
   resources.world_buf.shadow_direction_vs = float4(
       math::transform_direction(view_matrix, direction_ws), 0.0f);
 
@@ -326,7 +332,7 @@ void ShadowPass::init(const SceneState &scene_state, SceneResources &resources)
   resources.world_buf.shadow_add = 1.0f - resources.world_buf.shadow_mul;
 }
 
-void ShadowPass::sync()
+void ShadowPass::sync(SceneResources &resources)
 {
   if (!enabled_) {
     return;
@@ -341,6 +347,21 @@ void ShadowPass::sync()
   DRWState depth_pass_state = state | DRW_STATE_WRITE_STENCIL_SHADOW_PASS;
   DRWState depth_fail_state = state | DRW_STATE_WRITE_STENCIL_SHADOW_FAIL;
 #endif
+
+  if (use_raytracing_) {
+    raytrace_ps_.init();
+    raytrace_ps_.state_set(DRW_STATE_DEPTH_ALWAYS | DRW_STATE_STENCIL_ALWAYS |
+                           DRW_STATE_WRITE_STENCIL);
+    raytrace_ps_.state_stencil(0xFF, 0xFF, 0xFF);
+    raytrace_ps_.shader_set(ShaderCache::get().shadow_raytrace.get());
+    raytrace_ps_.bind_texture("depth_tx", &resources.depth_tx);
+    raytrace_ps_.bind_texture("normal_tx", &gbuffer_normal_ref);
+    raytrace_ps_.bind_ubo("pass_data", pass_data_);
+    raytrace_ps_.bind_tlas("shadow_as", shadow_as_.get());
+    raytrace_ps_.draw_procedural(GPU_PRIM_TRIS, 1, 3);
+
+    return;
+  }
 
   pass_ps_.init();
   pass_ps_.state_set(depth_pass_state);
@@ -387,8 +408,19 @@ void ShadowPass::object_sync(SceneState &scene_state,
   }
 
   Object *ob = ob_ref.object;
+  if (use_raytracing_) {
+    if (needs_rt_update_) {
+      if (blender::gpu::BottomLevelAS *blas = DRW_cache_object_surface_blas_get(ob)) {
+        for (int i : IndexRange(ob_ref.instances_count())) {
+          shadow_as_->add_instance(*blas, ob_ref.object_to_world(i));
+        }
+      }
+    }
+    return;
+  }
+
   bool is_manifold;
-  blender::gpu::Batch *geom_shadow = DRW_cache_object_edge_detection_get(ob, &is_manifold);
+  gpu::Batch *geom_shadow = DRW_cache_object_edge_detection_get(ob, &is_manifold);
   if (geom_shadow == nullptr) {
     return;
   }
@@ -418,20 +450,39 @@ void ShadowPass::object_sync(SceneState &scene_state,
     ps.draw_expand(geom_shadow, prim, tri_len, 1, handle);
   }
 
-  blender::gpu::Batch *geom_faces = DRW_cache_object_surface_get(ob);
+  gpu::Batch *geom_faces = DRW_cache_object_surface_get(ob);
   /* Caps. */
   get_pass_ptr(fail_type, is_manifold, true)->draw_expand(geom_faces, prim, 2, 1, handle);
   /* Sides extrusion. */
   get_pass_ptr(fail_type, is_manifold, false)->draw_expand(geom_shadow, prim, tri_len, 1, handle);
 }
 
+void ShadowPass::end_sync()
+{
+  if (use_raytracing_) {
+    shadow_as_->build();
+  }
+}
+
 void ShadowPass::draw(Manager &manager,
                       View &view,
                       SceneResources &resources,
                       gpu::Texture &depth_stencil_tx,
+                      gpu::Texture &normal_tx,
+                      int2 resolution,
                       bool force_fail_method)
 {
   if (!enabled_) {
+    return;
+  }
+
+  if (use_raytracing_) {
+    gbuffer_normal_ref = &normal_tx;
+    pass_data_.pixel_size = view.screen_pixel_radius(resolution);
+    pass_data_.push_update();
+    fb_.ensure(GPU_ATTACHMENT_TEXTURE(&depth_stencil_tx));
+    fb_.bind();
+    manager.submit(raytrace_ps_, view);
     return;
   }
 

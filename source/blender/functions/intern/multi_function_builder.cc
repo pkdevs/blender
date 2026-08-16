@@ -12,7 +12,7 @@ CustomMF_GenericConstant::CustomMF_GenericConstant(const CPPType &type,
     : type_(type), owns_value_(make_value_copy)
 {
   if (make_value_copy) {
-    void *copied_value = MEM_mallocN_aligned(type.size, type.alignment, __func__);
+    void *copied_value = MEM_new_uninitialized_aligned(type.size, type.alignment, __func__);
     type.copy_construct(value, copied_value);
     value = copied_value;
   }
@@ -27,7 +27,7 @@ CustomMF_GenericConstant::~CustomMF_GenericConstant()
 {
   if (owns_value_) {
     signature_.params[0].type.data_type().single_type().destruct(const_cast<void *>(value_));
-    MEM_freeN(const_cast<void *>(value_));
+    MEM_delete_void(const_cast<void *>(value_));
   }
 }
 
@@ -39,9 +39,11 @@ void CustomMF_GenericConstant::call(const IndexMask &mask,
   type_.fill_construct_indices(value_, output.data(), mask);
 }
 
-uint64_t CustomMF_GenericConstant::hash() const
+void CustomMF_GenericConstant::hash_unique(UniqueHashBytes &hash) const
 {
-  return type_.hash_or_fallback(value_, uintptr_t(this));
+  hash.add(&HASH_ID);
+  type_.hash_unique(value_, hash);
+  hash.add(&type_);
 }
 
 bool CustomMF_GenericConstant::equals(const MultiFunction &other) const

@@ -8,18 +8,24 @@
  * \ingroup sequencer
  */
 
-struct ImBuf;
-struct MovieReader;
-struct SeqRenderData;
-struct Strip;
-struct anim;
+namespace blender {
 
-namespace blender::seq {
+struct ImBuf;
+struct Editing;
+struct MovieReader;
+struct Strip;
+
+namespace seq {
+
+struct RenderData;
 
 #define PROXY_MAXFILE (2 * FILE_MAXDIR + FILE_MAXFILE)
 ImBuf *seq_proxy_fetch(const RenderData *context, Strip *strip, int timeline_frame);
-bool seq_proxy_get_custom_file_filepath(Strip *strip, char *filepath, int view_id);
+bool seq_proxy_get_custom_file_filepath(const Strip *strip, char *filepath, int view_id);
+/** Get the absolute base directory when project or per-strip custom proxy storage is used. */
+bool seq_proxy_get_custom_dir(const Editing &ed, const Strip &strip, char r_dirpath[FILE_MAX]);
 void free_strip_proxy(Strip *strip);
 void seq_proxy_index_dir_set(MovieReader *anim, const char *base_dir);
 
-}  // namespace blender::seq
+}  // namespace seq
+}  // namespace blender

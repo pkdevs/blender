@@ -11,8 +11,8 @@
 #include <cstdlib>
 #include <cstring>
 
-#include "BLI_listbase.h"
-#include "BLI_utildefines.h"
+#include "BLI_listbase.hh"
+#include "BLI_utildefines.hh"
 
 #include "BLT_translation.hh"
 
@@ -20,7 +20,7 @@
 #include "DNA_screen_types.h"
 
 #include "BKE_anim_data.hh"
-#include "BKE_animsys.h"
+#include "BKE_animsys.hh"
 #include "BKE_brush.hh"
 #include "BKE_context.hh"
 #include "BKE_fcurve_driver.h"
@@ -46,6 +46,8 @@
 #include "DEG_depsgraph_build.hh"
 
 #include "gpencil_intern.hh"
+
+namespace blender {
 
 /* ************************************************ */
 /* Datablock Operators */
@@ -343,3 +345,5 @@ void GPENCIL_OT_layer_annotation_move(wmOperatorType *ot)
 
   ot->prop = RNA_def_enum(ot->srna, "type", slot_move, 0, "Type", "");
 }
+
+}  // namespace blender

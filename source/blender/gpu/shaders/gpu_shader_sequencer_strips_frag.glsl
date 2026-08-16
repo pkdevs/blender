@@ -2,7 +2,7 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#include "infos/gpu_shader_sequencer_info.hh"
+#include "infos/gpu_shader_sequencer_infos.hh"
 
 #include "gpu_shader_sequencer_lib.glsl"
 
@@ -96,8 +96,17 @@ void main()
     }
   }
 
+  /* Thumbnails background. */
+  if ((strip.flags & GPU_SEQ_FLAG_THUMBNAILS_BACKGROUND) != 0) {
+    if (co.y < strip.strip_content_top) {
+      if (co.x >= strip.content_start && co.x <= strip.content_end) {
+        /* Re use the color band color here. */
+        col.rgb = unpackUnorm4x8(strip.col_color_band).rgb;
+      }
+    }
+  }
   /* Color band. */
-  if ((strip.flags & GPU_SEQ_FLAG_COLOR_BAND) != 0) {
+  else if ((strip.flags & GPU_SEQ_FLAG_COLOR_BAND) != 0) {
     if (co.y < strip.strip_content_top) {
       col.rgb = unpackUnorm4x8(strip.col_color_band).rgb;
       /* Darker line to better separate the color band. */

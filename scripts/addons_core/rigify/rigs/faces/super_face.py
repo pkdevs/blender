@@ -6,14 +6,28 @@ import bpy
 import re
 
 from mathutils import Vector
-from ...utils import copy_bone, flip_bone
-from ...utils import org, strip_org, make_deformer_name, connected_children_names,\
-    make_mechanism_name
+from ...utils import (
+    copy_bone,
+    flip_bone,
+)
+from ...utils import (
+    org,
+    strip_org,
+    make_deformer_name,
+    connected_children_names,
+    make_mechanism_name,
+)
 from ...utils import create_widget
 from ...utils.mechanism import make_property
 from ...utils.layers import ControlLayersOption
-from ..widgets import create_face_widget, create_eye_widget, create_eyes_widget,\
-    create_ear_widget, create_jaw_widget, create_teeth_widget
+from ..widgets import (
+    create_face_widget,
+    create_eye_widget,
+    create_eyes_widget,
+    create_ear_widget,
+    create_jaw_widget,
+    create_teeth_widget,
+)
 
 
 script = """
@@ -1036,7 +1050,7 @@ def add_parameters(params):
 def parameters_ui(layout, params):
     """ Create the ui for the rig parameters."""
 
-    layout.label(text='This monolithic face rig is deprecated.', icon='INFO')
+    layout.label(text='This monolithic face rig is deprecated.', icon='STATUS_INFO')
     layout.operator("pose.rigify_upgrade_face")
     layout.separator()
 

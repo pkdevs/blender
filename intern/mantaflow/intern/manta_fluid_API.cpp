@@ -9,6 +9,8 @@
 #include "manta_fluid_API.h"
 #include "MANTA_main.h"
 
+namespace blender {
+
 /* Fluid functions */
 MANTA *manta_init(int *res, struct FluidModifierData *fmd)
 {
@@ -166,7 +168,7 @@ size_t manta_get_index(int x, int max_x, int y, int max_y, int z /*, int max_z *
 {
   return x + y * max_x + z * max_x * max_y;
 }
-size_t manta_get_index2d(int x, int max_x, int y /*, int max_y, int z, int max_z */)
+size_t manta_get_index2d(int x, int max_x, int y /* , int max_y, int z, int max_z */)
 {
   return x + y * max_x;
 }
@@ -753,3 +755,5 @@ float manta_liquid_get_snd_particle_velocity_z_at(MANTA *liquid, int i)
 {
   return liquid->getSndParticleVelocityZAt(i);
 }
+
+}  // namespace blender

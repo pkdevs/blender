@@ -1,9 +1,9 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 5.0.0 Alpha (b'68bccbaeeefe')\n"
+"Project-Id-Version: Blender 5.3.0 Alpha (b'af4852ed4560')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-09-15 07:14+0000\n"
+"POT-Creation-Date: 2026-08-10 07:54+0000\n"
 "PO-Revision-Date: 2025-07-23 15:19+0000\n"
 "Last-Translator: Anonymous <noreply@weblate.org>\n"
 "Language-Team: Greek <https://translate.blender.org/projects/blender-ui/ui/el/>\n"
@@ -87,6 +87,14 @@ msgid "Active Bone"
 msgstr "Ενεργό Οστό"
 
 
+msgid "Link"
+msgstr "Σύνδεση"
+
+
+msgid "Append"
+msgstr "Συγχώνευση"
+
+
 msgid "Point"
 msgstr "Σημείο"
 
@@ -155,6 +163,10 @@ msgid "Fill"
 msgstr "Συμπλήρωμα"
 
 
+msgid "Both"
+msgstr "Both"
+
+
 msgid "Crop"
 msgstr "Περικοπή"
 
@@ -183,12 +195,8 @@ msgid "Gamma"
 msgstr "Γάμμα"
 
 
-msgid "Mix"
-msgstr "Μείξη"
-
-
-msgid "Screen"
-msgstr "Οθόνη"
+msgid "View"
+msgstr "View"
 
 
 msgid "Near"
@@ -259,10 +267,6 @@ msgid "Plane"
 msgstr "Επίπεδο"
 
 
-msgid "View"
-msgstr "View"
-
-
 msgid "Segments"
 msgstr "Τμήματα"
 
@@ -315,14 +319,6 @@ msgid "Save"
 msgstr "Αποθήκευση"
 
 
-msgid "Link"
-msgstr "Σύνδεση"
-
-
-msgid "Append"
-msgstr "Συγχώνευση"
-
-
 msgid "End"
 msgstr "Τέλος"
 
@@ -335,12 +331,28 @@ msgid "Collision"
 msgstr "Σύγκρουση"
 
 
+msgid "Font"
+msgstr "Γραμματοσειρά"
+
+
+msgid "Text"
+msgstr "Κείμενο"
+
+
+msgid "Sound"
+msgstr "Ήχος"
+
+
 msgid "Border"
 msgstr "Πλαίσιο"
 
 
 msgid "Grid"
 msgstr "Πλέγμα"
+
+
+msgid "Dynamic"
+msgstr "Δυναμικό"
 
 
 msgid "Repeat"
@@ -359,10 +371,6 @@ msgid "Library"
 msgstr "Βιβλιοθήκη"
 
 
-msgid "Dynamic"
-msgstr "Δυναμικό"
-
-
 msgid "Draw"
 msgstr "Εμφάνιση"
 
@@ -377,10 +385,6 @@ msgstr "Προεξοχή"
 
 msgid "Path"
 msgstr "Μονοπάτι"
-
-
-msgid "Font"
-msgstr "Γραμματοσειρά"
 
 
 msgid "Shear"
@@ -471,10 +475,6 @@ msgid "Lattice"
 msgstr "Πλέγμα"
 
 
-msgid "Sound"
-msgstr "Ήχος"
-
-
 msgid "Blend"
 msgstr "Ανάμιξη"
 
@@ -515,16 +515,12 @@ msgid "Keyboard"
 msgstr "Πληκτρολόγιο"
 
 
-msgid "Merge"
-msgstr "Συγχώνευση"
+msgid "Mix"
+msgstr "Μείξη"
 
 
-msgid "Text"
-msgstr "Κείμενο"
-
-
-msgid "Metaball"
-msgstr "Μετα-σφαίρα"
+msgid "Screen"
+msgstr "Οθόνη"
 
 
 msgid "Snap"
@@ -539,6 +535,10 @@ msgid "Select Linked"
 msgstr "Επιλογή Συνδεδεμένων"
 
 
+msgid "Metaball"
+msgstr "Μετα-σφαίρα"
+
+
 msgid "Light"
 msgstr "Φως"
 
@@ -551,12 +551,24 @@ msgid "Apply"
 msgstr "Εφαρμογή"
 
 
+msgid "Import"
+msgstr "Εισαγωγή"
+
+
 msgid "Track"
 msgstr "Ανίχνευση"
 
 
 msgid "Make Single User"
 msgstr "Ορισμός Ενός Χρήστη"
+
+
+msgid "Merge"
+msgstr "Συγχώνευση"
+
+
+msgid "Linked"
+msgstr "Συνδεδεμένο/α"
 
 
 msgid "Cache"
@@ -570,10 +582,6 @@ msgstr "Κλειδί"
 msgctxt "Operator"
 msgid "Mirror"
 msgstr "Καθρέφτισμα"
-
-
-msgid "Import"
-msgstr "Εισαγωγή"
 
 
 msgid "System"
@@ -636,10 +644,6 @@ msgid "Sensor"
 msgstr "Ανιχνευτής"
 
 
-msgid "Meta"
-msgstr "Μετα"
-
-
 msgid "Alpha Over"
 msgstr "Επικάλυψη βάσει διαφάνειας"
 
@@ -654,10 +658,6 @@ msgstr "Nor"
 
 msgid "Bake"
 msgstr "Φτιάξε"
-
-
-msgid "Linked"
-msgstr "Συνδεδεμένο/α"
 
 
 msgid "Shadow"
@@ -737,10 +737,6 @@ msgid "Open"
 msgstr "Άνοιγμα"
 
 
-msgid "Both"
-msgstr "Both"
-
-
 msgid "Next Keyframe"
 msgstr "Επόμενο Καρέ με Κλειδί"
 
@@ -762,10 +758,6 @@ msgstr "Replace Image"
 msgctxt "Operator"
 msgid "Fill"
 msgstr "Συμπλήρωμα"
-
-
-msgid "Ring"
-msgstr "Ring"
 
 
 msgid "Merge selected vertices"
@@ -861,6 +853,10 @@ msgstr "Συγχρον"
 
 msgid "Join"
 msgstr "Ένωσε"
+
+
+msgid "Movie"
+msgstr "Βίντεο"
 
 
 msgctxt "Operator"
@@ -977,12 +973,8 @@ msgid "Lens"
 msgstr "Φακός"
 
 
-msgid "Alpha Under"
-msgstr "Υποκάλυψη βάσει διαφάνειας"
-
-
-msgid "Gamma Cross"
-msgstr "Μετάβαση Γάμμα"
+msgid "Meta"
+msgstr "Μετα"
 
 
 msgid "Stencil"
@@ -993,6 +985,15 @@ msgid "Viewport Shading"
 msgstr "Σκίαση Παραθύρου Οπτικής"
 
 
+msgid "Cancel"
+msgstr "Ακύρωση"
+
+
+msgctxt "Operator"
+msgid "Clear"
+msgstr "Καθαρισμός"
+
+
 msgid "Torus"
 msgstr "Δαχτυλίδι"
 
@@ -1001,21 +1002,8 @@ msgid "Assign"
 msgstr "Ανάθεση"
 
 
-msgctxt "Operator"
-msgid "Clear"
-msgstr "Καθαρισμός"
-
-
-msgid "Cancel"
-msgstr "Ακύρωση"
-
-
 msgid "Esc"
 msgstr "Esc"
-
-
-msgid "Movie"
-msgstr "Βίντεο"
 
 
 msgid "Fields"

@@ -6,6 +6,10 @@
 
 #include "gpu_shader_compat.hh"
 
+/* -------------------------------------------------------------------- */
+/** \name Matrix Operations
+ * \{ */
+
 /**
  * Flip the matrix across its diagonal. Also flips dimensions for non square matrices.
  */
@@ -46,7 +50,7 @@ float4x4 invert(float4x4 mat)
  * Returns the inverse of a square matrix or zero matrix on failure.
  * \a r_success is optional and set to true if the matrix was inverted successfully.
  */
-float2x2 invert(float2x2 mat, out bool r_success)
+float2x2 invert(float2x2 mat, bool &r_success)
 {
   r_success = determinant(mat) != 0.0f;
   return r_success ? inverse(mat) : float2x2(0.0f);
@@ -55,7 +59,7 @@ float2x2 invert(float2x2 mat, out bool r_success)
  * Returns the inverse of a square matrix or zero matrix on failure.
  * \a r_success is optional and set to true if the matrix was inverted successfully.
  */
-float3x3 invert(float3x3 mat, out bool r_success)
+float3x3 invert(float3x3 mat, bool &r_success)
 {
   r_success = determinant(mat) != 0.0f;
   return r_success ? inverse(mat) : float3x3(0.0f);
@@ -64,7 +68,7 @@ float3x3 invert(float3x3 mat, out bool r_success)
  * Returns the inverse of a square matrix or zero matrix on failure.
  * \a r_success is optional and set to true if the matrix was inverted successfully.
  */
-float4x4 invert(float4x4 mat, out bool r_success)
+float4x4 invert(float4x4 mat, bool &r_success)
 {
   r_success = determinant(mat) != 0.0f;
   return r_success ? inverse(mat) : float4x4(0.0f);

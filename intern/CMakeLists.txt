@@ -2,7 +2,6 @@
 #
 # SPDX-License-Identifier: GPL-2.0-or-later
 
-# add_subdirectory(atomic)  # header only
 add_subdirectory(atomic)
 add_subdirectory(clog)
 add_subdirectory(ghost)
@@ -10,15 +9,12 @@ add_subdirectory(guardedalloc)
 add_subdirectory(libmv)
 add_subdirectory(memutil)
 add_subdirectory(opensubdiv)
+add_subdirectory(profile)
 add_subdirectory(mikktspace)
 add_subdirectory(eigen)
 add_subdirectory(sky)
 
 add_subdirectory(openvdb)
-
-if(WITH_AUDASPACE)
-  add_subdirectory(audaspace)
-endif()
 
 if(WITH_MOD_REMESH)
   add_subdirectory(dualcon)
@@ -74,4 +70,12 @@ if(UNIX AND NOT APPLE)
   if(WITH_GHOST_WAYLAND AND WITH_GHOST_WAYLAND_DYNLOAD)
     add_subdirectory(wayland_dynload)
   endif()
+endif()
+
+if(WITH_DRACO)
+  add_subdirectory(draco_bridge)
+endif()
+
+if (WITH_MESHOPTIMIZER)
+  add_subdirectory(meshoptimizer_bridge)
 endif()

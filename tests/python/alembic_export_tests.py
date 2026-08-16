@@ -180,7 +180,7 @@ class HierarchicalAndFlatExportTest(AbstractAlembicTest):
     def test_hierarchical_export(self, tempdir: pathlib.Path):
         abc = tempdir / 'cubes_hierarchical.abc'
         script = "import bpy; bpy.ops.wm.alembic_export(filepath='%s', start=1, end=1, " \
-                 "visible_objects_only=True, flatten=False)" % abc.as_posix()
+                 "flatten=False)" % abc.as_posix()
         self.run_blender('cubes-hierarchy.blend', script)
 
         # Now check the resulting Alembic file.
@@ -198,7 +198,7 @@ class HierarchicalAndFlatExportTest(AbstractAlembicTest):
     def test_flat_export(self, tempdir: pathlib.Path):
         abc = tempdir / 'cubes_flat.abc'
         script = "import bpy; bpy.ops.wm.alembic_export(filepath='%s', start=1, end=1, " \
-                 "visible_objects_only=True, flatten=True)" % abc.as_posix()
+                 "flatten=True)" % abc.as_posix()
         self.run_blender('cubes-hierarchy.blend', script)
 
         # Now check the resulting Alembic file.
@@ -219,7 +219,7 @@ class DupliGroupExportTest(AbstractAlembicTest):
     def test_hierarchical_export(self, tempdir: pathlib.Path):
         abc = tempdir / 'dupligroup_hierarchical.abc'
         script = "import bpy; bpy.ops.wm.alembic_export(filepath='%s', start=1, end=1, " \
-                 "visible_objects_only=True, flatten=False)" % abc.as_posix()
+                 "flatten=False)" % abc.as_posix()
         self.run_blender('dupligroup-scene.blend', script)
 
         # Now check the resulting Alembic file.
@@ -237,7 +237,7 @@ class DupliGroupExportTest(AbstractAlembicTest):
     def test_flat_export(self, tempdir: pathlib.Path):
         abc = tempdir / 'dupligroup_hierarchical.abc'
         script = "import bpy; bpy.ops.wm.alembic_export(filepath='%s', start=1, end=1, " \
-                 "visible_objects_only=True, flatten=True)" % abc.as_posix()
+                 "flatten=True)" % abc.as_posix()
         self.run_blender('dupligroup-scene.blend', script)
 
         # Now check the resulting Alembic file.
@@ -315,7 +315,7 @@ class CurveExportTest(AbstractAlembicTest):
     def test_export_single_curve(self, tempdir: pathlib.Path):
         abc = tempdir / 'single-curve.abc'
         script = "import bpy; bpy.ops.wm.alembic_export(filepath='%s', start=1, end=1, " \
-                 "visible_objects_only=True, flatten=False)" % abc.as_posix()
+                 "flatten=False)" % abc.as_posix()
         self.run_blender('single-curve.blend', script)
 
         # Now check the resulting Alembic file.
@@ -336,7 +336,7 @@ class HairParticlesExportTest(AbstractAlembicTest):
     def _do_test(self, tempdir: pathlib.Path, export_hair: bool, export_particles: bool) -> pathlib.Path:
         abc = tempdir / 'hair-particles.abc'
         script = "import bpy; bpy.ops.wm.alembic_export(filepath='%s', start=1, end=1, " \
-                 "visible_objects_only=True, flatten=False, " \
+                 "flatten=False, " \
                  "export_hair=%r, export_particles=%r, as_background_job=False)" \
                  % (abc.as_posix(), export_hair, export_particles)
         self.run_blender('hair-particles.blend', script)
@@ -402,7 +402,7 @@ class UVMapExportTest(AbstractAlembicTest):
         basename = 'T77021-multiple-uvmaps-animated-mesh'
         abc = tempdir / f'{basename}.abc'
         script = f"import bpy; bpy.ops.wm.alembic_export(filepath='{abc.as_posix()}', start=1, end=1, " \
-            f"visible_objects_only=True, flatten=False)"
+            f"flatten=False)"
         self.run_blender(f'{basename}.blend', script)
 
         self.maxDiff = 1000
@@ -451,7 +451,7 @@ class LongNamesExportTest(AbstractAlembicTest):
     def test_export_long_names(self, tempdir: pathlib.Path):
         abc = tempdir / 'long-names.abc'
         script = "import bpy; bpy.ops.wm.alembic_export(filepath='%s', start=1, end=1, " \
-                 "visible_objects_only=False, flatten=False)" % abc.as_posix()
+                 "flatten=False)" % abc.as_posix()
         self.run_blender('long-names.blend', script)
 
         name_parts = [
@@ -535,41 +535,6 @@ class LongNamesExportTest(AbstractAlembicTest):
         self.assertIn('.faceCounts', abcprop)
 
 
-class InvisibleObjectExportTest(AbstractAlembicTest):
-    """Export an object which is invisible.
-
-    This test only tests a small subset of the functionality that is required to
-    export invisible objects. It just tests that the visibility property is
-    written, and that it has the correct initial value. This is a limitation
-    caused by these tests relying on ``abcls``.
-    """
-
-    @with_tempdir
-    def test_hierarchical_export(self, tempdir: pathlib.Path):
-        abc = tempdir / 'visibility.abc'
-        script = "import bpy; bpy.ops.wm.alembic_export(filepath='%s', start=1, end=2, " \
-                 "visible_objects_only=False)" % abc.as_posix()
-        self.run_blender('visibility.blend', script)
-
-        def test(cube_name: str, expect_visible: bool):
-            returncode, output = self.abcls('-va', f'{abc}/{cube_name}')
-            if returncode:
-                self.fail(f"abcls failed: {output}")
-            output = output.strip()
-            self.assertEqual(f'Cube   .xform   visible   {int(expect_visible)}', output)
-
-        # This cube is always visible.
-        test('VisibleCube', True)
-
-        # This cube is never visible, and thus will not be pulled into the
-        # depsgraph by the standard builder, only by the all-objects builder.
-        test('InvisibleCube', False)
-
-        # This cube has animated visibility, and thus will be pulled into the
-        # depsgraph by the standard builder as well as the all-objects builder.
-        test('InvisibleAnimatedCube', False)
-
-
 class CustomPropertiesExportTest(AbstractAlembicTest):
     """Test export of custom properties."""
 
@@ -634,6 +599,25 @@ class CustomPropertiesExportTest(AbstractAlembicTest):
         abcprop = self.abcprop(abc, '/Camera/Hasselblad/.geom/.userProperties')
         self.assertIn('eyeSeparation', abcprop, 'Regular non-standard properties should still be written')
         self.assertNotIn('type', abcprop, 'Custom properties should not be written')
+
+
+class PointCloudExportTest(AbstractAlembicTest):
+    """Test export of point cloud objects."""
+
+    @with_tempdir
+    def test_export_single_point(self, tempdir: pathlib.Path) -> pathlib.Path:
+        abc = tempdir / 'single-point.abc'
+        script = (
+            "import bpy; bpy.context.scene.frame_set(1); "
+            "bpy.ops.wm.alembic_export(filepath='%s', start=1, end=1)" % abc.as_posix()
+        )
+        self.run_blender('single-point.blend', script)
+
+        abcprop = self.abcprop(abc, '/PointCloud/PointCloud/.geom')
+
+        self.assertEqual(abcprop['.pointIds'], [0])
+        self.assertEqual(abcprop['.widths'], [0.2])
+        self.assertEqual(abcprop['.velocities'], [[0, 0, -1]])
 
 
 if __name__ == '__main__':

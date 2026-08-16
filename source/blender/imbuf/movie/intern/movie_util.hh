@@ -17,9 +17,20 @@ extern "C" {
 #  include "DNA_scene_types.h"
 
 struct AVFrame;
+struct AVStream;
+struct AVFormatContext;
+
+namespace blender {
 
 int ffmpeg_deinterlace(
     AVFrame *dst, const AVFrame *src, enum AVPixelFormat pix_fmt, int width, int height);
+
+/**
+ * Whether `stream` should be treated as a loadable video stream. Only count attached pictures
+ * (cover art / embedded thumbnails) if there are no other "real" video streams in the container as
+ * a fallback.
+ */
+bool ffmpeg_stream_counts_as_video(const AVFormatContext *format_ctx, const AVStream *stream);
 
 const char *ffmpeg_last_error();
 AVCodecID mov_av_codec_id_get(IMB_Ffmpeg_Codec_ID id);
@@ -38,11 +49,13 @@ bool MOV_codec_supports_crf(AVCodecID codec_id);
  * Which pixel bit depths are supported by a given FFMPEG video CodecID.
  * Returns bit-mask of `R_IMF_CHAN_DEPTH_` flags.
  */
-int MOV_codec_valid_bit_depths(AVCodecID codec_id);
+eImageFormatDepth MOV_codec_valid_bit_depths(AVCodecID codec_id);
 
 /**
  * Returns thread count to be used for ffmpeg.
  */
 int MOV_thread_count();
+
+}  // namespace blender
 
 #endif /* WITH_FFMPEG */

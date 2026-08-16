@@ -2,14 +2,15 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 #include "BLI_path_utils.hh"
-#include "BLI_string.h"
+#include "BLI_string.hh"
 #include "BLI_string_ref.hh"
 #include "BLI_vector.hh"
 
 #include "BKE_appdir.hh"
 #include "BKE_global.hh"
+#include "BKE_gtest_base.hh"
 #include "BKE_idtype.hh"
 #include "BKE_image.hh"
 #include "BKE_main.hh"
@@ -19,21 +20,21 @@
 #include "testing/testing.h"
 #include "gmock/gmock.h"
 
+#include "IMB_cache.hh"
 #include "IMB_imbuf.hh"
-#include "IMB_moviecache.hh"
 
 #include "DNA_image_types.h"
 
 #include "RE_pipeline.h"
-
-#include "CLG_log.h"
 
 namespace blender::bke::tests {
 
 using testing::Eq;
 using testing::Pointwise;
 
-TEST(udim, image_ensure_tile_token)
+class UdimTest : public BlenderGTestBase {};
+
+TEST_F(UdimTest, image_ensure_tile_token)
 {
   auto verify = [](const char *original, const char *expected) {
     char result[FILE_MAX];
@@ -94,7 +95,7 @@ TEST(udim, image_ensure_tile_token)
   }
 }
 
-TEST(udim, image_get_tile_strformat)
+TEST_F(UdimTest, image_get_tile_strformat)
 {
   eUDIM_TILE_FORMAT tile_format;
   char *udim_pattern;
@@ -118,15 +119,15 @@ TEST(udim, image_get_tile_strformat)
   udim_pattern = BKE_image_get_tile_strformat("test.<UDIM>.png", &tile_format);
   EXPECT_EQ(tile_format, UDIM_TILE_FORMAT_UDIM);
   EXPECT_STREQ(udim_pattern, "test.%d.png");
-  MEM_freeN(udim_pattern);
+  MEM_delete(udim_pattern);
 
   udim_pattern = BKE_image_get_tile_strformat("test.<UVTILE>.png", &tile_format);
   EXPECT_EQ(tile_format, UDIM_TILE_FORMAT_UVTILE);
   EXPECT_STREQ(udim_pattern, "test.u%d_v%d.png");
-  MEM_freeN(udim_pattern);
+  MEM_delete(udim_pattern);
 }
 
-TEST(udim, image_get_tile_number_from_filepath)
+TEST_F(UdimTest, image_get_tile_number_from_filepath)
 {
   eUDIM_TILE_FORMAT tile_format;
   char *udim_pattern;
@@ -158,7 +159,7 @@ TEST(udim, image_get_tile_number_from_filepath)
   EXPECT_FALSE(BKE_image_get_tile_number_from_filepath(
       "wrong.1004.png", udim_pattern, tile_format, &tile_number));
 
-  MEM_freeN(udim_pattern);
+  MEM_delete(udim_pattern);
 
   /* UVTILE tile format tests. */
   udim_pattern = BKE_image_get_tile_strformat("test.<UVTILE>.png", &tile_format);
@@ -178,10 +179,10 @@ TEST(udim, image_get_tile_number_from_filepath)
   EXPECT_FALSE(BKE_image_get_tile_number_from_filepath(
       "wrong.u2_v2.png", udim_pattern, tile_format, &tile_number));
 
-  MEM_freeN(udim_pattern);
+  MEM_delete(udim_pattern);
 }
 
-TEST(udim, image_set_filepath_from_tile_number)
+TEST_F(UdimTest, image_set_filepath_from_tile_number)
 {
   eUDIM_TILE_FORMAT tile_format;
   char *udim_pattern;
@@ -204,7 +205,7 @@ TEST(udim, image_set_filepath_from_tile_number)
   /* UDIM tile format tests. */
   BKE_image_set_filepath_from_tile_number(filepath, udim_pattern, tile_format, 1028);
   EXPECT_STREQ(filepath, "test.1028.png");
-  MEM_freeN(udim_pattern);
+  MEM_delete(udim_pattern);
 
   /* UVTILE tile format tests. */
   udim_pattern = BKE_image_get_tile_strformat("test.<UVTILE>.png", &tile_format);
@@ -213,10 +214,10 @@ TEST(udim, image_set_filepath_from_tile_number)
 
   BKE_image_set_filepath_from_tile_number(filepath, udim_pattern, tile_format, 1028);
   EXPECT_STREQ(filepath, "test.u8_v3.png");
-  MEM_freeN(udim_pattern);
+  MEM_delete(udim_pattern);
 }
 
-class ImageTest : public ::testing::Test {
+class ImageTest : public BlenderGTestBase {
   Main *bmain_ = nullptr;
 
   RenderResult *get_image_render_result(Image &image)
@@ -231,23 +232,8 @@ class ImageTest : public ::testing::Test {
   }
 
  protected:
-  static void SetUpTestSuite()
-  {
-    CLG_init();
-    BKE_idtype_init();
-  }
-
-  static void TearDownTestSuite()
-  {
-    CLG_exit();
-  }
-
   void SetUp() override
   {
-    BKE_appdir_init();
-    IMB_init();
-    IMB_moviecache_init();
-
     bmain_ = BKE_main_new();
     G_MAIN = bmain_;
   }
@@ -256,10 +242,6 @@ class ImageTest : public ::testing::Test {
   {
     BKE_main_free(bmain_);
     G_MAIN = nullptr;
-
-    IMB_moviecache_destruct();
-    IMB_exit();
-    BKE_appdir_exit();
   }
 
   Image *load_image(const char *path)
@@ -277,8 +259,8 @@ class ImageTest : public ::testing::Test {
     }
 
     Vector<std::string> layer_names;
-    LISTBASE_FOREACH (const RenderLayer *, layer, &render_result->layers) {
-      layer_names.append(layer->name);
+    for (const RenderLayer &layer : render_result->layers) {
+      layer_names.append(layer.name);
     }
 
     return layer_names;
@@ -292,11 +274,11 @@ class ImageTest : public ::testing::Test {
       return {};
     }
 
-    LISTBASE_FOREACH (const RenderLayer *, layer, &render_result->layers) {
-      if (layer->name == layer_name) {
+    for (const RenderLayer &layer : render_result->layers) {
+      if (layer.name == layer_name) {
         Vector<std::string> pass_names;
-        LISTBASE_FOREACH (const RenderPass *, pass, &layer->passes) {
-          pass_names.append(pass->name);
+        for (const RenderPass &pass : layer.passes) {
+          pass_names.append(pass.name);
         }
         return pass_names;
       }

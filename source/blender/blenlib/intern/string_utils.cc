@@ -17,17 +17,20 @@
 #include "MEM_guardedalloc.h"
 
 #include "BLI_array.hh"
-#include "BLI_listbase.h"
-#include "BLI_string.h"
-#include "BLI_string_utf8.h"
+#include "BLI_listbase.hh"
+#include "BLI_string.hh"
+#include "BLI_string_utf8.hh"
+#include "BLI_string_utf8_symbols.hh"
 #include "BLI_string_utils.hh"
-#include "BLI_utildefines.h"
+#include "BLI_utildefines.hh"
 
-#include "BLI_dynstr.h"
+#include "BLI_dynstr.hh"
 
 #include "DNA_listBase.h"
 
-#include "BLI_strict_flags.h" /* IWYU pragma: keep. Keep last. */
+#include "BLI_strict_flags.hh" /* IWYU pragma: keep. Keep last. */
+
+namespace blender {
 
 /* -------------------------------------------------------------------- */
 /** \name String Replace
@@ -77,7 +80,7 @@ char *BLI_string_replaceN(const char *__restrict str,
      * - we've been adjusting `str` to point at the end of the replaced segments. */
     BLI_dynstr_append(ds, str);
 
-    /* Convert to new c-string (MEM_malloc'd), and free the buffer. */
+    /* Convert to new c-string (MEM_new'd), and free the buffer. */
     str_new = BLI_dynstr_get_cstring(ds);
     BLI_dynstr_free(ds);
 
@@ -88,9 +91,7 @@ char *BLI_string_replaceN(const char *__restrict str,
   return BLI_strdup(str);
 }
 
-void BLI_string_replace(std::string &haystack,
-                        const blender::StringRef needle,
-                        const blender::StringRef other)
+void BLI_string_replace(std::string &haystack, const StringRef needle, const StringRef other)
 {
   size_t i = 0;
   size_t index;
@@ -98,6 +99,15 @@ void BLI_string_replace(std::string &haystack,
     haystack.replace(index, size_t(needle.size()), other);
     i = index + size_t(other.size());
   }
+}
+
+std::string BLI_string_pad_number_sign(const blender::StringRef str)
+{
+  if (str.startswith("-")) {
+    return std::string(str);
+  }
+
+  return std::string(BLI_STR_UTF8_FIGURE_SPACE + str);
 }
 
 void BLI_string_replace_char(char *str, char src, char dst)
@@ -139,7 +149,7 @@ size_t BLI_string_replace_range(
     /* Grow, first handle special cases. */
 
     /* Special case, the src_end is entirely clipped. */
-    if (UNLIKELY(int(string_maxncpy) <= src_beg + dst_len)) {
+    if (int(string_maxncpy) <= src_beg + dst_len) [[unlikely]] {
       /* There is only room for the destination. */
       dst_len = (int(string_maxncpy) - src_beg) - 1;
       string_len = src_end;
@@ -177,20 +187,18 @@ size_t BLI_string_replace_range(
 
 /** \} */
 
-blender::StringRef BLI_string_split_name_number(const blender::StringRef name_full,
-                                                const char delim,
-                                                int &r_number)
+StringRef BLI_string_split_name_number(const StringRef name_full, const char delim, int &r_number)
 {
   const int64_t delim_index = name_full.rfind(delim);
   r_number = 0;
-  if (delim_index == blender::StringRef::not_found) {
+  if (delim_index == StringRef::not_found) {
     return name_full;
   }
 
-  blender::StringRef name_base = name_full.substr(0, delim_index);
+  StringRef name_base = name_full.substr(0, delim_index);
 
   if (delim_index < name_full.size() - 1) {
-    const blender::StringRef num_str = name_full.substr(delim_index + 1);
+    const StringRef num_str = name_full.substr(delim_index + 1);
     if (!std::all_of(num_str.begin(), num_str.end(), ::isdigit)) {
       return name_full;
     }
@@ -410,7 +418,7 @@ size_t BLI_string_flip_side_name(char *name_dst,
 
 /* Unique name utils. */
 
-void BLI_uniquename_cb(blender::FunctionRef<bool(blender::StringRefNull)> unique_check,
+void BLI_uniquename_cb(FunctionRef<bool(StringRefNull)> unique_check,
                        const char *defname,
                        char delim,
                        char *name,
@@ -433,7 +441,7 @@ void BLI_uniquename_cb(blender::FunctionRef<bool(blender::StringRefNull)> unique
 
       /* highly unlikely the string only has enough room for the number
        * but support anyway */
-      if (UNLIKELY((len == 0) || (numlen + 1 >= name_maxncpy))) {
+      if ((len == 0) || (numlen + 1 >= name_maxncpy)) [[unlikely]] {
         /* Number is known not to be UTF8. */
         BLI_strncpy(tempname, numstr, name_maxncpy);
       }
@@ -448,9 +456,9 @@ void BLI_uniquename_cb(blender::FunctionRef<bool(blender::StringRefNull)> unique
   }
 }
 
-std::string BLI_uniquename_cb(blender::FunctionRef<bool(blender::StringRef)> unique_check,
+std::string BLI_uniquename_cb(FunctionRef<bool(StringRef)> unique_check,
                               const char delim,
-                              const blender::StringRef name)
+                              const StringRef name)
 {
   std::string new_name = name;
 
@@ -459,7 +467,7 @@ std::string BLI_uniquename_cb(blender::FunctionRef<bool(blender::StringRef)> uni
   }
 
   int number;
-  blender::Array<char> left_buffer(int64_t(new_name.size()) + 1);
+  Array<char> left_buffer(int64_t(new_name.size()) + 1);
   const size_t len = BLI_string_split_name_number(
       new_name.c_str(), delim, left_buffer.data(), &number);
 
@@ -495,8 +503,8 @@ void BLI_uniquename(const ListBase *list,
   }
 
   BLI_uniquename_cb(
-      [&](const blender::StringRefNull name) {
-        LISTBASE_FOREACH (Link *, link, list) {
+      [&](const StringRefNull name) {
+        for (Link *link = static_cast<Link *>(list->first); link; link = link->next) {
           if (link != vlink) {
             const char *link_name = POINTER_OFFSET((const char *)link, name_offset);
             if (name == link_name) {
@@ -544,7 +552,7 @@ size_t BLI_string_join_array(char *result,
   for (uint i = 0; i < strings_num; i++) {
     const char *p = strings[i];
     while (*p) {
-      if (UNLIKELY(!(c < c_end))) {
+      if (!(c < c_end)) [[unlikely]] {
         i = strings_num; /* Break outer loop. */
         break;
       }
@@ -564,14 +572,14 @@ size_t BLI_string_join_array_by_sep_char(
   char *c_end = &result[result_maxncpy - 1];
   for (uint i = 0; i < strings_num; i++) {
     if (i != 0) {
-      if (UNLIKELY(!(c < c_end))) {
+      if (!(c < c_end)) [[unlikely]] {
         break;
       }
       *c++ = sep;
     }
     const char *p = strings[i];
     while (*p) {
-      if (UNLIKELY(!(c < c_end))) {
+      if (!(c < c_end)) [[unlikely]] {
         i = strings_num; /* Break outer loop. */
         break;
       }
@@ -585,7 +593,7 @@ size_t BLI_string_join_array_by_sep_char(
 char *BLI_string_join_arrayN(const char *strings[], uint strings_num)
 {
   const size_t result_size = BLI_string_len_array(strings, strings_num) + 1;
-  char *result = MEM_calloc_arrayN<char>(result_size, __func__);
+  char *result = MEM_new_array_zeroed<char>(result_size, __func__);
   char *c = result;
   for (uint i = 0; i < strings_num; i++) {
     const size_t string_len = strlen(strings[i]);
@@ -602,7 +610,7 @@ char *BLI_string_join_array_by_sep_charN(char sep, const char *strings[], uint s
 {
   const size_t result_size = BLI_string_len_array(strings, strings_num) +
                              (strings_num ? strings_num - 1 : 0) + 1;
-  char *result = MEM_calloc_arrayN<char>(result_size, __func__);
+  char *result = MEM_new_array_zeroed<char>(result_size, __func__);
   char *c = result;
   if (strings_num != 0) {
     for (uint i = 0; i < strings_num; i++) {
@@ -632,7 +640,7 @@ char *BLI_string_join_array_by_sep_char_with_tableN(char sep,
     result_size = 1;
   }
 
-  char *result = MEM_calloc_arrayN<char>(result_size, __func__);
+  char *result = MEM_new_array_zeroed<char>(result_size, __func__);
   char *c = result;
   if (strings_num != 0) {
     for (uint i = 0; i < strings_num; i++) {
@@ -652,3 +660,5 @@ char *BLI_string_join_array_by_sep_char_with_tableN(char sep,
 }
 
 /** \} */
+
+}  // namespace blender

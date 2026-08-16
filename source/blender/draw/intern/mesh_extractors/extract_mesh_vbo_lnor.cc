@@ -260,7 +260,7 @@ gpu::VertBufPtr extract_normals(const MeshRenderData &mr, const bool use_hq)
   }();
   gpu::VertBufPtr vbo = gpu::VertBufPtr(GPU_vertbuf_create_with_format(format));
   GPU_vertbuf_data_alloc(*vbo, size);
-  MutableSpan vbo_data = vbo->data<gpu::PackedNormal>();
+  MutableSpan vbo_data = vbo->data<int1010102_norm>();
   MutableSpan corners_data = vbo_data.take_front(mr.corners_num);
   MutableSpan loose_data = vbo_data.take_back(mr.loose_indices_num);
 
@@ -271,7 +271,7 @@ gpu::VertBufPtr extract_normals(const MeshRenderData &mr, const bool use_hq)
     extract_normals_bm(mr, corners_data);
   }
 
-  loose_data.fill(gpu::PackedNormal{});
+  loose_data.fill(int1010102_norm{});
   return vbo;
 }
 
@@ -344,8 +344,8 @@ gpu::VertBufPtr extract_normals_subdiv(const MeshRenderData &mr,
       GPU_vertbuf_create_on_device(vert_normals_format, subdiv_cache.num_subdiv_verts));
   draw_subdiv_accumulate_normals(subdiv_cache,
                                  &pos,
-                                 subdiv_cache.subdiv_vertex_face_adjacency_offsets,
-                                 subdiv_cache.subdiv_vertex_face_adjacency,
+                                 subdiv_cache.subdiv_vert_face_adjacency_offsets,
+                                 subdiv_cache.subdiv_vert_face_adjacency,
                                  subdiv_corner_verts.get(),
                                  vert_normals.get());
 

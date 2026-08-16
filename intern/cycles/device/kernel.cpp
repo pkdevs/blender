@@ -13,11 +13,12 @@ CCL_NAMESPACE_BEGIN
 bool device_kernel_has_shading(DeviceKernel kernel)
 {
   return (kernel == DEVICE_KERNEL_INTEGRATOR_SHADE_BACKGROUND ||
-          kernel == DEVICE_KERNEL_INTEGRATOR_SHADE_LIGHT ||
+          kernel == DEVICE_KERNEL_INTEGRATOR_SHADE_LIGHT_NEE ||
+          kernel == DEVICE_KERNEL_INTEGRATOR_SHADE_LIGHT_FORWARD ||
           kernel == DEVICE_KERNEL_INTEGRATOR_SHADE_SURFACE ||
           kernel == DEVICE_KERNEL_INTEGRATOR_SHADE_SURFACE_RAYTRACE ||
-          kernel == DEVICE_KERNEL_INTEGRATOR_SHADE_SURFACE_MNEE ||
           kernel == DEVICE_KERNEL_INTEGRATOR_SHADE_VOLUME ||
+          kernel == DEVICE_KERNEL_INTEGRATOR_SHADE_VOLUME_RAY_MARCHING ||
           kernel == DEVICE_KERNEL_INTEGRATOR_SHADE_SHADOW ||
           kernel == DEVICE_KERNEL_INTEGRATOR_SHADE_DEDICATED_LIGHT ||
           kernel == DEVICE_KERNEL_SHADER_EVAL_DISPLACE ||
@@ -33,8 +34,14 @@ bool device_kernel_has_intersection(DeviceKernel kernel)
           kernel == DEVICE_KERNEL_INTEGRATOR_INTERSECT_SUBSURFACE ||
           kernel == DEVICE_KERNEL_INTEGRATOR_INTERSECT_VOLUME_STACK ||
           kernel == DEVICE_KERNEL_INTEGRATOR_INTERSECT_DEDICATED_LIGHT ||
-          kernel == DEVICE_KERNEL_INTEGRATOR_SHADE_SURFACE_RAYTRACE ||
-          kernel == DEVICE_KERNEL_INTEGRATOR_SHADE_SURFACE_MNEE);
+          kernel == DEVICE_KERNEL_INTEGRATOR_INTERSECT_MNEE ||
+          kernel == DEVICE_KERNEL_INTEGRATOR_SHADE_SURFACE_RAYTRACE);
+}
+
+bool device_kernel_has_gpu_function(DeviceKernel kernel)
+{
+  return !(kernel == DEVICE_KERNEL_INTEGRATOR_MEGAKERNEL ||
+           kernel == DEVICE_KERNEL_INTEGRATOR_SHADOW_PATH_MNEE_PENDING);
 }
 
 const char *device_kernel_as_string(DeviceKernel kernel)
@@ -55,20 +62,26 @@ const char *device_kernel_as_string(DeviceKernel kernel)
       return "integrator_intersect_volume_stack";
     case DEVICE_KERNEL_INTEGRATOR_INTERSECT_DEDICATED_LIGHT:
       return "integrator_intersect_dedicated_light";
+    case DEVICE_KERNEL_INTEGRATOR_INTERSECT_MNEE:
+      return "integrator_intersect_mnee";
+    case DEVICE_KERNEL_INTEGRATOR_SHADOW_PATH_MNEE_PENDING:
+      return "integrator_shadow_path_mnee_pending";
     case DEVICE_KERNEL_INTEGRATOR_SHADE_BACKGROUND:
       return "integrator_shade_background";
-    case DEVICE_KERNEL_INTEGRATOR_SHADE_LIGHT:
-      return "integrator_shade_light";
+    case DEVICE_KERNEL_INTEGRATOR_SHADE_LIGHT_NEE:
+      return "integrator_shade_light_nee";
+    case DEVICE_KERNEL_INTEGRATOR_SHADE_LIGHT_FORWARD:
+      return "integrator_shade_light_forward";
     case DEVICE_KERNEL_INTEGRATOR_SHADE_SHADOW:
       return "integrator_shade_shadow";
     case DEVICE_KERNEL_INTEGRATOR_SHADE_SURFACE:
       return "integrator_shade_surface";
     case DEVICE_KERNEL_INTEGRATOR_SHADE_SURFACE_RAYTRACE:
       return "integrator_shade_surface_raytrace";
-    case DEVICE_KERNEL_INTEGRATOR_SHADE_SURFACE_MNEE:
-      return "integrator_shade_surface_mnee";
     case DEVICE_KERNEL_INTEGRATOR_SHADE_VOLUME:
       return "integrator_shade_volume";
+    case DEVICE_KERNEL_INTEGRATOR_SHADE_VOLUME_RAY_MARCHING:
+      return "integrator_shade_volume_ray_marching";
     case DEVICE_KERNEL_INTEGRATOR_SHADE_DEDICATED_LIGHT:
       return "integrator_shade_dedicated_light";
     case DEVICE_KERNEL_INTEGRATOR_MEGAKERNEL:

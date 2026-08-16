@@ -2,7 +2,7 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#include "infos/overlay_wireframe_info.hh"
+#include "infos/overlay_wireframe_infos.hh"
 
 VERTEX_SHADER_CREATE_INFO(overlay_wireframe)
 
@@ -22,7 +22,7 @@ bool is_edge_sharpness_visible(float wire_data)
 }
 #endif
 
-void wire_color_get(out float3 rim_col, out float3 wire_col)
+void wire_color_get(float3 &rim_col, float3 &wire_col)
 {
   eObjectInfoFlag ob_flag = drw_object_infos().flag;
   bool is_selected = flag_test(ob_flag, OBJECT_SELECTED);
@@ -59,7 +59,7 @@ float3 hsv_to_rgb(float3 hsv)
   return ((nrgb - 1.0f) * hsv.y + 1.0f) * hsv.z;
 }
 
-void wire_object_color_get(out float3 rim_col, out float3 wire_col)
+void wire_object_color_get(float3 &rim_col, float3 &wire_col)
 {
   ObjectInfos info = drw_object_infos();
   bool is_selected = flag_test(info.flag, OBJECT_SELECTED);
@@ -95,7 +95,13 @@ void main()
    * while keeping object coloring mode working (see #134011). */
   float no_nor_facing = (color_type == V3D_SHADING_SINGLE_COLOR) ? 0.0f : 0.5f;
 
+#ifdef WITH_RADIUS
+  float3 wpos = drw_point_object_to_world(pos_rad.xyz);
+  wpos += drw_world_incident_vector(wpos) * pos_rad.w;
+#else
   float3 wpos = drw_point_object_to_world(pos);
+#endif
+
 #if defined(POINTS)
   gl_PointSize = theme.sizes.vert * 2.0f;
 #elif defined(CURVES)
@@ -148,8 +154,8 @@ void main()
   }
 
 #if defined(POINTS)
-  final_color = wire_col.rgbb;
-  final_color_inner = rim_col.rgbb;
+  final_color = float4(wire_col * wire_opacity, wire_opacity);
+  final_color_inner = float4(rim_col * wire_opacity, wire_opacity);
 
 #else
   /* Convert to screen position [0..sizeVp]. */

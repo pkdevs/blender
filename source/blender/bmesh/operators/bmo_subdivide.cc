@@ -12,11 +12,11 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_math_geom.h"
-#include "BLI_math_vector.h"
-#include "BLI_noise.h"
-#include "BLI_rand.h"
-#include "BLI_stack.h"
+#include "BLI_math_geom_c.hh"
+#include "BLI_math_vector_c.hh"
+#include "BLI_noise_c.hh"
+#include "BLI_rand_c.hh"
+#include "BLI_stack_c.hh"
 #include "BLI_vector.hh"
 
 #include "BKE_customdata.hh"
@@ -25,7 +25,7 @@
 #include "intern/bmesh_operators_private.hh"
 #include "intern/bmesh_private.hh"
 
-using blender::Vector;
+namespace blender {
 
 struct SubDParams {
   int numcuts;
@@ -248,7 +248,7 @@ static void alter_co(BMVert *v,
 
   copy_v3_v3(co, v->co);
 
-  if (UNLIKELY(params->use_sphere)) { /* subdivide sphere */
+  if (params->use_sphere) [[unlikely]] { /* subdivide sphere */
     normalize_v3_length(co, params->smooth);
   }
   else if (params->use_smooth) {
@@ -689,7 +689,8 @@ static void quad_4edge_subdivide(BMesh *bm,
   int numcuts = params->numcuts;
   int i, j, a, b, s = numcuts + 2 /* , totv = numcuts * 4 + 4 */;
 
-  lines = MEM_calloc_arrayN<BMVert *>(size_t(numcuts + 2) * size_t(numcuts + 2), "q_4edge_split");
+  lines = MEM_new_array_zeroed<BMVert *>(size_t(numcuts + 2) * size_t(numcuts + 2),
+                                         "q_4edge_split");
   /* build a 2-dimensional array of verts,
    * containing every vert (and all new ones)
    * in the face */
@@ -745,7 +746,7 @@ static void quad_4edge_subdivide(BMesh *bm,
     }
   }
 
-  MEM_freeN(lines);
+  MEM_delete(lines);
 }
 
 /**
@@ -800,13 +801,12 @@ static void tri_3edge_subdivide(BMesh *bm,
   int i, j, a, b, numcuts = params->numcuts;
 
   /* number of verts in each lin */
-  lines = static_cast<BMVert ***>(
-      MEM_callocN(sizeof(void *) * (numcuts + 2), "triangle vert table"));
+  lines = MEM_new_array_zeroed<BMVert **>((numcuts + 2), "triangle vert table");
 
-  lines[0] = (BMVert **)stackarr;
+  lines[0] = reinterpret_cast<BMVert **>(stackarr);
   lines[0][0] = verts[numcuts * 2 + 1];
 
-  lines[numcuts + 1] = MEM_calloc_arrayN<BMVert *>(numcuts + 2, "triangle vert table 2");
+  lines[numcuts + 1] = MEM_new_array_zeroed<BMVert *>(numcuts + 2, "triangle vert table 2");
   for (i = 0; i < numcuts; i++) {
     lines[numcuts + 1][i + 1] = verts[i];
   }
@@ -814,7 +814,7 @@ static void tri_3edge_subdivide(BMesh *bm,
   lines[numcuts + 1][numcuts + 1] = verts[numcuts];
 
   for (i = 0; i < numcuts; i++) {
-    lines[i + 1] = MEM_calloc_arrayN<BMVert *>(2 + i, "triangle vert table row");
+    lines[i + 1] = MEM_new_array_zeroed<BMVert *>(2 + i, "triangle vert table row");
     a = numcuts * 2 + 2 + i;
     b = numcuts + numcuts - i;
     e = connect_smallest_face(bm, verts[a], verts[b], &f_new);
@@ -870,11 +870,11 @@ static void tri_3edge_subdivide(BMesh *bm,
 cleanup:
   for (i = 1; i < numcuts + 2; i++) {
     if (lines[i]) {
-      MEM_freeN(lines[i]);
+      MEM_delete(lines[i]);
     }
   }
 
-  MEM_freeN(lines);
+  MEM_delete(lines);
 }
 
 static const SubDPattern tri_3edge = {
@@ -1298,6 +1298,18 @@ void bmo_subdivide_edges_exec(BMesh *bm, BMOperator *op)
 
   BM_data_layer_free_n(bm, &bm->vdata, CD_SHAPEKEY, params.shape_info.tmpkey);
 
+  /* Vertex creases should not be interpolated when subdividing edges.
+   * See: #154814. */
+  const int cd_vert_crease_offset = CustomData_get_offset_named(
+      &bm->vdata, CD_PROP_FLOAT, "crease_vert");
+  if (cd_vert_crease_offset != -1) {
+    BM_ITER_MESH (v, &viter, bm, BM_VERTS_OF_MESH) {
+      if (BMO_vert_flag_test(bm, v, ELE_INNER)) {
+        BM_ELEM_CD_SET_FLOAT(v, cd_vert_crease_offset, 0.0f);
+      }
+    }
+  }
+
   BLI_stack_free(facedata);
 
   BMO_slot_buffer_from_enabled_flag(
@@ -1362,7 +1374,7 @@ void BM_mesh_esubdivide(BMesh *bm,
       if (edge_hflag & BM_ELEM_SELECT) {
         BMO_slot_buffer_hflag_enable(
             bm, op.slots_out, "geom_inner.out", BM_ALL_NOLOOP, BM_ELEM_SELECT, true);
-        BM_mesh_select_flush(bm);
+        BM_mesh_select_flush_from_verts(bm, true);
       }
       break;
     }
@@ -1381,6 +1393,23 @@ void BM_mesh_esubdivide(BMesh *bm,
             bm, op.slots_out, "geom_inner.out", BM_EDGE, BM_ELEM_SELECT, true);
       }
       break;
+    }
+  }
+  if (edge_hflag & BM_ELEM_SELECT) {
+    /* TODO(@ideasman42): the current behavior for face selection flushing
+     * can cause parts of disconnected UV islands to become selected.
+     * This is caused by the underlying geometry becoming selected.
+     * while this is not a bug in UV selection uses are likely to
+     * notice this problem when dealing with the UV selections.
+     * This can be observed after subdividing the default "Suzanne" model
+     * when the UV island of one of the ears is selected.
+     *
+     * We may want to change the resulting selection after a subdivision
+     * to avoid this problem occurring. */
+
+    if (bm->uv_select_sync_valid) {
+      const int cd_loop_uv_offset = CustomData_get_offset(&bm->ldata, CD_PROP_FLOAT2);
+      BM_mesh_uvselect_flush_post_subdivide(bm, cd_loop_uv_offset);
     }
   }
 
@@ -1414,3 +1443,5 @@ void bmo_bisect_edges_exec(BMesh *bm, BMOperator *op)
 
   BM_data_layer_free_n(bm, &bm->vdata, CD_SHAPEKEY, params.shape_info.tmpkey);
 }
+
+}  // namespace blender

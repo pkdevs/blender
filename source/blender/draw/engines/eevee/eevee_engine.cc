@@ -2,7 +2,7 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#include "BLI_rect.h"
+#include "BLI_rect.hh"
 
 #include "GPU_framebuffer.hh"
 
@@ -19,7 +19,9 @@
 
 #include "eevee_instance.hh"
 
-namespace blender::eevee {
+namespace blender {
+
+namespace eevee {
 
 DrawEngine *Engine::create_instance()
 {
@@ -31,7 +33,7 @@ void Engine::free_static()
   ShaderModule::module_free();
 }
 
-}  // namespace blender::eevee
+}  // namespace eevee
 
 using namespace blender::eevee;
 
@@ -87,6 +89,8 @@ RenderEngineType DRW_engine_viewport_eevee_type = {
     /*bake*/ nullptr,
     /*view_update*/ nullptr,
     /*view_draw*/ nullptr,
+    /*view_pause*/ nullptr,
+    /*view_resume*/ nullptr,
     /*update_script_node*/ nullptr,
     /*update_render_passes*/ &eevee_render_update_passes,
     /*update_custom_camera*/ nullptr,
@@ -98,3 +102,5 @@ RenderEngineType DRW_engine_viewport_eevee_type = {
         /*call*/ nullptr,
     },
 };
+
+}  // namespace blender

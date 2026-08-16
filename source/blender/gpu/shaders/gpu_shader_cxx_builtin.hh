@@ -11,7 +11,6 @@
 #pragma once
 
 #include "gpu_shader_cxx_matrix.hh"
-#include "gpu_shader_cxx_vector.hh"
 
 /* Some compilers complain about lack of return values. Keep it short. */
 #define RET \
@@ -37,19 +36,19 @@ template<int D> VecBase<bool, D> operator!(VecOp<bool, D>) RET;
 template<int D> VecBase<int, D> bitCount(VecOp<int, D>) RET;
 template<int D> VecBase<int, D> bitCount(VecOp<uint, D>) RET;
 template<int D> VecBase<int, D> bitfieldExtract(VecOp<int, D>, int, int) RET;
-template<int D> VecBase<int, D> bitfieldExtract(VecOp<uint, D>, int, int) RET;
+template<int D> VecBase<uint, D> bitfieldExtract(VecOp<uint, D>, int, int) RET;
 template<int D> VecBase<int, D> bitfieldInsert(VecOp<int, D>, VecOp<int, D>, int, int) RET;
-template<int D> VecBase<int, D> bitfieldInsert(VecOp<uint, D>, VecOp<uint, D>, int, int) RET;
+template<int D> VecBase<uint, D> bitfieldInsert(VecOp<uint, D>, VecOp<uint, D>, int, int) RET;
 template<int D> VecBase<int, D> bitfieldReverse(VecOp<int, D>) RET;
-template<int D> VecBase<int, D> bitfieldReverse(VecOp<uint, D>) RET;
+template<int D> VecBase<uint, D> bitfieldReverse(VecOp<uint, D>) RET;
 int bitCount(int) RET;
 int bitCount(uint) RET;
 int bitfieldExtract(int) RET;
-int bitfieldExtract(uint) RET;
+uint bitfieldExtract(uint) RET;
 int bitfieldInsert(int) RET;
-int bitfieldInsert(uint) RET;
+uint bitfieldInsert(uint) RET;
 int bitfieldReverse(int) RET;
-int bitfieldReverse(uint) RET;
+uint bitfieldReverse(uint) RET;
 
 template<int D> VecBase<int, D> findLSB(VecOp<int, D>) RET;
 template<int D> VecBase<int, D> findLSB(VecOp<uint, D>) RET;
@@ -80,7 +79,7 @@ bool isnan(float) RET;
 template<int D> VecBase<bool, D> isnan(VecOp<float, D>) RET;
 template<typename T> constexpr T log(T) RET;
 template<typename T> constexpr T log2(T) RET;
-template<typename T> T modf(T, T);
+template<typename T> T modf(T, T &) RET;
 template<typename T, typename U> constexpr T pow(T, U) RET;
 template<typename T> constexpr T round(T) RET;
 template<typename T> constexpr T sqrt(T) RET;
@@ -165,6 +164,7 @@ template<typename T, int D> VecBase<T, D> mix(VecOp<T, D>, VecOp<T, D>, VecOp<bo
 
 VecBase<float, 3> cross(VecOp<float, 3>, VecOp<float, 3>) RET;
 template<int D> float dot(VecOp<float, D>, VecOp<float, D>) RET;
+float distance(float, float) RET;
 template<int D> float distance(VecOp<float, D>, VecOp<float, D>) RET;
 template<int D> float length(VecOp<float, D>) RET;
 template<int D> VecBase<float, D> normalize(VecOp<float, D>) RET;
@@ -177,6 +177,34 @@ int floatBitsToInt(float) RET;
 uint floatBitsToUint(float) RET;
 float intBitsToFloat(int) RET;
 float uintBitsToFloat(uint) RET;
+
+/* Matrix compare operators. */
+#define EQ_OP(type, ...) \
+  inline bool operator==(type a, type b) \
+  { \
+    return __VA_ARGS__; \
+  }
+EQ_OP(float2x2, all(equal(a[0], b[0])) && all(equal(a[1], b[1])))
+EQ_OP(float2x3, all(equal(a[0], b[0])) && all(equal(a[1], b[1])))
+EQ_OP(float2x4, all(equal(a[0], b[0])) && all(equal(a[1], b[1])))
+EQ_OP(float3x2, all(equal(a[0], b[0])) && all(equal(a[1], b[1])) && all(equal(a[2], b[2])))
+EQ_OP(float3x3, all(equal(a[0], b[0])) && all(equal(a[1], b[1])) && all(equal(a[2], b[2])))
+EQ_OP(float3x4, all(equal(a[0], b[0])) && all(equal(a[1], b[1])) && all(equal(a[2], b[2])))
+EQ_OP(float4x2,
+      all(equal(a[0], b[0])) && all(equal(a[1], b[1])) && all(equal(a[2], b[2])) &&
+          all(equal(a[3], b[3])))
+EQ_OP(float4x3,
+      all(equal(a[0], b[0])) && all(equal(a[1], b[1])) && all(equal(a[2], b[2])) &&
+          all(equal(a[3], b[3])))
+EQ_OP(float4x4,
+      all(equal(a[0], b[0])) && all(equal(a[1], b[1])) && all(equal(a[2], b[2])) &&
+          all(equal(a[3], b[3])))
+#undef EQ_OP
+
+/* Matrices functions. */
+template<int C, int R> float determinant(MatBase<C, R>) RET;
+template<int C, int R> MatBase<C, R> inverse(MatBase<C, R>) RET;
+template<int C, int R> MatBase<R, C> transpose(MatBase<C, R>) RET;
 
 /* Derivative functions. */
 template<typename T> T gpu_dfdx(T) RET;
@@ -221,19 +249,80 @@ float2 unpackSnorm2x16(uint) RET;
 float4 unpackUnorm4x8(uint) RET;
 float4 unpackSnorm4x8(uint) RET;
 
-/* Matrices functions. */
-template<int C, int R> float determinant(MatBase<C, R>) RET;
-template<int C, int R> MatBase<C, R> inverse(MatBase<C, R>) RET;
-template<int C, int R> MatBase<R, C> transpose(MatBase<C, R>) RET;
-
-namespace gl_ComputeShader {
 void barrier() {}
 void memoryBarrier() {}
 void memoryBarrierShared() {}
 void memoryBarrierImage() {}
 void memoryBarrierBuffer() {}
 void groupMemoryBarrier() {}
-}  // namespace gl_ComputeShader
+
+/**
+ * Ray Queries.
+ * See https://github.com/KhronosGroup/GLSL/blob/main/extensions/ext/GLSL_EXT_ray_query.txt
+ */
+
+/* TODO: Use our own API abstraction for Metal compatibility. */
+
+struct rayQueryEXT {};
+struct accelerationStructureEXT {};
+
+const uint gl_RayFlagsNoneEXT = 0u;
+const uint gl_RayFlagsOpaqueEXT = 0x00000001u;
+const uint gl_RayFlagsNoOpaqueEXT = 0x00000002u;
+const uint gl_RayFlagsTerminateOnFirstHitEXT = 0x00000004u;
+const uint gl_RayFlagsSkipClosestHitShaderEXT = 0x00000008u;
+const uint gl_RayFlagsCullBackFacingTrianglesEXT = 0x00000010u;
+const uint gl_RayFlagsCullFrontFacingTrianglesEXT = 0x00000020u;
+const uint gl_RayFlagsCullOpaqueEXT = 0x00000040u;
+const uint gl_RayFlagsCullNoOpaqueEXT = 0x00000080u;
+
+const uint gl_RayQueryCommittedIntersectionNoneEXT = 0u;
+const uint gl_RayQueryCommittedIntersectionTriangleEXT = 1u;
+const uint gl_RayQueryCommittedIntersectionGeneratedEXT = 2u;
+
+const uint gl_RayQueryCandidateIntersectionTriangleEXT = 1u;
+const uint gl_RayQueryCandidateIntersectionAABBEXT = 2u;
+
+void rayQueryInitializeEXT(rayQueryEXT /*rayQuery*/,
+                           accelerationStructureEXT /*topLevel*/,
+                           uint /*rayFlags*/,
+                           uint /*cullMask*/,
+                           float3 /*origin*/,
+                           float /*tMin*/,
+                           float3 /*direction*/,
+                           float /*tMax*/) {};
+bool rayQueryProceedEXT(rayQueryEXT /*rayQuery*/) RET;
+void rayQueryTerminateEXT(rayQueryEXT /*rayQuery*/) {}
+void rayQueryGenerateIntersectionEXT(rayQueryEXT /*rayQuery*/, float /*hitT*/) {}
+void rayQueryConfirmIntersectionEXT(rayQueryEXT /*rayQuery*/) {}
+uint rayQueryGetIntersectionTypeEXT(rayQueryEXT /*rayQuery*/, bool /*committed*/) RET;
+float rayQueryGetRayTMinEXT(rayQueryEXT /*rayQuery*/) RET;
+/* Not available on Metal: no query-side ray-flags accessor. Gated off so use is a compile error.
+ */
+#if 0
+uint rayQueryGetRayFlagsEXT(rayQueryEXT /*rayQuery*/) RET;
+#endif
+float3 rayQueryGetWorldRayOriginEXT(rayQueryEXT /*rayQuery*/) RET;
+float3 rayQueryGetWorldRayDirectionEXT(rayQueryEXT /*rayQuery*/) RET;
+float rayQueryGetIntersectionTEXT(rayQueryEXT /*rayQuery*/, bool /*committed*/) RET;
+uint rayQueryGetIntersectionInstanceCustomIndexEXT(rayQueryEXT /*rayQuery*/,
+                                                   bool /*committed*/) RET;
+uint rayQueryGetIntersectionInstanceIdEXT(rayQueryEXT /*rayQuery*/, bool /*committed*/) RET;
+/* Not available on Metal: no inline equivalent. Gated off so use is a compile error. */
+#if 0
+uint rayQueryGetIntersectionInstanceShaderBindingTableRecordOffsetEXT(rayQueryEXT /*rayQuery*/,
+                                                                      bool /*committed*/) RET;
+#endif
+uint rayQueryGetIntersectionGeometryIndexEXT(rayQueryEXT /*rayQuery*/, bool /*committed*/) RET;
+uint rayQueryGetIntersectionPrimitiveIndexEXT(rayQueryEXT /*rayQuery*/, bool /*committed*/) RET;
+float2 rayQueryGetIntersectionBarycentricsEXT(rayQueryEXT /*rayQuery*/, bool /*committed*/) RET;
+bool rayQueryGetIntersectionFrontFaceEXT(rayQueryEXT /*rayQuery*/, bool /*committed*/) RET;
+bool rayQueryGetIntersectionCandidateAABBOpaqueEXT(rayQueryEXT /*rayQuery*/) RET;
+float3 rayQueryGetIntersectionObjectRayDirectionEXT(rayQueryEXT /*rayQuery*/,
+                                                    bool /*committed*/) RET;
+float3 rayQueryGetIntersectionObjectRayOriginEXT(rayQueryEXT /*rayQuery*/, bool /*committed*/) RET;
+float4x3 rayQueryGetIntersectionObjectToWorldEXT(rayQueryEXT /*rayQuery*/, bool /*committed*/) RET;
+float4x3 rayQueryGetIntersectionWorldToObjectEXT(rayQueryEXT /*rayQuery*/, bool /*committed*/) RET;
 
 /** \} */
 

@@ -2,16 +2,17 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+[[node]]
 void node_object_info(float mat_index,
-                      out float3 location,
-                      out float4 color,
-                      out float alpha,
-                      out float object_index,
-                      out float material_index,
-                      out float random)
+                      float3 &location,
+                      float4 &color,
+                      float &alpha,
+                      float &object_index,
+                      float &material_index,
+                      float &random)
 {
-  location = drw_modelmat()[3].xyz;
-  ObjectInfos info = drw_object_infos();
+  location = object_matrices_get().model[3].xyz;
+  ObjectInfos info = object_infos_get();
   color = info.ob_color;
   alpha = info.ob_color.a;
   object_index = info.index;

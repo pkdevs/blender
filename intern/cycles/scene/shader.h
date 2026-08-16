@@ -83,14 +83,20 @@ class Shader : public Node {
   NODE_SOCKET_API(bool, use_bump_map_correction)
   NODE_SOCKET_API(VolumeSampling, volume_sampling_method)
   NODE_SOCKET_API(int, volume_interpolation_method)
+  NODE_SOCKET_API(float, volume_step_rate)
 
   /* displacement */
   NODE_SOCKET_API(DisplacementMethod, displacement_method)
+
+  float prev_volume_step_rate;
+  bool prev_has_surface_shadow_transparency;
 
   /* synchronization */
   bool need_update_uvs;
   bool need_update_attribute;
   bool need_update_displacement;
+  bool need_update_shadow_transparency;
+  bool shadow_transparency_needs_realloc;
 
   /* If the shader has only volume components, the surface is assumed to
    * be transparent.
@@ -108,12 +114,15 @@ class Shader : public Node {
   bool has_volume;
   bool has_displacement;
   bool has_surface_bssrdf;
-  bool has_bump;
+  bool has_bump_from_surface;
+  bool has_bump_from_displacement;
   bool has_bssrdf_bump;
   bool has_surface_spatial_varying;
   bool has_volume_spatial_varying;
   bool has_volume_attribute_dependency;
   bool has_light_path_node;
+  bool has_aov_output_node;
+  bool has_time_dependency;
 
   float3 emission_estimate;
   EmissionSampling emission_sampling;
@@ -121,16 +130,20 @@ class Shader : public Node {
 
   /* requested mesh attributes */
   AttributeRequestSet attributes;
+  AttributeRequestSet global_attributes;
 
   /* determined before compiling */
   uint id;
 
 #ifdef WITH_OSL
-  /* osl shading state references */
-  OSL::ShaderGroupRef osl_surface_ref;
-  OSL::ShaderGroupRef osl_surface_bump_ref;
-  OSL::ShaderGroupRef osl_volume_ref;
-  OSL::ShaderGroupRef osl_displacement_ref;
+  /* Compiled osl shading state references. */
+  struct OSLCache {
+    OSL::ShaderGroupRef surface;
+    OSL::ShaderGroupRef bump;
+    OSL::ShaderGroupRef displacement;
+    OSL::ShaderGroupRef volume;
+  };
+  map<Device *, OSLCache> osl_cache;
 #endif
 
   Shader();
@@ -155,6 +168,8 @@ class Shader : public Node {
   }
 
   bool need_update_geometry() const;
+
+  bool has_surface_shadow_transparency() const;
 };
 
 /* Shader Manager virtual base class
@@ -192,7 +207,7 @@ class ShaderManager {
   virtual uint64_t get_attribute_id(AttributeStandard std);
 
   /* get shader id for mesh faces */
-  int get_shader_id(Shader *shader, bool smooth = false);
+  int get_shader_id(const Shader *shader, bool smooth = false);
 
   /* add default shaders to scene, to use as default for things that don't
    * have any shader assigned explicitly */
@@ -212,11 +227,9 @@ class ShaderManager {
 
   void init_xyz_transforms();
 
-  enum class SceneLinearSpace { Rec709, Rec2020, ACEScg, Unknown };
-
-  SceneLinearSpace get_scene_linear_space()
+  const string &get_scene_linear_interop_id()
   {
-    return scene_linear_space;
+    return scene_linear_interop_id;
   }
 
  protected:
@@ -242,7 +255,7 @@ class ShaderManager {
   float3 rec709_to_r;
   float3 rec709_to_g;
   float3 rec709_to_b;
-  SceneLinearSpace scene_linear_space;
+  string scene_linear_interop_id;
   vector<float> thin_film_table;
 
   template<std::size_t n>

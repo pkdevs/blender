@@ -152,6 +152,11 @@ Documentation Targets
      Set the environment variable BLENDER_DOC_OFFLINE=1
      to prevent download data at build time.
 
+     Set the environment variable BLENDER_DOC_SPHINX=0
+     to only generate RST files (skip the sphinx HTML build).
+
+   * python_stubs:
+     Generate Python API stubs (.pyi) from RST documentation.
    * doc_doxy:
      Generate doxygen C/C++ docs.
    * doc_dna:
@@ -270,54 +275,56 @@ endif
 
 # -----------------------------------------------------------------------------
 # Additional targets for the build configuration
+#
 
 # NOTE: These targets can be combined and are applied in reverse order listed here.
 # So it's important that `bpy` comes before `release` (for example)
 # `make bpy release` first loads `release` configuration, then `bpy`.
 # This is important as `bpy` will turn off some settings enabled by release.
 
-ifneq "$(findstring bpy, $(MAKECMDGOALS))" ""
+ifneq "$(filter bpy, $(MAKECMDGOALS))" ""
 	BUILD_DIR:=$(BUILD_DIR)_bpy
 	CMAKE_CONFIG_ARGS:=-C"$(BLENDER_DIR)/build_files/cmake/config/bpy_module.cmake" $(CMAKE_CONFIG_ARGS)
 	BLENDER_IS_PYTHON_MODULE:=1
 endif
-ifneq "$(findstring debug, $(MAKECMDGOALS))" ""
+ifneq "$(filter debug, $(MAKECMDGOALS))" ""
 	BUILD_DIR:=$(BUILD_DIR)_debug
 	BUILD_TYPE:=Debug
 endif
-ifneq "$(findstring full, $(MAKECMDGOALS))" ""
+ifneq "$(filter full, $(MAKECMDGOALS))" ""
 	BUILD_DIR:=$(BUILD_DIR)_full
 	CMAKE_CONFIG_ARGS:=-C"$(BLENDER_DIR)/build_files/cmake/config/blender_full.cmake" $(CMAKE_CONFIG_ARGS)
 endif
-ifneq "$(findstring lite, $(MAKECMDGOALS))" ""
+ifneq "$(filter lite, $(MAKECMDGOALS))" ""
 	BUILD_DIR:=$(BUILD_DIR)_lite
 	CMAKE_CONFIG_ARGS:=-C"$(BLENDER_DIR)/build_files/cmake/config/blender_lite.cmake" $(CMAKE_CONFIG_ARGS)
 endif
-ifneq "$(findstring release, $(MAKECMDGOALS))" ""
+ifneq "$(filter release, $(MAKECMDGOALS))" ""
 	BUILD_DIR:=$(BUILD_DIR)_release
 	CMAKE_CONFIG_ARGS:=-C"$(BLENDER_DIR)/build_files/cmake/config/blender_release.cmake" $(CMAKE_CONFIG_ARGS)
 endif
-ifneq "$(findstring cycles, $(MAKECMDGOALS))" ""
+ifneq "$(filter cycles, $(MAKECMDGOALS))" ""
 	BUILD_DIR:=$(BUILD_DIR)_cycles
 	CMAKE_CONFIG_ARGS:=-C"$(BLENDER_DIR)/build_files/cmake/config/cycles_standalone.cmake" $(CMAKE_CONFIG_ARGS)
 endif
-ifneq "$(findstring headless, $(MAKECMDGOALS))" ""
+ifneq "$(filter headless, $(MAKECMDGOALS))" ""
 	BUILD_DIR:=$(BUILD_DIR)_headless
 	CMAKE_CONFIG_ARGS:=-C"$(BLENDER_DIR)/build_files/cmake/config/blender_headless.cmake" $(CMAKE_CONFIG_ARGS)
 endif
 
-ifneq "$(findstring developer, $(MAKECMDGOALS))" ""
+ifneq "$(filter developer, $(MAKECMDGOALS))" ""
 	CMAKE_CONFIG_ARGS:=-C"$(BLENDER_DIR)/build_files/cmake/config/blender_developer.cmake" $(CMAKE_CONFIG_ARGS)
 endif
 
-ifneq "$(findstring ccache, $(MAKECMDGOALS))" ""
+ifneq "$(filter ccache, $(MAKECMDGOALS))" ""
 	CMAKE_CONFIG_ARGS:=-DWITH_COMPILER_CCACHE=YES $(CMAKE_CONFIG_ARGS)
 endif
 
 # -----------------------------------------------------------------------------
-# build tool
+# Build tool
+#
 
-ifneq "$(findstring ninja, $(MAKECMDGOALS))" ""
+ifneq "$(filter ninja, $(MAKECMDGOALS))" ""
 	CMAKE_CONFIG_ARGS:=$(CMAKE_CONFIG_ARGS) -G Ninja
 	BUILD_COMMAND:=ninja
 	DEPS_BUILD_COMMAND:=ninja
@@ -331,16 +338,13 @@ else
 	ifneq ("$(wildcard $(DEPS_BUILD_DIR)/build.ninja)","")
 		DEPS_BUILD_COMMAND:=ninja
 	else
-		ifeq ($(OS), Darwin)
-			DEPS_BUILD_COMMAND:=make -s
-		else
-			DEPS_BUILD_COMMAND:="$(BLENDER_DIR)/build_files/build_environment/linux/make_deps_wrapper.sh" -s
-		endif
+		DEPS_BUILD_COMMAND:="$(BLENDER_DIR)/build_files/build_environment/linux/make_deps_wrapper.sh" -s
 	endif
 endif
 
 # -----------------------------------------------------------------------------
 # Blender binary path
+#
 
 # Allow passing in own BLENDER_BIN so developers who don't
 # use the default build path can still use utility helpers.
@@ -355,6 +359,8 @@ endif
 
 # -----------------------------------------------------------------------------
 # Get the number of cores for threaded build
+#
+
 ifndef NPROCS
 	NPROCS:=1
 	ifeq ($(OS), Linux)
@@ -371,15 +377,17 @@ endif
 
 # -----------------------------------------------------------------------------
 # Macro for configuring cmake
+#
 
 CMAKE_CONFIG = cmake $(CMAKE_CONFIG_ARGS) \
-                     -H"$(BLENDER_DIR)" \
+                     -S"$(BLENDER_DIR)" \
                      -B"$(BUILD_DIR)" \
                      -DCMAKE_BUILD_TYPE_INIT:STRING=$(BUILD_TYPE)
 
 
 # -----------------------------------------------------------------------------
 # Tool for 'make config'
+#
 
 # X11 specific.
 ifdef DISPLAY
@@ -391,6 +399,8 @@ endif
 
 # -----------------------------------------------------------------------------
 # Build Blender
+#
+
 all: .FORCE
 	@echo
 	@echo Configuring Blender in \"$(BUILD_DIR)\" ...
@@ -425,10 +435,13 @@ developer: all
 ninja: all
 ccache: all
 
+
 # -----------------------------------------------------------------------------
 # Build dependencies
+#
+
 DEPS_TARGET = install
-ifneq "$(findstring clean, $(MAKECMDGOALS))" ""
+ifneq "$(filter clean, $(MAKECMDGOALS))" ""
 	DEPS_TARGET = clean
 endif
 
@@ -438,7 +451,7 @@ deps: .FORCE
 	@echo
 	@echo Configuring dependencies in \"$(DEPS_BUILD_DIR)\", install to \"$(DEPS_INSTALL_DIR)\"
 
-	@cmake -H"$(DEPS_SOURCE_DIR)" \
+	@cmake -S"$(DEPS_SOURCE_DIR)" \
 	       -B"$(DEPS_BUILD_DIR)" \
 	       -DHARVEST_TARGET=$(DEPS_INSTALL_DIR)
 
@@ -449,17 +462,23 @@ deps: .FORCE
 	@echo Dependencies successfully built and installed to $(DEPS_INSTALL_DIR).
 	@echo
 
+
 # -----------------------------------------------------------------------------
 # Configuration (save some cd'ing around)
+#
+
 config: .FORCE
 	$(CMAKE_CONFIG_TOOL) "$(BUILD_DIR)"
 
 
 # -----------------------------------------------------------------------------
 # Help for build targets
+#
+
 export HELP_TEXT
 help: .FORCE
 	@echo "$$HELP_TEXT"
+
 
 # -----------------------------------------------------------------------------
 # Packages
@@ -473,8 +492,12 @@ package_archive: .FORCE
 # -----------------------------------------------------------------------------
 # Tests
 #
+
 test: .FORCE
 	@$(PYTHON) ./build_files/utils/make_test.py "$(BUILD_DIR)"
+
+benchmark: .FORCE
+	@$(PYTHON) ./build_files/utils/make_benchmark.py "$(BUILD_DIR)"
 
 
 # -----------------------------------------------------------------------------
@@ -485,7 +508,7 @@ project_qtcreator: .FORCE
 	$(PYTHON) tools/utils_ide/cmake_qtcreator_project.py --build-dir "$(BUILD_DIR)"
 
 project_eclipse: .FORCE
-	cmake -G"Eclipse CDT4 - Unix Makefiles" -H"$(BLENDER_DIR)" -B"$(BUILD_DIR)"
+	cmake -G"Eclipse CDT4 - Unix Makefiles" -S"$(BLENDER_DIR)" -B"$(BUILD_DIR)"
 
 
 # -----------------------------------------------------------------------------
@@ -600,8 +623,8 @@ source_archive: .FORCE
 source_archive_complete: .FORCE
 	@cmake \
 	    -S "$(BLENDER_DIR)/build_files/build_environment" -B"$(BUILD_DIR)/source_archive" \
-	    -DCMAKE_BUILD_TYPE_INIT:STRING=$(BUILD_TYPE) -DPACKAGE_USE_UPSTREAM_SOURCES=OFF
-# This assumes CMake is still using a default `PACKAGE_DIR` variable:
+	    -DCMAKE_BUILD_TYPE_INIT:STRING=$(BUILD_TYPE) -DPACKAGE_USE_UPSTREAM_SOURCES=OFF -DPACKAGE_DOWNLOAD_ONLY=ON
+# This assumes the CMake build_environment `PACKAGE_DIR` variable wasn't modified:
 	@$(PYTHON) ./build_files/utils/make_source_archive.py --include-packages "$(BUILD_DIR)/source_archive/packages"
 # We assume that the tests will not change for minor releases so only package them for major versions
 	@$(PYTHON) ./build_files/utils/make_source_archive.py --package-test-data
@@ -623,6 +646,7 @@ format: .FORCE
 license: .FORCE
 	@$(PYTHON) tools/utils_maintenance/make_license.py
 
+
 # -----------------------------------------------------------------------------
 # Documentation
 #
@@ -633,8 +657,19 @@ doc_py: .FORCE
 	$(BLENDER_BIN) \
 	    --background --factory-startup \
 	    --python doc/python_api/sphinx_doc_gen.py
+ifneq ($(BLENDER_DOC_SPHINX), 0)
 	@sphinx-build -b html -j $(NPROCS) doc/python_api/sphinx-in doc/python_api/sphinx-out
 	@echo "docs written into: '$(BLENDER_DIR)/doc/python_api/sphinx-out/index.html'"
+endif
+
+python_stubs: .FORCE
+	@rm -rf "$(BLENDER_DIR)/doc/python_api/stubs"
+	@ASAN_OPTIONS=halt_on_error=0:${ASAN_OPTIONS} \
+	$(BLENDER_BIN) \
+	    --background --factory-startup --quiet \
+	    --python-exit-code 1 \
+	    --python doc/python_api/sphinx_doc_gen.py
+	@$(PYTHON) doc/python_api/sphinx_stub_gen.py
 
 doc_doxy: .FORCE
 	@cd doc/doxygen; doxygen Doxyfile
@@ -653,7 +688,9 @@ help_features: .FORCE
 	@$(PYTHON) "$(BLENDER_DIR)/build_files/cmake/cmake_print_build_options.py" $(BLENDER_DIR)"/CMakeLists.txt"
 
 clean: .FORCE
-	$(BUILD_COMMAND) -C "$(BUILD_DIR)" clean
+	@if [ -d "$(BUILD_DIR)" ] ; then \
+		$(BUILD_COMMAND) -C "$(BUILD_DIR)" clean ; \
+	fi
 
 .PHONY: all
 

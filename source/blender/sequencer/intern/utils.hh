@@ -8,12 +8,23 @@
  * \ingroup sequencer
  */
 
-struct Scene;
+#include <memory>
+
+namespace blender {
+
+struct MovieReader;
 struct Strip;
 
-namespace blender::seq {
+namespace seq {
 
 bool sequencer_strip_generates_image(Strip *strip);
-void strip_open_anim_file(Scene *scene, Strip *strip, bool openfile);
 
-}  // namespace blender::seq
+struct MovieReaderDeleter {
+  void operator()(MovieReader *reader) const;
+};
+using MovieReaderPtr = std::unique_ptr<MovieReader, MovieReaderDeleter>;
+
+void movie_metadata_set_from_reader(Strip &strip, MovieReader &reader);
+
+}  // namespace seq
+}  // namespace blender

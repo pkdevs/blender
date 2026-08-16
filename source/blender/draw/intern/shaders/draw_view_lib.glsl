@@ -4,18 +4,18 @@
 
 #pragma once
 
-#include "draw_view_info.hh"
+#include "draw_view_infos.hh"
 
 SHADER_LIBRARY_CREATE_INFO(draw_view)
 
 #if !defined(DRAW_VIEW_CREATE_INFO) && !defined(GLSL_CPP_STUBS)
-#  error Missing draw_view additional create info on shader create info
-#endif
+#else
 
 /* Returns the current active view. */
 ViewMatrices drw_view()
 {
-  return drw_view_buf[drw_view_id];
+
+  return buffer_get(draw_view, view_buf)[drw_view_id];
 }
 
 /* Returns true if the current view has a perspective projection matrix. */
@@ -28,6 +28,12 @@ bool drw_view_is_perspective()
 float3 drw_view_forward()
 {
   return drw_view().viewinv[2].xyz;
+}
+
+/* Returns the view up vector. */
+float3 drw_view_up()
+{
+  return drw_view().viewinv[1].xyz;
 }
 
 /* Returns the view origin. */
@@ -204,3 +210,4 @@ float drw_depth_screen_to_view(float ss_depth)
 }
 
 /** \} */
+#endif

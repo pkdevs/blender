@@ -9,19 +9,13 @@
 
 #pragma once
 
-#include "../GHOST_Types.h"
+#include "../GHOST_Types.hh"
 #include "GHOST_Event.hh"
 #include "GHOST_System.hh"
 #include "GHOST_TimerManager.hh"
 #include "GHOST_WindowSDL.hh"
 
-extern "C" {
-#include "SDL.h"
-}
-
-#if !SDL_VERSION_ATLEAST(2, 0, 0)
-#  error "SDL 2.0 or newer is needed to build with Ghost"
-#endif
+#include <SDL3/SDL.h>
 
 class GHOST_WindowSDL;
 

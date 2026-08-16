@@ -4,25 +4,31 @@
 
 #pragma once
 
+namespace blender {
+
 struct bContext;
 struct PointerRNA;
-struct uiLayout;
 struct wmOperator;
 struct bNodeTree;
 
-namespace blender::nodes {
+namespace ui {
+struct Layout;
+}  // namespace ui
 
-namespace geo_eval_log {
-class GeoTreeLog;
+namespace nodes {
+
+namespace eval_log {
+class NodeTreeLog;
 }
 
 void draw_geometry_nodes_modifier_ui(const bContext &C,
                                      PointerRNA *modifier_ptr,
-                                     uiLayout &layout);
+                                     ui::Layout &layout);
 
 void draw_geometry_nodes_operator_redo_ui(const bContext &C,
                                           wmOperator &op,
                                           bNodeTree &tree,
-                                          geo_eval_log::GeoTreeLog *tree_log);
+                                          eval_log::NodeTreeLog *tree_log);
 
-}  // namespace blender::nodes
+}  // namespace nodes
+}  // namespace blender

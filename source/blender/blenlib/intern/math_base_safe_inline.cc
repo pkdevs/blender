@@ -6,11 +6,12 @@
  * \ingroup bli
  */
 
-#ifndef __MATH_BASE_SAFE_INLINE_C__
-#define __MATH_BASE_SAFE_INLINE_C__
+#pragma once
 
-#include "BLI_math_base_safe.h"
-#include "BLI_utildefines.h"
+#include "BLI_math_base_safe.hh"
+#include "BLI_utildefines.hh"
+
+namespace blender {
 
 MINLINE float safe_divide(float a, float b)
 {
@@ -29,7 +30,7 @@ MINLINE float safe_floored_modf(float a, float b)
 
 MINLINE float safe_logf(float a, float base)
 {
-  if (UNLIKELY(a <= 0.0f || base <= 0.0f)) {
+  if (a <= 0.0f || base <= 0.0f) [[unlikely]] {
     return 0.0f;
   }
   return safe_divide(logf(a), logf(base));
@@ -59,10 +60,10 @@ MINLINE float safe_acosf(float a)
 
 MINLINE float safe_powf(float base, float exponent)
 {
-  if (UNLIKELY(base < 0.0f && exponent != (int)exponent)) {
+  if (base < 0.0f && exponent != int(exponent)) [[unlikely]] {
     return 0.0f;
   }
   return powf(base, exponent);
 }
 
-#endif /* __MATH_BASE_SAFE_INLINE_C__ */
+}  // namespace blender

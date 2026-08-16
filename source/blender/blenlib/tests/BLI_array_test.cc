@@ -6,9 +6,10 @@
 
 #include "BLI_array.hh"
 #include "BLI_exception_safety_test_utils.hh"
+#include "BLI_math_vector_types.hh"
 #include "BLI_vector.hh"
 
-#include "BLI_strict_flags.h" /* IWYU pragma: keep. Keep last. */
+#include "BLI_strict_flags.hh" /* IWYU pragma: keep. Keep last. */
 
 namespace blender::tests {
 
@@ -35,6 +36,31 @@ TEST(array, FillConstructor)
   EXPECT_EQ(array[2], 8);
   EXPECT_EQ(array[3], 8);
   EXPECT_EQ(array[4], 8);
+}
+
+TEST(array, FillConstructorZero)
+{
+  Array<int> array(5, 0);
+  EXPECT_EQ(array.size(), 5);
+  EXPECT_EQ(array[0], 0);
+  EXPECT_EQ(array[1], 0);
+  EXPECT_EQ(array[2], 0);
+  EXPECT_EQ(array[3], 0);
+  EXPECT_EQ(array[4], 0);
+}
+
+TEST(array, FillConstructorZeroAligned)
+{
+  struct alignas(512) LargeAlignedType {
+    std::array<int, 857> array = {};
+  };
+  Array<LargeAlignedType> array(5, LargeAlignedType());
+  EXPECT_EQ(array.size(), 5);
+  EXPECT_EQ(array[0].array[285], 0);
+  EXPECT_EQ(array[1].array[285], 0);
+  EXPECT_EQ(array[2].array[285], 0);
+  EXPECT_EQ(array[3].array[285], 0);
+  EXPECT_EQ(array[4].array[285], 0);
 }
 
 TEST(array, InitializerListConstructor)
@@ -120,7 +146,7 @@ TEST(array, MoveAssignment)
 TEST(array, TrivialTypeSizeConstructor)
 {
   Array<char, 1> *array = new Array<char, 1>(1);
-  char *ptr = &(*array)[0];
+  char *ptr = array->data();
   array->~Array();
 
   const char magic = 42;
@@ -254,6 +280,40 @@ TEST(array, Reinitialize)
   EXPECT_EQ(array[2], "");
   array.reinitialize(0);
   EXPECT_EQ(array.size(), 0);
+}
+
+TEST(array, ConstructStructWithBitFields)
+{
+  /* See bug report in #161714. */
+  struct TestStruct {
+    uint a : 1;
+    uint b : 1;
+  };
+
+  {
+    Array<TestStruct> array(3, {false, false});
+    EXPECT_EQ(array[0].a, 0);
+    EXPECT_EQ(array[0].b, 0);
+  }
+  {
+    Array<TestStruct> array(3, {true, false});
+    EXPECT_EQ(array[0].a, 1);
+    EXPECT_EQ(array[0].b, 0);
+  }
+  {
+    Array<TestStruct> array(3, {true, true});
+    EXPECT_EQ(array[0].a, 1);
+    EXPECT_EQ(array[0].b, 1);
+  }
+}
+
+TEST(array, ConstructZeroVector)
+{
+  /* This mainly exercises the #value_is_zero_memory specialization for VecBase. */
+  static_assert(!std::has_unique_object_representations_v<float3>);
+  float3 vec{0};
+  Array<float3> array(3, vec);
+  EXPECT_EQ(array[0], vec);
 }
 
 }  // namespace blender::tests

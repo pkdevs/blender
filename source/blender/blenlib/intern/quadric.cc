@@ -19,12 +19,14 @@
 
 #include <cstring>
 
-#include "BLI_math_base.h"
-#include "BLI_math_matrix.h"
-#include "BLI_math_vector.h"
-#include "BLI_quadric.h" /* own include */
+#include "BLI_math_base_c.hh"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_vector_c.hh"
+#include "BLI_quadric.hh" /* own include */
 
-#include "BLI_strict_flags.h" /* IWYU pragma: keep. Keep last. */
+#include "BLI_strict_flags.hh" /* IWYU pragma: keep. Keep last. */
+
+namespace blender {
 
 #define QUADRIC_FLT_TOT (sizeof(Quadric) / sizeof(double))
 
@@ -114,17 +116,22 @@ void BLI_quadric_clear(Quadric *q)
 
 void BLI_quadric_add_qu_qu(Quadric *a, const Quadric *b)
 {
-  add_vn_vn_d((double *)a, (double *)b, QUADRIC_FLT_TOT);
+  add_vn_vn_d(reinterpret_cast<double *>(a),
+              reinterpret_cast<double *>(const_cast<Quadric *>(b)),
+              QUADRIC_FLT_TOT);
 }
 
 void BLI_quadric_add_qu_ququ(Quadric *r, const Quadric *a, const Quadric *b)
 {
-  add_vn_vnvn_d((double *)r, (const double *)a, (const double *)b, QUADRIC_FLT_TOT);
+  add_vn_vnvn_d(reinterpret_cast<double *>(r),
+                reinterpret_cast<const double *>(a),
+                reinterpret_cast<const double *>(b),
+                QUADRIC_FLT_TOT);
 }
 
 void BLI_quadric_mul(Quadric *a, const double scalar)
 {
-  mul_vn_db((double *)a, QUADRIC_FLT_TOT, scalar);
+  mul_vn_db(reinterpret_cast<double *>(a), QUADRIC_FLT_TOT, scalar);
 }
 
 double BLI_quadric_evaluate(const Quadric *q, const double v[3])
@@ -152,3 +159,5 @@ bool BLI_quadric_optimize(const Quadric *q, double v[3], const double epsilon)
 
   return false;
 }
+
+}  // namespace blender

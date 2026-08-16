@@ -36,6 +36,11 @@ class FallbackColorSpace : public ColorSpace {
   {
     return "";
   }
+  StringRefNull family() const override
+  {
+    return "";
+  }
+
   StringRefNull interop_id() const override
   {
     switch (type_) {
@@ -50,9 +55,14 @@ class FallbackColorSpace : public ColorSpace {
     return "";
   }
 
-  bool is_invertible() const override
+  bool is_primary_interop_id() const override
   {
-    return true;
+    return false;
+  }
+
+  std::string icc_profile_path() const override
+  {
+    return "";
   }
 
   bool is_scene_linear() const override
@@ -67,6 +77,11 @@ class FallbackColorSpace : public ColorSpace {
   bool is_data() const override
   {
     return type_ == Type::DATA;
+  }
+
+  bool is_display_referred() const override
+  {
+    return type_ == Type::SRGB;
   }
 
   const CPUProcessor *get_to_scene_linear_cpu_processor() const override
