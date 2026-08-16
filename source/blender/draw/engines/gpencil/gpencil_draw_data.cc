@@ -11,6 +11,7 @@
 #include "DNA_light_types.h"
 #include "DNA_material_types.h"
 
+#include "BKE_colorband.hh"
 #include "BKE_image.hh"
 #include "BKE_image_gpu.hh"
 #include "BKE_material.hh"
@@ -51,6 +52,27 @@ static gpu::Texture *gpencil_image_texture_get(blender::Image *image, bool *r_al
   gpu_tex = BKE_image_acquire_gpu_texture(image, &iuser);
   DRW_manager_get()->hold_texture(gpu_tex);
   *r_alpha_premult = (gpu_tex) ? (image->alpha_mode == IMA_ALPHA_PREMUL) : false;
+
+  return gpu_tex;
+}
+
+static gpu::Texture *gpencil_gradient_texture_create(const ColorBand *coba)
+{
+  gpu::Texture *gpu_tex = nullptr;
+
+  float *data;
+  int size;
+
+  BKE_colorband_evaluate_table_rgba(coba, &data, &size);
+  gpu_tex = GPU_texture_create_1d("color_gradient",
+                                  size,
+                                  1,
+                                  gpu::TextureFormat::SRGBA_8_8_8_8,
+                                  GPU_TEXTURE_USAGE_SHADER_READ,
+                                  data);
+
+  DRW_manager_get()->hold_texture(gpu_tex);
+  MEM_delete(data);
 
   return gpu_tex;
 }
@@ -330,7 +352,7 @@ MaterialPool *gpencil_material_pool_create(Instance *inst,
     }
     else if (gp_style->fill_style == GP_MATERIAL_FILL_STYLE_GRADIENT) {
       bool use_radial = (gp_style->gradient_type == GP_MATERIAL_GRADIENT_RADIAL);
-      pool->tex_fill[mat_id] = nullptr;
+      pool->tex_fill[mat_id] = gpencil_gradient_texture_create(gp_style->gradient);
       mat_data->flag |= GP_FILL_GRADIENT_USE;
       mat_data->flag |= use_radial ? GP_FILL_GRADIENT_RADIAL : GP_FLAG_NONE;
       gpencil_uv_transform_get(gp_style->texture_offset,
