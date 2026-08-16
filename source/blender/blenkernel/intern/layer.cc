@@ -132,7 +132,7 @@ ViewLayer *BKE_view_layer_default_view(const Scene *scene)
   }
 
   BLI_assert(scene->view_layers.first_);
-  return static_cast<ViewLayer *>(scene->view_layers.first_);
+  return scene->view_layers.first();
 }
 
 ViewLayer *BKE_view_layer_default_render(const Scene *scene)
@@ -144,7 +144,7 @@ ViewLayer *BKE_view_layer_default_render(const Scene *scene)
   }
 
   BLI_assert(scene->view_layers.first_);
-  return static_cast<ViewLayer *>(scene->view_layers.first_);
+  return scene->view_layers.first();
 }
 
 ViewLayer *BKE_view_layer_find(const Scene *scene, const char *layer_name)
@@ -161,7 +161,7 @@ ViewLayer *BKE_view_layer_find(const Scene *scene, const char *layer_name)
 ViewLayer *BKE_view_layer_context_active_PLACEHOLDER(const Scene *scene)
 {
   BLI_assert(scene->view_layers.first_);
-  return static_cast<ViewLayer *>(scene->view_layers.first_);
+  return scene->view_layers.first();
 }
 
 static ViewLayer *view_layer_add(const char *name)
@@ -464,8 +464,7 @@ static void layer_lightgroup_copy_data(ViewLayer *view_layer_dst,
     BLI_duplicatelist(lightgroups_dst, lightgroups_src);
   }
 
-  ViewLayerLightgroup *lightgroup_dst = static_cast<ViewLayerLightgroup *>(
-      lightgroups_dst->first_);
+  ViewLayerLightgroup *lightgroup_dst = lightgroups_dst->first();
   const ViewLayerLightgroup *lightgroup_src = static_cast<const ViewLayerLightgroup *>(
       lightgroups_src->first_);
 
@@ -1536,9 +1535,7 @@ bool BKE_main_collection_sync_remap(const Main *bmain)
 
   BKE_main_collections_object_cache_free(bmain);
 
-  for (Scene *scene = bmain->scenes.first(); scene;
-       scene = static_cast<Scene *>(scene->id.next))
-  {
+  for (Scene *scene = bmain->scenes.first(); scene; scene = static_cast<Scene *>(scene->id.next)) {
     for (ViewLayer &view_layer : scene->view_layers) {
       view_layer.runtime->object_bases_array_mutex.tag_dirty();
 
@@ -1767,8 +1764,7 @@ void BKE_layer_collection_isolate_global(Scene * /*scene*/,
                                          LayerCollection *lc,
                                          bool extend)
 {
-  LayerCollection *lc_master = static_cast<LayerCollection *>(
-      view_layer->layer_collections.first_);
+  LayerCollection *lc_master = view_layer->layer_collections.first();
   bool hide_it = extend && (lc->runtime_flag & LAYER_COLLECTION_VISIBLE_VIEW_LAYER);
 
   if (!extend) {
@@ -1920,8 +1916,7 @@ void BKE_layer_collection_isolate_local(const Main &bmain,
                                         LayerCollection *lc,
                                         bool extend)
 {
-  LayerCollection *lc_master = static_cast<LayerCollection *>(
-      view_layer->layer_collections.first_);
+  LayerCollection *lc_master = view_layer->layer_collections.first();
   bool hide_it = extend && ((v3d->local_collections_uid & lc->local_collections_bits) != 0);
 
   if (!extend) {

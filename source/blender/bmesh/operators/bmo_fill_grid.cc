@@ -511,16 +511,16 @@ static void bm_grid_fill(BMesh *bm,
   BLI_assert(((LinkData *)lb_b->last_)->data == ((LinkData *)lb_rail_b->last_)->data);   /* TR */
   BLI_assert(((LinkData *)lb_a->last_)->data == ((LinkData *)lb_rail_b->first_)->data);  /* BR */
 
-  for (el = static_cast<LinkData *>(lb_a->first_), i = 0; el; el = el->next, i++) {
+  for (el = lb_a->first(), i = 0; el; el = el->next, i++) {
     v_grid[i] = static_cast<BMVert *>(el->data);
   }
-  for (el = static_cast<LinkData *>(lb_b->first_), i = 0; el; el = el->next, i++) {
+  for (el = lb_b->first(), i = 0; el; el = el->next, i++) {
     v_grid[(ytot * xtot) + (i - xtot)] = static_cast<BMVert *>(el->data);
   }
-  for (el = static_cast<LinkData *>(lb_rail_a->first_), i = 0; el; el = el->next, i++) {
+  for (el = lb_rail_a->first(), i = 0; el; el = el->next, i++) {
     v_grid[xtot * i] = static_cast<BMVert *>(el->data);
   }
-  for (el = static_cast<LinkData *>(lb_rail_b->first_), i = 0; el; el = el->next, i++) {
+  for (el = lb_rail_b->first(), i = 0; el; el = el->next, i++) {
     v_grid[(xtot * i) + (xtot - 1)] = static_cast<BMVert *>(el->data);
   }
 #ifndef NDEBUG
@@ -614,15 +614,13 @@ void bmo_grid_fill_exec(BMesh *bm, BMOperator *op)
     goto cleanup;
   }
 
-  estore_a = static_cast<BMEdgeLoopStore *>(eloops.first_);
+  estore_a = eloops.first();
   estore_b = static_cast<BMEdgeLoopStore *>(eloops.last_);
 
-  v_a_first = static_cast<BMVert *>(
-      (static_cast<LinkData *>(BM_edgeloop_verts_get(estore_a)->first_))->data);
-  v_a_last = static_cast<BMVert *>(
+  v_a_first = static_cast<BMVert *>((BM_edgeloop_verts_get(estore_a)->first())->data);
+  v_a_last = static_cast<BMVert *>
       (static_cast<LinkData *>(BM_edgeloop_verts_get(estore_a)->last_))->data);
-  v_b_first = static_cast<BMVert *>(
-      (static_cast<LinkData *>(BM_edgeloop_verts_get(estore_b)->first_))->data);
+  v_b_first = static_cast<BMVert *>((BM_edgeloop_verts_get(estore_b)->first())->data);
   v_b_last = static_cast<BMVert *>(
       (static_cast<LinkData *>(BM_edgeloop_verts_get(estore_b)->last_))->data);
 
@@ -641,7 +639,7 @@ void bmo_grid_fill_exec(BMesh *bm, BMOperator *op)
   if (BM_mesh_edgeloops_find_path(bm, &eloops_rail, edge_test_rail_fn, v_a_first, v_b_first) &&
       BM_mesh_edgeloops_find_path(bm, &eloops_rail, edge_test_rail_fn, v_a_last, v_b_last))
   {
-    estore_rail_a = static_cast<BMEdgeLoopStore *>(eloops_rail.first_);
+    estore_rail_a = eloops_rail.first();
     estore_rail_b = static_cast<BMEdgeLoopStore *>(eloops_rail.last_);
   }
   else {
@@ -650,7 +648,7 @@ void bmo_grid_fill_exec(BMesh *bm, BMOperator *op)
     if (BM_mesh_edgeloops_find_path(bm, &eloops_rail, edge_test_rail_fn, v_a_first, v_b_last) &&
         BM_mesh_edgeloops_find_path(bm, &eloops_rail, edge_test_rail_fn, v_a_last, v_b_first))
     {
-      estore_rail_a = static_cast<BMEdgeLoopStore *>(eloops_rail.first_);
+      estore_rail_a = eloops_rail.first();
       estore_rail_b = static_cast<BMEdgeLoopStore *>(eloops_rail.last_);
       BM_edgeloop_flip(bm, estore_b);
     }

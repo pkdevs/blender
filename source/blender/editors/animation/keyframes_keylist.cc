@@ -358,7 +358,7 @@ static void keylist_first_last(const AnimKeylist *keylist,
     *last_column = &keylist->runtime.key_columns[keylist->column_len - 1];
   }
   else {
-    *first_column = static_cast<const ActKeyColumn *>(keylist->key_columns.first_);
+    *first_column = keylist->key_columns.first();
     *last_column = static_cast<const ActKeyColumn *>(keylist->key_columns.last_);
   }
 }
@@ -739,8 +739,7 @@ static ActKeyColumn *keylist_find_exact_or_neighbor_column(AnimKeylist *keylist,
     return nullptr;
   }
 
-  ActKeyColumn *cursor = keylist->last_accessed_column.value_or(
-      static_cast<ActKeyColumn *>(keylist->key_columns.first_));
+  ActKeyColumn *cursor = keylist->last_accessed_column.value_or(keylist->key_columns.first());
   if (!is_cfra_eq(cursor->cfra, cfra)) {
     const bool walking_direction_front_to_back = cursor->cfra <= cfra;
     if (walking_direction_front_to_back) {

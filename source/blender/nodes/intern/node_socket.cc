@@ -194,7 +194,7 @@ static void verify_socket_template_list(bNodeTree *ntree,
     if (socklist->first_) {
       /* Some dynamic sockets left, store the list start
        * so we can add static sockets in front of it. */
-      sock = static_cast<bNodeSocket *>(socklist->first_);
+      sock = socklist->first();
       while (stemp->type != -1) {
         /* Put static sockets in front of dynamic. */
         BLI_insertlinkbefore(socklist, sock, stemp->sock);

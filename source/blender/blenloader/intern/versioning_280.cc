@@ -680,7 +680,7 @@ static void do_versions_material_convert_legacy_blend_mode(bNodeTree *ntree, cha
       add_node->locx_legacy = 0.5f * (fromnode->locx_legacy + tonode->locx_legacy);
       add_node->locy_legacy = 0.5f * (fromnode->locy_legacy + tonode->locy_legacy);
 
-      bNodeSocket *shader1_socket = static_cast<bNodeSocket *>(add_node->inputs.first_);
+      bNodeSocket *shader1_socket = add_node->inputs.first();
       bNodeSocket *shader2_socket = static_cast<bNodeSocket *>(add_node->inputs.last_);
       bNodeSocket *add_socket = bke::node_find_socket(*add_node, SOCK_OUT, "Shader"_ustr);
 
@@ -1099,10 +1099,8 @@ static void square_roughness_node_insert(bNodeTree *ntree)
 
     /* Link to input and material output node. */
     *version_cycles_node_socket_float_value(static_cast<bNodeSocket *>(node->inputs.last_)) = 0.5f;
-    bke::node_add_link(
-        *ntree, *fromnode, *fromsock, *node, *static_cast<bNodeSocket *>(node->inputs.first_));
-    bke::node_add_link(
-        *ntree, *node, *static_cast<bNodeSocket *>(node->outputs.first_), *tonode, *tosock);
+    bke::node_add_link(*ntree, *fromnode, *fromsock, *node, *node->inputs.first());
+    bke::node_add_link(*ntree, *node, *node->outputs.first(), *tonode, *tosock);
   };
 
   version_update_node_input(ntree, check_node, "Roughness", update_input, update_input_link);
@@ -3333,9 +3331,7 @@ void blo_do_versions_280(FileData *fd, Library * /*lib*/, Main *bmain)
             ListBaseT<ARegion> *regionbase = (&sl == area.spacedata.first_) ? &area.regionbase :
                                                                               &sl.regionbase;
 
-            for (ARegion *region = static_cast<ARegion *>(regionbase->first_), *region_next;
-                 region;
-                 region = region_next)
+            for (ARegion *region = regionbase->first(), *region_next; region; region = region_next)
             {
               region_next = static_cast<ARegion *>(region->next);
 

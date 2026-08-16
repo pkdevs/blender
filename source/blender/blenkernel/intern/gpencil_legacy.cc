@@ -472,7 +472,7 @@ bGPDframe *BKE_gpencil_frame_addnew(bGPDlayer *gpl, int cframe)
 
   /* find appropriate place to add frame */
   if (gpl->frames.first_) {
-    for (gf = static_cast<bGPDframe *>(gpl->frames.first_); gf; gf = gf->next) {
+    for (gf = gpl->frames.first(); gf; gf = gf->next) {
       /* check if frame matches one that is supposed to be added */
       if (gf->framenum == cframe) {
         state = -1;
@@ -955,13 +955,13 @@ bGPDframe *BKE_gpencil_layer_frame_get(bGPDlayer *gpl, int cframe, eGP_GetFrame_
         gpl->actframe = gpf;
       }
       else {
-        gpl->actframe = static_cast<bGPDframe *>(gpl->frames.first_);
+        gpl->actframe = gpl->frames.first();
       }
     }
   }
   else if (gpl->frames.first_) {
     /* check which of the ends to start checking from */
-    const int first = (static_cast<bGPDframe *>(gpl->frames.first_))->framenum;
+    const int first = (gpl->frames.first())->framenum;
     const int last = (static_cast<bGPDframe *>(gpl->frames.last_))->framenum;
 
     if (abs(cframe - first) > abs(cframe - last)) {
@@ -998,7 +998,7 @@ bGPDframe *BKE_gpencil_layer_frame_get(bGPDlayer *gpl, int cframe, eGP_GetFrame_
     else {
       /* If delete first frame, need to find one. */
       if (gpl->frames.first_ != nullptr) {
-        gpl->actframe = static_cast<bGPDframe *>(gpl->frames.first_);
+        gpl->actframe = gpl->frames.first();
       }
       else {
         /* Unresolved erogenous situation! */

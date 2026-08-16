@@ -811,9 +811,7 @@ void blo_do_versions_pre250(FileData *fd, Library *lib, Main *bmain)
 
   if (bmain->versionfile <= 223) {
     VFont *vf;
-    for (vf = static_cast<VFont *>(bmain->fonts.first_); vf;
-         vf = static_cast<VFont *>(vf->id.next))
-    {
+    for (vf = bmain->fonts.first(); vf; vf = static_cast<VFont *>(vf->id.next)) {
       if (BLI_str_endswith(vf->filepath, ".Bfont")) {
         STRNCPY(vf->filepath, FO_BUILTIN_NAME);
       }
@@ -825,8 +823,7 @@ void blo_do_versions_pre250(FileData *fd, Library *lib, Main *bmain)
     Mesh *mesh;
     bScreen *screen;
 
-    for (sound = bmain->sounds.first(); sound; sound = static_cast<bSound *>(sound->id.next))
-    {
+    for (sound = bmain->sounds.first(); sound; sound = static_cast<bSound *>(sound->id.next)) {
       if (sound->packedfile) {
         if (sound->newpackedfile == nullptr) {
           sound->newpackedfile = sound->packedfile;
@@ -843,8 +840,7 @@ void blo_do_versions_pre250(FileData *fd, Library *lib, Main *bmain)
     }
 
     /* some oldfile patch, moved from set_func_space */
-    for (screen = bmain->screens.first(); screen;
-         screen = static_cast<bScreen *>(screen->id.next))
+    for (screen = bmain->screens.first(); screen; screen = static_cast<bScreen *>(screen->id.next))
     {
       for (ScrArea &area : screen->areabase) {
         for (SpaceLink &sl : area.spacedata) {
@@ -907,8 +903,7 @@ void blo_do_versions_pre250(FileData *fd, Library *lib, Main *bmain)
     }
 
     /* patch for old wrong max view2d settings, allows zooming out more */
-    for (screen = bmain->screens.first(); screen;
-         screen = static_cast<bScreen *>(screen->id.next))
+    for (screen = bmain->screens.first(); screen; screen = static_cast<bScreen *>(screen->id.next))
     {
       for (ScrArea &area : screen->areabase) {
         for (SpaceLink &sl : area.spacedata) {
@@ -966,8 +961,7 @@ void blo_do_versions_pre250(FileData *fd, Library *lib, Main *bmain)
     }
 
     /* convert old mainb values for new button panels */
-    for (screen = bmain->screens.first(); screen;
-         screen = static_cast<bScreen *>(screen->id.next))
+    for (screen = bmain->screens.first(); screen; screen = static_cast<bScreen *>(screen->id.next))
     {
       for (ScrArea &area : screen->areabase) {
         for (SpaceLink &sl : area.spacedata) {
@@ -1033,8 +1027,7 @@ void blo_do_versions_pre250(FileData *fd, Library *lib, Main *bmain)
     bScreen *screen;
 
     /* New variable block-scale, for panels in any area. */
-    for (screen = bmain->screens.first(); screen;
-         screen = static_cast<bScreen *>(screen->id.next))
+    for (screen = bmain->screens.first(); screen; screen = static_cast<bScreen *>(screen->id.next))
     {
       for (ScrArea &area : screen->areabase) {
         for (SpaceLink &sl : area.spacedata) {
@@ -1115,8 +1108,7 @@ void blo_do_versions_pre250(FileData *fd, Library *lib, Main *bmain)
 
     /* New variable block-scale, for panels in any area, do again because new
      * areas didn't initialize it to 0.7 yet. */
-    for (screen = bmain->screens.first(); screen;
-         screen = static_cast<bScreen *>(screen->id.next))
+    for (screen = bmain->screens.first(); screen; screen = static_cast<bScreen *>(screen->id.next))
     {
       for (ScrArea &area : screen->areabase) {
         for (SpaceLink &sl : area.spacedata) {
@@ -1133,8 +1125,7 @@ void blo_do_versions_pre250(FileData *fd, Library *lib, Main *bmain)
   if (bmain->versionfile <= 233) {
     bScreen *screen;
 
-    for (screen = bmain->screens.first(); screen;
-         screen = static_cast<bScreen *>(screen->id.next))
+    for (screen = bmain->screens.first(); screen; screen = static_cast<bScreen *>(screen->id.next))
     {
       for (ScrArea &area : screen->areabase) {
         for (SpaceLink &sl : area.spacedata) {
@@ -1150,8 +1141,7 @@ void blo_do_versions_pre250(FileData *fd, Library *lib, Main *bmain)
   if (bmain->versionfile <= 234) {
     bScreen *screen;
 
-    for (screen = bmain->screens.first(); screen;
-         screen = static_cast<bScreen *>(screen->id.next))
+    for (screen = bmain->screens.first(); screen; screen = static_cast<bScreen *>(screen->id.next))
     {
       for (ScrArea &area : screen->areabase) {
         for (SpaceLink &sl : area.spacedata) {
@@ -1533,8 +1523,7 @@ void blo_do_versions_pre250(FileData *fd, Library *lib, Main *bmain)
       }
     }
 
-    for (ntree = bmain->nodetrees.first(); ntree;
-         ntree = static_cast<bNodeTree *>(ntree->id.next))
+    for (ntree = bmain->nodetrees.first(); ntree; ntree = static_cast<bNodeTree *>(ntree->id.next))
     {
       ntree_version_241(ntree);
     }
@@ -1572,8 +1561,7 @@ void blo_do_versions_pre250(FileData *fd, Library *lib, Main *bmain)
     bNodeTree *ntree;
     int a;
 
-    for (screen = bmain->screens.first(); screen;
-         screen = static_cast<bScreen *>(screen->id.next))
+    for (screen = bmain->screens.first(); screen; screen = static_cast<bScreen *>(screen->id.next))
     {
       ScrArea *area;
       area = screen->areabase.first();
@@ -1610,8 +1598,7 @@ void blo_do_versions_pre250(FileData *fd, Library *lib, Main *bmain)
       }
     }
 
-    for (ntree = bmain->nodetrees.first(); ntree;
-         ntree = static_cast<bNodeTree *>(ntree->id.next))
+    for (ntree = bmain->nodetrees.first(); ntree; ntree = static_cast<bNodeTree *>(ntree->id.next))
     {
       ntree_version_242(ntree);
     }
@@ -1991,8 +1978,7 @@ void blo_do_versions_pre250(FileData *fd, Library *lib, Main *bmain)
       }
     }
 
-    for (ntree = bmain->nodetrees.first(); ntree;
-         ntree = static_cast<bNodeTree *>(ntree->id.next))
+    for (ntree = bmain->nodetrees.first(); ntree; ntree = static_cast<bNodeTree *>(ntree->id.next))
     {
       ntree_version_245(fd, lib, ntree);
     }
@@ -2374,8 +2360,7 @@ void blo_do_versions_pre250(FileData *fd, Library *lib, Main *bmain)
     bScreen *screen;
 
     /* adjust default settings for Animation Editors */
-    for (screen = bmain->screens.first(); screen;
-         screen = static_cast<bScreen *>(screen->id.next))
+    for (screen = bmain->screens.first(); screen; screen = static_cast<bScreen *>(screen->id.next))
     {
       for (ScrArea &area : screen->areabase) {
         for (SpaceLink &sl : area.spacedata) {

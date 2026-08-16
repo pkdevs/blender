@@ -63,7 +63,7 @@ Mask *ED_mask_new(bContext *C, const char *name)
   if (area && area->spacedata.first_) {
     switch (area->spacetype) {
       case SPACE_CLIP: {
-        SpaceClip *sc = static_cast<SpaceClip *>(area->spacedata.first_);
+        SpaceClip *sc = area->spacedata.first_as<SpaceClip>();
         ED_space_clip_set_mask(C, sc, mask);
         break;
       }

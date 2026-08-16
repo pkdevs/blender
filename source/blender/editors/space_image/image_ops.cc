@@ -1406,7 +1406,7 @@ static Image *image_open_single(Main *bmain,
   if (ima->source == IMA_SRC_FILE) {
     if (range->udims_detected && range->udim_tiles.first_) {
       ima->source = IMA_SRC_TILED;
-      ImageTile *first_tile = static_cast<ImageTile *>(ima->tiles.first_);
+      ImageTile *first_tile = ima->tiles.first();
       first_tile->tile_number = range->offset;
       for (LinkData &node : range->udim_tiles) {
         BKE_image_add_tile(ima, POINTER_AS_INT(node.data), nullptr);

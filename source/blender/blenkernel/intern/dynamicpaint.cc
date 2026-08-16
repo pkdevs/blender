@@ -1026,8 +1026,7 @@ void dynamicPaint_freeCanvas(DynamicPaintModifierData *pmd)
 {
   if (pmd->canvas) {
     /* Free surface data */
-    DynamicPaintSurface *surface = static_cast<DynamicPaintSurface *>(
-        pmd->canvas->surfaces.first_);
+    DynamicPaintSurface *surface = pmd->canvas->surfaces.first();
     DynamicPaintSurface *next_surface = nullptr;
 
     while (surface) {
@@ -1243,16 +1242,13 @@ void dynamicPaint_Modifier_copy(const DynamicPaintModifierData *pmd,
     tpmd->canvas->pmd = tpmd;
     /* free default surface */
     if (tpmd->canvas->surfaces.first_) {
-      dynamicPaint_freeSurface(tpmd,
-                               static_cast<DynamicPaintSurface *>(tpmd->canvas->surfaces.first_));
+      dynamicPaint_freeSurface(tpmd, tpmd->canvas->surfaces.first());
     }
 
     tpmd->canvas->active_sur = pmd->canvas->active_sur;
 
     /* copy existing surfaces */
-    for (surface = static_cast<DynamicPaintSurface *>(pmd->canvas->surfaces.first_); surface;
-         surface = surface->next)
-    {
+    for (surface = pmd->canvas->surfaces.first(); surface; surface = surface->next) {
       DynamicPaintSurface *t_surface = dynamicPaint_createNewSurface(tpmd->canvas, nullptr);
       if (flag & LIB_ID_COPY_SET_COPIED_ON_WRITE) {
         /* TODO(sergey): Consider passing some tips to the surface

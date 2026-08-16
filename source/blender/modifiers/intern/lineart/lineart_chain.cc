@@ -597,7 +597,7 @@ static void lineart_bounding_area_link_point_recursive(LineartData *ld,
 
 static void lineart_bounding_area_link_chain(LineartData *ld, LineartEdgeChain *ec)
 {
-  LineartEdgeChainItem *pl = static_cast<LineartEdgeChainItem *>(ec->chain.first_);
+  LineartEdgeChainItem *pl = ec->chain.first();
   LineartEdgeChainItem *pr = static_cast<LineartEdgeChainItem *>(ec->chain.last_);
   LineartBoundingArea *ba1 = MOD_lineart_get_parent_bounding_area(ld, pl->pos[0], pl->pos[1]);
   LineartBoundingArea *ba2 = MOD_lineart_get_parent_bounding_area(ld, pr->pos[0], pr->pos[1]);
@@ -786,7 +786,7 @@ static void lineart_chain_connect(LineartData * /*ld*/,
     if (reverse_2) { /* L--R R-L. */
       BLI_listbase_reverse(&sub->chain);
     }
-    eci = static_cast<LineartEdgeChainItem *>(sub->chain.first_);
+    eci = sub->chain.first();
     if (lineart_point_overlapping(static_cast<LineartEdgeChainItem *>(onto->chain.last_),
                                   eci->pos[0],
                                   eci->pos[1],
@@ -797,17 +797,15 @@ static void lineart_chain_connect(LineartData * /*ld*/,
         return;
       }
     }
-    (static_cast<LineartEdgeChainItem *>(onto->chain.last_))->next =
-        static_cast<LineartEdgeChainItem *>(sub->chain.first_);
-    (static_cast<LineartEdgeChainItem *>(sub->chain.first_))->prev =
-        static_cast<LineartEdgeChainItem *>(onto->chain.last_);
+    (static_cast<LineartEdgeChainItem *>(onto->chain.last_))->next = sub->chain.first();
+    (sub->chain.first())->prev = static_cast<LineartEdgeChainItem *>(onto->chain.last_);
     onto->chain.last_ = sub->chain.last_;
   }
   else {              /* L-R L--R. */
     if (!reverse_2) { /* R-L L--R. */
       BLI_listbase_reverse(&sub->chain);
     }
-    eci = static_cast<LineartEdgeChainItem *>(onto->chain.first_);
+    eci = onto->chain.first();
     if (lineart_point_overlapping(
             static_cast<LineartEdgeChainItem *>(sub->chain.last_), eci->pos[0], eci->pos[1], 1e-5))
     {
@@ -816,10 +814,8 @@ static void lineart_chain_connect(LineartData * /*ld*/,
         return;
       }
     }
-    (static_cast<LineartEdgeChainItem *>(sub->chain.last_))->next =
-        static_cast<LineartEdgeChainItem *>(onto->chain.first_);
-    (static_cast<LineartEdgeChainItem *>(onto->chain.first_))->prev =
-        static_cast<LineartEdgeChainItem *>(sub->chain.last_);
+    (static_cast<LineartEdgeChainItem *>(sub->chain.last_))->next = onto->chain.first();
+    (onto->chain.first())->prev = static_cast<LineartEdgeChainItem *>(sub->chain.last_);
     onto->chain.first_ = sub->chain.first_;
   }
 }
@@ -974,7 +970,7 @@ void MOD_lineart_chain_connect(LineartData *ld)
     isec_mask = ec->intersection_mask;
     shadow_mask = ec->shadow_mask_bits;
 
-    eci_l = static_cast<LineartEdgeChainItem *>(ec->chain.first_);
+    eci_l = ec->chain.first();
     eci_r = static_cast<LineartEdgeChainItem *>(ec->chain.last_);
     while ((ba_l = lineart_bounding_area_get_end_point(ld, eci_l)) &&
            (ba_r = lineart_bounding_area_get_end_point(ld, eci_r)))
@@ -1034,7 +1030,7 @@ void MOD_lineart_chain_connect(LineartData *ld)
         lineart_chain_connect(ld, ec, closest_cre->ec, reverse_main, 1);
       }
       BLI_remlink(&swap, closest_cre->ec);
-      eci_l = static_cast<LineartEdgeChainItem *>(ec->chain.first_);
+      eci_l = ec->chain.first();
       eci_r = static_cast<LineartEdgeChainItem *>(ec->chain.last_);
     }
     ec->picked = 1;
@@ -1250,7 +1246,7 @@ void MOD_lineart_chain_clip_at_border(LineartData *ld)
   ld->chains.last_ = ld->chains.first_ = nullptr;
   while (LineartEdgeChain *ec = static_cast<LineartEdgeChain *>(BLI_pophead(&swap))) {
     bool ec_added = false;
-    LineartEdgeChainItem *first_eci = static_cast<LineartEdgeChainItem *>(ec->chain.first_);
+    LineartEdgeChainItem *first_eci = ec->chain.first();
     is_inside = LRT_ECI_INSIDE(first_eci) ? true : false;
     if (!is_inside) {
       ec->picked = 1;

@@ -217,7 +217,7 @@ static void console_lb_debug__internal(ListBaseT<ConsoleLine> *lb)
   ConsoleLine *cl;
 
   printf("%d: ", lb->count());
-  for (cl = lb->first; cl; cl = cl->next) {
+  for (cl = lb->first_; cl; cl = cl->next) {
     printf("<%s> ", cl->line);
   }
   printf("\n");
@@ -921,13 +921,13 @@ static wmOperatorStatus console_clear_exec(bContext *C, wmOperator *op)
 
   if (scrollback) { /* Last item in history. */
     while (sc->scrollback.first_) {
-      console_scrollback_free(sc, static_cast<ConsoleLine *>(sc->scrollback.first_));
+      console_scrollback_free(sc, sc->scrollback.first());
     }
   }
 
   if (history) {
     while (sc->history.first_) {
-      console_history_free(sc, static_cast<ConsoleLine *>(sc->history.first_));
+      console_history_free(sc, sc->history.first());
     }
     console_history_verify(C);
   }

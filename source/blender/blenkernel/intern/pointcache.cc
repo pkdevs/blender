@@ -1129,9 +1129,7 @@ PTCacheID BKE_ptcache_id_find(Object *ob, Scene *scene, PointCache *cache)
 static bool foreach_object_particle_ptcache(Object *object, PointCacheIdFn callback)
 {
   PTCacheID pid;
-  for (ParticleSystem *psys = object->particlesystem.first(); psys != nullptr;
-       psys = psys->next)
-  {
+  for (ParticleSystem *psys = object->particlesystem.first(); psys != nullptr; psys = psys->next) {
     if (psys->part == nullptr) {
       continue;
     }
@@ -1857,7 +1855,7 @@ static void ptcache_find_frames_around(PTCacheID *pid, uint frame, int *r_fra1, 
     }
   }
   else if (pid->cache->mem_cache.first_) {
-    PTCacheMem *pm = static_cast<PTCacheMem *>(pid->cache->mem_cache.first_);
+    PTCacheMem *pm = pid->cache->mem_cache.first();
     PTCacheMem *pm2 = static_cast<PTCacheMem *>(pid->cache->mem_cache.last_);
 
     while (pm->next && pm->next->frame <= frame) {
@@ -2016,7 +2014,7 @@ static int ptcache_mem_frame_to_disk(PTCacheID *pid, PTCacheMem *pm)
   }
 
   if (!error && pm->extradata.first_) {
-    PTCacheExtra *extra = static_cast<PTCacheExtra *>(pm->extradata.first_);
+    PTCacheExtra *extra = pm->extradata.first();
 
     for (; extra; extra = extra->next) {
       if (extra->data == nullptr || extra->totdata == 0) {

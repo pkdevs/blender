@@ -4039,7 +4039,7 @@ static void rna_generate_struct_register_func(BlenderRNA * /*brna*/, StructRNA *
               "\t\tfunc->cont.properties = {&rna_%s_%s_%s, &rna_%s_%s_%s};\n",
               srna->identifier.c_str(),
               func->identifier.c_str(),
-              static_cast<PropertyRNA *>(func->cont.properties.first_)->identifier.c_str(),
+              func->cont.properties.first()->identifier.c_str(),
               srna->identifier.c_str(),
               func->identifier.c_str(),
               static_cast<PropertyRNA *>(func->cont.properties.last_)->identifier.c_str());

@@ -1246,8 +1246,7 @@ void WM_toolsystem_do_msg_notify_tag_refresh(bContext *C,
 {
   ScrArea *area = static_cast<ScrArea *>(msg_val->user_data);
   Main *bmain = CTX_data_main(C);
-  wmWindow *win = static_cast<wmWindow *>(
-      (static_cast<wmWindowManager *>(bmain->wm.first_))->windows.first_);
+  wmWindow *win = bmain->wm.first()->windows.first();
   if (win->next != nullptr) {
     do {
       bScreen *screen = WM_window_get_active_screen(win);

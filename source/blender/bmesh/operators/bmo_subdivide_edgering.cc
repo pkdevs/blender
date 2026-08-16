@@ -706,18 +706,17 @@ static void bm_edgering_pair_interpolate(BMesh *bm,
       tri_sta = tri_array[0];
       tri_end = tri_array[resolu - 1];
 
-      for (el_store_ring = static_cast<BMEdgeLoopStore *>(eloops_ring->first_); el_store_ring;
+      for (el_store_ring = eloops_ring->first(); el_store_ring;
            el_store_ring = BM_EDGELOOP_NEXT(el_store_ring))
       {
         ListBaseT<LinkData> *lb_ring = BM_edgeloop_verts_get(el_store_ring);
         LinkData *v_iter;
 
-        BMVert *v_a = static_cast<BMVert *>((static_cast<LinkData *>(lb_ring->first_))->data);
+        BMVert *v_a = static_cast<BMVert *>(lb_ring->first()->data);
         BMVert *v_b = static_cast<BMVert *>((static_cast<LinkData *>(lb_ring->last_))->data);
 
         /* skip first and last */
-        for (v_iter = (static_cast<LinkData *>(lb_ring->first_))->next, i = 1;
-             v_iter != lb_ring->last_;
+        for (v_iter = (lb_ring->first())->next, i = 1; v_iter != lb_ring->last_;
              v_iter = v_iter->next, i++)
         {
           float co_a[3], co_b[3];
@@ -741,13 +740,13 @@ static void bm_edgering_pair_interpolate(BMesh *bm,
       float (*coord_array)[3] = MEM_new_array_uninitialized<float[3]>(resolu, __func__);
 
       /* calculate a bezier handle per edge ring */
-      for (el_store_ring = static_cast<BMEdgeLoopStore *>(eloops_ring->first_); el_store_ring;
+      for (el_store_ring = eloops_ring->first(); el_store_ring;
            el_store_ring = BM_EDGELOOP_NEXT(el_store_ring))
       {
         ListBaseT<LinkData> *lb_ring = BM_edgeloop_verts_get(el_store_ring);
         LinkData *v_iter;
 
-        BMVert *v_a = static_cast<BMVert *>((static_cast<LinkData *>(lb_ring->first_))->data);
+        BMVert *v_a = static_cast<BMVert *>(lb_ring->first()->data);
         BMVert *v_b = static_cast<BMVert *>((static_cast<LinkData *>(lb_ring->last_))->data);
 
         float co_a[3], no_a[3], handle_a[3], co_b[3], no_b[3], handle_b[3];
@@ -1157,7 +1156,7 @@ void bmo_subdivide_edgering_exec(BMesh *bm, BMOperator *op)
   else if (count == 2) {
     /* this case could be removed,
      * but simple to avoid 'bm_edgering_pair_calc' in this case since there's only one. */
-    BMEdgeLoopStore *el_store_a = static_cast<BMEdgeLoopStore *>(eloops_rim.first_);
+    BMEdgeLoopStore *el_store_a = eloops_rim.first();
     BMEdgeLoopStore *el_store_b = static_cast<BMEdgeLoopStore *>(eloops_rim.last_);
     LoopPairStore *lpair;
 

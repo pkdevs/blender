@@ -1261,8 +1261,7 @@ void copy_fmodifiers(ListBaseT<FModifier> *dst, const ListBaseT<FModifier> *src)
   dst->clear_no_delete();
   BLI_duplicatelist(dst, src);
 
-  for (fcm = static_cast<FModifier *>(dst->first_), srcfcm = static_cast<FModifier *>(src->first_);
-       fcm && srcfcm;
+  for (fcm = dst->first(), srcfcm = src->first(); fcm && srcfcm;
        srcfcm = srcfcm->next, fcm = fcm->next)
   {
     const FModifierTypeInfo *fmi = fmodifier_get_typeinfo(fcm);

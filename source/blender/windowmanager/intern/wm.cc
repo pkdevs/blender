@@ -277,7 +277,7 @@ void WM_operator_free(wmOperator *op)
 
   if (op->macro.first_) {
     wmOperator *opm, *opmnext;
-    for (opm = static_cast<wmOperator *>(op->macro.first_); opm; opm = opmnext) {
+    for (opm = op->macro.first(); opm; opm = opmnext) {
       opmnext = opm->next;
       WM_operator_free(opm);
     }

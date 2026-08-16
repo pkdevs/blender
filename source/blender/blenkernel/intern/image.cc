@@ -388,7 +388,7 @@ static void image_blend_write(BlendWriter *writer, ID *id, const void *id_addres
     else {
       /* Some trickery to keep forward compatibility of packed images. */
       if (ima->packedfiles.first_ != nullptr) {
-        imapf = static_cast<ImagePackedFile *>(ima->packedfiles.first_);
+        imapf = ima->packedfiles.first();
         ima->packedfile = imapf->packedfile;
       }
     }
@@ -936,7 +936,7 @@ bool BKE_image_scale(Image *image, int width, int height, ImageUser *iuser)
 static int image_get_tile_number_from_iuser(const Image *ima, const ImageUser *iuser)
 {
   BLI_assert(ima != nullptr && ima->tiles.first_);
-  ImageTile *tile = static_cast<ImageTile *>(ima->tiles.first_);
+  ImageTile *tile = ima->tiles.first();
   return (iuser && iuser->tile) ? iuser->tile : tile->tile_number;
 }
 
@@ -3167,9 +3167,7 @@ void BKE_image_walk_all_users(
     void *customdata,
     void callback(Image *ima, ID *iuser_id, ImageUser *iuser, void *customdata))
 {
-  for (Scene *scene = mainp->scenes.first(); scene;
-       scene = static_cast<Scene *>(scene->id.next))
-  {
+  for (Scene *scene = mainp->scenes.first(); scene; scene = static_cast<Scene *>(scene->id.next)) {
     image_walk_id_all_users(&scene->id, false, customdata, callback);
   }
 
@@ -3183,20 +3181,15 @@ void BKE_image_walk_all_users(
     image_walk_id_all_users(&ntree->id, false, customdata, callback);
   }
 
-  for (Material *ma = mainp->materials.first(); ma; ma = static_cast<Material *>(ma->id.next))
-  {
+  for (Material *ma = mainp->materials.first(); ma; ma = static_cast<Material *>(ma->id.next)) {
     image_walk_id_all_users(&ma->id, false, customdata, callback);
   }
 
-  for (Light *light = mainp->lights.first(); light;
-       light = static_cast<Light *>(light->id.next))
-  {
+  for (Light *light = mainp->lights.first(); light; light = static_cast<Light *>(light->id.next)) {
     image_walk_id_all_users(&light->id, false, customdata, callback);
   }
 
-  for (World *world = mainp->worlds.first(); world;
-       world = static_cast<World *>(world->id.next))
-  {
+  for (World *world = mainp->worlds.first(); world; world = static_cast<World *>(world->id.next)) {
     image_walk_id_all_users(&world->id, false, customdata, callback);
   }
 
@@ -3513,9 +3506,7 @@ static RenderPass *image_render_pass_get(RenderLayer *rl,
   int rp_index = 0;
   const char *rp_name = "";
 
-  for (rpass = static_cast<RenderPass *>(rl->passes.first_); rpass;
-       rpass = rpass->next, rp_index++)
-  {
+  for (rpass = rl->passes.first(); rpass; rpass = rpass->next, rp_index++) {
     if (rp_index == pass) {
       rpass_ret = rpass;
       if (view == 0) {
@@ -5163,9 +5154,7 @@ void BKE_image_pool_free(ImagePool *pool)
   /* Use single lock to dereference all the image buffers. */
   {
     std::scoped_lock lock(pool->mutex);
-    for (ImagePoolItem *item = pool->image_buffers.first(); item != nullptr;
-         item = item->next)
-    {
+    for (ImagePoolItem *item = pool->image_buffers.first(); item != nullptr; item = item->next) {
       if (item->ibuf != nullptr) {
         std::scoped_lock lock(item->image->runtime->cache_mutex);
         IMB_freeImBuf(item->ibuf);

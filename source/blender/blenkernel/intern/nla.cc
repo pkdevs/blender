@@ -1137,7 +1137,7 @@ void BKE_nlameta_flush_transforms(NlaStrip *mstrip)
    * - these are simply the start/end frames of the child strips,
    *   since we assume they weren't transformed yet
    */
-  oStart = (static_cast<NlaStrip *>(mstrip->strips.first_))->start;
+  oStart = (mstrip->strips.first())->start;
   oEnd = (static_cast<NlaStrip *>(mstrip->strips.last_))->end;
   offset = mstrip->start - oStart;
 

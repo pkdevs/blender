@@ -465,7 +465,7 @@ static void build_keyingset_enum(bContext *C, EnumPropertyItem **item, int *toti
   KeyingSet *keyingset;
   int enum_index = 1;
   if (scene->keyingsets.first_) {
-    for (keyingset = static_cast<KeyingSet *>(scene->keyingsets.first_); keyingset;
+    for (keyingset = scene->keyingsets.first(); keyingset;
          keyingset = keyingset->next, enum_index++)
     {
       if (ANIM_keyingset_context_ok_poll(C, keyingset)) {

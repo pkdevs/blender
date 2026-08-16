@@ -2567,7 +2567,7 @@ static int handle_panel_category_cycling(const wmEvent *event,
             /* Proper cyclic behavior, back to first/last category (only used for ctrl+tab). */
             pc_dyn = backwards ?
                          static_cast<PanelCategoryDyn *>(region->runtime->panels_category.last_) :
-                         static_cast<PanelCategoryDyn *>(region->runtime->panels_category.first_);
+                         region->runtime->panels_category.first();
           }
         }
 

@@ -2428,7 +2428,7 @@ static wmOperatorStatus text_jump_exec(bContext *C, wmOperator *op)
 {
   Text *text = CTX_data_edit_text(C);
   int line = RNA_int_get(op->ptr, "line");
-  short nlines = txt_get_span(static_cast<TextLine *>(text->lines.first_),
+  short nlines = txt_get_span(text->lines.first(),
                               static_cast<TextLine *>(text->lines.last_)) +
                  1;
 

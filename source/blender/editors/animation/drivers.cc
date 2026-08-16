@@ -738,7 +738,7 @@ bool ANIM_driver_vars_paste(ReportList *reports, FCurve *fcu, bool replace)
   /* 3) Add new vars */
   if (driver->variables.last_) {
     DriverVar *last = static_cast<DriverVar *>(driver->variables.last_);
-    DriverVar *first = static_cast<DriverVar *>(tmp_list.first_);
+    DriverVar *first = tmp_list.first();
 
     last->next = first;
     first->prev = last;

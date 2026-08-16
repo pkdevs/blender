@@ -3914,8 +3914,7 @@ static wmOperatorStatus vgroup_do_remap(Object *ob, const char *name_array, wmOp
   int i;
 
   name = name_array;
-  for (def = static_cast<const bDeformGroup *>(defbase->first_), i = 0; def; def = def->next, i++)
-  {
+  for (def = defbase->first(), i = 0; def; def = def->next, i++) {
     sort_map[i] = BKE_defgroup_name_index(defbase, name);
     name += MAX_VGROUP_NAME;
 

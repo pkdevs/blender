@@ -782,7 +782,7 @@ static void curve_to_filledpoly(const Curve *cu, ListBaseT<DispList> *dispbase)
     return;
   }
 
-  if (dispbase->first_ && (static_cast<DispList *>(dispbase->first_))->type == DL_SURF) {
+  if (dispbase->first_ && (dispbase->first())->type == DL_SURF) {
     bevels_to_filledpoly(cu, dispbase);
   }
   else {
@@ -810,9 +810,8 @@ static float displist_calc_taper(Depsgraph *depsgraph,
     return 1.0;
   }
 
-  DispList *dl = taperobj->runtime->curve_cache ?
-                     taperobj->runtime->curve_cache->disp.first() :
-                     nullptr;
+  DispList *dl = taperobj->runtime->curve_cache ? taperobj->runtime->curve_cache->disp.first() :
+                                                  nullptr;
   if (dl == nullptr) {
     BKE_displist_make_curveTypes(depsgraph, scene, taperobj, false);
     dl = taperobj->runtime->curve_cache->disp.first();

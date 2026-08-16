@@ -1551,7 +1551,7 @@ bool BMO_error_pop(BMesh *bm, const char **r_msg, BMOperator **r_op, eBMOpErrorL
   bool result = BMO_error_get(bm, r_msg, r_op, r_level);
 
   if (result) {
-    BMOpError *err = static_cast<BMOpError *>(bm->errorstack.first_);
+    BMOpError *err = bm->errorstack.first();
 
     BLI_remlink(&bm->errorstack, bm->errorstack.first_);
     MEM_delete(err);

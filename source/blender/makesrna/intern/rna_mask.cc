@@ -243,8 +243,7 @@ static void rna_MaskLayer_active_spline_point_set(PointerRNA *ptr,
 
   masklay->act_point = nullptr;
 
-  for (spline = static_cast<MaskSpline *>(masklay->splines.first_); spline; spline = spline->next)
-  {
+  for (spline = masklay->splines.first(); spline; spline = spline->next) {
     if (point >= spline->points && point < spline->points + spline->tot_point) {
       masklay->act_point = point;
 

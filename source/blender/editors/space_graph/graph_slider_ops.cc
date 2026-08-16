@@ -198,7 +198,7 @@ static void reset_bezts(tGraphSliderOp *gso)
       ac, &anim_data, OPERATOR_DATA_FILTER, ac->data, eAnimCont_Types(ac->datatype));
 
   /* Loop through filtered data and reset bezts. */
-  for (ale = anim_data.first_item(), link_bezt = gso->bezt_arr_list.first(); ale;
+  for (ale = anim_data.first(), link_bezt = gso->bezt_arr_list.first(); ale;
        ale = ale->next)
   {
     FCurve *fcu = static_cast<FCurve *>(ale->key_data);

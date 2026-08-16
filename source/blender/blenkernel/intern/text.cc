@@ -1257,7 +1257,7 @@ static void txt_delete_sel(Text *text)
 
 void txt_sel_all(Text *text)
 {
-  text->curl = static_cast<TextLine *>(text->lines.first_);
+  text->curl = text->lines.first();
   text->curc = 0;
 
   text->sell = static_cast<TextLine *>(text->lines.last_);

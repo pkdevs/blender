@@ -1882,8 +1882,7 @@ static Collection *single_object_users_collection(Main *bmain,
   /* Since master collection has already be duplicated as part of scene copy,    * we do not
    * duplicate it here. However, this means its children need to be re-added manually here,    *
    * otherwise their parent lists are empty (which will lead to crashes, see #63101). */
-  CollectionChild *child_next,
-      *child = static_cast<CollectionChild *>(collection->children.first_);
+  CollectionChild *child_next, *child = collection->children.first();
   CollectionChild *orig_child_last = static_cast<CollectionChild *>(collection->children.last_);
   for (; child != nullptr; child = child_next) {
     child_next = child->next;

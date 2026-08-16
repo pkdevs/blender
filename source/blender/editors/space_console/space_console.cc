@@ -86,11 +86,11 @@ static void console_free(SpaceLink *sl)
   SpaceConsole *sc = reinterpret_cast<SpaceConsole *>(sl);
 
   while (sc->scrollback.first_) {
-    console_scrollback_free(sc, static_cast<ConsoleLine *>(sc->scrollback.first_));
+    console_scrollback_free(sc, sc->scrollback.first());
   }
 
   while (sc->history.first_) {
-    console_history_free(sc, static_cast<ConsoleLine *>(sc->history.first_));
+    console_history_free(sc, sc->history.first());
   }
 
   MEM_delete(sc->runtime);

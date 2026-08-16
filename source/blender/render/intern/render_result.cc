@@ -53,7 +53,7 @@ namespace blender {
 static void render_result_views_free(RenderResult *rr)
 {
   while (rr->views.first_) {
-    RenderView *rv = static_cast<RenderView *>(rr->views.first_);
+    RenderView *rv = rr->views.first();
     BLI_remlink(&rr->views, rv);
 
     IMB_freeImBuf(rv->ibuf);
@@ -80,10 +80,10 @@ void render_result_free(RenderResult *rr)
   }
 
   while (rr->layers.first_) {
-    RenderLayer *rl = static_cast<RenderLayer *>(rr->layers.first_);
+    RenderLayer *rl = rr->layers.first();
 
     while (rl->passes.first_) {
-      RenderPass *rpass = static_cast<RenderPass *>(rl->passes.first_);
+      RenderPass *rpass = rl->passes.first();
 
       IMB_freeImBuf(rpass->ibuf);
 
@@ -164,7 +164,7 @@ void render_result_views_shallowdelete(RenderResult *rr)
   }
 
   while (rr->views.first_) {
-    RenderView *rv = static_cast<RenderView *>(rr->views.first_);
+    RenderView *rv = rr->views.first();
     BLI_remlink(&rr->views, rv);
     MEM_delete(rv);
   }
@@ -774,7 +774,7 @@ void render_result_merge(RenderResult *rr, RenderResult *rrpart)
 
     if (rlp) {
       /* Passes are allocated in sync. */
-      for (RenderPass *rpass = rl.passes.first_item(), *rpassp = rlp->passes.first();
+      for (RenderPass *rpass = rl.passes.first(), *rpassp = rlp->passes.first();
            rpass && rpassp;
            rpass = rpass->next)
       {
@@ -1244,7 +1244,7 @@ RenderView *RE_RenderViewGetById(RenderResult *rr, const int view_id)
 {
   RenderView *rv = static_cast<RenderView *>(BLI_findlink(&rr->views, view_id));
   BLI_assert(rr->views.first_);
-  return rv ? rv : static_cast<RenderView *>(rr->views.first_);
+  return rv ? rv : rr->views.first();
 }
 
 RenderView *RE_RenderViewGetByName(RenderResult *rr, const char *viewname)
@@ -1252,7 +1252,7 @@ RenderView *RE_RenderViewGetByName(RenderResult *rr, const char *viewname)
   RenderView *rv = static_cast<RenderView *>(
       BLI_findstring(&rr->views, viewname, offsetof(RenderView, name)));
   BLI_assert(rr->views.first_);
-  return rv ? rv : static_cast<RenderView *>(rr->views.first_);
+  return rv ? rv : rr->views.first();
 }
 
 static RenderPass *duplicate_render_pass(RenderPass *rpass)

@@ -5681,7 +5681,7 @@ static wmOperatorStatus spacedata_cleanup_exec(bContext *C, wmOperator *op)
   for (bScreen &screen : bmain->screens) {
     for (ScrArea &area : screen.areabase) {
       if (area.spacedata.first_ != area.spacedata.last_) {
-        SpaceLink *sl = static_cast<SpaceLink *>(area.spacedata.first_);
+        SpaceLink *sl = area.spacedata.first_as<SpaceLink>();
 
         BLI_remlink(&area.spacedata, sl);
         tot += area.spacedata.count();

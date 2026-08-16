@@ -1030,7 +1030,7 @@ static void object_blend_read_data(BlendDataReader *reader, ID *id)
 
   BLO_read_struct_list(reader, ObHook, &ob->hooks);
   while (ob->hooks.first_) {
-    ObHook *hook = static_cast<ObHook *>(ob->hooks.first_);
+    ObHook *hook = ob->hooks.first();
     HookModifierData *hmd = reinterpret_cast<HookModifierData *>(
         BKE_modifier_new(eModifierType_Hook));
 
@@ -1197,7 +1197,7 @@ static void object_lib_override_apply_post(ID *id_dst, ID *id_src)
    * (maybe a new flag to allow override code to set values of some read-only properties?).
    */
   PTCacheID *pid_src, *pid_dst;
-  for (pid_dst = pidlist_dst.first_item(), pid_src = pidlist_src.first(); pid_dst != nullptr;
+  for (pid_dst = pidlist_dst.first(), pid_src = pidlist_src.first(); pid_dst != nullptr;
        pid_dst = pid_dst->next, pid_src = (pid_src != nullptr) ? pid_src->next : nullptr)
   {
     /* If pid's do not match, just tag info of caches in dst as dirty and continue. */

@@ -1678,8 +1678,7 @@ int BKE_mask_layer_shape_find_frame_range(MaskLayer *masklay,
 {
   MaskLayerShape *masklay_shape;
 
-  for (masklay_shape = static_cast<MaskLayerShape *>(masklay->splines_shapes.first_);
-       masklay_shape;
+  for (masklay_shape = masklay->splines_shapes.first(); masklay_shape;
        masklay_shape = masklay_shape->next)
   {
     if (frame == masklay_shape->frame) {

@@ -714,7 +714,7 @@ void ED_mask_get_size(ScrArea *area, int *r_width, int *r_height)
   if (area && area->spacedata.first_) {
     switch (area->spacetype) {
       case SPACE_CLIP: {
-        SpaceClip *sc = static_cast<SpaceClip *>(area->spacedata.first_);
+        SpaceClip *sc = area->spacedata.first_as<SpaceClip>();
         ED_space_clip_get_size(sc, r_width, r_height);
         break;
       }
@@ -748,7 +748,7 @@ void ED_mask_zoom(ScrArea *area, ARegion *region, float *r_zoomx, float *r_zoomy
   if (area && area->spacedata.first_) {
     switch (area->spacetype) {
       case SPACE_CLIP: {
-        SpaceClip *sc = static_cast<SpaceClip *>(area->spacedata.first_);
+        SpaceClip *sc = area->spacedata.first_as<SpaceClip>();
         ED_space_clip_get_zoom(sc, region, r_zoomx, r_zoomy);
         break;
       }
@@ -779,7 +779,7 @@ void ED_mask_get_aspect(ScrArea *area, ARegion * /*region*/, float *r_aspx, floa
   if (area && area->spacedata.first_) {
     switch (area->spacetype) {
       case SPACE_CLIP: {
-        SpaceClip *sc = static_cast<SpaceClip *>(area->spacedata.first_);
+        SpaceClip *sc = area->spacedata.first_as<SpaceClip>();
         ED_space_clip_get_aspect(sc, r_aspx, r_aspy);
         break;
       }
@@ -810,7 +810,7 @@ void ED_mask_pixelspace_factor(ScrArea *area, ARegion *region, float *r_scalex, 
   if (area && area->spacedata.first_) {
     switch (area->spacetype) {
       case SPACE_CLIP: {
-        SpaceClip *sc = static_cast<SpaceClip *>(area->spacedata.first_);
+        SpaceClip *sc = area->spacedata.first_as<SpaceClip>();
         float aspx, aspy;
 
         ui::view2d_scale_get(&region->v2d, r_scalex, r_scaley);

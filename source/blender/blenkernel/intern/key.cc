@@ -72,7 +72,7 @@ static void shapekey_copy_data(Main * /*bmain*/,
   BLI_duplicatelist(&key_dst->block, &key_src->block);
 
   KeyBlock *kb_dst, *kb_src;
-  for (kb_src = key_src->block.first_item(), kb_dst = key_dst->block.first(); kb_dst;
+  for (kb_src = key_src->block.first(), kb_dst = key_dst->block.first(); kb_dst;
        kb_src = kb_src->next, kb_dst = kb_dst->next)
   {
     if (kb_dst->data) {
@@ -437,7 +437,7 @@ static bool get_keys_for_absolute_eval(float eval_time,
                                        KeyBlock *r_target_keys[4],
                                        float r_weights[4])
 {
-  KeyBlock *firstkey = static_cast<KeyBlock *>(keyblocks->first_);
+  KeyBlock *firstkey = keyblocks->first();
   KeyBlock *lastkey = static_cast<KeyBlock *>(keyblocks->last_);
   eval_time = clamp_f(eval_time, firstkey->pos, lastkey->pos);
 

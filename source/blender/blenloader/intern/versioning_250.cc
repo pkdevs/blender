@@ -421,7 +421,7 @@ static void do_versions_windowmanager_2_50(bScreen *screen)
 
     /* pushed back spaces also need regions! */
     if (area.spacedata.first_) {
-      SpaceLink *sl = static_cast<SpaceLink *>(area.spacedata.first_);
+      SpaceLink *sl = area.spacedata.first_as<SpaceLink>();
       for (sl = sl->next; sl; sl = sl->next) {
         if (area.headertype) {
           area_add_header_region(&area, &sl->regionbase);
@@ -790,7 +790,7 @@ void blo_do_versions_250(FileData *fd, Library * /*lib*/, Main *bmain)
 
       for (PTCacheID &pid : pidlist) {
         if (pid.ptcaches->is_empty()) {
-          pid.ptcaches->first = pid.ptcaches->last = pid.cache;
+          pid.ptcaches->first_ = pid.ptcaches->last_ = pid.cache;
         }
       }
 

@@ -745,7 +745,7 @@ static ListBaseT<NlaStrip> get_visible_nla_strips(NlaTrack *nlt, View2D *v2d)
      * if the view is adjacent to a strip that should have its extendmode
      * rendered.
      */
-    NlaStrip *first_strip = static_cast<NlaStrip *>(nlt->strips.first_);
+    NlaStrip *first_strip = nlt->strips.first();
     NlaStrip *last_strip = static_cast<NlaStrip *>(nlt->strips.last_);
     if (first_strip && v2d->cur.xmax < first_strip->start &&
         first_strip->extendmode == NLASTRIP_EXTEND_HOLD)

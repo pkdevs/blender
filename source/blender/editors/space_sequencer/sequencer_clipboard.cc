@@ -492,7 +492,7 @@ wmOperatorStatus sequencer_clipboard_paste_exec(bContext *C, wmOperator *op)
   }
   BKE_id_delete(bmain_dst, scene_src);
 
-  Strip *iseq_first = static_cast<Strip *>(nseqbase.first_);
+  Strip *iseq_first = nseqbase.first();
   BLI_movelisttolist(ed_dst->current_strips(), &nseqbase);
   /* Restore "first" pointer as BLI_movelisttolist sets it to nullptr */
   nseqbase.first_ = iseq_first;

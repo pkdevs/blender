@@ -249,9 +249,7 @@ void ED_armature_bone_rename(Main *bmain,
 
       Object *cob;
       /* Update any object constraints to use the new bone name */
-      for (cob = static_cast<Object *>(bmain->objects.first_); cob;
-           cob = static_cast<Object *>(cob->id.next))
-      {
+      for (cob = bmain->objects.first(); cob; cob = static_cast<Object *>(cob->id.next)) {
         if (cob->constraints.first_) {
           constraint_bone_name_fix(ob, cob, &cob->constraints, oldname, newname);
         }
@@ -371,8 +369,7 @@ void ED_armature_bone_rename(Main *bmain,
   /* correct view locking */
   {
     bScreen *screen;
-    for (screen = bmain->screens.first(); screen;
-         screen = static_cast<bScreen *>(screen->id.next))
+    for (screen = bmain->screens.first(); screen; screen = static_cast<bScreen *>(screen->id.next))
     {
       /* add regions */
       for (ScrArea &area : screen->areabase) {

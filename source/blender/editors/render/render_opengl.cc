@@ -1105,9 +1105,7 @@ static void write_result(const bke::BlenderProject *project,
   if (reports.list.first_ != nullptr) {
     /* TODO: Should rather use new #BKE_reports_move_to_reports ? */
     std::unique_lock lock(oglrender->reports_mutex);
-    for (Report *report = static_cast<Report *>(reports.list.first_); report != nullptr;
-         report = report->next)
-    {
+    for (Report *report = reports.list.first(); report != nullptr; report = report->next) {
       BKE_report(oglrender->reports, static_cast<eReportType>(report->type), report->message);
     }
   }

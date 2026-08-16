@@ -611,7 +611,7 @@ void iksolver_execute_tree(
     Depsgraph *depsgraph, Scene *scene, Object *ob, bPoseChannel *pchan_root, float ctime)
 {
   while (pchan_root->iktree.first_) {
-    PoseTree *tree = static_cast<PoseTree *>(pchan_root->iktree.first_);
+    PoseTree *tree = pchan_root->iktree.first();
     int a;
 
     /* stop on the first tree that isn't a standard IK chain */
@@ -680,7 +680,7 @@ void iksolver_clear_data(bPose *pose)
     }
 
     while (pchan.iktree.first_) {
-      PoseTree *tree = static_cast<PoseTree *>(pchan.iktree.first_);
+      PoseTree *tree = pchan.iktree.first();
 
       /* stop on the first tree that isn't a standard IK chain */
       if (tree->type != CONSTRAINT_TYPE_KINEMATIC) {

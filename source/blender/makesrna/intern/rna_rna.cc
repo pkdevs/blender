@@ -616,9 +616,7 @@ bool rna_builtin_properties_lookup_string(PointerRNA *ptr,
       }
     }
     else {
-      for (prop = static_cast<PropertyRNA *>(srna->cont.properties.first_); prop;
-           prop = prop->next)
-      {
+      for (prop = srna->cont.properties.first(); prop; prop = prop->next) {
         if (!(prop->flag_internal & PROP_INTERN_BUILTIN) && prop->identifier == key) {
           *r_ptr = {nullptr, RNA_Property, prop};
           return true;

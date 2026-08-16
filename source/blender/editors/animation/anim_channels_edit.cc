@@ -1524,9 +1524,7 @@ static void rearrange_nla_tracks(bAnimContext *ac, AnimData *adt, eRearrangeAnim
   ListBaseT<NlaTrack> extracted_nonlocal_nla_tracks = {nullptr, nullptr};
   if (is_liboverride) {
     NlaTrack *nla_track;
-    for (nla_track = adt->nla_tracks.first(); nla_track != nullptr;
-         nla_track = nla_track->next)
-    {
+    for (nla_track = adt->nla_tracks.first(); nla_track != nullptr; nla_track = nla_track->next) {
       if (!BKE_nlatrack_is_nonlocal_in_liboverride(&ac->obact->id, nla_track)) {
         break;
       }
@@ -1552,7 +1550,7 @@ static void rearrange_nla_tracks(bAnimContext *ac, AnimData *adt, eRearrangeAnim
     BLI_assert(is_liboverride);
     static_cast<NlaTrack *>(extracted_nonlocal_nla_tracks.last_)->next = static_cast<NlaTrack *>(
         adt->nla_tracks.first_);
-    static_cast<NlaTrack *>(adt->nla_tracks.first_)->prev = static_cast<NlaTrack *>(
+    adt->nla_tracks.first()->prev = static_cast<NlaTrack *>(
         extracted_nonlocal_nla_tracks.last_);
     adt->nla_tracks.first_ = extracted_nonlocal_nla_tracks.first_;
   }

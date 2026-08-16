@@ -248,7 +248,7 @@ static void write_boid_state(BlendWriter *writer, BoidState *state)
     }
   }
 #if 0
-  BoidCondition *cond = state->conditions.first;
+  BoidCondition *cond = state->conditions.first_;
   for (; cond; cond = cond->next) {
     writer->write_struct(cond);
   }
@@ -1233,7 +1233,7 @@ static void get_pointcache_keys_for_time(Object * /*ob*/,
       }
     }
     else if (cache->mem_cache.first_) {
-      pm = static_cast<PTCacheMem *>(cache->mem_cache.first_);
+      pm = cache->mem_cache.first();
       index2 = BKE_ptcache_mem_index_find(pm, index);
       if (index2 < 0) {
         return;
@@ -4085,7 +4085,7 @@ void object_remove_particle_system(Main *bmain,
   psys_free(ob, psys);
 
   if (ob->particlesystem.first_) {
-    (static_cast<ParticleSystem *>(ob->particlesystem.first_))->flag |= PSYS_CURRENT;
+    (ob->particlesystem.first())->flag |= PSYS_CURRENT;
   }
   else {
     ob->mode &= ~OB_MODE_PARTICLE_EDIT;

@@ -1584,8 +1584,7 @@ static wmOperatorStatus outliner_unhide_all_exec(bContext *C, wmOperator * /*op*
   ViewLayer *view_layer = CTX_data_view_layer(C);
 
   /* Unhide all the collections. */
-  LayerCollection *lc_master = static_cast<LayerCollection *>(
-      view_layer->layer_collections.first_);
+  LayerCollection *lc_master = view_layer->layer_collections.first();
   for (LayerCollection &lc_iter : lc_master->layer_collections) {
     BKE_layer_collection_set_flag(&lc_iter, LAYER_COLLECTION_HIDE, false);
   }

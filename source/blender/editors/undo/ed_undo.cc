@@ -1172,8 +1172,7 @@ size_t ED_undosys_total_memory_calc(UndoStack *ustack)
 {
   size_t total_memory = 0;
 
-  for (UndoStep *us = static_cast<UndoStep *>(ustack->steps.first_); us != nullptr; us = us->next)
-  {
+  for (UndoStep *us = ustack->steps.first(); us != nullptr; us = us->next) {
     if (us->type == BKE_UNDOSYS_TYPE_SCULPT) {
       total_memory += ed::sculpt_paint::undo::step_memory_size_get(us);
     }

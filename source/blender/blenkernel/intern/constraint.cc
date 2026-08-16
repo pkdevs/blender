@@ -6373,7 +6373,7 @@ void BKE_constraints_copy_ex(ListBaseT<bConstraint> *dst,
   dst->clear_no_delete();
   BLI_duplicatelist(dst, src);
 
-  for (con = dst->first_item(), srccon = src->first(); con && srccon;
+  for (con = dst->first(), srccon = src->first(); con && srccon;
        srccon = srccon->next, con = con->next)
   {
     constraint_copy_data_ex(con, srccon, flag, do_extern);

@@ -416,7 +416,7 @@ static void wm_file_read_setup_wm_use_new(bContext *C,
   /* Ensure that at least one window is kept open so we don't lose the context, see #42303. */
   if (!has_match) {
     wm_file_read_setup_wm_substitute_old_window(
-        old_wm, wm, old_wm->windows.first_item(), wm->windows.first());
+        old_wm, wm, old_wm->windows.first(), wm->windows.first());
   }
 
   wm_setup_data->old_wm = nullptr;
@@ -3221,7 +3221,7 @@ static wmOperatorStatus wm_open_mainfile__select_file_path_exec(bContext *C, wmO
 
   /* If possible, get the name of the most recently used `.blend` file. */
   if (G.recent_files.first_) {
-    RecentFile *recent = static_cast<RecentFile *>(G.recent_files.first_);
+    RecentFile *recent = G.recent_files.first();
     blendfile_path = recent->filepath;
   }
 
@@ -3916,7 +3916,7 @@ static void save_set_filepath(bContext *C, wmOperator *op)
     const char *blendfile_path = BKE_main_blendfile_path(bmain);
     /* If not saved before, get the name of the most recently used `.blend` file. */
     if ((blendfile_path[0] == '\0') && G.recent_files.first_) {
-      RecentFile *recent = static_cast<RecentFile *>(G.recent_files.first_);
+      RecentFile *recent = G.recent_files.first();
       STRNCPY(filepath, recent->filepath);
     }
     else {

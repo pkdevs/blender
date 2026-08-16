@@ -2380,7 +2380,7 @@ static void nlaeval_fmodifiers_join_stacks(ListBaseT<FModifier> *result,
     result->last_ = list2->last_;
 
     fcm1 = static_cast<FModifier *>(list1->last_);
-    fcm2 = static_cast<FModifier *>(list2->first_);
+    fcm2 = list2->first();
 
     fcm1->next = fcm2;
     fcm2->prev = fcm1;
@@ -2403,7 +2403,7 @@ static void nlaeval_fmodifiers_split_stacks(ListBaseT<FModifier> *list1,
 
   /* get endpoints */
   fcm1 = static_cast<FModifier *>(list1->last_);
-  fcm2 = static_cast<FModifier *>(list2->first_);
+  fcm2 = list2->first();
 
   /* clear their links */
   fcm1->next = nullptr;
@@ -3165,8 +3165,7 @@ static bool animsys_evaluate_nla_for_flush(NlaEvalData *echannels,
   NlaTrack *tweaked_track = nlatrack_find_tweaked(adt);
 
   /* Get the stack of strips to evaluate at current time (influence calculated here). */
-  for (nlt = static_cast<NlaTrack *>(adt->nla_tracks.first_); nlt; nlt = nlt->next, track_index++)
-  {
+  for (nlt = adt->nla_tracks.first(); nlt; nlt = nlt->next, track_index++) {
 
     if (!is_nlatrack_evaluatable(adt, nlt)) {
       continue;
@@ -3247,8 +3246,7 @@ static void animsys_evaluate_nla_for_keyframing(PointerRNA *ptr,
   NlaTrack *tweaked_track = nlatrack_find_tweaked(adt);
 
   /* Get the lower stack of strips to evaluate at current time (influence calculated here). */
-  for (nlt = static_cast<NlaTrack *>(adt->nla_tracks.first_); nlt; nlt = nlt->next, track_index++)
-  {
+  for (nlt = adt->nla_tracks.first(); nlt; nlt = nlt->next, track_index++) {
 
     if (!is_nlatrack_evaluatable(adt, nlt)) {
       continue;

@@ -3508,8 +3508,7 @@ static eHandlerActionFlag wm_handlers_do_intern(bContext *C,
    * by the event that's called, for eg:
    *
    * Calling a python script which changes the area.type, see #32232. */
-  for (wmEventHandler *handler_base = static_cast<wmEventHandler *>(handlers->first_),
-                      *handler_base_next;
+  for (wmEventHandler *handler_base = handlers->first(), *handler_base_next;
        handler_base && handlers->first_;
        handler_base = handler_base_next)
   {

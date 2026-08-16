@@ -504,7 +504,7 @@ static RulerItem *gzgroup_ruler_item_first_get(wmGizmoGroup *gzgroup)
   RulerInfo *ruler_info = static_cast<RulerInfo *>(gzgroup->customdata);
   BLI_assert(gzgroup->gizmos.first_ == ruler_info->snap_data.gizmo);
 #endif
-  return reinterpret_cast<RulerItem *>((static_cast<wmGizmo *>(gzgroup->gizmos.first_))->next);
+  return reinterpret_cast<RulerItem *>((gzgroup->gizmos.first())->next);
 }
 
 #define RULER_ID "RulerData3D"

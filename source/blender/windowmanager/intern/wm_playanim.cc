@@ -903,7 +903,7 @@ static void playanim_toscreen(PlayState &ps, const PlayAnimPict *picture, const 
   float frame_indicator_factor = -1.0f;
   if (ps.show_frame_indicator) {
     const int frame_range = static_cast<const PlayAnimPict *>(ps.picsbase.last_)->frame -
-                            static_cast<const PlayAnimPict *>(ps.picsbase.first_)->frame;
+                            ps.picsbase.first()->frame;
     if (frame_range > 0) {
       frame_indicator_factor = float(double(picture->frame) / double(frame_range));
     }
@@ -2118,7 +2118,7 @@ static std::optional<int> wm_main_playanim_intern(int argc, const char **argv, P
     }
 
     if (ps.direction == 1) {
-      ps.picture = static_cast<PlayAnimPict *>(ps.picsbase.first_);
+      ps.picture = ps.picsbase.first();
     }
     else {
       ps.picture = static_cast<PlayAnimPict *>(ps.picsbase.last_);

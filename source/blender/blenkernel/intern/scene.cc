@@ -2284,7 +2284,7 @@ int BKE_scene_base_iter_next(
             }
             ListBaseT<Base> *object_bases = BKE_view_layer_object_bases_get(view_layer_set);
             if (object_bases->first_) {
-              *base = static_cast<Base *>(object_bases->first_);
+              *base = object_bases->first();
               *ob = (*base)->object;
               iter->phase = F_SCENE;
               break;
@@ -2312,7 +2312,7 @@ int BKE_scene_base_iter_next(
                 }
                 ListBaseT<Base> *object_bases = BKE_view_layer_object_bases_get(view_layer_set);
                 if (object_bases->first_) {
-                  *base = static_cast<Base *>(object_bases->first_);
+                  *base = object_bases->first();
                   *ob = (*base)->object;
                   break;
                 }
@@ -3014,7 +3014,7 @@ Base *_setlooper_base_step(const Main &bmain, Scene **sce_iter, ViewLayer *view_
     BKE_view_layer_synced_ensure(bmain, *sce_iter, view_layer);
     ListBaseT<Base> *object_bases = BKE_view_layer_object_bases_get(view_layer);
     if (object_bases->first_) {
-      return static_cast<Base *>(object_bases->first_);
+      return object_bases->first();
     }
     /* No base on this scene layer. */
     goto next_set;

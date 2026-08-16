@@ -603,7 +603,7 @@ static bNodeTree *add_realize_node_tree(Main *bmain)
                      *separate,
                      *separate->inputs.first());
   bke::node_add_link(
-      *node_tree, *conv, *conv->outputs.first_item(), *join, *join->inputs.first());
+      *node_tree, *conv, *conv->outputs.first(), *join, *join->inputs.first());
   bke::node_add_link(*node_tree,
                      *separate,
                      *static_cast<bNodeSocket *>(BLI_findlink(&separate->outputs, 3)),
@@ -620,7 +620,7 @@ static bNodeTree *add_realize_node_tree(Main *bmain)
                      *join,
                      *join->inputs.first());
   bke::node_add_link(
-      *node_tree, *separate, *separate->outputs.first_item(), *join, *join->inputs.first());
+      *node_tree, *separate, *separate->outputs.first(), *join, *join->inputs.first());
   bke::node_add_link(*node_tree,
                      *join,
                      *join->outputs.first(),

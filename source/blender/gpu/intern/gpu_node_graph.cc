@@ -441,7 +441,7 @@ static bool uniform_attr_list_cmp(const void *a, const void *b)
     return true;
   }
 
-  GPUUniformAttr *attr_a = set_a->list.first_item(), *attr_b = set_b->list.first();
+  GPUUniformAttr *attr_a = set_a->list.first(), *attr_b = set_b->list.first();
 
   for (; attr_a && attr_b; attr_a = attr_a->next, attr_b = attr_b->next) {
     if (!STREQ(attr_a->name, attr_b->name) || attr_a->use_dupli != attr_b->use_dupli) {

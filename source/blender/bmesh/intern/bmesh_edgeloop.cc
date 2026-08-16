@@ -214,7 +214,7 @@ int BM_mesh_edgeloops_find(BMesh *bm,
          * the loop is cyclic, anchored at that junction. Drop the duplicated end and flag it
          * (kept distinct from a fully closed loop, which has no anchor). */
         if (built && el_store->len >= 2) {
-          LinkData *node_first = static_cast<LinkData *>(el_store->verts.first_);
+          LinkData *node_first = el_store->verts.first();
           LinkData *node_last = static_cast<LinkData *>(el_store->verts.last_);
           if (node_first->data == node_last->data) {
             BLI_remlink(&el_store->verts, node_last);
@@ -656,7 +656,7 @@ void BM_edgeloop_calc_center(BMesh * /*bm*/, BMEdgeLoopStore *el_store)
 {
   LinkData *node_curr = static_cast<LinkData *>(el_store->verts.last_);
   LinkData *node_prev = (static_cast<LinkData *>(el_store->verts.last_))->prev;
-  LinkData *node_first = static_cast<LinkData *>(el_store->verts.first_);
+  LinkData *node_first = el_store->verts.first();
   LinkData *node_next = node_first;
 
   const float *v_prev = NODE_AS_CO(node_prev);
@@ -695,7 +695,7 @@ void BM_edgeloop_calc_center(BMesh * /*bm*/, BMEdgeLoopStore *el_store)
 
 bool BM_edgeloop_calc_normal(BMesh * /*bm*/, BMEdgeLoopStore *el_store)
 {
-  LinkData *node_curr = static_cast<LinkData *>(el_store->verts.first_);
+  LinkData *node_curr = el_store->verts.first();
   const float *v_prev = NODE_AS_CO(el_store->verts.last_);
   const float *v_curr = NODE_AS_CO(node_curr);
 
@@ -725,7 +725,7 @@ bool BM_edgeloop_calc_normal_aligned(BMesh * /*bm*/,
                                      BMEdgeLoopStore *el_store,
                                      const float no_align[3])
 {
-  LinkData *node_curr = static_cast<LinkData *>(el_store->verts.first_);
+  LinkData *node_curr = el_store->verts.first();
   const float *v_prev = NODE_AS_CO(el_store->verts.last_);
   const float *v_curr = NODE_AS_CO(node_curr);
 
