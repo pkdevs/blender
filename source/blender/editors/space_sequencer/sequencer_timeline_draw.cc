@@ -189,17 +189,17 @@ static float strip_header_size_get(float pixely, float strip_height)
   return min_ff(max_size, 20 * UI_SCALE_FAC * pixely);
 }
 
-static bool strip_header_poll(const SpaceSeq *sseq, float pixely, float strip_height)
+static bool strip_content_visibility_get(const SpaceSeq *sseq,
+                                         float pixely,
+                                         const Strip *strip,
+                                         float strip_height)
 {
-  const float threshold = 20 * UI_SCALE_FAC;
+  float threshold = 20 * UI_SCALE_FAC;
+  if (strip_hides_text_overlay_first(sseq, strip)) {
+    threshold = 8 * UI_SCALE_FAC;
+  }
 
-  const bool has_space = ((strip_height) / pixely) > threshold;
-  const bool overlays_enabled = (sseq->timeline_overlay.flag &
-                                 (SEQ_TIMELINE_SHOW_STRIP_NAME | SEQ_TIMELINE_SHOW_STRIP_SOURCE |
-                                  SEQ_TIMELINE_SHOW_STRIP_DURATION)) != 0 &&
-                                (sseq->flag & SEQ_SHOW_OVERLAY) != 0;
-
-  return has_space && overlays_enabled;
+  return strip_height / pixely > threshold;
 }
 
 static rctf strip_bounds_get(const Scene *scene,
@@ -216,11 +216,20 @@ static rctf strip_bounds_get(const Scene *scene,
   bounds.ymin = strip->channel + STRIP_OFSBOTTOM;
   bounds.ymax = strip->channel + STRIP_OFSTOP;
 
-  const float pixely = ui::view2d_pixel_size_get_y(v2d);
   if (strip->is_overlap_transition()) {
-    if (strip_header_poll(sseq, pixely, bounds.ymax - bounds.ymin)) {
-      bounds.ymax -= strip_header_size_get(pixely, bounds.ymax - bounds.ymin);
+    const float pixely = ui::view2d_pixel_size_get_y(v2d);
+    const float max_height = bounds.ymax - bounds.ymin;
+
+    /* Transition is drawn below input strip header if both title and content area are visible. */
+    auto header_poll{[&](Strip *input_strip) {
+      return strip_text_overlay_visibility_get(sseq, pixely, input_strip, max_height) &&
+             strip_content_visibility_get(sseq, pixely, input_strip, max_height);
+    }};
+    if (header_poll(strip->input1) && header_poll(strip->input2)) {
+      bounds.ymax -= strip_header_size_get(pixely, max_height);
     }
+
+    /* If there's enough space, leave space for retiming keys below the transition. */
     float retiming_size = (retiming_key_size() + RETIMING_KEY_PIXEL_OFFSET) * pixely;
     if ((can_draw_retiming(scene, sseq, v2d, strip->input1) ||
          can_draw_retiming(scene, sseq, v2d, strip->input2)) &&
@@ -229,10 +238,12 @@ static rctf strip_bounds_get(const Scene *scene,
       r_has_retiming_region_offset = true;
       bounds.ymin += retiming_size;
     }
+
     /* Draw transitions fully inside strips. */
     bounds.ymax -= pixely;
     bounds.ymin += pixely;
   }
+
   return bounds;
 }
 
@@ -256,19 +267,6 @@ bool strip_overlaps_retiming_region(const Scene *scene,
     return !has_retiming_region_offset;
   }
   return false;
-}
-
-static bool strip_content_visibility_get(const SpaceSeq *sseq,
-                                         float pixely,
-                                         const Strip *strip,
-                                         float strip_height)
-{
-  float threshold = 20 * UI_SCALE_FAC;
-  if (strip_hides_text_overlay_first(sseq, strip)) {
-    threshold = 8 * UI_SCALE_FAC;
-  }
-
-  return strip_height / pixely > threshold;
 }
 
 static StripDrawContext strip_draw_context_get(const TimelineDrawContext &ctx, Strip *strip)
