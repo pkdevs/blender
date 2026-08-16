@@ -1229,6 +1229,29 @@ static float4 quad_weights_from_irregular_corner(const int x,
 }
 
 template<typename T>
+static std::array<T, 4> interpolate_subdivided_irregular_face(const Span<int> corner_verts,
+                                                              const IndexRange face,
+                                                              const int grid,
+                                                              Span<T> src)
+{
+  std::array<T, 4> values;
+  values[0] = src[corner_verts[grid]];
+  /* Calculate attribute value at center of polygon */
+  Array<float, 32> weights(face.size());
+  const float weight = math::rcp(float(face.size()));
+  weights.fill(weight);
+
+  values[2] = bke::attribute_math::mix_indices(src, corner_verts.slice(face), weights);
+  /* Calculate attribute value at midpoint of connecting edges */
+  const int next = bke::mesh::face_corner_next(face, grid);
+  values[1] = bke::attribute_math::mix2(0.5f, src[corner_verts[grid]], src[corner_verts[next]]);
+
+  const int prev = bke::mesh::face_corner_prev(face, grid);
+  values[3] = bke::attribute_math::mix2(0.5f, src[corner_verts[grid]], src[corner_verts[prev]]);
+  return values;
+}
+
+template<typename T>
 static void interpolate_grids_for_flat_layout(const SubdivCCG &subdiv_ccg,
                                               const Span<int> corner_verts,
                                               Span<int> grids,
@@ -1284,23 +1307,7 @@ static void interpolate_grids_for_flat_layout(const SubdivCCG &subdiv_ccg,
       }
     }
     else {
-      std::array<T, 4> values;
-      values[0] = src[corner_verts[grid]];
-      /* Calculate attribute value at center of polygon */
-      Array<float, 32> weights(face.size());
-      const float weight = math::rcp(float(face.size()));
-      weights.fill(weight);
-
-      values[2] = bke::attribute_math::mix_indices(src, corner_verts.slice(face), weights);
-      /* Calculate attribute value at midpoint of connecting edges */
-      const int next = bke::mesh::face_corner_next(face, grid);
-      values[1] = bke::attribute_math::mix2(
-          0.5f, src[corner_verts[grid]], src[corner_verts[next]]);
-
-      const int prev = bke::mesh::face_corner_prev(face, grid);
-      values[3] = bke::attribute_math::mix2(
-          0.5f, src[corner_verts[grid]], src[corner_verts[prev]]);
-      /* Interpolate attribute */
+      const std::array<T, 4> values = interpolate_subdivided_irregular_face<T>(corner_verts, face, grid, src);
       for (int y = 0; y < grid_size_1; y++) {
         for (int x = 0; x < grid_size_1; x++) {
           *data = Converter::convert(
@@ -1372,22 +1379,7 @@ static void interpolate_grids_for_standard_layout(const SubdivCCG &subdiv_ccg,
       }
     }
     else {
-      std::array<T, 4> values;
-      values[0] = src[corner_verts[grid]];
-      /* Calculate attribute value at center of polygon */
-      Array<float, 32> weights(face.size());
-      const float weight = math::rcp(float(face.size()));
-      weights.fill(weight);
-
-      values[2] = bke::attribute_math::mix_indices(src, corner_verts.slice(face), weights);
-      /* Calculate attribute value at midpoint of connecting edges */
-      const int next = bke::mesh::face_corner_next(face, grid);
-      values[1] = bke::attribute_math::mix2(
-          0.5f, src[corner_verts[grid]], src[corner_verts[next]]);
-
-      const int prev = bke::mesh::face_corner_prev(face, grid);
-      values[3] = bke::attribute_math::mix2(
-          0.5f, src[corner_verts[grid]], src[corner_verts[prev]]);
+      const std::array<T, 4> values = interpolate_subdivided_irregular_face<T>(corner_verts, face, grid, src);
       /* Interpolate attribute */
       for (int y = 0; y < grid_size; y++) {
         for (int x = 0; x < grid_size; x++) {
