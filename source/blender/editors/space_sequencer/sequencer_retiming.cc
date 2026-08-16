@@ -948,28 +948,10 @@ static void realize_fake_keys_in_rect(const Scene *scene, Strip *strip, const rc
   }
 }
 
-static bool has_overlapping_transition(const Scene *scene,
-                                       const View2D *v2d,
-                                       const SpaceSeq *sseq,
-                                       const Span<Strip *> effects,
-                                       const int frame)
-{
-  for (Strip *effect_strip : effects) {
-    if (!strip_overlaps_retiming_region(scene, sseq, v2d, effect_strip)) {
-      continue;
-    }
-    if (frame > effect_strip->left_handle() && frame < effect_strip->right_handle(scene)) {
-      return true;
-    }
-  }
-  return false;
-}
-
 wmOperatorStatus sequencer_retiming_box_select_exec(bContext *C, wmOperator *op)
 {
   const Scene *scene = CTX_data_sequencer_scene(C);
   const View2D *v2d = ui::view2d_fromcontext(C);
-  const SpaceSeq *sseq = CTX_wm_space_seq(C);
   Editing *ed = seq::editing_get(scene);
 
   if (ed == nullptr) {
@@ -996,9 +978,6 @@ wmOperatorStatus sequencer_retiming_box_select_exec(bContext *C, wmOperator *op)
     if (!seq::retiming_show_keys(strip)) {
       continue;
     }
-
-    const Span<Strip *> effects = seq::lookup_effects_by_strip(ed, strip);
-
     realize_fake_keys_in_rect(scene, strip, rectf);
 
     for (SeqRetimingKey &key : seq::retiming_keys_get(strip)) {
@@ -1009,12 +988,6 @@ wmOperatorStatus sequencer_retiming_box_select_exec(bContext *C, wmOperator *op)
         continue;
       }
       if (key_frame > rectf.xmax || key_frame < rectf.xmin) {
-        continue;
-      }
-
-      /* If there isn't enough space a transition strip may overlap the retiming key, potentially
-       * obscuring the key. In this case don't select the key. */
-      if (has_overlapping_transition(scene, v2d, sseq, effects, key_frame)) {
         continue;
       }
 
