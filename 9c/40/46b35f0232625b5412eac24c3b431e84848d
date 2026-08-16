@@ -1,0 +1,1 @@
+Referenced by issue #162710, Regression: Canceling a transform (G + Esc) in Grease Pencil Edit Mode deletes the entire frame under specific conditions (post-5.0, Auto-Key on)
