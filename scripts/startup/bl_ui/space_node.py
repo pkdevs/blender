@@ -859,6 +859,25 @@ class NODE_PT_active_node_properties(Panel):
         layout.template_node_inputs(node)
 
 
+class NODE_PT_active_node_debug_view(Panel):
+    bl_space_type = 'NODE_EDITOR'
+    bl_region_type = 'UI'
+    bl_category = "Node"
+    bl_label = "Debug View"
+    bl_options = {'DEFAULT_CLOSED'}
+
+    @classmethod
+    def poll(cls, context):
+        node = context.active_node
+        return node is not None and node.bl_idname == "GeometryNodeViewer"
+
+    def draw(self, context):
+        layout = self.layout
+        layout.use_property_split = True
+        layout.use_property_decorate = False
+        layout.prop(context.active_node, "is_debug_view")
+
+
 class NODE_PT_active_node_custom_properties(rna_prop_ui.PropertyPanel, Panel):
     bl_space_type = 'NODE_EDITOR'
     bl_region_type = 'UI'
@@ -1257,6 +1276,7 @@ classes = (
     NODE_PT_annotation,
     NODE_PT_overlay,
     NODE_PT_active_node_properties,
+    NODE_PT_active_node_debug_view,
     NODE_PT_active_node_custom_properties,
     NODE_PT_gizmo_display,
     NODE_AST_compositor,
