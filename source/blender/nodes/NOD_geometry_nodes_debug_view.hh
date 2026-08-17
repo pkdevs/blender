@@ -46,9 +46,6 @@ struct TreeDebugViewPropagation {
 /** Update the cached explicit Debug View exposure information on a node tree. */
 bool update_tree_debug_view_propagation(bNodeTree &tree);
 
-/** Decide whether logged Viewer data can replace modifier geometry. */
-bool is_geometry_candidate(bool is_debug_view, bool is_shown, bool has_geometry);
-
 /** A logged persistent geometry Debug View source. */
 struct Candidate {
   ComputeContextHash compute_context_hash;

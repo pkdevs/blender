@@ -991,8 +991,7 @@ static void find_side_effect_nodes(const NodesModifierData &nmd,
                                    Set<ComputeContextHash> &r_verbose_log_contexts)
 {
   if (nmd.node_group != nullptr && (nmd.flag & NODES_MODIFIER_SHOW_DEBUG_VIEWS)) {
-    /* This is independent of the selected candidate. The master toggle makes all persistent
-     * debug viewers usable, matching their regular side-effect behavior. */
+    /* The master toggle enables persistent Debug View side effects. */
     bke::ComputeContextCache compute_context_cache;
     const ComputeContext *object_context = &compute_context_cache.for_data_block(nullptr,
                                                                                  ctx.object->id);

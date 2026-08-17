@@ -129,11 +129,6 @@ bool update_tree_debug_view_propagation(bNodeTree &tree)
   return changed;
 }
 
-bool is_geometry_candidate(const bool is_debug_view, const bool is_shown, const bool has_geometry)
-{
-  return is_debug_view && is_shown && has_geometry;
-}
-
 static int persistent_id_namespace(const ComputeContextHash &compute_context_hash,
                                    const int32_t viewer_node_id)
 {

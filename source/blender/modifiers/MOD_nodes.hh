@@ -7,7 +7,6 @@
 #include <memory>
 
 #include "BLI_array.hh"
-
 #include "NOD_socket_usage_inference_fwd.hh"
 
 namespace blender {
