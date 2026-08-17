@@ -9,7 +9,7 @@ This file does not run anything; its methods are accessed by run_blender_setup.p
 import modules.ui_test_utils as ui
 
 
-def test_region_split():
+def test_area_split():
     _, t, window = ui.test_window()
     screen = window.screen
     initial_count = len(screen.areas)
@@ -20,15 +20,17 @@ def test_region_split():
     t.assertEqual(len(screen.areas), initial_count + 1, "Area split did not create a new area")
 
 
-def test_region_join():
+def test_area_join():
     _, t, window = ui.test_window()
     screen = window.screen
     initial_count = len(screen.areas)
 
-    old_areas, source = ui.split_area_pair(screen)
+    source = ui.largest_area(screen)
+
+    ui.split_area(source, "VERTICAL", 0.5)
     yield
 
-    target = ui.get_new_area(screen, old_areas)
+    target = screen.areas[-1]
 
     t.assertEqual(len(screen.areas), initial_count + 1, "Split did not create a new area")
     ui.join_area(source, target)
@@ -37,14 +39,14 @@ def test_region_join():
     t.assertEqual(len(screen.areas), initial_count, "Join did not remove the split area")
 
 
-def test_region_swap():
+def test_area_swap():
     _, t, window = ui.test_window()
     screen = window.screen
 
     old_areas, source = ui.split_area_pair(screen)
     yield
 
-    target = ui.get_new_area(screen, old_areas)
+    target = screen.areas[-1]
 
     t.assertEqual(len(screen.areas), len(old_areas) + 1, "Split did not create a new area")
 

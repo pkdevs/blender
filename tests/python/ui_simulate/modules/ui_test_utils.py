@@ -281,17 +281,6 @@ def split_area_pair(screen):
     return old_areas, source
 
 
-def get_new_area(screen, old_areas):
-    """
-    Return the area created by the last split.
-    """
-    return next(
-        area
-        for area in screen.areas
-        if area not in old_areas
-    )
-
-
 def build_grid(screen, target_count):
     """
     Dynamically construct a visible grid of areas.
