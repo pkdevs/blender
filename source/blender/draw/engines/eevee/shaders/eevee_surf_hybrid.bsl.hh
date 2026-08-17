@@ -197,6 +197,8 @@ void surf_hybrid([[resource_table]] PipelineConstants &pipe,
       g_diffuse_color /= float(g_light_accumulation_count);
       g_specular_color /= float(g_light_accumulation_count);
     }
+    g_diffuse_light *= alpha_rcp;
+    g_specular_light *= alpha_rcp;
     // TODO: Write as fragment output?
     if (uni.uniform_buf.render_pass.diffuse_light_id >= 0 &&
         uni.uniform_buf.render_pass.diffuse_color_id >= 0)
@@ -207,7 +209,7 @@ void surf_hybrid([[resource_table]] PipelineConstants &pipe,
           out_texel, uni.uniform_buf.render_pass.diffuse_color_id, float4(g_diffuse_color, 1.0f));
     }
     else {
-      g_emission += g_diffuse_color * g_diffuse_light * alpha_rcp;
+      g_emission += g_diffuse_color * g_diffuse_light;
     }
 
     if (uni.uniform_buf.render_pass.specular_light_id >= 0 &&
@@ -221,7 +223,7 @@ void surf_hybrid([[resource_table]] PipelineConstants &pipe,
                                 float4(g_specular_color, 1.0f));
     }
     else {
-      g_emission += g_specular_color * g_specular_light * alpha_rcp;
+      g_emission += g_specular_color * g_specular_light;
     }
 #endif
   }
