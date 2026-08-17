@@ -88,15 +88,13 @@ static void node_geo_exec(GeoNodeExecParams params)
   params.set_output("String"_ustr, cached_value->text);
 }
 
-using namespace blender::compositor;
-
-class ImportTextOperation : public NodeOperation {
+class ImportTextOperation : public compositor::NodeOperation {
  public:
-  using NodeOperation::NodeOperation;
+  using compositor::NodeOperation::NodeOperation;
 
   void execute() override
   {
-    Result &result = this->get_result("String");
+    compositor::Result &result = this->get_result("String");
     if (!result.should_compute()) {
       return;
     }
@@ -141,7 +139,8 @@ class ImportTextOperation : public NodeOperation {
   }
 };
 
-static NodeOperation *get_compositor_operation(Context &context, const bNode &node)
+static compositor::NodeOperation *get_compositor_operation(compositor::Context &context,
+                                                           const bNode &node)
 {
   return new ImportTextOperation(context, node);
 }
