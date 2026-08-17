@@ -164,7 +164,7 @@ struct TreeDrawContext {
    */
   Array<Vector<NodeExtraInfoRow>> extra_info_rows_per_node;
 
-  Map<int32_t, VectorSet<std::string>> shader_node_errors;
+  Map<int32_t, VectorSet<std::pair<std::string, nodes::NodeWarningType>>> shader_node_errors;
 
   ~TreeDrawContext()
   {
@@ -2205,19 +2205,28 @@ static void node_add_error_message_button(const TreeDrawContext &tree_draw_ctx,
     return;
   }
   if (ntree.type == NTREE_SHADER) {
-    const VectorSet<std::string> *errors = tree_draw_ctx.shader_node_errors.lookup_ptr(
-        node.identifier);
+    const VectorSet<std::pair<std::string, nodes::NodeWarningType>> *errors =
+        tree_draw_ctx.shader_node_errors.lookup_ptr(node.identifier);
     if (!errors) {
       return;
     }
     if (errors->is_empty()) {
       return;
     }
-    ui::Button *but = add_error_message_button(block, rect, ICON_STATUS_ERROR, icon_offset);
+    nodes::NodeWarningType highest_priority = nodes::NodeWarningType::Info;
+    for (const std::pair<std::string, nodes::NodeWarningType> &error : *errors) {
+      if (nodes::node_warning_type_severity(error.second) >
+          nodes::node_warning_type_severity(highest_priority))
+      {
+        highest_priority = error.second;
+      }
+    }
+    const int icon = nodes::node_warning_type_icon(highest_priority);
+    ui::Button *but = add_error_message_button(block, rect, icon, icon_offset);
     button_func_quick_tooltip_set(but, [errors = *errors](const ui::Button * /*but*/) {
       std::string tooltip;
       for (const int i : errors.index_range()) {
-        const StringRefNull error = errors[i];
+        const StringRefNull error = errors[i].first;
         tooltip += error.c_str();
         if (i + 1 < errors.size()) {
           tooltip += ".\n";

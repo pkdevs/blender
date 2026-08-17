@@ -170,8 +170,16 @@ GPUMaterialFromNodeTreeResult GPU_material_from_nodetree(
   inline_params.target_engine_ = engine == GPU_MAT_EEVEE ? SHD_OUTPUT_EEVEE : SHD_OUTPUT_ALL;
   nodes::inline_shader_node_tree(*ntree, *localtree, inline_params);
 
+  static_assert(int(GPUMaterialFromNodeTreeResult::WarningType::Error) ==
+                int(nodes::NodeWarningType::Error));
+  static_assert(int(GPUMaterialFromNodeTreeResult::WarningType::Warning) ==
+                int(nodes::NodeWarningType::Warning));
+  static_assert(int(GPUMaterialFromNodeTreeResult::WarningType::Info) ==
+                int(nodes::NodeWarningType::Info));
   for (nodes::InlineShaderNodeTreeParams::ErrorMessage &error : inline_params.r_error_messages) {
-    result.errors.append({error.node, std::move(error.message)});
+    result.errors.append({error.node,
+                          std::move(error.message),
+                          GPUMaterialFromNodeTreeResult::WarningType(error.type)});
   }
 
   ntreeGPUMaterialNodes(localtree, mat);
