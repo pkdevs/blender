@@ -409,7 +409,7 @@ static void calculate_curve_splines(Span<float3> knot_positions,
 }
 
 static void execute_curve_chain(Span<BMVert *> in_verts,
-                                const bool is_closed,
+                                bool is_closed,
                                 const int interpolation,
                                 const int restriction,
                                 const bool regular,
@@ -420,25 +420,22 @@ static void execute_curve_chain(Span<BMVert *> in_verts,
                                 Map<BMVert *, float3> &r_moves)
 {
   int verts_num = in_verts.size();
-  const int original_verts_num = verts_num;
-  bool local_is_closed = is_closed;
   int shift = 0;
 
-  if (local_is_closed) {
+  if (is_closed) {
     int longest_gap, best_gap_start;
     find_longest_unselected_gap(in_verts, longest_gap, best_gap_start);
 
-    int offset = original_verts_num / 4;
+    int offset = verts_num / 4;
 
     if (longest_gap > 2 * offset) {
-      local_is_closed = false;
+      is_closed = false;
 
-      int trim_start = math::mod_periodic(best_gap_start + longest_gap - offset,
-                                          original_verts_num);
-      int trim_end = math::mod_periodic(best_gap_start - 1 + offset, original_verts_num);
+      int trim_start = math::mod_periodic(best_gap_start + longest_gap - offset, verts_num);
+      int trim_end = math::mod_periodic(best_gap_start - 1 + offset, verts_num);
 
       shift = trim_start;
-      verts_num = math::mod_periodic(trim_end - trim_start, original_verts_num) + 1;
+      verts_num = math::mod_periodic(trim_end - trim_start, verts_num) + 1;
     }
     else {
       for (const int i : in_verts.index_range()) {
@@ -452,7 +449,7 @@ static void execute_curve_chain(Span<BMVert *> in_verts,
 
   Array<BMVert *> verts(verts_num);
   for (const int i : IndexRange(verts_num)) {
-    verts[i] = in_verts[(i + shift) % original_verts_num];
+    verts[i] = in_verts[math::mod_periodic(i + shift, int(in_verts.size()))];
   }
 
   Vector<int> knot_indices;
@@ -462,17 +459,13 @@ static void execute_curve_chain(Span<BMVert *> in_verts,
     }
   }
 
-  if (!local_is_closed) {
+  if (!is_closed) {
     if (knot_indices.is_empty() || knot_indices.first() != 0) {
       knot_indices.insert(0, 0);
     }
     if (knot_indices.last() != verts_num - 1) {
       knot_indices.append(verts_num - 1);
     }
-  }
-
-  if (knot_indices.size() < 2) {
-    return;
   }
 
   Array<float3> knot_positions(knot_indices.size());
@@ -490,13 +483,8 @@ static void execute_curve_chain(Span<BMVert *> in_verts,
                       knot_indices.data() + knot_indices.size(),
                       point_indices.data());
 
-  calculate_curve_distances(verts,
-                            knot_indices,
-                            point_indices,
-                            local_is_closed,
-                            regular,
-                            knot_distances,
-                            point_distances);
+  calculate_curve_distances(
+      verts, knot_indices, point_indices, is_closed, regular, knot_distances, point_distances);
 
   if (point_indices.is_empty()) {
     return;
@@ -511,13 +499,13 @@ static void execute_curve_chain(Span<BMVert *> in_verts,
       knot_distances.as_span().drop_front(1), point_distances, segment_indices, factors);
 
   if (interpolation == CURVE_INTERP_CUBIC) {
-    const int spline_knots_num = local_is_closed ? int(knot_indices.size()) + 1 :
-                                                   int(knot_indices.size());
+    const int spline_knots_num = is_closed ? int(knot_indices.size()) + 1 :
+                                             int(knot_indices.size());
     Array<float3> spline_knot_pos(spline_knots_num);
     for (const int ki : knot_indices.index_range()) {
       spline_knot_pos[ki] = knot_positions[ki];
     }
-    if (local_is_closed) {
+    if (is_closed) {
       spline_knot_pos[knot_indices.size()] = knot_positions[0];
     }
 
