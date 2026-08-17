@@ -302,10 +302,6 @@ void BKE_add_template_variables_general(bke::path_templates::VariableMap &variab
         case bke::ProjectVariableType::FLOAT:
           variables.add_float(var->name_get(), var->value_float_get());
           break;
-
-        default:
-          /* Other data types not yet supported by project variables. */
-          BLI_assert_unreachable();
       }
     }
   }
