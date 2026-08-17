@@ -1483,7 +1483,7 @@ static wmOperatorStatus object_update_all_paths_exec(bContext *C, wmOperator * /
     return OPERATOR_CANCELLED;
   }
   Vector<Object *> visible_objects_with_mpath;
-  CTX_DATA_BEGIN (C, Object *, ob, visible_objects_with_mpath) {
+  CTX_DATA_BEGIN (C, Object *, ob, visible_objects) {
     bool has_any_motion_path = false;
     if (ob->mpath) {
       ed::motionpath::tag_for_recalc(*ob->mpath);
