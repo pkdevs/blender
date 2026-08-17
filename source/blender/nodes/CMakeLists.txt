@@ -89,7 +89,6 @@ set(SRC
   intern/geometry_nodes_physics_bundles.cc
   intern/geometry_nodes_repeat_zone.cc
   intern/geometry_nodes_srna.cc
-  intern/geometry_nodes_warning.cc
   intern/inverse_eval.cc
   intern/list_function_eval.cc
   intern/math_functions.cc
@@ -117,6 +116,7 @@ set(SRC
   intern/trace_values.cc
   intern/value_elem.cc
   intern/volume_grid_function_eval.cc
+  intern/warning.cc
 
   NOD_bundle_type.hh
   NOD_caller_ui.hh
