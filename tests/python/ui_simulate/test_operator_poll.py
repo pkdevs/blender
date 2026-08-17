@@ -9,13 +9,15 @@ def _register():
     if not hasattr(bpy.types, "WM_OT_ui_test_poll_gated"):
         class UiTestPollGated(Operator):
             bl_idname = "wm.ui_test_poll_gated"
-            
+
             # NOTE: search matches against the operator *label*, not bl_idname,
             # so the "nqz" search text below must keep matching this label.
             bl_label = "NQZ Gated"
+
             @classmethod
             def poll(cls, context):
                 return context.scene.get("ui_test_allow_gated", False)
+
             def execute(self, context):
                 context.scene["ui_simulate_marker"] = context.scene.get("ui_simulate_marker", 0) + 1
                 return {'FINISHED'}
