@@ -365,7 +365,9 @@ class ShaderNodesInliner {
           }
           const bke::bNodeTreeZone *zone = zones.get_zone_by_node(node->identifier);
           if (zone) {
-            params_.r_error_messages.append({node, TIP_("Output node must not be in zone")});
+            this->report_error({tree.context, node},
+                               TIP_("Output node must not be in zone"),
+                               NodeWarningType::Error);
             continue;
           }
           for (const bNodeSocket *socket : node->input_sockets()) {
@@ -707,7 +709,8 @@ class ShaderNodesInliner {
     if (socket.context && socket.context->parents_num() >= U.nodes_stack_limit) {
       this->store_socket_value_fallback(socket);
       this->report_error(node,
-                         TIP_("Nodes stack limit reached (too many levels of nested nodes)"));
+                         TIP_("Nodes stack limit reached (too many levels of nested nodes)"),
+                         NodeWarningType::Error);
       return;
     }
     group->ensure_interface_cache();
@@ -919,7 +922,9 @@ class ShaderNodesInliner {
 
   void add_dynamic_repeat_zone_iterations_error(const NodeInContext &repeat_input_node)
   {
-    this->report_error(repeat_input_node, TIP_("Iterations input has to be a constant value"));
+    this->report_error(repeat_input_node,
+                       TIP_("Iterations input has to be a constant value"),
+                       NodeWarningType::Error);
   }
 
   void handle_output_socket__repeat_input(const SocketInContext &socket)
@@ -1004,7 +1009,8 @@ class ShaderNodesInliner {
     if (socket.context && socket.context->parents_num() >= U.nodes_stack_limit) {
       this->store_socket_value_fallback(socket);
       this->report_error(evaluate_closure_node,
-                         TIP_("Nodes stack limit reached (too many levels of nested nodes)"));
+                         TIP_("Nodes stack limit reached (too many levels of nested nodes)"),
+                         NodeWarningType::Error);
       return;
     }
 
@@ -1197,7 +1203,8 @@ class ShaderNodesInliner {
       /* This limitation may be lifted in the future. Menu Switch nodes could be supported natively
        * by render engines or we convert them to a bunch of mix nodes. */
       this->store_socket_value_fallback(socket);
-      this->report_error(node, TIP_("Menu value has to be a constant value"));
+      this->report_error(
+          node, TIP_("Menu value has to be a constant value"), NodeWarningType::Error);
       return;
     }
     const MenuValue menu_value = std::get<MenuValue>(menu_value_opt->value);
@@ -1331,8 +1338,9 @@ class ShaderNodesInliner {
       const int index = std::get<int>(primitive_index_value_opt->value);
       if (index < 0 || index >= storage.items_num) {
         this->store_socket_value_fallback(socket);
-        params_.r_error_messages.append(
-            {node.node, fmt::format("{}: {}", TIP_("Index out of range"), index)});
+        this->report_error(node,
+                           fmt::format("{}: {}", TIP_("Index out of range"), index),
+                           NodeWarningType::Error);
         return;
       }
       this->forward_value_or_schedule(socket, node.input_socket(index + 1));
@@ -1345,8 +1353,8 @@ class ShaderNodesInliner {
     const std::optional<eNodeSocketDatatype> internal_mix_type =
         this->get_internal_mix_socket_type(storage.data_type);
     if (!internal_mix_type) {
-      params_.r_error_messages.append(
-          {node.node, TIP_("Index must be a constant value for this data type")});
+      this->report_error(
+          node, TIP_("Index must be a constant value for this data type"), NodeWarningType::Error);
       this->store_socket_value_fallback(socket);
       return;
     }
@@ -1443,8 +1451,9 @@ class ShaderNodesInliner {
     const std::optional<eNodeSocketDatatype> internal_mix_type =
         this->get_internal_mix_socket_type(storage.input_type);
     if (!internal_mix_type) {
-      params_.r_error_messages.append(
-          {node.node, TIP_("Switch must be a constant value for this data type")});
+      this->report_error(node,
+                         TIP_("Switch must be a constant value for this data type"),
+                         NodeWarningType::Error);
       this->store_socket_value_fallback(socket);
       return;
     }
@@ -1543,9 +1552,9 @@ class ShaderNodesInliner {
       if (const std::optional<PrimitiveSocketValue> primitive_message =
               message_value->to_primitive(*message_socket->typeinfo))
       {
-        // TODO: Handle message types.
+        const NodeWarningType type = NodeWarningType(node->custom1);
         const StringRef message = std::get<std::string>(primitive_message->value);
-        this->report_error(node, message);
+        this->report_error(node, message, type);
       }
       else {
         this->report_required_constant_input_or_backtrack(
@@ -1635,7 +1644,7 @@ class ShaderNodesInliner {
         }
       }
     }
-    this->report_error(node, message);
+    this->report_error(node, message, NodeWarningType::Error);
   }
 
   struct EnsureInputsResult {
@@ -1716,7 +1725,7 @@ class ShaderNodesInliner {
     }
 
     for (const StringRef message : user_data.error_messages) {
-      this->report_error(node, message);
+      this->report_error(node, message, NodeWarningType::Error);
     }
   }
 
@@ -2080,7 +2089,7 @@ class ShaderNodesInliner {
     return !socket.is_available() || socket.typeinfo->idname == "NodeSocketVirtual"_ustr;
   }
 
-  void report_error(const NodeInContext &node, const StringRef message)
+  void report_error(const NodeInContext &node, const StringRef message, const NodeWarningType type)
   {
     Vector<NodeInContext> nodes;
     nodes.append(node);
@@ -2091,7 +2100,7 @@ class ShaderNodesInliner {
       }
     }
     for (const NodeInContext &node : nodes) {
-      params_.r_error_messages.append({&*node, message});
+      params_.r_error_messages.append({&*node, message, type});
     }
   }
 };
