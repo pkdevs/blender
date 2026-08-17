@@ -347,7 +347,7 @@ void blo_do_versions_503(FileData * /*fd*/, Library * /*lib*/, Main *bmain)
     }
   }
 
-  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 503, 15)) {
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 503, 16)) {
     for (Brush &brush : bmain->brushes) {
       if (ELEM(brush.ob_mode,
                OB_MODE_SCULPT,
