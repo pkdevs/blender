@@ -8,7 +8,7 @@
 
 #include "DNA_node_types.h"
 
-#include "NOD_geometry_nodes_warning.hh"
+#include "NOD_warning.hh"
 
 namespace blender {
 

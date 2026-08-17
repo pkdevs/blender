@@ -1427,8 +1427,7 @@ static std::string node_find_create_string_value(const bNode &node, const String
   return fmt::format("{}: \"{}\" ({})", TIP_("String"), str, node.name);
 }
 
-static std::string node_find_create_warning(const bNode &node,
-                                            const nodes::NodeWarning warning)
+static std::string node_find_create_warning(const bNode &node, const nodes::NodeWarning warning)
 {
   return fmt::format(
       "{}: \"{}\" ({})", nodes::node_warning_type_name(warning.type), warning.message, node.name);

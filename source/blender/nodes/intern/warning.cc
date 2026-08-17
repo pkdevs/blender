@@ -6,7 +6,7 @@
 
 #include "BKE_report.hh"
 
-#include "NOD_geometry_nodes_warning.hh"
+#include "NOD_warning.hh"
 
 #include "RNA_access.hh"
 #include "RNA_enum_types.hh"
