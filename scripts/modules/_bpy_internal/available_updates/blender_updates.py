@@ -8,7 +8,7 @@ from datetime import datetime, timedelta
 import bpy
 
 
-def _updates_cache_file_path() -> Path:
+def _updates_cache_path() -> Path:
     from bpy.utils import user_resource
     path = user_resource('CONFIG')
     if path:
@@ -21,18 +21,21 @@ def _timestamp_format() -> str:
     return "%Y-%m-%dT%H:%M:%SZ"
 
 
+_app_version = models.BlenderVersion(bpy.app.version[0] * 100 + bpy.app.version[1], bpy.app.version[2])
 
 
+def _cache_default_init() -> models.UpdatesCache:
+    return models.UpdatesCache(
+        ignored_versions=models.IgnoredVersions(
+            latest_lts=_app_version,
+            latest=_app_version,
+            current_release=_app_version),
+        tracks=models.Tracks(),
+        last_time_check=datetime.now() - timedelta(days=2)  # Expired by default
+    )
 
-_current_app_version = models.BlenderVersion(bpy.app.version[0] * 100 + bpy.app.version[1], bpy.app.version[2])
 
-_cache: models.UpdatesCache = models.UpdatesCache(
-    ignored_versions=models.IgnoredVersions(
-        latest_lts=_current_app_version,
-        latest=_current_app_version,
-        current_release=_current_app_version),
-    tracks=models.Tracks(),
-    last_time_check=datetime.now() - timedelta(days=2))
+_cache: models.UpdatesCache = _cache_default_init()
 
 
 def _json_converter():
@@ -45,20 +48,14 @@ def _json_converter():
 
 
 def reset_cache():
+    """Resets updates cache, ignored versions are not longer remember, and updates should downloaded again."""
     global _cache
-    _cache = models.UpdatesCache(
-        ignored_versions=models.IgnoredVersions(
-            latest_lts=_current_app_version,
-            latest=_current_app_version,
-            current_release=_current_app_version),
-        tracks=models.Tracks(),
-        last_time_check=datetime.now() - timedelta(days=2))
+    _cache = _cache_default_init()
 
 
 def _update_blender_tracks():
     """Updates blender tracks"""
     bpy.types.WindowManager.blender_updates_clear_tracks()
-    global _cache
 
     def load_track(track: models.VersionUpdate, track_type: str):
         if not track:
@@ -87,9 +84,10 @@ def _update_blender_tracks():
 
 
 def load_cache_file():
+    """Loads the updates cache stored in disk."""
     reset_cache()
 
-    cache_path = _updates_cache_file_path()
+    cache_path = _updates_cache_path()
     if not cache_path.is_file():
         return
 
@@ -102,11 +100,10 @@ def load_cache_file():
     json_doc = json.loads(json_cache)
     cache: models.UpdatesCache = _json_converter().structure(json_doc, models.UpdatesCache)
 
-    global _cache
-    _cache.ignored_versions.current_release = max(cache.ignored_versions.current_release, _current_app_version)
-    _cache.ignored_versions.latest_lts = max(cache.ignored_versions.latest_lts, _current_app_version)
-    _cache.ignored_versions.latest = max(cache.ignored_versions.latest, _current_app_version)
-    # Make sure to ignore in the latest track versions ignored in the latest lst latest track
+    _cache.ignored_versions.current_release = max(cache.ignored_versions.current_release, _app_version)
+    _cache.ignored_versions.latest_lts = max(cache.ignored_versions.latest_lts, _app_version)
+    _cache.ignored_versions.latest = max(cache.ignored_versions.latest, _app_version)
+    # Make sure to ignore in the latest track versions ignored in the latest lst track
     _cache.ignored_versions.latest = max(_cache.ignored_versions.latest, _cache.ignored_versions.latest_lts)
 
     _cache.last_time_check = cache.last_time_check
@@ -121,32 +118,32 @@ def load_cache_file():
 
 
 def is_cache_expired() -> bool:
-    global _cache
+    """Checks if the updates cache is expired, which expires every 24 hours."""
     return _cache.last_time_check < (datetime.now() - timedelta(days=1))
 
 
 def _load_update(update: models.VersionUpdate):
-
     # Skip earlier versions
-    if update.version <= _current_app_version:
+    if update.version <= _app_version:
         return
 
     ignore = _cache.ignored_versions
     tracks = _cache.tracks
 
     current_min = max(
-        tracks.current_release.version if tracks.current_release else _current_app_version,
+        tracks.current_release.version if tracks.current_release else _app_version,
         ignore.current_release)
 
-    latest_lts_min = max(tracks.latest_lts.version if tracks.latest_lts else _current_app_version, ignore.latest_lts)
+    latest_lts_min = max(tracks.latest_lts.version if tracks.latest_lts else _app_version, ignore.latest_lts)
 
+    # Latest track should be newer than the latest lst track
     latest_min = max(
-        tracks.latest.version if tracks.latest else _current_app_version,
+        tracks.latest.version if tracks.latest else _app_version,
         ignore.current_release,
         latest_lts_min)
 
     # Add the update int the current release track if is newer that the current listed/ignored.
-    if _current_app_version.version == update.version:
+    if _app_version.version == update.version:
         if not (current_min < update.version):
             return
         _cache.tracks.current_release = update
@@ -168,16 +165,16 @@ def _load_update(update: models.VersionUpdate):
 
 
 def write_cache_file():
+    """Write the updates cache into the dist in json format."""
     def datetime_default_formatter(obj) -> str:
         """datetime timestamp formatter"""
         if isinstance(obj, datetime):
             return obj.strftime(_timestamp_format())
         raise TypeError(f'Cannot serialize object of {type(obj)}')
 
-    with _updates_cache_file_path().open('w') as file:
+    with _updates_cache_path().open('w') as file:
         import dataclasses
         import json
-        global _cache
         file.write(json.dumps(dataclasses.asdict(_cache), default=datetime_default_formatter))
 
 
@@ -212,10 +209,10 @@ def load_json_updates_to_tracks(json_text):
 
 
 def ignore_update(version: models.BlenderVersion, is_lts: bool):
-    global _cache
+    """Ignores a update and reloads tracks discarding the new ignored version"""
 
-    # List version as ignored, it can be set in multiple tracks
-    if _current_app_version == version:
+    # A version can be ignored  in multiple tracks
+    if _app_version == version:
         _cache.ignored_versions.current_release = max(_cache.ignored_versions.current_release, version)
     if is_lts:
         _cache.ignored_versions.latest_lts = max(_cache.ignored_versions.latest_lts, version)
