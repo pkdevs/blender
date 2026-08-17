@@ -25,7 +25,6 @@
 #include "BKE_node.hh"
 #include "BKE_node_tree_interface.hh"
 
-#include "NOD_warning.hh"
 #include "NOD_socket_usage_inference_fwd.hh"
 #include "NOD_warning.hh"
 

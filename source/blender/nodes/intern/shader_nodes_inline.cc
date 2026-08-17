@@ -264,7 +264,7 @@ class ShaderNodesInliner {
    * Contains the compute contexts which #schedule_side_effect_nodes_in_context has handled
    * already.
    */
-  Set<const ComputeContext *> handle_side_effect_triggers_;
+  Set<const ComputeContext *> handled_side_effect_contexts_;
 
  public:
   ShaderNodesInliner(const bNodeTree &src_tree,
@@ -1572,7 +1572,7 @@ class ShaderNodesInliner {
                                              const bke::bNodeTreeZone *zone,
                                              const ComputeContext *context)
   {
-    if (!handle_side_effect_triggers_.add(context)) {
+    if (!handled_side_effect_contexts_.add(context)) {
       return;
     }
     const bke::bNodeTreeZones *zones = tree.zones();
