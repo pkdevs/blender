@@ -360,7 +360,7 @@ def keyconfig_update(keyconfig_data, keyconfig_version):
                     if index_to_fix != -1:
                         item_prop["properties"][index_to_fix] = ("brush_toggle", value_to_copy)
 
-    if keyconfig_version < (5, 3, 7):
+    if keyconfig_version < (5, 3, 15):
         if not has_copy:
             keyconfig_data = copy.deepcopy(keyconfig_data)
             has_copy = True
