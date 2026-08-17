@@ -7,18 +7,48 @@
 #include <string>
 
 #include "BLI_compute_context.hh"
+#include "BLI_multi_value_map.hh"
 #include "BLI_set.hh"
 #include "BLI_span.hh"
 #include "BLI_string_ref.hh"
 #include "BLI_vector.hh"
 
-namespace blender::nodes {
+namespace blender {
+
+struct bNodeTree;
+
+namespace nodes {
 
 namespace eval_log {
 class ViewerNodeLog;
 }
 
 namespace debug_view {
+
+/**
+ * A Debug Viewer that can be exposed through one of the node tree's group inputs.
+ *
+ * The group node path starts in the tree that owns the group input and ends in the tree that owns
+ * the Viewer node. The path is empty for a local Viewer directly connected to a Group Input node.
+ */
+struct PropagatedViewer {
+  int32_t viewer_node_id = 0;
+  Vector<int32_t> group_node_path;
+
+  friend bool operator==(const PropagatedViewer &, const PropagatedViewer &) = default;
+};
+
+/** Static Debug View exposure information cached on a node tree. */
+struct TreeDebugViewPropagation {
+  /** Viewers exposed through the corresponding group input index. */
+  MultiValueMap<int, PropagatedViewer> viewers_by_group_input;
+
+  friend bool operator==(const TreeDebugViewPropagation &,
+                         const TreeDebugViewPropagation &) = default;
+};
+
+/** Update the cached explicit Debug View exposure information on a node tree. */
+bool update_tree_debug_view_propagation(bNodeTree &tree);
 
 /** Prefer a custom node label, then a meaningfully customized node name. */
 std::string viewer_name_from_node(StringRef label, StringRef node_name);
@@ -104,4 +134,5 @@ int persistent_id_namespace(const Identifier &identifier);
 int unique_persistent_id_namespace(const Identifier &identifier, Set<int> &used_namespaces);
 
 }  // namespace debug_view
-}  // namespace blender::nodes
+}  // namespace nodes
+}  // namespace blender

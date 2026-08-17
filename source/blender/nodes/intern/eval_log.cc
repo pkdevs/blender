@@ -1238,7 +1238,9 @@ Span<debug_view::Candidate> NodesEvalLog::debug_view_candidates()
           candidate.viewer_log = viewer_log.viewer_log.get();
           candidate.sort_order = reversed_sort_order;
           candidate.sort_order.append(viewer_log.viewer_log->node_order);
-          candidate.context_names = reversed_context_names;
+          if (viewer_log.viewer_log->use_context_names) {
+            candidate.context_names = reversed_context_names;
+          }
           candidate.viewer_name = viewer_log.viewer_log->debug_view_name;
         }
       }

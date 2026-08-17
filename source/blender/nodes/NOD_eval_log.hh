@@ -262,6 +262,8 @@ class ViewerNodeLog {
   int node_order = 0;
   /** Empty when the node has neither a custom label nor a meaningfully customized name. */
   std::string debug_view_name;
+  /** Do not add nested group context names when an interface provides the presentation name. */
+  bool use_context_names = true;
 
   struct Item {
     int identifier;

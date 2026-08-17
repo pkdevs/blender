@@ -45,6 +45,9 @@ namespace rl = reference_lifetimes;
 namespace gizmos {
 struct TreeGizmoPropagation;
 }
+namespace debug_view {
+struct TreeDebugViewPropagation;
+}
 }  // namespace nodes
 namespace bke {
 struct bNodeType;
@@ -168,6 +171,7 @@ class bNodeTreeRuntime : NonCopyable, NonMovable {
   /** Information about usage of anonymous attributes within the group. */
   std::unique_ptr<node_tree_reference_lifetimes::ReferenceLifetimesInfo> reference_lifetimes_info;
   std::unique_ptr<nodes::gizmos::TreeGizmoPropagation> gizmo_propagation;
+  std::unique_ptr<nodes::debug_view::TreeDebugViewPropagation> debug_view_propagation;
   std::unique_ptr<nodes::StructureTypeInterface> structure_type_interface;
 
   /**

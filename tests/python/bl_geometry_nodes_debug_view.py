@@ -297,7 +297,7 @@ class GeometryNodesDebugViewFixtureTest(unittest.TestCase):
         warnings = self.warning_messages()
         self.assertIn("ROOT_DEBUG_A_EVALUATED", warnings)
         self.assertIn("ROOT_DEBUG_B_EVALUATED", warnings)
-        self.assertIn("NESTED_DEBUG_EVALUATED", warnings)
+        self.assertNotIn("NESTED_DEBUG_EVALUATED", warnings)
 
         root_a.is_debug_view = False
         self.assertTrue(root_a_show.is_unavailable)
@@ -317,7 +317,7 @@ class GeometryNodesDebugViewFixtureTest(unittest.TestCase):
         warnings = self.warning_messages()
         self.assertNotIn("ROOT_DEBUG_B_EVALUATED", warnings)
         self.assertIn("ROOT_DEBUG_A_EVALUATED", warnings)
-        self.assertIn("NESTED_DEBUG_EVALUATED", warnings)
+        self.assertNotIn("NESTED_DEBUG_EVALUATED", warnings)
 
         root_b_show.default_value = True
         self.assertEqual(self.evaluate(), 8)
@@ -357,6 +357,58 @@ class GeometryNodesDebugViewFixtureTest(unittest.TestCase):
         group_node.inputs["Show Debug"].default_value = True
         self.assertEqual(self.evaluate(), 8)
         self.assertIn("NESTED_DEBUG_EVALUATED", self.warning_messages())
+
+    def test_two_explicit_group_boundaries_and_removed_exposure(self):
+        nested_interface_socket = self.nested_group.interface.new_socket(
+            name="Show Debug", in_out='INPUT', socket_type='NodeSocketBool')
+        nested_interface_socket.default_value = True
+        self.nested_group.links.new(
+            self.nested_group.nodes["Nested Group Input"].outputs["Show Debug"],
+            self.nested_group.nodes["Nested Debug"].inputs["Show"])
+
+        middle_group = bpy.data.node_groups.new("Middle Debug Group", 'GeometryNodeTree')
+        middle_group.interface.new_socket(
+            name="Geometry", in_out='INPUT', socket_type='NodeSocketGeometry')
+        middle_interface_socket = middle_group.interface.new_socket(
+            name="Show Nested Debug", in_out='INPUT', socket_type='NodeSocketBool')
+        middle_interface_socket.default_value = True
+        middle_group.interface.new_socket(
+            name="Geometry", in_out='OUTPUT', socket_type='NodeSocketGeometry')
+
+        middle_input = middle_group.nodes.new("NodeGroupInput")
+        middle_output = middle_group.nodes.new("NodeGroupOutput")
+        nested_group_node = middle_group.nodes.new("GeometryNodeGroup")
+        nested_group_node.node_tree = self.nested_group
+        middle_group.links.new(
+            middle_input.outputs["Geometry"], nested_group_node.inputs["Geometry"])
+        middle_group.links.new(
+            middle_input.outputs["Show Nested Debug"], nested_group_node.inputs["Show Debug"])
+        middle_group.links.new(
+            nested_group_node.outputs["Geometry"], middle_output.inputs["Geometry"])
+
+        root_nested_group_node = self.root_group.nodes["Nested Debug Group"]
+        self.root_group.nodes.remove(root_nested_group_node)
+        middle_group_node = self.root_group.nodes.new("GeometryNodeGroup")
+        middle_group_node.node_tree = middle_group
+        self.root_group.links.new(
+            self.root_group.nodes["Normal Cube"].outputs["Mesh"],
+            middle_group_node.inputs["Geometry"])
+        self.root_group.links.new(
+            middle_group_node.outputs["Geometry"],
+            self.root_group.nodes["Root Group Output"].inputs["Geometry"])
+
+        self.modifier.show_debug_views = True
+        middle_group_node.inputs["Show Nested Debug"].default_value = True
+        self.assertEqual(self.evaluate(), 8)
+        self.assertIn("NESTED_DEBUG_EVALUATED", self.warning_messages())
+
+        for link in list(middle_group.links):
+            if (link.from_node == middle_input and
+                    link.from_socket.name == "Show Nested Debug"):
+                middle_group.links.remove(link)
+
+        self.assertEqual(self.evaluate(), 8)
+        self.assertNotIn("NESTED_DEBUG_EVALUATED", self.warning_messages())
 
 
 class GeometryNodesDebugViewSimulationZoneFixtureTest(unittest.TestCase):

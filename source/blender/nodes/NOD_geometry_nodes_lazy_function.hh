@@ -30,6 +30,7 @@
 #include "NOD_nested_node_id.hh"
 
 #include "BLI_compute_context.hh"
+#include "BLI_map.hh"
 #include "BLI_math_quaternion_types.hh"
 #include "BLI_multi_value_map.hh"
 
@@ -144,6 +145,8 @@ class GeoNodesBakeParams {
 
 struct GeoNodesSideEffectNodes {
   MultiValueMap<ComputeContextHash, const lf::FunctionNode *> nodes_by_context;
+  /** User-facing interface names for explicitly propagated Debug Viewers. */
+  Map<std::pair<ComputeContextHash, int32_t>, std::string> debug_view_names_by_context;
   /**
    * The repeat/foreach zone is identified by the compute context of the parent and the identifier
    * of the repeat output node.

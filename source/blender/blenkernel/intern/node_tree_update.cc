@@ -37,6 +37,7 @@
 #include "NOD_compositor_nodes_srna.hh"
 #include "NOD_dependencies.hh"
 #include "NOD_geo_viewer.hh"
+#include "NOD_geometry_nodes_debug_view.hh"
 #include "NOD_geometry_nodes_gizmos.hh"
 #include "NOD_geometry_nodes_lazy_function.hh"
 #include "NOD_geometry_nodes_srna.hh"
@@ -614,6 +615,9 @@ class NodeTreeMainUpdater {
         result.interface_changed = true;
       }
       if (gizmos::update_tree_gizmo_propagation(ntree)) {
+        result.interface_changed = true;
+      }
+      if (debug_view::update_tree_debug_view_propagation(ntree)) {
         result.interface_changed = true;
       }
     }

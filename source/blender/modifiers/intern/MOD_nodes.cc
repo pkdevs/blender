@@ -88,6 +88,7 @@
 #include "ED_viewer_path.hh"
 
 #include "NOD_dependencies.hh"
+#include "NOD_geometry_nodes_debug_view.hh"
 #include "NOD_geometry_nodes_execute.hh"
 #include "NOD_geometry_nodes_gizmos.hh"
 #include "NOD_geometry_nodes_lazy_function.hh"
@@ -694,7 +695,8 @@ static void find_side_effect_nodes_for_persistent_debug_views_in_tree(
     const ComputeContext &compute_context,
     bke::ComputeContextCache &compute_context_cache,
     nodes::GeoNodesSideEffectNodes &r_side_effect_nodes,
-    bool inside_simulation_zone);
+    bool inside_simulation_zone,
+    bool allow_local_debug_views);
 
 static bool is_persistent_debug_viewer(const bNode &node)
 {
@@ -703,6 +705,71 @@ static bool is_persistent_debug_viewer(const bNode &node)
   }
   const NodeGeometryViewer *storage = static_cast<const NodeGeometryViewer *>(node.storage);
   return storage && (storage->flag & NODE_GEO_VIEWER_FLAG_DEBUG_VIEW);
+}
+
+static void add_propagated_debug_views_for_group_node(
+    const ModifierEvalContext &ctx,
+    const NodesModifierData &nmd,
+    const bNodeTree &tree,
+    const bNode &group_node,
+    const ComputeContext &parent_compute_context,
+    bke::ComputeContextCache &compute_context_cache,
+    nodes::GeoNodesSideEffectNodes &r_side_effect_nodes)
+{
+  if (group_node.is_muted() || group_node.id == nullptr) {
+    return;
+  }
+  const bNodeTree &group_tree = *reinterpret_cast<const bNodeTree *>(group_node.id);
+  const bNodeTree &propagation_tree = *DEG_get_original(&group_tree);
+  const nodes::debug_view::TreeDebugViewPropagation *propagation =
+      propagation_tree.runtime->debug_view_propagation.get();
+  if (propagation == nullptr) {
+    return;
+  }
+
+  const bke::GroupNodeComputeContext &group_compute_context = compute_context_cache.for_group_node(
+      &parent_compute_context, group_node.identifier, &tree);
+
+  for (const auto item : propagation->viewers_by_group_input.items()) {
+    if (item.key < 0 || item.key >= group_node.input_sockets().size()) {
+      continue;
+    }
+    const bNodeSocket &group_input_socket = group_node.input_socket(item.key);
+    if (!group_input_socket.is_available()) {
+      continue;
+    }
+
+    for (const nodes::debug_view::PropagatedViewer &viewer : item.value) {
+      const ComputeContext *current_compute_context = &group_compute_context;
+      const bNodeTree *current_tree = &group_tree;
+      bool valid_path = true;
+      for (const int32_t nested_group_node_id : viewer.group_node_path) {
+        const bNode *nested_group_node = current_tree->node_by_id(nested_group_node_id);
+        if (nested_group_node == nullptr || nested_group_node->id == nullptr ||
+            nested_group_node->is_muted())
+        {
+          valid_path = false;
+          break;
+        }
+        current_compute_context = &compute_context_cache.for_group_node(
+            current_compute_context, nested_group_node->identifier, current_tree);
+        current_tree = reinterpret_cast<const bNodeTree *>(nested_group_node->id);
+      }
+      if (!valid_path) {
+        continue;
+      }
+
+      const bNode *viewer_node = current_tree->node_by_id(viewer.viewer_node_id);
+      if (viewer_node == nullptr || !is_persistent_debug_viewer(*viewer_node)) {
+        continue;
+      }
+      try_add_side_effect_node(
+          ctx, *current_compute_context, viewer_node->identifier, nmd, r_side_effect_nodes);
+      r_side_effect_nodes.debug_view_names_by_context.add_overwrite(
+          {current_compute_context->hash(), viewer_node->identifier},
+          std::string(group_input_socket.name));
+    }
+  }
 }
 
 /* Persistent viewers inside a simulation zone are not local side effects of the zone body,
@@ -750,7 +817,8 @@ static void find_side_effect_nodes_for_persistent_debug_views_in_zone(
                                                               group_compute_context,
                                                               compute_context_cache,
                                                               r_side_effect_nodes,
-                                                              true);
+                                                              true,
+                                                              false);
   }
 
   for (const bke::bNodeTreeZone *child_zone : zone.child_zones) {
@@ -773,7 +841,8 @@ static void find_side_effect_nodes_for_persistent_debug_views_in_tree(
     const ComputeContext &compute_context,
     bke::ComputeContextCache &compute_context_cache,
     nodes::GeoNodesSideEffectNodes &r_side_effect_nodes,
-    const bool inside_simulation_zone)
+    const bool inside_simulation_zone,
+    const bool allow_local_debug_views)
 {
   const bke::bNodeTreeZones *tree_zones = tree.zones();
   if (tree_zones == nullptr) {
@@ -791,7 +860,7 @@ static void find_side_effect_nodes_for_persistent_debug_views_in_tree(
     if (node == nullptr) {
       continue;
     }
-    if (inside_simulation_zone && is_persistent_debug_viewer(*node)) {
+    if ((inside_simulation_zone || allow_local_debug_views) && is_persistent_debug_viewer(*node)) {
       try_add_side_effect_node(ctx, compute_context, node->identifier, nmd, r_side_effect_nodes);
       continue;
     }
@@ -801,13 +870,18 @@ static void find_side_effect_nodes_for_persistent_debug_views_in_tree(
     const bNodeTree *group_tree = reinterpret_cast<const bNodeTree *>(node->id);
     const bke::GroupNodeComputeContext &group_compute_context =
         compute_context_cache.for_group_node(&compute_context, node->identifier, &tree);
+    if (allow_local_debug_views && !inside_simulation_zone) {
+      add_propagated_debug_views_for_group_node(
+          ctx, nmd, tree, *node, compute_context, compute_context_cache, r_side_effect_nodes);
+    }
     find_side_effect_nodes_for_persistent_debug_views_in_tree(ctx,
                                                               nmd,
                                                               *group_tree,
                                                               group_compute_context,
                                                               compute_context_cache,
                                                               r_side_effect_nodes,
-                                                              inside_simulation_zone);
+                                                              inside_simulation_zone,
+                                                              false);
   }
 }
 
@@ -933,7 +1007,8 @@ static void find_side_effect_nodes(const NodesModifierData &nmd,
                                                               *modifier_context,
                                                               compute_context_cache,
                                                               r_side_effect_nodes,
-                                                              false);
+                                                              false,
+                                                              true);
   }
 
   Main *bmain = DEG_get_bmain(ctx.depsgraph);

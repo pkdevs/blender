@@ -848,13 +848,38 @@ class LazyFunctionForImplicitSelfObject : public LazyFunction {
  * The viewer node does not have outputs. Instead it is executed because the executor knows that it
  * has side effects. The side effect is that the inputs to the viewer are logged.
  */
+static bool modifier_requests_persistent_debug_views_at_root(const GeoNodesUserData &user_data)
+{
+  return user_data.call_data->modifier_data &&
+         user_data.call_data->modifier_data->show_debug_views &&
+         dynamic_cast<const bke::GeometryNodesModifierComputeContext *>(
+             user_data.compute_context) != nullptr;
+}
+
+static StringRef propagated_debug_view_name(const GeoNodesUserData &user_data, const bNode &node)
+{
+  if (!user_data.call_data->side_effect_nodes) {
+    return {};
+  }
+  const std::string *name = user_data.call_data->side_effect_nodes->debug_view_names_by_context
+                                .lookup_ptr({user_data.compute_context->hash(), node.identifier});
+  return name ? StringRef(*name) : StringRef();
+}
+
 static void initialize_viewer_log(const bNode &node,
                                   const bool is_debug_view,
-                                  eval_log::ViewerNodeLog &log)
+                                  eval_log::ViewerNodeLog &log,
+                                  const StringRef propagated_name = {})
 {
   log.is_debug_view = is_debug_view;
   log.node_order = node.index();
-  log.debug_view_name = debug_view::viewer_name_from_node(node.label, node.name);
+  if (!propagated_name.is_empty()) {
+    log.debug_view_name = propagated_name;
+    log.use_context_names = false;
+  }
+  else {
+    log.debug_view_name = debug_view::viewer_name_from_node(node.label, node.name);
+  }
 }
 
 class LazyFunctionForViewerNode : public LazyFunction {
@@ -891,8 +916,7 @@ class LazyFunctionForViewerNode : public LazyFunction {
     const NodeGeometryViewer &storage = *static_cast<const NodeGeometryViewer *>(bnode_.storage);
 
     if (is_debug_view_) {
-      bool is_enabled = user_data.call_data->modifier_data &&
-                        user_data.call_data->modifier_data->show_debug_views;
+      bool is_enabled = modifier_requests_persistent_debug_views_at_root(user_data);
       if (user_data.call_data->side_effect_nodes && self_node) {
         const Span<const lf::FunctionNode *> side_effect_nodes =
             user_data.call_data->side_effect_nodes->nodes_by_context.lookup(
@@ -918,6 +942,7 @@ class LazyFunctionForViewerNode : public LazyFunction {
     }
 
     LinearAllocator<> &allocator = *tree_logger->allocator;
+    const StringRef propagated_name = propagated_debug_view_name(user_data, bnode_);
 
     if (is_debug_view_) {
       const bNodeSocket &show_socket = bnode_.input_socket(storage.items_num);
@@ -930,7 +955,7 @@ class LazyFunctionForViewerNode : public LazyFunction {
       const bool show = show_variant->get<bool>();
       if (!show) {
         auto log = allocator.construct<eval_log::ViewerNodeLog>();
-        initialize_viewer_log(bnode_, true, *log);
+        initialize_viewer_log(bnode_, true, *log, propagated_name);
         log->is_shown = false;
         tree_logger->viewer_node_logs.append(allocator, {bnode_.identifier, std::move(log)});
         for (const int i : IndexRange(storage.items_num)) {
@@ -958,7 +983,7 @@ class LazyFunctionForViewerNode : public LazyFunction {
     }
 
     auto log = allocator.construct<eval_log::ViewerNodeLog>();
-    initialize_viewer_log(bnode_, is_debug_view_, *log);
+    initialize_viewer_log(bnode_, is_debug_view_, *log, propagated_name);
     geo_viewer_node_log(bnode_, values, *log);
     tree_logger->viewer_node_logs.append(allocator, {bnode_.identifier, std::move(log)});
   }
@@ -1002,8 +1027,8 @@ class LazyFunctionForViewerInputUsage : public LazyFunction {
           user_data->call_data->side_effect_nodes->nodes_by_context.lookup(context_hash);
       viewer_is_used = nodes_with_side_effects.contains(&lf_viewer_node_);
     }
-    if (is_persistent_debug_view_ && user_data->call_data->modifier_data) {
-      viewer_is_used |= user_data->call_data->modifier_data->show_debug_views;
+    if (is_persistent_debug_view_) {
+      viewer_is_used |= modifier_requests_persistent_debug_views_at_root(*user_data);
     }
     params.set_output(0, viewer_is_used);
 
@@ -2068,7 +2093,7 @@ class GeometryNodesLazyFunctionSideEffectProvider : public lf::GraphExecutor::Si
     Vector<const lf::FunctionNode *> side_effect_nodes =
         call_data.side_effect_nodes->nodes_by_context.lookup(context_hash);
     side_effect_nodes.extend(local_side_effect_nodes_);
-    if (call_data.modifier_data && call_data.modifier_data->show_debug_views) {
+    if (modifier_requests_persistent_debug_views_at_root(*user_data)) {
       side_effect_nodes.extend(local_debug_view_nodes_);
     }
     return side_effect_nodes;
