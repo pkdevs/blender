@@ -8,6 +8,8 @@
 
 #  include <stddef.h>
 
+#  include <cstdint>
+
 /* NOTE(@nsirgien): Should match underlying type in the declaration inside "kernel/types.h"
  * TODO: use kernel/types.h directly. */
 enum DeviceKernel : int;
