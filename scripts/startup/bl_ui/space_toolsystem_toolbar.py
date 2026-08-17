@@ -1107,6 +1107,15 @@ class _defs_edit_mesh:
     def vertex_smooth():
         def draw_settings(_context, layout, tool):
             props = tool.operator_properties("mesh.vertices_smooth")
+            layout.prop(props, "method")
+            layout.prop(props, "factor")
+            if props.method == 'TAUBIN':
+                layout.prop(props, "taubin_mu")
+            elif props.method == 'HC':
+                layout.prop(props, "hc_alpha")
+                layout.prop(props, "hc_beta")
+            if props.method in {'TAUBIN', 'HC'}:
+                layout.prop(props, "use_cotangent_weights")
             layout.prop(props, "repeat")
         return dict(
             idname="builtin.smooth",

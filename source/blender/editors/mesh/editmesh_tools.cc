@@ -29,6 +29,7 @@
 #include "BLI_math_geom_c.hh"
 #include "BLI_math_matrix_c.hh"
 #include "BLI_math_rotation_c.hh"
+#include "BLI_math_vector.hh"
 #include "BLI_math_vector_c.hh"
 #include "BLI_rand_c.hh"
 #include "BLI_sort_utils.hh"
@@ -2731,9 +2732,227 @@ void MESH_OT_normals_make_consistent(wmOperatorType *ot)
 /** \name Smooth Vertices Operator
  * \{ */
 
+enum {
+  SMOOTH_METHOD_SIMPLE = 0,
+  SMOOTH_METHOD_TAUBIN = 1,
+  SMOOTH_METHOD_HC = 2,
+};
+
+static const EnumPropertyItem smooth_method_items[] = {
+    {SMOOTH_METHOD_SIMPLE,
+     "SIMPLE",
+     0,
+     "Simple",
+     "Average each vertex with its edge neighbors"},
+    {SMOOTH_METHOD_TAUBIN,
+     "TAUBIN",
+     0,
+     "Taubin",
+     "Two-pass smoothing with a negative second pass to reduce shrinkage"},
+    {SMOOTH_METHOD_HC,
+     "HC",
+     0,
+     "HC",
+     "Smooth then pull vertices back toward the originals to preserve volume"},
+    {0, nullptr, 0, nullptr, nullptr},
+};
+
+static void smooth_apply_blend(float3 &target,
+                               const float3 &source,
+                               const float fac,
+                               const bool xaxis,
+                               const bool yaxis,
+                               const bool zaxis)
+{
+  const float f_orig = 1.0f - fac;
+  if (xaxis) {
+    target.x = f_orig * target.x + fac * source.x;
+  }
+  if (yaxis) {
+    target.y = f_orig * target.y + fac * source.y;
+  }
+  if (zaxis) {
+    target.z = f_orig * target.z + fac * source.z;
+  }
+}
+
+static void smooth_apply_mirror_clip(float3 &co,
+                                     const float3 &ref,
+                                     const bool clipx,
+                                     const bool clipy,
+                                     const bool clipz,
+                                     const float clip_dist)
+{
+  if (clipx && fabsf(ref.x) <= clip_dist) {
+    co.x = 0.0f;
+  }
+  if (clipy && fabsf(ref.y) <= clip_dist) {
+    co.y = 0.0f;
+  }
+  if (clipz && fabsf(ref.z) <= clip_dist) {
+    co.z = 0.0f;
+  }
+}
+
+static Array<float> smooth_compute_edge_cotangent_weights(BMesh *bm)
+{
+  Array<float> weights(bm->totedge, 0.0f);
+  BMIter iter;
+  BMEdge *e;
+  BM_ITER_MESH (e, &iter, bm, BM_EDGES_OF_MESH) {
+    float w = 0.0f;
+    BMIter loop_iter;
+    BMLoop *l;
+    BM_ITER_ELEM (l, &loop_iter, e, BM_LOOPS_OF_EDGE) {
+      if (l->f->len < 3) {
+        continue;
+      }
+      const float cot = cotangent_tri_weight_v3(l->prev->v->co, l->v->co, l->next->v->co) * 0.5f;
+      if (cot > 0.0f) {
+        w += cot;
+      }
+    }
+    weights[BM_elem_index_get(e)] = w;
+  }
+  return weights;
+}
+
+static float3 smooth_neighbor_average(BMVert *v,
+                                      const Span<float3> src,
+                                      const Span<float> edge_weights)
+{
+  float3 sum(0.0f);
+  float wsum = 0.0f;
+  const bool weighted = !edge_weights.is_empty();
+  BMIter iter;
+  BMEdge *e;
+  BM_ITER_ELEM (e, &iter, v, BM_EDGES_OF_VERT) {
+    const float w = weighted ? edge_weights[BM_elem_index_get(e)] : 1.0f;
+    if (w == 0.0f) {
+      continue;
+    }
+    BMVert *other = BM_edge_other_vert(e, v);
+    sum += w * src[BM_elem_index_get(other)];
+    wsum += w;
+  }
+  if (wsum > 0.0f) {
+    return sum * (1.0f / wsum);
+  }
+  return src[BM_elem_index_get(v)];
+}
+
+static void edbm_smooth_volume_preserve(BMesh *bm,
+                                        const int method,
+                                        const float factor,
+                                        const int repeat,
+                                        const float taubin_mu,
+                                        const float hc_alpha,
+                                        const float hc_beta,
+                                        const bool use_cotangent,
+                                        const bool xaxis,
+                                        const bool yaxis,
+                                        const bool zaxis,
+                                        const bool clipx,
+                                        const bool clipy,
+                                        const bool clipz,
+                                        const float clip_dist)
+{
+  BM_mesh_elem_index_ensure(bm, use_cotangent ? (BM_VERT | BM_EDGE) : BM_VERT);
+
+  Vector<BMVert *> verts;
+  verts.reserve(bm->totvertsel);
+  BMIter iter;
+  BMVert *v;
+  BM_ITER_MESH (v, &iter, bm, BM_VERTS_OF_MESH) {
+    if (BM_elem_flag_test(v, BM_ELEM_SELECT)) {
+      verts.append(v);
+    }
+  }
+  if (verts.is_empty()) {
+    return;
+  }
+
+  Array<float3> positions(bm->totvert);
+  BM_ITER_MESH (v, &iter, bm, BM_VERTS_OF_MESH) {
+    positions[BM_elem_index_get(v)] = v->co;
+  }
+
+  Array<float> edge_weights;
+  if (use_cotangent) {
+    edge_weights = smooth_compute_edge_cotangent_weights(bm);
+  }
+  const Span<float> weights_span = use_cotangent ? edge_weights.as_span() : Span<float>{};
+
+  switch (method) {
+    case SMOOTH_METHOD_TAUBIN: {
+      Array<float3> averages(bm->totvert);
+      for (int j = 0; j < repeat; j++) {
+        for (BMVert *vert : verts) {
+          averages[BM_elem_index_get(vert)] = smooth_neighbor_average(vert, positions, weights_span);
+        }
+        for (BMVert *vert : verts) {
+          const int i = BM_elem_index_get(vert);
+          const float3 prev = positions[i];
+          smooth_apply_blend(positions[i], averages[i], factor, xaxis, yaxis, zaxis);
+          smooth_apply_mirror_clip(positions[i], prev, clipx, clipy, clipz, clip_dist);
+        }
+        for (BMVert *vert : verts) {
+          averages[BM_elem_index_get(vert)] = smooth_neighbor_average(vert, positions, weights_span);
+        }
+        for (BMVert *vert : verts) {
+          const int i = BM_elem_index_get(vert);
+          const float3 prev = positions[i];
+          smooth_apply_blend(positions[i], averages[i], taubin_mu, xaxis, yaxis, zaxis);
+          smooth_apply_mirror_clip(positions[i], prev, clipx, clipy, clipz, clip_dist);
+        }
+      }
+      break;
+    }
+    case SMOOTH_METHOD_HC: {
+      Array<float3> orig(positions.as_span());
+      Array<float3> hc_p(positions.as_span());
+      Array<float3> p_vals(bm->totvert);
+      Array<float3> b(bm->totvert, float3(0.0f));
+      for (int j = 0; j < repeat; j++) {
+        for (BMVert *vert : verts) {
+          const int i = BM_elem_index_get(vert);
+          const float3 p = smooth_neighbor_average(vert, hc_p, weights_span);
+          p_vals[i] = p;
+          b[i] = p - (hc_alpha * orig[i] + (1.0f - hc_alpha) * hc_p[i]);
+        }
+        for (BMVert *vert : verts) {
+          const int i = BM_elem_index_get(vert);
+          const float3 b_avg = smooth_neighbor_average(vert, b, weights_span);
+          hc_p[i] = p_vals[i] - (hc_beta * b[i] + (1.0f - hc_beta) * b_avg);
+        }
+      }
+      for (BMVert *vert : verts) {
+        const int i = BM_elem_index_get(vert);
+        const float3 prev = positions[i];
+        smooth_apply_blend(positions[i], hc_p[i], factor, xaxis, yaxis, zaxis);
+        smooth_apply_mirror_clip(positions[i], prev, clipx, clipy, clipz, clip_dist);
+      }
+      break;
+    }
+    default: {
+      BLI_assert_unreachable();
+      break;
+    }
+  }
+
+  for (BMVert *vert : verts) {
+    copy_v3_v3(vert->co, positions[BM_elem_index_get(vert)]);
+  }
+}
+
 static wmOperatorStatus edbm_do_smooth_vertex_exec(bContext *C, wmOperator *op)
 {
+  const int method = RNA_enum_get(op->ptr, "method");
   const float fac = RNA_float_get(op->ptr, "factor");
+  const float taubin_mu = RNA_float_get(op->ptr, "taubin_mu");
+  const float hc_alpha = RNA_float_get(op->ptr, "hc_alpha");
+  const float hc_beta = RNA_float_get(op->ptr, "hc_beta");
+  const bool use_cotangent = RNA_boolean_get(op->ptr, "use_cotangent_weights");
 
   const bool xaxis = RNA_boolean_get(op->ptr, "xaxis");
   const bool yaxis = RNA_boolean_get(op->ptr, "yaxis");
@@ -2796,24 +3015,43 @@ static wmOperatorStatus edbm_do_smooth_vertex_exec(bContext *C, wmOperator *op)
       }
     }
 
-    for (int i = 0; i < repeat; i++) {
-      if (!EDBM_op_callf(
-              em,
-              op,
-              "smooth_vert verts=%hv factor=%f mirror_clip_x=%b mirror_clip_y=%b mirror_clip_z=%b "
-              "clip_dist=%f use_axis_x=%b use_axis_y=%b use_axis_z=%b",
-              BM_ELEM_SELECT,
-              fac,
-              mirrx,
-              mirry,
-              mirrz,
-              clip_dist,
-              xaxis,
-              yaxis,
-              zaxis))
-      {
-        continue;
+    if (method == SMOOTH_METHOD_SIMPLE) {
+      for (int i = 0; i < repeat; i++) {
+        if (!EDBM_op_callf(em,
+                           op,
+                           "smooth_vert verts=%hv factor=%f mirror_clip_x=%b mirror_clip_y=%b "
+                           "mirror_clip_z=%b "
+                           "clip_dist=%f use_axis_x=%b use_axis_y=%b use_axis_z=%b",
+                           BM_ELEM_SELECT,
+                           fac,
+                           mirrx,
+                           mirry,
+                           mirrz,
+                           clip_dist,
+                           xaxis,
+                           yaxis,
+                           zaxis))
+        {
+          continue;
+        }
       }
+    }
+    else {
+      edbm_smooth_volume_preserve(em->bm,
+                                  method,
+                                  fac,
+                                  repeat,
+                                  taubin_mu,
+                                  hc_alpha,
+                                  hc_beta,
+                                  use_cotangent,
+                                  xaxis,
+                                  yaxis,
+                                  zaxis,
+                                  mirrx,
+                                  mirry,
+                                  mirrz,
+                                  clip_dist);
     }
 
     /* NOTE: redundant calculation could be avoided if the EDBM API could skip calculation. */
@@ -2840,22 +3078,100 @@ static wmOperatorStatus edbm_do_smooth_vertex_exec(bContext *C, wmOperator *op)
   return tot_selected ? OPERATOR_FINISHED : OPERATOR_CANCELLED;
 }
 
+static void edbm_vertices_smooth_ui(bContext * /*C*/, wmOperator *op)
+{
+  ui::Layout &layout = *op->layout;
+  layout.use_property_split_set(true);
+
+  layout.prop(op->ptr, "method", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+  layout.prop(op->ptr, "factor", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+
+  const int method = RNA_enum_get(op->ptr, "method");
+  if (method == SMOOTH_METHOD_TAUBIN) {
+    layout.prop(op->ptr, "taubin_mu", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+  }
+  else if (method == SMOOTH_METHOD_HC) {
+    layout.prop(op->ptr, "hc_alpha", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+    layout.prop(op->ptr, "hc_beta", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+  }
+  if (ELEM(method, SMOOTH_METHOD_TAUBIN, SMOOTH_METHOD_HC)) {
+    layout.prop(op->ptr, "use_cotangent_weights", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+  }
+
+  layout.prop(op->ptr, "repeat", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+
+  ui::Layout &row = layout.row(true, IFACE_("Axis"));
+  row.prop(op->ptr, "xaxis", ui::ITEM_R_TOGGLE, std::nullopt, ICON_NONE);
+  row.prop(op->ptr, "yaxis", ui::ITEM_R_TOGGLE, std::nullopt, ICON_NONE);
+  row.prop(op->ptr, "zaxis", ui::ITEM_R_TOGGLE, std::nullopt, ICON_NONE);
+}
+
 void MESH_OT_vertices_smooth(wmOperatorType *ot)
 {
+  PropertyRNA *prop;
+
   /* identifiers */
   ot->name = "Smooth Vertices";
-  ot->description = "Flatten angles of selected vertices";
+  ot->description = "Smooth selected vertices using simple, Taubin, or HC methods";
   ot->idname = "MESH_OT_vertices_smooth";
 
   /* API callbacks. */
   ot->exec = edbm_do_smooth_vertex_exec;
   ot->poll = ED_operator_editmesh;
+  ot->ui = edbm_vertices_smooth_ui;
 
   /* flags */
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 
+  RNA_def_enum(
+      ot->srna, "method", smooth_method_items, SMOOTH_METHOD_SIMPLE, "Method", "Smoothing algorithm");
+
   ot->prop = RNA_def_float_factor(
       ot->srna, "factor", 0.0f, -10.0f, 10.0f, "Smoothing", "Smoothing factor", 0.0f, 1.0f);
+
+  prop = RNA_def_float_factor(ot->srna,
+                              "taubin_mu",
+                              -0.53f,
+                              -1.0f,
+                              0.0f,
+                              "Shrinkage Compensation",
+                              "Negative second-pass factor (Mu) that counters the shrinkage "
+                              "caused by the smoothing pass",
+                              -1.0f,
+                              0.0f);
+  RNA_def_property_ui_range(prop, -1.0f, 0.0f, 0.01f, 3);
+
+  prop = RNA_def_float_factor(ot->srna,
+                              "hc_alpha",
+                              0.0f,
+                              0.0f,
+                              1.0f,
+                              "Original Bias",
+                              "Bias of the per-vertex pull-back toward the original positions "
+                              "(Alpha); 0 pulls toward the previous iteration, 1 pulls toward the "
+                              "original mesh",
+                              0.0f,
+                              1.0f);
+  RNA_def_property_ui_range(prop, 0.0f, 1.0f, 0.01f, 3);
+
+  prop = RNA_def_float_factor(ot->srna,
+                              "hc_beta",
+                              0.5f,
+                              0.0f,
+                              1.0f,
+                              "Pull-back Strength",
+                              "Strength of the volume-preserving pull-back correction (Beta)",
+                              0.0f,
+                              1.0f);
+  RNA_def_property_ui_range(prop, 0.0f, 1.0f, 0.01f, 3);
+
+  RNA_def_boolean(ot->srna,
+                  "use_cotangent_weights",
+                  false,
+                  "Cotangent Weights",
+                  "Weight each edge by its cotangent, giving more uniform smoothing on irregular "
+                  "triangulations");
+
   RNA_def_int(
       ot->srna, "repeat", 1, 1, 1000, "Repeat", "Number of times to smooth the mesh", 1, 100);
 
