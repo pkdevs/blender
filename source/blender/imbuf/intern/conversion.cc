@@ -20,7 +20,6 @@
 #include "MEM_guardedalloc.h"
 
 #include "OCIO_colorspace.hh"
-#include <memory>
 
 namespace blender {
 

@@ -373,6 +373,9 @@ class ImageFieldsFunction : public mf::MultiFunction {
     else if (image_buffer_->byte_data()) {
       sample_buffer(image_buffer_->byte_data(), mask, vectors, width, height, color_data);
     }
+    else{
+      BLI_assert_unreachable();
+    }
 
     int alpha_mode = image_.alpha_mode;
     if (IMB_colormanagement_space_name_is_data(image_.colorspace_settings.name)) {
