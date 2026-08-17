@@ -93,7 +93,8 @@ struct FresnelGeneralizedSchlick : public FresnelThinFilmed {
   float exponent;
 };
 
-struct FresnelF82Tint : public FresnelThinFilmed {  /* Perpendicular reflectivity. */
+struct FresnelF82Tint : public FresnelThinFilmed {
+  /* Perpendicular reflectivity. */
   Spectrum f0;
   /* Precomputed (1-cos)^6 factor for edge tint. */
   Spectrum b;
@@ -468,7 +469,7 @@ ccl_device_forceinline FresnelCoeff microfacet_fresnel(KernelGlobals kg,
       coeff *= generalized_schlick_fresnel(kg, fresnel, bsdf->ior, cos_theta_i, r_cos_theta_t);
       break;
     }
-    case MicrofacetFresnel::DIELECTRIC_TINT:{
+    case MicrofacetFresnel::DIELECTRIC_TINT: {
       Spectrum F;
       ccl_private FresnelThinFilmed *fresnel_thin_filmed = (ccl_private FresnelThinFilmed *)
                                                                bsdf->fresnel;
