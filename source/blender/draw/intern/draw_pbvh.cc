@@ -1252,11 +1252,11 @@ static std::array<T, 4> interpolate_subdivided_irregular_face(const Span<int> co
 }
 
 template<typename T>
-static void interpolate_grids_for_flat_layout(const SubdivCCG &subdiv_ccg,
-                                              const Span<int> corner_verts,
-                                              Span<int> grids,
-                                              gpu::VertBuf &vbo,
-                                              Span<T> src)
+static void interpolate_vert_data_for_flat_layout(const SubdivCCG &subdiv_ccg,
+                                                  const Span<int> corner_verts,
+                                                  Span<int> grids,
+                                                  gpu::VertBuf &vbo,
+                                                  Span<T> src)
 {
   using Converter = AttributeConverter<T>;
   using VBOType = typename Converter::VBOType;
@@ -1344,11 +1344,11 @@ static void interpolate_grids_for_flat_layout(const SubdivCCG &subdiv_ccg,
 }
 
 template<typename T>
-static void interpolate_grids_for_standard_layout(const SubdivCCG &subdiv_ccg,
-                                                  const Span<int> corner_verts,
-                                                  Span<int> grids,
-                                                  gpu::VertBuf &vbo,
-                                                  Span<T> src)
+static void interpolate_vert_data_for_standard_layout(const SubdivCCG &subdiv_ccg,
+                                                      const Span<int> corner_verts,
+                                                      Span<int> grids,
+                                                      gpu::VertBuf &vbo,
+                                                      Span<T> src)
 {
   using Converter = AttributeConverter<T>;
   using VBOType = typename Converter::VBOType;
@@ -1398,12 +1398,12 @@ static void interpolate_grids_for_standard_layout(const SubdivCCG &subdiv_ccg,
   });
 }
 
-BLI_NOINLINE static void fill_generic_attribute_grids(const Object &object,
-                                                      const OrigMeshData &orig_mesh_data,
-                                                      const BitSpan &use_flat_layout,
-                                                      const IndexMask &node_mask,
-                                                      const StringRef name,
-                                                      const MutableSpan<gpu::VertBufPtr> vbos)
+BLI_NOINLINE static void fill_generic_vert_attribute_grids(const Object &object,
+                                                           const OrigMeshData &orig_mesh_data,
+                                                           const BitSpan &use_flat_layout,
+                                                           const IndexMask &node_mask,
+                                                           const StringRef name,
+                                                           const MutableSpan<gpu::VertBufPtr> vbos)
 {
   const bke::pbvh::Tree &pbvh = *bke::object::pbvh_get(object);
   const Span<bke::pbvh::GridsNode> nodes = pbvh.nodes<bke::pbvh::GridsNode>();
@@ -1420,11 +1420,11 @@ BLI_NOINLINE static void fill_generic_attribute_grids(const Object &object,
           if constexpr (!std::is_void_v<typename AttributeConverter<T>::VBOType>) {
             const VArraySpan<T> src = attr.varray.typed<T>();
             if (use_flat_layout[i]) {
-              interpolate_grids_for_flat_layout<T>(
+              interpolate_vert_data_for_flat_layout<T>(
                   subdiv_ccg, corner_verts, nodes[i].grids(), *vbos[i], src);
             }
             else {
-              interpolate_grids_for_standard_layout<T>(
+              interpolate_vert_data_for_standard_layout<T>(
                   subdiv_ccg, corner_verts, nodes[i].grids(), *vbos[i], src);
             }
           }
@@ -1464,9 +1464,35 @@ BLI_NOINLINE static void update_generic_attribute_grids(const Object &object,
     return;
   }
 
-  ensure_vbos_allocated_grids(
-      object, attribute_format(orig_mesh_data, name, data_type), use_flat_layout, node_mask, vbos);
-  fill_generic_attribute_grids(object, orig_mesh_data, use_flat_layout, node_mask, name, vbos);
+  switch (attr.domain) {
+    case bke::AttrDomain::Point:
+      ensure_vbos_allocated_grids(object,
+                                  attribute_format(orig_mesh_data, name, data_type),
+                                  use_flat_layout,
+                                  node_mask,
+                                  vbos);
+      fill_generic_vert_attribute_grids(
+          object, orig_mesh_data, use_flat_layout, node_mask, name, vbos);
+      break;
+    case bke::AttrDomain::Corner:
+      ensure_vbos_allocated_grids(object,
+                                  attribute_format(orig_mesh_data, name, data_type),
+                                  use_flat_layout,
+                                  node_mask,
+                                  vbos);
+      /* TODO: Add me */
+      break;
+    case bke::AttrDomain::Face:
+      ensure_vbos_allocated_grids(object,
+                                  attribute_format(orig_mesh_data, name, data_type),
+                                  use_flat_layout,
+                                  node_mask,
+                                  vbos);
+      /* TODO: Add me */
+      break;
+    default:
+      BLI_assert_unreachable();
+  }
 }
 
 BLI_NOINLINE static void update_positions_bmesh(const Object &object,
