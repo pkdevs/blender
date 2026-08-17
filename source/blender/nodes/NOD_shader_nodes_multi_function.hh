@@ -6,11 +6,18 @@
 
 #include "FN_user_data.hh"
 
+#include "NOD_geometry_nodes_warning.hh"
+
 namespace blender::nodes {
 
 class ShaderNodesMultiFunctionUserData : public fn::UserData {
  public:
-  Vector<std::string> error_messages;
+  struct Warning {
+    NodeWarningType type;
+    std::string message;
+  };
+
+  Vector<Warning> warnings;
 };
 
 }  // namespace blender::nodes
