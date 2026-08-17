@@ -187,6 +187,17 @@ void forward_lighting_eval(const ViewMatrices view,
       }
     }
   }
+
+#if defined(MAT_LIGHT_ITER)
+  // TODO: Why is this darker than hybrid?
+  if (g_light_accumulation_count > 0) {
+    g_diffuse_color /= float(g_light_accumulation_count);
+    g_specular_color /= float(g_light_accumulation_count);
+    radiance_direct += g_diffuse_color * g_diffuse_light;
+    radiance_direct += g_specular_color * g_specular_light;
+  }
+#endif
+
   /* Light clamping. */
   float clamp_direct = uni.uniform_buf.clamp.surface_direct;
   float clamp_indirect = uni.uniform_buf.clamp.surface_indirect;

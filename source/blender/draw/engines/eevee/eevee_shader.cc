@@ -857,6 +857,9 @@ static SlotAllocator add_pipeline_create_info(gpu::shader::ShaderCreateInfo &inf
         case MAT_PIPE_FORWARD:
           pipeline_info_name = "eevee_surf_forward_infos_";
           info.define("closure_to_rgba", "closure_to_rgba_forward");
+          if (use_shader_to_rgba) {
+            info.define("MAT_LIGHT_ITER");
+          }
           info.compilation_constant(gpu::shader::Type::bool_t, "use_velocity", false);
           info.name_ += "_forward";
           /* Until every vertex shader are ported, we need to bridge the gap here by defining the
