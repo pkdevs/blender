@@ -229,8 +229,7 @@ ProjectVariable *BlenderProject::new_variable(StringRef name, ProjectVariableTyp
 {
   const std::string new_name = ensure_is_valid_project_variable_name(name);
 
-  ProjectVariable *var = MEM_new<ProjectVariable>("ProjectVariable", "", type);
-  this->variables.append(std::unique_ptr<ProjectVariable>(var));
+  this->variables.append(std::make_unique<ProjectVariable>("", type));
   this->rename_variable(this->variables.size() - 1, new_name); /* Also ensures name uniqueness. */
 
   this->is_dirty = true;
