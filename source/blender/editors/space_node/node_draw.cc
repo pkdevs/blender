@@ -2224,15 +2224,18 @@ static void node_add_error_message_button(const TreeDrawContext &tree_draw_ctx,
     const int icon = nodes::node_warning_type_icon(highest_priority);
     ui::Button *but = add_error_message_button(block, rect, icon, icon_offset);
     button_func_quick_tooltip_set(but, [errors = *errors](const ui::Button * /*but*/) {
-      std::string tooltip;
+      Vector<std::string> tooltip_lines;
       for (const int i : errors.index_range()) {
-        const StringRefNull error = errors[i].first;
-        tooltip += error.c_str();
-        if (i + 1 < errors.size()) {
-          tooltip += ".\n";
+        std::string error = errors[i].first;
+        if (error.empty()) {
+          continue;
         }
+        if (!error.ends_with(".")) {
+          error += ".";
+        }
+        tooltip_lines.append(std::move(error));
       }
-      return tooltip;
+      return fmt::format("{}", fmt::join(tooltip_lines, "\n"));
     });
   }
 }
