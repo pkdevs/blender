@@ -48,13 +48,13 @@ def _json_converter():
 
 
 def reset_cache():
-    """Resets updates cache, ignored versions are not longer remember, and updates should downloaded again."""
+    """Resets the updates cache, ignored versions are not longer remember, and updates should be downloaded again."""
     global _cache
     _cache = _cache_default_init()
 
 
 def _update_blender_tracks():
-    """Updates blender tracks"""
+    """Update blender tracks"""
     bpy.types.WindowManager.blender_updates_clear_tracks()
 
     def load_track(track: models.VersionUpdate, track_type: str):
@@ -103,7 +103,7 @@ def load_cache_file():
     _cache.ignored_versions.current_release = max(cache.ignored_versions.current_release, _app_version)
     _cache.ignored_versions.latest_lts = max(cache.ignored_versions.latest_lts, _app_version)
     _cache.ignored_versions.latest = max(cache.ignored_versions.latest, _app_version)
-    # Make sure to ignore in the latest track versions ignored in the latest lst track
+    # Make sure to ignore in the latest track versions ignored in the latest LTS track
     _cache.ignored_versions.latest = max(_cache.ignored_versions.latest, _cache.ignored_versions.latest_lts)
 
     _cache.last_time_check = cache.last_time_check
@@ -118,7 +118,7 @@ def load_cache_file():
 
 
 def is_cache_expired() -> bool:
-    """Checks if the updates cache is expired, which expires every 24 hours."""
+    """Checks if the updates cache is expired, which happens every 24 hours."""
     return _cache.last_time_check < (datetime.now() - timedelta(days=1))
 
 
@@ -136,13 +136,13 @@ def _load_update(update: models.VersionUpdate):
 
     latest_lts_min = max(tracks.latest_lts.version if tracks.latest_lts else _app_version, ignore.latest_lts)
 
-    # Latest track should be newer than the latest lst track
+    # Latest track should be newer than the latest LTS track
     latest_min = max(
         tracks.latest.version if tracks.latest else _app_version,
         ignore.current_release,
         latest_lts_min)
 
-    # Add the update int the current release track if is newer that the current listed/ignored.
+    # Add the update in the current release track if is newer that the current listed/ignored.
     if _app_version.version == update.version:
         if not (current_min < update.version):
             return
@@ -165,7 +165,7 @@ def _load_update(update: models.VersionUpdate):
 
 
 def write_cache_file():
-    """Write the updates cache into the dist in json format."""
+    """Write the updates cache into the disk in json format."""
     def datetime_default_formatter(obj) -> str:
         """datetime timestamp formatter"""
         if isinstance(obj, datetime):
