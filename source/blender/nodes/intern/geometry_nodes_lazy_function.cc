@@ -970,15 +970,25 @@ class LazyFunctionForViewerNode : public LazyFunction {
 class LazyFunctionForViewerInputUsage : public LazyFunction {
  private:
   const lf::FunctionNode &lf_viewer_node_;
+  const bool is_debug_view_;
   const bool is_persistent_debug_view_;
 
  public:
   LazyFunctionForViewerInputUsage(const lf::FunctionNode &lf_viewer_node,
+                                  const bool is_debug_view,
                                   const bool is_persistent_debug_view)
-      : lf_viewer_node_(lf_viewer_node), is_persistent_debug_view_(is_persistent_debug_view)
+      : lf_viewer_node_(lf_viewer_node),
+        is_debug_view_(is_debug_view),
+        is_persistent_debug_view_(is_persistent_debug_view)
   {
     debug_name_ = "Viewer Input Usage";
+    if (is_debug_view_) {
+      inputs_.append_as("Show", CPPType::get<SocketValueVariant>());
+    }
     outputs_.append_as("Viewer is Used", CPPType::get<bool>());
+    if (is_debug_view_) {
+      outputs_.append_as("Viewer Data is Used", CPPType::get<bool>());
+    }
   }
 
   void execute_impl(lf::Params &params, const lf::Context &context) const override
@@ -996,6 +1006,24 @@ class LazyFunctionForViewerInputUsage : public LazyFunction {
       viewer_is_used |= user_data->call_data->modifier_data->show_debug_views;
     }
     params.set_output(0, viewer_is_used);
+
+    if (!is_debug_view_) {
+      return;
+    }
+    if (!viewer_is_used) {
+      params.set_output(1, false);
+      return;
+    }
+
+    const SocketValueVariant *show_variant =
+        params.try_get_input_data_ptr_or_request<SocketValueVariant>(0);
+    if (!show_variant) {
+      return;
+    }
+    /* Field values and other non-single values cannot be evaluated here. Keep the data inputs
+     * conservatively used in that case. */
+    const bool show = !show_variant->is_single() || show_variant->get<bool>();
+    params.set_output(1, show);
   }
 };
 
@@ -3437,7 +3465,8 @@ struct GeometryNodesLazyFunctionBuilder {
   void build_viewer_node(const bNode &bnode, BuildGraphParams &graph_params)
   {
     const NodeGeometryViewer &storage = *static_cast<const NodeGeometryViewer *>(bnode.storage);
-    const bool is_persistent_debug_view = (storage.flag & NODE_GEO_VIEWER_FLAG_DEBUG_VIEW) &&
+    const bool is_debug_view = storage.flag & NODE_GEO_VIEWER_FLAG_DEBUG_VIEW;
+    const bool is_persistent_debug_view = is_debug_view &&
                                           !tree_zones_->get_zone_by_node(bnode.identifier);
     auto &lazy_function = scope_.construct<LazyFunctionForViewerNode>(
         bnode, mapping_->lf_index_by_bsocket);
@@ -3456,14 +3485,27 @@ struct GeometryNodesLazyFunctionBuilder {
 
     {
       auto &usage_lazy_function = scope_.construct<LazyFunctionForViewerInputUsage>(
-          lf_viewer_node, is_persistent_debug_view);
+          lf_viewer_node, is_debug_view, is_persistent_debug_view);
       lf::FunctionNode &lf_usage_node = graph_params.lf_graph.add_function(usage_lazy_function);
 
-      for (const bNodeSocket *bsocket : bnode.input_sockets().drop_back(1)) {
-        if (!bsocket->is_available()) {
-          continue;
+      if (is_debug_view) {
+        const bNodeSocket &show_socket = bnode.input_socket(storage.items_num);
+        graph_params.lf_inputs_by_bsocket.add(&show_socket, &lf_usage_node.input(0));
+        graph_params.usage_by_bsocket.add(&show_socket, &lf_usage_node.output(0));
+        for (const int i : IndexRange(storage.items_num)) {
+          const bNodeSocket &bsocket = bnode.input_socket(i);
+          if (bsocket.is_available()) {
+            graph_params.usage_by_bsocket.add(&bsocket, &lf_usage_node.output(1));
+          }
         }
-        graph_params.usage_by_bsocket.add(bsocket, &lf_usage_node.output(0));
+      }
+      else {
+        for (const bNodeSocket *bsocket : bnode.input_sockets().drop_back(1)) {
+          if (!bsocket->is_available()) {
+            continue;
+          }
+          graph_params.usage_by_bsocket.add(bsocket, &lf_usage_node.output(0));
+        }
       }
     }
   }

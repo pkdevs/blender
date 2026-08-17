@@ -23,6 +23,7 @@
 #include "NOD_socket_items_ops.hh"
 #include "NOD_socket_items_ui.hh"
 #include "NOD_socket_search_link.hh"
+#include "NOD_socket_usage_inference.hh"
 
 #include "UI_interface_layout.hh"
 #include "UI_resources.hh"
@@ -299,11 +300,21 @@ static void node_declare(NodeDeclarationBuilder &b)
     }
     input_decl.structure_type(StructureType::Dynamic);
     input_decl.custom_draw([](CustomSocketDrawParams &params) { draw_input_socket(params); });
+    if (storage.flag & NODE_GEO_VIEWER_FLAG_DEBUG_VIEW) {
+      input_decl.usage_inference(
+          [](const socket_usage_inference::SocketUsageParams &params) -> std::optional<bool> {
+            return params.bool_input_may_be("Show"_ustr, true);
+          });
+    }
   }
 
   b.add_input<decl::Bool>("Show"_ustr)
       .default_value(true)
-      .available(storage.flag & NODE_GEO_VIEWER_FLAG_DEBUG_VIEW);
+      .available(storage.flag & NODE_GEO_VIEWER_FLAG_DEBUG_VIEW)
+      .usage_inference(
+          [](const socket_usage_inference::SocketUsageParams & /*params*/) -> std::optional<bool> {
+            return true;
+          });
 
   b.add_input<decl::Extend>(""_ustr, "__extend__"_ustr).structure_type(StructureType::Dynamic);
 }

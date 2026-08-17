@@ -322,6 +322,42 @@ class GeometryNodesDebugViewFixtureTest(unittest.TestCase):
         root_b_show.default_value = True
         self.assertEqual(self.evaluate(), 8)
 
+    def test_viewer_show_gates_data_evaluation(self):
+        self.modifier.show_debug_views = True
+        viewer = self.root_group.nodes["Root Debug B"]
+        show_socket = viewer.inputs["Show"]
+
+        show_socket.default_value = False
+        self.assertEqual(self.evaluate(), 8)
+        self.assertNotIn("ROOT_DEBUG_B_EVALUATED", self.warning_messages())
+
+        show_socket.default_value = True
+        self.assertEqual(self.evaluate(), 8)
+        self.assertIn("ROOT_DEBUG_B_EVALUATED", self.warning_messages())
+
+    def test_group_input_show_gates_nested_viewer_data(self):
+        interface_socket = self.nested_group.interface.new_socket(
+            name="Show Debug", in_out='INPUT', socket_type='NodeSocketBool')
+        interface_socket.default_value = False
+
+        group_input = self.nested_group.nodes["Nested Group Input"]
+        viewer = self.nested_group.nodes["Nested Debug"]
+        self.nested_group.links.new(group_input.outputs["Show Debug"], viewer.inputs["Show"])
+
+        group_node = next(
+            node for node in self.root_group.nodes
+            if node.bl_idname == "GeometryNodeGroup" and node.node_tree == self.nested_group)
+        self.modifier.show_debug_views = True
+
+        group_node.inputs["Show Debug"].default_value = False
+        self.assertEqual(self.evaluate(), 8)
+        warnings = self.warning_messages()
+        self.assertNotIn("NESTED_DEBUG_EVALUATED", warnings)
+
+        group_node.inputs["Show Debug"].default_value = True
+        self.assertEqual(self.evaluate(), 8)
+        self.assertIn("NESTED_DEBUG_EVALUATED", self.warning_messages())
+
 
 class GeometryNodesDebugViewSimulationZoneFixtureTest(unittest.TestCase):
     def setUp(self):
