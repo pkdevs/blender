@@ -78,18 +78,20 @@
 #    define _MM_FLUSH_ZERO_ON 24
 #    define __get_fpcr(__fpcr) __asm__ __volatile__("mrs %0,fpcr" : "=r"(__fpcr))
 #    define __set_fpcr(__fpcr) __asm__ __volatile__("msr fpcr,%0" : : "ri"(__fpcr))
-#    define SIMD_SET_FLUSH_TO_ZERO set_fz(_MM_FLUSH_ZERO_ON);
-#    define SIMD_GET_FLUSH_TO_ZERO get_fz(_MM_FLUSH_ZERO_ON)
+#    define SIMD_SET_FLUSH_TO_ZERO blender::set_fz(_MM_FLUSH_ZERO_ON);
+#    define SIMD_GET_FLUSH_TO_ZERO blender::get_fz(_MM_FLUSH_ZERO_ON)
 #  else
 #    define _MM_FLUSH_ZERO_ON 24
 #    define __get_fpcr(__fpcr) __fpcr = _ReadStatusReg(0x5A20)
 #    define __set_fpcr(__fpcr) _WriteStatusReg(0x5A20, __fpcr)
-#    define SIMD_SET_FLUSH_TO_ZERO set_fz(_MM_FLUSH_ZERO_ON);
-#    define SIMD_GET_FLUSH_TO_ZERO get_fz(_MM_FLUSH_ZERO_ON)
+#    define SIMD_SET_FLUSH_TO_ZERO blender::set_fz(_MM_FLUSH_ZERO_ON);
+#    define SIMD_GET_FLUSH_TO_ZERO blender::get_fz(_MM_FLUSH_ZERO_ON)
 #  endif
 #else
 #  define SIMD_SET_FLUSH_TO_ZERO
 #endif
+
+namespace blender {
 
 #if (defined(__aarch64__) || defined(_M_ARM64)) && !defined(_MM_SET_FLUSH_ZERO_MODE)
 inline int set_fz(const uint32_t flag)
@@ -110,8 +112,6 @@ inline int get_fz(const uint32_t flag)
 }
 #endif
 
-namespace blender {
-
 /**
  * Enable flush-to-zero and denormals-are-zero for the lifetime of the object, then restore the
  * previous state. This is the mode #BLI_task_scheduler_init leaves all threads in, so this is
@@ -124,6 +124,8 @@ class ScopedFlushToZero {
 /* Same platforms that use the `_mm_*` intrinsics for #SIMD_SET_FLUSH_TO_ZERO above. */
 #if defined(__x86_64__) || defined(_M_X64) || \
     ((defined(__aarch64__) || defined(_M_ARM64)) && defined(_MM_SET_FLUSH_ZERO_MODE))
+  unsigned int orig_csr_;
+
  public:
   ScopedFlushToZero() : orig_csr_(_mm_getcsr())
   {
@@ -135,8 +137,6 @@ class ScopedFlushToZero {
     _mm_setcsr(orig_csr_);
   }
 
- private:
-  unsigned int orig_csr_;
 #endif
 };
 
