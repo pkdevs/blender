@@ -8,8 +8,8 @@
  * Primitive shapes.
  */
 
-#include <algorithm>
 #include "MEM_guardedalloc.h"
+#include <algorithm>
 
 #include "BLI_math_base_safe.hh"
 #include "BLI_math_matrix_c.hh"
