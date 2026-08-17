@@ -53,6 +53,7 @@ set(INC
   intern
   shader
   texture
+  function/include
   geometry/include
   ../animrig
   ../compositor
@@ -105,7 +106,9 @@ set(SRC
   intern/node_tree_defaults.cc
   intern/node_util.cc
   intern/partial_eval.cc
+  intern/scene_compositor_effect_inputs_srna.cc
   intern/shader_nodes_inline.cc
+  intern/socket_items_name_util.cc
   intern/socket_search_link.cc
   intern/socket_usage_inference.cc
   intern/socket_value_inference.cc
@@ -159,13 +162,16 @@ set(SRC
   NOD_partial_eval.hh
   NOD_register.hh
   NOD_rna_define.hh
+  NOD_scene_compositor_effect_inputs_srna.hh
   NOD_shader.h
   NOD_shader_nodes_inline.hh
+  NOD_shader_nodes_multi_function.hh
   NOD_socket.hh
   NOD_socket_declarations.hh
   NOD_socket_declarations_geometry.hh
   NOD_socket_items.hh
   NOD_socket_items_blend.hh
+  NOD_socket_items_name_util.hh
   NOD_socket_items_ops.hh
   NOD_socket_items_ui.hh
   NOD_socket_search_link.hh
