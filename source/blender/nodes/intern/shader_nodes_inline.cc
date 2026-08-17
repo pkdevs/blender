@@ -1203,8 +1203,8 @@ class ShaderNodesInliner {
       /* This limitation may be lifted in the future. Menu Switch nodes could be supported natively
        * by render engines or we convert them to a bunch of mix nodes. */
       this->store_socket_value_fallback(socket);
-      this->report_error(
-          node, TIP_("Menu value has to be a constant value"), NodeWarningType::Error);
+      this->report_required_constant_input_or_backtrack(
+          node, TIP_("Menu value has to be a constant value"));
       return;
     }
     const MenuValue menu_value = std::get<MenuValue>(menu_value_opt->value);
@@ -1353,8 +1353,8 @@ class ShaderNodesInliner {
     const std::optional<eNodeSocketDatatype> internal_mix_type =
         this->get_internal_mix_socket_type(storage.data_type);
     if (!internal_mix_type) {
-      this->report_error(
-          node, TIP_("Index must be a constant value for this data type"), NodeWarningType::Error);
+      this->report_required_constant_input_or_backtrack(
+          node, TIP_("Index must be a constant value for this data type"));
       this->store_socket_value_fallback(socket);
       return;
     }
@@ -1451,9 +1451,8 @@ class ShaderNodesInliner {
     const std::optional<eNodeSocketDatatype> internal_mix_type =
         this->get_internal_mix_socket_type(storage.input_type);
     if (!internal_mix_type) {
-      this->report_error(node,
-                         TIP_("Switch must be a constant value for this data type"),
-                         NodeWarningType::Error);
+      this->report_required_constant_input_or_backtrack(
+          node, TIP_("Switch must be a constant value for this data type"));
       this->store_socket_value_fallback(socket);
       return;
     }
