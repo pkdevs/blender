@@ -2,3 +2,4 @@ Referenced by commit c4e029c4cae1bce25941b276d80dc711afded775, Fix (unreported) 
 Referenced by issue #153986, Objects from appended scene are added to current scene
 Referenced by issue #154707, Offset and Linking issues when asset-dropping Instance Collection Empty Assets using Append Import Method
 Referenced by issue #155006, Offset and Linking issues when asset-dropping **nested** Instance Collection Empty Assets using Append Import Method
+Referenced by issue #162729, Appending compositor nodes also imports hidden selected objects
