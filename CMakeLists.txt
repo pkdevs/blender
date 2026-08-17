@@ -548,6 +548,8 @@ if(UNIX AND (NOT APPLE OR WITH_PYTHON_MODULE))
 Install redistributable runtime, otherwise install into CMAKE_INSTALL_PREFIX"
     ON
   )
+else()
+  set(WITH_INSTALL_PORTABLE ON)
 endif()
 
 option(WITH_PYTHON_INSTALL "Copy system Python into the Blender install directory" ON)
@@ -1346,7 +1348,10 @@ endif()
 
 # don't store paths to libs for portable distribution
 if(WITH_INSTALL_PORTABLE)
-  set(CMAKE_SKIP_BUILD_RPATH TRUE)
+  # TODO: match the CMake option, this check is historic.
+  if(UNIX AND (NOT APPLE OR WITH_PYTHON_MODULE))
+    set(CMAKE_SKIP_BUILD_RPATH TRUE)
+  endif()
 endif()
 
 if(UNIX AND NOT (APPLE OR HAIKU))
