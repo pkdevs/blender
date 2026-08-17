@@ -66,21 +66,6 @@ namespace nodes::eval_log {
 
 using fn::GField;
 
-struct NodeWarning {
-  NodeWarningType type;
-  std::string message;
-
-  NodeWarning(NodeWarningType type, StringRef message) : type(type), message(message) {}
-  NodeWarning(const Report &report);
-
-  uint64_t hash() const
-  {
-    return get_default_hash(this->type, this->message);
-  }
-
-  friend bool operator==(const NodeWarning &a, const NodeWarning &b) = default;
-};
-
 enum class NamedAttributeUsage {
   None = 0,
   Read = 1 << 0,
