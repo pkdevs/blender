@@ -105,7 +105,7 @@
 
 #include "editors/sculpt_paint/mesh/brushes/brushes.hh"
 #include "mesh_brush_common.hh"
-#include "mesh_stroke_common.hh"
+#include "mesh_paint.hh"
 
 namespace blender {
 
@@ -2541,14 +2541,16 @@ bool node_in_cylinder(const DistRayAABB_Precalc &ray_dist_precalc,
 
 bool node_in_box(const float4x4 &mat,
                  const Bounds<float3> &bounds,
-                 const float3 brush_center,
-                 const float3 brush_half_lengths)
+                 const float3 &brush_center,
+                 const float3 &brush_half_lengths,
+                 const bool test_z_axis)
 {
   const float3 node_center = math::transform_point(mat, (bounds.max + bounds.min) * 0.5f);
   const float3 center_diff = brush_center - node_center;
 
   const float3 node_half_lengths = (bounds.max - bounds.min) * 0.5f;
 
+  /* Gets the axes of object space described in brush space. */
   const float3 &node_x_axis = mat.x_axis();
   const float3 &node_y_axis = mat.y_axis();
   const float3 &node_z_axis = mat.z_axis();
@@ -2563,8 +2565,13 @@ bool node_in_box(const float4x4 &mat,
     return projection > radius1 + radius2;
   };
 
-  const std::array<float3, 3> brush_axes = {
-      float3{1.0f, 0.0f, 0.0f}, float3{0.0f, 1.0f, 0.0f}, float3{0.0f, 0.0f, 1.0f}};
+  const blender::Array<float3> brush_axes = test_z_axis ?
+                                                blender::Array<float3>{float3{1.0f, 0.0f, 0.0f},
+                                                                       float3{0.0f, 1.0f, 0.0f},
+                                                                       float3{0.0f, 0.0f, 1.0f}} :
+                                                blender::Array<float3>{float3{1.0f, 0.0f, 0.0f},
+                                                                       float3{0.0f, 1.0f, 0.0f}};
+
   const std::array<float3, 3> node_axes = {node_x_axis, node_y_axis, node_z_axis};
 
   /**
@@ -2582,16 +2589,18 @@ bool node_in_box(const float4x4 &mat,
 
   /* 2. Test axes aligned with the node bounds. */
   for (const float3 &axis : node_axes) {
-    if (axis_separates_boxes(axis)) {
+    if (axis_separates_boxes(float3(axis.x, axis.y, axis.z * test_z_axis))) {
       return false;
     }
   }
 
   /* 3. Test all their cross products. */
-  for (const float3 &brush_axis : brush_axes) {
-    for (const float3 &node_axis : node_axes) {
-      if (axis_separates_boxes(math::cross(brush_axis, node_axis))) {
-        return false;
+  if (test_z_axis) {
+    for (const float3 &brush_axis : brush_axes) {
+      for (const float3 &node_axis : node_axes) {
+        if (axis_separates_boxes(math::cross(brush_axis, node_axis))) {
+          return false;
+        }
       }
     }
   }
@@ -2600,9 +2609,9 @@ bool node_in_box(const float4x4 &mat,
   return true;
 }
 
-bool node_in_box_positive_z(const Bounds<float3> &bounds, const float4x4 &mat)
+bool node_in_box_positive_z(const float4x4 &mat, const Bounds<float3> &bounds)
 {
-  return node_in_box(mat, bounds, float3(0.0f, 0.0f, 0.5f), float3(1.0f, 1.0f, 0.5f));
+  return node_in_box(mat, bounds, float3(0.0f, 0.0f, 0.5f), float3(1.0f, 1.0f, 0.5f), true);
 }
 
 static IndexMask pbvh_gather_cursor_update(Object &ob, bool use_original, IndexMaskMemory &memory)
@@ -2665,15 +2674,29 @@ static IndexMask pbvh_gather_generic_cube(Object &ob,
     return {};
   }
   const bool ignore_ineffective = brush.sculpt_brush_type != SCULPT_BRUSH_TYPE_MASK;
-  const IndexMask cube_mask = bke::pbvh::search_nodes(
-      pbvh, memory, [&](const bke::pbvh::Node &node) {
+
+  switch (brush.falloff_shape) {
+    case PAINT_FALLOFF_SHAPE_SPHERE:
+      return bke::pbvh::search_nodes(pbvh, memory, [&](const bke::pbvh::Node &node) {
         if (ignore_ineffective && node_fully_masked_or_hidden(node)) {
           return false;
         }
         const Bounds<float3> &bounds = use_original ? node.bounds_orig() : node.bounds();
         return node_in_box(brush_local_mat, bounds);
       });
-  return cube_mask;
+
+    case PAINT_FALLOFF_SHAPE_TUBE:
+      return bke::pbvh::search_nodes(pbvh, memory, [&](const bke::pbvh::Node &node) {
+        if (ignore_ineffective && node_fully_masked_or_hidden(node)) {
+          return false;
+        }
+        const Bounds<float3> &bounds = use_original ? node.bounds_orig() : node.bounds();
+        return node_in_box(brush_local_mat, bounds, float3(0.0f), float3(1.0f, 1.0f, 1.0f), false);
+      });
+  }
+
+  BLI_assert_unreachable();
+  return {};
 }
 
 IndexMask gather_nodes(const bke::pbvh::Tree &pbvh,
@@ -2803,11 +2826,33 @@ static void calc_local_from_screen(const ViewContext &vc,
 
 static void calc_brush_local_mat(const float rotation,
                                  const Object &ob,
-                                 const float3 &sculpt_normal,
+                                 const float3 &tip_normal,
                                  float local_mat[4][4],
                                  float local_mat_inv[4][4])
 {
   const StrokeCache *cache = ob.runtime->sculpt_session->cache;
+
+  calc_brush_local_mat(rotation,
+                       cache->special_rotation,
+                       *cache->vc,
+                       ob,
+                       tip_normal,
+                       cache->location_symm,
+                       cache->radius,
+                       local_mat,
+                       local_mat_inv);
+}
+
+void calc_brush_local_mat(const float rotation,
+                          const float special_rotation,
+                          const ViewContext &vc,
+                          const Object &ob,
+                          const float3 &tip_normal,
+                          const float3 &tip_location,
+                          const float radius,
+                          float local_mat[4][4],
+                          float local_mat_inv[4][4])
+{
   float tmat[4][4];
   float mat[4][4];
   float scale[4][4];
@@ -2824,7 +2869,7 @@ static void calc_brush_local_mat(const float rotation,
 
   /* Read rotation (user angle, rake, etc.) to find the view's movement direction (negative X of
    * the brush). */
-  angle = rotation + cache->special_rotation;
+  angle = rotation + special_rotation;
   /* By convention, motion direction points down the brush's Y axis, the angle represents the X
    * axis, normal is a 90 deg CCW rotation of the motion direction. */
   float motion_normal_screen[2];
@@ -2833,8 +2878,7 @@ static void calc_brush_local_mat(const float rotation,
   /* Convert view's brush transverse direction to object-space,
    * i.e. the normal of the plane described by the motion */
   float motion_normal_local[3];
-  calc_local_from_screen(
-      *cache->vc, cache->location_symm, motion_normal_screen, motion_normal_local);
+  calc_local_from_screen(vc, tip_location, motion_normal_screen, motion_normal_local);
 
   /* Calculate the movement direction for the local matrix.
    * Note that there is a deliberate prioritization here: Our calculations are
@@ -2844,20 +2888,16 @@ static void calc_brush_local_mat(const float rotation,
    * apparent to the user).
    * The Y-axis of the brush-local frame has to lie in the intersection of the tangent plane
    * and the motion plane. */
-
-  cross_v3_v3v3(v, sculpt_normal, motion_normal_local);
+  cross_v3_v3v3(v, tip_normal, motion_normal_local);
   normalize_v3_v3(mat[1], v);
-
   /* Get other axes. */
-  cross_v3_v3v3(mat[0], mat[1], sculpt_normal);
-  copy_v3_v3(mat[2], sculpt_normal);
+  cross_v3_v3v3(mat[0], mat[1], tip_normal);
+  copy_v3_v3(mat[2], tip_normal);
 
   /* Set location. */
-  copy_v3_v3(mat[3], cache->location_symm);
+  copy_v3_v3(mat[3], tip_location);
 
   /* Scale by brush radius. */
-  float radius = cache->radius;
-
   normalize_m4(mat);
   scale_m4_fl(scale, radius);
   mul_m4_m4m4(tmat, mat, scale);
@@ -2866,15 +2906,6 @@ static void calc_brush_local_mat(const float rotation,
   copy_m4_m4(local_mat_inv, tmat);
   /* Return inverse (for converting from model-space coords to local area coords). */
   invert_m4_m4(local_mat, tmat);
-}
-
-static void calc_brush_local_mat(const float rotation,
-                                 const Object &ob,
-                                 float local_mat[4][4],
-                                 float local_mat_inv[4][4])
-{
-  const StrokeCache *cache = ob.runtime->sculpt_session->cache;
-  calc_brush_local_mat(rotation, ob, cache->sculpt_normal, local_mat, local_mat_inv);
 }
 
 float3 tilt_apply_to_normal(const Object &object,
@@ -2918,8 +2949,13 @@ static void update_brush_local_mat(const Sculpt &sd, Object &ob)
   if (cache->mirror_symmetry_pass == 0 && cache->radial_symmetry_pass == 0) {
     const Brush *brush = BKE_paint_brush_for_read(&sd.paint);
     const MTex *mask_tex = BKE_brush_mask_texture_get(brush, OB_MODE_SCULPT);
-    calc_brush_local_mat(
-        mask_tex->rot, ob, cache->brush_local_mat.ptr(), cache->brush_local_mat_inv.ptr());
+    calc_brush_local_mat(mask_tex->rot,
+                         ob,
+                         eBrushFalloffShape(brush->falloff_shape) == PAINT_FALLOFF_SHAPE_SPHERE ?
+                             cache->sculpt_normal_symm :
+                             cache->view_normal_symm,
+                         cache->brush_local_mat.ptr(),
+                         cache->brush_local_mat_inv.ptr());
   }
 }
 
@@ -3292,7 +3328,7 @@ static bool brush_type_needs_all_pbvh_nodes(const Brush &brush)
 
 /** Calculates the nodes that a brush will influence. */
 static brushes::CursorSampleResult calc_brush_node_mask(const Depsgraph &depsgraph,
-                                                        Sculpt &sd,
+                                                        const Sculpt &sd,
                                                         Object &ob,
                                                         const Brush &brush,
                                                         IndexMaskMemory &memory)
@@ -3329,36 +3365,49 @@ static brushes::CursorSampleResult calc_brush_node_mask(const Depsgraph &depsgra
   /* TODO: Test if gather_generic_cube is good enough for the case above. If true, move the
    * following above radius_scale definition. */
   else if (BKE_brush_has_cube_tip(&brush, PaintMode::Sculpt)) {
-    const IndexMask initial_node_mask = gather_nodes(pbvh,
-                                                     eBrushFalloffShape(brush.falloff_shape),
-                                                     use_original,
-                                                     ss.cache->location_symm,
-                                                     M_SQRT3,
-                                                     ss.cache->view_normal_symm,
-                                                     memory);
+    float3 tip_normal;
 
-    float3 sculpt_normal = calc_sculpt_normal(depsgraph, sd, ob, initial_node_mask);
-    sculpt_normal = tilt_apply_to_normal(sculpt_normal, *ss.cache, brush.tilt_strength_factor);
-    if (brush.falloff_shape == PAINT_FALLOFF_SHAPE_TUBE) {
-      project_plane_v3_v3v3(sculpt_normal, sculpt_normal, ss.cache->view_normal_symm);
-      normalize_v3(sculpt_normal);
+    if (brush.falloff_shape == PAINT_FALLOFF_SHAPE_SPHERE) {
+      /* Calculate sculpt normal from a estimate of the surface normal. */
+
+      /* TODO: Test to see if we need to pass in math::square(ss.cache->radius *
+       * std::numbers::sqrt2) as the radius_sq param in gather_nodes, as in
+       * clay_strips::calc_node_mask. */
+      const IndexMask initial_node_mask = gather_nodes(pbvh,
+                                                       eBrushFalloffShape(brush.falloff_shape),
+                                                       use_original,
+                                                       ss.cache->location_symm,
+                                                       M_SQRT3,
+                                                       ss.cache->view_normal_symm,
+                                                       memory);
+      tip_normal = calc_sculpt_normal(depsgraph, sd, ob, initial_node_mask);
+
+      if (math::is_zero(tip_normal)) {
+        /* The brush local matrix is degenerate: return an empty index mask. */
+        return {IndexMask(), std::nullopt, std::nullopt};
+      }
+    }
+    else {
+      tip_normal = ss.cache->view_normal_symm;
     }
 
-    if (math::is_zero(ss.cache->grab_delta_symm) || math::is_zero(sculpt_normal)) {
+    if (math::is_zero(ss.cache->grab_delta_symm)) {
       /* The brush local matrix is degenerate: return an empty index mask. */
       return {IndexMask(), std::nullopt, std::nullopt};
     }
 
-    float4x4 local_mat;
-    float4x4 local_mat_inv;
-    const MTex *mask_tex = BKE_brush_mask_texture_get(&brush, OB_MODE_SCULPT);
-    calc_brush_local_mat(mask_tex->rot, ob, sculpt_normal, local_mat.ptr(), local_mat_inv.ptr());
+    tip_normal = tilt_apply_to_normal(tip_normal, *ss.cache, brush.tilt_strength_factor);
 
-    /* Return only the plane normal for cube-shaped brushes. The plane center is only needed by
-     * planar brushes like Clay Strips and Plane. */
-    return {pbvh_gather_generic_cube(ob, brush, local_mat, use_original, memory),
+    float4x4 brush_local_mat;
+    float4x4 brush_local_mat_inv;
+    calc_brush_local_mat(0, ob, tip_normal, brush_local_mat.ptr(), brush_local_mat_inv.ptr());
+
+    std::optional<float3> plane_normal = brush.falloff_shape == PAINT_FALLOFF_SHAPE_SPHERE ?
+                                             std::optional{tip_normal} :
+                                             std::nullopt;
+    return {pbvh_gather_generic_cube(ob, brush, brush_local_mat, use_original, memory),
             std::nullopt,
-            sculpt_normal};
+            plane_normal};
   }
 
   return {pbvh_gather_generic(ob, brush, use_original, radius_scale, memory),
@@ -4080,20 +4129,14 @@ static void init_scene_project_brush_targets(const Depsgraph &depsgraph,
     }
 
     const Mesh *mesh_eval = BKE_object_get_evaluated_mesh(object);
-    if (!mesh_eval) {
+    if (!mesh_eval || mesh_eval->faces_num == 0) {
       continue;
     }
-
-    bke::BVHTreeFromMesh tree_data = mesh_eval->bvh_corner_tris();
-
-    if (tree_data.tree == nullptr) {
-      continue;
-    }
-
+    const bke::bvh::Tree &tree_data = mesh_eval->bvh_tris();
     const float4x4 active_to_target_matrix = object->world_to_object() *
                                              active_object.object_to_world();
 
-    ProjectBrushTarget project_target{std::move(tree_data), active_to_target_matrix};
+    ProjectBrushTarget project_target{&tree_data, active_to_target_matrix};
     cache.project_targets.append(std::move(project_target));
   }
 }
@@ -6691,7 +6734,13 @@ void cube_tip_init(const Sculpt & /*sd*/, const Object &ob, const Brush &brush, 
   float unused[4][4];
 
   zero_m4(mat);
-  calc_brush_local_mat(0.0, ob, unused, mat);
+  calc_brush_local_mat(0.0,
+                       ob,
+                       eBrushFalloffShape(brush.falloff_shape) == PAINT_FALLOFF_SHAPE_SPHERE ?
+                           ss.cache->sculpt_normal_symm :
+                           ss.cache->view_normal_symm,
+                       unused,
+                       mat);
 
   /* NOTE: we ignore the radius scaling done inside of calc_brush_local_mat to
    * duplicate prior behavior.
@@ -6841,29 +6890,60 @@ template void scatter_data_bmesh<float3>(Span<float3>,
 void calc_local_positions(const Span<float3> vert_positions,
                           const Span<int> verts,
                           const float4x4 &mat,
+                          const float3 &plane_center,
+                          const float3 &view_normal,
+                          const eBrushFalloffShape falloff_shape,
                           const MutableSpan<float3> local_positions)
 {
   PRF_scope(ProfileCategory::Editor);
   BLI_assert(local_positions.size() == verts.size());
-  for (const int i : verts.index_range()) {
-    local_positions[i] = math::transform_point(mat, vert_positions[verts[i]]);
+  if (falloff_shape == PAINT_FALLOFF_SHAPE_TUBE) {
+    float4 test_plane;
+    plane_from_point_normal_v3(test_plane, plane_center, view_normal);
+    for (const int i : verts.index_range()) {
+      float3 projected;
+      closest_to_plane_normalized_v3(projected, test_plane, vert_positions[verts[i]]);
+      local_positions[i] = math::transform_point(mat, projected);
+    }
+  }
+  else {
+    for (const int i : verts.index_range()) {
+      local_positions[i] = math::transform_point(mat, vert_positions[verts[i]]);
+    }
   }
 }
 
 void calc_local_positions(const Span<float3> positions,
                           const float4x4 &mat,
+                          const float3 &plane_center,
+                          const float3 &view_normal,
+                          const eBrushFalloffShape falloff_shape,
                           const MutableSpan<float3> local_positions)
 {
   PRF_scope(ProfileCategory::Editor);
   BLI_assert(local_positions.size() == positions.size());
-  for (const int i : positions.index_range()) {
-    local_positions[i] = math::transform_point(mat, positions[i]);
+  if (falloff_shape == PAINT_FALLOFF_SHAPE_TUBE) {
+    float4 test_plane;
+    plane_from_point_normal_v3(test_plane, plane_center, view_normal);
+    for (const int i : positions.index_range()) {
+      float3 projected;
+      closest_to_plane_normalized_v3(projected, test_plane, positions[i]);
+      local_positions[i] = math::transform_point(mat, projected);
+    }
+  }
+  else {
+    for (const int i : positions.index_range()) {
+      local_positions[i] = math::transform_point(mat, positions[i]);
+    }
   }
 }
 
 void calc_local_positions(const Span<float3> vert_positions,
                           const Span<int> verts,
                           const float4x4 &mat,
+                          const float3 &plane_center,
+                          const float3 &view_normal,
+                          const eBrushFalloffShape falloff_shape,
                           const MutableSpan<float2> xy_positions,
                           const MutableSpan<float> z_positions)
 {
@@ -6871,16 +6951,33 @@ void calc_local_positions(const Span<float3> vert_positions,
   BLI_assert(xy_positions.size() == verts.size());
   BLI_assert(z_positions.size() == verts.size());
 
-  for (const int i : verts.index_range()) {
-    const float3 position = math::transform_point(mat, vert_positions[verts[i]]);
+  if (falloff_shape == PAINT_FALLOFF_SHAPE_TUBE) {
+    float4 test_plane;
+    plane_from_point_normal_v3(test_plane, plane_center, view_normal);
+    for (const int i : verts.index_range()) {
+      float3 projected;
+      closest_to_plane_normalized_v3(projected, test_plane, vert_positions[verts[i]]);
+      const float3 position = math::transform_point(mat, projected);
 
-    xy_positions[i] = position.xy();
-    z_positions[i] = position.z;
+      xy_positions[i] = position.xy();
+      z_positions[i] = position.z;
+    }
+  }
+  else {
+    for (const int i : verts.index_range()) {
+      const float3 position = math::transform_point(mat, vert_positions[verts[i]]);
+
+      xy_positions[i] = position.xy();
+      z_positions[i] = position.z;
+    }
   }
 }
 
 void calc_local_positions(const Span<float3> positions,
                           const float4x4 &mat,
+                          const float3 &plane_center,
+                          const float3 &view_normal,
+                          const eBrushFalloffShape falloff_shape,
                           const MutableSpan<float2> xy_positions,
                           const MutableSpan<float> z_positions)
 {
@@ -6888,11 +6985,25 @@ void calc_local_positions(const Span<float3> positions,
   BLI_assert(xy_positions.size() == positions.size());
   BLI_assert(z_positions.size() == positions.size());
 
-  for (const int i : positions.index_range()) {
-    const float3 position = math::transform_point(mat, positions[i]);
+  if (falloff_shape == PAINT_FALLOFF_SHAPE_TUBE) {
+    float4 test_plane;
+    plane_from_point_normal_v3(test_plane, plane_center, view_normal);
+    for (const int i : positions.index_range()) {
+      float3 projected;
+      closest_to_plane_normalized_v3(projected, test_plane, positions[i]);
+      const float3 position = math::transform_point(mat, projected);
 
-    xy_positions[i] = position.xy();
-    z_positions[i] = position.z;
+      xy_positions[i] = position.xy();
+      z_positions[i] = position.z;
+    }
+  }
+  else {
+    for (const int i : positions.index_range()) {
+      const float3 position = math::transform_point(mat, positions[i]);
+
+      xy_positions[i] = position.xy();
+      z_positions[i] = position.z;
+    }
   }
 }
 
@@ -7041,7 +7152,13 @@ void calc_cube_tip_factors_common_mesh_indexed(const Depsgraph &depsgraph,
   /* Calculate local positions. */
   Vector<float3> local_positions_storage(verts.size());
   MutableSpan<float3> local_positions = local_positions_storage;
-  calc_local_positions(vert_positions, verts, mat, local_positions);
+  calc_local_positions(vert_positions,
+                       verts,
+                       mat,
+                       cache.location_symm,
+                       cache.view_normal_symm,
+                       eBrushFalloffShape(brush.falloff_shape),
+                       local_positions);
 
   /* Find the cube distance. */
   calc_brush_cube_distances<float3>(brush, local_positions, distances);
@@ -7123,7 +7240,12 @@ void calc_cube_tip_factors_common_grids(const Depsgraph &depsgraph,
   /* Calculate local positions. */
   Vector<float3> local_positions_storage(positions.size());
   MutableSpan<float3> local_positions = local_positions_storage;
-  calc_local_positions(positions, mat, local_positions);
+  calc_local_positions(positions,
+                       mat,
+                       cache.location_symm,
+                       cache.view_normal_symm,
+                       eBrushFalloffShape(brush.falloff_shape),
+                       local_positions);
 
   /* Find the cube distance. */
   r_distances.resize(positions.size());
@@ -7203,7 +7325,12 @@ void calc_cube_tip_factors_common_bmesh(const Depsgraph &depsgraph,
   /* Calculate local positions. */
   Vector<float3> local_positions_storage(verts.size());
   MutableSpan<float3> local_positions = local_positions_storage;
-  calc_local_positions(positions, mat, local_positions);
+  calc_local_positions(positions,
+                       mat,
+                       cache.location_symm,
+                       cache.view_normal_symm,
+                       eBrushFalloffShape(brush.falloff_shape),
+                       local_positions);
 
   /* Find the cube distance. */
   r_distances.resize(verts.size());
