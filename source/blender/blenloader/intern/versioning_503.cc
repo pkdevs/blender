@@ -305,7 +305,7 @@ void blo_do_versions_503(FileData * /*fd*/, Library * /*lib*/, Main *bmain)
    * \note Keep this message at the bottom of the function.
    */
 
-  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 503, 14)) {
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 503, 15)) {
     for (Brush &brush : bmain->brushes) {
       if (ELEM(brush.ob_mode,
                OB_MODE_SCULPT,
