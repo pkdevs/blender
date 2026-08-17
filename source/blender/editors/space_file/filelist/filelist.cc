@@ -200,7 +200,9 @@ static bool filelist_compare_asset_libraries(const AssetLibraryReference *librar
   return true;
 }
 
-void filelist_setlibrary(FileList *filelist, const AssetLibraryReference *asset_library_ref)
+void filelist_setlibrary(FileList *filelist,
+                         const AssetLibraryReference *asset_library_ref,
+                         FunctionRef<void()> on_change)
 {
   /* Unset if needed. */
   if (!asset_library_ref) {
@@ -211,15 +213,22 @@ void filelist_setlibrary(FileList *filelist, const AssetLibraryReference *asset_
     return;
   }
 
+  bool changed = false;
   if (!filelist->asset_library_ref) {
     filelist->asset_library_ref = MEM_new<AssetLibraryReference>("filelist asset library");
     *filelist->asset_library_ref = *asset_library_ref;
 
     filelist->flags |= FL_FORCE_RESET;
+    changed = true;
   }
   else if (!filelist_compare_asset_libraries(filelist->asset_library_ref, asset_library_ref)) {
     *filelist->asset_library_ref = *asset_library_ref;
     filelist->flags |= FL_FORCE_RESET;
+    changed = true;
+  }
+
+  if (changed && on_change) {
+    on_change();
   }
 }
 
@@ -366,7 +375,7 @@ static int filelist_geticon_file_type_ex(const FileList *filelist,
     }
 
     if (file->attributes & FILE_ATTR_OFFLINE) {
-      return ICON_ERROR;
+      return ICON_STATUS_ERROR;
     }
     if (file->attributes & FILE_ATTR_TEMPORARY) {
       return ICON_FILE_CACHE;

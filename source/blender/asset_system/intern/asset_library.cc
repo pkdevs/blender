@@ -259,9 +259,21 @@ std::optional<StringRefNull> AssetLibrary::remote_url() const
   return {};
 };
 
+std::optional<StringRefNull> AssetLibrary::auth_token() const
+{
+  return std::nullopt;
+}
+
 AssetCatalogService &AssetLibrary::catalog_service() const
 {
+  std::lock_guard lock{catalog_service_mutex_};
   return *catalog_service_;
+}
+
+std::shared_ptr<AssetCatalogService> AssetLibrary::catalog_service_ptr() const
+{
+  std::lock_guard lock{catalog_service_mutex_};
+  return catalog_service_;
 }
 
 void AssetLibrary::refresh_catalogs()

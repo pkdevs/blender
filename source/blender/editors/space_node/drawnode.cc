@@ -488,7 +488,7 @@ static void node_buts_image_views(ui::Layout &layout,
                                   PointerRNA *ptr,
                                   PointerRNA *imaptr)
 {
-  if (!imaptr->data) {
+  if (!*imaptr) {
     return;
   }
 
@@ -905,7 +905,7 @@ static void node_socket_undefined_draw(bContext * /*C*/,
                                        PointerRNA * /*node_ptr*/,
                                        StringRef /*text*/)
 {
-  layout->label(IFACE_("Undefined Socket Type"), ICON_ERROR);
+  layout->label(IFACE_("Undefined Socket Type"), ICON_STATUS_ERROR);
 }
 
 static void node_socket_undefined_draw_color(bContext * /*C*/,
@@ -933,7 +933,7 @@ static void node_socket_undefined_interface_draw(ID * /*id*/,
                                                  bContext * /*C*/,
                                                  ui::Layout *layout)
 {
-  layout->label(IFACE_("Undefined Socket Type"), ICON_ERROR);
+  layout->label(IFACE_("Undefined Socket Type"), ICON_STATUS_ERROR);
 }
 
 /** \} */
@@ -1379,7 +1379,7 @@ static void std_node_socket_draw(
         }
       }
       else if (default_value->has_conflict()) {
-        layout->label(IFACE_("Menu Error"), ICON_ERROR);
+        layout->label(IFACE_("Menu Error"), ICON_STATUS_ERROR);
       }
       else {
         layout->label(IFACE_("Menu Undefined"), ICON_QUESTION);
@@ -1594,14 +1594,19 @@ static void std_node_socket_interface_draw(ID *id,
     sub->prop(&ptr, "hide_value", DEFAULT_FLAGS, std::nullopt, ICON_NONE);
   }
 
-  if (interface_socket->flag & NODE_INTERFACE_SOCKET_INPUT && node_tree->type == NTREE_GEOMETRY) {
-    if (type == SOCK_BOOLEAN) {
-      col->prop(&ptr, "layer_selection_field", DEFAULT_FLAGS, std::nullopt, ICON_NONE);
+  if (interface_socket->flag & NODE_INTERFACE_SOCKET_INPUT) {
+    if (node_tree->type == NTREE_GEOMETRY) {
+      if (type == SOCK_BOOLEAN) {
+        col->prop(&ptr, "layer_selection_field", DEFAULT_FLAGS, std::nullopt, ICON_NONE);
+      }
+      ui::Layout *sub = &col->column(false);
+      sub->active_set(!is_layer_selection_field(*interface_socket));
+      sub->prop(&ptr, "hide_in_modifier", DEFAULT_FLAGS, std::nullopt, ICON_NONE);
+      sub->prop(&ptr, "structure_type", DEFAULT_FLAGS, IFACE_("Shape"), ICON_NONE);
     }
-    ui::Layout *sub = &col->column(false);
-    sub->active_set(!is_layer_selection_field(*interface_socket));
-    sub->prop(&ptr, "hide_in_modifier", DEFAULT_FLAGS, std::nullopt, ICON_NONE);
-    sub->prop(&ptr, "structure_type", DEFAULT_FLAGS, IFACE_("Shape"), ICON_NONE);
+    else if (node_tree->type == NTREE_COMPOSIT) {
+      col->prop(&ptr, "hide_in_modifier", DEFAULT_FLAGS, std::nullopt, ICON_NONE);
+    }
   }
 }
 
@@ -2288,7 +2293,7 @@ static NodeLinkDrawConfig nodelink_get_draw_config(const bContext &C,
 
   draw_config.dim_factor = selected ? 1.0f : node_link_dim_factor(v2d, link);
 
-  bTheme *btheme = ui::theme::theme_get();
+  const bTheme *btheme = ui::theme::theme_get();
   draw_config.dash_alpha = btheme->space_node.dash_alpha;
 
   const bool field_link = node_link_is_field_link(snode, link);

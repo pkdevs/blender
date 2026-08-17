@@ -266,7 +266,8 @@ static void output_path_layout(ui::Layout &layout,
   }
   else {
     for (const bke::path_templates::Error &error : path_errors) {
-      layout.label(BKE_path_template_error_to_string(error, image_path).c_str(), ICON_ERROR);
+      layout.label(BKE_path_template_error_to_string(error, image_path).c_str(),
+                   ICON_STATUS_ERROR);
     }
   }
 }
@@ -401,7 +402,7 @@ static void node_extra_info(NodeExtraInfoParams &parameters)
     NodeExtraInfoRow row;
     row.text = RPT_("Node Unsupported");
     row.tooltip = TIP_("The File Output node is only supported for scene compositing");
-    row.icon = ICON_ERROR;
+    row.icon = ICON_STATUS_ERROR;
     parameters.rows.append(std::move(row));
   }
 }
@@ -592,7 +593,7 @@ class FileOutputOperation : public NodeOperation {
     if (result.is_single_value()) {
       /* For single values, we fill a buffer that covers the domain of the operation with the value
        * of the result. */
-      data.allocate_texture(this->compute_domain(), true, ResultStorageType::CPU);
+      data.allocate_texture(this->compute_domain(), true, ResultStorageType::CPUImage);
       const GPointer single_value = result.single_value();
       const int64_t pixel_count = int64_t(data.domain().data_size.x) * data.domain().data_size.y;
       single_value.type()->fill_assign_n(
@@ -646,6 +647,7 @@ class FileOutputOperation : public NodeOperation {
       case ResultType::Scene:
       case ResultType::Text:
       case ResultType::Mask:
+      case ResultType::Bundle:
         /* Not supported. */
         BLI_assert_unreachable();
         break;
@@ -696,6 +698,7 @@ class FileOutputOperation : public NodeOperation {
       case ResultType::Scene:
       case ResultType::Text:
       case ResultType::Mask:
+      case ResultType::Bundle:
         /* Not supported. */
         BLI_assert_unreachable();
         break;

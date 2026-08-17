@@ -413,7 +413,7 @@ class Meshes : Overlay {
     GPU_debug_group_end();
   }
 
-  void draw_color_only(Framebuffer &framebuffer, Manager &manager, View &view) final
+  void draw_line_only(Framebuffer &framebuffer, Manager &manager, View &view) final
   {
     if (!enabled_) {
       return;
@@ -431,7 +431,7 @@ class Meshes : Overlay {
       return;
     }
 
-    GPU_debug_group_begin("Mesh Edit Color Only");
+    GPU_debug_group_begin("Mesh Edit Line Only");
 
     GPU_framebuffer_bind(framebuffer);
     manager.submit(edit_mesh_normals_ps_, view);
@@ -474,7 +474,15 @@ class Meshes : Overlay {
   {
     Mesh &mesh = DRW_object_get_data_for_drawing<Mesh>(*ob);
     if (BMEditMesh *em = mesh.runtime->edit_mesh.get()) {
-      return CustomData_get_offset(&em->bm->vdata, CD_MVERT_SKIN) != -1;
+      if (CustomData_get_offset_named(&em->bm->vdata, CD_PROP_FLOAT2, "skin_modifier_radius") ==
+          -1)
+      {
+        return false;
+      }
+      if (CustomData_get_offset_named(&em->bm->vdata, CD_PROP_BOOL, "skin_modifier_root") == -1) {
+        return false;
+      }
+      return true;
     }
     return false;
   }

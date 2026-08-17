@@ -15,6 +15,7 @@
 
 #include "DNA_node_types.h"
 
+#include "BKE_compositor.hh"
 #include "BKE_cryptomatte.hh"
 #include "BKE_global.hh"
 #include "BKE_image.hh"
@@ -28,6 +29,7 @@
 
 #include "IMB_colormanagement.hh"
 #include "IMB_imbuf.hh"
+#include "IMB_partial_update.hh"
 
 #include "DEG_depsgraph_query.hh"
 
@@ -38,6 +40,7 @@
 #include "COM_realize_on_domain_operation.hh"
 #include "COM_render_context.hh"
 #include "COM_result.hh"
+#include "COM_scene_compositor_effects_operation.hh"
 
 #include "NOD_dependencies.hh"
 #include "NOD_eval_log.hh"
@@ -61,6 +64,8 @@ class Context : public compositor::Context {
  private:
   /* Input data. */
   CompositorInputData input_data_;
+  /* The hash of the active compute context. */
+  const ComputeContextHash active_compute_context_hash_;
 
   /* Cached GPU and CPU passes that the compositor took ownership of. Those had their reference
    * count incremented when accessed and need to be freed/have their reference count decremented
@@ -73,7 +78,10 @@ class Context : public compositor::Context {
 
  public:
   Context(compositor::StaticCacheManager &cache_manager, const CompositorInputData &input_data)
-      : compositor::Context(cache_manager), input_data_(input_data)
+      : compositor::Context(cache_manager),
+        input_data_(input_data),
+        active_compute_context_hash_(
+            bke::compositor::compute_active_compute_context_hash(input_data_.scene))
   {
   }
 
@@ -106,6 +114,11 @@ class Context : public compositor::Context {
   {
     return gpu_supported_ &&
            this->get_render_data().compositor_device == SCE_COMPOSITOR_DEVICE_GPU;
+  }
+
+  const ComputeContextHash &get_active_compute_context_hash() const override
+  {
+    return active_compute_context_hash_;
   }
 
   compositor::NodeGroupOutputTypes needed_outputs() const
@@ -143,7 +156,7 @@ class Context : public compositor::Context {
     return compositor::Domain(this->get_render_size());
   }
 
-  void write_output(const compositor::Result &result)
+  void write_output_image(const compositor::Result &result)
   {
     Render *render = RE_GetSceneRender(&input_data_.scene);
     RenderResult *render_result = RE_AcquireResultWrite(render);
@@ -184,11 +197,34 @@ class Context : public compositor::Context {
 
       /* Free outdated GPU texture. */
       IMB_free_gpu_textures(image_buffer);
+      IMB_partial_update_mark_full(image_buffer);
     }
     RE_ReleaseResult(render);
+  }
 
-    Image *image = BKE_image_ensure_viewer(G.main, IMA_TYPE_R_RESULT, "Render Result");
-    BKE_image_partial_update_mark_full_update(image);
+  void write_output(compositor::Result &result)
+  {
+    using namespace compositor;
+
+    /* Realize the output on the compositing domain if needed. */
+    const Domain compositing_domain = this->get_compositing_domain();
+    const InputDescriptor input_descriptor = {ResultType::Color,
+                                              InputRealizationMode::OperationDomain};
+    SimpleOperation *realization_operation = RealizeOnDomainOperation::construct_if_needed(
+        *this, result, input_descriptor, compositing_domain);
+    if (!realization_operation) {
+      this->write_output_image(result);
+      return;
+    }
+
+    Result realize_input = this->create_result(result.type(), result.precision());
+    realize_input.share_data(result);
+    realization_operation->map_input_to_result(&realize_input);
+    realization_operation->evaluate();
+    Result &realized_result = realization_operation->get_result();
+    this->write_output_image(realized_result);
+    realized_result.release();
+    delete realization_operation;
   }
 
   bool should_cache_viewer_result()
@@ -204,13 +240,19 @@ class Context : public compositor::Context {
       return false;
     }
 
-    /* Node tree is not time depend, so no need to cache. */
-    const bNodeTree *original_node_tree = DEG_get_original(&input_data_.node_tree);
-    if (!original_node_tree->runtime->eval_dependencies->time_dependent) {
-      return false;
+    /* Only cache if any of the effects are time dependent. */
+    for (const SceneCompositorEffect &effect : input_data_.scene.compositor_effects) {
+      if (!bke::compositor::is_effect_enabled(effect, bke::compositor::ExecutionMode::Preview)) {
+        continue;
+      }
+
+      const bNodeTree *original_node_tree = DEG_get_original(effect.node_group);
+      if (original_node_tree->runtime->eval_dependencies->time_dependent) {
+        return true;
+      }
     }
 
-    return true;
+    return false;
   }
 
   void write_viewer_image(const compositor::Result &viewer_result)
@@ -295,7 +337,6 @@ class Context : public compositor::Context {
                     viewer_result.cpu_data().data(),
                     size.x * size.y * 4 * sizeof(float));
       }
-      image_buffer->userflags |= IB_DISPLAY_BUFFER_INVALID;
     }
 
     if (!viewer_result.is_single_value()) {
@@ -342,7 +383,7 @@ class Context : public compositor::Context {
           this->get_frame_number(), view_identifier, cached_buffer);
     }
 
-    BKE_image_partial_update_mark_full_update(image);
+    IMB_partial_update_mark_full(image_buffer);
     BKE_image_release_ibuf(image, image_buffer, lock);
     BLI_thread_unlock(LOCK_DRAW_IMAGE);
   }
@@ -357,20 +398,20 @@ class Context : public compositor::Context {
     SimpleOperation *realization_operation = RealizeOnDomainOperation::construct_if_needed(
         *this, viewer_result, input_descriptor, viewer_result.domain());
 
-    if (realization_operation) {
-      Result realize_input = this->create_result(ResultType::Color, viewer_result.precision());
-      realize_input.share_data(viewer_result);
-      realization_operation->map_input_to_result(&realize_input);
-      realization_operation->evaluate();
-
-      Result &realized_viewer_result = realization_operation->get_result();
-      this->write_viewer_image(realized_viewer_result);
-      realized_viewer_result.release();
-      delete realization_operation;
+    if (!realization_operation) {
+      this->write_viewer_image(viewer_result);
       return;
     }
 
-    this->write_viewer_image(viewer_result);
+    Result realize_input = this->create_result(ResultType::Color, viewer_result.precision());
+    realize_input.share_data(viewer_result);
+    realization_operation->map_input_to_result(&realize_input);
+    realization_operation->evaluate();
+
+    Result &realized_viewer_result = realization_operation->get_result();
+    this->write_viewer_image(realized_viewer_result);
+    realized_viewer_result.release();
+    delete realization_operation;
   }
 
   compositor::ResultType get_pass_data_type(const RenderPass *pass)
@@ -665,7 +706,7 @@ class Context : public compositor::Context {
       image->flag |= IMA_VIEW_AS_RENDER;
     }
 
-    BKE_image_partial_update_mark_full_update(image);
+    IMB_partial_update_mark_full(image_buffer);
     BKE_image_release_ibuf(image, image_buffer, lock);
     BLI_thread_unlock(LOCK_DRAW_IMAGE);
 
@@ -682,88 +723,33 @@ class Context : public compositor::Context {
     this->get_scene().runtime->compositor.nodes_evaluation_log =
         std::make_unique<nodes::eval_log::NodesEvalLog>();
 
-    using namespace compositor;
-    const NodeGroupOutputTypes needed_outputs = this->needed_outputs();
-    const bNodeTree &node_group = input_data_.node_tree;
-    const bke::DataBlockComputeContext compute_context(nullptr, this->get_scene().id);
-    NodeGroupOperation node_group_operation(*this,
-                                            node_group,
-                                            needed_outputs,
-                                            node_group.active_viewer_key,
-                                            bke::NODE_INSTANCE_KEY_BASE,
-                                            compute_context);
+    const compositor::NodeGroupOutputTypes needed_outputs = this->needed_outputs();
+    compositor::SceneCompositorEffectsOperation operation =
+        compositor::SceneCompositorEffectsOperation(*this, needed_outputs);
+    compositor::Result combined_pass = this->get_pass(&this->get_scene(), 0, RE_PASSNAME_COMBINED);
+    operation.map_input_to_result(&combined_pass);
+    operation.evaluate();
 
-    /* Set the reference count for the outputs, only the first color output is actually needed,
-     * while the rest are ignored. */
-    const bool is_group_output_needed = flag_is_set(needed_outputs,
-                                                    NodeGroupOutputTypes::GroupOutputNode);
-    node_group.ensure_interface_cache();
-    for (const bNodeTreeInterfaceSocket *output_socket : node_group.interface_outputs()) {
-      const bool is_first_output = output_socket == node_group.interface_outputs().first();
-      Result &output_result = node_group_operation.get_result(output_socket->identifier);
-      const bool is_color = output_result.type() == ResultType::Color;
-      const bool is_needed = is_group_output_needed && is_first_output && is_color;
-      output_result.set_reference_count(is_needed ? 1 : 0);
+    if (!operation.has_output()) {
+      operation.free_results();
+      return;
     }
 
-    /* Map the inputs to the operation. */
-    Vector<std::unique_ptr<Result>> inputs;
-    for (const bNodeTreeInterfaceSocket *input_socket : node_group.interface_inputs()) {
-      Result *input_result = new Result(
-          this->create_result(ResultType::Color, ResultPrecision::Full));
-      if (input_socket == node_group.interface_inputs()[0]) {
-        /* First socket is the combined pass. */
-        Result combined_pass = this->get_pass(&this->get_scene(), 0, "Image");
-        if (combined_pass.is_allocated()) {
-          input_result->share_data(combined_pass);
-        }
-        else {
-          input_result->allocate_invalid();
-        }
-        combined_pass.release();
-      }
-      else {
-        /* The rest of the sockets are not supported. */
-        input_result->allocate_invalid();
-      }
+    compositor::Result &output_result = operation.get_result();
 
-      node_group_operation.map_input_to_result(input_socket->identifier, input_result);
-      inputs.append(std::unique_ptr<Result>(input_result));
+    /* If the operation does not have a viewer output but one is needed, write the output as a
+     * viewer. */
+    const bool needs_viewer_output = flag_is_set(needed_outputs,
+                                                 compositor::NodeGroupOutputTypes::ViewerNode);
+    if (!operation.has_viewer_output() && needs_viewer_output) {
+      this->write_viewer(output_result);
     }
 
-    node_group_operation.evaluate();
-
-    /* Write the outputs of the operation. */
-    for (const bNodeTreeInterfaceSocket *output_socket : node_group.interface_outputs()) {
-      Result &output_result = node_group_operation.get_result(output_socket->identifier);
-      if (!output_result.should_compute()) {
-        continue;
-      }
-
-      if (this->is_canceled()) {
-        output_result.release();
-        continue;
-      }
-
-      /* Realize the output on the compositing domain if needed. */
-      const Domain compositing_domain = this->get_compositing_domain();
-      const InputDescriptor input_descriptor = {ResultType::Color,
-                                                InputRealizationMode::OperationDomain};
-      SimpleOperation *realization_operation = RealizeOnDomainOperation::construct_if_needed(
-          *this, output_result, input_descriptor, compositing_domain);
-      if (realization_operation) {
-        realization_operation->map_input_to_result(&output_result);
-        realization_operation->evaluate();
-        Result &realized_output_result = realization_operation->get_result();
-        this->write_output(realized_output_result);
-        realized_output_result.release();
-        delete realization_operation;
-        continue;
-      }
-
+    if (this->render_context()) {
       this->write_output(output_result);
-      output_result.release();
     }
+
+    output_result.release();
   }
 };
 

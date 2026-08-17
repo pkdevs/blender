@@ -275,9 +275,6 @@ struct NodeInsertOfsData {
   bNode *next = nullptr;
 
   wmTimer *anim_timer = nullptr;
-
-  /** Offset to apply to node chain. */
-  float offset_x = 0.0f;
 };
 
 struct SpaceNode_Runtime {
@@ -502,7 +499,6 @@ void NODE_OT_add_import_node(wmOperatorType *ot);
 void NODE_OT_swap_group_asset(wmOperatorType *ot);
 void NODE_OT_new_node_tree(wmOperatorType *ot);
 void NODE_OT_new_compositing_node_group(wmOperatorType *ot);
-void NODE_OT_duplicate_compositing_node_group(wmOperatorType *ot);
 void NODE_OT_duplicate_compositing_modifier_node_group(wmOperatorType *ot);
 void NODE_OT_new_compositor_sequencer_node_group(wmOperatorType *operator_type);
 void NODE_OT_add_group_input_node(wmOperatorType *ot);
