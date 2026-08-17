@@ -607,9 +607,10 @@ class PROJECT_OT_AddVariable(Operator):
     variable_type: bpy.props.EnumProperty(
         default='STRING',
         items=[
+            ('STRING', "String Variable", ""),
+            ('FILEPATH', "Filepath Variable", ""),
             ('INTEGER', "Integer Variable", ""),
             ('FLOAT', "Float Variable", ""),
-            ('STRING', "String Variable", ""),
         ],
     )
 
@@ -618,14 +619,16 @@ class PROJECT_OT_AddVariable(Operator):
         return bpy.data.project is not None
 
     def execute(self, context):
-        var = bpy.data.project.variables.new(name="tmp_name", type=self.variable_type)
         match self.variable_type:
-            case 'INTEGER':
-                var.name = "integer_variable"
-            case 'FLOAT':
-                var.name = "float_variable"
             case 'STRING':
-                var.name = "string_variable"
+                bpy.data.project.variables.new(name="string_variable", type='STRING')
+            case 'FILEPATH':
+                var = bpy.data.project.variables.new(name="filepath_variable", type='STRING')
+                var.subtype = 'FILEPATH'
+            case 'INTEGER':
+                bpy.data.project.variables.new(name="integer_variable", type='INTEGER')
+            case 'FLOAT':
+                bpy.data.project.variables.new(name="float_variable", type='FLOAT')
             case _:
                 assert (False)
 

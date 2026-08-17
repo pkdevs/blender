@@ -72,10 +72,11 @@ class PROJECT_MT_add_variable(Menu):
     def draw(self, context):
         layout = self.layout
 
+        layout.operator("project.add_variable", text="String", icon='NONE').variable_type = 'STRING'
+        layout.operator("project.add_variable", text="Filepath", icon='NONE').variable_type = 'FILEPATH'
+        layout.separator()
         layout.operator("project.add_variable", text="Integer", icon='NONE').variable_type = 'INTEGER'
         layout.operator("project.add_variable", text="Float", icon='NONE').variable_type = 'FLOAT'
-        layout.separator()
-        layout.operator("project.add_variable", text="String", icon='NONE').variable_type = 'STRING'
 
 
 # -------------------------------------------------------------
