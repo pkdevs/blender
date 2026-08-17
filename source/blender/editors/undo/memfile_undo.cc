@@ -8,18 +8,20 @@
  * Wrapper between `ED_undo.hh` and `BKE_undo_system.hh` API's.
  */
 
-#include "BLI_sys_types.h"
+#include "BLI_sys_types.hh"
 
-#include "BLI_ghash.h"
-#include "BLI_listbase.h"
+#include "BLI_ghash.hh"
+#include "BLI_listbase.hh"
 
 #include "DNA_ID.h"
 #include "DNA_collection_types.h"
+#include "DNA_mesh_types.h"
 #include "DNA_node_types.h"
 #include "DNA_object_types.h"
 #include "DNA_scene_types.h"
 
 #include "BKE_blender_undo.hh"
+#include "BKE_compositor.hh"
 #include "BKE_context.hh"
 #include "BKE_lib_query.hh"
 #include "BKE_main.hh"
@@ -77,7 +79,7 @@ static bool memfile_undosys_step_encode(bContext * /*C*/, Main *bmain, UndoStep 
   UndoStack *ustack = ED_undo_stack_get();
 
   if (bmain->is_memfile_undo_flush_needed) {
-    ED_editors_flush_edits_ex(bmain, false, true);
+    ED_editors_flush_edits_ex(bmain, true);
   }
 
   /* can be null, use when set. */
@@ -113,11 +115,11 @@ static int memfile_undosys_step_id_reused_cb(LibraryIDLinkCallbackData *cb_data)
   ID *id = *id_pointer;
   if (id != nullptr && !ID_IS_LINKED(id) && (id->tag & ID_TAG_UNDO_OLD_ID_REUSED_UNCHANGED) == 0) {
     bool do_stop_iter = true;
-    if (GS(self_id->name) == ID_OB) {
+    if (self_id->id_type() == ID_OB) {
       Object *ob_self = id_cast<Object *>(self_id);
       if (ob_self->type == OB_ARMATURE) {
         if (ob_self->data == id) {
-          BLI_assert(GS(id->name) == ID_AR);
+          BLI_assert(id->id_type() == ID_AR);
           if (ob_self->pose != nullptr) {
             /* We have a changed/re-read armature used by an unchanged armature object: our beloved
              * Bone pointers from the object's pose need their usual special treatment. */
@@ -217,13 +219,13 @@ static void memfile_undosys_step_decode(
             bmain, id, memfile_undosys_step_id_reused_cb, nullptr, IDWALK_READONLY);
       }
 
-      if (GS(id->name) == ID_SCE) {
+      if (id->id_type() == ID_SCE) {
         Scene *scene = reinterpret_cast<Scene *>(id);
         /* TODO: We should be able to restore these depsgraphs properly as part of
          * #BKE_scene_undo_depsgraphs_restore but this is currently only done for depsgraphs in the
          * scene.depsgraph_hash map. So the safest option is to just delete the following
          * depsgraphs for now. */
-        if (scene->compositing_node_group) {
+        if (bke::compositor::is_enabled(*scene, bke::compositor::ExecutionMode::Preview)) {
           /* Ensure undo calls from the UI update the interactive compositor preview depsgraph, see
            * #compo_initjob. */
           bke::CompositorRuntime &compositor_runtime = scene->runtime->compositor;
@@ -262,7 +264,7 @@ static void memfile_undosys_step_decode(
           DEG_id_tag_update_ex(bmain, &nodetree->id, recalc_flags);
         }
       }
-      if (GS(id->name) == ID_SCE) {
+      if (id->id_type() == ID_SCE) {
         Scene *scene = id_cast<Scene *>(id);
         if (scene->master_collection != nullptr) {
           recalc_flags = scene->master_collection->id.recalc;
@@ -290,7 +292,7 @@ static void memfile_undosys_step_decode(
       if (nodetree != nullptr) {
         nodetree->id.recalc_after_undo_push = 0;
       }
-      if (GS(id->name) == ID_SCE) {
+      if (id->id_type() == ID_SCE) {
         Scene *scene = id_cast<Scene *>(id);
         if (scene->master_collection != nullptr) {
           scene->master_collection->id.recalc_after_undo_push = 0;
@@ -321,7 +323,7 @@ static void memfile_undosys_step_free(UndoStep *us_p)
 
 void ED_memfile_undosys_type(UndoType *ut)
 {
-  ut->name = "Global Undo";
+  ut->identifier = "GLOBAL_UNDO";
   ut->poll = memfile_undosys_poll;
   ut->step_encode = memfile_undosys_step_encode;
   ut->step_decode = memfile_undosys_step_decode;
@@ -337,26 +339,13 @@ void ED_memfile_undosys_type(UndoType *ut)
 /* -------------------------------------------------------------------- */
 /** \name Utilities
  * \{ */
-
-/**
- * Ideally we wouldn't need to export global undo internals,
- * there are some cases where it's needed though.
- */
-static MemFile *ed_undosys_step_get_memfile(UndoStep *us_p)
-{
-  MemFileUndoStep *us = reinterpret_cast<MemFileUndoStep *>(us_p);
-  return &us->data->memfile;
-}
-
-MemFile *ED_undosys_stack_memfile_get_if_active(UndoStack *ustack)
+bool ED_undosys_autosave_compatible(UndoStack *ustack)
 {
   if (!ustack->step_active) {
-    return nullptr;
+    return false;
   }
-  if (ustack->step_active->type != BKE_UNDOSYS_TYPE_MEMFILE) {
-    return nullptr;
-  }
-  return ed_undosys_step_get_memfile(ustack->step_active);
+
+  return ELEM(ustack->step_active->type, BKE_UNDOSYS_TYPE_MEMFILE, BKE_UNDOSYS_TYPE_IMAGE);
 }
 
 void ED_undosys_stack_memfile_id_changed_tag(UndoStack *ustack, ID *id)

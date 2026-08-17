@@ -32,10 +32,12 @@ set(SRC
   nodes/node_fn_find_in_string.cc
   nodes/node_fn_float_to_int.cc
   nodes/node_fn_format_string.cc
+  nodes/node_fn_get_vector_component.cc
   nodes/node_fn_hash_value.cc
   nodes/node_fn_input_bool.cc
   nodes/node_fn_input_color.cc
   nodes/node_fn_input_int.cc
+  nodes/node_fn_input_int_vector.cc
   nodes/node_fn_input_menu.cc
   nodes/node_fn_input_rotation.cc
   nodes/node_fn_input_special_characters.cc
@@ -52,6 +54,7 @@ set(SRC
   nodes/node_fn_quaternion_to_rotation.cc
   nodes/node_fn_random_value.cc
   nodes/node_fn_replace_string.cc
+  nodes/node_fn_reverse_string.cc
   nodes/node_fn_rotate_euler.cc
   nodes/node_fn_rotate_rotation.cc
   nodes/node_fn_rotate_vector.cc
@@ -61,12 +64,15 @@ set(SRC
   nodes/node_fn_separate_color.cc
   nodes/node_fn_separate_matrix.cc
   nodes/node_fn_separate_transform.cc
+  nodes/node_fn_set_string_case.cc
   nodes/node_fn_slice_string.cc
+  nodes/node_fn_split_string.cc
   nodes/node_fn_string_length.cc
   nodes/node_fn_string_to_value.cc
   nodes/node_fn_transform_direction.cc
   nodes/node_fn_transform_point.cc
   nodes/node_fn_transpose_matrix.cc
+  nodes/node_fn_trim_string.cc
   nodes/node_fn_value_to_string.cc
 
   node_function_util.cc
@@ -81,6 +87,7 @@ set(LIB
   PRIVATE bf::blenlib
   PRIVATE bf::blentranslation
   PRIVATE bf::blenloader
+  PRIVATE bf::depsgraph
   PRIVATE bf::dna
   PRIVATE bf::functions
   PRIVATE bf::gpu

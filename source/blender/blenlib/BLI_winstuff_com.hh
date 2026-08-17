@@ -13,9 +13,7 @@
 #  error "This include is for Windows only!"
 #endif
 
-#include "BLI_sys_types.h"
-
-#define WIN32_LEAN_AND_MEAN
+#include "BLI_sys_types.hh"
 
 #include <windows.h>
 

@@ -8,8 +8,8 @@
 
 #include "DNA_node_types.h"
 
-#include "BLI_rect.h"
-#include "BLI_utildefines.h"
+#include "BLI_rect.hh"
+#include "BLI_utildefines.hh"
 
 #include "BKE_context.hh"
 #include "BKE_image.hh"
@@ -87,16 +87,11 @@ bool space_node_view_flag(
   BLI_rctf_init_minmax(&cur_new);
 
   int tot = 0;
-  bool has_frame = false;
   if (snode.edittree) {
     for (const bNode *node : snode.edittree->all_nodes()) {
       if ((node->flag & node_flag) == node_flag) {
         BLI_rctf_union(&cur_new, &node->runtime->draw_bounds);
         tot++;
-
-        if (node->is_frame()) {
-          has_frame = true;
-        }
       }
     }
   }
@@ -109,27 +104,19 @@ bool space_node_view_flag(
   const float height = BLI_rctf_size_y(&cur_new);
   const float new_aspect = width / height;
 
-  /* for single non-frame nodes, don't zoom in, just pan view,
-   * but do allow zooming out, this allows for big nodes to be zoomed out */
-  if ((tot == 1) && (has_frame == false) && ((oldwidth * oldheight) > (width * height))) {
-    /* center, don't zoom */
-    BLI_rctf_resize(&cur_new, oldwidth, oldheight);
+  if (old_aspect < new_aspect) {
+    const float height_new = width / old_aspect;
+    cur_new.ymin = cur_new.ymin - height_new / 4.0f;
+    cur_new.ymax = cur_new.ymax + height_new / 4.0f;
   }
   else {
-    if (old_aspect < new_aspect) {
-      const float height_new = width / old_aspect;
-      cur_new.ymin = cur_new.ymin - height_new / 4.0f;
-      cur_new.ymax = cur_new.ymax + height_new / 4.0f;
-    }
-    else {
-      const float width_new = height * old_aspect;
-      cur_new.xmin = cur_new.xmin - width_new / 4.0f;
-      cur_new.xmax = cur_new.xmax + width_new / 4.0f;
-    }
-
-    /* add some padding */
-    BLI_rctf_scale(&cur_new, 1.1f);
+    const float width_new = height * old_aspect;
+    cur_new.xmin = cur_new.xmin - width_new / 4.0f;
+    cur_new.xmax = cur_new.xmax + width_new / 4.0f;
   }
+
+  /* add some padding */
+  BLI_rctf_scale(&cur_new, 1.1f);
 
   ui::view2d_smooth_view(&C, &region, &cur_new, smooth_viewtx);
 
@@ -336,18 +323,76 @@ void NODE_OT_backimage_move(wmOperatorType *ot)
 /** \name Background Image Zoom
  * \{ */
 
+/* Simple struct for background image zoom data */
+struct backImageZoomData {
+  float factor;
+  float2 offset;
+};
+
+static void backimage_zoom_init(bContext *C, wmOperator *op)
+{
+  BLI_assert(space_node_composite_active_view_poll(C));
+
+  SpaceNode *snode = CTX_wm_space_node(C);
+
+  backImageZoomData *zdata = MEM_new_zeroed<backImageZoomData>(__func__);
+  op->customdata = zdata;
+
+  zdata->factor = RNA_float_get(op->ptr, "factor");
+  zdata->offset = {snode->xof, snode->yof}; /* Current img offset for execute. */
+}
+
 static wmOperatorStatus backimage_zoom_exec(bContext *C, wmOperator *op)
 {
-  SpaceNode *snode = CTX_wm_space_node(C);
   ARegion *region = CTX_wm_region(C);
-  float fac = RNA_float_get(op->ptr, "factor");
+  SpaceNode *snode = CTX_wm_space_node(C);
 
-  snode->zoom *= fac;
+  /* If executed without invoking, initialize the customdata here. */
+  if (op->customdata == nullptr) {
+    backimage_zoom_init(C, op);
+  }
+
+  backImageZoomData *zdata = static_cast<backImageZoomData *>(op->customdata);
+
+  snode->zoom *= zdata->factor;
+  snode->xof = zdata->offset.x;
+  snode->yof = zdata->offset.y;
+
   ED_region_tag_redraw(region);
   WM_main_add_notifier(NC_NODE | ND_DISPLAY, nullptr);
   WM_main_add_notifier(NC_SPACE | ND_SPACE_NODE_VIEW, nullptr);
 
+  MEM_SAFE_DELETE(zdata);
+  op->customdata = nullptr;
+
   return OPERATOR_FINISHED;
+}
+
+static wmOperatorStatus backimage_zoom_invoke(bContext *C, wmOperator *op, const wmEvent *event)
+{
+  ARegion *region = CTX_wm_region(C);
+  SpaceNode *snode = CTX_wm_space_node(C);
+
+  backimage_zoom_init(C, op);
+  backImageZoomData *zdata = static_cast<backImageZoomData *>(op->customdata);
+
+  /* If the not set in the preference, no need to do all the checks below. */
+  if ((U.uiflag & USER_ZOOM_TO_MOUSEPOS) == 0) {
+    return backimage_zoom_exec(C, op);
+  }
+
+  if (RNA_boolean_get(op->ptr, "use_mouse_pos")) {
+    float fac = RNA_float_get(op->ptr, "factor");
+
+    float2 img_center = {snode->xof + region->winx / 2.0f, snode->yof + region->winy / 2.0f};
+
+    float2 img_offset = {snode->xof + (event->mval[0] - img_center.x) * (1 - fac),
+                         snode->yof + (event->mval[1] - img_center.y) * (1 - fac)};
+
+    zdata->offset = {img_offset.x, img_offset.y};
+  }
+
+  return backimage_zoom_exec(C, op);
 }
 
 void NODE_OT_backimage_zoom(wmOperatorType *ot)
@@ -359,6 +404,7 @@ void NODE_OT_backimage_zoom(wmOperatorType *ot)
   ot->description = "Zoom in/out the background image";
 
   /* API callbacks. */
+  ot->invoke = backimage_zoom_invoke;
   ot->exec = backimage_zoom_exec;
   ot->poll = space_node_composite_active_view_poll;
 
@@ -367,6 +413,7 @@ void NODE_OT_backimage_zoom(wmOperatorType *ot)
 
   /* internal */
   RNA_def_float(ot->srna, "factor", 1.2f, 0.0f, 10.0f, "Factor", "", 0.0f, 10.0f);
+  RNA_def_boolean(ot->srna, "use_mouse_pos", true, "Use Mouse Position", "Zoom to mouse position");
 }
 
 /** \} */
@@ -529,20 +576,19 @@ bool ED_space_node_color_sample(
 
   if (fx >= 0.0f && fy >= 0.0f && fx < 1.0f && fy < 1.0f) {
     const float *fp;
-    uchar *cp;
+    const uchar *cp;
     int x = int(fx * ibuf->x), y = int(fy * ibuf->y);
 
     CLAMP(x, 0, ibuf->x - 1);
     CLAMP(y, 0, ibuf->y - 1);
 
-    if (ibuf->float_buffer.data) {
-      fp = (ibuf->float_buffer.data + (ibuf->channels) * (y * ibuf->x + x));
-      /* #IB_PROFILE_NONE is default but in fact its linear. */
+    if (const float *float_data = ibuf->float_data()) {
+      fp = (float_data + (ibuf->channels) * (y * ibuf->x + x));
       copy_v3_v3(r_col, fp);
       ret = true;
     }
-    else if (ibuf->byte_buffer.data) {
-      cp = ibuf->byte_buffer.data + 4 * (y * ibuf->x + x);
+    else if (const uchar *byte_data = ibuf->byte_data()) {
+      cp = byte_data + 4 * (y * ibuf->x + x);
       rgb_uchar_to_float(r_col, cp);
       IMB_colormanagement_colorspace_to_scene_linear_v3(r_col, ibuf->byte_buffer.colorspace);
       ret = true;
@@ -574,7 +620,7 @@ static void sample_apply(bContext *C, wmOperator *op, const wmEvent *event)
     return;
   }
 
-  if (!ibuf->byte_buffer.data) {
+  if (!ibuf->byte_data()) {
     IMB_byte_from_float(ibuf);
   }
 
@@ -588,7 +634,7 @@ static void sample_apply(bContext *C, wmOperator *op, const wmEvent *event)
 
   if (fx >= 0.0f && fy >= 0.0f && fx < 1.0f && fy < 1.0f) {
     const float *fp;
-    uchar *cp;
+    const uchar *cp;
     int x = int(fx * ibuf->x), y = int(fy * ibuf->y);
 
     CLAMP(x, 0, ibuf->x - 1);
@@ -599,8 +645,8 @@ static void sample_apply(bContext *C, wmOperator *op, const wmEvent *event)
     info->draw = 1;
     info->channels = ibuf->channels;
 
-    if (ibuf->byte_buffer.data) {
-      cp = ibuf->byte_buffer.data + 4 * (y * ibuf->x + x);
+    if (const uchar *byte_data = ibuf->byte_data()) {
+      cp = byte_data + 4 * (y * ibuf->x + x);
 
       info->col[0] = cp[0];
       info->col[1] = cp[1];
@@ -618,8 +664,8 @@ static void sample_apply(bContext *C, wmOperator *op, const wmEvent *event)
 
       info->color_manage = true;
     }
-    if (ibuf->float_buffer.data) {
-      fp = (ibuf->float_buffer.data + (ibuf->channels) * (y * ibuf->x + x));
+    if (const float *float_data = ibuf->float_data()) {
+      fp = float_data + (ibuf->channels) * (y * ibuf->x + x);
 
       info->colf[0] = fp[0];
       info->colf[1] = fp[1];

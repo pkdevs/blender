@@ -29,12 +29,12 @@
 #include "DNA_object_types.h"
 #include "DNA_scene_types.h"
 
-#include "BLI_listbase.h"
-#include "BLI_math_matrix.h"
-#include "BLI_math_rotation.h"
-#include "BLI_math_vector.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_rotation_c.hh"
+#include "BLI_math_vector_c.hh"
 #include "BLI_string_utils.hh"
-#include "BLI_utildefines.h"
+#include "BLI_utildefines.hh"
 
 #include "BLT_translation.hh"
 
@@ -53,6 +53,7 @@
 #include "BKE_object_types.hh"
 
 #include "DEG_depsgraph.hh"
+#include "DEG_depsgraph_query.hh"
 
 #include "BLO_read_write.hh"
 
@@ -87,7 +88,7 @@ static void metaball_free_data(ID *id)
 
   MEM_SAFE_DELETE(metaball->mat);
 
-  BLI_freelistN(&metaball->elems);
+  metaball->elems.free_no_destruct();
 }
 
 static void metaball_foreach_id(ID *id, LibraryForeachIDData *data)
@@ -113,7 +114,7 @@ static void metaball_blend_write(BlendWriter *writer, ID *id, const void *id_add
   BKE_id_blend_write(writer, &mb->id);
 
   /* direct data */
-  BLO_write_pointer_array(writer, mb->totcol, mb->mat);
+  writer->write_pointer_array(mb->totcol, mb->mat);
 
   for (MetaElem &ml : mb->elems) {
     writer->write_struct(&ml);
@@ -124,7 +125,7 @@ static void metaball_blend_read_data(BlendDataReader *reader, ID *id)
 {
   MetaBall *mb = id_cast<MetaBall *>(id);
 
-  BLO_read_pointer_array(reader, mb->totcol, reinterpret_cast<void **>(&mb->mat));
+  BLO_read_pointer_array_and_validate_size(reader, &mb->mat, &mb->totcol);
 
   BLO_read_struct_list(reader, MetaElem, &(mb->elems));
 
@@ -234,7 +235,7 @@ float2 BKE_mball_element_display_radius_calc_with_stiffness(const MetaElem *ml)
     /* Without this additional size, the cube can't be selected in solid mode.
      * Use the minimum size so this doesn't become too large because of one large axis.
      * See: #136396. */
-    const float offset = min_fff(ml->expx, ml->expy, ml->expz) * M_SQRT2;
+    const float offset = std::min({ml->expx, ml->expy, ml->expz}) * M_SQRT2;
     radius_stiffness[0] += offset;
     radius_stiffness[1] += offset;
   }
@@ -244,7 +245,7 @@ float BKE_mball_element_display_radius_calc(const MetaElem *ml)
 {
   float radius = ml->rad;
   if (ml->type == MB_CUBE) {
-    const float offset = min_fff(ml->expx, ml->expy, ml->expz) * M_SQRT2;
+    const float offset = std::min({ml->expx, ml->expy, ml->expz}) * M_SQRT2;
     radius += offset;
   }
   return radius;
@@ -414,7 +415,7 @@ void BKE_mball_properties_copy(Main *bmain, MetaBall *metaball_src)
   }
 }
 
-Object *BKE_mball_basis_find(Scene *scene, Object *object)
+Object *BKE_mball_basis_find(const Main &bmain, Scene *scene, Object *object)
 {
   Object *bob = object;
   int basisnr, obnr;
@@ -423,7 +424,7 @@ Object *BKE_mball_basis_find(Scene *scene, Object *object)
   BLI_string_split_name_number(object->id.name + 2, '.', basisname, &basisnr);
 
   for (ViewLayer &view_layer : scene->view_layers) {
-    BKE_view_layer_synced_ensure(scene, &view_layer);
+    BKE_view_layer_synced_ensure(bmain, scene, &view_layer);
     for (Base &base : *BKE_view_layer_object_bases_get(&view_layer)) {
       Object *ob = base.object;
       if ((ob->type == OB_MBALL) && !(base.flag & BASE_FROM_DUPLI)) {
@@ -487,7 +488,7 @@ bool BKE_mball_minmax(const MetaBall *mb, float min[3], float max[3])
     minmax_v3v3_v3(min, max, &ml.x);
   }
 
-  return (BLI_listbase_is_empty(&mb->elems) == false);
+  return (mb->elems.is_empty() == false);
 }
 
 bool BKE_mball_center_median(const MetaBall *mb, float r_cent[3])
@@ -580,7 +581,7 @@ bool BKE_mball_select_all(MetaBall *mb)
   bool changed = false;
   for (MetaElem &ml : *mb->editelems) {
     if ((ml.flag & SELECT) == 0) {
-      ml.flag |= SELECT;
+      ml.flag |= MB_SELECT;
       changed = true;
     }
   }
@@ -603,7 +604,7 @@ bool BKE_mball_deselect_all(MetaBall *mb)
   bool changed = false;
   for (MetaElem &ml : *mb->editelems) {
     if ((ml.flag & SELECT) != 0) {
-      ml.flag &= ~SELECT;
+      ml.flag &= ~MB_SELECT;
       changed = true;
     }
   }
@@ -626,7 +627,7 @@ bool BKE_mball_select_swap(MetaBall *mb)
 {
   bool changed = false;
   for (MetaElem &ml : *mb->editelems) {
-    ml.flag ^= SELECT;
+    ml.flag ^= MB_SELECT;
     changed = true;
   }
   return changed;
@@ -652,7 +653,7 @@ void BKE_mball_data_update(Depsgraph *depsgraph, Scene *scene, Object *ob)
 
   BKE_object_free_derived_caches(ob);
 
-  const Object *basis_object = BKE_mball_basis_find(scene, ob);
+  const Object *basis_object = BKE_mball_basis_find(*DEG_get_bmain(depsgraph), scene, ob);
   if (ob != basis_object) {
     return;
   }

@@ -20,25 +20,27 @@ static void node_declare(NodeDeclarationBuilder &b)
 {
   b.use_custom_socket_order();
   b.allow_any_socket_order();
-  b.add_input<decl::Color>("Image")
+  b.add_input<decl::Color>("Image"_ustr)
       .default_value({1.0f, 1.0f, 1.0f, 1.0f})
       .hide_value()
       .structure_type(StructureType::Dynamic);
-  b.add_output<decl::Color>("Image").structure_type(StructureType::Dynamic).align_with_previous();
+  b.add_output<decl::Color>("Image"_ustr)
+      .structure_type(StructureType::Dynamic)
+      .align_with_previous();
 
-  b.add_input<decl::Float>("Factor", "Fac")
+  b.add_input<decl::Float>("Factor"_ustr, "Fac"_ustr)
       .default_value(1.0f)
       .min(0.0f)
       .max(1.0f)
       .subtype(PROP_FACTOR)
       .structure_type(StructureType::Dynamic);
-  b.add_input<decl::Float>("Color Threshold")
+  b.add_input<decl::Float>("Color Threshold"_ustr)
       .default_value(0.5f)
       .min(0.0f)
       .description(
           "Pixels are despeckled only if their color difference from the average color of their "
           "neighbors exceeds this threshold");
-  b.add_input<decl::Float>("Neighbor Threshold")
+  b.add_input<decl::Float>("Neighbor Threshold"_ustr)
       .default_value(0.5f)
       .subtype(PROP_FACTOR)
       .min(0.0f)
@@ -84,7 +86,8 @@ class DespeckleOperation : public NodeOperation {
     input_image.bind_as_texture(shader, "input_tx");
 
     const Result &factor_image = get_input("Fac");
-    factor_image.bind_as_texture(shader, "factor_tx");
+    gpu::Texture *factor_texture = factor_image.bind_as_texture_or_single_value(shader,
+                                                                                "factor_tx");
 
     const Domain domain = compute_domain();
     Result &output_image = get_result("Image");
@@ -96,7 +99,7 @@ class DespeckleOperation : public NodeOperation {
     GPU_shader_unbind();
     output_image.unbind_as_image();
     input_image.unbind_as_texture();
-    factor_image.unbind_as_texture();
+    factor_image.unbind_as_texture_or_single_value(factor_texture);
   }
 
   void execute_cpu()
@@ -196,7 +199,7 @@ static void node_register()
 {
   static bke::bNodeType ntype;
 
-  cmp_node_type_base(&ntype, "CompositorNodeDespeckle", CMP_NODE_DESPECKLE);
+  cmp_node_type_base(&ntype, "CompositorNodeDespeckle"_ustr, CMP_NODE_DESPECKLE);
   ntype.ui_name = "Despeckle";
   ntype.ui_description =
       "Smooth areas of an image in which noise is noticeable, while leaving complex areas "

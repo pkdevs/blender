@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "BLI_assert.h"
+#include "BLI_assert.hh"
 #include "BLI_map.hh"
 #include "GPU_texture.hh"
 #include "MEM_guardedalloc.h"
@@ -175,13 +175,14 @@ struct MTLSamplerState {
   }
 };
 
-const MTLSamplerState DEFAULT_SAMPLER_STATE = {GPUSamplerState::default_sampler() /*, 0, 9999 */};
+const MTLSamplerState DEFAULT_SAMPLER_STATE = {GPUSamplerState::default_sampler() /* , 0, 9999 */};
 
 class MTLTexture : public Texture {
   friend class MTLContext;
   friend class MTLStateManager;
   friend class MTLFrameBuffer;
   friend class MTLStorageBuf;
+  friend class MTLTexturePool;
 
   /* Special case: The XR blitting function needs access to the Metal blit encoder and handles
    * for directly blitting from an UNORM to an SRGB texture without color space conversion. */
@@ -238,7 +239,6 @@ class MTLTexture : public Texture {
    * If this mode is used, source_texture points to a gpu::Texture from which
    * we pull their texture handle as a root.
    */
-  const gpu::Texture *source_texture_ = nullptr;
 
   enum TextureViewDirtyState {
     TEXTURE_VIEW_NOT_DIRTY = 0,
@@ -251,9 +251,6 @@ class MTLTexture : public Texture {
   bool mip_range_dirty_ = false;
 
   bool texture_view_stencil_ = false;
-  int mip_texture_base_level_ = 0;
-  int mip_texture_max_level_ = 1000;
-  int mip_texture_base_layer_ = 0;
   int texture_view_dirty_flags_ = TEXTURE_VIEW_NOT_DIRTY;
 
   /* Max mip-maps for currently allocated texture resource. */
@@ -291,11 +288,10 @@ class MTLTexture : public Texture {
                   GPUPixelBuffer *pixbuf) override;
 
   void generate_mipmap() override;
-  void copy_to(Texture *dst) override;
+  void copy_to(Texture *dst, IndexRange mip_levels) override;
   void clear(const double4 data) override;
   void swizzle_set(const char swizzle_mask[4]) override;
-  void mip_range_set(int min, int max) override;
-  void *read(int mip, eGPUDataFormat type) override;
+  void read(int mip, eGPUDataFormat type, void *data) override;
 
   bool is_format_srgb();
   bool texture_is_baked();
@@ -335,10 +331,7 @@ class MTLTexture : public Texture {
  protected:
   bool init_internal() override;
   bool init_internal(VertBuf *vbo) override;
-  bool init_internal(gpu::Texture *src,
-                     int mip_offset,
-                     int layer_offset,
-                     bool use_stencil) override; /* Texture View */
+  bool init_internal(gpu::Texture *src, bool use_stencil) override; /* Texture View */
 
  private:
   /* Common Constructor, default initialization. */
@@ -353,6 +346,8 @@ class MTLTexture : public Texture {
 
   /* Delete associated Metal GPU resources. */
   void reset();
+
+  void mip_range_set(int min, int max);
   void ensure_mipmaps(int miplvl);
 
   /* Flags a given mip level as being used. */
@@ -692,6 +687,16 @@ inline eGPUTextureUsage gpu_usage_from_mtl(MTLTextureUsage mtl_usage)
     usage = usage | GPU_TEXTURE_USAGE_FORMAT_VIEW;
   }
   return usage;
+}
+
+BLI_INLINE MTLTexture *unwrap(Texture *tex)
+{
+  return static_cast<MTLTexture *>(tex);
+}
+
+BLI_INLINE Texture *wrap(MTLTexture *texture)
+{
+  return static_cast<Texture *>(texture);
 }
 
 }  // namespace gpu

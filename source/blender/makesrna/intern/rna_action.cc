@@ -90,10 +90,10 @@ const EnumPropertyItem default_ActionSlot_target_id_type_items[] = {
 
 #  include <algorithm>
 
-#  include "BLI_listbase.h"
-#  include "BLI_math_base.h"
-#  include "BLI_string.h"
-#  include "BLI_string_utf8.h"
+#  include "BLI_listbase.hh"
+#  include "BLI_math_base_c.hh"
+#  include "BLI_string.hh"
+#  include "BLI_string_utf8.hh"
 
 #  include "BKE_fcurve.hh"
 #  include "BKE_main.hh"
@@ -174,7 +174,7 @@ static PointerRNA rna_ActionSlots_active_get(PointerRNA *ptr)
   animrig::Slot *active_slot = action.slot_active_get();
 
   if (!active_slot) {
-    return PointerRNA_NULL;
+    return {};
   }
   return RNA_pointer_create_discrete(&action.id, RNA_ActionSlot, active_slot);
 }
@@ -185,7 +185,7 @@ static void rna_ActionSlots_active_set(PointerRNA *ptr,
 {
   animrig::Action &action = rna_action(ptr);
 
-  if (value.data) {
+  if (value) {
     animrig::Slot &slot = rna_data_slot(&value);
     action.slot_active_set(slot.handle);
   }
@@ -668,7 +668,7 @@ static FCurve *rna_Channelbag_fcurve_new_from_fcurve(ID *dna_action_id,
   animrig::Channelbag &self = dna_channelbag->wrap();
 
   if (!data_path) {
-    data_path = source->rna_path;
+    data_path = source->rna_path().c_str();
   }
 
   if (self.fcurve_find({data_path, source->array_index})) {
@@ -680,8 +680,7 @@ static FCurve *rna_Channelbag_fcurve_new_from_fcurve(ID *dna_action_id,
     return nullptr;
   }
   FCurve *copy = BKE_fcurve_copy(source);
-  MEM_SAFE_DELETE(copy->rna_path);
-  copy->rna_path = BLI_strdupn(data_path, strlen(data_path));
+  copy->rna_path_set(data_path);
   self.fcurve_append(*copy);
 
   DEG_id_tag_update(dna_action_id, ID_RECALC_ANIMATION_NO_FLUSH);
@@ -979,7 +978,7 @@ static void rna_Action_active_pose_marker_index_range(
   bAction *act = static_cast<bAction *>(ptr->data);
 
   *min = 0;
-  *max = max_ii(0, BLI_listbase_count(&act->markers) - 1);
+  *max = max_ii(0, act->markers.count() - 1);
 }
 
 static bool rna_Action_is_empty_get(PointerRNA *ptr)
@@ -995,7 +994,7 @@ static bool rna_Action_is_action_legacy_get(PointerRNA *ptr)
 }
 static bool rna_Action_is_action_layered_get(PointerRNA * /* ptr */)
 {
-  /*All actions are layered through versioning. */
+  /* All actions are layered through versioning. */
   return true;
 }
 
@@ -1140,7 +1139,7 @@ static void reevaluate_fcurve_errors(bAnimContext *ac)
     PointerRNA ptr;
     PropertyRNA *prop;
     PointerRNA id_ptr = RNA_id_pointer_create(ale.id);
-    if (RNA_path_resolve_property(&id_ptr, fcu->rna_path, &ptr, &prop)) {
+    if (RNA_path_resolve_property(&id_ptr, fcu->rna_path().c_str(), &ptr, &prop)) {
       fcu->flag &= ~FCURVE_DISABLED;
     }
     else {
@@ -1358,7 +1357,7 @@ static void rna_def_dopesheet(BlenderRNA *brna)
   RNA_def_property_ui_text(prop,
                            "Only Show Errors",
                            "Only include F-Curves and drivers that are disabled or have errors");
-  RNA_def_property_ui_icon(prop, ICON_ERROR, 0);
+  RNA_def_property_ui_icon(prop, ICON_STATUS_ERROR, 0);
   RNA_def_property_flag(prop, PROP_CONTEXT_UPDATE);
   RNA_def_property_update(
       prop, NC_ANIMATION | ND_ANIMCHAN | NA_EDITED, "rna_Action_show_errors_update");
@@ -1584,7 +1583,7 @@ static void rna_def_dopesheet(BlenderRNA *brna)
   prop = RNA_def_property(srna, "show_lightprobes", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_negative_sdna(prop, nullptr, "filterflag2", ADS_FILTER_NOLIGHTPROBE);
   RNA_def_property_ui_text(
-      prop, "Display Light Probe", "Include visualization of lightprobe related animation data");
+      prop, "Display Light Probe", "Include visualization of light probe related animation data");
   RNA_def_property_ui_icon(prop, ICON_OUTLINER_OB_LIGHTPROBE, 0);
   RNA_def_property_update(prop, NC_ANIMATION | ND_ANIMCHAN | NA_EDITED, nullptr);
 
@@ -2017,7 +2016,7 @@ static void rna_def_action_keyframe_strip(BlenderRNA *brna)
         func,
         "array_index",
         -1,
-        -INT_MAX,
+        INT_MIN,
         INT_MAX,
         "Array Index",
         "Index of the animated array element, or -1 if the property is not an array",
@@ -2325,7 +2324,7 @@ static void rna_def_action_group(BlenderRNA *brna)
 
   prop = RNA_def_property(srna, "use_pin", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_flag(prop, PROP_NO_DEG_UPDATE);
-  RNA_def_property_boolean_sdna(prop, nullptr, "flag", ADT_CURVES_ALWAYS_VISIBLE);
+  RNA_def_property_boolean_sdna(prop, nullptr, "flag", AGRP_CURVES_ALWAYS_VISIBLE);
   RNA_def_property_ui_text(prop, "Pin in Graph Editor", "");
   RNA_def_property_update(prop, NC_ANIMATION | ND_ANIMCHAN | NA_EDITED, nullptr);
 

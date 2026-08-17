@@ -13,7 +13,7 @@
 #include "DNA_collection_types.h"
 
 #include "BLI_path_utils.hh"
-#include "BLI_utildefines.h"
+#include "BLI_utildefines.hh"
 
 #include "RNA_define.hh"
 #include "RNA_enum_types.hh"
@@ -44,6 +44,8 @@ BLI_STATIC_ASSERT(ARRAY_SIZE(rna_enum_collection_color_items) - 2 == COLLECTION_
 
 #ifdef RNA_RUNTIME
 
+#  include <string>
+
 #  include <fmt/format.h>
 
 #  include "DNA_object_types.h"
@@ -53,7 +55,7 @@ BLI_STATIC_ASSERT(ARRAY_SIZE(rna_enum_collection_color_items) - 2 == COLLECTION_
 #  include "DEG_depsgraph_build.hh"
 #  include "DEG_depsgraph_query.hh"
 
-#  include "BLI_listbase.h"
+#  include "BLI_listbase.hh"
 
 #  include "BKE_collection.hh"
 #  include "BKE_global.hh"
@@ -115,23 +117,17 @@ static bool rna_collection_objects_edit_check(Collection *collection,
     BKE_reportf(reports, RPT_ERROR, "Collection '%s' is not an original ID", object->id.name + 2);
     return false;
   }
-  /* Currently this should not be allowed (might be supported in the future though...). */
-  if (ID_IS_OVERRIDE_LIBRARY(&collection->id)) {
+
+  std::string reason;
+  if (!BKE_collection_is_content_editable(collection, &reason)) {
     BKE_reportf(reports,
                 RPT_ERROR,
-                "Could not (un)link the object '%s' because the collection '%s' is overridden",
+                "Could not (un)link the object '%s'. %s",
                 object->id.name + 2,
-                collection->id.name + 2);
+                reason.c_str());
     return false;
   }
-  if (!ID_IS_EDITABLE(&collection->id)) {
-    BKE_reportf(reports,
-                RPT_ERROR,
-                "Could not (un)link the object '%s' because the collection '%s' is linked",
-                object->id.name + 2,
-                collection->id.name + 2);
-    return false;
-  }
+
   return true;
 }
 
@@ -194,7 +190,7 @@ static bool rna_Collection_objects_override_apply(Main *bmain,
 
   Collection *coll_dst = id_cast<Collection *>(ptr_dst->owner_id);
 
-  if (ptr_item_dst->type == nullptr || ptr_item_src->type == nullptr) {
+  if (!ptr_item_dst->has_type() || !ptr_item_src->has_type()) {
     // BLI_assert_msg(0, "invalid source or destination object.");
     return false;
   }
@@ -243,21 +239,14 @@ static bool rna_collection_children_edit_check(Collection *collection,
     BKE_reportf(reports, RPT_ERROR, "Collection '%s' is not an original ID", child->id.name + 2);
     return false;
   }
-  /* Currently this should not be allowed (might be supported in the future though...). */
-  if (ID_IS_OVERRIDE_LIBRARY(&collection->id)) {
+
+  std::string reason;
+  if (!BKE_collection_is_content_editable(collection, &reason)) {
     BKE_reportf(reports,
                 RPT_ERROR,
-                "Could not (un)link the collection '%s' because the collection '%s' is overridden",
+                "Could not (un)link the collection '%s'. %s",
                 child->id.name + 2,
-                collection->id.name + 2);
-    return false;
-  }
-  if (!ID_IS_EDITABLE(&collection->id)) {
-    BKE_reportf(reports,
-                RPT_ERROR,
-                "Could not (un)link the collection '%s' because the collection '%s' is linked",
-                child->id.name + 2,
-                collection->id.name + 2);
+                reason.c_str());
     return false;
   }
   return true;
@@ -322,7 +311,7 @@ static bool rna_Collection_children_override_apply(Main *bmain,
 
   Collection *coll_dst = id_cast<Collection *>(ptr_dst->owner_id);
 
-  if (ptr_item_dst->type == nullptr || ptr_item_src->type == nullptr) {
+  if (!ptr_item_dst->has_type() || !ptr_item_src->has_type()) {
     /* This can happen when reference and overrides differ, just ignore then. */
     return false;
   }
@@ -351,7 +340,7 @@ static bool rna_Collection_children_override_apply(Main *bmain,
   return true;
 }
 
-static void rna_Collection_flag_set(PointerRNA *ptr, const bool value, const int flag)
+static void rna_Collection_flag_set(PointerRNA *ptr, const bool value, const eCollection_Flag flag)
 {
   Collection *collection = static_cast<Collection *>(ptr->data);
 
@@ -408,7 +397,7 @@ static void rna_Collection_color_tag_set(PointerRNA *ptr, int value)
     return;
   }
 
-  collection->color_tag = value;
+  collection->color_tag = CollectionColorTag(value);
 }
 
 static void rna_Collection_color_tag_update(Main * /*bmain*/, Scene *scene, PointerRNA * /*ptr*/)
@@ -460,6 +449,27 @@ static void rna_CollectionLightLinking_update(Main *bmain, Scene * /*scene*/, Po
 
   /* Tag relations for update so that an updated state of light sets is calculated. */
   DEG_relations_tag_update(bmain);
+}
+
+static PointerRNA rna_CollectionImport_import_properties_get(PointerRNA *ptr)
+{
+  const CollectionImport *data = reinterpret_cast<CollectionImport *>(ptr->data);
+
+  /* If the File Handler or Operator is missing, we allow the data to be accessible
+   * as generic ID properties. */
+  blender::bke::FileHandlerType *fh = blender::bke::file_handler_find(data->fh_idname);
+  if (!fh) {
+    return RNA_pointer_create_discrete(
+        ptr->owner_id, RNA_IDPropertyWrapPtr, data->import_properties);
+  }
+
+  wmOperatorType *ot = WM_operatortype_find(fh->import_operator, false);
+  if (!ot) {
+    return RNA_pointer_create_discrete(
+        ptr->owner_id, RNA_IDPropertyWrapPtr, data->import_properties);
+  }
+
+  return RNA_pointer_create_discrete(ptr->owner_id, ot->srna, data->import_properties);
 }
 
 static void rna_CollectionExport_name_set(PointerRNA *ptr, const char *value)
@@ -564,6 +574,55 @@ static PointerRNA rna_CollectionExport_export_properties_get(PointerRNA *ptr)
   }
 
   return RNA_pointer_create_discrete(ptr->owner_id, ot->srna, data->export_properties);
+}
+
+static const char *rna_CollectionImport_filepath_value_from_idprop(CollectionImport *data)
+{
+  if (IDProperty *group = data->import_properties) {
+    IDProperty *filepath_prop = IDP_GetPropertyFromGroup(group, "filepath");
+    if (filepath_prop && filepath_prop->type == IDP_STRING) {
+      return IDP_string_get(filepath_prop);
+    }
+  }
+  return nullptr;
+}
+
+static void rna_CollectionImport_filepath_get(PointerRNA *ptr, char *value)
+{
+  CollectionImport *data = reinterpret_cast<CollectionImport *>(ptr->data);
+  const char *value_src = rna_CollectionImport_filepath_value_from_idprop(data);
+  strcpy(value, value_src ? value_src : "");
+}
+static int rna_CollectionImport_filepath_length(PointerRNA *ptr)
+{
+  CollectionImport *data = reinterpret_cast<CollectionImport *>(ptr->data);
+  const char *value_src = rna_CollectionImport_filepath_value_from_idprop(data);
+  return value_src ? strlen(value_src) : 0;
+}
+static void rna_CollectionImport_filepath_set(PointerRNA *ptr, const char *value)
+{
+  CollectionImport *data = reinterpret_cast<CollectionImport *>(ptr->data);
+  if (!data->import_properties) {
+    IDPropertyTemplate val{};
+    data->import_properties = IDP_New(IDP_GROUP, &val, "import_properties");
+  }
+  IDProperty *group = data->import_properties;
+  /* By convention all exporters are expected to have a `filepath` property.
+   * See #WM_operator_properties_filesel. */
+  const char *prop_id = "filepath";
+  const size_t value_maxsize = FILE_MAX;
+  IDProperty *prop = IDP_GetPropertyFromGroup(group, prop_id);
+  if (prop && prop->type != IDP_STRING) {
+    IDP_FreeFromGroup(group, prop);
+    prop = nullptr;
+  }
+  if (prop == nullptr) {
+    prop = IDP_NewStringMaxSize(value, value_maxsize, prop_id);
+    IDP_AddToGroup(group, prop);
+  }
+  else {
+    IDP_AssignStringMaxSize(prop, value, value_maxsize);
+  }
 }
 
 static const char *rna_CollectionExport_filepath_value_from_idprop(CollectionExport *data)
@@ -788,6 +847,41 @@ static void rna_def_collection_child(BlenderRNA *brna)
   RNA_define_lib_overridable(false);
 }
 
+static void rna_def_collection_importer_data(BlenderRNA *brna)
+{
+  StructRNA *srna;
+  PropertyRNA *prop;
+
+  srna = RNA_def_struct(brna, "CollectionImport", nullptr);
+  RNA_def_struct_sdna(srna, "CollectionImport");
+  RNA_def_struct_ui_text(srna, "Collection Import Data", "Importer configured for the collection");
+
+  prop = RNA_def_property(srna, "is_open", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, nullptr, "flag", IO_HANDLER_PANEL_OPEN);
+  RNA_def_property_ui_text(prop, "Is Open", "Whether the panel is expanded or closed");
+  RNA_def_property_flag(prop, PROP_NO_DEG_UPDATE);
+  RNA_def_property_update(prop, NC_SPACE | ND_SPACE_PROPERTIES, nullptr);
+
+  prop = RNA_def_property(srna, "import_properties", PROP_POINTER, PROP_NONE);
+  RNA_def_property_struct_type(prop, "PropertyGroup");
+  RNA_def_property_ui_text(
+      prop, "Import Properties", "Properties associated with the configured importer");
+  RNA_def_property_pointer_funcs(
+      prop, "rna_CollectionImport_import_properties_get", nullptr, nullptr, nullptr);
+
+  /* Wrap the operator property for same reason as the CollectionExport filepath property below. */
+  prop = RNA_def_property(srna, "filepath", PROP_STRING, PROP_FILEPATH);
+  RNA_def_property_flag(prop, PROP_PATH_SUPPORTS_BLEND_RELATIVE);
+  RNA_def_property_string_funcs(prop,
+                                "rna_CollectionImport_filepath_get",
+                                "rna_CollectionImport_filepath_length",
+                                "rna_CollectionImport_filepath_set");
+  RNA_def_property_string_maxlength(prop, FILE_MAX);
+  RNA_def_property_ui_text(prop, "File Path", "The file path used for importing");
+  RNA_def_property_flag(prop, PROP_NO_DEG_UPDATE);
+  RNA_def_property_update(prop, NC_SPACE | ND_SPACE_PROPERTIES, nullptr);
+}
+
 static void rna_def_collection_exporter_data(BlenderRNA *brna)
 {
   StructRNA *srna;
@@ -917,6 +1011,12 @@ void RNA_def_collections(BlenderRNA *brna)
                            "Collection Children",
                            "Children collections with their parent-collection-specific settings");
 
+  /* Importer Handler. */
+  prop = RNA_def_property(srna, "importer", PROP_POINTER, PROP_NONE);
+  RNA_def_property_struct_type(prop, "CollectionImport");
+  RNA_def_property_ui_text(
+      prop, "Collection Import Handler", "Import Handler configured for the collection");
+
   /* Export Handlers. */
   prop = RNA_def_property(srna, "exporters", PROP_COLLECTION, PROP_NONE);
   RNA_def_property_struct_type(prop, "CollectionExport");
@@ -1032,6 +1132,7 @@ void RNA_def_collections(BlenderRNA *brna)
   rna_def_collection_light_linking(brna);
   rna_def_collection_object(brna);
   rna_def_collection_child(brna);
+  rna_def_collection_importer_data(brna);
   rna_def_collection_exporter_data(brna);
 }
 

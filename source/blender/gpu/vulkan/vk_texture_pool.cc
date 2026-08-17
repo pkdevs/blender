@@ -6,10 +6,10 @@
  * \ingroup gpu
  */
 
-#include "vk_texture_pool.hh"
-#include "vk_backend.hh"
+#include <fmt/format.h>
 
-#include "fmt/format.h"
+#include "vk_backend.hh"
+#include "vk_texture_pool.hh"
 
 #include "BKE_global.hh"
 
@@ -21,10 +21,18 @@ static CLG_LogRef LOG = {"gpu.vulkan"};
 
 namespace detail {
 /* Wrap non-hardcoded arguments of VkImageCreateInfo as tuple of lvalues.
- * Keep in sync with `VKTexturePool::acquire_texture()`. */
+ * Keep in sync with `VKTexturePool::acquire_texture_impl()`. */
 constexpr auto tie(const VkImageCreateInfo &info)
 {
-  return std::tie(info.format, info.flags, info.usage, info.extent.width, info.extent.height);
+  return std::tie(info.format,
+                  info.imageType,
+                  info.flags,
+                  info.usage,
+                  info.extent.width,
+                  info.extent.height,
+                  info.extent.depth,
+                  info.arrayLayers,
+                  info.mipLevels);
 }
 }  // namespace detail
 
@@ -33,8 +41,8 @@ constexpr auto tie(const VkImageCreateInfo &info)
 template<> struct DefaultHash<VkImageCreateInfo> {
   constexpr uint64_t operator()(const VkImageCreateInfo &value) const
   {
-    const auto &[_1, _2, _3, _4, _5] = detail::tie(value);
-    return get_default_hash(_1, _2, _3, _4, _5);
+    const auto &[_1, _2, _3, _4, _5, _6, _7, _8, _9] = detail::tie(value);
+    return get_default_hash(_1, _2, _3, _4, get_default_hash(_5, _6, _7, _8, _9));
   }
 };
 
@@ -56,6 +64,31 @@ bool VKImageInfo::operator==(const VKImageInfo &o) const
          std::tuple_cat(detail::tie(o.create_info), std::tie(o.allocation, o.segment));
 }
 
+static VkImage create_and_bind_vk_image(const VKImageInfo &info, const std::string &name_str)
+{
+  VKDevice &device = VKBackend::get().device;
+
+  /* Create VkImage handle from provided VkImageCreateInfo */
+  VkImage image;
+  VkResult create_result = device.functions.vkCreateImage(
+      device.vk_handle(), &info.create_info, nullptr, &image);
+  UNUSED_VARS_NDEBUG(create_result);
+  BLI_assert(create_result == VK_SUCCESS);
+
+  /* Bind VkImage handle to provided VmaAllocation. */
+  VkResult bind_result = vmaBindImageMemory2(
+      device.mem_allocator_get(), info.allocation, info.segment.offset, image, nullptr);
+  UNUSED_VARS_NDEBUG(bind_result);
+  BLI_assert(bind_result == VK_SUCCESS);
+
+  /* Register VkImage handle as resource for synchronization. */
+  bool use_subresource_tracking = info.create_info.arrayLayers > 1 ||
+                                  info.create_info.mipLevels > 1;
+  device.resources.add_aliased_image(image, use_subresource_tracking, name_str.c_str());
+
+  return image;
+}
+
 /* Query memory requirements from VkImageCreateInfo. If VK_KHR_MAINTENANCE4 is supported,
  * we avoid instantiating a VkImage handle. Otherwise, the image handle is destroyed as a
  * matching handle is provided by VKImageCache. */
@@ -71,11 +104,13 @@ inline VkMemoryRequirements get_image_memory_requirements(const VkImageCreateInf
         .pCreateInfo = &image_info,
         .planeAspect = VK_IMAGE_ASPECT_NONE,
     };
-    device.functions.vkGetDeviceImageMemoryRequirements(device.vk_handle(), &reqs_info, &reqs_out);
+    device.functions.vkGetDeviceImageMemoryRequirementsKHR(
+        device.vk_handle(), &reqs_info, &reqs_out);
   }
   else {
     VkImage image = VK_NULL_HANDLE;
-    VkResult result = vkCreateImage(device.vk_handle(), &image_info, nullptr, &image);
+    VkResult result = device.functions.vkCreateImage(
+        device.vk_handle(), &image_info, nullptr, &image);
     UNUSED_VARS_NDEBUG(result);
     BLI_assert(result == VK_SUCCESS);
 
@@ -84,8 +119,8 @@ inline VkMemoryRequirements get_image_memory_requirements(const VkImageCreateInf
         .pNext = nullptr,
         .image = image,
     };
-    vkGetImageMemoryRequirements2(device.vk_handle(), &reqs_info, &reqs_out);
-    vkDestroyImage(device.vk_handle(), image, nullptr);
+    device.functions.vkGetImageMemoryRequirements2(device.vk_handle(), &reqs_info, &reqs_out);
+    device.functions.vkDestroyImage(device.vk_handle(), image, nullptr);
   }
 
   return reqs_out.memoryRequirements;
@@ -100,31 +135,15 @@ VkImage VKImageCache::get_or_create(const VKImageInfo &info)
     return image_handle->image;
   }
 
-  VKDevice &device = VKBackend::get().device;
-
-  /* Otherwise, assemble VkImageCreateInfo and create a new image. */
-  VkImage image;
-  VkResult create_result = vkCreateImage(device.vk_handle(), &info.create_info, nullptr, &image);
-  UNUSED_VARS_NDEBUG(create_result);
-  BLI_assert(create_result == VK_SUCCESS);
-
-  /* Then, bind to the provided allocation */
-  VkResult bind_result = vmaBindImageMemory2(
-      device.mem_allocator_get(), info.allocation, info.segment.offset, image, nullptr);
-  UNUSED_VARS_NDEBUG(bind_result);
-  BLI_assert(bind_result == VK_SUCCESS);
-
-  /* Insert handle into cache. */
-  cache_.add_new(info, {.image = image});
-
   /* Generate debug label name, if one is needed in the rendergraph. */
   std::string name_str;
   if (G.debug & G_DEBUG_GPU) {
     name_str = fmt::format("VkImageFromPool_{}", cache_.size());
   }
 
-  /* Register VkImage as resource for synchronization. */
-  device.resources.add_aliased_image(image, false, name_str.c_str());
+  /* Otherwise, create VkImage handle and insert into cache. */
+  VkImage image = create_and_bind_vk_image(info, name_str);
+  cache_.add_new(info, {.image = image});
 
   return image;
 }
@@ -280,10 +299,13 @@ void VKTexturePool::AllocationHandle::alloc(VkMemoryRequirements requirements)
       .priority = 1.0f,
   };
 
+  if (G.debug & G_DEBUG_GPU) {
+    create_info.flags |= VMA_ALLOCATION_CREATE_USER_DATA_COPY_STRING_BIT;
+    create_info.pUserData = (void *)__func__;
+  }
+
   VkResult result = vmaAllocateMemory(
       device.mem_allocator_get(), &requirements, &create_info, &allocation, &allocation_info);
-
-  /* WATCH(not_mark): will remove asserts when pool is a bit more mature. */
   UNUSED_VARS_NDEBUG(result);
   BLI_assert(result == VK_SUCCESS);
 
@@ -293,16 +315,26 @@ void VKTexturePool::AllocationHandle::alloc(VkMemoryRequirements requirements)
 
 void VKTexturePool::AllocationHandle::free()
 {
-  VKDevice &device = VKBackend::get().device;
-  /* TODO(not_mark): allocation needs to go to discard pool, but for that it needs to be tracked.
-   * This is only OK right now because `max_unused_cycles_` is sufficiently large. */
-  vmaFreeMemory(device.mem_allocator_get(), allocation);
+  VKDiscardPool &discard_pool = VKDiscardPool::discard_pool_get();
+  discard_pool.discard_allocation(allocation);
   segments = {};
+}
+
+VKTexturePool::VKTexturePool()
+{
+  /* VKImageCache causes sporadic crashes on many RDNA2 Mesa configs (dGPU, iGPU; #154768,
+   * #155202). As Mesa has fast VkImage handle creation, it is simply not instantiated there. */
+  if (!GPU_type_matches(GPU_DEVICE_ATI, GPU_OS_UNIX, GPU_DRIVER_OPENSOURCE)) {
+    image_cache_ = VKImageCache();
+  }
 }
 
 VKTexturePool::~VKTexturePool()
 {
-  image_cache_.reset(true);
+  if (image_cache_) {
+    image_cache_->reset(true);
+    image_cache_ = {};
+  }
   for (TextureHandle handle : acquired_) {
     delete handle.texture;
   }
@@ -311,26 +343,29 @@ VKTexturePool::~VKTexturePool()
   }
 }
 
-Texture *VKTexturePool::acquire_texture(int2 extent,
-                                        TextureFormat format,
-                                        eGPUTextureUsage usage,
-                                        const char *name)
+Texture *VKTexturePool::acquire_texture_impl(int3 extent,
+                                             int mip_len,
+                                             GPUTextureType type,
+                                             TextureFormat format,
+                                             eGPUTextureUsage usage,
+                                             const char *name)
 {
-  /* Generate debug label name, if one isn't passed in `name`. */
-  std::string name_str;
-  if (G.debug & G_DEBUG_GPU) {
-    name_str = name ? name : fmt::format("TexFromPool_{}", acquired_.size());
-  }
+  /* Determine actual mipmap depth. */
+  int mip_len_max = 1 + floorf(log2f(std::max({extent.x, extent.y, extent.z})));
+  mip_len = min_ii(mip_len, mip_len_max);
 
   /* Initialize VKTexture return object. */
   VKTexture *texture = new VKTexture(name);
   texture->w_ = extent.x;
   texture->h_ = extent.y;
-  texture->d_ = 0;
+  texture->d_ = extent.z;
   texture->format_ = format;
   texture->format_flag_ = to_format_flag(format);
-  texture->type_ = GPU_TEXTURE_2D;
+  texture->type_ = type;
   texture->gpu_image_usage_flags_ = usage;
+  texture->mipmaps_ = mip_len;
+  texture->mip_min_ = 0;
+  texture->mip_max_ = mip_len - 1;
   /* R16G16F16 formats are typically not supported (<1%). */
   texture->device_format_ = format;
   if (texture->device_format_ == TextureFormat::SFLOAT_16_16_16) {
@@ -348,13 +383,12 @@ Texture *VKTexturePool::acquire_texture(int2 extent,
   VkImageCreateInfo create_info = {
       .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
       .pNext = nullptr,
-      .flags = to_vk_image_create(GPU_TEXTURE_2D, to_format_flag(format), usage) |
-               VK_IMAGE_CREATE_ALIAS_BIT,
-      .imageType = VK_IMAGE_TYPE_2D,
+      .flags = to_vk_image_create(type, to_format_flag(format), usage) | VK_IMAGE_CREATE_ALIAS_BIT,
+      .imageType = to_vk_image_type(type),
       .format = to_vk_format(format),
-      .extent = VkExtent3D(static_cast<uint32_t>(extent.x), static_cast<uint32_t>(extent.y), 1),
-      .mipLevels = 1,
-      .arrayLayers = 1,
+      .extent = texture->vk_extent_3d(0),
+      .mipLevels = static_cast<uint32_t>(max_ii(texture->mip_count(), 1)),
+      .arrayLayers = static_cast<uint32_t>(texture->layer_count()),
       .samples = VK_SAMPLE_COUNT_1_BIT,
       .tiling = VK_IMAGE_TILING_OPTIMAL,
       .usage = to_vk_image_usage(usage, to_format_flag(format), false),
@@ -379,10 +413,11 @@ Texture *VKTexturePool::acquire_texture(int2 extent,
 
   /* If no compatible region was found, allocate new memory. */
   if (image_info.allocation == VK_NULL_HANDLE) {
-    requirements.size = std::max(allocation_size, requirements.size);
+    VkMemoryRequirements allocation_requirements = requirements;
+    allocation_requirements.size = std::max(allocation_size, requirements.size);
 
     AllocationHandle handle;
-    handle.alloc(requirements);
+    handle.alloc(allocation_requirements);
 
     std::optional<VKMemorySegment> segment_opt = handle.acquire(requirements);
     if (segment_opt) {
@@ -395,9 +430,20 @@ Texture *VKTexturePool::acquire_texture(int2 extent,
     }
   }
 
-  /* Get or create a VkImage handle through VKImageCache and assign it to the texture. */
-  texture->vk_image_ = image_cache_.get_or_create(image_info);
-  debug::object_label(texture->vk_image_, texture->name_);
+  /* Generate debug label name, attempt to associate it with texture object. */
+  std::string name_str;
+  if (G.debug & G_DEBUG_GPU) {
+    name_str = name ? name : fmt::format("TexFromPool_{}", acquired_.size());
+  }
+
+  /* Get or create a VkImage handle and assign it to the texture. */
+  if (image_cache_) {
+    texture->vk_image_ = image_cache_->get_or_create(image_info);
+  }
+  else {
+    texture->vk_image_ = create_and_bind_vk_image(image_info, name_str);
+  }
+  debug::object_label(texture->vk_image_, name_str);
 
   if (G.debug & G_DEBUG_GPU) {
     /* Accumulate usage data for debug log. */
@@ -412,14 +458,25 @@ Texture *VKTexturePool::acquire_texture(int2 extent,
   return wrap(texture);
 }
 
-void VKTexturePool::release_texture(Texture *tex)
+void VKTexturePool::release_texture(Texture *texture)
 {
-  BLI_assert_msg(acquired_.contains({unwrap(tex)}),
+  BLI_assert_msg(acquired_.contains({unwrap(texture)}),
                  "Unacquired texture passed to VKTexturePool::offset_users_count()");
 
-  TextureHandle texture_handle = acquired_.lookup_key({unwrap(tex)});
+  TextureHandle texture_handle = acquired_.lookup_key({unwrap(texture)});
   VKImageInfo image_info = texture_handle.image_info;
   AllocationHandle allocation_handle = allocations_.lookup_key({image_info.allocation});
+
+  /* Avoiding WRITE_AFTER_WRITE/READ_AFTER_WRITE hazards (#161990) when reusing the same cached
+   * VkImage. */
+  VKContext &context = *VKContext::get();
+  render_graph::VKSynchronizationNode::CreateInfo synchronization = {
+      .vk_image = texture_handle.texture->vk_image_handle(),
+      .vk_image_layout = VK_IMAGE_LAYOUT_GENERAL,
+      .vk_image_aspect = to_vk_image_aspect_flag_bits(texture_handle.texture->device_format_get()),
+      .vk_access_flags = VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT,
+  };
+  context.render_graph().add_node(synchronization);
 
   if (G.debug & G_DEBUG_GPU) {
     current_usage_data_.acquired_segment_size -= image_info.segment.size;
@@ -429,17 +486,24 @@ void VKTexturePool::release_texture(Texture *tex)
   allocation_handle.release(image_info.segment);
   allocations_.add_overwrite(allocation_handle);
 
+  /* Forward VkImage to discard pool; if VKImageCache is used, this is
+   * handled by the cache over time. */
+  if (!image_cache_) {
+    VKDiscardPool &discard_pool = VKDiscardPool::discard_pool_get();
+    discard_pool.discard_image(texture_handle.texture->vk_image_handle(), VK_NULL_HANDLE);
+  }
+
   /* Delete texture and remove it from the acquired set.
    * VKTexture destructor is skipped as VKTexture::allocation_ is VK_NULL_HANDLE. */
   acquired_.remove(texture_handle);
   delete texture_handle.texture;
 }
 
-void VKTexturePool::offset_users_count(Texture *tex, int offset)
+void VKTexturePool::offset_users_count(Texture *texture, int offset)
 {
-  BLI_assert_msg(acquired_.contains({unwrap(tex)}),
+  BLI_assert_msg(acquired_.contains({unwrap(texture)}),
                  "Unacquired texture passed to VKTexturePool::offset_users_count()");
-  TextureHandle texture_handle = acquired_.lookup_key({unwrap(tex)});
+  TextureHandle texture_handle = acquired_.lookup_key({unwrap(texture)});
   texture_handle.users_count += offset;
   acquired_.add_overwrite(texture_handle);
 }
@@ -448,8 +512,10 @@ void VKTexturePool::reset(bool force_free)
 {
   /* Iterate acquired textures. */
   for (const TextureHandle &tex : acquired_) {
-    /* Reset the texture's backing image's unused cycles counter in the VKImageCache.  */
-    image_cache_.reset_unused_cycles_count(tex.image_info);
+    /* Reset the texture's backing image's unused cycles counter in VKImageCache. */
+    if (image_cache_) {
+      image_cache_->reset_unused_cycles_count(tex.image_info);
+    }
 
     /* Ensure the internal user counter equals 0; otherwise this indicates
      * a missing `::retain()` or `::release()`. */
@@ -472,19 +538,23 @@ void VKTexturePool::reset(bool force_free)
 
   /* Remove unused allocations. */
   for (AllocationHandle handle : unused_allocations) {
-    image_cache_.discard_all_of(handle.allocation);
+    if (image_cache_) {
+      image_cache_->discard_all_of(handle.allocation);
+    }
     handle.free();
     allocations_.remove(handle);
   }
 
   /* Remove unused images from cache. */
-  image_cache_.reset();
+  if (image_cache_) {
+    image_cache_->reset();
+  }
 
   /* Log debug usage data if it differs from the last `::reset()`. */
   if (G.debug & G_DEBUG_GPU) {
     /* Log debug usage data if it differs from the last `::reset()`. */
     current_usage_data_.allocation_count = allocations_.size();
-    current_usage_data_.image_cache_size = image_cache_.size();
+    current_usage_data_.image_cache_size = image_cache_ ? image_cache_->size() : 0;
 
     if (!(previous_usage_data_ == current_usage_data_)) {
       log_usage_data();
@@ -505,16 +575,19 @@ void VKTexturePool::log_usage_data()
   for (const AllocationHandle &handle : allocations_) {
     total_allocation_size += handle.allocation_info.size;
   }
-  float ratio = static_cast<float>(current_usage_data_.acquired_segment_size_max) /
-                static_cast<float>(total_allocation_size);
+  float ratio = float(current_usage_data_.acquired_segment_size_max) /
+                float(total_allocation_size);
 
-  CLOG_TRACE(&LOG,
-             "VKTexturePool uses %lu/%lu mb (%.1f%% of %lu allocations) (%lu VkImages)",
-             static_cast<unsigned long>(current_usage_data_.acquired_segment_size_max >> 20),
-             static_cast<unsigned long>(total_allocation_size >> 20),
-             ratio * 100.0f,
-             static_cast<unsigned long>(current_usage_data_.allocation_count),
-             static_cast<unsigned long>(current_usage_data_.image_cache_size));
+  std::string log_message = fmt::format("VKTexturePool uses {}/{} mb ({:.1f}%% of {} allocations)",
+                                        current_usage_data_.acquired_segment_size_max >> 20,
+                                        total_allocation_size >> 20,
+                                        ratio * 100.0f,
+                                        current_usage_data_.allocation_count);
+  if (image_cache_) {
+    log_message += fmt::format(" ({} cached VkImages)", current_usage_data_.image_cache_size);
+  }
+
+  CLOG_TRACE(&LOG, "%s", log_message.c_str());
 }
 
 }  // namespace gpu

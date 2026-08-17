@@ -7,9 +7,8 @@
 #include "BLI_math_matrix.hh"
 #include "BLI_math_matrix_types.hh"
 #include "BLI_math_vector_types.hh"
-#include "BLI_utildefines.h"
+#include "BLI_utildefines.hh"
 
-#include "GPU_capabilities.hh"
 #include "GPU_shader.hh"
 #include "GPU_texture.hh"
 
@@ -35,7 +34,7 @@ RealizeOnDomainOperation::RealizeOnDomainOperation(Context &context,
   InputDescriptor input_descriptor;
   input_descriptor.type = type;
   this->declare_input_descriptor(input_descriptor);
-  this->populate_result(context.create_result(type));
+  this->populate_result(type);
 }
 
 void RealizeOnDomainOperation::execute()
@@ -115,10 +114,13 @@ void RealizeOnDomainOperation::realize_on_domain_gpu(const float3x3 &transformat
     /* The texture sampler should use bilinear interpolation for both the bilinear and bicubic
      * cases, as the logic used by the bicubic realization shader expects textures to use bilinear
      * interpolation. */
-    const bool use_bilinear = ELEM(
-        realization_options.interpolation, Interpolation::Bilinear, Interpolation::Bicubic);
-    GPU_texture_filter_mode(input, use_bilinear);
-    GPU_texture_anisotropic_filter(input, false);
+    if (realization_options.interpolation == Interpolation::Anisotropic) {
+      GPU_texture_anisotropic_filter(input, true);
+      GPU_texture_mipmap_mode(input, true, true);
+    }
+    else {
+      GPU_texture_filter_mode(input, realization_options.interpolation != Interpolation::Nearest);
+    }
   }
 
   GPU_texture_extend_mode_x(input,
@@ -133,7 +135,7 @@ void RealizeOnDomainOperation::realize_on_domain_gpu(const float3x3 &transformat
   output.allocate_texture(domain);
   output.bind_as_image(shader, "domain_img");
 
-  compute_dispatch_threads_at_least(shader, domain.data_size);
+  compute_dispatch_threads_at_least(shader, output.domain().data_size);
 
   input.unbind_as_texture();
   output.unbind_as_image();
@@ -142,14 +144,15 @@ void RealizeOnDomainOperation::realize_on_domain_gpu(const float3x3 &transformat
 
 const char *RealizeOnDomainOperation::get_realization_shader_name()
 {
-  if (this->get_input().get_realization_options().interpolation == Interpolation::Bicubic) {
+  const Interpolation interpolation = get_input().get_realization_options().interpolation;
+  if (interpolation == Interpolation::Bicubic) {
     switch (this->get_input().type()) {
       case ResultType::Float:
         return "compositor_realize_on_domain_bicubic_float";
       case ResultType::Float2:
         return "compositor_realize_on_domain_bicubic_float2";
       case ResultType::Float3:
-        /* Float3 is internally stored in a float4 texture. */
+        /* Float3 is internally stored in a float4 texture due to GPU module limitations. */
         return "compositor_realize_on_domain_bicubic_float4";
       case ResultType::Float4:
         return "compositor_realize_on_domain_bicubic_float4";
@@ -159,11 +162,27 @@ const char *RealizeOnDomainOperation::get_realization_shader_name()
         return "compositor_realize_on_domain_int";
       case ResultType::Int2:
         return "compositor_realize_on_domain_int2";
+      case ResultType::Int3:
+        /* Int3 is internally stored in a int4 texture due to GPU module limitations. */
+        return "compositor_realize_on_domain_int4";
+      case ResultType::Int4:
+        return "compositor_realize_on_domain_int4";
       case ResultType::Bool:
         return "compositor_realize_on_domain_bool";
+      case ResultType::Float4x4:
+        return "compositor_realize_on_domain_float4x4";
       case ResultType::Menu:
         return "compositor_realize_on_domain_menu";
+      case ResultType::Quaternion:
+        return "compositor_realize_on_domain_bicubic_float4";
       case ResultType::String:
+      case ResultType::Object:
+      case ResultType::Image:
+      case ResultType::Font:
+      case ResultType::Scene:
+      case ResultType::Text:
+      case ResultType::Mask:
+      case ResultType::Bundle:
         /* Single only types do not support GPU code path. */
         BLI_assert(Result::is_single_value_only_type(this->get_input().type()));
         BLI_assert_unreachable();
@@ -177,21 +196,38 @@ const char *RealizeOnDomainOperation::get_realization_shader_name()
       case ResultType::Float2:
         return "compositor_realize_on_domain_float2";
       case ResultType::Float3:
-        /* Float3 is internally stored in a float4 texture. */
+        /* Float3 is internally stored in a float4 texture due to GPU module limitations. */
         return "compositor_realize_on_domain_float4";
       case ResultType::Float4:
-        return "compositor_realize_on_domain_float4";
       case ResultType::Color:
-        return "compositor_realize_on_domain_float4";
+        return (interpolation == Interpolation::Anisotropic) ?
+                   "compositor_realize_on_domain_anisotropic_float4" :
+                   "compositor_realize_on_domain_float4";
       case ResultType::Int:
         return "compositor_realize_on_domain_int";
       case ResultType::Int2:
         return "compositor_realize_on_domain_int2";
+      case ResultType::Int3:
+        /* Int3 is internally stored in a int4 texture due to GPU module limitations. */
+        return "compositor_realize_on_domain_int4";
+      case ResultType::Int4:
+        return "compositor_realize_on_domain_int4";
       case ResultType::Bool:
         return "compositor_realize_on_domain_bool";
+      case ResultType::Float4x4:
+        return "compositor_realize_on_domain_float4x4";
       case ResultType::Menu:
         return "compositor_realize_on_domain_menu";
+      case ResultType::Quaternion:
+        return "compositor_realize_on_domain_float4";
       case ResultType::String:
+      case ResultType::Object:
+      case ResultType::Image:
+      case ResultType::Font:
+      case ResultType::Scene:
+      case ResultType::Text:
+      case ResultType::Mask:
+      case ResultType::Bundle:
         /* Single only types do not support GPU code path. */
         BLI_assert(Result::is_single_value_only_type(this->get_input().type()));
         BLI_assert_unreachable();
@@ -207,12 +243,14 @@ template<typename T>
 static void realize_on_domain(const Result &input, Result &output, const float3x3 &transformation)
 {
   const RealizationOptions realization_options = input.get_realization_options();
+  const float2x2 jacobian(transformation);
   parallel_for(output.domain().data_size, [&](const int2 texel) {
     const float2 coordinates = math::transform_point(transformation, float2(texel));
     T sample = input.sample<T>(coordinates,
                                realization_options.interpolation,
                                realization_options.extension_x,
-                               realization_options.extension_y);
+                               realization_options.extension_y,
+                               jacobian);
     output.store_pixel(texel, sample);
   });
 }
@@ -226,7 +264,19 @@ void RealizeOnDomainOperation::realize_on_domain_cpu(const float3x3 &transformat
   output.allocate_texture(domain);
 
   input.get_cpp_type()
-      .to_static_type<float, float2, float3, float4, Color, int32_t, int2, bool, nodes::MenuValue>(
+      .to_static_type<float,
+                      float2,
+                      float3,
+                      float4,
+                      Color,
+                      int32_t,
+                      int2,
+                      int3,
+                      int4,
+                      bool,
+                      float4x4,
+                      nodes::MenuValue,
+                      math::Quaternion>(
           [&]<typename T>() { realize_on_domain<T>(input, output, transformation); });
 }
 
@@ -274,15 +324,7 @@ SimpleOperation *RealizeOnDomainOperation::construct_if_needed(
     return nullptr;
   }
 
-  if (!context.use_gpu()) {
-    return new RealizeOnDomainOperation(context, realized_target_domain, input_descriptor.type);
-  }
-
-  /* Make sure the data size of the domain does not surpass what is possible on GPU. */
-  Domain safe_realized_target_domain = realized_target_domain;
-  safe_realized_target_domain.data_size = math::min(realized_target_domain.data_size,
-                                                    int2(GPU_max_texture_size()));
-  return new RealizeOnDomainOperation(context, safe_realized_target_domain, input_descriptor.type);
+  return new RealizeOnDomainOperation(context, realized_target_domain, input_descriptor.type);
 }
 
 }  // namespace blender::compositor

@@ -9,20 +9,22 @@
  * with polygons (normal/area calculation, tessellation, etc)
  */
 
+#include <algorithm>
 #include <array>
+#include <cmath>
 
 #include "DNA_modifier_types.h"
 
 #include "BLI_array.hh"
-#include "BLI_linklist.h"
+#include "BLI_linklist.hh"
 #include "BLI_math_base.hh"
-#include "BLI_math_geom.h"
-#include "BLI_math_matrix.h"
-#include "BLI_math_vector.h"
+#include "BLI_math_geom_c.hh"
+#include "BLI_math_matrix_c.hh"
 #include "BLI_math_vector.hh"
-#include "BLI_memarena.h"
-#include "BLI_polyfill_2d.h"
-#include "BLI_polyfill_2d_beautify.h"
+#include "BLI_math_vector_c.hh"
+#include "BLI_memarena.hh"
+#include "BLI_polyfill_2d.hh"
+#include "BLI_polyfill_2d_beautify.hh"
 
 #include "bmesh.hh"
 #include "bmesh_tools.hh"
@@ -502,7 +504,7 @@ void BM_face_calc_tangent_from_edge_pair(const BMFace *f, float r_tangent[3])
     /* Edges may not be opposite side of the ngon,
      * this could cause problems for ngons with multiple-aligned edges of the same length.
      * Fall back to longest edge. */
-    if (UNLIKELY(normalize_v3(r_tangent) == 0.0f)) {
+    if (normalize_v3(r_tangent) == 0.0f) [[unlikely]] {
       normalize_v3_v3(r_tangent, vec_a);
     }
   }
@@ -955,7 +957,7 @@ void BM_verts_calc_normal_from_cloud_ex(
 
         if (co_test != co_a) {
           dot_test = dot_v3v3(dir_a, co_test);
-          if (dot_test < dot_a_min) {
+          if (dot_test < dot_a_min || co_a_opposite == nullptr) {
             dot_a_min = dot_test;
             co_a_opposite = co_test;
           }
@@ -963,7 +965,7 @@ void BM_verts_calc_normal_from_cloud_ex(
 
         if (co_test != co_b) {
           dot_test = dot_v3v3(dir_b, co_test);
-          if (dot_test < dot_b_min) {
+          if (dot_test < dot_b_min || co_b_opposite == nullptr) {
             dot_b_min = dot_test;
             co_b_opposite = co_test;
           }
@@ -971,7 +973,50 @@ void BM_verts_calc_normal_from_cloud_ex(
       }
     }
 
-    normal_quad_v3(r_normal, co_a, co_b, co_a_opposite, co_b_opposite);
+    if (normal_quad_v3(r_normal, co_a, co_b, co_a_opposite, co_b_opposite) != 0.0f) {
+      /* Refine by accumulating a normal over all vertices
+       * in radial order around the initial normal - so all vertices contribute to the result. */
+
+      blender::Array<int> order(varr_len);
+      blender::Array<float> angles(varr_len);
+      for (int i = 0; i < varr_len; i++) {
+        order[i] = i;
+        float dir_test[3];
+        sub_v3_v3v3(dir_test, varr[i]->co, center);
+        const float angle = angle_signed_on_axis_v3v3_v3(dir_a, dir_test, r_normal);
+        angles[i] = std::isfinite(angle) ? angle : 0.0f;
+      }
+      std::ranges::sort(order, [&](int a, int b) {
+        /* This order ensures the normal doesn't "flip" when refining. */
+        return angles[a] > angles[b];
+      });
+      float normal_refine[3] = {0.0f, 0.0f, 0.0f};
+      const float *v_prev = varr[order[varr_len - 1]]->co;
+      for (int i = 0; i < varr_len; i++) {
+        const float *v_curr = varr[order[i]]->co;
+        add_newell_cross_v3_v3v3(normal_refine, v_prev, v_curr);
+        v_prev = v_curr;
+      }
+
+      if (normalize_v3(normal_refine) != 0.0f) {
+        if (r_index_tangent) {
+          /* Re-compute the tangent, because it's *possible* the original
+           * tangent is aligned with the new normal. */
+          float dist_sq_max = -1.0f;
+          for (int i = 0; i < varr_len; i++) {
+            float dir_test[3];
+            sub_v3_v3v3(dir_test, varr[i]->co, center);
+            project_plane_normalized_v3_v3v3(dir_test, dir_test, normal_refine);
+            const float dist_sq_test = len_squared_v3(dir_test);
+            if (!(dist_sq_test <= dist_sq_max)) {
+              co_a_index = i;
+              dist_sq_max = dist_sq_test;
+            }
+          }
+        }
+        copy_v3_v3(r_normal, normal_refine);
+      }
+    }
   }
 
 finally:
@@ -1143,10 +1188,10 @@ void BM_face_triangulate(BMesh *bm,
             /* first check if the quad is concave on either diagonal */
             const int flip_flag = is_quad_flip_v3(
                 l_v1->v->co, l_v2->v->co, l_v3->v->co, l_v4->v->co);
-            if (UNLIKELY(flip_flag & (1 << 0))) {
+            if (flip_flag & (1 << 0)) [[unlikely]] {
               split_24 = true;
             }
-            else if (UNLIKELY(flip_flag & (1 << 1))) {
+            else if (flip_flag & (1 << 1)) [[unlikely]] {
               split_24 = false;
             }
             else {
@@ -1218,7 +1263,7 @@ void BM_face_triangulate(BMesh *bm,
       if (l_new->radial_next != l_new) {
         BMLoop *l_iter = l_new->radial_next;
         do {
-          if (UNLIKELY((l_iter->f->len == 3) && (l_new->prev->v == l_iter->prev->v))) {
+          if ((l_iter->f->len == 3) && (l_new->prev->v == l_iter->prev->v)) [[unlikely]] {
             /* Check the last tri because we swap last f_new with f at the end... */
             BLI_linklist_prepend(r_faces_double, (i != last_tri) ? f_new : f);
             break;
@@ -1340,7 +1385,7 @@ void BM_face_splits_check_legal(BMesh *bm, BMFace *f, BMLoop *(*loops)[2], int l
     };
 
     /* Always allow cuts that overlap (unlikely but not an error). */
-    if (UNLIKELY(equals_v2v2(co_pair[0], co_pair[1]))) {
+    if (equals_v2v2(co_pair[0], co_pair[1])) [[unlikely]] {
       continue;
     }
 

@@ -7,6 +7,7 @@
 #include "BKE_action.hh"
 #include "BKE_anim_data.hh"
 #include "BKE_fcurve.hh"
+#include "BKE_gtest_base.hh"
 #include "BKE_idtype.hh"
 #include "BKE_lib_id.hh"
 #include "BKE_main.hh"
@@ -16,24 +17,21 @@
 #include "DNA_object_types.h"
 
 #include "RNA_access.hh"
-#include "RNA_define.hh"
-#include "RNA_prototypes.hh"
 
-#include "BLI_listbase.h"
-#include "BLI_string.h"
-#include "BLI_string_utf8.h"
-#include "BLI_string_utils.hh"
+#include "BLI_string.hh"
+#include "BLI_string_utf8.hh"
 
 #include "DEG_depsgraph_build.hh"
 
 #include <limits>
 
-#include "CLG_log.h"
 #include "testing/testing.h"
 
 namespace blender::animrig::tests {
 
-TEST(action, low_level_initialisation)
+class ActionTest : public bke::BlenderGTestBase {};
+
+TEST_F(ActionTest, low_level_initialisation)
 {
   bAction *action = BKE_id_new_nomain<bAction>("NewAction");
 
@@ -43,30 +41,13 @@ TEST(action, low_level_initialisation)
   BKE_id_free(nullptr, action);
 }
 
-class ActionLayersTest : public testing::Test {
+class ActionLayersTest : public bke::BlenderGTestBase {
  public:
   Main *bmain;
   Action *action;
   Object *cube;
   Object *suzanne;
   Object *bob;
-
-  static void SetUpTestSuite()
-  {
-    /* BKE_id_free() hits a code path that uses CLOG, which crashes if not initialized properly. */
-    CLG_init();
-
-    /* To make id_can_have_animdata() and friends work, the `id_types` array needs to be set up. */
-    BKE_idtype_init();
-
-    RNA_init();
-  }
-
-  static void TearDownTestSuite()
-  {
-    CLG_exit();
-    RNA_exit();
-  }
 
   void SetUp() override
   {
@@ -868,7 +849,9 @@ TEST_F(ActionLayersTest, assign_action_ensure_slot_for_keying)
 {
   { /* Slotless Action, should create a typed slot. */
     Action &action = action_add(*this->bmain, "ACEmpty");
+    EXPECT_EQ(action.id.us, 0);
     Slot *chosen_slot = assign_action_ensure_slot_for_keying(action, cube->id);
+    EXPECT_EQ(action.id.us, 1);
     ASSERT_NE(nullptr, chosen_slot);
     EXPECT_EQ(ID_OB, chosen_slot->idtype);
     EXPECT_STREQ("OBKüüübus", chosen_slot->identifier);
@@ -1275,23 +1258,9 @@ static void add_fcurve_to_action(Action &action, FCurve &fcu)
   cbag.fcurve_append(fcu);
 }
 
-class ActionQueryTest : public testing::Test {
+class ActionQueryTest : public bke::BlenderGTestBase {
  public:
   Main *bmain;
-
-  static void SetUpTestSuite()
-  {
-    /* BKE_id_free() hits a code path that uses CLOG, which crashes if not initialized properly. */
-    CLG_init();
-
-    /* To make id_can_have_animdata() and friends work, the `id_types` array needs to be set up. */
-    BKE_idtype_init();
-  }
-
-  static void TearDownTestSuite()
-  {
-    CLG_exit();
-  }
 
   void SetUp() override
   {
@@ -1319,7 +1288,7 @@ TEST_F(ActionQueryTest, BKE_action_frame_range_calc)
 
   /* One curve with one key. */
   {
-    FCurve &fcu = *MEM_new<FCurve>(__func__);
+    FCurve &fcu = *BKE_fcurve_create();
     allocate_keyframes(fcu, 1);
     add_keyframe(fcu, 1.0f, 2.0f);
 
@@ -1333,8 +1302,8 @@ TEST_F(ActionQueryTest, BKE_action_frame_range_calc)
 
   /* Two curves with one key each on different frames. */
   {
-    FCurve &fcu1 = *MEM_new<FCurve>(__func__);
-    FCurve &fcu2 = *MEM_new<FCurve>(__func__);
+    FCurve &fcu1 = *BKE_fcurve_create();
+    FCurve &fcu2 = *BKE_fcurve_create();
     allocate_keyframes(fcu1, 1);
     allocate_keyframes(fcu2, 1);
     add_keyframe(fcu1, 1.0f, 2.0f);
@@ -1351,7 +1320,7 @@ TEST_F(ActionQueryTest, BKE_action_frame_range_calc)
 
   /* One curve with two keys. */
   {
-    FCurve &fcu = *MEM_new<FCurve>(__func__);
+    FCurve &fcu = *BKE_fcurve_create();
     allocate_keyframes(fcu, 2);
     add_keyframe(fcu, 1.0f, 2.0f);
     add_keyframe(fcu, 1.5f, 2.0f);
@@ -1378,7 +1347,7 @@ TEST_F(ActionQueryTest, action_has_single_frame)
 
   /* One curve with one key. */
   {
-    FCurve &fcu = *MEM_new<FCurve>(__func__);
+    FCurve &fcu = *BKE_fcurve_create();
     allocate_keyframes(fcu, 1);
     add_keyframe(fcu, 1.0f, 2.0f);
 
@@ -1392,8 +1361,8 @@ TEST_F(ActionQueryTest, action_has_single_frame)
 
   /* Two curves with one key each. */
   {
-    FCurve &fcu1 = *MEM_new<FCurve>(__func__);
-    FCurve &fcu2 = *MEM_new<FCurve>(__func__);
+    FCurve &fcu1 = *BKE_fcurve_create();
+    FCurve &fcu2 = *BKE_fcurve_create();
     allocate_keyframes(fcu1, 1);
     allocate_keyframes(fcu2, 1);
     add_keyframe(fcu1, 1.0f, 327.0f);
@@ -1414,7 +1383,7 @@ TEST_F(ActionQueryTest, action_has_single_frame)
 
   /* One curve with two keys. */
   {
-    FCurve &fcu = *MEM_new<FCurve>(__func__);
+    FCurve &fcu = *BKE_fcurve_create();
     allocate_keyframes(fcu, 2);
     add_keyframe(fcu, 1.0f, 2.0f);
     add_keyframe(fcu, 2.0f, 2.5f);
@@ -1429,13 +1398,9 @@ TEST_F(ActionQueryTest, action_has_single_frame)
 
 /*-----------------------------------------------------------*/
 
-class ChannelbagTest : public testing::Test {
+class ChannelbagTest : public bke::BlenderGTestBase {
  public:
   Channelbag *channelbag;
-
-  static void SetUpTestSuite() {}
-
-  static void TearDownTestSuite() {}
 
   void SetUp() override
   {
@@ -2137,23 +2102,9 @@ TEST_F(ChannelbagTest, channel_group_fcurve_ungroup)
 
 /*-----------------------------------------------------------*/
 
-class ActionFCurveMoveTest : public testing::Test {
+class ActionFCurveMoveTest : public bke::BlenderGTestBase {
  public:
   Main *bmain;
-
-  static void SetUpTestSuite()
-  {
-    /* BKE_id_free() hits a code path that uses CLOG, which crashes if not initialized properly. */
-    CLG_init();
-
-    /* To make id_can_have_animdata() and friends work, the `id_types` array needs to be set up. */
-    BKE_idtype_init();
-  }
-
-  static void TearDownTestSuite()
-  {
-    CLG_exit();
-  }
 
   void SetUp() override
   {
@@ -2164,13 +2115,6 @@ class ActionFCurveMoveTest : public testing::Test {
   {
     BKE_main_free(bmain);
   }
-
-  static FCurve *fcurve_create(const StringRefNull rna_path, const int array_index)
-  {
-    FCurve *fcurve = BKE_fcurve_create();
-    fcurve->rna_path = BLI_strdupn(rna_path.c_str(), array_index);
-    return fcurve;
-  };
 };
 
 TEST_F(ActionFCurveMoveTest, test_fcurve_move_layered)
@@ -2201,10 +2145,10 @@ TEST_F(ActionFCurveMoveTest, test_fcurve_move_layered)
 
   action_fcurve_move(action_dst, slot_dst.handle, action_src, fcurve_to_move);
 
-  EXPECT_EQ(nullptr, cbag_src.fcurve_find({fcurve_to_move.rna_path, fcurve_to_move.array_index}))
+  EXPECT_EQ(nullptr, cbag_src.fcurve_find({fcurve_to_move.rna_path(), fcurve_to_move.array_index}))
       << "F-Curve should no longer exist in source Action";
   EXPECT_EQ(&fcurve_to_move,
-            cbag_dst.fcurve_find({fcurve_to_move.rna_path, fcurve_to_move.array_index}))
+            cbag_dst.fcurve_find({fcurve_to_move.rna_path(), fcurve_to_move.array_index}))
       << "F-Curve should exist in destination Action";
 
   EXPECT_EQ(1, cbag_src.fcurves().size()) << "Source Action should still have the other F-Curve";

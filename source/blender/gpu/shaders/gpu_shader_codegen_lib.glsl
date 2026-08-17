@@ -5,6 +5,7 @@
 #pragma once
 
 #include "gpu_shader_compat.hh"
+#include "gpu_shader_math_vector_reduce_lib.glsl"
 
 float3 calc_barycentric_distances(float3 pos0, float3 pos1, float3 pos2)
 {
@@ -56,7 +57,6 @@ float2 calc_barycentric_co(int vertid)
 #  define FrontFacing true
 #endif
 
-/* Can't use enum here because not a header file. But would be great to do. */
 enum ClosureType : uchar {
   CLOSURE_NONE_ID = 0u,
   /* Diffuse */
@@ -75,22 +75,34 @@ enum ClosureType : uchar {
 
   /* Transmission */
   CLOSURE_BSDF_MICROFACET_GGX_REFRACTION_ID = 12u,
+  CLOSURE_BSDF_THIN_GLASS_TRANSMISSION_ID = 13u,
 
   /* Glass */
-  // CLOSURE_BSDF_HAIR_HUANG_ID = 13u, /* TODO */
+  // CLOSURE_BSDF_HAIR_HUANG_ID = 14u, /* TODO */
 
   /* BSSRDF */
-  CLOSURE_BSSRDF_BURLEY_ID = 14u,
+  CLOSURE_BSSRDF_BURLEY_ID = 15u,
 };
 
 struct ClosureUndetermined {
   packed_float3 color;
-  float weight;
   packed_float3 N;
   ClosureType type;
   /* Additional data different for each closure type. */
   packed_float4 data;
+
+  float weight() const
+  {
+    return reduce_add(abs(color));
+  }
 };
+
+bool closure_has_transmission(const ClosureType closure)
+{
+  return closure == CLOSURE_BSDF_TRANSLUCENT_ID ||
+         closure == CLOSURE_BSDF_MICROFACET_GGX_REFRACTION_ID ||
+         closure == CLOSURE_BSDF_THIN_GLASS_TRANSMISSION_ID;
+}
 
 ClosureUndetermined closure_new(ClosureType type)
 {
@@ -105,33 +117,28 @@ struct ClosureOcclusion {
 
 struct ClosureDiffuse {
   packed_float3 color;
-  float weight;
   packed_float3 N;
 };
 
 struct ClosureSubsurface {
   packed_float3 color;
-  float weight;
   packed_float3 N;
   packed_float3 sss_radius;
 };
 
 struct ClosureTranslucent {
   packed_float3 color;
-  float weight;
   packed_float3 N;
 };
 
 struct ClosureReflection {
   packed_float3 color;
-  float weight;
   packed_float3 N;
   float roughness;
 };
 
 struct ClosureRefraction {
   packed_float3 color;
-  float weight;
   packed_float3 N;
   float roughness;
   float ior;
@@ -139,7 +146,6 @@ struct ClosureRefraction {
 
 struct ClosureHair {
   packed_float3 color;
-  float weight;
   packed_float3 T;
   float offset;
   packed_float2 roughness;
@@ -147,24 +153,26 @@ struct ClosureHair {
 
 struct ClosureVolumeScatter {
   packed_float3 scattering;
-  float weight;
   float anisotropy;
 };
 
 struct ClosureVolumeAbsorption {
   packed_float3 absorption;
-  float weight;
 };
 
 struct ClosureEmission {
   packed_float3 emission;
-  float weight;
 };
 
 struct ClosureTransparency {
   packed_float3 transmittance;
-  float weight;
   float holdout;
+};
+
+struct ClosureThinRefraction {
+  packed_float3 color;
+  packed_float3 N;
+  float roughness;
 };
 
 ClosureDiffuse to_closure_diffuse(ClosureUndetermined cl)
@@ -208,6 +216,15 @@ ClosureRefraction to_closure_refraction(ClosureUndetermined cl)
   closure.color = cl.color;
   closure.roughness = cl.data.x;
   closure.ior = cl.data.y;
+  return closure;
+}
+
+ClosureThinRefraction to_closure_thin_refraction(ClosureUndetermined cl)
+{
+  ClosureThinRefraction closure;
+  closure.N = cl.N;
+  closure.color = cl.color;
+  closure.roughness = cl.data.x;
   return closure;
 }
 
@@ -301,6 +318,3 @@ float3 dF_impl(float3 v)
       g_derivative_flag = 0; \
     }
 #endif
-
-/* TODO(fclem): Remove. */
-#define CODEGEN_LIB

@@ -18,15 +18,15 @@
 #include "DNA_action_types.h"
 #include "DNA_node_types.h"
 
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 #include "BLI_map.hh"
-#include "BLI_math_matrix.h"
+#include "BLI_math_matrix_c.hh"
 #include "BLI_resource_scope.hh"
 #include "BLI_set.hh"
 #include "BLI_stack.hh"
-#include "BLI_string.h"
-#include "BLI_string_utf8.h"
-#include "BLI_utildefines.h"
+#include "BLI_string.hh"
+#include "BLI_string_utf8.hh"
+#include "BLI_utildefines.hh"
 
 #include "BLT_translation.hh"
 
@@ -84,8 +84,8 @@ struct MenuSearch_Item {
   StringRef drawstr;
   StringRef drawwstr_full;
   int icon = 0;
-  int state = 0;
   float weight = 0.0f;
+  int64_t state = 0; /**  Used to store #ButtonFlag values. */
 
   MenuSearch_Parent *menu_parent = nullptr;
   MenuType *mt = nullptr;
@@ -646,6 +646,7 @@ static MenuSearch_Data *menu_items_from_ui_create(bContext *C,
           SPACE_MENU_NOP(SPACE_STATUSBAR);
           SPACE_MENU_NOP(SPACE_TOPBAR);
           SPACE_MENU_NOP(SPACE_SPREADSHEET);
+          SPACE_MENU_NOP(SPACE_PROJECT);
         }
       }
       for (int i = 0; i < idname_array_len; i++) {
@@ -741,7 +742,7 @@ static MenuSearch_Data *menu_items_from_ui_create(bContext *C,
               /* Detect empty string, fall back to menu name. */
               const char *drawstr = but->drawstr.c_str();
               int drawstr_len = drawstr_sep - but->drawstr.c_str();
-              if (UNLIKELY(drawstr_len == 0)) {
+              if (drawstr_len == 0) [[unlikely]] {
                 drawstr = CTX_IFACE_(mt_from_but->translation_context, mt_from_but->label);
                 drawstr_len = strlen(drawstr);
                 if (drawstr[0] == '\0') {
@@ -756,7 +757,7 @@ static MenuSearch_Data *menu_items_from_ui_create(bContext *C,
             }
             else {
               const char *drawstr = but->drawstr.c_str();
-              if (UNLIKELY(drawstr[0] == '\0')) {
+              if (drawstr[0] == '\0') [[unlikely]] {
                 drawstr = CTX_IFACE_(mt_from_but->translation_context, mt_from_but->label);
                 if (drawstr[0] == '\0') {
                   drawstr_is_empty = true;
@@ -1031,10 +1032,10 @@ static void menu_search_update_fn(const bContext * /*C*/,
  * a separate context menu just for the search, however this is fairly involved.
  * \{ */
 
-static bool ui_search_menu_create_context_menu(bContext *C,
-                                               void *arg,
-                                               void *active,
-                                               const wmEvent *event)
+static bool search_menu_create_context_menu(bContext *C,
+                                            void *arg,
+                                            void *active,
+                                            const wmEvent *event)
 {
   MenuSearch_Data *data = static_cast<MenuSearch_Data *>(arg);
   MenuSearch_Item *item = static_cast<MenuSearch_Item *>(active);
@@ -1075,7 +1076,7 @@ static bool ui_search_menu_create_context_menu(bContext *C,
 /** \name Tooltip
  * \{ */
 
-static ARegion *ui_search_menu_create_tooltip(
+static ARegion *search_menu_create_tooltip(
     bContext *C, ARegion *region, const rcti * /*item_rect*/, void *arg, void *active)
 {
   MenuSearch_Data *data = static_cast<MenuSearch_Data *>(arg);
@@ -1150,8 +1151,8 @@ void button_func_menu_search(Button *but, const char *single_menu_idname)
                          menu_search_exec_fn,
                          nullptr);
 
-  button_func_search_set_context_menu(but, ui_search_menu_create_context_menu);
-  button_func_search_set_tooltip(but, ui_search_menu_create_tooltip);
+  button_func_search_set_context_menu(but, search_menu_create_context_menu);
+  button_func_search_set_tooltip(but, search_menu_create_tooltip);
   button_func_search_set_sep_string(but, UI_MENU_ARROW_SEP);
 }
 

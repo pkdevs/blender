@@ -12,14 +12,13 @@
 #include <optional>
 
 #include "BLI_generic_virtual_array.hh"
-#include "BLI_implicit_sharing.h"
+#include "BLI_implicit_sharing.hh"
 #include "BLI_memory_counter_fwd.hh"
 #include "BLI_span.hh"
 #include "BLI_string_ref.hh"
-#include "BLI_sys_types.h"
+#include "BLI_sys_types.hh"
 #include "BLI_vector.hh"
 
-#include "BKE_attribute_storage.hh"
 #include "BKE_volume_enums.hh"
 
 #include "DNA_customdata_types.h"
@@ -447,7 +446,7 @@ void CustomData_bmesh_interp(
 void CustomData_swap_corners(CustomData *data, int index, const int *corner_indices);
 
 /**
- * Custom data layers can be shared through implicit sharing (`BLI_implicit_sharing.h`). This
+ * Custom data layers can be shared through implicit sharing (`BLI_implicit_sharing.hh`). This
  * function makes sure that the layer is unshared if it was shared, which makes it mutable.
  */
 void CustomData_ensure_data_is_mutable(CustomDataLayer *layer, int totelem);
@@ -551,7 +550,7 @@ void CustomData_set_layer_render_index(CustomData *data, eCustomDataType type, i
 /**
  * Adds flag to the layer flags.
  */
-void CustomData_set_layer_flag(CustomData *data, eCustomDataType type, int flag);
+void CustomData_set_layer_flag(CustomData *data, eCustomDataType type, eCustomDataLayer_Flag flag);
 
 void CustomData_bmesh_set_default(CustomData *data, void **block);
 void CustomData_bmesh_free_block(CustomData *data, void **block);
@@ -609,8 +608,9 @@ void CustomData_external_remove(CustomData *data, ID *id, eCustomDataType type, 
 bool CustomData_external_test(CustomData *data, eCustomDataType type);
 
 void CustomData_external_write(
-    CustomData *data, ID *id, eCustomDataMask mask, int totelem, int free);
-void CustomData_external_read(CustomData *data, ID *id, eCustomDataMask mask, int totelem);
+    CustomData *data, StringRefNull basepath, ID *id, eCustomDataMask mask, int totelem, int free);
+void CustomData_external_read(
+    CustomData *data, StringRefNull basepath, ID *id, eCustomDataMask mask, int totelem);
 void CustomData_external_reload(CustomData *data, ID *id, eCustomDataMask mask, int totelem);
 
 /* Mesh-to-mesh transfer data. */
@@ -672,18 +672,13 @@ void CustomData_data_transfer(const MeshPairRemap *me_remap, CustomDataTransferL
  *
  * \param data: The custom-data to tweak for .blend file writing (modified in place).
  * \param layers_to_write: A reduced set of layers to be written to file.
- * \param write_data: #AttributeStorage data to write, to support the option for writing the new
- * format even when it isn't used at runtime.
  *
  * \warning This function invalidates the custom data struct by changing the layer counts and the
  * #layers pointer, and by invalidating the type map. It expects to work on a shallow copy of
  * the struct.
  */
 void CustomData_blend_write_prepare(CustomData &data,
-                                    bke::AttrDomain domain,
-                                    int domain_size,
-                                    Vector<CustomDataLayer, 16> &layers_to_write,
-                                    bke::AttributeStorage::BlendWriteData &write_data);
+                                    Vector<CustomDataLayer, 16> &layers_to_write);
 
 /**
  * \param layers_to_write: Layers created by #CustomData_blend_write_prepare.

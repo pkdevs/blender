@@ -40,9 +40,6 @@ from bl_ui.space_userpref import (
 USE_SHOW_ADDON_TYPE_AS_TEXT = True
 USE_SHOW_ADDON_TYPE_AS_ICON = True
 
-# Hide these add-ons when enabled (unless running with extensions debugging enabled).
-SECRET_ADDONS = {__package__}
-
 # For official extensions, it's policy that the website in the JSON listing overrides the developers own website.
 # This incurs an awkward lookup although it's not likely to cause a noticeable slowdown.
 # This choice moves away from the `blender_manifest.toml` being the source of truth for an extensions meta-data
@@ -235,8 +232,10 @@ def addon_draw_item_expanded(
     col_b = split.column()
 
     if item_description:
-        col_a.label(
-            text=" {:s}.".format(item_description),
+        col_a_row = col_a.row()
+        col_a_row.separator(factor=0.1)
+        col_a_row.label_multiline(
+            text="{:s}.".format(item_description),
             translate=False,
         )
 
@@ -287,7 +286,7 @@ def addon_draw_item_expanded(
     if item_warnings:
         # Only for legacy add-ons.
         col_a.label(text="Warning")
-        col_b.label(text=item_warnings[0], icon='ERROR')
+        col_b.label(text=item_warnings[0], icon='STATUS_WARNING')
         if len(item_warnings) > 1:
             for value in item_warnings[1:]:
                 col_a.label(text="")
@@ -319,7 +318,7 @@ def addons_panel_draw_missing_with_extension_impl(
         missing_modules  # `set[str]`
 ):
     layout_header, layout_panel = layout.panel("builtin_addons", default_closed=True)
-    layout_header.label(text="Missing Built-in Add-ons", icon='ERROR')
+    layout_header.label(text="Missing Built-in Add-ons", icon='STATUS_WARNING')
 
     if layout_panel is None:
         return
@@ -345,9 +344,9 @@ def addons_panel_draw_missing_with_extension_impl(
 
     if repo is None:
         # Most likely the user manually removed this.
-        box.label(text="Blender's extension repository not found!", icon='ERROR')
+        box.label(text="Blender's extension repository not found!", icon='STATUS_ERROR')
     elif not repo.enabled:
-        box.label(text="Blender's extension repository must be enabled to install extensions!", icon='ERROR')
+        box.label(text="Blender's extension repository must be enabled to install extensions!", icon='STATUS_ERROR')
         repo_index = -1
     else:
         # Ensure the remote data is available from which to install the extensions.
@@ -357,7 +356,7 @@ def addons_panel_draw_missing_with_extension_impl(
         pkg_manifest_remote = repo_cache_store.refresh_remote_from_directory(directory=repo.directory, error_fn=print)
         if pkg_manifest_remote is None:
             row = box.row()
-            row.label(text="Blender's extension repository must be refreshed!", icon='ERROR')
+            row.label(text="Blender's extension repository must be refreshed!", icon='STATUS_WARNING_FILLED')
             # Ideally this would only sync one repository, but there is no operator to do this
             # and this one corner-case doesn't justify adding a new operator.
             rowsub = row.row()
@@ -414,7 +413,7 @@ def addons_panel_draw_missing_impl(
         missing_modules,  # `set[str]`
 ):
     layout_header, layout_panel = layout.panel("missing_script_files", default_closed=True)
-    layout_header.label(text="Missing Add-ons", icon='ERROR')
+    layout_header.label(text="Missing Add-ons", icon='STATUS_WARNING')
 
     if layout_panel is None:
         return
@@ -517,7 +516,7 @@ def addons_panel_draw_items(
             del item_local
         else:
             # Weak but allow some add-ons to be hidden, as they're for internal use.
-            if (module_name in SECRET_ADDONS) and is_enabled and (show_development is False):
+            if (module_name in addon_utils._addons_hidden_core) and is_enabled and (show_development is False):
                 continue
 
             item_warnings = []
@@ -585,7 +584,7 @@ def addons_panel_draw_items(
         sub.label(text=" " + item_name, translate=False)
 
         if item_warnings:
-            sub.label(icon='ERROR')
+            sub.label(icon='STATUS_WARNING')
         elif USE_SHOW_ADDON_TYPE_AS_ICON:
             sub.label(icon=addon_type_icon[addon_type])
 
@@ -623,7 +622,7 @@ def addons_panel_draw_error_duplicates(layout):
     box = layout.box()
     row = box.row()
     row.label(text="Multiple add-ons with the same name found!")
-    row.label(icon='ERROR')
+    row.label(icon='STATUS_ERROR')
     box.label(text="Delete one of each pair to resolve:")
     for (addon_name, addon_file, addon_path) in addon_utils.error_duplicates:
         box.separator()
@@ -643,7 +642,7 @@ def addons_panel_draw_error_generic(layout, lines):
     box = layout.box()
     sub = box.row()
     sub.label(text=lines[0])
-    sub.label(icon='ERROR')
+    sub.label(icon='STATUS_ERROR')
     for l in lines[1:]:
         box.label(text=l)
 
@@ -1099,7 +1098,7 @@ class display_errors:
         box_header = layout.box()
         # Don't clip longer names.
         row = box_header.split(factor=0.9)
-        row.label(text="Repository Alert:", icon='ERROR')
+        row.label(text="Repository Alert:", icon='STATUS_WARNING_FILLED')
         rowsub = row.row(align=True)
         rowsub.alignment = 'RIGHT'
         rowsub.operator("extensions.status_clear_errors", text="", icon='X', emboss=False)
@@ -1349,7 +1348,7 @@ def extension_draw_item(
     # is enabled or not, which is useful to show - when they may be considering removing/updating
     # extensions based on them being used or not.
     if pkg_block or item_warnings:
-        sub.label(text=item.name, icon='ERROR', translate=False)
+        sub.label(text=item.name, icon='STATUS_WARNING', translate=False)
     else:
         sub.label(text=item.name, translate=False)
 
@@ -1409,8 +1408,8 @@ def extension_draw_item(
         row = col.row()
         row.active = is_enabled
 
-        # The full tagline may be multiple lines (not yet supported by Blender's UI).
-        row.label(text=" {:s}.".format(item.tagline), translate=False)
+        row.separator(factor=0.1)
+        row.label_multiline(text="{:s}.".format(item.tagline), translate=False)
 
         col.separator(type='LINE')
         del col
@@ -2060,7 +2059,7 @@ def extensions_panel_draw(panel, context):
     row_b.prop(wm, "extension_type", text="")
 
     row_b.separator()
-    row_b.prop(wm, "extension_use_filter", text="", icon='FILTER')
+    row_b.prop(wm, "extension_use_filter", text="", icon=('FILTER_FILLED' if wm.extension_use_filter else 'FILTER'))
     row_b.popover("USERPREF_PT_extensions_filter", text="", icon='DOWNARROW_HLT')
 
     row_b.separator()
@@ -2086,9 +2085,9 @@ def extensions_panel_draw(panel, context):
         # Don't clip longer names.
         row = box.split(factor=0.9, align=True)
         if repo_status_text.running:
-            row.label(text=iface_(repo_status_text.title) + "...", icon='INFO', translate=False)
+            row.label(text=iface_(repo_status_text.title) + "...", icon='STATUS_INFO', translate=False)
         else:
-            row.label(text=repo_status_text.title, icon='INFO')
+            row.label(text=repo_status_text.title, icon='STATUS_INFO')
         if show_development_reports:
             rowsub = row.row(align=True)
             rowsub.alignment = 'RIGHT'

@@ -7,11 +7,11 @@
  */
 
 #include "BLI_array_utils.hh"
-#include "BLI_listbase.h"
-#include "BLI_math_geom.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_geom_c.hh"
 #include "BLI_math_matrix.hh"
-#include "BLI_string.h"
-#include "BLI_utildefines.h"
+#include "BLI_string.hh"
+#include "BLI_utildefines.hh"
 #include "BLI_vector_set.hh"
 
 #include "BLT_translation.hh"
@@ -26,6 +26,7 @@
 
 #include "BKE_attribute.h"
 #include "BKE_attribute_math.hh"
+#include "BKE_bvh.hh"
 #include "BKE_bvhutils.hh"
 #include "BKE_context.hh"
 #include "BKE_curves.hh"
@@ -75,6 +76,11 @@
  */
 
 namespace blender::ed::curves {
+
+static eHandleDisplay view3d_handle_type_or_default(const View3D *v3d)
+{
+  return v3d ? v3d->overlay.handle_display : CURVE_HANDLE_SELECTED;
+}
 
 bool object_has_editable_curves(const Main &bmain, const Object &object)
 {
@@ -270,7 +276,7 @@ static void try_convert_single_object(Object &curves_ob,
   }
   Mesh &surface_me = *id_cast<Mesh *>(surface_ob.data);
 
-  bke::BVHTreeFromMesh surface_bvh = surface_me.bvh_corner_tris();
+  const bke::bvh::Tree &surface_bvh = surface_me.bvh_tris();
 
   const Span<float3> positions_cu = curves.positions();
   const Span<int> tri_faces = surface_me.corner_tri_faces();
@@ -341,13 +347,11 @@ static void try_convert_single_object(Object &curves_ob,
     const float3 &root_pos_cu = positions_cu[points.first()];
     const float3 root_pos_su = math::transform_point(transforms.curves_to_surface, root_pos_cu);
 
-    BVHTreeNearest nearest;
-    nearest.dist_sq = FLT_MAX;
-    BLI_bvhtree_find_nearest(
-        surface_bvh.tree, root_pos_su, &nearest, surface_bvh.nearest_callback, &surface_bvh);
-    BLI_assert(nearest.index >= 0);
+    const std::optional<bke::bvh::ClosestPointResult> nearest = surface_bvh.closest_point(
+        root_pos_su);
+    BLI_assert(nearest.has_value());
 
-    const int tri_i = nearest.index;
+    const int tri_i = nearest->index;
     const int face_i = tri_faces[tri_i];
 
     const int mface_i = find_mface_for_root_position(
@@ -358,7 +362,8 @@ static void try_convert_single_object(Object &curves_ob,
 
     ParticleData &particle = particles[new_hair_i];
     const int num_keys = points.size();
-    MutableSpan<HairKey> hair_keys{MEM_new_array_zeroed<HairKey>(num_keys, __func__), num_keys};
+    MutableSpan<HairKey> hair_keys{
+        MEM_new_array_zeroed<HairKey>(num_keys, "try_convert_single_object hair_keys"), num_keys};
 
     particle.hair = hair_keys.data();
     particle.totkey = hair_keys.size();
@@ -608,7 +613,7 @@ static void snap_curves_to_surface_exec_object(Object &curves_ob,
 
   switch (attach_mode) {
     case AttachMode::Nearest: {
-      bke::BVHTreeFromMesh surface_bvh = surface_mesh.bvh_corner_tris();
+      const bke::bvh::Tree &surface_bvh = surface_mesh.bvh_tris();
 
       threading::parallel_for(curves.curves_range(), 256, [&](const IndexRange curves_range) {
         for (const int curve_i : curves_range) {
@@ -618,20 +623,14 @@ static void snap_curves_to_surface_exec_object(Object &curves_ob,
           const float3 old_first_point_pos_su = math::transform_point(transforms.curves_to_surface,
                                                                       old_first_point_pos_cu);
 
-          BVHTreeNearest nearest;
-          nearest.index = -1;
-          nearest.dist_sq = FLT_MAX;
-          BLI_bvhtree_find_nearest(surface_bvh.tree,
-                                   old_first_point_pos_su,
-                                   &nearest,
-                                   surface_bvh.nearest_callback,
-                                   &surface_bvh);
-          const int tri_index = nearest.index;
-          if (tri_index == -1) {
+          const std::optional<bke::bvh::ClosestPointResult> nearest = surface_bvh.closest_point(
+              old_first_point_pos_su);
+          if (!nearest) {
             continue;
           }
+          const int tri_index = nearest->index;
 
-          const float3 new_first_point_pos_su = nearest.co;
+          const float3 new_first_point_pos_su = nearest->position;
           const float3 new_first_point_pos_cu = math::transform_point(transforms.surface_to_curves,
                                                                       new_first_point_pos_su);
           const float3 pos_diff_cu = new_first_point_pos_cu - old_first_point_pos_cu;
@@ -1139,12 +1138,12 @@ namespace split {
 static wmOperatorStatus split_exec(bContext *C, wmOperator * /*op*/)
 {
   View3D *v3d = CTX_wm_view3d(C);
+  const eHandleDisplay handle_display = view3d_handle_type_or_default(v3d);
   VectorSet<Curves *> unique_curves = get_unique_editable_curves(*C);
   for (Curves *curves_id : unique_curves) {
     CurvesGeometry &curves = curves_id->geometry.wrap();
     IndexMaskMemory memory;
-    const IndexMask points_to_split = retrieve_all_selected_points(
-        curves, v3d->overlay.handle_display, memory);
+    const IndexMask points_to_split = retrieve_all_selected_points(curves, handle_display, memory);
     if (points_to_split.is_empty()) {
       continue;
     }
@@ -1824,7 +1823,7 @@ static void CURVES_OT_handle_type_set(wmOperatorType *ot)
 {
   ot->name = "Set Handle Type";
   ot->idname = __func__;
-  ot->description = "Set the handle type for bezier curves";
+  ot->description = "Set the handle type for Bézier curves";
 
   ot->invoke = WM_menu_invoke;
   ot->exec = set_handle_type::exec;

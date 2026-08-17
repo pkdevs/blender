@@ -20,7 +20,7 @@ NODE_STORAGE_FUNCS(NodeGeometrySampleIndex);
 static void node_declare(NodeDeclarationBuilder &b)
 {
   const bNode *node = b.node_or_null();
-  b.add_input<decl::Geometry>("Geometry")
+  b.add_input<decl::Geometry>("Geometry"_ustr)
       .supported_type({GeometryComponent::Type::Mesh,
                        GeometryComponent::Type::PointCloud,
                        GeometryComponent::Type::Curve,
@@ -29,16 +29,18 @@ static void node_declare(NodeDeclarationBuilder &b)
       .description("Geometry to sample a value on");
   if (node != nullptr) {
     const eCustomDataType data_type = eCustomDataType(node_storage(*node).data_type);
-    b.add_input(data_type, "Value").hide_value().field_on_all();
+    b.add_input(data_type, "Value"_ustr).hide_value().evaluated_geometry_field();
   }
-  b.add_input<decl::Int>("Index")
-      .supports_field()
-      .description("Which element to retrieve a value from on the geometry")
-      .structure_type(StructureType::Dynamic);
+  auto &index = b.add_input<decl::Int>("Index"_ustr)
+                    .description("Which element to retrieve a value from on the geometry")
+                    .structure_type(StructureType::Dynamic);
 
   if (node != nullptr) {
     const eCustomDataType data_type = eCustomDataType(node_storage(*node).data_type);
-    b.add_output(data_type, "Value").dependent_field({2});
+    std::array<int, 1> dynamic_inputs = {index.index()};
+    b.add_output(data_type, "Value"_ustr)
+        .inferred_structure_type(dynamic_inputs)
+        .propagate_references(dynamic_inputs);
   }
 }
 
@@ -64,26 +66,26 @@ static void node_gather_link_searches(GatherLinkSearchOpParams &params)
   search_link_ops_for_declarations(params, declaration.inputs);
 
   const std::optional<eCustomDataType> type = bke::socket_type_to_custom_data_type(
-      eNodeSocketDatatype(params.other_socket().type));
+      params.other_socket().type);
   if (type && *type != CD_PROP_STRING) {
     /* The input and output sockets have the same name. */
     params.add_item(IFACE_("Value"), [type](LinkSearchOpParams &params) {
-      bNode &node = params.add_node("GeometryNodeSampleIndex");
+      bNode &node = params.add_node("GeometryNodeSampleIndex"_ustr);
       node_storage(node).data_type = *type;
-      params.update_and_connect_available_socket(node, "Value");
+      params.update_and_connect_available_socket(node, "Value"_ustr);
     });
   }
 }
 
 static void node_geo_exec(GeoNodeExecParams params)
 {
-  GeometrySet geometry = params.extract_input<GeometrySet>("Geometry");
+  GeometrySet geometry = params.extract_input<GeometrySet>("Geometry"_ustr);
   const NodeGeometrySampleIndex &storage = node_storage(params.node());
   const AttrDomain domain = AttrDomain(storage.domain);
   const bool use_clamp = bool(storage.clamp);
 
-  GField value_field = params.extract_input<GField>("Value");
-  SocketValueVariant index_value_variant = params.extract_input<SocketValueVariant>("Index");
+  GField value_field = params.extract_input<GField>("Value"_ustr);
+  SocketValueVariant index_value_variant = params.extract_input<SocketValueVariant>("Index"_ustr);
   const CPPType &cpp_type = value_field.cpp_type();
 
   const GeometryComponent *component = bke::SampleIndexFunction::find_source_component(geometry,
@@ -115,7 +117,7 @@ static void node_geo_exec(GeoNodeExecParams params)
     else {
       cpp_type.copy_construct(cpp_type.default_value(), buffer);
     }
-    params.set_output("Value", std::move(output_value));
+    params.set_output("Value"_ustr, std::move(output_value));
     return;
   }
 
@@ -157,14 +159,14 @@ static void node_geo_exec(GeoNodeExecParams params)
     return;
   }
 
-  params.set_output("Value", std::move(output_value));
+  params.set_output("Value"_ustr, std::move(output_value));
 }
 
 static void node_register()
 {
   static bke::bNodeType ntype;
 
-  geo_node_type_base(&ntype, "GeometryNodeSampleIndex", GEO_NODE_SAMPLE_INDEX);
+  geo_node_type_base(&ntype, "GeometryNodeSampleIndex"_ustr, GEO_NODE_SAMPLE_INDEX);
   ntype.ui_name = "Sample Index";
   ntype.ui_description = "Retrieve values from specific geometry elements";
   ntype.enum_name_legacy = "SAMPLE_INDEX";

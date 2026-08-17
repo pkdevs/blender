@@ -96,7 +96,7 @@
 #include <memory>
 #include <string>
 
-#include "BLI_compiler_attrs.h"
+#include "BLI_compiler_attrs.hh"
 #include "BLI_enum_flags.hh"
 #include "BLI_vector.hh"
 
@@ -218,6 +218,8 @@ enum {
    * - As tools in the toolbar.
    *
    * Even so, accessing from the menu should behave usefully.
+   * \note Operators which set this flag will be skipped by the repeat last
+   * action operator.
    */
   OPTYPE_DEPENDS_ON_CURSOR = (1 << 11),
 
@@ -412,6 +414,9 @@ struct wmNotifier {
 /* Changes to the active viewer path. */
 #define NC_VIEWER_PATH (28 << 24)
 
+/* Changes that affects UI drawing. */
+#define NC_UI (29 << 24)
+
 /* Data type, 256 entries is enough, it can overlap. */
 #define NOTE_DATA 0x00FF0000
 
@@ -499,6 +504,8 @@ struct wmNotifier {
 /* For updating motion paths in 3dview. */
 #define ND_DRAW_ANIMVIZ (33 << 16)
 #define ND_BONE_COLLECTION (34 << 16)
+/* For sequencer prefetch indicator redraw. */
+#define ND_SEQUENCER_PREFETCH (35 << 16)
 
 /* NC_MATERIAL Material. */
 #define ND_SHADING (30 << 16)
@@ -582,6 +589,11 @@ struct wmNotifier {
  */
 #define ND_ASSET_CATALOGS (4 << 16)
 
+/* Changes in theme preferences that affects UI text drawing. */
+#define ND_UI_FONT (1 << 16)
+
+#define ND_UI_LANG (2 << 16)
+
 /* Subtype, 256 entries too. */
 #define NOTE_SUBTYPE 0x0000FF00
 
@@ -619,6 +631,7 @@ struct wmNotifier {
 #define NA_ACTIVATED 7
 #define NA_PAINTING 8
 #define NA_JOB_FINISHED 9
+#define NA_DOWNLOAD_FINISHED 10
 
 /* ************** Gesture Manager data ************** */
 
@@ -1237,10 +1250,23 @@ struct wmIMEData {
 
 /* **************** Paint Cursor ******************* */
 
+using wmPaintCursorPoll = bool (*)(bContext *C);
 using wmPaintCursorDraw = void (*)(bContext *C,
                                    const int2 &xy,
                                    const float2 &tilt,
                                    void *customdata);
+
+struct wmPaintCursor {
+  wmPaintCursor *next, *prev;
+
+  void *customdata;
+
+  wmPaintCursorPoll poll;
+  wmPaintCursorDraw draw;
+
+  short space_type;
+  short region_type;
+};
 
 /* *************** Drag and drop *************** */
 
@@ -1444,6 +1470,13 @@ struct wmDropBox {
    */
   void (*draw_in_view)(bContext *C, wmWindow *win, wmDrag *drag, const int xy[2]);
 
+  /**
+   * Used by tree views to scroll when the mouse is near the edge.
+   * Called for every event while the dropbox is active (hovered and poll succeeds).
+   * For #wmEventType::TIMER events, only the ones created from this #wmDropBox.timer are passed to
+   * it.
+   */
+  void (*on_event_while_hover)(bContext *C, wmDropBox &dropbox, const wmEvent *event);
   /** Custom data for drawing. */
   void *draw_data;
 
@@ -1464,6 +1497,7 @@ struct wmDropBox {
   IDProperty *properties;
   /** RNA pointer to access properties. */
   PointerRNA *ptr;
+  wmTimer *timer;
 };
 
 /**

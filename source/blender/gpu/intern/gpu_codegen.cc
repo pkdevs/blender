@@ -13,7 +13,7 @@
 #include "DNA_material_types.h"
 
 #include "BLI_span.hh"
-#include "BLI_string.h"
+#include "BLI_string.hh"
 #include "BLI_vector.hh"
 
 #include "BKE_cryptomatte.hh"
@@ -76,7 +76,7 @@ static std::ostream &operator<<(std::ostream &stream, const GPUOutput *output)
 /* Print data constructor (i.e: vec2(1.0f, 1.0f)). */
 static std::ostream &operator<<(std::ostream &stream, const Span<float> &span)
 {
-  stream << GPUType(span.size()) << "(";
+  stream << gpu_float_type_from_element_count(span.size()) << "(";
   /* Use uint representation to allow exact same bit pattern even if NaN. This is
    * because we can pass UINTs as floats for constants. */
   const Span<uint32_t> uint_span = span.cast<uint32_t>();
@@ -92,12 +92,46 @@ static std::ostream &operator<<(std::ostream &stream, const Span<float> &span)
   return stream;
 }
 
+/* Print data constructor (i.e: int2(1, 1)). */
+static std::ostream &operator<<(std::ostream &stream, const Span<int> &span)
+{
+  stream << gpu_int_type_from_element_count(span.size()) << "(";
+  for (const int &element : span) {
+    stream << element;
+    if (&element != &span.last()) {
+      stream << ", ";
+    }
+  }
+  stream << ")";
+  return stream;
+}
+
 /* Trick type to change overload and keep a somewhat nice syntax. */
 struct GPUConstant : public GPUInput {};
 
 static std::ostream &operator<<(std::ostream &stream, const GPUConstant *input)
 {
-  stream << Span<float>(input->vec, input->type);
+  switch (input->type) {
+    case GPU_FLOAT:
+    case GPU_VEC2:
+    case GPU_VEC3:
+    case GPU_VEC4:
+    case GPU_MAT3:
+    case GPU_MAT4:
+      return stream << gpu_constant_to_float_span(input->constant_data, input->type);
+    case GPU_INT:
+    case GPU_INT2:
+    case GPU_INT3:
+    case GPU_INT4:
+      return stream << gpu_constant_to_int_span(input->constant_data, input->type);
+    case GPU_BOOL:
+      return stream << "bool(" << (gpu_constant_to_bool(input->constant_data) ? "true" : "false")
+                    << ")";
+    default:
+      break;
+  }
+
+  BLI_assert_unreachable();
   return stream;
 }
 
@@ -136,7 +170,7 @@ GPUCodegen::~GPUCodegen()
 {
   MEM_SAFE_DELETE(cryptomatte_input_);
   MEM_delete(create_info);
-  BLI_freelistN(&ubo_inputs_);
+  ubo_inputs_.free_no_destruct();
 };
 
 bool GPUCodegen::should_optimize_heuristic() const
@@ -150,7 +184,7 @@ bool GPUCodegen::should_optimize_heuristic() const
 
 void GPUCodegen::generate_attribs()
 {
-  if (BLI_listbase_is_empty(&graph.attributes)) {
+  if (graph.attributes.is_empty()) {
     output.attr_load.clear();
     return;
   }
@@ -247,7 +281,7 @@ void GPUCodegen::generate_resources()
   /* Increment heuristic. */
   textures_total_ = slot;
 
-  if (!BLI_listbase_is_empty(&ubo_inputs_)) {
+  if (!ubo_inputs_.is_empty()) {
     const char *linted_struct_suffix = "_host_shared_";
     /* NOTE: generate_uniform_buffer() should have sorted the inputs before this. */
     ss << "struct NodeTree {\n";
@@ -268,7 +302,7 @@ void GPUCodegen::generate_resources()
     info.uniform_buf(GPU_NODE_TREE_UBO_SLOT, "NodeTree", GPU_UBO_BLOCK_NAME, Frequency::BATCH);
   }
 
-  if (!BLI_listbase_is_empty(&graph.uniform_attrs.list)) {
+  if (!graph.uniform_attrs.list.is_empty()) {
     ss << "struct UniformAttrs {\n";
     for (GPUUniformAttr &attr : graph.uniform_attrs.list) {
       ss << "vec4 attr" << attr.id << ";\n";
@@ -280,7 +314,7 @@ void GPUCodegen::generate_resources()
     info.uniform_buf(2, "UniformAttrs", GPU_ATTRIBUTE_UBO_BLOCK_NAME "[512]", Frequency::BATCH);
   }
 
-  if (!BLI_listbase_is_empty(&graph.layer_attrs)) {
+  if (!graph.layer_attrs.is_empty()) {
     info.additional_info("draw_layer_attributes");
   }
 
@@ -471,7 +505,7 @@ GPUGraphOutput GPUCodegen::graph_serialize(GPUNodeTag tree_tag)
 
 void GPUCodegen::generate_cryptomatte()
 {
-  cryptomatte_input_ = MEM_new_zeroed<GPUInput>(__func__);
+  cryptomatte_input_ = MEM_new<GPUInput>(__func__);
   cryptomatte_input_->type = GPU_FLOAT;
   cryptomatte_input_->source = GPU_SOURCE_CRYPTOMATTE;
 
@@ -482,7 +516,7 @@ void GPUCodegen::generate_cryptomatte()
                                            BLI_strnlen(material->id.name + 2, MAX_NAME - 2));
     material_hash = hash.float_encoded();
   }
-  cryptomatte_input_->vec[0] = material_hash;
+  cryptomatte_input_->constant_data = material_hash;
 
   BLI_addtail(&ubo_inputs_, BLI_genericNodeN(cryptomatte_input_));
 }
@@ -499,7 +533,7 @@ void GPUCodegen::generate_uniform_buffer()
       }
     }
   }
-  if (!BLI_listbase_is_empty(&ubo_inputs_)) {
+  if (!ubo_inputs_.is_empty()) {
     /* This sorts the inputs based on size. */
     GPU_material_uniform_buffer_create(&mat, &ubo_inputs_);
   }
@@ -565,11 +599,11 @@ void GPUCodegen::generate_graphs()
   output.displacement = graph_serialize(
       GPU_NODE_TAG_DISPLACEMENT, graph.outlink_displacement, nullptr);
   output.thickness = graph_serialize(GPU_NODE_TAG_THICKNESS, graph.outlink_thickness, nullptr);
-  if (!BLI_listbase_is_empty(&graph.outlink_compositor)) {
+  if (!graph.outlink_compositor.is_empty()) {
     output.composite = graph_serialize(GPU_NODE_TAG_COMPOSITOR);
   }
 
-  if (!BLI_listbase_is_empty(&graph.material_functions)) {
+  if (!graph.material_functions.is_empty()) {
     for (GPUNodeGraphFunctionLink &func_link : graph.material_functions) {
       std::stringstream eval_ss;
       /* Untag every node in the graph to avoid serializing nodes from other functions */

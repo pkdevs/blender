@@ -31,6 +31,7 @@ set(DEFSRC
   rna_armature.cc
   rna_asset.cc
   rna_attribute.cc
+  rna_blender_project.cc
   rna_blendfile_import.cc
   rna_boid.cc
   rna_brush.cc
@@ -96,6 +97,7 @@ set(DEFSRC
   rna_volume.cc
   rna_wm.cc
   rna_wm_gizmo.cc
+  rna_wm_undo.cc
   rna_workspace.cc
   rna_world.cc
   rna_xr.cc
@@ -169,7 +171,7 @@ endif()
 if(CMAKE_C_COMPILER_ID MATCHES "Clang")
   string(APPEND GENSRC_FLAGS " -Wno-missing-variable-declarations")
 elseif(MSVC)
-  remove_cc_flag(
+  remove_c_and_cxx_flag(
     # Restore warn C4100 (unreferenced formal parameter) back to w4.
     "/w34100"
   )
@@ -216,6 +218,7 @@ set(SRC_RNA_INC
   ../RNA_enum_items.hh
   ../RNA_enum_types.hh
   ../RNA_path.hh
+  ../RNA_path_fwd.hh
   ../RNA_types.hh
 
   rna_action_tools.hh
@@ -228,6 +231,7 @@ set(SRC
   ${DEFSRC}
   ${APISRC}
   ../../../../intern/clog/clog.cc
+  ../../makesdna/intern/dna_parse.cc
 
   makesrna_utils.hh
 )
@@ -251,6 +255,7 @@ set(INC
   ../../imbuf
   ../../imbuf/movie
   ../../io/usd
+  ../../makesdna/intern
   ../../modifiers
   ../../nodes
   ../../nodes/composite/include
@@ -267,9 +272,10 @@ set(INC
   ../../../../intern/memutil
   ../../../../intern/mantaflow/extern
 
-
   # RNA_prototypes.hh
   ${CMAKE_CURRENT_BINARY_DIR}/../../makesrna/
+  # dna_includes_as_strings.h
+  ${CMAKE_BINARY_DIR}/source/blender/makesdna
 )
 
 set(INC_SYS
@@ -284,10 +290,6 @@ if(WITH_PYTHON)
   list(APPEND INC
     ../../python
   )
-endif()
-
-if(WITH_IMAGE_OPENEXR)
-  add_definitions(-DWITH_IMAGE_OPENEXR)
 endif()
 
 if(WITH_IMAGE_OPENJPEG)
@@ -399,7 +401,7 @@ if(WITH_GMP)
 endif()
 
 # Build `makesrna` executable.
-add_cc_flags_custom_test(makesrna)
+add_c_and_cxx_flags_custom_test(makesrna)
 
 add_executable(makesrna ${SRC} ${SRC_RNA_INC} ${SRC_DNA_INC})
 setup_platform_linker_flags(makesrna)
@@ -412,6 +414,7 @@ target_link_libraries(makesrna PRIVATE bf::intern::atomic)
 target_link_libraries(makesrna PRIVATE bf::intern::guardedalloc)
 target_link_libraries(makesrna PRIVATE bf_dna_blenlib)
 target_link_libraries(makesrna PRIVATE bf_dna_defaults)
+target_link_libraries(makesrna PRIVATE bf::dependencies::optional::openvdb)
 target_link_libraries(makesrna PRIVATE bf::dependencies::optional::tbb)
 target_link_libraries(makesrna PRIVATE bf::dependencies::pthreads)
 target_link_libraries(makesrna PRIVATE bf::dependencies::fmt)
@@ -423,7 +426,7 @@ add_custom_command(
   OUTPUT ${GENSRC}
   COMMAND
     ${CMAKE_COMMAND} -E env ${PLATFORM_ENV_BUILD}
-    "$<TARGET_FILE:makesrna>" ${CMAKE_CURRENT_BINARY_DIR}/ ${CMAKE_CURRENT_BINARY_DIR}/../
+    "$<TARGET_FILE:makesrna>" ${CMAKE_SOURCE_DIR}/source/blender/makesdna/ ${CMAKE_CURRENT_BINARY_DIR}/ ${CMAKE_CURRENT_BINARY_DIR}/../
   DEPENDS makesrna
 )
 
@@ -446,6 +449,7 @@ set(SRC
 
 set(LIB
   PRIVATE bf::animrig
+  PRIVATE bf::blenlib
   PRIVATE bf::dna
   bf_editor_space_api
 
@@ -472,6 +476,7 @@ set(LIB
   PRIVATE bf::dependencies::optional::tbb
   PRIVATE bf::dependencies::optional::audaspace
   PUBLIC bf::dependencies::fmt
+  PRIVATE bf::nodes::shader
 )
 
 blender_add_lib(bf_rna "${SRC}" "${INC}" "${INC_SYS}" "${LIB}")
@@ -481,6 +486,7 @@ target_compile_definitions(bf_rna PRIVATE RNA_RUNTIME)
 if(WITH_GTESTS)
   set(TEST_SRC
     makesrna_test.cc
+    rna_path_test.cc
   )
   set(TEST_LIB
     ${LIB}

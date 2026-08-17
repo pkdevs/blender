@@ -61,7 +61,7 @@ void node_volume_principled(float4 color,
     /* Add temperature from attribute. */
     float T = max(temperature * max(temperature_attribute.x, 0.0f), 0.0f);
 
-    /* Stefan-Boltzman law. */
+    /* Stefan-Boltzmann law. */
     float T2 = T * T;
     float T4 = T2 * T2;
     float sigma = 5.670373e-8f * 1e-6f / M_PI;
@@ -75,17 +75,14 @@ void node_volume_principled(float4 color,
   }
 
   ClosureVolumeScatter volume_scatter_data;
-  volume_scatter_data.weight = weight;
-  volume_scatter_data.scattering = scatter_coeff;
-  volume_scatter_data.anisotropy = anisotropy;
+  volume_scatter_data.scattering = scatter_coeff * weight;
+  volume_scatter_data.anisotropy = anisotropy * weight;
 
   ClosureVolumeAbsorption volume_absorption_data;
-  volume_absorption_data.weight = weight;
-  volume_absorption_data.absorption = absorption_coeff;
+  volume_absorption_data.absorption = absorption_coeff * weight;
 
   ClosureEmission emission_data;
-  emission_data.weight = weight;
-  emission_data.emission = emission_coeff;
+  emission_data.emission = emission_coeff * weight;
 
   result = closure_eval(volume_scatter_data, volume_absorption_data, emission_data);
 }

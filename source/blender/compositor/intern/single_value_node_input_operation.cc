@@ -4,13 +4,16 @@
 
 #include <string>
 
-#include "BLI_assert.h"
+#include "BLI_assert.hh"
+#include "BLI_math_euler.hh"
 #include "BLI_math_vector_types.hh"
 
 #include "DNA_node_types.h"
 
 #include "BKE_node.hh"
 #include "BKE_node_runtime.hh"
+
+#include "NOD_geometry_nodes_bundle.hh"
 
 #include "COM_operation.hh"
 #include "COM_result.hh"
@@ -25,8 +28,7 @@ SingleValueNodeInputOperation::SingleValueNodeInputOperation(Context &context,
                                                              const bNodeSocket &input_socket)
     : Operation(context), input_socket_(input_socket)
 {
-  const ResultType result_type = get_node_socket_result_type(&input_socket);
-  this->populate_result(context.create_result(result_type));
+  this->populate_result(get_node_socket_result_type(&input_socket));
 }
 
 void SingleValueNodeInputOperation::execute()
@@ -73,9 +75,31 @@ void SingleValueNodeInputOperation::execute()
       }
       break;
     }
+    case SOCK_INT_VECTOR: {
+      switch (input_socket_.default_value_typed<bNodeSocketValueIntVector>()->dimensions) {
+        case 2: {
+          const int2 value = input_socket_.default_value_typed<bNodeSocketValueIntVector>()->value;
+          result.set_single_value(value);
+          break;
+        }
+        case 3: {
+          const int3 value = input_socket_.default_value_typed<bNodeSocketValueIntVector>()->value;
+          result.set_single_value(value);
+          break;
+        }
+        default:
+          BLI_assert_unreachable();
+          break;
+      }
+      break;
+    }
     case SOCK_RGBA: {
       const Color value = input_socket_.default_value_typed<bNodeSocketValueRGBA>()->value;
       result.set_single_value(value);
+      break;
+    }
+    case SOCK_MATRIX: {
+      result.set_single_value(float4x4::identity());
       break;
     }
     case SOCK_MENU: {
@@ -88,6 +112,51 @@ void SingleValueNodeInputOperation::execute()
       result.set_single_value(value);
       break;
     }
+    case SOCK_ROTATION: {
+      const bNodeSocketValueRotation *rotation =
+          input_socket_.default_value_typed<bNodeSocketValueRotation>();
+      const math::EulerXYZ euler(float3(rotation->value_euler));
+      const math::Quaternion value = math::to_quaternion(euler);
+      result.set_single_value(value);
+      break;
+    }
+    case SOCK_OBJECT: {
+      Object *value = input_socket_.default_value_typed<bNodeSocketValueObject>()->value;
+      result.set_single_value(value);
+      break;
+    }
+    case SOCK_IMAGE: {
+      Image *value = input_socket_.default_value_typed<bNodeSocketValueImage>()->value;
+      result.set_single_value(value);
+      break;
+    }
+    case SOCK_FONT: {
+      VFont *value = input_socket_.default_value_typed<bNodeSocketValueFont>()->value;
+      result.set_single_value(value);
+      break;
+    }
+    case SOCK_SCENE: {
+      Scene *value = input_socket_.default_value_typed<bNodeSocketValueScene>()->value;
+      result.set_single_value(value);
+      break;
+    }
+    case SOCK_TEXT_ID: {
+      Text *value = input_socket_.default_value_typed<bNodeSocketValueText>()->value;
+      result.set_single_value(value);
+      break;
+    }
+    case SOCK_MASK: {
+      Mask *value = input_socket_.default_value_typed<bNodeSocketValueMask>()->value;
+      result.set_single_value(value);
+      break;
+    }
+    case SOCK_BUNDLE: {
+      result.set_single_value(nodes::Bundle::create());
+      break;
+    }
+    case SOCK_CUSTOM:
+      /* An undefined socket, its value does not matter. */
+      break;
     default:
       BLI_assert_unreachable();
       break;
@@ -99,9 +168,9 @@ Result &SingleValueNodeInputOperation::get_result()
   return Operation::get_result(output_identifier_);
 }
 
-void SingleValueNodeInputOperation::populate_result(Result result)
+void SingleValueNodeInputOperation::populate_result(const ResultType type)
 {
-  Operation::populate_result(output_identifier_, result);
+  Operation::populate_result(output_identifier_, type);
 }
 
 }  // namespace blender::compositor

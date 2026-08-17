@@ -3,13 +3,10 @@
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
 #pragma once
-#pragma create_info
 
 #include "draw_view_lib.glsl"
 
 #include "workbench_common.bsl.hh"
-
-SHADER_LIBRARY_CREATE_INFO(draw_view)
 
 /* From The Alchemy screen-space ambient obscurance algorithm
  * http://graphics.cs.williams.edu/papers/AlchemyHPG11/VV11AlchemyAO.pdf */

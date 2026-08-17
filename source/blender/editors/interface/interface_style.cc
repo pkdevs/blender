@@ -15,11 +15,11 @@
 
 #include "DNA_userdef_types.h"
 
-#include "BLI_listbase.h"
-#include "BLI_rect.h"
-#include "BLI_string.h"
-#include "BLI_string_utf8.h"
-#include "BLI_utildefines.h"
+#include "BLI_listbase.hh"
+#include "BLI_rect.hh"
+#include "BLI_string.hh"
+#include "BLI_string_utf8.hh"
+#include "BLI_utildefines.hh"
 
 #include "BKE_global.hh"
 
@@ -29,15 +29,13 @@
 
 #include "interface_intern.hh"
 
-namespace blender {
-
 #ifdef WIN32
-#  include "BLI_math_base.h" /* M_PI */
+#  include "BLI_math_base_c.hh" /* M_PI */
 #endif
 
-static CLG_LogRef LOG = {"ui.font"};
+namespace blender::ui {
 
-namespace ui {
+static CLG_LogRef LOG = {"ui.font"};
 
 static void fontstyle_set_ex(const uiFontStyle *fs, const float dpi_fac);
 
@@ -60,7 +58,7 @@ static void fontstyle_set_ex(const uiFontStyle *fs, const float dpi_fac);
 
 /* ********************************************** */
 
-static uiStyle *ui_style_new(ListBaseT<uiStyle> *styles, const char *name, short uifont_id)
+static uiStyle *style_new(ListBaseT<uiStyle> *styles, const char *name, short uifont_id)
 {
   uiStyle *style = MEM_new_zeroed<uiStyle>(__func__);
 
@@ -139,7 +137,10 @@ void fontstyle_draw_ex(const uiFontStyle *fs,
                        ResultBLF *r_info)
 {
   int xofs = 0, yofs;
-  FontFlags font_flag = BLF_CLIPPING;
+  FontFlags font_flag = {};
+  if (fs_params->word_clip) {
+    font_flag |= BLF_CLIPPING;
+  }
 
   fontstyle_set(fs);
 
@@ -524,7 +525,7 @@ void style_init()
   }
 
   if (style == nullptr) {
-    style = ui_style_new(&U.uistyles, "Default Style", UIFONT_DEFAULT);
+    style = style_new(&U.uistyles, "Default Style", UIFONT_DEFAULT);
   }
 
   BLF_cache_flush_set_fn(widgetbase_draw_cache_flush);
@@ -609,5 +610,4 @@ void fontstyle_set(const uiFontStyle *fs)
   fontstyle_set_ex(fs, UI_SCALE_FAC);
 }
 
-}  // namespace ui
-}  // namespace blender
+}  // namespace blender::ui

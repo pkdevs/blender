@@ -17,11 +17,11 @@
 #include "BKE_screen.hh"
 #include "BKE_workspace.hh"
 
-#include "BLI_listbase.h"
-#include "BLI_math_matrix.h"
-#include "BLI_math_vector.h"
-#include "BLI_rect.h"
-#include "BLI_string.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_vector_c.hh"
+#include "BLI_rect.hh"
+#include "BLI_string.hh"
 
 #include "BLF_api.hh"
 #include "BLT_translation.hh"
@@ -240,7 +240,7 @@ static bool uiTemplateInputStatus3DView(bContext *C, Layout *row)
 
   if (is_negative_m4(ob->object_to_world().ptr())) {
     row->separator(1.0f);
-    row->label("", ICON_ERROR);
+    row->label("", ICON_STATUS_WARNING_FILLED);
     row->separator(-0.2f);
     row->label(IFACE_("Active object has negative scale"), ICON_NONE);
     row->separator(0.5f, LayoutSeparatorType::Line);
@@ -252,7 +252,7 @@ static bool uiTemplateInputStatus3DView(bContext *C, Layout *row)
   if (!(fabsf(ob->scale[0] - ob->scale[1]) < 1e-4f && fabsf(ob->scale[1] - ob->scale[2]) < 1e-4f))
   {
     row->separator(1.0f);
-    row->label("", ICON_ERROR);
+    row->label("", ICON_STATUS_WARNING_FILLED);
     row->separator(-0.2f);
     row->label(IFACE_("Active object has non-uniform scale"), ICON_NONE);
     row->separator(0.5f, LayoutSeparatorType::Line);
@@ -374,9 +374,7 @@ void uiTemplateInputStatus(Layout *layout, bContext *C)
   }
 }
 
-static std::string ui_template_status_tooltip(bContext *C,
-                                              void * /*argN*/,
-                                              const StringRef /*tip*/)
+static std::string template_status_tooltip(bContext *C, void * /*argN*/, const StringRef /*tip*/)
 {
   Main *bmain = CTX_data_main(C);
   std::string tooltip_message;
@@ -436,7 +434,7 @@ void uiTemplateStatusInfo(Layout *layout, bContext *C)
       }
       row.emboss_set(EmbossType::None);
       /* This operator also works fine for blocked extensions. */
-      row.op("EXTENSIONS_OT_userpref_show_for_update", "", ICON_ERROR);
+      row.op("EXTENSIONS_OT_userpref_show_for_update", "", ICON_STATUS_WARNING_FILLED);
       Button *but = layout->block()->buttons_ptrs.last().get();
       uchar color[4];
       theme::get_color_4ubv(TH_TEXT, color);
@@ -563,7 +561,7 @@ void uiTemplateStatusInfo(Layout *layout, bContext *C)
                          0.0f,
                          0.0f,
                          "");
-  /*# ButtonType::Roundbox's background color is set in `but->col`. */
+  /* #ButtonType::Roundbox's background color is set in `but->col`. */
   theme::get_color_4ubv(TH_WARNING, but->col);
 
   if (!warning_message.empty()) {
@@ -591,7 +589,7 @@ void uiTemplateStatusInfo(Layout *layout, bContext *C)
   /* The warning icon itself. */
   but = uiDefIconBut(block,
                      ButtonType::But,
-                     ICON_ERROR,
+                     ICON_STATUS_WARNING_FILLED,
                      int(3 * UI_SCALE_FAC),
                      0,
                      UI_UNIT_X,
@@ -600,7 +598,7 @@ void uiTemplateStatusInfo(Layout *layout, bContext *C)
                      0.0f,
                      0.0f,
                      std::nullopt);
-  button_func_tooltip_set(but, ui_template_status_tooltip, nullptr, nullptr);
+  button_func_tooltip_set(but, template_status_tooltip, nullptr, nullptr);
   theme::get_color_type_4ubv(TH_INFO_WARNING_TEXT, SPACE_INFO, but->col);
   but->col[3] = 255; /* This theme color is RBG only, so have to set alpha here. */
 
@@ -617,7 +615,7 @@ void uiTemplateStatusInfo(Layout *layout, bContext *C)
                    0.0f,
                    0.0f,
                    std::nullopt);
-    button_func_tooltip_set(but, ui_template_status_tooltip, nullptr, nullptr);
+    button_func_tooltip_set(but, template_status_tooltip, nullptr, nullptr);
   }
 
   block_emboss_set(block, previous_emboss);

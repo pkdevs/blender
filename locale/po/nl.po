@@ -1,10 +1,10 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 5.1.0 Beta (b'57dd016d99c8')\n"
+"Project-Id-Version: Blender 5.3.0 Alpha (b'af4852ed4560')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-02-23 10:33+0000\n"
-"PO-Revision-Date: 2026-02-14 01:12+0000\n"
+"POT-Creation-Date: 2026-08-10 07:54+0000\n"
+"PO-Revision-Date: 2026-07-08 11:12+0000\n"
 "Last-Translator: Timo Hoetmer <timo@timohoetmer.nl>\n"
 "Language-Team: Dutch <https://translate.blender.org/projects/blender-ui/ui/nl/>\n"
 "Language: nl\n"
@@ -12,7 +12,7 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=n != 1;\n"
-"X-Generator: Weblate 5.15.2"
+"X-Generator: Weblate 2026.6.1"
 
 
 msgid "Shader AOV"
@@ -455,6 +455,16 @@ msgstr "Licht Probe"
 
 
 msgctxt "ID"
+msgid "Line Style"
+msgstr "Lijnstijl"
+
+
+msgctxt "ID"
+msgid "Mask"
+msgstr "Masker"
+
+
+msgctxt "ID"
 msgid "Material"
 msgstr "Materiaal"
 
@@ -495,8 +505,18 @@ msgstr "Deeltje"
 
 
 msgctxt "ID"
+msgid "Point Cloud"
+msgstr "Punten Wolk"
+
+
+msgctxt "ID"
 msgid "Scene"
-msgstr "Scene"
+msgstr "Scène"
+
+
+msgctxt "ID"
+msgid "Screen"
+msgstr "Scherm"
 
 
 msgctxt "ID"
@@ -512,6 +532,11 @@ msgstr "Luidspreker"
 msgctxt "ID"
 msgid "Text"
 msgstr "Tekst"
+
+
+msgctxt "ID"
+msgid "Texture"
+msgstr "Textuur"
 
 
 msgctxt "ID"
@@ -547,6 +572,10 @@ msgid "Active slot for this action"
 msgstr "Actieve slot voor deze actie"
 
 
+msgid "Action Strip"
+msgstr "Actie Strook"
+
+
 msgid "Keyframe"
 msgstr "Keyframe"
 
@@ -557,6 +586,14 @@ msgstr "Strook met een set F-Curves voor elk actieslot"
 
 msgid "Keyframe Animation Strip"
 msgstr "Keyframe Animatie Strook"
+
+
+msgid "Action Strips"
+msgstr "Actie Stroken"
+
+
+msgid "Collection of animation strips"
+msgstr "Collectie van animatie stroken"
 
 
 msgid "Add-on"
@@ -613,6 +650,10 @@ msgstr "Volledig"
 
 msgid "Optimize all kernels. Fastest rendering, may result in extra background CPU usage"
 msgstr "Optimaliseer alle kernels. De snelste weergave, kan resulteren in extra CPU-gebruik op de achtergrond"
+
+
+msgid "MetalRT"
+msgstr "MetalRT"
 
 
 msgid "MetalRT for ray tracing uses less memory for scenes which use curves extensively, and can give better performance in specific cases"
@@ -695,8 +736,20 @@ msgid "Show only hotkeys that have this text in their name"
 msgstr "Toon enkel sneltoetsen die deze tekst in hun naam hebben"
 
 
+msgid "Hide Mix Nodes"
+msgstr "Verberg Mix Nodes"
+
+
+msgid "When merging nodes with the Ctrl+Numpad0 hotkey (and similar) specify whether to collapse them or show the full node with options expanded"
+msgstr "Geef aan bij het samenvoegen van nodes met de Ctrl+Numpad0 hotkey (en vergelijkbaar) of ze moeten worden samengevoegd of dat de volledige node met opties uitgevouwen moet worden weergeven"
+
+
 msgid "Always"
 msgstr "Altijd"
+
+
+msgid "Always collapse the new merge nodes"
+msgstr "Vouw de nieuwe samenvoeg nodes altijd samen"
 
 
 msgid "Non-Shader"
@@ -733,14 +786,6 @@ msgstr "Onderkant"
 
 msgid "Place the Mix node at the same height as the lowest node"
 msgstr "Plaats de Mix node op dezelfde hoogte als de laagste node"
-
-
-msgid "Show Hotkey List"
-msgstr "Toon Hotkey Lijst"
-
-
-msgid "Expand this box into a list of all the hotkeys for functions in this addon"
-msgstr "Bereid deze box uit tot een lijst van alle sneltoetsen voor functies in deze addon"
 
 
 msgid "Fribidi Library"
@@ -903,6 +948,10 @@ msgid "The list of slots in this animation data-block"
 msgstr "De lijst aan slots in dit animatie data-blok"
 
 
+msgid "Tweak Mode Action Storage"
+msgstr "Modus Actie Opslag Aanpassen"
+
+
 msgid "Drivers"
 msgstr "Drivers"
 
@@ -935,6 +984,10 @@ msgid "NLA stack is evaluated when evaluating this block"
 msgstr "NLA stack wordt geëvalueerd wanneer je dit blok evalueert"
 
 
+msgid "Use NLA Tweak Mode"
+msgstr "Gebruik NLA Aanpas Modus"
+
+
 msgid "Collection of Driver F-Curves"
 msgstr "Collectie van Driver F-Curves"
 
@@ -961,6 +1014,10 @@ msgstr "Bewegingspad Instellingen"
 
 msgid "Motion Path settings for animation visualization"
 msgstr "Bewegingspad instellingen voor animatie visualisatie"
+
+
+msgid "Bake Location"
+msgstr "Bake Locatie"
 
 
 msgid "Heads"
@@ -1023,8 +1080,16 @@ msgid "All Keys"
 msgstr "Alle Toetsen"
 
 
+msgid "From the first keyframe to the last"
+msgstr "Van de eerste keyframe tot de laatste"
+
+
 msgid "Selected Keys"
 msgstr "Geselecteerde Toetsen"
+
+
+msgid "From the first selected keyframe to the last"
+msgstr "Van de eerst geselecteerde keyframe tot de laatste"
 
 
 msgid "Scene Frame Range"
@@ -1047,6 +1112,14 @@ msgid "Show frame numbers on Motion Paths"
 msgstr "Toon frame nummers op Bewegingspaden"
 
 
+msgid "All Action Keyframes"
+msgstr "Alle Actie Keyframes"
+
+
+msgid "Show Keyframe Numbers"
+msgstr "Toon Keyframe Nummers"
+
+
 msgid "Paths Type"
 msgstr "Paden Type"
 
@@ -1057,6 +1130,14 @@ msgstr "Rond Frame"
 
 msgid "In Range"
 msgstr "In Bereik"
+
+
+msgid "Display Paths of poses within specified range"
+msgstr "Toon Paden van poses binnen gespecificeerd bereik"
+
+
+msgid "Bake to active Camera"
+msgstr "Bake naar Actieve Camera"
 
 
 msgid "Collection of related sketches on a particular frame"
@@ -1435,6 +1516,30 @@ msgid "Active EditBone"
 msgstr "Actieve EditBone"
 
 
+msgid "Is Editable"
+msgstr "Is Bewerkbaar"
+
+
+msgid "Show assets from all of the listed asset libraries"
+msgstr "Toon assets van alle vermelde asset bibliotheken"
+
+
+msgid "Show the assets currently available in this Blender session"
+msgstr "Toon de assets momenteel beschikbaar in deze Blender sessie"
+
+
+msgid "Essentials"
+msgstr "Essenties"
+
+
+msgid "Custom"
+msgstr "Aangepast"
+
+
+msgid "Show assets from the asset libraries configured in the Preferences"
+msgstr "Toon assets van de asset-bibliotheek ingesteld in Voorkeuren"
+
+
 msgid "User Asset Libraries"
 msgstr "Gebruiker Asset Bibliotheken"
 
@@ -1457,6 +1562,18 @@ msgstr "Beschrijving"
 
 msgid "The type of license this asset is distributed under. An empty license name does not necessarily indicate that this is free of licensing terms. Contact the author if any clarification is needed."
 msgstr "Het type licentie waaronder deze asset gedistribueerd wordt. Een lege licentie-naam betekent niet gelijk dat deze vrij van licentievoorwaarden is. Neem contact op met de maker als er verduidelijking nodig is."
+
+
+msgid "Link"
+msgstr "Koppel"
+
+
+msgid "Append"
+msgstr "Bijvoegen"
+
+
+msgid "Append (Reuse Data)"
+msgstr "Bijvoegen (Hergebruik Data)"
 
 
 msgid "Tags"
@@ -1497,30 +1614,6 @@ msgstr "Regio's voor snelle toegang naar assets"
 
 msgid "Choose the asset library to display assets from"
 msgstr "Kies het asset-bibliotheek om assets van te tonen"
-
-
-msgid "Show assets from all of the listed asset libraries"
-msgstr "Toon assets van alle vermelde asset bibliotheken"
-
-
-msgid "Show the assets currently available in this Blender session"
-msgstr "Toon de assets momenteel beschikbaar in deze Blender sessie"
-
-
-msgid "Essentials"
-msgstr "Essenties"
-
-
-msgid "Show the basic building blocks and utilities coming with Blender"
-msgstr "Toon de basis-bouwblokken en utilities die met Blender komen"
-
-
-msgid "Custom"
-msgstr "Aangepast"
-
-
-msgid "Show assets from the asset libraries configured in the Preferences"
-msgstr "Toon assets van de asset-bibliotheek ingesteld in Voorkeuren"
 
 
 msgid "Activate Operator"
@@ -3309,10 +3402,6 @@ msgid "Index"
 msgstr "Index"
 
 
-msgid "Is Editable"
-msgstr "Is Bewerkbaar"
-
-
 msgid "Visible"
 msgstr "Zichtbaar"
 
@@ -3810,16 +3899,8 @@ msgid "ACES 1.3 sRGB"
 msgstr "ACES 1.3 sRGB"
 
 
-msgid "ACES 1.0 Output Transform for SDR D65 video, limited to Rec.709 gamut"
-msgstr "ACES 1.0 Output Transformatie voor SDR D65 video, beperkt tot Rec.709 gamut"
-
-
 msgid "ACES 2.0 sRGB"
 msgstr "ACES 2.0 sRGB"
-
-
-msgid "ACES 2 Output Transform for 100 nit SDR Rec709"
-msgstr "ACES 2 Output Transformatie voor 100 nit SDR Rec709"
 
 
 msgid "ACES2065-1"
@@ -3842,20 +3923,12 @@ msgid "AgX Base sRGB"
 msgstr "AgX Base sRGB"
 
 
-msgid "AgX Base Image Encoding for sRGB Display"
-msgstr "AgX Base Image Encoding voor sRGB Scherm"
-
-
 msgid "AgX Log"
 msgstr "AgX Log"
 
 
 msgid "Khronos PBR Neutral sRGB"
 msgstr "Khronos PBR Neutral sRGB"
-
-
-msgid "Khronos PBR Neutral Image Encoding for sRGB Display"
-msgstr "Khronos PBR Neutral Image Encoding voor sRGB Scherm"
 
 
 msgid "Linear CIE-XYZ D65"
@@ -4572,18 +4645,6 @@ msgid "Title"
 msgstr "Titel"
 
 
-msgid "Link"
-msgstr "Koppel"
-
-
-msgid "Append"
-msgstr "Bijvoegen"
-
-
-msgid "Append (Reuse Data)"
-msgstr "Bijvoegen (Hergebruik Data)"
-
-
 msgid "Additional"
 msgstr "Aanvullende"
 
@@ -4776,6 +4837,10 @@ msgid "Top (X-Y)"
 msgstr "Bovenkant (X-Y)"
 
 
+msgid "Dynamic"
+msgstr "Dynamisch"
+
+
 msgid "Show Value"
 msgstr "Toon Waarde"
 
@@ -4882,10 +4947,6 @@ msgstr "Lokaal"
 
 msgid "Global"
 msgstr "Globaal"
-
-
-msgid "Dynamic"
-msgstr "Dynamisch"
 
 
 msgid "Color Type"
@@ -5455,6 +5516,10 @@ msgid "Current Frame"
 msgstr "Huidige Frame"
 
 
+msgid "Restore Frame"
+msgstr "Herstel Frame"
+
+
 msgid "Rigid Body World"
 msgstr "Star Lichaam Wereld"
 
@@ -5771,36 +5836,12 @@ msgid "Dots"
 msgstr "Stippen"
 
 
-msgid "Rigid Body"
-msgstr "Star Lichaam"
-
-
-msgid "Quick Effects"
-msgstr "Snelle Effecten"
-
-
-msgid "Show/Hide"
-msgstr "Toon/Verberg"
-
-
-msgid "Convert"
-msgstr "Converteer"
-
-
-msgid "Hooks"
-msgstr "Haken"
-
-
-msgid "Clear Transform"
-msgstr "Maak Transformatie Leeg"
-
-
 msgid "Names"
 msgstr "Namen"
 
 
-msgid "Layout"
-msgstr "Indeling"
+msgid "Show/Hide"
+msgstr "Toon/Verberg"
 
 
 msgid "Mirror"
@@ -5823,10 +5864,6 @@ msgid "Select Linked"
 msgstr "Selecteer Aaneengesloten"
 
 
-msgid "Import"
-msgstr "Importeren"
-
-
 msgid "Light"
 msgstr "Licht"
 
@@ -5837,6 +5874,38 @@ msgstr "Voeg Afbeelding Toe"
 
 msgid "Relations"
 msgstr "Relaties"
+
+
+msgid "Rigid Body"
+msgstr "Star Lichaam"
+
+
+msgid "Import"
+msgstr "Importeren"
+
+
+msgid "Quick Effects"
+msgstr "Snelle Effecten"
+
+
+msgid "Convert"
+msgstr "Converteer"
+
+
+msgid "Hooks"
+msgstr "Haken"
+
+
+msgid "Clear Transform"
+msgstr "Maak Transformatie Leeg"
+
+
+msgid "Linked"
+msgstr "Gekoppeld"
+
+
+msgid "Layout"
+msgstr "Indeling"
 
 
 msgctxt "MovieClip"
@@ -5887,6 +5956,10 @@ msgid "Generate"
 msgstr "Genereer"
 
 
+msgid "Save & Load"
+msgstr "Opslaan & Laden"
+
+
 msgid "Select Handle"
 msgstr "Selecteer Handle"
 
@@ -5925,10 +5998,6 @@ msgstr "Herstellen"
 
 msgid "Help"
 msgstr "Help"
-
-
-msgid "Save & Load"
-msgstr "Opslaan & Laden"
 
 
 msgctxt "Operator"
@@ -6298,10 +6367,6 @@ msgid "Hide the socket input value"
 msgstr "Verberg de aansluiting invoer waarde"
 
 
-msgid "Linked"
-msgstr "Gekoppeld"
-
-
 msgid "Is Output"
 msgstr "Is Uitvoer"
 
@@ -6361,11 +6426,6 @@ msgstr "Pas Project Toe"
 msgctxt "Operator"
 msgid "Import BVH"
 msgstr "Importeer BVH"
-
-
-msgctxt "Operator"
-msgid "Import SVG"
-msgstr "Importeer SVG"
 
 
 msgctxt "Operator"
@@ -6536,11 +6596,6 @@ msgstr "Afbreken"
 
 msgid "Generated"
 msgstr "Gegenereerd"
-
-
-msgctxt "Operator"
-msgid "Make Markers Local"
-msgstr "Maak Markeringen Lokaal"
 
 
 msgctxt "Operator"
@@ -6715,6 +6770,10 @@ msgstr "Collectie Index"
 msgctxt "Operator"
 msgid "Add Bone"
 msgstr "Voeg Bot Toe"
+
+
+msgid "Search"
+msgstr "Zoeken"
 
 
 msgctxt "Operator"
@@ -7349,6 +7408,11 @@ msgstr "Verberg Curves"
 
 msgid "Next Keyframe"
 msgstr "Volgende Sleutelframe"
+
+
+msgctxt "Operator"
+msgid "Local View"
+msgstr "Lokale Scherm"
 
 
 msgctxt "Operator"
@@ -8651,10 +8715,6 @@ msgid "Remove Render View"
 msgstr "Verwijder Render Beeld"
 
 
-msgid "Restore Frame"
-msgstr "Herstel Frame"
-
-
 msgctxt "Operator"
 msgid "Play Animation"
 msgstr "Speel Animatie"
@@ -8887,6 +8947,10 @@ msgstr "Plakken"
 
 msgid "Select Handles"
 msgstr "Selecteer Handles"
+
+
+msgid "Movie"
+msgstr "Film"
 
 
 msgctxt "Operator"
@@ -9185,11 +9249,6 @@ msgstr "Selecteer Menu"
 msgctxt "Operator"
 msgid "Fly Navigation"
 msgstr "Vlieg Navigatie"
-
-
-msgctxt "Operator"
-msgid "Local View"
-msgstr "Lokale Scherm"
 
 
 msgid "Move the view"
@@ -10251,10 +10310,6 @@ msgid "Summary"
 msgstr "Overzicht"
 
 
-msgid "Selected File"
-msgstr "Geselecteerde Bestand"
-
-
 msgid "Background Type"
 msgstr "Achtergrond Type"
 
@@ -10360,8 +10415,8 @@ msgid "Light"
 msgstr "Licht"
 
 
-msgid "Search"
-msgstr "Zoeken"
+msgid "Cancel"
+msgstr "Annuleren"
 
 
 msgctxt "WindowManager"
@@ -10543,11 +10598,6 @@ msgid "File:"
 msgstr "Bestand:"
 
 
-msgctxt "Operator"
-msgid "Apply"
-msgstr "Toevoegen"
-
-
 msgid "Options:"
 msgstr "Opties:"
 
@@ -10616,6 +10666,10 @@ msgid "Rotation"
 msgstr "Rotatie"
 
 
+msgid "Frame Range Start"
+msgstr "Framebereik Start"
+
+
 msgid "Frame Range Before"
 msgstr "Framebereik Voor"
 
@@ -10631,10 +10685,6 @@ msgstr "Berekenen..."
 
 msgid "Before"
 msgstr "Voordat"
-
-
-msgid "Frame Range Start"
-msgstr "Framebereik Start"
 
 
 msgctxt "Operator"
@@ -10976,11 +11026,6 @@ msgid "Forward"
 msgstr "Vooruit"
 
 
-msgctxt "Operator"
-msgid "New Folder"
-msgstr "Nieuwe Map"
-
-
 msgid "When Appending"
 msgstr "Wanneer bij aan het voegen"
 
@@ -11003,6 +11048,11 @@ msgstr "Geluidsbestanden"
 
 msgid "Text Files"
 msgstr "Tekstbestanden"
+
+
+msgctxt "Operator"
+msgid "New Folder"
+msgstr "Nieuwe Map"
 
 
 msgctxt "Operator"
@@ -11231,6 +11281,16 @@ msgstr "Annotatie:"
 
 
 msgctxt "Operator"
+msgid "Save Copy..."
+msgstr "Sla Kopie Op..."
+
+
+msgctxt "Operator"
+msgid "Save Incremental"
+msgstr "Incrementeel Opslaan"
+
+
+msgctxt "Operator"
 msgid "Quit"
 msgstr "Sluit af"
 
@@ -11291,16 +11351,6 @@ msgstr "Volgende Werkplaats"
 
 
 msgctxt "Operator"
-msgid "Save Copy..."
-msgstr "Sla Kopie Op..."
-
-
-msgctxt "Operator"
-msgid "Save Incremental"
-msgstr "Incrementeel Opslaan"
-
-
-msgctxt "Operator"
 msgid "General"
 msgstr "Algemeen"
 
@@ -11354,6 +11404,10 @@ msgstr "B"
 
 msgid "Double Click Speed"
 msgstr "Snelheid Dubbelklik"
+
+
+msgid " Preferences"
+msgstr " Voorkeuren"
 
 
 msgid "Use Light"
@@ -11754,6 +11808,11 @@ msgid "Quick Edit"
 msgstr "Snel Bewerken"
 
 
+msgctxt "Operator"
+msgid "Apply"
+msgstr "Toevoegen"
+
+
 msgid "User Library"
 msgstr "Gebruikersbibliotheek"
 
@@ -11794,6 +11853,11 @@ msgstr "Glad"
 
 msgid "LineStyle"
 msgstr "LijnStijl"
+
+
+msgctxt "Key"
+msgid "Key"
+msgstr "Sleutel"
 
 
 msgid "lattices"
@@ -11842,10 +11906,6 @@ msgstr "Verwijder Aanpasser"
 
 msgid "Too many points selected: %d"
 msgstr "Teveel punten geselecteerd: %d"
-
-
-msgid "Cancel"
-msgstr "Annuleren"
 
 
 msgctxt "Curve"
@@ -11906,10 +11966,6 @@ msgid "Nothing selected"
 msgstr "Niets geselecteerd"
 
 
-msgid "Pin"
-msgstr "Prik"
-
-
 msgctxt "Operator"
 msgid "Replace Keyframes"
 msgstr "Vervang Sleutelframes"
@@ -11942,10 +11998,6 @@ msgstr "Kopieer Alles naar Geselecteerd"
 
 msgid "OK"
 msgstr "OK"
-
-
-msgid "Movie"
-msgstr "Film"
 
 
 msgid "Zoom in"
@@ -12154,6 +12206,10 @@ msgid "Close"
 msgstr "Sluit"
 
 
+msgid "No edges selected"
+msgstr "Geen randen geselecteerd"
+
+
 msgid "No face selected"
 msgstr "Geen vlakken geselecteerd"
 
@@ -12176,10 +12232,6 @@ msgstr "Gebruik draaipunt"
 
 msgid "Set and use 3D cursor"
 msgstr "Plaats en gebruik 3D cursor"
-
-
-msgid "No edges selected"
-msgstr "Geen randen geselecteerd"
 
 
 msgid "No faces filled"
@@ -12275,6 +12327,10 @@ msgstr "Voeg Werkplaats toe"
 
 msgid "File not found '%s'"
 msgstr "Bestand niet gevonden '%s'"
+
+
+msgid " Materials,"
+msgstr " Materialen,"
 
 
 msgid "Active Keyframe"
@@ -12396,11 +12452,6 @@ msgstr "Pak Bestand Uit"
 
 msgid "Flame"
 msgstr "Vlam"
-
-
-msgctxt "Key"
-msgid "Key"
-msgstr "Sleutel"
 
 
 msgid "Point is not found in given spline"

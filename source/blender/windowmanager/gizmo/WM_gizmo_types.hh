@@ -91,6 +91,9 @@ enum eWM_GizmoFlag {
   WM_GIZMO_NO_TOOLTIP = (1 << 12),
   /** Push an undo step after each use of the gizmo. */
   WM_GIZMO_NEEDS_UNDO = (1 << 13),
+
+  /** This gizmo should be visually distinct and not shown grouped with other gizmos. */
+  WM_GIZMO_NO_GROUPING = (1 << 14),
 };
 ENUM_OPERATORS(eWM_GizmoFlag);
 
@@ -306,7 +309,7 @@ struct wmGizmo {
 struct wmGizmoProperty {
   const wmGizmoPropertyType *type = nullptr;
 
-  PointerRNA ptr = PointerRNA_NULL;
+  PointerRNA ptr = {};
   PropertyRNA *prop = nullptr;
   int index = -1;
 
@@ -439,6 +442,8 @@ struct wmGizmoGroupType {
   wmGizmoGroupFnRefresh refresh;
   /** Refresh data for drawing, called before each redraw. */
   wmGizmoGroupFnDrawPrepare draw_prepare;
+  /** Optionally draw the background of the group itself. */
+  wmGizmoGroupFnDrawBackground draw_background;
   /** Initialize data for before invoke. */
   wmGizmoGroupFnInvokePrepare invoke_prepare;
 

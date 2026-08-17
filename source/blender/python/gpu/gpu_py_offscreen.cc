@@ -14,7 +14,7 @@
 
 #include <Python.h>
 
-#include "BLI_string_utf8.h"
+#include "BLI_string_utf8.hh"
 
 #include "BKE_global.hh"
 #include "BKE_lib_id.hh" /* For #BKE_id_is_in_global_main. */
@@ -59,7 +59,7 @@ static const PyC_StringEnumItems pygpu_framebuffer_color_texture_formats[] = {
 
 static int pygpu_offscreen_valid_check(BPyGPUOffScreen *py_ofs)
 {
-  if (UNLIKELY(py_ofs->ofs == nullptr)) {
+  if (py_ofs->ofs == nullptr) [[unlikely]] {
     PyErr_SetString(PyExc_ReferenceError,
 #ifdef BPYGPU_USE_GPUOBJ_FREE_METHOD
                     "GPU offscreen was freed, no further access is valid"
@@ -74,7 +74,7 @@ static int pygpu_offscreen_valid_check(BPyGPUOffScreen *py_ofs)
 
 #define BPY_GPU_OFFSCREEN_CHECK_OBJ(bpygpu) \
   { \
-    if (UNLIKELY(pygpu_offscreen_valid_check(bpygpu) == -1)) { \
+    if (pygpu_offscreen_valid_check(bpygpu) == -1) [[unlikely]] { \
       return nullptr; \
     } \
   } \
@@ -241,7 +241,12 @@ static PyObject *pygpu_offscreen_bind(BPyGPUOffScreen *self)
   ret->is_explicitly_bound = false;
   Py_INCREF(self);
 
-  pygpu_offscreen_stack_context_enter(ret);
+  PyObject *enter_ret = pygpu_offscreen_stack_context_enter(ret);
+  if (enter_ret == nullptr) [[unlikely]] {
+    Py_DECREF(ret);
+    return nullptr;
+  }
+  Py_DECREF(enter_ret);
   ret->is_explicitly_bound = true;
 
   return reinterpret_cast<PyObject *>(ret);
@@ -265,7 +270,7 @@ static PyObject *pygpu_offscreen_unbind(BPyGPUOffScreen *self, PyObject *args, P
 
   static const char *_keywords[] = {"restore", nullptr};
   static _PyArg_Parser _parser = {
-      "|$" /* Optional keyword only arguments. */
+      "|$" /* Optional, keyword only arguments. */
       "O&" /* `restore` */
       ":unbind",
       _keywords,
@@ -300,7 +305,7 @@ static PyObject *pygpu_offscreen__tp_new(PyTypeObject * /*self*/, PyObject *args
   static _PyArg_Parser _parser = {
       "i"  /* `width` */
       "i"  /* `height` */
-      "|$" /* Optional keyword only arguments. */
+      "|$" /* Optional, keyword only arguments. */
       "O&" /* `format` */
       ":GPUOffScreen.__new__",
       _keywords,
@@ -430,7 +435,7 @@ static PyObject *pygpu_offscreen_draw_view3d(BPyGPUOffScreen *self, PyObject *ar
       "O"  /* `region` */
       "O&" /* `view_matrix` */
       "O&" /* `projection_matrix` */
-      "|$" /* Optional keyword only arguments. */
+      "|$" /* Optional, keyword only arguments. */
       "O&" /* `do_color_management` */
       "O&" /* `draw_background` */
       ":draw_view3d",
@@ -487,6 +492,7 @@ static PyObject *pygpu_offscreen_draw_view3d(BPyGPUOffScreen *self, PyObject *ar
                            eDrawType(v3d->shading.type),
                            v3d,
                            region,
+                           nullptr,
                            GPU_offscreen_width(self->ofs),
                            GPU_offscreen_height(self->ofs),
                            reinterpret_cast<const float (*)[4]>(py_mat_view->matrix),
@@ -600,16 +606,18 @@ static PyMethodDef pygpu_offscreen__tp_methods[] = {
 PyDoc_STRVAR(
     /* Wrap. */
     pygpu_offscreen__tp_doc,
-    ".. class:: GPUOffScreen(width, height, *, format='RGBA8')\n"
+    ".. class:: GPUOffScreen\n"
     "\n"
     "   This object gives access to off screen buffers.\n"
     "\n"
-    "   :param width: Horizontal dimension of the buffer.\n"
-    "   :type width: int\n"
-    "   :param height: Vertical dimension of the buffer.\n"
-    "   :type height: int\n"
-    "   :param format: Internal data format inside GPU memory for color attachment texture.\n"
-    "   :type format: Literal['RGBA8', 'RGBA16', 'RGBA16F', 'RGBA32F']\n");
+    "   .. method:: __init__(width, height, *, format='RGBA8')\n"
+    "\n"
+    "      :param width: Horizontal dimension of the buffer.\n"
+    "      :type width: int\n"
+    "      :param height: Vertical dimension of the buffer.\n"
+    "      :type height: int\n"
+    "      :param format: Internal data format inside GPU memory for color attachment texture.\n"
+    "      :type format: Literal['RGBA8', 'RGBA16', 'RGBA16F', 'RGBA32F']\n");
 PyTypeObject BPyGPUOffScreen_Type = {
     /*ob_base*/ PyVarObject_HEAD_INIT(nullptr, 0)
     /*tp_name*/ "GPUOffScreen",

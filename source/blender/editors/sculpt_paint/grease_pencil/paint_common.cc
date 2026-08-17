@@ -8,6 +8,7 @@
 #include "BKE_crazyspace.hh"
 #include "BKE_curves.hh"
 #include "BKE_grease_pencil.hh"
+#include "BKE_grease_pencil_fills.hh"
 #include "BKE_paint.hh"
 
 #include "BLI_array_utils.hh"
@@ -177,8 +178,14 @@ IndexMask brush_point_influence_mask(const Paint &paint,
   Array<float> all_influences(selection.min_array_size());
   const IndexMask influence_mask = IndexMask::from_predicate(
       selection, memory, [&](const int point) {
+        const float2 &co = view_positions[point];
+
+        if (co == float2(invalid_screen_position)) {
+          return false;
+        }
+
         /* Distance falloff. */
-        const float distance_squared = math::distance_squared(int2(view_positions[point]), mval_i);
+        const float distance_squared = math::distance_squared(int2(co), mval_i);
         if (distance_squared > radius_squared) {
           all_influences[point] = 0.0f;
           return false;
@@ -329,9 +336,28 @@ IndexMask fill_mask_for_stroke_operation(const GreasePencilStrokeParams &params,
                                          const bool use_selection_masking,
                                          IndexMaskMemory &memory)
 {
-  return use_selection_masking ? ed::greasepencil::retrieve_editable_and_selected_fill_strokes(
-                                     params.ob_orig, params.drawing, params.layer_index, memory) :
-                                 params.drawing.strokes().curves_range();
+  if (!params.drawing.fills().has_value()) {
+    return {};
+  }
+  const GroupedSpan<int> fills = *params.drawing.fills();
+  if (!use_selection_masking) {
+    return fills.index_range();
+  }
+  const IndexMask editable_strokes = ed::greasepencil::retrieve_editable_and_selected_strokes(
+      params.ob_orig, params.drawing, params.layer_index, memory);
+  /* TODO: write dedicated function for this that doesn't use `contains`. */
+  return IndexMask::from_predicate(
+      fills.index_range(),
+      memory,
+      [&](const int64_t i) {
+        for (const int curve_i : fills[i]) {
+          if (!editable_strokes.contains(curve_i)) {
+            return false;
+          }
+        }
+        return true;
+      },
+      exec_mode::grain_size(1024));
 }
 
 bke::crazyspace::GeometryDeformation get_drawing_deformation(
@@ -356,9 +382,9 @@ Array<float2> view_positions_from_point_mask(const GreasePencilStrokeParams &par
             &params.region,
             math::transform_point(transform, deformation.positions[point_i]),
             view_positions[point_i],
-            V3D_PROJ_TEST_NOP);
+            V3D_PROJ_TEST_CLIP_NEAR | V3D_PROJ_TEST_CLIP_FAR);
         if (result != V3D_PROJ_RET_OK) {
-          view_positions[point_i] = float2(0);
+          view_positions[point_i] = float2(invalid_screen_position);
         }
       },
       exec_mode::grain_size(4096));
@@ -384,9 +410,9 @@ Array<float2> view_positions_from_curve_mask(const GreasePencilStrokeParams &par
               &params.region,
               math::transform_point(transform, deformation.positions[point_i]),
               view_positions[point_i],
-              V3D_PROJ_TEST_NOP);
+              V3D_PROJ_TEST_CLIP_NEAR | V3D_PROJ_TEST_CLIP_FAR);
           if (result != V3D_PROJ_RET_OK) {
-            view_positions[point_i] = float2(0);
+            view_positions[point_i] = float2(invalid_screen_position);
           }
         }
       },
@@ -414,9 +440,9 @@ Array<float2> view_positions_left_from_point_mask(const GreasePencilStrokeParams
             &params.region,
             math::transform_point(transform, handle_positions_left[point_i]),
             view_positions[point_i],
-            V3D_PROJ_TEST_NOP);
+            V3D_PROJ_TEST_CLIP_NEAR | V3D_PROJ_TEST_CLIP_FAR);
         if (result != V3D_PROJ_RET_OK) {
-          view_positions[point_i] = float2(0);
+          view_positions[point_i] = float2(invalid_screen_position);
         }
       },
       exec_mode::grain_size(4096));
@@ -443,9 +469,9 @@ Array<float2> view_positions_right_from_point_mask(const GreasePencilStrokeParam
             &params.region,
             math::transform_point(transform, handle_positions_right[point_i]),
             view_positions[point_i],
-            V3D_PROJ_TEST_NOP);
+            V3D_PROJ_TEST_CLIP_NEAR | V3D_PROJ_TEST_CLIP_FAR);
         if (result != V3D_PROJ_RET_OK) {
-          view_positions[point_i] = float2(0);
+          view_positions[point_i] = float2(invalid_screen_position);
         }
       },
       exec_mode::grain_size(4096));

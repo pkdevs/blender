@@ -4,13 +4,18 @@
 
 #include "BLI_array_utils.hh"
 #include "BLI_index_mask.hh"
+#include "BLI_listbase_iterator.hh"
 #include "BLI_ordered_edge.hh"
 
 #include "BKE_attribute.hh"
 #include "BKE_attribute_math.hh"
+#include "BKE_attribute_storage.hh"
 #include "BKE_customdata.hh"
+#include "BKE_deform.hh"
 #include "BKE_mesh.hh"
 #include "BKE_mesh_mapping.hh"
+
+#include "DNA_object_types.h"
 
 #include "GEO_mesh_selection.hh"
 #include "GEO_mesh_split_edges.hh"
@@ -23,11 +28,20 @@ static void propagate_vert_attributes(Mesh &mesh, const Span<int> new_to_old_ver
   /* These types aren't supported for interpolation below. */
   CustomData_free_layers(&mesh.vert_data, CD_SHAPEKEY);
   CustomData_free_layers(&mesh.vert_data, CD_CLOTH_ORCO);
-  CustomData_free_layers(&mesh.vert_data, CD_MVERT_SKIN);
   CustomData_realloc(
       &mesh.vert_data, mesh.verts_num, mesh.verts_num + new_to_old_verts_map.size());
   mesh.verts_num += new_to_old_verts_map.size();
   mesh.attribute_storage.wrap().resize(bke::AttrDomain::Point, mesh.verts_num);
+
+  Set<StringRef> vertex_group_names;
+  for (bDeformGroup &group : mesh.vertex_group_names) {
+    vertex_group_names.add(group.name);
+  }
+  if (!vertex_group_names.is_empty() && !mesh.deform_verts().is_empty()) {
+    MutableSpan<MDeformVert> dverts = mesh.deform_verts_for_write();
+    bke::gather_deform_verts(
+        dverts, new_to_old_verts_map, dverts.take_back(new_to_old_verts_map.size()));
+  }
 
   bke::MutableAttributeAccessor attributes = mesh.attributes_for_write();
   attributes.foreach_attribute([&](const bke::AttributeIter &iter) {
@@ -38,6 +52,9 @@ static void propagate_vert_attributes(Mesh &mesh, const Span<int> new_to_old_ver
       return;
     }
     if (iter.data_type == bke::AttrType::String) {
+      return;
+    }
+    if (vertex_group_names.contains(iter.name)) {
       return;
     }
     bke::GSpanAttributeWriter attribute = attributes.lookup_for_write_span(iter.name);
@@ -370,7 +387,7 @@ static Array<int2> calc_new_edges(const OffsetIndices<int> faces,
           const OrderedEdge edge = edge_from_corner(
               faces, corner_verts, corner_to_face_map, corner);
           int index = deduplication.first_index_of_try(edge);
-          if (UNLIKELY(index != -1)) {
+          if (index != -1) [[unlikely]] {
             found_duplicate.store(true, std::memory_order_relaxed);
           }
           else {
@@ -529,7 +546,12 @@ void split_edges(Mesh &mesh,
       orig_edges, selected_edges, orig_verts_num, memory);
   BitVector<> selection_bits(orig_edges.size());
   selected_edges.to_bits(selection_bits);
-  const bke::LooseEdgeCache &loose_edges = mesh.loose_edges();
+  const IndexMask &loose_edges = mesh.loose_edges();
+  BitVector<> loose_edge_bits;
+  if (!loose_edges.is_empty()) {
+    loose_edge_bits.resize(orig_edges.size());
+    loose_edges.to_bits(loose_edge_bits);
+  }
 
   const GroupedSpan<int> vert_to_corner_map = mesh.vert_to_corner_map();
 
@@ -541,7 +563,7 @@ void split_edges(Mesh &mesh,
   Array<int> vert_to_edge_offsets;
   Array<int> vert_to_edge_indices;
   GroupedSpan<int> vert_to_edge_map;
-  if (loose_edges.count > 0) {
+  if (!loose_edges.is_empty()) {
     vert_to_edge_map = bke::mesh::build_vert_to_edge_map(
         orig_edges, orig_verts_num, vert_to_edge_offsets, vert_to_edge_indices);
   }
@@ -562,7 +584,7 @@ void split_edges(Mesh &mesh,
       affected_verts,
       corner_groups,
       vert_to_edge_map,
-      loose_edges.is_loose_bits,
+      loose_edge_bits,
       selection_bits,
       vert_new_vert_offset_data);
 
@@ -586,11 +608,11 @@ void split_edges(Mesh &mesh,
                           unselected_edges,
                           mesh.edges_for_write());
 
-  if (loose_edges.count > 0) {
+  if (!loose_edges.is_empty()) {
     reassign_loose_edge_verts(orig_verts_num,
                               affected_verts,
                               vert_to_edge_map,
-                              loose_edges.is_loose_bits,
+                              loose_edge_bits,
                               selection_bits,
                               corner_groups,
                               new_verts_by_affected_vert,

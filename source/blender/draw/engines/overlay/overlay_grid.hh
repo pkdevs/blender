@@ -14,7 +14,7 @@
 #include "DNA_screen_types.h"
 #include "DNA_space_types.h"
 
-#include "BLI_math_color.h"
+#include "BLI_math_color_c.hh"
 
 #include "ED_image.hh"
 #include "ED_view3d.hh"
@@ -75,14 +75,24 @@ class Grid : Overlay {
     {
       const uint axis_vertex_count = 6;
       const uint grid_vertex_count = 4 * OVERLAY_GRID_STEPS_DRAW * grid_ubo_.num_lines;
+      const auto grid_draw_state = ps_draw_state | DRW_STATE_DEPTH_LESS_EQUAL |
+                                   DRW_STATE_BLEND_ADD;
 
       auto &sub = grid_ps_.sub("grid");
       sub.shader_set(res.shaders->grid.get());
-      sub.state_set(ps_draw_state | DRW_STATE_DEPTH_LESS_EQUAL | DRW_STATE_WRITE_DEPTH |
-                    DRW_STATE_BLEND_ADD);
+      sub.state_set(grid_draw_state);
       sub.bind_ubo("grid_buf", &grid_ubo_);
 
       for (int grid_iter = 0; grid_iter < num_iters_; grid_iter++) {
+        /* NOTE(not_mark): Only the first iteration draws to depth as a workaround for
+         * clipping with the mesh edit overlay while it's drawn after (See #154540). */
+        if (grid_iter == 0) {
+          sub.state_set(grid_draw_state | DRW_STATE_WRITE_DEPTH);
+        }
+        else {
+          sub.state_set(grid_draw_state);
+        }
+
         sub.push_constant("grid_iter", grid_iter);
         if (axis_flag_) {
           sub.push_constant("grid_flag", &axis_flag_);
@@ -170,8 +180,8 @@ class Grid : Overlay {
       grid_ubo_.steps[i].y = steps_y[i] * step_mult;
     }
 
-    /* Determine camera offset to center of v2d. */
-    grid_ubo_.offset = float2(v2d->cur.xmax + v2d->cur.xmin, v2d->cur.ymax + v2d->cur.ymin) - 1.0f;
+    /* Align the grid to the tile origin */
+    grid_ubo_.offset = float2(-1.0f);
 
     /* Query grid image zoom level. Then find the lowest relevant grid level + fractional. */
     float dist = ED_space_image_zoom_level(v2d, SI_GRID_STEPS_LEN) * 4.0f;
@@ -245,19 +255,19 @@ class Grid : Overlay {
       /* Fixed plane orthographic: set axis/plane bits dependent on the view
        * (top, right, left, etc.) that is selected. */
       if (ELEM(rv3d->view, RV3D_VIEW_RIGHT, RV3D_VIEW_LEFT)) {
-        axis_flag_ = (show_axis_y ? AXIS_Y : OVERLAY_GridBits(0)) |
-                     (show_axis_z ? AXIS_Z : OVERLAY_GridBits(0));
-        grid_flag_ = (show_ortho ? PLANE_YZ : OVERLAY_GridBits(0));
+        axis_flag_ = (show_axis_y ? (AXIS_Y | GRID_ALIGNED) : OVERLAY_GridBits(0)) |
+                     (show_axis_z ? (AXIS_Z | GRID_ALIGNED) : OVERLAY_GridBits(0));
+        grid_flag_ = (show_ortho ? (PLANE_YZ | GRID_ALIGNED) : OVERLAY_GridBits(0));
       }
       else if (ELEM(rv3d->view, RV3D_VIEW_TOP, RV3D_VIEW_BOTTOM)) {
-        axis_flag_ = (show_axis_x ? AXIS_X : OVERLAY_GridBits(0)) |
-                     (show_axis_y ? AXIS_Y : OVERLAY_GridBits(0));
-        grid_flag_ = (show_ortho ? PLANE_XY : OVERLAY_GridBits(0));
+        axis_flag_ = (show_axis_x ? (AXIS_X | GRID_ALIGNED) : OVERLAY_GridBits(0)) |
+                     (show_axis_y ? (AXIS_Y | GRID_ALIGNED) : OVERLAY_GridBits(0));
+        grid_flag_ = (show_ortho ? (PLANE_XY | GRID_ALIGNED) : OVERLAY_GridBits(0));
       }
       else if (ELEM(rv3d->view, RV3D_VIEW_FRONT, RV3D_VIEW_BACK)) {
-        axis_flag_ = (show_axis_x ? AXIS_X : OVERLAY_GridBits(0)) |
-                     (show_axis_z ? AXIS_Z : OVERLAY_GridBits(0));
-        grid_flag_ = (show_ortho ? PLANE_XZ : OVERLAY_GridBits(0));
+        axis_flag_ = (show_axis_x ? (AXIS_X | GRID_ALIGNED) : OVERLAY_GridBits(0)) |
+                     (show_axis_z ? (AXIS_Z | GRID_ALIGNED) : OVERLAY_GridBits(0));
+        grid_flag_ = (show_ortho ? (PLANE_XZ | GRID_ALIGNED) : OVERLAY_GridBits(0));
       }
 
       /* If any axes are set, set SHOW_AXES. If `grid` is toggled, set SHOW_GRID.
@@ -306,6 +316,14 @@ class Grid : Overlay {
                          abs(drw_view_position.z),
                          1.0f - abs(drw_view_forward.z));
     }
+    else if (bool(grid_flag_ & GRID_ALIGNED) || bool(axis_flag_ & GRID_ALIGNED)) {
+      /* #155497: use the same zoom-derived distance as `ED_view3d_grid_view_scale()` for
+       * axis-aligned orthographic views. */
+      dist = 10.0f * 12.0f / (state.region->sizex * rv3d->winmat[0][0]);
+      /* Keep the selected level from going below the smallest available grid step. */
+      const float min_step = std::min(grid_ubo_.steps[0].x, grid_ubo_.steps[0].y);
+      dist = std::max(dist, min_step);
+    }
     else {
       /* Scale is simply specified by orthographic view. */
       dist = rv3d->dist;
@@ -326,12 +344,20 @@ class Grid : Overlay {
       grid_ubo_.offset = camera_offs.xy();
     }
     else { /* Orthographic. */
-      float3 camera_offs = drw_view_position -
-                           drw_view_forward * dot(drw_view_position, drw_view_forward);
-      grid_ubo_.offset = camera_offs.xy();
+      const float forward_z = drw_view_forward.z;
+      constexpr float eps = 1e-6f;
+      if (abs(forward_z) > eps) {
+        /* Center the grid on the intersection of the orthographic view ray with the XY plane. */
+        float3 camera_offs = drw_view_position -
+                             drw_view_forward * safe_divide(drw_view_position.z, forward_z);
+        grid_ubo_.offset = camera_offs.xy();
+      }
+      else {
+        grid_ubo_.offset = drw_view_position.xy();
+      }
     }
 
-    /* Find the lowest relevant grid level + fractional. */
+    /* Find the lowest relevant grid level for the above distance. */
     for (int i : IndexRange(SI_GRID_STEPS_LEN)) {
       float curr = std::min(grid_ubo_.steps[i].x, grid_ubo_.steps[i].y);
       float next = (i < SI_GRID_STEPS_LEN - 1) ?
@@ -363,9 +389,12 @@ class Grid : Overlay {
       /* WATCH(not_mark): This appears to function in ortho/VR, but I'm not convinced. */
       bool use_clip_end = rv3d->is_persp ||
                           ((v3d->flag & (V3D_XR_SESSION_SURFACE | V3D_XR_SESSION_MIRROR)) != 0);
-      float clip_dist = use_clip_end ? v3d->clip_end :
-                                       (4.0f / max(rv3d->winmat[0][0], rv3d->winmat[1][1]));
-      grid_ubo_.clip_rect = float2(clip_dist);
+      if (use_clip_end) {
+        grid_ubo_.clip_rect = float2(v3d->clip_end);
+      }
+      else {
+        grid_ubo_.clip_rect = float2(4.0f / rv3d->winmat[0][0], 4.0f / rv3d->winmat[1][1]);
+      }
     }
 
     /* This suffices for most cases, and in others we fade to hide it. */

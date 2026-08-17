@@ -8,8 +8,6 @@
 
 #include <sstream>
 
-#include "GPU_capabilities.hh"
-
 #include "vk_shader.hh"
 
 #include "vk_backend.hh"
@@ -19,7 +17,6 @@
 #include "vk_state_manager.hh"
 #include "vk_vertex_attribute_object.hh"
 
-#include "BLI_string_utils.hh"
 #include "BLI_vector.hh"
 
 #include "BKE_global.hh"
@@ -393,6 +390,9 @@ static void print_resource(std::ostream &os,
       os << "buffer _" << res.storagebuf.name.str_no_array() << " { "
          << info.buffer_typename(res.storagebuf.type_name) << " " << res.storagebuf.name << "; };";
       break;
+    case ShaderCreateInfo::Resource::BindType::ACCELERATION_STRUCTURE:
+      os << "uniform accelerationStructureEXT " << res.acceleration_structure.name << ";";
+      break;
   }
 }
 
@@ -514,6 +514,11 @@ void VKShader::init(const shader::ShaderCreateInfo &info, bool /*is_codegen_only
   interface = vk_interface;
   is_static_shader_ = info.do_static_compilation_;
   is_compute_shader_ = !info.compute_source_.is_empty() || !info.compute_source_generated.empty();
+  max_input_attachment_index_ = 0;
+  for (const ShaderCreateInfo::SubpassIn &input : info.subpass_inputs_) {
+    max_input_attachment_index_ = max_uu(max_input_attachment_index_, uint32_t(input.index));
+  }
+  use_ray_query_ = bool(info.builtins_ & BuiltinBits::RAY_QUERY);
 }
 
 VKShader::~VKShader()
@@ -540,16 +545,16 @@ void VKShader::build_shader_module(MutableSpan<StringRefNull> sources,
 
   switch (stage) {
     case shaderc_vertex_shader:
-      source_patch = device.glsl_vertex_patch_get();
+      source_patch = device.glsl_vertex_patch_get(use_ray_query_);
       break;
     case shaderc_geometry_shader:
       source_patch = device.glsl_geometry_patch_get();
       break;
     case shaderc_fragment_shader:
-      source_patch = device.glsl_fragment_patch_get();
+      source_patch = device.glsl_fragment_patch_get(use_ray_query_);
       break;
     case shaderc_compute_shader:
-      source_patch = device.glsl_compute_patch_get();
+      source_patch = device.glsl_compute_patch_get(use_ray_query_);
       break;
     default:
       BLI_assert_msg(0, "Only forced ShaderC shader kinds are supported.");
@@ -620,7 +625,7 @@ bool VKShader::finalize(const shader::ShaderCreateInfo *info)
   return finalize_post(info->pipelines_.as_span());
 }
 
-bool VKShader::finalize_post(Span<PipelineState> pipelines)
+bool VKShader::finalize_post(Span<PipelineState> pipeline_states)
 {
   bool result = finalize_shader_module(vertex_module, "vertex") &&
                 finalize_shader_module(geometry_module, "geometry") &&
@@ -638,7 +643,7 @@ bool VKShader::finalize_post(Span<PipelineState> pipelines)
     ensure_and_get_compute_pipeline(*constants);
   }
   else {
-    result &= ensure_graphics_pipelines(pipelines);
+    result &= ensure_graphics_pipelines(pipeline_states);
   }
 
   return result;
@@ -653,7 +658,7 @@ bool VKShader::finalize_shader_module(VKShaderModule &shader_module, const char 
   if (bool(shader_module.compilation_result.GetNumWarnings() +
            shader_module.compilation_result.GetNumErrors()))
   {
-    print_log({shader_module.combined_sources},
+    print_log({shader_module.original_sources},
               shader_module.compilation_result.GetErrorMessage().c_str(),
               stage_name,
               bool(shader_module.compilation_result.GetNumErrors()),
@@ -662,6 +667,7 @@ bool VKShader::finalize_shader_module(VKShaderModule &shader_module, const char 
 
   std::string full_name = std::string(name) + "_" + stage_name;
   shader_module.finalize(full_name.c_str());
+  shader_module.original_sources.clear();
   shader_module.combined_sources.clear();
   shader_module.sources_hash.clear();
   shader_module.compilation_result = {};
@@ -692,8 +698,8 @@ bool VKShader::finalize_pipeline_layout(VKDevice &device,
     pipeline_info.pPushConstantRanges = &push_constant_range;
   }
 
-  if (vkCreatePipelineLayout(device.vk_handle(), &pipeline_info, nullptr, &vk_pipeline_layout) !=
-      VK_SUCCESS)
+  if (device.functions.vkCreatePipelineLayout(
+          device.vk_handle(), &pipeline_info, nullptr, &vk_pipeline_layout) != VK_SUCCESS)
   {
     return false;
   };
@@ -723,9 +729,9 @@ bool VKShader::finalize_descriptor_set_layouts(VKDevice &vk_device,
 
 void VKShader::bind(const shader::SpecializationConstants *constants_state)
 {
-  VKContext *ctx = VKContext::get();
+  VKContext *context = VKContext::get();
   /* Copy constants state. */
-  ctx->specialization_constants_set(constants_state);
+  context->specialization_constants_set(constants_state);
 
   /* Intentionally empty. Binding of the pipeline are done just before drawing/dispatching.
    * See #VKPipeline.update_and_bind */
@@ -836,7 +842,7 @@ std::string VKShader::resources_declare(const shader::ShaderCreateInfo &info) co
     if (push_constants_storage == VKPushConstants::StorageType::PUSH_CONSTANTS) {
       ss << "layout(push_constant, std430) uniform constants\n";
     }
-    else if (push_constants_storage == VKPushConstants::StorageType::UNIFORM_BUFFER) {
+    else if (push_constants_storage == VKPushConstants::StorageType::BUFFER) {
       ss << "layout(binding = " << push_constants_layout.descriptor_set_location_get()
          << ", std140) uniform constants\n";
     }
@@ -1336,6 +1342,7 @@ bool VKShader::ensure_graphics_pipelines(Span<shader::PipelineState> pipeline_st
     graphics_info.shaders.has_depth = pipeline_state.depth_format_ != TextureTargetFormat::Invalid;
     graphics_info.shaders.has_stencil = pipeline_state.stencil_format_ !=
                                         TextureTargetFormat::Invalid;
+    graphics_info.shaders.max_input_attachment_index = max_input_attachment_index_;
 
     /* Disable pipeline features that are dynamic to increase cache hits. */
     if (extensions.extended_dynamic_state) {
@@ -1407,6 +1414,7 @@ VkPipeline VKShader::ensure_and_get_graphics_pipeline(
   graphics_info.shaders.specialization_constants.extend(constants_state.values);
   graphics_info.shaders.has_depth = depth_attachment_format != VK_FORMAT_UNDEFINED;
   graphics_info.shaders.has_stencil = stencil_attachment_format != VK_FORMAT_UNDEFINED;
+  graphics_info.shaders.max_input_attachment_index = max_input_attachment_index_;
   /* Cleanup state to increase cache hits. */
   if (!graphics_info.shaders.has_stencil || state_manager.state.stencil_test == GPU_STENCIL_NONE) {
     graphics_info.shaders.state.stencil_test = GPU_STENCIL_NONE;

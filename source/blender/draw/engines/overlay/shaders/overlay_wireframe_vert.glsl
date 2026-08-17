@@ -95,7 +95,13 @@ void main()
    * while keeping object coloring mode working (see #134011). */
   float no_nor_facing = (color_type == V3D_SHADING_SINGLE_COLOR) ? 0.0f : 0.5f;
 
+#ifdef WITH_RADIUS
+  float3 wpos = drw_point_object_to_world(pos_rad.xyz);
+  wpos += drw_world_incident_vector(wpos) * pos_rad.w;
+#else
   float3 wpos = drw_point_object_to_world(pos);
+#endif
+
 #if defined(POINTS)
   gl_PointSize = theme.sizes.vert * 2.0f;
 #elif defined(CURVES)
@@ -148,8 +154,8 @@ void main()
   }
 
 #if defined(POINTS)
-  final_color = wire_col.rgbb;
-  final_color_inner = rim_col.rgbb;
+  final_color = float4(wire_col * wire_opacity, wire_opacity);
+  final_color_inner = float4(rim_col * wire_opacity, wire_opacity);
 
 #else
   /* Convert to screen position [0..sizeVp]. */

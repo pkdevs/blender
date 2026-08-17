@@ -170,17 +170,21 @@ class TOPBAR_MT_file(Menu):
         layout.separator()
 
         layout.operator_context = 'EXEC_AREA' if context.blend_data.is_saved else 'INVOKE_AREA'
-        layout.operator("wm.save_mainfile", text="Save", icon='FILE_TICK')
+        layout.operator("wm.save_mainfile", text="Save", icon='FILE_TICK').show_save_modified_images_dialog = True
 
         layout.operator_context = 'INVOKE_AREA'
-        layout.operator("wm.save_as_mainfile", text="Save As...")
+        layout.operator("wm.save_as_mainfile", text="Save As...").show_save_modified_images_dialog = True
         layout.operator_context = 'INVOKE_AREA'
-        layout.operator("wm.save_as_mainfile", text="Save Copy...").copy = True
+        save_copy = layout.operator("wm.save_as_mainfile", text="Save Copy...")
+        save_copy.copy = True
+        save_copy.show_save_modified_images_dialog = True
 
         sub = layout.row()
         sub.enabled = context.blend_data.is_saved
         sub.operator_context = 'EXEC_AREA'
-        sub.operator("wm.save_mainfile", text="Save Incremental").incremental = True
+        save_incremental = sub.operator("wm.save_mainfile", text="Save Incremental")
+        save_incremental.incremental = True
+        save_incremental.show_save_modified_images_dialog = True
 
         layout.separator()
 
@@ -188,6 +192,10 @@ class TOPBAR_MT_file(Menu):
         layout.operator("wm.link", text="Link...", icon='LINK_BLEND')
         layout.operator("wm.append", text="Append...", icon='APPEND_BLEND')
         layout.menu("TOPBAR_MT_file_previews")
+
+        layout.separator()
+
+        layout.menu("TOPBAR_MT_file_project", icon='PROJECT')
 
         layout.separator()
 
@@ -328,6 +336,21 @@ class TOPBAR_MT_file_defaults(Menu):
             del display_name
         else:
             layout.operator("wm.read_factory_settings")
+
+
+class TOPBAR_MT_file_project(Menu):
+    bl_label = "Project"
+    bl_translation_context = i18n_contexts.editor_preferences
+
+    def draw(self, _context):
+        layout = self.layout
+
+        layout.operator("project.new_project", text="New Project...", icon='ADD')
+        layout.operator("project.open_blend_in_project", icon='FILE_FOLDER')
+
+        layout.separator()
+
+        layout.operator("screen.project_setup_show", text="Project Settings...", icon='PREFERENCES')
 
 
 # Include technical operators here which would otherwise have no way for users to access.
@@ -869,6 +892,7 @@ classes = (
     TOPBAR_MT_file_new,
     TOPBAR_MT_file_recover,
     TOPBAR_MT_file_defaults,
+    TOPBAR_MT_file_project,
     TOPBAR_MT_templates_more,
     TOPBAR_MT_file_import,
     TOPBAR_MT_file_export,

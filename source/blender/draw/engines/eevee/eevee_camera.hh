@@ -8,8 +8,8 @@
  * \ingroup eevee
  */
 
-#include "BLI_math_geom.h"
-#include "BLI_math_matrix.h"
+#include "BLI_math_geom_c.hh"
+#include "BLI_math_matrix_c.hh"
 
 #include "BKE_camera.h"
 
@@ -176,7 +176,8 @@ class Camera {
  private:
   void update_bounds();
 
-  CameraParams v3d_camera_params_get() const;
+  float4x4 projection_crop_matrix(int2 film_offset, int2 film_extent, int2 display_extent);
+  float4x4 projection_overscan_matrix(int2 film_extent, int2 film_overscan);
 };
 
 /** \} */

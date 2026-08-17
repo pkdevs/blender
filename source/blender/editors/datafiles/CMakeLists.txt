@@ -324,6 +324,8 @@ if(WITH_BLENDER)
       documents
       dot
       downarrow_hlt
+      download
+      download_done
       driver
       driver_distance
       driver_rotational_difference
@@ -379,6 +381,7 @@ if(WITH_BLENDER)
       file_tick
       file_volume
       filter
+      filter_filled
       fixed_size
       folder_redirect
       fontpreview
@@ -413,6 +416,9 @@ if(WITH_BLENDER)
       gizmo
       gp_caps_flat
       gp_caps_round
+      gp_draw_stroke
+      gp_draw_fill
+      gp_draw_both
       gp_multiframe_editing
       gp_only_selected
       gp_select_between_strokes
@@ -424,6 +430,7 @@ if(WITH_BLENDER)
       grid
       grip
       grip_v
+      grip_corner_bottom_right
       group
       group_bone
       group_uvs
@@ -454,6 +461,7 @@ if(WITH_BLENDER)
       image_zdepth
       imgdisplay
       import
+      import_export
       indirect_only_off
       indirect_only_on
       info
@@ -821,6 +829,8 @@ if(WITH_BLENDER)
       seq_preview
       seq_sequencer
       seq_splitview
+      seq_strip
+      seq_strip_data
       seq_strip_duplicate
       seq_strip_meta
       seq_strip_modifier
@@ -865,6 +875,12 @@ if(WITH_BLENDER)
       split_horizontal
       split_vertical
       spreadsheet
+      status_error
+      status_error_filled
+      status_info
+      status_info_filled
+      status_warning
+      status_warning_filled
       statusbar
       sticky_uvs_disable
       sticky_uvs_loc

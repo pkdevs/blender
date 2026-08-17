@@ -8,9 +8,10 @@ import pathlib
 import sys
 import tempfile
 import unittest
-from pxr import Ar, Gf, Sdf, Usd, UsdGeom, UsdShade, UsdUI
+from pxr import Ar, Gf, Sdf, Usd, UsdGeom, UsdLux, UsdShade, UsdUI
 
 import bpy
+import mathutils
 
 sys.path.append(str(pathlib.Path(__file__).parent.absolute()))
 from modules.colored_print import (print_message, use_message_colors)
@@ -139,6 +140,13 @@ class USDImportTest(AbstractUSDTest):
         self.assertEqual(len(mesh.edges), 5)
         self.assertEqual(len(mesh.vertices), 5)
         self.assertEqual(len(mesh.polygons[0].vertices), 5)
+
+    def test_import_mesh_invalid_topology(self):
+        """Importer must not crash on invalid topology."""
+
+        infile = str(self.testdir / "usd_mesh_invalid_topology.usda")
+        res = bpy.ops.wm.usd_import(filepath=infile)
+        self.assertEqual({'FINISHED'}, res, f"Unable to import USD file {infile}")
 
     def test_import_mesh_topology_change(self):
         """Test importing meshes with changing topology over time."""
@@ -566,7 +574,7 @@ class USDImportTest(AbstractUSDTest):
 
         assert_attribute(mat, "displayColor", "Color", "Base Color")
         assert_attribute(mat, "f_vec", "Vector", "Normal")
-        assert_attribute(mat, "f_float", "Fac", "Roughness")
+        assert_attribute(mat, "ns:f_float", "Fac", "Roughness")
 
     def test_import_material_node_graph(self):
         """Verify we can follow connections through NodeGraph defs."""
@@ -1063,9 +1071,6 @@ class USDImportTest(AbstractUSDTest):
         self.assertEqual(attr.data_type, data_type)
         self.assertEqual(len(attr.data), elements_len)
 
-    def check_attribute_missing(self, blender_data, attribute_name):
-        self.assertFalse(attribute_name in blender_data.attributes)
-
     def test_import_attributes(self):
         """Test importing objects with all attribute data types."""
 
@@ -1085,7 +1090,6 @@ class USDImportTest(AbstractUSDTest):
         # Verify all attributes on the Mesh
         # Note: USD does not support signed 8-bit types so there is
         #       currently no equivalent to Blender's INT8 data type
-        # TODO: Blender is missing support for reading USD matrix data types
         mesh = bpy.data.objects["Mesh"].data
 
         self.check_attribute(mesh, "p_bool", 'POINT', 'BOOLEAN', 4)
@@ -1097,7 +1101,7 @@ class USDImportTest(AbstractUSDTest):
         self.check_attribute(mesh, "p_vec2", 'CORNER', 'FLOAT2', 4)  # TODO: Bug - wrong domain
         self.check_attribute(mesh, "p_vec3", 'POINT', 'FLOAT_VECTOR', 4)
         self.check_attribute(mesh, "p_quat", 'POINT', 'QUATERNION', 4)
-        self.check_attribute_missing(mesh, "p_mat4x4")
+        self.check_attribute(mesh, "p_mat4x4", 'POINT', 'FLOAT4X4', 4)
 
         self.check_attribute(mesh, "f_bool", 'FACE', 'BOOLEAN', 1)
         self.check_attribute(mesh, "f_int8", 'FACE', 'INT8', 1)
@@ -1108,7 +1112,7 @@ class USDImportTest(AbstractUSDTest):
         self.check_attribute(mesh, "f_vec2", 'FACE', 'FLOAT2', 1)
         self.check_attribute(mesh, "f_vec3", 'FACE', 'FLOAT_VECTOR', 1)
         self.check_attribute(mesh, "f_quat", 'FACE', 'QUATERNION', 1)
-        self.check_attribute_missing(mesh, "f_mat4x4")
+        self.check_attribute(mesh, "f_mat4x4", 'FACE', 'FLOAT4X4', 1)
 
         self.check_attribute(mesh, "fc_bool", 'CORNER', 'BOOLEAN', 4)
         self.check_attribute(mesh, "fc_int8", 'CORNER', 'INT8', 4)
@@ -1120,7 +1124,16 @@ class USDImportTest(AbstractUSDTest):
         self.check_attribute(mesh, "fc_vec2", 'CORNER', 'FLOAT2', 4)
         self.check_attribute(mesh, "fc_vec3", 'CORNER', 'FLOAT_VECTOR', 4)
         self.check_attribute(mesh, "fc_quat", 'CORNER', 'QUATERNION', 4)
-        self.check_attribute_missing(mesh, "fc_mat4x4")
+        self.check_attribute(mesh, "fc_mat4x4", 'CORNER', 'FLOAT4X4', 4)
+
+        # Matrix attributes need additional validation to check row-major vs. col-major differences.
+        # Pick a representative matrix to check.
+        depsgraph = bpy.context.evaluated_depsgraph_get()
+        blender_data = bpy.data.objects["Mesh"].evaluated_get(depsgraph).data
+        blender_mat = blender_data.attributes["p_mat4x4"].data[3].value
+        blender_values = [blender_mat[i][j] for i in range(0, 4) for j in range(0, 4)]
+        expected = [0.4, 0.8, 1.2, 1.6] * 4
+        self.assertEqual(self.round_vector(blender_values), expected)
 
         # Find the non "bezier" Curves object -- Has 2 curves (12 vertices each)
         all_curves = [o for o in bpy.data.objects if o.type == 'CURVES']
@@ -1136,7 +1149,7 @@ class USDImportTest(AbstractUSDTest):
         self.check_attribute(curves, "p_vec2", 'POINT', 'FLOAT2', 24)
         self.check_attribute(curves, "p_vec3", 'POINT', 'FLOAT_VECTOR', 24)
         self.check_attribute(curves, "p_quat", 'POINT', 'QUATERNION', 24)
-        self.check_attribute_missing(curves, "p_mat4x4")
+        self.check_attribute(curves, "p_mat4x4", 'POINT', 'FLOAT4X4', 24)
 
         self.check_attribute(curves, "sp_bool", 'CURVE', 'BOOLEAN', 2)
         self.check_attribute(curves, "sp_int8", 'CURVE', 'INT8', 2)
@@ -1147,7 +1160,7 @@ class USDImportTest(AbstractUSDTest):
         self.check_attribute(curves, "sp_vec2", 'CURVE', 'FLOAT2', 2)
         self.check_attribute(curves, "sp_vec3", 'CURVE', 'FLOAT_VECTOR', 2)
         self.check_attribute(curves, "sp_quat", 'CURVE', 'QUATERNION', 2)
-        self.check_attribute_missing(curves, "sp_mat4x4")
+        self.check_attribute(curves, "sp_mat4x4", 'CURVE', 'FLOAT4X4', 2)
 
         # Find the "bezier" Curves object -- Has 3 curves (2, 3, and 5 control points)
         curves = [o for o in all_curves if o.parent.name.startswith("Curve_bezier")]
@@ -1162,7 +1175,7 @@ class USDImportTest(AbstractUSDTest):
         self.check_attribute(curves, "p_vec2", 'POINT', 'FLOAT2', 10)
         self.check_attribute(curves, "p_vec3", 'POINT', 'FLOAT_VECTOR', 10)
         self.check_attribute(curves, "p_quat", 'POINT', 'QUATERNION', 10)
-        self.check_attribute_missing(curves, "p_mat4x4")
+        self.check_attribute(curves, "p_mat4x4", 'POINT', 'FLOAT4X4', 10)
 
         self.check_attribute(curves, "sp_bool", 'CURVE', 'BOOLEAN', 3)
         self.check_attribute(curves, "sp_int8", 'CURVE', 'INT8', 3)
@@ -1173,7 +1186,7 @@ class USDImportTest(AbstractUSDTest):
         self.check_attribute(curves, "sp_vec2", 'CURVE', 'FLOAT2', 3)
         self.check_attribute(curves, "sp_vec3", 'CURVE', 'FLOAT_VECTOR', 3)
         self.check_attribute(curves, "sp_quat", 'CURVE', 'QUATERNION', 3)
-        self.check_attribute_missing(curves, "sp_mat4x4")
+        self.check_attribute(curves, "sp_mat4x4", 'CURVE', 'FLOAT4X4', 3)
 
     def test_import_attributes_varying(self):
         """Test importing objects with time-varying positions, velocities, and attributes."""
@@ -1846,6 +1859,87 @@ class USDImportTest(AbstractUSDTest):
         self.assertEqual(xform[alt_label_key], alt_label_attr.Get())
         self.assertIn(alt_description_key, xform, "Alternate description should be imported")
         self.assertEqual(xform[alt_description_key], alt_description_attr.Get())
+
+    def test_import_colorspace(self):
+        """Test colorspace conversion on import, including hierarchy and per-prim override."""
+
+        texfile = str(self.testdir / "textures/test_grid_1001.png")
+        usd_path = self.tempdir / "colorspace_test.usda"
+
+        light_color = mathutils.Color((0.8, 0.2, 0.1))
+        mesh_color = mathutils.Color((0.3, 0.5, 1.0))
+
+        stage = Usd.Stage.CreateNew(str(usd_path))
+        root = UsdGeom.Xform.Define(stage, "/root")
+        stage.SetDefaultPrim(root.GetPrim())
+
+        # Set ACEScg linear colorspace on the root, inherited by children.
+        cs_api = Usd.ColorSpaceAPI.Apply(root.GetPrim())
+        cs_api.CreateColorSpaceNameAttr("lin_ap1_scene")
+
+        # Light inherits lin_ap1_scene from root.
+        light = UsdLux.SphereLight.Define(stage, "/root/Light")
+        light.CreateColorAttr(Gf.Vec3f(*light_color))
+        light.CreateIntensityAttr(1.0)
+
+        # Mesh with displayColor overridden to sRGB.
+        mesh = UsdGeom.Mesh.Define(stage, "/root/Mesh")
+        mesh.CreatePointsAttr([Gf.Vec3f(0, 0, 0), Gf.Vec3f(1, 0, 0),
+                               Gf.Vec3f(1, 1, 0), Gf.Vec3f(0, 1, 0)])
+        mesh.CreateFaceVertexCountsAttr([4])
+        mesh.CreateFaceVertexIndicesAttr([0, 1, 2, 3])
+        mesh_cs_api = Usd.ColorSpaceAPI.Apply(mesh.GetPrim())
+        mesh_cs_api.CreateColorSpaceNameAttr("srgb_rec709_scene")
+        pv_api = UsdGeom.PrimvarsAPI(mesh)
+        color_pv = pv_api.CreatePrimvar("displayColor",
+                                        Sdf.ValueTypeNames.Color3fArray,
+                                        UsdGeom.Tokens.constant)
+        color_pv.Set([Gf.Vec3f(*mesh_color)])
+
+        # Material with a texture that has ColorSpaceAPI set to Non-Color/data.
+        mat = UsdShade.Material.Define(stage, "/root/Material")
+        shader = UsdShade.Shader.Define(stage, "/root/Material/Surface")
+        shader.CreateIdAttr("UsdPreviewSurface")
+        mat.CreateSurfaceOutput().ConnectToSource(shader.ConnectableAPI(), "surface")
+        tex = UsdShade.Shader.Define(stage, "/root/Material/Texture")
+        tex.CreateIdAttr("UsdUVTexture")
+        tex.CreateInput('file', Sdf.ValueTypeNames.Asset).Set(texfile)
+        tex.CreateOutput("rgb", Sdf.ValueTypeNames.Float3)
+        shader.CreateInput("diffuseColor", Sdf.ValueTypeNames.Color3f).ConnectToSource(
+            tex.ConnectableAPI(), "rgb")
+        tex_cs_api = Usd.ColorSpaceAPI.Apply(tex.GetPrim())
+        tex_cs_api.CreateColorSpaceNameAttr("data")
+
+        # Bind material to mesh.
+        UsdShade.MaterialBindingAPI.Apply(mesh.GetPrim()).Bind(mat)
+
+        stage.Save()
+
+        res = bpy.ops.wm.usd_import(filepath=str(usd_path))
+        self.assertEqual({'FINISHED'}, res, f"Unable to import USD file {usd_path}")
+
+        # Light inherits lin_ap1_scene, gets converted to lin_rec709_scene.
+        light_data = bpy.data.lights.get("Light")
+        self.assertIsNotNone(light_data, "Light should be imported")
+        expected_light = light_color.from_acescg_to_scene_linear()
+        for i in range(3):
+            self.assertAlmostEqual(light_data.color[i], expected_light[i], places=2)
+
+        # Mesh displayColor has sRGB override, gets converted to lin_rec709_scene.
+        mesh_obj = bpy.data.objects.get("Mesh")
+        self.assertIsNotNone(mesh_obj, "Mesh should be imported")
+        color_attr = mesh_obj.data.color_attributes.get("displayColor")
+        self.assertIsNotNone(color_attr, "displayColor attribute should exist")
+        expected_mesh = mesh_color.from_srgb_to_scene_linear()
+        for sample in color_attr.data:
+            for i in range(3):
+                self.assertAlmostEqual(sample.color[i], expected_mesh[i], places=2)
+
+        # Texture with "data" colorspace should be imported as Non-Color.
+        tex_image = bpy.data.images.get("test_grid_1001.png")
+        self.assertIsNotNone(tex_image, "Texture image should be imported")
+        self.assertTrue(tex_image.colorspace_settings.name == "Non-Color",
+                        f"Texture should be non-color, got '{tex_image.colorspace_settings.name}'")
 
 
 class USDImportComparisonTest(unittest.TestCase):

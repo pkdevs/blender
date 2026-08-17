@@ -7,8 +7,8 @@ bl_info = {
     # This is now displayed as the maintainer, so show the foundation.
     # "author": "Julien Duroure, Scurest, Norbert Nopper, Urs Hanselmann, Moritz Becher, Benjamin Schmithüsen, Jim Eckerlein", # Original Authors
     'author': "Blender Foundation, Khronos Group",
-    "version": (5, 2, 3),
-    'blender': (4, 4, 0),
+    "version": (5, 3, 19),
+    'blender': (5, 2, 1),
     'location': 'File > Import-Export',
     'description': 'Import-Export as glTF 2.0',
     'warning': '',
@@ -130,9 +130,10 @@ def on_export_action_filter_changed(self, context):
                 item.action = action
 
     else:
-        bpy.data.scenes[0].gltf_action_filter.clear()
-        del bpy.types.Scene.gltf_action_filter
-        del bpy.types.Scene.gltf_action_filter_active
+        if hasattr(bpy.data.scenes[0], 'gltf_action_filter'):
+            bpy.data.scenes[0].gltf_action_filter.clear()
+            del bpy.types.Scene.gltf_action_filter
+            del bpy.types.Scene.gltf_action_filter_active
 
 
 def get_format_items(scene, context):
@@ -159,10 +160,20 @@ def get_format_items(scene, context):
 def is_draco_available():
     # Initialize on first use
     if not hasattr(is_draco_available, "draco_exists"):
-        from .io.com import draco as gltf2_io_draco_compression_extension
-        is_draco_available.draco_exists = gltf2_io_draco_compression_extension.dll_exists()
+        from .io.com import library as gltf2_compression_extension
+        is_draco_available.draco_exists = gltf2_compression_extension.dll_exists('bf_intern_draco_bridge', 'Draco')
 
     return is_draco_available.draco_exists
+
+
+def is_meshopt_available():
+    # Initialize on first use
+    if not hasattr(is_meshopt_available, "meshopt_exists"):
+        from .io.com import library as gltf2_compression_extension
+        is_meshopt_available.meshopt_exists = gltf2_compression_extension.dll_exists(
+            'bf_intern_meshopt_bridge', 'MeshOptimizer')
+
+    return is_meshopt_available.meshopt_exists
 
 
 def set_debug_log():
@@ -426,6 +437,26 @@ class ExportGLTF2_Base(ConvertGLTF2_Base):
         name='Geometry Nodes Instances (Experimental)',
         description='Export Geometry nodes instance meshes',
         default=False
+    )
+
+    export_meshopt_compression_enable: BoolProperty(
+        name='Meshopt Compression',
+        description='Compress mesh using Meshopt',
+        default=False
+    )
+
+    export_meshopt_extension: EnumProperty(
+        name='Meshopt Extension',
+        items=(
+            ('EXT_meshopt_compression',
+             'EXT_meshopt_compression',
+             'Use EXT_meshopt_compression extension for mesh compression'),
+            ('KHR_meshopt_compression',
+             'KHR_meshopt_compression',
+             'Use KHR_meshopt_compression extension for mesh compression'),
+        ),
+        description='Extension to use for meshopt compression',
+        default='EXT_meshopt_compression',
     )
 
     export_draco_mesh_compression_enable: BoolProperty(
@@ -1050,13 +1081,13 @@ class ExportGLTF2_Base(ConvertGLTF2_Base):
                     setattr(self, k, v)
                 self.will_save_settings = True
 
-                # Update filter if user saved settings
-                if hasattr(self, 'export_format'):
-                    self.filter_glob = '*.glb' if self.export_format == 'GLB' else '*.gltf'
-
             except (AttributeError, TypeError):
                 self.report({"ERROR"}, "Loading export settings failed. Removed corrupted settings")
                 del context.scene[self.scene_key]
+
+        # Update filter if user saved settings or use last used format
+        if hasattr(self, 'export_format'):
+            self.filter_glob = '*.glb' if self.export_format == 'GLB' else '*.gltf'
 
         return ExportHelper.invoke(self, context, event)
 
@@ -1114,7 +1145,7 @@ class ExportGLTF2_Base(ConvertGLTF2_Base):
         export_settings['exported_images'] = {}
         export_settings['exported_texture_nodes'] = []
         export_settings['additional_texture_export'] = []
-        export_settings['additional_texture_export_current_idx'] = 0
+        export_settings['additional_texture_export_current_idx'] = {}
 
         export_settings['timestamp'] = datetime.datetime.now()
         export_settings['gltf_export_id'] = self.gltf_export_id
@@ -1148,6 +1179,13 @@ class ExportGLTF2_Base(ConvertGLTF2_Base):
             export_settings['gltf_draco_generic_quantization'] = self.export_draco_generic_quantization
         else:
             export_settings['gltf_draco_mesh_compression'] = False
+
+        if is_meshopt_available():
+            export_settings['gltf_meshopt_compression'] = self.export_meshopt_compression_enable
+            export_settings['gltf_meshopt_extension'] = self.export_meshopt_extension
+        else:
+            export_settings['gltf_meshopt_compression'] = False
+            export_settings['gltf_meshopt_extension'] = self.export_meshopt_extension
 
         export_settings['gltf_gn_mesh'] = self.export_gn_mesh
 
@@ -1214,15 +1252,11 @@ class ExportGLTF2_Base(ConvertGLTF2_Base):
             else:
                 export_settings['gltf_anim_scene_split_object'] = False
 
-            if export_settings['gltf_animation_mode'] in ['NLA_TRACKS', 'SCENE']:
-                export_settings['gltf_export_anim_pointer'] = self.export_pointer_animation
-                if self.export_pointer_animation:
-                    export_settings['gltf_trs_w_animation_pointer'] = self.export_convert_animation_pointer
-                else:
-                    export_settings['gltf_trs_w_animation_pointer'] = False
+            export_settings['gltf_export_anim_pointer'] = self.export_pointer_animation
+            if self.export_pointer_animation:
+                export_settings['gltf_trs_w_animation_pointer'] = self.export_convert_animation_pointer
             else:
                 export_settings['gltf_trs_w_animation_pointer'] = False
-                export_settings['gltf_export_anim_pointer'] = False
 
             if export_settings['gltf_animation_mode'] != "ACTIONS":
                 export_settings['gltf_merge_animation'] = "NLA_TRACK"
@@ -1246,6 +1280,7 @@ class ExportGLTF2_Base(ConvertGLTF2_Base):
             export_settings['gltf_anim_slide_to_zero'] = self.export_anim_slide_to_zero
             export_settings['gltf_export_extra_animations'] = self.export_extra_animations
         else:
+            export_settings['gltf_export_anim_pointer'] = False
             export_settings['gltf_trs_w_animation_pointer'] = False
             export_settings['gltf_frame_range'] = False
             export_settings['gltf_force_sampling'] = False
@@ -1413,7 +1448,7 @@ def export_main(layout, operator, is_file_browser):
     if operator.export_format == 'GLTF_EMBEDDED':
         layout.label(
             text="This is the least efficient of the available forms, and should only be used when required.",
-            icon='ERROR')
+            icon='STATUS_WARNING')
 
     layout.prop(operator, 'export_copyright')
     if is_file_browser:
@@ -1471,6 +1506,8 @@ def export_panel_data(layout, operator):
 
         if is_draco_available():
             export_panel_data_compression(body, operator)
+        if is_meshopt_available():
+            export_panel_data_meshopt_compression(body, operator)
 
 
 def export_panel_data_scene_graph(layout, operator):
@@ -1514,7 +1551,7 @@ def export_panel_data_mesh(layout, operator):
                 row = sub_body.row()
                 row.label(
                     text="Note that fully compliant glTF 2.0 engine/viewer will use it as multiplicative factor for base color.",
-                    icon='ERROR')
+                    icon='STATUS_WARNING')
                 row = sub_body.row()
                 row.label(text="If you want to use VC for any other purpose than vertex color, you should use custom attributes.")
             row = sub_body.row()
@@ -1626,7 +1663,7 @@ def export_panel_data_compression(layout, operator):
     header, body = layout.panel("GLTF_export_data_compression", default_closed=True)
     header.use_property_split = False
     header.prop(operator, "export_draco_mesh_compression_enable", text="")
-    header.label(text="Compression")
+    header.label(text="Draco Compression")
     if body:
         body.active = operator.export_draco_mesh_compression_enable
 
@@ -1638,6 +1675,18 @@ def export_panel_data_compression(layout, operator):
         col.prop(operator, 'export_draco_texcoord_quantization', text="Tex Coord")
         col.prop(operator, 'export_draco_color_quantization', text="Color")
         col.prop(operator, 'export_draco_generic_quantization', text="Generic")
+
+# TODO: Make sure we can't enable both Draco and Meshopt at the same time
+
+
+def export_panel_data_meshopt_compression(layout, operator):
+    header, body = layout.panel("GLTF_export_data_meshopt_compression", default_closed=True)
+    header.use_property_split = False
+    header.prop(operator, "export_meshopt_compression_enable", text="")
+    header.label(text="Meshopt Compression")
+    if body:
+        body.active = operator.export_meshopt_compression_enable
+        body.prop(operator, 'export_meshopt_extension')
 
 
 def export_panel_animation(layout, operator):
@@ -1763,7 +1812,6 @@ def export_panel_animation_sampling(layout, operator):
 def export_panel_animation_pointer(layout, operator):
     header, body = layout.panel("GLTF_export_animation_pointer", default_closed=True)
     header.use_property_split = False
-    header.active = operator.export_animations and operator.export_animation_mode in ['NLA_TRACKS', 'SCENE']
     header.prop(operator, "export_pointer_animation", text="")
     header.label(text="Animation Pointer (Experimental)")
     if body:
@@ -1976,6 +2024,12 @@ class ImportGLTF2(Operator, ConvertGLTF2_Base, ImportHelper):
         default=True,
     )
 
+    import_point_as_pointcloud: BoolProperty(
+        name='Import Points as Point Cloud',
+        description='Import mesh with only POINTS primitives as Point Cloud objects',
+        default=False,
+    )
+
     def draw(self, context):
         operator = self
         layout = self.layout
@@ -2081,6 +2135,7 @@ def import_mesh_panel(layout, operator):
     if body:
         body.prop(operator, 'merge_vertices')
         body.prop(operator, 'import_merge_material_slots')
+        body.prop(operator, 'import_point_as_pointcloud')
 
 
 def import_bone_panel(layout, operator):
@@ -2189,7 +2244,7 @@ class GLTF_AddonPreferences(bpy.types.AddonPreferences):
         if self.allow_embedded_format:
             layout.label(
                 text="This is the least efficient of the available forms, and should only be used when required.",
-                icon='ERROR')
+                icon='STATUS_WARNING')
 
 
 class IO_FH_gltf2(bpy.types.FileHandler):

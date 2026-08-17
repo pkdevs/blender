@@ -46,6 +46,7 @@ extensions = (
 config_safe = """
 Checks: >
   -*,
+  modernize-min-max-use-initializer-list,
   modernize-redundant-void-arg,
   modernize-use-bool-literals,
   modernize-use-nullptr,
@@ -62,7 +63,10 @@ Checks: >
 config_unsafe = """
 Checks: >
   -*,
+  modernize-deprecated-headers,
+  modernize-use-equals-default,
   modernize-use-ranges,
+  modernize-use-using,
   readability-redundant-casting,
   readability-use-std-min-max
 """
@@ -95,11 +99,27 @@ CheckOptions:
     value: 1
 """
 
+# Config to remove unused includes.
+# This can easily break with different platforms and build options, and also
+# requires LLVM version 23 or newer to support disabling MissingIncludes.
+config_includes = """
+Checks: >
+  -*,
+  misc-include-cleaner
+
+CheckOptions:
+  - key: misc-include-cleaner.MissingIncludes
+    value: 0
+  - key: misc-include-cleaner.UnusedIncludes
+    value: 1
+"""
+
 configs = {
     "complete": None,
     "safe": config_safe,
     "unsafe": config_unsafe,
     "const": config_const,
+    "includes": config_includes,
 }
 
 

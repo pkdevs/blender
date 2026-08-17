@@ -10,11 +10,12 @@
 
 #include "intern/eval/deg_eval_flush.h"
 
+#include <algorithm>
 #include <deque>
 
-#include "BLI_listbase.h"
-#include "BLI_task.h"
-#include "BLI_utildefines.h"
+#include "BLI_listbase.hh"
+#include "BLI_task_c.hh"
+#include "BLI_utildefines.hh"
 
 #include "BKE_global.hh"
 #include "BKE_key.hh"
@@ -246,7 +247,7 @@ void invalidate_tagged_evaluated_transform(ID *id)
   switch (id_type) {
     case ID_OB: {
       Object *object = (Object *)id;
-      copy_vn_fl((float *)object->object_to_world().ptr(), 16, NAN);
+      std::fill_n((float *)object->object_to_world().ptr(), 16, NAN);
       break;
     }
     default:

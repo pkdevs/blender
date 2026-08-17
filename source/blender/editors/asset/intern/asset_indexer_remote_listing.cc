@@ -13,7 +13,7 @@
 #include <optional>
 #include <string>
 
-#include "BLI_fileops.h"
+#include "BLI_fileops.hh"
 #include "BLI_path_utils.hh"
 #include "BLI_serialize.hh"
 
@@ -59,28 +59,6 @@ RemoteListingAssetEntry &RemoteListingAssetEntry::operator=(RemoteListingAssetEn
 RemoteListingAssetEntry::~RemoteListingAssetEntry()
 {
   BLO_datablock_info_free(&datablock_info);
-}
-
-/** \} */
-
-/* -------------------------------------------------------------------- */
-/** \name #RemoteListingFileEntry type
- * \{ */
-
-RemoteListingFileEntry::RemoteListingFileEntry(RemoteListingFileEntry &&other)
-{
-  this->local_path = std::move(other.local_path);
-  this->download_url = std::move(other.download_url);
-}
-
-RemoteListingFileEntry &RemoteListingFileEntry::operator=(RemoteListingFileEntry &&other)
-{
-  if (this == &other) {
-    return *this;
-  }
-  std::destroy_at(this);
-  new (this) RemoteListingFileEntry(std::move(other));
-  return *this;
 }
 
 /** \} */
@@ -159,7 +137,10 @@ ReadingResult<AssetLibraryMeta> AssetLibraryMeta::read(
     const StringRefNull root_dirpath, const std::optional<Timestamp> ignore_before_timestamp)
 {
   char filepath[FILE_MAX];
-  BLI_path_join(filepath, sizeof(filepath), root_dirpath.c_str(), "_asset-library-meta.json");
+  BLI_path_join(filepath,
+                sizeof(filepath),
+                root_dirpath.c_str(),
+                asset_system::REMOTE_LIBRARY_TOP_META_FILE_NAME.c_str());
 
   if (!BLI_exists(filepath)) {
     return ReadingResult<AssetLibraryMeta>::Failure(

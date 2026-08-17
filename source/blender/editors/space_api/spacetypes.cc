@@ -12,7 +12,7 @@
 
 #include "DNA_windowmanager_types.h"
 
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 
 #include "BKE_context.hh"
 #include "BKE_screen.hh"
@@ -83,6 +83,7 @@ void ED_spacetypes_init()
   ED_spacetype_console();
   ED_spacetype_userpref();
   ED_spacetype_clip();
+  ED_spacetype_project();
   ED_spacetype_statusbar();
   ED_spacetype_topbar();
   spreadsheet::register_spacetype();
@@ -91,6 +92,8 @@ void ED_spacetypes_init()
   ED_operatortypes_userpref();
   ED_operatortypes_workspace();
   ED_operatortypes_scene();
+  ED_operatortypes_scene_compositor();
+  ED_menutypes_scene_compositor();
   ED_operatortypes_screen();
   ED_operatortypes_anim();
   ED_operatortypes_animchannels();
@@ -214,11 +217,6 @@ void ED_spacetypes_keymap(wmKeyConfig *keyconf)
     if (type->keymap) {
       type->keymap(keyconf);
     }
-    for (ARegionType &region_type : type->regiontypes) {
-      if (region_type.keymap) {
-        region_type.keymap(keyconf);
-      }
-    }
   }
 }
 
@@ -274,9 +272,9 @@ void ED_region_draw_cb_draw(const bContext *C, ARegion *region, int type)
   ed_region_draw_cb_draw(C, region, region->runtime->type, type);
 }
 
-void ED_region_surface_draw_cb_draw(ARegionType *art, int type)
+void ED_region_surface_draw_cb_draw(const bContext *C, ARegionType *art, int type)
 {
-  ed_region_draw_cb_draw(nullptr, nullptr, art, type);
+  ed_region_draw_cb_draw(C, nullptr, art, type);
 }
 
 void ED_region_draw_cb_remove_by_type(ARegionType *art, void *draw_fn, void (*free)(void *))

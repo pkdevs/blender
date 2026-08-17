@@ -29,20 +29,11 @@
 
 #include "vk_common.hh"
 
-/**
- * Enable VK_RESOURCE_STATE_TRACKER_VALIDATION to perform a consistency check
- * on the state. The consistency check is time consuming and should only be
- * turned on when needed.
- */
-// #define VK_RESOURCE_STATE_TRACKER_VALIDATION
-
 namespace blender::gpu::render_graph {
 
 class VKCommandBuilder;
 struct VKRenderGraphLink;
 class VKScheduler;
-
-using ResourceHandle = uint64_t;
 
 /**
  * ModificationStamp is used to track resource modifications.
@@ -158,10 +149,9 @@ class VKResourceStateTracker {
     }
   };
 
-  Map<ResourceHandle, Resource> resources_;
+  Vector<Resource> resources_;
   Vector<ResourceHandle> unused_handles_;
   Map<VkImage, ResourceHandle> image_resources_;
-  Map<VkBuffer, ResourceHandle> buffer_resources_;
 
  public:
   /**
@@ -180,7 +170,7 @@ class VKResourceStateTracker {
    * When a buffer is created in VKBuffer, it needs to be registered in the device resources so the
    * resource state can be tracked during its lifetime.
    */
-  void add_buffer(VkBuffer vk_buffer, const char *name = nullptr);
+  ResourceHandle add_buffer(VkBuffer vk_buffer, const char *name = nullptr);
 
   /**
    * Register an image resource.
@@ -227,7 +217,7 @@ class VKResourceStateTracker {
    * When a buffer is destroyed by calling `vmaDestroyBuffer`, a call to `remove_buffer` is needed
    * to unregister the resource from state tracking.
    */
-  void remove_buffer(VkBuffer vk_buffer);
+  VkBuffer remove_buffer(ResourceHandle buffer_handle);
 
   /**
    * Return the current stamp of the resource, and increase the stamp.
@@ -239,7 +229,11 @@ class VKResourceStateTracker {
    * This function is called when adding a node to the render graph, during building resource
    * dependencies. See `VKNodeInfo.build_links`
    */
-  ResourceWithStamp get_image_and_increase_stamp(VkImage vk_image);
+  inline ResourceWithStamp get_image_and_increase_stamp(VkImage vk_image)
+  {
+    ResourceHandle handle = image_resources_.lookup(vk_image);
+    return {.handle = handle, .stamp = resources_[handle].stamp++};
+  }
 
   /**
    * Return the current stamp of the resource, and increase the stamp.
@@ -251,7 +245,10 @@ class VKResourceStateTracker {
    * This function is called when adding a node to the render graph, during building resource
    * dependencies. See `VKNodeInfo.build_links`
    */
-  ResourceWithStamp get_buffer_and_increase_stamp(VkBuffer vk_buffer);
+  inline ResourceWithStamp get_buffer_and_increase_stamp(ResourceHandle buffer_handle)
+  {
+    return {.handle = buffer_handle, .stamp = resources_[buffer_handle].stamp++};
+  }
 
   /**
    * Return the current stamp of the resource.
@@ -261,7 +258,10 @@ class VKResourceStateTracker {
    * This function is called when adding a node to the render graph, during building resource
    * dependencies. See `VKNodeInfo.build_links`
    */
-  ResourceWithStamp get_buffer(VkBuffer vk_buffer) const;
+  inline ResourceWithStamp get_buffer(ResourceHandle buffer_handle) const
+  {
+    return ResourceWithStamp{.handle = buffer_handle, .stamp = resources_[buffer_handle].stamp};
+  }
 
   /**
    * Return the current stamp of the resource.
@@ -271,12 +271,10 @@ class VKResourceStateTracker {
    * This function is called when adding a node to the render graph, during building resource
    * dependencies. See `VKNodeInfo.build_links`
    */
-  ResourceWithStamp get_image(VkImage vk_image) const;
-
-  /** Get the resource type for the given handle. */
-  VKResourceType resource_type_get(ResourceHandle resource_handle) const
+  inline ResourceWithStamp get_image(VkImage vk_image) const
   {
-    return resources_.lookup(resource_handle).type;
+    ResourceHandle handle = image_resources_.lookup(vk_image);
+    return {.handle = handle, .stamp = resources_[handle].stamp};
   }
 
   bool use_dynamic_rendering_local_read = true;
@@ -289,21 +287,38 @@ class VKResourceStateTracker {
                  VKResourceBarrierState barrier_state,
                  const char *name = nullptr);
 
-  /**
-   * Get the current stamp of the resource.
-   */
-  static ResourceWithStamp get_stamp(ResourceHandle handle, const Resource &resource);
-
-  /**
-   * Get the current stamp of the resource and increase the stamp.
-   */
-  static ResourceWithStamp get_and_increase_stamp(ResourceHandle handle, Resource &resource);
-
   ResourceHandle create_resource_slot();
 
-#ifdef VK_RESOURCE_STATE_TRACKER_VALIDATION
-  void validate() const;
-#endif
+  /**
+   * Get the ref to an image resource state.
+   *
+   * NOTE: Can only be called when the mutex has been locked in the same thread.
+   */
+  inline Resource &get_image_resource(ResourceHandle resource_handle)
+  {
+    BLI_assert(resources_[resource_handle].type == VKResourceType::IMAGE);
+    return resources_[resource_handle];
+  }
+  inline const Resource &get_image_resource(ResourceHandle resource_handle) const
+  {
+    BLI_assert(resources_[resource_handle].type == VKResourceType::IMAGE);
+    return resources_[resource_handle];
+  }
+  /**
+   * Get the ref to an image resource state.
+   *
+   * NOTE: Can only be called when the mutex has been locked in the same thread.
+   */
+  inline Resource &get_buffer_resource(ResourceHandle resource_handle)
+  {
+    BLI_assert(resources_[resource_handle].type == VKResourceType::BUFFER);
+    return resources_[resource_handle];
+  }
+  inline const Resource &get_buffer_resource(ResourceHandle resource_handle) const
+  {
+    BLI_assert(resources_[resource_handle].type == VKResourceType::BUFFER);
+    return resources_[resource_handle];
+  }
 };
 
 }  // namespace blender::gpu::render_graph

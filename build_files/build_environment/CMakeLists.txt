@@ -23,13 +23,20 @@ include(ExternalProject)
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/../cmake/Modules")
 
-include(cmake/check_software.cmake)
 include(cmake/options.cmake)
+
 # `versions.cmake` needs to be included after `options.cmake`
 # due to the `BLENDER_PLATFORM_ARM` variable being needed.
 include(cmake/versions.cmake)
 include(cmake/download.cmake)
+
+if(PACKAGE_DOWNLOAD_ONLY)
+  return()
+endif()
+
 include(cmake/macros.cmake)
+include(cmake/check_software.cmake)
+
 # `setup_msys2.cmake` to install `perl`,
 # which HIP needs to function for the compiler detection to work properly,
 # hence needs to be included before `check_compilers.cmake`.
@@ -101,11 +108,7 @@ if(NOT APPLE)
   endif()
 endif()
 include(cmake/ispc.cmake)
-if(BLENDER_PLATFORM_WINDOWS_ARM)
-  include(cmake/openpgl_windows_arm.cmake)
-else()
-  include(cmake/openpgl.cmake)
-endif()
+include(cmake/openpgl.cmake)
 # EMBREE needs to be included after `dpcpp` as it uses it for compiling with GPU support
 if(BLENDER_PLATFORM_WINDOWS_ARM)
   # WoA needs EMBREE to be built with the VS Generator + LLVM,
@@ -170,8 +173,6 @@ if(UNIX)
 endif()
 
 if(UNIX AND NOT APPLE)
-  include(cmake/libglu.cmake)
-  include(cmake/mesa.cmake)
   include(cmake/wayland_protocols.cmake)
   # Can be removed when the build-bot upgrades to v1.20.x or newer.
   include(cmake/wayland.cmake)
@@ -189,6 +190,9 @@ include(cmake/rubberband.cmake)
 include(cmake/abseil.cmake)
 include(cmake/eigen.cmake)
 include(cmake/ceres.cmake)
+include(cmake/draco.cmake)
+include(cmake/meshoptimizer.cmake)
+include(cmake/tracy.cmake)
 # Keep these last.
 include(cmake/deps_md.cmake)
 include(cmake/cve_check.cmake)

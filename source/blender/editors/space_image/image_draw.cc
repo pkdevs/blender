@@ -16,14 +16,14 @@
 #include "DNA_space_types.h"
 #include "DNA_view2d_types.h"
 
-#include "BLI_rect.h"
-#include "BLI_string_utf8.h"
-#include "BLI_threads.h"
-#include "BLI_utildefines.h"
+#include "BLI_rect.hh"
+#include "BLI_string_utf8.hh"
+#include "BLI_threads.hh"
+#include "BLI_utildefines.hh"
 
+#include "IMB_cache.hh"
 #include "IMB_colormanagement.hh"
 #include "IMB_imbuf_enums.h"
-#include "IMB_moviecache.hh"
 
 #include "BKE_context.hh"
 #include "BKE_image.hh"
@@ -489,14 +489,17 @@ void draw_image_cache(const bContext *C, ARegion *region)
   SpaceImage *sima = CTX_wm_space_image(C);
   Scene *scene = CTX_data_scene(C);
   Image *image = ED_space_image(sima);
+  ScrArea *area = CTX_wm_area(C);
   float x, cfra = scene->r.cfra, sfra = scene->r.sfra, efra = scene->r.efra,
            framelen = region->winx / (efra - sfra + 1);
   Mask *mask = nullptr;
 
   if (!ED_space_image_show_cache(sima)) {
+    ED_area_hud_region_set_padding_flag(area, region, false);
     return;
   }
 
+  ED_area_hud_region_set_padding_flag(area, region, true);
   if (sima->mode == SI_MODE_MASK) {
     mask = ED_space_image_get_mask(sima);
   }
@@ -518,8 +521,7 @@ void draw_image_cache(const bContext *C, ARegion *region)
     int *points = nullptr;
 
     std::scoped_lock lock(image->runtime->cache_mutex);
-    IMB_moviecache_get_cache_segments(
-        image->runtime->cache, IMB_PROXY_NONE, 0, &num_segments, &points);
+    IMB_cache_get_cache_segments(image->runtime->cache, IMB_PROXY_NONE, 0, &num_segments, &points);
 
     ED_region_cache_draw_cached_segments(
         region, num_segments, points, sfra + sima->iuser.offset, efra + sima->iuser.offset);
