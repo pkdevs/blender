@@ -373,7 +373,7 @@ class ImageFieldsFunction : public mf::MultiFunction {
     else if (image_buffer_->byte_data()) {
       sample_buffer(image_buffer_->byte_data(), mask, vectors, width, height, color_data);
     }
-    else{
+    else {
       BLI_assert_unreachable();
     }
 
