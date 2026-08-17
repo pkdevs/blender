@@ -260,6 +260,12 @@ class ShaderNodesInliner {
    */
   Set<FailedToInlineRepeatZone> repeat_zones_to_force_inline_;
 
+  /**
+   * Contains the compute contexts which #schedule_side_effect_nodes_in_context has handled
+   * already.
+   */
+  Set<const ComputeContext *> handle_side_effect_triggers_;
+
  public:
   ShaderNodesInliner(const bNodeTree &src_tree,
                      bNodeTree &dst_tree,
@@ -285,6 +291,8 @@ class ShaderNodesInliner {
     for (const SocketInContext &socket : final_output_sockets) {
       this->schedule_socket(socket);
     }
+    /* Schedules top level warning nodes. */
+    this->schedule_side_effect_nodes_in_context(src_tree_, nullptr, nullptr);
 
     /* Evaluate until all scheduled sockets have a value. While evaluating a single socket, it may
      * either end up having a value, or request more other sockets that need to be evaluated first.
@@ -715,6 +723,7 @@ class ShaderNodesInliner {
         socket.context, node->identifier, &node->owner_tree());
     const SocketInContext group_output_socket_ctx = {
         &group_compute_context, &group_output_node->input_socket(socket->index())};
+    this->schedule_side_effect_nodes_in_context(*group, nullptr, &group_compute_context);
     this->forward_value_or_schedule(socket, group_output_socket_ctx);
   }
 
@@ -841,6 +850,7 @@ class ShaderNodesInliner {
     const ComputeContext &last_iteration_context = compute_context_cache_.for_repeat_zone(
         socket.context, repeat_output_node, iterations - 1);
     parent_zone_contexts_.add(&last_iteration_context, socket.context);
+    this->schedule_side_effect_nodes_in_context(tree, zone, &last_iteration_context);
     const SocketInContext origin_socket = {&last_iteration_context,
                                            &repeat_output_node.input_socket(socket->index())};
     this->forward_value_or_schedule(socket, origin_socket);
@@ -871,6 +881,7 @@ class ShaderNodesInliner {
     PreservedZone &preserved_zone = copied_zone_by_zone_output_node_.lookup_or_add_default(
         repeat_output_node);
     preserved_zone.output_node = &copied_node;
+    this->schedule_side_effect_nodes_in_context(tree, &zone, &in_context);
     /* Ensure that the repeat input node is created as well. */
     this->schedule_socket({&in_context, &repeat_input_node.output_socket(0)});
   }
@@ -906,6 +917,7 @@ class ShaderNodesInliner {
 
   void handle_output_socket__repeat_input(const SocketInContext &socket)
   {
+    const bNodeTree &tree = socket->owner_tree();
     const bNode &repeat_input_node = socket->owner_node();
     const auto *repeat_zone_context = dynamic_cast<const bke::RepeatZoneComputeContext *>(
         socket.context);
@@ -931,12 +943,15 @@ class ShaderNodesInliner {
     }
     /* For later iterations, the values are copied from the corresponding output of the previous
      * iteration. */
+    const bke::bNodeTreeZones &zones = *tree.zones();
+    const bke::bNodeTreeZone &zone = *zones.get_zone_by_node(repeat_input_node.identifier);
     const bNode &repeat_output_node = *repeat_input_node.owner_tree().node_by_id(
         repeat_zone_context->output_node_id());
     const int previous_iteration = iteration - 1;
     const ComputeContext &previous_iteration_context = compute_context_cache_.for_repeat_zone(
         repeat_zone_context->parent(), repeat_output_node, previous_iteration);
     parent_zone_contexts_.add(&previous_iteration_context, repeat_zone_context->parent());
+    this->schedule_side_effect_nodes_in_context(tree, &zone, &previous_iteration_context);
     const SocketInContext origin_socket = {&previous_iteration_context,
                                            &repeat_output_node.input_socket(socket->index() - 1)};
     this->forward_value_or_schedule(socket, origin_socket);
@@ -993,8 +1008,9 @@ class ShaderNodesInliner {
         closure_output_node.storage);
     const StringRef key = evaluate_closure_storage->output_items.items[socket->index()].name;
 
+    const bNodeTree &closure_tree = closure_output_node.owner_tree();
     const ClosureSourceLocation closure_source_location{
-        &closure_output_node.owner_tree(),
+        &closure_tree,
         closure_output_node.identifier,
         closure_zone_value->closure_creation_context ?
             closure_zone_value->closure_creation_context->hash() :
@@ -1006,6 +1022,8 @@ class ShaderNodesInliner {
                                                     &socket->owner_tree(),
                                                     closure_source_location);
     parent_zone_contexts_.add(&closure_eval_context, closure_zone_value->closure_creation_context);
+    this->schedule_side_effect_nodes_in_context(
+        closure_tree, closure_zone_value->zone, &closure_eval_context);
 
     for (const int i : IndexRange(closure_storage.output_items.items_num)) {
       const NodeClosureOutputItem &item = closure_storage.output_items.items[i];
@@ -1517,11 +1535,41 @@ class ShaderNodesInliner {
       if (const std::optional<PrimitiveSocketValue> primitive_message =
               message_value->to_primitive(*message_socket->typeinfo))
       {
+        // TODO: Handle message types.
         const StringRef message = std::get<std::string>(primitive_message->value);
         this->report_error(node, message);
       }
     }
     this->forward_value_or_schedule(socket, show_input_socket);
+  }
+
+  /**
+   * In some compute contexts, there may be nodes which need to be evaluated even if they are not
+   * connected to the output. Currently, this is only relevant for warning nodes. However, this
+   * could e.g. also be used for viewers in the future like in Geometry Nodes.
+   */
+  void schedule_side_effect_nodes_in_context(const bNodeTree &tree,
+                                             const bke::bNodeTreeZone *zone,
+                                             const ComputeContext *context)
+  {
+    if (!handle_side_effect_triggers_.add(context)) {
+      return;
+    }
+    const bke::bNodeTreeZones *zones = tree.zones();
+    if (!zones) {
+      return;
+    }
+    /* Schedule warning nodes in this compute context. */
+    for (const bNode *warning_node : tree.nodes_by_type("GeometryNodeWarning"_ustr)) {
+      const bke::bNodeTreeZone *warning_zone = zones->get_zone_by_node(warning_node->identifier);
+      if (warning_zone == zone) {
+        SocketInContext warning_output_socket{context, &warning_node->output_socket(0)};
+        if (!warning_output_socket->is_directly_linked()) {
+          /* Evaluate the warning node in this context even if its not otherwise used. */
+          this->schedule_socket(warning_output_socket);
+        }
+      }
+    }
   }
 
   /**
