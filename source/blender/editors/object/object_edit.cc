@@ -1482,22 +1482,27 @@ static wmOperatorStatus object_update_all_paths_exec(bContext *C, wmOperator * /
   if (scene == nullptr) {
     return OPERATOR_CANCELLED;
   }
-  Vector<Object *> visible_objects;
-  CTX_DATA_BEGIN (C, Object *, ob, visible_objects) {
-    visible_objects.append(ob);
+  Vector<Object *> visible_objects_with_mpath;
+  CTX_DATA_BEGIN (C, Object *, ob, visible_objects_with_mpath) {
+    bool has_any_motion_path = false;
     if (ob->mpath) {
       ed::motionpath::tag_for_recalc(*ob->mpath);
+      has_any_motion_path = true;
     }
     if (ob->pose) {
       for (bPoseChannel &pchan : ob->pose->chanbase) {
         if (pchan.mpath) {
           ed::motionpath::tag_for_recalc(*pchan.mpath);
+          has_any_motion_path = true;
         }
       }
     }
+    if (has_any_motion_path) {
+      visible_objects_with_mpath.append(ob);
+    }
   }
   CTX_DATA_END;
-  motion_paths_recalc(C, scene, visible_objects);
+  motion_paths_recalc(C, scene, visible_objects_with_mpath);
 
   WM_event_add_notifier(C, NC_OBJECT | ND_POSE | ND_TRANSFORM, nullptr);
 
