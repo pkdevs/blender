@@ -280,11 +280,11 @@ void BlenderProject::move_variable(int from_index, int to_index)
   this->is_dirty = true;
 }
 
-bool BlenderProject::rename_variable(int variable_index, StringRef name)
+void BlenderProject::rename_variable(int variable_index, StringRef name)
 {
   BLI_assert(variable_index >= 0 && variable_index < this->variables.size());
   if (variable_index < 0 || variable_index >= this->variables.size()) {
-    return false;
+    return;
   }
 
   const std::string new_name = ensure_is_valid_project_variable_name(name);
@@ -310,8 +310,6 @@ bool BlenderProject::rename_variable(int variable_index, StringRef name)
                     '_',
                     this->variables[variable_index]->name,
                     sizeof(IDProperty::name));
-
-  return true;
 }
 
 void with_blender_project_read_lock(FunctionRef<void()> lambda)

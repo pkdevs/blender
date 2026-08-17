@@ -210,7 +210,7 @@ class BlenderProject {
    * altered to meet them by substituting invalid characters. `name` will also
    * be modified if needed to make it unique among the current variables.
    */
-  bool rename_variable(int variable_index, StringRef name);
+  void rename_variable(int variable_index, StringRef name);
 };
 
 /**
