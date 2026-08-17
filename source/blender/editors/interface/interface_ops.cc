@@ -47,6 +47,8 @@
 #include "BKE_report.hh"
 #include "BKE_screen.hh"
 
+#include "BLO_userdef_default.h"
+
 #include "IMB_colormanagement.hh"
 
 #include "DEG_depsgraph.hh"
@@ -371,6 +373,168 @@ static bool reset_default_button_poll(bContext *C)
   return (ptr && prop && RNA_property_editable(&ptr, prop));
 }
 
+/**
+ * Find the RNA property on `parent` that resolves to `child`.
+ *
+ * This intentionally follows RNA relationships instead of relying on the byte
+ * layout of the underlying DNA structs. For collection properties the item
+ * index is returned as well, so the same relationship can be followed in the
+ * factory theme.
+ */
+static bool theme_child_relation_find(PointerRNA *parent,
+                                      const PointerRNA &child,
+                                      PropertyRNA **r_prop,
+                                      int *r_collection_index)
+{
+  PropertyRNA *iterprop = RNA_struct_iterator_property(parent->type);
+  CollectionPropertyIterator prop_iter = {};
+  RNA_property_collection_begin(parent, iterprop, &prop_iter);
+
+  for (; prop_iter.valid; RNA_property_collection_next(&prop_iter)) {
+    PropertyRNA *candidate = static_cast<PropertyRNA *>(prop_iter.ptr.data);
+    if (RNA_property_builtin(candidate)) {
+      continue;
+    }
+
+    const PropertyType candidate_type = RNA_property_type(candidate);
+    if (candidate_type == PROP_POINTER) {
+      const PointerRNA candidate_ptr = RNA_property_pointer_get(parent, candidate);
+      if (candidate_ptr.type == child.type && candidate_ptr.data == child.data) {
+        *r_prop = candidate;
+        *r_collection_index = -1;
+        RNA_property_collection_end(&prop_iter);
+        return true;
+      }
+      continue;
+    }
+
+    if (candidate_type != PROP_COLLECTION) {
+      continue;
+    }
+
+    CollectionPropertyIterator item_iter = {};
+    int item_index = 0;
+    RNA_property_collection_begin(parent, candidate, &item_iter);
+    for (; item_iter.valid; RNA_property_collection_next(&item_iter), item_index++) {
+      if (item_iter.ptr.type == child.type && item_iter.ptr.data == child.data) {
+        *r_prop = candidate;
+        *r_collection_index = item_index;
+        RNA_property_collection_end(&item_iter);
+        RNA_property_collection_end(&prop_iter);
+        return true;
+      }
+    }
+    RNA_property_collection_end(&item_iter);
+  }
+
+  RNA_property_collection_end(&prop_iter);
+  return false;
+}
+
+/**
+ * Resolve the RNA pointer equivalent to `ptr` inside Blender's factory theme.
+ *
+ * Theme data is not ID-owned, so ID-rooted RNA path helpers cannot be used
+ * here. Instead, walk from the Theme ancestor to `ptr`, identify each
+ * parent/child relationship through RNA, and replay that same relationship
+ * starting from `U_theme_default`.
+ *
+ * This keeps the resulting PointerRNA ancestry coherent and avoids any
+ * address+offset assumptions about bTheme or its nested DNA structs.
+ */
+static bool theme_factory_pointer_resolve(const PointerRNA *ptr, PointerRNA *r_factory_ptr)
+{
+  PointerRNA factory_parent = RNA_pointer_create_discrete(
+      nullptr, RNA_Theme, const_cast<bTheme *>(&U_theme_default));
+
+  if (ptr->type == RNA_Theme) {
+    *r_factory_ptr = factory_parent;
+    return true;
+  }
+
+  int theme_ancestor_index = -1;
+  for (int i = int(ptr->ancestors.size()) - 1; i >= 0; i--) {
+    if (ptr->ancestors[i].type == RNA_Theme) {
+      theme_ancestor_index = i;
+      break;
+    }
+  }
+  if (theme_ancestor_index == -1) {
+    return false;
+  }
+
+  PointerRNA source_parent = RNA_pointer_create_from_ancestor(*ptr, theme_ancestor_index);
+  const int ancestor_count = int(ptr->ancestors.size());
+
+  for (int child_index = theme_ancestor_index + 1; child_index <= ancestor_count; child_index++) {
+    const PointerRNA source_child = (child_index < ancestor_count) ?
+                                        RNA_pointer_create_from_ancestor(*ptr, child_index) :
+                                        *ptr;
+
+    PropertyRNA *relation_prop = nullptr;
+    int collection_index = -1;
+    if (!theme_child_relation_find(
+            &source_parent, source_child, &relation_prop, &collection_index))
+    {
+      return false;
+    }
+
+    PointerRNA factory_child;
+    if (RNA_property_type(relation_prop) == PROP_POINTER) {
+      factory_child = RNA_property_pointer_get(&factory_parent, relation_prop);
+    }
+    else {
+      if (!RNA_property_collection_lookup_int(
+              &factory_parent, relation_prop, collection_index, &factory_child))
+      {
+        return false;
+      }
+    }
+
+    if (!factory_child || factory_child.type != source_child.type) {
+      return false;
+    }
+
+    source_parent = source_child;
+    factory_parent = factory_child;
+  }
+
+  *r_factory_ptr = factory_parent;
+  return true;
+}
+
+static bool reset_theme_property_to_factory(Main *bmain,
+                                            PointerRNA *ptr,
+                                            PropertyRNA *prop,
+                                            const int array_index)
+{
+  const PropertyType type = RNA_property_type(prop);
+  const bool is_array = RNA_property_array_check(prop);
+
+  /* Keep the scope of the original fix: scalar numeric/boolean/enum values
+   * plus RGB/RGBA Theme colors. Other properties retain normal RNA reset. */
+  if (type == PROP_FLOAT && is_array) {
+    const PropertySubType subtype = RNA_property_subtype(prop);
+    if ((subtype != PROP_COLOR && subtype != PROP_COLOR_GAMMA) ||
+        RNA_property_array_length(ptr, prop) > 4)
+    {
+      return false;
+    }
+  }
+  else if (is_array ||
+           (type != PROP_FLOAT && type != PROP_INT && type != PROP_BOOLEAN && type != PROP_ENUM))
+  {
+    return false;
+  }
+
+  PointerRNA factory_ptr;
+  if (!theme_factory_pointer_resolve(ptr, &factory_ptr)) {
+    return false;
+  }
+
+  return RNA_property_copy(bmain, ptr, &factory_ptr, prop, array_index);
+}
+
 static wmOperatorStatus reset_default_button_exec(bContext *C, wmOperator *op)
 {
   Main &bmain = *CTX_data_main(C);
@@ -385,7 +549,9 @@ static wmOperatorStatus reset_default_button_exec(bContext *C, wmOperator *op)
   /* if there is a valid property that is editable... */
   if (ptr && prop && RNA_property_editable(&ptr, prop)) {
     const int array_index = (all) ? -1 : index;
-    if (RNA_property_reset(&bmain, &ptr, prop, array_index)) {
+    const bool did_reset = reset_theme_property_to_factory(&bmain, &ptr, prop, array_index) ||
+                       RNA_property_reset(&bmain, &ptr, prop, array_index);
+    if (did_reset) {
 
       /* Apply auto keyframe when property is successfully reset. */
       Scene *scene = CTX_data_scene(C);
