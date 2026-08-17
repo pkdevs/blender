@@ -61,7 +61,7 @@ float power_get(LightData light, LightingType type)
 {
   /* Mask anything above 3. See LIGHT_TRANSLUCENT_WITH_THICKNESS. */
   return light.power_factor[type & 3u] *
-         (type < LIGHT_VOLUME ? light.shape_power : light.point_power);
+         (type != LIGHT_VOLUME ? light.shape_power : light.point_power);
 }
 
 bool light_linking_affects_receiver(uint2 light_set_membership, uchar receiver_light_set)
