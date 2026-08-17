@@ -1030,10 +1030,11 @@ ccl_device_inline ShaderEvalResult kernel_path_mnee_sample(KernelGlobals kg,
       }
 
 #if defined(__KERNEL_ONEAPI__)
-      /* Temporary workaround for a bug in the ONEAPI + Embree backend that sometimes sets the
-       * SR_BSDF_HAS_DISPERSION flag when calling `surface_shader_eval` inside the MNEE code path.
-       * This happens even in scenes where no material uses dispersion. This workaround disables
-       * dispersion support + MNEE for all ONEAPI backends. */
+      /* FIXME: Temporary workaround for a bug in the oneAPI + Embree backend that sometimes sets
+       * the SR_BSDF_HAS_DISPERSION flag when calling `surface_shader_eval` inside the MNEE code
+       * path. This happens even in scenes where no material uses dispersion. This workaround
+       * disables dispersion support + MNEE for all oneAPI backends. Proper fix should be on the
+       * oneAPI side. */
       sd_mnee->runtime_flag &= ~SR_BSDF_HAS_DISPERSION;
 #endif
 
