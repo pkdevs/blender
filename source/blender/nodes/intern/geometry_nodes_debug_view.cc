@@ -259,40 +259,6 @@ void finalize_candidates(Vector<Candidate> &candidates)
   candidates = std::move(unique_candidates);
 }
 
-void initialize_state(const Span<Candidate> candidates, State &state)
-{
-  if (state.initialized || candidates.is_empty()) {
-    return;
-  }
-  state.enabled.add(candidates.first().identifier);
-  state.initialized = true;
-}
-
-bool toggle_candidate(const Span<Candidate> candidates, const Identifier &identifier, State &state)
-{
-  initialize_state(candidates, state);
-  const bool is_available = std::ranges::any_of(
-      candidates, [&](const Candidate &candidate) { return candidate.identifier == identifier; });
-  if (!is_available) {
-    return false;
-  }
-  if (!state.enabled.remove(identifier)) {
-    state.enabled.add_new(identifier);
-  }
-  return true;
-}
-
-Vector<int> enabled_candidate_indices(const Span<Candidate> candidates, const State &state)
-{
-  Vector<int> indices;
-  for (const int i : candidates.index_range()) {
-    if (state.enabled.contains(candidates[i].identifier)) {
-      indices.append(i);
-    }
-  }
-  return indices;
-}
-
 int persistent_id_namespace(const Identifier &identifier)
 {
   uint hash = BLI_hash_int_2d(uint(identifier.compute_context_hash.v1),

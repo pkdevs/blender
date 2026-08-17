@@ -6,13 +6,9 @@
  * \ingroup edobj
  */
 
-#include <bit>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
-#include <memory>
-
-#include <fmt/format.h>
 
 #include "CLG_log.h"
 
@@ -77,7 +73,6 @@
 #include "BKE_pointcloud.hh"
 #include "BKE_report.hh"
 #include "BKE_scene.hh"
-#include "BKE_screen.hh"
 #include "BKE_softbody.h"
 #include "BKE_volume.hh"
 
@@ -89,8 +84,6 @@
 
 #include "MOD_nodes.hh"
 
-#include "NOD_eval_log.hh"
-#include "NOD_geometry_nodes_debug_view.hh"
 #include "NOD_geometry_nodes_srna.hh"
 #include "RNA_access.hh"
 #include "RNA_define.hh"
@@ -3571,187 +3564,6 @@ void OBJECT_OT_geometry_nodes_input_attribute_toggle(wmOperatorType *ot)
 
   RNA_def_string(ot->srna, "input_name", nullptr, 0, "Input Name", "");
   RNA_def_string(ot->srna, "modifier_name", nullptr, MAX_NAME, "Modifier Name", "");
-}
-
-/** \} */
-
-/* ------------------------------------------------------------------- */
-/** \name Geometry Nodes Debug View Selection
- * \{ */
-
-static NodesModifierData *geometry_nodes_debug_view_modifier_get(bContext *C, Object **r_object)
-{
-  const PointerRNA modifier_ptr = edit_modifier_ptr_get(C, RNA_NodesModifier);
-  Object *object = nullptr;
-  NodesModifierData *nmd = nullptr;
-  if (modifier_ptr.data && modifier_ptr.owner_id && GS(modifier_ptr.owner_id->name) == ID_OB) {
-    object = reinterpret_cast<Object *>(modifier_ptr.owner_id);
-    nmd = static_cast<NodesModifierData *>(modifier_ptr.data);
-  }
-  else {
-    return nullptr;
-  }
-  if (BLI_findindex(&object->modifiers, nmd) == -1) {
-    return nullptr;
-  }
-  if (r_object) {
-    *r_object = object;
-  }
-  return nmd;
-}
-
-static Span<nodes::debug_view::Candidate> geometry_nodes_debug_view_candidates_get(
-    NodesModifierData &nmd, std::shared_ptr<nodes::eval_log::NodesEvalLog> &r_eval_log)
-{
-  if (!(nmd.flag & NODES_MODIFIER_SHOW_DEBUG_VIEWS) || !nmd.runtime->eval_log) {
-    return {};
-  }
-  r_eval_log = nmd.runtime->eval_log;
-  return r_eval_log->debug_view_candidates();
-}
-
-static bool geometry_nodes_debug_view_poll(bContext *C)
-{
-  NodesModifierData *nmd = geometry_nodes_debug_view_modifier_get(C, nullptr);
-  if (!nmd) {
-    return false;
-  }
-  std::shared_ptr<nodes::eval_log::NodesEvalLog> eval_log;
-  return !geometry_nodes_debug_view_candidates_get(*nmd, eval_log).is_empty();
-}
-
-static void geometry_nodes_debug_view_notify(bContext *C, Object &object)
-{
-  /* Refresh copy-on-eval and draw-manager object synchronization without reevaluating the
-   * modifier's geometry. */
-  DEG_id_tag_update(&object.id, ID_RECALC_SYNC_TO_EVAL);
-  WM_event_add_notifier(C, NC_OBJECT | ND_MODIFIER, &object);
-  WM_event_add_notifier(C, NC_VIEWER_PATH, nullptr);
-}
-
-static std::optional<nodes::debug_view::Identifier> geometry_nodes_debug_view_identifier_get(
-    PointerRNA &ptr)
-{
-  if (!RNA_struct_property_is_set(&ptr, "context_hash") ||
-      !RNA_struct_property_is_set(&ptr, "node_tree_lineage_hash") ||
-      !RNA_struct_property_is_set(&ptr, "viewer_node_id"))
-  {
-    return std::nullopt;
-  }
-  int context_hash[4];
-  RNA_int_get_array(&ptr, "context_hash", context_hash);
-  nodes::debug_view::Identifier identifier;
-  identifier.compute_context_hash.v1 = uint64_t(std::bit_cast<uint32_t>(context_hash[0])) |
-                                       (uint64_t(std::bit_cast<uint32_t>(context_hash[1])) << 32);
-  identifier.compute_context_hash.v2 = uint64_t(std::bit_cast<uint32_t>(context_hash[2])) |
-                                       (uint64_t(std::bit_cast<uint32_t>(context_hash[3])) << 32);
-  int node_tree_lineage_hash[4];
-  RNA_int_get_array(&ptr, "node_tree_lineage_hash", node_tree_lineage_hash);
-  identifier.node_tree_lineage_hash.v1 =
-      uint64_t(std::bit_cast<uint32_t>(node_tree_lineage_hash[0])) |
-      (uint64_t(std::bit_cast<uint32_t>(node_tree_lineage_hash[1])) << 32);
-  identifier.node_tree_lineage_hash.v2 =
-      uint64_t(std::bit_cast<uint32_t>(node_tree_lineage_hash[2])) |
-      (uint64_t(std::bit_cast<uint32_t>(node_tree_lineage_hash[3])) << 32);
-  identifier.viewer_node_id = RNA_int_get(&ptr, "viewer_node_id");
-  return identifier;
-}
-
-static wmOperatorStatus geometry_nodes_debug_view_toggle_exec(bContext *C, wmOperator *op)
-{
-  Object *object = nullptr;
-  NodesModifierData *nmd = geometry_nodes_debug_view_modifier_get(C, &object);
-  if (!nmd) {
-    return OPERATOR_CANCELLED;
-  }
-  std::shared_ptr<nodes::eval_log::NodesEvalLog> eval_log;
-  const Span<nodes::debug_view::Candidate> candidates = geometry_nodes_debug_view_candidates_get(
-      *nmd, eval_log);
-  const std::optional<nodes::debug_view::Identifier> identifier =
-      geometry_nodes_debug_view_identifier_get(*op->ptr);
-  if (!identifier || !nodes::debug_view::toggle_candidate(
-                         candidates, *identifier, nmd->runtime->debug_view_state))
-  {
-    return OPERATOR_CANCELLED;
-  }
-  geometry_nodes_debug_view_notify(C, *object);
-  return OPERATOR_FINISHED;
-}
-
-static std::string geometry_nodes_debug_view_toggle_description(bContext *C,
-                                                                wmOperatorType * /*ot*/,
-                                                                PointerRNA *ptr)
-{
-  NodesModifierData *nmd = geometry_nodes_debug_view_modifier_get(C, nullptr);
-  if (!nmd) {
-    return {};
-  }
-  std::shared_ptr<nodes::eval_log::NodesEvalLog> eval_log;
-  const Span<nodes::debug_view::Candidate> candidates = geometry_nodes_debug_view_candidates_get(
-      *nmd, eval_log);
-  const std::optional<nodes::debug_view::Identifier> identifier =
-      geometry_nodes_debug_view_identifier_get(*ptr);
-  if (!identifier) {
-    return {};
-  }
-  const Vector<nodes::debug_view::CandidatePresentation> presentations =
-      nodes::debug_view::candidate_presentations(candidates, IFACE_("Viewer"));
-  for (const int i : candidates.index_range()) {
-    if (candidates[i].identifier == *identifier) {
-      const bool is_enabled = nmd->runtime->debug_view_state.enabled.contains(*identifier);
-      return fmt::format(fmt::runtime(is_enabled ?
-                                          TIP_("Disable Debug View: {}") :
-                                          TIP_("Enable Debug View: {}. An active Viewer takes "
-                                               "precedence")),
-                         presentations[i].full_name);
-    }
-  }
-  return {};
-}
-
-void OBJECT_OT_geometry_nodes_debug_view_toggle(wmOperatorType *ot)
-{
-  ot->name = "Toggle Geometry Nodes Debug View";
-  ot->description = "Enable or disable a persistent Debug View for this modifier";
-  ot->idname = "OBJECT_OT_geometry_nodes_debug_view_toggle";
-
-  ot->exec = geometry_nodes_debug_view_toggle_exec;
-  ot->poll = geometry_nodes_debug_view_poll;
-  ot->get_description = geometry_nodes_debug_view_toggle_description;
-  ot->flag = OPTYPE_INTERNAL;
-
-  PropertyRNA *prop = RNA_def_int_vector(ot->srna,
-                                         "context_hash",
-                                         4,
-                                         nullptr,
-                                         INT_MIN,
-                                         INT_MAX,
-                                         "Context Hash",
-                                         "Stable compute context identity",
-                                         INT_MIN,
-                                         INT_MAX);
-  RNA_def_property_flag(prop, PROP_HIDDEN | PROP_SKIP_SAVE);
-  prop = RNA_def_int_vector(ot->srna,
-                            "node_tree_lineage_hash",
-                            4,
-                            nullptr,
-                            INT_MIN,
-                            INT_MAX,
-                            "Node Tree Lineage Hash",
-                            "Stable identity of the original node-tree datablock lineage",
-                            INT_MIN,
-                            INT_MAX);
-  RNA_def_property_flag(prop, PROP_HIDDEN | PROP_SKIP_SAVE);
-  prop = RNA_def_int(ot->srna,
-                     "viewer_node_id",
-                     0,
-                     INT_MIN,
-                     INT_MAX,
-                     "Viewer Node ID",
-                     "Stable Viewer node identity",
-                     INT_MIN,
-                     INT_MAX);
-  RNA_def_property_flag(prop, PROP_HIDDEN | PROP_SKIP_SAVE);
 }
 
 /** \} */

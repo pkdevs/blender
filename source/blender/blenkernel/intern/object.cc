@@ -143,7 +143,6 @@
 #include "ANIM_action_legacy.hh"
 #include "ANIM_animdata.hh"
 
-#include "MOD_nodes.hh"
 #include "NOD_geometry_nodes_srna.hh"
 
 #include "RNA_prototypes.hh"
@@ -1246,14 +1245,6 @@ static void object_asset_metadata_ensure(void *asset_ptr, AssetMetaData *asset_d
   }
 }
 
-static void object_undo_preserve(BlendLibReader * /*reader*/, ID *id_new, ID *id_old)
-{
-  if (id_new == id_old) {
-    return;
-  }
-  MOD_nodes_preserve_runtime_state_on_undo(*id_cast<Object *>(id_old), *id_cast<Object *>(id_new));
-}
-
 static AssetTypeInfo AssetType_OB = {
     /*pre_save_fn*/ object_asset_metadata_ensure,
     /*on_mark_asset_fn*/ object_asset_metadata_ensure,
@@ -1287,7 +1278,7 @@ IDTypeInfo IDType_ID_OB = {
     .blend_read_data = object_blend_read_data,
     .blend_read_after_liblink = object_blend_read_after_liblink,
 
-    .blend_read_undo_preserve = object_undo_preserve,
+    .blend_read_undo_preserve = nullptr,
 
     .lib_override_apply_post = object_lib_override_apply_post,
 };

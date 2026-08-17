@@ -2,10 +2,7 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#include <bit>
-
 #include <fmt/format.h>
-#include <memory>
 #include <sstream>
 
 #include "BKE_compute_contexts.hh"
@@ -17,7 +14,6 @@
 #include "BKE_node.hh"
 #include "BKE_node_runtime.hh"
 #include "BKE_object.hh"
-#include "BKE_screen.hh"
 
 #include "BLI_string.hh"
 #include "BLI_string_utf8.hh"
@@ -871,64 +867,6 @@ static void draw_manage_panel(const bContext *C,
   }
 }
 
-static void debug_view_identifier_set(PointerRNA &ptr, const debug_view::Identifier &identifier)
-{
-  const int context_hash[4] = {
-      std::bit_cast<int>(uint32_t(identifier.compute_context_hash.v1)),
-      std::bit_cast<int>(uint32_t(identifier.compute_context_hash.v1 >> 32)),
-      std::bit_cast<int>(uint32_t(identifier.compute_context_hash.v2)),
-      std::bit_cast<int>(uint32_t(identifier.compute_context_hash.v2 >> 32)),
-  };
-  RNA_int_set_array(&ptr, "context_hash", context_hash);
-  const int node_tree_lineage_hash[4] = {
-      std::bit_cast<int>(uint32_t(identifier.node_tree_lineage_hash.v1)),
-      std::bit_cast<int>(uint32_t(identifier.node_tree_lineage_hash.v1 >> 32)),
-      std::bit_cast<int>(uint32_t(identifier.node_tree_lineage_hash.v2)),
-      std::bit_cast<int>(uint32_t(identifier.node_tree_lineage_hash.v2 >> 32)),
-  };
-  RNA_int_set_array(&ptr, "node_tree_lineage_hash", node_tree_lineage_hash);
-  RNA_int_set(&ptr, "viewer_node_id", identifier.viewer_node_id);
-}
-
-static void draw_debug_view_toggles(const bContext &C,
-                                    ui::Layout &layout,
-                                    Object &object,
-                                    NodesModifierData &nmd)
-{
-  const int required_mode = eModifierMode_Realtime |
-                            (BKE_object_is_in_editmode(&object) ? eModifierMode_Editmode : 0);
-  if (!BKE_modifier_is_enabled(CTX_data_scene(&C), &nmd.modifier, required_mode) ||
-      !(nmd.flag & NODES_MODIFIER_SHOW_DEBUG_VIEWS) || !nmd.runtime->eval_log)
-  {
-    return;
-  }
-
-  /* Keep the log alive while candidate pointers are used to build the UI. */
-  const std::shared_ptr<eval_log::NodesEvalLog> eval_log = nmd.runtime->eval_log;
-  const Span<debug_view::Candidate> candidates = eval_log->debug_view_candidates();
-  if (candidates.is_empty()) {
-    return;
-  }
-  debug_view::initialize_state(candidates, nmd.runtime->debug_view_state);
-  const Vector<debug_view::CandidatePresentation> presentations =
-      debug_view::candidate_presentations(candidates, IFACE_("Viewer"));
-
-  ui::Layout &split = layout.split(0.4f, false);
-  ui::Layout &name_row = split.row(false);
-  name_row.alignment_set(ui::LayoutAlign::Right);
-  name_row.label(IFACE_("Debug Views"), ICON_NONE);
-
-  ui::Layout &controls = split.column(false);
-  for (const int i : candidates.index_range()) {
-    const debug_view::Candidate &candidate = candidates[i];
-    const bool is_enabled = nmd.runtime->debug_view_state.enabled.contains(candidate.identifier);
-    PointerRNA props = controls.op("OBJECT_OT_geometry_nodes_debug_view_toggle",
-                                   presentations[i].display_name,
-                                   is_enabled ? ICON_CHECKBOX_HLT : ICON_CHECKBOX_DEHLT);
-    debug_view_identifier_set(props, candidate.identifier);
-  }
-}
-
 void draw_geometry_nodes_modifier_ui(const bContext &C,
                                      PointerRNA *modifier_ptr,
                                      ui::Layout &layout)
@@ -992,7 +930,6 @@ void draw_geometry_nodes_modifier_ui(const bContext &C,
         });
 
     layout.prop(modifier_ptr, "show_debug_views", UI_ITEM_NONE, std::nullopt, ICON_NONE);
-    draw_debug_view_toggles(C, layout, object, nmd);
   }
 
   modifier_error_message_draw(layout, modifier_ptr);

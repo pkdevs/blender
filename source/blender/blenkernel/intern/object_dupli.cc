@@ -1885,12 +1885,6 @@ bool object_duplilist_debug_view(Depsgraph *depsgraph, Object *ob_eval, DupliLis
   if (candidates.is_empty()) {
     return false;
   }
-  nodes::debug_view::initialize_state(candidates, nmd_orig.runtime->debug_view_state);
-  const Vector<int> enabled_candidate_indices = nodes::debug_view::enabled_candidate_indices(
-      candidates, nmd_orig.runtime->debug_view_state);
-  if (enabled_candidate_indices.is_empty()) {
-    return false;
-  }
 
   DupliContext ctx;
   Vector<Object *> instance_stack;
@@ -1909,8 +1903,7 @@ bool object_duplilist_debug_view(Depsgraph *depsgraph, Object *ob_eval, DupliLis
   /* One generated component ID, one source namespace, and one INT_MAX terminator must fit. */
   static_assert(MAX_DUPLI_RECUR >= 3);
   BLI_assert(ctx.level == 0);
-  for (const int candidate_index : enabled_candidate_indices) {
-    const nodes::debug_view::Candidate &candidate = candidates[candidate_index];
+  for (const nodes::debug_view::Candidate &candidate : candidates) {
     const bke::GeometrySet &viewer_geometry = *candidate.viewer_log->main_geometry();
 
     /* Add one parent persistent-ID level to namespace otherwise corresponding components and

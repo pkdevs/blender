@@ -8383,10 +8383,8 @@ static void rna_def_modifier_nodes(BlenderRNA *brna)
 
   prop = RNA_def_property(srna, "show_debug_views", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, nullptr, "flag", NODES_MODIFIER_SHOW_DEBUG_VIEWS);
-  RNA_def_property_ui_text(prop,
-                           "Show Debug Views",
-                           "Show persistent Debug View outputs for this modifier; active Viewers "
-                           "are independent and take precedence");
+  RNA_def_property_ui_text(
+      prop, "Show Debug Views", "Enable persistent Debug View evaluation for this modifier");
   RNA_def_property_update(prop, 0, "rna_Modifier_update");
 
   prop = RNA_def_property(srna, "node_warnings", PROP_COLLECTION, PROP_NONE);

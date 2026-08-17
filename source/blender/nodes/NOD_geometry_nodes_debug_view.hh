@@ -98,12 +98,6 @@ struct CandidatePresentation {
   std::string full_name;
 };
 
-/** Runtime-only enabled state for one Geometry Nodes modifier. */
-struct State {
-  Set<Identifier> enabled;
-  bool initialized = false;
-};
-
 /** Sort candidates deterministically and remove duplicate identities. */
 void finalize_candidates(Vector<Candidate> &candidates);
 
@@ -113,15 +107,6 @@ void finalize_candidates(Vector<Candidate> &candidates);
  */
 Vector<CandidatePresentation> candidate_presentations(Span<Candidate> candidates,
                                                       StringRef default_viewer_name);
-
-/** Enable the first available candidate once, without reinitializing an empty state later. */
-void initialize_state(Span<Candidate> candidates, State &state);
-
-/** Toggle an available candidate by stable identity. */
-bool toggle_candidate(Span<Candidate> candidates, const Identifier &identifier, State &state);
-
-/** Candidate indices enabled in deterministic candidate order. Stale identities are preserved. */
-Vector<int> enabled_candidate_indices(Span<Candidate> candidates, const State &state);
 
 /**
  * Stable namespace for this Debug View in a dupli persistent-ID chain.

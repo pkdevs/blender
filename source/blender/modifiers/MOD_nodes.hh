@@ -8,7 +8,6 @@
 
 #include "BLI_array.hh"
 
-#include "NOD_geometry_nodes_debug_view.hh"
 #include "NOD_socket_usage_inference_fwd.hh"
 
 namespace blender {
@@ -34,13 +33,6 @@ class NodesEvalLog;
  */
 void MOD_nodes_update_interface(Main &bmain, Object *object, NodesModifierData *nmd);
 
-/**
- * Preserve runtime-only state across memfile undo for matching object-local modifier UIDs.
- *
- * Ordinary object and modifier duplication still create fresh runtime state.
- */
-void MOD_nodes_preserve_runtime_state_on_undo(const Object &old_object, Object &new_object);
-
 class NodesModifierUsageInferenceCache {
  private:
   uint64_t input_values_hash_ = 0;
@@ -61,8 +53,6 @@ struct NodesModifierRuntime {
    * evaluation (e.g. for gizmo backpropagation).
    */
   std::shared_ptr<nodes::eval_log::NodesEvalLog> eval_log;
-  /** Runtime-only enabled Debug Views. Compute-context hashes are not stored in blend files. */
-  nodes::debug_view::State debug_view_state;
   /**
    * Simulation cache that is shared between original and evaluated modifiers. This allows the
    * original modifier to be removed, without also removing the simulation state which may still be
