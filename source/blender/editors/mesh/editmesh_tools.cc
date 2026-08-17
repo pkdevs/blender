@@ -3015,6 +3015,10 @@ static wmOperatorStatus edbm_do_smooth_vertex_exec(bContext *C, wmOperator *op)
       }
     }
 
+    /* The BMO simple path already updates normals. Taubin/HC write coordinates
+     * directly, so tessellation needs a normal recalculation. */
+    bool calc_normals = false;
+
     if (method == SMOOTH_METHOD_SIMPLE) {
       for (int i = 0; i < repeat; i++) {
         if (!EDBM_op_callf(em,
@@ -3052,10 +3056,8 @@ static wmOperatorStatus edbm_do_smooth_vertex_exec(bContext *C, wmOperator *op)
                                   mirry,
                                   mirrz,
                                   clip_dist);
+      calc_normals = true;
     }
-
-    /* NOTE: redundant calculation could be avoided if the EDBM API could skip calculation. */
-    bool calc_normals = false;
 
     /* apply mirror */
     if ((id_cast<Mesh *>(obedit->data))->symmetry & ME_SYMMETRY_X) {
