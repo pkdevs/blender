@@ -100,7 +100,8 @@ class DistanceConstraintSet : public TemplatedConstraintSet<DistanceConstraintSe
 
   Vector<IndexMask> color_constraints(LinearAllocator<> &memory) const override
   {
-    const int total_verts = *std::max_element(point_pairs_.cast<int>().begin(), point_pairs_.cast<int>().end());
+    const int total_verts = *std::max_element(point_pairs_.cast<int>().begin(),
+                                              point_pairs_.cast<int>().end());
     return color_edges_by_verts(total_verts, point_pairs_, memory);
   }
 };

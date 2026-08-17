@@ -4,12 +4,12 @@
 
 #include "testing/testing.h"
 
+#include "BLI_array.hh"
+#include "BLI_coloring.hh"
+#include "BLI_linear_allocator.hh"
 #include "BLI_math_base.hh"
 #include "BLI_math_vector_types.hh"
-#include "BLI_array.hh"
 #include "BLI_vector.hh"
-#include "BLI_linear_allocator.hh"
-#include "BLI_coloring.hh"
 
 namespace blender::tests {
 

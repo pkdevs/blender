@@ -4,8 +4,8 @@
 
 #pragma once
 
-#include "GEO_xpbd_constraint_align_rotations.hh"
 #include "BLI_coloring.hh"
+#include "GEO_xpbd_constraint_align_rotations.hh"
 #include "GEO_xpbd_constraint_set_templated.hh"
 
 namespace blender::xpbd {

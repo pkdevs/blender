@@ -2,16 +2,16 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#include "BLI_index_mask.hh"
-#include "BLI_offset_indices.hh"
-#include "BLI_math_vector_types.hh"
-#include "BLI_linear_allocator.hh"
-#include "BLI_span.hh"
 #include "BLI_coloring.hh"
 #include "BLI_enumerable_thread_specific.hh"
+#include "BLI_index_mask.hh"
+#include "BLI_linear_allocator.hh"
+#include "BLI_math_vector_types.hh"
 #include "BLI_multi_value_map.hh"
+#include "BLI_offset_indices.hh"
 #include "BLI_ordered_edge.hh"
 #include "BLI_set.hh"
+#include "BLI_span.hh"
 #include "BLI_task_size_hints.hh"
 
 namespace blender {
@@ -36,11 +36,13 @@ Vector<IndexMask> color_verts_by_groups(GroupedSpan<int> vert_to_ids, LinearAllo
   return {};
 }
 
-Vector<IndexMask> color_verts_by_groups(GroupedSpan<int> vert_to_ids, int max_id_value, LinearAllocator<> &memory)
+Vector<IndexMask> color_verts_by_groups(GroupedSpan<int> vert_to_ids,
+                                        int max_id_value,
+                                        LinearAllocator<> &memory)
 {
   // Array<int> vert_colors(vert_to_ids.size());
-  // Vector<IndexMask> colors(color_verts_by_groups(vert_to_ids, max_id_value, vert_colors.as_mutable_span()));
-  // IndexMask::from_groups<int>(
+  // Vector<IndexMask> colors(color_verts_by_groups(vert_to_ids, max_id_value,
+  // vert_colors.as_mutable_span())); IndexMask::from_groups<int>(
   //     edges.index_range(), memory, [&](const int i) { return vert_colors[i]; }, colors);
   // return colors;
   return {};
@@ -267,11 +269,14 @@ static GroupedSpan<int> build_vert_to_edge_map(const Span<int2> edges,
   return {offsets, r_indices};
 }
 
-Vector<IndexMask> color_edges_by_verts(const int total_verts, const Span<int2> edges, LinearAllocator<> &memory)
+Vector<IndexMask> color_edges_by_verts(const int total_verts,
+                                       const Span<int2> edges,
+                                       LinearAllocator<> &memory)
 {
   Array<int> offsets;
   Array<int> indices;
-  const GroupedSpan<int> vert_to_edges = build_vert_to_edge_map(edges, total_verts, offsets, indices);
+  const GroupedSpan<int> vert_to_edges = build_vert_to_edge_map(
+      edges, total_verts, offsets, indices);
   return color_edges_by_verts(total_verts, edges, vert_to_edges, memory);
 }
 
@@ -279,20 +284,28 @@ int color_edges_by_verts(const int total_verts, const Span<int2> edges, MutableS
 {
   Array<int> offsets;
   Array<int> indices;
-  const GroupedSpan<int> vert_to_edges = build_vert_to_edge_map(edges, total_verts, offsets, indices);
+  const GroupedSpan<int> vert_to_edges = build_vert_to_edge_map(
+      edges, total_verts, offsets, indices);
   return color_edges_by_verts(total_verts, edges, vert_to_edges, r_color);
 }
 
-Vector<IndexMask> color_edges_by_verts(const int total_verts, const Span<int2> edges, const GroupedSpan<int> vert_to_edges, LinearAllocator<> &memory)
+Vector<IndexMask> color_edges_by_verts(const int total_verts,
+                                       const Span<int2> edges,
+                                       const GroupedSpan<int> vert_to_edges,
+                                       LinearAllocator<> &memory)
 {
   Array<int> edge_colors(edges.size());
-  Vector<IndexMask> colors(color_edges_by_verts(total_verts, edges, vert_to_edges, edge_colors.as_mutable_span()));
+  Vector<IndexMask> colors(
+      color_edges_by_verts(total_verts, edges, vert_to_edges, edge_colors.as_mutable_span()));
   IndexMask::from_groups<int>(
       edges.index_range(), memory, [&](const int i) { return edge_colors[i]; }, colors);
   return colors;
 }
 
-int color_edges_by_verts(const int total_verts, const Span<int2> edges, const GroupedSpan<int> vert_to_edges, MutableSpan<int> r_color)
+int color_edges_by_verts(const int total_verts,
+                         const Span<int2> edges,
+                         const GroupedSpan<int> vert_to_edges,
+                         MutableSpan<int> r_color)
 {
   static constexpr int not_a_color = -1;
   r_color.fill(not_a_color);
