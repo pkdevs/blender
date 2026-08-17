@@ -238,6 +238,11 @@ struct DEGObjectIterSettings {
   const ViewerPath *viewer_path;
 
   /**
+   * When set, only this original object contributes persistent Debug View geometry.
+   */
+  const Object *debug_view_object;
+
+  /**
    * If not empty, the iterator should only return objects that are in this list (or their
    * instances are in it). Pointers in this span should be the original data-block.
    */

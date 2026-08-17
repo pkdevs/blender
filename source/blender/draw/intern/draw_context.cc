@@ -859,6 +859,8 @@ static void foreach_obref_in_scene(
                             DEG_ITER_OBJECT_FLAG_LINKED_VIA_SET;
   if (v3d && v3d->flag2 & V3D_SHOW_VIEWER) {
     deg_iter_settings.viewer_path = &v3d->viewer_path;
+    deg_iter_settings.debug_view_object = draw_ctx.obact ? DEG_get_original(draw_ctx.obact) :
+                                                           nullptr;
   }
 
   DEG_OBJECT_ITER_BEGIN (&deg_iter_settings, ob) {

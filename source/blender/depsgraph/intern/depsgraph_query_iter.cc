@@ -235,7 +235,7 @@ bool deg_iterator_objects_step(DEGObjectIterData *data)
       data->id_node_index++;
       return true;
     }
-    if (data->settings->viewer_path &&
+    if (data->settings->debug_view_object == object_orig && data->settings->viewer_path &&
         object_duplilist_debug_view(data->graph, object, data->dupli_list))
     {
       deg_iterator_duplis_init(data, object);
