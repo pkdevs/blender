@@ -9,9 +9,6 @@
  */
 
 #include <algorithm>
-#include <cmath>
-#include <cstdio>
-
 #include "MEM_guardedalloc.h"
 
 #include "BLI_math_base_safe.hh"
