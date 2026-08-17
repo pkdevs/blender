@@ -21,7 +21,7 @@
 
 namespace blender::nodes::node_geo_bone_info_cc {
 
-struct BoneInfoValues {
+struct BoneInfo {
   float4x4 pose;
   float4x4 local_pose;
   float4x4 transform_pose;
@@ -29,9 +29,17 @@ struct BoneInfoValues {
   float rest_length;
 };
 
-static BoneInfoValues compute_bone_info_values(const Object &object,
-                                               const bPoseChannel &pchan,
-                                               const float4x4 &geometry_transform)
+/**
+ * \param object: Armature object.
+ * \param pchan: Pose channel of the bone.
+ * \param geometry_transform: Transform multiplied with pose and rest pose. Identity leaves
+ * those outputs in armature space. The compositor always passes identity because it has no
+ * modified object. Geometry Nodes Original mode does the same; Relative mode passes the
+ * transform from the armature object into the modified object.
+ */
+static BoneInfo compute_bone_info(const Object &object,
+                                  const bPoseChannel &pchan,
+                                  const float4x4 &geometry_transform)
 {
   const Bone *bone = pchan.bone_get(object);
   const float4x4 pose = geometry_transform * float4x4(pchan.pose_mat);
@@ -73,7 +81,7 @@ static void node_declare(NodeDeclarationBuilder &b)
 
 static void node_layout(ui::Layout &layout, bContext * /*C*/, PointerRNA *ptr)
 {
-  const bNodeTree &node_tree = *reinterpret_cast<bNodeTree *>(ptr->owner_id);
+  const bNodeTree &node_tree = *id_cast<const bNodeTree *>(ptr->owner_id);
   if (node_tree.type == NTREE_GEOMETRY) {
     layout.prop(ptr, "transform_space", ui::ITEM_R_EXPAND, std::nullopt, ICON_NONE);
   }
@@ -137,16 +145,19 @@ static void node_geo_exec(GeoNodeExecParams params)
     params.set_default_remaining_outputs();
     return;
   }
+
   if (object->type != OB_ARMATURE) {
     params.set_default_remaining_outputs();
     params.error_message_add(NodeWarningType::Error, TIP_("Object is not an armature"));
     return;
   }
+
   const std::string bone_name = params.extract_input<std::string>("Bone Name"_ustr);
   if (bone_name.empty()) {
     params.set_default_remaining_outputs();
     return;
   }
+
   if (!object->pose) {
     params.set_default_remaining_outputs();
     params.error_message_add(NodeWarningType::Error, TIP_("Object has no pose"));
@@ -182,7 +193,7 @@ static void node_geo_exec(GeoNodeExecParams params)
     return;
   }
 
-  const BoneInfoValues values = compute_bone_info_values(*object, *pchan, geometry_transform);
+  const BoneInfo values = compute_bone_info(*object, *pchan, geometry_transform);
   params.set_output("Pose"_ustr, values.pose);
   params.set_output("Local Pose"_ustr, values.local_pose);
   params.set_output("Transform Pose"_ustr, values.transform_pose);
@@ -191,11 +202,9 @@ static void node_geo_exec(GeoNodeExecParams params)
   params.set_output("Exists"_ustr, true);
 }
 
-using namespace blender::compositor;
-
-class BoneInfoOperation : public NodeOperation {
+class BoneInfoOperation : public compositor::NodeOperation {
  public:
-  using NodeOperation::NodeOperation;
+  using compositor::NodeOperation::NodeOperation;
 
   void execute() override
   {
@@ -204,6 +213,7 @@ class BoneInfoOperation : public NodeOperation {
       this->allocate_default_remaining_outputs();
       return;
     }
+
     if (object->type != OB_ARMATURE) {
       this->allocate_default_remaining_outputs();
       this->add_warning(NodeWarningType::Error, TIP_("Object is not an armature"));
@@ -215,6 +225,7 @@ class BoneInfoOperation : public NodeOperation {
       this->allocate_default_remaining_outputs();
       return;
     }
+
     if (!object->pose) {
       this->allocate_default_remaining_outputs();
       this->add_warning(NodeWarningType::Error, TIP_("Object has no pose"));
@@ -231,39 +242,39 @@ class BoneInfoOperation : public NodeOperation {
       return;
     }
 
-    const BoneInfoValues values = compute_bone_info_values(*object, *pchan, float4x4::identity());
+    const BoneInfo values = compute_bone_info(*object, *pchan, float4x4::identity());
 
-    Result &pose_result = this->get_result("Pose");
+    compositor::Result &pose_result = this->get_result("Pose");
     if (pose_result.should_compute()) {
       pose_result.allocate_single_value();
       pose_result.set_single_value(values.pose);
     }
 
-    Result &local_pose_result = this->get_result("Local Pose");
+    compositor::Result &local_pose_result = this->get_result("Local Pose");
     if (local_pose_result.should_compute()) {
       local_pose_result.allocate_single_value();
       local_pose_result.set_single_value(values.local_pose);
     }
 
-    Result &transform_pose_result = this->get_result("Transform Pose");
+    compositor::Result &transform_pose_result = this->get_result("Transform Pose");
     if (transform_pose_result.should_compute()) {
       transform_pose_result.allocate_single_value();
       transform_pose_result.set_single_value(values.transform_pose);
     }
 
-    Result &rest_pose_result = this->get_result("Rest Pose");
+    compositor::Result &rest_pose_result = this->get_result("Rest Pose");
     if (rest_pose_result.should_compute()) {
       rest_pose_result.allocate_single_value();
       rest_pose_result.set_single_value(values.rest_pose);
     }
 
-    Result &rest_length_result = this->get_result("Rest Length");
+    compositor::Result &rest_length_result = this->get_result("Rest Length");
     if (rest_length_result.should_compute()) {
       rest_length_result.allocate_single_value();
       rest_length_result.set_single_value(values.rest_length);
     }
 
-    Result &exists_result = this->get_result("Exists");
+    compositor::Result &exists_result = this->get_result("Exists");
     if (exists_result.should_compute()) {
       exists_result.allocate_single_value();
       exists_result.set_single_value(true);
@@ -271,7 +282,8 @@ class BoneInfoOperation : public NodeOperation {
   }
 };
 
-static NodeOperation *get_compositor_operation(Context &context, const bNode &node)
+static compositor::NodeOperation *get_compositor_operation(compositor::Context &context,
+                                                           const bNode &node)
 {
   return new BoneInfoOperation(context, node);
 }
