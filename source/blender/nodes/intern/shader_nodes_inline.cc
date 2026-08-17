@@ -869,6 +869,14 @@ class ShaderNodesInliner {
         socket.context, repeat_output_node->identifier, preserved_repeat_zone_iteration);
     parent_zone_contexts_.add(&in_context, out_context);
 
+    /* Scheduling side effect nodes last will make sure that they are evaluated before other nodes
+     * in the repeat zone. This is important for back-tracking the decision to preserve the repeat
+     * zone in case e.g. the warning node is used. Otherwise, the side effect nodes may only be
+     * evaluated when the repeat zone is completely done, at which point it is too late to
+     * back-track. */
+    BLI_SCOPED_DEFER(
+        [&]() { this->schedule_side_effect_nodes_in_context(tree, &zone, &in_context); });
+
     const EnsureInputsResult ensured_inputs = this->ensure_node_inputs(
         {&in_context, &socket->owner_node()});
     if (ensured_inputs.has_missing_inputs) {
@@ -881,7 +889,6 @@ class ShaderNodesInliner {
     PreservedZone &preserved_zone = copied_zone_by_zone_output_node_.lookup_or_add_default(
         repeat_output_node);
     preserved_zone.output_node = &copied_node;
-    this->schedule_side_effect_nodes_in_context(tree, &zone, &in_context);
     /* Ensure that the repeat input node is created as well. */
     this->schedule_socket({&in_context, &repeat_input_node.output_socket(0)});
   }
@@ -1519,8 +1526,9 @@ class ShaderNodesInliner {
     const std::optional<PrimitiveSocketValue> primitive_show = show_value->to_primitive(
         *show_input_socket->typeinfo);
     if (!primitive_show) {
+      this->report_required_constant_input_or_backtrack(node,
+                                                        TIP_("Inputs have to be constant values"));
       this->store_socket_value_fallback(socket);
-      this->report_error(node, TIP_("Inputs have to be constant values"));
       return;
     }
     const bool show = std::get<bool>(primitive_show->value);
@@ -1538,6 +1546,10 @@ class ShaderNodesInliner {
         // TODO: Handle message types.
         const StringRef message = std::get<std::string>(primitive_message->value);
         this->report_error(node, message);
+      }
+      else {
+        this->report_required_constant_input_or_backtrack(
+            node, TIP_("Inputs have to be constant values"));
       }
     }
     this->forward_value_or_schedule(socket, show_input_socket);
@@ -1593,25 +1605,37 @@ class ShaderNodesInliner {
     /* Check if this node is supported by the renderer. If not, either try inlining it harder to
      * eliminate the node, or report an error and skip it. */
     if (this->is_inliner_evaluation_node(*node)) {
-      bool found_repeat_zone_to_force_inline = false;
-      for (const ComputeContext *ctx = node.context; ctx; ctx = ctx->parent()) {
-        if (const auto *repeat_zone_ctx = dynamic_cast<const bke::RepeatZoneComputeContext *>(ctx))
-        {
-          if (repeat_zone_ctx->iteration() == preserved_repeat_zone_iteration) {
-            repeat_zones_to_force_inline_.add(
-                {repeat_zone_ctx->parent(), repeat_zone_ctx->output_node_id()});
-            found_repeat_zone_to_force_inline = true;
-          }
-        }
-      }
-      if (!found_repeat_zone_to_force_inline) {
-        this->report_error(node, TIP_("Node requires constant input values"));
-      }
+      this->report_required_constant_input_or_backtrack(
+          node, TIP_("Node requires constant input values"));
       this->store_socket_value_fallback(socket);
       return;
     }
     /* The node can't be constant-folded. So copy it to the destination tree instead. */
     this->handle_output_socket__eval_copy_node(*node, node.context, node.context);
+  }
+
+  /**
+   * Can be called when an input socket that only supports constant values got a non-constant one.
+   * This may either be caused by an issue in the original tree, or because a repeat-zone has been
+   * attempted to preserve that can't be preserved. In the latter case, no error is reported yet.
+   * Instead, the repeat zone is force-inlined which generally either fixes the issue or makes it
+   * obvious that the issue is in fact in the original tree (and then this function will be called
+   * again and the error is actually reported).
+   */
+  void report_required_constant_input_or_backtrack(const NodeInContext node,
+                                                   const StringRef message)
+  {
+    /* Before reporting an error, attempt to inline a surrounding repeat zone. */
+    for (const ComputeContext *ctx = node.context; ctx; ctx = ctx->parent()) {
+      if (const auto *repeat_zone_ctx = dynamic_cast<const bke::RepeatZoneComputeContext *>(ctx)) {
+        if (repeat_zone_ctx->iteration() == preserved_repeat_zone_iteration) {
+          repeat_zones_to_force_inline_.add(
+              {repeat_zone_ctx->parent(), repeat_zone_ctx->output_node_id()});
+          return;
+        }
+      }
+    }
+    this->report_error(node, message);
   }
 
   struct EnsureInputsResult {
