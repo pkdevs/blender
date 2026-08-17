@@ -1572,7 +1572,7 @@ class NodeTreeMainUpdater {
   const char *shader_tree_link_error(bNodeLink &link)
   {
     bNode &node = *link.fromnode;
-    ShaderNodeAncestorFlags flags = ShaderNodeAncestorFlags(link.tonode->runtime->tmp_flag);
+    ShaderNodeAncestorFlags flags = ShaderNodeAncestorFlags(link.fromnode->runtime->tmp_flag);
     switch (node.type_legacy) {
       case SH_NODE_LIGHT_ACCUMULATION:
         if (bool(flags & ShaderNodeAncestorFlags::ShaderToRGB)) {
