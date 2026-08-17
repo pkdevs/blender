@@ -89,6 +89,10 @@ ccl_device_noinline void svm_node_set_bump(KernelGlobals kg,
       object_normal_transform(kg, sd, &normal_out);
     }
 
+    if (sd->runtime_flag & SR_BACKFACING) {
+      normal_out = -normal_out;
+    }
+
     stack_store_float3(stack, node.out_offset, normal_out);
   }
   else {
