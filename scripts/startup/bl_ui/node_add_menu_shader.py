@@ -202,6 +202,7 @@ class NODE_MT_shader_node_output_base(node_add_menu.NodeMenu):
             "ShaderNodeOutputMaterial",
             poll=object_material_shader_nodes_poll(context),
         )
+        self.node_operator_with_searchable_enum(context, layout, "GeometryNodeWarning", "warning_type")
         self.node_operator(
             layout,
             "ShaderNodeOutputWorld",

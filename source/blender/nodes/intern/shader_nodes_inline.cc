@@ -634,6 +634,10 @@ class ShaderNodesInliner {
       this->handle_output_socket__implicit_conversion(socket);
       return;
     }
+    if (node->is_type("GeometryNodeWarning"_ustr)) {
+      this->handle_output_socket__warning(socket);
+      return;
+    }
     this->handle_output_socket__eval(socket);
   }
 
@@ -1481,6 +1485,43 @@ class ShaderNodesInliner {
     const SocketValue converted_value = this->handle_implicit_conversion(
         *socket_value, *socket->typeinfo, *socket->typeinfo);
     this->store_socket_value(socket, converted_value);
+  }
+
+  void handle_output_socket__warning(const SocketInContext &socket)
+  {
+    const NodeInContext node = socket.owner_node();
+
+    const SocketInContext show_input_socket = node.input_socket(0);
+    const SocketValue *show_value = value_by_socket_.lookup_ptr(show_input_socket);
+    if (!show_value) {
+      /* Wait until the value is available. */
+      this->schedule_socket(show_input_socket);
+      return;
+    }
+    const std::optional<PrimitiveSocketValue> primitive_show = show_value->to_primitive(
+        *show_input_socket->typeinfo);
+    if (!primitive_show) {
+      this->store_socket_value_fallback(socket);
+      this->report_error(node, TIP_("Inputs have to be constant values"));
+      return;
+    }
+    const bool show = std::get<bool>(primitive_show->value);
+    if (show) {
+      const SocketInContext message_socket = node.input_socket(1);
+      const SocketValue *message_value = value_by_socket_.lookup_ptr(message_socket);
+      if (!message_value) {
+        /* Wait until the value is available. */
+        this->schedule_socket(message_socket);
+        return;
+      }
+      if (const std::optional<PrimitiveSocketValue> primitive_message =
+              message_value->to_primitive(*message_socket->typeinfo))
+      {
+        const StringRef message = std::get<std::string>(primitive_message->value);
+        this->report_error(node, message);
+      }
+    }
+    this->forward_value_or_schedule(socket, show_input_socket);
   }
 
   /**
