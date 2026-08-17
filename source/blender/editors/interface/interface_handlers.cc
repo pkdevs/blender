@@ -550,8 +550,7 @@ struct AfterFunc {
   PointerRNA rnapoin;
   PropertyRNA *rnaprop;
 
-  void *search_arg;
-  FreeArgFunc search_arg_free_fn;
+  std::shared_ptr<void> search_arg;
 
   BlockInteraction_CallbackData custom_interaction_callbacks;
   BlockInteraction_Handle *custom_interaction_handle;
@@ -999,10 +998,7 @@ static void apply_but_func(bContext *C, Button *but)
 
   if (but->type == ButtonType::SearchMenu) {
     ButtonSearch *search_but = static_cast<ButtonSearch *>(but);
-    after->search_arg_free_fn = search_but->arg_free_fn;
     after->search_arg = search_but->arg;
-    search_but->arg_free_fn = nullptr;
-    search_but->arg = nullptr;
   }
 
   if (but->active != nullptr) {
@@ -1208,10 +1204,6 @@ static void apply_but_funcs_after(bContext *C)
     }
     if (after.rename_orig) {
       MEM_delete(after.rename_orig);
-    }
-
-    if (after.search_arg_free_fn) {
-      after.search_arg_free_fn(after.search_arg);
     }
 
     if (after.custom_interaction_handle != nullptr) {
@@ -1712,25 +1704,25 @@ static bool drag_toggle_but_is_supported(const Button *but)
   return false;
 }
 
-/* Button pushed state to compare if other buttons match. Can be more
- * then just true or false for toggle buttons with more than 2 states. */
-static int drag_toggle_but_pushed_state(Button *but)
+/**
+ * Button pushed state to compare if other buttons match.
+ */
+static bool drag_toggle_but_pushed_state(Button *but)
 {
-  if (!but->rnapoin && but->poin == nullptr && but->icon) {
-    /* Assume icon identifies a unique state, for buttons that
-     * work through functions callbacks and don't have an boolean
-     * value that indicates the state. */
-    return but->icon + but->iconadd;
+  BLI_assert(drag_toggle_but_is_supported(but));
+  if (button_is_decorator(but)) {
+    return button_anim_decorate_pushed_state(static_cast<ButtonDecorator *>(but));
   }
   if (button_is_bool(but)) {
     return button_is_pushed(but);
   }
-  return 0;
+  BLI_assert_unreachable();
+  return false;
 }
 
 struct uiDragToggleHandle {
   /* init */
-  int pushed_state;
+  bool pushed_state;
   float but_cent_start[2];
 
   bool is_xy_lock_init;
@@ -1742,7 +1734,7 @@ struct uiDragToggleHandle {
 
 static bool drag_toggle_set_xy_xy(bContext *C,
                                   ARegion *region,
-                                  const int pushed_state,
+                                  const bool pushed_state,
                                   const int xy_src[2],
                                   const int xy_dst[2],
                                   const bool drag_lock[2])
@@ -1776,7 +1768,7 @@ static bool drag_toggle_set_xy_xy(bContext *C,
         continue;
       }
       /* is it pressed? */
-      const int pushed_state_but = drag_toggle_but_pushed_state(&but);
+      const bool pushed_state_but = drag_toggle_but_pushed_state(&but);
       if (pushed_state_but == pushed_state) {
         continue;
       }
@@ -5422,16 +5414,8 @@ static int do_but_TEX(
       return WM_UI_HANDLER_BREAK;
     }
     else if (ELEM(event->type, WHEELUPMOUSE, WHEELDOWNMOUSE) && (event->modifier & KM_CTRL)) {
-      if (but->type == ButtonType::SearchMenu) {
-        /* Disable value cycling for search buttons. This causes issues because the search data is
-         * moved to the `afterfuncs`, but search updating requires it again or sometimes this
-         * event can be triggered twice in row without the button being refreshed. See #147539 and
-         * #152976. */
-      }
-      else {
-        const int inc_value = (event->type == WHEELUPMOUSE) ? 1 : -1;
-        return do_but_text_value_cycle(C, but, data, inc_value);
-      }
+      const int inc_value = (event->type == WHEELUPMOUSE) ? 1 : -1;
+      return do_but_text_value_cycle(C, but, data, inc_value);
     }
   }
   else if (data->state == BUTTON_STATE_TEXT_EDITING) {
