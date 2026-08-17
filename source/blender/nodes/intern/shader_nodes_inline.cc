@@ -1581,6 +1581,9 @@ class ShaderNodesInliner {
     }
     /* Schedule warning nodes in this compute context. */
     for (const bNode *warning_node : tree.nodes_by_type("GeometryNodeWarning"_ustr)) {
+      if (warning_node->is_muted()) {
+        continue;
+      }
       const bke::bNodeTreeZone *warning_zone = zones->get_zone_by_node(warning_node->identifier);
       if (warning_zone == zone) {
         SocketInContext warning_output_socket{context, &warning_node->output_socket(0)};
