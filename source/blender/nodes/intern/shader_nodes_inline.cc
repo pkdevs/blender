@@ -291,8 +291,12 @@ class ShaderNodesInliner {
     for (const SocketInContext &socket : final_output_sockets) {
       this->schedule_socket(socket);
     }
-    /* Schedules top level warning nodes. */
+
     this->schedule_side_effect_nodes_in_context(src_tree_, nullptr, nullptr);
+    /* Final outputs may be in nested groups, so schedule side effect nodes for these too. */
+    for (const SocketInContext &socket : final_output_sockets) {
+      this->schedule_side_effect_nodes_in_context(socket->owner_tree(), nullptr, socket.context);
+    }
 
     /* Evaluate until all scheduled sockets have a value. While evaluating a single socket, it may
      * either end up having a value, or request more other sockets that need to be evaluated first.
