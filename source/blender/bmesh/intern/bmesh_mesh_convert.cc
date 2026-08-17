@@ -488,9 +488,7 @@ void BM_mesh_bm_from_me(BMesh *bm, const Mesh *mesh, const BMeshFromMeshParams *
 
     int i;
     KeyBlock *block;
-    for (i = 0, block = mesh->key->block.first(); i < tot_shape_keys;
-         block = block->next, i++)
-    {
+    for (i = 0, block = mesh->key->block.first(); i < tot_shape_keys; block = block->next, i++) {
       if (is_new) {
         CustomData_add_layer_named(&bm->vdata, CD_SHAPEKEY, CD_SET_DEFAULT, 0, block->name);
         int j = CustomData_get_layer_index_n(&bm->vdata, CD_SHAPEKEY, i);

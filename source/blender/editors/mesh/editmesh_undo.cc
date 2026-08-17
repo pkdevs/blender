@@ -894,7 +894,7 @@ static UndoMesh **mesh_undostep_reference_elems_from_objects(Object **object, in
   /* Loop backwards over all previous mesh undo data until either:
    * - All elements have been found (where `um_references` we'll have every element set).
    * - There are no undo steps left to look for. */
-  UndoMesh *um_iter = static_cast<UndoMesh *>(um_arraystore.local_links.last_);
+  UndoMesh *um_iter = um_arraystore.local_links.last();
   while (um_iter && (uuid_map_len != 0)) {
     if (UndoMesh **um_p = uuid_map.pop_default(um_iter->mesh->id.session_uid, nullptr)) {
       *um_p = um_iter;

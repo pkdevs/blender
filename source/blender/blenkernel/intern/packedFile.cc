@@ -550,7 +550,7 @@ static void unpack_generate_paths(const char *filepath,
      * a file extension based on the file magic. */
     if (id_type == ID_IM) {
       Image *ima = id_cast<Image *>(id);
-      ImagePackedFile *imapf = static_cast<ImagePackedFile *>(ima->packedfiles.last_);
+      ImagePackedFile *imapf = ima->packedfiles.last();
       if (imapf != nullptr && imapf->packedfile != nullptr) {
         const PackedFile *pf = imapf->packedfile;
         enum eImbFileType ftype = eImbFileType(
@@ -681,8 +681,8 @@ int BKE_packedfile_unpack_image(Main *bmain,
   int ret_value = RET_ERROR;
 
   if (ima != nullptr) {
-    while (ima->packedfiles.last_) {
-      ImagePackedFile *imapf = static_cast<ImagePackedFile *>(ima->packedfiles.last_);
+    while (ima->packedfiles.last()) {
+      ImagePackedFile *imapf = ima->packedfiles.last();
       char *new_file_path = BKE_packedfile_unpack(
           bmain, reports, id_cast<ID *>(ima), imapf->filepath, imapf->packedfile, how);
 

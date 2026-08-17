@@ -1486,7 +1486,7 @@ float evaluate_time_fmodifiers(FModifiersStackStorage *storage,
                                float evaltime)
 {
   /* sanity checks */
-  if (ELEM(nullptr, modifiers, modifiers->last_)) {
+  if (ELEM(nullptr, modifiers, modifiers->last())) {
     return evaltime;
   }
 
@@ -1505,9 +1505,7 @@ float evaluate_time_fmodifiers(FModifiersStackStorage *storage,
    * (such as multiple 'stepped' modifiers in sequence, causing different stepping rates)
    */
   uint fcm_index = storage->modifier_count - 1;
-  for (FModifier *fcm = static_cast<FModifier *>(modifiers->last_); fcm;
-       fcm = fcm->prev, fcm_index--)
-  {
+  for (FModifier *fcm = modifiers->last(); fcm; fcm = fcm->prev, fcm_index--) {
     const FModifierTypeInfo *fmi = fmodifier_get_typeinfo(fcm);
 
     if (fmi == nullptr) {

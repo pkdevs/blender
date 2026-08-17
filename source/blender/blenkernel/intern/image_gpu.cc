@@ -162,7 +162,7 @@ static gpu::Texture *gpu_texture_create_tile_mapping(Image *ima, gpu::Texture *t
 
   /* Determine maximum tile number. */
   BKE_image_sort_tiles(ima);
-  ImageTile *last_tile = static_cast<ImageTile *>(ima->tiles.last_);
+  ImageTile *last_tile = ima->tiles.last();
   int max_tile = last_tile->tile_number - 1001;
 
   /* create image */

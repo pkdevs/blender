@@ -179,10 +179,10 @@ static void bridge_loop_pair(BMesh *bm,
 
     sub_v3_v3v3(dir_a_orig,
                 (static_cast<BMVert *>(lb_a->first()->data))->co,
-                (static_cast<BMVert *>((static_cast<LinkData *>(lb_a->last_))->data))->co);
+                (static_cast<BMVert *>(lb_a->last()->data))->co);
     sub_v3_v3v3(dir_b_orig,
                 (static_cast<BMVert *>(lb_b->first()->data))->co,
-                (static_cast<BMVert *>((static_cast<LinkData *>(lb_b->last_))->data))->co);
+                (static_cast<BMVert *>(lb_b->last()->data))->co);
 
     /* make the directions point out from the normals, 'no' is used as a temp var */
     cross_v3_v3v3(no, dir_a_orig, el_dir);

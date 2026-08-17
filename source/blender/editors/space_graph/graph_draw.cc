@@ -1529,8 +1529,7 @@ void graph_draw_channel_names(bContext *C,
     size_t channel_index = 0;
     float ymax = ANIM_UI_get_first_channel_top(v2d);
 
-    for (ale = anim_data.first(); ale; ale = ale->next, ymax -= channel_step, channel_index++)
-    {
+    for (ale = anim_data.first(); ale; ale = ale->next, ymax -= channel_step, channel_index++) {
       const float ymin = ymax - ANIM_UI_get_channel_height();
 
       /* check if visible */
@@ -1550,8 +1549,7 @@ void graph_draw_channel_names(bContext *C,
     /* set blending again, as may not be set in previous step */
     GPU_blend(GPU_BLEND_ALPHA);
 
-    for (ale = anim_data.first(); ale; ale = ale->next, ymax -= channel_step, channel_index++)
-    {
+    for (ale = anim_data.first(); ale; ale = ale->next, ymax -= channel_step, channel_index++) {
       const float ymin = ymax - ANIM_UI_get_channel_height();
 
       /* check if visible */

@@ -5690,7 +5690,7 @@ void BKE_object_check_uids_unique_and_report(const Object *object)
 
 SubsurfModifierData *BKE_object_get_last_subsurf_modifier(const Object *ob)
 {
-  ModifierData *md = static_cast<ModifierData *>(ob->modifiers.last_);
+  ModifierData *md = ob->modifiers.last();
 
   while (md) {
     if (md->type == eModifierType_Subsurf) {

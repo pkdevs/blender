@@ -769,8 +769,7 @@ static BMFace **bm_mesh_region_match_pair(
          * The data is created on 'begin' and cleared on 'end' */
         UIDFaceStepItem *fstep_item_src;
         UIDFaceStepItem *fstep_item_dst;
-        for (fstep_item_src = fstep_src->items.first(),
-            fstep_item_dst = fstep_dst->items.first();
+        for (fstep_item_src = fstep_src->items.first(), fstep_item_dst = fstep_dst->items.first();
              fstep_item_src && fstep_item_dst;
              fstep_item_src = fstep_item_src->next, fstep_item_dst = fstep_item_dst->next)
         {

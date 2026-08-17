@@ -163,7 +163,7 @@ static TreeElement *outliner_drop_insert_find(bContext *C,
   /* Mouse doesn't hover any item (ignoring x-axis),
    * so it's either above list bounds or below. */
   TreeElement *first = space_outliner->runtime->tree.first();
-  TreeElement *last = static_cast<TreeElement *>(space_outliner->runtime->tree.last_);
+  TreeElement *last = space_outliner->runtime->tree.last();
 
   if (view_mval[1] < last->ys) {
     *r_insert_type = TE_INSERT_AFTER;
@@ -468,12 +468,8 @@ static wmOperatorStatus parent_drop_invoke(bContext *C, wmOperator *op, const wm
   ListBaseT<wmDrag> *lb = static_cast<ListBaseT<wmDrag> *>(event->customdata);
   wmDrag *drag = lb->first();
 
-  parent_drop_set_parents(C,
-                          op->reports,
-                          drag->ids.first(),
-                          par,
-                          object::PAR_OBJECT,
-                          !(event->modifier & KM_ALT));
+  parent_drop_set_parents(
+      C, op->reports, drag->ids.first(), par, object::PAR_OBJECT, !(event->modifier & KM_ALT));
 
   return OPERATOR_FINISHED;
 }

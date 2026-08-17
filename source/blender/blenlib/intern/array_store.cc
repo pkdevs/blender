@@ -506,7 +506,7 @@ static void bchunk_list_ensure_min_size_last(const BArrayInfo *info,
                                              BArrayMemory *bs_mem,
                                              BChunkList *chunk_list)
 {
-  BChunkRef *cref = static_cast<BChunkRef *>(chunk_list->chunk_refs.last_);
+  BChunkRef *cref = chunk_list->chunk_refs.last();
   if (cref && cref->prev) {
     /* Both are decrefed after use (end of this block). */
     BChunk *chunk_curr = cref->link;
@@ -519,7 +519,7 @@ static void bchunk_list_ensure_min_size_last(const BArrayInfo *info,
         /* We have enough space to merge. */
 
         /* Remove last from the linked-list. */
-        BLI_assert(chunk_list->chunk_refs.last_ != chunk_list->chunk_refs.first_);
+        BLI_assert(chunk_list->chunk_refs.last() != chunk_list->chunk_refs.first());
         cref->prev->next = nullptr;
         chunk_list->chunk_refs.last_ = cref->prev;
         chunk_list->chunk_refs_len -= 1;
@@ -662,7 +662,7 @@ static void bchunk_list_append_data(const BArrayInfo *info,
   BLI_assert(data_len <= info->chunk_byte_size_max);
 
   if (!chunk_list->chunk_refs.is_empty()) {
-    BChunkRef *cref = static_cast<BChunkRef *>(chunk_list->chunk_refs.last_);
+    BChunkRef *cref = chunk_list->chunk_refs.last();
     BChunk *chunk_prev = cref->link;
 
     if (std::min(chunk_prev->data_len, data_len) < info->chunk_byte_size_min) {
@@ -749,8 +749,7 @@ static void bchunk_list_append_data_n(const BArrayInfo *info,
 
 #ifdef USE_MERGE_CHUNKS
   if (data_len > info->chunk_byte_size) {
-    BLI_assert(((BChunkRef *)chunk_list->chunk_refs.last_)->link->data_len >=
-               info->chunk_byte_size_min);
+    BLI_assert((chunk_list->chunk_refs.last())->link->data_len >= info->chunk_byte_size_min);
   }
 #endif
 }
@@ -796,8 +795,7 @@ static void bchunk_list_fill_from_array(const BArrayInfo *info,
 
 #ifdef USE_MERGE_CHUNKS
   if (data_len > info->chunk_byte_size) {
-    BLI_assert(((BChunkRef *)chunk_list->chunk_refs.last_)->link->data_len >=
-               info->chunk_byte_size_min);
+    BLI_assert((chunk_list->chunk_refs.last())->link->data_len >= info->chunk_byte_size_min);
   }
 #endif
 
@@ -1366,7 +1364,7 @@ static BChunkList *bchunk_list_from_data_merge(const BArrayInfo *info,
 
 #ifdef USE_FASTPATH_CHUNKS_LAST
   if (!chunk_list_reference->chunk_refs.is_empty()) {
-    const BChunkRef *cref = static_cast<const BChunkRef *>(chunk_list_reference->chunk_refs.last_);
+    const BChunkRef *cref = chunk_list_reference->chunk_refs.last();
     while ((cref->prev != nullptr) && (cref != cref_match_first) &&
            (cref->link->data_len <= data_len - i_prev))
     {

@@ -1416,7 +1416,7 @@ static void do_particle_interpolation(ParticleSystem *psys,
         }
       }
       else {
-        real_t = pa->time + (static_cast<ParticleTarget *>(psys->targets.last_))->time;
+        real_t = pa->time + (psys->targets.last())->time;
       }
     }
 

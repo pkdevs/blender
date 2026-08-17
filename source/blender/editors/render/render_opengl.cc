@@ -211,7 +211,7 @@ static void screen_opengl_views_setup(OGLRender *oglrender)
     }
 
     /* remove all the views that are not needed */
-    rv = static_cast<RenderView *>(rr->views.last_);
+    rv = rr->views.last();
     while (rv) {
       srv = static_cast<SceneRenderView *>(
           BLI_findstring(&rd->views, rv->name, offsetof(SceneRenderView, name)));

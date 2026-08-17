@@ -565,7 +565,7 @@ static EditBone *find_ebone_link(ListBaseT<EditBone> *edbo, Bone *link)
 
 EditBone *make_boneList(ListBaseT<EditBone> *edbo, ListBaseT<Bone> *bones, Bone *actBone)
 {
-  BLI_assert(!edbo->first_ && !edbo->last_);
+  BLI_assert(!edbo->first_ && !edbo->last());
 
   EditBone *active = make_boneList_recursive(edbo, bones, nullptr, actBone);
 

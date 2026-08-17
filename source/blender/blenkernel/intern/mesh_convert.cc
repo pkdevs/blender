@@ -409,8 +409,7 @@ void BKE_mesh_to_curve_nurblist(const Mesh *mesh,
       ListBaseT<VertLink> polyline = {nullptr, nullptr}; /* store a list of VertLink's */
       bool closed = false;
       int faces_num = 0;
-      int2 &edge_current = *static_cast<int2 *>(
-          const_cast<void *>((static_cast<EdgeLink *>(edges.last_))->edge));
+      int2 &edge_current = *static_cast<int2 *>(const_cast<void *>((edges.last())->edge));
       uint startVert = edge_current[0];
       uint endVert = edge_current[1];
       bool ok = true;
@@ -419,10 +418,10 @@ void BKE_mesh_to_curve_nurblist(const Mesh *mesh,
       faces_num++;
       appendPolyLineVert(&polyline, endVert);
       faces_num++;
-      BLI_freelinkN(&edges, edges.last_);
+      BLI_freelinkN(&edges, edges.last());
 
       while (ok) { /* while connected edges are found... */
-        EdgeLink *edl = static_cast<EdgeLink *>(edges.last_);
+        EdgeLink *edl = edges.last();
         ok = false;
         while (edl) {
           EdgeLink *edl_prev = edl->prev;
@@ -464,7 +463,7 @@ void BKE_mesh_to_curve_nurblist(const Mesh *mesh,
 
       /* Now we have a polyline, make into a curve */
       if (startVert == endVert) {
-        BLI_freelinkN(&polyline, polyline.last_);
+        BLI_freelinkN(&polyline, polyline.last());
         faces_num--;
         closed = true;
       }

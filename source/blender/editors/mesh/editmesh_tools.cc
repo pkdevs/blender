@@ -1346,7 +1346,7 @@ void MESH_OT_vert_connect(wmOperatorType *ot)
 static bool bm_vert_is_select_history_open(BMesh *bm)
 {
   BMEditSelection *ele_a = bm->selected.first();
-  BMEditSelection *ele_b = static_cast<BMEditSelection *>(bm->selected.last_);
+  BMEditSelection *ele_b = bm->selected.last();
   if ((ele_a->htype == BM_VERT) && (ele_b->htype == BM_VERT)) {
     if ((BM_iter_elem_count_flag(
              BM_EDGES_OF_VERT, reinterpret_cast<BMVert *>(ele_a->ele), BM_ELEM_SELECT, true) ==
@@ -1465,11 +1465,9 @@ static bool bm_vert_connect_select_history(BMesh *bm)
       if (changed == false) {
         /* existing loops: close the selection */
         if (bm_vert_is_select_history_open(bm)) {
-          changed |= bm_vert_connect_pair(
-              bm,
-              reinterpret_cast<BMVert *>((bm->selected.first())->ele),
-              reinterpret_cast<BMVert *>(
-                  (static_cast<BMEditSelection *>(bm->selected.last_))->ele));
+          changed |= bm_vert_connect_pair(bm,
+                                          reinterpret_cast<BMVert *>((bm->selected.first())->ele),
+                                          reinterpret_cast<BMVert *>((bm->selected.last())->ele));
 
           if (changed) {
             return true;
@@ -1507,7 +1505,7 @@ static bool bm_vert_connect_select_history(BMesh *bm)
         if (bm_vert_is_select_history_open(bm)) {
           BMEdge *e;
           ese_prev = bm->selected.first();
-          ese = static_cast<BMEditSelection *>(bm->selected.last_);
+          ese = bm->selected.last();
           e = BM_edge_create(bm,
                              reinterpret_cast<BMVert *>(ese_prev->ele),
                              reinterpret_cast<BMVert *>(ese->ele),
@@ -1572,16 +1570,12 @@ static bool bm_vert_connect_select_history_edge_to_vert_path(
     }
 
     v = (&e_curr->v1)[side];
-    if (!bm->selected.last_ ||
-        reinterpret_cast<BMVert *>((static_cast<BMEditSelection *>(bm->selected.last_))->ele) != v)
-    {
+    if (!bm->selected.last() || reinterpret_cast<BMVert *>((bm->selected.last())->ele) != v) {
       BM_select_history_store_notest(bm, v);
     }
 
     v = (&e_curr->v1)[!side];
-    if (!bm->selected.first_ ||
-        reinterpret_cast<BMVert *>((bm->selected.first())->ele) != v)
-    {
+    if (!bm->selected.first_ || reinterpret_cast<BMVert *>((bm->selected.first())->ele) != v) {
       BM_select_history_store_head_notest(bm, v);
     }
 
@@ -3384,13 +3378,11 @@ static bool merge_firstlast(BMEditMesh *em,
   /* While #merge_type_itemf does a sanity check, this operation runs on all edit-mode objects.
    * Some of them may not have the expected selection state. */
   if (use_first == false) {
-    if (!em->bm->selected.last_ ||
-        (static_cast<BMEditSelection *>(em->bm->selected.last_))->htype != BM_VERT)
-    {
+    if (!em->bm->selected.last() || (em->bm->selected.last())->htype != BM_VERT) {
       return false;
     }
 
-    ese = static_cast<BMEditSelection *>(em->bm->selected.last_);
+    ese = em->bm->selected.last();
     mergevert = reinterpret_cast<BMVert *>(ese->ele);
   }
   else {
@@ -3583,20 +3575,17 @@ static const EnumPropertyItem *merge_type_itemf(bContext *C,
      * since selecting will activate - we could have a separate code-path for these but it's a
      * hassle for now just apply to the active (first) object. */
     if (em->selectmode & SCE_SELECT_VERTEX) {
-      if (em->bm->selected.first_ && em->bm->selected.last_ &&
+      if (em->bm->selected.first_ && em->bm->selected.last() &&
           (em->bm->selected.first())->htype == BM_VERT &&
-          (static_cast<BMEditSelection *>(em->bm->selected.last_))->htype == BM_VERT)
+          (em->bm->selected.last())->htype == BM_VERT)
       {
         RNA_enum_items_add_value(&item, &totitem, merge_type_items, MESH_MERGE_FIRST);
         RNA_enum_items_add_value(&item, &totitem, merge_type_items, MESH_MERGE_LAST);
       }
-      else if (em->bm->selected.first_ && (em->bm->selected.first())->htype == BM_VERT)
-      {
+      else if (em->bm->selected.first_ && (em->bm->selected.first())->htype == BM_VERT) {
         RNA_enum_items_add_value(&item, &totitem, merge_type_items, MESH_MERGE_FIRST);
       }
-      else if (em->bm->selected.last_ &&
-               (static_cast<BMEditSelection *>(em->bm->selected.last_))->htype == BM_VERT)
-      {
+      else if (em->bm->selected.last() && (em->bm->selected.last())->htype == BM_VERT) {
         RNA_enum_items_add_value(&item, &totitem, merge_type_items, MESH_MERGE_LAST);
       }
     }

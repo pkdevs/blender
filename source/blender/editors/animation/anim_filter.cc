@@ -549,8 +549,7 @@ bool ANIM_animdata_can_have_greasepencil(const eAnimCont_Types type)
   { \
     if ((id)->adt) { \
       if (!(filter_mode & ANIMFILTER_CURVE_VISIBLE) || \
-          !((id)->adt->flag & ADT_CURVES_NOT_VISIBLE)) \
-      { \
+          !((id)->adt->flag & ADT_CURVES_NOT_VISIBLE)) { \
         if (filter_mode & ANIMFILTER_ANIMDATA) { \
           adtOk \
         } \
@@ -1786,7 +1785,7 @@ static size_t animfilter_nla(bAnimContext *ac,
     }
 
     /* first track to include will be the last one if we're filtering by channels */
-    first = static_cast<NlaTrack *>(adt->nla_tracks.last_);
+    first = adt->nla_tracks.last();
   }
   else {
     /* first track to include will the first one (as per normal) */
@@ -1931,14 +1930,8 @@ static size_t animfilter_block_data(bAnimContext *ac,
           items += animfilter_nla(ac, anim_data, adt, filter_mode, id);
         },
         { /* Drivers */
-          items += animfilter_fcurves(ac,
-                                      anim_data,
-                                      adt->drivers.first(),
-                                      ANIMTYPE_FCURVE,
-                                      filter_mode,
-                                      nullptr,
-                                      id,
-                                      id);
+          items += animfilter_fcurves(
+              ac, anim_data, adt->drivers.first(), ANIMTYPE_FCURVE, filter_mode, nullptr, id, id);
         },
         { /* NLA Control Keyframes */
           items += animfilter_nla_controls(ac, anim_data, adt, filter_mode, id);
@@ -3759,7 +3752,7 @@ static size_t animdata_filter_dopesheet(bAnimContext *ac,
   BKE_view_layer_synced_ensure(*ac->bmain, scene, view_layer);
   ListBaseT<Base> *object_bases = BKE_view_layer_object_bases_get(view_layer);
   if ((filter_mode & ANIMFILTER_LIST_CHANNELS) && !(ads->flag & ADS_FLAG_NO_DB_SORT) &&
-      (object_bases->first_ != object_bases->last_))
+      (object_bases->first_ != object_bases->last()))
   {
     /* Filter list of bases (i.e. objects), sort them, then add their contents normally... */
     /* TODO: Cache the old sorted order - if the set of bases hasn't changed, don't re-sort... */

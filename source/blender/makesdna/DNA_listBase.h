@@ -104,6 +104,14 @@ template<typename T> struct ListBaseT : public ListBase {
   {
     return static_cast<T *>(this->first_);
   }
+  T *last() const
+  {
+    return static_cast<T *>(this->last_);
+  }
+  T *last()
+  {
+    return static_cast<T *>(this->last_);
+  }
   template<typename U> U *first_as() const
   {
     return reinterpret_cast<U *>(this->first());
@@ -111,6 +119,14 @@ template<typename T> struct ListBaseT : public ListBase {
   template<typename U> U *first_as()
   {
     return reinterpret_cast<U *>(this->first());
+  }
+  template<typename U> U *last_as() const
+  {
+    return reinterpret_cast<U *>(this->last_);
+  }
+  template<typename U> U *last_as()
+  {
+    return reinterpret_cast<U *>(this->last_);
   }
 
   /* TODO: Add const and non-const iterators. However this will require some refactoring

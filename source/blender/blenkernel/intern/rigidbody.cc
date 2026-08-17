@@ -1368,9 +1368,7 @@ void BKE_rigidbody_constraints_collection_validate(Scene *scene, RigidBodyWorld 
 
 void BKE_rigidbody_main_collection_object_add(Main *bmain, Collection *collection, Object *object)
 {
-  for (Scene *scene = bmain->scenes.first(); scene;
-       scene = static_cast<Scene *>(scene->id.next))
-  {
+  for (Scene *scene = bmain->scenes.first(); scene; scene = static_cast<Scene *>(scene->id.next)) {
     RigidBodyWorld *rbw = scene->rigidbody_world;
 
     if (rbw == nullptr) {
@@ -1463,8 +1461,7 @@ void BKE_rigidbody_ensure_local_object(Main *bmain, Object *ob)
 {
   if (ob->rigidbody_object != nullptr) {
     /* Add newly local object to scene. */
-    for (Scene *scene = bmain->scenes.first(); scene;
-         scene = static_cast<Scene *>(scene->id.next))
+    for (Scene *scene = bmain->scenes.first(); scene; scene = static_cast<Scene *>(scene->id.next))
     {
       if (BKE_scene_object_find(*bmain, scene, ob)) {
         rigidbody_add_object_to_scene(bmain, scene, ob);
@@ -1473,8 +1470,7 @@ void BKE_rigidbody_ensure_local_object(Main *bmain, Object *ob)
   }
   if (ob->rigidbody_constraint != nullptr) {
     /* Add newly local object to scene. */
-    for (Scene *scene = bmain->scenes.first(); scene;
-         scene = static_cast<Scene *>(scene->id.next))
+    for (Scene *scene = bmain->scenes.first(); scene; scene = static_cast<Scene *>(scene->id.next))
     {
       if (BKE_scene_object_find(*bmain, scene, ob)) {
         rigidbody_add_constraint_to_scene(bmain, scene, ob);

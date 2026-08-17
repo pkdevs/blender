@@ -1307,8 +1307,7 @@ void wm_gizmomaptypes_free()
        gzmap_type = gzmap_type_next)
   {
     gzmap_type_next = gzmap_type->next;
-    for (wmGizmoGroupTypeRef *gzgt_ref = gzmap_type->grouptype_refs.first(), *gzgt_next;
-         gzgt_ref;
+    for (wmGizmoGroupTypeRef *gzgt_ref = gzmap_type->grouptype_refs.first(), *gzgt_next; gzgt_ref;
          gzgt_ref = gzgt_next)
     {
       gzgt_next = gzgt_ref->next;
@@ -1380,8 +1379,7 @@ void WM_gizmoconfig_update(Main *bmain)
     for (wmGizmoMapType &gzmap_type : gizmomaptypes) {
       if (gzmap_type.type_update_flag & WM_GIZMOMAPTYPE_UPDATE_REMOVE) {
         gzmap_type.type_update_flag &= ~WM_GIZMOMAPTYPE_UPDATE_REMOVE;
-        for (wmGizmoGroupTypeRef *gzgt_ref = gzmap_type.grouptype_refs.first(),
-                                 *gzgt_ref_next;
+        for (wmGizmoGroupTypeRef *gzgt_ref = gzmap_type.grouptype_refs.first(), *gzgt_ref_next;
              gzgt_ref;
              gzgt_ref = gzgt_ref_next)
         {

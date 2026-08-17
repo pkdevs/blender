@@ -314,8 +314,7 @@ void BKE_object_sync_to_original(Depsgraph *depsgraph, Object *object)
   object_orig->flag = object->flag;
 
   /* Copy back error messages from modifiers. */
-  for (ModifierData *md = object->modifiers.first(),
-                    *md_orig = object_orig->modifiers.first();
+  for (ModifierData *md = object->modifiers.first(), *md_orig = object_orig->modifiers.first();
        md != nullptr && md_orig != nullptr;
        md = md->next, md_orig = md_orig->next)
   {
@@ -475,8 +474,7 @@ void BKE_object_eval_eval_base_flags(Depsgraph *depsgraph,
   object->runtime->local_collections_bits = base->local_collections_bits;
 
   if (object->mode == OB_MODE_PARTICLE_EDIT) {
-    for (ParticleSystem *psys = object->particlesystem.first(); psys != nullptr;
-         psys = psys->next)
+    for (ParticleSystem *psys = object->particlesystem.first(); psys != nullptr; psys = psys->next)
     {
       BKE_particle_batch_cache_dirty_tag(psys, BKE_PARTICLE_BATCH_DIRTY_ALL);
     }

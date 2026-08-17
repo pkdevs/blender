@@ -2251,9 +2251,8 @@ static wmOperatorStatus move_to_collection_exec(bContext *C, wmOperator *op)
     collection = BKE_collection_add(bmain, collection, new_collection_name);
   }
 
-  Object *single_object = objects.is_single() ?
-                              static_cast<Object *>((objects.first())->data) :
-                              nullptr;
+  Object *single_object = objects.is_single() ? static_cast<Object *>((objects.first())->data) :
+                                                nullptr;
 
   if ((single_object != nullptr) && is_link &&
       BKE_collection_has_object(collection, single_object))

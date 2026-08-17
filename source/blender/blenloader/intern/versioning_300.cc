@@ -592,18 +592,11 @@ static bNodeTree *add_realize_node_tree(Main *bmain)
   realize->locx_legacy = separate->locx_legacy - 200.0f;
   realize->locy_legacy = join->locy_legacy;
 
-  bke::node_add_link(*node_tree,
-                     *group_input,
-                     *group_input->outputs.first(),
-                     *realize,
-                     *realize->inputs.first());
-  bke::node_add_link(*node_tree,
-                     *realize,
-                     *realize->outputs.first(),
-                     *separate,
-                     *separate->inputs.first());
   bke::node_add_link(
-      *node_tree, *conv, *conv->outputs.first(), *join, *join->inputs.first());
+      *node_tree, *group_input, *group_input->outputs.first(), *realize, *realize->inputs.first());
+  bke::node_add_link(
+      *node_tree, *realize, *realize->outputs.first(), *separate, *separate->inputs.first());
+  bke::node_add_link(*node_tree, *conv, *conv->outputs.first(), *join, *join->inputs.first());
   bke::node_add_link(*node_tree,
                      *separate,
                      *static_cast<bNodeSocket *>(BLI_findlink(&separate->outputs, 3)),
@@ -621,11 +614,8 @@ static bNodeTree *add_realize_node_tree(Main *bmain)
                      *join->inputs.first());
   bke::node_add_link(
       *node_tree, *separate, *separate->outputs.first(), *join, *join->inputs.first());
-  bke::node_add_link(*node_tree,
-                     *join,
-                     *join->outputs.first(),
-                     *group_output,
-                     *group_output->inputs.first());
+  bke::node_add_link(
+      *node_tree, *join, *join->outputs.first(), *group_output, *group_output->inputs.first());
 
   for (bNode &node : node_tree->nodes) {
     bke::node_set_selected(node, false);
@@ -1841,8 +1831,7 @@ static void version_liboverride_rnacollections_insertion_object(Object *object)
                                             opop.subitem_local_name,
                                             offsetof(ModifierData, name),
                                             opop.subitem_local_index));
-      ModifierData *mod_src = mod_anchor != nullptr ? mod_anchor->next :
-                                                      object->modifiers.first();
+      ModifierData *mod_src = mod_anchor != nullptr ? mod_anchor->next : object->modifiers.first();
 
       if (mod_src == nullptr) {
         /* Invalid case, just remove that override property operation. */

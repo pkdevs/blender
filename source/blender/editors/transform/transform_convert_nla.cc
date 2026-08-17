@@ -774,8 +774,7 @@ static void recalcData_nla(TransInfo *t)
       for (int j = 0; j < -delta_new_tracks; j++) {
         NlaTrack *new_track = BKE_nlatrack_new();
         new_track->flag |= NLATRACK_TEMPORARILY_ADDED;
-        BKE_nlatrack_insert_before(
-            nla_tracks, nla_tracks->first(), new_track, is_liboverride);
+        BKE_nlatrack_insert_before(nla_tracks, nla_tracks->first(), new_track, is_liboverride);
         dst_track = new_track;
       }
 
@@ -783,8 +782,7 @@ static void recalcData_nla(TransInfo *t)
         NlaTrack *new_track = BKE_nlatrack_new();
         new_track->flag |= NLATRACK_TEMPORARILY_ADDED;
 
-        BKE_nlatrack_insert_after(
-            nla_tracks, static_cast<NlaTrack *>(nla_tracks->last_), new_track, is_liboverride);
+        BKE_nlatrack_insert_after(nla_tracks, nla_tracks->last(), new_track, is_liboverride);
         dst_track = new_track;
       }
 

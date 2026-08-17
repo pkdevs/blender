@@ -2094,7 +2094,7 @@ static wmOperatorStatus armature_subdivide_exec(bContext *C, wmOperator *op)
   CTX_DATA_BEGIN_WITH_ID (C, EditBone *, ebone, selected_editable_bones, bArmature *, arm) {
     /* Keep track of the last bone in the editbone list. The newly created ones
      * will be appended after this one. */
-    EditBone *last_bone_before_cutting = static_cast<EditBone *>(arm->edbo->last_);
+    EditBone *last_bone_before_cutting = arm->edbo->last();
     BLI_assert_msg(last_bone_before_cutting,
                    "If there is no bone before subdividing, which bone is being subdivided here?");
 
@@ -2156,7 +2156,7 @@ static wmOperatorStatus armature_subdivide_exec(bContext *C, wmOperator *op)
      */
     ListBaseT<EditBone> new_bones;
     new_bones.first_ = last_bone_before_cutting->next;
-    new_bones.last_ = static_cast<EditBone *>(arm->edbo->last_);
+    new_bones.last_ = arm->edbo->last();
     for (EditBone &newbone : new_bones.items_reversed()) {
       ED_armature_ebone_unique_name(arm->edbo, newbone.name, &newbone);
     }

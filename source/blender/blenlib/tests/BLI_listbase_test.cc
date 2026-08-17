@@ -225,7 +225,7 @@ TEST(listbase, SplitAfter)
   EXPECT_EQ(split_after_lb.count(), 1);
   EXPECT_EQ(BLI_findindex(&split_after_lb, link1), 0);
   EXPECT_EQ(split_after_lb.first_, link1);
-  EXPECT_EQ(split_after_lb.last_, link1);
+  EXPECT_EQ(split_after_lb.last(), link1);
 
   lb.clear_no_delete();
   split_after_lb.clear_no_delete();
@@ -235,7 +235,7 @@ TEST(listbase, SplitAfter)
   EXPECT_EQ(lb.count(), 1);
   EXPECT_EQ(BLI_findindex(&lb, link1), 0);
   EXPECT_EQ(lb.first_, link1);
-  EXPECT_EQ(lb.last_, link1);
+  EXPECT_EQ(lb.last(), link1);
   EXPECT_EQ(split_after_lb.is_empty(), true);
 
   /* Two links */
@@ -250,7 +250,7 @@ TEST(listbase, SplitAfter)
   EXPECT_EQ(BLI_findindex(&split_after_lb, link1), 0);
   EXPECT_EQ(BLI_findindex(&split_after_lb, link2), 1);
   EXPECT_EQ(split_after_lb.first_, link1);
-  EXPECT_EQ(split_after_lb.last_, link2);
+  EXPECT_EQ(split_after_lb.last(), link2);
 
   lb.clear_no_delete();
   split_after_lb.clear_no_delete();
@@ -261,11 +261,11 @@ TEST(listbase, SplitAfter)
   EXPECT_EQ(lb.count(), 1);
   EXPECT_EQ(BLI_findindex(&lb, link1), 0);
   EXPECT_EQ(lb.first_, link1);
-  EXPECT_EQ(lb.last_, link1);
+  EXPECT_EQ(lb.last(), link1);
   EXPECT_EQ(split_after_lb.count(), 1);
   EXPECT_EQ(BLI_findindex(&split_after_lb, link2), 0);
   EXPECT_EQ(split_after_lb.first_, link2);
-  EXPECT_EQ(split_after_lb.last_, link2);
+  EXPECT_EQ(split_after_lb.last(), link2);
 
   lb.free_no_destruct();
   split_after_lb.free_no_destruct();
@@ -369,7 +369,7 @@ TEST(listbase, MutableIterator)
   EXPECT_EQ(count, 3);
   EXPECT_EQ(lb.count(), 2);
   EXPECT_EQ(lb.first_, link1);
-  EXPECT_EQ(lb.last_, link3);
+  EXPECT_EQ(lb.last(), link3);
 
   lb.free_no_destruct();
 }
@@ -403,7 +403,7 @@ TEST(listbase, MutableReversedIterator)
   EXPECT_EQ(count, 3);
   EXPECT_EQ(lb.count(), 2);
   EXPECT_EQ(lb.first_, link1);
-  EXPECT_EQ(lb.last_, link3);
+  EXPECT_EQ(lb.last(), link3);
 
   lb.free_no_destruct();
 }

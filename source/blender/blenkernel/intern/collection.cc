@@ -2573,8 +2573,7 @@ void BKE_scene_objects_iterator_next(BLI_Iterator *iter)
     do {
       collection = static_cast<Collection *>(data->scene_collection_iter.current);
       /* get the first unique object of this collection */
-      CollectionObject *new_cob = object_base_unique(*data->visited,
-                                                     collection->gobject.first());
+      CollectionObject *new_cob = object_base_unique(*data->visited, collection->gobject.first());
       if (new_cob) {
         data->cob_next = new_cob->next;
         iter->current = new_cob->ob;

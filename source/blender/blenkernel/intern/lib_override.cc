@@ -616,8 +616,7 @@ bool BKE_lib_override_library_create_from_tag(Main *bmain,
   FOREACH_MAIN_ID_END;
 
   /* Override the IDs. */
-  for (todo_id_iter = todo_ids.first(); todo_id_iter != nullptr;
-       todo_id_iter = todo_id_iter->next)
+  for (todo_id_iter = todo_ids.first(); todo_id_iter != nullptr; todo_id_iter = todo_id_iter->next)
   {
     reference_id = static_cast<ID *>(todo_id_iter->data);
 
@@ -1171,8 +1170,7 @@ static void lib_override_linked_group_tag_clear_boneshapes_objects(LibOverrideGr
     if (ob.type == OB_ARMATURE && ob.pose != nullptr &&
         ((ob.id.tag & data->tag) || data->linked_ids_hierarchy_default_override.contains(&ob.id)))
     {
-      for (bPoseChannel *pchan = ob.pose->chanbase.first(); pchan != nullptr;
-           pchan = pchan->next)
+      for (bPoseChannel *pchan = ob.pose->chanbase.first(); pchan != nullptr; pchan = pchan->next)
       {
         if (pchan->custom != nullptr && &pchan->custom->id != id_root) {
           data->id_tag_clear(&pchan->custom->id, bool(pchan->custom->id.tag & ID_TAG_MISSING));

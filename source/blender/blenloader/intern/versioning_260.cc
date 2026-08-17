@@ -2652,7 +2652,7 @@ void blo_do_versions_260(FileData *fd, Library * /*lib*/, Main *bmain)
         for (SpaceLink &sl : area.spacedata) {
           if (sl.spacetype == SPACE_NODE) {
             SpaceNode *snode = reinterpret_cast<SpaceNode *>(&sl);
-            bNodeTreePath *path = static_cast<bNodeTreePath *>(snode->treepath.last_);
+            bNodeTreePath *path = snode->treepath.last();
             if (!path) {
               continue;
             }

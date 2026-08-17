@@ -234,7 +234,7 @@ static std::optional<ARegionIMECursorState> console_main_region_cursor_ime(
   if (line_height == 0) {
     return ARegionIMECursorState::PositionPending;
   }
-  const ConsoleLine *cl = static_cast<const ConsoleLine *>(sc->history.last_);
+  const ConsoleLine *cl = sc->history.last();
   if (cl == nullptr) {
     return std::nullopt;
   }

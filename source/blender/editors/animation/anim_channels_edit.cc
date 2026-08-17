@@ -1233,7 +1233,7 @@ static bool rearrange_island_bottom(ListBaseT<tReorderChannelIsland> *list,
                                     tReorderChannelIsland *island)
 {
   if (rearrange_island_ok(island)) {
-    tReorderChannelIsland *last = static_cast<tReorderChannelIsland *>(list->last_);
+    tReorderChannelIsland *last = list->last();
 
     /* remove island from current position */
     BLI_remlink(list, island);
@@ -1311,7 +1311,7 @@ static void rearrange_animchannel_add_to_islands(ListBaseT<tReorderChannelIsland
                                                  const bool is_hidden)
 {
   /* always try to add to last island if possible */
-  tReorderChannelIsland *island = static_cast<tReorderChannelIsland *>(islands->last_);
+  tReorderChannelIsland *island = islands->last();
   bool is_sel = false, is_untouchable = false;
 
   /* get flags - selected and untouchable from the channel */
@@ -1471,9 +1471,9 @@ static bool rearrange_animchannel_islands(ListBaseT<T> *list,
    *   to the direction we're moving things,
    *   so that we shouldn't need to encounter items we've moved already.
    */
-  if (islands.first_ != islands.last_) {
+  if (islands.first_ != islands.last()) {
     tReorderChannelIsland *first = static_cast<tReorderChannelIsland *>(
-        (mode > 0) ? islands.last_ : islands.first_);
+        (mode > 0) ? islands.last() : islands.first_);
     tReorderChannelIsland *island, *isn = nullptr;
 
     for (island = first; island; island = isn) {
@@ -1548,10 +1548,8 @@ static void rearrange_nla_tracks(bAnimContext *ac, AnimData *adt, eRearrangeAnim
   /* Add back non-local NLA tracks at the beginning of the animation data's list. */
   if (!extracted_nonlocal_nla_tracks.is_empty()) {
     BLI_assert(is_liboverride);
-    static_cast<NlaTrack *>(extracted_nonlocal_nla_tracks.last_)->next = static_cast<NlaTrack *>(
-        adt->nla_tracks.first_);
-    adt->nla_tracks.first()->prev = static_cast<NlaTrack *>(
-        extracted_nonlocal_nla_tracks.last_);
+    extracted_nonlocal_nla_tracks.last()->next = static_cast<NlaTrack *>(adt->nla_tracks.first_);
+    adt->nla_tracks.first()->prev = extracted_nonlocal_nla_tracks.last();
     adt->nla_tracks.first_ = extracted_nonlocal_nla_tracks.first_;
   }
 

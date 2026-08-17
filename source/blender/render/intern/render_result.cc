@@ -774,8 +774,7 @@ void render_result_merge(RenderResult *rr, RenderResult *rrpart)
 
     if (rlp) {
       /* Passes are allocated in sync. */
-      for (RenderPass *rpass = rl.passes.first(), *rpassp = rlp->passes.first();
-           rpass && rpassp;
+      for (RenderPass *rpass = rl.passes.first(), *rpassp = rlp->passes.first(); rpass && rpassp;
            rpass = rpass->next)
       {
         /* For save buffers, skip any passes that are only saved to disk. */

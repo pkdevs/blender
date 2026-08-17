@@ -284,7 +284,7 @@ static void blo_update_defaults_screen(bScreen *screen,
   for (ScrArea &area : screen->areabase) {
     for (SpaceLink &sl : area.spacedata) {
       ListBaseT<ARegion> *regionbase = (&sl == area.spacedata.first()) ? &area.regionbase :
-                                                                              &sl.regionbase;
+                                                                         &sl.regionbase;
 
       for (ARegion &region : *regionbase) {
         if (region.regiontype == RGN_TYPE_TOOL_HEADER) {

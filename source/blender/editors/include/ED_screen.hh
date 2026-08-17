@@ -317,7 +317,7 @@ ScrArea *ED_screen_areas_iter_next(const bScreen *screen, const ScrArea *area);
                                 (ScrVert *)(win)->global_areas.vertbase.first_ : \
                                 (ScrVert *)(screen)->vertbase.first_; \
        vert_name != NULL; \
-       vert_name = (vert_name == (win)->global_areas.vertbase.last_) ? \
+       vert_name = (vert_name == (win)->global_areas.vertbase.last()) ? \
                        (ScrVert *)(screen)->vertbase.first_ : \
                        vert_name->next)
 

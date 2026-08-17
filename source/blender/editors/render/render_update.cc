@@ -256,9 +256,7 @@ void ED_render_engine_changed(Main *bmain, const bool update_scene_data)
   /* Inform all render engines and draw managers. */
   DEGEditorUpdateContext update_ctx = {nullptr};
   update_ctx.bmain = bmain;
-  for (Scene *scene = bmain->scenes.first(); scene;
-       scene = static_cast<Scene *>(scene->id.next))
-  {
+  for (Scene *scene = bmain->scenes.first(); scene; scene = static_cast<Scene *>(scene->id.next)) {
     update_ctx.scene = scene;
     for (ViewLayer &view_layer : scene->view_layers) {
       /* TDODO(sergey): Iterate over depsgraphs instead? */

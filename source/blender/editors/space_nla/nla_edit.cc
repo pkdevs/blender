@@ -454,9 +454,7 @@ static bool nla_tracks_get_selected_extents(bAnimContext *ac, float *r_min, floa
   /* loop through all tracks, finding the first one that's selected */
   float ymax = NLATRACK_FIRST_TOP(ac);
 
-  for (bAnimListElem *ale = anim_data.first(); ale;
-       ale = ale->next, ymax -= NLATRACK_STEP(snla))
-  {
+  for (bAnimListElem *ale = anim_data.first(); ale; ale = ale->next, ymax -= NLATRACK_STEP(snla)) {
     const bAnimChannelType *acf = ANIM_channel_get_typeinfo(ale);
 
     /* must be selected... */
@@ -804,7 +802,7 @@ static wmOperatorStatus nlaedit_add_transition_exec(bContext *C, wmOperator *op)
     NlaStrip *s1, *s2;
 
     /* get initial pair of strips */
-    if (ELEM(nlt->strips.first_, nullptr, nlt->strips.last_)) {
+    if (ELEM(nlt->strips.first_, nullptr, nlt->strips.last())) {
       continue;
     }
     s1 = nlt->strips.first();

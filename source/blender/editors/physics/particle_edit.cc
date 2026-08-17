@@ -5448,9 +5448,7 @@ static bool particle_edit_toggle_poll(bContext *C)
 
 static void free_all_psys_edit(Object *object)
 {
-  for (ParticleSystem *psys = object->particlesystem.first(); psys != nullptr;
-       psys = psys->next)
-  {
+  for (ParticleSystem *psys = object->particlesystem.first(); psys != nullptr; psys = psys->next) {
     if (psys->edit != nullptr) {
       BLI_assert(psys->free_edit != nullptr);
       psys->free_edit(psys->edit);

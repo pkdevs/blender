@@ -311,7 +311,7 @@ TEST_F(BMainMergeTest, linked_data)
   EXPECT_EQ(3, bmain_dst->objects.count());
   EXPECT_EQ(1, bmain_dst->libraries.count());
   EXPECT_EQ(ob_1, bmain_dst->objects.first_);
-  EXPECT_EQ(ob_2_2, bmain_dst->objects.last_);
+  EXPECT_EQ(ob_2_2, bmain_dst->objects.last());
   EXPECT_EQ(lib_src_1, bmain_dst->libraries.first_);
   EXPECT_EQ(ob_1->id.lib, lib_src_1);
   EXPECT_EQ(ob_2->id.lib, lib_src_1);
@@ -347,9 +347,9 @@ TEST_F(BMainMergeTest, linked_data)
   EXPECT_EQ(4, bmain_dst->objects.count());
   EXPECT_EQ(2, bmain_dst->libraries.count());
   EXPECT_EQ(ob_1, bmain_dst->objects.first_);
-  EXPECT_EQ(ob_3, bmain_dst->objects.last_);
+  EXPECT_EQ(ob_3, bmain_dst->objects.last());
   EXPECT_EQ(lib_src_3, bmain_dst->libraries.first_);
-  EXPECT_EQ(lib_src_1, bmain_dst->libraries.last_);
+  EXPECT_EQ(lib_src_1, bmain_dst->libraries.last());
   EXPECT_EQ(ob_1->id.lib, lib_src_1);
   EXPECT_EQ(ob_2->id.lib, lib_src_1);
   EXPECT_EQ(ob_2_2->id.lib, lib_src_1);
@@ -387,7 +387,7 @@ TEST_F(BMainMergeTest, linked_data)
   EXPECT_EQ(4, bmain_dst->objects.count());
   EXPECT_EQ(2, bmain_dst->libraries.count());
   EXPECT_EQ(lib_src_3, bmain_dst->libraries.first_);
-  EXPECT_EQ(lib_src_1, bmain_dst->libraries.last_);
+  EXPECT_EQ(lib_src_1, bmain_dst->libraries.last());
   EXPECT_EQ(ob_1->id.lib, lib_src_1);
   EXPECT_EQ(ob_2->id.lib, lib_src_1);
   EXPECT_EQ(ob_2_2->id.lib, lib_src_1);

@@ -438,7 +438,7 @@ static bool get_keys_for_absolute_eval(float eval_time,
                                        float r_weights[4])
 {
   KeyBlock *firstkey = keyblocks->first();
-  KeyBlock *lastkey = static_cast<KeyBlock *>(keyblocks->last_);
+  KeyBlock *lastkey = keyblocks->last();
   eval_time = clamp_f(eval_time, firstkey->pos, lastkey->pos);
 
   r_target_keys[0] = r_target_keys[1] = r_target_keys[2] = r_target_keys[3] = firstkey;
@@ -1318,7 +1318,7 @@ KeyBlock *BKE_keyblock_add(Key *key, const char *name)
 {
   float curpos = -0.1;
 
-  KeyBlock *kb = static_cast<KeyBlock *>(key->block.last_);
+  KeyBlock *kb = key->block.last();
   if (kb) {
     curpos = kb->pos;
   }
@@ -1795,7 +1795,7 @@ bool BKE_keyblock_move(Object *ob, int org_index, int new_index)
   /* We swap 'org' element with its previous/next neighbor (depending on direction of the move)
    * repeatedly, until we reach final position.
    * This allows us to only loop on the list once! */
-  for (kb = static_cast<KeyBlock *>(rev ? key->block.last_ : key->block.first_),
+  for (kb = static_cast<KeyBlock *>(rev ? key->block.last() : key->block.first_),
       i = (rev ? totkey - 1 : 0);
        kb;
        kb = (rev ? kb->prev : kb->next), rev ? i-- : i++)

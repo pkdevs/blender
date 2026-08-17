@@ -945,7 +945,7 @@ V3DSnapCursorState *ED_view3d_cursor_snap_state_active_get()
   if (data_intern->state_intern.is_empty()) {
     return &g_data_intern.state_default;
   }
-  return &(static_cast<SnapStateIntern *>(data_intern->state_intern.last_))->snap_state;
+  return &(data_intern->state_intern.last())->snap_state;
 }
 
 void ED_view3d_cursor_snap_state_active_set(V3DSnapCursorState *state)
@@ -956,7 +956,7 @@ void ED_view3d_cursor_snap_state_active_set(V3DSnapCursorState *state)
   }
 
   SnapStateIntern *state_intern = STATE_INTERN_GET(state);
-  if (state_intern == static_cast<SnapStateIntern *>(g_data_intern.state_intern.last_)) {
+  if (state_intern == g_data_intern.state_intern.last()) {
     return;
   }
 

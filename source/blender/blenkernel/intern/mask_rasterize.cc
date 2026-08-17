@@ -828,7 +828,7 @@ static void maskrasterize_layer_init_scanfill(MaskRasterHandle *mr_handle,
         }
 
         sf_vert = sf_vert_prev;
-        sf_vert_prev = static_cast<ScanFillVert *>(sf_ctx.fillvertbase.last_);
+        sf_vert_prev = sf_ctx.fillvertbase.last();
 
         for (j = 0; j < tot_diff_point; j++) {
           ScanFillEdge *sf_edge = BLI_scanfill_edge_add(&sf_ctx, sf_vert_prev, sf_vert);

@@ -2428,9 +2428,7 @@ static wmOperatorStatus text_jump_exec(bContext *C, wmOperator *op)
 {
   Text *text = CTX_data_edit_text(C);
   int line = RNA_int_get(op->ptr, "line");
-  short nlines = txt_get_span(text->lines.first(),
-                              static_cast<TextLine *>(text->lines.last_)) +
-                 1;
+  short nlines = txt_get_span(text->lines.first(), text->lines.last()) + 1;
 
   if (line < 1) {
     txt_move_toline(text, 1, false);
@@ -3227,7 +3225,7 @@ static void space_text_cursor_set_to_pos_wrapped(
     charp = 0;
   }
   else { /* Beyond end of text. */
-    linep = static_cast<TextLine *>(st->text->lines.last_);
+    linep = st->text->lines.last();
     charp = linep->len;
   }
 

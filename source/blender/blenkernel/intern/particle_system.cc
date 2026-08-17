@@ -5093,9 +5093,7 @@ void BKE_particle_settings_eval_reset(Depsgraph *depsgraph, ParticleSettings *pa
 void BKE_particle_system_eval_init(Depsgraph *depsgraph, Object *object)
 {
   DEG_debug_print_eval(depsgraph, __func__, object->id.name, object);
-  for (ParticleSystem *psys = object->particlesystem.first(); psys != nullptr;
-       psys = psys->next)
-  {
+  for (ParticleSystem *psys = object->particlesystem.first(); psys != nullptr; psys = psys->next) {
     psys->recalc |= (psys->part->id.recalc & ID_RECALC_PSYS_ALL);
   }
 }

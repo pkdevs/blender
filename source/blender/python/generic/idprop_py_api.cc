@@ -1474,7 +1474,7 @@ static PyObject *IDGroup_Iter_New_WithType(BPy_IDProperty *group,
     BLI_assert(!PyObject_GC_IsTracked((PyObject *)iter));
     PyObject_GC_Track(iter);
     iter->cur = static_cast<IDProperty *>(
-        (reversed ? group->prop->data.group.last_ : group->prop->data.group.first_));
+        (reversed ? group->prop->data.group.last() : group->prop->data.group.first_));
     iter->len_init = group->prop->len;
   }
   else {
@@ -1806,9 +1806,7 @@ PyObject *BPy_Wrap_GetKeys(IDProperty *prop)
   IDProperty *loop;
   int i;
 
-  for (i = 0, loop = prop->data.group.first(); loop && (i < prop->len);
-       loop = loop->next, i++)
-  {
+  for (i = 0, loop = prop->data.group.first(); loop && (i < prop->len); loop = loop->next, i++) {
     PyList_SET_ITEM(list, i, PyUnicode_FromString(loop->name));
   }
 

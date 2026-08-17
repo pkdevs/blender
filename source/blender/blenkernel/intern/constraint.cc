@@ -6602,7 +6602,7 @@ void BKE_constraint_targets_flush(bConstraint *con,
   }
 
   /* Remove the custom target. */
-  bConstraintTarget *ct = static_cast<bConstraintTarget *>(targets->last_);
+  bConstraintTarget *ct = targets->last();
 
   if (ct && (ct->flag & CONSTRAINT_TAR_CUSTOM_SPACE)) {
     BLI_assert(is_custom_space_needed(con));

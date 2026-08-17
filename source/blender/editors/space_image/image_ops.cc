@@ -3623,8 +3623,7 @@ static wmOperatorStatus image_unpack_invoke(bContext *C, wmOperator *op, const w
               ima->id.name + 2,
               ima->filepath,
               "textures",
-              BKE_image_has_packedfile(ima) ? (ima->packedfiles.first())->packedfile :
-                                              nullptr);
+              BKE_image_has_packedfile(ima) ? (ima->packedfiles.first())->packedfile : nullptr);
 
   return OPERATOR_FINISHED;
 }

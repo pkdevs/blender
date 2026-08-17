@@ -282,7 +282,7 @@ static wmOperatorStatus remove_particle_target_exec(bContext *C, wmOperator * /*
       break;
     }
   }
-  pt = static_cast<ParticleTarget *>(psys->targets.last_);
+  pt = psys->targets.last();
 
   if (pt) {
     pt->flag |= PTARGET_CURRENT;
@@ -520,7 +520,7 @@ static wmOperatorStatus remove_particle_dupliob_exec(bContext *C, wmOperator * /
     }
   }
 
-  ParticleDupliWeight *dw = static_cast<ParticleDupliWeight *>(part->instance_weights.last_);
+  ParticleDupliWeight *dw = part->instance_weights.last();
   if (dw) {
     dw->flag |= PART_DUPLIW_CURRENT;
   }

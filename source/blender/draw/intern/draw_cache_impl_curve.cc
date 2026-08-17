@@ -117,8 +117,7 @@ static int curve_render_normal_len_get(const ListBaseT<Nurb> *lb, const CurveCac
   int normal_len = 0;
   const BevList *bl;
   const Nurb *nu;
-  for (bl = ob_curve_cache->bev.first(), nu = lb->first(); nu && bl;
-       bl = bl->next, nu = nu->next)
+  for (bl = ob_curve_cache->bev.first(), nu = lb->first(); nu && bl; bl = bl->next, nu = nu->next)
   {
     int nr = bl->nr;
     int skip = nu->resolu / 16;

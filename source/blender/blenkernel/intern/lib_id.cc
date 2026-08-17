@@ -1889,7 +1889,7 @@ void id_sort_by_name(ListBaseT<ID> *lb, ID *id, ID *id_sorting_hint)
   ID *idtest;
 
   /* insert alphabetically */
-  if (lb->first_ == lb->last_) {
+  if (lb->first_ == lb->last()) {
     return;
   }
 
@@ -1928,9 +1928,7 @@ void id_sort_by_name(ListBaseT<ID> *lb, ID *id, ID *id_sorting_hint)
    * (higher extension numbers). */
   bool is_in_library = false;
   item_array_index = ID_SORT_STEP_SIZE - 1;
-  for (idtest = static_cast<ID *>(lb->last_); idtest != nullptr;
-       idtest = static_cast<ID *>(idtest->prev))
-  {
+  for (idtest = lb->last(); idtest != nullptr; idtest = static_cast<ID *>(idtest->prev)) {
     if (is_in_library) {
       if (idtest->lib != id->lib) {
         /* We got out of expected library 'range' in the list, so we are done here and can move on

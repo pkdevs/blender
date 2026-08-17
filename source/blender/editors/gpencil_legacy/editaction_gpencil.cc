@@ -389,7 +389,7 @@ bool ED_gpencil_anim_copybuf_paste(bAnimContext *ac, const short offset_mode)
   }
 
   /* Check if single channel in buffer (disregard names if so). */
-  if (gpencil_anim_copybuf.first_ == gpencil_anim_copybuf.last_) {
+  if (gpencil_anim_copybuf.first_ == gpencil_anim_copybuf.last()) {
     no_name = true;
   }
 

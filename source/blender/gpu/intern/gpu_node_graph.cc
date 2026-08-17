@@ -1237,8 +1237,7 @@ void gpu_node_graph_prune_unused(GPUNodeGraph *graph)
     }
   }
 
-  for (GPUMaterialAttribute *attr = graph->attributes.first(), *next = nullptr; attr;
-       attr = next)
+  for (GPUMaterialAttribute *attr = graph->attributes.first(), *next = nullptr; attr; attr = next)
   {
     next = attr->next;
     if (attr->users == 0) {

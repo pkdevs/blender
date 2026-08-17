@@ -698,8 +698,7 @@ static void copy_bonechildren(Bone *bone_dst,
   BLI_duplicatelist(&bone_dst->childbase, &bone_src->childbase);
 
   /* For each child in the list, update its children */
-  for (bone_src_child = bone_src->childbase.first(),
-      bone_dst_child = bone_dst->childbase.first();
+  for (bone_src_child = bone_src->childbase.first(), bone_dst_child = bone_dst->childbase.first();
        bone_src_child;
        bone_src_child = bone_src_child->next, bone_dst_child = bone_dst_child->next)
   {

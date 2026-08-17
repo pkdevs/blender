@@ -906,8 +906,7 @@ MovieClip *BKE_movieclip_file_add_exists_ex(Main *bmain, const char *filepath, b
   BLI_path_abs(filepath_abs, BKE_main_blendfile_path(bmain));
 
   /* first search an identical filepath */
-  for (clip = bmain->movieclips.first(); clip; clip = static_cast<MovieClip *>(clip->id.next))
-  {
+  for (clip = bmain->movieclips.first(); clip; clip = static_cast<MovieClip *>(clip->id.next)) {
     STRNCPY(filepath_test, clip->filepath);
     BLI_path_abs(filepath_test, ID_BLEND_PATH(bmain, &clip->id));
 

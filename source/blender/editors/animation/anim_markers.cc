@@ -195,7 +195,7 @@ void ED_markers_get_minmax(ListBaseT<TimeMarker> *markers,
 
   /* sanity check */
   // printf("markers = %p -  %p, %p\n", markers, markers->first, markers->last);
-  if (ELEM(nullptr, markers, markers->first_, markers->last_)) {
+  if (ELEM(nullptr, markers, markers->first_, markers->last())) {
     *r_first = 0.0f;
     *r_last = 0.0f;
     return;

@@ -359,7 +359,7 @@ static void keylist_first_last(const AnimKeylist *keylist,
   }
   else {
     *first_column = keylist->key_columns.first();
-    *last_column = static_cast<const ActKeyColumn *>(keylist->key_columns.last_);
+    *last_column = keylist->key_columns.last();
   }
 }
 

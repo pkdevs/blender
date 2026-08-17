@@ -1310,7 +1310,7 @@ static bool data_transfer_layersmapping_vgroups_multisrc_to_dst(
       }
       else if (use_delete && idx_dst > idx_src) {
         while (idx_dst-- > idx_src) {
-          BKE_object_defgroup_remove(ob_dst, static_cast<bDeformGroup *>(dst_defbase->last_));
+          BKE_object_defgroup_remove(ob_dst, dst_defbase->last());
         }
       }
       if (r_map) {

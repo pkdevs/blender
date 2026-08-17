@@ -435,7 +435,7 @@ static void ui_node_sock_name(const bNodeTree *ntree,
     bNode *node = sock->link->fromnode;
     const std::string node_name = bke::node_label(*ntree, *node);
 
-    if (node->inputs.is_empty() && node->outputs.first_ != node->outputs.last_) {
+    if (node->inputs.is_empty() && node->outputs.first_ != node->outputs.last()) {
       BLI_snprintf_utf8(name,
                         UI_MAX_NAME_STR,
                         "%s | %s",

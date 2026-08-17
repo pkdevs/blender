@@ -615,8 +615,8 @@ static void image_free_cached_frames(Image *image)
 
 static void image_free_packedfiles(Image *ima)
 {
-  while (ima->packedfiles.last_) {
-    ImagePackedFile *imapf = static_cast<ImagePackedFile *>(ima->packedfiles.last_);
+  while (ima->packedfiles.last()) {
+    ImagePackedFile *imapf = ima->packedfiles.last();
     if (imapf->packedfile) {
       BKE_packedfile_free(imapf->packedfile);
     }
@@ -632,8 +632,8 @@ void BKE_image_free_packedfiles(Image *ima)
 
 static void image_free_autosave_packedfiles(Image *ima)
 {
-  while (ima->autosave_packedfiles.last_) {
-    ImagePackedFile *imapf = static_cast<ImagePackedFile *>(ima->autosave_packedfiles.last_);
+  while (ima->autosave_packedfiles.last()) {
+    ImagePackedFile *imapf = ima->autosave_packedfiles.last();
     if (imapf->packedfile) {
       BKE_packedfile_free(imapf->packedfile);
     }
@@ -655,8 +655,8 @@ void BKE_image_free_views(Image *image)
 
 static void image_free_anims(Image *ima)
 {
-  while (ima->anims.last_) {
-    ImageAnim *ia = static_cast<ImageAnim *>(ima->anims.last_);
+  while (ima->anims.last()) {
+    ImageAnim *ia = ima->anims.last();
     if (ia->anim) {
       MOV_close(ia->anim);
       ia->anim = nullptr;
@@ -3289,7 +3289,7 @@ static bool image_remove_tile(Image *ima, ImageTile *tile)
 static void image_remove_all_tiles(Image *ima)
 {
   /* Remove all but the final tile. */
-  while (image_remove_tile(ima, static_cast<ImageTile *>(ima->tiles.last_))) {
+  while (image_remove_tile(ima, ima->tiles.last())) {
     ;
   }
 }
@@ -5789,7 +5789,7 @@ static void image_update_views_format(Image *ima, ImageUser *iuser)
     }
 
     /* check if the files are all available */
-    iv = static_cast<ImageView *>(ima->views.last_);
+    iv = ima->views.last();
     while (iv) {
       int file;
       char filepath[FILE_MAX];

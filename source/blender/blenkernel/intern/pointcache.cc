@@ -1856,7 +1856,7 @@ static void ptcache_find_frames_around(PTCacheID *pid, uint frame, int *r_fra1, 
   }
   else if (pid->cache->mem_cache.first_) {
     PTCacheMem *pm = pid->cache->mem_cache.first();
-    PTCacheMem *pm2 = static_cast<PTCacheMem *>(pid->cache->mem_cache.last_);
+    PTCacheMem *pm2 = pid->cache->mem_cache.last();
 
     while (pm->next && pm->next->frame <= frame) {
       pm = pm->next;
@@ -2361,7 +2361,7 @@ static int ptcache_write(PTCacheID *pid, int cfra, int overwrite)
       pm2 = ptcache_disk_frame_to_mem(pid, fra);
     }
     else {
-      pm2 = static_cast<PTCacheMem *>(cache->mem_cache.last_);
+      pm2 = cache->mem_cache.last();
     }
   }
 
@@ -2436,7 +2436,7 @@ static int ptcache_write_needed(PTCacheID *pid, int cfra, int *overwrite)
     }
   }
   else {
-    PTCacheMem *pm = static_cast<PTCacheMem *>(cache->mem_cache.last_);
+    PTCacheMem *pm = cache->mem_cache.last();
     /* don't write info file in memory */
     if (cfra == 0) {
       return 0;

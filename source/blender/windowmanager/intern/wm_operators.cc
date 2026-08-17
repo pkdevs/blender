@@ -759,8 +759,7 @@ PointerRNA WM_operator_properties_create(const char *opstring)
     return WM_operator_properties_create_ptr(ot);
   }
   /* Set the ID so the context can be accessed: see #STRUCT_NO_CONTEXT_WITHOUT_OWNER_ID. */
-  return RNA_pointer_create_discrete(
-      &G_MAIN->wm.first()->id, RNA_OperatorProperties, nullptr);
+  return RNA_pointer_create_discrete(&G_MAIN->wm.first()->id, RNA_OperatorProperties, nullptr);
 }
 
 void WM_operator_properties_alloc(PointerRNA **ptr, IDProperty **properties, const char *opstring)

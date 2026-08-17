@@ -671,8 +671,7 @@ static wmOperator *rna_OperatorProperties_find_operator(PointerRNA *ptr)
   wmWindowManager *wm = id_cast<wmWindowManager *>(ptr->owner_id);
 
   IDProperty *properties = static_cast<IDProperty *>(ptr->data);
-  for (wmOperator *op = static_cast<wmOperator *>(wm->runtime->operators.last_); op; op = op->prev)
-  {
+  for (wmOperator *op = wm->runtime->operators.last(); op; op = op->prev) {
     if (op->properties == properties) {
       return op;
     }

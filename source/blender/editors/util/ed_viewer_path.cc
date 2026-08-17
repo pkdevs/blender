@@ -413,7 +413,7 @@ UpdateActiveGeometryNodesViewerResult update_active_geometry_nodes_viewer(const 
   if (viewer_path.path.is_empty()) {
     return UpdateActiveGeometryNodesViewerResult::NotActive;
   }
-  const ViewerPathElem *last_elem = static_cast<ViewerPathElem *>(viewer_path.path.last_);
+  const ViewerPathElem *last_elem = viewer_path.path.last();
   if (last_elem->type != VIEWER_PATH_ELEM_TYPE_VIEWER_NODE) {
     return UpdateActiveGeometryNodesViewerResult::NotActive;
   }

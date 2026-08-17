@@ -5017,7 +5017,7 @@ static ButtonExtraOpIcon *but_extra_operator_icon_mouse_over_get(Button *but,
 
   /* Handle the padding space from the right edge as the last button. */
   if (x > xmax) {
-    return static_cast<ButtonExtraOpIcon *>(but->extra_op_icons.last_);
+    return but->extra_op_icons.last();
   }
 
   /* Inverse order, from right to left. */

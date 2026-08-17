@@ -268,7 +268,7 @@ void lineart_edge_cut(LineartData *ld,
   else {
     /* We have yet to reach a existing cutting point even after we searched the whole line, so we
      * append the new cut to the end. */
-    i_seg = static_cast<LineartEdgeSegment *>(e->segments.last_);
+    i_seg = e->segments.last();
     new_seg1->occlusion = i_seg->occlusion;
     new_seg1->material_mask_bits = i_seg->material_mask_bits;
     new_seg1->shadow_mask_bits = i_seg->shadow_mask_bits;
@@ -287,7 +287,7 @@ void lineart_edge_cut(LineartData *ld,
     }
   }
   else {
-    i_seg = static_cast<LineartEdgeSegment *>(e->segments.last_);
+    i_seg = e->segments.last();
     new_seg2->occlusion = i_seg->occlusion;
     new_seg2->material_mask_bits = i_seg->material_mask_bits;
     new_seg2->shadow_mask_bits = i_seg->shadow_mask_bits;
@@ -3384,8 +3384,8 @@ static bool lineart_schedule_new_triangle_task(LineartIsecThread *th)
   }
 
   th->pending_to = eln ? eln :
-                         static_cast<LineartElementLinkNode *>(
-                             ld->geom.triangle_buffer_pointers.last_);
+
+                         ld->geom.triangle_buffer_pointers.last();
   th->index_to = ld->isect_scheduled_up_to_index;
 
   BLI_spin_unlock(&ld->lock_task);

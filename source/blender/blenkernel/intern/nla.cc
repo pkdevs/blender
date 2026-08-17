@@ -464,8 +464,7 @@ NlaTrack *BKE_nlatrack_new_head(ListBaseT<NlaTrack> *nla_tracks, bool is_libover
 
 NlaTrack *BKE_nlatrack_new_tail(ListBaseT<NlaTrack> *nla_tracks, const bool is_liboverride)
 {
-  return BKE_nlatrack_new_after(
-      nla_tracks, static_cast<NlaTrack *>(nla_tracks->last_), is_liboverride);
+  return BKE_nlatrack_new_after(nla_tracks, nla_tracks->last(), is_liboverride);
 }
 
 float BKE_nla_clip_length_get_nonzero(const NlaStrip *strip)
@@ -603,9 +602,7 @@ NlaStrip *BKE_nlastack_add_strip(const OwnedAnimData owned_adt, const bool is_li
   }
 
   /* firstly try adding strip to last track, but if that fails, add to a new track */
-  if (BKE_nlatrack_add_strip(
-          static_cast<NlaTrack *>(adt->nla_tracks.last_), strip, is_liboverride) == 0)
-  {
+  if (BKE_nlatrack_add_strip(adt->nla_tracks.last(), strip, is_liboverride) == 0) {
     /* trying to add to the last track failed (no track or no space),
      * so add a new track to the stack, and add to that...
      */
@@ -927,7 +924,7 @@ void BKE_nlastrips_sort_strips(ListBaseT<NlaStrip> *strips)
 
   /* reassign the start and end points of the strips */
   strips->first_ = tmp.first_;
-  strips->last_ = tmp.last_;
+  strips->last_ = tmp.last();
 }
 
 void BKE_nlastrips_add_strip_unsafe(ListBaseT<NlaStrip> *strips, NlaStrip *strip)
@@ -1138,7 +1135,7 @@ void BKE_nlameta_flush_transforms(NlaStrip *mstrip)
    *   since we assume they weren't transformed yet
    */
   oStart = (mstrip->strips.first())->start;
-  oEnd = (static_cast<NlaStrip *>(mstrip->strips.last_))->end;
+  oEnd = (mstrip->strips.last())->end;
   offset = mstrip->start - oStart;
 
   /* check if scale changed */
@@ -1404,7 +1401,7 @@ bool BKE_nlatrack_get_bounds(NlaTrack *nlt, float bounds[2])
   bounds[0] = strip->start;
 
   /* upper bound is last strip's end frame */
-  strip = static_cast<NlaStrip *>(nlt->strips.last_);
+  strip = nlt->strips.last();
   bounds[1] = strip->end;
 
   /* done */
@@ -2191,9 +2188,7 @@ bool BKE_nla_action_stash(const OwnedAnimData owned_adt, const bool is_liboverri
   }
 
   /* create a new track, and add this immediately above the previous stashing track */
-  for (prev_track = static_cast<NlaTrack *>(adt->nla_tracks.last_); prev_track;
-       prev_track = prev_track->prev)
-  {
+  for (prev_track = adt->nla_tracks.last(); prev_track; prev_track = prev_track->prev) {
     if (strstr(prev_track->name, STASH_TRACK_NAME)) {
       break;
     }

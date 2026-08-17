@@ -128,7 +128,7 @@ static SpaceNode *find_active_node_editor(const bContext *C)
       }
       SpaceNode *snode = reinterpret_cast<SpaceNode *>(space_link);
       if (snode->edittree && snode->edittree->type == NTREE_COMPOSIT) {
-        bNodeTreePath *path = static_cast<bNodeTreePath *>(snode->treepath.last_);
+        bNodeTreePath *path = snode->treepath.last();
         if (snode->nodetree->active_viewer_key == path->parent_key) {
           return snode;
         }

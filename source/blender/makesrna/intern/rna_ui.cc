@@ -411,7 +411,7 @@ static StructRNA *rna_Panel_register(Main *bmain,
   pt->draw_header_preset = (have_function[3]) ? panel_draw_header_preset : nullptr;
 
   /* Find position to insert panel based on order. */
-  PanelType *pt_iter = static_cast<PanelType *>(art->paneltypes.last_);
+  PanelType *pt_iter = art->paneltypes.last();
 
   for (; pt_iter; pt_iter = pt_iter->prev) {
     /* No header has priority. */
@@ -428,7 +428,7 @@ static StructRNA *rna_Panel_register(Main *bmain,
 
   if (parent) {
     pt->parent = parent;
-    LinkData *pt_child_iter = static_cast<LinkData *>(parent->children.last_);
+    LinkData *pt_child_iter = parent->children.last();
     for (; pt_child_iter; pt_child_iter = pt_child_iter->prev) {
       PanelType *pt_child = static_cast<PanelType *>(pt_child_iter->data);
       if (pt_child->order <= pt->order) {

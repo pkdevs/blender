@@ -1276,7 +1276,7 @@ MainAllIDsIterator &MainAllIDsIterator::operator--()
      * constructor case). */
     ListBaseT<ID> *lb_ids = lbarray_[size_t(curr_lbarray_index_)];
     if (lb_ids && !lb_ids->is_empty()) {
-      curr_id_ = static_cast<ID *>(lb_ids->last_);
+      curr_id_ = lb_ids->last();
       return *this;
     }
   }

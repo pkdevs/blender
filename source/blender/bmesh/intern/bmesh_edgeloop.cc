@@ -215,7 +215,7 @@ int BM_mesh_edgeloops_find(BMesh *bm,
          * (kept distinct from a fully closed loop, which has no anchor). */
         if (built && el_store->len >= 2) {
           LinkData *node_first = el_store->verts.first();
-          LinkData *node_last = static_cast<LinkData *>(el_store->verts.last_);
+          LinkData *node_last = el_store->verts.last();
           if (node_first->data == node_last->data) {
             BLI_remlink(&el_store->verts, node_last);
             MEM_delete(node_last);
@@ -534,8 +534,8 @@ void BM_mesh_edgeloops_calc_order(BMesh * /*bm*/,
   /* not so efficient re-ordering */
   while (eloops->first_) {
     BMEdgeLoopStore *el_store_best = nullptr;
-    const float *co = (static_cast<BMEdgeLoopStore *>(eloops_ordered.last_))->co;
-    const float *no = (static_cast<BMEdgeLoopStore *>(eloops_ordered.last_))->no;
+    const float *co = (eloops_ordered.last())->co;
+    const float *no = (eloops_ordered.last())->no;
     float len_best_sq = FLT_MAX;
 
     if (use_normals) {
@@ -646,7 +646,8 @@ void BM_edgeloop_edges_get(BMEdgeLoopStore *el_store, BMEdge **e_arr)
   }
 
   if (el_store->flag & BM_EDGELOOP_IS_CLOSED) {
-    e_arr[i] = BM_edge_exists(NODE_AS_V(el_store->verts.first_), NODE_AS_V(el_store->verts.last_));
+    e_arr[i] = BM_edge_exists(NODE_AS_V(el_store->verts.first_),
+                              NODE_AS_V(el_store->verts.last()));
     BLI_assert(e_arr[i] != nullptr);
   }
   BLI_assert(el_store->len == i + 1);
@@ -654,8 +655,8 @@ void BM_edgeloop_edges_get(BMEdgeLoopStore *el_store, BMEdge **e_arr)
 
 void BM_edgeloop_calc_center(BMesh * /*bm*/, BMEdgeLoopStore *el_store)
 {
-  LinkData *node_curr = static_cast<LinkData *>(el_store->verts.last_);
-  LinkData *node_prev = (static_cast<LinkData *>(el_store->verts.last_))->prev;
+  LinkData *node_curr = el_store->verts.last();
+  LinkData *node_prev = (el_store->verts.last())->prev;
   LinkData *node_first = el_store->verts.first();
   LinkData *node_next = node_first;
 
@@ -696,7 +697,7 @@ void BM_edgeloop_calc_center(BMesh * /*bm*/, BMEdgeLoopStore *el_store)
 bool BM_edgeloop_calc_normal(BMesh * /*bm*/, BMEdgeLoopStore *el_store)
 {
   LinkData *node_curr = el_store->verts.first();
-  const float *v_prev = NODE_AS_CO(el_store->verts.last_);
+  const float *v_prev = NODE_AS_CO(el_store->verts.last());
   const float *v_curr = NODE_AS_CO(node_curr);
 
   zero_v3(el_store->no);
@@ -726,7 +727,7 @@ bool BM_edgeloop_calc_normal_aligned(BMesh * /*bm*/,
                                      const float no_align[3])
 {
   LinkData *node_curr = el_store->verts.first();
-  const float *v_prev = NODE_AS_CO(el_store->verts.last_);
+  const float *v_prev = NODE_AS_CO(el_store->verts.last());
   const float *v_curr = NODE_AS_CO(node_curr);
 
   zero_v3(el_store->no);

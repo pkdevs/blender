@@ -149,9 +149,7 @@ void BKE_keyconfig_keymap_filter_item(wmKeyMap *keymap,
                                       void *user_data)
 {
   if (params->check_diff_item_add || params->check_diff_item_remove) {
-    for (wmKeyMapDiffItem *kmdi = keymap->diff_items.first(), *kmdi_next; kmdi;
-         kmdi = kmdi_next)
-    {
+    for (wmKeyMapDiffItem *kmdi = keymap->diff_items.first(), *kmdi_next; kmdi; kmdi = kmdi_next) {
       kmdi_next = kmdi->next;
       bool remove = false;
 

@@ -1119,8 +1119,7 @@ Vector<Object *> ED_undo_editmode_objects_from_view_layer(const Main &bmain,
   Vector<Object *> objects(object_data.size());
   /* Base iteration, starting with the active-base to ensure it's the first item in the array.
    * Looping over the active-base twice is OK as the tag check prevents it being handled twice. */
-  for (Base *base = baseact,
-            *base_next = BKE_view_layer_object_bases_get(view_layer)->first();
+  for (Base *base = baseact, *base_next = BKE_view_layer_object_bases_get(view_layer)->first();
        base;
        base = base_next, base_next = base_next ? base_next->next : nullptr)
   {

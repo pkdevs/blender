@@ -469,7 +469,7 @@ MetaStack *meta_stack_active_get(const Editing *ed)
     return nullptr;
   }
 
-  return static_cast<MetaStack *>(ed->metastack.last_);
+  return ed->metastack.last();
 }
 
 void meta_stack_set(const Scene *scene, Strip *dst)

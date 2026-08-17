@@ -1119,7 +1119,7 @@ static void layer_collection_objects_sync(ViewLayer *view_layer,
            * been moved to the new base list and the first/last test ensure that
            * case also works. */
           Base *base = *base_p;
-          if (!ELEM(base, r_lb_new_object_bases->first_, r_lb_new_object_bases->last_)) {
+          if (!ELEM(base, r_lb_new_object_bases->first_, r_lb_new_object_bases->last())) {
             BLI_remlink(&view_layer->object_bases, base);
             BLI_addtail(r_lb_new_object_bases, base);
           }

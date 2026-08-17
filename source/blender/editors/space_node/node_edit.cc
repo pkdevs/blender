@@ -224,7 +224,7 @@ void snode_set_context(const bContext &C)
   }
 
   if (snode->nodetree != ntree || snode->id != id || snode->from != from ||
-      (snode->treepath.last_ == nullptr && ntree))
+      (snode->treepath.last() == nullptr && ntree))
   {
     ScrArea *area = CTX_wm_area(&C);
     ARegion *region = BKE_area_find_region_type(area, RGN_TYPE_WINDOW);
@@ -1010,7 +1010,7 @@ static wmOperatorStatus node_duplicate_exec(bContext *C, wmOperator *op)
   }
 
   /* Copy links between selected nodes. */
-  bNodeLink *lastlink = static_cast<bNodeLink *>(ntree->links.last_);
+  bNodeLink *lastlink = ntree->links.last();
   for (bNodeLink &link : ntree->links) {
     /* This creates new links between copied nodes. If keep_inputs is set, also copies input links
      * from unselected (when fromnode is null)! */
