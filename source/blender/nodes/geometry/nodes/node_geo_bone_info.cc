@@ -32,10 +32,10 @@ struct BoneInfo {
 /**
  * \param object: Armature object.
  * \param pchan: Pose channel of the bone.
- * \param geometry_transform: Transform multiplied with pose and rest pose. Identity leaves
- * those outputs in armature space. The compositor always passes identity because it has no
- * modified object. Geometry Nodes Original mode does the same; Relative mode passes the
- * transform from the armature object into the modified object.
+ * \param geometry_transform: Transform multiplied with pose and rest pose to express them in a different space.
+ * Identity leaves those outputs in armature space (used by Geometry Nodes original mode and Compositor; the latter
+ * because it has no modified object). Relative mode for Geometry Nodes passes the transform in order to map
+ * from armature space to the modified object's space.
  */
 static BoneInfo compute_bone_info(const Object &object,
                                   const bPoseChannel &pchan,
