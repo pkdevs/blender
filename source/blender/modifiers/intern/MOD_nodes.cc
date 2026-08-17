@@ -434,7 +434,8 @@ static void try_add_side_effect_node(const ModifierEvalContext &ctx,
                                      const ComputeContext &final_compute_context,
                                      const int final_node_id,
                                      const NodesModifierData &nmd,
-                                     nodes::GeoNodesSideEffectNodes &r_side_effect_nodes)
+                                     nodes::GeoNodesSideEffectNodes &r_side_effect_nodes,
+                                     const bool is_persistent_debug_view = false)
 {
   if (nmd.node_group == nullptr || ID_MISSING(nmd.node_group)) {
     return;
@@ -644,10 +645,17 @@ static void try_add_side_effect_node(const ModifierEvalContext &ctx,
     return;
   }
   local_side_effect_nodes.nodes_by_context.add(final_compute_context.hash(), lf_node);
+  if (is_persistent_debug_view) {
+    local_side_effect_nodes.persistent_debug_view_nodes_by_context.add(
+        final_compute_context.hash(), lf_node);
+  }
 
   /* Successfully found all side effect nodes for the viewer path. */
   for (const auto item : local_side_effect_nodes.nodes_by_context.items()) {
     r_side_effect_nodes.nodes_by_context.add_multiple(item.key, item.value);
+  }
+  for (const auto item : local_side_effect_nodes.persistent_debug_view_nodes_by_context.items()) {
+    r_side_effect_nodes.persistent_debug_view_nodes_by_context.add_multiple(item.key, item.value);
   }
   for (const auto item : local_side_effect_nodes.iterations_by_iteration_zone.items()) {
     r_side_effect_nodes.iterations_by_iteration_zone.add_multiple(item.key, item.value);
@@ -764,7 +772,7 @@ static void add_propagated_debug_views_for_group_node(
         continue;
       }
       try_add_side_effect_node(
-          ctx, *current_compute_context, viewer_node->identifier, nmd, r_side_effect_nodes);
+          ctx, *current_compute_context, viewer_node->identifier, nmd, r_side_effect_nodes, true);
     }
   }
 }
@@ -799,7 +807,7 @@ static void find_side_effect_nodes_for_persistent_debug_views_in_zone(
     }
     if (is_persistent_debug_viewer(*node)) {
       try_add_side_effect_node(
-          ctx, simulation_compute_context, node->identifier, nmd, r_side_effect_nodes);
+          ctx, simulation_compute_context, node->identifier, nmd, r_side_effect_nodes, true);
       continue;
     }
     if (!node->is_group() || node->id == nullptr) {
@@ -858,7 +866,8 @@ static void find_side_effect_nodes_for_persistent_debug_views_in_tree(
       continue;
     }
     if ((inside_simulation_zone || allow_local_debug_views) && is_persistent_debug_viewer(*node)) {
-      try_add_side_effect_node(ctx, compute_context, node->identifier, nmd, r_side_effect_nodes);
+      try_add_side_effect_node(
+          ctx, compute_context, node->identifier, nmd, r_side_effect_nodes, true);
       continue;
     }
     if (!node->is_group() || node->id == nullptr) {

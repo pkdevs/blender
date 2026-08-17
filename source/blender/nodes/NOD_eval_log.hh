@@ -258,6 +258,7 @@ class ViewerNodeLog {
 
  public:
   bool is_debug_view = false;
+  bool is_persistent_debug_view_requested = false;
   bool is_shown = true;
 
   struct Item {

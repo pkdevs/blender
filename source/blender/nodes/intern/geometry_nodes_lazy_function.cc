@@ -860,6 +860,21 @@ static void initialize_viewer_log(const bool is_debug_view, eval_log::ViewerNode
   log.is_debug_view = is_debug_view;
 }
 
+static bool persistent_debug_view_requested(const GeoNodesUserData &user_data,
+                                            const lf::FunctionNode *self_node)
+{
+  if (modifier_requests_persistent_debug_views_at_root(user_data)) {
+    return true;
+  }
+  if (self_node == nullptr || user_data.call_data->side_effect_nodes == nullptr) {
+    return false;
+  }
+  const Span<const lf::FunctionNode *> nodes =
+      user_data.call_data->side_effect_nodes->persistent_debug_view_nodes_by_context.lookup(
+          user_data.compute_context->hash());
+  return nodes.contains(self_node);
+}
+
 class LazyFunctionForViewerNode : public LazyFunction {
  private:
   const bNode &bnode_;
@@ -892,6 +907,9 @@ class LazyFunctionForViewerNode : public LazyFunction {
     const auto &user_data = *static_cast<GeoNodesUserData *>(context.user_data);
     const auto &local_user_data = *static_cast<GeoNodesLocalUserData *>(context.local_user_data);
     const NodeGeometryViewer &storage = *static_cast<const NodeGeometryViewer *>(bnode_.storage);
+    const bool is_persistent_debug_view_requested = is_debug_view_ &&
+                                                    persistent_debug_view_requested(user_data,
+                                                                                    self_node);
 
     if (is_debug_view_) {
       bool is_enabled = modifier_requests_persistent_debug_views_at_root(user_data);
@@ -932,6 +950,7 @@ class LazyFunctionForViewerNode : public LazyFunction {
       if (!show) {
         auto log = allocator.construct<eval_log::ViewerNodeLog>();
         initialize_viewer_log(true, *log);
+        log->is_persistent_debug_view_requested = is_persistent_debug_view_requested;
         log->is_shown = false;
         tree_logger->viewer_node_logs.append(allocator, {bnode_.identifier, std::move(log)});
         for (const int i : IndexRange(storage.items_num)) {
@@ -960,6 +979,7 @@ class LazyFunctionForViewerNode : public LazyFunction {
 
     auto log = allocator.construct<eval_log::ViewerNodeLog>();
     initialize_viewer_log(is_debug_view_, *log);
+    log->is_persistent_debug_view_requested = is_persistent_debug_view_requested;
     geo_viewer_node_log(bnode_, values, *log);
     tree_logger->viewer_node_logs.append(allocator, {bnode_.identifier, std::move(log)});
   }

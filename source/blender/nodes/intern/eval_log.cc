@@ -448,7 +448,8 @@ const bke::GeometrySet *ViewerNodeLog::main_geometry() const
 
 bool ViewerNodeLog::is_geometry_debug_view_candidate() const
 {
-  return this->is_debug_view && this->is_shown && this->main_geometry() != nullptr;
+  return this->is_debug_view && this->is_persistent_debug_view_requested && this->is_shown &&
+         this->main_geometry() != nullptr;
 }
 
 static bool warning_is_propagated(const NodeWarningPropagation propagation,
