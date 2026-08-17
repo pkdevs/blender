@@ -1588,7 +1588,7 @@ class ShaderNodesInliner {
       if (warning_zone == zone) {
         SocketInContext warning_output_socket{context, &warning_node->output_socket(0)};
         if (!warning_output_socket->is_directly_linked()) {
-          /* Evaluate the warning node in this context even if its not otherwise used. */
+          /* Evaluate the warning node in this context even if it's not otherwise used. */
           this->schedule_socket(warning_output_socket);
         }
       }
