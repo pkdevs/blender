@@ -27,6 +27,7 @@
 
 #include "NOD_warning.hh"
 #include "NOD_socket_usage_inference_fwd.hh"
+#include "NOD_warning.hh"
 
 namespace blender {
 
