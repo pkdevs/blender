@@ -1,3 +1,4 @@
 Referenced by issue #161229, Blender LTS: Maintenance Task 5.2
 Referenced by pull request #162742, Cycles: Bump minimum driver version in UI from 570 to 575
 Referenced by commit blender/blender-manual@ec379305f1926c01d3aca6457774977ded4b4680, Cycles: Bump required NVIDIA driver version to 575
+Referenced by commit 485dd00650c5586dfea7264d23310cda8ef079ff, Cycles: Bump minimum driver version in UI from 570 to 575
