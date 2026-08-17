@@ -53,7 +53,7 @@ ccl_device float spectrum_to_gray(KernelGlobals kg, Spectrum c)
 }
 
 #ifdef __SPECTRAL__
-/* Given a wavelength, convert it to linear rgb, assuming D65 illuminant.
+/* Given a wavelength, convert it to rgb in the working color space, assuming D65 illuminant.
  * [Metameric: Spectral Uplifting via Controllable Color Constraints]
  * (https://markvanderuit.nl/files/2023-07-23-paper-metameric/metameric-paper.pdf)
  * by Mark van de Ruit and Elmar Eisemann, Eq. (1). */
