@@ -296,7 +296,7 @@ static PointerRNA rna_SceneStrip_view_layer_get(PointerRNA *ptr)
   const Strip *strip = static_cast<const Strip *>(ptr->data);
   Scene *scene = strip->scene;
   if (scene == nullptr) {
-    return PointerRNA_NULL;
+    return {};
   }
   ViewLayer *view_layer = BKE_view_layer_find(scene, strip->scene_view_layer_name);
   return RNA_pointer_create_id_subdata(scene->id, RNA_ViewLayer, view_layer);
@@ -581,6 +581,10 @@ static bool rna_SequenceEditor_selected_retiming_key_get(PointerRNA *ptr)
 
 static void rna_Strip_views_format_update(Main *bmain, Scene *scene, PointerRNA *ptr)
 {
+  Strip &strip = *static_cast<Strip *>(ptr->data);
+  if (strip.type == STRIP_TYPE_MOVIE) {
+    seq::movie_metadata_invalidate(strip);
+  }
   rna_Strip_invalidate_raw_update(bmain, scene, ptr);
 }
 
@@ -690,7 +694,7 @@ static void rna_Strip_content_trim_start_set(PointerRNA *ptr, int value)
   seq::transform_translate_strip(scene, strip, value - strip->anim_startofs);
   strip->anim_startofs = value;
 
-  seq::add_reload_new_file(G.main, scene, strip, false);
+  seq::add_update_content_length(G.main, scene, strip);
   do_strip_frame_change_update(scene, strip);
 }
 
@@ -701,7 +705,7 @@ static void rna_Strip_content_trim_end_set(PointerRNA *ptr, int value)
 
   strip->anim_endofs = std::clamp(value, 0, strip_content_trim_max(strip, strip->anim_endofs));
 
-  seq::add_reload_new_file(G.main, scene, strip, false);
+  seq::add_update_content_length(G.main, scene, strip);
   do_strip_frame_change_update(scene, strip);
 }
 
@@ -883,7 +887,7 @@ static void rna_Strip_active_modifier_set(PointerRNA *ptr, PointerRNA value, Rep
 
   WM_main_add_notifier(NC_SCENE | ND_SEQUENCER, ptr->owner_id);
 
-  if (RNA_pointer_is_null(&value)) {
+  if (!value) {
     seq::modifier_set_active(strip, nullptr);
     return;
   }
@@ -1175,18 +1179,14 @@ static bool rna_MovieStrip_reload_if_needed(ID *scene_id, Strip *strip, Main *bm
 
 static PointerRNA rna_MovieStrip_metadata_get(ID *scene_id, Strip *strip)
 {
-  if (strip == nullptr || strip->runtime->movie_readers.is_empty()) {
-    return PointerRNA_NULL;
+  if (strip == nullptr) {
+    return {};
   }
 
-  MovieReader *anim = strip->runtime->movie_readers.first();
-  if (anim == nullptr) {
-    return PointerRNA_NULL;
-  }
-
-  IDProperty *metadata = MOV_load_metadata(anim);
+  Scene &scene = *id_cast<Scene *>(scene_id);
+  IDProperty *metadata = seq::movie_metadata_ensure(scene, *strip);
   if (metadata == nullptr) {
-    return PointerRNA_NULL;
+    return {};
   }
 
   PointerRNA ptr = RNA_pointer_create_discrete(scene_id, RNA_IDPropertyWrapPtr, metadata);
@@ -2074,7 +2074,7 @@ static PointerRNA rna_SequencerCompositorModifierProperties_get(PointerRNA *ptr)
 {
   auto *cmd = ptr->data_as<SequencerCompositorModifierData>();
   if (!cmd->node_group) {
-    return PointerRNA_NULL;
+    return {};
   }
   return RNA_pointer_create_discrete(
       ptr->owner_id, RNA_SequencerCompositorModifierProperties, cmd);
@@ -2107,7 +2107,7 @@ static PointerRNA rna_SequencerCompositorEffectProperties_get(PointerRNA *ptr)
   Strip *strip = ptr->data_as<Strip>();
   CompositorEffectVars *comp = static_cast<CompositorEffectVars *>(strip->effectdata);
   if (!comp || !comp->node_group) {
-    return PointerRNA_NULL;
+    return {};
   }
   return RNA_pointer_create_discrete(ptr->owner_id, RNA_SequencerCompositorEffectProperties, comp);
 }
