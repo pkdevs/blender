@@ -147,7 +147,6 @@ set(SRC
   NOD_geometry_nodes_physics_bundles.hh
   NOD_geometry_nodes_srna.hh
   NOD_geometry_nodes_values.hh
-  NOD_geometry_nodes_warning.hh
   NOD_inverse_eval_params.hh
   NOD_inverse_eval_path.hh
   NOD_inverse_eval_run.hh
@@ -184,6 +183,7 @@ set(SRC
   NOD_trace_values.hh
   NOD_value_elem.hh
   NOD_value_elem_eval.hh
+  NOD_warning.hh
   intern/list_function_eval.hh
   intern/node_common.h
   intern/node_exec.hh

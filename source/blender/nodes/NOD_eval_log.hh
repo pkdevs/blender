@@ -47,7 +47,7 @@
 
 #include "NOD_geometry_nodes_closure_location.hh"
 #include "NOD_geometry_nodes_list_fwd.hh"
-#include "NOD_geometry_nodes_warning.hh"
+#include "NOD_warning.hh"
 
 #include "DNA_node_types.h"
 
