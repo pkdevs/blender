@@ -67,14 +67,16 @@ static void ensure_flush_denormals_observer()
 }
 #endif
 
-void BLI_task_scheduler_init()
+void BLI_task_scheduler_init(const bool use_flush_denormals_to_zero)
 {
-  /* The main thread is not observed by the task scheduler, set it directly. */
-  SIMD_SET_FLUSH_TO_ZERO;
+  if (use_flush_denormals_to_zero) {
+    /* The main thread is not observed by the task scheduler, set it directly. */
+    SIMD_SET_FLUSH_TO_ZERO;
 
 #ifdef WITH_TBB
-  ensure_flush_denormals_observer();
+    ensure_flush_denormals_observer();
 #endif
+  }
 
 #ifdef WITH_TBB_GLOBAL_CONTROL
   const int threads_override_num = BLI_system_num_threads_override_get();
