@@ -14,7 +14,6 @@ namespace blender {
 
 struct ARegion;
 struct ReportList;
-struct SpaceInfo;
 struct wmOperatorType;
 
 void FILE_OT_autopack_toggle(wmOperatorType *ot);
@@ -33,16 +32,13 @@ void INFO_OT_reports_display_update(wmOperatorType *ot);
 
 /* `info_draw.cc` */
 
-void *info_text_pick(const SpaceInfo *sinfo,
-                     const ARegion *region,
-                     const ReportList *reports,
-                     int mouse_y);
-int info_textview_height(const SpaceInfo *sinfo, const ARegion *region, const ReportList *reports);
-void info_textview_main(const SpaceInfo *sinfo, const ARegion *region, const ReportList *reports);
+void *info_text_pick(const ARegion *region, const ReportList *reports, int mouse_y);
+int info_textview_height(const ARegion *region, const ReportList *reports);
+void info_textview_main(const ARegion *region, const ReportList *reports);
 
 /* `info_report.cc` */
 
-int info_report_mask(const SpaceInfo *sinfo);
+int info_report_mask();
 void INFO_OT_select_pick(wmOperatorType *ot); /* report selection */
 void INFO_OT_select_all(wmOperatorType *ot);
 void INFO_OT_select_box(wmOperatorType *ot);

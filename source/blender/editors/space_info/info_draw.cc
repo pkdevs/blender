@@ -75,8 +75,7 @@ static void report_textview_init__internal(TextViewContext *tvc)
 
 static int report_textview_skip__internal(TextViewContext *tvc)
 {
-  const SpaceInfo *sinfo = static_cast<const SpaceInfo *>(tvc->arg1);
-  const int report_mask = info_report_mask(sinfo);
+  const int report_mask = info_report_mask();
   while (tvc->iter && ((static_cast<const Report *>(tvc->iter))->type & report_mask) == 0) {
     tvc->iter = static_cast<void *>((static_cast<Link *>(const_cast<void *>(tvc->iter)))->prev);
   }
@@ -161,8 +160,7 @@ static void info_textview_draw_rect_calc(const ARegion *region,
   r_draw_rect_outer->ymax = region->winy;
 }
 
-static int info_textview_main__internal(const SpaceInfo *sinfo,
-                                        const ARegion *region,
+static int info_textview_main__internal(const ARegion *region,
                                         const ReportList *reports,
                                         const bool do_draw,
                                         const int mval[2],
@@ -181,8 +179,6 @@ static int info_textview_main__internal(const SpaceInfo *sinfo,
   tvc.line_get = report_textview_line_get;
   tvc.line_data = report_line_data;
   tvc.const_colors = nullptr;
-
-  tvc.arg1 = sinfo;
   tvc.arg2 = reports;
 
   /* view */
@@ -200,28 +196,25 @@ static int info_textview_main__internal(const SpaceInfo *sinfo,
   return ret;
 }
 
-void *info_text_pick(const SpaceInfo *sinfo,
-                     const ARegion *region,
-                     const ReportList *reports,
-                     int mouse_y)
+void *info_text_pick(const ARegion *region, const ReportList *reports, int mouse_y)
 {
   void *mval_pick_item = nullptr;
   const int mval[2] = {0, mouse_y};
 
-  info_textview_main__internal(sinfo, region, reports, false, mval, &mval_pick_item, nullptr);
+  info_textview_main__internal(region, reports, false, mval, &mval_pick_item, nullptr);
   return mval_pick_item;
 }
 
-int info_textview_height(const SpaceInfo *sinfo, const ARegion *region, const ReportList *reports)
+int info_textview_height(const ARegion *region, const ReportList *reports)
 {
   const int mval[2] = {INT_MAX, INT_MAX};
-  return info_textview_main__internal(sinfo, region, reports, false, mval, nullptr, nullptr);
+  return info_textview_main__internal(region, reports, false, mval, nullptr, nullptr);
 }
 
-void info_textview_main(const SpaceInfo *sinfo, const ARegion *region, const ReportList *reports)
+void info_textview_main(const ARegion *region, const ReportList *reports)
 {
   const int mval[2] = {INT_MAX, INT_MAX};
-  info_textview_main__internal(sinfo, region, reports, true, mval, nullptr, nullptr);
+  info_textview_main__internal(region, reports, true, mval, nullptr, nullptr);
 }
 
 }  // namespace blender

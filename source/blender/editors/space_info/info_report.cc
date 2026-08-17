@@ -62,30 +62,8 @@ static void reports_select_all(ReportList *reports, int report_mask, int action)
   }
 }
 
-int info_report_mask(const SpaceInfo * /*sinfo*/)
+int info_report_mask()
 {
-#if 0
-  int report_mask = 0;
-
-  if (sinfo->rpt_mask & INFO_RPT_DEBUG) {
-    report_mask |= RPT_DEBUG_ALL;
-  }
-  if (sinfo->rpt_mask & INFO_RPT_INFO) {
-    report_mask |= RPT_INFO_ALL;
-  }
-  if (sinfo->rpt_mask & INFO_RPT_OP) {
-    report_mask |= RPT_OPERATOR_ALL;
-  }
-  if (sinfo->rpt_mask & INFO_RPT_WARN) {
-    report_mask |= RPT_WARNING_ALL;
-  }
-  if (sinfo->rpt_mask & INFO_RPT_ERR) {
-    report_mask |= RPT_ERROR_ALL;
-  }
-
-  return report_mask;
-#endif
-
   return RPT_DEBUG_ALL | RPT_INFO_ALL | RPT_OPERATOR_ALL | RPT_PROPERTY_ALL | RPT_WARNING_ALL |
          RPT_ERROR_ALL;
 }
@@ -143,9 +121,8 @@ static wmOperatorStatus select_report_pick_exec(bContext *C, wmOperator *op)
 
   Report *report = static_cast<Report *>(BLI_findlink(&CTX_wm_reports(C)->list, report_index));
 
-  SpaceInfo *sinfo = CTX_wm_space_info(C);
   ReportList *reports = CTX_wm_reports(C);
-  const int report_mask = info_report_mask(sinfo);
+  const int report_mask = info_report_mask();
   if (!report) {
     return OPERATOR_CANCELLED;
   }
@@ -164,12 +141,11 @@ static wmOperatorStatus select_report_pick_invoke(bContext *C,
                                                   wmOperator *op,
                                                   const wmEvent *event)
 {
-  SpaceInfo *sinfo = CTX_wm_space_info(C);
   ARegion *region = CTX_wm_region(C);
   ReportList *reports = CTX_wm_reports(C);
   Report *report;
 
-  report = static_cast<Report *>(info_text_pick(sinfo, region, reports, event->mval[1]));
+  report = static_cast<Report *>(info_text_pick(region, reports, event->mval[1]));
 
   RNA_int_set(op->ptr, "report_index", BLI_findindex(&reports->list, report));
 
@@ -201,9 +177,8 @@ void INFO_OT_select_pick(wmOperatorType *ot)
 
 static wmOperatorStatus report_select_all_exec(bContext *C, wmOperator *op)
 {
-  SpaceInfo *sinfo = CTX_wm_space_info(C);
   ReportList *reports = CTX_wm_reports(C);
-  const int report_mask = info_report_mask(sinfo);
+  const int report_mask = info_report_mask();
 
   int action = RNA_enum_get(op->ptr, "action");
   reports_select_all(reports, report_mask, action);
@@ -231,10 +206,9 @@ void INFO_OT_select_all(wmOperatorType *ot)
 /* box_select operator */
 static wmOperatorStatus box_select_exec(bContext *C, wmOperator *op)
 {
-  SpaceInfo *sinfo = CTX_wm_space_info(C);
   ARegion *region = CTX_wm_region(C);
   ReportList *reports = CTX_wm_reports(C);
-  int report_mask = info_report_mask(sinfo);
+  int report_mask = info_report_mask();
   Report *report_min, *report_max;
   rcti rect;
 
@@ -251,8 +225,8 @@ static wmOperatorStatus box_select_exec(bContext *C, wmOperator *op)
     }
   }
 
-  report_min = static_cast<Report *>(info_text_pick(sinfo, region, reports, rect.ymax));
-  report_max = static_cast<Report *>(info_text_pick(sinfo, region, reports, rect.ymin));
+  report_min = static_cast<Report *>(info_text_pick(region, reports, rect.ymax));
+  report_max = static_cast<Report *>(info_text_pick(region, reports, rect.ymin));
 
   /* get the first report if none found */
   if (report_min == nullptr) {
@@ -318,9 +292,8 @@ void INFO_OT_select_box(wmOperatorType *ot)
 
 static wmOperatorStatus report_delete_exec(bContext *C, wmOperator * /*op*/)
 {
-  SpaceInfo *sinfo = CTX_wm_space_info(C);
   ReportList *reports = CTX_wm_reports(C);
-  int report_mask = info_report_mask(sinfo);
+  int report_mask = info_report_mask();
 
   Report *report, *report_next;
 
@@ -360,9 +333,8 @@ void INFO_OT_report_delete(wmOperatorType *ot)
 
 static wmOperatorStatus report_copy_exec(bContext *C, wmOperator * /*op*/)
 {
-  SpaceInfo *sinfo = CTX_wm_space_info(C);
   ReportList *reports = CTX_wm_reports(C);
-  int report_mask = info_report_mask(sinfo);
+  int report_mask = info_report_mask();
 
   DynStr *buf_dyn = BLI_dynstr_new();
   char *buf_str;

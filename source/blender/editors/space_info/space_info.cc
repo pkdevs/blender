@@ -104,17 +104,14 @@ static void info_main_region_init(wmWindowManager *wm, ARegion *region)
 
 static void info_textview_update_rect(const bContext *C, ARegion *region)
 {
-  SpaceInfo *sinfo = CTX_wm_space_info(C);
   View2D *v2d = &region->v2d;
 
-  ui::view2d_totRect_set(
-      v2d, region->winx - 1, info_textview_height(sinfo, region, CTX_wm_reports(C)));
+  ui::view2d_totRect_set(v2d, region->winx - 1, info_textview_height(region, CTX_wm_reports(C)));
 }
 
 static void info_main_region_draw(const bContext *C, ARegion *region)
 {
   /* draw entirely, view changes should be handled here */
-  SpaceInfo *sinfo = CTX_wm_space_info(C);
   View2D *v2d = &region->v2d;
 
   /* clear and setup matrix */
@@ -130,7 +127,7 @@ static void info_main_region_draw(const bContext *C, ARegion *region)
   /* Works best with no view2d matrix set. */
   ui::view2d_view_ortho(v2d);
 
-  info_textview_main(sinfo, region, CTX_wm_reports(C));
+  info_textview_main(region, CTX_wm_reports(C));
 
   /* reset view matrix */
   ui::view2d_view_restore(C);
