@@ -1984,7 +1984,7 @@ static nodes::eval_log::NodeTreeLog *get_nodes_modifier_log(const Object &object
 }
 
 static Span<nodes::NodeWarning> get_node_modifier_warnings(const Object &object,
-                                                                     NodesModifierData &nmd)
+                                                           NodesModifierData &nmd)
 {
   if (auto *log = get_nodes_modifier_log(object, nmd)) {
     log->ensure_node_warnings(nmd);

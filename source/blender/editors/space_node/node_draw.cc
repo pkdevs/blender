@@ -2104,8 +2104,7 @@ static void node_draw_panels(bNodeTree &ntree, const bNode &node, ui::Block &blo
   }
 }
 
-static nodes::NodeWarningType node_error_highest_priority(
-    Span<nodes::NodeWarning> warnings)
+static nodes::NodeWarningType node_error_highest_priority(Span<nodes::NodeWarning> warnings)
 {
   int highest_priority = 0;
   nodes::NodeWarningType highest_priority_type = nodes::NodeWarningType::Info;
@@ -2198,8 +2197,7 @@ static void node_add_error_message_button(const TreeDrawContext &tree_draw_ctx,
     ui::Button *but = add_error_message_button(
         block, rect, nodes::node_warning_type_icon(display_type), icon_offset);
     button_func_quick_tooltip_set(
-        but,
-        [warnings = Array<nodes::NodeWarning>(warnings)](const ui::Button * /*but*/) {
+        but, [warnings = Array<nodes::NodeWarning>(warnings)](const ui::Button * /*but*/) {
           return node_errors_tooltip_fn(warnings);
         });
     return;
