@@ -406,9 +406,9 @@ struct NodeTreeRelations {
 
 enum class ShaderNodeAncestorFlags {
   None = 0u,
-  ShaderMaterialOutput = 1u << 1,
-  ShaderToRGB = 1u << 2,
-  LightAccumulation = 1u << 3,
+  ShaderMaterialOutput = 1u << 0,
+  ShaderToRGB = 1u << 1,
+  LightAccumulation = 1u << 2,
 };
 ENUM_OPERATORS(ShaderNodeAncestorFlags);
 
