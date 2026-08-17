@@ -10,13 +10,18 @@
 
 #include "DNA_ID.h"
 #include "DNA_brush_types.h"
+#include "DNA_curves_types.h"
+#include "DNA_grease_pencil_types.h"
 #include "DNA_mesh_types.h"
+#include "DNA_pointcloud_types.h"
 #include "DNA_scene_types.h"
 
 #include "BLI_listbase_iterator.hh"
 #include "BLI_string_ref.hh"
 #include "BLI_sys_types.hh"
 
+#include "BKE_attribute.h"
+#include "BKE_attribute.hh"
 #include "BKE_compositor.hh"
 #include "BKE_main.hh"
 #include "BKE_mesh_legacy_convert.hh"
@@ -86,14 +91,14 @@ static void compositing_node_group_to_effect(Main &main, Scene &scene)
   scene.compositing_node_group = nullptr;
 }
 
-void do_versions_after_linking_530(FileData * /*fd*/, Main *bmain)
+void do_versions_after_linking_503(FileData * /*fd*/, Main *bmain)
 {
   if (!MAIN_VERSION_FILE_ATLEAST(bmain, 503, 8)) {
     version_node_socket_index_animdata(
         bmain, NTREE_GEOMETRY, "GeometryNodeSetGreasePencilColor", 5, 1, 6);
   }
 
-  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 503, 12)) {
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 503, 15)) {
     for (Scene &scene : bmain->scenes) {
       compositing_node_group_to_effect(*bmain, scene);
     }
@@ -141,7 +146,7 @@ static void update_node_group_asset_traits_for_scene_compositor_effects(bNodeTre
   bke::node_update_asset_metadata(node_group);
 }
 
-void blo_do_versions_530(FileData * /*fd*/, Library * /*lib*/, Main *bmain)
+void blo_do_versions_503(FileData * /*fd*/, Library * /*lib*/, Main *bmain)
 {
   if (!MAIN_VERSION_FILE_ATLEAST(bmain, 503, 1)) {
     for (Scene &scene : bmain->scenes) {
@@ -296,6 +301,77 @@ void blo_do_versions_530(FileData * /*fd*/, Library * /*lib*/, Main *bmain)
   }
 
   if (!MAIN_VERSION_FILE_ATLEAST(bmain, 503, 12)) {
+    for (Brush &brush : bmain->brushes) {
+      if (brush.ob_mode & OB_MODE_WEIGHT_PAINT || brush.ob_mode & OB_MODE_VERTEX_PAINT) {
+        if (brush.flag & BRUSH_FRONTFACE_FALLOFF_DEPRECATED && brush.falloff_angle_legacy != 0.0f)
+        {
+          switch (brush.falloff_shape) {
+            case PAINT_FALLOFF_SHAPE_SPHERE:
+              brush.mesh_automasking_settings->flags |= BRUSH_AUTOMASKING_BRUSH_NORMAL;
+              brush.mesh_automasking_settings->start_normal_falloff = 0.5f;
+              brush.mesh_automasking_settings->start_normal_limit = brush.falloff_angle_legacy;
+              break;
+            case PAINT_FALLOFF_SHAPE_TUBE:
+              brush.mesh_automasking_settings->flags |= BRUSH_AUTOMASKING_VIEW_NORMAL;
+              brush.mesh_automasking_settings->view_normal_falloff = 0.5f;
+              brush.mesh_automasking_settings->view_normal_limit = brush.falloff_angle_legacy;
+              break;
+          }
+        }
+      }
+    }
+  }
+
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 503, 13)) {
+    auto validate_active_index_fn = [](const AttributeOwner &owner, int &active_index) -> void {
+      const bke::AttributeStorage *storage = owner.get_storage();
+      if ((active_index < 0) || (active_index >= storage->count()) ||
+          !bke::allow_procedural_attribute_access(storage->at_index(active_index).name()))
+      {
+        active_index = -1;
+      }
+    };
+
+    for (Mesh &mesh : bmain->meshes) {
+      validate_active_index_fn(AttributeOwner::from_id(&mesh.id), mesh.attributes_active_index);
+    }
+    for (Curves &curves : bmain->hair_curves) {
+      validate_active_index_fn(AttributeOwner::from_id(&curves.id),
+                               curves.geometry.attributes_active_index);
+    }
+    for (GreasePencil &grease_pencil : bmain->grease_pencils) {
+      validate_active_index_fn(AttributeOwner::from_id(&grease_pencil.id),
+                               grease_pencil.attributes_active_index);
+      /* Also check the attributes_active_index in the individual drawings */
+      for (GreasePencilDrawingBase *drawing_base : grease_pencil.drawings()) {
+        if (drawing_base->type == GP_DRAWING) {
+          GreasePencilDrawing *drawing = reinterpret_cast<GreasePencilDrawing *>(drawing_base);
+          validate_active_index_fn(
+              AttributeOwner(AttributeOwnerType::GreasePencilDrawing, drawing),
+              drawing->geometry.attributes_active_index);
+        }
+      }
+    }
+    for (PointCloud &pointcloud : bmain->pointclouds) {
+      validate_active_index_fn(AttributeOwner::from_id(&pointcloud.id),
+                               pointcloud.attributes_active_index);
+    }
+  }
+
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 503, 14)) {
+    for (bScreen &screen : bmain->screens) {
+      for (ScrArea &area : screen.areabase) {
+        for (SpaceLink &space : area.spacedata) {
+          if (space.spacetype == SPACE_OUTLINER) {
+            SpaceOutliner *space_outliner = reinterpret_cast<SpaceOutliner *>(&space);
+            space_outliner->flag |= SO_EXPAND_ON_FOCUS;
+          }
+        }
+      }
+    }
+  }
+
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 503, 15)) {
     for (bNodeTree &node_group : bmain->nodetrees) {
       if (node_group.type != NTREE_COMPOSIT) {
         continue;

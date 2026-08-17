@@ -1404,8 +1404,29 @@ static bool rna_RegionView3D_pause_render_get(PointerRNA *ptr)
 
 static void rna_RegionView3D_pause_render_set(PointerRNA *ptr, const bool value)
 {
-  if (RenderEngine *engine = rna_RegionView3D_engine_get(ptr)) {
-    RE_engine_view_pause_set(engine, value);
+  ScrArea *area;
+  ARegion *region;
+  rna_area_region_from_regiondata(ptr, &area, &region);
+
+  if (area && region && region->alignment == RGN_ALIGN_QSPLIT) {
+    /* Pause all regions in quad split. */
+    for (ARegion &region_iter : area->regionbase) {
+      if (region_iter.regiontype != RGN_TYPE_WINDOW) {
+        continue;
+      }
+      const RegionView3D *rv3d = static_cast<RegionView3D *>(region_iter.regiondata);
+      if (rv3d && rv3d->view_render) {
+        if (RenderEngine *engine = RE_view_engine_get(rv3d->view_render)) {
+          RE_engine_view_pause_set(engine, value);
+        }
+      }
+    }
+  }
+  else {
+    /* Pause single region. */
+    if (RenderEngine *engine = rna_RegionView3D_engine_get(ptr)) {
+      RE_engine_view_pause_set(engine, value);
+    }
   }
 }
 
@@ -1415,9 +1436,11 @@ static bool rna_RegionView3D_support_pause_render_get(PointerRNA *ptr)
   return engine && engine->type->view_pause && engine->type->view_resume;
 }
 
-static void rna_RegionView3D_pause_render_update(Main *bmain, Scene * /*scene*/, PointerRNA *ptr)
+static void rna_RegionView3D_pause_render_update(Main *bmain,
+                                                 Scene * /*scene*/,
+                                                 PointerRNA * /*ptr*/)
 {
-  ED_render_view3d_pause_notify(bmain, static_cast<RegionView3D *>(ptr->data));
+  ED_render_view3d_pause_notify(bmain);
 }
 
 /**
@@ -4602,6 +4625,14 @@ static void rna_def_space_outliner(BlenderRNA *brna)
       prop,
       "Scroll to Active",
       "Scroll the active item into view when it changes outside of the Outliner");
+  RNA_def_property_update(prop, NC_SPACE | ND_SPACE_OUTLINER, nullptr);
+
+  prop = RNA_def_property(srna, "expand_on_focus", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, nullptr, "flag", SO_EXPAND_ON_FOCUS);
+  RNA_def_property_ui_text(
+      prop,
+      "Expand on Focus",
+      "Uncollapse the active item and scroll it into view when it changes outside the Outliner");
   RNA_def_property_update(prop, NC_SPACE | ND_SPACE_OUTLINER, nullptr);
 
   /* Granular restriction column option. */
