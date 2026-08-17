@@ -145,8 +145,6 @@ class GeoNodesBakeParams {
 
 struct GeoNodesSideEffectNodes {
   MultiValueMap<ComputeContextHash, const lf::FunctionNode *> nodes_by_context;
-  /** User-facing interface names for explicitly propagated Debug Viewers. */
-  Map<std::pair<ComputeContextHash, int32_t>, std::string> debug_view_names_by_context;
   /**
    * The repeat/foreach zone is identified by the compute context of the parent and the identifier
    * of the repeat output node.

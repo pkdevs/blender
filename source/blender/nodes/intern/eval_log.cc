@@ -908,16 +908,6 @@ NodeTreeLogger &NodesEvalLog::get_local_tree_logger(const ComputeContext &comput
     tree_logger.context_type = NodeTreeLogger::ContextType::Group;
     if (const bNode *caller_node = context->node()) {
       tree_logger.tree_orig_session_uid = get_original_session_uid(caller_node->id);
-      tree_logger.context_order = caller_node->index();
-      if (caller_node->label[0] != '\0') {
-        tree_logger.context_name = caller_node->label;
-      }
-      else if (caller_node->id) {
-        tree_logger.context_name = BKE_id_name(*caller_node->id);
-      }
-      else {
-        tree_logger.context_name = caller_node->name;
-      }
     }
   }
   else if (const auto *context = dynamic_cast<const bke::RepeatZoneComputeContext *>(
@@ -1163,9 +1153,6 @@ Span<debug_view::Candidate> NodesEvalLog::debug_view_candidates()
         const ComputeContextHash &context_hash = item.key;
         const NodeTreeLogger &tree_logger = *item.value;
 
-        Vector<int> reversed_sort_order;
-        Vector<std::string> reversed_context_names;
-        Vector<uint32_t> reversed_tree_session_uids;
         bool supported_context = true;
         const NodeTreeLogger *context_logger = &tree_logger;
         while (context_logger) {
@@ -1177,8 +1164,7 @@ Span<debug_view::Candidate> NodesEvalLog::debug_view_candidates()
           }
           if (context_logger->context_type == NodeTreeLogger::ContextType::SimulationZone) {
             /* A simulation zone is part of its parent tree. Its stable output-node identity is
-             * already part of the compute context hash, so it must not add a duplicate tree
-             * lineage entry or a per-zone presentation level. */
+             * already part of the compute context hash. */
             if (!context_logger->parent_node_id) {
               supported_context = false;
               break;
@@ -1189,14 +1175,11 @@ Span<debug_view::Candidate> NodesEvalLog::debug_view_candidates()
               supported_context = false;
               break;
             }
-            reversed_tree_session_uids.append(*context_logger->tree_orig_session_uid);
             if (context_logger->context_type == NodeTreeLogger::ContextType::Group) {
               if (!context_logger->parent_node_id) {
                 supported_context = false;
                 break;
               }
-              reversed_sort_order.append(context_logger->context_order);
-              reversed_context_names.append(context_logger->context_name);
             }
             else {
               /* The first non-group tree logger is the root tree. Its parent is the
@@ -1220,11 +1203,6 @@ Span<debug_view::Candidate> NodesEvalLog::debug_view_candidates()
         if (!supported_context) {
           continue;
         }
-        std::ranges::reverse(reversed_sort_order);
-        std::ranges::reverse(reversed_context_names);
-        std::ranges::reverse(reversed_tree_session_uids);
-        const ComputeContextHash tree_lineage_hash = debug_view::node_tree_lineage_hash(
-            reversed_tree_session_uids);
 
         for (const NodeTreeLogger::ViewerNodeLogWithNode &viewer_log :
              tree_logger.viewer_node_logs)
@@ -1232,20 +1210,17 @@ Span<debug_view::Candidate> NodesEvalLog::debug_view_candidates()
           if (!viewer_log.viewer_log->is_geometry_debug_view_candidate()) {
             continue;
           }
-          candidates.append({});
-          debug_view::Candidate &candidate = candidates.last();
-          candidate.identifier = {context_hash, tree_lineage_hash, viewer_log.node_id};
-          candidate.viewer_log = viewer_log.viewer_log.get();
-          candidate.sort_order = reversed_sort_order;
-          candidate.sort_order.append(viewer_log.viewer_log->node_order);
-          if (viewer_log.viewer_log->use_context_names) {
-            candidate.context_names = reversed_context_names;
+          const bool is_duplicate = std::ranges::any_of(
+              candidates, [&](const debug_view::Candidate &candidate) {
+                return candidate.compute_context_hash == context_hash &&
+                       candidate.viewer_node_id == viewer_log.node_id;
+              });
+          if (!is_duplicate) {
+            candidates.append({context_hash, viewer_log.node_id, viewer_log.viewer_log.get()});
           }
-          candidate.viewer_name = viewer_log.viewer_log->debug_view_name;
         }
       }
     }
-    debug_view::finalize_candidates(candidates);
   });
   return debug_view_candidates_cache_;
 }

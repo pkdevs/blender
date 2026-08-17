@@ -24,7 +24,6 @@
 #include "NOD_geometry_exec.hh"
 #include "NOD_geometry_nodes_bundle.hh"
 #include "NOD_geometry_nodes_closure.hh"
-#include "NOD_geometry_nodes_debug_view.hh"
 #include "NOD_geometry_nodes_lazy_function.hh"
 #include "NOD_geometry_nodes_list.hh"
 #include "NOD_multi_function.hh"
@@ -856,30 +855,9 @@ static bool modifier_requests_persistent_debug_views_at_root(const GeoNodesUserD
              user_data.compute_context) != nullptr;
 }
 
-static StringRef propagated_debug_view_name(const GeoNodesUserData &user_data, const bNode &node)
-{
-  if (!user_data.call_data->side_effect_nodes) {
-    return {};
-  }
-  const std::string *name = user_data.call_data->side_effect_nodes->debug_view_names_by_context
-                                .lookup_ptr({user_data.compute_context->hash(), node.identifier});
-  return name ? StringRef(*name) : StringRef();
-}
-
-static void initialize_viewer_log(const bNode &node,
-                                  const bool is_debug_view,
-                                  eval_log::ViewerNodeLog &log,
-                                  const StringRef propagated_name = {})
+static void initialize_viewer_log(const bool is_debug_view, eval_log::ViewerNodeLog &log)
 {
   log.is_debug_view = is_debug_view;
-  log.node_order = node.index();
-  if (!propagated_name.is_empty()) {
-    log.debug_view_name = propagated_name;
-    log.use_context_names = false;
-  }
-  else {
-    log.debug_view_name = debug_view::viewer_name_from_node(node.label, node.name);
-  }
 }
 
 class LazyFunctionForViewerNode : public LazyFunction {
@@ -942,8 +920,6 @@ class LazyFunctionForViewerNode : public LazyFunction {
     }
 
     LinearAllocator<> &allocator = *tree_logger->allocator;
-    const StringRef propagated_name = propagated_debug_view_name(user_data, bnode_);
-
     if (is_debug_view_) {
       const bNodeSocket &show_socket = bnode_.input_socket(storage.items_num);
       const int show_param_index = lf_index_by_bsocket_[show_socket.index_in_tree()];
@@ -955,7 +931,7 @@ class LazyFunctionForViewerNode : public LazyFunction {
       const bool show = show_variant->get<bool>();
       if (!show) {
         auto log = allocator.construct<eval_log::ViewerNodeLog>();
-        initialize_viewer_log(bnode_, true, *log, propagated_name);
+        initialize_viewer_log(true, *log);
         log->is_shown = false;
         tree_logger->viewer_node_logs.append(allocator, {bnode_.identifier, std::move(log)});
         for (const int i : IndexRange(storage.items_num)) {
@@ -983,7 +959,7 @@ class LazyFunctionForViewerNode : public LazyFunction {
     }
 
     auto log = allocator.construct<eval_log::ViewerNodeLog>();
-    initialize_viewer_log(bnode_, is_debug_view_, *log, propagated_name);
+    initialize_viewer_log(is_debug_view_, *log);
     geo_viewer_node_log(bnode_, values, *log);
     tree_logger->viewer_node_logs.append(allocator, {bnode_.identifier, std::move(log)});
   }

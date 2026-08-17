@@ -4,13 +4,9 @@
 
 #pragma once
 
-#include <string>
-
 #include "BLI_compute_context.hh"
 #include "BLI_multi_value_map.hh"
 #include "BLI_set.hh"
-#include "BLI_span.hh"
-#include "BLI_string_ref.hh"
 #include "BLI_vector.hh"
 
 namespace blender {
@@ -50,73 +46,25 @@ struct TreeDebugViewPropagation {
 /** Update the cached explicit Debug View exposure information on a node tree. */
 bool update_tree_debug_view_propagation(bNodeTree &tree);
 
-/** Prefer a custom node label, then a meaningfully customized node name. */
-std::string viewer_name_from_node(StringRef label, StringRef node_name);
-
 /** Decide whether logged Viewer data can replace modifier geometry. */
 bool is_geometry_candidate(bool is_debug_view, bool is_shown, bool has_geometry);
 
-/**
- * Hash the original node-tree datablock session UIDs in deterministic outer-to-inner order.
- *
- * Session UIDs are stable for the current Blender session and across memfile undo, but are
- * intentionally regenerated when a file is loaded normally.
- */
-ComputeContextHash node_tree_lineage_hash(Span<uint32_t> tree_session_uids);
-
-/** Stable identity of a Viewer node within one Geometry Nodes modifier evaluation. */
-struct Identifier {
-  ComputeContextHash compute_context_hash;
-  ComputeContextHash node_tree_lineage_hash;
-  int32_t viewer_node_id = 0;
-
-  uint64_t hash() const;
-
-  friend bool operator==(const Identifier &, const Identifier &) = default;
-};
-
-/**
- * A selectable persistent geometry Debug View.
- *
- * The log pointer is only valid while the owning #NodesEvalLog is kept alive. It is never stored
- * as modifier selection state.
- */
+/** A logged persistent geometry Debug View source. */
 struct Candidate {
-  Identifier identifier;
+  ComputeContextHash compute_context_hash;
+  int32_t viewer_node_id = 0;
   const eval_log::ViewerNodeLog *viewer_log = nullptr;
-
-  /** Node order at every nested group level, followed by the Viewer node order. */
-  Vector<int> sort_order;
-  /** Human-readable names of the nested group instances. */
-  Vector<std::string> context_names;
-  /** Empty for the standard Viewer name, which is translated only when presented in the UI. */
-  std::string viewer_name;
 };
 
-struct CandidatePresentation {
-  std::string display_name;
-  std::string full_name;
-};
-
-/** Sort candidates deterministically and remove duplicate identities. */
-void finalize_candidates(Vector<Candidate> &candidates);
-
 /**
- * Build presentation names from names captured during evaluation and disambiguate every candidate
- * in one linear pass.
- */
-Vector<CandidatePresentation> candidate_presentations(Span<Candidate> candidates,
-                                                      StringRef default_viewer_name);
-
-/**
- * Stable namespace for this Debug View in a dupli persistent-ID chain.
+ * Reserve a stable namespace for this Debug View in a dupli persistent-ID chain, probing
+ * deterministically if another source has the same hash.
  *
  * #INT_MAX is reserved as the end marker of a persistent ID.
  */
-int persistent_id_namespace(const Identifier &identifier);
-
-/** Reserve a namespace, probing deterministically if another enabled source has the same hash. */
-int unique_persistent_id_namespace(const Identifier &identifier, Set<int> &used_namespaces);
+int unique_persistent_id_namespace(const ComputeContextHash &compute_context_hash,
+                                   int32_t viewer_node_id,
+                                   Set<int> &used_namespaces);
 
 }  // namespace debug_view
 }  // namespace nodes

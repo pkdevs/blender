@@ -1910,8 +1910,8 @@ bool object_duplilist_debug_view(Depsgraph *depsgraph, Object *ob_eval, DupliLis
      * instances generated from different top-level preview sources. */
     DupliContext preview_ctx = ctx;
     preview_ctx.persistent_id[preview_ctx.level] =
-        nodes::debug_view::unique_persistent_id_namespace(candidate.identifier,
-                                                          used_preview_namespaces);
+        nodes::debug_view::unique_persistent_id_namespace(
+            candidate.compute_context_hash, candidate.viewer_node_id, used_preview_namespaces);
     preview_ctx.instance_idx[preview_ctx.level] = 0;
     preview_ctx.instance_data[preview_ctx.level] = nullptr;
     preview_ctx.level++;

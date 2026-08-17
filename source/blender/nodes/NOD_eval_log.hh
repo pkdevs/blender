@@ -259,11 +259,6 @@ class ViewerNodeLog {
  public:
   bool is_debug_view = false;
   bool is_shown = true;
-  int node_order = 0;
-  /** Empty when the node has neither a custom label nor a meaningfully customized name. */
-  std::string debug_view_name;
-  /** Do not add nested group context names when an interface provides the presentation name. */
-  bool use_context_names = true;
 
   struct Item {
     int identifier;
@@ -330,8 +325,6 @@ class NodeTreeLogger {
   std::optional<ComputeContextHash> parent_hash;
   std::optional<int32_t> parent_node_id;
   ContextType context_type = ContextType::Other;
-  int context_order = 0;
-  std::string context_name;
   Vector<ComputeContextHash> children_hashes;
   /**
    * The #ID.session_uid of the tree that this logger is for. It's an optional value because under
@@ -549,8 +542,8 @@ class NodesEvalLog {
    * code.
    */
   Map<ComputeContextHash, std::unique_ptr<NodeTreeLog>> tree_logs_;
-  /* Finalized candidates are immutable once this evaluation log is published. Candidate log
-   * pointers share this evaluation log's lifetime. */
+  /* Candidates are immutable once this evaluation log is published. Candidate log pointers share
+   * this evaluation log's lifetime. */
   CacheMutex debug_view_candidates_cache_mutex_;
   Vector<debug_view::Candidate> debug_view_candidates_cache_;
 

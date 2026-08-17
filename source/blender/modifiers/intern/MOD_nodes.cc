@@ -765,9 +765,6 @@ static void add_propagated_debug_views_for_group_node(
       }
       try_add_side_effect_node(
           ctx, *current_compute_context, viewer_node->identifier, nmd, r_side_effect_nodes);
-      r_side_effect_nodes.debug_view_names_by_context.add_overwrite(
-          {current_compute_context->hash(), viewer_node->identifier},
-          std::string(group_input_socket.name));
     }
   }
 }
