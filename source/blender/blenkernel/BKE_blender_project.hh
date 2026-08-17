@@ -189,7 +189,7 @@ class BlenderProject {
   /**
    * Remove the given variable.
    *
-   * Returns the index that the removed variable had, or -1 if the variable
+   * \returns The index that the removed variable had, or -1 if the variable
    * wasn't found.
    */
   int remove_variable(ProjectVariable *var);
