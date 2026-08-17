@@ -27,12 +27,25 @@ struct Main;
 
 namespace bke {
 
+/**
+ * The main data type of a project variable.
+ *
+ * We intentionally re-use the values from `eIDPropertyType` to make translation
+ * between the two easy.
+ */
 enum class ProjectVariableType : char {
   STRING = eIDPropertyType::IDP_STRING,
   INT = eIDPropertyType::IDP_INT,
   FLOAT = eIDPropertyType::IDP_FLOAT,
 };
 
+/**
+ * The subtype of a string project variable, indicating how the data should be
+ * interpreted.
+ *
+ * We intentionally re-use the values from `PropertySubType` to make translation
+ * between the two easy.
+ */
 enum class ProjectVariableStringSubtype {
   /* These should be kept in sync with their counterparts in PropertySubType
    * from RNA_types.hh. We don't include that header here because some places
@@ -41,6 +54,12 @@ enum class ProjectVariableStringSubtype {
   FILEPATH = 1, /* PropertySubType::PROP_FILEPATH */
 };
 
+/**
+ * A variable in a project.
+ *
+ * A project variable is a named value (like a string or integer)
+ * that is shared across all blend files in a project.
+ */
 class ProjectVariable : public IDProperty {
  public:
   ProjectVariable(StringRef name, ProjectVariableType type);
@@ -51,7 +70,7 @@ class ProjectVariable : public IDProperty {
   ProjectVariable(ProjectVariable &&other) noexcept;
   ProjectVariable &operator=(ProjectVariable &&other) noexcept;
 
-  /** Get this variable as its underlying ID property. */
+  /** Get the underlying ID property of the variable. */
   IDProperty &prop()
   {
     return *this;
@@ -64,10 +83,23 @@ class ProjectVariable : public IDProperty {
   /**
    * Get the variable's name.
    *
+   * Note that renaming a variable requires access to project data (to ensure
+   * name uniqueness), and therefore variable renaming is done via
+   * `rename_variable()` on `Project` rather than by a method on the variable
+   * itself.
+   *
    * \see Project::rename_variable()
    */
   StringRefNull name_get() const;
 
+  /**
+   * Get the variable's type.
+   *
+   * Note that the variable's type is determined at construction time,
+   * and cannot be changed after.
+   *
+   * \see Project::new_variable()
+   */
   ProjectVariableType type_get() const;
 
   ProjectVariableStringSubtype string_subtype_get() const;
@@ -145,6 +177,13 @@ class BlenderProject {
    */
   int find_variable_index(ProjectVariable *var);
 
+  /**
+   * Create a new variable of the given name and type.
+   *
+   * If `name` does not adhere to naming requirements, it is automatically
+   * altered to meet them by substituting invalid characters. `name` will also
+   * be modified if needed to make it unique among the current variables.
+   */
   ProjectVariable *new_variable(StringRef name, ProjectVariableType type);
 
   /**
@@ -168,7 +207,8 @@ class BlenderProject {
    * Rename the variable at the given index.
    *
    * If `name` does not adhere to naming requirements, it is automatically
-   * altered to meet them by substituting invalid characters.
+   * altered to meet them by substituting invalid characters. `name` will also
+   * be modified if needed to make it unique among the current variables.
    */
   bool rename_variable(int variable_index, StringRef name);
 };
