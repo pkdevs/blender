@@ -20,18 +20,24 @@ from bpy.app.translations import (
 
 logger = logging.getLogger(__name__)
 
-# Only increment for breaking changes.
+# The schema version of the Project Config, for managing breaking schema changes.
 #
-# In general, schema changes should as much as possible be made in a way that is
-# both backwards and forwards compatible:
-# - Forwards compatibility is basically free when strictly adding to the schema,
-#   and not changing any existing fields. This is due to unsupported fields in
-#   the TOML file simply being ignored.
-# - Backwards compatibility needs a little more attention, but boils down to:
-#   make sure that new fields are always optional.
+# Only increment this when there are breaking schema changes.
 #
-# Only when that's not reasonably possible should this version number be
-# incremented.
+# Project versioning should generally follow the same approach as blend file
+# versioning. In short:
+#
+# - When reasonably possible, change the schema in ways that fully preserve
+#   backwards compatibility and that avoid critical forwards compatibility
+#   breaks.
+# - When that's not possible, plan ahead and only make the needed breaking
+#   changes on major version bumps of Blender (e.g. 5.x -> 6.x).
+# - In the version just before a major version bump, add forwards compatibility
+#   code for the anticipated breaking changes, so that e.g. the last 5.x release
+#   can still open projects from Blender 6.0.
+#
+# For more details, see:
+# https://developer.blender.org/docs/handbook/guidelines/compatibility_handling_for_blend_files/
 #
 # NOTE: when incrementing this version number, ensure that the versioning code
 # in `read_project_toml_config()` is appropriately expanded to auto-upgrade
