@@ -164,7 +164,7 @@ struct TreeDrawContext {
    */
   Array<Vector<NodeExtraInfoRow>> extra_info_rows_per_node;
 
-  Map<int32_t, VectorSet<std::pair<std::string, nodes::NodeWarningType>>> shader_node_errors;
+  Map<int32_t, VectorSet<nodes::NodeWarning>> shader_node_errors;
 
   ~TreeDrawContext()
   {
@@ -2104,12 +2104,12 @@ static void node_draw_panels(bNodeTree &ntree, const bNode &node, ui::Block &blo
   }
 }
 
-static nodes::NodeWarningType node_error_highest_priority(
-    Span<nodes::NodeWarning> warnings)
+template<typename WarningsRange>
+static nodes::NodeWarningType node_error_highest_priority(const WarningsRange &warnings)
 {
   int highest_priority = 0;
   nodes::NodeWarningType highest_priority_type = nodes::NodeWarningType::Info;
-  for (const nodes::NodeWarning &warning : warnings) {
+  for (const auto &warning : warnings) {
     const int priority = node_warning_type_severity(warning.type);
     if (priority > highest_priority) {
       highest_priority = priority;
@@ -2205,35 +2205,28 @@ static void node_add_error_message_button(const TreeDrawContext &tree_draw_ctx,
     return;
   }
   if (ntree.type == NTREE_SHADER) {
-    const VectorSet<std::pair<std::string, nodes::NodeWarningType>> *errors =
-        tree_draw_ctx.shader_node_errors.lookup_ptr(node.identifier);
+    const VectorSet<nodes::NodeWarning> *errors = tree_draw_ctx.shader_node_errors.lookup_ptr(
+        node.identifier);
     if (!errors) {
       return;
     }
     if (errors->is_empty()) {
       return;
     }
-    nodes::NodeWarningType highest_priority = nodes::NodeWarningType::Info;
-    for (const std::pair<std::string, nodes::NodeWarningType> &error : *errors) {
-      if (nodes::node_warning_type_severity(error.second) >
-          nodes::node_warning_type_severity(highest_priority))
-      {
-        highest_priority = error.second;
-      }
-    }
-    const int icon = nodes::node_warning_type_icon(highest_priority);
-    ui::Button *but = add_error_message_button(block, rect, icon, icon_offset);
+    const nodes::NodeWarningType display_type = node_error_highest_priority(*errors);
+    ui::Button *but = add_error_message_button(
+        block, rect, nodes::node_warning_type_icon(display_type), icon_offset);
     button_func_quick_tooltip_set(but, [errors = *errors](const ui::Button * /*but*/) {
       Vector<std::string> tooltip_lines;
-      for (const int i : errors.index_range()) {
-        std::string error = errors[i].first;
-        if (error.empty()) {
+      for (const nodes::NodeWarning &error : errors) {
+        std::string message = error.message;
+        if (message.empty()) {
           continue;
         }
-        if (!error.ends_with(".")) {
-          error += ".";
+        if (!message.ends_with(".")) {
+          message += ".";
         }
-        tooltip_lines.append(std::move(error));
+        tooltip_lines.append(std::move(message));
       }
       return fmt::format("{}", fmt::join(tooltip_lines, "\n"));
     });

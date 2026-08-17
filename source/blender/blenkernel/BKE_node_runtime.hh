@@ -205,9 +205,9 @@ class bNodeTreeRuntime : NonCopyable, NonMovable {
 
   /**
    * Error messages for shading nodes. Those don't have more contextual information yet. Maps
-   * #bNode::identifier to error messages.
+   * #bNode::identifier to warnings.
    */
-  Map<int32_t, VectorSet<std::pair<std::string, nodes::NodeWarningType>>> shader_node_errors;
+  Map<int32_t, VectorSet<nodes::NodeWarning>> shader_node_errors;
   Mutex shader_node_errors_mutex;
 
   /**

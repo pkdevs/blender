@@ -1726,7 +1726,7 @@ class ShaderNodesInliner {
           {PrimitiveSocketValue::from_value({output_socket->typeinfo->base_cpp_type, value})});
     }
 
-    for (const ShaderNodesMultiFunctionUserData::Warning &warning : user_data.warnings) {
+    for (const NodeWarning &warning : user_data.warnings) {
       this->report_error(node, warning.message, warning.type);
     }
   }

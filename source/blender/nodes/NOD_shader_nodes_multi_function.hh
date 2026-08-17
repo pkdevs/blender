@@ -12,12 +12,7 @@ namespace blender::nodes {
 
 class ShaderNodesMultiFunctionUserData : public fn::UserData {
  public:
-  struct Warning {
-    NodeWarningType type;
-    std::string message;
-  };
-
-  Vector<Warning> warnings;
+  Vector<NodeWarning> warnings;
 };
 
 }  // namespace blender::nodes
