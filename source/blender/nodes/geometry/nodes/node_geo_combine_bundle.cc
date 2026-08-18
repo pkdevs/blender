@@ -60,6 +60,10 @@ static void node_declare(NodeDeclarationBuilder &b)
         decl.structure_type(StructureType::Dynamic);
       }
 
+      if (tree->type == NTREE_COMPOSIT) {
+        decl.compositor_realization_mode(CompositorInputRealizationMode::None);
+      }
+
       if (flat_bundle_type) {
         if (const SocketDeclaration *src_decl = flat_bundle_type->find_decl(name)) {
           decl.try_copy_ui_data(*src_decl);

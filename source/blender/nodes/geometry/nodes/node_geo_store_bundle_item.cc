@@ -41,6 +41,11 @@ static void node_declare(NodeDeclarationBuilder &b)
     else {
       decl.structure_type(StructureType(storage.structure_type));
     }
+
+    const bNodeTree *node_tree = b.tree_or_null();
+    if (node_tree && node_tree->type == NTREE_COMPOSIT) {
+      decl.compositor_realization_mode(CompositorInputRealizationMode::None);
+    }
   }
 }
 
