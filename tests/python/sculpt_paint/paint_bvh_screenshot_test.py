@@ -9,6 +9,7 @@ import sys
 
 BASE_DIR = os.path.dirname(os.path.realpath(__file__))
 
+
 def screenshot():
     sys.path.insert(0, BASE_DIR)
     from modules.test_helpers import set_view3d_context_override
