@@ -83,22 +83,22 @@ inline float radians(float deg) { return deg * 0.01745329251f; /* M_PI_F / 180 *
 inline float degrees(float rad) { return rad * 57.2957795131f; /* 180 / M_PI_F */ }
 inline uint packHalf2x16(float2 v) { return as_type<uint>(half2(v)); }
 inline float2 unpackHalf2x16(uint v) { return float2(as_type<half2>(v)); }
-inline int floatBitsToInt(float f) { return as_type<int>(f); }
-inline int2 floatBitsToInt(float2 f) { return as_type<int2>(f); }
-inline int3 floatBitsToInt(float3 f) { return as_type<int3>(f); }
-inline int4 floatBitsToInt(float4 f) { return as_type<int4>(f); }
-inline uint floatBitsToUint(float f) { return as_type<uint>(f); }
-inline uint2 floatBitsToUint(float2 f) { return as_type<uint2>(f); }
-inline uint3 floatBitsToUint(float3 f) { return as_type<uint3>(f); }
-inline uint4 floatBitsToUint(float4 f) { return as_type<uint4>(f); }
-inline float intBitsToFloat(int f) { return as_type<float>(f); }
-inline float2 intBitsToFloat(int2 f) { return as_type<float2>(f); }
-inline float3 intBitsToFloat(int3 f) { return as_type<float3>(f); }
-inline float4 intBitsToFloat(int4 f) { return as_type<float4>(f); }
-inline float uintBitsToFloat(uint f) { return as_type<float>(f); }
-inline float2 uintBitsToFloat(uint2 f) { return as_type<float2>(f); }
-inline float3 uintBitsToFloat(uint3 f) { return as_type<float3>(f); }
-inline float4 uintBitsToFloat(uint4 f) { return as_type<float4>(f); }
+inline constexpr int floatBitsToInt(float f) { return as_type<int>(f); }
+inline constexpr int2 floatBitsToInt(float2 f) { return as_type<int2>(f); }
+inline constexpr int3 floatBitsToInt(float3 f) { return as_type<int3>(f); }
+inline constexpr int4 floatBitsToInt(float4 f) { return as_type<int4>(f); }
+inline constexpr uint floatBitsToUint(float f) { return as_type<uint>(f); }
+inline constexpr uint2 floatBitsToUint(float2 f) { return as_type<uint2>(f); }
+inline constexpr uint3 floatBitsToUint(float3 f) { return as_type<uint3>(f); }
+inline constexpr uint4 floatBitsToUint(float4 f) { return as_type<uint4>(f); }
+inline constexpr float intBitsToFloat(int f) { return as_type<float>(f); }
+inline constexpr float2 intBitsToFloat(int2 f) { return as_type<float2>(f); }
+inline constexpr float3 intBitsToFloat(int3 f) { return as_type<float3>(f); }
+inline constexpr float4 intBitsToFloat(int4 f) { return as_type<float4>(f); }
+inline constexpr float uintBitsToFloat(uint f) { return as_type<float>(f); }
+inline constexpr float2 uintBitsToFloat(uint2 f) { return as_type<float2>(f); }
+inline constexpr float3 uintBitsToFloat(uint3 f) { return as_type<float3>(f); }
+inline constexpr float4 uintBitsToFloat(uint4 f) { return as_type<float4>(f); }
 /* clang-format on */
 
 #define bitfieldReverse reverse_bits

@@ -319,6 +319,7 @@ SourceProcessor::Result SourceProcessor::convert_bsl()
     // lower_tests(parser);
     /* Needs to be last. */
     lower_resource_macro_placeholder_ast(parser);
+    lower_constructors(parser);
 
     parser.language = Language::IL;
     parser.apply_mutations();

@@ -335,6 +335,24 @@ void SourceProcessor::lower_method_definitions(Parser &parser)
   parser.apply_mutations();
 }
 
+void SourceProcessor::lower_constructors(Parser &parser)
+{
+  for (FuncCall call : parser.root().children_of_type<FuncCall>()) {
+    if (call.identifier().str() != "_ctor") {
+      continue;
+    }
+    Token comma = call.parameters().child_first().back().next();
+    if (comma != ',') {
+      report_error(comma, "Compiler error: expecting comma");
+    }
+    parser.replace(comma, ") ");
+    parser.replace(call.back(), " _rotc()");
+  }
+  if (error_handler.err) {
+    throw ParserException();
+  }
+}
+
 /* Transform `a.fn(b)` into `fn(a, b)`. */
 void SourceProcessor::lower_method_calls(Parser &parser, bool with_prefix)
 {

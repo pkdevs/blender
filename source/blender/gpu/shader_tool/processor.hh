@@ -306,6 +306,7 @@ class SourceProcessor {
   void lower_empty_struct(Parser &parser);
   /* Transform `a.fn(b)` into `fn(a, b)`. */
   void lower_method_calls(Parser &parser, bool with_prefix = true);
+  void lower_constructors(Parser &parser);
   /* Transform `auto [a, b] = fn()` into `S _tmp = fn(); a = _tmp.A; b = _tmp.B;`. */
   void lower_structured_bindings(Parser &parser);
   /* Parse, convert to create infos, and erase declaration. */

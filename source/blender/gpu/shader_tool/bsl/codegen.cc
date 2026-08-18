@@ -2347,10 +2347,11 @@ struct CodegenContext : NodeErrorHandler {
       }
     }
     else {
-      /* '_ctor' macro resolve to either aggregate or default constructor depending on target
-       * language. */
-      open = "_ctor(" + cls->identifier + ")";
-      close = " _rotc()";
+      /* NOTE: Converting to `_ctor(id) param _rotc()` messes with the core syntax and prevent
+       * using AST for the next lowering passes. Instead convert to _ctor(id, params) and lower it
+       * to final macro later. */
+      open = "_ctor(" + cls->identifier + ",";
+      close = ")";
     }
     open += trivia(list.front());
     close += trivia(list.back());
@@ -2763,7 +2764,6 @@ void SourceProcessor::lower_bsl_to_il(Parser &parser, bsl::SymbolTable &symbols)
     throw ParserException();
   }
 
-  parser.language = Language::IL;
   parser.set_str(str);
 }
 }  // namespace blender::gpu::shader
