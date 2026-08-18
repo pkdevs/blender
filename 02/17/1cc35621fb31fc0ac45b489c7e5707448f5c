@@ -1,2 +1,3 @@
 Referenced by issue #162582, Crash rendering at very small resolution using Cycles with both GPU & CPU
 Referenced by pull request #162588, Fix #162582: Cycles crash rendering small images on multiple devices
+Referenced by commit cb2479ad5b9e2bcaba1c9bdbd869cd6bf241499c, Fix #162582: Cycles crash vith small render on multiple devices
