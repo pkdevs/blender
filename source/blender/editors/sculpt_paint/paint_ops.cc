@@ -216,7 +216,7 @@ static wmOperatorStatus stencil_control_invoke(bContext *C, wmOperator *op, cons
     }
   }
 
-  scd = MEM_new_uninitialized<StencilControlData>(__func__);
+  scd = MEM_new_zeroed<StencilControlData>(__func__);
   scd->mask = mask;
   scd->br = br;
 
