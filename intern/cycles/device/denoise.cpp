@@ -31,7 +31,7 @@ const NodeEnum *DenoiseParams::get_type_enum()
 
   if (type_enum.empty()) {
     type_enum.insert("optix", DENOISER_OPTIX);
-    type_enum.insert("openimageio", DENOISER_OPENIMAGEDENOISE);
+    type_enum.insert("openimagedenoise", DENOISER_OPENIMAGEDENOISE);
     type_enum.insert("dlss", DENOISER_DLSS);
   }
 
