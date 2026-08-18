@@ -570,6 +570,9 @@ GAttributeWriter MutableAttributeAccessor::convert_or_add_for_write(
     if (this->add_override(name, domain, data_type, attributeInit)) {
       return this->lookup_for_write(name);
     }
+    /* Transfer failed. */
+    type.destruct_n(converted_data, data_on_domain.size());
+    MEM_delete_void(converted_data);
     return {};
   }
   this->add(name, domain, data_type, initializer);
