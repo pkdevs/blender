@@ -248,8 +248,8 @@ wstring string_to_wstring(const string &str)
   wstring str_wc(length_wc, 0);
   MultiByteToWideChar(CP_UTF8, 0, str.c_str(), str.length(), &str_wc[0], length_wc);
 #else
-  char *const old_locale = strdup(setlocale(LC_CTYPE, nullptr));
-  setlocale(LC_CTYPE, "en_US.UTF-8");
+  locale_t new_locale = newlocale(LC_CTYPE_MASK, "en_US.UTF-8", (locale_t)0);
+  locale_t old_locale = uselocale(new_locale);
   mbstate_t state = {};
   const char *str_p = str.c_str();
   const size_t length_wc = mbsrtowcs(nullptr, &str_p, 0, &state);
@@ -258,8 +258,8 @@ wstring string_to_wstring(const string &str)
     str_wc.resize(length_wc, 0);
     mbsrtowcs(str_wc.data(), &str_p, str_wc.size(), &state);
   }
-  setlocale(LC_CTYPE, old_locale);
-  free(old_locale);
+  uselocale(old_locale);
+  freelocale(new_locale);
 #endif
   return str_wc;
 }
@@ -273,8 +273,8 @@ string string_from_wstring(const wstring &str)
   WideCharToMultiByte(
       CP_UTF8, 0, str.c_str(), str.size(), &str_mb[0], length_mb, nullptr, nullptr);
 #else
-  char *const old_locale = strdup(setlocale(LC_CTYPE, nullptr));
-  setlocale(LC_CTYPE, "en_US.UTF-8");
+  locale_t new_locale = newlocale(LC_CTYPE_MASK, "en_US.UTF-8", (locale_t)0);
+  locale_t old_locale = uselocale(new_locale);
   const wchar_t *str_p = str.c_str();
   mbstate_t state = {};
   const size_t length_mb = wcsrtombs(nullptr, &str_p, 0, &state);
@@ -283,8 +283,8 @@ string string_from_wstring(const wstring &str)
     str_mb.resize(length_mb, 0);
     wcsrtombs(str_mb.data(), &str_p, str_mb.size(), &state);
   }
-  setlocale(LC_CTYPE, old_locale);
-  free(old_locale);
+  uselocale(old_locale);
+  freelocale(new_locale);
 #endif
   return str_mb;
 }
