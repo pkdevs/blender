@@ -21,43 +21,6 @@
 
 namespace blender::nodes::node_geo_bone_info_cc {
 
-struct BoneInfo {
-  float4x4 pose;
-  float4x4 local_pose;
-  float4x4 transform_pose;
-  float4x4 rest_pose;
-  float rest_length;
-};
-
-/**
- * \param object: Armature object.
- * \param pchan: Pose channel of the bone.
- * \param geometry_transform: Transform multiplied with pose and rest pose to express them in a different space.
- * Identity leaves those outputs in armature space (used by Geometry Nodes original mode and Compositor; the latter
- * because it has no modified object). Relative mode for Geometry Nodes passes the transform in order to map
- * from armature space to the modified object's space.
- */
-static BoneInfo compute_bone_info(const Object &object,
-                                  const bPoseChannel &pchan,
-                                  const float4x4 &geometry_transform)
-{
-  const Bone *bone = pchan.bone_get(object);
-  const float4x4 pose = geometry_transform * float4x4(pchan.pose_mat);
-  const float4x4 rest_pose = geometry_transform * float4x4(bone->arm_mat);
-
-  const float4x4 parent_pose = pchan.parent ? float4x4(pchan.parent->pose_mat) :
-                                              float4x4::identity();
-  const float4x4 parent_rest_pose = bone->parent ? float4x4(bone->parent->arm_mat) :
-                                                   float4x4::identity();
-  const float4x4 local_pose = math::invert(rest_pose) * parent_rest_pose *
-                              math::invert(parent_pose) * pose;
-
-  float4x4 transform_pose;
-  BKE_pchan_to_mat4({&pchan, bone}, transform_pose.ptr());
-
-  return {pose, local_pose, transform_pose, rest_pose, bone->length};
-}
-
 static void node_declare(NodeDeclarationBuilder &b)
 {
   b.add_input<decl::Object>("Armature"_ustr)
@@ -138,6 +101,37 @@ static void node_node_init(bNodeTree * /*tree*/, bNode *node)
   node->custom1 = GEO_NODE_TRANSFORM_SPACE_ORIGINAL;
 }
 
+struct BoneInfo {
+  float4x4 pose;
+  float4x4 local_pose;
+  float4x4 transform_pose;
+  float4x4 rest_pose;
+  float rest_length;
+};
+
+/* Computes the bone info of the bone with the given pose channel in the given armature object.
+ * If provided, the bone will be transformed into the given transformation space. */
+static BoneInfo compute_bone_info(const Object &object,
+                                  const bPoseChannel &pchan,
+                                  const float4x4 &space_transformation = float4x4::identity())
+{
+  const Bone *bone = pchan.bone_get(object);
+  const float4x4 pose = space_transformation * float4x4(pchan.pose_mat);
+  const float4x4 rest_pose = space_transformation * float4x4(bone->arm_mat);
+
+  const float4x4 parent_pose = pchan.parent ? float4x4(pchan.parent->pose_mat) :
+                                              float4x4::identity();
+  const float4x4 parent_rest_pose = bone->parent ? float4x4(bone->parent->arm_mat) :
+                                                   float4x4::identity();
+  const float4x4 local_pose = math::invert(rest_pose) * parent_rest_pose *
+                              math::invert(parent_pose) * pose;
+
+  float4x4 transform_pose;
+  BKE_pchan_to_mat4({&pchan, bone}, transform_pose.ptr());
+
+  return {pose, local_pose, transform_pose, rest_pose, bone->length};
+}
+
 static void node_geo_exec(GeoNodeExecParams params)
 {
   Object *object = params.extract_input<Object *>("Armature"_ustr);
@@ -145,19 +139,16 @@ static void node_geo_exec(GeoNodeExecParams params)
     params.set_default_remaining_outputs();
     return;
   }
-
   if (object->type != OB_ARMATURE) {
     params.set_default_remaining_outputs();
     params.error_message_add(NodeWarningType::Error, TIP_("Object is not an armature"));
     return;
   }
-
   const std::string bone_name = params.extract_input<std::string>("Bone Name"_ustr);
   if (bone_name.empty()) {
     params.set_default_remaining_outputs();
     return;
   }
-
   if (!object->pose) {
     params.set_default_remaining_outputs();
     params.error_message_add(NodeWarningType::Error, TIP_("Object has no pose"));
@@ -242,7 +233,7 @@ class BoneInfoOperation : public compositor::NodeOperation {
       return;
     }
 
-    const BoneInfo values = compute_bone_info(*object, *pchan, float4x4::identity());
+    const BoneInfo values = compute_bone_info(*object, *pchan);
 
     compositor::Result &pose_result = this->get_result("Pose");
     if (pose_result.should_compute()) {
