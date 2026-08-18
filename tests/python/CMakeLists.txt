@@ -1688,18 +1688,18 @@ if(TEST_SRC_DIR_EXISTS)
 endif()
 
 if(WITH_GPU_MESH_PAINT_TESTS AND TEST_SRC_DIR_EXISTS)
-  set(render_tests
-    brushes
+  add_render_test(
+    sculpt_brush_render
+    ${CMAKE_CURRENT_LIST_DIR}/sculpt_brush_render_tests.py
+    --testdir "${TEST_SRC_DIR}/sculpting/brushes"
+    --outdir "${TEST_OUT_DIR}/sculpting"
   )
-
-  foreach(render_test ${render_tests})
-    add_render_test(
-      sculpt_render_${render_test}
-      ${CMAKE_CURRENT_LIST_DIR}/sculpt_brush_render_tests.py
-      --testdir "${TEST_SRC_DIR}/sculpting/${render_test}"
-      --outdir "${TEST_OUT_DIR}/sculpting"
-    )
-  endforeach()
+  add_render_test(
+    paint_bvh_screenshot
+    ${CMAKE_CURRENT_LIST_DIR}/sculpt_paint/paint_bvh_screenshot_test.py
+    --testdir "${TEST_SRC_DIR}/sculpting/paint_bvh"
+    --outdir "${TEST_OUT_DIR}/sculpting"
+  )
 endif()
 
 
