@@ -5,7 +5,6 @@
 #pragma once
 
 #include "draw_shader_shared.hh"
-#include "eevee_geom_interp.bsl.hh"
 #include "eevee_lightprobe_shared.hh" /* IWYU pragma: export: Needed for resource declaration. */
 #include "eevee_sampling_shared.hh"   /* IWYU pragma: export: Needed for resource declaration. */
 #include "eevee_shadow_shared.hh"

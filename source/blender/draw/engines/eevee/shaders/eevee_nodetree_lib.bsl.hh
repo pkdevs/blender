@@ -8,7 +8,6 @@
 #include "draw_model.bsl.hh"
 #include "draw_view.bsl.hh"
 #include "eevee_bxdf_lut_lib.bsl.hh"
-#include "eevee_geom_interp.bsl.hh"
 #include "eevee_hiz.bsl.hh"
 #include "eevee_nodetree_closures_lib.glsl"
 #include "eevee_pipeline.bsl.hh"

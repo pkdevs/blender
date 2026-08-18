@@ -13,9 +13,9 @@
 
 #pragma once
 
+#include "infos/eevee_geom_infos.hh"
 #include "infos/eevee_nodetree_infos.hh"
 
-#include "eevee_geom_interp.bsl.hh"
 #include "eevee_nodetree_frag_lib.glsl"
 #include "eevee_sampling_lib.bsl.hh"
 #include "eevee_shadow_shared.hh"

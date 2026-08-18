@@ -4,13 +4,13 @@
 
 #pragma once
 
+#include "infos/eevee_geom_infos.hh"
 #include "infos/eevee_nodetree_infos.hh"
 
 #include "draw_model.bsl.hh"
 #include "draw_pointcloud_lib.glsl"
 #include "draw_view.bsl.hh"
 #include "eevee_attributes_pointcloud_lib.glsl"
-#include "eevee_geom_interp.bsl.hh"
 #include "eevee_nodetree_vert_lib.glsl"
 #include "eevee_pipeline.bsl.hh"
 #include "eevee_reverse_z_lib.bsl.hh"

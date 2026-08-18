@@ -322,6 +322,8 @@ set(GLSL_SRC
   intern/shaders/subdiv_infos.hh
   intern/shaders/subdiv_patch_eval_infos.hh
 
+  engines/eevee/shaders/infos/eevee_common_infos.hh
+  engines/eevee/shaders/infos/eevee_geom_infos.hh
   engines/eevee/shaders/infos/eevee_nodetree_infos.hh
 
   engines/image/shaders/infos/engine_image_infos.hh
@@ -394,7 +396,6 @@ set(GLSL_SRC
   engines/eevee/shaders/eevee_gbuffer_types.bsl.hh
   engines/eevee/shaders/eevee_gbuffer_write.bsl.hh
   engines/eevee/shaders/eevee_geom_curves.bsl.hh
-  engines/eevee/shaders/eevee_geom_interp.bsl.hh
   engines/eevee/shaders/eevee_geom_mesh.bsl.hh
   engines/eevee/shaders/eevee_geom_pointcloud.bsl.hh
   engines/eevee/shaders/eevee_geom_types_lib.bsl.hh

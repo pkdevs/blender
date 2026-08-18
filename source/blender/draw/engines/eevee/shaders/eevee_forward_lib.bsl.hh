@@ -12,7 +12,6 @@
 
 #include "draw_model.bsl.hh"
 #include "eevee_colorspace_lib.bsl.hh"
-#include "eevee_geom_interp.bsl.hh"
 #include "eevee_light_eval.bsl.hh"
 #include "eevee_lightprobe.bsl.hh"
 #include "eevee_lightprobe_plane.bsl.hh"
