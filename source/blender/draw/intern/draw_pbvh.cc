@@ -283,8 +283,9 @@ class DrawCacheImpl : public DrawCache {
     /**
      * \brief Ensure the shared index buffer is large enough to hold the assigned space.
      *
-     * When this requires growing (or creating) the buffer, all per-node subranges are released
-     * (they get rebuilt into the new buffer by the next #ensure_*_indices pass).
+     * When this requires growing (or creating) the buffer, existing data is copied over and
+     * existing sub-ranges are recreated. It also increases the generation to inform that batches
+     * needs to be regenerated.
      */
     void ensure_capacity();
   };
@@ -323,7 +324,8 @@ class DrawCacheImpl : public DrawCache {
    */
   struct BatchCache {
     Vector<gpu::Batch *> batches;
-    uint64_t generation = 0;
+    uint64_t ibo_generation = 0;
+    uint64_t vbo_generation = 0;
   };
 
   /** Batches for drawing wireframe geometry. */
@@ -1570,11 +1572,8 @@ BLI_NOINLINE static void fill_uvs_grids(const Object &object,
           std::fill_n(data, node_info.vbo.len, float2(0));
         }
         else {
-          calc_node_uvs(subdiv_ccg,
-                        uv_channel,
-                        nodes[i],
-                        use_flat_layout[i],
-                        {data, node_info.vbo.len});
+          calc_node_uvs(
+              subdiv_ccg, uv_channel, nodes[i], use_flat_layout[i], {data, node_info.vbo.len});
         }
       },
       exec_mode::grain_size(1));
@@ -3261,21 +3260,25 @@ void DrawCacheImpl::IBOFamily::ensure_capacity()
   if (ibo && ibo->index_len_get() >= needed_len) {
     return;
   }
-  /* Release all subranges. The old shared buffer is freed once its last subrange is released and
-   * the cached batches are reconfigured in place to the new subranges (see #ensure_tris_batches).
-   * They are only reconfigured before any of the passes that reference them are submitted, so
-   * these subranges can be released right away. */
-  /* TODO: Index buffer regeneration can be reduced by implementing IndexBuf::copy_sub. Similar to
-   * what we've done for vertex buffers. This seems a missing part in this PR and results in
-   * recalculating each index buffer when index buffers don't fit anymore. Would only effect bmesh.
-   */
-  for (gpu::IndexBufPtr &ibo_sub : ibos) {
-    ibo_sub.reset();
+
+  /* Create new buffer. */
+  gpu::IndexBufPtr new_ibo = gpu::IndexBufPtr(
+      GPU_indexbuf_build_on_device(std::max(needed_len, 1u)));
+  GPU_indexbuf_use(new_ibo.get());
+  /* Copy over data from previous buffer. */
+  if (ibo) {
+    new_ibo->copy_sub(*ibo, 0, 0, ibo->index_len_get());
+    /* Rebuild all subranges.*/
+    for (gpu::IndexBufPtr &ibo_sub : ibos) {
+      if (ibo_sub) {
+        gpu::IndexBufPtr new_sub = gpu::IndexBufPtr(GPU_indexbuf_create_subrange(
+            new_ibo.get(), ibo_sub->index_start_get(), ibo_sub->index_len_get()));
+        ibo_sub.swap(new_sub);
+      }
+      generation++;
+    }
   }
-  ibo = gpu::IndexBufPtr(GPU_indexbuf_build_on_device(std::max(needed_len, 1u)));
-  /* Device memory must exist before any subrange data is uploaded with #GPU_indexbuf_update_sub.
-   */
-  GPU_indexbuf_use(ibo.get());
+  ibo.swap(new_ibo);
 }
 
 Span<gpu::Batch *> DrawCacheImpl::ensure_tris_batches(const Object &object,
@@ -3290,7 +3293,8 @@ Span<gpu::Batch *> DrawCacheImpl::ensure_tris_batches(const Object &object,
   this->free_nodes_with_changed_topology(pbvh);
 
   const bool coarse = request.use_coarse_grids;
-  (coarse ? ibo_tris_coarse_ : ibo_tris_).ensure_capacity();
+  IBOFamily &ibo_family = (coarse ? ibo_tris_coarse_ : ibo_tris_);
+  ibo_family.ensure_capacity();
 
   const Span<gpu::IndexBufPtr> ibos = this->ensure_tri_indices(
       object, orig_mesh_data, nodes_to_update, request.use_coarse_grids);
@@ -3317,7 +3321,8 @@ Span<gpu::Batch *> DrawCacheImpl::ensure_tris_batches(const Object &object,
   batches.resize(pbvh.nodes_num(), nullptr);
   nodes_to_update.foreach_index(
       [&](const int i) {
-        if (!batches[i] || batch_cache.generation != vbo_generation_ ||
+        if (!batches[i] || batch_cache.vbo_generation != vbo_generation_ ||
+            batch_cache.ibo_generation != ibo_family.generation ||
             batches[i]->elem_() != (ibos.is_empty() ? nullptr : ibos[i].get()))
         {
           if (!batches[i]) {
@@ -3332,7 +3337,8 @@ Span<gpu::Batch *> DrawCacheImpl::ensure_tris_batches(const Object &object,
         }
       },
       exec_mode::grain_size(64));
-  batch_cache.generation = vbo_generation_;
+  batch_cache.vbo_generation = vbo_generation_;
+  batch_cache.ibo_generation = ibo_family.generation;
 
   return batches;
 }
@@ -3349,7 +3355,8 @@ Span<gpu::Batch *> DrawCacheImpl::ensure_lines_batches(const Object &object,
   this->free_nodes_with_changed_topology(pbvh);
 
   const bool coarse = request.use_coarse_grids;
-  (coarse ? ibo_lines_coarse_ : ibo_lines_).ensure_capacity();
+  IBOFamily &ibo_family = (coarse ? ibo_lines_coarse_ : ibo_lines_);
+  ibo_family.ensure_capacity();
 
   const AttributeData &position = this->ensure_attribute_data(
       object, orig_mesh_data, CustomRequest::Position, nodes_to_update);
@@ -3362,7 +3369,8 @@ Span<gpu::Batch *> DrawCacheImpl::ensure_lines_batches(const Object &object,
   batches.resize(pbvh.nodes_num(), nullptr);
   nodes_to_update.foreach_index(
       [&](const int i) {
-        if (!batches[i] || batch_cache.generation != vbo_generation_ ||
+        if (!batches[i] || batch_cache.vbo_generation != vbo_generation_ ||
+            batch_cache.ibo_generation != ibo_family.generation ||
             batches[i]->elem_() != lines[i].get())
         {
           if (!batches[i]) {
@@ -3374,7 +3382,8 @@ Span<gpu::Batch *> DrawCacheImpl::ensure_lines_batches(const Object &object,
         }
       },
       exec_mode::grain_size(64));
-  batch_cache.generation = vbo_generation_;
+  batch_cache.vbo_generation = vbo_generation_;
+  batch_cache.ibo_generation = ibo_family.generation;
 
   return batches;
 }
