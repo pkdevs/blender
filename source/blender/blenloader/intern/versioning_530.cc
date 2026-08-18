@@ -232,6 +232,19 @@ void blo_do_versions_530(FileData * /*fd*/, Library * /*lib*/, Main *bmain)
         sd->paint.tile_offset[2] = 1.0f;
       }
     }
+
+    if (!MAIN_VERSION_FILE_ATLEAST(bmain, 503, 12)) {
+      for (bScreen &screen : bmain->screens) {
+        for (ScrArea &area : screen.areabase) {
+          for (SpaceLink &space : area.spacedata) {
+            if (space.spacetype == SPACE_IMAGE) {
+              SpaceImage *sima = reinterpret_cast<SpaceImage *>(&space);
+              sima->flag |= SI_SHOW_SEAMS;
+            }
+          }
+        }
+      }
+    }
   }
   /**
    * Always bump subversion in BKE_blender_version.h when adding versioning
