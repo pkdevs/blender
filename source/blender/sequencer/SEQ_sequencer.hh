@@ -113,6 +113,10 @@ struct EditingRuntime {
   PrefetchJob *prefetch_job = nullptr;
   CompositorCache *compositor_cache = nullptr;
 
+  /* Frame index that was rendered with a temporary, unkeyed value
+   * of an animated property. */
+  float temporary_animation_frame = MINAFRAMEF - 1.0f;
+
   /** Used for rendering a different frame using sequencer_draw_get_transform_preview from the box
    * blade tool. */
   int transform_preview_frame = 0;
