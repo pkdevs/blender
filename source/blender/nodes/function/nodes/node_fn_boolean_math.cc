@@ -202,6 +202,9 @@ NODE_SHADER_MATERIALX_BEGIN
   auto mx_or = [&](const NodeItem &x, const NodeItem &y) {
     return create_node("or", NodeItem::Type::Boolean, {{"in1", x}, {"in2", y}});
   };
+  auto mx_xor = [&](const NodeItem &x, const NodeItem &y) {
+    return create_node("xor", NodeItem::Type::Boolean, {{"in1", x}, {"in2", y}});
+  };
 
   if (op == NODE_BOOLEAN_MATH_NOT) {
     return mx_not(a);
@@ -218,9 +221,9 @@ NODE_SHADER_MATERIALX_BEGIN
     case NODE_BOOLEAN_MATH_NOR:
       return mx_not(mx_or(a, b));
     case NODE_BOOLEAN_MATH_XOR:
-      return mx_or(mx_and(a, mx_not(b)), mx_and(mx_not(a), b));
+      return mx_xor(a, b);
     case NODE_BOOLEAN_MATH_XNOR:
-      return mx_or(mx_and(a, b), mx_and(mx_not(a), mx_not(b)));
+      return mx_not(mx_xor(a, b));
     case NODE_BOOLEAN_MATH_IMPLY:
       return mx_or(mx_not(a), b);
     case NODE_BOOLEAN_MATH_NIMPLY:
