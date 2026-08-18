@@ -1449,9 +1449,11 @@ static int /*eContextResult*/ node_context(const bContext *C,
     if (snode->edittree != nullptr) {
       if (bNode *node = bke::node_get_active(*snode->edittree)) {
         if (ELEM(node->type_legacy, SH_NODE_TEX_IMAGE, SH_NODE_TEX_ENVIRONMENT)) {
-          Image *image = id_cast<Image *>(node->id);
-          CTX_data_id_pointer_set(result, &image->id);
-          return CTX_RESULT_OK;
+          if (node->id != nullptr) {
+            Image *image = id_cast<Image *>(node->id);
+            CTX_data_id_pointer_set(result, &image->id);
+            return CTX_RESULT_OK;
+          }
         }
       }
     }
