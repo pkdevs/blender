@@ -15,8 +15,13 @@
 
 #include "../paint_intern.hh"
 
+struct Curves;
+
 namespace blender {
 
+namespace bke {
+class CurvesGeometry;
+}
 namespace bke::greasepencil {
 class Drawing;
 class Layer;
@@ -37,12 +42,7 @@ using DeltaProjectionFunc =
 
 struct InputSample {
   float2 mouse_position;
-  float pressure;
-};
-
-struct XRInputSample {
-  float2 mouse_position;
-  float3 controller_position;
+  float3 controller_position = float3(0.0f);
   float pressure;
 };
 
@@ -50,13 +50,6 @@ class GreasePencilStrokeOperation : public PaintModeData {
  public:
   virtual void on_stroke_begin(const bContext &C, const InputSample &start_sample) = 0;
   virtual void on_stroke_extended(const bContext &C, const InputSample &extension_sample) = 0;
-  virtual void on_stroke_done(const bContext &C) = 0;
-};
-
-class GreasePencilXRStrokeOperation : public PaintModeData {
- public:
-  virtual void on_stroke_begin(const bContext &C, const XRInputSample &start_sample) = 0;
-  virtual void on_stroke_extended(const bContext &C, const XRInputSample &extension_sample) = 0;
   virtual void on_stroke_done(const bContext &C) = 0;
 };
 
@@ -186,6 +179,39 @@ float3 compute_orig_delta(const DeltaProjectionFunc &projection_fn,
 bool do_vertex_color_points(const Brush &brush);
 bool do_vertex_color_fill(const Brush &brush);
 
+void smooth_stroke(bke::greasepencil::Drawing &drawing,
+                   float influence,
+                   int iterations,
+                   int active_curve);
+void subdivide_stroke(bke::greasepencil::Drawing &drawing, float subdivisions, int active_curve);
+void add_strokes_to_drawing(bool on_back, Curves *strokes, bke::greasepencil::Drawing &drawing);
+void outline_stroke(bke::greasepencil::Drawing &drawing,
+                    int active_curve,
+                    const float4x4 &viewmat,
+                    const ed::greasepencil::DrawingPlacement &placement,
+                    float outline_radius,
+                    int material_index,
+                    bool on_back);
+int trim_end_points(bke::greasepencil::Drawing &drawing,
+                    float epsilon,
+                    bool on_back,
+                    int active_curve);
+void deselect_stroke(Scene *scene, bke::greasepencil::Drawing &drawing, int active_curve);
+void process_stroke_weights(const Scene &scene,
+                            const Object &object,
+                            bke::greasepencil::Drawing &drawing,
+                            int active_curve);
+void append_stroke_to_multiframe_drawings(
+    const bke::CurvesGeometry &src_strokes,
+    int curve,
+    int current_frame,
+    bool on_back,
+    Span<ed::greasepencil::MutableDrawingInfo> drawings);
+void convert_stroke_type(bke::greasepencil::Drawing &drawing,
+                         int active_curve,
+                         float threshold,
+                         int8_t curve_type);
+
 /* Stroke operation base class that performs various common initializations. */
 class GreasePencilStrokeOperationCommon : public GreasePencilStrokeOperation {
  public:
@@ -241,8 +267,7 @@ class GreasePencilStrokeOperationCommon : public GreasePencilStrokeOperation {
 /* Operations */
 
 std::unique_ptr<GreasePencilStrokeOperation> new_paint_operation(bool do_fill_guides = false);
-std::unique_ptr<GreasePencilXRStrokeOperation> new_xr_paint_operation(
-    bool do_fill_guides = false);
+std::unique_ptr<GreasePencilStrokeOperation> new_xr_paint_operation();
 std::unique_ptr<GreasePencilStrokeOperation> new_erase_operation(bool temp_eraser = false);
 std::unique_ptr<GreasePencilStrokeOperation> new_tint_operation(bool temp_eraser = false);
 std::unique_ptr<GreasePencilStrokeOperation> new_weight_paint_draw_operation(

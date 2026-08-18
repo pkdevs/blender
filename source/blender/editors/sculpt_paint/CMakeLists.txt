@@ -54,6 +54,7 @@ set(SRC
   grease_pencil/paint.cc
   grease_pencil/paint_common.cc
   grease_pencil/paint_cursor.cc
+  grease_pencil/paint_utils.cc
   grease_pencil/sculpt_clone.cc
   grease_pencil/sculpt_grab.cc
   grease_pencil/sculpt_pinch.cc

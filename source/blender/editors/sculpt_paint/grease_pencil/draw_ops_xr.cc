@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2023 Blender Authors
+/* SPDX-FileCopyrightText: 2026 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -57,8 +57,8 @@ static float xr_stroke_spacing(const Brush &brush)
   return min_spacing;
 }
 
-static std::unique_ptr<GreasePencilXRStrokeOperation> get_xr_stroke_operation(bContext &C,
-                                                                              wmOperator *op)
+static std::unique_ptr<GreasePencilStrokeOperation> get_xr_stroke_operation(bContext &C,
+                                                                            wmOperator *op)
 {
   const Paint *paint = BKE_paint_get_active_from_context(&C);
   const Brush &brush = *BKE_paint_brush_for_read(paint);
@@ -73,7 +73,6 @@ static std::unique_ptr<GreasePencilXRStrokeOperation> get_xr_stroke_operation(bC
     case GPAINT_BRUSH_TYPE_DRAW:
       return greasepencil::new_xr_paint_operation();
     case GPAINT_BRUSH_TYPE_FILL:
-      return greasepencil::new_xr_paint_operation(/* do_fill_guides = */ true);
     case GPAINT_BRUSH_TYPE_ERASE:
     case GPAINT_BRUSH_TYPE_TINT:
       return nullptr;
@@ -82,7 +81,7 @@ static std::unique_ptr<GreasePencilXRStrokeOperation> get_xr_stroke_operation(bC
 }
 
 struct GreasePencilXRPaintStroke {
-  std::unique_ptr<GreasePencilXRStrokeOperation> operation;
+  std::unique_ptr<GreasePencilStrokeOperation> operation;
   float3 last_controller_position = float3(0.0f);
   float stroke_distance = 0.0f;
   bool stroke_started = false;
@@ -110,7 +109,7 @@ wmOperatorStatus GreasePencilXRPaintStroke::modal(bContext *C,
     return OPERATOR_FINISHED;
   }
 
-  XRInputSample sample;
+  InputSample sample;
   sample.mouse_position = float2(event->mval);
   sample.controller_position = float3(actiondata->controller_loc);
   sample.pressure = actiondata->state[0];
@@ -283,11 +282,11 @@ void ED_operatortypes_grease_pencil_draw_xr()
   WM_operatortype_append(GREASE_PENCIL_XR_OT_brush_stroke);
 }
 
-static void grease_pencil_xr_brush_stroke_operator_type(wmOperatorType *ot, const char *idname)
+void GREASE_PENCIL_XR_OT_brush_stroke(wmOperatorType *ot)
 {
   using namespace ed::sculpt_paint;
   ot->name = "Grease Pencil XR Draw";
-  ot->idname = idname;
+  ot->idname = "GREASE_PENCIL_XR_OT_brush_stroke";
   ot->description = "Draw a new XR stroke in the active Grease Pencil object";
 
   ot->poll = grease_pencil_xr_brush_stroke_poll;
@@ -298,11 +297,6 @@ static void grease_pencil_xr_brush_stroke_operator_type(wmOperatorType *ot, cons
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 
   paint_stroke_operator_properties(ot);
-}
-
-void GREASE_PENCIL_XR_OT_brush_stroke(wmOperatorType *ot)
-{
-  grease_pencil_xr_brush_stroke_operator_type(ot, "GREASE_PENCIL_XR_OT_brush_stroke");
 }
 
 }  // namespace blender
