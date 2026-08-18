@@ -43,12 +43,13 @@ def test_area_swap():
     _, t, window = ui.test_window()
     screen = window.screen
 
-    old_areas, source = ui.split_area_pair(screen)
+    old_area_count = len(screen.areas)
+    source = ui.split_area_pair(screen)[1]
     yield
 
     target = screen.areas[-1]
 
-    t.assertEqual(len(screen.areas), len(old_areas) + 1, "Split did not create a new area")
+    t.assertEqual(len(screen.areas), old_area_count + 1, "Split did not create a new area")
 
     source.type = "VIEW_3D"
     target.type = "OUTLINER"
