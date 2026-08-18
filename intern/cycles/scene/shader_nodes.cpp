@@ -2668,6 +2668,9 @@ NODE_DEFINE(PrincipledBsdfNode)
   SOCKET_IN_NORMAL(tangent, "Tangent", zero_float3(), SocketType::LINK_TANGENT);
 
   SOCKET_IN_FLOAT(transmission_weight, "Transmission Weight", 0.0f);
+  SOCKET_IN_FLOAT(transmission_dispersion_scale, "Transmission Dispersion Scale", 0.0f);
+  SOCKET_IN_FLOAT(
+      transmission_dispersion_abbe_number, "Transmission Dispersion Abbe Number", 20.0f);
 
   SOCKET_IN_FLOAT(sheen_weight, "Sheen Weight", 0.0f);
   SOCKET_IN_FLOAT(sheen_roughness, "Sheen Roughness", 0.5f);
@@ -2742,6 +2745,11 @@ void PrincipledBsdfNode::simplify_settings(Scene * /* scene */)
     disconnect_unused_input("Thin Film Thickness");
     disconnect_unused_input("Thin Film IOR");
   }
+
+  if (!has_nonzero_weight("Transmission Weight")) {
+    disconnect_unused_input("Transmission Dispersion Scale");
+    disconnect_unused_input("Transmission Dispersion Abbe Number");
+  }
 }
 
 bool PrincipledBsdfNode::has_surface_transparent()
@@ -2793,6 +2801,12 @@ bool PrincipledBsdfNode::has_surface_bssrdf()
   }
 
   return subsurface_has_positive_weight();
+}
+
+bool PrincipledBsdfNode::has_dispersion()
+{
+  return has_nonzero_weight("Transmission Dispersion Scale") &&
+         has_nonzero_weight("Transmission Weight");
 }
 
 bool PrincipledBsdfNode::has_nonzero_weight(const char *name)
@@ -2854,6 +2868,10 @@ void PrincipledBsdfNode::compile(SVMCompiler &compiler)
           .specular_ior_level = compiler.input_float("Specular IOR Level"),
           .anisotropic = compiler.input_float("Anisotropic"),
           .anisotropic_rotation = compiler.input_float("Anisotropic Rotation"),
+          /* Transmission. */
+          .transmission_dispersion_scale = compiler.input_float("Transmission Dispersion Scale"),
+          .transmission_dispersion_abbe_number = compiler.input_float(
+              "Transmission Dispersion Abbe Number"),
           /* Emission. */
           .emission_color = compiler.input_float3("Emission Color"),
           .emission_strength = compiler.input_float("Emission Strength"),
@@ -6111,6 +6129,45 @@ void SeparateXYZNode::compile(SVMCompiler &compiler)
 void SeparateXYZNode::compile(OSLCompiler &compiler)
 {
   compiler.add(this, "node_separate_xyz");
+}
+
+/* Get Vector Component */
+
+NODE_DEFINE(GetVectorComponentNode)
+{
+  NodeType *type = NodeType::add("get_vector_component", create, NodeType::SHADER);
+
+  SOCKET_IN_VECTOR(vector, "Vector", zero_float3());
+  SOCKET_IN_INT(index, "Index", 0);
+
+  SOCKET_OUT_FLOAT(value, "Value");
+
+  return type;
+}
+
+GetVectorComponentNode::GetVectorComponentNode() : ShaderNode(get_node_type()) {}
+
+void GetVectorComponentNode::constant_fold(const ConstantFolder &folder)
+{
+  if (folder.all_inputs_constant()) {
+    folder.make_constant(index >= 0 && index <= 2 ? vector[index] : 0.0f);
+  }
+}
+
+void GetVectorComponentNode::compile(SVMCompiler &compiler)
+{
+  compiler.add_node(this,
+                    NODE_GET_VECTOR_COMPONENT,
+                    SVMNodeGetVectorComponent{
+                        .vector = compiler.input_float3("Vector"),
+                        .index = compiler.input_int("Index"),
+                        .out_offset = compiler.output("Value"),
+                    });
+}
+
+void GetVectorComponentNode::compile(OSLCompiler &compiler)
+{
+  compiler.add(this, "node_get_vector_component");
 }
 
 /* Hue/Saturation/Value */

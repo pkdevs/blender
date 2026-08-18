@@ -708,7 +708,7 @@ Brush *BKE_brush_add(Main *bmain, const char *name, const eObjectMode ob_mode)
   {
     BKE_brush_init_gpencil_settings(brush);
   }
-  else if (ob_mode == OB_MODE_SCULPT) {
+  else if (ELEM(ob_mode, OB_MODE_SCULPT, OB_MODE_WEIGHT_PAINT, OB_MODE_VERTEX_PAINT)) {
     BKE_brush_init_mesh_automasking_settings(brush);
   }
 
@@ -1338,8 +1338,9 @@ bool BKE_brush_use_locked_size(const Paint *paint, const Brush *brush)
 {
   const short us_flag = paint->unified_paint_settings.flag;
 
-  return (us_flag & UNIFIED_PAINT_SIZE) ? (us_flag & UNIFIED_PAINT_BRUSH_LOCK_SIZE) != 0 :
-                                          (brush->flag & BRUSH_LOCK_SIZE) != 0;
+  return (brush->unified_paint_flags & BRUSH_USE_UNIFIED_PAINT_SIZE) ?
+             (us_flag & UNIFIED_PAINT_BRUSH_LOCK_SIZE) != 0 :
+             (brush->flag & BRUSH_LOCK_SIZE) != 0;
 }
 
 bool BKE_brush_use_size_pressure(const Brush *brush)
@@ -1430,14 +1431,15 @@ float BKE_brush_weight_get(const Paint *paint, const Brush *brush)
 {
   const UnifiedPaintSettings *ups = &paint->unified_paint_settings;
 
-  return (ups->flag & UNIFIED_PAINT_WEIGHT) ? ups->weight : brush->weight;
+  return (brush->unified_paint_flags & BRUSH_USE_UNIFIED_PAINT_WEIGHT) ? ups->weight :
+                                                                         brush->weight;
 }
 
 void BKE_brush_weight_set(Paint *paint, Brush *brush, float value)
 {
   UnifiedPaintSettings *ups = &paint->unified_paint_settings;
 
-  if (ups->flag & UNIFIED_PAINT_WEIGHT) {
+  if (brush->unified_paint_flags & BRUSH_USE_UNIFIED_PAINT_WEIGHT) {
     ups->weight = value;
   }
   else {
@@ -1450,14 +1452,16 @@ int BKE_brush_input_samples_get(const Paint *paint, const Brush *brush)
 {
   const UnifiedPaintSettings *ups = &paint->unified_paint_settings;
 
-  return (ups->flag & UNIFIED_PAINT_INPUT_SAMPLES) ? ups->input_samples : brush->input_samples;
+  return (brush->unified_paint_flags & BRUSH_USE_UNIFIED_PAINT_INPUT_SAMPLES) ?
+             ups->input_samples :
+             brush->input_samples;
 }
 
 void BKE_brush_input_samples_set(Paint *paint, Brush *brush, int value)
 {
   UnifiedPaintSettings *ups = &paint->unified_paint_settings;
 
-  if (ups->flag & UNIFIED_PAINT_INPUT_SAMPLES) {
+  if (brush->unified_paint_flags & BRUSH_USE_UNIFIED_PAINT_INPUT_SAMPLES) {
     ups->input_samples = value;
   }
   else {
