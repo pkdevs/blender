@@ -60,21 +60,17 @@ ccl_device_inline float3x3 identity_float3x3()
  *
  * For math operations this must be converted to float3x3, so that on the CPU SIMD instructions
  * can be used. */
-/* TODO(sergey): Support on all platforms.
- * The tricky part is Metal, where pointers and references require explicit address space. What is
- * the address space of `this`? */
-#if !defined(__KERNEL_GPU__)
 struct packed_float3x3 {
   packed_float3x3() = default;
 
-  ccl_device_inline_method packed_float3x3(const float3x3 &m) : x(m.x), y(m.y), z(m.z) {}
+  ccl_device_inline_method packed_float3x3(const float3x3 m) : x(m.x), y(m.y), z(m.z) {}
 
   ccl_device_inline_method operator float3x3() const
   {
     return make_float3x3(x, y, z);
   }
 
-  ccl_device_inline_method packed_float3x3 &operator=(const float3x3 &a)
+  ccl_device_inline_method packed_float3x3 operator=(const float3x3 a)
   {
     x = a.x;
     y = a.y;
@@ -87,7 +83,6 @@ struct packed_float3x3 {
   packed_float3 z;
 };
 static_assert(sizeof(packed_float3x3) == 36, "packed_float3x3 expected to be exactly 36 bytes");
-#endif
 
 #if defined __METAL_PRINTF__
 #  define print_float3x3(label, a) \
