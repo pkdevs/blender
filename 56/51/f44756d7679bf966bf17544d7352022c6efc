@@ -1,2 +1,3 @@
 Referenced by issue #161229, Blender LTS: Maintenance Task 5.2
 Referenced by pull request #162765, Fix: FBX: Handle the CastShadow[s] property correctly
+Referenced by commit 72ccdd6e96ca119a1ffa3372559cc5654343b477, Fix: FBX: Handle the CastShadow[s] property correctly
