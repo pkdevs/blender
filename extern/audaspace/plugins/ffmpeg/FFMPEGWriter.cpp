@@ -39,6 +39,42 @@ AUD_NAMESPACE_BEGIN
 #define FFMPEG_OLD_CH_LAYOUT
 #endif
 
+#if LIBAVCODEC_VERSION_INT >= AV_VERSION_INT(61, 13, 100)
+static const enum AVSampleFormat* get_sample_formats(AVCodecContext* context, const AVCodec* codec)
+{
+	const enum AVSampleFormat* sample_formats = nullptr;
+	avcodec_get_supported_config(context,
+								 codec,
+								 AV_CODEC_CONFIG_SAMPLE_FORMAT,
+								 0,
+								 reinterpret_cast<const void**>(&sample_formats),
+								 nullptr);
+	return sample_formats;
+}
+
+static const int* get_sample_rates(AVCodecContext* context, const AVCodec* codec)
+{
+	const int* sample_rates = nullptr;
+	avcodec_get_supported_config(context,
+								 codec,
+								 AV_CODEC_CONFIG_SAMPLE_RATE,
+								 0,
+								 reinterpret_cast<const void**>(&sample_rates),
+								 nullptr);
+	return sample_rates;
+}
+#else
+static const enum AVSampleFormat* get_sample_formats(AVCodecContext* /*context*/, const AVCodec* codec)
+{
+	return codec->sample_fmts;
+}
+
+static const int* get_sample_rates(AVCodecContext* /*context*/, const AVCodec* codec)
+{
+	return codec->supported_samplerates;
+}
+#endif
+
 void FFMPEGWriter::encode()
 {
 	sample_t* data = m_input_buffer.getBuffer();
@@ -330,14 +366,16 @@ FFMPEGWriter::FFMPEGWriter(const std::string &filename, DeviceSpecs specs, Conta
 		if(m_formatCtx->oformat->flags & AVFMT_GLOBALHEADER)
 			m_codecCtx->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
 
-		bool format_supported = false;
+		const enum AVSampleFormat* sample_formats = get_sample_formats(m_codecCtx, codec);
+		/* A null list means that all sample formats are supported. */
+		bool format_supported = sample_formats == nullptr;
 
-		for(int i = 0; codec->sample_fmts[i] != -1; i++)
+		for(int i = 0; sample_formats && sample_formats[i] != AV_SAMPLE_FMT_NONE; i++)
 		{
-			if(av_get_alt_sample_fmt(codec->sample_fmts[i], false) == m_codecCtx->sample_fmt)
+			if(av_get_alt_sample_fmt(sample_formats[i], false) == m_codecCtx->sample_fmt)
 			{
-				m_deinterleave = av_sample_fmt_is_planar(codec->sample_fmts[i]);
-				m_codecCtx->sample_fmt = codec->sample_fmts[i];
+				m_deinterleave = av_sample_fmt_is_planar(sample_formats[i]);
+				m_codecCtx->sample_fmt = sample_formats[i];
 				format_supported = true;
 			}
 		}
@@ -345,10 +383,10 @@ FFMPEGWriter::FFMPEGWriter(const std::string &filename, DeviceSpecs specs, Conta
 		if(!format_supported)
 		{
 			int chosen_index = 0;
-			auto chosen = av_get_alt_sample_fmt(codec->sample_fmts[chosen_index], false);
-			for(int i = 1; codec->sample_fmts[i] != -1; i++)
+			auto chosen = av_get_alt_sample_fmt(sample_formats[chosen_index], false);
+			for(int i = 1; sample_formats[i] != AV_SAMPLE_FMT_NONE; i++)
 			{
-				auto fmt = av_get_alt_sample_fmt(codec->sample_fmts[i], false);
+				auto fmt = av_get_alt_sample_fmt(sample_formats[i], false);
 				if((fmt > chosen && chosen < m_codecCtx->sample_fmt) || (fmt > m_codecCtx->sample_fmt && fmt < chosen))
 				{
 					chosen = fmt;
@@ -356,7 +394,7 @@ FFMPEGWriter::FFMPEGWriter(const std::string &filename, DeviceSpecs specs, Conta
 				}
 			}
 
-			m_codecCtx->sample_fmt = codec->sample_fmts[chosen_index];
+			m_codecCtx->sample_fmt = sample_formats[chosen_index];
 			m_deinterleave = av_sample_fmt_is_planar(m_codecCtx->sample_fmt);
 			switch(av_get_alt_sample_fmt(m_codecCtx->sample_fmt, false))
 			{
@@ -386,20 +424,21 @@ FFMPEGWriter::FFMPEGWriter(const std::string &filename, DeviceSpecs specs, Conta
 		}
 
 		m_codecCtx->sample_rate = 0;
+		const int* sample_rates = get_sample_rates(m_codecCtx, codec);
 
-		if(codec->supported_samplerates)
+		if(sample_rates)
 		{
-			for(int i = 0; codec->supported_samplerates[i]; i++)
+			for(int i = 0; sample_rates[i]; i++)
 			{
-				if(codec->supported_samplerates[i] == m_specs.rate)
+				if(sample_rates[i] == m_specs.rate)
 				{
-					m_codecCtx->sample_rate = codec->supported_samplerates[i];
+					m_codecCtx->sample_rate = sample_rates[i];
 					break;
 				}
-				else if((codec->supported_samplerates[i] > m_codecCtx->sample_rate && m_specs.rate > m_codecCtx->sample_rate) ||
-						(codec->supported_samplerates[i] < m_codecCtx->sample_rate && m_specs.rate < codec->supported_samplerates[i]))
+				else if((sample_rates[i] > m_codecCtx->sample_rate && m_specs.rate > m_codecCtx->sample_rate) ||
+						(sample_rates[i] < m_codecCtx->sample_rate && m_specs.rate < sample_rates[i]))
 				{
-					m_codecCtx->sample_rate = codec->supported_samplerates[i];
+					m_codecCtx->sample_rate = sample_rates[i];
 				}
 			}
 		}
