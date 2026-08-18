@@ -36,7 +36,7 @@ static void node_declare(NodeDeclarationBuilder &b)
 class LoadTextCache : public memory_cache::CachedValue {
  public:
   std::string text;
-  Vector<eval_log::NodeWarning> warnings;
+  Vector<NodeWarning> warnings;
 
   void count_memory(MemoryCounter &counter) const override
   {
@@ -81,7 +81,7 @@ static void node_geo_exec(GeoNodeExecParams params)
 
   std::shared_ptr<const LoadTextCache> cached_value = get_cached_text(*path);
 
-  for (const eval_log::NodeWarning &warning : cached_value->warnings) {
+  for (const NodeWarning &warning : cached_value->warnings) {
     params.error_message_add(warning.type, warning.message);
   }
 
