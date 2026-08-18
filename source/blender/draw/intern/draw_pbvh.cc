@@ -1249,23 +1249,17 @@ static std::array<T, 4> interpolate_vert_data_for_subdivided_irregular_face(
   return values;
 }
 
-template<typename T>
 static void interpolate_vert_data_for_flat_layout(const SubdivCCG &subdiv_ccg,
                                                   const Span<int> corner_verts,
                                                   Span<int> grids,
                                                   gpu::VertBuf &vbo,
-                                                  Span<T> src)
+                                                  const GVArray& attr_varray)
 {
-  using Converter = AttributeConverter<T>;
-  using VBOType = typename Converter::VBOType;
-
   const CCGKey key = BKE_subdiv_ccg_key_top_level(subdiv_ccg);
   const int grid_size_1 = key.grid_size - 1;
   const int grid_area_1 = grid_size_1 * grid_size_1;
   const int verts_per_grid = grid_area_1 * 4;
   const float grid_size_1_inv = 1.0f / (key.grid_size - 1);
-  MutableSpan<VBOType> dst{vbo.data<VBOType>().data(), vbo.data<VBOType>().size()};
-
   threading::parallel_for(grids.index_range(), 1024, [&](const IndexRange range) {
     for (const int i : range) {
       const int grid = grids[i];
@@ -1277,39 +1271,55 @@ static void interpolate_vert_data_for_flat_layout(const SubdivCCG &subdiv_ccg,
           for (int x = 0; x < grid_size_1; x++) {
             const int start = verts_per_grid * i + CCG_grid_xy_to_index(grid_size_1, x, y) * 4;
             Span<int> face_verts = corner_verts.slice(face);
-            dst[start] = Converter::convert(
-                bke::attribute_math::mix4(quad_weights_from_grid(corner, x, y, grid_size_1_inv),
-                                          src[face_verts[0]],
-                                          src[face_verts[1]],
-                                          src[face_verts[2]],
-                                          src[face_verts[3]]));
-            dst[start + 1] = Converter::convert(bke::attribute_math::mix4(
-                quad_weights_from_grid(corner, x + 1, y, grid_size_1_inv),
-                src[face_verts[0]],
-                src[face_verts[1]],
-                src[face_verts[2]],
-                src[face_verts[3]]));
-            dst[start + 2] = Converter::convert(bke::attribute_math::mix4(
-                quad_weights_from_grid(corner, x + 1, y + 1, grid_size_1_inv),
-                src[face_verts[0]],
-                src[face_verts[1]],
-                src[face_verts[2]],
-                src[face_verts[3]]));
-            dst[start + 3] = Converter::convert(bke::attribute_math::mix4(
-                quad_weights_from_grid(corner, x, y + 1, grid_size_1_inv),
-                src[face_verts[0]],
-                src[face_verts[1]],
-                src[face_verts[2]],
-                src[face_verts[3]]));
+            bke::attribute_math::to_static_type(attr_varray.type(), [&]<typename T>() {
+              using Converter = AttributeConverter<T>;
+              using VBOType = typename Converter::VBOType;
+
+              Span<T> src = attr_varray.typed<T>();
+              MutableSpan<VBOType> dst{vbo.data<VBOType>().data(), vbo.data<VBOType>().size()};
+              dst[start] = Converter::convert(
+                  bke::attribute_math::mix4(quad_weights_from_grid(corner, x, y, grid_size_1_inv),
+                                            src[face_verts[0]],
+                                            src[face_verts[1]],
+                                            src[face_verts[2]],
+                                            src[face_verts[3]]));
+              dst[start + 1] = Converter::convert(bke::attribute_math::mix4(
+                  quad_weights_from_grid(corner, x + 1, y, grid_size_1_inv),
+                  src[face_verts[0]],
+                  src[face_verts[1]],
+                  src[face_verts[2]],
+                  src[face_verts[3]]));
+              dst[start + 2] = Converter::convert(bke::attribute_math::mix4(
+                  quad_weights_from_grid(corner, x + 1, y + 1, grid_size_1_inv),
+                  src[face_verts[0]],
+                  src[face_verts[1]],
+                  src[face_verts[2]],
+                  src[face_verts[3]]));
+              dst[start + 3] = Converter::convert(bke::attribute_math::mix4(
+                  quad_weights_from_grid(corner, x, y + 1, grid_size_1_inv),
+                  src[face_verts[0]],
+                  src[face_verts[1]],
+                  src[face_verts[2]],
+                  src[face_verts[3]]));
+            });
           }
         }
       }
       else {
-        const std::array<T, 4> values = interpolate_vert_data_for_subdivided_irregular_face<T>(
-            corner_verts, face, grid, src);
+        /* TODO: How do we do this part without 1) Needing to interpolate per grid element and 2)
+        Needing to make this entire function templated? */
+        /*
+        const std::array<T, 4> values =
+        interpolate_vert_data_for_subdivided_irregular_face<T>( corner_verts, face, grid, src);
+        */
         for (int y = 0; y < grid_size_1; y++) {
           for (int x = 0; x < grid_size_1; x++) {
             const int start = verts_per_grid * i + CCG_grid_xy_to_index(grid_size_1, x, y) * 4;
+            /*
+            bke::attribute_math::to_static_type(src.type, [&]<typename T>() {
+              using Converter = AttributeConverter<T>;
+              using VBOType = typename Converter::VBOType;
+              MutableSpan<VBOType> dst{vbo.data<VBOType>().data(), vbo.data<VBOType>().size()};
             dst[start] = Converter::convert(bke::attribute_math::mix4(
                 quad_weights_from_irregular_corner(x, y, grid_size_1_inv),
                 values[0],
@@ -1334,6 +1344,7 @@ static void interpolate_vert_data_for_flat_layout(const SubdivCCG &subdiv_ccg,
                 values[1],
                 values[2],
                 values[3]));
+                */
           }
         }
       }
@@ -1341,22 +1352,22 @@ static void interpolate_vert_data_for_flat_layout(const SubdivCCG &subdiv_ccg,
   });
 }
 
-template<typename T>
 static void interpolate_vert_data_for_standard_layout(const SubdivCCG &subdiv_ccg,
                                                       const Span<int> corner_verts,
                                                       Span<int> grids,
                                                       gpu::VertBuf &vbo,
-                                                      Span<T> src)
+                                                      const GVArray& src)
 {
-  using Converter = AttributeConverter<T>;
-  using VBOType = typename Converter::VBOType;
-
   const CCGKey key = BKE_subdiv_ccg_key_top_level(subdiv_ccg);
   const int grid_size = key.grid_size;
   const int grid_area = key.grid_area;
 
   const float grid_size_1_inv = 1.0f / (grid_size - 1);
+  /*
+  using Converter = AttributeConverter<T>;
+  using VBOType = typename Converter::VBOType;
   MutableSpan<VBOType> dst{vbo.data<VBOType>().data(), vbo.data<VBOType>().size()};
+  */
   threading::parallel_for(grids.index_range(), 1024, [&](const IndexRange range) {
     for (const int i : range) {
       const int grid = grids[i];
@@ -1368,27 +1379,33 @@ static void interpolate_vert_data_for_standard_layout(const SubdivCCG &subdiv_cc
           for (int x = 0; x < grid_size; x++) {
             Span<int> face_verts = corner_verts.slice(face);
             const int element = i * grid_area + CCG_grid_xy_to_index(grid_size, x, y);
+            /*
             dst[element] = Converter::convert(
                 bke::attribute_math::mix4(quad_weights_from_grid(corner, x, y, grid_size_1_inv),
                                           src[face_verts[0]],
                                           src[face_verts[1]],
                                           src[face_verts[2]],
                                           src[face_verts[3]]));
+                                          */
           }
         }
       }
       else {
+        /*
         const std::array<T, 4> values = interpolate_vert_data_for_subdivided_irregular_face<T>(
             corner_verts, face, grid, src);
+        */
         for (int y = 0; y < grid_size; y++) {
           for (int x = 0; x < grid_size; x++) {
             const int element = i * grid_area + CCG_grid_xy_to_index(grid_size, x, y);
+            /*
             dst[element] = Converter::convert(bke::attribute_math::mix4(
                 quad_weights_from_irregular_corner(x, y, grid_size_1_inv),
                 values[0],
                 values[1],
                 values[2],
                 values[3]));
+                */
           }
         }
       }
@@ -1416,14 +1433,13 @@ BLI_NOINLINE static void fill_generic_vert_attribute_grids(const Object &object,
       [&](const int i) {
         bke::attribute_math::to_static_type(attr.varray.type(), [&]<typename T>() {
           if constexpr (!std::is_void_v<typename AttributeConverter<T>::VBOType>) {
-            const VArraySpan<T> src = attr.varray.typed<T>();
             if (use_flat_layout[i]) {
-              interpolate_vert_data_for_flat_layout<T>(
-                  subdiv_ccg, corner_verts, nodes[i].grids(), *vbos[i], src);
+              interpolate_vert_data_for_flat_layout(
+                  subdiv_ccg, corner_verts, nodes[i].grids(), *vbos[i], attr.varray);
             }
             else {
-              interpolate_vert_data_for_standard_layout<T>(
-                  subdiv_ccg, corner_verts, nodes[i].grids(), *vbos[i], src);
+              interpolate_vert_data_for_standard_layout(
+                  subdiv_ccg, corner_verts, nodes[i].grids(), *vbos[i], attr.varray);
             }
           }
         });
