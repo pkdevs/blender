@@ -107,7 +107,7 @@ TreeTraversalAction outliner_collect_selected_collections(TreeElement *te, void 
     return TRAVERSE_CONTINUE;
   }
 
-  if ((tselem->type != TSE_SOME_ID) || (tselem->id && GS(tselem->id->name) != ID_GR)) {
+  if ((tselem->type != TSE_SOME_ID) || (tselem->id && tselem->id->id_type() != ID_GR)) {
     return TRAVERSE_SKIP_CHILDS;
   }
 
@@ -138,7 +138,7 @@ TreeTraversalAction outliner_collect_selected_objects(TreeElement *te, void *cus
     return TRAVERSE_CONTINUE;
   }
 
-  if ((tselem->type != TSE_SOME_ID) || (tselem->id == nullptr) || (GS(tselem->id->name) != ID_OB))
+  if ((tselem->type != TSE_SOME_ID) || (tselem->id == nullptr) || (tselem->id->id_type() != ID_OB))
   {
     return TRAVERSE_SKIP_CHILDS;
   }
@@ -845,6 +845,7 @@ static wmOperatorStatus collection_instance_exec(bContext *C, wmOperator * /*op*
     Object *ob = object::add_type(
         C, OB_EMPTY, collection->id.name + 2, scene->cursor.location, nullptr, false, 0);
     ob->instance_collection = collection;
+    ob->empty_drawsize = U.collection_instance_empty_size;
     ob->transflag |= OB_DUPLICOLLECTION;
     id_us_plus(&collection->id);
   }
