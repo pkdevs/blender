@@ -114,6 +114,11 @@ void do_versions_after_linking_503(FileData * /*fd*/, Main *bmain)
     }
   }
 
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 503, 16)) {
+    /* Shift animation data to accommodate the new dispersion inputs. */
+    version_node_socket_index_animdata(bmain, NTREE_SHADER, "ShaderNodeBsdfPrincipled", 20, 2, 33);
+  }
+
   /**
    * Always bump subversion in BKE_blender_version.h when adding versioning
    * code here, and wrap it inside a MAIN_VERSION_FILE_ATLEAST check.
@@ -343,6 +348,27 @@ void blo_do_versions_503(FileData * /*fd*/, Library * /*lib*/, Main *bmain)
             space_outliner->flag |= SO_EXPAND_ON_FOCUS;
           }
         }
+      }
+    }
+  }
+
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 503, 16)) {
+    for (Brush &brush : bmain->brushes) {
+      if (ELEM(brush.ob_mode,
+               OB_MODE_SCULPT,
+               OB_MODE_VERTEX_PAINT,
+               OB_MODE_TEXTURE_PAINT,
+               OB_MODE_SCULPT_GREASE_PENCIL,
+               OB_MODE_VERTEX_GREASE_PENCIL))
+      {
+        brush.unified_paint_flags |= BRUSH_USE_UNIFIED_PAINT_SIZE | BRUSH_USE_UNIFIED_PAINT_COLOR;
+      }
+      if (ELEM(brush.ob_mode,
+               OB_MODE_SCULPT_CURVES,
+               OB_MODE_WEIGHT_PAINT,
+               OB_MODE_WEIGHT_GREASE_PENCIL))
+      {
+        brush.unified_paint_flags |= BRUSH_USE_UNIFIED_PAINT_SIZE;
       }
     }
   }
