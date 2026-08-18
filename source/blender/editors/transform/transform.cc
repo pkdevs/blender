@@ -6,11 +6,12 @@
  * \ingroup edtransform
  */
 
-#include "BLI_listbase.h"
-#include "BLI_math_matrix.h"
-#include "BLI_math_vector.h"
-#include "BLI_rect.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_vector_c.hh"
+#include "BLI_rect.hh"
 
+#include "BKE_camera.h"
 #include "BKE_context.hh"
 #include "BKE_editmesh.hh"
 #include "BKE_global.hh"
@@ -236,7 +237,7 @@ void projectFloatViewCenterFallback(TransInfo *t, float adr[2])
 {
   const ARegion *region = t->region;
 
-  if (UNLIKELY(region == nullptr)) {
+  if (region == nullptr) [[unlikely]] {
     /* While this function probably wont be calved without a region.
      * Doing so shouldn't cause errors. */
     adr[0] = 0.0f;
@@ -264,8 +265,15 @@ void projectFloatViewCenterFallback(TransInfo *t, float adr[2])
              * for a 3D point that couldn't be projected. */
             const bool no_shift = true;
             rctf viewborder = {0};
-            ED_view3d_calc_camera_border(
-                t->scene, t->depsgraph, region, v3d, rv3d, no_shift, &viewborder);
+            viewborder = BKE_camera_view_border(t->scene,
+                                                t->depsgraph,
+                                                v3d,
+                                                rv3d,
+                                                region->winx,
+                                                region->winy,
+                                                no_shift,
+                                                false,
+                                                true);
             adr[0] = BLI_rctf_cent_x(&viewborder);
             adr[1] = BLI_rctf_cent_y(&viewborder);
             changed = true;
@@ -314,13 +322,18 @@ void projectIntViewEx(TransInfo *t, const float vec[3], int adr[2], const eV3DPr
       adr[1] = vec[1];
     }
     else {
-      float v[2];
-
-      v[0] = vec[0] / t->aspect[0];
-      v[1] = vec[1] / t->aspect[1];
-
-      ui::view2d_view_to_region(
-          static_cast<const View2D *>(t->view), v[0], v[1], &adr[0], &adr[1]);
+      if (t->view) {
+        const float v[2] = {
+            vec[0] / t->aspect[0],
+            vec[1] / t->aspect[1],
+        };
+        ui::view2d_view_to_region(
+            static_cast<const View2D *>(t->view), v[0], v[1], &adr[0], &adr[1]);
+      }
+      else {
+        adr[0] = 0;
+        adr[1] = 0;
+      }
     }
   }
   else if (t->spacetype == SPACE_ACTION) {
@@ -335,7 +348,7 @@ void projectIntViewEx(TransInfo *t, const float vec[3], int adr[2], const eV3DPr
     }
     else
 #endif
-    {
+    if (t->view) {
       ui::view2d_view_to_region(static_cast<View2D *>(t->view), vec[0], vec[1], &out[0], &out[1]);
     }
 
@@ -344,15 +357,17 @@ void projectIntViewEx(TransInfo *t, const float vec[3], int adr[2], const eV3DPr
   }
   else if (ELEM(t->spacetype, SPACE_GRAPH, SPACE_NLA)) {
     int out[2] = {0, 0};
-
-    ui::view2d_view_to_region(static_cast<View2D *>(t->view), vec[0], vec[1], &out[0], &out[1]);
+    if (t->view) {
+      ui::view2d_view_to_region(static_cast<View2D *>(t->view), vec[0], vec[1], &out[0], &out[1]);
+    }
     adr[0] = out[0];
     adr[1] = out[1];
   }
   else if (t->spacetype == SPACE_SEQ) { /* XXX not tested yet, but should work. */
     int out[2] = {0, 0};
-
-    ui::view2d_view_to_region(static_cast<View2D *>(t->view), vec[0], vec[1], &out[0], &out[1]);
+    if (t->view) {
+      ui::view2d_view_to_region(static_cast<View2D *>(t->view), vec[0], vec[1], &out[0], &out[1]);
+    }
     adr[0] = out[0];
     adr[1] = out[1];
   }
@@ -381,20 +396,31 @@ void projectIntViewEx(TransInfo *t, const float vec[3], int adr[2], const eV3DPr
       }
     }
     else if (t->options & CTX_MOVIECLIP) {
-      float v[2];
-
-      v[0] = vec[0] / t->aspect[0];
-      v[1] = vec[1] / t->aspect[1];
-
-      ui::view2d_view_to_region(
-          static_cast<const View2D *>(t->view), v[0], v[1], &adr[0], &adr[1]);
+      if (t->view) {
+        const float v[2] = {
+            vec[0] / t->aspect[0],
+            vec[1] / t->aspect[1],
+        };
+        ui::view2d_view_to_region(
+            static_cast<const View2D *>(t->view), v[0], v[1], &adr[0], &adr[1]);
+      }
+      else {
+        adr[0] = 0;
+        adr[1] = 0;
+      }
     }
     else {
       BLI_assert(0);
     }
   }
   else if (t->spacetype == SPACE_NODE) {
-    ui::view2d_view_to_region(static_cast<View2D *>(t->view), vec[0], vec[1], &adr[0], &adr[1]);
+    if (t->view) {
+      ui::view2d_view_to_region(static_cast<View2D *>(t->view), vec[0], vec[1], &adr[0], &adr[1]);
+    }
+    else {
+      adr[0] = 0;
+      adr[1] = 0;
+    }
   }
 }
 void projectIntView(TransInfo *t, const float vec[3], int adr[2])
@@ -550,8 +576,11 @@ static void viewRedrawForce(const bContext *C, TransInfo *t)
       SpaceImage *sima = static_cast<SpaceImage *>(t->area->spacedata.first);
       if (sima->lock) {
         BKE_view_layer_synced_ensure(*t->bmain, t->scene, t->view_layer);
-        WM_event_add_notifier(
-            C, NC_GEOM | ND_DATA, BKE_view_layer_edit_object_get(t->view_layer)->data);
+        if (Object *ob = BKE_view_layer_edit_object_get(t->view_layer)) {
+          if (ob->type == OB_MESH) {
+            WM_event_add_notifier(C, NC_GEOM | ND_DATA, ob->data);
+          }
+        }
       }
       else {
         ED_area_tag_redraw(t->area);
@@ -637,7 +666,7 @@ static bool transform_modal_item_poll(const wmOperator *op, int value)
     }
     case TFM_MODAL_ADD_SNAP:
     case TFM_MODAL_REMOVE_SNAP: {
-      if (t->spacetype != SPACE_VIEW3D) {
+      if (!ELEM(t->spacetype, SPACE_VIEW3D, SPACE_IMAGE)) {
         return false;
       }
       if (value == TFM_MODAL_ADD_SNAP) {
@@ -775,6 +804,9 @@ static bool transform_modal_item_poll(const wmOperator *op, int value)
       return t->vod != nullptr;
     case TFM_MODAL_STRIP_CLAMP:
       if (t->spacetype != SPACE_SEQ) {
+        return false;
+      }
+      if (t->data_type == &TransConvertType_SequencerRetiming) {
         return false;
       }
       break;
@@ -1051,8 +1083,8 @@ static void tool_settings_update_snap_toggle(TransInfo *t)
 
 wmOperatorStatus transformEvent(TransInfo *t, wmOperator *op, const wmEvent *event)
 {
-  bool is_navigating = t->vod ? (static_cast<RegionView3D *>(t->region->regiondata))->rflag &
-                                    RV3D_NAVIGATING :
+  bool is_navigating = t->vod ? ((static_cast<RegionView3D *>(t->region->regiondata))->rflag &
+                                 RV3D_NAVIGATING) != 0 :
                                 false;
 
   /* Handle modal numinput events first, if already activated. */
@@ -1756,7 +1788,7 @@ void saveTransform(bContext *C, TransInfo *t, wmOperator *op)
       {
         BKE_view_layer_synced_ensure(*t->bmain, t->scene, t->view_layer);
         const Object *obact = BKE_view_layer_active_object_get(t->view_layer);
-        const eObjectMode object_mode = eObjectMode(obact ? obact->mode : OB_MODE_OBJECT);
+        const eObjectMode object_mode = obact ? obact->mode : OB_MODE_OBJECT;
 
         if (t->spacetype == SPACE_GRAPH) {
           ts->proportional_fcurve = use_prop_edit;
@@ -2087,15 +2119,10 @@ bool initTransform(bContext *C, TransInfo *t, wmOperator *op, const wmEvent *eve
           continue;
         }
 
-        if (kmi.propvalue == TFM_MODAL_SNAP_INV_ON && kmi.val == KM_PRESS) {
-          if ((ELEM(kmi.type, EVT_LEFTCTRLKEY, EVT_RIGHTCTRLKEY) && (event->modifier & KM_CTRL)) ||
-              (ELEM(kmi.type, EVT_LEFTSHIFTKEY, EVT_RIGHTSHIFTKEY) &&
-               (event->modifier & KM_SHIFT)) ||
-              (ELEM(kmi.type, EVT_LEFTALTKEY, EVT_RIGHTALTKEY) && (event->modifier & KM_ALT)) ||
-              ((kmi.type == EVT_OSKEY) && (event->modifier & KM_OSKEY)))
-          {
-            t->modifiers |= MOD_SNAP_INVERT;
-          }
+        if ((kmi.propvalue == TFM_MODAL_SNAP_INV_ON) &&
+            WM_event_modifier_flag_match_kmi_press(event->modifier, &kmi))
+        {
+          t->modifiers |= MOD_SNAP_INVERT;
           break;
         }
       }
@@ -2109,16 +2136,10 @@ bool initTransform(bContext *C, TransInfo *t, wmOperator *op, const wmEvent *eve
           continue;
         }
 
-        if (kmi.propvalue == TFM_MODAL_NODE_ATTACH_OFF && kmi.val == KM_PRESS) {
-          if ((ELEM(kmi.type, EVT_LEFTCTRLKEY, EVT_RIGHTCTRLKEY) && (event->modifier & KM_CTRL)) ||
-              (ELEM(kmi.type, EVT_LEFTSHIFTKEY, EVT_RIGHTSHIFTKEY) &&
-               (event->modifier & KM_SHIFT)) ||
-              (ELEM(kmi.type, EVT_LEFTALTKEY, EVT_RIGHTALTKEY) && (event->modifier & KM_ALT)) ||
-              ((kmi.type == EVT_OSKEY) && (event->modifier & KM_OSKEY)) ||
-              ((kmi.type == EVT_HYPER) && (event->modifier & KM_HYPER)))
-          {
-            t->modifiers &= ~MOD_NODE_ATTACH;
-          }
+        if ((kmi.propvalue == TFM_MODAL_NODE_ATTACH_OFF) &&
+            WM_event_modifier_flag_match_kmi_press(event->modifier, &kmi))
+        {
+          t->modifiers &= ~MOD_NODE_ATTACH;
           break;
         }
       }

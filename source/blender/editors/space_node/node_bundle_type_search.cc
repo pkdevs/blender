@@ -7,9 +7,10 @@
 #include "BKE_node.hh"
 #include "BKE_node_runtime.hh"
 
-#include "BLI_string_utf8.h"
+#include "BLI_string_utf8.hh"
 
 #include "ED_screen.hh"
+#include "ED_undo.hh"
 
 #include "NOD_bundle_type.hh"
 #include "NOD_geometry_nodes_bundle.hh"
@@ -26,7 +27,6 @@ namespace blender::ed::space_node {
 
 struct BundleTypeSocketSearchData {
   int32_t node_id;
-  char socket_identifier[MAX_NAME];
 
   bNode *find_node(const bContext &C) const
   {
@@ -63,7 +63,7 @@ static void bundle_type_string_search(
     return;
   }
 
-  StringRef str = str_ptr;
+  const StringRef str = str_ptr;
 
   const auto *data = static_cast<BundleTypeSocketSearchData *>(arg);
   const Vector<std::string> names = get_type_names_from_context(*C, *data);
@@ -115,11 +115,13 @@ static void bundle_type_string_search_exec(bContext *C, void *data_v, void * /*i
   if (item.socket_type != SOCK_STRING) {
     return;
   }
-  if (item.name != nodes::Bundle::type_item_name) {
+  if (item.name != nodes::Bundle::type_item_name.ustr()) {
     return;
   }
   nodes::sync_node(*C, *node, nullptr);
   BKE_main_ensure_invariants(*CTX_data_main(C));
+
+  ED_undo_push(C, "Assign Bundle Type");
 }
 
 void node_bundle_type_add_string_search_button(const bContext & /*C*/,
@@ -143,10 +145,8 @@ void node_bundle_type_add_string_search_button(const bContext & /*C*/,
                                       "");
   ui::button_placeholder_set(but, placeholder);
 
-  const bNodeSocket &socket = *socket_ptr.data_as<bNodeSocket>();
   BundleTypeSocketSearchData *data = MEM_new_zeroed<BundleTypeSocketSearchData>(__func__);
   data->node_id = node.identifier;
-  STRNCPY_UTF8(data->socket_identifier, socket.identifier);
 
   ui::button_func_search_set_results_are_suggestions(but, true);
   ui::button_func_search_set_sep_string(but, UI_MENU_ARROW_SEP);

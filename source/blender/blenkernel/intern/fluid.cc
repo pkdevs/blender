@@ -8,17 +8,17 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 
-#include "BLI_fileops.h"
-#include "BLI_hash.h"
-#include "BLI_math_geom.h"
-#include "BLI_math_matrix.h"
-#include "BLI_math_vector.h"
+#include "BLI_fileops.hh"
+#include "BLI_hash_c.hh"
+#include "BLI_math_geom_c.hh"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_vector_c.hh"
 #include "BLI_path_utils.hh"
-#include "BLI_string.h"
-#include "BLI_task.h"
-#include "BLI_utildefines.h"
+#include "BLI_string.hh"
+#include "BLI_task_c.hh"
+#include "BLI_utildefines.hh"
 
 #include "DNA_colorband_types.h"
 #include "DNA_fluid_types.h"
@@ -55,8 +55,8 @@
 #  include "BLI_kdtree.hh"
 #  include "BLI_math_vector.hh"
 #  include "BLI_mutex.hh"
-#  include "BLI_threads.h"
-#  include "BLI_voxel.h"
+#  include "BLI_threads.hh"
+#  include "BLI_voxel.hh"
 
 #  include "BKE_bvhutils.hh"
 #  include "BKE_collision.h"
@@ -110,7 +110,7 @@ bool BKE_fluid_reallocate_fluid(FluidDomainSettings *fds, int res[3], int free_o
   if (free_old && fds->fluid) {
     manta_free(fds->fluid);
   }
-  if (!min_iii(res[0], res[1], res[2])) {
+  if (!std::min({res[0], res[1], res[2]})) {
     fds->fluid = nullptr;
   }
   else {
@@ -433,7 +433,11 @@ static void manta_set_domain_from_mesh(FluidDomainSettings *fds,
   }
   /* Apply object scale. */
   for (i = 0; i < 3; i++) {
-    size[i] = fabsf(size[i] * ob->scale[i]);
+    const float scale = ob->scale[i];
+    size[i] = fabsf(size[i] * (isfinite(scale) ? scale : 1.0f));
+    if (!isfinite(size[i])) {
+      size[i] = 1.0f;
+    }
   }
   copy_v3_v3(fds->global_size, size);
   copy_v3_v3(fds->dp0, min);
@@ -1477,7 +1481,7 @@ static void update_obstacles(Depsgraph *depsgraph,
 
 struct EmitFromParticlesData {
   FluidFlowSettings *ffs;
-  KDTree_3d *tree;
+  KDTree<float3> *tree;
 
   FluidObjectBB *bb;
   float *particle_vel;
@@ -1502,9 +1506,9 @@ static void emit_from_particles_task_cb(void *__restrict userdata,
       const float ray_start[3] = {float(x) + 0.5f, float(y) + 0.5f, float(z) + 0.5f};
 
       /* Find particle distance from the kdtree. */
-      KDTreeNearest_3d nearest;
+      KDTreeNearest<float3> nearest;
       const float range = data->solid + data->smooth;
-      kdtree_3d_find_nearest(data->tree, ray_start, &nearest);
+      kdtree_find_nearest<float3>(data->tree, ray_start, &nearest);
 
       if (nearest.dist < range) {
         bb->influence[index] = (nearest.dist < data->solid) ?
@@ -1543,7 +1547,7 @@ static void emit_from_particles(Object *flow_ob,
     /* radius based flow */
     const float solid = ffs->particle_size * 0.5f;
     const float smooth = 0.5f; /* add 0.5 cells of linear falloff to reduce aliasing */
-    KDTree_3d *tree = nullptr;
+    KDTree<float3> *tree = nullptr;
 
     sim.depsgraph = depsgraph;
     sim.scene = scene;
@@ -1568,7 +1572,7 @@ static void emit_from_particles(Object *flow_ob,
 
     /* setup particle radius emission if enabled */
     if (ffs->flags & FLUID_FLOW_USE_PART_SIZE) {
-      tree = kdtree_3d_new(psys->totpart + psys->totchild);
+      tree = kdtree_new<float3>(psys->totpart + psys->totchild);
       bounds_margin = int(ceil(solid + smooth));
     }
 
@@ -1607,7 +1611,7 @@ static void emit_from_particles(Object *flow_ob,
       mul_mat3_m4_v3(fds->imat, &particle_vel[valid_particles * 3]);
 
       if (ffs->flags & FLUID_FLOW_USE_PART_SIZE) {
-        kdtree_3d_insert(tree, valid_particles, pos);
+        kdtree_insert<float3>(tree, valid_particles, pos);
       }
 
       /* calculate emission map bounds */
@@ -1660,7 +1664,7 @@ static void emit_from_particles(Object *flow_ob,
         res[i] = bb->res[i];
       }
 
-      kdtree_3d_balance(tree);
+      kdtree_balance<float3>(tree);
 
       EmitFromParticlesData data{};
       data.ffs = ffs;
@@ -1680,7 +1684,7 @@ static void emit_from_particles(Object *flow_ob,
     }
 
     if (ffs->flags & FLUID_FLOW_USE_PART_SIZE) {
-      kdtree_3d_free(tree);
+      kdtree_free<float3>(tree);
     }
 
     /* free data */
@@ -3890,20 +3894,20 @@ static void fluid_modifier_processDomain(FluidModifierData *fmd,
 
   /* Try to read from cache and keep track of read success. */
   if (read_cache) {
-
-    /* Reallocate fluid object to match cached config before reading mesh/particles. */
-    if (has_config && manta_needs_realloc(fds->fluid, fmd)) {
-      BKE_fluid_reallocate_fluid(fds, fds->res, 1);
-    }
-
     /* Read mesh cache. */
     if (with_liquid && with_mesh) {
       if (mesh_frame != scene_framenr) {
         has_config = manta_read_config(fds->fluid, fmd, mesh_frame);
       }
 
-      /* Only load the mesh at the resolution it ways originally simulated at.
-       * The mesh files don't have a header, i.e. the don't store the grid resolution. */
+      /* The liquid mesh cache is read before the regular data-cache allocation. Ensure the Manta
+       * instance matches the cached configuration here instead of reallocating all cache types. */
+      if (has_config && manta_needs_realloc(fds->fluid, fmd)) {
+        BKE_fluid_reallocate_fluid(fds, fds->res, 1);
+      }
+
+      /* Only load the mesh at the resolution it was originally simulated at.
+       * The mesh files don't have a header, i.e. they don't store the grid resolution. */
       if (!manta_needs_realloc(fds->fluid, fmd)) {
         has_mesh = manta_read_mesh(fds->fluid, fmd, mesh_frame);
       }
@@ -3913,6 +3917,11 @@ static void fluid_modifier_processDomain(FluidModifierData *fmd,
     if (with_liquid && with_particles) {
       if (particles_frame != scene_framenr) {
         has_config = manta_read_config(fds->fluid, fmd, particles_frame);
+      }
+
+      /* The liquid particle cache is also read before the regular data-cache allocation. */
+      if (has_config && manta_needs_realloc(fds->fluid, fmd)) {
+        BKE_fluid_reallocate_fluid(fds, fds->res, 1);
       }
 
       read_partial = !baking_data && !baking_particles && next_particles;
@@ -3950,6 +3959,13 @@ static void fluid_modifier_processDomain(FluidModifierData *fmd,
     else {
       if (data_frame != scene_framenr) {
         has_config = manta_read_config(fds->fluid, fmd, data_frame);
+      }
+
+      if (with_smoke || with_liquid) {
+        /* Read config and realloc fluid object if needed. */
+        if (has_config && manta_needs_realloc(fds->fluid, fmd)) {
+          BKE_fluid_reallocate_fluid(fds, fds->res, 1);
+        }
       }
 
       read_partial = !baking_data && !baking_particles && !baking_mesh && next_data &&

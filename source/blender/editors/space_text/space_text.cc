@@ -13,13 +13,14 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_listbase.h"
-#include "BLI_string_utf8.h"
+#include "BLI_listbase.hh"
+#include "BLI_string_utf8.hh"
 
 #include "BKE_context.hh"
 #include "BKE_lib_query.hh"
 #include "BKE_lib_remap.hh"
 #include "BKE_screen.hh"
+#include "BKE_text.h"
 
 #include "ED_screen.hh"
 #include "ED_space_api.hh"
@@ -41,7 +42,9 @@
 
 namespace blender {
 
-/* ******************** default callbacks for text space ***************** */
+/* -------------------------------------------------------------------- */
+/** \name Default Callbacks for Text Space
+ * \{ */
 
 static SpaceLink *text_create(const ScrArea * /*area*/, const Scene * /*scene*/)
 {
@@ -51,7 +54,7 @@ static SpaceLink *text_create(const ScrArea * /*area*/, const Scene * /*scene*/)
   stext = MEM_new<SpaceText>("inittext");
   stext->spacetype = SPACE_TEXT;
 
-  stext->lheight = 12;
+  stext->line_height = 12;
   stext->tabnumber = 4;
   stext->margin_column = 80;
   stext->showsyntax = true;
@@ -111,6 +114,38 @@ static SpaceLink *text_duplicate(SpaceLink *sl)
 
   return reinterpret_cast<SpaceLink *>(stextn);
 }
+
+#ifdef WITH_INPUT_IME
+static std::optional<rcti> text_main_region_cursor_ime(wmWindow * /*win*/,
+                                                       const ScrArea *area,
+                                                       const ARegion *region)
+{
+  SpaceText *st = static_cast<SpaceText *>(area->spacedata.first);
+  /* Defer while the scroll-bar is being dragged. */
+  if (st->flags & ST_SCROLL_SELECT) {
+    return std::nullopt;
+  }
+  if (!st->text) {
+    return std::nullopt;
+  }
+  int offl, offc;
+  space_text_wrap_offset(st, region, st->text->sell, st->text->selc, &offl, &offc);
+  const int line_height = TXT_LINE_HEIGHT(st);
+  const int vsell = txt_get_span(static_cast<TextLine *>(st->text->lines.first), st->text->sell) -
+                    st->top + offl;
+  const int vselc = space_text_get_char_pos(st, st->text->sell->line, st->text->selc) - st->left +
+                    offc;
+  const int x = TXT_BODY_LEFT(st) + (vselc * st->runtime->char_width_px);
+  const int y = region->winy - vsell * line_height;
+  rcti rect;
+  rect.xmin = x;
+  rect.xmax = x + st->runtime->char_width_px;
+  rect.ymin = y - line_height;
+  rect.ymax = y;
+  return rect;
+}
+
+#endif
 
 static void text_listener(const wmSpaceTypeListenerParams *params)
 {
@@ -248,7 +283,11 @@ static int /*eContextResult*/ text_context(const bContext *C,
   return CTX_RESULT_MEMBER_NOT_FOUND;
 }
 
-/********************* main region ********************/
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Main Region
+ * \{ */
 
 /* Add handlers, stuff you only do once or on area/region changes. */
 static void text_main_region_init(wmWindowManager *wm, ARegion *region)
@@ -305,7 +344,11 @@ static void text_cursor(wmWindow *win, ScrArea *area, ARegion *region)
   WM_cursor_set(win, wmcursor);
 }
 
-/* ************* dropboxes ************* */
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Drop Boxes
+ * \{ */
 
 static bool text_drop_path_poll(bContext * /*C*/, wmDrag *drag, const wmEvent * /*event*/)
 {
@@ -360,9 +403,11 @@ static void text_dropboxes()
       lb, "TEXT_OT_insert", text_drop_string_poll, text_drop_string_copy, nullptr, nullptr);
 }
 
-/* ************* end drop *********** */
+/** \} */
 
-/****************** header region ******************/
+/* -------------------------------------------------------------------- */
+/** \name Header Region
+ * \{ */
 
 /* Add handlers, stuff you only do once or on area/region changes. */
 static void text_header_region_init(wmWindowManager * /*wm*/, ARegion *region)
@@ -375,7 +420,11 @@ static void text_header_region_draw(const bContext *C, ARegion *region)
   ED_region_header(C, region);
 }
 
-/****************** properties region ******************/
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Properties Region
+ * \{ */
 
 /* Add handlers, stuff you only do once or on area/region changes. */
 static void text_properties_region_init(wmWindowManager *wm, ARegion *region)
@@ -421,7 +470,11 @@ static void text_space_blend_write(BlendWriter *writer, SpaceLink *sl)
   writer->write_struct_cast<SpaceText>(sl);
 }
 
-/********************* registration ********************/
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Registration
+ * \{ */
 
 void ED_spacetype_text()
 {
@@ -453,6 +506,9 @@ void ED_spacetype_text()
   art->draw = text_main_region_draw;
   art->cursor = text_cursor;
   art->event_cursor = true;
+#ifdef WITH_INPUT_IME
+  art->cursor_ime = text_main_region_cursor_ime;
+#endif
 
   BLI_addhead(&st->regiontypes, art);
 
@@ -496,5 +552,7 @@ void ED_spacetype_text()
   ED_text_format_register_pov();
   ED_text_format_register_pov_ini();
 }
+
+/** \} */
 
 }  // namespace blender

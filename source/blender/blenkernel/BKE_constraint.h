@@ -36,6 +36,8 @@ struct bConstraintOb {
   struct Object *ob;
   /** pose channel that owns the constraints being evaluated */
   struct bPoseChannel *pchan;
+  /** Armature bone of the above pchan. */
+  struct Bone *pchan_armbone;
 
   /** matrix where constraints are accumulated + solved */
   float matrix[4][4];
@@ -48,7 +50,7 @@ struct bConstraintOb {
   short type;
   /**
    * Rotation order for constraint owner
-   * (as defined in #eEulerRotationOrders in BLI_math_rotation.h).
+   * (as defined in #eEulerRotationOrders in BLI_math_rotation_c.hh).
    */
   short rotOrder;
 };
@@ -221,6 +223,7 @@ struct bConstraint *BKE_constraints_active_get(ListBaseT<bConstraint> *list);
  * Set the given constraint as the active one (clearing all the others).
  */
 void BKE_constraints_active_set(ListBaseT<bConstraint> *list, struct bConstraint *con);
+bool BKE_constraint_has_influence(const struct bConstraint *con);
 struct bConstraint *BKE_constraints_find_name(ListBaseT<bConstraint> *list, const char *name);
 
 /**
@@ -325,6 +328,9 @@ void BKE_constraint_mat_convertspace(struct Object *ob,
  *
  * None of the actual calculations of the matrices should be done here! Also, this function is
  * not to be used by any new constraints, particularly any that have multiple targets.
+ *
+ * NOTE: ownertype=CONSTRAINT_OBTYPE_BONE is NOT supported by this function. Computing that also
+ * needs the bone-owning object, and that is not passed here.
  */
 void BKE_constraint_target_matrix_get(struct Depsgraph *depsgraph,
                                       struct Scene *scene,

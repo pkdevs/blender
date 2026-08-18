@@ -24,12 +24,12 @@
 
 #undef DNA_GENFILE_VERSIONING_MACROS
 
-#include "BLI_listbase.h"
-#include "BLI_math_vector.h"
+#include "BLI_listbase.hh"
 #include "BLI_math_vector.hh"
+#include "BLI_math_vector_c.hh"
 #include "BLI_set.hh"
-#include "BLI_string.h"
-#include "BLI_string_utf8.h"
+#include "BLI_string.hh"
+#include "BLI_string_utf8.hh"
 
 #include "BKE_anim_data.hh"
 #include "BKE_fcurve.hh"
@@ -154,45 +154,47 @@ static void do_version_glare_node_options_to_inputs(const Scene *scene,
   BKE_fcurves_id_cb(&node_tree->id, [&](ID * /*id*/, FCurve *fcurve) {
     /* The FCurve does not belong to the node since its RNA path doesn't start with the node's RNA
      * path. */
-    if (!StringRef(fcurve->rna_path).startswith(node_rna_path)) {
+    if (!fcurve->rna_path().startswith(node_rna_path)) {
       return;
     }
 
     /* Change the RNA path of the FCurve from the old properties to the new inputs, adjusting the
      * values of the FCurves frames when needed. */
-    char *old_rna_path = fcurve->rna_path;
-    if (BLI_str_endswith(fcurve->rna_path, "threshold")) {
-      fcurve->rna_path = BLI_sprintfN("%s.%s", node_rna_path.c_str(), "inputs[1].default_value");
+    if (BLI_str_endswith(fcurve->rna_path().c_str(), "threshold")) {
+      fcurve->rna_path_set_move(
+          BLI_sprintfN("%s.%s", node_rna_path.c_str(), "inputs[1].default_value"));
     }
-    else if (BLI_str_endswith(fcurve->rna_path, "mix")) {
-      fcurve->rna_path = BLI_sprintfN("%s.%s", node_rna_path.c_str(), "inputs[2].default_value");
+    else if (BLI_str_endswith(fcurve->rna_path().c_str(), "mix")) {
+      fcurve->rna_path_set_move(
+          BLI_sprintfN("%s.%s", node_rna_path.c_str(), "inputs[2].default_value"));
       adjust_fcurve_key_frame_values(
           fcurve, PROP_FLOAT, [&](const float value) { return mix_to_strength(value); });
     }
-    else if (BLI_str_endswith(fcurve->rna_path, "size")) {
-      fcurve->rna_path = BLI_sprintfN("%s.%s", node_rna_path.c_str(), "inputs[3].default_value");
+    else if (BLI_str_endswith(fcurve->rna_path().c_str(), "size")) {
+      fcurve->rna_path_set_move(
+          BLI_sprintfN("%s.%s", node_rna_path.c_str(), "inputs[3].default_value"));
       adjust_fcurve_key_frame_values(
           fcurve, PROP_FLOAT, [&](const float value) { return size_to_linear(value); });
     }
-    else if (BLI_str_endswith(fcurve->rna_path, "streaks")) {
-      fcurve->rna_path = BLI_sprintfN("%s.%s", node_rna_path.c_str(), "inputs[4].default_value");
+    else if (BLI_str_endswith(fcurve->rna_path().c_str(), "streaks")) {
+      fcurve->rna_path_set_move(
+          BLI_sprintfN("%s.%s", node_rna_path.c_str(), "inputs[4].default_value"));
     }
-    else if (BLI_str_endswith(fcurve->rna_path, "angle_offset")) {
-      fcurve->rna_path = BLI_sprintfN("%s.%s", node_rna_path.c_str(), "inputs[5].default_value");
+    else if (BLI_str_endswith(fcurve->rna_path().c_str(), "angle_offset")) {
+      fcurve->rna_path_set_move(
+          BLI_sprintfN("%s.%s", node_rna_path.c_str(), "inputs[5].default_value"));
     }
-    else if (BLI_str_endswith(fcurve->rna_path, "iterations")) {
-      fcurve->rna_path = BLI_sprintfN("%s.%s", node_rna_path.c_str(), "inputs[6].default_value");
+    else if (BLI_str_endswith(fcurve->rna_path().c_str(), "iterations")) {
+      fcurve->rna_path_set_move(
+          BLI_sprintfN("%s.%s", node_rna_path.c_str(), "inputs[6].default_value"));
     }
-    else if (BLI_str_endswith(fcurve->rna_path, "fade")) {
-      fcurve->rna_path = BLI_sprintfN("%s.%s", node_rna_path.c_str(), "inputs[7].default_value");
+    else if (BLI_str_endswith(fcurve->rna_path().c_str(), "fade")) {
+      fcurve->rna_path_set_move(
+          BLI_sprintfN("%s.%s", node_rna_path.c_str(), "inputs[7].default_value"));
     }
-    else if (BLI_str_endswith(fcurve->rna_path, "color_modulation")) {
-      fcurve->rna_path = BLI_sprintfN("%s.%s", node_rna_path.c_str(), "inputs[8].default_value");
-    }
-
-    /* The RNA path was changed, free the old path. */
-    if (fcurve->rna_path != old_rna_path) {
-      MEM_delete(old_rna_path);
+    else if (BLI_str_endswith(fcurve->rna_path().c_str(), "color_modulation")) {
+      fcurve->rna_path_set_move(
+          BLI_sprintfN("%s.%s", node_rna_path.c_str(), "inputs[8].default_value"));
     }
   });
 
@@ -295,7 +297,7 @@ static void do_version_glare_node_bloom_strength(const Scene *scene,
 
   /* Scale F-Curve. */
   BKE_fcurves_id_cb(&node_tree->id, [&](ID * /*id*/, FCurve *fcurve) {
-    if (strength_rna_path == fcurve->rna_path) {
+    if (strength_rna_path == fcurve->rna_path()) {
       adjust_fcurve_key_frame_values(
           fcurve, PROP_FLOAT, [&](const float value) { return scale_strength(value); });
     }
@@ -359,18 +361,20 @@ static void do_version_color_to_float_conversion(bNodeTree *node_tree)
     dot_product_node->location[1] = link.fromnode->location[1];
 
     /* Link the source socket to the dot product input. */
-    bNodeSocket *dot_product_a_input = bke::node_find_socket(*dot_product_node, SOCK_IN, "Vector");
+    bNodeSocket *dot_product_a_input = bke::node_find_socket(
+        *dot_product_node, SOCK_IN, "Vector"_ustr);
     version_node_add_link(
         *node_tree, *link.fromnode, *link.fromsock, *dot_product_node, *dot_product_a_input);
 
     /* Set the dot product vector to 1 / 3 to compute the average. */
     bNodeSocket *dot_product_b_input = bke::node_find_socket(
-        *dot_product_node, SOCK_IN, "Vector_001");
+        *dot_product_node, SOCK_IN, "Vector_001"_ustr);
     copy_v3_fl(dot_product_b_input->default_value_typed<bNodeSocketValueVector>()->value,
                1.0f / 3.0f);
 
     /* Link the dot product node output to the link target. */
-    bNodeSocket *dot_product_output = bke::node_find_socket(*dot_product_node, SOCK_OUT, "Value");
+    bNodeSocket *dot_product_output = bke::node_find_socket(
+        *dot_product_node, SOCK_OUT, "Value"_ustr);
     bNodeLink *output_link = &version_node_add_link(
         *node_tree, *dot_product_node, *dot_product_output, *link.tonode, *link.tosock);
 
@@ -389,7 +393,7 @@ static void do_version_bump_filter_width(bNodeTree *node_tree)
       continue;
     }
 
-    bNodeSocket *filter_width_input = bke::node_find_socket(node, SOCK_IN, "Filter Width");
+    bNodeSocket *filter_width_input = bke::node_find_socket(node, SOCK_IN, "Filter Width"_ustr);
     if (filter_width_input) {
       *version_cycles_node_socket_float_value(filter_width_input) = 1.0f;
     }
@@ -491,14 +495,13 @@ void do_versions_after_linking_440(FileData *fd, Main *bmain)
       }
       auto replace_rna_path_prefix =
           [](FCurve &fcurve, const StringRef old_prefix, const StringRef new_prefix) {
-            const StringRef rna_path = fcurve.rna_path;
+            const StringRef rna_path = fcurve.rna_path();
             if (!rna_path.startswith(old_prefix)) {
               return;
             }
             const StringRef tail = rna_path.drop_prefix(old_prefix.size());
             char *new_rna_path = BLI_strdupcat(new_prefix.data(), tail.data());
-            MEM_delete(fcurve.rna_path);
-            fcurve.rna_path = new_rna_path;
+            fcurve.rna_path_set_move(new_rna_path);
           };
       if (scene.adt->action) {
         animrig::foreach_fcurve_in_action(scene.adt->action->wrap(), [&](FCurve &fcurve) {
@@ -570,8 +573,8 @@ static void remove_triangulate_node_min_size_input(bNodeTree *tree)
   }
 
   for (bNode *triangulate : triangulate_nodes) {
-    bNodeSocket *selection = bke::node_find_socket(*triangulate, SOCK_IN, "Selection");
-    bNodeSocket *min_verts = bke::node_find_socket(*triangulate, SOCK_IN, "Minimum Vertices");
+    bNodeSocket *selection = bke::node_find_socket(*triangulate, SOCK_IN, "Selection"_ustr);
+    bNodeSocket *min_verts = bke::node_find_socket(*triangulate, SOCK_IN, "Minimum Vertices"_ustr);
     if (!min_verts) {
       /* Make versioning idempotent. */
       continue;
@@ -620,15 +623,16 @@ static void remove_triangulate_node_min_size_input(bNodeTree *tree)
     greater_or_equal.flag &= ~NODE_OPTIONS;
     version_node_add_link(*tree,
                           corners_of_face,
-                          *bke::node_find_socket(*&corners_of_face, SOCK_OUT, "Total"),
+                          *bke::node_find_socket(*&corners_of_face, SOCK_OUT, "Total"_ustr),
                           greater_or_equal,
-                          *bke::node_find_socket(*&greater_or_equal, SOCK_IN, "A_INT"));
+                          *bke::node_find_socket(*&greater_or_equal, SOCK_IN, "A_INT"_ustr));
     if (bNodeLink **min_verts_link = input_links.lookup_ptr(min_verts)) {
       (*min_verts_link)->tonode = &greater_or_equal;
-      (*min_verts_link)->tosock = bke::node_find_socket(*&greater_or_equal, SOCK_IN, "B_INT");
+      (*min_verts_link)->tosock = bke::node_find_socket(*&greater_or_equal, SOCK_IN, "B_INT"_ustr);
     }
     else {
-      bNodeSocket *new_min_verts = bke::node_find_socket(*&greater_or_equal, SOCK_IN, "B_INT");
+      bNodeSocket *new_min_verts = bke::node_find_socket(
+          *&greater_or_equal, SOCK_IN, "B_INT"_ustr);
       static_cast<bNodeSocketValueInt *>(new_min_verts->default_value)->value = old_min_verts;
     }
 
@@ -647,23 +651,23 @@ static void remove_triangulate_node_min_size_input(bNodeTree *tree)
       boolean_and.custom1 = NODE_BOOLEAN_MATH_AND;
 
       (*selection_link)->tonode = &boolean_and;
-      (*selection_link)->tosock = bke::node_find_socket(*&boolean_and, SOCK_IN, "Boolean");
+      (*selection_link)->tosock = bke::node_find_socket(*&boolean_and, SOCK_IN, "Boolean"_ustr);
       version_node_add_link(*tree,
                             greater_or_equal,
-                            *bke::node_find_socket(*&greater_or_equal, SOCK_OUT, "Result"),
+                            *bke::node_find_socket(*&greater_or_equal, SOCK_OUT, "Result"_ustr),
                             boolean_and,
-                            *bke::node_find_socket(*&boolean_and, SOCK_IN, "Boolean_001"));
+                            *bke::node_find_socket(*&boolean_and, SOCK_IN, "Boolean_001"_ustr));
 
       version_node_add_link(*tree,
                             boolean_and,
-                            *bke::node_find_socket(*&boolean_and, SOCK_OUT, "Boolean"),
+                            *bke::node_find_socket(*&boolean_and, SOCK_OUT, "Boolean"_ustr),
                             *triangulate,
                             *selection);
     }
     else {
       version_node_add_link(*tree,
                             greater_or_equal,
-                            *bke::node_find_socket(*&greater_or_equal, SOCK_OUT, "Result"),
+                            *bke::node_find_socket(*&greater_or_equal, SOCK_OUT, "Result"_ustr),
                             *triangulate,
                             *selection);
     }

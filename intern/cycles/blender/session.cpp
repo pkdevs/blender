@@ -144,7 +144,7 @@ void BlenderSession::create_session()
   sync = make_unique<BlenderSync>(
       b_engine, *b_data, *b_scene, scene, !background, use_developer_ui, session->progress);
   if (b_v3d) {
-    sync->sync_view(b_v3d, b_rv3d, width, height);
+    sync->sync_view(b_depsgraph, b_v3d, b_rv3d, width, height);
   }
   else {
     sync->sync_camera(*b_render, width, height, "");
@@ -374,7 +374,7 @@ void BlenderSession::render(blender::Depsgraph &b_depsgraph_)
   /* Compute render passes and film settings. */
   sync->sync_render_passes(*b_rlay, b_view_layer);
 
-  const int num_views = BLI_listbase_count(&b_rr->views);
+  const int num_views = b_rr->views.count();
 
   for (const auto [view_index, b_view] : b_rr->views.enumerate()) {
     b_rview_name = b_view.name;
@@ -827,7 +827,7 @@ void BlenderSession::synchronize(blender::Depsgraph &b_depsgraph_)
                   session_params.denoise_device);
 
   if (b_rv3d) {
-    sync->sync_view(b_v3d, b_rv3d, width, height);
+    sync->sync_view(b_depsgraph, b_v3d, b_rv3d, width, height);
   }
   else {
     sync->sync_camera(*b_render, width, height, "");
@@ -943,7 +943,7 @@ void BlenderSession::view_draw(const int w, const int h)
     else {
       /* update camera from 3d view */
 
-      sync->sync_view(b_v3d, b_rv3d, width, height);
+      sync->sync_view(b_depsgraph, b_v3d, b_rv3d, width, height);
 
       if (scene->camera->is_modified()) {
         reset = true;

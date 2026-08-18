@@ -35,7 +35,6 @@ set(SRC
   COM_node_operation.hh
   COM_operation.hh
   COM_pixel_operation.hh
-  COM_profiler.hh
   COM_realize_on_domain_operation.hh
   COM_render_context.hh
   COM_result.hh
@@ -62,7 +61,6 @@ set(SRC
   intern/node_operation.cc
   intern/operation.cc
   intern/pixel_operation.cc
-  intern/profiler.cc
   intern/realize_on_domain_operation.cc
   intern/render_context.cc
   intern/result.cc
@@ -432,7 +430,7 @@ set(GLSL_SOURCE_CONTENT "")
 set(GLSL_METADATA_CONTENT "")
 set(GLSL_INFOS_CONTENT "")
 foreach(GLSL_FILE ${GLSL_SRC})
-  get_filename_component(GLSL_FILE_NAME ${GLSL_FILE} NAME)
+  cmake_path(GET GLSL_FILE FILENAME GLSL_FILE_NAME)
   string(REPLACE "." "_" GLSL_FILE_NAME_UNDERSCORES ${GLSL_FILE_NAME})
   string(APPEND GLSL_FILE_NAME_UNDERSCORES "_tmp")
   string(APPEND GLSL_SOURCE_CONTENT "SHADER_SOURCE\(${GLSL_FILE_NAME_UNDERSCORES}, \"${GLSL_FILE_NAME}\", \"${GLSL_FILE}\"\)\n")

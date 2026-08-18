@@ -10,7 +10,7 @@
 
 #include <string>
 
-#include "BLI_compiler_attrs.h"
+#include "BLI_compiler_attrs.hh"
 #include "BLI_function_ref.hh"
 #include "BLI_map.hh"
 #include "BLI_math_matrix_types.hh"
@@ -45,6 +45,7 @@ struct wmKeyConfig;
 struct wmOperator;
 struct wmOperatorType;
 enum eReportType : uint16_t;
+enum eAnimvizCalcRange : uint8_t;
 
 namespace ui {
 struct Layout;
@@ -382,27 +383,25 @@ void single_obdata_user_make(Main *bmain, Scene *scene, Object *ob);
  */
 void motion_paths_clear(bContext *C, bool only_selected);
 
-/* Corresponds to eAnimvizCalcRange. */
-enum eObjectPathCalcRange {
-  OBJECT_PATH_CALC_RANGE_CURRENT_FRAME,
-  OBJECT_PATH_CALC_RANGE_CHANGED,
-  OBJECT_PATH_CALC_RANGE_FULL,
-};
-
 /**
- * For the objects with animation: update paths for those that have got them
- * This should selectively update paths that exist.
- *
- * To be called from various tools that do incremental updates
+ * Recalculate the motion paths on the given objects. This includes bones when recalculating
+ * armature objects.
  */
 void motion_paths_recalc(bContext *C,
                          Scene *scene,
-                         eObjectPathCalcRange range,
-                         ListBaseT<LinkData> *ld_objects);
+                         const eAnimvizCalcRange range,
+                         const Span<Object *> objects);
+/**
+ * Recalculate motion paths on all selected objects. This includes bones when recalculating
+ * armature objects.
+ */
+void motion_paths_recalc_selected(bContext *C, Scene *scene, eAnimvizCalcRange range);
 
-void motion_paths_recalc_selected(bContext *C, Scene *scene, eObjectPathCalcRange range);
-
-void motion_paths_recalc_visible(bContext *C, Scene *scene, eObjectPathCalcRange range);
+/**
+ * Recalculate motion paths on all visible objects. This includes bones when recalculating armature
+ * objects.
+ */
+void motion_paths_recalc_visible(bContext *C, Scene *scene, eAnimvizCalcRange range);
 
 /* constraints */
 /**
@@ -544,12 +543,12 @@ bool modifier_apply(Main *bmain,
                     bool do_all_keyframes);
 bool modifier_copy(ReportList *reports, Main *bmain, Scene *scene, Object *ob, ModifierData *md);
 void modifier_link(bContext *C, Object *ob_dst, Object *ob_src);
-bool modifier_copy_to_object(Main *bmain,
-                             const Scene *scene,
-                             const Object *ob_src,
-                             const ModifierData *md,
-                             Object *ob_dst,
-                             ReportList *reports);
+ModifierData *modifier_copy_to_object(Main *bmain,
+                                      const Scene *scene,
+                                      const Object *ob_src,
+                                      const ModifierData *md,
+                                      Object *ob_dst,
+                                      ReportList *reports);
 /**
  * If the object data of 'orig_ob' has other users, run 'callback' on
  * each of them.

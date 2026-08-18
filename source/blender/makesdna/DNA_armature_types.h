@@ -410,6 +410,7 @@ struct bArmature {
   ID id;
   struct AnimData *adt = nullptr;
 
+  /** Root bones. Children are listed in Bone::childbase. */
   ListBaseT<Bone> bonebase = {nullptr, nullptr};
 
   /** Use a hash-table for quicker lookups of bones by name. */
@@ -488,6 +489,10 @@ struct bArmature {
   /* Return the span of children of the given bone collection. */
   Span<const BoneCollection *> collection_children(const BoneCollection *parent) const;
   Span<BoneCollection *> collection_children(BoneCollection *parent);
+
+  const Bone *bone_get_indexed(int64_t bone_index) const;
+  Bone *bone_get_indexed(int64_t bone_index);
+
 #endif
 };
 

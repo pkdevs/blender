@@ -38,7 +38,6 @@ set(SRC
 
 set(LIB
   PUBLIC bf::dependencies::openimageio
-  PRIVATE bf::dependencies::jpeg
   PUBLIC bf::dependencies::optional::tbb
   PUBLIC bf::dependencies::optional::embree
   PUBLIC bf::dependencies::optional::openpgl
@@ -46,9 +45,6 @@ set(LIB
   PRIVATE bf::dependencies::opencolorio
   PRIVATE bf::dependencies::zstd
   PRIVATE bf::dependencies::openexr
-  # Used by OpenImageIO headers, which fallback to a bundled version. But we
-  # need to use the same version as Blender to avoid symbol conflicts.
-  PRIVATE bf::dependencies::fmt
 )
 
 set(SRC_HEADERS

@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "BLI_compiler_attrs.h"
+#include "BLI_compiler_attrs.hh"
 #include "BLI_span.hh"
 
 #include "DNA_armature_types.h"
@@ -37,6 +37,7 @@ struct bContext;
 struct bPoseChannel;
 struct wmKeyConfig;
 struct wmOperator;
+enum eAnimvizCalcRange : uint8_t;
 
 #define BONESEL_ROOT (1u << 29)
 #define BONESEL_TIP (1u << 30)
@@ -138,6 +139,10 @@ wmOperatorStatus ED_armature_join_objects_exec(bContext *C, wmOperator *op);
 
 /* `armature_select.cc` */
 
+/**
+ * To avoid/skip non-bone hits.
+ */
+bool ED_armature_selectresult_is_bone(const GPUSelectResult &hit_result);
 Base *ED_armature_base_and_ebone_from_select_buffer(Span<Base *> bases,
                                                     unsigned int select_id,
                                                     EditBone **r_ebone);
@@ -269,19 +274,13 @@ bool ED_object_posemode_exit(bContext *C, Object *ob);
 bool ED_object_posemode_enter_ex(Main *bmain, Object *ob);
 bool ED_object_posemode_enter(bContext *C, Object *ob);
 
-/** Corresponds to #eAnimvizCalcRange. */
-enum ePosePathCalcRange {
-  POSE_PATH_CALC_RANGE_CURRENT_FRAME,
-  POSE_PATH_CALC_RANGE_CHANGED,
-  POSE_PATH_CALC_RANGE_FULL,
-};
 /**
  * For the object with pose/action: update paths for those that have got them
  * This should selectively update paths that exist...
  *
  * To be called from various tools that do incremental updates.
  */
-void ED_pose_recalculate_paths(bContext *C, Scene *scene, Object *ob, ePosePathCalcRange range);
+void ED_pose_recalculate_paths(bContext *C, Scene *scene, Object *ob, eAnimvizCalcRange range);
 
 /* `pose_select.cc` */
 

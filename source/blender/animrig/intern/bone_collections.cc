@@ -6,12 +6,12 @@
  * \ingroup animrig
  */
 
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 #include "BLI_map.hh"
-#include "BLI_string.h"
-#include "BLI_string_utf8.h"
+#include "BLI_string.hh"
+#include "BLI_string_utf8.hh"
 #include "BLI_string_utils.hh"
-#include "BLI_utildefines.h"
+#include "BLI_utildefines.hh"
 
 #include "BLT_translation.hh"
 
@@ -19,10 +19,13 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BKE_animsys.h"
+#include "BKE_animsys.hh"
+#include "BKE_global.hh"
 #include "BKE_idprop.hh"
 #include "BKE_lib_id.hh"
 #include "BKE_lib_override.hh"
+
+#include "RNA_path.hh"
 
 #include "ANIM_armature_iter.hh"
 #include "ANIM_bone_collections.hh"
@@ -71,7 +74,7 @@ BoneCollection *ANIM_bonecoll_new(const char *name)
 
 void ANIM_bonecoll_free(BoneCollection *bcoll, const bool do_id_user_count)
 {
-  BLI_assert_msg(BLI_listbase_is_empty(&bcoll->bones),
+  BLI_assert_msg(bcoll->bones.is_empty(),
                  "bone collection still has bones assigned to it, will cause dangling pointers in "
                  "bone runtime data");
   if (bcoll->prop) {
@@ -117,7 +120,7 @@ void ANIM_armature_runtime_free(bArmature *armature)
 {
   /* Free the bone-to-its-collections mapping. */
   ANIM_armature_foreach_bone(&armature->bonebase,
-                             [&](Bone *bone) { BLI_freelistN(&bone->runtime.collections); });
+                             [&](Bone *bone) { bone->runtime.collections.free_no_destruct(); });
 }
 
 /**
@@ -585,7 +588,10 @@ bool ANIM_armature_bonecoll_move(bArmature *armature, BoneCollection *bcoll, con
   return true;
 }
 
-void ANIM_armature_bonecoll_name_set(bArmature *armature, BoneCollection *bcoll, const char *name)
+void ANIM_armature_bonecoll_name_set(Main &bmain,
+                                     bArmature *armature,
+                                     BoneCollection *bcoll,
+                                     const char *name)
 {
   char old_name[sizeof(bcoll->name)];
 
@@ -604,8 +610,19 @@ void ANIM_armature_bonecoll_name_set(bArmature *armature, BoneCollection *bcoll,
 
   /* Bone collections can be reached via .collections (4.0+) and .collections_all (4.1+).
    * Animation data from 4.0 should have been versioned to only use `.collections_all`. */
-  BKE_animdata_fix_paths_rename_all(&armature->id, "collections", old_name, bcoll->name);
-  BKE_animdata_fix_paths_rename_all(&armature->id, "collections_all", old_name, bcoll->name);
+  const DriverMap driver_map = BKE_animdata_build_driver_target_map(bmain);
+  BKE_animdata_fix_paths(armature->id,
+                         "collections",
+                         RNA_path_name_to_infix(old_name),
+                         RNA_path_name_to_infix(bcoll->name),
+                         /*verify_paths=*/true,
+                         driver_map);
+  BKE_animdata_fix_paths(armature->id,
+                         "collections_all",
+                         RNA_path_name_to_infix(old_name),
+                         RNA_path_name_to_infix(bcoll->name),
+                         /*verify_paths=*/true,
+                         driver_map);
 }
 
 void ANIM_armature_bonecoll_remove_from_index(bArmature *armature, int index)
@@ -993,7 +1010,7 @@ void ANIM_armature_bonecoll_reconstruct(bArmature *armature)
 {
   /* Remove all the old collection memberships. */
   for (BoneCollection *bcoll : armature->collections_span()) {
-    BLI_freelistN(&bcoll->bones);
+    bcoll->bones.free_no_destruct();
   }
 
   /* For all bones, restore their collection memberships. */
@@ -1009,7 +1026,7 @@ static bool any_bone_collection_visible(const bArmature *armature,
 {
   /* Special case: Hide bone when solo is active and it doesn't belong to any collection, see:
    * #137090. */
-  if (BLI_listbase_is_empty(collection_refs) && !(armature->flag & ARM_BCOLL_SOLO_ACTIVE)) {
+  if (collection_refs->is_empty() && !(armature->flag & ARM_BCOLL_SOLO_ACTIVE)) {
     return true;
   }
 
@@ -1117,7 +1134,7 @@ void ANIM_armature_bonecoll_show_from_ebone(bArmature *armature, const EditBone 
 
 void ANIM_armature_bonecoll_show_from_pchan(bArmature *armature, const bPoseChannel *pchan)
 {
-  ANIM_armature_bonecoll_show_from_bone(armature, pchan->bone);
+  ANIM_armature_bonecoll_show_from_bone(armature, pchan->bone_get(*armature));
 }
 
 /* ********* */
@@ -1418,7 +1435,7 @@ Map<BoneCollection *, BoneCollection *> ANIM_bonecoll_array_copy_no_membership(
     BoneCollection *bcoll_dst = MEM_dupalloc(bcoll_src);
 
     /* This will be rebuilt from the edit bones, so we don't need to copy it. */
-    BLI_listbase_clear(&bcoll_dst->bones);
+    bcoll_dst->bones.clear_no_delete();
 
     if (bcoll_src->prop) {
       bcoll_dst->prop = IDP_CopyProperty_ex(bcoll_src->prop,
@@ -1456,7 +1473,7 @@ void ANIM_bonecoll_array_free(BoneCollection ***bcoll_array,
      * However, during undo this is also used to free the BoneCollection
      * list on the Armature itself before copying over the undo BoneCollection
      * list, in which case this of Bone pointers may not be empty. */
-    BLI_freelistN(&bcoll->bones);
+    bcoll->bones.free_no_destruct();
 
     MEM_delete(bcoll);
   }

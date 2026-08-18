@@ -161,8 +161,9 @@ ENUM_OPERATORS(bPoseChannelRuntimeFlag);
 
 /* PoseChannel (transform) flags. */
 enum ePchan_Flag : short {
-  /* (1 << 0) to (1 << 3) used to be flags to determine if a type of channel should be modified by
-     pose sliding. This has been moved to the `SlideSubject` struct in Blender 5.2.  */
+  /* (1 << 0) to (1 << 3) used to be flags to determine if a type of channel
+   * should be modified by pose sliding.
+   * This has been moved to the `SlideSubject` struct in Blender 5.2. */
 
   /* old IK/cache stuff
    * - used to be here from (1 << 3) to (1 << 8)
@@ -255,8 +256,9 @@ enum ePchan_DrawFlag : char {
 ENUM_OPERATORS(ePchan_DrawFlag);
 
 /* NOTE: It doesn't take custom_scale_xyz into account. */
-#define PCHAN_CUSTOM_BONE_LENGTH(pchan) \
-  (((pchan)->drawflag & PCHAN_DRAW_NO_CUSTOM_BONE_SIZE) ? 1.0f : (pchan)->bone->length)
+#define PCHAN_CUSTOM_BONE_LENGTH(pchanbone) \
+  (((pchanbone).pchan->drawflag & PCHAN_DRAW_NO_CUSTOM_BONE_SIZE) ? 1.0f : \
+                                                                    (pchanbone).bone->length)
 
 #ifdef DNA_DEPRECATED_ALLOW
 /* PoseChannel->bboneflag */
@@ -274,8 +276,8 @@ enum ePchan_BBoneFlag : char {
 enum eRotationModes : short {
   /* quaternion rotations (default, and for older Blender versions) */
   ROT_MODE_QUAT = 0,
-  /* euler rotations - keep in sync with enum in BLI_math_rotation.h */
-  /** Blender 'default' (classic) - must be as 1 to sync with BLI_math_rotation.h defines */
+  /* euler rotations - keep in sync with enum in BLI_math_rotation_c.hh */
+  /** Blender 'default' (classic) - must be as 1 to sync with BLI_math_rotation_c.hh defines */
   ROT_MODE_EUL = 1,
   ROT_MODE_XYZ = 1,
   ROT_MODE_XZY = 2,
@@ -562,7 +564,7 @@ enum DNA_DEPRECATED eAnimEdit_AutoSnap : int {
 };
 
 /* SAction->cache_display */
-enum eTimeline_Cache_Flag : char {
+enum eTimeline_Cache_Flag : uint16_t {
   TIME_CACHE_DISPLAY = (1 << 0),
   TIME_CACHE_SOFTBODY = (1 << 1),
   TIME_CACHE_PARTICLES = (1 << 2),
@@ -570,7 +572,8 @@ enum eTimeline_Cache_Flag : char {
   TIME_CACHE_SMOKE = (1 << 4),
   TIME_CACHE_DYNAMICPAINT = (1 << 5),
   TIME_CACHE_RIGIDBODY = (1 << 6),
-  TIME_CACHE_SIMULATION_NODES = static_cast<char>(1 << 7),
+  TIME_CACHE_SIMULATION_NODES = (1 << 7),
+  TIME_CACHE_COMPOSITOR = (1 << 8),
 };
 ENUM_OPERATORS(eTimeline_Cache_Flag)
 
@@ -582,7 +585,7 @@ ENUM_OPERATORS(eTimeline_Cache_Flag)
 
 /** Data point for motion path (`mpv`). */
 struct bMotionPathVert {
-  /** Coordinates of point in 3D-space. */
+  /** Coordinates of point in world space or NDC space. */
   float co[3] = {};
   /** Quick settings. */
   eMotionPathVert_Flag flag = {};
@@ -675,8 +678,11 @@ struct bPoseChannel_BBoneSegmentBoundary {
   float depth_scale = 0;
 };
 
+static constexpr int64_t BONE_INDEX_UNKNOWN = -1;
 struct bPoseChannel_Runtime {
   SessionUID session_uid;
+
+  int64_t bone_index = BONE_INDEX_UNKNOWN;
 
   /* Cached dual quaternion for deformation. */
   struct DualQuat deform_dual_quat;
@@ -756,8 +762,6 @@ struct bPoseChannel {
   DNA_DEPRECATED char bboneflag = 0;
   char _pad0[4] = {};
 
-  /** Set on read file or rebuild pose. */
-  struct Bone *bone = nullptr;
   /** Set on read file or rebuild pose. */
   struct bPoseChannel *parent = nullptr;
   /** Set on read file or rebuild pose, the 'ik' child, for b-bones. */
@@ -846,7 +850,7 @@ struct bPoseChannel {
 
   /**
    * Curved bones settings - these are for animating,
-   * and are applied on top of the copies in pchan->bone
+   * and are applied on top of the copies in pchan->bone_get(*ob)
    */
   float roll1 = 0, roll2 = 0;
   float curve_in_x = 0, curve_in_z = 0;
@@ -859,7 +863,8 @@ struct bPoseChannel {
   float scale_in[3] = {1.0f, 1.0f, 1.0f};
   float scale_out[3] = {1.0f, 1.0f, 1.0f};
 
-  /** B-Bone custom handles; set on read file or rebuild pose based on pchan->bone data. */
+  /** B-Bone custom handles; set on read file or rebuild pose based on pchan->bone_get(*ob)
+   * data. */
   struct bPoseChannel *bbone_prev = nullptr;
   struct bPoseChannel *bbone_next = nullptr;
 
@@ -873,10 +878,29 @@ struct bPoseChannel {
 
   BoneColor color; /* MUST be named the same as in Bone and EditBone structs. */
 
-  void *_pad2 = nullptr;
-
   /** Runtime data (keep last). */
   struct bPoseChannel_Runtime runtime;
+
+#ifdef __cplusplus
+  /**
+   * Get the armature bone that corresponds to this bPoseChannel.
+   *
+   * Prefer this function over bone_get(armature), as it performs more checks at runtime.
+   */
+  const Bone *bone_get(const Object &owner) const;
+  Bone *bone_get(Object &owner);
+
+  /**
+   * Get the armature bone that corresponds to this bPoseChannel.
+   *
+   * Prefer bone_get(object) over this function, as that performs more checks at runtime.
+   *
+   * \warning only use when you are sure bone indices are up to date.
+   * Call `BKE_pose_ensure_bone_indices` to ensure bone indices are correct.
+   */
+  const Bone *bone_get(const bArmature &armature) const;
+  Bone *bone_get(bArmature &armature);
+#endif
 };
 
 /* Pose ------------------------------------ */
@@ -916,7 +940,7 @@ struct bPose {
   ePose_IKSolverType iksolver = {};
   /** Temporary IK data, depends on the IK solver. Not saved in file. */
   void *ikdata = nullptr;
-  /** IK solver parameter for ItaSC .*/
+  /** IK solver parameter for ItaSC. */
   bItasc *ikparam = nullptr;
 
   /** Settings for visualization of bone animation. */
@@ -1171,8 +1195,9 @@ struct SpaceAction {
   char mode_prev = 0;
   /* Snapping now lives on the Scene. */
   DNA_DEPRECATED char autosnap = 0;
+  char _pad1 = {};
   eTimeline_Cache_Flag cache_display = {};
-  char _pad1[6] = {};
+  char _pad2[4] = {};
 
   SpaceActionOverlays overlays;
 

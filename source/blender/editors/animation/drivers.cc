@@ -12,10 +12,10 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_listbase.h"
-#include "BLI_string.h"
-#include "BLI_string_utf8.h"
-#include "BLI_utildefines.h"
+#include "BLI_listbase.hh"
+#include "BLI_string.hh"
+#include "BLI_string_utf8.hh"
+#include "BLI_utildefines.hh"
 
 #include "DNA_anim_types.h"
 
@@ -103,7 +103,7 @@ FCurve *alloc_driver_fcurve(const char rna_path[],
 
   /* store path - make copy, and store that */
   if (rna_path) {
-    fcu->rna_path = BLI_strdup(rna_path);
+    fcu->rna_path_set(rna_path);
   }
   fcu->array_index = array_index;
 
@@ -592,20 +592,8 @@ bool ANIM_copy_driver(
 
   /* copy this to the copy/paste buf if it exists */
   if (fcu && fcu->driver) {
-    /* Make copies of some info such as the rna_path, then clear this info from the
-     * F-Curve temporarily so that we don't end up wasting memory storing the path
-     * which won't get used ever.
-     */
-    char *tmp_path = fcu->rna_path;
-    fcu->rna_path = nullptr;
-
-    /* make a copy of the F-Curve with */
     channeldriver_copypaste_buf = BKE_fcurve_copy(fcu);
-
-    /* restore the path */
-    fcu->rna_path = tmp_path;
-
-    /* copied... */
+    channeldriver_copypaste_buf->rna_path_set("");
     return true;
   }
 
@@ -683,12 +671,12 @@ void ANIM_driver_vars_copybuf_free()
     }
   }
 
-  BLI_listbase_clear(&driver_vars_copybuf);
+  driver_vars_copybuf.clear_no_delete();
 }
 
 bool ANIM_driver_vars_can_paste()
 {
-  return (BLI_listbase_is_empty(&driver_vars_copybuf) == false);
+  return (driver_vars_copybuf.is_empty() == false);
 }
 
 /* -------------------------------------------------- */
@@ -701,7 +689,7 @@ bool ANIM_driver_vars_copy(ReportList *reports, FCurve *fcu)
     return false;
   }
 
-  if (BLI_listbase_is_empty(&fcu->driver->variables)) {
+  if (fcu->driver->variables.is_empty()) {
     BKE_report(reports, RPT_ERROR, "Driver has no variables to copy");
     return false;
   }
@@ -712,7 +700,7 @@ bool ANIM_driver_vars_copy(ReportList *reports, FCurve *fcu)
   /* copy over the variables */
   driver_variables_copy(&driver_vars_copybuf, &fcu->driver->variables);
 
-  return (BLI_listbase_is_empty(&driver_vars_copybuf) == false);
+  return (driver_vars_copybuf.is_empty() == false);
 }
 
 bool ANIM_driver_vars_paste(ReportList *reports, FCurve *fcu, bool replace)
@@ -721,7 +709,7 @@ bool ANIM_driver_vars_paste(ReportList *reports, FCurve *fcu, bool replace)
   ListBaseT<DriverVar> tmp_list = {nullptr, nullptr};
 
   /* sanity checks */
-  if (BLI_listbase_is_empty(&driver_vars_copybuf)) {
+  if (driver_vars_copybuf.is_empty()) {
     BKE_report(reports, RPT_ERROR, "No driver variables in the internal clipboard to paste");
     return false;
   }
@@ -744,7 +732,7 @@ bool ANIM_driver_vars_paste(ReportList *reports, FCurve *fcu, bool replace)
       driver_free_variable_ex(driver, dvar);
     }
 
-    BLI_listbase_clear(&driver->variables);
+    driver->variables.clear_no_delete();
   }
 
   /* 3) Add new vars */

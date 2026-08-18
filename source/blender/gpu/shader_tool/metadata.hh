@@ -74,6 +74,11 @@ enum Type : uint64_t {
   float4 = hash("float4"),
   float3x3 = hash("float3x3"),
   float4x4 = hash("float4x4"),
+  int1 = hash("int"),
+  int2 = hash("int2"),
+  int3 = hash("int3"),
+  int4 = hash("int4"),
+  bool1 = hash("bool"),
   sampler1DArray = hash("sampler1DArray"),
   sampler2DArray = hash("sampler2DArray"),
   sampler2D = hash("sampler2D"),
@@ -168,6 +173,26 @@ struct FragmentOutputs : std::vector<ParsedFragOuput> {
   std::string serialize() const;
 };
 
+struct ParsedFragInput {
+  /* Line this resource was defined. */
+  size_t line;
+
+  std::string var_type;
+  std::string var_name;
+
+  std::string slot;
+  std::string image_type;
+  std::string raster_order_group;
+
+  std::string serialize() const;
+};
+
+struct FragmentInputs : std::vector<ParsedFragInput> {
+  std::string name;
+
+  std::string serialize() const;
+};
+
 struct ParsedVertInput {
   /* Line this resource was defined. */
   size_t line;
@@ -252,6 +277,7 @@ struct Source {
   std::vector<ResourceTable> resource_tables;
   std::vector<StageInterface> stage_interfaces;
   std::vector<FragmentOutputs> fragment_outputs;
+  std::vector<FragmentInputs> fragment_inputs;
   std::vector<VertexInputs> vertex_inputs;
   std::vector<Symbol> symbol_table;
   std::vector<TemplateDefinition> template_definitions;
