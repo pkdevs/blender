@@ -731,7 +731,7 @@ static void rna_def_asset_data(BlenderRNA *brna)
   RNA_def_property_ui_text(prop,
                            "Webpage",
                            "Webpage"
-                           "Webpage URL where the users can learn more about this asset.");
+                           "Webpage URL where users can learn more about this asset");
 
   prop = RNA_def_property(srna, "tags", PROP_COLLECTION, PROP_NONE);
   RNA_def_property_struct_type(prop, "AssetTag");

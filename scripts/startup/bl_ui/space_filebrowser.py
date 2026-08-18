@@ -803,7 +803,8 @@ class ASSETBROWSER_PT_metadata(asset_utils.AssetBrowserPanel, Panel):
     def _webpage_prop(layout, asset_metadata):
         """
         Only display the webpage property when is either set or can be modified (i.e. the
-        asset is in the current file)."""
+        asset is in the current file).
+        """
         if getattr(asset_metadata, "webpage") or not asset_metadata.is_property_readonly("webpage"):
             ui_name = asset_metadata.rna_type.properties["webpage"].name
             if asset_metadata.is_property_readonly("webpage"):
@@ -812,7 +813,7 @@ class ASSETBROWSER_PT_metadata(asset_utils.AssetBrowserPanel, Panel):
                 sub.alignment = 'RIGHT'
                 sub.label(text=ui_name)
                 url = getattr(asset_metadata, "webpage")
-                sub=split.row()
+                sub = split.row()
                 sub.alignment = 'LEFT'
                 sub.link(url=url, text=url)
             else:
