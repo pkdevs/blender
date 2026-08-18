@@ -437,6 +437,7 @@ static bool cast_ray_highpoly(bke::BVHTreeFromMesh *treeData,
     pixel_array[pixel_id].primitive_id = -1;
     pixel_array[pixel_id].object_id = -1;
     pixel_array[pixel_id].seed = 0;
+    pixel_array[pixel_id].is_margin = false;
   }
 
   return hit_mesh != -1;
@@ -613,6 +614,7 @@ bool RE_bake_pixels_populate_from_objects(Mesh *me_low,
 
       if (primitive_id == -1) {
         pixel_array_to[i].primitive_id = -1;
+        pixel_array_to[i].is_margin = false;
         continue;
       }
 
@@ -709,8 +711,12 @@ static void bake_differentials(BakeDataZSpan *bd,
   }
 }
 
-static void bake_pixels_add_margin(BakePixel pixel_array[], const BakeTargets *targets, int margin)
+static void bake_pixels_add_denoise_margin(BakePixel pixel_array[],
+                                           const BakeTargets *targets,
+                                           int margin)
 {
+  /* Bake neighboring pixels with the same primitive, so denoising gets a reasonable
+   * pixel value rather than a sharp transition that causes artifacts. */
   for (int image_id = 0; image_id < targets->images_num; image_id++) {
     BakeImage *image = &targets->images[image_id];
 
@@ -874,9 +880,9 @@ void RE_bake_pixels_populate(Mesh *mesh,
   }
 
   if (margin > 0) {
-    /* 4 pixels should be enough for denoiser to distinguish
-       rendered pixels from the background. */
-    bake_pixels_add_margin(pixel_array, targets, std::min(margin, 4));
+    /* 4 pixels should be enough for denoiser to distinguish rendered
+     * pixels from the background. */
+    bake_pixels_add_denoise_margin(pixel_array, targets, std::min(margin, 4));
   }
 
   MEM_delete(corner_tris);
