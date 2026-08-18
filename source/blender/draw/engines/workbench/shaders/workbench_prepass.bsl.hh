@@ -259,8 +259,7 @@ struct PointCloud {
   ViewMatrices view = views.get(id.view_id<1>());
   ObjectMatrices obj = models.get(res_id);
 
-  const ObjectInfos(&ob_buf)[] = buffer_get(draw_object_infos, drw_infos);
-  const eObjectInfoFlag ob_flag = ob_buf[res_id].flag;
+  const eObjectInfoFlag ob_flag = buffer_get(draw_object_infos, drw_infos)[res_id].flag;
 
   const pointcloud::Point ls_pt = pointcloud::point_get(uint(vert_id));
   const pointcloud::Point ws_pt = pointcloud::object_to_world(ls_pt, obj.model);
