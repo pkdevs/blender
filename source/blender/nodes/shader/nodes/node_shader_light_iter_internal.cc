@@ -71,6 +71,7 @@ void register_node_type_sh_light_iter_internal_input()
   ntype.enum_name_legacy = "LIGHT ITER INTERNAL INPUT";
   ntype.nclass = NODE_CLASS_SHADER;
   ntype.declare = file_ns::node_declare;
+  ntype.gather_link_search_ops = search_link_ops_for_shader_material_lighting_node;
   ntype.gpu_fn = file_ns::node_shader_fn;
 
   bke::node_register_type(ntype);
@@ -89,6 +90,7 @@ void register_node_type_sh_light_iter_internal_output()
   ntype.enum_name_legacy = "LIGHT ITER INTERNAL OUTPUT";
   ntype.nclass = NODE_CLASS_SHADER;
   ntype.declare = file_ns::node_declare;
+  ntype.gather_link_search_ops = search_link_ops_for_shader_material_lighting_node;
   ntype.gpu_fn = file_ns::node_shader_fn;
 
   bke::node_register_type(ntype);

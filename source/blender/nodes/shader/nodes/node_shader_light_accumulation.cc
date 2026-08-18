@@ -58,6 +58,7 @@ void register_node_type_sh_light_accumulation()
   ntype.enum_name_legacy = "LIGHT ACCUMULATION";
   ntype.nclass = NODE_CLASS_SHADER;
   ntype.declare = file_ns::node_declare;
+  ntype.gather_link_search_ops = search_link_ops_for_shader_material_lighting_node;
   ntype.gpu_fn = file_ns::node_shader_gpu_light_accumulation;
   // ntype.materialx_fn = file_ns::node_shader_materialx;
 

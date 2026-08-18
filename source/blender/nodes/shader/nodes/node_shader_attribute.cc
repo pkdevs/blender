@@ -134,6 +134,7 @@ void register_node_type_sh_attribute()
   ntype.initfunc = file_ns::node_shader_init_attribute;
   bke::node_type_storage(
       ntype, "NodeShaderAttribute", node_free_standard_storage, node_copy_standard_storage);
+  ntype.gather_link_search_ops = search_link_ops_for_shader_material_lighting_node;
   ntype.gpu_fn = file_ns::node_shader_gpu_attribute;
   ntype.materialx_fn = file_ns::node_shader_materialx;
 
