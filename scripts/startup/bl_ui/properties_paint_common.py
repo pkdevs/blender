@@ -1614,7 +1614,11 @@ def draw_mesh_automasking_settings(layout, settings, *, topbar=False, use_face_s
         subcol.prop(settings, "view_normal_falloff", text="Falloff")
 
     col = parent.column()
-    col.prop(settings, "use_automasking_start_normal", text="Area Normal")
+    row = col.row(align=True)
+    row.prop(settings, "use_automasking_start_normal", text="Area Normal")
+    subrow = row.row(align=True)
+    subrow.active = settings.use_automasking_start_normal
+    subrow.prop(settings, "use_stroke_normal_automasking", text="")
 
     if settings.use_automasking_start_normal:
         col = parent.column(align=True)

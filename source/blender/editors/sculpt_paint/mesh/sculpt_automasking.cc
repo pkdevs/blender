@@ -193,17 +193,28 @@ static float calc_brush_normal_factor(const Cache &automasking,
 {
   const SculptSession &ss = *object.runtime->sculpt_session;
   float falloff = automasking.settings.start_normal_falloff * M_PI;
-  float3 initial_normal;
 
-  if (ss.cache) {
-    initial_normal = ss.cache->initial_normal_symm;
+  /* Per-stroke value */
+  const float3 initial_normal = ss.cache ? ss.cache->initial_normal_symm :
+                                           ss.filter_cache->initial_normal;
+
+  /* Per-daub value, note that Mesh filters do not update this value even for deformations */
+  const std::optional<float3> current_normal = ss.cache ? std::make_optional(
+                                                              ss.cache->sculpt_normal_symm) :
+                                                          std::nullopt;
+
+  float3 sculpt_normal;
+  if (automasking.settings.flags & BRUSH_AUTOMASKING_BRUSH_NORMAL_STROKE) {
+    sculpt_normal = initial_normal;
   }
   else {
-    initial_normal = ss.filter_cache->initial_normal;
+    sculpt_normal = current_normal.value_or(initial_normal);
   }
 
+  // printf("%f %f %f\n", sculpt_normal.x, sculpt_normal.y, sculpt_normal.z);
+
   return normal_calc(normal,
-                     initial_normal,
+                     sculpt_normal,
                      automasking.settings.start_normal_limit - falloff * 0.5f,
                      automasking.settings.start_normal_limit + falloff * 0.5f);
 }

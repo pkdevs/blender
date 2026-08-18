@@ -494,13 +494,15 @@ static void do_paint_brush_task(const Depsgraph &depsgraph,
   scatter_data_mesh(color_buffer.as_span(), verts, mix_colors);
 
   for (const int i : verts.index_range()) {
-    color_vert_set(faces,
-                   corner_verts,
-                   vert_to_face_map,
-                   color_attribute.domain,
-                   verts[i],
-                   new_colors[i],
-                   color_attribute.span);
+    if (factors[i] != 0.0f) {
+      color_vert_set(faces,
+                     corner_verts,
+                     vert_to_face_map,
+                     color_attribute.domain,
+                     verts[i],
+                     new_colors[i],
+                     color_attribute.span);
+    }
   }
 }
 

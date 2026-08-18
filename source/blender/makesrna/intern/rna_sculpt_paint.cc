@@ -1079,6 +1079,16 @@ static void rna_def_mesh_automasking_settings(BlenderRNA *brna)
     RNA_def_property_update(prop, 0, "rna_MeshAutomaskingSettings_update");
   } while ((++entry)->identifier);
 
+  prop = RNA_def_property(srna, "use_stroke_normal_automasking", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_flag(prop, PROP_CONTEXT_UPDATE);
+  RNA_def_property_boolean_sdna(prop, nullptr, "flags", BRUSH_AUTOMASKING_BRUSH_NORMAL_STROKE);
+  RNA_def_property_ui_icon(prop, ICON_GP_SELECT_STROKES, 0);
+  RNA_def_property_ui_text(
+      prop,
+      "Stroke Normal",
+      "Calculate stroke normal at the beginning of stroke rather than per-daub");
+  RNA_def_property_update(prop, 0, "rna_UnifiedPaintSettings_update");
+
   prop = RNA_def_property(srna, "boundary_edges_propagation_steps", PROP_INT, PROP_UNSIGNED);
   RNA_def_property_flag(prop, PROP_CONTEXT_UPDATE);
   RNA_def_property_int_sdna(prop, nullptr, "boundary_edges_propagation_steps");

@@ -942,7 +942,13 @@ static bool brush_uses_topology_rake(const SculptSession &ss, const Brush &brush
  */
 static int sculpt_brush_needs_normal(const SculptSession &ss, const Brush &brush)
 {
+  const StrokeCache &cache = *ss.cache;
   const MTex *mask_tex = BKE_brush_mask_texture_get(&brush, OB_MODE_SCULPT);
+
+  const bool automasking_needs_sculpt_normal =
+      cache.automasking && (cache.automasking->settings.flags & BRUSH_AUTOMASKING_BRUSH_NORMAL) &&
+      (cache.automasking->settings.flags & BRUSH_AUTOMASKING_BRUSH_NORMAL_STROKE) == 0;
+
   return ((bke::brush::supports_normal_weight(brush) &&
            (bke::brush::normal_weight_get(brush, ss.cache->toggle_settings.invert) > 0.0f)) ||
           ELEM(brush.sculpt_brush_type,
@@ -959,7 +965,8 @@ static int sculpt_brush_needs_normal(const SculptSession &ss, const Brush &brush
           (brush.sculpt_brush_type == SCULPT_BRUSH_TYPE_SCENE_PROJECT &&
            brush.project_ray_direction_type == BRUSH_PROJECT_RAY_DIRECTION_PLANE_NORMAL) ||
           (mask_tex->tex && mask_tex->brush_map_mode == MTEX_MAP_MODE_AREA)) ||
-         brush_uses_topology_rake(ss, brush) || BKE_brush_has_cube_tip(&brush, PaintMode::Sculpt);
+         brush_uses_topology_rake(ss, brush) ||
+         BKE_brush_has_cube_tip(&brush, PaintMode::Sculpt) || automasking_needs_sculpt_normal;
 }
 
 static bool brush_needs_rake_rotation(const Brush &brush)
