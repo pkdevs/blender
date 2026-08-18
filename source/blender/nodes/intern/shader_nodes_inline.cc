@@ -1676,7 +1676,7 @@ class ShaderNodesInliner {
     }
     if (std::get_if<LinkedSocketValue>(&src_value.value)) {
       if (to_socket_type.type == SOCK_BOOLEAN &&
-          ELEM(from_socket_type.type, SOCK_FLOAT, SOCK_INT, SOCK_VECTOR, SOCK_RGBA))
+          ELEM(from_socket_type.type, SOCK_FLOAT, SOCK_INT, SOCK_RGBA))
       {
         return {this->insert_float_to_bool_conversion(src_value)};
       }
