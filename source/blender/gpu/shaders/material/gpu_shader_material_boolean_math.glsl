@@ -55,3 +55,59 @@ void boolean_math_nimply(bool a, bool b, out bool result)
 {
   result = (a && !b);
 }
+
+/* EEVEE represents boolean sockets as floats. */
+
+[[node]]
+void boolean_math_and_float(float a, float b, out float result)
+{
+  result = (a != 0.0f && b != 0.0f) ? 1.0f : 0.0f;
+}
+
+[[node]]
+void boolean_math_or_float(float a, float b, out float result)
+{
+  result = (a != 0.0f || b != 0.0f) ? 1.0f : 0.0f;
+}
+
+[[node]]
+void boolean_math_not_float(float a, out float result)
+{
+  result = (a == 0.0f) ? 1.0f : 0.0f;
+}
+
+[[node]]
+void boolean_math_nand_float(float a, float b, out float result)
+{
+  result = (a != 0.0f && b != 0.0f) ? 0.0f : 1.0f;
+}
+
+[[node]]
+void boolean_math_nor_float(float a, float b, out float result)
+{
+  result = (a != 0.0f || b != 0.0f) ? 0.0f : 1.0f;
+}
+
+[[node]]
+void boolean_math_xnor_float(float a, float b, out float result)
+{
+  result = ((a != 0.0f) == (b != 0.0f)) ? 1.0f : 0.0f;
+}
+
+[[node]]
+void boolean_math_xor_float(float a, float b, out float result)
+{
+  result = ((a != 0.0f) != (b != 0.0f)) ? 1.0f : 0.0f;
+}
+
+[[node]]
+void boolean_math_imply_float(float a, float b, out float result)
+{
+  result = (a == 0.0f || b != 0.0f) ? 1.0f : 0.0f;
+}
+
+[[node]]
+void boolean_math_nimply_float(float a, float b, out float result)
+{
+  result = (a != 0.0f && b == 0.0f) ? 1.0f : 0.0f;
+}

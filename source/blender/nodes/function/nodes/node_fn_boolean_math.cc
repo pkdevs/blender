@@ -18,6 +18,8 @@
 
 #include "NOD_rna_define.hh"
 
+#include "GPU_material.hh"
+
 #include "node_function_util.hh"
 #include "node_shader_util.hh"
 
@@ -140,27 +142,28 @@ static void node_eval_inverse_elem(value_elem::InverseElemEvalParams &params)
   }
 }
 
-static const char *gpu_shader_get_name(const NodeBooleanMathOperation operation)
+static const char *gpu_shader_get_name(const NodeBooleanMathOperation operation,
+                                       const bool as_float)
 {
   switch (operation) {
     case NODE_BOOLEAN_MATH_AND:
-      return "boolean_math_and";
+      return as_float ? "boolean_math_and_float" : "boolean_math_and";
     case NODE_BOOLEAN_MATH_OR:
-      return "boolean_math_or";
+      return as_float ? "boolean_math_or_float" : "boolean_math_or";
     case NODE_BOOLEAN_MATH_NOT:
-      return "boolean_math_not";
+      return as_float ? "boolean_math_not_float" : "boolean_math_not";
     case NODE_BOOLEAN_MATH_NAND:
-      return "boolean_math_nand";
+      return as_float ? "boolean_math_nand_float" : "boolean_math_nand";
     case NODE_BOOLEAN_MATH_NOR:
-      return "boolean_math_nor";
+      return as_float ? "boolean_math_nor_float" : "boolean_math_nor";
     case NODE_BOOLEAN_MATH_XNOR:
-      return "boolean_math_xnor";
+      return as_float ? "boolean_math_xnor_float" : "boolean_math_xnor";
     case NODE_BOOLEAN_MATH_XOR:
-      return "boolean_math_xor";
+      return as_float ? "boolean_math_xor_float" : "boolean_math_xor";
     case NODE_BOOLEAN_MATH_IMPLY:
-      return "boolean_math_imply";
+      return as_float ? "boolean_math_imply_float" : "boolean_math_imply";
     case NODE_BOOLEAN_MATH_NIMPLY:
-      return "boolean_math_nimply";
+      return as_float ? "boolean_math_nimply_float" : "boolean_math_nimply";
   }
 
   BLI_assert_unreachable();
@@ -173,7 +176,9 @@ static int node_gpu_material(GPUMaterial *mat,
                              GPUNodeStack *in,
                              GPUNodeStack *out)
 {
-  const char *name = gpu_shader_get_name(NodeBooleanMathOperation(node->custom1));
+  /* EEVEE represents boolean sockets as floats, while the compositor uses native booleans. */
+  const char *name = gpu_shader_get_name(NodeBooleanMathOperation(node->custom1),
+                                         in[0].type == GPU_FLOAT);
 
   if (name == nullptr) {
     return 0;
@@ -181,6 +186,54 @@ static int node_gpu_material(GPUMaterial *mat,
 
   return GPU_stack_link(mat, node, name, in, out);
 }
+
+NODE_SHADER_MATERIALX_BEGIN
+#ifdef WITH_MATERIALX
+{
+  const NodeBooleanMathOperation op = NodeBooleanMathOperation(node_->custom1);
+  NodeItem a = get_input_value(0, NodeItem::Type::Boolean);
+
+  auto mx_not = [&](const NodeItem &value) {
+    return create_node("not", NodeItem::Type::Boolean, {{"in", value}});
+  };
+  auto mx_and = [&](const NodeItem &x, const NodeItem &y) {
+    return create_node("and", NodeItem::Type::Boolean, {{"in1", x}, {"in2", y}});
+  };
+  auto mx_or = [&](const NodeItem &x, const NodeItem &y) {
+    return create_node("or", NodeItem::Type::Boolean, {{"in1", x}, {"in2", y}});
+  };
+
+  if (op == NODE_BOOLEAN_MATH_NOT) {
+    return mx_not(a);
+  }
+
+  NodeItem b = get_input_value(1, NodeItem::Type::Boolean);
+  switch (op) {
+    case NODE_BOOLEAN_MATH_AND:
+      return mx_and(a, b);
+    case NODE_BOOLEAN_MATH_OR:
+      return mx_or(a, b);
+    case NODE_BOOLEAN_MATH_NAND:
+      return mx_not(mx_and(a, b));
+    case NODE_BOOLEAN_MATH_NOR:
+      return mx_not(mx_or(a, b));
+    case NODE_BOOLEAN_MATH_XOR:
+      return mx_or(mx_and(a, mx_not(b)), mx_and(mx_not(a), b));
+    case NODE_BOOLEAN_MATH_XNOR:
+      return mx_or(mx_and(a, b), mx_and(mx_not(a), mx_not(b)));
+    case NODE_BOOLEAN_MATH_IMPLY:
+      return mx_or(mx_not(a), b);
+    case NODE_BOOLEAN_MATH_NIMPLY:
+      return mx_and(a, mx_not(b));
+    case NODE_BOOLEAN_MATH_NOT:
+      break;
+  }
+
+  BLI_assert_unreachable();
+  return empty();
+}
+#endif
+NODE_SHADER_MATERIALX_END
 
 static void node_eval_inverse(inverse_eval::InverseEvalParams &params)
 {
@@ -212,7 +265,7 @@ static void node_register()
 {
   static bke::bNodeType ntype;
 
-  fn_cmp_node_type_base(&ntype, "FunctionNodeBooleanMath"_ustr, FN_NODE_BOOLEAN_MATH);
+  common_node_type_base(&ntype, "FunctionNodeBooleanMath"_ustr, FN_NODE_BOOLEAN_MATH);
   ntype.ui_name = "Boolean Math";
   ntype.ui_description = "Perform a logical operation on the given boolean inputs";
   ntype.enum_name_legacy = "BOOLEAN_MATH";
@@ -223,6 +276,7 @@ static void node_register()
   ntype.gpu_fn = node_gpu_material;
   ntype.draw_buttons = node_layout;
   ntype.gather_link_search_ops = node_gather_link_searches;
+  ntype.materialx_fn = node_shader_materialx;
   ntype.eval_elem = node_eval_elem;
   ntype.eval_inverse_elem = node_eval_inverse_elem;
   ntype.eval_inverse = node_eval_inverse;
