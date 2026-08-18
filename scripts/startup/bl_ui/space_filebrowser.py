@@ -972,8 +972,14 @@ class ASSETBROWSER_MT_context_menu(AssetBrowserMenu, Menu):
         st = context.space_data
         params = st.params
 
+        add_separator = False
         if bpy.ops.asset.assets_download.poll():
             layout.operator("asset.assets_download", icon='DOWNLOAD')
+            add_separator = True
+        if bpy.ops.asset.assets_visit_webpage.poll():
+            layout.operator("asset.assets_visit_webpage", icon='URL')
+            add_separator = True
+        if add_separator:
             layout.separator()
 
         layout.operator("asset.library_refresh", icon='FILE_REFRESH')

@@ -1789,6 +1789,79 @@ static void ASSET_OT_assets_download(wmOperatorType *ot)
   ot->poll = assets_download_poll;
 }
 
+static wmOperatorStatus assets_visit_webpage_exec(bContext *C, wmOperator *op)
+{
+  const Vector<const asset_system::AssetRepresentation *> assets = selected_or_active_assets(C);
+  wmOperatorType *ot = WM_operatortype_find("WM_OT_url_open", false);
+  if (!ot) {
+    BKE_report(op->reports, RPT_ERROR, "Missing operator: 'WM_OT_url_open'");
+    return OPERATOR_CANCELLED;
+  }
+  for (const asset_system::AssetRepresentation *asset : assets) {
+    if (const char *webpage = asset->get_metadata().webpage) {
+      PointerRNA op_ptr = WM_operator_properties_create_ptr(ot);
+      RNA_string_set(&op_ptr, "url", webpage);
+      WM_operator_name_call_ptr(C, ot, wm::OpCallContext::InvokeDefault, &op_ptr, nullptr);
+      WM_operator_properties_free(&op_ptr);
+    }
+  }
+  return OPERATOR_FINISHED;
+}
+
+static bool assets_visit_webpage_any_poll(bContext *C)
+{
+  if ((G.f & G_FLAG_INTERNET_ALLOW) == 0) {
+    CTX_wm_operator_poll_msg_set(
+        C, "Internet access is disabled (can be enabled in the Preferences, System tab)");
+    return false;
+  }
+
+#ifndef WITH_PYTHON
+  UNUSED_VARS(C);
+  CTX_wm_operator_poll_msg_set(C, "Opening an external URL requires Python");
+  return false;
+#endif
+
+  return true;
+}
+
+static bool assets_visit_webpage_poll(bContext *C)
+{
+  if (!assets_visit_webpage_any_poll(C)) {
+    return false;
+  }
+
+  const Vector<const asset_system::AssetRepresentation *> assets = selected_or_active_assets(C);
+  if (assets.is_empty()) {
+    CTX_wm_operator_poll_msg_set(C, "No asset selected or active");
+    return false;
+  }
+
+  const bool has_webpage_asset = std::ranges::any_of(
+      assets, [](const asset_system::AssetRepresentation *asset) {
+        return asset->get_metadata().webpage;
+      });
+
+  if (!has_webpage_asset) {
+    CTX_wm_operator_poll_msg_set(C, "None of the selected assets have webpage");
+    return false;
+  }
+
+  return true;
+}
+
+static void ASSET_OT_assets_visit_webpage(wmOperatorType *ot)
+{
+  /* identifiers */
+  ot->name = "Visit Webpage";
+  ot->description = "Opens active Asset(s) Website in the web browser";
+  ot->idname = "ASSET_OT_assets_visit_webpage";
+
+  /* API callbacks. */
+  ot->exec = assets_visit_webpage_exec;
+  ot->poll = assets_visit_webpage_poll;
+}
+
 /* -------------------------------------------------------------------- */
 
 static wmOperatorStatus asset_download_exec(bContext *C, wmOperator *op)
@@ -1856,6 +1929,7 @@ void operatortypes_asset()
   WM_operatortype_append(ASSET_OT_screenshot_preview);
 
   WM_operatortype_append(ASSET_OT_assets_download);
+  WM_operatortype_append(ASSET_OT_assets_visit_webpage);
   WM_operatortype_append(ASSET_OT_asset_download);
 }
 
