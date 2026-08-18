@@ -465,92 +465,204 @@ ccl_device_inline bool restir_spot_light_reference_from_sample(
     return false;
   }
 
-  /*
-   * This implementation is exclusively for spherical Spots.
-   *
-   * Non-spherical Spots will get their own canonical disk
-   * parameterization later.
-   */
-  if (!klight->spot.is_sphere || !(klight->spot.radius > 0.0f))
-  {
+  // if (!(klight->spot.radius > 0.0f)) { // !!!: WRONG!
+  //   printf("\nrestir_spot_light_reference_from_sample(); returned false; !(klight->spot.radius > 0.0f)=%u\n",
+  //          !(klight->spot.radius > 0.0f));
+  //   return false;
+  // }
+  if (klight->spot.radius < 0.0f) { // !!!: WRONG! Always returns
+    printf("\nrestir_spot_light_reference_from_sample(); returned false; (klight->spot.radius < 0.0f)=%u\n",
+           (klight->spot.radius < 0.0f));
     return false;
   }
 
-  /*
-   * The sphere's persistent identity is its surface normal.
-   *
-   * ls->Ng is already the geometric normal of the sampled sphere
-   * point in world space.
-   */
-  const float3 world_Ng = normalize(ls->Ng);
+  if (klight->spot.is_sphere) { // spherical Spot
+  // if (klight->spot.radius > 0.0f) {
+    /*
+    * The sphere's persistent identity is its surface normal.
+    *
+    * ls->Ng is already the geometric normal of the sampled sphere
+    * point in world space.
+    */
+    const float3 world_Ng = normalize(ls->Ng);
 
-  if (!isfinite(world_Ng.x) ||
-      !isfinite(world_Ng.y) ||
-      !isfinite(world_Ng.z))
-  {
-    return false;
+    if (!isfinite(world_Ng.x) ||
+        !isfinite(world_Ng.y) ||
+        !isfinite(world_Ng.z))
+    {
+      return false;
+    }
+
+    /*
+    * Convert the sphere normal into the emitter's local space.
+    *
+    * This is the canonical parameterization of a spherical Spot.
+    */
+    const Transform itfm = lamp_get_inverse_transform(kg, klight);
+
+    const float3 local_Ng = normalize(transform_direction(&itfm, world_Ng));
+
+    if (!isfinite(local_Ng.x) ||
+        !isfinite(local_Ng.y) ||
+        !isfinite(local_Ng.z))
+    {
+      return false;
+    }
+
+    const float2 param = restir_direction_encode(local_Ng);
+
+    if (!isfinite(param.x) || !isfinite(param.y))
+    {
+      return false;
+    }
+
+    /*
+    * Persistent light identity.
+    */
+    reference->type = LIGHT_SPOT;
+    reference->object = ls->object;
+    reference->prim = ls->prim;
+    reference->param = param;
+
+    reference->flags =
+        RESTIR_LIGHT_REFERENCE_VALID |
+        RESTIR_LIGHT_REFERENCE_HAS_PARAM;
+
+  #if !defined(__KERNEL_GPU__) && defined(RESTIR_DI_DEBUG)
+    printf("\n=== RESTIR SPHERICAL SPOT REFERENCE ===\n");
+    printf("prim             = %d\n", reference->prim);
+    printf("object           = %d\n", reference->object);
+    printf("world P          = %f %f %f\n",
+          (double)ls->P.x,
+          (double)ls->P.y,
+          (double)ls->P.z);
+    printf("world Ng         = %f %f %f\n",
+          (double)world_Ng.x,
+          (double)world_Ng.y,
+          (double)world_Ng.z);
+    printf("local Ng         = %f %f %f\n",
+          (double)local_Ng.x,
+          (double)local_Ng.y,
+          (double)local_Ng.z);
+    printf("param            = %f %f\n",
+          (double)param.x,
+          (double)param.y);
+    printf("radius           = %f\n",
+          (double)klight->spot.radius);
+    printf("========================================\n");
+  #endif
+
+    return true;
   }
+  else if (klight->spot.radius > 0.0f) { // disk Spot
+  printf("\n=== RESTIR DISK SPOT REFERENCE ENTERED!!! ===\n");
 
   /*
-   * Convert the sphere normal into the emitter's local space.
+   * Non-spherical (Disk) Spot:
    *
-   * This is the canonical parameterization of a spherical Spot.
+   * Persistent identity is a point on the canonical emitter-local
+   * XY disk:
+   *
+   *     local P = (x, y, 0)
+   *
+   * normalized by radius:
+   *
+   *     param = (x / r, y / r)
+   *
+   * This parameterization is independent of the original target P.
    */
   const Transform itfm = lamp_get_inverse_transform(kg, klight);
 
-  const float3 local_Ng = normalize(transform_direction(&itfm, world_Ng));
+  const float3 local_P = transform_point(&itfm, ls->P);
 
-  if (!isfinite(local_Ng.x) ||
-      !isfinite(local_Ng.y) ||
-      !isfinite(local_Ng.z))
+    printf("DISK SPOT ls->P=(%f, %f, %f)\n",
+           (double)ls->P.x, (double)ls->P.y, (double)ls->P.z);
+    printf("DISK SPOT local_P=(%f, %f, %f)\n",
+           (double)local_P.x, (double)local_P.y, (double)local_P.z);
+
+  if (!isfinite(local_P.x) ||
+      !isfinite(local_P.y) ||
+      !isfinite(local_P.z))
   {
-    return false;
-  }
-
-  const float2 param = restir_direction_encode(local_Ng);
-
-  if (!isfinite(param.x) || !isfinite(param.y))
-  {
+    printf("DISK SPOT returend false; local_P=(%f, %f, %f)\n",
+           (double)local_P.x, (double)local_P.y, (double)local_P.z);
     return false;
   }
 
   /*
-   * Persistent light identity.
-   */
+  * The canonical disk lies in local Z = 0.
+  *
+  * Do not silently accept a point that is substantially away from
+  * the canonical plane.
+  */
+  const float plane_epsilon = 1e-5f;
+
+  if (fabsf(local_P.z) > plane_epsilon) {
+    printf("DISK SPOT returend false; local_P.z=%f > plane_epsilon=%f\n",
+           (double)local_P.z, (double)plane_epsilon);
+    return false;
+  }
+
+  const float radius = klight->spot.radius;
+
+  const float2 param = make_float2(local_P.x / radius,
+                                   local_P.y / radius);
+
+  if (!isfinite(param.x) || !isfinite(param.y)) {
+    printf("DISK SPOT returend false; param=(%f, %f)\n", // !!!: (nan, inf)
+           (double)param.x, (double)param.y);
+    return false;
+  }
+
+  /* The persistent point must lie inside the canonical disk. */
+  if (sqr(param.x) + sqr(param.y) > 1.0f + 1e-5f) {
+    printf("DISK SPOT returend false; sqr(param.x)=%f + sqr(param.y)=%f > 1.0f + 1e-5f\n",
+           (double)sqr(param.x), (double)sqr(param.y));
+    return false;
+  }
+
   reference->type = LIGHT_SPOT;
   reference->object = ls->object;
   reference->prim = ls->prim;
   reference->param = param;
-
   reference->flags =
       RESTIR_LIGHT_REFERENCE_VALID |
       RESTIR_LIGHT_REFERENCE_HAS_PARAM;
 
-#if !defined(__KERNEL_GPU__) && defined(RESTIR_DI_DEBUG)
-  printf("\n=== RESTIR SPHERICAL SPOT REFERENCE ===\n");
+  // #if !defined(__KERNEL_GPU__) && defined(RESTIR_DI_DEBUG)
+  printf("\n=== RESTIR DISK SPOT REFERENCE ===\n");
+
   printf("prim             = %d\n", reference->prim);
   printf("object           = %d\n", reference->object);
+
   printf("world P          = %f %f %f\n",
-         (double)ls->P.x,
-         (double)ls->P.y,
-         (double)ls->P.z);
-  printf("world Ng         = %f %f %f\n",
-         (double)world_Ng.x,
-         (double)world_Ng.y,
-         (double)world_Ng.z);
-  printf("local Ng         = %f %f %f\n",
-         (double)local_Ng.x,
-         (double)local_Ng.y,
-         (double)local_Ng.z);
+        (double)ls->P.x,
+        (double)ls->P.y,
+        (double)ls->P.z);
+
+  printf("local P          = %f %f %f\n",
+        (double)local_P.x,
+        (double)local_P.y,
+        (double)local_P.z);
+
   printf("param            = %f %f\n",
-         (double)param.x,
-         (double)param.y);
+        (double)param.x,
+        (double)param.y);
+
   printf("radius           = %f\n",
-         (double)klight->spot.radius);
+        (double)radius);
+
+  printf("disk r^2         = %f\n",
+        (double)(sqr(param.x) + sqr(param.y)));
+
   printf("========================================\n");
-#endif
+  // #endif
 
   return true;
+  }
+  else { // zero-radius point Spot: no 2D canonical disk parameterization
+    return false; // !!!
+  }
 }
 
 
@@ -583,9 +695,9 @@ ccl_device_inline bool restir_light_reference_from_sample( // !!!
       return restir_area_light_reference_from_sample(kg, ls, reference);
 
     case LIGHT_SPOT: // !!!
-printf(">>> CALLING RESTIR SPOT REFERENCE: ls->P = %f %f %f, ls->prim=%f, ls->object=%f\n\n",
-       (double)ls->P.x, (double)ls->P.y, (double)ls->P.z,
-       (double)ls->prim, (double)ls->object);
+// printf(">>> CALLING RESTIR SPOT REFERENCE: ls->P = %f %f %f, ls->prim=%f, ls->object=%f\n\n",
+//        (double)ls->P.x, (double)ls->P.y, (double)ls->P.z,
+//        (double)ls->prim, (double)ls->object);
       return restir_spot_light_reference_from_sample(kg, ls, reference);
 
     // case LIGHT_TRIANGLE:
@@ -1375,6 +1487,8 @@ ccl_device_inline bool restir_spot_light_sample_from_reference(
   if (!restir_light_reference_is_valid(reference) ||
       reference->type != LIGHT_SPOT || reference->prim < 0)
   {
+    printf("\nestir_spot_light_sample_from_reference(); returned false; !restir_light_reference_is_valid(reference)=%u\n",
+           !restir_light_reference_is_valid(reference));
     return false;
   }
 
@@ -1384,62 +1498,218 @@ ccl_device_inline bool restir_spot_light_sample_from_reference(
     return false;
   }
 
-  /* This function currently reconstructs spherical Spots only. */ // !!!
-  if (!klight->spot.is_sphere || !(klight->spot.radius > 0.0f))
-  {
+  printf("\n=== restir_spot_light_sample_from_reference() ENTERED!!! is_sphere=%u ===\n",
+         klight->spot.is_sphere);
+
+  // if (!(klight->spot.radius > 0.0f)) { // !!!: Wrong
+  //   printf("\nrestir_spot_light_sample_from_reference(); returned false; !(klight->spot.radius > 0.0f)=%u\n",
+  //          !(klight->spot.radius > 0.0f));
+  //   return false;
+  // }
+  if (klight->spot.radius < 0.0f) {
+    printf("\nrestir_spot_light_sample_from_reference(); returned false; (klight->spot.radius < 0.0f)=%u\n",
+           (klight->spot.radius < 0.0f));
     return false;
   }
 
-  if (!(reference->flags & RESTIR_LIGHT_REFERENCE_HAS_PARAM))
-  {
+  if (!(reference->flags & RESTIR_LIGHT_REFERENCE_HAS_PARAM)) {
+    printf("\nrestir_spot_light_sample_from_reference(); returned false; !(reference->flags & RESTIR_LIGHT_REFERENCE_HAS_PARAM)=%u\n",
+           !(reference->flags & RESTIR_LIGHT_REFERENCE_HAS_PARAM));
     return false;
   }
 
-  /* Decode the canonical sphere-surface normal in emitter-local space. */
-  const float3 local_Ng =
-      restir_direction_decode(reference->param);
+  if (klight->spot.is_sphere) {
+  // if (klight->spot.radius > 0.0f) {
+    /* Decode the canonical sphere-surface normal in emitter-local space. */
+    const float3 local_Ng =
+        restir_direction_decode(reference->param);
 
-  if (!isfinite(local_Ng.x) ||
-      !isfinite(local_Ng.y) ||
-      !isfinite(local_Ng.z))
-  {
+    if (!isfinite(local_Ng.x) ||
+        !isfinite(local_Ng.y) ||
+        !isfinite(local_Ng.z))
+    {
+      return false;
+    }
+
+    /* Transform the canonical normal into world space. */
+    const Transform itfm = lamp_get_inverse_transform(kg, klight);
+
+    const Transform tfm = transform_inverse(itfm);
+
+    const float3 world_Ng = normalize(transform_direction(&tfm, local_Ng));
+
+    if (!isfinite(world_Ng.x) ||
+        !isfinite(world_Ng.y) ||
+        !isfinite(world_Ng.z))
+    {
+      return false;
+    }
+
+    /*
+    * Reconstruct the exact point on the spherical emitter.
+    */
+    ls->P = klight->co + world_Ng * klight->spot.radius;
+
+    ls->Ng = world_Ng;
+
+    /*
+    * Target-dependent direction and distance.
+    */
+    ls->D = safe_normalize_len(ls->P - P, &ls->t);
+
+    if (!isfinite(ls->t) || ls->t < 0.0f) {
+      return false;
+    }
+
+    /*
+    * Restore the ordinary LightSample metadata.
+    */
+    ls->type = LIGHT_SPOT;
+    ls->shader = klight->shader_id;
+    ls->object = klight->object_id;
+    ls->prim = reference->prim;
+    ls->group = object_lightgroup(kg, ls->object);
+
+    ls->pdf_selection = 0.0f;
+    ls->emitter_id = EMITTER_NONE;
+
+    /*
+    * Spot attenuation is target-dependent and therefore must be
+    * recomputed after reconstruction.
+    */
+    ls->eval_fac = klight->spot.eval_fac;
+
+    const float3 local_ray = spot_light_to_local(kg, klight, -ls->D);
+
+    ls->eval_fac *= spot_light_attenuation(&klight->spot, local_ray);
+
+    if (!isfinite(ls->eval_fac)) {
+      return false;
+    }
+
+    if (ls->eval_fac == 0.0f) {
+      return false;
+    }
+
+    /*
+    * Recompute the spherical-light sampling PDF for the new target.
+    *
+    * This is target-dependent and therefore must NOT be stored in
+    * the persistent reference.
+    */
+    const float r_sq = sqr(klight->spot.radius);
+
+    const float d_sq = len_squared(P - klight->co);
+
+    ls->pdf =
+        sphere_light_pdf(d_sq, r_sq, N, ls->D, path_flag);
+
+  #if !defined(__KERNEL_GPU__) && defined(RESTIR_DI_DEBUG)
+    printf("\n=== RESTIR SPHERICAL SPOT RECONSTRUCTION ===\n");
+    printf("prim             = %d\n", reference->prim);
+    printf("param            = %f %f\n",
+          (double)reference->param.x,
+          (double)reference->param.y);
+    printf("local Ng         = %f %f %f\n",
+          (double)local_Ng.x,
+          (double)local_Ng.y,
+          (double)local_Ng.z);
+    printf("world Ng         = %f %f %f\n",
+          (double)world_Ng.x,
+          (double)world_Ng.y,
+          (double)world_Ng.z);
+    printf("reconstructed P  = %f %f %f\n",
+          (double)ls->P.x,
+          (double)ls->P.y,
+          (double)ls->P.z);
+    printf("target P         = %f %f %f\n",
+          (double)P.x,
+          (double)P.y,
+          (double)P.z);
+    printf("D                = %f %f %f\n",
+          (double)ls->D.x,
+          (double)ls->D.y,
+          (double)ls->D.z);
+    printf("t                = %f\n",
+          (double)ls->t);
+    printf("eval_fac         = %f\n",
+          (double)ls->eval_fac);
+    printf("pdf              = %f\n",
+          (double)ls->pdf);
+    printf("============================================\n");
+  #endif
+
+    return isfinite(ls->pdf) &&
+          ls->pdf > 0.0f &&
+          isfinite(ls->eval_fac) &&
+          ls->eval_fac >= 0.0f;
+  }
+  else if (klight->spot.radius > 0.0f) {
+  printf("\n=== RESTIR DISK SPOT RECONSTRUCTION ENTERED!!! ===\n");
+
+  /*
+   * Non-spherical Spot:
+   *
+   * Decode the persistent canonical disk coordinate.
+   *
+   * param = (x / r, y / r)
+   *
+   * Therefore:
+   *
+   * local P = (param.x * r,
+   *            param.y * r,
+   *            0)
+   */
+  const float radius = klight->spot.radius;
+  const float2 param = reference->param;
+
+  if (!isfinite(param.x) || !isfinite(param.y)) {
     return false;
   }
 
-  /* Transform the canonical normal into world space. */
+  /* Reference must represent a point inside the canonical disk. */
+  const float param_r_sq = sqr(param.x) + sqr(param.y);
+
+  if (param_r_sq > 1.0f + 1e-5f) {
+    return false;
+  }
+
+  const float3 local_P = make_float3(param.x * radius,
+                                    param.y * radius,
+                                    0.0f);
+
   const Transform itfm = lamp_get_inverse_transform(kg, klight);
-
   const Transform tfm = transform_inverse(itfm);
 
-  const float3 world_Ng = normalize(transform_direction(&tfm, local_Ng));
+  const float3 world_P = transform_point(&tfm, local_P);
 
-  if (!isfinite(world_Ng.x) ||
+  /* Canonical disk normal is emitter-local -Z. */
+  const float3 local_Ng = make_float3(0.0f, 0.0f, -1.0f);
+
+  const float3 world_Ng =
+      normalize(transform_direction(&tfm, local_Ng));
+
+  if (!isfinite(world_P.x) ||
+      !isfinite(world_P.y) ||
+      !isfinite(world_P.z) ||
+      !isfinite(world_Ng.x) ||
       !isfinite(world_Ng.y) ||
       !isfinite(world_Ng.z))
   {
     return false;
   }
 
-  /*
-   * Reconstruct the exact point on the spherical emitter.
-   */
-  ls->P = klight->co + world_Ng * klight->spot.radius;
-
+  ls->P = world_P;
   ls->Ng = world_Ng;
 
-  /*
-   * Target-dependent direction and distance.
-   */
-  ls->D =
-      safe_normalize_len(ls->P - P, &ls->t);
+  /* Target-dependent direction and distance. */
+  ls->D = safe_normalize_len(ls->P - P, &ls->t);
 
   if (!isfinite(ls->t) || ls->t < 0.0f) {
     return false;
   }
 
-  /*
-   * Restore the ordinary LightSample metadata.
-   */
+  /* Restore the metadata. */
   ls->type = LIGHT_SPOT;
   ls->shader = klight->shader_id;
   ls->object = klight->object_id;
@@ -1449,10 +1719,8 @@ ccl_device_inline bool restir_spot_light_sample_from_reference(
   ls->pdf_selection = 0.0f;
   ls->emitter_id = EMITTER_NONE;
 
-  /*
-   * Spot attenuation is target-dependent and therefore must be
-   * recomputed after reconstruction.
-   */
+  /* Attenuation is evaluated against the new target (target-dependent). 
+   * Exactly analogous to the sphere reconstruction. */
   ls->eval_fac = klight->spot.eval_fac;
 
   const float3 local_ray = spot_light_to_local(kg, klight, -ls->D);
@@ -1468,57 +1736,75 @@ ccl_device_inline bool restir_spot_light_sample_from_reference(
   }
 
   /*
-   * Recompute the spherical-light sampling PDF for the new target.
-   *
-   * This is target-dependent and therefore must NOT be stored in
-   * the persistent reference.
-   */
-  const float r_sq = sqr(klight->spot.radius);
+  * Uniform sampling over the canonical disk.
+  *
+  * The disk normal is the emitter's canonical local -Z
+  * transformed into world space.
+  */
+  const float invarea = 1.0f / (radius * radius * M_PI_F);
 
-  const float d_sq = len_squared(P - klight->co);
+  ls->pdf = invarea *
+            light_pdf_area_to_solid_angle(world_Ng, -ls->D, ls->t);
 
-  ls->pdf =
-      sphere_light_pdf(d_sq, r_sq, N, ls->D, path_flag);
+  // #if !defined(__KERNEL_GPU__) && defined(RESTIR_DI_DEBUG)
+  printf("\n=== RESTIR DISK SPOT RECONSTRUCTION ===\n");
 
-#if !defined(__KERNEL_GPU__) && defined(RESTIR_DI_DEBUG)
-  printf("\n=== RESTIR SPHERICAL SPOT RECONSTRUCTION ===\n");
   printf("prim             = %d\n", reference->prim);
+
   printf("param            = %f %f\n",
-         (double)reference->param.x,
-         (double)reference->param.y);
-  printf("local Ng         = %f %f %f\n",
-         (double)local_Ng.x,
-         (double)local_Ng.y,
-         (double)local_Ng.z);
+        (double)param.x,
+        (double)param.y);
+
+  printf("local P          = %f %f %f\n",
+        (double)local_P.x,
+        (double)local_P.y,
+        (double)local_P.z);
+
+  printf("world P          = %f %f %f\n",
+        (double)ls->P.x,
+        (double)ls->P.y,
+        (double)ls->P.z);
+
   printf("world Ng         = %f %f %f\n",
-         (double)world_Ng.x,
-         (double)world_Ng.y,
-         (double)world_Ng.z);
-  printf("reconstructed P  = %f %f %f\n",
-         (double)ls->P.x,
-         (double)ls->P.y,
-         (double)ls->P.z);
+        (double)ls->Ng.x,
+        (double)ls->Ng.y,
+        (double)ls->Ng.z);
+
   printf("target P         = %f %f %f\n",
-         (double)P.x,
-         (double)P.y,
-         (double)P.z);
+        (double)P.x,
+        (double)P.y,
+        (double)P.z);
+
   printf("D                = %f %f %f\n",
-         (double)ls->D.x,
-         (double)ls->D.y,
-         (double)ls->D.z);
+        (double)ls->D.x,
+        (double)ls->D.y,
+        (double)ls->D.z);
+
   printf("t                = %f\n",
-         (double)ls->t);
+        (double)ls->t);
+
   printf("eval_fac         = %f\n",
-         (double)ls->eval_fac);
+        (double)ls->eval_fac);
+
   printf("pdf              = %f\n",
-         (double)ls->pdf);
-  printf("============================================\n");
-#endif
+        (double)ls->pdf);
+
+  printf("============================================\n\n\n\n");
+  // #endif
 
   return isfinite(ls->pdf) &&
-         ls->pdf > 0.0f &&
-         isfinite(ls->eval_fac) &&
-         ls->eval_fac >= 0.0f;
+        ls->pdf > 0.0f &&
+        isfinite(ls->eval_fac) &&
+        ls->eval_fac >= 0.0f;
+  }
+  else {
+    // TODO:
+    /*
+     * Zero-radius non-spherical Spot is a point and has no
+     * canonical disk parameterization.
+     */
+    return false; // !!!
+  }
 }
 
 

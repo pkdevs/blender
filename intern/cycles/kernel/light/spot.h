@@ -311,7 +311,8 @@ ccl_device_inline bool spot_light_sample(KernelGlobals kg,
     ls->P = klight->co + ls->Ng * klight->spot.radius;
   }
 
-// DISK SPOT: will replace its target-dependent disk construction with the canonical local XY disk.
+// DISK SPOT: will replace its target-dependent disk construction with the canonical local XY disk. NO NEED!
+// !!!: Sampling distribution may depend on the target. Persistent geometry identity must not.
   else {
     /* Point light with ad-hoc radius based on oriented disk. */
     ls->P = klight->co;
