@@ -109,7 +109,7 @@ class ImportTextOperation : public compositor::NodeOperation {
 
     std::shared_ptr<const LoadTextCache> cached_value = get_cached_text(*path);
 
-    for (const eval_log::NodeWarning &warning : cached_value->warnings) {
+    for (const NodeWarning &warning : cached_value->warnings) {
       this->add_warning(warning.type, warning.message);
     }
 
