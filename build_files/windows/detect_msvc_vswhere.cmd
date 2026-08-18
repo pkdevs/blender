@@ -19,9 +19,6 @@ if "%BUILD_ARCH%" == "arm64" (
 	set VSWHERE_ARCH=x86.x64
 )
 
-set VS_InstallDir=
-set VSWhere_ClangFound=
-
 if NOT "%verbose%" == "" (
 	echo "%vs_where%" -latest %VSWHERE_ARGS% -version ^[%BUILD_VS_VER%.0^,%BUILD_VS_VER%.99^) -requires Microsoft.VisualStudio.Component.VC.Tools.%VSWHERE_ARCH%
 )
@@ -34,14 +31,16 @@ if NOT "%verbose%" == "" (
 )
 
 if "%VS_InstallDir%"=="" (
-	echo.
-	echo Visual Studio is detected but no suitable installation was found. 
-	echo.
-	echo Check the "Desktop development with C++" workload has been installed. 
-	echo. 
-	echo If you are attempting to use either Visual Studio Preview version or the Visual C++ Build tools, Please see 'make help' on how to opt in to those toolsets.
-	echo. 
-	goto FAIL
+	if NOT "%verbose%" == "" (
+		echo.
+		echo Visual Studio is detected but no suitable installation was found. 
+		echo.
+		echo Check the "Desktop development with C++" workload has been installed. 
+		echo. 
+		echo If you are attempting to use either Visual Studio Preview version or the Visual C++ Build tools, Please see 'make help' on how to opt in to those toolsets.
+		echo. 
+		goto FAIL
+	)
 )
 
 rem If we are using Clang + MSBuild, check to make sure the clang tools are installed
@@ -50,6 +49,7 @@ if "%WITH_CLANG%" == "1" (
 		if NOT "%verbose%" == "" (
 			echo "%vs_where%" -latest %VSWHERE_ARGS% -version ^[%BUILD_VS_VER%.0^,%BUILD_VS_VER%.99^) -requires Microsoft.VisualStudio.Component.VC.Llvm.ClangToolset
 		)
+
 		for /f "usebackq tokens=1* delims=: " %%i in (`"%vs_where%" -latest -version ^[%BUILD_VS_VER%.0^,%BUILD_VS_VER%.99^) %VSWHERE_ARGS% -requires Microsoft.VisualStudio.Component.VC.Llvm.ClangToolset`) do (
 			if /i "%%i"=="installationName" set VSWhere_ClangFound=%%j
 		)
