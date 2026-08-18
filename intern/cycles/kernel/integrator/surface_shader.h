@@ -297,8 +297,7 @@ ccl_device_inline float _surface_shader_bsdf_eval_mis(KernelGlobals kg,
     if (CLOSURE_IS_BSDF_OR_BSSRDF(sc->type)) {
       if (CLOSURE_IS_BSDF(sc->type)) {
         float bsdf_pdf = 0.0f;
-        bool dispersion;
-        const Spectrum eval = bsdf_eval(kg, sd, sc, wo, &bsdf_pdf, &dispersion);
+        const Spectrum eval = bsdf_eval(kg, sd, sc, wo, &bsdf_pdf);
 
         if (bsdf_pdf != 0.0f) {
           if (!_surface_shader_exclude(sc->type, light_shader_flags)) {
@@ -319,23 +318,7 @@ ccl_device_inline float _surface_shader_bsdf_eval_mis(KernelGlobals kg,
 
   r_avg_roughness_squared = (sum_pdf > 0.0f) ? sum_pdf_roughness_squared / sum_pdf : 0.0f;
 
-  if (!(sum_sample_weight > 0.0f)) {
-    return 0.0f;
-  }
-
-  /* if (sd->closure_flag & SD_BSDF_HAS_DISPERSION) { */
-  /*   /\* Treat closure as spectral and uplift non-dispersive transmission. *\/ */
-  /*   const float3 wavelength = sample_wavelengths(sd->rand_wavelength) * 1000.0f; */
-  /*   const float3 transmission_rgb = result_eval->sum - result_eval->glossy -
-   * result_eval->diffuse; */
-  /*   const Spectrum transmission = uplift(transmission_rgb, wavelength) +
-   * dispersive_transmission; */
-  /*   result_eval->sum = result_eval->glossy + result_eval->diffuse + transmission; */
-  /* } */
-
-  /* TODO(weizhen): uplift for sample, down for eval. */
-
-  return sum_pdf / sum_sample_weight;
+  return (sum_sample_weight > 0.0f) ? sum_pdf / sum_sample_weight : 0.0f;
 }
 
 ccl_device_inline float surface_shader_bsdf_eval_pdfs(const KernelGlobals kg,
@@ -358,9 +341,7 @@ ccl_device_inline float surface_shader_bsdf_eval_pdfs(const KernelGlobals kg,
     if (CLOSURE_IS_BSDF_OR_BSSRDF(sc->type)) {
       if (CLOSURE_IS_BSDF(sc->type)) {
         float bsdf_pdf = 0.0f;
-        /* TODO(weizhen): deal with eval. */
-        bool dispersion;
-        const Spectrum eval = bsdf_eval(kg, sd, sc, wo, &bsdf_pdf, &dispersion);
+        const Spectrum eval = bsdf_eval(kg, sd, sc, wo, &bsdf_pdf);
         kernel_assert(bsdf_pdf >= 0.0f);
         if (bsdf_pdf != 0.0f) {
           if (!_surface_shader_exclude(sc->type, light_shader_flags)) {
@@ -426,21 +407,6 @@ ccl_device_inline
                                             light_shader_flags,
                                             0.0f,
                                             r_avg_roughness_squared);
-
-  /* TODO(weizhen): can move to below. */
-  if (sd->runtime_flag & SR_BSDF_HAS_DISPERSION) {
-    /* Convert spectrum to rgb. */
-    const float3 wavelength = sample_wavelengths(sd->rand_wavelength) * 1000.0f;
-    const float3 rgb_x = wavelength_to_rgb_d65(kg, wavelength.x);
-    const float3 rgb_y = wavelength_to_rgb_d65(kg, wavelength.y);
-    const float3 rgb_z = wavelength_to_rgb_d65(kg, wavelength.z);
-
-    const Spectrum transmission = to_global(
-        bsdf_eval->sum - bsdf_eval->glossy - bsdf_eval->diffuse, rgb_x, rgb_y, rgb_z);
-    bsdf_eval->glossy = to_global(bsdf_eval->glossy, rgb_x, rgb_y, rgb_z) / 3.0f;
-    bsdf_eval->diffuse = to_global(bsdf_eval->diffuse, rgb_x, rgb_y, rgb_z) / 3.0f;
-    bsdf_eval->sum = bsdf_eval->glossy + bsdf_eval->diffuse + transmission / 3.0f;
-  }
 
   /* If the light does not use MIS, then it is only sampled via NEE, so the probability of hitting
    * the light using BSDF sampling is zero. */
@@ -1030,21 +996,14 @@ ccl_device int surface_shader_bsdf_sample_closure(KernelGlobals kg,
   *pdf = 0.0f;
   label = bsdf_sample(kg, sd, sc, rand_bsdf, &eval, wo, pdf, sampled_roughness, eta);
 
-  //  print_float3("eval", eval);
-
   if (*pdf != 0.0f) {
     bsdf_eval_init(bsdf_eval, sc, *wo, eval * sc->weight);
-
-    /* print_float3("before glossy", bsdf_eval->glossy); */
-    /* print_float3("before diffuse", bsdf_eval->diffuse); */
-    /* print_float3("before sum", bsdf_eval->sum); */
 
     const float sweight = sc->sample_weight;
     const float roughness_squared = bsdf_get_specular_roughness_squared(sc);
 
     if (sd->num_closure > 1) {
       const float weight = *pdf * sweight;
-      /* TODO(weizhen): guiding. */
       *pdf = _surface_shader_bsdf_eval_mis(kg,
                                            sd,
                                            *wo,
@@ -1059,19 +1018,6 @@ ccl_device int surface_shader_bsdf_sample_closure(KernelGlobals kg,
     else {
       r_avg_roughness_squared = roughness_squared;
     }
-
-    // if (sd->closure_flag & SD_BSDF_HAS_DISPERSION) {
-    /* Treat closure as spectral and uplift non-dispersive transmission. */
-    /* const float3 wavelength = sample_wavelengths(sd->rand_wavelength) * 1000.0f; */
-    /* const Spectrum transmission = bsdf_eval->sum - bsdf_eval->glossy - bsdf_eval->diffuse; */
-    /* bsdf_eval->glossy = uplift(bsdf_eval->glossy, wavelength); */
-    /* bsdf_eval->diffuse = uplift(bsdf_eval->diffuse, wavelength); */
-    /* bsdf_eval->sum = bsdf_eval->glossy + bsdf_eval->diffuse + transmission; */
-
-    /* print_float3("after glossy", bsdf_eval->glossy); */
-    /* print_float3("after diffuse", bsdf_eval->diffuse); */
-    /* print_float3("after sum", bsdf_eval->sum); */
-    // }
   }
   else {
     bsdf_eval_init(bsdf_eval, zero_spectrum());

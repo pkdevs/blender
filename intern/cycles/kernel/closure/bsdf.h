@@ -559,12 +559,10 @@ ccl_device_inline
               ccl_private ShaderData *sd,
               const ccl_private ShaderClosure *sc,
               const float3 wo,
-              ccl_private float *pdf,
-              ccl_private bool *dispersion)
+              ccl_private float *pdf)
 {
   Spectrum eval = zero_spectrum();
   *pdf = 0.f;
-  *dispersion = false;
 
   const float bump_shadowing = bump_shadowing_term(sd, sc, wo, true);
   if (bump_shadowing == 0.0f) {
@@ -606,7 +604,7 @@ ccl_device_inline
     case CLOSURE_BSDF_MICROFACET_GGX_REFRACTION_ID:
     case CLOSURE_BSDF_MICROFACET_GGX_GLASS_ID:
     case CLOSURE_BSDF_DIELECTRIC_VOLUMETRIC_ID:
-      eval = bsdf_microfacet_ggx_eval(kg, sc, sd->wi, wo, pdf, dispersion);
+      eval = bsdf_microfacet_ggx_eval(kg, sc, sd->wi, wo, pdf);
       break;
     case CLOSURE_BSDF_THIN_GLASS_TRANSMISSION_ID:
       eval = bsdf_thin_glass_transmission_eval(kg, sc, sd->wi, wo, pdf);

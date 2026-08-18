@@ -327,8 +327,7 @@ ccl_device void osl_closure_dielectric_bsdf_setup(KernelGlobals kg,
   bsdf->N = maybe_ensure_valid_specular_reflection(sd, safe_normalize_fallback(closure->N, sd->N));
   bsdf->alpha_x = closure->alpha_x;
   bsdf->alpha_y = closure->alpha_y;
-  fresnel->ior = bsdf_glass_ior(sd, closure->ior, closure->inv_abbe);
-  bsdf->ior = fresnel->ior.x;
+  bsdf->ior = bsdf_glass_ior(sd, closure->ior, closure->inv_abbe);
   bsdf->T = closure->T;
 
   const bool beckmann = closure->distribution == make_string("beckmann", 14712237670914973463ull);
@@ -443,7 +442,7 @@ ccl_device void osl_closure_generalized_schlick_bsdf_setup(
      * to the F0...F90 range, this allows us to use the real IOR.
      * Computing it back from F0 might give a different result in case of specular
      * tinting. */
-    bsdf->ior = bsdf_glass_ior(sd, -closure->exponent, closure->inv_abbe).x;
+    bsdf->ior = bsdf_glass_ior(sd, -closure->exponent, closure->inv_abbe);
   }
   else {
     bsdf->ior = ior_from_F0(average(closure->f0));

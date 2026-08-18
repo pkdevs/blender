@@ -210,7 +210,7 @@ ccl_device_inline IntegratorShadowState
 integrate_direct_light_shadow_init_common(KernelGlobals kg,
                                           IntegratorState state,
                                           const ccl_private Ray *ccl_restrict ray,
-                                          const Spectrum bsdf,
+                                          const Spectrum bsdf_spectrum,
                                           const int light_group,
                                           const int mnee_vertex_count,
                                           const bool constant_light_shader)
@@ -244,28 +244,11 @@ integrate_direct_light_shadow_init_common(KernelGlobals kg,
   integrator_state_write_shadow_ray_self(shadow_state, ray);
 
   /* Copy state from main path to shadow path. */
-  Spectrum unlit_throughput = INTEGRATOR_STATE(state, path, throughput);
-
-  const Spectrum spectrum_throughput = INTEGRATOR_STATE(state, path, spectrum_throughput);
-  if (!isequal(spectrum_throughput, one_spectrum())) {
-    /* Convert spectrum to rgb. */
-    const uint pixel = INTEGRATOR_STATE(state, path, rng_pixel);
-    const uint sample = INTEGRATOR_STATE(state, path, sample);
-    const float rand = path_rng_1D(kg, pixel, sample, PRNG_BOUNCE_NUM + PRNG_WAVELENGTH);
-    const float3 wavelength = sample_wavelengths(rand);
-    const float3 rgb_x = wavelength_to_rgb_d65(kg, wavelength.x);
-    const float3 rgb_y = wavelength_to_rgb_d65(kg, wavelength.y);
-    const float3 rgb_z = wavelength_to_rgb_d65(kg, wavelength.z);
-    unlit_throughput *= to_global(spectrum_throughput, rgb_x, rgb_y, rgb_z) / 3.0f;
-  }
-  const Spectrum throughput = unlit_throughput * bsdf;
-
-  /* print_float3("unlit", unlit_throughput); */
-  /* print_float3("bsdf", bsdf); */
-  /* printf("\n"); */
+  const Spectrum unlit_throughput = INTEGRATOR_STATE(state, path, throughput);
+  const Spectrum throughput = unlit_throughput * bsdf_spectrum;
 
   if (!(kernel_data.kernel_features & KERNEL_FEATURE_LIGHT_TREE)) {
-    INTEGRATOR_STATE_WRITE(shadow_state, shadow_path, bsdf_eval_average) = average(bsdf);
+    INTEGRATOR_STATE_WRITE(shadow_state, shadow_path, bsdf_eval_average) = average(bsdf_spectrum);
   }
 
   INTEGRATOR_STATE_WRITE(shadow_state, shadow_path, render_pixel_index) = INTEGRATOR_STATE(
@@ -438,7 +421,6 @@ ccl_device
     /* Path termination for constant light shader. */
     if (is_constant_light_shader && !(kernel_data.kernel_features & KERNEL_FEATURE_LIGHT_TREE)) {
       const float terminate = path_state_rng_light_termination(kg, rng_state);
-      /* FIXME(weizhen): should not convert to rgb. */
       if (light_sample_terminate(kg, &bsdf_eval, terminate)) {
         return SHADER_EVAL_EMPTY;
       }
@@ -616,17 +598,9 @@ ccl_device_forceinline int integrate_surface_bsdf_bssrdf_bounce(
 
   /* Update throughput. */
   const Spectrum bsdf_weight = bsdf_eval_sum(&bsdf_eval) / bsdf_pdf;
-  if (sd->runtime_flag & SR_BSDF_HAS_DISPERSION) {
-    INTEGRATOR_STATE_WRITE(state, path, spectrum_throughput) *= bsdf_weight;
-  }
-  else {
-    INTEGRATOR_STATE_WRITE(state, path, throughput) *= bsdf_weight;
-  }
-  /* print_float("pdf", bsdf_pdf); */
-  /* print_float3("bsdf_weight", bsdf_weight); */
+  INTEGRATOR_STATE_WRITE(state, path, throughput) *= bsdf_weight;
 
   if (kernel_data.kernel_features & KERNEL_FEATURE_LIGHT_PASSES) {
-    /* TODO(weizhen): do we need to do anything special for light passes? */
     if (INTEGRATOR_STATE(state, path, bounce) == 0) {
       INTEGRATOR_STATE_WRITE(state, path, pass_diffuse_weight) = bsdf_eval_pass_diffuse_weight(
           &bsdf_eval);
@@ -832,6 +806,12 @@ ccl_device int integrate_surface(KernelGlobals kg,
     if (sd.runtime_flag & SR_CACHE_MISS) {
       return LABEL_CACHE_MISS;
     }
+
+#ifdef __SPECTRAL__
+    if (sd.runtime_flag & SR_BSDF_HAS_DISPERSION) {
+      update_path_throughput_for_dispersion(kg, state, sd.rand_wavelength);
+    }
+#endif
 
     /* After shader evaluation, in case of texture cache miss. */
     guiding_record_surface_segment(kg, state, &sd);
