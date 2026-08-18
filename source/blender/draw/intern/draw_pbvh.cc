@@ -1396,6 +1396,41 @@ static void interpolate_vert_data_for_standard_layout(const SubdivCCG &subdiv_cc
   });
 }
 
+BLI_NOINLINE static void calc_generic_vert_attribute_grids(const Object &object,
+                                                           const OrigMeshData &orig_mesh_data,
+                                                           const BitSpan &use_flat_layout,
+                                                           const IndexMask &node_mask,
+                                                           const StringRef name,
+                                                           const MutableSpan<gpu::VertBufPtr> vbos)
+{
+  const bke::pbvh::Tree &pbvh = *bke::object::pbvh_get(object);
+  const Span<bke::pbvh::GridsNode> nodes = pbvh.nodes<bke::pbvh::GridsNode>();
+  const SubdivCCG &subdiv_ccg = *object.runtime->sculpt_session->subdiv_ccg;
+  const bke::AttributeAccessor attributes = orig_mesh_data.attributes;
+  const bke::GAttributeReader attr = attributes.lookup(name);
+
+  const Mesh &mesh = DRW_object_get_data_for_drawing<Mesh>(object);
+  const Span<int> corner_verts = mesh.corner_verts();
+
+  node_mask.foreach_index(
+      [&](const int i) {
+        bke::attribute_math::to_static_type(attr.varray.type(), [&]<typename T>() {
+          if constexpr (!std::is_void_v<typename AttributeConverter<T>::VBOType>) {
+            const VArraySpan<T> src = attr.varray.typed<T>();
+            if (use_flat_layout[i]) {
+              interpolate_vert_data_for_flat_layout<T>(
+                  subdiv_ccg, corner_verts, nodes[i].grids(), *vbos[i], src);
+            }
+            else {
+              interpolate_vert_data_for_standard_layout<T>(
+                  subdiv_ccg, corner_verts, nodes[i].grids(), *vbos[i], src);
+            }
+          }
+        });
+      },
+      exec_mode::grain_size(1));
+}
+
 template<typename T>
 static std::array<T, 4> interpolate_corner_data_for_subdivided_irregular_face(
     const IndexRange face, const int grid, Span<T> src)
@@ -1565,42 +1600,7 @@ static void interpolate_corner_data_for_standard_layout(const SubdivCCG &subdiv_
   });
 }
 
-BLI_NOINLINE static void fill_generic_vert_attribute_grids(const Object &object,
-                                                           const OrigMeshData &orig_mesh_data,
-                                                           const BitSpan &use_flat_layout,
-                                                           const IndexMask &node_mask,
-                                                           const StringRef name,
-                                                           const MutableSpan<gpu::VertBufPtr> vbos)
-{
-  const bke::pbvh::Tree &pbvh = *bke::object::pbvh_get(object);
-  const Span<bke::pbvh::GridsNode> nodes = pbvh.nodes<bke::pbvh::GridsNode>();
-  const SubdivCCG &subdiv_ccg = *object.runtime->sculpt_session->subdiv_ccg;
-  const bke::AttributeAccessor attributes = orig_mesh_data.attributes;
-  const bke::GAttributeReader attr = attributes.lookup(name);
-
-  const Mesh &mesh = DRW_object_get_data_for_drawing<Mesh>(object);
-  const Span<int> corner_verts = mesh.corner_verts();
-
-  node_mask.foreach_index(
-      [&](const int i) {
-        bke::attribute_math::to_static_type(attr.varray.type(), [&]<typename T>() {
-          if constexpr (!std::is_void_v<typename AttributeConverter<T>::VBOType>) {
-            const VArraySpan<T> src = attr.varray.typed<T>();
-            if (use_flat_layout[i]) {
-              interpolate_vert_data_for_flat_layout<T>(
-                  subdiv_ccg, corner_verts, nodes[i].grids(), *vbos[i], src);
-            }
-            else {
-              interpolate_vert_data_for_standard_layout<T>(
-                  subdiv_ccg, corner_verts, nodes[i].grids(), *vbos[i], src);
-            }
-          }
-        });
-      },
-      exec_mode::grain_size(1));
-}
-
-BLI_NOINLINE static void fill_generic_corner_attribute_grids(
+BLI_NOINLINE static void calc_generic_corner_attribute_grids(
     const Object &object,
     const OrigMeshData &orig_mesh_data,
     const BitSpan &use_flat_layout,
@@ -1627,6 +1627,53 @@ BLI_NOINLINE static void fill_generic_corner_attribute_grids(
               interpolate_corner_data_for_standard_layout<T>(
                   subdiv_ccg, nodes[i].grids(), *vbos[i], src);
             }
+          }
+        });
+      },
+      exec_mode::grain_size(1));
+}
+
+template<typename T>
+static void fill_face_data_grids(const SubdivCCG &subdiv_ccg,
+                                 const bool use_flat_layout,
+                                 Span<int> grids,
+                                 gpu::VertBuf &vbo,
+                                 Span<T> src)
+{
+  using Converter = AttributeConverter<T>;
+  using VBOType = typename Converter::VBOType;
+
+  const CCGKey key = BKE_subdiv_ccg_key_top_level(subdiv_ccg);
+  const int verts_per_grid = use_flat_layout ? (key.grid_size - 1) * (key.grid_size - 1) * 4 :
+                                               key.grid_area;
+  VBOType *dst = vbo.data<VBOType>().data();
+  for (const int i : grids.index_range()) {
+    const int face_index = subdiv_ccg.grid_to_face_map[grids[i]];
+    std::fill_n(dst, verts_per_grid, Converter::convert(src[face_index]));
+    dst += verts_per_grid;
+  }
+}
+
+BLI_NOINLINE static void fill_generic_face_attribute_grids(const Object &object,
+                                                           const OrigMeshData &orig_mesh_data,
+                                                           const BitSpan &use_flat_layout,
+                                                           const IndexMask &node_mask,
+                                                           const StringRef name,
+                                                           const MutableSpan<gpu::VertBufPtr> vbos)
+{
+  const bke::pbvh::Tree &pbvh = *bke::object::pbvh_get(object);
+  const Span<bke::pbvh::GridsNode> nodes = pbvh.nodes<bke::pbvh::GridsNode>();
+  const SubdivCCG &subdiv_ccg = *object.runtime->sculpt_session->subdiv_ccg;
+  const bke::AttributeAccessor attributes = orig_mesh_data.attributes;
+  const bke::GAttributeReader attr = attributes.lookup(name);
+
+  node_mask.foreach_index(
+      [&](const int i) {
+        bke::attribute_math::to_static_type(attr.varray.type(), [&]<typename T>() {
+          if constexpr (!std::is_void_v<typename AttributeConverter<T>::VBOType>) {
+            const VArraySpan<T> src = attr.varray.typed<T>();
+            fill_face_data_grids<T>(
+                subdiv_ccg, use_flat_layout[i], nodes[i].grids(), *vbos[i], src);
           }
         });
       },
@@ -1671,7 +1718,7 @@ BLI_NOINLINE static void update_generic_attribute_grids(const Object &object,
                                   use_flat_layout,
                                   node_mask,
                                   vbos);
-      fill_generic_vert_attribute_grids(
+      calc_generic_vert_attribute_grids(
           object, orig_mesh_data, use_flat_layout, node_mask, name, vbos);
       break;
     case bke::AttrDomain::Corner:
@@ -1680,7 +1727,7 @@ BLI_NOINLINE static void update_generic_attribute_grids(const Object &object,
                                   use_flat_layout,
                                   node_mask,
                                   vbos);
-      fill_generic_corner_attribute_grids(
+      calc_generic_corner_attribute_grids(
           object, orig_mesh_data, use_flat_layout, node_mask, name, vbos);
       break;
     case bke::AttrDomain::Face:
@@ -1689,7 +1736,8 @@ BLI_NOINLINE static void update_generic_attribute_grids(const Object &object,
                                   use_flat_layout,
                                   node_mask,
                                   vbos);
-      /* TODO: Add me */
+      fill_generic_face_attribute_grids(
+          object, orig_mesh_data, use_flat_layout, node_mask, name, vbos);
       break;
     default:
       BLI_assert_unreachable();
