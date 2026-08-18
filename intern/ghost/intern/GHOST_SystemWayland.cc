@@ -9097,10 +9097,10 @@ GHOST_SystemWayland::GHOST_SystemWayland(const bool background)
               getMilliSeconds(), GHOST_kEventSystemAppearanceChanged, nullptr));
         });
     if (appearance_watcher_) {
-      /* Push an initial event too (rather than relying on the caller to query
-       * #getSystemColorScheme up front), so the value the constructor just read
-       * synchronously above is picked up the same way a later change would be: through
-       * the main event queue, once the rest of Blender has finished initializing. */
+      /* Push an initial event too (rather than relying on the caller querying the color scheme up
+       * front), so the value the constructor just read synchronously above is picked up the same
+       * way a later change would be: through the main event queue, once the rest of Blender has
+       * finished initializing. */
       pushEvent_maybe_pending(std::make_unique<GHOST_Event>(
           getMilliSeconds(), GHOST_kEventSystemAppearanceChanged, nullptr));
     }

@@ -15,11 +15,11 @@
 
 #  include <dbus/dbus.h>
 
-static constexpr char PORTAL_SERVICE[] = "org.freedesktop.portal.Desktop";
-static constexpr char PORTAL_PATH[] = "/org/freedesktop/portal/desktop";
-static constexpr char PORTAL_SETTINGS_IFACE[] = "org.freedesktop.portal.Settings";
-static constexpr char APPEARANCE_NAMESPACE[] = "org.freedesktop.appearance";
-static constexpr char COLOR_SCHEME_KEY[] = "color-scheme";
+static constexpr const char *PORTAL_SERVICE = "org.freedesktop.portal.Desktop";
+static constexpr const char *PORTAL_PATH = "/org/freedesktop/portal/desktop";
+static constexpr const char *PORTAL_SETTINGS_IFACE = "org.freedesktop.portal.Settings";
+static constexpr const char *APPEARANCE_NAMESPACE = "org.freedesktop.appearance";
+static constexpr const char *COLOR_SCHEME_KEY = "color-scheme";
 
 static GHOST_TColorScheme color_scheme_from_value(const uint32_t value)
 {

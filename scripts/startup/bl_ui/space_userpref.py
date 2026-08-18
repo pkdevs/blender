@@ -1070,7 +1070,7 @@ class USERPREF_PT_theme(ThemePanel, Panel):
         layout = self.layout
 
         row = layout.row()
-        row.prop(prefs, "active_theme_type", text="")
+        row.prop(prefs, "active_theme_type", expand=True)
 
         split = layout.split(factor=0.6)
 

@@ -792,9 +792,9 @@ class ResetDefaultTheme(Operator):
 
     def execute(self, context):
         prefs = context.preferences
-        # Use the resolved type (rather than comparing `active_theme` against
-        # `active_theme_dark`/`_light`) so this is correct even before the target theme
-        # slot has ever been populated, e.g. the first time System mode resolves to Light.
+        # Use the resolved type (rather than comparing `active_theme` with `active_theme_dark`/`light`) so
+        # this is correct even before the target theme slot has ever been populated, e.g. the first time
+        # System mode resolves to Light.
         filename = "Blender_Dark" if prefs.active_theme_type_resolved == 'DARK' else "Blender_Light"
 
         filepath = bpy.utils.preset_find(filename, "interface_theme", ext=".xml")
