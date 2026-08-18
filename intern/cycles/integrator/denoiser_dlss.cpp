@@ -367,17 +367,6 @@ bool DLSSDenoiser::denoise_create_if_needed(DenoiseContext &context)
   params->Set(NVSDK_NGX_Parameter_Use_HW_Depth, NVSDK_NGX_DLSS_Depth_Type_Linear);
   params->Set(NVSDK_NGX_Parameter_DLSS_Roughness_Mode, NVSDK_NGX_DLSS_Roughness_Mode_Packed);
 
-  params->Set(NVSDK_NGX_Parameter_RayReconstruction_Hint_Render_Preset_DLAA,
-              NVSDK_NGX_RayReconstruction_Hint_Render_Preset_E);
-  params->Set(NVSDK_NGX_Parameter_RayReconstruction_Hint_Render_Preset_Quality,
-              NVSDK_NGX_RayReconstruction_Hint_Render_Preset_E);
-  params->Set(NVSDK_NGX_Parameter_RayReconstruction_Hint_Render_Preset_Balanced,
-              NVSDK_NGX_RayReconstruction_Hint_Render_Preset_E);
-  params->Set(NVSDK_NGX_Parameter_RayReconstruction_Hint_Render_Preset_Performance,
-              NVSDK_NGX_RayReconstruction_Hint_Render_Preset_E);
-  params->Set(NVSDK_NGX_Parameter_RayReconstruction_Hint_Render_Preset_UltraPerformance,
-              NVSDK_NGX_RayReconstruction_Hint_Render_Preset_E);
-
   const NVSDK_NGX_Result result = NVSDK_NGX_CUDA.CreateFeature1(
       ngx_device_, NVSDK_NGX_Feature_RayReconstruction, params, &handle_);
 
