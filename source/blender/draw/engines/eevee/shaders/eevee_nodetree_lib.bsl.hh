@@ -890,7 +890,9 @@ void node_light_info_impl(const int light_index,
 
   LightData light = lrd.light_buf[light_index];
   color = float4(light.color, 1.0f);
-  power = light.point_power;
+  /* Pre-divide power by PI,
+   * so users get a closer match to physically correct energy by default. */
+  power = light.point_power * M_1_PI;
   light_position = light.object_to_world.location();
   const bool is_directional = (light.type == LIGHT_SUN) || (light.type == LIGHT_SUN_ORTHO);
   LightVector lv = light_vector_get(light, is_directional, position);
@@ -924,12 +926,8 @@ void node_light_accumulation_impl(const int light_index,
   result = Closure(0);
 }
 
-void node_light_evaluation_impl(const int light_index,
-                                float3 position,
-                                float3 normal,
-                                float roughness,
-                                float &factor,
-                                float &energy_scale)
+void node_light_evaluation_impl(
+    const int light_index, float3 position, float3 normal, float roughness, float &factor)
 {
   /* clang-format off */ /* Multiline macros would break line count. */
   [[resource_table]] const eevee::LightRenderData &lrd = resource_table_get(eevee::LightRenderData);
@@ -947,20 +945,24 @@ void node_light_evaluation_impl(const int light_index,
 
   /* TODO(not_mark): remove, and update tests as this causes precision change. */
   /* Load LTC matrix and rotate into orthonormal basis around N. */
-  eevee::LTCData ltc_data = eevee::LTCData::sample_ltc_lut(
-      util_tx, normal, V, dot(normal, V), roughness);
+  eevee::LTCData ltc_data;
+  if (roughness == 1.0f) {
+    ltc_data = eevee::LTCData::identity(normal, V);
+  }
+  else {
+    ltc_data = eevee::LTCData::sample_ltc_lut(util_tx, normal, V, dot(normal, V), roughness);
+  }
   float3x3 T = from_incident_vector(normal, V);
   ltc_data.Minv = ltc_data.Minv * transpose(T);
-  float cosine_integral, form_factor;
-  light_ltc(
-      util_tx.utility_tx, light, ltc_data, lv, light_shape_vertices, cosine_integral, form_factor);
-  factor = cosine_integral * M_PI;
-  energy_scale = form_factor * M_1_PI;
-
-  energy_scale *= light.shape_power;
+  factor = light_ltc(util_tx.utility_tx, light, ltc_data, lv, light_shape_vertices);
 
   const bool is_transmission = false;  // TODO: Expose.
-  energy_scale *= light_attenuation_facing(light, lv.L, lv.dist, normal, is_transmission);
+  factor *= light_attenuation_facing(light, lv.L, lv.dist, normal, is_transmission);
+
+  factor *= light.shape_power;
+  /* Remove the base power (exposed in Light Info).
+   * The goal is to get a somewhat normalized factor. */
+  factor /= (light.point_power * M_1_PI);
 }
 
 void node_shadow_raycast_impl(const int light_index,

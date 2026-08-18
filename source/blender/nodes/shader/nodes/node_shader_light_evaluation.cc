@@ -23,7 +23,6 @@ static void node_declare(NodeDeclarationBuilder &b)
       .max(1.0f)
       .subtype(PROP_FACTOR);
   b.add_output<decl::Float>("Factor"_ustr);
-  b.add_output<decl::Float>("Energy Scale"_ustr);
 }
 
 static int node_shader_gpu_light_evaluation(GPUMaterial *mat,

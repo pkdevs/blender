@@ -3,12 +3,8 @@
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
 [[node]]
-void node_light_evaluation(const float light_index,
-                           float3 position,
-                           float3 normal,
-                           float roughness,
-                           float &factor,
-                           float &energy_scale)
+void node_light_evaluation(
+    const float light_index, float3 position, float3 normal, float roughness, float &factor)
 {
-  node_light_evaluation_impl(int(light_index), position, normal, roughness, factor, energy_scale);
+  node_light_evaluation_impl(int(light_index), position, normal, roughness, factor);
 }
