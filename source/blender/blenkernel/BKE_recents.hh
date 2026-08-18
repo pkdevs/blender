@@ -22,16 +22,20 @@
  * 4. Section-level `_default` in `recents_default` (builtin section default)
  * 5. Final fallback: value-initialized `T{}`
  *
+ * Versioning
+ *   `save()` saves a root-level `blender_version` key (see #BLENDER_VERSION) with the version
+ *   that wrote the file. Code that needs to handle older data specifically can read it via
+ *   `recents::Section("").get<int32_t>("blender_version")`.
+ *
  * Threading / initialization
- *   Call `recents::init()` or `recents::init_async()` early in startup to
- *   populate runtime data from the built-in defaults and the on-disk file.
- *   The module will lazily ensure initialization when needed, so explicit
- *   init is optional but recommended to avoid synchronous waits.
+ *   Call `recents::init()` or `recents::init_async()` early in startup to populate runtime data
+ *   from the built-in defaults and the on-disk file. The module will lazily ensure initialization
+ *   when needed, so explicit init is optional but recommended to avoid synchronous waits.
  *
  * Typical usage
  *   // Read
- *   std::vector<float> bounds =
- *       recents::Section("temp.window.dimensions").get("PREFERENCES");
+ *   auto bounds =
+ *       recents::Section("temp.window.dimensions").get<std::vector<float>>("PREFERENCES");
  *
  *   // Write
  *   recents::Section("temp.window.dimensions").set("PREFERENCES", bounds);
@@ -40,7 +44,6 @@
  *   auto s = recents::Section("panels");
  *   bool is_open = s.get<bool>("open");
  *   s.set("width", 12);
- *
  */
 
 #pragma once

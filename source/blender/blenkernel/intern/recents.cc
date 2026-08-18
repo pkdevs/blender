@@ -17,6 +17,7 @@
 #include <vector>
 
 #include "BKE_appdir.hh"
+#include "BKE_blender_version.h"
 #include "BKE_global.hh"
 #include "BKE_recents.hh"
 
@@ -153,16 +154,21 @@ bool save()
 {
   ensure_init();
 
-  /* Don't write files when running in background/headless mode. */
-  if (G.background) {
-    return false;
-  }
-
   std::lock_guard lock(recents_mutex);
   toml::value &current = current_get();
   if (current.is_empty()) {
     return false;
   }
+
+  /* Stamp the Blender version that wrote this file, so a future version can tell
+   * how old the on-disk data is and adjust how it's read if the format changes. */
+  current["blender_version"] = BLENDER_VERSION;
+
+  /* Don't write files when running in background/headless mode. */
+  if (G.background) {
+    return false;
+  }
+
   std::string toml_as_string = toml::format(current, version);
   FILE *file_handle = BLI_fopen(recents_file_path().c_str(), "w");
   if (file_handle == nullptr) {

@@ -5,6 +5,7 @@
 #include <string>
 #include <vector>
 
+#include "BKE_blender_version.h"
 #include "BKE_global.hh"
 #include "BKE_gtest_base.hh"
 #include "BKE_recents.hh"
@@ -182,6 +183,14 @@ TEST_F(RecentsTest, SaveIsNoOpInBackgroundMode)
 {
   /* The fixture forces background mode, so `save()` must never touch disk. */
   EXPECT_FALSE(save());
+}
+
+TEST_F(RecentsTest, SaveStampsBlenderVersion)
+{
+  /* `save()` still stamps the current Blender version onto the in-memory data
+   * even in background mode, though the no-op path skips writing it to disk. */
+  ASSERT_FALSE(save());
+  EXPECT_EQ(Section("").get<int32_t>("blender_version"), BLENDER_VERSION);
 }
 
 TEST_F(RecentsTest, ExplicitInitIsSafeToCallAgain)
