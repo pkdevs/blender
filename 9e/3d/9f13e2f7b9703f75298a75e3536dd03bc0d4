@@ -1,2 +1,3 @@
 Referenced by pull request #162662, PyAPI: enable bpy.app.portable on all portable installations
 Referenced by commit be07d99aaed8df8a9b47d73b7726f721b94b74e3, PyAPI: enable bpy.app.portable on all portable installations
+Referenced by pull request #162408, Cleanup: install glTF add-on libraries beside their dependencies
