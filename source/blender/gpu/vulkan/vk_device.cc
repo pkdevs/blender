@@ -88,6 +88,7 @@ void VKDevice::reinit()
 {
   samplers_.free();
   samplers_.init();
+  staging_pool_.free();
   staging_pool_.init();
 }
 

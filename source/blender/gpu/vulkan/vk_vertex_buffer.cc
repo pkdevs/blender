@@ -6,6 +6,8 @@
  * \ingroup gpu
  */
 
+#include <algorithm>
+
 #include "MEM_guardedalloc.h"
 
 #include "gpu_capabilities_private.hh"
@@ -142,6 +144,9 @@ void VKVertexBuffer::resize_data()
     return;
   }
   if (staging_alloc_.is_valid()) {
+    void *old_ptr = staging_alloc_.mapped_ptr;
+    size_t old_size = staging_alloc_.size;
+
     VKDevice &device = VKBackend::get().device;
     staging_alloc_ = device.staging_pool_get().sub_allocate(size_alloc_get());
     if (staging_alloc_.is_valid()) {
@@ -150,6 +155,7 @@ void VKVertexBuffer::resize_data()
     else {
       data_ = static_cast<uchar *>(MEM_new_array<uchar>(size_alloc_get(), __func__));
     }
+    memcpy(data_, old_ptr, std::min(old_size, size_t(size_alloc_get())));
   }
   else {
     data_ = static_cast<uchar *>(
