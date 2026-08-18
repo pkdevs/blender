@@ -91,7 +91,8 @@ def gather_primitives(
             material.name = material.name + "." + tile
 
         if blender_mat is not None:
-            export_settings['material_identifiers'][id(blender_mat)]['gltf'] = material
+            if 'material_identifiers' in export_settings.keys():
+                export_settings['material_identifiers'][id(blender_mat)]['gltf'] = material
 
         primitive = gltf2_io.MeshPrimitive(
             attributes=internal_primitive['attributes'],
