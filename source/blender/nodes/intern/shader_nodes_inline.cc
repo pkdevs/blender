@@ -1666,23 +1666,6 @@ class ShaderNodesInliner {
     return copied_node;
   }
 
-  /**
-   * By convention the float->bool conversion uses x > 0. Also see #float_to_bool.
-   * This is done explicitly by the inliner because the individual render engines don't necessarily
-   * support booleans natively and thus also don't do the conversion explicitly.
-   */
-  LinkedSocketValue insert_float_to_bool_conversion(const SocketValue &src_value)
-  {
-    bNode &math_node = *this->add_node("ShaderNodeMath"_ustr);
-    math_node.custom1 = NODE_MATH_GREATER_THAN;
-    bNodeSocket &value_in = *static_cast<bNodeSocket *>(math_node.inputs.first);
-    bNodeSocket &threshold_in = *value_in.next;
-    bNodeSocket &value_out = *static_cast<bNodeSocket *>(math_node.outputs.first);
-    this->set_input_socket_value({}, math_node, value_in, src_value);
-    static_cast<bNodeSocketValueFloat *>(threshold_in.default_value)->value = 0.0f;
-    return {&math_node, &value_out};
-  }
-
   /** Converts the given socket value if necessary. */
   SocketValue handle_implicit_conversion(const SocketValue &src_value,
                                          const bke::bNodeSocketType &from_socket_type,
@@ -1739,6 +1722,23 @@ class ShaderNodesInliner {
     }
 
     return SocketValue{FallbackValue{}};
+  }
+
+  /**
+   * By convention the float->bool conversion uses x > 0. Also see #float_to_bool.
+   * This is done explicitly by the inliner because the individual render engines don't necessarily
+   * support booleans natively and thus also don't do the conversion explicitly.
+   */
+  LinkedSocketValue insert_float_to_bool_conversion(const SocketValue &src_value)
+  {
+    bNode &math_node = *this->add_node("ShaderNodeMath"_ustr);
+    math_node.custom1 = NODE_MATH_GREATER_THAN;
+    bNodeSocket &value_in = *static_cast<bNodeSocket *>(math_node.inputs.first);
+    bNodeSocket &threshold_in = *value_in.next;
+    bNodeSocket &value_out = *static_cast<bNodeSocket *>(math_node.outputs.first);
+    this->set_input_socket_value({}, math_node, value_in, src_value);
+    static_cast<bNodeSocketValueFloat *>(threshold_in.default_value)->value = 0.0f;
+    return {&math_node, &value_out};
   }
 
   void set_input_socket_value(const NodeInContext &original_node,
