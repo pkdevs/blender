@@ -827,34 +827,15 @@ static FunctionSymbol ternary_conditional_operator(const ValueType type)
   return FunctionSymbol(
       "?:", {{ValueType::Boolean}, {type}, {type}}, [type](InsertCallParams &params) {
         const eNodeSocketDatatype socket_type = *value_to_closest_socket_type(type);
-        if (ELEM(params.tree.type, NTREE_GEOMETRY, NTREE_COMPOSIT)) {
-          bNode &node = params.add_node("GeometryNodeSwitch"_ustr);
-          auto &storage = *static_cast<NodeSwitch *>(node.storage);
-          storage.input_type = socket_type;
-          params.update_node_sockets(node);
-          params.add_input(node, 0);
-          params.add_input(node, 2, type);
-          params.add_input(node, 1, type);
-          params.set_output(node, 0, type);
-          return;
-        }
-        bNode &node = params.add_node("ShaderNodeMix"_ustr);
-        NodeShaderMix &storage = *static_cast<NodeShaderMix *>(node.storage);
-        storage.clamp_factor = false;
-        if (ELEM(socket_type, SOCK_FLOAT, SOCK_INT, SOCK_BOOLEAN)) {
-          storage.data_type = socket_type;
-        }
-        else if (socket_type == SOCK_VECTOR) {
-          storage.data_type = SOCK_VECTOR;
-        }
-        else {
-          storage.data_type = SOCK_RGBA;
-        }
+        bNode &node = params.add_node("GeometryNodeSwitch"_ustr);
+        auto &storage = *static_cast<NodeSwitch *>(node.storage);
+        storage.input_type = socket_type;
         params.update_node_sockets(node);
         params.add_input(node, 0);
-        params.add_input(node, 1);
-        params.add_input(node, 2);
+        params.add_input(node, 2, type);
+        params.add_input(node, 1, type);
         params.set_output(node, 0, type);
+        return;
       });
 }
 
