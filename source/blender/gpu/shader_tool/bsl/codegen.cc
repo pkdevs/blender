@@ -2628,8 +2628,8 @@ struct CodegenContext : NodeErrorHandler {
         .var_type = type,
         .var_name = name,
         .slot = string(attr.param1.str()),
-        .dual_source = string(attr.param3.str()),
-        .raster_order_group = string(attr.param2.str()),
+        .dual_source = string(attr.param2.str()),
+        .raster_order_group = string(attr.raster_order_group.str()),
     };
   }
 
@@ -2644,7 +2644,7 @@ struct CodegenContext : NodeErrorHandler {
         .var_name = name,
         .slot = string(attr.param1.str()),
         .image_type = string(attr.param2.str()),
-        .raster_order_group = string(attr.param3.str()),
+        .raster_order_group = string(attr.raster_order_group.str()),
     };
   }
 
@@ -2713,7 +2713,7 @@ struct CodegenContext : NodeErrorHandler {
                 .var_name = name,
                 .var_array = string(array.str()),
                 .res_type = string(attr.attr.identifier().str()),
-                .res_value = string(attr.param1.str()),
+                .res_slot = string(attr.param1.str()),
                 .res_condition = attr.parse_condition(),
                 .res_frequency = parse_frequency(attr.frequency)};
       case ResourceType::STORAGE_BUF:
@@ -2763,6 +2763,7 @@ void SourceProcessor::lower_bsl_to_il(Parser &parser, bsl::SymbolTable &symbols)
     throw ParserException();
   }
 
+  parser.language = Language::IL;
   parser.set_str(str);
 }
 }  // namespace blender::gpu::shader

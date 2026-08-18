@@ -48,7 +48,11 @@ struct ShadowRenderData {
 
   float punctual_sample_get(LightData light, float3 P) const
   {
+#ifndef __BSL__
     float3 shadow_position = light.local().local.shadow_position;
+#else
+    float3 shadow_position = light.local.local.shadow_position;
+#endif
     float3 lP = transform_point_inversed(light.object_to_world, P);
     lP -= shadow_position;
     int face_id = shadow_punctual_face_index_get(lP);

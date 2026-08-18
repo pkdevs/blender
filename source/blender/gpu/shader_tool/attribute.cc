@@ -65,9 +65,10 @@ void SourceProcessor::lint_attributes(Parser &parser)
           attr_str == "subpass_in" || attr_str == "point_coord" || attr_str == "point_size" ||
           attr_str == "position" || attr_str == "push_constant" || attr_str == "resource_table" ||
           attr_str == "smooth" || attr_str == "vertex_id" || attr_str == "legacy_info" ||
-          attr_str == "vertex" || attr_str == "viewport_index" || attr_str == "work_group_id" ||
-          attr_str == "maybe_unused" || attr_str == "fallthrough" || attr_str == "nodiscard" ||
-          attr_str == "node" || attr_str == "clip_control" || attr_str == "texture_atomic")
+          attr_str == "legacy_iface" || attr_str == "vertex" || attr_str == "viewport_index" ||
+          attr_str == "work_group_id" || attr_str == "maybe_unused" || attr_str == "fallthrough" ||
+          attr_str == "nodiscard" || attr_str == "node" || attr_str == "clip_control" ||
+          attr_str == "texture_atomic")
       {
         if (attr_scope.is_valid()) {
           report_error(attr, "This attribute requires no argument");
@@ -201,6 +202,7 @@ void SourceProcessor::lint_attributes_ast(Parser &parser)
       {"instance_index", ArgCount(0, 0)},
       {"layer", ArgCount(0, 0)},
       {"legacy_info", ArgCount(0, 0)},
+      {"legacy_iface", ArgCount(0, 0)},
       {"local_invocation_id", ArgCount(0, 0)},
       {"local_invocation_index", ArgCount(0, 0)},
       {"maybe_unused", ArgCount(0, 0)},

@@ -43,10 +43,17 @@ struct AmendCtx {
       return;
     }
 
+#ifndef __BSL__
     int2 base_offset_neg = light.sun().clipmap_base_offset_neg;
     int2 base_offset_pos = light.sun().clipmap_base_offset_pos;
     /* LOD relative max with respect to clipmap_lod_min. */
     int lod_max = light.sun().clipmap_lod_max - light.sun().clipmap_lod_min;
+#else
+    int2 base_offset_neg = light.sun.clipmap_base_offset_neg;
+    int2 base_offset_pos = light.sun.clipmap_base_offset_pos;
+    /* LOD relative max with respect to clipmap_lod_min. */
+    int lod_max = light.sun.clipmap_lod_max - light.sun.clipmap_lod_min;
+#endif
     /* Iterate in reverse. */
     for (int lod = lod_max; lod >= 0; lod--) {
       int tilemap_index = light.tilemap_index + lod;

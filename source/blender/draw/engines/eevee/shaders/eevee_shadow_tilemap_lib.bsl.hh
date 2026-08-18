@@ -170,14 +170,22 @@ float shadow_directional_level_fractional(LightData light, float3 lP)
   else {
     /* The narrowing need to be stronger since the tile-map position is not rounded but floored. */
     constexpr float narrowing = float(SHADOW_TILEMAP_RES) / (float(SHADOW_TILEMAP_RES) - 2.5001f);
-    /* Since we want half of the size, bias the level by -1. */
+/* Since we want half of the size, bias the level by -1. */
+#ifndef __BSL__
     float clipmap_lod_min_minus_one = float(light.sun().clipmap_lod_min - 1);
+#else
+    float clipmap_lod_min_minus_one = float(light.sun.clipmap_lod_min - 1);
+#endif
     float lod_min_half_size = exp2(clipmap_lod_min_minus_one);
     lod = length(lP.xy) * narrowing / lod_min_half_size;
     /* Apply cascade lod bias. Light bias is not supported here. */
     lod += clipmap_lod_min_minus_one;
   }
+#ifndef __BSL__
   return clamp(lod, float(light.sun().clipmap_lod_min), float(light.sun().clipmap_lod_max));
+#else
+  return clamp(lod, float(light.sun.clipmap_lod_min), float(light.sun.clipmap_lod_max));
+#endif
 }
 
 int shadow_directional_level(LightData light, float3 lP)
@@ -279,6 +287,7 @@ int2 shadow_decompress_grid_offset(eLightType light_type,
  */
 ShadowCoordinates shadow_directional_coordinates_at_level(LightData light, float3 lP, int level)
 {
+#ifndef __BSL__
   /* This difference needs to be less than 32 for the later shift to be valid.
    * This is ensured by `ShadowDirectional::clipmap_level_range()`. */
   int level_relative = level - light.sun().clipmap_lod_min;
@@ -290,6 +299,19 @@ ShadowCoordinates shadow_directional_coordinates_at_level(LightData light, float
                                                       level_relative);
   /* UV in [0..1] range over the tilemap. */
   float2 tilemap_uv = lP.xy - light.sun().clipmap_origin;
+#else
+  /* This difference needs to be less than 32 for the later shift to be valid.
+   * This is ensured by `ShadowDirectional::clipmap_level_range()`. */
+  int level_relative = level - light.sun.clipmap_lod_min;
+  int lod_relative = (light.type == LIGHT_SUN_ORTHO) ? light.sun.clipmap_lod_min : level;
+  /* Compute offset in tile. */
+  int2 clipmap_offset = shadow_decompress_grid_offset(light.type,
+                                                      light.sun.clipmap_base_offset_neg,
+                                                      light.sun.clipmap_base_offset_pos,
+                                                      level_relative);
+  /* UV in [0..1] range over the tilemap. */
+  float2 tilemap_uv = lP.xy - light.sun.clipmap_origin;
+#endif
   tilemap_uv *= exp2(float(-lod_relative));
   tilemap_uv -= float2(clipmap_offset) * (1.0f / float(SHADOW_TILEMAP_RES));
   tilemap_uv = saturate(tilemap_uv + 0.5f);

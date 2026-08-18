@@ -77,13 +77,14 @@ vector<SymbolTable::BuiltinFunc> SymbolTable::generate_all_constructors(
   /* Matrix Constructors (restricted to matching "float" component type). */
   for (int n = 2; n <= 4; ++n) {
     for (int m = 2; m <= 4; ++m) {
-      SymbolClass *mat = make_type(make_type(float_cls, m), n);
+      SymbolClass *row = make_type(float_cls, m);
+      SymbolClass *mat = make_type(row, n);
       /* Broadcast: float3x3(float) */
       funcs.push_back({mat, mat->identifier, {float_cls}});
       /* All-Scalar: float3x3(float, float, ...) [N*N scalars] */
-      funcs.push_back({mat, mat->identifier, vector<SymbolClass *>(n * n, float_cls)});
+      funcs.push_back({mat, mat->identifier, vector<SymbolClass *>(n * m, float_cls)});
       /* All-Vector: float3x3(float3, float3, float3) [N vectors] */
-      funcs.push_back({mat, mat->identifier, vector<SymbolClass *>(n, make_type(float_cls, n))});
+      funcs.push_back({mat, mat->identifier, vector<SymbolClass *>(n, row)});
     }
   }
 

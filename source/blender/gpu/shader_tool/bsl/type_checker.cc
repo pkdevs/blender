@@ -416,8 +416,8 @@ struct ExpressionTypeParser
     }
     ExpressionResult fval = expr(p_second);
 
-    if (left.type != table->bool_cls) {
-      error(t, Diag::CondInvalidTernary, left.type->original);
+    if (left.type != table->bool_cls && left.type != table->bool32_t_cls) {
+      error(t, Diag::TypeNotConvertibleToBool, left.type->original);
       return table->err_cls;
     }
     if (tval.type != fval.type) {

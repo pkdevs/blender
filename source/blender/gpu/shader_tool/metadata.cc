@@ -25,7 +25,7 @@ std::string ParsedResource::serialize() const
     ss << "ADDITIONAL_INFO(" << var_name << ")";
   }
   else if (res_type == "legacy_iface") {
-    ss << "VERTEX_OUT(" << var_type << ")";
+    ss << "VERTEX_OUT(" << var_type << "_t)";
   }
   else if (res_type == "resource_table") {
     if (!res_condition.empty()) {

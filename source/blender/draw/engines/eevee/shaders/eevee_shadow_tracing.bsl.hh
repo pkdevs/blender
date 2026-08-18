@@ -25,7 +25,7 @@ namespace eevee {
 /** \name Shadow Map Tracing loop
  * \{ */
 
-#define SHADOW_TRACING_INVALID_HISTORY FLT_MAX
+static constexpr float SHADOW_TRACING_INVALID_HISTORY = FLT_MAX;
 
 struct ShadowMapTracingState {
   /* Occluder ray coordinate at previous valid depth sample. */
@@ -160,9 +160,12 @@ ShadowRayDirectional shadow_ray_generate_directional(LightData light,
   /* Trace in a radius that is covered by low resolution page inflation. */
   float max_tracing_distance = texel_radius * float(SHADOW_PAGE_RES << SHADOW_TILEMAP_LOD);
   float max_tracing_angle_cos = cos_from_tan(max_tracing_distance / dist_to_near_plane);
-  /* Taking max of cosines to get the minimum of the angles. */
+/* Taking max of cosines to get the minimum of the angles. */
+#ifndef __BSL__
   float shadow_angle_cos = max(light.sun().shadow_angle_cos, max_tracing_angle_cos);
-
+#else
+  float shadow_angle_cos = max(light.sun.shadow_angle_cos, max_tracing_angle_cos);
+#endif
   /* Light shape is 1 unit away from the shading point. */
   float3 direction = sample_uniform_cone(random_2d, shadow_angle_cos);
 
@@ -235,14 +238,23 @@ ShadowRayPunctual shadow_ray_generate_punctual(LightData light, float2 random_2d
   }
 
   float clip_near = intBitsToFloat(light.clip_near);
+
+#ifndef __BSL__
   float shape_radius = light.spot().local.shadow_radius;
+#else
+  float shape_radius = light.spot.local.shadow_radius;
+#endif
   /* Clamp to a minimum value to avoid `local_ray_up` being degenerate. Could be revisited as the
    * issue might reappear at different zoom level. */
   shape_radius = max(0.00002f, shape_radius);
 
   float3 point_on_light_shape;
   if (is_area_light(light.type)) {
+#ifndef __BSL__
     random_2d *= light.area().size * light.area().shadow_scale;
+#else
+    random_2d *= light.area.size * light.area.shadow_scale;
+#endif
 
     point_on_light_shape = float3(random_2d, 0.0f);
   }
@@ -268,7 +280,11 @@ ShadowRayPunctual shadow_ray_generate_punctual(LightData light, float2 random_2d
 
   float3 direction = point_on_light_shape - lP;
 
+#ifndef __BSL__
   float3 shadow_position = light.local().local.shadow_position;
+#else
+  float3 shadow_position = light.local.local.shadow_position;
+#endif
   /* Clip the ray to not cross the near plane.
    * Avoid traces that starts on tiles that have not been queried, creating noise. */
   float clip_distance = max(0.0f, length(lP - shadow_position) - clip_near);
@@ -361,7 +377,12 @@ float shadow_texel_radius_at_position([[resource_table]] const Uniform &uni,
   if (is_directional) {
     float3 lP = transform_direction_transposed(light.object_to_world, P);
     lP -= light.position();
+
+#ifndef __BSL__
     LightSunData sun = light.sun();
+#else
+    LightSunData sun = light.sun;
+#endif
     if (light.type == LIGHT_SUN) {
       /* Simplification of `coverage_get(shadow_directional_level_fractional)`.
        * Do not apply the narrowing since we want the size of the tilemap (not its application
@@ -381,7 +402,12 @@ float shadow_texel_radius_at_position([[resource_table]] const Uniform &uni,
     const ViewMatrices view = views.get(0);
 
     float3 lP = light_world_to_local_point(light, P);
+
+#ifndef __BSL__
     lP -= light.local().local.shadow_position;
+#else
+    lP -= light.local.local.shadow_position;
+#endif
     /* Simplification of `exp2(shadow_punctual_level_fractional)`. */
     scale = shadow_punctual_pixel_ratio(light,
                                         lP,
@@ -482,7 +508,11 @@ float shadow_eval([[resource_table]] ShadowRenderData &srd,
     L = light.z_axis();
   }
   else {
+#ifndef __BSL__
     L = light.position() + light.local().local.shadow_position - P;
+#else
+    L = light.position() + light.local.local.shadow_position - P;
+#endif
     L = normalize_and_get_length(L, distance_to_shadow);
   }
 

@@ -158,7 +158,6 @@ enum class Diag {
   ExpectedColon,
   TypeInvalidOperator,
   TokenInvalidOperator,
-  CondInvalidTernary,
   TypeInvalidTernary,
   InvalidBinaryOperands,
   InvalidUnaryArgumentType,
@@ -372,8 +371,6 @@ static inline std::string_view diagnostic_message_get(Diag diag)
       return "Expected colon ':'";
     case Diag::TokenInvalidOperator:
       return "Invalid operator token '{}'";
-    case Diag::CondInvalidTernary:
-      return "Value of type '{}' is not contextually convertible to 'bool'";
     case Diag::TypeInvalidTernary:
       return "Incompatible operand types ('{}' and '{}')";
     case Diag::InvalidBinaryOperands:

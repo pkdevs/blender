@@ -21,11 +21,10 @@ struct GeomShadow {
             read)]] const ShadowRenderView (&render_view_buf)[SHADOW_VIEW_MAX];
 };
 
-}  // namespace eevee
-
 #if defined(USE_BARYCENTRICS) && defined(GPU_FRAGMENT_SHADER) && defined(MAT_GEOM_MESH)
 float3 barycentric_distances_get()
 {
+  SurfSmooth &interp = interface_get(eevee_geom_iface_info, interp);
   float wp_delta = length(gpu_dfdx(interp.P)) + length(gpu_dfdy(interp.P));
   float bc_delta = length(gpu_dfdx(gpu_BaryCoord)) + length(gpu_dfdy(gpu_BaryCoord));
   float rate_of_change = wp_delta / bc_delta;
@@ -40,8 +39,6 @@ void init_globals_mesh()
   g_data.barycentric_dists = barycentric_distances_get();
 #endif
 }
-
-namespace eevee {
 
 void init_globals_curves(const ViewMatrices view)
 {

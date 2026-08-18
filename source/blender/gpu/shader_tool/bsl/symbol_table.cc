@@ -471,8 +471,11 @@ void SymbolTable::register_builtins(LocalScope node)
         string return_type_id = base->identifier + to_string(target_length);
 
         SymbolVariable var(type, root->classes[return_type_id], tok, current);
+        SymbolFunction fun(
+            type, tok, root->classes[return_type_id], current, SymbolFunction::MEMBER);
 
         type->variables.emplace(current, var_arena.alloc(var));
+        type->functions.emplace(current, fun_arena.alloc(fun));
         return;
       }
       /* Only allow swizzling components that actually exist on this vector type. */
@@ -581,6 +584,7 @@ void SymbolTable::register_builtins(LocalScope node)
 
       /* WORKAROUND: Should become an entry point argument. */
       {"gl_FragStencilRefARB", "uint", false, 0},
+      {"gpu_BaryCoord", "float3", false, 0},
 
       {"FLT_MAX", "float", false, 0},
       {"FLT_MIN", "float", false, 0},
@@ -699,10 +703,23 @@ vector<SymbolTable::BuiltinFunc> SymbolTable::generate_all_builtin_functions()
   functions.push_back({void_cls, "printf", {str_cls}});
   functions.push_back({void_cls, "static_assert", {bool_cls}});
 
-  functions.push_back({bool_cls, "in_range_inclusive", {bool_cls, bool_cls, bool_cls}});
-  functions.push_back({bool_cls, "in_range_exclusive", {bool_cls, bool_cls, bool_cls}});
+  for (SymbolClass *type : {float_cls,
+                            float2_cls,
+                            float3_cls,
+                            float4_cls,
+                            int_cls,
+                            int2_cls,
+                            int3_cls,
+                            int4_cls,
+                            uint_cls,
+                            uint2_cls,
+                            uint3_cls,
+                            uint4_cls})
+  {
+    functions.push_back({bool_cls, "in_range_inclusive", {type, type, type}});
+    functions.push_back({bool_cls, "in_range_exclusive", {type, type, type}});
+  }
 
-  /* TODO replace by texelFetchSafe. */
   for (SymbolClass *sampler_t : {root->lookup_class("sampler2DDepth"),
                                  root->lookup_class("sampler2D"),
                                  root->lookup_class("isampler2D"),
@@ -711,7 +728,6 @@ vector<SymbolTable::BuiltinFunc> SymbolTable::generate_all_builtin_functions()
     functions.push_back({bool_cls, "in_texture_range", {int2_cls, sampler_t}});
   }
 
-  /* TODO replace by texelFetchSafe. */
   for (SymbolClass *sampler_t : {root->lookup_class("sampler2DArray"),
                                  root->lookup_class("isampler2DArray"),
                                  root->lookup_class("usampler2DArray"),
@@ -723,10 +739,9 @@ vector<SymbolTable::BuiltinFunc> SymbolTable::generate_all_builtin_functions()
                                  root->lookup_class("isampler2DArrayAtomic"),
                                  root->lookup_class("usampler2DArrayAtomic")})
   {
-    functions.push_back({bool_cls, "in_texture_range", {int3_cls, sampler_t}});
+    functions.push_back({bool_cls, "in_texture_range", {int2_cls, sampler_t}});
   }
 
-  /* TODO replace by texelFetchSafe. */
   for (SymbolClass *image_t : {root->lookup_class("iimage1DArray"),
                                root->lookup_class("uimage1DArray"),
                                root->lookup_class("image2D"),
@@ -749,7 +764,7 @@ vector<SymbolTable::BuiltinFunc> SymbolTable::generate_all_builtin_functions()
                                root->lookup_class("iimage2DArrayAtomic"),
                                root->lookup_class("uimage2DArrayAtomic")})
   {
-    functions.push_back({bool_cls, "in_image_range", {int3_cls, image_t}});
+    functions.push_back({bool_cls, "in_image_range", {int2_cls, image_t}});
   }
 
   /* There are many other overloads but we don't use them currently. */
@@ -794,6 +809,13 @@ vector<SymbolTable::BuiltinFunc> SymbolTable::generate_all_builtin_functions()
     }
   };
 
+  auto add_scalar_vec_binary = [&](const string &name, const vector<SymbolClass *> &types) {
+    SymbolClass *scalar = types[0];
+    for (size_t i = 1; i < types.size(); ++i) {
+      functions.push_back({types[i], name, {scalar, types[i]}});
+    }
+  };
+
   auto add_vec_scalar_scalar_ternary = [&](const string &name,
                                            const vector<SymbolClass *> &types) {
     SymbolClass *scalar = types[0];
@@ -806,6 +828,14 @@ vector<SymbolTable::BuiltinFunc> SymbolTable::generate_all_builtin_functions()
     SymbolClass *scalar = types[0];
     for (size_t i = 1; i < types.size(); ++i) {
       functions.push_back({types[i], name, {types[i], types[i], scalar}});
+    }
+  };
+
+  auto add_scalar_scalar_vec_ternary = [&](const string &name,
+                                           const vector<SymbolClass *> &types) {
+    SymbolClass *scalar = types[0];
+    for (size_t i = 1; i < types.size(); ++i) {
+      functions.push_back({types[i], name, {types[i], scalar, scalar}});
     }
   };
 
@@ -880,9 +910,9 @@ vector<SymbolTable::BuiltinFunc> SymbolTable::generate_all_builtin_functions()
   }
 
   add_binary("step", f_types);
-  add_vec_scalar_binary("step", f_types);
+  add_scalar_vec_binary("step", f_types);
   add_ternary("smoothstep", f_types);
-  add_vec_vec_scalar_ternary("smoothstep", f_types);
+  add_scalar_scalar_vec_ternary("smoothstep", f_types);
 
   add_ternary("fma", f_types);
 
@@ -1038,6 +1068,11 @@ vector<SymbolTable::BuiltinFunc> SymbolTable::generate_all_builtin_functions()
       samplers.emplace_back(root->classes["sampler2DArrayDepth"], 3, 2);
       samplers.emplace_back(root->classes["samplerCubeArrayDepth"], 4, 3);
     }
+    else {
+      samplers.emplace_back(root->classes[prefix + "sampler2DAtomic"], 2, 2);
+      samplers.emplace_back(root->classes[prefix + "sampler3DAtomic"], 3, 3);
+      samplers.emplace_back(root->classes[prefix + "sampler2DArrayAtomic"], 3, 2);
+    }
 
     for (auto [sampler, coord_dim, deriv_dim] : samplers) {
       SymbolClass *coord_type = f_types[coord_dim - 1];
@@ -1047,6 +1082,7 @@ vector<SymbolTable::BuiltinFunc> SymbolTable::generate_all_builtin_functions()
       functions.push_back({type, "texture", {sampler, coord_type}});
       functions.push_back({type, "textureLod", {sampler, coord_type, float_cls}});
       functions.push_back({type, "textureGather", {sampler, coord_type}});
+      functions.push_back({type, "textureGather", {sampler, coord_type, int_cls}});
       functions.push_back({type, "textureGrad", {sampler, coord_type, deriv_type, deriv_type}});
       functions.push_back({icoord_type, "textureSize", {sampler, int_cls}});
       functions.push_back({type, "texelFetch", {sampler, icoord_type, int_cls}});
@@ -1074,14 +1110,15 @@ vector<SymbolTable::BuiltinFunc> SymbolTable::generate_all_builtin_functions()
       functions.push_back({void_cls, "imageFence", {image}});
 
       if (image->identifier.ends_with("Atomic")) {
-        functions.push_back({type, "imageAtomicAdd", {image, coord_type, type}});
-        functions.push_back({type, "imageAtomicMin", {image, coord_type, type}});
-        functions.push_back({type, "imageAtomicMax", {image, coord_type, type}});
-        functions.push_back({type, "imageAtomicAnd", {image, coord_type, type}});
-        functions.push_back({type, "imageAtomicOr", {image, coord_type, type}});
-        functions.push_back({type, "imageAtomicXor", {image, coord_type, type}});
-        functions.push_back({type, "imageAtomicExchange", {image, coord_type, type}});
-        functions.push_back({type, "imageAtomicCompSwap", {image, coord_type, type, type}});
+        SymbolClass *scalar = prefix == "u" ? i_types[0] : u_types[0];
+        functions.push_back({scalar, "imageAtomicAdd", {image, coord_type, scalar}});
+        functions.push_back({scalar, "imageAtomicMin", {image, coord_type, scalar}});
+        functions.push_back({scalar, "imageAtomicMax", {image, coord_type, scalar}});
+        functions.push_back({scalar, "imageAtomicAnd", {image, coord_type, scalar}});
+        functions.push_back({scalar, "imageAtomicOr", {image, coord_type, scalar}});
+        functions.push_back({scalar, "imageAtomicXor", {image, coord_type, scalar}});
+        functions.push_back({scalar, "imageAtomicExchange", {image, coord_type, scalar}});
+        functions.push_back({scalar, "imageAtomicCompSwap", {image, coord_type, scalar, scalar}});
       }
     }
   }
