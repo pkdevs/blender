@@ -1229,10 +1229,8 @@ static float4 quad_weights_from_irregular_corner(const int x,
 }
 
 template<typename T>
-static std::array<T, 4> interpolate_subdivided_irregular_face(const Span<int> corner_verts,
-                                                              const IndexRange face,
-                                                              const int grid,
-                                                              Span<T> src)
+static std::array<T, 4> interpolate_vert_data_for_subdivided_irregular_face(
+    const Span<int> corner_verts, const IndexRange face, const int grid, Span<T> src)
 {
   std::array<T, 4> values;
   values[0] = src[corner_verts[grid]];
@@ -1307,7 +1305,7 @@ static void interpolate_vert_data_for_flat_layout(const SubdivCCG &subdiv_ccg,
         }
       }
       else {
-        const std::array<T, 4> values = interpolate_subdivided_irregular_face<T>(
+        const std::array<T, 4> values = interpolate_vert_data_for_subdivided_irregular_face<T>(
             corner_verts, face, grid, src);
         for (int y = 0; y < grid_size_1; y++) {
           for (int x = 0; x < grid_size_1; x++) {
@@ -1380,7 +1378,7 @@ static void interpolate_vert_data_for_standard_layout(const SubdivCCG &subdiv_cc
         }
       }
       else {
-        const std::array<T, 4> values = interpolate_subdivided_irregular_face<T>(
+        const std::array<T, 4> values = interpolate_vert_data_for_subdivided_irregular_face<T>(
             corner_verts, face, grid, src);
         for (int y = 0; y < grid_size; y++) {
           for (int x = 0; x < grid_size; x++) {
