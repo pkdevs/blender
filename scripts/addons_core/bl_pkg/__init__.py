@@ -556,7 +556,11 @@ def _remote_asset_library_sync_all_periodic():
             continue
         if not asset_lib.use_remote_url:
             continue
-        remote_asset_library_sync(asset_lib.remote_url, asset_lib.auth_token, Path(asset_lib.path),
+        auth_token = asset_lib.auth_token
+        # Match `AUTH_TOKEN_MAYBE_OVERRIDE_FROM_EXTENSIONS` in `remote_library.cc`.
+        if (auth_token_override := asset_auth_token_from_url(asset_lib.remote_url)) is not None:
+            auth_token = auth_token_override
+        remote_asset_library_sync(asset_lib.remote_url, auth_token, Path(asset_lib.path),
                                   only_if_older_than_sec=REMOTE_ASSET_LIBS_AUTOSYNC_PERIOD_SEC)
 
     # The online essentials library is not listed in the 'asset_libraries' list above, because it's not a preference.
@@ -586,6 +590,63 @@ def _remote_asset_library_restore_backups() -> None:
 
         from _bpy_internal.assets.remote_library import listing_downloader
         listing_downloader.restore_backup_if_exists_locked(asset_lib.remote_url, Path(asset_lib.path))
+
+
+# -----------------------------------------------------------------------------
+# Remote Asset Library Authentication
+
+def _pkg_manifest_from_asset_url(
+        repo_cache_store,
+        remote_url,
+):  # -> tuple[RepoItem, PkgManifest_Normalized] | None:
+    """
+    Return a repository & package-manifest from an asset libraries remote URL.
+    """
+    remote_url = remote_url.rstrip("/")
+    repos_all = [
+        repo_item for repo_item in bpy.context.preferences.extensions.repos
+        # Must match the repositories in the cache store or the manifests below pair with
+        # the wrong repository, see `repo_cache_store_refresh_from_prefs`.
+        if repo_item.enabled and repo_paths_or_none(repo_item)[0] is not None
+    ]
+    if not repos_all:
+        return
+    for i, pkg_manifest_local in enumerate(repo_cache_store.pkg_manifest_from_local_ensure(error_fn=print)):
+        if pkg_manifest_local is None:
+            continue
+        repo_item = repos_all[i]
+        for pkg_idname, value in pkg_manifest_local.items():
+            if value.type != "asset-library":
+                continue
+            if value.asset_library.remote_url.rstrip("/") != remote_url:
+                continue
+            return repos_all[i], value
+
+    return None
+
+
+def asset_auth_token_from_url(remote_url: str) -> str | None:
+    """
+    Given an asset library URL, return it's authentication token
+    in the case the repository is declared as a repository that uses a single repository-wide token.
+    """
+    repo_cache_store = repo_cache_store_ensure()
+    result = _pkg_manifest_from_asset_url(repo_cache_store, remote_url)
+    # When the asset-library isn't from an extensions repository.
+    if result is None:
+        return None
+
+    repo_item, value = result
+
+    # When the manifest requests no authentication, don't pass in a token.
+    if value.asset_library.auth is None:
+        return None
+
+    # Special case, this extensions repository declares all extension-asset libraries
+    assetlib_auth_method = repo_cache_store.assetlib_auth_method_from_directory(repo_item.directory, error_fn=print)
+    if assetlib_auth_method == 'FROM_REPOSITORY':
+        return repo_item.access_token
+    return None
 
 
 # -----------------------------------------------------------------------------

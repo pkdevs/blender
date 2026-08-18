@@ -99,6 +99,9 @@ InfoItemSeq = Sequence[InfoItem]
 
 COMPLETE_ITEM = ('DONE', "")
 
+ASSETLIB_AUTH_METHOD_DEFAULT = 'PER_LIBRARY'
+ASSETLIB_AUTH_METHOD_VALID = {'PER_LIBRARY', 'FROM_REPOSITORY'}
+
 # Time to wait when there is no output, avoid 0 as it causes high CPU usage.
 IDLE_WAIT_ON_READ = 0.05
 # IDLE_WAIT_ON_READ = 0.2
@@ -1673,10 +1676,15 @@ class _RepoDataSource_ABC(metaclass=abc.ABCMeta):
             data = self._data_load(error_fn=error_fn)
         return data
 
+    @abc.abstractmethod
+    def assetlib_auth_method(self) -> str:
+        raise Exception("Caller must define")
+
 
 class _RepoDataSource_JSON(_RepoDataSource_ABC):
     __slots__ = (
         "_data",
+        "_assetlib_auth_method",
 
         "_filepath",
         "_filter_params",
@@ -1694,6 +1702,7 @@ class _RepoDataSource_JSON(_RepoDataSource_ABC):
         self._mtime: int = 0
         self._filter_params: PkgManifest_FilterParams = filter_params
         self._data: RepoRemoteData | None = None
+        self._assetlib_auth_method: str = ASSETLIB_AUTH_METHOD_DEFAULT
 
     def exists(self) -> bool:
         try:
@@ -1781,7 +1790,15 @@ class _RepoDataSource_JSON(_RepoDataSource_ABC):
         self._data = data
         self._mtime = mtime
 
+        assetlib_auth_method = data_dict.get("assetlib_auth_method")
+        if assetlib_auth_method is None or assetlib_auth_method not in ASSETLIB_AUTH_METHOD_VALID:
+            assetlib_auth_method = ASSETLIB_AUTH_METHOD_DEFAULT
+        self._assetlib_auth_method = assetlib_auth_method
+
         return data
+
+    def assetlib_auth_method(self) -> str:
+        return self._assetlib_auth_method
 
 
 class _RepoDataSource_TOML_FILES(_RepoDataSource_ABC):
@@ -1951,6 +1968,12 @@ class _RepoDataSource_TOML_FILES(_RepoDataSource_ABC):
 
         return False
 
+    def assetlib_auth_method(self) -> str:
+        # Dummy, always default, it makes sense because its *only* needed
+        # when the asset library mirrors a remote repository that has authentication
+        # which isn't supported for local (TOML file) repositories.
+        return ASSETLIB_AUTH_METHOD_DEFAULT
+
 
 # -----------------------------------------------------------------------------
 # Public Repo Cache (non-command-line wrapper)
@@ -2118,6 +2141,16 @@ class _RepoCacheEntry:
     def force_local_refresh(self) -> None:
         self._pkg_manifest_local = None
 
+    def assetlib_auth_method(
+            self,
+            *,
+            error_fn: Callable[[Exception], None],
+            ignore_missing: bool = False,
+    ) -> str:
+        # The value is only stored in the remote listing, ensure it has been read.
+        self.pkg_manifest_from_remote_ensure(error_fn=error_fn, ignore_missing=ignore_missing)
+        return self._pkg_manifest_remote_data_source.assetlib_auth_method()
+
 
 class RepoCacheStore:
     __slots__ = (
@@ -2242,11 +2275,22 @@ class RepoCacheStore:
         self._repos.clear()
         self._is_init = False
 
+    def assetlib_auth_method_from_directory(
+            self,
+            directory: str,
+            *,
+            error_fn: Callable[[Exception], None],
+            ignore_missing: bool = False,
+    ) -> str:
+        for repo_entry in self._repos:
+            if directory == repo_entry.directory:
+                return repo_entry.assetlib_auth_method(error_fn=error_fn, ignore_missing=ignore_missing)
+        raise ValueError("Directory {:s} not a known repo".format(directory))
+
 
 # -----------------------------------------------------------------------------
 # Public Repo Lock
 #
-
 # Currently this is based on a path, this gives significant room without the risk of not being large enough.
 # The size limit is used to prevent over-allocating memory in the unlikely case a lot of data
 # is written into the lock file.
