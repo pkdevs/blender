@@ -1,1 +1,1 @@
-Referenced by pull request #162778, Fix: Add nullptr check
+Referenced by pull request #162778, Cleanup: Add missing nullptr check to before accessing id
