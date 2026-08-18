@@ -1891,6 +1891,10 @@ class CyclesPreferences(bpy.types.AddonPreferences):
                 if device_type == 'CPU':
                     continue
 
+                # Skip devices that do not meet the driver requirement.
+                if not device[8]:
+                    continue
+
                 has_device_dlss_support = device[9]
                 if has_device_dlss_support and self.find_existing_device_entry(device).use:
                     return True
