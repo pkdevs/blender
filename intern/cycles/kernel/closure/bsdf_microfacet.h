@@ -1457,12 +1457,14 @@ ccl_device_inline FresnelCoeff bsdf_thin_glass_tinted(const bool reflective,
 
   /* `tint.transmittance` gives the transmittance through the thin glass at normal incidence due to
    * absorption. Compute the transmittance at oblique angle according to Beer-Lambert law. */
-  const Spectrum c = is_zero(cos_theta_t) ? zero_spectrum() : power(tint.t, -1.0f / cos_theta_t);
+  const Spectrum c = is_zero(cos_theta_t) ? zero_spectrum() :
+                                            power(tint.transmittance, -1.0f / cos_theta_t);
 
   /* Account for internal reflections, t' = ct1t2 + ct1(r2c)^2t2 + ct1(r2c)^4t2 + ... */
-  const Spectrum transmittance = safe_divide(c * sqr(f.t), 1.0f - sqr(f.r * c));
+  const Spectrum transmittance = safe_divide(c * sqr(f.transmittance),
+                                             1.0f - sqr(f.reflectance * c));
   /* r' = r1 + ct1r2ct2 + ct1(r2c)^3t2 + ... */
-  const Spectrum reflectance = f.r * (tint.r + transmittance * c);
+  const Spectrum reflectance = f.reflectance * (tint.reflectance + transmittance * c);
 
   return {reflectance, transmittance};
 }
