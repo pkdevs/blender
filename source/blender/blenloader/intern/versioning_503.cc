@@ -279,104 +279,102 @@ void blo_do_versions_503(FileData * /*fd*/, Library * /*lib*/, Main *bmain)
         sd->paint.tile_offset[2] = 1.0f;
       }
     }
+  }
 
-    if (!MAIN_VERSION_FILE_ATLEAST(bmain, 503, 12)) {
-      for (Brush &brush : bmain->brushes) {
-        if (brush.ob_mode & OB_MODE_WEIGHT_PAINT || brush.ob_mode & OB_MODE_VERTEX_PAINT) {
-          if (brush.flag & BRUSH_FRONTFACE_FALLOFF_DEPRECATED &&
-              brush.falloff_angle_legacy != 0.0f)
-          {
-            switch (brush.falloff_shape) {
-              case PAINT_FALLOFF_SHAPE_SPHERE:
-                brush.mesh_automasking_settings->flags |= BRUSH_AUTOMASKING_BRUSH_NORMAL;
-                brush.mesh_automasking_settings->start_normal_falloff = 0.5f;
-                brush.mesh_automasking_settings->start_normal_limit = brush.falloff_angle_legacy;
-                break;
-              case PAINT_FALLOFF_SHAPE_TUBE:
-                brush.mesh_automasking_settings->flags |= BRUSH_AUTOMASKING_VIEW_NORMAL;
-                brush.mesh_automasking_settings->view_normal_falloff = 0.5f;
-                brush.mesh_automasking_settings->view_normal_limit = brush.falloff_angle_legacy;
-                break;
-            }
-          }
-        }
-      }
-    }
-
-    if (!MAIN_VERSION_FILE_ATLEAST(bmain, 503, 13)) {
-      auto validate_active_index_fn = [](const AttributeOwner &owner, int &active_index) -> void {
-        const bke::AttributeStorage *storage = owner.get_storage();
-        if ((active_index < 0) || (active_index >= storage->count()) ||
-            !bke::allow_procedural_attribute_access(storage->at_index(active_index).name()))
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 503, 12)) {
+    for (Brush &brush : bmain->brushes) {
+      if (brush.ob_mode & OB_MODE_WEIGHT_PAINT || brush.ob_mode & OB_MODE_VERTEX_PAINT) {
+        if (brush.flag & BRUSH_FRONTFACE_FALLOFF_DEPRECATED && brush.falloff_angle_legacy != 0.0f)
         {
-          active_index = -1;
-        }
-      };
-
-      for (Mesh &mesh : bmain->meshes) {
-        validate_active_index_fn(AttributeOwner::from_id(&mesh.id), mesh.attributes_active_index);
-      }
-      for (Curves &curves : bmain->hair_curves) {
-        validate_active_index_fn(AttributeOwner::from_id(&curves.id),
-                                 curves.geometry.attributes_active_index);
-      }
-      for (GreasePencil &grease_pencil : bmain->grease_pencils) {
-        validate_active_index_fn(AttributeOwner::from_id(&grease_pencil.id),
-                                 grease_pencil.attributes_active_index);
-        /* Also check the attributes_active_index in the individual drawings */
-        for (GreasePencilDrawingBase *drawing_base : grease_pencil.drawings()) {
-          if (drawing_base->type == GP_DRAWING) {
-            GreasePencilDrawing *drawing = reinterpret_cast<GreasePencilDrawing *>(drawing_base);
-            validate_active_index_fn(
-                AttributeOwner(AttributeOwnerType::GreasePencilDrawing, drawing),
-                drawing->geometry.attributes_active_index);
-          }
-        }
-      }
-      for (PointCloud &pointcloud : bmain->pointclouds) {
-        validate_active_index_fn(AttributeOwner::from_id(&pointcloud.id),
-                                 pointcloud.attributes_active_index);
-      }
-    }
-
-    if (!MAIN_VERSION_FILE_ATLEAST(bmain, 503, 14)) {
-      for (bScreen &screen : bmain->screens) {
-        for (ScrArea &area : screen.areabase) {
-          for (SpaceLink &space : area.spacedata) {
-            if (space.spacetype == SPACE_OUTLINER) {
-              SpaceOutliner *space_outliner = reinterpret_cast<SpaceOutliner *>(&space);
-              space_outliner->flag |= SO_EXPAND_ON_FOCUS;
-            }
+          switch (brush.falloff_shape) {
+            case PAINT_FALLOFF_SHAPE_SPHERE:
+              brush.mesh_automasking_settings->flags |= BRUSH_AUTOMASKING_BRUSH_NORMAL;
+              brush.mesh_automasking_settings->start_normal_falloff = 0.5f;
+              brush.mesh_automasking_settings->start_normal_limit = brush.falloff_angle_legacy;
+              break;
+            case PAINT_FALLOFF_SHAPE_TUBE:
+              brush.mesh_automasking_settings->flags |= BRUSH_AUTOMASKING_VIEW_NORMAL;
+              brush.mesh_automasking_settings->view_normal_falloff = 0.5f;
+              brush.mesh_automasking_settings->view_normal_limit = brush.falloff_angle_legacy;
+              break;
           }
         }
       }
     }
+  }
 
-    if (!MAIN_VERSION_FILE_ATLEAST(bmain, 503, 16)) {
-      for (Brush &brush : bmain->brushes) {
-        if (ELEM(brush.ob_mode,
-                 OB_MODE_SCULPT,
-                 OB_MODE_VERTEX_PAINT,
-                 OB_MODE_SCULPT_GREASE_PENCIL,
-                 OB_MODE_VERTEX_GREASE_PENCIL))
-        {
-          brush.unified_paint_flags |= BRUSH_USE_UNIFIED_PAINT_SIZE |
-                                       BRUSH_USE_UNIFIED_PAINT_COLOR;
-        }
-        if (ELEM(brush.ob_mode, OB_MODE_WEIGHT_PAINT, OB_MODE_WEIGHT_GREASE_PENCIL)) {
-          brush.unified_paint_flags |= BRUSH_USE_UNIFIED_PAINT_SIZE;
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 503, 13)) {
+    auto validate_active_index_fn = [](const AttributeOwner &owner, int &active_index) -> void {
+      const bke::AttributeStorage *storage = owner.get_storage();
+      if ((active_index < 0) || (active_index >= storage->count()) ||
+          !bke::allow_procedural_attribute_access(storage->at_index(active_index).name()))
+      {
+        active_index = -1;
+      }
+    };
+
+    for (Mesh &mesh : bmain->meshes) {
+      validate_active_index_fn(AttributeOwner::from_id(&mesh.id), mesh.attributes_active_index);
+    }
+    for (Curves &curves : bmain->hair_curves) {
+      validate_active_index_fn(AttributeOwner::from_id(&curves.id),
+                               curves.geometry.attributes_active_index);
+    }
+    for (GreasePencil &grease_pencil : bmain->grease_pencils) {
+      validate_active_index_fn(AttributeOwner::from_id(&grease_pencil.id),
+                               grease_pencil.attributes_active_index);
+      /* Also check the attributes_active_index in the individual drawings */
+      for (GreasePencilDrawingBase *drawing_base : grease_pencil.drawings()) {
+        if (drawing_base->type == GP_DRAWING) {
+          GreasePencilDrawing *drawing = reinterpret_cast<GreasePencilDrawing *>(drawing_base);
+          validate_active_index_fn(
+              AttributeOwner(AttributeOwnerType::GreasePencilDrawing, drawing),
+              drawing->geometry.attributes_active_index);
         }
       }
     }
+    for (PointCloud &pointcloud : bmain->pointclouds) {
+      validate_active_index_fn(AttributeOwner::from_id(&pointcloud.id),
+                               pointcloud.attributes_active_index);
+    }
+  }
 
-    if (!MAIN_VERSION_FILE_ATLEAST(bmain, 503, 17)) {
-      for (bScreen &screen : bmain->screens) {
-        for (ScrArea &area : screen.areabase) {
-          for (SpaceLink &space : area.spacedata) {
-            if (space.spacetype == SPACE_IMAGE) {
-              SpaceImage *sima = reinterpret_cast<SpaceImage *>(&space);
-              sima->flag |= SI_SHOW_SEAMS;
-            }
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 503, 14)) {
+    for (bScreen &screen : bmain->screens) {
+      for (ScrArea &area : screen.areabase) {
+        for (SpaceLink &space : area.spacedata) {
+          if (space.spacetype == SPACE_OUTLINER) {
+            SpaceOutliner *space_outliner = reinterpret_cast<SpaceOutliner *>(&space);
+            space_outliner->flag |= SO_EXPAND_ON_FOCUS;
+          }
+        }
+      }
+    }
+  }
+
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 503, 16)) {
+    for (Brush &brush : bmain->brushes) {
+      if (ELEM(brush.ob_mode,
+               OB_MODE_SCULPT,
+               OB_MODE_VERTEX_PAINT,
+               OB_MODE_SCULPT_GREASE_PENCIL,
+               OB_MODE_VERTEX_GREASE_PENCIL))
+      {
+        brush.unified_paint_flags |= BRUSH_USE_UNIFIED_PAINT_SIZE | BRUSH_USE_UNIFIED_PAINT_COLOR;
+      }
+      if (ELEM(brush.ob_mode, OB_MODE_WEIGHT_PAINT, OB_MODE_WEIGHT_GREASE_PENCIL)) {
+        brush.unified_paint_flags |= BRUSH_USE_UNIFIED_PAINT_SIZE;
+      }
+    }
+  }
+
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 503, 17)) {
+    for (bScreen &screen : bmain->screens) {
+      for (ScrArea &area : screen.areabase) {
+        for (SpaceLink &space : area.spacedata) {
+          if (space.spacetype == SPACE_IMAGE) {
+            SpaceImage *sima = reinterpret_cast<SpaceImage *>(&space);
+            sima->flag |= SI_SHOW_SEAMS;
           }
         }
       }
