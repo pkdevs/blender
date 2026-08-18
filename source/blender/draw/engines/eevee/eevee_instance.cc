@@ -170,7 +170,7 @@ void Instance::init(const int2 &output_res,
       sampling.reset();
     }
     if (assign_if_different(is_viewport_compositor_enabled,
-                            draw_ctx->is_viewport_compositor_enabled()))
+                            draw_ctx->is_viewport_compositor_used()))
     {
       sampling.reset();
     }
