@@ -50,11 +50,7 @@ struct PipelineState {
     return *this;
   }
 
-  Self &logic_op_xor()
-  {
-    state_.logic_op_xor = 1;
-    return *this;
-  }
+
 
   Self &primitive(GPUPrimType primitive_type)
   {
