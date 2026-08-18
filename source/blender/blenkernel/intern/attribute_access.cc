@@ -570,7 +570,9 @@ GAttributeWriter MutableAttributeAccessor::convert_or_add_for_write(
     if (this->add_override(name, domain, data_type, attributeInit)) {
       return this->lookup_for_write(name);
     }
-    /* Transfer failed. */
+    /* Transfer failed, convert_or_add_for_write() should not be used for attributes
+     * that can't be converted. */
+    BLI_assert_unreachable();
     type.destruct_n(converted_data, data_on_domain.size());
     MEM_delete_void(converted_data);
     return {};
