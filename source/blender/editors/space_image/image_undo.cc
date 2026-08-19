@@ -917,14 +917,14 @@ static bool image_undosys_step_encode(bContext *C, Main * /*bmain*/, UndoStep *u
 static void image_undosys_step_decode_undo_impl(ImageUndoStep *us)
 {
   BLI_assert(us->step.is_applied == true);
-  uhandle_restore_list(&us->handles, true, true);
+  uhandle_restore_list(&us->handles, true);
   us->step.is_applied = false;
 }
 
 static void image_undosys_step_decode_redo_impl(ImageUndoStep *us)
 {
   BLI_assert(us->step.is_applied == false);
-  uhandle_restore_list(&us->handles, false, true);
+  uhandle_restore_list(&us->handles, false);
   us->step.is_applied = true;
 }
 
