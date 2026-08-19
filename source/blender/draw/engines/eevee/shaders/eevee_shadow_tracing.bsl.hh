@@ -161,7 +161,7 @@ ShadowRayDirectional shadow_ray_generate_directional(LightData light,
   float max_tracing_distance = texel_radius * float(SHADOW_PAGE_RES << SHADOW_TILEMAP_LOD);
   float max_tracing_angle_cos = cos_from_tan(max_tracing_distance / dist_to_near_plane);
 /* Taking max of cosines to get the minimum of the angles. */
-#ifndef __BSL__
+#ifndef BSL_530
   float shadow_angle_cos = max(light.sun().shadow_angle_cos, max_tracing_angle_cos);
 #else
   float shadow_angle_cos = max(light.sun.shadow_angle_cos, max_tracing_angle_cos);
@@ -239,7 +239,7 @@ ShadowRayPunctual shadow_ray_generate_punctual(LightData light, float2 random_2d
 
   float clip_near = intBitsToFloat(light.clip_near);
 
-#ifndef __BSL__
+#ifndef BSL_530
   float shape_radius = light.spot().local.shadow_radius;
 #else
   float shape_radius = light.spot.local.shadow_radius;
@@ -250,7 +250,7 @@ ShadowRayPunctual shadow_ray_generate_punctual(LightData light, float2 random_2d
 
   float3 point_on_light_shape;
   if (is_area_light(light.type)) {
-#ifndef __BSL__
+#ifndef BSL_530
     random_2d *= light.area().size * light.area().shadow_scale;
 #else
     random_2d *= light.area.size * light.area.shadow_scale;
@@ -280,7 +280,7 @@ ShadowRayPunctual shadow_ray_generate_punctual(LightData light, float2 random_2d
 
   float3 direction = point_on_light_shape - lP;
 
-#ifndef __BSL__
+#ifndef BSL_530
   float3 shadow_position = light.local().local.shadow_position;
 #else
   float3 shadow_position = light.local.local.shadow_position;
@@ -378,7 +378,7 @@ float shadow_texel_radius_at_position([[resource_table]] const Uniform &uni,
     float3 lP = transform_direction_transposed(light.object_to_world, P);
     lP -= light.position();
 
-#ifndef __BSL__
+#ifndef BSL_530
     LightSunData sun = light.sun();
 #else
     LightSunData sun = light.sun;
@@ -403,7 +403,7 @@ float shadow_texel_radius_at_position([[resource_table]] const Uniform &uni,
 
     float3 lP = light_world_to_local_point(light, P);
 
-#ifndef __BSL__
+#ifndef BSL_530
     lP -= light.local().local.shadow_position;
 #else
     lP -= light.local.local.shadow_position;
@@ -508,7 +508,7 @@ float shadow_eval([[resource_table]] ShadowRenderData &srd,
     L = light.z_axis();
   }
   else {
-#ifndef __BSL__
+#ifndef BSL_530
     L = light.position() + light.local().local.shadow_position - P;
 #else
     L = light.position() + light.local.local.shadow_position - P;

@@ -88,7 +88,7 @@ struct Resources {
   {
     [[resource_table]] const Uniform &uni = uniforms;
 
-#ifndef __BSL__
+#ifndef BSL_530
     int level_min = light.sun().clipmap_lod_min;
     int level_max = light.sun().clipmap_lod_max;
 #else
@@ -144,7 +144,7 @@ struct Resources {
 
     float2 clipmap_origin = float2(origin_offset) * tile_size;
 
-#ifndef __BSL__
+#ifndef BSL_530
     LightSunData sun_data = light.sun();
 #else
     LightSunData sun_data = light.sun;
@@ -154,7 +154,7 @@ struct Resources {
     /* Number of levels is limited to 32 by `clipmap_level_range()` for this reason. */
     sun_data.clipmap_base_offset_pos = base_offset_pos;
     sun_data.clipmap_base_offset_neg = int2(0);
-#ifndef __BSL__
+#ifndef BSL_530
     light.sun() = sun_data;
 #else
     light.sun = sun_data;
@@ -169,7 +169,7 @@ struct Resources {
     float3 ls_camera_position = transform_direction_transposed(light.object_to_world,
                                                                ws_camera_position);
 
-#ifndef __BSL__
+#ifndef BSL_530
     int level_min = light.sun().clipmap_lod_min;
     int level_max = light.sun().clipmap_lod_max;
 #else
@@ -215,7 +215,7 @@ struct Resources {
     light.object_to_world.y.w = ls_camera_position.y;
     light.object_to_world.z.w = ls_camera_position.z;
 
-#ifndef __BSL__
+#ifndef BSL_530
     LightSunData sun_data = light.sun();
 #else
     LightSunData sun_data = light.sun;
@@ -226,7 +226,7 @@ struct Resources {
     sun_data.clipmap_base_offset_pos = pos_offset;
     sun_data.clipmap_base_offset_neg = neg_offset;
 
-#ifndef __BSL__
+#ifndef BSL_530
     light.sun() = sun_data;
 #else
     light.sun = sun_data;
@@ -319,7 +319,7 @@ void shadow_setup_main([[resource_table]] Resources &srt,
 
     if (light.shadow_jitter && uni.uniform_buf.shadow.use_jitter) {
       /* TODO(fclem): Remove atan here. We only need the cosine of the angle. */
-#ifndef __BSL__
+#ifndef BSL_530
       float shape_angle = atan_fast(light.sun().shape_radius);
 #else
       float shape_angle = atan_fast(light.sun.shape_radius);
@@ -331,7 +331,7 @@ void shadow_setup_main([[resource_table]] Resources &srt,
 
       shadow_direction = transform_direction(light.object_to_world, shadow_direction);
 
-#ifndef __BSL__
+#ifndef BSL_530
       if (light.sun().shadow_angle == 0.0f) {
         /* The shape is a point. There is nothing to jitter.
          * `shape_radius` is clamped to a minimum for precision reasons, so `shadow_angle` is
@@ -363,7 +363,7 @@ void shadow_setup_main([[resource_table]] Resources &srt,
     /* Local lights. */
     float3 position_on_light = float3(0.0f);
 
-#ifndef __BSL__
+#ifndef BSL_530
     if (light.shadow_jitter && uni.uniform_buf.shadow.use_jitter) {
       float3 rand = sampling.rng_3D_get(SAMPLING_SHADOW_I);
 

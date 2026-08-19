@@ -48,7 +48,7 @@ struct ShadowRenderData {
 
   float punctual_sample_get(LightData light, float3 P) const
   {
-#ifndef __BSL__
+#ifndef BSL_530
     float3 shadow_position = light.local().local.shadow_position;
 #else
     float3 shadow_position = light.local.local.shadow_position;

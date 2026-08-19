@@ -53,13 +53,13 @@ void cull_main([[resource_table]] Cull &srt,
       light.color = srt.sunlight_buf[l_idx].color;
       light.object_to_world = srt.sunlight_buf[l_idx].object_to_world;
 
-#ifndef __BSL__
+#ifndef BSL_530
       LightSunData sun_data = light.sun();
 #else
       LightSunData sun_data = light.sun;
 #endif
       sun_data.direction = srt.sunlight_buf[l_idx].object_to_world.z_axis();
-#ifndef __BSL__
+#ifndef BSL_530
       light.sun() = sun_data;
 #else
       light.sun = sun_data;
@@ -72,7 +72,7 @@ void cull_main([[resource_table]] Cull &srt,
   }
 
 /* Do not select 0 power lights. */
-#ifndef __BSL__
+#ifndef BSL_530
   if (light.local().local.influence_radius_max < 1e-8f) {
     return;
   }
@@ -86,7 +86,7 @@ void cull_main([[resource_table]] Cull &srt,
   switch (light.type) {
     case LIGHT_SPOT_SPHERE:
     case LIGHT_SPOT_DISK: {
-#ifndef __BSL__
+#ifndef BSL_530
       LightSpotData spot = light.spot();
 #else
       LightSpotData spot = light.spot;
@@ -112,7 +112,7 @@ void cull_main([[resource_table]] Cull &srt,
     case LIGHT_OMNI_SPHERE:
     case LIGHT_OMNI_DISK:
       sphere.center = light.position();
-#ifndef __BSL__
+#ifndef BSL_530
       sphere.radius = light.local().local.influence_radius_max;
 #else
       sphere.radius = light.local.local.influence_radius_max;
@@ -252,7 +252,7 @@ void zbin_main([[resource_table]] ZBinning &srt,
     LightData light = srt.light_buf[index];
     float3 P = light.position();
     /* TODO(fclem): Could have better bounds for spot and area lights. */
-#ifndef __BSL__
+#ifndef BSL_530
     float radius = light.local().local.influence_radius_max;
 #else
     float radius = light.local.local.influence_radius_max;
@@ -433,7 +433,7 @@ void tile_main([[resource_table]] const draw::View &views,
     float3 v_right = view.normal_world_to_view(light.x_axis());
     float3 v_up = view.normal_world_to_view(light.y_axis());
     float3 v_back = view.normal_world_to_view(light.z_axis());
-#ifndef __BSL__
+#ifndef BSL_530
     float radius = light.local().local.influence_radius_max;
 #else
     float radius = light.local.local.influence_radius_max;

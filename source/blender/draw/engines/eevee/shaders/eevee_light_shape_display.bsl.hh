@@ -28,7 +28,7 @@ struct ShapeDisplayFragOut {
 float shape_display_light_radiance_get(LightData light)
 {
   if (is_sun_light(light.type)) {
-#ifndef __BSL__
+#ifndef BSL_530
     float radius = light.sun().shape_radius;
 #else
     float radius = light.sun.shape_radius;
@@ -37,7 +37,7 @@ float shape_display_light_radiance_get(LightData light)
   }
 
   if (is_area_light(light.type)) {
-#ifndef __BSL__
+#ifndef BSL_530
     float area = light.area().size.x * light.area().size.y * 4.0f;
 #else
     float area = light.area.size.x * light.area.size.y * 4.0f;
@@ -48,7 +48,7 @@ float shape_display_light_radiance_get(LightData light)
     return 1.0f / max(M_PI * area, 1e-20f);
   }
 
-#ifndef __BSL__
+#ifndef BSL_530
   float radius = light.local().local.shape_radius;
 #else
   float radius = light.local.local.shape_radius;
@@ -60,14 +60,14 @@ float shape_display_light_radiance_get(LightData light)
 float3 shape_display_light_position_get(const ViewMatrices view, LightData light, float2 quad_pos)
 {
   if (is_area_light(light.type)) {
-#ifndef __BSL__
+#ifndef BSL_530
     return transform_point(light.object_to_world, float3(quad_pos * light.area().size, 0.0f));
 #else
     return transform_point(light.object_to_world, float3(quad_pos * light.area.size, 0.0f));
 #endif
   }
 
-#ifndef __BSL__
+#ifndef BSL_530
   float radius = light.local().local.shape_radius;
 #else
   float radius = light.local.local.shape_radius;
@@ -174,7 +174,7 @@ void shape_display_frag([[resource_table]] const draw::View &views,
   float3 V = view.world_incident_vector(P);
 
   if (is_sun_light(light_type)) {
-#ifndef __BSL__
+#ifndef BSL_530
     float3 sun_direction = light.sun().direction;
     float sun_cos = cos_from_tan(light.sun().shape_radius);
 #else

@@ -226,7 +226,7 @@ void dof_coc_tile_pack(CocTile tile, float3 &out_fg, float3 &out_bg)
   out_bg.z = tile.bg_min_intersectable_coc;
 }
 
-#ifndef __BSL__
+#ifndef BSL_530
 /* WORKAROUND(@fclem): GLSL compilers differs in what qualifiers are requires to pass images as
  * parameters. Workaround by using defines. */
 #  define dof_coc_tile_load(tiles_fg_img_, tiles_bg_img_, texel_) \

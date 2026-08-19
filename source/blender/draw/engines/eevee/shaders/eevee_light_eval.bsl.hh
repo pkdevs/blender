@@ -118,7 +118,7 @@ template<bool is_transmission> struct EvalCtx {
       return;
     }
 
-#ifndef __BSL__
+#ifndef BSL_530
 #  if defined(SRT_CONSTANT_shadow_ray_count)
     int ray_count = shadow_ray_count;
     int ray_step_count = shadow_ray_step_count;

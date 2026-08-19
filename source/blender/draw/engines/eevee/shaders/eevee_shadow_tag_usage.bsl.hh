@@ -56,7 +56,7 @@ struct TagUsage {
 
     float3 lP = light_world_to_local_direction(light, P);
 
-#ifndef __BSL__
+#ifndef BSL_530
     level = clamp(level, light.sun().clipmap_lod_min, light.sun().clipmap_lod_max);
 #else
     level = clamp(level, light.sun.clipmap_lod_min, light.sun.clipmap_lod_max);
@@ -78,7 +78,7 @@ struct TagUsage {
 
     float3 lP = light_world_to_local_direction(light, P);
 
-#ifndef __BSL__
+#ifndef BSL_530
     LightSunData sun = light.sun();
 #else
     LightSunData sun = light.sun;
@@ -127,7 +127,7 @@ struct TagUsage {
 
     float3 lP = light_world_to_local_point(light, P);
     float dist_to_light = max(length(lP) - radius, 1e-5f);
-#ifndef __BSL__
+#ifndef BSL_530
     if (dist_to_light > light.local().local.influence_radius_max) {
       return;
     }

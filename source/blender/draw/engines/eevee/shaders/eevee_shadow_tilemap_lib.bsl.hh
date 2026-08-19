@@ -171,7 +171,7 @@ float shadow_directional_level_fractional(LightData light, float3 lP)
     /* The narrowing need to be stronger since the tile-map position is not rounded but floored. */
     constexpr float narrowing = float(SHADOW_TILEMAP_RES) / (float(SHADOW_TILEMAP_RES) - 2.5001f);
 /* Since we want half of the size, bias the level by -1. */
-#ifndef __BSL__
+#ifndef BSL_530
     float clipmap_lod_min_minus_one = float(light.sun().clipmap_lod_min - 1);
 #else
     float clipmap_lod_min_minus_one = float(light.sun.clipmap_lod_min - 1);
@@ -181,7 +181,7 @@ float shadow_directional_level_fractional(LightData light, float3 lP)
     /* Apply cascade lod bias. Light bias is not supported here. */
     lod += clipmap_lod_min_minus_one;
   }
-#ifndef __BSL__
+#ifndef BSL_530
   return clamp(lod, float(light.sun().clipmap_lod_min), float(light.sun().clipmap_lod_max));
 #else
   return clamp(lod, float(light.sun.clipmap_lod_min), float(light.sun.clipmap_lod_max));
@@ -287,7 +287,7 @@ int2 shadow_decompress_grid_offset(eLightType light_type,
  */
 ShadowCoordinates shadow_directional_coordinates_at_level(LightData light, float3 lP, int level)
 {
-#ifndef __BSL__
+#ifndef BSL_530
   /* This difference needs to be less than 32 for the later shift to be valid.
    * This is ensured by `ShadowDirectional::clipmap_level_range()`. */
   int level_relative = level - light.sun().clipmap_lod_min;

@@ -25,7 +25,7 @@ float3 volume_light(LightData light, const bool is_directional, LightVector lv)
 {
   float power = 1.0f;
   if (!is_directional) {
-#ifndef __BSL__
+#ifndef BSL_530
     float light_radius = light.local().local.shape_radius;
 #else
     float light_radius = light.local.local.shape_radius;
