@@ -1865,12 +1865,15 @@ void object_duplilist_preview(Depsgraph *depsgraph,
   }
 }
 
-bool object_duplilist_debug_view(Depsgraph *depsgraph, Object *ob_eval, DupliList &r_duplilist)
+bool object_duplilist_debug_view(Depsgraph *depsgraph,
+                                 Object *ob_eval,
+                                 const int modifier_persistent_uid,
+                                 DupliList &r_duplilist)
 {
   Object *ob_orig = DEG_get_original(ob_eval);
   const int required_mode = eModifierMode_Realtime |
                             (BKE_object_is_in_editmode(ob_orig) ? eModifierMode_Editmode : 0);
-  ModifierData *md_orig = BKE_object_active_modifier(ob_orig);
+  ModifierData *md_orig = BKE_modifiers_findby_persistent_uid(ob_orig, modifier_persistent_uid);
   if (md_orig == nullptr || md_orig->type != eModifierType_Nodes ||
       !BKE_modifier_is_enabled(DEG_get_input_scene(depsgraph), md_orig, required_mode))
   {

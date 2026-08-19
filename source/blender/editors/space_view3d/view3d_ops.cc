@@ -17,7 +17,10 @@
 #include "BKE_blender_copybuffer.hh"
 #include "BKE_blendfile.hh"
 #include "BKE_context.hh"
+#include "BKE_object.hh"
 #include "BKE_report.hh"
+
+#include "DEG_depsgraph_query.hh"
 
 #include "BLO_readfile.hh"
 
@@ -180,6 +183,53 @@ static void VIEW3D_OT_pastebuffer(wmOperatorType *ot)
                   "Put pasted objects in the active collection");
 }
 
+static wmOperatorStatus debug_view_pin_exec(bContext *C, wmOperator * /*op*/)
+{
+  View3D *v3d = CTX_wm_view3d(C);
+  if (!v3d) {
+    return OPERATOR_CANCELLED;
+  }
+  if (v3d->debug_view_pin) {
+    v3d->debug_view_pin = false;
+    v3d->debug_view_pin_object = nullptr;
+    v3d->debug_view_pin_modifier_uid = 0;
+  }
+  else {
+    DEGDebugViewRequest request{};
+    if (!ED_view3d_debug_view_request(*v3d, CTX_data_active_object(C), request)) {
+      return OPERATOR_CANCELLED;
+    }
+    v3d->debug_view_pin = true;
+    v3d->debug_view_pin_object = const_cast<Object *>(request.object);
+    v3d->debug_view_pin_modifier_uid = request.modifier_persistent_uid;
+  }
+
+  WM_event_add_notifier(C, NC_SPACE | ND_SPACE_VIEW3D, v3d);
+  return OPERATOR_FINISHED;
+}
+
+static bool debug_view_pin_poll(bContext *C)
+{
+  View3D *v3d = CTX_wm_view3d(C);
+  if (!v3d || v3d->debug_view_pin) {
+    return v3d != nullptr;
+  }
+
+  DEGDebugViewRequest request{};
+  return ED_view3d_debug_view_request(*v3d, CTX_data_active_object(C), request);
+}
+
+static void VIEW3D_OT_debug_view_pin(wmOperatorType *ot)
+{
+  ot->name = "Pin Debug View Context";
+  ot->description =
+      "Pin the persistent Debug View context to the current object and Geometry Nodes modifier";
+  ot->idname = "VIEW3D_OT_debug_view_pin";
+
+  ot->exec = debug_view_pin_exec;
+  ot->poll = debug_view_pin_poll;
+}
+
 /** \} */
 
 /* -------------------------------------------------------------------- */
@@ -238,6 +288,7 @@ void view3d_operatortypes()
   WM_operatortype_append(VIEW3D_OT_navigate);
   WM_operatortype_append(VIEW3D_OT_copybuffer);
   WM_operatortype_append(VIEW3D_OT_pastebuffer);
+  WM_operatortype_append(VIEW3D_OT_debug_view_pin);
 
   WM_operatortype_append(VIEW3D_OT_object_mode_pie_or_toggle);
 

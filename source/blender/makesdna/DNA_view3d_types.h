@@ -821,6 +821,12 @@ struct View3D {
   /** Path to the viewer node that is currently previewed. This is retrieved from the workspace. */
   ViewerPath viewer_path;
 
+  /** Persistent Debug View context pin. */
+  struct Object *debug_view_pin_object = nullptr;
+  int debug_view_pin_modifier_uid = 0;
+  char debug_view_pin = false;
+  char _pad_debug_view_pin[3] = {};
+
   /** Runtime evaluation data (keep last). */
   View3D_Runtime runtime;
 };

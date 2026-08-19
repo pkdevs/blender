@@ -15,6 +15,7 @@
 #include "DNA_curve_types.h"
 #include "DNA_gpencil_legacy_types.h"
 #include "DNA_lightprobe_types.h"
+#include "DNA_modifier_types.h"
 #include "DNA_object_types.h"
 #include "DNA_scene_types.h"
 #include "DNA_view3d_types.h"
@@ -39,6 +40,7 @@
 #include "BKE_lib_remap.hh"
 #include "BKE_library.hh"
 #include "BKE_main.hh"
+#include "BKE_modifier.hh"
 #include "BKE_object.hh"
 #include "BKE_scene.hh"
 #include "BKE_screen.hh"
@@ -77,6 +79,7 @@
 
 #include "DEG_depsgraph.hh"
 #include "DEG_depsgraph_build.hh"
+#include "DEG_depsgraph_query.hh"
 
 #include "view3d_intern.hh" /* own include */
 #include "view3d_navigate.hh"
@@ -190,6 +193,42 @@ void ED_view3d_shade_update(Main *bmain, View3D *v3d, ScrArea *area)
       }
     }
   }
+}
+
+bool ED_view3d_debug_view_request(View3D &v3d,
+                                  const Object *active_object,
+                                  DEGDebugViewRequest &r_request)
+{
+  if (v3d.debug_view_pin) {
+    const Object *pinned_object = v3d.debug_view_pin_object;
+    const ModifierData *pinned_modifier = (pinned_object && v3d.debug_view_pin_modifier_uid > 0) ?
+                                              BKE_modifiers_findby_persistent_uid(
+                                                  pinned_object, v3d.debug_view_pin_modifier_uid) :
+                                              nullptr;
+    if (pinned_modifier && pinned_modifier->type == eModifierType_Nodes) {
+      r_request.object = pinned_object;
+      r_request.modifier_persistent_uid = v3d.debug_view_pin_modifier_uid;
+      return true;
+    }
+
+    v3d.debug_view_pin = false;
+    v3d.debug_view_pin_object = nullptr;
+    v3d.debug_view_pin_modifier_uid = 0;
+  }
+
+  const Object *active_object_orig = active_object ? DEG_get_original(active_object) : nullptr;
+  const ModifierData *active_modifier = active_object_orig ?
+                                            BKE_object_active_modifier(active_object_orig) :
+                                            nullptr;
+  if (!active_modifier || active_modifier->type != eModifierType_Nodes ||
+      active_modifier->persistent_uid <= 0)
+  {
+    return false;
+  }
+
+  r_request.object = active_object_orig;
+  r_request.modifier_persistent_uid = active_modifier->persistent_uid;
+  return true;
 }
 
 /* ******************** default callbacks for view3d space ***************** */
@@ -1559,6 +1598,14 @@ static void view3d_id_remap_v3d(ScrArea *area,
       }
     }
   }
+
+  if (mappings.apply(reinterpret_cast<ID **>(&v3d->debug_view_pin_object),
+                     ID_REMAP_APPLY_DEFAULT) == ID_REMAP_RESULT_SOURCE_UNASSIGNED)
+  {
+    v3d->debug_view_pin = false;
+    v3d->debug_view_pin_object = nullptr;
+    v3d->debug_view_pin_modifier_uid = 0;
+  }
 }
 
 static void view3d_id_remap(ScrArea *area, SpaceLink *slink, const bke::id::IDRemapper &mappings)
@@ -1588,6 +1635,7 @@ static void view3d_foreach_id(SpaceLink *space_link, LibraryForeachIDData *data)
 
   BKE_LIB_FOREACHID_PROCESS_IDSUPER(data, v3d->camera, IDWALK_CB_DIRECT_WEAK_LINK);
   BKE_LIB_FOREACHID_PROCESS_IDSUPER(data, v3d->ob_center, IDWALK_CB_DIRECT_WEAK_LINK);
+  BKE_LIB_FOREACHID_PROCESS_IDSUPER(data, v3d->debug_view_pin_object, IDWALK_CB_DIRECT_WEAK_LINK);
   if (v3d->localvd) {
     BKE_LIB_FOREACHID_PROCESS_IDSUPER(data, v3d->localvd->camera, IDWALK_CB_DIRECT_WEAK_LINK);
 

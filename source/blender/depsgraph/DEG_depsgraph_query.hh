@@ -220,6 +220,12 @@ enum DegIterFlag {
 };
 ENUM_OPERATORS(DegIterFlag)
 
+/** The object and modifier context used to evaluate persistent Debug Views. */
+struct DEGDebugViewRequest {
+  const Object *object = nullptr;
+  int modifier_persistent_uid = 0;
+};
+
 struct DEGObjectIterSettings {
   Depsgraph *depsgraph;
   /**
@@ -237,10 +243,8 @@ struct DEGObjectIterSettings {
    */
   const ViewerPath *viewer_path;
 
-  /**
-   * When set, only this original object contributes persistent Debug View geometry.
-   */
-  const Object *debug_view_object;
+  /** When set, the iterator should generate persistent Debug View geometry for this request. */
+  const DEGDebugViewRequest *debug_view_request;
 
   /**
    * If not empty, the iterator should only return objects that are in this list (or their

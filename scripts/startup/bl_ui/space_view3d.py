@@ -7272,6 +7272,12 @@ class VIEW3D_PT_overlay_viewer_node(Panel):
         overlay = view.overlay
         display_all = overlay.show_overlays
 
+        layout.operator(
+            "view3d.debug_view_pin",
+            text="Unpin Debug View Context" if view.debug_view_pinned else "Pin Debug View Context",
+            icon='PINNED' if view.debug_view_pinned else 'UNPINNED',
+        )
+
         col = layout.column()
         col.active = display_all
 

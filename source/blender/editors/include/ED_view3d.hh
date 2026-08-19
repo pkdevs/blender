@@ -31,6 +31,7 @@ struct BoundBox;
 struct Camera;
 struct CustomData_MeshMasks;
 struct Depsgraph;
+struct DEGDebugViewRequest;
 struct EditBone;
 struct GPUSelectBuffer;
 struct ID;
@@ -1122,6 +1123,11 @@ void ED_view3d_mats_rv3d_restore(RegionView3D *rv3d, RV3DMatrixStore *rv3dmat);
 void ED_view3D_mats_rv3d_free(RV3DMatrixStore *rv3d_mat);
 
 RenderEngineType *ED_view3d_engine_type(const Scene *scene, int drawtype);
+
+/** Resolve the persistent Debug View request for a View3D. */
+bool ED_view3d_debug_view_request(View3D &v3d,
+                                  const Object *active_object,
+                                  DEGDebugViewRequest &r_request);
 
 bool ED_view3d_context_activate(bContext *C);
 /**

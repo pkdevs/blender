@@ -852,6 +852,7 @@ static void foreach_obref_in_scene(
   Depsgraph *depsgraph = draw_ctx.depsgraph;
   eEvaluationMode eval_mode = DEG_get_mode(depsgraph);
   View3D *v3d = draw_ctx.v3d;
+  DEGDebugViewRequest debug_view_request{};
 
   DEGObjectIterSettings deg_iter_settings = {nullptr};
   deg_iter_settings.depsgraph = depsgraph;
@@ -859,8 +860,9 @@ static void foreach_obref_in_scene(
                             DEG_ITER_OBJECT_FLAG_LINKED_VIA_SET;
   if (v3d && v3d->flag2 & V3D_SHOW_VIEWER) {
     deg_iter_settings.viewer_path = &v3d->viewer_path;
-    deg_iter_settings.debug_view_object = draw_ctx.obact ? DEG_get_original(draw_ctx.obact) :
-                                                           nullptr;
+    if (ED_view3d_debug_view_request(*v3d, draw_ctx.obact, debug_view_request)) {
+      deg_iter_settings.debug_view_request = &debug_view_request;
+    }
   }
 
   DEG_OBJECT_ITER_BEGIN (&deg_iter_settings, ob) {
