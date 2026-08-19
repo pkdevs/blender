@@ -59,25 +59,25 @@ static wmOperatorStatus edbm_curve_exec(bContext *C, wmOperator *op)
 
   const float factor = RNA_float_get(op->ptr, "factor");
   const int restriction = RNA_enum_get(op->ptr, "restriction");
-  const bool boundaries = RNA_boolean_get(op->ptr, "boundaries");
+  const bool extend = RNA_boolean_get(op->ptr, "extend");
   const bool regular = RNA_boolean_get(op->ptr, "regular");
   bool lock[3];
   RNA_boolean_get_array(op->ptr, "lock", lock);
   const int interpolation = RNA_enum_get(op->ptr, "interpolation");
 
-  bool changed = false;
+  bool changed_multi = false;
 
   for (Object *obedit : objects) {
     BMEditMesh *em = BKE_editmesh_from_object(obedit);
 
     if (!EDBM_op_callf(em,
                        op,
-                       "curve geom=%hvef factor=%f restriction=%i boundaries=%b regular=%b "
+                       "curve geom=%hvef factor=%f restriction=%i extend=%b regular=%b "
                        "lock_x=%b lock_y=%b lock_z=%b interpolation=%i",
                        BM_ELEM_SELECT,
                        factor,
                        restriction,
-                       boundaries,
+                       extend,
                        regular,
                        lock[0],
                        lock[1],
@@ -87,24 +87,25 @@ static wmOperatorStatus edbm_curve_exec(bContext *C, wmOperator *op)
       continue;
     }
 
-    changed = true;
+    changed_multi = true;
     EDBMUpdate_Params params{};
     params.calc_looptris = true;
     params.calc_normals = true;
     EDBM_update(id_cast<Mesh *>(obedit->data), &params);
   }
 
-  return changed ? OPERATOR_FINISHED : OPERATOR_CANCELLED;
+  return changed_multi ? OPERATOR_FINISHED : OPERATOR_CANCELLED;
 }
 
 static void edbm_curve_ui(bContext * /*C*/, wmOperator *op)
 {
+  /* A custom UI function is needed to draw the axis locks (X/Y/Z) as a row of toggle buttons. */
   ui::Layout &layout = *op->layout;
   layout.use_property_split_set(true);
 
   layout.prop(op->ptr, "factor", UI_ITEM_NONE, std::nullopt, ICON_NONE);
   layout.prop(op->ptr, "restriction", UI_ITEM_NONE, std::nullopt, ICON_NONE);
-  layout.prop(op->ptr, "boundaries", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+  layout.prop(op->ptr, "extend", UI_ITEM_NONE, std::nullopt, ICON_NONE);
   layout.prop(op->ptr, "regular", UI_ITEM_NONE, std::nullopt, ICON_NONE);
 
   ui::Layout &lock_row = layout.row(true, IFACE_("Lock"));
@@ -136,11 +137,12 @@ void MESH_OT_curve(wmOperatorType *ot)
                CURVE_RESTRICT_NONE,
                "Restriction",
                "Restrictions on how the vertices can be moved");
-  RNA_def_boolean(ot->srna,
-                  "boundaries",
-                  false,
-                  "Extend",
-                  "Limit the tool to work within the boundaries of the selected vertices");
+  RNA_def_boolean(
+      ot->srna,
+      "extend",
+      true,
+      "Extend",
+      "Limits the tool to work within the boundaries of the selected vertices if false");
   RNA_def_boolean(ot->srna,
                   "regular",
                   true,

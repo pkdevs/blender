@@ -575,7 +575,7 @@ void bmo_curve_exec(BMesh *bm, BMOperator *op)
 {
   const float factor = BMO_slot_float_get(op->slots_in, "factor");
   const int restriction = BMO_slot_int_get(op->slots_in, "restriction");
-  const bool boundaries = BMO_slot_bool_get(op->slots_in, "boundaries");
+  const bool extend = BMO_slot_bool_get(op->slots_in, "extend");
   const bool regular = BMO_slot_bool_get(op->slots_in, "regular");
   const bool lock_x = BMO_slot_bool_get(op->slots_in, "lock_x");
   const bool lock_y = BMO_slot_bool_get(op->slots_in, "lock_y");
@@ -587,7 +587,7 @@ void bmo_curve_exec(BMesh *bm, BMOperator *op)
   Vector<CurveChainData> chains;
   get_curve_input_chains(bm, chains);
 
-  if (boundaries) {
+  if (!extend) {
     trim_chains_to_boundaries(chains);
   }
 

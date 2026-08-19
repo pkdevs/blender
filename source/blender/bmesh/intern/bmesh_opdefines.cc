@@ -790,8 +790,8 @@ static BMOpDefine bmo_curve_def = {
         {"factor", BMO_OP_SLOT_FLT},
         /* Restrictions on how the vertices can be moved. */
         {"restriction", BMO_OP_SLOT_INT},
-        /* Limit the tool to work within the boundaries of the selected vertices. */
-        {"boundaries", BMO_OP_SLOT_BOOL},
+        /* Limits the tool to work within the boundaries of the selected vertices if false. */
+        {"extend", BMO_OP_SLOT_BOOL},
         /* Distribute vertices at constant distances along the curve. */
         {"regular", BMO_OP_SLOT_BOOL},
         /* Lock X axis editing. */
