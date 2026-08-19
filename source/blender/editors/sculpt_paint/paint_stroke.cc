@@ -193,6 +193,24 @@ static bool paint_brush_type_raycast_original(const Brush &brush, PaintMode /*mo
   return ELEM(brush.stroke_method, BRUSH_STROKE_ANCHORED, BRUSH_STROKE_DRAG_DOT);
 }
 
+/* TODO: Deduplicate this with the one in `brush.cc` */
+static bool sculpt_is_grab_tool(const Brush &br)
+{
+  if (br.sculpt_brush_type == SCULPT_BRUSH_TYPE_CLOTH &&
+      br.cloth_deform_type == BRUSH_CLOTH_DEFORM_GRAB)
+  {
+    return true;
+  }
+  return ELEM(br.sculpt_brush_type,
+              SCULPT_BRUSH_TYPE_GRAB,
+              SCULPT_BRUSH_TYPE_ELASTIC_DEFORM,
+              SCULPT_BRUSH_TYPE_POSE,
+              SCULPT_BRUSH_TYPE_BOUNDARY,
+              SCULPT_BRUSH_TYPE_THUMB,
+              SCULPT_BRUSH_TYPE_ROTATE,
+              SCULPT_BRUSH_TYPE_SNAKE_HOOK);
+}
+
 static bool paint_brush_type_require_inbetween_mouse_events(const Brush &brush,
                                                             const PaintMode mode)
 {
@@ -202,16 +220,7 @@ static bool paint_brush_type_require_inbetween_mouse_events(const Brush &brush,
 
   switch (mode) {
     case PaintMode::Sculpt:
-      if (ELEM(brush.sculpt_brush_type,
-               SCULPT_BRUSH_TYPE_GRAB,
-               SCULPT_BRUSH_TYPE_ROTATE,
-               SCULPT_BRUSH_TYPE_THUMB,
-               SCULPT_BRUSH_TYPE_SNAKE_HOOK,
-               SCULPT_BRUSH_TYPE_ELASTIC_DEFORM,
-               SCULPT_BRUSH_TYPE_CLOTH,
-               SCULPT_BRUSH_TYPE_BOUNDARY,
-               SCULPT_BRUSH_TYPE_POSE))
-      {
+      if (sculpt_is_grab_tool(brush)) {
         return false;
       }
       else {
@@ -1011,23 +1020,6 @@ bool paint_space_stroke_enabled(const Brush &br, const PaintMode mode)
   }
 
   return paint_supports_dynamic_size(br, mode);
-}
-
-static bool sculpt_is_grab_tool(const Brush &br)
-{
-  if (br.sculpt_brush_type == SCULPT_BRUSH_TYPE_CLOTH &&
-      br.cloth_deform_type == BRUSH_CLOTH_DEFORM_GRAB)
-  {
-    return true;
-  }
-  return ELEM(br.sculpt_brush_type,
-              SCULPT_BRUSH_TYPE_GRAB,
-              SCULPT_BRUSH_TYPE_ELASTIC_DEFORM,
-              SCULPT_BRUSH_TYPE_POSE,
-              SCULPT_BRUSH_TYPE_BOUNDARY,
-              SCULPT_BRUSH_TYPE_THUMB,
-              SCULPT_BRUSH_TYPE_ROTATE,
-              SCULPT_BRUSH_TYPE_SNAKE_HOOK);
 }
 
 bool paint_supports_dynamic_size(const Brush &br, const PaintMode mode)
