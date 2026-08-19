@@ -476,8 +476,6 @@ static int rna_Strip_elements_length(PointerRNA *ptr)
 {
   Strip *strip = static_cast<Strip *>(ptr->data);
 
-  /* `strip->content_length()` alone is discounted from the content trim offsets
-   * (`anim_startofs`/`anim_endofs`), so it doesn't cover the full `stripdata` array. */
   return strip->data->stripdata_num;
 }
 
