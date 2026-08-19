@@ -6734,12 +6734,12 @@ void cube_tip_init(const Sculpt & /*sd*/, const Object &ob, const Brush &brush, 
   float tmat[4][4];
   float unused[4][4];
 
-  const float special_rotation = BKE_brush_needs_rake_rotation(brush) ?
-                                     ss.cache->special_rotation :
-                                     BKE_brush_mask_texture_get(&brush, OB_MODE_SCULPT)->rot;
+  const float tip_rotation = BKE_brush_needs_rake_rotation(brush) ?
+                                 ss.cache->special_rotation :
+                                 BKE_brush_mask_texture_get(&brush, OB_MODE_SCULPT)->rot;
   zero_m4(mat);
   calc_brush_local_mat(0.0,
-                       special_rotation,
+                       tip_rotation,
                        ob,
                        eBrushFalloffShape(brush.falloff_shape) == PAINT_FALLOFF_SHAPE_SPHERE ?
                            ss.cache->sculpt_normal_symm :
