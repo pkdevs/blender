@@ -1070,15 +1070,22 @@ struct CodegenContext : NodeErrorHandler {
   void enum_decl(ClassDecl decl, SymbolScope &scope)
   {
     SymbolScope &body_scope = *scope.scopes[string(decl.identifier().str())];
+    SymbolClass *enum_cls = body_scope.as_class();
     LocalScope body = decl.body();
 
     IdQualified type = decl.parent_class();
+
+    if (enum_cls) {
+      /* TODO(fclem): Remove. Compatibility with previous BSL version. */
+      builder.ss << "#define " << enum_cls->identifier << " " << type.str() << "\n";
+    }
+
     jump_to(decl.front());
 
     /* Treat enum values as static variables. */
     for (EnumValue val : body.children_of_type<EnumValue>()) {
       line(val.front());
-      string type_str = string("const ") + string(type.str());
+      string type_str = string("static constexpr ") + string(type.str());
       builder << type_str;
       /* Pretty align. */
       builder.ss << string(
@@ -1250,7 +1257,7 @@ struct CodegenContext : NodeErrorHandler {
       const SymbolVariable &member = *v.second;
       if (member.type->is_srt()) {
         access_macros += " access_" + cls.identifier + "_" + member.identifier + "()";
-        access_macros += " " + member.type->identifier + "_new_()";
+        access_macros += " " + member.type->identifier + "_ctor_()";
       }
       else {
         access_macros += " access_" + cls.identifier + "_" + member.identifier + "()";

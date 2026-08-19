@@ -74,6 +74,9 @@ string SymbolVariable::value_str() const
         if constexpr (std::is_same_v<T, bool>) {
           return v ? "true" : "false";
         }
+        if constexpr (std::is_unsigned_v<T>) {
+          return to_string(v) + "u";
+        }
         else {
           return to_string(v);
         }

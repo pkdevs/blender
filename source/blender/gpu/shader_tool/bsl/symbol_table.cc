@@ -107,7 +107,12 @@ Result<StringPair> SymbolTable::mangle_identifier(TemplateArgList args,
       }
       int val = value_as<int>(expr_result.value);
       /* Replace minus sign by underscore. */
-      result.str += string("T") + (val < 0 ? "_" : "") + to_string(abs(val));
+      if (arg.type().str() == "bool") {
+        result.str += string("T") + (val ? "true" : "false");
+      }
+      else {
+        result.str += string("T") + (val < 0 ? "_" : "") + to_string(abs(val));
+      }
       result.str_debug += ", " + to_string(val);
     }
     param = param.next();
