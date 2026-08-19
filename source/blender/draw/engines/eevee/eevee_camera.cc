@@ -298,7 +298,8 @@ void Camera::sync()
     data.equirect_scale_inv = float2(0.0f);
   }
 
-  data.panoramic_view_overscan = this->is_panoramic() ? 1.05f : 1.0f;
+  /* 5% over-scan for DoF (see eevee_view.cc) plus user config. */
+  data.panoramic_view_overscan = this->is_panoramic() ? 1.05f + overscan_ : 1.0f;
   data.panoramic_view_mask = uint32_t(this->is_panoramic() ? panoramic_view_mask_get(data) :
                                                              PanoramicViewBits::FRONT);
   data_.initialized = true;

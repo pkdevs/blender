@@ -30,7 +30,7 @@ void VolumeModule::init()
   /* The froxel grid's aspect ratio must match the view it will be sampled against in
    * `VolumeModule::set_view`, otherwise `coord_scale` ends up sampling outside the valid tile
    * range. */
-  const int2 extent = inst_.film.render_extent_shading_view_get();
+  const int2 extent = inst_.film.render_extent_get();
   int tile_size = clamp_i(scene_eval->eevee.volumetric_tile_size, 1, 16);
 
   int3 tex_size;
@@ -352,7 +352,7 @@ void VolumeModule::set_view(View &main_view, int2 extent)
     exponential_frame_count = 0;
   }
   else if (inst_.camera.is_panoramic()) {
-    /* Disable reprojection until the volume module supports perview history. */
+    /* Disable reprojection until the volume module supports per view history. */
     exponential_frame_count = 0;
   }
   else if (inst_.is_playback) {

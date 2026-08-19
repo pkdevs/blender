@@ -33,18 +33,13 @@ void ShadingView::init() {}
 
 void ShadingView::sync()
 {
-  int2 render_extent = inst_.film.render_extent_get();
+  extent_ = inst_.film.render_extent_get();
   const CameraData &cam = inst_.camera.data_get();
 
   if (inst_.camera.is_panoramic()) {
-    int64_t render_pixel_count = render_extent.x * int64_t(render_extent.y);
-    /* Some panoramic projections can heavily magnify one cubemap face. Keep each face close to
-     * the final film pixel density until per-projection face clipping is implemented. */
-    extent_ = int2(ceilf(sqrtf(float(render_pixel_count))));
     is_enabled_ = (cam.panoramic_view_mask & (1u << uint(face_id_))) != 0u;
   }
   else {
-    extent_ = render_extent;
     /* Only enable -Z view. */
     is_enabled_ = (face_id_ == 5);
   }
@@ -56,8 +51,7 @@ void ShadingView::sync()
   /* Create views. */
   float4x4 viewmat, winmat;
   if (inst_.camera.is_panoramic()) {
-    /* TODO(@fclem) Over-scans. */
-    /* For now a mandatory 5% over-scan for DoF. */
+    /* panoramic_view_overscan has included the 5% overscan (see Camera::sync). */
     float side = cam.clip_near * cam.panoramic_view_overscan;
     float near = cam.clip_near;
     float far = cam.clip_far;
@@ -246,7 +240,7 @@ void ShadingView::update_view()
     const float2 pixel_size = render_size / float2(film.film_extent_get());
 
     /* Render extent in final film pixel unit. */
-    const int2 render_extent = film.render_extent_get() * film.scaling_factor_get();
+    const int2 render_extent = film.render_extent_original_get() * film.scaling_factor_get();
     const int overscan_pixels = film.render_overscan_get() * film.scaling_factor_get();
 
     const float2 render_bottom_left = bottom_left - pixel_size * float(overscan_pixels);

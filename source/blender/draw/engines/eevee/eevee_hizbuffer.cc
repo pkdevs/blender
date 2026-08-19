@@ -15,7 +15,7 @@ namespace blender::eevee {
 
 void HiZBuffer::sync()
 {
-  int2 render_extent = inst_.film.render_extent_shading_view_get();
+  int2 render_extent = inst_.film.render_extent_get();
   int2 probe_extent = int2(inst_.sphere_probes.probe_render_extent());
   int2 max_extent = math::max(render_extent, probe_extent);
   /* Padding to avoid complexity during down-sampling and screen tracing. */

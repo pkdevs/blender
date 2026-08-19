@@ -152,7 +152,7 @@ void DepthOfField::sync()
     return;
   }
 
-  int2 max_render_res = inst_.film.render_extent_shading_view_get();
+  int2 max_render_res = inst_.film.render_extent_get();
   int2 half_render_res = math::divide_ceil(max_render_res, int2(2));
   int2 reduce_size = math::ceil_to_multiple(half_render_res, int2(DOF_REDUCE_GROUP_SIZE));
 
@@ -543,7 +543,7 @@ void DepthOfField::render(View &view,
 
   /* Acquire reduce texture mip chains, and views for each mip level. */
   {
-    int2 max_render_res = inst_.film.render_extent_shading_view_get();
+    int2 max_render_res = inst_.film.render_extent_get();
     int2 half_render_res = math::divide_ceil(max_render_res, int2(2));
     int2 reduce_size = math::ceil_to_multiple(half_render_res, int2(DOF_REDUCE_GROUP_SIZE));
 

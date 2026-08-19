@@ -45,7 +45,7 @@ void AmbientOcclusion::init()
   data_.angle_bias = 1.0 / max_ff(1e-8f, 1.0 - sce_eevee.fast_gi_bias);
   data_.thickness_near = sce_eevee.fast_gi_thickness_near;
   /* Size is multiplied by 2 because it is applied in NDC [-1..1] range. */
-  data_.pixel_size = float2(2.0f) / float2(inst_.film.render_extent_shading_view_get());
+  data_.pixel_size = float2(2.0f) / float2(inst_.film.render_extent_get());
 
   ray_count_ = sce_eevee.fast_gi_ray_count;
   step_count_ = sce_eevee.fast_gi_step_count;
@@ -88,8 +88,8 @@ void AmbientOcclusion::sync()
                                 &inst_.render_buffers.data.ambient_occlusion_id);
 
   render_pass_ps_.barrier(GPU_BARRIER_SHADER_IMAGE_ACCESS | GPU_BARRIER_TEXTURE_FETCH);
-  render_pass_ps_.dispatch(math::divide_ceil(inst_.film.render_extent_shading_view_get(),
-                                             int2(AMBIENT_OCCLUSION_PASS_TILE_SIZE)));
+  render_pass_ps_.dispatch(
+      math::divide_ceil(inst_.film.render_extent_get(), int2(AMBIENT_OCCLUSION_PASS_TILE_SIZE)));
 }
 
 void AmbientOcclusion::render_pass(View &view)

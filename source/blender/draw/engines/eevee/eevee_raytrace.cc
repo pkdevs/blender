@@ -495,7 +495,7 @@ RayTraceResult RayTraceModule::render(RayTraceBuffer &rt_buffer,
       1, power_of_2_max_i(inst_.scene->eevee.fast_gi_resolution));
 
   const int2 group_size(RAYTRACE_GROUP_SIZE);
-  int2 extent = inst_.film.render_extent_shading_view_get();
+  int2 extent = inst_.film.render_extent_get();
   const int2 tracing_res = math::divide_ceil(extent, int2(resolution_scale));
   /* Just like HiZ, the FastGI needs a multiple of its dispatch size in order to use MipMaps. */
   const int2 tracing_res_fast_gi = math::ceil_to_multiple(
@@ -651,7 +651,7 @@ RayTraceResultTexture RayTraceModule::trace(int closure_index,
 
   const int resolution_scale = max_ii(1, power_of_2_max_i(options.resolution_scale));
 
-  int2 extent = inst_.film.render_extent_shading_view_get();
+  int2 extent = inst_.film.render_extent_get();
   const int2 tracing_res = math::divide_ceil(extent, int2(resolution_scale));
 
   renderbuf_depth_view_ = inst_.render_buffers.depth_tx;
@@ -808,7 +808,7 @@ RayTraceResultTexture RayTraceModule::trace(int closure_index,
 
 RayTraceResult RayTraceModule::alloc_only(RayTraceBuffer &rt_buffer)
 {
-  int2 extent = inst_.film.render_extent_shading_view_get();
+  int2 extent = inst_.film.render_extent_get();
   eGPUTextureUsage usage_rw = GPU_TEXTURE_USAGE_SHADER_READ | GPU_TEXTURE_USAGE_SHADER_WRITE;
 
   RayTraceResult result;

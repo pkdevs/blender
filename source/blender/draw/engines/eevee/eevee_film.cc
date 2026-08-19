@@ -275,18 +275,6 @@ static eViewLayerEEVEEPassType get_viewport_compositor_enabled_passes(
   return viewport_compositor_enabled_passes;
 }
 
-int2 Film::render_extent_shading_view_get() const
-{
-  int2 extent = render_extent_get();
-  if (!inst_.camera.is_panoramic()) {
-    return extent;
-  }
-  /* Same square extent `ShadingView::sync` gives each face: same total pixel count as
-   * `extent`, reshaped to a square so pixel density stays close to the final film. */
-  int64_t render_pixel_count = extent.x * int64_t(extent.y);
-  return int2(ceilf(sqrtf(float(render_pixel_count))));
-}
-
 /* Light passes are stored pre-divided by their matching Color pass, so Color must be enabled
  * whenever Light is (#161352). */
 static eViewLayerEEVEEPassType with_light_pass_color_dependencies(eViewLayerEEVEEPassType passes)
@@ -403,6 +391,16 @@ void Film::init(const int2 &extent, const rcti *output_rect)
       data_.extent_inv = 1.0f / float2(data_.extent);
       data_.offset = int2(0, 0);
       data_.overscan = 0;
+    }
+
+    if (inst_.camera.is_panoramic()) {
+      /* Reshape into a square so each face's pixel density stays close to the final film.
+       * TODO: Remove once per projection face clipping is implemented. */
+      int64_t render_pixel_count = data_.render_extent.x * int64_t(data_.render_extent.y);
+      render_extent_shading_view_ = int2(ceilf(sqrtf(float(render_pixel_count))));
+    }
+    else {
+      render_extent_shading_view_ = data_.render_extent;
     }
 
     data_.filter_radius = clamp_f(scene.r.gauss, 0.0f, 100.0f);
