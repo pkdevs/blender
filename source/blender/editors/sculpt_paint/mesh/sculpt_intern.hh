@@ -387,6 +387,7 @@ struct StrokeCache {
     std::optional<float> density_seed;
     float density = 0.0f;
 
+    Array<float> max_factors;
     /**
      * Used by the color attribute paint brush tool to store the brush color during a stroke and
      * composite it over the original color.

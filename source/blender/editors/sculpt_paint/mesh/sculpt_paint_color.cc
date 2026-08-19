@@ -242,6 +242,7 @@ bke::GSpanAttributeWriter active_color_attribute_for_write(Mesh &mesh)
 }
 
 struct ColorPaintLocalData {
+  Vector<float> max_factors;
   Vector<float> factors;
   Vector<float> auto_mask;
   Vector<float3> positions;
@@ -351,6 +352,7 @@ static void do_paint_brush_task(const Depsgraph &depsgraph,
                                 bke::pbvh::MeshNode &node,
                                 ColorPaintLocalData &tls,
                                 const MutableSpan<float4> mix_colors,
+                                const MutableSpan<float> max_factors,
                                 bke::GSpanAttributeWriter &color_attribute)
 {
   const SculptSession &ss = *object.runtime->sculpt_session;
@@ -493,14 +495,19 @@ static void do_paint_brush_task(const Depsgraph &depsgraph,
 
   scatter_data_mesh(color_buffer.as_span(), verts, mix_colors);
 
+  MutableSpan<float> stroke_max_factors = gather_data_mesh(max_factors.as_span(), verts, tls.max_factors);
+
   for (const int i : verts.index_range()) {
-    color_vert_set(faces,
-                   corner_verts,
-                   vert_to_face_map,
-                   color_attribute.domain,
-                   verts[i],
-                   new_colors[i],
-                   color_attribute.span);
+    if (factors[i] > stroke_max_factors[i]) {
+      color_vert_set(faces,
+                     corner_verts,
+                     vert_to_face_map,
+                     color_attribute.domain,
+                     verts[i],
+                     new_colors[i],
+                     color_attribute.span);
+      stroke_max_factors[i] = factors[i];
+    }
   }
 }
 
@@ -661,6 +668,10 @@ void do_paint_brush(const Depsgraph &depsgraph,
     ss.cache->paint_brush.mix_colors = Array<float4>(mesh.verts_num, float4(0));
   }
 
+  if (ss.cache->paint_brush.max_factors.is_empty()) {
+    ss.cache->paint_brush.max_factors = Array<float>(mesh.verts_num, 0.0f);
+  }
+
   threading::EnumerableThreadSpecific<ColorPaintLocalData> all_tls;
   node_mask.foreach_index(
       [&](const int i) {
@@ -680,6 +691,7 @@ void do_paint_brush(const Depsgraph &depsgraph,
                             nodes[i],
                             tls,
                             ss.cache->paint_brush.mix_colors,
+                            ss.cache->paint_brush.max_factors,
                             color_attribute);
       },
       exec_mode::grain_size(1));
