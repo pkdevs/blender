@@ -116,6 +116,9 @@ class GHOST_SystemCocoa : public GHOST_System {
    */
   GHOST_IWindow *getWindowUnderCursor(int32_t x, int32_t y) override;
 
+  /** \copydoc #GHOST_ISystem::getSystemColorScheme */
+  GHOST_TColorScheme getSystemColorScheme() const override;
+
   /***************************************************************************************
    * Event management functionality.
    ***************************************************************************************/
@@ -263,6 +266,9 @@ class GHOST_SystemCocoa : public GHOST_System {
    * \return Indication whether the event was handled.
    */
   GHOST_TSuccess handleApplicationBecomeActiveEvent();
+
+  /** Handles a change to the application's effective appearance. */
+  void handleApplicationAppearanceChanged();
 
   /**
    * \return True if any dialog window is open.

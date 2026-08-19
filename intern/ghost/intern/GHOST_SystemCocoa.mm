@@ -34,6 +34,8 @@
 #  include "GHOST_NDOFManagerCocoa.hh"
 #endif
 
+#import <Cocoa/Cocoa.h>
+
 /* For the currently not ported to Cocoa keyboard layout functions (64bit & 10.6 compatible) */
 #include <Carbon/Carbon.h>
 #include <sys/time.h>
@@ -349,6 +351,8 @@ extern "C" int GHOST_HACK_getFirstFile(char buf[FIRSTFILEBUFLG])
  * Cocoa objects.
  */
 
+static int cocoa_effective_appearance_context;
+
 /**
  * CocoaAppDelegate
  * ObjC object to capture applicationShouldTerminate, and send quit event
@@ -359,11 +363,16 @@ extern "C" int GHOST_HACK_getFirstFile(char buf[FIRSTFILEBUFLG])
 
 - (instancetype)initWithSystemCocoa:(GHOST_SystemCocoa *)systemCocoa;
 - (void)dealloc;
+- (void)startObservingApplicationAppearance;
 - (void)applicationDidFinishLaunching:(NSNotification *)aNotification;
 - (BOOL)application:(NSApplication *)theApplication openFile:(NSString *)filename;
 - (NSApplicationTerminateReply)applicationShouldTerminate:(NSApplication *)sender;
 - (void)applicationWillTerminate:(NSNotification *)aNotification;
 - (void)applicationWillBecomeActive:(NSNotification *)aNotification;
+- (void)observeValueForKeyPath:(NSString *)keyPath
+                      ofObject:(id)object
+                        change:(NSDictionary *)change
+                       context:(void *)context;
 - (void)toggleFullScreen:(NSNotification *)notification;
 - (void)windowWillClose:(NSNotification *)notification;
 
@@ -391,11 +400,22 @@ extern "C" int GHOST_HACK_getFirstFile(char buf[FIRSTFILEBUFLG])
   return self;
 }
 
+- (void)startObservingApplicationAppearance
+{
+  [NSApp addObserver:self
+          forKeyPath:@"effectiveAppearance"
+             options:0
+             context:&cocoa_effective_appearance_context];
+}
+
 - (void)dealloc
 {
   @autoreleasepool {
     NSNotificationCenter *center = [NSNotificationCenter defaultCenter];
     [center removeObserver:self name:NSWindowWillCloseNotification object:nil];
+    [NSApp removeObserver:self
+               forKeyPath:@"effectiveAppearance"
+                  context:&cocoa_effective_appearance_context];
     [super dealloc];
   }
 }
@@ -440,6 +460,19 @@ extern "C" int GHOST_HACK_getFirstFile(char buf[FIRSTFILEBUFLG])
 - (void)applicationWillBecomeActive:(NSNotification *)aNotification
 {
   system_cocoa_->handleApplicationBecomeActiveEvent();
+}
+
+- (void)observeValueForKeyPath:(NSString *)keyPath
+                      ofObject:(id)object
+                        change:(NSDictionary *)change
+                       context:(void *)context
+{
+  if (context == &cocoa_effective_appearance_context) {
+    system_cocoa_->handleApplicationAppearanceChanged();
+    return;
+  }
+
+  [super observeValueForKeyPath:keyPath ofObject:object change:change context:context];
 }
 
 - (void)toggleFullScreen:(NSNotification *)notification
@@ -660,6 +693,14 @@ GHOST_TSuccess GHOST_SystemCocoa::init()
       NSWindow.allowsAutomaticWindowTabbing = NO;
 
       [NSApp finishLaunching];
+
+      CocoaAppDelegate *appDelegate = (CocoaAppDelegate *)[NSApp delegate];
+      [appDelegate startObservingApplicationAppearance];
+
+      /* The event is queued after the application has finished initializing, like later
+       * appearance changes, so Blender resolves the initial state through the normal event path.
+       */
+      handleApplicationAppearanceChanged();
     }
   }
   return success;
@@ -828,6 +869,24 @@ GHOST_IWindow *GHOST_SystemCocoa::getWindowUnderCursor(int32_t x, int32_t y)
 
     return window_manager_->getWindowAssociatedWithOSWindow((const void *)nswindow);
   }
+}
+
+GHOST_TColorScheme GHOST_SystemCocoa::getSystemColorScheme() const
+{
+  @autoreleasepool {
+    NSAppearance *appearance = [NSApp effectiveAppearance];
+    const NSAppearanceName appearance_name = [appearance
+        bestMatchFromAppearancesWithNames:@[ NSAppearanceNameAqua, NSAppearanceNameDarkAqua ]];
+
+    if ([appearance_name isEqualToString:NSAppearanceNameDarkAqua]) {
+      return GHOST_kColorSchemePreferDark;
+    }
+    if ([appearance_name isEqualToString:NSAppearanceNameAqua]) {
+      return GHOST_kColorSchemePreferLight;
+    }
+  }
+
+  return GHOST_kColorSchemeNoPreference;
 }
 
 /**
@@ -1174,6 +1233,13 @@ bool GHOST_SystemCocoa::hasDialogWindow()
 
 void GHOST_SystemCocoa::notifyExternalEventProcessed()
 {
+  outside_loop_event_processed_ = true;
+}
+
+void GHOST_SystemCocoa::handleApplicationAppearanceChanged()
+{
+  pushEvent(std::make_unique<GHOST_Event>(
+      getMilliSeconds(), GHOST_kEventSystemAppearanceChanged, nullptr));
   outside_loop_event_processed_ = true;
 }
 
