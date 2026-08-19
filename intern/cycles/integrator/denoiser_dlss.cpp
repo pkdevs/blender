@@ -177,7 +177,7 @@ DLSSDenoiser::DLSSDenoiser(Device *denoiser_device, const DenoiseParams &params)
   }
 
   const wstring app_path = string_to_wstring(path_get());
-  const wstring user_path = string_to_wstring(path_user_get());
+  const wstring app_data_path = string_to_wstring(path_cache_get());
 
   const wchar_t *const app_paths[] = {app_path.c_str()};
 
@@ -207,7 +207,7 @@ DLSSDenoiser::DLSSDenoiser(Device *denoiser_device, const DenoiseParams &params)
   thread_scoped_lock ngx_lock(ngx_mutex);
 
   const NVSDK_NGX_Result result = NVSDK_NGX_CUDA.Init_Ext1(
-      ApplicationId, user_path.c_str(), ngx_device_, NVSDK_NGX_Version_API, &feature_info);
+      ApplicationId, app_data_path.c_str(), ngx_device_, NVSDK_NGX_Version_API, &feature_info);
 
   if (NVSDK_NGX_FAILED(result)) {
     set_error("Failed to initialize NGX driver");
@@ -268,7 +268,7 @@ bool DLSSDenoiser::is_device_supported(const DeviceInfo &device)
     return false;
   }
 
-  const wstring user_path = string_to_wstring(path_user_get());
+  const wstring app_data_path = string_to_wstring(path_cache_get());
 
   CUdevice cuDevice = 0;
   cuDeviceGet(&cuDevice, device.num);
@@ -278,7 +278,7 @@ bool DLSSDenoiser::is_device_supported(const DeviceInfo &device)
   discovery_info.FeatureID = NVSDK_NGX_Feature_RayReconstruction;
   discovery_info.Identifier.IdentifierType = NVSDK_NGX_Application_Identifier_Type_Application_Id;
   discovery_info.Identifier.v.ApplicationId = ApplicationId;
-  discovery_info.ApplicationDataPath = user_path.c_str();
+  discovery_info.ApplicationDataPath = app_data_path.c_str();
 
   NVSDK_NGX_FeatureRequirement requirement = {NVSDK_NGX_FeatureSupportResult_Supported};
 
