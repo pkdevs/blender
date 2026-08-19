@@ -2545,6 +2545,11 @@ struct CodegenContext : NodeErrorHandler {
       builder << id;
       return var;
     }
+
+    if (var->is_constexpr && var->array_dimensions > 0) {
+      error(id, Diag::ConstexprVarMustNotBeArray);
+    }
+
     /* Note we only resolve static variable. */
     if (var->is_static) {
       builder.curr = id.back();

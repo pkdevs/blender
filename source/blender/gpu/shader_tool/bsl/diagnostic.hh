@@ -134,6 +134,7 @@ enum class Diag {
   MultidimensionalArraysNotSupported,
   ArraySizeNotConstantExpression,
   ConstexprDivisionByZero,
+  ConstexprVarMustNotBeArray,
   InitializerListRequiresExplicitType,
   ExpectedArrayMemberInitializer,
   FieldDesignatorOutOfOrder,
@@ -325,6 +326,8 @@ static inline std::string_view diagnostic_message_get(Diag diag)
       return "Array size is not a constant expression";
     case Diag::ConstexprDivisionByZero:
       return "Division by zero during constexpr evaluation";
+    case Diag::ConstexprVarMustNotBeArray:
+      return "Array variables cannot be constexpr";
     case Diag::InitializerListRequiresExplicitType:
       return "Initializer list requires explicit type";
     case Diag::ExpectedArrayMemberInitializer:
