@@ -1265,7 +1265,7 @@ struct CodegenContext : NodeErrorHandler {
       }
     }
 
-    builder.ss << access_macros + "\n";
+    builder.ss << "\n" + access_macros + "\n";
     builder.ss << "\n#pragma resource_defines " + cls.identifier + "\n";
   }
 
