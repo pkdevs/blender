@@ -2820,16 +2820,16 @@ static void calc_local_from_screen(const ViewContext &vc,
   mul_m4_v3(ob.world_to_object().ptr(), r_local_dir);
 }
 
-static void calc_brush_local_mat(const float rotation,
-                                 const float special_rotation,
+static void calc_brush_local_mat(const float texture_rotation,
+                                 const float tip_rotation,
                                  const Object &ob,
                                  const float3 &tip_normal,
                                  float local_mat[4][4],
                                  float local_mat_inv[4][4])
 {
   const StrokeCache *cache = ob.runtime->sculpt_session->cache;
-  calc_brush_local_mat(rotation,
-                       special_rotation,
+  calc_brush_local_mat(texture_rotation,
+                       tip_rotation,
                        *cache->vc,
                        ob,
                        tip_normal,
@@ -2839,8 +2839,8 @@ static void calc_brush_local_mat(const float rotation,
                        local_mat_inv);
 }
 
-void calc_brush_local_mat(const float rotation,
-                          const float special_rotation,
+void calc_brush_local_mat(const float texture_rotation,
+                          const float tip_rotation,
                           const ViewContext &vc,
                           const Object &ob,
                           const float3 &tip_normal,
@@ -2865,7 +2865,7 @@ void calc_brush_local_mat(const float rotation,
 
   /* Read rotation (user angle, rake, etc.) to find the view's movement direction (negative X of
    * the brush). */
-  angle = rotation + special_rotation;
+  angle = texture_rotation + tip_rotation;
   /* By convention, motion direction points down the brush's Y axis, the angle represents the X
    * axis, normal is a 90 deg CCW rotation of the motion direction. */
   float motion_normal_screen[2];
