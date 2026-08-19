@@ -3922,6 +3922,9 @@ static void rna_generate_struct_register_func(BlenderRNA * /*brna*/, StructRNA *
   /* Struct and property creation runs on startup, on the first call to #RNA_blender_rna_get. */
   fprintf(f,
           "StructRNA *RNA_%s;\n"
+          "#ifdef _MSC_VER\n"
+          "#  pragma optimize(\"\", off)\n"
+          "#endif\n"
           "void register_struct_%s(BlenderRNA &brna)\n"
           "{\n",
           srna->identifier.c_str(),
@@ -4081,7 +4084,11 @@ static void rna_generate_struct_register_func(BlenderRNA * /*brna*/, StructRNA *
             "\t}\n");
   }
 
-  fprintf(f, "};\n\n");
+  fprintf(f,
+          "}\n"
+          "#ifdef _MSC_VER\n"
+          "#  pragma optimize(\"\", on)\n"
+          "#endif\n\n");
 }
 
 struct RNAProcessItem {
