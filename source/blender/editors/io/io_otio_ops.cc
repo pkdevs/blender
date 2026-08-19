@@ -234,7 +234,7 @@ void WM_OT_otio_export(wmOperatorType *ot)
 #  ifndef WIN32
                static_cast<int>(io::otio::ImgSeqFallback::Symlink),
 #  else
-               static_cast<int>(io::otio::ImgSeqFallback::RENDER_MOVIE),
+               static_cast<int>(io::otio::ImgSeqFallback::RenderMovie),
 #  endif
                "Fallback Method",
                "Method to Use to Export Non-Sequenced Image Sequences");

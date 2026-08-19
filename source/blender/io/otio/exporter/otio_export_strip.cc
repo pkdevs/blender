@@ -6,6 +6,7 @@
  * \ingroup otio
  */
 
+#include <cstdio>
 #include <cstring>
 
 #include "BKE_idprop.hh"
