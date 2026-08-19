@@ -122,7 +122,7 @@ void surf_forward([[resource_table]] PipelineConstants & /*pipe*/,
                   [[out]] SurfaceForwardFragOut &frag_out,
                   [[front_facing]] const bool front_face)
 {
-  SurfFlat &interp_flat = interface_get(eevee_geom_iface_info, interp_flat);
+  auto &interp_flat = interface_get(eevee_geom_iface_info, interp_flat);
   draw::ID id{interp_flat.resource_id_raw};
   const uint resource_id = id.resource_id<1>();
 

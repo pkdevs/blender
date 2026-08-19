@@ -59,16 +59,15 @@ struct GeomPointCloud {
   const ObjectMatrices obj = models.get(resource_id);
   const ObjectInfos ob_infos = infos.get(resource_id);
 
-  SurfSmooth &interp = interface_get(eevee_geom_iface_info, interp);
-  PointCloudSmooth &pointcloud_interp = interface_get(eevee_geom_pointcloud_iface_info,
-                                                      pointcloud_interp);
+  auto &interp = interface_get(eevee_geom_iface_info, interp);
+  auto &pointcloud_interp = interface_get(eevee_geom_pointcloud_iface_info, pointcloud_interp);
 
   /* clang-format off */ /* Multi-line macro breaks error line counting. */
-  PointCloudFlat &pointcloud_interp_flat = interface_get(eevee_geom_pointcloud_iface_info, pointcloud_interp_flat);
+  auto &pointcloud_interp_flat = interface_get(eevee_geom_pointcloud_iface_info, pointcloud_interp_flat);
   /* clang-format on */
 
   if (pipe.is_shadow_pipe) [[static_branch]] {
-    ShadowFlat &shadow_iface = interface_get(eevee_shadow_iface_info, shadow_iface);
+    auto &shadow_iface = interface_get(eevee_shadow_iface_info, shadow_iface);
 
     shadow_iface.shadow_view_id = int(view_id);
     out_viewport = int(shadow.render_view_buf[view_id].viewport_index);
@@ -129,7 +128,7 @@ struct GeomPointCloud {
   float3 vs_P = view.point_world_to_view(interp.P);
 
   if (pipe.is_shadow_pipe) [[static_branch]] {
-    ShadowSmooth &shadow_clip = interface_get(eevee_shadow_iface_info, shadow_clip);
+    auto &shadow_clip = interface_get(eevee_shadow_iface_info, shadow_clip);
 
     float3 vs_P = view.point_world_to_view(interp.P);
     ShadowRenderView view = shadow.render_view_buf[view_id];

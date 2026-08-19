@@ -63,12 +63,12 @@ struct GeomCurve {
   const ViewMatrices view = views.get(view_id);
   const ObjectMatrices obj = models.get(resource_id);
 
-  SurfSmooth &interp = interface_get(eevee_geom_iface_info, interp);
-  CurveSmooth &curve_interp = interface_get(eevee_geom_curves_iface_info, curve_interp);
-  CurveFlat &curve_interp_flat = interface_get(eevee_geom_curves_iface_info, curve_interp_flat);
+  auto &interp = interface_get(eevee_geom_iface_info, interp);
+  auto &curve_interp = interface_get(eevee_geom_curves_iface_info, curve_interp);
+  auto &curve_interp_flat = interface_get(eevee_geom_curves_iface_info, curve_interp_flat);
 
   if (pipe.is_shadow_pipe) [[static_branch]] {
-    ShadowFlat &shadow_iface = interface_get(eevee_shadow_iface_info, shadow_iface);
+    auto &shadow_iface = interface_get(eevee_shadow_iface_info, shadow_iface);
 
     shadow_iface.shadow_view_id = int(view_id);
     out_viewport = int(shadow.render_view_buf[view_id].viewport_index);
@@ -132,7 +132,7 @@ struct GeomCurve {
   }
 
   if (pipe.use_clip_plane) [[static_branch]] {
-    ClipSmooth &clip_interp = interface_get(eevee_clip_plane, clip_interp);
+    auto &clip_interp = interface_get(eevee_clip_plane, clip_interp);
     const ClipPlaneData &clip_plane = buffer_get(eevee_clip_plane, clip_plane);
     clip_interp.clip_distance = dot(clip_plane.plane, float4(interp.P, 1.0f));
   }
@@ -140,7 +140,7 @@ struct GeomCurve {
   float3 vs_P = view.point_world_to_view(interp.P);
 
   if (pipe.is_shadow_pipe) [[static_branch]] {
-    ShadowSmooth &shadow_clip = interface_get(eevee_shadow_iface_info, shadow_clip);
+    auto &shadow_clip = interface_get(eevee_shadow_iface_info, shadow_clip);
     ShadowRenderView view = shadow.render_view_buf[view_id];
     shadow_clip.position = shadow_position_vector_get(vs_P, view);
     shadow_clip.vector = shadow_clip_vector_get(vs_P, view.clip_distance_inv);

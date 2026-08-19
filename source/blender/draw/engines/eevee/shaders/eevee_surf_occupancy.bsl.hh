@@ -61,7 +61,7 @@ void surf_occupancy([[resource_table]] SurfOccupancy &srt,
                     [[front_facing]] const bool front_facing,
                     [[frag_coord]] const float4 frag_co)
 {
-  const SurfSmooth &interp = interface_get(eevee_geom_iface_info, interp);
+  const auto &interp = interface_get(eevee_geom_iface_info, interp);
 
   const ViewMatrices view = views.get(0);
   int2 texel = int2(frag_co.xy);

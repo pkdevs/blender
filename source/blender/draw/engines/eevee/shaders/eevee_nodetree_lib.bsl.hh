@@ -4,6 +4,8 @@
 
 #pragma once
 
+#include "infos/eevee_geom_infos.hh"
+
 #include "draw_intersect_lib.glsl"
 #include "draw_model.bsl.hh"
 #include "draw_view.bsl.hh"
@@ -27,7 +29,7 @@ uint resource_id_get()
   /* clang-format off */ /* Multi-line macro mess the shader log line. */
   [[resource_table]] const eevee::PipelineConstants &pipe = resource_table_get(eevee::PipelineConstants);
   /* clang-format on */
-  eevee::SurfFlat &interp_flat = interface_get(eevee_geom_iface_info, interp_flat);
+  auto &interp_flat = interface_get(eevee_geom_iface_info, interp_flat);
   draw::ID id{interp_flat.resource_id_raw};
   if (pipe.is_shadow_pipe) {
     return id.resource_id<64>();
@@ -40,7 +42,7 @@ uint view_id_get()
   /* clang-format off */ /* Multi-line macro mess the shader log line. */
   [[resource_table]] const eevee::PipelineConstants &pipe = resource_table_get(eevee::PipelineConstants);
   /* clang-format on */
-  eevee::SurfFlat &interp_flat = interface_get(eevee_geom_iface_info, interp_flat);
+  auto &interp_flat = interface_get(eevee_geom_iface_info, interp_flat);
   draw::ID id{interp_flat.resource_id_raw};
   if (pipe.is_shadow_pipe) {
     return id.view_id<64>();

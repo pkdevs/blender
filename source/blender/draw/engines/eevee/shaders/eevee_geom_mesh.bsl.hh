@@ -58,7 +58,7 @@ struct GeomMeshVertIn {
   auto &interp = interface_get(eevee_geom_iface_info, interp);
 
   if (pipe.is_shadow_pipe) [[static_branch]] {
-    ShadowFlat &shadow_iface = interface_get(eevee_shadow_iface_info, shadow_iface);
+    auto &shadow_iface = interface_get(eevee_shadow_iface_info, shadow_iface);
 
     shadow_iface.shadow_view_id = int(view_id);
     out_viewport = int(shadow.render_view_buf[view_id].viewport_index);
@@ -72,7 +72,7 @@ struct GeomMeshVertIn {
     /* clang-format off */ /* Multi-line define messes up line index. */
     [[resource_table]] const GeometryVelocity &geo_vel = resource_table_get(eevee::GeometryVelocity);
     /* clang-format on */
-    SurfVelocity &motion = interface_get(eevee_velocity_iface_info, motion);
+    auto &motion = interface_get(eevee_velocity_iface_info, motion);
     float3 prv, nxt;
     geo_vel.local_position_deltas(vert_in.pos, vert_id, prv, nxt, resource_id);
     /* FIXME(fclem): Evaluating before displacement avoid displacement being treated as motion but
@@ -102,7 +102,7 @@ struct GeomMeshVertIn {
   float3 vs_P = view.point_world_to_view(interp.P);
 
   if (pipe.is_shadow_pipe) [[static_branch]] {
-    ShadowSmooth &shadow_clip = interface_get(eevee_shadow_iface_info, shadow_clip);
+    auto &shadow_clip = interface_get(eevee_shadow_iface_info, shadow_clip);
     ShadowRenderView view = shadow.render_view_buf[view_id];
     shadow_clip.position = shadow_position_vector_get(vs_P, view);
     shadow_clip.vector = shadow_clip_vector_get(vs_P, view.clip_distance_inv);
