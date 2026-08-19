@@ -338,20 +338,30 @@ bool DLSSDenoiser::denoise_create_if_needed(DenoiseContext &context)
   params->Set(NVSDK_NGX_Parameter_OutWidth, context.denoised_buffer_params.width);
   params->Set(NVSDK_NGX_Parameter_OutHeight, context.denoised_buffer_params.height);
 
+  NVSDK_NGX_PerfQuality_Value perf_quality_value = NVSDK_NGX_PerfQuality_Value_DLAA;
+  if (context.denoise_params.upscale_factor > 1) {
+    switch (context.denoise_params.quality) {
+      default:
+      case DENOISER_QUALITY_HIGH:
+        perf_quality_value = NVSDK_NGX_PerfQuality_Value_MaxQuality;
+        break;
+      case DENOISER_QUALITY_BALANCED:
+        perf_quality_value = NVSDK_NGX_PerfQuality_Value_Balanced;
+        break;
+      case DENOISER_QUALITY_FAST:
+        perf_quality_value = NVSDK_NGX_PerfQuality_Value_MaxPerf;
+        if (context.denoise_params.upscale_factor >= 3) {
+          perf_quality_value = NVSDK_NGX_PerfQuality_Value_UltraPerformance;
+        }
+        break;
+    }
+  }
+  params->Set(NVSDK_NGX_Parameter_PerfQualityValue, perf_quality_value);
+
   params->Set(NVSDK_NGX_Parameter_DLSS_Denoise_Mode, NVSDK_NGX_DLSS_Denoise_Mode_DLUnified);
   params->Set(NVSDK_NGX_Parameter_DLSS_Feature_Create_Flags,
               NVSDK_NGX_DLSS_Feature_Flags_IsHDR | NVSDK_NGX_DLSS_Feature_Flags_MVLowRes);
   params->Set(NVSDK_NGX_Parameter_DLSS_Enable_Output_Subrects, 0);
-  params->Set(NVSDK_NGX_Parameter_PerfQualityValue,
-              context.denoise_params.upscale_factor == 1.0f ?
-                  NVSDK_NGX_PerfQuality_Value_DLAA :
-              context.denoise_params.upscale_factor <= 1.0f / 0.65f ?
-                  NVSDK_NGX_PerfQuality_Value_MaxQuality :
-              context.denoise_params.upscale_factor <= 1.0f / 0.57f ?
-                  NVSDK_NGX_PerfQuality_Value_Balanced :
-              context.denoise_params.upscale_factor <= 1.0f / 0.5f ?
-                  NVSDK_NGX_PerfQuality_Value_MaxPerf :
-                  NVSDK_NGX_PerfQuality_Value_UltraPerformance);
   params->Set(NVSDK_NGX_Parameter_Use_HW_Depth, NVSDK_NGX_DLSS_Depth_Type_Linear);
   params->Set(NVSDK_NGX_Parameter_DLSS_Roughness_Mode, NVSDK_NGX_DLSS_Roughness_Mode_Packed);
 
