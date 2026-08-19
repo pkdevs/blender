@@ -16,6 +16,7 @@ struct OpenSubdiv_Converter {
    * Other topology information is currently encoded with callbacks rather than arrays directly.
    */
   blender::OffsetIndices<int> faces;
+  blender::Span<int> corner_verts;
 
   OpenSubdiv_SchemeType (*getSchemeType)(const OpenSubdiv_Converter *converter);
 
@@ -45,10 +46,6 @@ struct OpenSubdiv_Converter {
   //////////////////////////////////////////////////////////////////////////////
   // Face relationships.
 
-  // Array of vertex indices the face consists of.
-  void (*getFaceVertices)(const OpenSubdiv_Converter *converter,
-                          const int face_index,
-                          int *face_vertices);
   // Array of edge indices the face consists of.
   // Aligned with the vertex indices array, edge i connects face vertex i
   // with face index i+1.

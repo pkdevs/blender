@@ -71,8 +71,6 @@ struct Vertex {
 };
 
 struct Corner {
-  /* Indexes into the geometry.vertices array */
-  int vert_index = 0;
   int grid_index = 0;
 };
 
@@ -127,6 +125,8 @@ struct MultiresReshapeSmoothContext : NonCopyable, NonMovable {
     size_t num_edges;
     Array<Edge> edges;
 
+    /* Indexes into the geometry.vertices array */
+    Array<int> corner_verts;
     Array<Corner> corners;
 
     /* Face topology of subdivision level. */
@@ -341,9 +341,9 @@ static std::array<std::optional<GridCoord>, 4> grid_coords_from_face_verts(
 
   for (const int i : face.index_range()) {
     const int corner_index = face[i];
-    Corner *corner = &reshape_smooth_context->geometry.corners[corner_index];
+    const int vert_index = reshape_smooth_context->geometry.corner_verts[corner_index];
     result[i] = vert_grid_coord_with_grid_index(
-        &reshape_smooth_context->geometry.vertices[corner->vert_index], grid_index);
+        &reshape_smooth_context->geometry.vertices[vert_index], grid_index);
     BLI_assert(result[i].has_value());
   }
   return result;
@@ -488,6 +488,7 @@ static bool foreach_topology_info(const bke::subdiv::ForeachContext *foreach_con
   reshape_smooth_context->geometry.max_edges = max_edges;
   reshape_smooth_context->geometry.edges.reinitialize(max_edges);
 
+  reshape_smooth_context->geometry.corner_verts.reinitialize(num_loops);
   reshape_smooth_context->geometry.corners.reinitialize(num_loops);
 
   reshape_smooth_context->geometry.face_offsets.reinitialize(num_faces + 1);
@@ -647,7 +648,7 @@ static void foreach_loop(const bke::subdiv::ForeachContext *foreach_context,
   BLI_assert(subdiv_loop_index < reshape_smooth_context->geometry.corners.size());
 
   Corner *corner = &reshape_smooth_context->geometry.corners[subdiv_loop_index];
-  corner->vert_index = subdiv_vert_index;
+  reshape_smooth_context->geometry.corner_verts[subdiv_loop_index] = subdiv_vert_index;
 
   const int first_grid_index = reshape_context->face_start_grid_index[coarse_face_index];
   corner->grid_index = first_grid_index + coarse_corner;
@@ -820,23 +821,6 @@ static int get_num_vertices(const OpenSubdiv_Converter *converter)
   return reshape_smooth_context->geometry.vertices.size();
 }
 
-static void get_face_vertices(const OpenSubdiv_Converter *converter,
-                              int face_index,
-                              int *face_vertices)
-{
-  const MultiresReshapeSmoothContext *reshape_smooth_context =
-      static_cast<const MultiresReshapeSmoothContext *>(converter->user_data);
-  BLI_assert(face_index < reshape_smooth_context->geometry.faces().size());
-
-  const IndexRange face = reshape_smooth_context->geometry.faces()[face_index];
-
-  for (const int i : face.index_range()) {
-    const int corner_index = face[i];
-    const Corner *corner = &reshape_smooth_context->geometry.corners[corner_index];
-    face_vertices[i] = corner->vert_index;
-  }
-}
-
 static int get_num_edges(const OpenSubdiv_Converter *converter)
 {
   const MultiresReshapeSmoothContext *reshape_smooth_context =
@@ -897,11 +881,11 @@ static void converter_init(const MultiresReshapeSmoothContext *reshape_smooth_co
   converter->specifiesFullTopology = specifies_full_topology;
 
   converter->faces = reshape_smooth_context->geometry.faces();
+  converter->corner_verts = reshape_smooth_context->geometry.corner_verts;
 
   converter->getNumEdges = get_num_edges;
   converter->getNumVertices = get_num_vertices;
 
-  converter->getFaceVertices = get_face_vertices;
   converter->getFaceEdges = nullptr;
 
   converter->getEdgeVertices = get_edge_vertices;

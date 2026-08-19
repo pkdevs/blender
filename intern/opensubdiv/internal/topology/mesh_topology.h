@@ -90,8 +90,6 @@ class MeshTopology {
   bool isFaceVertexIndicesEqual(int face_index,
                                 int num_expected_face_vertex_indices,
                                 const int *expected_face_vertex_indices) const;
-  bool isFaceVertexIndicesEqual(int face_index,
-                                const std::vector<int> &expected_face_vertex_indices) const;
 
   //////////////////////////////////////////////////////////////////////////////
   // Pipeline related.

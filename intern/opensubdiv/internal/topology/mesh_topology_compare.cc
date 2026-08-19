@@ -78,17 +78,12 @@ static bool isEqualGeometryFace(const MeshTopology &mesh_topology,
     return false;
   }
 
-  std::vector<int> vertices_of_face;
+  const OffsetIndices<int> faces = converter->faces;
+  const Span<int> corner_verts = converter->corner_verts;
   for (int face_index = 0; face_index < num_requested_faces; ++face_index) {
-    int num_face_vertices = converter->faces[face_index].size();
-    if (mesh_topology.getNumFaceVertices(face_index) != num_face_vertices) {
-      return false;
-    }
-
-    vertices_of_face.resize(num_face_vertices);
-    converter->getFaceVertices(converter, face_index, vertices_of_face.data());
-
-    if (!mesh_topology.isFaceVertexIndicesEqual(face_index, vertices_of_face)) {
+    const Span<int> face_verts = corner_verts.slice(faces[face_index]);
+    if (!mesh_topology.isFaceVertexIndicesEqual(face_index, face_verts.size(), face_verts.data()))
+    {
       return false;
     }
   }

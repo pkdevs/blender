@@ -111,14 +111,14 @@ inline bool TopologyRefinerFactory<TopologyRefinerData>::assignComponentTopology
   const bool full_topology_specified = converter->specifiesFullTopology(converter);
 
   const blender::OffsetIndices<int> src_faces = converter->faces;
+  const blender::Span<int> src_corner_verts = converter->corner_verts;
 
   // Vertices of face.
   for (const int face_index : src_faces.index_range()) {
+    const blender::Span<int> face_verts = src_corner_verts.slice(src_faces[face_index]);
     IndexArray dst_face_verts = getBaseFaceVertices(refiner, face_index);
-    converter->getFaceVertices(converter, face_index, &dst_face_verts[0]);
-
-    base_mesh_topology->setFaceVertexIndices(
-        face_index, dst_face_verts.size(), &dst_face_verts[0]);
+    std::copy_n(face_verts.data(), face_verts.size(), dst_face_verts.begin());
+    base_mesh_topology->setFaceVertexIndices(face_index, face_verts.size(), face_verts.data());
   }
 
   // If converter does not provide full topology, we are done.
