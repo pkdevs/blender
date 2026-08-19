@@ -449,7 +449,11 @@ void tile_main([[resource_table]] const draw::View &views,
     switch (light.type) {
       case LIGHT_SPOT_SPHERE:
       case LIGHT_SPOT_DISK: {
+#ifndef BSL_530
         LightSpotData spot = light.spot();
+#else
+        LightSpotData spot = light.spot;
+#endif
         /* Only for < ~170 degree Cone due to plane extraction precision. */
         if (spot.spot_tan < 10.0f) {
           Pyramid pyramid = shape_pyramid_non_oblique(
@@ -461,7 +465,7 @@ void tile_main([[resource_table]] const draw::View &views,
           break;
         }
         /* Fall-through to the hemispheric case. */
-        ATTR_FALLTHROUGH;
+        [[fallthrough]];
       }
       case LIGHT_RECT:
       case LIGHT_ELLIPSE: {

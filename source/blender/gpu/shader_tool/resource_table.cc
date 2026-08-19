@@ -767,7 +767,7 @@ void SourceProcessor::lower_resource_table(Parser &parser)
         for (const auto &member : srt) {
           if (member.res_type == "resource_table") {
             access_macros += "#define access_" + srt.name + "_" + member.var_name + "() ";
-            access_macros += member.var_type + "::new_()\n";
+            access_macros += member.var_type + "_ctor_()\n";
           }
           else {
             access_macros += "#define access_" + srt.name + "_" + member.var_name + "() ";
