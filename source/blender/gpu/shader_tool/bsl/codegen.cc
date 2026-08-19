@@ -1785,11 +1785,12 @@ struct CodegenContext : NodeErrorHandler {
           create_info_decl += "BUILTINS(BuiltinBits::" + to_str(attr.res_type) + ")\n";
           break;
         case ResourceType::FRAG_DEPTH:
-          for (Attr attr : decl.attributes().children_of_type<Attr>()) {
+          for (Attr attr : arg.attributes().children_of_type<Attr>()) {
             string_view id = attr.identifier().str();
             if (id == "frag_depth") {
               create_info_decl += "DEPTH_WRITE(DepthWrite::" +
-                                  to_uppercase(string(attr.parameters().str())) + ")\n";
+                                  to_uppercase(string(attr.parameters().splat_1().arg1.str())) +
+                                  ")\n";
             }
           }
           break;
