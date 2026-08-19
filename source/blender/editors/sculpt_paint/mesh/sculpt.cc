@@ -3582,7 +3582,7 @@ static void do_brush_action(const Depsgraph &depsgraph,
     bke::pbvh::Tree &pbvh = *bke::object::pbvh_get(ob);
     bke::pbvh::update_normals(depsgraph, ob, pbvh);
   }
-  if (sculpt_brush_needs_normal(ss, brush) || BKE_brush_has_cube_tip(&brush, PaintMode::Sculpt)) {
+  if (sculpt_brush_needs_normal(ss, brush)) {
     update_sculpt_normal(depsgraph, sd, ob, cursor_sample_result);
   }
 
