@@ -1049,7 +1049,9 @@ static bool strip_read_data_cb(Strip *strip, void *user_data)
         const int count = strip->data->stripdata_num == 0 ?
                               strip->anim_startofs + strip->len + strip->anim_endofs :
                               strip->data->stripdata_num;
-        (void)BLO_read_array(reader, &strip->data->stripdata, count);
+        if (!BLO_read_array(reader, &strip->data->stripdata, count)) {
+          strip->data->stripdata_num = 0;
+        }
         break;
       }
       case STRIP_TYPE_MOVIE:
