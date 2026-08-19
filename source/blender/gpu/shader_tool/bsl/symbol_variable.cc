@@ -9,6 +9,10 @@
 #include "symbol_table.hh"
 #include "symbol_variable.hh"
 
+#include <iomanip>
+#include <limits>
+#include <sstream>
+
 namespace bsl {
 
 using namespace blender::gpu::shader::parser::ast;
@@ -65,6 +69,18 @@ SymbolClass *SymbolVariable::parent_class()
   return this->parent->as_class();
 }
 
+std::string to_string_exact(float val)
+{
+  std::stringstream ss;
+  ss << std::setprecision(std::numeric_limits<float>::max_digits10) << val;
+  string str = ss.str();
+  /* Add trailing zero if there is no decimal. */
+  if (str.find_first_of(".eE") == std::string::npos) {
+    str += ".0";
+  }
+  return str + "f";
+}
+
 string SymbolVariable::value_str() const
 {
   assert(is_constexpr);
@@ -74,8 +90,11 @@ string SymbolVariable::value_str() const
         if constexpr (std::is_same_v<T, bool>) {
           return v ? "true" : "false";
         }
-        if constexpr (std::is_unsigned_v<T>) {
+        else if constexpr (std::is_unsigned_v<T>) {
           return to_string(v) + "u";
+        }
+        else if constexpr (std::is_same_v<T, float>) {
+          return to_string_exact(v);
         }
         else {
           return to_string(v);
