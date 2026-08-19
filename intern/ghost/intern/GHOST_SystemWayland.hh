@@ -27,8 +27,9 @@
 #  include <thread>
 #endif
 
-#ifdef WITH_GHOST_WAYLAND_DBUS
-#  include "GHOST_WaylandAppearanceWatcher.hh"
+#ifdef WITH_GHOST_DBUS
+#  include "GHOST_DBusWatcher.hh"
+#  include <atomic>
 #  include <memory>
 #endif
 
@@ -407,7 +408,11 @@ class GHOST_SystemWayland : public GHOST_System {
 
   struct GWL_Display *display_;
 
-#ifdef WITH_GHOST_WAYLAND_DBUS
-  std::unique_ptr<GHOST_WaylandAppearanceWatcher> appearance_watcher_;
+#ifdef WITH_GHOST_DBUS
+  std::unique_ptr<GHOST_DBusWatcher> dbus_watcher_;
+  /** Written from the watcher's background thread, see #getSystemColorScheme. */
+  std::atomic<GHOST_TColorScheme> color_scheme_ = GHOST_kColorSchemeNoPreference;
+  /** Whether #color_scheme_ has been reported by the system, as opposed to never read. */
+  std::atomic<bool> color_scheme_known_ = false;
 #endif
 };

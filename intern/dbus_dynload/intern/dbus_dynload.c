@@ -8,7 +8,8 @@
  * Wrapper functions for `<dbus/dbus.h>`.
  */
 
-#include <stdlib.h> /* `atexit`. */
+#include <stddef.h> /* `NULL`. */
+#include <string.h> /* `memset`. */
 
 #include "dbus_dynload_API.h"
 #include "dbus_dynload_utils.h"
@@ -22,6 +23,10 @@ static DynamicLibrary lib = NULL;
 
 bool dbus_dynload_init(const bool verbose)
 {
+  if (lib != NULL) {
+    return true;
+  }
+
   /* Library paths. */
   const char *paths[] = {
       "libdbus-1.so.3",
@@ -32,30 +37,22 @@ bool dbus_dynload_init(const bool verbose)
   if (!(lib = dynamic_library_open_array_with_error(paths, paths_num, verbose, &path_index))) {
     return false;
   }
-  if (atexit(dbus_dynload_exit)) {
-    dbus_dynload_exit();
-    return false;
-  }
+
+  /* NOTE: unlike `wayland_dynload`, there is no `atexit` unload. DBUS is used from a background
+   * thread which may still be running at exit (see #GHOST_DBusWatcher), unloading the library
+   * from under it would crash. Keeping it loaded for the life of the process is harmless. */
 
 #define DBUS_DYNLOAD_FN(symbol) \
   if (!(dbus_dynload.symbol = dynamic_library_find_with_error( \
             lib, #symbol, paths[path_index], verbose))) \
   { \
-    dbus_dynload_exit(); \
+    memset(&dbus_dynload, 0x0, sizeof(dbus_dynload)); \
     return false; \
   }
 #include "dbus_dynload.h"
 #undef DBUS_DYNLOAD_FN
 
   return true;
-}
-
-void dbus_dynload_exit(void)
-{
-  if (lib != NULL) {
-    dynamic_library_close(lib); /*  Ignore errors. */
-    lib = NULL;
-  }
 }
 
 /* Validate local signatures against the original header. */

@@ -8978,6 +8978,24 @@ static void gwl_display_event_thread_destroy(GWL_Display *display)
  * WAYLAND specific implementation of the #GHOST_System interface.
  * \{ */
 
+#ifdef WITH_GHOST_DBUS
+/**
+ * #GHOST_TColorScheme intentionally uses the same values as the XDG Desktop Portal
+ * `org.freedesktop.appearance` `color-scheme` setting, anything outside that range is a
+ * value this version of Blender doesn't know about.
+ */
+static GHOST_TColorScheme ghost_color_scheme_from_portal_value(const uint32_t value)
+{
+  switch (value) {
+    case GHOST_kColorSchemePreferDark:
+      return GHOST_kColorSchemePreferDark;
+    case GHOST_kColorSchemePreferLight:
+      return GHOST_kColorSchemePreferLight;
+  }
+  return GHOST_kColorSchemeNoPreference;
+}
+#endif /* WITH_GHOST_DBUS */
+
 GHOST_SystemWayland::GHOST_SystemWayland(const bool background)
     : GHOST_System(),
 #ifdef USE_EVENT_BACKGROUND_THREAD
@@ -9087,34 +9105,41 @@ GHOST_SystemWayland::GHOST_SystemWayland(const bool background)
    * references to the timer-manager that it's safer to create it. */
   display_->key_repeat_timer_manager = new GHOST_TimerManager();
 
-#ifdef WITH_GHOST_WAYLAND_DBUS
+#ifdef WITH_GHOST_DBUS
   /* Like the WAYLAND event thread, there's no need for this in background mode. */
   if (!background) {
-    appearance_watcher_ = std::make_unique<GHOST_WaylandAppearanceWatcher>(
-        [this](GHOST_TColorScheme /*color_scheme*/) {
-          /* Called from the watcher's own background thread. */
+    dbus_watcher_ = std::make_unique<GHOST_DBusWatcher>();
+    dbus_watcher_->setting_add(
+        "org.freedesktop.appearance", "color-scheme", [this](const GHOST_DBusValue &value) {
+          const uint32_t *value_uint = std::get_if<uint32_t>(&value);
+          if (!value_uint) {
+            return;
+          }
+          const GHOST_TColorScheme color_scheme = ghost_color_scheme_from_portal_value(
+              *value_uint);
+          /* The first value is always reported, even when it matches #color_scheme_'s initial
+           * value: a desktop actively reporting "no preference" is not the same as never having
+           * read one, and the two resolve to different themes. Later repeats are dropped to avoid
+           * unnecessary events for duplicate signals. */
+          const bool is_first = !color_scheme_known_.exchange(true);
+          const bool is_changed = color_scheme_.exchange(color_scheme) != color_scheme;
+          if (!is_first && !is_changed) {
+            return;
+          }
           pushEvent_maybe_pending(std::make_unique<GHOST_Event>(
               getMilliSeconds(), GHOST_kEventSystemAppearanceChanged, nullptr));
         });
-    if (appearance_watcher_) {
-      /* Push an initial event too (rather than relying on the caller querying the color scheme up
-       * front), so the value the constructor just read synchronously above is picked up the same
-       * way a later change would be: through the main event queue, once the rest of Blender has
-       * finished initializing. */
-      pushEvent_maybe_pending(std::make_unique<GHOST_Event>(
-          getMilliSeconds(), GHOST_kEventSystemAppearanceChanged, nullptr));
-    }
+    dbus_watcher_->start();
   }
 #endif
 }
 
 void GHOST_SystemWayland::display_destroy_and_free_all()
 {
-#ifdef WITH_GHOST_WAYLAND_DBUS
-  /* Stop and join the watcher thread before freeing `display_`: its callback (still able to
-   * run until the thread is joined) accesses `display_` indirectly via `pushEvent_maybe_pending`.
-   */
-  appearance_watcher_.reset();
+#ifdef WITH_GHOST_DBUS
+  /* Stop the watcher before freeing `display_`: its callback (which can still run up until
+   * this returns) accesses `display_` indirectly via `pushEvent_maybe_pending`. */
+  dbus_watcher_.reset();
 #endif
 
   gwl_display_destroy(display_);
@@ -10804,12 +10829,13 @@ GHOST_TimerManager *GHOST_SystemWayland::key_repeat_timer_manager()
 
 GHOST_TColorScheme GHOST_SystemWayland::getSystemColorScheme() const
 {
-#ifdef WITH_GHOST_WAYLAND_DBUS
-  if (appearance_watcher_) {
-    return appearance_watcher_->color_scheme_get();
-  }
-#endif
+#ifdef WITH_GHOST_DBUS
+  /* Stays #GHOST_kColorSchemeNoPreference until the watcher's first read completes, callers are
+   * expected to react to #GHOST_kEventSystemAppearanceChanged rather than query this up front. */
+  return color_scheme_.load();
+#else
   return GHOST_kColorSchemeNoPreference;
+#endif
 }
 
 void GHOST_SystemWayland::xdg_toplevel_icon_update(GHOST_WindowWayland *window,

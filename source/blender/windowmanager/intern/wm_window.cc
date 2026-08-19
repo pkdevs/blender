@@ -1802,10 +1802,17 @@ static bool ghost_event_proc(const GHOST_IEvent *ghost_event, GHOST_TUserDataPtr
         case GHOST_kColorSchemePreferDark:
           return UserPrefThemeType::Dark;
         case GHOST_kColorSchemePreferLight:
+        case GHOST_kColorSchemeNoPreference:
+          /* "No preference" resolves to light, matching what desktops expect of it: GNOME's
+           * Dark Style toggle switches between "prefer dark" and "no preference", it never
+           * reports "prefer light". Toolkits (GTK, Qt) treat it as light for the same reason.
+           *
+           * This is only reached once the system has actually reported a color scheme, a
+           * platform that can't query one never sends this event, so Blender's own default
+           * (dark) still applies there. */
           return UserPrefThemeType::Light;
-        default:
-          return UserPrefThemeType::Dark;
       }
+      return UserPrefThemeType::Dark;
     }();
 
     /* If System mode now resolves to Light but no light theme has ever been loaded,

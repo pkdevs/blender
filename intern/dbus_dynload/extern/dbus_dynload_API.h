@@ -15,7 +15,6 @@ extern "C" {
 #include <stdbool.h>
 
 bool dbus_dynload_init(bool verbose);
-void dbus_dynload_exit(void);
 
 #ifdef __cplusplus
 }
