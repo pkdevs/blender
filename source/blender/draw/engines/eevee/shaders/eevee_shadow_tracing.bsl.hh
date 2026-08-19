@@ -149,10 +149,8 @@ struct ShadowRayDirectional {
 };
 
 /* `lP` is supposed to be in light rotated space. But not translated. */
-ShadowRayDirectional shadow_ray_generate_directional(LightData light,
-                                                     float2 random_2d,
-                                                     float3 lP,
-                                                     float texel_radius)
+ShadowRayDirectional shadow_ray_generate_directional(
+    LightData light, float2 random_2d, float3 lP, float texel_radius, float soft_shadow_scale)
 {
   float clip_near = orderedIntBitsToFloat(light.clip_near);
   /* Assumed to be non-null. */
@@ -164,7 +162,7 @@ ShadowRayDirectional shadow_ray_generate_directional(LightData light,
   float shadow_angle_cos = max(light.sun().shadow_angle_cos, max_tracing_angle_cos);
 
   /* Light shape is 1 unit away from the shading point. */
-  float3 direction = sample_uniform_cone(random_2d, shadow_angle_cos);
+  float3 direction = sample_uniform_cone(random_2d, shadow_angle_cos * soft_shadow_scale);
 
   /* It only make sense to trace where there can be occluder. Clamp by distance to near plane. */
   direction *= max(texel_radius, dist_to_near_plane / direction.z);
@@ -225,7 +223,10 @@ struct ShadowRayPunctual {
 };
 
 /* Return ray in UV clip space [0..1]. */
-ShadowRayPunctual shadow_ray_generate_punctual(LightData light, float2 random_2d, float3 lP)
+ShadowRayPunctual shadow_ray_generate_punctual(LightData light,
+                                               float2 random_2d,
+                                               float3 lP,
+                                               float soft_shadow_scale)
 {
   if (light.type == LIGHT_RECT) {
     random_2d = random_2d * 2.0f - 1.0f;
@@ -233,6 +234,7 @@ ShadowRayPunctual shadow_ray_generate_punctual(LightData light, float2 random_2d
   else {
     random_2d = sample_disk(random_2d);
   }
+  random_2d *= soft_shadow_scale;
 
   float clip_near = intBitsToFloat(light.clip_near);
   float shape_radius = light.spot().local.shadow_radius;
@@ -523,16 +525,15 @@ float shadow_eval([[resource_table]] ShadowRenderData &srd,
   float surface_hit = 0.0f;
   for (int ray_index = 0; ray_index < ray_count && ray_index < SHADOW_MAX_RAY; ray_index++) {
     float2 random_ray_2d = fract(hammersley_2d(ray_index, ray_count) + random_shadow_3d.xy);
-    random_ray_2d = mix(float2(0.5f), random_ray_2d, soft_shadow_scale);
-
     bool has_hit;
     if (is_directional) {
       ShadowRayDirectional clip_ray = shadow_ray_generate_directional(
-          light, random_ray_2d, lP, texel_radius);
+          light, random_ray_2d, lP, texel_radius, soft_shadow_scale);
       has_hit = shadow_map_trace(srd, clip_ray, ray_step_count, random_shadow_3d.z);
     }
     else {
-      ShadowRayPunctual clip_ray = shadow_ray_generate_punctual(light, random_ray_2d, lP);
+      ShadowRayPunctual clip_ray = shadow_ray_generate_punctual(
+          light, random_ray_2d, lP, soft_shadow_scale);
       has_hit = shadow_map_trace(srd, clip_ray, ray_step_count, random_shadow_3d.z);
     }
 
