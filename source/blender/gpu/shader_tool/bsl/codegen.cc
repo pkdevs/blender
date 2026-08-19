@@ -2053,6 +2053,9 @@ struct CodegenContext : NodeErrorHandler {
                    preceeded_by_true_if_constexpr || (is_constexpr && constexpr_value == true),
                    preceeded_by_regular_if || !is_constexpr);
     }
+    else {
+      jump_to(next.front());
+    }
   }
 
   void static_if_statement(Node decl,
@@ -2109,6 +2112,7 @@ struct CodegenContext : NodeErrorHandler {
     else {
       /* Pretty align. */
       builder.ss << string(decl.front().char_number(), ' ') + "#endif\n";
+      jump_to(next.front());
     }
   }
 
