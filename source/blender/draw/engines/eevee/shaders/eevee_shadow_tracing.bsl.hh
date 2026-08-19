@@ -152,6 +152,9 @@ struct ShadowRayDirectional {
 ShadowRayDirectional shadow_ray_generate_directional(
     LightData light, float2 random_2d, float3 lP, float texel_radius, float soft_shadow_scale)
 {
+  float shadow_angle_cos = light.sun().shadow_angle_cos;
+  shadow_angle_cos = mix(1.0f, shadow_angle_cos, soft_shadow_scale);
+
   float clip_near = orderedIntBitsToFloat(light.clip_near);
   /* Assumed to be non-null. */
   float dist_to_near_plane = -lP.z - clip_near;
@@ -159,10 +162,10 @@ ShadowRayDirectional shadow_ray_generate_directional(
   float max_tracing_distance = texel_radius * float(SHADOW_PAGE_RES << SHADOW_TILEMAP_LOD);
   float max_tracing_angle_cos = cos_from_tan(max_tracing_distance / dist_to_near_plane);
   /* Taking max of cosines to get the minimum of the angles. */
-  float shadow_angle_cos = max(light.sun().shadow_angle_cos, max_tracing_angle_cos);
+  shadow_angle_cos = max(shadow_angle_cos, max_tracing_angle_cos);
 
   /* Light shape is 1 unit away from the shading point. */
-  float3 direction = sample_uniform_cone(random_2d, shadow_angle_cos * soft_shadow_scale);
+  float3 direction = sample_uniform_cone(random_2d, shadow_angle_cos);
 
   /* It only make sense to trace where there can be occluder. Clamp by distance to near plane. */
   direction *= max(texel_radius, dist_to_near_plane / direction.z);
