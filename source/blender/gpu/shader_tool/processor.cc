@@ -1056,7 +1056,7 @@ void SourceProcessor::lower_swizzle_methods_ast(Parser &parser)
   for (FuncCall call : parser.root().descendants_of_type<FuncCall>()) {
     ast::FuncParamList params = call.parameters();
     if (call.front().prev() != Dot || !params.is_empty()) {
-      return;
+      continue;
     }
 
     string_view method_name = call.identifier().str();
