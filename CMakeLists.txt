@@ -343,12 +343,22 @@ if(UNIX AND NOT (APPLE OR HAIKU))
   option(WITH_GHOST_WAYLAND "Enable building Blender against Wayland for windowing" ON)
   mark_as_advanced(WITH_GHOST_WAYLAND)
 
+  option(WITH_GHOST_DBUS "\
+Enable reading desktop settings over DBUS, such as the light/dark theme preference. \
+Requires the `dbus-1` headers at build time."
+    ON
+  )
+  mark_as_advanced(WITH_GHOST_DBUS)
+
+  option(WITH_GHOST_DBUS_DYNLOAD "\
+Enable runtime dynamic loading of `libdbus` (avoids a link time dependency)"
+    ON
+  )
+  mark_as_advanced(WITH_GHOST_DBUS_DYNLOAD)
+
   if(WITH_GHOST_WAYLAND)
     option(WITH_GHOST_CSD "Enable client side decorations with Wayland" ON)
     mark_as_advanced(WITH_GHOST_CSD)
-
-    option(WITH_GHOST_WAYLAND_DBUS "Optionally build with DBUS support (used for themes)." ON)
-    mark_as_advanced(WITH_GHOST_WAYLAND_DBUS)
 
     option(WITH_GHOST_WAYLAND_DYNLOAD "Enable runtime dynamic WAYLAND libraries loading" ON)
     mark_as_advanced(WITH_GHOST_WAYLAND_DYNLOAD)
@@ -1356,6 +1366,9 @@ endif()
 if(UNIX AND NOT (APPLE OR HAIKU))
   set_and_warn_incompatible(WITH_HEADLESS WITH_GHOST_WAYLAND OFF)
   set_and_warn_incompatible(WITH_HEADLESS WITH_GHOST_X11 OFF)
+  # Only the X11/WAYLAND back-ends read desktop settings over DBUS.
+  set_and_warn_incompatible(WITH_HEADLESS WITH_GHOST_DBUS OFF)
+  set_and_warn_incompatible(WITH_GHOST_SDL WITH_GHOST_DBUS OFF)
 endif()
 set_and_warn_incompatible(WITH_HEADLESS WITH_GHOST_SDL OFF)
 
@@ -2570,7 +2583,10 @@ if(FIRST_RUN)
     endif()
     if(WITH_GHOST_WAYLAND)
       info_cfg_option(WITH_GHOST_WAYLAND_DYNLOAD)
-      info_cfg_option(WITH_GHOST_WAYLAND_DBUS)
+    endif()
+    info_cfg_option(WITH_GHOST_DBUS)
+    if(WITH_GHOST_DBUS)
+      info_cfg_option(WITH_GHOST_DBUS_DYNLOAD)
     endif()
   endif()
 
