@@ -161,7 +161,7 @@ DRWContext::DRWContext(Mode mode_,
     this->object_pose = nullptr;
   }
 
-  this->active_tool = WM_toolsystem_ref_from_context(C);
+  this->active_tool = (C) ? WM_toolsystem_ref_from_context(C) : nullptr;
 
   /* View layer can be lazily synced. */
   BKE_view_layer_synced_ensure(*DEG_get_bmain(depsgraph), this->scene, this->view_layer);
