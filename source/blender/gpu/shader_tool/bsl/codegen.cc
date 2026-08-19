@@ -2167,17 +2167,18 @@ struct CodegenContext : NodeErrorHandler {
 
     if (attr.res_type != ResourceType::NONE) {
       /* Resources are defined in global space at runtime. */
+      skip_node(decl);
       return false;
-    }
-
-    if (jump) {
-      jump_to(decl.front());
     }
 
     if (scope.as_class() == nullptr && decl.is_reference()) {
       /* Local references are simply pasted. */
       skip_node(decl);
       return false;
+    }
+
+    if (jump) {
+      jump_to(decl.front());
     }
 
     skip_node(decl.attributes());
