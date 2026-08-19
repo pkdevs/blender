@@ -466,8 +466,6 @@ static bool collection_importer_remove_poll(bContext *C)
 
 static bool collection_importer_import_poll(bContext *C)
 {
-  using namespace blender;
-
   const Collection *collection = CTX_data_collection(C);
   if (!collection || !collection->importer || ID_IS_LINKED(&collection->id) ||
       ID_IS_OVERRIDE_LIBRARY(&collection->id))
