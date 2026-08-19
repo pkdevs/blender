@@ -28,8 +28,7 @@ static void node_shader_buts_tangent(ui::Layout &layout, bContext *C, PointerRNA
   layout.prop(ptr, "direction_type", ui::ITEM_R_SPLIT_EMPTY_NAME, "", ICON_NONE);
 
   if (RNA_enum_get(ptr, "direction_type") == SHD_TANGENT_UVMAP) {
-    PointerRNA obptr = CTX_data_pointer_get(C, "active_object");
-    Object *object = static_cast<Object *>(obptr.data);
+    Object *object = get_space_editor_object(C);
 
     if (object && object->type == OB_MESH) {
       Depsgraph *depsgraph = CTX_data_depsgraph_pointer(C);
