@@ -246,7 +246,7 @@ void ED_mesh_undosys_type(UndoType *ut);
 /* `editmesh_select.cc` */
 
 void EDBM_select_mirrored(
-    BMEditMesh *em, const Mesh *mesh, int axis, bool extend, int *r_totmirr, int *r_totfail);
+    BMEditMesh *em, int axis, bool extend, bool use_topology, int *r_totmirr, int *r_totfail);
 
 #if 0 /* Unused but seems useful to keep. */
 /**
