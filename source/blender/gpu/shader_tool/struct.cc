@@ -337,7 +337,7 @@ void SourceProcessor::lower_method_definitions(Parser &parser)
 
 void SourceProcessor::lower_constructors(Parser &parser)
 {
-  for (FuncCall call : parser.root().children_of_type<FuncCall>()) {
+  for (FuncCall call : parser.root().descendants_of_type<FuncCall>()) {
     if (call.identifier().str() != "_ctor") {
       continue;
     }
