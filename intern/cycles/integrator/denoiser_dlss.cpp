@@ -322,7 +322,9 @@ bool DLSSDenoiser::denoise_create_if_needed(DenoiseContext &context)
   tex_specular_motion_.destroy();
   tex_output_.destroy();
 
-  if (context.buffer_params.width <= 128 || context.buffer_params.height <= 96) {
+  /* Feature creation fails below these dimensions.
+   * Avoid hard error that stops rendering and only disable denoising for very small viewports. */
+  if (context.denoised_buffer_params.width < 32 || context.denoised_buffer_params.height < 32) {
     last_width_ = 0;
     last_height_ = 0;
     return false;
@@ -409,7 +411,7 @@ bool DLSSDenoiser::denoise_filter_color_preprocess(const DenoiseContext &context
     return true;
   }
 
-  /* Input params (with resolution divider applied) */
+  /* Input params (with resolution divider applied). */
   const BufferParams &buffer_params = context.buffer_params;
 
   const int work_size = buffer_params.width * buffer_params.height;
@@ -435,7 +437,7 @@ bool DLSSDenoiser::denoise_filter_color_postprocess(const DenoiseContext &contex
     return true;
   }
 
-  /* Output params */
+  /* Output params. */
   const BufferParams &buffer_params = context.denoised_buffer_params;
 
   const int work_size = buffer_params.width * buffer_params.height;
