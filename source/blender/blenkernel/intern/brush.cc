@@ -1799,11 +1799,6 @@ bool BKE_brush_has_cube_tip(const Brush *brush, PaintMode paint_mode)
   return false;
 }
 
-bool BKE_brush_needs_rake_rotation(const Brush &brush)
-{
-  return bke::brush::supports_rake_factor(brush) && (brush.rake_factor != 0.0f);
-}
-
 namespace bke::brush {
 float normal_weight_get(const Brush &brush, const bool invert)
 {
@@ -1957,6 +1952,10 @@ bool supports_normal_weight(const Brush &brush)
               SCULPT_BRUSH_TYPE_GRAB,
               SCULPT_BRUSH_TYPE_SNAKE_HOOK,
               SCULPT_BRUSH_TYPE_ELASTIC_DEFORM);
+}
+bool supports_rake(const Brush &brush)
+{
+  return !is_grab_tool(brush);
 }
 bool supports_rake_factor(const Brush &brush)
 {

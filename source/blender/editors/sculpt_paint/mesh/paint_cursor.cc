@@ -694,7 +694,7 @@ static void cursor_space_drawing_setup(const PaintCursorContext &pcontext)
     float local_mat[4][4];
     float local_mat_inv[4][4];
 
-    const bool needs_rake = BKE_brush_needs_rake_rotation(*brush);
+    const bool needs_rake = bke::brush::supports_rake(*brush);
     calc_brush_local_mat(0,
                          needs_rake ? pcontext.paint->runtime->brush_rotation :
                                       BKE_brush_mask_texture_get(brush, OB_MODE_SCULPT)->rot,

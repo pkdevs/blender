@@ -230,7 +230,6 @@ void BKE_brush_scale_size(int *r_brush_size,
  * (often presented to the user as a square) tip inside a specific paint mode.
  */
 bool BKE_brush_has_cube_tip(const Brush *brush, PaintMode paint_mode);
-bool BKE_brush_needs_rake_rotation(const Brush &brush);
 
 namespace bke::brush {
 float normal_weight_get(const Brush &brush, bool invert);
@@ -258,6 +257,7 @@ bool supports_plane_height(const Brush &brush);
 bool supports_plane_depth(const Brush &brush);
 bool supports_jitter(const Brush &brush);
 bool supports_normal_weight(const Brush &brush);
+bool supports_rake(const Brush &brush);
 bool supports_rake_factor(const Brush &brush);
 bool supports_persistence(const Brush &brush);
 bool supports_pinch_factor(const Brush &brush);
