@@ -437,6 +437,11 @@ struct UndoImageBuf {
   std::string ibuf_filepath;
   int ibuf_fileframe = 0;
 
+  /**
+   * Tiles for this state of the image.
+   * \note Unmodified tiles are shared with #UndoImageBuf::post,
+   * so pointer comparison can detect tiles that don't need restoring.
+   */
   UndoImageTile **tiles = nullptr;
 
   /** Can calculate these from dims, just for convenience. */
@@ -495,9 +500,9 @@ static void ubuf_from_image_all_tiles(UndoImageBuf *ubuf, const ImBuf *ibuf)
 
 /**
  * Ensure we can copy the ubuf into the ibuf.
- * Returns True if the pixel buffers were replaced.
+ * \returns true if the pixel buffers were replaced.
  */
-static bool ubuf_ensure_compat_ibuf(const UndoImageBuf *ubuf, ImBuf *ibuf)
+[[nodiscard]] static bool ubuf_ensure_compat_ibuf(const UndoImageBuf *ubuf, ImBuf *ibuf)
 {
   bool replaced = false;
 
@@ -570,11 +575,11 @@ struct UndoImageHandle {
  * Copy the tiles of every #UndoImageBuf back into the image buffers.
  *
  * \param use_init: Restore the state before the undo step, instead of the state after it.
- * \param use_partial: Only restore tiles this undo step changed.
+ * \param use_partial: Only restore tiles this undo step changed (for debugging).
  */
 static void uhandle_restore_list(ListBaseT<UndoImageHandle> *undo_handles,
                                  const bool use_init,
-                                 const bool use_partial)
+                                 const bool use_partial = true)
 {
   for (UndoImageHandle &uh : *undo_handles) {
     /* Tiles only added to second set of tiles. */
@@ -591,7 +596,7 @@ static void uhandle_restore_list(ListBaseT<UndoImageHandle> *undo_handles,
       const UndoImageBuf *ubuf_other = use_init ? ubuf_iter.post : &ubuf_iter;
 
       /* Check if we need to restore all because of modified image dimensions or image
-       * buffer, or if we can do a partial restore and update.*/
+       * buffer, or if we can do a partial restore and update. */
       const bool ibuf_reallocated = ubuf_ensure_compat_ibuf(ubuf, ibuf);
       const bool restore_all = ibuf_reallocated || !use_partial || ubuf_other == nullptr ||
                                ubuf_other->tiles_dims[0] != ubuf->tiles_dims[0] ||
