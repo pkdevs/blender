@@ -2880,6 +2880,7 @@ static wmOperatorStatus sequencer_separate_images_exec(bContext *C, wmOperator *
             MEM_realloc_uninitialized(data_new->stripdata, sizeof(*se_new)));
         STRNCPY_UTF8(se_new->filename, se->filename);
         data_new->stripdata = se_new;
+        data_new->stripdata_num = 1;
 
         if (step > 1) {
           strip_new->runtime->flag &= ~seq::StripRuntimeFlag::Overlap;
@@ -3712,6 +3713,7 @@ static wmOperatorStatus sequencer_change_path_exec(bContext *C, wmOperator *op)
       MEM_delete(strip->data->stripdata);
     }
     strip->data->stripdata = se = MEM_new_array<StripElem>(len, "stripelem");
+    strip->data->stripdata_num = len;
 
     for (ImageFrameRange &range : ranges) {
       int framenr, numdigits;
@@ -3754,9 +3756,9 @@ static wmOperatorStatus sequencer_change_path_exec(bContext *C, wmOperator *op)
 
     /* Reset these else we won't see all the images. */
     strip->anim_startofs = strip->anim_endofs = 0;
-    strip->content_length_set(len);
 
-    /* Correct start/end frames so we don't move. */
+    /* Correct start/end frames so we don't move.
+     * Also sets `strip->len` from `strip->data->stripdata_num`. */
     seq::add_reload_new_file(bmain, scene, strip, true);
   }
   else if (strip->type == STRIP_TYPE_SOUND) {

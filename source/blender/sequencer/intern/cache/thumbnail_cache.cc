@@ -825,7 +825,7 @@ void thumbnail_cache_invalidate_strip(Scene *scene, const Strip *strip)
           int paths_count = 1;
           if (strip->type == STRIP_TYPE_IMAGE) {
             /* Image strip has array of file names. */
-            paths_count = strip->stripdata_len();
+            paths_count = strip->data->stripdata_num;
           }
           char filepath[FILE_MAX];
           const char *basepath = ID_BLEND_PATH_FROM_GLOBAL(&scene->id);

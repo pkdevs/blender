@@ -660,35 +660,6 @@ void Strip::content_length_set(int new_length)
   this->len = new_length;
 }
 
-int Strip::stripdata_len() const
-{
-  switch (this->type) {
-    case STRIP_TYPE_IMAGE:
-      /* Every image in the sequence has its own #StripElem. Content trimming (#anim_startofs,
-       * #anim_endofs) hides elements at both ends without shrinking the array, so the full array
-       * is always this many elements long. */
-      return this->anim_startofs + this->content_length() + this->anim_endofs;
-    case STRIP_TYPE_MOVIE:
-    case STRIP_TYPE_SOUND:
-      /* Single #StripElem storing the file path. */
-      return (this->data && this->data->stripdata) ? 1 : 0;
-    default:
-      return 0;
-  }
-}
-
-void Strip::anim_startofs_set(int new_value)
-{
-  this->content_length_set(this->content_length() + this->anim_startofs - new_value);
-  this->anim_startofs = new_value;
-}
-
-void Strip::anim_endofs_set(int new_value)
-{
-  this->content_length_set(this->content_length() + this->anim_endofs - new_value);
-  this->anim_endofs = new_value;
-}
-
 void Strip::end_offset_set(float new_end_offset)
 {
   if (this->type == STRIP_TYPE_SCENE) {

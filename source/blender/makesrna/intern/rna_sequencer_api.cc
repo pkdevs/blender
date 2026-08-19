@@ -616,11 +616,12 @@ static StripElem *rna_StripElements_append(ID *id, Strip *strip, const char *fil
   Scene *scene = id_cast<Scene *>(id);
   StripElem *se;
 
-  const int old_len = strip->stripdata_len();
+  const int old_len = strip->data->stripdata_num;
   strip->data->stripdata = se = static_cast<StripElem *>(
       MEM_realloc_uninitialized(strip->data->stripdata, sizeof(StripElem) * (old_len + 1)));
   se += old_len;
   STRNCPY(se->filename, filename);
+  strip->data->stripdata_num = old_len + 1;
   strip->content_length_set(strip->content_length() + 1);
 
   strip->flag &= ~SEQ_SINGLE_FRAME_CONTENT;
@@ -638,7 +639,7 @@ static void rna_StripElements_pop(ID *id, Strip *strip, ReportList *reports, int
   /* `index` addresses the same full `stripdata` array as #StripElements (see
    * #rna_Strip_elements_begin), which may include elements hidden by content trim
    * (#Strip::anim_startofs / #Strip::anim_endofs), not just the visible ones. */
-  const int old_len = strip->stripdata_len();
+  const int old_len = strip->data->stripdata_num;
   if (old_len == 1) {
     BKE_report(reports, RPT_ERROR, "Cannot pop the last element");
     return;
@@ -662,7 +663,7 @@ static void rna_StripElements_pop(ID *id, Strip *strip, ReportList *reports, int
   }
 
   /* Remove the popped slot from whichever count currently accounts for it, so the physical
-   * array (#Strip::stripdata_len()) shrinks by exactly one element. */
+   * array (`data->stripdata_num`) shrinks by exactly one element. */
   if (index < strip->anim_startofs) {
     strip->anim_startofs--;
   }
@@ -689,6 +690,7 @@ static void rna_StripElements_pop(ID *id, Strip *strip, ReportList *reports, int
 
   MEM_delete(strip->data->stripdata);
   strip->data->stripdata = new_se;
+  strip->data->stripdata_num = old_len - 1;
 
   WM_main_add_notifier(NC_SCENE | ND_SEQUENCER, scene);
 }

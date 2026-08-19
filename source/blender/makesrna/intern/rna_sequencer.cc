@@ -478,7 +478,7 @@ static int rna_Strip_elements_length(PointerRNA *ptr)
 
   /* `strip->content_length()` alone is discounted from the content trim offsets
    * (`anim_startofs`/`anim_endofs`), so it doesn't cover the full `stripdata` array. */
-  return strip->stripdata_len();
+  return strip->data->stripdata_num;
 }
 
 static void rna_Strip_elements_begin(CollectionPropertyIterator *iter, PointerRNA *ptr)
@@ -689,7 +689,7 @@ static void rna_Strip_content_trim_start_set(PointerRNA *ptr, int value)
   /* As `anim_startofs` is changed, strip shrinks on the right with left handle position unchanged.
    * To give the appearance as if the strip is trimmed from the left, add move compensation. */
   seq::transform_translate_strip(scene, strip, value - strip->anim_startofs);
-  strip->anim_startofs_set(value);
+  strip->anim_startofs = value;
 
   seq::add_update_content_length(G.main, scene, strip);
   do_strip_frame_change_update(scene, strip);
@@ -700,7 +700,7 @@ static void rna_Strip_content_trim_end_set(PointerRNA *ptr, int value)
   Strip *strip = static_cast<Strip *>(ptr->data);
   Scene *scene = id_cast<Scene *>(ptr->owner_id);
 
-  strip->anim_endofs_set(std::clamp(value, 0, strip_content_trim_max(strip, strip->anim_endofs)));
+  strip->anim_endofs = std::clamp(value, 0, strip_content_trim_max(strip, strip->anim_endofs));
 
   seq::add_update_content_length(G.main, scene, strip);
   do_strip_frame_change_update(scene, strip);
