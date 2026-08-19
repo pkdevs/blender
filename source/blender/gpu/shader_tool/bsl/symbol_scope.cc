@@ -408,7 +408,8 @@ bool SymbolScope::function_emplace(SymbolFunction *fn, bool builtin)
        * This suffix needs to be the same whatever the file include order is, as it can differ from
        * shader to shader. We use the line index for that. It is short enough to not clutter the
        * resulting source file. */
-      fn->identifier += to_string(fn->loc.tok.line_number());
+      /* TODO(fclem): This is left out for compatibility with previous BSL versions. */
+      // fn->identifier += to_string(fn->loc.tok.line_number());
     }
     result = true;
   }

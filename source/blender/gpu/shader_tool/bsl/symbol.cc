@@ -653,9 +653,8 @@ struct SymbolParser : NodeErrorHandler {
       }
     }
     else {
-      SymbolClassTemplate *temp = table.tmp_cls_arena.alloc(decl);
       SymbolClass *cls = table.cls_arena.alloc(&scope, decl.decl());
-      cls->template_data = temp;
+      cls->template_data = table.tmp_cls_arena.alloc(decl);
       if (!scope.classes.emplace(cls).second) {
         ClassDecl cls_decl(decl.decl());
         error(cls_decl.identifier(), Diag::Redefinition, cls_decl.identifier().str());
@@ -723,6 +722,12 @@ struct SymbolParser : NodeErrorHandler {
             *parent, temp_decl.decl(), prefix, mangled.str, poi, temp);
         fn_inst->is_specialization = true;
         fn_inst->template_data = fn->template_data;
+        /* For compatibility with previous version of BSL, do not mangle function names with
+         * arguments if ADL is possible. */
+        if (fn->template_data->is_adl_possible()) {
+          fn_inst->identifier = fn_inst->identifier.substr(
+              0, fn_inst->identifier.size() - mangled.str.size());
+        }
         fn->template_data->instances.emplace(mangled.str, fn_inst);
         fn->add_overload(fn_inst);
       }
@@ -775,6 +780,12 @@ struct SymbolParser : NodeErrorHandler {
         SymbolFunction *spec = parse_func_decl(scope, decl, prefix, mangled.str, poi);
         spec->is_specialization = true;
         spec->template_data = fn->template_data;
+        /* For compatibility with previous version of BSL, do not mangle function names with
+         * arguments if ADL is possible. */
+        if (fn->template_data->is_adl_possible()) {
+          spec->identifier = spec->identifier.substr(0,
+                                                     spec->identifier.size() - mangled.str.size());
+        }
         fn->template_data->instances.emplace(mangled.str, spec);
         fn->add_overload(spec);
       }

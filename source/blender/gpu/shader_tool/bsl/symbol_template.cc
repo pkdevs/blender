@@ -51,12 +51,13 @@ template<typename T> SymbolTemplate<T>::SymbolTemplate(ast::TemplateDecl temp) :
   }
 
   FuncDecl decl(temp.decl());
-  for (FuncArg arg : decl.arguments().children_of_type<FuncArg>()) {
+  for (TemplateArg tmp_arg : tmp_args.children_of_type<TemplateArg>()) {
     int arg_id = -1;
     int id = 0;
-    for (TemplateArg tmp_arg : tmp_args.children_of_type<TemplateArg>()) {
+    for (FuncArg arg : decl.arguments().children_of_type<FuncArg>()) {
       if (tmp_arg.identifier().str() == arg.type().identifier().str()) {
         arg_id = id;
+        break;
       }
       ++id;
     }
