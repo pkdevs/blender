@@ -355,8 +355,8 @@ if(WITH_HYDRA)
   add_definitions(-DWITH_HYDRA)
 endif()
 
-if(WITH_OTIO)
-  add_definitions(-DWITH_OTIO)
+if(WITH_IO_OTIO)
+  add_definitions(-DWITH_IO_OTIO)
 endif()
 
 if(WITH_EXPERIMENTAL_FEATURES)

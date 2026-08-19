@@ -8,6 +8,9 @@
 
 #pragma once
 
+#include <set>
+#include <unordered_map>
+
 #include "BLI_path_utils.hh"
 
 #include "opentimelineio/clip.h"

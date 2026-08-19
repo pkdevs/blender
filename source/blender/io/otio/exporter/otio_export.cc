@@ -16,6 +16,8 @@
 #include "BLI_listbase.hh"
 #include "BLI_listbase_iterator.hh"
 
+#include "CLG_log.h"
+
 #include "DNA_listBase.h"
 #include "DNA_scene_types.h"
 #include "DNA_sequence_types.h"
@@ -40,6 +42,9 @@
 #include "otio_export_strip.hh"
 
 namespace blender {
+
+static CLG_LogRef LOG = {"io.otio"};
+
 namespace io::otio {
 
 using namespace opentimelineio::OPENTIMELINEIO_VERSION_NS;
@@ -130,7 +135,7 @@ static void otio_export_recursive(Main *bmain,
                                   SerializableObject::Retainer<Stack> *primary_stack,
                                   SerializableObject::Retainer<Stack> *secondary_stack,
                                   ListBaseT<Strip> *strips,
-                                  int _last_strip_end,
+                                  int stack_start,
                                   int stack_end,
                                   const ListBaseT<SeqTimelineChannel> *channel_listbase,
                                   wmJobWorkerStatus *worker_status,
@@ -191,7 +196,7 @@ static void otio_export_recursive(Main *bmain,
 
     auto track_source_range = otio::TimeRange(
         RationalTime(0, scene->frames_per_second()),
-        RationalTime(stack_end - _last_strip_end, scene->frames_per_second()));
+        RationalTime(stack_end - stack_start, scene->frames_per_second()));
 
     auto track = SerializableObject::Retainer<Track>(
         new Track("", track_source_range, track_type));
@@ -211,13 +216,13 @@ static void otio_export_recursive(Main *bmain,
     /* Append all the strips of this channel in the track. */
     for (Strip *strip : strips) {
       if (transition_effects_2.contains(strip)) {
-        CLOG_INFO(&LOG, "Exporting Transition '%s'...", transition_effects_2[strip]->name + 2);
+        CLOG_INFO(&LOG, "Exporting transition '%s'", transition_effects_2[strip]->name + 2);
         export_transition(transition_effects_2[strip],
                           scene,
                           inside_meta ? meta_video_track : track,
                           last_strip_end);
       }
-      CLOG_INFO(&LOG, "Exporting Strip '%s'...", strip->name + 2);
+      CLOG_INFO(&LOG, "Exporting strip '%s'", strip->name + 2);
 
       StripExporter *strip_exporter = nullptr;
 
@@ -242,7 +247,7 @@ static void otio_export_recursive(Main *bmain,
         ListBaseT<Strip> *seqbase = seq::get_seqbase_from_strip(strip, &r_channels, &r_offset);
 
         if (!seqbase) {
-          CLOG_WARN(&LOG, "No seqbase in Meta Strip / Sequencer Strip '%s' ", strip->name + 2);
+          CLOG_WARN(&LOG, "No seqbase in meta or scene strip '%s'", strip->name + 2);
 
           StripExporter missing_reference_exporter_video = StripExporter(
               strip, scene, inside_meta ? meta_video_track : track, last_strip_end);
@@ -382,7 +387,7 @@ static void otio_export_recursive(Main *bmain,
 
   TimeRange source_range = TimeRange(
       RationalTime(0, scene->frames_per_second()),
-      RationalTime(stack_end - _last_strip_end, scene->frames_per_second()));
+      RationalTime(stack_end - stack_start, scene->frames_per_second()));
   (*primary_stack)->set_source_range(source_range);
   if (secondary_stack) {
     (*secondary_stack)->set_source_range(source_range);

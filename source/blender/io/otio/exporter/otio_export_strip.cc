@@ -54,6 +54,8 @@
 
 namespace blender::io::otio {
 
+static CLG_LogRef LOG = {"io.otio"};
+
 using namespace opentimelineio::OPENTIMELINEIO_VERSION_NS;
 
 /************** Helper Functions. **************/
@@ -413,7 +415,7 @@ static void img_sequence_create_symlinks(const StripElem *se,
 
   /* Create `BL_links` directory if it does not exist. */
   if (!BLI_dir_create_recursive(BL_links_path)) {
-    CLOG_ERROR(&LOG, "Unable to Create Directory '%s'", BL_links_path);
+    CLOG_ERROR(&LOG, "Unable to create directory '%s'", BL_links_path);
     return;
   }
 
@@ -430,7 +432,7 @@ static void img_sequence_create_symlinks(const StripElem *se,
     BLI_path_join(symlink_target, sizeof(symlink_target), "..", se->filename);
 
     BLI_create_symlink(symlink_path, symlink_target);
-    CLOG_INFO_NOCHECK(&LOG, "Created Symlink '%s' -> '%s'", symlink_path, symlink_target);
+    CLOG_INFO_NOCHECK(&LOG, "Created symlink '%s' -> '%s'", symlink_path, symlink_target);
   }
 }
 
@@ -826,7 +828,7 @@ static void add_modifier_metadata_echo(StripModifierData &smd, AnyVector &contai
   add_modifier_metadata_to_container(metadata, container, smd);
 }
 
-static AnyDictionary serialize_curveMapping(const CurveMapping *cmp)
+static AnyDictionary serialize_curve_mapping(const CurveMapping *cmp)
 {
   AnyDictionary root;
   root["flag"] = static_cast<int64_t>(cmp->flag);
@@ -883,13 +885,13 @@ static void add_modifier_metadata_curves(StripModifierData &smd, AnyVector &cont
   switch (smd.type) {
     case eSeqModifierType_Curves: {
       const CurvesModifierData *cmd = reinterpret_cast<CurvesModifierData *>(&smd);
-      metadata = serialize_curveMapping(&cmd->curve_mapping);
+      metadata = serialize_curve_mapping(&cmd->curve_mapping);
       break;
     }
 
     case eSeqModifierType_HueCorrect: {
       const HueCorrectModifierData *hcmd = reinterpret_cast<HueCorrectModifierData *>(&smd);
-      metadata = serialize_curveMapping(&hcmd->curve_mapping);
+      metadata = serialize_curve_mapping(&hcmd->curve_mapping);
       break;
     }
 
@@ -898,7 +900,7 @@ static void add_modifier_metadata_curves(StripModifierData &smd, AnyVector &cont
           &smd);
       AnyVector graphics;
       for (const EQCurveMappingData &cmd : semd->graphics) {
-        graphics.push_back(serialize_curveMapping(&cmd.curve_mapping));
+        graphics.push_back(serialize_curve_mapping(&cmd.curve_mapping));
       }
       metadata["graphics"] = graphics;
       break;
@@ -1126,9 +1128,8 @@ SerializableObject::Retainer<Clip> ImageStripExporter::export_strip(
   else {
     /* Image Sequence. */
     if (!strip_->data || !strip_->data->stripdata) {
-      CLOG_ERROR(&LOG,
-                 "Exporting the Image (Sequence) Strip '%s' with Missing Reference...",
-                 strip_->name + 2);
+      CLOG_ERROR(
+          &LOG, "Exporting image sequence strip '%s' with a missing reference", strip_->name + 2);
       return export_with_missing_reference(single_input_effects);
     }
 
@@ -1154,14 +1155,13 @@ SerializableObject::Retainer<Clip> ImageStripExporter::export_strip(
       BLI_strncat(name_prefix, ".", sizeof(name_prefix));
 
       CLOG_WARN(&LOG,
-                "The Strip '%s' contains Image Sequence with Non-Sequenced Image Names",
+                "Strip '%s' contains an image sequence with non-sequential filenames",
                 strip_->name + 2);
 
       switch (export_params->img_sequence_fallback) {
         case ImgSeqFallback::RenderMovie: {
-          CLOG_INFO(&LOG,
-                    "Exporting the Image (Sequence) Strip '%s' as a Rendered Movie...",
-                    strip_->name + 2);
+          CLOG_INFO(
+              &LOG, "Exporting image sequence strip '%s' as a rendered movie", strip_->name + 2);
 
           auto exporter = RenderAsMovieExporter(strip_, scene_, track_, last_strip_end, filepath_);
           auto clip = exporter.export_strip(bmain, export_params, single_input_effects);
@@ -1169,8 +1169,7 @@ SerializableObject::Retainer<Clip> ImageStripExporter::export_strip(
           return clip;
         }
         case ImgSeqFallback::Rename: {
-          CLOG_INFO(
-              &LOG, "Renaming the Images of the Image (Sequence) Strip '%s'...", strip_->name + 2);
+          CLOG_INFO(&LOG, "Renaming the images of image sequence strip '%s'", strip_->name + 2);
 
           img_sequence_rename(se, target_url_base, img_count, padding);
           break;
@@ -1179,8 +1178,7 @@ SerializableObject::Retainer<Clip> ImageStripExporter::export_strip(
 #ifndef WIN32
         case ImgSeqFallback::Symlink: {
           CLOG_INFO(&LOG,
-                    "Creating Symbolic Links (Symlinks) for Images in the Image (Sequence) Strip "
-                    "'%s'...",
+                    "Creating symbolic links for the images of image sequence strip '%s'",
                     strip_->name + 2);
 
           img_sequence_create_symlinks(se, target_url_base, img_count, padding);
@@ -1195,7 +1193,7 @@ SerializableObject::Retainer<Clip> ImageStripExporter::export_strip(
     else {
       if (!BLI_path_frame_get(se->filename, &start_frame_nr, &padding)) {
         CLOG_ERROR(&LOG,
-                   "Exporting the Image (Sequence) Strip '%s' with Missing Reference...",
+                   "Exporting image sequence strip '%s' with a missing reference",
                    strip_->name + 2);
         return export_with_missing_reference(single_input_effects);
       }
@@ -1291,15 +1289,15 @@ SerializableObject::Retainer<Clip> RenderAsMovieExporter::export_strip(
     render_res = get_scene_strip_resolution_percent(export_params->scene_strip_res);
   }
 
-  CLOG_INFO(&LOG, "Rendering Strip '%s'... ", strip_->name + 2);
+  CLOG_INFO(&LOG, "Rendering strip '%s'", strip_->name + 2);
   const bool is_rendered = seq::render_strip_full(
       bmain, scene_, strip_, render_res, render_filepath, false);
 
   if (!is_rendered) {
-    CLOG_ERROR(&LOG, "Strip Rendering Failed...Exporting with Missing Reference...");
+    CLOG_ERROR(&LOG, "Strip rendering failed, exporting with a missing reference");
     return export_with_missing_reference(single_input_effects);
   }
-  CLOG_INFO(&LOG, "Strip Rendered as Movie to '%s'", render_filepath);
+  CLOG_INFO(&LOG, "Strip rendered as movie to '%s'", render_filepath);
 
   auto exporter = MovieStripExporter(strip_, scene_, track_, last_strip_end, render_filepath);
   auto clip = exporter.export_strip(bmain, export_params, single_input_effects);

@@ -122,11 +122,11 @@ if(WITH_USD)
   add_definitions(-DWITH_USD)
 endif()
 
-if(WITH_OTIO)
+if(WITH_IO_OTIO)
   list(APPEND LIB
     bf_io_otio
   )
-  add_definitions(-DWITH_OTIO)
+  add_definitions(-DWITH_IO_OTIO)
 endif()
 
 if(WITH_PUGIXML)

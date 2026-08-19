@@ -6,7 +6,7 @@
  * \ingroup editor/io
  */
 
-#ifdef WITH_OTIO
+#ifdef WITH_IO_OTIO
 
 #  include <cerrno>
 #  include <cstring>
@@ -53,22 +53,22 @@ static const EnumPropertyItem io_otio_scene_strip_resolution[] = {
      "SCENE_STRIP_100",
      ICON_NONE,
      "100%",
-     "Bake Scene Strips at 100% Resolution"},
+     "Bake scene strips at 100% resolution"},
     {static_cast<int>(io::otio::SceneStripRes::Percent75),
      "SCENE_STRIP_75",
      ICON_NONE,
      "75%",
-     "Bake Scene Strips at 75% Resolution"},
+     "Bake scene strips at 75% resolution"},
     {static_cast<int>(io::otio::SceneStripRes::Percent50),
      "SCENE_STRIP_50",
      ICON_NONE,
      "50%",
-     "Bake Scene Strips at 50% Resolution"},
+     "Bake scene strips at 50% resolution"},
     {static_cast<int>(io::otio::SceneStripRes::Percent25),
      "SCENE_STRIP_25",
      ICON_NONE,
      "25%",
-     "Bake Scene Strips at 25% Resolution"},
+     "Bake scene strips at 25% resolution"},
     {0, nullptr, 0, nullptr, nullptr}};
 
 static const EnumPropertyItem io_otio_image_sequence_export_fallback[] = {
@@ -77,18 +77,18 @@ static const EnumPropertyItem io_otio_image_sequence_export_fallback[] = {
      "IMG_SEQUENCE_SYMLINK",
      ICON_NONE,
      "Create Symlinks",
-     "Create Sequenced Symbolic Links that Point to Original Images"},
+     "Create sequenced symbolic links that point to the original images"},
 #  endif
     {static_cast<int>(io::otio::ImgSeqFallback::RenderMovie),
      "IMG_SEQUENCE_RENDER_MOVIE",
      ICON_NONE,
      "Render Movie",
-     "Render and Link the Image Sequence as a Movie"},
+     "Render and link the image sequence as a movie"},
     {static_cast<int>(io::otio::ImgSeqFallback::Rename),
      "IMG_SEQUENCE_RENAME",
      ICON_NONE,
      "Rename Images",
-     "Append Sequence Numbers to Image Name"},
+     "Append sequence numbers to the image filenames"},
     {0, nullptr, 0, nullptr, nullptr}};
 
 static wmOperatorStatus wm_otio_export_invoke(bContext *C,
@@ -113,7 +113,7 @@ static wmOperatorStatus wm_otio_export_exec(bContext *C, wmOperator *op)
   Editing *editing = seq::editing_get(scene);
 
   if (!scene || !editing) {
-    BKE_report(op->reports, RPT_ERROR, "No Sequencer Scene found");
+    BKE_report(op->reports, RPT_ERROR, "No sequencer scene found");
     return OPERATOR_CANCELLED;
   }
 
@@ -197,7 +197,7 @@ bool wm_otio_export_poll(bContext *C)
 void WM_OT_otio_export(wmOperatorType *ot)
 {
   ot->name = "Export OTIO";
-  ot->description = "Export Sequencer Scene as OpenTimelineIO Timeline";
+  ot->description = "Export the sequencer scene as an OpenTimelineIO timeline";
   ot->idname = "WM_OT_otio_export";
 
   ot->invoke = wm_otio_export_invoke;
@@ -219,14 +219,14 @@ void WM_OT_otio_export(wmOperatorType *ot)
   RNA_def_property_flag(prop, PROP_HIDDEN);
 
   RNA_def_boolean(
-      ot->srna, "bake_scene_strips", true, "Bake Scene Strips", "Export Scene Strips as Video");
+      ot->srna, "bake_scene_strips", true, "Bake Scene Strips", "Export scene strips as video");
 
   RNA_def_enum(ot->srna,
                "scene_strip_resolution",
                io_otio_scene_strip_resolution,
                static_cast<int>(io::otio::SceneStripRes::Percent100),
                "Scene Strip Resolution",
-               "Resolution at which to Export the Scene Strips");
+               "Resolution at which to export scene strips");
 
   RNA_def_enum(ot->srna,
                "img_sequence_fallback",
@@ -237,7 +237,7 @@ void WM_OT_otio_export(wmOperatorType *ot)
                static_cast<int>(io::otio::ImgSeqFallback::RenderMovie),
 #  endif
                "Fallback Method",
-               "Method to Use to Export Non-Sequenced Image Sequences");
+               "Method used for image sequences with non-sequential filenames");
 }
 
 namespace ed::io {

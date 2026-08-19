@@ -54,6 +54,7 @@ static PyStructSequence_Field app_builtopts_info_fields[] = {
     {"io_stl", nullptr},
     {"io_fbx", nullptr},
     {"io_gpencil", nullptr},
+    {"io_otio", nullptr},
     {"opencolorio", nullptr},
     {"openmp", nullptr},
     {"openvdb", nullptr},
@@ -64,7 +65,6 @@ static PyStructSequence_Field app_builtopts_info_fields[] = {
     {"potrace", nullptr},
     {"pugixml", nullptr},
     {"haru", nullptr},
-    {"otio", nullptr},
     {"experimental_features", nullptr},
     /* Sentinel (this line prevents `clang-format` wrapping into columns). */
     {nullptr},
@@ -276,6 +276,12 @@ static PyObject *make_builtopts_info()
   SetObjIncref(Py_False);
 #endif
 
+#ifdef WITH_IO_OTIO
+  SetObjIncref(Py_True);
+#else
+  SetObjIncref(Py_False);
+#endif
+
   /* OpenColorIO */
   SetObjIncref(Py_True);
 
@@ -328,12 +334,6 @@ static PyObject *make_builtopts_info()
 #endif
 
 #ifdef WITH_HARU
-  SetObjIncref(Py_True);
-#else
-  SetObjIncref(Py_False);
-#endif
-
-#ifdef WITH_OTIO
   SetObjIncref(Py_True);
 #else
   SetObjIncref(Py_False);

@@ -10,8 +10,6 @@
 
 #include "BLI_path_utils.hh"
 
-#include "CLG_log.h"
-
 namespace blender {
 
 struct bContext;
@@ -59,8 +57,6 @@ struct ExportJobData {
 };
 
 }  // namespace io::otio
-
-static CLG_LogRef LOG = {"io.otio"};
 
 void OTIO_export(const bContext *C, const char *filepath, const OTIOExportParams *export_params);
 

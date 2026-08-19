@@ -24,6 +24,9 @@
 #include "otio_export.hh"
 
 namespace blender {
+
+static CLG_LogRef LOG = {"io.otio"};
+
 namespace io::otio {
 short get_scene_strip_resolution_percent(SceneStripRes resolution)
 {
@@ -79,25 +82,24 @@ static bool validate_transitions(ReportList *reports, ListBaseT<Strip> *seqbase)
     }
     if (!strip.input1 || !strip.input2) {
       CLOG_ERROR(&LOG,
-                 "The Effect Strip '%s' have insufficient inputs. input1 = '%s' ; input2 = '%s'",
+                 "Transition strip '%s' has insufficient inputs, input1 = '%s', input2 = '%s'",
                  strip.name + 2,
                  strip.input1 ? strip.input1->name + 2 : "nullptr",
                  strip.input2 ? strip.input2->name + 2 : "nullptr");
-      BKE_report(reports, RPT_ERROR, "Insufficient Inputs Transition Strip");
+      BKE_report(reports, RPT_ERROR, "Transition strip has insufficient inputs");
       return false;
     }
 
     /* All three strips (input1, transition strip and input2) should be on the same channel. */
     if (strip.channel != strip.input1->channel || strip.channel != strip.input2->channel) {
       CLOG_ERROR(&LOG,
-                 "The input1 '%s', input2 '%s' and the Transition Strip '%s' are not placed in "
-                 "the same Channel",
+                 "Input strips '%s' and '%s' are not on the same channel as transition strip '%s'",
                  strip.input1->name + 2,
                  strip.input2->name + 2,
                  strip.name + 2);
       BKE_report(reports,
                  RPT_ERROR,
-                 "The Transition and the Input Strips Should be placed on the Same Channel");
+                 "Transition and input strips must be on the same channel");
       return false;
     }
   }
@@ -108,7 +110,7 @@ bool OTIO_validate_timeline_blender(ReportList *reports, const Scene *scene)
 {
   Editing *ed = seq::editing_get(scene);
   if (!scene || !ed) {
-    BKE_report(reports, RPT_ERROR, "No Sequencer Scene found");
+    BKE_report(reports, RPT_ERROR, "No sequencer scene found");
     return false;
   }
 
