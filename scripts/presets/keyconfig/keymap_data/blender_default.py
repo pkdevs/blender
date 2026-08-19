@@ -4109,6 +4109,9 @@ def km_grease_pencil_paint_mode(params):
     
         # Delete menu
         op_menu("VIEW3D_MT_edit_greasepencil_delete", {"type": 'DEL', "value": 'PRESS'}),
+
+        # Transform Actions.
+        *_template_items_transform_actions(params, use_bend=True, use_mirror=True, use_tosphere=True, use_shear=True),
     ])
 
     if params.select_mouse == 'LEFTMOUSE' and not params.legacy:
