@@ -14,6 +14,7 @@
 #include "testing/testing.h"
 
 namespace blender::ed::sculpt_paint::tests {
+namespace {
 class MeshTests : public bke::BlenderGTestBase {
  public:
   Mesh *mesh = nullptr;
@@ -25,6 +26,7 @@ class MeshTests : public bke::BlenderGTestBase {
     }
   }
 };
+}  // namespace
 
 TEST_F(MeshTests, create_boundary_info__cube)
 {

@@ -19,6 +19,7 @@
 #include "testing/testing.h"
 
 namespace blender::ed::sculpt_paint::tests {
+namespace {
 class MeshTests : public bke::BlenderGTestBase {
  public:
   Mesh *mesh;
@@ -30,6 +31,7 @@ class MeshTests : public bke::BlenderGTestBase {
     }
   }
 };
+}  // namespace
 
 TEST_F(MeshTests, calc_vert_neighbors_interior__cube)
 {
