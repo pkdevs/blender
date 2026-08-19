@@ -100,7 +100,41 @@ struct ExpressionTypeParser
           error(t, Diag::FunctionCallNotAllowedInReferenceDefinition);
         }
         auto sym = scope->lookup_function(*table, call.identifier(), call.parameters(), *scope);
-        return sym.unwrap(err)->return_type;
+        SymbolFunction *fn = sym.unwrap(err);
+        if (fn->is_builtin) {
+          /* Implement builtin type casts. */
+          ast::Expr param = call.parameters().splat_1().arg1;
+          if (!param.is_valid()) {
+            /* Not a constexpr. */
+          }
+          else {
+            ExpressionResult res = sub_expression(t, param, 0);
+            if (!res.is_constexpr() || res.array_dim != 0) {
+              /* Not a constexpr. */
+            }
+            else if (fn->identifier == "float") {
+              return std::visit(
+                  [&](auto val) -> ExpressionResult { return {table->float_cls, float(val)}; },
+                  res.value);
+            }
+            else if (fn->identifier == "int") {
+              return std::visit(
+                  [&](auto val) -> ExpressionResult { return {table->int_cls, int(val)}; },
+                  res.value);
+            }
+            else if (fn->identifier == "uint") {
+              return std::visit(
+                  [&](auto val) -> ExpressionResult { return {table->uint_cls, uint(val)}; },
+                  res.value);
+            }
+            else if (fn->identifier == "bool") {
+              return std::visit(
+                  [&](auto val) -> ExpressionResult { return {table->bool_cls, bool(val)}; },
+                  res.value);
+            }
+          }
+        }
+        return fn->return_type;
       }
       case ast::NodeType::LocalVar: {
         ast::LocalVar var = t;
@@ -363,7 +397,13 @@ struct ExpressionTypeParser
         case Multiply:
           return {type, apply_arithmetic(lhs, rhs, [](auto l, auto r) { return l * r; })};
         case Divide:
-          return {type, apply_arithmetic(lhs, rhs, [](auto l, auto r) { return l / r; })};
+          return {type, apply_arithmetic(lhs, rhs, [&](auto l, auto r) {
+                    if (r == 0) {
+                      error(t, Diag::ConstexprDivisionByZero);
+                      return l * r;
+                    }
+                    return l / r;
+                  })};
         case Modulo:
           return {type, apply_integral(lhs, rhs, [](auto l, auto r) { return l % r; })};
         case Plus:
