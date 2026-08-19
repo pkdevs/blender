@@ -16,6 +16,7 @@
 #include "eevee_thickness_lib.bsl.hh"
 #include "eevee_uniform.bsl.hh"
 #include "gpu_shader_math_base_lib.glsl"
+#include "gpu_shader_math_rotation_lib.glsl"
 #include "gpu_shader_math_vector_safe_lib.glsl"
 #include "gpu_shader_ray_utils_lib.glsl"
 
@@ -152,9 +153,6 @@ struct ShadowRayDirectional {
 ShadowRayDirectional shadow_ray_generate_directional(
     LightData light, float2 random_2d, float3 lP, float texel_radius, float soft_shadow_scale)
 {
-  float shadow_angle_cos = light.sun().shadow_angle_cos;
-  shadow_angle_cos = mix(1.0f, shadow_angle_cos, soft_shadow_scale);
-
   float clip_near = orderedIntBitsToFloat(light.clip_near);
   /* Assumed to be non-null. */
   float dist_to_near_plane = -lP.z - clip_near;
@@ -162,10 +160,14 @@ ShadowRayDirectional shadow_ray_generate_directional(
   float max_tracing_distance = texel_radius * float(SHADOW_PAGE_RES << SHADOW_TILEMAP_LOD);
   float max_tracing_angle_cos = cos_from_tan(max_tracing_distance / dist_to_near_plane);
   /* Taking max of cosines to get the minimum of the angles. */
-  shadow_angle_cos = max(shadow_angle_cos, max_tracing_angle_cos);
+  float shadow_angle_cos = max(light.sun().shadow_angle_cos, max_tracing_angle_cos);
 
   /* Light shape is 1 unit away from the shading point. */
   float3 direction = sample_uniform_cone(random_2d, shadow_angle_cos);
+
+  float3 shadow_space_light_direction = transpose(light.object_to_world.as_float3x3()) *
+                                        light.sun().direction;
+  direction = spherical_interpolate(shadow_space_light_direction, direction, soft_shadow_scale);
 
   /* It only make sense to trace where there can be occluder. Clamp by distance to near plane. */
   direction *= max(texel_radius, dist_to_near_plane / direction.z);
