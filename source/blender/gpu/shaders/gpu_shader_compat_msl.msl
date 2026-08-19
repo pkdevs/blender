@@ -27,6 +27,8 @@
 /* Suppress unhelpful shader compiler warnings. */
 #pragma clang diagnostic ignored "-Wunused-variable"
 #pragma clang diagnostic ignored "-Wcomment"
+/* Don't let these go unnoticed as they are errors in GLSL. */
+#pragma clang diagnostic error "-Wreturn-type"
 
 /* Wrapper needs to be last. */
 #include "gpu_shader_msl_wrapper.msl"
