@@ -187,11 +187,11 @@ struct VisibleLightIterator {
     /* clang-format off */ /* Multiline macros would break line count. */
     [[resource_table]] const eevee::LightRenderData &lrd = resource_table_get(eevee::LightRenderData);
     /* clang-format on */
-    LightVector lv = light_vector_get(lrd.light_buf[index], is_directional(), P);
-    if (light_attenuation_surface(lrd.light_buf[index], false, lv) < LIGHT_ATTENUATION_THRESHOLD) {
-      return true;
+    if (is_directional()) {
+      return false;
     }
-    if (all(lessThan(lrd.light_buf[index].color, float3(1e-6f)))) {
+    LightVector lv = light_vector_get(lrd.light_buf[index], false, P);
+    if (light_attenuation_surface(lrd.light_buf[index], false, lv) < LIGHT_ATTENUATION_THRESHOLD) {
       return true;
     }
     return false;
