@@ -55,6 +55,21 @@ struct DofGatherData {
   float layer_opacity;
 };
 
+/* -------------------------------------------------------------------- */
+/** \name Constants.
+ * \{ */
+
+#define unit_ring_radius float(1.0f / float(gather_ring_count))
+#define unit_sample_radius float(1.0f / float(gather_ring_count + 0.5f))
+#define large_kernel_radius float(0.5f + float(gather_ring_count))
+#define smaller_kernel_radius float(0.5f + float(gather_ring_count - gather_density_change_ring))
+/* NOTE(fclem) the bias is reducing issues with density change visible transition. */
+#define radius_downscale_factor float(smaller_kernel_radius / large_kernel_radius)
+#define change_density_at_ring int((gather_ring_count - gather_density_change_ring + 1))
+#define coc_radius_error float(2.0f)
+
+/** \} */
+
 struct Accumulator {
   [[compilation_constant]] const bool is_hole_fill;
   [[compilation_constant]] const bool is_resolve;
@@ -67,21 +82,6 @@ struct Accumulator {
 
   [[resource_table]] srt_t<Sampling> sampling;
   [[resource_table]] srt_t<draw::View> views;
-
-  /** \} */
-
-  /* -------------------------------------------------------------------- */
-  /** \name Constants.
-   * \{ */
-
-#define unit_ring_radius float(1.0f / float(gather_ring_count))
-#define unit_sample_radius float(1.0f / float(gather_ring_count + 0.5f))
-#define large_kernel_radius float(0.5f + float(gather_ring_count))
-#define smaller_kernel_radius float(0.5f + float(gather_ring_count - gather_density_change_ring))
-/* NOTE(fclem) the bias is reducing issues with density change visible transition. */
-#define radius_downscale_factor float(smaller_kernel_radius / large_kernel_radius)
-#define change_density_at_ring int((gather_ring_count - gather_density_change_ring + 1))
-#define coc_radius_error float(2.0f)
 
   /** \} */
 
