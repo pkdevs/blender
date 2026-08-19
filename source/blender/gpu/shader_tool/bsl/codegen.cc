@@ -1128,7 +1128,7 @@ struct CodegenContext : NodeErrorHandler {
     }
 
     if (cls.is_srt()) {
-      builder.ss << "\n#pragma resource_defines " + cls.identifier + "\n";
+      generate_srt_placeholder_macros(cls);
     }
 
     /* Rollback to front. */
@@ -1241,6 +1241,25 @@ struct CodegenContext : NodeErrorHandler {
     if (cls.is_srt()) {
       parse_class_metadata(cls, body);
     }
+  }
+
+  void generate_srt_placeholder_macros(SymbolClass &cls)
+  {
+    string access_macros = "#pragma resource_access ";
+    for (const auto &[k, v] : cls.variables) {
+      const SymbolVariable &member = *v.second;
+      if (member.type->is_srt()) {
+        access_macros += " access_" + cls.identifier + "_" + member.identifier + "()";
+        access_macros += " " + member.type->identifier + "_new_()";
+      }
+      else {
+        access_macros += " access_" + cls.identifier + "_" + member.identifier + "()";
+        access_macros += " " + member.identifier + "";
+      }
+    }
+
+    builder.ss << access_macros + "\n";
+    builder.ss << "\n#pragma resource_defines " + cls.identifier + "\n";
   }
 
   string size_to_float_vec_type_str(size_t member_size)

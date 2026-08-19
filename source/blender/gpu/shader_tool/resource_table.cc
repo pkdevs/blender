@@ -762,25 +762,7 @@ void SourceProcessor::lower_resource_table(Parser &parser)
       ctor += "}\n";
       parser.insert_after(end_of_srt, ctor);
 
-      if (parser.language == Language::BSL) {
-        string access_macros = "#pragma resource_access ";
-        for (const auto &member : srt) {
-          if (member.res_type == "resource_table") {
-            access_macros += " access_" + srt.name + "_" + member.var_name + "()";
-            access_macros += " " + member.var_type + "::new_()";
-          }
-          else {
-            access_macros += " access_" + srt.name + "_" + member.var_name + "()";
-            access_macros += " " + member.var_name + "";
-          }
-        }
-
-        string placeholder = "#pragma resource_defines " + srt.name + "\n";
-        parser.insert_before(struct_tok, access_macros + "\n");
-        parser.insert_before(struct_tok, placeholder);
-        parser.insert_line_number(struct_tok.str_index_start() - 1, struct_tok.line_number());
-      }
-      else {
+      {
         string access_macros;
         for (const auto &member : srt) {
           if (member.res_type == "resource_table") {
@@ -837,8 +819,10 @@ void SourceProcessor::lower_resource_macro_placeholder_ast(Parser &parser)
     if (dir_str.starts_with("#pragma resource_access ")) {
       auto pairs = split_into_pairs(string(dir_str));
       for (auto pair : pairs) {
-        parser.insert_before(directive.front(),
-                             "#define " + pair.first + " " + pair.second + "\n");
+        if (pair.first != "#pragma") {
+          parser.insert_before(directive.front(),
+                               "#define " + pair.first + " " + pair.second + "\n");
+        }
       }
       parser.erase(directive);
     }
