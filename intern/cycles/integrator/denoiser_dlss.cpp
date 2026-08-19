@@ -256,21 +256,9 @@ bool DLSSDenoiser::is_device_supported(const DeviceInfo &device)
 
   /* 'NVSDK_NGX_CUDA_GetFeatureRequirements' is an expensive call, so cache the result (since
    * 'is_device_supported' is called a lot). */
-  static NVSDK_NGX_Feature_Support_Result supported_cache[8] = {
-      NVSDK_NGX_FeatureSupportResult_CheckNotPresent,
-      NVSDK_NGX_FeatureSupportResult_CheckNotPresent,
-      NVSDK_NGX_FeatureSupportResult_CheckNotPresent,
-      NVSDK_NGX_FeatureSupportResult_CheckNotPresent,
-      NVSDK_NGX_FeatureSupportResult_CheckNotPresent,
-      NVSDK_NGX_FeatureSupportResult_CheckNotPresent,
-      NVSDK_NGX_FeatureSupportResult_CheckNotPresent,
-      NVSDK_NGX_FeatureSupportResult_CheckNotPresent};
-
-  if (device.num >= 8) {
-    return false;
-  }
-  if (supported_cache[device.num] != NVSDK_NGX_FeatureSupportResult_CheckNotPresent) {
-    return supported_cache[device.num] == NVSDK_NGX_FeatureSupportResult_Supported;
+  static ccl::map<int, NVSDK_NGX_Feature_Support_Result> supported_cache;
+  if (const auto it = supported_cache.find(device.num); it != supported_cache.end()) {
+    return it->second == NVSDK_NGX_FeatureSupportResult_Supported;
   }
 
   thread_scoped_lock ngx_lock(ngx_mutex);
@@ -298,7 +286,7 @@ bool DLSSDenoiser::is_device_supported(const DeviceInfo &device)
       cuDevice, &discovery_info, &requirement);
 
   if (NVSDK_NGX_SUCCEED(result)) {
-    supported_cache[device.num] = requirement.FeatureSupported;
+    supported_cache.emplace(device.num, requirement.FeatureSupported);
     return requirement.FeatureSupported == NVSDK_NGX_FeatureSupportResult_Supported;
   }
   else {
