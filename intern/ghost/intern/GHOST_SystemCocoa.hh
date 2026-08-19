@@ -117,7 +117,7 @@ class GHOST_SystemCocoa : public GHOST_System {
   GHOST_IWindow *getWindowUnderCursor(int32_t x, int32_t y) override;
 
   /** \copydoc #GHOST_ISystem::getSystemColorScheme */
-  GHOST_TColorScheme getSystemColorScheme() const override;
+  GHOST_TColorScheme getSystemColorScheme(int blocking_timeout_ms) const override;
 
   /***************************************************************************************
    * Event management functionality.

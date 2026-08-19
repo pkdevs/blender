@@ -145,10 +145,18 @@ class GHOST_ISystem {
 
   /**
    * Return the system's current light/dark color-scheme preference.
-   * \note Platforms that can't query this (or haven't implemented support for it)
-   * return #GHOST_kColorSchemeNoPreference.
+   *
+   * Querying the system may be asynchronous, in which case #GHOST_kColorSchemeUnknown is
+   * returned until it has answered. Callers that can't draw correctly without the preference
+   * (a window takes its colors from the theme as it is created) can pass a
+   * `blocking_timeout_ms` to wait for it, the timeout keeping a system that never answers from
+   * holding up start-up. On timeout the preference simply arrives later as
+   * #GHOST_kEventSystemAppearanceChanged, as it would for any change.
+   *
+   * \note Platforms that can't query this (or haven't implemented support for it) always
+   * return #GHOST_kColorSchemeUnknown and never block.
    */
-  virtual GHOST_TColorScheme getSystemColorScheme() const = 0;
+  virtual GHOST_TColorScheme getSystemColorScheme(int blocking_timeout_ms = 0) const = 0;
 
  protected:
   /**

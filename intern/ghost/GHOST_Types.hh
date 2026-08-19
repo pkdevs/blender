@@ -290,7 +290,13 @@ enum GHOST_TWindowOrder { GHOST_kWindowOrderTop = 0, GHOST_kWindowOrderBottom };
  * Values match the XDG Desktop Portal `org.freedesktop.appearance` `color-scheme` setting.
  */
 enum GHOST_TColorScheme {
-  /** No preference is known, or the platform doesn't support querying one. */
+  /**
+   * Nothing has been reported: the platform can't query a preference, or hasn't read one yet
+   * (see #GHOST_ISystem::getSystemColorScheme). Distinct from #GHOST_kColorSchemeNoPreference,
+   * callers should keep their own default rather than treat this as light or dark.
+   */
+  GHOST_kColorSchemeUnknown = -1,
+  /** The desktop actively reports having no preference either way. */
   GHOST_kColorSchemeNoPreference = 0,
   GHOST_kColorSchemePreferDark = 1,
   GHOST_kColorSchemePreferLight = 2,

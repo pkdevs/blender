@@ -93,7 +93,7 @@ void wm_window_close(bContext *C, wmWindowManager *wm, wmWindow *win);
  * but better not since caller may continue to use.
  * Instead, caller needs to handle the error case and cleanup.
  */
-void wm_window_ghostwindows_ensure(wmWindowManager *wm);
+void wm_window_ghostwindows_ensure(bContext *C, wmWindowManager *wm);
 /**
  * Call after #wm_window_ghostwindows_ensure or #WM_check
  * (after loading a new file) in the unlikely event a window couldn't be created.

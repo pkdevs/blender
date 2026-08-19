@@ -1188,9 +1188,66 @@ static void wm_window_ghostwindow_ensure(wmWindowManager *wm, wmWindow *win, boo
   ED_screen_global_areas_refresh(win);
 }
 
-void wm_window_ghostwindows_ensure(wmWindowManager *wm)
+/**
+ * Resolve the system's light/dark preference into #UserDef::runtime, loading the built-in light
+ * theme if that slot has never been filled in. Repeat calls that give the current value do
+ * nothing.
+ *
+ * \param blocking_timeout_ms: Passed to #GHOST_ISystem::getSystemColorScheme, for callers that
+ * need the preference now rather than whenever the system gets around to reporting it.
+ */
+static void system_appearance_update(bContext *C, const int blocking_timeout_ms = 0)
+{
+  const GHOST_TColorScheme color_scheme = g_system->getSystemColorScheme(blocking_timeout_ms);
+  if (color_scheme == GHOST_kColorSchemeUnknown) {
+    /* Nothing has been reported: the platform can't query a preference, or the desktop hasn't
+     * answered yet. */
+    return;
+  }
+
+  const UserPrefThemeType theme_type = color_scheme == GHOST_kColorSchemePreferDark ?
+                                           UserPrefThemeType::Dark :
+                                           UserPrefThemeType::Light;
+  bool changed = U.runtime.system_theme_type != theme_type;
+  U.runtime.system_theme_type = theme_type;
+
+  /* If System mode now resolves to Light but no light theme has ever been loaded,
+   * `active_theme_get()` would otherwise keep silently falling back to the dark theme.
+   * Loading the built-in default is only implemented in Python (XML parsing), and the
+   * operator itself resolves which of dark/light to load from the same (already updated
+   * above) state, so this doesn't need to pass that along explicitly.
+   *
+   * `force_reset=False` so this only ever fills in a theme slot that's never been loaded,
+   * it must never reset a theme the user has already loaded or customized. */
+  if (bke::resolve_active_theme_type() == UserPrefThemeType::Light && !U.active_theme_light) {
+    if (wmOperatorType *ot = WM_operatortype_find("preferences.reset_default_theme", true)) {
+      PointerRNA props_ptr = WM_operator_properties_create_ptr(ot);
+      RNA_boolean_set(&props_ptr, "force_reset", false);
+      WM_operator_name_call_ptr(C, ot, wm::OpCallContext::ExecDefault, &props_ptr, nullptr);
+      WM_operator_properties_free(&props_ptr);
+      changed = true;
+    }
+  }
+
+  if (changed) {
+    /* Full redraw, relevant when Active Theme Type is System. */
+    WM_main_add_notifier(NC_WINDOW, nullptr);
+  }
+}
+
+void wm_window_ghostwindows_ensure(bContext *C, wmWindowManager *wm)
 {
   BLI_assert(G.background == false);
+
+  /* A window takes its colors from the theme as it is created, so the system's light/dark
+   * preference should be resolved before that, not once the window is already on screen.
+   *
+   * Reading it is asynchronous and starts before this in #wm_ghost_init, so by the time the first
+   * window is created it has normally arrived and this doesn't wait at all. The timeout bounds
+   * the cost on a desktop that is slow to answer (or never does), where the preference is picked
+   * up later through #GHOST_kEventSystemAppearanceChanged instead. */
+  constexpr int system_color_scheme_timeout_ms = 100;
+  system_appearance_update(C, system_color_scheme_timeout_ms);
 
   /* No command-line prefsize? then we set this.
    * Note that these values will be used only
@@ -1797,42 +1854,7 @@ static bool ghost_event_proc(const GHOST_IEvent *ghost_event, GHOST_TUserDataPtr
   }
 
   if (type == GHOST_kEventSystemAppearanceChanged) {
-    U.runtime.system_theme_type = [&]() {
-      switch (g_system->getSystemColorScheme()) {
-        case GHOST_kColorSchemePreferDark:
-          return UserPrefThemeType::Dark;
-        case GHOST_kColorSchemePreferLight:
-        case GHOST_kColorSchemeNoPreference:
-          /* "No preference" resolves to light, matching what desktops expect of it: GNOME's
-           * Dark Style toggle switches between "prefer dark" and "no preference", it never
-           * reports "prefer light". Toolkits (GTK, Qt) treat it as light for the same reason.
-           *
-           * This is only reached once the system has actually reported a color scheme, a
-           * platform that can't query one never sends this event, so Blender's own default
-           * (dark) still applies there. */
-          return UserPrefThemeType::Light;
-      }
-      return UserPrefThemeType::Dark;
-    }();
-
-    /* If System mode now resolves to Light but no light theme has ever been loaded,
-     * `active_theme_get()` would otherwise keep silently falling back to the dark theme.
-     * Loading the built-in default is only implemented in Python (XML parsing), and the
-     * operator itself resolves which of dark/light to load from the same (already updated
-     * above) state, so this doesn't need to pass that along explicitly.
-     *
-     * `force_reset=False` so this only ever fills in a theme slot that's never been loaded,
-     * it must never clobber a theme the user has already loaded or customized. */
-    if (bke::resolve_active_theme_type() == UserPrefThemeType::Light && !U.active_theme_light) {
-      wmOperatorType *ot = WM_operatortype_find("preferences.reset_default_theme", false);
-      PointerRNA props_ptr = WM_operator_properties_create_ptr(ot);
-      RNA_boolean_set(&props_ptr, "force_reset", false);
-      WM_operator_name_call_ptr(C, ot, wm::OpCallContext::ExecDefault, &props_ptr, nullptr);
-      WM_operator_properties_free(&props_ptr);
-    }
-
-    /* Full redraw, relevant when Active Theme Type is System. */
-    WM_main_add_notifier(NC_WINDOW, nullptr);
+    system_appearance_update(C);
     return true;
   }
 

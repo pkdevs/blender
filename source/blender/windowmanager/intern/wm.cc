@@ -498,7 +498,7 @@ void WM_check(bContext *C)
     WM_init_gpu_backend();
 
     /* Case: no open windows at all, for old file reads. */
-    wm_window_ghostwindows_ensure(wm);
+    wm_window_ghostwindows_ensure(C, wm);
   }
 
   /* Case: file-read. */

@@ -59,8 +59,16 @@ struct GHOST_DBusWatcher::Data {
    */
   std::mutex mutex;
   std::condition_variable finished_cond;
+  /** Signalled once #initial_done is set, see #GHOST_DBusWatcher::wait_initial. */
+  std::condition_variable initial_cond;
   bool stop = false;
   bool finished = false;
+  /**
+   * Whether the initial read of every setting has been delivered to its callback. Also set when
+   * there is nothing to deliver (the bus couldn't be reached, the thread was stopped), so a
+   * waiter is never left hanging.
+   */
+  bool initial_done = false;
   DBusConnection *connection = nullptr;
 
   /**
@@ -300,6 +308,19 @@ static bool settings_subscribe(WatcherData *data, DBusConnection *connection)
   return true;
 }
 
+/** Release anyone waiting in #GHOST_DBusWatcher::wait_initial. */
+static void initial_done_set(WatcherData *data)
+{
+  {
+    std::lock_guard lock{data->mutex};
+    if (data->initial_done) {
+      return;
+    }
+    data->initial_done = true;
+  }
+  data->initial_cond.notify_all();
+}
+
 static bool thread_should_stop(WatcherData *data)
 {
   std::lock_guard lock{data->mutex};
@@ -330,6 +351,7 @@ static void thread_run(std::shared_ptr<GHOST_DBusWatcher::Data> data_ptr)
         }
       }
       settings_changed_flush(data);
+      initial_done_set(data);
 
       /* Blocks until a message arrives (dispatching it through #filter_func) or the connection
        * is closed, so watching costs nothing while nothing changes. */
@@ -338,6 +360,10 @@ static void thread_run(std::shared_ptr<GHOST_DBusWatcher::Data> data_ptr)
       }
     }
   }
+
+  /* Also covers the paths that returned before reading anything, so #wait_initial can't block
+   * for its full timeout when there was never going to be a value. */
+  initial_done_set(data);
 
   {
     std::lock_guard lock{data->mutex};
@@ -387,6 +413,16 @@ GHOST_DBusWatcher::~GHOST_DBusWatcher()
   }
 
   thread_.join();
+}
+
+bool GHOST_DBusWatcher::wait_initial(const int timeout_ms)
+{
+  if (!thread_.joinable()) {
+    return false;
+  }
+  std::unique_lock lock{data_->mutex};
+  return data_->initial_cond.wait_for(
+      lock, std::chrono::milliseconds(timeout_ms), [this] { return data_->initial_done; });
 }
 
 void GHOST_DBusWatcher::setting_add(const char *name_space,

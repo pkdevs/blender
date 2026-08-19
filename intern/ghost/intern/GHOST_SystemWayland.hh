@@ -286,7 +286,7 @@ class GHOST_SystemWayland : public GHOST_System {
   void xdg_toplevel_icon_update(GHOST_WindowWayland *window, struct xdg_toplevel *toplevel);
 
   /** \copydoc #GHOST_ISystem::getSystemColorScheme */
-  GHOST_TColorScheme getSystemColorScheme() const override;
+  GHOST_TColorScheme getSystemColorScheme(int blocking_timeout_ms) const override;
 
   /* WAYLAND direct-data access. */
 
@@ -411,8 +411,6 @@ class GHOST_SystemWayland : public GHOST_System {
 #ifdef WITH_GHOST_DBUS
   std::unique_ptr<GHOST_DBusWatcher> dbus_watcher_;
   /** Written from the watcher's background thread, see #getSystemColorScheme. */
-  std::atomic<GHOST_TColorScheme> color_scheme_ = GHOST_kColorSchemeNoPreference;
-  /** Whether #color_scheme_ has been reported by the system, as opposed to never read. */
-  std::atomic<bool> color_scheme_known_ = false;
+  std::atomic<GHOST_TColorScheme> color_scheme_ = GHOST_kColorSchemeUnknown;
 #endif
 };

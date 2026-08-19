@@ -165,9 +165,9 @@ GHOST_IWindow *GHOST_System::getWindowUnderCursor(int32_t x, int32_t y)
   return nullptr;
 }
 
-GHOST_TColorScheme GHOST_System::getSystemColorScheme() const
+GHOST_TColorScheme GHOST_System::getSystemColorScheme(int /*blocking_timeout_ms*/) const
 {
-  return GHOST_kColorSchemeNoPreference;
+  return GHOST_kColorSchemeUnknown;
 }
 
 void GHOST_System::dispatchEvents()

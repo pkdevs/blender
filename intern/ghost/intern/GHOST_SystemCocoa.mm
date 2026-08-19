@@ -871,7 +871,7 @@ GHOST_IWindow *GHOST_SystemCocoa::getWindowUnderCursor(int32_t x, int32_t y)
   }
 }
 
-GHOST_TColorScheme GHOST_SystemCocoa::getSystemColorScheme() const
+GHOST_TColorScheme GHOST_SystemCocoa::getSystemColorScheme(int /*blocking_timeout_ms*/) const
 {
   @autoreleasepool {
     NSAppearance *appearance = [NSApp effectiveAppearance];
@@ -886,7 +886,7 @@ GHOST_TColorScheme GHOST_SystemCocoa::getSystemColorScheme() const
     }
   }
 
-  return GHOST_kColorSchemeNoPreference;
+  return GHOST_kColorSchemeUnknown;
 }
 
 /**

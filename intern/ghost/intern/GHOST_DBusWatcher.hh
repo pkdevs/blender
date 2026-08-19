@@ -72,6 +72,21 @@ class GHOST_DBusWatcher {
    * doesn't know a setting simply leaves that setting's callback un-called.
    */
   bool start();
+
+  /**
+   * Block until every setting's initial value has been passed to its callback, or until
+   * `timeout_ms` has elapsed, returning whether the values arrived in time.
+   *
+   * Reading is otherwise entirely asynchronous. This exists for values a caller can't draw
+   * correctly without (the light/dark preference decides the window decoration colors, which
+   * are chosen once when a window is created). Prefer waiting as late as possible: #start is
+   * called early in start-up, so by the time anything needs a value it has normally arrived
+   * and this returns immediately.
+   *
+   * Returns false without waiting when #start didn't start a thread, and stops waiting early
+   * when the bus turned out to be unreachable.
+   */
+  bool wait_initial(int timeout_ms);
 };
 
 #endif /* WITH_GHOST_DBUS */

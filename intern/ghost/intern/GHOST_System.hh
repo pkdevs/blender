@@ -97,7 +97,7 @@ class GHOST_System : public GHOST_ISystem {
    * Default implementation for platforms that don't (yet) support querying this.
    * Implementations that can support it should override this.
    */
-  GHOST_TColorScheme getSystemColorScheme() const override;
+  GHOST_TColorScheme getSystemColorScheme(int blocking_timeout_ms) const override;
 
   /***************************************************************************************
    * Event management functionality

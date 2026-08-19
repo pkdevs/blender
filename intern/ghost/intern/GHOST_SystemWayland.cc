@@ -9117,13 +9117,10 @@ GHOST_SystemWayland::GHOST_SystemWayland(const bool background)
           }
           const GHOST_TColorScheme color_scheme = ghost_color_scheme_from_portal_value(
               *value_uint);
-          /* The first value is always reported, even when it matches #color_scheme_'s initial
-           * value: a desktop actively reporting "no preference" is not the same as never having
-           * read one, and the two resolve to different themes. Later repeats are dropped to avoid
-           * unnecessary events for duplicate signals. */
-          const bool is_first = !color_scheme_known_.exchange(true);
-          const bool is_changed = color_scheme_.exchange(color_scheme) != color_scheme;
-          if (!is_first && !is_changed) {
+          /* #color_scheme_ starts out #GHOST_kColorSchemeUnknown, so the first value always
+           * differs from it and gets reported, including a desktop that says it has no
+           * preference. Repeats are dropped to avoid unnecessary events for duplicate signals. */
+          if (color_scheme_.exchange(color_scheme) == color_scheme) {
             return;
           }
           pushEvent_maybe_pending(std::make_unique<GHOST_Event>(
@@ -10827,14 +10824,18 @@ GHOST_TimerManager *GHOST_SystemWayland::key_repeat_timer_manager()
   return display_->key_repeat_timer_manager;
 }
 
-GHOST_TColorScheme GHOST_SystemWayland::getSystemColorScheme() const
+GHOST_TColorScheme GHOST_SystemWayland::getSystemColorScheme(const int blocking_timeout_ms) const
 {
 #ifdef WITH_GHOST_DBUS
-  /* Stays #GHOST_kColorSchemeNoPreference until the watcher's first read completes, callers are
-   * expected to react to #GHOST_kEventSystemAppearanceChanged rather than query this up front. */
+  if (dbus_watcher_ && (blocking_timeout_ms > 0)) {
+    dbus_watcher_->wait_initial(blocking_timeout_ms);
+  }
+  /* Stays #GHOST_kColorSchemeUnknown until the watcher's first read completes, which callers
+   * can wait for with `blocking_timeout_ms`, see also #GHOST_kEventSystemAppearanceChanged. */
   return color_scheme_.load();
 #else
-  return GHOST_kColorSchemeNoPreference;
+  (void)blocking_timeout_ms;
+  return GHOST_kColorSchemeUnknown;
 #endif
 }
 
