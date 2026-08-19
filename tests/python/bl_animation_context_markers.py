@@ -65,6 +65,7 @@ class ContextMarkersTest(unittest.TestCase):
 
 class SceneMarkersTest(ContextMarkersTest):
     """Tests for markers in the current scene."""
+
     def test_scene_markers(self):
         self._test_context_no_markers()
         _add_test_markers(self.scene.timeline_markers)
@@ -73,6 +74,7 @@ class SceneMarkersTest(ContextMarkersTest):
 
 class PoseMarkersTest(ContextMarkersTest):
     """Helper for testing pose markers."""
+
     def _test_pose_markers(self, space_mode, animation_data_owner):
         action = bpy.data.actions.new("Action")
         _add_test_markers(action.pose_markers)
@@ -114,12 +116,14 @@ class PoseMarkersTest(ContextMarkersTest):
 
 class ActionPoseMarkersTest(PoseMarkersTest):
     """Tests for pose markers on an object action."""
+
     def test_action_pose_markers(self):
         self._test_pose_markers('ACTION', self.cube)
 
 
 class ShapeKeyPoseMarkersTest(PoseMarkersTest):
     """Tests for pose markers on a shape key action."""
+
     def test_shape_key_pose_markers(self):
         # Object needs at least one shapekey before it can be assigned a shapekey action.
         self.cube.shape_key_add()
@@ -129,6 +133,7 @@ class ShapeKeyPoseMarkersTest(PoseMarkersTest):
 
 class OverrideSceneMarkersTest(ContextMarkersTest):
     """Tests for markers in a context-overridden scene (used for fetching sequencer scene markers for example)."""
+
     def test_override_scene_markers(self):
         other_scene = bpy.data.scenes.new("Other")
         _add_test_markers(other_scene.timeline_markers)
