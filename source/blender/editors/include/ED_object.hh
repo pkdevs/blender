@@ -443,6 +443,14 @@ void constraint_link(Main *bmain,
 void constraint_copy_for_object(Main *bmain, Object *ob_dst, bConstraint *con);
 void constraint_copy_for_pose(Main *bmain, Object *ob_dst, bPoseChannel *pchan, bConstraint *con);
 
+void constraint_remove_all(Main *bmain, Object *ob, ListBaseT<struct bConstraint> *constraints);
+void constraint_remove(Main *bmain,
+                       Object *ob,
+                       ListBaseT<struct bConstraint> *constraints,
+                       ReportList *reports,
+                       const int *indices_ptr,
+                       const int indices_num);
+
 /* `object_modes.cc` */
 
 /**

@@ -423,26 +423,6 @@ static void rna_PoseChannel_constraints_remove(
   }
 }
 
-static void rna_PoseChannel_constraints_remove_all(ID *id, bPoseChannel *pchan, Main *bmain)
-{
-  bool is_any_ik = false;
-  Object *ob = id_cast<Object *>(id);
-
-  for (bConstraint &con : pchan->constraints.items_mutable()) {
-    is_any_ik |= ELEM(con.type, CONSTRAINT_TYPE_KINEMATIC, CONSTRAINT_TYPE_SPLINEIK);
-    BKE_constraint_remove_ex(&pchan->constraints, ob, &con);
-  }
-
-  if (is_any_ik) {
-    BIK_clear_data(ob->pose);
-  }
-
-  ed::object::constraint_update(bmain, ob);
-  DEG_relations_tag_update(bmain);
-
-  WM_main_add_notifier(NC_OBJECT | ND_CONSTRAINT | NA_REMOVED, id);
-}
-
 static void rna_PoseChannel_constraints_remove_constraints(ID *id,
                                                            bPoseChannel *pchan,
                                                            Main *bmain,
@@ -450,56 +430,9 @@ static void rna_PoseChannel_constraints_remove_constraints(ID *id,
                                                            const int *indices_ptr,
                                                            const int indices_num)
 {
-  bool is_any_ik = false;
   Object *ob = id_cast<Object *>(id);
 
-  if (!indices_ptr) {
-    rna_PoseChannel_constraints_remove_all(id, pchan, bmain);
-    return;
-  }
-
-  Span<int> indices(indices_ptr, indices_num);
-
-  blender::Vector<int> sorted(indices);
-  std::sort(sorted.begin(), sorted.end());
-  /* Make all indices unique, and resize the vector to the new index count. */
-  sorted.resize(std::unique(sorted.begin(), sorted.end()) - sorted.begin());
-
-  indices = sorted.as_span();
-
-  if (indices.first() < 0 || indices.last() >= pchan->constraints.count()) {
-    BKE_report(reports, RPT_ERROR_INVALID_INPUT, "Indices must be in range");
-    return;
-  }
-
-  /* Construct a list of constraints to remove, visiting each constraint only once. */
-  Vector<bConstraint *> to_be_removed;
-  for (const auto &[index, constraint] : pchan->constraints.enumerate()) {
-    if (indices.is_empty()) {
-      break;
-    }
-    if (index != indices[0]) {
-      continue;
-    }
-    to_be_removed.append(&constraint);
-    indices = indices.drop_front(1);
-  }
-  /* Remove the listed constraints. */
-  for (bConstraint *constraint : to_be_removed) {
-    is_any_ik |= ELEM(constraint->type, CONSTRAINT_TYPE_KINEMATIC, CONSTRAINT_TYPE_SPLINEIK);
-    BKE_constraint_remove_ex(&pchan->constraints, ob, constraint);
-  }
-
-  if (is_any_ik) {
-    BIK_clear_data(ob->pose);
-  }
-
-  ed::object::constraint_update(bmain, ob);
-  DEG_relations_tag_update(bmain);
-
-  BKE_constraints_active_set(&pchan->constraints, nullptr);
-
-  WM_main_add_notifier(NC_OBJECT | ND_CONSTRAINT | NA_REMOVED, id);
+  ed::object::constraint_remove(bmain, ob, &pchan->constraints, reports, indices_ptr, indices_num);
 }
 
 static void rna_PoseChannel_constraints_move(

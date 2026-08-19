@@ -11,7 +11,7 @@ import sys
 import unittest
 
 import bpy
-from bpy.types import Constraint
+from bpy.types import Constraint, bpy_prop_collection
 from mathutils import Matrix
 
 
@@ -545,9 +545,14 @@ class AbstractConstraintRemovalTests:
     """This abstracts away tests for constraint mass removal called on either
     ObjectConstraints or PoseBoneConstraints structs.
 
-    Should be inherited from alongside AbstractConstraintTests.
+    Should be inherited alongside AbstractConstraintTests.
     """
-    constraints = None
+    constraints: bpy_prop_collection
+
+    def check_test_preconditions(self):
+        """Make sure the test file contains the required preconditions."""
+        self.assertEqual(len(self.constraints), 3)
+        self.assertEqual(self.constraints[1].name, 'Copy Location.001')
 
     def test_remove_constraints(self):
         """Remove Constraints: simple remove."""
@@ -569,8 +574,10 @@ class AbstractConstraintRemovalTests:
 
     def test_exceptions(self):
         """Remove Constraints: throw exceptions for out-of-range indices."""
-        self.assertRaises(RuntimeError, self.constraints.remove_constraints, indices=(-1,))
-        self.assertRaises(RuntimeError, self.constraints.remove_constraints, indices=(3,))
+        with self.assertRaises(RuntimeError):
+            self.constraints.remove_constraints(indices=(-1,))
+        with self.assertRaises(RuntimeError):
+            self.constraints.remove_constraints(indices=(3,))
 
 
 class PoseBonesConstratintTest(AbstractConstraintRemovalTests, AbstractConstraintTests):
@@ -582,6 +589,7 @@ class PoseBonesConstratintTest(AbstractConstraintRemovalTests, AbstractConstrain
         context_override = self.bone_constraint_context('Pose Bones')
         with bpy.context.temp_override(**context_override):
             self.constraints = bpy.context.active_pose_bone.constraints
+        self.check_test_preconditions()
 
 
 class ObjectConstratintTest(AbstractConstraintRemovalTests, AbstractConstraintTests):
@@ -593,6 +601,7 @@ class ObjectConstratintTest(AbstractConstraintRemovalTests, AbstractConstraintTe
         context_override = self.constraint_context('Object')
         with bpy.context.temp_override(**context_override):
             self.constraints = bpy.context.object.constraints
+        self.check_test_preconditions()
 
 
 def main():

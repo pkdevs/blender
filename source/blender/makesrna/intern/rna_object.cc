@@ -1623,61 +1623,14 @@ static void rna_Object_constraints_remove(Object *object,
   WM_main_add_notifier(NC_OBJECT | ND_CONSTRAINT | NA_REMOVED, object);
 }
 
-static void rna_Object_constraints_remove_all(Object *object, Main *bmain)
-{
-  for (bConstraint &con : object->constraints.items_mutable()) {
-    BKE_constraint_remove_ex(&object->constraints, object, &con);
-  }
-
-  ed::object::constraint_update(bmain, object);
-  WM_main_add_notifier(NC_OBJECT | ND_CONSTRAINT | NA_REMOVED, object);
-}
-
 static void rna_Object_constraints_remove_constraints(Object *object,
                                                       Main *bmain,
                                                       ReportList *reports,
                                                       const int *indices_ptr,
                                                       const int indices_num)
 {
-  if (!indices_ptr) {
-    rna_Object_constraints_remove_all(object, bmain);
-    return;
-  }
-
-  Span<int> indices(indices_ptr, indices_num);
-
-  blender::Vector<int> sorted(indices);
-  std::sort(sorted.begin(), sorted.end());
-  /* Make all indices unique, and resize the vector to the new index count. */
-  sorted.resize(std::unique(sorted.begin(), sorted.end()) - sorted.begin());
-
-  indices = sorted.as_span();
-
-  if (indices.first() < 0 || indices.last() >= object->constraints.count()) {
-    BKE_report(reports, RPT_ERROR_INVALID_INPUT, "Indices must be in range");
-    return;
-  }
-
-  /* Construct a list of constraints to remove, visiting each constraint only once. */
-  Vector<bConstraint *> to_be_removed;
-  for (const auto &[index, constraint] : object->constraints.enumerate()) {
-    if (indices.is_empty()) {
-      break;
-    }
-    if (index != indices[0]) {
-      continue;
-    }
-    to_be_removed.append(&constraint);
-    indices = indices.drop_front(1);
-  }
-  /* Remove the listed constraints. */
-  for (bConstraint *constraint : to_be_removed) {
-    BKE_constraint_remove_ex(&object->constraints, object, constraint);
-  }
-
-  ed::object::constraint_update(bmain, object);
-  ed::object::constraint_active_set(object, nullptr);
-  WM_main_add_notifier(NC_OBJECT | ND_CONSTRAINT | NA_REMOVED, object);
+  ed::object::constraint_remove(
+      bmain, object, &object->constraints, reports, indices_ptr, indices_num);
 }
 
 static void rna_Object_constraints_clear(Object *object, Main *bmain)
