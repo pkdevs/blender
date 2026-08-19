@@ -261,8 +261,6 @@ static EffectHandle effect_handle_for_blend_mode_get(StripBlendMode blend)
       gamma_cross_effect_get_handle(rval);
       break;
     case STRIP_BLEND_MUL:
-      mul_effect_get_handle(rval);
-      break;
     case STRIP_BLEND_SCREEN:
     case STRIP_BLEND_LIGHTEN:
     case STRIP_BLEND_DODGE:
