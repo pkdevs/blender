@@ -1526,7 +1526,6 @@ void outliner_set_coordinates(const ARegion *region, SpaceOutliner *space_outlin
   int starty = int(region->v2d.tot.ymax) - UI_UNIT_Y;
 
   tree_iterator::all(space_outliner->runtime->tree, [&](TreeElement *te) {
-    /* store coord and continue, we need coordinates for elements outside view too */
     te->xs = 0;
     te->ys = 0;
   });
