@@ -973,11 +973,18 @@ class WM_OT_context_modal_mouse(Operator):
             else:
                 exec("item.{:s} = {:f}".format(data_path_item, value_orig + delta))
 
+    def _values_set(self, value):
+        data_path_item = self.data_path_item
+        for item, value_orig in self._values.items():
+            if type(value_orig) == int:
+                exec("item.{:s} = int({:d})".format(data_path_item, round(value)))
+            else:
+                exec("item.{:s} = {:f}".format(data_path_item, value))
+
     def _values_restore(self):
         data_path_item = self.data_path_item
         for item, value_orig in self._values.items():
             exec("item.{:s} = {:s}".format(data_path_item, str(value_orig)))
-
         self._values.clear()
 
     def _values_clear(self):
@@ -985,11 +992,69 @@ class WM_OT_context_modal_mouse(Operator):
 
     def modal(self, context, event):
         event_type = event.type
-
+        number_events = {
+            'ZERO': '0',
+            'ONE': '1',
+            'TWO': '2',
+            'THREE': '3',
+            'FOUR': '4',
+            'FIVE': '5',
+            'SIX': '6',
+            'SEVEN': '7',
+            'EIGHT': '8',
+            'NINE': '9',
+            'NUMPAD_0': '0',
+            'NUMPAD_1': '1',
+            'NUMPAD_2': '2',
+            'NUMPAD_3': '3',
+            'NUMPAD_4': '4',
+            'NUMPAD_5': '5',
+            'NUMPAD_6': '6',
+            'NUMPAD_7': '7',
+            'NUMPAD_8': '8',
+            'NUMPAD_9': '9',
+        }
         # Factor for precision tweaking (match GIZMO_PRECISION_FAC in `gizmo_library_utils.cc`).
         context_modal_mouse_precision_fac = 0.05
 
-        if event_type == 'MOUSEMOVE':
+        if event.value == 'PRESS' and event_type in {'BACK_SPACE', 'DEL'}:
+            if self._numeric_input:
+                self._numeric_input = self._numeric_input[:-1]
+
+                if self._numeric_input:
+                    if self.header_text:
+                        context.area.header_text_set(
+                            self.header_text % float(self._numeric_input)
+                        )
+                else:
+                    context.area.header_text_set(None)
+
+        elif (
+                event.value == 'PRESS' and
+                not (event.ctrl or event.alt or event.oskey or event.hyper) and
+                event_type in number_events
+        ):
+            self._numeric_input += number_events[event_type]
+
+            if self.header_text:
+                context.area.header_text_set(
+                    self.header_text % float(self._numeric_input)
+                )
+
+        elif event.value == 'PRESS' and event_type in {'RET', 'NUMPAD_ENTER'}:
+            if self._numeric_input:
+                value = float(self._numeric_input)
+                self._values_set(value)
+
+            item = next(iter(self._values.keys()))
+            self._values_clear()
+            context.area.header_text_set(None)
+            return operator_value_undo_return(item)
+
+        elif (
+                event_type == 'MOUSEMOVE' and
+                not self._numeric_input
+        ):
             total_offset = event.mouse_x - self.initial_x
             step_delta = event.mouse_x - self._prev_x
             if event.shift:
@@ -1035,6 +1100,7 @@ class WM_OT_context_modal_mouse(Operator):
             self.initial_x = event.mouse_x
             self._prev_x = event.mouse_x
             self._precision_offset = 0.0
+            self._numeric_input = ""
 
             context.window_manager.modal_handler_add(self)
             return {'RUNNING_MODAL'}
