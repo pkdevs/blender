@@ -11,6 +11,8 @@
 
 #include "DEG_depsgraph_query.hh"
 
+#include "ED_node.hh"
+
 #include "RNA_access.hh"
 
 #include "UI_interface_layout.hh"
@@ -30,7 +32,7 @@ static void node_shader_buts_uvmap(ui::Layout &layout, bContext *C, PointerRNA *
   layout.prop(ptr, "from_instancer", ui::ITEM_R_SPLIT_EMPTY_NAME, std::nullopt, ICON_NONE);
 
   if (!RNA_boolean_get(ptr, "from_instancer")) {
-    Object *object = get_space_editor_object(C);
+    Object *object = ed::space_node::get_space_editor_object(C);
 
     if (object && object->type == OB_MESH) {
       Depsgraph *depsgraph = CTX_data_depsgraph_pointer(C);

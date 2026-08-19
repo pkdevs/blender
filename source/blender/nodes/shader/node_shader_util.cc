@@ -469,17 +469,4 @@ void search_link_ops_for_shader_bsdf_node(nodes::GatherLinkSearchOpParams &param
   nodes::search_filtered_link_ops_for_basic_node(params, skip_socket_identifiers);
 }
 
-Object *get_space_editor_object(bContext *C)
-{
-  SpaceNode *snode = CTX_wm_space_node(C);
-
-  if (snode && snode->from) {
-    if (snode->from->id_type() == ID_OB) {
-      return id_cast<Object *>(snode->from);
-    }
-  }
-
-  return nullptr;
-}
-
 }  // namespace blender
