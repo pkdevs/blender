@@ -174,7 +174,7 @@ static PointerRNA rna_ActionSlots_active_get(PointerRNA *ptr)
   animrig::Slot *active_slot = action.slot_active_get();
 
   if (!active_slot) {
-    return PointerRNA_NULL;
+    return {};
   }
   return RNA_pointer_create_discrete(&action.id, RNA_ActionSlot, active_slot);
 }
@@ -185,7 +185,7 @@ static void rna_ActionSlots_active_set(PointerRNA *ptr,
 {
   animrig::Action &action = rna_action(ptr);
 
-  if (value.data) {
+  if (value) {
     animrig::Slot &slot = rna_data_slot(&value);
     action.slot_active_set(slot.handle);
   }
@@ -1139,7 +1139,7 @@ static void reevaluate_fcurve_errors(bAnimContext *ac)
     PointerRNA ptr;
     PropertyRNA *prop;
     PointerRNA id_ptr = RNA_id_pointer_create(ale.id);
-    if (RNA_path_resolve_property(&id_ptr, fcu->rna_path().c_str(), &ptr, &prop)) {
+    if (RNA_path_resolve_property(&id_ptr, fcu->rna_path_parsed(), &ptr, &prop)) {
       fcu->flag &= ~FCURVE_DISABLED;
     }
     else {

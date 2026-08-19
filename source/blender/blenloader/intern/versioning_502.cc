@@ -462,7 +462,7 @@ static void versioning_replace_legacy_compositor_switch_node(bNodeTree *node_tre
   }
 }
 
-void do_versions_after_linking_520(FileData *fd, Main *bmain)
+void do_versions_after_linking_502(FileData *fd, Main *bmain)
 {
   if (!MAIN_VERSION_FILE_ATLEAST(bmain, 502, 2)) {
     for (Scene &scene : bmain->scenes) {
@@ -541,7 +541,7 @@ static void version_solid_color_width_height_defaults(Main &bmain)
   }
 }
 
-void blo_do_versions_520(FileData * /*fd*/, Library * /*lib*/, Main *bmain)
+void blo_do_versions_502(FileData * /*fd*/, Library * /*lib*/, Main *bmain)
 {
   if (!MAIN_VERSION_FILE_ATLEAST(bmain, 502, 1)) {
     for (Scene &scene : bmain->scenes) {
@@ -603,7 +603,8 @@ void blo_do_versions_520(FileData * /*fd*/, Library * /*lib*/, Main *bmain)
       if (scene.toolsettings->gp_paint) {
         UnifiedPaintSettings &settings =
             scene.toolsettings->gp_paint->paint.unified_paint_settings;
-        settings.flag &= ~(UNIFIED_PAINT_SIZE | UNIFIED_PAINT_ALPHA | UNIFIED_PAINT_COLOR);
+        settings.flag &= ~(UNIFIED_PAINT_SIZE_DEPRECATED | UNIFIED_PAINT_ALPHA_DEPRECATED |
+                           UNIFIED_PAINT_COLOR_DEPRECATED);
       }
     }
   }

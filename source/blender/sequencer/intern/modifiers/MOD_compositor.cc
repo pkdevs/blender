@@ -142,7 +142,7 @@ class CompositorModifierContext : public CompositorContext {
 
     node_group.ensure_topology_cache();
     PointerRNA inputs_ptr = RNA_pointer_get(&properties_ptr_, "inputs");
-    BLI_assert(inputs_ptr.data != nullptr);
+    BLI_assert(inputs_ptr);
 
     /* Map the inputs to the operation. */
     Vector<std::unique_ptr<Result>> inputs;
@@ -277,8 +277,10 @@ static void compositor_modifier_apply(ModifierApplyContext &context,
   CompositorCache &com_cache = context.render_data.scene->ed->runtime->ensure_compositor_cache();
   CompositorModifierContext com_mod_context(context, com_cache.get_cache_manager(), modifier_data);
 
+  GpuContextState gpu_state = GpuContextState::Unsupported;
   if (com_mod_context.use_gpu()) {
-    com_mod_context.set_gpu_supported(render_begin_gpu(context.render_data));
+    gpu_state = render_begin_gpu(context.render_data);
+    com_mod_context.set_gpu_supported(gpu_state != GpuContextState::Unsupported);
   }
 
   com_cache.recreate_if_needed(
@@ -286,9 +288,7 @@ static void compositor_modifier_apply(ModifierApplyContext &context,
   com_mod_context.evaluate();
   com_mod_context.cache_manager().reset();
   com_mod_context.free_resources();
-  if (com_mod_context.use_gpu()) {
-    render_end_gpu(context.render_data);
-  }
+  render_end_gpu(context.render_data, gpu_state);
 
   context.result.translation += com_mod_context.get_result_translation();
 }
@@ -296,7 +296,7 @@ static void compositor_modifier_apply(ModifierApplyContext &context,
 static PointerRNA *modifier_panel_get_property_pointers(Panel *panel)
 {
   PointerRNA *ptr = ui::panel_custom_data_get(panel);
-  BLI_assert(!RNA_pointer_is_null(ptr));
+  BLI_assert(*ptr);
   BLI_assert(RNA_struct_is_a(ptr->type, RNA_StripModifier));
   ui::panel_context_pointer_set(panel, "modifier", ptr);
   return ptr;
