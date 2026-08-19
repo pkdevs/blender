@@ -187,7 +187,6 @@ int main(int argc, char **argv)
         !filename.ends_with("gpu_shader_2D_update_mipmaps.bsl.hh") &&
         !filename.ends_with("eevee_bxdf_lut_lib.bsl.hh") &&
         !filename.ends_with("eevee_hiz_update.bsl.hh") &&
-        !filename.ends_with("eevee_light_shadow_setup.bsl.hh") &&
         !filename.ends_with("eevee_reverse_z_lib.bsl.hh") &&
         !filename.ends_with("eevee_shadow_page_defrag.bsl.hh") &&
         !filename.ends_with("eevee_surfel.bsl.hh") &&
@@ -201,16 +200,11 @@ int main(int argc, char **argv)
         !filename.ends_with("eevee_bxdf_microfacet.bsl.hh") &&
         !filename.ends_with("eevee_bxdf_oren_nayar.bsl.hh") &&
         !filename.ends_with("eevee_bxdf_types.bsl.hh") &&
+        !filename.ends_with("eevee_cryptomatte.bsl.hh") &&
+        !filename.ends_with("eevee_cryptomatte_sort.bsl.hh") &&
         !filename.ends_with("eevee_camera_lib.bsl.hh") &&
         !filename.ends_with("eevee_closure.bsl.hh") &&
         !filename.ends_with("eevee_colorspace_lib.bsl.hh") &&
-        !filename.ends_with("eevee_cryptomatte.bsl.hh") &&
-        !filename.ends_with("eevee_cryptomatte_sort.bsl.hh") &&
-        !filename.ends_with("eevee_debug.bsl.hh") &&
-        !filename.ends_with("eevee_deferred_combine.bsl.hh") &&
-        !filename.ends_with("eevee_deferred_eval.bsl.hh") &&
-        !filename.ends_with("eevee_deferred_thickness_amend.bsl.hh") &&
-        !filename.ends_with("eevee_deferred_tile_classify.bsl.hh") &&
         !filename.ends_with("eevee_depth_of_field_accumulator.bsl.hh") &&
         !filename.ends_with("eevee_depth_of_field_bokeh_lut.bsl.hh") &&
         !filename.ends_with("eevee_depth_of_field_filter.bsl.hh") &&
@@ -222,6 +216,53 @@ int main(int argc, char **argv)
         !filename.ends_with("eevee_depth_of_field_tiles.bsl.hh") &&
         !filename.ends_with("eevee_fast_gi.bsl.hh") && !filename.ends_with("eevee_film.bsl.hh") &&
         !filename.ends_with("eevee_hiz.bsl.hh") && !filename.ends_with("eevee_filter.bsl.hh") &&
+        !filename.ends_with("eevee_lightprobe.bsl.hh") &&
+        !filename.ends_with("eevee_lightprobe_display.bsl.hh") &&
+        !filename.ends_with("eevee_lightprobe_plane.bsl.hh") &&
+        !filename.ends_with("eevee_lightprobe_sphere.bsl.hh") &&
+        // !filename.ends_with("eevee_lightprobe_sphere_bake.bsl.hh") &&
+        !filename.ends_with("eevee_lightprobe_sphere_culling.bsl.hh") &&
+        !filename.ends_with("eevee_lightprobe_volume.bsl.hh") &&
+        !filename.ends_with("eevee_lightprobe_volume_bake.bsl.hh") &&
+        !filename.ends_with("eevee_lightprobe_volume_load.bsl.hh") &&
+        !filename.ends_with("eevee_lookdev_copy_world.bsl.hh") &&
+        !filename.ends_with("eevee_lookdev_display.bsl.hh") &&
+        !filename.ends_with("eevee_ltc_lib.bsl.hh") &&
+        !filename.ends_with("eevee_ltc_lut_lib.bsl.hh") &&
+        !filename.ends_with("eevee_motion_blur.bsl.hh") &&
+        !filename.ends_with("eevee_occupancy_convert.bsl.hh") &&
+        !filename.ends_with("eevee_occupancy_lib.bsl.hh") &&
+        !filename.ends_with("eevee_octahedron_lib.bsl.hh") &&
+        !filename.ends_with("eevee_ray_denoise.bsl.hh") &&
+        !filename.ends_with("eevee_ray_generate.bsl.hh") &&
+        !filename.ends_with("eevee_ray_tile.bsl.hh") &&
+        !filename.ends_with("eevee_ray_trace.bsl.hh") &&
+        !filename.ends_with("eevee_ray_trace_screen_lib.bsl.hh") &&
+        !filename.ends_with("eevee_ray_types_lib.bsl.hh") &&
+        !filename.ends_with("eevee_renderpass.bsl.hh") &&
+        !filename.ends_with("eevee_renderpass_clear.bsl.hh") &&
+        !filename.ends_with("eevee_sampling_lib.bsl.hh") &&
+        !filename.ends_with("eevee_spherical_harmonics.bsl.hh") &&
+        !filename.ends_with("eevee_subsurface.bsl.hh") &&
+        !filename.ends_with("eevee_subsurface_lib.bsl.hh") &&
+        !filename.ends_with("eevee_thickness_lib.bsl.hh") &&
+        !filename.ends_with("eevee_transparency.bsl.hh") &&
+        !filename.ends_with("eevee_uniform.bsl.hh") &&
+        !filename.ends_with("eevee_utility_tx.bsl.hh") &&
+        !filename.ends_with("eevee_velocity.bsl.hh") &&
+        !filename.ends_with("eevee_volume_lib.bsl.hh") &&
+        // !filename.ends_with("eevee_test_fast_gi.bsl.hh") &&
+        // !filename.ends_with("eevee_test_gbuffer_closure.bsl.hh") &&
+        // !filename.ends_with("eevee_test_gbuffer_normal.bsl.hh") &&
+        // !filename.ends_with("eevee_test_occupancy.bsl.hh") &&
+        // !filename.ends_with("eevee_test_shadow.bsl.hh") &&
+        // !filename.ends_with("eevee_volume.bsl.hh") &&
+        // !filename.ends_with("eevee_light_shadow_setup.bsl.hh") &&
+        // !filename.ends_with("eevee_debug.bsl.hh") &&
+        // !filename.ends_with("eevee_deferred_combine.bsl.hh") &&
+        // !filename.ends_with("eevee_deferred_eval.bsl.hh") &&
+        // !filename.ends_with("eevee_deferred_thickness_amend.bsl.hh") &&
+        // !filename.ends_with("eevee_deferred_tile_classify.bsl.hh") &&
         // !filename.ends_with("eevee_forward_lib.bsl.hh") &&
         // !filename.ends_with("eevee_forward_resolve.bsl.hh") &&
         // !filename.ends_with("eevee_gbuffer_read.bsl.hh") &&
@@ -240,54 +281,25 @@ int main(int argc, char **argv)
         // !filename.ends_with("eevee_light_iter.bsl.hh") &&
         // !filename.ends_with("eevee_light_lib.bsl.hh") &&
         // !filename.ends_with("eevee_light_shape_display.bsl.hh") &&
-        // !filename.ends_with("eevee_lightprobe.bsl.hh") &&
-        // !filename.ends_with("eevee_lightprobe_display.bsl.hh") &&
-        !filename.ends_with("eevee_lightprobe_plane.bsl.hh") &&
-        !filename.ends_with("eevee_lightprobe_sphere.bsl.hh") &&
-        !filename.ends_with("eevee_lightprobe_sphere_bake.bsl.hh") &&
-        !filename.ends_with("eevee_lightprobe_sphere_culling.bsl.hh") &&
-        !filename.ends_with("eevee_lightprobe_volume.bsl.hh") &&
-        !filename.ends_with("eevee_lightprobe_volume_bake.bsl.hh") &&
-        !filename.ends_with("eevee_lightprobe_volume_load.bsl.hh") &&
-        !filename.ends_with("eevee_lookdev_copy_world.bsl.hh") &&
-        !filename.ends_with("eevee_lookdev_display.bsl.hh") &&
-        !filename.ends_with("eevee_ltc_lib.bsl.hh") &&
-        !filename.ends_with("eevee_ltc_lut_lib.bsl.hh") &&
         // !filename.ends_with("eevee_material_variants.bsl.hh") &&
-        !filename.ends_with("eevee_motion_blur.bsl.hh") &&
         // !filename.ends_with("eevee_nodetree_lib.bsl.hh") &&
-        !filename.ends_with("eevee_occupancy_convert.bsl.hh") &&
-        !filename.ends_with("eevee_occupancy_lib.bsl.hh") &&
-        !filename.ends_with("eevee_octahedron_lib.bsl.hh") &&
         // !filename.ends_with("eevee_pipeline.bsl.hh") &&
-        !filename.ends_with("eevee_ray_denoise.bsl.hh") &&
-        !filename.ends_with("eevee_ray_generate.bsl.hh") &&
-        !filename.ends_with("eevee_ray_tile.bsl.hh") &&
-        !filename.ends_with("eevee_ray_trace.bsl.hh") &&
-        !filename.ends_with("eevee_ray_trace_screen_lib.bsl.hh") &&
-        !filename.ends_with("eevee_ray_types_lib.bsl.hh") &&
-        // !filename.ends_with("eevee_renderpass.bsl.hh") &&
-        // !filename.ends_with("eevee_renderpass_clear.bsl.hh") &&
-        // !filename.ends_with("eevee_sampling_lib.bsl.hh") &&
-        !filename.ends_with("eevee_shadow.bsl.hh") &&
-        !filename.ends_with("eevee_shadow_page_allocate.bsl.hh") &&
-        !filename.ends_with("eevee_shadow_page_clear.bsl.hh") &&
-        !filename.ends_with("eevee_shadow_page_free.bsl.hh") &&
-        !filename.ends_with("eevee_shadow_page_mask.bsl.hh") &&
-        !filename.ends_with("eevee_shadow_page_ops.bsl.hh") &&
-        !filename.ends_with("eevee_shadow_tag_update.bsl.hh") &&
-        !filename.ends_with("eevee_shadow_tag_usage.bsl.hh") &&
-        !filename.ends_with("eevee_shadow_tag_usage_transparent.bsl.hh") &&
-        !filename.ends_with("eevee_shadow_tilemap_amend.bsl.hh") &&
-        !filename.ends_with("eevee_shadow_tilemap_bounds.bsl.hh") &&
-        !filename.ends_with("eevee_shadow_tilemap_finalize.bsl.hh") &&
-        !filename.ends_with("eevee_shadow_tilemap_init.bsl.hh") &&
-        !filename.ends_with("eevee_shadow_tilemap_lib.bsl.hh") &&
-        !filename.ends_with("eevee_shadow_tracing.bsl.hh") &&
-        !filename.ends_with("eevee_shadow_visibility.bsl.hh") &&
-        !filename.ends_with("eevee_spherical_harmonics.bsl.hh") &&
-        !filename.ends_with("eevee_subsurface.bsl.hh") &&
-        !filename.ends_with("eevee_subsurface_lib.bsl.hh") &&
+        // !filename.ends_with("eevee_shadow.bsl.hh") &&
+        // !filename.ends_with("eevee_shadow_page_allocate.bsl.hh") &&
+        // !filename.ends_with("eevee_shadow_page_clear.bsl.hh") &&
+        // !filename.ends_with("eevee_shadow_page_free.bsl.hh") &&
+        // !filename.ends_with("eevee_shadow_page_mask.bsl.hh") &&
+        // !filename.ends_with("eevee_shadow_page_ops.bsl.hh") &&
+        // !filename.ends_with("eevee_shadow_tag_update.bsl.hh") &&
+        // !filename.ends_with("eevee_shadow_tag_usage.bsl.hh") &&
+        // !filename.ends_with("eevee_shadow_tag_usage_transparent.bsl.hh") &&
+        // !filename.ends_with("eevee_shadow_tilemap_amend.bsl.hh") &&
+        // !filename.ends_with("eevee_shadow_tilemap_bounds.bsl.hh") &&
+        // !filename.ends_with("eevee_shadow_tilemap_finalize.bsl.hh") &&
+        // !filename.ends_with("eevee_shadow_tilemap_init.bsl.hh") &&
+        // !filename.ends_with("eevee_shadow_tilemap_lib.bsl.hh") &&
+        // !filename.ends_with("eevee_shadow_tracing.bsl.hh") &&
+        // !filename.ends_with("eevee_shadow_visibility.bsl.hh") &&
         // !filename.ends_with("eevee_surf_capture.bsl.hh") &&
         // !filename.ends_with("eevee_surf_deferred.bsl.hh") &&
         // !filename.ends_with("eevee_surf_depth.bsl.hh") &&
@@ -297,18 +309,6 @@ int main(int argc, char **argv)
         // !filename.ends_with("eevee_surf_shadow.bsl.hh") &&
         // !filename.ends_with("eevee_surf_volume.bsl.hh") &&
         // !filename.ends_with("eevee_surf_world.bsl.hh") &&
-        // !filename.ends_with("eevee_test_fast_gi.bsl.hh") &&
-        // !filename.ends_with("eevee_test_gbuffer_closure.bsl.hh") &&
-        // !filename.ends_with("eevee_test_gbuffer_normal.bsl.hh") &&
-        // !filename.ends_with("eevee_test_occupancy.bsl.hh") &&
-        // !filename.ends_with("eevee_test_shadow.bsl.hh") &&
-        !filename.ends_with("eevee_thickness_lib.bsl.hh") &&
-        !filename.ends_with("eevee_transparency.bsl.hh") &&
-        !filename.ends_with("eevee_uniform.bsl.hh") &&
-        !filename.ends_with("eevee_utility_tx.bsl.hh") &&
-        !filename.ends_with("eevee_velocity.bsl.hh") &&
-        !filename.ends_with("eevee_volume.bsl.hh") &&
-        !filename.ends_with("eevee_volume_lib.bsl.hh") &&
         // !filename.ends_with("eevee_surf_common.bsl.hh") &&
         true)
     {
