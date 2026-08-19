@@ -399,7 +399,7 @@ bool DLSSDenoiser::denoise_filter_color_preprocess(const DenoiseContext &context
     return true;
   }
 
-  // Input params (with resolution divider applied)
+  /* Input params (with resolution divider applied) */
   const BufferParams &buffer_params = context.buffer_params;
 
   const int work_size = buffer_params.width * buffer_params.height;
@@ -425,7 +425,7 @@ bool DLSSDenoiser::denoise_filter_color_postprocess(const DenoiseContext &contex
     return true;
   }
 
-  // Output params
+  /* Output params */
   const BufferParams &buffer_params = context.denoised_buffer_params;
 
   const int work_size = buffer_params.width * buffer_params.height;
