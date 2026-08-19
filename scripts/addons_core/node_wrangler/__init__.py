@@ -2,6 +2,8 @@
 #
 # SPDX-License-Identifier: GPL-2.0-or-later
 
+# meaningless comment for a test, do not merge this
+
 bl_info = {
     "name": "Node Wrangler",
     # This is now displayed as the maintainer, so show the foundation.
