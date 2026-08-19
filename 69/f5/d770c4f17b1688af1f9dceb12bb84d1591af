@@ -1,2 +1,3 @@
 Referenced by issue #151864, WIP: Sculpt & Memfile Undo Integration
 Referenced by issue #162811, Regression: Redoing add mesh in edit mode can change it's position
+Referenced by pull request #162826, Mesh: remove object geometry tag when reading edit-mesh undo data
