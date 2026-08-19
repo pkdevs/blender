@@ -1425,6 +1425,7 @@ BLI_NOINLINE static void calc_generic_vert_attribute_grids(const Object &object,
                                                            const StringRef name,
                                                            const MutableSpan<gpu::VertBufPtr> vbos)
 {
+  PRF_scope(ProfileCategory::Draw);
   const bke::pbvh::Tree &pbvh = *bke::object::pbvh_get(object);
   const Span<bke::pbvh::GridsNode> nodes = pbvh.nodes<bke::pbvh::GridsNode>();
   const SubdivCCG &subdiv_ccg = *object.runtime->sculpt_session->subdiv_ccg;
@@ -1630,6 +1631,7 @@ BLI_NOINLINE static void calc_generic_corner_attribute_grids(
     const StringRef name,
     const MutableSpan<gpu::VertBufPtr> vbos)
 {
+  PRF_scope(ProfileCategory::Draw);
   const bke::pbvh::Tree &pbvh = *bke::object::pbvh_get(object);
   const Span<bke::pbvh::GridsNode> nodes = pbvh.nodes<bke::pbvh::GridsNode>();
   const SubdivCCG &subdiv_ccg = *object.runtime->sculpt_session->subdiv_ccg;
@@ -1683,6 +1685,7 @@ BLI_NOINLINE static void fill_generic_face_attribute_grids(const Object &object,
                                                            const StringRef name,
                                                            const MutableSpan<gpu::VertBufPtr> vbos)
 {
+  PRF_scope(ProfileCategory::Draw);
   const bke::pbvh::Tree &pbvh = *bke::object::pbvh_get(object);
   const Span<bke::pbvh::GridsNode> nodes = pbvh.nodes<bke::pbvh::GridsNode>();
   const SubdivCCG &subdiv_ccg = *object.runtime->sculpt_session->subdiv_ccg;
