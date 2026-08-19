@@ -87,8 +87,6 @@ void GPU_polygon_smooth(bool enable)
   SET_IMMUTABLE_STATE(polygon_smooth, enable);
 }
 
-
-
 void GPU_write_mask(GPUWriteMask mask)
 {
   SET_IMMUTABLE_STATE(write_mask, mask);

@@ -274,7 +274,6 @@ void GLStateManager::set_clip_distances(const int new_dist_len, const int old_di
   }
 }
 
-
 void GLStateManager::set_facing(const bool invert)
 {
   glFrontFace((invert) ? GL_CW : GL_CCW);

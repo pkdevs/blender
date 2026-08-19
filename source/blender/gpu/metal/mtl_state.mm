@@ -344,8 +344,6 @@ void MTLStateManager::set_clip_distances(const int new_dist_len, const int old_d
   }
 }
 
-
-
 void MTLStateManager::set_facing(const bool invert)
 {
   /* Check Current Context. */

@@ -66,7 +66,6 @@ struct VKExtensions {
   /** VK_KHR_maintenance4 */
   bool maintenance4 = false;
 
-
   /**
    * Does the device support VK_EXT_memory_priority
    */

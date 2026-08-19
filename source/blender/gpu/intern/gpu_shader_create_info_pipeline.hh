@@ -50,8 +50,6 @@ struct PipelineState {
     return *this;
   }
 
-
-
   Self &primitive(GPUPrimType primitive_type)
   {
     primitive_ = primitive_type;
