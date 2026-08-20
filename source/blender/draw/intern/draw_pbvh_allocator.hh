@@ -17,18 +17,18 @@
 namespace blender::draw::pbvh {
 
 /**
- * Allocates sub-ranges inside a virtual GPU buffer of a known (but growing) size.
+ * Allocates sub-ranges inside a GPU buffer of a known (but growing) size.
  *
  * - #acquire: a node requests a range sized to its geometry. The allocator either reuses space
- *   that was previously #release'd, or grows the virtual buffer by extending its size.
+ *   that was previously #release'd, or grows by extending its size.
  * - #release: a node no longer needs its range. The space is tracked as free so it can be reused
  *   by a later #acquire.
  *
  * Growing the buffer is an expensive event, since the GPU buffers backing the space need to be
  * reallocated. The caller should compare #size between frames to detect whether this happened.
  */
-class VirtualAllocator {
-  uint64_t size_ = 0;
+class RangeAllocator {
+  int64_t size_ = 0;
   bool should_optimize_ = false;
   Vector<IndexRange> released_ranges_;
 
@@ -37,6 +37,7 @@ class VirtualAllocator {
   {
     return size_ == 0;
   }
+
   int64_t size() const
   {
     return size_;
@@ -52,6 +53,8 @@ class VirtualAllocator {
   {
     BLI_assert(!buffer_info.is_space_acquired);
     if (buffer_info.len <= 0) {
+      buffer_info.is_space_acquired = true;
+      buffer_info.offset = 0;
       return;
     }
 
@@ -104,7 +107,7 @@ class VirtualAllocator {
     should_optimize_ = true;
   }
 
-private:
+ private:
   /**
    * Merge adjacent free ranges in the released-space list.
    *
@@ -121,45 +124,47 @@ private:
 #endif
   }
 
- private:
   void optimize_sort()
   {
-    std::ranges::sort(
-        released_ranges_, [](const IndexRange &a, const IndexRange &b) { return a.begin() < b.begin(); });
+    std::ranges::sort(released_ranges_, [](const IndexRange &a, const IndexRange &b) {
+      return a.begin() < b.begin();
+    });
   }
+
   void optimize_merge()
   {
-    int last = -2;
+    int last_value = -2;
     int last_index = -1;
-    for (int index : released_ranges_
-      .index_range()) {
+    for (int index : released_ranges_.index_range()) {
       IndexRange &range = released_ranges_[index];
       if (range.is_empty()) {
         continue;
       }
-      if (range.first() == last + 1) {
+      if (range.first() == last_value + 1) {
         /* Merge with previous */
         IndexRange &prev_range = released_ranges_[last_index];
         range = IndexRange::from_begin_size(prev_range.first(), prev_range.size() + range.size());
         prev_range = IndexRange::from_begin_size(prev_range.first(), 0);
       }
-      last = range.last();
+      last_value = range.last();
       last_index = index;
     }
   }
+
   void optimize_remove_empty()
   {
     released_ranges_.remove_if([](const IndexRange &space) { return space.is_empty(); });
   }
+
 #ifndef NDEBUG
   void validate() const
   {
-    int last_index = -2;
+    int last_value = -2;
     for (const IndexRange &range : released_ranges_) {
-      BLI_assert_msg(range.start() != last_index + 1, "Found two ranges that has to be merged.");
-      BLI_assert_msg(range.start() > last_index, "Ranges are unordered");
+      BLI_assert_msg(range.start() != last_value + 1, "Found two ranges that has to be merged.");
+      BLI_assert_msg(range.start() > last_value, "Ranges are unordered");
       BLI_assert_msg(!range.is_empty(), "Found empty range");
-      last_index = range.last();
+      last_value = range.last();
     }
   }
 #endif
