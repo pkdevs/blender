@@ -580,7 +580,8 @@ static void box_select_action(bAnimContext *ac,
         const float f1 = ANIM_nla_tweakedit_remap(ale, rectf.xmin, NLATIME_CONVERT_UNMAP);
         const float f2 = ANIM_nla_tweakedit_remap(ale, rectf.xmax, NLATIME_CONVERT_UNMAP);
 
-        /* Make sure f1 & f2 are in order (e.g. in case of NLASTRIP_FLAG_REVERSE). */
+        /* Make sure f1 & f2 are in order (e.g. in case of NLASTRIP_FLAG_REVERSE). Note: will still
+         * fail for the Summary (since that is excluded from NLA remapping). */
         sel_data.ked.f1 = math::min(f1, f2);
         sel_data.ked.f2 = math::max(f1, f2);
       }
@@ -876,7 +877,8 @@ static void region_select_action_keys(bAnimContext *ac,
       const float f1 = ANIM_nla_tweakedit_remap(ale, rectf.xmin, NLATIME_CONVERT_UNMAP);
       const float f2 = ANIM_nla_tweakedit_remap(ale, rectf.xmax, NLATIME_CONVERT_UNMAP);
 
-      /* Make sure f1 & f2 are in order (e.g. in case of NLASTRIP_FLAG_REVERSE). */
+      /* Make sure f1 & f2 are in order (e.g. in case of NLASTRIP_FLAG_REVERSE). Note: will still
+       * fail for the Summary (since that is excluded from NLA remapping). */
       sel_data.ked.f1 = math::min(f1, f2);
       sel_data.ked.f2 = math::max(f1, f2);
     }
