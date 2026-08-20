@@ -93,8 +93,8 @@ float bitmask_to_occlusion_cosine(uint bitmask)
   /* The precomputed weights are the accumulated weights from the reference loop for each of the
    * samples in the mask. The weight is distributed evenly for each sample inside a mask.
    * This is like a 4 piecewise linear approximation of the cosine lobe. */
-  constexpr float4 weights = float4(0.0095061f, 0.0270951f, 0.0405571f, 0.0478421f);
-  constexpr uint4 masks = uint4(0xF000000Fu, 0x0F0000F0u, 0x00F00F00u, 0x000FF000u);
+  const float4 weights = float4(0.0095061f, 0.0270951f, 0.0405571f, 0.0478421f);
+  const uint4 masks = uint4(0xF000000Fu, 0x0F0000F0u, 0x00F00F00u, 0x000FF000u);
   return saturate(1.0f - dot(float4(bitCount(uint4(bitmask) & masks)), weights));
 #endif
 }

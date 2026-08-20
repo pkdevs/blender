@@ -265,9 +265,9 @@ int main(int argc, char **argv)
         // !filename.ends_with("eevee_deferred_tile_classify.bsl.hh") &&
         // !filename.ends_with("eevee_forward_lib.bsl.hh") &&
         // !filename.ends_with("eevee_forward_resolve.bsl.hh") &&
-        // !filename.ends_with("eevee_gbuffer_read.bsl.hh") &&
-        // !filename.ends_with("eevee_gbuffer_types.bsl.hh") &&
-        // !filename.ends_with("eevee_gbuffer_write.bsl.hh") &&
+        !filename.ends_with("eevee_gbuffer_read.bsl.hh") &&
+        !filename.ends_with("eevee_gbuffer_types.bsl.hh") &&
+        !filename.ends_with("eevee_gbuffer_write.bsl.hh") &&
         // !filename.ends_with("eevee_geom_curves.bsl.hh") &&
         // !filename.ends_with("eevee_geom_interp.bsl.hh") &&
         // !filename.ends_with("eevee_geom_mesh.bsl.hh") &&

@@ -47,10 +47,10 @@
 /* Maximum number of thread-groups dispatched for remapping a probe to octahedral mapping. */
 #define SPHERE_PROBE_MAX_HARMONIC SQUARE(SPHERE_PROBE_ATLAS_RES / SPHERE_PROBE_REMAP_GROUP_SIZE)
 /* Start and end value for mixing sphere probe and volume probes. */
-#define SPHERE_PROBE_MIX_START_ROUGHNESS 0.7f
-#define SPHERE_PROBE_MIX_END_ROUGHNESS 0.9f
+static constexpr float SPHERE_PROBE_MIX_START_ROUGHNESS = 0.7f;
+static constexpr float SPHERE_PROBE_MIX_END_ROUGHNESS = 0.9f;
 /* Roughness of the last mip map for sphere probes. */
-#define SPHERE_PROBE_MIP_MAX_ROUGHNESS 0.7f
+static constexpr float SPHERE_PROBE_MIP_MAX_ROUGHNESS = 0.7f;
 #define SPHERE_PROBE_FORMAT SFLOAT_16_16_16_16
 /**
  * Limited by the UBO size limit `(16384 bytes / sizeof(SphereProbeData))`.
@@ -76,38 +76,44 @@
 #if 0
 /* Useful for debugging the tile-copy version of the shadow rendering without making debugging
  * tools unresponsive. */
-#  define SHADOW_TILEMAP_RES 4
-#  define SHADOW_TILEMAP_LOD 2 /* LOG2(SHADOW_TILEMAP_RES) */
+static constexpr int SHADOW_TILEMAP_RES = 4;
+static constexpr int SHADOW_TILEMAP_LOD = 2; /* LOG2(SHADOW_TILEMAP_RES) */
 #else
-#  define SHADOW_TILEMAP_RES 32
-#  define SHADOW_TILEMAP_LOD 5 /* LOG2(SHADOW_TILEMAP_RES) */
+static constexpr int SHADOW_TILEMAP_RES = 32;
+static constexpr int SHADOW_TILEMAP_LOD = 5; /* LOG2(SHADOW_TILEMAP_RES) */
 #endif
-#define SHADOW_TILEMAP_LOD0_LEN ((SHADOW_TILEMAP_RES / 1) * (SHADOW_TILEMAP_RES / 1))
-#define SHADOW_TILEMAP_LOD1_LEN ((SHADOW_TILEMAP_RES / 2) * (SHADOW_TILEMAP_RES / 2))
-#define SHADOW_TILEMAP_LOD2_LEN ((SHADOW_TILEMAP_RES / 4) * (SHADOW_TILEMAP_RES / 4))
-#define SHADOW_TILEMAP_LOD3_LEN ((SHADOW_TILEMAP_RES / 8) * (SHADOW_TILEMAP_RES / 8))
-#define SHADOW_TILEMAP_LOD4_LEN ((SHADOW_TILEMAP_RES / 16) * (SHADOW_TILEMAP_RES / 16))
-#define SHADOW_TILEMAP_LOD5_LEN ((SHADOW_TILEMAP_RES / 32) * (SHADOW_TILEMAP_RES / 32))
-#define SHADOW_TILEMAP_PER_ROW 64
-#define SHADOW_TILEDATA_PER_TILEMAP \
-  (SHADOW_TILEMAP_LOD0_LEN + SHADOW_TILEMAP_LOD1_LEN + SHADOW_TILEMAP_LOD2_LEN + \
-   SHADOW_TILEMAP_LOD3_LEN + SHADOW_TILEMAP_LOD4_LEN + SHADOW_TILEMAP_LOD5_LEN)
+static constexpr int SHADOW_TILEMAP_LOD0_LEN = ((SHADOW_TILEMAP_RES / 1) *
+                                                (SHADOW_TILEMAP_RES / 1));
+static constexpr int SHADOW_TILEMAP_LOD1_LEN = ((SHADOW_TILEMAP_RES / 2) *
+                                                (SHADOW_TILEMAP_RES / 2));
+static constexpr int SHADOW_TILEMAP_LOD2_LEN = ((SHADOW_TILEMAP_RES / 4) *
+                                                (SHADOW_TILEMAP_RES / 4));
+static constexpr int SHADOW_TILEMAP_LOD3_LEN = ((SHADOW_TILEMAP_RES / 8) *
+                                                (SHADOW_TILEMAP_RES / 8));
+static constexpr int SHADOW_TILEMAP_LOD4_LEN = ((SHADOW_TILEMAP_RES / 16) *
+                                                (SHADOW_TILEMAP_RES / 16));
+static constexpr int SHADOW_TILEMAP_LOD5_LEN = ((SHADOW_TILEMAP_RES / 32) *
+                                                (SHADOW_TILEMAP_RES / 32));
+static constexpr int SHADOW_TILEMAP_PER_ROW = 64;
+static constexpr int SHADOW_TILEDATA_PER_TILEMAP =
+    (SHADOW_TILEMAP_LOD0_LEN + SHADOW_TILEMAP_LOD1_LEN + SHADOW_TILEMAP_LOD2_LEN +
+     SHADOW_TILEMAP_LOD3_LEN + SHADOW_TILEMAP_LOD4_LEN + SHADOW_TILEMAP_LOD5_LEN);
 /* Maximum number of relative LOD distance we can store. */
-#define SHADOW_TILEMAP_MAX_CLIPMAP_LOD 8
+static constexpr int SHADOW_TILEMAP_MAX_CLIPMAP_LOD = 8;
 #if 0
 /* Useful for debugging the tile-copy version of the shadow rendering without making debugging
  * tools unresponsive. */
-#  define SHADOW_PAGE_CLEAR_GROUP_SIZE 8
-#  define SHADOW_PAGE_RES 8
-#  define SHADOW_PAGE_LOD 3 /* LOG2(SHADOW_PAGE_RES) */
+static constexpr int SHADOW_PAGE_CLEAR_GROUP_SIZE= 8;
+static constexpr int SHADOW_PAGE_RES= 8;
+static constexpr int SHADOW_PAGE_LOD= 3; /* LOG2(SHADOW_PAGE_RES) */
 #else
-#  define SHADOW_PAGE_CLEAR_GROUP_SIZE 32
-#  define SHADOW_PAGE_RES 256
-#  define SHADOW_PAGE_LOD 8 /* LOG2(SHADOW_PAGE_RES) */
+static constexpr int SHADOW_PAGE_CLEAR_GROUP_SIZE = 32;
+static constexpr int SHADOW_PAGE_RES = 256;
+static constexpr int SHADOW_PAGE_LOD = 8; /* LOG2(SHADOW_PAGE_RES) */
 #endif
 /* For testing only. */
 // #define SHADOW_FORCE_LOD0
-#define SHADOW_MAP_MAX_RES (SHADOW_PAGE_RES * SHADOW_TILEMAP_RES)
+static constexpr int SHADOW_MAP_MAX_RES = (SHADOW_PAGE_RES * SHADOW_TILEMAP_RES);
 #define SHADOW_DEPTH_SCAN_GROUP_SIZE 8
 #define SHADOW_AABB_TAG_GROUP_SIZE 64
 #define SHADOW_MAX_TILEMAP 4096
@@ -137,7 +143,7 @@
 #define DEFERRED_GBUFFER_ROG_ID 0
 
 /* Ray-tracing. */
-#define RAYTRACE_GROUP_SIZE 8
+static constexpr int RAYTRACE_GROUP_SIZE = 8;
 /* Keep this as a define to avoid shader variations. */
 #define RAYTRACE_RADIANCE_FORMAT UFLOAT_11_11_10
 #define RAYTRACE_RAYTIME_FORMAT SFLOAT_32
@@ -145,7 +151,7 @@
 #define RAYTRACE_TILEMASK_FORMAT UINT_8
 
 /* Sub-Surface Scattering. */
-#define SUBSURFACE_GROUP_SIZE RAYTRACE_GROUP_SIZE
+static constexpr int SUBSURFACE_GROUP_SIZE = RAYTRACE_GROUP_SIZE;
 #define SUBSURFACE_RADIANCE_FORMAT UFLOAT_11_11_10
 #define SUBSURFACE_OBJECT_ID_FORMAT UINT_16
 
@@ -161,17 +167,17 @@
 #define IRRADIANCE_GRID_MAX 64
 
 /* Depth Of Field. */
-#define DOF_TILES_SIZE 8
+static constexpr int DOF_TILES_SIZE = 8;
 #define DOF_TILES_FLATTEN_GROUP_SIZE DOF_TILES_SIZE
 #define DOF_TILES_DILATE_GROUP_SIZE 8
 #define DOF_BOKEH_LUT_SIZE 32
-#define DOF_MAX_SLIGHT_FOCUS_RADIUS 5
-#define DOF_SLIGHT_FOCUS_SAMPLE_MAX 16
+static constexpr int DOF_MAX_SLIGHT_FOCUS_RADIUS = 5;
+static constexpr int DOF_SLIGHT_FOCUS_SAMPLE_MAX = 16;
 #define DOF_MIP_COUNT 4
 #define DOF_REDUCE_GROUP_SIZE (1 << (DOF_MIP_COUNT - 1))
 #define DOF_DEFAULT_GROUP_SIZE 32
-#define DOF_STABILIZE_GROUP_SIZE 16
-#define DOF_FILTER_GROUP_SIZE 8
+static constexpr int DOF_STABILIZE_GROUP_SIZE = 16;
+static constexpr int DOF_FILTER_GROUP_SIZE = 8;
 #define DOF_GATHER_GROUP_SIZE DOF_TILES_SIZE
 #define DOF_RESOLVE_GROUP_SIZE (DOF_TILES_SIZE * 2)
 
@@ -302,9 +308,9 @@
 #define VELOCITY_GEO_NEXT_BUF_SLOT 3
 #define VELOCITY_INDIRECTION_BUF_SLOT 4
 
-#define CLOSURE_WEIGHT_CUTOFF 1e-5f
+static constexpr float CLOSURE_WEIGHT_CUTOFF = 1e-5f;
 /* Treat closure as singular if the roughness is below this threshold. */
-#define BSDF_ROUGHNESS_THRESHOLD 2e-2f
+static constexpr float BSDF_ROUGHNESS_THRESHOLD = 2e-2f;
 
 /* Cannot use math libraries in shared headers yet. */
 #define EEVEE_PI 3.14159265358979323846f /* pi */

@@ -59,7 +59,7 @@ struct GGXBrdfClosure {
   GGXBrdfData eval(float3 Xi) const
   {
     /* Geometric normal. */
-    constexpr float3 N = float3(0.0f, 0.0f, 1.0f);
+    const float3 N = float3(0.0f, 0.0f, 1.0f);
 
     /* Return values. */
     GGXBrdfData brdf = {};
@@ -138,7 +138,7 @@ struct GGXBsdfClosure {
   GGXBsdfData eval(float3 Xi) const
   {
     /* Geometric normal. */
-    constexpr float3 N = float3(0.0f, 0.0f, 1.0f);
+    const float3 N = float3(0.0f, 0.0f, 1.0f);
 
     GGXBsdfData bsdf = {};
 
@@ -218,7 +218,7 @@ struct GGXBtdfGt1Closure {
   GGXBtdfGt1Data eval(float3 Xi) const
   {
     /* Geometric normal. */
-    constexpr float3 N = float3(0.0f, 0.0f, 1.0f);
+    const float3 N = float3(0.0f, 0.0f, 1.0f);
 
     GGXBtdfGt1Data btdf = {};
 

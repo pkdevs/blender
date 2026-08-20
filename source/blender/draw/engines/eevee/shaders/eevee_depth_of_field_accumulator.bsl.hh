@@ -540,8 +540,7 @@ struct Accumulator {
           ring += gather_density_change_ring;
           /* We need to account for the density change in the weights (slide 62).
            * For that multiply old kernel data by its area divided by the new kernel area. */
-          constexpr float outer_rings_weight = 1.0f /
-                                               (radius_downscale_factor * radius_downscale_factor);
+          float outer_rings_weight = 1.0f / (radius_downscale_factor * radius_downscale_factor);
           /* Samples are already weighted per ring in foreground pass. */
           if (!is_foreground) {
             dof_gather_amend_weight(accum_data, outer_rings_weight);
