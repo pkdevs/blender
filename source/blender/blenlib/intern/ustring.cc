@@ -24,6 +24,12 @@ namespace detail {
 
 const blender::detail::UStringEntry &ustring_ensure_entry(const StringRef str)
 {
+  /* Use the same EMPTY_ENTRY used by the default constructor so that all empty #UString instances
+   * compare equal, and so that we skip the table lookup and associated overhead for the default
+   * constructor. */
+  if (str.is_empty()) {
+    return UString::EMPTY_ENTRY;
+  }
   return global_string_table().lookup_key_or_add({std::string(str), hash_string(str)});
 }
 
