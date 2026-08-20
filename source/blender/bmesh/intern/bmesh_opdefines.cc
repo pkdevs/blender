@@ -2213,16 +2213,18 @@ static BMOpDefine bmo_create_grid_def = {
 };
 
 /*
- * Create UV Sphere.
+ * Create Quad Sphere.
  *
- * Creates a UV sphere with a variable number of subdivisions.
+ * Creates a sphere from a subdivided cube, made up entirely of quads.
  */
 static BMOpDefine bmo_create_quadsphere_def = {
     /*opname*/ "create_quadsphere",
     /*slot_types_in*/
     {
-        /* How many times to recursively subdivide the sphere. */
+        /* Number of quads along each edge of the cube the sphere is made from. */
         {"segments", BMO_OP_SLOT_INT},
+        /* Iterations used to distribute the vertices evenly, zero maps radially. */
+        {"iterations", BMO_OP_SLOT_INT},
         /* Radius. */
         {"radius", BMO_OP_SLOT_FLT},
         /* Matrix to multiply the new geometry with. */
@@ -2242,6 +2244,11 @@ static BMOpDefine bmo_create_quadsphere_def = {
     /*type_flag*/ (BMO_OPTYPE_FLAG_NORMALS_CALC | BMO_OPTYPE_FLAG_SELECT_FLUSH),
 };
 
+/*
+ * Create UV Sphere.
+ *
+ * Creates a UV sphere with a variable number of subdivisions.
+ */
 static BMOpDefine bmo_create_uvsphere_def = {
     /*opname*/ "create_uvsphere",
     /*slot_types_in*/
