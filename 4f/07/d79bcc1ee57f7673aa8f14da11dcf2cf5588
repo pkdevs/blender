@@ -1,2 +1,3 @@
 Referenced by pull request #161464, Fix: Cycles: Hydra: Various issues
 Referenced by commit beafdd0072583893f2a56227a189c3d4c7ec8a6f, Fix: Cycles: Hydra uses unsupported GPU when driver is outdated
+Referenced by issue #161229, Blender LTS: Maintenance Task 5.2
