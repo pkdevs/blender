@@ -248,8 +248,6 @@ static BMOpDefine bmo_relax_edge_loops_def = {
          BMO_OP_SLOT_INT,
          to_subtype_union(BMO_OP_SLOT_SUBTYPE_INT_ENUM),
          bmo_enum_relax_edge_loops_interpolation_method},
-        /* Number of relaxation passes. */
-        {"iterations", BMO_OP_SLOT_INT},
         /* Distribute vertices at constant distances along the loop. */
         {"even_spacing", BMO_OP_SLOT_BOOL},
     },
