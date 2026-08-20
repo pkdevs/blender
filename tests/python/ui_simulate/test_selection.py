@@ -67,11 +67,10 @@ def _view3d_click_at(e, co_world, *, ctrl=False):
     yield
 
 
-def _assert_only_object_selected(t, selected_obj, deselected_obj):
+def _assert_only_object_selected(t, selected_obj):
     import bpy
     t.assertEqual(bpy.context.view_layer.objects.active, selected_obj)
     t.assertTrue(selected_obj.select_get())
-    t.assertFalse(deselected_obj.select_get())
     t.assertEqual({obj.name for obj in bpy.context.selected_objects}, {selected_obj.name})
 
 
@@ -124,10 +123,37 @@ def _test_view3d_selection_in_shading(shading_type):
     yield
 
     yield from _view3d_click_at(e, sphere.matrix_world.translation, ctrl=True)
-    _assert_only_object_selected(t, sphere, cube)
+    _assert_only_object_selected(t, sphere)
 
     yield from _view3d_click_at(e, cube.matrix_world.translation, ctrl=True)
-    _assert_only_object_selected(t, cube, sphere)
+    _assert_only_object_selected(t, cube)
+
+
+def _setup_depth_cycling_objects():
+    """Three overlapping cubes ordered from nearest to farthest in front view."""
+    import bpy
+    bpy.ops.wm.read_homefile(use_empty=True)
+
+    objects = []
+    for name, y in (('DepthNear', -2.0), ('DepthMiddle', 0.0), ('DepthFar', 2.0)):
+        bpy.ops.mesh.primitive_cube_add(location=(0.0, y, 0.0))
+        obj = bpy.context.view_layer.objects.active
+        obj.name = name
+        objects.append(obj)
+    return objects
+
+
+def test_view3d_selection_depth_cycling():
+    """Repeated clicks at a stationary cursor select nearest to farthest."""
+    objects, e, t, _window, _area = yield from _setup_selection_test(_setup_depth_cycling_objects)
+
+    import bpy
+    bpy.ops.object.select_all(action='DESELECT')
+    yield
+
+    for obj in (*objects, objects[0]):
+        yield from _view3d_click_at(e, (0.0, 0.0, 0.0))
+        _assert_only_object_selected(t, obj)
 
 
 def test_view3d_selection_all_shading_modes():

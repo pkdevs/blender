@@ -1719,6 +1719,7 @@ if(WITH_UI_TESTS)
     test_search_in_editors.test_graph_editor_search
     test_search_in_editors.test_file_browser_search
     test_selection.test_view3d_selection_all_shading_modes
+    test_selection.test_view3d_selection_depth_cycling
     test_selection.test_view3d_mesh_edit_selection
     test_selection.test_view3d_armature_edit_selection
     test_selection.test_view3d_armature_pose_selection
