@@ -2221,8 +2221,6 @@ static BMOpDefine bmo_create_quadsphere_def = {
     {
         /* Number of quads along each edge of the cube the sphere is made from. */
         {"segments", BMO_OP_SLOT_INT},
-        /* Iterations used to distribute the vertices evenly, zero maps radially. */
-        {"iterations", BMO_OP_SLOT_INT},
         /* Radius. */
         {"radius", BMO_OP_SLOT_FLT},
         /* Matrix to multiply the new geometry with. */
