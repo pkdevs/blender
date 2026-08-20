@@ -53,22 +53,41 @@ struct UvElementMap;
 /* `editmesh_utils.cc` */
 class EditMeshSymmetryHelper {
  public:
-  static std::optional<EditMeshSymmetryHelper> create_if_needed(Object *ob, uchar htype);
+  static std::optional<EditMeshSymmetryHelper> create_if_needed(
+      Object *ob,
+      uchar htype,
+      uint8_t symmetry_axes,
+      bool use_self,
+      bool use_select,
+      bool respecthide,
+      std::optional<bool> use_topology = std::nullopt);
 
   bool any_mirror_vert_selected(BMVert *v, char hflag) const;
   bool any_mirror_edge_selected(BMEdge *e, char hflag) const;
   bool any_mirror_face_selected(BMFace *f, char hflag) const;
 
-  void set_hflag_on_mirror_verts(BMVert *v, char hflag, bool value) const;
-  void set_hflag_on_mirror_edges(BMEdge *e, char hflag, bool value) const;
-  void set_hflag_on_mirror_faces(BMFace *f, char hflag, bool value) const;
+  bool set_hflag_on_mirror_verts(BMVert *v, char hflag, bool value) const;
+  bool set_hflag_on_mirror_edges(BMEdge *e, char hflag, bool value) const;
+  bool set_hflag_on_mirror_faces(BMFace *f, char hflag, bool value) const;
 
   void apply_on_mirror_verts(BMVert *v, FunctionRef<void(BMVert *)> op) const;
   void apply_on_mirror_edges(BMEdge *e, FunctionRef<void(BMEdge *)> op) const;
   void apply_on_mirror_faces(BMFace *f, FunctionRef<void(BMFace *)> op) const;
 
+  /**
+   * Scans the entire mesh for elements with \a hflag set and selects their mirrors.
+   * \return {tot_mirror, tot_fail}.
+   */
+  std::pair<int, int> set_all_mirrored(char hflag, bool extend) const;
+
  private:
-  EditMeshSymmetryHelper(Object *ob, uchar htype);
+  EditMeshSymmetryHelper(Object *ob,
+                         uchar htype,
+                         uint8_t symmetry_axes,
+                         bool use_self,
+                         bool use_select,
+                         bool respecthide,
+                         std::optional<bool> use_topology);
 
   BMEditMesh *em_;
   Mesh *mesh_;
@@ -244,9 +263,6 @@ bool EDBM_automerge_and_split(
 void ED_mesh_undosys_type(UndoType *ut);
 
 /* `editmesh_select.cc` */
-
-void EDBM_select_mirrored(
-    BMEditMesh *em, const Mesh *mesh, int axis, bool extend, int *r_totmirr, int *r_totfail);
 
 #if 0 /* Unused but seems useful to keep. */
 /**

@@ -138,111 +138,6 @@ static inline bool is_count_a_match(const eElemCountType type,
 /** \name Select Mirror
  * \{ */
 
-void EDBM_select_mirrored(BMEditMesh *em,
-                          const Mesh *mesh,
-                          const int axis,
-                          const bool extend,
-                          int *r_totmirr,
-                          int *r_totfail)
-{
-  BMesh *bm = em->bm;
-  BMIter iter;
-  int totmirr = 0;
-  int totfail = 0;
-  bool use_topology = mesh->editflag & ME_EDIT_MIRROR_TOPO;
-
-  *r_totmirr = *r_totfail = 0;
-
-  /* Flush (select -> tag). */
-  if (bm->selectmode & SCE_SELECT_VERTEX) {
-    BMVert *v;
-    BM_ITER_MESH (v, &iter, bm, BM_VERTS_OF_MESH) {
-      BM_elem_flag_set(v, BM_ELEM_TAG, BM_elem_flag_test(v, BM_ELEM_SELECT));
-    }
-  }
-  else if (em->selectmode & SCE_SELECT_EDGE) {
-    BMEdge *e;
-    BM_ITER_MESH (e, &iter, bm, BM_EDGES_OF_MESH) {
-      BM_elem_flag_set(e, BM_ELEM_TAG, BM_elem_flag_test(e, BM_ELEM_SELECT));
-    }
-  }
-  else {
-    BMFace *f;
-    BM_ITER_MESH (f, &iter, bm, BM_FACES_OF_MESH) {
-      BM_elem_flag_set(f, BM_ELEM_TAG, BM_elem_flag_test(f, BM_ELEM_SELECT));
-    }
-  }
-
-  EDBM_verts_mirror_cache_begin(em, axis, true, true, false, use_topology);
-
-  if (!extend) {
-    EDBM_flag_disable_all(em, BM_ELEM_SELECT);
-  }
-
-  if (bm->selectmode & SCE_SELECT_VERTEX) {
-    BMVert *v;
-    BM_ITER_MESH (v, &iter, bm, BM_VERTS_OF_MESH) {
-      if (BM_elem_flag_test(v, BM_ELEM_HIDDEN)) {
-        continue;
-      }
-
-      if (BM_elem_flag_test(v, BM_ELEM_TAG)) {
-        BMVert *v_mirr = EDBM_verts_mirror_get(em, v);
-        if (v_mirr && !BM_elem_flag_test(v_mirr, BM_ELEM_HIDDEN)) {
-          BM_vert_select_set(bm, v_mirr, true);
-          totmirr++;
-        }
-        else {
-          totfail++;
-        }
-      }
-    }
-  }
-  else if (em->selectmode & SCE_SELECT_EDGE) {
-    BMEdge *e;
-    BM_ITER_MESH (e, &iter, bm, BM_EDGES_OF_MESH) {
-      if (BM_elem_flag_test(e, BM_ELEM_HIDDEN)) {
-        continue;
-      }
-
-      if (BM_elem_flag_test(e, BM_ELEM_TAG)) {
-        BMEdge *e_mirr = EDBM_verts_mirror_get_edge(em, e);
-        if (e_mirr && !BM_elem_flag_test(e_mirr, BM_ELEM_HIDDEN)) {
-          BM_edge_select_set(bm, e_mirr, true);
-          totmirr++;
-        }
-        else {
-          totfail++;
-        }
-      }
-    }
-  }
-  else {
-    BMFace *f;
-    BM_ITER_MESH (f, &iter, bm, BM_FACES_OF_MESH) {
-      if (BM_elem_flag_test(f, BM_ELEM_HIDDEN)) {
-        continue;
-      }
-
-      if (BM_elem_flag_test(f, BM_ELEM_TAG)) {
-        BMFace *f_mirr = EDBM_verts_mirror_get_face(em, f);
-        if (f_mirr && !BM_elem_flag_test(f_mirr, BM_ELEM_HIDDEN)) {
-          BM_face_select_set(bm, f_mirr, true);
-          totmirr++;
-        }
-        else {
-          totfail++;
-        }
-      }
-    }
-  }
-
-  EDBM_verts_mirror_cache_end(em);
-
-  *r_totmirr = totmirr;
-  *r_totfail = totfail;
-}
-
 static bool UNUSED_FUNCTION(EDBM_select_mirrored_extend_all)(Object *obedit, BMEditMesh *em)
 {
   BMesh *bm = em->bm;
@@ -273,8 +168,14 @@ static bool UNUSED_FUNCTION(EDBM_select_mirrored_extend_all)(Object *obedit, BME
   if (selectmode & SCE_SELECT_VERTEX) {
     symmetry_htype |= BM_VERT;
   }
+  const Mesh *mesh = id_cast<const Mesh *>(obedit->data);
   if (std::optional<EditMeshSymmetryHelper> symmetry_helper =
-          EditMeshSymmetryHelper::create_if_needed(obedit, symmetry_htype))
+          EditMeshSymmetryHelper::create_if_needed(obedit,
+                                                   symmetry_htype,
+                                                   mesh->symmetry,
+                                                   (symmetry_htype & BM_VERT) != 0,
+                                                   (symmetry_htype & BM_EDGE) != 0,
+                                                   (symmetry_htype & BM_FACE) != 0))
   {
     const char hflag = BM_ELEM_SELECT;
     BMIter iter;
@@ -4883,6 +4784,7 @@ static wmOperatorStatus edbm_select_mirror_exec(bContext *C, wmOperator *op)
   ViewLayer *view_layer = CTX_data_view_layer(C);
   const int axis_flag = RNA_enum_get(op->ptr, "axis");
   const bool extend = RNA_boolean_get(op->ptr, "extend");
+  const bool topology = RNA_boolean_get(op->ptr, "topology");
   Object *obedit_active = CTX_data_edit_object(C);
   BMEditMesh *em_active = BKE_editmesh_from_object(obedit_active);
   const int select_mode = em_active->bm->selectmode;
@@ -4893,18 +4795,31 @@ static wmOperatorStatus edbm_select_mirror_exec(bContext *C, wmOperator *op)
 
   for (Object *obedit : objects) {
     BMEditMesh *em = BKE_editmesh_from_object(obedit);
+    BMesh *bm = em->bm;
 
-    if (em->bm->totvertsel == 0) {
+    if (bm->totvertsel == 0) {
       continue;
+    }
+
+    uchar htype;
+    if (bm->selectmode & SCE_SELECT_VERTEX) {
+      htype = BM_VERT;
+    }
+    else if (bm->selectmode & SCE_SELECT_EDGE) {
+      htype = BM_EDGE;
+    }
+    else {
+      htype = BM_FACE;
     }
 
     int tot_mirr_iter = 0, tot_fail_iter = 0;
 
-    for (int axis = 0; axis < 3; axis++) {
-      if ((1 << axis) & axis_flag) {
-        EDBM_select_mirrored(
-            em, id_cast<const Mesh *>(obedit->data), axis, extend, &tot_mirr_iter, &tot_fail_iter);
-      }
+    if (std::optional<EditMeshSymmetryHelper> symmetry_helper =
+            EditMeshSymmetryHelper::create_if_needed(
+                obedit, htype, uint8_t(axis_flag), true, false, false, topology))
+    {
+      std::tie(tot_mirr_iter, tot_fail_iter) = symmetry_helper->set_all_mirrored(BM_ELEM_SELECT,
+                                                                                 extend);
     }
 
     if (tot_mirr_iter) {
@@ -4941,7 +4856,12 @@ void MESH_OT_select_mirror(wmOperatorType *ot)
 
   /* Props. */
   RNA_def_enum_flag(ot->srna, "axis", rna_enum_axis_flag_xyz_items, (1 << 0), "Axis", "");
-
+  RNA_def_boolean(
+      ot->srna,
+      "topology",
+      false,
+      "Topology",
+      "Use topology based mirroring (for when both sides of mesh have matching, unique topology)");
   RNA_def_boolean(ot->srna, "extend", false, "Extend", "Extend the existing selection");
 }
 
