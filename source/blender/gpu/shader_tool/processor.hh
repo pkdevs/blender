@@ -405,7 +405,7 @@ class SourceProcessor {
   /* Example: `textureGather(t,c,1)` > `textureGather1(t,c)` */
   void lower_gather_component(Parser &parser);
   /* Lower test expect clauses to SSBO assignments. */
-  void lower_tests(Parser &parser);
+  void lower_tests(Parser &parser, const std::string &prefix = "");
   /* Lower resource pragmas to macros (breaks BSL parsing). */
   void lower_resource_macro_placeholder_ast(Parser &parser);
 

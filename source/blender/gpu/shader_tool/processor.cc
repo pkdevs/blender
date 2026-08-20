@@ -268,6 +268,7 @@ SourceProcessor::Result SourceProcessor::convert_bsl()
     parse_pragma_runtime_generated(parser);
     parse_includes(parser);
     parse_defines(parser);
+    lower_tests(parser, "srt.");
 
     parser.only_apply_mutations();
 
@@ -317,8 +318,6 @@ SourceProcessor::Result SourceProcessor::convert_bsl()
     /* Lower string, assert, printf. */
     lower_strings(parser);
     lower_printf(parser);
-    /* Lower other C++ constructs. */
-    // lower_tests(parser);
     /* Needs to be last. */
     lower_resource_macro_placeholder_ast(parser);
     lower_constructors(parser);
@@ -1655,7 +1654,7 @@ void SourceProcessor::lint_reserved_tokens(Parser &parser)
   });
 }
 
-void SourceProcessor::lower_tests(Parser &parser)
+void SourceProcessor::lower_tests(Parser &parser, const string &prefix)
 {
   parser().foreach_function([&](bool, Token type, Token, Scope, bool, Scope fn_body) {
     if (type.str() != "void") {
@@ -1672,9 +1671,9 @@ void SourceProcessor::lower_tests(Parser &parser)
       test_body.foreach_match("A(..)", [&](Tokens toks) {
         if (toks[0].str().starts_with("EXPECT_")) {
           int id = test_id;
-          parser.insert_before(toks[0], "out_test[" + to_string(id) + "] = ");
+          parser.insert_before(toks[0], prefix + "out_test[" + to_string(id) + "] = ");
           parser.insert_after(toks[4],
-                              "; out_test[" + to_string(id) +
+                              "; " + prefix + "out_test[" + to_string(id) +
                                   "].line = " + to_string(toks[0].line_number()));
           test_id++;
         }

@@ -16,19 +16,35 @@ void set_clipmap_data(LightData &light,
                       float clipmap_origin_x,
                       float clipmap_origin_y)
 {
+#ifndef BSL_530
   LightSunData sun_data = light.sun();
+#else
+  LightSunData sun_data = light.sun;
+#endif
   sun_data.clipmap_origin = float2(clipmap_origin_x, clipmap_origin_y);
   sun_data.clipmap_lod_min = clipmap_lod_min;
   sun_data.clipmap_lod_max = clipmap_lod_max;
+#ifndef BSL_530
   light.sun() = sun_data;
+#else
+  light.sun = sun_data;
+#endif
 }
 
 void set_clipmap_base_offset(LightData &light, int2 clipmap_base_offset)
 {
+#ifndef BSL_530
   LightSunData sun_data = light.sun();
+#else
+  LightSunData sun_data = light.sun;
+#endif
   sun_data.clipmap_base_offset_pos = clipmap_base_offset;
   sun_data.clipmap_base_offset_neg = int2(0);
+#ifndef BSL_530
   light.sun() = sun_data;
+#else
+  light.sun = sun_data;
+#endif
 }
 
 [[compute, local_size(1)]]
@@ -40,10 +56,17 @@ void main()
     set_clipmap_data(light, 1, 2, 3.0f, 4.0f);
     set_clipmap_base_offset(light, int2(5, 6));
 
+#ifndef BSL_530
     EXPECT_EQ(light.sun().clipmap_lod_min, 1);
     EXPECT_EQ(light.sun().clipmap_lod_max, 2);
     EXPECT_EQ(light.sun().clipmap_origin, float2(3.0f, 4.0f));
     EXPECT_EQ(light.sun().clipmap_base_offset_pos, int2(5, 6));
+#else
+    EXPECT_EQ(light.sun.clipmap_lod_min, 1);
+    EXPECT_EQ(light.sun.clipmap_lod_max, 2);
+    EXPECT_EQ(light.sun.clipmap_origin, float2(3.0f, 4.0f));
+    EXPECT_EQ(light.sun.clipmap_base_offset_pos, int2(5, 6));
+#endif
   }
 
   TEST(eevee_shadow, DirectionalClipmapLevel)

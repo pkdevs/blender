@@ -29,7 +29,7 @@ float3 quantize_flush_to_zero_10bit(float3 data)
 }
 
 [[compute, local_size(1)]]
-void eevee_test_gbuffer_closure_main([[resource_table]] const ShaderTestOutput & /*srt*/,
+void eevee_test_gbuffer_closure_main([[resource_table, maybe_unused]] const ShaderTestOutput &srt,
                                      [[resource_table]] const gbuffer::PackParameters &param)
 {
   float3 Ng = float3(1.0f, 0.0f, 0.0f);
@@ -48,14 +48,14 @@ void eevee_test_gbuffer_closure_main([[resource_table]] const ShaderTestOutput &
 
     EXPECT_EQ(uint(data_out.used_layers), uint(ADDITIONAL_DATA));
     EXPECT_NEAR(float3(header.empty_bins()), float3(0, 1, 1), 0.5f);
-    EXPECT_EQ(header.closure_len(), 1);
+    EXPECT_EQ(header.closure_len(), uchar(1u));
 
     ClosureUndetermined out_refraction;
     out_refraction.type = gbuffer::mode_to_closure_type(header.bin_type(0));
     out_refraction.color = gbuffer::closure_color_unpack(data_out.closure[0]);
     out_refraction.N = gbuffer::normal_unpack(data_out.normal[0]);
 
-    EXPECT_EQ(out_refraction.type, CLOSURE_BSDF_THIN_GLASS_TRANSMISSION_ID);
+    EXPECT_EQ(uchar(out_refraction.type), uchar(CLOSURE_BSDF_THIN_GLASS_TRANSMISSION_ID));
     EXPECT_NEAR(out_refraction.color, data_in.closure[0].color, 1e-5f);
     EXPECT_NEAR(out_refraction.N, data_in.closure[0].N, 1e-5f);
   }
@@ -72,14 +72,14 @@ void eevee_test_gbuffer_closure_main([[resource_table]] const ShaderTestOutput &
 
     EXPECT_EQ(uint(data_out.used_layers), 0u);
     EXPECT_NEAR(float3(header.empty_bins()), float3(1, 0, 1), 0.5f);
-    EXPECT_EQ(header.closure_len(), 1);
+    EXPECT_EQ(header.closure_len(), uchar(1));
 
     ClosureUndetermined out_diffuse;
     out_diffuse.type = gbuffer::mode_to_closure_type(header.bin_type(1));
     out_diffuse.color = gbuffer::closure_color_unpack(data_out.closure[0]);
     out_diffuse.N = gbuffer::normal_unpack(data_out.normal[0]);
 
-    EXPECT_EQ(out_diffuse.type, CLOSURE_BSDF_DIFFUSE_ID);
+    EXPECT_EQ(uchar(out_diffuse.type), uchar(CLOSURE_BSDF_DIFFUSE_ID));
     EXPECT_NEAR(out_diffuse.color, data_in.closure[1].color, 1e-5f);
     EXPECT_NEAR(out_diffuse.N, data_in.closure[1].N, 1e-5f);
   }
@@ -97,7 +97,7 @@ void eevee_test_gbuffer_closure_main([[resource_table]] const ShaderTestOutput &
 
     EXPECT_EQ(uint(data_out.used_layers), uint(ADDITIONAL_DATA));
     EXPECT_NEAR(float3(header.empty_bins()), float3(0, 1, 1), 0.5f);
-    EXPECT_EQ(header.closure_len(), 1);
+    EXPECT_EQ(header.closure_len(), uchar(1));
 
     ClosureUndetermined out_sss_burley;
     out_sss_burley.type = gbuffer::mode_to_closure_type(header.bin_type(0));
@@ -105,7 +105,7 @@ void eevee_test_gbuffer_closure_main([[resource_table]] const ShaderTestOutput &
     out_sss_burley.N = gbuffer::normal_unpack(data_out.normal[0]);
     gbuffer::Subsurface::unpack_additional(out_sss_burley, data_out.closure[1]);
 
-    EXPECT_EQ(out_sss_burley.type, CLOSURE_BSSRDF_BURLEY_ID);
+    EXPECT_EQ(uchar(out_sss_burley.type), uchar(CLOSURE_BSSRDF_BURLEY_ID));
     EXPECT_NEAR(out_sss_burley.color, data_in.closure[0].color, 1e-5f);
     EXPECT_NEAR(out_sss_burley.N, data_in.closure[0].N, 1e-5f);
     EXPECT_NEAR(out_sss_burley.data.rgb, data_in.closure[0].data.rgb, 1e-5f);
@@ -123,14 +123,14 @@ void eevee_test_gbuffer_closure_main([[resource_table]] const ShaderTestOutput &
 
     EXPECT_EQ(uint(data_out.used_layers), uint(ADDITIONAL_DATA));
     EXPECT_NEAR(float3(header.empty_bins()), float3(0, 1, 1), 0.5f);
-    EXPECT_EQ(header.closure_len(), 1);
+    EXPECT_EQ(header.closure_len(), uchar(1));
 
     ClosureUndetermined out_translucent;
     out_translucent.type = gbuffer::mode_to_closure_type(header.bin_type(0));
     out_translucent.color = gbuffer::closure_color_unpack(data_out.closure[0]);
     out_translucent.N = gbuffer::normal_unpack(data_out.normal[0]);
 
-    EXPECT_EQ(out_translucent.type, CLOSURE_BSDF_TRANSLUCENT_ID);
+    EXPECT_EQ(uchar(out_translucent.type), uchar(CLOSURE_BSDF_TRANSLUCENT_ID));
     EXPECT_NEAR(out_translucent.color, data_in.closure[0].color, 1e-5f);
     EXPECT_NEAR(out_translucent.N, data_in.closure[0].N, 1e-5f);
   }
@@ -148,7 +148,7 @@ void eevee_test_gbuffer_closure_main([[resource_table]] const ShaderTestOutput &
 
     EXPECT_EQ(uint(data_out.used_layers), 0u);
     EXPECT_NEAR(float3(header.empty_bins()), float3(0, 1, 1), 0.5f);
-    EXPECT_EQ(header.closure_len(), 1);
+    EXPECT_EQ(header.closure_len(), uchar(1));
 
     ClosureUndetermined out_reflection;
     out_reflection.type = gbuffer::mode_to_closure_type(header.bin_type(0));
@@ -156,7 +156,7 @@ void eevee_test_gbuffer_closure_main([[resource_table]] const ShaderTestOutput &
     out_reflection.N = gbuffer::normal_unpack(data_out.normal[0]);
     gbuffer::Reflection::unpack_additional(out_reflection, data_out.closure[1]);
 
-    EXPECT_EQ(out_reflection.type, CLOSURE_BSDF_MICROFACET_GGX_REFLECTION_ID);
+    EXPECT_EQ(uchar(out_reflection.type), uchar(CLOSURE_BSDF_MICROFACET_GGX_REFLECTION_ID));
     EXPECT_NEAR(out_reflection.color, data_in.closure[0].color, 1e-5f);
     EXPECT_NEAR(out_reflection.N, data_in.closure[0].N, 1e-5f);
     EXPECT_NEAR(out_reflection.data.r, data_in.closure[0].data.r, 1e-5f);
@@ -176,7 +176,7 @@ void eevee_test_gbuffer_closure_main([[resource_table]] const ShaderTestOutput &
 
     EXPECT_EQ(uint(data_out.used_layers), uint(ADDITIONAL_DATA));
     EXPECT_NEAR(float3(header.empty_bins()), float3(0, 1, 1), 0.5f);
-    EXPECT_EQ(header.closure_len(), 1);
+    EXPECT_EQ(header.closure_len(), uchar(1));
 
     ClosureUndetermined out_refraction;
     out_refraction.type = gbuffer::mode_to_closure_type(header.bin_type(0));
@@ -184,7 +184,7 @@ void eevee_test_gbuffer_closure_main([[resource_table]] const ShaderTestOutput &
     out_refraction.N = gbuffer::normal_unpack(data_out.normal[0]);
     gbuffer::Refraction::unpack_additional(out_refraction, data_out.closure[1]);
 
-    EXPECT_EQ(out_refraction.type, CLOSURE_BSDF_MICROFACET_GGX_REFRACTION_ID);
+    EXPECT_EQ(uchar(out_refraction.type), uchar(CLOSURE_BSDF_MICROFACET_GGX_REFRACTION_ID));
     EXPECT_NEAR(out_refraction.color, data_in.closure[0].color, 1e-5f);
     EXPECT_NEAR(out_refraction.N, data_in.closure[0].N, 1e-5f);
     EXPECT_NEAR(out_refraction.data.r, data_in.closure[0].data.r, 1e-5f);
@@ -214,7 +214,7 @@ void eevee_test_gbuffer_closure_main([[resource_table]] const ShaderTestOutput &
     EXPECT_EQ(uint(data_out.used_layers),
               uint(ADDITIONAL_DATA | NORMAL_DATA_1 | CLOSURE_DATA_2 | CLOSURE_DATA_3));
     EXPECT_NEAR(float3(header.empty_bins()), float3(0, 1, 0), 0.5f);
-    EXPECT_EQ(header.closure_len(), 2);
+    EXPECT_EQ(header.closure_len(), uchar(2));
 
     ClosureUndetermined out_cl0;
     out_cl0.type = gbuffer::mode_to_closure_type(header.bin_type(0));
@@ -228,13 +228,13 @@ void eevee_test_gbuffer_closure_main([[resource_table]] const ShaderTestOutput &
     out_cl1.N = gbuffer::normal_unpack(data_out.normal[1]);
     gbuffer::Reflection::unpack_additional(out_cl1, data_out.closure[3]);
 
-    EXPECT_EQ(out_cl0.type, CLOSURE_BSDF_MICROFACET_GGX_REFRACTION_ID);
+    EXPECT_EQ(uchar(out_cl0.type), uchar(CLOSURE_BSDF_MICROFACET_GGX_REFRACTION_ID));
     EXPECT_NEAR(out_cl0.color, in_cl0.color, 1e-5f);
     EXPECT_NEAR(out_cl0.N, in_cl0.N, 1e-5f);
     EXPECT_NEAR(out_cl0.data.r, in_cl0.data.r, 1e-5f);
     EXPECT_NEAR(out_cl0.data.g, in_cl0.data.g, 1e-5f);
 
-    EXPECT_EQ(out_cl1.type, CLOSURE_BSDF_MICROFACET_GGX_REFLECTION_ID);
+    EXPECT_EQ(uchar(out_cl1.type), uchar(CLOSURE_BSDF_MICROFACET_GGX_REFLECTION_ID));
     EXPECT_NEAR(out_cl1.color, in_cl1.color, 1e-5f);
     EXPECT_NEAR(out_cl1.N, in_cl1.N, 1e-5f);
     EXPECT_NEAR(out_cl1.data.r, in_cl1.data.r, 1e-5f);
@@ -259,7 +259,7 @@ void eevee_test_gbuffer_closure_main([[resource_table]] const ShaderTestOutput &
 
     EXPECT_EQ(uint(data_out.used_layers), uint(ADDITIONAL_DATA | NORMAL_DATA_1));
     EXPECT_NEAR(float3(header.empty_bins()), float3(0, 0, 1), 0.5f);
-    EXPECT_EQ(header.closure_len(), 2);
+    EXPECT_EQ(header.closure_len(), uchar(2));
 
     ClosureUndetermined out_refraction;
     out_refraction.type = gbuffer::mode_to_closure_type(header.bin_type(0));
@@ -273,13 +273,13 @@ void eevee_test_gbuffer_closure_main([[resource_table]] const ShaderTestOutput &
     out_reflection.N = gbuffer::normal_unpack(data_out.normal[1]);
     gbuffer::ReflectionColorless::unpack_additional(out_reflection, data_out.closure[1]);
 
-    EXPECT_EQ(out_refraction.type, CLOSURE_BSDF_MICROFACET_GGX_REFRACTION_ID);
+    EXPECT_EQ(uchar(out_refraction.type), CLOSURE_BSDF_MICROFACET_GGX_REFRACTION_ID);
     EXPECT_NEAR(out_refraction.color, data_in.closure[0].color, 1e-5f);
     EXPECT_NEAR(out_refraction.N, data_in.closure[0].N, 1e-5f);
     EXPECT_NEAR(out_refraction.data.r, data_in.closure[0].data.r, 1e-5f);
     EXPECT_NEAR(out_refraction.data.g, data_in.closure[0].data.g, 1e-5f);
 
-    EXPECT_EQ(out_reflection.type, CLOSURE_BSDF_MICROFACET_GGX_REFLECTION_ID);
+    EXPECT_EQ(uchar(out_reflection.type), CLOSURE_BSDF_MICROFACET_GGX_REFLECTION_ID);
     EXPECT_NEAR(out_reflection.color, data_in.closure[1].color, 1e-5f);
     EXPECT_NEAR(out_reflection.N, data_in.closure[1].N, 1e-5f);
     EXPECT_NEAR(out_reflection.data.r, data_in.closure[1].data.r, 1e-5f);
