@@ -112,6 +112,9 @@ class GHOST_SystemWin32 : public GHOST_System {
                               const bool is_dialog = false,
                               const GHOST_IWindow *parent_window = nullptr) override;
 
+  /** \copydoc #GHOST_ISystem::getSystemColorScheme */
+  GHOST_TColorScheme getSystemColorScheme(int /*blocking_timeout_ms*/) const override;
+
   /**
    * Create a new off-screen context.
    * Never explicitly delete the window, use #disposeContext() instead.

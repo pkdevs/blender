@@ -1012,17 +1012,9 @@ GHOST_TabletData GHOST_WindowWin32::getTabletData()
 
 void GHOST_WindowWin32::ThemeRefresh()
 {
-  DWORD lightMode;
-  DWORD pcbData = sizeof(lightMode);
-  if (RegGetValueW(HKEY_CURRENT_USER,
-                   L"Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize\\",
-                   L"AppsUseLightTheme",
-                   RRF_RT_REG_DWORD,
-                   nullptr,
-                   &lightMode,
-                   &pcbData) == ERROR_SUCCESS)
-  {
-    BOOL DarkMode = !lightMode;
+  GHOST_TColorScheme colorScheme = system_->getSystemColorScheme(0);
+  if (colorScheme != GHOST_kColorSchemeNoPreference) {
+    const BOOL DarkMode = colorScheme == GHOST_kColorSchemePreferDark;
 
     /* `20 == DWMWA_USE_IMMERSIVE_DARK_MODE` in Windows 11 SDK.
      * This value was undocumented for Windows 10 versions 2004 and later,

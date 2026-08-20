@@ -299,6 +299,24 @@ GHOST_IWindow *GHOST_SystemWin32::createWindow(const char *title,
   return window;
 }
 
+GHOST_TColorScheme GHOST_SystemWin32::getSystemColorScheme(int /*blocking_timeout_ms*/) const
+{
+  DWORD lightMode;
+  DWORD pcbData = sizeof(lightMode);
+  if (RegGetValueW(HKEY_CURRENT_USER,
+                   L"Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize\\",
+                   L"AppsUseLightTheme",
+                   RRF_RT_REG_DWORD,
+                   nullptr,
+                   &lightMode,
+                   &pcbData) == ERROR_SUCCESS)
+  {
+    return bool(lightMode) ? GHOST_kColorSchemePreferLight : GHOST_kColorSchemePreferDark;
+  }
+
+  return GHOST_kColorSchemeUnknown;
+}
+
 /**
  * Create a new off-screen context.
  * Never explicitly delete the window, use #disposeContext() instead.
@@ -2291,6 +2309,9 @@ LRESULT WINAPI GHOST_SystemWin32::s_wndProc(HWND hwnd, uint msg, WPARAM wParam, 
           if (((void *)lParam != nullptr) && (wcscmp(LPCWSTR(lParam), L"ImmersiveColorSet") == 0))
           {
             window->ThemeRefresh();
+
+            system->pushEvent(
+                std::make_unique<GHOST_Event>(0, GHOST_kEventSystemAppearanceChanged, nullptr));
           }
           window->updateHDRInfo();
           break;
