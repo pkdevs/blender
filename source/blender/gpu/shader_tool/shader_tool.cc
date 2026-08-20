@@ -251,10 +251,10 @@ int main(int argc, char **argv)
         !filename.ends_with("eevee_utility_tx.bsl.hh") &&
         !filename.ends_with("eevee_velocity.bsl.hh") &&
         !filename.ends_with("eevee_volume_lib.bsl.hh") &&
-        // !filename.ends_with("eevee_test_fast_gi.bsl.hh") &&
-        // !filename.ends_with("eevee_test_gbuffer_closure.bsl.hh") &&
-        // !filename.ends_with("eevee_test_gbuffer_normal.bsl.hh") &&
-        // !filename.ends_with("eevee_test_occupancy.bsl.hh") &&
+        !filename.ends_with("eevee_test_fast_gi.bsl.hh") &&
+        !filename.ends_with("eevee_test_gbuffer_closure.bsl.hh") &&
+        !filename.ends_with("eevee_test_gbuffer_normal.bsl.hh") &&
+        !filename.ends_with("eevee_test_occupancy.bsl.hh") &&
         // !filename.ends_with("eevee_test_shadow.bsl.hh") &&
         // !filename.ends_with("eevee_volume.bsl.hh") &&
         // !filename.ends_with("eevee_light_shadow_setup.bsl.hh") &&

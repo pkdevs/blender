@@ -879,6 +879,18 @@ vector<SymbolTable::BuiltinFunc> SymbolTable::generate_all_builtin_functions()
   /* 2-argument atan(y, x). */
   add_binary("atan", f_types);
 
+  for (string fn : {"EXPECT_EQ", "EXPECT_NE", "EXPECT_LE", "EXPECT_LT", "EXPECT_GE", "EXPECT_GT"})
+  {
+    add_binary(fn, f_types);
+    add_binary(fn, i_types);
+    add_binary(fn, u_types);
+    add_binary(fn, {char_cls, uchar_cls});
+  }
+  add_unary("EXPECT_TRUE", b_types);
+  add_unary("EXPECT_FALSE", b_types);
+  add_ternary("EXPECT_NEAR", f_types);
+  add_vec_vec_scalar_ternary("EXPECT_NEAR", f_types);
+
   const vector<string> exp_unary = {"exp", "log", "exp2", "log2", "sqrt", "inversesqrt"};
   for (const auto &name : exp_unary) {
     add_unary(name, f_types);
