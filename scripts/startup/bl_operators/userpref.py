@@ -1082,6 +1082,22 @@ class PREFERENCES_OT_studiolight_install(Operator):
     bl_idname = "preferences.studiolight_install"
     bl_label = "Install Light"
 
+    def update_type(self, _context):
+        space_data = _context.space_data
+        if space_data.type != 'FILE_BROWSER':
+            return
+
+        if self.type == 'STUDIO':
+            space_data.params.filter_glob = "*.sl"
+        else:
+            space_data.params.filter_glob = "*.png;*.jpg;*.hdr;*.exr"
+
+        if self.filter_glob != space_data.params.filter_glob:
+            # Force update of file list, because update the filter does not update the real file list
+            bpy.ops.file.refresh()
+
+        self.filter_glob = space_data.params.filter_glob
+
     files: CollectionProperty(
         name="File Path",
         type=OperatorFileListElement,
@@ -1096,7 +1112,7 @@ class PREFERENCES_OT_studiolight_install(Operator):
     )
     filter_glob: StringProperty(
         default="*.png;*.jpg;*.hdr;*.exr",
-        options={'HIDDEN'},
+        options={'HIDDEN', 'SKIP_SAVE'},
     )
     type: EnumProperty(
         name="Type",
@@ -1105,6 +1121,7 @@ class PREFERENCES_OT_studiolight_install(Operator):
             ('WORLD', "World", "Install custom HDRIs"),
             ('STUDIO', "Studio", "Install custom Studio Lights"),
         ),
+        update=update_type,
     )
 
     def execute(self, context):
