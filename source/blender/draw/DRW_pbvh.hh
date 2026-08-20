@@ -60,8 +60,8 @@ struct ViewportRequest {
  */
 struct NodeInfo {
   struct BufferRange {
-    /** \brief Does this node already have space inside GPU buffers. */
-    bool is_space_assigned = false;
+    /** \brief Does this node already have space acquired inside GPU buffers. */
+    bool is_space_acquired = false;
     int offset = -1;
     int len = -1;
     IndexRange index_range() const
