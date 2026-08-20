@@ -137,6 +137,10 @@ class USERPREF_MT_save_load(Menu):
         sub_revert.active = prefs.is_dirty or bpy.app.factory_startup
         sub_revert.operator("wm.read_userpref", text="Revert to Saved Preferences")
 
+        old_version = bpy.types.PREFERENCES_OT_import_prev.previous_version()
+        if old_version:
+            layout.operator("preferences.import_prev", text=iface_("Import Blender {:d}.{:d} Preferences", "Operator").format(*old_version), icon='NONE', translate=False)
+
         app_template = prefs.app_template
         if app_template:
             display_name = bpy.path.display_name(iface_(app_template))

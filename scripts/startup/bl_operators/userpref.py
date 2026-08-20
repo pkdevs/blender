@@ -95,11 +95,7 @@ class PREFERENCES_OT_keyconfig_activate(Operator):
             return {'CANCELLED'}
 
 
-class PREFERENCES_OT_copy_prev(Operator):
-    """Copy settings from previous version"""
-    bl_idname = "preferences.copy_prev"
-    bl_label = "Copy Previous Settings"
-
+class PreferencesHelper:
     @classmethod
     def _old_version_path(cls, version):
         return bpy.utils.resource_path('USER', major=version[0], minor=version[1])
@@ -134,20 +130,30 @@ class PREFERENCES_OT_copy_prev(Operator):
         return None
 
     @classmethod
-    def _old_path(cls):
+    def old_path(cls):
         version_old = cls.previous_version()
         return cls._old_version_path(version_old) if version_old else None
 
     @classmethod
-    def _new_path(cls):
+    def new_path(cls):
         return bpy.utils.resource_path('USER')
+
+
+class PREFERENCES_OT_copy_prev(Operator):
+    """Copy settings from previous version"""
+    bl_idname = "preferences.copy_prev"
+    bl_label = "Copy Previous Settings"
+
+    @classmethod
+    def previous_version(cls):
+        return PreferencesHelper.previous_version()
 
     @classmethod
     def poll(cls, _context):
         import os
 
-        old = cls._old_path()
-        new = cls._new_path()
+        old = PreferencesHelper.old_path()
+        new = PreferencesHelper.new_path()
         if not old:
             return False
 
@@ -169,7 +175,7 @@ class PREFERENCES_OT_copy_prev(Operator):
 
     def execute(self, _context):
         import shutil
-        shutil.copytree(self._old_path(), self._new_path(), dirs_exist_ok=True, symlinks=True)
+        shutil.copytree(PreferencesHelper.old_path(), PreferencesHelper.new_path(), dirs_exist_ok=True, symlinks=True)
 
         # Reload preferences and `recent-files.txt`.
         bpy.ops.wm.read_userpref()
@@ -182,6 +188,57 @@ class PREFERENCES_OT_copy_prev(Operator):
             bpy.ops.wm.read_homefile()
         else:
             self.report({'INFO'}, "Reload Start-Up file to restore settings")
+
+        return {'FINISHED'}
+
+class PREFERENCES_OT_import_prev(Operator):
+    """Copy settings from previous version"""
+    bl_idname = "preferences.import_prev"
+    bl_label = "Import Settings"
+
+    @classmethod
+    def previous_version(cls):
+        return PreferencesHelper.previous_version()
+
+    @classmethod
+    def poll(cls, _context):
+        import os
+
+        old = PreferencesHelper.old_path()
+        new = PreferencesHelper.new_path()
+        if not old:
+            print("NO OLD VERSION!")
+            return False
+
+        # Disable operator in case config path is overridden with environment
+        # variable. That case has no automatic per-version configuration.
+        userconfig_path = os.path.normpath(bpy.utils.user_resource('CONFIG'))
+        new_userconfig_path = os.path.normpath(os.path.join(new, "config"))
+        if userconfig_path != new_userconfig_path:
+            return False
+
+        old_userpref = os.path.join(old, "config", "userpref.blend")
+        if os.path.isdir(old) and os.path.isfile(old_userpref):
+            return True
+
+
+        return False
+
+    def execute(self, _context):
+        import os
+        import shutil
+        old_file = os.path.join(PreferencesHelper.old_path(), "config", "userpref.blend")
+        new_file = os.path.join(PreferencesHelper.new_path(), "config", "userpref.blend")
+
+        shutil.copyfile(old_file, new_file)
+
+        # Reload preferences and `recent-files.txt`.
+        bpy.ops.wm.read_userpref()
+
+        # TODO: This assumes we're only handling the userpref.blend
+        # bpy.ops.wm.read_history()
+        # Fix operator presets that have unwanted filepath properties
+        bpy.ops.wm.operator_presets_cleanup()
 
         return {'FINISHED'}
 
@@ -1305,6 +1362,7 @@ classes = (
     PREFERENCES_OT_addon_show,
     PREFERENCES_OT_app_template_install,
     PREFERENCES_OT_copy_prev,
+    PREFERENCES_OT_import_prev,
     PREFERENCES_OT_keyconfig_activate,
     PREFERENCES_OT_keyconfig_export,
     PREFERENCES_OT_keyconfig_import,
