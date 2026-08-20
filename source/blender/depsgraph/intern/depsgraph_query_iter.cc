@@ -228,12 +228,13 @@ bool deg_iterator_objects_step(DEGObjectIterData *data)
 
     object->runtime->select_id = object_orig->runtime->select_id;
 
-    const bool use_preview = object_orig == data->object_orig_with_preview;
-    if (use_preview && !object_viewer_path_is_hidden_debug_view(*data->settings->viewer_path)) {
+    bool replace_object_with_preview = false;
+    const bool use_viewer_path_preview = object_orig == data->object_orig_with_preview;
+    if (use_viewer_path_preview &&
+        !object_viewer_path_is_hidden_debug_view(*data->settings->viewer_path))
+    {
       object_duplilist_preview(data->graph, object, data->settings->viewer_path, data->dupli_list);
-      deg_iterator_duplis_init(data, object);
-      data->id_node_index++;
-      return true;
+      replace_object_with_preview = true;
     }
     const DEGDebugViewRequest *debug_view_request = data->settings->debug_view_request;
     if (debug_view_request && debug_view_request->object == object_orig &&
@@ -244,6 +245,9 @@ bool deg_iterator_objects_step(DEGObjectIterData *data)
                                                                  nullptr,
                                     data->dupli_list))
     {
+      replace_object_with_preview = true;
+    }
+    if (replace_object_with_preview) {
       deg_iterator_duplis_init(data, object);
       data->id_node_index++;
       return true;
