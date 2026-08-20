@@ -7915,7 +7915,9 @@ void RNA_def_userdef(BlenderRNA *brna)
   RNA_def_property_ui_text(
       prop,
       "Active Theme",
-      "The theme currently in use, resolved from Active Theme Type/Dark Theme/Light Theme");
+      "The theme currently in use, resolved from Active Theme Type/Dark "
+      "Theme/Light Theme. Edit via the \"active_theme_dark\" and \"active_theme_light\" "
+      "properties.");
 
   prop = RNA_def_property(srna, "themes", PROP_COLLECTION, PROP_NONE);
   RNA_def_property_collection_sdna(prop, nullptr, "themes", nullptr);
