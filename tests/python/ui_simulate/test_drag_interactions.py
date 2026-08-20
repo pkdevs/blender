@@ -383,6 +383,11 @@ def uv_editor_drag():
 
     yield e.ctrl.z()
 
+    # Undo may re-allocate the object and Mesh datablocks, so reacquire
+    # both from the current view layer.
+    plane = window.view_layer.objects.active
+    mesh = plane.data
+
     bm = bmesh.from_edit_mesh(mesh)
     uv_layer = bm.loops.layers.uv.active
     loop = bm.faces[0].loops[0]
