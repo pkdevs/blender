@@ -1690,6 +1690,14 @@ class NodeTreeMainUpdater {
       {
         return true;
       }
+      /* A propagated Debug View is a side effect of group evaluation. Treat the group like an
+       * output so changes to its inputs invalidate the modifier even when its regular outputs are
+       * unused. */
+      if (node_group != nullptr && node_group->runtime->debug_view_propagation &&
+          !node_group->runtime->debug_view_propagation->viewers_by_group_input.is_empty())
+      {
+        return true;
+      }
     }
     return false;
   }
