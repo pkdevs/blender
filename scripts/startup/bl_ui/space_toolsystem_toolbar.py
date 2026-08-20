@@ -512,6 +512,7 @@ class _defs_view3d_add:
         'CUBE': ToolDefaults('EDGE', 'FREE', 'EDGE', 'FREE'),
         'CONE': ToolDefaults('CENTER', 'FIXED', 'EDGE', 'FREE'),
         'CYLINDER': ToolDefaults('CENTER', 'FIXED', 'EDGE', 'FREE'),
+        'SPHERE_QUAD': ToolDefaults('CENTER', 'FIXED', 'CENTER', 'FIXED'),
         'SPHERE_UV': ToolDefaults('CENTER', 'FIXED', 'CENTER', 'FIXED'),
         'SPHERE_ICO': ToolDefaults('CENTER', 'FIXED', 'CENTER', 'FIXED'),
     }
@@ -719,7 +720,7 @@ class _defs_view3d_add:
             if show_extra:
                 layout.popover("TOPBAR_PT_tool_settings_extra", text="...")
 
-            _defs_view3d_add.draw_settings_defaults_init(context.mode, tool, 'SPHERE_ICO')
+            _defs_view3d_add.draw_settings_defaults_init(context.mode, tool, 'SPHERE_QUAD')
 
         return dict(
             idname="builtin.primitive_quad_sphere_add",

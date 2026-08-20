@@ -8,7 +8,7 @@ from bpy.app.handlers import persistent
 
 @persistent
 def load_handler(_):
-    bpy.ops.mesh.primitive_quad_sphere_add(subdivisions=6)
+    bpy.ops.mesh.primitive_quad_sphere_add(segments=64)
     bpy.ops.object.mode_set(mode='SCULPT')
 
 

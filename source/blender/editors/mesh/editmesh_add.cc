@@ -43,7 +43,6 @@
 namespace blender {
 
 #define MESH_ADD_VERTS_MAXI 10000000
-#define MESH_ADD_SUBD_MAXI 500
 
 /* ********* add primitive operators ************* */
 
@@ -740,7 +739,6 @@ static wmOperatorStatus add_primitive_quadsphere_exec(bContext *C, wmOperator *o
     return OPERATOR_CANCELLED;
   }
 
-  /* BMESH_TODO make plane side this: M_SQRT2 - plane (diameter of 1.41 makes it unit size) */
   make_prim_finish(C, obedit, &creation_data, enter_editmode);
 
   return OPERATOR_FINISHED;
@@ -749,7 +747,7 @@ static wmOperatorStatus add_primitive_quadsphere_exec(bContext *C, wmOperator *o
 void MESH_OT_primitive_quad_sphere_add(wmOperatorType *ot)
 {
   /* identifiers */
-  ot->name = "Add quadsphere";
+  ot->name = "Add Quad Sphere";
   ot->description =
       "Construct a spherical mesh from a subdivided cube, consisting entirely of four-sided faces";
   ot->idname = "MESH_OT_primitive_quad_sphere_add";
@@ -761,7 +759,7 @@ void MESH_OT_primitive_quad_sphere_add(wmOperatorType *ot)
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 
   /* props */
-  RNA_def_int(ot->srna, "segments", 4, 1, MESH_ADD_SUBD_MAXI, "Segments", "", 1, 182);
+  RNA_def_int(ot->srna, "segments", 4, 1, 500, "Segments", "", 1, 200);
   ed::object::add_unit_props_radius(ot);
   ed::object::add_mesh_props(ot);
   ed::object::add_generic_props(ot, true);
