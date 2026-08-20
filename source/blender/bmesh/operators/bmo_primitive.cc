@@ -860,9 +860,9 @@ void BM_mesh_calc_uvs_grid(BMesh *bm,
  * NOTE: normalizing `co` would bunch vertices towards the cube corners, rated by the
  * shortest over longest segment on the worst loop it scores 50-58% where this scores 97%.
  *
- * NOTE: the published form raises each axis to a large even power `p` which must scale with
- * the segments (5000 for a 500x500 grid), too large for `pow`. Since the vertices are on the
- * cube, `on_face` gives the limit of `p` exactly.
+ * NOTE: the published form mathoverflow. raises each axis to a large even power `p` which must
+ * scale with the segments (5000 for a 500x500 grid), too large for `pow`. Since the vertices are
+ * on the cube, `on_face` gives the limit of `p` exactly.
  */
 static float3 quadsphere_co_from_cube(const float3 &co, const bool on_face[3], const int iter_num)
 {
@@ -1002,13 +1002,7 @@ void bmo_create_quadsphere_exec(BMesh *bm, BMOperator *op)
   };
 
   int v_index = 0;
-  auto vert_add_fn = [bm,
-                      varr,
-                      rad,
-                      &mat,
-                      &v_index,
-                      &vert_index_from_grid_index_fn,
-                      &sphere_co_from_grid_index_fn](const int3 &grid_index) {
+  auto vert_add_fn = [&](const int3 &grid_index) {
     BLI_assert(v_index == vert_index_from_grid_index_fn(grid_index));
     UNUSED_VARS_NDEBUG(vert_index_from_grid_index_fn);
     float3 co = sphere_co_from_grid_index_fn(grid_index);
@@ -1044,7 +1038,7 @@ void bmo_create_quadsphere_exec(BMesh *bm, BMOperator *op)
   BLI_assert(v_index == slot_verts_out->len);
 
   /* Rotation order set to match `BM_mesh_calc_uvs_cube`. */
-  const char cube_faces[6][4] = {
+  static const char cube_faces[6][4] = {
       {0, 1, 3, 2},
       {2, 3, 7, 6},
       {6, 7, 5, 4},
@@ -1054,7 +1048,7 @@ void bmo_create_quadsphere_exec(BMesh *bm, BMOperator *op)
   };
   /* The lower left corner of each face of `cube_faces` in the UV layout from
    * `BM_mesh_calc_uvs_cube`. */
-  const float cube_faces_uv[6][2] = {
+  static const float cube_faces_uv[6][2] = {
       {0.375f, 0.0f},
       {0.375f, 0.25f},
       {0.375f, 0.5f},
