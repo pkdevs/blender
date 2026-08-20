@@ -433,7 +433,8 @@ void paintface_select_loop(bContext *C, Object *ob, const int mval[2], const boo
 
   ARegion *region = CTX_wm_region(C);
   RegionView3D *rv3d = static_cast<RegionView3D *>(region->regiondata);
-  ED_view3d_init_mats_rv3d(ob_eval, rv3d);
+  View3D *v3d = CTX_wm_view3d(C);
+  ED_view3d_init_mats_rv3d(ob_eval, v3d, rv3d);
 
   Mesh *mesh = BKE_mesh_from_object(ob);
   const Span<int> corner_edges = mesh->corner_edges();

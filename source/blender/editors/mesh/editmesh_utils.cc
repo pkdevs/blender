@@ -2072,7 +2072,7 @@ void EDBM_project_snap_verts(
   BMIter iter;
   BMVert *eve;
 
-  ED_view3d_init_mats_rv3d(obedit, static_cast<RegionView3D *>(region->regiondata));
+  ED_view3d_init_mats_rv3d(obedit, CTX_wm_view3d(C), static_cast<RegionView3D *>(region->regiondata));
 
   const Scene *scene = CTX_data_scene(C);
   transform::SnapObjectContext *snap_context = transform::snap_object_context_create();

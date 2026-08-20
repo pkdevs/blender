@@ -164,8 +164,8 @@ DRWContext::DRWContext(Mode mode_,
   BKE_view_layer_synced_ensure(*DEG_get_bmain(depsgraph), this->scene, this->view_layer);
 
   /* fclem: Is this still needed ? */
-  if (this->object_edit && rv3d) {
-    ED_view3d_init_mats_rv3d(this->object_edit, rv3d);
+  if (this->object_edit && v3d && rv3d) {
+    ED_view3d_init_mats_rv3d(this->object_edit, v3d, rv3d);
   }
 
   BLI_assert(g_context == nullptr);

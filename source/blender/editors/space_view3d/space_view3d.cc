@@ -124,19 +124,21 @@ bool ED_view3d_area_user_region(const ScrArea *area, const View3D *v3d, ARegion 
   return false;
 }
 
-void ED_view3d_init_mats_rv3d(const Object *ob, RegionView3D *rv3d)
+void ED_view3d_init_mats_rv3d(const Object *ob, const View3D *v3d, RegionView3D *rv3d)
 {
+  /* We need non nullptr v3d to use RV3D_CLIPPING_ENABLED macro */
+  BLI_assert(v3d && rv3d);
   /* local viewmat and persmat, to calculate projections */
   mul_m4_m4m4(rv3d->viewmatob, rv3d->viewmat, ob->object_to_world().ptr());
   mul_m4_m4m4(rv3d->persmatob, rv3d->persmat, ob->object_to_world().ptr());
 
   /* initializes object space clipping, speeds up clip tests */
-  ED_view3d_clipping_local(rv3d, ob->object_to_world().ptr());
+  ED_view3d_clipping_local(v3d, rv3d, ob->object_to_world().ptr());
 }
 
-void ED_view3d_init_mats_rv3d_gl(const Object *ob, RegionView3D *rv3d)
+void ED_view3d_init_mats_rv3d_gl(const Object *ob, const View3D *v3d, RegionView3D *rv3d)
 {
-  ED_view3d_init_mats_rv3d(ob, rv3d);
+  ED_view3d_init_mats_rv3d(ob, v3d, rv3d);
 
   /* We have to multiply instead of loading `viewmatob` to make
    * it work with duplis using display-lists, otherwise it will

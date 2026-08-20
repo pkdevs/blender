@@ -1255,7 +1255,7 @@ static void partialvis_gesture_update_mesh(gesture::GestureData &gesture_data)
   RegionView3D *rv3d = gesture_data.vc.rv3d;
   const bool clipping_enabled = RV3D_CLIPPING_ENABLED(v3d, rv3d);
   if (clipping_enabled) {
-    ED_view3d_clipping_local(rv3d, object->object_to_world().ptr());
+    ED_view3d_clipping_local(v3d, rv3d, object->object_to_world().ptr());
   }
   const bool value = action_to_hide(action);
   const Span<float3> positions = bke::pbvh::vert_positions_eval(depsgraph, *object);
@@ -1287,7 +1287,7 @@ static void partialvis_gesture_update_grids(Depsgraph &depsgraph,
   RegionView3D *rv3d = gesture_data.vc.rv3d;
   const bool clipping_enabled = RV3D_CLIPPING_ENABLED(v3d, rv3d);
   if (clipping_enabled) {
-    ED_view3d_clipping_local(rv3d, object->object_to_world().ptr());
+    ED_view3d_clipping_local(v3d, rv3d, object->object_to_world().ptr());
   }
 
   const bool value = action_to_hide(action);
@@ -1316,7 +1316,7 @@ static void partialvis_gesture_update_bmesh(gesture::GestureData &gesture_data)
 
   const bool clipping_enabled = RV3D_CLIPPING_ENABLED(v3d, rv3d);
   if (clipping_enabled) {
-    ED_view3d_clipping_local(rv3d, object->object_to_world().ptr());
+    ED_view3d_clipping_local(v3d, rv3d, object->object_to_world().ptr());
   }
 
   const auto selection_test_fn = [&](const BMVert *v) {

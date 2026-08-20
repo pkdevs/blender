@@ -560,7 +560,7 @@ static void do_lasso_tag_pose(const ViewContext *vc, const Span<int2> mcoords)
 
   view3d_userdata_lassoselect_init(&data, vc, &rect, mcoords, static_cast<eSelectOp>(0));
 
-  ED_view3d_init_mats_rv3d(vc->obact, vc->rv3d);
+  ED_view3d_init_mats_rv3d(vc->obact, vc->v3d, vc->rv3d);
 
   /* Treat bones as clipped segments (no joints). */
   pose_foreachScreenBone(vc,
@@ -850,7 +850,7 @@ static bool do_lasso_select_mesh(const ViewContext *vc,
   data.uv_selctx = uv_selctx.get();
 
   /* for non zbuf projections, don't change the GL state */
-  ED_view3d_init_mats_rv3d(vc->obedit, vc->rv3d);
+  ED_view3d_init_mats_rv3d(vc->obedit, vc->v3d, vc->rv3d);
 
   GPU_matrix_set(vc->rv3d->viewmat);
 
@@ -986,7 +986,7 @@ static bool do_lasso_select_curve(const ViewContext *vc,
     data.select_flag = BEZT_FLAG_TEMP_TAG;
   }
 
-  ED_view3d_init_mats_rv3d(vc->obedit, vc->rv3d); /* for foreach's screen/vert projection */
+  ED_view3d_init_mats_rv3d(vc->obedit, vc->v3d, vc->rv3d); /* for foreach's screen/vert projection */
   nurbs_foreachScreenVert(vc, do_lasso_select_curve__doSelect, &data, V3D_PROJ_TEST_CLIP_DEFAULT);
 
   /* Deselect items that were not added to selection (indicated by temp flag). */
@@ -1031,7 +1031,7 @@ static bool do_lasso_select_lattice(const ViewContext *vc,
     data.is_changed |= ED_lattice_flags_set(vc->obedit, 0);
   }
 
-  ED_view3d_init_mats_rv3d(vc->obedit, vc->rv3d); /* for foreach's screen/vert projection */
+  ED_view3d_init_mats_rv3d(vc->obedit, vc->v3d, vc->rv3d); /* for foreach's screen/vert projection */
   lattice_foreachScreenVert(
       vc, do_lasso_select_lattice__doSelect, &data, V3D_PROJ_TEST_CLIP_DEFAULT);
   return data.is_changed;
@@ -1132,7 +1132,7 @@ static bool do_lasso_select_armature(const ViewContext *vc,
 
   ED_armature_ebone_listbase_temp_clear(arm->edbo);
 
-  ED_view3d_init_mats_rv3d(vc->obedit, vc->rv3d);
+  ED_view3d_init_mats_rv3d(vc->obedit, vc->v3d, vc->rv3d);
 
   /* Operate on fully visible (non-clipped) points. */
   armature_foreachScreenBone(
@@ -1186,7 +1186,7 @@ static bool do_lasso_select_meta(const ViewContext *vc,
     data.is_changed |= BKE_mball_deselect_all(mb);
   }
 
-  ED_view3d_init_mats_rv3d(vc->obedit, vc->rv3d);
+  ED_view3d_init_mats_rv3d(vc->obedit, vc->v3d, vc->rv3d);
 
   mball_foreachScreenElem(
       vc, do_lasso_select_mball__doSelectElem, &data, V3D_PROJ_TEST_CLIP_DEFAULT);
@@ -1334,7 +1334,7 @@ static bool do_lasso_select_paintvert(const ViewContext *vc,
 
     view3d_userdata_lassoselect_init(&data.lasso_data, vc, &rect, mcoords, sel_op);
 
-    ED_view3d_init_mats_rv3d(vc->obact, vc->rv3d);
+    ED_view3d_init_mats_rv3d(vc->obact, vc->v3d, vc->rv3d);
 
     meshobject_foreachScreenVert(
         vc, do_lasso_select_meshobject__doSelectVert, &data, V3D_PROJ_TEST_CLIP_DEFAULT);
@@ -3801,7 +3801,7 @@ static bool do_paintvert_box_select(const ViewContext *vc,
 
     view3d_userdata_boxselect_init(&data.box_data, vc, rect, sel_op);
 
-    ED_view3d_init_mats_rv3d(vc->obact, vc->rv3d);
+    ED_view3d_init_mats_rv3d(vc->obact, vc->v3d, vc->rv3d);
 
     meshobject_foreachScreenVert(
         vc, do_paintvert_box_select__doSelectVert, &data, V3D_PROJ_TEST_CLIP_DEFAULT);
@@ -3916,7 +3916,7 @@ static bool do_nurbs_box_select(const ViewContext *vc, const rcti *rect, const e
     data.select_flag = BEZT_FLAG_TEMP_TAG;
   }
 
-  ED_view3d_init_mats_rv3d(vc->obedit, vc->rv3d); /* for foreach's screen/vert projection */
+  ED_view3d_init_mats_rv3d(vc->obedit, vc->v3d, vc->rv3d); /* for foreach's screen/vert projection */
   nurbs_foreachScreenVert(vc, do_nurbs_box_select__doSelect, &data, V3D_PROJ_TEST_CLIP_DEFAULT);
 
   /* Deselect items that were not added to selection (indicated by temp flag). */
@@ -3951,7 +3951,7 @@ static bool do_lattice_box_select(const ViewContext *vc, const rcti *rect, const
     data.is_changed |= ED_lattice_flags_set(vc->obedit, 0);
   }
 
-  ED_view3d_init_mats_rv3d(vc->obedit, vc->rv3d); /* for foreach's screen/vert projection */
+  ED_view3d_init_mats_rv3d(vc->obedit, vc->v3d, vc->rv3d); /* for foreach's screen/vert projection */
   lattice_foreachScreenVert(
       vc, do_lattice_box_select__doSelect, &data, V3D_PROJ_TEST_CLIP_DEFAULT);
 
@@ -4083,7 +4083,7 @@ static bool do_mesh_box_select(const ViewContext *vc,
   data.uv_selctx = uv_selctx.get();
 
   /* for non zbuf projections, don't change the GL state */
-  ED_view3d_init_mats_rv3d(vc->obedit, vc->rv3d);
+  ED_view3d_init_mats_rv3d(vc->obedit, vc->v3d, vc->rv3d);
 
   GPU_matrix_set(vc->rv3d->viewmat);
 
@@ -4825,7 +4825,7 @@ static bool mesh_circle_select(const ViewContext *vc,
 
   const bool select = (sel_op != SEL_OP_SUB);
 
-  ED_view3d_init_mats_rv3d(vc->obedit, vc->rv3d); /* for foreach's screen/vert projection */
+  ED_view3d_init_mats_rv3d(vc->obedit, vc->v3d, vc->rv3d); /* for foreach's screen/vert projection */
 
   view3d_userdata_circleselect_init(&data, vc, select, mval, rad);
 
@@ -5008,7 +5008,7 @@ static bool paint_vertsel_circle_select(const ViewContext *vc,
     CircleSelectUserData_ForMeshObjectVert data;
     data.select_vert = select_vert.span;
 
-    ED_view3d_init_mats_rv3d(vc->obact, vc->rv3d); /* for foreach's screen/vert projection */
+    ED_view3d_init_mats_rv3d(vc->obact, vc->v3d, vc->rv3d); /* for foreach's screen/vert projection */
 
     view3d_userdata_circleselect_init(&data.circle_data, vc, select, mval, rad);
     meshobject_foreachScreenVert(
@@ -5075,7 +5075,7 @@ static bool nurbscurve_circle_select(const ViewContext *vc,
     data.select_flag = BEZT_FLAG_TEMP_TAG;
   }
 
-  ED_view3d_init_mats_rv3d(vc->obedit, vc->rv3d); /* for foreach's screen/vert projection */
+  ED_view3d_init_mats_rv3d(vc->obedit, vc->v3d, vc->rv3d); /* for foreach's screen/vert projection */
   nurbs_foreachScreenVert(vc, nurbscurve_circle_doSelect, &data, V3D_PROJ_TEST_CLIP_DEFAULT);
 
   /* Deselect items that were not added to selection (indicated by temp flag). */
@@ -5111,7 +5111,7 @@ static bool lattice_circle_select(const ViewContext *vc,
   if (SEL_OP_USE_PRE_DESELECT(sel_op)) {
     data.is_changed |= ED_lattice_flags_set(vc->obedit, 0);
   }
-  ED_view3d_init_mats_rv3d(vc->obedit, vc->rv3d); /* for foreach's screen/vert projection */
+  ED_view3d_init_mats_rv3d(vc->obedit, vc->v3d, vc->rv3d); /* for foreach's screen/vert projection */
 
   lattice_foreachScreenVert(vc, latticecurve_circle_doSelect, &data, V3D_PROJ_TEST_CLIP_DEFAULT);
 
@@ -5269,7 +5269,7 @@ static bool armature_circle_select(const ViewContext *vc,
     data.is_changed |= ED_armature_edit_deselect_all_visible(vc->obedit);
   }
 
-  ED_view3d_init_mats_rv3d(vc->obedit, vc->rv3d);
+  ED_view3d_init_mats_rv3d(vc->obedit, vc->v3d, vc->rv3d);
 
   /* Operate on fully visible (non-clipped) points. */
   armature_foreachScreenBone(
@@ -5321,7 +5321,7 @@ static bool mball_circle_select(const ViewContext *vc,
     data.is_changed |= BKE_mball_deselect_all(id_cast<MetaBall *>(vc->obedit->data));
   }
 
-  ED_view3d_init_mats_rv3d(vc->obedit, vc->rv3d);
+  ED_view3d_init_mats_rv3d(vc->obedit, vc->v3d, vc->rv3d);
 
   mball_foreachScreenElem(
       vc, do_circle_select_mball__doSelectElem, &data, V3D_PROJ_TEST_CLIP_DEFAULT);

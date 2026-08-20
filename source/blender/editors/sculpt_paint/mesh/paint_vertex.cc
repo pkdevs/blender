@@ -1845,7 +1845,7 @@ void VertexPaintStroke::update_step(wmOperator * /*op*/, PointerRNA *itemptr)
 
   float mat[4][4];
 
-  ED_view3d_init_mats_rv3d(&ob, vc.rv3d);
+  ED_view3d_init_mats_rv3d(&ob, vc.v3d, vc.rv3d);
 
   mul_m4_m4m4(mat, vc.rv3d->persmat, ob.object_to_world().ptr());
 

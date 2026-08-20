@@ -810,14 +810,13 @@ bool ED_mesh_pick_vert(
     const Object *ob_eval = DEG_get_evaluated(vc.depsgraph, ob);
     const Mesh *mesh_eval = BKE_object_get_evaluated_mesh(ob_eval);
     ARegion *region = vc.region;
-    RegionView3D *rv3d = static_cast<RegionView3D *>(region->regiondata);
 
     /* find the vert closest to 'mval' */
     const float mval_f[2] = {float(mval[0]), float(mval[1])};
 
     VertPickData data{};
 
-    ED_view3d_init_mats_rv3d(ob, rv3d);
+    ED_view3d_init_mats_rv3d(ob, vc.v3d, vc.rv3d);
 
     if (mesh_eval == nullptr) {
       return false;

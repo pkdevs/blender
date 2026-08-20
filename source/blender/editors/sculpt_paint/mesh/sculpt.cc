@@ -5800,7 +5800,7 @@ bool SculptPaintStroke::test_start(wmOperator *op, const float mouse[2])
       }
     }
 
-    ED_view3d_init_mats_rv3d(&ob, this->vc.rv3d);
+    ED_view3d_init_mats_rv3d(&ob, this->vc.v3d, this->vc.rv3d);
 
     stroke_cache_init(mouse);
     if (brush && brush_type_is_paint(brush->sculpt_brush_type)) {

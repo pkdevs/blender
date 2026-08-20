@@ -4699,7 +4699,7 @@ static void project_paint_begin(const bContext *C, ProjPaintState *ps, const cha
 
   if (ps->source == PROJ_SRC_VIEW) {
     /* faster clipping lookups */
-    ED_view3d_clipping_local(ps->rv3d, ps->ob->object_to_world().ptr());
+    ED_view3d_clipping_local(ps->v3d, ps->rv3d, ps->ob->object_to_world().ptr());
   }
 
   const Mesh &mesh_orig = *id_cast<const Mesh *>(ps->ob->data);

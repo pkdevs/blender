@@ -515,7 +515,7 @@ BMVert *EDBM_vert_find_nearest_ex(ViewContext *vc,
     data.hit.dist = data.hit_cycle.dist = data.hit.dist_bias = data.hit_cycle.dist_bias =
         *dist_px_manhattan_p;
 
-    ED_view3d_init_mats_rv3d(vc->obedit, vc->rv3d);
+    ED_view3d_init_mats_rv3d(vc->obedit, vc->v3d, vc->rv3d);
     mesh_foreachScreenVert(vc, findnearestvert__doClosest, &data, clip_flag);
 
     hit = (data.use_cycle && data.hit_cycle.vert) ? &data.hit_cycle : &data.hit;
@@ -711,7 +711,7 @@ BMEdge *EDBM_edge_find_nearest_ex(ViewContext *vc,
       data.dist = FLT_MAX;
       data.edge_test = eed;
 
-      ED_view3d_init_mats_rv3d(vc->obedit, vc->rv3d);
+      ED_view3d_init_mats_rv3d(vc->obedit, vc->v3d, vc->rv3d);
 
       mesh_foreachScreenEdge(vc,
                              find_nearest_edge_center__doZBuf,
@@ -769,7 +769,7 @@ BMEdge *EDBM_edge_find_nearest_ex(ViewContext *vc,
     data.hit.dist = data.hit_cycle.dist = data.hit.dist_bias = data.hit_cycle.dist_bias =
         *dist_px_manhattan_p;
 
-    ED_view3d_init_mats_rv3d(vc->obedit, vc->rv3d);
+    ED_view3d_init_mats_rv3d(vc->obedit, vc->v3d, vc->rv3d);
     mesh_foreachScreenEdge(
         vc, find_nearest_edge__doClosest, &data, clip_flag | V3D_PROJ_TEST_CLIP_CONTENT_DEFAULT);
 
@@ -935,7 +935,7 @@ BMFace *EDBM_face_find_nearest_ex(ViewContext *vc,
       data.dist_px_manhattan = FLT_MAX;
       data.face_test = efa;
 
-      ED_view3d_init_mats_rv3d(vc->obedit, vc->rv3d);
+      ED_view3d_init_mats_rv3d(vc->obedit, vc->v3d, vc->rv3d);
 
       mesh_foreachScreenFace(
           vc, find_nearest_face_center__doZBuf, &data, V3D_PROJ_TEST_CLIP_DEFAULT);
@@ -989,7 +989,7 @@ BMFace *EDBM_face_find_nearest_ex(ViewContext *vc,
     data.hit.dist = data.hit_cycle.dist = data.hit.dist_bias = data.hit_cycle.dist_bias =
         *dist_px_manhattan_p;
 
-    ED_view3d_init_mats_rv3d(vc->obedit, vc->rv3d);
+    ED_view3d_init_mats_rv3d(vc->obedit, vc->v3d, vc->rv3d);
     mesh_foreachScreenFace(vc, findnearestface__doClosest, &data, clip_flag);
 
     hit = (data.use_cycle && data.hit_cycle.face) ? &data.hit_cycle : &data.hit;
@@ -2424,7 +2424,7 @@ static wmOperatorStatus edbm_select_loop_or_ring_invoke_impl(bContext *C,
        * and avoiding this would add complexity without tangible benefit. */
       ViewContext vc = em_setup_viewcontext(C);
       ED_view3d_viewcontext_init_object(&vc, obedit);
-      ED_view3d_init_mats_rv3d(obedit, vc.rv3d);
+      ED_view3d_init_mats_rv3d(obedit, vc.v3d, vc.rv3d);
       float mvalf[2] = {float(event->mval[0]), float(event->mval[1])};
 
       if (em->selectmode & SCE_SELECT_VERTEX) {

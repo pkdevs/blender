@@ -849,9 +849,9 @@ static void calc_local_clipping(float clip_local[6][4],
   ED_view3d_clipping_calc_from_boundbox(clip_local, &clipbb_local, is_negative_m4(mat));
 }
 
-void ED_view3d_clipping_local(RegionView3D *rv3d, const float mat[4][4])
+void ED_view3d_clipping_local(const View3D *v3d, RegionView3D *rv3d, const float mat[4][4])
 {
-  if (rv3d->rflag & RV3D_CLIPPING) {
+  if (RV3D_CLIPPING_ENABLED(v3d, rv3d)) {
     calc_local_clipping(rv3d->clip_local, rv3d->clipbb, mat);
   }
 }

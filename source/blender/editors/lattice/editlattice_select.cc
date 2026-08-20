@@ -591,7 +591,7 @@ static BPoint *findnearestLattvert(ViewContext *vc, bool select, Base **r_base)
     data.is_changed = false;
 
     ED_view3d_viewcontext_init_object(vc, base->object);
-    ED_view3d_init_mats_rv3d(base->object, vc->rv3d);
+    ED_view3d_init_mats_rv3d(base->object, vc->v3d, vc->rv3d);
     lattice_foreachScreenVert(
         vc, findnearestLattvert__doClosest, &data, V3D_PROJ_TEST_CLIP_DEFAULT);
 

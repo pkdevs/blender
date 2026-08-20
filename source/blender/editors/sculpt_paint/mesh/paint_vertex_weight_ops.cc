@@ -185,7 +185,7 @@ static wmOperatorStatus weight_sample_invoke(bContext *C, wmOperator *op, const 
     uint index;
 
     view3d_operator_needs_gpu(C);
-    ED_view3d_init_mats_rv3d(vc.obact, vc.rv3d);
+    ED_view3d_init_mats_rv3d(vc.obact, vc.v3d, vc.rv3d);
 
     if (use_vert_sel) {
       if (ED_mesh_pick_vert(
@@ -336,7 +336,7 @@ static wmOperatorStatus weight_sample_group_invoke(bContext *C,
   bool found = false;
 
   view3d_operator_needs_gpu(C);
-  ED_view3d_init_mats_rv3d(vc.obact, vc.rv3d);
+  ED_view3d_init_mats_rv3d(vc.obact, vc.v3d, vc.rv3d);
 
   if (use_vert_sel) {
     /* Extract from the vertex. */
@@ -757,6 +757,7 @@ static wmOperatorStatus paint_weight_gradient_exec(bContext *C, wmOperator *op)
   wmGesture *gesture = static_cast<wmGesture *>(op->customdata);
   WPGradient_vertStoreBase *vert_cache;
   ARegion *region = CTX_wm_region(C);
+  View3D *v3d = CTX_wm_view3d(C);
   Scene *scene = CTX_data_scene(C);
   Object *ob = CTX_data_active_object(C);
   Mesh *mesh = id_cast<Mesh *>(ob->data);
@@ -834,7 +835,7 @@ static wmOperatorStatus paint_weight_gradient_exec(bContext *C, wmOperator *op)
     data.use_vgroup_restrict = (ts->wpaint->flag & VP_FLAG_VGROUP_RESTRICT) != 0;
   }
 
-  ED_view3d_init_mats_rv3d(ob, static_cast<RegionView3D *>(region->regiondata));
+  ED_view3d_init_mats_rv3d(ob, v3d, static_cast<RegionView3D *>(region->regiondata));
 
   const Object *ob_eval = DEG_get_evaluated(depsgraph, ob);
   const Mesh *mesh_eval = BKE_object_get_evaluated_mesh(ob_eval);

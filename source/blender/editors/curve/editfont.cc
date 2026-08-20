@@ -2615,7 +2615,7 @@ bool ED_curve_editfont_select_pick(
 
   ViewContext vc = ED_view3d_viewcontext_init(C, depsgraph);
 
-  ED_view3d_init_mats_rv3d(vc.obedit, vc.rv3d);
+  ED_view3d_init_mats_rv3d(vc.obedit, vc.v3d, vc.rv3d);
 
   /* currently only select active */
   (void)params;

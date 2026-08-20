@@ -864,7 +864,7 @@ void ED_view3d_clipping_calc(
  */
 bool ED_view3d_clipping_clamp_minmax(const RegionView3D *rv3d, float min[3], float max[3]);
 
-void ED_view3d_clipping_local(RegionView3D *rv3d, const float mat[4][4]);
+void ED_view3d_clipping_local(const View3D *v3d, RegionView3D *rv3d, const float mat[4][4]);
 /**
  * Return true when `co` is hidden by the 3D views clipping planes.
  *
@@ -1102,8 +1102,8 @@ bool ED_operator_rv3d_user_region_poll(bContext *C);
  * view3d_project_short_clip and view3d_project_short_noclip in cases where
  * these functions are not used during draw_object
  */
-void ED_view3d_init_mats_rv3d(const Object *ob, RegionView3D *rv3d);
-void ED_view3d_init_mats_rv3d_gl(const Object *ob, RegionView3D *rv3d);
+void ED_view3d_init_mats_rv3d(const Object *ob, const View3D *v3d, RegionView3D *rv3d);
+void ED_view3d_init_mats_rv3d_gl(const Object *ob, const View3D *v3d, RegionView3D *rv3d);
 #ifndef NDEBUG
 /**
  * Ensure we correctly initialize.

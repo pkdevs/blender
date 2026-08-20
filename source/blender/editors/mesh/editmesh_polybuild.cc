@@ -143,7 +143,7 @@ static wmOperatorStatus edbm_polybuild_transform_at_cursor_invoke(bContext *C,
   BMesh *bm = em->bm;
 
   invert_m4_m4(vc.obedit->runtime->world_to_object.ptr(), vc.obedit->object_to_world().ptr());
-  ED_view3d_init_mats_rv3d(vc.obedit, vc.rv3d);
+  ED_view3d_init_mats_rv3d(vc.obedit, vc.v3d, vc.rv3d);
 
   if (!ele_act) {
     return OPERATOR_CANCELLED;
@@ -208,7 +208,7 @@ static wmOperatorStatus edbm_polybuild_delete_at_cursor_invoke(bContext *C,
   BMesh *bm = em->bm;
 
   invert_m4_m4(vc.obedit->runtime->world_to_object.ptr(), vc.obedit->object_to_world().ptr());
-  ED_view3d_init_mats_rv3d(vc.obedit, vc.rv3d);
+  ED_view3d_init_mats_rv3d(vc.obedit, vc.v3d, vc.rv3d);
 
   if (!ele_act) {
     return OPERATOR_CANCELLED;
@@ -303,7 +303,7 @@ static wmOperatorStatus edbm_polybuild_face_at_cursor_invoke(bContext *C,
   BMesh *bm = em->bm;
 
   invert_m4_m4(vc.obedit->runtime->world_to_object.ptr(), vc.obedit->object_to_world().ptr());
-  ED_view3d_init_mats_rv3d(vc.obedit, vc.rv3d);
+  ED_view3d_init_mats_rv3d(vc.obedit, vc.v3d, vc.rv3d);
 
   edbm_selectmode_ensure(vc.scene, vc.em, SCE_SELECT_VERTEX);
 
@@ -480,7 +480,7 @@ static wmOperatorStatus edbm_polybuild_split_at_cursor_invoke(bContext *C,
   BMesh *bm = em->bm;
 
   invert_m4_m4(vc.obedit->runtime->world_to_object.ptr(), vc.obedit->object_to_world().ptr());
-  ED_view3d_init_mats_rv3d(vc.obedit, vc.rv3d);
+  ED_view3d_init_mats_rv3d(vc.obedit, vc.v3d, vc.rv3d);
 
   edbm_selectmode_ensure(vc.scene, vc.em, SCE_SELECT_VERTEX);
 

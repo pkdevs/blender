@@ -4232,7 +4232,7 @@ static wmOperatorStatus knifetool_modal(bContext *C, wmOperator *op, const wmEve
 
   kcd->region = kcd->vc.region;
 
-  ED_view3d_init_mats_rv3d(ob, kcd->vc.rv3d); /* Needed to initialize clipping. */
+  ED_view3d_init_mats_rv3d(ob, kcd->vc.v3d, kcd->vc.rv3d); /* Needed to initialize clipping. */
 
   if (kcd->mode == MODE_PANNING) {
     kcd->mode = KnifeMode(kcd->prevmode);

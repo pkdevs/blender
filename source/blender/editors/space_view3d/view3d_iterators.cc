@@ -307,7 +307,7 @@ void meshobject_foreachScreenVert(const ViewContext *vc,
   data.hide_vert = *attributes.lookup<bool>(".hide_vert", bke::AttrDomain::Point);
 
   if (clip_flag & V3D_PROJ_TEST_CLIP_BB) {
-    ED_view3d_clipping_local(vc->rv3d, vc->obact->object_to_world().ptr());
+    ED_view3d_clipping_local(vc->v3d, vc->rv3d, vc->obact->object_to_world().ptr());
   }
 
   BKE_mesh_foreach_mapped_vert(
@@ -355,7 +355,7 @@ void mesh_foreachScreenVert(
   data.clip_flag = clip_flag;
 
   if (clip_flag & V3D_PROJ_TEST_CLIP_BB) {
-    ED_view3d_clipping_local(vc->rv3d,
+    ED_view3d_clipping_local(vc->v3d, vc->rv3d,
                              vc->obedit->object_to_world().ptr()); /* for local clipping lookups */
   }
 
@@ -426,7 +426,7 @@ void mesh_foreachScreenEdge(const ViewContext *vc,
   data.clip_flag = clip_flag;
 
   if (clip_flag & V3D_PROJ_TEST_CLIP_BB) {
-    ED_view3d_clipping_local(vc->rv3d,
+    ED_view3d_clipping_local(vc->v3d, vc->rv3d,
                              vc->obedit->object_to_world().ptr()); /* for local clipping lookups */
   }
 
@@ -526,7 +526,7 @@ void mesh_foreachScreenEdge_clip_bb_segment(const ViewContext *vc,
   BM_mesh_elem_table_ensure(vc->em->bm, BM_EDGE);
 
   if ((clip_flag & V3D_PROJ_TEST_CLIP_BB) && (vc->rv3d->clipbb != nullptr)) {
-    ED_view3d_clipping_local(
+    ED_view3d_clipping_local(vc->v3d,
         vc->rv3d, vc->obedit->object_to_world().ptr()); /* for local clipping lookups. */
     BKE_mesh_foreach_mapped_edge(
         mesh, vc->em->bm->totedge, mesh_foreachScreenEdge_clip_bb_segment__mapFunc, &data);
@@ -622,7 +622,7 @@ void nurbs_foreachScreenVert(const ViewContext *vc,
   ED_view3d_check_mats_rv3d(vc->rv3d);
 
   if (clip_flag & V3D_PROJ_TEST_CLIP_BB) {
-    ED_view3d_clipping_local(vc->rv3d,
+    ED_view3d_clipping_local(vc->v3d, vc->rv3d,
                              vc->obedit->object_to_world().ptr()); /* for local clipping lookups */
   }
 
@@ -744,7 +744,7 @@ void lattice_foreachScreenVert(const ViewContext *vc,
   ED_view3d_check_mats_rv3d(vc->rv3d);
 
   if (clip_flag & V3D_PROJ_TEST_CLIP_BB) {
-    ED_view3d_clipping_local(vc->rv3d,
+    ED_view3d_clipping_local(vc->v3d, vc->rv3d,
                              obedit->object_to_world().ptr()); /* for local clipping lookups */
   }
 

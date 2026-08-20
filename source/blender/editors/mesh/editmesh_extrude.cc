@@ -756,7 +756,7 @@ static wmOperatorStatus edbm_dupli_extrude_cursor_invoke(bContext *C,
     }
 
     invert_m4_m4(vc.obedit->runtime->world_to_object.ptr(), vc.obedit->object_to_world().ptr());
-    ED_view3d_init_mats_rv3d(vc.obedit, vc.rv3d);
+    ED_view3d_init_mats_rv3d(vc.obedit, vc.v3d, vc.rv3d);
 
     float local_center[3];
     mul_v3_m4v3(local_center, vc.obedit->world_to_object().ptr(), center);

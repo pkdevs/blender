@@ -804,7 +804,7 @@ static void gesture_apply_for_symmetry_pass(bContext & /*C*/, gesture::GestureDa
   Object &object = *gesture_data.vc.obact;
   const bool clipping_enabled = RV3D_CLIPPING_ENABLED(v3d, rv3d);
   if (clipping_enabled) {
-    ED_view3d_clipping_local(rv3d, object.object_to_world().ptr());
+    ED_view3d_clipping_local(v3d, rv3d, object.object_to_world().ptr());
   }
   const IndexMask &node_mask = gesture_data.node_mask;
   const MaskOperation &op = *reinterpret_cast<const MaskOperation *>(gesture_data.operation);

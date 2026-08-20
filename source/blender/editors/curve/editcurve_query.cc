@@ -111,7 +111,7 @@ bool ED_curve_pick_vert_ex(ViewContext *vc,
     data.is_changed = false;
 
     ED_view3d_viewcontext_init_object(vc, base->object);
-    ED_view3d_init_mats_rv3d(vc->obedit, vc->rv3d);
+    ED_view3d_init_mats_rv3d(vc->obedit, vc->v3d, vc->rv3d);
     nurbs_foreachScreenVert(vc, curve_pick_vert__do_closest, &data, V3D_PROJ_TEST_CLIP_DEFAULT);
 
     if (r_base && data.is_changed) {
