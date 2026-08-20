@@ -9,6 +9,7 @@
  */
 
 #include <deque>
+#include <queue>
 
 #include "DEG_depsgraph.hh"
 #include "DEG_depsgraph_query.hh"
@@ -19,6 +20,7 @@
 #include "intern/node/deg_node_component.hh"
 #include "intern/node/deg_node_id.hh"
 #include "intern/node/deg_node_operation.hh"
+#include "intern/node/deg_node_time.hh"
 
 namespace blender {
 
@@ -238,6 +240,79 @@ void deg_foreach_id(const Depsgraph *depsgraph, DEGForeachIDCallback callback)
   }
 }
 
+/* Find the component node with the given type in the given ID node. Returns nullptr if no such
+ * component is found. */
+const ComponentNode *find_scene_component_node(const IDNode &id_node,
+                                               const NodeType component_node_type)
+{
+  for (const ComponentNode *component_node : id_node.components.values()) {
+    if (component_node->type == component_node_type) {
+      return component_node;
+    }
+  }
+
+  return nullptr;
+}
+
+/* The main implementation of DEG_scene_component_depends_on_time. It performs a forward breadth
+ * first search starting from the time source node of the graph until it find a component node that
+ * matches the given component type. */
+bool deg_scene_component_depends_on_time(const Depsgraph &depsgraph,
+                                         const Scene &scene,
+                                         const eDepsSceneComponentType component_type)
+{
+  const TimeSourceNode *time_source = depsgraph.find_time_source();
+  if (!time_source) {
+    return false;
+  }
+
+  IDNode *scene_id_node = depsgraph.find_id_node(reinterpret_cast<const ID *>(&scene));
+  if (!scene_id_node) {
+    BLI_assert_unreachable();
+    return false;
+  }
+
+  const NodeType component_node_type = nodeTypeFromSceneComponent(component_type);
+  const ComponentNode *component_node = find_scene_component_node(*scene_id_node,
+                                                                  component_node_type);
+  if (!component_node) {
+    BLI_assert_unreachable();
+    return false;
+  }
+
+  std::queue<const Node *> queue;
+  Set<const Node *> nodes_already_scheduled;
+  queue.push(time_source);
+  nodes_already_scheduled.add_new(time_source);
+
+  while (!queue.empty()) {
+    const Node *current_node = queue.front();
+    queue.pop();
+
+    for (const Relation *relation : current_node->outlinks) {
+      const Node *to_node = relation->to;
+      if (to_node->get_class() == NodeClass::COMPONENT) {
+        if (static_cast<const ComponentNode *>(to_node) == component_node) {
+          return true;
+        }
+      }
+
+      if (to_node->get_class() == NodeClass::OPERATION) {
+        if (static_cast<const OperationNode *>(to_node)->owner == component_node) {
+          return true;
+        }
+      }
+
+      if (!nodes_already_scheduled.contains(to_node)) {
+        queue.push(to_node);
+        nodes_already_scheduled.add(to_node);
+      }
+    }
+  }
+
+  return false;
+}
+
 }  // namespace
 }  // namespace deg
 
@@ -271,6 +346,15 @@ void DEG_foreach_ancestor_ID(const Depsgraph *depsgraph,
 void DEG_foreach_ID(const Depsgraph *depsgraph, DEGForeachIDCallback callback)
 {
   deg::deg_foreach_id(reinterpret_cast<const deg::Depsgraph *>(depsgraph), callback);
+}
+
+bool DEG_scene_component_depends_on_time(const Depsgraph &depsgraph,
+                                         const Scene &scene,
+                                         const eDepsSceneComponentType component_type)
+{
+
+  return deg::deg_scene_component_depends_on_time(
+      reinterpret_cast<const deg::Depsgraph &>(depsgraph), scene, component_type);
 }
 
 }  // namespace blender
