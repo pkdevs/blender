@@ -928,7 +928,7 @@ void bmo_create_quadsphere_exec(BMesh *bm, BMOperator *op)
    * - 5: 0.000000130
    *
    * 3 is a good balance between being a low number of iterations
-   * while the value and perceptually *perfect*
+   * while the error being low enough to be perceptually *perfect*.
    *
    * NOTE: measured by comparing the the distance to an iteration of 50. */
   const int iter_num = 3;
