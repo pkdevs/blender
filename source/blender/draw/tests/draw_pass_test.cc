@@ -15,6 +15,7 @@
 #include "draw_testing.hh"
 
 #include <bitset>
+#include <cstddef>
 
 namespace blender::draw {
 
@@ -247,6 +248,60 @@ static void test_draw_pass_multi_draw()
   EXPECT_EQ(result, expected.str());
 }
 DRAW_TEST(draw_pass_multi_draw)
+
+static void test_draw_record_layout()
+{
+  /* DrawRecord is uploaded to its own buffer, so it does not need to match DrawCommand's size.
+   * Layout must however stay in sync with the host / shader definition. */
+  EXPECT_EQ(sizeof(command::DrawRecord), 24);
+  EXPECT_EQ(offsetof(command::DrawRecord, vertex_len), 0u);
+  EXPECT_EQ(offsetof(command::DrawRecord, instance_len), 4u);
+  EXPECT_EQ(offsetof(command::DrawRecord, vertex_first), 8u);
+  EXPECT_EQ(offsetof(command::DrawRecord, base_index), 12u);
+  EXPECT_EQ(offsetof(command::DrawRecord, instance_first), 16u);
+  EXPECT_EQ(offsetof(command::DrawRecord, res_id), 20u);
+}
+DRAW_TEST(draw_record_layout)
+
+static void test_draw_pass_multi_draw_records()
+{
+  PassMain pass = {"test.multi_draw_records"};
+  pass.init();
+  pass.shader_set(GPU_shader_get_builtin_shader(GPU_SHADER_3D_IMAGE_COLOR));
+
+  gpu::Batch *batch = GPU_batch_procedural_triangles_get();
+
+  /* First range on a new command. Second record is discarded (vertex_len 0). */
+  Vector<command::DrawRecord> records = {
+      {10, 1, 0, 5, 0, 1},
+      {0, 1, 0, 5, 0, 99},
+      {6, 2, 1, 5, 0, 2 | 0x80000000u},
+  };
+  pass.draw_multi(batch, records);
+
+  /* Same shader state: appends to the same DrawMulti command. */
+  Vector<command::DrawRecord> records_2 = {{7, 1, 2, 5, 0, 3}};
+  pass.draw_multi(batch, records_2);
+
+  std::string result = pass.serialize();
+  std::stringstream expected;
+  expected << ".test.multi_draw_records" << std::endl;
+  expected << "  .shader_bind(gpu_shader_3D_image_color)" << std::endl;
+  expected << "  .draw_multi(0)" << std::endl;
+  expected << "    .records(count=3)" << std::endl;
+  expected << "      .record(id=0, instance_first=0, instance_len=1, vertex_len=10, "
+              "vertex_first=0, resource_id=1, front_face)"
+           << std::endl;
+  expected << "      .record(id=1, instance_first=1, instance_len=2, vertex_len=6, "
+              "vertex_first=1, resource_id=2, back_face)"
+           << std::endl;
+  expected << "      .record(id=2, instance_first=3, instance_len=1, vertex_len=7, "
+              "vertex_first=2, resource_id=3, front_face)"
+           << std::endl;
+
+  EXPECT_EQ(result, expected.str());
+}
+DRAW_TEST(draw_pass_multi_draw_records)
 
 static void test_draw_pass_sortable()
 {
