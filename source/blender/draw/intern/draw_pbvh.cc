@@ -763,7 +763,7 @@ void DrawCacheImpl::AttributeData::update(const NodeInfo &node_info)
   /* Nodes with no visible geometry (e.g. fully hidden BMesh nodes after dyntopo) don't have any
    * space assigned to them. Their buffer range is invalid (`offset = -1, len = 0`), so there is
    * nothing to upload and the derived byte offsets would be out of bounds. */
-  if (node_info.vbo.len <= 0 || !node_info.vbo.is_space_assigned) {
+  if (node_info.vbo.len <= 0 || !node_info.vbo.is_space_acquired) {
     return;
   }
   /* The VBO can be missing or smaller than the buffer space if the attribute's update function
