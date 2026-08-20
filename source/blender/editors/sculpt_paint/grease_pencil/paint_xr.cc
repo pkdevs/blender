@@ -8,7 +8,6 @@
 #include "BKE_context.hh"
 #include "BKE_curves.hh"
 #include "BKE_grease_pencil.hh"
-#include "BKE_grease_pencil_fills.hh"
 #include "BKE_material.hh"
 #include "BKE_paint.hh"
 #include "BKE_scene.hh"
@@ -76,7 +75,6 @@ struct XRPaintOperationExecutor {
   std::optional<BrushColorJitterSettings> jitter_settings_;
 
   ColorGeometry4f vertex_color_ = ColorGeometry4f(0.0f, 0.0f, 0.0f, 0.0f);
-  ColorGeometry4f fill_color_ = ColorGeometry4f(0.0f, 0.0f, 0.0f, 0.0f);
   float softness_;
   float aspect_ratio_;
 
@@ -99,9 +97,6 @@ struct XRPaintOperationExecutor {
       if (settings_->flag2 & GP_BRUSH_USE_STROKE) {
         vertex_color_ = color_base;
       }
-      if (settings_->flag2 & GP_BRUSH_USE_FILL) {
-        fill_color_ = color_base;
-      }
     }
     softness_ = 1.0f - settings_->hardness;
     aspect_ratio_ = settings_->aspect_ratio[0] / math::max(settings_->aspect_ratio[1], 1e-8f);
@@ -112,9 +107,7 @@ struct XRPaintOperationExecutor {
                             const bContext &C,
                             const InputSample &start_sample,
                             const float3 start_location,
-                            const int material_index,
-                            const bool use_stroke,
-                            const bool use_fill)
+                            const int material_index)
   {
     const RegionView3D *rv3d = CTX_wm_region_view3d(&C);
     const ARegion *region = CTX_wm_region(&C);
@@ -155,7 +148,6 @@ struct XRPaintOperationExecutor {
     }
 
     const bool on_back = (scene_->toolsettings->gpencil_flags & GP_TOOL_FLAG_PAINT_ONBACK) != 0;
-    const bool hide_fill_while_drawing = (settings_->flag & GP_BRUSH_DISSABLE_LASSO) != 0;
     ed::greasepencil::add_single_curve(*self.drawing_, on_back == false);
     bke::CurvesGeometry &curves = self.drawing_->strokes_for_write();
 
@@ -175,10 +167,6 @@ struct XRPaintOperationExecutor {
       self.drawing_->vertex_colors_for_write()[last_active_point] = vertex_color_;
       point_attributes_to_skip.add("vertex_color");
     }
-    if (use_fill || attributes.contains("fill_color")) {
-      self.drawing_->fill_colors_for_write()[active_curve] = fill_color_;
-      curve_attributes_to_skip.add("fill_color");
-    }
     bke::SpanAttributeWriter<float> delta_times = attributes.convert_or_add_for_write_span<float>(
         "delta_time", bke::AttrDomain::Point);
     delta_times.span[last_active_point] = 0.0f;
@@ -189,7 +177,7 @@ struct XRPaintOperationExecutor {
         "material_index", bke::AttrDomain::Curve);
     bke::SpanAttributeWriter<bool> cyclic = attributes.convert_or_add_for_write_span<bool>(
         "cyclic", bke::AttrDomain::Curve);
-    cyclic.span[active_curve] = use_fill && !use_stroke;
+    cyclic.span[active_curve] = false;
     materials.span[active_curve] = material_index;
     curve_attributes_to_skip.add_multiple({"material_index", "cyclic"});
     cyclic.finish();
@@ -210,25 +198,6 @@ struct XRPaintOperationExecutor {
     aspect_ratio.span[active_curve] = aspect_ratio_;
     curve_attributes_to_skip.add("aspect_ratio");
     aspect_ratio.finish();
-
-    if (!use_stroke) {
-      bke::SpanAttributeWriter<bool> hide_stroke = attributes.convert_or_add_for_write_span<bool>(
-          "hide_stroke", bke::AttrDomain::Curve);
-      hide_stroke.span[active_curve] = true;
-      curve_attributes_to_skip.add("hide_stroke");
-      hide_stroke.finish();
-    }
-    if (use_fill) {
-      if (bke::SpanAttributeWriter<int> fill_id = attributes.lookup_or_add_for_write_span<int>(
-              "fill_id", bke::AttrDomain::Curve))
-      {
-        fill_id.span[active_curve] = 0;
-        const int new_fill_id = bke::greasepencil::get_next_available_fill_id(fill_id.span);
-        fill_id.span[active_curve] = new_fill_id;
-        curve_attributes_to_skip.add("fill_id");
-        fill_id.finish();
-      }
-    }
 
     if (settings_->uv_random > 0.0f || attributes.contains("rotation")) {
       bke::SpanAttributeWriter<float> rotations = attributes.convert_or_add_for_write_span<float>(
@@ -252,17 +221,6 @@ struct XRPaintOperationExecutor {
       end_caps.span[active_curve] = settings_->caps_type;
       curve_attributes_to_skip.add("end_cap");
       end_caps.finish();
-    }
-
-    if (use_fill &&
-        (start_opacity < 1.0f || attributes.contains("fill_opacity") || hide_fill_while_drawing))
-    {
-      bke::SpanAttributeWriter<float> fill_opacities =
-          attributes.convert_or_add_for_write_span<float>(
-              "fill_opacity", bke::AttrDomain::Curve, bke::AttributeInitValue(1.0f));
-      fill_opacities.span[active_curve] = !hide_fill_while_drawing ? start_opacity : 0.1f;
-      curve_attributes_to_skip.add("fill_opacity");
-      fill_opacities.finish();
     }
 
     bke::SpanAttributeWriter<float> init_times = attributes.convert_or_add_for_write_span<float>(
@@ -394,8 +352,6 @@ void GreasePencilXRPaintOperation::on_stroke_begin(const bContext &C,
   Material *material = BKE_grease_pencil_object_material_ensure_from_brush(
       CTX_data_main(&C), object_, brush);
   const int material_index = BKE_object_material_index_get(object_, material);
-  const bool use_stroke = (settings->flag2 & GP_BRUSH_USE_STROKE) != 0;
-  const bool use_fill = (settings->flag2 & GP_BRUSH_USE_FILL) != 0;
 
   frame_number_ = scene_->r.cfra;
   drawing_ = grease_pencil->get_editable_drawing_at(layer, frame_number_);
@@ -411,8 +367,7 @@ void GreasePencilXRPaintOperation::on_stroke_begin(const bContext &C,
                                                       start_sample.controller_position);
 
   XRPaintOperationExecutor executor{*scene_};
-  executor.process_start_sample(
-      *this, C, start_sample, start_location, material_index, use_stroke, use_fill);
+  executor.process_start_sample(*this, C, start_sample, start_location, material_index);
 
   DEG_id_tag_update(&grease_pencil->id, ID_RECALC_GEOMETRY);
   WM_event_add_notifier(&C, NC_GEOM | ND_DATA, grease_pencil);

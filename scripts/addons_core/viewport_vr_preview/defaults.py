@@ -2314,10 +2314,4 @@ def vr_ensure_default_actionmaps(session_state):
 
     loaded = action_map.vr_load_actionmaps(session_state, filepath)
 
-    if loaded and not session_state.actionmaps.find(
-            session_state,
-            VRDefaultActionmaps.GREASE_PENCIL.value):
-        vr_defaults_create_grease_pencil(session_state)
-        action_map.vr_save_actionmaps(session_state, filepath, sort=False)
-
     return loaded

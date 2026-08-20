@@ -57,27 +57,41 @@ static float xr_stroke_spacing(const Brush &brush)
   return min_spacing;
 }
 
+static bool xr_brush_supports_stroke_line(const Brush &brush,
+                                          const PaintMode mode,
+                                          const BrushSwitchMode brush_switch_mode)
+{
+  if (mode != PaintMode::GPencil || brush_switch_mode == BrushSwitchMode::Erase) {
+    return false;
+  }
+  if (eBrushGPaintType(brush.gpencil_brush_type) != GPAINT_BRUSH_TYPE_DRAW) {
+    return false;
+  }
+  if (brush.gpencil_settings == nullptr) {
+    return false;
+  }
+
+  const bool use_stroke = (brush.gpencil_settings->flag2 & GP_BRUSH_USE_STROKE) != 0;
+  const bool use_fill = (brush.gpencil_settings->flag2 & GP_BRUSH_USE_FILL) != 0;
+  return use_stroke && !use_fill;
+}
+
 static std::unique_ptr<GreasePencilStrokeOperation> get_xr_stroke_operation(bContext &C,
                                                                             wmOperator *op)
 {
   const Paint *paint = BKE_paint_get_active_from_context(&C);
-  const Brush &brush = *BKE_paint_brush_for_read(paint);
-  const PaintMode mode = BKE_paintmode_get_active_from_context(&C);
-  const auto brush_switch_mode = BrushSwitchMode(RNA_enum_get(op->ptr, "brush_toggle"));
-
-  if (mode != PaintMode::GPencil || brush_switch_mode == BrushSwitchMode::Erase) {
+  const Brush *brush = BKE_paint_brush_for_read(paint);
+  if (paint == nullptr || brush == nullptr) {
     return nullptr;
   }
 
-  switch (eBrushGPaintType(brush.gpencil_brush_type)) {
-    case GPAINT_BRUSH_TYPE_DRAW:
-      return greasepencil::new_xr_paint_operation();
-    case GPAINT_BRUSH_TYPE_FILL:
-    case GPAINT_BRUSH_TYPE_ERASE:
-    case GPAINT_BRUSH_TYPE_TINT:
-      return nullptr;
+  const PaintMode mode = BKE_paintmode_get_active_from_context(&C);
+  const auto brush_switch_mode = BrushSwitchMode(RNA_enum_get(op->ptr, "brush_toggle"));
+
+  if (!xr_brush_supports_stroke_line(*brush, mode, brush_switch_mode)) {
+    return nullptr;
   }
-  return nullptr;
+  return greasepencil::new_xr_paint_operation();
 }
 
 struct GreasePencilXRPaintStroke {
@@ -204,16 +218,18 @@ static wmOperatorStatus grease_pencil_xr_brush_stroke_invoke(bContext *C,
   }
 
   const Paint *paint = BKE_paint_get_active_from_context(C);
-  const Brush &brush = *BKE_paint_brush_for_read(paint);
+  const Brush *brush = BKE_paint_brush_for_read(paint);
+  if (paint == nullptr || brush == nullptr) {
+    return OPERATOR_CANCELLED;
+  }
+
   const PaintMode mode = BKE_paintmode_get_active_from_context(C);
   const auto brush_switch_mode = BrushSwitchMode(RNA_enum_get(op->ptr, "brush_toggle"));
-  const bool use_duplicate_previous_key = mode == PaintMode::GPencil &&
-                                          (ELEM(eBrushGPaintType(brush.gpencil_brush_type),
-                                                GPAINT_BRUSH_TYPE_ERASE,
-                                                GPAINT_BRUSH_TYPE_TINT) ||
-                                           (eBrushGPaintType(brush.gpencil_brush_type) ==
-                                                GPAINT_BRUSH_TYPE_DRAW &&
-                                            brush_switch_mode == BrushSwitchMode::Erase));
+  if (!xr_brush_supports_stroke_line(*brush, mode, brush_switch_mode)) {
+    return OPERATOR_CANCELLED;
+  }
+
+  const bool use_duplicate_previous_key = false;
 
   wmOperatorStatus return_value = ed::greasepencil::grease_pencil_draw_operator_invoke(
       C, op, use_duplicate_previous_key);
