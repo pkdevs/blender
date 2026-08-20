@@ -16,6 +16,8 @@
 #include "DNA_sequence_types.h"
 #include "DNA_session_uid_types.h"
 
+#include <optional>
+
 namespace blender {
 
 struct BlendDataReader;
@@ -115,7 +117,7 @@ struct EditingRuntime {
 
   /* Frame index that was rendered with a temporary, unkeyed value
    * of an animated property. */
-  float temporary_animation_frame = MINAFRAMEF - 1.0f;
+  std::optional<float> temporary_animation_frame;
 
   /** Used for rendering a different frame using sequencer_draw_get_transform_preview from the box
    * blade tool. */

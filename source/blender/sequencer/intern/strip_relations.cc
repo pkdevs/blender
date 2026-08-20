@@ -187,27 +187,23 @@ void relations_invalidate_cache(Scene *scene, Strip *strip)
 void relations_tag_temporary_animation_frame(Scene *scene)
 {
   Editing *ed = editing_get(scene);
-  if (ed == nullptr) {
-    return;
+  if (ed != nullptr) {
+    ed->runtime->temporary_animation_frame = BKE_scene_frame_get(scene);
   }
-
-  ed->runtime->temporary_animation_frame = BKE_scene_frame_get(scene);
 }
 
 void relations_invalidate_temporary_animation_frame(Scene *scene)
 {
   Editing *ed = editing_get(scene);
-  if (ed == nullptr) {
+  if (ed == nullptr || !ed->runtime->temporary_animation_frame.has_value()) {
     return;
   }
 
-  const float temp_frame = ed->runtime->temporary_animation_frame;
-  if (temp_frame < MINAFRAMEF || temp_frame == BKE_scene_frame_get(scene)) {
-    return;
+  const float temp_frame = ed->runtime->temporary_animation_frame.value();
+  if (temp_frame != BKE_scene_frame_get(scene)) {
+    final_image_cache_invalidate_frame_range(scene, temp_frame, temp_frame);
+    ed->runtime->temporary_animation_frame.reset();
   }
-
-  final_image_cache_invalidate_frame_range(scene, temp_frame, temp_frame);
-  ed->runtime->temporary_animation_frame = MINAFRAMEF - 1.0f;
 }
 
 void relations_invalidate_scene_strips(const Main *bmain, const Scene *scene_target)

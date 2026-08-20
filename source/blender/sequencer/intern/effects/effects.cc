@@ -341,7 +341,7 @@ float effect_fader_calc(Scene *scene,
       &scene->id, strip, RNA_Strip, "effect_fader", 0, nullptr);
   if (fcu) {
     /* At the current frame, a value that differs from the curve is an interactive user edit
-     * that has not beed committed to the curve yet. Use it directly so that preview reflects
+     * that has not been committed to the curve yet. Use it directly so that preview reflects
      * this edited state. Note that we need to evaluate at the scene time, so that a retimed
      * meta strip case is covered. */
     if (is_current_frame &&
