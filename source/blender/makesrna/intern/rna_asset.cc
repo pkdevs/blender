@@ -370,9 +370,7 @@ static void rna_AssetMetaData_webpage_set(PointerRNA *ptr, const char *value)
 {
   AssetMetaData *asset_data = static_cast<AssetMetaData *>(ptr->data);
 
-  if (asset_data->webpage) {
-    MEM_delete(asset_data->webpage);
-  }
+  MEM_delete(asset_data->webpage);
 
   if (value[0]) {
     asset_data->webpage = BLI_strdup(value);
@@ -731,7 +729,7 @@ static void rna_def_asset_data(BlenderRNA *brna)
   RNA_def_property_ui_text(prop,
                            "Webpage",
                            "Webpage"
-                           "Webpage URL where users can learn more about this asset");
+                           "Web-address to a page with more information about this asset");
 
   prop = RNA_def_property(srna, "tags", PROP_COLLECTION, PROP_NONE);
   RNA_def_property_struct_type(prop, "AssetTag");
