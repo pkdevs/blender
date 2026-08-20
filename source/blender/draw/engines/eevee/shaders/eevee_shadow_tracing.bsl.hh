@@ -166,7 +166,7 @@ ShadowRayDirectional shadow_ray_generate_directional(
   float3 direction = sample_uniform_cone(random_2d, shadow_angle_cos);
 
   float3 shadow_space_light_direction = transpose(light.object_to_world.as_float3x3()) *
-                                        light.sun().direction;
+                                        float3(light.sun().direction);
   direction = spherical_interpolate(shadow_space_light_direction, direction, soft_shadow_scale);
 
   /* It only make sense to trace where there can be occluder. Clamp by distance to near plane. */
