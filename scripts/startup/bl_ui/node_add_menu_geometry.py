@@ -3,11 +3,14 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 
 import bpy
-from bl_ui import node_add_menu
 from bpy.app.translations import (
-    pgettext_n as n_,
     contexts as i18n_contexts,
 )
+from bpy.app.translations import (
+    pgettext_n as n_,
+)
+
+from bl_ui import node_add_menu
 
 
 class NODE_MT_gn_attribute_base(node_add_menu.NodeMenu):
@@ -983,6 +986,7 @@ class NODE_MT_gn_volume_read_base(node_add_menu.NodeMenu):
     def draw(self, context):
         del context
         layout = self.layout
+        self.node_operator(layout, "GeometryNodeGetGridNames")
         self.node_operator(layout, "GeometryNodeGetNamedGrid")
         self.node_operator(layout, "GeometryNodeGridInfo")
         self.node_operator(layout, "GeometryNodeInputVoxelIndex")
