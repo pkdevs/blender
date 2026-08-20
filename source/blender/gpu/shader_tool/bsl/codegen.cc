@@ -1138,6 +1138,13 @@ struct CodegenContext : NodeErrorHandler {
       generate_srt_placeholder_macros(cls);
     }
 
+    /* Emit static variables. */
+    for (VarDecl decl : body.children_of_type<VarDecl>()) {
+      if (decl.type().is_static()) {
+        var_decl(decl, cls);
+      }
+    }
+
     /* Rollback to front. */
     jump_to(decl.front());
 
@@ -1184,13 +1191,6 @@ struct CodegenContext : NodeErrorHandler {
       }
     }
     else {
-      /* Emit static variables. */
-      for (VarDecl decl : body.children_of_type<VarDecl>()) {
-        if (decl.type().is_static()) {
-          var_decl(decl, cls);
-        }
-      }
-
       /* Emit function prototypes. */
       if (body.child_first(NodeType::FuncDecl).is_valid()) {
         /* Prototypes are not needed with MSL wrapper class. */
