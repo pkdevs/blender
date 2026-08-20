@@ -467,12 +467,17 @@ struct SymbolParser : NodeErrorHandler {
     else {
       IdQualified aliased(stmt.aliased());
       IdQualified name(stmt.identifier());
+      string identifier(name.name().str());
+      SymbolFunction *fun = scope.lookup_function(table, aliased).unwrap(this);
+      if (!fun->is_error) {
+        scope.functions.emplace(identifier, fun, stmt.identifier().front());
+        return;
+      }
       SymbolClass *type = scope.lookup_class(table, aliased).unwrap(this);
-      if (type->is_error) {
+      if (type->is_error && fun->is_error) {
         error(aliased, Diag::UnknownTypeAlias);
         return;
       }
-      string identifier(name.name().str());
       if (type) {
         scope.classes.emplace(identifier, type, stmt.identifier().front());
         return;
