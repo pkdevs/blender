@@ -164,7 +164,7 @@ ccl_device void flatten_closure_tree(KernelGlobals kg,
       if (stack_size == layer_stack_level) {
         /* We just finished processing the top layers of a Layer closure, so adjust the weight to
          * account for the layering. */
-        if (last_closure->id == OSL_CLOSURE_DielectricBSDF_ID &&
+        if (closure && last_closure->id == OSL_CLOSURE_DielectricBSDF_ID &&
             closure->id == OSL_CLOSURE_AnisotropicVDF_ID)
         {
           /* If a dielectric closure is layered over a VDF closure, it describes the surface
