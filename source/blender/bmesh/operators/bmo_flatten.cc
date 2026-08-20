@@ -130,11 +130,10 @@ void bmo_flatten_exec(BMesh *bm, BMOperator *op)
     const int start = face_group_index[g][0];
     const int length = face_group_index[g][1];
 
-    Vector<BMFace *> faces;
-    faces.reserve(length);
+    Array<BMFace *> faces(length);
     for (const int i : IndexRange(start, length)) {
       BMFace *f = BM_face_at_index(bm, face_groups_array[i]);
-      faces.append(f);
+      faces[i - start] = f;
       /* For every edge in the face, the BM_ELEM_TAG is disabled so the only edges that will still
        * have them enabled are those without faces which would be detected in the second pass.  */
       BMIter eiter;
