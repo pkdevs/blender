@@ -4,11 +4,11 @@
  *
  * Author: Sergey Sharybin. */
 
-#include <algorithm>
 #ifdef _MSC_VER
 #  include <iso646.h>
 #endif
 
+#include <algorithm>
 #include <cassert>
 #include <cstdio>
 

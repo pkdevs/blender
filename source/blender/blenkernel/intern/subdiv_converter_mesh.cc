@@ -195,7 +195,7 @@ static void precalc_uv_layer(const OpenSubdiv_Converter *converter, const int la
   const StringRef name = storage->uv_map_names[layer_index];
   const bke::AttributeAccessor attributes = mesh->attributes();
   const VArraySpan uv_map = *attributes.lookup<float2>(name, bke::AttrDomain::Corner);
-  const int num_vert = storage->num_manifold_vertices;
+  const int num_vert = mesh->verts_num;
   /* Initialize memory required for the operations. */
   if (storage->loop_uv_indices == nullptr) {
     storage->loop_uv_indices = MEM_new_array_uninitialized<int>(size_t(mesh->corners_num),
@@ -329,8 +329,7 @@ static int initialize_manifold_index_map(const IndexMask &unused_mask,
 static void initialize_manifold_edges(ConverterStorage *storage)
 {
   const Span<int2> mesh_edges = storage->mesh->edges();
-  if (storage->manifold_edge_index_reverse.is_empty() &&
-      storage->manifold_vertex_index.is_empty())
+  if (storage->manifold_edge_index_reverse.is_empty() && storage->manifold_vertex_index.is_empty())
   {
     storage->edges = mesh_edges.take_front(storage->num_manifold_edges);
     return;
@@ -340,7 +339,7 @@ static void initialize_manifold_edges(ConverterStorage *storage)
   threading::parallel_for(edges_manifold.index_range(), 4096, [&](const IndexRange range) {
     for (const int manifold_edge_index : range) {
       const int edge_index = manifold_to_original(storage->manifold_edge_index_reverse,
-                                                   manifold_edge_index);
+                                                  manifold_edge_index);
       const int2 &edge = mesh_edges[edge_index];
       edges_manifold[manifold_edge_index] = int2(
           original_to_manifold(storage->manifold_vertex_index, edge[0]),
