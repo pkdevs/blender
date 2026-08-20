@@ -935,12 +935,12 @@ static void multires_unsubdivide_add_original_index_datalayers(Mesh *mesh)
   multires_unsubdivide_free_original_datalayers(mesh);
   bke::MutableAttributeAccessor attributes = mesh->attributes_for_write();
 
-  bke::SpanAttributeWriter l_index = attributes.lookup_or_add_for_write_only_span<int>(
+  bke::SpanAttributeWriter l_index = attributes.convert_or_add_for_write_only_span<int>(
       lname, bke::AttrDomain::Corner);
   array_utils::fill_index_range<int>(l_index.span);
   l_index.finish();
 
-  bke::SpanAttributeWriter v_index = attributes.lookup_or_add_for_write_only_span<int>(
+  bke::SpanAttributeWriter v_index = attributes.convert_or_add_for_write_only_span<int>(
       vname, bke::AttrDomain::Point);
   array_utils::fill_index_range<int>(v_index.span);
   v_index.finish();

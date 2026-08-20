@@ -369,7 +369,7 @@ static Mesh *doOcean(ModifierData *md, const ModifierEvalContext *ctx, Mesh *mes
         ColorGeometry4b *mlcol = &mloopcols.span[face.start()];
 
         ColorGeometry4b *mlcolspray = nullptr;
-        if (omd->flag & MOD_OCEAN_GENERATE_SPRAY) {
+        if ((omd->flag & MOD_OCEAN_GENERATE_SPRAY) && mloopcols_spray) {
           mlcolspray = &mloopcols_spray.span[face.start()];
         }
 
@@ -393,7 +393,7 @@ static Mesh *doOcean(ModifierData *md, const ModifierEvalContext *ctx, Mesh *mes
           /* This needs to be set (render engine uses) */
           mlcol->a = 255;
 
-          if (omd->flag & MOD_OCEAN_GENERATE_SPRAY) {
+          if ((omd->flag & MOD_OCEAN_GENERATE_SPRAY) && mlcolspray != nullptr) {
             if (omd->flag & MOD_OCEAN_INVERT_SPRAY) {
               mlcolspray->r = ocr.Eminus[0] * 255;
             }

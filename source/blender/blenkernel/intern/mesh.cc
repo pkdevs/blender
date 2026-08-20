@@ -1921,7 +1921,7 @@ void mesh_sharp_edges_set_from_angle(Mesh &mesh, const float angle, const bool k
   if (!keep_sharp_edges) {
     attributes.remove("sharp_edge");
   }
-  SpanAttributeWriter<bool> sharp_edges = attributes.lookup_or_add_for_write_span<bool>(
+  SpanAttributeWriter<bool> sharp_edges = attributes.convert_or_add_for_write_span<bool>(
       "sharp_edge", AttrDomain::Edge);
   const VArraySpan<bool> sharp_faces = *attributes.lookup<bool>("sharp_face", AttrDomain::Face);
   mesh::edges_sharp_from_angle_set(mesh.faces(),

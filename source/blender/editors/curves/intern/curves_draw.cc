@@ -654,7 +654,7 @@ static void create_Bezier(bke::CurvesGeometry &curves,
 
   const IndexRange new_points = curves.points_by_curve()[curve_index];
 
-  bke::SpanAttributeWriter<float> radii = attributes.lookup_or_add_for_write_only_span<float>(
+  bke::SpanAttributeWriter<float> radii = attributes.convert_or_add_for_write_only_span<float>(
       "radius", bke::AttrDomain::Point);
 
   const float *co = cubic_spline;
@@ -716,7 +716,7 @@ static void create_NURBS(bke::CurvesGeometry &curves,
 
   const IndexRange new_points = curves.points_by_curve()[curve_index];
 
-  bke::SpanAttributeWriter<float> radii = attributes.lookup_or_add_for_write_only_span<float>(
+  bke::SpanAttributeWriter<float> radii = attributes.convert_or_add_for_write_only_span<float>(
       "radius", bke::AttrDomain::Point);
   /* If cyclic shows to first left handle else first control point. */
   const float *pt = cubic_spline + (is_cyclic ? 0 : dims);
@@ -928,7 +928,7 @@ static wmOperatorStatus curves_draw_exec(bContext *C, wmOperator *op)
            (bezier_as_nurbs ? selection_attribute_names :
                               get_curves_all_selection_attribute_names()))
       {
-        bke::AttributeWriter<bool> selection = attributes.lookup_or_add_for_write<bool>(
+        bke::AttributeWriter<bool> selection = attributes.convert_or_add_for_write<bool>(
             selection_name, bke::AttrDomain::Curve);
         if (selection_name == ".selection" || !bezier_as_nurbs) {
           selection.varray.set(curve_index, true);
@@ -980,7 +980,7 @@ static wmOperatorStatus curves_draw_exec(bContext *C, wmOperator *op)
     curves.fill_curve_types(IndexRange(curve_index, 1), CURVE_TYPE_POLY);
 
     MutableSpan<float3> positions = curves.positions_for_write();
-    bke::SpanAttributeWriter<float> radii = attributes.lookup_or_add_for_write_only_span<float>(
+    bke::SpanAttributeWriter<float> radii = attributes.convert_or_add_for_write_only_span<float>(
         "radius", bke::AttrDomain::Point);
 
     const IndexRange new_points = curves.points_by_curve()[curve_index];
@@ -1004,7 +1004,7 @@ static wmOperatorStatus curves_draw_exec(bContext *C, wmOperator *op)
 
     radii.finish();
 
-    bke::AttributeWriter<bool> selection = attributes.lookup_or_add_for_write<bool>(
+    bke::AttributeWriter<bool> selection = attributes.convert_or_add_for_write<bool>(
         ".selection", bke::AttrDomain::Curve);
     selection.varray.set(curve_index, true);
     selection.finish();
@@ -1012,7 +1012,7 @@ static wmOperatorStatus curves_draw_exec(bContext *C, wmOperator *op)
     /* Creates ".selection_handle_left" and ".selection_handle_right" attributes, otherwise all
      * existing Bezier handles would be treated as selected. */
     for (const StringRef selection_name : get_curves_bezier_selection_attribute_names(curves)) {
-      bke::AttributeWriter<bool> selection = attributes.lookup_or_add_for_write<bool>(
+      bke::AttributeWriter<bool> selection = attributes.convert_or_add_for_write<bool>(
           selection_name, bke::AttrDomain::Curve);
       selection.finish();
     }

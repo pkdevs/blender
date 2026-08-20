@@ -414,7 +414,7 @@ static void data_transfer_dtdata_type_postprocess(Mesh *me_dst,
     if (!custom_nors_dst) {
       return;
     }
-    bke::SpanAttributeWriter<bool> sharp_edges = attributes.lookup_or_add_for_write_span<bool>(
+    bke::SpanAttributeWriter<bool> sharp_edges = attributes.convert_or_add_for_write_span<bool>(
         "sharp_edge", bke::AttrDomain::Edge);
     const VArraySpan sharp_faces = *attributes.lookup<bool>("sharp_face", bke::AttrDomain::Face);
     /* Note loop_nors_dst contains our custom normals as transferred from source... */

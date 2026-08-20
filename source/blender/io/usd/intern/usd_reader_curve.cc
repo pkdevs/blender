@@ -159,7 +159,7 @@ void USDCurvesReader::read_velocities(bke::CurvesGeometry &curves,
   if (!velocities.empty()) {
     bke::MutableAttributeAccessor attributes = curves.attributes_for_write();
     bke::SpanAttributeWriter<float3> velocity =
-        attributes.lookup_or_add_for_write_only_span<float3>("velocity", bke::AttrDomain::Point);
+        attributes.convert_or_add_for_write_only_span<float3>("velocity", bke::AttrDomain::Point);
 
     Span<pxr::GfVec3f> usd_data(velocities.cdata(), velocities.size());
     velocity.span.copy_from(usd_data.cast<float3>());

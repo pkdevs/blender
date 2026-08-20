@@ -193,13 +193,13 @@ static void shape_attributes_to_curves(bke::CurvesGeometry &curves,
   curves.update_curve_types();
 
   bke::MutableAttributeAccessor attributes = curves.attributes_for_write();
-  bke::SpanAttributeWriter<int> materials = attributes.lookup_or_add_for_write_span<int>(
+  bke::SpanAttributeWriter<int> materials = attributes.convert_or_add_for_write_span<int>(
       "material_index", bke::AttrDomain::Curve);
   MutableSpan<bool> cyclic = curves.cyclic_for_write();
 
-  bke::SpanAttributeWriter fill_colors = attributes.lookup_or_add_for_write_span<ColorGeometry4f>(
+  bke::SpanAttributeWriter fill_colors = attributes.convert_or_add_for_write_span<ColorGeometry4f>(
       "fill_color", bke::AttrDomain::Curve);
-  bke::SpanAttributeWriter<float> fill_opacities = attributes.lookup_or_add_for_write_span<float>(
+  bke::SpanAttributeWriter<float> fill_opacities = attributes.convert_or_add_for_write_span<float>(
       "fill_opacity", bke::AttrDomain::Curve);
 
   MutableSpan<float3> positions = curves.positions_for_write();
@@ -217,12 +217,8 @@ static void shape_attributes_to_curves(bke::CurvesGeometry &curves,
 
   materials.span.slice(curves_range).fill(material_index);
   const ColorGeometry4f shape_color = convert_svg_color(shape.fill);
-  if (fill_colors) {
-    fill_colors.span.slice(curves_range).fill(shape_color);
-  }
-  if (fill_opacities) {
-    fill_opacities.span.slice(curves_range).fill(shape_color.a);
-  }
+  fill_colors.span.slice(curves_range).fill(shape_color);
+  fill_opacities.span.slice(curves_range).fill(shape_color.a);
 
   const bool use_stroke = bool(shape.stroke.type);
   const bool use_fill = bool(shape.fill.type);
@@ -237,14 +233,12 @@ static void shape_attributes_to_curves(bke::CurvesGeometry &curves,
   bke::SpanAttributeWriter<bool> hide_stroke = attributes.lookup_for_write_span<bool>(
       "hide_stroke");
   bke::SpanAttributeWriter<int> fill_ids = attributes.lookup_for_write_span<int>("fill_id");
-  if (hide_stroke) {
-    hide_stroke.span.slice(curves_range).fill(!use_stroke);
-    hide_stroke.finish();
-  }
-  if (fill_ids) {
-    fill_ids.span.slice(curves_range).fill(use_fill ? shape_index + 1 : 0);
-    fill_ids.finish();
-  }
+
+  hide_stroke.span.slice(curves_range).fill(!use_stroke);
+  hide_stroke.finish();
+
+  fill_ids.span.slice(curves_range).fill(use_fill ? shape_index + 1 : 0);
+  fill_ids.finish();
 
   int curve_index = curves_range.start();
   for (NSVGpath *path = shape.paths; path; path = path->next) {

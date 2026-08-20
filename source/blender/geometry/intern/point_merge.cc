@@ -59,7 +59,7 @@ PointCloud *merge_points(const PointCloud &src_points,
       }
     }
     const GVArraySpan src_span(*src);
-    bke::GSpanAttributeWriter dst_attribute = dst_attributes.lookup_or_add_for_write_only_span(
+    bke::GSpanAttributeWriter dst_attribute = dst_attributes.convert_or_add_for_write_only_span(
         iter.name, bke::AttrDomain::Point, iter.data_type);
     array_utils::gather(src_span, unselected, dst_attribute.span.take_front(unselected.size()));
     if (iter.name == "id" && iter.data_type == bke::AttrType::Int32) {

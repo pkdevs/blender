@@ -77,7 +77,7 @@ static void assign_material_to_id_geometry(ID *id,
     max_index_cache.ensure([&](std::optional<int> &data) { data = new_index; });
   }
   else {
-    SpanAttributeWriter<int> indices = attributes.lookup_or_add_for_write_span<int>(
+    SpanAttributeWriter<int> indices = attributes.convert_or_add_for_write_span<int>(
         "material_index", domain);
     index_mask::masked_fill(indices.span, new_index, selection);
     indices.finish();

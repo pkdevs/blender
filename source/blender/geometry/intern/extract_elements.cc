@@ -205,11 +205,8 @@ Array<Mesh *> extract_mesh_faces(const Mesh &mesh,
 
         bke::MutableAttributeAccessor element_attributes = element->attributes_for_write();
         for (const PropagationAttribute &src_attribute : propagation_attributes) {
-          bke::GSpanAttributeWriter dst = element_attributes.lookup_or_add_for_write_only_span(
+          bke::GSpanAttributeWriter dst = element_attributes.convert_or_add_for_write_only_span(
               src_attribute.name, src_attribute.domain, src_attribute.data_type);
-          if (!dst) {
-            continue;
-          }
           switch (src_attribute.domain) {
             case AttrDomain::Point: {
               for (const int i : IndexRange(verts_num)) {

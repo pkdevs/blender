@@ -896,7 +896,7 @@ void LazyFunctionForReduceForeachGeometryElement::handle_main_items_and_geometry
       const IndexMask mask = component_info.field_evaluator->get_evaluated_selection_as_mask();
 
       /* Actually create the attribute. */
-      bke::GSpanAttributeWriter attribute = attributes.lookup_or_add_for_write_only_span(
+      bke::GSpanAttributeWriter attribute = attributes.convert_or_add_for_write_only_span(
           attribute_name, component_info.id.domain, cd_type);
 
       /* Fill the elements of the attribute that we didn't iterate over because they were not
@@ -1115,7 +1115,7 @@ void LazyFunctionForReduceForeachGeometryElement::handle_generation_items_group(
 
           /* Actually create the attribute. */
           bke::GSpanAttributeWriter dst_attribute =
-              dst_attributes.lookup_or_add_for_write_only_span(
+              dst_attributes.convert_or_add_for_write_only_span(
                   name, *propagation_domain, data_type);
           type.fill_assign_n(element_value, dst_attribute.span.data(), dst_attribute.span.size());
           dst_attribute.finish();

@@ -297,7 +297,7 @@ static void transfer_attributes(
       }
       /* Try writing into an existing attribute buffer. */
       if (has_matching_existing_attribute) {
-        bke::GSpanAttributeWriter dst_attr = dst_attributes.lookup_or_add_for_write_only_span(
+        bke::GSpanAttributeWriter dst_attr = dst_attributes.convert_or_add_for_write_only_span(
             item.name, item.domain, item.type);
         BLI_assert(dst_attr);
         bke::attribute_math::gather(*src_attr, ids.src_by_dst_index, dst_attr.span);
@@ -323,7 +323,7 @@ static void transfer_attributes(
 
     /* A subset of the indices are transferred, first try to write them into an existing array. */
     if (has_matching_existing_attribute) {
-      bke::GSpanAttributeWriter dst_attr = dst_attributes.lookup_or_add_for_write_span(
+      bke::GSpanAttributeWriter dst_attr = dst_attributes.convert_or_add_for_write_span(
           item.name, item.domain, item.type);
       BLI_assert(dst_attr);
       bke::attribute_math::gather(*src_attr, ids.src_by_dst_index, ids.gather_mask, dst_attr.span);

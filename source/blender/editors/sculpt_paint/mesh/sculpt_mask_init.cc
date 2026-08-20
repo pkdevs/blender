@@ -57,7 +57,7 @@ void write_mask_mesh(const Depsgraph &depsgraph,
 
   undo::push_nodes(depsgraph, object, node_mask, undo::Type::Mask);
 
-  bke::SpanAttributeWriter mask = attributes.lookup_or_add_for_write_span<float>(
+  bke::SpanAttributeWriter mask = attributes.convert_or_add_for_write_span<float>(
       ".sculpt_mask", bke::AttrDomain::Point);
   if (!mask) {
     return;

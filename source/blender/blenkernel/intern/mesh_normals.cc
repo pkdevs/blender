@@ -1661,6 +1661,10 @@ static void mesh_set_custom_normals(Mesh &mesh,
   }
   SpanAttributeWriter<bool> sharp_edges = attributes.lookup_or_add_for_write_span<bool>(
       "sharp_edge", AttrDomain::Edge);
+  if (!sharp_edges) {
+    return;
+  }
+
   const VArraySpan sharp_faces = *attributes.lookup<bool>("sharp_face", AttrDomain::Face);
 
   mesh_normals_corner_custom_set(mesh.vert_positions(),

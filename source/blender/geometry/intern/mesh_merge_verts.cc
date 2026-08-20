@@ -1473,7 +1473,7 @@ static void mix_attributes(const bke::AttributeAccessor src_attributes,
         return;
       }
     }
-    bke::GSpanAttributeWriter dst_attr = dst_attributes.lookup_or_add_for_write_only_span(
+    bke::GSpanAttributeWriter dst_attr = dst_attributes.convert_or_add_for_write_only_span(
         iter.name, iter.domain, iter.data_type);
     bke::attribute_math::mix_groups(GVArraySpan(src_attr), dst_to_src, dst_attr.span);
     dst_attr.finish();
@@ -1715,7 +1715,7 @@ static Mesh *create_merged_mesh(const Mesh &mesh,
       }
     }
     const CPPType &type = src_attr.type();
-    bke::GSpanAttributeWriter dst_attr = dst_attributes.lookup_or_add_for_write_only_span(
+    bke::GSpanAttributeWriter dst_attr = dst_attributes.convert_or_add_for_write_only_span(
         iter.name, iter.domain, iter.data_type);
     bke::attribute_math::gather(
         src_attr, dst_to_src_faces, dst_attr.span.take_front(dst_to_src_faces.size()));

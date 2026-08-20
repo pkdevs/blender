@@ -821,7 +821,7 @@ struct EraseOperationExecutor {
                                                                bke::AttrDomain::Point))
     {
       SpanAttributeWriter<bool> opacity_modified =
-          dst_attributes.lookup_or_add_for_write_span<bool>(
+          dst_attributes.convert_or_add_for_write_span<bool>(
               "_eraser_opacity_modified", bke::AttrDomain::Point, bke::AttributeInitValue(false));
       BLI_assert(opacity_modified);
 
@@ -839,7 +839,7 @@ struct EraseOperationExecutor {
       opacity_modified.finish();
     }
 
-    SpanAttributeWriter<bool> dst_inserted = dst_attributes.lookup_or_add_for_write_span<bool>(
+    SpanAttributeWriter<bool> dst_inserted = dst_attributes.convert_or_add_for_write_span<bool>(
         "_eraser_inserted", bke::AttrDomain::Point);
     BLI_assert(dst_inserted);
     const OffsetIndices<int> &dst_points_by_curve = dst.points_by_curve();

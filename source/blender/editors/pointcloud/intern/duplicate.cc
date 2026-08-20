@@ -30,7 +30,7 @@ static void duplicate_points(PointCloud &pointcloud, const IndexMask &mask)
         return;
       }
     }
-    bke::GSpanAttributeWriter dst = dst_attributes.lookup_or_add_for_write_only_span(
+    bke::GSpanAttributeWriter dst = dst_attributes.convert_or_add_for_write_only_span(
         iter.name, iter.domain, iter.data_type);
     array_utils::copy(src, dst.span.take_front(pointcloud.totpoint));
     array_utils::gather(src, mask, dst.span.take_back(mask.size()));
@@ -53,7 +53,7 @@ static wmOperatorStatus duplicate_exec(bContext *C, wmOperator * /*op*/)
     duplicate_points(*pointcloud, selection);
 
     bke::SpanAttributeWriter selection_attr =
-        pointcloud->attributes_for_write().lookup_or_add_for_write_span<bool>(
+        pointcloud->attributes_for_write().convert_or_add_for_write_span<bool>(
             ".selection", bke::AttrDomain::Point);
     selection_attr.span.take_back(selection.size()).fill(true);
     selection_attr.finish();

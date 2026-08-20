@@ -402,7 +402,7 @@ Mesh *MOD_solidify_extrude_modifyMesh(ModifierData *md, const ModifierEvalContex
   if (orig_attributes.contains("bevel_weight_edge") ||
       (do_bevel_convex || !orig_vert_bweight.is_empty()))
   {
-    result_edge_bweight = result_attributes.lookup_or_add_for_write_span<float>(
+    result_edge_bweight = result_attributes.convert_or_add_for_write_span<float>(
         "bevel_weight_edge", bke::AttrDomain::Edge);
   }
 
@@ -427,7 +427,8 @@ Mesh *MOD_solidify_extrude_modifyMesh(ModifierData *md, const ModifierEvalContex
   (void)0
 
   bke::SpanAttributeWriter dst_material_index =
-      result_attributes.lookup_or_add_for_write_span<int>("material_index", bke::AttrDomain::Face);
+      result_attributes.convert_or_add_for_write_span<int>("material_index",
+                                                           bke::AttrDomain::Face);
 
   /* flip normals */
 
@@ -1011,7 +1012,7 @@ Mesh *MOD_solidify_extrude_modifyMesh(ModifierData *md, const ModifierEvalContex
 
     bke::SpanAttributeWriter<float> result_edge_crease;
     if (crease_rim || crease_outer || crease_inner) {
-      result_edge_crease = result_attributes.lookup_or_add_for_write_span<float>(
+      result_edge_crease = result_attributes.convert_or_add_for_write_span<float>(
           "crease_edge", bke::AttrDomain::Edge);
     }
 

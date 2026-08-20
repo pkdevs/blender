@@ -144,7 +144,8 @@ static void read_typed_property_sample(const ICompoundProperty &parent,
 
     const SamplePtr sample_ptr = array_prop.getValue(selector);
     bke::SpanAttributeWriter<TWriteValue> writer =
-        attribute_accessor.lookup_or_add_for_write_span<TWriteValue>(name, bke::AttrDomain::Point);
+        attribute_accessor.convert_or_add_for_write_span<TWriteValue>(name,
+                                                                      bke::AttrDomain::Point);
     MutableSpan<TWriteValue> span = writer.span;
     for (const int64_t i : IndexRange(std::min(span.size(), int64_t(sample_ptr->size())))) {
       ValueType value = (*sample_ptr)[i];
@@ -273,8 +274,8 @@ void AbcPointsReader::read_geometry(bke::GeometrySet &geometry_set,
         m_schema, sample_sel, read_params.velocity_name);
     if (velocities && pointcloud->totpoint == int(velocities->size())) {
       bke::SpanAttributeWriter<float3> velocity_writer =
-          attribute_accessor.lookup_or_add_for_write_span<float3>("velocity",
-                                                                  bke::AttrDomain::Point);
+          attribute_accessor.convert_or_add_for_write_span<float3>("velocity",
+                                                                   bke::AttrDomain::Point);
       MutableSpan<float3> point_velocity = velocity_writer.span;
       for (const int64_t i :
            IndexRange(std::min(point_velocity.size(), int64_t(velocities->size()))))

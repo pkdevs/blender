@@ -94,8 +94,8 @@ static void save_selection_as_attribute(MutableAttributeAccessor attributes,
 {
   BLI_assert(!attributes.contains(name));
 
-  SpanAttributeWriter<bool> attribute = attributes.lookup_or_add_for_write_span<bool>(name,
-                                                                                      domain);
+  SpanAttributeWriter<bool> attribute = attributes.convert_or_add_for_write_span<bool>(name,
+                                                                                       domain);
   selection.to_bools(attribute.span);
   attribute.finish();
 }

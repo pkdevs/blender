@@ -514,7 +514,7 @@ static bool remove_stroke_or_fill_based_on_mode(Object &object,
     return false;
   }
   if (mode == DeleteMode::OnlyStrokes) {
-    bke::SpanAttributeWriter<bool> hide_strokes = attributes.lookup_or_add_for_write_span<bool>(
+    bke::SpanAttributeWriter<bool> hide_strokes = attributes.convert_or_add_for_write_span<bool>(
         "hide_stroke", bke::AttrDomain::Curve, bke::AttributeInitValue(false));
     index_mask::masked_fill(hide_strokes.span, true, fills_with_stroke);
     hide_strokes.finish();
@@ -885,7 +885,7 @@ static wmOperatorStatus grease_pencil_stroke_material_set_exec(bContext *C, wmOp
 
     bke::CurvesGeometry &curves = info.drawing.strokes_for_write();
     bke::MutableAttributeAccessor attributes = curves.attributes_for_write();
-    bke::SpanAttributeWriter<int> materials = attributes.lookup_or_add_for_write_span<int>(
+    bke::SpanAttributeWriter<int> materials = attributes.convert_or_add_for_write_span<int>(
         "material_index", bke::AttrDomain::Curve);
 
     const IndexMask fill_strokes = bke::greasepencil::selected_mask_to_fills(
@@ -1193,8 +1193,9 @@ static wmOperatorStatus grease_pencil_set_uniform_opacity_exec(bContext *C, wmOp
     MutableSpan<float> opacities = info.drawing.opacities_for_write();
     bke::curves::fill_points<float>(points_by_curve, strokes, opacity_stroke, opacities);
 
-    if (SpanAttributeWriter<float> fill_opacities = attributes.lookup_or_add_for_write_span<float>(
-            "fill_opacity", AttrDomain::Curve, bke::AttributeInitValue(1.0f)))
+    if (SpanAttributeWriter<float> fill_opacities =
+            attributes.convert_or_add_for_write_span<float>(
+                "fill_opacity", AttrDomain::Curve, bke::AttributeInitValue(1.0f)))
     {
       index_mask::masked_fill(fill_opacities.span, opacity_fill, strokes);
       fill_opacities.finish();
@@ -5111,9 +5112,9 @@ static wmOperatorStatus grease_pencil_set_stroke_type_exec(bContext *C, wmOperat
     bke::CurvesGeometry &curves = info.drawing.strokes_for_write();
     bke::MutableAttributeAccessor attributes = curves.attributes_for_write();
 
-    bke::SpanAttributeWriter<bool> hide_stroke = attributes.lookup_or_add_for_write_span<bool>(
+    bke::SpanAttributeWriter<bool> hide_stroke = attributes.convert_or_add_for_write_span<bool>(
         "hide_stroke", bke::AttrDomain::Curve);
-    bke::SpanAttributeWriter<int> fill_ids = attributes.lookup_or_add_for_write_span<int>(
+    bke::SpanAttributeWriter<int> fill_ids = attributes.convert_or_add_for_write_span<int>(
         "fill_id", bke::AttrDomain::Curve);
 
     switch (type) {
@@ -5367,7 +5368,7 @@ static wmOperatorStatus grease_pencil_join_fills_exec(bContext *C, wmOperator *o
   }
   bke::CurvesGeometry &curves = drawing_dst->strokes_for_write();
   bke::MutableAttributeAccessor attributes = curves.attributes_for_write();
-  bke::SpanAttributeWriter<int> fill_ids = attributes.lookup_or_add_for_write_span<int>(
+  bke::SpanAttributeWriter<int> fill_ids = attributes.convert_or_add_for_write_span<int>(
       "fill_id", bke::AttrDomain::Curve);
 
   const IndexMask selected_strokes = bke::greasepencil::selected_mask_to_fills(
@@ -5643,7 +5644,7 @@ static void remap_material_indices(bke::greasepencil::Drawing &drawing,
   bke::CurvesGeometry &curves = drawing.strokes_for_write();
   bke::MutableAttributeAccessor attributes = curves.attributes_for_write();
   /* Validate material indices and add missing materials. */
-  bke::SpanAttributeWriter<int> material_writer = attributes.lookup_or_add_for_write_span<int>(
+  bke::SpanAttributeWriter<int> material_writer = attributes.convert_or_add_for_write_span<int>(
       "material_index", bke::AttrDomain::Curve);
   threading::parallel_for(curves.curves_range(), 1024, [&](const IndexRange range) {
     for (const int curve_i : range) {
