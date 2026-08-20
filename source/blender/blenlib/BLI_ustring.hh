@@ -54,8 +54,8 @@ const blender::detail::UStringEntry *ustring_ensure_entry(const char *str);
 }  // namespace detail
 
 /**
- * This is a thin wrapper around OpenImageIO's ustring class. Additionally it also provides
- * conversions to our StringRef types.
+ * This class is inspired by OpenImageIO's ustring class. Compared to that, the implementation is
+ * simpler and requires less memory usage for the unique string storage.
  *
  * See the OpenImageIO documentation for more details:
  * https://openimageio.readthedocs.io/en/stable/imageioapi.html#efficient-unique-strings-ustring
