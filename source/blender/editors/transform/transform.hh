@@ -719,7 +719,7 @@ struct TransDataContainer {
   bool use_local_mat;
 
   /* True if the mirror modifier's clipping boundary has been hit. */
-  bool has_clipping_enabled;
+  bool has_mirror_clipping;
 
   /** Mirror option. */
   union {
