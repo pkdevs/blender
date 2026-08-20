@@ -1108,8 +1108,8 @@ function(data_to_c
 
   add_custom_command(
     OUTPUT ${file_to}
-    COMMAND "$<TARGET_FILE:datatoc>" ${file_from} ${file_to} ${symbol_name_override}
-    DEPENDS ${file_from} datatoc)
+    COMMAND "$<TARGET_FILE:host_datatoc>" ${file_from} ${file_to} ${symbol_name_override}
+    DEPENDS ${file_from} host_datatoc)
 
   set_source_files_properties(${file_to} PROPERTIES GENERATED TRUE)
 endfunction()
@@ -1132,8 +1132,8 @@ function(data_to_c_simple
 
   add_custom_command(
     OUTPUT  ${_file_to}
-    COMMAND "$<TARGET_FILE:datatoc>" ${_file_from} ${_file_to}
-    DEPENDS ${_file_from} datatoc)
+    COMMAND "$<TARGET_FILE:host_datatoc>" ${_file_from} ${_file_to}
+    DEPENDS ${_file_from} host_datatoc)
 
   set_source_files_properties(${_file_to} PROPERTIES GENERATED TRUE)
 endfunction()
@@ -1176,8 +1176,8 @@ function(glsl_to_c
 
   add_custom_command(
     OUTPUT  ${_file_to}
-    COMMAND "$<TARGET_FILE:datatoc>" ${_file_tmp} ${_file_to}
-    DEPENDS ${_file_tmp} datatoc)
+    COMMAND "$<TARGET_FILE:host_datatoc>" ${_file_tmp} ${_file_to}
+    DEPENDS ${_file_tmp} host_datatoc)
 
   set_source_files_properties(${_file_tmp} PROPERTIES GENERATED TRUE)
   set_source_files_properties(${_file_to}  PROPERTIES GENERATED TRUE)
@@ -1209,9 +1209,9 @@ function(msgfmt_simple
     make_directory ${_file_to_path}
 
     COMMAND ${CMAKE_COMMAND} -E
-    env ${PLATFORM_ENV_BUILD} "$<TARGET_FILE:msgfmt>" ${_file_from} ${_file_to}
+    env ${PLATFORM_ENV_BUILD} "$<TARGET_FILE:host_msgfmt>" ${_file_from} ${_file_to}
 
-    DEPENDS msgfmt ${_file_from})
+    DEPENDS host_msgfmt ${_file_from})
 
   set_source_files_properties(${_file_to} PROPERTIES GENERATED TRUE)
 endfunction()

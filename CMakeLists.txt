@@ -78,6 +78,17 @@ enable_testing()
 
 include(build_files/cmake/macros.cmake)
 
+# -----------------------------------------------------------------------------
+# Load crosscompilation utilities
+
+# Always include crosscompile utilities as they provide functions needed
+# even for native builds (e.g., blender_setup_host_tool)
+include(build_files/cmake/crosscompile.cmake)
+
+if(CMAKE_CROSSCOMPILING)
+  blender_create_cross_target(NATIVE Release)
+endif()
+
 # There are some circumstances where the git checkout doesn't grab
 # the files from LFS but produces small pointer files. The build system
 # does not pick up on this, and at runtime blender will throw a strange

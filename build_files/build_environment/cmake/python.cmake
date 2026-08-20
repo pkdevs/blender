@@ -10,7 +10,7 @@ if(BUILD_MODE STREQUAL Debug)
 endif()
 
 if(WIN32)
-  set(PYTHON_BINARY ${LIBDIR}/python/python${PYTHON_POSTFIX}.exe)
+  set(PYTHON_BINARY ${LIBDIR_HOST}/python/python${PYTHON_POSTFIX}.exe)
   set(PYTHON_SRC ${BUILD_DIR}/python/src/external_python/)
   # Return values:
   # - `${ResultingPath}`: the DOS-style path.

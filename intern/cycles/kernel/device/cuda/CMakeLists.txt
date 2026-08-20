@@ -151,8 +151,8 @@ if(WITH_CYCLES_CUDA_BINARIES)
 
     add_custom_command(
       OUTPUT ${cuda_file_compressed}
-      COMMAND "$<TARGET_FILE:zstd_compress>" ${cuda_file} ${cuda_file_compressed}
-      DEPENDS ${cuda_file})
+      COMMAND "$<TARGET_FILE:host_zstd_compress>" ${cuda_file} ${cuda_file_compressed}
+      DEPENDS ${cuda_file} host_zstd_compress)
 
     unset(_cuda_nvcc_args)
     delayed_install("${CMAKE_CURRENT_BINARY_DIR}" "${cuda_file_compressed}" ${CYCLES_INSTALL_PATH}/lib)

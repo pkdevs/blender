@@ -96,8 +96,8 @@ if(WITH_CYCLES_CUDA_BINARIES AND WITH_CYCLES_DEVICE_OPTIX)
 
     add_custom_command(
       OUTPUT ${output_compressed}
-      COMMAND "$<TARGET_FILE:zstd_compress>" ${output} ${output_compressed}
-      DEPENDS ${output})
+      COMMAND "$<TARGET_FILE:host_zstd_compress>" ${output} ${output_compressed}
+      DEPENDS ${output} host_zstd_compress)
 
     list(APPEND optix_ptx ${output_compressed})
     set(optix_ptx "${optix_ptx}" PARENT_SCOPE)

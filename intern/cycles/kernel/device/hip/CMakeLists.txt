@@ -98,8 +98,8 @@ if(WITH_CYCLES_HIP_BINARIES AND WITH_CYCLES_DEVICE_HIP)
       DEPENDS ${kernel_sources})
     add_custom_command(
       OUTPUT ${hip_file_compressed}
-      COMMAND "$<TARGET_FILE:zstd_compress>" ${hip_file} ${hip_file_compressed}
-      DEPENDS ${hip_file})
+      COMMAND "$<TARGET_FILE:host_zstd_compress>" ${hip_file} ${hip_file_compressed}
+      DEPENDS ${hip_file} host_zstd_compress)
     delayed_install("${CMAKE_CURRENT_BINARY_DIR}" "${hip_file_compressed}" ${CYCLES_INSTALL_PATH}/lib)
     list(APPEND hip_fatbins ${hip_file_compressed})
     set(hip_fatbins "${hip_fatbins}" PARENT_SCOPE)

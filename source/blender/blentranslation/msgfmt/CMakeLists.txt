@@ -34,6 +34,7 @@ add_executable(msgfmt ${SRC})
 setup_platform_linker_flags(msgfmt)
 blender_target_include_dirs(msgfmt ${INC})
 target_link_libraries(msgfmt ${LIB})
+blender_setup_host_tool(msgfmt MSGFMT)
 
 # If using an external manifest, copy it to the output directory after building.
 if(WITH_WINDOWS_EXTERNAL_MANIFEST)

@@ -73,6 +73,17 @@ if(WITH_CYCLES_DEVICE_ONEAPI)
     -o"${cycles_kernel_oneapi_lib}"
     -I"${CMAKE_CURRENT_SOURCE_DIR}/../../.."
   )
+  if(WIN32)
+    if(CMAKE_CROSSCOMPILING)
+      if(CMAKE_SYSTEM_PROCESSOR MATCHES "AMD64|x86_64")
+        set(sycl_compiler_flags --target=x86_64-pc-windows-msvc ${sycl_compiler_flags})
+      elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "ARM64|aarch64")
+        set(sycl_compiler_flags --target=aarch64-pc-windows-msvc ${sycl_compiler_flags})
+      else()
+        message(FATAL_ERROR "Unsupported system processor when cross-compiling for Windows: ${CMAKE_SYSTEM_PROCESSOR}")
+      endif()
+    endif()
+  endif()
   # SYCL_CPP_FLAGS is a variable that the user can set to pass extra compiler options.
   if(DEFINED SYCL_CPP_FLAGS)
     list(APPEND sycl_compiler_flags ${SYCL_CPP_FLAGS})

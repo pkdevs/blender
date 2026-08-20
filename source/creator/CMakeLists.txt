@@ -1184,7 +1184,7 @@ elseif(WIN32)
       # clang-cl doesn't support stripped pdbs yet, it takes the /PDBSTRIPPED argument
       # without errors, but will just proceed to not do anything with it. So for now
       # just call pdbcopy manually to create the stripped pdb.
-      if(CMAKE_SYSTEM_PROCESSOR STREQUAL "ARM64")
+      if(CMAKE_HOST_SYSTEM_PROCESSOR STREQUAL "ARM64")
         set(SDK_SEARCH_DIR $ENV{WindowsSdkDir}/Debuggers/arm64)
       else()
         set(SDK_SEARCH_DIR $ENV{WindowsSdkDir}/Debuggers/x64)

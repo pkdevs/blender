@@ -87,6 +87,7 @@ add_executable(shader_tool shader_tool.cc ${SRC})
 blender_target_include_dirs(shader_tool ${INC})
 
 optimize_debug_target(shader_tool)
+blender_setup_host_tool(shader_tool SHADER_TOOL)
 
 if(WITH_GTESTS)
   set(TEST_SRC

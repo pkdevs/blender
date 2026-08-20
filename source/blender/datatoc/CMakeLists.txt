@@ -12,3 +12,4 @@ set(SRC
 # `SRC_DNA_INC` is defined in the parent directory.
 add_executable(datatoc ${SRC})
 optimize_debug_target(datatoc)
+blender_setup_host_tool(datatoc DATATOC)

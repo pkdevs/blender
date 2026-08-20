@@ -408,6 +408,7 @@ setup_platform_linker_flags(makesrna)
 setup_platform_linker_libs(makesrna)
 blender_target_include_dirs(makesrna ${INC})
 blender_target_include_dirs_sys(makesrna ${INC_SYS})
+blender_setup_host_tool(makesrna MAKESRNA)
 
 target_link_libraries(makesrna PRIVATE bf_dna)
 target_link_libraries(makesrna PRIVATE bf::intern::atomic)
@@ -426,11 +427,11 @@ add_custom_command(
   OUTPUT ${GENSRC}
   COMMAND
     ${CMAKE_COMMAND} -E env ${PLATFORM_ENV_BUILD}
-    "$<TARGET_FILE:makesrna>"
+    "$<TARGET_FILE:host_makesrna>"
     ${CMAKE_SOURCE_DIR}/source/blender/makesdna/
     ${CMAKE_CURRENT_BINARY_DIR}/
     ${CMAKE_CURRENT_BINARY_DIR}/../
-  DEPENDS makesrna
+  DEPENDS host_makesrna
 )
 
 # Build bf_rna

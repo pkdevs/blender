@@ -117,8 +117,8 @@ if(WITH_CYCLES_HIP_BINARIES AND WITH_CYCLES_DEVICE_HIPRT)
     )
     add_custom_command(
       OUTPUT ${hiprt_file_compressed}
-      COMMAND "$<TARGET_FILE:zstd_compress>" ${hiprt_file} ${hiprt_file_compressed}
-      DEPENDS ${hiprt_file}
+      COMMAND "$<TARGET_FILE:host_zstd_compress>" ${hiprt_file} ${hiprt_file_compressed}
+      DEPENDS ${hiprt_file} host_zstd_compress
     )
     delayed_install("${CMAKE_CURRENT_BINARY_DIR}" "${hiprt_file_compressed}" ${CYCLES_INSTALL_PATH}/lib)
     list(APPEND hiprt_hipfb ${hiprt_file_compressed})
