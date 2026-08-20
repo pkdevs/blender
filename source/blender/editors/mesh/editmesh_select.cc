@@ -139,9 +139,9 @@ static inline bool is_count_a_match(const eElemCountType type,
  * \{ */
 
 void EDBM_select_mirrored(BMEditMesh *em,
+                          const Mesh *mesh,
                           const int axis,
                           const bool extend,
-                          const bool use_topology,
                           int *r_totmirr,
                           int *r_totfail)
 {
@@ -149,6 +149,7 @@ void EDBM_select_mirrored(BMEditMesh *em,
   BMIter iter;
   int totmirr = 0;
   int totfail = 0;
+  bool use_topology = mesh->editflag & ME_EDIT_MIRROR_TOPO;
 
   *r_totmirr = *r_totfail = 0;
 
@@ -4882,7 +4883,6 @@ static wmOperatorStatus edbm_select_mirror_exec(bContext *C, wmOperator *op)
   ViewLayer *view_layer = CTX_data_view_layer(C);
   const int axis_flag = RNA_enum_get(op->ptr, "axis");
   const bool extend = RNA_boolean_get(op->ptr, "extend");
-  const bool topology = RNA_boolean_get(op->ptr, "topology");
   Object *obedit_active = CTX_data_edit_object(C);
   BMEditMesh *em_active = BKE_editmesh_from_object(obedit_active);
   const int select_mode = em_active->bm->selectmode;
@@ -4902,7 +4902,8 @@ static wmOperatorStatus edbm_select_mirror_exec(bContext *C, wmOperator *op)
 
     for (int axis = 0; axis < 3; axis++) {
       if ((1 << axis) & axis_flag) {
-        EDBM_select_mirrored(em, axis, extend, topology, &tot_mirr_iter, &tot_fail_iter);
+        EDBM_select_mirrored(
+            em, id_cast<const Mesh *>(obedit->data), axis, extend, &tot_mirr_iter, &tot_fail_iter);
       }
     }
 
@@ -4940,12 +4941,7 @@ void MESH_OT_select_mirror(wmOperatorType *ot)
 
   /* Props. */
   RNA_def_enum_flag(ot->srna, "axis", rna_enum_axis_flag_xyz_items, (1 << 0), "Axis", "");
-  RNA_def_boolean(
-      ot->srna,
-      "topology",
-      false,
-      "Topology",
-      "Use topology based mirroring (for when both sides of mesh have matching, unique topology)");
+
   RNA_def_boolean(ot->srna, "extend", false, "Extend", "Extend the existing selection");
 }
 
