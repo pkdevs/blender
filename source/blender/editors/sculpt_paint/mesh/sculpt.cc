@@ -3400,13 +3400,15 @@ static brushes::CursorSampleResult calc_brush_node_mask(const Depsgraph &depsgra
 
     tip_normal = tilt_apply_to_normal(tip_normal, *ss.cache, brush.tilt_strength_factor);
 
-    const float special_rotation = bke::brush::supports_rake(brush) ?
-                                       ss.cache->special_rotation :
-                                       BKE_brush_mask_texture_get(&brush, OB_MODE_SCULPT)->rot;
+    /* TODO: For brushes that does not support rake, we should allow users to set a starting
+     * rotation. Should be implemented after moving Rake and Rotation settings from the texture
+     * datablock. */
+    const float tip_rotation = bke::brush::supports_rake(brush) ? ss.cache->special_rotation :
+                                                                  0.0f;
     float4x4 brush_local_mat;
     float4x4 brush_local_mat_inv;
     calc_brush_local_mat(
-        0, special_rotation, ob, tip_normal, brush_local_mat.ptr(), brush_local_mat_inv.ptr());
+        0, tip_rotation, ob, tip_normal, brush_local_mat.ptr(), brush_local_mat_inv.ptr());
 
     std::optional<float3> plane_normal = brush.falloff_shape == PAINT_FALLOFF_SHAPE_SPHERE ?
                                              std::optional{tip_normal} :
@@ -6739,9 +6741,10 @@ void cube_tip_init(const Sculpt & /*sd*/, const Object &ob, const Brush &brush, 
   float tmat[4][4];
   float unused[4][4];
 
-  const float tip_rotation = bke::brush::supports_rake(brush) ?
-                                 ss.cache->special_rotation :
-                                 BKE_brush_mask_texture_get(&brush, OB_MODE_SCULPT)->rot;
+  /* TODO: For brushes that does not support rake, we should allow users to set a starting
+   * rotation. Should be implemented after moving Rake and Rotation settings from the texture
+   * datablock. */
+  const float tip_rotation = bke::brush::supports_rake(brush) ? ss.cache->special_rotation : 0.0f;
   zero_m4(mat);
   calc_brush_local_mat(0.0,
                        tip_rotation,
