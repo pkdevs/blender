@@ -759,7 +759,20 @@ void DrawCacheImpl::AttributeData::ensure_buffer_capacity(const GPUVertFormat &f
 
 void DrawCacheImpl::AttributeData::update(const NodeInfo &node_info)
 {
-  GPU_vertbuf_use(vbo.get());
+  gpu::VertBuf *vbo = this->vbo.get();
+  /* Nodes with no visible geometry (e.g. fully hidden BMesh nodes after dyntopo) don't have any
+   * space assigned to them. Their buffer range is invalid (`offset = -1, len = 0`), so there is
+   * nothing to upload and the derived byte offsets would be out of bounds. */
+  if (node_info.vbo.len <= 0 || !node_info.vbo.is_space_assigned) {
+    return;
+  }
+  /* The VBO can be missing or smaller than the buffer space if the attribute's update function
+   * skipped resizing it. Never upload out of bounds ranges. */
+  if (vbo == nullptr ||
+      uint64_t(node_info.vbo.offset) + uint64_t(node_info.vbo.len) > uint64_t(vbo->vertex_alloc)) {
+    return;
+  }
+  GPU_vertbuf_use(vbo);
   uint8_t *data = vbo->data<uint8_t>().data();
   data += node_info.vbo.offset * vbo->format.stride;
   vbo->update_sub(
