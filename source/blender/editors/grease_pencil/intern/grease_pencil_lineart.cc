@@ -19,7 +19,7 @@
 #include "BKE_report.hh"
 #include "BKE_scene.hh"
 #include "BKE_screen.hh"
-
+#include "BLT_translation.hh"
 #include "DNA_curves_types.h"
 #include "DNA_modifier_types.h"
 
@@ -505,6 +505,17 @@ static wmOperatorStatus lineart_gpencil_clear_strokes_exec(bContext *C, wmOperat
   return OPERATOR_FINISHED;
 }
 
+static std::string lineart_bake_strokes_get_description(bContext * /*C*/,
+                                                        wmOperatorType *ot,
+                                                        PointerRNA *properties)
+{
+  const bool bake_all = RNA_boolean_get(properties, "bake_all");
+  if (bake_all) {
+    return TIP_("Bake Line Art for all Grease Pencil Objects");
+  }
+  return ot->description ? CTX_IFACE_(ot->translation_context, ot->description) : "";
+}
+
 static void OBJECT_OT_lineart_bake_strokes(wmOperatorType *ot)
 {
   ot->name = "Bake Line Art";
@@ -515,6 +526,7 @@ static void OBJECT_OT_lineart_bake_strokes(wmOperatorType *ot)
   ot->invoke = lineart_bake_strokes_invoke;
   ot->exec = lineart_bake_strokes_exec;
   ot->modal = lineart_bake_strokes_common_modal;
+  ot->get_description = lineart_bake_strokes_get_description;
 
   RNA_def_boolean(ot->srna, "bake_all", false, "Bake All", "Bake all Line Art modifiers");
 }
