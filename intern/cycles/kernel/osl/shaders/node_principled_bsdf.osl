@@ -59,7 +59,7 @@ shader node_principled_bsdf(string distribution = "multi_ggx",
 
   float alpha_x = r2, alpha_y = r2;
 
-  int is_backfacing = !ThinWall && backfacing();
+  int is_backfacing_no_thin_wall = !ThinWall && backfacing();
 
   /* Handle anisotropy. */
   vector T = Tangent;
@@ -118,8 +118,8 @@ shader node_principled_bsdf(string distribution = "multi_ggx",
       color F90 = color(1.0);
       // TODO: since this is a layer over an opaque slab, no IOR inversion is needed
       //       But how to deal with double sided cases?
-      float thinfilm_ior = is_backfacing ? ThinFilmIOR / eta : ThinFilmIOR;
-      eta = is_backfacing ? 1.0 / eta : eta;
+      float thinfilm_ior = is_backfacing_no_thin_wall ? ThinFilmIOR / eta : ThinFilmIOR;
+      eta = is_backfacing_no_thin_wall ? 1.0 / eta : eta;
       BSDF = layer(generalized_schlick_bsdf(Normal,
                                             T,
                                             color(1.0),
@@ -208,7 +208,7 @@ shader node_principled_bsdf(string distribution = "multi_ggx",
 
     // TODO: since the dielectric_bsdf does implicit IOR inversion for backfacing we need to add an
     //       and explicit IOR inversion to counter this.
-    coat_ior = is_backfacing ? 1.0 / coat_ior : coat_ior;
+    coat_ior = backfacing() ? 1.0 / coat_ior : coat_ior;
 
     closure color CoatBSDF = dielectric_bsdf(
         CoatNormal, vector(0.0), color(1.0), color(0.0), coat_r2, coat_r2, coat_ior, "multi_ggx");
