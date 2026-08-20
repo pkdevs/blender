@@ -976,7 +976,7 @@ class ASSETBROWSER_MT_context_menu(AssetBrowserMenu, Menu):
         if bpy.ops.asset.assets_download.poll():
             layout.operator("asset.assets_download", icon='DOWNLOAD')
             add_separator = True
-        if context.asset.metadata.webpage:
+        if context.asset and context.asset.metadata.webpage:
             layout.operator("wm.url_open", text="Visit Webpage", icon='URL').url = context.asset.metadata.webpage
             add_separator = True
         if add_separator:
