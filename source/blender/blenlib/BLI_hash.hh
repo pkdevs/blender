@@ -105,6 +105,7 @@ template<typename T> struct DefaultHash {
                        })
     {
       /* When the type has an overload of the #hash_value which is standard popularized by boost.
+       * https://www.boost.org/doc/libs/latest/libs/container_hash/doc/html/hash.html
        * This works e.g. for the pxr::SdfPath type. */
       return hash_value(value);
     }
