@@ -171,11 +171,11 @@ static bool UNUSED_FUNCTION(EDBM_select_mirrored_extend_all)(Object *obedit, BME
   const Mesh *mesh = id_cast<const Mesh *>(obedit->data);
   if (std::optional<EditMeshSymmetryHelper> symmetry_helper =
           EditMeshSymmetryHelper::create_if_needed(obedit,
-                                                    symmetry_htype,
-                                                    mesh->symmetry,
-                                                    (symmetry_htype & BM_VERT) != 0,
-                                                    (symmetry_htype & BM_EDGE) != 0,
-                                                    (symmetry_htype & BM_FACE) != 0))
+                                                   symmetry_htype,
+                                                   mesh->symmetry,
+                                                   (symmetry_htype & BM_VERT) != 0,
+                                                   (symmetry_htype & BM_EDGE) != 0,
+                                                   (symmetry_htype & BM_FACE) != 0))
   {
     const char hflag = BM_ELEM_SELECT;
     BMIter iter;
@@ -4818,7 +4818,8 @@ static wmOperatorStatus edbm_select_mirror_exec(bContext *C, wmOperator *op)
             EditMeshSymmetryHelper::create_if_needed(
                 obedit, htype, uint8_t(axis_flag), true, false, false, topology))
     {
-      std::tie(tot_mirr_iter, tot_fail_iter) = symmetry_helper->select_mirrored(extend);
+      std::tie(tot_mirr_iter, tot_fail_iter) = symmetry_helper->set_all_mirrored(BM_ELEM_SELECT,
+                                                                                 extend);
     }
 
     if (tot_mirr_iter) {

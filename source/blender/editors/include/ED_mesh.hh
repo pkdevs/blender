@@ -74,8 +74,11 @@ class EditMeshSymmetryHelper {
   void apply_on_mirror_edges(BMEdge *e, FunctionRef<void(BMEdge *)> op) const;
   void apply_on_mirror_faces(BMFace *f, FunctionRef<void(BMFace *)> op) const;
 
-  /** \return {tot_mirror, tot_fail}. */
-  std::pair<int, int> select_mirrored(bool extend) const;
+  /**
+   * Scans the entire mesh for elements with \a hflag set and selects their mirrors.
+   * \return {tot_mirror, tot_fail}.
+   */
+  std::pair<int, int> set_all_mirrored(char hflag, bool extend) const;
 
  private:
   EditMeshSymmetryHelper(Object *ob,

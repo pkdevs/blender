@@ -576,7 +576,8 @@ bool EditMeshSymmetryHelper::set_hflag_on_mirror_faces(BMFace *f,
   return found;
 }
 
-std::pair<int, int> EditMeshSymmetryHelper::select_mirrored(const bool extend) const
+std::pair<int, int> EditMeshSymmetryHelper::set_all_mirrored(const char hflag,
+                                                             const bool extend) const
 {
   BMesh *bm = em_->bm;
   BMIter iter;
@@ -591,7 +592,7 @@ std::pair<int, int> EditMeshSymmetryHelper::select_mirrored(const bool extend) c
     source_verts.reserve(bm->totvertsel);
     BMVert *v;
     BM_ITER_MESH (v, &iter, bm, BM_VERTS_OF_MESH) {
-      if (BM_elem_flag_test(v, BM_ELEM_SELECT) && !BM_elem_flag_test(v, BM_ELEM_HIDDEN)) {
+      if (BM_elem_flag_test(v, hflag) && !BM_elem_flag_test(v, BM_ELEM_HIDDEN)) {
         source_verts.append(v);
       }
     }
@@ -600,7 +601,7 @@ std::pair<int, int> EditMeshSymmetryHelper::select_mirrored(const bool extend) c
     source_edges.reserve(bm->totedgesel);
     BMEdge *e;
     BM_ITER_MESH (e, &iter, bm, BM_EDGES_OF_MESH) {
-      if (BM_elem_flag_test(e, BM_ELEM_SELECT) && !BM_elem_flag_test(e, BM_ELEM_HIDDEN)) {
+      if (BM_elem_flag_test(e, hflag) && !BM_elem_flag_test(e, BM_ELEM_HIDDEN)) {
         source_edges.append(e);
       }
     }
@@ -609,18 +610,18 @@ std::pair<int, int> EditMeshSymmetryHelper::select_mirrored(const bool extend) c
     source_faces.reserve(bm->totfacesel);
     BMFace *f;
     BM_ITER_MESH (f, &iter, bm, BM_FACES_OF_MESH) {
-      if (BM_elem_flag_test(f, BM_ELEM_SELECT) && !BM_elem_flag_test(f, BM_ELEM_HIDDEN)) {
+      if (BM_elem_flag_test(f, hflag) && !BM_elem_flag_test(f, BM_ELEM_HIDDEN)) {
         source_faces.append(f);
       }
     }
   }
 
   if (!extend) {
-    EDBM_flag_disable_all(em_, BM_ELEM_SELECT);
+    EDBM_flag_disable_all(em_, hflag);
   }
 
   for (BMVert *v : source_verts) {
-    if (set_hflag_on_mirror_verts(v, BM_ELEM_SELECT, true)) {
+    if (set_hflag_on_mirror_verts(v, hflag, true)) {
       tot_mirr++;
     }
     else {
@@ -628,7 +629,7 @@ std::pair<int, int> EditMeshSymmetryHelper::select_mirrored(const bool extend) c
     }
   }
   for (BMEdge *e : source_edges) {
-    if (set_hflag_on_mirror_edges(e, BM_ELEM_SELECT, true)) {
+    if (set_hflag_on_mirror_edges(e, hflag, true)) {
       tot_mirr++;
     }
     else {
@@ -636,7 +637,7 @@ std::pair<int, int> EditMeshSymmetryHelper::select_mirrored(const bool extend) c
     }
   }
   for (BMFace *f : source_faces) {
-    if (set_hflag_on_mirror_faces(f, BM_ELEM_SELECT, true)) {
+    if (set_hflag_on_mirror_faces(f, hflag, true)) {
       tot_mirr++;
     }
     else {
