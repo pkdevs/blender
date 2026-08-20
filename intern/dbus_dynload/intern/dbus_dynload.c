@@ -39,7 +39,7 @@ bool dbus_dynload_init(const bool verbose)
   }
 
   /* NOTE: unlike `wayland_dynload`, there is no `atexit` unload. DBUS is used from a background
-   * thread which may still be running at exit (see #GHOST_DBusWatcher), unloading the library
+   * thread which may still be running at exit (see #GHOST_SystemDBusUnix), unloading the library
    * from under it would crash. Keeping it loaded for the life of the process is harmless. */
 
 #define DBUS_DYNLOAD_FN(symbol) \

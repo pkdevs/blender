@@ -28,7 +28,7 @@
 #endif
 
 #ifdef WITH_GHOST_DBUS
-#  include "GHOST_DBusWatcher.hh"
+#  include "GHOST_SystemDBusUnix.hh"
 #  include <atomic>
 #  include <memory>
 #endif
@@ -409,7 +409,7 @@ class GHOST_SystemWayland : public GHOST_System {
   struct GWL_Display *display_;
 
 #ifdef WITH_GHOST_DBUS
-  std::unique_ptr<GHOST_DBusWatcher> dbus_watcher_;
+  std::unique_ptr<GHOST_SystemDBusUnix> dbus_watcher_;
   /** Written from the watcher's background thread, see #getSystemColorScheme. */
   std::atomic<GHOST_TColorScheme> color_scheme_ = GHOST_kColorSchemeUnknown;
 #endif

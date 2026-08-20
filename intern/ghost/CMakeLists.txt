@@ -428,9 +428,9 @@ elseif(WITH_GHOST_X11 OR WITH_GHOST_WAYLAND)
       ${dbus_INCLUDE_DIRS}
     )
     list(APPEND SRC
-      intern/GHOST_DBusWatcher.cc
+      intern/GHOST_SystemDBusUnix.cc
 
-      intern/GHOST_DBusWatcher.hh
+      intern/GHOST_SystemDBusUnix.hh
     )
     add_definitions(-DWITH_GHOST_DBUS)
 

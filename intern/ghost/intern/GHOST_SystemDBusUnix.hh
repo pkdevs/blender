@@ -18,7 +18,7 @@
 #  include <variant>
 
 /**
- * The value of a desktop setting, see #GHOST_DBusWatcher::setting_add.
+ * The value of a desktop setting, see #GHOST_SystemDBusUnix::setting_add.
  */
 using GHOST_DBusValue = std::variant<bool, int32_t, uint32_t, double, std::string>;
 
@@ -36,7 +36,7 @@ using GHOST_DBusValue = std::variant<bool, int32_t, uint32_t, double, std::strin
  * each setting happen on the background thread, so a slow (or unresponsive) bus doesn't delay
  * startup.
  */
-class GHOST_DBusWatcher {
+class GHOST_SystemDBusUnix {
  public:
   /** Shared with the background thread, see the note on detaching in the destructor. */
   struct Data;
@@ -48,11 +48,11 @@ class GHOST_DBusWatcher {
  public:
   using SettingChangedFn = std::function<void(const GHOST_DBusValue &value)>;
 
-  GHOST_DBusWatcher();
-  ~GHOST_DBusWatcher();
+  GHOST_SystemDBusUnix();
+  ~GHOST_SystemDBusUnix();
 
-  GHOST_DBusWatcher(const GHOST_DBusWatcher &) = delete;
-  GHOST_DBusWatcher &operator=(const GHOST_DBusWatcher &) = delete;
+  GHOST_SystemDBusUnix(const GHOST_SystemDBusUnix &) = delete;
+  GHOST_SystemDBusUnix &operator=(const GHOST_SystemDBusUnix &) = delete;
 
   /**
    * Register a portal setting to watch, must be called before #start.

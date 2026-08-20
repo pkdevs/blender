@@ -9108,7 +9108,7 @@ GHOST_SystemWayland::GHOST_SystemWayland(const bool background)
 #ifdef WITH_GHOST_DBUS
   /* Like the WAYLAND event thread, there's no need for this in background mode. */
   if (!background) {
-    dbus_watcher_ = std::make_unique<GHOST_DBusWatcher>();
+    dbus_watcher_ = std::make_unique<GHOST_SystemDBusUnix>();
     dbus_watcher_->setting_add(
         "org.freedesktop.appearance", "color-scheme", [this](const GHOST_DBusValue &value) {
           const uint32_t *value_uint = std::get_if<uint32_t>(&value);

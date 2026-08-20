@@ -8,7 +8,7 @@
 
 #ifdef WITH_GHOST_DBUS
 
-#  include "GHOST_DBusWatcher.hh"
+#  include "GHOST_SystemDBusUnix.hh"
 
 #  include "GHOST_Debug.hh"
 
@@ -43,7 +43,7 @@ static constexpr int SETTING_READ_TIMEOUT_MS = 5000;
 /** How long the destructor waits for the background thread, see the note there. */
 static constexpr int THREAD_EXIT_TIMEOUT_MS = 250;
 
-struct GHOST_DBusWatcher::Data {
+struct GHOST_SystemDBusUnix::Data {
   struct Setting {
     std::string name_space;
     std::string key;
@@ -59,7 +59,7 @@ struct GHOST_DBusWatcher::Data {
    */
   std::mutex mutex;
   std::condition_variable finished_cond;
-  /** Signalled once #initial_done is set, see #GHOST_DBusWatcher::wait_initial. */
+  /** Signalled once #initial_done is set, see #GHOST_SystemDBusUnix::wait_initial. */
   std::condition_variable initial_cond;
   bool stop = false;
   bool finished = false;
@@ -78,7 +78,7 @@ struct GHOST_DBusWatcher::Data {
   std::vector<std::pair<size_t, GHOST_DBusValue>> pending;
 };
 
-using WatcherData = GHOST_DBusWatcher::Data;
+using WatcherData = GHOST_SystemDBusUnix::Data;
 
 static bool value_from_iter(DBusMessageIter *iter, GHOST_DBusValue &r_value)
 {
@@ -308,7 +308,7 @@ static bool settings_subscribe(WatcherData *data, DBusConnection *connection)
   return true;
 }
 
-/** Release anyone waiting in #GHOST_DBusWatcher::wait_initial. */
+/** Release anyone waiting in #GHOST_SystemDBusUnix::wait_initial. */
 static void initial_done_set(WatcherData *data)
 {
   {
@@ -327,7 +327,7 @@ static bool thread_should_stop(WatcherData *data)
   return data->stop;
 }
 
-static void thread_run(std::shared_ptr<GHOST_DBusWatcher::Data> data_ptr)
+static void thread_run(std::shared_ptr<GHOST_SystemDBusUnix::Data> data_ptr)
 {
   WatcherData *data = data_ptr.get();
 
@@ -379,9 +379,9 @@ static void thread_run(std::shared_ptr<GHOST_DBusWatcher::Data> data_ptr)
   data->finished_cond.notify_all();
 }
 
-GHOST_DBusWatcher::GHOST_DBusWatcher() : data_(std::make_shared<Data>()) {}
+GHOST_SystemDBusUnix::GHOST_SystemDBusUnix() : data_(std::make_shared<Data>()) {}
 
-GHOST_DBusWatcher::~GHOST_DBusWatcher()
+GHOST_SystemDBusUnix::~GHOST_SystemDBusUnix()
 {
   if (!thread_.joinable()) {
     return;
@@ -415,7 +415,7 @@ GHOST_DBusWatcher::~GHOST_DBusWatcher()
   thread_.join();
 }
 
-bool GHOST_DBusWatcher::wait_initial(const int timeout_ms)
+bool GHOST_SystemDBusUnix::wait_initial(const int timeout_ms)
 {
   if (!thread_.joinable()) {
     return false;
@@ -425,9 +425,9 @@ bool GHOST_DBusWatcher::wait_initial(const int timeout_ms)
       lock, std::chrono::milliseconds(timeout_ms), [this] { return data_->initial_done; });
 }
 
-void GHOST_DBusWatcher::setting_add(const char *name_space,
-                                    const char *key,
-                                    SettingChangedFn on_change)
+void GHOST_SystemDBusUnix::setting_add(const char *name_space,
+                                       const char *key,
+                                       SettingChangedFn on_change)
 {
   GHOST_ASSERT(!thread_.joinable(), "Settings must be added before starting the watcher");
   Data::Setting &setting = data_->settings.emplace_back();
@@ -436,7 +436,7 @@ void GHOST_DBusWatcher::setting_add(const char *name_space,
   setting.on_change = std::move(on_change);
 }
 
-bool GHOST_DBusWatcher::start()
+bool GHOST_SystemDBusUnix::start()
 {
   if (data_->settings.empty()) {
     return false;
