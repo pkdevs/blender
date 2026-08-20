@@ -367,6 +367,9 @@ struct SymbolParser : NodeErrorHandler {
         SymbolVariable *sym = table.var_arena.alloc(&scope, type, decl, table);
         sym->type = type;
         if (scope.variable_emplace(sym)) {
+          NOTE(scope.variables.find(sym->identifier)->second.first.tok,
+               Diag::PreviousDefinition,
+               sym->identifier);
           error(sym->loc.tok, Diag::Redefinition, sym->identifier);
         }
       }
