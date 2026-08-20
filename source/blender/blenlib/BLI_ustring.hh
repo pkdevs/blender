@@ -15,16 +15,6 @@ namespace blender {
 namespace detail {
 
 /**
- * A #StringRef paired with its already-computed hash, so that looking up a string in the global
- * string table doesn't need to hash it again when it also has to be hashed for the potential
- * insertion right after.
- */
-struct StrWithHash {
-  StringRef str;
-  uint64_t hash;
-};
-
-/**
  * Unique storage for a string. Owned by a global table. Comparing pointers to the unique values
  * in the table is enough to test for equality. Do not access these fields directly.
  */
@@ -40,11 +30,6 @@ struct UStringEntry {
   friend bool operator==(const UStringEntry &a, const StringRef b)
   {
     return a.str == b;
-  }
-
-  friend bool operator==(const UStringEntry &a, const blender::detail::StrWithHash &b)
-  {
-    return a.str == b.str;
   }
 };
 
@@ -162,11 +147,6 @@ template<> struct DefaultHash<blender::detail::UStringEntry> {
   constexpr uint64_t operator()(const StringRef value) const
   {
     return get_default_hash(value);
-  }
-
-  constexpr uint64_t operator()(const blender::detail::StrWithHash &value) const
-  {
-    return value.hash;
   }
 };
 
