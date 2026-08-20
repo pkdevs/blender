@@ -35,7 +35,7 @@ struct SurfShadow {
   [[legacy_info]] ShaderCreateInfo eevee_geom_iface_info;
 
   [[storage(SHADOW_RENDER_MAP_BUF_SLOT,
-            read)]] const uint (&render_map_buf)[SHADOW_RENDER_MAP_SIZE];
+            read)]] const uint (&render_map_buf)[/*SHADOW_RENDER_MAP_SIZE*/];
 
   [[image(SHADOW_ATLAS_IMG_SLOT, read_write, UINT_32)]] uimage2DArrayAtomic shadow_atlas_img;
 };

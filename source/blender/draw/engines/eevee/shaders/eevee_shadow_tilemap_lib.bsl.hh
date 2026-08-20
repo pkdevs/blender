@@ -53,7 +53,9 @@ uint2 shadow_tile_coord_in_atlas(uint2 tile, int tilemap_index)
  */
 int shadow_tile_offset(uint2 tile, int tiles_index, int lod)
 {
+#ifdef GLSL_CPP_STUBS
   static_assert(SHADOW_TILEMAP_LOD <= 5, "This needs to be adjusted");
+#endif
   constexpr int lod0_width = SHADOW_TILEMAP_RES / 1;
   constexpr int lod1_width = SHADOW_TILEMAP_RES / 2;
   constexpr int lod2_width = SHADOW_TILEMAP_RES / 4;

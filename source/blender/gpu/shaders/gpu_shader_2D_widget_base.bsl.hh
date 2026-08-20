@@ -12,8 +12,8 @@
 #include "gpu_shader_create_info.hh"
 
 /* TODO(fclem): Share with C code. */
-#define MAX_PARAM 12
-#define MAX_INSTANCE 6
+static constexpr int MAX_PARAM = 12;
+static constexpr int MAX_INSTANCE = 6;
 
 namespace builtin::widget {
 

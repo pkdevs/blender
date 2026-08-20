@@ -23,7 +23,7 @@
 /* NOTE: The shader is written to update 5 mipmaps using LDS.
  * Each thread actually update 4 LOD_0 pixels, which means the number of MIPLVL we cover is:
  * `(log2(HIZ_GROUP_SIZE) + 1) + LOD_0 + LAST_GROUP_LVL = HIZ_MIP_COUNT` */
-#define HIZ_GROUP_SIZE 16
+static constexpr int HIZ_GROUP_SIZE = 16;
 
 /* Avoid too much overhead caused by resizing the light buffers too many time. */
 #define LIGHT_CHUNK 256
@@ -55,7 +55,7 @@ static constexpr float SPHERE_PROBE_MIP_MAX_ROUGHNESS = 0.7f;
 /**
  * Limited by the UBO size limit `(16384 bytes / sizeof(SphereProbeData))`.
  */
-#define SPHERE_PROBE_MAX 128
+static constexpr int SPHERE_PROBE_MAX = 128;
 
 /** NOTE: Runtime format only. */
 #define VOLUME_PROBE_FORMAT SFLOAT_16_16_16_16
@@ -65,7 +65,7 @@ static constexpr float SPHERE_PROBE_MIP_MAX_ROUGHNESS = 0.7f;
  * Limited by the max layer count supported by a hardware (256).
  * Limited by the UBO size limit `(16384 bytes / sizeof(PlanarProbeData))`.
  */
-#define PLANAR_PROBE_MAX 16
+static constexpr int PLANAR_PROBE_MAX = 16;
 
 /**
  * IMPORTANT: Some data packing are tweaked for these values.
@@ -164,7 +164,7 @@ static constexpr int SUBSURFACE_GROUP_SIZE = RAYTRACE_GROUP_SIZE;
 
 /* Irradiance Cache. */
 /** Maximum number of entities inside the cache. */
-#define IRRADIANCE_GRID_MAX 64
+static constexpr int IRRADIANCE_GRID_MAX = 64;
 
 /* Depth Of Field. */
 static constexpr int DOF_TILES_SIZE = 8;
@@ -173,9 +173,9 @@ static constexpr int DOF_TILES_SIZE = 8;
 #define DOF_BOKEH_LUT_SIZE 32
 static constexpr int DOF_MAX_SLIGHT_FOCUS_RADIUS = 5;
 static constexpr int DOF_SLIGHT_FOCUS_SAMPLE_MAX = 16;
-#define DOF_MIP_COUNT 4
-#define DOF_REDUCE_GROUP_SIZE (1 << (DOF_MIP_COUNT - 1))
-#define DOF_DEFAULT_GROUP_SIZE 32
+static constexpr int DOF_MIP_COUNT = 4;
+static constexpr int DOF_REDUCE_GROUP_SIZE = (1 << (DOF_MIP_COUNT - 1));
+static constexpr int DOF_DEFAULT_GROUP_SIZE = 32;
 static constexpr int DOF_STABILIZE_GROUP_SIZE = 16;
 static constexpr int DOF_FILTER_GROUP_SIZE = 8;
 #define DOF_GATHER_GROUP_SIZE DOF_TILES_SIZE

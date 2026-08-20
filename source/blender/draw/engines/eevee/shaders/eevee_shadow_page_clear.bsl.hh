@@ -12,7 +12,7 @@ namespace eevee::shadow {
 
 struct PageClear {
   [[storage(2, read)]] const ShadowPagesInfoData &pages_infos_buf;
-  [[storage(6, read)]] const uint (&dst_coord_buf)[SHADOW_RENDER_MAP_SIZE];
+  [[storage(6, read)]] const uint (&dst_coord_buf)[/*SHADOW_RENDER_MAP_SIZE*/];
   [[image(SHADOW_ATLAS_IMG_SLOT, read_write, UINT_32)]] uimage2DArrayAtomic shadow_atlas_img;
 };
 

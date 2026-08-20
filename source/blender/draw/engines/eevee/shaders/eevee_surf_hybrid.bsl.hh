@@ -225,50 +225,50 @@ void surf_hybrid([[resource_table]] PipelineConstants &pipe,
   /* Output remaining closures using image store. */
   if (gbuf_params.gbuffer_layer_max >= 2) [[static_branch]] {
     if (!gbuf_params.gbuffer_simple_layout) [[static_branch]] {
-      if (flag_test(gbuf.used_layers, CLOSURE_DATA_2)) {
+      if (flag_test(gbuf.used_layers, UsedLayerFlag::CLOSURE_DATA_2)) {
         srt.write_closure_data(out_texel,
                                2,
                                gbuffer::closure_data_layer_dither_flush_to_zero(
                                    gbuf.closure[2], frag_co.xy, 2u, gbuffer_dither));
       }
-      if (flag_test(gbuf.used_layers, CLOSURE_DATA_3)) {
+      if (flag_test(gbuf.used_layers, UsedLayerFlag::CLOSURE_DATA_3)) {
         srt.write_closure_data(out_texel,
                                3,
                                gbuffer::closure_data_layer_dither_flush_to_zero(
                                    gbuf.closure[3], frag_co.xy, 3u, gbuffer_dither));
       }
     }
-    if (flag_test(gbuf.used_layers, NORMAL_DATA_1)) {
+    if (flag_test(gbuf.used_layers, UsedLayerFlag::NORMAL_DATA_1)) {
       srt.write_normal_data(out_texel, 1, gbuf.normal[1]);
     }
   }
   if (gbuf_params.gbuffer_layer_max >= 3) [[static_branch]] {
-    if (flag_test(gbuf.used_layers, CLOSURE_DATA_4)) {
+    if (flag_test(gbuf.used_layers, UsedLayerFlag::CLOSURE_DATA_4)) {
       srt.write_closure_data(out_texel,
                              4,
                              gbuffer::closure_data_layer_dither_flush_to_zero(
                                  gbuf.closure[4], frag_co.xy, 4u, gbuffer_dither));
     }
-    if (flag_test(gbuf.used_layers, CLOSURE_DATA_5)) {
+    if (flag_test(gbuf.used_layers, UsedLayerFlag::CLOSURE_DATA_5)) {
       srt.write_closure_data(out_texel,
                              5,
                              gbuffer::closure_data_layer_dither_flush_to_zero(
                                  gbuf.closure[5], frag_co.xy, 5u, gbuffer_dither));
     }
-    if (flag_test(gbuf.used_layers, NORMAL_DATA_2)) {
+    if (flag_test(gbuf.used_layers, UsedLayerFlag::NORMAL_DATA_2)) {
       srt.write_normal_data(out_texel, 2, gbuf.normal[2]);
     }
   }
 
 #if defined(GBUFFER_HAS_REFRACTION) || defined(GBUFFER_HAS_SUBSURFACE) || \
     defined(GBUFFER_HAS_TRANSLUCENT)
-  if (flag_test(gbuf.used_layers, ADDITIONAL_DATA)) {
+  if (flag_test(gbuf.used_layers, UsedLayerFlag::ADDITIONAL_DATA)) {
     srt.write_normal_data(
         out_texel, uni.pipeline_buf.gbuffer_additional_data_layer_id, gbuf.additional_info);
   }
 #endif
 
-  if (flag_test(gbuf.used_layers, OBJECT_ID)) {
+  if (flag_test(gbuf.used_layers, UsedLayerFlag::OBJECT_ID)) {
     srt.write_header_data(out_texel, 1, resource_id);
   }
 

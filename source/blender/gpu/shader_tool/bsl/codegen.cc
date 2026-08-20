@@ -2709,6 +2709,38 @@ struct CodegenContext : NodeErrorHandler {
     return frequency.is_valid() ? string(frequency.str()) : string("PASS");
   }
 
+  string array_size_to_string(ast::ArrayDecl array, const SymbolScope &scope)
+  {
+    if (!array.is_valid()) {
+      return "";
+    }
+
+    string str;
+    for (Subscript sub : array.children_of_type<ast::Subscript>()) {
+      if (sub.expr().is_valid()) {
+        auto [result, err] = table.expr_type_analysis(scope, sub.expr().child_first());
+        if (result.is_constexpr()) {
+          if (result.type == table.int_cls) {
+            str += '[' + to_string(value_as<int>(result.value)) + ']';
+          }
+          else if (result.type == table.uint_cls) {
+            str += '[' + to_string(value_as<uint>(result.value)) + ']';
+          }
+          else {
+            error(sub.expr(), Diag::SubscriptNotInt);
+          }
+        }
+        else {
+          error(sub.expr(), Diag::ArraySizeNotConstantExpression);
+        }
+      }
+      else {
+        str += string(sub.str());
+      }
+    }
+    return str;
+  }
+
   metadata::ParsedResource parse_resource(AttrList attributes,
                                           const string &type,
                                           const string &name,
@@ -2725,14 +2757,14 @@ struct CodegenContext : NodeErrorHandler {
         return {.line = 0,
                 .var_type = type,
                 .var_name = name,
-                .var_array = string(array.str()),
+                .var_array = array_size_to_string(array, cls),
                 .res_type = string(attr.attr.identifier().str()),
                 .res_condition = attr.parse_condition()};
       case ResourceType::SPECIALIZATION_CONST:
         return {.line = 0,
                 .var_type = type,
                 .var_name = name,
-                .var_array = string(array.str()),
+                .var_array = array_size_to_string(array, cls),
                 .res_type = string(attr.attr.identifier().str()),
                 .res_value = string(attr.param1.str()),
                 .res_condition = attr.parse_condition()};
@@ -2740,7 +2772,7 @@ struct CodegenContext : NodeErrorHandler {
         return {.line = 0,
                 .var_type = type,
                 .var_name = name,
-                .var_array = string(array.str()),
+                .var_array = array_size_to_string(array, cls),
                 .res_type = string(attr.attr.identifier().str()),
                 .res_slot = string(attr.param1.str()),
                 .res_condition = attr.parse_condition(),
@@ -2749,7 +2781,7 @@ struct CodegenContext : NodeErrorHandler {
         return {.line = 0,
                 .var_type = type,
                 .var_name = name,
-                .var_array = string(array.str()),
+                .var_array = array_size_to_string(array, cls),
                 .res_type = string(attr.attr.identifier().str()),
                 .res_slot = string(attr.param1.str()),
                 .res_condition = attr.parse_condition(),
@@ -2758,7 +2790,7 @@ struct CodegenContext : NodeErrorHandler {
         return {.line = 0,
                 .var_type = type,
                 .var_name = name,
-                .var_array = string(array.str()),
+                .var_array = array_size_to_string(array, cls),
                 .res_type = string(attr.attr.identifier().str()),
                 .res_slot = string(attr.param1.str()),
                 .res_qualifier = string(attr.param2.str()),
@@ -2768,7 +2800,7 @@ struct CodegenContext : NodeErrorHandler {
         return {.line = 0,
                 .var_type = type,
                 .var_name = name,
-                .var_array = string(array.str()),
+                .var_array = array_size_to_string(array, cls),
                 .res_type = string(attr.attr.identifier().str()),
                 .res_slot = string(attr.param1.str()),
                 .res_qualifier = string(attr.param2.str()),

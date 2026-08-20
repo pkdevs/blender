@@ -208,9 +208,9 @@ struct RendermapFinalize {
   [[storage(2, read_write)]] uint (&tiles_buf)[];
   [[storage(3, read_write)]] DispatchCommand &clear_dispatch_buf;
   [[storage(4, read_write)]] DrawCommandArray &tile_draw_buf;
-  [[storage(5, write)]] uint (&dst_coord_buf)[SHADOW_RENDER_MAP_SIZE];
-  [[storage(6, write)]] uint (&src_coord_buf)[SHADOW_RENDER_MAP_SIZE];
-  [[storage(7, write)]] uint (&render_map_buf)[SHADOW_RENDER_MAP_SIZE];
+  [[storage(5, write)]] uint (&dst_coord_buf)[/*SHADOW_RENDER_MAP_SIZE*/];
+  [[storage(6, write)]] uint (&src_coord_buf)[/*SHADOW_RENDER_MAP_SIZE*/];
+  [[storage(7, write)]] uint (&render_map_buf)[/*SHADOW_RENDER_MAP_SIZE*/];
 };
 
 /**

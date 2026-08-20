@@ -63,9 +63,9 @@ float linearrgb_to_srgb(float c)
  * Dispatch with y, z = 1
  */
 #define LOCAL_SIZE_X 128
-#define TILE_SIZE 8
-#define MAX_SHARED_SAMPLES (TILE_SIZE + TILE_SIZE + 1)
-#define INPUT_LEVEL 0
+static constexpr int TILE_SIZE = 8;
+static constexpr int MAX_SHARED_SAMPLES = (TILE_SIZE + TILE_SIZE + 1);
+static constexpr int INPUT_LEVEL = 0;
 
 /** Shared storage that can store intermediate results using without encoding. */
 template<typename T> struct Shared {
