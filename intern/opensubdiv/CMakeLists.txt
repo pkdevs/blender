@@ -62,7 +62,6 @@ if(WITH_OPENSUBDIV)
 
 
     # Topology.
-    internal/topology/mesh_topology.cc
     internal/topology/mesh_topology_compare.cc
     internal/topology/mesh_topology.h
     internal/topology/topology_refiner_factory.cc

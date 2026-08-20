@@ -32,7 +32,10 @@ struct ConverterStorage {
   Settings settings;
   const Mesh *mesh;
   Span<float3> vert_positions;
+
   Span<int2> edges;
+  Array<int2> edges_manifold;
+
   OffsetIndices<int> faces;
   /* Vertex indices of face corners, using manifold vertex indices (see #manifold_vertex_index
    * below). Either an alias of Mesh::corner_verts(), or backed by #corner_verts_manifold if the
@@ -274,7 +277,6 @@ static void init_functions(OpenSubdiv_Converter *converter)
 
   converter->getFaceEdges = nullptr;
 
-  converter->getEdgeVertices = get_edge_vertices;
   converter->getNumEdgeFaces = nullptr;
   converter->getEdgeFaces = nullptr;
   converter->getEdgeSharpness = get_edge_sharpness;

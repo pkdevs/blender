@@ -27,85 +27,6 @@ static int getEffectiveNumEdges(const OpenSubdiv_Converter *converter)
   return converter->getNumEdges(converter);
 }
 
-static bool isEqualGeometryCounters(const MeshTopology &mesh_topology,
-                                    const OpenSubdiv_Converter *converter)
-{
-  if (converter->getNumVertices(converter) != mesh_topology.getNumVertices()) {
-    return false;
-  }
-  if (converter->faces.size() != mesh_topology.getNumFaces()) {
-    return false;
-  }
-  if (getEffectiveNumEdges(converter) != mesh_topology.getNumEdges()) {
-    return false;
-  }
-
-  return true;
-}
-
-////////////////////////////////////////////////////////////////////////////////
-// Geometry.
-
-// Edges.
-
-static bool isEqualGeometryEdge(const MeshTopology &mesh_topology,
-                                const OpenSubdiv_Converter *converter)
-{
-  const int num_requested_edges = getEffectiveNumEdges(converter);
-  if (num_requested_edges != mesh_topology.getNumEdges()) {
-    return false;
-  }
-
-  // NOTE: Ignoring the sharpness we don't really care of the content of the
-  // edges, they should be in the consistent state with faces and face-vertices.
-  // If that's not the case the mesh is invalid and comparison can not happen
-  // reliably.
-  //
-  // For sharpness it is important to know that edges are connecting same pair
-  // of vertices. But since sharpness is stored sparesly the connectivity will
-  // be checked when comparing edge sharpness.
-
-  return true;
-}
-
-// Faces.
-
-static bool isEqualGeometryFace(const MeshTopology &mesh_topology,
-                                const OpenSubdiv_Converter *converter)
-{
-  const int num_requested_faces = converter->faces.size();
-  if (num_requested_faces != mesh_topology.getNumFaces()) {
-    return false;
-  }
-
-  const OffsetIndices<int> faces = converter->faces;
-  const Span<int> corner_verts = converter->corner_verts;
-  for (int face_index = 0; face_index < num_requested_faces; ++face_index) {
-    const Span<int> face_verts = corner_verts.slice(faces[face_index]);
-    if (!mesh_topology.isFaceVertexIndicesEqual(face_index, face_verts.size(), face_verts.data()))
-    {
-      return false;
-    }
-  }
-
-  return true;
-}
-
-// Geometry comparison entry point.
-
-static bool isEqualGeometry(const MeshTopology &mesh_topology,
-                            const OpenSubdiv_Converter *converter)
-{
-  if (!isEqualGeometryEdge(mesh_topology, converter)) {
-    return false;
-  }
-  if (!isEqualGeometryFace(mesh_topology, converter)) {
-    return false;
-  }
-
-  return true;
-}
-
 ////////////////////////////////////////////////////////////////////////////////
 // Geometry tags.
 
@@ -159,9 +80,9 @@ static float getEffectiveEdgeSharpness(const OpenSubdiv_Converter *converter, co
 static bool isEqualEdgeTags(const MeshTopology &mesh_topology,
                             const OpenSubdiv_Converter *converter)
 {
-  const int num_edges = mesh_topology.getNumEdges();
+  const int num_edges = mesh_topology.edges.size();
   for (int edge_index = 0; edge_index < num_edges; ++edge_index) {
-    const float current_sharpness = mesh_topology.getEdgeSharpness(edge_index);
+    const float current_sharpness = mesh_topology.edge_sharpness[edge_index];
     const float requested_sharpness = getEffectiveEdgeSharpness(converter, edge_index);
 
     if (current_sharpness != requested_sharpness) {
@@ -184,37 +105,45 @@ static bool isEqualEdgeTags(const MeshTopology &mesh_topology,
   return true;
 }
 
-// Tags comparison entry point.
-
-static bool isEqualTags(const MeshTopology &mesh_topology, const OpenSubdiv_Converter *converter)
-{
-  if (!isEqualVertexTags(mesh_topology, converter)) {
-    return false;
-  }
-  if (!isEqualEdgeTags(mesh_topology, converter)) {
-    return false;
-  }
-
-  return true;
-}
-
-////////////////////////////////////////////////////////////////////////////////
-// Entry point.
-
 bool MeshTopology::isEqualToConverter(const OpenSubdiv_Converter *converter) const
 {
-  // Preliminary checks.
-  if (!isEqualGeometryCounters(*this, converter)) {
+  if (this->verts_num != converter->getNumVertices(converter)) {
+    return false;
+  }
+  if (!this->edges.empty()) {
+    if (this->edges.size() != converter->getNumEdges(converter)) {
+      return false;
+    }
+  }
+  if (this->face_offsets.size() != converter->faces.data().size()) {
     return false;
   }
 
-  // Geometry.
-  if (!isEqualGeometry(*this, converter)) {
+  if (!this->edges.empty()) {
+    // NOTE: Ignoring the sharpness we don't really care of the content of the
+    // edges, they should be in the consistent state with faces and face-vertices.
+    // If that's not the case the mesh is invalid and comparison can not happen
+    // reliably.
+    //
+    // For sharpness it is important to know that edges are connecting same pair
+    // of vertices. But since sharpness is stored sparesly the connectivity will
+    // be checked when comparing edge sharpness.
+    // if (converter->edges.cast<std::pair<int, int>>() != Span(this->edges)) {
+    //   return false;
+    // }
+  }
+
+  if (converter->faces.data() != Span(this->face_offsets)) {
+    return false;
+  }
+  if (converter->corner_verts != Span(this->corner_verts)) {
     return false;
   }
 
-  // Tags.
-  if (!isEqualTags(*this, converter)) {
+  if (!isEqualVertexTags(*this, converter)) {
+    return false;
+  }
+  if (!isEqualEdgeTags(*this, converter)) {
     return false;
   }
 

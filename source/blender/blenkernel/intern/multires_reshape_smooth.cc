@@ -888,7 +888,6 @@ static void converter_init(const MultiresReshapeSmoothContext *reshape_smooth_co
 
   converter->getFaceEdges = nullptr;
 
-  converter->getEdgeVertices = get_edge_vertices;
   converter->getNumEdgeFaces = nullptr;
   converter->getEdgeFaces = nullptr;
   converter->getEdgeSharpness = get_edge_sharpness;

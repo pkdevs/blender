@@ -60,13 +60,10 @@ inline bool TopologyRefinerFactory<TopologyRefinerData>::resizeComponentTopology
   }
 
   // Faces and face-vertices.
-  const blender::OffsetIndices<int> src_faces = converter->faces;
-  base_mesh_topology->setNumFaces(src_faces.size());
+  const blender::OffsetIndices<int> src_faces = converter->faces.data();
   setNumBaseFaces(refiner, src_faces.size());
   for (const int face_index : src_faces.index_range()) {
-    const int num_face_vertices = src_faces[face_index].size();
-    base_mesh_topology->setNumFaceVertices(face_index, num_face_vertices);
-    setNumBaseFaceVertices(refiner, face_index, num_face_vertices);
+    setNumBaseFaceVertices(refiner, face_index, src_faces[face_index].size());
   }
 
   // If converter does not provide full topology, we are done.
@@ -74,7 +71,6 @@ inline bool TopologyRefinerFactory<TopologyRefinerData>::resizeComponentTopology
   // The rest is needed to define relations between faces-of-edge and
   // edges-of-vertex, which is not available for partially specified mesh.
   if (!converter->specifiesFullTopology(converter)) {
-    base_mesh_topology->finishResizeTopology();
     return true;
   }
 
@@ -94,7 +90,6 @@ inline bool TopologyRefinerFactory<TopologyRefinerData>::resizeComponentTopology
     setNumBaseVertexFaces(refiner, vertex_index, num_vert_faces);
   }
 
-  base_mesh_topology->finishResizeTopology();
   return true;
 }
 
@@ -106,7 +101,6 @@ inline bool TopologyRefinerFactory<TopologyRefinerData>::assignComponentTopology
   using Far::IndexArray;
 
   const OpenSubdiv_Converter *converter = cb_data.converter;
-  MeshTopology *base_mesh_topology = cb_data.base_mesh_topology;
 
   const bool full_topology_specified = converter->specifiesFullTopology(converter);
 
@@ -118,7 +112,6 @@ inline bool TopologyRefinerFactory<TopologyRefinerData>::assignComponentTopology
     const blender::Span<int> face_verts = src_corner_verts.slice(src_faces[face_index]);
     IndexArray dst_face_verts = getBaseFaceVertices(refiner, face_index);
     std::copy_n(face_verts.data(), face_verts.size(), dst_face_verts.begin());
-    base_mesh_topology->setFaceVertexIndices(face_index, face_verts.size(), face_verts.data());
   }
 
   // If converter does not provide full topology, we are done.
@@ -182,7 +175,7 @@ inline bool TopologyRefinerFactory<TopologyRefinerData>::assignComponentTags(
   MeshTopology *base_mesh_topology = cb_data.base_mesh_topology;
 
   const bool full_topology_specified = converter->specifiesFullTopology(converter);
-  if (full_topology_specified || converter->getEdgeVertices != nullptr) {
+  if (full_topology_specified || !converter->edges.is_empty()) {
     const int num_edges = converter->getNumEdges(converter);
     for (int edge_index = 0; edge_index < num_edges; ++edge_index) {
       const float sharpness = converter->getEdgeSharpness(converter, edge_index);
@@ -190,10 +183,7 @@ inline bool TopologyRefinerFactory<TopologyRefinerData>::assignComponentTags(
         continue;
       }
 
-      int edge_vertices[2];
-      converter->getEdgeVertices(converter, edge_index, edge_vertices);
-      base_mesh_topology->setEdgeVertexIndices(edge_index, edge_vertices[0], edge_vertices[1]);
-      base_mesh_topology->setEdgeSharpness(edge_index, sharpness);
+      const blender::int2 edge_vertices = converter->edges[edge_index];
 
       if (full_topology_specified) {
         setBaseEdgeSharpness(refiner, edge_index, sharpness);
@@ -337,6 +327,10 @@ TopologyRefinerImpl *TopologyRefinerImpl::createFromConverter(
   using OpenSubdiv::Far::TopologyRefiner;
 
   blender::opensubdiv::MeshTopology base_mesh_topology;
+  base_mesh_topology.face_offsets = std::vector(converter->faces.data().begin(),
+                                                converter->faces.data().end());
+  base_mesh_topology.corner_verts = std::vector(converter->corner_verts.begin(),
+                                                converter->corner_verts.end());
 
   TopologyRefinerData cb_data;
   cb_data.converter = converter;

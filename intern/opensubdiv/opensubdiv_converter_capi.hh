@@ -4,11 +4,13 @@
 
 #pragma once
 
+#include "BLI_math_vector_types.hh"
 #include "BLI_offset_indices.hh"
 
 #include "opensubdiv_capi_type.hh"
 
 struct OpenSubdiv_Converter {
+  blender::Span<blender::int2> edges;
   /**
    * The face topology of the base mesh to be subdivided. See #Mesh::faces() documentation for the
    * details.
@@ -16,6 +18,7 @@ struct OpenSubdiv_Converter {
    * Other topology information is currently encoded with callbacks rather than arrays directly.
    */
   blender::OffsetIndices<int> faces;
+
   blender::Span<int> corner_verts;
 
   OpenSubdiv_SchemeType (*getSchemeType)(const OpenSubdiv_Converter *converter);
@@ -56,10 +59,6 @@ struct OpenSubdiv_Converter {
   //////////////////////////////////////////////////////////////////////////////
   // Edge relationships.
 
-  // Vertices the edge consists of.
-  void (*getEdgeVertices)(const OpenSubdiv_Converter *converter,
-                          const int edge_index,
-                          int edge_vertices[2]);
   // Number of faces which are sharing the given edge.
   int (*getNumEdgeFaces)(const OpenSubdiv_Converter *converter, const int edge_index);
   // Array of face indices which are sharing the given edge.
