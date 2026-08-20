@@ -46,7 +46,7 @@ namespace blender {
 #define MESH_ADD_SUBD_MAXI 500
 /* Default iterations to distribute a quad-sphere's vertices evenly.
  * `quadsphere_co_from_cube` converges by the third pass, one keeps the existing shape. */
-#define MESH_ADD_QUADSPHERE_ITERATIONS 1
+#define MESH_ADD_QUADSPHERE_ITERATIONS 3
 #define MESH_ADD_QUADSPHERE_ITERATIONS_MAXI 10
 
 /* ********* add primitive operators ************* */
