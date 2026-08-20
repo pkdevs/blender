@@ -7,6 +7,7 @@
  * \ingroup bke
  */
 
+#include <atomic>
 #include <chrono>
 #include <condition_variable>
 #include <cstdlib>
@@ -418,6 +419,12 @@ static Scene *sound_original_scene(const Scene *scene)
   return const_cast<Scene *>(DEG_get_original(scene));
 }
 
+/* The original Scene can be shared by an unlocked render job and the user interface. */
+static std::atomic_ref<uint64_t> sound_animation_data_generation_ref(Scene &scene)
+{
+  return std::atomic_ref<uint64_t>(scene.runtime->audio.animation_data_generation);
+}
+
 static void sound_reset_scene_audio_animation(Scene *scene);
 
 static bool sound_update_animation_flags_fn(Strip *strip, void *user_data)
@@ -504,7 +511,7 @@ static bool sound_update_animation_flags(Scene *scene)
 void BKE_sound_mark_scene_audio_animation_stale(const Scene *scene)
 {
   Scene *scene_orig = sound_original_scene(scene);
-  scene_orig->runtime->audio.animation_data_generation++;
+  sound_animation_data_generation_ref(*scene_orig).fetch_add(1, std::memory_order_relaxed);
 }
 
 bool BKE_sound_update_animation_flags(Main *bmain, Scene *scene)
@@ -612,7 +619,7 @@ static void sound_collect_scene_audio_animation_updates(Scene *scene,
   Scene *scene_eval = DEG_get_evaluated(depsgraph, scene);
   if (force || !DEG_is_evaluated(scene_eval) ||
       scene_eval->runtime->audio.cached_animation_data_generation !=
-          scene->runtime->audio.animation_data_generation)
+          sound_animation_data_generation_ref(*scene).load(std::memory_order_relaxed))
   {
     r_scenes.append(scene);
   }
@@ -693,7 +700,7 @@ static void sound_bake_animation_impl(Scene *scene, Depsgraph *depsgraph)
   if (DEG_is_evaluated(scene_eval)) {
     scene_eval->r.cfra = oldfra_eval;
     scene_eval->runtime->audio.cached_animation_data_generation =
-        scene->runtime->audio.animation_data_generation;
+        sound_animation_data_generation_ref(*scene).load(std::memory_order_relaxed);
   }
 }
 
@@ -702,6 +709,8 @@ static void sound_bake_scene_audio_animation(Main *bmain,
                                              Depsgraph *depsgraph,
                                              const bool force)
 {
+  BKE_sound_update_animation_flags(bmain, scene);
+
   Set<const Scene *> visited_scenes;
   Vector<Scene *> scenes;
   sound_collect_scene_audio_animation_updates(scene, depsgraph, force, visited_scenes, scenes);
@@ -709,7 +718,6 @@ static void sound_bake_scene_audio_animation(Main *bmain,
     return;
   }
 
-  BKE_sound_update_animation_flags(bmain, scene);
   DEG_id_tag_update(&scene->id, ID_RECALC_SEQUENCER_STRIPS);
   for (Scene *scene_update : scenes) {
     if (scene_update != scene) {
@@ -746,9 +754,10 @@ static void sound_bake_scene_audio_animation(Main *bmain,
     if (scene_eval->ed != nullptr) {
       seq::eval_strips(depsgraph, scene_eval, &scene_eval->ed->seqbase);
     }
+    BKE_sound_update_scene(depsgraph, scene_eval);
     BKE_sound_set_scene_volume(scene_eval, scene_eval->audio.volume);
     scene_eval->runtime->audio.cached_animation_data_generation =
-        scene_update->runtime->audio.animation_data_generation;
+        sound_animation_data_generation_ref(*scene_update).load(std::memory_order_relaxed);
   }
 }
 
@@ -1474,8 +1483,39 @@ static void sound_reset_scene_audio_animation(Scene *scene)
 
   BKE_sound_lock();
 
+  const float default_location[3] = {0.0f, 0.0f, 0.0f};
+  const float default_orientation[4] = {1.0f, 0.0f, 0.0f, 0.0f};
+  const float default_value = 1.0f;
+  /* AnimateableProperty::reset() keeps the first value, so restore Audaspace's defaults explicitly
+   * before properties are rewritten for the current scene. */
+
   if (scene->runtime->audio.sound_scene != nullptr) {
-    scene->runtime->audio.sound_scene->getAnimProperty(aud::AP_VOLUME)->reset();
+    aud::AnimateableProperty *volume = scene->runtime->audio.sound_scene->getAnimProperty(
+        aud::AP_VOLUME);
+    volume->reset();
+    aud::AnimateableProperty *location = scene->runtime->audio.sound_scene->getAnimProperty(
+        aud::AP_LOCATION);
+    location->reset();
+    location->write(default_location);
+    aud::AnimateableProperty *orientation = scene->runtime->audio.sound_scene->getAnimProperty(
+        aud::AP_ORIENTATION);
+    orientation->reset();
+    orientation->write(default_orientation);
+  }
+
+  for (AUD_SequenceEntry handle : scene->runtime->audio.speaker_handles) {
+    aud::AnimateableProperty *volume = handle->getAnimProperty(aud::AP_VOLUME);
+    volume->reset();
+    volume->write(&default_value);
+    aud::AnimateableProperty *pitch = handle->getAnimProperty(aud::AP_PITCH);
+    pitch->reset();
+    pitch->write(&default_value);
+    aud::AnimateableProperty *location = handle->getAnimProperty(aud::AP_LOCATION);
+    location->reset();
+    location->write(default_location);
+    aud::AnimateableProperty *orientation = handle->getAnimProperty(aud::AP_ORIENTATION);
+    orientation->reset();
+    orientation->write(default_orientation);
   }
 
   if (scene->ed != nullptr) {
