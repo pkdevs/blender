@@ -1051,7 +1051,8 @@ bool popup_context_menu_for_button(bContext *C, Button *but, const wmEvent *even
       layout.op("ASSET_OT_assets_download", {}, ICON_DOWNLOAD);
     }
     if (asset && asset->get_metadata().webpage) {
-      layout.op("ASSET_OT_assets_visit_webpage", {}, ICON_URL);
+      PointerRNA op_ptr = layout.op("WM_OT_url_open", "Visit Webpage", ICON_URL);
+      RNA_string_set(&op_ptr, "url", asset->get_metadata().webpage);
     }
   }
 
