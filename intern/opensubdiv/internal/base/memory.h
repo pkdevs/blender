@@ -5,6 +5,8 @@
 #ifndef OPENSUBDIV_BASE_MEMORY_H_
 #define OPENSUBDIV_BASE_MEMORY_H_
 
+#include "MEM_guardedalloc.h"
+
 namespace blender::opensubdiv {
 
 }  // namespace blender::opensubdiv

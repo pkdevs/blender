@@ -814,13 +814,6 @@ static int get_num_vertices(const OpenSubdiv_Converter *converter)
   return reshape_smooth_context->geometry.vertices.size();
 }
 
-static int get_num_edges(const OpenSubdiv_Converter *converter)
-{
-  const MultiresReshapeSmoothContext *reshape_smooth_context =
-      static_cast<const MultiresReshapeSmoothContext *>(converter->user_data);
-  return reshape_smooth_context->geometry.num_edges;
-}
-
 static float get_edge_sharpness(const OpenSubdiv_Converter *converter, const int edge_index)
 {
   const MultiresReshapeSmoothContext *reshape_smooth_context =
@@ -858,6 +851,7 @@ static void converter_init(const MultiresReshapeSmoothContext *reshape_smooth_co
   converter->getFVarLinearInterpolation = get_fvar_linear_interpolation;
   converter->specifiesFullTopology = specifies_full_topology;
 
+  converter->edges = reshape_smooth_context->geometry.edges;
   converter->faces = reshape_smooth_context->geometry.faces();
   converter->corner_verts = reshape_smooth_context->geometry.corner_verts;
 

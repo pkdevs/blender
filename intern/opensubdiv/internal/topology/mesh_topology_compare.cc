@@ -16,18 +16,6 @@
 namespace blender::opensubdiv {
 
 ////////////////////////////////////////////////////////////////////////////////
-// Quick preliminary checks.
-
-static int getEffectiveNumEdges(const OpenSubdiv_Converter *converter)
-{
-  if (converter->getNumEdges == nullptr) {
-    return 0;
-  }
-
-  return converter->getNumEdges(converter);
-}
-
-////////////////////////////////////////////////////////////////////////////////
 // Geometry tags.
 
 // Vertices.
@@ -52,9 +40,9 @@ static float getEffectiveVertexSharpness(const OpenSubdiv_Converter *converter,
 static bool isEqualVertexTags(const MeshTopology &mesh_topology,
                               const OpenSubdiv_Converter *converter)
 {
-  const int num_vertices = mesh_topology.getNumVertices();
+  const int num_vertices = mesh_topology.verts_num;
   for (int vertex_index = 0; vertex_index < num_vertices; ++vertex_index) {
-    const float current_sharpness = mesh_topology.getVertexSharpness(vertex_index);
+    const float current_sharpness = mesh_topology.vert_sharpness[vertex_index];
     const float requested_sharpness = getEffectiveVertexSharpness(converter, vertex_index);
 
     if (current_sharpness != requested_sharpness) {
@@ -93,10 +81,9 @@ static bool isEqualEdgeTags(const MeshTopology &mesh_topology,
       continue;
     }
 
-    int requested_edge_vertices[2];
-    converter->getEdgeVertices(converter, edge_index, requested_edge_vertices);
-    if (!mesh_topology.isEdgeEqual(
-            edge_index, requested_edge_vertices[0], requested_edge_vertices[1]))
+    const blender::int2 edge_vertices = converter->edges[edge_index];
+    if (mesh_topology.edges[edge_index].first != edge_vertices[0] ||
+        mesh_topology.edges[edge_index].second != edge_vertices[1])
     {
       return false;
     }

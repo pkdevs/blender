@@ -11,6 +11,7 @@
 #include <cstring>
 
 #include "BLI_array_utils.hh"
+#include "BLI_task.hh"
 
 #include "BKE_attribute.hh"
 #include "BKE_customdata.hh"
@@ -116,12 +117,6 @@ static bool specifies_full_topology(const OpenSubdiv_Converter * /*converter*/)
   return false;
 }
 
-static int get_num_edges(const OpenSubdiv_Converter *converter)
-{
-  ConverterStorage *storage = static_cast<ConverterStorage *>(converter->user_data);
-  return storage->num_manifold_edges;
-}
-
 static int get_num_vertices(const OpenSubdiv_Converter *converter)
 {
   ConverterStorage *storage = static_cast<ConverterStorage *>(converter->user_data);
@@ -141,18 +136,6 @@ static int original_to_manifold(const Array<int> &forward_map, const int origina
 static int manifold_to_original(const Array<int> &reverse_map, const int manifold_index)
 {
   return reverse_map.is_empty() ? manifold_index : reverse_map[manifold_index];
-}
-
-static void get_edge_vertices(const OpenSubdiv_Converter *converter,
-                              int manifold_edge_index,
-                              int *manifold_edge_vertices)
-{
-  ConverterStorage *storage = static_cast<ConverterStorage *>(converter->user_data);
-  const int edge_index = manifold_to_original(storage->manifold_edge_index_reverse,
-                                              manifold_edge_index);
-  const int2 &edge = storage->edges[edge_index];
-  manifold_edge_vertices[0] = original_to_manifold(storage->manifold_vertex_index, edge[0]);
-  manifold_edge_vertices[1] = original_to_manifold(storage->manifold_vertex_index, edge[1]);
 }
 
 static float get_edge_sharpness(const OpenSubdiv_Converter *converter, int manifold_edge_index)
@@ -338,6 +321,35 @@ static int initialize_manifold_index_map(const IndexMask &unused_mask,
   return num_manifold_elements;
 }
 
+/* Builds the manifold-space edges array exposed as `converter->edges`: for each manifold edge
+ * index, the pair of (already vertex-remapped) manifold vertex indices, skipping loose edges.
+ * This is the same remapping the old getEdgeVertices callback did per-query; it's now
+ * precomputed once since OpenSubdiv consumes the whole edges array directly. Must be called
+ * after #storage's vertex and edge manifold maps have been initialized. */
+static void initialize_manifold_edges(ConverterStorage *storage)
+{
+  const Span<int2> mesh_edges = storage->mesh->edges();
+  if (storage->manifold_edge_index_reverse.is_empty() &&
+      storage->manifold_vertex_index.is_empty())
+  {
+    storage->edges = mesh_edges.take_front(storage->num_manifold_edges);
+    return;
+  }
+  storage->edges_manifold.reinitialize(storage->num_manifold_edges);
+  const MutableSpan<int2> edges_manifold = storage->edges_manifold;
+  threading::parallel_for(edges_manifold.index_range(), 4096, [&](const IndexRange range) {
+    for (const int manifold_edge_index : range) {
+      const int edge_index = manifold_to_original(storage->manifold_edge_index_reverse,
+                                                   manifold_edge_index);
+      const int2 &edge = mesh_edges[edge_index];
+      edges_manifold[manifold_edge_index] = int2(
+          original_to_manifold(storage->manifold_vertex_index, edge[0]),
+          original_to_manifold(storage->manifold_vertex_index, edge[1]));
+    }
+  });
+  storage->edges = storage->edges_manifold;
+}
+
 static void initialize_manifold_indices(ConverterStorage *storage)
 {
   const Mesh *mesh = storage->mesh;
@@ -363,10 +375,11 @@ static void initialize_manifold_indices(ConverterStorage *storage)
 
   storage->num_manifold_edges = initialize_manifold_index_map(
       loose_edges, mesh->edges_num, nullptr, &storage->manifold_edge_index_reverse);
+  initialize_manifold_edges(storage);
 
   /* Initialize infinite sharp mapping. */
   if (!loose_edges.is_empty()) {
-    const Span<int2> edges = storage->edges;
+    const Span<int2> edges = mesh->edges();
     storage->infinite_sharp_vertices_map.resize(mesh->verts_num, false);
     loose_edges.foreach_index([&](const int edge_index) {
       const int2 edge = edges[edge_index];
@@ -384,7 +397,6 @@ static void init_user_data(OpenSubdiv_Converter *converter,
   user_data->settings = *settings;
   user_data->mesh = mesh;
   user_data->vert_positions = mesh->vert_positions();
-  user_data->edges = mesh->edges();
   user_data->faces = mesh->faces();
   user_data->corner_edges = mesh->corner_edges();
   if (settings->use_creases) {
@@ -405,7 +417,9 @@ void converter_init_for_mesh(OpenSubdiv_Converter *converter,
   converter->faces = mesh->faces();
   init_functions(converter);
   init_user_data(converter, settings, mesh);
-  converter->corner_verts = static_cast<ConverterStorage *>(converter->user_data)->corner_verts;
+  const auto &storage = *static_cast<ConverterStorage *>(converter->user_data);
+  converter->edges = storage.edges;
+  converter->corner_verts = storage.corner_verts;
 }
 
 }  // namespace blender::bke::subdiv
