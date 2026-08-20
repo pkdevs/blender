@@ -28,13 +28,15 @@ buildbot:
         default:
             version: any
             overrides: {}
+        darwin-x64:
+            overrides: {}
         darwin-arm64:
             overrides: {}
-        darwin-x86_64:
+        linux-x64:
             overrides: {}
-        linux-x86_64:
+        linux-arm64:
             overrides: {}
-        windows-amd64:
+        windows-x64:
             overrides: {}
         windows-arm64:
             overrides: {}
