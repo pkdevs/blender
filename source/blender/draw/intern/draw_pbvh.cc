@@ -40,6 +40,7 @@
 #include "DRW_render.hh"
 
 #include "PRF_profile.hh"
+#include "draw_pbvh_allocator.hh"
 #include "draw_sculpt.hh"
 
 #include "attribute_convert.hh"
@@ -93,123 +94,6 @@ struct OrigMeshData {
   }
 };
 
-class GPUBufferSpace {
-  uint64_t size_ = 0;
-  Vector<IndexRange> unassigned_;
-
- public:
-  bool is_empty() const
-  {
-    return size_ == 0;
-  }
-  int64_t size() const
-  {
-    return size_;
-  }
-
-  void assign(NodeInfo::BufferRange &buffer_info)
-  {
-    BLI_assert(!buffer_info.is_space_assigned);
-    if (buffer_info.len <= 0) {
-      return;
-    }
-    /* Check for space inside existing unassigned space. */
-    for (int64_t space_index : unassigned_.index_range()) {
-      IndexRange &unassigned_index_range = unassigned_[space_index];
-      if (unassigned_index_range.size() >= buffer_info.len) {
-        buffer_info.offset = unassigned_index_range.start();
-        unassigned_index_range = unassigned_index_range.drop_front(buffer_info.len);
-        if (unassigned_index_range.is_empty()) {
-          unassigned_.remove(space_index);
-        }
-        buffer_info.is_space_assigned = true;
-        break;
-      }
-    }
-
-    /* If not found we need to grow space. This would invalidate all existing VBO's. */
-    if (!buffer_info.is_space_assigned) {
-      buffer_info.offset = size_;
-      size_ += buffer_info.len;
-      buffer_info.is_space_assigned = true;
-    }
-  }
-
-  void unassign(NodeInfo::BufferRange &buffer_info)
-  {
-    BLI_assert(buffer_info.is_space_assigned);
-    const IndexRange range = buffer_info.index_range();
-    buffer_info.is_space_assigned = false;
-    buffer_info.len = -1;
-    buffer_info.offset = -1;
-
-    if (range.is_empty()) {
-      return;
-    }
-    unassigned_.append(range);
-  }
-
-  void optimize()
-  {
-    this->optimize(unassigned_);
-#ifndef NDEBUG
-    this->validate();
-#endif
-  }
-
- private:
-  void optimize(Vector<IndexRange> &space)
-  {
-    this->optimize_sort(space);
-    this->optimize_merge(space);
-    this->optimize_remove_empty(space);
-  }
-  void optimize_sort(Vector<IndexRange> &space)
-  {
-    std::ranges::sort(
-        space, [](const IndexRange &a, const IndexRange &b) { return a.begin() < b.begin(); });
-  }
-  void optimize_merge(Vector<IndexRange> &space)
-  {
-    int last = -2;
-    int last_index = -1;
-    for (int index : space.index_range()) {
-      IndexRange &range = space[index];
-      if (range.is_empty()) {
-        continue;
-      }
-      if (range.first() == last + 1) {
-        /* Merge with previous */
-        IndexRange &prev_range = space[last_index];
-        range = IndexRange::from_begin_size(prev_range.first(), prev_range.size() + range.size());
-        prev_range = IndexRange::from_begin_size(prev_range.first(), 0);
-      }
-      last = range.last();
-      last_index = index;
-    }
-  }
-  void optimize_remove_empty(Vector<IndexRange> &space)
-  {
-    space.remove_if([](const IndexRange &space) { return space.is_empty(); });
-  }
-#ifndef NDEBUG
-  void validate() const
-  {
-    this->validate(unassigned_);
-  }
-  void validate(Span<IndexRange> space) const
-  {
-    int last_index = -2;
-    for (const IndexRange &range : space) {
-      BLI_assert_msg(range.start() != last_index + 1, "Found two ranges that has to be merged.");
-      BLI_assert_msg(range.start() > last_index, "Ranges are unordered");
-      BLI_assert_msg(!range.is_empty(), "Found empty range");
-      last_index = range.last();
-    }
-  }
-#endif
-};
-
 /**
  * Stores the data necessary to draw the PBVH geometry. A separate `*Impl` class is used to hide
  * implementation details from the public header.
@@ -260,7 +144,7 @@ class DrawCacheImpl : public DrawCache {
    * \brief Shared index buffer with space bookkeeping and the per-node subranges.
    */
   struct IBOFamily {
-    GPUBufferSpace space;
+    VirtualAllocator space;
     /**
      * \brief Increasing counter whenever space is grown.
      *
@@ -296,7 +180,7 @@ class DrawCacheImpl : public DrawCache {
 
   /** \brief Info per node where it is located in the buffers. */
   Vector<NodeInfo> node_infos_;
-  GPUBufferSpace vbo_space_;
+  VirtualAllocator vbo_space_;
 
   /**
    * \brief Incremented whenever the shared vertex buffer space grows.
@@ -902,10 +786,6 @@ static void update_positions_mesh(const Object &object,
             faces, corner_verts, vert_positions, nodes[i].faces(), *attr_vbo.vbo, node_info);
       },
       exec_mode::grain_size(1));
-  node_mask.foreach_index([&](const int i) {
-    const NodeInfo &node_info = draw_cache.get_node_infos()[i];
-    attr_vbo.update(node_info);
-  });
 }
 
 static void update_normals_mesh(const Object &object,
@@ -2841,7 +2721,7 @@ Span<gpu::IndexBufPtr> DrawCacheImpl::ensure_lines_indices(const Object &object,
   const IndexMask nodes_to_calculate = IndexMask::from_predicate(
       node_mask, memory, [&](const int i) {
         return !ibos[i] && (coarse ? node_infos_[i].ibo_lines_coarse : node_infos_[i].ibo_lines)
-                               .is_space_assigned;
+                               .is_space_acquired;
       });
 
   /* Build offsets for only the nodes being calculated, so the scratch buffer is sized
@@ -3091,7 +2971,7 @@ Span<gpu::IndexBufPtr> DrawCacheImpl::ensure_tri_indices(const Object &object,
       IndexMaskMemory memory;
       const IndexMask nodes_to_calculate = IndexMask::from_predicate(
           node_mask, memory, [&](const int i) {
-            return !ibos[i] && node_infos_[i].ibo_tris.is_space_assigned;
+            return !ibos[i] && node_infos_[i].ibo_tris.is_space_acquired;
           });
 
       /* Build offsets for only the nodes being calculated, so the scratch buffer is sized
@@ -3156,7 +3036,7 @@ Span<gpu::IndexBufPtr> DrawCacheImpl::ensure_tri_indices(const Object &object,
       const IndexMask nodes_to_calculate = IndexMask::from_predicate(
           node_mask, memory, [&](const int i) {
             return !ibos[i] && (coarse ? node_infos_[i].ibo_tris_coarse : node_infos_[i].ibo_tris)
-                                   .is_space_assigned;
+                                   .is_space_acquired;
           });
 
       /* Build offsets for only the nodes being calculated, so the scratch buffer is sized
@@ -3215,7 +3095,7 @@ Span<gpu::IndexBufPtr> DrawCacheImpl::ensure_tri_indices(const Object &object,
       IndexMaskMemory memory;
       const IndexMask nodes_to_calculate = IndexMask::from_predicate(
           node_mask, memory, [&](const int i) {
-            return !ibos[i] && node_infos_[i].ibo_tris.is_space_assigned;
+            return !ibos[i] && node_infos_[i].ibo_tris.is_space_acquired;
           });
 
       /* Build offsets for only the nodes being calculated, so the scratch buffer is sized
@@ -3402,30 +3282,30 @@ Span<int> DrawCacheImpl::ensure_material_indices(const Object &object)
 }
 
 static bool update_node_buffer_range(NodeInfo::BufferRange &range,
-                                     GPUBufferSpace &space,
+                                     VirtualAllocator &space,
                                      const int64_t new_len)
 {
   bool changed = false;
   if (range.len != new_len) {
-    if (range.is_space_assigned) {
-      space.unassign(range);
+    if (range.is_space_acquired) {
+      space.release(range);
       changed = true;
     }
     range.offset = -1;
     range.len = new_len;
-    range.is_space_assigned = false;
+    range.is_space_acquired = false;
   }
   return changed;
 }
 
 static bool update_node_buffer_space(NodeInfo &node_info,
                                      const int64_t vert_len,
-                                     GPUBufferSpace &vbo_space,
+                                     VirtualAllocator &vbo_space,
                                      const NodeIndexCounts &counts,
-                                     GPUBufferSpace &ibo_lines_space,
-                                     GPUBufferSpace &ibo_lines_coarse_space,
-                                     GPUBufferSpace &ibo_tris_space,
-                                     GPUBufferSpace &ibo_tris_coarse_space)
+                                     VirtualAllocator &ibo_lines_space,
+                                     VirtualAllocator &ibo_lines_coarse_space,
+                                     VirtualAllocator &ibo_tris_space,
+                                     VirtualAllocator &ibo_tris_coarse_space)
 {
   bool changed = false;
   changed |= update_node_buffer_range(node_info.vbo, vbo_space, vert_len);
@@ -3487,37 +3367,25 @@ Span<NodeInfo> DrawCacheImpl::ensure_node_infos(const Object &object,
     }
   });
 
-  vbo_space_.optimize();
-  ibo_lines_.space.optimize();
-  ibo_lines_coarse_.space.optimize();
-  ibo_tris_.space.optimize();
-  ibo_tris_coarse_.space.optimize();
-
   /* Assign space for nodes that don't have any assigned space. */
   nodes_to_update.foreach_index([&](const int node_index) {
     NodeInfo &node_info = node_infos_[node_index];
-    if (!node_info.vbo.is_space_assigned && node_info.vbo.len > 0) {
-      vbo_space_.assign(node_info.vbo);
+    if (!node_info.vbo.is_space_acquired && node_info.vbo.len > 0) {
+      vbo_space_.acquire(node_info.vbo);
     }
-    if (!node_info.ibo_lines.is_space_assigned && node_info.ibo_lines.len > 0) {
-      ibo_lines_.space.assign(node_info.ibo_lines);
+    if (!node_info.ibo_lines.is_space_acquired && node_info.ibo_lines.len > 0) {
+      ibo_lines_.space.acquire(node_info.ibo_lines);
     }
-    if (!node_info.ibo_lines_coarse.is_space_assigned && node_info.ibo_lines_coarse.len > 0) {
-      ibo_lines_coarse_.space.assign(node_info.ibo_lines_coarse);
+    if (!node_info.ibo_lines_coarse.is_space_acquired && node_info.ibo_lines_coarse.len > 0) {
+      ibo_lines_coarse_.space.acquire(node_info.ibo_lines_coarse);
     }
-    if (!node_info.ibo_tris.is_space_assigned && node_info.ibo_tris.len > 0) {
-      ibo_tris_.space.assign(node_info.ibo_tris);
+    if (!node_info.ibo_tris.is_space_acquired && node_info.ibo_tris.len > 0) {
+      ibo_tris_.space.acquire(node_info.ibo_tris);
     }
-    if (!node_info.ibo_tris_coarse.is_space_assigned && node_info.ibo_tris_coarse.len > 0) {
-      ibo_tris_coarse_.space.assign(node_info.ibo_tris_coarse);
+    if (!node_info.ibo_tris_coarse.is_space_acquired && node_info.ibo_tris_coarse.len > 0) {
+      ibo_tris_coarse_.space.acquire(node_info.ibo_tris_coarse);
     }
   });
-
-  vbo_space_.optimize();
-  ibo_lines_.space.optimize();
-  ibo_lines_coarse_.space.optimize();
-  ibo_tris_.space.optimize();
-  ibo_tris_coarse_.space.optimize();
 
   /* Growing the buffer space swaps all attribute VBOs, invalidating any cached batches. */
   if (uint64_t(vbo_space_.size()) > vbo_space_limit_) {
