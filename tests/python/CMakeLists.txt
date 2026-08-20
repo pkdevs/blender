@@ -1718,6 +1718,13 @@ if(WITH_UI_TESTS)
     test_search_in_editors.test_dopesheet_search
     test_search_in_editors.test_graph_editor_search
     test_search_in_editors.test_file_browser_search
+    test_selection.test_view3d_selection_all_shading_modes
+    test_selection.test_view3d_mesh_edit_selection
+    test_selection.test_view3d_armature_edit_selection
+    test_selection.test_view3d_armature_pose_selection
+    test_selection.test_view3d_grease_pencil_point_selection
+    test_selection.test_view3d_curves_point_selection
+    test_selection.test_view3d_weight_paint_vertex_selection
     test_sculpt.asset_shelf_brush_selection
     test_sculpt.face_set_expand
     test_sculpt.face_set_gestures
