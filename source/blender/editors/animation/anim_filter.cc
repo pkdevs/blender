@@ -194,7 +194,7 @@ static bool actedit_get_context(bAnimContext *ac, SpaceAction *saction)
       ac->datatype = ANIMCONT_ACTION;
       ac->data = ac->active_action;
 
-      if (saction->flag & SACTION_POSEMARKERS_SHOW) {
+      if (ac->active_action && (saction->flag & SACTION_POSEMARKERS_SHOW)) {
         ac->markers = &ac->active_action->markers;
       }
 
@@ -204,7 +204,7 @@ static bool actedit_get_context(bAnimContext *ac, SpaceAction *saction)
       ac->datatype = ANIMCONT_SHAPEKEY;
       ac->data = actedit_get_shapekeys(ac);
 
-      if (saction->flag & SACTION_POSEMARKERS_SHOW) {
+      if (ac->active_action && (saction->flag & SACTION_POSEMARKERS_SHOW)) {
         ac->markers = &ac->active_action->markers;
       }
 
@@ -3438,7 +3438,6 @@ static size_t animdata_filter_dopesheet_scene(bAnimContext *ac,
 
   /* filter data contained under object first */
   BEGIN_ANIMFILTER_SUBCHANNELS (EXPANDED_SCEC(sce)) {
-    bNodeTree *ntree = sce->compositing_node_group;
     World *wo = sce->world;
     Editing *ed = sce->ed;
 
@@ -3453,9 +3452,18 @@ static size_t animdata_filter_dopesheet_scene(bAnimContext *ac,
     }
 
     /* nodetree */
-    if ((ntree) && !(ac->filters.flag & ADS_FILTER_NONTREE)) {
-      tmp_items += animdata_filter_ds_nodetree(
-          ac, &tmp_data, reinterpret_cast<ID *>(sce), ntree, filter_mode);
+    if (!(ac->filters.flag & ADS_FILTER_NONTREE)) {
+      VectorSet<bNodeTree *> node_trees;
+      for (SceneCompositorEffect &effect : sce->compositor_effects) {
+        if (!effect.node_group || ID_MISSING(effect.node_group)) {
+          continue;
+        }
+        node_trees.add(effect.node_group);
+      }
+      for (bNodeTree *node_tree : node_trees) {
+        tmp_items += animdata_filter_ds_nodetree(
+            ac, &tmp_data, reinterpret_cast<ID *>(sce), node_tree, filter_mode);
+      }
     }
 
     /* VSE strip node trees. */
@@ -3863,6 +3871,9 @@ static size_t animdata_filter_animchan(bAnimContext *ac,
   /* data to filter depends on channel type */
   /* NOTE: only common channel-types have been handled for now. More can be added as necessary */
   switch (channel->type) {
+    case ANIMTYPE_NONE:
+      return 0;
+
     case ANIMTYPE_SUMMARY:
       items += animdata_filter_dopesheet(ac, anim_data, filter_mode);
       break;
