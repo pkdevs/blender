@@ -262,19 +262,6 @@ ListInfoLog::ListInfoLog(const GListPtr &list)
   this->size = list->size();
 }
 
-NodeWarning::NodeWarning(const Report &report)
-{
-  switch (report.type) {
-    case RPT_ERROR:
-      this->type = NodeWarningType::Error;
-      break;
-    default:
-      this->type = NodeWarningType::Info;
-      break;
-  }
-  this->message = report.message;
-}
-
 ImageInfoLog::ImageInfoLog(const int2 data_size,
                            const int2 display_size,
                            const int2 data_offset,
@@ -941,6 +928,12 @@ NodeTreeLogger &NodesEvalLog::get_local_tree_logger(const ComputeContext &comput
       tree_logger.tree_orig_session_uid = get_original_session_uid(
           reinterpret_cast<const ID *>(nmd->node_group));
     }
+  }
+  else if (const auto *context = dynamic_cast<const bke::SceneCompositorEffectComputeContext *>(
+               &compute_context))
+  {
+    tree_logger.tree_orig_session_uid = get_original_session_uid(
+        reinterpret_cast<const ID *>(context->effect().node_group));
   }
   else if (const auto *context = dynamic_cast<const bke::OperatorComputeContext *>(
                &compute_context))

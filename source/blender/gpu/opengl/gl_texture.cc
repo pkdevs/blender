@@ -427,9 +427,13 @@ void GLTexture::clear(const double4 data)
 
   gpu::FrameBuffer *prev_fb = GPU_framebuffer_active_get();
 
-  FrameBuffer *fb = this->framebuffer_get();
-  fb->bind(true);
-  fb->clear_attachment(this->attachment_type(0), data);
+  /* fb->clear_attachment only affects one mip level. Iterate in reverse order so at the end, mip
+   * level 0 is bound to the framebuffer. */
+  for (int mip = mipmaps_ - 1; mip >= 0; mip--) {
+    FrameBuffer *fb = this->framebuffer_get(mip);
+    fb->bind(true);
+    fb->clear_attachment(this->attachment_type(0), data);
+  }
 
   GPU_framebuffer_bind(prev_fb);
 }
@@ -483,34 +487,42 @@ void GLTexture::read(int mip, eGPUDataFormat type, void *data)
   BLI_assert(validate_data_format(format_, type));
 
   size_t texture_size = read_size_get(mip, type);
-
-  GLTexture *texture = this;
-  if (is_texture_view() && (type_get() != source_texture_->type_get() ||
-                            mip_size_get(0) != source_texture_->mip_size_get(0) ||
-                            mip_map_range() != source_texture_->mip_map_range()))
-  {
-    /* Read from the source texture, since OpenGL drivers don't seem to handle dimensions well,
-     * but this only works if the view and the texture formats match. */
-    BLI_assert(format_get() == source_texture_->format_get());
-    texture = static_cast<GLTexture *>(source_texture_);
-  }
-
   GLenum gl_format = to_gl_data_format(
       format_ == TextureFormat::SFLOAT_32_DEPTH_UINT_8 ? TextureFormat::SFLOAT_32_DEPTH : format_);
   GLenum gl_type = to_gl(type);
 
-  glGetTextureSubImage(texture->tex_id_,
-                       mip + mip_min_,
-                       0,
-                       0,
-                       view_layer_start_,
-                       w_,
-                       std::max(h_, 1),
-                       std::max(d_, 1),
-                       gl_format,
-                       gl_type,
-                       texture_size,
-                       data);
+  const int3 extent = mip_size_get(mip);
+
+  if (is_texture_view() && format_get() == source_texture_->format_get()) {
+    /* Read from the source texture, since OpenGL drivers don't seem to handle dimensions well,
+     * but this only works if the view and the texture formats match. */
+    glGetTextureSubImage(static_cast<GLTexture *>(source_texture_)->tex_id_,
+                         mip + mip_min_,
+                         0,
+                         (type_ & GPU_TEXTURE_1D) ? view_layer_start_ : 0,
+                         (type_ & GPU_TEXTURE_1D) ? 0 : view_layer_start_,
+                         extent.x,
+                         extent.y,
+                         extent.z,
+                         gl_format,
+                         gl_type,
+                         texture_size,
+                         data);
+  }
+  else {
+    glGetTextureSubImage(tex_id_,
+                         mip,
+                         0,
+                         0,
+                         0,
+                         extent.x,
+                         extent.y,
+                         extent.z,
+                         gl_format,
+                         gl_type,
+                         texture_size,
+                         data);
+  }
 }
 
 /** \} */
@@ -563,11 +575,16 @@ void GLTexture::mip_range_set(int min, int max)
   }
 }
 
-FrameBuffer *GLTexture::framebuffer_get()
+FrameBuffer *GLTexture::framebuffer_get(int mip)
 {
   if (framebuffer_) {
     GLFrameBuffer *gl_framebuffer = static_cast<GLFrameBuffer *>(framebuffer_);
     if (gl_framebuffer->context_get() == GLContext::get()) {
+      if (framebuffer_mip_ != mip) {
+        framebuffer_->attachment_set(this->attachment_type(0),
+                                     GPU_ATTACHMENT_TEXTURE_MIP(this, mip));
+        framebuffer_mip_ = mip;
+      }
       return framebuffer_;
     }
 
@@ -577,7 +594,8 @@ FrameBuffer *GLTexture::framebuffer_get()
   }
   BLI_assert(!(type_ & GPU_TEXTURE_1D));
   framebuffer_ = GPU_framebuffer_create(name_.c_str());
-  framebuffer_->attachment_set(this->attachment_type(0), GPU_ATTACHMENT_TEXTURE(this));
+  framebuffer_->attachment_set(this->attachment_type(0), GPU_ATTACHMENT_TEXTURE_MIP(this, mip));
+  framebuffer_mip_ = mip;
   has_pixels_ = true;
   return framebuffer_;
 }
