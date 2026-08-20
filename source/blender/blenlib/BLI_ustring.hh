@@ -71,7 +71,7 @@ class UString {
 
  public:
   UString() = default;
-  explicit UString(StringRef str) : ptr_(blender::detail::ustring_ensure_entry(str)) {}
+  explicit UString(const StringRef str) : ptr_(blender::detail::ustring_ensure_entry(str)) {}
 
   template<FixedString FStr> friend UString operator""_ustr();
 
