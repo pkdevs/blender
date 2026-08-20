@@ -730,7 +730,7 @@ static wmOperatorStatus add_primitive_quadsphere_exec(bContext *C, wmOperator *o
                                obedit,
                                &creation_data,
                                calc_uvs,
-                               "create_quadsphere segments=%i iterations=%i "
+                               "create_quadsphere segments=%i "
                                "radius=%f matrix=%m4 calc_uvs=%b",
                                RNA_int_get(op->ptr, "segments"),
                                RNA_int_get(op->ptr, "iterations"),
