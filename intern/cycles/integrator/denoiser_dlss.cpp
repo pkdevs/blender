@@ -126,7 +126,8 @@ struct NGXDriver {
 
 CCL_NAMESPACE_BEGIN
 
-static const int ApplicationId = 100334311;
+/* Application ID for Blender from NVIDIA. */
+static const int NGX_APPLICATION_ID = 100334311;
 
 static thread_mutex ngx_mutex;
 
@@ -206,8 +207,11 @@ DLSSDenoiser::DLSSDenoiser(Device *denoiser_device, const DenoiseParams &params)
 
   thread_scoped_lock ngx_lock(ngx_mutex);
 
-  const NVSDK_NGX_Result result = NVSDK_NGX_CUDA.Init_Ext1(
-      ApplicationId, app_data_path.c_str(), ngx_device_, NVSDK_NGX_Version_API, &feature_info);
+  const NVSDK_NGX_Result result = NVSDK_NGX_CUDA.Init_Ext1(NGX_APPLICATION_ID,
+                                                           app_data_path.c_str(),
+                                                           ngx_device_,
+                                                           NVSDK_NGX_Version_API,
+                                                           &feature_info);
 
   if (NVSDK_NGX_FAILED(result)) {
     set_error("Failed to initialize NGX driver");
@@ -277,7 +281,7 @@ bool DLSSDenoiser::is_device_supported(const DeviceInfo &device)
   discovery_info.SDKVersion = NVSDK_NGX_Version_API;
   discovery_info.FeatureID = NVSDK_NGX_Feature_RayReconstruction;
   discovery_info.Identifier.IdentifierType = NVSDK_NGX_Application_Identifier_Type_Application_Id;
-  discovery_info.Identifier.v.ApplicationId = ApplicationId;
+  discovery_info.Identifier.v.ApplicationId = NGX_APPLICATION_ID;
   discovery_info.ApplicationDataPath = app_data_path.c_str();
 
   NVSDK_NGX_FeatureRequirement requirement = {NVSDK_NGX_FeatureSupportResult_Supported};
