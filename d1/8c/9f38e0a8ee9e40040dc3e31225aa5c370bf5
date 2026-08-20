@@ -1,2 +1,3 @@
 Referenced by pull request #157957, Refactor: Clear now-unused viewer node ID member
 Referenced by commit 103d910943b7209c70b7fa961a109da7792d0e86, Refactor: Clear now-unused viewer node ID member
+Referenced by pull request #162927, Fix #162909: Missing Viewer Image when adding Viewer node
