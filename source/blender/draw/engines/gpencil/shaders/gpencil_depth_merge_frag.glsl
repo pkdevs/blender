@@ -8,6 +8,12 @@ FRAGMENT_SHADER_CREATE_INFO(gpencil_depth_merge)
 
 void main()
 {
+  if (gl_FragCoord.x < clipping_rect.x || gl_FragCoord.x > clipping_rect.z ||
+      gl_FragCoord.y < clipping_rect.y || gl_FragCoord.y > clipping_rect.w)
+  {
+    gpu_discard_fragment();
+    return;
+  }
   float depth = textureLod(depth_buf, gl_FragCoord.xy / float2(textureSize(depth_buf, 0)), 0).r;
   if (stroke_order3d) {
     gl_FragDepth = depth;

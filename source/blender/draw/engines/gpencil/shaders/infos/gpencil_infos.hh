@@ -1,3 +1,4 @@
+
 /* SPDX-FileCopyrightText: 2023 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
@@ -117,6 +118,7 @@ GPU_SHADER_CREATE_INFO(gpencil_depth_merge)
 DO_STATIC_COMPILATION()
 PUSH_CONSTANT(float4x4, gp_model_matrix)
 PUSH_CONSTANT(bool, stroke_order3d)
+PUSH_CONSTANT(float4, clipping_rect)
 SAMPLER(0, sampler2DDepth, depth_buf)
 VERTEX_SOURCE("gpencil_depth_merge_vert.glsl")
 FRAGMENT_SOURCE("gpencil_depth_merge_frag.glsl")
@@ -190,6 +192,7 @@ PUSH_CONSTANT(float, mix_factor)
 PUSH_CONSTANT(float, taa_accumulated_weight)
 PUSH_CONSTANT(bool, do_anti_aliasing)
 PUSH_CONSTANT(bool, only_alpha)
+PUSH_CONSTANT(float4, clipping_rect)
 /* Reminder: Blending func is `fragRevealage * DST + frag_color`. */
 FRAGMENT_OUT_DUAL(0, float4, out_color, SRC_0)
 FRAGMENT_OUT_DUAL(0, float4, out_reveal, SRC_1)
