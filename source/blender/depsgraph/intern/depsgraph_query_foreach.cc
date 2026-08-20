@@ -254,15 +254,15 @@ const ComponentNode *find_scene_component_node(const IDNode &id_node,
   return nullptr;
 }
 
-/* The main implementation of DEG_scene_component_depends_on_time. It performs a forward breadth
- * first search starting from the time source node of the graph until it find a component node that
- * matches the given component type. */
+/* The main implementation of DEG_scene_component_depends_on_time. It performs a backward breadth
+ * first search starting from the component node that matches the given component type until it
+ * finds the time source node of the graph if it exists. */
 bool deg_scene_component_depends_on_time(const Depsgraph &depsgraph,
                                          const Scene &scene,
                                          const eDepsSceneComponentType component_type)
 {
-  const TimeSourceNode *time_source = depsgraph.find_time_source();
-  if (!time_source) {
+  const TimeSourceNode *time_source_node = depsgraph.find_time_source();
+  if (!time_source_node) {
     return false;
   }
 
@@ -282,30 +282,27 @@ bool deg_scene_component_depends_on_time(const Depsgraph &depsgraph,
 
   std::queue<const Node *> queue;
   Set<const Node *> nodes_already_scheduled;
-  queue.push(time_source);
-  nodes_already_scheduled.add_new(time_source);
+  queue.push(component_node);
+  nodes_already_scheduled.add_new(component_node);
+
+  for (const OperationNode *operation_node : component_node->operations) {
+    queue.push(operation_node);
+    nodes_already_scheduled.add_new(operation_node);
+  }
 
   while (!queue.empty()) {
     const Node *current_node = queue.front();
     queue.pop();
 
-    for (const Relation *relation : current_node->outlinks) {
-      const Node *to_node = relation->to;
-      if (to_node->get_class() == NodeClass::COMPONENT) {
-        if (static_cast<const ComponentNode *>(to_node) == component_node) {
-          return true;
-        }
+    for (const Relation *relation : current_node->inlinks) {
+      const Node *from_node = relation->from;
+      if (from_node == time_source_node) {
+        return true;
       }
 
-      if (to_node->get_class() == NodeClass::OPERATION) {
-        if (static_cast<const OperationNode *>(to_node)->owner == component_node) {
-          return true;
-        }
-      }
-
-      if (!nodes_already_scheduled.contains(to_node)) {
-        queue.push(to_node);
-        nodes_already_scheduled.add(to_node);
+      if (!nodes_already_scheduled.contains(from_node)) {
+        queue.push(from_node);
+        nodes_already_scheduled.add(from_node);
       }
     }
   }
