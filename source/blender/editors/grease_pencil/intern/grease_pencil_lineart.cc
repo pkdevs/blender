@@ -19,7 +19,9 @@
 #include "BKE_report.hh"
 #include "BKE_scene.hh"
 #include "BKE_screen.hh"
+
 #include "BLT_translation.hh"
+
 #include "DNA_curves_types.h"
 #include "DNA_modifier_types.h"
 
