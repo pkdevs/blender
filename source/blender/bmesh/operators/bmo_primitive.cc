@@ -919,7 +919,7 @@ void bmo_create_quadsphere_exec(BMesh *bm, BMOperator *op)
   /* Vertices along each cube edge. */
   const int seg_vert = seg + 1;
   /* Iterations to distribute vertices evenly. */
-  const int iter_num = max_ii(0, BMO_slot_int_get(op->slots_in, "iterations"));
+  const int iter_num = 3;
 
   const int cd_loop_uv_offset = CustomData_get_offset(&bm->ldata, CD_PROP_FLOAT2);
   const bool calc_uvs = (cd_loop_uv_offset != -1) && BMO_slot_bool_get(op->slots_in, "calc_uvs");
