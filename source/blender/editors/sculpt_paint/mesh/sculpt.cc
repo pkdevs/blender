@@ -2785,6 +2785,9 @@ static void update_sculpt_normal(const Depsgraph &depsgraph,
                                bke::brush::normal_weight_get(brush, cache.toggle_settings.invert) >
                                    0.0f);
 
+  /* We check whether sculpt_normal is zero because it would be uninitialized on the second brush
+   * step when brush has cube tip. For brushes where update_normal is false, sculpt_normal would
+   * remain uninitialized if we do not add this zero check. */
   if (cache.mirror_symmetry_pass == 0 && cache.radial_symmetry_pass == 0 &&
       (stroke_is_first_brush_step_of_symmetry_pass(cache) || update_normal ||
        is_zero_v3(cache.sculpt_normal)))
