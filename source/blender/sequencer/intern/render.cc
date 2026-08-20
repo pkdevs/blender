@@ -789,7 +789,7 @@ static SeqResult seq_render_effect_strip_impl(const RenderData *context,
     return out;
   }
 
-  float fac = effect_fader_calc(scene, strip, timeline_frame);
+  float fac = effect_fader_calc(scene, strip, timeline_frame, state->is_current_frame);
 
   StripEarlyOut early_out = sh.early_out(strip, fac);
 
@@ -2141,6 +2141,7 @@ ImBuf *render_give_ibuf(const RenderData *context, float timeline_frame, int cha
       scene, channels, seqbasep, timeline_frame, chanshown);
 
   SeqRenderState state;
+  state.is_current_frame = timeline_frame == BKE_scene_frame_get(scene);
 
   if (!strips.is_empty() && !out) {
     std::scoped_lock lock(seq_render_mutex);
@@ -2182,6 +2183,7 @@ SeqResult seq_render_give_ibuf_seqbase(const RenderData *context,
 ImBuf *render_give_ibuf_direct(const RenderData *context, float timeline_frame, Strip *strip)
 {
   SeqRenderState state;
+  state.is_current_frame = timeline_frame == BKE_scene_frame_get(context->scene);
 
   movie_reader_cache_timestamp_bump();
 
@@ -2214,36 +2216,50 @@ float get_render_scale_factor(const RenderData &context)
   return get_render_scale_factor(context.preview_render_size, context.scene->r.size);
 }
 
-bool render_begin_gpu(const RenderData &rd)
+GpuContextState render_begin_gpu(const RenderData &rd)
 {
+  GPUContext *active_ctx = GPU_context_active_get();
+  if (active_ctx != nullptr) {
+    GPU_render_begin();
+    return GpuContextState::AlreadyActive;
+  }
+
   /* Use GPU context from VSE render data (e.g. prefetch render). */
   if (rd.gpu_context.ghost_context != nullptr) {
     gpu::GPU_activate_secondary_context(rd.gpu_context);
     GPU_render_begin();
-    return true;
+    return GpuContextState::Success;
   }
 
   /* Use main GPU context (regular preview area drawing, or "render sequence preview" operator). */
   if (BLI_thread_is_main() || rd.render == nullptr) {
     DRW_gpu_context_enable();
-    return DRW_gpu_context_is_enabled();
+    return DRW_gpu_context_is_enabled() ? GpuContextState::Success : GpuContextState::Unsupported;
   }
 
   /* Use GPU context from Render. */
   GHOST_IContext *render_ghost_context = RE_system_gpu_context_get(rd.render);
   if (!render_ghost_context) {
-    return false;
+    return GpuContextState::Unsupported;
   }
 
   WM_system_gpu_context_activate(render_ghost_context);
   void *render_gpu_context = RE_blender_gpu_context_ensure(rd.render);
   GPU_render_begin();
   GPU_context_active_set(static_cast<GPUContext *>(render_gpu_context));
-  return true;
+  return GpuContextState::Success;
 }
 
-void render_end_gpu(const RenderData &rd)
+void render_end_gpu(const RenderData &rd, GpuContextState state)
 {
+  if (state == GpuContextState::Unsupported) {
+    return;
+  }
+  if (state == GpuContextState::AlreadyActive) {
+    GPU_render_end();
+    return;
+  }
+
   /* Use GPU context from VSE render data (e.g. prefetch render). */
   if (rd.gpu_context.ghost_context != nullptr) {
     GPU_render_end();
