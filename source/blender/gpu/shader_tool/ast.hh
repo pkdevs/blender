@@ -231,7 +231,14 @@ struct Node {
   Node find_recursion_end() const
   {
     {
-      /* Try using parent first. */
+      /* Try using next first. */
+      Node node = *this;
+      if (node.next().is_valid()) {
+        return node.next();
+      }
+    }
+    {
+      /* Try using parent next. */
       Node node = *this;
       while (node.is_valid()) {
         node = node.parent();
