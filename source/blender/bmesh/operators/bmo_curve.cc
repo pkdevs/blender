@@ -185,6 +185,51 @@ static void trace_curve_loop(BMVert *start_vert,
   }
 }
 
+static CurveChainData build_curve_chain_from_edge(BMEdge *start_edge, Set<BMEdge *> &visited_edges)
+{
+  CurveChainData chain;
+  chain.is_closed = false;
+
+  Vector<BMVert *> forward_trace;
+  bool is_forward_circular = false;
+  trace_curve_loop(start_edge->v1, start_edge, visited_edges, forward_trace, is_forward_circular);
+
+  if (is_forward_circular) {
+    chain.is_closed = true;
+    chain.verts.append(start_edge->v1);
+    chain.verts.extend(forward_trace);
+  }
+  else {
+    Vector<BMVert *> backward_trace;
+    bool is_backward_circular = false;
+    trace_curve_loop(
+        start_edge->v2, start_edge, visited_edges, backward_trace, is_backward_circular);
+
+    std::ranges::reverse(backward_trace);
+    chain.verts.extend(backward_trace);
+    chain.verts.extend(forward_trace);
+  }
+
+  return chain;
+}
+
+static void get_perpendicular_chains(const CurveChainData chain,
+                                     Vector<CurveChainData> &r_chains,
+                                     Set<BMEdge *> &visited_edges)
+{
+  for (BMVert *vert : chain.verts) {
+    BMIter iter;
+    BMEdge *edge;
+    BM_ITER_ELEM (edge, &iter, vert, BM_EDGES_OF_VERT) {
+      if (BM_elem_flag_test(edge, BM_ELEM_HIDDEN) || visited_edges.contains(edge)) {
+        continue;
+      }
+      CurveChainData perp_chain = build_curve_chain_from_edge(edge, visited_edges);
+      r_chains.append(std::move(perp_chain));
+    }
+  }
+}
+
 static void get_curve_input_chains(BMesh *bm, Vector<CurveChainData> &r_chains)
 {
   Vector<BMVert *> selected_verts;
@@ -209,29 +254,7 @@ static void get_curve_input_chains(BMesh *bm, Vector<CurveChainData> &r_chains)
         continue;
       }
 
-      CurveChainData chain;
-      chain.is_closed = false;
-
-      Vector<BMVert *> forward_trace;
-      bool is_forward_circular = false;
-      trace_curve_loop(
-          start_edge->v1, start_edge, visited_edges, forward_trace, is_forward_circular);
-
-      if (is_forward_circular) {
-        chain.is_closed = true;
-        chain.verts.append(start_edge->v1);
-        chain.verts.extend(forward_trace);
-      }
-      else {
-        Vector<BMVert *> backward_trace;
-        bool is_backward_circular = false;
-        trace_curve_loop(
-            start_edge->v2, start_edge, visited_edges, backward_trace, is_backward_circular);
-
-        std::ranges::reverse(backward_trace);
-        chain.verts.extend(backward_trace);
-        chain.verts.extend(forward_trace);
-      }
+      CurveChainData chain = build_curve_chain_from_edge(start_edge, visited_edges);
 
       if (chain.verts.size() < 3) {
         continue;
@@ -241,11 +264,14 @@ static void get_curve_input_chains(BMesh *bm, Vector<CurveChainData> &r_chains)
       for (BMVert *chain_vert : chain.verts) {
         if (BM_elem_flag_test(chain_vert, BM_ELEM_SELECT)) {
           num_selected++;
-          if (num_selected >= 2) {
-            r_chains.append(std::move(chain));
-            break;
-          }
         }
+      }
+
+      if (num_selected == chain.verts.size()) {
+        get_perpendicular_chains(chain, r_chains, visited_edges);
+      }
+      else {
+        r_chains.append(std::move(chain));
       }
     }
   }
