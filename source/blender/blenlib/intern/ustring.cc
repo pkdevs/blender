@@ -22,19 +22,12 @@ static StringTable &global_string_table()
 
 namespace detail {
 
-const blender::detail::UStringEntry *ustring_ensure_entry(const StringRef str)
+const blender::detail::UStringEntry &ustring_ensure_entry(const StringRef str)
 {
-  const uint64_t hash = get_default_hash(str);
-  StringTable &table = global_string_table();
-  if (const blender::detail::UStringEntry *entry = table.lookup_ptr(
-          detail::StrWithHash{str, hash}))
-  {
-    return entry;
-  }
-  return &table.lookup_key_or_add(blender::detail::UStringEntry{std::string(str), hash});
+  return global_string_table().lookup_key_or_add({std::string(str), hash_string(str)});
 }
 
-const blender::detail::UStringEntry *ustring_ensure_entry(const char *str)
+const blender::detail::UStringEntry &ustring_ensure_entry(const char *str)
 {
   return ustring_ensure_entry(StringRef(str));
 }

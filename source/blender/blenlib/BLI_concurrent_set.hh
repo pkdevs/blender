@@ -63,9 +63,17 @@ class ConcurrentSet {
    * now stored in the set is returned (which might not be the passed in key, if another thread
    * added an equal key first).
    */
-  const Key &lookup_key_or_add(Key key)
+  const Key &lookup_key_or_add(const Key &key)
   {
-    return *set_.insert(std::move(key)).first;
+    return this->lookup_key_or_add_as(key);
+  }
+  const Key &lookup_key_or_add(Key &&key)
+  {
+    return this->lookup_key_or_add_as(std::move(key));
+  }
+  template<typename ForwardKey> const Key &lookup_key_or_add_as(ForwardKey &&key)
+  {
+    return *set_.insert(std::forward<ForwardKey>(key)).first;
   }
 
   /** Returns the number of keys currently in the set. */

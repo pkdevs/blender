@@ -48,8 +48,8 @@ struct UStringEntry {
   }
 };
 
-const blender::detail::UStringEntry *ustring_ensure_entry(StringRef str);
-const blender::detail::UStringEntry *ustring_ensure_entry(const char *str);
+const blender::detail::UStringEntry &ustring_ensure_entry(StringRef str);
+const blender::detail::UStringEntry &ustring_ensure_entry(const char *str);
 
 }  // namespace detail
 
@@ -71,7 +71,7 @@ class UString {
 
  public:
   UString() = default;
-  explicit UString(const StringRef str) : ptr_(blender::detail::ustring_ensure_entry(str)) {}
+  explicit UString(const StringRef str) : ptr_(&blender::detail::ustring_ensure_entry(str)) {}
 
   template<FixedString FStr> friend UString operator""_ustr();
 
@@ -198,7 +198,7 @@ template<FixedString FStr> inline UString operator""_ustr()
   static std::atomic<const blender::detail::UStringEntry *> static_entry;
   const blender::detail::UStringEntry *entry = static_entry.load(std::memory_order_relaxed);
   if (entry == nullptr) [[unlikely]] {
-    entry = blender::detail::ustring_ensure_entry(FStr.data);
+    entry = &blender::detail::ustring_ensure_entry(FStr.data);
     static_entry.store(entry, std::memory_order_relaxed);
   }
   return UString(entry);
