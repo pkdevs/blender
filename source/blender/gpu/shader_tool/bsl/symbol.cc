@@ -581,6 +581,7 @@ struct SymbolParser : NodeErrorHandler {
       ctor->add_argument(cls);
       ctor->is_builtin = true;
       scope.function_emplace(ctor, true);
+      ctor->identifier = prefix + ctor->identifier;
     }
     else {
       cls->ensure_size_and_align();
