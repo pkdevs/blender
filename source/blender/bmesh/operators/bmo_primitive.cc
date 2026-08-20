@@ -876,7 +876,6 @@ void bmo_create_quadsphere_exec(BMesh *bm, BMOperator *op)
   }
 
   for (i = 0; i < ARRAY_SIZE(faces); i++) {
-    BMFace *f;
     BMVert *quad[4] = {
         verts[faces[i][0]],
         verts[faces[i][1]],
@@ -884,7 +883,7 @@ void bmo_create_quadsphere_exec(BMesh *bm, BMOperator *op)
         verts[faces[i][3]],
     };
 
-    f = BM_face_create_verts(bm, quad, 4, nullptr, BM_CREATE_NOP, true);
+    BMFace *f = BM_face_create_verts(bm, quad, 4, nullptr, BM_CREATE_NOP, true);
     BMIter liter;
     BMLoop *l;
     BM_ITER_ELEM (l, &liter, f, BM_LOOPS_OF_FACE) {
@@ -919,27 +918,23 @@ void bmo_create_quadsphere_exec(BMesh *bm, BMOperator *op)
     if (!BMO_vert_flag_test(bm, v, VERT_MARK)) {
       continue;
     }
-    float co[3];
-    copy_v3_v3(co, v->co);
-    // Source https://mathoverflow.net/questions/446657/mapping-a-cube-to-a-sphere
-    float x = co[0];
-    float y = co[1];
-    float z = co[2];
-    int p = 50;
-    float xc = std::sqrt(std::pow(x, p) + y * y + z * z) *
+    /*  Source https://mathoverflow.net/questions/446657
+        Mapping a cube to a sphere
+    */
+    const float x = v->co[0];
+    const float y = v->co[1];
+    const float z = v->co[2];
+    /* for x in [-1,1]: large even p makes x^p -> 1 on face ⊥ x-axis, else 0 (50 is good enough)
+    */
+    const int p = 50;
+    const float xc = std::sqrt(std::pow(x, p) + y * y + z * z) *
                std::tan(x * std::atan(1 / std::sqrt(std::pow(x, p) + y * y + z * z)));
-    float yc = std::sqrt(x * x + std::pow(y, p) + z * z) *
+    const float yc = std::sqrt(x * x + std::pow(y, p) + z * z) *
                std::tan(y * std::atan(1 / std::sqrt(x * x + std::pow(y, p) + z * z)));
-    float zc = std::sqrt(x * x + y * y + std::pow(z, p)) *
+    const float zc = std::sqrt(x * x + y * y + std::pow(z, p)) *
                std::tan(z * std::atan(1 / std::sqrt(x * x + y * y + std::pow(z, p))));
-    float n = std::sqrt(xc * xc + yc * yc + zc * zc);
-    co[0] = xc / n;
-    co[1] = yc / n;
-    co[2] = zc / n;
-    // Apply the radius
-    co[0] = co[0] * rad;
-    co[1] = co[1] * rad;
-    co[2] = co[2] * rad;
+    float3 co{xc, yc, zc};
+    normalize_v3_v3_length(co, co, rad);
     mul_m4_v3(mat, co);
     copy_v3_v3(v->co, co);
   }
