@@ -1078,18 +1078,53 @@ void ShaderGraph::bump_from_displacement(bool use_object_space)
   dot_dy->set_math_type(NODE_VECTOR_MATH_DOT_PRODUCT);
 
   GeometryNode *geom = create_node<GeometryNode>();
-  connect(geom->output("Normal"), bump->input("Normal"));
-  connect(geom->output("Normal"), dot_center->input("Vector2"));
-  connect(geom->output("Normal"), dot_dx->input("Vector2"));
-  connect(geom->output("Normal"), dot_dy->input("Vector2"));
 
-  connect(out_center, dot_center->input("Vector1"));
-  connect(out_dx, dot_dx->input("Vector1"));
-  connect(out_dy, dot_dy->input("Vector1"));
+  VectorTransformNode *node_transform_normal = nullptr;
+  VectorTransformNode *node_transform_vectors[3] = {nullptr};
+
+  if (use_object_space) {
+    node_transform_normal = create_node<VectorTransformNode>();
+    for (int i = 0; i < 3; i++) {
+      node_transform_vectors[i] = create_node<VectorTransformNode>();
+      node_transform_vectors[i]->set_transform_type(NODE_VECTOR_TRANSFORM_TYPE_VECTOR);
+      node_transform_vectors[i]->set_convert_to(NODE_VECTOR_TRANSFORM_CONVERT_SPACE_OBJECT);
+      node_transform_vectors[i]->set_convert_from(NODE_VECTOR_TRANSFORM_CONVERT_SPACE_WORLD);
+    }
+    node_transform_normal->set_transform_type(NODE_VECTOR_TRANSFORM_TYPE_NORMAL);
+    node_transform_normal->set_convert_to(NODE_VECTOR_TRANSFORM_CONVERT_SPACE_OBJECT);
+    node_transform_normal->set_convert_from(NODE_VECTOR_TRANSFORM_CONVERT_SPACE_WORLD);
+
+    connect(geom->output("Normal"), node_transform_normal->input("Vector"));
+
+    connect(node_transform_normal->output("Vector"), dot_center->input("Vector2"));
+    connect(node_transform_normal->output("Vector"), dot_dx->input("Vector2"));
+    connect(node_transform_normal->output("Vector"), dot_dy->input("Vector2"));
+
+    connect(out_center, node_transform_vectors[0]->input("Vector"));
+    connect(node_transform_vectors[0]->output("Vector"), dot_center->input("Vector1"));
+
+    connect(out_dx, node_transform_vectors[1]->input("Vector"));
+    connect(node_transform_vectors[1]->output("Vector"), dot_dx->input("Vector1"));
+
+    connect(out_dy, node_transform_vectors[2]->input("Vector"));
+    connect(node_transform_vectors[2]->output("Vector"), dot_dy->input("Vector1"));
+  }
+  else {
+
+    connect(geom->output("Normal"), dot_center->input("Vector2"));
+    connect(geom->output("Normal"), dot_dx->input("Vector2"));
+    connect(geom->output("Normal"), dot_dy->input("Vector2"));
+
+    connect(out_center, dot_center->input("Vector1"));
+    connect(out_dx, dot_dx->input("Vector1"));
+    connect(out_dy, dot_dy->input("Vector1"));
+  }
 
   connect(dot_center->output("Value"), bump->input("SampleCenter"));
   connect(dot_dx->output("Value"), bump->input("SampleX"));
   connect(dot_dy->output("Value"), bump->input("SampleY"));
+
+  connect(geom->output("Normal"), bump->input("Normal"));
 
   /* connect the bump out to the set normal in: */
   connect(bump->output("Normal"), set_normal->input("Direction"));
