@@ -132,37 +132,28 @@ static bool is_disabled(const Scene * /*scene*/, ModifierData *md, bool /*use_re
   return false;
 }
 
-static bool is_visibility_animated(PropertyRNA *prop_hide_viewport,
-                                   PropertyRNA *prop_hide_render,
-                                   PropertyRNA *prop_hide_base,
-                                   Object *ob,
-                                   Base *base)
+struct LineartVisibilityProps {
+  PropertyRNA *prop_hide_viewport;
+  PropertyRNA *prop_hide_render;
+};
+
+static bool is_visibility_animated(LineartVisibilityProps &visibility_props, Object *ob)
 {
-  PointerRNA ptr_hide_viewport = RNA_pointer_create_discrete(&ob->id, RNA_Object, ob);
-  PointerRNA ptr_hide_render = RNA_pointer_create_discrete(&ob->id, RNA_Object, ob);
-  PointerRNA ptr_hide_base = RNA_pointer_create_discrete(nullptr, RNA_ObjectBase, base);
-  std::optional<std::string> path_hide_viewport = RNA_path_from_ID_to_property(&ptr_hide_viewport,
-                                                                               prop_hide_viewport);
-  std::optional<std::string> path_hide_render = RNA_path_from_ID_to_property(&ptr_hide_render,
-                                                                             prop_hide_render);
-  std::optional<std::string> path_hide_base = RNA_path_from_ID_to_property(&ptr_hide_base,
-                                                                           prop_hide_base);
-  const int is_animated_viewport = bke::animdata::prop_is_animated(
-      ob->adt, path_hide_viewport->c_str(), 0);
-  const int is_animated_render = bke::animdata::prop_is_animated(
-      ob->adt, path_hide_render->c_str(), 0);
-  const int is_animated_base = bke::animdata::prop_is_animated(
-      ob->adt, path_hide_base->c_str(), 0);
-  return is_animated_viewport || is_animated_render || is_animated_base;
+  auto is_prop_animated = [ob](PropertyRNA *prop) {
+    PointerRNA ptr = RNA_pointer_create_discrete(&ob->id, RNA_Object, ob);
+    std::optional<std::string> path = RNA_path_from_ID_to_property(&ptr, prop);
+    return bke::animdata::prop_is_animated(ob->adt, path->c_str(), 0);
+  };
+
+  return is_prop_animated(visibility_props.prop_hide_viewport) ||
+         is_prop_animated(visibility_props.prop_hide_render);
 }
 
 static void add_this_collection(Collection &collection,
                                 const ModifierUpdateDepsgraphContext *ctx,
                                 const int mode,
                                 Set<const Object *> &object_dependencies,
-                                PropertyRNA *prop_hide_viewport,
-                                PropertyRNA *prop_hide_render,
-                                PropertyRNA *prop_hide_base)
+                                LineartVisibilityProps &visibility_props)
 {
   bool default_add = true;
   /* Do not do nested collection usage check, this is consistent with lineart calculation, because
@@ -172,15 +163,14 @@ static void add_this_collection(Collection &collection,
   if (collection.lineart_usage & COLLECTION_LRT_EXCLUDE) {
     default_add = false;
   }
-  int base_flag = (mode == DAG_EVAL_VIEWPORT) ? BASE_ENABLED_VIEWPORT : BASE_ENABLED_RENDER;
+
   int object_visibility_flag = (mode == DAG_EVAL_VIEWPORT) ? OB_HIDE_VIEWPORT : OB_HIDE_RENDER;
   FOREACH_COLLECTION_OBJECT_RECURSIVE_BEGIN (&collection, ob) {
-    if ((!(_base->flag & base_flag)) || (ob->visibility_flag & object_visibility_flag)) {
+    if (ob->visibility_flag & object_visibility_flag) {
       /* If an object is hidden, we check if they have animated visibility flag so it can be
        * visible some point later, that way the object will still be taken into account when
        * calculating lines without re-building dependencies with the modifier. */
-      if (!is_visibility_animated(prop_hide_viewport, prop_hide_render, prop_hide_base, ob, _base))
-      {
+      if (!is_visibility_animated(visibility_props, ob)) {
         continue;
       }
     }
@@ -198,13 +188,8 @@ static void add_this_collection(Collection &collection,
       if (!ob->instance_collection) {
         continue;
       }
-      add_this_collection(*ob->instance_collection,
-                          ctx,
-                          mode,
-                          object_dependencies,
-                          prop_hide_viewport,
-                          prop_hide_render,
-                          prop_hide_base);
+      add_this_collection(
+          *ob->instance_collection, ctx, mode, object_dependencies, visibility_props);
       object_dependencies.add(ob);
     }
   }
@@ -230,17 +215,16 @@ static void update_depsgraph(ModifierData *md, const ModifierUpdateDepsgraphCont
   Set<const Object *> &object_dependencies = runtime->object_dependencies;
   object_dependencies.clear();
 
-  PropertyRNA *prop_hide_viewport = RNA_struct_type_find_property(RNA_Object, "hide_viewport");
-  PropertyRNA *prop_hide_render = RNA_struct_type_find_property(RNA_Object, "hide_render");
-  PropertyRNA *prop_hide_base = RNA_struct_type_find_property(RNA_ObjectBase, "hide_viewport");
+  LineartVisibilityProps visibility_props;
+
+  visibility_props.prop_hide_viewport = RNA_struct_type_find_property(RNA_Object, "hide_viewport");
+  visibility_props.prop_hide_render = RNA_struct_type_find_property(RNA_Object, "hide_render");
 
   add_this_collection(*ctx->scene->master_collection,
                       ctx,
                       DAG_EVAL_VIEWPORT,
                       object_dependencies,
-                      prop_hide_viewport,
-                      prop_hide_render,
-                      prop_hide_base);
+                      visibility_props);
 
   /* No need to add any non-geometry objects into `lmd->object_dependencies` because we won't be
    * loading... */
