@@ -513,7 +513,7 @@ static std::string lineart_bake_strokes_get_description(bContext * /*C*/,
 {
   const bool bake_all = RNA_boolean_get(properties, "bake_all");
   if (bake_all) {
-    return TIP_("Bake Line Art for all Grease Pencil Objects");
+    return TIP_("Bake Line Art for all Grease Pencil objects");
   }
   return ot->description ? CTX_IFACE_(ot->translation_context, ot->description) : "";
 }
