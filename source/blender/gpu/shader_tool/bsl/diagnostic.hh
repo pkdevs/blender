@@ -233,6 +233,7 @@ enum class Diag {
   UnknownClassInstantiation,
   Redefinition,
   RedefinitionTemplate,
+  PreviousDefinition,
   CalledIsNotFunction,
   SubscriptNotArray,
   InvalidNumberLiteral,
@@ -532,6 +533,8 @@ static inline std::string_view diagnostic_message_get(Diag diag)
       return "Redefinition of template '{}'";
     case Diag::Redefinition:
       return "Redefinition of '{}'";
+    case Diag::PreviousDefinition:
+      return "Previous definition of '{}' is here";
     case Diag::CalledIsNotFunction:
       return "Called object type '{}' is not a function";
     case Diag::SubscriptNotArray:

@@ -421,6 +421,16 @@ bool SymbolScope::function_emplace(SymbolFunction *fn, bool builtin)
   return result;
 }
 
+bool SymbolScope::variable_emplace(string id, SymbolVariable *var)
+{
+  return !variables.emplace(id, var).second;
+}
+
+bool SymbolScope::variable_emplace(SymbolVariable *var)
+{
+  return !variables.emplace(var->identifier, var).second;
+}
+
 vector<SymbolVariable *> SymbolScope::non_static_variables_in_declaration_order() const
 {
   assert(this->type == CLASS);

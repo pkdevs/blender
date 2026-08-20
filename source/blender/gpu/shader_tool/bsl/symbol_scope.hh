@@ -149,6 +149,10 @@ struct SymbolScope : Symbol {
 
   /* Returns true if the function is an overload or redefines the symbol. */
   bool function_emplace(SymbolFunction *fn, bool builtin = false);
+  /* Returns true if redefined symbol. */
+  bool variable_emplace(string id, SymbolVariable *var);
+  /* Returns true if redefined symbol. */
+  bool variable_emplace(SymbolVariable *var);
 
   vector<SymbolVariable *> non_static_variables_in_declaration_order() const;
 

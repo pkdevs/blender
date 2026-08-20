@@ -165,7 +165,9 @@ struct SymbolParser : NodeErrorHandler {
         }
         var->is_constexpr = true;
         var->value = val.value;
-        scope.variables.emplace(id, var);
+        if (scope.variable_emplace(id, var)) {
+          error(var->loc.tok, Diag::Redefinition, id);
+        }
       }
       param = param.next();
     }
@@ -199,7 +201,9 @@ struct SymbolParser : NodeErrorHandler {
             arg.type().identifier(), Diag::UnknownTypeNameWithArg, arg.type().identifier().str());
       }
       SymbolVariable *var = table.var_arena.alloc(&scope, type, arg.declarator(), table);
-      scope.variables.emplace(var->identifier, var);
+      if (scope.variable_emplace(var)) {
+        error(var->loc.tok, Diag::Redefinition, var->identifier);
+      }
       /* Register argument type for argument resolution. */
       fn_sym->add_argument(type, arg.declarator().initial_value().expr());
 
@@ -348,7 +352,7 @@ struct SymbolParser : NodeErrorHandler {
         if (fn->fn_type == SymbolFunction::MEMBER) {
           SymbolVariable *var = table.var_arena.alloc(
               &scope, fn->parent_class(), decl.front(), "this_");
-          scope.variables.emplace(var->identifier, var);
+          scope.variable_emplace(var);
         }
       }
     }
@@ -362,7 +366,9 @@ struct SymbolParser : NodeErrorHandler {
       for (Declarator decl : var.children_of_type<Declarator>()) {
         SymbolVariable *sym = table.var_arena.alloc(&scope, type, decl, table);
         sym->type = type;
-        scope.variables.emplace(sym->identifier, sym);
+        if (scope.variable_emplace(sym)) {
+          error(sym->loc.tok, Diag::Redefinition, sym->identifier);
+        }
       }
     }
   }
@@ -429,7 +435,7 @@ struct SymbolParser : NodeErrorHandler {
           }
         }
         SymbolVariable *var = table.var_arena.alloc(root, type, name, string(name.str()));
-        root->variables.emplace(var->identifier, var);
+        root->variable_emplace(var);
       }
       /* TODO: Make a warning/error if this just defines a constant in global space without #if
        * directives. */
@@ -494,12 +500,22 @@ struct SymbolParser : NodeErrorHandler {
       sym->value = std::visit([](auto &&v) -> ConstexprValue { return v + 1; },
                               enum_cls->enum_last_val);
     }
-    scope.variables.emplace(sym->identifier, sym);
+    if (scope.variable_emplace(sym)) {
+      NOTE(scope.variables.find(sym->identifier)->second.first.tok,
+           Diag::PreviousDefinition,
+           sym->identifier);
+      error(sym->loc.tok, Diag::Redefinition, sym->identifier);
+    }
     /* Save value for the next member. */
     enum_cls->enum_last_val = sym->value;
     /* Alias to the parent namespace for non-anonymous, non-class enum. */
     if (!cls.is_enum_class()) {
-      scope.parent->variables.emplace(sym->identifier, sym);
+      if (scope.parent->variable_emplace(sym)) {
+        NOTE(scope.variables.find(sym->identifier)->second.first.tok,
+             Diag::PreviousDefinition,
+             sym->identifier);
+        error(sym->loc.tok, Diag::Redefinition, sym->identifier);
+      }
     }
     /* Set resolved identifier. */
     sym->identifier = prefix + sym->identifier;
@@ -571,7 +587,9 @@ struct SymbolParser : NodeErrorHandler {
       /* Instantiate into parent class as member. */
       SymbolVariable *var = table.var_arena.alloc(
           &scope, cls, decl.front(), cls->original + ns_sep);
-      scope.variables.emplace(cls->original, var);
+      if (scope.variable_emplace(cls->original, var)) {
+        error(var->loc.tok, Diag::Redefinition, cls->original);
+      }
 
       var->type = cls;
       var->set_offset(parent_class.is_union(), offset);
@@ -629,7 +647,9 @@ struct SymbolParser : NodeErrorHandler {
       /* Create return variable instance. To be used during inlining. */
       SymbolVariable *var = table.var_arena.alloc(
           fn, fn->return_type, fn->decl.front(), SymbolFunction::inline_fn_ret_id);
-      fn->variables.emplace(SymbolFunction::inline_fn_ret_id, var);
+      if (fn->variable_emplace(SymbolFunction::inline_fn_ret_id, var)) {
+        error(var->loc.tok, Diag::Redefinition, SymbolFunction::inline_fn_ret_id);
+      }
     }
 
     return fn;
@@ -816,7 +836,12 @@ struct SymbolParser : NodeErrorHandler {
     SymbolVariable *sym = table.var_arena.alloc(
         &scope, table.void_cls, decl.front(), string(decl.identifier().str()));
     sym->is_static = true;
-    scope.variables.emplace(sym->identifier, sym);
+    if (scope.variable_emplace(sym)) {
+      NOTE(scope.variables.find(sym->identifier)->second.first.tok,
+           Diag::PreviousDefinition,
+           sym->identifier);
+      error(decl, Diag::Redefinition, sym->identifier);
+    }
     /* Set resolved identifier. */
     sym->identifier = prefix + sym->identifier;
   }
@@ -840,7 +865,12 @@ struct SymbolParser : NodeErrorHandler {
 
     /* Create temp variable to write to. */
     SymbolVariable *tmp = table.var_arena.alloc(&scope, cls, decl.front(), decl.tmp_id());
-    scope.variables.emplace(tmp->identifier, tmp);
+    if (scope.variable_emplace(tmp)) {
+      NOTE(scope.variables.find(tmp->identifier)->second.first.tok,
+           Diag::PreviousDefinition,
+           tmp->identifier);
+      error(decl, Diag::Redefinition, tmp->identifier);
+    }
 
     for (SymbolVariable *var : cls->non_static_variables_in_declaration_order()) {
       if (!id.is_valid()) {
@@ -851,7 +881,12 @@ struct SymbolParser : NodeErrorHandler {
       SymbolVariable *sym = table.var_arena.alloc(*var);
       sym->identifier = id.str();
       sym->parent = &scope;
-      scope.variables.emplace(sym->identifier, sym);
+      if (scope.variable_emplace(sym)) {
+        NOTE(scope.variables.find(sym->identifier)->second.first.tok,
+             Diag::PreviousDefinition,
+             sym->identifier);
+        error(decl, Diag::Redefinition, sym->identifier);
+      }
       /* Resolve to the tmp variable member. */
       sym->identifier = tmp->identifier + '.' + var->identifier;
 
@@ -943,7 +978,12 @@ struct SymbolParser : NodeErrorHandler {
       SymbolVariable *sym = table.var_arena.alloc(&scope, type, decl, table);
       sym->res_type = attr.res_type;
       sym->is_static |= attr.res_type != ResourceType::NONE;
-      scope.variables.emplace(sym->identifier, sym);
+      if (scope.variable_emplace(sym)) {
+        NOTE(scope.variables.find(sym->identifier)->second.first.tok,
+             Diag::PreviousDefinition,
+             sym->identifier);
+        error(sym->loc.tok, Diag::Redefinition, sym->identifier);
+      }
 
       if (is_srt_local_ref && !is_ref) {
         error(decl, Diag::ResourceTableMustBeReference);
@@ -982,7 +1022,9 @@ struct SymbolParser : NodeErrorHandler {
           string suffix = cls->is_union ? "()" : "";
           string prefix = cls->is_union ? "_" : "";
           /* Alias to the first, non-anonymous parent. */
-          named_parent->variables.emplace(sym->identifier, sym);
+          if (named_parent->variable_emplace(sym)) {
+            error(sym->loc.tok, Diag::Redefinition, sym->identifier);
+          }
           /* Rename to the resolved symbol. */
           sym->identifier = anon_prefix + prefix + sym->identifier + suffix;
 
