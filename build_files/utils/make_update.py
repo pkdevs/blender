@@ -68,7 +68,7 @@ def parse_arguments() -> argparse.Namespace:
         default="git",
         help="Path to the git binary. (Only useful if it is not in your PATH)")
     parser.add_argument("--architecture", type=str,
-                        choices=("x86_64", "amd64", "arm64",))
+                        choices=("x64", "x86_64", "amd64", "arm64",))
     parser.add_argument("--prune-destructive", action="store_true",
                         help="Destructive! Detect and remove stale files from older checkouts")
 
@@ -130,8 +130,6 @@ def get_effective_architecture(args: argparse.Namespace) -> str:
     # Normalize the architecture name.
     if architecture in {"x86_64", "amd64"}:
         architecture = "x64"
-    if architecture == "aarch64":
-        architecture = "arm64"
 
     assert isinstance(architecture, str)
     return architecture
