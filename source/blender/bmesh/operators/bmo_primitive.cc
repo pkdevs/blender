@@ -917,7 +917,20 @@ void bmo_create_quadsphere_exec(BMesh *bm, BMOperator *op)
   const int seg = max_ii(1, BMO_slot_int_get(op->slots_in, "segments"));
   /* Vertices along each cube edge. */
   const int seg_vert = seg + 1;
-  /* Iterations to distribute vertices evenly. */
+  /* Iterations to distribute vertices evenly.
+   *
+   * The maximum error for each iteration.
+   * - 0: 0.0782
+   * - 1: 0.00343
+   * - 2: 0.000159
+   * - 3: 0.00000766
+   * - 4: 0.000000446
+   * - 5: 0.000000130
+   *
+   * 3 is a good balance between being a low number of iterations
+   * while the value and perceptually *perfect*
+   *
+   * NOTE: measured by comparing the the distance to an iteration of 50. */
   const int iter_num = 3;
 
   const int cd_loop_uv_offset = CustomData_get_offset(&bm->ldata, CD_PROP_FLOAT2);
