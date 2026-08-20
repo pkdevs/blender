@@ -330,7 +330,7 @@ static void node_declare(NodeDeclarationBuilder &b)
   thinfilm.add_input<decl::Float>("Thin Film Thickness"_ustr)
       .default_value(0.5f)
       .min(0.0f)
-      .max(100000.0f)
+      .max(1.0f)
       .not_implemented()
       .description("Thickness of the thin film in micrometers (μm)");
   /* TODO(weizhen): OpenPBR unit for thin film is micrometer, but our default is nanometer. Need to
