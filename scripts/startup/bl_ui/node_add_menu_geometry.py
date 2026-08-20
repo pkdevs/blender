@@ -3,14 +3,11 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 
 import bpy
-from bpy.app.translations import (
-    contexts as i18n_contexts,
-)
+from bl_ui import node_add_menu
 from bpy.app.translations import (
     pgettext_n as n_,
+    contexts as i18n_contexts,
 )
-
-from bl_ui import node_add_menu
 
 
 class NODE_MT_gn_attribute_base(node_add_menu.NodeMenu):
