@@ -50,7 +50,7 @@ class ConcurrentSet {
  public:
   /**
    * Look up a key without adding it. Returns null if the key does not exist yet. Does not
-   * require creating a #Key first, unlike #add_get.
+   * require creating a #Key first, unlike #lookup_key_or_add.
    */
   template<typename ForwardKey> const Key *lookup_ptr(const ForwardKey &key) const
   {
@@ -132,6 +132,10 @@ class ConcurrentSet {
   UsedSet set_;
 
  public:
+  /**
+   * Look up a key without adding it. Returns null if the key does not exist yet. Does not
+   * require creating a #Key first, unlike #lookup_key_or_add.
+   */
   template<typename ForwardKey> const Key *lookup_ptr(const ForwardKey &key) const
   {
     std::lock_guard lock{mutex_};
@@ -139,10 +143,23 @@ class ConcurrentSet {
     return stored ? stored->get() : nullptr;
   }
 
-  const Key &add_get(Key key)
+  /**
+   * Add the key to the set if it does not exist yet. Either way, a reference to the key that is
+   * now stored in the set is returned (which might not be the passed in key, if another thread
+   * added an equal key first).
+   */
+  const Key &lookup_key_or_add(const Key &key)
+  {
+    return this->lookup_key_or_add_as(key);
+  }
+  const Key &lookup_key_or_add(Key &&key)
+  {
+    return this->lookup_key_or_add_as(std::move(key));
+  }
+  template<typename ForwardKey> const Key &lookup_key_or_add_as(ForwardKey &&key)
   {
     std::lock_guard lock{mutex_};
-    return *set_.lookup_key_or_add_as(std::make_unique<Key>(std::move(key)));
+    return *set_.lookup_key_or_add_as(std::make_unique<Key>(std::forward<ForwardKey>(key)));
   }
 
   /** Returns the number of keys currently in the set. */
