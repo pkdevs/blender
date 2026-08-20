@@ -769,6 +769,8 @@ class ResetTheme(Operator):
             return {'CANCELLED'}
 
         context.preferences.active_theme.reset_to_baseline()
+        # Reset font style as well to allow resetting the default dark theme too.
+        bpy.ops.preferences.reset_default_ui_style()
 
         import _rna_xml as rna_xml
         preset_class = bpy.types.USERPREF_MT_interface_theme_presets
