@@ -864,6 +864,27 @@ void BM_mesh_calc_uvs_grid(BMesh *bm,
  * scale with the segments (5000 for a 500x500 grid), too large for `pow`. Since the vertices are
  * on the cube, `on_face` gives the limit of `p` exactly.
  */
+
+/* Rotation order set to match `BM_mesh_calc_uvs_cube`. */
+static const char cube_faces[6][4] = {
+    {0, 1, 3, 2},
+    {2, 3, 7, 6},
+    {6, 7, 5, 4},
+    {4, 5, 1, 0},
+    {2, 6, 4, 0},
+    {7, 3, 1, 5},
+};
+/* The lower left corner of each face of `cube_faces` in the UV layout from
+ * `BM_mesh_calc_uvs_cube`. */
+static const float cube_faces_uv[6][2] = {
+    {0.375f, 0.0f},
+    {0.375f, 0.25f},
+    {0.375f, 0.5f},
+    {0.375f, 0.75f},
+    {0.125f, 0.5f},
+    {0.625f, 0.5f},
+};
+
 static float3 quadsphere_co_from_cube(const float3 &co, const bool on_face[3], const int iter_num)
 {
   BLI_assert(on_face[0] || on_face[1] || on_face[2]);
@@ -1036,26 +1057,6 @@ void bmo_create_quadsphere_exec(BMesh *bm, BMOperator *op)
     }
   }
   BLI_assert(v_index == slot_verts_out->len);
-
-  /* Rotation order set to match `BM_mesh_calc_uvs_cube`. */
-  static const char cube_faces[6][4] = {
-      {0, 1, 3, 2},
-      {2, 3, 7, 6},
-      {6, 7, 5, 4},
-      {4, 5, 1, 0},
-      {2, 6, 4, 0},
-      {7, 3, 1, 5},
-  };
-  /* The lower left corner of each face of `cube_faces` in the UV layout from
-   * `BM_mesh_calc_uvs_cube`. */
-  static const float cube_faces_uv[6][2] = {
-      {0.375f, 0.0f},
-      {0.375f, 0.25f},
-      {0.375f, 0.5f},
-      {0.375f, 0.75f},
-      {0.125f, 0.5f},
-      {0.625f, 0.5f},
-  };
 
   /* A `cube_faces` vertex as its cube corner, each axis 0 or 1. */
   auto corner_from_cube_vert_fn = [](const int cube_vert) -> int3 {
@@ -1891,16 +1892,6 @@ void bmo_create_cube_exec(BMesh *bm, BMOperator *op)
   const int cd_loop_uv_offset = CustomData_get_offset(&bm->ldata, CD_PROP_FLOAT2);
   const bool calc_uvs = (cd_loop_uv_offset != -1) && BMO_slot_bool_get(op->slots_in, "calc_uvs");
 
-  /* rotation order set to match 'BM_mesh_calc_uvs_cube' */
-  const char faces[6][4] = {
-      {0, 1, 3, 2},
-      {2, 3, 7, 6},
-      {6, 7, 5, 4},
-      {4, 5, 1, 0},
-      {2, 6, 4, 0},
-      {7, 3, 1, 5},
-  };
-
   BMO_slot_mat4_get(op->slots_in, "matrix", mat);
 
   if (!off) {
@@ -1920,13 +1911,13 @@ void bmo_create_cube_exec(BMesh *bm, BMOperator *op)
     }
   }
 
-  for (i = 0; i < ARRAY_SIZE(faces); i++) {
+  for (i = 0; i < ARRAY_SIZE(cube_faces); i++) {
     BMFace *f;
     BMVert *quad[4] = {
-        verts[faces[i][0]],
-        verts[faces[i][1]],
-        verts[faces[i][2]],
-        verts[faces[i][3]],
+        verts[cube_faces[i][0]],
+        verts[cube_faces[i][1]],
+        verts[cube_faces[i][2]],
+        verts[cube_faces[i][3]],
     };
 
     f = BM_face_create_verts(bm, quad, 4, nullptr, BM_CREATE_NOP, true);
