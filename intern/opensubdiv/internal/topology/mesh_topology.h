@@ -18,11 +18,6 @@ namespace blender::opensubdiv {
 // comparison between Application side and OpenSubddiv side.
 class MeshTopology {
  public:
-  int getNumFaces() const
-  {
-    return this->face_offsets.size() - 1;
-  }
-
   //////////////////////////////////////////////////////////////////////////////
   // Comparison.
 

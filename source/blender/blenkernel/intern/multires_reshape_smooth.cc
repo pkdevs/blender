@@ -74,13 +74,6 @@ struct Corner {
   int grid_index = 0;
 };
 
-struct Edge {
-  int v1 = 0;
-  int v2 = 0;
-
-  float sharpness = 0.0f;
-};
-
 /* Storage of data which is linearly interpolated from the reshape level to the top level. */
 
 struct LinearGridElement {
@@ -123,7 +116,8 @@ struct MultiresReshapeSmoothContext : NonCopyable, NonMovable {
      *
      * NOTE: Different type from others to be able to easier use atomic ops. */
     size_t num_edges;
-    Array<Edge> edges;
+    Array<int2> edges;
+    Array<float> edge_sharpness;
 
     /* Indexes into the geometry.vertices array */
     Array<int> corner_verts;
@@ -677,10 +671,9 @@ static void store_edge(MultiresReshapeSmoothContext *reshape_smooth_context,
   const int edge_index = atomic_fetch_and_add_z(&reshape_smooth_context->geometry.num_edges, 1);
   BLI_assert(edge_index < reshape_smooth_context->geometry.max_edges);
 
-  Edge *edge = &reshape_smooth_context->geometry.edges[edge_index];
-  edge->v1 = subdiv_v1;
-  edge->v2 = subdiv_v2;
-  edge->sharpness = bke::subdiv::crease_to_sharpness(crease);
+  reshape_smooth_context->geometry.edges[edge_index] = int2(subdiv_v1, subdiv_v2);
+  reshape_smooth_context->geometry.edge_sharpness[edge_index] = bke::subdiv::crease_to_sharpness(
+      crease);
 }
 
 static void foreach_edge(const bke::subdiv::ForeachContext *foreach_context,
@@ -828,27 +821,12 @@ static int get_num_edges(const OpenSubdiv_Converter *converter)
   return reshape_smooth_context->geometry.num_edges;
 }
 
-static void get_edge_vertices(const OpenSubdiv_Converter *converter,
-                              const int edge_index,
-                              int edge_vertices[2])
-{
-  const MultiresReshapeSmoothContext *reshape_smooth_context =
-      static_cast<const MultiresReshapeSmoothContext *>(converter->user_data);
-  BLI_assert(edge_index < reshape_smooth_context->geometry.num_edges);
-
-  const Edge *edge = &reshape_smooth_context->geometry.edges[edge_index];
-  edge_vertices[0] = edge->v1;
-  edge_vertices[1] = edge->v2;
-}
-
 static float get_edge_sharpness(const OpenSubdiv_Converter *converter, const int edge_index)
 {
   const MultiresReshapeSmoothContext *reshape_smooth_context =
       static_cast<const MultiresReshapeSmoothContext *>(converter->user_data);
-  BLI_assert(edge_index < reshape_smooth_context->geometry.num_edges);
 
-  const Edge *edge = &reshape_smooth_context->geometry.edges[edge_index];
-  return edge->sharpness;
+  return reshape_smooth_context->geometry.edge_sharpness[edge_index];
 }
 
 static float get_vert_sharpness(const OpenSubdiv_Converter *converter, const int vert_index)
@@ -883,7 +861,6 @@ static void converter_init(const MultiresReshapeSmoothContext *reshape_smooth_co
   converter->faces = reshape_smooth_context->geometry.faces();
   converter->corner_verts = reshape_smooth_context->geometry.corner_verts;
 
-  converter->getNumEdges = get_num_edges;
   converter->getNumVertices = get_num_vertices;
 
   converter->getFaceEdges = nullptr;

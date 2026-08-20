@@ -42,8 +42,7 @@ struct OpenSubdiv_Converter {
   //////////////////////////////////////////////////////////////////////////////
   // Global geometry counters.
 
-  // Number of faces/edges/vertices in the base mesh.
-  int (*getNumEdges)(const OpenSubdiv_Converter *converter);
+  // Number of vertices in the base mesh.
   int (*getNumVertices)(const OpenSubdiv_Converter *converter);
 
   //////////////////////////////////////////////////////////////////////////////

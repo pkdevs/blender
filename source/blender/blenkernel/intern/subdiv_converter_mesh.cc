@@ -272,7 +272,6 @@ static void init_functions(OpenSubdiv_Converter *converter)
   converter->getFVarLinearInterpolation = get_fvar_linear_interpolation;
   converter->specifiesFullTopology = specifies_full_topology;
 
-  converter->getNumEdges = get_num_edges;
   converter->getNumVertices = get_num_vertices;
 
   converter->getFaceEdges = nullptr;
