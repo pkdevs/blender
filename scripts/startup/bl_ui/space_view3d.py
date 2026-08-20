@@ -7278,6 +7278,13 @@ class VIEW3D_PT_overlay_viewer_node(Panel):
             icon='PINNED' if view.debug_view_pinned else 'UNPINNED',
         )
 
+        layout.separator()
+        row = layout.row(align=True)
+        row.label(text="Debug Views")
+        row.operator("view3d.debug_view_all", text="All", depress=view.debug_view_is_all)
+        row.operator("view3d.debug_view_previous", text="", icon='BACK')
+        row.operator("view3d.debug_view_next", text="", icon='FORWARD')
+
         col = layout.column()
         col.active = display_all
 

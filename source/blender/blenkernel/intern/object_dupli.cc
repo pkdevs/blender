@@ -1868,6 +1868,7 @@ void object_duplilist_preview(Depsgraph *depsgraph,
 bool object_duplilist_debug_view(Depsgraph *depsgraph,
                                  Object *ob_eval,
                                  const int modifier_persistent_uid,
+                                 const DEGDebugViewSource *source,
                                  DupliList &r_duplilist)
 {
   Object *ob_orig = DEG_get_original(ob_eval);
@@ -1906,15 +1907,24 @@ bool object_duplilist_debug_view(Depsgraph *depsgraph,
   /* One generated component ID, one source namespace, and one INT_MAX terminator must fit. */
   static_assert(MAX_DUPLI_RECUR >= 3);
   BLI_assert(ctx.level == 0);
+  bool source_found = source == nullptr;
   for (const nodes::debug_view::Candidate &candidate : candidates) {
+    if (source && (candidate.compute_context_hash.v1 != source->compute_context_hash.v1 ||
+                   candidate.compute_context_hash.v2 != source->compute_context_hash.v2 ||
+                   candidate.viewer_node_id != source->viewer_node_id))
+    {
+      continue;
+    }
+    source_found = true;
     const bke::GeometrySet &viewer_geometry = *candidate.viewer_log->main_geometry();
 
     /* Add one parent persistent-ID level to namespace otherwise corresponding components and
      * instances generated from different top-level preview sources. */
     DupliContext preview_ctx = ctx;
     preview_ctx.persistent_id[preview_ctx.level] =
-        nodes::debug_view::unique_persistent_id_namespace(
-            candidate.compute_context_hash, candidate.viewer_node_id, used_preview_namespaces);
+        nodes::debug_view::unique_persistent_id_namespace(candidate.compute_context_hash,
+                                                          candidate.viewer_node_id,
+                                                          used_preview_namespaces);
     preview_ctx.instance_idx[preview_ctx.level] = 0;
     preview_ctx.instance_data[preview_ctx.level] = nullptr;
     preview_ctx.level++;
@@ -1925,7 +1935,7 @@ bool object_duplilist_debug_view(Depsgraph *depsgraph,
                                   true,
                                   ob_eval->type == OB_CURVES);
   }
-  return true;
+  return source_found;
 }
 
 bool object_viewer_path_is_hidden_debug_view(const ViewerPath &viewer_path)

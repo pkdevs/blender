@@ -183,6 +183,22 @@ static void VIEW3D_OT_pastebuffer(wmOperatorType *ot)
                   "Put pasted objects in the active collection");
 }
 
+static void debug_view_inspection_redraw(bContext *C, View3D &v3d)
+{
+  if (ScrArea *area = CTX_wm_area(C)) {
+    for (ARegion &region : area->regionbase) {
+      if (region.regiontype != RGN_TYPE_WINDOW) {
+        continue;
+      }
+      /* The inspected dupli set changes without a depsgraph update. Recreate the viewport so draw
+       * engines cannot keep presenting temporal accumulation from the previous set. */
+      WM_draw_region_free(&region);
+      ED_region_tag_redraw(&region);
+    }
+  }
+  WM_event_add_notifier(C, NC_SPACE | ND_SPACE_VIEW3D, &v3d);
+}
+
 static wmOperatorStatus debug_view_pin_exec(bContext *C, wmOperator * /*op*/)
 {
   View3D *v3d = CTX_wm_view3d(C);
@@ -204,7 +220,8 @@ static wmOperatorStatus debug_view_pin_exec(bContext *C, wmOperator * /*op*/)
     v3d->debug_view_pin_modifier_uid = request.modifier_persistent_uid;
   }
 
-  WM_event_add_notifier(C, NC_SPACE | ND_SPACE_VIEW3D, v3d);
+  ED_view3d_debug_view_set_all(*v3d);
+  debug_view_inspection_redraw(C, *v3d);
   return OPERATOR_FINISHED;
 }
 
@@ -228,6 +245,77 @@ static void VIEW3D_OT_debug_view_pin(wmOperatorType *ot)
 
   ot->exec = debug_view_pin_exec;
   ot->poll = debug_view_pin_poll;
+}
+
+static bool debug_view_inspection_poll(bContext *C)
+{
+  return CTX_wm_view3d(C) != nullptr;
+}
+
+static wmOperatorStatus debug_view_all_exec(bContext *C, wmOperator * /*op*/)
+{
+  View3D *v3d = CTX_wm_view3d(C);
+  if (!v3d) {
+    return OPERATOR_CANCELLED;
+  }
+
+  if (ED_view3d_debug_view_set_all(*v3d)) {
+    debug_view_inspection_redraw(C, *v3d);
+  }
+  return OPERATOR_FINISHED;
+}
+
+static wmOperatorStatus debug_view_cycle_exec(bContext *C, const bool next)
+{
+  View3D *v3d = CTX_wm_view3d(C);
+  if (!v3d) {
+    return OPERATOR_CANCELLED;
+  }
+
+  if (ED_view3d_debug_view_cycle(*v3d, CTX_data_active_object(C), next)) {
+    debug_view_inspection_redraw(C, *v3d);
+  }
+  return OPERATOR_FINISHED;
+}
+
+static wmOperatorStatus debug_view_previous_exec(bContext *C, wmOperator * /*op*/)
+{
+  return debug_view_cycle_exec(C, false);
+}
+
+static wmOperatorStatus debug_view_next_exec(bContext *C, wmOperator * /*op*/)
+{
+  return debug_view_cycle_exec(C, true);
+}
+
+static void VIEW3D_OT_debug_view_all(wmOperatorType *ot)
+{
+  ot->name = "Show All Debug Views";
+  ot->description = "Display all participating persistent Debug Views";
+  ot->idname = "VIEW3D_OT_debug_view_all";
+
+  ot->exec = debug_view_all_exec;
+  ot->poll = debug_view_inspection_poll;
+}
+
+static void VIEW3D_OT_debug_view_previous(wmOperatorType *ot)
+{
+  ot->name = "Show Previous Debug View";
+  ot->description = "Display the previous participating persistent Debug View";
+  ot->idname = "VIEW3D_OT_debug_view_previous";
+
+  ot->exec = debug_view_previous_exec;
+  ot->poll = debug_view_inspection_poll;
+}
+
+static void VIEW3D_OT_debug_view_next(wmOperatorType *ot)
+{
+  ot->name = "Show Next Debug View";
+  ot->description = "Display the next participating persistent Debug View";
+  ot->idname = "VIEW3D_OT_debug_view_next";
+
+  ot->exec = debug_view_next_exec;
+  ot->poll = debug_view_inspection_poll;
 }
 
 /** \} */
@@ -289,6 +377,9 @@ void view3d_operatortypes()
   WM_operatortype_append(VIEW3D_OT_copybuffer);
   WM_operatortype_append(VIEW3D_OT_pastebuffer);
   WM_operatortype_append(VIEW3D_OT_debug_view_pin);
+  WM_operatortype_append(VIEW3D_OT_debug_view_all);
+  WM_operatortype_append(VIEW3D_OT_debug_view_previous);
+  WM_operatortype_append(VIEW3D_OT_debug_view_next);
 
   WM_operatortype_append(VIEW3D_OT_object_mode_pie_or_toggle);
 

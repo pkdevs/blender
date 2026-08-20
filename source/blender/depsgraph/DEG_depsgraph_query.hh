@@ -10,6 +10,9 @@
 
 #pragma once
 
+#include <optional>
+
+#include "BLI_compute_context.hh"
 #include "BLI_enum_flags.hh"
 #include "BLI_function_ref.hh"
 #include "BLI_iterator.hh"
@@ -220,10 +223,18 @@ enum DegIterFlag {
 };
 ENUM_OPERATORS(DegIterFlag)
 
-/** The object and modifier context used to evaluate persistent Debug Views. */
+/** Identity of a persistent Debug View source within an evaluated modifier context. */
+struct DEGDebugViewSource {
+  ComputeContextHash compute_context_hash;
+  int32_t viewer_node_id = 0;
+};
+
+/** The object and modifier context used to request persistent Debug View geometry. */
 struct DEGDebugViewRequest {
   const Object *object = nullptr;
   int modifier_persistent_uid = 0;
+  /** Optional source to display instead of all participating sources. */
+  std::optional<DEGDebugViewSource> source;
 };
 
 struct DEGObjectIterSettings {

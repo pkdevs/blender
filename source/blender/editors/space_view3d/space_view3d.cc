@@ -81,6 +81,10 @@
 #include "DEG_depsgraph_build.hh"
 #include "DEG_depsgraph_query.hh"
 
+#include "NOD_eval_log.hh"
+
+#include "MOD_nodes.hh"
+
 #include "view3d_intern.hh" /* own include */
 #include "view3d_navigate.hh"
 
@@ -195,10 +199,137 @@ void ED_view3d_shade_update(Main *bmain, View3D *v3d, ScrArea *area)
   }
 }
 
+bool ED_view3d_debug_view_set_all(View3D &v3d)
+{
+  View3D_DebugViewRuntime &debug_view = v3d.runtime.debug_view;
+  const bool changed = debug_view.mode != V3D_DEBUG_VIEW_ALL ||
+                       debug_view.selected_source_hash_v1[0] != 0 ||
+                       debug_view.selected_source_hash_v1[1] != 0 ||
+                       debug_view.selected_source_hash_v2[0] != 0 ||
+                       debug_view.selected_source_hash_v2[1] != 0 ||
+                       debug_view.selected_source_viewer_node_id != 0;
+
+  debug_view.mode = V3D_DEBUG_VIEW_ALL;
+  debug_view.selected_source_hash_v1[0] = 0;
+  debug_view.selected_source_hash_v1[1] = 0;
+  debug_view.selected_source_hash_v2[0] = 0;
+  debug_view.selected_source_hash_v2[1] = 0;
+  debug_view.selected_source_viewer_node_id = 0;
+  return changed;
+}
+
+static uint64_t debug_view_hash_from_runtime(const uint32_t hash[2])
+{
+  return uint64_t(hash[0]) | (uint64_t(hash[1]) << 32);
+}
+
+static void debug_view_hash_to_runtime(const uint64_t hash, uint32_t r_hash[2])
+{
+  r_hash[0] = uint32_t(hash);
+  r_hash[1] = uint32_t(hash >> 32);
+}
+
+static bool debug_view_candidate_matches(const nodes::debug_view::Candidate &candidate,
+                                         const DEGDebugViewSource &source)
+{
+  return candidate.compute_context_hash.v1 == source.compute_context_hash.v1 &&
+         candidate.compute_context_hash.v2 == source.compute_context_hash.v2 &&
+         candidate.viewer_node_id == source.viewer_node_id;
+}
+
+static nodes::eval_log::NodesEvalLog *debug_view_eval_log_for_request(
+    const DEGDebugViewRequest &request)
+{
+  if (!request.object || request.modifier_persistent_uid <= 0) {
+    return nullptr;
+  }
+
+  ModifierData *modifier = BKE_modifiers_findby_persistent_uid(request.object,
+                                                               request.modifier_persistent_uid);
+  if (!modifier || modifier->type != eModifierType_Nodes) {
+    return nullptr;
+  }
+
+  NodesModifierData &nmd = reinterpret_cast<NodesModifierData &>(*modifier);
+  if (!nmd.runtime) {
+    return nullptr;
+  }
+  return nmd.runtime->eval_log.get();
+}
+
+static DEGDebugViewSource debug_view_source_from_runtime(const View3D &v3d)
+{
+  const View3D_DebugViewRuntime &debug_view = v3d.runtime.debug_view;
+  DEGDebugViewSource source{};
+  source.compute_context_hash.v1 = debug_view_hash_from_runtime(
+      debug_view.selected_source_hash_v1);
+  source.compute_context_hash.v2 = debug_view_hash_from_runtime(
+      debug_view.selected_source_hash_v2);
+  source.viewer_node_id = debug_view.selected_source_viewer_node_id;
+  return source;
+}
+
+static bool debug_view_source_is_present(const View3D &v3d, const DEGDebugViewRequest &request)
+{
+  nodes::eval_log::NodesEvalLog *eval_log = debug_view_eval_log_for_request(request);
+  if (!eval_log) {
+    return false;
+  }
+
+  const DEGDebugViewSource source = debug_view_source_from_runtime(v3d);
+  for (const nodes::debug_view::Candidate &candidate : eval_log->debug_view_candidates()) {
+    if (debug_view_candidate_matches(candidate, source)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+static void debug_view_context_set(View3D &v3d,
+                                   const Object *object,
+                                   const int modifier_persistent_uid)
+{
+  View3D_DebugViewRuntime &debug_view = v3d.runtime.debug_view;
+  if (debug_view.context_object != object ||
+      debug_view.context_modifier_uid != modifier_persistent_uid)
+  {
+    ED_view3d_debug_view_set_all(v3d);
+  }
+
+  debug_view.context_object = const_cast<Object *>(object);
+  debug_view.context_modifier_uid = modifier_persistent_uid;
+}
+
+static void debug_view_select_source(View3D &v3d, const nodes::debug_view::Candidate &candidate)
+{
+  View3D_DebugViewRuntime &debug_view = v3d.runtime.debug_view;
+  debug_view.mode = V3D_DEBUG_VIEW_SINGLE;
+  debug_view_hash_to_runtime(candidate.compute_context_hash.v1,
+                             debug_view.selected_source_hash_v1);
+  debug_view_hash_to_runtime(candidate.compute_context_hash.v2,
+                             debug_view.selected_source_hash_v2);
+  debug_view.selected_source_viewer_node_id = candidate.viewer_node_id;
+}
+
+static bool debug_view_inspection_state_changed(const View3D_DebugViewRuntime &before,
+                                                const View3D_DebugViewRuntime &after)
+{
+  return before.mode != after.mode ||
+         before.selected_source_hash_v1[0] != after.selected_source_hash_v1[0] ||
+         before.selected_source_hash_v1[1] != after.selected_source_hash_v1[1] ||
+         before.selected_source_hash_v2[0] != after.selected_source_hash_v2[0] ||
+         before.selected_source_hash_v2[1] != after.selected_source_hash_v2[1] ||
+         before.selected_source_viewer_node_id != after.selected_source_viewer_node_id;
+}
+
 bool ED_view3d_debug_view_request(View3D &v3d,
                                   const Object *active_object,
                                   DEGDebugViewRequest &r_request)
 {
+  r_request = {};
+
+  const Object *resolved_object = nullptr;
+  int resolved_modifier_persistent_uid = 0;
   if (v3d.debug_view_pin) {
     const Object *pinned_object = v3d.debug_view_pin_object;
     const ModifierData *pinned_modifier = (pinned_object && v3d.debug_view_pin_modifier_uid > 0) ?
@@ -206,29 +337,102 @@ bool ED_view3d_debug_view_request(View3D &v3d,
                                                   pinned_object, v3d.debug_view_pin_modifier_uid) :
                                               nullptr;
     if (pinned_modifier && pinned_modifier->type == eModifierType_Nodes) {
-      r_request.object = pinned_object;
-      r_request.modifier_persistent_uid = v3d.debug_view_pin_modifier_uid;
-      return true;
+      resolved_object = pinned_object;
+      resolved_modifier_persistent_uid = v3d.debug_view_pin_modifier_uid;
     }
-
-    v3d.debug_view_pin = false;
-    v3d.debug_view_pin_object = nullptr;
-    v3d.debug_view_pin_modifier_uid = 0;
+    else {
+      v3d.debug_view_pin = false;
+      v3d.debug_view_pin_object = nullptr;
+      v3d.debug_view_pin_modifier_uid = 0;
+    }
   }
 
-  const Object *active_object_orig = active_object ? DEG_get_original(active_object) : nullptr;
-  const ModifierData *active_modifier = active_object_orig ?
-                                            BKE_object_active_modifier(active_object_orig) :
-                                            nullptr;
-  if (!active_modifier || active_modifier->type != eModifierType_Nodes ||
-      active_modifier->persistent_uid <= 0)
-  {
+  if (!resolved_object) {
+    const Object *active_object_orig = active_object ? DEG_get_original(active_object) : nullptr;
+    const ModifierData *active_modifier = active_object_orig ?
+                                              BKE_object_active_modifier(active_object_orig) :
+                                              nullptr;
+    if (active_modifier && active_modifier->type == eModifierType_Nodes &&
+        active_modifier->persistent_uid > 0)
+    {
+      resolved_object = active_object_orig;
+      resolved_modifier_persistent_uid = active_modifier->persistent_uid;
+    }
+  }
+
+  debug_view_context_set(v3d, resolved_object, resolved_modifier_persistent_uid);
+  if (!resolved_object) {
     return false;
   }
 
-  r_request.object = active_object_orig;
-  r_request.modifier_persistent_uid = active_modifier->persistent_uid;
+  r_request.object = resolved_object;
+  r_request.modifier_persistent_uid = resolved_modifier_persistent_uid;
+
+  View3D_DebugViewRuntime &debug_view = v3d.runtime.debug_view;
+  if (debug_view.mode == V3D_DEBUG_VIEW_SINGLE) {
+    if (!debug_view_source_is_present(v3d, r_request)) {
+      ED_view3d_debug_view_set_all(v3d);
+    }
+    else {
+      r_request.source = debug_view_source_from_runtime(v3d);
+    }
+  }
   return true;
+}
+
+bool ED_view3d_debug_view_cycle(View3D &v3d, const Object *active_object, const bool next)
+{
+  const View3D_DebugViewRuntime before = v3d.runtime.debug_view;
+  const bool was_single = before.mode == V3D_DEBUG_VIEW_SINGLE;
+
+  DEGDebugViewRequest request{};
+  if (!ED_view3d_debug_view_request(v3d, active_object, request)) {
+    return debug_view_inspection_state_changed(before, v3d.runtime.debug_view);
+  }
+
+  nodes::eval_log::NodesEvalLog *eval_log = debug_view_eval_log_for_request(request);
+  if (!eval_log) {
+    return debug_view_inspection_state_changed(before, v3d.runtime.debug_view);
+  }
+
+  const auto candidates = eval_log->debug_view_candidates();
+  if (candidates.is_empty()) {
+    return debug_view_inspection_state_changed(before, v3d.runtime.debug_view);
+  }
+
+  const View3D_DebugViewRuntime &after_request = v3d.runtime.debug_view;
+  const bool context_changed = before.context_object != after_request.context_object ||
+                               before.context_modifier_uid != after_request.context_modifier_uid;
+  /* A disappeared source has already reset the state to All. Do not immediately select another
+   * source as a side effect of the same operator invocation. */
+  if (was_single && after_request.mode == V3D_DEBUG_VIEW_ALL && !context_changed) {
+    return debug_view_inspection_state_changed(before, v3d.runtime.debug_view);
+  }
+
+  if (after_request.mode == V3D_DEBUG_VIEW_ALL) {
+    debug_view_select_source(v3d, next ? candidates.first() : candidates.last());
+    return debug_view_inspection_state_changed(before, v3d.runtime.debug_view);
+  }
+
+  const DEGDebugViewSource current_source = debug_view_source_from_runtime(v3d);
+  int current_index = -1;
+  for (int i = 0; i < candidates.size(); i++) {
+    if (debug_view_candidate_matches(candidates[i], current_source)) {
+      current_index = i;
+      break;
+    }
+  }
+
+  if (current_index == -1) {
+    ED_view3d_debug_view_set_all(v3d);
+    return debug_view_inspection_state_changed(before, v3d.runtime.debug_view);
+  }
+
+  const int candidate_count = candidates.size();
+  const int next_index = next ? (current_index + 1) % candidate_count :
+                                (current_index + candidate_count - 1) % candidate_count;
+  debug_view_select_source(v3d, candidates[next_index]);
+  return debug_view_inspection_state_changed(before, v3d.runtime.debug_view);
 }
 
 /* ******************** default callbacks for view3d space ***************** */
@@ -1676,7 +1880,9 @@ static void view3d_space_blend_read_data(BlendDataReader *reader, SpaceLink *sl)
 static void view3d_space_blend_write(BlendWriter *writer, SpaceLink *sl)
 {
   View3D *v3d = reinterpret_cast<View3D *>(sl);
-  writer->write_struct(v3d);
+  View3D v3d_copy = dna::shallow_copy(*v3d);
+  v3d_copy.runtime.debug_view = View3D_DebugViewRuntime{};
+  writer->write_struct_at_address(v3d, &v3d_copy);
 
   if (v3d->localvd) {
     writer->write_struct(v3d->localvd);

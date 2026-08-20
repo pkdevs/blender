@@ -16,6 +16,7 @@
 namespace blender {
 
 struct Depsgraph;
+struct DEGDebugViewSource;
 struct ID;
 struct Object;
 struct ParticleSystem;
@@ -91,6 +92,7 @@ void object_duplilist_preview(Depsgraph *depsgraph,
 bool object_duplilist_debug_view(Depsgraph *depsgraph,
                                  Object *ob_eval,
                                  int modifier_persistent_uid,
+                                 const DEGDebugViewSource *source,
                                  DupliList &r_duplilist);
 /** Return true when the path references a Debug View whose Show input is false. */
 bool object_viewer_path_is_hidden_debug_view(const ViewerPath &viewer_path);

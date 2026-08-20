@@ -1877,6 +1877,12 @@ static int rna_SpaceView3D_icon_from_show_object_viewport_get(PointerRNA *ptr)
                                                     &v3d->object_type_exclude_select);
 }
 
+static bool rna_SpaceView3D_debug_view_is_all_get(PointerRNA *ptr)
+{
+  const View3D *v3d = static_cast<View3D *>(ptr->data);
+  return v3d->runtime.debug_view.mode == V3D_DEBUG_VIEW_ALL;
+}
+
 static std::optional<std::string> rna_View3DShading_path(const PointerRNA *ptr)
 {
   if (GS(ptr->owner_id->name) == ID_SCE) {
@@ -6028,6 +6034,11 @@ static void rna_def_space_view3d(BlenderRNA *brna)
   RNA_def_property_ui_text(prop,
                            "Debug View Context Pinned",
                            "Keep using the pinned object and Geometry Nodes modifier");
+
+  prop = RNA_def_property(srna, "debug_view_is_all", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_funcs(prop, "rna_SpaceView3D_debug_view_is_all_get", nullptr);
+  RNA_def_property_clear_flag(prop, PROP_EDITABLE | PROP_ANIMATABLE);
+  RNA_def_property_ui_text(prop, "All Debug Views", "Display all participating Debug Views");
 
   /* Nested Structs */
   prop = RNA_def_property(srna, "shading", PROP_POINTER, PROP_NONE);

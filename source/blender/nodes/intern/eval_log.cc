@@ -2,6 +2,8 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+#include <algorithm>
+
 #include "NOD_eval_log.hh"
 #include "NOD_geometry_nodes_bundle.hh"
 #include "NOD_geometry_nodes_closure.hh"
@@ -1221,6 +1223,17 @@ Span<debug_view::Candidate> NodesEvalLog::debug_view_candidates()
         }
       }
     }
+
+    std::ranges::sort(candidates,
+                      [](const debug_view::Candidate &a, const debug_view::Candidate &b) {
+                        if (a.compute_context_hash.v1 != b.compute_context_hash.v1) {
+                          return a.compute_context_hash.v1 < b.compute_context_hash.v1;
+                        }
+                        if (a.compute_context_hash.v2 != b.compute_context_hash.v2) {
+                          return a.compute_context_hash.v2 < b.compute_context_hash.v2;
+                        }
+                        return a.viewer_node_id < b.viewer_node_id;
+                      });
   });
   return debug_view_candidates_cache_;
 }

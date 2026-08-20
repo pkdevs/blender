@@ -696,6 +696,25 @@ struct View3DOverlay {
   float sculpt_curves_cage_opacity = 0;
 };
 
+enum eView3DDebugViewMode : char {
+  V3D_DEBUG_VIEW_ALL = 0,
+  V3D_DEBUG_VIEW_SINGLE = 1,
+};
+
+struct View3D_DebugViewRuntime {
+  eView3DDebugViewMode mode = V3D_DEBUG_VIEW_ALL;
+  char _pad[7] = {};
+
+  /** Resolved object and modifier context for the inspection state. */
+  struct Object *context_object = nullptr;
+  int context_modifier_uid = 0;
+
+  /** Selected source key, when in single-source mode. */
+  uint32_t selected_source_hash_v1[2] = {};
+  uint32_t selected_source_hash_v2[2] = {};
+  int selected_source_viewer_node_id = 0;
+};
+
 struct View3D_Runtime {
   /** Nkey panel stores stuff here. */
   void *properties_storage = nullptr;
@@ -715,6 +734,9 @@ struct View3D_Runtime {
   /* Times recorded for performance overlay. */
   float last_sync_time = 0;
   float last_submission_time = 0;
+
+  /** Runtime-only inspection state for persistent Geometry Nodes Debug Views. */
+  View3D_DebugViewRuntime debug_view;
 };
 
 /** 3D ViewPort Struct. */
