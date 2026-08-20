@@ -241,10 +241,10 @@ SourceProcessor::Result SourceProcessor::convert_bsl()
   metadata_ = {};
 
   string str = remove_comments(this->source_);
-  /* Define `BSL_530` macro for this file only. Needed for compatibility with old BSL version? */
-  str = "#define BSL_530\n" + str + "\n#undef BSL_530\n";
   /* Add source file line directive first so that error lines are correct. */
   str = line_directive_prefix(filename) + str;
+  /* Define `BSL_530` macro for this file only. Needed for compatibility with old BSL version? */
+  str = "#define BSL_530\n" + str + "\n#undef BSL_530\n";
 
   SourceManager sources;
 
