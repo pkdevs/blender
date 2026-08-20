@@ -844,27 +844,6 @@ void BM_mesh_calc_uvs_grid(BMesh *bm,
   }
 }
 
-/**
- * Map a location on the surface of a cube (each axis in [-1, 1]) onto a sphere.
- *
- * \param co: The location on the cube, at least one axis must be on a face.
- * \param on_face: For each axis, true when `co` is on the face perpendicular to it.
- * \param iter_num: Times to evaluate the mapping, zero maps radially, one is un-refined
- * (the reference counts one fewer, refinements on top of the first).
- * In practice it converges by the third pass.
- * \return The direction on the sphere, the caller scales it to the radius.
- *
- * Mapping & refinement ("Update 1") by Harry van Langen,
- * see: https://mathoverflow.net/questions/446657
- *
- * NOTE: normalizing `co` would bunch vertices towards the cube corners, rated by the
- * shortest over longest segment on the worst loop it scores 50-58% where this scores 97%.
- *
- * NOTE: the published form mathoverflow. raises each axis to a large even power `p` which must
- * scale with the segments (5000 for a 500x500 grid), too large for `pow`. Since the vertices are
- * on the cube, `on_face` gives the limit of `p` exactly.
- */
-
 /* Rotation order set to match `BM_mesh_calc_uvs_cube`. */
 static const char cube_faces[6][4] = {
     {0, 1, 3, 2},
@@ -885,8 +864,28 @@ static const float cube_faces_uv[6][2] = {
     {0.625f, 0.5f},
 };
 
+/**
+ * Map a location on the surface of a cube (each axis in [-1, 1]) onto a sphere.
+ *
+ * \param co: The location on the cube, at least one axis must be on a face.
+ * \param on_face: For each axis, true when `co` is on the face perpendicular to it.
+ * \param iter_num: Times to evaluate the mapping, zero maps radially, one is un-refined
+ * (the reference counts one fewer, refinements on top of the first).
+ * In practice it converges by the third pass.
+ * \return The direction on the sphere, the caller scales it to the radius.
+ */
 static float3 quadsphere_co_from_cube(const float3 &co, const bool on_face[3], const int iter_num)
 {
+  /* Mapping & refinement ("Update 1") by Harry van Langen,
+   * see: https://mathoverflow.net/questions/446657
+   *
+   * - Normalizing `co` would bunch vertices towards the cube corners.
+   *
+   * - The reference raises each axis to a large power `p` as a ternary - one on the
+   *   face perpendicular to that axis, zero elsewhere - since a formula can't branch.
+   *   The vertices are generated on the cube, so `on_face` branches instead,
+   *   giving exactly the value a large `p` only approaches.
+   */
   BLI_assert(on_face[0] || on_face[1] || on_face[2]);
   float3 co_iter = co;
   for (int iter = 0; iter < iter_num; iter++) {
