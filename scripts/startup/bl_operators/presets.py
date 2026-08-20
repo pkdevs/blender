@@ -723,7 +723,7 @@ class SetPresetInterfaceTheme(Operator):
         preset_class = getattr(bpy.types, self.menu_idname)
         preset_class.bl_label = bpy.path.display_name(basename(filepath), title_case=False)
 
-        # A theme already loaded for `filepath` only has its values (re)loaded from the XML
+        # A theme already loaded for `filepath` only has its colors (re)loaded from the XML
         # below when `force_reset` is set, keeping any live edits otherwise. A brand new one
         # always needs its values loaded, since `ensure_theme` only resets it to a baseline.
         is_new = not any(theme.filepath == filepath for theme in context.preferences.themes)
@@ -732,18 +732,27 @@ class SetPresetInterfaceTheme(Operator):
         if self.force_reset and not is_new:
             context.preferences.active_theme.reset_to_baseline()
 
-        if is_new or self.force_reset:
-            import _rna_xml as rna_xml
-            try:
-                rna_xml.xml_file_run(
-                    context,
-                    filepath,
-                    preset_class.preset_xml_map,
-                    secure_types=getattr(preset_class, "preset_xml_secure_types", None),
-                )
-            except Exception as ex:
-                self.report({'ERROR'}, rpt_("Failed to execute the preset: {:s}").format(repr(ex)))
-                return {'CANCELLED'}
+        # Unlike the colors, the font style (`UserDef.ui_styles`) is shared by every theme, so it
+        # can't be kept along with the rest of the theme's live edits. It always has to be reset
+        # and re-loaded from the preset becoming active, otherwise the previous theme's style
+        # would stay behind (e.g. the light theme's panel title shadow, on the dark theme).
+        bpy.ops.preferences.reset_default_ui_style()
+
+        rna_map = preset_class.preset_xml_map
+        if not (is_new or self.force_reset):
+            rna_map = tuple(item for item in rna_map if item[0] != "preferences.active_theme")
+
+        import _rna_xml as rna_xml
+        try:
+            rna_xml.xml_file_run(
+                context,
+                filepath,
+                rna_map,
+                secure_types=getattr(preset_class, "preset_xml_secure_types", None),
+            )
+        except Exception as ex:
+            self.report({'ERROR'}, rpt_("Failed to execute the preset: {:s}").format(repr(ex)))
+            return {'CANCELLED'}
 
         return {'FINISHED'}
 
@@ -802,9 +811,7 @@ class ResetDefaultTheme(Operator):
             self.report({'ERROR'}, "Could not find the built-in theme preset")
             return {'CANCELLED'}
 
-        if self.force_reset:
-            bpy.ops.preferences.reset_default_ui_style()
-
+        # The font style is reset and re-loaded by the operator below in any case.
         return bpy.ops.wm.interface_theme_preset_set(
             filepath=filepath,
             menu_idname="USERPREF_MT_interface_theme_presets",
