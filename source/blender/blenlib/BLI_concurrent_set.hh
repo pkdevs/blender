@@ -63,7 +63,7 @@ class ConcurrentSet {
    * now stored in the set is returned (which might not be the passed in key, if another thread
    * added an equal key first).
    */
-  const Key &add_get(Key key)
+  const Key &lookup_key_or_add(Key key)
   {
     return *set_.insert(std::move(key)).first;
   }

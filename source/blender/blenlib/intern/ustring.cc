@@ -31,7 +31,7 @@ const blender::detail::UStringEntry *ustring_ensure_entry(const StringRef str)
   {
     return entry;
   }
-  return &table.add_get(blender::detail::UStringEntry{std::string(str), hash});
+  return &table.lookup_key_or_add(blender::detail::UStringEntry{std::string(str), hash});
 }
 
 const blender::detail::UStringEntry *ustring_ensure_entry(const char *str)
