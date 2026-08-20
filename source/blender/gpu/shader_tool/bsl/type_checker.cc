@@ -392,6 +392,9 @@ struct ExpressionTypeParser
     SymbolClass *type = table->to_class(type_id);
     ExprFlag flags = ExprFlag(lhs.flags & rhs.flags);
 
+    /* For debugging. */
+    // std::cout << t.prev().str() << t.str() << t.next().str() << std::endl;
+
     if (flags & ExprFlag::IsConstexpr) {
       switch (op_type) {
         case Multiply:

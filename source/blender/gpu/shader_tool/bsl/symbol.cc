@@ -1113,8 +1113,7 @@ struct SymbolParser : NodeErrorHandler {
     if (cls != table.int_cls && cls != table.uint_cls && cls != table.bool_cls &&
         cls != table.float_cls)
     {
-      /* TODO: Currently creates too many false positive. */
-      // error(decl, Diag::ConstexprVarMustBeIntOrUint);
+      error(decl, Diag::ConstexprVarMustBeIntOrUint);
       return {table.err_cls};
     }
 
@@ -1127,8 +1126,7 @@ struct SymbolParser : NodeErrorHandler {
     }
 
     if (!result.is_constexpr()) {
-      /* TODO: Currently creates too many false positive. */
-      // error(decl, Diag::ConstexprVarMustBeInitializedByConstantExpr, decl.identifier().str());
+      error(decl, Diag::ConstexprVarMustBeInitializedByConstantExpr, decl.identifier().str());
     }
     return result;
   }
