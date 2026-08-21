@@ -18,11 +18,13 @@
 
 #include "BLI_listbase.hh"
 #include "BLI_math_vector_c.hh"
+#include "BLI_string_utf8.hh"
 #include "BLI_utildefines.hh"
 
 #include "BLT_translation.hh"
 
 #include "DNA_curve_types.h"
+#include "DNA_grease_pencil_types.h"
 #include "DNA_key_types.h"
 #include "DNA_lattice_types.h"
 #include "DNA_mesh_types.h"
@@ -30,6 +32,8 @@
 
 #include "BKE_context.hh"
 #include "BKE_curve.hh"
+#include "BKE_curves.hh"
+#include "BKE_grease_pencil.hh"
 #include "BKE_key.hh"
 #include "BKE_lattice.hh"
 #include "BKE_library.hh"
@@ -422,6 +426,34 @@ static wmOperatorStatus shape_key_copy_exec(bContext *C, wmOperator * /*op*/)
   for (KeyBlock *kb_src : to_duplicate) {
     kb_new = BKE_keyblock_duplicate(key, kb_src);
     kb_new->flag |= KEYBLOCK_SEL;
+
+    if (ob->type == OB_GREASE_PENCIL) {
+      GreasePencil *grease_pencil = id_cast<GreasePencil *>(ob->data);
+
+      for (GreasePencilDrawingBase *base : grease_pencil->drawings()) {
+        bke::greasepencil::Drawing &drawing =
+            reinterpret_cast<GreasePencilDrawing *>(base)->wrap();
+        bke::CurvesGeometry &curves = drawing.strokes_for_write();
+
+        bke::MutableAttributeAccessor attributes = curves.attributes_for_write();
+
+        char attr_name_old[64];
+        SNPRINTF_UTF8(attr_name_old, (".SK_%s"), kb_src->name);
+
+        char attr_name_new[64];
+        SNPRINTF_UTF8(attr_name_new, (".SK_%s"), kb_new->name);
+
+        const VArray<float3> key_positions_old = *attributes.lookup_or_default<float3>(
+            attr_name_old, bke::AttrDomain::Point, float3(0.0f));
+
+        bke::SpanAttributeWriter<float3> key_positions_new =
+            attributes.lookup_or_add_for_write_span<float3>(attr_name_new, bke::AttrDomain::Point);
+
+        array_utils::copy(key_positions_old, key_positions_new.span);
+
+        key_positions_new.finish();
+      }
+    }
   }
 
   if (kb_new != nullptr) {
