@@ -130,11 +130,15 @@ static void calculate_splines_axis(Span<float> distances,
   }
 }
 
-static void trace_curve_loop(BMVert *start_vert,
-                             BMEdge *start_edge,
-                             Set<BMEdge *> &visited_edges,
-                             Vector<BMVert *> &r_loop,
-                             bool &r_circular)
+/**
+ * Starts at a specific edge and walks continuosly in one direction along quad edges until it
+ * loops back into itself in a circle or hits the end of the edge loop.
+ */
+static void traverse_edge_loop(BMVert *start_vert,
+                               BMEdge *start_edge,
+                               Set<BMEdge *> &visited_edges,
+                               Vector<BMVert *> &r_loop,
+                               bool &r_circular)
 {
   BMVert *curr_vert = start_vert;
   BMEdge *curr_edge = start_edge;
@@ -185,6 +189,10 @@ static void trace_curve_loop(BMVert *start_vert,
   }
 }
 
+/**
+ * Runs `traverse_edge_loop` in both forward and backward direction from a specific
+ * edge and combines them into CurveChainData.
+ */
 static CurveChainData build_curve_chain_from_edge(BMEdge *start_edge, Set<BMEdge *> &visited_edges)
 {
   CurveChainData chain;
@@ -192,7 +200,8 @@ static CurveChainData build_curve_chain_from_edge(BMEdge *start_edge, Set<BMEdge
 
   Vector<BMVert *> forward_trace;
   bool is_forward_circular = false;
-  trace_curve_loop(start_edge->v1, start_edge, visited_edges, forward_trace, is_forward_circular);
+  traverse_edge_loop(
+      start_edge->v1, start_edge, visited_edges, forward_trace, is_forward_circular);
 
   if (is_forward_circular) {
     chain.is_closed = true;
@@ -202,7 +211,7 @@ static CurveChainData build_curve_chain_from_edge(BMEdge *start_edge, Set<BMEdge
   else {
     Vector<BMVert *> backward_trace;
     bool is_backward_circular = false;
-    trace_curve_loop(
+    traverse_edge_loop(
         start_edge->v2, start_edge, visited_edges, backward_trace, is_backward_circular);
 
     std::ranges::reverse(backward_trace);
@@ -267,16 +276,22 @@ static void get_curve_input_chains(BMesh *bm, Vector<CurveChainData> &r_chains)
         }
       }
 
+      /* If a whole edge loop is selected, all edge loops perpendicular to it are operated on,
+       * with the selected edge loop being used as control points.  */
       if (num_selected == chain.verts.size()) {
         get_perpendicular_chains(chain, r_chains, visited_edges);
       }
-      else {
+      else if (num_selected >= 2) {
         r_chains.append(std::move(chain));
       }
     }
   }
 }
 
+/**
+ * Measures the gap size between the current vertex and the next vertex
+ * to find the longest gap size and the starting index of that gap.
+ */
 static void find_longest_unselected_gap(Span<BMVert *> verts,
                                         int &r_longest_gap,
                                         int &r_best_gap_start)
@@ -322,8 +337,10 @@ static void trim_chains_to_boundaries(Vector<CurveChainData> &chains)
       find_longest_unselected_gap(chain.verts, longest_gap, best_gap_start);
 
       if (longest_gap > 0) {
-        int shift = math::mod_periodic(best_gap_start + longest_gap, int(chain.verts.size()));
-        std::rotate(chain.verts.begin(), chain.verts.begin() + shift, chain.verts.end());
+        int new_start_index = math::mod_periodic(best_gap_start + longest_gap,
+                                                 int(chain.verts.size()));
+        /* Pushes the unselected gap to the end of the vector so it's easy to trim it off. */
+        std::rotate(chain.verts.begin(), chain.verts.begin() + new_start_index, chain.verts.end());
       }
       chain.is_closed = false;
     }
@@ -368,8 +385,8 @@ static void calculate_curve_distances(Span<BMVert *> verts,
   for (const int i : IndexRange(verts_num)) {
     positions[i] = float3(verts[i]->co);
   }
-  const int dist_size = verts_num + (is_closed ? 1 : 0);
-  Array<float> cumulative(dist_size);
+  const int cumulative_array_size = verts_num + (is_closed ? 1 : 0);
+  Array<float> cumulative(cumulative_array_size);
   cumulative[0] = 0.0f;
   length_parameterize::accumulate_lengths<float3>(
       positions, is_closed, cumulative.as_mutable_span().drop_front(1));
@@ -434,7 +451,7 @@ static void calculate_curve_splines(Span<float3> knot_positions,
   calculate_splines_axis(knot_distances, coords_z, is_closed, r_coeffs[2]);
 }
 
-static void execute_curve_chain(Span<BMVert *> in_verts,
+static void execute_curve_chain(Span<BMVert *> input_chain,
                                 bool is_closed,
                                 const int interpolation,
                                 const int restriction,
@@ -445,12 +462,12 @@ static void execute_curve_chain(Span<BMVert *> in_verts,
                                 const bool lock_z,
                                 Map<BMVert *, float3> &r_moves)
 {
-  int verts_num = in_verts.size();
-  int shift = 0;
+  int verts_num = input_chain.size();
+  int new_start_index = 0;
 
   if (is_closed) {
     int longest_gap, best_gap_start;
-    find_longest_unselected_gap(in_verts, longest_gap, best_gap_start);
+    find_longest_unselected_gap(input_chain, longest_gap, best_gap_start);
 
     int offset = verts_num / 4;
 
@@ -460,13 +477,13 @@ static void execute_curve_chain(Span<BMVert *> in_verts,
       int trim_start = math::mod_periodic(best_gap_start + longest_gap - offset, verts_num);
       int trim_end = math::mod_periodic(best_gap_start - 1 + offset, verts_num);
 
-      shift = trim_start;
+      new_start_index = trim_start;
       verts_num = math::mod_periodic(trim_end - trim_start, verts_num) + 1;
     }
     else {
-      for (const int i : in_verts.index_range()) {
-        if (BM_elem_flag_test(in_verts[i], BM_ELEM_SELECT)) {
-          shift = i;
+      for (const int i : input_chain.index_range()) {
+        if (BM_elem_flag_test(input_chain[i], BM_ELEM_SELECT)) {
+          new_start_index = i;
           break;
         }
       }
@@ -475,7 +492,7 @@ static void execute_curve_chain(Span<BMVert *> in_verts,
 
   Array<BMVert *> verts(verts_num);
   for (const int i : IndexRange(verts_num)) {
-    verts[i] = in_verts[math::mod_periodic(i + shift, int(in_verts.size()))];
+    verts[i] = input_chain[math::mod_periodic(i + new_start_index, int(input_chain.size()))];
   }
 
   Vector<int> knot_indices;
@@ -525,18 +542,8 @@ static void execute_curve_chain(Span<BMVert *> in_verts,
       knot_distances.as_span().drop_front(1), point_distances, segment_indices, factors);
 
   if (interpolation == CURVE_INTERP_CUBIC) {
-    const int spline_knots_num = is_closed ? int(knot_indices.size()) + 1 :
-                                             int(knot_indices.size());
-    Array<float3> spline_knot_pos(spline_knots_num);
-    for (const int ki : knot_indices.index_range()) {
-      spline_knot_pos[ki] = knot_positions[ki];
-    }
-    if (is_closed) {
-      spline_knot_pos[knot_indices.size()] = knot_positions[0];
-    }
-
     std::array<Array<SplineCoeffs>, 3> axis_coeffs;
-    calculate_curve_splines(spline_knot_pos, knot_distances, false, axis_coeffs);
+    calculate_curve_splines(knot_positions, knot_distances, is_closed, axis_coeffs);
 
     for (const int i : IndexRange(points_num)) {
       const int seg = segment_indices[i];

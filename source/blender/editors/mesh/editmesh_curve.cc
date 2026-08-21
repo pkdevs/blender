@@ -117,11 +117,11 @@ static void edbm_curve_ui(bContext * /*C*/, wmOperator *op)
   layout.prop(op->ptr, "interpolation", UI_ITEM_NONE, std::nullopt, ICON_NONE);
 }
 
-void MESH_OT_curve(wmOperatorType *ot)
+void MESH_OT_fit_edge_loops_to_curve(wmOperatorType *ot)
 {
   ot->name = "To Curve";
   ot->description = "Turn a loop into a smooth curve";
-  ot->idname = "MESH_OT_curve";
+  ot->idname = "MESH_OT_fit_edge_loops_to_curve";
 
   ot->exec = edbm_curve_exec;
   ot->poll = ED_operator_editmesh;

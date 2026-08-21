@@ -146,7 +146,7 @@ void MESH_OT_circularize(wmOperatorType *ot);
 
 /* *** `editmesh_curve.cc` *** */
 
-void MESH_OT_curve(wmOperatorType *ot);
+void MESH_OT_fit_edge_loops_to_curve(wmOperatorType *ot);
 
 /* *** `editmesh_flatten.cc` *** */
 

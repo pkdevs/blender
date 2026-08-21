@@ -1308,7 +1308,7 @@ class VIEW3D_MT_transform(VIEW3D_MT_transform_base, Menu):
             layout.operator("transform.shrink_fatten", text="Shrink/Fatten")
             layout.operator("mesh.space_edge_loops_evenly", text="Space Edge Loops Evenly")
             layout.operator("mesh.relax_edge_loops", text="Relax Edge Loops")
-            layout.operator("mesh.curve", text="To Curve")
+            layout.operator("mesh.fit_edge_loops_to_curve", text="To Curve")
             layout.operator("transform.skin_resize")
         elif context.mode in {'EDIT_CURVE', 'EDIT_GREASE_PENCIL', 'EDIT_CURVES', 'EDIT_POINTCLOUD'}:
             layout.operator("transform.transform", text="Radius").mode = 'CURVE_SHRINKFATTEN'
