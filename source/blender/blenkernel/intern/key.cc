@@ -40,6 +40,7 @@
 #include "BKE_animsys.hh"
 #include "BKE_attribute.hh"
 #include "BKE_curve.hh"
+#include "BKE_curves.hh"
 #include "BKE_customdata.hh"
 #include "BKE_deform.hh"
 #include "BKE_editmesh.hh"
@@ -1950,5 +1951,36 @@ void BKE_keyblock_rename(Main &bmain, Key *key, KeyBlock *kb, const char *newnam
                          RNA_path_name_to_infix(kb->name),
                          /*verify_paths=*/true,
                          bmain);
+
+  char attr_name_old[64];
+  SNPRINTF_UTF8(attr_name_old, (".SK_%s"), oldname);
+  char attr_name_new[64];
+  SNPRINTF_UTF8(attr_name_new, (".SK_%s"), newname);
+
+  for (Object &object : bmain.objects) {
+    if (object.type != OB_GREASE_PENCIL) {
+      continue;
+    }
+
+    GreasePencil *grease_pencil = id_cast<GreasePencil *>(object.data);
+
+    Key *gp_keys = grease_pencil->key;
+
+    if (!gp_keys) {
+      continue;
+    }
+    if (gp_keys != key) {
+      continue;
+    }
+
+    for (GreasePencilDrawingBase *base : grease_pencil->drawings()) {
+      bke::greasepencil::Drawing &drawing = reinterpret_cast<GreasePencilDrawing *>(base)->wrap();
+      bke::CurvesGeometry &curves = drawing.strokes_for_write();
+
+      bke::MutableAttributeAccessor attributes = curves.attributes_for_write();
+
+      attributes.rename(attr_name_old, attr_name_new);
+    }
+  }
 }
 }  // namespace blender
