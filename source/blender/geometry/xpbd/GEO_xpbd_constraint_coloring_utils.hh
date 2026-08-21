@@ -17,6 +17,9 @@ ConstraintColoring color_constraints__unary(const Span<int> affected_points,
 ConstraintColoring color_constraints__binary(const Span<int2> affected_points,
                                              LinearAllocator<> &memory);
 
+ConstraintColoring color_constraints__quaternary(const Span<int4> affected_points,
+                                                 LinearAllocator<> &memory);
+
 ConstraintColoring color_constraints__n_ary(const GroupedSpan<int> affected_points,
                                             LinearAllocator<> &memory);
 

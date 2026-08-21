@@ -118,6 +118,7 @@ set(SRC
   xpbd/GEO_xpbd_constraint_distance.hh
   xpbd/GEO_xpbd_constraint_friction_edge.hh
   xpbd/GEO_xpbd_constraint_friction_face.hh
+  xpbd/GEO_xpbd_constraint_isometric_bending.hh
   xpbd/GEO_xpbd_constraint_math.hh
   xpbd/GEO_xpbd_constraint_pin_position.hh
   xpbd/GEO_xpbd_constraint_pin_rotation.hh
@@ -171,6 +172,7 @@ if(WITH_GTESTS)
     tests/GEO_interpolate_curves_test.cc
     tests/GEO_merge_curves_test.cc
     tests/GEO_realize_instances_test.cc
+    tests/GEO_xpbd_constraint_isometric_bending_test.cc
   )
   set(TEST_LIB
     PRIVATE bf::intern::clog

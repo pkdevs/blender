@@ -64,6 +64,12 @@ class CrossEdgeLengthConstraintBundle {
   static const FlatBundleTypePtr &get_bundle_type();
 };
 
+class IsometricBendingConstraintBundle {
+ public:
+  static constexpr StringRefNull name = "Blender.Constraint.IsometricBending";
+  static const FlatBundleTypePtr &get_bundle_type();
+};
+
 /** This is currently not used by built-in nodes but is used in essential assets. */
 class ForceBundle {
  public:

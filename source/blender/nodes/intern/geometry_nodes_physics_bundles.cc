@@ -170,6 +170,21 @@ const FlatBundleTypePtr &CrossEdgeLengthConstraintBundle::get_bundle_type()
   return bundle_type;
 }
 
+const FlatBundleTypePtr &IsometricBendingConstraintBundle::get_bundle_type()
+{
+  static const FlatBundleTypePtr bundle_type = []() {
+    FlatBundleTypeBuilder b(IsometricBendingConstraintBundle::name);
+    add_filter(b);
+    b.add<decl::Vector>("rest_position"_ustr).structure_type(StructureType::Field);
+    b.add<decl::Float>("compliance"_ustr).default_value(1e-4f).min(0.0f);
+    b.add<decl::Float>("error_threshold"_ustr).default_value(1e-3f).min(1e-5f);
+    const FlatBundleTypePtr bundle_type = b.build();
+    BundleTypeRegistry::register_type(bundle_type);
+    return bundle_type;
+  }();
+  return bundle_type;
+}
+
 const FlatBundleTypePtr &ForceBundle::get_bundle_type()
 {
   static const FlatBundleTypePtr bundle_type = []() {

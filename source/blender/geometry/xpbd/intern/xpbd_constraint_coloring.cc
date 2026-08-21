@@ -81,6 +81,15 @@ ConstraintColoring color_constraints__binary(const Span<int2> affected_points,
       memory);
 }
 
+ConstraintColoring color_constraints__quaternary(const Span<int4> affected_points,
+                                                 LinearAllocator<> &memory)
+{
+  return generic_constraint_coloring<int>(
+      [&](const int constraint_i) { return Span<int>(&affected_points[constraint_i][0], 4); },
+      affected_points.size(),
+      memory);
+}
+
 ConstraintColoring color_constraints__n_ary(const GroupedSpan<int> affected_points,
                                             LinearAllocator<> &memory)
 {

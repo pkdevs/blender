@@ -29,6 +29,7 @@
 #include "GEO_xpbd_constraint_distance.hh"
 #include "GEO_xpbd_constraint_friction_edge.hh"
 #include "GEO_xpbd_constraint_friction_face.hh"
+#include "GEO_xpbd_constraint_isometric_bending.hh"
 #include "GEO_xpbd_constraint_pin_position.hh"
 #include "GEO_xpbd_constraint_pin_rotation.hh"
 #include "GEO_xpbd_constraint_rod_bend_twist.hh"
@@ -96,6 +97,7 @@ static NestedBundleTypePtr make_world_type()
   types.append(PinRotationBundle::get_bundle_type());
   types.append(EdgeLengthConstraintBundle::get_bundle_type());
   types.append(CrossEdgeLengthConstraintBundle::get_bundle_type());
+  types.append(IsometricBendingConstraintBundle::get_bundle_type());
 
   /* Not actually used by the node but only registered here. */
   ForceBundle::get_bundle_type();
@@ -282,6 +284,24 @@ struct CrossEdgeLengthConstraintUsage {
   xpbd::ConstraintColoring coloring;
 };
 
+struct IsometricBendingConstraint {
+  std::string path;
+  float error_threshold;
+};
+struct IsometricBendingConstraintUsage {
+  /** Index of the corresponding #IsometricBendingConstraint. */
+  int constraint_i;
+
+  Vector<int4> point_indices;
+  Vector<float4> weights;
+  /** Per stencil stiffness scale, rest dihedral angle and rest edge length. */
+  Vector<float3> rest_data;
+  Vector<float> compliances;
+  MutableSpan<float> lambdas;
+
+  xpbd::ConstraintColoring coloring;
+};
+
 struct StaticMeshInfo {
   const Mesh *mesh;
   const bke::bvh::Tree *corner_tris_bvh;
@@ -379,6 +399,7 @@ struct GeometryData {
   Vector<PinRotationConstraintUsage> pin_rotation_constraints;
   Vector<EdgeLengthConstraintUsage> edge_length_constraints;
   Vector<CrossEdgeLengthConstraintUsage> cross_edge_length_constraints;
+  Vector<IsometricBendingConstraintUsage> isometric_bending_constraints;
   Vector<MeshColliderUsage> mesh_colliders;
   Vector<RodStretchShearConstraintUsage> rod_stretch_shear_constraints;
   Vector<RodBendTwistConstraintUsage> rod_bend_twist_constraints;
@@ -550,6 +571,7 @@ struct ConstraintsInfo {
   Vector<PinRotationConstraint> pin_rotation_constraints;
   Vector<EdgeLengthConstraint> edge_length_constraints;
   Vector<CrossEdgeLengthConstraint> cross_edge_length_constraints;
+  Vector<IsometricBendingConstraint> isometric_bending_constraints;
 };
 
 class XpbdSolverStep {
@@ -634,6 +656,7 @@ class XpbdSolverStep {
     this->gather_from_world__bend_twist_constraints();
     this->gather_from_world__edge_length_constraints();
     this->gather_from_world__cross_edge_length_constraints();
+    this->gather_from_world__isometric_bending_constraints();
     this->gather_from_world__damping();
     this->gather_from_world__pin_positions();
     this->gather_from_world__pin_rotations();
@@ -2024,6 +2047,173 @@ class XpbdSolverStep {
           const int cross_edge_v1 = face1_verts[mod_i(face1_i1 - face1_dir * (i + 1), face1_size)];
           fn(edge_i, cross_edge_v0, cross_edge_v1);
         }
+      }
+    }
+  }
+
+  void gather_from_world__isometric_bending_constraints()
+  {
+    TLS &tls = tls_.local();
+    const Span<std::string> paths = nested_bundle_paths_.lookup_as(
+        IsometricBendingConstraintBundle::name);
+    for (const StringRef path : paths) {
+      const Bundle &bundle = **world_.lookup_path_ptr<BundlePtr>(path);
+      const float error_threshold =
+          bundle.lookup<float>(*BundleKey::from_str("error_threshold")).value_or(1e-3f);
+      const int constraint_i = constraints_.isometric_bending_constraints.append_and_get_index(
+          {path, error_threshold});
+      for (const int data_key_i : geometries_.data.index_range()) {
+        const DataKey &data_key = geometries_.data_keys[data_key_i];
+        GeometryData &geo_data = *geometries_.data[data_key_i];
+        if (data_key.type != GeometryComponent::Type::Mesh) {
+          continue;
+        }
+        if (this->effector_applies_to_geometry(path, bundle, data_key_i)) {
+          IsometricBendingConstraintUsage constraint_usage;
+          constraint_usage.constraint_i = constraint_i;
+          geo_data.isometric_bending_constraints.append(std::move(constraint_usage));
+        }
+      }
+    }
+
+    for (const int data_key_i : geometries_.data_keys.index_range()) {
+      const DataKey &data_key = geometries_.data_keys[data_key_i];
+      GeometryData &geo_data = *geometries_.data[data_key_i];
+      for (IsometricBendingConstraintUsage &constraint_usage :
+           geo_data.isometric_bending_constraints)
+      {
+        const IsometricBendingConstraint &constraint =
+            constraints_.isometric_bending_constraints[constraint_usage.constraint_i];
+        const Mesh &mesh = *geometries_.geometry_sets[data_key.geo_bundle_i].geometry.get_mesh();
+        const VArraySpan<float3> rest_positions = this->lookup_attribute_required<float3>(
+            data_key_i, this->prop_attr_name(constraint.path, "rest_position"), AttrDomain::Point);
+        if (rest_positions.is_empty()) {
+          continue;
+        }
+        const VArray<float> edge_compliances = this->lookup_attribute_default<float>(
+            data_key_i,
+            this->prop_attr_name(constraint.path, "compliance"),
+            AttrDomain::Edge,
+            0.0f);
+        /* Compliance for stencils that span a face instead of an edge (the inner diagonals of
+         * quads and ngons), interpolated from the same per-edge values. */
+        const VArray<float> face_compliances = this->lookup_attribute_default<float>(
+            data_key_i,
+            this->prop_attr_name(constraint.path, "compliance"),
+            AttrDomain::Face,
+            0.0f);
+
+        Vector<int4> &stencil_points = constraint_usage.point_indices;
+        Vector<float4> &stencil_weights = constraint_usage.weights;
+        Vector<float3> &stencil_rest_data = constraint_usage.rest_data;
+        Vector<float> &stencil_compliances = constraint_usage.compliances;
+
+        this->foreach_bending_stencil(
+            mesh, [&](const int4 &points, const int edge_i, const int face_i) {
+              const float3 &rest_x0 = rest_positions[points[0]];
+              const float3 &rest_x1 = rest_positions[points[1]];
+              const float3 &rest_x2 = rest_positions[points[2]];
+              const float3 &rest_x3 = rest_positions[points[3]];
+              const std::optional<float4> weights = xpbd::isometric_bending_weights(
+                  rest_x0, rest_x1, rest_x2, rest_x3);
+              const std::optional<float> rest_angle = xpbd::dihedral_angle(
+                  rest_x0, rest_x1, rest_x2, rest_x3);
+              if (!weights || !rest_angle) {
+                return;
+              }
+              stencil_points.append(points);
+              stencil_weights.append(*weights);
+              stencil_rest_data.append(float3(
+                  xpbd::isometric_bending_stiffness_scale(rest_x0, rest_x1, rest_x2, rest_x3),
+                  *rest_angle,
+                  math::distance(rest_x0, rest_x1)));
+              stencil_compliances.append(edge_i >= 0 ? edge_compliances[edge_i] :
+                                                       face_compliances[face_i]);
+            });
+
+        constraint_usage.lambdas = tls.allocator.allocate_array<float>(stencil_points.size());
+
+        auto &constraint_set = tls.scope.construct<xpbd::IsometricBendingConstraintSet>(
+            data_key_i,
+            stencil_points,
+            stencil_weights,
+            stencil_rest_data,
+            stencil_compliances,
+            error_scale_from_threshold(constraint.error_threshold),
+            constraint_usage.lambdas);
+        xpbd::ConstraintColoring coloring = constraint_set.color_constraints(tls.allocator);
+        geo_data.static_constraints.append({&constraint_set, std::move(coloring)});
+      }
+    }
+  }
+
+  /**
+   * Visit the bending stencils of a mesh: for each stencil the two points of an edge shared by
+   * two triangles, followed by the two corners opposite of that edge. Quads and ngons are
+   * triangulated by fanning around their first corner. The fan only depends on topology, not on
+   * vertex positions which change during the simulation, so the stencils are stable. The inner
+   * edges of a fan produce stencils as well; those are reported with a face index instead of an
+   * edge index.
+   */
+  void foreach_bending_stencil(
+      const Mesh &mesh,
+      std::invocable<const int4 & /*points*/, int /*edge_i*/, int /*face_i*/> auto &&fn)
+  {
+    const Span<int2> edges = mesh.edges();
+    const Span<int> corner_verts = mesh.corner_verts();
+    const OffsetIndices<int> faces = mesh.faces();
+
+    Array<int> offsets;
+    Array<int> indices;
+    const GroupedSpan<int> edge_to_faces = bke::mesh::build_edge_to_face_map(
+        faces, mesh.corner_edges(), mesh.edges_num, offsets, indices);
+
+    /* Find the corner opposite of an edge in the fan triangulation of a face. */
+    const auto fan_wing_vert = [&](const int face_i, const int edge_v0, const int edge_v1) -> int {
+      const Span<int> face_verts = corner_verts.slice(faces[face_i]);
+      const int size = face_verts.size();
+      if (size == 3) {
+        return face_verts[0] ^ face_verts[1] ^ face_verts[2] ^ edge_v0 ^ edge_v1;
+      }
+      for (const int i : IndexRange(size)) {
+        const int v0 = face_verts[i];
+        const int v1 = face_verts[(i + 1) % size];
+        if (!((v0 == edge_v0 && v1 == edge_v1) || (v0 == edge_v1 && v1 == edge_v0))) {
+          continue;
+        }
+        /* The fan triangles are (0, i, i + 1) for i from 1 to size - 2. */
+        if (i == 0) {
+          return face_verts[2];
+        }
+        if (i == size - 1) {
+          return face_verts[size - 2];
+        }
+        return face_verts[0];
+      }
+      return -1;
+    };
+
+    for (const int edge_i : edges.index_range()) {
+      const Span<int> incident_faces = edge_to_faces[edge_i];
+      if (incident_faces.size() != 2) {
+        continue;
+      }
+      const int2 &edge = edges[edge_i];
+      const int wing0 = fan_wing_vert(incident_faces[0], edge[0], edge[1]);
+      const int wing1 = fan_wing_vert(incident_faces[1], edge[0], edge[1]);
+      if (wing0 < 0 || wing1 < 0 || wing0 == wing1) {
+        continue;
+      }
+      fn(int4(edge[0], edge[1], wing0, wing1), edge_i, incident_faces[0]);
+    }
+
+    for (const int face_i : faces.index_range()) {
+      const Span<int> face_verts = corner_verts.slice(faces[face_i]);
+      const int size = face_verts.size();
+      /* The inner edges of the fan are (0, i) for i from 2 to size - 2, with the neighboring fan
+       * corners as wings. */
+      for (const int i : IndexRange(2, math::max(size - 3, 0))) {
+        fn(int4(face_verts[0], face_verts[i], face_verts[i - 1], face_verts[i + 1]), -1, face_i);
       }
     }
   }
