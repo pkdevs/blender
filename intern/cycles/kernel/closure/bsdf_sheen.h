@@ -11,8 +11,8 @@
 
 #include "kernel/sample/mapping.h"
 
-#include "kernel/util/lookup_table.h"
 #include "kernel/constants.h"
+#include "kernel/util/lookup_table.h"
 
 CCL_NAMESPACE_BEGIN
 
