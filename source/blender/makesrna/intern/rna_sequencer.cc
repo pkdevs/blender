@@ -227,6 +227,7 @@ static void rna_Strip_invalidate_raw_update(Main * /*bmain*/, Scene * /*scene*/,
     Strip *strip = static_cast<Strip *>(ptr->data);
 
     seq::relations_invalidate_cache_raw(scene, strip);
+    seq::relations_tag_temporary_animation_frame(scene);
   }
 }
 
@@ -241,6 +242,7 @@ static void rna_Strip_invalidate_preprocessed_update(Main * /*bmain*/,
     Strip *strip = static_cast<Strip *>(ptr->data);
 
     seq::relations_invalidate_cache(scene, strip);
+    seq::relations_tag_temporary_animation_frame(scene);
   }
 }
 
@@ -476,12 +478,7 @@ static int rna_Strip_elements_length(PointerRNA *ptr)
 {
   Strip *strip = static_cast<Strip *>(ptr->data);
 
-  /* Hack? copied from `sequencer.cc`, #reload_sequence_new_file(). */
-  size_t olen = MEM_allocN_len(strip->data->stripdata) / sizeof(StripElem);
-
-  /* The problem with `strip->data->len` and `strip->len` is that it's discounted from the offset
-   * (hard cut trim). */
-  return int(olen);
+  return strip->data->stripdata_num;
 }
 
 static void rna_Strip_elements_begin(CollectionPropertyIterator *iter, PointerRNA *ptr)
@@ -581,6 +578,10 @@ static bool rna_SequenceEditor_selected_retiming_key_get(PointerRNA *ptr)
 
 static void rna_Strip_views_format_update(Main *bmain, Scene *scene, PointerRNA *ptr)
 {
+  Strip &strip = *static_cast<Strip *>(ptr->data);
+  if (strip.type == STRIP_TYPE_MOVIE) {
+    seq::movie_metadata_invalidate(strip);
+  }
   rna_Strip_invalidate_raw_update(bmain, scene, ptr);
 }
 
@@ -690,7 +691,7 @@ static void rna_Strip_content_trim_start_set(PointerRNA *ptr, int value)
   seq::transform_translate_strip(scene, strip, value - strip->anim_startofs);
   strip->anim_startofs = value;
 
-  seq::add_reload_new_file(G.main, scene, strip, false);
+  seq::add_update_content_length(G.main, scene, strip);
   do_strip_frame_change_update(scene, strip);
 }
 
@@ -701,7 +702,7 @@ static void rna_Strip_content_trim_end_set(PointerRNA *ptr, int value)
 
   strip->anim_endofs = std::clamp(value, 0, strip_content_trim_max(strip, strip->anim_endofs));
 
-  seq::add_reload_new_file(G.main, scene, strip, false);
+  seq::add_update_content_length(G.main, scene, strip);
   do_strip_frame_change_update(scene, strip);
 }
 
@@ -942,6 +943,7 @@ static void rna_StripTransform_update(Main * /*bmain*/, Scene * /*scene*/, Point
   Strip *strip = strip_get_by_transform(ed, static_cast<StripTransform *>(ptr->data));
 
   seq::relations_invalidate_cache(scene, strip);
+  seq::relations_tag_temporary_animation_frame(scene);
 }
 
 static bool crop_strip_cmp_fn(Strip *strip, void *arg_pt)
@@ -989,6 +991,7 @@ static void rna_StripCrop_update(Main * /*bmain*/, Scene * /*scene*/, PointerRNA
   Strip *strip = strip_get_by_crop(ed, static_cast<StripCrop *>(ptr->data));
 
   seq::relations_invalidate_cache(scene, strip);
+  seq::relations_tag_temporary_animation_frame(scene);
 }
 
 static void rna_Strip_text_font_set(PointerRNA *ptr,
@@ -1175,16 +1178,12 @@ static bool rna_MovieStrip_reload_if_needed(ID *scene_id, Strip *strip, Main *bm
 
 static PointerRNA rna_MovieStrip_metadata_get(ID *scene_id, Strip *strip)
 {
-  if (strip == nullptr || strip->runtime->movie_readers.is_empty()) {
+  if (strip == nullptr) {
     return {};
   }
 
-  MovieReader *anim = strip->runtime->movie_readers.first();
-  if (anim == nullptr) {
-    return {};
-  }
-
-  IDProperty *metadata = MOV_load_metadata(anim);
+  Scene &scene = *id_cast<Scene *>(scene_id);
+  IDProperty *metadata = seq::movie_metadata_ensure(scene, *strip);
   if (metadata == nullptr) {
     return {};
   }
@@ -1500,6 +1499,7 @@ static void rna_StripColorBalance_update(Main * /*bmain*/, Scene * /*scene*/, Po
   Strip *strip = strip_get_by_colorbalance(ed, static_cast<StripColorBalance *>(ptr->data), &smd);
 
   seq::relations_invalidate_cache(scene, strip);
+  seq::relations_tag_temporary_animation_frame(scene);
 }
 
 static void rna_SequenceEditor_overlay_lock_set(PointerRNA *ptr, bool value)
@@ -1731,6 +1731,7 @@ static void rna_StripModifier_update(Main *bmain, Scene * /*scene*/, PointerRNA 
   }
   else {
     seq::relations_invalidate_cache(scene, strip);
+    seq::relations_tag_temporary_animation_frame(scene);
   }
 }
 
