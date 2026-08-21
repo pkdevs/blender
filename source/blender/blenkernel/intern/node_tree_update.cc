@@ -480,6 +480,8 @@ class NodeTreeMainUpdater {
       }
     }
 
+    this->restore_runtime_rna_data_sharing();
+
     for (const auto item : update_result_by_tree_.items()) {
       bNodeTree *ntree = item.key;
       const TreeUpdateResult &result = item.value;
@@ -549,6 +551,23 @@ class NodeTreeMainUpdater {
   }
 
  private:
+  void restore_runtime_rna_data_sharing()
+  {
+    for (bNodeTree *ntree : relations_.get_all_trees()) {
+      if (!ID_IS_OVERRIDE_LIBRARY_REAL(&ntree->id)) {
+        continue;
+      }
+      const bNodeTree *reference = id_cast<const bNodeTree *>(
+          ntree->id.override_library->reference);
+      ntree->runtime->geometry_nodes_srna_data = reference->runtime->geometry_nodes_srna_data;
+      ntree->runtime->compositor_nodes_srna_data = reference->runtime->compositor_nodes_srna_data;
+      ntree->runtime->compositor_effect_nodes_srna_data =
+          reference->runtime->compositor_effect_nodes_srna_data;
+      ntree->runtime->scene_compositor_effect_srna_data =
+          reference->runtime->scene_compositor_effect_srna_data;
+    }
+  }
+
   enum class ToposortMark {
     None,
     Temporary,
