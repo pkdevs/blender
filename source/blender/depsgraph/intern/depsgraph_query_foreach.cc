@@ -242,8 +242,7 @@ void deg_foreach_id(const Depsgraph *depsgraph, DEGForeachIDCallback callback)
 
 /* Find the component node with the given type in the given ID node. Returns nullptr if no such
  * component is found. */
-const ComponentNode *find_scene_component_node(const IDNode &id_node,
-                                               const NodeType component_node_type)
+const ComponentNode *find_component_node(const IDNode &id_node, const NodeType component_node_type)
 {
   for (const ComponentNode *component_node : id_node.components.values()) {
     if (component_node->type == component_node_type) {
@@ -273,8 +272,7 @@ bool deg_scene_component_depends_on_time(const Depsgraph &depsgraph,
   }
 
   const NodeType component_node_type = nodeTypeFromSceneComponent(component_type);
-  const ComponentNode *component_node = find_scene_component_node(*scene_id_node,
-                                                                  component_node_type);
+  const ComponentNode *component_node = find_component_node(*scene_id_node, component_node_type);
   if (!component_node) {
     BLI_assert_unreachable();
     return false;
@@ -302,7 +300,7 @@ bool deg_scene_component_depends_on_time(const Depsgraph &depsgraph,
 
       if (!nodes_already_scheduled.contains(from_node)) {
         queue.push(from_node);
-        nodes_already_scheduled.add(from_node);
+        nodes_already_scheduled.add_new(from_node);
       }
     }
   }
