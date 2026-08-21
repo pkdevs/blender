@@ -283,7 +283,7 @@ static void bm_face_calc_tri_density_uv(const BMLoop *l0,
                                         int cd_loop_uv_offset,
                                         const float2 &image_size,
                                         double2 &r_density,
-                                        double &r_area)
+                                        double &r_area_uv)
 {
   const float3 p0 = l0->v->co;
   const float3 p1 = l1->v->co;
@@ -321,7 +321,7 @@ static void bm_face_calc_tri_density_uv(const BMLoop *l0,
       if (bitangent_length > epsilon_stretch_relative * abs_det) {
         r_density.y += area * ((image_size.y * abs_det) / bitangent_length);
       }
-      r_area += area;
+      r_area_uv += area;
     }
   }
 }
