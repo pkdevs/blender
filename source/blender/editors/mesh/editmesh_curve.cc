@@ -61,9 +61,9 @@ static wmOperatorStatus edbm_curve_exec(bContext *C, wmOperator *op)
   const int restriction = RNA_enum_get(op->ptr, "restriction");
   const bool extend = RNA_boolean_get(op->ptr, "extend");
   const bool regular = RNA_boolean_get(op->ptr, "regular");
+  const int interpolation = RNA_enum_get(op->ptr, "interpolation");
   bool lock[3];
   RNA_boolean_get_array(op->ptr, "lock", lock);
-  const int interpolation = RNA_enum_get(op->ptr, "interpolation");
 
   bool changed_multi = false;
 
@@ -120,7 +120,7 @@ static void edbm_curve_ui(bContext * /*C*/, wmOperator *op)
 void MESH_OT_fit_edge_loops_to_curve(wmOperatorType *ot)
 {
   ot->name = "To Curve";
-  ot->description = "Turn a loop into a smooth curve";
+  ot->description = "Fits the unselected edge loops to a curve defined by selected vertices. ";
   ot->idname = "MESH_OT_fit_edge_loops_to_curve";
 
   ot->exec = edbm_curve_exec;
