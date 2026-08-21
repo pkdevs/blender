@@ -2,8 +2,8 @@
  *
  * SPDX-License-Identifier: MIT */
 
-#include "identifier.hh"
 #include "lexit.hh"
+#include "identifier.hh"
 #include "simd.hh"
 
 #include <algorithm>

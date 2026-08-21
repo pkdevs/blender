@@ -6,8 +6,8 @@
  * \ingroup shader_tool
  */
 
-#include "expression.hh"
 #include "symbol_table.hh"
+#include "expression.hh"
 
 namespace bsl {
 

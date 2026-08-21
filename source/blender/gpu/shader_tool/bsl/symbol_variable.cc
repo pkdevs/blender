@@ -6,8 +6,8 @@
  * \ingroup shader_tool
  */
 
-#include "symbol_table.hh"
 #include "symbol_variable.hh"
+#include "symbol_table.hh"
 
 #include <iomanip>
 #include <limits>

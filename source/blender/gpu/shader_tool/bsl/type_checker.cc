@@ -6,9 +6,9 @@
  * \ingroup shader_tool
  */
 
+#include "type_checker.hh"
 #include "pratt_parser.hh"
 #include "symbol_table.hh"
-#include "type_checker.hh"
 
 namespace bsl {
 
