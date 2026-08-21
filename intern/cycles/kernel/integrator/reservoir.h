@@ -27,7 +27,7 @@ struct Reservoir {
 ccl_device_inline void reservoir_clear(ccl_private Reservoir *reservoir)
 {
   reservoir->light = {};
-  reservoir->reference = restir_light_reference_empty();
+  reservoir->reference = restir_light_reference_empty(); // !!!: Sets `reference.prim = PRIM_NONE;`
   reservoir->radiance = {};
   reservoir->luminance = 0.0f;
   reservoir->total_weight = 0.0f;
@@ -60,7 +60,12 @@ ccl_device_inline void reservoir_init(KernelGlobals kg,
 
 ccl_device_inline bool reservoir_is_empty(ccl_private const Reservoir *reservoir)
 {
-  return !(reservoir->total_weight > 0.0f);
+  // if (reservoir->total_weight <= 0.0f) { // !!!: Debug only!
+  //   printf("reservoir_is_empty() returned false!!!; reservoir->total_weight=%f\n", (double)reservoir->total_weight);
+  // }
+
+  // return !(reservoir->total_weight > 0.0f);
+  return reservoir->total_weight == 0.0f;
 }
 
 ccl_device_inline bool reservoir_has_valid_reference(ccl_private const Reservoir *reservoir)
@@ -75,24 +80,30 @@ ccl_device_inline float reservoir_compute_luminance(
   return dot(spectrum_to_rgb(sample_radiance.sum), reservoir->rgb_to_y);
 }
 
-ccl_device_inline bool reservoir_finalize(ccl_private Reservoir *reservoir,
+ccl_device_inline bool reservoir_finalize(ccl_private Reservoir *reservoir, // !!!
                                           const bool require_valid_reference)
 {
-  if (reservoir_is_empty(reservoir) ||
-      (require_valid_reference && !reservoir_has_valid_reference(reservoir)) ||
-      !(isfinite(reservoir->luminance) && reservoir->luminance > 0.0f))
-  {
-    reservoir_clear(reservoir);
+  // if (reservoir_is_empty(reservoir) || // !!!: Suspicious
+  //     (require_valid_reference && !reservoir_has_valid_reference(reservoir)) ||
+  //     !(isfinite(reservoir->luminance) && reservoir->luminance > 0.0f))
+  // {
+  //   reservoir_clear(reservoir);
+  //   return false;
+  // }
+  if (reservoir_is_empty(reservoir)) {
+    printf("reservoir_finalize() returned false! reservoir_is_empty=true\n"); // !!!: almost Always returning!
+    // reservoir_clear(reservoir);
     return false;
   }
 
+  printf("reservoir_finalize(); total_weight=%f, luminance=%f\n", (double)reservoir->total_weight, (double)reservoir->luminance);
   /* Apply unbiased contribution weight. */
   reservoir->total_weight /= reservoir->luminance; // !!!
 
-  if (!(isfinite(reservoir->total_weight) && reservoir->total_weight > 0.0f)) {
-    reservoir_clear(reservoir);
-    return false;
-  }
+  // if (!(isfinite(reservoir->total_weight) && reservoir->total_weight > 0.0f)) { // !!!: Suspicious
+  //   reservoir_clear(reservoir);
+  //   return false;
+  // }
 
   return true;
 }
@@ -143,7 +154,7 @@ ccl_device_inline float reservoir_mis_weight_forward(ccl_private const Reservoir
       reservoir->num_bsdf_samples, bsdf_pdf, reservoir->num_light_samples, light_pdf);
 }
 
-ccl_device_inline void reservoir_add_sample(
+ccl_device_inline void reservoir_add_sample( // !!!
     ccl_private Reservoir *reservoir,
     const ccl_private LightSample &ls,
     const ccl_private ReSTIRLightSampleReference &candidate_reference,
@@ -155,18 +166,51 @@ ccl_device_inline void reservoir_add_sample(
   const float candidate_luminance = reservoir_compute_luminance(reservoir, candidate_radiance);
   const float weight = candidate_luminance * mis_weight;
 
-  if ((require_valid_reference && !restir_light_reference_is_valid(&candidate_reference)) ||
-      !(isfinite(candidate_luminance) && candidate_luminance > 0.0f) ||
-      !(isfinite(weight) && weight > 0.0f))
-  {
+printf(
+    "\n=== RESERVOIR ADD SAMPLE ===\n"
+    "candidate: type=%d prim=%d object=%d flags=%u param=(%f,%f)\n"
+    "candidate_luminance=%f mis_weight=%f weight=%f rand=%f\n"
+    "BEFORE: total_weight=%f selected_prim=%d selected_object=%d\n"
+    "============================\n",
+    candidate_reference.type,
+    candidate_reference.prim,
+    candidate_reference.object,
+    candidate_reference.flags,
+    (double)candidate_reference.param.x,
+    (double)candidate_reference.param.y,
+    (double)candidate_luminance,
+    (double)mis_weight,
+    (double)weight,
+    (double)rand,
+    (double)reservoir->total_weight,
+    reservoir->reference.prim,
+    reservoir->reference.object);
+
+  // if ((require_valid_reference && !restir_light_reference_is_valid(&candidate_reference)) || // !!!: zero-radius; suspicious
+  //     !(isfinite(candidate_luminance) && candidate_luminance > 0.0f) ||
+  //     !(isfinite(weight) && weight > 0.0f))
+  // {
+  //   return;
+  // }
+  if (!(weight > 0.0f)) {
+    printf(
+        "=== RESERVOIR ADD REJECTED === "
+        "valid_ref=%d luminance=%f weight=%f\n",
+        (int)restir_light_reference_is_valid(&candidate_reference),
+        (double)candidate_luminance,
+        (double)weight);
+    return;
+    /* Should be theoretically captured by the following condition, but we can not trust floating
+      * point precision. */
     return;
   }
+
   reservoir->total_weight += weight;
 
-  if (!(isfinite(reservoir->total_weight) && reservoir->total_weight > 0.0f)) {
-    reservoir_clear(reservoir);
-    return;
-  }
+  // if (!(isfinite(reservoir->total_weight) && reservoir->total_weight > 0.0f)) { // !!!: zero-radius; suspicious
+  //   reservoir_clear(reservoir);
+  //   return;
+  // }
 
   // Reservoir replacement
   if (rand * reservoir->total_weight <= weight) {
@@ -174,6 +218,8 @@ ccl_device_inline void reservoir_add_sample(
     reservoir->reference = candidate_reference;
     reservoir->radiance = candidate_radiance;
     reservoir->luminance = candidate_luminance;
+
+    printf("\nreservoir_add_sample() res replacement! total_weight=%f\n", (double)reservoir->total_weight);
   }
 }
 
@@ -186,24 +232,41 @@ ccl_device_inline void reservoir_add_light_sample(
     const float rand,
     const bool require_valid_reference)
 {
-  if (!(isfinite(ls.pdf) && ls.pdf > 0.0f)) {
-    return;
-  }
+  // if (!(isfinite(ls.pdf) && ls.pdf > 0.0f)) { // !!!: zero-radius; suspicious
+  //   return;
+  // }
 
   const float mis_weight = reservoir_mis_weight_nee(reservoir, ls.pdf, bsdf_pdf);
 
   float light_pdf_in_area = ls.pdf;
 
   // TODO(weizhen): Convert pdf to area measure when returning the pdf instead of here.
-  const float jacobian = ls.jacobian_solid_angle_to_area();
+  const float jacobian = ls.jacobian_solid_angle_to_area(); // !!!
+
+printf(
+    "\n=== ADD LIGHT SAMPLE ===\n"
+    "type=%d prim=%d object=%d\n"
+    "ls.pdf=%f\n"
+    "bsdf_pdf=%f\n"
+    "jacobian=%f\n"
+    "========================\n",
+    ls.type,
+    ls.prim,
+    ls.object,
+    (double)ls.pdf,
+    (double)bsdf_pdf,
+    (double)jacobian);
 
   if (jacobian > 0.0f) {
     light_pdf_in_area *= jacobian;
+    printf("reservoir_add_light_sample() updated light_pdf_in_area=%f", (double)light_pdf_in_area);
   }
 
-  if (!(isfinite(light_pdf_in_area) && light_pdf_in_area > 0.0f)) {
-    return;
-  }
+  // if (!(isfinite(light_pdf_in_area) && light_pdf_in_area > 0.0f)) { // !!!: zero-radius; suspicious
+  //   return;
+  // }
+
+  printf("reservoir_add_light_sample() updated (mis_weight / light_pdf_in_area)=%f", (double)(mis_weight / light_pdf_in_area));
 
   reservoir_add_sample(reservoir,
                        ls,
@@ -261,9 +324,12 @@ ccl_device_inline void reservoir_add_reservoir(ccl_private Reservoir *reservoir,
                                                const bool require_valid_reference)
 {
   // !!!: DI only
-  if (reservoir_is_empty(&other) || !reservoir_has_valid_reference(&other)) {
+  if (reservoir_is_empty(&other) || !reservoir_has_valid_reference(&other)) { // !!!: Suspicious
     return;
   }
+  // if (reservoir_is_empty(&other)) {
+  //   return;
+  // }
 
   reservoir_add_sample(
       reservoir, other.light, other.reference, other.radiance, other.total_weight, rand, require_valid_reference);
@@ -275,13 +341,16 @@ ccl_device_inline void reservoir_add_reservoir(ccl_private Reservoir *reservoir,
 ccl_device_inline bool sample_copy_direction(KernelGlobals kg, // !!!: lamp
                                              ccl_private const Reservoir &reservoir)
 {
-  if (reservoir_is_empty(&reservoir) || !reservoir_has_valid_reference(&reservoir)) {
+  if (reservoir_is_empty(&reservoir) || !reservoir_has_valid_reference(&reservoir)) { // !!!: Suspicious
     return false;
   }
+  // if (reservoir_is_empty(&reservoir)) {
+  //   return false;
+  // }
 
-  if (reservoir.reference.object != OBJECT_NONE) {
-    return false;
-  }
+  // if (reservoir.reference.object != OBJECT_NONE) { // !!!: Wrong?
+  //   return false;
+  // }
 
   if (reservoir.reference.type == LIGHT_AREA) {
     const ccl_global KernelLight *klight = &kernel_data_fetch(
@@ -298,6 +367,8 @@ ccl_device_inline bool sample_copy_direction(KernelGlobals kg, // !!!: lamp
       return true;
     }
   }
+
+  // TODO: Spot and sun as well?
 
   return false;
 }
@@ -357,8 +428,20 @@ ccl_device_inline bool restir_unpack_reservoir(KernelGlobals kg, // !!!: lamp
 {
   PROFILING_INIT(kg, PROFILING_RESTIR_RESERVOIR_PASSES);
 
-  // prevents stale light, radiance, or reference metadata from surviving when reusing a stack variable
-  reservoir_clear(reservoir);
+  // // prevents stale light, radiance, or reference metadata from surviving when reusing a stack variable
+  // reservoir_clear(reservoir); // !!! Suspicious here
+
+
+printf(
+    "ZERO RESERVOIR BEFORE WRITE: "
+    "total_weight=%f luminance=%f "
+    "flags=%u type=%d prim=%d object=%d\n",
+    (double)reservoir->total_weight,
+    (double)reservoir->luminance,
+    reservoir->reference.flags,
+    reservoir->reference.type,
+    reservoir->reference.prim, // If -1 here, the bug is reservoir selection/finalization/addition before film writing.
+    reservoir->reference.object);
 
   int i = 0;
   // TODO: this works for diffuse surfaces. For specular, probably `sd->wi` is needed instead.
@@ -372,12 +455,27 @@ ccl_device_inline bool restir_unpack_reservoir(KernelGlobals kg, // !!!: lamp
 
   reservoir->luminance = buffer[i];
 
-  if (reservoir_is_empty(reservoir)) {
-    return false;
-  }
+  // printf("restir_unpack_reservoir() entered; object=%f, prim=%f, total_weight=%f\n\n\n",
+  //   (double)reservoir->reference.object, (double)reservoir->reference.prim, (double)reservoir->total_weight);
+printf(
+    "ZERO RESERVOIR AFTER READ: "
+    "total_weight=%f luminance=%f "
+    "flags=%u type=%d prim=%d object=%d\n"
+    "===================================\n",
+    (double)reservoir->total_weight,
+    (double)reservoir->luminance,
+    reservoir->reference.flags,
+    reservoir->reference.type,
+    reservoir->reference.prim,
+    reservoir->reference.object);
+
+  // !!!: Suspicious
+  // if (reservoir_is_empty(reservoir)) { // !!!: always Returning false here for 0-radius lights!
+  //   return false;
+  // }
 
   // Reconstruct reference.type, RESTIR_LIGHT_REFERENCE_VALID, RESTIR_LIGHT_REFERENCE_HAS_PARAM
-  return restir_light_reference_restore_metadata(kg, &reservoir->reference);
+  return restir_light_reference_restore_metadata(kg, &reservoir->reference); // !!!
 }
 
 
@@ -387,7 +485,10 @@ ccl_device_inline bool restir_unpack_reservoir(KernelGlobals kg, // !!!: lamp
 // No Reference adaptation is required
 
 struct GlobalReservoir {
-  // TODO(weizhen): Compress with rgbe. http://www.graphics.cornell.edu/online/formats/rgbe
+  // File intern/cycles/util/types_rgbe.h
+  /* TODO(weizhen): Compress with rgbe. http://www.graphics.cornell.edu/online/formats/rgbe
+   * https://www.graphics.cornell.edu/~bjw/rgbe.html
+   * https://github.com/box/hdrCompressor/blob/master/src/rgbe/rgbe.c */
   Spectrum radiance;
   float total_weight = 0.0f;
   ShaderData sd;
