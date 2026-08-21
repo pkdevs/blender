@@ -14,9 +14,8 @@ namespace blender::gpu::shader::parser::ast {
 std::string NodeData::location(const ParserBase &parser) const
 {
   std::string str = parser[front].filename();
-  str += std::to_string(parser[front].line_number());
-  str += ':';
-  str += std::to_string(parser[front].char_number() + 1);
+  str += ":" + std::to_string(parser[front].line_number());
+  str += ':' + std::to_string(parser[front].char_number() + 1);
   return str;
 }
 
