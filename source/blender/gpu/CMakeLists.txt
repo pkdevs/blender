@@ -693,6 +693,7 @@ set(GLSL_SRC
   shaders/material/gpu_shader_material_fresnel.glsl
   shaders/material/gpu_shader_material_gamma.glsl
   shaders/material/gpu_shader_material_geometry.glsl
+  shaders/material/gpu_shader_material_get_vector_component.glsl
   shaders/material/gpu_shader_material_glass.glsl
   shaders/material/gpu_shader_material_glossy.glsl
   shaders/material/gpu_shader_material_hair_info.glsl
@@ -992,6 +993,7 @@ if(WITH_GTESTS)
       tests/framebuffer_test.cc
       tests/immediate_test.cc
       tests/index_buffer_test.cc
+      tests/mipmap_test.cc
       tests/push_constants_test.cc
       tests/ray_tracing_test.cc
       tests/shader_create_info_test.cc
