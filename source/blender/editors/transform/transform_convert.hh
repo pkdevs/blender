@@ -129,6 +129,12 @@ struct CurvesTransformData {
    * Copy of all positions being transformed.
    */
   Array<float3> positions;
+
+  /* Copy of the deformations for each layer to unapply at the end. */
+  Array<Array<float3>> deformation_offsets;
+
+  /* Copy of the source positions for each layer to unapply at the end. */
+  Array<Array<float3>> src_positions;
 };
 
 /* `transform_convert.cc` */

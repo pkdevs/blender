@@ -26,6 +26,7 @@
 #include "BKE_grease_pencil.hh"
 #include "BKE_grease_pencil_fills.hh"
 #include "BKE_idtype.hh"
+#include "BKE_key.hh"
 #include "BKE_lib_id.hh"
 #include "BKE_lib_query.hh"
 #include "BKE_main.hh"
@@ -185,11 +186,11 @@ static void grease_pencil_initialize_drawing_user_counts_after_read(GreasePencil
   }
 }
 
-static void grease_pencil_copy_data(Main * /*bmain*/,
-                                    std::optional<Library *> /*owner_library*/,
+static void grease_pencil_copy_data(Main *bmain,
+                                    std::optional<Library *> owner_library,
                                     ID *id_dst,
                                     const ID *id_src,
-                                    const int /*flag*/)
+                                    const int flag)
 {
   GreasePencil *grease_pencil_dst = reinterpret_cast<GreasePencil *>(id_dst);
   const GreasePencil *grease_pencil_src = reinterpret_cast<const GreasePencil *>(id_src);
@@ -199,6 +200,20 @@ static void grease_pencil_copy_data(Main * /*bmain*/,
       MEM_dupalloc(grease_pencil_src->material_array));
 
   BKE_grease_pencil_duplicate_drawing_array(grease_pencil_src, grease_pencil_dst);
+
+  if (grease_pencil_src->key && (flag & LIB_ID_COPY_SHAPEKEY)) {
+    BKE_id_copy_in_lib(bmain,
+                       owner_library,
+                       &grease_pencil_src->key->id,
+                       &grease_pencil_dst->id,
+                       reinterpret_cast<ID **>(&grease_pencil_dst->key),
+                       flag);
+    /* It has one user, but its owner reference (added in #id_copy_libmanagement_cb)
+     * is the real owner, remove the reference here, see: #159691. */
+    if ((flag & LIB_ID_CREATE_NO_USER_REFCOUNT) == 0) {
+      id_us_min(&grease_pencil_dst->key->id);
+    }
+  }
 
   /* Duplicate layer tree. */
   grease_pencil_dst->root_group_ptr = MEM_new<bke::greasepencil::LayerGroup>(
@@ -252,6 +267,8 @@ static void grease_pencil_free_data(ID *id)
 static void grease_pencil_foreach_id(ID *id, LibraryForeachIDData *data)
 {
   GreasePencil *grease_pencil = reinterpret_cast<GreasePencil *>(id);
+  BKE_LIB_FOREACHID_PROCESS_IDSUPER(data, grease_pencil->key, IDWALK_CB_USER);
+
   for (int i = 0; i < grease_pencil->material_array_num; i++) {
     BKE_LIB_FOREACHID_PROCESS_IDSUPER(data, grease_pencil->material_array[i], IDWALK_CB_USER);
   }
@@ -2547,6 +2564,128 @@ static void grease_pencil_do_layer_adjustments(GreasePencil &grease_pencil)
   }
 }
 
+static void grease_pencil_do_shape_keys(bke::GeometrySet &geometry_set)
+{
+  using namespace bke::greasepencil;
+
+  // printf("grease_pencil_do_shape_keys\n");
+
+  bke::GeometryComponentEditData::remember_deformed_positions_if_necessary(geometry_set);
+
+  GreasePencil &grease_pencil = *geometry_set.get_grease_pencil_for_write();
+
+  // const bke::AttributeAccessor layer_attributes = grease_pencil.attributes();
+
+  MutableSpan<bke::GreasePencilDrawingEditHints> edit_hints = {};
+  if (geometry_set.has_component<bke::GeometryComponentEditData>()) {
+    bke::GeometryComponentEditData &edit_component =
+        geometry_set.get_component_for_write<bke::GeometryComponentEditData>();
+    if (auto &hints = edit_component.grease_pencil_edit_hints_) {
+      if (!hints->drawing_hints) {
+        hints->drawing_hints.emplace(hints->grease_pencil_id_orig.layers().size());
+      }
+      edit_hints = *hints->drawing_hints;
+    }
+  }
+
+  struct LayerDrawingInfo {
+    Drawing *drawing;
+    const int layer_index;
+  };
+
+  Set<Drawing *> all_drawings;
+  Vector<LayerDrawingInfo> drawing_infos;
+  for (const int layer_i : grease_pencil.layers().index_range()) {
+    const Layer &layer = grease_pencil.layer(layer_i);
+    /* Set of owned drawings, ignore drawing references to other data blocks. */
+    if (Drawing *drawing = grease_pencil.get_eval_drawing(layer)) {
+      if (all_drawings.add(drawing)) {
+        drawing_infos.append({drawing, layer_i});
+      }
+    }
+  }
+
+  Key *key = grease_pencil.key;
+  // KeyBlock *actkb = BKE_keyblock_find_by_index(key, ob->shapenr - 1);
+
+  if (!key) {
+    return;
+  }
+
+  // const Vector<LayerDrawingInfo> drawings = get_drawing_infos_by_layer(
+  //     grease_pencil, layer_mask, frame);
+  // threading::parallel_for_each(drawings, [&](const LayerDrawingInfo &info) {
+  //   if (edit_hints.is_empty()) {
+  //     modify_curves(*md, *ctx, *info.drawing, nullptr);
+  //   }
+  //   else {
+  //     modify_curves(*md, *ctx, *info.drawing, &edit_hints[info.layer_index]);
+  //   }
+  // });
+
+  // printf("dsha key->block.count() %i %p\n", key->block.count(), key);
+
+  for (const auto [keyblock_index, keyblock] : key->block.enumerate()) {
+    // printf("keyblock_index %i\n", keyblock_index);
+    if (&keyblock == key->refkey) {
+      // printf("&keyblock == key->refkey\n");
+      continue;
+    }
+    if (keyblock.flag & KEYBLOCK_MUTE) {
+      // printf("KEYBLOCK_MUTE\n");
+      continue;
+    }
+    const float keyblock_influence = keyblock.curval;
+    // printf("keyblock_influence %f\n", keyblock_influence);
+    if (keyblock_influence == 0.0f) {
+      continue;
+    }
+
+    /* Reference can be any block. */
+    KeyBlock *ref_keyblock = static_cast<KeyBlock *>(BLI_findlink(&key->block, keyblock.relative));
+    if (ref_keyblock == nullptr) {
+      continue;
+    }
+
+    char attr_name[64];
+    SNPRINTF_UTF8(attr_name, (".SK_%s"), keyblock.name);
+
+    char ref_attr_name[64];
+    SNPRINTF_UTF8(ref_attr_name, (".SK_%s"), ref_keyblock->name);
+
+    threading::parallel_for_each(drawing_infos, [&](LayerDrawingInfo &info) {
+      bke::CurvesGeometry &curves = info.drawing->strokes_for_write();
+
+      const bke::AttributeAccessor attributes = curves.attributes();
+      const VArray<float3> key_positions = *attributes.lookup_or_default<float3>(
+          attr_name, bke::AttrDomain::Point, float3(0.0f));
+      const VArray<float3> ref_key_positions = *attributes.lookup_or_default<float3>(
+          ref_attr_name, bke::AttrDomain::Point, float3(0.0f));
+
+      MutableSpan<float3> positions = curves.positions_for_write();
+      threading::parallel_for(positions.index_range(), 4096, [&](const IndexRange range) {
+        for (const int i : range) {
+          positions[i] += (key_positions[i] - ref_key_positions[i]) * keyblock_influence;
+        }
+      });
+
+      bke::GreasePencilDrawingEditHints *layer_edit_hints = edit_hints.is_empty() ?
+                                                                nullptr :
+                                                                &edit_hints[info.layer_index];
+
+      if (layer_edit_hints && layer_edit_hints->positions()) {
+        MutableSpan<float3> positions = *layer_edit_hints->positions_for_write();
+
+        threading::parallel_for(positions.index_range(), 4096, [&](const IndexRange range) {
+          for (const int i : range) {
+            positions[i] += (key_positions[i] - ref_key_positions[i]) * keyblock_influence;
+          }
+        });
+      }
+    });
+  }
+}
+
 static void grease_pencil_evaluate_layers(GreasePencil &grease_pencil)
 {
   using namespace blender::bke::greasepencil;
@@ -2582,10 +2721,17 @@ void BKE_grease_pencil_eval_geometry(Depsgraph *depsgraph, GreasePencil *grease_
 void BKE_object_eval_grease_pencil(Depsgraph *depsgraph, Scene *scene, Object *object)
 {
   using namespace blender::bke;
+
   /* Free any evaluated data and restore original data. */
   BKE_object_free_derived_caches(object);
 
   GreasePencil *grease_pencil = id_cast<GreasePencil *>(object->data);
+
+  if (grease_pencil->key) {
+    printf(
+        "eval key->block.count() %i %p\n", grease_pencil->key->block.count(), grease_pencil->key);
+  }
+
   GeometrySet geometry_set = GeometrySet::from_grease_pencil(grease_pencil,
                                                              GeometryOwnershipType::ReadOnly);
   /* The layer adjustments for tinting and radii offsets are applied before modifier evaluation.
@@ -2608,6 +2754,9 @@ void BKE_object_eval_grease_pencil(Depsgraph *depsgraph, Scene *scene, Object *o
     edit_component.grease_pencil_edit_hints_ = std::make_unique<GreasePencilEditHints>(
         *id_cast<const GreasePencil *>(DEG_get_original(object)->data));
   }
+
+  grease_pencil_do_shape_keys(geometry_set);
+
   grease_pencil_evaluate_modifiers(depsgraph, scene, object, geometry_set);
 
   if (geometry_set.has_grease_pencil()) {

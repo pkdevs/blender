@@ -20,6 +20,7 @@
 #include "BLI_utildefines.hh"
 
 #include "DNA_curve_types.h"
+#include "DNA_grease_pencil_types.h"
 #include "DNA_key_types.h"
 #include "DNA_lattice_types.h"
 #include "DNA_mesh_types.h"
@@ -347,6 +348,16 @@ void deg_graph_id_tag_legacy_compat(
         Curve *curve = id_cast<Curve *>(id);
         if (curve->key != nullptr) {
           ID *key_id = &curve->key->id;
+          if (key_id != nullptr) {
+            graph_id_tag_update(bmain, depsgraph, key_id, 0, update_source);
+          }
+        }
+        break;
+      }
+      case ID_GP: {
+        GreasePencil *grease_pencil = id_cast<GreasePencil *>(id);
+        if (grease_pencil->key != nullptr) {
+          ID *key_id = &grease_pencil->key->id;
           if (key_id != nullptr) {
             graph_id_tag_update(bmain, depsgraph, key_id, 0, update_source);
           }

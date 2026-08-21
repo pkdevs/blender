@@ -10,10 +10,16 @@
 
 #include "BKE_context.hh"
 #include "BKE_curves_utils.hh"
+#include "BKE_key.hh"
+#include "BKE_main.hh"
 
 #include "BLI_index_mask_expression.hh"
+#include "BLI_listbase.hh"
+#include "BLI_string_utf8.hh"
 
 #include "DEG_depsgraph_query.hh"
+
+#include "DNA_key_types.h"
 
 #include "ED_curves.hh"
 #include "ED_grease_pencil.hh"
@@ -47,6 +53,11 @@ static void createTransGreasePencilVerts(bContext *C, TransInfo *t)
   for (const int i : trans_data_contrainers.index_range()) {
     TransDataContainer &tc = trans_data_contrainers[i];
     GreasePencil &grease_pencil = *id_cast<GreasePencil *>(tc.obedit->data);
+
+    if (grease_pencil.key) {
+      printf(
+          "tran key->block.count() %i %p\n", grease_pencil.key->block.count(), grease_pencil.key);
+    }
 
     CurvesTransformData *curves_transform_data = curves::create_curves_transform_custom_data(
         tc.custom.type);
@@ -89,6 +100,8 @@ static void createTransGreasePencilVerts(bContext *C, TransInfo *t)
     const Span<ed::greasepencil::MutableDrawingInfo> drawings =
         curves_transform_data.drawings.as_span();
     curves_transform_data.grease_pencil_falloffs.reinitialize(drawings.size());
+    curves_transform_data.deformation_offsets.reinitialize(drawings.size());
+    curves_transform_data.src_positions.reinitialize(drawings.size());
 
     for (ed::greasepencil::MutableDrawingInfo info : drawings) {
       bke::CurvesGeometry &curves = info.drawing.strokes_for_write();
@@ -219,6 +232,33 @@ static void createTransGreasePencilVerts(bContext *C, TransInfo *t)
 
       CurvesTransformData &curves_transform_data = *static_cast<CurvesTransformData *>(
           tc.custom.type.data);
+
+      curves_transform_data.deformation_offsets[drawing] = Array<float3>(deformation.positions);
+      curves_transform_data.src_positions[drawing] = Array<float3>(curves.positions());
+
+      for (const int point_i : deformation.positions.index_range()) {
+        curves_transform_data.deformation_offsets[drawing][point_i] -=
+            curves_transform_data.src_positions[drawing][point_i];
+      }
+
+      Key *key = grease_pencil.key;
+      KeyBlock *actkb = BKE_keyblock_find_by_index(key, tc.obedit->shapenr - 1);
+
+      if (key && actkb && tc.obedit->shapenr != 1) {
+        bke::MutableAttributeAccessor attributes = curves.attributes_for_write();
+
+        char attr_name[64];
+
+        SNPRINTF_UTF8(attr_name, (".SK_%s"), actkb->name);
+
+        const VArray<float3> key_positions = *attributes.lookup<float3>(attr_name,
+                                                                        bke::AttrDomain::Point);
+
+        for (const int point_i : deformation.positions.index_range()) {
+          curves_transform_data.deformation_offsets[drawing][point_i] -= key_positions[point_i];
+        }
+      }
+
       curves_transform_data.grease_pencil_falloffs[drawing] = info.multi_frame_falloff;
       float &drawing_falloff = curves_transform_data.grease_pencil_falloffs[drawing];
       curves::curve_populate_trans_data_structs(*t,
@@ -252,12 +292,17 @@ static void recalcData_grease_pencil(TransInfo *t)
     const CurvesTransformData &transform_data = *static_cast<CurvesTransformData *>(
         tc.custom.type.data);
 
+    Key *key = grease_pencil.key;
+    KeyBlock *actkb = BKE_keyblock_find_by_index(key, tc.obedit->shapenr - 1);
+
     const Vector<ed::greasepencil::MutableDrawingInfo> drawings = transform_data.drawings;
 
     int layer_i = 0;
     for (const int64_t i : drawings.index_range()) {
       ed::greasepencil::MutableDrawingInfo info = drawings[i];
       bke::CurvesGeometry &curves = info.drawing.strokes_for_write();
+      const Span<float3> deformation_offsets = transform_data.deformation_offsets[i];
+      const Span<float3> src_positions = transform_data.src_positions[i];
 
       if (t->mode == TFM_CURVE_SHRINKFATTEN) {
         curves.tag_radii_changed();
@@ -268,10 +313,48 @@ static void recalcData_grease_pencil(TransInfo *t)
       else {
         const Vector<MutableSpan<float3>> positions_per_selection_attr =
             ed::curves::get_curves_positions_for_write(curves);
-        for (MutableSpan<float3> positions : positions_per_selection_attr) {
-          curves::copy_positions_from_curves_transform_custom_data(
-              tc.custom.type, layer_i++, positions);
+
+        if (key && actkb && tc.obedit->shapenr != 1) {
+          bke::MutableAttributeAccessor attributes = curves.attributes_for_write();
+          OffsetIndices<int> tran_offsets{transform_data.layer_offsets};
+
+          for (MutableSpan<float3> positions : positions_per_selection_attr) {
+            UNUSED_VARS(positions);
+
+            const IndexMask &selection = transform_data.selection_by_layer[layer_i];
+
+            char attr_name[64];
+
+            SNPRINTF_UTF8(attr_name, (".SK_%s"), actkb->name);
+
+            bke::SpanAttributeWriter<float3> key_positions =
+                attributes.lookup_or_add_for_write_span<float3>(attr_name, bke::AttrDomain::Point);
+
+            Span<float3> trans_positions = transform_data.positions.as_span().slice(
+                tran_offsets[layer_i]);
+
+            selection.foreach_index([&](const int point_i, const int pos) {
+              key_positions.span[point_i] = trans_positions[pos] - deformation_offsets[point_i] -
+                                            src_positions[point_i];
+            });
+
+            key_positions.finish();
+
+            layer_i++;
+          }
         }
+        else {
+          for (MutableSpan<float3> positions : positions_per_selection_attr) {
+            const IndexMask &selection = transform_data.selection_by_layer[layer_i];
+
+            curves::copy_positions_from_curves_transform_custom_data(
+                tc.custom.type, layer_i++, positions);
+
+            selection.foreach_index(
+                [&](const int point_i) { positions[point_i] -= deformation_offsets[point_i]; });
+          }
+        }
+
         curves.tag_positions_changed();
         curves.calculate_bezier_auto_handles();
         info.drawing.tag_positions_changed();
@@ -280,6 +363,35 @@ static void recalcData_grease_pencil(TransInfo *t)
     }
 
     DEG_id_tag_update(&grease_pencil.id, ID_RECALC_GEOMETRY);
+
+    // WM_event_add_notifier(C, NC_OBJECT | ND_KEYS, nullptr);
+
+    if (key) {
+      WM_main_add_notifier(NC_OBJECT | ND_KEYS, &key->id);
+    }
+    // WM_event_add_notifier(C, NC_OBJECT | ND_KEYS, &tc.obedit->id);
+
+    DEG_id_tag_update(&tc.obedit->id, ID_RECALC_GEOMETRY);
+    // WM_event_add_notifier(C, NC_OBJECT | ND_DRAW, ob);
+
+    Object *ob;
+
+    for (ob = static_cast<Object *>(t->bmain->objects.first); ob;
+         ob = static_cast<Object *>(ob->id.next))
+    {
+      if (BKE_key_from_object(ob) == key) {
+        DEG_id_tag_update(&ob->id, ID_RECALC_GEOMETRY);
+        WM_main_add_notifier(NC_OBJECT | ND_MODIFIER, ob);
+      }
+    }
+
+    // if (BKE_key_from_object(ob) == key) {
+    //   DEG_id_tag_update(&ob->id, ID_RECALC_GEOMETRY);
+    //   WM_main_add_notifier(NC_OBJECT | ND_MODIFIER, ob);
+    // }
+
+    // DEG_id_tag_update(&tc.obedit->id, ID_RECALC_GEOMETRY);
+    // WM_main_add_notifier(NC_OBJECT | ND_MODIFIER, tc.obedit);
   }
 }
 
@@ -288,6 +400,8 @@ static void special_aftertrans_update__grease_pencil(bContext *C, TransInfo *t)
   Scene *scene = CTX_data_scene(C);
   MutableSpan<TransDataContainer> trans_data_contrainers(t->data_container, t->data_container_len);
 
+  WM_event_add_notifier(C, NC_OBJECT | ND_KEYS | ND_DRAW, nullptr);
+
   /* If the transform operation was cancelled and new keyframes got created, remove them. */
   if ((t->state != TRANS_CANCEL) || ((t->flag & T_DUPLICATED_KEYFRAMES) == 0)) {
     return;
@@ -295,6 +409,8 @@ static void special_aftertrans_update__grease_pencil(bContext *C, TransInfo *t)
 
   for (TransDataContainer &tc : trans_data_contrainers) {
     GreasePencil &grease_pencil = *id_cast<GreasePencil *>(tc.obedit->data);
+
+    WM_event_add_notifier(C, NC_OBJECT | ND_KEYS | ND_DRAW, tc.obedit);
 
     Vector<ed::greasepencil::MutableDrawingInfo> drawings =
         ed::greasepencil::retrieve_editable_drawings_with_falloff(*scene, grease_pencil);

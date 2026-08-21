@@ -41,6 +41,7 @@ const EnumPropertyItem rna_enum_keyblock_type_items[] = {
 #  include "BLT_translation.hh"
 
 #  include "DNA_curve_types.h"
+#  include "DNA_grease_pencil_types.h"
 #  include "DNA_lattice_types.h"
 #  include "DNA_mesh_types.h"
 #  include "DNA_object_types.h"
@@ -74,6 +75,8 @@ static Key *rna_ShapeKey_find_key(ID *id)
       return (id_cast<Mesh *>(id))->key;
     case ID_OB:
       return BKE_key_from_object(id_cast<Object *>(id));
+    case ID_GP:
+      return (id_cast<GreasePencil *>(id))->key;
     default:
       return nullptr;
   }

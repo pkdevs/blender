@@ -42,6 +42,7 @@ class LayerGroupRuntime;
 }  // namespace greasepencil
 }  // namespace bke
 
+struct Key;
 struct Main;
 struct GreasePencil;
 struct Object;
@@ -447,6 +448,9 @@ struct GreasePencil {
   ID id;
   /** Animation data. */
   struct AnimData *adt = nullptr;
+
+  /* Shape keys */
+  struct Key *key = nullptr;
 
   /**
    * An array of pointers to drawings. The drawing can own its data or reference it from another

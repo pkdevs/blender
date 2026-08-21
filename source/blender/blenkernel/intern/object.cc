@@ -69,6 +69,7 @@
 #include "BKE_animsys.hh"
 #include "BKE_armature.hh"
 #include "BKE_asset.hh"
+#include "BKE_attribute.hh"
 #include "BKE_bpath.hh"
 #include "BKE_camera.h"
 #include "BKE_collection.hh"
@@ -4723,6 +4724,71 @@ static KeyBlock *insert_curvekey(Main *bmain, Object *ob, const char *name, cons
   return kb;
 }
 
+/* Grease Pencil. */
+static KeyBlock *insert_grease_pencil_shape_key(Main *bmain,
+                                                Object *ob,
+                                                const char *name,
+                                                const bool from_mix)
+{
+
+  GreasePencil *grease_pencil = id_cast<GreasePencil *>(ob->data);
+  Key *key = grease_pencil->key;
+  KeyBlock *kb;
+  int newkey = 0;
+
+  if (key == nullptr) {
+    key = grease_pencil->key = BKE_key_add(bmain, id_cast<ID *>(grease_pencil));
+    key->type = KEY_RELATIVE;
+    newkey = 1;
+  }
+
+  if (newkey || from_mix == false) {
+    /* create from curve */
+    kb = BKE_keyblock_add_ctime(key, name, false);
+    if (!newkey) {
+      KeyBlock *basekb = static_cast<KeyBlock *>(key->block.first);
+      kb->data = MEM_dupalloc_void(basekb->data);
+      kb->totelem = basekb->totelem;
+    }
+    else {
+      BKE_keyblock_convert_from_grease_pencil(grease_pencil, kb);
+    }
+  }
+  else {
+    /* copy from current values */
+    int totelem;
+    float *data = BKE_key_evaluate_object(ob, &totelem);
+
+    /* create new block with prepared data */
+    kb = BKE_keyblock_add_ctime(key, name, false);
+    kb->totelem = totelem;
+    kb->data = data;
+  }
+
+  for (GreasePencilDrawingBase *base : grease_pencil->drawings()) {
+    bke::greasepencil::Drawing &drawing = reinterpret_cast<GreasePencilDrawing *>(base)->wrap();
+    bke::CurvesGeometry &curves = drawing.strokes_for_write();
+
+    bke::MutableAttributeAccessor attributes = curves.attributes_for_write();
+
+    char attr_name[64];
+
+    SNPRINTF_UTF8(attr_name, (".SK_%s"), kb->name);
+
+    bke::SpanAttributeWriter<float3> key_positions =
+        attributes.lookup_or_add_for_write_span<float3>(attr_name, bke::AttrDomain::Point);
+
+    // for (const int i : key_positions.span.index_range()) {
+    //   key_positions.span[i] = float3(0.0f, 0.0f, 1.0f);
+    // }
+    // key_positions.span[0] = float3(0.0f, 1.0f, 1.0f);
+
+    key_positions.finish();
+  }
+
+  return kb;
+}
+
 /** \} */
 
 /* -------------------------------------------------------------------- */
@@ -4746,6 +4812,9 @@ KeyBlock *BKE_object_shapekey_insert(Main *bmain,
       break;
     case OB_LATTICE:
       key = insert_lattkey(bmain, ob, name, from_mix);
+      break;
+    case OB_GREASE_PENCIL:
+      key = insert_grease_pencil_shape_key(bmain, ob, name, from_mix);
       break;
     default:
       break;

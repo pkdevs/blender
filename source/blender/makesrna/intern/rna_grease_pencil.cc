@@ -1527,6 +1527,12 @@ static void rna_def_grease_pencil_data(BlenderRNA *brna)
   RNA_def_struct_ui_text(srna, "Grease Pencil", "Grease Pencil data-block");
   RNA_def_struct_ui_icon(srna, ICON_OUTLINER_DATA_GREASEPENCIL);
 
+  prop = RNA_def_property(srna, "shape_keys", PROP_POINTER, PROP_NONE);
+  RNA_def_property_pointer_sdna(prop, nullptr, "key");
+  RNA_def_property_override_flag(prop, PROPOVERRIDE_OVERRIDABLE_LIBRARY);
+  RNA_def_property_clear_flag(prop, PROP_PTR_NO_OWNERSHIP);
+  RNA_def_property_ui_text(prop, "Shape Keys", "");
+
   /* attributes */
   rna_def_attributes_common(srna, AttributeOwnerType::GreasePencil);
 

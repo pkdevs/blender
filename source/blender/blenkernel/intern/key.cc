@@ -44,6 +44,7 @@
 #include "BKE_deform.hh"
 #include "BKE_editmesh.hh"
 #include "BKE_global.hh"
+#include "BKE_grease_pencil.hh"
 #include "BKE_idtype.hh"
 #include "BKE_key.hh"
 #include "BKE_lattice.hh"
@@ -264,6 +265,16 @@ Key *BKE_key_add(Main *bmain, ID *id) /* Common function. */
       el[2] = 0;
 
       key->elemsize = sizeof(float[KEYELEM_ELEM_SIZE_CURVE]);
+
+      break;
+    case ID_GP:
+      el = key->elemstr;
+
+      el[0] = KEYELEM_FLOAT_LEN_COORD;
+      el[1] = IPO_FLOAT;
+      el[2] = 0;
+
+      key->elemsize = sizeof(float[KEYELEM_FLOAT_LEN_COORD]);
 
       break;
 
@@ -1254,6 +1265,7 @@ bool BKE_key_idtype_support(const short id_type)
     case ID_ME:
     case ID_CU_LEGACY:
     case ID_LT:
+    case ID_GP:
       return true;
     default:
       return false;
@@ -1277,6 +1289,10 @@ Key **BKE_key_from_id_p(ID *id)
     case ID_LT: {
       Lattice *lt = id_cast<Lattice *>(id);
       return &lt->key;
+    }
+    case ID_GP: {
+      GreasePencil *grease_pencil = id_cast<GreasePencil *>(id);
+      return &grease_pencil->key;
     }
     default:
       break;
@@ -1768,6 +1784,146 @@ void BKE_keyblock_mesh_calc_normals(const KeyBlock *kb,
   if (free_face_normals) {
     MEM_delete(face_normals);
   }
+}
+
+/************************* Grease Pencil ************************/
+
+// int BKE_keyblock_curve_element_count(const ListBaseT<Nurb> *nurb)
+// {
+//   const Nurb *nu;
+//   int tot = 0;
+
+//   nu = static_cast<const Nurb *>(nurb->first);
+//   while (nu) {
+//     if (nu->bezt) {
+//       tot += KEYELEM_ELEM_LEN_BEZTRIPLE * nu->pntsu;
+//     }
+//     else if (nu->bp) {
+//       tot += KEYELEM_ELEM_LEN_BPOINT * nu->pntsu * nu->pntsv;
+//     }
+
+//     nu = nu->next;
+//   }
+//   return tot;
+// }
+
+void BKE_keyblock_update_from_grease_pencil(const GreasePencil * /*grease_pencil*/, KeyBlock *kb)
+{
+  // BLI_assert(BKE_keyblock_curve_element_count(nurb) == kb->totelem);
+
+  // const int tot = kb->totelem;
+  // if (tot == 0) {
+  //   return;
+  // }
+
+  // BezTriple *bezt;
+  // BPoint *bp;
+  // int a;
+  // float *fp = static_cast<float *>(kb->data);
+  // for (Nurb &nu : *nurb) {
+  //   if (nu.bezt) {
+  //     for (a = nu.pntsu, bezt = nu.bezt; a; a--, bezt++) {
+  //       for (int i = 0; i < 3; i++) {
+  //         copy_v3_v3(&fp[i * 3], bezt->vec[i]);
+  //       }
+  //       fp[9] = bezt->tilt;
+  //       fp[10] = bezt->radius;
+  //       fp += KEYELEM_FLOAT_LEN_BEZTRIPLE;
+  //     }
+  //   }
+  //   else {
+  //     for (a = nu.pntsu * nu.pntsv, bp = nu.bp; a; a--, bp++) {
+  //       copy_v3_v3(fp, bp->vec);
+  //       fp[3] = bp->tilt;
+  //       fp[4] = bp->radius;
+  //       fp += KEYELEM_FLOAT_LEN_BPOINT;
+  //     }
+  //   }
+  // }
+}
+
+void BKE_keyblock_grease_pencil_data_transform(const ListBaseT<Nurb> *nurb,
+                                               const float mat[4][4],
+                                               const void *src_data,
+                                               void *dst_data)
+{
+  // const float *src = static_cast<const float *>(src_data);
+  // float *dst = static_cast<float *>(dst_data);
+  // for (Nurb &nu : *nurb) {
+  //   if (nu.bezt) {
+  //     for (int a = nu.pntsu; a; a--) {
+  //       for (int i = 0; i < 3; i++) {
+  //         mul_v3_m4v3(&dst[i * 3], mat, &src[i * 3]);
+  //       }
+  //       dst[9] = src[9];
+  //       dst[10] = src[10];
+  //       src += KEYELEM_FLOAT_LEN_BEZTRIPLE;
+  //       dst += KEYELEM_FLOAT_LEN_BEZTRIPLE;
+  //     }
+  //   }
+  //   else {
+  //     for (int a = nu.pntsu * nu.pntsv; a; a--) {
+  //       mul_v3_m4v3(dst, mat, src);
+  //       dst[3] = src[3];
+  //       dst[4] = src[4];
+  //       src += KEYELEM_FLOAT_LEN_BPOINT;
+  //       dst += KEYELEM_FLOAT_LEN_BPOINT;
+  //     }
+  //   }
+  // }
+}
+
+void BKE_keyblock_convert_from_grease_pencil(const GreasePencil *grease_pencil, KeyBlock *kb)
+{
+  // const int tot = BKE_keyblock_curve_element_count(nurb);
+  const int tot = 1;
+  if (tot == 0) {
+    return;
+  }
+
+  MEM_SAFE_DELETE_VOID(kb->data);
+
+  kb->data = MEM_new_array_uninitialized(
+      size_t(tot), size_t(grease_pencil->key->elemsize), __func__);
+  kb->totelem = tot;
+
+  BKE_keyblock_update_from_grease_pencil(grease_pencil, kb);
+}
+
+// static void keyblock_data_convert_to_curve(const float *fp, ListBaseT<Nurb> *nurb, int totpoint)
+// {
+// for (Nurb *nu = static_cast<Nurb *>(nurb->first); nu && totpoint > 0; nu = nu->next) {
+//   if (nu->bezt != nullptr) {
+//     BezTriple *bezt = nu->bezt;
+//     for (int i = nu->pntsu; i && (totpoint -= KEYELEM_ELEM_LEN_BEZTRIPLE) >= 0;
+//          i--, bezt++, fp += KEYELEM_FLOAT_LEN_BEZTRIPLE)
+//     {
+//       for (int j = 0; j < 3; j++) {
+//         copy_v3_v3(bezt->vec[j], &fp[j * 3]);
+//       }
+//       bezt->tilt = fp[9];
+//       bezt->radius = fp[10];
+//     }
+//   }
+//   else {
+//     BPoint *bp = nu->bp;
+//     for (int i = nu->pntsu * nu->pntsv; i && (totpoint -= KEYELEM_ELEM_LEN_BPOINT) >= 0;
+//          i--, bp++, fp += KEYELEM_FLOAT_LEN_BPOINT)
+//     {
+//       copy_v3_v3(bp->vec, fp);
+//       bp->tilt = fp[3];
+//       bp->radius = fp[4];
+//     }
+//   }
+// }
+// }
+
+void BKE_keyblock_convert_to_grease_pencil(KeyBlock *kb, GreasePencil * /*grease_pencil*/)
+{
+  // const float *fp = static_cast<const float *>(kb->data);
+  // const int tot = min_ii(kb->totelem, BKE_keyblock_curve_element_count(nurb));
+
+  // keyblock_data_convert_to_curve(fp, nurb, tot);
 }
 
 /************************* raw coords ************************/

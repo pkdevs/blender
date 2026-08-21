@@ -565,6 +565,13 @@ void curve_populate_trans_data_structs(const TransInfo &t,
         points_to_transform_per_attr[selection_i],
         src_positions_per_selection_attr[selection_i],
         tc.custom.type);
+
+    if (selection_i == 0 && !deformation.positions.is_empty()) {
+      points_to_transform_per_attr[selection_i].foreach_index(
+          [&](const int point_i, const int pos) {
+            positions_per_selection_attr[selection_i][pos] = deformation.positions[point_i];
+          });
+    }
   }
 
   MutableSpan<TransData> all_tc_data = MutableSpan(tc.data, tc.data_len);
@@ -600,7 +607,7 @@ void curve_populate_trans_data_structs(const TransInfo &t,
           }
           float3 center(0.0f);
           selection.foreach_index_optimized<int64_t>(
-              [&](const int64_t point_i) { center += point_positions[point_i]; });
+              [&](const int64_t point_i) { center += deformation.positions[point_i]; });
           center /= selection.size();
           mean_center_point_per_curve[curve_i] = center;
         },
@@ -633,7 +640,7 @@ void curve_populate_trans_data_structs(const TransInfo &t,
             center = mean_center_point_per_curve[curve_i];
           }
           else if (use_local_center) {
-            center = point_positions[domain_i];
+            center = deformation.positions[domain_i];
           }
           else {
             center = *elem;
@@ -659,16 +666,16 @@ void curve_populate_trans_data_structs(const TransInfo &t,
             td.val = nullptr;
           }
 
-          if (deformation.deform_mats.is_empty()) {
-            copy_m3_m3(td.smtx, smtx_base.ptr());
-            copy_m3_m3(td.mtx, mtx_base.ptr());
-          }
-          else {
-            const float3x3 mtx = deformation.deform_mats[domain_i] * mtx_base;
-            const float3x3 smtx = math::pseudo_invert(mtx);
-            copy_m3_m3(td.smtx, smtx.ptr());
-            copy_m3_m3(td.mtx, mtx.ptr());
-          }
+          // if (deformation.deform_mats.is_empty()) {
+          copy_m3_m3(td.smtx, smtx_base.ptr());
+          copy_m3_m3(td.mtx, mtx_base.ptr());
+          // }
+          // else {
+          //   const float3x3 mtx = deformation.deform_mats[domain_i] * mtx_base;
+          //   const float3x3 smtx = math::pseudo_invert(mtx);
+          //   copy_m3_m3(td.smtx, smtx.ptr());
+          //   copy_m3_m3(td.mtx, mtx.ptr());
+          // }
         },
         exec_mode::grain_size(1024));
   }
