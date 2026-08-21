@@ -31,7 +31,7 @@ enum OperatorType : uint16_t {
   OP_INVALID = 0b1111'1111'1111'1111,
 };
 
-OperatorType to_operator_type(TokenType tok_type)
+static OperatorType to_operator_type(TokenType tok_type)
 {
   switch (tok_type) {
     case Plus:

@@ -790,7 +790,6 @@ struct SymbolParser : NodeErrorHandler {
 
   void parse_template_spec(SymbolScope &scope, TemplateSpec temp, const std::string &prefix)
   {
-    SourceLocation poi = temp.front();
     TemplateParamList temp_params = temp.parameters();
     /* Instantiate the whole symbol into the current namespace. */
     if (temp.is_function()) {

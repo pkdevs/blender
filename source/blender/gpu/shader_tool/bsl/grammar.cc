@@ -30,7 +30,6 @@ struct BSLParser {
   using Node = ast::NodeData;
   using TokenID = ast::TokenID;
   using NodeID = ast::NodeID;
-  using ParserBase = ParserBase;
 
   Token curr;
 

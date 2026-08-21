@@ -69,7 +69,7 @@ SymbolClass *SymbolVariable::parent_class()
   return this->parent->as_class();
 }
 
-std::string to_string_exact(float val)
+static std::string to_string_exact(float val)
 {
   std::stringstream ss;
   ss << std::setprecision(std::numeric_limits<float>::max_digits10) << val;
