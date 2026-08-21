@@ -247,9 +247,6 @@ class SourceProcessor {
   /* Lower namespaces by adding namespace prefix to all the contained structs and functions. */
   void lower_namespaces(Parser &parser);
   void lower_bsl_to_il(Parser &parser, bsl::SymbolTable &symbols);
-  /* Lower namespaces by adding namespace prefix to all the contained structs and functions.
-   * Also mangle template parameters. */
-  void lower_namespaces_and_explicit_templates(Parser &parser);
   /**
    * Needs to run before namespace mutation so that `using` have more precedence.
    * Otherwise the following would fail.
@@ -364,7 +361,7 @@ class SourceProcessor {
    * defined. Needed step in order to support proper intra class calls of templated method with
    * arbitrary declaration order.
    */
-  void lower_templated_forward_declaration(Parser &parser);
+  void lower_method_forward_declaration(Parser &parser);
   /* Limited union implementation. Create getters and setters to a raw data struct. */
   void lower_unions(Parser &parser);
   /**

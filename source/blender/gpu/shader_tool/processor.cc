@@ -312,7 +312,7 @@ SourceProcessor::Result SourceProcessor::convert_bsl()
     /* Lower SRT and Interfaces. */
     lower_pipeline_definition(parser, filename);
     /* Lower class methods. */
-    lower_templated_forward_declaration(parser);
+    lower_method_forward_declaration(parser);
     lower_union_setters(parser);
     lower_method_calls(parser, false);
     /* Lower string, assert, printf. */

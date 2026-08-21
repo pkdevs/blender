@@ -15,7 +15,6 @@
 namespace blender::gpu::shader {
 using namespace std;
 using namespace shader::parser;
-using namespace shader::parser::ast;
 using namespace metadata;
 
 string SourceProcessor::template_arguments_mangle(const Scope template_args)
@@ -271,31 +270,6 @@ void SourceProcessor::lower_template_calls(Parser &parser)
   parser().foreach_match("A<..>A<", [&](const vector<Token> &tokens) {
     parser.replace(tokens[1].scope(), template_arguments_mangle(tokens[1].scope()), true);
   });
-
-  parser.apply_mutations();
-}
-
-/* Mangle template parameter into the symbol name. */
-void SourceProcessor::lower_namespaces_and_explicit_templates(Parser &parser)
-{
-  // parser.root().foreach_recursive<IdQualified>([&](IdQualified id) {
-  //   Node parent = id.parent();
-  //   switch (parent.type()) {
-  //     case NodeType::ClassDecl:
-  //     case NodeType::IdType:
-  //       parser.symbols.resolve_type(id);
-  //       break;
-  //     case NodeType::FuncDecl:
-  //     case NodeType::FuncCall:
-  //       resolve_function(id);
-  //       break;
-  //     case NodeType::Expr:
-  //       resolve_member(id);
-  //       break;
-  //     default:
-  //       break;
-  //   }
-  // });
 
   parser.apply_mutations();
 }

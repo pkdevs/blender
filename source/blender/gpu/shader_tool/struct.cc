@@ -563,7 +563,7 @@ void SourceProcessor::lower_structured_bindings(Parser &parser)
   parser.apply_mutations();
 }
 
-void SourceProcessor::lower_templated_forward_declaration(Parser &parser)
+void SourceProcessor::lower_method_forward_declaration(Parser &parser)
 {
   for (Preprocessor directive : parser.root().children_of_type<Preprocessor>()) {
     if (!directive.str().starts_with("#pragma member_forward_decl")) {
