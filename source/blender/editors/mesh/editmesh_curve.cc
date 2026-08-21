@@ -72,7 +72,7 @@ static wmOperatorStatus edbm_curve_exec(bContext *C, wmOperator *op)
 
     if (!EDBM_op_callf(em,
                        op,
-                       "curve geom=%hvef factor=%f restriction=%i extend=%b regular=%b "
+                       "curve geom=%hv factor=%f restriction=%i extend=%b regular=%b "
                        "lock_x=%b lock_y=%b lock_z=%b interpolation=%i",
                        BM_ELEM_SELECT,
                        factor,
