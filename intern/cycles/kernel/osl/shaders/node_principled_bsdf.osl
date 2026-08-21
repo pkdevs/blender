@@ -35,6 +35,7 @@ shader node_principled_bsdf(string distribution = "multi_ggx",
                             int ThinWall = 0,
                             float ThinFilmThickness = 0.0,
                             float ThinFilmIOR = 1.33,
+                            float ThinFilmWeight = 1.0,
                             normal Normal = N,
                             normal CoatNormal = N,
                             normal Tangent = normalize(dPdu),
@@ -130,7 +131,9 @@ shader node_principled_bsdf(string distribution = "multi_ggx",
                                             "thinfilm_thickness",
                                             ThinFilmThickness,
                                             "thinfilm_ior",
-                                            ThinFilmIOR),
+                                            ThinFilmIOR,
+                                            "thinfilm_weight",
+                                            ThinFilmWeight),
                    BSDF);
     }
   }
@@ -167,7 +170,9 @@ shader node_principled_bsdf(string distribution = "multi_ggx",
                                                                 "thinfilm_thickness",
                                                                 ThinFilmThickness,
                                                                 "thinfilm_ior",
-                                                                thinfilm_ior);
+                                                                thinfilm_ior,
+                                                                "thinfilm_weight",
+                                                                ThinFilmWeight);
       BSDF = mix(TransmissionBSDF, BSDF, 1.0 - transmission);
     }
   }
@@ -186,7 +191,9 @@ shader node_principled_bsdf(string distribution = "multi_ggx",
                                        "thinfilm_thickness",
                                        ThinFilmThickness,
                                        "thinfilm_ior",
-                                       ThinFilmIOR);
+                                       ThinFilmIOR,
+                                       "thinfilm_weight",
+                                       ThinFilmWeight);
     BSDF = mix(MetallicBSDF, BSDF, 1.0 - metallic);
   }
 

@@ -33,6 +33,7 @@ void node_bsdf_metallic(float4 base_color,
                         float weight,
                         float thin_film_thickness,
                         float thin_film_ior,
+                        float thin_film_weight,
                         const float do_multiscatter,
                         const float use_complex_ior,
                         Closure &result)

@@ -2253,6 +2253,7 @@ NODE_DEFINE(MetallicBsdfNode)
 
   SOCKET_IN_FLOAT(thin_film_thickness, "Thin Film Thickness", 0.0f);
   SOCKET_IN_FLOAT(thin_film_ior, "Thin Film IOR", 1.33f);
+  SOCKET_IN_FLOAT(thin_film_weight, "Thin Film Weight", 1.0f);
 
   SOCKET_OUT_CLOSURE(BSDF, "BSDF");
 
@@ -2310,6 +2311,7 @@ void MetallicBsdfNode::compile(SVMCompiler &compiler)
           .rotation = compiler.input_float("Rotation"),
           .thin_film_thickness = compiler.input_float("Thin Film Thickness"),
           .thin_film_ior = compiler.input_float("Thin Film IOR"),
+          .thin_film_weight = compiler.input_float("Thin Film Weight"),
           .normal_offset = compiler.input_link("Normal"),
           .tangent_offset = compiler.input_link("Tangent"),
       });
@@ -2426,6 +2428,7 @@ NODE_DEFINE(GlassBsdfNode)
 
   SOCKET_IN_FLOAT(thin_film_thickness, "Thin Film Thickness", 0.0f);
   SOCKET_IN_FLOAT(thin_film_ior, "Thin Film IOR", 1.33f);
+  SOCKET_IN_FLOAT(thin_film_weight, "Thin Film Weight", 1.0f);
 
   SOCKET_OUT_CLOSURE(BSDF, "BSDF");
 
@@ -2447,6 +2450,7 @@ void GlassBsdfNode::compile(SVMCompiler &compiler)
                         .ior = compiler.input_float("IOR"),
                         .thin_film_thickness = compiler.input_float("Thin Film Thickness"),
                         .thin_film_ior = compiler.input_float("Thin Film IOR"),
+                        .thin_film_weight = compiler.input_float("Thin Film Weight"),
                         .normal_offset = compiler.input_link("Normal"),
                     });
 }
@@ -2684,6 +2688,7 @@ NODE_DEFINE(PrincipledBsdfNode)
 
   SOCKET_IN_FLOAT(thin_film_thickness, "Thin Film Thickness", 0.0f);
   SOCKET_IN_FLOAT(thin_film_ior, "Thin Film IOR", 1.33f);
+  SOCKET_IN_FLOAT(thin_film_weight, "Thin Film Weight", 1.0f);
 
   SOCKET_IN_FLOAT(surface_mix_weight, "SurfaceMixWeight", 0.0f, SocketType::SVM_INTERNAL);
 
@@ -2738,9 +2743,10 @@ void PrincipledBsdfNode::simplify_settings(Scene * /* scene */)
     disconnect_unused_input("Tangent");
   }
 
-  if (!has_nonzero_weight("Thin Film Thickness")) {
+  if (!has_nonzero_weight("Thin Film Thickness") || !has_nonzero_weight("Thin Film Weight")) {
     disconnect_unused_input("Thin Film Thickness");
     disconnect_unused_input("Thin Film IOR");
+    disconnect_unused_input("Thin Film Weight");
   }
 }
 
@@ -2873,6 +2879,8 @@ void PrincipledBsdfNode::compile(SVMCompiler &compiler)
           /* Thin film. */
           .thin_film_thickness = compiler.input_float("Thin Film Thickness"),
           .thin_film_ior = compiler.input_float("Thin Film IOR"),
+          .thin_film_weight = compiler.input_float("Thin Film Weight"),
+
           /* Thin wall. */
           .thin_wall = compiler.input_int("Thin Wall"),
       });

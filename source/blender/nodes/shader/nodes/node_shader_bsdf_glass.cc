@@ -44,6 +44,11 @@ static void node_declare(NodeDeclarationBuilder &b)
       .min(1.0f)
       .max(1000.0f)
       .description("Index of refraction (IOR) of the thin film");
+  film.add_input<decl::Float>("Thin Film Weight"_ustr)
+      .default_value(1.0f)
+      .min(0.0f)
+      .max(1.0f)
+      .description("The coverage weight of the thin film");
 }
 
 static void node_shader_buts_glass(ui::Layout &layout, bContext * /*C*/, PointerRNA *ptr)

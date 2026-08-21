@@ -77,6 +77,7 @@ OSL_CLOSURE_STRUCT_BEGIN(DielectricBSDF, dielectric_bsdf)
   OSL_CLOSURE_STRUCT_MEMBER(DielectricBSDF, STRING, DeviceString, distribution, nullptr)
   OSL_CLOSURE_STRUCT_MEMBER(DielectricBSDF, FLOAT, float, thinfilm_thickness, "thinfilm_thickness")
   OSL_CLOSURE_STRUCT_MEMBER(DielectricBSDF, FLOAT, float, thinfilm_ior, "thinfilm_ior")
+  OSL_CLOSURE_STRUCT_MEMBER(DielectricBSDF, FLOAT, float, thinfilm_weight, "thinfilm_weight")
 OSL_CLOSURE_STRUCT_END(DielectricBSDF, dielectric_bsdf)
 
 OSL_CLOSURE_STRUCT_BEGIN(ConductorBSDF, conductor_bsdf)
@@ -89,6 +90,7 @@ OSL_CLOSURE_STRUCT_BEGIN(ConductorBSDF, conductor_bsdf)
   OSL_CLOSURE_STRUCT_MEMBER(ConductorBSDF, STRING, DeviceString, distribution, nullptr)
   OSL_CLOSURE_STRUCT_MEMBER(ConductorBSDF, FLOAT, float, thinfilm_thickness, "thinfilm_thickness")
   OSL_CLOSURE_STRUCT_MEMBER(ConductorBSDF, FLOAT, float, thinfilm_ior, "thinfilm_ior")
+  OSL_CLOSURE_STRUCT_MEMBER(ConductorBSDF, FLOAT, float, thinfilm_weight, "thinfilm_weight")
 OSL_CLOSURE_STRUCT_END(ConductorBSDF, conductor_bsdf)
 
 OSL_CLOSURE_STRUCT_BEGIN(GeneralizedSchlickBSDF, generalized_schlick_bsdf)
@@ -107,6 +109,8 @@ OSL_CLOSURE_STRUCT_BEGIN(GeneralizedSchlickBSDF, generalized_schlick_bsdf)
   OSL_CLOSURE_STRUCT_MEMBER(
       GeneralizedSchlickBSDF, FLOAT, float, thinfilm_thickness, "thinfilm_thickness")
   OSL_CLOSURE_STRUCT_MEMBER(GeneralizedSchlickBSDF, FLOAT, float, thinfilm_ior, "thinfilm_ior")
+  OSL_CLOSURE_STRUCT_MEMBER(
+      GeneralizedSchlickBSDF, FLOAT, float, thinfilm_weight, "thinfilm_weight")
 OSL_CLOSURE_STRUCT_END(GeneralizedSchlickBSDF, generalized_schlick_bsdf)
 
 OSL_CLOSURE_STRUCT_BEGIN(ThinGlass, thin_glass)
@@ -118,6 +122,7 @@ OSL_CLOSURE_STRUCT_BEGIN(ThinGlass, thin_glass)
   OSL_CLOSURE_STRUCT_MEMBER(ThinGlass, FLOAT, float, roughness, nullptr)
   OSL_CLOSURE_STRUCT_MEMBER(ThinGlass, FLOAT, float, thinfilm_thickness, nullptr)
   OSL_CLOSURE_STRUCT_MEMBER(ThinGlass, FLOAT, float, thinfilm_ior, nullptr)
+  OSL_CLOSURE_STRUCT_MEMBER(ThinGlass, FLOAT, float, thinfilm_weight, nullptr)
 OSL_CLOSURE_STRUCT_END(ThinGlass, thin_glass)
 
 OSL_CLOSURE_STRUCT_BEGIN(ThinSubsurface, thin_subsurface)
@@ -149,6 +154,7 @@ OSL_CLOSURE_STRUCT_BEGIN(MicrofacetF82Tint, microfacet_f82_tint)
   OSL_CLOSURE_STRUCT_MEMBER(
       MicrofacetF82Tint, FLOAT, float, thinfilm_thickness, "thinfilm_thickness")
   OSL_CLOSURE_STRUCT_MEMBER(MicrofacetF82Tint, FLOAT, float, thinfilm_ior, "thinfilm_ior")
+  OSL_CLOSURE_STRUCT_MEMBER(MicrofacetF82Tint, FLOAT, float, thinfilm_weight, "thinfilm_weight")
 OSL_CLOSURE_STRUCT_END(MicrofacetF82Tint, microfacet)
 
 OSL_CLOSURE_STRUCT_BEGIN(MicrofacetMultiGGXGlass, microfacet_multi_ggx_glass)

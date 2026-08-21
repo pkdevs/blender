@@ -304,6 +304,7 @@ ccl_device
       const float thinfilm_ior = (thinfilm_thickness > THINFILM_THICKNESS_CUTOFF) ?
                                      fmaxf(stack_load(stack, data.thin_film_ior), 1e-5f) :
                                      0.0f;
+      const float thinfilm_weight = saturatef(stack_load(stack, data.thin_film_weight));
 
       float alpha_x = sqr(roughness);
       float alpha_y = sqr(roughness);
@@ -342,7 +343,7 @@ ccl_device
 
             fresnel->thin_film.thickness = thinfilm_thickness;
             fresnel->thin_film.ior = thinfilm_ior;
-            fresnel->thin_film.weight = 1.0f;
+            fresnel->thin_film.weight = thinfilm_weight;
 
             /* setup bsdf */
             sd->runtime_flag |= bsdf_microfacet_ggx_setup(bsdf);
@@ -366,7 +367,7 @@ ccl_device
       const float transmission_weight = saturatef(stack_load(stack, data.transmission_weight));
       if (transmission_weight > CLOSURE_WEIGHT_CUTOFF) {
         if (reflective_caustics || refractive_caustics) {
-          FresnelThinFilm thinfilm = {thinfilm_thickness, thinfilm_ior, 1.0f};
+          FresnelThinFilm thinfilm = {thinfilm_thickness, thinfilm_ior, thinfilm_weight};
           if (thin_wall) {
             bsdf_thin_glass_setup(kg,
                                   sd,
@@ -452,7 +453,7 @@ ccl_device
           fresnel->f90 = white;
           fresnel->exponent = -eta;
           fresnel->tint = {white, black};
-          fresnel->thin_film = {thinfilm_thickness, thinfilm_ior, 1.0f};
+          fresnel->thin_film = {thinfilm_thickness, thinfilm_ior, thinfilm_weight};
 
           /* setup bsdf */
           sd->runtime_flag |= bsdf_microfacet_ggx_setup(bsdf);
@@ -596,6 +597,7 @@ ccl_device
         const float thin_film_thickness = fmaxf(stack_load(stack, cdata.thin_film_thickness),
                                                 1e-5f);
         const float thin_film_ior = fmaxf(stack_load(stack, cdata.thin_film_ior), 1e-5f);
+        const float thin_film_weight = saturatef(stack_load(stack, cdata.thin_film_weight));
 
         const ClosureType distribution = cdata.distribution;
         /* Setup BSDF */
@@ -618,7 +620,7 @@ ccl_device
 
           fresnel->thin_film.thickness = thin_film_thickness;
           fresnel->thin_film.ior = thin_film_ior;
-          fresnel->thin_film.weight = 1.0f;
+          fresnel->thin_film.weight = thin_film_weight;
 
           const float3 n = max(stack_load(stack, cdata.base_ior), zero_float3());
           const float3 k = max(stack_load(stack, cdata.edge_tint_k), zero_float3());
@@ -636,7 +638,7 @@ ccl_device
 
           fresnel->thin_film.thickness = thin_film_thickness;
           fresnel->thin_film.ior = thin_film_ior;
-          fresnel->thin_film.weight = 1.0f;
+          fresnel->thin_film.weight = thin_film_weight;
 
           const float3 color = saturate(stack_load(stack, cdata.base_ior));
           const float3 tint = saturate(stack_load(stack, cdata.edge_tint_k));
@@ -797,6 +799,7 @@ ccl_device
 
       const float thinfilm_thickness = stack_load(stack, bsdf_data.thin_film_thickness);
       const float thinfilm_ior = fmaxf(stack_load(stack, bsdf_data.thin_film_ior), 1e-5f);
+      const float thinfilm_weight = saturatef(stack_load(stack, bsdf_data.thin_film_weight));
 
       ccl_private MicrofacetBsdf *bsdf = (ccl_private MicrofacetBsdf *)bsdf_alloc(
           sd, sizeof(MicrofacetBsdf), make_spectrum(mix_weight));
@@ -821,7 +824,7 @@ ccl_device
         fresnel->thin_film.thickness = thinfilm_thickness;
         fresnel->thin_film.ior = (sd->runtime_flag & SR_BACKFACING) ? thinfilm_ior / ior :
                                                                       thinfilm_ior;
-        fresnel->thin_film.weight = 1.0f;
+        fresnel->thin_film.weight = thinfilm_weight;
         /* setup bsdf */
         if (type == CLOSURE_BSDF_MICROFACET_BECKMANN_GLASS_ID) {
           sd->runtime_flag |= bsdf_microfacet_beckmann_glass_setup(bsdf);

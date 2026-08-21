@@ -1090,6 +1090,7 @@ struct SVMNodeGlassBsdfData {
   SVMInputFloat ior;
   SVMInputFloat thin_film_thickness;
   SVMInputFloat thin_film_ior;
+  SVMInputFloat thin_film_weight;
   SVMStackOffset normal_offset;
   uint8_t _pad[3];
 };
@@ -1106,6 +1107,7 @@ struct SVMNodeMetallicBsdfData {
   SVMInputFloat rotation;
   SVMInputFloat thin_film_thickness;
   SVMInputFloat thin_film_ior;
+  SVMInputFloat thin_film_weight;
   SVMStackOffset normal_offset;
   SVMStackOffset tangent_offset;
   uint8_t _pad[2];
@@ -1181,6 +1183,7 @@ struct SVMNodePrincipledBsdfData {
   /* Thin film. */
   SVMInputFloat thin_film_thickness;
   SVMInputFloat thin_film_ior;
+  SVMInputFloat thin_film_weight;
   /* Thin wall. */
   SVMInputInt thin_wall;
 };

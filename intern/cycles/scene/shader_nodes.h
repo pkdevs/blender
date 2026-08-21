@@ -584,6 +584,7 @@ class PrincipledBsdfNode : public BsdfBaseNode {
   NODE_SOCKET_API(float, surface_mix_weight)
   NODE_SOCKET_API(float, thin_film_thickness)
   NODE_SOCKET_API(float, thin_film_ior)
+  NODE_SOCKET_API(float, thin_film_weight)
 
  public:
   void attributes(Shader *shader, AttributeRequestSet *attributes) override;
@@ -664,6 +665,7 @@ class MetallicBsdfNode : public BsdfNode {
   NODE_SOCKET_API(float, rotation)
   NODE_SOCKET_API(float, thin_film_thickness)
   NODE_SOCKET_API(float, thin_film_ior)
+  NODE_SOCKET_API(float, thin_film_weight)
   NODE_SOCKET_API(ClosureType, distribution)
   NODE_SOCKET_API(ClosureType, fresnel_type)
 
@@ -714,6 +716,7 @@ class GlassBsdfNode : public BsdfNode {
   NODE_SOCKET_API(float, IOR)
   NODE_SOCKET_API(float, thin_film_thickness)
   NODE_SOCKET_API(float, thin_film_ior)
+  NODE_SOCKET_API(float, thin_film_weight)
   NODE_SOCKET_API(ClosureType, distribution)
 };
 
