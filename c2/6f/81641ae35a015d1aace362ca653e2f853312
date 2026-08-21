@@ -1,1 +1,2 @@
 Referenced by commit 63fa40151e3c5f7ab36446a8117cdde28e5b06ca, UI: IME preview composition text while editing
+Referenced by commit 299ec26fd958abb590cc84a6751a32b7c76ae017, Fix: IME receives key presses meant for popups
