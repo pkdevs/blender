@@ -487,10 +487,8 @@ struct SymbolParser : NodeErrorHandler {
 
   void parse_enum_value(SymbolScope &scope, EnumValue val, ClassDecl cls, const string &prefix)
   {
-    auto [enum_cls, err_enum] = scope.lookup_class(table, cls.identifier());
-    error(err_enum);
-    auto [type, err_type] = scope.lookup_class(table, cls.parent_class());
-    error(err_type);
+    SymbolClass *enum_cls = scope.lookup_class(table, cls.identifier()).unwrap(this);
+    SymbolClass *type = scope.lookup_class(table, cls.parent_class()).unwrap(this);
 
     SymbolVariable *sym = table.var_arena.alloc(&scope, type, val);
     sym->is_static = true;
@@ -508,6 +506,7 @@ struct SymbolParser : NodeErrorHandler {
       sym->value = std::visit([](auto &&v) -> ConstexprValue { return v + 1; },
                               enum_cls->enum_last_val);
     }
+
     if (scope.variable_emplace(sym)) {
       NOTE(scope.variables.find(sym->identifier)->second.first.tok,
            Diag::PreviousDefinition,

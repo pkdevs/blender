@@ -124,7 +124,7 @@ struct ExpressionTypeParser
             }
             else if (fn->identifier == "uint") {
               return std::visit(
-                  [&](auto val) -> ExpressionResult { return {table->uint_cls, uint(val)}; },
+                  [&](auto val) -> ExpressionResult { return {table->uint_cls, uint32_t(val)}; },
                   res.value);
             }
             else if (fn->identifier == "bool") {
@@ -166,7 +166,7 @@ struct ExpressionTypeParser
         value = std::stoi(str_val, nullptr, 0);
       }
       else if (type == table->uint_cls) {
-        value = uint(std::stoull(str_val, nullptr, 0));
+        value = uint32_t(std::stoull(str_val, nullptr, 0));
       }
       else if (type == table->bool_cls) {
         value = str_val == "true";

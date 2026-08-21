@@ -33,26 +33,26 @@ struct CodegenContext : NodeErrorHandler {
   SymbolTable &table;
   metadata::Source &metadata;
 
-  struct ExpressionResult {
+  struct CodegenResult {
     string str;
 
     SymbolClass *type;
     /* Array dimension of the current temporary. */
     int8_t array_dim = 0;
 
-    ExpressionResult(SymbolVariable *var, const string &trivia)
+    CodegenResult(SymbolVariable *var, const string &trivia)
         : str((var->is_constexpr ? var->value_str() : var->identifier) + trivia),
           type(var->type),
           array_dim(var->array_dimensions)
     {
     }
 
-    ExpressionResult(const ast::Node &node, SymbolClass *cls, int8_t array_dim = 0)
+    CodegenResult(const ast::Node &node, SymbolClass *cls, int8_t array_dim = 0)
         : str(node.str_full()), type(cls), array_dim(array_dim)
     {
     }
 
-    ExpressionResult(const string &str, SymbolClass *cls, int8_t array_dim = 0)
+    CodegenResult(const string &str, SymbolClass *cls, int8_t array_dim = 0)
         : str(str), type(cls), array_dim(array_dim)
     {
     }
@@ -63,8 +63,8 @@ struct CodegenContext : NodeErrorHandler {
    * Evaluates operand types and emits tokens in source order.
    */
   struct CodegenExpressionParser
-      : public PrattParser<CodegenExpressionParser, ExpressionResult, ast::Node> {
-    using Base = PrattParser<CodegenExpressionParser, ExpressionResult, ast::Node>;
+      : public PrattParser<CodegenExpressionParser, CodegenResult, ast::Node> {
+    using Base = PrattParser<CodegenExpressionParser, CodegenResult, ast::Node>;
     using ErrorType = Base::ErrorType;
     using BindingPower = Base::BindingPower;
 
@@ -84,7 +84,7 @@ struct CodegenContext : NodeErrorHandler {
       }
     }
 
-    ExpressionResult eval()
+    CodegenResult eval()
     {
       if (!node.is_valid()) {
         return {node, ctx.table.err_cls};
@@ -96,7 +96,7 @@ struct CodegenContext : NodeErrorHandler {
      * CRTP Overrides
      */
 
-    ExpressionResult identifier(const ast::Node &t)
+    CodegenResult identifier(const ast::Node &t)
     {
       switch (t.type()) {
         case ast::NodeType::Constructor:
@@ -111,34 +111,34 @@ struct CodegenContext : NodeErrorHandler {
       return {t, ctx.table.err_cls};
     }
 
-    ExpressionResult number_literal(const ast::Node &t)
+    CodegenResult number_literal(const ast::Node &t)
     {
       return {t, ctx.table.get_literal_type(t.str())};
     }
 
-    ExpressionResult string_literal(const ast::Node &t)
+    CodegenResult string_literal(const ast::Node &t)
     {
       return {t, ctx.table.str_cls};
     }
 
-    ExpressionResult parenthesis(const ast::Node &t, BindingPower /*p*/)
+    CodegenResult parenthesis(const ast::Node &t, BindingPower /*p*/)
     {
-      ExpressionResult result = ctx.expr(ExprSub(t).expr(), scope);
+      CodegenResult result = ctx.expr(ExprSub(t).expr(), scope);
       string front(t.front().str_with_whitespace());
       string back(t.back().str_with_whitespace());
       return {front + result.str + back, result.type};
     }
 
-    ExpressionResult member(ExpressionResult left, const ast::Node &t)
+    CodegenResult member(CodegenResult left, const ast::Node &t)
     {
       ast::Node right = consume();
       switch (right.type()) {
         case ast::NodeType::FuncCall: {
-          ExpressionResult rhs = function(right, *left.type);
+          CodegenResult rhs = function(right, *left.type);
           return {left.str + string(t.str_full()) + rhs.str, rhs.type};
         }
         case ast::NodeType::LocalVar: {
-          ExpressionResult rhs = variable(LocalVar(right).identifier(), *left.type);
+          CodegenResult rhs = variable(LocalVar(right).identifier(), *left.type);
           if (left.type->is_srt()) {
             /* Remove access to SRT type (makes the resource global). */
             return {left.str + as_whitespace(t.str_full()) + rhs.str, rhs.type, rhs.array_dim};
@@ -150,11 +150,11 @@ struct CodegenContext : NodeErrorHandler {
       }
     }
 
-    ExpressionResult subscript(ExpressionResult left, const ast::Node &t)
+    CodegenResult subscript(CodegenResult left, const ast::Node &t)
     {
       /* Subscript operator. */
       if (ast::Subscript sub = t; sub.is_valid()) {
-        ExpressionResult param = ctx.expr(sub.expr(), scope);
+        CodegenResult param = ctx.expr(sub.expr(), scope);
 
         string_view front = t.front().str_with_whitespace();
         string_view back = t.back().str_with_whitespace();
@@ -180,23 +180,23 @@ struct CodegenContext : NodeErrorHandler {
       return {t, ctx.table.err_cls};
     }
 
-    ExpressionResult function_call(ExpressionResult left, const ast::Node &t)
+    CodegenResult function_call(CodegenResult left, const ast::Node &t)
     {
       ctx.error(t, Diag::CalledIsNotFunction, left.type ? left.type->identifier : "");
       return {t, ctx.table.err_cls};
     }
 
-    ExpressionResult prefix(const ast::Node &t, BindingPower p)
+    CodegenResult prefix(const ast::Node &t, BindingPower p)
     {
       using namespace builtin;
       TokenType op_type = t.front().type();
-      ExpressionResult right = expr(p);
+      CodegenResult right = expr(p);
 
       ClassId type = unary_prefix_operator_return_type(op_type, right.type);
       return {string(t.str_full()) + right.str, ctx.table.to_class(type)};
     }
 
-    ExpressionResult suffix(ExpressionResult left, const ast::Node &t)
+    CodegenResult suffix(CodegenResult left, const ast::Node &t)
     {
       using namespace builtin;
       TokenType op_type = t.front().type();
@@ -205,19 +205,19 @@ struct CodegenContext : NodeErrorHandler {
       return {left.str + string(t.str_full()), ctx.table.to_class(type)};
     }
 
-    ExpressionResult comma(ExpressionResult lhs, const ast::Node &t, BindingPower p)
+    CodegenResult comma(CodegenResult lhs, const ast::Node &t, BindingPower p)
     {
       using namespace builtin;
-      ExpressionResult rhs = expr(p);
+      CodegenResult rhs = expr(p);
       return {lhs.str + string(t.str_full()) + rhs.str, rhs.type};
     }
 
-    ExpressionResult binary(ExpressionResult lhs, const ast::Node &t, BindingPower p)
+    CodegenResult binary(CodegenResult lhs, const ast::Node &t, BindingPower p)
     {
       using namespace builtin;
       TokenType op_type = t.front().type();
 
-      ExpressionResult rhs = expr(p);
+      CodegenResult rhs = expr(p);
 
       ClassId type = binary_operator_return_type(lhs.type, op_type, rhs.type);
 #if 0 /* Future operator overloading */
@@ -229,15 +229,15 @@ struct CodegenContext : NodeErrorHandler {
       return {lhs.str + string(t.str_full()) + rhs.str, ctx.table.to_class(type)};
     }
 
-    ExpressionResult ternary(ExpressionResult left,
-                             const ast::Node &t,
-                             BindingPower /*p_first*/,
-                             BindingPower p_second)
+    CodegenResult ternary(CodegenResult left,
+                          const ast::Node &t,
+                          BindingPower /*p_first*/,
+                          BindingPower p_second)
     {
       ast::Node question = t;
-      ExpressionResult tval = ctx.expr(consume(), scope);
+      CodegenResult tval = ctx.expr(consume(), scope);
       ast::Node colon = consume();
-      ExpressionResult fval = expr(p_second);
+      CodegenResult fval = expr(p_second);
       return {left.str + string(question.str_full()) + tval.str + string(colon.str_full()) +
                   fval.str,
               tval.type};
@@ -265,7 +265,7 @@ struct CodegenContext : NodeErrorHandler {
                  Invalid;
     }
 
-    ExpressionResult error(ErrorType err, lexit::TokenType type)
+    CodegenResult error(ErrorType err, lexit::TokenType type)
     {
       switch (err) {
         case ErrorType::ExpectedParenthesis:
@@ -285,7 +285,7 @@ struct CodegenContext : NodeErrorHandler {
     }
 
    private:
-    ExpressionResult constructor(Constructor construct)
+    CodegenResult constructor(Constructor construct)
     {
       SymbolClass *cls = scope.lookup_class(ctx.table, construct.identifier()).unwrap(&ctx);
       if (cls->is_srt()) {
@@ -295,7 +295,7 @@ struct CodegenContext : NodeErrorHandler {
       return ctx.initializer_list(construct.initializer_list(), scope, cls);
     }
 
-    ExpressionResult variable(IdQualified id, const SymbolScope &symbol_scope)
+    CodegenResult variable(IdQualified id, const SymbolScope &symbol_scope)
     {
       assert(id.is_valid());
       string whitespace = trivia(id);
@@ -332,7 +332,7 @@ struct CodegenContext : NodeErrorHandler {
       return {var, whitespace};
     }
 
-    ExpressionResult function(const ast::FuncCall &call, const SymbolScope &symbol_scope)
+    CodegenResult function(const ast::FuncCall &call, const SymbolScope &symbol_scope)
     {
       assert(call.is_valid());
 
@@ -2154,7 +2154,7 @@ struct CodegenContext : NodeErrorHandler {
     skip_node(AttrList(cond.next()));
   }
 
-  ExpressionResult expr(Expr node, const SymbolScope &scope)
+  CodegenResult expr(Expr node, const SymbolScope &scope)
   {
     assert(node.is_valid());
     return CodegenExpressionParser(*this, scope, node.child_first()).eval();
@@ -2239,7 +2239,7 @@ struct CodegenContext : NodeErrorHandler {
         auto [result, err] = table.expr_type_analysis(scope, sub.expr().child_first());
         /* Note: Do not report error. The size might be defined by compilation constant. */
         if (!err && result.is_constexpr()) {
-          if (value_as<uint>(result.value) == 0) {
+          if (value_as<uint32_t>(result.value) == 0) {
             error(decl, Diag::ArraySizeMustBeGreaterThanZero);
           }
         }
@@ -2329,10 +2329,10 @@ struct CodegenContext : NodeErrorHandler {
     builder.curr = stmt.back().next();
   }
 
-  ExpressionResult init_expression_or_initializer_list(Node node,
-                                                       const SymbolScope &scope,
-                                                       SymbolClass *cls,
-                                                       int array_dim = 0)
+  CodegenResult init_expression_or_initializer_list(Node node,
+                                                    const SymbolScope &scope,
+                                                    SymbolClass *cls,
+                                                    int array_dim = 0)
   {
     if (node == NodeType::InitializerList) {
       return initializer_list(node, scope, cls, array_dim);
@@ -2344,10 +2344,10 @@ struct CodegenContext : NodeErrorHandler {
     return {"", cls};
   }
 
-  ExpressionResult initializer_list(InitializerList list,
-                                    const SymbolScope &scope,
-                                    SymbolClass *cls,
-                                    int array_dim = 0)
+  CodegenResult initializer_list(InitializerList list,
+                                 const SymbolScope &scope,
+                                 SymbolClass *cls,
+                                 int array_dim = 0)
   {
     const bool is_empty = list.is_empty();
     if (array_dim > 0) {
@@ -2724,7 +2724,7 @@ struct CodegenContext : NodeErrorHandler {
             str += '[' + to_string(value_as<int>(result.value)) + ']';
           }
           else if (result.type == table.uint_cls) {
-            str += '[' + to_string(value_as<uint>(result.value)) + ']';
+            str += '[' + to_string(value_as<uint32_t>(result.value)) + ']';
           }
           else {
             error(sub.expr(), Diag::SubscriptNotInt);

@@ -92,15 +92,25 @@ using NodeID = int;
 struct NodeData;
 using Nodes = std::vector<NodeData>;
 
+/**
+ * Immutable AST node data.
+ * Contains indices of its neighbor and the token range it covers.
+ *
+ * A node cannot overlap with its neighbors.
+ * All nodes are stored in source order.
+ */
 struct NodeData {
   NodeType type = NodeType::Invalid;
+
+  /* Boundary tokens. */
   TokenID front = -1;
   TokenID back = -1;
+
   NodeID parent = -1;
-  NodeID prev = -1;
-  NodeID next = -1;
-  NodeID child_first = -1;
-  NodeID child_last = -1;
+  /* Neighbors. */
+  NodeID prev = -1, next = -1;
+  /* Children. */
+  NodeID child_first = -1, child_last = -1;
 
   NodeData() = default;
 
@@ -124,9 +134,16 @@ struct NodeData {
   std::string location(const ParserBase &parser) const;
 };
 
+/**
+ * Type-less, read-only interface to a AST node data.
+ * Can represent an invalid node.
+ *
+ * Serves as a basis for typed node interfaces.
+ */
 struct Node {
   const ParserBase *p = nullptr;
   NodeID id = -1;
+
 #ifdef LEXIT_DEBUG
   NodeType debug_type;
   const NodeData *debug_data;
@@ -146,41 +163,39 @@ struct Node {
   const NodeData *data() const;
   NodeType type() const;
 
+  /* Boundary tokens. */
   Token front() const;
   Token back() const;
 
+  /* Return the neighbor node or an invalid node if it doesn't exists. */
   Node prev() const;
   Node next() const;
   Node parent() const;
-  Node prev(NodeType type) const;
-  Node next(NodeType type) const;
-  Node parent(NodeType type) const;
   Node children() const;
   Node child_first() const;
   Node child_last() const;
-  Node child_first(NodeType type) const
-  {
-    Node node = child_first();
-    return (node.type() == type) ? node : node.next(type);
-  }
-  Node child_last(NodeType type) const
-  {
-    Node node = child_last();
-    return (node.type() == type) ? node : node.prev(type);
-  }
+
+  /* Return the first neighbor node of type or an invalid node if it doesn't exists. */
+  Node prev(NodeType type) const;
+  Node next(NodeType type) const;
+  Node parent(NodeType type) const;
+  Node child_first(NodeType type) const;
+  Node child_last(NodeType type) const;
 
   int child_count() const;
   bool is_empty() const;
+  bool has_single_child() const;
   bool is_valid() const
   {
     return id != -1;
   }
-  bool has_single_child() const;
 
-  void print_ast() const;
   std::string_view str() const;
   /* Same as str buf with trailing whitespaces. */
   std::string_view str_full() const;
+
+  /* Print AST dump to the standard output. */
+  void print_ast() const;
 
   bool operator==(NodeType type) const
   {
@@ -262,6 +277,18 @@ struct Node {
     return *this;
   }
 };
+
+inline Node Node::child_first(NodeType type) const
+{
+  Node node = child_first();
+  return (node.type() == type) ? node : node.next(type);
+}
+
+inline Node Node::child_last(NodeType type) const
+{
+  Node node = child_last();
+  return (node.type() == type) ? node : node.prev(type);
+}
 
 struct Node::ChildIterator {
   Node current;
@@ -387,7 +414,7 @@ template<typename NodeT> struct Node::RecursiveTypedRange {
   Node end_node;
   RecursiveTypedIterator<NodeT> begin() const
   {
-    return {Node::first_node_of_type(start.children(), NodeT::NodeEnumVal, end_node), end_node};
+    return {Node::first_node_of_type(start.child_first(), NodeT::NodeEnumVal, end_node), end_node};
   }
   RecursiveTypedIterator<NodeT> end() const
   {
@@ -400,6 +427,8 @@ template<typename NodeT> inline Node::RecursiveTypedRange<NodeT> Node::descendan
   return {*this, find_recursion_end()};
 }
 
+/* All typed nodes are implicitly convertible to each other an to the type-less #Node class.
+ * Converting a #Node into a typed node of the wrong type will create an invalid node. */
 #define NODE_COMMON(Type) \
   static constexpr NodeType NodeEnumVal = NodeType::Type; \
   Type() = default; \
@@ -952,7 +981,7 @@ struct FuncParamList : Node {
 
 inline FuncParamList Attr::parameters() const
 {
-  return FuncParamList(children().next());
+  return FuncParamList(child_first().next());
 }
 
 struct FuncForwardDecl : Node {
@@ -1224,7 +1253,7 @@ struct SwitchCase : Node {
   }
 };
 
-/* Enum, Struct, Class. */
+/* Enum, Struct, Class, Union. */
 struct ClassDecl : Node {
   NODE_COMMON(ClassDecl);
 
