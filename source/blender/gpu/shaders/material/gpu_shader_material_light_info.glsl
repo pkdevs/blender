@@ -8,20 +8,20 @@ void node_light_info(const float light_index,
                      float4 &color,
                      float &power,
                      float3 &light_position,
+                     float &cutoff_distance,
+                     float &is_sun,
                      float3 &direction,
                      float &distance,
-                     float &cutoff_distance,
-                     float &mask,
-                     float &is_sun)
+                     float &mask)
 {
   node_light_info_impl(int(light_index),
                        position,
                        color,
                        power,
                        light_position,
+                       cutoff_distance,
+                       is_sun,
                        direction,
                        distance,
-                       cutoff_distance,
-                       mask,
-                       is_sun);
+                       mask);
 }

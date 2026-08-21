@@ -878,11 +878,11 @@ void node_light_info_impl(const int light_index,
                           float4 &color,
                           float &power,
                           float3 &light_position,
+                          float &cutoff_distance,
+                          float &is_sun,
                           float3 &direction,
                           float &distance,
-                          float &cutoff_distance,
-                          float &mask,
-                          float &is_sun)
+                          float &mask)
 {
   /* clang-format off */ /* Multiline macros would break line count. */
   [[resource_table]] const eevee::LightRenderData &lrd = resource_table_get(eevee::LightRenderData);

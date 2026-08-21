@@ -10,21 +10,24 @@ namespace nodes::node_shader_light_info_cc {
 
 static void node_declare(NodeDeclarationBuilder &b)
 {
+  b.use_custom_socket_order();
+  b.allow_any_socket_order();
+
   const bNodeTree *ntree = b.tree_or_null();
   const bool is_gpu_internal = ntree && (ntree->flag & NTREE_IS_GPU_SHADER_INTERNAL);
-
-  b.add_input<decl::Int>("LightIndex"_ustr).available(is_gpu_internal);
-
-  b.add_input<decl::Vector>("Position"_ustr).hide_value();
 
   b.add_output<decl::Color>("Color"_ustr);
   b.add_output<decl::Float>("Power"_ustr);
   b.add_output<decl::Vector>("Position"_ustr);
+  b.add_output<decl::Float>("Cutoff Distance"_ustr);
+  b.add_output<decl::Float>("Is Sun"_ustr);
+  b.add_separator();
   b.add_output<decl::Vector>("Direction"_ustr);
   b.add_output<decl::Float>("Distance"_ustr);
-  b.add_output<decl::Float>("Cutoff Distance"_ustr);
   b.add_output<decl::Float>("Mask"_ustr);
-  b.add_output<decl::Float>("Is Sun"_ustr);
+
+  b.add_input<decl::Int>("LightIndex"_ustr).available(is_gpu_internal);
+  b.add_input<decl::Vector>("Position"_ustr).hide_value();
 }
 
 static int node_shader_gpu_light_info(GPUMaterial *mat,
