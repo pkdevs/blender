@@ -116,8 +116,10 @@ shader node_principled_bsdf(string distribution = "multi_ggx",
       /* Apply specular tint */
       color F0 = f0 * specular_tint;
       color F90 = color(1.0);
-      // TODO: since this is a layer over an opaque slab, no IOR inversion is needed
-      //       But how to deal with double sided cases?
+      /* NOTE: Since this is a layer over an opaque slab, no IOR inversion needs to be done.
+       * Since `generalized_schlick_bsdf` does implicit IOR inversion we need to counter it by
+       * pre-inverting the IOR on backfacing. Ideally we would solve this implicitly by adding a
+       * double-sided or opaque flag to the material. */
       float thinfilm_ior = is_backfacing_no_thin_wall ? ThinFilmIOR / eta : ThinFilmIOR;
       eta = is_backfacing_no_thin_wall ? 1.0 / eta : eta;
       BSDF = layer(generalized_schlick_bsdf(Normal,
@@ -206,8 +208,10 @@ shader node_principled_bsdf(string distribution = "multi_ggx",
     float coat_r2 = clamp(CoatRoughness, 0.0, 1.0);
     coat_r2 = coat_r2 * coat_r2;
 
-    // TODO: since the dielectric_bsdf does implicit IOR inversion for backfacing we need to add an
-    //       and explicit IOR inversion to counter this.
+    /* NOTE: Since the dielectric_bsdf does implicit IOR inversion for backfacing and our current
+     * coating model did not do IOR inversion we need to add an and explicit IOR inversion to
+     * counter this. In a future redesign of our coating we should consider correct coating
+     * including layer order and IOR inversion. */
     coat_ior = backfacing() ? 1.0 / coat_ior : coat_ior;
 
     closure color CoatBSDF = dielectric_bsdf(
