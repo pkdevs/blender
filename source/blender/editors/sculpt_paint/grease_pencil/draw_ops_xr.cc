@@ -98,7 +98,6 @@ struct GreasePencilXRPaintStroke {
   std::unique_ptr<GreasePencilStrokeOperation> operation;
   float3 last_controller_position = float3(0.0f);
   float stroke_distance = 0.0f;
-  bool stroke_started = false;
 
   wmOperatorStatus modal(bContext *C, wmOperator *op, const wmEvent *event);
   void finish(bContext *C);
@@ -135,7 +134,6 @@ wmOperatorStatus GreasePencilXRPaintStroke::modal(bContext *C,
     }
     this->operation->on_stroke_begin(*C, sample);
     this->last_controller_position = sample.controller_position;
-    this->stroke_started = true;
     ED_region_tag_redraw(CTX_wm_region(C));
     return OPERATOR_RUNNING_MODAL;
   }
@@ -198,6 +196,9 @@ static bool wm_xr_operator_gpencil_test_event(const wmOperator *op, const wmEven
 
   BLI_assert(event->custom == EVT_DATA_XR);
   BLI_assert(event->customdata);
+  if (event->customdata == nullptr) {
+    return false;
+  }
 
   wmXrActionData *actiondata = static_cast<wmXrActionData *>(event->customdata);
   const bool op_is_grease_pencil_xr_stroke = STREQ(op->type->idname,
@@ -229,10 +230,8 @@ static wmOperatorStatus grease_pencil_xr_brush_stroke_invoke(bContext *C,
     return OPERATOR_CANCELLED;
   }
 
-  const bool use_duplicate_previous_key = false;
-
   wmOperatorStatus return_value = ed::greasepencil::grease_pencil_draw_operator_invoke(
-      C, op, use_duplicate_previous_key);
+      C, op, false);
   if (return_value != OPERATOR_RUNNING_MODAL) {
     return return_value;
   }

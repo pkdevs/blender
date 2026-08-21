@@ -58,7 +58,6 @@ class GreasePencilXRPaintOperation : public GreasePencilStrokeOperation {
   float stroke_random_val_factor_ = 0.0f;
 
   double start_time_;
-  double delta_time_;
 
   friend struct XRPaintOperationExecutor;
 
@@ -134,8 +133,6 @@ struct XRPaintOperationExecutor {
                                                         start_opacity,
                                                         start_sample.pressure);
 
-    const float start_rotation = ed::greasepencil::randomize_rotation(
-        *settings_, self.rng_, self.stroke_random_rotation_factor_, start_sample.pressure);
     if (use_vertex_color_) {
       vertex_color_ = ed::greasepencil::randomize_color(*settings_,
                                                         jitter_settings_,
@@ -200,6 +197,8 @@ struct XRPaintOperationExecutor {
     aspect_ratio.finish();
 
     if (settings_->uv_random > 0.0f || attributes.contains("rotation")) {
+      const float start_rotation = ed::greasepencil::randomize_rotation(
+          *settings_, self.rng_, self.stroke_random_rotation_factor_, start_sample.pressure);
       bke::SpanAttributeWriter<float> rotations = attributes.convert_or_add_for_write_span<float>(
           "rotation", bke::AttrDomain::Point);
       rotations.span[last_active_point] = start_rotation;
@@ -361,7 +360,6 @@ void GreasePencilXRPaintOperation::on_stroke_begin(const bContext &C,
   grease_pencil->runtime->is_drawing_stroke = true;
 
   start_time_ = BLI_time_now_seconds();
-  delta_time_ = 0.0f;
 
   const float3 start_location = math::transform_point(math::invert(placement_.to_world_space()),
                                                       start_sample.controller_position);
@@ -495,7 +493,6 @@ void GreasePencilXRPaintOperation::on_stroke_extended(
   delta_times.finish();
 
   accum_distance_ += distance;
-  delta_time_ = new_delta_time;
 
   bke::fill_attribute_range_default(attributes,
                                     bke::AttrDomain::Point,

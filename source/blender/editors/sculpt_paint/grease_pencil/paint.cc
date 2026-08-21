@@ -228,13 +228,13 @@ class PaintOperation : public GreasePencilStrokeOperation {
 
   RandomNumberGenerator rng_;
 
-  float stroke_random_radius_factor_ = 0.0f;
-  float stroke_random_opacity_factor_ = 0.0f;
-  float stroke_random_rotation_factor_ = 0.0f;
+  float stroke_random_radius_factor_;
+  float stroke_random_opacity_factor_;
+  float stroke_random_rotation_factor_;
 
-  float stroke_random_hue_factor_ = 0.0f;
-  float stroke_random_sat_factor_ = 0.0f;
-  float stroke_random_val_factor_ = 0.0f;
+  float stroke_random_hue_factor_;
+  float stroke_random_sat_factor_;
+  float stroke_random_val_factor_;
 
   /** The current time at which the paint operation begins. */
   double start_time_;
@@ -249,8 +249,8 @@ class PaintOperation : public GreasePencilStrokeOperation {
 
   friend struct PaintOperationExecutor;
 
-  Brush *saved_active_brush_ = nullptr;
-  Brush *fill_guides_brush_ = nullptr;
+  Brush *saved_active_brush_;
+  Brush *fill_guides_brush_;
 
  public:
   void on_stroke_begin(const bContext &C, const InputSample &start_sample) override;
@@ -314,17 +314,6 @@ struct PaintOperationExecutor {
     jitter_settings_ = BKE_brush_color_jitter_get_settings(paint, brush_);
   }
 
-  void update_start_sample_depth_placement(PaintOperation &self, const InputSample &start_sample)
-  {
-    if (self.placement_.use_project_to_stroke() || self.placement_.use_project_to_surface()) {
-      self.stroke_placement_depths_.append(self.stroke_placement_depths_.is_empty() ?
-                                               std::nullopt :
-                                               self.stroke_placement_depths_.last());
-      /* Initialize the snap point. */
-      self.update_stroke_depth_placement(start_sample);
-    }
-  }
-
   void process_start_sample(PaintOperation &self,
                             const bContext &C,
                             const InputSample &start_sample,
@@ -349,7 +338,6 @@ struct PaintOperationExecutor {
     else {
       start_location = self.placement_.project(start_coords);
     }
-
     float start_radius = ed::greasepencil::radius_from_input_sample(
         rv3d,
         region,
@@ -526,7 +514,13 @@ struct PaintOperationExecutor {
     curve_attributes_to_skip.add("curve_type");
     curves.update_curve_types();
 
-    this->update_start_sample_depth_placement(self, start_sample);
+    if (self.placement_.use_project_to_stroke() || self.placement_.use_project_to_surface()) {
+      self.stroke_placement_depths_.append(self.stroke_placement_depths_.is_empty() ?
+                                               std::nullopt :
+                                               self.stroke_placement_depths_.last());
+      /* Initialize the snap point. */
+      self.update_stroke_depth_placement(start_sample);
+    }
 
     /* Initialize the rest of the attributes with default values. */
     bke::fill_attribute_range_default(
@@ -695,6 +689,7 @@ struct PaintOperationExecutor {
     else {
       position = self.placement_.project(coords);
     }
+
     float radius = ed::greasepencil::radius_from_input_sample(rv3d,
                                                               region,
                                                               brush_,
@@ -964,9 +959,10 @@ struct PaintOperationExecutor {
             self.stroke_placement_depths_.as_mutable_span().slice(smooth_window);
         for (const int64_t window_i : smooth_window.index_range()) {
           const std::optional<float> depth = stroke_depths[window_i];
-          curve_positions_slice[window_i] = depth ? self.placement_.place(final_coords[window_i],
-                                                                          *depth) :
-                                                    self.placement_.project(final_coords[window_i]);
+          curve_positions_slice[window_i] = depth ?
+                                                self.placement_.place(final_coords[window_i],
+                                                                      *depth) :
+                                                self.placement_.project(final_coords[window_i]);
         }
       }
       else {
@@ -1187,7 +1183,6 @@ void PaintOperation::on_stroke_begin(const bContext &C, const InputSample &start
 
   BLI_assert(grease_pencil->has_active_layer());
   const bke::greasepencil::Layer &layer = *grease_pencil->get_active_layer();
-
   /* Initialize helper class for projecting screen space coordinates. */
   placement_ = ed::greasepencil::DrawingPlacement(*scene_, *region, *view3d, *eval_object, &layer);
   if (placement_.use_project_to_surface() || placement_.use_project_to_stroke()) {
