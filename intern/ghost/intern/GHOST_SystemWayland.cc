@@ -3607,9 +3607,9 @@ static void gwl_window_csd_active_elem_button(GWL_Seat *seat,
   GHOST_TCSD_Type press_type = GHOST_kCSDTypeBody;
 
   bool is_double_click = false;
-  if (ebutton < ARRAY_SIZE(GHOST_CSD_EventState::buttons)) {
+  GHOST_CSD_EventState &event_state = win->csd_eventstate_get();
+  if (ebutton < ARRAY_SIZE(event_state.buttons)) {
     const GHOST_CSD_Params &params = seat->system->getWindowCSD();
-    GHOST_CSD_EventState &event_state = win->csd_eventstate_get();
     GHOST_CSD_EventState_Button &event_button = event_state.buttons[ebutton];
 
     if (event_button.action_history_num >= 1) {
@@ -10494,9 +10494,8 @@ GHOST_TCapabilityFlag GHOST_SystemWayland::getCapabilities() const
           ((has_wl_trackpad_physical_direction == 1) ?
                0 :
                GHOST_kCapabilityTrackpadPhysicalDirection) |
-          /* This WAYLAND back-end doesn't have support for window decoration styles.
-           * In all likelihood, this back-end will eventually need to support client-side
-           * decorations, see #113795. */
+          /* The title bar is drawn by Blender itself via CSD, so the backend does not need to
+           * support this. */
           GHOST_kCapabilityWindowDecorationStyles |
           /* No support for window path meta-data. */
           GHOST_kCapabilityWindowPath |
