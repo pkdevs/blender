@@ -353,6 +353,12 @@ def run_blender(
     env_overlay = {
         "TMPDIR": TEMP_DIR_TMPDIR,
         "BLENDER_USER_RESOURCES": TEMP_DIR_BLENDER_USER,
+        # Keep this test out of the users home directory, remote asset libraries
+        # cache their contents there (under "remote-assets").
+        # NOTE: WIN32 & macOS look the cache directory up through OS API's,
+        # which these don't redirect.
+        "HOME": TEMP_DIR_HOME,
+        "XDG_CACHE_HOME": TEMP_DIR_HOME_CACHE,
         "ASAN_OPTIONS": "log_path={:s}:{:s}".format(
             # Needed so the `stdout` & `stderr` aren't mixed in with ASAN messages.
             os.path.join(TEMP_DIR_TMPDIR, "blender_asan.txt"),
@@ -452,6 +458,10 @@ TEMP_DIR_BLENDER_USER = ""
 TEMP_DIR_REMOTE = ""
 TEMP_DIR_REMOTE_AS_URL = ""
 TEMP_DIR_LOCAL = ""
+# Stands in for the users home directory & the cache directory within it (`XDG_CACHE_HOME`),
+# otherwise remote asset libraries write into the real home directory.
+TEMP_DIR_HOME = ""
+TEMP_DIR_HOME_CACHE = ""
 # Don't leave temporary files in TMP: `/tmp` (since it's only cleared on restart).
 # Instead, have a test-local temporary directly which is removed when the test finishes.
 TEMP_DIR_TMPDIR = ""
@@ -1884,6 +1894,8 @@ def main() -> None:
     # pylint: disable-next=global-statement
     global TEMP_DIR_BLENDER_USER, TEMP_DIR_REMOTE, TEMP_DIR_LOCAL, TEMP_DIR_TMPDIR, TEMP_DIR_REMOTE_AS_URL
     # pylint: disable-next=global-statement
+    global TEMP_DIR_HOME, TEMP_DIR_HOME_CACHE
+    # pylint: disable-next=global-statement
     global BLENDER_PYTHON_VERSION
 
     with tempfile.TemporaryDirectory() as temp_prefix:
@@ -1891,12 +1903,16 @@ def main() -> None:
         TEMP_DIR_REMOTE = os.path.join(temp_prefix, "bl_ext_remote")
         TEMP_DIR_LOCAL = os.path.join(temp_prefix, "bl_ext_local")
         TEMP_DIR_TMPDIR = os.path.join(temp_prefix, "tmp")
+        TEMP_DIR_HOME = os.path.join(temp_prefix, "home")
+        TEMP_DIR_HOME_CACHE = os.path.join(TEMP_DIR_HOME, ".cache")
 
         for directory in (
                 TEMP_DIR_BLENDER_USER,
                 TEMP_DIR_REMOTE,
                 TEMP_DIR_LOCAL,
                 TEMP_DIR_TMPDIR,
+                TEMP_DIR_HOME,
+                TEMP_DIR_HOME_CACHE,
         ):
             os.makedirs(directory, exist_ok=True)
 
