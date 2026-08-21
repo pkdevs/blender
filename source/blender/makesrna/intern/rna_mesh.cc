@@ -1900,10 +1900,8 @@ static PointerRNA rna_Mesh_vertex_color_new(Mesh *mesh,
     mesh->default_color_attribute = BLI_strdup(new_name.c_str());
   }
 
-  PointerRNA attr_ptr = rna_AttributeGroup_lookup_string(RNA_id_pointer_create(&mesh->id),
-                                                         mesh->active_color_attribute,
-                                                         ATTR_DOMAIN_MASK_CORNER,
-                                                         CD_MASK_PROP_BYTE_COLOR);
+  PointerRNA attr_ptr = rna_AttributeGroup_lookup_string(
+      RNA_id_pointer_create(&mesh->id), new_name, ATTR_DOMAIN_MASK_CORNER, CD_MASK_PROP_BYTE_COLOR);
   attr_ptr.type = RNA_MeshLoopColorLayer;
   return attr_ptr;
 }
