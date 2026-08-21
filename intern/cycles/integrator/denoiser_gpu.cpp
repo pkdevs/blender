@@ -103,6 +103,9 @@ bool DenoiserGPU::denoise_buffer(const BufferParams &buffer_params,
     if (!denoise_pass(context, PASS_SHADOW_CATCHER)) {
       return false;
     }
+    if (!denoise_pass(context, PASS_AO)) {
+      return false;
+    }
   }
 
   if (local_buffer_used) {

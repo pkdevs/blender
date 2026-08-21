@@ -618,6 +618,9 @@ void Film::update_passes(Scene *scene)
     add_auto_pass(scene, PASS_SHADOW_CATCHER);
     add_auto_pass(scene, PASS_SHADOW_CATCHER_SAMPLE_COUNT);
   }
+  if (use_denoise && Pass::contains(scene->passes, PASS_AO)) {
+    add_auto_pass(scene, PASS_AO);
+  }
 
   const vector<Pass *> passes_immutable = scene->passes;
   for (const Pass *pass : passes_immutable) {

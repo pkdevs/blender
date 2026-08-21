@@ -251,6 +251,8 @@ def list_render_passes(scene, srl):
         yield (n_("Noisy Image"), "RGBA", 'COLOR')
         if crl.use_pass_shadow_catcher:
             yield (n_("Noisy Shadow Catcher"), "RGB", 'COLOR')
+        if srl.use_pass_ambient_occlusion:
+            yield (n_("Noisy Ambient Occlusion"), "RGB", 'COLOR')
     if crl.denoising_store_passes:
         yield (n_("Denoising Albedo"), "RGB", 'COLOR')
         yield (n_("Denoising Specular Albedo"), "RGB", 'COLOR')

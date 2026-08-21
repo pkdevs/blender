@@ -219,6 +219,8 @@ PassInfo Pass::get_info(const PassType type,
       break;
     case PASS_AO:
       pass_info.num_components = 3;
+      pass_info.use_denoising_albedo = false;
+      pass_info.support_denoise = true;
       break;
 
     case PASS_DIFFUSE_COLOR:

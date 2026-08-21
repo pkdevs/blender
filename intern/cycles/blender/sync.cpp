@@ -778,6 +778,7 @@ static bool get_known_pass_type(blender::RenderPass &b_pass, PassType &type, Pas
   MAP_PASS("Emission", PASS_EMISSION, false);
   MAP_PASS("Environment", PASS_BACKGROUND, false);
   MAP_PASS("Ambient Occlusion", PASS_AO, false);
+  MAP_PASS("Noisy Ambient Occlusion", PASS_AO, true);
 
   MAP_PASS("BakePrimitive", PASS_BAKE_PRIMITIVE, false);
   MAP_PASS("BakeSeed", PASS_BAKE_SEED, false);
