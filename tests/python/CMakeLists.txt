@@ -600,6 +600,11 @@ add_blender_test(
   --testdir "${TEST_SRC_DIR}"
 )
 
+add_blender_test(
+  geometry_nodes_xpbd_pins
+  --python ${CMAKE_CURRENT_LIST_DIR}/bl_geometry_nodes_xpbd_pins.py
+)
+
 # ------------------------------------------------------------------------------
 # MODIFIERS TESTS
 # ------------------------------------------------------------------------------

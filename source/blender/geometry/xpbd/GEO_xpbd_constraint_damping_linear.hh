@@ -43,6 +43,11 @@ class LinearDampingConstraintSet
                     const int constraint_i) const
   {
     const int point_i = points_[constraint_i];
+    if (params.inv_mass(geo_i_, point_i) == 0.0f) {
+      /* A drag force cannot change the velocity of a point with zero inverse mass; hard pinned
+       * points in particular keep the pin target's motion for friction to see. */
+      return;
+    }
     const float3 &velocity = params.velocity(geo_i_, point_i);
     const float damping = linear_dampings_[constraint_i];
     const float damping_factor = std::clamp(params.delta_time * damping, 0.0f, 1.0f);

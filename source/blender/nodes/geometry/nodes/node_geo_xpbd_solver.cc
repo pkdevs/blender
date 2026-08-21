@@ -648,6 +648,8 @@ class XpbdSolverStep {
       this->create_chunk_constraints__pin_rotations(tls, chunk_i);
     });
 
+    this->detect_hard_pinned_points();
+
     result_ = this->do_simulation();
 
     this->write_back__pin_positions();
@@ -2195,6 +2197,30 @@ class XpbdSolverStep {
     }
   }
 
+  /**
+   * Points pinned with compliance <= 0 are kinematic: their inverse mass is cleared so no
+   * constraint can move them (the pin projection becomes a no-op for them), and
+   * #simulate__apply_hard_pins__chunk drives them along the animated pin target every substep.
+   * A hard pin solved as a plain projection loses against every constraint solved after it in
+   * the Gauss-Seidel sweep, so a stiff enough constraint network can overpower it.
+   */
+  void detect_hard_pinned_points()
+  {
+    for (const int data_key_i : geometries_.data_keys.index_range()) {
+      GeometryData &geo_data = *geometries_.data[data_key_i];
+      for (const PinPositionConstraintUsage &constraint_usage : geo_data.pin_position_constraints)
+      {
+        for (const int pin_i : constraint_usage.points.index_range()) {
+          if (constraint_usage.compliances[pin_i] <= 0.0f) {
+            const int point_i = constraint_usage.points[pin_i];
+            geo_data.is_hard_pinned[point_i] = true;
+            geo_data.inv_masses[point_i] = 0.0f;
+          }
+        }
+      }
+    }
+  }
+
   void create_chunk_constraints__pin_positions(TLS &tls, const int chunk_i)
   {
     const GeometryDataChunk &chunk = geometries_.chunks[chunk_i];
@@ -2205,15 +2231,6 @@ class XpbdSolverStep {
           geo_data.pin_position_constraints[constraint_usage_i];
       const PinPositionConstraint &constraint =
           constraints_.pin_position_constraints[constraint_usage.constraint_i];
-
-      /* Detect hard pinned points. */
-      for (const int pin_i : constraint_usage.points.index_range()) {
-        const int point_i = constraint_usage.points[pin_i];
-        const float compliance = constraint_usage.compliances[pin_i];
-        if (compliance <= 0.0f) {
-          geo_data.is_hard_pinned[point_i] = true;
-        }
-      }
 
       const IndexRange pin_range = unique_sorted_indices::find_content_range<int>(
           constraint_usage.points, chunk.points_range);
@@ -2412,6 +2429,7 @@ class XpbdSolverStep {
               substeps_, substep_i, interpolation_begin_, interpolation_end_);
           this->simulate__update_pins__chunk(chunk_i, substep);
           this->simulate__inertial_update__chunk(chunk_i, solver_refs_i);
+          this->simulate__apply_hard_pins__chunk(chunk_i, solver_refs_i);
           this->simulate__gather_dynamic_constraints__chunk(substep, chunk_i, solver_refs_i);
           this->simulate__reset_forces__chunk(chunk_i);
 
@@ -2455,6 +2473,7 @@ class XpbdSolverStep {
         this->parallel_for_each_chunk(16, [&](const int chunk_i) {
           this->simulate__update_pins__chunk(chunk_i, substep);
           this->simulate__inertial_update__chunk(chunk_i, solver_refs_i);
+          this->simulate__apply_hard_pins__chunk(chunk_i, solver_refs_i);
         });
         this->simulate__gather_dynamic_constraints(substep, solver_refs_i);
         this->simulate__reset_forces();
@@ -2554,6 +2573,34 @@ class XpbdSolverStep {
           const math::Quaternion pin_rot = math::interpolate(
               begin_rot, end_rot, substep.interpolate_end);
           constraint_usage.current_rotations[pin_i] = pin_rot;
+        }
+      }
+    }
+  }
+
+  /**
+   * Place hard pinned points at their interpolated pin target for this substep, see
+   * #detect_hard_pinned_points. This has to run after the inertial update, which moves points
+   * with zero inverse mass along their previous velocity. The velocity update later derives the
+   * velocity from these positions, so contacts and friction against hard pinned points see the
+   * target's motion.
+   */
+  void simulate__apply_hard_pins__chunk(const int chunk_i, const int solver_refs_i)
+  {
+    const GeometryDataChunk &chunk = geometries_.chunks[chunk_i];
+    GeometryData &geo_data = *geometries_.data[chunk.data_key_i];
+    const ChunkData &chunk_data = chunks_data_[chunk_i];
+    const xpbd::GeometryRef &ref = geometries_.solver_refs[solver_refs_i][chunk.data_key_i];
+
+    for (const PinPositionConstraintChunkUsage &constraint_chunk_usage :
+         chunk_data.pin_position_constraints)
+    {
+      const PinPositionConstraintUsage &constraint_usage =
+          geo_data.pin_position_constraints[constraint_chunk_usage.constraint_usage_i];
+      for (const int pin_i : constraint_chunk_usage.pin_range) {
+        if (constraint_usage.compliances[pin_i] <= 0.0f) {
+          ref.positions[constraint_usage.points[pin_i]] =
+              constraint_usage.current_positions[pin_i];
         }
       }
     }
