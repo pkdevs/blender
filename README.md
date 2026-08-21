@@ -1,5 +1,5 @@
 <!--
-Keep this document short & concise,
+Keep this document short & concise, 
 linking to external resources instead of including content in-line.
 See 'release/text/readme.html' for the end user read-me.
 -->
