@@ -23,6 +23,9 @@ struct SymbolTable;
 struct SymbolFunction;
 struct SymbolClass;
 
+/**
+ * Identifier to symbol map.
+ */
 template<typename SymbolT>
 struct SymbolMap : unordered_map<string, pair<SourceLocation, SymbolT *>> {
   pair<SymbolT *, bool> emplace(SymbolT *sym)
@@ -51,6 +54,11 @@ struct SymbolMap : unordered_map<string, pair<SourceLocation, SymbolT *>> {
   }
 };
 
+/**
+ * Container for symbol visible inside a namespace scope.
+ * - Scope can be anonymous (automatic identifier identifier).
+ * - Symbols can be referenced by multiple scopes (e.g. `enum`, `using`).
+ */
 struct SymbolScope : Symbol {
   friend SymbolParser;
 

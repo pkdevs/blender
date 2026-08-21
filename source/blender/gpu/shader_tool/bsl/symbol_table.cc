@@ -522,43 +522,6 @@ void SymbolTable::register_builtins(LocalScope node)
     builtin_function_decl(fn, true);
   }
 
-  /* Builtin operators. */
-
-  prefix_type_to_id = {
-      {Increment, "inc_op_"},
-      {Decrement, "dec_op_"},
-      {Plus, "pos_op_"},
-      {Minus, "neg_op_"},
-      {BitwiseNot, "bitnot_op_"},
-      {Not, "not_op_"},
-  };
-
-  suffix_type_to_id = {
-      {Increment, "suffix_inc_op_"},
-      {Decrement, "suffix_dec_op_"},
-  };
-
-  binary_type_to_id = {
-      {Plus, "add_op_"},
-      {Minus, "sub_op_"},
-      {Multiply, "mul_op_"},
-      {Divide, "div_op_"},
-      {Modulo, "mod_op_"},
-      {And, "bitand_op_"},
-      {Or, "bitor_op_"},
-      {Xor, "bitxor_op_"},
-      {LShift, "lshift_op_"},
-      {RShift, "rshift_op_"},
-      {Equal, "eq_op_"},
-      {NotEqual, "neq_op_"},
-      {LThan, "lte_op_"},
-      {GThan, "gte_op_"},
-      {LEqual, "leq_op_"},
-      {GEqual, "geq_op_"},
-      {LogicalAnd, "and_op_"},
-      {LogicalOr, "or_op_"},
-  };
-
   image_formats = {
       {0, "SNORM_8"},           {1, "SNORM_8_8"},        {2, "SNORM_8_8_8_8"},
       {3, "SNORM_16"},          {4, "SNORM_16_16"},      {5, "SNORM_16_16_16_16"},

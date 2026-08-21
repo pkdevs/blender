@@ -15,6 +15,11 @@ namespace bsl {
 
 enum class MatchRank { None = 0, Conversion = 1, Promotion = 2, Exact = 3 };
 
+/**
+ * Container for a function symbol.
+ *
+ * All overloads of this function are contained inside the first declaration.
+ */
 struct SymbolFunction : SymbolScope {
   /* Single linked list of overloads. */
   SymbolFunction *overload_next = nullptr;

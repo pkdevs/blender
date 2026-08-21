@@ -30,26 +30,6 @@ struct SymbolFunction;
 struct SymbolClass;
 struct SymbolScope;
 
-/* Left is nullptr for unary operators. */
-using OperatorKey = tuple<SymbolClass * /* Left */, TokenType, SymbolClass * /* Right */>;
-
-struct OperatorKeyHasher {
-  template<class T> static void hash_combine(std::size_t &seed, const T &v)
-  {
-    std::hash<T> hasher;
-    seed ^= hasher(v) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
-  }
-
-  std::size_t operator()(const OperatorKey &t) const
-  {
-    std::size_t seed = 0;
-    hash_combine(seed, std::get<0>(t));
-    hash_combine(seed, std::get<1>(t));
-    hash_combine(seed, std::get<2>(t));
-    return seed;
-  }
-};
-
 struct SymbolTable {
 
   static constexpr string err_symbol = "ERROR_SYMBOL";
@@ -131,9 +111,6 @@ struct SymbolTable {
 
   unordered_map<int, string> image_formats;
 
-  unordered_map<TokenType, const char *> prefix_type_to_id;
-  unordered_map<TokenType, const char *> suffix_type_to_id;
-  unordered_map<TokenType, const char *> binary_type_to_id;
   static constexpr string subscript_operator_id = "arr_op_";
 
   template<typename SymbolT> SymbolT *alloc(SymbolT &&sym);

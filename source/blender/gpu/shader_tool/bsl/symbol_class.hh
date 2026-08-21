@@ -111,22 +111,23 @@ builtin::ClassId unary_suffix_operator_return_type(SymbolClass *lhs, TokenType o
 
 }  // namespace builtin
 
+/**
+ * Container for a class symbol and its metadata.
+ */
 struct SymbolClass : SymbolScope {
   ResourceTableType srt_type = ResourceTableType::NONE;
 
-  SymbolFunction *operator_subscript = nullptr;
   SymbolClassTemplate *template_data = nullptr;
 
-  /* For enums, the value of the last declaration. */
-  ConstexprValue enum_last_val = -1;
+  SymbolFunction *operator_subscript = nullptr;
 
   int size = -1;  /* -1 is for not computed yet. */
   int align = -1; /* -1 is for not computed yet. */
 
+  builtin::ClassId builtin_class = builtin::ClassId::Invalid;
+
   /* For builtin types, number of components. */
   int8_t comp_len = 0;
-
-  builtin::ClassId builtin_class = builtin::ClassId::Invalid;
 
   bool is_anonymous = false;
   bool is_union = false;

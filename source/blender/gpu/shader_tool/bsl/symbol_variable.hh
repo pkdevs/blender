@@ -20,7 +20,11 @@ struct SymbolScope;
 struct SymbolClass;
 struct SymbolTable;
 
+/**
+ * Base struct for all named code entities.
+ */
 struct Symbol {
+  /* Mangled identifier (eg. for 'i' in 'struct A { static int i; }' it would be 'A_i'). */
   string identifier;
   /* Unresolved identifier */
   string original;
@@ -28,6 +32,11 @@ struct Symbol {
   SymbolScope *parent = nullptr;
 };
 
+/**
+ * Note that we do not support smaller types (e.g. char, ushort, ...) because they might not exist
+ * in the target language. Supporting them would mean having potentially 2 different result for the
+ * same expression depending on whether or not it is constexpr.
+ */
 using ConstexprValue = std::variant<bool, int32_t, uint32_t, float>;
 
 template<typename T> T value_as(const ConstexprValue &v)
@@ -35,8 +44,11 @@ template<typename T> T value_as(const ConstexprValue &v)
   return std::visit([](auto &&arg) -> T { return static_cast<T>(arg); }, v);
 }
 
+/**
+ * Represent variable declarations, parameters, or enum values.
+ */
 struct SymbolVariable : Symbol {
-  SymbolClass *type = nullptr; /* TODO rename to type */
+  SymbolClass *type = nullptr;
 
   /* Valid if the variable is a local reference.
    * The variable will be substituted to this statement. */

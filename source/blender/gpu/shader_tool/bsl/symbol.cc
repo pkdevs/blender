@@ -47,6 +47,9 @@ struct SymbolParser : NodeErrorHandler {
 
     int offset = 0;
 
+    /* For enums, the value of the last declaration. */
+    ConstexprValue enum_last_val = -1;
+
     if (node.type() == NodeType::FuncDecl || node.type() == NodeType::ClassDecl ||
         node.type() == NodeType::LocalScope)
     {
@@ -68,7 +71,7 @@ struct SymbolParser : NodeErrorHandler {
             parse_class_decl(scope, child, parent, offset, prefix);
             break;
           case NodeType::EnumValue:
-            parse_enum_value(scope, child, parent, prefix);
+            parse_enum_value(scope, child, parent, enum_last_val, prefix);
             break;
           case NodeType::FuncForwardDecl:
             parse_func_forward_decl(scope, child);
@@ -485,9 +488,12 @@ struct SymbolParser : NodeErrorHandler {
     }
   }
 
-  void parse_enum_value(SymbolScope &scope, EnumValue val, ClassDecl cls, const string &prefix)
+  void parse_enum_value(SymbolScope &scope,
+                        EnumValue val,
+                        ClassDecl cls,
+                        ConstexprValue &enum_last_val,
+                        const string &prefix)
   {
-    SymbolClass *enum_cls = scope.lookup_class(table, cls.identifier()).unwrap(this);
     SymbolClass *type = scope.lookup_class(table, cls.parent_class()).unwrap(this);
 
     SymbolVariable *sym = table.var_arena.alloc(&scope, type, val);
@@ -503,8 +509,7 @@ struct SymbolParser : NodeErrorHandler {
       }
     }
     else {
-      sym->value = std::visit([](auto &&v) -> ConstexprValue { return v + 1; },
-                              enum_cls->enum_last_val);
+      sym->value = std::visit([](auto &&v) -> ConstexprValue { return v + 1; }, enum_last_val);
     }
 
     if (scope.variable_emplace(sym)) {
@@ -514,7 +519,7 @@ struct SymbolParser : NodeErrorHandler {
       error(sym->loc.tok, Diag::Redefinition, sym->identifier);
     }
     /* Save value for the next member. */
-    enum_cls->enum_last_val = sym->value;
+    enum_last_val = sym->value;
     /* Alias to the parent namespace for non-anonymous, non-class enum. */
     if (!cls.is_enum_class()) {
       if (scope.parent->variable_emplace(sym)) {

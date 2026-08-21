@@ -21,6 +21,10 @@ struct SymbolScope;
 struct SymbolClass;
 struct SymbolFunction;
 
+/**
+ * Templated symbol additional storage.
+ * Contains instances and reference to the declaration.
+ */
 template<typename T> struct SymbolTemplate {
   /* Definition. */
   ast::TemplateDecl decl;
