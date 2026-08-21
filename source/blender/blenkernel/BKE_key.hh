@@ -142,10 +142,6 @@ void BKE_keyblock_update_from_mesh(const Mesh *mesh, KeyBlock *kb);
 void BKE_keyblock_convert_from_mesh(const Mesh *mesh, const Key *key, KeyBlock *kb);
 void BKE_keyblock_convert_to_mesh(const KeyBlock *kb, MutableSpan<float3> vert_positions);
 
-void BKE_keyblock_update_from_grease_pencil(const GreasePencil *grease_pencil, KeyBlock *kb);
-void BKE_keyblock_convert_from_grease_pencil(const GreasePencil *grease_pencil, KeyBlock *kb);
-void BKE_keyblock_convert_to_grease_pencil(KeyBlock *kb, GreasePencil *grease_pencil);
-
 /**
  * Computes normals (vertices, faces and/or loops ones) of given mesh for given shape key.
  *

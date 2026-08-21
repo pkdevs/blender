@@ -2568,13 +2568,13 @@ static void grease_pencil_do_shape_keys(bke::GeometrySet &geometry_set)
 {
   using namespace bke::greasepencil;
 
-  // printf("grease_pencil_do_shape_keys\n");
-
   bke::GeometryComponentEditData::remember_deformed_positions_if_necessary(geometry_set);
-
   GreasePencil &grease_pencil = *geometry_set.get_grease_pencil_for_write();
 
-  // const bke::AttributeAccessor layer_attributes = grease_pencil.attributes();
+  Key *key = grease_pencil.key;
+  if (!key) {
+    return;
+  }
 
   MutableSpan<bke::GreasePencilDrawingEditHints> edit_hints = {};
   if (geometry_set.has_component<bke::GeometryComponentEditData>()) {
@@ -2605,38 +2605,14 @@ static void grease_pencil_do_shape_keys(bke::GeometrySet &geometry_set)
     }
   }
 
-  Key *key = grease_pencil.key;
-  // KeyBlock *actkb = BKE_keyblock_find_by_index(key, ob->shapenr - 1);
-
-  if (!key) {
-    return;
-  }
-
-  // const Vector<LayerDrawingInfo> drawings = get_drawing_infos_by_layer(
-  //     grease_pencil, layer_mask, frame);
-  // threading::parallel_for_each(drawings, [&](const LayerDrawingInfo &info) {
-  //   if (edit_hints.is_empty()) {
-  //     modify_curves(*md, *ctx, *info.drawing, nullptr);
-  //   }
-  //   else {
-  //     modify_curves(*md, *ctx, *info.drawing, &edit_hints[info.layer_index]);
-  //   }
-  // });
-
-  // printf("dsha key->block.count() %i %p\n", key->block.count(), key);
-
   for (const auto [keyblock_index, keyblock] : key->block.enumerate()) {
-    // printf("keyblock_index %i\n", keyblock_index);
     if (&keyblock == key->refkey) {
-      // printf("&keyblock == key->refkey\n");
       continue;
     }
     if (keyblock.flag & KEYBLOCK_MUTE) {
-      // printf("KEYBLOCK_MUTE\n");
       continue;
     }
     const float keyblock_influence = keyblock.curval;
-    // printf("keyblock_influence %f\n", keyblock_influence);
     if (keyblock_influence == 0.0f) {
       continue;
     }
@@ -2721,17 +2697,10 @@ void BKE_grease_pencil_eval_geometry(Depsgraph *depsgraph, GreasePencil *grease_
 void BKE_object_eval_grease_pencil(Depsgraph *depsgraph, Scene *scene, Object *object)
 {
   using namespace blender::bke;
-
   /* Free any evaluated data and restore original data. */
   BKE_object_free_derived_caches(object);
 
   GreasePencil *grease_pencil = id_cast<GreasePencil *>(object->data);
-
-  if (grease_pencil->key) {
-    printf(
-        "eval key->block.count() %i %p\n", grease_pencil->key->block.count(), grease_pencil->key);
-  }
-
   GeometrySet geometry_set = GeometrySet::from_grease_pencil(grease_pencil,
                                                              GeometryOwnershipType::ReadOnly);
   /* The layer adjustments for tinting and radii offsets are applied before modifier evaluation.

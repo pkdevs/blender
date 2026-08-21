@@ -666,16 +666,8 @@ void curve_populate_trans_data_structs(const TransInfo &t,
             td.val = nullptr;
           }
 
-          // if (deformation.deform_mats.is_empty()) {
           copy_m3_m3(td.smtx, smtx_base.ptr());
           copy_m3_m3(td.mtx, mtx_base.ptr());
-          // }
-          // else {
-          //   const float3x3 mtx = deformation.deform_mats[domain_i] * mtx_base;
-          //   const float3x3 smtx = math::pseudo_invert(mtx);
-          //   copy_m3_m3(td.smtx, smtx.ptr());
-          //   copy_m3_m3(td.mtx, mtx.ptr());
-          // }
         },
         exec_mode::grain_size(1024));
   }

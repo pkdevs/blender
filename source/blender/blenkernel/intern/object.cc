@@ -4750,9 +4750,6 @@ static KeyBlock *insert_grease_pencil_shape_key(Main *bmain,
       kb->data = MEM_dupalloc_void(basekb->data);
       kb->totelem = basekb->totelem;
     }
-    else {
-      BKE_keyblock_convert_from_grease_pencil(grease_pencil, kb);
-    }
   }
   else {
     /* copy from current values */
@@ -4763,27 +4760,6 @@ static KeyBlock *insert_grease_pencil_shape_key(Main *bmain,
     kb = BKE_keyblock_add_ctime(key, name, false);
     kb->totelem = totelem;
     kb->data = data;
-  }
-
-  for (GreasePencilDrawingBase *base : grease_pencil->drawings()) {
-    bke::greasepencil::Drawing &drawing = reinterpret_cast<GreasePencilDrawing *>(base)->wrap();
-    bke::CurvesGeometry &curves = drawing.strokes_for_write();
-
-    bke::MutableAttributeAccessor attributes = curves.attributes_for_write();
-
-    char attr_name[64];
-
-    SNPRINTF_UTF8(attr_name, (".SK_%s"), kb->name);
-
-    bke::SpanAttributeWriter<float3> key_positions =
-        attributes.lookup_or_add_for_write_span<float3>(attr_name, bke::AttrDomain::Point);
-
-    // for (const int i : key_positions.span.index_range()) {
-    //   key_positions.span[i] = float3(0.0f, 0.0f, 1.0f);
-    // }
-    // key_positions.span[0] = float3(0.0f, 1.0f, 1.0f);
-
-    key_positions.finish();
   }
 
   return kb;
