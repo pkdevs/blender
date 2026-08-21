@@ -1118,9 +1118,23 @@ class PREFERENCES_OT_studiolight_install(Operator):
             self.report({'ERROR'}, "Failed to create Studio Light path")
             return {'CANCELLED'}
 
+        installed = 0
+
         for e in self.files:
-            shutil.copy(os.path.join(self.directory, e.name), path_studiolights)
+            filepath = os.path.join(self.directory, e.name)
+
+            if not os.path.isfile(filepath):
+                msg = rpt_("{!r} is not a file").format(filepath)
+                print(msg)
+                self.report({'WARNING'}, msg)
+                continue
+
+            shutil.copy(filepath, path_studiolights)
             prefs.studio_lights.load(os.path.join(path_studiolights, e.name), self.type)
+            installed += 1
+
+        if installed == 0:
+            return {'CANCELLED'}
 
         # print message
         msg = rpt_("StudioLight Installed {!r} into {!r}").format(
