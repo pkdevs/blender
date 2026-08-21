@@ -266,6 +266,17 @@ float BM_face_calc_area_uv(const BMFace *f, int cd_loop_uv_offset)
   return fabsf(BM_face_calc_area_uv_signed(f, cd_loop_uv_offset));
 }
 
+/**
+ * Compute the triangle's contribution to a face's per-axis (U, V) texel density.
+ *
+ * NOTE: `tangent` and `bitangent` are the partial derivatives of the 3D position with respect
+ * to u and v (the tangent-space basis used for normal mapping), found by solving
+ * `e1 = tangent * uv_e1.x + bitangent * uv_e1.y` and `e2 = tangent * uv_e2.x + bitangent *
+ * uv_e2.y`. Both vectors come out scaled by `abs_det` (twice the UV-space triangle area), so
+ * `tangent_length / abs_det` is the world-space distance covered by one UV unit along U, and
+ * `width * abs_det / tangent_length` is texels per world-space unit along U (`height` and
+ * `bitangent_length` give the V axis the same way).
+ */
 static void bm_face_calc_tri_density_uv(const BMLoop *l0,
                                         const BMLoop *l1,
                                         const BMLoop *l2,
@@ -279,21 +290,21 @@ static void bm_face_calc_tri_density_uv(const BMLoop *l0,
   const float3 p1 = l1->v->co;
   const float3 p2 = l2->v->co;
 
-  const float *t0 = BM_ELEM_CD_GET_FLOAT_P(l0, cd_loop_uv_offset);
-  const float *t1 = BM_ELEM_CD_GET_FLOAT_P(l1, cd_loop_uv_offset);
-  const float *t2 = BM_ELEM_CD_GET_FLOAT_P(l2, cd_loop_uv_offset);
+  const float *luv0 = BM_ELEM_CD_GET_FLOAT_P(l0, cd_loop_uv_offset);
+  const float *luv1 = BM_ELEM_CD_GET_FLOAT_P(l1, cd_loop_uv_offset);
+  const float *luv2 = BM_ELEM_CD_GET_FLOAT_P(l2, cd_loop_uv_offset);
 
   const float3 e1 = p1 - p0;
   const float3 e2 = p2 - p0;
 
-  const float2 uvs1 = float2(t1) - float2(t0);
-  const float2 uvs2 = float2(t2) - float2(t0);
+  const float2 uv_e1 = float2(luv1) - float2(luv0);
+  const float2 uv_e2 = float2(luv2) - float2(luv0);
 
-  const float det = math::cross(uvs1, uvs2);
+  const float det = math::cross(uv_e1, uv_e2);
   const float abs_det = math::abs(det);
   if (abs_det > 1e-7f) {
-    const float3 tangent = e1 * uvs2.y - e2 * uvs1.y;
-    const float3 bitangent = e2 * uvs1.x - e1 * uvs2.x;
+    const float3 tangent = e1 * uv_e2.y - e2 * uv_e1.y;
+    const float3 bitangent = e2 * uv_e1.x - e1 * uv_e2.x;
 
     const float tangent_length = math::length(tangent);
     const float bitangent_length = math::length(bitangent);

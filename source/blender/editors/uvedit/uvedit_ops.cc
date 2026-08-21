@@ -1082,6 +1082,48 @@ enum class UVTexelUnit {
   Meter = 2,
   Foot = 3,
 };
+
+static void uv_texel_density_face_accumulate(const BMFace *f,
+                                             int cd_loop_uv_offset,
+                                             int width,
+                                             int height,
+                                             bool use_uniform_scale,
+                                             float *r_area,
+                                             float *r_area_uv,
+                                             float2 *r_island_density)
+{
+  const float face_area = BM_face_calc_area(f);
+  if (use_uniform_scale) {
+    *r_area_uv += BM_face_calc_area_uv(f, cd_loop_uv_offset);
+  }
+  else {
+    const float2 face_density = BM_face_calc_density_uv(f, cd_loop_uv_offset, width, height);
+    r_island_density->x += face_area * face_density.x;
+    r_island_density->y += face_area * face_density.y;
+  }
+  *r_area += face_area;
+}
+
+static float2 uv_texel_density_finalize(float area,
+                                        float area_uv,
+                                        float2 island_density,
+                                        int width,
+                                        int height,
+                                        bool use_uniform_scale,
+                                        float scale_length)
+{
+  float2 density;
+  if (use_uniform_scale) {
+    density.x = density.y = (area > 0.0f) ? sqrtf(area_uv * width * height / area) / scale_length :
+                                            0.0f;
+  }
+  else {
+    density.x = (island_density.x / area) / scale_length;
+    density.y = (island_density.y / area) / scale_length;
+  }
+  return density;
+}
+
 static wmOperatorStatus uv_apply_texel_density_exec(bContext *C, wmOperator *op)
 {
   const Main *bmain = CTX_data_main(C);
@@ -1123,26 +1165,11 @@ static wmOperatorStatus uv_apply_texel_density_exec(bContext *C, wmOperator *op)
     BMFace *efa;
     BMIter iter;
     BM_ITER_MESH (efa, &iter, em->bm, BM_FACES_OF_MESH) {
-      const float face_area = BM_face_calc_area(efa);
-      if (use_uniform_scale) {
-        area_uv += BM_face_calc_area_uv(efa, offsets.uv);
-      }
-      else {
-        const float2 face_density = BM_face_calc_density_uv(efa, offsets.uv, width, height);
-        island_density.x += face_area * face_density.x;
-        island_density.y += face_area * face_density.y;
-      }
-      area += face_area;
+      uv_texel_density_face_accumulate(
+          efa, offsets.uv, width, height, use_uniform_scale, &area, &area_uv, &island_density);
     }
-    if (use_uniform_scale) {
-      density.x = density.y = (area > 0.0f) ? sqrtf(area_uv * width * height / area) /
-                                                  scene->unit.scale_length :
-                                              0.0f;
-    }
-    else {
-      density.x = (island_density.x / area) / scene->unit.scale_length;
-      density.y = (island_density.y / area) / scene->unit.scale_length;
-    }
+    density = uv_texel_density_finalize(
+        area, area_uv, island_density, width, height, use_uniform_scale, scene->unit.scale_length);
   }
   else {
     if (use_uniform_scale) {
@@ -1194,31 +1221,26 @@ static wmOperatorStatus uv_apply_texel_density_exec(bContext *C, wmOperator *op)
 
         BMFace *f = element[j].l->f;
         if (processed_faces.add(f)) {
-          const float face_area = BM_face_calc_area(f);
-          if (use_uniform_scale) {
-            area_uv += BM_face_calc_area_uv(f, offsets.uv);
-          }
-          else {
-            const float2 face_density = BM_face_calc_density_uv(f, offsets.uv, width, height);
-            island_density.x += face_area * face_density.x;
-            island_density.y += face_area * face_density.y;
-          }
-          area += face_area;
+          uv_texel_density_face_accumulate(
+              f, offsets.uv, width, height, use_uniform_scale, &area, &area_uv, &island_density);
         }
       }
 
+      island_density = uv_texel_density_finalize(area,
+                                                 area_uv,
+                                                 island_density,
+                                                 width,
+                                                 height,
+                                                 use_uniform_scale,
+                                                 scene->unit.scale_length);
+
       float2 scale;
       if (use_uniform_scale) {
-        island_density.x = (area > 0.0f) ?
-                               sqrtf(area_uv * width * height / area) / scene->unit.scale_length :
-                               0.0f;
         const float uniform_scale = (island_density.x > 0.0f) ? density.x / island_density.x :
                                                                 0.0f;
         scale.x = scale.y = uniform_scale;
       }
       else {
-        island_density.x = (island_density.x / area) / scene->unit.scale_length;
-        island_density.y = (island_density.y / area) / scene->unit.scale_length;
         scale = {density.x / island_density.x, density.y / island_density.y};
       }
       for (int j = 0; j < element_map->island_total_uvs[i]; j++) {
