@@ -1123,13 +1123,14 @@ class PREFERENCES_OT_studiolight_install(Operator):
         for e in self.files:
             filepath = os.path.join(self.directory, e.name)
 
-            if not os.path.isfile(filepath):
-                msg = rpt_("{!r} is not a file").format(filepath)
+            try:
+                shutil.copy(filepath, path_studiolights)
+            except Exception as ex:
+                msg = rpt_("Unable to copy {!r}: {:s}").format(e.name, str(ex))
                 print(msg)
                 self.report({'WARNING'}, msg)
                 continue
 
-            shutil.copy(filepath, path_studiolights)
             prefs.studio_lights.load(os.path.join(path_studiolights, e.name), self.type)
             installed += 1
 
