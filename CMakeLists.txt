@@ -69,20 +69,16 @@ if(POLICY CMP0177)
 endif()
 
 # -----------------------------------------------------------------------------
-# Load Blender's Local Macros
-
-include(build_files/cmake/macros.cmake)
-
-# -----------------------------------------------------------------------------
 # Initialize Project
-
-blender_project_hack_pre()
 
 project(Blender)
 
-blender_project_hack_post()
-
 enable_testing()
+
+# -----------------------------------------------------------------------------
+# Load Blender's Local Macros
+
+include(build_files/cmake/macros.cmake)
 
 # There are some circumstances where the git checkout doesn't grab
 # the files from LFS but produces small pointer files. The build system
@@ -548,6 +544,8 @@ if(UNIX AND (NOT APPLE OR WITH_PYTHON_MODULE))
 Install redistributable runtime, otherwise install into CMAKE_INSTALL_PREFIX"
     ON
   )
+else()
+  set(WITH_INSTALL_PORTABLE ON)
 endif()
 
 option(WITH_PYTHON_INSTALL "Copy system Python into the Blender install directory" ON)
@@ -596,11 +594,14 @@ endif()
 option(WITH_COMPILER_SIMD "Add the recommended Blender default SIMD flags to the compiler's C_FLAGS/CXX_FLAGS" ON)
 mark_as_advanced(WITH_COMPILER_SIMD)
 
+
+option(WITH_EMBREE "Build Cycles with Embree support, and use Embree BVH in Blender" ON)
+
+
 # Cycles
 option(WITH_CYCLES "Enable Cycles Render Engine" ON)
 option(WITH_CYCLES_OSL "Build Cycles with OpenShadingLanguage support" ON)
 option(WITH_CYCLES_PATH_GUIDING "Build Cycles with path guiding support" ON)
-option(WITH_CYCLES_EMBREE "Build Cycles with Embree support" ON)
 option(WITH_CYCLES_DEBUG "Build Cycles with options useful for debugging (e.g., MIS)" OFF)
 
 option(WITH_CYCLES_STANDALONE "Build Cycles standalone application" OFF)
@@ -1343,7 +1344,10 @@ endif()
 
 # don't store paths to libs for portable distribution
 if(WITH_INSTALL_PORTABLE)
-  set(CMAKE_SKIP_BUILD_RPATH TRUE)
+  # TODO: match the CMake option, this check is historic.
+  if(UNIX AND (NOT APPLE OR WITH_PYTHON_MODULE))
+    set(CMAKE_SKIP_BUILD_RPATH TRUE)
+  endif()
 endif()
 
 if(UNIX AND NOT (APPLE OR HAIKU))
@@ -2609,7 +2613,7 @@ if(FIRST_RUN)
   if(WITH_CYCLES)
     info_cfg_text("Rendering (Cycles):")
     info_cfg_option(WITH_CYCLES_OSL)
-    info_cfg_option(WITH_CYCLES_EMBREE)
+    info_cfg_option(WITH_EMBREE)
     info_cfg_option(WITH_CYCLES_PATH_GUIDING)
     if(NOT APPLE)
       info_cfg_option(WITH_CYCLES_DEVICE_OPTIX)

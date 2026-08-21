@@ -37,13 +37,13 @@ inline PointerRNA get_active_node_to_operate_on(bContext *C,
 {
   SpaceNode *snode = CTX_wm_space_node(C);
   if (!snode) {
-    return PointerRNA_NULL;
+    return {};
   }
   if (!snode->edittree) {
-    return PointerRNA_NULL;
+    return {};
   }
   if (!ID_IS_EDITABLE(snode->edittree)) {
-    return PointerRNA_NULL;
+    return {};
   }
 
   bNode *node = nullptr;
@@ -55,13 +55,13 @@ inline PointerRNA get_active_node_to_operate_on(bContext *C,
     node = bke::node_get_active(*snode->edittree);
   }
   if (!node) {
-    return PointerRNA_NULL;
+    return {};
   }
 
   if (bke::zone_type_by_node_type(node->type_legacy) != nullptr) {
     const bke::bNodeTreeZones *zones = snode->edittree->zones();
     if (!zones) {
-      return PointerRNA_NULL;
+      return {};
     }
     if (const bke::bNodeTreeZone *zone = zones->get_zone_by_node(node->identifier)) {
       if (zone->input_node() == node) {
@@ -72,7 +72,7 @@ inline PointerRNA get_active_node_to_operate_on(bContext *C,
   }
 
   if (node->idname != node_idname) {
-    return PointerRNA_NULL;
+    return {};
   }
   return RNA_pointer_create_discrete(&snode->edittree->id, RNA_Node, node);
 }
@@ -129,6 +129,9 @@ inline void remove_active_item(wmOperatorType *ot,
 
   ot->exec = [](bContext *C, wmOperator *op) -> wmOperatorStatus {
     PointerRNA node_ptr = get_active_node_to_operate_on(C, op, Accessor::node_idname);
+    if (!node_ptr) {
+      return OPERATOR_CANCELLED;
+    }
     bNode &node = *static_cast<bNode *>(node_ptr.data);
     SocketItemsRef ref = Accessor::get_items_from_node(node);
     if (*ref.items_num > 0 && ref.active_index) {
@@ -156,6 +159,9 @@ inline void remove_item_by_index(wmOperatorType *ot,
 
   ot->exec = [](bContext *C, wmOperator *op) -> wmOperatorStatus {
     PointerRNA node_ptr = get_active_node_to_operate_on(C, op, Accessor::node_idname);
+    if (!node_ptr) {
+      return OPERATOR_CANCELLED;
+    }
     bNode &node = *static_cast<bNode *>(node_ptr.data);
     const int index_to_remove = RNA_int_get(op->ptr, "index");
     SocketItemsRef ref = Accessor::get_items_from_node(node);
@@ -208,7 +214,7 @@ inline void add_item(wmOperatorType *ot,
 
   ot->exec = [](bContext *C, wmOperator *op) -> wmOperatorStatus {
     PointerRNA node_ptr = get_active_node_to_operate_on(C, op, Accessor::node_idname);
-    if (node_ptr.data == nullptr) {
+    if (!node_ptr) {
       return OPERATOR_CANCELLED;
     }
     bNodeTree *ntree = reinterpret_cast<bNodeTree *>(node_ptr.owner_id);
@@ -346,6 +352,9 @@ inline void move_active_item(wmOperatorType *ot,
 
   ot->exec = [](bContext *C, wmOperator *op) -> wmOperatorStatus {
     PointerRNA node_ptr = get_active_node_to_operate_on(C, op, Accessor::node_idname);
+    if (!node_ptr) {
+      return OPERATOR_CANCELLED;
+    }
     bNode &node = *static_cast<bNode *>(node_ptr.data);
     const MoveDirection direction = MoveDirection(RNA_enum_get(op->ptr, "direction"));
 

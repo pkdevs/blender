@@ -90,6 +90,8 @@ ResultType socket_data_type_to_result_type(const eNodeSocketDatatype data_type,
       return ResultType::Text;
     case SOCK_MASK:
       return ResultType::Mask;
+    case SOCK_BUNDLE:
+      return ResultType::Bundle;
     default:
       BLI_assert_unreachable();
       return ResultType::Float;
@@ -118,6 +120,11 @@ ResultType get_node_socket_result_type(const bNodeSocket *socket)
 
 ResultType get_node_interface_socket_result_type(const bNodeTreeInterfaceSocket &socket)
 {
+  /* Gracefully handle undefined interface sockets, falling back to a float. */
+  if (socket.socket_typeinfo() == &bke::NodeSocketTypeUndefined) {
+    return ResultType::Float;
+  }
+
   const eNodeSocketDatatype socket_type = socket.socket_typeinfo()->type;
   if (socket_type == SOCK_VECTOR) {
     return socket_data_type_to_result_type(

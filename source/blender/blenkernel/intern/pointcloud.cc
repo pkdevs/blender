@@ -136,7 +136,9 @@ static void pointcloud_blend_write(BlendWriter *writer, ID *id, const void *id_a
   CustomData_reset(&pointcloud->pdata_legacy);
 
   /* Write LibData */
-  writer->write_id_struct(id_address, pointcloud);
+  writer->write_id_struct(id_address, pointcloud, [](BlendStructWriter &struct_writer) {
+    struct_writer.generated_ptr(offsetof(PointCloud, attribute_storage.dna_attributes));
+  });
   BKE_id_blend_write(writer, &pointcloud->id);
 
   /* Direct data */
@@ -346,7 +348,7 @@ void pointcloud_resize(PointCloud &pointcloud, const int size)
   if (size > old_totpoint) {
     /* Initialize new points. */
     fill_attribute_range_default(
-        attributes, bke::AttrDomain::Point, {}, IndexRange(old_totpoint, size));
+        attributes, bke::AttrDomain::Point, {}, IndexRange::from_begin_end(old_totpoint, size));
   }
 }
 

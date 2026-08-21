@@ -217,8 +217,11 @@ static void view_layer_remove_unset_nodetrees(const Main *bmain, Scene *scene, V
   for (Scene *sce = static_cast<Scene *>(bmain->scenes.first); sce;
        sce = static_cast<Scene *>(sce->id.next))
   {
-    if (sce->compositing_node_group) {
-      bke::node_tree_remove_layer_n(sce->compositing_node_group, scene, act_layer_index);
+    for (SceneCompositorEffect &effect : sce->compositor_effects) {
+      if (!effect.node_group || ID_MISSING(effect.node_group)) {
+        continue;
+      }
+      bke::node_tree_remove_layer_n(effect.node_group, scene, act_layer_index);
     }
   }
 }
@@ -240,11 +243,21 @@ bool ED_scene_view_layer_delete(Main *bmain, Scene *scene, ViewLayer *layer, Rep
   /* We need to unset node-trees before removing the layer, otherwise its index will be -1. */
   view_layer_remove_unset_nodetrees(bmain, scene, layer);
 
+  /* Return whether the given screen uses the to-be-removed view layer. */
+  const auto is_using_view_layer = [&](const bScreen &screen) -> bool {
+    const ScreenAnimData *sad = static_cast<const ScreenAnimData *>(screen.animtimer->customdata);
+    return (sad && sad->scene == scene && sad->view_layer == layer);
+  };
+
+  /* Stop animation playback of this layer before removing it, as the ScreenAnimData struct
+   * has a pointer to it. */
+  wmWindowManager *wm = static_cast<wmWindowManager *>(bmain->wm.first);
+  ED_screen_animation_stop(bmain, wm, is_using_view_layer);
+
   BLI_remlink(&scene->view_layers, layer);
   BLI_assert(scene->view_layers.is_empty() == false);
 
   /* Remove from windows. */
-  wmWindowManager *wm = static_cast<wmWindowManager *>(bmain->wm.first);
   for (wmWindow &win : wm->windows) {
     if (win.scene == scene && STREQ(win.view_layer_name, layer->name)) {
       ViewLayer *first_layer = BKE_view_layer_default_view(scene);

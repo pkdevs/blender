@@ -20,6 +20,30 @@ from bpy.app.translations import (
 
 logger = logging.getLogger(__name__)
 
+# The schema version of the Project Config, for managing breaking schema changes.
+#
+# Only increment this when there are breaking schema changes.
+#
+# Project versioning should generally follow the same approach as blend file
+# versioning. In short:
+#
+# - When reasonably possible, change the schema in ways that fully preserve
+#   backwards compatibility and that avoid critical forwards compatibility
+#   breaks.
+# - When that's not possible, plan ahead and only make the needed breaking
+#   changes on major version bumps of Blender (e.g. 5.x -> 6.x).
+# - In the version just before a major version bump, add forwards compatibility
+#   code for the anticipated breaking changes, so that e.g. the last 5.x release
+#   can still open projects from Blender 6.0.
+#
+# For more details, see:
+# https://developer.blender.org/docs/handbook/guidelines/compatibility_handling_for_blend_files/
+#
+# NOTE: when incrementing this version number, ensure that the versioning code
+# in `read_project_toml_config()` is appropriately expanded to auto-upgrade
+# between versions
+PROJECT_SCHEMA_VERSION = 1
+
 # Directory and file name where the project is read/written to disk.
 PROJECT_DIR = ".blender_project"
 PROJECT_CONFIG = "project.toml"
@@ -34,12 +58,16 @@ PROJECT_DEFAULT_NAME = "Untitled Project"
 
 @dataclass
 class ProjectConfig:
+    schema_version: int
     name: str
 
     @staticmethod
     def new_from_project(project):
         """Create a ProjectConfig object from an existing real project."""
-        return ProjectConfig(name=project.name)
+        return ProjectConfig(
+            schema_version=PROJECT_SCHEMA_VERSION,
+            name=project.name,
+        )
 
     def populate_project(self, project):
         """Fills in an existing real project's data from this ProjectConfig object."""
@@ -121,11 +149,17 @@ def save_project(project, report=None):
         config_dir_path.mkdir(parents=True, exist_ok=True)
     except FileExistsError:
         if report:
-            report({'ERROR'}, rpt_("A file named '{:s}' already exists, but it needs to be a directory.").format(PROJECT_DIR))
+            report(
+                {'ERROR'},
+                rpt_("A file named '{:s}' already exists, but it needs to be a directory.").format(PROJECT_DIR),
+            )
         raise ProjectSaveException
     except PermissionError:
         if report:
-            report({'ERROR'}, rpt_("Cannot create '{:s}' directory due to file-system permissions.").format(PROJECT_DIR))
+            report(
+                {'ERROR'},
+                rpt_("Cannot create '{:s}' directory due to file-system permissions.").format(PROJECT_DIR),
+            )
         raise ProjectSaveException
     except Exception as e:
         if report:
@@ -246,6 +280,19 @@ def read_project_toml_config(root_path, report=None):
             report({'ERROR'}, str(e))
         raise ProjectLoadException
 
+    # If there's no version schema, that means it's version 1.
+    if "schema_version" not in config_dict:
+        config_dict["schema_version"] = 1
+
+    # Handle project config versioning.
+    if config_dict["schema_version"] > PROJECT_SCHEMA_VERSION:
+        if report:
+            report({'ERROR'}, rpt_("Project configuration is newer than this version of Blender supports"))
+        raise ProjectLoadException
+    elif config_dict["schema_version"] < PROJECT_SCHEMA_VERSION:
+        # Put versioning upgrade code here when needed.
+        pass
+
     # Validate schema and convert to ProjectConfig class.
     converter = cattrs.Converter()
     try:
@@ -330,8 +377,11 @@ class PROJECT_OT_NewProject(Operator):
         # happen.
         if blend_file_is_in_valid_project(Path(bpy.data.filepath)):
             self.report(
-                {'ERROR'},
-                "New project directory is already inside of an existing project. Try reloading the current blend file to open the existing project.")
+                {'ERROR'}, (
+                    "New project directory is already inside of an existing project. "
+                    "Try reloading the current blend file to open the existing project."
+                )
+            )
             return {'CANCELLED'}
 
         # Get the initial project name based on the folder name.

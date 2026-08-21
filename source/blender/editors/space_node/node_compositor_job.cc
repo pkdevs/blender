@@ -2,6 +2,7 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+#include "BKE_compositor.hh"
 #include "BLI_listbase.hh"
 
 #include "GPU_capabilities.hh"
@@ -41,9 +42,11 @@ struct CompositorJob {
   Main *bmain;
   Scene *scene;
   ViewLayer *view_layer;
-  bNodeTree *evaluated_node_tree;
   Render *render;
   compositor::NodeGroupOutputTypes needed_outputs;
+  /* Identifies if the compositor is executing due to the user making a modification or if it is
+   * executing due to playback or rendering. */
+  bool triggered_by_user = false;
 };
 
 /* Suspend or resume animation playback if animation is playing. */
@@ -84,9 +87,6 @@ static void compositor_job_init(void *compositor_job_data)
    * evaluate_on_framechange. */
   DEG_evaluate_on_refresh(compositor_runtime.preview_depsgraph);
 
-  compositor_job->evaluated_node_tree = DEG_get_evaluated(compositor_runtime.preview_depsgraph,
-                                                          scene->compositing_node_group);
-
   compositor_job->render = RE_NewInteractiveCompositorRender(scene);
   if (scene->r.compositor_device == SCE_COMPOSITOR_DEVICE_GPU) {
     RE_display_ensure_gpu_context(compositor_job->render);
@@ -111,29 +111,24 @@ static void compositor_job_start(void *compositor_job_data, wmJobWorkerStatus *w
 
   bke::CompositorRuntime &compositor_runtime = compositor_job->scene->runtime->compositor;
   Scene *evaluated_scene = DEG_get_evaluated_scene(compositor_runtime.preview_depsgraph);
+  render::CompositorInputData input_data(*compositor_job->render,
+                                         *compositor_job->bmain,
+                                         *evaluated_scene,
+                                         evaluated_scene->r,
+                                         "",
+                                         nullptr,
+                                         compositor_job->needed_outputs,
+                                         compositor_job->triggered_by_user);
   if (!(evaluated_scene->r.scemode & R_MULTIVIEW)) {
-    RE_compositor_execute(*compositor_job->render,
-                          *compositor_job->bmain,
-                          *evaluated_scene,
-                          evaluated_scene->r,
-                          *compositor_job->evaluated_node_tree,
-                          "",
-                          nullptr,
-                          compositor_job->needed_outputs);
+    RE_compositor_execute(input_data);
   }
   else {
     for (SceneRenderView &scene_render_view : evaluated_scene->r.views) {
       if (!BKE_scene_multiview_is_render_view_active(&evaluated_scene->r, &scene_render_view)) {
         continue;
       }
-      RE_compositor_execute(*compositor_job->render,
-                            *compositor_job->bmain,
-                            *evaluated_scene,
-                            evaluated_scene->r,
-                            *compositor_job->evaluated_node_tree,
-                            scene_render_view.name,
-                            nullptr,
-                            compositor_job->needed_outputs);
+      input_data.view_name = scene_render_view.name;
+      RE_compositor_execute(input_data);
     }
   }
 }
@@ -181,7 +176,7 @@ static bool is_compositing_possible(const Scene *scene)
     return false;
   }
 
-  if (!scene->compositing_node_group) {
+  if (!bke::compositor::is_enabled(*scene, bke::compositor::ExecutionMode::Preview)) {
     return false;
   }
 
@@ -204,7 +199,7 @@ static bool is_compositing_possible(const Scene *scene)
 /* Returns the compositor outputs that need to be computed because their result is visible to the
  * user or required by the render pipeline. */
 static compositor::NodeGroupOutputTypes get_compositor_needed_outputs(
-    const wmWindowManager *window_manager, Scene *scene)
+    const wmWindowManager *window_manager)
 {
   if (G.background) {
     return compositor::NodeGroupOutputTypes::None;
@@ -231,24 +226,13 @@ static compositor::NodeGroupOutputTypes get_compositor_needed_outputs(
       else if (space_link->spacetype == SPACE_IMAGE) {
         const SpaceImage *space_image = reinterpret_cast<const SpaceImage *>(space_link);
         Image *image = ED_space_image(space_image);
-        if (!image || image->source != IMA_SRC_VIEWER) {
-          continue;
-        }
-        /* Do not override the Render Result if compositing is disabled in the render pipeline or
-         * if the sequencer is enabled. */
-        if (image->type == IMA_TYPE_R_RESULT && scene->r.scemode & R_DOCOMP &&
-            !RE_seq_render_active(scene, &scene->r))
-        {
-          needed_outputs |= compositor::NodeGroupOutputTypes::GroupOutputNode;
-        }
-        else if (image->type == IMA_TYPE_COMPOSITE) {
+        if (image && image->source == IMA_SRC_VIEWER && image->type == IMA_TYPE_COMPOSITE) {
           needed_outputs |= compositor::NodeGroupOutputTypes::ViewerNode;
         }
       }
 
-      /* All outputs are already needed, return early. */
-      if (needed_outputs == (compositor::NodeGroupOutputTypes::GroupOutputNode |
-                             compositor::NodeGroupOutputTypes::ViewerNode |
+      /* All possible outputs are already needed, return early. */
+      if (needed_outputs == (compositor::NodeGroupOutputTypes::ViewerNode |
                              compositor::NodeGroupOutputTypes::NodePreviews))
       {
         return needed_outputs;
@@ -265,7 +249,20 @@ static compositor::NodeGroupOutputTypes get_compositor_needed_outputs(
   return needed_outputs;
 }
 
-void ED_node_compositor_job(Main *bmain, Scene *scene, ViewLayer *view_layer)
+static eWM_JobFlag get_job_flags(const bool triggered_by_user)
+{
+  /* Of the job is triggered by the user, report progress. */
+  if (triggered_by_user) {
+    return WM_JOB_EXCL_RENDER | WM_JOB_PROGRESS;
+  }
+
+  return WM_JOB_EXCL_RENDER;
+}
+
+void ED_node_compositor_job(Main *bmain,
+                            Scene *scene,
+                            ViewLayer *view_layer,
+                            const bool triggered_by_user)
 {
   if (!is_compositing_possible(scene)) {
     return;
@@ -273,7 +270,7 @@ void ED_node_compositor_job(Main *bmain, Scene *scene, ViewLayer *view_layer)
 
   wmWindowManager *window_manager = static_cast<wmWindowManager *>(bmain->wm.first);
   const compositor::NodeGroupOutputTypes needed_outputs = get_compositor_needed_outputs(
-      window_manager, scene);
+      window_manager);
   if (needed_outputs == compositor::NodeGroupOutputTypes::None) {
     return;
   }
@@ -288,7 +285,7 @@ void ED_node_compositor_job(Main *bmain, Scene *scene, ViewLayer *view_layer)
                            window,
                            scene,
                            "Compositing...",
-                           WM_JOB_EXCL_RENDER | WM_JOB_PROGRESS,
+                           get_job_flags(triggered_by_user),
                            WM_JOB_TYPE_COMPOSITE);
 
   CompositorJob *compositor_job = MEM_new<CompositorJob>("Compositor Job");
@@ -297,6 +294,7 @@ void ED_node_compositor_job(Main *bmain, Scene *scene, ViewLayer *view_layer)
   compositor_job->scene = scene;
   compositor_job->view_layer = view_layer;
   compositor_job->needed_outputs = needed_outputs;
+  compositor_job->triggered_by_user = triggered_by_user;
 
   WM_jobs_customdata_set(job, compositor_job, compositor_job_free);
   WM_jobs_timer(job, 0.1, 0, 0);
