@@ -275,9 +275,8 @@ class PassBase {
    * Record a stream of draw records for the given batch. Each record is culled
    * against its own resource bound and written to a static draw command slot. Records are issued
    * as multi-draw indirect calls.
-   * \note A record with an instance or vertex count of 0 will be discarded. It will not be
-   * recorded.
-   * \note Only supported by `PassMain` (DrawMultiBuf). Using it with `PassSimple` asserts.
+   *
+   * \note Only supported by `PassMain`.
    */
   void draw_multi(gpu::Batch *batch, Span<command::DrawRecord> records);
 

@@ -553,14 +553,18 @@ void MTLBatch::draw_advanced_indirect(StorageBuf *indirect_buf, intptr_t offset)
   this->draw_advanced_indirect_internal(indirect_buf, 1, offset, 0);
 }
 
-void MTLBatch::multi_draw_indirect(
-    StorageBuf *indirect_buf, int count, intptr_t offset, intptr_t stride)
+void MTLBatch::multi_draw_indirect(StorageBuf *indirect_buf,
+                                   int count,
+                                   intptr_t offset,
+                                   intptr_t stride)
 {
   this->draw_advanced_indirect_internal(indirect_buf, count, offset, stride);
 }
 
-void MTLBatch::draw_advanced_indirect_internal(
-    StorageBuf *indirect_buf, int count, intptr_t offset, intptr_t stride)
+void MTLBatch::draw_advanced_indirect_internal(StorageBuf *indirect_buf,
+                                               int count,
+                                               intptr_t offset,
+                                               intptr_t stride)
 {
   BLI_assert(count > 0);
 
@@ -638,7 +642,9 @@ void MTLBatch::draw_advanced_indirect_internal(
   for (int i = 0; i < count; i++) {
     intptr_t cmd_offset = offset + i * stride;
     if (mtl_elem == nullptr) {
-      [rec drawPrimitives:mtl_prim_type indirectBuffer:mtl_indirect_buf indirectBufferOffset:cmd_offset];
+      [rec drawPrimitives:mtl_prim_type
+                indirectBuffer:mtl_indirect_buf
+          indirectBufferOffset:cmd_offset];
     }
     else {
       [rec drawIndexedPrimitives:mtl_prim_type
