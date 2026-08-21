@@ -10,6 +10,8 @@
 #include "pratt_parser.hh"
 #include "symbol_table.hh"
 
+#include <bit>
+
 namespace bsl {
 
 /**
@@ -130,6 +132,34 @@ struct ExpressionTypeParser
             else if (fn->identifier == "bool") {
               return std::visit(
                   [&](auto val) -> ExpressionResult { return {table->bool_cls, bool(val)}; },
+                  res.value);
+            }
+            else if (fn->identifier == "floatBitsToUint") {
+              return std::visit(
+                  [&](auto val) -> ExpressionResult {
+                    return {table->uint_cls, std::bit_cast<uint32_t>(float(val))};
+                  },
+                  res.value);
+            }
+            else if (fn->identifier == "floatBitsToInt") {
+              return std::visit(
+                  [&](auto val) -> ExpressionResult {
+                    return {table->int_cls, std::bit_cast<int>(float(val))};
+                  },
+                  res.value);
+            }
+            else if (fn->identifier == "uintBitsToFloat") {
+              return std::visit(
+                  [&](auto val) -> ExpressionResult {
+                    return {table->uint_cls, std::bit_cast<float>(uint32_t(val))};
+                  },
+                  res.value);
+            }
+            else if (fn->identifier == "intBitsToFloat") {
+              return std::visit(
+                  [&](auto val) -> ExpressionResult {
+                    return {table->int_cls, std::bit_cast<float>(int(val))};
+                  },
                   res.value);
             }
           }

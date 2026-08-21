@@ -10,6 +10,7 @@
 #include "expression.hh"
 
 #include <bit>
+#include <cmath>
 
 namespace bsl {
 
@@ -515,6 +516,11 @@ void SymbolTable::register_builtins(LocalScope node)
     builtin_function_decl(f, false);
   }
 
+  root->lookup_function("floatBitsToUint")->is_builtin = true;
+  root->lookup_function("floatBitsToInt")->is_builtin = true;
+  root->lookup_function("uintBitsToFloat")->is_builtin = true;
+  root->lookup_function("intBitsToFloat")->is_builtin = true;
+
   const vector<BuiltinType> builtin_types = generate_builtin_types();
 
   const vector<BuiltinFunc> builtin_constructors = generate_all_constructors(builtin_types);
@@ -563,7 +569,7 @@ void SymbolTable::register_builtins(LocalScope node)
       {"INT_MAX", "float", true, 0x7FFFFFFF},
       {"USHRT_MAX", "float", true, 0x0000FFFFu},
       {"UINT_MAX", "float", true, 0xFFFFFFFFu},
-      {"NAN_FLT", "float", false, 0},
+      {"NAN_FLT", "float", true, NAN},
       {"FLT_11_MAX", "float", false, 0},
       {"FLT_10_MAX", "float", false, 0},
       {"FLT_11_11_10_MAX", "float3", false, 0},

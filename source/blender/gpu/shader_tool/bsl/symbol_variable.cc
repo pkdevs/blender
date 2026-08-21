@@ -9,6 +9,7 @@
 #include "symbol_variable.hh"
 #include "symbol_table.hh"
 
+#include <cmath>
 #include <iomanip>
 #include <limits>
 #include <sstream>
@@ -94,6 +95,9 @@ string SymbolVariable::value_str() const
           return to_string(v) + "u";
         }
         else if constexpr (std::is_same_v<T, float>) {
+          if (std::isnan(v)) {
+            return "uintBitsToFloat(0x7FC00000u)";
+          }
           return to_string_exact(v);
         }
         else {

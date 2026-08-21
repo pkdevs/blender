@@ -301,18 +301,22 @@ TEST(shader_tool, Constexpr)
     string input = R"(
 static constexpr int a{1};
 static constexpr int b = {3};
-// static constexpr int c = int{3}; /* TODO */
+static constexpr int c = int(3);
 static constexpr int d = 4;
 static constexpr int e = {{4}};
 static constexpr int f = (a + b / 2) * d - e;
+static constexpr int g = floatBitsToInt(24);
+static constexpr float h = intBitsToFloat(floatBitsToInt(24));
 int func() { return f; })";
     string expect = R"(
 static constexpr int a= 1;
 static constexpr int b = 3;
-
+static constexpr int c = 3;
 static constexpr int d = 4;
 static constexpr int e = 4;
 static constexpr int f = 4;
+static constexpr int g = 1103101952;
+static constexpr float h = 24.0f;
 int func() { return 4; })";
     auto [output, _, error] = process_test_string(input, Language::BSL);
     EXPECT_EQ(output, expect);
