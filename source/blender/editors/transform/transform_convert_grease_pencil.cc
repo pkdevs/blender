@@ -375,35 +375,6 @@ static void recalcData_grease_pencil(TransInfo *t)
     }
 
     DEG_id_tag_update(&grease_pencil.id, ID_RECALC_GEOMETRY);
-
-    // // WM_event_add_notifier(C, NC_OBJECT | ND_KEYS, nullptr);
-
-    // if (key) {
-    //   WM_main_add_notifier(NC_OBJECT | ND_KEYS, &key->id);
-    // }
-    // // WM_event_add_notifier(C, NC_OBJECT | ND_KEYS, &tc.obedit->id);
-
-    // DEG_id_tag_update(&tc.obedit->id, ID_RECALC_GEOMETRY);
-    // // WM_event_add_notifier(C, NC_OBJECT | ND_DRAW, ob);
-
-    // Object *ob;
-
-    // for (ob = static_cast<Object *>(t->bmain->objects.first); ob;
-    //      ob = static_cast<Object *>(ob->id.next))
-    // {
-    //   if (BKE_key_from_object(ob) == key) {
-    //     DEG_id_tag_update(&ob->id, ID_RECALC_GEOMETRY);
-    //     WM_main_add_notifier(NC_OBJECT | ND_MODIFIER, ob);
-    //   }
-    // }
-
-    // // if (BKE_key_from_object(ob) == key) {
-    // //   DEG_id_tag_update(&ob->id, ID_RECALC_GEOMETRY);
-    // //   WM_main_add_notifier(NC_OBJECT | ND_MODIFIER, ob);
-    // // }
-
-    // // DEG_id_tag_update(&tc.obedit->id, ID_RECALC_GEOMETRY);
-    // // WM_main_add_notifier(NC_OBJECT | ND_MODIFIER, tc.obedit);
   }
 }
 
@@ -412,8 +383,6 @@ static void special_aftertrans_update__grease_pencil(bContext *C, TransInfo *t)
   Scene *scene = CTX_data_scene(C);
   MutableSpan<TransDataContainer> trans_data_contrainers(t->data_container, t->data_container_len);
 
-  // WM_event_add_notifier(C, NC_OBJECT | ND_KEYS | ND_DRAW, nullptr);
-
   /* If the transform operation was cancelled and new keyframes got created, remove them. */
   if ((t->state != TRANS_CANCEL) || ((t->flag & T_DUPLICATED_KEYFRAMES) == 0)) {
     return;
@@ -421,8 +390,6 @@ static void special_aftertrans_update__grease_pencil(bContext *C, TransInfo *t)
 
   for (TransDataContainer &tc : trans_data_contrainers) {
     GreasePencil &grease_pencil = *id_cast<GreasePencil *>(tc.obedit->data);
-
-    // WM_event_add_notifier(C, NC_OBJECT | ND_KEYS | ND_DRAW, tc.obedit);
 
     Vector<ed::greasepencil::MutableDrawingInfo> drawings =
         ed::greasepencil::retrieve_editable_drawings_with_falloff(*scene, grease_pencil);
