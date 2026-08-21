@@ -16,18 +16,32 @@ static void node_declare(NodeDeclarationBuilder &b)
   const bNodeTree *ntree = b.tree_or_null();
   const bool is_gpu_internal = ntree && (ntree->flag & NTREE_IS_GPU_SHADER_INTERNAL);
 
-  b.add_output<decl::Color>("Color"_ustr);
-  b.add_output<decl::Float>("Power"_ustr);
-  b.add_output<decl::Vector>("Position"_ustr);
-  b.add_output<decl::Float>("Cutoff Distance"_ustr);
+  b.add_output<decl::Color>("Color"_ustr).description("Light color");
+  b.add_output<decl::Float>("Power"_ustr).description("Radiant intensity divided by PI");
+  b.add_output<decl::Vector>("Position"_ustr).description("Light position");
+  b.add_output<decl::Float>("Cutoff Distance"_ustr).description("Max light influence radius");
   b.add_output<decl::Float>("Is Sun"_ustr);
   b.add_separator();
-  b.add_output<decl::Vector>("Direction"_ustr);
-  b.add_output<decl::Float>("Distance"_ustr);
-  b.add_output<decl::Float>("Mask"_ustr);
+  b.add_output<decl::Vector>("Direction"_ustr)
+      .description(
+          "Local lights: Normalized direction from evaluation position to light position.\n"
+          "Sun lights: Sun direction * -1.0");
+  b.add_output<decl::Float>("Distance"_ustr)
+      .description(
+          "Local lights: Distance from evaluation position to light position.\n"
+          "Sun lights: 1.0");
+  b.add_output<decl::Float>("Mask"_ustr)
+      .description(
+          "All local lights: Mask to smooth the light cutoff.\n"
+          "Spot lights: Cutoff mask and spot attenuation.\n"
+          "Sun lights: 1.0");
 
   b.add_input<decl::Int>("LightIndex"_ustr).available(is_gpu_internal);
-  b.add_input<decl::Vector>("Position"_ustr).hide_value();
+  b.add_input<decl::Vector>("Position"_ustr)
+      .hide_value()
+      .description(
+          "Evaluation position used for Direction, Distance, and Mask.\n"
+          "Surface position by default");
 }
 
 static int node_shader_gpu_light_info(GPUMaterial *mat,
@@ -57,7 +71,9 @@ void register_node_type_sh_light_info()
 
   sh_node_type_base(&ntype, "ShaderNodeLightInfo"_ustr, SH_NODE_LIGHT_INFO);
   ntype.ui_name = "Light Info";
-  ntype.ui_description = "Light Info";
+  ntype.ui_description =
+      "Exposes physical properties of the light being evaluated and computes basic information "
+      "relative to the evaluation position";
   ntype.enum_name_legacy = "LIGHT INFO";
   ntype.nclass = NODE_CLASS_INPUT;
   ntype.declare = file_ns::node_declare;

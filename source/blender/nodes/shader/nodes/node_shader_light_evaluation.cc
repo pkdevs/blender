@@ -22,7 +22,7 @@ static void node_declare(NodeDeclarationBuilder &b)
       .min(0.0f)
       .max(1.0f)
       .subtype(PROP_FACTOR);
-  b.add_output<decl::Float>("Factor"_ustr);
+  b.add_output<decl::Float>("Factor"_ustr).description("Shading reflection factor, scaled by PI");
 }
 
 static int node_shader_gpu_light_evaluation(GPUMaterial *mat,

@@ -54,7 +54,11 @@ void register_node_type_sh_light_accumulation()
 
   sh_node_type_base(&ntype, "ShaderNodeLightAccumulation"_ustr, SH_NODE_LIGHT_ACCUMULATION);
   ntype.ui_name = "Light Accumulation";
-  ntype.ui_description = "Light Accumulation";
+  ntype.ui_description =
+      "Adds the result of all the evaluated lights and stores each input into its respective "
+      "Compositing Pass.\n"
+      "The combined result is computed as (Diffuse Light * Diffuse Color) + (Glossy Light * "
+      "Glossy Color)";
   ntype.enum_name_legacy = "LIGHT ACCUMULATION";
   ntype.nclass = NODE_CLASS_SHADER;
   ntype.declare = file_ns::node_declare;
