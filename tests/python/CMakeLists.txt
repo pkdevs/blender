@@ -1766,6 +1766,14 @@ if(WITH_UI_TESTS)
     test_render.interactive_rendering_eevee
     test_render.animation_rendering_and_player
     test_bpy_types.unregister_referenced_type
+    test_drag_interactions.view3d_object_drag
+    test_drag_interactions.viewport_navigation_drags
+    test_drag_interactions.node_single_drag
+    test_drag_interactions.node_multiple_drag
+    test_drag_interactions.dopesheet_keyframe_drag
+    test_drag_interactions.graph_editor_drag
+    test_drag_interactions.uv_editor_drag
+    test_drag_interactions.image_editor_pan
     test_drop_interactions.view3d_drop_world
     test_drop_interactions.view3d_drop_world_session_uid
     test_drop_interactions.view3d_drop_world_cancel
