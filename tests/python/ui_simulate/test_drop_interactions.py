@@ -183,7 +183,7 @@ def scene_drop_scene_asset():
 
 def scene_drop_scene_asset_cancel():
     import bpy
-    e, t, window = ui.test_window()
+    _e, t, _ = ui.test_window()
     yield
 
     original_scene = bpy.context.window.scene

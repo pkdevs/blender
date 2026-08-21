@@ -1766,6 +1766,14 @@ if(WITH_UI_TESTS)
     test_render.interactive_rendering_eevee
     test_render.animation_rendering_and_player
     test_bpy_types.unregister_referenced_type
+    test_drop_interactions.view3d_drop_world
+    test_drop_interactions.view3d_drop_world_session_uid
+    test_drop_interactions.view3d_drop_world_cancel
+    test_drop_interactions.ui_drop_material_slot
+    test_drop_interactions.scene_drop_scene_asset
+    test_drop_interactions.scene_drop_scene_asset_cancel
+    test_drop_interactions.scene_drop_scene_asset_child_window
+    test_drop_interactions.file_browser_drop_folder
     test_sequencer.compositor_modifier_mask_with_single_input
     test_menu_search_and_exec.view3d_add
     test_menu_search_and_exec.modifier_add
