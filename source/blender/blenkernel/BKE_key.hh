@@ -20,7 +20,6 @@ namespace blender {
  * \ingroup bke
  */
 struct Curve;
-struct GreasePencil;
 struct ID;
 struct Key;
 struct KeyBlock;
