@@ -281,8 +281,7 @@ static void bm_face_calc_tri_density_uv(const BMLoop *l0,
                                         const BMLoop *l1,
                                         const BMLoop *l2,
                                         int cd_loop_uv_offset,
-                                        int width,
-                                        int height,
+                                        const float2 &image_size,
                                         double2 &r_density,
                                         double &r_area)
 {
@@ -300,9 +299,13 @@ static void bm_face_calc_tri_density_uv(const BMLoop *l0,
   const float2 uv_e1 = float2(luv1) - float2(luv0);
   const float2 uv_e2 = float2(luv2) - float2(luv0);
 
+  constexpr float epsilon_area = 1e-7f;
+  /* `tangent`/`bitangent` scale with `abs_det`, so the threshold must scale too. */
+  constexpr float epsilon_stretch_relative = 1e-6f;
+
   const float det = math::cross(uv_e1, uv_e2);
   const float abs_det = math::abs(det);
-  if (abs_det > 1e-7f) {
+  if (abs_det > epsilon_area) {
     const float3 tangent = e1 * uv_e2.y - e2 * uv_e1.y;
     const float3 bitangent = e2 * uv_e1.x - e1 * uv_e2.x;
 
@@ -311,32 +314,28 @@ static void bm_face_calc_tri_density_uv(const BMLoop *l0,
 
     const float area = area_tri_v3(p0, p1, p2);
 
-    if (area > 1e-7f) {
-      if (tangent_length > 1e-6f * abs_det) {
-        r_density.x += area * ((width * abs_det) / tangent_length);
+    if (area > epsilon_area) {
+      if (tangent_length > epsilon_stretch_relative * abs_det) {
+        r_density.x += area * ((image_size.x * abs_det) / tangent_length);
       }
-      if (bitangent_length > 1e-6f * abs_det) {
-        r_density.y += area * ((height * abs_det) / bitangent_length);
+      if (bitangent_length > epsilon_stretch_relative * abs_det) {
+        r_density.y += area * ((image_size.y * abs_det) / bitangent_length);
       }
       r_area += area;
     }
   }
 }
 
-float2 BM_face_calc_density_uv(const BMFace *f, int cd_loop_uv_offset, int width, int height)
+float2 BM_face_calc_density_uv(const BMFace *f, int cd_loop_uv_offset, const float2 &image_size)
 {
   const int len = f->len;
-  if (len < 3) {
-    return {0.0f, 0.0f};
-  }
-
   double2 density = {0.0, 0.0};
-  double area_sum = 0.0;
+  double area_uv_sum = 0.0;
 
   if (len == 3) {
     const BMLoop *l0 = BM_FACE_FIRST_LOOP(f);
     bm_face_calc_tri_density_uv(
-        l0, l0->next, l0->next->next, cd_loop_uv_offset, width, height, density, area_sum);
+        l0, l0->next, l0->next->next, cd_loop_uv_offset, image_size, density, area_uv_sum);
   }
   else {
     const int total_tri = len - 2;
@@ -348,15 +347,14 @@ float2 BM_face_calc_density_uv(const BMFace *f, int cd_loop_uv_offset, int width
                                   loops[index[j][1]],
                                   loops[index[j][2]],
                                   cd_loop_uv_offset,
-                                  width,
-                                  height,
+                                  image_size,
                                   density,
-                                  area_sum);
+                                  area_uv_sum);
     }
   }
 
-  if (area_sum > 0.0) {
-    return {float(density.x / area_sum), float(density.y / area_sum)};
+  if (area_uv_sum > 0.0) {
+    return {float(density.x / area_uv_sum), float(density.y / area_uv_sum)};
   }
   return {0.0f, 0.0f};
 }
