@@ -17,8 +17,6 @@ using namespace lexit;
 struct ParserBase;
 struct Token;
 
-std::string to_str(TokenType type);
-
 namespace ast {
 
 using Token = parser::Token;
@@ -56,15 +54,18 @@ enum class NodeType : char {
   TemplateInst,
   TemplateExplicit,
   LocalScope,
+  ArrayDecl,
   Subscript,
   AttrList,
   Attr,
   Expr,
+  ContinueStmt,
+  BreakStmt,
   ReturnStmt,
   UsingStmt,
   LocalStmt,
   LocalVar,
-  Switch,
+  SwitchStmt,
   SwitchCase,
   ForLoop,
   WhileLoop,
@@ -77,10 +78,12 @@ enum class NodeType : char {
   DesignatedInitializer,
   Initializer,
   StringConst,
+  ExprSub,
   NumConst,
   Op,
   OpDeref,
   Constructor,
+  StructuredBinding,
 };
 
 using TokenID = int;
@@ -90,6 +93,7 @@ struct NodeData;
 using Nodes = std::vector<NodeData>;
 
 struct NodeData {
+  NodeType type = NodeType::Invalid;
   TokenID front = -1;
   TokenID back = -1;
   NodeID parent = -1;
@@ -97,12 +101,11 @@ struct NodeData {
   NodeID next = -1;
   NodeID child_first = -1;
   NodeID child_last = -1;
-  NodeType type = NodeType::Invalid;
 
   NodeData() = default;
 
   NodeData(Nodes &nodes, NodeID id, NodeID parent_id, lexit::Token tok, NodeType type)
-      : front(tok.index_), back(tok.index_), type(type)
+      : type(type), front(tok.index_), back(tok.index_)
   {
     if (parent_id != -1) {
       NodeData &parent = nodes[parent_id];
@@ -126,6 +129,7 @@ struct Node {
   NodeID id = -1;
 #ifdef LEXIT_DEBUG
   NodeType debug_type;
+  const NodeData *debug_data;
   std::string_view debug_str;
 #endif
 
@@ -135,9 +139,11 @@ struct Node {
 #ifdef LEXIT_DEBUG
     debug_str = str();
     debug_type = type();
+    debug_data = data();
 #endif
   }
 
+  const NodeData *data() const;
   NodeType type() const;
 
   Token front() const;
@@ -145,9 +151,10 @@ struct Node {
 
   Node prev() const;
   Node next() const;
+  Node parent() const;
   Node prev(NodeType type) const;
   Node next(NodeType type) const;
-  Node parent() const;
+  Node parent(NodeType type) const;
   Node children() const;
   Node child_first() const;
   Node child_last() const;
@@ -162,14 +169,18 @@ struct Node {
     return (node.type() == type) ? node : node.prev(type);
   }
 
+  int child_count() const;
   bool is_empty() const;
   bool is_valid() const
   {
     return id != -1;
   }
+  bool has_single_child() const;
 
   void print_ast() const;
   std::string_view str() const;
+  /* Same as str buf with trailing whitespaces. */
+  std::string_view str_full() const;
 
   bool operator==(NodeType type) const
   {
@@ -188,23 +199,17 @@ struct Node {
 
   /* Traversal. */
 
-  template<typename NodeT, typename CallbackT> void foreach_recursive(CallbackT cb) const
-  {
-    for (Node end = Node(p, child_last().id + 1),
-              node = first_node_of_type(children(), NodeT::NodeEnumVal, end);
-         node.id != end.id;
-         node = next_node_of_type(node, NodeT::NodeEnumVal, end))
-    {
-      cb(NodeT(node));
-    }
-  }
+  struct ChildIterator;
+  struct ChildRange;
+  ChildRange children_range() const;
 
-  template<typename NodeT, typename CallbackT> void foreach(CallbackT cb) const
-  {
-    for (Node node = children(); node.is_valid(); node = node.next(NodeT::NodeEnumVal)) {
-      cb(NodeT(node));
-    }
-  }
+  template<typename NodeT> struct TypedChildIterator;
+  template<typename NodeT> struct TypedChildRange;
+  template<typename NodeT> TypedChildRange<NodeT> children_of_type() const;
+
+  template<typename NodeT> struct RecursiveTypedIterator;
+  template<typename NodeT> struct RecursiveTypedRange;
+  template<typename NodeT> RecursiveTypedRange<NodeT> descendants_of_type() const;
 
  private:
   static Node first_node_of_type(Node node, NodeType type, Node end)
@@ -222,7 +227,178 @@ struct Node {
     } while (node.id != end.id && node.type() != type);
     return node;
   }
+
+  Node find_recursion_end() const
+  {
+    {
+      /* Try using next first. */
+      Node node = *this;
+      if (node.next().is_valid()) {
+        return node.next();
+      }
+    }
+    {
+      /* Try using parent next. */
+      Node node = *this;
+      while (node.is_valid()) {
+        node = node.parent();
+        if (node.next().is_valid()) {
+          return node.next();
+        }
+      }
+    }
+    {
+      /* Using children in last resort. */
+      Node node = *this;
+      while (node.is_valid()) {
+        node = node.child_last();
+        if (!node.child_last().is_valid()) {
+          /* No children. Deepest latest node. */
+          return Node(p, node.id + 1);
+        }
+      }
+    }
+    /* Nothing to iterate on. */
+    return *this;
+  }
 };
+
+struct Node::ChildIterator {
+  Node current;
+
+  ChildIterator &operator++()
+  {
+    current = current.next();
+    return *this;
+  }
+  ChildIterator operator++(int)
+  {
+    ChildIterator tmp = *this;
+    ++(*this);
+    return tmp;
+  }
+  Node operator*() const
+  {
+    return current;
+  }
+  bool operator!=(const ChildIterator &other) const
+  {
+    return current.id != other.current.id;
+  }
+  bool operator==(const ChildIterator &other) const
+  {
+    return current.id == other.current.id;
+  }
+};
+
+struct Node::ChildRange {
+  Node parent;
+  ChildIterator begin() const
+  {
+    return {parent.child_first()};
+  }
+  ChildIterator end() const
+  {
+    return {Node()};
+  }
+};
+
+inline Node::ChildRange Node::children_range() const
+{
+  return {*this};
+}
+
+template<typename NodeT> struct Node::TypedChildIterator {
+  Node current;
+
+  TypedChildIterator &operator++()
+  {
+    current = current.next(NodeT::NodeEnumVal);
+    return *this;
+  }
+  TypedChildIterator operator++(int)
+  {
+    TypedChildIterator tmp = *this;
+    ++(*this);
+    return tmp;
+  }
+  NodeT operator*() const
+  {
+    return NodeT(current);
+  }
+  bool operator!=(const TypedChildIterator &other) const
+  {
+    return current.id != other.current.id;
+  }
+  bool operator==(const TypedChildIterator &other) const
+  {
+    return current.id == other.current.id;
+  }
+};
+
+template<typename NodeT> struct Node::TypedChildRange {
+  Node parent;
+  TypedChildIterator<NodeT> begin() const
+  {
+    return {parent.child_first(NodeT::NodeEnumVal)};
+  }
+  TypedChildIterator<NodeT> end() const
+  {
+    return {Node()};
+  }
+};
+
+template<typename NodeT> inline Node::TypedChildRange<NodeT> Node::children_of_type() const
+{
+  return {*this};
+}
+
+template<typename NodeT> struct Node::RecursiveTypedIterator {
+  Node current;
+  Node end_node;
+
+  RecursiveTypedIterator &operator++()
+  {
+    current = Node::next_node_of_type(current, NodeT::NodeEnumVal, end_node);
+    return *this;
+  }
+  RecursiveTypedIterator operator++(int)
+  {
+    RecursiveTypedIterator tmp = *this;
+    ++(*this);
+    return tmp;
+  }
+  NodeT operator*() const
+  {
+    return NodeT(current);
+  }
+  bool operator!=(const RecursiveTypedIterator &other) const
+  {
+    return current.id != other.current.id;
+  }
+  bool operator==(const RecursiveTypedIterator &other) const
+  {
+    return current.id == other.current.id;
+  }
+};
+
+template<typename NodeT> struct Node::RecursiveTypedRange {
+  Node start;
+  Node end_node;
+  RecursiveTypedIterator<NodeT> begin() const
+  {
+    return {Node::first_node_of_type(start.children(), NodeT::NodeEnumVal, end_node), end_node};
+  }
+  RecursiveTypedIterator<NodeT> end() const
+  {
+    return {end_node, end_node};
+  }
+};
+
+template<typename NodeT> inline Node::RecursiveTypedRange<NodeT> Node::descendants_of_type() const
+{
+  return {*this, find_recursion_end()};
+}
 
 #define NODE_COMMON(Type) \
   static constexpr NodeType NodeEnumVal = NodeType::Type; \
@@ -233,14 +409,35 @@ using TokenRange = Token; /* TODO */
 
 struct FuncParamList;
 struct LocalScope;
+struct ClassDecl;
 struct InitializerList;
+struct TemplateParamList;
 
 struct Preprocessor : Node {
   NODE_COMMON(Preprocessor);
 };
 
+struct NumConst : Node {
+  NODE_COMMON(NumConst);
+};
+
 struct Id : Node {
   NODE_COMMON(Id);
+
+  /* Return the next Id in an IdQualified.  */
+  Id next_id() const
+  {
+    Node next_node = next();
+    next_node = (next_node.type() == NodeType::TemplateParamList) ? next_node.next() : next_node;
+    return next_node.type() == NodeType::NamespaceSeparator ? next_node.next() : Node{};
+  }
+
+  bool is_namespace() const
+  {
+    return next_id().is_valid();
+  }
+
+  TemplateParamList template_params() const;
 };
 
 struct IdQualified : Node {
@@ -251,15 +448,37 @@ struct IdQualified : Node {
     return child_first(NodeType::NamespaceSeparator).is_valid();
   }
 
-  TokenRange full_namespace() const;
-  IdQualified parent_namespace() const;
+  bool is_global() const
+  {
+    return child_first().type() == NodeType::NamespaceSeparator;
+  }
 
   Id name() const
   {
-    Node node = children().child_last();
-    return Id(node);
+    return child_last(NodeType::Id);
   }
+
+  Id namespace_start() const
+  {
+    return child_first(NodeType::Id);
+  }
+
+  TemplateParamList template_params() const;
 };
+
+struct TemplateParamList : Node {
+  NODE_COMMON(TemplateParamList);
+};
+
+inline TemplateParamList IdQualified::template_params() const
+{
+  return child_last(NodeType::TemplateParamList);
+}
+
+inline TemplateParamList Id::template_params() const
+{
+  return next();
+}
 
 struct OpDeref : Node {
   NODE_COMMON(OpDeref);
@@ -277,6 +496,90 @@ struct TemplateExplicit : Node {
   NODE_COMMON(TemplateExplicit);
 };
 
+struct TemplateSpec : Node {
+  NODE_COMMON(TemplateSpec);
+
+  TemplateParamList parameters() const;
+
+  bool is_function() const
+  {
+    return child_last().type() == NodeType::FuncDecl;
+  }
+
+  bool is_class() const
+  {
+    return child_last().type() == NodeType::ClassDecl;
+  }
+
+  Node decl() const
+  {
+    return child_last();
+  }
+};
+
+struct TemplateInst : Node {
+  NODE_COMMON(TemplateInst);
+
+  TemplateParamList parameters() const;
+
+  bool is_function() const
+  {
+    return child_last().type() == NodeType::FuncForwardDecl;
+  }
+
+  bool is_class() const
+  {
+    return child_last().type() == NodeType::ClassDecl;
+  }
+
+  Node decl() const
+  {
+    return child_last();
+  }
+};
+
+struct TemplateArg : Node {
+  NODE_COMMON(TemplateArg);
+
+  IdQualified type() const
+  {
+    return child_first();
+  }
+
+  IdQualified identifier() const
+  {
+    return child_last();
+  }
+};
+
+struct TemplateArgList : Node {
+  NODE_COMMON(TemplateArgList);
+};
+
+struct TemplateDecl : Node {
+  NODE_COMMON(TemplateDecl);
+
+  TemplateArgList arguments() const
+  {
+    return child_first();
+  }
+
+  bool is_function() const
+  {
+    return child_last().type() == NodeType::FuncDecl;
+  }
+
+  bool is_class() const
+  {
+    return child_last().type() == NodeType::ClassDecl;
+  }
+
+  Node decl() const
+  {
+    return child_last();
+  }
+};
+
 struct Const : Node {
   NODE_COMMON(Const);
 };
@@ -287,6 +590,31 @@ struct Reference : Node {
 
 struct Expr : Node {
   NODE_COMMON(Expr);
+};
+
+struct ExprSub : Node {
+  NODE_COMMON(ExprSub);
+
+  Expr expr()
+  {
+    return child_first();
+  }
+};
+
+struct UsingStmt : Node {
+  NODE_COMMON(UsingStmt);
+
+  bool is_namespace() const;
+
+  IdQualified identifier() const
+  {
+    return child_first();
+  }
+
+  IdQualified aliased() const
+  {
+    return child_last();
+  }
 };
 
 struct LocalVar : Node {
@@ -315,12 +643,19 @@ struct IdType : Node {
     return constant().is_valid();
   }
 
-  Const constant() const
+  bool is_constexpr() const;
+
+  bool is_static() const
   {
-    return child_first();
+    return child_first(NodeType::StaticStmt).is_valid();
   }
 
-  IdQualified id() const
+  Const constant() const
+  {
+    return child_first(NodeType::Const);
+  }
+
+  IdQualified identifier() const
   {
     return child_first(NodeType::IdQualified);
   }
@@ -340,8 +675,19 @@ struct Subscript : Node {
   }
 };
 
-struct DesignatedInitializer : Node {
-  NODE_COMMON(DesignatedInitializer);
+struct ArrayDecl : Node {
+  NODE_COMMON(ArrayDecl);
+
+  /* Return 0 if invalid. */
+  int dimensions() const
+  {
+    return is_valid() ? child_count() : 0;
+  }
+
+  Subscript sub() const
+  {
+    return child_first();
+  }
 };
 
 struct Initializer : Node {
@@ -350,6 +696,20 @@ struct Initializer : Node {
 
 struct InitializerList : Node {
   NODE_COMMON(InitializerList);
+};
+
+struct Constructor : Node {
+  NODE_COMMON(Constructor);
+
+  IdQualified identifier() const
+  {
+    return child_first();
+  }
+
+  InitializerList initializer_list() const
+  {
+    return child_last();
+  }
 };
 
 struct Attr : Node {
@@ -368,13 +728,30 @@ struct AttrList : Node {
 
   bool contains_attr(std::string_view attr_name) const
   {
+    if (!is_valid()) {
+      return false;
+    }
     bool found = false;
-    foreach<Attr>([&](Attr attr) {
+    for (Attr attr : children_of_type<Attr>()) {
       if (attr.identifier().str() == attr_name) {
         found = true;
       }
-    });
+    }
     return found;
+  }
+};
+
+struct LocalStmt : Node {
+  NODE_COMMON(LocalStmt);
+
+  AttrList attributes() const
+  {
+    return child_first();
+  }
+
+  Expr expr() const
+  {
+    return child_last();
   }
 };
 
@@ -392,6 +769,32 @@ struct AssignStmt : Node {
   }
 };
 
+struct DesignatedInitializer : Node {
+  NODE_COMMON(DesignatedInitializer);
+
+  Id identifier() const
+  {
+    return child_first();
+  }
+
+  AssignStmt assign() const
+  {
+    return child_last();
+  }
+};
+
+struct StructuredBinding : Node {
+  NODE_COMMON(StructuredBinding);
+
+  /* Unique identified used to name the temporary variable. */
+  std::string tmp_id() const;
+
+  AssignStmt assign() const
+  {
+    return child_last();
+  }
+};
+
 struct Declarator : Node {
   NODE_COMMON(Declarator);
 
@@ -400,17 +803,27 @@ struct Declarator : Node {
     return reference().is_valid();
   }
 
+  bool is_array() const
+  {
+    return array().is_valid();
+  }
+
+  IdType type() const
+  {
+    return prev(NodeType::IdType);
+  }
+
   Reference reference() const
   {
     return child_first();
   }
 
-  Id identifier() const
+  IdQualified identifier() const
   {
-    return child_first(NodeType::Id);
+    return child_first(NodeType::IdQualified);
   }
 
-  Subscript array() const
+  ArrayDecl array() const
   {
     return identifier().next();
   }
@@ -443,6 +856,12 @@ struct VarDecl : Node {
   {
     return child_first(NodeType::IdType);
   }
+
+  /* Return true if the first declarator is a reference. */
+  bool is_reference() const
+  {
+    return Declarator(child_first(NodeType::Declarator)).is_reference();
+  }
 };
 
 struct FuncArg : Node {
@@ -473,7 +892,7 @@ struct FuncArg : Node {
     return type().is_const();
   }
 
-  Id identifier() const
+  IdQualified identifier() const
   {
     return declarator().identifier();
   }
@@ -502,6 +921,33 @@ struct FuncParamList : Node {
   NODE_COMMON(FuncParamList);
 
   bool is_empty() const;
+
+  struct Splat1 {
+    Expr arg1;
+  };
+  struct Splat2 {
+    Expr arg1, arg2;
+  };
+  struct Splat3 {
+    Expr arg1, arg2, arg3;
+  };
+
+  Splat1 splat_1() const
+  {
+    return {child_first()};
+  }
+
+  Splat2 splat_2() const
+  {
+    Node node = child_first();
+    return {node, node.next()};
+  }
+
+  Splat3 splat_3() const
+  {
+    Node node = child_first();
+    return {node, node.next(), node.next().next()};
+  }
 };
 
 inline FuncParamList Attr::parameters() const
@@ -509,12 +955,22 @@ inline FuncParamList Attr::parameters() const
   return FuncParamList(children().next());
 }
 
-struct FuncDecl : Node {
-  NODE_COMMON(FuncDecl);
+struct FuncForwardDecl : Node {
+  NODE_COMMON(FuncForwardDecl);
+
+  bool is_method() const
+  {
+    return parent(NodeType::ClassDecl).is_valid();
+  }
 
   bool is_static() const
   {
     return child_first(NodeType::StaticStmt).is_valid();
+  }
+
+  bool is_const() const
+  {
+    return child_last(NodeType::Const).is_valid();
   }
 
   AttrList attributes() const
@@ -537,6 +993,56 @@ struct FuncDecl : Node {
     return child_first(NodeType::FuncArgList);
   }
 
+  /* Associated class if this function is a class method. */
+  ClassDecl parent_class() const;
+};
+
+struct FuncDecl : Node {
+  NODE_COMMON(FuncDecl);
+
+  bool is_method() const
+  {
+    return parent(NodeType::ClassDecl).is_valid();
+  }
+
+  bool is_static() const
+  {
+    return child_first(NodeType::StaticStmt).is_valid();
+  }
+
+  bool is_const() const
+  {
+    return child_last(NodeType::Const).is_valid();
+  }
+
+  bool is_template() const
+  {
+    return TemplateDecl(parent()).is_valid();
+  }
+
+  AttrList attributes() const
+  {
+    return child_first();
+  }
+
+  IdType return_type() const
+  {
+    return child_first(NodeType::IdType);
+  }
+
+  IdQualified identifier() const
+  {
+    return return_type().next();
+  }
+
+  FuncArgList arguments() const
+  {
+    return child_first(NodeType::FuncArgList);
+  }
+
+  /* Associated class if this function is a class method. */
+  ClassDecl parent_class() const;
+
   LocalScope body() const;
 };
 
@@ -554,10 +1060,29 @@ struct FuncCall : Node {
   }
 };
 
+struct PipelineDecl : Node {
+  NODE_COMMON(PipelineDecl);
+
+  IdQualified type() const
+  {
+    return child_first();
+  }
+
+  IdQualified identifier() const
+  {
+    return type().next();
+  }
+
+  FuncParamList parameters() const
+  {
+    return child_last();
+  }
+};
+
 struct EnumValue : Node {
   NODE_COMMON(EnumValue);
 
-  Id identifier() const
+  IdQualified identifier() const
   {
     return child_first();
   }
@@ -572,9 +1097,145 @@ struct LocalScope : Node {
   NODE_COMMON(LocalScope);
 };
 
+struct Condition : Node {
+  NODE_COMMON(Condition);
+
+  AttrList attributes() const
+  {
+    return next();
+  }
+};
+
+struct IfStmt : Node {
+  NODE_COMMON(IfStmt);
+
+  Condition condition() const
+  {
+    return child_first();
+  }
+
+  AttrList attributes() const
+  {
+    return child_last(NodeType::AttrList);
+  }
+
+  LocalScope body() const
+  {
+    return child_last();
+  }
+};
+
+struct ElseIfStmt : Node {
+  NODE_COMMON(ElseIfStmt);
+
+  Condition condition() const
+  {
+    return child_first();
+  }
+
+  AttrList attributes() const
+  {
+    return child_last(NodeType::AttrList);
+  }
+
+  LocalScope body() const
+  {
+    return child_last();
+  }
+};
+
+struct ElseStmt : Node {
+  NODE_COMMON(ElseStmt);
+
+  LocalScope body() const
+  {
+    return child_last();
+  }
+};
+
+struct ForLoop : Node {
+  NODE_COMMON(ForLoop);
+
+  Condition condition() const
+  {
+    return child_first();
+  }
+
+  LocalScope body() const
+  {
+    return child_last();
+  }
+};
+
+struct WhileLoop : Node {
+  NODE_COMMON(WhileLoop);
+
+  Condition condition() const
+  {
+    return child_first();
+  }
+
+  LocalScope body() const
+  {
+    return child_last();
+  }
+};
+
+struct DoWhileLoop : Node {
+  NODE_COMMON(DoWhileLoop);
+
+  Condition condition() const
+  {
+    return child_last();
+  }
+
+  LocalScope body() const
+  {
+    return child_first();
+  }
+};
+
+struct SwitchStmt : Node {
+  NODE_COMMON(SwitchStmt);
+
+  Condition condition() const
+  {
+    return child_first();
+  }
+};
+
+struct SwitchCase : Node {
+  NODE_COMMON(SwitchCase);
+
+  bool is_default_case() const
+  {
+    return child_first().type() == NodeType::LocalScope;
+  }
+
+  /* Either NumConst or IdQualified. */
+  Node value() const
+  {
+    return child_first();
+  }
+
+  LocalScope body() const
+  {
+    return child_last();
+  }
+};
+
 /* Enum, Struct, Class. */
 struct ClassDecl : Node {
   NODE_COMMON(ClassDecl);
+
+  bool is_enum() const;
+  bool is_enum_class() const;
+  bool is_union() const;
+
+  bool is_anonymous() const
+  {
+    return !identifier().is_valid();
+  }
 
   IdQualified identifier() const;
 
@@ -591,15 +1252,58 @@ struct ClassDecl : Node {
   }
 };
 
+inline ClassDecl FuncDecl::parent_class() const
+{
+  return is_template() ? parent().parent().parent() : parent().parent();
+}
+
 inline LocalScope FuncDecl::body() const
 {
   return child_last(NodeType::LocalScope);
 }
 
+inline TemplateParamList TemplateSpec::parameters() const
+{
+  Node node = child_last();
+  if (node.type() == NodeType::ClassDecl) {
+    ClassDecl decl(node);
+    return decl.identifier().template_params();
+  }
+  if (node.type() == NodeType::FuncDecl) {
+    FuncDecl decl(node);
+    return decl.identifier().template_params();
+  }
+  assert(0);
+  return {};
+}
+
+inline TemplateParamList TemplateInst::parameters() const
+{
+  Node node = child_last();
+  if (node.type() == NodeType::ClassDecl) {
+    ClassDecl decl(node);
+    return decl.identifier().template_params();
+  }
+  if (node.type() == NodeType::FuncForwardDecl) {
+    FuncForwardDecl decl(node);
+    return decl.identifier().template_params();
+  }
+  assert(0);
+  return {};
+}
+
 struct Namespace : Node {
   NODE_COMMON(Namespace);
 
-  IdType name() const;
+  LocalScope body() const
+  {
+    return child_last();
+  }
+
+  IdQualified identifier() const
+  {
+    return child_first();
+  }
 };
 
 #undef NODE_COMMON
