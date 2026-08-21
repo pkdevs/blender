@@ -1,2 +1,3 @@
 Referenced by pull request #151340, Fix #151327: Crash accessing MeshUVLoopLayer pin property
 Referenced by commit b3ce0e33b855773f4dbba7f62412389950d8cd64, Fix #151327: Crash accessing MeshUVLoopLayer pin property
+Referenced by commit 862cc2dcc5c665b6aafadac7736721ab7cd31f61, Fix: error where Mesh.vertex_colors.new() returned the wrong layer
