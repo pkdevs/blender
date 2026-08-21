@@ -56,30 +56,35 @@ class MESH_MT_vertex_group_context_menu(Menu):
 class MESH_MT_shape_key_context_menu(Menu):
     bl_label = "Shape Key Specials"
 
-    def draw(self, _context):
+    def draw(self, context):
         layout = self.layout
+
+        obj = context.object
 
         layout.operator("object.shape_key_add", icon='ADD', text="New Combined").from_mix = True
         layout.operator("object.shape_key_copy", icon='DUPLICATE', text="Duplicate")
-        layout.operator("object.shape_key_transfer", text="Copy from Objects")
+        if obj.type != 'GREASEPENCIL':
+            layout.operator("object.shape_key_transfer", text="Copy from Objects")
         layout.separator()
-        layout.operator("object.join_shapes", text="New from Objects")
-        layout.operator("object.join_shapes", text="New from Objects Flipped").use_mirror = True
-        layout.operator("object.update_shapes", icon='FILE_REFRESH')
-        layout.operator("object.update_shapes", text="Update from Objects Flipped").use_mirror = True
-        layout.separator()
-        layout.operator("object.shape_key_mirror", icon='ARROW_LEFTRIGHT', text="Flip").use_topology = False
-        layout.operator("object.shape_key_mirror", text="Flip (Topology)").use_topology = True
-        layout.separator()
+        if obj.type != 'GREASEPENCIL':
+            layout.operator("object.join_shapes", text="New from Objects")
+            layout.operator("object.join_shapes", text="New from Objects Flipped").use_mirror = True
+            layout.operator("object.update_shapes", icon='FILE_REFRESH')
+            layout.operator("object.update_shapes", text="Update from Objects Flipped").use_mirror = True
+            layout.separator()
+            layout.operator("object.shape_key_mirror", icon='ARROW_LEFTRIGHT', text="Flip").use_topology = False
+            layout.operator("object.shape_key_mirror", text="Flip (Topology)").use_topology = True
+            layout.separator()
         layout.operator("object.shape_key_lock", icon='LOCKED', text="Lock All").action = 'LOCK'
         layout.operator("object.shape_key_lock", icon='UNLOCKED', text="Unlock All").action = 'UNLOCK'
         layout.separator()
-        layout.operator("object.shape_key_make_basis", text="Make Basis")
-        layout.operator("object.shape_key_apply_to_basis", text="Apply to Basis")
-        layout.separator()
-        props = layout.operator("object.shape_key_remove", text="Apply All")
-        props.all = True
-        props.apply_mix = True
+        if obj.type != 'GREASEPENCIL':
+            layout.operator("object.shape_key_make_basis", text="Make Basis")
+            layout.operator("object.shape_key_apply_to_basis", text="Apply to Basis")
+            layout.separator()
+            props = layout.operator("object.shape_key_remove", text="Apply All")
+            props.all = True
+            props.apply_mix = True
         props = layout.operator("object.shape_key_remove", icon='X', text="Delete All")
         props.all = True
         props.apply_mix = False
@@ -287,7 +292,8 @@ def draw_shape_key_properties(context, layout):
             sub.prop(kb, "slider_min", text="Range Min")
             sub.prop(kb, "slider_max", text="Max")
 
-            col.prop_search(kb, "vertex_group", ob, "vertex_groups", text="Vertex Group")
+            if ob.type != 'GREASEPENCIL':
+                col.prop_search(kb, "vertex_group", ob, "vertex_groups", text="Vertex Group")
             col.prop_search(kb, "relative_key", key, "key_blocks", text="Relative To")
 
     else:
@@ -324,6 +330,9 @@ class DATA_PT_shape_keys(MeshButtonsPanel, Panel):
         if enable_edit or (ob.use_shape_key_edit_mode and ob.type == 'MESH'):
             enable_pin = True
 
+        if ob.type == 'GREASEPENCIL':
+            enable_pin = True            
+
         row = layout.row()
 
         row.template_shape_key_tree()
@@ -353,7 +362,8 @@ class DATA_PT_shape_keys(MeshButtonsPanel, Panel):
             split = layout.split(factor=0.4)
             row = split.row()
             row.enabled = enable_edit
-            row.prop(key, "use_relative")
+            if ob.type != 'GREASEPENCIL':
+                row.prop(key, "use_relative")
 
             row = split.row()
             row.alignment = 'RIGHT'
@@ -362,12 +372,13 @@ class DATA_PT_shape_keys(MeshButtonsPanel, Panel):
             sub.label()  # XXX, for alignment only
             subsub = sub.row(align=True)
             subsub.active = enable_pin
-            subsub.prop(ob, "show_only_shape_key", text="")
+            if ob.type != 'GREASEPENCIL':
+                subsub.prop(ob, "show_only_shape_key", text="")
             if ob.type == 'MESH':
                 sub.prop(ob, "use_shape_key_edit_mode", text="")
 
             sub = row.row()
-            if key.use_relative:
+            if key.use_relative or ob.type == 'GREASEPENCIL':
                 sub.operator("object.shape_key_clear", icon='X', text="")
             else:
                 sub.operator("object.shape_key_retime", icon='RECOVER_LAST', text="")
