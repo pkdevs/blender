@@ -279,6 +279,9 @@ def draw_shape_key_properties(context, layout):
         if ob.show_only_shape_key is False:
             enable_edit_value = True
 
+    if ob.type == 'GREASEPENCIL':
+        enable_edit_value = True
+
     layout.use_property_split = True
     if key.use_relative:
         if ob.active_shape_key_index != 0:
