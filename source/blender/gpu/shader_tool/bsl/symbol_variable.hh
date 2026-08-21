@@ -11,6 +11,7 @@
 #include "resource.hh"
 #include "source_location.hh"
 
+#include <cstdint>
 #include <variant>
 
 namespace bsl {
@@ -27,7 +28,7 @@ struct Symbol {
   SymbolScope *parent = nullptr;
 };
 
-using ConstexprValue = std::variant<bool, int, uint, float>;
+using ConstexprValue = std::variant<bool, int32_t, uint32_t, float>;
 
 template<typename T> T value_as(const ConstexprValue &v)
 {
