@@ -11,9 +11,13 @@
 #  include <iso646.h>
 #endif
 
+#include <vector>
+
 #include <opensubdiv/far/topologyRefiner.h>
 
-#include "internal/topology/mesh_topology.h"
+#include "BLI_math_vector_types.hh"
+
+#include "MEM_guardedalloc.h"
 
 // Those settings don't really belong to OpenSubdiv's topology refiner, but
 // we are keeping track of them on our side of topology refiner. This is to
@@ -54,21 +58,49 @@ class TopologyRefinerImpl {
   // Subdivision settingsa this refiner is created for.
   OpenSubdiv_TopologyRefinerSettings settings;
 
+  //////////////////////////////////////////////////////////////////////////////
   // Topology of the mesh which corresponds to the base level.
   //
-  // All the indices and values are kept exactly the same as user-defined
-  // converter provided them. This allows to easily compare values which might
-  // be touched by the refinement process.
+  // Only the parts which are needed to tell whether a different converter describes the same mesh
+  // are stored. See #isEqualToConverter.
   //
-  // On a more technical note this allows to easier/faster to compare following
-  // things:
+  // All the indices and values are exactly the ones the converter provided: they are copied
+  // straight from it before the refiner is built, never read back out of the refiner. That is
+  // what makes them comparable against a later converter, since the refinement process changes
+  // the values the refiner itself stores:
   //
   //  - Face vertices, where OpenSubdiv could re-arrange them to keep winding
   //    uniform.
   //
   //  - Vertex crease where OpenSubdiv will force crease for non-manifold or
   //    corner vertices.
-  MeshTopology base_mesh_topology;
+
+  int base_verts_num = 0;
+
+  // Number of edges in the base mesh. The #base_edges array is stored sparsely, so this is the
+  // edge count rather than its size.
+  int base_edges_num = 0;
+
+  // The pair of vertices each edge connects, but only up to the last edge which has sharpness.
+  //
+  // Sharpness is the only per-edge data which can not be derived from the faces, so the vertices
+  // of the remaining edges never have to be compared. Many meshes have no sharp edges at all, in
+  // which case this stays empty.
+  std::vector<blender::int2> base_edges;
+
+  // Sharpness of each edge, matching #OpenSubdiv_Converter::edge_sharpness: either
+  // #base_edges_num elements, or empty when no edge is sharp.
+  std::vector<float> base_edge_sharpness;
+
+  // The face topology of the base mesh, see #OffsetIndices and #Mesh::faces().
+  std::vector<int> base_face_offsets;
+
+  // Continuous array of all vertices of all faces, sliced by the face offsets.
+  std::vector<int> base_corner_verts;
+
+  // Sharpness of each vertex, matching #OpenSubdiv_Converter::vert_sharpness: either
+  // #base_verts_num elements, or empty when no vertex is sharp.
+  std::vector<float> base_vert_sharpness;
 
   MEM_CXX_CLASS_ALLOC_FUNCS("TopologyRefinerImpl");
 };

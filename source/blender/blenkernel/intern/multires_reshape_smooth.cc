@@ -65,13 +65,6 @@ struct Vertex {
   /* All grid coordinates which the vertex corresponding to.
    * For a vertices which are created from inner points of grids there is always one coordinate. */
   Vector<GridCoord> grid_coords = {};
-
-  float sharpness = 0.0f;
-  bool is_infinite_sharp = false;
-};
-
-struct Corner {
-  int grid_index = 0;
 };
 
 /* Storage of data which is linearly interpolated from the reshape level to the top level. */
@@ -107,6 +100,9 @@ struct MultiresReshapeSmoothContext : NonCopyable, NonMovable {
   /* Geometry at a reshape multires level. */
   struct {
     Array<Vertex> vertices;
+    /* Sharpness of each vertex, including the infinite sharpness of vertices which are adjacent
+     * to a loose edge. See #OpenSubdiv_Converter::vert_sharpness. */
+    Array<float> vert_sharpness;
 
     /* Maximum number of edges which might be stored in the edges array.
      * Is calculated based on the number of edges in the base mesh and the subdivision level. */
@@ -117,11 +113,13 @@ struct MultiresReshapeSmoothContext : NonCopyable, NonMovable {
      * NOTE: Different type from others to be able to easier use atomic ops. */
     size_t num_edges;
     Array<int2> edges;
+    /* Sharpness of each of the #num_edges edges above. */
     Array<float> edge_sharpness;
 
     /* Indexes into the geometry.vertices array */
     Array<int> corner_verts;
-    Array<Corner> corners;
+    /* The grid each corner was created for. All the corners of a face share the same grid. */
+    Array<int> corner_grid_indices;
 
     /* Face topology of subdivision level. */
     Array<int> face_offsets;
@@ -298,13 +296,12 @@ static void base_surface_grids_write(MultiresReshapeSmoothContext *reshape_smoot
 static int get_face_grid_index(const MultiresReshapeSmoothContext *reshape_smooth_context,
                                const IndexRange face)
 {
-  const Corner *first_corner = &reshape_smooth_context->geometry.corners[face.start()];
-  const int grid_index = first_corner->grid_index;
+  const Span<int> corner_grid_indices = reshape_smooth_context->geometry.corner_grid_indices;
+  const int grid_index = corner_grid_indices[face.start()];
 
 #  ifndef NDEBUG
   for (const int corner_index : face) {
-    const Corner *corner = &reshape_smooth_context->geometry.corners[corner_index];
-    BLI_assert(corner->grid_index == grid_index);
+    BLI_assert(corner_grid_indices[corner_index] == grid_index);
   }
 #  endif
 
@@ -478,12 +475,14 @@ static bool foreach_topology_info(const bke::subdiv::ForeachContext *foreach_con
                             reshape_smooth_context->geometry.max_edges;
 
   reshape_smooth_context->geometry.vertices.reinitialize(num_vertices);
+  reshape_smooth_context->geometry.vert_sharpness = Array<float>(num_vertices, 0.0f);
 
   reshape_smooth_context->geometry.max_edges = max_edges;
   reshape_smooth_context->geometry.edges.reinitialize(max_edges);
+  reshape_smooth_context->geometry.edge_sharpness.reinitialize(max_edges);
 
   reshape_smooth_context->geometry.corner_verts.reinitialize(num_loops);
-  reshape_smooth_context->geometry.corners.reinitialize(num_loops);
+  reshape_smooth_context->geometry.corner_grid_indices.reinitialize(num_loops);
 
   reshape_smooth_context->geometry.face_offsets.reinitialize(num_faces + 1);
   offset_indices::fill_constant_group_size(4, 0, reshape_smooth_context->geometry.face_offsets);
@@ -521,7 +520,8 @@ static void foreach_single_vert(const bke::subdiv::ForeachContext *foreach_conte
   }
 
   crease = get_effective_crease_float(reshape_smooth_context, crease);
-  vert->sharpness = bke::subdiv::crease_to_sharpness(crease);
+  reshape_smooth_context->geometry.vert_sharpness[subdiv_vert_index] =
+      bke::subdiv::crease_to_sharpness(crease);
 }
 
 /* TODO(sergey): De-duplicate with similar function in multires_reshape_vertcos.cc */
@@ -639,13 +639,13 @@ static void foreach_loop(const bke::subdiv::ForeachContext *foreach_context,
       static_cast<MultiresReshapeSmoothContext *>(foreach_context->user_data);
   const MultiresReshapeContext *reshape_context = reshape_smooth_context->reshape_context;
 
-  BLI_assert(subdiv_loop_index < reshape_smooth_context->geometry.corners.size());
+  auto &geometry = reshape_smooth_context->geometry;
+  BLI_assert(subdiv_loop_index < geometry.corner_verts.size());
 
-  Corner *corner = &reshape_smooth_context->geometry.corners[subdiv_loop_index];
-  reshape_smooth_context->geometry.corner_verts[subdiv_loop_index] = subdiv_vert_index;
+  geometry.corner_verts[subdiv_loop_index] = subdiv_vert_index;
 
   const int first_grid_index = reshape_context->face_start_grid_index[coarse_face_index];
-  corner->grid_index = first_grid_index + coarse_corner;
+  geometry.corner_grid_indices[subdiv_loop_index] = first_grid_index + coarse_corner;
 }
 
 static void foreach_vert_of_loose_edge(const bke::subdiv::ForeachContext *foreach_context,
@@ -656,9 +656,12 @@ static void foreach_vert_of_loose_edge(const bke::subdiv::ForeachContext *foreac
 {
   MultiresReshapeSmoothContext *reshape_smooth_context =
       static_cast<MultiresReshapeSmoothContext *>(foreach_context->user_data);
-  Vertex *vert = &reshape_smooth_context->geometry.vertices[vert_index];
 
-  vert->is_infinite_sharp = !vert->grid_coords.is_empty();
+  /* NOTE: This runs in a separate pass after every other vertex callback, so it is fine to
+   * override the sharpness which may have been set from the vertex crease. */
+  if (!reshape_smooth_context->geometry.vertices[vert_index].grid_coords.is_empty()) {
+    reshape_smooth_context->geometry.vert_sharpness[vert_index] = OPENSUBDIV_SHARPNESS_INFINITE;
+  }
 }
 
 static void store_edge(MultiresReshapeSmoothContext *reshape_smooth_context,
@@ -814,35 +817,6 @@ static int get_num_vertices(const OpenSubdiv_Converter *converter)
   return reshape_smooth_context->geometry.vertices.size();
 }
 
-static float get_edge_sharpness(const OpenSubdiv_Converter *converter, const int edge_index)
-{
-  const MultiresReshapeSmoothContext *reshape_smooth_context =
-      static_cast<const MultiresReshapeSmoothContext *>(converter->user_data);
-
-  return reshape_smooth_context->geometry.edge_sharpness[edge_index];
-}
-
-static float get_vert_sharpness(const OpenSubdiv_Converter *converter, const int vert_index)
-{
-  const MultiresReshapeSmoothContext *reshape_smooth_context =
-      static_cast<const MultiresReshapeSmoothContext *>(converter->user_data);
-  BLI_assert(vert_index < reshape_smooth_context->geometry.vertices.size());
-
-  const Vertex *vertex = &reshape_smooth_context->geometry.vertices[vert_index];
-  return vertex->sharpness;
-}
-
-static bool is_infinite_sharp_vertex(const OpenSubdiv_Converter *converter, int vert_index)
-{
-  const MultiresReshapeSmoothContext *reshape_smooth_context =
-      static_cast<const MultiresReshapeSmoothContext *>(converter->user_data);
-
-  BLI_assert(vert_index < reshape_smooth_context->geometry.vertices.size());
-
-  const Vertex *vertex = &reshape_smooth_context->geometry.vertices[vert_index];
-  return vertex->is_infinite_sharp;
-}
-
 static void converter_init(const MultiresReshapeSmoothContext *reshape_smooth_context,
                            OpenSubdiv_Converter *converter)
 {
@@ -851,9 +825,14 @@ static void converter_init(const MultiresReshapeSmoothContext *reshape_smooth_co
   converter->getFVarLinearInterpolation = get_fvar_linear_interpolation;
   converter->specifiesFullTopology = specifies_full_topology;
 
-  converter->edges = reshape_smooth_context->geometry.edges;
+  /* Only the first #num_edges entries of the sparse edge storage were filled in. */
+  const int edges_num = int(reshape_smooth_context->geometry.num_edges);
+  converter->edges = reshape_smooth_context->geometry.edges.as_span().take_front(edges_num);
   converter->faces = reshape_smooth_context->geometry.faces();
   converter->corner_verts = reshape_smooth_context->geometry.corner_verts;
+  converter->edge_sharpness = reshape_smooth_context->geometry.edge_sharpness.as_span().take_front(
+      edges_num);
+  converter->vert_sharpness = reshape_smooth_context->geometry.vert_sharpness;
 
   converter->getNumVertices = get_num_vertices;
 
@@ -861,14 +840,11 @@ static void converter_init(const MultiresReshapeSmoothContext *reshape_smooth_co
 
   converter->getNumEdgeFaces = nullptr;
   converter->getEdgeFaces = nullptr;
-  converter->getEdgeSharpness = get_edge_sharpness;
 
   converter->getNumVertexEdges = nullptr;
   converter->getVertexEdges = nullptr;
   converter->getNumVertexFaces = nullptr;
   converter->getVertexFaces = nullptr;
-  converter->isInfiniteSharpVertex = is_infinite_sharp_vertex;
-  converter->getVertexSharpness = get_vert_sharpness;
 
   converter->getNumUVLayers = nullptr;
   converter->precalcUVLayer = nullptr;

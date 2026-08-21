@@ -9,17 +9,31 @@
 
 #include "opensubdiv_capi_type.hh"
 
-struct OpenSubdiv_Converter {
-  blender::Span<blender::int2> edges;
-  /**
-   * The face topology of the base mesh to be subdivided. See #Mesh::faces() documentation for the
-   * details.
-   *
-   * Other topology information is currently encoded with callbacks rather than arrays directly.
-   */
-  blender::OffsetIndices<int> faces;
+/**
+ * Sharpness value which makes an edge or a vertex infinitely sharp. Mirrors
+ * `OpenSubdiv::Sdc::Crease::SHARPNESS_INFINITE`, which can not be included here.
+ */
+constexpr float OPENSUBDIV_SHARPNESS_INFINITE = 10.0f;
 
+struct OpenSubdiv_Converter {
+  /**
+   * The topology of the mesh to be subdivided. See #Mesh::faces(), etc. documentation for the
+   * details. Other topology information is currently encoded with callbacks rather than arrays
+   * directly.
+   */
+  blender::Span<blender::int2> edges;
+  blender::OffsetIndices<int> faces;
   blender::Span<int> corner_verts;
+
+  /**
+   * Sharpness (aka crease) of every edge and every vertex, in the
+   * `[0, #OPENSUBDIV_SHARPNESS_INFINITE]` range. Vertex sharpness includes the infinite sharpness
+   * used to make vertices adjacent to a loose edge sharp.
+   *
+   * Either aligned with #edges and with the vertices respectively, or empty.
+   */
+  blender::Span<float> edge_sharpness;
+  blender::Span<float> vert_sharpness;
 
   OpenSubdiv_SchemeType (*getSchemeType)(const OpenSubdiv_Converter *converter);
 
@@ -62,8 +76,6 @@ struct OpenSubdiv_Converter {
   int (*getNumEdgeFaces)(const OpenSubdiv_Converter *converter, const int edge_index);
   // Array of face indices which are sharing the given edge.
   void (*getEdgeFaces)(const OpenSubdiv_Converter *converter, const int edge, int *edge_faces);
-  // Edge sharpness (aka crease).
-  float (*getEdgeSharpness)(const OpenSubdiv_Converter *converter, const int edge_index);
 
   //////////////////////////////////////////////////////////////////////////////
   // Vertex relationships.
@@ -80,16 +92,6 @@ struct OpenSubdiv_Converter {
   void (*getVertexFaces)(const OpenSubdiv_Converter *converter,
                          const int vertex_index,
                          int *vertex_faces);
-
-  // Check whether vertex is to be marked as an infinite sharp.
-  // This is a way to make sharp vertices which are adjacent to a loose edges.
-  bool (*isInfiniteSharpVertex)(const OpenSubdiv_Converter *converter, const int vertex_index);
-
-  // If vertex is not infinitely sharp, this is its actual sharpness.
-  float (*getVertexSharpness)(const OpenSubdiv_Converter *converter, const int vertex_index);
-
-  //////////////////////////////////////////////////////////////////////////////
-  // Face-varying data.
 
   /////////////////////////////////////
   // UV coordinates.

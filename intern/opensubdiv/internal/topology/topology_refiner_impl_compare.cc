@@ -5,7 +5,6 @@
  * Author: Sergey Sharybin. */
 
 #include "internal/base/type_convert.h"
-#include "internal/topology/mesh_topology.h"
 
 #include "opensubdiv_converter_capi.hh"
 #include "opensubdiv_topology_refiner.hh"
@@ -55,6 +54,48 @@ static bool checkPreliminaryMatches(const TopologyRefinerImpl *topology_refiner_
 {
   return checkSchemeTypeMatches(topology_refiner_impl, converter) &&
          checkOptionsMatches(topology_refiner_impl, converter);
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// Base mesh topology.
+
+static bool checkBaseMeshTopologyMatches(const TopologyRefinerImpl *topology_refiner_impl,
+                                         const OpenSubdiv_Converter *converter)
+{
+  if (topology_refiner_impl->base_verts_num != converter->getNumVertices(converter)) {
+    return false;
+  }
+  if (topology_refiner_impl->base_edges_num != converter->edges.size()) {
+    return false;
+  }
+  if (converter->faces.data() != Span(topology_refiner_impl->base_face_offsets)) {
+    return false;
+  }
+  if (converter->corner_verts != Span(topology_refiner_impl->base_corner_verts)) {
+    return false;
+  }
+  if (converter->edge_sharpness != Span(topology_refiner_impl->base_edge_sharpness)) {
+    return false;
+  }
+  if (converter->vert_sharpness != Span(topology_refiner_impl->base_vert_sharpness)) {
+    return false;
+  }
+
+  // NOTE: Ignoring the sharpness we don't really care of the content of the edges, they should be
+  // in the consistent state with the faces and face-vertices compared above. If that's not the
+  // case the mesh is invalid and comparison can not happen reliably. For sharpness it is
+  // important to know that the edges still connect the same pair of vertices though.
+  const Span<int2> base_edges = topology_refiner_impl->base_edges;
+  for (const int edge_index : base_edges.index_range()) {
+    if (topology_refiner_impl->base_edge_sharpness[edge_index] < 1e-6f) {
+      continue;
+    }
+    if (base_edges[edge_index] != converter->edges[edge_index]) {
+      return false;
+    }
+  }
+
+  return true;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -117,7 +158,7 @@ bool TopologyRefinerImpl::isEqualToConverter(const OpenSubdiv_Converter *convert
     return false;
   }
 
-  if (!base_mesh_topology.isEqualToConverter(converter)) {
+  if (!checkBaseMeshTopologyMatches(this, converter)) {
     return false;
   }
 
