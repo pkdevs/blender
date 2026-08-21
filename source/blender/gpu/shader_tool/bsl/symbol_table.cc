@@ -9,6 +9,8 @@
 #include "symbol_table.hh"
 #include "expression.hh"
 
+#include <bit>
+
 namespace bsl {
 
 using namespace blender::gpu::shader::parser;
