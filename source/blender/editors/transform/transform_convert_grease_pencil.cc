@@ -244,13 +244,18 @@ static void createTransGreasePencilVerts(bContext *C, TransInfo *t)
 
         char attr_name[64];
 
-        SNPRINTF_UTF8(attr_name, (".SK_%s"), actkb->name);
+        if (!(actkb->flag & KEYBLOCK_MUTE)) {
+          const float keyblock_influence = actkb->curval;
 
-        const VArray<float3> key_positions = *attributes.lookup_or_default<float3>(
-            attr_name, bke::AttrDomain::Point, float3(0.0f));
+          SNPRINTF_UTF8(attr_name, (".SK_%s"), actkb->name);
 
-        for (const int point_i : deformation.positions.index_range()) {
-          curves_transform_data.deformation_offsets[drawing][point_i] -= key_positions[point_i];
+          const VArray<float3> key_positions = *attributes.lookup_or_default<float3>(
+              attr_name, bke::AttrDomain::Point, float3(0.0f));
+
+          for (const int point_i : deformation.positions.index_range()) {
+            curves_transform_data.deformation_offsets[drawing][point_i] -= key_positions[point_i] *
+                                                                           keyblock_influence;
+          }
         }
       }
 
@@ -289,6 +294,17 @@ static void recalcData_grease_pencil(TransInfo *t)
 
     Key *key = grease_pencil.key;
     KeyBlock *actkb = BKE_keyblock_find_by_index(key, tc.obedit->shapenr - 1);
+    float keyblock_influence = 0.0f;
+
+    if (key && actkb) {
+      if (actkb->flag & KEYBLOCK_MUTE) {
+        continue;
+      }
+      keyblock_influence = actkb->curval;
+      if (keyblock_influence == 0.0f) {
+        continue;
+      }
+    }
 
     const Vector<ed::greasepencil::MutableDrawingInfo> drawings = transform_data.drawings;
 
@@ -329,8 +345,9 @@ static void recalcData_grease_pencil(TransInfo *t)
                 tran_offsets[layer_i]);
 
             selection.foreach_index([&](const int point_i, const int pos) {
-              key_positions.span[point_i] = trans_positions[pos] - deformation_offsets[point_i] -
-                                            src_positions[point_i];
+              key_positions.span[point_i] = (trans_positions[pos] - deformation_offsets[point_i] -
+                                             src_positions[point_i]) /
+                                            keyblock_influence;
             });
 
             key_positions.finish();
