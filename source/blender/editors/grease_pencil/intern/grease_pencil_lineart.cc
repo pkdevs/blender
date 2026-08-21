@@ -533,6 +533,17 @@ static void OBJECT_OT_lineart_bake_strokes(wmOperatorType *ot)
   RNA_def_boolean(ot->srna, "bake_all", false, "Bake All", "Bake all Line Art modifiers");
 }
 
+static std::string lineart_clear_get_description(bContext * /*C*/,
+                                                 wmOperatorType *ot,
+                                                 PointerRNA *properties)
+{
+  const bool clear_all = RNA_boolean_get(properties, "clear_all");
+  if (clear_all) {
+    return TIP_("Clear all strokes in all Grease Pencil object");
+  }
+  return ot->description ? CTX_IFACE_(ot->translation_context, ot->description) : "";
+}
+
 static void OBJECT_OT_lineart_clear(wmOperatorType *ot)
 {
   ot->name = "Clear Baked Line Art";
@@ -541,6 +552,7 @@ static void OBJECT_OT_lineart_clear(wmOperatorType *ot)
 
   ot->poll = ed::greasepencil::active_grease_pencil_poll;
   ot->exec = lineart_gpencil_clear_strokes_exec;
+  ot->get_description = lineart_clear_get_description;
 
   RNA_def_boolean(ot->srna, "clear_all", false, "Clear All", "Clear all Line Art modifier bakes");
 }
