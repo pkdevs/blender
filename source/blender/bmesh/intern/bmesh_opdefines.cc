@@ -780,6 +780,19 @@ static BMOpDefine bmo_create_vert_def = {
     /*type_flag*/ (BMO_OPTYPE_FLAG_NOP),
 };
 
+static BMO_FlagSet bmo_enum_curve_restriction[] = {
+    {CURVE_RESTRICT_NONE, "NONE"},
+    {CURVE_RESTRICT_EXTRUDE, "EXTRUDE"},
+    {CURVE_RESTRICT_INDENT, "INDENT"},
+    {0, nullptr},
+};
+
+static BMO_FlagSet bmo_enum_curve_interpolation_method[] = {
+    {CURVE_INTERP_CUBIC, "CUBIC"},
+    {CURVE_INTERP_LINEAR, "LINEAR"},
+    {0, nullptr},
+};
+
 static BMOpDefine bmo_curve_def = {
     /*opname*/ "curve",
     /*slot_types_in*/
@@ -789,7 +802,10 @@ static BMOpDefine bmo_curve_def = {
         /* Influence factor: spans from 0.0 to 1.0. */
         {"factor", BMO_OP_SLOT_FLT},
         /* Restrictions on how the vertices can be moved. */
-        {"restriction", BMO_OP_SLOT_INT},
+        {"restriction",
+         BMO_OP_SLOT_INT,
+         to_subtype_union(BMO_OP_SLOT_SUBTYPE_INT_ENUM),
+         bmo_enum_curve_restriction},
         /* Limits the tool to work within the boundaries of the selected vertices if false. */
         {"extend", BMO_OP_SLOT_BOOL},
         /* Distribute vertices at constant distances along the curve. */
@@ -800,8 +816,11 @@ static BMOpDefine bmo_curve_def = {
         {"lock_y", BMO_OP_SLOT_BOOL},
         /* Lock Z axis editing. */
         {"lock_z", BMO_OP_SLOT_BOOL},
-        /* Algorithm used for interpolation. */
-        {"interpolation", BMO_OP_SLOT_INT},
+        /* Method used for interpolation. */
+        {"interpolation",
+         BMO_OP_SLOT_INT,
+         to_subtype_union(BMO_OP_SLOT_SUBTYPE_INT_ENUM),
+         bmo_enum_curve_interpolation_method},
         {{'\0'}},
     },
     /*slot_types_out*/
