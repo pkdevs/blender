@@ -59,7 +59,7 @@ void Film::init_aovs(const Set<std::string> &passes_used_by_viewport_compositor)
       }
     }
 
-    if (inst_.is_viewport_compositor_enabled) {
+    if (inst_.is_viewport_compositor_used) {
       for (ViewLayerAOV &aov : inst_.view_layer->aovs) {
         /* Already added as a display pass. No need to add again. */
         if (!aovs.is_empty() && aovs.last() == &aov) {
@@ -275,6 +275,19 @@ static eViewLayerEEVEEPassType get_viewport_compositor_enabled_passes(
   return viewport_compositor_enabled_passes;
 }
 
+/* Light passes are stored pre-divided by their matching Color pass, so Color must be enabled
+ * whenever Light is (#161352). */
+static eViewLayerEEVEEPassType with_light_pass_color_dependencies(eViewLayerEEVEEPassType passes)
+{
+  if (passes & EEVEE_RENDER_PASS_DIFFUSE_LIGHT) {
+    passes |= EEVEE_RENDER_PASS_DIFFUSE_COLOR;
+  }
+  if (passes & EEVEE_RENDER_PASS_SPECULAR_LIGHT) {
+    passes |= EEVEE_RENDER_PASS_SPECULAR_COLOR;
+  }
+  return passes;
+}
+
 void Film::init(const int2 &extent, const rcti *output_rect)
 {
   using namespace math;
@@ -297,8 +310,9 @@ void Film::init(const int2 &extent, const rcti *output_rect)
 
   /* Compute the passes needed by the viewport compositor. */
   Set<std::string> passes_used_by_viewport_compositor;
-  if (inst_.is_viewport_compositor_enabled) {
-    passes_used_by_viewport_compositor = bke::compositor::get_used_passes(scene, inst_.view_layer);
+  if (inst_.is_viewport_compositor_used) {
+    passes_used_by_viewport_compositor = bke::compositor::get_used_passes(
+        scene, inst_.view_layer, bke::compositor::ExecutionMode::Preview);
     viewport_compositor_enabled_passes_ = get_viewport_compositor_enabled_passes(
         passes_used_by_viewport_compositor, inst_.view_layer);
   }
@@ -320,6 +334,8 @@ void Film::init(const int2 &extent, const rcti *output_rect)
         enabled_passes |= EEVEE_RENDER_PASS_DEPTH;
       }
 
+      enabled_passes = with_light_pass_color_dependencies(enabled_passes);
+
       if (assign_if_different(enabled_passes_, enabled_passes)) {
         inst_.sampling.reset();
       }
@@ -329,14 +345,7 @@ void Film::init(const int2 &extent, const rcti *output_rect)
       enabled_passes_ = enabled_passes(inst_.view_layer);
     }
 
-    /* Force enable color passes if light passes are enabled.
-     * This is needed since we need to pre-divide by them. */
-    if (enabled_passes_ & EEVEE_RENDER_PASS_DIFFUSE_LIGHT) {
-      enabled_passes_ |= EEVEE_RENDER_PASS_DIFFUSE_COLOR;
-    }
-    if (enabled_passes_ & EEVEE_RENDER_PASS_SPECULAR_LIGHT) {
-      enabled_passes_ |= EEVEE_RENDER_PASS_SPECULAR_COLOR;
-    }
+    enabled_passes_ = with_light_pass_color_dependencies(enabled_passes_);
 
     /* Filter obsolete passes. */
     enabled_passes_ &= ~(EEVEE_RENDER_PASS_UNUSED_8 | EEVEE_RENDER_PASS_UNUSED_14);
@@ -618,7 +627,7 @@ void Film::sync()
 
   const int cryptomatte_layer_count = cryptomatte_layer_len_get();
   const bool is_cryptomatte_pass_enabled = cryptomatte_layer_count > 0;
-  const bool do_cryptomatte_sorting = !inst_.is_viewport() || inst_.is_viewport_compositor_enabled;
+  const bool do_cryptomatte_sorting = !inst_.is_viewport() || inst_.is_viewport_compositor_used;
   cryptomatte_post_ps_.init();
   if (is_cryptomatte_pass_enabled && do_cryptomatte_sorting) {
     cryptomatte_post_ps_.state_set(DRW_STATE_NO_DRAW);
@@ -676,6 +685,7 @@ void Film::init_pass(PassSimple &pass, gpu::Shader *sh)
   pass.bind_image("cryptomatte_img", &cryptomatte_tx_);
   pass.bind_image("denoising_depth_img", &denoising_depth_tx_);
   pass.bind_resources(inst_.uniform_data);
+  pass.bind_resources(inst_.sampling);
 }
 
 void Film::end_sync()

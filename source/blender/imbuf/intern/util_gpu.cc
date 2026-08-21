@@ -6,12 +6,15 @@
  * \ingroup imbuf
  */
 
+#include "BLI_bit_span.hh"
+#include "BLI_bit_vector.hh"
 #include "BLI_math_base.hh"
 #include "BLI_math_vector_types.hh"
 #include "BLI_mutex.hh"
 #include "BLI_rect.hh"
 #include "BLI_time.hh"
 #include "BLI_utildefines.hh"
+#include "BLI_utility_mixins.hh"
 
 #include "MEM_guardedalloc.h"
 
@@ -201,65 +204,73 @@ static GPUTextureConversion imb_gpu_texture_conversion(const ImBuf *ibuf,
  * match the scaled size. If #premultiplied_alpha is true and alpha is not packed, alpha is ensured
  * to be premultiplied, otherwise, it is ensured to be straight. If #is_grayscale is true, if the
  * image will be stored as a grayscale image with no data loss, it will be return as so, otherwise,
- * it will be RGBA. #tmp_ibuf should be freed by the caller if it exists.
+ * it will be RGBA.
  */
-struct GPUTextureUpload {
+struct GPUTextureUpload : NonCopyable, NonMovable {
   const void *data = nullptr;
   eGPUDataFormat format = GPU_DATA_FLOAT;
   int stride = 0;
   int2 size = int2(0);
   ImBuf *tmp_ibuf = nullptr;
+
+  GPUTextureUpload() = default;
+  ~GPUTextureUpload()
+  {
+    if (tmp_ibuf) {
+      IMB_freeImBuf(tmp_ibuf);
+    }
+  }
 };
 
-static GPUTextureUpload get_gpu_texture_data(ImBuf *source_buffer,
-                                             const int2 src_offset,
-                                             const int2 src_size,
-                                             const std::optional<int2> scaled_size,
-                                             const bool premultiplied_alpha,
-                                             const bool is_grayscale)
+static void get_gpu_texture_data(ImBuf *source_buffer,
+                                 const int2 src_offset,
+                                 const int2 src_size,
+                                 const std::optional<int2> scaled_size,
+                                 const bool premultiplied_alpha,
+                                 const bool is_grayscale,
+                                 GPUTextureUpload &r_upload)
 {
   const GPUTextureConversion conversion = imb_gpu_texture_conversion(
       source_buffer, is_grayscale, premultiplied_alpha);
 
-  GPUTextureUpload upload;
   int channels;
 
   if (conversion == GPUTextureConversion::Byte) {
     /* Convert to byte buffer. */
-    upload.tmp_ibuf = IMB_allocImBuf(
+    r_upload.tmp_ibuf = IMB_allocImBuf(
         src_size.x, src_size.y, ImBufFlags::ByteData | ImBufFlags::UninitializedPixels);
-    if (upload.tmp_ibuf == nullptr) {
-      return upload;
+    if (r_upload.tmp_ibuf == nullptr) {
+      return;
     }
-    IMB_colormanagement_imbuf_to_byte_texture(upload.tmp_ibuf->byte_data_for_write(),
+    IMB_colormanagement_imbuf_to_byte_texture(r_upload.tmp_ibuf->byte_data_for_write(),
                                               src_offset.x,
                                               src_offset.y,
                                               src_size.x,
                                               src_size.y,
                                               source_buffer,
                                               premultiplied_alpha);
-    upload.data = upload.tmp_ibuf->byte_data();
-    upload.format = GPU_DATA_UBYTE;
-    upload.stride = src_size.x;
+    r_upload.data = r_upload.tmp_ibuf->byte_data();
+    r_upload.format = GPU_DATA_UBYTE;
+    r_upload.stride = src_size.x;
     channels = 4;
   }
   else if (conversion == GPUTextureConversion::Float) {
     /* Convert to float buffer. */
-    upload.tmp_ibuf = IMB_allocImBuf(
+    r_upload.tmp_ibuf = IMB_allocImBuf(
         src_size.x, src_size.y, ImBufFlags::FloatData | ImBufFlags::UninitializedPixels);
-    if (upload.tmp_ibuf == nullptr) {
-      return upload;
+    if (r_upload.tmp_ibuf == nullptr) {
+      return;
     }
-    IMB_colormanagement_imbuf_to_float_texture(upload.tmp_ibuf->float_data_for_write(),
+    IMB_colormanagement_imbuf_to_float_texture(r_upload.tmp_ibuf->float_data_for_write(),
                                                src_offset.x,
                                                src_offset.y,
                                                src_size.x,
                                                src_size.y,
                                                source_buffer,
                                                premultiplied_alpha);
-    upload.data = upload.tmp_ibuf->float_data();
-    upload.format = GPU_DATA_FLOAT;
-    upload.stride = src_size.x;
+    r_upload.data = r_upload.tmp_ibuf->float_data();
+    r_upload.format = GPU_DATA_FLOAT;
+    r_upload.stride = src_size.x;
     channels = 4;
   }
   else {
@@ -268,56 +279,59 @@ static GPUTextureUpload get_gpu_texture_data(ImBuf *source_buffer,
     const int64_t offset = int64_t(channels) *
                            (int64_t(src_offset.y) * source_buffer->x + src_offset.x);
     if (source_buffer->float_data()) {
-      upload.data = source_buffer->float_data() + offset;
-      upload.format = GPU_DATA_FLOAT;
+      r_upload.data = source_buffer->float_data() + offset;
+      r_upload.format = GPU_DATA_FLOAT;
     }
     else {
-      upload.data = source_buffer->byte_data() + offset;
-      upload.format = GPU_DATA_UBYTE;
+      r_upload.data = source_buffer->byte_data() + offset;
+      r_upload.format = GPU_DATA_UBYTE;
     }
-    upload.stride = source_buffer->x;
+    r_upload.stride = source_buffer->x;
   }
 
   int2 size = src_size;
 
   /* Rescale. */
   if (scaled_size.has_value()) {
-    const bool is_float = (upload.format == GPU_DATA_FLOAT);
+    const bool is_float = (r_upload.format == GPU_DATA_FLOAT);
     ImBuf *buffer = IMB_allocImBuf(scaled_size->x,
                                    scaled_size->y,
                                    (is_float ? ImBufFlags::FloatData : ImBufFlags::ByteData) |
                                        ImBufFlags::UninitializedPixels);
 
     if (buffer == nullptr) {
-      upload.data = nullptr;
-      return upload;
+      r_upload.data = nullptr;
+      return;
     }
 
+    /* Avoid excessive overhead with small updates. */
+    const bool threaded = size.x >= 1024;
+
     if (is_float) {
-      IMB_scale_box(static_cast<const float *>(upload.data),
+      IMB_scale_box(static_cast<const float *>(r_upload.data),
                     size,
                     channels,
                     buffer->float_data_for_write(),
                     *scaled_size,
-                    true,
-                    upload.stride);
+                    threaded,
+                    r_upload.stride);
     }
     else {
-      IMB_scale_box(static_cast<const uchar *>(upload.data),
+      IMB_scale_box(static_cast<const uchar *>(r_upload.data),
                     size,
                     channels,
                     buffer->byte_data_for_write(),
                     *scaled_size,
-                    true,
-                    upload.stride);
+                    threaded,
+                    r_upload.stride);
     }
-    if (upload.tmp_ibuf) {
-      IMB_freeImBuf(upload.tmp_ibuf);
+    if (r_upload.tmp_ibuf) {
+      IMB_freeImBuf(r_upload.tmp_ibuf);
     }
-    upload.tmp_ibuf = buffer;
-    upload.data = is_float ? static_cast<const void *>(buffer->float_data()) :
-                             static_cast<const void *>(buffer->byte_data());
-    upload.stride = scaled_size->x;
+    r_upload.tmp_ibuf = buffer;
+    r_upload.data = is_float ? static_cast<const void *>(buffer->float_data()) :
+                               static_cast<const void *>(buffer->byte_data());
+    r_upload.stride = scaled_size->x;
     size = *scaled_size;
   }
 
@@ -326,15 +340,15 @@ static GPUTextureUpload get_gpu_texture_data(ImBuf *source_buffer,
     ImBuf *buffer = IMB_allocImBuf(size.x, size.y, ImBufFlags::Zero);
 
     if (buffer == nullptr) {
-      upload.data = nullptr;
-      return upload;
+      r_upload.data = nullptr;
+      return;
     }
 
-    if (upload.format == GPU_DATA_FLOAT) {
+    if (r_upload.format == GPU_DATA_FLOAT) {
       IMB_alloc_float_pixels(buffer, 1);
-      imb_gpu_extract_first_channel(static_cast<const float *>(upload.data),
+      imb_gpu_extract_first_channel(static_cast<const float *>(r_upload.data),
                                     channels,
-                                    upload.stride,
+                                    r_upload.stride,
                                     size.x,
                                     size.y,
                                     buffer->float_data_for_write());
@@ -343,26 +357,46 @@ static GPUTextureUpload get_gpu_texture_data(ImBuf *source_buffer,
       buffer->color_mode = ImColorMode::BW;
       buffer->assign_byte_data(
           MEM_new_array_uninitialized<uint8_t>(size_t(size.x) * size.y, __func__));
-      imb_gpu_extract_first_channel(static_cast<const uchar *>(upload.data),
+      imb_gpu_extract_first_channel(static_cast<const uchar *>(r_upload.data),
                                     channels,
-                                    upload.stride,
+                                    r_upload.stride,
                                     size.x,
                                     size.y,
                                     buffer->byte_data_for_write());
     }
-    if (upload.tmp_ibuf) {
-      IMB_freeImBuf(upload.tmp_ibuf);
+    if (r_upload.tmp_ibuf) {
+      IMB_freeImBuf(r_upload.tmp_ibuf);
     }
-    upload.tmp_ibuf = buffer;
-    upload.data = (upload.format == GPU_DATA_FLOAT) ?
-                      static_cast<const void *>(buffer->float_data()) :
-                      static_cast<const void *>(buffer->byte_data());
-    upload.stride = size.x;
+    r_upload.tmp_ibuf = buffer;
+    r_upload.data = (r_upload.format == GPU_DATA_FLOAT) ?
+                        static_cast<const void *>(buffer->float_data()) :
+                        static_cast<const void *>(buffer->byte_data());
+    r_upload.stride = size.x;
   }
 
-  upload.size = size;
+  r_upload.size = size;
+}
 
-  return upload;
+static void imb_gpu_texture_default_init(gpu::Texture *tex, const ImBuf *ibuf)
+{
+  GPU_texture_swizzle_set(tex, imb_gpu_get_swizzle(ibuf));
+  GPU_texture_anisotropic_filter(tex, true);
+}
+
+static void imb_gpu_texture_default_init_mipmap(gpu::Texture *tex)
+{
+  GPU_texture_extend_mode(tex, GPU_SAMPLER_EXTEND_MODE_REPEAT);
+  GPU_texture_mipmap_mode(tex, true, true);
+}
+
+static void imb_gpu_texture_default_init_array(gpu::Texture *tex)
+{
+  const char *swizzle = (GPU_texture_component_len(GPU_texture_format(tex)) == 1) ? "rrra" :
+                                                                                    "rgba";
+  GPU_texture_swizzle_set(tex, swizzle);
+  GPU_texture_anisotropic_filter(tex, true);
+  GPU_texture_extend_mode(tex, GPU_SAMPLER_EXTEND_MODE_CLAMP_TO_BORDER);
+  GPU_texture_mipmap_mode(tex, true, true);
 }
 
 gpu::Texture *IMB_touch_gpu_texture(const char *name,
@@ -376,30 +410,18 @@ gpu::Texture *IMB_touch_gpu_texture(const char *name,
   gpu::TextureFormat tex_format;
   imb_gpu_get_format(ibuf, use_high_bitdepth, use_grayscale, &tex_format);
 
+  const eGPUTextureUsage usage = GPU_TEXTURE_USAGE_SHADER_READ |
+                                 GPU_texture_mipmap_usage(tex_format);
+
   gpu::Texture *tex;
   if (layers > 0) {
-    tex = GPU_texture_create_2d_array(name,
-                                      w,
-                                      h,
-                                      layers,
-                                      9999,
-                                      tex_format,
-                                      GPU_TEXTURE_USAGE_SHADER_READ |
-                                          GPU_TEXTURE_USAGE_SHADER_WRITE,
-                                      nullptr);
+    tex = GPU_texture_create_2d_array(name, w, h, layers, 9999, tex_format, usage, nullptr);
+    imb_gpu_texture_default_init_array(tex);
   }
   else {
-    tex = GPU_texture_create_2d(name,
-                                w,
-                                h,
-                                9999,
-                                tex_format,
-                                GPU_TEXTURE_USAGE_SHADER_READ | GPU_TEXTURE_USAGE_SHADER_WRITE,
-                                nullptr);
+    tex = GPU_texture_create_2d(name, w, h, 9999, tex_format, usage, nullptr);
+    imb_gpu_texture_default_init(tex, ibuf);
   }
-
-  GPU_texture_swizzle_set(tex, imb_gpu_get_swizzle(ibuf));
-  GPU_texture_anisotropic_filter(tex, true);
   return tex;
 }
 
@@ -417,16 +439,13 @@ void IMB_update_gpu_texture_sub(gpu::Texture *tex,
                                               std::optional<int2>(int2(w, h)) :
                                               std::nullopt;
   const bool is_grayscale = use_grayscale && imb_is_grayscale_texture_format_compatible(ibuf);
-  const GPUTextureUpload upload = get_gpu_texture_data(
-      ibuf, int2(0), int2(ibuf->x, ibuf->y), scaled_size, use_premult, is_grayscale);
+  GPUTextureUpload upload;
+  get_gpu_texture_data(
+      ibuf, int2(0), int2(ibuf->x, ibuf->y), scaled_size, use_premult, is_grayscale, upload);
 
   if (upload.data) {
     GPU_texture_update_sub(
         tex, upload.format, upload.data, x, y, z, upload.size.x, upload.size.y, 1, upload.stride);
-  }
-
-  if (upload.tmp_ibuf) {
-    IMB_freeImBuf(upload.tmp_ibuf);
   }
 }
 
@@ -448,15 +467,16 @@ gpu::Texture *IMB_create_gpu_texture(const char *name,
 
   /* Correct the smaller size to maintain the original aspect ratio of the image. */
   if (do_rescale && ibuf->x != ibuf->y) {
-    if (size[0] > size[1]) {
-      size[1] = int(ibuf->y * (float(size[0]) / ibuf->x));
+    if (ibuf->x > ibuf->y) {
+      size[1] = math::max(1, int(ibuf->y * (float(size[0]) / ibuf->x)));
     }
     else {
-      size[0] = int(ibuf->x * (float(size[1]) / ibuf->y));
+      size[0] = math::max(1, int(ibuf->x * (float(size[1]) / ibuf->y)));
     }
   }
 
-  if (ibuf->ftype == IMB_FTYPE_DDS) {
+  /* Compressed textures can't be written to, so upload uncompressed when modified. */
+  if (ibuf->ftype == IMB_FTYPE_DDS && (ibuf->userflags & IB_BITMAPDIRTY) == 0) {
     gpu::TextureFormat compressed_format;
     if (!IMB_gpu_get_compressed_format(ibuf, &compressed_format)) {
       CLOG_WARN(&LOG,
@@ -510,12 +530,11 @@ gpu::Texture *IMB_create_gpu_texture(const char *name,
       ibuf, flag_is_set(flags, GPUTextureCreateFlags::HighBitDepth), true, &tex_format);
 
   /* Create Texture. Specify read usage to allow both shader and host reads, the latter is needed
-   * by the GPU compositor. */
-  const eGPUTextureUsage usage = use_mipmap ?
-                                     GPU_TEXTURE_USAGE_SHADER_READ |
-                                         GPU_TEXTURE_USAGE_SHADER_WRITE |
-                                         GPU_TEXTURE_USAGE_HOST_READ :
-                                     GPU_TEXTURE_USAGE_SHADER_READ | GPU_TEXTURE_USAGE_HOST_READ;
+   * by the GPU compositor. Mipmaps need additional usage flags. */
+  eGPUTextureUsage usage = GPU_TEXTURE_USAGE_SHADER_READ | GPU_TEXTURE_USAGE_HOST_READ;
+  if (use_mipmap) {
+    usage |= GPU_texture_mipmap_usage(tex_format);
+  }
   tex = GPU_texture_create_2d(
       name, UNPACK2(size), use_mipmap ? 9999 : 1, tex_format, usage, nullptr);
   if (tex == nullptr) {
@@ -529,26 +548,49 @@ gpu::Texture *IMB_create_gpu_texture(const char *name,
   const std::optional<int2> scaled_size = do_rescale ? std::optional<int2>(int2(size)) :
                                                        std::nullopt;
   const bool is_grayscale = imb_is_grayscale_texture_format_compatible(ibuf);
-  const GPUTextureUpload upload = get_gpu_texture_data(
-      ibuf,
-      int2(0),
-      int2(ibuf->x, ibuf->y),
-      scaled_size,
-      flag_is_set(flags, GPUTextureCreateFlags::Premultiplied),
-      is_grayscale);
+  GPUTextureUpload upload;
+  get_gpu_texture_data(ibuf,
+                       int2(0),
+                       int2(ibuf->x, ibuf->y),
+                       scaled_size,
+                       flag_is_set(flags, GPUTextureCreateFlags::Premultiplied),
+                       is_grayscale,
+                       upload);
 
   if (upload.data) {
     GPU_texture_update(tex, upload.format, upload.data);
   }
 
-  if (upload.tmp_ibuf) {
-    IMB_freeImBuf(upload.tmp_ibuf);
-  }
-
-  GPU_texture_swizzle_set(tex, imb_gpu_get_swizzle(ibuf));
-  GPU_texture_anisotropic_filter(tex, true);
+  imb_gpu_texture_default_init(tex, ibuf);
 
   return tex;
+}
+
+/* Number of modified chunks to track for mipmap. */
+static int2 imb_gpu_mipmap_modified_chunks_size(gpu::Texture *tex)
+{
+  return int2(divide_ceil_u(GPU_texture_width(tex), GPU_TEXTURE_MIPMAP_UPDATE_CHUNK_SIZE),
+              divide_ceil_u(GPU_texture_height(tex), GPU_TEXTURE_MIPMAP_UPDATE_CHUNK_SIZE));
+}
+
+/* For scaled images or UDIM atlases, set the modified chunk bits. */
+static void imb_gpu_mipmap_modified_chunks_mark(MutableBitSpan modified_chunks,
+                                                const int2 size,
+                                                const rcti &bounds)
+{
+  constexpr int chunk_size = GPU_TEXTURE_MIPMAP_UPDATE_CHUNK_SIZE;
+  if (BLI_rcti_is_empty(&bounds)) {
+    return;
+  }
+  const int tx_begin = std::max(bounds.xmin, 0) / chunk_size;
+  const int ty_begin = std::max(bounds.ymin, 0) / chunk_size;
+  const int tx_end = std::min((bounds.xmax - 1) / chunk_size, size.x - 1);
+  const int ty_end = std::min((bounds.ymax - 1) / chunk_size, size.y - 1);
+  for (int ty = ty_begin; ty <= ty_end; ty++) {
+    for (int tx = tx_begin; tx <= tx_end; tx++) {
+      modified_chunks[int64_t(ty) * size.x + tx].set();
+    }
+  }
 }
 
 /* Compute offset and size for partial update with scaling. */
@@ -586,7 +628,8 @@ static void imb_gpu_texture_update_region(gpu::Texture *tex,
                                           int h,
                                           const int layer,
                                           const int2 tile_offset,
-                                          const int2 tile_size)
+                                          const int2 tile_size,
+                                          rcti &r_bounds)
 {
   /* The texture may be smaller than the image when its size was limited. */
   const int limit_w = (layer >= 0) ? tile_size.x : GPU_texture_width(tex);
@@ -617,8 +660,11 @@ static void imb_gpu_texture_update_region(gpu::Texture *tex,
     offset += tile_offset;
   }
 
-  const GPUTextureUpload upload = get_gpu_texture_data(
-      ibuf, int2(x, y), int2(w, h), scaled_size, store_premultiplied, use_grayscale);
+  GPUTextureUpload upload;
+  get_gpu_texture_data(
+      ibuf, int2(x, y), int2(w, h), scaled_size, store_premultiplied, use_grayscale, upload);
+
+  BLI_rcti_init_minmax(&r_bounds);
 
   if (upload.data) {
     GPU_texture_update_sub(tex,
@@ -631,13 +677,10 @@ static void imb_gpu_texture_update_region(gpu::Texture *tex,
                            upload.size.y,
                            1,
                            upload.stride);
-  }
 
-  if (upload.tmp_ibuf) {
-    IMB_freeImBuf(upload.tmp_ibuf);
+    BLI_rcti_init(
+        &r_bounds, offset.x, offset.x + upload.size.x, offset.y, offset.y + upload.size.y);
   }
-
-  GPU_texture_unbind(tex);
 }
 
 void IMB_gpu_texture_apply_partial_update(gpu::Texture *tex,
@@ -648,6 +691,23 @@ void IMB_gpu_texture_apply_partial_update(gpu::Texture *tex,
                                           const int2 tile_offset,
                                           const int2 tile_size)
 {
+  /* For simplicity we require partial update and mipmap chunk sizes to match. */
+  static_assert(imbuf::partial_update::CHUNK_SIZE == GPU_TEXTURE_MIPMAP_UPDATE_CHUNK_SIZE);
+
+  /* For scaled images and UDIM atlases, we need to recompute the chunks rather than
+   * getting them directly from the changes. */
+  const bool compute_chunks = (GPU_texture_width(tex) != ibuf->x) ||
+                              (GPU_texture_height(tex) != ibuf->y) ||
+                              (layer >= 0 &&
+                               (tile_offset != int2(0, 0) || tile_size != int2(ibuf->x, ibuf->y)));
+  BitVector<> modified_chunks;
+  int2 modified_chunks_size;
+  if (compute_chunks) {
+    modified_chunks_size = imb_gpu_mipmap_modified_chunks_size(tex);
+    modified_chunks.resize(int64_t(modified_chunks_size.x) * modified_chunks_size.y, false);
+  }
+
+  /* Update modified regions and gather modified chunks for mipmap update. */
   rcti buffer_rect;
   BLI_rcti_init(&buffer_rect, 0, ibuf->x, 0, ibuf->y);
   for (const rcti &region : changes.modified_regions()) {
@@ -655,6 +715,7 @@ void IMB_gpu_texture_apply_partial_update(gpu::Texture *tex,
     if (!BLI_rcti_isect(&buffer_rect, &region, &clipped)) {
       continue;
     }
+    rcti bounds;
     imb_gpu_texture_update_region(tex,
                                   ibuf,
                                   store_premultiplied,
@@ -664,8 +725,19 @@ void IMB_gpu_texture_apply_partial_update(gpu::Texture *tex,
                                   BLI_rcti_size_y(&clipped),
                                   layer,
                                   tile_offset,
-                                  tile_size);
+                                  tile_size,
+                                  bounds);
+    if (compute_chunks) {
+      imb_gpu_mipmap_modified_chunks_mark(modified_chunks, modified_chunks_size, bounds);
+    }
   }
+
+  /* Partial mipmap update. */
+  GPU_texture_update_mipmap_chain_partial(tex,
+                                          math::max(layer, 0),
+                                          compute_chunks ? BitSpan(modified_chunks) :
+                                                           BitSpan(changes.modified_chunks));
+  GPU_texture_unbind(tex);
 }
 
 static void imb_gpu_texture_apply_partial_updates(ImBuf *ibuf, const bool use_premult)
@@ -683,15 +755,18 @@ static void imb_gpu_texture_apply_partial_updates(ImBuf *ibuf, const bool use_pr
     case Changes::Kind::Resized:
       GPU_texture_free(ibuf->gpu.texture);
       ibuf->gpu.texture = nullptr;
-      ibuf->gpu.flag = ImBufGPUFlag(0);
+      ibuf->gpu.flag &= ~IMB_GPU_LOAD_FAILED;
       break;
     case Changes::Kind::Partial:
+      /* A compressed texture can't be updated in place, need to recreate. */
+      if (GPU_texture_has_compressed_format(ibuf->gpu.texture)) {
+        GPU_texture_free(ibuf->gpu.texture);
+        ibuf->gpu.texture = nullptr;
+        ibuf->gpu.flag &= ~IMB_GPU_LOAD_FAILED;
+        break;
+      }
       IMB_gpu_texture_apply_partial_update(
           ibuf->gpu.texture, ibuf, use_premult, changes, -1, int2(0), int2(0));
-      if (!(ibuf->gpu.flag & IMB_GPU_DISABLE_MIPMAP_UPDATE)) {
-        GPU_texture_update_mipmap_chain(ibuf->gpu.texture);
-        ibuf->gpu.flag |= IMB_GPU_MIPMAP_COMPLETE;
-      }
       ibuf->gpu.partial_update_changeset = new_changeset_id;
       break;
     case Changes::Kind::None:
@@ -746,16 +821,8 @@ gpu::Texture *IMB_acquire_gpu_texture(const char *name,
   }
   ibuf->gpu.flag &= ~IMB_GPU_LOAD_FAILED;
 
-  GPU_texture_extend_mode(tex, GPU_SAMPLER_EXTEND_MODE_REPEAT);
-
-  if (!(ibuf->gpu.flag & IMB_GPU_DISABLE_MIPMAP_UPDATE)) {
-    GPU_texture_update_mipmap_chain(tex);
-    GPU_texture_mipmap_mode(tex, true, true);
-    ibuf->gpu.flag |= IMB_GPU_MIPMAP_COMPLETE;
-  }
-  else {
-    GPU_texture_mipmap_mode(tex, false, true);
-  }
+  GPU_texture_update_mipmap_chain(tex);
+  imb_gpu_texture_default_init_mipmap(tex);
 
   ibuf->gpu.partial_update_changeset = changeset_id;
   ibuf->gpu.texture = tex;
@@ -784,7 +851,7 @@ void IMB_free_gpu_textures(ImBuf *ibuf)
     GPU_texture_free(ibuf->gpu.texture);
     ibuf->gpu.texture = nullptr;
   }
-  ibuf->gpu.flag = ImBufGPUFlag(0);
+  ibuf->gpu.flag &= ~IMB_GPU_LOAD_FAILED;
 }
 
 void IMB_assign_gpu_texture(ImBuf *ibuf, gpu::Texture *texture)
@@ -798,7 +865,7 @@ void IMB_assign_gpu_texture(ImBuf *ibuf, gpu::Texture *texture)
     GPU_texture_free(ibuf->gpu.texture);
     ibuf->gpu.texture = nullptr;
   }
-  ibuf->gpu.flag = ImBufGPUFlag(0);
+  ibuf->gpu.flag &= ~IMB_GPU_LOAD_FAILED;
   ibuf->gpu.partial_update_changeset = IMB_partial_update_changeset_id_current();
   ibuf->gpu.texture = texture;
 }

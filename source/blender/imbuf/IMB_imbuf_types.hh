@@ -20,6 +20,7 @@
 #include "DNA_image_enums.h"
 #include "IMB_imbuf_enums.h"
 
+#include <atomic>
 #include <string>
 
 namespace blender {
@@ -122,13 +123,9 @@ struct ImBufFloatBuffer {
 };
 
 enum ImBufGPUFlag : int {
-  /** Mipmap chain has been generated for the GPU texture. */
-  IMB_GPU_MIPMAP_COMPLETE = (1 << 0),
-  /** Disable mipmap updates, primarily used for texture painting. */
-  IMB_GPU_DISABLE_MIPMAP_UPDATE = (1 << 1),
   /** GPU texture failed to be loaded onto the GPU, to distinguish a null
    * texture between not yet loaded and failed to load. */
-  IMB_GPU_LOAD_FAILED = (1 << 2),
+  IMB_GPU_LOAD_FAILED = (1 << 0),
 };
 ENUM_OPERATORS(ImBufGPUFlag)
 
@@ -141,8 +138,10 @@ struct ImBufGPU {
    *
    * TODO(@sergey): This should become a list of textures, to support having high-res ImBuf on GPU
    * without hitting hardware limitations.
+   *
+   * Atomic because partial update tracking reads this without holding a lock.
    */
-  gpu::Texture *texture = nullptr;
+  std::atomic<gpu::Texture *> texture = nullptr;
 
   /** Last used timestamp for garbage collection */
   int64_t lastused = 0;
@@ -151,7 +150,7 @@ struct ImBufGPU {
   ImBufGPUFlag flag = ImBufGPUFlag(0);
 
   /** Changeset tracking for partial update. */
-  int64_t partial_update_changeset = -1;
+  std::atomic<int64_t> partial_update_changeset = -1;
 
   /** Mutex guarding access to #texture, #lastused, and #flag. */
   blender::Mutex mutex;
@@ -165,10 +164,14 @@ struct ImBufGPU {
 
 struct ImBuf {
   /* dimensions */
-  /** Width and Height of our image buffer.
-   * Should be 'unsigned int' since most formats use this.
-   * but this is problematic with texture math in `imagetexture.c`
-   * avoid problems and use int. - campbell */
+  /**
+   * Width and Height of our image buffer.
+   *
+   * Should be 'unsigned int' since most formats use this, but this is problematic with texture
+   * math in `imagetexture.c`. Avoid this by using 'int'. - campbell
+   *
+   * \see Prefer #IMB_get_pixel_count over (x * y) to avoid integer overflow for very large images.
+   */
   int x = 0;
   int y = 0;
 
