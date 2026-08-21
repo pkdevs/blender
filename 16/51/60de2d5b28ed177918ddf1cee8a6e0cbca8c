@@ -6,4 +6,4 @@ Referenced by issue #160394, ImBuf: Memory leak on image_mapping_udim.blend test
 Referenced by issue #160588, EEVEE: Volumes samples accumulation never stops in mr Elephant
 Referenced by pull request #160617, Fix #160588: EEVEE sampling does not converge with missing image texture
 Referenced by commit c2f4d4219f7eba809bdc53bc50b4b8a2682e19fe, Fix #160588: EEVEE sampling does not converge with missing image texture
-Referenced by issue #162957, Grease Pencil not rendering
+Referenced by issue #162957, Regression: Grease Pencil not rendering
