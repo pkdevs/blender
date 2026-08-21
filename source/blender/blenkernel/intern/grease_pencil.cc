@@ -2658,6 +2658,8 @@ static void grease_pencil_do_shape_keys(bke::GeometrySet &geometry_set)
           }
         });
       }
+
+      info.drawing->tag_positions_changed();
     });
   }
 }
