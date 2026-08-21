@@ -4876,6 +4876,22 @@ bool BKE_object_shapekey_remove(Main *bmain, Object *ob, KeyBlock *kb)
     }
   }
 
+  if (ob->type == OB_GREASE_PENCIL) {
+    GreasePencil *grease_pencil = id_cast<GreasePencil *>(ob->data);
+
+    for (GreasePencilDrawingBase *base : grease_pencil->drawings()) {
+      bke::greasepencil::Drawing &drawing = reinterpret_cast<GreasePencilDrawing *>(base)->wrap();
+      bke::CurvesGeometry &curves = drawing.strokes_for_write();
+
+      bke::MutableAttributeAccessor attributes = curves.attributes_for_write();
+
+      char attr_name[64];
+      SNPRINTF_UTF8(attr_name, (".SK_%s"), kb->name);
+
+      attributes.remove(attr_name);
+    }
+  }
+
   if (kb->data) {
     MEM_delete_void(kb->data);
   }
