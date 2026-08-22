@@ -901,7 +901,7 @@ static void item_enum_expand_elem_exec(Layout *layout,
                                        const EnumPropertyItem *item,
                                        const bool is_first)
 {
-  const char *name = (!uiname || !uiname->is_empty()) ? item->name : "";
+  const char *name = item->name;
   const int icon = item->icon;
   const int value = item->value;
   const int itemw = text_icon_width(block->curlayout, icon_only ? "" : name, icon, false);
