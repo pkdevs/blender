@@ -200,7 +200,7 @@ for (float i = 0; i < 2; i++) [[unroll]] { i; }
 for (int i = 0, j = 0; i < 2; i++) [[unroll]] { i; }
   )";
     auto [output, _, error] = process_test_local(input, Language::BSL);
-    EXPECT_EQ(error, "Multiple variable declared in unrolled loop");
+    EXPECT_EQ(error, "Multiple variables declared in unrolled loop");
   }
   {
     string input = R"(

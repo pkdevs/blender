@@ -176,13 +176,13 @@ struct CodegenContext : NodeErrorHandler {
           return {left.str, left.type->operator_subscript->return_type};
         }
       }
-      ctx.error(t, Diag::SubscriptNotArray);
+      ctx.error(t, Diag::InvalidSubscript);
       return {t, ctx.table.err_cls};
     }
 
     CodegenResult function_call(CodegenResult left, const ast::Node &t)
     {
-      ctx.error(t, Diag::CalledIsNotFunction, left.type ? left.type->identifier : "");
+      ctx.error(t, Diag::OperatorCalledIsNotFunction, left.type ? left.type->identifier : "");
       return {t, ctx.table.err_cls};
     }
 
@@ -275,7 +275,7 @@ struct CodegenContext : NodeErrorHandler {
           ctx.error(node, Diag::ExpectedColon);
           break;
         case ErrorType::InvalidOperator:
-          ctx.error(node, Diag::TokenInvalidOperator, to_str(type));
+          ctx.error(node, Diag::OperatorTokenInvalid, to_str(type));
           break;
         case ErrorType::InvalidExpression:
           ctx.error(node, Diag::InvalidExprTypeChecker);
@@ -851,7 +851,7 @@ struct CodegenContext : NodeErrorHandler {
     }
     /* Check if only a single var is declared. */
     if (decl.next(NodeType::Declarator).is_valid()) {
-      error(init_stmt.type(), Diag::UnrolledLoopMultipleVars);
+      error(init_stmt.type(), Diag::UnrolledLoopMultipleVariables);
       return;
     }
     /* Check if loop variable is of integer type. */
@@ -1513,7 +1513,7 @@ struct CodegenContext : NodeErrorHandler {
     string fn_body = "{\n";
     if (member_type.is_builtin()) {
       if (member.array_dimensions > 0) {
-        error(member.loc.tok, Diag::UnionArrayUnsupportedAlt);
+        error(member.loc.tok, Diag::UnionArrayUnsupported);
       }
       string to_var = "this_." +
                       union_data_access(member.offset, member_type.size, union_type.size);
@@ -1669,12 +1669,12 @@ struct CodegenContext : NodeErrorHandler {
     string ret_val = "_r" + uuid;
 
     if (std::ranges::find(inlining_stack, fn) != inlining_stack.end()) {
-      error(call, Diag::RecursiveInlining);
+      error(call, Diag::InliningRecursive);
       return "";
     }
 
     inlining_stack.push_back(fn);
-    NOTE(call, Diag::InInliningOf, fn->original);
+    NOTE(call, Diag::NoteInInliningOf, fn->original);
 
     jump_to(fn->decl.front());
 
@@ -1994,7 +1994,7 @@ struct CodegenContext : NodeErrorHandler {
 
       if (is_constexpr && !result.is_constexpr()) {
         /* Report error if expression couldn't be evaluated. */
-        error(stmt, Diag::IfConstexprNotConstexpr);
+        error(stmt, Diag::ConstexprIfConditionNotConstexpr);
       }
       else if (result.is_constexpr()) {
         /* Expression was evaluated successfully. Treat the statement as constexpr. */
@@ -2002,7 +2002,7 @@ struct CodegenContext : NodeErrorHandler {
       }
 
       if (cond.attributes().contains_attr("static_branch")) {
-        error(decl, Diag::NonStaticBranchNotHomogenous);
+        error(decl, Diag::StaticBranchMissingPrevious);
       }
     }
 
@@ -2218,7 +2218,7 @@ struct CodegenContext : NodeErrorHandler {
         AssignStmt stmt = decl.initial_value();
         InitializerList list = stmt.initializer_list();
         if (!list.is_valid()) {
-          error(decl, Diag::ArrayTypeNeedsExplicitSizeOrInitializer);
+          error(decl, Diag::ArrayNeedsSizeOrInitializer);
         }
         int size = list.child_count();
         builder << builder.curr;
@@ -2233,7 +2233,7 @@ struct CodegenContext : NodeErrorHandler {
 
     for (Subscript sub : array.children_of_type<Subscript>()) {
       if (sub.is_empty()) {
-        error(decl, Diag::MultidimensionalArrayImplicitSize);
+        error(decl, Diag::ArrayMultidimensionalImplicitSize);
       }
       else {
         auto [result, err] = table.expr_type_analysis(scope, sub.expr().child_first());
@@ -2445,7 +2445,7 @@ struct CodegenContext : NodeErrorHandler {
     assert(id.is_valid());
     auto *cls = scope.lookup_class(table, id).unwrap(this);
     if (cls->template_data && !id.template_params().is_valid()) {
-      error(id, Diag::MissingExplicitTemplateArguments);
+      error(id, Diag::TemplateMissingExplicitArguments);
     }
     else if (cls->is_error) {
       error(id, Diag::UnknownTypeNameWithArg);
@@ -2720,11 +2720,8 @@ struct CodegenContext : NodeErrorHandler {
       if (sub.expr().is_valid()) {
         auto [result, err] = table.expr_type_analysis(scope, sub.expr().child_first());
         if (result.is_constexpr()) {
-          if (result.type == table.int_cls) {
+          if (result.type == table.int_cls || result.type == table.uint_cls) {
             str += '[' + to_string(value_as<int>(result.value)) + ']';
-          }
-          else if (result.type == table.uint_cls) {
-            str += '[' + to_string(value_as<uint32_t>(result.value)) + ']';
           }
           else {
             error(sub.expr(), Diag::SubscriptNotInt);

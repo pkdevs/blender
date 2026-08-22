@@ -285,13 +285,13 @@ const int &a = 1;)";
     string input = R"(
 int b; int &a = b++;)";
     auto [output, _, error] = process_test_local(input, Language::BSL);
-    EXPECT_EQ(error, "Reference cannot bind to an expression with side effect");
+    EXPECT_EQ(error, "Reference cannot bind to an expression with side effects");
   }
   {
     string input = R"(
 int b; int &a = ++b;)";
     auto [output, _, error] = process_test_local(input, Language::BSL);
-    EXPECT_EQ(error, "Reference cannot bind to an expression with side effect");
+    EXPECT_EQ(error, "Reference cannot bind to an expression with side effects");
   }
 }
 

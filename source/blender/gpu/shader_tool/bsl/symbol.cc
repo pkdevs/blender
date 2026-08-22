@@ -279,7 +279,7 @@ struct SymbolParser : NodeErrorHandler {
         case ResourceType::OUT:
           switch (entry_point_type) {
             case SymbolFunction::EntryPointType::COMP:
-              error(arg.type(), Diag::OutAttributeOnlyAllowedInVertFrag);
+              error(arg.type(), Diag::AttributeNotAllowedInComp, "out");
               break;
             case SymbolFunction::EntryPointType::FRAG:
               if (type->srt_type != ResourceTableType::FRAGMENT_OUT) {
@@ -298,14 +298,14 @@ struct SymbolParser : NodeErrorHandler {
               }
               break;
             case SymbolFunction::EntryPointType::NONE:
-              error(arg.type().identifier(), Diag::OnlyEntryPointsCanUseOutAttribute);
+              error(arg.type().identifier(), Diag::AttributeOnlyEntryPointsCanUseOut);
               break;
           }
           break;
         case ResourceType::IN:
           switch (entry_point_type) {
             case SymbolFunction::EntryPointType::COMP:
-              error(arg.type().identifier(), Diag::InAttributeOnlyAllowedInVertFrag);
+              error(arg.type().identifier(), Diag::AttributeNotAllowedInComp, "in");
               break;
             case SymbolFunction::EntryPointType::FRAG:
               if (type->srt_type != ResourceTableType::FRAGMENT_IN &&
@@ -327,7 +327,7 @@ struct SymbolParser : NodeErrorHandler {
               }
               break;
             case SymbolFunction::EntryPointType::NONE:
-              error(arg.type().identifier(), Diag::OnlyEntryPointsCanUseInAttribute);
+              error(arg.type().identifier(), Diag::AttributeOnlyEntryPointsCanUseIn);
               break;
           }
           break;
@@ -371,7 +371,7 @@ struct SymbolParser : NodeErrorHandler {
         sym->type = type;
         if (scope.variable_emplace(sym)) {
           NOTE(scope.variables.find(sym->identifier)->second.first.tok,
-               Diag::PreviousDefinition,
+               Diag::NotePreviousDefinition,
                sym->identifier);
           error(sym->loc.tok, Diag::Redefinition, sym->identifier);
         }
@@ -478,7 +478,7 @@ struct SymbolParser : NodeErrorHandler {
       }
       SymbolClass *type = scope.lookup_class(table, aliased).unwrap(this);
       if (type->is_error && fun->is_error) {
-        error(aliased, Diag::UnknownTypeAlias);
+        error(aliased, Diag::UnknownTypeName);
         return;
       }
       if (type) {
@@ -505,7 +505,7 @@ struct SymbolParser : NodeErrorHandler {
         sym->value = result.value;
       }
       else {
-        error(assign, Diag::EnumNotConstexpr);
+        error(assign, Diag::ExprNotIntegralConstant);
       }
     }
     else {
@@ -514,7 +514,7 @@ struct SymbolParser : NodeErrorHandler {
 
     if (scope.variable_emplace(sym)) {
       NOTE(scope.variables.find(sym->identifier)->second.first.tok,
-           Diag::PreviousDefinition,
+           Diag::NotePreviousDefinition,
            sym->identifier);
       error(sym->loc.tok, Diag::Redefinition, sym->identifier);
     }
@@ -524,7 +524,7 @@ struct SymbolParser : NodeErrorHandler {
     if (!cls.is_enum_class()) {
       if (scope.parent->variable_emplace(sym)) {
         NOTE(scope.variables.find(sym->identifier)->second.first.tok,
-             Diag::PreviousDefinition,
+             Diag::NotePreviousDefinition,
              sym->identifier);
         error(sym->loc.tok, Diag::Redefinition, sym->identifier);
       }
@@ -701,7 +701,7 @@ struct SymbolParser : NodeErrorHandler {
                                        const SymbolT &sym)
   {
     if (sym.template_data == nullptr) {
-      error(decl.identifier(), Diag::MissingTemplateDefinition);
+      error(decl.identifier(), Diag::TemplateMissingDefinition);
       return {};
     }
     TemplateDecl temp_decl = sym.template_data->decl;
@@ -735,13 +735,13 @@ struct SymbolParser : NodeErrorHandler {
           Id last = id.child_last(NodeType::Id).prev(NodeType::Id);
           if (auto *parent_cls = scope.lookup_class(table, start, last).unwrap(this); parent_cls) {
             if (parent_cls->template_data && !last.template_params().is_valid()) {
-              error(last, Diag::MissingTemplateParameters);
+              error(last, Diag::TemplateMissingParameters);
             }
             parent = parent_cls;
           }
 
           if (parent == nullptr) {
-            error(id, Diag::MissingParentClassInstantiation, id.str());
+            error(id, Diag::TemplateMissingParentClassInstantiation, id.str());
             return;
           }
         }
@@ -850,7 +850,7 @@ struct SymbolParser : NodeErrorHandler {
     sym->is_static = true;
     if (scope.variable_emplace(sym)) {
       NOTE(scope.variables.find(sym->identifier)->second.first.tok,
-           Diag::PreviousDefinition,
+           Diag::NotePreviousDefinition,
            sym->identifier);
       error(decl, Diag::Redefinition, sym->identifier);
     }
@@ -863,13 +863,13 @@ struct SymbolParser : NodeErrorHandler {
     AssignStmt assign = decl.assign();
     Expr expr = assign.expr();
     if (!expr.is_valid()) {
-      error(decl, Diag::CannotDeduceAutoType);
+      error(decl, Diag::AutoTypeCannotBeDeduced);
       return;
     }
 
     SymbolClass *cls = table.expr_type_analysis(scope, expr.child_first()).unwrap(this).type;
     if (cls->is_error) {
-      error(decl, Diag::CannotDeduceAutoType);
+      error(decl, Diag::AutoTypeCannotBeDeduced);
       return;
     }
 
@@ -879,14 +879,14 @@ struct SymbolParser : NodeErrorHandler {
     SymbolVariable *tmp = table.var_arena.alloc(&scope, cls, decl.front(), decl.tmp_id());
     if (scope.variable_emplace(tmp)) {
       NOTE(scope.variables.find(tmp->identifier)->second.first.tok,
-           Diag::PreviousDefinition,
+           Diag::NotePreviousDefinition,
            tmp->identifier);
       error(decl, Diag::Redefinition, tmp->identifier);
     }
 
     for (SymbolVariable *var : cls->non_static_variables_in_declaration_order()) {
       if (!id.is_valid()) {
-        error(decl, Diag::NotEnoughNamesInStructuredBinding);
+        error(decl, Diag::StructuredBindingNotEnoughNames);
         return;
       }
       /* Make copy of the variable in local scope. */
@@ -895,7 +895,7 @@ struct SymbolParser : NodeErrorHandler {
       sym->parent = &scope;
       if (scope.variable_emplace(sym)) {
         NOTE(scope.variables.find(sym->identifier)->second.first.tok,
-             Diag::PreviousDefinition,
+             Diag::NotePreviousDefinition,
              sym->identifier);
         error(decl, Diag::Redefinition, sym->identifier);
       }
@@ -905,7 +905,7 @@ struct SymbolParser : NodeErrorHandler {
       id = id.next();
     }
     if (id.is_valid()) {
-      error(decl, Diag::TooManyNamesInStructuredBinding);
+      error(decl, Diag::StructuredBindingTooManyNames);
       return;
     }
   }
@@ -967,7 +967,7 @@ struct SymbolParser : NodeErrorHandler {
       /* Currently supported as noop for legacy resource table reference getter. */
     }
     else if (attr.res_type != ResourceType::NONE) {
-      error(var, Diag::OutOfClassResourceDeclaration);
+      error(var, Diag::ResourceOutOfClassDeclaration);
     }
 
     const bool is_srt_local_ref = type->is_srt() && cls == nullptr;
@@ -983,7 +983,7 @@ struct SymbolParser : NodeErrorHandler {
     const bool is_ref = var.is_reference();
     for (Declarator decl : var.children_of_type<Declarator>()) {
       if (is_ref != decl.is_reference()) {
-        error(decl, Diag::VarDeclMixedReference);
+        error(decl, Diag::ReferenceMixedVarDecl);
         continue;
       }
 
@@ -992,7 +992,7 @@ struct SymbolParser : NodeErrorHandler {
       sym->is_static |= attr.res_type != ResourceType::NONE;
       if (scope.variable_emplace(sym)) {
         NOTE(scope.variables.find(sym->identifier)->second.first.tok,
-             Diag::PreviousDefinition,
+             Diag::NotePreviousDefinition,
              sym->identifier);
         error(sym->loc.tok, Diag::Redefinition, sym->identifier);
       }
@@ -1069,7 +1069,7 @@ struct SymbolParser : NodeErrorHandler {
 
         if (!sym->is_static) {
           if (sym->parent_class()) {
-            error(var.type(), Diag::NonStaticConstexprMember);
+            error(var.type(), Diag::ConstexprMemberNonStatic);
           }
           else if (sym->parent->parent_function()) {
             /* Only case where its fine. */
@@ -1077,7 +1077,7 @@ struct SymbolParser : NodeErrorHandler {
           else {
             /* Could be allowed if compiler can make them also static.
              * This is required for MSL where we have a wrapper class. */
-            error(var.type(), Diag::NonStaticConstexprGlobal);
+            error(var.type(), Diag::ConstexprGlobalNonStatic);
           }
         }
       }
@@ -1092,7 +1092,7 @@ struct SymbolParser : NodeErrorHandler {
       return cls;
     }
     if (list.child_count() != 1) {
-      error(list, Diag::ExcessElementsInScalarInitializer);
+      error(list, Diag::ExpectedScalarInitializer);
       return cls;
     }
     if (Initializer init = list.child_first(); init.is_valid()) {

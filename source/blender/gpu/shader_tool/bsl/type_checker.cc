@@ -260,7 +260,7 @@ struct ExpressionTypeParser
     if (is_reference) {
       error(t, Diag::FunctionCallNotAllowedInReferenceDefinition);
     }
-    error(t, Diag::CalledIsNotFunction, left.type->identifier);
+    error(t, Diag::OperatorCalledIsNotFunction, left.type->identifier);
     return table->err_cls;
   }
 
@@ -494,7 +494,7 @@ struct ExpressionTypeParser
       return table->err_cls;
     }
     if (tval.type != fval.type) {
-      error(t, Diag::TypeInvalidTernary, tval.type->original, fval.type->original);
+      error(t, Diag::OperatorInvalidTernary, tval.type->original, fval.type->original);
       return table->err_cls;
     }
 
@@ -515,7 +515,7 @@ struct ExpressionTypeParser
         error(node, Diag::ExpectedColon);
         break;
       case ErrorType::InvalidOperator:
-        error(node, Diag::TokenInvalidOperator, to_str(type));
+        error(node, Diag::OperatorTokenInvalid, to_str(type));
         break;
       case ErrorType::InvalidExpression:
         error(node, Diag::InvalidExprTypeChecker);

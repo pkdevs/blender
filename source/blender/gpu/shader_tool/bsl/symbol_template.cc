@@ -103,12 +103,12 @@ Result<T *> SymbolTemplate<T>::lookup_adl(const SymbolTable &symbols,
 {
   if constexpr (is_same_v<T, SymbolClass>) {
     return {scope.root_scope()->lookup_class(SymbolTable::err_symbol),
-            AstNodeException(list, Diag::ADLOnTypesNotAllowed)};
+            AstNodeException(list, Diag::CompilerErrorADLOnTypesNotAllowed)};
   }
   else {
     if (!is_adl_possible()) {
       return {scope.root_scope()->lookup_function(SymbolTable::err_symbol),
-              AstNodeException(list.prev(), Diag::MissingExplicitTemplateArguments)};
+              AstNodeException(list.prev(), Diag::TemplateMissingExplicitArguments)};
     }
     auto [mangled, err] = symbols.mangle_identifier(*this, list, scope);
     auto [args, args_debug] = mangled;

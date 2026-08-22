@@ -143,7 +143,7 @@ Result<SymbolFunction *> SymbolFunction::lookup_overload(IdQualified id,
     }
   }
 
-  Diag error_type = is_ambiguous ? Diag::AmbiguousOverload : Diag::NoMatchingOverload;
+  Diag error_type = is_ambiguous ? Diag::OverloadAmbiguous : Diag::OverloadNotFound;
   return {root_scope()->lookup_function(SymbolTable::err_symbol),
           AstNodeException(id, error_type, original, to_str(arg_types), candidates)};
 }

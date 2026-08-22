@@ -95,7 +95,7 @@ Result<StringPair> SymbolTable::mangle_identifier(TemplateArgList args,
           }
         }
         if (type->is_error) {
-          err = AstNodeException(param, Diag::UndeclaredIdentifier, string(type_id.str()));
+          err = AstNodeException(param, Diag::UnknownIdentifier, string(type_id.str()));
         }
         else {
           result.str += "T" + type->identifier;

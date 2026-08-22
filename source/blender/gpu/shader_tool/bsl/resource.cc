@@ -177,7 +177,7 @@ Result<ParsedAttribute> resource_type_from_attributes(AttrList list)
         }
         else {
           result.err = AstNodeException(
-              attr, Diag::DeclarationAlreadyOfType, to_str(result.value.res_type));
+              attr, Diag::ResourceTableDeclarationAlreadyOfType, to_str(result.value.res_type));
         }
       }
     }

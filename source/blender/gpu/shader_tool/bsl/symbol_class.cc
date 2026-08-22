@@ -55,7 +55,7 @@ optional<TokenException> SymbolClass::get_flat_members_recursive(const SymbolCla
 
     if (var->array_dimensions > 1) {
       /* TODO */
-      return TokenException(var->loc.tok, Diag::MultidimensionalArraysNotSupported);
+      return TokenException(var->loc.tok, Diag::ArrayMultidimensionalNotSupported);
     }
     int elements = (var->array_dimensions == 0) ? 1 : var->array_elements;
     if (elements == -1) {
