@@ -1082,21 +1082,16 @@ class PREFERENCES_OT_studiolight_install(Operator):
     bl_idname = "preferences.studiolight_install"
     bl_label = "Install Light"
 
-    def update_type(self, _context):
-        space_data = _context.space_data
-        if space_data.type != 'FILE_BROWSER':
+    def update_type(self, context):
+        filter_glob = "*.sl" if self.type == 'STUDIO' else "*.png;*.jpg;*.hdr;*.exr"
+        if filter_glob == self.filter_glob:
             return
 
-        if self.type == 'STUDIO':
-            space_data.params.filter_glob = "*.sl"
-        else:
-            space_data.params.filter_glob = "*.png;*.jpg;*.hdr;*.exr"
+        self.filter_glob = filter_glob
 
-        if self.filter_glob != space_data.params.filter_glob:
-            # Force update of file list, because update the filter does not update the real file list
-            bpy.ops.file.refresh()
-
-        self.filter_glob = space_data.params.filter_glob
+        space_data = context.space_data
+        if space_data is not None and space_data.type == 'FILE_BROWSER':
+            space_data.params.filter_glob = filter_glob
 
     files: CollectionProperty(
         name="File Path",
