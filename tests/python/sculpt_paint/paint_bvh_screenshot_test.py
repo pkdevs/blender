@@ -15,6 +15,7 @@ def screenshot():
     from modules.test_helpers import set_view3d_context_override
     import bpy
 
+    bpy.context.preferences.view.show_splash = False
     output_path = sys.argv[-1]
 
     # Force redraw and take screenshot.
@@ -44,6 +45,7 @@ if inside_blender:
 def get_arguments(filepath, output_filepath):
     return [
         "--no-window-focus",
+        "--no-native-pixels",
         "--window-geometry",
         "0", "0", "1024", "768",
         "-noaudio",
