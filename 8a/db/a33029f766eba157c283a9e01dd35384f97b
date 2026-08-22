@@ -42,4 +42,4 @@ Referenced by commit cd1437318652cffe6784619ac1c78a37d0a99c4a, Fix #161697: Cras
 Referenced by pull request #162110, Fix #161905: External Multires data cleared when exiting Edit Mode
 Referenced by commit 8297ddc6351f91f315e948a70370d3740bd18f81, Fix #161905: External Multires data cleared when exiting Edit Mode
 Referenced by issue #162943, Crash with Float Mesh Boolean Solver in Geometry Nodes
-Referenced by pull request #162979, Fix #162943: Crash with Float Mesh Boolean Solver in Geometry Nodes
+Referenced by pull request #162979, Fix #162943: Crash loading Mesh to BMesh when attribute exists with a different domain
