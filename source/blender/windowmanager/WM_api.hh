@@ -849,6 +849,10 @@ void WM_event_remove_modal_handler(ListBaseT<wmEventHandler> *handlers,
                                    bool postpone) ATTR_NONNULL(1, 2);
 
 void WM_event_remove_modal_handler_all(const wmOperator *op, bool postpone) ATTR_NONNULL(1);
+/**
+ * Returns true if a modal operator is active.
+ */
+bool WM_event_has_modal_handler(const wmWindow *win);
 
 /**
  * Modal handlers store a pointer to an area which might be freed while the handler runs.

@@ -123,20 +123,24 @@ static ListBaseT<LinkData> selected_objects_get(bContext *C);
 /** \name Internal Utilities
  * \{ */
 
-static bool object_mode_set_ok_or_report(ReportList *reports)
+static bool object_mode_set_ok_or_report(bContext *C, ReportList *reports)
 {
-  /* NOTE(@ideasman42): toggling modes while transforming should not be allowed by the key-map,
-   * so users should not be able do this. Python scripts can though,
-   * so check here to report an error instead of crashing.
-   *
-   * This is *not* a comprehensive check, since users might be trying to change modes
-   * while in the middle of *any* modal operator (painting or dragging a UI slider... etc).
+  /* NOTE(@ideasman42): toggling modes while transforming or runninng a modal operator should not
+   * be allowed by the key-map, so users should not be able do this. Python scripts can though, so
+   * check here to report an error instead of crashing.
    *
    * This check could be removed if it causes any problems since the error it prevents
    * is quite obscure. See: #137380. */
 
   if (G.moving & (G_TRANSFORM_OBJ | G_TRANSFORM_EDIT)) {
     BKE_reportf(reports, RPT_ERROR, "Unable to change object mode while transforming");
+    return false;
+  }
+
+  wmWindow *win = CTX_wm_window(C);
+  if (win && WM_event_has_modal_handler(win)) {
+    BKE_reportf(
+        reports, RPT_ERROR, "Unable to change object mode while a modal operator is active");
     return false;
   }
 
@@ -1013,7 +1017,7 @@ static wmOperatorStatus editmode_toggle_exec(bContext *C, wmOperator *op)
   const bool is_mode_set = (obact->mode & mode_flag) != 0;
   wmMsgBus *mbus = CTX_wm_message_bus(C);
 
-  if (!object_mode_set_ok_or_report(op->reports)) {
+  if (!object_mode_set_ok_or_report(C, op->reports)) {
     return OPERATOR_CANCELLED;
   }
   if (!is_mode_set) {
@@ -1110,7 +1114,7 @@ static wmOperatorStatus posemode_exec(bContext *C, wmOperator *op)
   ViewLayer *view_layer = CTX_data_view_layer(C);
   Base *base = CTX_data_active_base(C);
 
-  if (!object_mode_set_ok_or_report(op->reports)) {
+  if (!object_mode_set_ok_or_report(C, op->reports)) {
     return OPERATOR_CANCELLED;
   }
 
@@ -2056,7 +2060,7 @@ static wmOperatorStatus object_mode_set_exec(bContext *C, wmOperator *op)
   if (!mode_compat_test(ob, mode)) {
     return OPERATOR_PASS_THROUGH;
   }
-  if (!object_mode_set_ok_or_report(op->reports)) {
+  if (!object_mode_set_ok_or_report(C, op->reports)) {
     return OPERATOR_CANCELLED;
   }
 

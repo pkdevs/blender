@@ -5311,6 +5311,16 @@ void WM_event_remove_handlers_by_area(ListBaseT<wmEventHandler> *handlers, const
   }
 }
 
+bool WM_event_has_modal_handler(const wmWindow *win)
+{
+  for (wmEventHandler &handler_base : win->runtime->modalhandlers) {
+    if (handler_base.type == WM_HANDLER_TYPE_OP) {
+      return true;
+    }
+  }
+  return false;
+}
+
 wmOperator *WM_operator_find_modal_by_type(wmWindow *win, const wmOperatorType *ot)
 {
   for (wmEventHandler &handler_base : win->runtime->modalhandlers) {
