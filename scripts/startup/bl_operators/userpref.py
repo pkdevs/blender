@@ -1112,7 +1112,7 @@ class PREFERENCES_OT_studiolight_install(Operator):
     )
     filter_glob: StringProperty(
         default="*.png;*.jpg;*.hdr;*.exr",
-        options={'HIDDEN'},
+        options={'HIDDEN', 'SKIP_SAVE'},
     )
     type: EnumProperty(
         name="Type",
@@ -1135,9 +1135,24 @@ class PREFERENCES_OT_studiolight_install(Operator):
             self.report({'ERROR'}, "Failed to create Studio Light path")
             return {'CANCELLED'}
 
+        installed = 0
+
         for e in self.files:
-            shutil.copy(os.path.join(self.directory, e.name), path_studiolights)
+            filepath = os.path.join(self.directory, e.name)
+
+            try:
+                shutil.copy(filepath, path_studiolights)
+            except Exception as ex:
+                msg = rpt_("Unable to copy {!r}: {:s}").format(e.name, str(ex))
+                print(msg)
+                self.report({'WARNING'}, msg)
+                continue
+
             prefs.studio_lights.load(os.path.join(path_studiolights, e.name), self.type)
+            installed += 1
+
+        if installed == 0:
+            return {'CANCELLED'}
 
         # print message
         msg = rpt_("StudioLight Installed {!r} into {!r}").format(
