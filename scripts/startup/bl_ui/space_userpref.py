@@ -769,6 +769,19 @@ class USERPREF_PT_system_display_graphics(SystemPanel, CenterAlignMixIn, Panel):
                 col.label(text="\u2022 Windows on ARM requires driver 31.0.112.0 or higher", icon='BLANK1')
 
 
+class USERPREF_PT_system_video_decode(SystemPanel, CenterAlignMixIn, Panel):
+    bl_label = "Video Decoding API"
+
+    def draw_centered(self, context, layout):
+        system = context.preferences.system
+
+        col = layout.column()
+        col.use_property_split = False
+
+        row = col.row()
+        row.prop(system, "video_decode_backend", expand=True)
+
+
 class USERPREF_PT_system_os_settings(SystemPanel, CenterAlignMixIn, Panel):
     bl_label = "Operating System Settings"
 
@@ -3107,6 +3120,7 @@ classes = (
 
     USERPREF_PT_system_cycles_devices,
     USERPREF_PT_system_display_graphics,
+    USERPREF_PT_system_video_decode,
     USERPREF_PT_system_os_settings,
     USERPREF_PT_system_network,
     USERPREF_PT_system_memory,

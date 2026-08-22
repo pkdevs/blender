@@ -217,6 +217,16 @@ enum eUserPref_GPUBackendType : short {
 #endif
 };
 
+/** #UserDef.video_decode_backend */
+enum eUserPref_VideoDecodeBackend : char {
+  USER_VIDEO_DECODE_NONE = 0,
+  USER_VIDEO_DECODE_AUTO = 1,
+  USER_VIDEO_DECODE_D3D11VA = 2,
+  USER_VIDEO_DECODE_CUDA = 3,
+  USER_VIDEO_DECODE_VAAPI = 4,
+  USER_VIDEO_DECODE_VIDEOTOOLBOX = 5,
+};
+
 /** #UserDef.tablet_api */
 enum eUserpref_TabletAPI : short {
   USER_TABLET_AUTOMATIC = 0,
@@ -1158,6 +1168,9 @@ struct UserDef {
 
   /** #GPUBackendType */
   eUserPref_GPUBackendType gpu_backend = USER_GPU_BACKEND_DEFAULT;
+  /** Video hardware decode backend: #eUserPref_VideoDecodeBackend. */
+  eUserPref_VideoDecodeBackend video_decode_backend = USER_VIDEO_DECODE_AUTO;
+  char _pad_vdec[7] = {};
 
   /** Number of samples for FPS display calculations. */
   short playback_fps_samples = 8;
