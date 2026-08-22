@@ -841,7 +841,7 @@ static wmOperatorStatus grease_pencil_primitive_invoke(bContext *C,
     ptd.fill_color = std::nullopt;
   }
 
-  ptd.fill_opacity = ptd.brush->alpha;
+  ptd.fill_opacity = BKE_brush_alpha_get(paint, ptd.brush);
   ptd.softness = 1.0 - ptd.settings->hardness;
 
   ptd.texture_space = ed::greasepencil::calculate_texture_space(
