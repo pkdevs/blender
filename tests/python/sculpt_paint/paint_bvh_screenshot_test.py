@@ -18,7 +18,7 @@ def screenshot():
     output_path = sys.argv[-1]
 
     # Force redraw and take screenshot.
-    bpy.ops.wm.redraw_timer(type='DRAW_WIN_SWAP', iterations=100)
+    bpy.ops.wm.redraw_timer(type='DRAW_WIN_SWAP', iterations=1)
 
     context_override = bpy.context.copy()
     set_view3d_context_override(context_override)
@@ -36,8 +36,9 @@ except ImportError:
     inside_blender = False
 
 if inside_blender:
-    screenshot()
-    sys.exit(0)
+    bpy.ops.wm.redraw_timer(type='DRAW_WIN_SWAP', iterations=1)
+    # Run on a delay to allow EEVEE shaders to compile
+    bpy.app.timers.register(screenshot, first_interval=2.0)
 
 
 def get_arguments(filepath, output_filepath):
@@ -83,5 +84,5 @@ def main():
     sys.exit(not ok)
 
 
-if __name__ == "__main__":
+if __name__ == "__main__" and not inside_blender:
     main()
