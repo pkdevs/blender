@@ -16,13 +16,15 @@
 
 namespace blender::gpu::shader::parser {
 
-static std::string to_string(TokenType type)
+std::string to_str(TokenType type)
 {
   switch (type) {
     case Word:
       return "Word";
     case Number:
       return "Number";
+    case Default:
+      return "default";
     case TemplateOpen:
       return "<";
     case TemplateClose:
@@ -232,7 +234,7 @@ struct ScopeParser {
         case BracketClose:
           return;
         default:
-          error("Unexpected token \"" + to_string(peek()) + "\": Expecting declaration");
+          error("Unexpected token \"" + to_str(peek()) + "\": Expecting declaration");
           break;
       }
     }
@@ -275,7 +277,7 @@ struct ScopeParser {
     }
     open_scope(curr, ScopeType::Struct);
     match('{');
-    member_declaration();
+    members_decl();
     close_scope(curr, ScopeType::Struct);
     match('}');
     /* Support C-style anonymous struct for C compatibility. */
@@ -283,7 +285,7 @@ struct ScopeParser {
     match(';');
   }
 
-  void member_declaration()
+  void members_decl()
   {
     while (true) {
       switch (peek()) {
@@ -338,13 +340,14 @@ struct ScopeParser {
         case Inline:    /* For MSL / C++. */
         case Number:    /* For C++ bit-flags. */
         case Star:      /* For C++ pointers. */
+        case Default:   /* For C++ constructor. */
         case Comma:     /* For C++ constructor. */
         case Equal:     /* For C++ operator. */
         case Word:
           next();
           break;
         default:
-          error("Unexpected token \"" + to_string(peek()) + "\"");
+          error("Unexpected token \"" + to_str(peek()) + "\"");
           return;
       }
     }
@@ -395,7 +398,7 @@ struct ScopeParser {
           next();
           break;
         default:
-          error("Unexpected token \"" + to_string(peek()) + "\"");
+          error("Unexpected token \"" + to_str(peek()) + "\"");
           return;
       }
     }
@@ -407,7 +410,7 @@ struct ScopeParser {
     match(Union);
     open_scope(curr, ScopeType::Local);
     match('{');
-    member_declaration();
+    members_decl();
     close_scope(curr, ScopeType::Local);
     match('}');
   }
@@ -495,7 +498,7 @@ struct ScopeParser {
           next();
           break;
         default:
-          error("Unexpected token \"" + to_string(peek()) + "\"");
+          error("Unexpected token \"" + to_str(peek()) + "\"");
           return;
       }
     }
@@ -555,13 +558,14 @@ struct ScopeParser {
           close_scope(curr.prev(), ScopeType::Assignment);
           return;
         case This:
+        case Default: /* For C++ constructor. */
         case Word:
         case Number:
         case EXPRESSION_TOKENS:
           next();
           break;
         default:
-          error("Unexpected token \"" + to_string(peek()) + "\"");
+          error("Unexpected token \"" + to_str(peek()) + "\"");
           return;
       }
     }
@@ -605,6 +609,9 @@ struct ScopeParser {
         case While:
           while_loop();
           break;
+        case Do:
+          do_while_loop();
+          break;
         case Switch:
           switch_statement();
           break;
@@ -621,7 +628,8 @@ struct ScopeParser {
           break;
         case Using:
         case This:
-        case Case: /* For switch cases. */
+        case Case:    /* For switch cases. */
+        case Default: /* For switch cases. */
         case Comma:
         case Break:
         case Const:
@@ -635,7 +643,7 @@ struct ScopeParser {
           next();
           break;
         default:
-          error("Unexpected token \"" + to_string(peek()) + "\"");
+          error("Unexpected token \"" + to_str(peek()) + "\"");
           return;
       }
     }
@@ -660,6 +668,14 @@ struct ScopeParser {
     match(While);
     condition(1, ScopeType::LoopArgs);
     local_scope(ScopeType::LoopBody);
+  }
+
+  void do_while_loop()
+  {
+    match(Do);
+    local_scope(ScopeType::LoopBody);
+    match(While);
+    condition(1, ScopeType::LoopArgs);
   }
 
   void condition(int arg_needed, ScopeType type)
@@ -736,7 +752,7 @@ struct ScopeParser {
           next();
           break;
         default:
-          error("Unexpected token \"" + to_string(peek()) + "\"");
+          error("Unexpected token \"" + to_str(peek()) + "\"");
           return;
       }
     }
@@ -803,23 +819,12 @@ struct ScopeParser {
           }
           assignment();
           break;
-        case String:     /* Needed for legacy create info. */
-        case Or:         /* Needed for legacy create info. */
-        case Equal:      /* Needed for some macros. */
-        case LThan:      /* Needed for some macros. */
-        case GThan:      /* Needed for some macros. */
-        case LogicalOr:  /* Needed for some macros. */
-        case LogicalAnd: /* Needed for some macros. */
-        case Dot:        /* Needed for some macros. */
-        case Star:       /* Needed for pointers in shared files. */
+        case String:            /* Needed for legacy create info. */
+        case EXPRESSION_TOKENS: /* Needed for some macros. */
         case Word:
         case Number:
-        case Minus: /* For C++ constructors.  */
-        case Plus:  /* For C++ constructors.  */
         case Const:
         case Constexpr:
-        case Ampersand:
-        case Colon:
           if (!in_argument) {
             open_scope(curr, ScopeType::FunctionArg);
             in_argument = true;
@@ -827,7 +832,7 @@ struct ScopeParser {
           next();
           break;
         default:
-          error("Unexpected token \"" + to_string(peek()) + "\"");
+          error("Unexpected token \"" + to_str(peek()) + "\"");
           return;
       }
     }
@@ -874,7 +879,7 @@ struct ScopeParser {
           next();
           break;
         default:
-          error("Unexpected token \"" + to_string(peek()) + "\"");
+          error("Unexpected token \"" + to_str(peek()) + "\"");
           return;
       }
     }
@@ -938,7 +943,7 @@ struct ScopeParser {
           next();
           break;
         default:
-          error("Unexpected token \"" + to_string(peek()) + "\"");
+          error("Unexpected token \"" + to_str(peek()) + "\"");
           return;
       }
     }
@@ -987,7 +992,7 @@ struct ScopeParser {
           next();
           break;
         default:
-          error("Unexpected token \"" + to_string(peek()) + "\"");
+          error("Unexpected token \"" + to_str(peek()) + "\"");
           return;
       }
     }
@@ -1035,7 +1040,7 @@ struct ScopeParser {
           next();
           break;
         default:
-          error("Unexpected token \"" + to_string(peek()) + "\"");
+          error("Unexpected token \"" + to_str(peek()) + "\"");
           return;
       }
     }
@@ -1122,7 +1127,9 @@ struct ScopeParser {
   {
     if (curr_node.type() == type) {
       IndexRange &range = parser.scope_ranges[curr_node.index_];
-      range.size = tok.index_ - range.start + 1;
+      /* On error/EOF unwind, `tok` is invalid: extend the scope to the last token. */
+      const int64_t end = tok.is_valid() ? tok.index_ : parser.size();
+      range.size = end - range.start + 1;
       curr_node = curr_node.parent();
     }
   }
@@ -1142,8 +1149,8 @@ struct ScopeParser {
   void match(char expected)
   {
     if (curr != TokenType(expected)) {
-      error("Syntax Error: Expected token \"" + to_string(TokenType(expected)) + "\" but got \"" +
-            to_string(curr.type()) + "\"");
+      error("Syntax Error: Expected token \"" + to_str(TokenType(expected)) + "\" but got \"" +
+            to_str(curr.type()) + "\"");
     }
     next();
   }
@@ -1151,8 +1158,8 @@ struct ScopeParser {
   void match(char expected, char expected2)
   {
     if (curr != TokenType(expected) && curr != TokenType(expected2)) {
-      error("Syntax Error: Expected token \"" + to_string(TokenType(expected)) + "\" or \"" +
-            to_string(TokenType(expected2)) + "\" but got \"" + to_string(curr.type()) + "\"");
+      error("Syntax Error: Expected token \"" + to_str(TokenType(expected)) + "\" or \"" +
+            to_str(TokenType(expected2)) + "\" but got \"" + to_str(curr.type()) + "\"");
     }
     next();
   }

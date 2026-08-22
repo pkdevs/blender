@@ -763,7 +763,7 @@ class _defs_edit_armature:
     def bone_size():
         return dict(
             idname="builtin.bone_size",
-            label="Bone Size",
+            label="B-Bone Size",
             icon="ops.transform.bone_size",
             widget="VIEW3D_GGT_tool_generic_handle_free",
             keymap=(),
@@ -2165,10 +2165,11 @@ class _defs_weight_paint:
     def sample_weight():
         def draw_settings(context, layout, _tool):
             ups = context.tool_settings.weight_paint.unified_paint_settings
-            if ups.use_unified_weight:
+            brush = context.tool_settings.weight_paint.brush
+            if brush.use_unified_weight:
                 weight = ups.weight
-            elif context.tool_settings.weight_paint.brush:
-                weight = context.tool_settings.weight_paint.brush.weight
+            elif brush:
+                weight = brush.weight
             else:
                 return
             layout.label(text=iface_("Weight: {:.3f}").format(weight), translate=False)

@@ -33,7 +33,7 @@
 
 #include "BLI_utildefines.hh"
 
-#include "BKE_animsys.h"
+#include "BKE_animsys.hh"
 #include "BKE_context.hh"
 #include "BKE_idprop.hh"
 #include "BKE_report.hh"
@@ -74,6 +74,7 @@
 
 #include "CLG_log.h"
 
+#include "buttons/interface_label.hh"
 #include "interface_intern.hh"
 
 namespace blender::ui {
@@ -854,6 +855,10 @@ static bool but_equals_old(const Button *but, const Button *oldbut)
     }
   }
 
+  if (but->type == ButtonType::Label) {
+    return button_label_is_multiline(but) == button_label_is_multiline(oldbut);
+  }
+
   return true;
 }
 
@@ -945,7 +950,7 @@ static void but_update_old_active_from_new(Button *oldbut, Button *but)
   BLI_assert(oldbut->active || oldbut->semi_modal_state);
 
   /* flags from the buttons we want to refresh, may want to add more here... */
-  const int flag_copy = BUT_REDALERT | BUT_DISABLED | UI_HAS_ICON | UI_SELECT_DRAW;
+  const int64_t flag_copy = BUT_REDALERT | BUT_DISABLED | UI_HAS_ICON | UI_SELECT_DRAW;
   const int drawflag_copy = BUT_HAS_QUICK_TOOLTIP | BUT_NO_TOOLTIP;
 
   /* still stuff needs to be copied */
@@ -987,8 +992,13 @@ static void but_update_old_active_from_new(Button *oldbut, Button *but)
     ButtonSearch *search_oldbut = static_cast<ButtonSearch *>(oldbut),
                  *search_but = static_cast<ButtonSearch *>(but);
 
-    std::swap(search_oldbut->arg_free_fn, search_but->arg_free_fn);
     std::swap(search_oldbut->arg, search_but->arg);
+  }
+  if (oldbut->type == ButtonType::Label) {
+    auto *label_oldbut = static_cast<ButtonLabel *>(oldbut);
+    auto *label_but = static_cast<ButtonLabel *>(but);
+    std::swap(label_oldbut->wrap_cache, label_but->wrap_cache);
+    std::swap(label_oldbut->max_lines, label_but->max_lines);
   }
 
   /* copy hardmin for list rows to prevent 'sticking' highlight to mouse position
@@ -1156,7 +1166,7 @@ static bool but_update_from_old_block(Block *block,
   }
   else {
     matched_old_buttons.add(oldbut);
-    int flag_copy = BUT_DRAG_MULTI;
+    int64_t flag_copy = BUT_DRAG_MULTI;
 
     /* Stupid special case: The active button may be inside (as in, overlapped on top) a row
      * button which we also want to keep highlighted then. */
@@ -1265,11 +1275,12 @@ static bool but_is_rna_undo(const Button *but)
 
   /* No owner or type known. Assume we do not undo push as it may be a property from
    * the preferences stored outside datablocks. */
-  if (but->rnapoin.owner_id == nullptr || but->rnapoin.type == nullptr) {
+  if (!but->rnapoin.has_owner_id() || !but->rnapoin.has_type()) {
     return false;
   }
 
-  return ID_CHECK_UNDO(but->rnapoin.owner_id) && RNA_struct_undo_check(but->rnapoin.type);
+  return ID_CHECK_UNDO(but->rnapoin.owner_id) &&
+         RNA_property_undo_check(but->rnaprop, but->rnapoin.type);
 }
 
 /* assigns automatic keybindings to menu items for fast access
@@ -2037,7 +2048,7 @@ bool button_context_poll_operator_ex(bContext *C,
                                      const wmOperatorCallParams *optype_params)
 {
   bool result;
-  int old_but_flag = 0;
+  int64_t old_but_flag = 0;
 
   const bContextStore *previous_ctx = CTX_store_get(C);
   if (but) {
@@ -2779,7 +2790,7 @@ double button_value_get(Button *but)
   if (but->editval) {
     return *(but->editval);
   }
-  if (but->poin == nullptr && but->rnapoin.data == nullptr) {
+  if (but->poin == nullptr && !but->rnapoin) {
     return 0.0;
   }
 
@@ -3073,6 +3084,28 @@ static std::string textbox_string_get(ButtonTextBox *textbox)
   return RNA_property_string_get(&textbox->rnapoin, textbox->rnaprop);
 }
 
+/**
+ * Returns true if the unit should be included in the number edit string.
+ */
+static bool button_edit_string_include_unit_suffix(const Button *button)
+{
+  const int unit_type = RNA_SUBTYPE_UNIT_VALUE(button_unit_type_get(button));
+  if (BKE_unit_is_adaptive(*button->block->unit, unit_type)) {
+    /* Include the unit in the edit string when the unit is adaptive. */
+    return true;
+  }
+  PropertySubType subtype = PROP_NONE;
+  if (button->rnaprop) {
+    subtype = RNA_property_subtype(button->rnaprop);
+  }
+  if (subtype == PROP_TIME_ABSOLUTE) {
+    /* Include the unit in the edit string when the property uses absolute time (independent of the
+     * scene settings). */
+    return true;
+  }
+  return false;
+}
+
 void button_string_get_ex(Button *but,
                           char *str,
                           const size_t str_maxncpy,
@@ -3177,11 +3210,8 @@ void button_string_get_ex(Button *but,
       }
 
       if (button_is_unit(but)) {
-        /* In case where the unit is adaptive, include the unit in the edit string. Otherwise the
-         * unit is added as an edit hint. */
-        const int unit_type = RNA_SUBTYPE_UNIT_VALUE(button_unit_type_get(but));
-        const bool do_suffix = BKE_unit_is_adaptive(*but->block->unit, unit_type);
-        get_but_string_unit(but, str, str_maxncpy, value, false, prec, do_suffix);
+        const bool include_unit_suffix = button_edit_string_include_unit_suffix(but);
+        get_but_string_unit(but, str, str_maxncpy, value, false, prec, include_unit_suffix);
       }
       else if (subtype == PROP_FACTOR) {
         if (U.factor_display_type == USER_FACTOR_AS_FACTOR) {
@@ -3386,7 +3416,7 @@ bool button_string_eval_number(bContext *C, const Button *but, const char *str, 
 
 bool button_string_set(bContext *C, Button *but, const char *str)
 {
-  if (but->rnaprop && but->rnapoin.data &&
+  if (but->rnaprop && but->rnapoin &&
       ELEM(but->type, ButtonType::Text, ButtonType::TextBox, ButtonType::SearchMenu))
   {
     if (RNA_property_editable(&but->rnapoin, but->rnaprop)) {
@@ -3408,7 +3438,7 @@ bool button_string_set(bContext *C, Button *but, const char *str)
 
       if (type == PROP_POINTER) {
         if (str[0] == '\0') {
-          RNA_property_pointer_set(&but->rnapoin, but->rnaprop, PointerRNA_NULL, nullptr);
+          RNA_property_pointer_set(&but->rnapoin, but->rnaprop, {}, nullptr);
           return true;
         }
 
@@ -3698,10 +3728,6 @@ static void but_free_type_specific(Button *but)
       ButtonSearch *search_but = static_cast<ButtonSearch *>(but);
       MEM_SAFE_DELETE(search_but->item_active_str);
 
-      if (search_but->arg_free_fn) {
-        search_but->arg_free_fn(search_but->arg);
-        search_but->arg = nullptr;
-      }
       break;
     }
     default:
@@ -4518,7 +4544,7 @@ static Button *def_but(Block *block,
   return but;
 }
 
-void def_but_icon(Button *but, const int icon, const int flag)
+void def_but_icon(Button *but, const int icon, const int64_t flag)
 {
   if (icon) {
     icon_ensure_deferred(
@@ -4631,8 +4657,7 @@ static void def_but_rna__menu(bContext *C, Layout *layout, void *but_p)
     rows = totitems;
   }
 
-  const char *title = RNA_property_ui_name(
-      but->rnaprop, RNA_pointer_is_null(&but->rnapoin) ? nullptr : &but->rnapoin);
+  const char *title = RNA_property_ui_name(but->rnaprop, but->rnapoin ? &but->rnapoin : nullptr);
 
   /* Is there a non-blank label before this button on the same row? */
   Button *but_prev = but->block->prev_but(but);
@@ -5023,7 +5048,7 @@ static Button *def_but_rna(Block *block,
   }
 
   const char *info;
-  if (but->rnapoin.data && !RNA_property_editable_info(&but->rnapoin, prop, &info)) {
+  if (but->rnapoin && !RNA_property_editable_info(&but->rnapoin, prop, &info)) {
     button_disable(but, info);
   }
 
@@ -5031,7 +5056,7 @@ static Button *def_but_rna(Block *block,
     /* If the button shows an ID, automatically set it as focused in context so operators can
      * access it. */
     const PointerRNA pptr = RNA_property_pointer_get(ptr, prop);
-    if (pptr.data && RNA_struct_is_ID(pptr.type)) {
+    if (pptr && RNA_struct_is_ID(pptr.type)) {
       but->context = CTX_store_add(block->contexts, "id", &pptr);
     }
   }
@@ -5164,7 +5189,7 @@ Button *uiDefButAlert(Block *block, AlertIcon icon, int x, int y, short width, s
       theme::get_color_4ubv(TH_ERROR, color);
       return uiDefButImage(block, ibuf, x, y, ibuf->x, ibuf->y, color);
     }
-    bTheme *btheme = theme::theme_get();
+    const bTheme *btheme = theme::theme_get();
     return uiDefButImage(block, ibuf, x, y, ibuf->x, ibuf->y, btheme->tui.wcol_menu_back.text);
   }
   return nullptr;
@@ -5206,7 +5231,7 @@ void autocomplete_update_name(AutoComplete *autocpl, const StringRef name)
   char *truncate = autocpl->truncate;
   const char *startname = autocpl->startname;
   int match_index = 0;
-  for (int a = 0; a < autocpl->maxncpy - 1; a++) {
+  for (int a = 0; a < std::min<size_t>(name.size(), autocpl->maxncpy) - 1; a++) {
     if (startname[a] == 0 || startname[a] != name[a]) {
       match_index = a;
       break;
@@ -5619,22 +5644,17 @@ void block_flag_disable(Block *block, int flag)
   block->flag &= ~flag;
 }
 
-void button_flag_enable(Button *but, int flag)
+void button_flag_enable(Button *but, int64_t flag)
 {
   but->flag |= flag;
 }
 
-void button_flag2_enable(Button *but, int flag)
-{
-  but->flag2 |= flag;
-}
-
-void button_flag_disable(Button *but, int flag)
+void button_flag_disable(Button *but, int64_t flag)
 {
   but->flag &= ~flag;
 }
 
-bool button_flag_is_set(Button *but, int flag)
+bool button_flag_is_set(Button *but, int64_t flag)
 {
   return (but->flag & flag) != 0;
 }
@@ -6130,17 +6150,18 @@ void button_func_search_set(Button *but,
     search_create_fn = searchbox_create_generic;
   }
 
-  if (search_but->arg_free_fn != nullptr) {
-    search_but->arg_free_fn(search_but->arg);
-    search_but->arg = nullptr;
-  }
-
   search_but->popup_create_fn = search_create_fn;
   search_but->items_update_fn = search_update_fn;
   search_but->item_active = active;
 
-  search_but->arg = arg;
-  search_but->arg_free_fn = search_arg_free_fn;
+  if (free_arg && !search_arg_free_fn) {
+    search_arg_free_fn = MEM_delete_void;
+  }
+  search_but->arg = std::shared_ptr<void>(
+      arg,
+      search_arg_free_fn ?
+          search_arg_free_fn :
+          [](void *) { /* Pointer does not need freeing, do nothing in the deleter callback. */ });
 
   if (search_exec_fn) {
 #ifndef NDEBUG
@@ -6152,10 +6173,15 @@ void button_func_search_set(Button *but,
 #endif
     /* Handling will pass the active item as arg2 later, so keep it nullptr here. */
     if (free_arg) {
-      button_funcN_set(but, search_exec_fn, search_but->arg, nullptr);
+      /* XXX This is only done so `but_equals_old()` can recognize this button over redraws,
+       * otherwise interaction breaks entirely. Unlike #button_funcN_set(), #button_func_set() sets
+       * arg1, which takes part in the comparison, so the pointer needs to be stable over redraws.
+       * #button_funcN_set() doesn't set it, but takes ownership of the memory and frees it later.
+       * So give it a duplicate of the memory. */
+      button_funcN_set(but, search_exec_fn, MEM_dupalloc_void(search_but->arg.get()), nullptr);
     }
     else {
-      button_func_set(but, search_exec_fn, search_but->arg, nullptr);
+      button_func_set(but, search_exec_fn, search_but->arg.get(), nullptr);
     }
   }
 
@@ -6313,6 +6339,11 @@ void button_hint_drawstr_set(Button *but, const char *string)
   button_add_shortcut(but, string, false);
 }
 
+void button_icon_scale_set(Button *but, const float scale)
+{
+  but->icon_scale = scale;
+}
+
 void button_icon_indicator_number_set(Button *but, const int indicator_number)
 {
   icon_text_overlay_init_from_count(&but->icon_overlay_text, indicator_number);
@@ -6333,6 +6364,14 @@ void button_node_link_set(Button *but, bNodeSocket *socket, const float draw_col
   but->flag |= BUT_NODE_LINK;
   but->custom_data = socket;
   rgba_float_to_uchar(but->col, draw_color);
+}
+
+void button_pushbutton_draw_as_overlay_set(Button *but, const bool value)
+{
+  ButtonPush *but_push = static_cast<ButtonPush *>(but);
+  BLI_assert(but->type == ButtonType::But);
+
+  but_push->draw_as_overlay = value;
 }
 
 void button_number_step_size_set(Button *but, float step_size)
@@ -6477,7 +6516,7 @@ std::string button_string_get_rna_property_identifier(const Button &but)
 
 std::string button_string_get_rna_struct_identifier(const Button &but)
 {
-  if (but.rnaprop && but.rnapoin.data) {
+  if (but.rnaprop && but.rnapoin) {
     return RNA_struct_identifier(but.rnapoin.type);
   }
   if (but.optype) {

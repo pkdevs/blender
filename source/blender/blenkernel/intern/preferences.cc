@@ -22,6 +22,7 @@
 
 #include "BKE_appdir.hh"
 #include "BKE_asset.hh"
+#include "BKE_blender_version.h"
 #include "BKE_preferences.h"
 
 #include "BLI_utildefines.hh"
@@ -31,6 +32,9 @@
 #include "BLO_read_write.hh"
 
 #include "DNA_userdef_types.h"
+
+#include "RNA_define.hh"
+#include "RNA_enum_types.hh"
 
 namespace blender {
 
@@ -84,6 +88,7 @@ bUserAssetLibrary *BKE_preferences_asset_library_add(UserDef *userdef,
 
 void BKE_preferences_asset_library_remove(UserDef *userdef, bUserAssetLibrary *library)
 {
+  MEM_delete(library->auth_token);
   BLI_freelinkN(&userdef->asset_libraries, library);
 }
 
@@ -186,9 +191,25 @@ void BKE_preferences_asset_library_default_add(UserDef *userdef)
       library->dirpath, sizeof(library->dirpath), documents_path, N_("Blender"), N_("Assets"));
 }
 
+void BKE_preferences_asset_library_read_data(BlendDataReader *reader, bUserAssetLibrary *library)
+{
+  if (library->auth_token) {
+    BLO_read_string(reader, &library->auth_token);
+  }
+}
+
+void BKE_preferences_asset_library_write_data(BlendWriter *writer,
+                                              const bUserAssetLibrary *library)
+{
+  if (library->auth_token) {
+    writer->write_string(library->auth_token);
+  }
+}
+
 bUserAssetLibrary *BKE_preferences_remote_asset_library_add(UserDef *userdef,
                                                             const char *name,
-                                                            const char *remote_url)
+                                                            const char *remote_url,
+                                                            const char *auth_token)
 {
   bUserAssetLibrary *library = MEM_new<bUserAssetLibrary>(__func__);
 
@@ -200,6 +221,11 @@ bUserAssetLibrary *BKE_preferences_remote_asset_library_add(UserDef *userdef,
   }
 
   BKE_preferences_remote_asset_library_url_set(library, remote_url);
+
+  if (auth_token && auth_token[0]) {
+    library->flag |= ASSET_LIBRARY_USE_AUTH_TOKEN;
+    BKE_preferences_remote_asset_library_auth_token_set(library, auth_token);
+  }
 
   return library;
 }
@@ -242,6 +268,13 @@ void BKE_preferences_remote_asset_library_url_set(bUserAssetLibrary *library,
           std::string{asset_system::online_essentials_cache_directory_path()} :
           asset_system::remote_library_cache_directory_path_from_url(remote_url);
   BLI_strncpy_utf8(library->dirpath, library_dirpath.c_str(), sizeof(library->dirpath));
+}
+
+void BKE_preferences_remote_asset_library_auth_token_set(bUserAssetLibrary *library,
+                                                         const StringRef auth_token)
+{
+  const StringRef auth_token_trimmed = StringRef{auth_token}.trim();
+  library->auth_token = BLI_strdupn(auth_token_trimmed.data(), auth_token_trimmed.size());
 }
 
 /** \} */
@@ -712,5 +745,42 @@ bool BKE_preferences_asset_shelf_settings_ensure_catalog_path_enabled(UserDef *u
 }
 
 /** \} */
+
+const EnumPropertyItem *BKE_preferences_active_section_itemf(const UserDef *userdef, bool *r_free)
+{
+
+  const bool use_developer_ui = (userdef->flag & USER_DEVELOPER_UI) != 0;
+  const bool is_alpha = BKE_blender_version_is_alpha();
+
+  if (use_developer_ui && is_alpha) {
+    *r_free = false;
+    return rna_enum_preference_section_items;
+  }
+
+  EnumPropertyItem *items = nullptr;
+  int totitem = 0;
+
+  for (const EnumPropertyItem *it = rna_enum_preference_section_items; it->identifier != nullptr;
+       it++)
+  {
+    if (it->value == USER_SECTION_EXPERIMENTAL) {
+      if (is_alpha == false) {
+        continue;
+      }
+    }
+    else if (it->value == USER_SECTION_DEVELOPER_TOOLS) {
+      if (use_developer_ui == false) {
+        continue;
+      }
+    }
+
+    RNA_enum_item_add(&items, &totitem, it);
+  }
+
+  RNA_enum_item_end(&items, &totitem);
+
+  *r_free = true;
+  return items;
+}
 
 }  // namespace blender

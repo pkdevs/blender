@@ -5,7 +5,6 @@
 #include "usd_reader_material.hh"
 #include "usd_asset_utils.hh"
 #include "usd_colorspace_utils.hh"
-#include "usd_hash_types.hh"
 #include "usd_reader_utils.hh"
 
 #include "BKE_image.hh"
@@ -20,16 +19,15 @@
 #include "BKE_report.hh"
 
 #include "BLI_fileops.hh"
-#include "BLI_listbase.hh"
+#include "BLI_listbase_iterator.hh"
 #include "BLI_map.hh"
 #include "BLI_math_vector_c.hh"
 #include "BLI_math_vector_types.hh"
-#include "BLI_path_utils.hh"
 #include "BLI_string.hh"
 #include "BLI_string_ref.hh"
-#include "BLI_string_utf8.hh"
 #include "BLI_vector.hh"
 
+#include "DNA_listBase.h"
 #include "DNA_material_types.h"
 #include "DNA_node_types.h"
 

@@ -32,6 +32,7 @@
 #include "BKE_idtype.hh"
 #include "BKE_lib_id.hh"
 #include "BKE_lib_query.hh"
+#include "BKE_material.hh"
 #include "BKE_modifier.hh"
 #include "BKE_object.hh"
 #include "BKE_object_types.hh"
@@ -135,7 +136,9 @@ static void pointcloud_blend_write(BlendWriter *writer, ID *id, const void *id_a
   CustomData_reset(&pointcloud->pdata_legacy);
 
   /* Write LibData */
-  writer->write_id_struct(id_address, pointcloud);
+  writer->write_id_struct(id_address, pointcloud, [](BlendStructWriter &struct_writer) {
+    struct_writer.generated_ptr(offsetof(PointCloud, attribute_storage.dna_attributes));
+  });
   BKE_id_blend_write(writer, &pointcloud->id);
 
   /* Direct data */
@@ -308,6 +311,11 @@ bool BKE_pointcloud_attribute_required(const PointCloud * /*pointcloud*/, const 
   return name == ATTR_POSITION;
 }
 
+void BKE_pointcloud_material_remap(PointCloud *pointcloud, const uint *remap, const int remap_num)
+{
+  BKE_material_attr_indices_remap(pointcloud->attributes_for_write(), remap, remap_num);
+}
+
 void pointcloud_copy_parameters(const PointCloud &src, PointCloud &dst)
 {
   dst.flag = src.flag;
@@ -340,7 +348,7 @@ void pointcloud_resize(PointCloud &pointcloud, const int size)
   if (size > old_totpoint) {
     /* Initialize new points. */
     fill_attribute_range_default(
-        attributes, bke::AttrDomain::Point, {}, IndexRange(old_totpoint, size));
+        attributes, bke::AttrDomain::Point, {}, IndexRange::from_begin_end(old_totpoint, size));
   }
 }
 

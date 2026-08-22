@@ -402,7 +402,7 @@ class CYCLES_RENDER_PT_sampling_path_guiding(CyclesButtonsPanel, Panel):
             render_area = render_size_x * render_size_y
 
             if render_area > tile_area and render_size_x <= 8192 and render_size_y <= 8192:
-                layout.label(text="May work poorly with render tiling", icon='INFO')
+                layout.label(text="May work poorly with render tiling", icon='STATUS_INFO')
 
 
 class CYCLES_RENDER_PT_sampling_path_guiding_debug(CyclesDebugButtonsPanel, Panel):
@@ -1507,6 +1507,7 @@ class CYCLES_OBJECT_PT_visibility_ray_visibility(CyclesButtonsPanel, Panel):
         if ob.type != 'LIGHT':
             sub = col.column()
             sub.prop(ob, "visible_shadow", text="Shadow")
+            sub.prop(ob, "visible_raycast", text="Raycast")
 
 
 class CYCLES_OBJECT_PT_visibility_culling(CyclesButtonsPanel, Panel):
@@ -2537,18 +2538,6 @@ def draw_device(self, context):
             osl_col.prop(cscene, "shading_system")
 
 
-def draw_pause(self, context):
-    layout = self.layout
-    scene = context.scene
-
-    if context.engine == "CYCLES":
-        view = context.space_data
-
-        if view.shading.type == 'RENDERED':
-            cscene = scene.cycles
-            layout.prop(cscene, "preview_pause", icon='PLAY' if cscene.preview_pause else 'PAUSE', text="")
-
-
 def get_panels():
     exclude_panels = {
         'DATA_PT_camera_dof',
@@ -2685,7 +2674,6 @@ def register():
     from bpy.utils import register_class
 
     bpy.types.RENDER_PT_context.append(draw_device)
-    bpy.types.VIEW3D_HT_header.append(draw_pause)
 
     for panel in get_panels():
         panel.COMPAT_ENGINES.add('CYCLES')
@@ -2698,7 +2686,6 @@ def unregister():
     from bpy.utils import unregister_class
 
     bpy.types.RENDER_PT_context.remove(draw_device)
-    bpy.types.VIEW3D_HT_header.remove(draw_pause)
 
     for panel in get_panels():
         if 'CYCLES' in panel.COMPAT_ENGINES:

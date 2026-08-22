@@ -50,10 +50,6 @@ eTfmMode transform_mode_really_used(bContext *C, eTfmMode mode)
     if (ob->type != OB_ARMATURE) {
       return TFM_RESIZE;
     }
-    bArmature *arm = id_cast<bArmature *>(ob->data);
-    if (arm->drawtype == ARM_DRAW_TYPE_ENVELOPE) {
-      return TFM_BONE_ENVELOPE_DIST;
-    }
   }
 
   return mode;
@@ -275,16 +271,12 @@ void constraintTransLim(const TransInfo *t, const TransDataContainer *tc, TransD
 
     /* Evaluate valid constraints. */
     for (con = td->con; con; con = con->next) {
+      if (!BKE_constraint_has_influence(con)) {
+        continue;
+      }
+
       const bConstraintTypeInfo *cti = nullptr;
       ListBaseT<bConstraintTarget> targets = {nullptr, nullptr};
-
-      /* Only consider constraint if enabled. */
-      if (con->flag & (CONSTRAINT_DISABLE | CONSTRAINT_OFF)) {
-        continue;
-      }
-      if (con->enforce == 0.0f) {
-        continue;
-      }
 
       /* Only use it if it's tagged for this purpose (and the right type). */
       if (con->type == CONSTRAINT_TYPE_LOCLIMIT) {
@@ -392,11 +384,7 @@ static void constraintRotLim(const TransInfo * /*t*/, TransData *td, TransDataEx
 
     /* Evaluate valid constraints. */
     for (con = td->con; con; con = con->next) {
-      /* Only consider constraint if enabled. */
-      if (con->flag & (CONSTRAINT_DISABLE | CONSTRAINT_OFF)) {
-        continue;
-      }
-      if (con->enforce == 0.0f) {
+      if (!BKE_constraint_has_influence(con)) {
         continue;
       }
 
@@ -498,11 +486,7 @@ void constraintScaleLim(const TransInfo *t, const TransDataContainer *tc, int td
 
   /* Evaluate valid constraints. */
   for (con = td->con; con; con = con->next) {
-    /* Only consider constraint if enabled. */
-    if (con->flag & (CONSTRAINT_DISABLE | CONSTRAINT_OFF)) {
-      continue;
-    }
-    if (con->enforce == 0.0f) {
+    if (!BKE_constraint_has_influence(con)) {
       continue;
     }
 
@@ -1281,10 +1265,10 @@ void transform_mode_rotation_axis_get(const TransInfo *t, float3 &r_axis)
   }
   else {
     r_axis = t->spacemtx[t->orient_axis];
-    /* For unconstrained rotation in the 3D viewport, flip the axis so the rotation direction
-     * matches the mouse movement in view space. */
+    /* For unconstrained rotation in the 3D viewport and UV editor, flip the axis so the rotation
+     * direction matches the mouse movement in view space. */
     if ((t->mode == TFM_ROTATION) && (t->con.mode & CON_APPLY) == 0 &&
-        (t->spacetype == SPACE_VIEW3D))
+        ELEM(t->spacetype, SPACE_VIEW3D, SPACE_IMAGE))
     {
       r_axis = -r_axis;
     }

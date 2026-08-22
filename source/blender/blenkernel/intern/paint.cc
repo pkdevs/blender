@@ -9,6 +9,7 @@
 /* ALlow using deprecated color for sync legacy. */
 #define DNA_DEPRECATED_ALLOW
 
+#include <algorithm>
 #include <cstdlib>
 #include <cstring>
 #include <optional>
@@ -604,21 +605,6 @@ PaintMode BKE_paintmode_get_from_tool(const bToolRef *tref)
   }
 
   return PaintMode::Invalid;
-}
-
-bool BKE_paint_use_unified_size(const Paint *paint)
-{
-  return paint->unified_paint_settings.flag & UNIFIED_PAINT_SIZE;
-}
-
-bool BKE_paint_use_unified_strength(const Paint *paint)
-{
-  return paint->unified_paint_settings.flag & UNIFIED_PAINT_ALPHA;
-}
-
-bool BKE_paint_use_unified_color(const Paint *paint)
-{
-  return paint->unified_paint_settings.flag & UNIFIED_PAINT_COLOR;
 }
 
 /**
@@ -1470,6 +1456,7 @@ bool BKE_paint_ensure(ToolSettings *ts, Paint **r_paint)
     VPaint *data = MEM_new<VPaint>(__func__);
     paint = &data->paint;
     paint_init_data(*paint);
+    BKE_paint_mesh_automasking_settings_ensure(*paint);
   }
   else if (reinterpret_cast<Sculpt **>(r_paint) == &ts->sculpt) {
     Sculpt *data = MEM_new<Sculpt>(__func__);
@@ -1550,7 +1537,7 @@ void BKE_paint_init(Main *bmain, Scene *sce, PaintMode mode, const bool ensure_b
     BKE_paint_cavity_curve_preset(paint, CURVE_PRESET_LINE);
   }
 
-  if (mode == PaintMode::Sculpt) {
+  if (ELEM(mode, PaintMode::Sculpt, PaintMode::Vertex, PaintMode::Weight)) {
     BKE_paint_mesh_automasking_settings_ensure(*paint);
   }
 }
@@ -1943,9 +1930,24 @@ float paint_grid_paint_mask(const GridPaintMask *gpm, uint level, uint x, uint y
 }
 
 /* Threshold to move before updating the brush rotation, reduces jitter. */
-static float paint_rake_rotation_spacing(const Paint & /*ups*/, const Brush &brush)
+static float paint_rake_rotation_spacing(const Paint & /*paint*/,
+                                         const Brush &brush,
+                                         bool in_stroke,
+                                         bool is_first_dab)
 {
-  return brush.sculpt_brush_type == SCULPT_BRUSH_TYPE_CLAY_STRIPS ? 1.0f : 20.0f;
+  const float rotation_spacing = brush.sculpt_brush_type == SCULPT_BRUSH_TYPE_CLAY_STRIPS ? 1.0f :
+                                                                                            20.0f;
+  if (!in_stroke) {
+    /* Increase spacing when not in stroke to avoid cursor jitter. */
+    return std::max(rotation_spacing, 20.0f);
+  }
+  else if (is_first_dab) {
+    /* Use a smaller limit if the stroke hasn't started to prevent excessive pre-roll. */
+    return std::min(rotation_spacing, 4.0f);
+  }
+  else {
+    return rotation_spacing;
+  }
 }
 
 void paint_update_brush_rake_rotation(Paint &paint, const Brush &brush, float rotation)
@@ -1976,19 +1978,15 @@ bool paint_calculate_rake_rotation(Paint &paint,
                                    const Brush &brush,
                                    const float mouse_pos[2],
                                    const PaintMode paint_mode,
-                                   bool stroke_has_started)
+                                   bool in_stroke,
+                                   bool is_first_dab)
 {
   bke::PaintRuntime &paint_runtime = *paint.runtime;
 
   bool ok = false;
   if (paint_rake_rotation_active(brush, paint_mode)) {
-    float r = paint_rake_rotation_spacing(paint, brush);
+    const float r = paint_rake_rotation_spacing(paint, brush, in_stroke, is_first_dab);
     float rotation;
-
-    /* Use a smaller limit if the stroke hasn't started to prevent excessive pre-roll. */
-    if (!stroke_has_started) {
-      r = min_ff(r, 4.0f);
-    }
 
     float dpos[2];
     sub_v2_v2v2(dpos, mouse_pos, paint_runtime.last_rake);
@@ -2046,10 +2044,6 @@ void BKE_sculptsession_bm_to_me(Object *ob)
 {
   if (ob && ob->runtime->sculpt_session) {
     sculptsession_bm_to_me_update_data_only(ob);
-
-    /* Ensure the objects evaluated mesh doesn't hold onto arrays
-     * now realloc'd in the mesh #34473. */
-    DEG_id_tag_update(&ob->id, ID_RECALC_GEOMETRY);
   }
 }
 
@@ -2077,28 +2071,6 @@ void BKE_sculptsession_free_pbvh(Object &object)
   ss->clear_active_elements(false);
 }
 
-void BKE_sculptsession_bm_to_me_for_render(Object *object)
-{
-  if (object && object->runtime->sculpt_session) {
-    if (object->runtime->sculpt_session->bm) {
-      /* Ensure no points to old arrays are stored in DM
-       *
-       * Apparently, we could not use DEG_id_tag_update
-       * here because this will lead to the while object
-       * surface to disappear, so we'll release DM in place.
-       */
-      BKE_object_free_derived_caches(object);
-
-      sculptsession_bm_to_me_update_data_only(object);
-
-      /* In contrast with sculptsession_bm_to_me no need in
-       * DAG tag update here - derived mesh was freed and
-       * old pointers are nowhere stored.
-       */
-    }
-  }
-}
-
 void BKE_sculptsession_free(Object *ob)
 {
   if (ob && ob->runtime->sculpt_session) {
@@ -2106,6 +2078,7 @@ void BKE_sculptsession_free(Object *ob)
 
     if (ss->bm) {
       BKE_sculptsession_bm_to_me(ob);
+      DEG_id_tag_update(&ob->id, ID_RECALC_GEOMETRY);
       BM_mesh_free(ss->bm);
     }
 
@@ -2340,7 +2313,7 @@ static bool sculpt_modifiers_active(const Scene *scene, const Sculpt *sd, Object
   return false;
 }
 
-static void sculpt_update_object(Depsgraph *depsgraph,
+static void sculptsession_update(Depsgraph *depsgraph,
                                  Object *ob,
                                  Object *ob_eval,
                                  bool is_paint_tool)
@@ -2381,7 +2354,7 @@ static void sculpt_update_object(Depsgraph *depsgraph,
 
     if (ob->mode & (OB_MODE_VERTEX_PAINT | OB_MODE_WEIGHT_PAINT)) {
       const Mesh *me_eval_deform = BKE_object_get_mesh_deform_eval(ob_eval);
-
+      BLI_assert(me_eval_deform != nullptr);
       /* If the fully evaluated mesh has the same topology as the deform-only version, use it.
        * This matters because crazyspace evaluation is very restrictive and excludes even modifiers
        * that simply recompute vertex weights (which can even include Geometry Nodes). */
@@ -2453,7 +2426,7 @@ static void sculpt_update_object(Depsgraph *depsgraph,
   bke::pbvh::update_normals(*depsgraph, *ob, pbvh);
 }
 
-void BKE_sculpt_update_object_before_eval(Object *ob_eval)
+void BKE_sculptsession_update_before_eval(Object *ob_eval)
 {
   /* Update before mesh evaluation in the dependency graph. */
   Object *ob_orig = DEG_get_original(ob_eval);
@@ -2489,13 +2462,13 @@ void BKE_sculpt_update_object_before_eval(Object *ob_eval)
   }
 }
 
-void BKE_sculpt_update_object_after_eval(Depsgraph *depsgraph, Object *ob_eval)
+void BKE_sculptsession_update_after_eval(Depsgraph *depsgraph, Object *ob_eval)
 {
   /* Update after mesh evaluation in the dependency graph, to rebuild pbvh::Tree or
    * other data when modifiers change the mesh. */
   Object *ob_orig = DEG_get_original(ob_eval);
 
-  sculpt_update_object(depsgraph, ob_orig, ob_eval, false);
+  sculptsession_update(depsgraph, ob_orig, ob_eval, false);
 }
 
 void BKE_sculpt_color_layer_create_if_needed(Object *object)
@@ -2521,14 +2494,14 @@ void BKE_sculpt_color_layer_create_if_needed(Object *object)
   BKE_mesh_tessface_clear(orig_me);
 }
 
-void BKE_sculpt_update_object_for_edit(Depsgraph *depsgraph, Object *ob_orig, bool is_paint_tool)
+void BKE_sculptsession_update_for_edit(Depsgraph *depsgraph, Object *ob_orig, bool is_paint_tool)
 {
   PRF_scope(ProfileCategory::Editor);
   BLI_assert(ob_orig == DEG_get_original(ob_orig));
 
   Object *ob_eval = DEG_get_evaluated(depsgraph, ob_orig);
 
-  sculpt_update_object(depsgraph, ob_orig, ob_eval, is_paint_tool);
+  sculptsession_update(depsgraph, ob_orig, ob_eval, is_paint_tool);
 }
 
 void BKE_sculpt_mask_layers_ensure(Depsgraph *depsgraph,
@@ -2594,41 +2567,6 @@ void BKE_sculpt_mask_layers_ensure(Depsgraph *depsgraph,
   }
   else {
     attributes.add<float>(".sculpt_mask", AttrDomain::Point, AttributeInitDefaultValue());
-  }
-}
-
-void BKE_sculpt_toolsettings_data_ensure(Main *bmain, Scene *scene)
-{
-  BKE_paint_init(bmain, scene, PaintMode::Sculpt, true);
-
-  Sculpt *sd = scene->toolsettings->sculpt;
-
-  const Sculpt defaults = {};
-
-  /* We have file versioning code here for historical
-   * reasons.  Don't add more checks here, do it properly
-   * in blenloader.
-   */
-
-  if (sd->detail_percent == 0.0f) {
-    sd->detail_percent = defaults.detail_percent;
-  }
-  if (sd->constant_detail == 0.0f) {
-    sd->constant_detail = defaults.constant_detail;
-  }
-  if (sd->detail_size == 0.0f) {
-    sd->detail_size = defaults.detail_size;
-  }
-
-  /* Set sane default tiling offsets. */
-  if (!sd->paint.tile_offset[0]) {
-    sd->paint.tile_offset[0] = 1.0f;
-  }
-  if (!sd->paint.tile_offset[1]) {
-    sd->paint.tile_offset[1] = 1.0f;
-  }
-  if (!sd->paint.tile_offset[2]) {
-    sd->paint.tile_offset[2] = 1.0f;
   }
 }
 
