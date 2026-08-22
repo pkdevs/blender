@@ -13,7 +13,6 @@
 #include "BKE_object_types.hh"
 #include "BKE_paint.hh"
 #include "BKE_paint_bvh.hh"
-#include "BKE_paint_types.hh"
 #include "BKE_subdiv_ccg.hh"
 
 #include "BLI_array.hh"
@@ -33,7 +32,6 @@ namespace blender::ed::sculpt_paint::brushes {
 inline namespace rotate_cc {
 
 struct LocalData {
-  Vector<float3> local_positions;
   Vector<float> factors;
   Vector<float> distances;
   Vector<float3> translations;
@@ -60,7 +58,6 @@ BLI_NOINLINE static void calc_translations(const Span<float3> positions,
 static void calc_faces(const Depsgraph &depsgraph,
                        const Sculpt &sd,
                        const Brush &brush,
-                       const float4x4 &mat,
                        const float angle,
                        const MeshAttributeData &attribute_data,
                        const bke::pbvh::MeshNode &node,
@@ -74,32 +71,15 @@ static void calc_faces(const Depsgraph &depsgraph,
   const OrigPositionData orig_data = orig_position_data_get_mesh(object, node);
   const Span<int> verts = node.verts();
 
-  if (BKE_brush_has_cube_tip(&brush, PaintMode::Sculpt)) {
-    tls.local_positions.resize(orig_data.positions.size());
-    const MutableSpan<float3> local_positions = tls.local_positions;
-    calc_cube_tip_factors_common_from_orig_data_mesh(depsgraph,
-                                                     brush,
-                                                     object,
-                                                     mat,
-                                                     attribute_data,
-                                                     orig_data.positions,
-                                                     orig_data.normals,
-                                                     local_positions,
-                                                     node,
-                                                     tls.factors,
-                                                     tls.distances);
-  }
-  else {
-    calc_factors_common_from_orig_data_mesh(depsgraph,
-                                            brush,
-                                            object,
-                                            attribute_data,
-                                            orig_data.positions,
-                                            orig_data.normals,
-                                            node,
-                                            tls.factors,
-                                            tls.distances);
-  }
+  calc_factors_common_from_orig_data_mesh(depsgraph,
+                                          brush,
+                                          object,
+                                          attribute_data,
+                                          orig_data.positions,
+                                          orig_data.normals,
+                                          node,
+                                          tls.factors,
+                                          tls.distances);
 
   scale_factors(tls.factors, angle);
 
@@ -119,7 +99,6 @@ static void calc_grids(const Depsgraph &depsgraph,
                        const Sculpt &sd,
                        Object &object,
                        const Brush &brush,
-                       const float4x4 &mat,
                        const float angle,
                        bke::pbvh::GridsNode &node,
                        LocalData &tls)
@@ -133,30 +112,14 @@ static void calc_grids(const Depsgraph &depsgraph,
   const Span<int> grids = node.grids();
   const int grid_verts_num = grids.size() * key.grid_area;
 
-  if (BKE_brush_has_cube_tip(&brush, PaintMode::Sculpt)) {
-    tls.local_positions.resize(orig_data.positions.size());
-    const MutableSpan<float3> local_positions = tls.local_positions;
-    calc_cube_tip_factors_common_from_orig_data_grids(depsgraph,
-                                                      brush,
-                                                      object,
-                                                      mat,
-                                                      orig_data.positions,
-                                                      orig_data.normals,
-                                                      local_positions,
-                                                      node,
-                                                      tls.factors,
-                                                      tls.distances);
-  }
-  else {
-    calc_factors_common_from_orig_data_grids(depsgraph,
-                                             brush,
-                                             object,
-                                             orig_data.positions,
-                                             orig_data.normals,
-                                             node,
-                                             tls.factors,
-                                             tls.distances);
-  }
+  calc_factors_common_from_orig_data_grids(depsgraph,
+                                           brush,
+                                           object,
+                                           orig_data.positions,
+                                           orig_data.normals,
+                                           node,
+                                           tls.factors,
+                                           tls.distances);
 
   scale_factors(tls.factors, angle);
 
@@ -176,7 +139,6 @@ static void calc_bmesh(const Depsgraph &depsgraph,
                        const Sculpt &sd,
                        Object &object,
                        const Brush &brush,
-                       const float4x4 &mat,
                        const float angle,
                        bke::pbvh::BMeshNode &node,
                        LocalData &tls)
@@ -190,24 +152,8 @@ static void calc_bmesh(const Depsgraph &depsgraph,
   Array<float3> orig_normals(verts.size());
   orig_position_data_gather_bmesh(*ss.bm_log, verts, orig_positions, orig_normals);
 
-  if (BKE_brush_has_cube_tip(&brush, PaintMode::Sculpt)) {
-    tls.local_positions.resize(orig_positions.size());
-    const MutableSpan<float3> local_positions = tls.local_positions;
-    calc_cube_tip_factors_common_from_orig_data_bmesh(depsgraph,
-                                                      brush,
-                                                      object,
-                                                      mat,
-                                                      orig_positions,
-                                                      orig_normals,
-                                                      local_positions,
-                                                      node,
-                                                      tls.factors,
-                                                      tls.distances);
-  }
-  else {
-    calc_factors_common_from_orig_data_bmesh(
-        depsgraph, brush, object, orig_positions, orig_normals, node, tls.factors, tls.distances);
-  }
+  calc_factors_common_from_orig_data_bmesh(
+      depsgraph, brush, object, orig_positions, orig_normals, node, tls.factors, tls.distances);
 
   scale_factors(tls.factors, angle);
 
@@ -234,8 +180,6 @@ void do_rotate_brush(const Depsgraph &depsgraph,
 
   constexpr std::array<int, 8> flip{1, -1, -1, 1, -1, 1, 1, -1};
   const float angle = ss.cache->vertex_rotation * flip[ss.cache->mirror_symmetry_pass];
-  float4x4 mat;
-  ed::sculpt_paint::cube_tip_init(sd, object, brush, mat.ptr());
 
   threading::EnumerableThreadSpecific<LocalData> all_tls;
   switch (pbvh.type()) {
@@ -247,16 +191,8 @@ void do_rotate_brush(const Depsgraph &depsgraph,
       node_mask.foreach_index(
           [&](const int i) {
             LocalData &tls = all_tls.local();
-            calc_faces(depsgraph,
-                       sd,
-                       brush,
-                       mat,
-                       angle,
-                       attribute_data,
-                       nodes[i],
-                       object,
-                       tls,
-                       position_data);
+            calc_faces(
+                depsgraph, sd, brush, angle, attribute_data, nodes[i], object, tls, position_data);
             bke::pbvh::update_node_bounds_mesh(position_data.eval, nodes[i]);
           },
           exec_mode::grain_size(1));
@@ -269,7 +205,7 @@ void do_rotate_brush(const Depsgraph &depsgraph,
       node_mask.foreach_index(
           [&](const int i) {
             LocalData &tls = all_tls.local();
-            calc_grids(depsgraph, sd, object, brush, mat, angle, nodes[i], tls);
+            calc_grids(depsgraph, sd, object, brush, angle, nodes[i], tls);
             bke::pbvh::update_node_bounds_grids(subdiv_ccg.grid_area, positions, nodes[i]);
           },
           exec_mode::grain_size(1));
@@ -280,7 +216,7 @@ void do_rotate_brush(const Depsgraph &depsgraph,
       node_mask.foreach_index(
           [&](const int i) {
             LocalData &tls = all_tls.local();
-            calc_bmesh(depsgraph, sd, object, brush, mat, angle, nodes[i], tls);
+            calc_bmesh(depsgraph, sd, object, brush, angle, nodes[i], tls);
             bke::pbvh::update_node_bounds_bmesh(nodes[i]);
           },
           exec_mode::grain_size(1));
