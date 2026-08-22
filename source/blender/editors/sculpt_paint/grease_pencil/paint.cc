@@ -1746,8 +1746,8 @@ void PaintOperation::on_stroke_done(const bContext &C)
       process_stroke_weights(*scene_, *object_, drawing, active_curve);
     }
     if ((settings->flag & GP_BRUSH_OUTLINE_STROKE) != 0) {
-      const float outline_radius = BKE_brush_unprojected_radius_get(paint, brush) / 2.0f *
-                                   settings->outline_fac * 0.5f;
+      const float outline_radius = BKE_brush_unprojected_radius_get(paint, brush) *
+                                   settings->outline_fac;
       const int material_index = [&]() {
         Material *material = BKE_grease_pencil_object_material_alt_ensure_from_brush(
             CTX_data_main(&C), object_, brush);

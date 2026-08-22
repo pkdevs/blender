@@ -75,13 +75,7 @@ static wmOperatorStatus brush_scale_size_exec(bContext *C, wmOperator *op)
         }
       }
 
-      if (use_unified_size) {
-        BKE_brush_size_set(paint, brush, size);
-      }
-      else {
-        brush->size = max_ii(size, 1);
-        BKE_brush_tag_unsaved_changes(brush);
-      }
+      BKE_brush_size_set(paint, brush, size);
     }
 
     /* Unprojected diameter. */

@@ -665,7 +665,7 @@ class _draw_tool_settings_context_mode:
 
         if grease_pencil_tool == 'TINT':
             ups = paint.unified_paint_settings
-            prop_owner = ups if ups.use_unified_color else brush
+            prop_owner = ups if brush.use_unified_color else brush
             row.prop_with_popover(prop_owner, "color", text="", panel="TOPBAR_PT_grease_pencil_vertex_color")
 
         from bl_ui.properties_paint_common import (
@@ -8607,7 +8607,7 @@ class VIEW3D_PT_greasepencil_draw_context_menu(Panel):
         if brush.gpencil_brush_type not in {'ERASE', 'CUTTER', 'EYEDROPPER'} and is_vertex:
             split = layout.split(factor=0.1)
             ups = settings.unified_paint_settings
-            prop_owner = ups if ups.use_unified_color else brush
+            prop_owner = ups if brush.use_unified_color else brush
             split.prop(prop_owner, "color", text="")
             split.template_color_picker(prop_owner, "color", value_slider=True)
 
