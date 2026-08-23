@@ -73,7 +73,7 @@ struct ButtonItem;
   if (ot == nullptr) { \
     item_disabled(this, _opname); \
     RNA_warning_bare("%s: '%s' unknown operator", _caller_fn_name, _opname); \
-    return PointerRNA_NULL; \
+    return {}; \
   } \
   (void)0
 
@@ -93,6 +93,8 @@ struct LayoutRoot {
   const uiStyle *style;
   Block *block;
   Layout *layout;
+  /** Direction of #ItemType::LayoutRoot layouts, used for resolving the height of multi-line
+   * labels. */
   LayoutDirection direction;
   bool use_dynamic_height;
 };
@@ -311,6 +313,8 @@ struct LayoutItemSplit : public LayoutRow {
 };
 
 /** \} */
+
+static void item_disabled(Layout *layout, const char *name);
 
 /* -------------------------------------------------------------------- */
 /** \name Item
@@ -597,7 +601,6 @@ LayoutDirection Layout::local_direction() const
 {
   switch (this->type()) {
     case ItemType::LayoutRoot:
-      return this->root_->direction;
     case ItemType::LayoutRow:
     case ItemType::LayoutOverlap:
     case ItemType::LayoutPanelHeader:
@@ -995,6 +998,10 @@ static void item_enum_expand_exec(Layout *layout,
     block_layout_set_current(block, item_local_sublayout(layout, layout, true));
   }
 
+  if (!item_array->identifier) {
+    item_disabled(layout, IFACE_("Empty list"));
+  }
+
   for (const EnumPropertyItem *item = item_array; item->identifier; item++) {
     const bool is_first = item == item_array;
 
@@ -1334,7 +1341,7 @@ void context_active_but_prop_get_filebrowser(const bContext *C,
 
   for (Block &block : region->runtime->uiblocks) {
     for (Button &but : block.buttons()) {
-      if (but.rnapoin.data) {
+      if (but.rnapoin) {
         if (RNA_property_type(but.rnaprop) == PROP_STRING) {
           prevbut = &but;
         }
@@ -2757,7 +2764,7 @@ void button_configure_search(Button *but,
     }
     else {
       /* Rely on `has_search_fn`. */
-      coll_search->search_ptr = PointerRNA_NULL;
+      coll_search->search_ptr = {};
       coll_search->search_prop = nullptr;
       coll_search->item_search_prop = nullptr;
     }
@@ -2828,7 +2835,7 @@ void Layout::textbox_with_state(PointerRNA *ptr,
 
   this->row(true).alignment_set(LayoutAlign::Expand);
 
-  const float line_heigth = fontstyle_height_max(UI_FSTYLE_WIDGET);
+  const float line_height = fontstyle_height_max(UI_FSTYLE_WIDGET);
 
   /** Ensure minimum value is set. */
   textbox_state->visible_lines = std::max(textbox_state->visible_lines,
@@ -2844,7 +2851,7 @@ void Layout::textbox_with_state(PointerRNA *ptr,
       0,
       w,
       std::max<int>(UI_UNIT_Y,
-                    std::round(line_heigth * textbox_state->visible_lines) +
+                    std::round(line_height * textbox_state->visible_lines) +
                         (textbox_vertical_padding() * 2.0f)),
       ptr,
       prop,
@@ -3288,7 +3295,15 @@ static Button *uiItem_simple(Layout *layout,
     icon = ICON_BLANK1;
   }
 
-  const int w = text_icon_width_ex(layout, name, icon, text_pad_none, UI_FSTYLE_WIDGET);
+  /* When drawing text over an emboss background (like for a normal push button), the widget needs
+   * to be slightly wider than just the text, since the text will get some horizontal padding
+   * inside the background box when drawing. Otherwise drawing would truncate the text to fit.
+   * This is not the most thorough check, but should work well enough and can be expanded as
+   * needed. */
+  const bool has_emboss = but_type != ButtonType::Label &&
+                          layout->emboss() == ui::EmbossType::Emboss;
+  const int w = text_icon_width_ex(
+      layout, name, icon, has_emboss ? text_pad_default : text_pad_none, UI_FSTYLE_WIDGET);
   Button *but;
   if (icon && !name.is_empty()) {
     but = uiDefIconTextBut(block, but_type, icon, name, 0, 0, w, UI_UNIT_Y, nullptr, tooltip);
@@ -3379,6 +3394,9 @@ void Layout::label_multiline(StringRefNull text, int icon, FontStyleAlign align,
   label->text_align = align;
   label->is_multiline = true;
   label->max_lines = max_lines;
+  if (this->red_alert()) {
+    button_flag_enable(button, BUT_REDALERT);
+  }
 }
 
 void Layout::link(const StringRef url, const StringRef name, int icon)
@@ -3501,7 +3519,7 @@ void uiItemLDrag(Layout *layout, PointerRNA *ptr, StringRef name, int icon)
 {
   Button *but = uiItem_simple(layout, name, icon);
 
-  if (ptr && ptr->type) {
+  if (ptr && ptr->has_type()) {
     if (RNA_struct_is_ID(ptr->type)) {
       button_drag_set_id(but, ptr->owner_id);
     }
@@ -3738,7 +3756,7 @@ PointerRNA Layout::op_menu_enum(const bContext *C,
   /* Use the menu button as owner for the operator properties, which will then be passed to the
    * individual menu items. */
   but->opptr = MEM_new<PointerRNA>("uiButOpPtr", WM_operator_properties_create_ptr(ot));
-  BLI_assert(but->opptr->data == nullptr);
+  BLI_assert(!*but->opptr);
   WM_operator_properties_alloc(
       &but->opptr, reinterpret_cast<IDProperty **>(&but->opptr->data), ot->idname);
 
@@ -3766,7 +3784,7 @@ PointerRNA Layout::op_menu_enum(const bContext *C,
   if (!ot->srna) {
     item_disabled(this, opname.c_str());
     RNA_warning_bare("UILayout.operator_menu_enum(): operator missing srna '%s'", opname.c_str());
-    return PointerRNA_NULL;
+    return {};
   }
 
   return this->op_menu_enum(C, ot, propname, name, icon);
@@ -5725,7 +5743,7 @@ static void resolve_label_multiline(ButtonLabel *button)
   }
   label_multiline_wrap_lines(button, icon_pad);
   const float line_height = ui::fontstyle_height_max(UI_FSTYLE_WIDGET);
-  /* Top and bottom Text text padding. */
+  /* Top and bottom text padding. */
   const float padding = std::max(UI_UNIT_Y - line_height, 0.0f);
   int lines = button->wrap_cache->wrapped_lines.size();
   if (button->max_lines > 0) {
@@ -5740,14 +5758,19 @@ void Layout::resolve_dynamic_height()
   if (this->items().is_empty()) {
     return;
   }
-  /* Extra vertical offsset. */
+  /* Extra vertical offset. */
   int y_offs = 0;
 
   /* For simplicity a column is a grid of n rows and 1 columns, and a row is a grid of 1 rows and n
    * columns. */
-  int rows = this->local_direction() == LayoutDirection::Vertical ? this->items().size() : 1;
-  int cols = this->local_direction() == LayoutDirection::Horizontal ? this->items().size() : 1;
-  bool row_major = this->local_direction() == LayoutDirection::Vertical;
+  const LayoutDirection direction = this->type() == ItemType::LayoutRoot ?
+                                        this->root_->direction :
+                                    this->type() == ItemType::LayoutSplit ?
+                                        LayoutDirection::Horizontal :
+                                        this->local_direction();
+  int rows = direction == LayoutDirection::Vertical ? this->items().size() : 1;
+  int cols = direction == LayoutDirection::Horizontal ? this->items().size() : 1;
+  bool row_major = direction == LayoutDirection::Vertical;
 
   if (const LayoutItemGridFlow *flow = this->type() == ItemType::LayoutGridFlow ?
                                            static_cast<const LayoutItemGridFlow *>(this) :
@@ -5767,9 +5790,9 @@ void Layout::resolve_dynamic_height()
   }
   /* Dynamic height is resolved row by row, and each row pushes down following rows. */
   for (const int row : IndexRange(rows)) {
-    /* Maximun sub-item heigth in the row before resolving its dynamic heigth. */
+    /* Maximum sub-item height in the row before resolving its dynamic height. */
     int max_row_subitem_heigth = 0;
-    /* Maximun sub-item heigth in the row after resolving its dynamic heigth. */
+    /* Maximum sub-item height in the row after resolving its dynamic height. */
     int max_row_subitem_heigth_new = 0;
 
     for (const int col : IndexRange(cols)) {
@@ -5781,10 +5804,10 @@ void Layout::resolve_dynamic_height()
       const int2 size = subitem->size();
       max_row_subitem_heigth = std::max(max_row_subitem_heigth, size.y);
 
-      /* Apply acumulated offset from previous rows. */
+      /* Apply accumulated offset from previous rows. */
       item_translate_y(subitem, -y_offs);
 
-      /* Resolve sub-item dynamic heigth. */
+      /* Resolve sub-item dynamic height. */
       if (subitem->type() == ItemType::Button) {
         const auto *sub_bitem = static_cast<const ButtonItem *>(subitem);
         if (button_label_is_multiline(sub_bitem->but)) {
@@ -5801,7 +5824,7 @@ void Layout::resolve_dynamic_height()
     y_offs += std::max(max_row_subitem_heigth_new - max_row_subitem_heigth, 0);
   }
 
-  /* Apply change in heigth to this layout. */
+  /* Apply change in height to this layout. */
   this->y_ -= y_offs;
   this->h_ += y_offs;
 }
@@ -6186,7 +6209,7 @@ void Layout::context_set_from_but(const Button *but)
     this->context_ptr_set("button_operator", but->opptr);
   }
 
-  if (but->rnapoin.data && but->rnaprop) {
+  if (but->rnapoin && but->rnaprop) {
     /* TODO: index could be supported as well */
     PointerRNA ptr_prop = RNA_pointer_create_discrete(nullptr, RNA_Property, but->rnaprop);
     this->context_ptr_set("button_prop", &ptr_prop);

@@ -151,7 +151,7 @@ RNANodeIdentifier RNANodeQuery::construct_node_identifier(const PointerRNA *ptr,
                                                           RNAPointerSource source)
 {
   RNANodeIdentifier node_identifier;
-  if (ptr->type == nullptr) {
+  if (!ptr->has_type()) {
     return node_identifier;
   }
   /* Set default values for returns. */
@@ -353,8 +353,11 @@ RNANodeIdentifier RNANodeQuery::construct_node_identifier(const PointerRNA *ptr,
     node_identifier.type = NodeType::GEOMETRY;
     return node_identifier;
   }
-  else if (RNA_struct_is_a(ptr->type, RNA_Strip)) {
-    /* Sequencer strip */
+  else if (RNA_struct_is_a(ptr->type, RNA_Strip) ||
+           RNA_struct_is_a(ptr->type, RNA_StripModifier) ||
+           ELEM(ptr->type, RNA_StripTransform, RNA_StripCrop, RNA_StripColorBalanceData))
+  {
+    /* Sequencer strip or related nested data. */
     node_identifier.type = NodeType::SEQUENCER;
     return node_identifier;
   }

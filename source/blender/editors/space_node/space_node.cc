@@ -28,6 +28,7 @@
 #include "MEM_guardedalloc.h"
 
 #include "BKE_asset.hh"
+#include "BKE_compositor.hh"
 #include "BKE_compute_context_cache.hh"
 #include "BKE_compute_contexts.hh"
 #include "BKE_context.hh"
@@ -397,6 +398,43 @@ bool node_editor_is_for_geometry_nodes_modifier(const SpaceNode &snode,
   return object_and_modifier->nmd->modifier.persistent_uid == nmd.modifier.persistent_uid;
 }
 
+struct SceneAndCompositorEffect {
+  const Scene *scene = nullptr;
+  const SceneCompositorEffect *effect = nullptr;
+};
+
+static std::optional<SceneAndCompositorEffect> get_scene_compositor_effect_for_node_editor(
+    const SpaceNode &space_node)
+{
+  if (space_node.node_tree_sub_type != SNODE_COMPOSITOR_SCENE) {
+    return std::nullopt;
+  }
+
+  if (!space_node.id) {
+    return std::nullopt;
+  }
+
+  if (GS(space_node.id->name) != ID_SCE) {
+    return std::nullopt;
+  }
+
+  const Scene *scene = id_cast<Scene *>(space_node.id);
+  if (space_node.flag & SNODE_PIN) {
+    for (const SceneCompositorEffect &effect : scene->compositor_effects) {
+      if (effect.node_group == space_node.nodetree) {
+        return SceneAndCompositorEffect(scene, &effect);
+      }
+    }
+    return std::nullopt;
+  }
+
+  const SceneCompositorEffect *active_effect = bke::compositor::get_active_effect(*scene);
+  if (!active_effect) {
+    return std::nullopt;
+  }
+  return SceneAndCompositorEffect(scene, active_effect);
+}
+
 const ComputeContext *compute_context_for_zone(const bke::bNodeTreeZone &zone,
                                                bke::ComputeContextCache &compute_context_cache,
                                                const ComputeContext *parent_compute_context)
@@ -514,11 +552,15 @@ static const ComputeContext *get_node_editor_root_compute_context(
   if (snode.nodetree->type == NTREE_COMPOSIT) {
     switch (SpaceNodeCompositorNodesType(snode.node_tree_sub_type)) {
       case SNODE_COMPOSITOR_SCENE: {
-        const Scene *scene = reinterpret_cast<Scene *>(snode.id);
-        if (!scene) {
+        std::optional<SceneAndCompositorEffect> scene_and_effect =
+            ed::space_node::get_scene_compositor_effect_for_node_editor(snode);
+        if (!scene_and_effect) {
           return nullptr;
         }
-        return &compute_context_cache.for_data_block(nullptr, scene->id);
+        const bke::DataBlockComputeContext &scene_context = compute_context_cache.for_data_block(
+            nullptr, scene_and_effect->scene->id);
+        return &compute_context_cache.for_scene_compositor_effect(&scene_context,
+                                                                  *scene_and_effect->effect);
       }
       case SNODE_COMPOSITOR_SEQUENCER: {
         return nullptr;
@@ -1050,16 +1092,21 @@ static bool node_import_file_drop_poll(bContext *C, wmDrag *drag, const wmEvent 
   if (!snode->edittree) {
     return false;
   }
-  if (snode->edittree->type != NTREE_GEOMETRY) {
+  if (!ELEM(snode->edittree->type, NTREE_GEOMETRY, NTREE_COMPOSIT)) {
     return false;
   }
   if (drag->type != WM_DRAG_PATH) {
     return false;
   }
+  const bool is_geometry_tree = snode->edittree->type == NTREE_GEOMETRY;
   const Span<std::string> paths = WM_drag_get_paths(drag);
   for (const StringRef path : paths) {
-    if (path.endswith(".csv") || path.endswith(".obj") || path.endswith(".ply") ||
-        path.endswith(".stl") || path.endswith(".txt") || path.endswith(".vdb"))
+    if (path.endswith(".txt")) {
+      return true;
+    }
+    if (is_geometry_tree &&
+        (path.endswith(".csv") || path.endswith(".obj") || path.endswith(".ply") ||
+         path.endswith(".stl") || path.endswith(".vdb")))
     {
       return true;
     }
@@ -1407,9 +1454,10 @@ static int /*eContextResult*/ node_context(const bContext *C,
     if (snode->edittree != nullptr) {
       if (bNode *node = bke::node_get_active(*snode->edittree)) {
         if (ELEM(node->type_legacy, SH_NODE_TEX_IMAGE, SH_NODE_TEX_ENVIRONMENT)) {
-          Image *image = id_cast<Image *>(node->id);
-          CTX_data_id_pointer_set(result, &image->id);
-          return CTX_RESULT_OK;
+          if (Image *image = id_cast<Image *>(node->id)) {
+            CTX_data_id_pointer_set(result, &image->id);
+            return CTX_RESULT_OK;
+          }
         }
       }
     }
