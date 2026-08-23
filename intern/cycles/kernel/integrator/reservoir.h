@@ -8,6 +8,8 @@
 
 CCL_NAMESPACE_BEGIN
 
+// TODO(Tri): Clean up mess of commit ReSTIR: Fix zero-radius spot lights in ReSTIR DI
+
 struct Reservoir {
   LightSample light;
   ReSTIRLightSampleReference reference;
@@ -64,8 +66,8 @@ ccl_device_inline bool reservoir_is_empty(ccl_private const Reservoir *reservoir
   //   printf("reservoir_is_empty() returned false!!!; reservoir->total_weight=%f\n", (double)reservoir->total_weight);
   // }
 
-  // return !(reservoir->total_weight > 0.0f);
-  return reservoir->total_weight == 0.0f;
+  return !(reservoir->total_weight > 0.0f);
+  // return reservoir->total_weight == 0.0f;
 }
 
 ccl_device_inline bool reservoir_has_valid_reference(ccl_private const Reservoir *reservoir)
@@ -91,7 +93,7 @@ ccl_device_inline bool reservoir_finalize(ccl_private Reservoir *reservoir, // !
   //   return false;
   // }
   if (reservoir_is_empty(reservoir)) {
-    printf("reservoir_finalize() returned false! reservoir_is_empty=true\n"); // !!!: almost Always returning!
+    printf("reservoir_finalize() returned false! reservoir_is_empty=true\n"); // !!!: almost Always returning! 
     // reservoir_clear(reservoir);
     return false;
   }
@@ -199,7 +201,6 @@ printf(
         (int)restir_light_reference_is_valid(&candidate_reference),
         (double)candidate_luminance,
         (double)weight);
-    return;
     /* Should be theoretically captured by the following condition, but we can not trust floating
       * point precision. */
     return;
@@ -259,14 +260,14 @@ printf(
 
   if (jacobian > 0.0f) {
     light_pdf_in_area *= jacobian;
-    printf("reservoir_add_light_sample() updated light_pdf_in_area=%f", (double)light_pdf_in_area);
+    printf("reservoir_add_light_sample() updated light_pdf_in_area=%f\n", (double)light_pdf_in_area);
   }
 
   // if (!(isfinite(light_pdf_in_area) && light_pdf_in_area > 0.0f)) { // !!!: zero-radius; suspicious
   //   return;
   // }
 
-  printf("reservoir_add_light_sample() updated (mis_weight / light_pdf_in_area)=%f", (double)(mis_weight / light_pdf_in_area));
+  printf("reservoir_add_light_sample() updated (mis_weight / light_pdf_in_area)=%f\n", (double)(mis_weight / light_pdf_in_area));
 
   reservoir_add_sample(reservoir,
                        ls,
@@ -428,8 +429,9 @@ ccl_device_inline bool restir_unpack_reservoir(KernelGlobals kg, // !!!: lamp
 {
   PROFILING_INIT(kg, PROFILING_RESTIR_RESERVOIR_PASSES);
 
-  // // prevents stale light, radiance, or reference metadata from surviving when reusing a stack variable
-  // reservoir_clear(reservoir); // !!! Suspicious here
+  // prevents stale light, radiance, or reference metadata from surviving when reusing a stack variable
+  // simply guarantees that anything you don't deserialize cannot remain stale.
+  reservoir_clear(reservoir);
 
 
 printf(
@@ -444,8 +446,13 @@ printf(
     reservoir->reference.object);
 
   int i = 0;
+
   // TODO: this works for diffuse surfaces. For specular, probably `sd->wi` is needed instead.
   // TODO: compress the data.
+  // reservoir->reference.type = (LightType)(int)buffer[i++];
+  // // !!!: No need for flags! restir_light_reference_restore_metadata() can handle it
+  // // reservoir->reference.flags = (uint32_t)buffer[i++];
+
   reservoir->reference.object = (int)buffer[i++];
   reservoir->reference.prim = (int)buffer[i++]; // For analytic lights: object = OBJECT_NONE; prim = KernelLight index
   reservoir->reference.param.x = buffer[i++];
@@ -457,7 +464,7 @@ printf(
 
   // printf("restir_unpack_reservoir() entered; object=%f, prim=%f, total_weight=%f\n\n\n",
   //   (double)reservoir->reference.object, (double)reservoir->reference.prim, (double)reservoir->total_weight);
-printf(
+printf( // Rejected candidates
     "ZERO RESERVOIR AFTER READ: "
     "total_weight=%f luminance=%f "
     "flags=%u type=%d prim=%d object=%d\n"
@@ -469,13 +476,36 @@ printf(
     reservoir->reference.prim,
     reservoir->reference.object);
 
-  // !!!: Suspicious
-  // if (reservoir_is_empty(reservoir)) { // !!!: always Returning false here for 0-radius lights!
-  //   return false;
-  // }
+  /* No selected sample exists in an empty reservoir.
+   * Do not attempt to restore/reconstruct its light reference.
+   */
+  if (reservoir_is_empty(reservoir)) { // !!!: always Returning false here for 0-radius lights!
+    printf("restir_unpack_reservoir() returns false on empty reservoir!\n\n");
+    return false;
+  }
 
+printf( // Accepted candidates
+    "\n=== UNPACKED REFERENCE ===\n"
+    "total_weight=%f\n"
+    "luminance=%f\n"
+    "type=%d\n"
+    "flags=%u\n"
+    "object=%d\n"
+    "prim=%d\n"
+    "param=(%f,%f)\n"
+    "==========================\n",
+    (double)reservoir->total_weight,
+    (double)reservoir->luminance,
+    reservoir->reference.type,
+    reservoir->reference.flags,
+    reservoir->reference.object,
+    reservoir->reference.prim,
+    (double)reservoir->reference.param.x,
+    (double)reservoir->reference.param.y);
+
+  // !!!: sees: reference->type == 0 which isn't LIGHT_TRIANGLE
   // Reconstruct reference.type, RESTIR_LIGHT_REFERENCE_VALID, RESTIR_LIGHT_REFERENCE_HAS_PARAM
-  return restir_light_reference_restore_metadata(kg, &reservoir->reference); // !!!
+  return restir_light_reference_restore_metadata(kg, &reservoir->reference); // !!!: See why triangle fails
 }
 
 

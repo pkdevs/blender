@@ -918,9 +918,9 @@ ccl_device
       /* Construct the reference from the light sample in ordinary NEE. */
       // !!!: One contributor of the darkness in DI (not all types are supported; current support might have issues)
       // !!!: restir_light_reference_from_sample() may have problem populating reference
-      if (!restir_light_reference_from_sample(kg, &ls, &reference)) { // Even though `radiance_eval` calls light_sample_shader_eval() (which is for none-constant lighst), if this isn't called, we'll get total darkness for constant lights
+      if (!restir_light_reference_from_sample(kg, &ls, sd->time, &reference)) {
         printf("integrate_surface_direct_light() returned!; !restir_light_reference_from_sample()=%u\n\n\n\n",
-               (!restir_light_reference_from_sample(kg, &ls, &reference)));
+               (!restir_light_reference_from_sample(kg, &ls, sd->time, &reference)));
         continue;
       }
     }
@@ -938,14 +938,6 @@ ccl_device
     /* Evaluates light emission, BSDF response, and the geometry conversion. */
     const float bsdf_pdf = radiance_eval( // !!!:
         kg, state, sd, &ls, &radiance, &reference, check_visibility);
-
-    // !!!: Dangerous rejection
-    /* Reject invalid candidate weights before reservoir replacement. */
-    // if (!(isfinite(bsdf_pdf) && bsdf_pdf > 0.0f) || bsdf_eval_is_zero(&radiance))
-    // { // !!!: 0-radius light; Always returning here!
-    //   printf("\n\n\n\n\n --- SEE integrate_surface_direct_light()\n\n\n\n\n");
-    //   continue;
-    // }
 
     PROFILING_EVENT(PROFILING_RESTIR_RESERVOIR);
 

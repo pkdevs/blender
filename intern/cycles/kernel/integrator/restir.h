@@ -295,6 +295,7 @@ ccl_device_inline bool streaming_di_samples(KernelGlobals kg,
         &canonical.reference,
         current->sd.P,
         current->sd.N,
+        current->sd.time,
         current->sd.shader,
         current->path_flag,
         &canonical.light);
@@ -340,6 +341,7 @@ ccl_device_inline bool streaming_di_samples(KernelGlobals kg,
           &canonical.reference,
           neighbor.sd.P,
           neighbor.sd.N,
+          neighbor.sd.time,
           neighbor.sd.shader,
           neighbor.path_flag,
           &canonical_ls);
@@ -361,6 +363,7 @@ ccl_device_inline bool streaming_di_samples(KernelGlobals kg,
                                        &neighbor.reservoir.reference, // !!!: Ensure
                                        neighbor.sd.P,
                                        neighbor.sd.N,
+                                       neighbor.sd.time,
                                        neighbor.sd.shader,
                                        neighbor.path_flag,
                                        &neighbor.reservoir.light);
@@ -378,6 +381,7 @@ ccl_device_inline bool streaming_di_samples(KernelGlobals kg,
         &neighbor.reservoir.reference, // !!!: Ensure
         current->sd.P,
         current->sd.N,
+        current->sd.time,
         current->sd.shader,
         current->path_flag,
         &neighbor.reservoir.light);
@@ -453,6 +457,7 @@ ccl_device void integrator_evaluate_final_samples(KernelGlobals kg, // DEVICE_KE
       &reservoir.reference,
       current.sd.P,
       current.sd.N,
+      current.sd.time,
       current.sd.shader,
       current.path_flag,
       &reservoir.light);

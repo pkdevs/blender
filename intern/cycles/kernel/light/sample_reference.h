@@ -14,7 +14,7 @@
 #include "kernel/light/point.h"
 #include "kernel/light/spot.h"
 #include "kernel/light/sun.h"
-// #include "kernel/light/triangle.h" // !!!
+// #include "kernel/light/triangle.h" // !!!: Not possible to import
 #include "kernel/sample/lcg.h"
 #include "kernel/types.h"
 
@@ -66,8 +66,6 @@ ccl_device_inline ReSTIRLightSampleReference restir_light_reference_empty()
 ccl_device_inline bool restir_light_reference_is_valid(
     const ccl_private ReSTIRLightSampleReference *reference)
 {
-  printf("restir_light_reference_is_valid(); returned ((reference->flags & RESTIR_LIGHT_REFERENCE_VALID) != 0) = %u, reference->flags=%u\n",
-         ((reference->flags & RESTIR_LIGHT_REFERENCE_VALID) != 0), reference->flags);
   return (reference->flags & RESTIR_LIGHT_REFERENCE_VALID) != 0;
 }
 
@@ -91,7 +89,8 @@ ccl_device_inline bool restir_point_light_reference_from_sample(
   }
 
   reference->type = LIGHT_POINT;
-  reference->object = ls->object;
+  // reference->object = ls->object;
+  reference->object = OBJECT_NONE;
   reference->prim = ls->prim;
 
   if (klight->spot.is_sphere) {
@@ -149,7 +148,8 @@ ccl_device_inline bool restir_sun_light_reference_from_sample(
   }
 
   reference->type = LIGHT_SUN;
-  reference->object = ls->object;
+  // reference->object = ls->object;
+  reference->object = OBJECT_NONE;
   reference->prim = ls->prim;
 
   // store light-local cone direction
@@ -187,7 +187,8 @@ ccl_device_inline bool restir_area_light_reference_from_sample(
   }
 
   reference->type = LIGHT_AREA;
-  reference->object = ls->object;
+  // reference->object = ls->object;
+  reference->object = OBJECT_NONE;
   reference->prim = ls->prim;
 // param stores the same barycentric-style emitter coordinates `float2(v + 0.5f, -u - v)`.
   reference->param = area_light_uv(klight, ls->P);
@@ -258,7 +259,8 @@ ccl_device_inline bool restir_spot_light_reference_from_sample(
 
     /* Persistent light identity. */
     reference->type = LIGHT_SPOT;
-    reference->object = ls->object;
+    // reference->object = ls->object;
+    reference->object = OBJECT_NONE;
     reference->prim = ls->prim;
     reference->param = param;
 
@@ -275,8 +277,7 @@ ccl_device_inline bool restir_spot_light_reference_from_sample(
      * with no additional geometric parameter.
      */
     reference->type = LIGHT_SPOT;
-    reference->object = ls->object; // ???: Wrong here? // Returns 4 for spot
-    // reference->object = OBJECT_NONE;
+    reference->object = OBJECT_NONE;
     reference->prim = ls->prim;
     reference->flags = RESTIR_LIGHT_REFERENCE_VALID;
 
@@ -286,7 +287,81 @@ ccl_device_inline bool restir_spot_light_reference_from_sample(
 
 
 
+ccl_device_inline bool restir_triangle_light_reference_from_sample(
+    KernelGlobals kg,
+    const ccl_private LightSample *ls,
+    const float time,
+    ccl_private ReSTIRLightSampleReference *reference)
+{
+  *reference = restir_light_reference_empty();
 
+  if (ls->type != LIGHT_TRIANGLE || ls->object < 0 || ls->prim < 0) {
+    return false;
+  }
+
+  float3 V[3];
+  // triangle_world_space_vertices(kg, ls->object, ls->prim, -1.0f, V); // !!!
+  triangle_world_space_vertices(kg, ls->object, ls->prim, time, V);
+
+  /*
+   * The persistent parameterization is the triangle's barycentric
+   * coordinates:
+   *     P = (1 - u - v) * V0 + u * V1 + v * V2
+   *
+   * These coordinates are emitter-local and therefore independent of
+   * the current shading target.
+   */
+  const float3 e0 = V[1] - V[0];
+  const float3 e1 = V[2] - V[0];
+  const float3 p = ls->P - V[0];
+
+  const float d00 = dot(e0, e0);
+  const float d01 = dot(e0, e1);
+  const float d11 = dot(e1, e1);
+  const float d20 = dot(p, e0);
+  const float d21 = dot(p, e1);
+
+  const float denom = d00 * d11 - d01 * d01;
+
+  printf("restir_triangle_light_reference_from_sample(); denom=%f\n", (double)denom);
+
+  if (!(isfinite(denom) && denom > 0.0f)) {
+    return false;
+  }
+
+  const float u = (d11 * d20 - d01 * d21) / denom;
+  const float v = (d00 * d21 - d01 * d20) / denom;
+
+  printf("restir_triangle_light_reference_from_sample(); u=%f, v=%f\n", (double)u, (double)v);
+
+  if (!(isfinite(u) && isfinite(v))) {
+    return false;
+  }
+
+  /*
+   * The sampled point must lie on the triangle.
+   *
+   * A small tolerance is allowed for floating-point reconstruction,
+   * particularly for samples produced through solid-angle sampling.
+   */
+  const float w = 1.0f - u - v;
+  constexpr float epsilon = 1e-5f;
+
+  if (u < -epsilon || v < -epsilon || w < -epsilon) {
+    return false;
+  }
+
+  reference->type = LIGHT_TRIANGLE;
+  reference->object = ls->object;
+  reference->prim = ls->prim; // !!!: Wrong?
+  reference->flags = RESTIR_LIGHT_REFERENCE_VALID |
+                     RESTIR_LIGHT_REFERENCE_HAS_PARAM;
+  reference->param = make_float2(u, v);
+
+  printf("restir_triangle_light_reference_from_sample(); returend true!\n\n\n");
+
+  return true;
+}
 
 // TODO: Handle all analytic lights
 /* Dispatcher
@@ -295,6 +370,7 @@ ccl_device_inline bool restir_spot_light_reference_from_sample(
 ccl_device_inline bool restir_light_reference_from_sample( // !!!
     KernelGlobals kg,
     const ccl_private LightSample *ls,
+    const float time,
     ccl_private ReSTIRLightSampleReference *reference)
 {
   switch (ls->type) {
@@ -314,7 +390,7 @@ ccl_device_inline bool restir_light_reference_from_sample( // !!!
       return restir_spot_light_reference_from_sample(kg, ls, reference);
 
     case LIGHT_TRIANGLE:
-      return false; // TODO
+      return restir_triangle_light_reference_from_sample(kg, ls, time, reference);
 
     default:
       *reference = restir_light_reference_empty();
@@ -329,13 +405,70 @@ ccl_device_inline bool restir_light_reference_restore_metadata(
     ccl_private ReSTIRLightSampleReference *reference)
 {
   // reference->flags = 0; // !!!: Wrong? the flags are part of the serialized reference state.
+printf(
+    "\n=== RESTORE METADATA INPUT ===\n"
+    "type=%d flags=%u object=%d OBJECT_NONE=%d prim=%d param=(%f,%f)\n"
+    "================================\n\n",
+    reference->type,
+    reference->flags,
+    reference->object,
+    OBJECT_NONE,
+    reference->prim,
+    (double)reference->param.x,
+    (double)reference->param.y);
+
+  /*
+   * Geometric emitter.
+   *
+   * For LIGHT_TRIANGLE:
+   *   object = object index
+   *   prim   = primitive index
+   *   param  = barycentric coordinates
+   *
+   * There is no KernelLight corresponding to this reference, so
+   * reference->prim must NEVER be used to index lights[].
+   */
+  // if (reference->type == LIGHT_TRIANGLE) { // !!!: Wrong! Always false! type is unknown in restir_unpack
+  // if (reference->object > 0) {
+  if (reference->object != OBJECT_NONE) { // Only tringle lights must have object index
+
+    // if (reference->object < 0 ||
+    //     reference->prim < 0 ||
+    //     !(reference->flags & RESTIR_LIGHT_REFERENCE_HAS_PARAM))
+    // {
+    if (reference->prim < 0) {
+      *reference = restir_light_reference_empty();
+      printf("restore_metadat(); LIGHT_TRIANGLE returned false! prim=%f\n", reference->prim);
+      return false;
+    }
+
+    /*
+     * The serialized reference already contains all required
+     * triangle metadata. Nothing needs to be fetched from lights[].
+     */
+    reference->flags |= RESTIR_LIGHT_REFERENCE_VALID;
+
+    reference->type = LIGHT_TRIANGLE; // !!!: Remove?
+    reference->flags |= RESTIR_LIGHT_REFERENCE_HAS_PARAM; // !!!: Remove?
+
+    printf("restir_light_reference_restore_metadata(); LIGHT_TRIANGLE returned true!\n\n\n");
+    return true;
+  }
+
+  // printf("restir_light_reference_restore_metadata() entered analytic light teritory; prim=%f\n\n", 
+  //        reference->prim);
+printf(
+    "!!! ANALYTIC LIGHT LOOKUP !!! "
+    "type=%d light_index=%d\n",
+    reference->type, reference->prim);
+
 
   if (reference->prim < 0) {
-    printf("RESTIR RESTORE: INVALID prim=%d\n", reference->prim);
     *reference = restir_light_reference_empty();
     return false;
   }
 
+  /* Analytic lights only. */
   const ccl_global KernelLight *klight = &kernel_data_fetch(lights, reference->prim);
 
   reference->type = (LightType)klight->type;
@@ -350,19 +483,20 @@ ccl_device_inline bool restir_light_reference_restore_metadata(
   }
 
   // TODO:
+  /* Analytic ligth switch: */
   switch (reference->type) {
     case LIGHT_POINT:
     case LIGHT_SUN:
+    // case LIGHT_BACKGROUND:
     case LIGHT_AREA:
-      return true;
     case LIGHT_SPOT:
+    // case LIGHT_TRIANGLE: // Remove?
       return true;
     default:
       *reference = restir_light_reference_empty();
       return false;
   }
 }
-
 
 
 // MARK: - Consumption
@@ -809,8 +943,134 @@ ccl_device_inline bool restir_spot_light_sample_from_reference(
   }
 }
 
+// MARK: - Triangle
+
+ccl_device_inline bool restir_triangle_light_sample_from_reference(
+    KernelGlobals kg,
+    const ccl_private ReSTIRLightSampleReference *reference,
+    const float3 P,
+    const float time,
+    ccl_private LightSample *ls)
+{
+  *ls = {};
+
+  if (!restir_light_reference_is_valid(reference) ||
+      reference->type != LIGHT_TRIANGLE ||
+      reference->object < 0 || reference->prim < 0 ||
+      !(reference->flags & RESTIR_LIGHT_REFERENCE_HAS_PARAM) // TODO: Remove?
+    )
+  {
+    printf("restir_triangle_light_sample_from_reference(); returned false!\n");
+    return false;
+  }
+
+printf("A: object=%d prim=%d\n", reference->object, reference->prim);
+
+  float3 V[3];
+  triangle_world_space_vertices(kg, reference->object, reference->prim, time, V); // !!!
+
+printf("B: vertices OK\n");
+
+  const float3 e0 = V[1] - V[0];
+  const float3 e1 = V[2] - V[0];
+
+  ls->object = reference->object;
+  ls->prim = reference->prim;
+
+printf("C: before object_flag\n");
+
+  ls->Ng = safe_normalize(cross(e0, e1));
 
 
+  printf("restir_triangle_light_sample_from_reference(); ran! TRI RECON: object=%d prim=%d\n", 
+    ls->object, ls->prim);
+
+  /* Flip normal if necessary. */
+  const int object_flag = kernel_data_fetch(object_flag, ls->object); // !!!: Crash site?
+
+  printf("TRI RECON: object_flag=%d\n", object_flag);
+
+  if (object_flag & SD_OBJECT_NEGATIVE_SCALE) {
+    ls->Ng = -ls->Ng;
+  }
+
+  ls->eval_fac = 1.0f;
+
+/*
+TODO: Full reconstruction of tri invariants?
+object done
+prim done
+Ng (Kinda done)
+shader Done
+type Done
+group Done
+pdf_selection
+pdf Done
+P Done
+D Done
+t
+*/
+
+printf("D: before tri_shader, prim=%d\n", ls->prim);
+
+  /* Restore triangle light metadata. */
+  ls->shader = kernel_data_fetch(tri_shader, ls->prim) | SHADER_USE_MIS; // !!!: Crash site?
+
+printf("E: tri_shader OK, shader=%d\n", ls->shader);
+  
+  ls->type = LIGHT_TRIANGLE;
+  ls->group = object_lightgroup(kg, ls->object);
+
+printf("F: after ls->object=%d\n", ls->object);
+
+  /* Reconstruct the emitter position from the persistent barycentric coords */
+  const float u = reference->param.x;
+  const float v = reference->param.y;
+  const float w = 1.0f - u - v;
+
+  if (!(isfinite(u) && isfinite(v) && isfinite(w)) ||
+      u < 0.0f || v < 0.0f || w < 0.0f)
+  {
+    printf("restir_triangle_light_sample_from_reference(); returned false!, u=%f, v=%f, w=%f\n",
+           (double)u, (double)v, (double)w);
+    return false;
+  }
+
+  ls->P = w * V[0] + u * V[1] + v * V[2];
+
+  /* Target-dependent direction and distance. */
+  ls->D = safe_normalize_len(ls->P - P, &ls->t);
+
+  if (!isfinite(ls->t) || ls->t <= 0.0f) {
+    return false;
+  }
+
+
+printf("G: before ls->pdf is assigned!\n");
+
+  // /*
+  //  * The PDF is target-dependent. The caller is expected to initialize
+  //  * the appropriate PDF before entering the reconstruction path, as is
+  //  * done by triangle_light_sample_from_reference().
+  //  */
+  // // !!!: certainly incomplete/wrong for this path.
+  // ls->pdf = triangle_light_pdf(kg, nullptr, ls->t); // !!!: see if it's the right approach
+  // // !!!: normal Cycles may expect info about the sampled primitive / triangle / light sample.
+
+  const float area = 0.5f * len(cross(e0, e1));
+
+  if (area == 0.0f) {
+    printf("restir_triangle_light_sample_from_reference(); returned false! area == 0.0f\n");
+    return false;
+  }
+
+  ls->pdf = triangle_light_pdf_area_sampling(
+      ls->Ng, -ls->D, ls->t) / area;
+
+printf("H: After ls->pdf=%f!\n", (double)ls->pdf);
+
+  return isfinite(ls->pdf) && ls->pdf > 0.0f;
+}
 
 // Dispatcher; restir_light_sample_reconstruct()
 // Basically a replacement for `light_sample_from_uv()`
@@ -819,6 +1079,7 @@ ccl_device_inline bool restir_light_sample_from_reference(
     const ccl_private ReSTIRLightSampleReference *reference,
     const float3 P,
     const float3 N,
+    const float time,
     const int shader_flags,
     const uint32_t path_flag,
     ccl_private LightSample *ls)
@@ -848,10 +1109,12 @@ ccl_device_inline bool restir_light_sample_from_reference(
 
     case LIGHT_SPOT:
       return restir_spot_light_sample_from_reference(
-          kg, reference, P, N, shader_flags, path_flag,ls);
+          kg, reference, P, N, shader_flags, path_flag, ls);
 
     case LIGHT_TRIANGLE:
-      return false; // TODO
+    
+      return restir_triangle_light_sample_from_reference(
+          kg, reference, P, time, ls); // !!! time
 
     default:
       *ls = {};
@@ -897,8 +1160,9 @@ ccl_device_inline void restir_debug_validate_light_reference_roundtrip_from_refe
     return;
   }
 
+  const float time = 0.0f; // TODO: obtain from sd
   const bool decoded = restir_light_sample_from_reference(
-      kg, reference, P, N, shader_flags, path_flag, &reconstructed);
+      kg, reference, P, N, time, shader_flags, path_flag, &reconstructed);
 
   if (!decoded) {
 #if !defined(__KERNEL_GPU__) && defined(RESTIR_DI_DEBUG)
@@ -952,7 +1216,8 @@ ccl_device_inline void restir_debug_validate_light_reference_roundtrip(
 {
   ReSTIRLightSampleReference reference = restir_light_reference_empty();
 
-  const bool encoded = restir_light_reference_from_sample(kg, original, &reference);
+  const float time = 0.0f;
+  const bool encoded = restir_light_reference_from_sample(kg, original, time, &reference);
   if (!encoded) {
     return;
   }
