@@ -51,6 +51,7 @@ set(SRC
   operators/bmo_subdivide.cc
   operators/bmo_subdivide_edgering.cc
   operators/bmo_symmetrize.cc
+  operators/bmo_to_annotation.cc
   operators/bmo_triangulate.cc
   operators/bmo_unsubdivide.cc
   operators/bmo_utils.cc

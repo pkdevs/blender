@@ -165,6 +165,12 @@ enum FlattenMethod {
   FLATTEN_VIEW = 2,
 };
 
+enum ToAnnotationMethod {
+  TO_ANNOTATION_PROJECT = 0,
+  TO_ANNOTATION_SPREAD = 1,
+  TO_ANNOTATION_SPREAD_EVENLY = 2
+};
+
 extern const BMOpDefine *bmo_opdefines[];
 extern const int bmo_opdefines_total;
 

@@ -198,6 +198,7 @@ void ED_operatortypes_mesh()
   WM_operatortype_append(MESH_OT_flatten);
   WM_operatortype_append(MESH_OT_space_edge_loops_evenly);
   WM_operatortype_append(MESH_OT_relax_edge_loops);
+  WM_operatortype_append(MESH_OT_to_annotation);
 }
 
 #if 0 /* UNUSED, remove? */
