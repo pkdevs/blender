@@ -189,7 +189,6 @@ void node_gpu_stack_from_data(GPUNodeStack *gs, bNodeSocket *socket, bNodeStack 
     gs->sockettype = socket->type;
   }
   else {
-    nodestack_get_vec(std::get<float4>(gs->value), socket->type, ns);
     gs->link = static_cast<GPUNodeLink *>(ns->data);
 
     if (socket->type == SOCK_FLOAT) {
@@ -228,6 +227,11 @@ void node_gpu_stack_from_data(GPUNodeStack *gs, bNodeSocket *socket, bNodeStack 
       gs->type = GPU_NONE;
     }
 
+    /* The value is retrieved as float4, but then stored using the type of the socket. */
+    float4 vec(0.0f);
+    nodestack_get_vec(vec, socket->type, ns);
+    gs->set_float_vec(vec);
+
     gs->hasinput = ns->hasinput && ns->data;
     /* XXX Commented out the ns->data check here, as it seems it's not always set,
      *     even though there *is* a valid connection/output... But that might need
@@ -240,7 +244,7 @@ void node_gpu_stack_from_data(GPUNodeStack *gs, bNodeSocket *socket, bNodeStack 
 
 void node_data_from_gpu_stack(bNodeStack *ns, GPUNodeStack *gs)
 {
-  copy_v4_v4(ns->vec, std::get<float4>(gs->value));
+  copy_v4_v4(ns->vec, gs->get_float_vec());
   ns->data = gs->link;
   ns->sockettype = gs->sockettype;
 }

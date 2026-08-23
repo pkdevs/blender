@@ -234,24 +234,8 @@ void ShaderOperation::link_node_input_unavailable(const bNodeSocket &input)
 
   /* Create a constant link with some zero value. The value is arbitrary and ignored. See the
    * method description. */
-  GPUNodeLink *link = nullptr;
-
-  switch (input.type) {
-    case SOCK_INT:
-    case SOCK_MENU:
-    case SOCK_INT_VECTOR:
-      stack.value = int4(0);
-      link = GPU_constant(std::get<int4>(stack.value));
-      break;
-    case SOCK_BOOLEAN:
-      stack.value = false;
-      link = GPU_constant(&std::get<bool>(stack.value));
-      break;
-    default:
-      stack.value = float4(0);
-      link = GPU_constant(std::get<float4>(stack.value));
-      break;
-  }
+  stack.value = gpu_node_stack_value_from_type(stack.type);
+  GPUNodeLink *link = gpu_node_stack_constant_link(stack);
 
   const ResultType type = get_node_socket_result_type(&input);
   GPU_link(material_, get_set_function_name(type), link, &stack.link);
@@ -265,27 +249,23 @@ static GPUNodeLink *get_input_value_link(const bNodeSocket &input, GPUNodeStack 
    * uniform for socket types that might change a lot to avoid excessive shader recompilation. */
   switch (input.type) {
     case SOCK_INT: {
-      stack.value = int4(input.default_value_typed<bNodeSocketValueInt>()->value, 0, 0, 0);
-      return GPU_uniform(std::get<int4>(stack.value));
+      stack.value = input.default_value_typed<bNodeSocketValueInt>()->value;
+      return gpu_node_stack_uniform_link(stack);
     }
     case SOCK_MENU: {
-      stack.value = int4(input.default_value_typed<bNodeSocketValueMenu>()->value, 0, 0, 0);
-      return GPU_constant(std::get<int4>(stack.value));
+      stack.value = input.default_value_typed<bNodeSocketValueMenu>()->value;
+      return gpu_node_stack_constant_link(stack);
     }
     case SOCK_INT_VECTOR: {
       const bNodeSocketValueIntVector *storage =
           input.default_value_typed<bNodeSocketValueIntVector>();
       switch (storage->dimensions) {
-        case 2: {
-          const int2 value = int2(storage->value);
-          stack.value = int4(value.x, value.y, 0, 0);
-          return GPU_uniform(std::get<int4>(stack.value));
-        }
-        case 3: {
-          const int3 value = int3(storage->value);
-          stack.value = int4(value.x, value.y, value.z, 0);
-          return GPU_uniform(std::get<int4>(stack.value));
-        }
+        case 2:
+          stack.value = int2(storage->value);
+          return gpu_node_stack_uniform_link(stack);
+        case 3:
+          stack.value = int3(storage->value);
+          return gpu_node_stack_uniform_link(stack);
         default:
           break;
       }
@@ -293,29 +273,39 @@ static GPUNodeLink *get_input_value_link(const bNodeSocket &input, GPUNodeStack 
     }
     case SOCK_BOOLEAN: {
       stack.value = bool(input.default_value_typed<bNodeSocketValueBoolean>()->value);
-      return GPU_constant(&std::get<bool>(stack.value));
+      return gpu_node_stack_constant_link(stack);
     }
     case SOCK_FLOAT: {
-      const float value = input.default_value_typed<bNodeSocketValueFloat>()->value;
-      stack.value = float4(value, 0.0f, 0.0f, 0.0f);
-      return GPU_uniform(std::get<float4>(stack.value));
+      stack.value = input.default_value_typed<bNodeSocketValueFloat>()->value;
+      return gpu_node_stack_uniform_link(stack);
     }
     case SOCK_VECTOR: {
-      stack.value = float4(input.default_value_typed<bNodeSocketValueVector>()->value);
-      return GPU_uniform(std::get<float4>(stack.value));
+      const bNodeSocketValueVector *storage = input.default_value_typed<bNodeSocketValueVector>();
+      switch (storage->dimensions) {
+        case 2:
+          stack.value = float2(storage->value);
+          return gpu_node_stack_uniform_link(stack);
+        case 3:
+          stack.value = float3(storage->value);
+          return gpu_node_stack_uniform_link(stack);
+        case 4:
+          stack.value = float4(storage->value);
+          return gpu_node_stack_uniform_link(stack);
+        default:
+          break;
+      }
+      break;
     }
     case SOCK_RGBA: {
-      const Color value = Color(input.default_value_typed<bNodeSocketValueRGBA>()->value);
-      stack.value = float4(value);
-      return GPU_uniform(std::get<float4>(stack.value));
+      stack.value = float4(Color(input.default_value_typed<bNodeSocketValueRGBA>()->value));
+      return gpu_node_stack_uniform_link(stack);
     }
     case SOCK_ROTATION: {
       const bNodeSocketValueRotation *rotation =
           input.default_value_typed<bNodeSocketValueRotation>();
       const math::EulerXYZ euler(float3(rotation->value_euler));
-      const math::Quaternion value = math::to_quaternion(euler);
-      stack.value = float4(value);
-      return GPU_uniform(std::get<float4>(stack.value));
+      stack.value = float4(math::to_quaternion(euler));
+      return gpu_node_stack_uniform_link(stack);
     }
     case SOCK_MATRIX:
       /* Matrix sockets do not have default values. */

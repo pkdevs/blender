@@ -14,6 +14,7 @@
 #include "BLI_assert.hh"
 #include "BLI_enum_flags.hh"
 #include "BLI_math_base_c.hh"
+#include "BLI_math_matrix_types.hh"
 #include "BLI_math_vector_types.hh"
 #include "BLI_set.hh"
 
@@ -383,45 +384,133 @@ const GPUUniformAttrList *GPU_material_uniform_attributes(const GPUMaterial *mat
 /* Functions to create GPU Materials nodes. */
 /* TODO: Move to its own header. */
 
-using GPUNodeStackValue = std::variant<float4, int4, bool>;
+/**
+ * Held type matches GPUType when the socket stores a constant. Otherwise, float4 is used as a
+ * placeholder.
+ */
+using GPUNodeStackValue =
+    std::variant<float, float2, float3, float4, float3x3, float4x4, int, int2, int3, int4, bool>;
+
+/**
+ * Returns the GPUNodeStackValue which corresponds to the given type, zero-initialized.
+ */
+inline GPUNodeStackValue gpu_node_stack_value_from_type(const GPUType type)
+{
+  switch (type) {
+    case GPU_FLOAT:
+      return 0.0f;
+    case GPU_VEC2:
+      return float2(0.0f);
+    case GPU_VEC3:
+      return float3(0.0f);
+    case GPU_VEC4:
+      return float4(0.0f);
+    case GPU_MAT3:
+      return float3x3::zero();
+    case GPU_MAT4:
+      return float4x4::zero();
+    case GPU_INT:
+      return 0;
+    case GPU_INT2:
+      return int2(0);
+    case GPU_INT3:
+      return int3(0);
+    case GPU_INT4:
+      return int4(0);
+    case GPU_BOOL:
+      return false;
+    case GPU_NONE:
+    case GPU_TEX1D_ARRAY:
+    case GPU_TEX2D:
+    case GPU_TEX2D_ARRAY:
+    case GPU_TEX3D:
+    case GPU_CLOSURE:
+    case GPU_ATTR:
+      break;
+  }
+
+  /* Types that have no constant value use float4 as a placeholder. */
+  return float4(0.0f);
+}
 
 struct GPUNodeStack {
   GPUType type = GPU_NONE;
-  GPUNodeStackValue value{};
+  GPUNodeStackValue value = float4(0.0f);
   GPUNodeLink *link = nullptr;
   bool hasinput = false;
   bool hasoutput = false;
   short sockettype = 0;
   bool end = false;
 
+  float4 get_float_vec() const
+  {
+    switch (this->type) {
+      case GPU_FLOAT:
+        return float4(std::get<float>(this->value), 0.0f, 0.0f, 0.0f);
+      case GPU_VEC2:
+        return float4(std::get<float2>(this->value), 0.0f, 0.0f);
+      case GPU_VEC3:
+        return float4(std::get<float3>(this->value), 0.0f);
+      case GPU_VEC4:
+        return std::get<float4>(this->value);
+      default:
+        break;
+    }
+
+    BLI_assert_unreachable();
+    return float4(0.0f);
+  }
+
+  void set_float_vec(const float4 &vec)
+  {
+    switch (this->type) {
+      case GPU_FLOAT:
+        this->value = vec.x;
+        return;
+      case GPU_VEC2:
+        this->value = float2(vec);
+        return;
+      case GPU_VEC3:
+        this->value = float3(vec);
+        return;
+      case GPU_VEC4:
+        this->value = vec;
+        return;
+      default:
+        break;
+    }
+
+    BLI_assert_unreachable();
+  }
+
   /* Return true if the socket might contain a polychromatic value.
    * This is a conservative heuristic that allows for optimization. */
   bool might_be_tinted() const
   {
-    const float4 &vec = std::get<float4>(this->value);
+    const float4 vec = this->get_float_vec();
     return this->link || (vec[0] != vec[1]) || (vec[1] != vec[2]);
   }
 
   bool socket_not_zero() const
   {
-    return this->link || (saturate_f(std::get<float4>(this->value)[0]) > near_zero);
+    return this->link || (saturate_f(this->get_float_vec()[0]) > near_zero);
   }
 
   bool socket_not_one() const
   {
-    return this->link || (saturate_f(std::get<float4>(this->value)[0]) < near_one);
+    return this->link || (saturate_f(this->get_float_vec()[0]) < near_one);
   }
 
   bool socket_not_black() const
   {
-    const float4 &vec = std::get<float4>(this->value);
+    const float4 vec = this->get_float_vec();
     return this->link || saturate_f(vec[0]) > near_zero || saturate_f(vec[1]) > near_zero ||
            saturate_f(vec[2]) > near_zero;
   }
 
   bool socket_not_white() const
   {
-    const float4 &vec = std::get<float4>(this->value);
+    const float4 vec = this->get_float_vec();
     return this->link || saturate_f(vec[0]) < near_one || saturate_f(vec[1]) < near_one ||
            saturate_f(vec[2]) < near_one;
   }
@@ -463,12 +552,15 @@ struct GPUCodegenOutput {
   GPUShaderCreateInfo *create_info;
 };
 
+GPUNodeLink *gpu_node_stack_constant_link(const GPUNodeStack &stack);
+GPUNodeLink *gpu_node_stack_uniform_link(const GPUNodeStack &stack);
 GPUNodeLink *GPU_constant(const float *num);
 GPUNodeLink *GPU_uniform(const float *num);
 GPUNodeLink *GPU_constant(const int *num);
 GPUNodeLink *GPU_uniform(const int *num);
 GPUNodeLink *GPU_constant(const bool *num);
 GPUNodeLink *GPU_uniform(const bool *num);
+
 GPUNodeLink *GPU_attribute(GPUMaterial *mat, eCustomDataType type, const char *name);
 /**
  * Add a GPU attribute that refers to the default color attribute on a geometry.

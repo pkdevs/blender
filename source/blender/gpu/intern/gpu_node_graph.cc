@@ -9,6 +9,8 @@
  */
 
 #include <cstdio>
+#include <type_traits>
+#include <variant>
 
 #include "MEM_guardedalloc.h"
 
@@ -17,6 +19,7 @@
 #include "BLI_assert.hh"
 #include "BLI_ghash.hh"
 #include "BLI_listbase.hh"
+#include "BLI_memory_utils.hh"
 #include "BLI_stack.hh"
 #include "BLI_string.hh"
 #include "BLI_utildefines.hh"
@@ -276,46 +279,88 @@ static void gpu_node_input_link(GPUNode *node, GPUNodeLink *link, const GPUType 
   BLI_addtail(&node->inputs, input);
 }
 
-static GPUNodeLink *gpu_node_stack_constant_link(const GPUNodeStack &stack)
+GPUNodeLink *GPU_constant(const float *num)
 {
-  switch (stack.type) {
-    case GPU_FLOAT:
-    case GPU_VEC2:
-    case GPU_VEC3:
-    case GPU_VEC4:
-      return GPU_constant(std::get<float4>(stack.value));
-    case GPU_INT:
-    case GPU_INT2:
-    case GPU_INT3:
-    case GPU_INT4:
-      return GPU_constant(std::get<int4>(stack.value));
-    case GPU_BOOL:
-      return GPU_constant(&std::get<bool>(stack.value));
-    default:
-      /* Fallback for unhandled types. Not meant to expose real stack values. */
-      return GPU_constant(std::get<float4>(stack.value));
-  }
+  GPUNodeLink *link = gpu_node_link_create();
+  link->link_type = GPU_NODE_LINK_CONSTANT;
+  link->data = num;
+  return link;
 }
 
-static GPUNodeLink *gpu_node_stack_uniform_link(const GPUNodeStack &stack)
+GPUNodeLink *GPU_uniform(const float *num)
 {
-  switch (stack.type) {
-    case GPU_FLOAT:
-    case GPU_VEC2:
-    case GPU_VEC3:
-    case GPU_VEC4:
-      return GPU_uniform(std::get<float4>(stack.value));
-    case GPU_INT:
-    case GPU_INT2:
-    case GPU_INT3:
-    case GPU_INT4:
-      return GPU_uniform(std::get<int4>(stack.value));
-    case GPU_BOOL:
-      return GPU_uniform(&std::get<bool>(stack.value));
-    default:
-      /* Fallback for unhandled types. Not meant to expose real stack values. */
-      return GPU_uniform(std::get<float4>(stack.value));
-  }
+  GPUNodeLink *link = gpu_node_link_create();
+  link->link_type = GPU_NODE_LINK_UNIFORM;
+  link->data = num;
+  return link;
+}
+
+GPUNodeLink *GPU_constant(const int *num)
+{
+  GPUNodeLink *link = gpu_node_link_create();
+  link->link_type = GPU_NODE_LINK_CONSTANT;
+  link->data = num;
+  return link;
+}
+
+GPUNodeLink *GPU_uniform(const int *num)
+{
+  GPUNodeLink *link = gpu_node_link_create();
+  link->link_type = GPU_NODE_LINK_UNIFORM;
+  link->data = num;
+  return link;
+}
+
+GPUNodeLink *GPU_constant(const bool *num)
+{
+  GPUNodeLink *link = gpu_node_link_create();
+  link->link_type = GPU_NODE_LINK_CONSTANT;
+  link->data = num;
+  return link;
+}
+
+GPUNodeLink *GPU_uniform(const bool *num)
+{
+  GPUNodeLink *link = gpu_node_link_create();
+  link->link_type = GPU_NODE_LINK_UNIFORM;
+  link->data = num;
+  return link;
+}
+
+GPUNodeLink *gpu_node_stack_constant_link(const GPUNodeStack &stack)
+{
+  return std::visit(
+      [](const auto &value) -> GPUNodeLink * {
+        using T = std::decay_t<decltype(value)>;
+        if constexpr (std::is_arithmetic_v<T>) {
+          return GPU_constant(&value);
+        }
+        else if constexpr (is_same_any_v<T, float3x3, float4x4>) {
+          return GPU_constant(value.base_ptr());
+        }
+        else {
+          return GPU_constant(value);
+        }
+      },
+      stack.value);
+}
+
+GPUNodeLink *gpu_node_stack_uniform_link(const GPUNodeStack &stack)
+{
+  return std::visit(
+      [](const auto &value) -> GPUNodeLink * {
+        using T = std::decay_t<decltype(value)>;
+        if constexpr (std::is_arithmetic_v<T>) {
+          return GPU_uniform(&value);
+        }
+        else if constexpr (is_same_any_v<T, float3x3, float4x4>) {
+          return GPU_uniform(value.base_ptr());
+        }
+        else {
+          return GPU_uniform(value);
+        }
+      },
+      stack.value);
 }
 
 static const char *gpu_uniform_set_function_from_type(eNodeSocketDatatype type)
@@ -798,54 +843,6 @@ GPUNodeLink *GPU_layer_attribute(GPUMaterial *mat, const char *name)
   GPUNodeLink *link = gpu_node_link_create();
   link->link_type = GPU_NODE_LINK_LAYER_ATTR;
   link->layer_attr = attr;
-  return link;
-}
-
-GPUNodeLink *GPU_constant(const float *num)
-{
-  GPUNodeLink *link = gpu_node_link_create();
-  link->link_type = GPU_NODE_LINK_CONSTANT;
-  link->data = num;
-  return link;
-}
-
-GPUNodeLink *GPU_uniform(const float *num)
-{
-  GPUNodeLink *link = gpu_node_link_create();
-  link->link_type = GPU_NODE_LINK_UNIFORM;
-  link->data = num;
-  return link;
-}
-
-GPUNodeLink *GPU_constant(const int *num)
-{
-  GPUNodeLink *link = gpu_node_link_create();
-  link->link_type = GPU_NODE_LINK_CONSTANT;
-  link->data = num;
-  return link;
-}
-
-GPUNodeLink *GPU_uniform(const int *num)
-{
-  GPUNodeLink *link = gpu_node_link_create();
-  link->link_type = GPU_NODE_LINK_UNIFORM;
-  link->data = num;
-  return link;
-}
-
-GPUNodeLink *GPU_constant(const bool *num)
-{
-  GPUNodeLink *link = gpu_node_link_create();
-  link->link_type = GPU_NODE_LINK_CONSTANT;
-  link->data = num;
-  return link;
-}
-
-GPUNodeLink *GPU_uniform(const bool *num)
-{
-  GPUNodeLink *link = gpu_node_link_create();
-  link->link_type = GPU_NODE_LINK_UNIFORM;
-  link->data = num;
   return link;
 }
 
