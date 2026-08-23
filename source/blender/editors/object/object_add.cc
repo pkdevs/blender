@@ -2445,6 +2445,8 @@ static wmOperatorStatus object_curves_empty_hair_add_exec(bContext *C, wmOperato
     dynamics_modifier->modifier.flag |= eModifierFlag_PinLast;
   }
 
+  ed::curves::ensure_surface_deformation_node_exists(*C, *curves_ob);
+
   /* Make sure the surface object has a rest position attribute which is necessary for
    * deformations. */
   surface_ob->modifier_flag |= OB_MODIFIER_FLAG_ADD_REST_POSITION;
