@@ -37,7 +37,7 @@ static int gpu_shader_normal(GPUMaterial *mat,
                              GPUNodeStack *in,
                              GPUNodeStack *out)
 {
-  GPUNodeLink *vec = GPU_uniform(std::get<float4>(out[0].value));
+  GPUNodeLink *vec = gpu_node_stack_uniform_link(out[0]);
   return GPU_stack_link(mat, node, "normal_new_shading", in, out, vec);
 }
 

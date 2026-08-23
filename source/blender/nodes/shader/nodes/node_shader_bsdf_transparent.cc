@@ -26,7 +26,7 @@ static int node_shader_gpu_bsdf_transparent(GPUMaterial *mat,
                                             GPUNodeStack *in,
                                             GPUNodeStack *out)
 {
-  if (in[0].link || !is_zero_v3(std::get<float4>(in[0].value))) {
+  if (in[0].link || !is_zero_v3(in[0].get_float_vec())) {
     GPU_material_flag_set(mat, GPU_MATFLAG_TRANSPARENT);
 
     if (in[0].might_be_tinted()) {
