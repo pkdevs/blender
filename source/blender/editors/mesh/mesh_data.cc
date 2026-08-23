@@ -283,7 +283,7 @@ std::string ED_mesh_color_add(Mesh *mesh,
   if (const BMEditMesh *em = mesh->runtime->edit_mesh.get()) {
     BM_data_layer_add_named(em->bm, &em->bm->ldata, CD_PROP_BYTE_COLOR, new_name);
     if (do_init) {
-      const BMDataLayerLookup active_attr = BM_data_layer_lookup(*em->bm, name);
+      const BMDataLayerLookup active_attr = BM_data_layer_lookup(*em->bm, active_name);
       if (active_attr.type == bke::AttrType::ColorByte &&
           active_attr.domain == bke::AttrDomain::Corner)
       {
@@ -314,7 +314,7 @@ std::string ED_mesh_color_add(Mesh *mesh,
     BKE_id_attributes_active_color_set(&mesh->id, new_name);
   }
 
-  DEG_id_tag_update(&mesh->id, 0);
+  DEG_id_tag_update(&mesh->id, ID_RECALC_GEOMETRY);
   WM_main_add_notifier(NC_GEOM | ND_DATA, mesh);
 
   return new_name;
@@ -340,7 +340,7 @@ bool ED_mesh_color_ensure(Mesh *mesh, const char *name)
   BKE_id_attributes_active_color_set(&mesh->id, unique_name);
   BKE_id_attributes_default_color_set(&mesh->id, unique_name);
   BKE_mesh_tessface_clear(mesh);
-  DEG_id_tag_update(&mesh->id, 0);
+  DEG_id_tag_update(&mesh->id, ID_RECALC_GEOMETRY);
 
   return true;
 }
