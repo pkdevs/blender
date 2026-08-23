@@ -1,0 +1,1 @@
+Referenced by issue #163004, regression: numpy.array(Matrix) is no longer c-contiguous in 5.1+
