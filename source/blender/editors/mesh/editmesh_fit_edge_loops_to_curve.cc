@@ -49,7 +49,7 @@ static const EnumPropertyItem prop_restriction_items[] = {
     {0, nullptr},
 };
 
-static wmOperatorStatus edbm_curve_exec(bContext *C, wmOperator *op)
+static wmOperatorStatus edbm_fit_edge_loops_to_curve_exec(bContext *C, wmOperator *op)
 {
   const Main *bmain = CTX_data_main(C);
   const Scene *scene = CTX_data_scene(C);
@@ -72,7 +72,7 @@ static wmOperatorStatus edbm_curve_exec(bContext *C, wmOperator *op)
 
     if (!EDBM_op_callf(em,
                        op,
-                       "curve geom=%hv factor=%f restriction=%i extend=%b regular=%b "
+                       "fit_edge_loops_to_curve geom=%hv factor=%f restriction=%i extend=%b regular=%b "
                        "lock_x=%b lock_y=%b lock_z=%b interpolation=%i",
                        BM_ELEM_SELECT,
                        factor,
@@ -97,7 +97,7 @@ static wmOperatorStatus edbm_curve_exec(bContext *C, wmOperator *op)
   return changed_multi ? OPERATOR_FINISHED : OPERATOR_CANCELLED;
 }
 
-static void edbm_curve_ui(bContext * /*C*/, wmOperator *op)
+static void edbm_fit_edge_loops_to_curve_ui(bContext * /*C*/, wmOperator *op)
 {
   /* A custom UI function is needed to draw the axis locks (X/Y/Z) as a row of toggle buttons. */
   ui::Layout &layout = *op->layout;
@@ -120,17 +120,17 @@ static void edbm_curve_ui(bContext * /*C*/, wmOperator *op)
 void MESH_OT_fit_edge_loops_to_curve(wmOperatorType *ot)
 {
   ot->name = "To Curve";
-  ot->description = "Fits the unselected edge loops to a curve defined by the selected vertices. ";
+  ot->description = "Fits the unselected edge loops to a curve defined by the selected vertices.";
   ot->idname = "MESH_OT_fit_edge_loops_to_curve";
 
-  ot->exec = edbm_curve_exec;
+  ot->exec = edbm_fit_edge_loops_to_curve_exec;
   ot->poll = ED_operator_editmesh;
-  ot->ui = edbm_curve_ui;
+  ot->ui = edbm_fit_edge_loops_to_curve_ui;
 
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 
   RNA_def_float_factor(
-      ot->srna, "factor", 1.0f, 0.0f, 1.0f, "Factor", "Force of the tool", 0.0f, 1.0f);
+      ot->srna, "factor", 1.0f, 0.0f, 1.0f, "Factor", "Curving factor", 0.0f, 1.0f);
   RNA_def_enum(ot->srna,
                "restriction",
                prop_restriction_items,

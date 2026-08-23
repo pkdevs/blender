@@ -793,8 +793,13 @@ static BMO_FlagSet bmo_enum_curve_interpolation_method[] = {
     {0, nullptr},
 };
 
-static BMOpDefine bmo_curve_def = {
-    /*opname*/ "curve",
+/*
+ * To Curve.
+ *
+ * Fits the unselected edge loops to a curve defined by the selected vertices.
+ */
+static BMOpDefine bmo_fit_edge_loops_to_curve_def = {
+    /*opname*/ "fit_edge_loops_to_curve",
     /*slot_types_in*/
     {
         /* Input geometry. */
@@ -826,7 +831,7 @@ static BMOpDefine bmo_curve_def = {
     /*slot_types_out*/
     {{{'\0'}}},
     /*init*/ nullptr,
-    /*exec*/ bmo_curve_exec,
+    /*exec*/ bmo_fit_edge_loops_to_curve_exec,
     /*type_flag*/
     (BMO_OPTYPE_FLAG_NORMALS_CALC),
 };
@@ -3021,7 +3026,7 @@ const BMOpDefine *bmo_opdefines[] = {
     &bmo_create_monkey_def,
     &bmo_create_uvsphere_def,
     &bmo_create_vert_def,
-    &bmo_curve_def,
+    &bmo_fit_edge_loops_to_curve_def,
     &bmo_delete_def,
     &bmo_dissolve_edges_def,
     &bmo_dissolve_faces_def,

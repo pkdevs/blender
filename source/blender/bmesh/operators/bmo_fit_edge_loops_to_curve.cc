@@ -4,6 +4,8 @@
 
 /** \file
  * \ingroup bmesh
+ * 
+ * Fits the unselected edge loops to a curve defined by the selected vertices.
  */
 #include "BLI_math_vector.hh"
 #include "BLI_math_vector_c.hh"
@@ -52,8 +54,8 @@ struct SplineCoeffs {
  * Uses `BLI_tridiagonal_solve` for open chains and
  * `BLI_tridiagonal_solve_cyclic` for closed loops.
  */
-static void calculate_splines_axis(Span<float> distances,
-                                   Span<float> coords,
+static void calculate_splines_axis(const Span<float> distances,
+                                   const Span<float> coords,
                                    const bool is_closed,
                                    Array<SplineCoeffs> &r_coeffs)
 {
@@ -292,7 +294,7 @@ static void get_curve_input_chains(BMesh *bm, Vector<CurveChainData> &r_chains)
  * Measures the gap size between the current vertex and the next vertex
  * to find the longest gap size and the starting index of that gap.
  */
-static void find_longest_unselected_gap(Span<BMVert *> verts,
+static void find_longest_unselected_gap(const Span<BMVert *> verts,
                                         int &r_longest_gap,
                                         int &r_best_gap_start)
 {
@@ -371,9 +373,9 @@ static void trim_chains_to_boundaries(Vector<CurveChainData> &chains)
   }
 }
 
-static void calculate_curve_distances(Span<BMVert *> verts,
-                                      Span<int> knot_indices,
-                                      Span<int> point_indices,
+static void calculate_curve_distances(const Span<BMVert *> verts,
+                                      const Span<int> knot_indices,
+                                      const Span<int> point_indices,
                                       const bool is_closed,
                                       const bool regular,
                                       Array<float> &r_knot_distances,
@@ -430,8 +432,8 @@ static void calculate_curve_distances(Span<BMVert *> verts,
   }
 }
 
-static void calculate_curve_splines(Span<float3> knot_positions,
-                                    Span<float> knot_distances,
+static void calculate_curve_splines(const Span<float3> knot_positions,
+                                    const Span<float> knot_distances,
                                     const bool is_closed,
                                     std::array<Array<SplineCoeffs>, 3> &r_coeffs)
 {
@@ -451,16 +453,15 @@ static void calculate_curve_splines(Span<float3> knot_positions,
   calculate_splines_axis(knot_distances, coords_z, is_closed, r_coeffs[2]);
 }
 
-static void execute_curve_chain(Span<BMVert *> input_chain,
+static void execute_curve_chain(const Span<BMVert *> input_chain,
                                 bool is_closed,
-                                const int interpolation,
-                                const int restriction,
+                                const CurveInterpolation interpolation,
+                                const CurveRestriction restriction,
                                 const bool regular,
                                 const float factor,
                                 const bool lock_x,
                                 const bool lock_y,
-                                const bool lock_z,
-                                Map<BMVert *, float3> &r_moves)
+                                const bool lock_z)
 {
   int verts_num = input_chain.size();
   int new_start_index = 0;
@@ -471,6 +472,9 @@ static void execute_curve_chain(Span<BMVert *> input_chain,
 
     int offset = verts_num / 4;
 
+    /* For a closed circle, if more than 50 percent of the vertices in the circle are unselected,
+     * in order to prevent a total collapse from happening, the tool's influence is restricted to
+     * 25 percent of the total vertices on either side of the selection. */
     if (longest_gap > 2 * offset) {
       is_closed = false;
 
@@ -600,20 +604,22 @@ static void execute_curve_chain(Span<BMVert *> input_chain,
     }
 
     const float3 final_pos = math::interpolate(old_pos, new_pos, factor);
-    r_moves.add_overwrite(vert, final_pos);
+    copy_v3_v3(vert->co, final_pos);
   }
 }
 
-void bmo_curve_exec(BMesh *bm, BMOperator *op)
+void bmo_fit_edge_loops_to_curve_exec(BMesh *bm, BMOperator *op)
 {
   const float factor = BMO_slot_float_get(op->slots_in, "factor");
-  const int restriction = BMO_slot_int_get(op->slots_in, "restriction");
+  const CurveRestriction restriction = static_cast<CurveRestriction>(
+      BMO_slot_int_get(op->slots_in, "restriction"));
   const bool extend = BMO_slot_bool_get(op->slots_in, "extend");
   const bool regular = BMO_slot_bool_get(op->slots_in, "regular");
   const bool lock_x = BMO_slot_bool_get(op->slots_in, "lock_x");
   const bool lock_y = BMO_slot_bool_get(op->slots_in, "lock_y");
   const bool lock_z = BMO_slot_bool_get(op->slots_in, "lock_z");
-  const int interpolation = BMO_slot_int_get(op->slots_in, "interpolation");
+  const CurveInterpolation interpolation = static_cast<CurveInterpolation>(
+      BMO_slot_int_get(op->slots_in, "interpolation"));
 
   BMO_slot_buffer_hflag_enable(bm, op->slots_in, "geom", BM_VERT, BM_ELEM_SELECT, false);
 
@@ -624,8 +630,6 @@ void bmo_curve_exec(BMesh *bm, BMOperator *op)
     trim_chains_to_boundaries(chains);
   }
 
-  Map<BMVert *, float3> moves;
-
   for (const CurveChainData &chain : chains) {
     execute_curve_chain(chain.verts,
                         chain.is_closed,
@@ -635,12 +639,7 @@ void bmo_curve_exec(BMesh *bm, BMOperator *op)
                         factor,
                         lock_x,
                         lock_y,
-                        lock_z,
-                        moves);
-  }
-
-  for (auto item : moves.items()) {
-    copy_v3_v3(item.key->co, item.value);
+                        lock_z);
   }
 }
 
