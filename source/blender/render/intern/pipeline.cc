@@ -2406,6 +2406,13 @@ void RE_RenderAnim(Render *re,
                               (re_type->flag & RE_USE_POSTPROCESS)) &&
                              write_anim;
 
+  if (is_movie && do_write_file && re->r.ffcodecdata.audio_codec_id_get() != FFMPEG_CODEC_ID_NONE)
+  {
+    /* Updating flags can tag depsgraph relations. Do this before the render pipeline depsgraph is
+     * built, so it contains the current audio relations from its initial build. */
+    BKE_sound_update_animation_flags(bmain, scene);
+  }
+
   render_init_depsgraph(re);
 
   if (is_movie && do_write_file) {
