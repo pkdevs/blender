@@ -296,7 +296,6 @@ static void seq_split_set_right_hold_offset(Main *bmain,
     strip->anim_endofs += round_fl_to_int((content_end - timeline_frame) * speed_factor);
   }
 
-  /* Needed only to set `strip->len`. */
   add_update_content_length(bmain, scene, strip);
   strip->right_handle_set(scene, timeline_frame);
 }
@@ -324,7 +323,6 @@ static void seq_split_set_left_hold_offset(Main *bmain,
     strip->end_offset_set(strip->end_offset() + offset);
   }
 
-  /* Needed only to set `strip->len`. */
   add_update_content_length(bmain, scene, strip);
   strip->left_handle_set(scene, timeline_frame);
 }
