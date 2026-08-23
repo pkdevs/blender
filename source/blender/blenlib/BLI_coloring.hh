@@ -4,7 +4,10 @@
 
 #pragma once
 
+#include <optional>
+
 #include "BLI_index_mask.hh"
+#include "BLI_index_range.hh"
 #include "BLI_linear_allocator.hh"
 #include "BLI_math_vector_types.hh"
 #include "BLI_offset_indices.hh"
@@ -18,18 +21,23 @@ namespace blender {
  * \param max_id_value: Mean it is possible to use plain array of that size instead of hash set. No
  * internal check of size is made.
  */
+int color_verts_by_groups(Span<int> vert_id, IndexRange ids_range, MutableSpan<int> r_color);
+Vector<IndexMask> color_verts_by_groups(Span<int> vert_id,
+                                        IndexRange ids_range,
+                                        LinearAllocator<> &memory);
+
 int color_verts_by_groups(Span<int> vert_id, MutableSpan<int> r_color);
 Vector<IndexMask> color_verts_by_groups(Span<int> vert_id, LinearAllocator<> &memory);
 
-int color_verts_by_groups(GroupedSpan<int> vert_to_ids, MutableSpan<int> r_color);
-Vector<IndexMask> color_verts_by_groups(GroupedSpan<int> vert_to_ids, LinearAllocator<> &memory);
-
-int color_verts_by_groups(GroupedSpan<int> vert_to_ids,
-                          int max_id_value,
+int color_verts_by_groups(GroupedSpan<int> vert_ids,
+                          IndexRange ids_range,
                           MutableSpan<int> r_color);
-Vector<IndexMask> color_verts_by_groups(GroupedSpan<int> vert_to_ids,
-                                        int max_id_value,
+Vector<IndexMask> color_verts_by_groups(GroupedSpan<int> vert_ids,
+                                        IndexRange ids_range,
                                         LinearAllocator<> &memory);
+
+int color_verts_by_groups(GroupedSpan<int> vert_ids, MutableSpan<int> r_color);
+Vector<IndexMask> color_verts_by_groups(GroupedSpan<int> vert_ids, LinearAllocator<> &memory);
 
 /**
  * Edge must link verties of different colors.

@@ -16,49 +16,161 @@
 
 namespace blender {
 
-Vector<IndexMask> color_verts_by_groups(Span<int> vert_id, LinearAllocator<> &memory)
-{
-  // Array<int> vert_colors(vert_id.size());
-  // Vector<IndexMask> colors(color_verts_by_groups(vert_id, vert_colors.as_mutable_span()));
-  // IndexMask::from_groups<int>(
-  //     edges.index_range(), memory, [&](const int i) { return vert_colors[i]; }, colors);
-  // return colors;
-  return {};
-}
-
-Vector<IndexMask> color_verts_by_groups(GroupedSpan<int> vert_to_ids, LinearAllocator<> &memory)
-{
-  // Array<int> vert_colors(vert_to_ids.size());
-  // Vector<IndexMask> colors(color_verts_by_groups(vert_to_ids, vert_colors.as_mutable_span()));
-  // IndexMask::from_groups<int>(
-  //     edges.index_range(), memory, [&](const int i) { return vert_colors[i]; }, colors);
-  // return colors;
-  return {};
-}
-
-Vector<IndexMask> color_verts_by_groups(GroupedSpan<int> vert_to_ids,
-                                        int max_id_value,
+Vector<IndexMask> color_verts_by_groups(const Span<int> vert_id,
+                                        const IndexRange ids_range,
                                         LinearAllocator<> &memory)
 {
-  // Array<int> vert_colors(vert_to_ids.size());
-  // Vector<IndexMask> colors(color_verts_by_groups(vert_to_ids, max_id_value,
-  // vert_colors.as_mutable_span())); IndexMask::from_groups<int>(
-  //     edges.index_range(), memory, [&](const int i) { return vert_colors[i]; }, colors);
-  // return colors;
-  return {};
+  Array<int> vert_colors(vert_id.size());
+  Vector<IndexMask> colors(
+      color_verts_by_groups(vert_id, ids_range, vert_colors.as_mutable_span()));
+  IndexMask::from_groups<int>(
+      vert_id.index_range(), memory, [&](const int i) { return vert_colors[i]; }, colors);
+  return colors;
 }
 
-int color_verts_by_groups(Span<int> vert_id, MutableSpan<int> r_color)
+Vector<IndexMask> color_verts_by_groups(const GroupedSpan<int> vert_ids,
+                                        const IndexRange ids_range,
+                                        LinearAllocator<> &memory)
+{
+  Array<int> vert_colors(vert_ids.size());
+  Vector<IndexMask> colors(
+      color_verts_by_groups(vert_ids, ids_range, vert_colors.as_mutable_span()));
+  IndexMask::from_groups<int>(
+      vert_ids.index_range(), memory, [&](const int i) { return vert_colors[i]; }, colors);
+  return colors;
+}
+
+Vector<IndexMask> color_verts_by_groups(const Span<int> vert_id, LinearAllocator<> &memory)
+{
+  Array<int> vert_colors(vert_id.size());
+  Vector<IndexMask> colors(color_verts_by_groups(vert_id, vert_colors.as_mutable_span()));
+  IndexMask::from_groups<int>(
+      vert_id.index_range(), memory, [&](const int i) { return vert_colors[i]; }, colors);
+  return colors;
+}
+
+Vector<IndexMask> color_verts_by_groups(const GroupedSpan<int> vert_ids, LinearAllocator<> &memory)
+{
+  Array<int> vert_colors(vert_ids.size());
+  Vector<IndexMask> colors(color_verts_by_groups(vert_ids, vert_colors.as_mutable_span()));
+  IndexMask::from_groups<int>(
+      vert_ids.index_range(), memory, [&](const int i) { return vert_colors[i]; }, colors);
+  return colors;
+}
+
+int color_verts_by_groups(const Span<int> vert_id,
+                          const IndexRange ids_range,
+                          MutableSpan<int> r_color)
+{
+  BLI_assert(r_color.size() == vert_id.size());
+
+  if (vert_id.is_empty()) {
+    return 0;
+  }
+
+  Array<int> counts(ids_range.size() + 1, 0);
+  for (const int i : vert_id.index_range()) {
+    BLI_assert(ids_range.contains(vert_id[i]));
+    int &id = counts[vert_id[i] - ids_range.start()];
+    r_color[i] = id;
+    id++;
+  }
+  return *std::max_element(counts.begin(), counts.end());
+}
+
+int color_verts_by_groups(const GroupedSpan<int> vert_ids,
+                          const IndexRange ids_range,
+                          MutableSpan<int> r_color)
+{
+  BLI_assert(r_color.size() == vert_ids.size());
+
+#ifndef NDEBUG
+  r_color.fill(-1);
+#endif NDEBUG
+
+  Array<int> ids_group_offsets_data(ids_range.size() + 1, 0);
+  BLI_assert(std::all_of(vert_ids.data.begin(), vert_ids.data.end(), [&](const int value) {
+    return ids_range.contains(value);
+  }));
+  /* TODO: Support any range. */
+  BLI_assert(ids_range.start() == 0);
+  const OffsetIndices<int> ids_group_offsets = offset_indices::build_reverse_offsets(
+      vert_ids.data, ids_group_offsets_data);
+  BLI_assert(vert_ids.data.size() == vert_ids.offsets.total_size());
+  BLI_assert(ids_group_offsets.total_size() == vert_ids.offsets.total_size());
+  Array<int> ids_group_indices_data(ids_group_offsets.total_size());
+  offset_indices::reverse_indices_in_groups(
+      vert_ids.data, ids_group_offsets, ids_group_indices_data, vert_ids.offsets);
+  const GroupedSpan<int> verts_by_ids(ids_group_offsets, ids_group_indices_data.as_span());
+
+  Vector<bool, 16> color_is_used;
+
+  for (const int vert : vert_ids.index_range()) {
+    color_is_used.as_mutable_span().fill(false);
+    const Span<int> vert_groups = vert_ids[vert];
+    for (const int group_id : vert_groups) {
+      for (const int other_vert : verts_by_ids[group_id]) {
+        if (vert <= other_vert) {
+          continue;
+        }
+        color_is_used.resize(std::max<int>(color_is_used.size(), r_color[other_vert] + 1), false);
+        r_color[other_vert] = true;
+      }
+    }
+
+    const int best_color = color_is_used.as_span().first_index_try(false);
+    if (best_color == -1) {
+      r_color[vert] = color_is_used.size();
+      color_is_used.resize(color_is_used.size() + 1);
+    }
+    else {
+      r_color[vert] = best_color;
+    }
+  }
+
+  return color_is_used.size();
+}
+
+int color_verts_by_groups(const Span<int> vert_id, MutableSpan<int> r_color)
+{
+  BLI_assert(r_color.size() == vert_id.size());
+
+  if (vert_id.is_empty()) {
+    return 0;
+  }
+
+  Map<int, int> counts;
+  for (const int i : vert_id.index_range()) {
+    int &count = counts.lookup_or_add(vert_id[i], 0);
+    r_color[i] = count;
+    count++;
+  }
+
+  return *std::max_element(counts.values().begin(), counts.values().end());
+}
+
+int color_verts_by_groups(const GroupedSpan<int> vert_ids, MutableSpan<int> r_color)
+{
+  BLI_assert(r_color.size() == vert_ids.size());
+
+  const VectorSet<int> group_id_mapping(vert_ids.data);
+  Array<int> mapped_ids(vert_ids.data.size());
+  threading::parallel_for(mapped_ids.index_range(), 1024, [&](const IndexRange range) {
+    for (const int i : range) {
+      mapped_ids[i] = group_id_mapping.index_of(vert_ids.data[i]);
+    }
+  });
+
+  return color_verts_by_groups(
+      {vert_ids.offsets, mapped_ids}, group_id_mapping.index_range(), r_color);
+}
+
+bool is_valid_verts_by_groups_coloring(Span<int> vert_id, Span<IndexMask> colors)
 {
   return {};
 }
 
-int color_verts_by_groups(GroupedSpan<int> vert_to_ids, MutableSpan<int> r_color)
-{
-  return {};
-}
-
-int color_verts_by_groups(GroupedSpan<int> vert_to_ids, int max_id_value, MutableSpan<int> r_color)
+bool is_valid_verts_by_groups_coloring(GroupedSpan<int> vert_to_ids, Span<IndexMask> colors)
 {
   return {};
 }
@@ -257,7 +369,6 @@ static GroupedSpan<int> build_vert_to_edge_map(const Span<int2> edges,
                                                Array<int> &r_indices)
 {
   const Span<int> edge_verts = edges.cast<int>();
-
   r_offsets.reinitialize(verts_num + 1);
   r_offsets.as_mutable_span().fill(0);
   offset_indices::build_reverse_offsets(edge_verts, r_offsets);
