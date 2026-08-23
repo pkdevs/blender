@@ -3022,6 +3022,8 @@ def km_text(params):
         ("text.move_lines", {"type": 'DOWN_ARROW', "value": 'PRESS', "shift": True, "ctrl": True, "repeat": True},
          {"properties": [("direction", 'DOWN')]}),
         ("text.indent_or_autocomplete", {"type": 'TAB', "value": 'PRESS', "repeat": True}, None),
+        ("text.indent", {"type": 'TAB', "value": 'PRESS', "repeat": True}, None), # Placeholder for UI shortcut
+        ("text.autocomplete", {"type": 'TAB', "value": 'PRESS', "repeat": True}, None), # Placeholder for UI shortcut
         ("text.unindent", {"type": 'TAB', "value": 'PRESS', "shift": True, "repeat": True}, None),
         ("text.comment_toggle", {"type": 'SLASH', "value": 'PRESS', "ctrl": True}, None),
         ("text.move", {"type": 'HOME', "value": 'PRESS'},
