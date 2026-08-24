@@ -184,9 +184,6 @@ Paint *BKE_paint_get_active(const Main &bmain, Scene *sce, ViewLayer *view_layer
 Paint *BKE_paint_get_active_from_context(const bContext *C);
 PaintMode BKE_paintmode_get_active_from_context(const bContext *C);
 PaintMode BKE_paintmode_get_from_tool(const bToolRef *tref);
-bool BKE_paint_use_unified_size(const Paint *paint);
-bool BKE_paint_use_unified_strength(const Paint *paint);
-bool BKE_paint_use_unified_color(const Paint *paint);
 
 /* Paint brush retrieval and assignment. */
 
@@ -316,7 +313,8 @@ bool paint_calculate_rake_rotation(Paint &paint,
                                    const Brush &brush,
                                    const float mouse_pos[2],
                                    PaintMode paint_mode,
-                                   bool stroke_has_started);
+                                   bool in_stroke,
+                                   bool is_first_dab);
 void paint_update_brush_rake_rotation(Paint &paint, const Brush &brush, float rotation);
 
 void BKE_paint_stroke_get_average(const Paint *paint, const Object *ob, float stroke[3]);

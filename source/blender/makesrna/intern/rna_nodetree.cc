@@ -2218,6 +2218,17 @@ static void rna_CompositorNodeTree_is_strip_modifier_set(PointerRNA *ptr, bool v
   compositor_node_asset_trait_flag_set(ptr, COMPOSIT_NODE_ASSET_STRIP_MODIFIER, value);
 }
 
+static bool rna_CompositorNodeTree_allow_usage_in_scene_compositor_effect_get(PointerRNA *ptr)
+{
+  return compositor_node_asset_trait_flag_get(ptr, COMPOSIT_NODE_ASSET_SCENE_EFFECT);
+}
+
+static void rna_CompositorNodeTree_allow_usage_in_scene_compositor_effect_set(PointerRNA *ptr,
+                                                                              bool value)
+{
+  compositor_node_asset_trait_flag_set(ptr, COMPOSIT_NODE_ASSET_SCENE_EFFECT, value);
+}
+
 static const EnumPropertyItem *itemf_function_check(
     const EnumPropertyItem *original_item_array,
     FunctionRef<bool(const EnumPropertyItem *item)> value_supported)
@@ -3054,7 +3065,7 @@ static PointerRNA rna_NodeInternal_input_template(StructRNA *srna, int index)
       return ptr;
     }
   }
-  return PointerRNA_NULL;
+  return {};
 }
 
 static PointerRNA rna_NodeInternal_output_template(StructRNA *srna, int index)
@@ -3072,7 +3083,7 @@ static PointerRNA rna_NodeInternal_output_template(StructRNA *srna, int index)
       return ptr;
     }
   }
-  return PointerRNA_NULL;
+  return {};
 }
 
 static bool rna_NodeInternal_poll(StructRNA *srna, bNodeTree *ntree)
@@ -3314,32 +3325,6 @@ static void rna_Node_image_layer_view_update(Main *bmain, Scene *scene, PointerR
   rna_Node_update(bmain, scene, ptr);
 }
 
-static const EnumPropertyItem *renderresult_layers_add_enum(RenderLayer *rl)
-{
-  EnumPropertyItem *item = nullptr;
-  EnumPropertyItem tmp = {0};
-  int i = 0, totitem = 0;
-
-  while (rl) {
-    tmp.identifier = rl->name;
-    /* Little trick: using space char instead empty string
-     * makes the item selectable in the drop-down. */
-    if (rl->name[0] == '\0') {
-      tmp.name = " ";
-    }
-    else {
-      tmp.name = rl->name;
-    }
-    tmp.value = i++;
-    RNA_enum_item_add(&item, &totitem, &tmp);
-    rl = rl->next;
-  }
-
-  RNA_enum_item_end(&item, &totitem);
-
-  return item;
-}
-
 static const EnumPropertyItem *rna_ShaderNodeMix_data_type_itemf(bContext * /*C*/,
                                                                  PointerRNA *ptr,
                                                                  PropertyRNA * /*prop*/,
@@ -3369,7 +3354,6 @@ static const EnumPropertyItem *rna_Node_image_layer_itemf(bContext * /*C*/,
   bNode *node = ptr->data_as<bNode>();
   Image *ima = reinterpret_cast<Image *>(node->id);
   const EnumPropertyItem *item = nullptr;
-  RenderLayer *rl;
 
   if (node->type_legacy == CMP_NODE_CRYPTOMATTE &&
       node->custom1 != CMP_NODE_CRYPTOMATTE_SOURCE_IMAGE)
@@ -3382,8 +3366,22 @@ static const EnumPropertyItem *rna_Node_image_layer_itemf(bContext * /*C*/,
     return rna_enum_dummy_NULL_items;
   }
 
-  rl = static_cast<RenderLayer *>(ima->rr->layers.first);
-  item = renderresult_layers_add_enum(rl);
+  const auto &item_from_render_layer = [&](const RenderLayer &rl,
+                                           const int index) -> EnumPropertyItem {
+    EnumPropertyItem tmp;
+    tmp.identifier = rl.name;
+    /* Little trick: using space char instead empty string
+     * makes the item selectable in the drop-down. */
+    if (rl.name[0] == '\0') {
+      tmp.name = " ";
+    }
+    else {
+      tmp.name = rl.name;
+    }
+    tmp.value = index;
+    return tmp;
+  };
+  item = rna_enum_property_items_from_listbase(ima->rr->layers, item_from_render_layer);
 
   *r_free = true;
 
@@ -3492,15 +3490,28 @@ static const EnumPropertyItem *rna_Node_view_layer_itemf(bContext * /*C*/,
   bNode *node = ptr->data_as<bNode>();
   Scene *sce = reinterpret_cast<Scene *>(node->id);
   const EnumPropertyItem *item = nullptr;
-  RenderLayer *rl;
 
   if (sce == nullptr) {
     *r_free = false;
     return rna_enum_dummy_NULL_items;
   }
 
-  rl = static_cast<RenderLayer *>(sce->view_layers.first);
-  item = renderresult_layers_add_enum(rl);
+  const auto &item_from_view_layer = [&](const ViewLayer &vl,
+                                         const int index) -> EnumPropertyItem {
+    EnumPropertyItem tmp;
+    tmp.identifier = vl.name;
+    /* Little trick: using space char instead empty string
+     * makes the item selectable in the drop-down. */
+    if (vl.name[0] == '\0') {
+      tmp.name = " ";
+    }
+    else {
+      tmp.name = vl.name;
+    }
+    tmp.value = index;
+    return tmp;
+  };
+  item = rna_enum_property_items_from_listbase(sce->view_layers, item_from_view_layer);
 
   *r_free = true;
 
@@ -3659,7 +3670,7 @@ static void rna_NodeCryptomatte_image_set(PointerRNA *ptr,
     if (node->id) {
       id_us_min(node->id);
     }
-    if (value.data) {
+    if (value) {
       id_us_plus(static_cast<ID *>(value.data));
     }
     node->id = static_cast<ID *>(value.data);
@@ -10342,6 +10353,16 @@ static void rna_def_composite_nodetree(BlenderRNA *brna)
                                  "rna_CompositorNodeTree_is_strip_modifier_get",
                                  "rna_CompositorNodeTree_is_strip_modifier_set");
   RNA_def_property_update(prop, NC_NODE | ND_DISPLAY, "rna_NodeTree_update_asset");
+
+  prop = RNA_def_property(srna, "allow_usage_in_scene_compositor_effect", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
+  RNA_def_property_ui_text(
+      prop, "Scene Effect", "The node group can be used as a scene compositor effect");
+  RNA_def_property_boolean_funcs(
+      prop,
+      "rna_CompositorNodeTree_allow_usage_in_scene_compositor_effect_get",
+      "rna_CompositorNodeTree_allow_usage_in_scene_compositor_effect_set");
+  RNA_def_property_update(prop, NC_NODE | ND_DISPLAY, "rna_NodeTree_update_asset");
 }
 
 static void rna_def_shader_nodetree(BlenderRNA *brna)
@@ -10814,6 +10835,7 @@ static void rna_def_nodes(BlenderRNA *brna)
   define("FunctionNode", "FunctionNodeFindInString");
   define("FunctionNode", "FunctionNodeFloatToInt", def_float_to_int);
   define("FunctionNode", "FunctionNodeFormatString", def_fn_format_string);
+  define("FunctionNode", "FunctionNodeGetVectorComponent");
   define("FunctionNode", "FunctionNodeHashValue");
   define("FunctionNode", "FunctionNodeInputBool", def_fn_input_bool);
   define("FunctionNode", "FunctionNodeInputColor", def_fn_input_color);
