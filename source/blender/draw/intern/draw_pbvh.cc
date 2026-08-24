@@ -144,7 +144,7 @@ class DrawCacheImpl : public DrawCache {
    * \brief Shared index buffer with space bookkeeping and the per-node subranges.
    */
   struct IBOFamily {
-    VirtualAllocator space;
+    RangeAllocator space;
     /**
      * \brief Increasing counter whenever space is grown.
      *
@@ -180,7 +180,7 @@ class DrawCacheImpl : public DrawCache {
 
   /** \brief Info per node where it is located in the buffers. */
   Vector<NodeInfo> node_infos_;
-  VirtualAllocator vbo_space_;
+  RangeAllocator vbo_space_;
 
   /**
    * \brief Incremented whenever the shared vertex buffer space grows.
@@ -252,8 +252,7 @@ class DrawCacheImpl : public DrawCache {
                                           const IndexMask &nodes_to_update) override;
 
   Span<int> ensure_material_indices(const Object &object) override;
-  Span<NodeInfo> ensure_node_infos(const Object &object,
-                                   const IndexMask &nodes_to_update) override;
+  Span<NodeInfo> ensure_node_infos(const Object &object, const IndexMask &all_leaf_nodes) override;
   Span<NodeInfo> get_node_infos() const
   {
     return node_infos_;
@@ -359,6 +358,23 @@ BLI_NOINLINE static void free_ibos(const MutableSpan<gpu::IndexBufPtr> ibos,
   IndexMaskMemory memory;
   const IndexMask mask = IndexMask::from_intersection(node_mask, ibos.index_range(), memory);
   mask.foreach_index([&](const int i) { ibos[i].reset(); });
+}
+
+/**
+ * Upload a node's index data to the shared IBO and return its subrange. Zero-length ranges (a
+ * leaf with no visible geometry) are skipped.
+ */
+static void update_ibos_subrange(gpu::IndexBuf &ibo_shared,
+                                 const NodeInfo::BufferRange &range,
+                                 const uint32_t *host_data)
+{
+  if (range.len == 0) {
+    return;
+  }
+  GPU_indexbuf_update_sub(&ibo_shared,
+                          uint(range.offset) * sizeof(uint32_t),
+                          uint(range.len) * sizeof(uint32_t),
+                          host_data);
 }
 
 BLI_NOINLINE static void free_batches(const MutableSpan<gpu::Batch *> batches)
@@ -769,7 +785,8 @@ void DrawCacheImpl::AttributeData::update(const NodeInfo &node_info)
   /* The VBO can be missing or smaller than the buffer space if the attribute's update function
    * skipped resizing it. Never upload out of bounds ranges. */
   if (vbo == nullptr ||
-      uint64_t(node_info.vbo.offset) + uint64_t(node_info.vbo.len) > uint64_t(vbo->vertex_alloc)) {
+      uint64_t(node_info.vbo.offset) + uint64_t(node_info.vbo.len) > uint64_t(vbo->vertex_alloc))
+  {
     return;
   }
   GPU_vertbuf_use(vbo);
@@ -2770,10 +2787,8 @@ Span<gpu::IndexBufPtr> DrawCacheImpl::ensure_lines_indices(const Object &object,
           exec_mode::grain_size(1));
       nodes_to_calculate.foreach_index([&](const int i, const int64_t pos) {
         const int64_t ibo_len = node_infos_[i].ibo_lines.len;
-        GPU_indexbuf_update_sub(&ibo_shared,
-                                uint(node_infos_[i].ibo_lines.offset) * sizeof(uint32_t),
-                                uint(ibo_len) * sizeof(uint32_t),
-                                scratch_buffer.data() + scratch_offsets[pos]);
+        update_ibos_subrange(
+            ibo_shared, node_infos_[i].ibo_lines, scratch_buffer.data() + scratch_offsets[pos]);
         ibos[i] = gpu::IndexBufPtr(GPU_indexbuf_create_subrange(
             &ibo_shared, uint(node_infos_[i].ibo_lines.offset), uint(ibo_len)));
       });
@@ -2801,10 +2816,7 @@ Span<gpu::IndexBufPtr> DrawCacheImpl::ensure_lines_indices(const Object &object,
       nodes_to_calculate.foreach_index([&](const int i, const int64_t pos) {
         const NodeInfo::BufferRange &src = coarse ? node_infos_[i].ibo_lines_coarse :
                                                     node_infos_[i].ibo_lines;
-        GPU_indexbuf_update_sub(&ibo_shared,
-                                uint(src.offset) * sizeof(uint32_t),
-                                uint(src.len) * sizeof(uint32_t),
-                                scratch_buffer.data() + scratch_offsets[pos]);
+        update_ibos_subrange(ibo_shared, src, scratch_buffer.data() + scratch_offsets[pos]);
         ibos[i] = gpu::IndexBufPtr(
             GPU_indexbuf_create_subrange(&ibo_shared, uint(src.offset), uint(src.len)));
       });
@@ -2823,13 +2835,12 @@ Span<gpu::IndexBufPtr> DrawCacheImpl::ensure_lines_indices(const Object &object,
           exec_mode::grain_size(1));
       nodes_to_calculate.foreach_index([&](const int i, const int64_t pos) {
         const int64_t ibo_len = node_infos_[i].ibo_lines.len;
-        GPU_indexbuf_update_sub(&ibo_shared,
-                                uint(node_infos_[i].ibo_lines.offset) * sizeof(uint32_t),
-                                uint(ibo_len) * sizeof(uint32_t),
-                                scratch_buffer.data() + scratch_offsets[pos]);
+        update_ibos_subrange(
+            ibo_shared, node_infos_[i].ibo_lines, scratch_buffer.data() + scratch_offsets[pos]);
         ibos[i] = gpu::IndexBufPtr(GPU_indexbuf_create_subrange(
             &ibo_shared, uint(node_infos_[i].ibo_lines.offset), uint(ibo_len)));
       });
+
       break;
     }
   }
@@ -3018,10 +3029,8 @@ Span<gpu::IndexBufPtr> DrawCacheImpl::ensure_tri_indices(const Object &object,
           exec_mode::grain_size(1));
       nodes_to_calculate.foreach_index([&](const int i, const int64_t pos) {
         const int64_t ibo_len = node_infos_[i].ibo_tris.len;
-        GPU_indexbuf_update_sub(&ibo_shared,
-                                uint(node_infos_[i].ibo_tris.offset) * sizeof(uint32_t),
-                                uint(ibo_len) * sizeof(uint32_t),
-                                scratch_buffer.data() + scratch_offsets[pos]);
+        update_ibos_subrange(
+            ibo_shared, node_infos_[i].ibo_tris, scratch_buffer.data() + scratch_offsets[pos]);
         ibos[i] = gpu::IndexBufPtr(GPU_indexbuf_create_subrange(
             &ibo_shared, uint(node_infos_[i].ibo_tris.offset), uint(ibo_len)));
       });
@@ -3086,10 +3095,7 @@ Span<gpu::IndexBufPtr> DrawCacheImpl::ensure_tri_indices(const Object &object,
       nodes_to_calculate.foreach_index([&](const int i, const int64_t pos) {
         const NodeInfo::BufferRange &src = coarse ? node_infos_[i].ibo_tris_coarse :
                                                     node_infos_[i].ibo_tris;
-        GPU_indexbuf_update_sub(&ibo_shared,
-                                uint(src.offset) * sizeof(uint32_t),
-                                uint(src.len) * sizeof(uint32_t),
-                                scratch_buffer.data() + scratch_offsets[pos]);
+        update_ibos_subrange(ibo_shared, src, scratch_buffer.data() + scratch_offsets[pos]);
         ibos[i] = gpu::IndexBufPtr(
             GPU_indexbuf_create_subrange(&ibo_shared, uint(src.offset), uint(src.len)));
       });
@@ -3133,13 +3139,12 @@ Span<gpu::IndexBufPtr> DrawCacheImpl::ensure_tri_indices(const Object &object,
           exec_mode::grain_size(1));
       nodes_to_calculate.foreach_index([&](const int i, const int64_t pos) {
         const int64_t ibo_len = node_infos_[i].ibo_tris.len;
-        GPU_indexbuf_update_sub(&ibo_shared,
-                                uint(node_infos_[i].ibo_tris.offset) * sizeof(uint32_t),
-                                uint(ibo_len) * sizeof(uint32_t),
-                                scratch_buffer.data() + scratch_offsets[pos]);
+        update_ibos_subrange(
+            ibo_shared, node_infos_[i].ibo_tris, scratch_buffer.data() + scratch_offsets[pos]);
         ibos[i] = gpu::IndexBufPtr(GPU_indexbuf_create_subrange(
             &ibo_shared, uint(node_infos_[i].ibo_tris.offset), uint(ibo_len)));
       });
+
       return ibos;
     }
   }
@@ -3214,16 +3219,20 @@ Span<gpu::Batch *> DrawCacheImpl::ensure_tris_batches(const Object &object,
   batches.resize(pbvh.nodes_num(), nullptr);
   nodes_to_update.foreach_index(
       [&](const int i) {
+        const bool has_ibo = !ibos.is_empty() && ibos[i] != nullptr;
         if (!batches[i] || batch_cache.vbo_generation != vbo_generation_ ||
             batch_cache.ibo_generation != ibo_family.generation ||
-            batches[i]->elem_() != (ibos.is_empty() ? nullptr : ibos[i].get()))
+            batches[i]->elem_() != (has_ibo ? ibos[i].get() : nullptr))
         {
+          if (!has_ibo) {
+            /* No geometry for this node. */
+            return;
+          }
           if (!batches[i]) {
             batches[i] = GPU_batch_calloc();
           }
           GPU_batch_clear(batches[i]);
-          GPU_batch_init(
-              batches[i], GPU_PRIM_TRIS, nullptr, ibos.is_empty() ? nullptr : ibos[i].get());
+          GPU_batch_init(batches[i], GPU_PRIM_TRIS, nullptr, ibos[i].get());
           for (gpu::VertBuf *vbo : attr_vbos) {
             GPU_batch_vertbuf_add(batches[i], vbo, false);
           }
@@ -3262,6 +3271,9 @@ Span<gpu::Batch *> DrawCacheImpl::ensure_lines_batches(const Object &object,
   batches.resize(pbvh.nodes_num(), nullptr);
   nodes_to_update.foreach_index(
       [&](const int i) {
+        if (lines[i] == nullptr) {
+          return;
+        }
         if (!batches[i] || batch_cache.vbo_generation != vbo_generation_ ||
             batch_cache.ibo_generation != ibo_family.generation ||
             batches[i]->elem_() != lines[i].get())
@@ -3295,7 +3307,7 @@ Span<int> DrawCacheImpl::ensure_material_indices(const Object &object)
 }
 
 static bool update_node_buffer_range(NodeInfo::BufferRange &range,
-                                     VirtualAllocator &space,
+                                     RangeAllocator &space,
                                      const int64_t new_len)
 {
   bool changed = false;
@@ -3313,12 +3325,12 @@ static bool update_node_buffer_range(NodeInfo::BufferRange &range,
 
 static bool update_node_buffer_space(NodeInfo &node_info,
                                      const int64_t vert_len,
-                                     VirtualAllocator &vbo_space,
+                                     RangeAllocator &vbo_space,
                                      const NodeIndexCounts &counts,
-                                     VirtualAllocator &ibo_lines_space,
-                                     VirtualAllocator &ibo_lines_coarse_space,
-                                     VirtualAllocator &ibo_tris_space,
-                                     VirtualAllocator &ibo_tris_coarse_space)
+                                     RangeAllocator &ibo_lines_space,
+                                     RangeAllocator &ibo_lines_coarse_space,
+                                     RangeAllocator &ibo_tris_space,
+                                     RangeAllocator &ibo_tris_coarse_space)
 {
   bool changed = false;
   changed |= update_node_buffer_range(node_info.vbo, vbo_space, vert_len);
@@ -3332,10 +3344,10 @@ static bool update_node_buffer_space(NodeInfo &node_info,
 }
 
 Span<NodeInfo> DrawCacheImpl::ensure_node_infos(const Object &object,
-                                                const IndexMask &nodes_to_update)
+                                                const IndexMask &all_leaf_nodes)
 {
   PRF_scope(ProfileCategory::Draw);
-  if (nodes_to_update.is_empty()) {
+  if (all_leaf_nodes.is_empty()) {
     return node_infos_;
   }
 
@@ -3354,7 +3366,7 @@ Span<NodeInfo> DrawCacheImpl::ensure_node_infos(const Object &object,
 
   /* - Free nodes that require different space inside the GPU buffers. */
   dirty_topology_.resize(nodes_num);
-  nodes_to_update.foreach_index([&](const int node_index) {
+  all_leaf_nodes.foreach_index([&](const int node_index) {
     NodeInfo &node_info = node_infos_[node_index];
 
     if (!node_info.is_dirty) {
@@ -3380,22 +3392,25 @@ Span<NodeInfo> DrawCacheImpl::ensure_node_infos(const Object &object,
     }
   });
 
-  /* Assign space for nodes that don't have any assigned space. */
-  nodes_to_update.foreach_index([&](const int node_index) {
+  /* Assign space for nodes that don't have any assigned space.
+   *
+   * A zero-length range is acquired too. It must be acquired so that leaved without visible
+   * geometry are drawn correctly. */
+  all_leaf_nodes.foreach_index([&](const int node_index) {
     NodeInfo &node_info = node_infos_[node_index];
-    if (!node_info.vbo.is_space_acquired && node_info.vbo.len > 0) {
+    if (!node_info.vbo.is_space_acquired) {
       vbo_space_.acquire(node_info.vbo);
     }
-    if (!node_info.ibo_lines.is_space_acquired && node_info.ibo_lines.len > 0) {
+    if (!node_info.ibo_lines.is_space_acquired) {
       ibo_lines_.space.acquire(node_info.ibo_lines);
     }
-    if (!node_info.ibo_lines_coarse.is_space_acquired && node_info.ibo_lines_coarse.len > 0) {
+    if (!node_info.ibo_lines_coarse.is_space_acquired) {
       ibo_lines_coarse_.space.acquire(node_info.ibo_lines_coarse);
     }
-    if (!node_info.ibo_tris.is_space_acquired && node_info.ibo_tris.len > 0) {
+    if (!node_info.ibo_tris.is_space_acquired) {
       ibo_tris_.space.acquire(node_info.ibo_tris);
     }
-    if (!node_info.ibo_tris_coarse.is_space_acquired && node_info.ibo_tris_coarse.len > 0) {
+    if (!node_info.ibo_tris_coarse.is_space_acquired) {
       ibo_tris_coarse_.space.acquire(node_info.ibo_tris_coarse);
     }
   });
