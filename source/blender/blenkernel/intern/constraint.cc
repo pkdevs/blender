@@ -6917,6 +6917,12 @@ void BKE_constraint_blend_read_data(BlendDataReader *reader,
         bSplineIKConstraint *data = static_cast<bSplineIKConstraint *>(con.data);
 
         BLO_read_array_and_validate_size(reader, &data->points, &data->numpoints);
+
+        /* Clamp spline IK chain lengths to a value that will not crash older Blender versions,
+         * which may be encountered when opening future versions' .blend files. */
+        if (data->chainlen > 255) {
+          data->chainlen = 255;
+        }
         break;
       }
       case CONSTRAINT_TYPE_KINEMATIC: {
