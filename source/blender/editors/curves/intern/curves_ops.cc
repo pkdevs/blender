@@ -1235,6 +1235,15 @@ static wmOperatorStatus surface_set_exec(bContext *C, wmOperator *op)
     /* Required for deformation. */
     new_surface_ob.modifier_flag |= OB_MODIFIER_FLAG_ADD_REST_POSITION;
     DEG_id_tag_update(&new_surface_ob.id, ID_RECALC_GEOMETRY);
+
+    if (NodesModifierData *dynamics_modifier = object::ensure_essential_asset_modifier(
+            *C,
+            curves_ob,
+            "nodes/geometry_nodes_dynamics_assets.blend/NodeTree/Hair Dynamics",
+            op->reports))
+    {
+      dynamics_modifier->modifier.flag |= eModifierFlag_PinLast;
+    }
   }
   CTX_DATA_END;
 

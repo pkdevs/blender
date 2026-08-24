@@ -31,6 +31,7 @@ struct KeyBlock;
 struct GpencilModifierData;
 struct Main;
 struct ModifierData;
+struct NodesModifierData;
 struct Object;
 struct PointerRNA;
 struct ReportList;
@@ -499,6 +500,10 @@ enum {
  */
 ModifierData *modifier_add(
     ReportList *reports, Main *bmain, Scene *scene, Object *ob, const char *name, int type);
+NodesModifierData *ensure_essential_asset_modifier(bContext &C,
+                                                   Object &object,
+                                                   StringRefNull path,
+                                                   ReportList *reports);
 bool modifier_remove(ReportList *reports, Main *bmain, Scene *scene, Object *ob, ModifierData *md);
 void modifiers_clear(Main *bmain, Scene *scene, Object *ob);
 bool modifier_move_down(ReportList *reports, eReportType error_type, Object *ob, ModifierData *md);

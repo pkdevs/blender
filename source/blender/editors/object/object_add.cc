@@ -2332,10 +2332,10 @@ void OBJECT_OT_curves_random_add(wmOperatorType *ot)
   add_generic_props(ot, false);
 }
 
-static NodesModifierData *add_essential_asset_modifier(bContext &C,
-                                                       Object &object,
-                                                       const StringRefNull path,
-                                                       ReportList *reports)
+NodesModifierData *ensure_essential_asset_modifier(bContext &C,
+                                                   Object &object,
+                                                   const StringRefNull path,
+                                                   ReportList *reports)
 {
   Scene &scene = *CTX_data_scene(&C);
   Main &bmain = *CTX_data_main(&C);
@@ -2365,6 +2365,18 @@ static NodesModifierData *add_essential_asset_modifier(bContext &C,
     return nullptr;
   }
   bNodeTree *node_group = id_cast<bNodeTree *>(asset_id);
+
+  /* Check for an existing modifier using the same asset. */
+  for (ModifierData &md : object.modifiers) {
+    if (md.type != eModifierType_Nodes) {
+      continue;
+    }
+    NodesModifierData &nmd = reinterpret_cast<NodesModifierData &>(md);
+    if (nmd.node_group == node_group) {
+      return &nmd;
+    }
+  }
+
   NodesModifierData *nmd = reinterpret_cast<NodesModifierData *>(
       modifier_add(reports, &bmain, &scene, &object, BKE_id_name(*asset_id), eModifierType_Nodes));
   nmd->node_group = node_group;
@@ -2421,7 +2433,7 @@ static wmOperatorStatus object_curves_empty_hair_add_exec(bContext *C, wmOperato
   }
 
   if (!has_capture_rest_geometry_modifier(surface_ob)) {
-    if (!add_essential_asset_modifier(
+    if (!ensure_essential_asset_modifier(
             *C,
             *surface_ob,
             "nodes/geometry_nodes_essentials.blend/NodeTree/Capture Rest Geometry",
@@ -2441,7 +2453,7 @@ static wmOperatorStatus object_curves_empty_hair_add_exec(bContext *C, wmOperato
       }
     }
   }
-  if (NodesModifierData *dynamics_modifier = add_essential_asset_modifier(
+  if (NodesModifierData *dynamics_modifier = ensure_essential_asset_modifier(
           *C,
           *curves_ob,
           "nodes/geometry_nodes_dynamics_assets.blend/NodeTree/Hair Dynamics",
