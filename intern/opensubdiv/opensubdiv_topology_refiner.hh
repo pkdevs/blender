@@ -15,8 +15,6 @@
 
 #include <opensubdiv/far/topologyRefiner.h>
 
-#include "BLI_math_vector_types.hh"
-
 #include "MEM_guardedalloc.h"
 
 // Those settings don't really belong to OpenSubdiv's topology refiner, but
@@ -82,7 +80,7 @@ class TopologyRefinerImpl {
   // Sharpness is the only per-edge data which can not be derived from the faces, so the vertices
   // of the remaining edges never have to be compared. Many meshes have no sharp edges at all, in
   // which case this stays empty.
-  std::vector<blender::int2> base_edges_sparse;
+  std::vector<std::pair<int, int>> base_edges_sparse;
 
   // Sharpness of each edge, matching #OpenSubdiv_Converter::edge_sharpness: either one element per
   // edge of the base mesh, or empty when no edge is sharp. Since it is stored densely, comparing

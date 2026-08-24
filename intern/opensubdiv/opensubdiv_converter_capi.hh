@@ -4,8 +4,8 @@
 
 #pragma once
 
-#include "BLI_math_vector_types.hh"
-#include "BLI_offset_indices.hh"
+#include <span>
+#include <utility>
 
 #include "opensubdiv_capi_type.hh"
 
@@ -17,13 +17,13 @@ constexpr float OPENSUBDIV_SHARPNESS_INFINITE = 10.0f;
 
 struct OpenSubdiv_Converter {
   /**
-   * The topology of the mesh to be subdivided. See #Mesh::faces(), etc. documentation for the
-   * details. Other topology information is currently encoded with callbacks rather than arrays
-   * directly.
+   * The topology of the mesh to be subdivided. See #Mesh::edges(), #Mesh::face_offsets(), and
+   * #Mesh::corner_verts() documentation for the details. Other topology information is currently
+   * encoded with callbacks rather than arrays directly.
    */
-  blender::Span<blender::int2> edges;
-  blender::OffsetIndices<int> faces;
-  blender::Span<int> corner_verts;
+  std::span<const std::pair<int, int>> edges;
+  std::span<const int> face_offsets;
+  std::span<const int> corner_verts;
 
   /**
    * Sharpness (aka crease) of every edge and every vertex, in the
@@ -32,8 +32,8 @@ struct OpenSubdiv_Converter {
    *
    * Either aligned with #edges and with the vertices respectively, or empty.
    */
-  blender::Span<float> edge_sharpness;
-  blender::Span<float> vert_sharpness;
+  std::span<const float> edge_sharpness;
+  std::span<const float> vert_sharpness;
 
   OpenSubdiv_SchemeType (*getSchemeType)(const OpenSubdiv_Converter *converter);
 

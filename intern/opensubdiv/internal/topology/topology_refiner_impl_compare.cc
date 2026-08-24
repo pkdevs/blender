@@ -4,6 +4,10 @@
  *
  * Author: Sergey Sharybin. */
 
+#include <algorithm>
+#include <utility>
+#include <vector>
+
 #include "internal/base/type_convert.h"
 
 #include "opensubdiv_converter_capi.hh"
@@ -65,16 +69,16 @@ static bool checkBaseMeshTopologyMatches(const TopologyRefinerImpl *topology_ref
   if (topology_refiner_impl->base_verts_num != converter->getNumVertices(converter)) {
     return false;
   }
-  if (converter->faces.data() != Span(topology_refiner_impl->base_face_offsets)) {
+  if (!std::ranges::equal(converter->face_offsets, topology_refiner_impl->base_face_offsets)) {
     return false;
   }
-  if (converter->corner_verts != Span(topology_refiner_impl->base_corner_verts)) {
+  if (!std::ranges::equal(converter->corner_verts, topology_refiner_impl->base_corner_verts)) {
     return false;
   }
-  if (converter->edge_sharpness != Span(topology_refiner_impl->base_edge_sharpness)) {
+  if (!std::ranges::equal(converter->edge_sharpness, topology_refiner_impl->base_edge_sharpness)) {
     return false;
   }
-  if (converter->vert_sharpness != Span(topology_refiner_impl->base_vert_sharpness)) {
+  if (!std::ranges::equal(converter->vert_sharpness, topology_refiner_impl->base_vert_sharpness)) {
     return false;
   }
 
@@ -82,8 +86,8 @@ static bool checkBaseMeshTopologyMatches(const TopologyRefinerImpl *topology_ref
   // in the consistent state with the faces and face-vertices compared above. If that's not the
   // case the mesh is invalid and comparison can not happen reliably. For sharpness it is
   // important to know that the edges still connect the same pair of vertices though.
-  const Span<int2> base_edges = topology_refiner_impl->base_edges_sparse;
-  for (const int edge_index : base_edges.index_range()) {
+  const std::vector<std::pair<int, int>> &base_edges = topology_refiner_impl->base_edges_sparse;
+  for (size_t edge_index = 0; edge_index < base_edges.size(); edge_index++) {
     if (topology_refiner_impl->base_edge_sharpness[edge_index] < 1e-6f) {
       continue;
     }

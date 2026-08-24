@@ -827,8 +827,10 @@ static void converter_init(const MultiresReshapeSmoothContext *reshape_smooth_co
 
   /* Only the first #num_edges entries of the sparse edge storage were filled in. */
   const int edges_num = int(reshape_smooth_context->geometry.num_edges);
-  converter->edges = reshape_smooth_context->geometry.edges.as_span().take_front(edges_num);
-  converter->faces = reshape_smooth_context->geometry.faces();
+  converter->edges = reshape_smooth_context->geometry.edges.as_span()
+                         .take_front(edges_num)
+                         .cast<std::pair<int, int>>();
+  converter->face_offsets = reshape_smooth_context->geometry.face_offsets.as_span();
   converter->corner_verts = reshape_smooth_context->geometry.corner_verts;
   converter->edge_sharpness = reshape_smooth_context->geometry.edge_sharpness.as_span().take_front(
       edges_num);

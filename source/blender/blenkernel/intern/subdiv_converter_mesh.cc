@@ -437,8 +437,8 @@ void converter_init_for_mesh(OpenSubdiv_Converter *converter,
   init_functions(converter);
   init_user_data(converter, settings, mesh);
   const auto &storage = *static_cast<ConverterStorage *>(converter->user_data);
-  converter->faces = storage.faces;
-  converter->edges = storage.edges;
+  converter->face_offsets = storage.mesh->face_offsets();
+  converter->edges = storage.edges.cast<std::pair<int, int>>();
   converter->corner_verts = storage.corner_verts;
   converter->edge_sharpness = storage.edge_sharpness;
   converter->vert_sharpness = storage.vert_sharpness;

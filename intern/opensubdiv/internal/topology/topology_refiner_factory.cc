@@ -24,6 +24,18 @@ struct TopologyRefinerData {
   const OpenSubdiv_Converter *converter;
 };
 
+// See #OffsetIndices::size().
+static int faces_num_from_offsets(const std::span<const int> face_offsets)
+{
+  return face_offsets.empty() ? 0 : int(face_offsets.size()) - 1;
+}
+
+// See #OffsetIndices::total_size().
+[[maybe_unused]] static int total_size_from_offsets(const std::span<const int> face_offsets)
+{
+  return face_offsets.empty() ? 0 : face_offsets.back() - face_offsets.front();
+}
+
 using TopologyRefinerFactoryType = OpenSubdiv::Far::TopologyRefinerFactory<TopologyRefinerData>;
 
 namespace OpenSubdiv::OPENSUBDIV_VERSION::Far {
@@ -39,10 +51,12 @@ inline bool TopologyRefinerFactory<TopologyRefinerData>::resizeComponentTopology
   setNumBaseVertices(refiner, num_vertices);
 
   // Faces and face-vertices.
-  const blender::OffsetIndices<int> src_faces = converter->faces;
-  setNumBaseFaces(refiner, src_faces.size());
-  for (const int face_index : src_faces.index_range()) {
-    setNumBaseFaceVertices(refiner, face_index, src_faces[face_index].size());
+  const std::span<const int> face_offsets = converter->face_offsets;
+  const int num_faces = faces_num_from_offsets(face_offsets);
+  setNumBaseFaces(refiner, num_faces);
+  for (int face_index = 0; face_index < num_faces; ++face_index) {
+    setNumBaseFaceVertices(
+        refiner, face_index, face_offsets[face_index + 1] - face_offsets[face_index]);
   }
 
   // If converter does not provide full topology, we are done.
@@ -82,12 +96,15 @@ inline bool TopologyRefinerFactory<TopologyRefinerData>::assignComponentTopology
 
   const bool full_topology_specified = converter->specifiesFullTopology(converter);
 
-  const blender::OffsetIndices<int> src_faces = converter->faces;
-  const blender::Span<int> src_corner_verts = converter->corner_verts;
+  const std::span<const int> face_offsets = converter->face_offsets;
+  const std::span<const int> src_corner_verts = converter->corner_verts;
+  const int num_faces = faces_num_from_offsets(face_offsets);
 
   // Vertices of face.
-  for (const int face_index : src_faces.index_range()) {
-    const blender::Span<int> face_verts = src_corner_verts.slice(src_faces[face_index]);
+  for (int face_index = 0; face_index < num_faces; ++face_index) {
+    const int start = face_offsets[face_index];
+    const std::span<const int> face_verts = src_corner_verts.subspan(
+        start, face_offsets[face_index + 1] - start);
     IndexArray dst_face_verts = getBaseFaceVertices(refiner, face_index);
     std::copy_n(face_verts.data(), face_verts.size(), dst_face_verts.begin());
   }
@@ -120,11 +137,12 @@ inline bool TopologyRefinerFactory<TopologyRefinerData>::assignComponentTopology
   }
 
   // Edge relations.
-  const blender::Span<blender::int2> edges = converter->edges;
-  for (int edge_index = 0; edge_index < edges.size(); ++edge_index) {
+  const std::span<const std::pair<int, int>> edges = converter->edges;
+  for (int edge_index = 0; edge_index < int(edges.size()); ++edge_index) {
     // Vertices this edge connects.
     IndexArray dst_edge_vertices = getBaseEdgeVertices(refiner, edge_index);
-    std::copy_n(&edges[edge_index][0], 2, dst_edge_vertices.begin());
+    dst_edge_vertices[0] = edges[edge_index].first;
+    dst_edge_vertices[1] = edges[edge_index].second;
 
     // Faces adjacent to this edge.
     IndexArray dst_edge_faces = getBaseEdgeFaces(refiner, edge_index);
@@ -132,7 +150,7 @@ inline bool TopologyRefinerFactory<TopologyRefinerData>::assignComponentTopology
   }
 
   // Face relations.
-  for (const int face_index : src_faces.index_range()) {
+  for (int face_index = 0; face_index < num_faces; ++face_index) {
     IndexArray dst_face_edges = getBaseFaceEdges(refiner, face_index);
     converter->getFaceEdges(converter, face_index, &dst_face_edges[0]);
   }
@@ -154,8 +172,8 @@ inline bool TopologyRefinerFactory<TopologyRefinerData>::assignComponentTags(
   const OpenSubdiv_Converter *converter = cb_data.converter;
 
   const bool full_topology_specified = converter->specifiesFullTopology(converter);
-  const blender::Span<float> edge_sharpness = converter->edge_sharpness;
-  for (const int edge_index : edge_sharpness.index_range()) {
+  const std::span<const float> edge_sharpness = converter->edge_sharpness;
+  for (int edge_index = 0; edge_index < int(edge_sharpness.size()); ++edge_index) {
     const float sharpness = edge_sharpness[edge_index];
     if (sharpness < 1e-6f) {
       continue;
@@ -167,8 +185,8 @@ inline bool TopologyRefinerFactory<TopologyRefinerData>::assignComponentTags(
     else {
       // TODO(sergey): Should be a faster way to find reconstructed edge to
       // specify sharpness for (assuming, findBaseEdge has linear complexity).
-      const blender::int2 edge_vertices = converter->edges[edge_index];
-      const int base_edge_index = findBaseEdge(refiner, edge_vertices[0], edge_vertices[1]);
+      const std::pair<int, int> edge_vertices = converter->edges[edge_index];
+      const int base_edge_index = findBaseEdge(refiner, edge_vertices.first, edge_vertices.second);
       if (base_edge_index == OpenSubdiv::Far::INDEX_INVALID) {
         printf("OpenSubdiv Error: failed to find reconstructed edge\n");
         return false;
@@ -181,10 +199,10 @@ inline bool TopologyRefinerFactory<TopologyRefinerData>::assignComponentTags(
   // handles correct cases when vertex is a corner of plane. Currently mark
   // vertices which are adjacent to a loose edge as sharp, but this decision
   // needs some more investigation.
-  const blender::Span<float> vert_sharpness = converter->vert_sharpness;
+  const std::span<const float> vert_sharpness = converter->vert_sharpness;
   const int num_vertices = converter->getNumVertices(converter);
   for (int vertex_index = 0; vertex_index < num_vertices; ++vertex_index) {
-    float sharpness = vert_sharpness.is_empty() ? 0.0f : vert_sharpness[vertex_index];
+    float sharpness = vert_sharpness.empty() ? 0.0f : vert_sharpness[vertex_index];
 
     // If its vertex where 2 non-manifold edges meet adjust vertex sharpness to
     // the edges.
@@ -293,30 +311,30 @@ static void storeBaseMeshTopology(const OpenSubdiv_Converter *converter,
                                   TopologyRefinerImpl &refiner_impl)
 {
   refiner_impl.base_verts_num = converter->getNumVertices(converter);
-  refiner_impl.base_face_offsets.assign(converter->faces.data().begin(),
-                                        converter->faces.data().end());
-  assert(converter->corner_verts.size() == converter->faces.total_size());
+  refiner_impl.base_face_offsets.assign(converter->face_offsets.begin(),
+                                        converter->face_offsets.end());
+  assert(converter->corner_verts.size() == total_size_from_offsets(converter->face_offsets));
   refiner_impl.base_corner_verts.assign(converter->corner_verts.begin(),
                                         converter->corner_verts.end());
-  assert(converter->edge_sharpness.is_empty() ||
+  assert(converter->edge_sharpness.empty() ||
          converter->edge_sharpness.size() == converter->edges.size());
   refiner_impl.base_edge_sharpness.assign(converter->edge_sharpness.begin(),
                                           converter->edge_sharpness.end());
-  assert(converter->vert_sharpness.is_empty() ||
-         converter->vert_sharpness.size() == refiner_impl.base_verts_num);
+  assert(converter->vert_sharpness.empty() ||
+         int(converter->vert_sharpness.size()) == refiner_impl.base_verts_num);
   refiner_impl.base_vert_sharpness.assign(converter->vert_sharpness.begin(),
                                           converter->vert_sharpness.end());
 
   // Only up to the last sharp one is stored, see #TopologyRefinerImpl::base_edges_sparse.
-  const blender::Span<float> sharpness = converter->edge_sharpness;
+  const std::span<const float> sharpness = converter->edge_sharpness;
   int stored_edges_num = 0;
-  for (int edge_index = sharpness.size() - 1; edge_index >= 0; edge_index--) {
+  for (int edge_index = int(sharpness.size()) - 1; edge_index >= 0; edge_index--) {
     if (sharpness[edge_index] >= 1e-6f) {
       stored_edges_num = edge_index + 1;
       break;
     }
   }
-  const blender::Span<blender::int2> edges = converter->edges.take_front(stored_edges_num);
+  const std::span<const std::pair<int, int>> edges = converter->edges.first(stored_edges_num);
   refiner_impl.base_edges_sparse.assign(edges.begin(), edges.end());
 }
 
