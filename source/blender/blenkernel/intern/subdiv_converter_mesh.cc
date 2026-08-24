@@ -268,50 +268,50 @@ static int initialize_manifold_index_map(const IndexMask &unused_mask,
 
 /* Builds the manifold-space edges array exposed as `converter->edges`: for each manifold edge
  * index, the pair of manifold vertex indices, skipping loose edges. */
-static void initialize_manifold_edges(ConverterStorage *storage)
+static void initialize_manifold_edges(ConverterStorage &storage)
 {
-  const Span<int2> mesh_edges = storage->mesh->edges();
-  if (storage->manifold_edge_to_orig.is_empty() && storage->manifold_verts.is_empty()) {
-    storage->edges = mesh_edges.take_front(storage->num_manifold_edges);
+  const Span<int2> mesh_edges = storage.mesh->edges();
+  if (storage.manifold_edge_to_orig.is_empty() && storage.manifold_verts.is_empty()) {
+    storage.edges = mesh_edges.take_front(storage.num_manifold_edges);
     return;
   }
-  storage->edges_manifold.reinitialize(storage->num_manifold_edges);
-  const MutableSpan<int2> edges_manifold = storage->edges_manifold;
+  storage.edges_manifold.reinitialize(storage.num_manifold_edges);
+  const MutableSpan<int2> edges_manifold = storage.edges_manifold;
   threading::parallel_for(edges_manifold.index_range(), 4096, [&](const IndexRange range) {
     for (const int manifold_edge_index : range) {
-      const int edge_index = manifold_to_original(storage->manifold_edge_to_orig,
+      const int edge_index = manifold_to_original(storage.manifold_edge_to_orig,
                                                   manifold_edge_index);
       const int2 &edge = mesh_edges[edge_index];
       edges_manifold[manifold_edge_index] = int2(
-          original_to_manifold(storage->manifold_verts, edge[0]),
-          original_to_manifold(storage->manifold_verts, edge[1]));
+          original_to_manifold(storage.manifold_verts, edge[0]),
+          original_to_manifold(storage.manifold_verts, edge[1]));
     }
   });
-  storage->edges = storage->edges_manifold;
+  storage.edges = storage.edges_manifold;
 }
 
-static void initialize_manifold_indices(ConverterStorage *storage)
+static void initialize_manifold_indices(ConverterStorage &storage)
 {
-  const Mesh *mesh = storage->mesh;
+  const Mesh *mesh = storage.mesh;
   const IndexMask &loose_verts = mesh->verts_no_face();
   const IndexMask &loose_edges = mesh->loose_edges();
 
-  storage->num_manifold_vertices = initialize_manifold_index_map(
-      loose_verts, mesh->verts_num, &storage->manifold_verts, &storage->manifold_vert_to_orig);
-  if (storage->manifold_verts.is_empty()) {
-    storage->corner_verts = mesh->corner_verts();
+  storage.num_manifold_vertices = initialize_manifold_index_map(
+      loose_verts, mesh->verts_num, &storage.manifold_verts, &storage.manifold_vert_to_orig);
+  if (storage.manifold_verts.is_empty()) {
+    storage.corner_verts = mesh->corner_verts();
   }
   else {
     const Span<int> mesh_corner_verts = mesh->corner_verts();
-    storage->corner_verts_manifold.reinitialize(mesh_corner_verts.size());
-    array_utils::gather(storage->manifold_verts.as_span(),
+    storage.corner_verts_manifold.reinitialize(mesh_corner_verts.size());
+    array_utils::gather(storage.manifold_verts.as_span(),
                         mesh_corner_verts,
-                        storage->corner_verts_manifold.as_mutable_span());
-    storage->corner_verts = storage->corner_verts_manifold;
+                        storage.corner_verts_manifold.as_mutable_span());
+    storage.corner_verts = storage.corner_verts_manifold;
   }
 
-  storage->num_manifold_edges = initialize_manifold_index_map(
-      loose_edges, mesh->edges_num, nullptr, &storage->manifold_edge_to_orig);
+  storage.num_manifold_edges = initialize_manifold_index_map(
+      loose_edges, mesh->edges_num, nullptr, &storage.manifold_edge_to_orig);
   initialize_manifold_edges(storage);
 }
 
@@ -337,52 +337,51 @@ static void gather_manifold_sharpness(const Span<float> creases,
 
 /* Builds the sharpness of every manifold edge, exposed as `converter->edge_sharpness`. Left empty
  * when no edge is sharp, which OpenSubdiv treats the same as all-zero sharpness. */
-static void initialize_edge_sharpness(ConverterStorage *storage)
+static void initialize_edge_sharpness(ConverterStorage &storage)
 {
 #if BUGGY_SIMPLE_SCHEME_WORKAROUND
-  if (storage->settings.is_simple) {
+  if (storage.settings.is_simple) {
     /* Emulate the bilinear scheme by making every edge infinitely sharp. */
-    storage->edge_sharpness = Array<float>(storage->num_manifold_edges,
-                                           OPENSUBDIV_SHARPNESS_INFINITE);
+    storage.edge_sharpness = Array<float>(storage.num_manifold_edges,
+                                          OPENSUBDIV_SHARPNESS_INFINITE);
     return;
   }
 #endif
-  if (storage->cd_edge_crease.is_empty()) {
+  if (storage.cd_edge_crease.is_empty()) {
     return;
   }
-  storage->edge_sharpness.reinitialize(storage->num_manifold_edges);
+  storage.edge_sharpness.reinitialize(storage.num_manifold_edges);
   gather_manifold_sharpness(
-      storage->cd_edge_crease, storage->manifold_edge_to_orig, storage->edge_sharpness);
+      storage.cd_edge_crease, storage.manifold_edge_to_orig, storage.edge_sharpness);
 }
 
 /* Builds the sharpness of every manifold vertex, exposed as `converter->vert_sharpness`. Besides
  * the vertex crease this includes the infinite sharpness given to vertices adjacent to a loose
  * edge, since OpenSubdiv expects non-manifold vertices to be sharp. Left empty when no vertex is
  * sharp. */
-static void initialize_vert_sharpness(ConverterStorage *storage)
+static void initialize_vert_sharpness(ConverterStorage &storage)
 {
 #if BUGGY_SIMPLE_SCHEME_WORKAROUND
-  if (storage->settings.is_simple) {
+  if (storage.settings.is_simple) {
     /* Emulate the bilinear scheme by making every vertex infinitely sharp. */
-    storage->vert_sharpness = Array<float>(storage->num_manifold_vertices,
-                                           OPENSUBDIV_SHARPNESS_INFINITE);
+    storage.vert_sharpness = Array<float>(storage.num_manifold_vertices,
+                                          OPENSUBDIV_SHARPNESS_INFINITE);
     return;
   }
 #endif
-  const Mesh *mesh = storage->mesh;
+  const Mesh *mesh = storage.mesh;
   const IndexMask &loose_edges = mesh->loose_edges();
-  if (storage->cd_vertex_crease.is_empty() && loose_edges.is_empty()) {
+  if (storage.cd_vertex_crease.is_empty() && loose_edges.is_empty()) {
     return;
   }
 
-  storage->vert_sharpness.reinitialize(storage->num_manifold_vertices);
-  const MutableSpan<float> sharpness = storage->vert_sharpness;
-  if (storage->cd_vertex_crease.is_empty()) {
+  storage.vert_sharpness.reinitialize(storage.num_manifold_vertices);
+  const MutableSpan<float> sharpness = storage.vert_sharpness;
+  if (storage.cd_vertex_crease.is_empty()) {
     sharpness.fill(0.0f);
   }
   else {
-    gather_manifold_sharpness(
-        storage->cd_vertex_crease, storage->manifold_vert_to_orig, sharpness);
+    gather_manifold_sharpness(storage.cd_vertex_crease, storage.manifold_vert_to_orig, sharpness);
   }
 
   if (loose_edges.is_empty()) {
@@ -401,7 +400,7 @@ static void initialize_vert_sharpness(ConverterStorage *storage)
   });
   threading::parallel_for(sharpness.index_range(), 4096, [&](const IndexRange range) {
     for (const int manifold_vertex_index : range) {
-      const int vertex_index = manifold_to_original(storage->manifold_vert_to_orig,
+      const int vertex_index = manifold_to_original(storage.manifold_vert_to_orig,
                                                     manifold_vertex_index);
       if (infinite_sharp_verts[vertex_index]) {
         sharpness[manifold_vertex_index] = OPENSUBDIV_SHARPNESS_INFINITE;
@@ -425,9 +424,9 @@ static void init_user_data(OpenSubdiv_Converter *converter,
   }
   user_data->uv_map_names = mesh->uv_map_names();
   user_data->loop_uv_indices = nullptr;
-  initialize_manifold_indices(user_data);
-  initialize_edge_sharpness(user_data);
-  initialize_vert_sharpness(user_data);
+  initialize_manifold_indices(*user_data);
+  initialize_edge_sharpness(*user_data);
+  initialize_vert_sharpness(*user_data);
   converter->user_data = user_data;
 }
 
