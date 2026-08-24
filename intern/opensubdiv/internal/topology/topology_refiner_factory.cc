@@ -148,6 +148,7 @@ inline bool TopologyRefinerFactory<TopologyRefinerData>::assignComponentTags(
 {
   using OpenSubdiv::Sdc::Crease;
 
+  /* Not static assert because Crease::SHARPNESS_INFINITE is not constexpr. */
   assert(OPENSUBDIV_SHARPNESS_INFINITE == Crease::SHARPNESS_INFINITE);
 
   const OpenSubdiv_Converter *converter = cb_data.converter;
