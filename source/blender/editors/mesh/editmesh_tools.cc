@@ -6,6 +6,8 @@
  * \ingroup edmesh
  */
 
+#include <algorithm>
+#include <cmath>
 #include <cstddef>
 #include <fmt/format.h>
 
@@ -49,6 +51,8 @@
 #include "BKE_object_types.hh"
 #include "BKE_paint.hh"
 #include "BKE_report.hh"
+
+#include "eigen_capi.h"
 
 #include "DEG_depsgraph.hh"
 #include "DEG_depsgraph_build.hh"
@@ -2736,6 +2740,7 @@ enum {
   SMOOTH_METHOD_SIMPLE = 0,
   SMOOTH_METHOD_TAUBIN = 1,
   SMOOTH_METHOD_HC = 2,
+  SMOOTH_METHOD_FREQUENCY = 3,
 };
 
 static const EnumPropertyItem smooth_method_items[] = {
@@ -2754,6 +2759,12 @@ static const EnumPropertyItem smooth_method_items[] = {
      0,
      "HC",
      "Smooth then pull vertices back toward the originals to preserve volume"},
+    {SMOOTH_METHOD_FREQUENCY,
+     "FREQUENCY",
+     0,
+     "Frequency-Aware",
+     "Implicit biharmonic filtering of normalized graph frequencies that removes fine detail "
+     "while retaining the broad shape"},
     {0, nullptr, 0, nullptr, nullptr},
 };
 
@@ -2841,13 +2852,143 @@ static float3 smooth_neighbor_average(BMVert *v,
   return src[BM_elem_index_get(v)];
 }
 
-static void edbm_smooth_volume_preserve(BMesh *bm,
+static LinearSolver *smooth_frequency_solver_create(BMesh *bm,
+                                                    const Span<float> edge_weights,
+                                                    const Span<bool> pinned,
+                                                    const Span<float> inverse_weight_sums,
+                                                    const float cutoff,
+                                                    const Span<float3> positions)
+{
+  const int verts_num = positions.size();
+  LinearSolver *solver = EIG_linear_least_squares_solver_new(2 * verts_num, verts_num, 3);
+  for (const int i : positions.index_range()) {
+    for (const int axis : IndexRange(3)) {
+      EIG_linear_solver_variable_set(solver, axis, i, positions[i][axis]);
+    }
+    if (pinned[i]) {
+      EIG_linear_solver_variable_lock(solver, i);
+    }
+  }
+
+  const bool weighted = !edge_weights.is_empty();
+  const double laplacian_scale = 1.0 / double(std::max(cutoff, 1e-6f));
+  BMIter iter;
+  BMVert *v;
+  BM_ITER_MESH (v, &iter, bm, BM_VERTS_OF_MESH) {
+    const int i = BM_elem_index_get(v);
+    EIG_linear_solver_matrix_add(solver, i, i, 1.0);
+    if (inverse_weight_sums[i] == 0.0f) {
+      continue;
+    }
+
+    const int row = verts_num + i;
+    EIG_linear_solver_matrix_add(solver, row, i, laplacian_scale);
+    BMIter eiter;
+    BMEdge *e;
+    BM_ITER_ELEM (e, &eiter, v, BM_EDGES_OF_VERT) {
+      BMVert *other = BM_edge_other_vert(e, v);
+      const float weight = weighted ? edge_weights[BM_elem_index_get(e)] : 1.0f;
+      EIG_linear_solver_matrix_add(solver,
+                                   row,
+                                   BM_elem_index_get(other),
+                                   -laplacian_scale * double(weight * inverse_weight_sums[i]));
+    }
+  }
+  return solver;
+}
+
+static bool smooth_frequency_solve(LinearSolver *solver,
+                                   const Span<bool> pinned,
+                                   const bool xaxis,
+                                   const bool yaxis,
+                                   const bool zaxis,
+                                   const Span<float3> right_hand_side,
+                                   MutableSpan<float3> positions)
+{
+  for (const int i : right_hand_side.index_range()) {
+    for (const int axis : IndexRange(3)) {
+      EIG_linear_solver_right_hand_side_add(solver, axis, i, right_hand_side[i][axis]);
+    }
+  }
+  if (!EIG_linear_solver_solve(solver)) {
+    return false;
+  }
+
+  const bool axis_enabled[3] = {xaxis, yaxis, zaxis};
+  for (const int i : positions.index_range()) {
+    if (pinned[i]) {
+      continue;
+    }
+    for (const int axis : IndexRange(3)) {
+      if (axis_enabled[axis]) {
+        const double value = EIG_linear_solver_variable_get(solver, axis, i);
+        const float position = float(value);
+        if (!std::isfinite(position)) {
+          return false;
+        }
+        positions[i][axis] = position;
+      }
+    }
+  }
+  return true;
+}
+
+static bool smooth_frequency_filter(BMesh *bm,
+                                    const Span<float> edge_weights,
+                                    const Span<bool> pinned,
+                                    const float cutoff,
+                                    const int iterations,
+                                    const bool xaxis,
+                                    const bool yaxis,
+                                    const bool zaxis,
+                                    MutableSpan<float3> positions)
+{
+  const int verts_num = positions.size();
+  if (verts_num == 0 || iterations == 0) {
+    return true;
+  }
+
+  const bool weighted = !edge_weights.is_empty();
+  Array<float> inverse_weight_sums(verts_num, 0.0f);
+  BMIter iter;
+  BMVert *v;
+  BM_ITER_MESH (v, &iter, bm, BM_VERTS_OF_MESH) {
+    float weight_sum = 0.0f;
+    BMIter eiter;
+    BMEdge *e;
+    BM_ITER_ELEM (e, &eiter, v, BM_EDGES_OF_VERT) {
+      weight_sum += weighted ? edge_weights[BM_elem_index_get(e)] : 1.0f;
+    }
+    if (weight_sum > 0.0f) {
+      inverse_weight_sums[BM_elem_index_get(v)] = 1.0f / weight_sum;
+    }
+  }
+
+  Array<float3> right_hand_side(verts_num);
+  LinearSolver *solver = smooth_frequency_solver_create(
+      bm, edge_weights, pinned, inverse_weight_sums, cutoff, positions);
+  bool success = true;
+  for (int iteration = 0; iteration < iterations; iteration++) {
+    right_hand_side.as_mutable_span().copy_from(positions);
+    if (!smooth_frequency_solve(
+            solver, pinned, xaxis, yaxis, zaxis, right_hand_side, positions))
+    {
+      success = false;
+      break;
+    }
+  }
+  EIG_linear_solver_delete(solver);
+  return success;
+}
+
+static bool edbm_smooth_volume_preserve(BMesh *bm,
                                         const int method,
                                         const float factor,
                                         const int repeat,
                                         const float taubin_mu,
                                         const float hc_alpha,
                                         const float hc_beta,
+                                        const float frequency_cutoff,
                                         const bool use_cotangent,
                                         const bool xaxis,
                                         const bool yaxis,
@@ -2869,7 +3010,7 @@ static void edbm_smooth_volume_preserve(BMesh *bm,
     }
   }
   if (verts.is_empty()) {
-    return;
+    return true;
   }
 
   Array<float3> positions(bm->totvert);
@@ -2934,15 +3075,45 @@ static void edbm_smooth_volume_preserve(BMesh *bm,
       }
       break;
     }
+    case SMOOTH_METHOD_FREQUENCY: {
+      Array<bool> pinned(bm->totvert, false);
+      BM_ITER_MESH (v, &iter, bm, BM_VERTS_OF_MESH) {
+        if (!BM_elem_flag_test(v, BM_ELEM_SELECT)) {
+          pinned[BM_elem_index_get(v)] = true;
+        }
+      }
+      Array<float3> filtered_positions(positions.as_span());
+      if (!smooth_frequency_filter(bm,
+                                   weights_span,
+                                   pinned,
+                                   frequency_cutoff,
+                                   repeat,
+                                   xaxis,
+                                   yaxis,
+                                   zaxis,
+                                   filtered_positions))
+      {
+        return false;
+      }
+      for (BMVert *vert : verts) {
+        const int i = BM_elem_index_get(vert);
+        const float3 prev = positions[i];
+        smooth_apply_blend(
+            positions[i], filtered_positions[i], factor, xaxis, yaxis, zaxis);
+        smooth_apply_mirror_clip(positions[i], prev, clipx, clipy, clipz, clip_dist);
+      }
+      break;
+    }
     default: {
       BLI_assert_unreachable();
-      break;
+      return false;
     }
   }
 
   for (BMVert *vert : verts) {
     copy_v3_v3(vert->co, positions[BM_elem_index_get(vert)]);
   }
+  return true;
 }
 
 static wmOperatorStatus edbm_do_smooth_vertex_exec(bContext *C, wmOperator *op)
@@ -2952,6 +3123,7 @@ static wmOperatorStatus edbm_do_smooth_vertex_exec(bContext *C, wmOperator *op)
   const float taubin_mu = RNA_float_get(op->ptr, "taubin_mu");
   const float hc_alpha = RNA_float_get(op->ptr, "hc_alpha");
   const float hc_beta = RNA_float_get(op->ptr, "hc_beta");
+  const float frequency_cutoff = RNA_float_get(op->ptr, "frequency_cutoff");
   const bool use_cotangent = RNA_boolean_get(op->ptr, "use_cotangent_weights");
 
   const bool xaxis = RNA_boolean_get(op->ptr, "xaxis");
@@ -3015,8 +3187,8 @@ static wmOperatorStatus edbm_do_smooth_vertex_exec(bContext *C, wmOperator *op)
       }
     }
 
-    /* The BMO simple path already updates normals. Taubin/HC write coordinates
-     * directly, so tessellation needs a normal recalculation. */
+    /* The BMO simple path already updates normals. Advanced methods write
+     * coordinates directly, so tessellation needs a normal recalculation. */
     bool calc_normals = false;
 
     if (method == SMOOTH_METHOD_SIMPLE) {
@@ -3041,21 +3213,26 @@ static wmOperatorStatus edbm_do_smooth_vertex_exec(bContext *C, wmOperator *op)
       }
     }
     else {
-      edbm_smooth_volume_preserve(em->bm,
-                                  method,
-                                  fac,
-                                  repeat,
-                                  taubin_mu,
-                                  hc_alpha,
-                                  hc_beta,
-                                  use_cotangent,
-                                  xaxis,
-                                  yaxis,
-                                  zaxis,
-                                  mirrx,
-                                  mirry,
-                                  mirrz,
-                                  clip_dist);
+      if (!edbm_smooth_volume_preserve(em->bm,
+                                       method,
+                                       fac,
+                                       repeat,
+                                       taubin_mu,
+                                       hc_alpha,
+                                       hc_beta,
+                                       frequency_cutoff,
+                                       use_cotangent,
+                                       xaxis,
+                                       yaxis,
+                                       zaxis,
+                                       mirrx,
+                                       mirry,
+                                       mirrz,
+                                       clip_dist))
+      {
+        BKE_report(
+            op->reports, RPT_WARNING, "Frequency smoothing could not solve the filter system");
+      }
       calc_normals = true;
     }
 
@@ -3096,7 +3273,10 @@ static void edbm_vertices_smooth_ui(bContext * /*C*/, wmOperator *op)
     layout.prop(op->ptr, "hc_alpha", UI_ITEM_NONE, std::nullopt, ICON_NONE);
     layout.prop(op->ptr, "hc_beta", UI_ITEM_NONE, std::nullopt, ICON_NONE);
   }
-  if (ELEM(method, SMOOTH_METHOD_TAUBIN, SMOOTH_METHOD_HC)) {
+  else if (method == SMOOTH_METHOD_FREQUENCY) {
+    layout.prop(op->ptr, "frequency_cutoff", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+  }
+  if (ELEM(method, SMOOTH_METHOD_TAUBIN, SMOOTH_METHOD_HC, SMOOTH_METHOD_FREQUENCY)) {
     layout.prop(op->ptr, "use_cotangent_weights", UI_ITEM_NONE, std::nullopt, ICON_NONE);
   }
 
@@ -3114,7 +3294,8 @@ void MESH_OT_vertices_smooth(wmOperatorType *ot)
 
   /* identifiers */
   ot->name = "Smooth Vertices";
-  ot->description = "Smooth selected vertices using simple, Taubin, or HC methods";
+  ot->description =
+      "Smooth selected vertices using simple, Taubin, HC, or frequency-aware methods";
   ot->idname = "MESH_OT_vertices_smooth";
 
   /* API callbacks. */
@@ -3166,6 +3347,20 @@ void MESH_OT_vertices_smooth(wmOperatorType *ot)
                               0.0f,
                               1.0f);
   RNA_def_property_ui_range(prop, 0.0f, 1.0f, 0.01f, 3);
+
+  prop = RNA_def_float(ot->srna,
+                       "frequency_cutoff",
+                       0.25f,
+                       0.001f,
+                       2.0f,
+                       "Normalized Cutoff",
+                       "Normalized graph frequency whose amplitude is halved by one filter "
+                       "iteration before Factor is applied; lower values remove coarser detail, "
+                       "and the scale depends on mesh topology and resolution",
+                       0.001f,
+                       2.0f);
+  RNA_def_property_ui_range(prop, 0.001f, 2.0f, 0.01f, 3);
+  RNA_def_property_ui_scale_type(prop, PROP_SCALE_LOG);
 
   RNA_def_boolean(ot->srna,
                   "use_cotangent_weights",
