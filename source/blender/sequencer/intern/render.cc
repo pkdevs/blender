@@ -25,6 +25,7 @@
 
 #include "BKE_anim_data.hh"
 #include "BKE_animsys.hh"
+#include "BKE_compositor.hh"
 #include "BKE_global.hh"
 #include "BKE_image.hh"
 #include "BKE_layer.hh"
@@ -73,6 +74,7 @@
 
 #include "cache/final_image_cache.hh"
 #include "cache/intra_frame_cache.hh"
+#include "cache/movie_reader_cache.hh"
 #include "cache/source_image_cache.hh"
 #include "effects/effects.hh"
 #include "intern/movie_read.hh"
@@ -84,6 +86,7 @@
 #include "utils.hh"
 
 #include <algorithm>
+#include <utility>
 
 namespace blender::seq {
 
@@ -154,16 +157,13 @@ static void ensure_ibuf_is_color_space(ImBuf *ibuf, bool make_float, const char 
     if (ibuf->byte_data() != nullptr) {
       IMB_free_byte_pixels(ibuf);
     }
-    /* Note: we do not use predivide to more closely match what
-     * compositor does, and to better preserve cases of pure emissive
-     * colors (alpha=0, RGB non black). */
     IMB_colormanagement_transform_float(ibuf->float_data_for_write(),
                                         ibuf->x,
                                         ibuf->y,
                                         ibuf->channels,
                                         from_colorspace,
                                         to_colorspace,
-                                        false);
+                                        true);
     IMB_colormanagement_assign_float_colorspace(ibuf, to_colorspace);
   }
 }
@@ -786,7 +786,7 @@ static SeqResult seq_render_effect_strip_impl(const RenderData *context,
     return out;
   }
 
-  float fac = effect_fader_calc(scene, strip, timeline_frame);
+  float fac = effect_fader_calc(scene, strip, timeline_frame, state->is_current_frame);
 
   StripEarlyOut early_out = sh.early_out(strip, fac);
 
@@ -875,12 +875,8 @@ void ensure_ibuf_is_rgba(ImBuf *ibuf)
 /**
  * Render individual view for multi-view or single (default view) for mono-view.
  */
-static ImBuf *seq_render_image_strip_view(const RenderData *context,
-                                          Strip *strip,
-                                          char *filepath,
-                                          char *prefix,
-                                          const char *ext,
-                                          int view_id)
+static ImBuf *seq_render_image_strip_view(
+    const RenderData *context, Strip *strip, const char *filepath, const char *prefix, int view_id)
 {
   ImBuf *ibuf = nullptr;
 
@@ -894,8 +890,11 @@ static ImBuf *seq_render_image_strip_view(const RenderData *context,
   }
   else {
     char filepath_view[FILE_MAX];
-    BKE_scene_multiview_view_prefix_get(context->scene, filepath, prefix, &ext);
-    seq_multiview_name(context->scene, view_id, prefix, ext, filepath_view, FILE_MAX);
+    if (!seq_multiview_view_filepath_get(
+            *context->scene, filepath, view_id, filepath_view, sizeof(filepath_view), nullptr))
+    {
+      return nullptr;
+    }
     ibuf = IMB_load_image_from_filepath(
         filepath_view, flag, strip->data->colorspace_settings.name);
   }
@@ -913,24 +912,29 @@ static ImBuf *seq_render_image_strip_view(const RenderData *context,
   return ibuf;
 }
 
-bool seq_image_strip_is_multiview_render(const Scene *scene,
-                                         const Strip *strip,
-                                         int totfiles,
-                                         const char *filepath,
-                                         char *r_prefix,
-                                         const char *r_ext)
+bool seq_strip_do_multiview_render(const Scene *scene,
+                                   const Strip *strip,
+                                   const char *filepath,
+                                   char *r_prefix)
 {
-  if (totfiles > 1) {
-    BKE_scene_multiview_view_prefix_get(scene, filepath, r_prefix, &r_ext);
-    if (r_prefix[0] == '\0') {
-      return false;
-    }
-  }
-  else {
-    r_prefix[0] = '\0';
+  r_prefix[0] = '\0';
+
+  if ((strip->flag & SEQ_USE_VIEWS) == 0 || (scene->r.scemode & R_MULTIVIEW) == 0 ||
+      BKE_scene_multiview_num_views_get(&scene->r) <= 1)
+  {
+    return false;
   }
 
-  return (strip->flag & SEQ_USE_VIEWS) != 0 && (scene->r.scemode & R_MULTIVIEW) != 0;
+  if (strip->views_format != R_IMF_VIEWS_INDIVIDUAL) {
+    /* Strips interpreted as a single stereo file always force multiview. */
+    return true;
+  }
+
+  /* For "Individual" view, if strip's file suffix does not match any view suffix,
+   * (implying no common prefix), fallback to mono render. */
+  const char *ext = nullptr;
+  BKE_scene_multiview_view_prefix_get(scene, filepath, r_prefix, &ext);
+  return r_prefix[0] != '\0';
 }
 
 static ImBuf *create_missing_media_image(const RenderData *context, int width, int height)
@@ -958,7 +962,6 @@ static ImBuf *seq_render_image_strip(const RenderData *context,
   PRF_scope_with_name("SeqRenderImage", ProfileCategory::Draw);
 
   char filepath[FILE_MAX];
-  const char *ext = nullptr;
   char prefix[FILE_MAX];
   ImBuf *ibuf = nullptr;
 
@@ -978,17 +981,16 @@ static ImBuf *seq_render_image_strip(const RenderData *context,
   }
 
   /* Proxy not found, render original. */
-  const int totfiles = seq_num_files(context->scene, strip->views_format, true);
-  bool is_multiview_render = seq_image_strip_is_multiview_render(
-      context->scene, strip, totfiles, filepath, prefix, ext);
+  const bool do_multiview_render = seq_strip_do_multiview_render(
+      context->scene, strip, filepath, prefix);
 
-  if (is_multiview_render) {
-    int totviews = BKE_scene_multiview_num_views_get(&context->scene->r);
+  if (do_multiview_render) {
+    const int totfiles = seq_multiview_num_files_get(context->scene, strip->views_format);
+    const int totviews = BKE_scene_multiview_num_views_get(&context->scene->r);
     Array<ImBuf *> ibufs_arr(totviews, nullptr);
 
     for (int view_id = 0; view_id < totfiles; view_id++) {
-      ibufs_arr[view_id] = seq_render_image_strip_view(
-          context, strip, filepath, prefix, ext, view_id);
+      ibufs_arr[view_id] = seq_render_image_strip_view(context, strip, filepath, prefix, view_id);
     }
 
     if (ibufs_arr[0] == nullptr) {
@@ -1011,7 +1013,7 @@ static ImBuf *seq_render_image_strip(const RenderData *context,
     }
   }
   else {
-    ibuf = seq_render_image_strip_view(context, strip, filepath, prefix, ext, context->view_id);
+    ibuf = seq_render_image_strip_view(context, strip, filepath, prefix, context->view_id);
   }
 
   media_presence_set_missing(context->scene, strip, ibuf == nullptr);
@@ -1055,7 +1057,7 @@ static ImBuf *seq_render_movie_strip_custom_file_proxy(const RenderData *context
 static ImBuf *seq_render_movie_strip_view(const RenderData *context,
                                           Strip *strip,
                                           float timeline_frame,
-                                          MovieReader *reader,
+                                          MovieReaderAccessor &reader,
                                           bool *r_is_proxy_image)
 {
   ImBuf *ibuf = nullptr;
@@ -1071,7 +1073,7 @@ static ImBuf *seq_render_movie_strip_view(const RenderData *context,
       ibuf = seq_render_movie_strip_custom_file_proxy(context, strip, timeline_frame);
     }
     else {
-      ibuf = MOV_decode_frame(reader, frame_index + strip->anim_startofs, psize);
+      ibuf = reader.decode_frame(frame_index + strip->anim_startofs, psize);
     }
 
     if (ibuf != nullptr) {
@@ -1081,7 +1083,7 @@ static ImBuf *seq_render_movie_strip_view(const RenderData *context,
 
   /* Fetching for requested proxy size failed, try fetching the original instead. */
   if (ibuf == nullptr) {
-    ibuf = MOV_decode_frame(reader, frame_index + strip->anim_startofs, IMB_PROXY_NONE);
+    ibuf = reader.decode_frame(frame_index + strip->anim_startofs, IMB_PROXY_NONE);
   }
   if (ibuf == nullptr) {
     return nullptr;
@@ -1102,27 +1104,60 @@ static ImBuf *seq_render_movie_strip(const RenderData *context,
 {
   PRF_scope_with_name("SeqRenderMovie", ProfileCategory::Draw);
 
-  /* Load all the videos. */
-  strip_open_anim_file(context->scene, strip, false);
-
   ImBuf *ibuf = nullptr;
-  MovieReader *first_reader = strip->runtime->movie_reader_get();
-  const int totfiles = seq_num_files(context->scene, strip->views_format, true);
-  bool is_multiview_render = (strip->flag & SEQ_USE_VIEWS) != 0 &&
-                             (context->scene->r.scemode & R_MULTIVIEW) != 0 &&
-                             totfiles == strip->runtime->movie_readers.size();
+  const bool use_multiview = (strip->flag & SEQ_USE_VIEWS) != 0 &&
+                             (context->scene->r.scemode & R_MULTIVIEW) != 0;
+  const int totfiles = use_multiview ?
+                           seq_multiview_num_files_get(context->scene, strip->views_format) :
+                           1;
 
-  if (is_multiview_render) {
-    int totviews = BKE_scene_multiview_num_views_get(&context->scene->r);
+  const int frame_index = round_fl_to_int(
+                              give_frame_index(context->scene, strip, timeline_frame)) +
+                          strip->anim_startofs;
+  /* Prefetch renders a scene copy, but movie readers should still get cached into
+   * the original scene. This way invalidation & cleanup affects entries cached
+   * by prefetch too. */
+  Scene &cache_scene = *prefetch_get_original_scene(context);
+  float source_fps = 0.0f;
+
+  Vector<MovieReaderAccessor> readers;
+  bool do_multiview_render = false;
+  if (use_multiview && totfiles > 0) {
+    readers.append(
+        movie_reader_cache_acquire_view(cache_scene, *context->scene, *strip, 0, frame_index));
+
+    do_multiview_render = strip->views_format == R_IMF_VIEWS_STEREO_3D ||
+                          readers[0].uses_multiview_filepath();
+
+    /* Opening individual multiview files is all-or-nothing. Fall back to the original filepath if
+     * any view cannot be opened. */
+    if (do_multiview_render && strip->views_format == R_IMF_VIEWS_INDIVIDUAL) {
+      bool all_readers_open = static_cast<bool>(readers[0]);
+      for (int view_id = 1; view_id < totfiles && all_readers_open; view_id++) {
+        readers.append(movie_reader_cache_acquire_view(
+            cache_scene, *context->scene, *strip, view_id, frame_index));
+        all_readers_open = static_cast<bool>(readers.last());
+      }
+      if (!all_readers_open) {
+        readers.clear();
+        do_multiview_render = false;
+      }
+    }
+  }
+
+  if (do_multiview_render) {
+    const int totviews = BKE_scene_multiview_num_views_get(&context->scene->r);
     Array<ImBuf *> ibuf_arr(totviews, nullptr);
 
-    int ibuf_view_id = 0;
-    for (MovieReader *reader : strip->runtime->movie_readers) {
+    for (const int64_t ibuf_view_id : readers.index_range()) {
+      MovieReaderAccessor &reader = readers[ibuf_view_id];
       if (reader) {
         ibuf_arr[ibuf_view_id] = seq_render_movie_strip_view(
             context, strip, timeline_frame, reader, r_is_proxy_image);
+        if (ibuf_view_id == 0) {
+          source_fps = MOV_get_fps(reader.reader());
+        }
       }
-      ibuf_view_id++;
     }
 
     if (strip->views_format == R_IMF_VIEWS_STEREO_3D) {
@@ -1146,8 +1181,17 @@ static ImBuf *seq_render_movie_strip(const RenderData *context,
     }
   }
   else {
-    ibuf = seq_render_movie_strip_view(
-        context, strip, timeline_frame, first_reader, r_is_proxy_image);
+    MovieReaderAccessor reader;
+    if (readers.is_empty()) {
+      reader = movie_reader_cache_acquire(cache_scene, *context->scene, *strip, frame_index);
+    }
+    else {
+      reader = std::move(readers[0]);
+    }
+    if (reader) {
+      ibuf = seq_render_movie_strip_view(context, strip, timeline_frame, reader, r_is_proxy_image);
+      source_fps = MOV_get_fps(reader.reader());
+    }
   }
 
   media_presence_set_missing(context->scene, strip, ibuf == nullptr);
@@ -1157,8 +1201,8 @@ static ImBuf *seq_render_movie_strip(const RenderData *context,
   }
 
   if (*r_is_proxy_image == false) {
-    if (first_reader) {
-      strip->data->stripdata->orig_fps = MOV_get_fps(first_reader);
+    if (source_fps != 0.0f) {
+      strip->data->stripdata->orig_fps = source_fps;
     }
     strip->data->stripdata->orig_width = ibuf->x;
     strip->data->stripdata->orig_height = ibuf->y;
@@ -1466,11 +1510,6 @@ static ImBuf *seq_render_scene_strip_ex(const RenderData *context,
   const bool is_preview = !context->render && (context->scene->r.seq_prev_type) != OB_RENDER;
   const float frame = float(scene->r.sfra) + frame_index + float(strip->anim_startofs);
 
-#if 0 /* UNUSED */
-  bool have_seq = (scene->r.scemode & R_DOSEQ) && scene->ed && scene->ed->seqbase.first;
-#endif
-  const bool have_comp = (scene->r.scemode & R_DOCOMP) && scene->compositing_node_group;
-
   ViewLayer *view_layer = get_view_layer_for_scene_strip(scene, strip);
   Depsgraph *depsgraph = get_depsgraph_for_scene_strip(context->bmain, scene, view_layer);
 
@@ -1484,6 +1523,15 @@ static ImBuf *seq_render_scene_strip_ex(const RenderData *context,
     camera = scene->camera;
   }
 
+#if 0 /* UNUSED */
+  bool have_seq = (scene->r.scemode & R_DOSEQ) && scene->ed && scene->ed->seqbase.first;
+#endif
+  const bool is_viewport_render = view3d_fn && is_preview && camera;
+  const bke::compositor::ExecutionMode execution_mode =
+      is_viewport_render ? bke::compositor::ExecutionMode::Preview :
+                           bke::compositor::ExecutionMode::Render;
+  const bool have_comp = bke::compositor::is_enabled(*scene, execution_mode);
+
   if (have_comp == false && camera == nullptr) {
     return nullptr;
   }
@@ -1494,7 +1542,7 @@ static ImBuf *seq_render_scene_strip_ex(const RenderData *context,
   /* Temporarily disable camera switching to enforce using `camera`. */
   scene->r.mode |= R_NO_CAMERA_SWITCH;
 
-  if (view3d_fn && is_preview && camera) {
+  if (is_viewport_render) {
     int width, height;
     BKE_render_resolution(&scene->r, false, &width, &height);
 
@@ -1761,10 +1809,6 @@ static SeqResult do_render_strip_uncached(const RenderData *context,
           local_context.skip_cache = true;
 
           out = do_render_strip_seqbase(&local_context, state, strip, frame_index);
-
-          /* We have just rendered timeline of another scene; make sure movie decoding
-           * contexts no longer needed by the current frame are freed. */
-          relations_free_all_anim_ibufs(local_context.scene, frame_index);
         }
       }
       else {
@@ -2093,13 +2137,12 @@ ImBuf *render_give_ibuf(const RenderData *context, float timeline_frame, int cha
   Vector<Strip *> strips = query_rendered_strips_sorted(
       scene, channels, seqbasep, timeline_frame, chanshown);
 
-  /* Make sure we only keep the `anim` data for strips that are in view. */
-  relations_free_all_anim_ibufs(context->scene, timeline_frame);
-
   SeqRenderState state;
+  state.is_current_frame = timeline_frame == BKE_scene_frame_get(scene);
 
   if (!strips.is_empty() && !out) {
     std::scoped_lock lock(seq_render_mutex);
+    movie_reader_cache_timestamp_bump();
     /* Try to make space before we add any new frames to the cache if it is full.
      * If we do this after we have added the new cache, we risk removing what we just added. */
     evict_caches_if_full(orig_scene);
@@ -2137,6 +2180,9 @@ SeqResult seq_render_give_ibuf_seqbase(const RenderData *context,
 ImBuf *render_give_ibuf_direct(const RenderData *context, float timeline_frame, Strip *strip)
 {
   SeqRenderState state;
+  state.is_current_frame = timeline_frame == BKE_scene_frame_get(context->scene);
+
+  movie_reader_cache_timestamp_bump();
 
   intra_frame_cache_set_cur_frame(context->scene,
                                   timeline_frame,
@@ -2167,36 +2213,50 @@ float get_render_scale_factor(const RenderData &context)
   return get_render_scale_factor(context.preview_render_size, context.scene->r.size);
 }
 
-bool render_begin_gpu(const RenderData &rd)
+GpuContextState render_begin_gpu(const RenderData &rd)
 {
+  GPUContext *active_ctx = GPU_context_active_get();
+  if (active_ctx != nullptr) {
+    GPU_render_begin();
+    return GpuContextState::AlreadyActive;
+  }
+
   /* Use GPU context from VSE render data (e.g. prefetch render). */
   if (rd.gpu_context.ghost_context != nullptr) {
     gpu::GPU_activate_secondary_context(rd.gpu_context);
     GPU_render_begin();
-    return true;
+    return GpuContextState::Success;
   }
 
   /* Use main GPU context (regular preview area drawing, or "render sequence preview" operator). */
   if (BLI_thread_is_main() || rd.render == nullptr) {
     DRW_gpu_context_enable();
-    return DRW_gpu_context_is_enabled();
+    return DRW_gpu_context_is_enabled() ? GpuContextState::Success : GpuContextState::Unsupported;
   }
 
   /* Use GPU context from Render. */
   GHOST_IContext *render_ghost_context = RE_system_gpu_context_get(rd.render);
   if (!render_ghost_context) {
-    return false;
+    return GpuContextState::Unsupported;
   }
 
   WM_system_gpu_context_activate(render_ghost_context);
   void *render_gpu_context = RE_blender_gpu_context_ensure(rd.render);
   GPU_render_begin();
   GPU_context_active_set(static_cast<GPUContext *>(render_gpu_context));
-  return true;
+  return GpuContextState::Success;
 }
 
-void render_end_gpu(const RenderData &rd)
+void render_end_gpu(const RenderData &rd, GpuContextState state)
 {
+  if (state == GpuContextState::Unsupported) {
+    return;
+  }
+  if (state == GpuContextState::AlreadyActive) {
+    GPU_render_end();
+    return;
+  }
+
   /* Use GPU context from VSE render data (e.g. prefetch render). */
   if (rd.gpu_context.ghost_context != nullptr) {
     GPU_render_end();
