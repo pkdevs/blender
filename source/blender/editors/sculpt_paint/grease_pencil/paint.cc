@@ -323,7 +323,7 @@ struct PaintOperationExecutor {
                             const bool use_fill)
   {
     const float2 start_coords = start_sample.mouse_position;
-    const Paint *paint = &scene_->toolsettings->gp_paint->paint;
+    const Paint &paint = scene_->toolsettings->gp_paint->paint;
     const RegionView3D *rv3d = CTX_wm_region_view3d(&C);
     const ARegion *region = CTX_wm_region(&C);
 
@@ -674,7 +674,7 @@ struct PaintOperationExecutor {
   {
     const RegionView3D *rv3d = CTX_wm_region_view3d(&C);
     const ARegion *region = CTX_wm_region(&C);
-    const Paint *paint = &scene_->toolsettings->gp_paint->paint;
+    const Paint &paint = scene_->toolsettings->gp_paint->paint;
 
     const bool on_back = (scene_->toolsettings->gpencil_flags & GP_TOOL_FLAG_PAINT_ONBACK) != 0;
 
@@ -707,7 +707,7 @@ struct PaintOperationExecutor {
         extension_sample.pressure, paint, brush_, settings_);
 
     const float brush_radius_px = brush_radius_to_pixel_radius(
-        rv3d, paint, brush_, math::transform_point(self.placement_.to_world_space(), position));
+        rv3d, &paint, brush_, math::transform_point(self.placement_.to_world_space(), position));
 
     bke::CurvesGeometry &curves = self.drawing_->strokes_for_write();
     OffsetIndices<int> points_by_curve = curves.points_by_curve();

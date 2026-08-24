@@ -1464,14 +1464,14 @@ static void set_fill_attributes(bke::CurvesGeometry &fill_curves,
     const float pressure = 1.0f;
     radii.span[point_i] = ed::greasepencil::radius_from_input_sample(view_context.rv3d,
                                                                      view_context.region,
-                                                                     &paint,
+                                                                     paint,
                                                                      &brush,
                                                                      pressure,
                                                                      positions[point_i],
                                                                      to_world,
                                                                      brush.gpencil_settings);
     opacities.span[point_i] = ed::greasepencil::opacity_from_input_sample(
-        pressure, &paint, &brush, brush.gpencil_settings);
+        pressure, paint, &brush, brush.gpencil_settings);
   }
 
   radii.finish();
@@ -1545,8 +1545,8 @@ static bool grease_pencil_apply_fill(bContext &C, wmOperator &op, const wmEvent 
   GreasePencil &grease_pencil = *id_cast<GreasePencil *>(object.data);
   auto &op_data = *static_cast<GreasePencilFillOpData *>(op.customdata);
   const ToolSettings &ts = *CTX_data_tool_settings(&C);
-  Paint *paint = &ts.gp_paint->paint;
-  Brush &brush = *BKE_paint_brush(paint);
+  Paint &paint = ts.gp_paint->paint;
+  Brush &brush = *BKE_paint_brush(&paint);
   const float2 mouse_position = float2(event.mval);
   const int simplify_levels = brush.gpencil_settings->fill_simplylvl;
   const std::optional<float> opacity_threshold =
@@ -1625,7 +1625,7 @@ static bool grease_pencil_apply_fill(bContext &C, wmOperator &op, const wmEvent 
 
     set_fill_attributes(fill_curves,
                         view_context,
-                        *paint,
+                        paint,
                         brush,
                         scene,
                         layer.to_world_space(object),

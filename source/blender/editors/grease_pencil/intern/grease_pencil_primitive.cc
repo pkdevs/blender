@@ -508,14 +508,14 @@ static void grease_pencil_primitive_update_curves(PrimitiveToolOperation &ptd)
 
     const float radius = ed::greasepencil::radius_from_input_sample(ptd.vc.rv3d,
                                                                     ptd.region,
-                                                                    &paint,
+                                                                    paint,
                                                                     ptd.brush,
                                                                     pressure,
                                                                     positions_3d[point],
                                                                     ptd.placement.to_world_space(),
                                                                     ptd.settings);
     const float opacity = ed::greasepencil::opacity_from_input_sample(
-        pressure, &paint, ptd.brush, ptd.settings);
+        pressure, paint, ptd.brush, ptd.settings);
 
     if (point == 0) {
       lengths[point] = 0.0f;
