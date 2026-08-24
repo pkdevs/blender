@@ -1250,19 +1250,21 @@ static float4 quad_weights_from_irregular_corner(const int x,
   return quad_weights_from_uv(u, v);
 }
 
+/**
+ * This logic closely matches the behavior of #subdiv_mesh_ensure_loop_interpolation in
+ * `subdiv_mesh.cc` to determine the PTex attributes
+ */
 template<typename T>
 static std::array<T, 4> interpolate_vert_data_for_subdivided_irregular_face(
     const Span<int> corner_verts, const IndexRange face, const int grid, Span<T> src)
 {
   std::array<T, 4> values;
   values[0] = src[corner_verts[grid]];
-  /* Calculate attribute value at center of polygon */
-  Array<float, 32> weights(face.size());
-  const float weight = math::rcp(float(face.size()));
-  weights.fill(weight);
 
-  values[2] = bke::attribute_math::mix_indices(src, corner_verts.slice(face), weights);
-  /* Calculate attribute value at midpoint of connecting edges */
+  /* Calculate attribute value at center of polygon. */
+  values[2] = bke::attribute_math::mix_indices(src, corner_verts.slice(face));
+
+  /* Calculate attribute value at midpoint of connecting edges. */
   const int next = bke::mesh::face_corner_next(face, grid);
   values[1] = bke::attribute_math::mix2(0.5f, src[corner_verts[grid]], src[corner_verts[next]]);
 
@@ -1274,9 +1276,9 @@ static std::array<T, 4> interpolate_vert_data_for_subdivided_irregular_face(
 template<typename T>
 static void interpolate_vert_data_for_flat_layout(const SubdivCCG &subdiv_ccg,
                                                   const Span<int> corner_verts,
-                                                  Span<int> grids,
-                                                  gpu::VertBuf &vbo,
-                                                  Span<T> src)
+                                                  const Span<int> grids,
+                                                  const Span<T> src,
+                                                  gpu::VertBuf &vbo)
 {
   using Converter = AttributeConverter<T>;
   using VBOType = typename Converter::VBOType;
@@ -1286,7 +1288,7 @@ static void interpolate_vert_data_for_flat_layout(const SubdivCCG &subdiv_ccg,
   const int grid_area_1 = grid_size_1 * grid_size_1;
   const int verts_per_grid = grid_area_1 * 4;
   const float grid_size_1_inv = 1.0f / (key.grid_size - 1);
-  MutableSpan<VBOType> dst{vbo.data<VBOType>().data(), vbo.data<VBOType>().size()};
+  MutableSpan<VBOType> dst = vbo.data<VBOType>();
 
   threading::parallel_for(grids.index_range(), 1024, [&](const IndexRange range) {
     for (const int i : range) {
@@ -1366,9 +1368,9 @@ static void interpolate_vert_data_for_flat_layout(const SubdivCCG &subdiv_ccg,
 template<typename T>
 static void interpolate_vert_data_for_standard_layout(const SubdivCCG &subdiv_ccg,
                                                       const Span<int> corner_verts,
-                                                      Span<int> grids,
-                                                      gpu::VertBuf &vbo,
-                                                      Span<T> src)
+                                                      const Span<int> grids,
+                                                      const Span<T> src,
+                                                      gpu::VertBuf &vbo)
 {
   using Converter = AttributeConverter<T>;
   using VBOType = typename Converter::VBOType;
@@ -1378,7 +1380,7 @@ static void interpolate_vert_data_for_standard_layout(const SubdivCCG &subdiv_cc
   const int grid_area = key.grid_area;
 
   const float grid_size_1_inv = 1.0f / (grid_size - 1);
-  MutableSpan<VBOType> dst{vbo.data<VBOType>().data(), vbo.data<VBOType>().size()};
+  MutableSpan<VBOType> dst = vbo.data<VBOType>();
   threading::parallel_for(grids.index_range(), 1024, [&](const IndexRange range) {
     for (const int i : range) {
       const int grid = grids[i];
@@ -1386,7 +1388,7 @@ static void interpolate_vert_data_for_standard_layout(const SubdivCCG &subdiv_cc
       const IndexRange face = subdiv_ccg.faces[face_index];
       const int corner = grid - face.start();
       if (face.size() == 4) {
-        Span<int> face_verts = corner_verts.slice(face);
+        const Span<int> face_verts = corner_verts.slice(face);
         for (int y = 0; y < grid_size; y++) {
           for (int x = 0; x < grid_size; x++) {
             const int element = i * grid_area + CCG_grid_xy_to_index(grid_size, x, y);
@@ -1430,23 +1432,23 @@ BLI_NOINLINE static void calc_generic_vert_attribute_grids(const Object &object,
   const Span<bke::pbvh::GridsNode> nodes = pbvh.nodes<bke::pbvh::GridsNode>();
   const SubdivCCG &subdiv_ccg = *object.runtime->sculpt_session->subdiv_ccg;
   const bke::AttributeAccessor attributes = orig_mesh_data.attributes;
-  const bke::GAttributeReader attr = attributes.lookup(name);
+  const GVArraySpan attr = *attributes.lookup(name);
 
   const Mesh &mesh = DRW_object_get_data_for_drawing<Mesh>(object);
   const Span<int> corner_verts = mesh.corner_verts();
 
   node_mask.foreach_index(
       [&](const int i) {
-        bke::attribute_math::to_static_type(attr.varray.type(), [&]<typename T>() {
+        bke::attribute_math::to_static_type(attr.type(), [&]<typename T>() {
           if constexpr (!std::is_void_v<typename AttributeConverter<T>::VBOType>) {
-            const VArraySpan<T> src = attr.varray.typed<T>();
+            const VArraySpan<T> src = attr.typed<T>();
             if (use_flat_layout[i]) {
               interpolate_vert_data_for_flat_layout<T>(
-                  subdiv_ccg, corner_verts, nodes[i].grids(), *vbos[i], src);
+                  subdiv_ccg, corner_verts, nodes[i].grids(), src, *vbos[i]);
             }
             else {
               interpolate_vert_data_for_standard_layout<T>(
-                  subdiv_ccg, corner_verts, nodes[i].grids(), *vbos[i], src);
+                  subdiv_ccg, corner_verts, nodes[i].grids(), src, *vbos[i]);
             }
           }
         });
@@ -1454,24 +1456,26 @@ BLI_NOINLINE static void calc_generic_vert_attribute_grids(const Object &object,
       exec_mode::grain_size(1));
 }
 
+/**
+ * This logic closely matches the behavior of #subdiv_mesh_ensure_loop_interpolation in
+ * `subdiv_mesh.cc` to determine the PTex attributes
+ */
 template<typename T>
 static std::array<T, 4> interpolate_corner_data_for_subdivided_irregular_face(
-    const IndexRange face, const int grid, Span<T> src)
+    const IndexRange face, const int grid, const Span<T> src)
 {
   std::array<T, 4> values;
   values[0] = src[grid];
-  /* Calculate attribute value at center of polygon */
-  Array<float, 32> weights(face.size());
-  const float weight = math::rcp(float(face.size()));
-  weights.fill(weight);
 
   Array<int, 32> indices(face.size());
   for (int i = 0; i < face.size(); i++) {
     indices[i] = face.first() + i;
   }
 
-  values[2] = bke::attribute_math::mix_indices(src, indices, weights);
-  /* Calculate attribute value at midpoint of connecting edges */
+  /* Calculate attribute value at center of polygon. */
+  values[2] = bke::attribute_math::mix_indices(src, indices);
+
+  /* Calculate attribute value at midpoint of connecting edges. */
   const int next = bke::mesh::face_corner_next(face, grid);
   values[1] = bke::attribute_math::mix2(0.5f, src[grid], src[next]);
 
@@ -1482,9 +1486,9 @@ static std::array<T, 4> interpolate_corner_data_for_subdivided_irregular_face(
 
 template<typename T>
 static void interpolate_corner_data_for_flat_layout(const SubdivCCG &subdiv_ccg,
-                                                    Span<int> grids,
-                                                    gpu::VertBuf &vbo,
-                                                    Span<T> src)
+                                                    const Span<int> grids,
+                                                    const Span<T> src,
+                                                    gpu::VertBuf &vbo)
 {
   using Converter = AttributeConverter<T>;
   using VBOType = typename Converter::VBOType;
@@ -1494,7 +1498,7 @@ static void interpolate_corner_data_for_flat_layout(const SubdivCCG &subdiv_ccg,
   const int grid_area_1 = grid_size_1 * grid_size_1;
   const int verts_per_grid = grid_area_1 * 4;
   const float grid_size_1_inv = 1.0f / (key.grid_size - 1);
-  MutableSpan<VBOType> dst{vbo.data<VBOType>().data(), vbo.data<VBOType>().size()};
+  MutableSpan<VBOType> dst = vbo.data<VBOType>();
 
   threading::parallel_for(grids.index_range(), 1024, [&](const IndexRange range) {
     for (const int i : range) {
@@ -1572,9 +1576,9 @@ static void interpolate_corner_data_for_flat_layout(const SubdivCCG &subdiv_ccg,
 
 template<typename T>
 static void interpolate_corner_data_for_standard_layout(const SubdivCCG &subdiv_ccg,
-                                                        Span<int> grids,
-                                                        gpu::VertBuf &vbo,
-                                                        Span<T> src)
+                                                        const Span<int> grids,
+                                                        const Span<T> src,
+                                                        gpu::VertBuf &vbo)
 {
   using Converter = AttributeConverter<T>;
   using VBOType = typename Converter::VBOType;
@@ -1584,7 +1588,7 @@ static void interpolate_corner_data_for_standard_layout(const SubdivCCG &subdiv_
   const int grid_area = key.grid_area;
 
   const float grid_size_1_inv = 1.0f / (grid_size - 1);
-  MutableSpan<VBOType> dst{vbo.data<VBOType>().data(), vbo.data<VBOType>().size()};
+  MutableSpan<VBOType> dst = vbo.data<VBOType>();
   threading::parallel_for(grids.index_range(), 1024, [&](const IndexRange range) {
     for (const int i : range) {
       const int grid = grids[i];
@@ -1636,20 +1640,20 @@ BLI_NOINLINE static void calc_generic_corner_attribute_grids(
   const Span<bke::pbvh::GridsNode> nodes = pbvh.nodes<bke::pbvh::GridsNode>();
   const SubdivCCG &subdiv_ccg = *object.runtime->sculpt_session->subdiv_ccg;
   const bke::AttributeAccessor attributes = orig_mesh_data.attributes;
-  const bke::GAttributeReader attr = attributes.lookup(name);
+  const GVArraySpan attr = *attributes.lookup(name);
 
   node_mask.foreach_index(
       [&](const int i) {
-        bke::attribute_math::to_static_type(attr.varray.type(), [&]<typename T>() {
+        bke::attribute_math::to_static_type(attr.type(), [&]<typename T>() {
           if constexpr (!std::is_void_v<typename AttributeConverter<T>::VBOType>) {
-            const VArraySpan<T> src = attr.varray.typed<T>();
+            const VArraySpan<T> src = attr.typed<T>();
             if (use_flat_layout[i]) {
               interpolate_corner_data_for_flat_layout<T>(
-                  subdiv_ccg, nodes[i].grids(), *vbos[i], src);
+                  subdiv_ccg, nodes[i].grids(), src, *vbos[i]->data<T>());
             }
             else {
               interpolate_corner_data_for_standard_layout<T>(
-                  subdiv_ccg, nodes[i].grids(), *vbos[i], src);
+                  subdiv_ccg, nodes[i].grids(), src, *vbos[i]);
             }
           }
         });
@@ -1660,9 +1664,9 @@ BLI_NOINLINE static void calc_generic_corner_attribute_grids(
 template<typename T>
 static void fill_face_data_grids(const SubdivCCG &subdiv_ccg,
                                  const bool use_flat_layout,
-                                 Span<int> grids,
-                                 gpu::VertBuf &vbo,
-                                 Span<T> src)
+                                 const Span<int> grids,
+                                 const Span<T> src,
+                                 gpu::VertBuf &vbo)
 {
   using Converter = AttributeConverter<T>;
   using VBOType = typename Converter::VBOType;
@@ -1690,15 +1694,15 @@ BLI_NOINLINE static void fill_generic_face_attribute_grids(const Object &object,
   const Span<bke::pbvh::GridsNode> nodes = pbvh.nodes<bke::pbvh::GridsNode>();
   const SubdivCCG &subdiv_ccg = *object.runtime->sculpt_session->subdiv_ccg;
   const bke::AttributeAccessor attributes = orig_mesh_data.attributes;
-  const bke::GAttributeReader attr = attributes.lookup(name);
+  const GVArraySpan attr = *attributes.lookup(name);
 
   node_mask.foreach_index(
       [&](const int i) {
-        bke::attribute_math::to_static_type(attr.varray.type(), [&]<typename T>() {
+        bke::attribute_math::to_static_type(attr.type(), [&]<typename T>() {
           if constexpr (!std::is_void_v<typename AttributeConverter<T>::VBOType>) {
-            const VArraySpan<T> src = attr.varray.typed<T>();
+            const VArraySpan<T> src = attr.typed<T>();
             fill_face_data_grids<T>(
-                subdiv_ccg, use_flat_layout[i], nodes[i].grids(), *vbos[i], src);
+                subdiv_ccg, use_flat_layout[i], nodes[i].grids(), src, *vbos[i]);
           }
         });
       },
