@@ -295,10 +295,15 @@ static void storeBaseMeshTopology(const OpenSubdiv_Converter *converter,
   refiner_impl.base_verts_num = converter->getNumVertices(converter);
   refiner_impl.base_face_offsets.assign(converter->faces.data().begin(),
                                         converter->faces.data().end());
+  assert(converter->corner_verts.size() == converter->faces.total_size());
   refiner_impl.base_corner_verts.assign(converter->corner_verts.begin(),
                                         converter->corner_verts.end());
+  assert(converter->edge_sharpness.is_empty() ||
+         converter->edge_sharpness.size() == converter->edges.size());
   refiner_impl.base_edge_sharpness.assign(converter->edge_sharpness.begin(),
                                           converter->edge_sharpness.end());
+  assert(converter->vert_sharpness.is_empty() ||
+         converter->vert_sharpness.size() == refiner_impl.base_verts_num);
   refiner_impl.base_vert_sharpness.assign(converter->vert_sharpness.begin(),
                                           converter->vert_sharpness.end());
 
