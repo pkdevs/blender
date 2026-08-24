@@ -286,23 +286,22 @@ void GPUCodegen::generate_resources()
 
   if (!ubo_inputs_.is_empty()) {
     const char *linted_struct_suffix = "_host_shared_";
-    /* NOTE: generate_uniform_buffer() should have sorted the inputs before this.
-     * MSL does not pad bool to 4 bytes; use bool32_t so UBO layout matches correctly. */
-    auto stream_ubo_type = [&ss](const GPUType type) -> std::ostream & {
-      if (type == GPU_BOOL) {
-        return ss << "bool32_t";
-      }
-      return ss << type;
-    };
+    /* NOTE: generate_uniform_buffer() should have sorted the inputs before this. */
     ss << "struct NodeTree {\n";
     for (LinkData &link : ubo_inputs_) {
       GPUInput *input = static_cast<GPUInput *>(link.data);
       if (input->source == GPU_SOURCE_CRYPTOMATTE) {
-        stream_ubo_type(input->type) << " crypto_hash;\n";
+        ss << input->type << " crypto_hash;\n";
       }
       else {
-        stream_ubo_type(input->type)
-            << " u" << input->id << (input->is_duplicate ? "b" : "") << ";\n";
+        /* MSL does not pad bool to 4 bytes; use bool32_t so UBO layout matches correctly. */
+        if (input->type == GPU_BOOL) {
+          ss << "bool32_t";
+        }
+        else {
+          ss << input->type;
+        }
+        ss << " u" << input->id << (input->is_duplicate ? "b" : "") << ";\n";
       }
     }
     ss << "};\n";
