@@ -318,10 +318,12 @@ ccl_device void osl_closure_dielectric_bsdf_setup(KernelGlobals kg,
   const bool beckmann = closure->distribution == make_string("beckmann", 14712237670914973463ull);
   const bool multiggx = closure->distribution == make_string("multi_ggx", 16842698693386468366ull);
 
-  fresnel->thin_film = {closure->thinfilm_thickness,
-                        backfacing ? closure->thinfilm_ior * bsdf->ior : closure->thinfilm_ior};
+  fresnel->thin_film = {closure->thinfilm_thickness, closure->thinfilm_ior};
   fresnel->tint = {rgb_to_spectrum(closure->reflection_tint),
                    rgb_to_spectrum(closure->transmission_tint)};
+  if (backfacing) {
+    adjust_thin_film_ior_at_backface(fresnel->thin_film.ior, bsdf->ior);
+  }
   bsdf_dielectric_tint_setup(kg, bsdf, sd, fresnel, beckmann, multiggx);
 
   if (layer_albedo != nullptr) {
@@ -480,7 +482,10 @@ ccl_device void osl_closure_generalized_schlick_bsdf_setup(
   fresnel->f90 = rgb_to_spectrum(closure->f90);
   fresnel->exponent = closure->exponent;
   fresnel->thin_film.thickness = closure->thinfilm_thickness;
-  fresnel->thin_film.ior = backfacing ? closure->thinfilm_ior * bsdf->ior : closure->thinfilm_ior;
+  fresnel->thin_film.ior = closure->thinfilm_ior;
+  if (backfacing) {
+    adjust_thin_film_ior_at_backface(fresnel->thin_film.ior, bsdf->ior);
+  }
   bsdf_microfacet_setup_fresnel_generalized_schlick(kg, bsdf, sd->wi, fresnel, preserve_energy);
 
   if (layer_albedo != nullptr) {
