@@ -458,14 +458,14 @@ static void box_select_elem(BoxSelectData *sel_data,
                             float xmin,
                             float xmax,
                             bool summary,
-                            bool next_row_in_box)
+                            const bool next_row_in_box)
 {
   bAnimContext *ac = sel_data->ac;
 
   /* When this expanded channel's children are also in the box, defer selection to them for
    * granular control. A box that covers this channel and any of its children must cover the first
    * child too, so it's sufficient to check whether the row immediately below is in the box. */
-  if (next_row_in_box && ANIM_channel_setting_get(ac, ale, ACHANNEL_SETTING_EXPAND) > 0) {
+  if (next_row_in_box && ANIM_channel_setting_get(ac, ale, ACHANNEL_SETTING_EXPAND) == 1) {
     return;
   }
 
