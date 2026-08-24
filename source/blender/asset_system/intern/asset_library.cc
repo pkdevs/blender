@@ -21,6 +21,7 @@
 #include "BLI_listbase.h"  // IWYU pragma: keep
 #include "BLI_path_utils.hh"
 #include "BLI_string.h"
+#include "BLI_utildefines.h"
 
 #include "DNA_asset_types.h"
 #include "DNA_space_types.h"
@@ -276,6 +277,11 @@ void AssetLibrary::refresh_catalogs()
   /* To be implemented by a subclass, like #OnDiskAssetLibrary::refresh_catalogs. */
 }
 
+Vector<std::string> AssetLibrary::additional_root_paths() const
+{
+  return {};
+}
+
 void AssetLibrary::load_or_reload_catalogs()
 {
   std::lock_guard lock{catalog_service_mutex_};
@@ -291,7 +297,7 @@ void AssetLibrary::load_or_reload_catalogs()
   /* The catalog service was created before without being associated with a definition file. */
   if (catalog_service_->get_catalog_definition_file() == nullptr) {
     catalog_service_->load_from_disk();
-    if (library_type() == ASSET_LIBRARY_ESSENTIALS) {
+    if (ELEM(library_type(), ASSET_LIBRARY_ESSENTIALS, ASSET_LIBRARY_PRODUCTION)) {
       this->refresh_catalogs();
     }
   }
@@ -304,11 +310,12 @@ std::weak_ptr<AssetRepresentation> AssetLibrary::add_external_on_disk_asset(
     StringRef relative_asset_path,
     StringRef name,
     const int id_type,
-    std::unique_ptr<AssetMetaData> metadata)
+    std::unique_ptr<AssetMetaData> metadata,
+    StringRef root_path_override)
 {
   std::scoped_lock lock{asset_storage_.external_assets_mutex};
   return asset_storage_.external_assets.lookup_key_or_add(std::make_shared<AssetRepresentation>(
-      relative_asset_path, name, id_type, std::move(metadata), *this));
+      relative_asset_path, name, id_type, std::move(metadata), *this, root_path_override));
 }
 
 std::weak_ptr<AssetRepresentation> AssetLibrary::add_external_online_asset(
@@ -485,6 +492,13 @@ Vector<AssetLibraryReference> all_valid_asset_library_refs()
     result.append(library_ref);
   }
 
+  {
+    AssetLibraryReference library_ref{};
+    library_ref.custom_library_index = -1;
+    library_ref.type = ASSET_LIBRARY_PRODUCTION;
+    result.append(library_ref);
+  }
+
   const bool include_remote_libraries = USER_EXPERIMENTAL_TEST(&U, use_remote_asset_libraries);
   const bool include_online_essentials = (U.asset_flag & USER_ASSETS_USE_ONLINE_ESSENTIALS) != 0;
   if (include_remote_libraries && include_online_essentials) {
@@ -543,6 +557,14 @@ AssetLibraryReference online_essentials_library_reference()
   return library_ref;
 }
 
+AssetLibraryReference production_library_reference()
+{
+  AssetLibraryReference library_ref{};
+  library_ref.custom_library_index = -1;
+  library_ref.type = ASSET_LIBRARY_PRODUCTION;
+  return library_ref;
+}
+
 void all_library_tag_catalogs_dirty()
 {
   AssetLibraryService *service = AssetLibraryService::get();
@@ -574,6 +596,7 @@ bool is_or_contains_remote_libraries(const AssetLibraryReference &reference)
       }
       break;
     }
+    case ASSET_LIBRARY_PRODUCTION:
     case ASSET_LIBRARY_LOCAL:
       return false;
   }
@@ -603,6 +626,7 @@ bool contains_assets_from_remote_url(const AssetLibrary &library, const StringRe
       return is_online_essentials_url(remote_url);
     case ASSET_LIBRARY_CUSTOM:
       return library.remote_url() == remote_url;
+    case ASSET_LIBRARY_PRODUCTION:
     case ASSET_LIBRARY_LOCAL:
       return false;
   }

@@ -42,6 +42,12 @@ const EnumPropertyItem rna_enum_asset_library_type_items[] = {
      0,
      "Online Essentials",
      "Show additional building blocks and utilities available online"},
+    {ASSET_LIBRARY_PRODUCTION,
+     "PRODUCTION",
+     0,
+     "Production",
+     "Show assets from the directories listed in the BLENDER_PRODUCTION_DATAFILES environment "
+     "variable"},
     {ASSET_LIBRARY_CUSTOM,
      "CUSTOM",
      0,

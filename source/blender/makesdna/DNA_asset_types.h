@@ -32,6 +32,9 @@ enum eAssetLibraryType : short {
   /** Additions to the essentials library that are stored online - displayed in the UI as part of
    * the normal essentials library. */
   ASSET_LIBRARY_ONLINE_ESSENTIALS = 4,
+  /** Display assets from directories listed in the `BLENDER_PRODUCTION_DATAFILES` environment
+   * variable. */
+  ASSET_LIBRARY_PRODUCTION = 5,
 
   /** Display assets from custom asset libraries, as defined in the preferences
    * (#bUserAssetLibrary). The name will be taken from #FileSelectParams.asset_library_ref.idname

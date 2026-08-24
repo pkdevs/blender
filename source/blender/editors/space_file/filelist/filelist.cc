@@ -912,6 +912,9 @@ void filelist_settype(FileList *filelist, short type)
     case FILE_ASSET_LIBRARY_ESSENTIALS:
       filelist_set_readjob_essentials_asset_library(filelist);
       break;
+    case FILE_ASSET_LIBRARY_PRODUCTION:
+      filelist_set_readjob_production_asset_library(filelist);
+      break;
     case FILE_ASSET_LIBRARY_ALL:
       filelist_set_readjob_all_asset_library(filelist);
       break;

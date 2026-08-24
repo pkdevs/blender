@@ -610,6 +610,9 @@ enum eFileSelectType : short {
   FILE_UNIX = 8,
   FILE_BLENDER = 8, /* don't display relative paths */
   FILE_SPECIAL = 9,
+
+  /** Load assets from the directories listed in `BLENDER_PRODUCTION_DATAFILES`. */
+  FILE_ASSET_LIBRARY_PRODUCTION = 10,
 };
 
 /**

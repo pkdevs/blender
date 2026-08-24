@@ -91,6 +91,11 @@ void asset_tooltip(const asset_system::AssetRepresentation &asset,
       tooltip_text_field_add(
           tip, TIP_("Asset Library: Essentials"), {}, ui::TIP_STYLE_NORMAL, ui::TIP_LC_VALUE);
       break;
+    case ASSET_LIBRARY_PRODUCTION:
+      tooltip_text_field_add(tip, {}, {}, ui::TIP_STYLE_SPACER, ui::TIP_LC_NORMAL, false);
+      tooltip_text_field_add(
+          tip, TIP_("Asset Library: Production"), {}, ui::TIP_STYLE_NORMAL, ui::TIP_LC_VALUE);
+      break;
     default:
       /* Intentionally empty. */
       break;

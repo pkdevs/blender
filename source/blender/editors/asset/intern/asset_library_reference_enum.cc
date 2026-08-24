@@ -74,7 +74,8 @@ AssetLibraryReference library_reference_from_enum_value(int value)
                     ASSET_LIBRARY_ALL,
                     ASSET_LIBRARY_LOCAL,
                     ASSET_LIBRARY_ESSENTIALS,
-                    ASSET_LIBRARY_ONLINE_ESSENTIALS));
+                    ASSET_LIBRARY_ONLINE_ESSENTIALS,
+                    ASSET_LIBRARY_PRODUCTION));
     return library;
   }
 
@@ -146,6 +147,10 @@ const EnumPropertyItem *library_reference_to_rna_enum_itemf(
   if (include_separate_online_essentials) {
     BLI_assert(rna_enum_asset_library_type_items[3].value == ASSET_LIBRARY_ONLINE_ESSENTIALS);
     RNA_enum_item_add(&item, &totitem, &rna_enum_asset_library_type_items[3]);
+  }
+  if (include_readonly) {
+    BLI_assert(rna_enum_asset_library_type_items[4].value == ASSET_LIBRARY_PRODUCTION);
+    RNA_enum_item_add(&item, &totitem, &rna_enum_asset_library_type_items[4]);
   }
 
   {

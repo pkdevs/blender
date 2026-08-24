@@ -31,9 +31,11 @@ AssetRepresentation::AssetRepresentation(StringRef relative_asset_path,
                                          StringRef name,
                                          const int id_type,
                                          std::unique_ptr<AssetMetaData> metadata,
-                                         AssetLibrary &owner_asset_library)
+                                         AssetLibrary &owner_asset_library,
+                                         StringRef root_path_override)
     : owner_asset_library_(owner_asset_library),
       relative_identifier_(relative_asset_path),
+      root_path_override_(root_path_override),
       asset_(AssetRepresentation::ExternalAsset{name, id_type, std::move(metadata)})
 {
 }
@@ -173,7 +175,8 @@ std::string AssetRepresentation::full_path() const
   char filepath[FILE_MAX];
   BLI_path_join(filepath,
                 sizeof(filepath),
-                owner_asset_library_.root_path().c_str(),
+                root_path_override_.empty() ? owner_asset_library_.root_path().c_str() :
+                                             root_path_override_.c_str(),
                 library_relative_identifier().c_str());
   return filepath;
 }

@@ -29,7 +29,7 @@ struct AnyAssetLibraryDefinition {
   bUserAssetLibrary *user_library;
 };
 
-constexpr int FIXED_ITEMS_COUNT = 2;
+constexpr int FIXED_ITEMS_COUNT = 3;
 
 static Vector<AnyAssetLibraryDefinition> userpref_ui_asset_libraries()
 {
@@ -37,6 +37,7 @@ static Vector<AnyAssetLibraryDefinition> userpref_ui_asset_libraries()
 
   result.append(AnyAssetLibraryDefinition{ASSET_LIBRARY_ALL, nullptr});
   result.append(AnyAssetLibraryDefinition{ASSET_LIBRARY_ESSENTIALS, nullptr});
+  result.append(AnyAssetLibraryDefinition{ASSET_LIBRARY_PRODUCTION, nullptr});
 
   BLI_assert(result.size() == FIXED_ITEMS_COUNT);
 

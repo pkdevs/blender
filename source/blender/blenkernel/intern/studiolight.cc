@@ -20,6 +20,7 @@
 #include "BLI_math_vector.h"
 #include "BLI_path_utils.hh"
 #include "BLI_string.h"
+#include "BLI_vector.hh"
 
 #include "CLG_log.h"
 
@@ -618,17 +619,10 @@ static StudioLight *studiolight_add_file(const char *filepath, int flag)
   return nullptr;
 }
 
-static void studiolight_add_files_from_datafolder(const int folder_id,
-                                                  const char *subfolder,
-                                                  int flag)
+static void studiolight_add_files_from_dir(const char *dirpath, int flag)
 {
-  const std::optional<std::string> folder = BKE_appdir_folder_id(folder_id, subfolder);
-  if (!folder) {
-    return;
-  }
-
   direntry *dirs;
-  const uint dirs_num = BLI_filelist_dir_contents(folder->c_str(), &dirs);
+  const uint dirs_num = BLI_filelist_dir_contents(dirpath, &dirs);
   int i;
   for (i = 0; i < dirs_num; i++) {
     if (dirs[i].type & S_IFREG) {
@@ -637,6 +631,30 @@ static void studiolight_add_files_from_datafolder(const int folder_id,
   }
   BLI_filelist_free(dirs, dirs_num);
   dirs = nullptr;
+}
+
+static void studiolight_add_files_from_datafolder(const int folder_id,
+                                                  const char *subfolder,
+                                                  int flag)
+{
+  const std::optional<std::string> folder = BKE_appdir_folder_id(folder_id, subfolder);
+  if (!folder) {
+    return;
+  }
+  studiolight_add_files_from_dir(folder->c_str(), flag);
+}
+
+/**
+ * Add studio lights from every directory listed in the `BLENDER_PRODUCTION_DATAFILES`
+ * environment variable, mirroring #studiolight_add_files_from_datafolder but merging
+ * results from all directories instead of only the first match.
+ */
+static void studiolight_add_files_from_production_datafolder(const char *subfolder, int flag)
+{
+  const Vector<std::string> folders = BKE_appdir_folder_id_production_datafiles(subfolder);
+  for (const std::string &folder : folders) {
+    studiolight_add_files_from_dir(folder.c_str(), flag);
+  }
 }
 
 static int studiolight_flag_cmp_order(const StudioLight *sl)
@@ -870,6 +888,14 @@ void BKE_studiolight_init()
       BLENDER_SYSTEM_DATAFILES, STUDIOLIGHT_WORLD_FOLDER, STUDIOLIGHT_TYPE_WORLD);
   studiolight_add_files_from_datafolder(
       BLENDER_SYSTEM_DATAFILES, STUDIOLIGHT_MATCAP_FOLDER, STUDIOLIGHT_TYPE_MATCAP);
+
+  /* Additional directories from `BLENDER_PRODUCTION_DATAFILES`. */
+  studiolight_add_files_from_production_datafolder(
+      STUDIOLIGHT_LIGHTS_FOLDER, STUDIOLIGHT_TYPE_STUDIO | STUDIOLIGHT_SPECULAR_HIGHLIGHT_PASS);
+  studiolight_add_files_from_production_datafolder(STUDIOLIGHT_WORLD_FOLDER,
+                                                   STUDIOLIGHT_TYPE_WORLD);
+  studiolight_add_files_from_production_datafolder(STUDIOLIGHT_MATCAP_FOLDER,
+                                                   STUDIOLIGHT_TYPE_MATCAP);
 
   /* sort studio lights on filename. */
   BLI_listbase_sort(&studiolights, studiolight_cmp);

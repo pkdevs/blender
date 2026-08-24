@@ -50,6 +50,12 @@ class AssetRepresentation : NonCopyable, NonMovable {
    */
   /* Mutable to allow lazy updating on name changes in #library_relative_identifier(). */
   mutable std::string relative_identifier_;
+  /**
+   * Overrides the directory used by #full_path(), for assets that live in a directory other than
+   * #owner_asset_library_'s own #AssetLibrary::root_path(). Empty if no override is needed (the
+   * common case).
+   */
+  std::string root_path_override_;
 
   struct ExternalAsset {
     std::string name;
@@ -87,13 +93,20 @@ class AssetRepresentation : NonCopyable, NonMovable {
    * Constructs an asset representation for an external ID stored on disk. The asset will not be
    * editable.
    *
+   * \param root_path_override: If this asset lives in a directory other than
+   *                            \a owner_asset_library's own #AssetLibrary::root_path() (relevant
+   *                            for libraries backed by multiple directories, see
+   *                            #AssetLibrary::additional_root_paths()), pass that directory here.
+   *                            Leave empty to use the owning library's root path.
+   *
    * For online assets, use the version with #online_info below.
    */
   AssetRepresentation(StringRef relative_asset_path,
                       StringRef name,
                       int id_type,
                       std::unique_ptr<AssetMetaData> metadata,
-                      AssetLibrary &owner_asset_library);
+                      AssetLibrary &owner_asset_library,
+                      StringRef root_path_override = "");
   /**
    * Constructs an asset representation for an external ID stored online (requiring download).
    */

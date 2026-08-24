@@ -17,6 +17,7 @@
 
 #include "BLI_compiler_attrs.h"
 #include "BLI_string_ref.hh"
+#include "BLI_vector.hh"
 
 #include "DNA_listBase.h"
 
@@ -86,6 +87,17 @@ std::optional<std::string> BKE_appdir_folder_id(int folder_id,
  * Returns the path to a folder in the user area, creating it if it doesn't exist.
  */
 std::optional<std::string> BKE_appdir_folder_id_create(int folder_id, const char *subfolder)
+    ATTR_WARN_UNUSED_RESULT;
+/**
+ * Returns every existing directory listed in the `BLENDER_PRODUCTION_DATAFILES` environment
+ * variable (a list of paths separated by the platform's path-list separator: `;` on Windows,
+ * `:` otherwise), with `subfolder` appended to each.
+ *
+ * Unlike #BKE_appdir_folder_id, all matching directories are returned (not just the first),
+ * since these directories are meant to be merged with the user/system datafiles rather than
+ * override them.
+ */
+Vector<std::string> BKE_appdir_folder_id_production_datafiles(const char *subfolder)
     ATTR_WARN_UNUSED_RESULT;
 /**
  * Returns the path to a folder in the user area without checking that it actually exists first.

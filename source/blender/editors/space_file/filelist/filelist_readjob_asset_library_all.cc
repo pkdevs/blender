@@ -10,6 +10,7 @@
 #include "AS_essentials_library.hh"
 
 #include "BLI_listbase.h"
+#include "BLI_path_utils.hh"
 #include "BLI_string.h"
 
 #include "filelist_intern.hh"
@@ -95,6 +96,17 @@ static void filelist_readjob_all_asset_library(FileListReadJob *job_params,
         else {
           filelist_readjob_recursive_dir_add_items(
               true, job_params, stop, do_update, &progress_this);
+        }
+
+        /* Some libraries (e.g. the Production library) are backed by more than one directory on
+         * disk. Make sure every one of them gets scanned too, not just the first/main one. */
+        for (const std::string &additional_path : nested_library.additional_root_paths()) {
+          STRNCPY(filelist->filelist.root, additional_path.c_str());
+          BLI_path_slash_ensure(filelist->filelist.root, sizeof(filelist->filelist.root));
+
+          float progress_additional = 0.0f;
+          filelist_readjob_recursive_dir_add_items(
+              true, job_params, stop, do_update, &progress_additional);
         }
 
         libraries_done_count++;

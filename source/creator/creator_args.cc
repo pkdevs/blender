@@ -896,6 +896,12 @@ static void print_help(bArgs *ba, bool all)
   PRINT("  $BLENDER_SYSTEM_EXTENSIONS Directory for system extensions repository.\n");
   PRINT("  $BLENDER_SYSTEM_DATAFILES  Directory to replace bundled datafiles.\n");
   PRINT("  $BLENDER_SYSTEM_PYTHON     Directory to replace bundled Python libraries.\n");
+  PRINT(
+      "  $BLENDER_PRODUCTION_DATAFILES  Directories (separated by the platform's path-list\n"
+      "                             separator) with additional data files (studio lights, "
+      "matcaps,\n"
+      "                             asset catalogs, ..) merged in alongside the user/system "
+      "datafiles.\n");
   PRINT("  $BLENDER_CUSTOM_SPLASH     Full path to an image that replaces the splash screen.\n");
   PRINT(
       "  $BLENDER_CUSTOM_SPLASH_BANNER Full path to an image to overlay on the splash screen.\n");
@@ -1952,6 +1958,9 @@ static const char arg_handle_env_system_set_doc_python[] =
 static const char arg_handle_env_system_set_doc_extensions[] =
     "\n\t"
     "Set the " STRINGIFY_ARG(BLENDER_SYSTEM_EXTENSIONS) " environment variable.";
+static const char arg_handle_env_system_set_doc_production_datafiles[] =
+    "\n\t"
+    "Set the " STRINGIFY_ARG(BLENDER_PRODUCTION_DATAFILES) " environment variable.";
 
 static int arg_handle_env_system_set(int argc, const char **argv, void * /*data*/)
 {
@@ -3083,6 +3092,11 @@ void main_args_setup(bContext *C, bArgs *ba, bool all)
                nullptr,
                "--env-system-extensions",
                CB_EX(arg_handle_env_system_set, extensions),
+               nullptr);
+  BLI_args_add(ba,
+               nullptr,
+               "--env-production-datafiles",
+               CB_EX(arg_handle_env_system_set, production_datafiles),
                nullptr);
 
   BLI_args_add(ba, "-t", "--threads", CB(arg_handle_threads_set), nullptr);
