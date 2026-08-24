@@ -27,6 +27,12 @@
 
 #include "spirv/unified1/spirv.h"
 
+#ifdef WITH_GPU_BACKEND_TESTS
+#  if 0
+#    include "spirv-tools/libspirv.h"
+#  endif
+#endif
+
 namespace blender::gpu {
 
 static CLG_LogRef LOG = {"gpu.vulkan"};
@@ -264,6 +270,30 @@ static void spirv_inject_op_string(const Span<uint32_t> &spirv_in,
   header_out->bound = header_in->bound + 1u;
 }
 
+#ifdef WITH_GPU_BACKEND_TESTS
+/* Validate the SPIR-V binary using SPIRV-Tools. Only compiled into test builds since validation
+ * is expensive. Used to catch breakage of spirv_inject_op_string with future SPIR-V versions.
+ * \todo Enable the code below once SPIRV-Tools static library is included in the dependencies. */
+#  if 0
+static bool spirv_validate(const Span<uint32_t> &spirv, StringRef name)
+{
+  spv_context context = spvContextCreate(SPV_ENV_VULKAN_1_2);
+  spv_diagnostic diagnostic = nullptr;
+  const spv_result_t result = spvValidateBinary(context, spirv.data(), spirv.size(), &diagnostic);
+  const bool valid = result == SPV_SUCCESS;
+  if (!valid) {
+    CLOG_ERROR(&LOG,
+               "SPIR-V validation failed for %s: %s",
+               std::string(name).c_str(),
+               (diagnostic && diagnostic->error) ? diagnostic->error : "unknown error");
+  }
+  spvDiagnosticDestroy(diagnostic);
+  spvContextDestroy(context);
+  return valid;
+}
+#  endif
+#endif
+
 static std::string patch_line_directives(std::string source)
 {
   /* Patch line directives so that we can make error reporting consistent. */
@@ -368,6 +398,16 @@ static bool compile_ex(shaderc::Compiler &compiler,
     else {
       shader_module.spirv_binary = Vector<uint32_t>(compilation_result_span);
     }
+
+#ifdef WITH_GPU_BACKEND_TESTS
+    /* TODO(@chrismile): enable the code below once SPIRV-Tools library is available. */
+#  if 0
+    if (!spirv_validate(shader_module.spirv_binary, full_name)) {
+      return false;
+    }
+#  endif
+#endif
+
     write_spirv_to_disk(shader_module);
   }
   return compilation_succeeded;
