@@ -1142,7 +1142,7 @@ class Occupancy {
                      const float margin,
                      const bool write) const;
 
-  int bitmap_radix = 800;               /* Width and Height of `bitmap`. */
+  int bitmap_radix = 400;               /* Width and Height of `bitmap`. */
   float bitmap_scale_reciprocal = 1.0f; /* == 1.0f / `bitmap_scale`. */
  private:
   mutable Array<float> bitmap_;
@@ -2047,7 +2047,7 @@ static float pack_islands_margin_fraction(const Span<PackIsland *> islands,
       BLI_assert(scale_high > 0.0f);
       BLI_assert(value_low <= 0.0f);
       BLI_assert(value_high >= 0.0f);
-      if (scale_high < scale_low * 1.0001f) {
+      if (scale_high < scale_low * 1.001f || scale_high - scale_low < 0.001f) {
         /* Convergence. */
         break;
       }
