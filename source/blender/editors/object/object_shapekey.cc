@@ -437,43 +437,33 @@ static wmOperatorStatus shape_key_copy_exec(bContext *C, wmOperator * /*op*/)
 
         bke::MutableAttributeAccessor attributes = curves.attributes_for_write();
 
-        {
-          char attr_name_old[64];
-          SNPRINTF_UTF8(attr_name_old, (".SK_%s"), kb_src->name);
+        const VArray<float3> key_positions_old = *attributes.lookup_or_default<float3>(
+            blender::bke::greasepencil::shapekey_position_attribute(kb_src->name),
+            bke::AttrDomain::Point,
+            float3(0.0f));
 
-          char attr_name_new[64];
-          SNPRINTF_UTF8(attr_name_new, (".SK_%s"), kb_new->name);
+        bke::SpanAttributeWriter<float3> key_positions_new =
+            attributes.lookup_or_add_for_write_span<float3>(
+                blender::bke::greasepencil::shapekey_position_attribute(kb_new->name),
+                bke::AttrDomain::Point);
 
-          const VArray<float3> key_positions_old = *attributes.lookup_or_default<float3>(
-              attr_name_old, bke::AttrDomain::Point, float3(0.0f));
+        array_utils::copy(key_positions_old, key_positions_new.span);
 
-          bke::SpanAttributeWriter<float3> key_positions_new =
-              attributes.lookup_or_add_for_write_span<float3>(attr_name_new,
-                                                              bke::AttrDomain::Point);
+        key_positions_new.finish();
 
-          array_utils::copy(key_positions_old, key_positions_new.span);
+        const VArray<float> key_radius_old = *attributes.lookup_or_default<float>(
+            blender::bke::greasepencil::shapekey_radius_attribute(kb_src->name),
+            bke::AttrDomain::Point,
+            0.0f);
 
-          key_positions_new.finish();
-        }
+        bke::SpanAttributeWriter<float> key_radius_new =
+            attributes.lookup_or_add_for_write_span<float>(
+                blender::bke::greasepencil::shapekey_radius_attribute(kb_new->name),
+                bke::AttrDomain::Point);
 
-        {
-          char attr_name_old[64];
-          SNPRINTF_UTF8(attr_name_old, (".SKr_%s"), kb_src->name);
+        array_utils::copy(key_radius_old, key_radius_new.span);
 
-          char attr_name_new[64];
-          SNPRINTF_UTF8(attr_name_new, (".SKr_%s"), kb_new->name);
-
-          const VArray<float> key_radius_old = *attributes.lookup_or_default<float>(
-              attr_name_old, bke::AttrDomain::Point, 0.0f);
-
-          bke::SpanAttributeWriter<float> key_radius_new =
-              attributes.lookup_or_add_for_write_span<float>(attr_name_new,
-                                                             bke::AttrDomain::Point);
-
-          array_utils::copy(key_radius_old, key_radius_new.span);
-
-          key_radius_new.finish();
-        }
+        key_radius_new.finish();
       }
     }
   }

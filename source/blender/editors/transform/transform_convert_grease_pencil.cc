@@ -15,7 +15,6 @@
 
 #include "BLI_index_mask_expression.hh"
 #include "BLI_listbase.hh"
-#include "BLI_string_utf8.hh"
 
 #include "DEG_depsgraph_query.hh"
 
@@ -254,15 +253,13 @@ static void createTransGreasePencilVerts(bContext *C, TransInfo *t)
       if (key && actkb && tc.obedit->shapenr != 1) {
         bke::MutableAttributeAccessor attributes = curves.attributes_for_write();
 
-        char attr_name[64];
-
         if (!(actkb->flag & KEYBLOCK_MUTE)) {
           const float keyblock_influence = actkb->curval;
 
-          SNPRINTF_UTF8(attr_name, (".SK_%s"), actkb->name);
-
           const VArray<float3> key_positions = *attributes.lookup_or_default<float3>(
-              attr_name, bke::AttrDomain::Point, float3(0.0f));
+              blender::bke::greasepencil::shapekey_position_attribute(actkb->name),
+              bke::AttrDomain::Point,
+              float3(0.0f));
 
           for (const int point_i : deformation.positions.index_range()) {
             curves_transform_data.deformation_offsets[drawing][point_i] -= key_positions[point_i] *
@@ -334,12 +331,10 @@ static void recalcData_grease_pencil(TransInfo *t)
 
           const IndexMask &selection = transform_data.selection_by_layer[layer_i];
 
-          char attr_name[64];
-
-          SNPRINTF_UTF8(attr_name, (".SKr_%s"), actkb->name);
-
           bke::SpanAttributeWriter<float> key_radius =
-              attributes.lookup_or_add_for_write_span<float>(attr_name, bke::AttrDomain::Point);
+              attributes.lookup_or_add_for_write_span<float>(
+                  blender::bke::greasepencil::shapekey_radius_attribute(actkb->name),
+                  bke::AttrDomain::Point);
 
           Span<float> trans_radius = transform_data.value_attribute[i];
 
@@ -370,12 +365,10 @@ static void recalcData_grease_pencil(TransInfo *t)
 
             const IndexMask &selection = transform_data.selection_by_layer[layer_i];
 
-            char attr_name[64];
-
-            SNPRINTF_UTF8(attr_name, (".SK_%s"), actkb->name);
-
             bke::SpanAttributeWriter<float3> key_positions =
-                attributes.lookup_or_add_for_write_span<float3>(attr_name, bke::AttrDomain::Point);
+                attributes.lookup_or_add_for_write_span<float3>(
+                    blender::bke::greasepencil::shapekey_position_attribute(actkb->name),
+                    bke::AttrDomain::Point);
 
             Span<float3> trans_positions = transform_data.positions.as_span().slice(
                 tran_offsets[layer_i]);

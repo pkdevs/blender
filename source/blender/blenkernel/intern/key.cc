@@ -1952,72 +1952,34 @@ void BKE_keyblock_rename(Main &bmain, Key *key, KeyBlock *kb, const char *newnam
                          /*verify_paths=*/true,
                          bmain);
 
-  {
-    char attr_name_old[64];
-    SNPRINTF_UTF8(attr_name_old, (".SK_%s"), oldname);
-    char attr_name_new[64];
-    SNPRINTF_UTF8(attr_name_new, (".SK_%s"), newname);
-
-    for (Object &object : bmain.objects) {
-      if (object.type != OB_GREASE_PENCIL) {
-        continue;
-      }
-
-      GreasePencil *grease_pencil = id_cast<GreasePencil *>(object.data);
-
-      Key *gp_keys = grease_pencil->key;
-
-      if (!gp_keys) {
-        continue;
-      }
-      if (gp_keys != key) {
-        continue;
-      }
-
-      for (GreasePencilDrawingBase *base : grease_pencil->drawings()) {
-        bke::greasepencil::Drawing &drawing =
-            reinterpret_cast<GreasePencilDrawing *>(base)->wrap();
-        bke::CurvesGeometry &curves = drawing.strokes_for_write();
-
-        bke::MutableAttributeAccessor attributes = curves.attributes_for_write();
-
-        attributes.rename(attr_name_old, attr_name_new);
-      }
+  for (Object &object : bmain.objects) {
+    if (object.type != OB_GREASE_PENCIL) {
+      continue;
     }
-  }
 
-  {
-    char attr_name_old[64];
-    SNPRINTF_UTF8(attr_name_old, (".SKr_%s"), oldname);
-    char attr_name_new[64];
-    SNPRINTF_UTF8(attr_name_new, (".SKr_%s"), newname);
+    GreasePencil *grease_pencil = id_cast<GreasePencil *>(object.data);
 
-    for (Object &object : bmain.objects) {
-      if (object.type != OB_GREASE_PENCIL) {
-        continue;
-      }
+    Key *gp_keys = grease_pencil->key;
 
-      GreasePencil *grease_pencil = id_cast<GreasePencil *>(object.data);
+    if (!gp_keys) {
+      continue;
+    }
+    if (gp_keys != key) {
+      continue;
+    }
 
-      Key *gp_keys = grease_pencil->key;
+    for (GreasePencilDrawingBase *base : grease_pencil->drawings()) {
+      bke::greasepencil::Drawing &drawing = reinterpret_cast<GreasePencilDrawing *>(base)->wrap();
+      bke::CurvesGeometry &curves = drawing.strokes_for_write();
 
-      if (!gp_keys) {
-        continue;
-      }
-      if (gp_keys != key) {
-        continue;
-      }
+      bke::MutableAttributeAccessor attributes = curves.attributes_for_write();
 
-      for (GreasePencilDrawingBase *base : grease_pencil->drawings()) {
-        bke::greasepencil::Drawing &drawing =
-            reinterpret_cast<GreasePencilDrawing *>(base)->wrap();
-        bke::CurvesGeometry &curves = drawing.strokes_for_write();
-
-        bke::MutableAttributeAccessor attributes = curves.attributes_for_write();
-
-        attributes.rename(attr_name_old, attr_name_new);
-      }
+      attributes.rename(blender::bke::greasepencil::shapekey_position_attribute(oldname),
+                        blender::bke::greasepencil::shapekey_position_attribute(newname));
+      attributes.rename(blender::bke::greasepencil::shapekey_radius_attribute(oldname),
+                        blender::bke::greasepencil::shapekey_radius_attribute(newname));
     }
   }
 }
+
 }  // namespace blender
