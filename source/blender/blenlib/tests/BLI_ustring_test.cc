@@ -182,7 +182,7 @@ TEST(ustring, Concurrency)
   });
 
   const char *shared_ptr = nullptr;
-  for (int64_t i = 0; i < total; i++) {
+  for (const int i : IndexRange(total)) {
     if (i % 2 == 0) {
       if (shared_ptr == nullptr) {
         shared_ptr = results[i].c_str();
