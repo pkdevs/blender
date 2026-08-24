@@ -1217,9 +1217,6 @@ static wmOperatorStatus surface_set_exec(bContext *C, wmOperator *op)
         &invalid_uvs,
         &missing_uvs);
 
-    /* Add deformation modifier if necessary. */
-    ensure_surface_deformation_node_exists(*C, curves_ob);
-
     curves_id.surface = &new_surface_ob;
     object::parent_set(op->reports,
                        C,

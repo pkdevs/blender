@@ -221,7 +221,6 @@ void foreach_selectable_curve_range(const bke::CurvesGeometry &curves,
 bool object_has_editable_curves(const Main &bmain, const Object &object);
 bke::CurvesGeometry primitive_random_sphere(int curves_size, int points_per_curve);
 VectorSet<Curves *> get_unique_editable_curves(const bContext &C);
-void ensure_surface_deformation_node_exists(bContext &C, Object &curves_ob);
 
 /**
  * Allocate an array of #TransVert for cursor/selection snapping (See
