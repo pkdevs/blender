@@ -10,6 +10,7 @@
 #  include <tbb/concurrent_unordered_set.h>
 #else
 #  include <memory>
+#  include <utility>
 
 #  include "BLI_mutex.hh"
 #  include "BLI_set.hh"
@@ -17,6 +18,7 @@
 
 #include "BLI_hash.hh"
 #include "BLI_hash_tables.hh"
+#include "BLI_utility_mixins.hh"
 
 namespace blender {
 
@@ -29,7 +31,7 @@ namespace blender {
  * implementation if TBB is not available. The fallback implementation is not optimized.
  */
 template<typename Key, typename Hash = DefaultHash<Key>, typename IsEqual = DefaultEquality<Key>>
-class ConcurrentSet {
+class ConcurrentSet : NonCopyable {
 #ifdef WITH_TBB
  private:
   /**
@@ -133,6 +135,18 @@ class ConcurrentSet {
   UsedSet set_;
 
  public:
+  ConcurrentSet() = default;
+  ConcurrentSet(ConcurrentSet &&other) noexcept
+      : mutex_(std::exchange(other.mutex_, std::make_unique<Mutex>())), set_(std::move(other.set_))
+  {
+  }
+  ConcurrentSet &operator=(ConcurrentSet &&other) noexcept
+  {
+    std::destroy_at(this);
+    new (this) ConcurrentSet(std::move(other));
+    return *this;
+  }
+
   /**
    * Look up a key without adding it. Returns null if the key does not exist yet. Does not
    * require creating a #Key first, unlike #lookup_key_or_add.
