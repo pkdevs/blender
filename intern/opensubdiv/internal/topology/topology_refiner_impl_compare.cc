@@ -65,9 +65,6 @@ static bool checkBaseMeshTopologyMatches(const TopologyRefinerImpl *topology_ref
   if (topology_refiner_impl->base_verts_num != converter->getNumVertices(converter)) {
     return false;
   }
-  if (topology_refiner_impl->base_edges_num != converter->edges.size()) {
-    return false;
-  }
   if (converter->faces.data() != Span(topology_refiner_impl->base_face_offsets)) {
     return false;
   }

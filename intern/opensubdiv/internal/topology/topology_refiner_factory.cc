@@ -293,7 +293,6 @@ static void storeBaseMeshTopology(const OpenSubdiv_Converter *converter,
                                   TopologyRefinerImpl &refiner_impl)
 {
   refiner_impl.base_verts_num = converter->getNumVertices(converter);
-  refiner_impl.base_edges_num = converter->edges.size();
   refiner_impl.base_face_offsets.assign(converter->faces.data().begin(),
                                         converter->faces.data().end());
   refiner_impl.base_corner_verts.assign(converter->corner_verts.begin(),
@@ -303,7 +302,7 @@ static void storeBaseMeshTopology(const OpenSubdiv_Converter *converter,
   refiner_impl.base_vert_sharpness.assign(converter->vert_sharpness.begin(),
                                           converter->vert_sharpness.end());
 
-  // Only the edges up to the last sharp one are stored, see #TopologyRefinerImpl::base_edges.
+  // Only up to the last sharp one is stored, see #TopologyRefinerImpl::base_edges_sparse.
   const blender::Span<float> sharpness = converter->edge_sharpness;
   int stored_edges_num = 0;
   for (int edge_index = sharpness.size() - 1; edge_index >= 0; edge_index--) {
