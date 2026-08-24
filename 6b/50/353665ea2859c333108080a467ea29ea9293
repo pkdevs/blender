@@ -1,1 +1,2 @@
 Referenced by issue #163057, GPU: Vulkan: Invalid usage of VkImageViewUsageCreateInfo leads to crash on Intel Windows
+Referenced by pull request #163061, Fix #163057: Vulkan crash selecting objects on Intel GPUs
