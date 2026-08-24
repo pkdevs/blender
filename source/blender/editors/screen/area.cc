@@ -228,7 +228,7 @@ static void draw_azone_arrow(float x1, float y1, float x2, float y2, AZEdge edge
   immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
   float color[4];
   ui::theme::get_color_4fv(TH_TEXT, color);
-  color[3] = std::max(color[3], 0.3f);
+  color[3] = 0.6f;
   immUniformColor4fv(color);
 
   immBegin(GPU_PRIM_TRI_FAN, 6);
