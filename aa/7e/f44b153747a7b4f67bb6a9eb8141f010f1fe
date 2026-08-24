@@ -1,0 +1,1 @@
+Referenced by issue #163016, Assigning a camera to a VSE Scene Strip leaves 3D Viewports using Local Camera, preventing camera-marker switching from appearing in the viewport
