@@ -63,7 +63,8 @@ class MultiFunctionProcedureOperation : public PixelOperation {
    * unit and execution schedule. If the operation is operating on single values, is_single_value
    * should be true. */
   MultiFunctionProcedureOperation(Context &context,
-                                  CompileState &compile_state,
+                                  PixelCompileUnit &compile_unit,
+                                  const Schedule &schedule,
                                   const bool is_single_value,
                                   const ComputeContext &compute_context);
 
