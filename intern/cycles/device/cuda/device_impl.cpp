@@ -96,6 +96,9 @@ CUDADevice::CUDADevice(const DeviceInfo &info, Stats &stats, Profiler &profiler,
   cuda_assert(cuDeviceGetAttribute(&value, CU_DEVICE_ATTRIBUTE_CAN_MAP_HOST_MEMORY, cuDevice));
   can_map_host = value != 0;
 
+  cuda_assert(cuDeviceGetAttribute(&value, CU_DEVICE_ATTRIBUTE_INTEGRATED, cuDevice));
+  integrated_gpu = value != 0;
+
   cuda_assert(cuDeviceGetAttribute(
       &pitch_alignment, CU_DEVICE_ATTRIBUTE_TEXTURE_PITCH_ALIGNMENT, cuDevice));
 
@@ -519,6 +522,107 @@ void CUDADevice::reserve_local_memory(const uint64_t kernel_features)
     cuMemGetInfo(&free_after, &total);
   }
 #  endif
+}
+
+void *CUDADevice::host_alloc(const MemoryType type, const size_t size)
+{
+  if (integrated_gpu && type != MEM_IMAGE_TEXTURE) {
+    const CUDAContextScope scope(this);
+
+    int host_alloc_type = 2;
+    if (const char *host_alloc_type_str = getenv("CYCLES_CUDA_INTEGRATED_HOST_ALLOC")) {
+      host_alloc_type = atoi(host_alloc_type_str);
+    }
+
+#  ifdef _WIN32
+    if (host_alloc_type >= 2) {
+      static const auto VirtualAlloc2 = reinterpret_cast<PVOID (*)(
+          HANDLE, PVOID, SIZE_T, ULONG, ULONG, MEM_EXTENDED_PARAMETER *, ULONG)>(
+          GetProcAddress(GetModuleHandleW(L"KernelBase.dll"), "VirtualAlloc2"));
+      if (VirtualAlloc2 != nullptr) {
+        /* Align memory to 2MiB for optimal GPU access */
+        MEM_ADDRESS_REQUIREMENTS address_requirements = {};
+        address_requirements.Alignment = 2 * 1024 * 1024;
+
+        MEM_EXTENDED_PARAMETER extended_param = {};
+        extended_param.Type = MemExtendedParameterAddressRequirements;
+        extended_param.Pointer = &address_requirements;
+
+        void *host_pointer = VirtualAlloc2(GetCurrentProcess(),
+                                           nullptr,
+                                           size,
+                                           MEM_RESERVE | MEM_COMMIT,
+                                           PAGE_READWRITE,
+                                           &extended_param,
+                                           1);
+        if (host_pointer != nullptr) {
+          if (cuMemHostRegister(host_pointer, size, CU_MEMHOSTREGISTER_DEVICEMAP) == CUDA_SUCCESS)
+          {
+            return host_pointer;
+          }
+          VirtualFree(host_pointer, 0, MEM_RELEASE);
+        }
+      }
+
+      host_alloc_type = 0;
+    }
+#  endif
+
+    if (host_alloc_type >= 1) {
+      void *host_pointer = nullptr;
+      if (cuMemHostAlloc(&host_pointer, size, CU_MEMHOSTALLOC_DEVICEMAP) == CUDA_SUCCESS) {
+        return host_pointer;
+      }
+    }
+
+    /* Fall back to normal host allocation. */
+  }
+
+  return GPUDevice::host_alloc(type, size);
+}
+
+void CUDADevice::host_free(const MemoryType type, void *host_pointer, const size_t size)
+{
+  if (integrated_gpu && type != MEM_IMAGE_TEXTURE) {
+    const CUDAContextScope scope(this);
+
+#  ifdef _WIN32
+    if (cuMemHostUnregister(host_pointer) == CUDA_SUCCESS) {
+      VirtualFree(host_pointer, 0, MEM_RELEASE);
+      return;
+    }
+#  endif
+
+    if (cuMemFreeHost(host_pointer) == CUDA_SUCCESS) {
+      return;
+    }
+
+    /* This is presumably a normal host allocation. */
+  }
+
+  GPUDevice::host_free(type, host_pointer, size);
+}
+
+GPUDevice::Mem *CUDADevice::generic_alloc(device_memory &mem, const size_t pitch_padding)
+{
+  if (integrated_gpu && mem.type != MEM_DEVICE_ONLY && mem.host_pointer != nullptr) {
+    CUDAContextScope scope(this);
+
+    /* Can just use shared allocation with devices that have a unified memory architecture. */
+    device_ptr device_pointer = 0;
+    cuMemHostGetDevicePointer(&device_pointer, mem.host_pointer, 0);
+    if (device_pointer) {
+      mem.shared_pointer = mem.host_pointer;
+      mem.shared_counter++;
+      mem.device_pointer = device_pointer;
+
+      const thread_scoped_lock lock(device_mem_map_mutex);
+      Mem *cmem = &device_mem_map[&mem];
+      return cmem;
+    }
+  }
+
+  return GPUDevice::generic_alloc(mem, pitch_padding);
 }
 
 void CUDADevice::get_device_memory_info(size_t &total, size_t &free)

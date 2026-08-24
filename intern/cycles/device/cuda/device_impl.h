@@ -28,6 +28,7 @@ class CUDADevice : public GPUDevice {
   CUdevice cuDevice;
   CUcontext cuContext;
   CUmodule cuModule;
+  bool integrated_gpu = false;
   int pitch_alignment;
   int cuDevId;
   int cuDevArchitecture;
@@ -79,7 +80,12 @@ class CUDADevice : public GPUDevice {
   void image_copy_to(device_image &mem);
   void image_free(device_image &mem);
 
+  /* Host memory. */
+  void *host_alloc(const MemoryType type, const size_t size) override;
+  void host_free(const MemoryType type, void *host_pointer, const size_t size) override;
+
   /* Device side memory. */
+  GPUDevice::Mem *generic_alloc(device_memory &mem, const size_t pitch_padding = 0) override;
   void get_device_memory_info(size_t &total, size_t &free) override;
   bool alloc_device(void *&device_pointer, const size_t size) override;
   void free_device(void *device_pointer) override;
