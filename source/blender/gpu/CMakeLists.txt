@@ -9,6 +9,7 @@ set(INC
   metal
   opengl
   vulkan
+  shader_tool
   ../makesrna
 
   # For theme color access.
@@ -116,7 +117,6 @@ set(SRC
   shader_tool/flow_control.cc
   shader_tool/function.cc
   shader_tool/grammar.cc
-  shader_tool/grammar_bsl.cc
   shader_tool/intermediate.cc
   shader_tool/metadata.cc
   shader_tool/namespace.cc
@@ -128,6 +128,20 @@ set(SRC
   shader_tool/union.cc
 
   shader_tool/lexit/lexit.cc
+
+  shader_tool/bsl/codegen.cc
+  shader_tool/bsl/constructor.cc
+  shader_tool/bsl/grammar.cc
+  shader_tool/bsl/operator.cc
+  shader_tool/bsl/resource.cc
+  shader_tool/bsl/symbol.cc
+  shader_tool/bsl/symbol_class.cc
+  shader_tool/bsl/symbol_function.cc
+  shader_tool/bsl/symbol_scope.cc
+  shader_tool/bsl/symbol_table.cc
+  shader_tool/bsl/symbol_template.cc
+  shader_tool/bsl/symbol_variable.cc
+  shader_tool/bsl/type_checker.cc
 
   GPU_attribute_convert.hh
   GPU_batch.hh
@@ -522,6 +536,7 @@ set(GLSL_SRC
   shaders/infos/gpu_shader_2D_point_uniform_size_uniform_color_aa_infos.hh
   shaders/infos/gpu_shader_2D_point_uniform_size_uniform_color_outline_aa_infos.hh
   shaders/infos/gpu_shader_2D_point_varying_size_varying_color_infos.hh
+  shaders/infos/gpu_shader_2D_rounded_corner_mask_infos.hh
   shaders/infos/gpu_shader_2D_widget_infos.hh
   shaders/infos/gpu_shader_3D_depth_only_infos.hh
   shaders/infos/gpu_shader_3D_flat_color_infos.hh
@@ -551,6 +566,8 @@ set(GLSL_SRC
   shaders/gpu_shader_2D_vert.glsl
   shaders/gpu_shader_2D_area_borders_vert.glsl
   shaders/gpu_shader_2D_area_borders_frag.glsl
+  shaders/gpu_shader_2D_rounded_corner_mask_vert.glsl
+  shaders/gpu_shader_2D_rounded_corner_mask_frag.glsl
   shaders/gpu_shader_2D_widget_base.bsl.hh
   shaders/gpu_shader_2D_widget_shadow_vert.glsl
   shaders/gpu_shader_2D_widget_shadow_frag.glsl
@@ -690,6 +707,7 @@ set(GLSL_SRC
   shaders/material/gpu_shader_material_fresnel.glsl
   shaders/material/gpu_shader_material_gamma.glsl
   shaders/material/gpu_shader_material_geometry.glsl
+  shaders/material/gpu_shader_material_get_vector_component.glsl
   shaders/material/gpu_shader_material_glass.glsl
   shaders/material/gpu_shader_material_glossy.glsl
   shaders/material/gpu_shader_material_hair_info.glsl
@@ -989,6 +1007,7 @@ if(WITH_GTESTS)
       tests/framebuffer_test.cc
       tests/immediate_test.cc
       tests/index_buffer_test.cc
+      tests/mipmap_test.cc
       tests/push_constants_test.cc
       tests/ray_tracing_test.cc
       tests/shader_create_info_test.cc

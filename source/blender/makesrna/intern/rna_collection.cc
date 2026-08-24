@@ -190,7 +190,7 @@ static bool rna_Collection_objects_override_apply(Main *bmain,
 
   Collection *coll_dst = id_cast<Collection *>(ptr_dst->owner_id);
 
-  if (ptr_item_dst->type == nullptr || ptr_item_src->type == nullptr) {
+  if (!ptr_item_dst->has_type() || !ptr_item_src->has_type()) {
     // BLI_assert_msg(0, "invalid source or destination object.");
     return false;
   }
@@ -311,7 +311,7 @@ static bool rna_Collection_children_override_apply(Main *bmain,
 
   Collection *coll_dst = id_cast<Collection *>(ptr_dst->owner_id);
 
-  if (ptr_item_dst->type == nullptr || ptr_item_src->type == nullptr) {
+  if (!ptr_item_dst->has_type() || !ptr_item_src->has_type()) {
     /* This can happen when reference and overrides differ, just ignore then. */
     return false;
   }
@@ -754,6 +754,7 @@ static void rna_def_collection_exporters(BlenderRNA *brna, PropertyRNA *cprop)
   RNA_def_parameter_flags(parm, PROP_ENUM_NO_CONTEXT, PARM_REQUIRED);
   RNA_def_string(func, "name", nullptr, 0, "Name", "Name of the new export handler");
   parm = RNA_def_pointer(func, "exporter", "CollectionExport", "", "Newly created export handler");
+  RNA_def_parameter_flags(parm, PROP_NEVER_NULL, ParameterFlag(0));
   RNA_def_function_return(func, parm);
 
   func = RNA_def_function(srna, "remove", "rna_CollectionExport_remove");
