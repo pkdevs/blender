@@ -23,6 +23,7 @@
 
 #include "AS_asset_library.hh"
 #include "AS_essentials_library.hh"
+#include "AS_production_library.hh"
 #include "all_library.hh"
 #include "asset_catalog_collection.hh"
 #include "asset_catalog_definition_file.hh"  // IWYU pragma: keep
@@ -30,6 +31,7 @@
 #include "essentials_library.hh"
 #include "on_disk_library.hh"
 #include "preferences_on_disk_library.hh"
+#include "production_library.hh"
 #include "remote_library.hh"
 #include "runtime_library.hh"
 #include "utils.hh"
@@ -87,6 +89,14 @@ AssetLibrary *AssetLibraryService::get_asset_library(
     }
     case ASSET_LIBRARY_ONLINE_ESSENTIALS: {
       return this->get_online_essentials_asset_library();
+    }
+    case ASSET_LIBRARY_PRODUCTION: {
+      const StringRefNull root_path = production_directory_path();
+      if (root_path.is_empty()) {
+        return nullptr;
+      }
+
+      return this->get_asset_library_on_disk_builtin(type, root_path);
     }
     case ASSET_LIBRARY_LOCAL: {
       /* For the "Current File" library we get the asset library root path based on main. */
@@ -212,6 +222,9 @@ AssetLibrary *AssetLibraryService::get_asset_library_on_disk(
       break;
     case ASSET_LIBRARY_ESSENTIALS:
       lib_uptr = std::make_unique<EssentialsAssetLibrary>();
+      break;
+    case ASSET_LIBRARY_PRODUCTION:
+      lib_uptr = std::make_unique<ProductionAssetLibrary>();
       break;
     case ASSET_LIBRARY_LOCAL:
       lib_uptr = std::make_unique<OnDiskAssetLibrary>(
@@ -451,6 +464,13 @@ std::string AssetLibraryService::resolve_asset_weak_reference_to_library_path(
     case ASSET_LIBRARY_ONLINE_ESSENTIALS:
       library_dirpath = online_essentials_cache_directory_path();
       break;
+    case ASSET_LIBRARY_PRODUCTION: {
+      std::string production_dirpath = find_production_library_dirpath(asset_reference);
+      if (production_dirpath.empty()) {
+        return "";
+      }
+      return utils::normalize_path(production_dirpath);
+    }
     case ASSET_LIBRARY_LOCAL:
     case ASSET_LIBRARY_ALL:
       return "";
@@ -458,6 +478,44 @@ std::string AssetLibraryService::resolve_asset_weak_reference_to_library_path(
 
   std::string normalized_library_dirpath = utils::normalize_path(library_dirpath);
   return normalized_library_dirpath;
+}
+
+std::string AssetLibraryService::find_production_library_dirpath(
+    const AssetWeakReference &asset_reference)
+{
+  Vector<std::string> candidate_roots = production_datafiles_directory_paths();
+  if (candidate_roots.is_empty()) {
+    return "";
+  }
+  if (candidate_roots.size() == 1) {
+    return candidate_roots.first();
+  }
+
+  /* Multiple production directories share the single #ASSET_LIBRARY_PRODUCTION library type, so
+   * the weak reference alone doesn't tell us which one the asset came from. Disambiguate by
+   * checking which directory actually contains the referenced .blend file on disk. */
+  StringRefNull relative_identifier = asset_reference.relative_asset_identifier;
+  const int64_t blend_ext_pos = rfind_blendfile_extension(relative_identifier);
+  if (blend_ext_pos == StringRef::not_found) {
+    return candidate_roots.first();
+  }
+  const int64_t sep_pos = relative_identifier.find_first_of(SEP_STR ALTSEP_STR, blend_ext_pos);
+  const std::string blendfile_relative_path = std::string(
+      (sep_pos == StringRef::not_found) ? relative_identifier :
+                                          relative_identifier.substr(0, sep_pos));
+
+  for (const std::string &root : candidate_roots) {
+    const std::string candidate_path = utils::normalize_path(root + SEP_STR) +
+                                       blendfile_relative_path;
+    if (BLI_exists(candidate_path.c_str())) {
+      return root;
+    }
+  }
+
+  /* No match found on disk (e.g. the file was deleted/moved after the asset index/weak reference
+   * was created). Fall back to the first directory so a (likely invalid) path is still returned,
+   * matching prior single-path behavior. */
+  return candidate_roots.first();
 }
 
 int64_t AssetLibraryService::rfind_blendfile_extension(StringRef path)
@@ -563,7 +621,8 @@ std::optional<AssetLibraryService::ExplodedPath> AssetLibraryService::
     }
     case ASSET_LIBRARY_CUSTOM:
     case ASSET_LIBRARY_ESSENTIALS:
-    case ASSET_LIBRARY_ONLINE_ESSENTIALS: {
+    case ASSET_LIBRARY_ONLINE_ESSENTIALS:
+    case ASSET_LIBRARY_PRODUCTION: {
       std::string full_path = this->resolve_asset_weak_reference_to_full_path(asset_reference);
       /* #full_path uses native slashes, so others don't need to be considered in the following. */
 
@@ -619,6 +678,9 @@ std::string AssetLibraryService::root_path_from_library_ref(
   }
   if (library_reference.type == ASSET_LIBRARY_ONLINE_ESSENTIALS) {
     return online_essentials_cache_directory_path();
+  }
+  if (library_reference.type == ASSET_LIBRARY_PRODUCTION) {
+    return production_directory_path();
   }
 
   bUserAssetLibrary *custom_library = find_custom_asset_library_from_library_ref(

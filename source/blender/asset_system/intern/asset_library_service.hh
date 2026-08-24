@@ -149,6 +149,14 @@ class AssetLibraryService {
   std::string resolve_asset_weak_reference_to_library_path(
       const AssetWeakReference &asset_reference);
   /**
+   * The Production library can be backed by multiple directories (one per entry in
+   * `BLENDER_PRODUCTION_DATAFILES`), all sharing the single #ASSET_LIBRARY_PRODUCTION library
+   * type. Weak references alone can't tell which of those directories an asset came from, so this
+   * checks each directory on disk for the referenced .blend file and returns the first match.
+   * Falls back to the first production directory if no match is found on disk.
+   */
+  std::string find_production_library_dirpath(const AssetWeakReference &asset_reference);
+  /**
    * Attempt to build a full path to an asset based on the currently available (not necessary
    * loaded) asset libraries. The path is not guaranteed to exist. The returned path will be
    * normalized and using native slashes.

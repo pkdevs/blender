@@ -375,6 +375,8 @@ static std::optional<eFileSelectType> asset_library_reference_to_fileselect_type
     case ASSET_LIBRARY_ESSENTIALS:
     case ASSET_LIBRARY_ONLINE_ESSENTIALS:
       return FILE_ASSET_LIBRARY_ESSENTIALS;
+    case ASSET_LIBRARY_PRODUCTION:
+      return FILE_ASSET_LIBRARY_PRODUCTION;
     case ASSET_LIBRARY_CUSTOM: {
       const bUserAssetLibrary *user_library = BKE_preferences_asset_library_find_index(
           &U, library_reference.custom_library_index);

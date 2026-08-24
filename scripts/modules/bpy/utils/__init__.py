@@ -35,6 +35,7 @@ __all__ = (
     "manual_map",
     "manual_language_code",
     "previews",
+    "production_datafiles_paths",
     "resource_path",
     "script_path_user",
     "extension_path_user",
@@ -427,6 +428,29 @@ def script_paths_system_environment():
     if env_system_paths := _os.environ.get("BLENDER_SYSTEM_SCRIPTS"):
         return [_os.path.normpath(p) for p in env_system_paths.split(_os.pathsep) if p]
     return []
+
+
+def production_datafiles_paths(*, subdir=None):
+    """
+    Returns a list of directories from the ``BLENDER_PRODUCTION_DATAFILES`` environment variable.
+
+    :param subdir: Optional subdirectory appended to each path.
+    :type subdir: str | None
+    :return: production data-file directories (only existing directories are included).
+    :rtype: list[str]
+    """
+    env_paths = _os.environ.get("BLENDER_PRODUCTION_DATAFILES")
+    if not env_paths:
+        return []
+
+    paths = []
+    for p in env_paths.split(_os.pathsep):
+        if not p:
+            continue
+        path = _os.path.join(p, subdir) if subdir else p
+        if _os.path.isdir(path):
+            paths.append(_os.path.normpath(path))
+    return paths
 
 
 def script_paths(*, subdir=None, user_pref=True, check_all=False, use_user=True, use_system_environment=True):

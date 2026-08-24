@@ -844,6 +844,12 @@ std::optional<std::string> BKE_appdir_folder_id_create(const int folder_id, cons
   return path;
 }
 
+Vector<std::string> BKE_appdir_folder_id_production_datafiles(const char *subfolder)
+{
+  const bool check_is_dir = true;
+  return get_path_environment_multiple(subfolder, "BLENDER_PRODUCTION_DATAFILES", check_is_dir);
+}
+
 std::optional<std::string> BKE_appdir_resource_path_id_with_version(const int folder_id,
                                                                     const bool check_is_dir,
                                                                     const int version)

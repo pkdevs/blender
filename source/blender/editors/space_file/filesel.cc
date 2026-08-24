@@ -66,6 +66,7 @@
 #include "UI_view2d.hh"
 
 #include "AS_essentials_library.hh"
+#include "AS_production_library.hh"
 
 #include "file_banner.hh"
 #include "file_intern.hh"
@@ -450,6 +451,10 @@ static void fileselect_refresh_asset_params(FileAssetSelectParams *asset_params)
     case ASSET_LIBRARY_ONLINE_ESSENTIALS:
       STRNCPY(base_params->dir, asset_system::online_essentials_cache_directory_path().c_str());
       base_params->type = FILE_ASSET_LIBRARY_ESSENTIALS;
+      break;
+    case ASSET_LIBRARY_PRODUCTION:
+      STRNCPY(base_params->dir, asset_system::production_directory_path().c_str());
+      base_params->type = FILE_ASSET_LIBRARY_PRODUCTION;
       break;
     case ASSET_LIBRARY_ALL:
       base_params->dir[0] = '\0';

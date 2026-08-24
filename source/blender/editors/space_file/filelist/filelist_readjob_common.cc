@@ -449,7 +449,11 @@ void filelist_readjob_list_lib_add_datablock(
                                std::move(metadata),
                                *online_asset_info) :
                            job_params->load_asset_library->add_external_on_disk_asset(
-                               entry->relpath, datablock_info->name, idcode, std::move(metadata));
+                               entry->relpath,
+                               datablock_info->name,
+                               idcode,
+                               std::move(metadata),
+                               job_params->tmp_filelist->filelist.root);
         if (job_params->on_asset_added) {
           (*job_params->on_asset_added)(*entry->get_asset());
         }

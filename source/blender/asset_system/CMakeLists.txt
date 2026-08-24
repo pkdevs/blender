@@ -31,6 +31,7 @@ set(SRC
   intern/library_types/essentials_library.cc
   intern/library_types/on_disk_library.cc
   intern/library_types/preferences_on_disk_library.cc
+  intern/library_types/production_library.cc
   intern/library_types/remote_library.cc
   intern/library_types/runtime_library.cc
   intern/utils.cc
@@ -43,6 +44,7 @@ set(SRC
   AS_asset_representation.hh
   AS_disk_file_hash_service.hh
   AS_essentials_library.hh
+  AS_production_library.hh
   AS_remote_library.hh
   intern/asset_catalog_collection.hh
   intern/asset_catalog_definition_file.hh
@@ -52,6 +54,7 @@ set(SRC
   intern/library_types/essentials_library.hh
   intern/library_types/on_disk_library.hh
   intern/library_types/preferences_on_disk_library.hh
+  intern/library_types/production_library.hh
   intern/library_types/remote_library.hh
   intern/library_types/runtime_library.hh
   intern/utils.hh

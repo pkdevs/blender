@@ -195,9 +195,15 @@ class AssetLibrary {
    * leaking that's only cleared when the library storage is destructed (typically on exit or
    * loading a different file).
    *
-   * \param relative_asset_path: The path of the asset relative to the asset library root. With
-   *                             this the asset must be uniquely identifiable within the asset
-   *                             library.
+   * \param relative_asset_path: The path of the asset relative to \a root_path_override if given,
+   *                             otherwise relative to the asset library root. With this the asset
+   *                             must be uniquely identifiable within the asset library.
+   * \param root_path_override: Some libraries are backed by more than one directory on disk (e.g.
+   *                            the Production library, see #AssetLibrary::additional_root_paths()).
+   *                            For assets found in such an additional directory (rather than the
+   *                            library's main #root_path()), pass that directory here so the asset
+   *                            can still be resolved to the correct full path later on. Leave empty
+   *                            to use the library's own #root_path().
    * \return A weak pointer to the new asset representation. The caller needs to keep some
    *         reference stored to be able to call #remove_asset(). This would be dangling once the
    *         asset library is destructed, so a weak pointer should be used to reference it.
@@ -206,7 +212,8 @@ class AssetLibrary {
       StringRef relative_asset_path,
       StringRef name,
       int id_type,
-      std::unique_ptr<AssetMetaData> metadata);
+      std::unique_ptr<AssetMetaData> metadata,
+      StringRef root_path_override = "");
   /** See #AssetLibrary::add_external_on_disk_asset(). Use this for assets that are not available
    * on disk, and part of an online asset library. */
   std::weak_ptr<AssetRepresentation> add_external_online_asset(
@@ -269,6 +276,15 @@ class AssetLibrary {
    */
   bool is_read_only() const;
 
+  /**
+   * Some libraries can be backed by more than one directory on disk (e.g. the Production
+   * library, which merges every directory listed in the `BLENDER_PRODUCTION_DATAFILES`
+   * environment variable). #root_path() returns the first of these, if any. This returns the
+   * remaining ones (if any), so callers that need to enumerate every directory backing this
+   * library (e.g. the "All" library file listing) can find them all.
+   */
+  virtual Vector<std::string> additional_root_paths() const;
+
  protected:
   /** Load catalogs that have changed on disk. */
   virtual void refresh_catalogs();
@@ -281,6 +297,7 @@ AssetLibraryReference all_library_reference();
 AssetLibraryReference essentials_library_reference();
 AssetLibraryReference current_file_library_reference();
 AssetLibraryReference online_essentials_library_reference();
+AssetLibraryReference production_library_reference();
 
 void all_library_tag_catalogs_dirty();
 void all_library_reload_catalogs_if_dirty();
