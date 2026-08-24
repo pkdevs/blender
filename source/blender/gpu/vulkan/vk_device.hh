@@ -67,11 +67,6 @@ struct VKExtensions {
   bool maintenance4 = false;
 
   /**
-   * Does the device support logic ops.
-   */
-  bool logic_ops = false;
-
-  /**
    * Does the device support VK_EXT_memory_priority
    */
   bool memory_priority = false;
@@ -100,6 +95,11 @@ struct VKExtensions {
    * Does the device support VK_EXT_vertex_input_dynamic_state
    */
   bool vertex_input_dynamic_state = false;
+
+  /**
+   * Does the device support VK_EXT_provoking_vertex
+   */
+  bool provoking_vertex = false;
 
   /**
    * Does the device support VK_EXT_host_image_copy

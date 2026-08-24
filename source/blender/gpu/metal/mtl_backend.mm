@@ -509,6 +509,9 @@ void MTLBackend::capabilities_init(MTLContext *ctx)
 #endif
   GCaps.ray_query_support = MTLBackend::capabilities.supports_ray_tracing;
 
+  /* Vertex pipeline stores and atomics support. */
+  GCaps.vertex_pipeline_stores_and_atomics_support = true;
+
   /** Identify support for tile inputs. */
   const bool is_tile_based_arch = (GPU_platform_architecture() == GPU_ARCHITECTURE_TBDR);
   if (is_tile_based_arch) {
@@ -554,6 +557,11 @@ void MTLBackend::capabilities_init(MTLContext *ctx)
   GCaps.hdr_viewport_support = true;
 
   GCaps.geometry_shader_support = false;
+
+  /* Apple GPUs can write to an sRGB texture as a storage image directly, with the hardware doing
+   * the sRGB conversion. Use this for sRGB mipmap generation instead of a temporary non-sRGB
+   * texture. */
+  GCaps.srgb_write_direct_support = true;
 
   /* Compile shaders on performance cores but leave one free so UI is still responsive.
    * Also respect command line option to reduce number of threads. */
