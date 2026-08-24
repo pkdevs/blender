@@ -437,21 +437,43 @@ static wmOperatorStatus shape_key_copy_exec(bContext *C, wmOperator * /*op*/)
 
         bke::MutableAttributeAccessor attributes = curves.attributes_for_write();
 
-        char attr_name_old[64];
-        SNPRINTF_UTF8(attr_name_old, (".SK_%s"), kb_src->name);
+        {
+          char attr_name_old[64];
+          SNPRINTF_UTF8(attr_name_old, (".SK_%s"), kb_src->name);
 
-        char attr_name_new[64];
-        SNPRINTF_UTF8(attr_name_new, (".SK_%s"), kb_new->name);
+          char attr_name_new[64];
+          SNPRINTF_UTF8(attr_name_new, (".SK_%s"), kb_new->name);
 
-        const VArray<float3> key_positions_old = *attributes.lookup_or_default<float3>(
-            attr_name_old, bke::AttrDomain::Point, float3(0.0f));
+          const VArray<float3> key_positions_old = *attributes.lookup_or_default<float3>(
+              attr_name_old, bke::AttrDomain::Point, float3(0.0f));
 
-        bke::SpanAttributeWriter<float3> key_positions_new =
-            attributes.lookup_or_add_for_write_span<float3>(attr_name_new, bke::AttrDomain::Point);
+          bke::SpanAttributeWriter<float3> key_positions_new =
+              attributes.lookup_or_add_for_write_span<float3>(attr_name_new,
+                                                              bke::AttrDomain::Point);
 
-        array_utils::copy(key_positions_old, key_positions_new.span);
+          array_utils::copy(key_positions_old, key_positions_new.span);
 
-        key_positions_new.finish();
+          key_positions_new.finish();
+        }
+
+        {
+          char attr_name_old[64];
+          SNPRINTF_UTF8(attr_name_old, (".SKr_%s"), kb_src->name);
+
+          char attr_name_new[64];
+          SNPRINTF_UTF8(attr_name_new, (".SKr_%s"), kb_new->name);
+
+          const VArray<float> key_radius_old = *attributes.lookup_or_default<float>(
+              attr_name_old, bke::AttrDomain::Point, 0.0f);
+
+          bke::SpanAttributeWriter<float> key_radius_new =
+              attributes.lookup_or_add_for_write_span<float>(attr_name_new,
+                                                             bke::AttrDomain::Point);
+
+          array_utils::copy(key_radius_old, key_radius_new.span);
+
+          key_radius_new.finish();
+        }
       }
     }
   }

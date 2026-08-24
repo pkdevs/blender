@@ -97,6 +97,8 @@ static void createTransGreasePencilVerts(bContext *C, TransInfo *t)
     curves_transform_data.grease_pencil_falloffs.reinitialize(drawings.size());
     curves_transform_data.deformation_offsets.reinitialize(drawings.size());
     curves_transform_data.src_positions.reinitialize(drawings.size());
+    curves_transform_data.value_attribute.reinitialize(drawings.size());
+    curves_transform_data.src_value_attribute.reinitialize(drawings.size());
 
     for (ed::greasepencil::MutableDrawingInfo info : drawings) {
       bke::CurvesGeometry &curves = info.drawing.strokes_for_write();
@@ -210,23 +212,36 @@ static void createTransGreasePencilVerts(bContext *C, TransInfo *t)
           bke::crazyspace::get_evaluated_grease_pencil_drawing_deformation(
               *CTX_data_depsgraph_pointer(C), *object, info.drawing);
 
+      CurvesTransformData &curves_transform_data = *static_cast<CurvesTransformData *>(
+          tc.custom.type.data);
+
+      Key *key = grease_pencil.key;
+      KeyBlock *actkb = BKE_keyblock_find_by_index(key, tc.obedit->shapenr - 1);
+
       std::optional<MutableSpan<float>> value_attribute;
       if (t->mode == TFM_GPENCIL_OPACITY) {
         MutableSpan<float> opacities = info.drawing.opacities_for_write();
         value_attribute = opacities;
       }
       else if (is_scale_thickness) {
-        MutableSpan<float> radii = info.drawing.radii_for_write();
-        value_attribute = radii;
+        if (key && actkb && tc.obedit->shapenr != 1) {
+          const Span<float> radii = info.drawing.radii_for_write();
+
+          curves_transform_data.src_value_attribute[drawing] = Array<float>(radii);
+          curves_transform_data.value_attribute[drawing] = Array<float>(radii);
+
+          value_attribute = curves_transform_data.value_attribute[drawing].as_mutable_span();
+        }
+        else {
+          MutableSpan<float> radii = info.drawing.radii_for_write();
+          value_attribute = radii;
+        }
       }
 
       const IndexMask affected_strokes = use_proportional_edit || use_individual_origins ?
                                              ed::greasepencil::retrieve_editable_strokes(
                                                  *object, info.drawing, info.layer_index, memory) :
                                              IndexMask();
-
-      CurvesTransformData &curves_transform_data = *static_cast<CurvesTransformData *>(
-          tc.custom.type.data);
 
       curves_transform_data.deformation_offsets[drawing] = Array<float3>(deformation.positions);
       curves_transform_data.src_positions[drawing] = Array<float3>(curves.positions());
@@ -235,9 +250,6 @@ static void createTransGreasePencilVerts(bContext *C, TransInfo *t)
         curves_transform_data.deformation_offsets[drawing][point_i] -=
             curves_transform_data.src_positions[drawing][point_i];
       }
-
-      Key *key = grease_pencil.key;
-      KeyBlock *actkb = BKE_keyblock_find_by_index(key, tc.obedit->shapenr - 1);
 
       if (key && actkb && tc.obedit->shapenr != 1) {
         bke::MutableAttributeAccessor attributes = curves.attributes_for_write();
@@ -312,11 +324,36 @@ static void recalcData_grease_pencil(TransInfo *t)
     for (const int64_t i : drawings.index_range()) {
       ed::greasepencil::MutableDrawingInfo info = drawings[i];
       bke::CurvesGeometry &curves = info.drawing.strokes_for_write();
+      bke::MutableAttributeAccessor attributes = curves.attributes_for_write();
       const Span<float3> deformation_offsets = transform_data.deformation_offsets[i];
       const Span<float3> src_positions = transform_data.src_positions[i];
+      const Span<float> src_radius = transform_data.src_value_attribute[i];
 
       if (t->mode == TFM_CURVE_SHRINKFATTEN) {
+        if (key && actkb && tc.obedit->shapenr != 1) {
+
+          const IndexMask &selection = transform_data.selection_by_layer[layer_i];
+
+          char attr_name[64];
+
+          SNPRINTF_UTF8(attr_name, (".SKr_%s"), actkb->name);
+
+          bke::SpanAttributeWriter<float> key_radius =
+              attributes.lookup_or_add_for_write_span<float>(attr_name, bke::AttrDomain::Point);
+
+          Span<float> trans_radius = transform_data.value_attribute[i];
+
+          selection.foreach_index([&](const int point_i) {
+            key_radius.span[point_i] = (trans_radius[point_i] - src_radius[point_i]) /
+                                       keyblock_influence;
+          });
+
+          key_radius.finish();
+        }
+
         curves.tag_radii_changed();
+
+        layer_i++;
       }
       else if (t->mode == TFM_TILT) {
         curves.tag_normals_changed();
@@ -326,7 +363,6 @@ static void recalcData_grease_pencil(TransInfo *t)
             ed::curves::get_curves_positions_for_write(curves);
 
         if (key && actkb && tc.obedit->shapenr != 1) {
-          bke::MutableAttributeAccessor attributes = curves.attributes_for_write();
           OffsetIndices<int> tran_offsets{transform_data.layer_offsets};
 
           for (MutableSpan<float3> positions : positions_per_selection_attr) {

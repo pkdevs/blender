@@ -2629,6 +2629,12 @@ static void grease_pencil_do_shape_keys(bke::GeometrySet &geometry_set)
     char ref_attr_name[64];
     SNPRINTF_UTF8(ref_attr_name, (".SK_%s"), ref_keyblock->name);
 
+    char radius_attr_name[64];
+    SNPRINTF_UTF8(radius_attr_name, (".SKr_%s"), keyblock.name);
+
+    char ref_radius_attr_name[64];
+    SNPRINTF_UTF8(ref_radius_attr_name, (".SKr_%s"), ref_keyblock->name);
+
     threading::parallel_for_each(drawing_infos, [&](LayerDrawingInfo &info) {
       bke::CurvesGeometry &curves = info.drawing->strokes_for_write();
 
@@ -2638,10 +2644,24 @@ static void grease_pencil_do_shape_keys(bke::GeometrySet &geometry_set)
       const VArray<float3> ref_key_positions = *attributes.lookup_or_default<float3>(
           ref_attr_name, bke::AttrDomain::Point, float3(0.0f));
 
+      const VArray<float> key_radius = *attributes.lookup_or_default<float>(
+          radius_attr_name, bke::AttrDomain::Point, 0.0f);
+      const VArray<float> ref_key_radius = *attributes.lookup_or_default<float>(
+          ref_radius_attr_name, bke::AttrDomain::Point, 0.0f);
+
       MutableSpan<float3> positions = curves.positions_for_write();
       threading::parallel_for(positions.index_range(), 4096, [&](const IndexRange range) {
         for (const int i : range) {
           positions[i] += (key_positions[i] - ref_key_positions[i]) * keyblock_influence;
+        }
+      });
+
+      MutableSpan<float> radius = curves.radius_for_write();
+      threading::parallel_for(positions.index_range(), 4096, [&](const IndexRange range) {
+        for (const int i : range) {
+          radius[i] += (key_radius[i] - ref_key_radius[i]) * keyblock_influence;
+          /* Stop the radius from being negative. */
+          radius[i] = math::max(radius[i], 0.0f);
         }
       });
 

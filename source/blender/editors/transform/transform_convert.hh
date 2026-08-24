@@ -135,6 +135,12 @@ struct CurvesTransformData {
 
   /* Copy of the source positions for each layer to unapply at the end. */
   Array<Array<float3>> src_positions;
+
+  /* Copy of the source values (Radius or Opacity) for each layer to unapply at the end. */
+  Array<Array<float>> src_value_attribute;
+
+  /* Copy of the values (Radius or Opacity) being transformed. */
+  Array<Array<float>> value_attribute;
 };
 
 /* `transform_convert.cc` */
