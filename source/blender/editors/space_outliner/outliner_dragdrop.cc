@@ -1505,6 +1505,28 @@ static wmOperatorStatus collection_drop_invoke(bContext *C,
     BLI_listbase_reverse(&drag->ids);
   }
 
+  int insert_index = items.size();
+  if (is_custom_sort_move) {
+    auto is_relative = [&](const std::variant<Object *, Collection *> &item) {
+      if (is_object_element(data.te)) {
+        return std::holds_alternative<Object *>(item) &&
+               std::get<Object *>(item) == reinterpret_cast<Object *>(TREESTORE(data.te)->id);
+      }
+      if (is_collection_element(data.te)) {
+        return std::holds_alternative<Collection *>(item) &&
+               std::get<Collection *>(item) ==
+                   reinterpret_cast<Collection *>(TREESTORE(data.te)->id);
+      }
+      return false;
+    };
+    for (const int i : items.index_range()) {
+      if (is_relative(items[i])) {
+        insert_index = (data.insert_type == TE_INSERT_AFTER) ? i + 1 : i;
+        break;
+      }
+    }
+  }
+
   for (wmDragID &drag_id : drag->ids) {
     /* Ctrl enables linking, so we don't need a from collection then. */
     Collection *from = (event->modifier & KM_CTRL) ?
@@ -1523,9 +1545,14 @@ static wmOperatorStatus collection_drop_invoke(bContext *C,
       }
 
       if (is_custom_sort_move) {
-        items.remove_if([&](const std::variant<Object *, Collection *> &item) {
-          return std::holds_alternative<Object *>(item) && std::get<Object *>(item) == object;
-        });
+        const int64_t index = items.first_index_of_try(
+            std::variant<Object *, Collection *>(object));
+        if (index != -1) {
+          if (index < insert_index) {
+            insert_index--;
+          }
+          items.remove(index);
+        }
         dragged_items.append(object);
       }
     }
@@ -1538,10 +1565,14 @@ static wmOperatorStatus collection_drop_invoke(bContext *C,
       }
 
       if (is_custom_sort_move) {
-        items.remove_if([&](const std::variant<Object *, Collection *> &item) {
-          return std::holds_alternative<Collection *>(item) &&
-                 std::get<Collection *>(item) == collection;
-        });
+        const int64_t index = items.first_index_of_try(
+            std::variant<Object *, Collection *>(collection));
+        if (index != -1) {
+          if (index < insert_index) {
+            insert_index--;
+          }
+          items.remove(index);
+        }
         dragged_items.append(collection);
       }
     }
@@ -1553,32 +1584,6 @@ static wmOperatorStatus collection_drop_invoke(bContext *C,
   }
 
   if (is_custom_sort_move) {
-    int insert_index = items.size();
-
-    auto is_relative = [&](const std::variant<Object *, Collection *> &item) {
-      if (is_object_element(data.te)) {
-        return std::holds_alternative<Object *>(item) &&
-               std::get<Object *>(item) == reinterpret_cast<Object *>(TREESTORE(data.te)->id);
-      }
-      if (is_collection_element(data.te)) {
-        return std::holds_alternative<Collection *>(item) &&
-               std::get<Collection *>(item) ==
-                   reinterpret_cast<Collection *>(TREESTORE(data.te)->id);
-      }
-      return false;
-    };
-
-    int found_index = -1;
-    for (const int i : items.index_range()) {
-      if (is_relative(items[i])) {
-        found_index = i;
-        break;
-      }
-    }
-    if (found_index != -1) {
-      insert_index = (data.insert_type == TE_INSERT_AFTER) ? found_index + 1 : found_index;
-    }
-
     items.insert(insert_index, dragged_items.as_span());
 
     for (const int i : items.index_range()) {
