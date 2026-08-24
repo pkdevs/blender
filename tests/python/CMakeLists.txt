@@ -1726,6 +1726,7 @@ if(WITH_UI_TESTS)
     test_selection.test_view3d_grease_pencil_point_selection
     test_selection.test_view3d_curves_point_selection
     test_selection.test_view3d_weight_paint_vertex_selection
+    test_selection.test_view3d_curve_point_selection
     test_sculpt.asset_shelf_brush_selection
     test_sculpt.face_set_expand
     test_sculpt.face_set_gestures
