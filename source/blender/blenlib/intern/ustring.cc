@@ -30,7 +30,16 @@ const blender::detail::UStringEntry &ustring_ensure_entry(const StringRef str)
   if (str.is_empty()) {
     return UString::EMPTY_ENTRY;
   }
-  return global_string_table().lookup_key_or_add({std::string(str), hash_string(str)});
+
+  StringTable &table = global_string_table();
+
+  /* Avoid constructing a #std::string when the string is already stored. The TBB set
+   * implementation does not support creating the actual key type lazily. Though it isn't ideal,
+   * the second set lookup and std::string allocation only happen once per string. */
+  if (const UStringEntry *entry = table.lookup_ptr(str)) {
+    return *entry;
+  }
+  return table.lookup_key_or_add({std::string(str), hash_string(str)});
 }
 
 const blender::detail::UStringEntry &ustring_ensure_entry(const char *str)
