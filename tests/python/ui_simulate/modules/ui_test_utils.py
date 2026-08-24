@@ -273,12 +273,11 @@ def split_area_pair(screen):
     Returns the original areas before the split and the source area.
     Caller must yield after this operation.
     """
-    old_areas = set(screen.areas)
     source = largest_area(screen)
 
     split_area(source, "VERTICAL", 0.5)
 
-    return old_areas, source
+    return source
 
 
 def build_grid(screen, target_count):

@@ -44,7 +44,7 @@ def test_area_swap():
     screen = window.screen
 
     old_area_count = len(screen.areas)
-    source = ui.split_area_pair(screen)[1]
+    source = ui.split_area_pair(screen)
     yield
 
     target = screen.areas[-1]
