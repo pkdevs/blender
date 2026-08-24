@@ -246,6 +246,18 @@ void ED_operatormacros_sequencer()
                  "Add Mask Strip",
                  "Add a mask strip to the sequencer and move it",
                  "SEQUENCER_OT_mask_strip_add");
+  add_move_macro("SEQUENCER_OT_movie_strip_add_move",
+                 "Add Movie Strip",
+                 "Add a movie strip to the sequencer and move it",
+                 "SEQUENCER_OT_movie_strip_add");
+  add_move_macro("SEQUENCER_OT_sound_strip_add_move",
+                 "Add Sound Strip",
+                 "Add a sound strip to the sequencer and move it",
+                 "SEQUENCER_OT_sound_strip_add");
+  add_move_macro("SEQUENCER_OT_image_strip_add_move",
+                 "Add Image Strip",
+                 "Add an image or image sequence to the sequencer and move it",
+                 "SEQUENCER_OT_image_strip_add");
 }
 
 }  // namespace blender::ed::vse

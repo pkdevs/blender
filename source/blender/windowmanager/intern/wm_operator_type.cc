@@ -417,6 +417,39 @@ static wmOperatorStatus wm_macro_invoke(bContext *C, wmOperator *op, const wmEve
   return wm_macro_invoke_internal(C, op, event, static_cast<wmOperator *>(op->macro.first));
 }
 
+/**
+ * If the running sub-operator is blocking, grab cursor.
+ * This may end up grabbing twice, but we don't care.
+ */
+static void wm_macro_cursor_grab(bContext *C, wmOperator *op)
+{
+  if ((op->opm->type->flag & OPTYPE_BLOCKING) == 0) {
+    return;
+  }
+
+  int wrap = WM_CURSOR_WRAP_NONE;
+  const rcti *wrap_region = nullptr;
+
+  if ((op->opm->flag & OP_IS_MODAL_GRAB_CURSOR) || (op->opm->type->flag & OPTYPE_GRAB_CURSOR_XY)) {
+    wrap = WM_CURSOR_WRAP_XY;
+  }
+  else if (op->opm->type->flag & OPTYPE_GRAB_CURSOR_X) {
+    wrap = WM_CURSOR_WRAP_X;
+  }
+  else if (op->opm->type->flag & OPTYPE_GRAB_CURSOR_Y) {
+    wrap = WM_CURSOR_WRAP_Y;
+  }
+
+  if (wrap) {
+    ARegion *region = CTX_wm_region(C);
+    if (region) {
+      wrap_region = &region->winrct;
+    }
+  }
+
+  WM_cursor_grab_enable(CTX_wm_window(C), eWM_CursorWrapAxis(wrap), wrap_region, false);
+}
+
 static wmOperatorStatus wm_macro_modal(bContext *C, wmOperator *op, const wmEvent *event)
 {
   wmOperator *opm = op->opm;
@@ -454,33 +487,7 @@ static wmOperatorStatus wm_macro_modal(bContext *C, wmOperator *op, const wmEven
           wm_event_free_handler(&handler->head);
         }
 
-        /* If operator is blocking, grab cursor.
-         * This may end up grabbing twice, but we don't care. */
-        if (op->opm->type->flag & OPTYPE_BLOCKING) {
-          int wrap = WM_CURSOR_WRAP_NONE;
-          const rcti *wrap_region = nullptr;
-
-          if ((op->opm->flag & OP_IS_MODAL_GRAB_CURSOR) ||
-              (op->opm->type->flag & OPTYPE_GRAB_CURSOR_XY))
-          {
-            wrap = WM_CURSOR_WRAP_XY;
-          }
-          else if (op->opm->type->flag & OPTYPE_GRAB_CURSOR_X) {
-            wrap = WM_CURSOR_WRAP_X;
-          }
-          else if (op->opm->type->flag & OPTYPE_GRAB_CURSOR_Y) {
-            wrap = WM_CURSOR_WRAP_Y;
-          }
-
-          if (wrap) {
-            ARegion *region = CTX_wm_region(C);
-            if (region) {
-              wrap_region = &region->winrct;
-            }
-          }
-
-          WM_cursor_grab_enable(win, eWM_CursorWrapAxis(wrap), wrap_region, false);
-        }
+        wm_macro_cursor_grab(C, op);
       }
     }
   }
@@ -496,6 +503,32 @@ static void wm_macro_cancel(bContext *C, wmOperator *op)
   }
 
   wm_macro_end(op, OPERATOR_CANCELLED);
+}
+
+wmOperatorStatus wm_macro_resume_after_fileselect(bContext *C,
+                                                  wmOperator *op,
+                                                  wmOperator *opm,
+                                                  const wmEvent *event)
+{
+  MacroData *md = static_cast<MacroData *>(op->customdata);
+  if (md) {
+    md->retval = OPERATOR_FINISHED;
+  }
+
+  const bool stop = (opm->flag & OP_MACRO_STOP) != 0;
+  opm->flag &= ~OP_MACRO_STOP;
+
+  if (stop || opm->next == nullptr) {
+    return wm_macro_end(op, OPERATOR_FINISHED);
+  }
+
+  const wmOperatorStatus retval = wm_macro_invoke_internal(C, op, event, opm->next);
+
+  if ((retval & OPERATOR_RUNNING_MODAL) && op->opm && op->opm != opm) {
+    wm_macro_cursor_grab(C, op);
+  }
+
+  return retval;
 }
 
 wmOperatorType *WM_operatortype_append_macro(const char *idname,

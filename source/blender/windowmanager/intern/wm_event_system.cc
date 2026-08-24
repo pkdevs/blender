@@ -140,6 +140,7 @@ static wmOperatorStatus wm_operator_call_internal(bContext *C,
 
 static bool wm_operator_check_locked_interface(bContext *C, wmOperatorType *ot);
 static wmEvent *wm_event_add_mousemove_to_head(wmWindow *win);
+static void wm_operator_clear_for_fileselect(const wmOperator *file_operator);
 static void wm_operator_free_for_fileselect(wmOperator *file_operator);
 
 static void wm_event_state_update_and_click_set_ex(wmEvent *event,
@@ -2351,7 +2352,10 @@ void WM_event_remove_handlers(bContext *C, ListBaseT<wmEventHandler> *handlers)
         WM_cursor_grab_disable(win, nullptr);
 
         if (handler->is_fileselect) {
-          wm_operator_free_for_fileselect(handler->op);
+          wm_operator_clear_for_fileselect(handler->op);
+          /* Unlike modal handlers, this is never the containing macro, see
+           * #WM_event_add_modal_handler_ex. Free the macro that owns the sub-operator. */
+          WM_operator_free(handler->op->opm ? handler->op->opm : handler->op);
         }
         else {
           WM_operator_free(handler->op);
@@ -2855,7 +2859,7 @@ static eHandlerActionFlag wm_handler_operator_call(bContext *C,
   return WM_HANDLER_BREAK;
 }
 
-static void wm_operator_free_for_fileselect(wmOperator *file_operator)
+static void wm_operator_clear_for_fileselect(const wmOperator *file_operator)
 {
   for (bScreen &screen : G_MAIN->screens) {
     for (ScrArea &area : screen.areabase) {
@@ -2867,6 +2871,11 @@ static void wm_operator_free_for_fileselect(wmOperator *file_operator)
       }
     }
   }
+}
+
+static void wm_operator_free_for_fileselect(wmOperator *file_operator)
+{
+  wm_operator_clear_for_fileselect(file_operator);
 
   WM_operator_free(file_operator);
 }
@@ -3010,8 +3019,11 @@ static eHandlerActionFlag wm_handler_fileselect_do(bContext *C,
           wm->op_undo_depth--;
         }
 
+        /* The containing macro, when the file browser was opened by a macro sub-operator. */
+        wmOperator *op_macro = handler->op->opm;
+
         /* XXX check this carefully, `CTX_wm_manager(C) == wm` is a bit hackish. */
-        if (retval & OPERATOR_FINISHED) {
+        if ((retval & OPERATOR_FINISHED) && (op_macro == nullptr)) {
           if (CTX_wm_manager(C) == wm && wm->op_undo_depth == 0) {
             if (handler->op->type->flag & OPTYPE_UNDO) {
               ED_undo_push_op(C, handler->op);
@@ -3048,15 +3060,46 @@ static eHandlerActionFlag wm_handler_fileselect_do(bContext *C,
         /* For #WM_operator_pystring only, custom report handling is done above. */
         wm_operator_reports(C, handler->op, retval, true);
 
-        if (retval & OPERATOR_FINISHED) {
-          WM_operator_last_properties_store(handler->op);
-        }
+        if (op_macro) {
+          /* The macro owns the sub-operator, only detach it from the file browser. */
+          wm_operator_clear_for_fileselect(handler->op);
 
-        if (retval & (OPERATOR_CANCELLED | OPERATOR_FINISHED)) {
-          wm_operator_free_for_fileselect(handler->op);
+          if (retval & OPERATOR_FINISHED) {
+            const intptr_t undo_id_prev = wm_operator_undo_active_id(wm);
+            const intptr_t register_id_prev = wm_operator_register_active_id(wm);
+
+            const wmOperatorStatus macro_retval = wm_macro_resume_after_fileselect(
+                C, op_macro, handler->op, eventstate);
+
+            if (macro_retval & OPERATOR_FINISHED) {
+              wm_operator_finished(C,
+                                   op_macro,
+                                   false,
+                                   true,
+                                   undo_id_prev != wm_operator_undo_active_id(wm),
+                                   register_id_prev != wm_operator_register_active_id(wm));
+            }
+            else if ((macro_retval & OPERATOR_RUNNING_MODAL) == 0) {
+              WM_operator_free(op_macro);
+            }
+          }
+          else {
+            WM_operator_free(op_macro);
+          }
+        }
+        else {
+          if (retval & OPERATOR_FINISHED) {
+            WM_operator_last_properties_store(handler->op);
+          }
+
+          if (retval & (OPERATOR_CANCELLED | OPERATOR_FINISHED)) {
+            wm_operator_free_for_fileselect(handler->op);
+          }
         }
       }
       else {
+        wmOperator *op_macro = handler->op->opm;
+
         if (handler->op->type->cancel) {
           if (handler->op->type->flag & OPTYPE_UNDO) {
             wm->op_undo_depth++;
@@ -3068,7 +3111,14 @@ static eHandlerActionFlag wm_handler_fileselect_do(bContext *C,
             wm->op_undo_depth--;
           }
         }
-        wm_operator_free_for_fileselect(handler->op);
+
+        if (op_macro) {
+          wm_operator_clear_for_fileselect(handler->op);
+          WM_operator_free(op_macro);
+        }
+        else {
+          wm_operator_free_for_fileselect(handler->op);
+        }
       }
 
       CTX_wm_area_set(C, nullptr);

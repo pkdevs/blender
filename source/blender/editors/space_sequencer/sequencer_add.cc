@@ -168,7 +168,6 @@ static void sequencer_add_ui(bContext * /*C*/, wmOperator *op)
 {
   ui::Layout &layout = *op->layout;
   SequencerAddData *sad = static_cast<SequencerAddData *>(op->customdata);
-  ImageFormatData *imf = &sad->im_format;
 
   bool is_redo_panel = sad == nullptr;
 
@@ -199,11 +198,12 @@ static void sequencer_add_ui(bContext * /*C*/, wmOperator *op)
     layout.prop(op->ptr, "length", UI_ITEM_NONE, std::nullopt, ICON_NONE);
   }
 
-  if (RNA_struct_find_property(op->ptr, "show_multiview")) {
+  if (!is_redo_panel && RNA_struct_find_property(op->ptr, "show_multiview")) {
     layout.separator();
 
     /* Image template. */
-    PointerRNA imf_ptr = RNA_pointer_create_discrete(nullptr, RNA_ImageFormatSettings, imf);
+    PointerRNA imf_ptr = RNA_pointer_create_discrete(
+        nullptr, RNA_ImageFormatSettings, &sad->im_format);
 
     /* Multiview template. */
     if (RNA_boolean_get(op->ptr, "show_multiview")) {
@@ -1448,7 +1448,7 @@ static wmOperatorStatus sequencer_add_movie_strip_exec(bContext *C, wmOperator *
   DEG_relations_tag_update(bmain);
   DEG_id_tag_update(&scene->id, ID_RECALC_SEQUENCER_STRIPS);
   sequencer_select_do_updates(C, scene);
-  move_strips(C, op);
+  stop_macro_if_not_moving(op);
 
   sequencer_add_free(C, op);
 
@@ -1610,7 +1610,7 @@ static wmOperatorStatus sequencer_add_sound_strip_exec(bContext *C, wmOperator *
   DEG_relations_tag_update(bmain);
   DEG_id_tag_update(&scene->id, ID_RECALC_SEQUENCER_STRIPS);
   sequencer_select_do_updates(C, scene);
-  move_strips(C, op);
+  stop_macro_if_not_moving(op);
 
   sequencer_add_free(C, op);
 
@@ -1850,7 +1850,7 @@ static wmOperatorStatus sequencer_add_image_strip_exec(bContext *C, wmOperator *
 
   DEG_id_tag_update(&scene->id, ID_RECALC_SEQUENCER_STRIPS);
   sequencer_select_do_updates(C, scene);
-  move_strips(C, op);
+  stop_macro_if_not_moving(op);
 
   sequencer_add_free(C, op);
 

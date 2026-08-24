@@ -53,6 +53,14 @@ extern void wm_clear_default_size(bContext *C);
  */
 void wm_operator_register(bContext *C, wmOperator *op);
 
+/**
+ * Continue a macro whose sub-operator \a opm opened a file browser and has just been executed.
+ */
+wmOperatorStatus wm_macro_resume_after_fileselect(bContext *C,
+                                                  wmOperator *op,
+                                                  wmOperator *opm,
+                                                  const wmEvent *event);
+
 /* `wm_operator.cc`, for init/exit. */
 
 void wm_operatortype_free();
