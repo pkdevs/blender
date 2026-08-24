@@ -12,6 +12,8 @@ def _register():
 
             # NOTE: search matches against the operator *label*, not bl_idname,
             # so the "nqz" search text below must keep matching this label.
+            # "NQZ" is an arbitrary, unlikely-to-collide search token used to
+            # reliably find this test-only operator.
             bl_label = "NQZ Gated"
 
             @classmethod
@@ -25,6 +27,13 @@ def _register():
 
 
 def test_operator_search_poll_gating():
+    """
+    Verify operator search respects an operator's poll() result.
+
+    The test searches for a test-only operator with poll() first disabled
+    and then enabled, confirming that the operator is only executable
+    through search when poll() returns True.
+    """
     import bpy
     _register()
     e, t, window = ui.test_window()
