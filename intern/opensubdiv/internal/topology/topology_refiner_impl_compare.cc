@@ -85,7 +85,7 @@ static bool checkBaseMeshTopologyMatches(const TopologyRefinerImpl *topology_ref
   // in the consistent state with the faces and face-vertices compared above. If that's not the
   // case the mesh is invalid and comparison can not happen reliably. For sharpness it is
   // important to know that the edges still connect the same pair of vertices though.
-  const Span<int2> base_edges = topology_refiner_impl->base_edges;
+  const Span<int2> base_edges = topology_refiner_impl->base_edges_sparse;
   for (const int edge_index : base_edges.index_range()) {
     if (topology_refiner_impl->base_edge_sharpness[edge_index] < 1e-6f) {
       continue;

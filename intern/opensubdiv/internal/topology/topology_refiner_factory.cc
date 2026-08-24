@@ -313,7 +313,7 @@ static void storeBaseMeshTopology(const OpenSubdiv_Converter *converter,
     }
   }
   const blender::Span<blender::int2> edges = converter->edges.take_front(stored_edges_num);
-  refiner_impl.base_edges.assign(edges.begin(), edges.end());
+  refiner_impl.base_edges_sparse.assign(edges.begin(), edges.end());
 }
 
 TopologyRefinerImpl *TopologyRefinerImpl::createFromConverter(

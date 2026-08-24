@@ -77,8 +77,7 @@ class TopologyRefinerImpl {
 
   int base_verts_num = 0;
 
-  // Number of edges in the base mesh. The #base_edges array is stored sparsely, so this is the
-  // edge count rather than its size.
+  // Number of edges in the base mesh.
   int base_edges_num = 0;
 
   // The pair of vertices each edge connects, but only up to the last edge which has sharpness.
@@ -86,7 +85,7 @@ class TopologyRefinerImpl {
   // Sharpness is the only per-edge data which can not be derived from the faces, so the vertices
   // of the remaining edges never have to be compared. Many meshes have no sharp edges at all, in
   // which case this stays empty.
-  std::vector<blender::int2> base_edges;
+  std::vector<blender::int2> base_edges_sparse;
 
   // Sharpness of each edge, matching #OpenSubdiv_Converter::edge_sharpness: either
   // #base_edges_num elements, or empty when no edge is sharp.
