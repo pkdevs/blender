@@ -437,7 +437,7 @@ ccl_device void osl_closure_generalized_schlick_bsdf_setup(
     const float ior = ior_from_F0(average(closure->f0));
     bsdf->ior = backfacing ? 1.0f / ior : ior;
   }
-  
+
   bool preserve_energy = false;
 
   /* Beckmann */
