@@ -41,6 +41,7 @@ VKImageView::VKImageView(VKTexture &texture, const VKImageViewInfo &info, String
       info.vk_format == to_vk_format(texture.device_format_get()))
   {
     view_usage_info.usage = texture.vk_image_usage_get() & ~VK_IMAGE_USAGE_STORAGE_BIT;
+    BLI_assert(view_usage_info.usage != 0);
     view_usage_info.pNext = image_view_info.pNext;
     image_view_info.pNext = &view_usage_info;
   }
