@@ -187,7 +187,10 @@ struct VisibleLightIterator {
     /* clang-format off */ /* Multiline macros would break line count. */
     [[resource_table]] const eevee::LightRenderData &lrd = resource_table_get(eevee::LightRenderData);
     /* clang-format on */
-    if (all(equal(lrd.light_buf[index].color * lrd.light_buf[index].point_power, float3(0.0f)))) {
+
+    LightData light = lrd.light_buf[index];
+
+    if (all(equal(light.color * light.point_power, float3(0.0f)))) {
       /* This is an optimization, but also ensures we skip the extracted World Sun if it's radiance
        * falls bellow the extraction Threshold. */
       return true;
@@ -195,8 +198,8 @@ struct VisibleLightIterator {
     if (is_directional()) {
       return false;
     }
-    LightVector lv = light_vector_get(lrd.light_buf[index], false, P);
-    if (light_attenuation_surface(lrd.light_buf[index], false, lv) < LIGHT_ATTENUATION_THRESHOLD) {
+    LightVector lv = light_vector_get(light, false, P);
+    if (light_attenuation_surface(light, false, lv) < LIGHT_ATTENUATION_THRESHOLD) {
       return true;
     }
     return false;
