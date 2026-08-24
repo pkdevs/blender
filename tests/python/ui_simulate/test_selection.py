@@ -82,6 +82,8 @@ def _setup_selection_test(
     for operators that require the window context restored after loading a
     startup file. Mode changes and deselect are left to the caller.
     """
+    import bpy
+    bpy.ops.wm.read_homefile(use_empty=True)
     obj = setup_data()
     yield
     e, t, window = ui.test_window()
@@ -99,7 +101,6 @@ def _setup_selection_test(
 def _setup_scene_objects():
     """Two objects placed either side of the origin."""
     import bpy
-    bpy.ops.wm.read_homefile(use_empty=True)
 
     bpy.ops.mesh.primitive_cube_add(location=(-3.0, 0.0, 0.0))
     cube = bpy.context.view_layer.objects.active
@@ -151,7 +152,7 @@ def test_view3d_selection_depth_cycling():
     bpy.ops.object.select_all(action='DESELECT')
     yield
 
-    for obj in (*objects, objects[0]):
+    for obj in objects:
         yield from _view3d_click_at(e, (0.0, 0.0, 0.0))
         _assert_only_object_selected(t, obj)
 
@@ -222,6 +223,35 @@ def test_view3d_mesh_edit_selection():
     yield
     yield from _view3d_click_at(e, (0.4, 0.4, 0.0))
     t.assertEqual(_mesh_edit_selected(obj, 'FACE'), {0})
+
+
+# -----------------------------------------------------------------------------
+# Weight paint vertex selection
+# -----------------------------------------------------------------------------
+
+
+def test_view3d_weight_paint_vertex_selection():
+    import bpy
+    obj, e, t, window, _area = yield from _setup_selection_test(_setup_plane)
+
+    bpy.ops.object.mode_set(mode='WEIGHT_PAINT')
+    yield
+
+    obj.data.use_paint_mask_vertex = True
+    # With vertex selection enabled the brush does not select, so switch to
+    # the select tool for LMB to run ``view3d.select``. Assigning the tool
+    # requires the View3D area in the context.
+    area, _ = _setup_view3d(window)
+    with bpy.context.temp_override(window=window, area=area):
+        bpy.ops.wm.tool_set_by_id(name="builtin.select")
+    yield
+
+    _deselect_all('paint.vert_select_all')
+    yield
+
+    # Click the corner vertex at (-1, -1).
+    yield from _view3d_click_at(e, (-1.0, -1.0, 0.0))
+    t.assertEqual(_attribute_selected(obj, '.select_vert'), {0})
 
 
 # -----------------------------------------------------------------------------
@@ -317,18 +347,13 @@ def _link_object(name, data):
 
 
 def _set_points_along_x(points, spacing):
-    """Position the points of a line along X at ``spacing`` intervals.
-
-    ``points`` is an indexable point sequence. Attribute data (e.g. a curves
-    ``position`` attribute) assigns its values directly.
-    """
-    for i in range(len(points)):
-        co = (float(i) * spacing, 0.0, 0.0)
-        point = points[i]
+    """Position points of a line along X at ``spacing`` intervals."""
+    for i, point in enumerate(points):
+        x = float(i) * spacing
         if hasattr(point, 'position'):
-            point.position = co
+            point.position = (x, 0.0, 0.0)
         else:
-            points[i] = co
+            point.co = (x, 0.0, 0.0, 1.0)
 
 
 def _attribute_selected(obj, attribute_name):
@@ -373,7 +398,28 @@ def _setup_curves_edit():
     return obj
 
 
-def _test_view3d_point_selection(setup_data, *, deselect_operator, get_selected, click_coords):
+def _setup_curve_edit():
+    """A curve object with a single 3-point spline along X."""
+    import bpy
+
+    bpy.ops.wm.read_homefile(use_empty=True)
+
+    curve = bpy.data.curves.new('SelectionCurve', 'CURVE')
+    curve.dimensions = '3D'
+    spline = curve.splines.new('POLY')
+    spline.points.add(2)
+
+    _set_points_along_x(spline.points, spacing=1.0)
+
+    obj = _link_object("SelectionCurve", curve)
+    return obj
+
+
+def _curve_selected_points(obj):
+    return {i for i, point in enumerate(obj.data.splines[0].points) if point.select}
+
+
+def _curves_point_selection(setup_data, *, deselect_operator, get_selected, click_coords):
     """Click points in edit mode and assert the resulting selection."""
     obj, e, t, _window, _area = yield from _setup_selection_test(setup_data)
 
@@ -390,7 +436,7 @@ def _test_view3d_point_selection(setup_data, *, deselect_operator, get_selected,
 
 
 def test_view3d_grease_pencil_point_selection():
-    yield from _test_view3d_point_selection(
+    yield from _curves_point_selection(
         _setup_grease_pencil_edit,
         deselect_operator='grease_pencil.select_all',
         get_selected=_grease_pencil_selected_points,
@@ -399,7 +445,7 @@ def test_view3d_grease_pencil_point_selection():
 
 
 def test_view3d_curves_point_selection():
-    yield from _test_view3d_point_selection(
+    yield from _curves_point_selection(
         _setup_curves_edit,
         deselect_operator='curves.select_all',
         get_selected=lambda obj: _attribute_selected(obj, '.selection'),
@@ -407,30 +453,10 @@ def test_view3d_curves_point_selection():
     )
 
 
-# -----------------------------------------------------------------------------
-# Weight paint vertex selection
-# -----------------------------------------------------------------------------
-
-
-def test_view3d_weight_paint_vertex_selection():
-    import bpy
-    obj, e, t, window, _area = yield from _setup_selection_test(_setup_plane)
-
-    bpy.ops.object.mode_set(mode='WEIGHT_PAINT')
-    yield
-
-    obj.data.use_paint_mask_vertex = True
-    # With vertex selection enabled the brush does not select, so switch to
-    # the select tool for LMB to run ``view3d.select``. Assigning the tool
-    # requires the View3D area in the context.
-    area, _ = _setup_view3d(window)
-    with bpy.context.temp_override(window=window, area=area):
-        bpy.ops.wm.tool_set_by_id(name="builtin.select")
-    yield
-
-    _deselect_all('paint.vert_select_all')
-    yield
-
-    # Click the corner vertex at (-1, -1).
-    yield from _view3d_click_at(e, (-1.0, -1.0, 0.0))
-    t.assertEqual(_attribute_selected(obj, '.select_vert'), {0})
+def test_view3d_curve_point_selection():
+    yield from _curves_point_selection(
+        _setup_curve_edit,
+        deselect_operator='curve.select_all',
+        get_selected=_curve_selected_points,
+        click_coords=(((0.0, 0.0, 0.0), {0}), ((2.0, 0.0, 0.0), {2})),
+    )
