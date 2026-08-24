@@ -418,7 +418,7 @@ static float compression_half_max(const int compression, const int quality)
   return HALF_MAX;
 }
 
-static int openexr_compression_data_colorspace(const int compression)
+static int openexr_compression_for_data_colorspace(const int compression)
 {
   /* Still write data passes lossless when using lossy compression. */
   if (ELEM(compression, R_IMF_EXR_CODEC_DWAA, R_IMF_EXR_CODEC_DWAB)) {
@@ -996,7 +996,7 @@ void IMB_exr_write_pass(ExrWriteHandle *handle,
     echan.ystride = ystride;
     /* This is used for writing, the data should not be modified. ????????? */
     echan.rect = const_cast<float *>(rect + channel);
-    echan.use_half_float = use_half_float;
+    echan.use_half_float = use_half_float && !IMB_colormanagement_space_is_data(echan.colorspace);
   }
 
   CLOG_DEBUG(&LOG, "Added pass %s %s", layerpassname.c_str(), channelnames.c_str());
@@ -1101,7 +1101,7 @@ bool IMB_exr_write_end(ExrWriteHandle *handle,
 
           if (echan.colorspace && IMB_colormanagement_space_is_data(echan.colorspace)) {
             openexr_header_compression(
-                &part_header, openexr_compression_data_colorspace(compress), quality);
+                &part_header, openexr_compression_for_data_colorspace(compress), quality);
           }
         }
 
@@ -2234,11 +2234,12 @@ static const ColorSpace *imb_exr_part_colorspace(const Header &header)
 static const Header &imb_exr_colorspace_header(const MultiPartInputFile &file)
 {
   /* For multi-part files, find the first header with a non-data colorspace,
-   * and use that as the colorspace.
+   * and use that as the colorspace for all color passes.
    *
    * The color interop forum recommendation say the colorInteropID of later
    * parts should not be different than the first part, except if it's missing
-   * or set to data. */
+   * or set to data. This fits for Blender image datablocks, which also have
+   * one colorspace but individual passes may be marked as data. */
   for (int p = 0; p < file.parts(); p++) {
     const ColorSpace *colorspace = imb_exr_part_colorspace(file.header(p));
     if (colorspace && !IMB_colormanagement_space_is_data(colorspace)) {
@@ -2246,6 +2247,7 @@ static const Header &imb_exr_colorspace_header(const MultiPartInputFile &file)
     }
   }
 
+  /* No representative colorspace found, fall back to the first header. */
   return file.header(0);
 }
 
