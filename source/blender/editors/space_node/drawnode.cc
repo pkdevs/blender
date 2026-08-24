@@ -1752,10 +1752,11 @@ float2 socket_link_connection_location(const bNode &node,
   return socket_location;
 }
 
-static void calculate_inner_link_bezier_points(std::array<float2, 4> &points)
+static void calculate_inner_link_bezier_points(std::array<float2, 4> &points,
+                                               const float curve_factor = 1.0f)
 {
   const int curving = ui::theme::get_value_type(TH_NODE_CURVING, SPACE_NODE);
-  if (curving == 0) {
+  if (curving == 0 || curve_factor <= 0.0f) {
     /* Straight line: align all points. */
     points[1] = math::interpolate(points[0], points[3], 1.0f / 3.0f);
     points[2] = math::interpolate(points[0], points[3], 2.0f / 3.0f);
@@ -1767,8 +1768,7 @@ static void calculate_inner_link_bezier_points(std::array<float2, 4> &points)
     /* Reduce the handle offset when the link endpoints are close to horizontal. */
     const float slope = math::safe_divide(dist_y, dist_x);
     const float clamp_factor = math::min(1.0f, slope * (4.5f - 0.25f * float(curving)));
-
-    const float handle_offset = curving * 0.1f * dist_x * clamp_factor;
+    const float handle_offset = curving * 0.1f * dist_x * clamp_factor * curve_factor;
 
     points[1].x = points[0].x + handle_offset;
     points[1].y = points[0].y;
@@ -1778,12 +1778,28 @@ static void calculate_inner_link_bezier_points(std::array<float2, 4> &points)
   }
 }
 
-static std::array<float2, 4> node_link_bezier_points(const bNodeLink &link)
+static float node_link_curve_factor(const SpaceNode &snode, const View2D &v2d)
+{
+  switch (eSpaceNode_NodeDetailMode(snode.node_detail_mode)) {
+    case SNODE_DETAIL_OFF:
+      return 1.0f;
+    case SNODE_DETAIL_MINIMIZED:
+      /* Sockets preserved in Minimized — keep bezier links. */
+      return 1.0f;
+    case SNODE_DETAIL_AUTO:
+    default:
+      break;
+  }
+  return (node_tree_view_scale(snode) > NODE_TREE_SCALE_SMALL * UI_INV_SCALE_FAC) ? 1.0f : 0.0f;
+}
+
+static std::array<float2, 4> node_link_bezier_points(const bNodeLink &link,
+                                                     const float curve_factor = 1.0f)
 {
   std::array<float2, 4> points;
   points[0] = socket_link_connection_location(*link.fromnode, *link.fromsock, link);
   points[3] = socket_link_connection_location(*link.tonode, *link.tosock, link);
-  calculate_inner_link_bezier_points(points);
+  calculate_inner_link_bezier_points(points, curve_factor);
   return points;
 }
 
@@ -2389,6 +2405,20 @@ static void node_draw_link_bezier_ex(const SpaceNode &snode,
   }
 }
 
+static bool draw_link_details(const SpaceNode &snode)
+{
+  switch (eSpaceNode_NodeDetailMode(snode.node_detail_mode)) {
+    case SNODE_DETAIL_OFF:
+      return true;
+    case SNODE_DETAIL_MINIMIZED:
+      return false;
+    case SNODE_DETAIL_AUTO:
+    default:
+      return node_tree_view_scale(snode) > NODE_TREE_SCALE_SMALL * UI_INV_SCALE_FAC;
+  }
+}
+
+
 void node_draw_link_bezier(const bContext &C,
                            const View2D &v2d,
                            const SpaceNode &snode,
@@ -2398,7 +2428,7 @@ void node_draw_link_bezier(const bContext &C,
                            const int th_col3,
                            const bool selected)
 {
-  const std::array<float2, 4> points = node_link_bezier_points(link);
+  const std::array<float2, 4> points = node_link_bezier_points(link, node_link_curve_factor(snode, v2d));
   if (!node_link_draw_is_visible(v2d, points)) {
     return;
   }
@@ -2447,6 +2477,7 @@ void node_draw_link(const bContext &C,
 }
 
 std::array<float2, 4> node_link_bezier_points_dragged(const SpaceNode &snode,
+                                                      const View2D &v2d,
                                                       const bNodeLink &link)
 {
   const float2 cursor = snode.runtime->cursor * UI_SCALE_FAC;
@@ -2456,7 +2487,7 @@ std::array<float2, 4> node_link_bezier_points_dragged(const SpaceNode &snode,
                   cursor;
   points[3] = link.tosock ? socket_link_connection_location(*link.tonode, *link.tosock, link) :
                             cursor;
-  calculate_inner_link_bezier_points(points);
+  calculate_inner_link_bezier_points(points, node_link_curve_factor(snode, v2d));
   return points;
 }
 
@@ -2469,16 +2500,21 @@ void node_draw_link_dragged(const bContext &C,
     return;
   }
 
-  const std::array<float2, 4> points = node_link_bezier_points_dragged(snode, link);
+  const std::array<float2, 4> points = node_link_bezier_points_dragged(snode, v2d, link);
 
   const NodeLinkDrawConfig draw_config = nodelink_get_draw_config(
       C, v2d, snode, link, TH_WIRE_INNER, TH_WIRE_INNER, TH_WIRE, true);
+  const bool show_end_markers = draw_link_details(snode);
   /* End marker outline. */
-  node_draw_link_end_markers(link, draw_config, points, true);
+  if (show_end_markers) {
+    node_draw_link_end_markers(link, draw_config, points, /*outline=*/true);
+  }
   /* Link. */
   node_draw_link_bezier_ex(snode, draw_config, points);
   /* End marker fill. */
-  node_draw_link_end_markers(link, draw_config, points, false);
+  if (show_end_markers) {
+    node_draw_link_end_markers(link, draw_config, points, /*outline=*/false);
+  }
 }
 
 /** \} */

@@ -8666,6 +8666,26 @@ static void rna_def_space_node(BlenderRNA *brna)
       {0, nullptr, 0, nullptr, nullptr},
   };
 
+  
+  static const EnumPropertyItem rna_enum_snode_detail_mode_items[] = {
+    {SNODE_DETAIL_AUTO,
+     "AUTO",
+     ICON_NONE,
+     "Auto",
+     "Automatically reduce node detail when zoomed out"},
+    {SNODE_DETAIL_MINIMIZED,
+     "MINIMIZED",
+     ICON_NONE,
+     "Minimized",
+     "Always show header pill only — no sockets, labels or info panels"},
+    {SNODE_DETAIL_OFF,
+     "OFF",
+     ICON_NONE,
+     "Off",
+     "Always show full node detail regardless of zoom level"},
+    {0, nullptr, 0, nullptr, nullptr},
+};
+
   srna = RNA_def_struct(brna, "SpaceNodeEditor", "Space");
   RNA_def_struct_sdna(srna, "SpaceNode");
   RNA_def_struct_ui_text(srna, "Space Node Editor", "Node editor space data");
@@ -8828,6 +8848,13 @@ static void rna_def_space_node(BlenderRNA *brna)
   RNA_def_property_ui_text(prop,
                            "Supports Previews",
                            "Whether the node editor's type supports displaying node previews");
+
+  prop = RNA_def_property(srna, "node_detail_mode", PROP_ENUM, PROP_NONE);
+  RNA_def_property_enum_sdna(prop, nullptr, "node_detail_mode");
+  RNA_def_property_enum_items(prop, rna_enum_snode_detail_mode_items);
+  RNA_def_property_ui_text(
+      prop, "Node Detail", "Control the level of node detail drawn while zooming");
+  RNA_def_property_update(prop, NC_SPACE | ND_SPACE_NODE, nullptr);
 
   rna_def_space_node_overlay(brna);
   RNA_api_space_node(srna);

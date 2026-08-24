@@ -159,7 +159,7 @@ Map<int, bool> &node_can_sync_cache_get(SpaceNode &snode);
 
 void node_tree_interface_draw(bContext &C, ui::Layout &layout, bNodeTree &tree);
 
-const char *node_socket_get_label(const bNodeSocket *socket, const char *panel_label = nullptr);
+const char *node_socket_get_label(const bNodeSocket *socket, const char *panel_label = nullptr, const bool use_long = false);
 
 const char *node_socket_get_description(const bNodeSocket *socket);
 

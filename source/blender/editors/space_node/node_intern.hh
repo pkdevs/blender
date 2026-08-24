@@ -283,6 +283,8 @@ struct SpaceNode_Runtime {
   /** Mouse position for drawing socket-less links and adding nodes. */
   float2 cursor;
 
+  const bNodeSocket *hovered_socket = nullptr;
+
   std::optional<int> frame_identifier_to_highlight;
 
   /** Temporary data for modal linking operator. */
@@ -326,6 +328,18 @@ enum NodeResizeDirection {
 };
 ENUM_OPERATORS(NodeResizeDirection);
 
+enum class NodeDetailLevel {
+  /** Full: sockets, property UI, panels, extra info. */
+  Full,
+  FullOff,
+  /** Reduced: sockets and labels visible, property UI hidden. */
+  Reduced,
+  /** CollapsedMinimized: pill only, with sockets. */
+  CollapsedMinimized,
+  /** Collapsed: pill only and or no sockets drawn on body. */
+  Collapsed,
+};
+
 /* Nodes draw without DPI - the view zoom is flexible. */
 #define BASIS_RAD (0.2f * U.widget_unit)
 #define NODE_DYS (U.widget_unit / 2)
@@ -338,7 +352,11 @@ ENUM_OPERATORS(NodeResizeDirection);
 #define NODE_MULTI_INPUT_LINK_GAP (0.25f * U.widget_unit)
 #define NODE_RESIZE_MARGIN (0.20f * U.widget_unit)
 #define NODE_LINK_RESOL 12
+#define NODE_TREE_SCALE_SMALL 0.2f
+#define NODE_SOCKET_OUTLINE U.pixelsize
 
+/** At this scale and below, switch from full to reduced detail (hide property UI). */
+#define NODE_TREE_SCALE_REDUCED 0.5f
 /* `space_node.cc` */
 
 /**
@@ -379,6 +397,8 @@ void node_set_cursor(wmWindow &win, ARegion &region, SpaceNode &snode, const flo
 float2 node_to_view(const float2 &co);
 void node_to_updated_rect(const bNode &node, rctf &r_rect);
 float2 node_from_view(const float2 &co);
+float node_tree_view_scale(const SpaceNode &snode);
+NodeDetailLevel node_detail_level(const SpaceNode &snode);
 
 /* `node_ops.cc` */
 
@@ -470,6 +490,7 @@ void node_draw_link_bezier(const bContext &C,
                            bool selected);
 
 std::array<float2, 4> node_link_bezier_points_dragged(const SpaceNode &snode,
+                                                      const View2D &v2d,
                                                       const bNodeLink &link);
 void node_link_bezier_points_evaluated(const bNodeLink &link,
                                        std::array<float2, NODE_LINK_RESOL + 1> &coords);

@@ -402,6 +402,9 @@ class NODE_MT_view(Menu):
             layout.operator("node.backimage_fit", text="Fit Backdrop to Available Space")
 
         layout.separator()
+        layout.prop_menu_enum(snode, "node_detail_mode")
+
+        layout.separator()
 
         layout.menu("INFO_MT_area")
 

@@ -819,7 +819,7 @@ bNodeSocket *node_find_indicated_socket(SpaceNode &snode,
   };
 
   for (bNode *node : sorted_nodes) {
-    const bool node_collapsed = node->flag & NODE_COLLAPSED;
+    const bool node_collapsed = (node->flag & NODE_COLLAPSED) || node_detail_level(snode) == NodeDetailLevel::CollapsedMinimized;
     if (!node->is_reroute() && !node_collapsed &&
         node->runtime->draw_bounds.ymax - cursor.y < NODE_DY)
     {

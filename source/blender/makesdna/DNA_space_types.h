@@ -831,6 +831,12 @@ struct SpaceNodeOverlay {
   char _pad[4] = {};
 };
 
+enum eSpaceNode_NodeDetailMode : int8_t {
+  SNODE_DETAIL_AUTO      = 0,
+  SNODE_DETAIL_MINIMIZED = 1,
+  SNODE_DETAIL_OFF       = 2,
+};
+
 struct SpaceNode {
   DNA_DEFINE_CXX_METHODS(SpaceNode)
 
@@ -900,7 +906,8 @@ struct SpaceNode {
   struct bGPdata *gpd = nullptr;
 
   eSpaceNode_Gizmo_Flag gizmo_flag = {};
-  char _pad2[7] = {};
+  eSpaceNode_NodeDetailMode node_detail_mode = SNODE_DETAIL_AUTO;
+  char _pad2[6] = {};
 
   SpaceNodeOverlay overlay;
 
