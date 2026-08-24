@@ -9,12 +9,10 @@
  * Embeds GPU meshes inside of bke::pbvh::Tree nodes, used by mesh sculpt mode.
  */
 
-#include "BLI_assert.hh"
 #include "BLI_enumerable_thread_specific.hh"
 #include "BLI_map.hh"
 #include "BLI_math_geom_c.hh"
 #include "BLI_math_vector_types.hh"
-#include "BLI_span.hh"
 #include "BLI_utildefines.hh"
 #include "BLI_vector.hh"
 
@@ -40,6 +38,7 @@
 #include "DRW_render.hh"
 
 #include "PRF_profile.hh"
+
 #include "draw_pbvh_allocator.hh"
 #include "draw_sculpt.hh"
 
@@ -2715,8 +2714,6 @@ static void create_lines_index_grids(const CCGKey &key,
     skip = 1 << (key.level - display_level - 1);
   }
 
-  /* TODO: this needs to be fixed in main as well. there was an under allocation that could lead to
-   * artifacts. */
   const int quads_per_axis = (gridsize - 1) / skip;
   UNUSED_VARS_NDEBUG(quads_per_axis);
   BLI_assert(uint(ibo_info.len) == 4 * totgrid * quads_per_axis * (quads_per_axis + 1));
