@@ -1537,6 +1537,7 @@ static void rna_def_trackingMarkers(BlenderRNA *brna, PropertyRNA *cprop)
       1.0);
   RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
   parm = RNA_def_pointer(func, "marker", "MovieTrackingMarker", "", "Newly created marker");
+  RNA_def_parameter_flags(parm, PROP_NEVER_NULL, ParameterFlag(0));
   RNA_def_function_return(func, parm);
 
   func = RNA_def_function(srna, "delete_frame", "rna_trackingMarkers_delete_frame");
@@ -1884,6 +1885,7 @@ static void rna_def_trackingPlaneMarkers(BlenderRNA *brna, PropertyRNA *cprop)
   RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
   parm = RNA_def_pointer(
       func, "plane_marker", "MovieTrackingPlaneMarker", "", "Newly created plane marker");
+  RNA_def_parameter_flags(parm, PROP_NEVER_NULL, ParameterFlag(0));
   RNA_def_function_return(func, parm);
 
   func = RNA_def_function(srna, "delete_frame", "rna_trackingPlaneMarkers_delete_frame");
@@ -2310,6 +2312,7 @@ static void rna_def_trackingTracks(BlenderRNA *brna)
               MINFRAME,
               MAXFRAME);
   parm = RNA_def_pointer(func, "track", "MovieTrackingTrack", "", "Newly created track");
+  RNA_def_parameter_flags(parm, PROP_NEVER_NULL, ParameterFlag(0));
   RNA_def_function_return(func, parm);
 
   /* active track */
@@ -2378,6 +2381,7 @@ static void rna_def_trackingObjectTracks(BlenderRNA *brna)
               MINFRAME,
               MAXFRAME);
   parm = RNA_def_pointer(func, "track", "MovieTrackingTrack", "", "Newly created track");
+  RNA_def_parameter_flags(parm, PROP_NEVER_NULL, ParameterFlag(0));
   RNA_def_function_return(func, parm);
 
   /* active track */
@@ -2523,6 +2527,7 @@ static void rna_def_trackingObjects(BlenderRNA *brna, PropertyRNA *cprop)
   parm = RNA_def_string(func, "name", nullptr, 0, "", "Name of new object");
   RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
   parm = RNA_def_pointer(func, "object", "MovieTrackingObject", "", "New motion tracking object");
+  RNA_def_parameter_flags(parm, PROP_NEVER_NULL, ParameterFlag(0));
   RNA_def_function_return(func, parm);
 
   func = RNA_def_function(srna, "remove", "rna_trackingObject_remove");

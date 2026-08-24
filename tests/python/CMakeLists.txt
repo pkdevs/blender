@@ -1719,6 +1719,7 @@ if(WITH_UI_TESTS)
   # `"${TEST_PYTHON_EXE}" "${CMAKE_CURRENT_LIST_DIR}/ui_simulate/run.py" --list-tests`
   # list explicitly so changes bisecting/updated are sure to re-run CMake.
   set(_ui_tests
+    test_editor_types.test_open_editor_types
     test_search_in_editors.test_properties_search
     test_search_in_editors.test_outliner_search
     test_search_in_editors.test_dopesheet_search
@@ -1772,6 +1773,14 @@ if(WITH_UI_TESTS)
     test_render.interactive_rendering_eevee
     test_render.animation_rendering_and_player
     test_bpy_types.unregister_referenced_type
+    test_drag_interactions.view3d_object_drag
+    test_drag_interactions.viewport_navigation_drags
+    test_drag_interactions.node_single_drag
+    test_drag_interactions.node_multiple_drag
+    test_drag_interactions.dopesheet_keyframe_drag
+    test_drag_interactions.graph_editor_drag
+    test_drag_interactions.uv_editor_drag
+    test_drag_interactions.image_editor_pan
     test_sequencer.compositor_modifier_mask_with_single_input
     test_menu_search_and_exec.view3d_add
     test_menu_search_and_exec.modifier_add
