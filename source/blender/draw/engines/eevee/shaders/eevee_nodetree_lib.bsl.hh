@@ -829,7 +829,8 @@ void light_iter_init(eevee::light::VisibleLightIterator &iter)
 #ifdef GPU_FRAGMENT_SHADER
   iter.init(gl_FragCoord.xy,
             dot(view_matrices_get().forward(), g_data.P) -
-                dot(view_matrices_get().forward(), view_matrices_get().position()));
+                dot(view_matrices_get().forward(), view_matrices_get().position()),
+            receiver_light_set_get(object_infos_get()));
 #endif
 }
 bool light_iter_next(eevee::light::VisibleLightIterator &iter)

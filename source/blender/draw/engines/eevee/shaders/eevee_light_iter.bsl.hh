@@ -67,7 +67,9 @@ struct VisibleLightIterator {
 
   int phase;
 
-  void init(float2 pixel, float linear_view_z)
+  uint light_set;
+
+  void init(float2 pixel, float linear_view_z, uint receiver_light_set)
   {
     /* clang-format off */ /* Multiline macros would break line count. */
     [[resource_table]] const eevee::LightRenderData &lrd = resource_table_get(eevee::LightRenderData);
@@ -94,6 +96,7 @@ struct VisibleLightIterator {
     local_min_index = simd_broadcast_first(simd_min(local_min_index));
     local_max_index = simd_broadcast_first(simd_max(local_max_index));
 #endif
+    light_set = receiver_light_set;
 
     phase = 0;
   }
@@ -189,6 +192,10 @@ struct VisibleLightIterator {
     /* clang-format on */
 
     LightData light = lrd.light_buf[index];
+
+    if (!light_linking_affects_receiver(light.light_set_membership, light_set)) {
+      return true;
+    }
 
     if (all(equal(light.color * light.point_power, float3(0.0f)))) {
       /* This is an optimization, but also ensures we skip the extracted World Sun if it's radiance
