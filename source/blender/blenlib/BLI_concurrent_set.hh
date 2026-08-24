@@ -128,7 +128,8 @@ class ConcurrentSet {
                       PtrHash,
                       PtrIsEqual>;
 
-  mutable Mutex mutex_;
+  /* Wrapped in a unique_ptr to allow ConcurrentSet to be moveable. */
+  mutable std::unique_ptr<Mutex> mutex_ = std::make_unique<Mutex>();
   UsedSet set_;
 
  public:
@@ -138,7 +139,7 @@ class ConcurrentSet {
    */
   template<typename ForwardKey> const Key *lookup_ptr(const ForwardKey &key) const
   {
-    std::lock_guard lock{mutex_};
+    std::lock_guard lock{*mutex_};
     const std::unique_ptr<Key> *stored = set_.lookup_key_ptr_as(key);
     return stored ? stored->get() : nullptr;
   }
@@ -158,21 +159,21 @@ class ConcurrentSet {
   }
   template<typename ForwardKey> const Key &lookup_key_or_add_as(ForwardKey &&key)
   {
-    std::lock_guard lock{mutex_};
+    std::lock_guard lock{*mutex_};
     return *set_.lookup_key_or_add_as(std::make_unique<Key>(std::forward<ForwardKey>(key)));
   }
 
   /** Returns the number of keys currently in the set. */
   int64_t size() const
   {
-    std::lock_guard lock{mutex_};
+    std::lock_guard lock{*mutex_};
     return set_.size();
   }
 
   /** Potentially grow the set so that it can hold at least #n keys without rehashing again. */
   void reserve(const int64_t n)
   {
-    std::lock_guard lock{mutex_};
+    std::lock_guard lock{*mutex_};
     set_.reserve(n);
   }
 
