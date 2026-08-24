@@ -163,6 +163,19 @@ void sequencer_keymap(wmKeyConfig *keyconf)
   slip_modal_keymap(keyconf);
 }
 
+static void add_move_macro(const char *idname,
+                           const char *name,
+                           const char *description,
+                           const char *add_idname)
+{
+  wmOperatorType *ot = WM_operatortype_append_macro(
+      idname, name, description, OPTYPE_UNDO | OPTYPE_REGISTER);
+  WM_operatortype_macro_define(ot, add_idname);
+  wmOperatorTypeMacro *otmacro = WM_operatortype_macro_define(ot, "TRANSFORM_OT_seq_slide");
+  RNA_boolean_set(otmacro->ptr, "view2d_edge_pan", true);
+  RNA_boolean_set(otmacro->ptr, "release_confirm", false);
+}
+
 void ED_operatormacros_sequencer()
 {
   wmOperatorType *ot;
@@ -212,6 +225,27 @@ void ED_operatormacros_sequencer()
       OPTYPE_UNDO | OPTYPE_REGISTER);
   WM_operatortype_macro_define(ot, "SEQUENCER_OT_retiming_transition_add");
   WM_operatortype_macro_define(ot, "TRANSFORM_OT_seq_slide");
+
+  add_move_macro("SEQUENCER_OT_effect_strip_add_move",
+                 "Add Effect Strip",
+                 "Add an effect to the sequencer and move it",
+                 "SEQUENCER_OT_effect_strip_add");
+  add_move_macro("SEQUENCER_OT_scene_strip_add_move",
+                 "Add Scene Strip",
+                 "Add a strip re-using this scene as the source and move it",
+                 "SEQUENCER_OT_scene_strip_add");
+  add_move_macro("SEQUENCER_OT_scene_strip_add_new_move",
+                 "Add Strip with a new Scene",
+                 "Add a strip using a new scene as the source and move it",
+                 "SEQUENCER_OT_scene_strip_add_new");
+  add_move_macro("SEQUENCER_OT_movieclip_strip_add_move",
+                 "Add MovieClip Strip",
+                 "Add a movieclip strip to the sequencer and move it",
+                 "SEQUENCER_OT_movieclip_strip_add");
+  add_move_macro("SEQUENCER_OT_mask_strip_add_move",
+                 "Add Mask Strip",
+                 "Add a mask strip to the sequencer and move it",
+                 "SEQUENCER_OT_mask_strip_add");
 }
 
 }  // namespace blender::ed::vse

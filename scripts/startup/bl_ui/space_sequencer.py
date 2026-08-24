@@ -729,15 +729,19 @@ class SEQUENCER_MT_add(Menu):
         layout.separator()
 
         layout.operator_context = 'INVOKE_REGION_WIN'
-        layout.operator("sequencer.effect_strip_add", text="Color", icon='COLOR').type = 'COLOR'
-        layout.operator("sequencer.effect_strip_add", text="Text", icon='FONT_DATA').type = 'TEXT'
+        props = layout.operator("sequencer.effect_strip_add_move", text="Color", icon='COLOR')
+        props.SEQUENCER_OT_effect_strip_add.type = 'COLOR'
+        props = layout.operator("sequencer.effect_strip_add_move", text="Text", icon='FONT_DATA')
+        props.SEQUENCER_OT_effect_strip_add.type = 'TEXT'
 
         layout.separator()
         total, nonsound = selected_strips_count(context)
 
-        layout.operator("sequencer.effect_strip_add", text="Adjustment Layer", icon='COLOR').type = 'ADJUSTMENT'
+        props = layout.operator("sequencer.effect_strip_add_move", text="Adjustment Layer", icon='COLOR')
+        props.SEQUENCER_OT_effect_strip_add.type = 'ADJUSTMENT'
         col = layout.column()
-        col.operator("sequencer.effect_strip_add", text="Compositor", icon='NODE_COMPOSITING').type = 'COMPOSITOR'
+        props = col.operator("sequencer.effect_strip_add_move", text="Compositor", icon='NODE_COMPOSITING')
+        props.SEQUENCER_OT_effect_strip_add.type = 'COMPOSITOR'
         col.enabled = nonsound < 3
 
         layout.operator_context = 'INVOKE_DEFAULT'
@@ -771,9 +775,12 @@ class SEQUENCER_MT_add_transitions(Menu):
         layout = self.layout
 
         col = layout.column()
-        col.operator("sequencer.effect_strip_add", text="Crossfade").type = 'CROSS'
-        col.operator("sequencer.effect_strip_add", text="Gamma Crossfade").type = 'GAMMA_CROSS'
-        col.operator("sequencer.effect_strip_add", text="Wipe").type = 'WIPE'
+        props = col.operator("sequencer.effect_strip_add_move", text="Crossfade")
+        props.SEQUENCER_OT_effect_strip_add.type = 'CROSS'
+        props = col.operator("sequencer.effect_strip_add_move", text="Gamma Crossfade")
+        props.SEQUENCER_OT_effect_strip_add.type = 'GAMMA_CROSS'
+        props = col.operator("sequencer.effect_strip_add_move", text="Wipe")
+        props.SEQUENCER_OT_effect_strip_add.type = 'WIPE'
         col.enabled = nonsound == 2
 
         layout.separator()
@@ -792,49 +799,53 @@ class SEQUENCER_MT_add_effect(Menu):
         layout.operator_context = 'INVOKE_REGION_WIN'
         _, nonsound = selected_strips_count(context)
 
-        layout.operator("sequencer.effect_strip_add", text="Multicam Selector").type = 'MULTICAM'
+        props = layout.operator("sequencer.effect_strip_add_move", text="Multicam Selector")
+        props.SEQUENCER_OT_effect_strip_add.type = 'MULTICAM'
 
         layout.separator()
 
         col = layout.column()
-        col.operator("sequencer.effect_strip_add", text="Speed Control").type = 'SPEED'
-        col.operator("sequencer.effect_strip_add", text="Glow").type = 'GLOW'
-        col.operator("sequencer.effect_strip_add", text="Gaussian Blur").type = 'GAUSSIAN_BLUR'
+        props = col.operator("sequencer.effect_strip_add_move", text="Speed Control")
+        props.SEQUENCER_OT_effect_strip_add.type = 'SPEED'
+        props = col.operator("sequencer.effect_strip_add_move", text="Glow")
+        props.SEQUENCER_OT_effect_strip_add.type = 'GLOW'
+        props = col.operator("sequencer.effect_strip_add_move", text="Gaussian Blur")
+        props.SEQUENCER_OT_effect_strip_add.type = 'GAUSSIAN_BLUR'
         col.enabled = nonsound == 1
 
         layout.separator()
 
         col = layout.column()
         col.operator(
-            "sequencer.effect_strip_add",
+            "sequencer.effect_strip_add_move",
             text="Add",
             text_ctxt=i18n_contexts.id_sequence,
-        ).type = 'ADD'
+        ).SEQUENCER_OT_effect_strip_add.type = 'ADD'
         col.operator(
-            "sequencer.effect_strip_add",
+            "sequencer.effect_strip_add_move",
             text="Subtract",
             text_ctxt=i18n_contexts.id_sequence,
-        ).type = 'SUBTRACT'
+        ).SEQUENCER_OT_effect_strip_add.type = 'SUBTRACT'
         col.operator(
-            "sequencer.effect_strip_add",
+            "sequencer.effect_strip_add_move",
             text="Multiply",
             text_ctxt=i18n_contexts.id_sequence,
-        ).type = 'MULTIPLY'
+        ).SEQUENCER_OT_effect_strip_add.type = 'MULTIPLY'
         col.operator(
-            "sequencer.effect_strip_add",
+            "sequencer.effect_strip_add_move",
             text="Alpha Over",
             text_ctxt=i18n_contexts.id_sequence,
-        ).type = 'ALPHA_OVER'
+        ).SEQUENCER_OT_effect_strip_add.type = 'ALPHA_OVER'
         col.operator(
-            "sequencer.effect_strip_add",
+            "sequencer.effect_strip_add_move",
             text="Alpha Under",
             text_ctxt=i18n_contexts.id_sequence,
-        ).type = 'ALPHA_UNDER'
+        ).SEQUENCER_OT_effect_strip_add.type = 'ALPHA_UNDER'
         col.operator(
-            "sequencer.effect_strip_add",
+            "sequencer.effect_strip_add_move",
             text="Color Mix",
             text_ctxt=i18n_contexts.id_sequence,
-        ).type = 'COLORMIX'
+        ).SEQUENCER_OT_effect_strip_add.type = 'COLORMIX'
         col.enabled = nonsound == 2
 
 

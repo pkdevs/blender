@@ -70,6 +70,12 @@ enum eOperator_Flag : short {
    * (the region-type is maintained to prevent errors).
    */
   OP_IS_MODAL_CURSOR_REGION = (1 << 4),
+
+  /**
+   * Set by a macro sub-operator on itself to end the macro after it,
+   * skipping any remaining sub-operators. Cleared once acted on.
+   */
+  OP_MACRO_STOP = (1 << 5),
 };
 ENUM_OPERATORS(eOperator_Flag)
 

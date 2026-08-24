@@ -143,8 +143,9 @@ static void sequencer_add_scene_draw(const bContext *C, Menu *menu)
   /* New scene. */
   {
     PointerRNA op_ptr = layout.op(
-        "SEQUENCER_OT_scene_strip_add_new", IFACE_("Empty Scene"), ICON_ADD);
-    RNA_enum_set(&op_ptr, "type", SCE_COPY_NEW);
+        "SEQUENCER_OT_scene_strip_add_new_move", IFACE_("Empty Scene"), ICON_ADD);
+    PointerRNA add_ptr = RNA_pointer_get(&op_ptr, "SEQUENCER_OT_scene_strip_add_new");
+    RNA_enum_set(&add_ptr, "type", SCE_COPY_NEW);
   }
 
   /* Handle the assets. */
@@ -203,12 +204,13 @@ static void sequencer_add_scene_draw(const bContext *C, Menu *menu)
       if (scene.id.asset_data) {
         continue;
       }
-      PointerRNA op_ptr = layout.op("SEQUENCER_OT_scene_strip_add",
+      PointerRNA op_ptr = layout.op("SEQUENCER_OT_scene_strip_add_move",
                                     scene.id.name + 2,
                                     ICON_NONE,
                                     wm::OpCallContext::InvokeRegionWin,
                                     UI_ITEM_NONE);
-      RNA_enum_set(&op_ptr, "scene", i);
+      PointerRNA add_ptr = RNA_pointer_get(&op_ptr, "SEQUENCER_OT_scene_strip_add");
+      RNA_enum_set(&add_ptr, "scene", i);
     }
   }
 }

@@ -505,6 +505,16 @@ static void move_strips(bContext *C, wmOperator *op)
   WM_operator_properties_free(&ptr);
 }
 
+static void stop_macro_if_not_moving(wmOperator *op)
+{
+  PropertyRNA *prop = RNA_struct_find_property(op->ptr, "move_strips");
+
+  if (prop == nullptr || !RNA_property_boolean_get(op->ptr, prop) || op_invoked_by_drop_event(op))
+  {
+    op->flag |= OP_MACRO_STOP;
+  }
+}
+
 static bool load_data_init_from_operator(seq::LoadData *load_data, bContext *C, wmOperator *op)
 {
   const Main *bmain = CTX_data_main(C);
@@ -634,6 +644,9 @@ static bool load_data_init_from_operator(seq::LoadData *load_data, bContext *C, 
 
     load_data->start_frame = std::trunc(mouse_view.x);
     load_data->channel = std::trunc(mouse_view.y);
+
+    RNA_int_set(op->ptr, "frame_start", load_data->start_frame);
+    RNA_int_set(op->ptr, "channel", load_data->channel);
   }
   return true;
 }
@@ -765,7 +778,7 @@ static wmOperatorStatus sequencer_add_scene_strip_exec(bContext *C, wmOperator *
   DEG_id_tag_update(&scene->id, ID_RECALC_SEQUENCER_STRIPS);
   DEG_relations_tag_update(bmain);
   sequencer_select_do_updates(C, scene);
-  move_strips(C, op);
+  stop_macro_if_not_moving(op);
 
   return OPERATOR_FINISHED;
 }
@@ -858,7 +871,7 @@ static wmOperatorStatus sequencer_add_scene_strip_new_exec(bContext *C, wmOperat
   DEG_id_tag_update(&scene->id, ID_RECALC_SEQUENCER_STRIPS);
   DEG_relations_tag_update(bmain);
   sequencer_select_do_updates(C, scene);
-  move_strips(C, op);
+  stop_macro_if_not_moving(op);
 
   return OPERATOR_FINISHED;
 }
@@ -1034,7 +1047,7 @@ static wmOperatorStatus sequencer_add_movieclip_strip_exec(bContext *C, wmOperat
 
   DEG_id_tag_update(&scene->id, ID_RECALC_SEQUENCER_STRIPS);
   sequencer_select_do_updates(C, scene);
-  move_strips(C, op);
+  stop_macro_if_not_moving(op);
 
   return OPERATOR_FINISHED;
 }
@@ -1106,7 +1119,7 @@ static wmOperatorStatus sequencer_add_mask_strip_exec(bContext *C, wmOperator *o
 
   DEG_id_tag_update(&scene->id, ID_RECALC_SEQUENCER_STRIPS);
   sequencer_select_do_updates(C, scene);
-  move_strips(C, op);
+  stop_macro_if_not_moving(op);
 
   return OPERATOR_FINISHED;
 }
@@ -2005,7 +2018,10 @@ static wmOperatorStatus sequencer_add_effect_strip_exec(bContext *C, wmOperator 
   if (seq::effect_type_get_min_num_inputs(load_data.effect.type) == 0 &&
       (load_data.effect.type != STRIP_TYPE_COMPOSITOR || input1 == nullptr))
   {
-    move_strips(C, op);
+    stop_macro_if_not_moving(op);
+  }
+  else {
+    op->flag |= OP_MACRO_STOP;
   }
 
   return OPERATOR_FINISHED;

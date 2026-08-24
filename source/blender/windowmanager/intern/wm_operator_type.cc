@@ -360,6 +360,11 @@ static wmOperatorStatus wm_macro_exec(bContext *C, wmOperator *op)
     else {
       break; /* Operator didn't finish, end macro. */
     }
+
+    if (opm.flag & OP_MACRO_STOP) {
+      opm.flag &= ~OP_MACRO_STOP;
+      break;
+    }
   }
 
   return wm_macro_end(op, retval);
@@ -395,6 +400,11 @@ static wmOperatorStatus wm_macro_invoke_internal(bContext *C,
     }
     else {
       break; /* Operator didn't finish, end macro. */
+    }
+
+    if (opm->flag & OP_MACRO_STOP) {
+      opm->flag &= ~OP_MACRO_STOP;
+      break;
     }
   }
 
