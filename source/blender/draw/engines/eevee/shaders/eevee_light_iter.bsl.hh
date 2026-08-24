@@ -76,7 +76,6 @@ struct VisibleLightIterator {
     /* clang-format on */
     const LightCullingData &culling = lrd.light_cull_buf;
     const auto &zbins = lrd.light_zbin_buf;
-    const auto &words = lrd.light_tile_buf;
 
     uint2 tile_co = uint2(pixel / culling.tile_size);
     tile_word_offset = (tile_co.x + tile_co.y * culling.tile_x_len) * culling.tile_word_len;

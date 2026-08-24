@@ -824,7 +824,7 @@ void scene_time_uniforms(float &seconds, float &frame)
   frame = uni.uniform_buf.scene.frame;
 }
 
-void light_iter_init(eevee::light::VisibleLightIterator &iter)
+void light_iter_init([[maybe_unused]] eevee::light::VisibleLightIterator &iter)
 {
 #ifdef GPU_FRAGMENT_SHADER
   iter.init(gl_FragCoord.xy,
@@ -833,7 +833,7 @@ void light_iter_init(eevee::light::VisibleLightIterator &iter)
             receiver_light_set_get(object_infos_get()));
 #endif
 }
-bool light_iter_next(eevee::light::VisibleLightIterator &iter)
+bool light_iter_next([[maybe_unused]] eevee::light::VisibleLightIterator &iter)
 {
 #ifdef GPU_FRAGMENT_SHADER
   return iter.next();
@@ -841,7 +841,7 @@ bool light_iter_next(eevee::light::VisibleLightIterator &iter)
   return false;
 #endif
 }
-bool light_iter_should_skip(eevee::light::VisibleLightIterator &iter)
+bool light_iter_should_skip([[maybe_unused]] eevee::light::VisibleLightIterator &iter)
 {
 #ifdef GPU_FRAGMENT_SHADER
   return iter.should_skip(g_data.P);
@@ -904,12 +904,12 @@ void node_light_info_impl(const int light_index,
   is_sun = is_directional ? 1.0f : 0.0f;
 }
 
-void node_light_accumulation_impl(const int light_index,
-                                  float4 diffuse_light,
-                                  float4 diffuse_color,
-                                  float4 glossy_light,
-                                  float4 glossy_color,
-                                  float weight,
+void node_light_accumulation_impl([[maybe_unused]] const int light_index,
+                                  [[maybe_unused]] float4 diffuse_light,
+                                  [[maybe_unused]] float4 diffuse_color,
+                                  [[maybe_unused]] float4 glossy_light,
+                                  [[maybe_unused]] float4 glossy_color,
+                                  [[maybe_unused]] float weight,
                                   Closure &result)
 {
   /* clang-format off */ /* Multiline macros would break line count. */
@@ -966,9 +966,9 @@ void node_light_evaluation_impl(
   factor /= (light.point_power * M_1_PI);
 }
 
-void node_shadow_raycast_impl(const int light_index,
-                              float3 position,
-                              float softness,
+void node_shadow_raycast_impl([[maybe_unused]] const int light_index,
+                              [[maybe_unused]] float3 position,
+                              [[maybe_unused]] float softness,
                               float4 &color)
 {
   /* clang-format off */ /* Multiline macros would break line count. */
