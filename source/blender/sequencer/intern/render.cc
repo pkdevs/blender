@@ -157,16 +157,13 @@ static void ensure_ibuf_is_color_space(ImBuf *ibuf, bool make_float, const char 
     if (ibuf->byte_data() != nullptr) {
       IMB_free_byte_pixels(ibuf);
     }
-    /* Note: we do not use predivide to more closely match what
-     * compositor does, and to better preserve cases of pure emissive
-     * colors (alpha=0, RGB non black). */
     IMB_colormanagement_transform_float(ibuf->float_data_for_write(),
                                         ibuf->x,
                                         ibuf->y,
                                         ibuf->channels,
                                         from_colorspace,
                                         to_colorspace,
-                                        false);
+                                        true);
     IMB_colormanagement_assign_float_colorspace(ibuf, to_colorspace);
   }
 }
@@ -789,7 +786,7 @@ static SeqResult seq_render_effect_strip_impl(const RenderData *context,
     return out;
   }
 
-  float fac = effect_fader_calc(scene, strip, timeline_frame);
+  float fac = effect_fader_calc(scene, strip, timeline_frame, state->is_current_frame);
 
   StripEarlyOut early_out = sh.early_out(strip, fac);
 
@@ -2141,6 +2138,7 @@ ImBuf *render_give_ibuf(const RenderData *context, float timeline_frame, int cha
       scene, channels, seqbasep, timeline_frame, chanshown);
 
   SeqRenderState state;
+  state.is_current_frame = timeline_frame == BKE_scene_frame_get(scene);
 
   if (!strips.is_empty() && !out) {
     std::scoped_lock lock(seq_render_mutex);
@@ -2182,6 +2180,7 @@ SeqResult seq_render_give_ibuf_seqbase(const RenderData *context,
 ImBuf *render_give_ibuf_direct(const RenderData *context, float timeline_frame, Strip *strip)
 {
   SeqRenderState state;
+  state.is_current_frame = timeline_frame == BKE_scene_frame_get(context->scene);
 
   movie_reader_cache_timestamp_bump();
 
@@ -2218,6 +2217,7 @@ GpuContextState render_begin_gpu(const RenderData &rd)
 {
   GPUContext *active_ctx = GPU_context_active_get();
   if (active_ctx != nullptr) {
+    GPU_render_begin();
     return GpuContextState::AlreadyActive;
   }
 
@@ -2249,7 +2249,11 @@ GpuContextState render_begin_gpu(const RenderData &rd)
 
 void render_end_gpu(const RenderData &rd, GpuContextState state)
 {
-  if (state == GpuContextState::AlreadyActive || state == GpuContextState::Unsupported) {
+  if (state == GpuContextState::Unsupported) {
+    return;
+  }
+  if (state == GpuContextState::AlreadyActive) {
+    GPU_render_end();
     return;
   }
 
