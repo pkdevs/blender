@@ -48,6 +48,7 @@
 #include "BKE_idtype.hh"
 #include "BKE_main.hh"
 #include "BKE_preferences.h"
+#include "BKE_recents.hh"
 
 #include "BLO_userdef_default.h"
 
@@ -192,7 +193,11 @@ static FileSelectParams *fileselect_ensure_updated_file_params(SpaceFile *sfile)
     else {
       params->type = FILE_SPECIAL;
     }
-
+    const std::string last_operator_directory =
+        recents::Section("filebrowser.last_operator_directory").get<std::string>(op->idname);
+    if (!last_operator_directory.empty()) {
+      STRNCPY(params->dir, last_operator_directory.c_str());
+    }
     if (is_filepath && RNA_struct_property_is_set_ex(op->ptr, "filepath", false)) {
       char filepath[FILE_MAX];
       RNA_string_get(op->ptr, "filepath", filepath);

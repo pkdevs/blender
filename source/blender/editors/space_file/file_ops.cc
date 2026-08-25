@@ -19,6 +19,7 @@
 #include "BKE_blendfile.hh"
 #include "BKE_context.hh"
 #include "BKE_main.hh"
+#include "BKE_recents.hh"
 #include "BKE_report.hh"
 #include "BKE_screen.hh"
 
@@ -2163,7 +2164,7 @@ static bool file_execute(bContext *C, SpaceFile *sfile)
     char filepath[FILE_MAX];
 
     sfile->op = nullptr;
-
+    recents::Section("filebrowser.last_operator_directory").set<std::string>(op->idname, params->dir);
     file_sfile_to_operator_ex(C, bmain, op, sfile, filepath);
 
     if (BLI_exists(params->dir)) {
