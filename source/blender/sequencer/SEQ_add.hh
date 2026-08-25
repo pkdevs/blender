@@ -155,10 +155,15 @@ Strip *add_movieclip_strip(Scene *scene, ListBaseT<Strip> *seqbase, LoadData *lo
  * \return created strip
  */
 Strip *add_mask_strip(Scene *scene, ListBaseT<Strip> *seqbase, LoadData *load_data);
-std::pair<int, int> transition_max_bounds_get(const Scene *scene,
-                                              Editing *ed,
-                                              const Strip *input1,
-                                              const Strip *input2);
+bool transition_has_space(const Scene *scene,
+                          const Strip *input1,
+                          const Strip *input2,
+                          int left_handle,
+                          int right_handle);
+std::pair<int, int> transition_handles_clamp(const Scene *scene,
+                                             const Strip *input1,
+                                             const Strip *input2,
+                                             std::pair<int, int> original_handles);
 std::optional<StringRefNull> overlap_transition_validate(Scene *scene,
                                                          const Strip *input1,
                                                          const Strip *input2,

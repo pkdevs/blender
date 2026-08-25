@@ -167,52 +167,74 @@ Strip *add_mask_strip(Scene *scene, ListBaseT<Strip> *seqbase, LoadData *load_da
   return strip;
 }
 
-// this could take in the left and right handles, and then return a bool depending on if it got
-// clamped or not
-// or it could take in a pair of left, right, and then return the clamped pair. then you can
-// compare the pairs for equality. then it doesn't unnecessarily change if that isn't needed
-std::pair<int, int> transition_max_bounds_get(const Scene *scene,
-                                              Editing *ed,
-                                              const Strip *input1,
-                                              const Strip *input2)
+struct TransitionClampData {
+  int left_handle_min, left_handle_max;
+  int right_handle_min, right_handle_max;
+};
+
+// rename input1 and input2 to left_input and right_input in these once the order is checked
+static TransitionClampData transition_hard_bounds_get(const Scene *scene,
+                                                      const Strip *input1,
+                                                      const Strip *input2)
 {
+  const int cutpoint = input2->left_handle();
+
+  TransitionClampData clamp_data;
+  clamp_data.left_handle_min = input1->left_handle();
+  clamp_data.left_handle_max = cutpoint - 1;
+  clamp_data.right_handle_min = cutpoint + 1;
+  clamp_data.right_handle_max = input2->right_handle(scene);
+
+  Editing *ed = seq::editing_get(scene);
   const Strip *left_transition = seq::get_transition_on_side(ed, input1, seq::Side::Left);
   const Strip *right_transition = seq::get_transition_on_side(ed, input2, seq::Side::Right);
 
-  int left_handle_min = input1->left_handle();
-  int right_handle_max = input2->right_handle(scene);
   if (left_transition) {
-    left_handle_min = max_ii(left_handle_min, left_transition->right_handle(scene));
+    clamp_data.left_handle_min = max_ii(clamp_data.left_handle_min,
+                                        left_transition->right_handle(scene));
   }
   if (right_transition) {
-    right_handle_max = min_ii(right_handle_max, right_transition->left_handle());
+    clamp_data.right_handle_max = min_ii(clamp_data.right_handle_max,
+                                         right_transition->left_handle());
   }
 
-  return {left_handle_min, right_handle_max};
+  return clamp_data;
 }
 
-// this validation also needs to check that that it is _within_ bounds
-// i guess this could feed in left as: cutpoint - 1 and right as: cutpoint + 1
-// then if those values get changed by transition_max_bounds_get (which could be renamed to
-// transition_bounds_clamp), it is for sure invalid. hmm
-// and i guess the transition would just be clamped to the area where it can fit in case it's
-// completely in the wrong place. then it's not an error that needs to be checked here
-// but you can't compare against if it's different reliably. maybe just make it return a bool for
-// whether it got clamped
-// then in sequencer_add_transition_strip_exec just make tmp variables for the inputs, since that's
-// the only place where you want to test that
+bool transition_has_space(const Scene *scene,
+                          const Strip *input1,
+                          const Strip *input2,
+                          int left_handle,
+                          int right_handle)
+{
+  TransitionClampData bounds = transition_hard_bounds_get(scene, input1, input2);
+  const bool left_valid = left_handle >= bounds.left_handle_min &&
+                          left_handle <= bounds.left_handle_max;
+  const bool right_valid = right_handle >= bounds.right_handle_min &&
+                           right_handle <= bounds.right_handle_max;
+  return left_valid && right_valid;
+}
 
-// ACTUALLY, this is used incorrectly in sequencer_add_transition_strip_exec. i mean, this
-// shouldn't be called at all there. it should just do those two checks directly there and ignore
-// those cases. those aren't really errors the space check is done later and the length check is
-// global
+std::pair<int, int> transition_handles_clamp(const Scene *scene,
+                                             const Strip *input1,
+                                             const Strip *input2,
+                                             std::pair<int, int> original_handles)
+{
+  const auto [left, right] = original_handles;
+  const TransitionClampData bounds = transition_hard_bounds_get(scene, input1, input2);
+
+  const auto left_clamped = math::clamp(left, bounds.left_handle_min, bounds.left_handle_max);
+  const auto right_clamped = math::clamp(right, bounds.right_handle_min, bounds.right_handle_max);
+
+  return {left_clamped, right_clamped};
+}
+
 std::optional<StringRefNull> overlap_transition_validate(Scene *scene,
                                                          const Strip *input1,
                                                          const Strip *input2,
                                                          int length)
 {
-  Editing *ed = editing_get(scene);
-
+  // this should also check that input1 comes before input2
   if (length < 2) {
     return N_("Transition length must be at least 2");
   }
@@ -222,11 +244,10 @@ std::optional<StringRefNull> overlap_transition_validate(Scene *scene,
   if (input1->is_overlap_transition() || input2->is_overlap_transition()) {
     return N_("Cannot add transitions on other transitions");
   }
-  const auto bounds = transition_max_bounds_get(scene, ed, input1, input2);
+
+  /* Check if the minimum length transition fits. */
   const int cutpoint = input2->left_handle();
-  const bool no_space_left = bounds.first > cutpoint - 1;
-  const bool no_space_right = bounds.second < cutpoint + 1;
-  if (no_space_left || no_space_right) {
+  if (!transition_has_space(scene, input1, input2, cutpoint - 1, cutpoint + 1)) {
     return N_("Not enough space for transition");
   }
 
@@ -238,8 +259,6 @@ Strip *add_effect_strip(Scene *scene,
                         LoadData *load_data,
                         ReportList *reports)
 {
-  Editing *ed = editing_get(scene);
-
   const int length = load_data->effect.length;
   const Strip *input1 = load_data->effect.input1;
   const Strip *input2 = load_data->effect.input2;
@@ -282,19 +301,13 @@ Strip *add_effect_strip(Scene *scene,
   if (overlap_transition) {
     strip->flag |= SEQ_SAME_CHANNEL_TRANSITION;
 
-    // const int cutpoint = input2->left_handle();
-    const auto bounds = transition_max_bounds_get(scene, ed, input1, input2);
-
     // make this respect the start frame parameter. then in #rna_Strips_new_effect and the add
     // operator, calculate it so the behavior is the same
-    // this bounds checking isn't correct. well. this is fine here, but
-    // #overlap_transition_validate doesn't account for the start frame rn
-    const int left_handle = max_ii(load_data->start_frame, bounds.first);
-    const int right_handle = min_ii(load_data->start_frame + length, bounds.second);
-    // const int left_handle = max_ii(cutpoint - floor(length / 2.0), bounds.first);
-    // const int right_handle = min_ii(cutpoint + ceil(length / 2.0), bounds.second);
+    const std::pair<int, int> handles{load_data->start_frame, load_data->start_frame + length};
+    const auto [left_clamped,
+                right_clamped] = transition_handles_clamp(scene, input1, input2, handles);
 
-    strip->handles_set(scene, left_handle, right_handle);
+    strip->handles_set(scene, left_clamped, right_clamped);
     strip->channel_set(input1->channel);
   }
 

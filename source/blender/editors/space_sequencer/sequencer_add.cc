@@ -2237,8 +2237,6 @@ static wmOperatorStatus sequencer_add_transition_strip_exec(bContext *C, wmOpera
   printf("exec called\n");
 
   // check if there's anything from sequencer_add_generic_exec missing
-  // make this work with connected strips (now for videos, later for audio as well)
-  // actually, that doesn't need any special handling. so yea
 
   VectorSet<Strip *> inputs = seq::query_selected_strips(ed->current_strips());
   /* Ignore sound strips until audio transitions are added (to make connected strips work in the
@@ -2257,10 +2255,6 @@ static wmOperatorStatus sequencer_add_transition_strip_exec(bContext *C, wmOpera
   const auto type = StripType(RNA_enum_get(op->ptr, "type"));
   // add the "clamp" option
 
-  // maybe don't do this. just do it directly in the loop thing. nvm it was for a reason
-  // Vector<std::pair<Strip *, Strip *>> input_pairs;
-
-  // left, right, cutpoint, channel (make struct)
   struct OverlapLoadData {
     Strip *left_input;
     Strip *right_input;
@@ -2268,12 +2262,9 @@ static wmOperatorStatus sequencer_add_transition_strip_exec(bContext *C, wmOpera
     int cutpoint;
     int left_handle, right_handle;
   };
-  // sort it first by channel, then by cutpoint. then check and calculate overlap by going through
-  // each adjacent "pair" in the vector. when doing that check to see the channels are the same.
-  // that way you're comparing against adjacent transitions on the same channel. and of course
-  // check that a.input2=b.input1
-  // could be a vectorset since i'm removing stuff
+
   Vector<OverlapLoadData> overlap_transitions{};
+  bool clamped = false;
 
   /* Find cutpoints for transitions. */
   for (Strip *left_strip : inputs) {
@@ -2285,71 +2276,49 @@ static wmOperatorStatus sequencer_add_transition_strip_exec(bContext *C, wmOpera
       const int left_strip_right_handle = left_strip->right_handle(scene);
       const int right_strip_left_handle = right_strip->left_handle();
 
-      // Ahh it needss to separetely check if there's enough space taking all new transitions into
-      // consideration: if you add two transitions to three adjacent strips at once, you need to
-      // check it ahead of time so you don't end up with only the other one of them being added
-      // ok
-      // so calculate the size of the overlapping region, then divide it in half across the
-      // transitions (if clamping is enabled)
-
       /* Adjacent strips on the same channel get overlap transitions. */
       if (left_strip_right_handle == right_strip_left_handle &&
           left_strip->channel == right_strip->channel)
       {
-        /* It's clear what the user intends, so these aren't errors. */
+        /* It's clear what the user intends so these aren't errors. */
         const bool has_transition_already = seq::get_transition_between(
                                                 scene, left_strip, right_strip) != nullptr;
         const bool invalid_input = left_strip->is_overlap_transition() ||
                                    right_strip->is_overlap_transition();
-
-        auto error_message = seq::overlap_transition_validate(
-            scene, left_strip, right_strip, length);
-        if (error_message) {
-          // or error and return?
-          BKE_reportf(op->reports,
-                      RPT_WARNING,
-                      "Cannot add transition between %s and %s: %s",
-                      left_strip->name,
-                      right_strip->name,
-                      error_message->c_str());
+        if (has_transition_already || invalid_input) {
           continue;
         }
-        /* Existing transitions keep their bounds. New transitions are clamped to them. */
-        // add transition_max_bounds_get here and check if that causes the calculated bounds to get
-        // clamped. move the floor, ceil logic to another function to keep these in sync.
-        // if it is clamped, just set a boolean flag and after this function report the waring
-        // about it.
+
         const int cutpoint = right_strip->left_handle();
-        const auto bounds = seq::transition_max_bounds_get(scene, ed, left_strip, right_strip);
-        const int left_handle = max_ii(cutpoint - floor(length / 2.0), bounds.first);
-        const int right_handle = min_ii(cutpoint + ceil(length / 2.0), bounds.second);
-        overlap_transitions.append(
-            {left_strip, right_strip, left_strip->channel, cutpoint, left_handle, right_handle});
-        /* Zero-initialize other values. */
-        // seq::LoadData load_data{};
-        // load_data.effect.length = length;
-        // load_data.effect.type = type;
-        // load_data.effect.input1 = left_strip;
-        // load_data.effect.input2 = right_strip;
-        // load_data.channel = left_strip->channel;
-        /* The reports shouldn't return anything. Maybe revert it to return them instead of just
-         * writing directly to reports. */
-        // seq::add_effect_strip(scene, ed->current_strips(), &load_data, op->reports);
-        // input_pairs.append({left_strip, right_strip});
+        const std::pair<int, int> handles{cutpoint - floor(length / 2.0),
+                                          cutpoint + ceil(length / 2.0)};
+        /* Existing transitions keep their bounds. New transitions are clamped to them. */
+        const auto clamped_handles = seq::transition_handles_clamp(
+            scene, left_strip, right_strip, handles);
+        overlap_transitions.append({left_strip,
+                                    right_strip,
+                                    left_strip->channel,
+                                    cutpoint,
+                                    clamped_handles.first,
+                                    clamped_handles.second});
+        clamped |= handles != clamped_handles;
+        if (handles != clamped_handles) {
+          printf("clamped at start (%i, %i) -> (%i, %i)\n",
+                 handles.first,
+                 handles.second,
+                 clamped_handles.first,
+                 clamped_handles.second);
+        }
       }
       /* Strips that overlap in time on different channels get old type transition effects. */
-      // was there a function for this?
+      // can't use the function because it would add twice for one selection. but what about the
+      // case where they match in time? compare the channel
       else if (right_strip_left_handle >= left_strip_left_handle &&
                right_strip_left_handle < left_strip_right_handle)
       {
-        // input_pairs.append({left_strip, right_strip});
+        // enough channels check?
       }
     }
-  }
-
-  if (overlap_transitions.is_empty()) {
-    BKE_report(op->reports, RPT_ERROR, "");
-    return OPERATOR_CANCELLED;
   }
 
   std::ranges::sort(overlap_transitions,
@@ -2357,11 +2326,8 @@ static wmOperatorStatus sequencer_add_transition_strip_exec(bContext *C, wmOpera
                       return first.channel < second.channel || first.cutpoint < second.cutpoint;
                     });
 
-  // this requires a new #add_transition_strip function.
-  // wait no it doesn't you can just specify the start frame in the load data
   /* Check new transitions against adjacent new transitions. If their length would cause them to
    * overlap, move the overlapping handles an equal distance away to prevent overlap. */
-  // maybe change i name to something else
   for (int i = 0; i < overlap_transitions.size() - 1; ++i) {
     OverlapLoadData &first = overlap_transitions[i];
     OverlapLoadData &second = overlap_transitions[i + 1];
@@ -2372,25 +2338,26 @@ static wmOperatorStatus sequencer_add_transition_strip_exec(bContext *C, wmOpera
     if (first.right_input != second.left_input) {
       continue;
     }
-    if (first.right_handle <= second.left_handle) {
-      continue;
-    }
 
-    // save a variable about whether it got clamped
     const int distance = first.right_handle - second.left_handle;
-    first.right_handle = first.right_handle - ceil(distance / 2.0f);
-    second.left_handle = second.left_handle + floor(distance / 2.0f);
+    if (distance > 0) {
+      clamped |= true;
+      printf("clamped at distance (cutpoints): (%i, %i)\n", first.cutpoint, second.cutpoint);
+
+      first.right_handle = first.right_handle - ceil(distance / 2.0f);
+      second.left_handle = second.left_handle + floor(distance / 2.0f);
+    }
   }
 
-  // the min and max need to be for both handles separately! in #transition_max_bounds_get
-
-  /* Don't add overlap transitions where there isn't space for them. */
+  /* Don't add overlap transitions where there isn't space for them. This is done as a separate
+   * step to remove all otherwise overlapping transitions. */
   const int64_t no_space_count = overlap_transitions.remove_if(
       [&](const OverlapLoadData &transition) {
-        const auto [left_handle_min, right_handle_max] = seq::transition_max_bounds_get(
-            scene, ed, transition.left_input, transition.right_input);
-        return transition.left_handle < left_handle_min ||
-               transition.right_handle > right_handle_max;
+        return !seq::transition_has_space(scene,
+                                          transition.left_input,
+                                          transition.right_input,
+                                          transition.left_handle,
+                                          transition.right_handle);
       });
 
   if (overlap_transitions.is_empty()) {
@@ -2398,27 +2365,30 @@ static wmOperatorStatus sequencer_add_transition_strip_exec(bContext *C, wmOpera
     return OPERATOR_CANCELLED;
   }
 
+  if (clamped) {
+    BKE_report(op->reports, RPT_WARNING, "Length of transition(s) clamped");
+  }
   if (no_space_count > 0) {
-    BKE_report(op->reports, RPT_WARNING, "Some transitions were not added due to lack of space");
+    BKE_report(op->reports, RPT_WARNING, "Some transition(s) were not added due to lack of space");
   }
 
+  deselect_all_strips(scene);
+
   /* Finally do the actual adding. */
-  for (OverlapLoadData &transition : overlap_transitions) {
+  for (OverlapLoadData &transition_data : overlap_transitions) {
     /* Zero-initialize other values. */
     seq::LoadData load_data{};
-    load_data.start_frame = transition.left_handle;
-    load_data.effect.length = transition.right_handle - transition.left_handle;
+    load_data.start_frame = transition_data.left_handle;
+    load_data.effect.length = transition_data.right_handle - transition_data.left_handle;
     load_data.effect.type = type;
-    load_data.effect.input1 = transition.left_input;
-    load_data.effect.input2 = transition.right_input;
-    load_data.channel = transition.channel;
-    printf("%s's transition: left: %i, right: %i\n",
-           transition.left_input->name,
-           transition.left_handle,
-           transition.right_handle);
+    load_data.effect.input1 = transition_data.left_input;
+    load_data.effect.input2 = transition_data.right_input;
+    load_data.channel = transition_data.channel;
     // The reports shouldn't return anything. Maybe revert it to return them instead of just
     // writing directly to reports.
-    seq::add_effect_strip(scene, ed->current_strips(), &load_data, op->reports);
+    Strip *transition = seq::add_effect_strip(
+        scene, ed->current_strips(), &load_data, op->reports);
+    seq::select_active_set(scene, transition);
   }
 
   DEG_id_tag_update(&scene->id, ID_RECALC_SEQUENCER_STRIPS);
@@ -2437,9 +2407,6 @@ static wmOperatorStatus sequencer_add_transition_strip_invoke(bContext *C,
     return OPERATOR_CANCELLED;
   }
 
-  printf("invoke called\n");
-  // set default length here
-
   return sequencer_add_transition_strip_exec(C, op);
 }
 
@@ -2451,15 +2418,15 @@ static std::string sequencer_add_transition_strip_get_description(bContext * /*C
 
   switch (type) {
     case STRIP_TYPE_CROSS:
-      return TIP_("Add a crossfade transition for two or more selected strips with video content");
+      return TIP_(
+          "Add crossfade transition(s) for two or more selected strips with video content");
     case STRIP_TYPE_GAMCROSS:
       return TIP_(
-          "Add a gamma crossfade transition for two or more selected strips with video content");
+          "Add gamma crossfade transition(s) for two or more selected strips with video content");
     case STRIP_TYPE_WIPE:
-      return TIP_(
-          "Add a wipe transition strip for two or more selected strips with video content");
+      return TIP_("Add wipe transition(s) for two or more selected strips with video content");
     case STRIP_TYPE_COMPOSITOR:
-      return TIP_("Add a compositor transition two or more selected strips with video content");
+      return TIP_("Add compositor transition(s) two or more selected strips with video content");
     default:
       break;
   }
@@ -2490,7 +2457,6 @@ void SEQUENCER_OT_transition_strip_add(wmOperatorType *ot)
                STRIP_TYPE_CROSS,
                "Type",
                "Transition type");
-  // RNA_def_property_translation_context(prop, BLT_I18NCONTEXT_ID_SEQUENCE);
   RNA_def_int(ot->srna,
               "length",
               seq::DEFAULT_STRIP_LENGTH,
