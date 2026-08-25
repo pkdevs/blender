@@ -39,6 +39,7 @@
 #include "BKE_editmesh.hh"
 #include "BKE_grease_pencil.hh"
 #include "BKE_idtype.hh"
+#include "BKE_key.hh"
 #include "BKE_lattice.hh"
 #include "BKE_layer.hh"
 #include "BKE_lib_id.hh"
@@ -920,6 +921,7 @@ static wmOperatorStatus apply_objects_internal(bContext *C,
     }
     else if (ob->type == OB_GREASE_PENCIL) {
       GreasePencil &grease_pencil = *id_cast<GreasePencil *>(ob->data);
+      Key *key = grease_pencil.key;
 
       const float scalef = mat4_to_scale(mat);
 
@@ -944,8 +946,38 @@ static wmOperatorStatus apply_objects_internal(bContext *C,
                 }
               });
 
-              curves.transform(object_to_layer * float4x4(mat) * layer_to_object);
+              const float4x4 matrix = object_to_layer * float4x4(mat) * layer_to_object;
+              const float3x3 matrix_without_translation = float3x3(matrix);
+
+              curves.transform(matrix);
               curves.calculate_bezier_auto_handles();
+
+              if (!key) {
+                return;
+              }
+
+              bke::MutableAttributeAccessor attributes = curves.attributes_for_write();
+
+              for (const auto [keyblock_index, keyblock] : key->block.enumerate()) {
+                /* Skip the base key frame. */
+                if (&keyblock == key->refkey) {
+                  continue;
+                }
+
+                bke::SpanAttributeWriter<float3> key_positions =
+                    attributes.lookup_or_add_for_write_span<float3>(
+                        blender::bke::greasepencil::shapekey_position_attribute(keyblock.name),
+                        bke::AttrDomain::Point);
+
+                threading::parallel_for(curves.points_range(), 8192, [&](const IndexRange range) {
+                  for (const int i : range) {
+                    key_positions.span[i] = math::transform_point(matrix_without_translation,
+                                                                  key_positions.span[i]);
+                  }
+                });
+
+                key_positions.finish();
+              }
             });
       }
     }
