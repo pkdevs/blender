@@ -33,6 +33,9 @@ static int node_shader_gpu_shadow_raycast(GPUMaterial *mat,
   if (!in[1].link) {
     GPU_link(mat, "world_position_get", &in[1].link);
   }
+  else {
+    GPU_material_flag_set(mat, GPU_MATFLAG_SHADOW_OFFSET);
+  }
 
   return GPU_stack_link(mat, node, "node_shadow_raycast", in, out);
 }

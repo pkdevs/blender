@@ -254,7 +254,8 @@ def draw_material_surface_settings(layout, mat, is_eevee=True):
         col.prop(mat, "displacement_method", text="Displacement")
         col = col.column(align=True)
 
-    col.enabled = mat.displacement_method != 'BUMP'
+    # TODO: Use a separate method for shadow offset?
+    # col.enabled = mat.displacement_method != 'BUMP'
     # Clarify that this is for displacement if the displacement method setting is not above.
     max_diplacement_text = "Max Distance" if is_eevee else "Max Displacement"
     col.prop(mat, "max_vertex_displacement", text=max_diplacement_text)
