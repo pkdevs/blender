@@ -86,10 +86,8 @@ def test_operator_search_poll_gating():
 def test_operator_poll_sweep():
     """
     Sweep every registered operator's poll() across every settable editor
-    type and verify that no poll() call raises an exception.
-
-    This helps identify operators whose poll() functions crash when evaluated
-    in different editor contexts.    
+	type and confirm each call returns a plain bool rather than raising or
+	returning something poll() shouldn't (None, a string, etc). 
     """
     _, t, window = ui.test_window()
     area = ui.largest_area(window.screen)

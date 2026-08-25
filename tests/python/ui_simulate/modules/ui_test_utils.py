@@ -281,7 +281,11 @@ def poll_sweep(window, area):
                     op = getattr(mod, op_name)
                     total += 1
                     try:
-                        op.poll()
+                        result = op.poll()
+                        if not isinstance(result, bool):
+                            failures.append(
+	                            f"{area_type}: {idname} poll returned {result!r} (expected bool)"
+	                        )
                     except Exception as ex:
                         failures.append(f"{area_type}: {idname} poll raised {ex!r}")
 
