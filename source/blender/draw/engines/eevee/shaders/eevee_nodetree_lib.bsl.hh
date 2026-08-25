@@ -827,10 +827,10 @@ void scene_time_uniforms(float &seconds, float &frame)
 void light_iter_init([[maybe_unused]] eevee::light::VisibleLightIterator &iter)
 {
 #ifdef GPU_FRAGMENT_SHADER
-  iter.init(gl_FragCoord.xy,
-            dot(view_matrices_get().forward(), g_data.P) -
-                dot(view_matrices_get().forward(), view_matrices_get().position()),
-            receiver_light_set_get(object_infos_get()));
+  const ViewMatrices view = view_matrices_get();
+  const float3 forward = view.forward();
+  const float linear_view_z = dot(forward, g_data.P) - dot(forward, view.position());
+  iter.init(gl_FragCoord.xy, linear_view_z, receiver_light_set_get(object_infos_get()));
 #endif
 }
 bool light_iter_next([[maybe_unused]] eevee::light::VisibleLightIterator &iter)
@@ -863,6 +863,11 @@ bool light_iter_should_skip([[maybe_unused]] eevee::light::VisibleLightIterator 
         light_index = iter.index;
 
 #else
+
+/* Avoid double definition warning (GPU_SHADER_CREATE_INFO shenanigans).  */
+#  ifdef LIGHT_ITER_BEGIN
+#    undef LIGHT_ITER_BEGIN
+#  endif
 
 #  define LIGHT_ITER_BEGIN(light_index) \
     { \

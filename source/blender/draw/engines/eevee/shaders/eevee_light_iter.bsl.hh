@@ -8,6 +8,7 @@
 
 #include "eevee_light_data.bsl.hh"
 #include "eevee_light_lib.bsl.hh"
+#include "gpu_shader_math_vector_compare_lib.glsl"
 
 namespace eevee::light {
 
@@ -53,10 +54,15 @@ void foreach([[resource_table]] const LightRenderData &srt,
   }
 }
 
-// TODO: BSL issue workaround
-#define bool_ctor_() false
+enum LightIteratorPhase : uint {
+  LIGHT_ITER_PHASE_INIT = 0,
+  LIGHT_ITER_PHASE_DIRECTIONAL = 1,
+  LIGHT_ITER_PHASE_LOCAL = 2,
+  LIGHT_ITER_PHASE_END = 3,
+};
 
 struct VisibleLightIterator {
+ private:
   int index;
 
   uint tile_word_offset;
@@ -65,10 +71,38 @@ struct VisibleLightIterator {
   uint local_word_idx;
   uint local_word;
 
-  int phase;
+  LightIteratorPhase phase;
 
   uint light_set;
 
+  void next_local_word()
+  {
+    /* clang-format off */ /* Multiline macros would break line count. */
+    [[resource_table]] const eevee::LightRenderData &lrd = resource_table_get(eevee::LightRenderData);
+    /* clang-format on */
+    const auto &words = lrd.light_tile_buf;
+
+    /* Same as divide by 32 but avoid integer division. */
+    uint word_max = local_max_index >> 5u;
+    if (local_word_idx > word_max) {
+      return;
+    }
+
+    local_word = words[tile_word_offset + local_word_idx];
+    local_word &= zbin_mask(local_word_idx, local_min_index, local_max_index);
+/* Ensure all threads inside a subgroup get the same value to reduce VGPR usage. */
+#ifdef GPU_METAL
+    /* Waiting to implement extensions support. We need:
+     * - GL_KHR_shader_subgroup_ballot
+     * - GL_KHR_shader_subgroup_arithmetic
+     * or
+     * - Vulkan 1.1
+     */
+    local_word = simd_broadcast_first(simd_or(local_word));
+#endif
+  }
+
+ public:
   void init(float2 pixel, float linear_view_z, uint receiver_light_set)
   {
     /* clang-format off */ /* Multiline macros would break line count. */
@@ -97,34 +131,7 @@ struct VisibleLightIterator {
 #endif
     light_set = receiver_light_set;
 
-    phase = 0;
-  }
-
-  void next_local_word_()
-  {
-    /* clang-format off */ /* Multiline macros would break line count. */
-    [[resource_table]] const eevee::LightRenderData &lrd = resource_table_get(eevee::LightRenderData);
-    /* clang-format on */
-    const auto &words = lrd.light_tile_buf;
-
-    /* Same as divide by 32 but avoid integer division. */
-    uint word_max = local_max_index >> 5u;
-    if (local_word_idx > word_max) {
-      return;
-    }
-
-    local_word = words[tile_word_offset + local_word_idx];
-    local_word &= zbin_mask(local_word_idx, local_min_index, local_max_index);
-/* Ensure all threads inside a subgroup get the same value to reduce VGPR usage. */
-#ifdef GPU_METAL
-    /* Waiting to implement extensions support. We need:
-     * - GL_KHR_shader_subgroup_ballot
-     * - GL_KHR_shader_subgroup_arithmetic
-     * or
-     * - Vulkan 1.1
-     */
-    local_word = simd_broadcast_first(simd_or(local_word));
-#endif
+    phase = LIGHT_ITER_PHASE_INIT;
   }
 
   bool next()
@@ -135,28 +142,22 @@ struct VisibleLightIterator {
     const LightCullingData &culling = lrd.light_cull_buf;
 
     switch (phase) {
-      case 0: {
-        /* Initialize. */
+      case LIGHT_ITER_PHASE_INIT: {
         index = int(culling.local_lights_len) - 1;
-        phase = 1;
+        phase = LIGHT_ITER_PHASE_DIRECTIONAL;
       }
-      case 1: {
-        /* Directional Lights. */
+      case LIGHT_ITER_PHASE_DIRECTIONAL: {
         index++;
         if (index < culling.items_count) {
           return true;
         }
-        else {
-          /* Swap to local. */
-          phase = 2;
-          /* Same as divide by 32 but avoid integer division. */
-          uint word_min = local_min_index >> 5u;
-          local_word_idx = word_min;
-          next_local_word_();
-        }
+        phase = LIGHT_ITER_PHASE_LOCAL;
+        /* Same as divide by 32 but avoid integer division. */
+        uint word_min = local_min_index >> 5u;
+        local_word_idx = word_min;
+        next_local_word();
       }
-      case 2: {
-        /* Local Lights. */
+      case LIGHT_ITER_PHASE_LOCAL: {
         /* Same as divide by 32 but avoid integer division. */
         uint word_max = local_max_index >> 5u;
         while (local_word_idx <= word_max) {
@@ -167,13 +168,11 @@ struct VisibleLightIterator {
             return true;
           }
           local_word_idx++;
-          next_local_word_();
+          next_local_word();
         }
-        /* Finished */
-        phase = 3;
+        phase = LIGHT_ITER_PHASE_END;
       }
-      case 3:
-        /* Iteration finished. */
+      case LIGHT_ITER_PHASE_END:
       default:
         return false;
     }
@@ -196,9 +195,9 @@ struct VisibleLightIterator {
       return true;
     }
 
-    if (all(equal(light.color * light.point_power, float3(0.0f)))) {
+    if (is_zero(light.color * light.point_power)) {
       /* This is an optimization, but also ensures we skip the extracted World Sun if it's radiance
-       * falls bellow the extraction Threshold. */
+       * falls bellow the extraction threshold. */
       return true;
     }
     if (is_directional()) {

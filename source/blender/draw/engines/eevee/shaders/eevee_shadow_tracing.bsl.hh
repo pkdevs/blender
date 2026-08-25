@@ -123,8 +123,8 @@ bool shadow_map_trace([[resource_table]] ShadowRenderData &srd,
                       float step_offset)
 {
   ShadowMapTracingState state = shadow_map_trace_init(sample_count, step_offset);
-  for (int i = 0; (i <= sample_count) && (i <= SHADOW_MAX_STEP) && (state.hit == false); i++)
-  { /* Saturate to always cover the shading point position when i == sample_count. */
+  for (int i = 0; (i <= sample_count) && (i <= SHADOW_MAX_STEP) && (state.hit == false);
+       i++) { /* Saturate to always cover the shading point position when i == sample_count. */
     state.ray_time = square(saturate(float(i) * state.ray_step_mul + state.ray_step_bias));
 
     ShadowTracingSample samp = shadow_map_trace_sample(srd, state, ray);
@@ -165,8 +165,8 @@ ShadowRayDirectional shadow_ray_generate_directional(
   /* Light shape is 1 unit away from the shading point. */
   float3 direction = sample_uniform_cone(random_2d, shadow_angle_cos);
 
-  float3 shadow_space_light_direction = transpose(light.object_to_world.as_float3x3()) *
-                                        float3(light.sun().direction);
+  float3 shadow_space_light_direction = transform_direction_transposed(
+      light.object_to_world, float3(light.sun().direction));
   direction = spherical_interpolate(shadow_space_light_direction, direction, soft_shadow_scale);
 
   /* It only make sense to trace where there can be occluder. Clamp by distance to near plane. */

@@ -37,11 +37,6 @@ struct [[host_shared]] Transform {
   }
 #endif
 
-  float3x3 as_float3x3() const
-  {
-    return float3x3(float3(x.x, y.x, z.x), float3(x.y, y.y, z.y), float3(x.z, y.z, z.z));
-  }
-
   float3 x_axis() const
   {
     return float3(x.x, y.x, z.x);

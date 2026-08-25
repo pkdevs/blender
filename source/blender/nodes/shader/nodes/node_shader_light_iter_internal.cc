@@ -17,6 +17,8 @@ static void node_declare(NodeDeclarationBuilder &b)
 
   b.add_output<decl::Int>("LightIndex"_ustr).available(is_gpu_internal);
 
+  /* Declared as ZoneIO so the Closure result can be read outside the light loop.
+   * Even if we don't really use the value for anything, compilation would fail otherwise. */
   b.add_input<decl::Shader>("ShaderZoneIO"_ustr).available(is_gpu_internal);
   b.add_output<decl::Shader>("ShaderZoneIO"_ustr).available(is_gpu_internal);
 }
@@ -40,6 +42,8 @@ static void node_declare(NodeDeclarationBuilder &b)
   const bNodeTree *ntree = b.tree_or_null();
   const bool is_gpu_internal = ntree && (ntree->flag & NTREE_IS_GPU_SHADER_INTERNAL);
 
+  /* Declared as ZoneIO so the Closure result can be read outside the light loop.
+   * Even if we don't really use the value for anything, compilation would fail otherwise. */
   b.add_input<decl::Shader>("ShaderZoneIO"_ustr).available(is_gpu_internal);
   b.add_output<decl::Shader>("ShaderZoneIO"_ustr).available(is_gpu_internal);
 }

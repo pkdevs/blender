@@ -99,7 +99,7 @@ struct CombineFragOut {
 /* Early fragment test is needed to avoid processing fragments background fragments. */
 [[fragment, early_fragment_tests]]
 void combine_frag([[resource_table]] Combine &srt,
-                  [[resource_table]] RenderPassOutputRW &render_passes,
+                  [[resource_table]] RenderPassOutput &render_passes,
                   [[resource_table]] const draw::View &views,
                   [[resource_table]] const Uniform &uni,
                   [[resource_table]] const HiZ &hiz,
