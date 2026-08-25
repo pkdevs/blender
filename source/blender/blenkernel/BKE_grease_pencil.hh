@@ -981,11 +981,14 @@ std::string shapekey_position_attribute(const char *name);
 std::string shapekey_radius_attribute(const char *name);
 std::string shapekey_opacity_attribute(const char *name);
 
+void shapekey_get_applied_position(const Key *key,
+                                   const bke::AttributeAccessor &attributes,
+                                   MutableSpan<float3> position);
 void shapekey_get_applied_radius(const Key *key,
-                                 bke::MutableAttributeAccessor &attributes,
+                                 const bke::AttributeAccessor &attributes,
                                  MutableSpan<float> radius);
 void shapekey_get_applied_opacity(const Key *key,
-                                  bke::MutableAttributeAccessor &attributes,
+                                  const bke::AttributeAccessor &attributes,
                                   MutableSpan<float> opacity);
 
 void shapekey_set_applied_radius(const Key *key,

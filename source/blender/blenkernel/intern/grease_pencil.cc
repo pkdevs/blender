@@ -2278,8 +2278,54 @@ std::string shapekey_opacity_attribute(const char *name)
   return std::string(attr_name);
 }
 
+void shapekey_get_applied_position(const Key *key,
+                                   const bke::AttributeAccessor &attributes,
+                                   MutableSpan<float3> position)
+{
+  for (const auto [keyblock_index, keyblock] : key->block.enumerate()) {
+    /* Skip the base key frame. */
+    if (&keyblock == key->refkey) {
+      continue;
+    }
+    if (keyblock.flag & KEYBLOCK_MUTE) {
+      continue;
+    }
+
+    const float keyblock_influence = keyblock.curval;
+    if (keyblock_influence == 0.0f) {
+      continue;
+    }
+
+    /* Reference can be any block. */
+    KeyBlock *ref_keyblock = static_cast<KeyBlock *>(BLI_findlink(&key->block, keyblock.relative));
+    if (ref_keyblock == nullptr) {
+      continue;
+    }
+    /* If the reference block is the same as the current block nothing will happen, so
+     * skip. */
+    if (&keyblock == ref_keyblock) {
+      continue;
+    }
+
+    const VArray<float3> key_position = *attributes.lookup_or_default<float3>(
+        blender::bke::greasepencil::shapekey_position_attribute(keyblock.name),
+        bke::AttrDomain::Point,
+        float3(0.0f));
+    const VArray<float3> ref_key_position = *attributes.lookup_or_default<float3>(
+        blender::bke::greasepencil::shapekey_position_attribute(ref_keyblock->name),
+        bke::AttrDomain::Point,
+        float3(0.0f));
+
+    threading::parallel_for(position.index_range(), 4096, [&](const IndexRange range) {
+      for (const int i : range) {
+        position[i] += (key_position[i] - ref_key_position[i]) * keyblock_influence;
+      }
+    });
+  }
+}
+
 void shapekey_get_applied_radius(const Key *key,
-                                 bke::MutableAttributeAccessor &attributes,
+                                 const bke::AttributeAccessor &attributes,
                                  MutableSpan<float> radius)
 {
   for (const auto [keyblock_index, keyblock] : key->block.enumerate()) {
@@ -2332,7 +2378,7 @@ void shapekey_get_applied_radius(const Key *key,
 }
 
 void shapekey_get_applied_opacity(const Key *key,
-                                  bke::MutableAttributeAccessor &attributes,
+                                  const bke::AttributeAccessor &attributes,
                                   MutableSpan<float> opacity)
 {
   for (const auto [keyblock_index, keyblock] : key->block.enumerate()) {
@@ -2785,97 +2831,24 @@ static void grease_pencil_do_shape_keys(bke::GeometrySet &geometry_set)
     bke::CurvesGeometry &curves = info.drawing->strokes_for_write();
     const bke::AttributeAccessor attributes = curves.attributes();
 
-    for (const auto [keyblock_index, keyblock] : key->block.enumerate()) {
-      /* Skip the base key frame. */
-      if (&keyblock == key->refkey) {
-        continue;
-      }
-      if (keyblock.flag & KEYBLOCK_MUTE) {
-        continue;
-      }
+    MutableSpan<float3> positions = curves.positions_for_write();
+    MutableSpan<float> radius = curves.radius_for_write();
+    MutableSpan<float> opacity = info.drawing->opacities_for_write();
 
-      const float keyblock_influence = keyblock.curval;
-      if (keyblock_influence == 0.0f) {
-        continue;
-      }
+    shapekey_get_applied_position(key, attributes, positions);
+    shapekey_get_applied_radius(key, attributes, radius);
+    shapekey_get_applied_opacity(key, attributes, opacity);
 
-      /* Reference can be any block. */
-      KeyBlock *ref_keyblock = static_cast<KeyBlock *>(
-          BLI_findlink(&key->block, keyblock.relative));
-      if (ref_keyblock == nullptr) {
-        continue;
-      }
-      /* If the reference block is the same as the current block nothing will happen, so skip. */
-      if (&keyblock == ref_keyblock) {
-        continue;
-      }
+    bke::GreasePencilDrawingEditHints *layer_edit_hints = edit_hints.is_empty() ?
+                                                              nullptr :
+                                                              &edit_hints[info.layer_index];
 
-      const VArray<float3> key_positions = *attributes.lookup_or_default<float3>(
-          blender::bke::greasepencil::shapekey_position_attribute(keyblock.name),
-          bke::AttrDomain::Point,
-          float3(0.0f));
-      const VArray<float3> ref_key_positions = *attributes.lookup_or_default<float3>(
-          blender::bke::greasepencil::shapekey_position_attribute(ref_keyblock->name),
-          bke::AttrDomain::Point,
-          float3(0.0f));
+    if (layer_edit_hints && layer_edit_hints->positions()) {
+      MutableSpan<float3> edit_positions = *layer_edit_hints->positions_for_write();
 
-      const VArray<float> key_radius = *attributes.lookup_or_default<float>(
-          blender::bke::greasepencil::shapekey_radius_attribute(keyblock.name),
-          bke::AttrDomain::Point,
-          0.0f);
-      const VArray<float> ref_key_radius = *attributes.lookup_or_default<float>(
-          blender::bke::greasepencil::shapekey_radius_attribute(ref_keyblock->name),
-          bke::AttrDomain::Point,
-          0.0f);
-
-      const VArray<float> key_opacity = *attributes.lookup_or_default<float>(
-          blender::bke::greasepencil::shapekey_opacity_attribute(keyblock.name),
-          bke::AttrDomain::Point,
-          0.0f);
-      const VArray<float> ref_key_opacity = *attributes.lookup_or_default<float>(
-          blender::bke::greasepencil::shapekey_opacity_attribute(ref_keyblock->name),
-          bke::AttrDomain::Point,
-          0.0f);
-
-      MutableSpan<float3> positions = curves.positions_for_write();
-      threading::parallel_for(positions.index_range(), 4096, [&](const IndexRange range) {
-        for (const int i : range) {
-          positions[i] += (key_positions[i] - ref_key_positions[i]) * keyblock_influence;
-        }
-      });
-
-      MutableSpan<float> radius = curves.radius_for_write();
-      threading::parallel_for(positions.index_range(), 4096, [&](const IndexRange range) {
-        for (const int i : range) {
-          radius[i] += (key_radius[i] - ref_key_radius[i]) * keyblock_influence;
-          /* Stop the radius from being negative. */
-          radius[i] = math::max(radius[i], 0.0f);
-        }
-      });
-
-      MutableSpan<float> opacity = info.drawing->opacities_for_write();
-      threading::parallel_for(positions.index_range(), 4096, [&](const IndexRange range) {
-        for (const int i : range) {
-          opacity[i] += (key_opacity[i] - ref_key_opacity[i]) * keyblock_influence;
-          /* Stop the opacity from going out of range. */
-          opacity[i] = math::clamp(opacity[i], 0.0f, 1.0f);
-        }
-      });
-
-      bke::GreasePencilDrawingEditHints *layer_edit_hints = edit_hints.is_empty() ?
-                                                                nullptr :
-                                                                &edit_hints[info.layer_index];
-
-      if (layer_edit_hints && layer_edit_hints->positions()) {
-        MutableSpan<float3> positions = *layer_edit_hints->positions_for_write();
-
-        threading::parallel_for(positions.index_range(), 4096, [&](const IndexRange range) {
-          for (const int i : range) {
-            positions[i] += (key_positions[i] - ref_key_positions[i]) * keyblock_influence;
-          }
-        });
-      }
+      shapekey_get_applied_position(key, attributes, edit_positions);
     }
+
     info.drawing->tag_positions_changed();
   });
 }
