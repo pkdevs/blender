@@ -436,7 +436,6 @@ struct GHOST_InstanceVK {
           !device_vk.features.features.geometryShader ||
 #endif
           !device_vk.features.features.multiViewport ||
-          !device_vk.features.features.shaderClipDistance ||
           !device_vk.features.features.fragmentStoresAndAtomics ||
           !device_vk.features.features.imageCubeArray ||
           !device_vk.features.features.dualSrcBlend || !device_vk.features.features.imageCubeArray)
@@ -610,7 +609,7 @@ struct GHOST_InstanceVK {
     device_features.vertexPipelineStoresAndAtomics =
         device.features.features.vertexPipelineStoresAndAtomics;
     device_features.multiViewport = VK_TRUE;
-    device_features.shaderClipDistance = VK_TRUE;
+    device_features.shaderClipDistance = device.features.features.shaderClipDistance;
     device_features.fragmentStoresAndAtomics = VK_TRUE;
 
     device_features.dualSrcBlend = VK_TRUE;
