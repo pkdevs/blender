@@ -35,7 +35,12 @@ static void filelist_readjob_production_asset_library(FileListReadJob *job_param
   filelist->filelist.entries_num = 0;
 
   BLI_assert(job_params->filelist->asset_library_ref->type == ASSET_LIBRARY_PRODUCTION);
-  BLI_assert(job_params->load_asset_library != nullptr);
+
+  /* No `BLENDER_PRODUCTION_DATAFILES` paths configured (or none of them exist), nothing to read.
+   * Leave the file-list empty rather than crashing on a null library. */
+  if (job_params->load_asset_library == nullptr) {
+    return;
+  }
 
   /* Read the first directory listed in `BLENDER_PRODUCTION_DATAFILES`, which is this library's
    * main root path. */
