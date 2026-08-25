@@ -1222,11 +1222,6 @@ BLI_NOINLINE static void fill_uvs_grids(const Object &object,
       exec_mode::grain_size(1));
 }
 
-static float4 quad_weights_from_uv(const float u, const float v)
-{
-  return {(1.0f - u) * (1.0f - v), u * (1.0f - v), u * v, (1.0f - u) * v};
-}
-
 static float4 quad_weights_from_grid(const int corner,
                                      const int x,
                                      const int y,
@@ -1237,7 +1232,7 @@ static float4 quad_weights_from_grid(const int corner,
   float u;
   float v;
   bke::subdiv::rotate_grid_to_quad(corner, grid_u, grid_v, &u, &v);
-  return quad_weights_from_uv(u, v);
+  return bke::subdiv::quad_weights_from_uv(u, v);
 }
 
 static float4 quad_weights_from_irregular_corner(const int x,
@@ -1247,30 +1242,7 @@ static float4 quad_weights_from_irregular_corner(const int x,
   const float u = 1.0f - (y * grid_size_1_inv);
   const float v = 1.0f - (x * grid_size_1_inv);
 
-  return quad_weights_from_uv(u, v);
-}
-
-/**
- * This logic closely matches the behavior of #subdiv_mesh_ensure_loop_interpolation in
- * `subdiv_mesh.cc` to determine the PTex attributes
- */
-template<typename T>
-static std::array<T, 4> interpolate_vert_data_for_subdivided_irregular_face(
-    const Span<int> corner_verts, const IndexRange face, const int grid, Span<T> src)
-{
-  std::array<T, 4> values;
-  values[0] = src[corner_verts[grid]];
-
-  /* Calculate attribute value at center of polygon. */
-  values[2] = bke::attribute_math::mix_indices(src, corner_verts.slice(face));
-
-  /* Calculate attribute value at midpoint of connecting edges. */
-  const int next = bke::mesh::face_corner_next(face, grid);
-  values[1] = bke::attribute_math::mix2(0.5f, src[corner_verts[grid]], src[corner_verts[next]]);
-
-  const int prev = bke::mesh::face_corner_prev(face, grid);
-  values[3] = bke::attribute_math::mix2(0.5f, src[corner_verts[grid]], src[corner_verts[prev]]);
-  return values;
+  return bke::subdiv::quad_weights_from_uv(u, v);
 }
 
 template<typename T>
@@ -1329,8 +1301,9 @@ static void interpolate_vert_data_for_flat_layout(const SubdivCCG &subdiv_ccg,
         }
       }
       else {
-        const std::array<T, 4> values = interpolate_vert_data_for_subdivided_irregular_face<T>(
-            corner_verts, face, grid, src);
+        const std::array<T, 4> values =
+            bke::subdiv::interpolate_vert_data_for_subdivided_irregular_face<T>(
+                corner_verts, face, grid, src);
         for (int y = 0; y < grid_size_1; y++) {
           for (int x = 0; x < grid_size_1; x++) {
             const int start = verts_per_grid * i + CCG_grid_xy_to_index(grid_size_1, x, y) * 4;
@@ -1402,8 +1375,9 @@ static void interpolate_vert_data_for_standard_layout(const SubdivCCG &subdiv_cc
         }
       }
       else {
-        const std::array<T, 4> values = interpolate_vert_data_for_subdivided_irregular_face<T>(
-            corner_verts, face, grid, src);
+        const std::array<T, 4> values =
+            bke::subdiv::interpolate_vert_data_for_subdivided_irregular_face<T>(
+                corner_verts, face, grid, src);
         for (int y = 0; y < grid_size; y++) {
           for (int x = 0; x < grid_size; x++) {
             const int element = i * grid_area + CCG_grid_xy_to_index(grid_size, x, y);
@@ -1441,47 +1415,18 @@ BLI_NOINLINE static void calc_generic_vert_attribute_grids(const Object &object,
       [&](const int i) {
         bke::attribute_math::to_static_type(attr.type(), [&]<typename T>() {
           if constexpr (!std::is_void_v<typename AttributeConverter<T>::VBOType>) {
-            const VArraySpan<T> src = attr.typed<T>();
             if (use_flat_layout[i]) {
               interpolate_vert_data_for_flat_layout<T>(
-                  subdiv_ccg, corner_verts, nodes[i].grids(), src, *vbos[i]);
+                  subdiv_ccg, corner_verts, nodes[i].grids(), attr.typed<T>(), *vbos[i]);
             }
             else {
               interpolate_vert_data_for_standard_layout<T>(
-                  subdiv_ccg, corner_verts, nodes[i].grids(), src, *vbos[i]);
+                  subdiv_ccg, corner_verts, nodes[i].grids(), attr.typed<T>(), *vbos[i]);
             }
           }
         });
       },
       exec_mode::grain_size(1));
-}
-
-/**
- * This logic closely matches the behavior of #subdiv_mesh_ensure_loop_interpolation in
- * `subdiv_mesh.cc` to determine the PTex attributes
- */
-template<typename T>
-static std::array<T, 4> interpolate_corner_data_for_subdivided_irregular_face(
-    const IndexRange face, const int grid, const Span<T> src)
-{
-  std::array<T, 4> values;
-  values[0] = src[grid];
-
-  Array<int, 32> indices(face.size());
-  for (int i = 0; i < face.size(); i++) {
-    indices[i] = face.first() + i;
-  }
-
-  /* Calculate attribute value at center of polygon. */
-  values[2] = bke::attribute_math::mix_indices(src, indices);
-
-  /* Calculate attribute value at midpoint of connecting edges. */
-  const int next = bke::mesh::face_corner_next(face, grid);
-  values[1] = bke::attribute_math::mix2(0.5f, src[grid], src[next]);
-
-  const int prev = bke::mesh::face_corner_prev(face, grid);
-  values[3] = bke::attribute_math::mix2(0.5f, src[grid], src[prev]);
-  return values;
 }
 
 template<typename T>
@@ -1538,8 +1483,8 @@ static void interpolate_corner_data_for_flat_layout(const SubdivCCG &subdiv_ccg,
         }
       }
       else {
-        const std::array<T, 4> values = interpolate_corner_data_for_subdivided_irregular_face<T>(
-            face, grid, src);
+        const std::array<T, 4> values =
+            bke::subdiv::interpolate_corner_data_for_subdivided_irregular_face<T>(face, grid, src);
         for (int y = 0; y < grid_size_1; y++) {
           for (int x = 0; x < grid_size_1; x++) {
             const int start = verts_per_grid * i + CCG_grid_xy_to_index(grid_size_1, x, y) * 4;
@@ -1609,8 +1554,8 @@ static void interpolate_corner_data_for_standard_layout(const SubdivCCG &subdiv_
         }
       }
       else {
-        const std::array<T, 4> values = interpolate_corner_data_for_subdivided_irregular_face<T>(
-            face, grid, src);
+        const std::array<T, 4> values =
+            bke::subdiv::interpolate_corner_data_for_subdivided_irregular_face<T>(face, grid, src);
         for (int y = 0; y < grid_size; y++) {
           for (int x = 0; x < grid_size; x++) {
             const int element = i * grid_area + CCG_grid_xy_to_index(grid_size, x, y);
@@ -1646,14 +1591,13 @@ BLI_NOINLINE static void calc_generic_corner_attribute_grids(
       [&](const int i) {
         bke::attribute_math::to_static_type(attr.type(), [&]<typename T>() {
           if constexpr (!std::is_void_v<typename AttributeConverter<T>::VBOType>) {
-            const VArraySpan<T> src = attr.typed<T>();
             if (use_flat_layout[i]) {
               interpolate_corner_data_for_flat_layout<T>(
-                  subdiv_ccg, nodes[i].grids(), src, *vbos[i]->data<T>());
+                  subdiv_ccg, nodes[i].grids(), attr.typed<T>(), *vbos[i]);
             }
             else {
               interpolate_corner_data_for_standard_layout<T>(
-                  subdiv_ccg, nodes[i].grids(), src, *vbos[i]);
+                  subdiv_ccg, nodes[i].grids(), attr.typed<T>(), *vbos[i]);
             }
           }
         });
@@ -1700,9 +1644,8 @@ BLI_NOINLINE static void fill_generic_face_attribute_grids(const Object &object,
       [&](const int i) {
         bke::attribute_math::to_static_type(attr.type(), [&]<typename T>() {
           if constexpr (!std::is_void_v<typename AttributeConverter<T>::VBOType>) {
-            const VArraySpan<T> src = attr.typed<T>();
             fill_face_data_grids<T>(
-                subdiv_ccg, use_flat_layout[i], nodes[i].grids(), src, *vbos[i]);
+                subdiv_ccg, use_flat_layout[i], nodes[i].grids(), attr.typed<T>(), *vbos[i]);
           }
         });
       },
