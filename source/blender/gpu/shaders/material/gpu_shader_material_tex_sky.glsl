@@ -157,6 +157,9 @@ void node_tex_sky_nishita(float3 co,
                           float3 xyz_to_r,
                           float3 xyz_to_g,
                           float3 xyz_to_b,
+                          float3 sun_pixel_bottom,
+                          float3 sun_pixel_top,
+                          float4 sun_params,
                           sampler2DArray ima,
                           float layer,
                           float4 &color)
@@ -174,5 +177,33 @@ void node_tex_sky_nishita(float3 co,
 
   /* Look up color in the precomputed map and convert to RGB. */
   xyz = fade * texture(ima, float3(x, y, layer)).rgb;
-  color = float4(dot(xyz_to_r, xyz), dot(xyz_to_g, xyz), dot(xyz_to_b, xyz), 1.0f);
+  float3 rgb = float3(dot(xyz_to_r, xyz), dot(xyz_to_g, xyz), dot(xyz_to_b, xyz));
+
+  /* The Sun disc covers about half a degree, too small to survive baking into the map, so it's
+   * drawn here instead. Every ray sees it, and it reaches the scene through EEVEE's existing
+   * mechanism: anything brighter than the World's Sun Threshold is pulled out of the light probe
+   * and turned into a sun light, which is what casts shadows. Excluding the disc here would leave
+   * the Sun lighting the scene with only its glow, none of its own light - measured on a lit
+   * plane, turning the disc off changes nothing at all without this. This also brings EEVEE
+   * nearer to Cycles, which has always let every ray see the disc. */
+  float sun_elevation = sun_params.x;
+  float angular_diameter = sun_params.y;
+  float sun_intensity = sun_params.z;
+  float earth_intersection_angle = sun_params.w;
+  if (angular_diameter > 0.0f && dir_elevation > earth_intersection_angle) {
+    float sun_angle = sky_angle_between(
+        spherical.x, spherical.y, M_PI_2 - sun_elevation, -sun_rotation);
+    float half_angular = angular_diameter * 0.5f;
+    if (sun_angle < half_angular) {
+      /* Limb darkening, coefficient is 0.6. */
+      float angle_fraction = sun_angle / half_angular;
+      float limb_darkening = 1.0f - 0.6f * (1.0f - sqrt(max(1.0f - angle_fraction * angle_fraction,
+                                                            0.0f)));
+      float sun_y = ((dir_elevation - sun_elevation) / angular_diameter) + 0.5f;
+      float3 disc = mix(sun_pixel_bottom, sun_pixel_top, sun_y) * sun_intensity * limb_darkening;
+      rgb += float3(dot(xyz_to_r, disc), dot(xyz_to_g, disc), dot(xyz_to_b, disc));
+    }
+  }
+
+  color = float4(rgb, 1.0f);
 }

@@ -5512,7 +5512,12 @@ static void def_sh_tex_sky(BlenderRNA *brna, StructRNA *srna)
 
   /* Nishita parameters. */
   prop = RNA_def_property(srna, "sun_disc", PROP_BOOLEAN, PROP_NONE);
-  RNA_def_property_ui_text(prop, "Sun Disc", "Include the sun itself in the output");
+  RNA_def_property_ui_text(prop,
+                           "Sun Disc",
+                           "Include the sun itself in the output.\n"
+                           "Cycles lights the scene from the disc itself. EEVEE holds whatever is "
+                           "brighter than the World's Sun Threshold out of the light probe and "
+                           "turns it into a sun light, which is what casts the shadows");
   RNA_def_property_boolean_sdna(prop, nullptr, "sun_disc", 1);
   RNA_def_property_boolean_default(prop, true);
   RNA_def_property_update(prop, 0, "rna_ShaderNode_socket_update");
