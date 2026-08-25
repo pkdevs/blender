@@ -105,7 +105,8 @@ def flatten_children(iterable):
 
 '''
 
-UTILITIES_FUNC_COMMON_IK_FK = ['''
+UTILITIES_FUNC_COMMON_IK_FK = [
+    '''
 #########################################
 ## "Visual Transform" helper functions ##
 #########################################
@@ -297,13 +298,16 @@ def match_pole_target(view_layer, ik_first, ik_last, pole, match_bone_matrix, le
 ##########
 
 def parse_bone_names(names_string):
+    # If names_string is a string representation of a list of strings,
+    # eg `"['Bone1', 'Bone2']"`, return it as an actual list of strings.
     if names_string[0] == '[' and names_string[-1] == ']':
         import ast
         return ast.literal_eval(names_string)
     else:
         return names_string
 
-''']
+'''
+]
 
 # noinspection SpellCheckingInspection
 UTILITIES_FUNC_OLD_ARM_FKIK = ['''
