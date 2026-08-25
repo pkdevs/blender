@@ -33,6 +33,112 @@
 
 namespace blender::ed::transform::greasepencil {
 
+static void shapekey_get_applied_opacity(const Key *key,
+                                         bke::MutableAttributeAccessor &attributes,
+                                         MutableSpan<float> opacity)
+{
+  for (const auto [keyblock_index, keyblock] : key->block.enumerate()) {
+    /* Skip the base key frame. */
+    if (&keyblock == key->refkey) {
+      continue;
+    }
+    if (keyblock.flag & KEYBLOCK_MUTE) {
+      continue;
+    }
+
+    const float keyblock_influence = keyblock.curval;
+    if (keyblock_influence == 0.0f) {
+      continue;
+    }
+
+    /* Reference can be any block. */
+    KeyBlock *ref_keyblock = static_cast<KeyBlock *>(BLI_findlink(&key->block, keyblock.relative));
+    if (ref_keyblock == nullptr) {
+      continue;
+    }
+    /* If the reference block is the same as the current block nothing will happen, so
+     * skip. */
+    if (&keyblock == ref_keyblock) {
+      continue;
+    }
+
+    const VArray<float> key_opacity = *attributes.lookup_or_default<float>(
+        blender::bke::greasepencil::shapekey_opacity_attribute(keyblock.name),
+        bke::AttrDomain::Point,
+        0.0f);
+    const VArray<float> ref_key_opacity = *attributes.lookup_or_default<float>(
+        blender::bke::greasepencil::shapekey_opacity_attribute(ref_keyblock->name),
+        bke::AttrDomain::Point,
+        0.0f);
+
+    threading::parallel_for(opacity.index_range(), 4096, [&](const IndexRange range) {
+      for (const int i : range) {
+        opacity[i] += (key_opacity[i] - ref_key_opacity[i]) * keyblock_influence;
+      }
+    });
+  }
+
+  threading::parallel_for(opacity.index_range(), 4096, [&](const IndexRange range) {
+    for (const int i : range) {
+      /* Stop the opacity from going out of range. */
+      opacity[i] = math::clamp(opacity[i], 0.0f, 1.0f);
+    }
+  });
+}
+
+static void shapekey_get_applied_radius(const Key *key,
+                                        bke::MutableAttributeAccessor &attributes,
+                                        MutableSpan<float> radius)
+{
+  for (const auto [keyblock_index, keyblock] : key->block.enumerate()) {
+    /* Skip the base key frame. */
+    if (&keyblock == key->refkey) {
+      continue;
+    }
+    if (keyblock.flag & KEYBLOCK_MUTE) {
+      continue;
+    }
+
+    const float keyblock_influence = keyblock.curval;
+    if (keyblock_influence == 0.0f) {
+      continue;
+    }
+
+    /* Reference can be any block. */
+    KeyBlock *ref_keyblock = static_cast<KeyBlock *>(BLI_findlink(&key->block, keyblock.relative));
+    if (ref_keyblock == nullptr) {
+      continue;
+    }
+    /* If the reference block is the same as the current block nothing will happen, so
+     * skip. */
+    if (&keyblock == ref_keyblock) {
+      continue;
+    }
+
+    const VArray<float> key_radius = *attributes.lookup_or_default<float>(
+        blender::bke::greasepencil::shapekey_radius_attribute(keyblock.name),
+        bke::AttrDomain::Point,
+        0.0f);
+    const VArray<float> ref_key_radius = *attributes.lookup_or_default<float>(
+        blender::bke::greasepencil::shapekey_radius_attribute(ref_keyblock->name),
+        bke::AttrDomain::Point,
+        0.0f);
+
+    threading::parallel_for(radius.index_range(), 4096, [&](const IndexRange range) {
+      for (const int i : range) {
+        radius[i] += (key_radius[i] - ref_key_radius[i]) * keyblock_influence;
+      }
+    });
+  }
+
+  threading::parallel_for(radius.index_range(), 4096, [&](const IndexRange range) {
+    for (const int i : range) {
+      /* Stop the radius from being negative. */
+      radius[i] = math::max(radius[i], 0.0f);
+    }
+  });
+}
+
 static void createTransGreasePencilVerts(bContext *C, TransInfo *t)
 {
   Depsgraph *depsgraph = CTX_data_depsgraph_pointer(C);
@@ -220,12 +326,18 @@ static void createTransGreasePencilVerts(bContext *C, TransInfo *t)
       std::optional<MutableSpan<float>> value_attribute;
       if (t->mode == TFM_GPENCIL_OPACITY) {
         if (key && actkb && tc.obedit->shapenr != 1) {
+          bke::MutableAttributeAccessor attributes = curves.attributes_for_write();
           const Span<float> opacities = info.drawing.opacities_for_write();
 
           curves_transform_data.src_value_attribute[drawing] = Array<float>(opacities);
           curves_transform_data.value_attribute[drawing] = Array<float>(opacities);
 
-          value_attribute = curves_transform_data.value_attribute[drawing].as_mutable_span();
+          MutableSpan<float> opacity =
+              curves_transform_data.value_attribute[drawing].as_mutable_span();
+
+          shapekey_get_applied_opacity(key, attributes, opacity);
+
+          value_attribute = opacity;
         }
         else {
           MutableSpan<float> opacities = info.drawing.opacities_for_write();
@@ -234,12 +346,18 @@ static void createTransGreasePencilVerts(bContext *C, TransInfo *t)
       }
       else if (is_scale_thickness) {
         if (key && actkb && tc.obedit->shapenr != 1) {
+          bke::MutableAttributeAccessor attributes = curves.attributes_for_write();
           const Span<float> radii = info.drawing.radii_for_write();
 
           curves_transform_data.src_value_attribute[drawing] = Array<float>(radii);
           curves_transform_data.value_attribute[drawing] = Array<float>(radii);
 
-          value_attribute = curves_transform_data.value_attribute[drawing].as_mutable_span();
+          MutableSpan<float> radius =
+              curves_transform_data.value_attribute[drawing].as_mutable_span();
+
+          shapekey_get_applied_radius(key, attributes, radius);
+
+          value_attribute = radius;
         }
         else {
           MutableSpan<float> radii = info.drawing.radii_for_write();
