@@ -2037,7 +2037,7 @@ wmJob *WM_jobs_get(wmWindowManager *wm,
 /**
  * Returns true if job runs, for UI (progress) indicators.
  */
-bool WM_jobs_test(const wmWindowManager *wm, const void *owner, int job_type);
+bool WM_jobs_progress_test(const wmWindowManager *wm, const void *owner, int job_type);
 float WM_jobs_progress(const wmWindowManager *wm, const void *owner);
 const char *WM_jobs_name(const wmWindowManager *wm, const void *owner);
 /**
@@ -2125,6 +2125,9 @@ void WM_jobs_kill_all_from_owner(wmWindowManager *wm, const void *owner) ATTR_NO
 
 bool WM_jobs_has_running(const wmWindowManager *wm);
 bool WM_jobs_has_running_type(const wmWindowManager *wm, int job_type);
+bool WM_jobs_has_running(const wmWindowManager *window_manager,
+                         const void *owner,
+                         const eWM_JobType type);
 
 void WM_job_main_thread_lock_acquire(wmJob *wm_job);
 void WM_job_main_thread_lock_release(wmJob *wm_job);

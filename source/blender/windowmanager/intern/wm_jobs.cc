@@ -261,7 +261,7 @@ wmJob *WM_jobs_get(wmWindowManager *wm,
   return wm_job;
 }
 
-bool WM_jobs_test(const wmWindowManager *wm, const void *owner, int job_type)
+bool WM_jobs_progress_test(const wmWindowManager *wm, const void *owner, int job_type)
 {
   /* Job can be running or about to run (suspended). */
   for (wmJob &wm_job : wm->runtime->jobs) {
@@ -824,6 +824,27 @@ bool WM_jobs_has_running_type(const wmWindowManager *wm, int job_type)
       return true;
     }
   }
+  return false;
+}
+
+bool WM_jobs_has_running(const wmWindowManager *window_manager,
+                         const void *owner,
+                         const eWM_JobType type)
+{
+  for (const wmJob &job : window_manager->runtime->jobs) {
+    if (job.owner != owner) {
+      continue;
+    }
+
+    if (!ELEM(type, WM_JOB_TYPE_ANY, job.job_type)) {
+      continue;
+    }
+
+    if (job.running || job.suspended) {
+      return true;
+    }
+  }
+
   return false;
 }
 
