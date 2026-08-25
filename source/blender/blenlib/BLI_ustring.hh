@@ -175,10 +175,10 @@ template<FixedString FStr> inline UString operator""_ustr()
    */
   /* This is initialized to null by default. */
   static std::atomic<const blender::detail::UStringEntry *> static_entry;
-  const blender::detail::UStringEntry *entry = static_entry.load(std::memory_order_relaxed);
+  const blender::detail::UStringEntry *entry = static_entry.load(std::memory_order_acquire);
   if (entry == nullptr) [[unlikely]] {
     entry = &blender::detail::ustring_ensure_entry(FStr.data);
-    static_entry.store(entry, std::memory_order_relaxed);
+    static_entry.store(entry, std::memory_order_release);
   }
   return UString(entry);
 }
