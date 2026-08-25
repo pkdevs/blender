@@ -90,7 +90,7 @@ if(DEFINED LIBDIR)
   # NOTE: Make sure "proper" compiled zlib comes first
   set(CMAKE_PREFIX_PATH ${LIBDIR}/zlib ${LIB_SUBDIRS})
 
-  include(platform_old_libs_update)
+  include("${CMAKE_CURRENT_LIST_DIR}/platform_old_libs_update.cmake")
 
   set(WITH_STATIC_LIBS ON)
   set(OPENEXR_ROOT_DIR ${LIBDIR}/openexr)
@@ -458,7 +458,7 @@ if(DEFINED OpenColorIO_DIR)
 endif()
 add_bundled_libraries(opencolorio/lib)
 
-if(WITH_CYCLES AND WITH_CYCLES_EMBREE)
+if(WITH_EMBREE)
   find_package(Embree 4.0.0 REQUIRED)
 endif()
 add_bundled_libraries(embree/lib)
@@ -521,6 +521,7 @@ if(WITH_XR_OPENXR)
   find_package(XR_OpenXR_SDK)
   set_and_warn_library_found("OpenXR-SDK" XR_OPENXR_SDK_FOUND WITH_XR_OPENXR)
 endif()
+add_bundled_libraries(xr_openxr_sdk/lib)
 
 if(WITH_GMP)
   find_package_wrapper(GMP)

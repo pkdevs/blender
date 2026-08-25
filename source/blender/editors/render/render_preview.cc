@@ -44,7 +44,7 @@
 #include "DNA_space_types.h"
 #include "DNA_world_types.h"
 
-#include "BKE_animsys.h"
+#include "BKE_animsys.hh"
 #include "BKE_armature.hh"
 #include "BKE_brush.hh"
 #include "BKE_collection.hh"
@@ -155,6 +155,9 @@ struct IconPreview {
   /* May be nullptr, is used for rendering IDs that require some other object for it to be applied
    * on before the ID can be represented as an image, for example when rendering an Action. */
   Object *active_object;
+
+  /* Set by the job when it was stopped before finishing, e.g. by undo. */
+  bool cancelled;
 };
 
 /** \} */
@@ -1129,7 +1132,7 @@ static void scene_preview_render(const PreviewImage *prv_img,
  * \{ */
 
 /* inside thread, called by renderer, sets job update value */
-static void shader_preview_update(void *spv, RenderResult * /*rr*/, rcti * /*rect*/)
+static void shader_preview_update(void *spv, RenderResult * /*rr*/)
 {
   ShaderPreview *sp = static_cast<ShaderPreview *>(spv);
 
@@ -1639,6 +1642,8 @@ static void icon_preview_startjob_all_sizes(void *customdata, wmJobWorkerStatus 
     }
     other_id_types_preview_render(prv, ip, icon_size, pr_method, worker_status);
   }
+
+  ip->cancelled = worker_status->stop;
 }
 
 static void icon_preview_endjob(void *customdata, const PreviewImageRenderEndStatus status)
@@ -1654,13 +1659,19 @@ static void icon_preview_endjob(void *customdata, const PreviewImageRenderEndSta
       }
     }
 
+    if (status == PRV_RENDER_STATUS_CANCELLED) {
+      ip->bmain->need_preview_render_restart = true;
+    }
+
     ip->owner = nullptr;
   }
 }
 
 static void icon_preview_endjob(void *customdata)
 {
-  icon_preview_endjob(customdata, PRV_RENDER_STATUS_FINISHED);
+  const IconPreview *ip = static_cast<IconPreview *>(customdata);
+  icon_preview_endjob(customdata,
+                      ip->cancelled ? PRV_RENDER_STATUS_CANCELLED : PRV_RENDER_STATUS_FINISHED);
 }
 
 /**
@@ -2146,7 +2157,7 @@ bool ED_preview_use_image_size(const PreviewImage *preview, eIconSizes size)
   return size == ICON_SIZE_PREVIEW && preview->runtime->deferred_loading_data;
 }
 
-bool ED_preview_id_is_supported(const ID *id, const char **r_disabled_hint)
+bool ED_preview_id_render_is_supported(const ID *id, const char **r_disabled_hint)
 {
   if (id == nullptr) {
     return false;
@@ -2201,11 +2212,6 @@ bool ED_preview_id_is_supported(const ID *id, const char **r_disabled_hint)
 void ED_preview_icon_render(
     const bContext *C, Scene *scene, PreviewImage *prv_img, ID *id, eIconSizes icon_size)
 {
-  /* Check if the ID supports the auto-generated previews at all. */
-  if (!ED_preview_id_is_supported(id)) {
-    return;
-  }
-
   /* Deferred loading of previews from the file system. */
   if (prv_img->runtime->deferred_loading_data) {
     if (BKE_previewimg_is_rendering(prv_img, icon_size)) {
@@ -2214,6 +2220,11 @@ void ED_preview_icon_render(
     }
 
     PreviewLoadJob::load_jobless(prv_img, icon_size);
+    return;
+  }
+
+  /* Check if the ID supports the auto-generated previews at all. */
+  if (!ED_preview_id_render_is_supported(id)) {
     return;
   }
 
@@ -2269,7 +2280,7 @@ void ED_preview_icon_job(
   }
 
   /* Check if the ID supports the auto-generated previews at all. */
-  if (!ED_preview_id_is_supported(id)) {
+  if (!ED_preview_id_render_is_supported(id)) {
     return;
   }
 

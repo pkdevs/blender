@@ -207,7 +207,10 @@ void outliner_item_mode_toggle(bContext *C,
       do_outliner_item_mode_toggle_generic(C, tvc, base);
     }
     else if (tvc.ob_edit && OB_TYPE_SUPPORT_EDITMODE(ob->type)) {
-      do_outliner_item_editmode_toggle(C, tvc.scene, base);
+      /* Grease Pencil does not support multi-object editing yet. */
+      if (ob->type != OB_GREASE_PENCIL) {
+        do_outliner_item_editmode_toggle(C, tvc.scene, base);
+      }
     }
     else if (tvc.ob_pose && ob->type == OB_ARMATURE) {
       do_outliner_item_posemode_toggle(C, tvc.scene, base);
@@ -857,15 +860,16 @@ void tree_element_activate(bContext *C,
 
 static void tree_elemment_shapekey_active_set(bContext *C, TreeElement *te)
 {
-  TreeElement *parent_te = outliner_search_back_te(te, ID_OB);
-  TreeStoreElem *parent_tselem = TREESTORE(parent_te);
-  Object *ob = id_cast<Object *>(parent_tselem->id);
+  if (TreeElement *parent_te = outliner_search_back_te(te, ID_OB)) {
+    TreeStoreElem *parent_tselem = TREESTORE(parent_te);
+    Object *ob = id_cast<Object *>(parent_tselem->id);
 
-  if (ob) {
-    PointerRNA object_ptr = RNA_pointer_create_discrete(&ob->id, RNA_Object, ob);
-    PropertyRNA *prop = RNA_struct_find_property(&object_ptr, "active_shape_key_index");
-    RNA_property_int_set(&object_ptr, prop, te->index);
-    RNA_property_update(C, &object_ptr, prop);
+    if (ob) {
+      PointerRNA object_ptr = RNA_pointer_create_discrete(&ob->id, RNA_Object, ob);
+      PropertyRNA *prop = RNA_struct_find_property(&object_ptr, "active_shape_key_index");
+      RNA_property_int_set(&object_ptr, prop, te->index);
+      RNA_property_update(C, &object_ptr, prop);
+    }
   }
 }
 
@@ -932,6 +936,7 @@ void tree_element_type_active_set(bContext *C,
       break;
     case TSE_SHAPE_KEY_BLOCK:
       tree_elemment_shapekey_active_set(C, te);
+      break;
     default:
       break;
   }
@@ -1206,10 +1211,14 @@ eOLDrawState tree_element_active_state_get(const TreeViewContext &tvc,
   return OL_DRAWSEL_NONE;
 }
 
-static eOLDrawState tree_element_shapekey_state_get(const Object *ob, const TreeElement *te)
+static eOLDrawState tree_element_shapekey_state_get(const TreeElement *te)
 {
-  if (ob && (ob->shapenr == te->index + 1)) {
-    return OL_DRAWSEL_NORMAL;
+  if (const Object *ob = id_cast<Object *>(
+          outliner_search_back(const_cast<TreeElement *>(te), ID_OB)))
+  {
+    if (ob->shapenr == te->index + 1) {
+      return OL_DRAWSEL_NORMAL;
+    }
   }
   return OL_DRAWSEL_NONE;
 }
@@ -1257,7 +1266,7 @@ eOLDrawState tree_element_type_active_state_get(const TreeViewContext &tvc,
     case TSE_BONE_COLLECTION:
       return tree_element_bone_collection_state_get(te, tselem);
     case TSE_SHAPE_KEY_BLOCK:
-      return tree_element_shapekey_state_get(tvc.obact, te);
+      return tree_element_shapekey_state_get(te);
     default:
       break;
   }
@@ -1486,7 +1495,7 @@ static void outliner_set_properties_tab(bContext *C, TreeElement *te, TreeStoreE
     }
   }
 
-  if (ptr.data) {
+  if (ptr) {
     outliner_sync_to_properties_editors(C, &ptr, context);
   }
 }
