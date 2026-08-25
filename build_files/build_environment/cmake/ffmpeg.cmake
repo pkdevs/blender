@@ -148,6 +148,42 @@ elseif(UNIX)
   )
 endif()
 
+if(APPLE)
+  set(FFMPEG_EXTRA_FLAGS
+    ${FFMPEG_EXTRA_FLAGS}
+    --enable-videotoolbox
+  )
+else()
+  set(FFMPEG_EXTRA_FLAGS
+    ${FFMPEG_EXTRA_FLAGS}
+    --disable-videotoolbox
+  )
+endif()
+
+if(UNIX AND NOT APPLE)
+  set(FFMPEG_EXTRA_FLAGS
+    ${FFMPEG_EXTRA_FLAGS}
+    --enable-vaapi
+  )
+else()
+  set(FFMPEG_EXTRA_FLAGS
+    ${FFMPEG_EXTRA_FLAGS}
+    --disable-vaapi
+  )
+endif()
+
+if(WIN32)
+  set(FFMPEG_EXTRA_FLAGS
+    ${FFMPEG_EXTRA_FLAGS}
+    --enable-d3d11va
+  )
+else()
+  set(FFMPEG_EXTRA_FLAGS
+    ${FFMPEG_EXTRA_FLAGS}
+    --disable-d3d11va
+  )
+endif()
+
 ExternalProject_Add(external_ffmpeg
   URL file://${PACKAGE_DIR}/${FFMPEG_FILE}
   DOWNLOAD_DIR ${DOWNLOAD_DIR}
@@ -175,7 +211,6 @@ ExternalProject_Add(external_ffmpeg
       --enable-zlib
       --enable-stripping
       --enable-runtime-cpudetect
-      --disable-vaapi
       --disable-nonfree
       --enable-gpl
       --enable-libmp3lame
@@ -196,7 +231,6 @@ ExternalProject_Add(external_ffmpeg
       --disable-indev=qtkit
       --disable-sdl2
       --disable-gnutls
-      --disable-videotoolbox
       --disable-libxcb
       --disable-xlib
       --disable-audiotoolbox
