@@ -1066,6 +1066,7 @@ struct SVMNodeGlossyBsdfData {
   SVMInputFloat roughness;
   SVMInputFloat anisotropy;
   SVMInputFloat rotation;
+  SVMInputFloat retroreflectivity;
   SVMStackOffset normal_offset;
   SVMStackOffset tangent_offset;
   uint8_t _pad[2];
@@ -1106,6 +1107,7 @@ struct SVMNodeMetallicBsdfData {
   SVMInputFloat rotation;
   SVMInputFloat thin_film_thickness;
   SVMInputFloat thin_film_ior;
+  SVMInputFloat retroreflectivity;
   SVMStackOffset normal_offset;
   SVMStackOffset tangent_offset;
   uint8_t _pad[2];
@@ -1162,6 +1164,7 @@ struct SVMNodePrincipledBsdfData {
   SVMInputFloat specular_ior_level;
   SVMInputFloat anisotropic;
   SVMInputFloat anisotropic_rotation;
+  SVMInputFloat retroreflectivity;
   /* Transmission. */
   SVMInputFloat transmission_dispersion_scale;
   SVMInputFloat transmission_dispersion_abbe_number;

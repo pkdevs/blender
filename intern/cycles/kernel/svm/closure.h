@@ -152,6 +152,8 @@ principled_bsdf_emission(KernelGlobals kg,
     const float3 coat_normal = safe_normalize_fallback(
         stack_load_float3_default(stack, data.coat_normal_offset, N), sd->N);
     const float3 valid_coat_normal = maybe_ensure_valid_specular_reflection(sd, coat_normal);
+    const float retroreflectivity = saturatef(stack_load(stack, data.retroreflectivity));
+
     if (reflective_caustics) {
       MicrofacetBsdf coat;
       ccl_private MicrofacetBsdf *bsdf = bsdf_alloc_maybe_emission(
@@ -161,11 +163,12 @@ principled_bsdf_emission(KernelGlobals kg,
         bsdf->N = valid_coat_normal;
         bsdf->T = zero_float3();
         bsdf->ior = coat_ior;
+        bsdf->retroreflectivity = retroreflectivity;
 
         bsdf->alpha_x = bsdf->alpha_y = sqr(coat_roughness);
 
         /* setup bsdf */
-        sd->runtime_flag |= bsdf_microfacet_ggx_setup(bsdf);
+        sd->runtime_flag |= bsdf_microfacet_ggx_setup(bsdf, sd);
         bsdf_microfacet_setup_fresnel_dielectric(kg, bsdf, sd->wi);
 
         /* Attenuate lower layers */
@@ -304,6 +307,7 @@ ccl_device
       const float thinfilm_ior = (thinfilm_thickness > THINFILM_THICKNESS_CUTOFF) ?
                                      fmaxf(stack_load(stack, data.thin_film_ior), 1e-5f) :
                                      0.0f;
+      const float retroreflectivity = saturatef(stack_load(stack, data.retroreflectivity));
 
       float alpha_x = sqr(roughness);
       float alpha_y = sqr(roughness);
@@ -336,6 +340,7 @@ ccl_device
             bsdf->T = T;
             bsdf->alpha_x = alpha_x;
             bsdf->alpha_y = alpha_y;
+            bsdf->retroreflectivity = retroreflectivity;
 
             fresnel->f0 = clamped_base_color;
             const Spectrum f82 = min(specular_tint, white);
@@ -344,7 +349,7 @@ ccl_device
             fresnel->thin_film.ior = thinfilm_ior;
 
             /* setup bsdf */
-            sd->runtime_flag |= bsdf_microfacet_ggx_setup(bsdf);
+            sd->runtime_flag |= bsdf_microfacet_ggx_setup(bsdf, sd);
             const bool is_multiggx = (distribution == CLOSURE_BSDF_MICROFACET_MULTI_GGX_GLASS_ID);
             bsdf_microfacet_setup_fresnel_f82_tint(kg, bsdf, sd->wi, fresnel, f82, is_multiggx);
           }
@@ -376,6 +381,7 @@ ccl_device
                                   valid_reflection_N,
                                   sqr(roughness),
                                   ior,
+                                  retroreflectivity,
                                   thinfilm,
                                   ray_visibility,
                                   path_flag);
@@ -453,6 +459,7 @@ ccl_device
           bsdf->T = T;
           bsdf->alpha_x = alpha_x;
           bsdf->alpha_y = alpha_y;
+          bsdf->retroreflectivity = retroreflectivity;
 
           fresnel->f0 = f0 * specular_tint;
           fresnel->f90 = white;
@@ -461,7 +468,7 @@ ccl_device
           fresnel->thin_film = {thinfilm_thickness, thinfilm_ior};
 
           /* setup bsdf */
-          sd->runtime_flag |= bsdf_microfacet_ggx_setup(bsdf);
+          sd->runtime_flag |= bsdf_microfacet_ggx_setup(bsdf, sd);
           const bool is_multiggx = (distribution == CLOSURE_BSDF_MICROFACET_MULTI_GGX_GLASS_ID);
           bsdf_microfacet_setup_fresnel_generalized_schlick(
               kg, bsdf, sd->wi, fresnel, is_multiggx);
@@ -578,6 +585,7 @@ ccl_device
         float3 N = stack_load_float3_default(stack, cdata.normal_offset, sd->N);
         N = safe_normalize_fallback(N, sd->N);
         const float3 valid_reflection_N = maybe_ensure_valid_specular_reflection(sd, N);
+        const float retroreflectivity = saturatef(stack_load(stack, cdata.retroreflectivity));
         const float anisotropy = saturatef(stack_load(stack, cdata.anisotropy));
         const float roughness = saturatef(stack_load(stack, cdata.roughness));
         bsdf->alpha_x = sqr(roughness);
@@ -598,6 +606,7 @@ ccl_device
 
         bsdf->N = valid_reflection_N;
         bsdf->ior = 1.0f;
+        bsdf->retroreflectivity = retroreflectivity;
 
         const float thin_film_thickness = fmaxf(stack_load(stack, cdata.thin_film_thickness),
                                                 1e-5f);
@@ -606,10 +615,10 @@ ccl_device
         const ClosureType distribution = cdata.distribution;
         /* Setup BSDF */
         if (distribution == CLOSURE_BSDF_MICROFACET_BECKMANN_ID) {
-          sd->runtime_flag |= bsdf_microfacet_beckmann_setup(bsdf);
+          sd->runtime_flag |= bsdf_microfacet_beckmann_setup(bsdf, sd);
         }
         else {
-          sd->runtime_flag |= bsdf_microfacet_ggx_setup(bsdf);
+          sd->runtime_flag |= bsdf_microfacet_ggx_setup(bsdf, sd);
         }
 
         const bool is_multiggx = (distribution == CLOSURE_BSDF_MICROFACET_MULTI_GGX_ID);
@@ -687,9 +696,11 @@ ccl_device
       }
 
       const float roughness = sqr(saturatef(stack_load(stack, bsdf_data.roughness)));
+      const float retroreflectivity = saturatef(stack_load(stack, bsdf_data.retroreflectivity));
 
       bsdf->N = maybe_ensure_valid_specular_reflection(sd, N);
       bsdf->ior = 1.0f;
+      bsdf->retroreflectivity = retroreflectivity;
 
       /* compute roughness */
       const float anisotropy = clamp(stack_load(stack, bsdf_data.anisotropy), -0.99f, 0.99f);
@@ -720,13 +731,13 @@ ccl_device
 
       /* setup bsdf */
       if (type == CLOSURE_BSDF_MICROFACET_BECKMANN_ID) {
-        sd->runtime_flag |= bsdf_microfacet_beckmann_setup(bsdf);
+        sd->runtime_flag |= bsdf_microfacet_beckmann_setup(bsdf, sd);
       }
       else if (type == CLOSURE_BSDF_ASHIKHMIN_SHIRLEY_ID) {
-        sd->runtime_flag |= bsdf_ashikhmin_shirley_setup(bsdf);
+        sd->runtime_flag |= bsdf_ashikhmin_shirley_setup(bsdf, sd);
       }
       else {
-        sd->runtime_flag |= bsdf_microfacet_ggx_setup(bsdf);
+        sd->runtime_flag |= bsdf_microfacet_ggx_setup(bsdf, sd);
         if (type == CLOSURE_BSDF_MICROFACET_MULTI_GGX_ID) {
           const Spectrum color = max(rgb_to_spectrum(stack_load(stack, bsdf_data.color)), black);
           bsdf_microfacet_setup_fresnel_constant(kg, bsdf, sd->wi, color);

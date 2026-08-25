@@ -897,7 +897,7 @@ struct ccl_align(16) ShaderClosure {
 
   /* Extra space for closures to store data, somewhat arbitrary but closures
    * assert that their size fits. */
-  char pad[sizeof(Spectrum) * 2 + sizeof(float) * 4];
+  char pad[sizeof(Spectrum) * 2 + sizeof(float) * 5];
 };
 
 /* Shader Data

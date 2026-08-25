@@ -28,6 +28,11 @@ static void node_declare(NodeDeclarationBuilder &b)
       .min(0.0f)
       .max(1.0f)
       .subtype(PROP_FACTOR);
+  b.add_input<decl::Float>("Retroreflectivity"_ustr)
+      .default_value(0.0f)
+      .min(0.0f)
+      .max(1.0f)
+      .subtype(PROP_FACTOR);
   b.add_input<decl::Vector>("Normal"_ustr).hide_value();
   b.add_input<decl::Vector>("Tangent"_ustr).hide_value();
   b.add_input<decl::Float>("Weight"_ustr).available(is_gpu_internal);
@@ -50,8 +55,8 @@ static int node_shader_gpu_bsdf_glossy(GPUMaterial *mat,
                                        GPUNodeStack *in,
                                        GPUNodeStack *out)
 {
-  if (!in[4].link) {
-    GPU_link(mat, "world_normals_get", &in[4].link);
+  if (!in[5].link) {
+    GPU_link(mat, "world_normals_get", &in[5].link);
   }
 
   GPU_material_flag_set(mat, GPU_MATFLAG_GLOSSY);

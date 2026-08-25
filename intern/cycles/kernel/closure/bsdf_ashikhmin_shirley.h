@@ -22,13 +22,19 @@
 
 CCL_NAMESPACE_BEGIN
 
-ccl_device int bsdf_ashikhmin_shirley_setup(ccl_private MicrofacetBsdf *bsdf)
+ccl_device int bsdf_ashikhmin_shirley_setup(ccl_private MicrofacetBsdf *bsdf,
+                                            ccl_private ShaderData *sd)
 {
   bsdf->alpha_x = clamp(bsdf->alpha_x, 1e-4f, 1.0f);
   bsdf->alpha_y = clamp(bsdf->alpha_y, 1e-4f, 1.0f);
 
   bsdf->fresnel_type = MicrofacetFresnel::NONE;
   bsdf->type = CLOSURE_BSDF_ASHIKHMIN_SHIRLEY_ID;
+
+  /* Probabilistically swap between the regular and retroreflective lobe */
+  bsdf->retroreflectivity = bsdf->retroreflectivity > 0.0f &&
+                            lcg_step_float(&sd->lcg_state) < bsdf->retroreflectivity;
+
   return SR_BSDF | SR_BSDF_HAS_EVAL;
 }
 
@@ -46,12 +52,13 @@ ccl_device_inline float bsdf_ashikhmin_shirley_roughness_to_exponent(const float
 }
 
 ccl_device_forceinline Spectrum bsdf_ashikhmin_shirley_eval(const ccl_private ShaderClosure *sc,
-                                                            const float3 wi,
+                                                            const float3 wi_in,
                                                             const float3 wo,
                                                             ccl_private float *pdf)
 {
   const ccl_private MicrofacetBsdf *bsdf = (const ccl_private MicrofacetBsdf *)sc;
   const float3 N = bsdf->N;
+  const float3 wi = bsdf->retroreflectivity ? reflect(-wi_in, N) : wi_in;
 
   float NdotI = dot(N, wi);
   float NdotO = dot(N, wo);
@@ -127,7 +134,7 @@ ccl_device_inline void bsdf_ashikhmin_shirley_sample_first_quadrant(float n_x,
 
 ccl_device int bsdf_ashikhmin_shirley_sample(const ccl_private ShaderClosure *sc,
                                              const float3 Ng,
-                                             const float3 wi,
+                                             const float3 wi_in,
                                              float2 rand,
                                              ccl_private Spectrum *eval,
                                              ccl_private float3 *wo,
@@ -137,6 +144,7 @@ ccl_device int bsdf_ashikhmin_shirley_sample(const ccl_private ShaderClosure *sc
   const ccl_private MicrofacetBsdf *bsdf = (const ccl_private MicrofacetBsdf *)sc;
   *sampled_roughness = make_float2(bsdf->alpha_x, bsdf->alpha_y);
   const float3 N = bsdf->N;
+  const float3 wi = bsdf->retroreflectivity ? reflect(-wi_in, N) : wi_in;
   int label = LABEL_REFLECT | LABEL_GLOSSY;
 
   const float NdotI = dot(N, wi);
@@ -219,7 +227,7 @@ ccl_device int bsdf_ashikhmin_shirley_sample(const ccl_private ShaderClosure *sc
   }
   else {
     /* leave the rest to eval */
-    *eval = bsdf_ashikhmin_shirley_eval(sc, wi, *wo, pdf);
+    *eval = bsdf_ashikhmin_shirley_eval(sc, wi_in, *wo, pdf);
   }
 
   return label;

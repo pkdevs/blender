@@ -570,6 +570,7 @@ class PrincipledBsdfNode : public BsdfBaseNode {
   NODE_SOCKET_API(float, anisotropic)
   NODE_SOCKET_API(float, anisotropic_rotation)
   NODE_SOCKET_API(float3, tangent)
+  NODE_SOCKET_API(float, retroreflectivity)
   NODE_SOCKET_API(float, transmission_weight)
   NODE_SOCKET_API(float, transmission_dispersion_scale)
   NODE_SOCKET_API(float, transmission_dispersion_abbe_number)
@@ -667,6 +668,7 @@ class MetallicBsdfNode : public BsdfNode {
   NODE_SOCKET_API(float, rotation)
   NODE_SOCKET_API(float, thin_film_thickness)
   NODE_SOCKET_API(float, thin_film_ior)
+  NODE_SOCKET_API(float, retroreflectivity)
   NODE_SOCKET_API(ClosureType, distribution)
   NODE_SOCKET_API(ClosureType, fresnel_type)
 
@@ -694,6 +696,7 @@ class GlossyBsdfNode : public BsdfNode {
   NODE_SOCKET_API(float, anisotropy)
   NODE_SOCKET_API(float, rotation)
   NODE_SOCKET_API(ClosureType, distribution)
+  NODE_SOCKET_API(float, retroreflectivity)
 
   void attributes(Shader *shader, AttributeRequestSet *attributes) override;
   bool has_attribute_dependency() override

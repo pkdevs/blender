@@ -2254,6 +2254,8 @@ NODE_DEFINE(MetallicBsdfNode)
   SOCKET_IN_FLOAT(thin_film_thickness, "Thin Film Thickness", 0.0f);
   SOCKET_IN_FLOAT(thin_film_ior, "Thin Film IOR", 1.33f);
 
+  SOCKET_IN_FLOAT(retroreflectivity, "Retroreflectivity", 0.0f);
+
   SOCKET_OUT_CLOSURE(BSDF, "BSDF");
 
   return type;
@@ -2310,6 +2312,7 @@ void MetallicBsdfNode::compile(SVMCompiler &compiler)
           .rotation = compiler.input_float("Rotation"),
           .thin_film_thickness = compiler.input_float("Thin Film Thickness"),
           .thin_film_ior = compiler.input_float("Thin Film IOR"),
+          .retroreflectivity = compiler.input_float("Retroreflectivity"),
           .normal_offset = compiler.input_link("Normal"),
           .tangent_offset = compiler.input_link("Tangent"),
       });
@@ -2344,6 +2347,7 @@ NODE_DEFINE(GlossyBsdfNode)
   SOCKET_IN_FLOAT(roughness, "Roughness", 0.5f);
   SOCKET_IN_FLOAT(anisotropy, "Anisotropy", 0.0f);
   SOCKET_IN_FLOAT(rotation, "Rotation", 0.0f);
+  SOCKET_IN_FLOAT(retroreflectivity, "Retroreflectivity", 0.0f);
 
   SOCKET_OUT_CLOSURE(BSDF, "BSDF");
 
@@ -2394,6 +2398,7 @@ void GlossyBsdfNode::compile(SVMCompiler &compiler)
                         .roughness = compiler.input_float("Roughness"),
                         .anisotropy = compiler.input_float("Anisotropy"),
                         .rotation = compiler.input_float("Rotation"),
+                        .retroreflectivity = compiler.input_float("Retroreflectivity"),
                         .normal_offset = compiler.input_link("Normal"),
                         .tangent_offset = compiler.input_link("Tangent"),
                     });
@@ -2666,6 +2671,7 @@ NODE_DEFINE(PrincipledBsdfNode)
   SOCKET_IN_FLOAT(anisotropic, "Anisotropic", 0.0f);
   SOCKET_IN_FLOAT(anisotropic_rotation, "Anisotropic Rotation", 0.0f);
   SOCKET_IN_NORMAL(tangent, "Tangent", zero_float3(), SocketType::LINK_TANGENT);
+  SOCKET_IN_FLOAT(retroreflectivity, "Retroreflectivity", 0.0f);
 
   SOCKET_IN_FLOAT(transmission_weight, "Transmission Weight", 0.0f);
   SOCKET_IN_FLOAT(transmission_dispersion_scale, "Transmission Dispersion Scale", 0.0f);
@@ -2868,6 +2874,7 @@ void PrincipledBsdfNode::compile(SVMCompiler &compiler)
           .specular_ior_level = compiler.input_float("Specular IOR Level"),
           .anisotropic = compiler.input_float("Anisotropic"),
           .anisotropic_rotation = compiler.input_float("Anisotropic Rotation"),
+          .retroreflectivity = compiler.input_float("Retroreflectivity"),
           /* Transmission. */
           .transmission_dispersion_scale = compiler.input_float("Transmission Dispersion Scale"),
           .transmission_dispersion_abbe_number = compiler.input_float(

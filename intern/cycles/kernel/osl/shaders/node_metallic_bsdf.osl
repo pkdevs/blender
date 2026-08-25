@@ -14,6 +14,7 @@ shader node_metallic_bsdf(color BaseColor = color(0.617, 0.577, 0.540),
                           float Roughness = 0.5,
                           float Anisotropy = 0.0,
                           float Rotation = 0.0,
+                          float Retroreflectivity = 0.0,
                           float ThinFilmThickness = 0.0,
                           float ThinFilmIOR = 1.33,
                           normal Normal = N,
@@ -47,7 +48,9 @@ shader node_metallic_bsdf(color BaseColor = color(0.617, 0.577, 0.540),
                                "thinfilm_thickness",
                                ThinFilmThickness,
                                "thinfilm_ior",
-                               ThinFilmIOR);
+                               ThinFilmIOR,
+                               "retroreflectivity",
+                               Retroreflectivity);
   }
   else {
     BSDF = conductor_bsdf(Normal,
@@ -60,6 +63,8 @@ shader node_metallic_bsdf(color BaseColor = color(0.617, 0.577, 0.540),
                           "thinfilm_thickness",
                           ThinFilmThickness,
                           "thinfilm_ior",
-                          ThinFilmIOR);
+                          ThinFilmIOR,
+                          "retroreflectivity",
+                          Retroreflectivity);
   }
 }

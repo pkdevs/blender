@@ -85,6 +85,7 @@ void node_bsdf_principled(float4 base_color,
                           const float4 specular_tint,
                           const float anisotropic,
                           const float anisotropic_rotation,
+                          const float retroreflectivity,
                           const float3 T,
                           const float transmission_weight,
                           const float transmission_dispersion_scale,
@@ -119,6 +120,7 @@ void node_bsdf_principled(float4 base_color,
   subsurface.weight = saturate(subsurface_weight);
   /* Not used by EEVEE */
   /* subsurface_ior = clamp(subsurface_ior, 1.01f, 3.8f); */
+  /* retroreflectivity = saturate(retroreflectivity); */
 
   Specular specular;
   specular.tint = max(specular_tint.rgb, float3(0.0f));

@@ -206,8 +206,9 @@ ccl_device void osl_closure_reflection_setup(KernelGlobals kg,
 
   bsdf->N = maybe_ensure_valid_specular_reflection(sd, safe_normalize_fallback(closure->N, sd->N));
   bsdf->alpha_x = bsdf->alpha_y = 0.0f;
+  bsdf->retroreflectivity = closure->retroreflectivity;
 
-  sd->runtime_flag |= bsdf_microfacet_ggx_setup(bsdf);
+  sd->runtime_flag |= bsdf_microfacet_ggx_setup(bsdf, sd);
 }
 
 ccl_device void osl_closure_refraction_setup(KernelGlobals kg,
@@ -310,6 +311,7 @@ ccl_device void osl_closure_dielectric_bsdf_setup(KernelGlobals kg,
   bsdf->alpha_y = closure->alpha_y;
   bsdf->ior = closure->ior;
   bsdf->T = closure->T;
+  bsdf->retroreflectivity = closure->retroreflectivity;
 
   const bool beckmann = closure->distribution == make_string("beckmann", 14712237670914973463ull);
   const bool multiggx = closure->distribution == make_string("multi_ggx", 16842698693386468366ull);
@@ -358,16 +360,17 @@ ccl_device void osl_closure_conductor_bsdf_setup(KernelGlobals kg,
   bsdf->alpha_y = closure->alpha_y;
   bsdf->ior = 0.0f;
   bsdf->T = closure->T;
+  bsdf->retroreflectivity = closure->retroreflectivity;
 
   bool preserve_energy = false;
 
   /* Beckmann */
   if (closure->distribution == make_string("beckmann", 14712237670914973463ull)) {
-    sd->runtime_flag |= bsdf_microfacet_beckmann_setup(bsdf);
+    sd->runtime_flag |= bsdf_microfacet_beckmann_setup(bsdf, sd);
   }
   /* GGX (either single- or multi-scattering) */
   else {
-    sd->runtime_flag |= bsdf_microfacet_ggx_setup(bsdf);
+    sd->runtime_flag |= bsdf_microfacet_ggx_setup(bsdf, sd);
     preserve_energy = (closure->distribution == make_string("multi_ggx", 16842698693386468366ull));
   }
 
@@ -417,6 +420,7 @@ ccl_device void osl_closure_generalized_schlick_bsdf_setup(
   bsdf->alpha_x = closure->alpha_x;
   bsdf->alpha_y = closure->alpha_y;
   bsdf->T = closure->T;
+  bsdf->retroreflectivity = closure->retroreflectivity;
 
   if (closure->exponent < 0.0f) {
     /* Trick for principled BSDF: Since we use the real Fresnel equation and remap
@@ -440,7 +444,7 @@ ccl_device void osl_closure_generalized_schlick_bsdf_setup(
       sd->runtime_flag |= bsdf_microfacet_beckmann_refraction_setup(bsdf);
     }
     else {
-      sd->runtime_flag |= bsdf_microfacet_beckmann_setup(bsdf);
+      sd->runtime_flag |= bsdf_microfacet_beckmann_setup(bsdf, sd);
     }
   }
   /* GGX (either single- or multi-scattering) */
@@ -452,7 +456,7 @@ ccl_device void osl_closure_generalized_schlick_bsdf_setup(
       sd->runtime_flag |= bsdf_microfacet_ggx_refraction_setup(bsdf);
     }
     else {
-      sd->runtime_flag |= bsdf_microfacet_ggx_setup(bsdf);
+      sd->runtime_flag |= bsdf_microfacet_ggx_setup(bsdf, sd);
     }
 
     preserve_energy = (closure->distribution == make_string("multi_ggx", 16842698693386468366ull));
@@ -530,6 +534,7 @@ ccl_device void osl_closure_thin_glass_setup(KernelGlobals kg,
                                                      valid_reflection_N,
                                                      closure->roughness,
                                                      closure->ior,
+                                                     closure->retroreflectivity,
                                                      thinfilm,
                                                      path_visibility,
                                                      path_flag);
@@ -587,6 +592,7 @@ ccl_device void osl_closure_microfacet_setup(KernelGlobals kg,
   bsdf->alpha_y = closure->alpha_y;
   bsdf->ior = closure->ior;
   bsdf->T = closure->T;
+  bsdf->retroreflectivity = closure->retroreflectivity;
 
   /* Beckmann */
   if (closure->distribution == make_string("beckmann", 14712237670914973463ull)) {
@@ -597,12 +603,12 @@ ccl_device void osl_closure_microfacet_setup(KernelGlobals kg,
       sd->runtime_flag |= bsdf_microfacet_beckmann_glass_setup(bsdf);
     }
     else {
-      sd->runtime_flag |= bsdf_microfacet_beckmann_setup(bsdf);
+      sd->runtime_flag |= bsdf_microfacet_beckmann_setup(bsdf, sd);
     }
   }
   /* Ashikhmin-Shirley */
   else if (closure->distribution == make_string("ashikhmin_shirley", 11318482998918370922ull)) {
-    sd->runtime_flag |= bsdf_ashikhmin_shirley_setup(bsdf);
+    sd->runtime_flag |= bsdf_ashikhmin_shirley_setup(bsdf, sd);
   }
   /* GGX (either single- or multi-scattering) */
   else {
@@ -613,7 +619,7 @@ ccl_device void osl_closure_microfacet_setup(KernelGlobals kg,
       sd->runtime_flag |= bsdf_microfacet_ggx_glass_setup(bsdf);
     }
     else {
-      sd->runtime_flag |= bsdf_microfacet_ggx_setup(bsdf);
+      sd->runtime_flag |= bsdf_microfacet_ggx_setup(bsdf, sd);
     }
 
     if (closure->distribution == make_string("multi_ggx", 16842698693386468366ull)) {
@@ -664,16 +670,17 @@ ccl_device void osl_closure_microfacet_f82_tint_setup(
   bsdf->alpha_y = closure->alpha_y;
   bsdf->ior = 0.0f;
   bsdf->T = closure->T;
+  bsdf->retroreflectivity = closure->retroreflectivity;
 
   bool preserve_energy = false;
 
   /* Beckmann */
   if (closure->distribution == make_string("beckmann", 14712237670914973463ull)) {
-    sd->runtime_flag |= bsdf_microfacet_beckmann_setup(bsdf);
+    sd->runtime_flag |= bsdf_microfacet_beckmann_setup(bsdf, sd);
   }
   /* GGX (either single- or multi-scattering) */
   else {
-    sd->runtime_flag |= bsdf_microfacet_ggx_setup(bsdf);
+    sd->runtime_flag |= bsdf_microfacet_ggx_setup(bsdf, sd);
     preserve_energy = (closure->distribution == make_string("multi_ggx", 16842698693386468366ull));
   }
 
@@ -743,10 +750,11 @@ ccl_device void osl_closure_microfacet_multi_ggx_aniso_setup(
   bsdf->alpha_x = closure->alpha_x;
   bsdf->alpha_y = closure->alpha_y;
   bsdf->ior = 1.0f;
+  bsdf->retroreflectivity = closure->retroreflectivity;
 
   bsdf->T = closure->T;
 
-  sd->runtime_flag |= bsdf_microfacet_ggx_setup(bsdf);
+  sd->runtime_flag |= bsdf_microfacet_ggx_setup(bsdf, sd);
   bsdf_microfacet_setup_fresnel_constant(kg, bsdf, sd->wi, rgb_to_spectrum(closure->color));
 
   if (layer_albedo != nullptr) {

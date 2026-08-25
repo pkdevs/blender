@@ -28,6 +28,7 @@ void node_bsdf_metallic(float4 base_color,
                         float roughness,
                         float anisotropy,
                         float rotation,
+                        float retroreflectivity,
                         float3 N,
                         float3 T,
                         float weight,
@@ -51,6 +52,7 @@ void node_bsdf_metallic(float4 base_color,
   roughness = saturate(roughness);
   /* Not used by EEVEE */
   /* anisotropy = saturate(anisotropy); */
+  /* retroreflectivity = saturate(retroreflectivity); */
 
   N = safe_normalize(N);
   float3 V = coordinate_incoming(g_data.P);
