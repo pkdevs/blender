@@ -39,6 +39,7 @@
 #include "BKE_sound.hh"
 
 #include "DEG_depsgraph.hh"
+#include "DEG_depsgraph_query.hh"
 
 #include "MOV_read.hh"
 
@@ -56,6 +57,8 @@
 #include "SEQ_thumbnail_cache.hh"
 #include "SEQ_transform.hh"
 #include "SEQ_utils.hh"
+
+#include "cache/movie_reader_cache.hh"
 
 #include "BLO_read_write.hh"
 
@@ -174,8 +177,6 @@ static void seq_strip_free_ex(Scene *scene,
     strip->data = nullptr;
   }
 
-  strip_free_movie_readers(strip);
-
   if (strip->is_effect()) {
     EffectHandle sh = strip_effect_handle_get(strip);
     if (sh.free) {
@@ -277,6 +278,9 @@ void seq_free_strip_recurse(Scene *scene, Strip *strip, const bool do_id_user)
 
 StripRuntime::~StripRuntime()
 {
+  if (movie_metadata != nullptr) {
+    IDP_FreeProperty(movie_metadata);
+  }
   clear_sound_time_stretch();
 }
 
@@ -899,13 +903,19 @@ static bool strip_write_data_cb(Strip *strip, void *userdata)
           }
           writer->write_struct(text);
           writer->write_string(text->text_ptr);
-        } break;
+          break;
+        }
         case STRIP_TYPE_COLORMIX:
           writer->write_struct_cast<ColorMixVars>(strip->effectdata);
           break;
-        case STRIP_TYPE_COMPOSITOR:
+        case STRIP_TYPE_COMPOSITOR: {
+          CompositorEffectVars *comp = static_cast<CompositorEffectVars *>(strip->effectdata);
+          if (comp->system_properties) {
+            IDP_BlendWrite(writer, comp->system_properties);
+          }
           writer->write_struct_cast<CompositorEffectVars>(strip->effectdata);
           break;
+        }
         default:
           break;
       }
@@ -925,8 +935,7 @@ static bool strip_write_data_cb(Strip *strip, void *userdata)
       writer->write_struct(data->proxy);
     }
     if (strip->type == STRIP_TYPE_IMAGE) {
-      writer->write_struct_array(MEM_allocN_len(data->stripdata) / sizeof(StripElem),
-                                 data->stripdata);
+      writer->write_struct_array(data->stripdata_num, data->stripdata);
     }
     else if (ELEM(strip->type, STRIP_TYPE_MOVIE, STRIP_TYPE_SOUND)) {
       writer->write_struct(data->stripdata);
@@ -985,7 +994,8 @@ static bool strip_read_data_cb(Strip *strip, void *user_data)
           SpeedControlVars *speed = static_cast<SpeedControlVars *>(strip->effectdata);
           speed->frameMap = nullptr;
         }
-      } break;
+        break;
+      }
       case STRIP_TYPE_WIPE:
         BLO_read_struct_nonnull(reader, WipeVars, &strip->effectdata);
         break;
@@ -1006,13 +1016,18 @@ static bool strip_read_data_cb(Strip *strip, void *user_data)
           text->text_blf_id = STRIP_FONT_NOT_LOADED;
           text->runtime = nullptr;
         }
-      } break;
+        break;
+      }
       case STRIP_TYPE_COLORMIX:
         BLO_read_struct_nonnull(reader, ColorMixVars, &strip->effectdata);
         break;
-      case STRIP_TYPE_COMPOSITOR:
+      case STRIP_TYPE_COMPOSITOR: {
         BLO_read_struct_nonnull(reader, CompositorEffectVars, &strip->effectdata);
+        CompositorEffectVars *comp = static_cast<CompositorEffectVars *>(strip->effectdata);
+        BLO_read_struct(reader, IDProperty, &comp->system_properties);
+        IDP_BlendDataRead(reader, &comp->system_properties);
         break;
+      }
       default:
         BLI_assert_unreachable();
         strip->effectdata = nullptr;
@@ -1029,25 +1044,29 @@ static bool strip_read_data_cb(Strip *strip, void *user_data)
 
   BLO_read_struct(reader, StripData, &strip->data);
   if (strip->data) {
-    /* `STRIP_TYPE_SOUND_HD` case needs to be kept here, for backward compatibility. */
-    if (ELEM(strip->type,
-             STRIP_TYPE_IMAGE,
-             STRIP_TYPE_MOVIE,
-             STRIP_TYPE_SOUND,
-             STRIP_TYPE_SOUND_HD))
-    {
-      /* FIXME In #STRIP_TYPE_IMAGE case, there is currently no available information about the
-       * length of the stored array of #StripElem.
-       *
-       * This is 'not a problem' because the reading code only checks that the loaded buffer is at
-       * least large enough for the requested data (here a single #StripElem item), and always
-       * assign the whole read memory (without any truncating). But relying on this behavior is
-       * weak and should be addressed. */
-      BLO_read_struct(reader, StripElem, &strip->data->stripdata);
+    switch (strip->type) {
+      case STRIP_TYPE_IMAGE: {
+        /* Avoid using `strip->data->stripdata_num` since it is initialized by versioning code. */
+        const int count = strip->data->stripdata_num == 0 ?
+                              strip->anim_startofs + strip->len + strip->anim_endofs :
+                              strip->data->stripdata_num;
+        if (!BLO_read_array(reader, &strip->data->stripdata, count)) {
+          strip->data->stripdata_num = 0;
+        }
+        break;
+      }
+      case STRIP_TYPE_MOVIE:
+      case STRIP_TYPE_SOUND:
+      case STRIP_TYPE_SOUND_HD: {
+        /* `STRIP_TYPE_SOUND_HD` case needs to be kept here, for backward compatibility. */
+        BLO_read_struct(reader, StripElem, &strip->data->stripdata);
+        break;
+      }
+      default:
+        strip->data->stripdata = nullptr;
+        break;
     }
-    else {
-      strip->data->stripdata = nullptr;
-    }
+
     BLO_read_struct(reader, StripCrop, &strip->data->crop);
     BLO_read_struct(reader, StripTransform, &strip->data->transform);
     BLO_read_struct(reader, StripProxy, &strip->data->proxy);
@@ -1264,6 +1283,10 @@ static bool strip_sound_update_cb(Strip *strip, void *user_data)
 void eval_strips(Depsgraph *depsgraph, Scene *scene, ListBaseT<Strip> *seqbase)
 {
   DEG_debug_print_eval(depsgraph, __func__, scene->id.name, scene);
+
+  /* Note: sequencer caches are stored on the original scene, not the evaluated copy. */
+  relations_invalidate_temporary_animation_frame(DEG_get_original(scene));
+
   BKE_sound_ensure_scene(scene);
 
   foreach_strip(seqbase, strip_sound_update_cb, scene);
@@ -1272,8 +1295,11 @@ void eval_strips(Depsgraph *depsgraph, Scene *scene, ListBaseT<Strip> *seqbase)
   sound_update_bounds_all(scene);
 }
 
+EditingRuntime::EditingRuntime() : movie_reader_cache(movie_reader_cache_create()) {}
+
 EditingRuntime::~EditingRuntime()
 {
+  movie_reader_cache_destroy(this->movie_reader_cache);
   MEM_delete(this->compositor_cache);
 }
 
