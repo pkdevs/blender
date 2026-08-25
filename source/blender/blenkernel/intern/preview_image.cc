@@ -520,7 +520,7 @@ void BKE_previewimg_render_end(PreviewImage *prv,
 
   /* When job is cancelled for e.g. undo, PRV_RENDERING remains so that it can resume
    * when going back to that undo step. Also tag for restart in the current state, if
-   * the ID itself was not modified in the undo stap but still had its preview cancelled. */
+   * the ID itself was not modified in the undo step but still had its preview cancelled. */
   if (status == PRV_RENDER_STATUS_CANCELLED) {
     if (!(prv->flag[size] & PRV_USER_EDITED)) {
       prv->runtime->tag[size] |= PRV_TAG_RESTART_RENDERING;
