@@ -282,6 +282,9 @@ def poll_sweep(window, area):
                     total += 1
                     try:
                         result = op.poll()
+                        # NOTE: BPY currently loses the Python type information when converting
+                        # the poll result, so this cannot detect invalid return types yet.
+                        # Keep the check so it catches them once BPY preserves the type.
                         if not isinstance(result, bool):
                             failures.append(
 	                            f"{area_type}: {idname} poll returned {result!r} (expected bool)"
