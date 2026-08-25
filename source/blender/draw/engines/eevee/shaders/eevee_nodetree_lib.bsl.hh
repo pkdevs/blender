@@ -923,9 +923,9 @@ void node_light_accumulation_impl([[maybe_unused]] const int light_index,
 #if defined(GPU_FRAGMENT_SHADER) && defined(MAT_LIGHT_ITER)
   LightData light = lrd.light_buf[light_index];
   g_diffuse_light += diffuse_light.rgb * weight * light.power_factor[LIGHT_DIFFUSE];
-  g_diffuse_color += diffuse_color.rgb * weight;
+  g_diffuse_color += diffuse_color.rgb;
   g_specular_light += glossy_light.rgb * weight * light.power_factor[LIGHT_SPECULAR];
-  g_specular_color += glossy_color.rgb * weight;
+  g_specular_color += glossy_color.rgb;
   g_light_accumulation_count++;
 #endif
 
