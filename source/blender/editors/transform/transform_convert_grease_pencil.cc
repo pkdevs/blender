@@ -324,7 +324,7 @@ static void recalcData_grease_pencil(TransInfo *t)
     KeyBlock *actkb = BKE_keyblock_find_by_index(key, tc.obedit->shapenr - 1);
     float keyblock_influence = 0.0f;
 
-    if (key && actkb) {
+    if (key && actkb && tc.obedit->shapenr != 1) {
       if (actkb->flag & KEYBLOCK_MUTE) {
         continue;
       }
