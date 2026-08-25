@@ -152,6 +152,15 @@ Strip *add_movieclip_strip(Scene *scene, ListBaseT<Strip> *seqbase, LoadData *lo
  * \return created strip
  */
 Strip *add_mask_strip(Scene *scene, ListBaseT<Strip> *seqbase, LoadData *load_data);
+bool transition_has_space(const Scene *scene,
+                          const Strip *left_input,
+                          const Strip *right_input,
+                          int left_handle,
+                          int right_handle);
+std::pair<int, int> transition_handles_clamp(const Scene *scene,
+                                             const Strip *left_input,
+                                             const Strip *right_input,
+                                             std::pair<int, int> original_handles);
 /**
  * Add effect strip.
  *

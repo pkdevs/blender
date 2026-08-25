@@ -737,8 +737,10 @@ class SEQUENCER_MT_add(Menu):
 
         layout.operator("sequencer.effect_strip_add", text="Adjustment Layer", icon='COLOR').type = 'ADJUSTMENT'
         col = layout.column()
-        col.operator("sequencer.effect_strip_add", text="Compositor", icon='NODE_COMPOSITING').type = 'COMPOSITOR'
-        col.enabled = nonsound < 3
+        if nonsound < 2:
+            col.operator("sequencer.effect_strip_add", text="Compositor", icon='NODE_COMPOSITING').type = 'COMPOSITOR'
+        else:
+            col.operator("sequencer.transition_strip_add", text="Compositor", icon='NODE_COMPOSITING').type = 'COMPOSITOR'
 
         layout.operator_context = 'INVOKE_DEFAULT'
         layout.menu("SEQUENCER_MT_add_effect", icon='SHADERFX')
@@ -746,7 +748,7 @@ class SEQUENCER_MT_add(Menu):
         col = layout.column()
         col.menu("SEQUENCER_MT_add_transitions", icon='ARROW_LEFTRIGHT')
         # Enable for video transitions or sound cross-fade.
-        col.enabled = nonsound == 2 or (nonsound == 0 and total == 2)
+        col.enabled = nonsound >= 2 or (nonsound == 0 and total == 2)
 
         col = layout.column()
         col.operator_menu_enum("sequencer.fades_add", "type", text="Fade", icon='IPO_EASE_IN_OUT')
@@ -771,10 +773,10 @@ class SEQUENCER_MT_add_transitions(Menu):
         layout = self.layout
 
         col = layout.column()
-        col.operator("sequencer.effect_strip_add", text="Crossfade").type = 'CROSS'
-        col.operator("sequencer.effect_strip_add", text="Gamma Crossfade").type = 'GAMMA_CROSS'
-        col.operator("sequencer.effect_strip_add", text="Wipe").type = 'WIPE'
-        col.enabled = nonsound == 2
+        col.operator("sequencer.transition_strip_add", text="Crossfade").type = 'CROSS'
+        col.operator("sequencer.transition_strip_add", text="Gamma Crossfade").type = 'GAMMA_CROSS'
+        col.operator("sequencer.transition_strip_add", text="Wipe").type = 'WIPE'
+        col.enabled = nonsound >= 2
 
         layout.separator()
 
