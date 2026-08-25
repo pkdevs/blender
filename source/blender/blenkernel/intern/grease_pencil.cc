@@ -2626,28 +2626,35 @@ static void grease_pencil_do_shape_keys(bke::GeometrySet &geometry_set)
     }
   }
 
-  for (const auto [keyblock_index, keyblock] : key->block.enumerate()) {
-    if (&keyblock == key->refkey) {
-      continue;
-    }
-    if (keyblock.flag & KEYBLOCK_MUTE) {
-      continue;
-    }
-    const float keyblock_influence = keyblock.curval;
-    if (keyblock_influence == 0.0f) {
-      continue;
-    }
+  threading::parallel_for_each(drawing_infos, [&](LayerDrawingInfo &info) {
+    bke::CurvesGeometry &curves = info.drawing->strokes_for_write();
+    const bke::AttributeAccessor attributes = curves.attributes();
 
-    /* Reference can be any block. */
-    KeyBlock *ref_keyblock = static_cast<KeyBlock *>(BLI_findlink(&key->block, keyblock.relative));
-    if (ref_keyblock == nullptr) {
-      continue;
-    }
+    for (const auto [keyblock_index, keyblock] : key->block.enumerate()) {
+      /* Skip the base key frame. */
+      if (&keyblock == key->refkey) {
+        continue;
+      }
+      if (keyblock.flag & KEYBLOCK_MUTE) {
+        continue;
+      }
 
-    threading::parallel_for_each(drawing_infos, [&](LayerDrawingInfo &info) {
-      bke::CurvesGeometry &curves = info.drawing->strokes_for_write();
+      const float keyblock_influence = keyblock.curval;
+      if (keyblock_influence == 0.0f) {
+        continue;
+      }
 
-      const bke::AttributeAccessor attributes = curves.attributes();
+      /* Reference can be any block. */
+      KeyBlock *ref_keyblock = static_cast<KeyBlock *>(
+          BLI_findlink(&key->block, keyblock.relative));
+      if (ref_keyblock == nullptr) {
+        continue;
+      }
+      /* If the reference block is the same as the current block nothing will happen, so skip. */
+      if (&keyblock == ref_keyblock) {
+        continue;
+      }
+
       const VArray<float3> key_positions = *attributes.lookup_or_default<float3>(
           blender::bke::greasepencil::shapekey_position_attribute(keyblock.name),
           bke::AttrDomain::Point,
@@ -2695,7 +2702,7 @@ static void grease_pencil_do_shape_keys(bke::GeometrySet &geometry_set)
       threading::parallel_for(positions.index_range(), 4096, [&](const IndexRange range) {
         for (const int i : range) {
           opacity[i] += (key_opacity[i] - ref_key_opacity[i]) * keyblock_influence;
-          /* Stop the opacity from being negative. */
+          /* Stop the opacity from going out of range. */
           opacity[i] = math::clamp(opacity[i], 0.0f, 1.0f);
         }
       });
@@ -2713,10 +2720,9 @@ static void grease_pencil_do_shape_keys(bke::GeometrySet &geometry_set)
           }
         });
       }
-
-      info.drawing->tag_positions_changed();
-    });
-  }
+    }
+    info.drawing->tag_positions_changed();
+  });
 }
 
 static void grease_pencil_evaluate_layers(GreasePencil &grease_pencil)
