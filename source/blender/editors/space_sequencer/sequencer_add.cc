@@ -2234,8 +2234,6 @@ static wmOperatorStatus sequencer_add_transition_strip_exec(bContext *C, wmOpera
 {
   Scene *scene = CTX_data_sequencer_scene(C);
   Editing *ed = seq::editing_ensure(scene);
-  printf("exec called\n");
-
   // check if there's anything from sequencer_add_generic_exec missing
 
   VectorSet<Strip *> inputs = seq::query_selected_strips(ed->current_strips());
@@ -2302,13 +2300,6 @@ static wmOperatorStatus sequencer_add_transition_strip_exec(bContext *C, wmOpera
                                     clamped_handles.first,
                                     clamped_handles.second});
         clamped |= handles != clamped_handles;
-        if (handles != clamped_handles) {
-          printf("clamped at start (%i, %i) -> (%i, %i)\n",
-                 handles.first,
-                 handles.second,
-                 clamped_handles.first,
-                 clamped_handles.second);
-        }
       }
       /* Strips that overlap in time on different channels get old type transition effects. */
       // can't use the function because it would add twice for one selection. but what about the
@@ -2342,7 +2333,6 @@ static wmOperatorStatus sequencer_add_transition_strip_exec(bContext *C, wmOpera
     const int distance = first.right_handle - second.left_handle;
     if (distance > 0) {
       clamped |= true;
-      printf("clamped at distance (cutpoints): (%i, %i)\n", first.cutpoint, second.cutpoint);
 
       first.right_handle = first.right_handle - ceil(distance / 2.0f);
       second.left_handle = second.left_handle + floor(distance / 2.0f);
