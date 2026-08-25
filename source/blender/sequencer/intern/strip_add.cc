@@ -24,6 +24,7 @@
 #include "BLI_path_utils.hh"
 #include "BLI_string.hh"
 #include "BLI_string_utf8.hh"
+#include "BLT_translation.hh"
 
 #include "BKE_image.hh"
 #include "BKE_layer.hh"
@@ -166,10 +167,14 @@ Strip *add_mask_strip(Scene *scene, ListBaseT<Strip> *seqbase, LoadData *load_da
   return strip;
 }
 
-static std::pair<int, int> transition_max_bounds_get(const Scene *scene,
-                                                     Editing *ed,
-                                                     const Strip *input1,
-                                                     const Strip *input2)
+// this could take in the left and right handles, and then return a bool depending on if it got
+// clamped or not
+// or it could take in a pair of left, right, and then return the clamped pair. then you can
+// compare the pairs for equality. then it doesn't unnecessarily change if that isn't needed
+std::pair<int, int> transition_max_bounds_get(const Scene *scene,
+                                              Editing *ed,
+                                              const Strip *input1,
+                                              const Strip *input2)
 {
   const Strip *left_transition = seq::get_transition_on_side(ed, input1, seq::Side::Left);
   const Strip *right_transition = seq::get_transition_on_side(ed, input2, seq::Side::Right);
@@ -186,33 +191,46 @@ static std::pair<int, int> transition_max_bounds_get(const Scene *scene,
   return {left_handle_min, right_handle_max};
 }
 
-static bool overlap_transition_validate(
-    Scene *scene, const Strip *input1, const Strip *input2, int length, ReportList *reports)
+// this validation also needs to check that that it is _within_ bounds
+// i guess this could feed in left as: cutpoint - 1 and right as: cutpoint + 1
+// then if those values get changed by transition_max_bounds_get (which could be renamed to
+// transition_bounds_clamp), it is for sure invalid. hmm
+// and i guess the transition would just be clamped to the area where it can fit in case it's
+// completely in the wrong place. then it's not an error that needs to be checked here
+// but you can't compare against if it's different reliably. maybe just make it return a bool for
+// whether it got clamped
+// then in sequencer_add_transition_strip_exec just make tmp variables for the inputs, since that's
+// the only place where you want to test that
+
+// ACTUALLY, this is used incorrectly in sequencer_add_transition_strip_exec. i mean, this
+// shouldn't be called at all there. it should just do those two checks directly there and ignore
+// those cases. those aren't really errors the space check is done later and the length check is
+// global
+std::optional<StringRefNull> overlap_transition_validate(Scene *scene,
+                                                         const Strip *input1,
+                                                         const Strip *input2,
+                                                         int length)
 {
   Editing *ed = editing_get(scene);
 
   if (length < 2) {
-    BKE_report(reports, RPT_ERROR, "Transition length must be at least 2");
-    return false;
+    return N_("Transition length must be at least 2");
   }
   if (seq::get_transition_between(scene, input1, input2) != nullptr) {
-    BKE_report(reports, RPT_ERROR, "Cannot add multiple transitions between the same strips");
-    return false;
+    return N_("Cannot add multiple transitions between the same strips");
   }
   if (input1->is_overlap_transition() || input2->is_overlap_transition()) {
-    BKE_report(reports, RPT_ERROR, "Cannot add transitions on other transitions");
-    return false;
+    return N_("Cannot add transitions on other transitions");
   }
   const auto bounds = transition_max_bounds_get(scene, ed, input1, input2);
   const int cutpoint = input2->left_handle();
   const bool no_space_left = bounds.first > cutpoint - 1;
   const bool no_space_right = bounds.second < cutpoint + 1;
   if (no_space_left || no_space_right) {
-    BKE_report(reports, RPT_ERROR, "Not enough space for transition");
-    return false;
+    return N_("Not enough space for transition");
   }
 
-  return true;
+  return {};
 }
 
 Strip *add_effect_strip(Scene *scene,
@@ -230,8 +248,12 @@ Strip *add_effect_strip(Scene *scene,
                           strip_type_can_be_transition(load_data->effect.type);
   const bool overlap_transition = transition && input1->channel == input2->channel &&
                                   input1->right_handle(scene) == input2->left_handle();
-  if (overlap_transition && !overlap_transition_validate(scene, input1, input2, length, reports)) {
-    return nullptr;
+  if (overlap_transition) {
+    auto error_message = overlap_transition_validate(scene, input1, input2, length);
+    if (error_message) {
+      BKE_report(reports, RPT_ERROR, error_message->c_str());
+      return nullptr;
+    }
   }
 
   Strip *strip = strip_alloc(
@@ -260,11 +282,17 @@ Strip *add_effect_strip(Scene *scene,
   if (overlap_transition) {
     strip->flag |= SEQ_SAME_CHANNEL_TRANSITION;
 
-    const int cutpoint = input2->left_handle();
+    // const int cutpoint = input2->left_handle();
     const auto bounds = transition_max_bounds_get(scene, ed, input1, input2);
 
-    const int left_handle = max_ii(cutpoint - floor(length / 2.0), bounds.first);
-    const int right_handle = min_ii(cutpoint + ceil(length / 2.0), bounds.second);
+    // make this respect the start frame parameter. then in #rna_Strips_new_effect and the add
+    // operator, calculate it so the behavior is the same
+    // this bounds checking isn't correct. well. this is fine here, but
+    // #overlap_transition_validate doesn't account for the start frame rn
+    const int left_handle = max_ii(load_data->start_frame, bounds.first);
+    const int right_handle = min_ii(load_data->start_frame + length, bounds.second);
+    // const int left_handle = max_ii(cutpoint - floor(length / 2.0), bounds.first);
+    // const int right_handle = min_ii(cutpoint + ceil(length / 2.0), bounds.second);
 
     strip->handles_set(scene, left_handle, right_handle);
     strip->channel_set(input1->channel);

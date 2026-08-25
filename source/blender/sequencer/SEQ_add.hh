@@ -8,7 +8,10 @@
  * \ingroup sequencer
  */
 
+#include <optional>
+
 #include "BLI_enum_flags.hh"
+#include "BLI_string_ref.hh"
 
 #include "DNA_listBase.h"
 #include "DNA_scene_enums.h"
@@ -152,6 +155,14 @@ Strip *add_movieclip_strip(Scene *scene, ListBaseT<Strip> *seqbase, LoadData *lo
  * \return created strip
  */
 Strip *add_mask_strip(Scene *scene, ListBaseT<Strip> *seqbase, LoadData *load_data);
+std::pair<int, int> transition_max_bounds_get(const Scene *scene,
+                                              Editing *ed,
+                                              const Strip *input1,
+                                              const Strip *input2);
+std::optional<StringRefNull> overlap_transition_validate(Scene *scene,
+                                                         const Strip *input1,
+                                                         const Strip *input2,
+                                                         int length);
 /**
  * Add effect strip.
  *
