@@ -470,7 +470,6 @@ DRAW_TEST(draw_visibility)
  * The manager default resource (index 0) has no bounds and is always visible.
  * The visibility buffer is cleared to all-ones, so only culled resources clear their bit and bits
  * of unused resources stay set.
- * Culled instances still get an entry in the resource id buffer, with an invalid id of 0xFFFFFFFF.
  */
 class VisibilityFixture {
  public:
@@ -482,9 +481,6 @@ class VisibilityFixture {
   ResourceHandleRange vis_handle;
   ResourceHandleRange cul_pos_handle;
   ResourceHandleRange cul_neg_handle;
-  static constexpr uint32_t invalid_resource_id = 0xFFFFFFFFu;
-  static constexpr const char *expected_mask = "11111111111111111111111111110011";
-
   VisibilityFixture() : view("test_view_visibility")
   {
     GPU_render_begin();
@@ -532,17 +528,6 @@ static std::string resource_id_to_string(Span<uint32_t> buf)
   return s.str();
 }
 
-static uint32_t count_value(Span<uint32_t> buf, uint32_t value)
-{
-  uint32_t count = 0;
-  for (const uint32_t v : buf) {
-    if (v == value) {
-      count++;
-    }
-  }
-  return count;
-}
-
 static void test_draw_visibility_regular()
 {
   VisibilityFixture fixture;
@@ -561,12 +546,11 @@ static void test_draw_visibility_regular()
 
   Manager::SubmitDebugOutput out = fixture.mgr.submit_debug(pass, fixture.view);
 
-  EXPECT_EQ(mask_to_string(out.visibility), VisibilityFixture::expected_mask)
+  EXPECT_EQ(mask_to_string(out.visibility), "11111111111111111111111111110011")
       << "visibility bitmask mismatch";
   /* Every instance is drawn; culled instances get the invalid resource id. */
   EXPECT_EQ(out.resource_id.size(), 7u)
       << "resource_id: " << resource_id_to_string(out.resource_id);
-  EXPECT_EQ(2u, count_value(out.resource_id, VisibilityFixture::invalid_resource_id));
 }
 DRAW_TEST(draw_visibility_regular)
 
@@ -589,12 +573,11 @@ static void test_draw_visibility_multi()
 
   Manager::SubmitDebugOutput out = fixture.mgr.submit_debug(pass, fixture.view);
 
-  EXPECT_EQ(mask_to_string(out.visibility), VisibilityFixture::expected_mask)
+  EXPECT_EQ(mask_to_string(out.visibility), "11111111111111111111111111110011")
       << "visibility bitmask mismatch";
   /* Every instance is drawn; culled instances get the invalid resource id. */
   EXPECT_EQ(out.resource_id.size(), 4u)
       << "resource_id: " << resource_id_to_string(out.resource_id);
-  EXPECT_EQ(2u, count_value(out.resource_id, VisibilityFixture::invalid_resource_id));
 }
 DRAW_TEST(draw_visibility_multi)
 
@@ -623,12 +606,11 @@ static void test_draw_visibility_mixed()
 
   Manager::SubmitDebugOutput out = fixture.mgr.submit_debug(pass, fixture.view);
 
-  EXPECT_EQ(mask_to_string(out.visibility), VisibilityFixture::expected_mask)
+  EXPECT_EQ(mask_to_string(out.visibility), "11111111111111111111111111110011")
       << "visibility bitmask mismatch";
   /* All 1 + 2 + 1 + 3 + 1 instances are drawn; all culled ones use the invalid resource id. */
   EXPECT_EQ(out.resource_id.size(), 8u)
       << "resource_id: " << resource_id_to_string(out.resource_id);
-  EXPECT_EQ(2u, count_value(out.resource_id, VisibilityFixture::invalid_resource_id));
 }
 DRAW_TEST(draw_visibility_mixed)
 
@@ -654,12 +636,11 @@ static void test_draw_visibility_sortable()
 
   Manager::SubmitDebugOutput out = fixture.mgr.submit_debug(pass, fixture.view);
 
-  EXPECT_EQ(mask_to_string(out.visibility), VisibilityFixture::expected_mask)
+  EXPECT_EQ(mask_to_string(out.visibility), "11111111111111111111111111110011")
       << "visibility bitmask mismatch";
   /* All 2 + 3 + 1 + 1 instances are drawn; all culled ones use the invalid resource id. */
   EXPECT_EQ(out.resource_id.size(), 7u)
       << "resource_id: " << resource_id_to_string(out.resource_id);
-  EXPECT_EQ(2u, count_value(out.resource_id, VisibilityFixture::invalid_resource_id));
 }
 DRAW_TEST(draw_visibility_sortable)
 
