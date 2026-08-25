@@ -123,6 +123,7 @@ struct MicrofacetBsdf {
   float3 T;
 
   /* Probability of retroreflection, converted to a boolean in bsdf_microfacet_ggx_setup() */
+  /* This must always be initialized to 0.0f when unused! */
   float retroreflectivity;
 };
 
@@ -1418,6 +1419,7 @@ ccl_device_inline void bsdf_thin_glass_transmission_setup(KernelGlobals kg,
     bsdf->fresnel_type = MicrofacetFresnel::NONE;
     bsdf->energy_scale = 1.0f;
     bsdf->type = CLOSURE_BSDF_THIN_GLASS_TRANSMISSION_ID;
+    bsdf->retroreflectivity = 0.0f;
     sd->runtime_flag |= (SR_BSDF | SR_BSDF_HAS_TRANSMISSION | bsdf_microfacet_eval_flag(bsdf));
     bsdf_microfacet_setup_fresnel_constant(kg, bsdf, reflect(sd->wi, N), one_spectrum());
   }

@@ -232,6 +232,7 @@ ccl_device void osl_closure_refraction_setup(KernelGlobals kg,
   bsdf->N = maybe_ensure_valid_specular_reflection(sd, safe_normalize_fallback(closure->N, sd->N));
   bsdf->ior = closure->ior;
   bsdf->alpha_x = bsdf->alpha_y = 0.0f;
+  bsdf->retroreflectivity = 0.0f;
 
   sd->runtime_flag |= bsdf_microfacet_ggx_refraction_setup(bsdf);
 }
@@ -720,6 +721,7 @@ ccl_device void osl_closure_microfacet_multi_ggx_glass_setup(
   bsdf->ior = closure->ior;
 
   bsdf->T = zero_float3();
+  bsdf->retroreflectivity = 0.0f;
 
   sd->runtime_flag |= bsdf_microfacet_ggx_glass_setup(bsdf);
   bsdf_microfacet_setup_fresnel_constant(kg, bsdf, sd->wi, rgb_to_spectrum(closure->color));

@@ -399,6 +399,7 @@ ccl_device
               bsdf->N = valid_reflection_N;
               bsdf->T = zero_float3();
               bsdf->alpha_x = bsdf->alpha_y = sqr(roughness);
+              bsdf->retroreflectivity = 0.0f;
 
               const float dispersion_scale = saturatef(
                   stack_load(stack, data.transmission_dispersion_scale));
@@ -768,6 +769,7 @@ ccl_device
       if (bsdf) {
         bsdf->N = maybe_ensure_valid_specular_reflection(sd, N);
         bsdf->T = zero_float3();
+        bsdf->retroreflectivity = 0.0f;
 
         float eta = fmaxf(stack_load(stack, bsdf_data.ior), 1e-5f);
         eta = (sd->runtime_flag & SR_BACKFACING) ? 1.0f / eta : eta;
@@ -823,6 +825,7 @@ ccl_device
       if (bsdf && fresnel) {
         bsdf->N = maybe_ensure_valid_specular_reflection(sd, N);
         bsdf->T = zero_float3();
+        bsdf->retroreflectivity = 0.0f;
 
         const float ior = fmaxf(stack_load(stack, bsdf_data.ior), 1e-5f);
         bsdf->ior = (sd->runtime_flag & SR_BACKFACING) ? 1.0f / ior : ior;
