@@ -1,2 +1,3 @@
 Referenced by issue #163010, Material preview icons can get stuck after undo
 Referenced by pull request #163106, Fix #163010: Preview icons stuck loading after undo on unchanged ID
+Referenced by commit ba4954a828e5d78686327dbf20e79913fe91ac69, Fix #163010: Preview icons stuck loading after undo on unchanged ID
