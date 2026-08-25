@@ -33,6 +33,8 @@ struct VKSynchronizationCreateInfo {
    * Reset the tracked image layout to VK_IMAGE_LAYOUT_UNDEFINED after the barrier.
    * Used for aliased images (texture pool). When the memory is reused by another alias, the image
    * contents become undefined, so the next access must transition from an undefined layout.
+   * The vk_image_layout field cannot be used for this directly, as VK_IMAGE_LAYOUT_UNDEFINED may
+   * only ever be used as oldLayout, not newLayout (i.e., the transition target layout).
    */
   bool reset_layout_to_undefined = false;
 };
