@@ -168,7 +168,7 @@ void cache_init(bContext *C,
 
   float3 co;
 
-  if (vc.rv3d && stroke_get_location_bvh(C, co, mval_fl, false)) {
+  if (vc.rv3d && stroke_get_location_bvh(C, mval_fl, false)) {
     /* Get radius from brush. */
     const Brush *brush = BKE_paint_brush_for_read(&sd.paint);
 
