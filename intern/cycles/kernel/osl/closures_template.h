@@ -48,7 +48,7 @@ OSL_CLOSURE_STRUCT_END(TranslucentBSDF, translucent_bsdf)
 
 OSL_CLOSURE_STRUCT_BEGIN(Reflection, reflection)
   OSL_CLOSURE_STRUCT_MEMBER(Reflection, VECTOR, packed_float3, N, nullptr)
-  OSL_CLOSURE_STRUCT_MEMBER(ConductorBSDF, FLOAT, float, retroreflectivity, "retroreflectivity")
+  OSL_CLOSURE_STRUCT_MEMBER(Reflection, FLOAT, float, retroreflectivity, "retroreflectivity")
 OSL_CLOSURE_STRUCT_END(Reflection, reflection)
 
 OSL_CLOSURE_STRUCT_BEGIN(Refraction, refraction)
@@ -78,7 +78,7 @@ OSL_CLOSURE_STRUCT_BEGIN(DielectricBSDF, dielectric_bsdf)
   OSL_CLOSURE_STRUCT_MEMBER(DielectricBSDF, STRING, DeviceString, distribution, nullptr)
   OSL_CLOSURE_STRUCT_MEMBER(DielectricBSDF, FLOAT, float, thinfilm_thickness, "thinfilm_thickness")
   OSL_CLOSURE_STRUCT_MEMBER(DielectricBSDF, FLOAT, float, thinfilm_ior, "thinfilm_ior")
-  OSL_CLOSURE_STRUCT_MEMBER(ConductorBSDF, FLOAT, float, retroreflectivity, "retroreflectivity")
+  OSL_CLOSURE_STRUCT_MEMBER(DielectricBSDF, FLOAT, float, retroreflectivity, "retroreflectivity")
 OSL_CLOSURE_STRUCT_END(DielectricBSDF, dielectric_bsdf)
 
 OSL_CLOSURE_STRUCT_BEGIN(ConductorBSDF, conductor_bsdf)
