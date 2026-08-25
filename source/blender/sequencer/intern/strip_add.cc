@@ -172,22 +172,21 @@ struct TransitionClampData {
   int right_handle_min, right_handle_max;
 };
 
-// rename input1 and input2 to left_input and right_input in these once the order is checked
 static TransitionClampData transition_hard_bounds_get(const Scene *scene,
-                                                      const Strip *input1,
-                                                      const Strip *input2)
+                                                      const Strip *left_input,
+                                                      const Strip *right_input)
 {
-  const int cutpoint = input2->left_handle();
+  const int cutpoint = right_input->left_handle();
 
   TransitionClampData clamp_data;
-  clamp_data.left_handle_min = input1->left_handle();
+  clamp_data.left_handle_min = left_input->left_handle();
   clamp_data.left_handle_max = cutpoint - 1;
   clamp_data.right_handle_min = cutpoint + 1;
-  clamp_data.right_handle_max = input2->right_handle(scene);
+  clamp_data.right_handle_max = right_input->right_handle(scene);
 
   Editing *ed = seq::editing_get(scene);
-  const Strip *left_transition = seq::get_transition_on_side(ed, input1, seq::Side::Left);
-  const Strip *right_transition = seq::get_transition_on_side(ed, input2, seq::Side::Right);
+  const Strip *left_transition = seq::get_transition_on_side(ed, left_input, seq::Side::Left);
+  const Strip *right_transition = seq::get_transition_on_side(ed, right_input, seq::Side::Right);
 
   if (left_transition) {
     clamp_data.left_handle_min = max_ii(clamp_data.left_handle_min,
@@ -300,8 +299,6 @@ Strip *add_effect_strip(Scene *scene,
   if (overlap_transition) {
     strip->flag |= SEQ_SAME_CHANNEL_TRANSITION;
 
-    // make this respect the start frame parameter. then in #rna_Strips_new_effect and the add
-    // operator, calculate it so the behavior is the same
     const std::pair<int, int> handles{load_data->start_frame, load_data->start_frame + length};
     const auto [left_clamped,
                 right_clamped] = transition_handles_clamp(scene, input1, input2, handles);

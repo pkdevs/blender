@@ -2374,10 +2374,9 @@ static wmOperatorStatus sequencer_add_transition_strip_exec(bContext *C, wmOpera
     load_data.effect.input1 = transition_data.left_input;
     load_data.effect.input2 = transition_data.right_input;
     load_data.channel = transition_data.channel;
-    // The reports shouldn't return anything. Maybe revert it to return them instead of just
-    // writing directly to reports.
     Strip *transition = seq::add_effect_strip(
         scene, ed->current_strips(), &load_data, op->reports);
+    BLI_assert(transition);
     seq::select_active_set(scene, transition);
   }
 

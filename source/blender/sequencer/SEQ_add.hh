@@ -8,10 +8,7 @@
  * \ingroup sequencer
  */
 
-#include <optional>
-
 #include "BLI_enum_flags.hh"
-#include "BLI_string_ref.hh"
 
 #include "DNA_listBase.h"
 #include "DNA_scene_enums.h"
