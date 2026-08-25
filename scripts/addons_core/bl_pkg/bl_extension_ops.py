@@ -1356,9 +1356,7 @@ class CommandHandle:
         msg_list = self.cmd_batch.calc_status_log_or_none()
         if msg_list is not None:
             context.workspace.status_text_set(
-                " | ".join(
-                    ["{:s}: {:s}".format(ty, str(msg)) for (ty, msg) in msg_list]
-                )
+                " | ".join([_status_text_from_log_entry(ty, msg) for (ty, msg) in msg_list])
             )
 
             # Setting every time is a bit odd. but OK.
@@ -1405,6 +1403,28 @@ class CommandHandle:
         while operator_finished_result(self.op_modal_step(op, context)) is None:
             # Avoid high CPU use on exit.
             time.sleep(0.1)
+
+
+def _status_text_from_log_entry(ty, msg):
+    from .bl_extension_utils import (
+        size_as_fmt_string,
+        sizes_as_percentage_string,
+    )
+
+    if ty != 'PROGRESS':
+        return "{:s}: {:s}".format(ty, str(msg))
+    msg_str, progress_unit, progress, progress_range = msg
+    if progress_unit != 'BYTE':
+        return "{:s}: {:d}".format(iface_(msg_str), progress)
+    if progress_range <= 0 or progress > progress_range:
+        # Unknown or exceeded total size.
+        return "{:s}: {:s}".format(iface_(msg_str), size_as_fmt_string(progress))
+    return "{:s}: {:s} of {:s} ({:s})".format(
+        iface_(msg_str),
+        size_as_fmt_string(progress),
+        size_as_fmt_string(progress_range),
+        sizes_as_percentage_string(progress, progress_range).strip(),
+    )
 
 
 def _report(ty, msg):
