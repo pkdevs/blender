@@ -105,8 +105,9 @@ struct LookupKey {
 
 using Item = std::variant<Member, LookupIndex, LookupKey>;
 
-/** Convert a parsed path back to a string representation. */
-std::string to_string(Span<Item> items);
+/** Convert (an item of) a parsed path back to a string representation. */
+std::string to_string(const Item &item);
+std::string to_string(const Span<Item> items);
 
 }  // namespace rna_path
 

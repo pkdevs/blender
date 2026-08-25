@@ -21,6 +21,7 @@
 #include "UI_tree_view.hh"
 
 #include "RNA_access.hh"
+#include "RNA_path.hh"
 #include "RNA_prototypes.hh"
 
 #include "DNA_dynamic_override_types.h"
@@ -37,6 +38,8 @@ namespace dynoverride {
 
 using namespace blender::bke::dynoverride;
 
+class RNAPathViewItem;
+
 class DynamicOverrideTreeView : public AbstractTreeView {
  public:
   explicit DynamicOverrideTreeView(DynamicOverride &dynoverride) : dynoverride_(dynoverride) {}
@@ -45,10 +48,7 @@ class DynamicOverrideTreeView : public AbstractTreeView {
 
  private:
   void build_tree_rule(TreeViewOrItem &parent, DynamicOverrideRule &rule);
-  void build_tree_rule_property_recursive(TreeViewOrItem &parent,
-                                          DynamicOverrideRule &rule,
-                                          DynamicOverrideRuleProperty &rule_prop,
-                                          const int index_in_parsed_rna_path);
+
   DynamicOverride &dynoverride_;
 };
 
@@ -214,207 +214,106 @@ class LayerViewItemDragController : public AbstractViewItemDragController {
 #endif
 
 /**
- * One item in the RNA path leading to a RuleProperty.
- *
- * Never a tree leaf.
- */
-class RNAPathViewItem : public AbstractTreeViewItem {
- public:
-  RNAPathViewItem(DynamicOverride &dynoverride, LayerGroup &group)
-      : dynoverride_(dynoverride), group_(group)
-  {
-    this->label_ = group_.name();
-  }
-
-  std::optional<bool> should_be_collapsed() const override
-  {
-    const bool is_collapsed = !group_.is_expanded();
-    return is_collapsed;
-  }
-
-  bool set_collapsed(const bool collapsed) override
-  {
-    if (!AbstractTreeViewItem::set_collapsed(collapsed)) {
-      return false;
-    }
-    group_.set_expanded(!collapsed);
-    return true;
-  }
-
-  void on_collapse_change(bContext &C, const bool is_collapsed) override
-  {
-    const bool is_expanded = !is_collapsed;
-
-    /* Let RNA handle the property change. This makes sure all the notifiers and DEG
-     * update calls are properly called. */
-    PointerRNA group_ptr = RNA_pointer_create_discrete(
-        &dynoverride_.id, RNA_GreasePencilLayerGroup, &group_);
-    PropertyRNA *prop = RNA_struct_find_property(&group_ptr, "is_expanded");
-
-    RNA_property_boolean_set(&group_ptr, prop, is_expanded);
-    RNA_property_update(&C, &group_ptr, prop);
-  }
-
-  void build_row(Layout &row) override
-  {
-    build_layer_group_name(row);
-
-    Layout &sub = row.row(true);
-    sub.use_property_decorate_set(false);
-
-    build_layer_group_buttons(sub);
-  }
-
-  std::optional<bool> should_be_active() const override
-  {
-    if (this->dynoverride_.has_active_group()) {
-      return &group_ == this->dynoverride_.get_active_group();
-    }
-    return {};
-  }
-
-  void build_context_menu(bContext &C, Layout &layout) const override
-  {
-    MenuType *mt = WM_menutype_find("GREASE_PENCIL_MT_group_context_menu", true);
-    if (!mt) {
-      return;
-    }
-    menutype_draw(&C, mt, &layout);
-  }
-
-  void on_activate(bContext &C) override
-  {
-    PointerRNA grease_pencil_ptr = RNA_pointer_create_discrete(
-        &dynoverride_.id, RNA_GreasePencilv3LayerGroup, nullptr);
-    PointerRNA value_ptr = RNA_pointer_create_discrete(
-        &dynoverride_.id, RNA_GreasePencilLayerGroup, &group_);
-
-    PropertyRNA *prop = RNA_struct_find_property(&grease_pencil_ptr, "active");
-
-    if (dynoverride_.has_active_layer()) {
-      WM_msg_publish_rna_prop(
-          CTX_wm_message_bus(&C), &dynoverride_.id, &dynoverride_, GreasePencilv3Layers, active);
-    }
-
-    RNA_property_pointer_set(&grease_pencil_ptr, prop, value_ptr, nullptr);
-    RNA_property_update(&C, &grease_pencil_ptr, prop);
-
-    ED_undo_push(&C, "Active Grease Pencil Group");
-  }
-
-  bool supports_renaming() const override
-  {
-    return true;
-  }
-
-  bool rename(const bContext &C, StringRefNull new_name) override
-  {
-    PointerRNA group_ptr = RNA_pointer_create_discrete(
-        &dynoverride_.id, RNA_GreasePencilLayerGroup, &group_);
-    PropertyRNA *prop = RNA_struct_find_property(&group_ptr, "name");
-
-    RNA_property_string_set(&group_ptr, prop, new_name.c_str());
-    RNA_property_update(&const_cast<bContext &>(C), &group_ptr, prop);
-
-    ED_undo_push(&const_cast<bContext &>(C), "Rename Grease Pencil Layer Group");
-    return true;
-  }
-
-  StringRef get_rename_string() const override
-  {
-    return group_.name();
-  }
-
-  void delete_item(bContext *C) override
-  {
-    dynoverride_.remove_group(group_);
-    DEG_id_tag_update(&dynoverride_.id, ID_RECALC_GEOMETRY);
-    WM_event_add_notifier(C, NC_OBJECT | ND_DRAW, nullptr);
-    ED_undo_push(C, "Delete Grease Pencil Group");
-  }
-
-  std::unique_ptr<AbstractViewItemDragController> create_drag_controller() const override
-  {
-    return std::make_unique<LayerViewItemDragController>(
-        static_cast<LayerTreeView &>(get_tree_view()), dynoverride_, group_.base);
-  }
-
-  std::unique_ptr<TreeViewItemDropTarget> create_drop_target() override
-  {
-    return std::make_unique<LayerNodeDropTarget>(
-        *this, group_.as_node(), DropBehavior::ReorderAndInsert);
-  }
-
- private:
-  DynamicOverride &dynoverride_;
-  LayerGroup &group_;
-
-  void build_layer_group_name(Layout &row)
-  {
-    short icon = ICON_GREASEPENCIL_LAYER_GROUP;
-    if (group_.color_tag != LAYERGROUP_COLOR_NONE) {
-      icon = ICON_LAYERGROUP_COLOR_01 + int(group_.color_tag);
-    }
-
-    Button *but = uiItemL_ex(&row, group_.name(), icon, false, false);
-    if (ID_IS_LINKED(&dynoverride_)) {
-      button_flag_enable(but, BUT_DISABLED);
-    }
-    else if (!group_.is_editable()) {
-      button_disable(but, "Layer Group is locked or not visible");
-    }
-  }
-
-  void build_layer_group_buttons(Layout &row)
-  {
-    PointerRNA group_ptr = RNA_pointer_create_discrete(
-        &dynoverride_.id, RNA_GreasePencilLayerGroup, &group_);
-
-    Layout *sub = &row.row(true);
-    if (group_.as_node().parent_group()) {
-      sub->active_set(group_.as_node().parent_group()->use_masks());
-    }
-    sub->prop(&group_ptr, "use_masks", ITEM_R_ICON_ONLY, std::nullopt, ICON_NONE);
-
-    sub = &row.row(true);
-    if (group_.as_node().parent_group()) {
-      sub->active_set(group_.as_node().parent_group()->use_onion_skinning());
-    }
-    sub->prop(&group_ptr, "use_onion_skinning", ITEM_R_ICON_ONLY, std::nullopt, ICON_NONE);
-
-    sub = &row.row(true);
-    if (group_.as_node().parent_group()) {
-      sub->active_set(group_.as_node().parent_group()->is_visible());
-    }
-    sub->prop(&group_ptr, "hide", ITEM_R_ICON_ONLY, std::nullopt, ICON_NONE);
-
-    sub = &row.row(true);
-    if (group_.as_node().parent_group()) {
-      sub->active_set(!group_.as_node().parent_group()->is_locked());
-    }
-    sub->prop(&group_ptr, "lock", ITEM_R_ICON_ONLY, std::nullopt, ICON_NONE);
-  }
-};
-
-/**
  * Item representing one dynoverride rule.
  */
 class RuleViewItem : public AbstractTreeViewItem {
  public:
   RuleViewItem(DynamicOverride &dynoverride, DynamicOverrideRule &rule)
-      : dynoverride_(dynoverride), rule_(rule_)
+      : dynoverride_(dynoverride), rule_(rule)
   {
     this->label_ = rule_.name;
   }
 
   void build_row(Layout &row) override
   {
-    build_layer_name(row);
+    build_rule_name(row);
 
     Layout &sub = row.row(true);
     sub.use_property_decorate_set(false);
 
-    build_layer_buttons(sub);
+    build_rule_buttons(sub);
+  }
+
+  bool supports_collapsing() const override
+  {
+    return true;
+  }
+
+  bool supports_renaming() const override
+  {
+    return false;
+  }
+
+  void build_tree_rule_property(TreeViewOrItem &parent, DynamicOverrideRuleProperty &property);
+
+ private:
+  DynamicOverride &dynoverride_;
+  DynamicOverrideRule &rule_;
+
+  /* Map allowing to group all properties by the items in their RNA path. */
+  Map<const ParsedRNAPathRef, RNAPathViewItem *> rna_path_items_;
+
+  void build_rule_name(Layout &row)
+  {
+    uiItemL_ex(&row, rule_.name, ICON_NONE, false, false);
+  }
+
+  void build_rule_buttons(Layout &row)
+  {
+    if (rule_.type != DynamicOverrideRuleType::IDData) {
+      return;
+    }
+    if (rule_.target_filter.type != DynamicOverrideRuleTargetFilterType::IDSingle) {
+      return;
+    }
+    DynamicOverrideRuleIDData &rule = reinterpret_cast<DynamicOverrideRuleIDData &>(rule_);
+
+    PointerRNA rule_ptr = RNA_pointer_create_id_subdata(
+        dynoverride_.id, RNA_DynamicOverrideRuleIDData, &rule_);
+
+    PointerRNA rule_filter_ptr = RNA_pointer_create_with_parent(
+        rule_ptr, RNA_DynamicOverrideRuleTargetFilterIDSingle, &rule_.target_filter);
+    Layout &sub_idref = row.row(true);
+    sub_idref.enabled_set(false);
+    sub_idref.prop(&rule_filter_ptr, "target_id", {}, {}, ICON_NONE);
+
+    Layout &sub_butts = row.row(true);
+    sub_butts.prop(&rule_ptr,
+                   "is_muted",
+                   ITEM_R_ICON_ONLY,
+                   {},
+                   bool(rule_.flag & DynamicOverrideRuleFlag::IsMuted) ? ICON_CHECKBOX_DEHLT :
+                                                                         ICON_CHECKBOX_HLT);
+    sub_butts.separator_spacer();
+    PointerRNA op_data = sub_butts.op("UI_OT_dynoverride_remove_rule", "", ICON_X);
+    RNA_int_set(&op_data, "session_uid", int(dynoverride_.id.session_uid));
+    RNA_string_set(&op_data, "rule_name", rule_.name);
+  }
+};
+
+/**
+ * One item in the RNA path leading to a RuleProperty.
+ *
+ * Never a tree leaf.
+ */
+class RNAPathViewItem : public AbstractTreeViewItem {
+ public:
+  RNAPathViewItem(DynamicOverride &dynoverride,
+                  DynamicOverrideRule &rule,
+                  const ParsedRNAPathRef rna_parsed_path)
+      : dynoverride_(dynoverride), rule_(rule), rna_parsed_path_(rna_parsed_path)
+  {
+    this->label_ = rna_path::to_string(rna_parsed_path_.last());
+  }
+
+  void build_row(Layout &row) override
+  {
+    build_rnapath_item_name(row);
+
+    Layout &sub = row.row(true);
+    sub.use_property_decorate_set(false);
+
+    build_rnapath_item_buttons(sub);
   }
 
   bool supports_collapsing() const override
@@ -430,16 +329,14 @@ class RuleViewItem : public AbstractTreeViewItem {
  private:
   DynamicOverride &dynoverride_;
   DynamicOverrideRule &rule_;
+  const ParsedRNAPathRef rna_parsed_path_;
 
-  /* Map allowing to group all properties by the items in their RNA path. */
-  Map<StringRef, RNAPathViewItem *> rna_path_items;
-
-  void build_layer_name(Layout &row)
+  void build_rnapath_item_name(Layout &row)
   {
-    uiItemL_ex(&row, rule_.name, ICON_NONE, false, false);
+    uiItemL_ex(&row, label_, ICON_NONE, false, false);
   }
 
-  void build_layer_buttons(Layout & /*row*/) {}
+  void build_rnapath_item_buttons(Layout &row) {}
 };
 
 /**
@@ -449,10 +346,12 @@ class RuleViewItem : public AbstractTreeViewItem {
  */
 class PropertyViewItem : public AbstractTreeViewItem {
  public:
-  PropertyViewItem(DynamicOverride &dynoverride, LayerGroup &group)
-      : dynoverride_(dynoverride), group_(group)
+  PropertyViewItem(DynamicOverride &dynoverride,
+                   DynamicOverrideRule &rule,
+                   DynamicOverrideRuleProperty &property)
+      : dynoverride_(dynoverride), rule_(rule), property_(property)
   {
-    this->label_ = group_.name();
+    this->label_ = rna_path::to_string(rule_property_rna_path_parsed(property).last());
   }
 
   bool supports_collapsing() const override
@@ -467,76 +366,92 @@ class PropertyViewItem : public AbstractTreeViewItem {
 
   void build_row(Layout &row) override
   {
-    build_layer_group_name(row);
+    build_property_name(row);
 
     Layout &sub = row.row(true);
     sub.use_property_decorate_set(false);
 
-    build_layer_group_buttons(sub);
+    build_property_buttons(sub);
   }
 
  private:
   DynamicOverride &dynoverride_;
-  LayerGroup &group_;
+  DynamicOverrideRule &rule_;
+  DynamicOverrideRuleProperty &property_;
 
-  void build_layer_group_name(Layout &row)
+  void build_property_name(Layout &row)
   {
-    short icon = ICON_GREASEPENCIL_LAYER_GROUP;
-    if (group_.color_tag != LAYERGROUP_COLOR_NONE) {
-      icon = ICON_LAYERGROUP_COLOR_01 + int(group_.color_tag);
-    }
-
-    Button *but = uiItemL_ex(&row, group_.name(), icon, false, false);
-    if (ID_IS_LINKED(&dynoverride_)) {
-      button_flag_enable(but, BUT_DISABLED);
-    }
-    else if (!group_.is_editable()) {
-      button_disable(but, "Layer Group is locked or not visible");
-    }
+    uiItemL_ex(&row, label_, ICON_NONE, false, false);
   }
 
-  void build_layer_group_buttons(Layout &row)
+  void build_property_buttons(Layout &row)
   {
-    PointerRNA group_ptr = RNA_pointer_create_discrete(
-        &dynoverride_.id, RNA_GreasePencilLayerGroup, &group_);
+    DynamicOverrideRuleIDData &iddata_rule = reinterpret_cast<DynamicOverrideRuleIDData &>(rule_);
+    PointerRNA rule_ptr = RNA_pointer_create_id_subdata(
+        dynoverride_.id, RNA_DynamicOverrideRuleIDData, &rule_);
+    PointerRNA property_ptr = RNA_pointer_create_with_parent(
+        rule_ptr, RNA_DynamicOverrideRuleProperty, &property_);
+    PointerRNA override_values_ptr = RNA_pointer_create_with_parent(
+        rule_ptr, rule_get_runtime_override_values_rna_struct(iddata_rule), &iddata_rule);
 
-    Layout *sub = &row.row(true);
-    if (group_.as_node().parent_group()) {
-      sub->active_set(group_.as_node().parent_group()->use_masks());
-    }
-    sub->prop(&group_ptr, "use_masks", ITEM_R_ICON_ONLY, std::nullopt, ICON_NONE);
+    Layout &sub_prop = row.row(true);
+    sub_prop.emboss_set(EmbossType::Emboss);
+    sub_prop.use_property_decorate_set(true);
+    sub_prop.prop(
+        &override_values_ptr, rule_property_rna_identifier(property_), {}, {}, ICON_NONE);
 
-    sub = &row.row(true);
-    if (group_.as_node().parent_group()) {
-      sub->active_set(group_.as_node().parent_group()->use_onion_skinning());
-    }
-    sub->prop(&group_ptr, "use_onion_skinning", ITEM_R_ICON_ONLY, std::nullopt, ICON_NONE);
-
-    sub = &row.row(true);
-    if (group_.as_node().parent_group()) {
-      sub->active_set(group_.as_node().parent_group()->is_visible());
-    }
-    sub->prop(&group_ptr, "hide", ITEM_R_ICON_ONLY, std::nullopt, ICON_NONE);
-
-    sub = &row.row(true);
-    if (group_.as_node().parent_group()) {
-      sub->active_set(!group_.as_node().parent_group()->is_locked());
-    }
-    sub->prop(&group_ptr, "lock", ITEM_R_ICON_ONLY, std::nullopt, ICON_NONE);
+    Layout &sub_butts = row.row(true);
+    sub_butts.prop(&property_ptr,
+                   "is_muted",
+                   ITEM_R_ICON_ONLY,
+                   {},
+                   bool(property_.flag & DynamicOverrideRulePropertyFlag::IsMuted) ?
+                       ICON_CHECKBOX_DEHLT :
+                       ICON_CHECKBOX_HLT);
+    sub_butts.separator_spacer();
+    PointerRNA op_data = sub_butts.op("UI_OT_dynoverride_remove_rule_property", "", ICON_X);
+    RNA_int_set(&op_data, "session_uid", int(dynoverride_.id.session_uid));
+    RNA_string_set(&op_data, "rule_name", rule_.name);
+    RNA_string_set(&op_data, "property_rna_path", property_.rna_path);
   }
 };
 
+void RuleViewItem::build_tree_rule_property(TreeViewOrItem &parent_root,
+                                            DynamicOverrideRuleProperty &property)
+{
+  if (rule_.type != DynamicOverrideRuleType::IDData) {
+    return;
+  }
+
+  /* Build intermediary RNA path items. */
+  const ParsedRNAPathRef rna_parsed_path = rule_property_rna_path_parsed(property);
+  TreeViewOrItem *parent = &parent_root;
+  /* Note: last item in the parsed RNA path is skipped, as it's the actual overridden property,
+   * which will be represented by a `PropertyViewItem`. */
+  for (int slice_size = 1; slice_size < rna_parsed_path.size(); slice_size++) {
+    const ParsedRNAPathRef rna_parsed_path_slice = rna_parsed_path.slice(0, slice_size);
+    parent = rna_path_items_.lookup_or_add_cb(
+        rna_parsed_path_slice,
+        /* Add new treeview item to the current parent, if it does not exist yet. */
+        [this, parent, rna_parsed_path_slice]() -> RNAPathViewItem * {
+          return &parent->add_tree_item<RNAPathViewItem>(
+              this->dynoverride_, this->rule_, rna_parsed_path_slice);
+        });
+  }
+
+  parent->add_tree_item<PropertyViewItem>(this->dynoverride_, this->rule_, property);
+}
+
 void DynamicOverrideTreeView::build_tree_rule(TreeViewOrItem &parent, DynamicOverrideRule &rule)
 {
-  if (node.is_layer()) {
-    parent.add_tree_item<LayerViewItem>(this->dynoverride_, node.as_layer());
+  if (rule.type != DynamicOverrideRuleType::IDData) {
+    return;
   }
-  else if (node.is_group()) {
-    LayerGroupViewItem &group_item = parent.add_tree_item<LayerGroupViewItem>(this->dynoverride_,
-                                                                              node.as_group());
-    for (GreasePencilLayerTreeNode &node_ : node.as_group().children.items_reversed()) {
-      build_tree_node_recursive(group_item, node_.wrap());
-    }
+  RuleViewItem &rule_item = parent.add_tree_item<RuleViewItem>(this->dynoverride_, rule);
+
+  DynamicOverrideRuleIDData &rule_iddata = reinterpret_cast<DynamicOverrideRuleIDData &>(rule);
+  for (DynamicOverrideRuleProperty &rule_prop : rule_iddata.properties) {
+    rule_item.build_tree_rule_property(rule_item, rule_prop);
   }
 }
 

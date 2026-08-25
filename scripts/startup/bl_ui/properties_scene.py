@@ -73,53 +73,7 @@ class SCENE_PT_scene_dynamic_override(SceneButtonsPanel, Panel):
 
         layout.template_ID(scene, "dynamic_override", new="dynamic_override.new")
 
-        dynoverride = scene.dynamic_override
-        if not dynoverride:
-            return
-
-        for rule in dynoverride.rules:
-            if not rule.target_filter.target_id:
-                continue
-            target_name = rule.target_filter.target_id.name_full
-            target_type = rule.target_filter.target_id.rna_type.name.lower()
-            rule_id = f"{target_type}::{target_name}"
-            panel_header, panel_body = layout.panel(idname=rule_id)
-            panel_header.prop(rule, "name", text="")
-            sub_butts = panel_header.row(align=True)
-            sub_butts.prop(rule, "is_muted", icon='CHECKBOX_DEHLT' if rule.is_muted else 'CHECKBOX_HLT', icon_only=True)
-            sub_butts.separator_spacer()
-            op = sub_butts.operator('UI_OT_dynoverride_remove_rule', text="", icon='X')
-            op.session_uid = dynoverride.session_uid
-            op.rule_name = rule.name
-            if panel_body is None:
-                # Closed panel...
-                continue
-
-            col = panel_body.column()
-            col.active = not rule.is_muted
-            if isinstance(rule.target_filter, bpy.types.DynamicOverrideRuleTargetFilterIDSingle):
-                row = col.row()
-                label_text = iface_("Target {}")
-                row.prop(rule.target_filter, "target_id", text=label_text.format(rule.target_filter.bl_rna.properties['id_type'].enum_items[rule.target_filter.id_type].name))
-
-            if isinstance(rule, bpy.types.DynamicOverrideRuleIDData):
-                for prop in rule.properties:
-                    row = col.row()
-                    row.label(text=f"\t\t{prop.rna_path}:")
-                    sub = row.row()
-                    sub.active = not prop.is_muted
-                    sub.prop(rule.override_values, prop.property_identifier)
-                    sub_butts = row.row(align=True)
-                    sub_butts.prop(
-                        prop,
-                        "is_muted",
-                        icon='CHECKBOX_DEHLT' if prop.is_muted else 'CHECKBOX_HLT',
-                        icon_only=True)
-                    sub_butts.separator_spacer()
-                    op = sub_butts.operator('UI_OT_dynoverride_remove_rule_property', text="", icon='X')
-                    op.session_uid = dynoverride.session_uid
-                    op.rule_name = rule.name
-                    op.property_rna_path = prop.rna_path
+        self.layout.template_dynamic_override_tree()
 
 
 class SCENE_PT_unit(SceneButtonsPanel, Panel):

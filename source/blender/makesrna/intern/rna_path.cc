@@ -240,35 +240,51 @@ std::optional<ParsedRNAPath<N>> ParsedRNAPath<N>::from_string(const StringRefNul
 
 namespace rna_path {
 
+std::string to_string(const Item &item)
+{
+  if (const Member *member = std::get_if<Member>(&item)) {
+    return member->identifier.c_str();
+  }
+  else if (const LookupIndex *lookup_index = std::get_if<LookupIndex>(&item)) {
+    return "[" + std::to_string(lookup_index->index) + "]";
+  }
+  else if (const LookupKey *lookup_key = std::get_if<LookupKey>(&item)) {
+    std::string result = "[\"";
+    for (const char c : lookup_key->key.ref()) {
+      if (c == '\\') {
+        result.append("\\\\");
+      }
+      else if (c == '"') {
+        result.append("\\\"");
+      }
+      else {
+        result.append(1, c);
+      }
+    }
+    result.append("\"]");
+    return result;
+  }
+  else {
+    BLI_assert_unreachable();
+  }
+  return "";
+}
+
 std::string to_string(const Span<Item> items)
 {
   std::string result;
   for (const auto &item : items) {
-    if (const Member *member = std::get_if<Member>(&item)) {
+    if (std::holds_alternative<Member>(item)) {
       if (!result.empty()) {
         result.append(".");
       }
-      result.append(member->identifier.c_str());
+      result.append(to_string(item));
     }
-    else if (const LookupIndex *lookup_index = std::get_if<LookupIndex>(&item)) {
-      result.append("[");
-      result.append(std::to_string(lookup_index->index));
-      result.append("]");
+    else if (std::holds_alternative<LookupIndex>(item)) {
+      result.append(to_string(item));
     }
-    else if (const LookupKey *lookup_key = std::get_if<LookupKey>(&item)) {
-      result.append("[\"");
-      for (const char c : lookup_key->key.ref()) {
-        if (c == '\\') {
-          result.append("\\\\");
-        }
-        else if (c == '"') {
-          result.append("\\\"");
-        }
-        else {
-          result.append(1, c);
-        }
-      }
-      result.append("\"]");
+    else if (std::holds_alternative<LookupKey>(item)) {
+      result.append(to_string(item));
     }
     else {
       BLI_assert_unreachable();
