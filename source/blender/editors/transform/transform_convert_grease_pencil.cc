@@ -139,6 +139,55 @@ static void shapekey_get_applied_radius(const Key *key,
   });
 }
 
+static void shapekey_set_applied_opacity(const Key *key,
+                                         const KeyBlock *actkb,
+                                         const IndexMask &selection,
+                                         const Span<float> new_opacity,
+                                         bke::MutableAttributeAccessor &attributes)
+{
+  const float keyblock_influence = actkb->curval;
+
+  const VArray<float> opacity = *attributes.lookup<float>("opacity", bke::AttrDomain::Point);
+
+  Array<float> old_opacity(opacity.size());
+  array_utils::copy(opacity, old_opacity.as_mutable_span());
+  shapekey_get_applied_opacity(key, attributes, old_opacity.as_mutable_span());
+
+  bke::SpanAttributeWriter<float> key_opacity = attributes.lookup_or_add_for_write_span<float>(
+      blender::bke::greasepencil::shapekey_opacity_attribute(actkb->name), bke::AttrDomain::Point);
+
+  selection.foreach_index([&](const int point_i) {
+    key_opacity.span[point_i] += (new_opacity[point_i] - old_opacity[point_i]) /
+                                 keyblock_influence;
+  });
+
+  key_opacity.finish();
+}
+
+static void shapekey_set_applied_radius(const Key *key,
+                                        const KeyBlock *actkb,
+                                        const IndexMask &selection,
+                                        const Span<float> new_radius,
+                                        bke::MutableAttributeAccessor &attributes)
+{
+  const float keyblock_influence = actkb->curval;
+
+  const VArray<float> radius = *attributes.lookup<float>("radius", bke::AttrDomain::Point);
+
+  Array<float> old_radius(radius.size());
+  array_utils::copy(radius, old_radius.as_mutable_span());
+  shapekey_get_applied_radius(key, attributes, old_radius.as_mutable_span());
+
+  bke::SpanAttributeWriter<float> key_radius = attributes.lookup_or_add_for_write_span<float>(
+      blender::bke::greasepencil::shapekey_radius_attribute(actkb->name), bke::AttrDomain::Point);
+
+  selection.foreach_index([&](const int point_i) {
+    key_radius.span[point_i] += (new_radius[point_i] - old_radius[point_i]) / keyblock_influence;
+  });
+
+  key_radius.finish();
+}
+
 static void createTransGreasePencilVerts(bContext *C, TransInfo *t)
 {
   Depsgraph *depsgraph = CTX_data_depsgraph_pointer(C);
@@ -458,19 +507,8 @@ static void recalcData_grease_pencil(TransInfo *t)
         if (key && actkb && tc.obedit->shapenr != 1) {
           const IndexMask &selection = transform_data.selection_by_layer[layer_i];
 
-          bke::SpanAttributeWriter<float> key_radius =
-              attributes.lookup_or_add_for_write_span<float>(
-                  blender::bke::greasepencil::shapekey_radius_attribute(actkb->name),
-                  bke::AttrDomain::Point);
-
-          Span<float> trans_radius = transform_data.value_attribute[i];
-
-          selection.foreach_index([&](const int point_i) {
-            key_radius.span[point_i] = (trans_radius[point_i] - src_value[point_i]) /
-                                       keyblock_influence;
-          });
-
-          key_radius.finish();
+          shapekey_set_applied_radius(
+              key, actkb, selection, transform_data.value_attribute[i], attributes);
         }
 
         curves.tag_radii_changed();
@@ -481,19 +519,8 @@ static void recalcData_grease_pencil(TransInfo *t)
         if (key && actkb && tc.obedit->shapenr != 1) {
           const IndexMask &selection = transform_data.selection_by_layer[layer_i];
 
-          bke::SpanAttributeWriter<float> key_opacity =
-              attributes.lookup_or_add_for_write_span<float>(
-                  blender::bke::greasepencil::shapekey_opacity_attribute(actkb->name),
-                  bke::AttrDomain::Point);
-
-          Span<float> trans_opacity = transform_data.value_attribute[i];
-
-          selection.foreach_index([&](const int point_i) {
-            key_opacity.span[point_i] = (trans_opacity[point_i] - src_value[point_i]) /
-                                        keyblock_influence;
-          });
-
-          key_opacity.finish();
+          shapekey_set_applied_opacity(
+              key, actkb, selection, transform_data.value_attribute[i], attributes);
         }
 
         layer_i++;
