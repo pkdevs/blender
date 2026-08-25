@@ -173,7 +173,7 @@ printf(
     "candidate: type=%d prim=%d object=%d flags=%u param=(%f,%f)\n"
     "candidate_luminance=%f mis_weight=%f weight=%f rand=%f\n"
     "BEFORE: total_weight=%f selected_prim=%d selected_object=%d\n"
-    "============================\n",
+    "============================\n\n",
     candidate_reference.type,
     candidate_reference.prim,
     candidate_reference.object,
@@ -242,7 +242,11 @@ ccl_device_inline void reservoir_add_light_sample(
   float light_pdf_in_area = ls.pdf;
 
   // TODO(weizhen): Convert pdf to area measure when returning the pdf instead of here.
-  const float jacobian = ls.jacobian_solid_angle_to_area(); // !!!
+  float jacobian = 1.0f;
+  /* Sun is already sampled in solid angle. */
+  if (ls.type != LIGHT_SUN) {
+    jacobian = ls.jacobian_solid_angle_to_area(); // !!!
+  }
 
 printf(
     "\n=== ADD LIGHT SAMPLE ===\n"
@@ -266,7 +270,19 @@ printf(
   // if (!(isfinite(light_pdf_in_area) && light_pdf_in_area > 0.0f)) { // !!!: zero-radius; suspicious
   //   return;
   // }
-
+  
+// printf(
+//     "CANDIDATE RADIANCE: "
+//     "type=%d pdf=%f eval_fac=%f "
+//     "sum radiance=(%f,%f,%f) "
+//     "jacobian=%f\n",
+//     ls.type,
+//     (double)ls.pdf,
+//     (double)ls.eval_fac,
+//     (double)candidate_radiance.sum.x,
+//     (double)candidate_radiance.sum.y,
+//     (double)candidate_radiance.sum.z,
+//     (double)jacobian);
   printf("reservoir_add_light_sample() updated (mis_weight / light_pdf_in_area)=%f\n", (double)(mis_weight / light_pdf_in_area));
 
   reservoir_add_sample(reservoir,
@@ -431,7 +447,7 @@ ccl_device_inline bool restir_unpack_reservoir(KernelGlobals kg, // !!!: lamp
 
   // prevents stale light, radiance, or reference metadata from surviving when reusing a stack variable
   // simply guarantees that anything you don't deserialize cannot remain stale.
-  reservoir_clear(reservoir);
+  reservoir_clear(reservoir); // !!!: Cause of crash in render mode? No
 
 
 printf(
@@ -528,6 +544,23 @@ struct GlobalReservoir {
   int rcv_index;
 
   float3 rgb_to_y;
+
+
+/*
+  LightSample light;
+  ReSTIRLightSampleReference reference;
+
+  BsdfEval radiance;
+  float luminance;
+  float total_weight = 0.0f;
+
+  int num_light_samples;
+  int num_bsdf_samples = 1;
+  int max_samples;
+  float3 rgb_to_y;
+
+  int direct_sampling_method;
+*/
 };
 
 ccl_device_inline void global_reservoir_init(KernelGlobals kg,

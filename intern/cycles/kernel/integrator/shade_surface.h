@@ -249,12 +249,7 @@ ccl_device_forceinline float radiance_eval(KernelGlobals kg,
   ccl_private ShaderData *emission_sd = AS_SHADER_DATA(&emission_sd_storage);
 
   PROFILING_INIT(kg, PROFILING_RESTIR_LIGHT_EVAL);
-  /* Evaluate *non-constant* part of light shader. */
-  // const Spectrum light_eval = light_sample_shader_eval( // !!!: Ensure Correctness of light_sample_shader_eval()
-  //     kg, state, emission_sd, ls, sd->time, sd, reference, check_visibility);
-  
   Spectrum light_eval = zero_spectrum();
-
   const ShaderEvalResult shader_result = light_sample_shader_eval(
       kg, state, emission_sd, ls, sd->time, light_eval, sd, reference, check_visibility);
 
@@ -272,7 +267,12 @@ ccl_device_forceinline float radiance_eval(KernelGlobals kg,
 
   PROFILING_EVENT(PROFILING_RESTIR_BSDF_EVAL);
   const float bsdf_pdf = surface_shader_bsdf_eval(kg, state, sd, ls->D, radiance, ls->shader);
-  const float geometry_term = ls->jacobian_solid_angle_to_area();
+
+  /* Sun is already sampled in solid angle. */
+  float geometry_term = 1.0f;
+  if (ls->type != LIGHT_SUN) {
+    geometry_term = ls->jacobian_solid_angle_to_area();
+  }
 
   // bsdf_eval_mul(radiance, light_eval * geometry_term); // !!!: DI Blackout
   const Spectrum scale = light_eval * geometry_term;
@@ -940,6 +940,25 @@ ccl_device
         kg, state, sd, &ls, &radiance, &reference, check_visibility);
 
     PROFILING_EVENT(PROFILING_RESTIR_RESERVOIR);
+
+
+printf(
+    "\n=== BEFORE RESERVOIR ADD ===\n"
+    "radiance.sum = (%e, %e, %e)\n"
+    "rgb_to_y     = (%e, %e, %e)\n"
+    // "luminance    = %e\n"
+    "eval_fac     = %e\n"
+    "ls.pdf       = %e\n"
+    "============================\n",
+    (double)radiance.sum.x,
+    (double)radiance.sum.y,
+    (double)radiance.sum.z,
+    (double)reservoir.rgb_to_y.x,
+    (double)reservoir.rgb_to_y.y,
+    (double)reservoir.rgb_to_y.z,
+    // (double)reservoir_compute_luminance(reservoir, radiance),
+    (double)ls.eval_fac,
+    (double)ls.pdf);
 
     /* Compute the NEE MIS weight and divide by the light PDF in the appropriate measure. */
     reservoir_add_light_sample(&reservoir, ls, reference, radiance, bsdf_pdf, rand_pick, use_restir); // !!!
