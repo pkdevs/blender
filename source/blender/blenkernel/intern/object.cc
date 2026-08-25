@@ -4887,6 +4887,7 @@ bool BKE_object_shapekey_remove(Main *bmain, Object *ob, KeyBlock *kb)
 
       attributes.remove(blender::bke::greasepencil::shapekey_position_attribute(kb->name));
       attributes.remove(blender::bke::greasepencil::shapekey_radius_attribute(kb->name));
+      attributes.remove(blender::bke::greasepencil::shapekey_opacity_attribute(kb->name));
     }
   }
 

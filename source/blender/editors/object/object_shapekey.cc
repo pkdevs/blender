@@ -464,6 +464,20 @@ static wmOperatorStatus shape_key_copy_exec(bContext *C, wmOperator * /*op*/)
         array_utils::copy(key_radius_old, key_radius_new.span);
 
         key_radius_new.finish();
+
+        const VArray<float> key_opacity_old = *attributes.lookup_or_default<float>(
+            blender::bke::greasepencil::shapekey_opacity_attribute(kb_src->name),
+            bke::AttrDomain::Point,
+            0.0f);
+
+        bke::SpanAttributeWriter<float> key_opacity_new =
+            attributes.lookup_or_add_for_write_span<float>(
+                blender::bke::greasepencil::shapekey_opacity_attribute(kb_new->name),
+                bke::AttrDomain::Point);
+
+        array_utils::copy(key_opacity_old, key_opacity_new.span);
+
+        key_opacity_new.finish();
       }
     }
   }

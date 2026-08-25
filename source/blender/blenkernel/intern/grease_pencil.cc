@@ -2257,6 +2257,13 @@ void ensure_non_empty_layer_names(Main &bmain, GreasePencil &grease_pencil)
   }
 }
 
+std::string shapekey_position_attribute(const char *name)
+{
+  char attr_name[64];
+  SNPRINTF_UTF8(attr_name, ".SK_%s", name);
+  return std::string(attr_name);
+}
+
 std::string shapekey_radius_attribute(const char *name)
 {
   char attr_name[64];
@@ -2264,10 +2271,10 @@ std::string shapekey_radius_attribute(const char *name)
   return std::string(attr_name);
 }
 
-std::string shapekey_position_attribute(const char *name)
+std::string shapekey_opacity_attribute(const char *name)
 {
   char attr_name[64];
-  SNPRINTF_UTF8(attr_name, ".SK_%s", name);
+  SNPRINTF_UTF8(attr_name, ".SKo_%s", name);
   return std::string(attr_name);
 }
 
@@ -2659,6 +2666,15 @@ static void grease_pencil_do_shape_keys(bke::GeometrySet &geometry_set)
           bke::AttrDomain::Point,
           0.0f);
 
+      const VArray<float> key_opacity = *attributes.lookup_or_default<float>(
+          blender::bke::greasepencil::shapekey_opacity_attribute(keyblock.name),
+          bke::AttrDomain::Point,
+          0.0f);
+      const VArray<float> ref_key_opacity = *attributes.lookup_or_default<float>(
+          blender::bke::greasepencil::shapekey_opacity_attribute(ref_keyblock->name),
+          bke::AttrDomain::Point,
+          0.0f);
+
       MutableSpan<float3> positions = curves.positions_for_write();
       threading::parallel_for(positions.index_range(), 4096, [&](const IndexRange range) {
         for (const int i : range) {
@@ -2672,6 +2688,15 @@ static void grease_pencil_do_shape_keys(bke::GeometrySet &geometry_set)
           radius[i] += (key_radius[i] - ref_key_radius[i]) * keyblock_influence;
           /* Stop the radius from being negative. */
           radius[i] = math::max(radius[i], 0.0f);
+        }
+      });
+
+      MutableSpan<float> opacity = info.drawing->opacities_for_write();
+      threading::parallel_for(positions.index_range(), 4096, [&](const IndexRange range) {
+        for (const int i : range) {
+          opacity[i] += (key_opacity[i] - ref_key_opacity[i]) * keyblock_influence;
+          /* Stop the opacity from being negative. */
+          opacity[i] = math::clamp(opacity[i], 0.0f, 1.0f);
         }
       });
 

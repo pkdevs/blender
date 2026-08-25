@@ -976,8 +976,9 @@ const AttributeAccessorFunctions &get_attribute_accessor_functions();
  */
 void ensure_non_empty_layer_names(Main &bmain, GreasePencil &grease_pencil);
 
-std::string shapekey_radius_attribute(const char *name);
 std::string shapekey_position_attribute(const char *name);
+std::string shapekey_radius_attribute(const char *name);
+std::string shapekey_opacity_attribute(const char *name);
 
 }  // namespace greasepencil
 

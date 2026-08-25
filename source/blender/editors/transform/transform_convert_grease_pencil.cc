@@ -219,8 +219,18 @@ static void createTransGreasePencilVerts(bContext *C, TransInfo *t)
 
       std::optional<MutableSpan<float>> value_attribute;
       if (t->mode == TFM_GPENCIL_OPACITY) {
-        MutableSpan<float> opacities = info.drawing.opacities_for_write();
-        value_attribute = opacities;
+        if (key && actkb && tc.obedit->shapenr != 1) {
+          const Span<float> opacities = info.drawing.opacities_for_write();
+
+          curves_transform_data.src_value_attribute[drawing] = Array<float>(opacities);
+          curves_transform_data.value_attribute[drawing] = Array<float>(opacities);
+
+          value_attribute = curves_transform_data.value_attribute[drawing].as_mutable_span();
+        }
+        else {
+          MutableSpan<float> opacities = info.drawing.opacities_for_write();
+          value_attribute = opacities;
+        }
       }
       else if (is_scale_thickness) {
         if (key && actkb && tc.obedit->shapenr != 1) {
@@ -324,11 +334,10 @@ static void recalcData_grease_pencil(TransInfo *t)
       bke::MutableAttributeAccessor attributes = curves.attributes_for_write();
       const Span<float3> deformation_offsets = transform_data.deformation_offsets[i];
       const Span<float3> src_positions = transform_data.src_positions[i];
-      const Span<float> src_radius = transform_data.src_value_attribute[i];
+      const Span<float> src_value = transform_data.src_value_attribute[i];
 
       if (t->mode == TFM_CURVE_SHRINKFATTEN) {
         if (key && actkb && tc.obedit->shapenr != 1) {
-
           const IndexMask &selection = transform_data.selection_by_layer[layer_i];
 
           bke::SpanAttributeWriter<float> key_radius =
@@ -339,7 +348,7 @@ static void recalcData_grease_pencil(TransInfo *t)
           Span<float> trans_radius = transform_data.value_attribute[i];
 
           selection.foreach_index([&](const int point_i) {
-            key_radius.span[point_i] = (trans_radius[point_i] - src_radius[point_i]) /
+            key_radius.span[point_i] = (trans_radius[point_i] - src_value[point_i]) /
                                        keyblock_influence;
           });
 
@@ -347,6 +356,27 @@ static void recalcData_grease_pencil(TransInfo *t)
         }
 
         curves.tag_radii_changed();
+
+        layer_i++;
+      }
+      else if (t->mode == TFM_GPENCIL_OPACITY) {
+        if (key && actkb && tc.obedit->shapenr != 1) {
+          const IndexMask &selection = transform_data.selection_by_layer[layer_i];
+
+          bke::SpanAttributeWriter<float> key_opacity =
+              attributes.lookup_or_add_for_write_span<float>(
+                  blender::bke::greasepencil::shapekey_opacity_attribute(actkb->name),
+                  bke::AttrDomain::Point);
+
+          Span<float> trans_opacity = transform_data.value_attribute[i];
+
+          selection.foreach_index([&](const int point_i) {
+            key_opacity.span[point_i] = (trans_opacity[point_i] - src_value[point_i]) /
+                                        keyblock_influence;
+          });
+
+          key_opacity.finish();
+        }
 
         layer_i++;
       }

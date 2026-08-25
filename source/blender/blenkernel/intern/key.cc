@@ -1978,6 +1978,8 @@ void BKE_keyblock_rename(Main &bmain, Key *key, KeyBlock *kb, const char *newnam
                         blender::bke::greasepencil::shapekey_position_attribute(newname));
       attributes.rename(blender::bke::greasepencil::shapekey_radius_attribute(oldname),
                         blender::bke::greasepencil::shapekey_radius_attribute(newname));
+      attributes.rename(blender::bke::greasepencil::shapekey_opacity_attribute(oldname),
+                        blender::bke::greasepencil::shapekey_opacity_attribute(newname));
     }
   }
 }
