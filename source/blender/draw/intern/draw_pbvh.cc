@@ -145,17 +145,10 @@ class DrawCacheImpl : public DrawCache {
   struct IBOFamily {
     RangeAllocator space;
     /**
-     * \brief Increasing counter whenever space is grown.
+     * \brief Limit for the index buffer space.
      *
-     * Used to detect when batches need rebuilding. When an index buffer is reallocated all sub
-     * index buffers and batches needs to be rebuilt to refer to the new reallocated data.
-     */
-    uint64_t generation = 0;
-    /**
-     * \brief Max size for index buffers.
-     *
-     * Only when space grows past this, the generation is incremented. Prevents unnecessary
-     * generation bumps when space doesn't change.
+     * When the allocated space grows past this, the underlying buffer is reallocated and batches
+     * need rebuilding.
      */
     uint64_t space_limit = 0;
     /** \brief Index buffer containing all indices. */
@@ -167,8 +160,7 @@ class DrawCacheImpl : public DrawCache {
      * \brief Ensure the shared index buffer is large enough to hold the assigned space.
      *
      * When this requires growing (or creating) the buffer, existing data is copied over and
-     * existing sub-ranges are recreated. It also increases the generation to inform that batches
-     * needs to be regenerated.
+     * existing sub-ranges are recreated.
      */
     void ensure_capacity();
   };
@@ -181,15 +173,7 @@ class DrawCacheImpl : public DrawCache {
   Vector<NodeInfo> node_infos_;
   RangeAllocator vbo_space_;
 
-  /**
-   * \brief Incremented whenever the shared vertex buffer space grows.
-   *
-   * Growing the buffer space is the event that swaps (resizes) all attribute VBOs, invalidating
-   * any cached batches that reference them. The generation is checked against the one recorded on
-   * each #BatchCache to decide whether the cached batches need to be rebuilt.
-   */
-  uint64_t vbo_generation_ = 0;
-  /** High-water mark of the vertex buffer space, used to detect growth. */
+  /** Limit of the vertex buffer space, used to detect when it was reallocated. */
   uint64_t vbo_space_limit_ = 0;
 
   /**
@@ -199,16 +183,14 @@ class DrawCacheImpl : public DrawCache {
   Map<AttributeRequest, AttributeData> attribute_vbos_;
 
   /**
-   * \brief Cached batches for a given setup, together with the generation of the vertex buffers
-   * they were built for.
+   * \brief Cached batches for a given setup.
    *
-   * Batches hold raw pointers to the shared attribute VBOs. When the VBOs are resized (swapped),
-   * the cached batches are invalidated so they can be rebuilt with the new pointers.
+   * Batches hold raw pointers to the shared attribute VBOs and index subranges. Those pointers
+   * become stale when the underlying buffers are reallocated.
    */
   struct BatchCache {
     Vector<gpu::Batch *> batches;
-    uint64_t ibo_generation = 0;
-    uint64_t vbo_generation = 0;
+    bool dirty = false;
   };
 
   /** Batches for drawing wireframe geometry. */
@@ -3163,14 +3145,13 @@ void DrawCacheImpl::IBOFamily::ensure_capacity()
   /* Copy over data from previous buffer. */
   if (ibo) {
     new_ibo->copy_sub(*ibo, 0, 0, ibo->index_len_get());
-    /* Rebuild all subranges.*/
+    /* Rebuild all subranges. */
     for (gpu::IndexBufPtr &ibo_sub : ibos) {
       if (ibo_sub) {
         gpu::IndexBufPtr new_sub = gpu::IndexBufPtr(GPU_indexbuf_create_subrange(
             new_ibo.get(), ibo_sub->index_start_get(), ibo_sub->index_len_get()));
         ibo_sub.swap(new_sub);
       }
-      generation++;
     }
   }
   ibo.swap(new_ibo);
@@ -3217,8 +3198,7 @@ Span<gpu::Batch *> DrawCacheImpl::ensure_tris_batches(const Object &object,
   nodes_to_update.foreach_index(
       [&](const int i) {
         const bool has_ibo = !ibos.is_empty() && ibos[i] != nullptr;
-        if (!batches[i] || batch_cache.vbo_generation != vbo_generation_ ||
-            batch_cache.ibo_generation != ibo_family.generation ||
+        if (!batches[i] || batch_cache.dirty ||
             batches[i]->elem_() != (has_ibo ? ibos[i].get() : nullptr))
         {
           if (!has_ibo) {
@@ -3236,8 +3216,7 @@ Span<gpu::Batch *> DrawCacheImpl::ensure_tris_batches(const Object &object,
         }
       },
       exec_mode::grain_size(64));
-  batch_cache.vbo_generation = vbo_generation_;
-  batch_cache.ibo_generation = ibo_family.generation;
+  batch_cache.dirty = false;
 
   return batches;
 }
@@ -3271,10 +3250,7 @@ Span<gpu::Batch *> DrawCacheImpl::ensure_lines_batches(const Object &object,
         if (lines[i] == nullptr) {
           return;
         }
-        if (!batches[i] || batch_cache.vbo_generation != vbo_generation_ ||
-            batch_cache.ibo_generation != ibo_family.generation ||
-            batches[i]->elem_() != lines[i].get())
-        {
+        if (!batches[i] || batch_cache.dirty || batches[i]->elem_() != lines[i].get()) {
           if (!batches[i]) {
             batches[i] = GPU_batch_calloc();
           }
@@ -3284,8 +3260,7 @@ Span<gpu::Batch *> DrawCacheImpl::ensure_lines_batches(const Object &object,
         }
       },
       exec_mode::grain_size(64));
-  batch_cache.vbo_generation = vbo_generation_;
-  batch_cache.ibo_generation = ibo_family.generation;
+  batch_cache.dirty = false;
 
   return batches;
 }
@@ -3301,6 +3276,22 @@ Span<int> DrawCacheImpl::ensure_material_indices(const Object &object)
     material_indices_ = calc_material_indices(object, orig_mesh_data);
   }
   return material_indices_;
+}
+
+/**
+ * \brief Ensure the limit of a space is at least as large as its current size.
+ *
+ * Returns true when the space has grown, in which case the caller should reallocate the underlying
+ * buffer and rebuild the cached batches.
+ */
+static bool ensure_size(RangeAllocator &space, uint64_t &space_limit)
+{
+  const uint64_t size = uint64_t(space.size());
+  if (size <= space_limit) {
+    return false;
+  }
+  space_limit = size;
+  return true;
 }
 
 static bool update_node_buffer_range(NodeInfo::BufferRange &range,
@@ -3412,28 +3403,21 @@ Span<NodeInfo> DrawCacheImpl::ensure_node_infos(const Object &object,
     }
   });
 
-  /* Growing the buffer space swaps all attribute VBOs, invalidating any cached batches. */
-  if (uint64_t(vbo_space_.size()) > vbo_space_limit_) {
-    vbo_space_limit_ = vbo_space_.size();
-    vbo_generation_++;
-  }
-  /* Index buffer family spaces aren't consumed by batches yet (future: shared index buffers), but
-   * track their growth so the generation can be used to invalidate batches when they are. */
-  if (uint64_t(ibo_lines_.space.size()) > ibo_lines_.space_limit) {
-    ibo_lines_.space_limit = ibo_lines_.space.size();
-    ibo_lines_.generation++;
-  }
-  if (uint64_t(ibo_lines_coarse_.space.size()) > ibo_lines_coarse_.space_limit) {
-    ibo_lines_coarse_.space_limit = ibo_lines_coarse_.space.size();
-    ibo_lines_coarse_.generation++;
-  }
-  if (uint64_t(ibo_tris_.space.size()) > ibo_tris_.space_limit) {
-    ibo_tris_.space_limit = ibo_tris_.space.size();
-    ibo_tris_.generation++;
-  }
-  if (uint64_t(ibo_tris_coarse_.space.size()) > ibo_tris_coarse_.space_limit) {
-    ibo_tris_coarse_.space_limit = ibo_tris_coarse_.space.size();
-    ibo_tris_coarse_.generation++;
+  /* Mark cached batches dirty when a buffer they reference is reallocated. */
+  const bool vbo_reallocated = ensure_size(vbo_space_, vbo_space_limit_);
+  const bool lines_reallocated = ensure_size(ibo_lines_.space, ibo_lines_.space_limit);
+  const bool lines_coarse_reallocated = ensure_size(ibo_lines_coarse_.space,
+                                                    ibo_lines_coarse_.space_limit);
+  const bool tris_reallocated = ensure_size(ibo_tris_.space, ibo_tris_.space_limit);
+  const bool tris_coarse_reallocated = ensure_size(ibo_tris_coarse_.space,
+                                                   ibo_tris_coarse_.space_limit);
+  lines_batches_.dirty = vbo_reallocated || lines_reallocated;
+  lines_batches_coarse_.dirty = vbo_reallocated || lines_coarse_reallocated;
+  /* It is rare that tris and coardse tris are not reallocated at the same time. */
+  if (vbo_reallocated || tris_reallocated || tris_coarse_reallocated) {
+    for (BatchCache &batch_cache : tris_batches_.values()) {
+      batch_cache.dirty = true;
+    }
   }
 
   /* Return all nodes (not only the nodes that are being updated) to keep the indices alligned
