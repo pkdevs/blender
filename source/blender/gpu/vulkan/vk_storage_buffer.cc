@@ -5,6 +5,7 @@
 /** \file
  * \ingroup gpu
  */
+#include "BLI_assert.hh"
 #include "vk_shader.hh"
 #include "vk_shader_interface.hh"
 #include "vk_staging_buffer.hh"
@@ -28,9 +29,9 @@ VKStorageBuffer::VKStorageBuffer(size_t size, GPUUsageType usage, const char *na
 }
 VKStorageBuffer::~VKStorageBuffer()
 {
-  if (async_read_buffer_) {
-    MEM_delete(async_read_buffer_);
-    async_read_buffer_ = nullptr;
+  if (read_buffer_) {
+    MEM_delete(read_buffer_);
+    read_buffer_ = nullptr;
   }
 }
 
@@ -132,30 +133,54 @@ void VKStorageBuffer::copy_sub(VertBuf *src, uint dst_offset, uint src_offset, u
   context.render_graph().add_node(copy_buffer);
 }
 
+void VKStorageBuffer::ensure_read_buffer()
+{
+  if (read_buffer_) {
+    return;
+  }
+
+  read_buffer_ = MEM_new<VKStagingBuffer>(
+      __func__, buffer_, VKStagingBuffer::Direction::DeviceToHost);
+}
+
 void VKStorageBuffer::async_flush_to_host()
 {
-  if (async_read_buffer_ != nullptr) {
+  if (async_in_progress_) {
     return;
   }
   ensure_allocated();
+  async_in_progress_ = true;
+  /* Mapped buffers don't need a read buffer. */
+  if (buffer_.is_mapped()) {
+    return;
+  }
   VKContext &context = *VKContext::get();
-
-  async_read_buffer_ = MEM_new<VKStagingBuffer>(
-      __func__, buffer_, VKStagingBuffer::Direction::DeviceToHost);
-  async_read_buffer_->copy_from_device(context);
-  async_read_buffer_->host_buffer_get().async_flush_to_host(context);
+  ensure_read_buffer();
+  read_buffer_->copy_from_device(context);
 }
 
 void VKStorageBuffer::read(void *data)
 {
-  if (async_read_buffer_ == nullptr) {
-    async_flush_to_host();
-  }
-
   VKContext &context = *VKContext::get();
-  async_read_buffer_->host_buffer_get().read_async(context, data);
-  MEM_delete(async_read_buffer_);
-  async_read_buffer_ = nullptr;
+  if (async_in_progress_) {
+    if (buffer_.is_mapped()) {
+      buffer_.read_async(context, data);
+    }
+    else {
+      BLI_assert(read_buffer_);
+      read_buffer_->host_buffer_get().read_async(context, data);
+    }
+  }
+  else {
+    if (buffer_.is_mapped()) {
+      buffer_.read(context, data);
+    }
+    else {
+      ensure_read_buffer();
+      read_buffer_->copy_from_device(context);
+      read_buffer_->host_buffer_get().read(context, data);
+    }
+  }
 }
 
 }  // namespace gpu

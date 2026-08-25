@@ -27,7 +27,6 @@ class VKBuffer : public NonCopyable {
   size_t alloc_size_in_bytes_ = 0;
   VKResourceWithHandle<VkBuffer> resource_;
   VmaAllocation allocation_ = VK_NULL_HANDLE;
-  TimelineValue async_timeline_ = 0;
   /** Has a previous allocation failed. Will skip reallocations. */
   bool allocation_failed_ = false;
 
@@ -69,11 +68,6 @@ class VKBuffer : public NonCopyable {
    * Read the buffer (synchronously).
    */
   void read(VKContext &context, void *data) const;
-
-  /**
-   * Start a async read-back.
-   */
-  void async_flush_to_host(VKContext &context);
 
   /**
    * Wait until the async read back is finished and fill the given data with the content of the

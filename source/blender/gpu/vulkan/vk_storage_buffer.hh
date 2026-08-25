@@ -23,8 +23,10 @@ class VKStorageBuffer : public StorageBuf {
   GPUUsageType usage_;
   VKBuffer buffer_;
 
-  /** Staging buffer that is used when doing an async read-back. */
-  VKStagingBuffer *async_read_buffer_ = nullptr;
+  bool async_in_progress_ = false;
+  /* Read back buffer (only set when storage buffer isn't mapped). */
+  VKStagingBuffer *read_buffer_ = nullptr;
+
   VkDeviceSize offset_ = 0;
 
  public:
@@ -66,6 +68,7 @@ class VKStorageBuffer : public StorageBuf {
 
  private:
   void allocate();
+  void ensure_read_buffer();
 };
 
 BLI_INLINE VKStorageBuffer *unwrap(StorageBuf *storage_buffer)
