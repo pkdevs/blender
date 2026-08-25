@@ -253,13 +253,14 @@ static void test_draw_record_layout()
 {
   /* DrawRecord is uploaded to its own buffer, so it does not need to match DrawCommand's size.
    * Layout must however stay in sync with the host / shader definition. */
-  EXPECT_EQ(sizeof(command::DrawRecord), 24);
+  EXPECT_EQ(sizeof(command::DrawRecord), 28);
   EXPECT_EQ(offsetof(command::DrawRecord, vertex_len), 0u);
   EXPECT_EQ(offsetof(command::DrawRecord, instance_len), 4u);
   EXPECT_EQ(offsetof(command::DrawRecord, vertex_first), 8u);
   EXPECT_EQ(offsetof(command::DrawRecord, base_index), 12u);
   EXPECT_EQ(offsetof(command::DrawRecord, instance_first), 16u);
   EXPECT_EQ(offsetof(command::DrawRecord, res_id), 20u);
+  EXPECT_EQ(offsetof(command::DrawRecord, custom_id), 24u);
 }
 DRAW_TEST(draw_record_layout)
 
@@ -273,14 +274,14 @@ static void test_draw_pass_multi_draw_records()
 
   /* First range on a new command. Second record is discarded (vertex_len 0). */
   Vector<command::DrawRecord> records = {
-      {10, 1, 0, 5, 0, 1},
-      {0, 1, 0, 5, 0, 99},
-      {6, 2, 1, 5, 0, 2 | 0x80000000u},
+      {10, 1, 0, 5, 0, 1, 0},
+      {0, 1, 0, 5, 0, 99, 0},
+      {6, 2, 1, 5, 0, 2 | 0x80000000u, 0},
   };
   pass.draw_multi(batch, records);
 
   /* Same shader state: appends to the same DrawMulti command. */
-  Vector<command::DrawRecord> records_2 = {{7, 1, 2, 5, 0, 3}};
+  Vector<command::DrawRecord> records_2 = {{7, 1, 2, 5, 0, 3, 0}};
   pass.draw_multi(batch, records_2);
 
   std::string result = pass.serialize();
@@ -290,13 +291,13 @@ static void test_draw_pass_multi_draw_records()
   expected << "  .draw_multi(0)" << std::endl;
   expected << "    .records(count=3)" << std::endl;
   expected << "      .record(id=0, instance_first=0, instance_len=1, vertex_len=10, "
-              "vertex_first=0, resource_id=1, front_face)"
+              "vertex_first=0, resource_id=1, front_face, custom_id=0)"
            << std::endl;
   expected << "      .record(id=1, instance_first=1, instance_len=2, vertex_len=6, "
-              "vertex_first=1, resource_id=2, back_face)"
+              "vertex_first=1, resource_id=2, back_face, custom_id=0)"
            << std::endl;
   expected << "      .record(id=2, instance_first=3, instance_len=1, vertex_len=7, "
-              "vertex_first=2, resource_id=3, front_face)"
+              "vertex_first=2, resource_id=3, front_face, custom_id=0)"
            << std::endl;
 
   EXPECT_EQ(result, expected.str());
@@ -565,9 +566,9 @@ static void test_draw_visibility_multi()
 
   gpu::Batch *batch = GPU_batch_procedural_triangles_get();
   Vector<command::DrawRecord> records = {
-      {1, 1, 0, -1, 0, uint(fixture.cul_pos_handle.index())},
-      {1, 2, 0, -1, 0, uint(fixture.vis_handle.index())}, /* Draw 2 visible instances. */
-      {1, 1, 0, -1, 0, uint(fixture.cul_neg_handle.index())},
+      {1, 1, 0, -1, 0, uint(fixture.cul_pos_handle.index()), 0},
+      {1, 2, 0, -1, 0, uint(fixture.vis_handle.index()), 0}, /* Draw 2 visible instances. */
+      {1, 1, 0, -1, 0, uint(fixture.cul_neg_handle.index()), 0},
   };
   pass.draw_multi(batch, records);
 
@@ -597,8 +598,8 @@ static void test_draw_visibility_mixed()
       GPU_PRIM_TRIS, 2, -1, -1, fixture.vis_handle); /* Draw 2 visible instances. */
   /* Add multi-draw records in between. */
   Vector<command::DrawRecord> records = {
-      {1, 1, 0, -1, 0, uint(fixture.cul_neg_handle.index())},
-      {1, 3, 0, -1, 0, uint(fixture.vis_handle.index())}, /* Draw 3 visible instances. */
+      {1, 1, 0, -1, 0, uint(fixture.cul_neg_handle.index()), 0},
+      {1, 3, 0, -1, 0, uint(fixture.vis_handle.index()), 0}, /* Draw 3 visible instances. */
   };
   pass.draw_multi(batch, records);
   /* Regular draw after the records to exercise both paths in one pass. */

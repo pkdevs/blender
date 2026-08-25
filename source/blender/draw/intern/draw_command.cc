@@ -687,7 +687,8 @@ std::string DrawMulti::serialize(const std::string &line_prefix) const
            << ", instance_first=" << rec.instance_first << ", instance_len=" << rec.instance_len
            << ", vertex_len=" << rec.vertex_len << ", vertex_first=" << rec.vertex_first
            << ", resource_id=" << (rec.res_id & 0x7FFFFFFFu)
-           << ((rec.res_id & 0x80000000u) ? ", back_face)" : ", front_face)");
+           << ((rec.res_id & 0x80000000u) ? ", back_face" : ", front_face")
+           << ", custom_id=" << rec.custom_id << ")";
       }
     }
   }
