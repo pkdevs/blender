@@ -698,8 +698,7 @@ class DrawMultiBuf {
   /** Number of view-independent instances reserved in the resource id buffer by the records.
    * Records own [0, record_res_id_count_) and groups own the range after it. */
   uint record_res_id_count_ = 0;
-  /** Offset (in DrawCommand slots) of the first record slot inside command_buf_, set during
-   * generate_commands. */
+  /** Offset (in DrawCommand slots) of the first record slot inside command_buf_. */
   uint record_start_ = 0;
   /** Record ranges, keyed by the DrawMulti command uuid. */
   Map<uint, Vector<DrawRecordRange>> record_ranges_;
@@ -733,6 +732,7 @@ class DrawMultiBuf {
     header_id_counter_ = 0;
     group_count_ = 0;
     prototype_count_ = 0;
+    record_start_ = 0;
     record_count_ = 0;
     record_res_id_count_ = 0;
     group_ids_.clear();

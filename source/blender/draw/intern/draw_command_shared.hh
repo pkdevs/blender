@@ -112,8 +112,8 @@ struct [[host_shared]] DrawRecord {
   uint vertex_first;
   int base_index;
   uint instance_first;
-  /* Resource handle index used for visibility culling. The most significant bit encodes the winding
-   * order. */
+  /* Resource handle index used for visibility culling. The most significant bit encodes the
+   * winding order. */
   uint res_id;
 };
 

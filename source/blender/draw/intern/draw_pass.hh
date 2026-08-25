@@ -277,6 +277,7 @@ class PassBase {
    * as multi-draw indirect calls.
    *
    * \note Only supported by `PassMain`.
+   * \note Does not support primitive expansion.
    */
   void draw_multi(gpu::Batch *batch, Span<command::DrawRecord> records);
 
