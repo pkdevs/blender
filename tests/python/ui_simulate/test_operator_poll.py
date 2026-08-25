@@ -86,8 +86,8 @@ def test_operator_search_poll_gating():
 def test_operator_poll_sweep():
     """
     Sweep every registered operator's poll() across every settable editor
-	type and confirm each call returns a plain bool rather than raising or
-	returning something poll() shouldn't (None, a string, etc). 
+        type and confirm each call returns a plain bool rather than raising or
+        returning something poll() shouldn't (None, a string, etc).
     """
     _, t, window = ui.test_window()
     area = ui.largest_area(window.screen)

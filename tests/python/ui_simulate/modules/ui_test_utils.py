@@ -287,8 +287,8 @@ def poll_sweep(window, area):
                         # Keep the check so it catches them once BPY preserves the type.
                         if not isinstance(result, bool):
                             failures.append(
-	                            f"{area_type}: {idname} poll returned {result!r} (expected bool)"
-	                        )
+                                f"{area_type}: {idname} poll returned {result!r} (expected bool)"
+                            )
                     except Exception as ex:
                         failures.append(f"{area_type}: {idname} poll raised {ex!r}")
 
