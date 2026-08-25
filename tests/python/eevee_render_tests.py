@@ -78,6 +78,8 @@ BLOCKLIST = [
     "image_mipmap_working_space.blend",
     "image_mipmap_world.blend",
     "image_mipmap_world_sun.blend",
+    # Blocked due to being unsupported in EEVEE
+    "principled_bsdf_retroreflective.blend",
 
     ### Cycles only tests go here ###
 ]
