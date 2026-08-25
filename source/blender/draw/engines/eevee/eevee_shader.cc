@@ -695,7 +695,8 @@ class SlotAllocator {
 static SlotAllocator add_pipeline_create_info(gpu::shader::ShaderCreateInfo &info,
                                               eMaterialPipeline pipeline_type,
                                               eMaterialGeometry geometry_type,
-                                              const bool use_shader_to_rgba)
+                                              const bool use_shader_to_rgba,
+                                              const bool use_lightitng_nodes)
 {
   using namespace blender::gpu::shader;
 
@@ -830,10 +831,14 @@ static SlotAllocator add_pipeline_create_info(gpu::shader::ShaderCreateInfo &inf
           info.fragment_function("eevee_surf_capture");
           break;
         case MAT_PIPE_DEFERRED:
-          if (use_shader_to_rgba) {
+          if (use_shader_to_rgba || use_lightitng_nodes) {
             pipeline_info_name = "eevee_surf_hybrid_infos_";
-            info.define("closure_to_rgba", "closure_to_rgba_hybrid");
-            info.define("MAT_LIGHT_ITER");
+            if (use_shader_to_rgba) {
+              info.define("closure_to_rgba", "closure_to_rgba_hybrid");
+            }
+            if (use_lightitng_nodes) {
+              info.define("MAT_LIGHT_ITER");
+            }
             info.name_ += "_deferred_hybrid";
             info.compilation_constant(gpu::shader::Type::bool_t, "use_velocity", false);
             /* Until every vertex shader are ported, we need to bridge the gap here by defining the
@@ -857,7 +862,7 @@ static SlotAllocator add_pipeline_create_info(gpu::shader::ShaderCreateInfo &inf
         case MAT_PIPE_FORWARD:
           pipeline_info_name = "eevee_surf_forward_infos_";
           info.define("closure_to_rgba", "closure_to_rgba_forward");
-          if (use_shader_to_rgba) {
+          if (use_lightitng_nodes) {
             info.define("MAT_LIGHT_ITER");
           }
           info.compilation_constant(gpu::shader::Type::bool_t, "use_velocity", false);
@@ -944,6 +949,7 @@ void ShaderModule::material_create_info_amend(GPUMaterial *gpumat, GPUCodegenOut
 
   uint64_t shader_uuid = GPU_material_uuid_get(gpumat);
   const bool use_shader_to_rgba = GPU_material_flag_get(gpumat, GPU_MATFLAG_SHADER_TO_RGBA);
+  const bool use_lighting_nodes = GPU_material_flag_get(gpumat, GPU_MATFLAG_LIGHTING);
 
   eMaterialPipeline pipeline_type;
   eMaterialGeometry geometry_type;
@@ -962,7 +968,7 @@ void ShaderModule::material_create_info_amend(GPUMaterial *gpumat, GPUCodegenOut
 
   /* WORKAROUND: Add new ob attr buffer. */
   if (GPU_material_uniform_attributes(gpumat) != nullptr ||
-      GPU_material_flag_get(gpumat, GPU_MATFLAG_SHADER_TO_RGBA))  // TODO: More precise check
+      GPU_material_flag_get(gpumat, GPU_MATFLAG_LIGHT_ATTRIBUTE))
   {
     info.additional_info("draw_object_attributes");
 
@@ -1034,7 +1040,7 @@ void ShaderModule::material_create_info_amend(GPUMaterial *gpumat, GPUCodegenOut
    * SlotAllocator. */
 
   SlotAllocator slots = add_pipeline_create_info(
-      info, pipeline_type, geometry_type, use_shader_to_rgba);
+      info, pipeline_type, geometry_type, use_shader_to_rgba, use_lighting_nodes);
 
   if (GPU_material_flag_get(gpumat, GPU_MATFLAG_SHADER_TO_RGBA)) {
     info.define("MAT_SHADER_TO_RGBA");
@@ -1145,9 +1151,7 @@ void ShaderModule::material_create_info_amend(GPUMaterial *gpumat, GPUCodegenOut
         gpu::shader::Type::bool_t, "gbuffer_simple_layout", use_simple_layout);
   }
 
-  if ((pipeline_type == MAT_PIPE_FORWARD) ||
-      GPU_material_flag_get(gpumat, GPU_MATFLAG_SHADER_TO_RGBA))
-  {
+  if ((pipeline_type == MAT_PIPE_FORWARD) || use_shader_to_rgba || use_lighting_nodes) {
     const int transmit_eval_count = (closure_bits &
                                      (CLOSURE_REFRACTION | CLOSURE_TRANSLUCENT | CLOSURE_SSS)) ?
                                         1 :

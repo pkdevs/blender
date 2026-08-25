@@ -50,9 +50,6 @@ static int node_shader_gpu_light_info(GPUMaterial *mat,
                                       GPUNodeStack *in,
                                       GPUNodeStack *out)
 {
-  // TODO: Use a different flag.
-  GPU_material_flag_set(mat, GPU_MATFLAG_SHADER_TO_RGBA);
-
   if (!in[1].link) {
     GPU_link(mat, "world_position_get", &in[1].link);
   }

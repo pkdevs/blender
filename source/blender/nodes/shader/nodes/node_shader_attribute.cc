@@ -60,6 +60,7 @@ static int node_shader_gpu_attribute(GPUMaterial *mat,
   float attr_hash = 0.0f;
 
   if (attr->type == SHD_ATTRIBUTE_LIGHT) {
+    GPU_material_flag_set(mat, GPU_MATFLAG_LIGHT_ATTRIBUTE);
     const bool use_dupli = false;
     /* Mimic gpu_node_graph_add_uniform_attribute */
     uint hash_code = BLI_ghashutil_strhash_p(attr->name) << 1 | (use_dupli ? 0 : 1);
