@@ -125,67 +125,65 @@ ProjectVariable &ProjectVariable::operator=(ProjectVariable &&other) noexcept
 
 StringRefNull ProjectVariable::name_get() const
 {
-  return StringRefNull(this->prop().name);
+  return StringRefNull(this->name);
 }
 
 ProjectVariableType ProjectVariable::type_get() const
 {
-  return ProjectVariableType(this->prop().type);
+  return ProjectVariableType(this->type);
 }
 
 ProjectVariableStringSubtype ProjectVariable::string_subtype_get() const
 {
-  return ProjectVariableStringSubtype(this->prop().ui_data->rna_subtype);
+  return ProjectVariableStringSubtype(this->ui_data->rna_subtype);
 }
 
 void ProjectVariable::string_subtype_set(ProjectVariableStringSubtype type)
 {
-  this->prop().ui_data->rna_subtype = PropertySubType(type);
+  this->ui_data->rna_subtype = PropertySubType(type);
 }
 
 StringRefNull ProjectVariable::value_string_get() const
 {
-  return StringRefNull(IDP_string_get(&this->prop()));
+  return StringRefNull(IDP_string_get(this));
 }
 
 int ProjectVariable::value_int_get() const
 {
-  return IDP_int_get(&this->prop());
+  return IDP_int_get(this);
 }
 
 float ProjectVariable::value_float_get() const
 {
-  return IDP_float_get(&this->prop());
+  return IDP_float_get(this);
 }
 
 void ProjectVariable::value_set(StringRefNull value)
 {
-  IDP_AssignString(&this->prop(), value.c_str());
+  IDP_AssignString(this, value.c_str());
 }
 
 void ProjectVariable::value_set(int value)
 {
-  IDP_int_set(&this->prop(), value);
+  IDP_int_set(this, value);
 }
 
 void ProjectVariable::value_set(float value)
 {
-  IDP_float_set(&this->prop(), value);
+  IDP_float_set(this, value);
 }
 
 StringRefNull ProjectVariable::description_get() const
 {
-  return StringRefNull(this->prop().ui_data->description);
+  return StringRefNull(this->ui_data->description);
 }
 
 void ProjectVariable::description_set(StringRef description)
 {
-  IDProperty &prop = this->prop();
-
-  MEM_delete(prop.ui_data->description);
-  prop.ui_data->description = MEM_new_array<char>(description.size() + 1,
-                                                  "ProjectVariable description");
-  description.copy_unsafe(prop.ui_data->description);
+  MEM_delete(this->ui_data->description);
+  this->ui_data->description = MEM_new_array<char>(description.size() + 1,
+                                                   "ProjectVariable description");
+  description.copy_unsafe(this->ui_data->description);
 }
 
 void BlenderProject::set_name(StringRef name)
@@ -311,11 +309,11 @@ void BlenderProject::rename_variable(int variable_index, StringRef name)
     return false;
   };
 
-  this->variables[variable_index]->name[0] = '\0';
+  this->variables[variable_index]->prop().name[0] = '\0';
   BLI_uniquename_cb(is_variable_name_used,
                     new_name.c_str(),
                     '_',
-                    this->variables[variable_index]->name,
+                    this->variables[variable_index]->prop().name,
                     sizeof(IDProperty::name));
 }
 

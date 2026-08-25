@@ -60,7 +60,7 @@ enum class ProjectVariableStringSubtype {
  * A project variable is a named value (like a string or integer)
  * that is shared across all blend files in a project.
  */
-class ProjectVariable : public IDProperty {
+class ProjectVariable : IDProperty {
  public:
   ProjectVariable(StringRef name, ProjectVariableType type);
 
@@ -70,7 +70,17 @@ class ProjectVariable : public IDProperty {
   ProjectVariable(ProjectVariable &&other) noexcept;
   ProjectVariable &operator=(ProjectVariable &&other) noexcept;
 
-  /** Get the underlying ID property of the variable. */
+  /**
+   * Get the underlying ID property of the variable.
+   *
+   * NOTE: typically you shouldn't use this, especially outside of this source
+   * file.
+   *
+   * We inherit privately from `IDProperty` because we're only using a specific
+   * subset of what it does, and we don't want people accidentally putting it
+   * in invalid states for this type. This method bypasses those protections,
+   * and should only be used in narrow specific cases.
+   */
   IDProperty &prop()
   {
     return *this;
