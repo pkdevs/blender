@@ -1,0 +1,1 @@
+Referenced by issue #158999, Any viewport "Local camera" will override render and batch render camera, if the user's cursor is on that viewport, if local camera is toggle ON on that viewport.
