@@ -23,7 +23,10 @@
 
 #include "BLI_listbase.hh"
 #include "BLI_math_geom_c.hh"
+#include "BLI_math_vector.hh"
+#include "BLI_math_vector_types.hh"
 #include "BLI_path_utils.hh"
+#include "BLI_rand_c.hh"
 #include "BLI_string_ref.hh"
 #include "BLI_string_utf8.hh"
 
@@ -972,6 +975,7 @@ static bool bake_targets_output_external(const BakeAPIRender *bkr,
 }
 
 /* Vertex Color Bake Targets */
+#define TRI_SAMPLES_NUM 32
 
 static bool bake_targets_init_vertex_colors(Main *bmain,
                                             BakeTargets *targets,
@@ -998,8 +1002,10 @@ static bool bake_targets_init_vertex_colors(Main *bmain,
   targets->material_to_image = MEM_new_array_zeroed<Image *>(ob->totcol, __func__);
   targets->materials_num = ob->totcol;
 
+  int tris_num = poly_to_tri_count(mesh->faces_num, mesh->corners_num);
+
   BakeImage *bk_image = &targets->images[0];
-  bk_image->width = std::ceil(std::sqrt(mesh->corners_num));
+  bk_image->width = std::ceil(std::sqrt(tris_num * TRI_SAMPLES_NUM));
   bk_image->height = bk_image->width;
   bk_image->offset = 0;
   bk_image->image = nullptr;
@@ -1009,44 +1015,56 @@ static bool bake_targets_init_vertex_colors(Main *bmain,
   return true;
 }
 
-static int find_original_loop(const OffsetIndices<int> orig_faces,
-                              const Span<int> orig_corner_verts,
-                              const int *vert_origindex,
-                              const int *poly_origindex,
-                              const int poly_eval,
-                              const int vert_eval)
-{
-  /* Get original vertex and face index. There is currently no loop mapping
-   * in modifier stack evaluation. */
-  const int vert_orig = vert_origindex[vert_eval];
-  const int poly_orig_index = poly_origindex[poly_eval];
-
-  if (vert_orig == ORIGINDEX_NONE || poly_orig_index == ORIGINDEX_NONE) {
-    return ORIGINDEX_NONE;
-  }
-
-  /* Find matching loop with original vertex in original face. */
-  const IndexRange orig_face = orig_faces[poly_orig_index];
-  const int *poly_verts_orig = &orig_corner_verts[orig_face.start()];
-  for (int j = 0; j < orig_face.size(); ++j) {
-    if (poly_verts_orig[j] == vert_orig) {
-      return orig_face.start() + j;
-    }
-  }
-
-  return ORIGINDEX_NONE;
-}
-
 static void bake_targets_populate_pixels_color_attributes(BakeTargets *targets,
-                                                          Object *ob,
                                                           Mesh *mesh_eval,
                                                           BakePixel *pixel_array)
 {
-  Mesh *mesh = id_cast<Mesh *>(ob->data);
   const int pixels_num = targets->pixels_num;
+  const int tris_num = poly_to_tri_count(mesh_eval->faces_num, mesh_eval->corners_num);
+  const float deriv = 1.0f / sqrtf(TRI_SAMPLES_NUM);
 
-  /* Initialize blank pixels. */
-  for (int i = 0; i < pixels_num; i++) {
+  /* Precalculate fixed uv sequence for all triangles. */
+  Array<float2> uvs(TRI_SAMPLES_NUM);
+
+  double halton[2];
+  uint primes[2] = {2, 3};
+  double ofs[2] = {0, 0};
+
+  for (int sample = 0; sample < TRI_SAMPLES_NUM; sample++) {
+    BLI_halton_2d(primes, ofs, 1, halton);
+
+    if (halton[0] + halton[1] > 1) {
+      halton[0] = 1 - halton[0];
+      halton[1] = 1 - halton[1];
+    }
+
+    uvs[sample] = float2(halton[0], halton[1]);
+  }
+
+  /* Populate through triangles. */
+  for (int tri = 0; tri < tris_num; tri++) {
+    for (int sample = 0; sample < TRI_SAMPLES_NUM; sample++) {
+      const size_t index = size_t(tri) * TRI_SAMPLES_NUM + sample;
+      BakePixel *pixel = &pixel_array[index];
+
+      pixel->primitive_id = tri;
+      pixel->object_id = 0;
+      pixel->seed = int(index);
+
+      pixel->du_dx = deriv;
+      pixel->dv_dx = -deriv;
+      pixel->du_dy = deriv;
+      pixel->dv_dy = deriv;
+
+      pixel->uv[0] = uvs[sample].x;
+      pixel->uv[1] = uvs[sample].y;
+
+      pixel->is_margin = false;
+    }
+  }
+
+  /* Initialize empty blank pixels. */
+  for (size_t i = size_t(tris_num) * TRI_SAMPLES_NUM; i < pixels_num; i++) {
     BakePixel *pixel = &pixel_array[i];
 
     pixel->primitive_id = -1;
@@ -1060,93 +1078,22 @@ static void bake_targets_populate_pixels_color_attributes(BakeTargets *targets,
     pixel->uv[1] = 0.0f;
     pixel->is_margin = false;
   }
-
-  /* Populate through adjacent triangles, first triangle wins. */
-  const int corner_tris_num = poly_to_tri_count(mesh_eval->faces_num, mesh_eval->corners_num);
-  int3 *corner_tris = MEM_new_array_uninitialized<int3>(corner_tris_num, __func__);
-
-  const Span<int> corner_verts = mesh_eval->corner_verts();
-  bke::mesh::corner_tris_calc(mesh_eval->vert_positions(),
-                              mesh_eval->faces(),
-                              corner_verts,
-                              {corner_tris, corner_tris_num});
-  const Span<int> tri_faces = mesh_eval->corner_tri_faces();
-
-  /* For mapping back to original mesh in case there are modifiers. */
-  const int *vert_origindex = static_cast<const int *>(
-      CustomData_get_layer(&mesh_eval->vert_data, CD_ORIGINDEX));
-  const int *poly_origindex = static_cast<const int *>(
-      CustomData_get_layer(&mesh_eval->face_data, CD_ORIGINDEX));
-  const OffsetIndices orig_faces = mesh->faces();
-  const Span<int> orig_corner_verts = mesh->corner_verts();
-
-  for (int i = 0; i < corner_tris_num; i++) {
-    const int3 &tri = corner_tris[i];
-    const int face_i = tri_faces[i];
-
-    for (int j = 0; j < 3; j++) {
-      uint l = tri[j];
-      const int v = corner_verts[l];
-
-      /* Map back to original loop if there are modifiers. */
-      if (vert_origindex != nullptr && poly_origindex != nullptr) {
-        l = find_original_loop(
-            orig_faces, orig_corner_verts, vert_origindex, poly_origindex, face_i, v);
-        if (l == ORIGINDEX_NONE || l >= mesh->corners_num) {
-          continue;
-        }
-      }
-
-      BakePixel *pixel = &pixel_array[l];
-
-      if (pixel->primitive_id != -1) {
-        continue;
-      }
-
-      pixel->primitive_id = i;
-
-      /* Seed is the vertex, so that sampling noise is coherent for the same
-       * vertex, but different corners can still have different normals,
-       * materials and UVs. */
-      pixel->seed = v;
-
-      /* Barycentric coordinates. */
-      if (j == 0) {
-        pixel->uv[0] = 1.0f;
-        pixel->uv[1] = 0.0f;
-      }
-      else if (j == 1) {
-        pixel->uv[0] = 0.0f;
-        pixel->uv[1] = 1.0f;
-      }
-      else if (j == 2) {
-        pixel->uv[0] = 0.0f;
-        pixel->uv[1] = 0.0f;
-      }
-    }
-  }
-
-  MEM_delete(corner_tris);
 }
 
-static void bake_result_add_to_rgba(float rgba[4], const float *result, const int channels_num)
+static float4 bake_result_to_rgba(const float *result, const int channels_num)
 {
   if (channels_num == 4) {
-    add_v4_v4(rgba, result);
+    return float4(result[0], result[1], result[2], result[3]);
   }
   else if (channels_num == 3) {
-    add_v3_v3(rgba, result);
-    rgba[3] += 1.0f;
+    return float4(result[0], result[1], result[2], 1);
   }
   else {
-    rgba[0] += result[0];
-    rgba[1] += result[0];
-    rgba[2] += result[0];
-    rgba[3] += 1.0f;
+    return float4(result[0], result[0], result[0], 1);
   }
 }
 
-static void convert_float_color_to_byte_color(const ColorGeometry4f *float_colors,
+static void convert_float_color_to_byte_color(const float4 *float_colors,
                                               const int num,
                                               const bool is_noncolor,
                                               ColorGeometry4b *byte_colors)
@@ -1163,8 +1110,366 @@ static void convert_float_color_to_byte_color(const ColorGeometry4f *float_color
   }
 }
 
-static bool bake_targets_output_vertex_colors(BakeTargets *targets, Object *ob)
+static float3 tri_grad(const float3 &basis_1, const float3 &basis_2, float x0, float x1, float x2)
 {
+  return (x1 - x0) * basis_1 + (x2 - x0) * basis_2;
+}
+
+static void calculate_vertex_colors_least_squares(Mesh *mesh,
+                                                  Array<float4> &colors,
+                                                  const bke::AttrDomain domain,
+                                                  const BakeTargets *targets,
+                                                  const BakePixel *pixel_array)
+{
+  const int channels_num = targets->channels_num;
+  const float *result = targets->result;
+
+  const Span<int> corner_verts = mesh->corner_verts();
+  const Span<float3> vert_positions = mesh->vert_positions();
+
+  const int tris_num = poly_to_tri_count(mesh->faces_num, mesh->corners_num);
+  Array<int3> corner_tris(tris_num);
+  bke::mesh::corner_tris_calc(vert_positions, mesh->faces(), corner_verts, corner_tris);
+
+  /* Precalculate data for vertex color calculation. */
+  typedef struct {
+    float area;
+    /* Data term. */
+    float4 sum_col_bary[3];
+    /* Smoothness term. */
+    float3 grad_basis[2];
+    float3 bary_grad[3];
+  } TriangleData;
+
+  typedef struct {
+    int tri;
+    int tri_corner;
+  } TriContributionData;
+
+  typedef struct {
+    int tris[2];
+    int tri_corners[2];
+  } EdgeContributionData;
+
+  Array<TriangleData> tris_data(tris_num);
+
+  Vector<float> colors_denom(colors.size(), 0);
+  Array<Vector<TriContributionData>> col_tris(colors.size());
+  Array<Vector<EdgeContributionData>> col_edges(colors.size());
+
+  Array<float4> local_min(colors.size(), float4(FLT_MAX));
+  Array<float4> local_max(colors.size(), float4(-FLT_MAX));
+
+  float4 global_min(FLT_MAX), global_max(-FLT_MAX);
+
+  /* Since we use the same uv sequence for all triangles, we can
+   * calculate sum_bary, sum_bary_sq and sum_bary_bary once and reuse for all triangles. */
+  float3 sum_bary(0), sum_bary_sq(0), sum_bary_bary(0);
+
+  if (tris_num > 0) {
+    for (int sample = 0; sample < TRI_SAMPLES_NUM; sample++) {
+      const size_t index = sample;
+      const BakePixel *pixel = &pixel_array[index];
+
+      const float3 w = float3(pixel->uv[0], pixel->uv[1], 1.0f - pixel->uv[0] - pixel->uv[1]);
+
+      sum_bary_bary[0] += w[0] * w[1];
+      sum_bary_bary[1] += w[0] * w[2];
+      sum_bary_bary[2] += w[1] * w[2];
+
+      for (int corner = 0; corner < 3; corner++) {
+        sum_bary[corner] += w[corner];
+        sum_bary_sq[corner] += w[corner] * w[corner];
+      }
+    }
+
+    sum_bary /= TRI_SAMPLES_NUM;
+    sum_bary_sq /= TRI_SAMPLES_NUM;
+    sum_bary_bary /= TRI_SAMPLES_NUM;
+  }
+
+  for (int tri = 0; tri < tris_num; tri++) {
+    float4 sample_min(FLT_MAX), sample_max(-FLT_MAX);
+
+    /* Precalculate data for data term. */
+    float4 sum_col(0);
+    float4 sum_col_bary[3] = {float4(0), float4(0), float4(0)};
+
+    for (int sample = 0; sample < TRI_SAMPLES_NUM; sample++) {
+      const size_t index = size_t(tri) * TRI_SAMPLES_NUM + sample;
+      const BakePixel *pixel = &pixel_array[index];
+
+      const float4 col = bake_result_to_rgba(&result[index * channels_num], channels_num);
+
+      sample_min = math::min(sample_min, col);
+      sample_max = math::max(sample_max, col);
+
+      const float3 w = float3(pixel->uv[0], pixel->uv[1], 1.0f - pixel->uv[0] - pixel->uv[1]);
+
+      sum_col += col;
+
+      sum_col_bary[0] += w[0] * col;
+      sum_col_bary[1] += w[1] * col;
+      sum_col_bary[2] += w[2] * col;
+    }
+
+    sum_col /= TRI_SAMPLES_NUM;
+    sum_col_bary[0] /= TRI_SAMPLES_NUM;
+    sum_col_bary[1] /= TRI_SAMPLES_NUM;
+    sum_col_bary[2] /= TRI_SAMPLES_NUM;
+
+    /* Precalculate data for smoothness term. */
+    const int3 tri_corners = corner_tris[tri];
+
+    const float3 v0 = vert_positions[corner_verts[tri_corners[0]]];
+    const float3 v1 = vert_positions[corner_verts[tri_corners[1]]];
+    const float3 v2 = vert_positions[corner_verts[tri_corners[2]]];
+
+    const float3 d1 = v0 - v2;
+    const float3 d2 = v1 - v0;
+    const float3 n = math::cross(d1, d2);
+
+    const float n_len_sqr = math::length_squared(n);
+    const float area = 0.5f * sqrtf(n_len_sqr);
+
+    const float3 grad_basis_1 = math::safe_divide(math::cross(n, d1), n_len_sqr) * sqrtf(area);
+    const float3 grad_basis_2 = math::safe_divide(math::cross(n, d2), n_len_sqr) * sqrtf(area);
+
+    /* Store data for both terms. */
+    TriangleData tri_data;
+
+    tri_data.area = area;
+
+    tri_data.sum_col_bary[0] = sum_col_bary[0];
+    tri_data.sum_col_bary[1] = sum_col_bary[1];
+    tri_data.sum_col_bary[2] = sum_col_bary[2];
+
+    tri_data.grad_basis[0] = grad_basis_1;
+    tri_data.grad_basis[1] = grad_basis_2;
+
+    tri_data.bary_grad[0] = tri_grad(grad_basis_1, grad_basis_2, 1, 0, 0);
+    tri_data.bary_grad[1] = tri_grad(grad_basis_1, grad_basis_2, 0, 1, 0);
+    tri_data.bary_grad[2] = tri_grad(grad_basis_1, grad_basis_2, 0, 0, 1);
+
+    tris_data[tri] = tri_data;
+
+    /* For initial estimate calculate vertex colors for each triange
+     * using 3 simple linear regressions and average based on triangle area.
+     * Triangle corner colors is also used for local clamping in the
+     * subsequent calculation to reduce ringing artefacts. */
+    int3 color_idx = tri_corners;
+
+    if (domain == bke::AttrDomain::Point) {
+      color_idx.x = corner_verts[color_idx.x];
+      color_idx.y = corner_verts[color_idx.y];
+      color_idx.z = corner_verts[color_idx.z];
+    }
+
+    for (int corner = 0; corner < 3; corner++) {
+      const float4 beta_num = sum_col_bary[corner] - sum_bary[corner] * sum_col;
+      const float beta_denom = sum_bary_sq[corner] - sum_bary[corner] * sum_bary[corner];
+      const float4 beta = math::safe_divide(beta_num, beta_denom);
+      const float4 alpha = sum_col - beta * sum_bary[corner];
+
+      const float4 approx_color = math::clamp(alpha + beta, sample_min, sample_max);
+
+      const int col_index = color_idx[corner];
+
+      colors[col_index] += approx_color * area;
+      colors_denom[col_index] += area;
+
+      /* Calculated corner colors should have less noise than sample colors. */
+      local_min[col_index] = math::min(local_min[col_index], approx_color);
+      local_max[col_index] = math::max(local_max[col_index], approx_color);
+    }
+
+    global_min = math::min(global_min, sample_min);
+    global_max = math::max(global_max, sample_max);
+
+    /* Add triangle and edge contributions to colors. */
+    for (int corner = 0; corner < 3; corner++) {
+      const int col_index = color_idx[corner];
+      const int next_col_tri_1 = color_idx[(corner + 1) % 3];
+      const int prev_col_tri_1 = color_idx[(corner + 2) % 3];
+
+      Vector<TriContributionData> &tri_contrib = col_tris[col_index];
+      Vector<EdgeContributionData> &edge_contrib = col_edges[col_index];
+
+      for (int i = 0; i < tri_contrib.size(); i++) {
+        const int tri_2 = tri_contrib[i].tri;
+        const int corner_2 = tri_contrib[i].tri_corner;
+
+        const int3 tri_corners_2 = corner_tris[tri_2];
+        int next_col_tri_2 = tri_corners_2[(corner_2 + 1) % 3];
+        int prev_col_tri_2 = tri_corners_2[(corner_2 + 2) % 3];
+
+        if (domain == bke::AttrDomain::Point) {
+          prev_col_tri_2 = corner_verts[prev_col_tri_2];
+          next_col_tri_2 = corner_verts[next_col_tri_2];
+        }
+
+        if (prev_col_tri_1 != next_col_tri_2 && next_col_tri_1 != prev_col_tri_2) {
+          continue;
+        }
+
+        edge_contrib.append(EdgeContributionData({tri, tri_2}, {corner, corner_2}));
+      }
+
+      tri_contrib.append(TriContributionData(tri, corner));
+    }
+  }
+
+  for (int i = 0; i < colors.size(); i++) {
+    colors[i] *= math::safe_divide(1.0f, colors_denom[i]);
+  }
+
+  colors_denom.clear_and_shrink();
+
+  /* Use Gauss-Seidel method to calculate vertex colors for the whole mesh
+   * with edge-based regularization. */
+  const int iters_num = 15;
+  const float alpha = 0.1f;
+
+  for (int iter = 0; iter < iters_num; iter++) {
+    for (int col_index = 0; col_index < colors.size(); col_index++) {
+      /* Data term. */
+      float4 data(0);
+      float data_denom = 0;
+
+      const Vector<TriContributionData> &tri_contrib = col_tris[col_index];
+
+      for (int i = 0; i < tri_contrib.size(); i++) {
+        const int tri_index = tri_contrib[i].tri;
+        const int corner_index = tri_contrib[i].tri_corner;
+
+        int3 col_idx = corner_tris[tri_index];
+
+        if (domain == bke::AttrDomain::Point) {
+          col_idx.x = corner_verts[col_idx.x];
+          col_idx.y = corner_verts[col_idx.y];
+          col_idx.z = corner_verts[col_idx.z];
+        }
+
+        /* Subtract from each sample color contribution from other vertices.
+         * Contribution from other vertices is a summ of other vertex colors
+         * multiplied by their barycentric coordinates.
+         * Remainder is ~ current vertex color multiplied by it's barycentic
+         * coefficient, so denominator must contain current vertex barycentric coeff.
+         * We also need to multiply both numerator and denominator by current
+         * vertex barycentric coefficient to weight samples closer to current
+         * vertex higher. */
+        const float area = tris_data[tri_index].area;
+        const float4 sum_col_bary = tris_data[tri_index].sum_col_bary[corner_index];
+
+        float4 sum_others_bary;
+
+        if (corner_index == 0) {
+          sum_others_bary = colors[col_idx[1]] * sum_bary_bary[0] +
+                            colors[col_idx[2]] * sum_bary_bary[1];
+        }
+        else if (corner_index == 1) {
+          sum_others_bary = colors[col_idx[0]] * sum_bary_bary[0] +
+                            colors[col_idx[2]] * sum_bary_bary[2];
+        }
+        else {
+          sum_others_bary = colors[col_idx[0]] * sum_bary_bary[1] +
+                            colors[col_idx[1]] * sum_bary_bary[2];
+        }
+
+        data += (sum_col_bary - sum_others_bary) * area;
+        data_denom += sum_bary_sq[corner_index] * area;
+      }
+
+      /* Smoothness term. */
+      float4 smooth(0);
+      float smooth_denom = 0;
+
+      if (alpha > 0) {
+        const Vector<EdgeContributionData> &edge_contrib = col_edges[col_index];
+
+        for (int i = 0; i < edge_contrib.size(); i++) {
+          const int tri_1 = edge_contrib[i].tris[0];
+          const int tri_2 = edge_contrib[i].tris[1];
+
+          const int corner_1 = edge_contrib[i].tri_corners[0];
+          const int corner_2 = edge_contrib[i].tri_corners[1];
+
+          const float w = tris_data[tri_1].area + tris_data[tri_2].area;
+
+          const float3 bary_grad_1 = tris_data[tri_1].bary_grad[corner_1];
+          const float3 bary_grad_2 = tris_data[tri_2].bary_grad[corner_2];
+
+          const float3 bary_grad_d = bary_grad_1 - bary_grad_2;
+          const float bary_grad_d_len_sqr = math::length_squared(bary_grad_d);
+
+          smooth_denom += w * bary_grad_d_len_sqr;
+
+          const float3 tri_1_grad_basis_1 = tris_data[tri_1].grad_basis[0];
+          const float3 tri_1_grad_basis_2 = tris_data[tri_1].grad_basis[1];
+
+          const float3 tri_2_grad_basis_1 = tris_data[tri_2].grad_basis[0];
+          const float3 tri_2_grad_basis_2 = tris_data[tri_2].grad_basis[1];
+
+          int3 col_idx_tri_1 = corner_tris[tri_1];
+          int3 col_idx_tri_2 = corner_tris[tri_2];
+
+          if (domain == bke::AttrDomain::Point) {
+            col_idx_tri_1.x = corner_verts[col_idx_tri_1.x];
+            col_idx_tri_1.y = corner_verts[col_idx_tri_1.y];
+            col_idx_tri_1.z = corner_verts[col_idx_tri_1.z];
+
+            col_idx_tri_2.x = corner_verts[col_idx_tri_2.x];
+            col_idx_tri_2.y = corner_verts[col_idx_tri_2.y];
+            col_idx_tri_2.z = corner_verts[col_idx_tri_2.z];
+          }
+
+          const float4 tri_1_cols[3] = {
+              colors[col_idx_tri_1.x], colors[col_idx_tri_1.y], colors[col_idx_tri_1.z]};
+
+          const float4 tri_2_cols[3] = {
+              colors[col_idx_tri_2.x], colors[col_idx_tri_2.y], colors[col_idx_tri_2.z]};
+
+          for (int ch = 0; ch < channels_num; ch++) {
+            const float3 tri_1_grad = tri_grad(tri_1_grad_basis_1,
+                                               tri_1_grad_basis_2,
+                                               tri_1_cols[0][ch],
+                                               tri_1_cols[1][ch],
+                                               tri_1_cols[2][ch]);
+
+            const float3 tri_2_grad = tri_grad(tri_2_grad_basis_1,
+                                               tri_2_grad_basis_2,
+                                               tri_2_cols[0][ch],
+                                               tri_2_cols[1][ch],
+                                               tri_2_cols[2][ch]);
+
+            const float3 grad_d = tri_1_grad - tri_2_grad;
+            smooth[ch] -= w * math::dot(grad_d, bary_grad_d);
+          }
+        }
+      }
+
+      /* Clamp data term separately to reduce ringing artefacts without
+       * destroying edge-based regularization smoothing. */
+      data = math::clamp(math::safe_divide(data, data_denom),
+                         local_min[col_index],
+                         local_max[col_index]) * data_denom;
+
+      /* Then calculate final color and clamp it using global bounds to avoid
+       * values exceeding expected range. */
+      const float4 num = data + alpha * (smooth + colors[col_index] * smooth_denom);
+      const float denom = data_denom + alpha * smooth_denom;
+      data = math::safe_divide(num, denom);
+
+      colors[col_index] = math::clamp(data, global_min, global_max);
+    }
+  }
+}
+
+static bool bake_targets_output_vertex_colors(BakeTargets *targets,
+                                              Object *ob,
+                                              BakePixel *pixel_array)
+{
+
   Mesh *mesh = id_cast<Mesh *>(ob->data);
   const StringRef attr_name = mesh->active_color_attribute;
   const bke::AttrDomain domain = [&]() {
@@ -1175,66 +1480,61 @@ static bool bake_targets_output_vertex_colors(BakeTargets *targets, Object *ob)
     return attributes.lookup_meta_data(attr_name)->domain;
   }();
 
-  const int channels_num = targets->channels_num;
-  const bool is_noncolor = targets->is_noncolor;
-  const float *result = targets->result;
+  int cols_num;
 
   if (domain == bke::AttrDomain::Point) {
-    const int totvert = mesh->verts_num;
-    const int totloop = mesh->corners_num;
+    cols_num = mesh->verts_num;
+  }
+  else if (domain == bke::AttrDomain::Corner) {
+    cols_num = mesh->corners_num;
+  }
+  else {
+    return true;
+  }
 
-    ColorGeometry4f *mcol = MEM_new_array_zeroed<ColorGeometry4f>(totvert, __func__);
+  Array<float4> colors(cols_num, float4(0));
+  calculate_vertex_colors_least_squares(mesh, colors, domain, targets, pixel_array);
+  
+  const bool is_noncolor = targets->is_noncolor;
 
-    /* Accumulate float vertex colors in scene linear color space. */
-    int *num_loops_for_vertex = MEM_new_array_zeroed<int>(mesh->verts_num, "num_loops_for_vertex");
-
-    const Span<int> corner_verts = mesh->corner_verts();
-    for (int i = 0; i < totloop; i++) {
-      const int v = corner_verts[i];
-      bake_result_add_to_rgba(mcol[v], &result[i * channels_num], channels_num);
-      num_loops_for_vertex[v]++;
-    }
-
-    /* Normalize for number of loops. */
-    for (int i = 0; i < totvert; i++) {
-      if (num_loops_for_vertex[i] > 0) {
-        mul_v4_fl(mcol[i], 1.0f / num_loops_for_vertex[i]);
-      }
-    }
-
+  if (domain == bke::AttrDomain::Point) {
     if (BMEditMesh *em = mesh->runtime->edit_mesh.get()) {
       const BMDataLayerLookup attr = BM_data_layer_lookup(*em->bm, attr_name);
       BMVert *v;
       BMIter viter;
       int i = 0;
       BM_ITER_MESH (v, &viter, em->bm, BM_VERTS_OF_MESH) {
+        float4 color = colors[i];
+        i++;
+
+        if (!BM_elem_flag_test(v, BM_ELEM_SELECT)) {
+          continue;
+        }
+
         void *data = BM_ELEM_CD_GET_VOID_P(v, attr.offset);
         if (attr.type == bke::AttrType::ColorFloat) {
-          memcpy(data, &mcol[i], sizeof(MPropCol));
+          memcpy(data, &color, sizeof(MPropCol));
         }
         else if (attr.type == bke::AttrType::ColorByte) {
           convert_float_color_to_byte_color(
-              &mcol[i], 1, is_noncolor, static_cast<ColorGeometry4b *>(data));
+              &color, 1, is_noncolor, static_cast<ColorGeometry4b *>(data));
         }
-        i++;
       }
     }
     else {
       bke::MutableAttributeAccessor attributes = mesh->attributes_for_write();
       bke::GSpanAttributeWriter attr = attributes.lookup_for_write_span(attr_name);
       if (attr.span.type().is<ColorGeometry4f>()) {
-        memcpy(attr.span.data(), mcol, sizeof(ColorGeometry4f) * mesh->verts_num);
+        memcpy(attr.span.data(), &colors[0], sizeof(ColorGeometry4f) * mesh->verts_num);
       }
       else if (attr.span.type().is<ColorGeometry4b>()) {
-        convert_float_color_to_byte_color(
-            mcol, totvert, is_noncolor, static_cast<ColorGeometry4b *>(attr.span.data()));
+        convert_float_color_to_byte_color(&colors[0],
+                                          mesh->verts_num,
+                                          is_noncolor,
+                                          static_cast<ColorGeometry4b *>(attr.span.data()));
       }
       attr.finish();
     }
-
-    MEM_delete(mcol);
-
-    MEM_SAFE_DELETE(num_loops_for_vertex);
   }
   else if (domain == bke::AttrDomain::Corner) {
     if (BMEditMesh *em = mesh->runtime->edit_mesh.get()) {
@@ -1246,10 +1546,12 @@ static bool bake_targets_output_vertex_colors(BakeTargets *targets, Object *ob)
         BMLoop *l;
         BMIter liter;
         BM_ITER_ELEM (l, &liter, f, BM_LOOPS_OF_FACE) {
-          ColorGeometry4f color;
-          zero_v4(color);
-          bake_result_add_to_rgba(color, &result[i * channels_num], channels_num);
+          float4 color = colors[i];
           i++;
+
+          if (!BM_elem_flag_test(l, BM_ELEM_SELECT)) {
+            continue;
+          }
 
           void *data = BM_ELEM_CD_GET_VOID_P(l, attr.offset);
           if (attr.type == bke::AttrType::ColorFloat) {
@@ -1266,19 +1568,12 @@ static bool bake_targets_output_vertex_colors(BakeTargets *targets, Object *ob)
       bke::MutableAttributeAccessor attributes = mesh->attributes_for_write();
       bke::GSpanAttributeWriter attr = attributes.lookup_for_write_span(attr_name);
       if (attr.span.type().is<ColorGeometry4f>()) {
-        MutableSpan colors = attr.span.typed<ColorGeometry4f>();
-        for (int i = 0; i < mesh->corners_num; i++) {
-          zero_v4(colors[i]);
-          bake_result_add_to_rgba(colors[i], &result[i * channels_num], channels_num);
-        }
+        memcpy(attr.span.data(), &colors[0], sizeof(ColorGeometry4f) * mesh->corners_num);
       }
       else if (attr.span.type().is<ColorGeometry4b>()) {
-        MutableSpan colors = attr.span.typed<ColorGeometry4b>();
+        MutableSpan span_colors = attr.span.typed<ColorGeometry4b>();
         for (int i = 0; i < mesh->corners_num; i++) {
-          ColorGeometry4f color;
-          zero_v4(color);
-          bake_result_add_to_rgba(color, &result[i * channels_num], channels_num);
-          convert_float_color_to_byte_color(&color, 1, is_noncolor, &colors[i]);
+          convert_float_color_to_byte_color(&colors[i], 1, is_noncolor, &span_colors[i]);
         }
       }
       attr.finish();
@@ -1330,12 +1625,11 @@ static bool bake_targets_init(const BakeAPIRender *bkr,
 
 static void bake_targets_populate_pixels(const BakeAPIRender *bkr,
                                          BakeTargets *targets,
-                                         Object *ob,
                                          Mesh *mesh_eval,
                                          BakePixel *pixel_array)
 {
   if (bkr->target == R_BAKE_TARGET_VERTEX_COLORS) {
-    bake_targets_populate_pixels_color_attributes(targets, ob, mesh_eval, pixel_array);
+    bake_targets_populate_pixels_color_attributes(targets, mesh_eval, pixel_array);
   }
   else {
     RE_bake_pixels_populate(
@@ -1361,7 +1655,7 @@ static bool bake_targets_output(const BakeAPIRender *bkr,
     }
   }
   else if (bkr->target == R_BAKE_TARGET_VERTEX_COLORS) {
-    return bake_targets_output_vertex_colors(targets, ob);
+    return bake_targets_output_vertex_colors(targets, ob, pixel_array);
   }
 
   return false;
@@ -1516,7 +1810,7 @@ static wmOperatorStatus bake(const BakeAPIRender *bkr,
                   ob_low->id.name + 2);
       goto cleanup;
     }
-    bake_targets_populate_pixels(bkr, &targets, ob_low, me_low_eval, pixel_array_low);
+    bake_targets_populate_pixels(bkr, &targets, me_low_eval, pixel_array_low);
   }
 
   if (bkr->is_selected_to_active) {
@@ -1576,7 +1870,7 @@ static wmOperatorStatus bake(const BakeAPIRender *bkr,
                     ob_low->id.name + 2);
         goto cleanup;
       }
-      bake_targets_populate_pixels(bkr, &targets, ob_low, me_cage_eval, pixel_array_low);
+      bake_targets_populate_pixels(bkr, &targets, me_cage_eval, pixel_array_low);
     }
 
     highpoly = MEM_new_array_zeroed<BakeHighPolyData>(highpoly_num, "bake high poly objects");
@@ -1765,7 +2059,7 @@ static wmOperatorStatus bake(const BakeAPIRender *bkr,
               BKE_id_free(nullptr, &me_nores->id);
               goto cleanup;
             }
-            bake_targets_populate_pixels(bkr, &targets, ob_low, me_nores, pixel_array_low);
+            bake_targets_populate_pixels(bkr, &targets, me_nores, pixel_array_low);
           }
 
           RE_bake_normal_world_to_tangent(pixel_array_low,
