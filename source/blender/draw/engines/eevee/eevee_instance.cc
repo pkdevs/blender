@@ -87,7 +87,9 @@ void Instance::init()
     if (rv3d && (rv3d->persp == RV3D_CAMOB)) {
       camera = v3d->camera;
     }
-    /* Panoramic camera need the full film, none of the border resize below apply. */
+    /* Panoramic camera need the full film, none of the border resize below apply.
+     * TODO: passepartout crop is unsupported for panoramic camera.
+     * Could reuse the uv_scale/uv_bias remap already used for camera shift (see Camera::sync). */
     const bool is_panoramic_camera =
         camera && camera->type == OB_CAMERA &&
         reinterpret_cast<const blender::Camera *>(camera->data)->type == CAM_PANO;

@@ -242,6 +242,10 @@ void Camera::sync()
     const blender::Camera *cam = reinterpret_cast<const blender::Camera *>(camera_eval->data);
     data.clip_near = cam->clip_start;
     data.clip_far = cam->clip_end;
+    if (this->is_panoramic()) {
+      /* Panoramic projection doesn't use winmat so offset the shared uv_bias instead. */
+      data.uv_bias += float2(cam->shiftx, cam->shifty);
+    }
     if (data.type == CAMERA_PANO_EQUIRECT) {
       data.equirect_bias.x = -cam->longitude_min + M_PI_2;
       data.equirect_bias.y = -cam->latitude_min + M_PI_2;
