@@ -70,19 +70,20 @@ static wmOperatorStatus edbm_fit_edge_loops_to_curve_exec(bContext *C, wmOperato
   for (Object *obedit : objects) {
     BMEditMesh *em = BKE_editmesh_from_object(obedit);
 
-    if (!EDBM_op_callf(em,
-                       op,
-                       "fit_edge_loops_to_curve geom=%hv factor=%f restriction=%i extend=%b regular=%b "
-                       "lock_x=%b lock_y=%b lock_z=%b interpolation=%i",
-                       BM_ELEM_SELECT,
-                       factor,
-                       restriction,
-                       extend,
-                       regular,
-                       lock[0],
-                       lock[1],
-                       lock[2],
-                       interpolation))
+    if (!EDBM_op_callf(
+            em,
+            op,
+            "fit_edge_loops_to_curve geom=%hv factor=%f restriction=%i extend=%b regular=%b "
+            "lock_x=%b lock_y=%b lock_z=%b interpolation=%i",
+            BM_ELEM_SELECT,
+            factor,
+            restriction,
+            extend,
+            regular,
+            lock[0],
+            lock[1],
+            lock[2],
+            interpolation))
     {
       continue;
     }

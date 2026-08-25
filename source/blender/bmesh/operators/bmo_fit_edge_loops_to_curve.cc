@@ -4,7 +4,7 @@
 
 /** \file
  * \ingroup bmesh
- * 
+ *
  * Fits the unselected edge loops to a curve defined by the selected vertices.
  */
 #include "BLI_math_vector.hh"
