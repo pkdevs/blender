@@ -229,10 +229,10 @@ std::pair<int, int> transition_handles_clamp(const Scene *scene,
   return {left_clamped, right_clamped};
 }
 
-std::optional<StringRefNull> overlap_transition_validate(Scene *scene,
-                                                         const Strip *input1,
-                                                         const Strip *input2,
-                                                         int length)
+static std::optional<StringRefNull> overlap_transition_validate(Scene *scene,
+                                                                const Strip *input1,
+                                                                const Strip *input2,
+                                                                int length)
 {
   // this should also check that input1 comes before input2
   if (length < 2) {

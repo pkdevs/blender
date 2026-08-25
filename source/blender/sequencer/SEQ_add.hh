@@ -164,10 +164,6 @@ std::pair<int, int> transition_handles_clamp(const Scene *scene,
                                              const Strip *input1,
                                              const Strip *input2,
                                              std::pair<int, int> original_handles);
-std::optional<StringRefNull> overlap_transition_validate(Scene *scene,
-                                                         const Strip *input1,
-                                                         const Strip *input2,
-                                                         int length);
 /**
  * Add effect strip.
  *
