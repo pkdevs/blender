@@ -899,7 +899,7 @@ static ShaderNode *add_node(Scene *scene,
   }
   else if (b_node.is_type("ShaderNodeTexImage"_ustr)) {
     const auto &storage = *static_cast<blender::NodeTexImage *>(b_node.storage);
-    blender::Image *b_image = blender::id_cast<blender::Image *>(b_node.id);
+    blender::Image *b_image = blender::node_tex_image_get_image(b_node);
     blender::ImageUser &b_image_user = const_cast<blender::ImageUser &>(storage.iuser);
     ImageTextureNode *image = graph->create_node<ImageTextureNode>();
 
@@ -974,7 +974,7 @@ static ShaderNode *add_node(Scene *scene,
   }
   else if (b_node.is_type("ShaderNodeTexEnvironment"_ustr)) {
     const auto &storage = *static_cast<blender::NodeTexEnvironment *>(b_node.storage);
-    blender::Image *b_image = blender::id_cast<blender::Image *>(b_node.id);
+    blender::Image *b_image = blender::node_tex_image_get_image(b_node);
     blender::ImageUser &b_image_user = const_cast<blender::ImageUser &>(storage.iuser);
     EnvironmentTextureNode *env = graph->create_node<EnvironmentTextureNode>();
 

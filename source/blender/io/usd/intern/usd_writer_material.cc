@@ -18,6 +18,8 @@
 #include "BKE_node_runtime.hh"
 #include "BKE_report.hh"
 
+#include "NOD_shader.h"
+
 #include "IMB_colormanagement.hh"
 #include "IMB_imbuf.hh"
 
@@ -1185,7 +1187,7 @@ static pxr::UsdShadeShader create_usd_preview_shader(const USDExporterContext &u
         .Set(pxr::SdfAssetPath(imagePath));
   }
 
-  io::usd::colorspace_from_image_texture(reinterpret_cast<const Image *>(node->id), shader);
+  io::usd::colorspace_from_image_texture(node_tex_image_get_image(*node), shader);
 
   pxr::TfToken wrap = get_node_tex_image_wrap(node);
   if (!wrap.IsEmpty()) {
@@ -1315,7 +1317,7 @@ std::string get_tex_image_asset_filepath(const bNode *node,
                                          const pxr::UsdStageRefPtr stage,
                                          const USDExportParams &export_params)
 {
-  Image *ima = reinterpret_cast<Image *>(node->id);
+  Image *ima = node_tex_image_get_image(*node);
   return get_tex_image_asset_filepath(ima, stage, export_params);
 }
 
@@ -1464,7 +1466,7 @@ void export_texture(bNode *node,
     return;
   }
 
-  Image *ima = reinterpret_cast<Image *>(node->id);
+  Image *ima = node_tex_image_get_image(*node);
   if (!ima) {
     return;
   }

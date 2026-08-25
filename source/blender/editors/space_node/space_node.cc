@@ -66,6 +66,7 @@
 #include "WM_api.hh"
 #include "WM_types.hh"
 
+#include "NOD_shader.h"
 #include "NOD_trace_values.hh"
 
 #include "io_utils.hh"
@@ -1467,7 +1468,7 @@ static int /*eContextResult*/ node_context(const bContext *C,
     if (snode->edittree != nullptr) {
       if (bNode *node = bke::node_get_active(*snode->edittree)) {
         if (ELEM(node->type_legacy, SH_NODE_TEX_IMAGE, SH_NODE_TEX_ENVIRONMENT)) {
-          if (Image *image = id_cast<Image *>(node->id)) {
+          if (Image *image = node_tex_image_get_image(*node)) {
             CTX_data_id_pointer_set(result, &image->id);
             return CTX_RESULT_OK;
           }

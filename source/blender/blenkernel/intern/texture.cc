@@ -47,6 +47,7 @@
 #include "BKE_preview_image.hh"
 #include "BKE_texture.h"
 
+#include "NOD_shader.h"
 #include "NOD_texture.h"
 
 #include "RE_texture.h"
@@ -645,9 +646,10 @@ void BKE_texture_get_value(Tex *texture,
 static void texture_nodes_fetch_images_for_pool(Tex *texture, bNodeTree *ntree, ImagePool *pool)
 {
   for (bNode *node : ntree->all_nodes()) {
-    if (node->type_legacy == SH_NODE_TEX_IMAGE && node->id != nullptr) {
-      Image *image = id_cast<Image *>(node->id);
-      BKE_image_pool_acquire_ibuf(image, &texture->iuser, pool);
+    if (node->type_legacy == SH_NODE_TEX_IMAGE) {
+      if (Image *image = node_tex_image_get_image(*node)) {
+        BKE_image_pool_acquire_ibuf(image, &texture->iuser, pool);
+      }
     }
     else if (node->is_group() && node->id != nullptr) {
       /* TODO(sergey): Do we need to control recursion here? */

@@ -94,6 +94,8 @@
 #include "BKE_scene.hh"
 #include "BKE_workspace.hh"
 
+#include "NOD_shader.h"
+
 #include "BLF_api.hh"
 
 #include "RE_pipeline.h"
@@ -3040,17 +3042,18 @@ static void image_walk_ntree_all_users(
 {
   switch (ntree->type) {
     case NTREE_SHADER:
+      ntree->ensure_topology_cache();
       for (bNode *node : ntree->all_nodes()) {
-        if (node->id) {
-          if (node->type_legacy == SH_NODE_TEX_IMAGE) {
-            NodeTexImage *tex = static_cast<NodeTexImage *>(node->storage);
-            Image *ima = id_cast<Image *>(node->id);
-            callback(ima, id, &tex->iuser, customdata);
-          }
-          if (node->type_legacy == SH_NODE_TEX_ENVIRONMENT) {
-            NodeTexImage *tex = static_cast<NodeTexImage *>(node->storage);
-            Image *ima = id_cast<Image *>(node->id);
-            callback(ima, id, &tex->iuser, customdata);
+        if (ELEM(node->type_legacy, SH_NODE_TEX_IMAGE, SH_NODE_TEX_ENVIRONMENT)) {
+          if (Image *ima = node_tex_image_get_image(*node)) {
+            if (node->type_legacy == SH_NODE_TEX_IMAGE) {
+              NodeTexImage *tex = static_cast<NodeTexImage *>(node->storage);
+              callback(ima, id, &tex->iuser, customdata);
+            }
+            else {
+              NodeTexEnvironment *tex = static_cast<NodeTexEnvironment *>(node->storage);
+              callback(ima, id, &tex->iuser, customdata);
+            }
           }
         }
       }

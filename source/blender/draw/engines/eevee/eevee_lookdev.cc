@@ -161,7 +161,7 @@ bool LookdevWorld::sync(const LookdevParameters &new_parameters)
     intensity_socket_->value = parameters_.intensity;
 
     BKE_image_assign_gpu_texture(image, nullptr);
-    environment_node_->id = nullptr;
+    node_socket_set_image(*environment_node_, "Image"_ustr, nullptr);
 
     StudioLight *sl = BKE_studiolight_find(parameters_.hdri.c_str(),
                                            STUDIOLIGHT_ORIENTATIONS_MATERIAL_MODE);
@@ -171,7 +171,7 @@ bool LookdevWorld::sync(const LookdevParameters &new_parameters)
       if (texture != nullptr) {
         GPU_texture_ref(texture);
         BKE_image_assign_gpu_texture(image, texture);
-        environment_node_->id = &image->id;
+        node_socket_set_image(*environment_node_, "Image"_ustr, image);
       }
     }
 

@@ -5,6 +5,8 @@
 #include <fmt/format.h>
 #include <variant>
 
+#include "DNA_image_types.h"
+
 #include "BKE_compute_context_cache.hh"
 #include "BKE_lib_id.hh"
 #include "BKE_node_tree_zones.hh"
@@ -20,6 +22,7 @@
 #include "NOD_multi_function.hh"
 #include "NOD_node_declaration.hh"
 #include "NOD_node_in_compute_context.hh"
+#include "NOD_shader.h"
 #include "NOD_shader_nodes_inline.hh"
 #include "NOD_shader_nodes_multi_function.hh"
 
@@ -41,7 +44,7 @@ struct NodeAndSocket {
 };
 
 struct PrimitiveSocketValue {
-  std::variant<int, float, bool, ColorGeometry4f, float3, MenuValue, std::string> value;
+  std::variant<int, float, bool, ColorGeometry4f, float3, MenuValue, std::string, Image *> value;
 
   const void *buffer() const
   {
@@ -76,6 +79,9 @@ struct PrimitiveSocketValue {
     }
     if (type.is<std::string>()) {
       return {*static_cast<const std::string *>(value.get())};
+    }
+    if (type.is<Image *>()) {
+      return {*static_cast<Image *const *>(value.get())};
     }
     BLI_assert_unreachable();
     return {};
@@ -153,6 +159,8 @@ struct SocketValue {
         case SOCK_STRING:
           return PrimitiveSocketValue{
               std::string(socket.default_value_typed<bNodeSocketValueString>()->value)};
+        case SOCK_IMAGE:
+          return PrimitiveSocketValue{socket.default_value_typed<bNodeSocketValueImage>()->value};
         default:
           return std::nullopt;
       }
@@ -168,6 +176,8 @@ struct SocketValue {
         case SOCK_MENU:
           return PrimitiveSocketValue::from_value(
               {type.base_cpp_type, type.base_cpp_type->default_value()});
+        case SOCK_IMAGE:
+          return PrimitiveSocketValue{static_cast<Image *>(nullptr)};
         default:
           return std::nullopt;
       }
@@ -1504,6 +1514,65 @@ class ShaderNodesInliner {
       /* The node can only be evaluated if all inputs values are known. */
       return;
     }
+    if (node->is_type("ShaderNodeImage"_ustr)) {
+      Image *image = id_cast<Image *>(node->id);
+      for (const bNodeSocket *output_socket : node->output_sockets()) {
+        if (!output_socket->is_available()) {
+          continue;
+        }
+        this->store_socket_value({node.context, output_socket}, {PrimitiveSocketValue{image}});
+      }
+      return;
+    }
+    if (node->is_type("ShaderNodeImageInfo"_ustr)) {
+      Image *image = nullptr;
+      int frame = 0;
+      for (const bNodeSocket *input_socket : node->input_sockets()) {
+        if (!input_socket->is_available()) {
+          continue;
+        }
+        const SocketInContext input_socket_ctx = {node.context, input_socket};
+        const std::optional<PrimitiveSocketValue> value =
+            value_by_socket_.lookup(input_socket_ctx).to_primitive(*input_socket->typeinfo);
+        if (!value) {
+          this->handle_output_socket__eval_copy_node(*node, node.context, node.context);
+          return;
+        }
+        if (input_socket->type == SOCK_IMAGE) {
+          image = std::get<Image *>(value->value);
+        }
+        else if (input_socket->type == SOCK_INT) {
+          frame = std::get<int>(value->value);
+        }
+      }
+      const ShaderImageInfoResult info = node_shader_evaluate_image_info(image, frame);
+      for (const bNodeSocket *output_socket : node->output_sockets()) {
+        if (!output_socket->is_available()) {
+          continue;
+        }
+        SocketValue socket_value;
+        if (STREQ(output_socket->identifier, "Width")) {
+          socket_value = {PrimitiveSocketValue{info.width}};
+        }
+        else if (STREQ(output_socket->identifier, "Height")) {
+          socket_value = {PrimitiveSocketValue{info.height}};
+        }
+        else if (STREQ(output_socket->identifier, "Has Alpha")) {
+          socket_value = {PrimitiveSocketValue{info.has_alpha}};
+        }
+        else if (STREQ(output_socket->identifier, "Frame Count")) {
+          socket_value = {PrimitiveSocketValue{info.frame_count}};
+        }
+        else if (STREQ(output_socket->identifier, "FPS")) {
+          socket_value = {PrimitiveSocketValue{info.fps}};
+        }
+        else {
+          continue;
+        }
+        this->store_socket_value({node.context, output_socket}, socket_value);
+      }
+      return;
+    }
     const bke::bNodeType &node_type = *node->typeinfo;
     if (node_type.build_multi_function && ensured_inputs.all_inputs_primitive) {
       /* Do constant folding. */
@@ -1843,6 +1912,11 @@ class ShaderNodesInliner {
       socket_storage->value[3] = 1.0f;
       return {node, output_socket};
     }
+    if (Image *const *value_image = std::get_if<Image *>(&value.value)) {
+      bNode *node = this->add_node("ShaderNodeImage"_ustr);
+      node->id = id_cast<ID *>(*value_image);
+      return {node, static_cast<bNodeSocket *>(node->outputs.first)};
+    }
     BLI_assert_unreachable();
     return {};
   }
@@ -1880,6 +1954,11 @@ class ShaderNodesInliner {
       case SOCK_RGBA: {
         copy_v4_v4(socket.default_value_typed<bNodeSocketValueRGBA>()->value,
                    std::get<ColorGeometry4f>(value.value));
+        break;
+      }
+      case SOCK_IMAGE: {
+        socket.default_value_typed<bNodeSocketValueImage>()->value = std::get<Image *>(
+            value.value);
         break;
       }
       case SOCK_MENU: {

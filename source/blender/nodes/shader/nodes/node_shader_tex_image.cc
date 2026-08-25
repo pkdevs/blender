@@ -13,6 +13,8 @@
 
 #include "DEG_depsgraph_query.hh"
 
+#include "NOD_shader.h"
+
 namespace blender {
 
 namespace nodes::node_shader_tex_image_cc {
@@ -20,6 +22,7 @@ namespace nodes::node_shader_tex_image_cc {
 static void sh_node_tex_image_declare(NodeDeclarationBuilder &b)
 {
   b.is_function_node();
+  b.add_input<decl::Image>("Image"_ustr).optional_label();
   b.add_input<decl::Vector>("Vector"_ustr).default_input_type(NODE_DEFAULT_INPUT_POSITION_FIELD);
   b.add_output<decl::Color>("Color"_ustr).no_muted_links();
   b.add_output<decl::Float>("Alpha"_ustr).no_muted_links();
@@ -35,13 +38,16 @@ static void node_shader_init_tex_image(bNodeTree * /*ntree*/, bNode *node)
   node->storage = tex;
 }
 
+/** Vector is the second input (Image is GPU_NONE and skipped by GPU_stack_link). */
+static constexpr int VECTOR_INPUT = 1;
+
 static int node_shader_gpu_tex_image(GPUMaterial *mat,
                                      bNode *node,
                                      bNodeExecData * /*execdata*/,
                                      GPUNodeStack *in,
                                      GPUNodeStack *out)
 {
-  Image *ima = id_cast<Image *>(node->id);
+  Image *ima = node_tex_image_get_image(*node);
   NodeTexImage *tex = static_cast<NodeTexImage *>(node->storage);
 
   /* We get the image user from the original node, since GPU image keeps
@@ -54,13 +60,15 @@ static int node_shader_gpu_tex_image(GPUMaterial *mat,
     return GPU_stack_link(mat, node, "node_tex_image_empty", in, out);
   }
 
-  GPUNodeLink **texco = &in[0].link;
+  GPUNodeStack *vector_in = &in[VECTOR_INPUT];
+
+  GPUNodeLink **texco = &vector_in->link;
   if (!*texco) {
     *texco = GPU_attribute(mat, CD_AUTO_FROM_NAME, "");
     node_shader_gpu_bump_tex_coord(mat, node, texco);
   }
 
-  node_shader_gpu_tex_mapping(mat, node, in, out);
+  node_shader_gpu_tex_mapping(mat, node, vector_in, out);
 
   GPUSamplerState sampler_state = GPUSamplerState::default_sampler();
 
@@ -121,7 +129,7 @@ static int node_shader_gpu_tex_image(GPUMaterial *mat,
         GPUNodeLink *gpu_image = GPU_image(mat, ima, iuser, sampler_state);
         GPU_link(mat, "world_normals_get", &vnor);
         GPU_link(mat, "normal_transform_world_to_object", vnor, &wnor);
-        GPU_link(mat, gpu_node_name, in[0].link, wnor, gpu_image, &col1, &col2, &col3);
+        GPU_link(mat, gpu_node_name, vector_in->link, wnor, gpu_image, &col1, &col2, &col3);
         GPU_link(mat, "tex_box_blend", wnor, col1, col2, col3, blend, &out[0].link, &out[1].link);
         break;
       }
@@ -192,7 +200,7 @@ NODE_SHADER_MATERIALX_BEGIN
   if (!res.node) {
     res = val(MaterialX::Color4(1.0f, 0.0f, 1.0f, 1.0f));
 
-    Image *image = (Image *)node_->id;
+    Image *image = node_tex_image_get_image(*node_);
     if (image) {
       NodeTexImage *tex_image = static_cast<NodeTexImage *>(node_->storage);
 

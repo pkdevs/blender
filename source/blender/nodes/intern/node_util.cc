@@ -8,11 +8,14 @@
 
 #include <cctype>
 #include <cstring>
+#include <limits>
 
+#include "DNA_image_types.h"
 #include "DNA_node_types.h"
 
 #include "BLI_listbase.hh"
 #include "BLI_math_rotation_c.hh"
+#include "BLI_memory_utils.hh"
 #include "BLI_string.hh"
 #include "BLI_string_utf8.hh"
 #include "BLI_utildefines.hh"
@@ -20,14 +23,24 @@
 #include "BLT_translation.hh"
 
 #include "BKE_colortools.hh"
+#include "BKE_image.hh"
+#include "BKE_lib_id.hh"
 #include "BKE_node.hh"
+#include "BKE_node_runtime.hh"
 #include "BKE_node_tree_update.hh"
+
+#include "IMB_imbuf.hh"
+#include "IMB_imbuf_types.hh"
+
+#include "MOV_read.hh"
 
 #include "RNA_access.hh"
 #include "RNA_enum_types.hh"
 #include "RNA_prototypes.hh"
 
 #include "MEM_guardedalloc.h"
+
+#include "NOD_shader.h"
 
 #include "node_util.hh"
 
@@ -148,11 +161,114 @@ void node_image_label(const bNodeTree * /*ntree*/,
                       char *label,
                       int label_maxncpy)
 {
-  if (node->id == nullptr) {
-    BLI_strncpy(label, IFACE_(node->typeinfo->ui_name.c_str()), label_maxncpy);
+  /* Prefer the default node name when the Image input is linked. */
+  if (bNodeTree *tree = node->runtime->owner_tree) {
+    tree->ensure_topology_cache();
+  }
+  if (const bNodeSocket *image_socket = bke::node_find_socket(*node, SOCK_IN, "Image"_ustr)) {
+    if (bke::node_tree_runtime::topology_cache_is_available(*image_socket) &&
+        image_socket->is_logically_linked())
+    {
+      BLI_strncpy_utf8(label, IFACE_(node->typeinfo->ui_name.c_str()), label_maxncpy);
+      return;
+    }
+  }
+  if (Image *image = node_tex_image_get_image(*node)) {
+    BLI_strncpy_utf8(label, image->id.name + 2, label_maxncpy);
     return;
   }
-  BLI_strncpy(label, node->id->name + 2, label_maxncpy);
+  BLI_strncpy_utf8(label, IFACE_(node->typeinfo->ui_name.c_str()), label_maxncpy);
+}
+
+static Image *image_from_image_socket_origin(const bNodeSocket &origin)
+{
+  const bNode &origin_node = origin.owner_node();
+  if (origin_node.is_type("ShaderNodeImage"_ustr) ||
+      origin_node.is_type("GeometryNodeInputImage"_ustr))
+  {
+    return id_cast<Image *>(origin_node.id);
+  }
+  if (origin.type == SOCK_IMAGE && origin.default_value) {
+    return origin.default_value_typed<bNodeSocketValueImage>()->value;
+  }
+  return nullptr;
+}
+
+/** Linked Image input, else socket default, else node->id. */
+Image *node_tex_image_get_image(const bNode &node)
+{
+  const bNodeSocket *socket = bke::node_find_socket(node, SOCK_IN, "Image"_ustr);
+  if (socket == nullptr || socket->type != SOCK_IMAGE) {
+    return id_cast<Image *>(node.id);
+  }
+
+  if (bNodeTree *tree = node.runtime->owner_tree) {
+    tree->ensure_topology_cache();
+  }
+  if (bke::node_tree_runtime::topology_cache_is_available(*socket) &&
+      socket->is_logically_linked())
+  {
+    return image_from_image_socket_origin(*socket->logically_linked_sockets().first());
+  }
+
+  if (socket->default_value) {
+    if (Image *image = socket->default_value_typed<bNodeSocketValueImage>()->value) {
+      return image;
+    }
+  }
+  return id_cast<Image *>(node.id);
+}
+
+void node_socket_set_image(bNode &node, const UString identifier, Image *image)
+{
+  bNodeSocket *socket = bke::node_find_socket(node, SOCK_IN, identifier);
+  if (socket == nullptr || socket->type != SOCK_IMAGE || socket->default_value == nullptr) {
+    return;
+  }
+  Image *&socket_image = socket->default_value_typed<bNodeSocketValueImage>()->value;
+  if (socket_image != image) {
+    id_us_min(id_cast<ID *>(socket_image));
+    socket_image = image;
+    id_us_plus(id_cast<ID *>(socket_image));
+  }
+  if (node.id && node.id->id_type() == ID_IM) {
+    id_us_min(node.id);
+    node.id = nullptr;
+  }
+}
+
+ShaderImageInfoResult node_shader_evaluate_image_info(Image *image, const int frame)
+{
+  ShaderImageInfoResult result;
+  if (!image) {
+    return result;
+  }
+
+  ImageUser image_user;
+  BKE_imageuser_default(&image_user);
+  image_user.frames = std::numeric_limits<int>::max();
+  image_user.framenr = BKE_image_is_animated(image) ? frame : 0;
+
+  void *lock;
+  ImBuf *ibuf = BKE_image_acquire_ibuf(image, &image_user, &lock);
+  BLI_SCOPED_DEFER([&]() { BKE_image_release_ibuf(image, ibuf, lock); });
+  if (!ibuf) {
+    return result;
+  }
+
+  result.has_alpha = ibuf->can_contain_alpha();
+  result.width = ibuf->x;
+  result.height = ibuf->y;
+
+  if (ImageAnim *ianim = static_cast<ImageAnim *>(image->anims.first)) {
+    MovieReader *anim = ianim->anim;
+    if (anim) {
+      result.frame_count = MOV_get_duration_frames(anim);
+      result.fps = MOV_get_fps(anim);
+    }
+  }
+
+  return result;
 }
 
 void node_math_label(const bNodeTree * /*ntree*/,

@@ -28,6 +28,8 @@
 #include "BKE_node_runtime.hh"
 #include "BKE_node_tree_update.hh"
 
+#include "NOD_shader.h"
+
 #include "BLI_fileops.hh"
 #include "BLI_math_vector_c.hh"
 #include "BLI_path_utils.hh"
@@ -352,7 +354,7 @@ void dome_light_to_world_material(const USDImportParams &params,
     return;
   }
 
-  tex->id = &image->id;
+  node_socket_set_image(*tex, "Image"_ustr, image);
 
   /* Set the transform. */
   pxr::UsdGeomXformCache xf_cache(time);
@@ -430,8 +432,8 @@ static bool node_search(bNode *fromnode, bNode * /*tonode*/, void *userdata, boo
     res.color[3] = 1.0f;
   }
   else if (!res.image && fromnode->type_legacy == SH_NODE_TEX_ENVIRONMENT) {
-    NodeTexImage *tex = static_cast<NodeTexImage *>(fromnode->storage);
-    res.image = reinterpret_cast<Image *>(fromnode->id);
+    NodeTexEnvironment *tex = static_cast<NodeTexEnvironment *>(fromnode->storage);
+    res.image = node_tex_image_get_image(*fromnode);
     res.iuser = &tex->iuser;
 
     /* Always adjust for rotational differences between Blender and USD. */

@@ -12,14 +12,18 @@
 #include "DNA_brush_types.h"
 #include "DNA_curves_types.h"
 #include "DNA_grease_pencil_types.h"
+#include "DNA_image_types.h"
 #include "DNA_mesh_types.h"
+#include "DNA_node_types.h"
 #include "DNA_pointcloud_types.h"
 #include "DNA_scene_types.h"
 #include "DNA_sequence_types.h"
 
 #include "BLI_listbase_iterator.hh"
+#include "BLI_string.hh"
 #include "BLI_string_ref.hh"
 #include "BLI_sys_types.hh"
+#include "BLI_utildefines.hh"
 
 #include "BKE_attribute.h"
 #include "BKE_attribute.hh"
@@ -27,6 +31,7 @@
 #include "BKE_main.hh"
 #include "BKE_mesh_legacy_convert.hh"
 #include "BKE_node.hh"
+#include "BKE_node_legacy_types.hh"
 #include "BKE_node_runtime.hh"
 #include "BKE_paint.hh"
 #include "BKE_paint_types.hh"
@@ -121,6 +126,37 @@ void do_versions_after_linking_503(FileData * /*fd*/, Main *bmain)
   if (!MAIN_VERSION_FILE_ATLEAST(bmain, 503, 16)) {
     /* Shift animation data to accommodate the new dispersion inputs. */
     version_node_socket_index_animdata(bmain, NTREE_SHADER, "ShaderNodeBsdfPrincipled", 20, 2, 33);
+  }
+
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 503, 18)) {
+    /* Image / Environment Texture: Image moved from node->id onto an Image input socket. */
+    version_node_socket_index_animdata(bmain, NTREE_SHADER, SH_NODE_TEX_IMAGE, 0, 1, 2);
+    version_node_socket_index_animdata(bmain, NTREE_SHADER, SH_NODE_TEX_ENVIRONMENT, 0, 1, 2);
+
+    FOREACH_NODETREE_BEGIN (bmain, node_tree, id_owner) {
+      if (node_tree->type != NTREE_SHADER) {
+        continue;
+      }
+      for (bNode &node : node_tree->nodes) {
+        if (!STR_ELEM(node.idname, "ShaderNodeTexImage", "ShaderNodeTexEnvironment")) {
+          continue;
+        }
+        bNodeSocket *image_socket = bke::node_find_socket(node, SOCK_IN, "Image"_ustr);
+        if (image_socket == nullptr) {
+          image_socket = &version_node_add_socket(
+              *node_tree, node, SOCK_IN, "NodeSocketImage", "Image");
+        }
+        if (image_socket->default_value) {
+          Image *&socket_image = image_socket->default_value_typed<bNodeSocketValueImage>()->value;
+          if (socket_image == nullptr && node.id && node.id->id_type() == ID_IM) {
+            /* Transfer the existing usercount from node.id to the socket. */
+            socket_image = id_cast<Image *>(node.id);
+            node.id = nullptr;
+          }
+        }
+      }
+    }
+    FOREACH_NODETREE_END;
   }
 
   /**

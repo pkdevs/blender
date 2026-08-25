@@ -33,6 +33,8 @@
 
 #include "BKE_node_runtime.hh"
 
+#include "NOD_shader.h"
+
 #include "DEG_depsgraph.hh"
 
 #include "usd.hh"
@@ -153,7 +155,8 @@ class UsdExportTest : public BlendfileLoadingBaseTest {
   void compare_blender_image_to_usd_image_shader(const bNode *image_node,
                                                  const pxr::UsdPrim &image_prim)
   {
-    const Image *image = reinterpret_cast<Image *>(image_node->id);
+    const Image *image = node_tex_image_get_image(*image_node);
+    ASSERT_NE(image, nullptr);
 
     const pxr::UsdShadeShader image_shader(image_prim);
     const pxr::UsdShadeInput file_input = image_shader.GetInput(pxr::TfToken("file"));

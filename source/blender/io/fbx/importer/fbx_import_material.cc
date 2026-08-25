@@ -334,7 +334,7 @@ static void add_image_texture(Main *bmain,
   /* Add texture node and any UV transformations if needed. */
   bNode *image_node = add_node(ntree, SH_NODE_TEX_IMAGE, node_locx_image, node_locy);
   BLI_assert(image_node);
-  image_node->id = &image->id;
+  node_socket_set_image(*image_node, "Image"_ustr, image);
   NodeTexImage *tex_image = static_cast<NodeTexImage *>(image_node->storage);
 
   /* Wrap mode. */

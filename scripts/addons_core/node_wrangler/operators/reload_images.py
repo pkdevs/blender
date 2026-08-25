@@ -40,6 +40,7 @@ class NODE_OT_reload_images(Operator):
                 images_to_reload.add(node.texture.image)
             elif (node.bl_idname in {'CompositorNodeImage',
                                      'GeometryNodeInputImage',
+                                     'ShaderNodeImage',
                                      'ShaderNodeTexEnvironment',
                                      'ShaderNodeTexImage',
                                      'TextureNodeImage'}
@@ -48,8 +49,10 @@ class NODE_OT_reload_images(Operator):
                 images_to_reload.add(node.image)
             elif node.bl_idname in {'GeometryNodeGroup',
                                     'GeometryNodeImageInfo',
-                                    'GeometryNodeImageTexture'}:
-                # For these Geometry Nodes, check each input since images can be defined in sockets.
+                                    'GeometryNodeImageTexture',
+                                    'ShaderNodeImageInfo',
+                                    'ShaderNodeGroup'}:
+                # Image can be defined on sockets (including shader groups).
                 for sock in node.inputs:
                     if (sock.bl_idname == 'NodeSocketImage'
                             and sock.default_value is not None):

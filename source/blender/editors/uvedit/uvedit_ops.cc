@@ -41,6 +41,8 @@
 #include "BKE_node.hh"
 #include "BKE_node_legacy_types.hh"
 
+#include "NOD_shader.h"
+
 #include "DEG_depsgraph.hh"
 #include "DEG_depsgraph_query.hh"
 
@@ -111,11 +113,14 @@ bool ED_object_get_active_image(Object *ob,
   Material *ma = DEG_is_evaluated(ob) ? BKE_object_material_get_eval(ob, mat_nr) :
                                         BKE_object_material_get(ob, mat_nr);
   bNodeTree *ntree = ma ? ma->nodetree : nullptr;
+  if (ntree) {
+    ntree->ensure_topology_cache();
+  }
   bNode *node = (ntree) ? bke::node_get_active_texture(*ntree) : nullptr;
 
   if (node && is_image_texture_node(node)) {
     if (r_ima) {
-      *r_ima = id_cast<Image *>(node->id);
+      *r_ima = node_tex_image_get_image(*node);
     }
     if (r_iuser) {
       if (node->type_legacy == SH_NODE_TEX_IMAGE) {
@@ -159,7 +164,7 @@ void ED_object_assign_active_image(Main *bmain, Object *ob, int mat_nr, Image *i
   bNode *node = ma ? bke::node_get_active_texture(*ma->nodetree) : nullptr;
 
   if (node && is_image_texture_node(node)) {
-    node->id = &ima->id;
+    node_socket_set_image(*node, "Image"_ustr, ima);
     BKE_main_ensure_invariants(*bmain, ma->nodetree->id);
   }
 }

@@ -49,25 +49,34 @@ class NODE_OT_add_texture_setup(Operator, NWBase):
             if not node.inputs:
                 continue
 
+            is_texture_node = node.rna_type.identifier in texture_types
+            use_environment_texture = node.type == 'BACKGROUND'
+
+            # Shader nodes: first free enabled input.
+            # Texture nodes: Mapping connects to Vector (Image is now the first input).
             input_index = 0
-            target_input = node.inputs[0]
-            for input_socket in node.inputs:
-                if input_socket.enabled:
-                    input_index += 1
-                    if not input_socket.is_linked:
-                        target_input = input_socket
-                        break
+            if is_texture_node and 'Vector' in node.inputs:
+                target_input = node.inputs['Vector']
+                if target_input.is_linked:
+                    self.report({'WARNING'}, rpt_("No free inputs for node {}").format(node.name))
+                    continue
+                input_index = node.inputs.find('Vector') + 1
             else:
-                self.report({'WARNING'}, rpt_("No free inputs for node {}").format(node.name))
-                continue
+                target_input = node.inputs[0]
+                for input_socket in node.inputs:
+                    if input_socket.enabled:
+                        input_index += 1
+                        if not input_socket.is_linked:
+                            target_input = input_socket
+                            break
+                else:
+                    self.report({'WARNING'}, rpt_("No free inputs for node {}").format(node.name))
+                    continue
 
             x_offset = 0
             padding = 40.0
             locx = node.location.x
             locy = node.location.y - (input_index * padding)
-
-            is_texture_node = node.rna_type.identifier in texture_types
-            use_environment_texture = node.type == 'BACKGROUND'
 
             # Add an image texture before normal shader nodes.
             if not is_texture_node:
@@ -78,8 +87,8 @@ class NODE_OT_add_texture_setup(Operator, NWBase):
                 nodes.active = image_texture_node
                 connect_sockets(image_texture_node.outputs[0], target_input)
 
-                # The mapping setup following this will connect to the first input of this image texture.
-                target_input = image_texture_node.inputs[0]
+                # The mapping setup following this will connect to the Vector input.
+                target_input = image_texture_node.inputs['Vector']
 
             node.select = False
 

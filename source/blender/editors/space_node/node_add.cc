@@ -61,6 +61,7 @@
 #include "SEQ_sequencer.hh"
 
 #include "NOD_defaults.hh"
+#include "NOD_shader.h"
 
 #include "WM_api.hh"
 #include "WM_types.hh"
@@ -988,12 +989,13 @@ static wmOperatorStatus node_add_image_exec(bContext *C, wmOperator *op)
       BKE_report(op->reports, RPT_WARNING, "Could not add an image node");
       continue;
     }
-    if (type == GEO_NODE_IMAGE_TEXTURE) {
-      bNodeSocket *image_socket = static_cast<bNodeSocket *>(node->inputs.first);
-      bNodeSocketValueImage *socket_value = static_cast<bNodeSocketValueImage *>(
-          image_socket->default_value);
-      socket_value->value = image;
-      BKE_ntree_update_tag_socket_property(&node_tree, image_socket);
+    if (type == GEO_NODE_IMAGE_TEXTURE || type == SH_NODE_TEX_IMAGE ||
+        type == SH_NODE_TEX_ENVIRONMENT)
+    {
+      node_socket_set_image(*node, "Image"_ustr, image);
+      if (bNodeSocket *image_socket = bke::node_find_socket(*node, SOCK_IN, "Image"_ustr)) {
+        BKE_ntree_update_tag_socket_property(&node_tree, image_socket);
+      }
     }
     else {
       node->id = id_cast<ID *>(image);

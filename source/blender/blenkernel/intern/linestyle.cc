@@ -2158,7 +2158,7 @@ void BKE_linestyle_default_shader(const bContext *C, FreestyleLineStyle *linesty
   bke::node_set_active(*ntree, *input_texture);
 
   fromsock = static_cast<bNodeSocket *>(BLI_findlink(&uv_along_stroke->outputs, 0)); /* UV */
-  tosock = static_cast<bNodeSocket *>(BLI_findlink(&input_texture->inputs, 0));      /* UV */
+  tosock = bke::node_find_socket(*input_texture, SOCK_IN, "Vector"_ustr);
   bke::node_add_link(*ntree, *uv_along_stroke, *fromsock, *input_texture, *tosock);
 
   fromsock = static_cast<bNodeSocket *>(BLI_findlink(&input_texture->outputs, 0)); /* Color */

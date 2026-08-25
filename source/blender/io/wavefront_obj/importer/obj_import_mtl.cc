@@ -395,7 +395,7 @@ static void add_image_textures(Main *bmain,
 
     bNode *image_node = add_node(ntree, SH_NODE_TEX_IMAGE, node_locx_image, node_locy);
     BLI_assert(image_node);
-    image_node->id = &image->id;
+    node_socket_set_image(*image_node, "Image"_ustr, image);
     static_cast<NodeTexImage *>(image_node->storage)->projection = value.projection_type;
 
     /* Add normal map node if needed. */

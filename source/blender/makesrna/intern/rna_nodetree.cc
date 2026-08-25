@@ -3248,6 +3248,21 @@ static void rna_Node_tex_image_update(Main *bmain, Scene * /*scene*/, PointerRNA
   WM_main_add_notifier(NC_IMAGE, nullptr);
 }
 
+static PointerRNA rna_ShaderNodeTexImage_image_get(PointerRNA *ptr)
+{
+  const bNode *node = ptr->data_as<bNode>();
+  Image *image = node_tex_image_get_image(*node);
+  return RNA_id_pointer_create(reinterpret_cast<ID *>(image));
+}
+
+static void rna_ShaderNodeTexImage_image_set(PointerRNA *ptr,
+                                             PointerRNA value,
+                                             ReportList * /*reports*/)
+{
+  bNode *node = ptr->data_as<bNode>();
+  node_socket_set_image(*node, "Image"_ustr, static_cast<Image *>(value.data));
+}
+
 static void rna_NodeGroup_update(Main *bmain, Scene * /*scene*/, PointerRNA *ptr)
 {
   bNodeTree *ntree = reinterpret_cast<bNodeTree *>(ptr->owner_id);
@@ -5565,14 +5580,16 @@ static void def_sh_tex_environment(BlenderRNA *brna, StructRNA *srna)
   PropertyRNA *prop;
 
   prop = RNA_def_property(srna, "image", PROP_POINTER, PROP_NONE);
-  RNA_def_property_pointer_sdna(prop, nullptr, "id");
+  RNA_def_property_pointer_funcs(prop,
+                                 "rna_ShaderNodeTexImage_image_get",
+                                 "rna_ShaderNodeTexImage_image_set",
+                                 nullptr,
+                                 "rna_Image_no_renderresult_or_viewer_poll");
   RNA_def_property_struct_type(prop, "Image");
   RNA_def_property_flag(prop, PROP_EDITABLE);
   RNA_def_property_override_flag(prop, PROPOVERRIDE_OVERRIDABLE_LIBRARY);
   RNA_def_property_ui_text(prop, "Image", "");
   RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_tex_image_update");
-  RNA_def_property_pointer_funcs(
-      prop, nullptr, nullptr, nullptr, "rna_Image_no_renderresult_or_viewer_poll");
 
   RNA_def_struct_sdna_from(srna, "NodeTexEnvironment", "storage");
   def_sh_tex(brna, srna);
@@ -5650,14 +5667,16 @@ static void def_sh_tex_image(BlenderRNA *brna, StructRNA *srna)
   PropertyRNA *prop;
 
   prop = RNA_def_property(srna, "image", PROP_POINTER, PROP_NONE);
-  RNA_def_property_pointer_sdna(prop, nullptr, "id");
+  RNA_def_property_pointer_funcs(prop,
+                                 "rna_ShaderNodeTexImage_image_get",
+                                 "rna_ShaderNodeTexImage_image_set",
+                                 nullptr,
+                                 "rna_Image_no_renderresult_or_viewer_poll");
   RNA_def_property_struct_type(prop, "Image");
   RNA_def_property_flag(prop, PROP_EDITABLE);
   RNA_def_property_override_flag(prop, PROPOVERRIDE_OVERRIDABLE_LIBRARY);
   RNA_def_property_ui_text(prop, "Image", "");
   RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_tex_image_update");
-  RNA_def_property_pointer_funcs(
-      prop, nullptr, nullptr, nullptr, "rna_Image_no_renderresult_or_viewer_poll");
 
   RNA_def_struct_sdna_from(srna, "NodeTexImage", "storage");
   def_sh_tex(brna, srna);
@@ -9188,7 +9207,7 @@ static void def_geo_input_object(BlenderRNA * /*brna*/, StructRNA *srna)
   RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_update");
 }
 
-static void def_geo_image(BlenderRNA * /*brna*/, StructRNA *srna)
+static void def_input_image(BlenderRNA * /*brna*/, StructRNA *srna)
 {
   PropertyRNA *prop;
 
@@ -10637,6 +10656,8 @@ static void rna_def_nodes(BlenderRNA *brna)
   define("ShaderNode", "ShaderNodeHairInfo");
   define("ShaderNode", "ShaderNodeHoldout");
   define("ShaderNode", "ShaderNodeHueSaturation");
+  define("ShaderNode", "ShaderNodeImage", def_input_image);
+  define("ShaderNode", "ShaderNodeImageInfo");
   define("ShaderNode", "ShaderNodeInvert");
   define("ShaderNode", "ShaderNodeLayerWeight");
   define("ShaderNode", "ShaderNodeLightFalloff");
@@ -10996,7 +11017,7 @@ static void rna_def_nodes(BlenderRNA *brna)
   define("GeometryNode", "GeometryNodeInputEdgeSmooth");
   define("GeometryNode", "GeometryNodeInputFont", def_geo_input_font);
   define("GeometryNode", "GeometryNodeInputID");
-  define("GeometryNode", "GeometryNodeInputImage", def_geo_image);
+  define("GeometryNode", "GeometryNodeInputImage", def_input_image);
   define("GeometryNode", "GeometryNodeInputIndex");
   define("GeometryNode", "GeometryNodeInputInstanceBounds");
   define("GeometryNode", "GeometryNodeInputInstanceReference");

@@ -18,6 +18,8 @@
 #include "BKE_node_tree_update.hh"
 #include "BKE_report.hh"
 
+#include "NOD_shader.h"
+
 #include "BLI_fileops.hh"
 #include "BLI_listbase_iterator.hh"
 #include "BLI_map.hh"
@@ -1391,7 +1393,7 @@ void USDMaterialReader::load_tex_image(const pxr::UsdShadeShader &usd_shader,
     add_udim_tiles(image, udim_tiles);
   }
 
-  tex_image->id = &image->id;
+  node_socket_set_image(*tex_image, "Image"_ustr, image);
 
   colorspace_to_image_texture(usd_shader, file_input, !extra.is_color_corrected, image);
 

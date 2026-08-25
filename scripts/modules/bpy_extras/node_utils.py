@@ -52,6 +52,10 @@ def find_base_socket_type(socket):
         return 'NodeSocketTexture'
     if socket.type == 'MATERIAL':
         return 'NodeSocketMaterial'
+    if socket.type == 'BUNDLE':
+        return 'NodeSocketBundle'
+    if socket.type == 'CLOSURE':
+        return 'NodeSocketClosure'
 
 
 def connect_sockets(input, output):

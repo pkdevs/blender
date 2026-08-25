@@ -11,6 +11,8 @@
 #include "BKE_node_legacy_types.hh"
 #include "BKE_node_runtime.hh"
 
+#include "NOD_shader.h"
+
 #include "BLI_math_vector_c.hh"
 #include "BLI_path_utils.hh"
 #include "BLI_string.hh"
@@ -141,7 +143,7 @@ static std::string get_image_filepath(const bNode *tex_node)
   if (!tex_node) {
     return "";
   }
-  Image *tex_image = reinterpret_cast<Image *>(tex_node->id);
+  Image *tex_image = node_tex_image_get_image(*tex_node);
   if (!tex_image || !BKE_image_has_filepath(tex_image)) {
     return "";
   }

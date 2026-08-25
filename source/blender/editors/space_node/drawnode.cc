@@ -348,20 +348,79 @@ static void node_buts_image_user(ui::Layout &layout,
       split_2.active_set(!is_data);
     }
 
-    /* Avoid losing changes image is painted. */
-    if (BKE_image_is_dirty(static_cast<Image *>(imaptr->data))) {
+    /* Avoid losing changes while image is painted. */
+    if (BKE_image_is_dirty(image)) {
       split.enabled_set(false);
     }
   }
+}
+
+static bool node_image_input_is_linked(PointerRNA *node_ptr)
+{
+  bNode *node = node_ptr->data_as<bNode>();
+  if (bNodeTree *tree = node->runtime->owner_tree) {
+    tree->ensure_topology_cache();
+  }
+  const bNodeSocket *image_socket = bke::node_find_socket(*node, SOCK_IN, "Image"_ustr);
+  return image_socket && image_socket->is_logically_linked();
+}
+
+static void node_buts_image_colorspace(ui::Layout &layout, PointerRNA *imaptr)
+{
+  Image *image = static_cast<Image *>(imaptr->data);
+  if (!image) {
+    return;
+  }
+
+  ui::Layout &split = layout.split(0.33f, true);
+  PointerRNA colorspace_settings_ptr = RNA_pointer_get(imaptr, "colorspace_settings");
+  split.label(IFACE_("Color Space"), ICON_NONE);
+  split.prop_with_menu(&colorspace_settings_ptr,
+                       "name",
+                       DEFAULT_FLAGS,
+                       "",
+                       ICON_NONE,
+                       "UI_MT_color_space_select");
+
+  if (image->source != IMA_SRC_GENERATED) {
+    ui::Layout &split_2 = layout.split(0.33f, true);
+    split_2.label(IFACE_("Alpha"), ICON_NONE);
+    split_2.prop(imaptr, "alpha_mode", DEFAULT_FLAGS, "", ICON_NONE);
+
+    const bool is_data = IMB_colormanagement_space_name_is_data(image->colorspace_settings.name);
+    split_2.active_set(!is_data);
+  }
+
+  if (BKE_image_is_dirty(image)) {
+    split.enabled_set(false);
+  }
+}
+
+static void node_shader_buts_image_info(ui::Layout &layout, bContext * /*C*/, PointerRNA *ptr)
+{
+  /* Color Space / Alpha in draw_buttons keeps the Image socket aligned with the selector. */
+  if (node_image_input_is_linked(ptr)) {
+    return;
+  }
+
+  bNode *node = ptr->data_as<bNode>();
+  bNodeSocket *image_socket = bke::node_find_socket(*node, SOCK_IN, "Image"_ustr);
+  if (image_socket == nullptr) {
+    return;
+  }
+
+  PointerRNA socket_ptr = RNA_pointer_create_discrete(ptr->owner_id, RNA_NodeSocket, image_socket);
+  PointerRNA imaptr = RNA_pointer_get(&socket_ptr, "default_value");
+  node_buts_image_colorspace(layout, &imaptr);
 }
 
 static void node_shader_buts_tex_image(ui::Layout &layout, bContext *C, PointerRNA *ptr)
 {
   PointerRNA imaptr = RNA_pointer_get(ptr, "image");
   PointerRNA iuserptr = RNA_pointer_get(ptr, "image_user");
+  const bool image_linked = node_image_input_is_linked(ptr);
 
   layout.context_ptr_set("image_user", &iuserptr);
-  template_id(&layout, C, ptr, "image", "IMAGE_OT_new", "IMAGE_OT_open", nullptr);
   layout.prop(ptr, "interpolation", DEFAULT_FLAGS, "", ICON_NONE);
   layout.prop(ptr, "projection", DEFAULT_FLAGS, "", ICON_NONE);
 
@@ -371,14 +430,19 @@ static void node_shader_buts_tex_image(ui::Layout &layout, bContext *C, PointerR
 
   layout.prop(ptr, "extension", DEFAULT_FLAGS, "", ICON_NONE);
 
-  /* NOTE: image user properties used directly here, unlike compositor image node,
-   * which redefines them in the node struct RNA to get proper updates.
-   */
-  node_buts_image_user(layout, C, &iuserptr, &imaptr, &iuserptr, false, true);
+  if (!image_linked) {
+    /* NOTE: image user properties used directly here, unlike compositor image node,
+     * which redefines them in the node struct RNA to get proper updates.
+     */
+    node_buts_image_user(layout, C, &iuserptr, &imaptr, &iuserptr, false, true);
+  }
 }
 
 static void node_shader_buts_tex_image_ex(ui::Layout &layout, bContext *C, PointerRNA *ptr)
 {
+  if (node_image_input_is_linked(ptr)) {
+    return;
+  }
   PointerRNA iuserptr = RNA_pointer_get(ptr, "image_user");
   uiTemplateImage(&layout, C, ptr, "image", &iuserptr, false, false);
 }
@@ -387,18 +451,22 @@ static void node_shader_buts_tex_environment(ui::Layout &layout, bContext *C, Po
 {
   PointerRNA imaptr = RNA_pointer_get(ptr, "image");
   PointerRNA iuserptr = RNA_pointer_get(ptr, "image_user");
+  const bool image_linked = node_image_input_is_linked(ptr);
 
   layout.context_ptr_set("image_user", &iuserptr);
-  template_id(&layout, C, ptr, "image", "IMAGE_OT_new", "IMAGE_OT_open", nullptr);
-
   layout.prop(ptr, "interpolation", DEFAULT_FLAGS, "", ICON_NONE);
   layout.prop(ptr, "projection", DEFAULT_FLAGS, "", ICON_NONE);
 
-  node_buts_image_user(layout, C, &iuserptr, &imaptr, &iuserptr, false, true);
+  if (!image_linked) {
+    node_buts_image_user(layout, C, &iuserptr, &imaptr, &iuserptr, false, true);
+  }
 }
 
 static void node_shader_buts_tex_environment_ex(ui::Layout &layout, bContext *C, PointerRNA *ptr)
 {
+  if (node_image_input_is_linked(ptr)) {
+    return;
+  }
   PointerRNA iuserptr = RNA_pointer_get(ptr, "image_user");
   uiTemplateImage(&layout, C, ptr, "image", &iuserptr, false, false);
 
@@ -458,6 +526,9 @@ static void node_shader_set_butfunc(bke::bNodeType *ntype)
     case SH_NODE_TEX_IMAGE:
       ntype->draw_buttons = node_shader_buts_tex_image;
       ntype->draw_buttons_ex = node_shader_buts_tex_image_ex;
+      break;
+    case SH_NODE_IMAGE_INFO:
+      ntype->draw_buttons = node_shader_buts_image_info;
       break;
     case SH_NODE_TEX_ENVIRONMENT:
       ntype->draw_buttons = node_shader_buts_tex_environment;
@@ -1439,7 +1510,7 @@ static void std_node_socket_draw(
     }
     case SOCK_IMAGE: {
       const bNodeTree *node_tree = id_cast<const bNodeTree *>(node_ptr->owner_id);
-      if (node_tree->type == NTREE_GEOMETRY) {
+      if (ELEM(node_tree->type, NTREE_GEOMETRY, NTREE_SHADER)) {
         if (optional_label) {
           template_id(layout, C, ptr, "default_value", "image.new", "image.open", nullptr);
         }
@@ -1544,7 +1615,6 @@ static void std_node_socket_interface_draw(ID *id,
     case SOCK_RGBA:
     case SOCK_OBJECT:
     case SOCK_COLLECTION:
-    case SOCK_IMAGE:
     case SOCK_TEXTURE:
     case SOCK_MATERIAL:
     case SOCK_FONT:
@@ -1553,6 +1623,15 @@ static void std_node_socket_interface_draw(ID *id,
     case SOCK_MASK:
     case SOCK_SOUND: {
       col->prop(&ptr, "default_value", DEFAULT_FLAGS, IFACE_("Default"), ICON_NONE);
+      break;
+    }
+    case SOCK_IMAGE: {
+      col->prop(&ptr, "default_value", DEFAULT_FLAGS, IFACE_("Default"), ICON_NONE);
+      const bNodeTree *ntree = reinterpret_cast<const bNodeTree *>(id);
+      if (ntree->type == NTREE_SHADER) {
+        PointerRNA imaptr = RNA_pointer_get(&ptr, "default_value");
+        node_buts_image_colorspace(*col, &imaptr);
+      }
       break;
     }
     case SOCK_MENU: {

@@ -34,4 +34,21 @@ struct bNode *ntreeShaderOutputNode(struct bNodeTree *ntree, int target);
  */
 void ntreeGPUMaterialNodes(struct bNodeTree *localtree, struct GPUMaterial *mat);
 
+/** Evaluate Image Info outputs for constant folding in the shader inliner. */
+struct ShaderImageInfoResult {
+  int width = 0;
+  int height = 0;
+  bool has_alpha = false;
+  int frame_count = 1;
+  float fps = 0.0f;
+};
+struct ShaderImageInfoResult node_shader_evaluate_image_info(struct Image *image, int frame);
+
+/**
+ * Image from a linked Image input (e.g. ShaderNodeImage), else socket default, else node->id.
+ */
+struct Image *node_tex_image_get_image(const struct bNode &node);
+/** Set an Image socket value and clear any leftover Image on node->id. */
+void node_socket_set_image(struct bNode &node, UString identifier, struct Image *image);
+
 }  // namespace blender

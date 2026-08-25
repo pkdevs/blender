@@ -6982,7 +6982,7 @@ static bool proj_paint_add_slot(bContext *C, wmOperator *op)
       case PAINT_CANVAS_SOURCE_IMAGE: {
         new_node = bke::node_add_static_node(C, *ntree, SH_NODE_TEX_IMAGE);
         ima = proj_paint_image_create(op, bmain, is_data);
-        new_node->id = &ima->id;
+        node_socket_set_image(*new_node, "Image"_ustr, ima);
         break;
       }
       case PAINT_CANVAS_SOURCE_COLOR_ATTRIBUTE: {

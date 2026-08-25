@@ -64,7 +64,7 @@ def texture(
     if alpha_socket is not None:
         mh.node_tree.links.new(alpha_socket, tex_img.outputs['Alpha'])
     # Inputs
-    uv_socket = tex_img.inputs[0]
+    uv_socket = tex_img.inputs['Vector']
 
     x -= 340
 

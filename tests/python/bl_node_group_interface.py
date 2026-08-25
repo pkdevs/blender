@@ -438,7 +438,7 @@ class ShaderNodeGroupInterfaceTest(AbstractNodeGroupInterfaceTest, NodeGroupInte
         self.do_test_socket_type("NodeSocketFloat")
         self.do_test_socket_type("NodeSocketFloat", subtype='FACTOR')
         self.do_test_invalid_socket_type("NodeSocketGeometry")
-        self.do_test_invalid_socket_type("NodeSocketImage")
+        self.do_test_socket_type("NodeSocketImage")
         self.do_test_socket_type("NodeSocketInt")
         self.do_test_socket_type("NodeSocketInt", subtype='PERCENTAGE')
         self.do_test_invalid_socket_type("NodeSocketMaterial")

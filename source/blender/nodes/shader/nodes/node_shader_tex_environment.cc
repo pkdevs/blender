@@ -13,12 +13,15 @@
 
 #include "DEG_depsgraph_query.hh"
 
+#include "NOD_shader.h"
+
 namespace blender {
 
 namespace nodes::node_shader_tex_environment_cc {
 
 static void node_declare(NodeDeclarationBuilder &b)
 {
+  b.add_input<decl::Image>("Image"_ustr).optional_label();
   b.add_input<decl::Vector>("Vector"_ustr).hide_value();
   b.add_output<decl::Color>("Color"_ustr).no_muted_links();
 }
@@ -34,19 +37,22 @@ static void node_shader_init_tex_environment(bNodeTree * /*ntree*/, bNode *node)
   node->storage = tex;
 }
 
+/** Vector is the second input (Image is GPU_NONE and skipped by GPU_stack_link). */
+static constexpr int VECTOR_INPUT = 1;
+
 static int node_shader_gpu_tex_environment(GPUMaterial *mat,
                                            bNode *node,
                                            bNodeExecData * /*execdata*/,
                                            GPUNodeStack *in,
                                            GPUNodeStack *out)
 {
-  Image *ima = id_cast<Image *>(node->id);
+  Image *ima = node_tex_image_get_image(*node);
   NodeTexEnvironment *tex = static_cast<NodeTexEnvironment *>(node->storage);
 
   /* We get the image user from the original node, since GPU image keeps
    * a pointer to it and the dependency refreshes the original. */
   bNode *node_original = node->runtime->original ? node->runtime->original : node;
-  NodeTexImage *tex_original = static_cast<NodeTexImage *>(node_original->storage);
+  NodeTexEnvironment *tex_original = static_cast<NodeTexEnvironment *>(node_original->storage);
   ImageUser *iuser = &tex_original->iuser;
   /* Setting the GPU_SAMPLER_FILTERING_ANISOTROPIC_ENABLE enables anisotropic filtering. The
    * exact number of samples are being determined at bind time by the engine.
@@ -66,16 +72,18 @@ static int node_shader_gpu_tex_environment(GPUMaterial *mat,
     return GPU_stack_link(mat, node, "node_tex_environment_empty", in, out);
   }
 
-  if (!in[0].link) {
-    GPU_link(mat, "node_tex_coord_position", &in[0].link);
-    node_shader_gpu_bump_tex_coord(mat, node, &in[0].link);
+  GPUNodeStack *vector_in = &in[VECTOR_INPUT];
+
+  if (!vector_in->link) {
+    GPU_link(mat, "node_tex_coord_position", &vector_in->link);
+    node_shader_gpu_bump_tex_coord(mat, node, &vector_in->link);
   }
 
-  node_shader_gpu_tex_mapping(mat, node, in, out);
+  node_shader_gpu_tex_mapping(mat, node, vector_in, out);
 
   /* Compute texture coordinate. */
   if (tex->projection == SHD_PROJ_EQUIRECTANGULAR) {
-    GPU_link(mat, "node_tex_environment_equirectangular", in[0].link, &in[0].link);
+    GPU_link(mat, "node_tex_environment_equirectangular", vector_in->link, &vector_in->link);
     /* To fix pole issue we clamp the v coordinate. */
     sampler.extend_yz = GPU_SAMPLER_EXTEND_MODE_EXTEND;
     /* Force the highest mipmap and don't do anisotropic filtering.
@@ -84,7 +92,7 @@ static int node_shader_gpu_tex_environment(GPUMaterial *mat,
                                    GPU_SAMPLER_FILTERING_ANISOTROPIC_MASK);
   }
   else {
-    GPU_link(mat, "node_tex_environment_mirror_ball", in[0].link, &in[0].link);
+    GPU_link(mat, "node_tex_environment_mirror_ball", vector_in->link, &vector_in->link);
     /* Fix pole issue. */
     sampler.extend_x = GPU_SAMPLER_EXTEND_MODE_EXTEND;
     sampler.extend_yz = GPU_SAMPLER_EXTEND_MODE_EXTEND;
@@ -110,7 +118,8 @@ static int node_shader_gpu_tex_environment(GPUMaterial *mat,
   }
 
   /* Sample texture with correct interpolation. */
-  GPU_link(mat, gpu_fn, in[0].link, GPU_image(mat, ima, iuser, sampler), &out[0].link, &outalpha);
+  GPU_link(
+      mat, gpu_fn, vector_in->link, GPU_image(mat, ima, iuser, sampler), &out[0].link, &outalpha);
 
   if (out[0].hasoutput && out[0].link && ima) {
     if (ELEM(ima->alpha_mode, IMA_ALPHA_IGNORE, IMA_ALPHA_CHANNEL_PACKED) ||
@@ -138,7 +147,7 @@ NODE_SHADER_MATERIALX_BEGIN
 {
   NodeItem res = val(MaterialX::Color4(1.0f, 0.0f, 1.0f, 1.0f));
 
-  Image *image = (Image *)node_->id;
+  Image *image = node_tex_image_get_image(*node_);
   if (!image) {
     return res;
   }

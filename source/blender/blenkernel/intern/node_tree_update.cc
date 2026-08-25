@@ -43,6 +43,7 @@
 #include "NOD_geometry_nodes_srna.hh"
 #include "NOD_node_declaration.hh"
 #include "NOD_scene_compositor_effect_inputs_srna.hh"
+#include "NOD_shader.h"
 #include "NOD_socket.hh"
 #include "NOD_socket_declarations.hh"
 #include "NOD_sync_sockets.hh"
@@ -1018,7 +1019,7 @@ class NodeTreeMainUpdater {
       /* Check if the tree itself has an animated image. */
       for (const UString idname : {"ShaderNodeTexImage"_ustr, "ShaderNodeTexEnvironment"_ustr}) {
         for (const bNode *node : ntree.nodes_by_type(idname)) {
-          Image *image = reinterpret_cast<Image *>(node->id);
+          Image *image = node_tex_image_get_image(*node);
           if (image != nullptr && BKE_image_is_animated(image)) {
             ntree.runtime->runtime_flag |= NTREE_RUNTIME_FLAG_HAS_IMAGE_ANIMATION;
             break;
@@ -2261,7 +2262,20 @@ void BKE_ntree_update_tag_id_changed(Main *bmain, ID *id)
 {
   FOREACH_NODETREE_BEGIN (bmain, ntree, ntree_id) {
     for (bNode *node : ntree->all_nodes()) {
-      if (node->id == id) {
+      bool matches = (node->id == id);
+      if (!matches && id->id_type() == ID_IM) {
+        for (bNodeSocket *socket : node->input_sockets()) {
+          if (socket->type == SOCK_IMAGE && socket->default_value) {
+            if (socket->default_value_typed<bNodeSocketValueImage>()->value ==
+                id_cast<Image *>(id))
+            {
+              matches = true;
+              break;
+            }
+          }
+        }
+      }
+      if (matches) {
         node->runtime->update |= NODE_UPDATE_ID;
         add_node_tag(ntree, node, NTREE_CHANGED_NODE_PROPERTY);
       }

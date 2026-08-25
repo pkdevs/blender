@@ -292,10 +292,10 @@ class NODE_OT_add_principled_setup(Operator, NWBase, ImportHelper):
                                  sum(n.location.y for n in texture_nodes) / len(texture_nodes)))
             reroute.location = tex_coords + Vector((-50, -120))
             for texture_node in texture_nodes:
-                link = connect_sockets(texture_node.inputs[0], reroute.outputs[0])
+                link = connect_sockets(texture_node.inputs['Vector'], reroute.outputs[0])
             link = connect_sockets(reroute.inputs[0], mapping.outputs[0])
         else:
-            link = connect_sockets(texture_nodes[0].inputs[0], mapping.outputs[0])
+            link = connect_sockets(texture_nodes[0].inputs['Vector'], mapping.outputs[0])
 
         # Connect texture_coordinates to mapping node
         texture_input = nodes.new(type='ShaderNodeTexCoord')

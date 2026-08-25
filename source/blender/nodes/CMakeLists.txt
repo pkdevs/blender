@@ -204,6 +204,7 @@ set(LIB
   PRIVATE bf::geometry
   PRIVATE bf::gpu
   PRIVATE bf::imbuf
+  PRIVATE bf::imbuf::movie
   PRIVATE bf::intern::guardedalloc
   bf_nodes_composite
   bf_nodes_function
