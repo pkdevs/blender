@@ -105,8 +105,7 @@ def flatten_children(iterable):
 
 '''
 
-UTILITIES_FUNC_COMMON_IK_FK = [
-    '''
+UTILITIES_FUNC_COMMON_IK_FK = ['''
 #########################################
 ## "Visual Transform" helper functions ##
 #########################################
@@ -305,9 +304,7 @@ def parse_bone_names(names_string):
         return ast.literal_eval(names_string)
     else:
         return names_string
-
-'''
-]
+''']
 
 # noinspection SpellCheckingInspection
 UTILITIES_FUNC_OLD_ARM_FKIK = ['''
