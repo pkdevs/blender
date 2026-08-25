@@ -15,25 +15,26 @@ namespace blender::gpu::render_graph {
 /**
  * Information stored inside the render graph node. See `VKRenderGraphNode`.
  */
-struct VKSynchronizationData {};
+struct VKSynchronizationData {
+  /** Reset the tracked image layout to VK_IMAGE_LAYOUT_UNDEFINED after the barrier. */
+  bool reset_layout_to_undefined;
+};
 
 /**
  * Information needed to add a node to the render graph.
  */
 struct VKSynchronizationCreateInfo {
   VkImage vk_image;
-  /**
-   * Layout the image is transitioned to and tracked in after the barrier.
-   *
-   * Can be set to VK_IMAGE_LAYOUT_UNDEFINED to only synchronize memory/execution without a layout
-   * transition, marking the contents as undefined. This is used for aliased images (texture pool).
-   * Once the memory can be reused by another alias, the contents become undefined, so the next
-   * access must transition from an undefined layout.
-   */
   VkImageLayout vk_image_layout;
   VkImageAspectFlags vk_image_aspect;
   /** Access flags the synchronization node waits for. */
   VkAccessFlags vk_access_flags;
+  /**
+   * Reset the tracked image layout to VK_IMAGE_LAYOUT_UNDEFINED after the barrier.
+   * Used for aliased images (texture pool). When the memory is reused by another alias, the image
+   * contents become undefined, so the next access must transition from an undefined layout.
+   */
+  bool reset_layout_to_undefined = false;
 };
 
 class VKSynchronizationNode : public VKNodeInfo<VKNodeType::SYNCHRONIZATION,
@@ -50,11 +51,9 @@ class VKSynchronizationNode : public VKNodeInfo<VKNodeType::SYNCHRONIZATION,
    * actual node data (`VKRenderGraphNode` includes all header files.)
    */
   template<typename Node, typename Storage>
-  static void set_node_data(Node &node,
-                            Storage & /* storage */,
-                            const CreateInfo & /*create_info*/)
+  static void set_node_data(Node &node, Storage & /* storage */, const CreateInfo &create_info)
   {
-    node.synchronization = {};
+    node.synchronization = {create_info.reset_layout_to_undefined};
   }
 
   /**

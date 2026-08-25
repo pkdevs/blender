@@ -499,7 +499,7 @@ TEST_F(VKRenderGraphTestTransfer, copy_buffer_to_image_synchronization_aliased_i
   /* Synchronization node added by VKTexturePool::release_texture(). */
   VKSynchronizationNode::CreateInfo synchronization = {};
   synchronization.vk_image = image;
-  synchronization.vk_image_layout = VK_IMAGE_LAYOUT_UNDEFINED;
+  synchronization.vk_image_layout = VK_IMAGE_LAYOUT_GENERAL;
   synchronization.vk_image_aspect = VK_IMAGE_ASPECT_COLOR_BIT;
   synchronization.vk_access_flags = VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT;
   render_graph->add_node(synchronization);
@@ -546,7 +546,7 @@ TEST_F(VKRenderGraphTestTransfer, copy_buffer_to_image_synchronization_aliased_i
           "dst_access_mask=VK_ACCESS_MEMORY_READ_BIT, "
           "VK_ACCESS_MEMORY_WRITE_BIT, "
           "old_layout=VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, "
-          "new_layout=VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, image=0x2, subresource_range=" +
+          "new_layout=VK_IMAGE_LAYOUT_GENERAL, image=0x2, subresource_range=" +
           endl() +
           "    aspect_mask=VK_IMAGE_ASPECT_COLOR_BIT, base_mip_level=0, level_count=4294967295, "
           "base_array_layer=0, layer_count=4294967295  )" +
@@ -560,7 +560,7 @@ TEST_F(VKRenderGraphTestTransfer, copy_buffer_to_image_synchronization_aliased_i
           " - image_barrier(src_access_mask=VK_ACCESS_MEMORY_READ_BIT, "
           "VK_ACCESS_MEMORY_WRITE_BIT, "
           "dst_access_mask=VK_ACCESS_TRANSFER_WRITE_BIT, "
-          "old_layout=VK_IMAGE_LAYOUT_UNDEFINED, new_layout=VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, "
+          "old_layout=VK_IMAGE_LAYOUT_GENERAL, new_layout=VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, "
           "image=0x2, subresource_range=" +
           endl() +
           "    aspect_mask=VK_IMAGE_ASPECT_COLOR_BIT, base_mip_level=0, level_count=4294967295, "

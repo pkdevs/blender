@@ -121,12 +121,24 @@ void VKCommandBuilder::groups_extract_barriers(VKRenderGraph &render_graph,
         barrier_list_.append(barrier);
       }
 
+      /* Reset the tracked layout of aliased images to undefined once their memory can be reused.
+       */
+      if (node.type == VKNodeType::SYNCHRONIZATION &&
+          node.synchronization.reset_layout_to_undefined)
+      {
+        for (const VKRenderGraphImage &link : render_graph.linked_images(node_handle)) {
+          VKResourceStateTracker::Resource &resource = render_graph.resources_.get_image_resource(
+              link.resource.handle);
+          resource.barrier_state.image_layout = VK_IMAGE_LAYOUT_UNDEFINED;
+        }
+      }
+
       /* Check for additional barriers when resuming rendering.
        *
        * Between suspending rendering and resuming the state/layout of resources can change and
        * require additional barriers.
        */
-      if (node.type == VKNodeType::BEGIN_RENDERING) {
+      else if (node.type == VKNodeType::BEGIN_RENDERING) {
         /* Begin rendering scope. */
         BLI_assert(!rendering_active);
         rendering_scope = node_handle;
@@ -928,15 +940,6 @@ void VKCommandBuilder::add_image_barrier(VkImage vk_image,
                                          const VKSubImageRange &subimage)
 {
   BLI_assert(aspect_mask != VK_IMAGE_ASPECT_NONE);
-
-  /* A requested layout of UNDEFINED indicates the caller only needs synchronization, not a layout
-   * transition (e.g., an aliased image whose contents are discarded). Keep the current layout to
-   * avoid emitting an invalid transition to UNDEFINED. The resource is still tracked as UNDEFINED
-   * by the caller so the next access transitions from it. */
-  if (new_image_layout == VK_IMAGE_LAYOUT_UNDEFINED) {
-    new_image_layout = old_image_layout;
-  }
-
   for (VkImageMemoryBarrier &vk_image_memory_barrier :
        vk_image_memory_barriers_.as_mutable_span().drop_front(
            r_barrier.image_memory_barriers.start()))
