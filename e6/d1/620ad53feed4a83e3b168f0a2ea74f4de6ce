@@ -1,3 +1,4 @@
 Referenced by issue #163011, Blocky shadow artifacts following recent change in transparent shadows
 Referenced by issue #162770, 5.2 regression: modifier panel inputs fail to create override operations when pasting datablocks in outliner
 Referenced by pull request #162973, Fix #162770: Geometry Nodes input overrides lost after copy-paste
+Referenced by issue #163077, %.# Bug Report UVEditing
