@@ -3213,9 +3213,7 @@ class EXTENSIONS_OT_package_install(Operator, _ExtCmdMixIn):
             self._draw_for_drop(context)
 
     def _draw_for_drop(self, _context):
-        from .bl_extension_ui import (
-            size_as_fmt_string,
-        )
+        from .bl_extension_utils import size_as_fmt_string
         layout = self.layout
 
         _repo_index, repo_name, _pkg_id, item_remote = self._drop_variables

@@ -48,28 +48,6 @@ USE_ADDON_IGNORE_EXTENSION_MANIFEST_HACK = True
 
 
 # -----------------------------------------------------------------------------
-# Generic Utilities
-
-def size_as_fmt_string(num: float, *, precision: int = 1) -> str:
-    for unit in ("B", "KB", "MB", "GB", "TB", "PB", "EB", "ZB"):
-        if abs(num) < 1024.0:
-            return "{:3.{:d}f}{:s}".format(num, precision, unit)
-        num /= 1024.0
-    unit = "YB"
-    return "{:.{:d}f}{:s}".format(num, precision, unit)
-
-
-def sizes_as_percentage_string(size_partial: int, size_final: int) -> str:
-    if size_final == 0:
-        percent = 0.0
-    else:
-        size_partial = min(size_partial, size_final)
-        percent = size_partial / size_final
-
-    return "{:-6.2f}%".format(percent * 100)
-
-
-# -----------------------------------------------------------------------------
 # Shared Utilities (Extensions / Legacy Add-ons)
 
 def pkg_repo_and_id_from_theme_path(repos_all, filepath):
@@ -1307,6 +1285,8 @@ def extension_draw_item(
         extensions_warnings,  # `dict[str, list[str]]`
         show_developer_ui,  # `bool`
 ):
+    from .bl_extension_utils import size_as_fmt_string
+
     item = item_local or item_remote
     is_installed = item_local is not None
     has_remote = repo_item.remote_url != ""
@@ -2025,6 +2005,10 @@ def extensions_panel_draw(panel, context):
     )
     from .bl_extension_notify import (
         update_in_progress,
+    )
+    from .bl_extension_utils import (
+        size_as_fmt_string,
+        sizes_as_percentage_string,
     )
 
     from bpy.app.translations import pgettext_iface as iface_

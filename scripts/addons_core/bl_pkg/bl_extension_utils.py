@@ -51,6 +51,10 @@ __all__ = (
     "RepoLockContext",
 
     "repo_lock_directory_query",
+
+    # Size String Formatting.
+    "size_as_fmt_string",
+    "sizes_as_percentage_string",
 )
 
 import abc
@@ -2370,3 +2374,25 @@ def repo_lock_directory_force_unlock(
     except Exception as ex:
         return str(ex)
     return None
+
+
+# -----------------------------------------------------------------------------
+# Size String Formatting
+
+def size_as_fmt_string(num: float, *, precision: int = 1) -> str:
+    for unit in ("B", "KB", "MB", "GB", "TB", "PB", "EB", "ZB"):
+        if abs(num) < 1024.0:
+            return "{:3.{:d}f}{:s}".format(num, precision, unit)
+        num /= 1024.0
+    unit = "YB"
+    return "{:.{:d}f}{:s}".format(num, precision, unit)
+
+
+def sizes_as_percentage_string(size_partial: int, size_final: int) -> str:
+    if size_final == 0:
+        percent = 0.0
+    else:
+        size_partial = min(size_partial, size_final)
+        percent = size_partial / size_final
+
+    return "{:-6.2f}%".format(percent * 100)
