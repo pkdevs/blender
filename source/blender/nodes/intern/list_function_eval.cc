@@ -233,7 +233,9 @@ static void add_list_to_params(mf::ParamsBuilder &params,
     return false;
   }
   for (const int output_i : output_values.index_range()) {
-    output_values[output_i]->set(GList::from_container(std::move(output_lists[output_i])));
+    if (output_values[output_i]) {
+      output_values[output_i]->set(GList::from_container(std::move(output_lists[output_i])));
+    }
   }
   return true;
 }
