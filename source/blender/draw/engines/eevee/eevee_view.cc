@@ -41,7 +41,7 @@ void ShadingView::sync()
   }
   else {
     /* Only enable -Z view. */
-    is_enabled_ = (face_id_ == 5);
+    is_enabled_ = (face_id_ == PANORAMIC_FACE_NEG_Z);
   }
 
   if (!is_enabled_) {

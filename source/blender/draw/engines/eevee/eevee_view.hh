@@ -43,7 +43,7 @@ class ShadingView {
   /** Matrix to apply to the viewmat. */
   float4x4 face_matrix_;
   /** Cubemap face index. Used by panoramic views and film reprojection. */
-  int face_id_ = -1;
+  ePanoramicFace face_id_;
 
   /** Ray-tracing persistent buffers. Only opaque and refraction can have surface tracing. */
   RayTraceBuffer rt_buffer_opaque_;
@@ -70,7 +70,10 @@ class ShadingView {
   bool is_enabled_ = false;
 
  public:
-  ShadingView(Instance &inst, const char *name, const float4x4 &face_matrix, int face_id)
+  ShadingView(Instance &inst,
+              const char *name,
+              const float4x4 &face_matrix,
+              ePanoramicFace face_id)
       : inst_(inst),
         name_(name),
         face_matrix_(face_matrix),
@@ -118,12 +121,12 @@ class MainView {
 
  public:
   MainView(Instance &inst)
-      : shading_views_0(inst, "posX_view", cubeface_mat(0), 0),
-        shading_views_1(inst, "negX_view", cubeface_mat(1), 1),
-        shading_views_2(inst, "posY_view", cubeface_mat(2), 2),
-        shading_views_3(inst, "negY_view", cubeface_mat(3), 3),
-        shading_views_4(inst, "posZ_view", cubeface_mat(4), 4),
-        shading_views_5(inst, "negZ_view", cubeface_mat(5), 5)
+      : shading_views_0(inst, "posX_view", cubeface_mat(0), PANORAMIC_FACE_POS_X),
+        shading_views_1(inst, "negX_view", cubeface_mat(1), PANORAMIC_FACE_NEG_X),
+        shading_views_2(inst, "posY_view", cubeface_mat(2), PANORAMIC_FACE_POS_Y),
+        shading_views_3(inst, "negY_view", cubeface_mat(3), PANORAMIC_FACE_NEG_Y),
+        shading_views_4(inst, "posZ_view", cubeface_mat(4), PANORAMIC_FACE_POS_Z),
+        shading_views_5(inst, "negZ_view", cubeface_mat(5), PANORAMIC_FACE_NEG_Z)
   {
   }
 

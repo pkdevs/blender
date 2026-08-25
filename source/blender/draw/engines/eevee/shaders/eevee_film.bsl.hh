@@ -36,39 +36,39 @@ float depth_convert_to_scene(const ViewMatrices view,
   return -view.depth_screen_to_view(depth);
 }
 
-int panoramic_face_index(float3 direction)
+ePanoramicFace panoramic_face_index(float3 direction)
 {
   float3 abs_direction = abs(direction);
   if (abs_direction.x >= abs_direction.y && abs_direction.x >= abs_direction.z) {
-    return (direction.x >= 0.0f) ? 0 : 1;
+    return (direction.x >= 0.0f) ? PANORAMIC_FACE_POS_X : PANORAMIC_FACE_NEG_X;
   }
   if (abs_direction.y >= abs_direction.z) {
-    return (direction.y >= 0.0f) ? 2 : 3;
+    return (direction.y >= 0.0f) ? PANORAMIC_FACE_POS_Y : PANORAMIC_FACE_NEG_Y;
   }
-  return (direction.z >= 0.0f) ? 4 : 5;
+  return (direction.z >= 0.0f) ? PANORAMIC_FACE_POS_Z : PANORAMIC_FACE_NEG_Z;
 }
 
-float2 panoramic_face_uv_from_direction(float3 direction, int face_id)
+float2 panoramic_face_uv_from_direction(float3 direction, ePanoramicFace face_id)
 {
   float2 uv;
   switch (face_id) {
     default:
-    case 0:
+    case PANORAMIC_FACE_POS_X:
       uv = float2(-direction.z, -direction.y) * safe_rcp(direction.x);
       break;
-    case 1:
+    case PANORAMIC_FACE_NEG_X:
       uv = float2(-direction.z, direction.y) * safe_rcp(direction.x);
       break;
-    case 2:
+    case PANORAMIC_FACE_POS_Y:
       uv = float2(direction.x, direction.z) * safe_rcp(direction.y);
       break;
-    case 3:
+    case PANORAMIC_FACE_NEG_Y:
       uv = float2(-direction.x, direction.z) * safe_rcp(direction.y);
       break;
-    case 4:
+    case PANORAMIC_FACE_POS_Z:
       uv = float2(direction.x, -direction.y) * safe_rcp(direction.z);
       break;
-    case 5:
+    case PANORAMIC_FACE_NEG_Z:
       uv = float2(direction.x, direction.y) * safe_rcp(direction.z);
       break;
   }
@@ -219,7 +219,7 @@ struct Film {
     if (length_squared(camera_direction) == 0.0f) {
       return -1;
     }
-    return panoramic_face_index(camera_direction);
+    return int(panoramic_face_index(camera_direction));
   }
 
   bool panoramic_texel_is_owned_by_view(float3 camera_direction, int view_id)
@@ -227,7 +227,7 @@ struct Film {
     return panoramic_texel_owner_view_id(camera_direction) == view_id;
   }
 
-  float2 panoramic_render_uv_get(int2 texel_film, int view_id)
+  float2 panoramic_render_uv_get(int2 texel_film, ePanoramicFace view_id)
   {
     [[resource_table]] const Uniform &uni = this->uniforms;
 
@@ -238,7 +238,7 @@ struct Film {
     }
 
     /* if view_id is not the owner, throw the pixel out */
-    if (!panoramic_texel_is_owned_by_view(camera_direction, view_id)) {
+    if (!panoramic_texel_is_owned_by_view(camera_direction, int(view_id))) {
       return float2(-1.0f);
     }
 
@@ -254,7 +254,7 @@ struct Film {
     return render_uv;
   }
 
-  FilmSample panoramic_sample_get(int2 texel_film, int view_id)
+  FilmSample panoramic_sample_get(int2 texel_film, ePanoramicFace view_id)
   {
     FilmSample film_sample;
     film_sample.texel = int2(0);
@@ -271,7 +271,7 @@ struct Film {
     return film_sample;
   }
 
-  int panoramic_view_id_get()
+  ePanoramicFace panoramic_view_id_get()
   {
     [[resource_table]] const Uniform &uni = this->uniforms;
     [[resource_table]] const draw::View &views = this->views_;
@@ -318,7 +318,7 @@ struct Film {
     return film_sample;
   }
 
-  FilmSample sample_get(int sample_n, int2 texel_film, int view_id)
+  FilmSample sample_get(int sample_n, int2 texel_film, ePanoramicFace view_id)
   {
     [[resource_table]] const Uniform &uni = this->uniforms;
 

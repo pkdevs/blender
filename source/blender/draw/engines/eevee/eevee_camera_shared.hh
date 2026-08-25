@@ -31,6 +31,16 @@ static inline bool is_panoramic(eCameraType type)
   return type > CAMERA_ORTHO;
 }
 
+/** Index of panoramic camera's 6 cube map faces. */
+enum [[host_shared]] ePanoramicFace : uint32_t {
+  PANORAMIC_FACE_POS_X = 0u,
+  PANORAMIC_FACE_NEG_X = 1u,
+  PANORAMIC_FACE_POS_Y = 2u,
+  PANORAMIC_FACE_NEG_Y = 3u,
+  PANORAMIC_FACE_POS_Z = 4u,
+  PANORAMIC_FACE_NEG_Z = 5u,
+};
+
 struct [[host_shared]] CameraData {
   /* View Matrices of the camera, not from any view! */
   float4x4 persmat;
