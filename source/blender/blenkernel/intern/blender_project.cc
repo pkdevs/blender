@@ -65,6 +65,13 @@ ProjectVariable::ProjectVariable(StringRef name, ProjectVariableType type)
    * creation, only pointer-based. We free this after copying its data to `this`. */
   IDProperty *tmp_property;
 
+  /* Guard against invalid types, in case of enum casts from integers.
+   * We could instead do this as the `default` case in the switch below, but
+   * then we don't get nice compiler warnings if someone adds a type but
+   * forgets to handle it here. */
+  BLI_assert(ELEM(
+      type, ProjectVariableType::INT, ProjectVariableType::FLOAT, ProjectVariableType::STRING));
+
   switch (type) {
     case ProjectVariableType::INT: {
       IDPropertyTemplate prop_template{0};
