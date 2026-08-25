@@ -252,7 +252,6 @@ static void createTransGreasePencilVerts(bContext *C, TransInfo *t)
     curves_transform_data.deformation_offsets.reinitialize(drawings.size());
     curves_transform_data.src_positions.reinitialize(drawings.size());
     curves_transform_data.value_attribute.reinitialize(drawings.size());
-    curves_transform_data.src_value_attribute.reinitialize(drawings.size());
 
     for (ed::greasepencil::MutableDrawingInfo info : drawings) {
       bke::CurvesGeometry &curves = info.drawing.strokes_for_write();
@@ -378,7 +377,6 @@ static void createTransGreasePencilVerts(bContext *C, TransInfo *t)
           bke::MutableAttributeAccessor attributes = curves.attributes_for_write();
           const Span<float> opacities = info.drawing.opacities_for_write();
 
-          curves_transform_data.src_value_attribute[drawing] = Array<float>(opacities);
           curves_transform_data.value_attribute[drawing] = Array<float>(opacities);
 
           MutableSpan<float> opacity =
@@ -398,7 +396,6 @@ static void createTransGreasePencilVerts(bContext *C, TransInfo *t)
           bke::MutableAttributeAccessor attributes = curves.attributes_for_write();
           const Span<float> radii = info.drawing.radii_for_write();
 
-          curves_transform_data.src_value_attribute[drawing] = Array<float>(radii);
           curves_transform_data.value_attribute[drawing] = Array<float>(radii);
 
           MutableSpan<float> radius =
@@ -501,7 +498,6 @@ static void recalcData_grease_pencil(TransInfo *t)
       bke::MutableAttributeAccessor attributes = curves.attributes_for_write();
       const Span<float3> deformation_offsets = transform_data.deformation_offsets[i];
       const Span<float3> src_positions = transform_data.src_positions[i];
-      const Span<float> src_value = transform_data.src_value_attribute[i];
 
       if (t->mode == TFM_CURVE_SHRINKFATTEN) {
         if (key && actkb && tc.obedit->shapenr != 1) {
