@@ -59,6 +59,15 @@ struct CameraParams {
   float sensor_y = 0.0f;
   int sensor_fit = 0;
 
+  /**
+   * Aspect override: the aspect ratio (y-over-x) of the rect the sensor fit and framing are
+   * resolved against. The resolved frame is inscribed and centered inside the view rect. Currently
+   * it is used in the camera viewport view with scene render size aspect, so its framing follows
+   * the camera's frame rather than the viewport size or aspect.
+   */
+  bool use_aspect_override = false;
+  float aspect_override = 0.0f;
+
   /* clipping */
   float clip_start = 0.1f;
   float clip_end = 100.0f;

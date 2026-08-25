@@ -425,6 +425,12 @@ void BKE_camera_params_from_view3d(CameraParams *params,
     const Object *ob_camera_eval = DEG_get_evaluated(depsgraph, v3d->camera);
     BKE_camera_params_from_object(params, ob_camera_eval);
 
+    /* Override the aspect, so change in viewport framing is minimized when camera parameters. */
+    const Scene *scene = DEG_get_evaluated_scene(depsgraph);
+    params->use_aspect_override = true;
+    params->aspect_override = (float(scene->r.ysch) * scene->r.yasp) /
+                              (float(scene->r.xsch) * scene->r.xasp);
+
     params->zoom = BKE_screen_view3d_zoom_to_fac(rv3d->camzoom);
 
     params->offsetx = 2.0f * rv3d->camdx * params->zoom;
@@ -468,6 +474,10 @@ void BKE_camera_params_compute_viewplane(
 
   params->ycor = aspy / aspx;
 
+  const float fasp = params->use_aspect_override ? params->aspect_override :
+                                                   (params->ycor * float(winy)) / float(winx);
+  float frame_width = math::min(float(winx), params->ycor * float(winy) / fasp);
+
   if (params->is_ortho) {
     /* orthographic camera */
     /* scale == 1.0 means exact 1 to 1 mapping */
@@ -480,16 +490,12 @@ void BKE_camera_params_compute_viewplane(
   }
 
   /* determine sensor fit */
-  sensor_fit = BKE_camera_sensor_fit(params->sensor_fit, aspx * winx, aspy * winy);
+  sensor_fit = BKE_camera_sensor_fit(params->sensor_fit, 1.0f, fasp);
 
-  if (sensor_fit == CAMERA_SENSOR_FIT_HOR) {
-    viewfac = winx;
-  }
-  else {
-    viewfac = params->ycor * winy;
-  }
+  viewfac = (sensor_fit == CAMERA_SENSOR_FIT_HOR) ? 1.0f : fasp;
 
   pixsize /= viewfac;
+  pixsize /= frame_width;
 
   /* extra zoom factor */
   pixsize *= params->zoom;
@@ -502,8 +508,8 @@ void BKE_camera_params_compute_viewplane(
   viewplane.ymax = 0.5f * params->ycor * float(winy);
 
   /* lens shift and offset */
-  dx = params->shiftx * viewfac + winx * params->offsetx;
-  dy = params->shifty * viewfac + winy * params->offsety;
+  dx = params->shiftx * viewfac * frame_width + winx * params->offsetx;
+  dy = params->shifty * viewfac * frame_width + winy * params->offsety;
 
   viewplane.xmin += dx;
   viewplane.ymin += dy;
