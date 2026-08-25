@@ -14,7 +14,7 @@ def test_area_split():
     screen = window.screen
     initial_count = len(screen.areas)
 
-    ui.split_area(ui.largest_area(screen), "VERTICAL", 0.5)
+    ui.split_area_pair(screen)
     yield
 
     t.assertEqual(len(screen.areas), initial_count + 1, "Area split did not create a new area")
@@ -25,9 +25,7 @@ def test_area_join():
     screen = window.screen
     initial_count = len(screen.areas)
 
-    source = ui.largest_area(screen)
-
-    ui.split_area(source, "VERTICAL", 0.5)
+    source = ui.split_area_pair(screen)
     yield
 
     target = screen.areas[-1]
