@@ -683,12 +683,13 @@ static bool sequencer_is_mouse_over_handle(const bContext *C, const wmEvent *eve
     return false;
   }
 
+  const SpaceSeq *sseq = CTX_wm_space_seq(C);
   const View2D *v2d = ui::view2d_fromcontext(C);
 
   float mouse_co[2];
   ui::view2d_region_to_view(v2d, event->mval[0], event->mval[1], &mouse_co[0], &mouse_co[1]);
 
-  ed::vse::StripSelection selection = ed::vse::pick_strip_and_handle(scene, v2d, mouse_co);
+  ed::vse::StripSelection selection = ed::vse::pick_strip_and_handle(scene, sseq, v2d, mouse_co);
 
   return selection.handle != ed::vse::STRIP_HANDLE_NONE;
 }

@@ -806,6 +806,11 @@ static bool transform_modal_item_poll(const wmOperator *op, int value)
       if (t->spacetype != SPACE_SEQ) {
         return false;
       }
+      break;
+    case TFM_MODAL_STRIP_SYMMETRIC:
+      if (t->spacetype != SPACE_SEQ) {
+        return false;
+      }
       if (t->data_type == &TransConvertType_SequencerRetiming) {
         return false;
       }
@@ -867,6 +872,7 @@ wmKeyMap *transform_modal_keymap(wmKeyConfig *keyconf)
       {TFM_MODAL_PASSTHROUGH_NAVIGATE, "PASSTHROUGH_NAVIGATE", 0, "Navigate", ""},
       {TFM_MODAL_NODE_FRAME, "NODE_FRAME", 0, "Attach/Detach Frame", ""},
       {TFM_MODAL_STRIP_CLAMP, "STRIP_CLAMP_TOGGLE", 0, "Clamp Strips", ""},
+      {TFM_MODAL_STRIP_SYMMETRIC, "STRIP_SYMMETRIC_TOGGLE", 0, "Symmetric Transitions", ""},
       {0, nullptr, 0, nullptr, nullptr},
   };
 
@@ -1416,7 +1422,11 @@ wmOperatorStatus transformEvent(TransInfo *t, wmOperator *op, const wmEvent *eve
         }
         break;
       case TFM_MODAL_STRIP_CLAMP:
-        t->modifiers ^= MOD_STRIP_CLAMP_HOLDS;
+        t->modifiers ^= MOD_STRIP_SOFT_CLAMP;
+        t->redraw |= TREDRAW_HARD;
+        break;
+      case TFM_MODAL_STRIP_SYMMETRIC:
+        t->modifiers ^= MOD_STRIP_SYMMETRIC;
         t->redraw |= TREDRAW_HARD;
         break;
       default:

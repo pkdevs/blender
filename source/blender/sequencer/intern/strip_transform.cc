@@ -68,12 +68,67 @@ bool transform_test_overlap(const Scene *scene, Strip *strip1, Strip *strip2)
 
 bool transform_test_overlap(const Scene *scene, ListBaseT<Strip> *seqbasep, Strip *test)
 {
+  /* Don't shuffle transitions. */
+  if (test->is_overlap_transition()) {
+    return false;
+  }
   for (Strip &strip : *seqbasep) {
+    /* Transitions should only ever overlap the strips they're applied on. Don't shuffle based on
+     * them. */
+    if (strip.is_overlap_transition()) {
+      continue;
+    }
+    if (edit_strip_flagged_for_removal(scene, &strip)) {
+      continue;
+    }
     if (transform_test_overlap(scene, test, &strip)) {
       return true;
     }
   }
+
   return false;
+}
+
+void transform_set_overlap_flags(const Scene *scene,
+                                 ListBaseT<Strip> *seqbasep,
+                                 VectorSet<Strip *> &strips)
+{
+  edit_cancel_removal(scene);
+  for (Strip *strip : strips) {
+    strip->runtime->flag &= ~StripRuntimeFlag::Overlap;
+  }
+
+  /* First flag transitions for deletion. */
+  for (Strip *transition : strips) {
+    if (!transition->is_overlap_transition()) {
+      continue;
+    }
+    const Strip *left = transition->input1;
+    const Strip *right = transition->input2;
+    if (left->right_handle(scene) != right->left_handle() || left->channel != right->channel ||
+        transition->left_handle() < left->left_handle() ||
+        transition->right_handle(scene) > right->right_handle(scene) ||
+        transition->left_handle() >= left->right_handle(scene) ||
+        transition->right_handle(scene) <= right->left_handle())
+    {
+      edit_flag_for_removal(scene, transition);
+    }
+  }
+
+  /* Then test overlap. */
+  for (Strip *strip : strips) {
+    if (edit_strip_flagged_for_removal(scene, strip)) {
+      continue;
+    }
+    if (strip->is_overlap_transition()) {
+      continue;
+    }
+    if (!transform_test_overlap(scene, seqbasep, strip)) {
+      continue;
+    }
+
+    strip->runtime->flag |= StripRuntimeFlag::Overlap;
+  }
 }
 
 /** \} */
@@ -100,11 +155,12 @@ void transform_translate_strip(Scene *evil_scene, Strip *strip, int delta)
     const int right_handle = strip->right_handle(evil_scene);
     strip->handles_set(evil_scene, left_handle + delta, right_handle + delta);
   }
-  else if (strip->input1 == nullptr && strip->input2 == nullptr) { /* All other strip types. */
+  /* All other strip types. */
+  else if (!strip->is_time_dependent()) {
     strip->start += delta;
-    /* Only to make files usable in older versions. */
-    strip->startdisp = strip->left_handle();
-    strip->enddisp = strip->right_handle(evil_scene);
+    /* For transitions and to make files usable in older versions. */
+    strip->startdisp += delta;
+    strip->enddisp += delta;
   }
 
   offset_animdata(evil_scene, strip, delta);
@@ -233,12 +289,22 @@ bool transform_seqbase_shuffle_time(Span<Strip *> strips_to_shuffle,
                                     ListBaseT<TimeMarker> *markers,
                                     const bool use_sync_markers)
 {
+  Editing *ed = editing_get(evil_scene);
   int offset_l = shuffle_strip_time_offset_get(evil_scene, strips_to_shuffle, seqbasep, 'L');
   int offset_r = shuffle_strip_time_offset_get(evil_scene, strips_to_shuffle, seqbasep, 'R');
   int offset = (-offset_l < offset_r) ? offset_l : offset_r;
 
   if (offset) {
-    for (Strip *strip : strips_to_shuffle) {
+    /* If both transition inputs are being shuffled, move the transition with them. */
+    VectorSet<Strip *> strips_to_translate;
+    strips_to_translate.add_multiple(strips_to_shuffle);
+    expand_strips(ed, strips_to_translate, StripRelation::Transitions);
+    strips_to_translate.remove_if([&](Strip *strip) {
+      return strip->is_overlap_transition() && !(strips_to_translate.contains(strip->input1) &&
+                                                 strips_to_translate.contains(strip->input2));
+    });
+
+    for (Strip *strip : strips_to_translate) {
       transform_translate_strip(evil_scene, strip, offset);
       strip->runtime->flag &= ~StripRuntimeFlag::Overlap;
     }
@@ -361,7 +427,7 @@ static void strip_transform_handle_overwrite_trim(Scene *scene,
                                                   Strip *target,
                                                   bool covers_left)
 {
-  Editing *ed = seq::editing_get(scene);
+  Editing *ed = editing_get(scene);
   VectorSet<Strip *> targets;
   targets.add(target);
   expand_strips(ed, targets, StripRelation::EffectChain);
@@ -506,6 +572,16 @@ void transform_handle_overlap(Scene *scene,
     }
     strip->runtime->flag &= ~StripRuntimeFlag::Overlap;
   }
+
+  /* Finally remove transition strips if the input strips are no longer adjacent. */
+  Editing *ed = editing_get(scene);
+
+  VectorSet<Strip *> transform_expanded;
+  transform_expanded.add_multiple(source_strips);
+  expand_strips(ed, transform_expanded, StripRelation::Effects);
+  transform_set_overlap_flags(scene, seqbasep, transform_expanded);
+
+  edit_remove_flagged_strips(scene, seqbasep);
 }
 
 void transform_strips_after_frame(Scene *scene,

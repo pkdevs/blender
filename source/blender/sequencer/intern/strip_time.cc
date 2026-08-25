@@ -177,20 +177,9 @@ void time_update_meta_strip_range(const Scene *scene, Strip *strip_meta)
   time_update_meta_strip_range(scene, lookup_meta_by_strip(scene->ed, strip_meta));
 }
 
-static bool transition_inputs_have_wrong_order(const Scene *scene,
-                                               const Strip *input1,
-                                               const Strip *input2)
-{
-  const int first_start = input1->left_handle();
-  const int second_start = input2->left_handle();
-  return (first_start > second_start) ||
-         (first_start == second_start &&
-          input1->right_handle(scene) > input2->right_handle(scene));
-}
-
 void strip_time_effect_range_set(const Scene *scene, Strip *strip)
 {
-  if (strip->input1 == nullptr && strip->input2 == nullptr) {
+  if (!strip->is_time_dependent()) {
     return;
   }
 
@@ -200,7 +189,7 @@ void strip_time_effect_range_set(const Scene *scene, Strip *strip)
                             strip->input2->right_handle(scene));
 
     /* Sort by timeline frame so 2-input transitions go "from" earlier "to" later. */
-    if (effect_is_transition(strip->type) &&
+    if (strip_type_can_be_transition(strip->type) &&
         transition_inputs_have_wrong_order(scene, strip->input1, strip->input2))
     {
       std::swap(strip->input1, strip->input2);
@@ -420,7 +409,7 @@ static void strip_time_slip_strip_ex(const Scene *scene,
 
   /* Skip effect strips where the length is dependent on another strip,
    * as they are calculated with #strip_time_update_effects_strip_range. */
-  if (strip->input1 != nullptr || strip->input2 != nullptr) {
+  if (strip->is_time_dependent()) {
     return;
   }
 
@@ -457,10 +446,11 @@ static void strip_time_slip_strip_ex(const Scene *scene,
     strip->startofs = strip->startofs - delta;
     strip->end_offset_set(strip->end_offset() + delta);
   }
-
-  /* Only to make files usable in older versions. */
-  strip->startdisp = strip->left_handle();
-  strip->enddisp = strip->right_handle(scene);
+  else {
+    /* For transitions and to make files usable in older versions. */
+    strip->startdisp += delta;
+    strip->enddisp += delta;
+  }
 
   Span<Strip *> effects = lookup_effects_by_strip(scene->ed, strip);
   strip_time_update_effects_strip_range(scene, effects);
@@ -473,6 +463,11 @@ void time_slip_strip(
 }
 
 }  // namespace seq
+
+bool Strip::is_time_dependent() const
+{
+  return (this->input1 != nullptr || this->input2 != nullptr) && !this->is_overlap_transition();
+}
 
 float Strip::media_playback_rate_factor(float scene_fps) const
 {
@@ -589,7 +584,8 @@ void Strip::left_handle_set(const Scene *scene, int timeline_frame)
     this->startofs = offset;
   }
 
-  this->startdisp = timeline_frame; /* Only to make files usable in older versions. */
+  /* For transitions and making files usable in older versions. */
+  this->startdisp = timeline_frame;
 
   Span<Strip *> effects = seq::lookup_effects_by_strip(scene->ed, this);
   seq::strip_time_update_effects_strip_range(scene, effects);
@@ -605,7 +601,8 @@ void Strip::right_handle_set(const Scene *scene, int timeline_frame)
   }
 
   this->end_offset_set(this->content_end(scene) - timeline_frame);
-  this->enddisp = timeline_frame; /* Only to make files usable in older versions. */
+  /* For transitions and making files usable in older versions. */
+  this->enddisp = timeline_frame;
 
   Span<Strip *> effects = seq::lookup_effects_by_strip(scene->ed, this);
   seq::strip_time_update_effects_strip_range(scene, effects);

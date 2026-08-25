@@ -43,6 +43,7 @@ void select_strip_single(Scene *scene, Strip *strip, bool deselect_all);
  * \return true if any strips were deselected; false otherwise.
  */
 bool deselect_all_strips(const Scene *scene);
+bool deselect_transition_handles(const Scene *scene);
 
 bool maskedit_mask_poll(bContext *C);
 bool check_show_maskedit(SpaceSeq *sseq, Scene *scene);
@@ -77,6 +78,7 @@ void special_preview_clear();
  */
 VectorSet<Strip *> selected_strips_from_context(bContext *C);
 StripSelection pick_strip_and_handle(const struct Scene *scene,
+                                     const SpaceSeq *sseq,
                                      const View2D *v2d,
                                      float mouse_co[2]);
 bool can_select_handle(const Scene *scene, const Strip *strip, const View2D *v2d);

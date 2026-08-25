@@ -59,7 +59,7 @@ enum eStripFlag : uint32_t {
   SEQ_AUTO_PLAYBACK_RATE = (1 << 17),
   SEQ_SINGLE_FRAME_CONTENT = (1 << 18),
   SEQ_SHOW_RETIMING = (1 << 19),
-  /* (1 << 20) unused, set to zero by versioning code. */
+  SEQ_SAME_CHANNEL_TRANSITION = (1 << 20),
   SEQ_MULTIPLY_ALPHA = (1 << 21),
 
   SEQ_USE_EFFECT_DEFAULT_FADE = (1 << 22),
@@ -479,12 +479,25 @@ struct Strip {
   seq::StripRuntime *runtime = nullptr;
 
 #ifdef __cplusplus
+  /**
+   * Transitions can overlap the input strips or not. Overlap transitions have handles and are
+   * drawn in a different way. Non-overlap transitions behave the same as the old transition effect
+   * strips.
+   */
+  bool is_overlap_transition() const;
+
   bool is_effect() const;
   int effect_num_inputs_get() const;
   bool is_effect_with_inputs() const
   {
     return this->effect_num_inputs_get() != 0;
   }
+
+  /**
+   * Returns true if the length and location of this strip depends on the timing of its input
+   * strips. False for transitions as they can be positioned independently within strip bounds.
+   */
+  bool is_time_dependent() const;
 
   /**
    * Get timeline frame where strip content starts.

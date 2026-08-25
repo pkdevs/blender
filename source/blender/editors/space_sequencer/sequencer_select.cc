@@ -39,6 +39,7 @@
 
 #include "SEQ_channels.hh"
 #include "SEQ_connect.hh"
+#include "SEQ_effects.hh"
 #include "SEQ_iterator.hh"
 #include "SEQ_relations.hh"
 #include "SEQ_retiming.hh"
@@ -93,24 +94,80 @@ bool deselect_all_strips(const Scene *scene)
   return changed;
 }
 
-Strip *strip_under_mouse_get(const Scene *scene, const View2D *v2d, const int mval[2])
+static bool has_transition_handles_selected(const Scene *scene)
+
+{
+  /* It should be the case that there are only transition handles selected if and only if the
+   * active strip is a transition and has a handle selected. */
+  Strip *active = seq::select_active_get(scene);
+
+  if (active && active->is_overlap_transition()) {
+    if ((active->flag & (SEQ_LEFTSEL | SEQ_RIGHTSEL)) != 0) {
+      return true;
+    }
+  }
+  return false;
+}
+
+bool deselect_transition_handles(const Scene *scene)
+{
+  Editing *ed = seq::editing_get(scene);
+  bool changed = false;
+
+  if (ed == nullptr) {
+    return false;
+  }
+  /* If the selection state is invalid before running this function it may not deselect handles.
+   * Clamping already prevents things from breaking in an invalid state, so assume selection is
+   * always valid. */
+  if (!has_transition_handles_selected(scene)) {
+    return false;
+  }
+
+  for (Strip &strip : *seq::active_seqbase_get(ed)) {
+    if (strip.is_overlap_transition() && (strip.flag & (SEQ_LEFTSEL | SEQ_RIGHTSEL))) {
+      strip.flag &= ~(SEQ_LEFTSEL | SEQ_RIGHTSEL);
+      changed = true;
+    }
+  }
+  return changed;
+}
+
+static void deselect_non_transitions(ListBaseT<Strip> *seqbase)
+{
+  for (Strip &strip : *seqbase) {
+    if (!strip.is_overlap_transition()) {
+      strip.flag &= ~STRIP_ALLSEL;
+    }
+  }
+}
+
+Strip *strip_under_mouse_get(const Scene *scene,
+                             const SpaceSeq *sseq,
+                             const View2D *v2d,
+                             const int mval[2])
 {
   float mouse_co[2];
   ui::view2d_region_to_view(v2d, mval[0], mval[1], &mouse_co[0], &mouse_co[1]);
+  const int mouse_channel = int(mouse_co[1]);
 
+  Strip *intersecting_strip = nullptr;
   Vector<Strip *> visible = sequencer_visible_strips_get(scene, v2d);
-  int mouse_channel = int(mouse_co[1]);
   for (Strip *strip : visible) {
     if (strip->channel != mouse_channel) {
       continue;
     }
-    rctf body = strip_bounds_get(scene, strip);
+    rctf body = strip_bounds_get(scene, sseq, v2d, strip);
     if (BLI_rctf_isect_pt_v(&body, mouse_co)) {
-      return strip;
+      if (strip->is_overlap_transition()) {
+        return strip;
+      }
+      /* Keep looking in case there is a transition on top. */
+      intersecting_strip = strip;
     }
   }
 
-  return nullptr;
+  return intersecting_strip;
 }
 
 VectorSet<Strip *> all_strips_from_context(bContext *C)
@@ -280,16 +337,6 @@ void select_strip_single(Scene *scene, Strip *strip, bool deselect_all)
   strip->flag |= SEQ_SELECT;
 }
 
-rctf strip_bounds_get(const Scene *scene, const Strip *strip)
-{
-  rctf bounds;
-  bounds.xmin = strip->left_handle();
-  bounds.xmax = strip->right_handle(scene);
-  bounds.ymin = strip->channel + STRIP_OFSBOTTOM;
-  bounds.ymax = strip->channel + STRIP_OFSTOP;
-  return bounds;
-}
-
 rcti strip_int_bounds_get(const Scene *scene, const Strip *strip)
 {
   rcti bounds;
@@ -313,6 +360,9 @@ Strip *find_neighboring_strip(const Scene *scene, const Strip *test, const seq::
     sel = SEQ_SELECT;
   }
   for (Strip &strip : *ed->current_strips()) {
+    if (strip.is_overlap_transition()) {
+      continue;
+    }
     if ((&strip != test) && (test->channel == strip.channel) &&
         ((sel == -1) || (sel && (strip.flag & SEQ_SELECT)) ||
          (sel == 0 && (strip.flag & SEQ_SELECT) == 0)))
@@ -393,6 +443,10 @@ static wmOperatorStatus sequencer_de_select_all_exec(bContext *C, wmOperator *op
     deselect_all_strips(scene);
   }
   for (Strip *strip : strips) {
+    /* Transition handles and normal strips should not be selected at the same time. */
+    if (strip->is_overlap_transition()) {
+      strip->flag &= ~(SEQ_LEFTSEL | SEQ_RIGHTSEL);
+    }
     switch (action) {
       case SEL_SELECT:
         strip->flag |= SEQ_SELECT;
@@ -863,7 +917,7 @@ static float inner_clickable_handle_size_get(const Scene *scene,
 
 bool can_select_handle(const Scene *scene, const Strip *strip, const View2D *v2d)
 {
-  if (strip->is_effect_with_inputs()) {
+  if (strip->is_effect_with_inputs() && !strip->is_overlap_transition()) {
     return false;
   }
 
@@ -892,13 +946,14 @@ bool can_select_handle(const Scene *scene, const Strip *strip, const View2D *v2d
 }
 
 static void strip_clickable_areas_get(const Scene *scene,
-                                      const Strip *strip,
+                                      const SpaceSeq *sseq,
                                       const View2D *v2d,
+                                      const Strip *strip,
                                       rctf *r_body,
                                       rctf *r_left_handle,
                                       rctf *r_right_handle)
 {
-  *r_body = strip_bounds_get(scene, strip);
+  *r_body = strip_bounds_get(scene, sseq, v2d, strip);
   *r_left_handle = *r_body;
   *r_right_handle = *r_body;
 
@@ -910,22 +965,26 @@ static void strip_clickable_areas_get(const Scene *scene,
   BLI_rctf_pad(r_body, -handsize, 0.0f);
 }
 
-static rctf strip_clickable_area_get(const Scene *scene, const View2D *v2d, const Strip *strip)
+static rctf strip_clickable_area_get(const Scene *scene,
+                                     const SpaceSeq *sseq,
+                                     const View2D *v2d,
+                                     const Strip *strip)
 {
   rctf body, left, right;
-  strip_clickable_areas_get(scene, strip, v2d, &body, &left, &right);
+  strip_clickable_areas_get(scene, sseq, v2d, strip, &body, &left, &right);
   BLI_rctf_union(&body, &left);
   BLI_rctf_union(&body, &right);
   return body;
 }
 
 static float strip_to_frame_distance(const Scene *scene,
+                                     const SpaceSeq *sseq,
                                      const View2D *v2d,
                                      const Strip *strip,
                                      float timeline_frame)
 {
   rctf body, left, right;
-  strip_clickable_areas_get(scene, strip, v2d, &body, &left, &right);
+  strip_clickable_areas_get(scene, sseq, v2d, strip, &body, &left, &right);
   return BLI_rctf_length_x(&body, timeline_frame);
 }
 
@@ -935,6 +994,7 @@ static float strip_to_frame_distance(const Scene *scene,
  * returned.
  */
 static Vector<Strip *> padded_strips_under_mouse_get(const Scene *scene,
+                                                     const SpaceSeq *sseq,
                                                      const View2D *v2d,
                                                      float mouse_co[2])
 {
@@ -945,6 +1005,7 @@ static Vector<Strip *> padded_strips_under_mouse_get(const Scene *scene,
   }
 
   Vector<Strip *> strips;
+  Vector<Strip *> transitions;
   for (Strip &strip : *ed->current_strips()) {
     if (strip.channel != int(mouse_co[1])) {
       continue;
@@ -955,17 +1016,33 @@ static Vector<Strip *> padded_strips_under_mouse_get(const Scene *scene,
     if (strip.right_handle(scene) < v2d->cur.xmin) {
       continue;
     }
-    const rctf body = strip_clickable_area_get(scene, v2d, &strip);
+    if (!transitions.is_empty() && !strip.is_overlap_transition()) {
+      continue;
+    }
+    const rctf body = strip_clickable_area_get(scene, sseq, v2d, &strip);
     if (!BLI_rctf_isect_pt_v(&body, mouse_co)) {
       continue;
     }
-    strips.append(&strip);
+    if (strip.is_overlap_transition()) {
+      transitions.append(&strip);
+    }
+    else {
+      strips.append(&strip);
+    }
   }
 
-  std::ranges::sort(strips, [&](const Strip *strip1, const Strip *strip2) {
-    return strip_to_frame_distance(scene, v2d, strip1, mouse_co[0]) <
-           strip_to_frame_distance(scene, v2d, strip2, mouse_co[0]);
+  Vector<Strip *> &sorting = transitions.is_empty() ? strips : transitions;
+
+  std::ranges::sort(sorting, [&](const Strip *strip1, const Strip *strip2) {
+    return strip_to_frame_distance(scene, sseq, v2d, strip1, mouse_co[0]) <
+           strip_to_frame_distance(scene, sseq, v2d, strip2, mouse_co[0]);
   });
+
+  /* Transitions don't have adjacent handle selection. We only want the closest transition. */
+  if (!transitions.is_empty()) {
+    Vector<Strip *> transition{transitions[0]};
+    return transition;
+  }
 
   return strips;
 }
@@ -981,6 +1058,7 @@ static bool strips_are_adjacent(const Scene *scene, const Strip *strip1, const S
 }
 
 static eStripHandle strip_handle_under_cursor_get(const Scene *scene,
+                                                  const SpaceSeq *sseq,
                                                   const Strip *strip,
                                                   const View2D *v2d,
                                                   float mouse_co[2])
@@ -990,7 +1068,7 @@ static eStripHandle strip_handle_under_cursor_get(const Scene *scene,
   }
 
   rctf body, left, right;
-  strip_clickable_areas_get(scene, strip, v2d, &body, &left, &right);
+  strip_clickable_areas_get(scene, sseq, v2d, strip, &body, &left, &right);
   if (BLI_rctf_isect_pt_v(&left, mouse_co)) {
     return STRIP_HANDLE_LEFT;
   }
@@ -1002,12 +1080,13 @@ static eStripHandle strip_handle_under_cursor_get(const Scene *scene,
 }
 
 static bool is_mouse_over_both_handles_of_adjacent_strips(const Scene *scene,
+                                                          const SpaceSeq *sseq,
                                                           Vector<Strip *> strips,
                                                           const View2D *v2d,
                                                           float mouse_co[2])
 {
   const eStripHandle strip1_handle = strip_handle_under_cursor_get(
-      scene, strips[0], v2d, mouse_co);
+      scene, sseq, strips[0], v2d, mouse_co);
 
   if (strip1_handle == STRIP_HANDLE_NONE) {
     return false;
@@ -1016,7 +1095,7 @@ static bool is_mouse_over_both_handles_of_adjacent_strips(const Scene *scene,
     return false;
   }
   const eStripHandle strip2_handle = strip_handle_under_cursor_get(
-      scene, strips[1], v2d, mouse_co);
+      scene, sseq, strips[1], v2d, mouse_co);
   if (strip1_handle == STRIP_HANDLE_RIGHT && strip2_handle != STRIP_HANDLE_LEFT) {
     return false;
   }
@@ -1027,7 +1106,10 @@ static bool is_mouse_over_both_handles_of_adjacent_strips(const Scene *scene,
   return true;
 }
 
-StripSelection pick_strip_and_handle(const Scene *scene, const View2D *v2d, float mouse_co[2])
+StripSelection pick_strip_and_handle(const Scene *scene,
+                                     const SpaceSeq *sseq,
+                                     const View2D *v2d,
+                                     float mouse_co[2])
 {
   StripSelection selection;
   /* Do not pick strips when clicking inside time scrub region. */
@@ -1036,17 +1118,17 @@ StripSelection pick_strip_and_handle(const Scene *scene, const View2D *v2d, floa
     return selection;
   }
 
-  Vector<Strip *> strips = padded_strips_under_mouse_get(scene, v2d, mouse_co);
+  Vector<Strip *> strips = padded_strips_under_mouse_get(scene, sseq, v2d, mouse_co);
 
   if (strips.size() == 0) {
     return selection;
   }
 
   selection.strip1 = strips[0];
-  selection.handle = strip_handle_under_cursor_get(scene, selection.strip1, v2d, mouse_co);
+  selection.handle = strip_handle_under_cursor_get(scene, sseq, selection.strip1, v2d, mouse_co);
 
   if (strips.size() == 2 &&
-      is_mouse_over_both_handles_of_adjacent_strips(scene, strips, v2d, mouse_co))
+      is_mouse_over_both_handles_of_adjacent_strips(scene, sseq, strips, v2d, mouse_co))
   {
     selection.strip2 = strips[1];
   }
@@ -1054,11 +1136,111 @@ StripSelection pick_strip_and_handle(const Scene *scene, const View2D *v2d, floa
   return selection;
 }
 
+static wmOperatorStatus sequencer_select_transition_exec(bContext *C,
+                                                         wmOperator *op,
+                                                         StripSelection selection)
+{
+  Scene *scene = CTX_data_sequencer_scene(C);
+  Editing *ed = seq::editing_get(scene);
+  SpaceSeq *sseq = CTX_wm_space_seq(C);
+
+  if (seq::retiming_selection_clear(ed)) {
+    WM_event_add_notifier(C, NC_SCENE | ND_SEQUENCER, scene);
+  }
+
+  const bool extend = RNA_boolean_get(op->ptr, "extend");
+  const bool deselect = RNA_boolean_get(op->ptr, "deselect");
+  const bool deselect_all = RNA_boolean_get(op->ptr, "deselect_all");
+  const bool toggle = RNA_boolean_get(op->ptr, "toggle");
+  const bool ignore_connections = RNA_boolean_get(op->ptr, "ignore_connections");
+  const bool wait_to_deselect_others = RNA_boolean_get(op->ptr, "wait_to_deselect_others");
+
+  const bool already_selected = element_already_selected(selection);
+
+  /* If the transition handle is already selected before dragging, don't deselect it after
+   * dragging. */
+  if (selection.handle != STRIP_HANDLE_NONE && already_selected) {
+    sseq->flag &= ~SPACE_SEQ_DESELECT_STRIP_HANDLE;
+  }
+  else {
+    sseq->flag |= SPACE_SEQ_DESELECT_STRIP_HANDLE;
+  }
+
+  /* Clicking on already selected element falls on modal operation.
+   * All strips are deselected on mouse button release unless extend mode is used. */
+  if (already_selected && wait_to_deselect_others && !toggle && !ignore_connections) {
+    return OPERATOR_RUNNING_MODAL;
+  }
+
+  Strip *strip = selection.strip1;
+  eStripHandle handle = selection.handle;
+  ListBaseT<Strip> *seqbase = seq::active_seqbase_get(ed);
+
+  const bool was_selected = (strip->flag & SEQ_SELECT) != 0;
+
+  VectorSet<Strip *> copy_to;
+  if (was_selected) {
+    copy_to = seq::query_selected_strips(seq::active_seqbase_get(scene->ed));
+    copy_to.remove(strip);
+    copy_to.remove_if([](Strip *strip) { return !strip->is_overlap_transition(); });
+  }
+
+  if (deselect_all || (!extend && !deselect && !toggle)) {
+    deselect_all_strips(scene);
+  }
+  else if (ELEM(handle, STRIP_HANDLE_LEFT, STRIP_HANDLE_RIGHT)) {
+    /* Transition handles and normal strips must not be selected at the same time. */
+    deselect_non_transitions(seqbase);
+  }
+
+  /* Do actual selection. */
+  const eStripFlag new_handle_flag = handle == STRIP_HANDLE_LEFT ? SEQ_LEFTSEL : SEQ_RIGHTSEL;
+  if (toggle) {
+    if (was_selected && handle == STRIP_HANDLE_NONE) {
+      strip->flag &= ~STRIP_ALLSEL;
+    }
+    else if (handle != STRIP_HANDLE_NONE) {
+      strip->flag ^= new_handle_flag;
+    }
+
+    if (!was_selected) {
+      strip->flag |= SEQ_SELECT;
+    }
+  }
+  else if (deselect) {
+    strip->flag &= ~STRIP_ALLSEL;
+  }
+  else {
+    /* Replace or extend the selection. Selection is already cleared earlier if necessary. */
+    const eStripFlag new_flag = SEQ_SELECT |
+                                (handle != STRIP_HANDLE_NONE ? new_handle_flag : SEQ_FLAG_NONE);
+    strip->flag |= new_flag;
+  }
+
+  /* Copy selection to other selected transitions. */
+  if (was_selected) {
+    for (Strip *selected_strip : copy_to) {
+      selected_strip->flag &= ~STRIP_ALLSEL;
+      selected_strip->flag |= strip->flag & STRIP_ALLSEL;
+    }
+  }
+
+  /* Select connected transitions. */
+  if (!ignore_connections) {
+    sequencer_select_connected_strips(selection);
+  }
+
+  sequencer_select_do_updates(C, scene);
+  sequencer_select_set_active(scene, strip);
+  return OPERATOR_FINISHED;
+}
+
 wmOperatorStatus sequencer_select_exec(bContext *C, wmOperator *op)
 {
   const View2D *v2d = ui::view2d_fromcontext(C);
   Scene *scene = CTX_data_sequencer_scene(C);
   Editing *ed = seq::editing_get(scene);
+  SpaceSeq *sseq = CTX_wm_space_seq(C);
   ARegion *region = CTX_wm_region(C);
 
   if (ed == nullptr) {
@@ -1075,9 +1257,26 @@ wmOperatorStatus sequencer_select_exec(bContext *C, wmOperator *op)
     }
   }
 
-  const bool was_retiming = seq::retiming_keys_are_selected(scene);
+  const bool toggle = RNA_boolean_get(op->ptr, "toggle");
+  const bool extend = RNA_boolean_get(op->ptr, "extend");
+  const bool center = RNA_boolean_get(op->ptr, "center");
 
   MouseCoords mouse_co(v2d, RNA_int_get(op->ptr, "mouse_x"), RNA_int_get(op->ptr, "mouse_y"));
+
+  /* If there isn't enough space the transition is drawn over the retiming keys. If the mouse is
+   * over a transition, don't select retiming keys. */
+  StripSelection selection;
+  if (region->regiontype == RGN_TYPE_PREVIEW) {
+    selection.strip1 = strip_select_from_preview(C, mouse_co.region, toggle, extend, center);
+  }
+  else {
+    selection = pick_strip_and_handle(scene, sseq, v2d, mouse_co.view);
+    if (selection.strip1 && selection.strip1->is_overlap_transition()) {
+      return sequencer_select_transition_exec(C, op, selection);
+    }
+  }
+
+  const bool was_retiming = seq::retiming_keys_are_selected(scene);
 
   /* Check to see if the mouse cursor intersects with the retiming box; if so, `strip_key_owner` is
    * set. If the cursor intersects with a retiming key, `key` will be set too. */
@@ -1127,19 +1326,14 @@ wmOperatorStatus sequencer_select_exec(bContext *C, wmOperator *op)
     WM_event_add_notifier(C, NC_SCENE | ND_SEQUENCER, scene);
   }
 
-  const bool extend = RNA_boolean_get(op->ptr, "extend");
+  bool changed = false;
+
+  /* We should only reach here if no transition selection is happening.
+   * Transition handles and normal strips must not be selected at the same time. */
+  changed |= deselect_transition_handles(scene);
+
   const bool deselect = RNA_boolean_get(op->ptr, "deselect");
   const bool deselect_all = RNA_boolean_get(op->ptr, "deselect_all");
-  const bool toggle = RNA_boolean_get(op->ptr, "toggle");
-  const bool center = RNA_boolean_get(op->ptr, "center");
-
-  StripSelection selection;
-  if (region->regiontype == RGN_TYPE_PREVIEW) {
-    selection.strip1 = strip_select_from_preview(C, mouse_co.region, toggle, extend, center);
-  }
-  else {
-    selection = pick_strip_and_handle(scene, v2d, mouse_co.view);
-  }
 
   /* NOTE: `side_of_frame` and `linked_time` functionality is designed to be shared on one
    * keymap, therefore both properties can be true at the same time. */
@@ -1177,7 +1371,6 @@ wmOperatorStatus sequencer_select_exec(bContext *C, wmOperator *op)
   const bool wait_to_deselect_others = RNA_boolean_get(op->ptr, "wait_to_deselect_others");
   const bool already_selected = element_already_selected(selection);
 
-  SpaceSeq *sseq = CTX_wm_space_seq(C);
   if (selection.handle != STRIP_HANDLE_NONE && already_selected) {
     sseq->flag &= ~SPACE_SEQ_DESELECT_STRIP_HANDLE;
   }
@@ -1208,7 +1401,6 @@ wmOperatorStatus sequencer_select_exec(bContext *C, wmOperator *op)
     copy_to.remove_if([](Strip *strip) { return strip->is_effect_with_inputs(); });
   }
 
-  bool changed = false;
   /* Deselect everything for now. NOTE that this condition runs for almost every click with no
    * modifiers. `sequencer_select_strip_impl` expects this and will re-select any strips in
    * `selection`. */
@@ -1353,6 +1545,7 @@ static wmOperatorStatus sequencer_select_handle_exec(bContext *C, wmOperator *op
   const View2D *v2d = ui::view2d_fromcontext(C);
   Scene *scene = CTX_data_sequencer_scene(C);
   Editing *ed = seq::editing_get(scene);
+  SpaceSeq *sseq = CTX_wm_space_seq(C);
 
   if (ed == nullptr) {
     return OPERATOR_CANCELLED;
@@ -1360,19 +1553,20 @@ static wmOperatorStatus sequencer_select_handle_exec(bContext *C, wmOperator *op
 
   MouseCoords mouse_co(v2d, RNA_int_get(op->ptr, "mouse_x"), RNA_int_get(op->ptr, "mouse_y"));
 
-  StripSelection selection = pick_strip_and_handle(scene, v2d, mouse_co.view);
+  StripSelection selection = pick_strip_and_handle(scene, sseq, v2d, mouse_co.view);
   if (selection.strip1 == nullptr || selection.handle == STRIP_HANDLE_NONE) {
     return OPERATOR_CANCELLED | OPERATOR_PASS_THROUGH;
   }
 
-  /* Ignore clicks on retiming keys. */
-  Strip *strip_key_test = nullptr;
-  SeqRetimingKey *key = retiming_mouseover_key_get(scene, v2d, mouse_co.region, &strip_key_test);
-  if (key != nullptr) {
-    return OPERATOR_CANCELLED | OPERATOR_PASS_THROUGH;
+  /* Ignore clicks on retiming keys, unless the transition strip is drawn on top. */
+  if (!selection.strip1->is_overlap_transition()) {
+    Strip *strip_key_test = nullptr;
+    SeqRetimingKey *key = retiming_mouseover_key_get(scene, v2d, mouse_co.region, &strip_key_test);
+    if (key != nullptr) {
+      return OPERATOR_CANCELLED | OPERATOR_PASS_THROUGH;
+    }
   }
 
-  SpaceSeq *sseq = CTX_wm_space_seq(C);
   if (element_already_selected(selection)) {
     sseq->flag &= ~SPACE_SEQ_DESELECT_STRIP_HANDLE;
     return OPERATOR_CANCELLED | OPERATOR_PASS_THROUGH;
@@ -1465,6 +1659,9 @@ static bool select_linked_internal(Scene *scene)
     if ((strip.flag & SEQ_SELECT) == 0) {
       continue;
     }
+    if (strip.is_overlap_transition()) {
+      continue;
+    }
     /* Only get unselected neighbors. */
     Strip *neighbor = find_neighboring_strip(scene, &strip, seq::Side::Left, 0);
     if (neighbor) {
@@ -1496,6 +1693,9 @@ static bool select_more_less_impl(Scene *scene, bool select_more)
 
   for (Strip &strip : *seq::active_seqbase_get(ed)) {
     if ((strip.flag & SEQ_SELECT) != selection_filter) {
+      continue;
+    }
+    if (strip.is_overlap_transition()) {
       continue;
     }
     Strip *neighbor = find_neighboring_strip(
@@ -1600,6 +1800,7 @@ static wmOperatorStatus sequencer_select_linked_pick_invoke(bContext *C,
 {
   Scene *scene = CTX_data_sequencer_scene(C);
   const View2D *v2d = ui::view2d_fromcontext(C);
+  const SpaceSeq *sseq = CTX_wm_space_seq(C);
 
   bool extend = RNA_boolean_get(op->ptr, "extend");
 
@@ -1607,7 +1808,7 @@ static wmOperatorStatus sequencer_select_linked_pick_invoke(bContext *C,
   ui::view2d_region_to_view(v2d, event->mval[0], event->mval[1], &mouse_co[0], &mouse_co[1]);
 
   /* This works like UV, not mesh. */
-  StripSelection mouse_selection = pick_strip_and_handle(scene, v2d, mouse_co);
+  StripSelection mouse_selection = pick_strip_and_handle(scene, sseq, v2d, mouse_co);
   if (!mouse_selection.strip1) {
     return OPERATOR_FINISHED; /* User error as with mesh?? */
   }
@@ -1719,6 +1920,9 @@ static wmOperatorStatus sequencer_select_handles_exec(bContext *C, wmOperator *o
   Editing *ed = seq::editing_get(scene);
   int sel_side = RNA_enum_get(op->ptr, "side");
   for (Strip &strip : *ed->current_strips()) {
+    if (strip.is_overlap_transition()) {
+      continue;
+    }
     if (strip.flag & SEQ_SELECT) {
       Strip *l_neighbor = find_neighboring_strip(scene, &strip, seq::Side::Left, -1);
       Strip *r_neighbor = find_neighboring_strip(scene, &strip, seq::Side::Right, -1);
@@ -1905,6 +2109,9 @@ static wmOperatorStatus sequencer_select_side_exec(bContext *C, wmOperator *op)
     if (strip.channel >= seq::MAX_CHANNELS) [[unlikely]] {
       continue;
     }
+    if (strip.is_overlap_transition()) {
+      continue;
+    }
     int *frame_limit_p = &frame_ranges[strip.channel];
     if (strip.flag & SEQ_SELECT) {
       selected = true;
@@ -2013,6 +2220,7 @@ static void seq_box_select_strip_from_preview(const bContext *C,
 static wmOperatorStatus sequencer_box_select_exec(bContext *C, wmOperator *op)
 {
   Scene *scene = CTX_data_sequencer_scene(C);
+  SpaceSeq *sseq = CTX_wm_space_seq(C);
   View2D *v2d = ui::view2d_fromcontext(C);
   Editing *ed = seq::editing_get(scene);
 
@@ -2025,13 +2233,19 @@ static wmOperatorStatus sequencer_box_select_exec(bContext *C, wmOperator *op)
   }
 
   const eSelectOp sel_op = eSelectOp(RNA_enum_get(op->ptr, "mode"));
-  const bool handles = RNA_boolean_get(op->ptr, "include_handles");
+  const bool include_handles = RNA_boolean_get(op->ptr, "include_handles");
   const bool select = (sel_op != SEL_OP_SUB);
 
-  bool changed = false;
+  const bool has_transition_handles = has_transition_handles_selected(scene);
 
+  bool changed = false;
   if (SEL_OP_USE_PRE_DESELECT(sel_op)) {
     changed |= deselect_all_strips(scene);
+  }
+  /* Deselect transition handles first if box selecting entire strips, so transition handles and
+   * non-transitions aren't selected at the same time. */
+  else if (has_transition_handles && !include_handles) {
+    changed |= deselect_transition_handles(scene);
   }
 
   rctf rectf;
@@ -2049,9 +2263,20 @@ static wmOperatorStatus sequencer_box_select_exec(bContext *C, wmOperator *op)
   }
 
   for (Strip &strip : *ed->current_strips()) {
-    rctf rq = strip_bounds_get(scene, &strip);
+    if (include_handles) {
+      /* Select exclusively transition or non-transition handles based on the previous selection
+       * state. Transition handles and non-transition handles must not be selected at the same
+       * time. */
+      if (has_transition_handles && !strip.is_overlap_transition()) {
+        continue;
+      }
+      if (!has_transition_handles && strip.is_overlap_transition()) {
+        continue;
+      }
+    }
+    rctf rq = strip_bounds_get(scene, sseq, v2d, &strip);
     if (BLI_rctf_isect(&rq, &rectf, nullptr)) {
-      if (handles) {
+      if (include_handles) {
         /* Get the clickable handle size, ignoring padding. */
         float handsize = inner_clickable_handle_size_get(scene, &strip, v2d) * 4;
 
@@ -2120,6 +2345,7 @@ static wmOperatorStatus sequencer_box_select_invoke(bContext *C,
   Scene *scene = CTX_data_sequencer_scene(C);
   const View2D *v2d = ui::view2d_fromcontext(C);
   ARegion *region = CTX_wm_region(C);
+  const SpaceSeq *sseq = CTX_wm_space_seq(C);
 
   if (region->regiontype == RGN_TYPE_PREVIEW && !sequencer_view_preview_only_poll(C)) {
     return OPERATOR_CANCELLED;
@@ -2133,7 +2359,7 @@ static wmOperatorStatus sequencer_box_select_invoke(bContext *C,
     WM_event_drag_start_mval(event, region, mval);
     ui::view2d_region_to_view(v2d, mval[0], mval[1], &mouse_co[0], &mouse_co[1]);
 
-    StripSelection selection = pick_strip_and_handle(scene, v2d, mouse_co);
+    StripSelection selection = pick_strip_and_handle(scene, sseq, v2d, mouse_co);
 
     if (selection.strip1 != nullptr) {
       return OPERATOR_CANCELLED | OPERATOR_PASS_THROUGH;
@@ -2238,12 +2464,16 @@ static bool do_lasso_select_timeline(bContext *C,
 {
   Scene *scene = CTX_data_scene(C);
   Editing *ed = seq::editing_get(scene);
+  SpaceSeq *sseq = CTX_wm_space_seq(C);
+  View2D *v2d = ui::view2d_fromcontext(C);
 
   bool changed = false;
   const bool select = (sel_op != SEL_OP_SUB);
 
+  changed |= deselect_transition_handles(scene);
+
   for (Strip &strip : ed->seqbase) {
-    rctf strip_rct = strip_bounds_get(scene, &strip);
+    rctf strip_rct = strip_bounds_get(scene, sseq, v2d, &strip);
     rcti region_rct;
     ui::view2d_view_to_region_clip(
         &region->v2d, strip_rct.xmin, strip_rct.ymin, &region_rct.xmin, &region_rct.ymin);
@@ -2428,19 +2658,23 @@ static wmOperatorStatus vse_circle_select_exec(bContext *C, wmOperator *op)
   const eSelectOp sel_op = eSelectOp(RNA_enum_get(op->ptr, "mode"));
 
   Scene *scene = CTX_data_scene(C);
+  SpaceSeq *sseq = CTX_wm_space_seq(C);
   View2D *v2d = ui::view2d_fromcontext(C);
   Editing *ed = seq::editing_get(scene);
   ARegion *region = CTX_wm_region(C);
 
   const bool use_pre_deselect = SEL_OP_USE_PRE_DESELECT(sel_op);
 
-  if (use_pre_deselect && WM_gesture_is_modal_first(gesture)) {
-    deselect_all_strips(scene);
-    sequencer_select_do_updates(C, scene);
-  }
-
   if (ed == nullptr) {
     return OPERATOR_CANCELLED;
+  }
+
+  bool changed = false;
+  if (use_pre_deselect && WM_gesture_is_modal_first(gesture)) {
+    changed |= deselect_all_strips(scene);
+  }
+  else {
+    changed |= deselect_transition_handles(scene);
   }
 
   float2 view_mval;
@@ -2455,9 +2689,8 @@ static wmOperatorStatus vse_circle_select_exec(bContext *C, wmOperator *op)
 
   float x_radius = radius / ui::view2d_scale_get_x(v2d);
   float y_radius = radius / ui::view2d_scale_get_y(v2d);
-  bool changed = false;
   for (Strip &strip : *ed->current_strips()) {
-    rctf rq = strip_bounds_get(scene, &strip);
+    rctf rq = strip_bounds_get(scene, sseq, v2d, &strip);
     /* Use custom function to check the distance because in timeline the circle is a ellipse. */
     if (check_circle_intersection_in_timeline(&rq, view_mval, x_radius, y_radius)) {
       if (ELEM(sel_op, SEL_OP_ADD, SEL_OP_SET)) {
@@ -2698,7 +2931,7 @@ static bool select_grouped_visual_overlap(const Scene *scene,
   VectorSet<Strip *> strips_to_select;
 
   for (Strip *strip : strips) {
-    if (strip->channel > act_strip->channel) {
+    if (seq::strip_draw_order_compare(act_strip, strip)) {
       continue;
     }
     if (act_strip->right_handle(scene) <= strip->left_handle() ||
@@ -2738,8 +2971,10 @@ static wmOperatorStatus sequencer_select_grouped_exec(bContext *C, wmOperator *o
   const bool extend = RNA_boolean_get(op->ptr, "extend");
   bool changed = false;
   if (!extend) {
-    deselect_all_strips(scene);
-    changed = true;
+    changed |= deselect_all_strips(scene);
+  }
+  else {
+    changed |= deselect_transition_handles(scene);
   }
 
   const int type = RNA_enum_get(op->ptr, "type");
@@ -2818,6 +3053,7 @@ void SEQUENCER_OT_select_grouped(wmOperatorType *ot)
 /* Special pseudo-types for this operator. Use a high value to avoid clashing with `STRIP_TYPE`. */
 enum {
   SEQ_SELECT_TYPE_EFFECT = 1000,
+  SEQ_SELECT_TYPE_TRANSITION,
   SEQ_SELECT_TYPE_VISUAL,
 };
 
@@ -2836,6 +3072,7 @@ static const EnumPropertyItem sequencer_prop_select_by_type_items[] = {
     {STRIP_TYPE_ADJUSTMENT, "ADJUSTMENT", ICON_COLOR, "Adjustment Layer", ""},
     {STRIP_TYPE_COMPOSITOR, "COMPOSITOR", ICON_NODE_COMPOSITING, "Compositor", ""},
     RNA_ENUM_ITEM_SEPR,
+    {SEQ_SELECT_TYPE_TRANSITION, "TRANSITION", ICON_ARROW_LEFTRIGHT, "Transition", ""},
     {SEQ_SELECT_TYPE_EFFECT, "EFFECT", ICON_SHADERFX, "Effect", ""},
     {SEQ_SELECT_TYPE_VISUAL,
      "VISUAL",
@@ -2857,8 +3094,10 @@ static wmOperatorStatus sequencer_select_by_type_exec(bContext *C, wmOperator *o
   const bool extend = RNA_boolean_get(op->ptr, "extend");
   bool changed = false;
   if (!extend) {
-    deselect_all_strips(scene);
-    changed = true;
+    changed |= deselect_all_strips(scene);
+  }
+  else {
+    changed |= deselect_transition_handles(scene);
   }
 
   VectorSet<Strip *> strips = strips_from_context(scene, is_preview);
@@ -2875,8 +3114,13 @@ static wmOperatorStatus sequencer_select_by_type_exec(bContext *C, wmOperator *o
     }
 
     bool match;
-    if (type == SEQ_SELECT_TYPE_EFFECT) {
-      match = strip->is_effect() && !ELEM(strip->type, STRIP_TYPE_COLOR, STRIP_TYPE_TEXT);
+    if (type == SEQ_SELECT_TYPE_TRANSITION) {
+      match = (strip->input1 != nullptr) && (strip->input2 != nullptr) &&
+              seq::strip_type_can_be_transition(strip->type);
+    }
+    else if (type == SEQ_SELECT_TYPE_EFFECT) {
+      match = strip->is_effect() && !ELEM(strip->type, STRIP_TYPE_COLOR, STRIP_TYPE_TEXT) &&
+              !strip->is_overlap_transition();
     }
     else if (type == SEQ_SELECT_TYPE_VISUAL) {
       match = strip->type != STRIP_TYPE_SOUND;

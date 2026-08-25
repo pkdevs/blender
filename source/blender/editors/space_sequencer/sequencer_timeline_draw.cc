@@ -50,6 +50,7 @@
 
 #include "SEQ_channels.hh"
 #include "SEQ_connect.hh"
+#include "SEQ_edit.hh"
 #include "SEQ_effects.hh"
 #include "SEQ_prefetch.hh"
 #include "SEQ_relations.hh"
@@ -92,6 +93,9 @@ Vector<Strip *> sequencer_visible_strips_get(const Scene *scene, const View2D *v
   Vector<Strip *> strips;
 
   for (Strip &strip : *ed->current_strips()) {
+    if (seq::edit_strip_flagged_for_removal(scene, &strip)) {
+      continue;
+    }
     if (min_ii(strip.left_handle(), strip.content_start()) > v2d->cur.xmax) {
       continue;
     }
@@ -153,53 +157,89 @@ static bool seq_draw_waveforms_poll(const SpaceSeq *sseq, const Strip *strip)
   return false;
 }
 
-static bool strip_hides_text_overlay_first(const TimelineDrawContext &ctx,
-                                           const StripDrawContext &strip_ctx)
+static bool strip_hides_text_overlay_first(const SpaceSeq *sseq, const Strip *strip)
 {
-  return seq_draw_waveforms_poll(ctx.sseq, strip_ctx.strip) ||
-         ELEM(strip_ctx.strip->type, STRIP_TYPE_COLOR, STRIP_TYPE_TEXT);
+  return seq_draw_waveforms_poll(sseq, strip) ||
+         ELEM(strip->type, STRIP_TYPE_COLOR, STRIP_TYPE_TEXT) || strip->is_overlap_transition();
 }
 
-static void strip_draw_context_set_text_overlay_visibility(const TimelineDrawContext &ctx,
-                                                           StripDrawContext &strip_ctx)
+static bool strip_text_overlay_visibility_get(const SpaceSeq *sseq,
+                                              float pixely,
+                                              const Strip *strip,
+                                              float strip_height)
 {
   float threshold = 8 * UI_SCALE_FAC;
-  if (strip_hides_text_overlay_first(ctx, strip_ctx)) {
+  if (strip_hides_text_overlay_first(sseq, strip)) {
     threshold = 20 * UI_SCALE_FAC;
   }
 
-  const bool overlays_enabled = (ctx.sseq->timeline_overlay.flag &
+  const bool has_space = strip_height / pixely >= threshold;
+  const bool overlays_enabled = (sseq->timeline_overlay.flag &
                                  (SEQ_TIMELINE_SHOW_STRIP_NAME | SEQ_TIMELINE_SHOW_STRIP_SOURCE |
-                                  SEQ_TIMELINE_SHOW_STRIP_DURATION)) != 0;
+                                  SEQ_TIMELINE_SHOW_STRIP_DURATION)) != 0 &&
+                                (sseq->flag & SEQ_SHOW_OVERLAY) != 0;
 
-  strip_ctx.can_draw_text_overlay = (strip_ctx.top - strip_ctx.bottom) / ctx.pixely >= threshold;
-  strip_ctx.can_draw_text_overlay &= overlays_enabled;
+  return overlays_enabled && has_space;
 }
 
-static void strip_draw_context_set_strip_content_visibility(const TimelineDrawContext &ctx,
-                                                            StripDrawContext &strip_ctx)
+static float strip_header_size_get(float pixely, float strip_height)
+{
+  /* Header size is 20px, unless capped to 40% of strip height. */
+  const float max_size = strip_height * 0.40f;
+  return min_ff(max_size, 20 * UI_SCALE_FAC * pixely);
+}
+
+static bool strip_content_visibility_get(const SpaceSeq *sseq,
+                                         float pixely,
+                                         const Strip *strip,
+                                         float strip_height)
 {
   float threshold = 20 * UI_SCALE_FAC;
-  if (strip_hides_text_overlay_first(ctx, strip_ctx)) {
+  if (strip_hides_text_overlay_first(sseq, strip)) {
     threshold = 8 * UI_SCALE_FAC;
   }
 
-  strip_ctx.can_draw_strip_content = ((strip_ctx.top - strip_ctx.bottom) / ctx.pixely) > threshold;
+  return strip_height / pixely > threshold;
 }
 
-static void strip_draw_context_set_retiming_overlay_visibility(const TimelineDrawContext &ctx,
-                                                               StripDrawContext &strip_ctx)
+rctf strip_bounds_get(const Scene *scene,
+                      const SpaceSeq *sseq,
+                      const View2D *v2d,
+                      const Strip *strip)
 {
-  float2 threshold{15 * UI_SCALE_FAC, 25 * UI_SCALE_FAC};
-  strip_ctx.can_draw_retiming_overlay = (strip_ctx.top - strip_ctx.bottom) / ctx.pixely >=
-                                        threshold.y;
-  strip_ctx.can_draw_retiming_overlay &= strip_ctx.strip_length / ctx.pixelx >= threshold.x;
-  strip_ctx.can_draw_retiming_overlay &= retiming_overlay_enabled(ctx.sseq);
-}
+  rctf bounds;
+  bounds.xmin = strip->left_handle();
+  bounds.xmax = strip->right_handle(scene);
+  bounds.ymin = strip->channel + STRIP_OFSBOTTOM;
+  bounds.ymax = strip->channel + STRIP_OFSTOP;
 
-static float strip_header_size_get(const TimelineDrawContext &ctx)
-{
-  return min_ff(0.40f, 20 * UI_SCALE_FAC * ctx.pixely);
+  if (strip->is_overlap_transition()) {
+    const float pixely = ui::view2d_pixel_size_get_y(v2d);
+    const float max_height = bounds.ymax - bounds.ymin;
+
+    /* Transition is drawn below input strip header if both title and content area are visible. */
+    auto header_poll{[&](Strip *input_strip) {
+      return strip_text_overlay_visibility_get(sseq, pixely, input_strip, max_height) &&
+             strip_content_visibility_get(sseq, pixely, input_strip, max_height);
+    }};
+    if (header_poll(strip->input1) && header_poll(strip->input2)) {
+      bounds.ymax -= strip_header_size_get(pixely, max_height);
+    }
+
+    /* Leave space for retiming keys below the transition. */
+    const float retiming_size = (retiming_key_size() + RETIMING_KEY_PIXEL_OFFSET) * pixely;
+    if (can_draw_retiming(scene, sseq, v2d, strip->input1) ||
+        can_draw_retiming(scene, sseq, v2d, strip->input2))
+    {
+      bounds.ymin += retiming_size;
+    }
+
+    /* Draw transitions fully inside strips. */
+    bounds.ymax -= pixely;
+    bounds.ymin += pixely;
+  }
+
+  return bounds;
 }
 
 static StripDrawContext strip_draw_context_get(const TimelineDrawContext &ctx, Strip *strip)
@@ -209,10 +249,12 @@ static StripDrawContext strip_draw_context_get(const TimelineDrawContext &ctx, S
   Scene *scene = ctx.scene;
 
   strip_ctx.strip = strip;
-  strip_ctx.bottom = strip->channel + STRIP_OFSBOTTOM;
-  strip_ctx.top = strip->channel + STRIP_OFSTOP;
-  strip_ctx.left_handle = strip->left_handle();
-  strip_ctx.right_handle = strip->right_handle(scene);
+  rctf bounds = strip_bounds_get(scene, ctx.sseq, ctx.v2d, strip);
+
+  strip_ctx.bottom = bounds.ymin;
+  strip_ctx.top = bounds.ymax;
+  strip_ctx.left_handle = bounds.xmin;
+  strip_ctx.right_handle = bounds.xmax;
   strip_ctx.content_start = strip->content_start();
   strip_ctx.content_end = strip->content_end(scene);
 
@@ -229,10 +271,12 @@ static StripDrawContext strip_draw_context_get(const TimelineDrawContext &ctx, S
   strip_ctx.content_end = max_ff(strip_ctx.content_end, strip_ctx.left_handle);
 
   strip_ctx.strip_length = strip_ctx.right_handle - strip_ctx.left_handle;
+  strip_ctx.strip_height = strip_ctx.top - strip_ctx.bottom;
 
-  strip_draw_context_set_text_overlay_visibility(ctx, strip_ctx);
-  strip_draw_context_set_strip_content_visibility(ctx, strip_ctx);
-  strip_draw_context_set_retiming_overlay_visibility(ctx, strip_ctx);
+  strip_ctx.can_draw_text_overlay = strip_text_overlay_visibility_get(
+      ctx.sseq, ctx.pixely, strip_ctx.strip, strip_ctx.strip_height);
+  strip_ctx.can_draw_strip_content = strip_content_visibility_get(
+      ctx.sseq, ctx.pixely, strip_ctx.strip, strip_ctx.strip_height);
   strip_ctx.strip_is_too_small = (!strip_ctx.can_draw_text_overlay &&
                                   !strip_ctx.can_draw_strip_content);
   strip_ctx.is_active_strip = strip == select_active_get(scene);
@@ -259,7 +303,8 @@ static StripDrawContext strip_draw_context_get(const TimelineDrawContext &ctx, S
   }
 
   if (strip_ctx.can_draw_text_overlay) {
-    strip_ctx.strip_content_top = strip_ctx.top - strip_header_size_get(ctx);
+    strip_ctx.strip_content_top = strip_ctx.top -
+                                  strip_header_size_get(ctx.pixely, strip_ctx.strip_height);
   }
   else {
     strip_ctx.strip_content_top = strip_ctx.top;
@@ -306,6 +351,11 @@ static void color3ubv_from_seq(const Scene *curscene,
     return;
   }
 
+  if (strip->is_overlap_transition()) {
+    r_col[0] = r_col[1] = r_col[2] = 255;
+    return;
+  }
+
   uchar blendcol[3];
 
   /* Sometimes the active theme is not the sequencer theme, e.g. when an operator invokes the file
@@ -343,7 +393,6 @@ static void color3ubv_from_seq(const Scene *curscene,
       }
       break;
 
-    /* Transitions use input colors, fallback for when the input is a transition itself. */
     case STRIP_TYPE_CROSS:
     case STRIP_TYPE_GAMCROSS:
     case STRIP_TYPE_WIPE:
@@ -752,7 +801,8 @@ static void draw_handle_transform_text(const TimelineDrawContext &ctx,
 
 float strip_handle_draw_size_get(const Scene *scene, const Strip *strip, const float pixelx)
 {
-  const float handle_size = pixelx * (5.0f * U.pixelsize);
+  const float handle_size = pixelx *
+                            ((strip->is_overlap_transition() ? 7.0f : 5.0f) * U.pixelsize);
 
   /* Ensure that the handle is not wider than a quarter of the strip. */
   return min_ff(handle_size, (float(strip->right_handle(scene) - strip->left_handle()) / 4.0f));
@@ -887,6 +937,12 @@ static void get_strip_text_color(const StripDrawContext &strip_ctx, uchar r_col[
   const Strip *strip = strip_ctx.strip;
   const bool active_or_selected = (strip->flag & SEQ_SELECT) || strip_ctx.is_active_strip;
 
+  if (strip->is_overlap_transition()) {
+    r_col[0] = r_col[1] = r_col[2] = 0;
+    r_col[3] = active_or_selected ? 255 : 150;
+    return;
+  }
+
   /* Text: white when selected/active, black otherwise. */
   r_col[0] = r_col[1] = r_col[2] = r_col[3] = 255;
 
@@ -962,7 +1018,7 @@ static void draw_strip_icons(const TimelineDrawContext &ctx,
       const float icon_indent = 2.0f * strip.handle_width - 4 * ctx.pixelx * UI_SCALE_FAC;
       const float icon_spacing = 3.0f * ctx.pixelx * UI_SCALE_FAC;
       rctf rect;
-      rect.ymin = strip.top - strip_header_size_get(ctx);
+      rect.ymin = strip.top - strip_header_size_get(ctx.pixely, strip.strip_height);
       rect.ymax = strip.top;
       rect.xmin = max_ff(strip.left_handle, ctx.v2d->cur.xmin) + icon_indent;
       if (missing_data) {
@@ -1012,9 +1068,6 @@ static void draw_strip_icons(const TimelineDrawContext &ctx,
 static void draw_seq_text_overlay(const TimelineDrawContext &ctx,
                                   const StripDrawContext &strip_ctx)
 {
-  if ((ctx.sseq->flag & SEQ_SHOW_OVERLAY) == 0) {
-    return;
-  }
   /* Draw text only if there is enough horizontal or vertical space. */
   if ((strip_ctx.strip_length <= 32 * ctx.pixelx * UI_SCALE_FAC) || strip_ctx.strip_is_too_small ||
       !strip_ctx.can_draw_text_overlay)
@@ -1255,21 +1308,33 @@ static void draw_seq_timeline_channels(const TimelineDrawContext &ctx)
  * always render "on top" of others. */
 static void visible_strips_ordered_get(const TimelineDrawContext &ctx,
                                        Vector<StripDrawContext> &r_bottom_layer,
-                                       Vector<StripDrawContext> &r_top_layer)
+                                       Vector<StripDrawContext> &r_bottom_layer_transitions,
+                                       Vector<StripDrawContext> &r_top_layer,
+                                       Vector<StripDrawContext> &r_top_layer_transitions)
 {
-  r_bottom_layer.clear();
-  r_top_layer.clear();
-
   Vector<Strip *> strips = sequencer_visible_strips_get(ctx.C);
   r_bottom_layer.reserve(strips.size());
 
   for (Strip *strip : strips) {
     StripDrawContext strip_ctx = strip_draw_context_get(ctx, strip);
-    if (!flag_is_set(strip->runtime->flag, seq::StripRuntimeFlag::Overlap)) {
-      r_bottom_layer.append(strip_ctx);
+
+    if (strip->is_overlap_transition()) {
+      if (flag_is_set(strip->input1->runtime->flag, seq::StripRuntimeFlag::Overlap) ||
+          flag_is_set(strip->input2->runtime->flag, seq::StripRuntimeFlag::Overlap))
+      {
+        r_top_layer_transitions.append(strip_ctx);
+      }
+      else {
+        r_bottom_layer_transitions.append(strip_ctx);
+      }
     }
     else {
-      r_top_layer.append(strip_ctx);
+      if (flag_is_set(strip->runtime->flag, seq::StripRuntimeFlag::Overlap)) {
+        r_top_layer.append(strip_ctx);
+      }
+      else {
+        r_bottom_layer.append(strip_ctx);
+      }
     }
   }
 
@@ -1326,7 +1391,9 @@ static void draw_strips_background(const TimelineDrawContext &ctx,
                                  (ctx.sseq->timeline_overlay.flag &
                                   SEQ_TIMELINE_CONTINUOUS_THUMBNAILS);
     /* Darker color band for thumbnail strips. */
-    if (show_overlay && seq::strip_can_have_thumbnail(scene, strip.strip) && show_thumbnails) {
+    if (show_overlay && seq::strip_can_have_thumbnail(scene, strip.strip) && show_thumbnails &&
+        strip.can_draw_strip_content)
+    {
       /* The more negative the offset, darker the color. */
       const int color_offset = -15;
       uchar col_in[3] = {col[0], col[1], col[2]};
@@ -1352,13 +1419,12 @@ static void draw_strips_background(const TimelineDrawContext &ctx,
 
     /* Transition state. */
     if (show_overlay && strip.can_draw_strip_content &&
-        seq::effect_is_transition(strip.strip->type) && strip.strip->input1 && strip.strip->input2)
+        strip.strip->effect_num_inputs_get() == 2 &&
+        seq::strip_type_can_be_transition(strip.strip->type))
     {
       data.flags |= GPU_SEQ_FLAG_TRANSITION;
-
       const Strip *input1 = strip.strip->input1;
       const Strip *input2 = strip.strip->input2;
-
       /* Left side. */
       if (input1->type == STRIP_TYPE_COLOR) {
         rgb_float_to_uchar(col, (static_cast<const SolidColorVars *>(input1->effectdata))->col);
@@ -1367,7 +1433,6 @@ static void draw_strips_background(const TimelineDrawContext &ctx,
         color3ubv_from_seq(scene, input1, strip.show_strip_color_tag, strip.is_muted, col);
       }
       data.col_transition_in = color_pack(col);
-
       /* Right side. */
       if (input2->type == STRIP_TYPE_COLOR) {
         rgb_float_to_uchar(col, (static_cast<const SolidColorVars *>(input2->effectdata))->col);
@@ -1417,6 +1482,7 @@ static void strip_data_outline_params_set(const StripDrawContext &strip,
 {
   const bool active = strip.is_active_strip;
   const bool selected = strip.strip->flag & SEQ_SELECT;
+  const bool transition = strip.strip->is_overlap_transition();
   uchar4 col{0, 0, 0, 255};
 
   if (selected) {
@@ -1424,17 +1490,18 @@ static void strip_data_outline_params_set(const StripDrawContext &strip,
     data.flags |= GPU_SEQ_FLAG_SELECTED;
   }
   if (active) {
-    if (selected) {
-      ui::theme::get_color_3ubv(TH_SEQ_ACTIVE, col);
-    }
-    else {
-      ui::theme::get_color_shade_3ubv(TH_SEQ_ACTIVE, -40, col);
-    }
+    int offset = !selected ? -40 : 0;
+    ui::theme::get_color_shade_3ubv(TH_SEQ_ACTIVE, offset, col);
     data.flags |= GPU_SEQ_FLAG_ACTIVE;
   }
   if (!selected && !active) {
-    /* Color for unselected strips is a bit darker than the background. */
-    ui::theme::get_color_shade_3ubv(TH_BACK, -40, col);
+    if (!transition) {
+      /* Color for unselected strips is a bit darker than the background. */
+      ui::theme::get_color_shade_3ubv(TH_BACK, -40, col);
+    }
+    else {
+      col = {255, 255, 255, 150};
+    }
   }
 
   const bool translating = (G.moving & G_TRANSFORM_SEQ);
@@ -1450,7 +1517,10 @@ static void strip_data_outline_params_set(const StripDrawContext &strip,
   /* Strip outline is:
    *  - Red when overlapping with other strips or handles are clamped.
    *  - Slightly lighter while translating strips. */
-  if ((translating && overlaps && !use_overwrite) || clamped_l || clamped_r) {
+  if (transition) {
+    /* Transition outline doesn't have special state when transforming. */
+  }
+  else if ((translating && overlaps && !use_overwrite) || clamped_l || clamped_r) {
     col[0] = 255;
     col[1] = col[2] = 33;
     data.flags |= GPU_SEQ_FLAG_OVERLAP;
@@ -1469,7 +1539,9 @@ static void strip_data_highlight_flags_set(const StripDrawContext &strip,
   const Strip *act_strip = seq::select_active_get(ctx.scene);
   const Strip *special_preview = special_preview_get();
   /* Highlight if strip is an input of an active strip, or if the strip is solo preview. */
-  if (act_strip != nullptr && (act_strip->flag & SEQ_SELECT) != 0) {
+  if (act_strip != nullptr && (act_strip->flag & SEQ_SELECT) != 0 &&
+      !act_strip->is_overlap_transition())
+  {
     if (act_strip->input1 == strip.strip || act_strip->input2 == strip.strip) {
       data.flags |= GPU_SEQ_FLAG_HIGHLIGHT;
     }
@@ -1666,6 +1738,80 @@ static void draw_seq_strips(const TimelineDrawContext &ctx,
   GPU_blend(GPU_BLEND_NONE);
 }
 
+static void draw_seq_transitions(const TimelineDrawContext &ctx,
+                                 StripsDrawBatch &strips_batch,
+                                 const Vector<StripDrawContext> &strips)
+{
+  if (strips.is_empty()) {
+    return;
+  }
+
+  wmOrtho2_region_pixelspace(ctx.region);
+  GPU_blend(GPU_BLEND_ALPHA_PREMULT);
+
+  for (const StripDrawContext &strip : strips) {
+    assert(strip.strip->input1 && strip.strip->input2);
+
+    SeqStripDrawData &data = strips_batch.add_strip(strip.content_start,
+                                                    strip.content_end,
+                                                    strip.top,
+                                                    strip.bottom,
+                                                    strip.strip_content_top,
+                                                    strip.left_handle,
+                                                    strip.right_handle,
+                                                    strip.handle_width,
+                                                    true);
+
+    data.flags |= GPU_SEQ_FLAG_BACKGROUND;
+    data.flags |= GPU_SEQ_FLAG_TRANSITION;
+    data.flags |= GPU_SEQ_FLAG_SAME_CHANNEL_TRANSITION;
+
+    strip_data_handle_flags_set(strip, ctx, data);
+    strip_data_outline_params_set(strip, ctx, data);
+
+    uchar background[4];
+
+    color3ubv_from_seq(
+        ctx.scene, strip.strip, strip.show_strip_color_tag, strip.is_muted, background);
+    background[3] = 255;
+
+    const bool selected = strip.strip->flag & SEQ_SELECT;
+
+    uchar4 transition_in = selected ? uchar4(0x00, 0x00, 0x00, 0x33) :
+                                      uchar4(0xff, 0xff, 0xff, 0x33);
+    uchar4 transition_out = selected ? uchar4(0xff, 0xff, 0xff, 0xff) :
+                                       uchar4(0xff, 0xff, 0xff, 0xcc);
+
+    if (strip.is_muted) {
+      background[3] = MUTE_ALPHA;
+      transition_in[3] -= 30;
+      transition_out -= 60;
+    }
+    else if (!selected) {
+      background[3] = 0xcc;
+    }
+
+    data.col_background = color_pack(background);
+    data.col_transition_in = color_pack(transition_in);
+    data.col_transition_out = color_pack(transition_out);
+  }
+  strips_batch.flush_batch();
+
+  GPU_blend(GPU_BLEND_ALPHA);
+
+  /* Draw is_connected icon. */
+  draw_strip_icons(ctx, strips);
+
+  /* Draw text. */
+  ui::view2d_view_ortho(ctx.v2d);
+  for (const StripDrawContext &strip_ctx : strips) {
+    draw_seq_text_overlay(ctx, strip_ctx);
+  }
+
+  ui::view2d_text_cache_draw(ctx.region);
+  GPU_blend(GPU_BLEND_NONE);
+}
+
 static void draw_seq_strips(const TimelineDrawContext &ctx, StripsDrawBatch &strips_batch)
 {
   if (ctx.ed == nullptr) {
@@ -1683,9 +1829,13 @@ static void draw_seq_strips(const TimelineDrawContext &ctx, StripsDrawBatch &str
   seq::thumbnail_cache_maintain_capacity(ctx.scene);
 
   Vector<StripDrawContext> bottom_layer, top_layer;
-  visible_strips_ordered_get(ctx, bottom_layer, top_layer);
+  Vector<StripDrawContext> bottom_layer_transitions, top_layer_transitions;
+  visible_strips_ordered_get(
+      ctx, bottom_layer, bottom_layer_transitions, top_layer, top_layer_transitions);
   draw_seq_strips(ctx, strips_batch, bottom_layer);
+  draw_seq_transitions(ctx, strips_batch, bottom_layer_transitions);
   draw_seq_strips(ctx, strips_batch, top_layer);
+  draw_seq_transitions(ctx, strips_batch, top_layer_transitions);
 }
 
 static void draw_timeline_sfra_efra(const TimelineDrawContext &ctx)

@@ -19,6 +19,8 @@
 #include "BKE_context.hh"
 
 #include "SEQ_channels.hh"
+#include "SEQ_edit.hh"
+#include "SEQ_effects.hh"
 #include "SEQ_iterator.hh"
 #include "SEQ_relations.hh"
 #include "SEQ_retiming.hh"
@@ -35,11 +37,23 @@ namespace {
 /** Used for sequencer retiming transform. */
 struct TransDataSeq {
   Strip *strip;
+  /* Transition to be moved when retiming keys for the same frame are selected in adjacent strips.
+   * Mirrors the behavior of strip handle moving. Initially set null by MEM_new_array_zeroed. */
+  Strip *attached_transition;
   int orig_timeline_frame;
   int key_index; /* Some actions may need to destroy original data, use index to access it. */
 };
 
 }  // namespace
+
+static bool retiming_moves_handle(const Scene *scene, Strip *strip, seq::Side handle_side)
+{
+  const int frame = handle_side == seq::Side::Left ? strip->left_handle() :
+                                                     strip->right_handle(scene);
+  SeqRetimingKey *key = seq::retiming_key_get_by_frame(scene, strip, frame);
+  return key && flag_is_set(key->flag, SEQ_KEY_SELECTED) &&
+         !seq::retiming_key_is_transition_type(key);
+}
 
 static TransData *SeqToTransData(const Scene *scene,
                                  Strip *strip,
@@ -63,6 +77,17 @@ static TransData *SeqToTransData(const Scene *scene,
   tdseq->strip = strip;
   tdseq->orig_timeline_frame = seq::retiming_key_frame_get(scene, strip, key);
   tdseq->key_index = seq::retiming_key_index_get(strip, key);
+
+  /* Move transitions when retiming keys for the same frame are selected in adjacent strips. */
+  const bool key_moves_right_handle = tdseq->orig_timeline_frame == strip->right_handle(scene) &&
+                                      !seq::retiming_key_is_transition_type(key);
+  if (key_moves_right_handle) {
+    Strip *transition = seq::get_transition_on_side(
+        seq::editing_get(scene), strip, seq::Side::Right);
+    if (transition && retiming_moves_handle(scene, transition->input2, seq::Side::Left)) {
+      tdseq->attached_transition = transition;
+    }
+  }
 
   td->extra = static_cast<void *>(tdseq);
   td->flag |= TD_SELECTED;
@@ -92,11 +117,16 @@ static void freeSeqData(TransInfo *t, TransDataContainer *tc, TransCustomData *c
   dependant.add_multiple(transformed_strips);
   dependant.remove_if([&](Strip *strip) { return seq::transform_strip_can_be_translated(strip); });
 
-  if (seq_transform_check_overlap(transformed_strips)) {
+  /* Last, handle overlap. `transform_handle_overlap` removes invalid transitions after the overlap
+   * has been handled. If there's no overlap delete them here. */
+  if (seq_transform_check_overlap_flags(transformed_strips)) {
     const bool use_sync_markers = ((static_cast<SpaceSeq *>(t->area->spacedata.first))->flag &
                                    SEQ_MARKER_TRANS) != 0;
     seq::transform_handle_overlap(
         scene, seqbasep, transformed_strips, dependant, use_sync_markers);
+  }
+  else {
+    seq::edit_remove_flagged_strips(scene, seqbasep);
   }
 
   if ((custom_data->data != nullptr) && custom_data->use_free) {
@@ -107,18 +137,63 @@ static void freeSeqData(TransInfo *t, TransDataContainer *tc, TransCustomData *c
   }
 }
 
-static void create_trans_seq_clamp_data(TransInfo *t,
-                                        const Scene *scene,
-                                        const Map<SeqRetimingKey *, Strip *> &selection)
+static void create_trans_seq_clamp_data(TransInfo *t, const Scene *scene)
 {
-  TransSeq *ts = static_cast<TransSeq *>(TRANS_DATA_CONTAINER_FIRST_SINGLE(t)->custom.type.data);
-  const Editing *ed = seq::editing_get(scene);
+  Editing *ed = seq::editing_get(scene);
 
-  /* Prevent snaps and change in `values` past `offset_clamp` for all transformed retiming keys. */
-  BLI_rcti_init(&ts->offset_clamp, INT_MIN, INT_MAX, 0, 0);
+  const TransDataContainer *tc = TRANS_DATA_CONTAINER_FIRST_SINGLE(t);
+  TransSeq *ts = static_cast<TransSeq *>(tc->custom.type.data);
 
-  for (auto item : selection.items()) {
-    SeqRetimingKey *key = item.key;
+  t->modifiers |= MOD_STRIP_SOFT_CLAMP;
+
+  /* Prevent snaps and change in `values` past `hard_clamp` for all selected
+     retiming keys. */
+  BLI_rcti_init(&ts->hard_clamp, INT_MIN, INT_MAX, 0, 0);
+
+  TransData *td = tc->data;
+  for (int i = 0; i < tc->data_len; i++, td++) {
+    const TransDataSeq *tdseq = static_cast<TransDataSeq *>(td->extra);
+    const Strip *strip = tdseq->strip;
+    const MutableSpan keys = seq::retiming_keys_get(strip);
+    SeqRetimingKey *key = &keys[tdseq->key_index];
+
+    /* Transitions are moved when retiming keys for the same frame are selected in adjacent strips
+     * (which causes the adjacent strip handles to move). If this is the case, soft clamp the
+     * transition inside input strip bounds, and hard clamp against adjacent transitions. */
+    const Strip *transition_strip = tdseq->attached_transition;
+    if (transition_strip) {
+      const int min_offset = transition_strip->input1->left_handle() -
+                             transition_strip->left_handle();
+      const int max_offset = transition_strip->input2->right_handle(scene) -
+                             transition_strip->right_handle(scene);
+      ts->soft_clamp_min = max_ii(ts->soft_clamp_min, min_offset);
+      ts->soft_clamp_max = min_ii(ts->soft_clamp_max, max_offset);
+
+      /* Prevent the transition from overlapping adjacent transitions. Clamping is done as long as
+       * the adjacent transition isn't also moved. */
+      Strip *left_adjacent_transition = seq::get_transition_on_side(
+          ed, transition_strip->input1, seq::Side::Left);
+      Strip *right_adjacent_transition = seq::get_transition_on_side(
+          ed, transition_strip->input2, seq::Side::Right);
+      if (left_adjacent_transition) {
+        const int adjacent_offset = left_adjacent_transition->right_handle(scene) -
+                                    transition_strip->left_handle();
+        if (!(retiming_moves_handle(scene, left_adjacent_transition->input1, seq::Side::Right) &&
+              retiming_moves_handle(scene, left_adjacent_transition->input2, seq::Side::Left)))
+        {
+          ts->hard_clamp.xmin = max_ii(ts->hard_clamp.xmin, adjacent_offset);
+        }
+      }
+      if (right_adjacent_transition) {
+        const int adjacent_offset = right_adjacent_transition->left_handle() -
+                                    transition_strip->right_handle(scene);
+        if (!(retiming_moves_handle(scene, right_adjacent_transition->input1, seq::Side::Right) &&
+              retiming_moves_handle(scene, right_adjacent_transition->input2, seq::Side::Left)))
+        {
+          ts->hard_clamp.xmax = min_ii(ts->hard_clamp.xmax, adjacent_offset);
+        }
+      }
+    }
 
     /* Transition retiming key. */
     if (seq::retiming_key_is_transition_type(key) &&
@@ -139,33 +214,32 @@ static void create_trans_seq_clamp_data(TransInfo *t,
 
       if (key_start->flag & SEQ_KEY_SELECTED) {
         /* Ensure start transition key cannot pass the midpoint. */
-        ts->offset_clamp.xmax = min_ii(midpoint - key_start->strip_frame_index,
-                                       ts->offset_clamp.xmax);
-        ts->offset_clamp.xmin = max_ii(-max_offset, ts->offset_clamp.xmin);
+        ts->hard_clamp.xmax = min_ii(midpoint - key_start->strip_frame_index, ts->hard_clamp.xmax);
+        ts->hard_clamp.xmin = max_ii(-max_offset, ts->hard_clamp.xmin);
       }
       else {
         /* Ensure end transition key cannot pass the midpoint. */
-        ts->offset_clamp.xmin = max_ii(-(key_end->strip_frame_index - midpoint - 1),
-                                       ts->offset_clamp.xmin);
-        ts->offset_clamp.xmax = min_ii(max_offset, ts->offset_clamp.xmax);
+        ts->hard_clamp.xmin = max_ii(-(key_end->strip_frame_index - midpoint - 1),
+                                     ts->hard_clamp.xmin);
+        ts->hard_clamp.xmax = min_ii(max_offset, ts->hard_clamp.xmax);
       }
     }
     /* Non-transition retiming key. */
     else {
-      Strip *strip = item.value;
       SeqRetimingKey *key_prev = key - 1, *key_next = key + 1;
       if (!seq::retiming_is_last_key(strip, key)) {
         /* Ensure that this key cannot pass the next key. */
-        ts->offset_clamp.xmax = min_ii(key_next->strip_frame_index - key->strip_frame_index - 1,
-                                       ts->offset_clamp.xmax);
-        /* TODO(john): There is an off-by-one error for the last "fake" key's `strip_frame_index`,
-         * which is 1 less than it should be. This is not an immediate issue but should be fixed.
+        ts->hard_clamp.xmax = min_ii(key_next->strip_frame_index - key->strip_frame_index - 1,
+                                     ts->hard_clamp.xmax);
+        /* TODO(john): There is an off-by-one error for the last "fake" key's
+         * `strip_frame_index`, which is 1 less than it should be. This is not an immediate issue
+         * but should be fixed.
          */
       }
       if (key->strip_frame_index != 0) {
         /* Ensure that this key cannot pass the previous key. */
-        ts->offset_clamp.xmin = max_ii(-(key->strip_frame_index - key_prev->strip_frame_index - 1),
-                                       ts->offset_clamp.xmin);
+        ts->hard_clamp.xmin = max_ii(-(key->strip_frame_index - key_prev->strip_frame_index - 1),
+                                     ts->hard_clamp.xmin);
       }
     }
   }
@@ -205,7 +279,7 @@ static void createTransSeqRetimingData(bContext * /*C*/, TransInfo *t)
     SeqToTransData(t->scene, item.value, item.key, td++, td2d++, tdseq++);
   }
 
-  create_trans_seq_clamp_data(t, t->scene, selection);
+  create_trans_seq_clamp_data(t, t->scene);
 }
 
 static void recalcData_sequencer_retiming(TransInfo *t)
@@ -239,6 +313,8 @@ static void recalcData_sequencer_retiming(TransInfo *t)
     const MutableSpan keys = seq::retiming_keys_get(strip);
     SeqRetimingKey *key = &keys[tdseq->key_index];
 
+    const int delta_x = new_frame - seq::retiming_key_frame_get(t->scene, strip, key);
+
     if (seq::retiming_key_is_transition_type(key) &&
         !seq::retiming_selection_has_whole_transition(seq::editing_get(t->scene), key))
     {
@@ -248,18 +324,20 @@ static void recalcData_sequencer_retiming(TransInfo *t)
       seq::retiming_key_frame_set(t->scene, strip, key, new_frame);
     }
 
+    /* Move transitions when retiming keys for the same frame are selected in adjacent strips. */
+    if (tdseq->attached_transition) {
+      seq::transform_translate_strip(t->scene, tdseq->attached_transition, delta_x);
+    }
+
     seq::relations_invalidate_cache(t->scene, strip);
   }
 
   /* Test overlap, displays red outline. */
   Editing *ed = seq::editing_get(t->scene);
+  ListBaseT<Strip> *seqbase = seq::active_seqbase_get(ed);
+
   seq::expand_strips(ed, transformed_strips, seq::StripRelation::Effects);
-  for (Strip *strip : transformed_strips) {
-    strip->runtime->flag &= ~seq::StripRuntimeFlag::Overlap;
-    if (seq::transform_test_overlap(t->scene, seq::active_seqbase_get(ed), strip)) {
-      strip->runtime->flag |= seq::StripRuntimeFlag::Overlap;
-    }
-  }
+  seq::transform_set_overlap_flags(t->scene, seqbase, transformed_strips);
 }
 
 TransConvertTypeInfo TransConvertType_SequencerRetiming = {

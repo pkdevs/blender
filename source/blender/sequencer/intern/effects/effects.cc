@@ -25,11 +25,13 @@
 #include "RNA_prototypes.hh"
 
 #include "SEQ_render.hh"
+#include "SEQ_sequencer.hh"
 
 #include "effects.hh"
 #include "render.hh"
 
-namespace blender::seq {
+namespace blender {
+namespace seq {
 
 SeqResult prepare_effect_imbufs(const RenderData *context,
                                 const SeqResult &ibuf1,
@@ -312,15 +314,10 @@ EffectHandle strip_blend_mode_handle_get(Strip *strip)
 static float transition_fader_calc(const Scene *scene, const Strip *strip, float timeline_frame)
 {
   float fac = float(timeline_frame - strip->left_handle());
-  /* Compositor with no inputs can have strip->len not be updated,
+  /* Overlap transitions and compositor strips with no inputs can have strip->len not be updated,
    * since most of existing editing code assumes no-input effects never need the length.
    * So for the fader, just calculated it here directly. */
-  if (strip->type == STRIP_TYPE_COMPOSITOR) {
-    fac /= strip->enddisp - strip->startdisp;
-  }
-  else {
-    fac /= strip->length(scene);
-  }
+  fac /= strip->right_handle(scene) - strip->left_handle();
   fac = math::clamp(fac, 0.0f, 1.0f);
   return fac;
 }
@@ -331,7 +328,7 @@ float effect_fader_calc(Scene *scene,
                         const bool is_current_frame)
 {
   if (strip->flag & SEQ_USE_EFFECT_DEFAULT_FADE) {
-    if (effect_is_transition(strip->type)) {
+    if (strip_type_can_be_transition(strip->type)) {
       return transition_fader_calc(scene, strip, timeline_frame);
     }
     return 1.0f;
@@ -388,9 +385,62 @@ bool strip_type_is_effect(StripType type)
          (type >= STRIP_TYPE_GAUSSIAN_BLUR && type <= STRIP_TYPE_COLORMIX);
 }
 
-bool effect_is_transition(StripType type)
+bool strip_type_can_be_transition(StripType type)
 {
   return ELEM(type, STRIP_TYPE_CROSS, STRIP_TYPE_GAMCROSS, STRIP_TYPE_WIPE, STRIP_TYPE_COMPOSITOR);
 }
 
-}  // namespace blender::seq
+Strip *get_transition_between(Scene *scene, const Strip *input1, const Strip *input2)
+{
+  Editing *ed = editing_get(scene);
+  if (ed == nullptr) {
+    return nullptr;
+  }
+  Span<Strip *> effect_strips = lookup_effects_by_strip(ed, input1);
+  for (Strip *effect : effect_strips) {
+    /* Inputs should never be in the reverse order, but check anyway. */
+    if (effect->is_overlap_transition() && ELEM(input2, effect->input1, effect->input2)) {
+      return effect;
+    }
+  }
+  return nullptr;
+}
+
+Strip *get_transition_on_side(Editing *ed, const Strip *strip, Side side)
+{
+  Span<Strip *> effects = lookup_effects_by_strip(ed, strip);
+  for (Strip *transition : effects) {
+    if (!transition->is_overlap_transition()) {
+      continue;
+    }
+    if (side == Side::Left && transition->input2 == strip) {
+      return transition;
+    }
+    if (side == Side::Right && transition->input1 == strip) {
+      return transition;
+    }
+  }
+  return nullptr;
+}
+
+bool transition_inputs_have_wrong_order(const Scene *scene,
+                                        const Strip *input1,
+                                        const Strip *input2)
+{
+  const int first_start = input1->left_handle();
+  const int second_start = input2->left_handle();
+  return (first_start > second_start) ||
+         (first_start == second_start &&
+          input1->right_handle(scene) > input2->right_handle(scene));
+}
+
+}  // namespace seq
+
+bool Strip::is_overlap_transition() const
+{
+  return (this->input1 != nullptr) && (this->input2 != nullptr) &&
+         seq::strip_type_can_be_transition(this->type) &&
+         flag_is_set(this->flag, SEQ_SAME_CHANNEL_TRANSITION);
+}
+
+}  // namespace blender

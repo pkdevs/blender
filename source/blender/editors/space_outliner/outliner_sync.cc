@@ -26,6 +26,7 @@
 #include "ED_armature.hh"
 #include "ED_object.hh"
 #include "ED_outliner.hh"
+#include "ED_sequencer.hh"
 
 #include "SEQ_select.hh"
 
@@ -341,13 +342,14 @@ void ED_outliner_select_sync_from_outliner(bContext *C, SpaceOutliner *space_out
   const Main *bmain = CTX_data_main(C);
   Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
+  WorkSpace *workspace = CTX_wm_workspace(C);
 
   SyncSelectTypes sync_types;
   outliner_sync_select_from_outliner_set_types(C, space_outliner, &sync_types);
 
   /* To store elements that have been selected to prevent linked object sync errors */
   SelectedItems selected_items;
-  outliner_sync_selection_from_outliner(CTX_wm_workspace(C),
+  outliner_sync_selection_from_outliner(workspace,
                                         *bmain,
                                         scene,
                                         view_layer,
@@ -369,6 +371,7 @@ void ED_outliner_select_sync_from_outliner(bContext *C, SpaceOutliner *space_out
   }
   if (sync_types.seq_strip) {
     space_outliner->sync_select_dirty &= ~WM_OUTLINER_SYNC_SELECT_FROM_SEQUENCE;
+    ed::vse::deselect_transition_handles(workspace->sequencer_scene);
     WM_event_add_notifier(C, NC_SCENE | ND_SEQUENCER | NA_SELECTED, CTX_data_sequencer_scene(C));
   }
 }

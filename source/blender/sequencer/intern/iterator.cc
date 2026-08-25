@@ -15,6 +15,7 @@
 #include "BLI_listbase.hh"
 
 #include "SEQ_connect.hh"
+#include "SEQ_edit.hh"
 #include "SEQ_iterator.hh"
 #include "SEQ_relations.hh"
 #include "SEQ_render.hh"
@@ -75,8 +76,13 @@ void expand_strips(Editing *ed, VectorSet<Strip *> &strips, const StripRelation 
   for (int64_t i = 0; i < strips.size(); i++) {
     Strip *strip = strips[i];
 
-    if (flag_is_set(include, StripRelation::Effects)) {
+    const bool effects = flag_is_set(include, StripRelation::Effects);
+    const bool transitions = flag_is_set(include, StripRelation::Transitions);
+    if (effects || transitions) {
       for (Strip *effect_strip : lookup_effects_by_strip(ed, strip)) {
+        if (transitions && !effects && !effect_strip->is_overlap_transition()) {
+          continue;
+        }
         strips.add(effect_strip);
       }
     }
@@ -215,13 +221,17 @@ bool must_render_strip(const VectorSet<Strip *> &strip_stack, Strip *target_stri
 }
 
 /* Remove strips we don't want to render from VectorSet. */
-static void collection_filter_rendered_strips(VectorSet<Strip *> &strip_stack,
+static void collection_filter_rendered_strips(const Scene *scene,
+                                              VectorSet<Strip *> &strip_stack,
                                               ListBaseT<SeqTimelineChannel> *channels)
 {
   /* Remove sound strips and muted strips from VectorSet, because these are not rendered.
+   * While transforming, strips may be flagged for removal, with the actual removal done once the
+   * transform is confirmed. Remove these as well.
    * Function #must_render_strip() don't have to check for these strips anymore. */
   strip_stack.remove_if([&](Strip *strip) {
-    return strip->type == STRIP_TYPE_SOUND || render_is_muted(channels, strip);
+    return strip->type == STRIP_TYPE_SOUND || render_is_muted(channels, strip) ||
+           edit_strip_flagged_for_removal(scene, strip);
   });
 
   strip_stack.remove_if([&](Strip *strip) { return !must_render_strip(strip_stack, strip); });
@@ -237,8 +247,16 @@ VectorSet<Strip *> query_rendered_strips(const Scene *scene,
   if (displayed_channel != 0) {
     collection_filter_channel_up_to_incl(strips, displayed_channel);
   }
-  collection_filter_rendered_strips(strips, channels);
+  collection_filter_rendered_strips(scene, strips, channels);
   return strips;
+}
+
+bool strip_draw_order_compare(const Strip *a, const Strip *b)
+{
+  if (a->channel == b->channel) {
+    return b->is_overlap_transition();
+  }
+  return (a->channel < b->channel);
 }
 
 Vector<Strip *> query_rendered_strips_sorted(const Scene *scene,
@@ -251,8 +269,7 @@ Vector<Strip *> query_rendered_strips_sorted(const Scene *scene,
 
   Vector<Strip *> strips_vec = strips.extract_vector();
   /* Sort strips by channel. */
-  std::ranges::sort(strips_vec,
-                    [](const Strip *a, const Strip *b) { return a->channel < b->channel; });
+  std::ranges::sort(strips_vec, strip_draw_order_compare);
   return strips_vec;
 }
 

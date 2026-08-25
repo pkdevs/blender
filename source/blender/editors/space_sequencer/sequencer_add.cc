@@ -641,19 +641,12 @@ static bool load_data_init_from_operator(seq::LoadData *load_data, bContext *C, 
 static bool sequencer_add_generic_exec(
     bContext *C, wmOperator *op, seq::LoadData *load_data, Scene *scene, const int num_strips)
 {
-  Editing *ed = seq::editing_ensure(scene);
+  seq::editing_ensure(scene);
 
   const char *error_msg;
   if (!have_free_channels(C, op, num_strips, &error_msg)) {
     BKE_report(op->reports, RPT_ERROR, error_msg);
     return false;
-  }
-
-  /* Keeping the old selection when moving newly imported strips is unexpected and feels buggy,
-   * so we deselect when `move_strips` is set too. */
-  if (RNA_boolean_get(op->ptr, "move_strips") || RNA_boolean_get(op->ptr, "replace_sel")) {
-    deselect_all_strips(scene);
-    seq::retiming_selection_clear(ed);
   }
 
   if (!load_data_init_from_operator(load_data, C, op)) {
@@ -670,6 +663,13 @@ static void seq_load_apply_generic_options(bContext *C, wmOperator *op, Strip *s
 
   if (strip == nullptr) {
     return;
+  }
+
+  /* Keeping the old selection when moving newly imported strips is unexpected and feels buggy,
+   * so we deselect when `move_strips` is set too. */
+  if (RNA_boolean_get(op->ptr, "move_strips") || RNA_boolean_get(op->ptr, "replace_sel")) {
+    deselect_all_strips(scene);
+    seq::retiming_selection_clear(ed);
   }
 
   if (RNA_boolean_get(op->ptr, "replace_sel")) {
@@ -710,6 +710,13 @@ static bool seq_load_apply_generic_options_only_test_overlap(bContext *C,
 
   if (strip == nullptr) {
     return false;
+  }
+
+  /* Keeping the old selection when moving newly imported strips is unexpected and feels buggy,
+   * so we deselect when `move_strips` is set too. */
+  if (RNA_boolean_get(op->ptr, "move_strips") || RNA_boolean_get(op->ptr, "replace_sel")) {
+    deselect_all_strips(scene);
+    seq::retiming_selection_clear(ed);
   }
 
   if (RNA_boolean_get(op->ptr, "replace_sel")) {
@@ -1980,7 +1987,10 @@ static wmOperatorStatus sequencer_add_effect_strip_exec(bContext *C, wmOperator 
     }
   }
 
-  Strip *strip = seq::add_effect_strip(scene, ed->current_strips(), &load_data);
+  Strip *strip = seq::add_effect_strip(scene, ed->current_strips(), &load_data, op->reports);
+  if (strip == nullptr) {
+    return OPERATOR_CANCELLED;
+  }
   seq_load_apply_generic_options(C, op, strip);
 
   if (strip->type == STRIP_TYPE_COLOR) {

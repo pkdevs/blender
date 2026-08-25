@@ -352,7 +352,7 @@ static bool sequencer_swap_inputs_poll(bContext *C)
     const Strip *input2 = active_strip->input2;
     const bool inputs_fully_overlap = input1->left_handle() == input2->left_handle() &&
                                       input1->right_handle(scene) == input2->right_handle(scene);
-    if (seq::effect_is_transition(active_strip->type) && !inputs_fully_overlap) {
+    if (seq::strip_type_can_be_transition(active_strip->type) && !inputs_fully_overlap) {
       CTX_wm_operator_poll_msg_set(C,
                                    "Transition inputs can only be swapped if the order is "
                                    "ambiguous (i.e. if inputs fully overlap horizontally)");
@@ -928,13 +928,14 @@ static SlipData *slip_data_init(bContext *C, const wmOperator *op, const wmEvent
 {
   const Scene *scene = CTX_data_sequencer_scene(C);
   const Editing *ed = seq::editing_get(scene);
+  const SpaceSeq *sseq = CTX_wm_space_seq(C);
   const View2D *v2d = ui::view2d_fromcontext(C);
 
   SlipData *data = MEM_new<SlipData>("slipdata");
 
   VectorSet<Strip *> strips;
   if (RNA_boolean_get(op->ptr, "use_cursor_position") && event) {
-    Strip *strip = strip_under_mouse_get(scene, v2d, event->mval);
+    Strip *strip = strip_under_mouse_get(scene, sseq, v2d, event->mval);
     if (strip) {
       strips.add(strip);
     }
@@ -952,7 +953,8 @@ static SlipData *slip_data_init(bContext *C, const wmOperator *op, const wmEvent
   const ListBaseT<SeqTimelineChannel> *channels = seq::channels_displayed_get(
       seq::editing_get(scene));
   strips.remove_if([&](Strip *strip) {
-    return (seq::transform_single_image_check(strip) || seq::transform_is_locked(channels, strip));
+    return (seq::transform_single_image_check(strip) || strip->is_overlap_transition() ||
+            seq::transform_is_locked(channels, strip));
   });
   if (strips.is_empty()) {
     MEM_SAFE_DELETE(data);
@@ -1508,6 +1510,21 @@ static wmOperatorStatus sequencer_connect_exec(bContext *C, wmOperator *op)
     return OPERATOR_CANCELLED;
   }
 
+  /* Transitions can only be connected to each other, not to other strips. */
+  bool has_transition = false;
+  bool has_non_transition = false;
+  for (Strip *strip : selected) {
+    if (strip->is_overlap_transition()) {
+      has_transition = true;
+    }
+    else {
+      has_non_transition = true;
+    }
+    if (has_transition && has_non_transition) {
+      return OPERATOR_CANCELLED;
+    }
+  }
+
   const bool toggle = RNA_boolean_get(op->ptr, "toggle");
   if (toggle && seq::are_strips_connected_together(selected)) {
     seq::disconnect(selected);
@@ -1699,18 +1716,28 @@ VectorSet<Strip *> strip_effect_get_new_inputs(const Scene *scene,
     inputs.remove_if([&](Strip *strip) { return strip == active_strip; });
   }
 
-  /* Reorganize inputs before creating effect strip. Note that transition inputs are automatically
-   * swapped after add & during transform by #strip_time_effect_range_set, so ignore that here. */
-  if (inputs.size() == 2 && !seq::effect_is_transition(effect_type)) {
+  if (inputs.size() == 2) {
     Strip *first = inputs[0];
     Strip *second = inputs[1];
-
-    /* Blend-modes make the active strip the second input. If neither strip is active (as in
-     * reassign inputs), make it the strip on the lower channel. */
-    if (first == seq::select_active_get(scene) ||
-        (ignore_active && first->channel < second->channel))
-    {
-      /* Swap inputs. */
+    bool do_swap = false;
+    /* Makes the active strip the second input. If neither strip is active (as in reassign inputs),
+     * make it the strip on the lower channel. */
+    const bool default_order_swap = first == seq::select_active_get(scene) ||
+                                    (ignore_active && first->channel < second->channel);
+    if (seq::strip_type_can_be_transition(effect_type)) {
+      /* Sort by timeline frame so 2-input transitions go "from" earlier "to" later. If the order
+       * is ambiguous, use the same order as for other 2-input effects. */
+      const bool inputs_fully_overlap = first->left_handle() == second->left_handle() &&
+                                        first->right_handle(scene) == second->right_handle(scene);
+      do_swap = inputs_fully_overlap ?
+                    default_order_swap :
+                    seq::transition_inputs_have_wrong_order(scene, first, second);
+    }
+    else {
+      /* Other 2-input effects (blend-modes). */
+      do_swap = default_order_swap;
+    }
+    if (do_swap) {
       inputs.clear();
       inputs.add(second);
       inputs.add(first);
@@ -1773,6 +1800,21 @@ static wmOperatorStatus sequencer_reassign_inputs_exec(bContext *C, wmOperator *
   return OPERATOR_FINISHED;
 }
 
+static bool sequencer_reassign_inputs_poll(bContext *C)
+{
+  const Scene *scene = CTX_data_sequencer_scene(C);
+  const Strip *active_strip = seq::select_active_get(scene);
+
+  if (active_strip && active_strip->is_effect()) {
+    if (active_strip->is_overlap_transition()) {
+      CTX_wm_operator_poll_msg_set(C, "Cannot reassign same channel transition inputs");
+      return false;
+    }
+    return true;
+  }
+  return false;
+}
+
 void SEQUENCER_OT_reassign_inputs(wmOperatorType *ot)
 {
   /* Identifiers. */
@@ -1782,7 +1824,7 @@ void SEQUENCER_OT_reassign_inputs(wmOperatorType *ot)
 
   /* API callbacks. */
   ot->exec = sequencer_reassign_inputs_exec;
-  ot->poll = sequencer_effect_poll;
+  ot->poll = sequencer_reassign_inputs_poll;
 
   /* Flags. */
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
@@ -1971,6 +2013,7 @@ static wmOperatorStatus sequencer_split_exec(bContext *C, wmOperator *op)
 static wmOperatorStatus sequencer_split_invoke(bContext *C, wmOperator *op, const wmEvent *event)
 {
   Scene *scene = CTX_data_sequencer_scene(C);
+  SpaceSeq *sseq = CTX_wm_space_seq(C);
   View2D *v2d = ui::view2d_fromcontext(C);
 
   auto split_side = seq::Side(RNA_enum_get(op->ptr, "side"));
@@ -1989,7 +2032,7 @@ static wmOperatorStatus sequencer_split_invoke(bContext *C, wmOperator *op, cons
     ui::view2d_region_to_view(v2d, event->mval[0], event->mval[1], &mouseloc[0], &mouseloc[1]);
     if (RNA_boolean_get(op->ptr, "use_cursor_position")) {
       split_frame = round_fl_to_int(mouseloc[0]);
-      Strip *strip = strip_under_mouse_get(scene, v2d, event->mval);
+      Strip *strip = strip_under_mouse_get(scene, sseq, v2d, event->mval);
       if (strip == nullptr || split_frame == strip->left_handle() ||
           split_frame == strip->right_handle(scene))
       {
@@ -2118,6 +2161,7 @@ static wmOperatorStatus sequencer_box_blade_exec(bContext *C, wmOperator *op)
   Main *bmain = CTX_data_main(C);
   Scene *scene = CTX_data_sequencer_scene(C);
   Editing *ed = seq::editing_get(scene);
+  SpaceSeq *sseq = CTX_wm_space_seq(C);
   ListBaseT<SeqTimelineChannel> *channels = seq::channels_displayed_get(ed);
 
   scene->ed->runtime->show_transform_preview = false;
@@ -2146,7 +2190,7 @@ static wmOperatorStatus sequencer_box_blade_exec(bContext *C, wmOperator *op)
    * note that this means strips.size() can increase during the loops.  */
   for (int i = 0; i < strips.size(); i++) {
     Strip *strip = strips[i];
-    rctf strip_rect = strip_bounds_get(scene, strip);
+    rctf strip_rect = strip_bounds_get(scene, sseq, v2d, strip);
     if (BLI_rctf_isect(&strip_rect, &box_rect, nullptr)) {
       gap_removal_boundary[0] = math::min(gap_removal_boundary[0], strip->left_handle());
       gap_removal_boundary[1] = math::max(gap_removal_boundary[1], strip->right_handle(scene));
@@ -3608,12 +3652,25 @@ static wmOperatorStatus sequencer_change_effect_type_exec(bContext *C, wmOperato
     return OPERATOR_CANCELLED;
   }
 
+  if (strip->is_overlap_transition() && !seq::strip_type_can_be_transition(new_type)) {
+    BKE_report(op->reports, RPT_ERROR, "Cannot change transition to non-transition type");
+    return OPERATOR_CANCELLED;
+  }
+
   /* Note: allow changing to compositor effect; it can have any number of inputs. */
   if (new_type != STRIP_TYPE_COMPOSITOR) {
     if (have_inputs != seq::effect_type_get_min_num_inputs(new_type)) {
       BKE_report(op->reports, RPT_ERROR, "New effect takes less or more inputs");
       return OPERATOR_CANCELLED;
     }
+  }
+
+  /* Sort by timeline frame so 2-input transitions go "from" earlier "to" later. This is for
+   * non-overlapping transitions. */
+  if (seq::strip_type_can_be_transition(new_type) && have_inputs == 2 &&
+      seq::transition_inputs_have_wrong_order(scene, strip->input1, strip->input2))
+  {
+    std::swap(strip->input1, strip->input2);
   }
 
   /* Free previous effect. */

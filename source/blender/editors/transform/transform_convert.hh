@@ -421,13 +421,20 @@ extern TransConvertTypeInfo TransConvertType_Sequencer;
  * Sequencer transform customdata (stored in #TransCustomDataContainer).
  */
 struct TransSeq {
-  /* An array of TransDataSeq for either retiming or normal transform. */
   void *tdseq;
   /* Maximum delta allowed along x and y before clamping selected strips/handles. Always active. */
-  rcti offset_clamp;
+  rcti hard_clamp;
   /* Maximum delta before clamping handles to the bounds of underlying content. May be disabled. */
-  int hold_clamp_min = INT_MIN;
-  int hold_clamp_max = INT_MAX;
+  int soft_clamp_min = INT_MIN;
+  int soft_clamp_max = INT_MAX;
+
+  /* Maximum x-axis delta allowed for transitions when symmetric handle mode is enabled.*/
+  int symmetric_hard_clamp_min = INT_MIN;
+  int symmetric_hard_clamp_max = INT_MAX;
+  /* Maximum x-axis delta before clamping transitions to the bounds of underlying content when
+   * symmetric handle mode is enabled. May be disabled. */
+  int symmetric_soft_clamp_min = INT_MIN;
+  int symmetric_soft_clamp_max = INT_MAX;
 
   /* Initial rect of the view2d, used for computing offset during edge panning. */
   rctf initial_v2d_cur;
@@ -437,7 +444,7 @@ struct TransSeq {
   VectorSet<Strip *> time_dependent_strips;
 };
 
-bool seq_transform_check_overlap(Span<Strip *> transformed_strips);
+bool seq_transform_check_overlap_flags(Span<Strip *> transformed_strips);
 
 /* `transform_convert_sequencer_image.cc` */
 

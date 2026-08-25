@@ -28,6 +28,8 @@ namespace seq {
 
 struct RenderData;
 
+enum class Side : int;
+
 void effect_ensure_initialized(Strip *strip);
 void effect_free(Strip *strip);
 
@@ -47,7 +49,15 @@ void compositor_effect_nodes_input_usages(const Scene &sequencer_scene,
  * take variable number of inputs. */
 int effect_type_get_min_num_inputs(StripType type);
 bool strip_type_is_effect(StripType type);
-bool effect_is_transition(StripType type);
+/* Compositor strips can be non-transitions as well, depending on the number of inputs.
+ * Transitions can be on top of the input strips on the same channel, in which case they have
+ * handles and are drawn differently. Use #Strip::is_overlap_transition to test for this. */
+bool strip_type_can_be_transition(StripType type);
+Strip *get_transition_between(Scene *scene, const Strip *input1, const Strip *input2);
+Strip *get_transition_on_side(Editing *ed, const Strip *strip, Side side);
+bool transition_inputs_have_wrong_order(const Scene *scene,
+                                        const Strip *input1,
+                                        const Strip *input2);
 
 void effect_text_font_set(Strip *strip, VFont *font);
 bool effects_can_render_text(const Strip *strip);

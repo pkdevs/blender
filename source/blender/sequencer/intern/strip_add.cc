@@ -31,6 +31,7 @@
 #include "BKE_main.hh"
 #include "BKE_mask.hh"
 #include "BKE_movieclip.hh"
+#include "BKE_report.hh"
 #include "BKE_scene.hh"
 #include "BKE_sound.hh"
 
@@ -165,8 +166,74 @@ Strip *add_mask_strip(Scene *scene, ListBaseT<Strip> *seqbase, LoadData *load_da
   return strip;
 }
 
-Strip *add_effect_strip(Scene *scene, ListBaseT<Strip> *seqbase, LoadData *load_data)
+static std::pair<int, int> transition_max_bounds_get(const Scene *scene,
+                                                     Editing *ed,
+                                                     const Strip *input1,
+                                                     const Strip *input2)
 {
+  const Strip *left_transition = seq::get_transition_on_side(ed, input1, seq::Side::Left);
+  const Strip *right_transition = seq::get_transition_on_side(ed, input2, seq::Side::Right);
+
+  int left_handle_min = input1->left_handle();
+  int right_handle_max = input2->right_handle(scene);
+  if (left_transition) {
+    left_handle_min = max_ii(left_handle_min, left_transition->right_handle(scene));
+  }
+  if (right_transition) {
+    right_handle_max = min_ii(right_handle_max, right_transition->left_handle());
+  }
+
+  return {left_handle_min, right_handle_max};
+}
+
+static bool overlap_transition_validate(
+    Scene *scene, const Strip *input1, const Strip *input2, int length, ReportList *reports)
+{
+  Editing *ed = editing_get(scene);
+
+  if (length < 2) {
+    BKE_report(reports, RPT_ERROR, "Transition length must be at least 2");
+    return false;
+  }
+  if (seq::get_transition_between(scene, input1, input2) != nullptr) {
+    BKE_report(reports, RPT_ERROR, "Cannot add multiple transitions between the same strips");
+    return false;
+  }
+  if (input1->is_overlap_transition() || input2->is_overlap_transition()) {
+    BKE_report(reports, RPT_ERROR, "Cannot add transitions on other transitions");
+    return false;
+  }
+  const auto bounds = transition_max_bounds_get(scene, ed, input1, input2);
+  const int cutpoint = input2->left_handle();
+  const bool no_space_left = bounds.first > cutpoint - 1;
+  const bool no_space_right = bounds.second < cutpoint + 1;
+  if (no_space_left || no_space_right) {
+    BKE_report(reports, RPT_ERROR, "Not enough space for transition");
+    return false;
+  }
+
+  return true;
+}
+
+Strip *add_effect_strip(Scene *scene,
+                        ListBaseT<Strip> *seqbase,
+                        LoadData *load_data,
+                        ReportList *reports)
+{
+  Editing *ed = editing_get(scene);
+
+  const int length = load_data->effect.length;
+  const Strip *input1 = load_data->effect.input1;
+  const Strip *input2 = load_data->effect.input2;
+
+  const bool transition = (input1 != nullptr) && (input2 != nullptr) &&
+                          strip_type_can_be_transition(load_data->effect.type);
+  const bool overlap_transition = transition && input1->channel == input2->channel &&
+                                  input1->right_handle(scene) == input2->left_handle();
+  if (overlap_transition && !overlap_transition_validate(scene, input1, input2, length, reports)) {
+    return nullptr;
+  }
+
   Strip *strip = strip_alloc(
       seqbase, load_data->start_frame, load_data->channel, load_data->effect.type);
 
@@ -187,7 +254,20 @@ Strip *add_effect_strip(Scene *scene, ListBaseT<Strip> *seqbase, LoadData *load_
   if (strip->input1 == nullptr) {
     strip->content_length_set(1); /* Effect is generator, set non zero length. */
     strip->flag |= SEQ_SINGLE_FRAME_CONTENT;
-    strip->right_handle_set(scene, load_data->start_frame + load_data->effect.length);
+    strip->right_handle_set(scene, load_data->start_frame + length);
+  }
+
+  if (overlap_transition) {
+    strip->flag |= SEQ_SAME_CHANNEL_TRANSITION;
+
+    const int cutpoint = input2->left_handle();
+    const auto bounds = transition_max_bounds_get(scene, ed, input1, input2);
+
+    const int left_handle = max_ii(cutpoint - floor(length / 2.0), bounds.first);
+    const int right_handle = min_ii(cutpoint + ceil(length / 2.0), bounds.second);
+
+    strip->handles_set(scene, left_handle, right_handle);
+    strip->channel_set(input1->channel);
   }
 
   strip_add_set_name(scene, strip, load_data);

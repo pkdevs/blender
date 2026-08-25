@@ -102,7 +102,8 @@ void special_preview_set(bContext *C, const int mval[2])
   }
 
   ARegion *region = CTX_wm_region(C);
-  Strip *strip = strip_under_mouse_get(scene, &region->v2d, mval);
+  SpaceSeq *sseq = CTX_wm_space_seq(C);
+  Strip *strip = strip_under_mouse_get(scene, sseq, &region->v2d, mval);
   if (strip != nullptr && strip->type != STRIP_TYPE_SOUND) {
     sequencer_special_update_set(strip);
   }

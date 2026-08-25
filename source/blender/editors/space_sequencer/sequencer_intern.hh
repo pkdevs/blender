@@ -103,10 +103,9 @@ struct StripDrawContext {
   float left_handle, right_handle; /* Position in frames. */
   float strip_content_top; /* Position in timeline space without content and text overlay. */
   float handle_width;      /* Width of strip handle in frames. */
-  float strip_length;
+  float strip_length, strip_height;
 
   bool can_draw_text_overlay;
-  bool can_draw_retiming_overlay;
   bool can_draw_strip_content;
   bool strip_is_too_small; /* Shorthand for (!can_draw_text_overlay && !can_draw_strip_content). */
   bool is_active_strip;
@@ -272,15 +271,6 @@ void SEQUENCER_OT_scene_frame_range_update(wmOperatorType *ot);
 /* `sequencer_select.cc` */
 
 /**
- *  Returns real-valued box bounds of strip in view-space.
- *
- * \note Strips are slightly shorter than their containing channels:
- * their height starts at `STRIP_OFSBOTTOM` and ends at `STRIP_OFSTOP`.
- * For a strip's channel and frame extents (rather than the size),
- * see #strip_int_bounds_get.
- */
-rctf strip_bounds_get(const Scene *scene, const Strip *strip);
-/**
  *  Returns the extents of the strip along channels and frames.
  */
 rcti strip_int_bounds_get(const Scene *scene, const Strip *strip);
@@ -308,14 +298,17 @@ void sequencer_select_do_updates(const bContext *C, Scene *scene);
 /**
  * Returns the strip that intersects with the mouse cursor in the timeline, if applicable.
  *
- * This check is more robust than simply comparing the timeline frame and channel, since strips do
- * not take up the full height of their channels (see #STRIP_OFSBOTTOM, #STRIP_OFSTOP).
+ * This should be used instead of comparing the timeline frame and channel, since
+ * transitions can overlap other strips.
  * Does not consider padded handles.
  *
  * \param mval: Mouse cursor location in region-space.
  * \return `Strip` that intersects with the cursor, or `nullptr` if not found.
  */
-Strip *strip_under_mouse_get(const Scene *scene, const View2D *v2d, const int mval[2]);
+Strip *strip_under_mouse_get(const Scene *scene,
+                             const SpaceSeq *sseq,
+                             const View2D *v2d,
+                             const int mval[2]);
 
 /* `sequencer_add.cc` */
 
@@ -414,6 +407,8 @@ wmOperatorStatus sequencer_retiming_select_all_exec(bContext *C, wmOperator *op)
 wmOperatorStatus sequencer_retiming_box_select_exec(bContext *C, wmOperator *op);
 
 /* `sequencer_retiming_draw.cc` */
+constexpr int RETIMING_KEY_PIXEL_OFFSET = 4;
+
 void sequencer_retiming_draw_segments(const TimelineDrawContext &ctx,
                                       const StripDrawContext &strip_ctx);
 void sequencer_retiming_keys_draw(const TimelineDrawContext &ctx, Span<StripDrawContext> strips);
@@ -421,6 +416,11 @@ void sequencer_retiming_speed_labels_draw(const TimelineDrawContext &ctx,
                                           const StripDrawContext &strip_ctx);
 rcti strip_retiming_keys_box_get(const Scene *scene, const View2D *v2d, const Strip *strip);
 bool retiming_overlay_enabled(const SpaceSeq *sseq);
+bool can_draw_retiming(const Scene *scene,
+                       const SpaceSeq *sseq,
+                       const View2D *v2d,
+                       const Strip *strip);
+float retiming_key_size();
 
 /* `sequencer_text_edit.cc` */
 bool sequencer_text_editing_active_poll(bContext *C);
@@ -466,6 +466,19 @@ IndexRange strip_text_selection_range_get(const TextVars *data);
 /* `sequencer_timeline_draw.cc` */
 Vector<Strip *> sequencer_visible_strips_get(const bContext *C);
 Vector<Strip *> sequencer_visible_strips_get(const Scene *scene, const View2D *v2d);
+/**
+ *  Returns float-valued box bounds of a strip in view-space.
+ *
+ * \note Strips are slightly shorter than their containing channels:
+ * their height starts at `STRIP_OFSBOTTOM` and ends at `STRIP_OFSTOP`.
+ * Transitions have a smaller height than normal strips.
+ * For a strip's channel and frame extents (rather than the size), see
+ * #strip_int_bounds_get.
+ */
+rctf strip_bounds_get(const Scene *scene,
+                      const SpaceSeq *sseq,
+                      const View2D *v2d,
+                      const Strip *strip);
 
 /* `sequencer_clipboard.cc` */
 wmOperatorStatus sequencer_clipboard_copy_exec(bContext *C, wmOperator *op);

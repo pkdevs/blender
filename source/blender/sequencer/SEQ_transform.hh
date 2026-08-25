@@ -14,6 +14,7 @@
 #include "BLI_bounds_types.hh"
 #include "BLI_math_matrix_types.hh"
 #include "BLI_span.hh"
+#include "BLI_vector_set.hh"
 
 namespace blender {
 
@@ -33,6 +34,13 @@ bool transform_strip_can_be_translated(const Strip *strip);
 bool transform_single_image_check(const Strip *strip);
 bool transform_test_overlap(const Scene *scene, ListBaseT<Strip> *seqbasep, Strip *test);
 bool transform_test_overlap(const Scene *scene, Strip *strip1, Strip *strip2);
+/**
+ * First clears the #StripRuntimeFlag::Overlap flag and cancels old deletion, then updates overlap
+ * and deletion.
+ */
+void transform_set_overlap_flags(const Scene *scene,
+                                 ListBaseT<Strip> *seqbasep,
+                                 VectorSet<Strip *> &strips);
 void transform_translate_strip(Scene *evil_scene, Strip *strip, int delta);
 /**
  * \return 0 if there weren't enough space.

@@ -21,7 +21,16 @@ namespace seq {
 bool animation_keyframes_exist(const Scene *scene);
 bool animation_drivers_exist(Scene *scene);
 void free_animdata(Scene *scene, Strip *strip);
-void offset_animdata(const Scene *scene, Strip *strip, float ofs);
+void offset_animdata(const Scene *scene, const Strip *strip, float ofs);
+/**
+ * Move and scale strip animation data based on old and new strip bounds.
+ */
+void transform_transition_animdata(const Scene *scene,
+                                   const Strip *strip,
+                                   float left_old,
+                                   float right_old,
+                                   float left_new,
+                                   float right_new);
 
 /**
  * Return whether the fcurve targets the given strip.

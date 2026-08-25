@@ -52,7 +52,7 @@ void foreach_strip(ListBaseT<Strip> *seqbase, FunctionRef<bool(Strip *)> callbac
 enum class StripRelation {
   None = 0,
 
-  /** Effects of this strip. */
+  /** Effects of this strip, including overlap transitions. */
   Effects = (1 << 0),
   /** If the strip is an effect, the inputs of this strip. */
   Inputs = (1 << 1),
@@ -60,6 +60,8 @@ enum class StripRelation {
   MetaContents = (1 << 2),
   /** Strips connected to this strip. */
   Connected = (1 << 3),
+  /** Overlap transitions that have this strip as input. */
+  Transitions = (1 << 4),
 
   /** The entire effect chain a strip participates in, followed in both directions. */
   EffectChain = Effects | Inputs,
@@ -136,6 +138,10 @@ VectorSet<Strip *> query_rendered_strips(const Scene *scene,
                                          int timeline_frame,
                                          int displayed_channel);
 
+/**
+ * \return true if #a is drawn below #b, assuming both strips are drawn.
+ */
+bool strip_draw_order_compare(const Strip *a, const Strip *b);
 /**
  * Strips are sorted from lowest to highest channel.
  * \copydoc #query_rendered_strips
