@@ -202,12 +202,12 @@ static TransitionClampData transition_hard_bounds_get(const Scene *scene,
 }
 
 bool transition_has_space(const Scene *scene,
-                          const Strip *input1,
-                          const Strip *input2,
+                          const Strip *left_input,
+                          const Strip *right_input,
                           int left_handle,
                           int right_handle)
 {
-  TransitionClampData bounds = transition_hard_bounds_get(scene, input1, input2);
+  TransitionClampData bounds = transition_hard_bounds_get(scene, left_input, right_input);
   const bool left_valid = left_handle >= bounds.left_handle_min &&
                           left_handle <= bounds.left_handle_max;
   const bool right_valid = right_handle >= bounds.right_handle_min &&
@@ -216,12 +216,12 @@ bool transition_has_space(const Scene *scene,
 }
 
 std::pair<int, int> transition_handles_clamp(const Scene *scene,
-                                             const Strip *input1,
-                                             const Strip *input2,
+                                             const Strip *left_input,
+                                             const Strip *right_input,
                                              std::pair<int, int> original_handles)
 {
   const auto [left, right] = original_handles;
-  const TransitionClampData bounds = transition_hard_bounds_get(scene, input1, input2);
+  const TransitionClampData bounds = transition_hard_bounds_get(scene, left_input, right_input);
 
   const auto left_clamped = math::clamp(left, bounds.left_handle_min, bounds.left_handle_max);
   const auto right_clamped = math::clamp(right, bounds.right_handle_min, bounds.right_handle_max);
@@ -230,24 +230,23 @@ std::pair<int, int> transition_handles_clamp(const Scene *scene,
 }
 
 static std::optional<StringRefNull> overlap_transition_validate(Scene *scene,
-                                                                const Strip *input1,
-                                                                const Strip *input2,
+                                                                const Strip *left_input,
+                                                                const Strip *right_input,
                                                                 int length)
 {
-  // this should also check that input1 comes before input2
   if (length < 2) {
     return N_("Transition length must be at least 2");
   }
-  if (seq::get_transition_between(scene, input1, input2) != nullptr) {
+  if (seq::get_transition_between(scene, left_input, right_input) != nullptr) {
     return N_("Cannot add multiple transitions between the same strips");
   }
-  if (input1->is_overlap_transition() || input2->is_overlap_transition()) {
+  if (left_input->is_overlap_transition() || right_input->is_overlap_transition()) {
     return N_("Cannot add transitions on other transitions");
   }
 
   /* Check if the minimum length transition fits. */
-  const int cutpoint = input2->left_handle();
-  if (!transition_has_space(scene, input1, input2, cutpoint - 1, cutpoint + 1)) {
+  const int cutpoint = right_input->left_handle();
+  if (!transition_has_space(scene, left_input, right_input, cutpoint - 1, cutpoint + 1)) {
     return N_("Not enough space for transition");
   }
 
