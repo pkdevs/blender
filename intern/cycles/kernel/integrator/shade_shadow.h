@@ -284,7 +284,7 @@ ccl_device void integrator_shade_shadow(KernelGlobals kg,
     return;
   }
 
-  kernel_assert(result == SHADER_EVAL_OK);
+  kernel_assert(result == TRANSPARENT_SHADOW_EVAL_CONTINUE);
 #endif
 
   if (shadow_intersections_has_remaining(packed_num_hits)) {
