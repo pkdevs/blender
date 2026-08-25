@@ -99,7 +99,7 @@ ProjectVariable::ProjectVariable(StringRef name, ProjectVariableType type)
   this->prop() = *tmp_property;
 
   /* Shallow delete, so the pointers copied to `this` remain valid. */
-  MEM_delete(tmp_property);
+  MEM_delete_void(static_cast<void *>(tmp_property));
 }
 
 ProjectVariable::~ProjectVariable()
