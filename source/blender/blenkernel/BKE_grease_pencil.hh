@@ -30,6 +30,7 @@ struct Main;
 struct Scene;
 struct Object;
 struct Material;
+struct KeyBlock;
 
 namespace draw {
 struct GreasePencilBatchCache;
@@ -979,6 +980,24 @@ void ensure_non_empty_layer_names(Main &bmain, GreasePencil &grease_pencil);
 std::string shapekey_position_attribute(const char *name);
 std::string shapekey_radius_attribute(const char *name);
 std::string shapekey_opacity_attribute(const char *name);
+
+void shapekey_get_applied_radius(const Key *key,
+                                 bke::MutableAttributeAccessor &attributes,
+                                 MutableSpan<float> radius);
+void shapekey_get_applied_opacity(const Key *key,
+                                  bke::MutableAttributeAccessor &attributes,
+                                  MutableSpan<float> opacity);
+
+void shapekey_set_applied_radius(const Key *key,
+                                 const KeyBlock *actkb,
+                                 const IndexMask &selection,
+                                 const Span<float> new_radius,
+                                 bke::MutableAttributeAccessor &attributes);
+void shapekey_set_applied_opacity(const Key *key,
+                                  const KeyBlock *actkb,
+                                  const IndexMask &selection,
+                                  const Span<float> new_opacity,
+                                  bke::MutableAttributeAccessor &attributes);
 
 }  // namespace greasepencil
 
