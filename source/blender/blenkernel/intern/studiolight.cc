@@ -19,7 +19,7 @@
 #include "BLI_math_color_c.hh"
 #include "BLI_math_vector_c.hh"
 #include "BLI_path_utils.hh"
-#include "BLI_string.h"
+#include "BLI_string.hh"
 #include "BLI_vector.hh"
 
 #include "CLG_log.h"
