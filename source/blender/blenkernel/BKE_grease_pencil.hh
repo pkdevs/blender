@@ -991,6 +991,11 @@ void shapekey_get_applied_opacity(const Key *key,
                                   const bke::AttributeAccessor &attributes,
                                   MutableSpan<float> opacity);
 
+void shapekey_set_applied_position(const Key *key,
+                                   const KeyBlock *actkb,
+                                   const IndexMask &selection,
+                                   const Span<float3> new_position,
+                                   bke::MutableAttributeAccessor &attributes);
 void shapekey_set_applied_radius(const Key *key,
                                  const KeyBlock *actkb,
                                  const IndexMask &selection,

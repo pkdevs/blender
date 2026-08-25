@@ -13,6 +13,7 @@
 #include "BKE_crazyspace.hh"
 #include "BKE_curves.hh"
 #include "BKE_grease_pencil.hh"
+#include "BKE_key.hh"
 #include "BKE_paint.hh"
 
 #include "ED_grease_pencil.hh"
@@ -57,6 +58,10 @@ void RandomizeOperation::on_stroke_begin(const bContext &C, const InputSample &s
 
 void RandomizeOperation::on_stroke_extended(const bContext &C, const InputSample &extension_sample)
 {
+  Object &object = *CTX_data_active_object(&C);
+  GreasePencil &grease_pencil = *id_cast<GreasePencil *>(object.data);
+  Key *key = grease_pencil.key;
+  KeyBlock *actkb = BKE_keyblock_find_by_index(key, object.shapenr - 1);
   Paint &paint = *BKE_paint_get_active_from_context(&C);
   const Brush &brush = *BKE_paint_brush(&paint);
   const int sculpt_mode_flag = brush.gpencil_settings->sculpt_mode_flag;
@@ -75,25 +80,56 @@ void RandomizeOperation::on_stroke_extended(const bContext &C, const InputSample
 
         bool changed = false;
         if (sculpt_mode_flag & GP_SCULPT_FLAGMODE_APPLY_POSITION) {
-          MutableSpan<float3> positions = curves.positions_for_write();
-
           /* Jitter is applied perpendicular to the mouse movement vector. */
           const float2 forward = math::normalize(this->mouse_delta(extension_sample));
           const float2 sideways = float2(-forward.y, forward.x);
 
-          point_mask.foreach_index(
-              [&](const int64_t point_i) {
-                const float2 &co = view_positions[point_i];
-                const float influence = brush_point_influence(
-                    paint, brush, co, extension_sample, params.multi_frame_falloff);
-                if (influence <= 0.0f) {
-                  return;
-                }
-                const float noise = 2.0f * hash_rng(seed, 5678, point_i) - 1.0f;
-                positions[point_i] += compute_orig_delta(
-                    projection_fn, deformation, point_i, sideways * influence * noise);
-              },
-              exec_mode::grain_size(4096));
+          if (key && actkb && object.shapenr != 1) {
+            const float keyblock_influence = actkb->curval;
+
+            if (keyblock_influence == 0.0f) {
+              return false;
+            }
+
+            bke::MutableAttributeAccessor attributes = curves.attributes_for_write();
+            bke::SpanAttributeWriter<float3> key_positions =
+                attributes.lookup_or_add_for_write_span<float3>(
+                    blender::bke::greasepencil::shapekey_position_attribute(actkb->name),
+                    bke::AttrDomain::Point);
+
+            point_mask.foreach_index(
+                [&](const int64_t point_i) {
+                  const float2 &co = view_positions[point_i];
+                  const float influence = brush_point_influence(
+                      paint, brush, co, extension_sample, params.multi_frame_falloff);
+                  if (influence <= 0.0f) {
+                    return;
+                  }
+                  const float noise = 2.0f * hash_rng(seed, 5678, point_i) - 1.0f;
+                  key_positions.span[point_i] += compute_orig_delta(
+                      projection_fn, deformation, point_i, sideways * influence * noise);
+                },
+                exec_mode::grain_size(4096));
+
+            key_positions.finish();
+          }
+          else {
+            MutableSpan<float3> positions = curves.positions_for_write();
+
+            point_mask.foreach_index(
+                [&](const int64_t point_i) {
+                  const float2 &co = view_positions[point_i];
+                  const float influence = brush_point_influence(
+                      paint, brush, co, extension_sample, params.multi_frame_falloff);
+                  if (influence <= 0.0f) {
+                    return;
+                  }
+                  const float noise = 2.0f * hash_rng(seed, 5678, point_i) - 1.0f;
+                  positions[point_i] += compute_orig_delta(
+                      projection_fn, deformation, point_i, sideways * influence * noise);
+                },
+                exec_mode::grain_size(4096));
+          }
 
           if (curves.has_curve_with_type(CURVE_TYPE_BEZIER)) {
             MutableSpan<float3> handle_positions_left = curves.handle_positions_left_for_write();

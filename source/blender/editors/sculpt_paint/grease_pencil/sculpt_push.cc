@@ -6,6 +6,7 @@
 #include "BKE_crazyspace.hh"
 #include "BKE_curves.hh"
 #include "BKE_grease_pencil.hh"
+#include "BKE_key.hh"
 #include "BKE_paint.hh"
 
 #include "ED_grease_pencil.hh"
@@ -37,6 +38,10 @@ void PushOperation::on_stroke_begin(const bContext &C, const InputSample &start_
 void PushOperation::on_stroke_extended(const bContext &C, const InputSample &extension_sample)
 {
   Paint &paint = *BKE_paint_get_active_from_context(&C);
+  Object &object = *CTX_data_active_object(&C);
+  GreasePencil &grease_pencil = *id_cast<GreasePencil *>(object.data);
+  Key *key = grease_pencil.key;
+  KeyBlock *actkb = BKE_keyblock_find_by_index(key, object.shapenr - 1);
   const Brush &brush = *BKE_paint_brush(&paint);
 
   this->foreach_editable_drawing_with_automask(
@@ -47,23 +52,57 @@ void PushOperation::on_stroke_extended(const bContext &C, const InputSample &ext
         bke::crazyspace::GeometryDeformation deformation = get_drawing_deformation(params);
         const Array<float2> view_positions = view_positions_from_point_mask(params, point_mask);
         bke::CurvesGeometry &curves = params.drawing.strokes_for_write();
-        MutableSpan<float3> positions = curves.positions_for_write();
-
         const float2 mouse_delta = this->mouse_delta(extension_sample);
 
-        point_mask.foreach_index(
-            [&](const int64_t point_i) {
-              const float2 &co = view_positions[point_i];
-              const float influence = brush_point_influence(
-                  paint, brush, co, extension_sample, params.multi_frame_falloff);
-              if (influence <= 0.0f) {
-                return;
-              }
+        if (key && actkb && object.shapenr != 1) {
+          const float keyblock_influence = actkb->curval;
 
-              positions[point_i] += compute_orig_delta(
-                  projection_fn, deformation, point_i, mouse_delta * influence);
-            },
-            exec_mode::grain_size(4096));
+          if (keyblock_influence == 0.0f) {
+            return false;
+          }
+
+          bke::MutableAttributeAccessor attributes = curves.attributes_for_write();
+          bke::SpanAttributeWriter<float3> key_positions =
+              attributes.lookup_or_add_for_write_span<float3>(
+                  blender::bke::greasepencil::shapekey_position_attribute(actkb->name),
+                  bke::AttrDomain::Point);
+
+          point_mask.foreach_index(
+              [&](const int64_t point_i) {
+                const float2 &co = view_positions[point_i];
+                const float influence = brush_point_influence(
+                    paint, brush, co, extension_sample, params.multi_frame_falloff);
+                if (influence <= 0.0f) {
+                  return;
+                }
+
+                key_positions.span[point_i] += compute_orig_delta(projection_fn,
+                                                                  deformation,
+                                                                  point_i,
+                                                                  mouse_delta * influence) /
+                                               keyblock_influence;
+              },
+              exec_mode::grain_size(4096));
+
+          key_positions.finish();
+        }
+        else {
+          MutableSpan<float3> positions = curves.positions_for_write();
+
+          point_mask.foreach_index(
+              [&](const int64_t point_i) {
+                const float2 &co = view_positions[point_i];
+                const float influence = brush_point_influence(
+                    paint, brush, co, extension_sample, params.multi_frame_falloff);
+                if (influence <= 0.0f) {
+                  return;
+                }
+
+                positions[point_i] += compute_orig_delta(
+                    projection_fn, deformation, point_i, mouse_delta * influence);
+              },
+              exec_mode::grain_size(4096));
+        }
 
         if (curves.has_curve_with_type(CURVE_TYPE_BEZIER)) {
           MutableSpan<float3> handle_positions_left = curves.handle_positions_left_for_write();

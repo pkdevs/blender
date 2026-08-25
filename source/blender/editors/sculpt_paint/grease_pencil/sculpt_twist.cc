@@ -8,6 +8,7 @@
 #include "BKE_crazyspace.hh"
 #include "BKE_curves.hh"
 #include "BKE_grease_pencil.hh"
+#include "BKE_key.hh"
 #include "BKE_paint.hh"
 
 #include "ED_grease_pencil.hh"
@@ -45,6 +46,10 @@ void TwistOperation::on_stroke_begin(const bContext &C, const InputSample &start
 
 void TwistOperation::on_stroke_extended(const bContext &C, const InputSample &extension_sample)
 {
+  Object &object = *CTX_data_active_object(&C);
+  GreasePencil &grease_pencil = *id_cast<GreasePencil *>(object.data);
+  Key *key = grease_pencil.key;
+  KeyBlock *actkb = BKE_keyblock_find_by_index(key, object.shapenr - 1);
   Paint &paint = *BKE_paint_get_active_from_context(&C);
   const Brush &brush = *BKE_paint_brush(&paint);
   const bool invert = this->is_inverted(brush);
@@ -61,24 +66,60 @@ void TwistOperation::on_stroke_extended(const bContext &C, const InputSample &ex
 
         const float2 mouse_pos = extension_sample.mouse_position;
 
-        point_mask.foreach_index(
-            [&](const int64_t point_i) {
-              const float2 &co = view_positions[point_i];
-              const float influence = brush_point_influence(
-                  paint, brush, co, extension_sample, params.multi_frame_falloff);
-              if (influence <= 0.0f) {
-                return;
-              }
+        if (key && actkb && object.shapenr != 1) {
+          const float keyblock_influence = actkb->curval;
 
-              const float angle = DEG2RADF(invert ? -1.0f : 1.0f) * influence;
-              const float2 radial_offset = co - mouse_pos;
-              positions[point_i] += compute_orig_delta(projection_fn,
-                                                       deformation,
-                                                       point_i,
-                                                       rotate_by_angle(radial_offset, angle) -
-                                                           radial_offset);
-            },
-            exec_mode::grain_size(4096));
+          if (keyblock_influence == 0.0f) {
+            return false;
+          }
+
+          bke::MutableAttributeAccessor attributes = curves.attributes_for_write();
+          bke::SpanAttributeWriter<float3> key_positions =
+              attributes.lookup_or_add_for_write_span<float3>(
+                  blender::bke::greasepencil::shapekey_position_attribute(actkb->name),
+                  bke::AttrDomain::Point);
+
+          point_mask.foreach_index(
+              [&](const int64_t point_i) {
+                const float2 &co = view_positions[point_i];
+                const float influence = brush_point_influence(
+                    paint, brush, co, extension_sample, params.multi_frame_falloff);
+                if (influence <= 0.0f) {
+                  return;
+                }
+
+                const float angle = DEG2RADF(invert ? -1.0f : 1.0f) * influence;
+                const float2 radial_offset = co - mouse_pos;
+                key_positions.span[point_i] += compute_orig_delta(
+                    projection_fn,
+                    deformation,
+                    point_i,
+                    rotate_by_angle(radial_offset, angle) - radial_offset);
+              },
+              exec_mode::grain_size(4096));
+
+          key_positions.finish();
+        }
+        else {
+          point_mask.foreach_index(
+              [&](const int64_t point_i) {
+                const float2 &co = view_positions[point_i];
+                const float influence = brush_point_influence(
+                    paint, brush, co, extension_sample, params.multi_frame_falloff);
+                if (influence <= 0.0f) {
+                  return;
+                }
+
+                const float angle = DEG2RADF(invert ? -1.0f : 1.0f) * influence;
+                const float2 radial_offset = co - mouse_pos;
+                positions[point_i] += compute_orig_delta(projection_fn,
+                                                         deformation,
+                                                         point_i,
+                                                         rotate_by_angle(radial_offset, angle) -
+                                                             radial_offset);
+              },
+              exec_mode::grain_size(4096));
+        }
 
         if (curves.has_curve_with_type(CURVE_TYPE_BEZIER)) {
           MutableSpan<float3> handle_positions_left = curves.handle_positions_left_for_write();

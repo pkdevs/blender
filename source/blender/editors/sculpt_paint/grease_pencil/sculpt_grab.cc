@@ -6,6 +6,7 @@
 #include "BKE_crazyspace.hh"
 #include "BKE_curves.hh"
 #include "BKE_grease_pencil.hh"
+#include "BKE_key.hh"
 #include "BKE_paint.hh"
 
 #include "BLI_index_mask.hh"
@@ -234,6 +235,11 @@ void GrabOperation::on_stroke_begin(const bContext &C, const InputSample &start_
 
 void GrabOperation::on_stroke_extended(const bContext &C, const InputSample &extension_sample)
 {
+  Object &object = *CTX_data_active_object(&C);
+  GreasePencil &grease_pencil = *id_cast<GreasePencil *>(object.data);
+  Key *key = grease_pencil.key;
+  KeyBlock *actkb = BKE_keyblock_find_by_index(key, object.shapenr - 1);
+
   this->foreach_grabbed_drawing(
       C,
       [&](const GreasePencilStrokeParams &params,
@@ -249,14 +255,44 @@ void GrabOperation::on_stroke_extended(const bContext &C, const InputSample &ext
 
         bke::CurvesGeometry &curves = params.drawing.strokes_for_write();
         bke::crazyspace::GeometryDeformation deformation = get_drawing_deformation(params);
-        MutableSpan<float3> positions = curves.positions_for_write();
-        mask.foreach_index(
-            [&](const int point_i, const int index) {
-              /* Translate the point with the influence factor. */
-              positions[point_i] += compute_orig_delta(
-                  projection_fn, deformation, point_i, mouse_delta_win * weights[index]);
-            },
-            exec_mode::grain_size(4096));
+
+        if (key && actkb && object.shapenr != 1) {
+          const float keyblock_influence = actkb->curval;
+
+          if (keyblock_influence == 0.0f) {
+            return false;
+          }
+
+          bke::MutableAttributeAccessor attributes = curves.attributes_for_write();
+          bke::SpanAttributeWriter<float3> key_positions =
+              attributes.lookup_or_add_for_write_span<float3>(
+                  blender::bke::greasepencil::shapekey_position_attribute(actkb->name),
+                  bke::AttrDomain::Point);
+
+          mask.foreach_index(
+              [&](const int point_i, const int index) {
+                /* Translate the point with the influence factor. */
+                key_positions.span[point_i] += compute_orig_delta(projection_fn,
+                                                                  deformation,
+                                                                  point_i,
+                                                                  mouse_delta_win *
+                                                                      weights[index]) /
+                                               keyblock_influence;
+              },
+              exec_mode::grain_size(4096));
+
+          key_positions.finish();
+        }
+        else {
+          MutableSpan<float3> positions = curves.positions_for_write();
+          mask.foreach_index(
+              [&](const int point_i, const int index) {
+                /* Translate the point with the influence factor. */
+                positions[point_i] += compute_orig_delta(
+                    projection_fn, deformation, point_i, mouse_delta_win * weights[index]);
+              },
+              exec_mode::grain_size(4096));
+        }
 
         if (curves.has_curve_with_type(CURVE_TYPE_BEZIER)) {
           MutableSpan<float3> handle_positions_left = curves.handle_positions_left_for_write();

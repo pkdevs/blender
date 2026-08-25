@@ -4,9 +4,11 @@
 
 #include "BLI_task.hh"
 
+#include "BKE_attribute.hh"
 #include "BKE_context.hh"
 #include "BKE_curves.hh"
 #include "BKE_grease_pencil.hh"
+#include "BKE_key.hh"
 #include "BKE_paint.hh"
 
 #include "ED_grease_pencil.hh"
@@ -37,6 +39,10 @@ void ThicknessOperation::on_stroke_begin(const bContext &C, const InputSample &s
 
 void ThicknessOperation::on_stroke_extended(const bContext &C, const InputSample &extension_sample)
 {
+  Object &object = *CTX_data_active_object(&C);
+  GreasePencil &grease_pencil = *id_cast<GreasePencil *>(object.data);
+  Key *key = grease_pencil.key;
+  KeyBlock *actkb = BKE_keyblock_find_by_index(key, object.shapenr - 1);
   Paint &paint = *BKE_paint_get_active_from_context(&C);
   const Brush &brush = *BKE_paint_brush(&paint);
   const bool invert = this->is_inverted(brush);
@@ -46,21 +52,51 @@ void ThicknessOperation::on_stroke_extended(const bContext &C, const InputSample
         const Array<float2> view_positions = view_positions_from_point_mask(params, point_mask);
         bke::CurvesGeometry &curves = params.drawing.strokes_for_write();
         BLI_assert(view_positions.size() == curves.points_num());
-        MutableSpan<float> radii = params.drawing.radii_for_write();
 
-        point_mask.foreach_index(
-            [&](const int64_t point_i) {
-              float &radius = radii[point_i];
-              const float influence = brush_point_influence(paint,
-                                                            brush,
-                                                            view_positions[point_i],
-                                                            extension_sample,
-                                                            params.multi_frame_falloff);
-              /* Factor 1/1000 is used to map arbitrary influence value to a sensible radius. */
-              const float delta_radius = (invert ? -influence : influence) * 0.001f;
-              radius = std::max(radius + delta_radius, 0.0f);
-            },
-            exec_mode::grain_size(4096));
+        if (key && actkb && object.shapenr != 1) {
+          const float keyblock_influence = actkb->curval;
+
+          if (keyblock_influence == 0.0f) {
+            return false;
+          }
+
+          bke::MutableAttributeAccessor attributes = curves.attributes_for_write();
+          bke::SpanAttributeWriter<float> key_radius =
+              attributes.lookup_or_add_for_write_span<float>(
+                  blender::bke::greasepencil::shapekey_radius_attribute(actkb->name),
+                  bke::AttrDomain::Point);
+
+          point_mask.foreach_index(
+              [&](const int64_t point_i) {
+                const float influence = brush_point_influence(paint,
+                                                              brush,
+                                                              view_positions[point_i],
+                                                              extension_sample,
+                                                              params.multi_frame_falloff);
+                /* Factor 1/1000 is used to map arbitrary influence value to a sensible radius. */
+                key_radius.span[point_i] += (invert ? -influence : influence) * 0.001f;
+              },
+              exec_mode::grain_size(4096));
+
+          key_radius.finish();
+        }
+        else {
+          MutableSpan<float> radii = params.drawing.radii_for_write();
+
+          point_mask.foreach_index(
+              [&](const int64_t point_i) {
+                float &radius = radii[point_i];
+                const float influence = brush_point_influence(paint,
+                                                              brush,
+                                                              view_positions[point_i],
+                                                              extension_sample,
+                                                              params.multi_frame_falloff);
+                /* Factor 1/1000 is used to map arbitrary influence value to a sensible radius. */
+                const float delta_radius = (invert ? -influence : influence) * 0.001f;
+                radius = std::max(radius + delta_radius, 0.0f);
+              },
+              exec_mode::grain_size(4096));
+        }
 
         curves.tag_radii_changed();
         return true;

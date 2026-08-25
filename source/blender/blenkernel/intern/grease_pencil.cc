@@ -2430,6 +2430,32 @@ void shapekey_get_applied_opacity(const Key *key,
   });
 }
 
+void shapekey_set_applied_position(const Key *key,
+                                   const KeyBlock *actkb,
+                                   const IndexMask &selection,
+                                   const Span<float3> new_position,
+                                   bke::MutableAttributeAccessor &attributes)
+{
+  const float keyblock_influence = actkb->curval;
+
+  const VArray<float3> position = *attributes.lookup<float3>("position", bke::AttrDomain::Point);
+
+  Array<float3> old_position(position.size());
+  array_utils::copy(position, old_position.as_mutable_span());
+  shapekey_get_applied_position(key, attributes, old_position.as_mutable_span());
+
+  bke::SpanAttributeWriter<float3> key_position = attributes.lookup_or_add_for_write_span<float3>(
+      blender::bke::greasepencil::shapekey_position_attribute(actkb->name),
+      bke::AttrDomain::Point);
+
+  selection.foreach_index([&](const int point_i) {
+    key_position.span[point_i] += (new_position[point_i] - old_position[point_i]) /
+                                  keyblock_influence;
+  });
+
+  key_position.finish();
+}
+
 void shapekey_set_applied_radius(const Key *key,
                                  const KeyBlock *actkb,
                                  const IndexMask &selection,

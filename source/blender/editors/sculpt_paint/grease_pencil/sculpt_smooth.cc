@@ -8,6 +8,7 @@
 #include "BKE_context.hh"
 #include "BKE_curves.hh"
 #include "BKE_grease_pencil.hh"
+#include "BKE_key.hh"
 #include "BKE_paint.hh"
 #include "BKE_paint_types.hh"
 
@@ -100,6 +101,10 @@ void SmoothOperation::on_stroke_begin(const bContext &C, const InputSample &star
 
 void SmoothOperation::on_stroke_extended(const bContext &C, const InputSample &extension_sample)
 {
+  Object &object = *CTX_data_active_object(&C);
+  GreasePencil &grease_pencil = *id_cast<GreasePencil *>(object.data);
+  Key *key = grease_pencil.key;
+  KeyBlock *actkb = BKE_keyblock_find_by_index(key, object.shapenr - 1);
   Paint &paint = *BKE_paint_get_active_from_context(&C);
   const Brush &brush = [&]() -> const Brush & {
     if (temp_smooth_) {
@@ -137,14 +142,39 @@ void SmoothOperation::on_stroke_extended(const bContext &C, const InputSample &e
 
         bool changed = false;
         if (sculpt_mode_flag & GP_SCULPT_FLAGMODE_APPLY_POSITION) {
-          geometry::smooth_curve_positions(curves,
-                                           curves.curves_range(),
-                                           selection_varray,
-                                           iterations,
-                                           influences,
-                                           false,
-                                           false);
+          if (key && actkb && object.shapenr != 1) {
+            const float keyblock_influence = actkb->curval;
 
+            if (keyblock_influence != 0.0f) {
+              Array<float3> applied_positions(curves.points_num());
+              array_utils::copy(curves.positions(), applied_positions.as_mutable_span());
+
+              bke::greasepencil::shapekey_get_applied_position(
+                  key, attributes, applied_positions.as_mutable_span());
+
+              geometry::smooth_curve_attribute(curves.curves_range(),
+                                               points_by_curve,
+                                               selection_varray,
+                                               cyclic,
+                                               iterations,
+                                               influences,
+                                               false,
+                                               false,
+                                               applied_positions.as_mutable_span());
+
+              bke::greasepencil::shapekey_set_applied_position(
+                  key, actkb, point_mask, applied_positions.as_span(), attributes);
+            }
+          }
+          else {
+            geometry::smooth_curve_positions(curves,
+                                             curves.curves_range(),
+                                             selection_varray,
+                                             iterations,
+                                             influences,
+                                             false,
+                                             false);
+          }
           params.drawing.tag_positions_changed();
           changed = true;
         }
