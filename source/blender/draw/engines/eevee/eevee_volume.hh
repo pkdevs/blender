@@ -35,8 +35,6 @@
 
 #pragma once
 
-#include <array>
-
 #include "BLI_set.hh"
 
 #include "DRW_gpu_wrapper.hh"
@@ -170,7 +168,7 @@ class VolumeModule {
 
   void end_sync();
 
-  void set_view(View &main_view, int2 extent);
+  void set_view(View &main_view, int2 render_extent);
 
   /* Render material properties. Needs to be called after `set_view`. */
   void draw_prepass(View &main_view);

@@ -310,7 +310,7 @@ void Camera::sync()
 void Camera::update_bounds()
 {
   if (this->is_panoramic()) {
-    bound_sphere.center = math::transform_point(data_.viewinv, float3(0.0f));
+    bound_sphere.center = data_.viewinv.location();
     bound_sphere.radius = data_.clip_far;
     /* Each cubemap face covers a fixed 90 degree FOV. At unit distance from the camera, a face's
      * corners are at (+-1, +-1), so the diagonal is the diagonal of that 2x2 square. */

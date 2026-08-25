@@ -18,6 +18,7 @@
 #include "eevee_velocity.bsl.hh"
 #include "gpu_shader_fullscreen_lib.glsl"
 #include "gpu_shader_math_safe_lib.glsl"
+#include "gpu_shader_math_vector_compare_lib.glsl"
 #include "gpu_shader_math_vector_lib.glsl"
 #include "gpu_shader_math_vector_safe_lib.glsl"
 
@@ -74,15 +75,6 @@ float2 panoramic_face_uv_from_direction(float3 direction, int face_id)
   return uv * 0.5f + 0.5f;
 }
 
-float4 film_cryptomatte_false_color(float hash)
-{
-  uint m3hash = floatBitsToUint(hash);
-  return float4(hash,
-                float(m3hash << 8) / float(0xFFFFFFFFu),
-                float(m3hash << 16) / float(0xFFFFFFFFu),
-                1.0f);
-}
-
 float display_depth_amend(float depth)
 {
   /* This effectively offsets the depth of the whole 2x2 region to the lowest value of the region
@@ -99,16 +91,6 @@ float display_depth_amend(float depth)
 float4 texelfetch_as_YCoCg_opacity(sampler2D tx, int2 texel)
 {
   float4 color = texelFetch(tx, texel, 0);
-  /* Convert transmittance to opacity. */
-  color.a = saturate(1.0f - color.a);
-  /* Transform to YCoCg for accumulation. */
-  color.rgb = colorspace::YCoCg_from_scene_linear(color.rgb);
-  return color;
-}
-
-float4 texture_as_YCoCg_opacity(sampler2D tx, float2 uv)
-{
-  float4 color = textureLod(tx, uv, 0.0f);
   /* Convert transmittance to opacity. */
   color.a = saturate(1.0f - color.a);
   /* Transform to YCoCg for accumulation. */
@@ -232,11 +214,6 @@ struct Film {
     return eevee::camera::view_from_uv(cam, film_uv);
   }
 
-  bool panoramic_texel_has_valid_projection(int2 texel_film)
-  {
-    return length_squared(panoramic_direction_get(texel_film)) != 0.0f;
-  }
-
   int panoramic_texel_owner_view_id(float3 camera_direction)
   {
     if (length_squared(camera_direction) == 0.0f) {
@@ -255,6 +232,10 @@ struct Film {
     [[resource_table]] const Uniform &uni = this->uniforms;
 
     const float3 camera_direction = panoramic_direction_get(texel_film);
+    if (is_zero(camera_direction)) {
+      /* Texel is outside the lens (e.g. the corners of a fisheye render). */
+      return float2(-1.0f);
+    }
 
     /* if view_id is not the owner, throw the pixel out */
     if (!panoramic_texel_is_owned_by_view(camera_direction, view_id)) {
@@ -526,7 +507,7 @@ struct Film {
     if (uni.uniform_buf.film.display_storage_type == PASS_STORAGE_COLOR) {
       return imageLoadFast(color_accum_img, int3(texel_film, display_id));
     }
-    return film_cryptomatte_false_color(
+    return eevee::cryptomatte::false_color(
         imageLoadFast(crypto.cryptomatte_img, int3(texel_film, display_id)).r);
   }
 
@@ -1065,7 +1046,7 @@ struct Film {
       /* Panoramic views use a single owning cubemap face per film texel. */
       panoramic_sample = sample_get(0, texel_film, panoramic_view_id_get());
       if (panoramic_sample.weight == 0.0f) {
-        if (!panoramic_texel_has_valid_projection(texel_film)) {
+        if (is_zero(panoramic_direction_get(texel_film))) {
           /* No subview owns this texel under the current projection at all (e.g. outside the
            * fisheye lens). Clear it instead of copying stale data. */
           clear_history(texel_film, out_color, out_depth);
@@ -1413,7 +1394,7 @@ void accumulate_or_display_frag([[resource_table]] const FilmDisplay &srt,
   int2 texel_film = int2(frag_co.xy) - uni.uniform_buf.film.offset;
 
   if (is_panoramic(uni.uniform_buf.camera.type) &&
-      !film.panoramic_texel_has_valid_projection(texel_film))
+      is_zero(film.panoramic_direction_get(texel_film)))
   {
     /* A zero direction means failed panoramic sampling, e.g. outside the fisheye lens.
      * Display as black with background depth so overlay can draw over them. */
