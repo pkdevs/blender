@@ -533,9 +533,7 @@ void tag_update_overlays(bContext *C);
  *
  * TODO: This should be updated to return std::optional<float3>
  */
-std::optional<float3> stroke_get_location_bvh(bContext *C,
-                                              const float mval[2],
-                                              bool force_original);
+std::optional<float3> stroke_get_location_bvh(bContext *C, float2 mval, bool force_original);
 std::optional<float3> stroke_get_location_bvh(Depsgraph &depsgraph,
                                               ViewContext &vc,
                                               const Sculpt &sd,
@@ -546,7 +544,7 @@ std::optional<float3> stroke_get_location_bvh(Depsgraph &depsgraph,
                                               ViewContext &vc,
                                               const Paint &paint,
                                               const Brush *brush,
-                                              const float mval[2],
+                                              float2 mval,
                                               bool force_original);
 
 struct ActiveElementInfo {

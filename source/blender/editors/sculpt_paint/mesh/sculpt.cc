@@ -5002,7 +5002,7 @@ std::optional<float3> stroke_get_location_bvh(Depsgraph &depsgraph,
                                               ViewContext &vc,
                                               const Paint &paint,
                                               const Brush *brush,
-                                              const float mval[2],
+                                              const float2 mval,
                                               const bool force_original)
 {
   const bool check_closest = brush && brush->falloff_shape == PAINT_FALLOFF_SHAPE_TUBE;
@@ -5012,7 +5012,7 @@ std::optional<float3> stroke_get_location_bvh(Depsgraph &depsgraph,
 }
 
 std::optional<float3> stroke_get_location_bvh(bContext *C,
-                                              const float mval[2],
+                                              const float2 mval,
                                               const bool force_original)
 {
   Depsgraph *depsgraph = CTX_data_depsgraph_pointer(C);
