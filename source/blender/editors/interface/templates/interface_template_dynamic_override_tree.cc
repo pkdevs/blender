@@ -52,55 +52,50 @@ class DynamicOverrideTreeView : public AbstractTreeView {
   DynamicOverride &dynoverride_;
 };
 
-#if 0
-class LayerNodeDropTarget : public TreeViewItemDropTarget {
-  TreeNode &drop_tree_node_;
+class DynamicOverrideDropTarget : public TreeViewItemDropTarget {
+  DynamicOverride &drop_dynoverride_;
+  DynamicOverrideRule &drop_dynoverride_rule_;
 
  public:
-  LayerNodeDropTarget(AbstractTreeViewItem &item, TreeNode &drop_tree_node, DropBehavior behavior)
-      : TreeViewItemDropTarget(item, behavior), drop_tree_node_(drop_tree_node)
+  DynamicOverrideDropTarget(AbstractTreeViewItem &item,
+                            DynamicOverride &drop_dynoverride,
+                            DynamicOverrideRule &drop_dynoverride_rule,
+                            DropBehavior behavior)
+      : TreeViewItemDropTarget(item, behavior),
+        drop_dynoverride_(drop_dynoverride),
+        drop_dynoverride_rule_(drop_dynoverride_rule)
   {
   }
 
   bool can_drop(const wmDrag &drag, const char ** /*r_disabled_hint*/) const override
   {
-    if (!ELEM(drag.type, WM_DRAG_GREASE_PENCIL_LAYER, WM_DRAG_GREASE_PENCIL_GROUP)) {
+    if (drag.type != WM_DRAG_DYNAMIC_OVERRIDE_RULE) {
       return false;
     }
 
-    wmDragGreasePencilLayer *active_drag_node = static_cast<wmDragGreasePencilLayer *>(drag.poin);
-    if (active_drag_node->node->wrap().is_layer()) {
-      return true;
-    }
-
-    LayerGroup &group = active_drag_node->node->wrap().as_group();
-    if (drop_tree_node_.is_child_of(group)) {
-      /* Don't drop group node into its child node. */
+    wmDragDynamicOverrideRule *active_drag_rule = static_cast<wmDragDynamicOverrideRule *>(
+        drag.poin);
+    if (active_drag_rule->dynoverride != &drop_dynoverride_) {
       return false;
     }
+
     return true;
   }
 
   std::string drop_tooltip(const DragInfo &drag_info) const override
   {
-    const wmDragGreasePencilLayer *drag_grease_pencil =
-        static_cast<const wmDragGreasePencilLayer *>(drag_info.drag_data.poin);
-    TreeNode &drag_node = drag_grease_pencil->node->wrap();
+    const wmDragDynamicOverrideRule *active_drag_rule =
+        static_cast<const wmDragDynamicOverrideRule *>(drag_info.drag_data.poin);
+    DynamicOverrideRule &drag_rule = *active_drag_rule->dynoverride_rule;
 
-    const StringRef drag_name = drag_node.name();
-    const StringRef drop_name = drop_tree_node_.name();
-    const StringRef node_type = drag_node.is_layer() ? "layer" : "group";
+    const StringRef drag_name = drag_rule.name;
+    const StringRef drop_name = drop_dynoverride_rule_.name;
 
     switch (drag_info.drop_location) {
-      case DropLocation::Into:
-        return fmt::format(
-            fmt::runtime(TIP_("Move {} {} into {}")), node_type, drag_name, drop_name);
       case DropLocation::Before:
-        return fmt::format(
-            fmt::runtime(TIP_("Move {} {} above {}")), node_type, drag_name, drop_name);
+        return fmt::format(fmt::runtime(TIP_("Move {} above {}")), drag_name, drop_name);
       case DropLocation::After:
-        return fmt::format(
-            fmt::runtime(TIP_("Move {} {} below {}")), node_type, drag_name, drop_name);
+        return fmt::format(fmt::runtime(TIP_("Move {} below {}")), drag_name, drop_name);
       default:
         BLI_assert_unreachable();
         break;
@@ -111,39 +106,29 @@ class LayerNodeDropTarget : public TreeViewItemDropTarget {
 
   bool on_drop(bContext *C, const DragInfo &drag_info) const override
   {
-    const wmDragGreasePencilLayer *drag_grease_pencil =
-        static_cast<const wmDragGreasePencilLayer *>(drag_info.drag_data.poin);
-    GreasePencil &grease_pencil = *drag_grease_pencil->grease_pencil;
-    TreeNode &drag_node = drag_grease_pencil->node->wrap();
+    const wmDragDynamicOverrideRule *active_drag_rule =
+        static_cast<const wmDragDynamicOverrideRule *>(drag_info.drag_data.poin);
+    DynamicOverride &drag_dynoverride = *active_drag_rule->dynoverride;
+    DynamicOverrideRule &drag_dynoverride_rule = *active_drag_rule->dynoverride_rule;
 
-    if (!drop_tree_node_.parent_group()) {
-      /* Root node is not added to the tree view, so there should never be a drop target for this.
-       */
-      BLI_assert_unreachable();
+    if (&drag_dynoverride != &drop_dynoverride_) {
       return false;
     }
 
-    if (&drop_tree_node_ == &drag_node) {
+    if (&drop_dynoverride_rule_ == &drag_dynoverride_rule) {
       return false;
     }
 
+    Main *bmain = CTX_data_main(C);
     switch (drag_info.drop_location) {
-      case DropLocation::Into: {
-        BLI_assert_msg(drop_tree_node_.is_group(),
-                       "Inserting should not be possible for layers, only for groups, because "
-                       "only groups use DropBehavior::Reorder_and_Insert");
-        LayerGroup &drop_group = drop_tree_node_.as_group();
-        grease_pencil.move_node_into(drag_node, drop_group);
-        break;
-      }
       case DropLocation::Before: {
-        /* Draw order is inverted, so inserting before (above) means inserting the node after. */
-        grease_pencil.move_node_after(drag_node, drop_tree_node_);
+        bke::dynoverride::rule_move(
+            *bmain, drop_dynoverride_, drop_dynoverride_rule_, drag_dynoverride_rule, false);
         break;
       }
       case DropLocation::After: {
-        /* Draw order is inverted, so inserting after (below) means inserting the node before. */
-        grease_pencil.move_node_before(drag_node, drop_tree_node_);
+        bke::dynoverride::rule_move(
+            *bmain, drop_dynoverride_, drop_dynoverride_rule_, drag_dynoverride_rule, true);
         break;
       }
       default: {
@@ -152,66 +137,40 @@ class LayerNodeDropTarget : public TreeViewItemDropTarget {
       }
     }
 
-    if (drag_node.is_layer()) {
-      WM_msg_publish_rna_prop(
-          CTX_wm_message_bus(C), &grease_pencil.id, &grease_pencil, GreasePencilv3Layers, active);
-      WM_msg_publish_rna_prop(
-          CTX_wm_message_bus(C), &grease_pencil.id, &grease_pencil, GreasePencil, layers);
-    }
-    else if (drag_node.is_group()) {
-      WM_msg_publish_rna_prop(CTX_wm_message_bus(C),
-                              &grease_pencil.id,
-                              &grease_pencil,
-                              GreasePencilv3LayerGroup,
-                              active);
-      WM_msg_publish_rna_prop(
-          CTX_wm_message_bus(C), &grease_pencil.id, &grease_pencil, GreasePencil, layer_groups);
-    }
+    ED_undo_push(C, "Dynamic Override: Reorder Rules");
 
-    ED_undo_push(C, "Reorder Layers");
-
-    DEG_id_tag_update(&grease_pencil.id, ID_RECALC_GEOMETRY);
-    WM_event_add_notifier(C, NC_GPENCIL | NA_EDITED, nullptr);
+    WM_main_add_notifier(NC_ID | NA_EDITED, nullptr);
     return true;
   }
 };
 
-class LayerViewItemDragController : public AbstractViewItemDragController {
-  GreasePencil &grease_pencil_;
-  TreeNode &dragged_node_;
+class DynamicOverrideItemDragController : public AbstractViewItemDragController {
+  DynamicOverride &dragged_dynoverride_;
+  DynamicOverrideRule &dragged_dynoverride_rule_;
 
  public:
-  LayerViewItemDragController(LayerTreeView &tree_view,
-                              GreasePencil &grease_pencil,
-                              GreasePencilLayerTreeNode &node)
+  DynamicOverrideItemDragController(DynamicOverrideTreeView &tree_view,
+                                    DynamicOverride &dragged_dynoverride,
+                                    DynamicOverrideRule &dragged_dynoverride_rule)
       : AbstractViewItemDragController(tree_view),
-        grease_pencil_(grease_pencil),
-        dragged_node_(node.wrap())
+        dragged_dynoverride_(dragged_dynoverride),
+        dragged_dynoverride_rule_(dragged_dynoverride_rule)
   {
   }
 
   std::optional<eWM_DragDataType> get_drag_type() const override
   {
-    if (dragged_node_.wrap().is_layer()) {
-      return WM_DRAG_GREASE_PENCIL_LAYER;
-    }
-    return WM_DRAG_GREASE_PENCIL_GROUP;
+    return WM_DRAG_DYNAMIC_OVERRIDE_RULE;
   }
 
   void *create_drag_data() const override
   {
-    wmDragGreasePencilLayer *drag_data = MEM_new_zeroed<wmDragGreasePencilLayer>(__func__);
-    drag_data->node = &dragged_node_;
-    drag_data->grease_pencil = &grease_pencil_;
+    wmDragDynamicOverrideRule *drag_data = MEM_new_zeroed<wmDragDynamicOverrideRule>(__func__);
+    drag_data->dynoverride = &dragged_dynoverride_;
+    drag_data->dynoverride_rule = &dragged_dynoverride_rule_;
     return drag_data;
   }
-
-  void on_drag_start(bContext & /*C*/, AbstractViewItem & /*item*/) override
-  {
-    grease_pencil_.set_active_node(&dragged_node_);
-  }
 };
-#endif
 
 /**
  * Item representing one dynoverride rule.
@@ -244,6 +203,18 @@ class RuleViewItem : public AbstractTreeViewItem {
     return false;
   }
 
+  std::unique_ptr<AbstractViewItemDragController> create_drag_controller() const override
+  {
+    return std::make_unique<DynamicOverrideItemDragController>(
+        static_cast<DynamicOverrideTreeView &>(get_tree_view()), dynoverride_, rule_);
+  }
+
+  std::unique_ptr<TreeViewItemDropTarget> create_drop_target() override
+  {
+    return std::make_unique<DynamicOverrideDropTarget>(
+        *this, dynoverride_, rule_, DropBehavior::Reorder);
+  }
+
   void build_tree_rule_property(TreeViewOrItem &parent, DynamicOverrideRuleProperty &property);
 
  private:
@@ -273,7 +244,7 @@ class RuleViewItem : public AbstractTreeViewItem {
     PointerRNA rule_filter_ptr = RNA_pointer_create_with_parent(
         rule_ptr, RNA_DynamicOverrideRuleTargetFilterIDSingle, &rule_.target_filter);
     Layout &sub_idref = row.row(true);
-    sub_idref.enabled_set(false);
+    // sub_idref.enabled_set(false);
     sub_idref.prop(&rule_filter_ptr, "target_id", {}, {}, ICON_NONE);
 
     Layout &sub_butts = row.row(true);

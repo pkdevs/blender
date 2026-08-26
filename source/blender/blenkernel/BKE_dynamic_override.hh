@@ -50,7 +50,13 @@ void rule_name_set(DynamicOverride &dynamic_override,
 void rule_remove(Main &bmain,
                  DynamicOverride &dynamic_override,
                  DynamicOverrideRule *existing_rule);
-void rule_remove_for_id(Main &bmain, DynamicOverride &dynamic_override, ID &owner_id);
+void rule_remove_for_id(Main &bmain, DynamicOverride &dynoverride, ID &owner_id);
+
+void rule_move(Main &bmain,
+               DynamicOverride &dynamic_override,
+               DynamicOverrideRule &anchor_rule,
+               DynamicOverrideRule &moved_rule,
+               bool move_after);
 
 DynamicOverrideRuleProperty *rule_rna_property_add(Main &bmain,
                                                    DynamicOverride &dynamic_override,

@@ -125,6 +125,8 @@ struct ID;
 struct ImBuf;
 struct bContext;
 struct bContextStore;
+struct DynamicOverride;
+struct DynamicOverrideRule;
 struct GreasePencil;
 struct GreasePencilLayerTreeNode;
 struct ReportList;
@@ -1296,6 +1298,7 @@ enum eWM_DragDataType : int8_t {
   WM_DRAG_NODE_TREE_INTERFACE,
   WM_DRAG_BONE_COLLECTION,
   WM_DRAG_SHAPE_KEY,
+  WM_DRAG_DYNAMIC_OVERRIDE_RULE,
 };
 
 enum eWM_DragFlags {
@@ -1352,6 +1355,11 @@ struct wmDragPath {
 struct wmDragGreasePencilLayer {
   GreasePencil *grease_pencil;
   GreasePencilLayerTreeNode *node;
+};
+
+struct wmDragDynamicOverrideRule {
+  DynamicOverride *dynoverride;
+  DynamicOverrideRule *dynoverride_rule;
 };
 
 using WMDropboxTooltipFunc = std::string (*)(bContext *C,

@@ -564,6 +564,63 @@ void rule_remove_for_id(Main &bmain, DynamicOverride &dynamic_override, ID &owne
   }
 }
 
+void rule_move(Main &bmain,
+               DynamicOverride &dynoverride,
+               DynamicOverrideRule &anchor_rule,
+               DynamicOverrideRule &moved_rule,
+               bool move_after)
+{
+  bool is_moved_down = false;
+  for (DynamicOverrideRule *rule_iter = moved_rule.next; rule_iter; rule_iter = rule_iter->next) {
+    if (rule_iter == &anchor_rule) {
+      is_moved_down = true;
+      break;
+    }
+  }
+  DynamicOverrideRule *affected_boundary = is_moved_down && moved_rule.next ? moved_rule.next :
+                                                                              moved_rule.prev;
+
+  BLI_remlink(&dynoverride.rules, &moved_rule);
+  if (move_after) {
+    BLI_insertlinkafter(&dynoverride.rules, &anchor_rule, &moved_rule);
+  }
+  else {
+    BLI_insertlinkbefore(&dynoverride.rules, &anchor_rule, &moved_rule);
+  }
+
+  DEG_relations_tag_update(&bmain);
+  DEG_id_tag_update(&dynoverride.id, ID_RECALC_PARAMETERS);
+  /* Only rules in-between original position and new position of the moved one need to be tagged
+   * for updates. the rules outside of this range should never be affected by the move. */
+  auto tag_update_rule = [](DynamicOverrideRule &rule) -> void {
+    DEG_id_tag_update(rule.target_filter.target_id, ID_RECALC_DYNAMIC_OVERRIDE);
+    /* TODO: Fixme - which ones are needed? */
+    DEG_id_tag_update(rule.target_filter.target_id, ID_RECALC_SYNC_TO_EVAL);
+    DEG_id_tag_update(rule.target_filter.target_id, ID_RECALC_PARAMETERS);
+    DEG_id_tag_update(rule.target_filter.target_id, ID_RECALC_TRANSFORM);
+  };
+  if (is_moved_down) {
+    for (DynamicOverrideRule *rule_iter = affected_boundary; rule_iter;
+         rule_iter = rule_iter->next)
+    {
+      tag_update_rule(*rule_iter);
+      if (rule_iter == &moved_rule) {
+        break;
+      }
+    }
+  }
+  else {
+    for (DynamicOverrideRule *rule_iter = affected_boundary; rule_iter;
+         rule_iter = rule_iter->prev)
+    {
+      tag_update_rule(*rule_iter);
+      if (rule_iter == &moved_rule) {
+        break;
+      }
+    }
+  }
+}
+
 DynamicOverrideRuleProperty *rule_rna_property_add(Main &bmain,
                                                    DynamicOverride &dynamic_override,
                                                    DynamicOverrideRule &rule,

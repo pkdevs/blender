@@ -438,7 +438,7 @@ static void rna_def_dynamic_override_rule_target_filter_single_id(BlenderRNA *br
                                  "rna_DynamicOverrideRuleTargetFilterIDSingle_target_id_type",
                                  "rna_DynamicOverrideRuleTargetFilterIDSingle_target_id_poll");
   RNA_def_property_clear_flag(prop, PROP_ID_REFCOUNT);
-  RNA_def_property_flag(prop, PROP_EDITABLE);
+  RNA_def_property_flag(prop, PROP_EDITABLE | PROP_NEVER_UNLINK);
   RNA_def_property_update(prop, NC_ID | NA_EDITED, "rna_DynamicOverrideRule_relations_update");
 }
 
