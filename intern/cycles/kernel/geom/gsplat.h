@@ -114,7 +114,7 @@ ccl_device_inline float3 gsplat_normal(KernelGlobals kg, const int object, const
   }
   if ((scale.y < scale.x) && (scale.y <= scale.z)) {
     return make_float3(
-               2.0f * (b * c - a * d), a * a - b * b + c * c - d * d, .0f * (a * b + c * d)) *
+               2.0f * (b * c - a * d), a * a - b * b + c * c - d * d, 2.0f * (a * b + c * d)) *
            normalizer;
   }
   kernel_assert((scale.z < scale.x) && (scale.z < scale.y));
