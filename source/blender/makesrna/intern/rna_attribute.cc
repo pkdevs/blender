@@ -139,7 +139,8 @@ const EnumPropertyItem rna_enum_attr_storage_type_items[] = {
     {0, nullptr, 0, nullptr, nullptr},
 };
 
-static EnumPropertyItem domain_item_auto{int(AttrDomain::Auto), "AUTO", 0, "Auto", ""};
+static EnumPropertyItem domain_item_auto{
+    int(bke::AttrDomainSelection::Auto), "AUTO", 0, "Auto", ""};
 static EnumPropertyItem domain_item_point{
     int(AttrDomain::Point), "POINT", ICON_VERTEXSEL, "Point", "Vertex or point"};
 static EnumPropertyItem domain_item_edge{
@@ -2021,7 +2022,7 @@ static void rna_def_attribute_group_id_common(StructRNA *srna)
   RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
 
   parm = RNA_def_pointer(func, "attribute", "Attribute", "", "New geometry attribute");
-  RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_RNAPTR);
+  RNA_def_parameter_flags(parm, PROP_NEVER_NULL, PARM_RNAPTR);
   RNA_def_function_return(func, parm);
 
   func = RNA_def_function(srna, "remove", "rna_AttributeGroupID_remove");
@@ -2198,7 +2199,7 @@ static void rna_def_attribute_group_grease_pencil_drawing(BlenderRNA *brna)
   RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
 
   parm = RNA_def_pointer(func, "attribute", "Attribute", "", "New geometry attribute");
-  RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_RNAPTR);
+  RNA_def_parameter_flags(parm, PROP_NEVER_NULL, PARM_RNAPTR);
   RNA_def_function_return(func, parm);
 
   func = RNA_def_function(srna, "remove", "rna_AttributeGroupGreasePencilDrawing_remove");

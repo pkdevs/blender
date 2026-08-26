@@ -28,6 +28,7 @@
 #include "NOD_geometry_nodes_list.hh"
 #include "NOD_multi_function.hh"
 #include "NOD_node_declaration.hh"
+#include "NOD_shader_nodes_multi_function.hh"
 
 #include "BLI_array_utils.hh"
 #include "BLI_bit_group_vector.hh"
@@ -529,8 +530,8 @@ static void execute_multi_function_on_value_variant__field(
         fn, input_values, output_values, r_error_message);
   }
   if (any_input_is_list) {
-    execute_multi_function_on_value_variant__list(fn, input_values, output_values, user_data);
-    return true;
+    return execute_multi_function_on_value_variant__list(
+        fn, owned_fn, input_values, output_values, user_data, r_error_message);
   }
   if (any_input_is_field) {
     execute_multi_function_on_value_variant__field(fn, owned_fn, input_values, output_values);
@@ -1615,6 +1616,13 @@ void report_from_multi_function(const mf::Context &context,
                                 NodeWarningType type,
                                 std::string message)
 {
+  if (auto *shader_nodes_user_data = dynamic_cast<ShaderNodesMultiFunctionUserData *>(
+          context.user_data))
+  {
+    shader_nodes_user_data->warnings.append({type, std::move(message)});
+    return;
+  }
+
   const auto *user_data = dynamic_cast<const GeoNodesUserData *>(context.user_data);
   if (!user_data) {
     return;
