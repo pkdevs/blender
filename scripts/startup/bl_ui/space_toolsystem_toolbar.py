@@ -3451,6 +3451,28 @@ class _defs_sequencer_generic:
             # No keymap default action, only for gizmo!
         )
 
+    @ToolDef.from_fn
+    def mask_interactive_square():
+        return dict(
+            idname="builtin.sequencer_mask_square",
+            label="Square Mask",
+            icon="ops.mask.interactive_square",
+            widget=None,
+            operator="mask.interactive_square_add",
+            keymap="Sequencer Tool: Mask, Interactive Square",
+        )
+
+    @ToolDef.from_fn
+    def mask_interactive_circle():
+        return dict(
+            idname="builtin.sequencer_mask_circle",
+            label="Circle Mask",
+            icon="ops.mask.interactive_circle",
+            widget=None,
+            operator="mask.interactive_circle_add",
+            keymap="Sequencer Tool: Mask, Interactive Circle",
+        )
+
 
 class _defs_sequencer_select:
     @ToolDef.from_fn
@@ -3571,6 +3593,78 @@ class _defs_sequencer_select:
             icon="ops.generic.select_circle",
             widget=None,
             keymap="Preview Tool: Select Circle",
+            draw_settings=draw_settings,
+            draw_cursor=draw_cursor,
+        )
+
+
+class _defs_sequencer_mask_select:
+
+    @ToolDef.from_fn
+    def select():
+        return dict(
+            idname="builtin.select",
+            label="Tweak",
+            icon="ops.generic.select",
+            widget=None,
+            keymap=(),
+        )
+
+    @ToolDef.from_fn
+    def box():
+        def draw_settings(_context, layout, tool):
+            props = tool.operator_properties("mask.select_box")
+            row = layout.row()
+            row.use_property_split = False
+            row.prop(props, "mode", text="", expand=True, icon_only=True)
+
+        return dict(
+            idname="builtin.select_box",
+            label="Select Box",
+            icon="ops.generic.select_box",
+            widget=None,
+            keymap=(),
+            draw_settings=draw_settings,
+        )
+
+    @ToolDef.from_fn
+    def lasso():
+        def draw_settings(_context, layout, tool):
+            props = tool.operator_properties("mask.select_lasso")
+            row = layout.row()
+            row.use_property_split = False
+            row.prop(props, "mode", text="", expand=True, icon_only=True)
+
+        return dict(
+            idname="builtin.select_lasso",
+            label="Select Lasso",
+            icon="ops.generic.select_lasso",
+            widget=None,
+            keymap=(),
+            draw_settings=draw_settings,
+        )
+
+    @ToolDef.from_fn
+    def circle():
+        def draw_settings(_context, layout, tool):
+            props = tool.operator_properties("mask.select_circle")
+            row = layout.row()
+            row.use_property_split = False
+            row.prop(props, "mode", text="", expand=True, icon_only=True)
+            layout.prop(props, "radius")
+
+        def draw_cursor(_context, tool, xy):
+            from gpu_extras.presets import draw_circle_2d
+            props = tool.operator_properties("mask.select_circle")
+            radius = props.radius
+            draw_circle_2d(xy, (1.0,) * 4, radius, segments=32)
+
+        return dict(
+            idname="builtin.select_circle",
+            label="Select Circle",
+            icon="ops.generic.select_circle",
+            widget=None,
+            keymap=(),
             draw_settings=draw_settings,
             draw_cursor=draw_cursor,
         )
@@ -4268,7 +4362,10 @@ class SEQUENCER_PT_tools_active(ToolSelectPanelHelper, Panel):
     def tools_from_context(cls, context, mode=None):
         if mode is None:
             if context.space_data:
-                mode = context.space_data.view_type
+                if context.space_data.view_type == 'PREVIEW':
+                    mode = context.space_data.mode
+                else:
+                    mode = context.space_data.view_type
         for tools in (cls._tools[None], cls._tools.get(mode, ())):
             for item in tools:
                 if not (type(item) is ToolDef) and callable(item):
@@ -4291,12 +4388,13 @@ class SEQUENCER_PT_tools_active(ToolSelectPanelHelper, Panel):
     )
 
     # Private tools dictionary, store data to implement `tools_all` & `tools_from_context`.
-    # The keys match sequence editors view type: `context.space_data.view_type`.
+    # The keys match sequence editors view type: `context.space_data.view_type`
+    #  and mode: `context.space_data.mode`.
     # The values represent the tools, see `ToolSelectPanelHelper` for details.
     _tools = {
         None: [
         ],
-        'PREVIEW': [
+        'VIEW': [   # view_type == 'PREVIEW' and mode == VIEW
             (
                 _defs_sequencer_select.select_preview,
                 _defs_sequencer_select.box_preview,
@@ -4309,6 +4407,28 @@ class SEQUENCER_PT_tools_active(ToolSelectPanelHelper, Panel):
             _defs_sequencer_generic.rotate,
             _defs_sequencer_generic.scale,
             _defs_sequencer_generic.transform,
+            None,
+            _defs_sequencer_generic.sample,
+            *_tools_annotate,
+        ],
+        'MASK': [   # view_type == 'PREVIEW' and mode == MASK
+            (
+                _defs_sequencer_mask_select.select,
+                _defs_sequencer_mask_select.box,
+                _defs_sequencer_mask_select.circle,
+                _defs_sequencer_mask_select.lasso,
+            ),
+            _defs_sequencer_generic.cursor,
+            None,
+            _defs_sequencer_generic.translate,
+            _defs_sequencer_generic.rotate,
+            _defs_sequencer_generic.scale,
+            _defs_sequencer_generic.transform,
+            None,
+            (
+                _defs_sequencer_generic.mask_interactive_square,
+                _defs_sequencer_generic.mask_interactive_circle,
+            ),
             None,
             _defs_sequencer_generic.sample,
             *_tools_annotate,

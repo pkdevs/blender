@@ -30,6 +30,8 @@ void MASK_OT_add_vertex(wmOperatorType *ot);
 void MASK_OT_add_feather_vertex(wmOperatorType *ot);
 void MASK_OT_primitive_circle_add(wmOperatorType *ot);
 void MASK_OT_primitive_square_add(wmOperatorType *ot);
+void MASK_OT_interactive_square_add(wmOperatorType *ot);
+void MASK_OT_interactive_circle_add(wmOperatorType *ot);
 
 /* `mask_ops.cc` */
 

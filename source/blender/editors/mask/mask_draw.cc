@@ -662,9 +662,18 @@ void ED_mask_draw_region(
 {
   View2D *v2d = &region->v2d;
   Mask *mask_eval = DEG_get_evaluated(depsgraph, mask_);
+  ScrArea *area = CTX_wm_area(C);
 
-  /* aspect always scales vertically in movie and image spaces */
-  const float width = width_i, height = float(height_i) * (aspy / aspx);
+  float width, height;
+  if (area->spacetype == SPACE_CLIP || area->spacetype == SPACE_IMAGE) {
+    /* aspect always scales vertically in movie and image spaces */
+    width = width_i;
+    height = float(height_i) * (aspy / aspx);
+  }
+  else {
+    width = float(width_i);
+    height = float(height_i);
+  }
 
   int x, y;
   // int w, h;
@@ -703,6 +712,11 @@ void ED_mask_draw_region(
   else { /* (width > height) */
     xofs = 0.0f;
     yofs = ((width - height) / -2.0f) * zoomy;
+  }
+
+  if (area->spacetype == SPACE_SEQ) {
+    xofs *= aspx;
+    yofs *= aspy;
   }
 
   if (show_overlays && draw_flag & MASK_DRAWFLAG_OVERLAY) {
@@ -772,7 +786,14 @@ void ED_mask_draw_region(
   if (stabmat) {
     GPU_matrix_mul(stabmat);
   }
-  GPU_matrix_scale_2f(maxdim, maxdim);
+
+  if (area->spacetype == SPACE_SEQ) {
+    /* Masks stretches with change in aspect Ratio in space sequencer */
+    GPU_matrix_scale_2f(maxdim * aspx, maxdim * aspy);
+  }
+  else {
+    GPU_matrix_scale_2f(maxdim, maxdim);
+  }
 
   if (do_draw_cb) {
     ED_region_draw_cb_draw(C, region, REGION_DRAW_PRE_VIEW);

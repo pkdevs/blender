@@ -535,6 +535,19 @@ void blo_do_versions_503(FileData * /*fd*/, Library * /*lib*/, Main *bmain)
     }
   }
 
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 503, 18)) {
+    for (bScreen &screen : bmain->screens) {
+      for (ScrArea &area : screen.areabase) {
+        for (SpaceLink &space : area.spacedata) {
+          if (space.spacetype == SPACE_SEQ) {
+            SpaceSeq *sseq = reinterpret_cast<SpaceSeq *>(&space);
+            sseq->mask_draw_flag |= MASK_DRAWFLAG_SPLINE;
+          }
+        }
+      }
+    }
+  }
+
   if (!MAIN_VERSION_FILE_ATLEAST(bmain, 503, 19)) {
     for (bScreen &screen : bmain->screens) {
       for (ScrArea &area : screen.areabase) {

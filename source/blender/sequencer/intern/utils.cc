@@ -35,6 +35,7 @@
 #include "SEQ_channels.hh"
 #include "SEQ_edit.hh"
 #include "SEQ_iterator.hh"
+#include "SEQ_modifier.hh"
 #include "SEQ_relations.hh"
 #include "SEQ_render.hh"
 #include "SEQ_select.hh"
@@ -329,10 +330,17 @@ Strip *get_strip_by_name(ListBaseT<Strip> *seqbase, const char *name, bool recur
 
 Mask *active_mask_get(Scene *scene)
 {
-  Strip *strip_act = select_active_get(scene);
-
-  if (strip_act && strip_act->type == STRIP_TYPE_MASK) {
-    return strip_act->mask;
+  if (scene) {
+    Strip *strip_act = select_active_get(scene);
+    if (strip_act && strip_act->type == STRIP_TYPE_MASK) {
+      return strip_act->mask;
+    }
+    else if (strip_act) {
+      StripModifierData *active_smd = seq::modifier_get_active(strip_act);
+      if (active_smd && active_smd->type == eSeqModifierType_Mask) {
+        return active_smd->mask_id;
+      }
+    }
   }
 
   return nullptr;

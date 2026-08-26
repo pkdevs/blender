@@ -87,10 +87,28 @@ class SEQUENCER_HT_header(Header):
         layout.template_header()
 
         layout.prop(st, "view_type", text="")
+        if (st.view_type in {'PREVIEW', 'SEQUENCER_PREVIEW'}):
+            layout.prop(st, "mode", text="")
 
         SEQUENCER_MT_editor_menus.draw_collapsible(context, layout)
 
         layout.separator_spacer()
+
+        if st.mode in {'MASK'} and st.view_type in {'PREVIEW', 'SEQUENCER_PREVIEW'}:
+            sequencer_scene = context.workspace.sequencer_scene
+            sequencer_editor = sequencer_scene.sequence_editor if sequencer_scene else None
+            active_strip = sequencer_editor.active_strip if sequencer_editor else None
+            active_modifier = active_strip.modifiers.active if active_strip and active_strip.modifiers else None
+            if active_modifier and active_modifier.type == 'MASK':
+                row = layout.row(align=True)
+                row.template_ID(active_modifier, "input_mask_id", new="sequencer.new_sequencer_mask")
+            elif active_strip:
+                row = layout.row(align=True)
+                row.operator("sequencer.new_sequencer_mask", text="New Mask", icon='MOD_MASK')
+            else:
+                row = layout.row()
+                row.enabled = False
+                row.label(text="Select strip(s) to add mask", icon='MOD_MASK')
 
         scene = context.sequencer_scene
         tool_settings = scene.tool_settings if scene else None
@@ -102,6 +120,19 @@ class SEQUENCER_HT_header(Header):
 
         if sequencer_tool_settings and st.view_type == 'PREVIEW':
             layout.prop(sequencer_tool_settings, "pivot_point", text="", icon_only=True)
+
+        if tool_settings and st.mode in {'MASK'} and st.view_type in {'PREVIEW', 'SEQUENCER_PREVIEW'}:
+            row = layout.row(align=True)
+            row.prop(tool_settings, "use_proportional_edit_mask", text="", icon_only=True)
+            sub = row.row(align=True)
+            sub.active = tool_settings.use_proportional_edit_mask
+            sub.prop_with_popover(
+                tool_settings,
+                "proportional_edit_falloff",
+                text="",
+                icon_only=True,
+                panel="SEQUENCER_PT_proportional_edit",
+            )
 
         if sequencer_tool_settings and st.view_type in {'SEQUENCER', 'SEQUENCER_PREVIEW'}:
             row = layout.row(align=True)
@@ -154,20 +185,109 @@ class SEQUENCER_MT_editor_menus(Menu):
     def draw(self, context):
         layout = self.layout
         st = context.space_data
-        has_sequencer, _has_preview = _space_view_types(st)
+        has_sequencer, has_preview = _space_view_types(st)
 
         layout.menu("SEQUENCER_MT_view")
-        layout.menu("SEQUENCER_MT_select")
+
+        if has_preview and st.mode == 'MASK':
+            layout.menu("MASK_MT_select")
+        else:
+            layout.menu("SEQUENCER_MT_select")
 
         if has_sequencer and context.sequencer_scene:
             if st.show_markers:
                 layout.menu("SEQUENCER_MT_marker")
             layout.menu("SEQUENCER_MT_add")
 
-        layout.menu("SEQUENCER_MT_strip")
+        if not has_preview or st.mode != 'MASK':
+            layout.menu("SEQUENCER_MT_strip")
 
-        if st.view_type in {'SEQUENCER', 'PREVIEW'}:
+        if st.view_type == 'SEQUENCER':
             layout.menu("SEQUENCER_MT_image")
+        elif st.view_type == 'PREVIEW':
+            if st.mode == 'MASK':
+                layout.menu("MASK_MT_add")
+                layout.menu("MASK_MT_mask")
+            else:
+                layout.menu("SEQUENCER_MT_image")
+
+
+class SEQUENCER_MT_mask_context_menu(Menu):
+    bl_label = "Mask"
+
+    @classmethod
+    def poll(cls, context):
+        st = context.space_data
+        return st.mode == 'MASK' and st.view_type == 'PREVIEW'
+
+    def draw(self, context):
+        layout = self.layout
+        from .properties_mask_common import draw_mask_context_menu
+        draw_mask_context_menu(layout, context)
+
+
+# -----------------------------------------------------------------------------
+# Mask (similar code in space_clip.py, keep in sync)
+
+from bl_ui.properties_mask_common import (
+    MASK_PT_mask,
+    MASK_PT_layers,
+    MASK_PT_spline,
+    MASK_PT_point,
+    MASK_PT_animation,
+    MASK_PT_display,
+)
+
+
+class SEQUENCE_PT_mask(MASK_PT_mask, Panel):
+    bl_space_type = 'SEQUENCE_EDITOR'
+    bl_region_type = 'UI'
+    bl_category = "Mask"
+
+
+class SEQUENCE_PT_mask_layers(MASK_PT_layers, Panel):
+    bl_space_type = 'SEQUENCE_EDITOR'
+    bl_region_type = 'UI'
+    bl_category = "Mask"
+
+
+class SEQUENCE_PT_active_mask_spline(MASK_PT_spline, Panel):
+    bl_space_type = 'SEQUENCE_EDITOR'
+    bl_region_type = 'UI'
+    bl_category = "Mask"
+
+
+class SEQUENCE_PT_active_mask_point(MASK_PT_point, Panel):
+    bl_space_type = 'SEQUENCE_EDITOR'
+    bl_region_type = 'UI'
+    bl_category = "Mask"
+
+
+class SEQUENCE_PT_mask_animation(MASK_PT_animation, Panel):
+    bl_space_type = 'SEQUENCE_EDITOR'
+    bl_region_type = 'UI'
+    bl_category = "Mask"
+
+
+# --- end mask ---
+
+
+class SEQUENCER_PT_proportional_edit(Panel):
+    bl_space_type = 'SEQUENCE_EDITOR'
+    bl_region_type = 'HEADER'
+    bl_label = "Proportional Editing"
+    bl_ui_units_x = 8
+
+    def draw(self, context):
+        layout = self.layout
+        tool_settings = context.tool_settings
+        col = layout.column()
+
+        col.prop(tool_settings, "use_proportional_connected")
+        col.separator()
+
+        col.prop(tool_settings, "proportional_edit_falloff", expand=True)
+        col.prop(tool_settings, "proportional_size")
 
 
 class SEQUENCER_PT_gizmo_display(Panel):
@@ -342,6 +462,29 @@ class SEQUENCER_PT_sequencer_overlay_waveforms(Panel):
         row = layout.row()
         row.prop(overlay_settings, "waveform_display_style", expand=True)
         row.active = overlay_settings.waveform_display_type != 'NO_WAVEFORMS'
+
+
+class SEQUENCER_PT_overlay_mask(Panel):
+    bl_space_type = 'SEQUENCE_EDITOR'
+    bl_region_type = 'HEADER'
+    bl_parent_id = "SEQUENCER_PT_overlay"
+    bl_label = "Mask Display"
+
+    @classmethod
+    def poll(cls, context):
+        st = context.space_data
+        return st.mode == 'MASK' and st.view_type in {'PREVIEW', 'SEQUENCER_PREVIEW'}
+
+    def draw(self, context):
+        layout = self.layout
+
+        space_data = context.space_data
+
+        row = layout.row(align=True)
+        row.prop(space_data, "show_mask_spline", text="Spline")
+        sub = row.row()
+        sub.active = space_data.show_mask_spline
+        sub.prop(space_data, "mask_display_type", text="")
 
 
 class SEQUENCER_MT_range(Menu):
@@ -2128,6 +2271,7 @@ classes = (
     SEQUENCER_MT_view_pie,
     SEQUENCER_MT_preview_view_pie,
     SEQUENCER_MT_modifier_add,
+    SEQUENCER_MT_mask_context_menu,
 
     SEQUENCER_PT_active_tool,
 
@@ -2138,6 +2282,7 @@ classes = (
     SEQUENCER_PT_sequencer_overlay_strips,
     SEQUENCER_PT_sequencer_overlay_thumbnails,
     SEQUENCER_PT_sequencer_overlay_waveforms,
+    SEQUENCER_PT_overlay_mask,
 
 
     SEQUENCER_PT_cache_settings,
@@ -2159,6 +2304,13 @@ classes = (
     SEQUENCER_PT_snapping,
     SEQUENCER_PT_preview_snapping,
     SEQUENCER_PT_sequencer_snapping,
+    SEQUENCER_PT_proportional_edit,
+
+    SEQUENCE_PT_mask,
+    SEQUENCE_PT_mask_layers,
+    SEQUENCE_PT_active_mask_spline,
+    SEQUENCE_PT_active_mask_point,
+    SEQUENCE_PT_mask_animation,
 )
 
 if __name__ == "__main__":  # only for live edit.

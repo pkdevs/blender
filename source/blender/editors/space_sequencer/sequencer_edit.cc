@@ -34,6 +34,7 @@
 #include "BKE_global.hh"
 #include "BKE_idtype.hh"
 #include "BKE_layer.hh"
+#include "BKE_lib_id.hh"
 #include "BKE_library.hh"
 #include "BKE_main.hh"
 #include "BKE_report.hh"
@@ -46,6 +47,7 @@
 #include "SEQ_edit.hh"
 #include "SEQ_effects.hh"
 #include "SEQ_iterator.hh"
+#include "SEQ_modifier.hh"
 #include "SEQ_prefetch.hh"
 #include "SEQ_relations.hh"
 #include "SEQ_render.hh"
@@ -101,7 +103,7 @@ bool maskedit_mask_poll(bContext *C)
 
 bool check_show_maskedit(SpaceSeq *sseq, Scene *scene)
 {
-  if (sseq && sseq->mainb == SEQ_DRAW_IMG_IMBUF) {
+  if (sseq && sseq->mainb == SEQ_DRAW_IMG_IMBUF && sseq->mode == SEQ_MODE_MASK) {
     return (seq::active_mask_get(scene) != nullptr);
   }
 
@@ -118,6 +120,145 @@ bool maskedit_poll(bContext *C)
   }
 
   return false;
+}
+
+bool maskedit_visible_splines_poll(bContext *C)
+{
+  Scene *scene = CTX_data_sequencer_scene(C);
+  if (scene) {
+    Strip *strip_act = seq::select_active_get(scene);
+    if (strip_act) {
+      return seq::strip_supports_modifiers(strip_act);
+    }
+  }
+
+  return false;
+}
+
+void mask_set(bContext *C, Mask *mask)
+{
+  Scene *scene = CTX_data_sequencer_scene(C);
+  Strip *strip_act = seq::select_active_get(scene);
+
+  if (strip_act) {
+    /* weak, but same as image/space */
+    id_us_ensure_real(id_cast<ID *>(mask));
+
+    if (strip_act->type == STRIP_TYPE_MASK) {
+      strip_act->mask = mask;
+    }
+    else {
+      bool assigned_modifier = false;
+      StripModifierData *active_smd = seq::modifier_get_active(strip_act);
+
+      if (active_smd && active_smd->type == eSeqModifierType_Mask) {
+        active_smd->mask_id = mask;
+        if (mask) {
+          active_smd->mask_input_type = STRIP_MASK_INPUT_ID;
+        }
+        assigned_modifier = true;
+      }
+      else if (mask) {
+        StripModifierData *smd = seq::modifier_new(strip_act, nullptr, eSeqModifierType_Mask);
+        seq::modifier_persistent_uid_init(*strip_act, *smd);
+
+        smd->mask_id = mask;
+        smd->mask_input_type = STRIP_MASK_INPUT_ID;
+        assigned_modifier = true;
+      }
+
+      if (assigned_modifier) {
+        Main *bmain = CTX_data_main(C);
+        seq::relations_invalidate_cache(scene, strip_act);
+        DEG_relations_tag_update(bmain);
+      }
+    }
+  }
+
+  if (C) {
+    WM_event_add_notifier(C, NC_SCENE | ND_SEQUENCER | NA_EDITED, scene);
+  }
+}
+
+void mouse_position(Scene *scene, const ARegion *region, const int mval[2], float r_co[2])
+{
+  int sx, sy, height, width;
+  float zoomx, zoomy;
+
+  ui::view2d_view_to_region(&region->v2d, 0.0f, 0.0f, &sx, &sy);
+  size_get(scene, &width, &height);
+  zoom_get(region, &zoomx, &zoomy);
+
+  r_co[0] = ((mval[0] - sx) / zoomx) / width;
+  r_co[1] = ((mval[1] - sy) / zoomy) / height;
+}
+
+void point_position(Scene *scene, const ARegion *region, float x, float y, float *r_x, float *r_y)
+{
+  int sx, sy, width, height;
+  float zoomx, zoomy;
+
+  ui::view2d_view_to_region(&region->v2d, 0.0f, 0.0f, &sx, &sy);
+  size_get(scene, &width, &height);
+  zoom_get(region, &zoomx, &zoomy);
+
+  *r_x = ((x - sx) / zoomx) / width;
+  *r_y = ((y - sy) / zoomy) / height;
+}
+
+void point_position__reverse(Scene *scene, const ARegion *region, const float *co, float *r_co)
+{
+  int sx, sy, width, height;
+  float zoomx, zoomy;
+
+  ui::view2d_view_to_region(&region->v2d, 0.0f, 0.0f, &sx, &sy);
+  size_get(scene, &width, &height);
+  zoom_get(region, &zoomx, &zoomy);
+
+  r_co[0] = co[0] * width * zoomx + float(sx);
+  r_co[1] = co[1] * height * zoomy + float(sy);
+}
+
+void size_get(const Scene *scene, int *r_width, int *r_height)
+{
+  if (scene) {
+    *r_width = scene->r.xsch;
+    *r_height = scene->r.ysch;
+  }
+  else {
+    *r_width = 0.0f;
+    *r_height = 0.0f;
+  }
+}
+
+void zoom_get(const ARegion *region, float *r_zoomx, float *r_zoomy)
+{
+  if (region) {
+    *r_zoomx = float(BLI_rcti_size_x(&region->winrct) + 1) /
+               float(BLI_rctf_size_x(&region->v2d.cur));
+    *r_zoomy = float(BLI_rcti_size_y(&region->winrct) + 1) /
+               float(BLI_rctf_size_y(&region->v2d.cur));
+  }
+  else {
+    *r_zoomx = 0.0f;
+    *r_zoomy = 0.0f;
+  }
+}
+
+void aspect_get(Scene *scene, float *r_aspx, float *r_aspy)
+{
+  if (scene) {
+    float aspx, aspy;
+    BKE_render_aspect_get(&scene->r, &aspx, &aspy);
+
+    /* y is always 1 */
+    *r_aspy = 1.0f;
+    *r_aspx = aspx / aspy;
+  }
+  else {
+    *r_aspx = 1.0f;
+    *r_aspy = 1.0f;
+  }
 }
 
 bool check_show_imbuf(const SpaceSeq &sseq)

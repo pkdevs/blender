@@ -25,6 +25,8 @@
 
 #include "ANIM_keyframing.hh"
 
+#include "SEQ_utils.hh"
+
 #include "WM_api.hh"
 #include "WM_types.hh"
 
@@ -312,7 +314,7 @@ static void createTransMaskingData(bContext *C, TransInfo *t)
     return;
   }
 
-  ED_mask_get_aspect(t->area, t->region, &asp[0], &asp[1]);
+  ED_mask_get_aspect(t->area, t->region, t->scene, &asp[0], &asp[1]);
 
   tc->data_len = (is_prop_edit) ? count : countsel;
   td = tc->data = MEM_new_array_zeroed<TransData>(tc->data_len, "TransObData(Mask Editing)");
@@ -385,7 +387,7 @@ static void flushTransMasking(TransInfo *t)
 
   TransDataContainer *tc = TRANS_DATA_CONTAINER_FIRST_SINGLE(t);
 
-  ED_mask_get_aspect(t->area, t->region, &asp[0], &asp[1]);
+  ED_mask_get_aspect(t->area, t->region, t->scene, &asp[0], &asp[1]);
   inv[0] = 1.0f / asp[0];
   inv[1] = 1.0f / asp[1];
 
@@ -444,6 +446,9 @@ static void special_aftertrans_update__mask(bContext *C, TransInfo *t)
   else if (t->spacetype == SPACE_IMAGE) {
     SpaceImage *sima = t->area->spacedata.first_as<SpaceImage>();
     mask = ED_space_image_get_mask(sima);
+  }
+  else if (t->spacetype == SPACE_SEQ) {
+    mask = seq::active_mask_get(t->scene);
   }
   else {
     BLI_assert(0);

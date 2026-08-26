@@ -52,6 +52,7 @@
 #include "GPU_viewport.hh"
 
 #include "ED_gpencil_legacy.hh"
+#include "ED_mask.hh"
 #include "ED_screen.hh"
 #include "ED_sequencer.hh"
 #include "ED_space_api.hh"
@@ -69,6 +70,7 @@
 #include "SEQ_select.hh"
 #include "SEQ_sequencer.hh"
 #include "SEQ_transform.hh"
+#include "SEQ_utils.hh"
 
 #include "UI_interface.hh"
 #include "UI_resources.hh"
@@ -259,42 +261,41 @@ static void sequencer_draw_borders_overlay(const SpaceSeq &sseq,
   immUnbindProgram();
 }
 
-#if 0
-void sequencer_draw_maskedit(const bContext *C, Scene *scene, ARegion *region, SpaceSeq *sseq)
+static void sequencer_draw_maskedit(const bContext *C,
+                                    Scene *scene,
+                                    ARegion *region,
+                                    const SpaceSeq &space_sequencer)
 {
-  /* NOTE: sequencer mask editing isn't finished, the draw code is working but editing not.
-   * For now just disable drawing since the strip frame will likely be offset. */
-
-  // if (sc->mode == SC_MODE_MASKEDIT)
-  if (0 && sseq->mainb == SEQ_DRAW_IMG_IMBUF) {
-    Mask *mask = SEQ_active_mask_get(scene);
+  if (space_sequencer.mode == SEQ_MODE_MASK && space_sequencer.mainb == SEQ_DRAW_IMG_IMBUF) {
+    ScrArea *area = CTX_wm_area(C);
+    Mask *mask = CTX_data_edit_mask(C);
+    Depsgraph *depsgraph = CTX_data_expect_evaluated_depsgraph(C);
 
     if (mask) {
+      float aspx, aspy;
       int width, height;
-      float aspx = 1.0f, aspy = 1.0f;
-      // ED_mask_get_size(C, &width, &height);
+      ED_mask_get_size(area, scene, &width, &height);
+      aspect_get(scene, &aspx, &aspy);
 
-      // Scene *scene = CTX_data_sequencer_scene(C);
-      BKE_render_resolution(&scene->r, false, &width, &height);
-
-      ED_mask_draw_region(mask,
+      ED_mask_draw_region(depsgraph,
+                          mask,
                           region,
-                          true,
-                          0,
-                          0,
-                          0, /* TODO */
+                          space_sequencer.flag & SEQ_SHOW_OVERLAY,
+                          MaskDrawFlag(space_sequencer.mask_draw_flag & ~MASK_DRAWFLAG_OVERLAY),
+                          MaskDrawType(space_sequencer.mask_draw_type),
+                          MASK_OVERLAY_COMBINED,
+                          1.0f,
                           width,
                           height,
                           aspx,
                           aspy,
                           false,
-                          true,
+                          false,
                           nullptr,
                           C);
     }
   }
 }
-#endif
 
 /* Force redraw, when prefetching and using cache view. */
 static void seq_prefetch_wm_notify(const bContext *C, Scene *scene)
@@ -1946,9 +1947,7 @@ void sequencer_preview_region_draw(const bContext *C, ARegion *region)
                                   overlay_texture,
                                   timeline_frame);
 
-#if 0
-  sequencer_draw_maskedit(C, scene, region, sseq);
-#endif
+  sequencer_draw_maskedit(C, scene, region, space_sequencer);
 
   /* Free GPU textures. Note that the #current_texture is kept around via #preview_set_gpu_texture,
    * for other preview areas or frames if nothing changes between them. */

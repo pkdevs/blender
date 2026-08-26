@@ -10,6 +10,7 @@
 
 #include "BKE_context.hh"
 #include "BKE_mask.hh"
+#include "BKE_scene.hh"
 
 #include "BLI_listbase.hh"
 #include "BLI_math_geom_c.hh"
@@ -23,6 +24,7 @@
 #include "ED_clip.hh"
 #include "ED_image.hh"
 #include "ED_mask.hh" /* own include */
+#include "ED_sequencer.hh"
 
 #include "UI_view2d.hh"
 
@@ -52,6 +54,8 @@ bool ED_mask_find_nearest_diff_point(const bContext *C,
 
   ScrArea *area = CTX_wm_area(C);
   ARegion *region = CTX_wm_region(C);
+  Scene *scene = (area && area->spacetype == SPACE_SEQ) ? CTX_data_sequencer_scene(C) :
+                                                          CTX_data_scene(C);
 
   MaskLayer *point_mask_layer;
   MaskSpline *point_spline;
@@ -64,8 +68,8 @@ bool ED_mask_find_nearest_diff_point(const bContext *C,
   Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
   Mask *mask_eval = DEG_get_evaluated(depsgraph, mask_orig);
 
-  ED_mask_get_size(area, &width, &height);
-  ED_mask_pixelspace_factor(area, region, &scalex, &scaley);
+  ED_mask_get_size(area, scene, &width, &height);
+  ED_mask_pixelspace_factor(area, region, scene, &scalex, &scaley);
 
   co[0] = normal_co[0] * scalex;
   co[1] = normal_co[1] * scaley;
@@ -216,6 +220,8 @@ MaskSplinePoint *ED_mask_point_find_nearest(const bContext *C,
 {
   ScrArea *area = CTX_wm_area(C);
   ARegion *region = CTX_wm_region(C);
+  Scene *scene = (area && area->spacetype == SPACE_SEQ) ? CTX_data_sequencer_scene(C) :
+                                                          CTX_data_scene(C);
 
   MaskLayer *point_mask_layer = nullptr;
   MaskSpline *point_spline = nullptr;
@@ -229,9 +235,8 @@ MaskSplinePoint *ED_mask_point_find_nearest(const bContext *C,
   Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
   Mask *mask_eval = DEG_get_evaluated(depsgraph, mask_orig);
 
-  ED_mask_get_size(area, &width, &height);
-  ED_mask_pixelspace_factor(area, region, &scalex, &scaley);
-
+  ED_mask_get_size(area, scene, &width, &height);
+  ED_mask_pixelspace_factor(area, region, scene, &scalex, &scaley);
   co[0] = normal_co[0] * scalex;
   co[1] = normal_co[1] * scaley;
 
@@ -373,6 +378,8 @@ bool ED_mask_feather_find_nearest(const bContext *C,
 {
   ScrArea *area = CTX_wm_area(C);
   ARegion *region = CTX_wm_region(C);
+  Scene *scene = (area && area->spacetype == SPACE_SEQ) ? CTX_data_sequencer_scene(C) :
+                                                          CTX_data_scene(C);
 
   MaskLayer *point_mask_layer = nullptr;
   MaskSpline *point_spline = nullptr;
@@ -386,8 +393,8 @@ bool ED_mask_feather_find_nearest(const bContext *C,
   Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
   Mask *mask_eval = DEG_get_evaluated(depsgraph, mask_orig);
 
-  ED_mask_get_size(area, &width, &height);
-  ED_mask_pixelspace_factor(area, region, &scalex, &scaley);
+  ED_mask_get_size(area, scene, &width, &height);
+  ED_mask_pixelspace_factor(area, region, scene, &scalex, &scaley);
 
   co[0] = normal_co[0] * scalex;
   co[1] = normal_co[1] * scaley;
@@ -488,7 +495,8 @@ bool ED_mask_feather_find_nearest(const bContext *C,
   return false;
 }
 
-void ED_mask_mouse_pos(ScrArea *area, ARegion *region, const int mval[2], float r_co[2])
+void ED_mask_mouse_pos(
+    ScrArea *area, ARegion *region, Scene *scene, const int mval[2], float r_co[2])
 {
   if (area) {
     switch (area->spacetype) {
@@ -499,7 +507,8 @@ void ED_mask_mouse_pos(ScrArea *area, ARegion *region, const int mval[2], float 
         break;
       }
       case SPACE_SEQ: {
-        ui::view2d_region_to_view(&region->v2d, mval[0], mval[1], &r_co[0], &r_co[1]);
+        ed::vse::mouse_position(scene, region, mval, r_co);
+        BKE_mask_coord_from_seq_scene(scene, r_co, r_co);
         break;
       }
       case SPACE_IMAGE: {
@@ -521,7 +530,8 @@ void ED_mask_mouse_pos(ScrArea *area, ARegion *region, const int mval[2], float 
   }
 }
 
-void ED_mask_point_pos(ScrArea *area, ARegion *region, float x, float y, float *r_x, float *r_y)
+void ED_mask_point_pos(
+    ScrArea *area, ARegion *region, Scene *scene, float x, float y, float *r_x, float *r_y)
 {
   float co[2];
 
@@ -533,9 +543,11 @@ void ED_mask_point_pos(ScrArea *area, ARegion *region, float x, float y, float *
         BKE_mask_coord_from_movieclip(sc->clip, &sc->user, co, co);
         break;
       }
-      case SPACE_SEQ:
-        zero_v2(co); /* MASKTODO */
+      case SPACE_SEQ: {
+        ed::vse::point_position(scene, region, x, y, &co[0], &co[1]);
+        BKE_mask_coord_from_seq_scene(scene, co, co);
         break;
+      }
       case SPACE_IMAGE: {
         SpaceImage *sima = area->spacedata.first_as<SpaceImage>();
         ED_image_point_pos(sima, region, x, y, &co[0], &co[1]);
@@ -559,7 +571,7 @@ void ED_mask_point_pos(ScrArea *area, ARegion *region, float x, float y, float *
 }
 
 void ED_mask_point_pos__reverse(
-    ScrArea *area, ARegion *region, float x, float y, float *r_x, float *r_y)
+    ScrArea *area, ARegion *region, Scene *scene, float x, float y, float *r_x, float *r_y)
 {
   float co[2];
 
@@ -573,9 +585,13 @@ void ED_mask_point_pos__reverse(
         ED_clip_point_stable_pos__reverse(sc, region, co, co);
         break;
       }
-      case SPACE_SEQ:
-        zero_v2(co); /* MASKTODO */
+      case SPACE_SEQ: {
+        co[0] = x;
+        co[1] = y;
+        BKE_mask_coord_to_seq_scene(scene, co, co);
+        ed::vse::point_position__reverse(scene, region, co, co);
         break;
+      }
       case SPACE_IMAGE: {
         SpaceImage *sima = area->spacedata.first_as<SpaceImage>();
         co[0] = x;
@@ -691,9 +707,35 @@ void ED_mask_center_from_pivot_ex(const bContext *C,
       C, min, max, false, handles_as_knot_selected_only);
 
   switch (mode) {
-    case V3D_AROUND_CURSOR:
-      ED_mask_cursor_location_get(area, r_center);
+    case V3D_AROUND_CURSOR: {
+      float cursor[2];
+      ED_mask_cursor_location_get(area, cursor);
+      switch (area->spacetype) {
+        case SPACE_CLIP: {
+          SpaceClip *space_clip = area->spacedata.first_as<SpaceClip>();
+          BKE_mask_coord_from_movieclip(space_clip->clip, &space_clip->user, r_center, cursor);
+          break;
+        }
+        case SPACE_SEQ: {
+          Scene *scene = CTX_data_sequencer_scene(C);
+          /* Mask coordinates use a bottom-left origin, while Space Sequence uses a center origin.
+           * Subtract 0.5f to convert from bottom-left-origin to center-origin coordinates. */
+          cursor[0] -= 0.5f;
+          cursor[1] -= 0.5f;
+          BKE_mask_coord_from_seq_scene(scene, r_center, cursor);
+          break;
+        }
+        case SPACE_IMAGE: {
+          SpaceImage *space_image = area->spacedata.first_as<SpaceImage>();
+          BKE_mask_coord_from_image(space_image->image, &space_image->iuser, r_center, cursor);
+          break;
+        }
+        default:
+          BLI_assert(0);
+          break;
+      }
       break;
+    }
     default:
       mid_v2_v2v2(r_center, min, max);
       break;
@@ -709,7 +751,7 @@ void ED_mask_center_from_pivot_ex(const bContext *C,
 /** \name Generic 2D View Queries
  * \{ */
 
-void ED_mask_get_size(ScrArea *area, int *r_width, int *r_height)
+void ED_mask_get_size(ScrArea *area, Scene *scene, int *r_width, int *r_height)
 {
   if (area && area->spacedata.first_) {
     switch (area->spacetype) {
@@ -719,8 +761,7 @@ void ED_mask_get_size(ScrArea *area, int *r_width, int *r_height)
         break;
       }
       case SPACE_SEQ: {
-        // Scene *scene = CTX_data_scene(C);
-        // BKE_render_resolution(&scene->r, false, r_width, r_height);
+        ed::vse::size_get(scene, r_width, r_height);
         break;
       }
       case SPACE_IMAGE: {
@@ -753,7 +794,7 @@ void ED_mask_zoom(ScrArea *area, ARegion *region, float *r_zoomx, float *r_zoomy
         break;
       }
       case SPACE_SEQ: {
-        *r_zoomx = *r_zoomy = 1.0f;
+        ed::vse::zoom_get(region, r_zoomx, r_zoomy);
         break;
       }
       case SPACE_IMAGE: {
@@ -774,7 +815,8 @@ void ED_mask_zoom(ScrArea *area, ARegion *region, float *r_zoomx, float *r_zoomy
   }
 }
 
-void ED_mask_get_aspect(ScrArea *area, ARegion * /*region*/, float *r_aspx, float *r_aspy)
+void ED_mask_get_aspect(
+    ScrArea *area, ARegion * /*region*/, Scene *scene, float *r_aspx, float *r_aspy)
 {
   if (area && area->spacedata.first_) {
     switch (area->spacetype) {
@@ -784,7 +826,7 @@ void ED_mask_get_aspect(ScrArea *area, ARegion * /*region*/, float *r_aspx, floa
         break;
       }
       case SPACE_SEQ: {
-        *r_aspx = *r_aspy = 1.0f; /* MASKTODO - render aspect? */
+        ed::vse::aspect_get(scene, r_aspx, r_aspy);
         break;
       }
       case SPACE_IMAGE: {
@@ -805,7 +847,8 @@ void ED_mask_get_aspect(ScrArea *area, ARegion * /*region*/, float *r_aspx, floa
   }
 }
 
-void ED_mask_pixelspace_factor(ScrArea *area, ARegion *region, float *r_scalex, float *r_scaley)
+void ED_mask_pixelspace_factor(
+    ScrArea *area, ARegion *region, Scene *scene, float *r_scalex, float *r_scaley)
 {
   if (area && area->spacedata.first_) {
     switch (area->spacetype) {
@@ -821,7 +864,16 @@ void ED_mask_pixelspace_factor(ScrArea *area, ARegion *region, float *r_scalex, 
         break;
       }
       case SPACE_SEQ: {
-        *r_scalex = *r_scaley = 1.0f; /* MASKTODO? */
+        float aspx, aspy;
+        int width, height;
+
+        ui::view2d_scale_get(&region->v2d, r_scalex, r_scaley);
+        ed::vse::size_get(scene, &width, &height);
+        ed::vse::aspect_get(scene, &aspx, &aspy);
+        float maxdim = max_ff(float(width), float(height));
+
+        *r_scalex *= aspx * maxdim;
+        *r_scaley *= aspy * maxdim;
         break;
       }
       case SPACE_IMAGE: {
@@ -858,7 +910,11 @@ void ED_mask_cursor_location_get(ScrArea *area, float cursor[2])
         break;
       }
       case SPACE_SEQ: {
-        zero_v2(cursor);
+        SpaceSeq *space_seq = area->spacedata.first_as<SpaceSeq>();
+        /* Mask coordinates use a bottom-left origin, while Space Sequence uses a center origin.
+         * Add 0.5f to convert from center-origin to bottom-left-origin coordinates. */
+        float mask_cursor[2] = {(space_seq->cursor[0] + 0.5f), (space_seq->cursor[1] + 0.5f)};
+        copy_v2_v2(cursor, mask_cursor);
         break;
       }
       case SPACE_IMAGE: {

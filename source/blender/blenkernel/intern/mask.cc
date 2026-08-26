@@ -43,6 +43,7 @@
 #include "BKE_main.hh"
 #include "BKE_mask.hh"
 #include "BKE_movieclip.hh"
+#include "BKE_scene.hh"
 #include "BKE_tracking.hh"
 
 #include "DEG_depsgraph_build.hh"
@@ -1205,6 +1206,31 @@ void BKE_mask_coord_from_image(Image *image, ImageUser *iuser, float r_co[2], co
   BKE_mask_coord_from_frame(r_co, co, frame_size);
 }
 
+void BKE_mask_coord_from_seq_scene(Scene *scene, float r_co[2], const float co[2])
+{
+  float frame_size[2];
+  float aspx, aspy;
+
+  if (scene) {
+    BKE_render_aspect_get(&scene->r, &aspx, &aspy);
+    frame_size[0] = float(scene->r.xsch);
+    frame_size[1] = float(scene->r.ysch);
+  }
+  else {
+    aspx = 1.0f;
+    aspy = 1.0f;
+    copy_v2_fl(frame_size, 0.0f);
+  }
+
+  /* Mask coordinates use a bottom-left origin, while Space Sequence uses a center origin.
+   * Add 0.5f to convert from center-origin to bottom-left-origin coordinates. */
+  float unit_co[2];
+  unit_co[0] = co[0] / (aspx / aspy) + 0.5f;
+  unit_co[1] = co[1] + 0.5f;
+
+  BKE_mask_coord_from_frame(r_co, unit_co, frame_size);
+}
+
 void BKE_mask_coord_to_frame(float r_co[2], const float co[2], const float frame_size[2])
 {
   if (frame_size[0] == frame_size[1]) {
@@ -1250,6 +1276,29 @@ void BKE_mask_coord_to_image(Image *image, ImageUser *iuser, float r_co[2], cons
   frame_size[1] *= (aspy / aspx);
 
   BKE_mask_coord_to_frame(r_co, co, frame_size);
+}
+
+void BKE_mask_coord_to_seq_scene(Scene *scene, float r_co[2], const float co[2])
+{
+  float frame_size[2];
+  float aspx, aspy;
+
+  if (scene) {
+    BKE_render_aspect_get(&scene->r, &aspx, &aspy);
+    frame_size[0] = float(scene->r.xsch);
+    frame_size[1] = float(scene->r.ysch);
+  }
+  else {
+    aspx = 1.0f;
+    aspy = 1.0f;
+    copy_v2_fl(frame_size, 0.0f);
+  }
+
+  BKE_mask_coord_to_frame(r_co, co, frame_size);
+  /* Mask coordinates use a bottom-left origin, while Space Sequence uses a center origin.
+   * Subtract 0.5f to convert from bottom-left-origin to center-origin coordinates. */
+  r_co[0] = (r_co[0] - 0.5f) * aspx / aspy;
+  r_co[1] = r_co[1] - 0.5f;
 }
 
 void BKE_mask_point_parent_matrix_get(MaskSplinePoint *point,

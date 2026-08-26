@@ -2122,6 +2122,28 @@ static int rna_ColorStrip_height_default(PointerRNA *ptr, PropertyRNA * /*prop*/
   return scene->r.ysch;
 }
 
+static void rna_MaskModifier_mask_id_set(PointerRNA *ptr,
+                                         PointerRNA value,
+                                         struct ReportList * /*reports*/)
+{
+  StripModifierData *smd = static_cast<StripModifierData *>(ptr->data);
+  smd->mask_id = static_cast<Mask *>(value.data);
+
+  if (smd->mask_id) {
+    smd->mask_input_type = STRIP_MASK_INPUT_ID;
+  }
+}
+
+static int rna_StripModifier_mask_editable(const PointerRNA *ptr, const char **r_info)
+{
+  const Strip *strip = static_cast<Strip *>(ptr->data);
+  if (strip && strip->type == STRIP_TYPE_SOUND) {
+    *r_info = N_("Masks cannot be added to sound strips");
+    return PropertyFlag(0);
+  }
+  return PROP_EDITABLE;
+}
+
 }  // namespace blender
 
 #else
@@ -4406,6 +4428,8 @@ static void rna_def_modifier(BlenderRNA *brna)
   RNA_def_property_pointer_sdna(prop, nullptr, "mask_id");
   RNA_def_property_flag(prop, PROP_EDITABLE);
   RNA_def_property_ui_text(prop, "Mask", "Mask ID used as mask input for the modifier");
+  RNA_def_property_pointer_funcs(prop, nullptr, "rna_MaskModifier_mask_id_set", nullptr, nullptr);
+  RNA_def_property_editable_func(prop, "rna_StripModifier_mask_editable");
   RNA_def_property_update(prop, NC_SCENE | ND_SEQUENCER, "rna_StripModifier_update");
 
   prop = RNA_def_property(srna, "is_active", PROP_BOOLEAN, PROP_NONE);

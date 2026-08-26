@@ -950,6 +950,9 @@ static TransConvertTypeInfo *convert_type_get(const TransInfo *t, Object **r_obj
     if (t->options & CTX_SEQUENCER_IMAGE) {
       return &TransConvertType_SequencerImage;
     }
+    if (t->options & CTX_MASK) {
+      return &TransConvertType_Mask;
+    }
     if (seq::retiming_keys_are_selected(t->scene)) {
       return &TransConvertType_SequencerRetiming;
     }

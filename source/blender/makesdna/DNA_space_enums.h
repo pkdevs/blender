@@ -482,6 +482,12 @@ enum eSpaceSeq_Displays : char {
   SEQ_VIEW_SEQUENCE_PREVIEW = 3,
 };
 
+/** #SpaceSeq.mode */
+enum eSpaceSeq_Mode : char {
+  SEQ_MODE_VIEW = 0,
+  SEQ_MODE_MASK = 1,
+};
+
 /** #SpaceSeq.render_size */
 enum eSpaceSeq_Proxy_RenderSize : short {
   SEQ_RENDER_SIZE_NONE = -1,

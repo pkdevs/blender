@@ -489,6 +489,11 @@ bool ED_operator_region_graphedit_active(bContext *C)
 
 bool ED_operator_sequencer_active(bContext *C)
 {
+  SpaceSeq *sseq = CTX_wm_space_seq(C);
+  if (sseq != nullptr && sseq->view == SEQ_VIEW_PREVIEW && sseq->mode == SEQ_MODE_MASK) {
+    return false;
+  }
+
   return ed_spacetype_test(C, SPACE_SEQ) && CTX_data_sequencer_scene(C) != nullptr;
 }
 

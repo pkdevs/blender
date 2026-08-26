@@ -38,7 +38,9 @@
 #include "SEQ_channels.hh"
 #include "SEQ_offscreen.hh"
 #include "SEQ_preview_cache.hh"
+#include "SEQ_relations.hh"
 #include "SEQ_retiming.hh"
+#include "SEQ_select.hh"
 #include "SEQ_sequencer.hh"
 #include "SEQ_thumbnail_cache.hh"
 #include "SEQ_time.hh"
@@ -77,6 +79,7 @@ static SpaceLink *sequencer_create(const ScrArea * /*area*/, const Scene *scene)
   sseq->spacetype = SPACE_SEQ;
   sseq->chanshown = 0;
   sseq->view = SEQ_VIEW_SEQUENCE;
+  sseq->mode = SEQ_MODE_VIEW;
   sseq->mainb = SEQ_DRAW_IMG_IMBUF;
   sseq->flag = SEQ_USE_ALPHA | SEQ_SHOW_MARKERS | SEQ_ZOOM_TO_FIT | SEQ_SHOW_OVERLAY;
   sseq->preview_overlay.flag = SEQ_PREVIEW_SHOW_GPENCIL | SEQ_PREVIEW_SHOW_OUTLINE_SELECTED |
@@ -89,6 +92,8 @@ static SpaceLink *sequencer_create(const ScrArea * /*area*/, const Scene *scene)
 
   sseq->cache_overlay.flag = SEQ_CACHE_SHOW | SEQ_CACHE_SHOW_FINAL_OUT;
   sseq->draw_flag |= SEQ_DRAW_TRANSFORM_PREVIEW;
+  sseq->mask_draw_flag |= MASK_DRAWFLAG_SPLINE;
+  sseq->mask_draw_type = MASK_DT_OUTLINE;
 
   /* Header. */
   region = BKE_area_region_new();
@@ -332,6 +337,7 @@ static int /*eContextResult*/ sequencer_context(const bContext *C,
                                                 bContextDataResult *result)
 {
   Scene *scene = CTX_data_sequencer_scene(C);
+  SpaceSeq *sseq = CTX_wm_space_seq(C);
 
   if (CTX_data_dir(member)) {
     CTX_data_dir_set(result, sequencer_context_dir);
@@ -345,12 +351,12 @@ static int /*eContextResult*/ sequencer_context(const bContext *C,
     }
   }
   if (CTX_data_equals(member, "edit_mask")) {
-    if (scene) {
+    if (scene && sseq->mode == SEQ_MODE_MASK) {
       Mask *mask = seq::active_mask_get(scene);
       if (mask) {
         CTX_data_id_pointer_set(result, &mask->id);
+        return CTX_RESULT_OK;
       }
-      return CTX_RESULT_OK;
     }
   }
 
@@ -858,10 +864,9 @@ static void sequencer_preview_region_init(wmWindowManager *wm, ARegion *region)
 
   view2d_region_reinit(&region->v2d, ui::V2D_COMMONVIEW_CUSTOM, region->winx, region->winy);
 
-#if 0
-  keymap = WM_keymap_ensure(wm->runtime->defaultconf, "Mask Editing", SPACE_EMPTY, RGN_TYPE_WINDOW);
+  keymap = WM_keymap_ensure(
+      wm->runtime->defaultconf, "Mask Editing", SPACE_EMPTY, RGN_TYPE_WINDOW);
   WM_event_add_keymap_handler_v2d_mask(&region->runtime->handlers, keymap);
-#endif
 
   /* Own keymap. */
   keymap = WM_keymap_ensure(wm->runtime->defaultconf, "Preview", SPACE_SEQ, RGN_TYPE_WINDOW);
@@ -1069,8 +1074,31 @@ static void sequencer_preview_region_listener(const wmRegionListenerParams *para
       }
       break;
     case NC_MASK:
-      if (wmn->action == NA_EDITED) {
-        ED_region_tag_redraw(region);
+      Scene *scene = const_cast<Scene *>(params->scene);
+      Strip *active_strip = seq::select_active_get(scene);
+      switch (wmn->data) {
+        case ND_SELECT:
+        case ND_DRAW:
+        case ND_DATA:
+          if (active_strip) {
+            seq::relations_invalidate_cache(scene, active_strip);
+          }
+          ED_region_tag_redraw(region);
+          break;
+        default:
+          break;
+      }
+      switch (wmn->action) {
+        case NA_EDITED:
+        case NA_ADDED:
+        case NA_SELECTED:
+          if (active_strip) {
+            seq::relations_invalidate_cache(scene, active_strip);
+          }
+          ED_region_tag_redraw(region);
+          break;
+        default:
+          break;
       }
       break;
   }

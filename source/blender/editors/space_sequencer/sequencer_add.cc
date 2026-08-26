@@ -35,6 +35,7 @@
 #include "BKE_image.hh"
 #include "BKE_lib_id.hh"
 #include "BKE_main.hh"
+#include "BKE_mask.hh"
 #include "BKE_report.hh"
 #include "BKE_scene.hh"
 #include "BKE_sound.hh"
@@ -56,7 +57,9 @@
 #include "SEQ_add.hh"
 #include "SEQ_connect.hh"
 #include "SEQ_effects.hh"
+#include "SEQ_modifier.hh"
 #include "SEQ_proxy.hh"
+#include "SEQ_relations.hh"
 #include "SEQ_select.hh"
 #include "SEQ_sequencer.hh"
 #include "SEQ_transform.hh"
@@ -2347,6 +2350,62 @@ void SEQUENCER_OT_effect_strip_add(wmOperatorType *ot)
                              1.0f);
   RNA_def_property_subtype(prop, PROP_COLOR_GAMMA);
   RNA_def_property_flag(prop, PROP_SKIP_SAVE);
+}
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Sequencer Mask Operations
+ * \{ */
+
+static wmOperatorStatus new_sequencer_mask_exec(bContext *C, wmOperator *op)
+{
+  Main *bmain = CTX_data_main(C);
+  Scene *scene = CTX_data_sequencer_scene(C);
+
+  char mask_name[MAX_ID_NAME - 2];
+  RNA_string_get(op->ptr, "name", mask_name);
+
+  Mask *mask = BKE_mask_new(bmain, mask_name);
+  id_us_ensure_real(id_cast<ID *>(mask));
+
+  Strip *strip_act = seq::select_active_get(scene);
+
+  if (strip_act && strip_act->type != STRIP_TYPE_SOUND) {
+    StripModifierData *active_smd = seq::modifier_get_active(strip_act);
+    if (active_smd && active_smd->type == eSeqModifierType_Mask) {
+      active_smd->mask_id = mask;
+      active_smd->mask_input_type = STRIP_MASK_INPUT_ID;
+    }
+    else {
+      StripModifierData *mask_smd = seq::modifier_new(strip_act, nullptr, eSeqModifierType_Mask);
+      seq::modifier_persistent_uid_init(*strip_act, *mask_smd);
+
+      mask_smd->mask_id = mask;
+      mask_smd->mask_input_type = STRIP_MASK_INPUT_ID;
+    }
+
+    DEG_relations_tag_update(bmain);
+    DEG_id_tag_update(&scene->id, ID_RECALC_SEQUENCER_STRIPS);
+    WM_event_add_notifier(C, NC_SCENE | ND_SEQUENCER, scene);
+  }
+
+  WM_event_add_notifier(C, NC_MASK | NA_ADDED, mask);
+  return OPERATOR_FINISHED;
+}
+
+void SEQUENCER_OT_new_sequencer_mask(wmOperatorType *ot)
+{
+  ot->name = "New Sequencer Mask data block";
+  ot->idname = "SEQUENCER_OT_new_sequencer_mask";
+  ot->description = "Create a new mask data block for sequencer";
+
+  ot->poll = maskedit_visible_splines_poll;
+  ot->exec = new_sequencer_mask_exec;
+
+  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
+
+  RNA_def_string(ot->srna, "name", DATA_("Mask"), MAX_ID_NAME - 2, "Name", "");
 }
 
 /** \} */

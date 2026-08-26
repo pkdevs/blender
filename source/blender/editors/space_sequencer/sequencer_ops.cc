@@ -121,6 +121,7 @@ void sequencer_operatortypes()
   WM_operatortype_append(SEQUENCER_OT_text_strip_add);
   WM_operatortype_append(SEQUENCER_OT_effect_strip_add);
   WM_operatortype_append(SEQUENCER_OT_add_scene_strip_from_scene_asset);
+  WM_operatortype_append(SEQUENCER_OT_new_sequencer_mask);
 
   /* sequencer_modifier.cc */
   WM_operatortype_append(SEQUENCER_OT_strip_modifier_add);

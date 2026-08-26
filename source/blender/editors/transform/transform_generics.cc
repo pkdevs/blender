@@ -29,6 +29,7 @@
 #include "BKE_mask.hh"
 #include "BKE_modifier.hh"
 #include "BKE_paint.hh"
+#include "BKE_scene.hh"
 #include "BKE_screen.hh"
 
 #include "SEQ_transform.hh"
@@ -37,6 +38,7 @@
 #include "ED_image.hh"
 #include "ED_object.hh"
 #include "ED_screen.hh"
+#include "ED_sequencer.hh"
 #include "ED_space_api.hh"
 #include "ED_uvedit.hh"
 
@@ -330,7 +332,13 @@ void initTransInfo(bContext *C, TransInfo *t, wmOperator *op, const wmEvent *eve
     }
   }
   else if (t->spacetype == SPACE_SEQ && region->regiontype == RGN_TYPE_PREVIEW) {
-    t->options |= CTX_SEQUENCER_IMAGE;
+    SpaceSeq *sseq = area->spacedata.first_as<SpaceSeq>();
+    if (sseq->mode == SEQ_MODE_VIEW) {
+      t->options |= CTX_SEQUENCER_IMAGE;
+    }
+    else if (sseq->mode == SEQ_MODE_MASK) {
+      t->options |= CTX_MASK;
+    }
 
     /* Needed for auto-keying transforms in preview during playback. */
     bScreen *animscreen = ED_screen_animation_playing(CTX_wm_manager(C));
@@ -338,11 +346,15 @@ void initTransInfo(bContext *C, TransInfo *t, wmOperator *op, const wmEvent *eve
   }
 
   setTransformViewAspect(t, t->aspect);
-
   if (op && (prop = RNA_struct_find_property(op->ptr, "center_override")) &&
       RNA_property_is_set(op->ptr, prop))
   {
     RNA_property_float_get_array(op->ptr, prop, t->center_global);
+    if (t->spacetype == SPACE_SEQ && t->options & CTX_MASK) {
+      float2 unit_center = seq::image_preview_unit_from_px(t->scene, t->center_global);
+      BKE_mask_coord_from_seq_scene(t->scene, unit_center, unit_center);
+      copy_v2_v2(t->center_global, unit_center);
+    }
     mul_v3_v3(t->center_global, t->aspect);
     t->flag |= T_OVERRIDE_CENTER;
   }
@@ -968,9 +980,14 @@ void calculateCenterCursor2D(TransInfo *t, float r_center[2])
   }
   if (t->spacetype == SPACE_SEQ) {
     SpaceSeq *sseq = t->area->spacedata.first_as<SpaceSeq>();
-    const float2 cursor_pixel = seq::image_preview_unit_to_px(t->scene, sseq->cursor);
-    copy_v2_v2(cursor_local_buf, cursor_pixel);
-    cursor = cursor_local_buf;
+    if (sseq->mode == SEQ_MODE_MASK) {
+      cursor = sseq->cursor;
+    }
+    else {
+      const float2 cursor_pixel = seq::image_preview_unit_to_px(t->scene, sseq->cursor);
+      copy_v2_v2(cursor_local_buf, cursor_pixel);
+      cursor = cursor_local_buf;
+    }
   }
   else if (t->spacetype == SPACE_CLIP) {
     SpaceClip *space_clip = t->area->spacedata.first_as<SpaceClip>();
@@ -988,6 +1005,10 @@ void calculateCenterCursor2D(TransInfo *t, float r_center[2])
       else if (t->spacetype == SPACE_CLIP) {
         SpaceClip *space_clip = t->area->spacedata.first_as<SpaceClip>();
         BKE_mask_coord_from_movieclip(space_clip->clip, &space_clip->user, co, cursor);
+      }
+      else if (t->spacetype == SPACE_SEQ) {
+        Scene *scene = CTX_data_sequencer_scene(t->context);
+        BKE_mask_coord_from_seq_scene(scene, co, cursor);
       }
       else {
         BLI_assert_msg(0, "Shall not happen");

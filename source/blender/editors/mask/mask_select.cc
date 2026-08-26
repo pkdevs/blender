@@ -375,10 +375,12 @@ static wmOperatorStatus select_invoke(bContext *C, wmOperator *op, const wmEvent
 {
   ScrArea *area = CTX_wm_area(C);
   ARegion *region = CTX_wm_region(C);
+  Scene *scene = (area && area->spacetype == SPACE_SEQ) ? CTX_data_sequencer_scene(C) :
+                                                          CTX_data_scene(C);
 
   float co[2];
 
-  ED_mask_mouse_pos(area, region, event->mval, co);
+  ED_mask_mouse_pos(area, region, scene, event->mval, co);
 
   RNA_float_set_array(op->ptr, "location", co);
 
@@ -428,6 +430,8 @@ static wmOperatorStatus box_select_exec(bContext *C, wmOperator *op)
 {
   ScrArea *area = CTX_wm_area(C);
   ARegion *region = CTX_wm_region(C);
+  Scene *scene = (area && area->spacetype == SPACE_SEQ) ? CTX_data_sequencer_scene(C) :
+                                                          CTX_data_scene(C);
 
   Mask *mask_orig = CTX_data_edit_mask(C);
   Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
@@ -447,8 +451,8 @@ static wmOperatorStatus box_select_exec(bContext *C, wmOperator *op)
   /* get rectangle from operator */
   WM_operator_properties_border_to_rcti(op, &rect);
 
-  ED_mask_point_pos(area, region, rect.xmin, rect.ymin, &rectf.xmin, &rectf.ymin);
-  ED_mask_point_pos(area, region, rect.xmax, rect.ymax, &rectf.xmax, &rectf.ymax);
+  ED_mask_point_pos(area, region, scene, rect.xmin, rect.ymin, &rectf.xmin, &rectf.ymin);
+  ED_mask_point_pos(area, region, scene, rect.xmax, rect.ymax, &rectf.xmax, &rectf.ymax);
 
   /* do actual selection */
   for (MaskLayer *mask_layer_orig = mask_orig->masklayers.first(),
@@ -525,6 +529,8 @@ static bool do_lasso_select_mask(bContext *C, const Span<int2> mcoords, const eS
 {
   ScrArea *area = CTX_wm_area(C);
   ARegion *region = CTX_wm_region(C);
+  Scene *scene = (area && area->spacetype == SPACE_SEQ) ? CTX_data_sequencer_scene(C) :
+                                                          CTX_data_scene(C);
 
   Mask *mask_orig = CTX_data_edit_mask(C);
   Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
@@ -575,6 +581,7 @@ static bool do_lasso_select_mask(bContext *C, const Span<int2> mcoords, const eS
         /* point in screen coords */
         ED_mask_point_pos__reverse(area,
                                    region,
+                                   scene,
                                    point_deform->bezt.vec[1][0],
                                    point_deform->bezt.vec[1][1],
                                    &screen_co[0],
@@ -659,6 +666,8 @@ static wmOperatorStatus circle_select_exec(bContext *C, wmOperator *op)
 {
   ScrArea *area = CTX_wm_area(C);
   ARegion *region = CTX_wm_region(C);
+  Scene *scene = (area && area->spacetype == SPACE_SEQ) ? CTX_data_sequencer_scene(C) :
+                                                          CTX_data_scene(C);
 
   Mask *mask_orig = CTX_data_edit_mask(C);
   Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
@@ -674,14 +683,14 @@ static wmOperatorStatus circle_select_exec(bContext *C, wmOperator *op)
   const int radius = RNA_int_get(op->ptr, "radius");
 
   /* compute ellipse and position in unified coordinates */
-  ED_mask_get_size(area, &width, &height);
+  ED_mask_get_size(area, scene, &width, &height);
   ED_mask_zoom(area, region, &zoomx, &zoomy);
   width = height = max_ii(width, height);
 
   ellipse[0] = width * zoomx / radius;
   ellipse[1] = height * zoomy / radius;
 
-  ED_mask_point_pos(area, region, x, y, &offset[0], &offset[1]);
+  ED_mask_point_pos(area, region, scene, x, y, &offset[0], &offset[1]);
 
   const eSelectOp sel_op = ED_select_op_modal(
       eSelectOp(RNA_enum_get(op->ptr, "mode")),
@@ -769,6 +778,8 @@ static wmOperatorStatus mask_select_linked_pick_invoke(bContext *C,
 {
   ScrArea *area = CTX_wm_area(C);
   ARegion *region = CTX_wm_region(C);
+  Scene *scene = (area && area->spacetype == SPACE_SEQ) ? CTX_data_sequencer_scene(C) :
+                                                          CTX_data_scene(C);
 
   Mask *mask = CTX_data_edit_mask(C);
   MaskLayer *mask_layer;
@@ -779,7 +790,7 @@ static wmOperatorStatus mask_select_linked_pick_invoke(bContext *C,
   const float threshold = 19;
   bool changed = false;
 
-  ED_mask_mouse_pos(area, region, event->mval, co);
+  ED_mask_mouse_pos(area, region, scene, event->mval, co);
 
   point = ED_mask_point_find_nearest(
       C, mask, co, threshold, &mask_layer, &spline, nullptr, nullptr);

@@ -14,6 +14,7 @@
 #include "BKE_curve.hh"
 #include "BKE_mask.hh"
 
+#include "BLI_listbase.hh"
 #include "BLI_math_matrix_c.hh"
 #include "BLI_math_vector_c.hh"
 
@@ -445,9 +446,11 @@ static void mask_point_make_pixel_space(bContext *C,
 {
   ScrArea *area = CTX_wm_area(C);
   ARegion *region = CTX_wm_region(C);
+  Scene *scene = (area && area->spacetype == SPACE_SEQ) ? CTX_data_sequencer_scene(C) :
+                                                          CTX_data_scene(C);
 
   float scalex, scaley;
-  ED_mask_pixelspace_factor(area, region, &scalex, &scaley);
+  ED_mask_pixelspace_factor(area, region, scene, &scalex, &scaley);
 
   point_pixel[0] = point_normalized[0] * scalex;
   point_pixel[1] = point_normalized[1] * scaley;
@@ -572,10 +575,12 @@ static wmOperatorStatus add_vertex_invoke(bContext *C, wmOperator *op, const wmE
 {
   ScrArea *area = CTX_wm_area(C);
   ARegion *region = CTX_wm_region(C);
+  Scene *scene = (area && area->spacetype == SPACE_SEQ) ? CTX_data_sequencer_scene(C) :
+                                                          CTX_data_scene(C);
 
   float co[2];
 
-  ED_mask_mouse_pos(area, region, event->mval, co);
+  ED_mask_mouse_pos(area, region, scene, event->mval, co);
 
   RNA_float_set_array(op->ptr, "location", co);
 
@@ -671,10 +676,12 @@ static wmOperatorStatus add_feather_vertex_invoke(bContext *C,
 {
   ScrArea *area = CTX_wm_area(C);
   ARegion *region = CTX_wm_region(C);
+  Scene *scene = (area && area->spacetype == SPACE_SEQ) ? CTX_data_sequencer_scene(C) :
+                                                          CTX_data_scene(C);
 
   float co[2];
 
-  ED_mask_mouse_pos(area, region, event->mval, co);
+  ED_mask_mouse_pos(area, region, scene, event->mval, co);
 
   RNA_float_set_array(op->ptr, "location", co);
 
@@ -752,10 +759,12 @@ static int create_primitive_from_points(bContext *C,
   ED_mask_view_lock_state_store(C, &lock_state);
 
   ScrArea *area = CTX_wm_area(C);
+  Scene *scene = (area && area->spacetype == SPACE_SEQ) ? CTX_data_sequencer_scene(C) :
+                                                          CTX_data_scene(C);
   int size = RNA_float_get(op->ptr, "size");
 
   int width, height;
-  ED_mask_get_size(area, &width, &height);
+  ED_mask_get_size(area, scene, &width, &height);
   float scale = float(size) / max_ii(width, height);
 
   /* Get location in mask space. */
@@ -824,10 +833,12 @@ static wmOperatorStatus primitive_add_invoke(bContext *C,
                                              const wmEvent * /*event*/)
 {
   ScrArea *area = CTX_wm_area(C);
+  Scene *scene = (area && area->spacetype == SPACE_SEQ) ? CTX_data_sequencer_scene(C) :
+                                                          CTX_data_scene(C);
   float cursor[2];
   int width, height;
 
-  ED_mask_get_size(area, &width, &height);
+  ED_mask_get_size(area, scene, &width, &height);
   ED_mask_cursor_location_get(area, cursor);
 
   cursor[0] *= width;
@@ -836,6 +847,43 @@ static wmOperatorStatus primitive_add_invoke(bContext *C,
   RNA_float_set_array(op->ptr, "location", cursor);
 
   return op->type->exec(C, op);
+}
+
+struct InteractiveMaskData {
+  MaskSpline *spline;
+  int start_pt[2];
+  bool is_created;
+  short event_invoke_type;
+};
+
+static wmOperatorStatus interactive_add_invoke(bContext *C, wmOperator *op, const wmEvent *event)
+{
+  ScrArea *area = CTX_wm_area(C);
+  ARegion *region = CTX_wm_region(C);
+  Scene *scene = (area && area->spacetype == SPACE_SEQ) ? CTX_data_sequencer_scene(C) :
+                                                          CTX_data_scene(C);
+
+  float mouse_unit_co[2], frame_size[2];
+  int width, height;
+  ED_mask_get_size(area, scene, &width, &height);
+  ED_mask_mouse_pos(area, region, scene, event->mval, mouse_unit_co);
+  frame_size[0] = width;
+  frame_size[1] = height;
+  BKE_mask_coord_to_frame(mouse_unit_co, mouse_unit_co, frame_size);
+  mouse_unit_co[0] *= width;
+  mouse_unit_co[1] *= height;
+  RNA_float_set_array(op->ptr, "location", mouse_unit_co);
+
+  InteractiveMaskData *mask_data = MEM_new_zeroed<InteractiveMaskData>("InteractiveMaskData");
+  mask_data->is_created = false;
+  mask_data->spline = nullptr;
+  mask_data->event_invoke_type = event->type;
+  copy_v2_v2_int(mask_data->start_pt, event->mval);
+  op->customdata = mask_data;
+
+  /* Add modal handler. */
+  WM_event_add_modal_handler(C, op);
+  return OPERATOR_RUNNING_MODAL;
 }
 
 static void define_primitive_add_properties(wmOperatorType *ot)
@@ -849,6 +897,22 @@ static void define_primitive_add_properties(wmOperatorType *ot)
                 "Size of new primitive",
                 -FLT_MAX,
                 FLT_MAX);
+  RNA_def_float_vector(ot->srna,
+                       "location",
+                       2,
+                       nullptr,
+                       -FLT_MAX,
+                       FLT_MAX,
+                       "Location",
+                       "Location of new primitive",
+                       -FLT_MAX,
+                       FLT_MAX);
+}
+
+static void define_interactive_add_properties(wmOperatorType *ot)
+{
+  RNA_def_float(
+      ot->srna, "size", 0, -FLT_MAX, FLT_MAX, "Size", "Size of new primitive", -FLT_MAX, FLT_MAX);
   RNA_def_float_vector(ot->srna,
                        "location",
                        2,
@@ -929,6 +993,255 @@ void MASK_OT_primitive_square_add(wmOperatorType *ot)
 
   /* properties */
   define_primitive_add_properties(ot);
+}
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Interactive Add Circle Operator
+ * \{ */
+
+static wmOperatorStatus interactive_circle_add_modal(bContext *C,
+                                                     wmOperator *op,
+                                                     const wmEvent *event)
+{
+  InteractiveMaskData *mask_data = static_cast<InteractiveMaskData *>(op->customdata);
+  Mask *mask = CTX_data_edit_mask(C);
+
+  switch (event->type) {
+    case MOUSEMOVE: {
+      if (!mask_data->is_created) {
+        const float points[4][2] = {{0.0f, 0.5f}, {0.5f, 1.0f}, {1.0f, 0.5f}, {0.5f, 0.0f}};
+        int num_points = ARRAY_SIZE(points);
+        /* use HD_VECT here and switch to HD_AUTO afterwards,
+         * because handles behave weirdly when points overlap. */
+        create_primitive_from_points(C, op, points, num_points, HD_VECT);
+
+        mask = CTX_data_edit_mask(C);
+        MaskLayer *mask_layer = BKE_mask_layer_active(mask);
+        mask_data->spline = mask_layer->act_spline;
+        mask_data->is_created = true;
+      }
+      else {
+        ScrArea *area = CTX_wm_area(C);
+        ARegion *region = CTX_wm_region(C);
+        Scene *scene = (area && area->spacetype == SPACE_SEQ) ? CTX_data_sequencer_scene(C) :
+                                                                CTX_data_scene(C);
+
+        float mask_start_unit_pos[2], mask_current_unit_pos[2];
+        ED_mask_mouse_pos(area, region, scene, event->mval, mask_start_unit_pos);
+        ED_mask_mouse_pos(area, region, scene, mask_data->start_pt, mask_current_unit_pos);
+
+        MaskSplinePoint *mask_points = mask_data->spline->points;
+
+        /* Left */
+        mask_points[0].bezt.vec[1][0] = mask_start_unit_pos[0];
+        mask_points[0].bezt.vec[1][1] = (mask_start_unit_pos[1] + mask_current_unit_pos[1]) / 2;
+
+        /* Top */
+        mask_points[1].bezt.vec[1][0] = (mask_start_unit_pos[0] + mask_current_unit_pos[0]) / 2;
+        mask_points[1].bezt.vec[1][1] = mask_start_unit_pos[1];
+
+        /* Right */
+        mask_points[2].bezt.vec[1][0] = mask_current_unit_pos[0];
+        mask_points[2].bezt.vec[1][1] = (mask_start_unit_pos[1] + mask_current_unit_pos[1]) / 2;
+
+        /* Bottom */
+        mask_points[3].bezt.vec[1][0] = (mask_start_unit_pos[0] + mask_current_unit_pos[0]) / 2;
+        mask_points[3].bezt.vec[1][1] = mask_current_unit_pos[1];
+
+        for (int i = 0; i < mask_data->spline->tot_point; i++) {
+          mask_points[i].bezt.h1 = HD_AUTO;
+          mask_points[i].bezt.h2 = HD_AUTO;
+          BKE_mask_calc_handle_point_auto(mask_data->spline, &mask_points[i], true);
+        }
+
+        DEG_id_tag_update(&mask->id, ID_RECALC_GEOMETRY);
+        WM_event_add_notifier(C, NC_MASK | NA_EDITED, mask);
+      }
+      break;
+    }
+    case LEFTMOUSE:
+    case MIDDLEMOUSE:
+    case RIGHTMOUSE: {
+      if (event->type == mask_data->event_invoke_type && event->val == KM_RELEASE) {
+        if (mask_data) {
+          MEM_delete(mask_data);
+        }
+        op->customdata = nullptr;
+
+        return OPERATOR_FINISHED;
+      }
+      else if (event->type != mask_data->event_invoke_type && event->val == KM_PRESS) {
+        ATTR_FALLTHROUGH;
+      }
+      else {
+        break;
+      }
+    }
+    case EVT_ESCKEY: {
+      if (mask_data->is_created && mask_data->spline) {
+        MaskLayer *mask_layer = BKE_mask_layer_active(mask);
+
+        BLI_remlink(&mask_layer->splines, mask_data->spline);
+        mask_layer->act_spline = nullptr;
+        mask_layer->act_point = nullptr;
+
+        int shape_ofs = BKE_mask_layer_shape_spline_to_index(mask_layer, mask_data->spline);
+        BKE_mask_layer_shape_changed_remove(mask_layer, shape_ofs, mask_data->spline->tot_point);
+
+        BKE_mask_spline_free(mask_data->spline);
+        mask_data->spline = nullptr;
+        mask_data->is_created = false;
+
+        DEG_id_tag_update(&mask->id, ID_RECALC_GEOMETRY);
+        WM_event_add_notifier(C, NC_MASK | NA_EDITED, mask);
+      }
+
+      if (mask_data) {
+        MEM_delete(mask_data);
+      }
+      op->customdata = nullptr;
+      return OPERATOR_CANCELLED;
+    }
+    default:
+      return OPERATOR_PASS_THROUGH;
+  }
+
+  return OPERATOR_RUNNING_MODAL;
+}
+
+void MASK_OT_interactive_circle_add(wmOperatorType *ot)
+{
+  /* identifiers */
+  ot->name = "Add Circle";
+  ot->description = "Add new circle-shaped spline";
+  ot->idname = "MASK_OT_interactive_circle_add";
+
+  /* API callbacks. */
+  ot->modal = interactive_circle_add_modal;
+  ot->invoke = interactive_add_invoke;
+  ot->poll = ED_maskedit_visible_splines_poll;
+
+  /* flags */
+  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
+
+  /* properties */
+  define_interactive_add_properties(ot);
+}
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Interactive Add Square Operator
+ * \{ */
+
+static wmOperatorStatus interactive_square_add_modal(bContext *C,
+                                                     wmOperator *op,
+                                                     const wmEvent *event)
+{
+  InteractiveMaskData *mask_data = static_cast<InteractiveMaskData *>(op->customdata);
+  Mask *mask = CTX_data_edit_mask(C);
+
+  switch (event->type) {
+    case MOUSEMOVE: {
+      if (!mask_data->is_created) {
+        const float points[4][2] = {{0.0f, 0.0f}, {0.0f, 1.0f}, {1.0f, 1.0f}, {1.0f, 0.0f}};
+        int num_points = ARRAY_SIZE(points);
+        create_primitive_from_points(C, op, points, num_points, HD_VECT);
+
+        mask = CTX_data_edit_mask(C);
+        MaskLayer *mask_layer = BKE_mask_layer_active(mask);
+        mask_data->spline = mask_layer->act_spline;
+        mask_data->is_created = true;
+      }
+      else {
+        ScrArea *area = CTX_wm_area(C);
+        ARegion *region = CTX_wm_region(C);
+        Scene *scene = (area && area->spacetype == SPACE_SEQ) ? CTX_data_sequencer_scene(C) :
+                                                                CTX_data_scene(C);
+
+        float mask_unit_pos[2];
+        ED_mask_mouse_pos(area, region, scene, event->mval, mask_unit_pos);
+
+        MaskSplinePoint *mask_points = mask_data->spline->points;
+        mask_points[0].bezt.vec[1][1] = mask_unit_pos[1]; /* Y-dir for Bottom-Left */
+        mask_points[2].bezt.vec[1][0] = mask_unit_pos[0]; /* X-dir for Top-Right */
+        mask_points[3].bezt.vec[1][0] = mask_unit_pos[0]; /* X-dir for Bottom-Right */
+        mask_points[3].bezt.vec[1][1] = mask_unit_pos[1]; /* Y-dir for Bottom-Right */
+
+        DEG_id_tag_update(&mask->id, ID_RECALC_GEOMETRY);
+        WM_event_add_notifier(C, NC_MASK | NA_EDITED, mask);
+      }
+      break;
+    }
+    case LEFTMOUSE:
+    case MIDDLEMOUSE:
+    case RIGHTMOUSE: {
+      if (event->type == mask_data->event_invoke_type && event->val == KM_RELEASE) {
+        if (mask_data) {
+          MEM_delete(mask_data);
+        }
+        op->customdata = nullptr;
+
+        return OPERATOR_FINISHED;
+      }
+      else if (event->type != mask_data->event_invoke_type && event->val == KM_PRESS) {
+        ATTR_FALLTHROUGH;
+      }
+      else {
+        break;
+      }
+    }
+    case EVT_ESCKEY: {
+      if (mask_data->is_created && mask_data->spline) {
+        MaskLayer *mask_layer = BKE_mask_layer_active(mask);
+
+        BLI_remlink(&mask_layer->splines, mask_data->spline);
+        mask_layer->act_spline = nullptr;
+        mask_layer->act_point = nullptr;
+
+        int shape_ofs = BKE_mask_layer_shape_spline_to_index(mask_layer, mask_data->spline);
+        BKE_mask_layer_shape_changed_remove(mask_layer, shape_ofs, mask_data->spline->tot_point);
+
+        BKE_mask_spline_free(mask_data->spline);
+        mask_data->spline = nullptr;
+        mask_data->is_created = false;
+
+        DEG_id_tag_update(&mask->id, ID_RECALC_GEOMETRY);
+        WM_event_add_notifier(C, NC_MASK | NA_EDITED, mask);
+      }
+
+      if (mask_data) {
+        MEM_delete(mask_data);
+      }
+      op->customdata = nullptr;
+      return OPERATOR_CANCELLED;
+    }
+    default:
+      return OPERATOR_PASS_THROUGH;
+  }
+
+  return OPERATOR_RUNNING_MODAL;
+}
+
+void MASK_OT_interactive_square_add(wmOperatorType *ot)
+{
+  /* identifiers */
+  ot->name = "Add Square";
+  ot->description = "Add new square-shaped spline";
+  ot->idname = "MASK_OT_interactive_square_add";
+
+  /* API callbacks. */
+  ot->modal = interactive_square_add_modal;
+  ot->invoke = interactive_add_invoke;
+  ot->poll = ED_maskedit_visible_splines_poll;
+
+  /* flags */
+  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
+
+  /* properties */
+  define_interactive_add_properties(ot);
 }
 
 /** \} */

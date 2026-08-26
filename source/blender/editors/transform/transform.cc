@@ -17,6 +17,7 @@
 #include "BKE_global.hh"
 #include "BKE_layer.hh"
 #include "BKE_mask.hh"
+#include "BKE_scene.hh"
 #include "BKE_screen.hh"
 #include "BKE_workspace.hh"
 
@@ -25,6 +26,7 @@
 #include "ED_clip.hh"
 #include "ED_image.hh"
 #include "ED_screen.hh"
+#include "ED_sequencer.hh"
 #include "ED_space_api.hh"
 #include "ED_uvedit.hh"
 
@@ -136,6 +138,11 @@ void setTransformViewAspect(TransInfo *t, float r_aspect[3])
       const float2 aspect = seq::image_preview_unit_to_px(scene, r_aspect);
       copy_v2_v2(r_aspect, aspect);
     }
+    else if (t->options & CTX_MASK) {
+      Scene *scene = CTX_data_sequencer_scene(t->context);
+      ed::vse::aspect_get(scene, &r_aspect[0], &r_aspect[1]);
+      r_aspect[2] = 1.0f;
+    }
   }
   else if (t->spacetype == SPACE_CLIP) {
     SpaceClip *sclip = t->area->spacedata.first_as<SpaceClip>();
@@ -217,8 +224,21 @@ void convertViewVec(TransInfo *t, float r_vec[3], double dx, double dy)
   else if (ELEM(t->spacetype, SPACE_GRAPH, SPACE_NLA)) {
     convertViewVec2D(static_cast<View2D *>(t->view), r_vec, dx, dy);
   }
-  else if (ELEM(t->spacetype, SPACE_NODE, SPACE_SEQ)) {
+  else if (t->spacetype == SPACE_NODE) {
     convertViewVec2D(&t->region->v2d, r_vec, dx, dy);
+  }
+  else if (t->spacetype == SPACE_SEQ) {
+    if ((t->options & CTX_MASK) && !(t->options & CTX_CURSOR)) {
+      convertViewVec2D_mask(&t->region->v2d, r_vec, dx, dy);
+
+      Scene *scene = CTX_data_sequencer_scene(t->context);
+      float maxdim = max_ff(scene->r.xsch, scene->r.ysch);
+      r_vec[0] /= maxdim;
+      r_vec[1] /= maxdim;
+    }
+    else {
+      convertViewVec2D(&t->region->v2d, r_vec, dx, dy);
+    }
   }
   else if (t->spacetype == SPACE_CLIP) {
     if (t->options & CTX_MASK) {
@@ -368,12 +388,30 @@ void projectIntViewEx(TransInfo *t, const float vec[3], int adr[2], const eV3DPr
     adr[1] = out[1];
   }
   else if (t->spacetype == SPACE_SEQ) { /* XXX not tested yet, but should work. */
-    int out[2] = {0, 0};
-    if (t->view) {
-      ui::view2d_view_to_region(static_cast<View2D *>(t->view), vec[0], vec[1], &out[0], &out[1]);
+    if ((t->options & CTX_MASK)) {
+      Scene *scene = t->scene;
+      if (scene) {
+        float2 v = {vec[0] / t->aspect[0], vec[1] / t->aspect[1]};
+        BKE_mask_coord_to_seq_scene(scene, v, v);
+        ed::vse::point_position__reverse(scene, t->region, v, v);
+
+        adr[0] = v[0];
+        adr[1] = v[1];
+      }
+      else {
+        adr[0] = 0;
+        adr[1] = 0;
+      }
     }
-    adr[0] = out[0];
-    adr[1] = out[1];
+    else {
+      int out[2] = {0, 0};
+      if (t->view) {
+        ui::view2d_view_to_region(
+            static_cast<View2D *>(t->view), vec[0], vec[1], &out[0], &out[1]);
+      }
+      adr[0] = out[0];
+      adr[1] = out[1];
+    }
   }
   else if (t->spacetype == SPACE_CLIP) {
     SpaceClip *sc = t->area->spacedata.first_as<SpaceClip>();
@@ -558,9 +596,15 @@ static void viewRedrawForce(const bContext *C, TransInfo *t)
     WM_event_add_notifier(C, NC_SPACE | ND_SPACE_NODE_VIEW, nullptr);
   }
   else if (t->spacetype == SPACE_SEQ) {
-    WM_event_add_notifier(C, NC_SCENE | ND_SEQUENCER, nullptr);
-    /* Key-frames on strips has been moved, so make sure related editors are informed. */
-    WM_event_add_notifier(C, NC_ANIMATION, nullptr);
+    if (t->options & CTX_MASK) {
+      Mask *mask = CTX_data_edit_mask(C);
+      WM_event_add_notifier(C, NC_MASK | NA_EDITED, mask);
+    }
+    else {
+      WM_event_add_notifier(C, NC_SCENE | ND_SEQUENCER, nullptr);
+      /* Key-frames on strips has been moved, so make sure related editors are informed. */
+      WM_event_add_notifier(C, NC_ANIMATION, nullptr);
+    }
   }
   else if (t->spacetype == SPACE_IMAGE) {
     if (t->options & CTX_MASK) {

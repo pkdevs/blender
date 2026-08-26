@@ -177,9 +177,11 @@ _km_hierarchy = [
     ('Video Sequence Editor', 'SEQUENCE_EDITOR', 'WINDOW', [
         ('Sequencer', 'SEQUENCE_EDITOR', 'WINDOW', [
             _km_expand_from_toolsystem('SEQUENCE_EDITOR', 'SEQUENCER'),
+            _km_expand_from_toolsystem('SEQUENCE_EDITOR', 'SEQUENCER_PREVIEW'),
         ]),
         ('Preview', 'SEQUENCE_EDITOR', 'WINDOW', [
-            _km_expand_from_toolsystem('SEQUENCE_EDITOR', 'PREVIEW'),
+            _km_expand_from_toolsystem('SEQUENCE_EDITOR', 'VIEW'),
+            _km_expand_from_toolsystem('SEQUENCE_EDITOR', 'MASK'),
         ]),
         ('Sequencer Channels', 'SEQUENCE_EDITOR', 'WINDOW', []),
         ('Slip Modal', 'EMPTY', 'WINDOW', []),

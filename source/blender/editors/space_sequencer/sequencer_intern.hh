@@ -329,6 +329,7 @@ void SEQUENCER_OT_image_strip_add(wmOperatorType *ot);
 void SEQUENCER_OT_text_strip_add(wmOperatorType *ot);
 void SEQUENCER_OT_effect_strip_add(wmOperatorType *ot);
 void SEQUENCER_OT_add_scene_strip_from_scene_asset(wmOperatorType *ot);
+void SEQUENCER_OT_new_sequencer_mask(wmOperatorType *ot);
 
 void frame_filename_set(char *dst,
                         size_t dst_maxncpy,

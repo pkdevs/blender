@@ -217,6 +217,12 @@ const EnumPropertyItem rna_enum_space_sequencer_view_type_items[] = {
     {0, nullptr, 0, nullptr, nullptr},
 };
 
+const EnumPropertyItem rna_enum_space_sequencer_mode_items[] = {
+    {SEQ_MODE_VIEW, "VIEW", ICON_SEQ_PREVIEW, "View", ""},
+    {SEQ_MODE_MASK, "MASK", ICON_MOD_MASK, "Mask", ""},
+    {0, nullptr, 0, nullptr, nullptr},
+};
+
 const EnumPropertyItem rna_enum_space_file_browse_mode_items[] = {
     {FILE_BROWSE_MODE_FILES,
      "FILES",
@@ -7045,6 +7051,28 @@ static void rna_def_space_sequencer(BlenderRNA *brna)
   RNA_def_property_enum_items(prop, display_mode_items);
   RNA_def_property_ui_text(
       prop, "Display Mode", "View mode to use for displaying sequencer output");
+  RNA_def_property_update(prop, NC_SPACE | ND_SPACE_SEQUENCER, nullptr);
+
+  /*Preview Mode*/
+  prop = RNA_def_property(srna, "mode", PROP_ENUM, PROP_NONE);
+  RNA_def_property_enum_sdna(prop, nullptr, "mode");
+  RNA_def_property_enum_items(prop, rna_enum_space_sequencer_mode_items);
+  RNA_def_property_enum_default(prop, SEQ_MODE_VIEW);
+  RNA_def_property_ui_text(prop, "Mode", "Sequencer workspace editing mode");
+  RNA_def_property_flag(prop, PROP_EDITABLE);
+  RNA_def_property_update(prop, NC_SPACE | ND_SPACE_SEQUENCER, nullptr);
+
+  /* mask drawing */
+  prop = RNA_def_property(srna, "mask_display_type", PROP_ENUM, PROP_NONE);
+  RNA_def_property_enum_sdna(prop, nullptr, "mask_draw_type");
+  RNA_def_property_enum_items(prop, dt_uv_items);
+  RNA_def_property_ui_text(prop, "Edge Display Type", "Display type for mask splines");
+  RNA_def_property_update(prop, NC_SPACE | ND_SPACE_SEQUENCER, nullptr);
+
+  prop = RNA_def_property(srna, "show_mask_spline", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, nullptr, "mask_draw_flag", MASK_DRAWFLAG_SPLINE);
+  RNA_def_property_ui_text(
+      prop, "Show Mask Spline", "Show the mask control points and curves in the preview area");
   RNA_def_property_update(prop, NC_SPACE | ND_SPACE_SEQUENCER, nullptr);
 
   /* flags */

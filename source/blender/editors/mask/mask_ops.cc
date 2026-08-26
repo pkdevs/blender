@@ -37,6 +37,7 @@
 #include "ED_image.hh"
 #include "ED_mask.hh"
 #include "ED_select_utils.hh"
+#include "ED_sequencer.hh"
 
 #include "ANIM_keyframing.hh"
 
@@ -68,7 +69,7 @@ Mask *ED_mask_new(bContext *C, const char *name)
         break;
       }
       case SPACE_SEQ: {
-        /* do nothing */
+        ed::vse::mask_set(C, mask);
         break;
       }
       case SPACE_IMAGE: {
@@ -303,6 +304,8 @@ static bool spline_under_mouse_get(const bContext *C,
 {
   const float threshold = 19.0f;
   ScrArea *area = CTX_wm_area(C);
+  Scene *scene = (area && area->spacetype == SPACE_SEQ) ? CTX_data_sequencer_scene(C) :
+                                                          CTX_data_scene(C);
   SpaceClip *sc = CTX_wm_space_clip(C);
   float closest_dist_squared = 0.0f;
   MaskLayer *closest_layer = nullptr;
@@ -315,7 +318,7 @@ static bool spline_under_mouse_get(const bContext *C,
   Mask *mask_eval = DEG_get_evaluated(depsgraph, mask_orig);
 
   int width, height;
-  ED_mask_get_size(area, &width, &height);
+  ED_mask_get_size(area, scene, &width, &height);
   float pixel_co[2];
   pixel_co[0] = co[0] * width;
   pixel_co[1] = co[1] * height;
@@ -471,6 +474,8 @@ static SlidePointData *slide_point_customdata(bContext *C, wmOperator *op, const
 {
   ScrArea *area = CTX_wm_area(C);
   ARegion *region = CTX_wm_region(C);
+  Scene *scene = (area && area->spacetype == SPACE_SEQ) ? CTX_data_sequencer_scene(C) :
+                                                          CTX_data_scene(C);
 
   Mask *mask = CTX_data_edit_mask(C);
   SlidePointData *customdata = nullptr;
@@ -487,8 +492,8 @@ static SlidePointData *slide_point_customdata(bContext *C, wmOperator *op, const
   MaskViewLockState lock_state;
   ED_mask_view_lock_state_store(C, &lock_state);
 
-  ED_mask_mouse_pos(area, region, event->mval, co);
-  ED_mask_get_size(area, &width, &height);
+  ED_mask_mouse_pos(area, region, scene, event->mval, co);
+  ED_mask_get_size(area, scene, &width, &height);
 
   cv_point = ED_mask_point_find_nearest(
       C, mask, co, threshold, &cv_mask_layer, &cv_spline, &which_handle, &cv_score);
@@ -594,10 +599,10 @@ static SlidePointData *slide_point_customdata(bContext *C, wmOperator *op, const
       ED_mask_view_lock_state_restore_no_jump(C, &lock_state);
     }
 
-    ED_mask_mouse_pos(area, region, event->mval, customdata->prev_mouse_coord);
+    ED_mask_mouse_pos(area, region, scene, event->mval, customdata->prev_mouse_coord);
 
     const int zero_mouse[2] = {0, 0};
-    ED_mask_mouse_pos(area, region, zero_mouse, customdata->prev_zero_coord);
+    ED_mask_mouse_pos(area, region, scene, zero_mouse, customdata->prev_zero_coord);
   }
 
   return customdata;
@@ -716,9 +721,11 @@ static wmOperatorStatus slide_point_modal(bContext *C, wmOperator *op, const wmE
     case MOUSEMOVE: {
       ScrArea *area = CTX_wm_area(C);
       ARegion *region = CTX_wm_region(C);
+      Scene *scene = (area && area->spacetype == SPACE_SEQ) ? CTX_data_sequencer_scene(C) :
+                                                              CTX_data_scene(C);
       float2 delta;
 
-      ED_mask_mouse_pos(area, region, event->mval, co);
+      ED_mask_mouse_pos(area, region, scene, event->mval, co);
       sub_v2_v2v2(delta, co, data->prev_mouse_coord);
       copy_v2_v2(data->prev_mouse_coord, co);
 
@@ -727,7 +734,7 @@ static wmOperatorStatus slide_point_modal(bContext *C, wmOperator *op, const wmE
       {
         const int zero_mouse[2] = {0, 0};
         float zero_coord[2];
-        ED_mask_mouse_pos(area, region, zero_mouse, zero_coord);
+        ED_mask_mouse_pos(area, region, scene, zero_mouse, zero_coord);
 
         float zero_delta[2];
         sub_v2_v2v2(zero_delta, zero_coord, data->prev_zero_coord);
@@ -1022,10 +1029,14 @@ static void free_slide_spline_curvature_data(SlideSplineCurvatureData *slide_dat
 static bool slide_spline_curvature_check(bContext *C, const wmEvent *event)
 {
   Mask *mask = CTX_data_edit_mask(C);
+  ScrArea *area = CTX_wm_area(C);
+  ARegion *region = CTX_wm_region(C);
+  Scene *scene = (area && area->spacetype == SPACE_SEQ) ? CTX_data_sequencer_scene(C) :
+                                                          CTX_data_scene(C);
   float co[2];
   const float threshold = 19.0f;
 
-  ED_mask_mouse_pos(CTX_wm_area(C), CTX_wm_region(C), event->mval, co);
+  ED_mask_mouse_pos(area, region, scene, event->mval, co);
 
   if (ED_mask_point_find_nearest(C, mask, co, threshold, nullptr, nullptr, nullptr, nullptr)) {
     return false;
@@ -1046,6 +1057,10 @@ static SlideSplineCurvatureData *slide_spline_curvature_customdata(bContext *C,
   const float threshold = 19.0f;
 
   Mask *mask = CTX_data_edit_mask(C);
+  ScrArea *area = CTX_wm_area(C);
+  ARegion *region = CTX_wm_region(C);
+  Scene *scene = (area && area->spacetype == SPACE_SEQ) ? CTX_data_sequencer_scene(C) :
+                                                          CTX_data_scene(C);
   SlideSplineCurvatureData *slide_data;
   MaskLayer *mask_layer;
   MaskSpline *spline;
@@ -1056,7 +1071,7 @@ static SlideSplineCurvatureData *slide_spline_curvature_customdata(bContext *C,
   MaskViewLockState lock_state;
   ED_mask_view_lock_state_store(C, &lock_state);
 
-  ED_mask_mouse_pos(CTX_wm_area(C), CTX_wm_region(C), event->mval, co);
+  ED_mask_mouse_pos(area, region, scene, event->mval, co);
 
   if (!ED_mask_find_nearest_diff_point(C,
                                        mask,
@@ -1247,10 +1262,14 @@ static wmOperatorStatus slide_spline_curvature_modal(bContext *C,
 
       ATTR_FALLTHROUGH; /* update CV position */
     case MOUSEMOVE: {
+      ScrArea *area = CTX_wm_area(C);
+      ARegion *region = CTX_wm_region(C);
+      Scene *scene = (area && area->spacetype == SPACE_SEQ) ? CTX_data_sequencer_scene(C) :
+                                                              CTX_data_scene(C);
       float B[2], mouse_coord[2], delta[2];
 
       /* Get coordinate spline is expected to go through. */
-      ED_mask_mouse_pos(CTX_wm_area(C), CTX_wm_region(C), event->mval, mouse_coord);
+      ED_mask_mouse_pos(area, region, scene, event->mval, mouse_coord);
       sub_v2_v2v2(delta, mouse_coord, slide_data->prev_mouse_coord);
       if (slide_data->accurate) {
         mul_v2_fl(delta, 0.2f);

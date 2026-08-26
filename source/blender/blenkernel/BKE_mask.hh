@@ -12,6 +12,7 @@
 
 #include "DNA_listBase.h"
 #include "DNA_mask_types.h"
+#include "DNA_scene_types.h"
 
 namespace blender {
 
@@ -198,6 +199,7 @@ void BKE_mask_coord_from_movieclip(MovieClip *clip,
                                    float r_co[2],
                                    const float co[2]);
 void BKE_mask_coord_from_image(Image *image, ImageUser *iuser, float r_co[2], const float co[2]);
+void BKE_mask_coord_from_seq_scene(Scene *scene, float r_co[2], const float co[2]);
 /**
  * Inverse of #BKE_mask_coord_from_image.
  */
@@ -207,6 +209,7 @@ void BKE_mask_coord_to_movieclip(MovieClip *clip,
                                  float r_co[2],
                                  const float co[2]);
 void BKE_mask_coord_to_image(Image *image, ImageUser *iuser, float r_co[2], const float co[2]);
+void BKE_mask_coord_to_seq_scene(Scene *scene, float r_co[2], const float co[2]);
 
 /** \} */
 

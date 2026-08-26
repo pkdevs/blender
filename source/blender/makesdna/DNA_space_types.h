@@ -355,7 +355,13 @@ struct SpaceSeq {
   /** Overlay an image of the editing on below the strips. */
   eSpaceSeq_DrawFlag draw_flag = {};
   eSpaceSeq_Gizmo_Flag gizmo_flag = {};
-  char _pad[4] = {};
+
+  /** Mask Options */
+  eSpaceSeq_Mode mode = SEQ_MODE_VIEW;
+  /** Draw Options */
+  MaskDrawFlag mask_draw_flag = MASK_DRAWFLAG_SPLINE;
+  MaskDrawType mask_draw_type = MASK_DT_OUTLINE;
+  char _pad1[1] = {};
 
   /** 2D cursor for transform. */
   float cursor[2] = {};
