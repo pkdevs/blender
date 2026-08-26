@@ -264,6 +264,16 @@ elseif(WITH_GHOST_X11 OR WITH_GHOST_WAYLAND)
       ${xkbcommon_LINK_LIBRARIES}
     )
 
+    if(WITH_GHOST_WAYLAND_DBUS)
+      add_definitions(-DWITH_GHOST_WAYLAND_DBUS)
+      list(APPEND INC_SYS
+        ${gio_INCLUDE_DIRS}
+      )
+      list(APPEND LIB
+        ${gio_LINK_LIBRARIES}
+      )
+    endif()
+
     if(WITH_GHOST_WAYLAND_DYNLOAD)
       list(APPEND INC_SYS
         ../wayland_dynload/extern

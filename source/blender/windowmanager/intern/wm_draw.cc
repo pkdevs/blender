@@ -1550,6 +1550,12 @@ bool WM_desktop_cursor_sample_read(float r_col[3])
   return ghost_system->getPixelAtCursor(r_col);
 }
 
+bool WM_desktop_cursor_left_window()
+{
+  const GHOST_ISystem *ghost_system = GHOST_ISystem::getSystem();
+  return ghost_system->getCursorLeftWindow();
+}
+
 /** \} */
 
 /* -------------------------------------------------------------------- */

@@ -418,6 +418,12 @@ class GHOST_ISystem {
    */
   virtual GHOST_TSuccess getPixelAtCursor(float r_color[3]) const = 0;
 
+  /**
+   * \return True if the cursor has left every window belonging to this application.
+   * Always returns False if platform is not Wayland, since this is only relevant for Wayland.
+   */
+  virtual bool getCursorLeftWindow() const = 0;
+
 #ifdef WITH_INPUT_NDOF
   /**
    * Sets 3D mouse dead-zone.

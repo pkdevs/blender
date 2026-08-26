@@ -80,6 +80,9 @@ struct Eyedropper {
   void *draw_handle_sample_text = nullptr;
   char sample_text[MAX_NAME] = {};
 
+  /* Polls for cursor hover out of window sampling. */
+  wmTimer *cursor_leave_timer = nullptr;
+
   bNode *crypto_node = nullptr;
   CryptomatteSession *cryptomatte_session = nullptr;
   ViewportColorSampleSession *viewport_session = nullptr;
@@ -179,6 +182,11 @@ static void eyedropper_exit(bContext *C, wmOperator *op)
   if (eye->viewport_session) {
     MEM_delete(eye->viewport_session);
     eye->viewport_session = nullptr;
+  }
+
+  if (eye->cursor_leave_timer) {
+    WM_event_timer_remove(CTX_wm_manager(C), window, eye->cursor_leave_timer);
+    eye->cursor_leave_timer = nullptr;
   }
 
   op->customdata = nullptr;
@@ -539,6 +547,18 @@ static void eyedropper_color_set(bContext *C, Eyedropper *eye, const float col[3
   RNA_property_update(C, &eye->ptr, eye->prop);
 }
 
+/* Sample outside the window directly, skipping the window check. */
+static void eyedropper_color_sample_desktop(bContext *C, Eyedropper *eye)
+{
+  float col[3];
+  if (!WM_desktop_cursor_sample_read(col)) {
+    return;
+  }
+  IMB_colormanagement_srgb_to_scene_linear_v3(col, col);
+  eyedropper_color_set(C, eye, col);
+  return;
+}
+
 static void eyedropper_color_sample(bContext *C, Eyedropper *eye, const int event_xy[2])
 {
   /* Accumulate color. */
@@ -631,7 +651,33 @@ static wmOperatorStatus eyedropper_modal(bContext *C, wmOperator *op, const wmEv
         break;
     }
   }
+  /* WAYLAND sends no event on hover-out, so poll and sample once it happens. */
+  else if (event->type == TIMER && event->customdata == eye->cursor_leave_timer) {
+    if (WM_desktop_cursor_left_window() && (WM_capabilities_flag() & WM_CAPABILITY_DESKTOP_SAMPLE))
+    {
+      const bool is_undo = eye->is_undo;
+      eyedropper_color_sample_desktop(C, eye);
+      eyedropper_exit(C, op);
+      return is_undo ? OPERATOR_FINISHED : OPERATOR_CANCELLED;
+    }
+  }
+
   else if (ISMOUSE_MOTION(event->type)) {
+    /* WAYLAND keeps sending motion events while dragging outside the window. 
+     * So exit after out of window sample */
+    if (STREQ(WM_ghost_backend(), "WAYLAND")) {
+      int event_xy_win[2];
+      const bool cursor_outside_window = (WM_window_find_under_cursor(
+                                              CTX_wm_window(C), event->xy, event_xy_win) ==
+                                          nullptr);
+      if (cursor_outside_window && (WM_capabilities_flag() & WM_CAPABILITY_DESKTOP_SAMPLE)) {
+        const bool is_undo = eye->is_undo;
+        eyedropper_color_sample(C, eye, event->xy);
+        eyedropper_exit(C, op);
+        return is_undo ? OPERATOR_FINISHED : OPERATOR_CANCELLED;
+      }
+    }
+
     if (eye->accum_start) {
       /* button is pressed so keep sampling */
       eyedropper_color_sample(C, eye, event->xy);
@@ -664,6 +710,13 @@ static wmOperatorStatus eyedropper_invoke(bContext *C, wmOperator *op, const wmE
     /* Workaround for de-activating the button clearing the cursor, see #76794 */
     context_active_but_clear(C, win, CTX_wm_region(C));
     WM_cursor_modal_set(win, WM_CURSOR_EYEDROPPER);
+
+    if (STREQ(WM_ghost_backend(), "WAYLAND") &&
+        (WM_capabilities_flag() & WM_CAPABILITY_DESKTOP_SAMPLE))
+    {
+      Eyedropper *eye = static_cast<Eyedropper *>(op->customdata);
+      eye->cursor_leave_timer = WM_event_timer_add(CTX_wm_manager(C), win, TIMER, 0.1);
+    }
 
     /* add temp handler */
     WM_event_add_modal_handler(C, op);
@@ -711,7 +764,14 @@ void UI_OT_eyedropper_color(wmOperatorType *ot)
   ot->poll = eyedropper_poll;
 
   /* flags */
-  ot->flag = OPTYPE_UNDO | OPTYPE_BLOCKING | OPTYPE_INTERNAL;
+  ot->flag = OPTYPE_UNDO | OPTYPE_INTERNAL | OPTYPE_BLOCKING;
+
+  /* Do not use OPTYPE_BLOCKING on WAYLAND. It confines the cursor on WAYLAND, blocking desktop sampling. */
+  if (STREQ(WM_ghost_backend(), "WAYLAND") &&
+        (WM_capabilities_flag() & WM_CAPABILITY_DESKTOP_SAMPLE))
+  {
+    ot->flag = OPTYPE_UNDO | OPTYPE_INTERNAL;
+  }
 
   /* Paths relative to the context. */
   PropertyRNA *prop;

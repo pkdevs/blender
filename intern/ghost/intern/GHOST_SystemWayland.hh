@@ -18,6 +18,7 @@
 #endif
 #include <wayland-client.h>
 
+#include <atomic>
 #include <mutex>
 #include <span>
 #include <string>
@@ -230,6 +231,10 @@ class GHOST_SystemWayland : public GHOST_System {
   GHOST_TSuccess getCursorPosition(int32_t &x, int32_t &y) const override;
   GHOST_TSuccess setCursorPosition(int32_t x, int32_t y) override;
 
+  GHOST_TSuccess getPixelAtCursor(float r_color[3]) const override;
+
+  bool getCursorLeftWindow() const override;
+
   uint32_t getCursorPreferredLogicalSize() const override;
 
   void getMainDisplayDimensions(uint32_t &width, uint32_t &height) const override;
@@ -337,6 +342,9 @@ class GHOST_SystemWayland : public GHOST_System {
   /** Set this seat to be active. */
   void seat_active_set(const struct GWL_Seat *seat);
 
+  /** Set from pointer enter/leave handling. */
+  void cursor_left_window_set(bool value);
+
   struct wl_seat *wl_seat_active_get_with_input_serial(uint32_t &serial);
 
   /**
@@ -398,4 +406,7 @@ class GHOST_SystemWayland : public GHOST_System {
   void display_destroy_and_free_all();
 
   struct GWL_Display *display_;
+
+  /** True once the cursor has left every window with no button held. */
+  std::atomic<bool> cursor_left_window_ = {false};
 };

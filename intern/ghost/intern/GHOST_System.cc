@@ -293,6 +293,11 @@ GHOST_TSuccess GHOST_System::getPixelAtCursor(float /*r_color*/[3]) const
   return GHOST_kFailure;
 }
 
+bool GHOST_System::getCursorLeftWindow() const
+{
+  return false;
+}
+
 #ifdef WITH_INPUT_NDOF
 void GHOST_System::setNDOFDeadZone(float deadzone)
 {

@@ -159,6 +159,9 @@ class GHOST_System : public GHOST_ISystem {
   /** \copydoc #GHOST_ISystem::getPixelAtCursor */
   GHOST_TSuccess getPixelAtCursor(float r_color[3]) const override;
 
+  /** \copydoc #GHOST_ISystem::getCursorLeftWindow */
+  bool getCursorLeftWindow() const override;
+
 #ifdef WITH_INPUT_NDOF
   /***************************************************************************************
    * Access to 3D mouse.

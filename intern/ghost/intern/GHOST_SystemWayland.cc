@@ -51,6 +51,7 @@
 #include <algorithm>
 #include <atomic>
 #include <optional>
+#include <string>
 #include <string_view>
 #include <thread>
 #include <unordered_set>
@@ -91,6 +92,10 @@
 
 #include <cstdlib> /* For `exit`. */
 #include <cstring>
+
+#ifdef WITH_GHOST_WAYLAND_DBUS
+#  include <gio/gio.h> /* For out of window color sampling via the XDG desktop portal. */
+#endif
 #include <mutex>
 
 #include <pthread.h> /* For setting the thread priority. */
@@ -4740,6 +4745,10 @@ static void pointer_handle_enter(void *data,
   }
   CLOG_DEBUG(LOG, "enter");
 
+#ifdef WITH_GHOST_WAYLAND_DBUS
+  seat->system->cursor_left_window_set(false);
+#endif
+
   GHOST_WindowWayland *win = ghost_wl_surface_user_data(wl_surface);
 
   seat->cursor_source_serial = serial;
@@ -4801,6 +4810,10 @@ static void pointer_handle_leave(void *data,
     return;
   }
   CLOG_DEBUG(LOG, "leave");
+
+#ifdef WITH_GHOST_WAYLAND_DBUS
+  seat->system->cursor_left_window_set(true);
+#endif
 
 #ifdef WITH_GHOST_CSD
   if (seat->system->use_window_frame_csd_get()) {
@@ -9919,6 +9932,154 @@ GHOST_TSuccess GHOST_SystemWayland::setCursorPosition(const int32_t x, const int
   return GHOST_kFailure;
 }
 
+#ifdef WITH_GHOST_WAYLAND_DBUS
+
+struct GWL_PortalPickColorResult {
+  GMainLoop *loop = nullptr;
+  bool success = false;
+  float color[3] = {0.0f, 0.0f, 0.0f};
+};
+
+/* Called when the PickColor request's Response signal arrives. */
+static void ghost_wl_portal_pick_color_response_cb(GDBusConnection * /*connection*/,
+                                                    const char * /*sender_name*/,
+                                                    const char * /*object_path*/,
+                                                    const char * /*interface_name*/,
+                                                    const char * /*signal_name*/,
+                                                    GVariant *parameters,
+                                                    void *user_data)
+{
+  GWL_PortalPickColorResult &result = *static_cast<GWL_PortalPickColorResult *>(user_data);
+
+  uint32_t response = 1; /* Non-zero implies cancelled or failed. */
+  GVariant *results = nullptr;
+  g_variant_get(parameters, "(u@a{sv})", &response, &results);
+
+  if (response == 0) {
+    GVariant *color_variant = g_variant_lookup_value(results, "color", G_VARIANT_TYPE("(ddd)"));
+    if (color_variant) {
+      double r, g, b;
+      g_variant_get(color_variant, "(ddd)", &r, &g, &b);
+      result.color[0] = float(r);
+      result.color[1] = float(g);
+      result.color[2] = float(b);
+
+      result.success = true;
+      g_variant_unref(color_variant);
+    }
+  }
+  g_variant_unref(results);
+
+  g_main_loop_quit(result.loop);
+}
+
+/**
+ * Ask the XDG desktop portal to pick a color, blocking until the user does
+ * (via a private #GMainLoop, like #GHOST_SystemCocoa's `NSRunLoop` spin from #131593).
+ */
+static GHOST_TSuccess ghost_wl_portal_pick_color(float r_color[3])
+{
+  GError *error = nullptr;
+  GDBusConnection *connection = g_bus_get_sync(G_BUS_TYPE_SESSION, nullptr, &error);
+  if (!connection) {
+    if (error) {
+      g_error_free(error);
+    }
+    return GHOST_kFailure;
+  }
+
+  /* Unique per-call token to predict Request path and subscribe
+   * before calling PickColor, avoiding a race with its Response signal. */
+  static std::atomic<uint64_t> token_source{0};
+  const std::string handle_token = "blender_pick_color_" +
+                                    std::to_string(token_source.fetch_add(1));
+
+  const char *unique_name = g_dbus_connection_get_unique_name(connection);
+
+  /* Request path format per the portal spec. */
+  std::string sender_escaped = (unique_name && unique_name[0] == ':') ? (unique_name + 1) : "";
+  std::replace(sender_escaped.begin(), sender_escaped.end(), '.', '_');
+
+  const std::string request_path = "/org/freedesktop/portal/desktop/request/" + sender_escaped +
+                                    "/" + handle_token;
+
+  GWL_PortalPickColorResult result;
+  result.loop = g_main_loop_new(nullptr, FALSE);
+
+  const guint signal_subscription_id = g_dbus_connection_signal_subscribe(
+      connection,
+      "org.freedesktop.portal.Desktop",
+      "org.freedesktop.portal.Request",
+      "Response",
+      request_path.c_str(),
+      nullptr,
+      G_DBUS_SIGNAL_FLAGS_NONE,
+      ghost_wl_portal_pick_color_response_cb,
+      &result,
+      nullptr);
+
+  GVariantBuilder options_builder;
+  g_variant_builder_init(&options_builder, G_VARIANT_TYPE("a{sv}"));
+  g_variant_builder_add(
+      &options_builder, "{sv}", "handle_token", g_variant_new_string(handle_token.c_str()));
+
+  error = nullptr;
+  GVariant *call_result = g_dbus_connection_call_sync(
+      connection,
+      "org.freedesktop.portal.Desktop",
+      "/org/freedesktop/portal/desktop",
+      "org.freedesktop.portal.Screenshot",
+      "PickColor",
+      g_variant_new("(sa{sv})", "", &options_builder),
+      G_VARIANT_TYPE("(o)"),
+      G_DBUS_CALL_FLAGS_NONE,
+      /* Bounds only the request being accepted to 2 secs, not the user picking a pixel. */
+      2000,
+      nullptr,
+      &error);
+
+  GHOST_TSuccess success = GHOST_kFailure;
+  if (call_result) {
+    g_variant_unref(call_result);
+
+    /* Blocks until the user picks a pixel or cancels. */
+    g_main_loop_run(result.loop);
+
+    if (result.success) {
+      r_color[0] = result.color[0];
+      r_color[1] = result.color[1];
+      r_color[2] = result.color[2];
+      success = GHOST_kSuccess;
+    }
+  }
+  else if (error) {
+    g_error_free(error);
+  }
+
+  g_dbus_connection_signal_unsubscribe(connection, signal_subscription_id);
+  g_main_loop_unref(result.loop);
+  g_object_unref(connection);
+
+  return success;
+}
+
+#endif
+
+GHOST_TSuccess GHOST_SystemWayland::getPixelAtCursor(float r_color[3]) const
+{
+#ifdef WITH_GHOST_WAYLAND_DBUS
+  return ghost_wl_portal_pick_color(r_color);
+#else
+  (void)r_color;
+  return GHOST_kFailure;
+#endif
+}
+
+bool GHOST_SystemWayland::getCursorLeftWindow() const
+{
+  return cursor_left_window_.load(std::memory_order_relaxed);
+}
+
 uint32_t GHOST_SystemWayland::getCursorPreferredLogicalSize() const
 {
 #ifdef USE_EVENT_BACKGROUND_THREAD
@@ -10488,8 +10649,10 @@ GHOST_TCapabilityFlag GHOST_SystemWayland::getCapabilities() const
            * screen-shot and eye-dropper sampling logic, both operations where the overhead
            * is negligible. */
           GHOST_kCapabilityGPUReadFrontBuffer |
-          /* This WAYLAND back-end has not yet implemented desktop color sample. */
+#ifndef WITH_GHOST_WAYLAND_DBUS
+          /* Desktop color sampling needs the XDG desktop portal, which needs D-Bus support. */
           GHOST_kCapabilityDesktopSample |
+#endif
           /* This flag will eventually be removed when support
            * for the old track-pad protocol is dropped. */
           ((has_wl_trackpad_physical_direction == 1) ?
@@ -11068,6 +11231,11 @@ GHOST_TSuccess GHOST_SystemWayland::pushEvent_maybe_pending(
 void GHOST_SystemWayland::seat_active_set(const GWL_Seat *seat)
 {
   gwl_display_seat_active_set(display_, seat);
+}
+
+void GHOST_SystemWayland::cursor_left_window_set(const bool value)
+{
+  cursor_left_window_.store(value, std::memory_order_relaxed);
 }
 
 wl_seat *GHOST_SystemWayland::wl_seat_active_get_with_input_serial(uint32_t &serial)

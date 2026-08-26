@@ -726,6 +726,7 @@ endif()
 if(WITH_GHOST_WAYLAND)
   find_package(PkgConfig)
   pkg_check_modules(xkbcommon xkbcommon)
+  pkg_check_modules(gio gio-2.0)
 
   # When dynamically linked WAYLAND is used and `${LIBDIR}/wayland` is present,
   # there is no need to search for the libraries as they are not needed for building.
@@ -787,6 +788,13 @@ if(WITH_GHOST_WAYLAND)
   set_and_warn_library_found("wayland-cursor" wayland-cursor_FOUND WITH_GHOST_WAYLAND)
   set_and_warn_library_found("wayland-protocols" wayland-protocols_FOUND WITH_GHOST_WAYLAND)
   set_and_warn_library_found("xkbcommon" xkbcommon_FOUND WITH_GHOST_WAYLAND)
+
+  if(gio_FOUND)
+    set(WITH_GHOST_WAYLAND_DBUS ON)
+  else()
+    message(STATUS "gio-2.0 not found, WAYLAND out of window color sampling (eyedropper) will be disabled")
+    set(WITH_GHOST_WAYLAND_DBUS OFF)
+  endif()
 
   if(WITH_GHOST_WAYLAND)
     if(DEFINED LIBDIR)

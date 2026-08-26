@@ -279,6 +279,13 @@ wmWindow *WM_window_find_by_area(wmWindowManager *wm, const ScrArea *area);
 bool WM_desktop_cursor_sample_read(float r_col[3]);
 
 /**
+ * Return true if the cursor has left every Blender window and no cursor-move event is
+ * expected until it enters one again (required on WAYLAND).
+ * Always false where that's not needed.
+ */
+bool WM_desktop_cursor_left_window();
+
+/**
  * Read pixels from the front-buffer (fast).
  *
  * \note Internally this depends on the front-buffer state,
