@@ -19,6 +19,7 @@
 #include "DNA_curve_types.h"
 #include "DNA_object_types.h"
 
+#include "BKE_anonymous_attribute_id.hh"
 #include "BKE_curve_legacy_convert.hh"
 #include "BKE_curve_to_mesh.hh"
 #include "BKE_curves.hh"
@@ -46,6 +47,33 @@ static inline Imath::V3f to_yup_V3f(float3 v)
   Imath::V3f p;
   copy_yup_from_zup(p.getValue(), v);
   return p;
+}
+
+/* Excluded attributes are those which are handled through native Alembic concepts
+ * and should not be exported as generic attributes. */
+static bool is_excluded_attr(StringRefNull name)
+{
+  static const Set<StringRefNull> excluded_attrs = []() {
+    Set<StringRefNull> set;
+    set.add_new("position");
+    set.add_new("radius");
+    set.add_new("resolution");
+    set.add_new("id");
+    set.add_new("cyclic");
+    set.add_new("curve_type");
+    set.add_new("normal_mode");
+    set.add_new("handle_left");
+    set.add_new("handle_right");
+    set.add_new("handle_type_left");
+    set.add_new("handle_type_right");
+    set.add_new("knots_mode");
+    set.add_new("nurbs_order");
+    set.add_new("nurbs_weight");
+    set.add_new("velocity");
+    return set;
+  }();
+
+  return excluded_attrs.contains(name);
 }
 
 ABCCurveWriter::ABCCurveWriter(const ABCWriterConstructorArgs &args) : ABCAbstractWriter(args) {}
@@ -259,6 +287,36 @@ void ABCCurveWriter::do_write(HierarchyContext &context)
   update_bounding_box(context.object);
   sample.setSelfBounds(bounding_box_);
   abc_curve_schema_.set(sample);
+
+  write_arb_geo_params(curves, context.object);
+}
+
+void ABCCurveWriter::write_arb_geo_params(const bke::CurvesGeometry &curves, const Object *object)
+{
+  Alembic::Abc::OCompoundProperty arb_geom_params = abc_curve_schema_.getArbGeomParams();
+
+  const bke::AttributeAccessor attributes = curves.attributes();
+
+  attributes.foreach_attribute([&](const bke::AttributeIter &iter) {
+    /* Skip "internal" Blender properties and attributes dealt with elsewhere. */
+    if (iter.name[0] == '.' || bke::attribute_name_is_anonymous(iter.name) ||
+        is_excluded_attr(iter.name))
+    {
+      return;
+    }
+
+    AttributeParamMaps &param_maps = get_attribute_param_maps();
+    create_geom_param_for_attribute(
+        arb_geom_params, param_maps, iter, timesample_index(), {}, BKE_id_name(object->id));
+  });
+}
+
+AttributeParamMaps &ABCCurveWriter::get_attribute_param_maps()
+{
+  if (!attribute_maps_) {
+    attribute_maps_ = std::make_unique<AttributeParamMaps>();
+  }
+  return *attribute_maps_.get();
 }
 
 ABCCurveMeshWriter::ABCCurveMeshWriter(const ABCWriterConstructorArgs &args)
