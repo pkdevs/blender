@@ -1441,7 +1441,6 @@ struct KernelObject {
   Transform tfm;
   Transform itfm;
 
-  float volume_density;
   float pass_id;
   float random_number;
   float color[3];
@@ -1454,20 +1453,32 @@ struct KernelObject {
   uint16_t num_geom_steps;
   uint16_t num_tfm_steps;
   int numverts;
-  int numprims;
 
   uint attribute_map_offset;
   uint motion_offset;
 
   /* Cached offset into attribute arrays, as these are accessed often. */
   int position_offset;
-  int normal_offset;
 
-  /* Cached offsets into gaussian splat attributes. */
-  int gsplat_scale_offset;
-  int gsplat_rotation_offset;
-  int gsplat_radiance_base_offset;
-  int gsplat_radiance_spherical_harmonics_offset;
+  union {
+    /* Information about mesh and volume objects. */
+    struct {
+      int num_prims;
+
+      float volume_density;
+      float volume_velocity_scale;
+
+      int normal_offset;
+    } mesh_volume;
+
+    /* Information about gaussian splat objects. */
+    struct {
+      int scale_offset;
+      int rotation_offset;
+      int radiance_base_offset;
+      int radiance_spherical_harmonics_offset;
+    } gsplat;
+  };
 
   float cryptomatte_object;
   float cryptomatte_asset;
@@ -1481,9 +1492,6 @@ struct KernelObject {
 
   uint visibility;
   int primitive_type;
-
-  /* Volume velocity scale. */
-  float velocity_scale;
 
   /* TODO: separate array to avoid memory overhead when not used. */
   uint64_t light_set_membership;

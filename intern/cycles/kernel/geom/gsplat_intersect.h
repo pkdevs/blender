@@ -61,9 +61,9 @@ ccl_device_forceinline bool gsplat_intersect_test(KernelGlobals kg,
     return false;
   }
 
-  const int scale_offset = kernel_data_fetch(objects, object).gsplat_scale_offset;
-  const int rotation_offset = kernel_data_fetch(objects, object).gsplat_rotation_offset;
-  const int radiance_base_offset = kernel_data_fetch(objects, object).gsplat_radiance_base_offset;
+  const int scale_offset = kernel_data_fetch(objects, object).gsplat.scale_offset;
+  const int rotation_offset = kernel_data_fetch(objects, object).gsplat.rotation_offset;
+  const int radiance_base_offset = kernel_data_fetch(objects, object).gsplat.radiance_base_offset;
   const float3 scale = kernel_data_fetch(attributes_float3, scale_offset + prim);
   const float4 rotation = kernel_data_fetch(attributes_float4, rotation_offset + prim);
   const float4 radiance_base = kernel_data_fetch(attributes_float4, radiance_base_offset + prim);

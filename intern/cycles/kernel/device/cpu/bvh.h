@@ -259,7 +259,7 @@ ccl_device_inline void custom_intersect(const RTCIntersectFunctionNArguments *ar
   const int prim_offset = kernel_data_fetch(object_prim_offset, object);
   const int prim = args->primID + prim_offset;
 
-  assert(kernel_data_fetch(objects, object).primitive_type == PRIMITIVE_GSPLAT);
+  assert(kernel_data_fetch(objects, object).primitive_type & PRIMITIVE_GSPLAT);
 
   float isect_t;
   if (!gsplat_intersect_test(
@@ -329,7 +329,7 @@ ccl_device_inline void custom_occluded(const RTCOccludedFunctionNArguments *args
   const int prim = args->primID + prim_offset;
 
   const int primitive_type = kernel_data_fetch(objects, object).primitive_type;
-  assert(primitive_type == PRIMITIVE_GSPLAT);
+  assert(primitive_type & PRIMITIVE_GSPLAT);
 
   Intersection isect;
   if (!gsplat_intersect(kg,

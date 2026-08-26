@@ -30,7 +30,7 @@ CCL_NAMESPACE_BEGIN
 ccl_device_inline float3 gsplat_radiance(KernelGlobals kg, const ccl_private ShaderData &sd)
 {
   const int radiance_base_offset =
-      kernel_data_fetch(objects, sd.object).gsplat_radiance_base_offset;
+      kernel_data_fetch(objects, sd.object).gsplat.radiance_base_offset;
   const float4 radiance_base = kernel_data_fetch(attributes_float4,
                                                  radiance_base_offset + sd.prim);
 
@@ -43,7 +43,7 @@ ccl_device_inline float3 gsplat_radiance(KernelGlobals kg, const ccl_private Sha
   float3 color_srgb = spherical_harmonics_evaluate_band_L0(direction, make_float3(radiance_base));
 
   const int radiance_spherical_harmonics_offset =
-      kernel_data_fetch(objects, sd.object).gsplat_radiance_spherical_harmonics_offset;
+      kernel_data_fetch(objects, sd.object).gsplat.radiance_spherical_harmonics_offset;
   if (radiance_spherical_harmonics_offset != ATTR_STD_NOT_FOUND) {
     const ccl_global PackedSphericalHarmonics &packed_spherical_harmonics = kernel_data_fetch(
         attributes_spherical_harmonics, radiance_spherical_harmonics_offset + sd.prim);
@@ -80,8 +80,8 @@ ccl_device_inline float3 gsplat_normal(KernelGlobals kg, const int object, const
   /* TODO(sergey): Solve ambiguity when there are two smallest axis.*/
   /* The paper mentions this case explicitly and that it is solved using the view direction. */
 
-  const int scale_offset = kernel_data_fetch(objects, object).gsplat_scale_offset;
-  const int rotation_offset = kernel_data_fetch(objects, object).gsplat_rotation_offset;
+  const int scale_offset = kernel_data_fetch(objects, object).gsplat.scale_offset;
+  const int rotation_offset = kernel_data_fetch(objects, object).gsplat.rotation_offset;
   const float3 scale = kernel_data_fetch(attributes_float3, scale_offset + prim);
   const float4 rotation = kernel_data_fetch(attributes_float4, rotation_offset + prim);
 
