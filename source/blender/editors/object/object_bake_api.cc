@@ -168,7 +168,7 @@ static wmOperatorStatus bake_modal(bContext *C, wmOperator * /*op*/, const wmEve
 /* This could be bake_break but we would be required to use const_cast. */
 static bool bake_has_been_canceled(const BakeAPIRender *bkr)
 {
-  /* brk can be null when called via bake_exec. */
+  /* bkr can be null when called via bake_exec. */
   return G.is_break || (bkr != nullptr && (bkr->stop && *(bkr->stop)));
 }
 
@@ -1381,19 +1381,15 @@ static void bake_targets_free(BakeTargets *targets)
 
 /* Main Bake Logic */
 
-static wmOperatorStatus bake(const BakeAPIRender *bkr,
-                             Object *ob_low,
-                             const Span<PointerRNA> selected_objects,
-                             ReportList *reports)
+static bool bake(const BakeAPIRender *bkr,
+                 Object *ob_low,
+                 const Span<PointerRNA> selected_objects,
+                 ReportList *reports)
 {
   Render *re = bkr->render;
   Main *bmain = bkr->main;
   Scene *scene = bkr->scene;
   ViewLayer *view_layer = bkr->view_layer;
-
-  if (bake_has_been_canceled(bkr)) {
-    return OPERATOR_CANCELLED;
-  }
 
   /* We build a depsgraph for the baking,
    * so we don't need to change the original data to adjust visibility and modifiers. */
@@ -1404,7 +1400,6 @@ static wmOperatorStatus bake(const BakeAPIRender *bkr,
 
   DEG_graph_build_from_view_layer(depsgraph);
 
-  wmOperatorStatus op_result = OPERATOR_CANCELLED;
   bool ok = false;
 
   Object *ob_cage = nullptr;
@@ -1799,18 +1794,11 @@ static wmOperatorStatus bake(const BakeAPIRender *bkr,
 
   if (!ok) {
     BKE_reportf(reports, RPT_ERROR, "Problem baking object \"%s\"", ob_low->id.name + 2);
-    op_result = OPERATOR_CANCELLED;
   }
   else {
     /* save the results */
-    if (bake_targets_output(
-            bkr, &targets, ob_low, ob_low_eval, me_low_eval, pixel_array_low, reports))
-    {
-      op_result = OPERATOR_FINISHED;
-    }
-    else {
-      op_result = OPERATOR_CANCELLED;
-    }
+    ok = bake_targets_output(
+        bkr, &targets, ob_low, ob_low_eval, me_low_eval, pixel_array_low, reports);
   }
 
   bake_targets_refresh(&targets);
@@ -1850,7 +1838,7 @@ cleanup:
 
   DEG_graph_free(depsgraph);
 
-  return op_result;
+  return ok;
 }
 
 /* Bake Operator */
@@ -1968,14 +1956,18 @@ static wmOperatorStatus bake_exec(bContext *C, wmOperator *op)
   RE_SetReports(re, bkr.reports);
 
   if (bkr.is_selected_to_active) {
-    result = bake(&bkr, bkr.ob, bkr.selected_objects, bkr.reports);
+    if (bake(&bkr, bkr.ob, bkr.selected_objects, bkr.reports)) {
+      result = OPERATOR_FINISHED;
+    }
   }
   else {
     bkr.is_clear = bkr.is_clear && bkr.selected_objects.size() == 1;
     for (const PointerRNA &ptr : bkr.selected_objects) {
       Object *ob_iter = static_cast<Object *>(ptr.data);
-      result = bake(&bkr, ob_iter, {}, bkr.reports);
-      if (result == OPERATOR_CANCELLED) {
+      if (bake(&bkr, ob_iter, {}, bkr.reports)) {
+        result = OPERATOR_FINISHED;
+      }
+      if (bake_has_been_canceled(&bkr)) {
         break;
       }
     }
