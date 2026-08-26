@@ -5,7 +5,6 @@
 #pragma once
 
 #include "gpu_shader_compat.hh"
-#include "gpu_shader_math_vector_safe_lib.glsl"
 
 /* -------------------------------------------------------------------- */
 /** \name Transform function.
@@ -58,7 +57,7 @@ float2 project_point(float3x3 mat, float2 point)
 {
   float3 tmp = mat * float3(point, 1.0f);
   /* Absolute value to not flip the frustum upside down behind the camera. */
-  return safe_divide(tmp.xy, abs(tmp.z));
+  return tmp.xy / abs(tmp.z);
 }
 /**
  * Project a point using a matrix (location & rotation & scale & perspective divide).
@@ -67,7 +66,7 @@ float3 project_point(float4x4 mat, float3 point)
 {
   float4 tmp = mat * float4(point, 1.0f);
   /* Absolute value to not flip the frustum upside down behind the camera. */
-  return safe_divide(tmp.xyz, abs(tmp.w));
+  return tmp.xyz / abs(tmp.w);
 }
 
 /** \} */
