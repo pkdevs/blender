@@ -781,14 +781,16 @@ ccl_device Spectrum bsdf_microfacet_eval(KernelGlobals kg,
   const bool has_transmission = CLOSURE_IS_GLASS(bsdf->type) || !has_reflection;
 
   const float3 N = bsdf->N;
-  const float3 wi = bsdf->retroreflectivity ? reflect(-wi_in, N) : wi_in;
-  const float cos_NI = dot(N, wi);
   const float cos_NO = dot(N, wo);
 
   const float alpha_x = bsdf->alpha_x;
   const float alpha_y = bsdf->alpha_y;
 
   const bool is_transmission = (cos_NO < 0.0f);
+
+  /* Don't retroreflect transmission or refraction rays */
+  const float3 wi = (bsdf->retroreflectivity && !is_transmission) ? reflect(-wi_in, N) : wi_in;
+  const float cos_NI = dot(N, wi);
 
   /* Check whether the pair of directions is valid for evaluation:
    * - Incoming direction has to be in the upper hemisphere (Cycles convention)
@@ -873,8 +875,7 @@ ccl_device int bsdf_microfacet_sample(KernelGlobals kg,
   const ccl_private MicrofacetBsdf *bsdf = (const ccl_private MicrofacetBsdf *)sc;
 
   const float3 N = bsdf->N;
-  const float3 wi = bsdf->retroreflectivity ? reflect(-wi_in, N) : wi_in;
-  const float cos_NI = dot(N, wi);
+  const float cos_NI = dot(N, wi_in);
   if (cos_NI <= 0) {
     /* Incident angle from the lower hemisphere is invalid. */
     return LABEL_NONE;
@@ -891,12 +892,12 @@ ccl_device int bsdf_microfacet_sample(KernelGlobals kg,
   /* Needed for anisotropic microfacets later. */
   float3 local_H;
   float3 local_I;
+  float3 X, Y;
+
   if (m_singular) {
     H = N;
   }
   else {
-    float3 X;
-    float3 Y;
     if (alpha_x == alpha_y) {
       make_orthonormals(N, &X, &Y);
     }
@@ -906,7 +907,7 @@ ccl_device int bsdf_microfacet_sample(KernelGlobals kg,
 
     /* Importance sampling with distribution of visible normals. Vectors are transformed to local
      * space before and after sampling. */
-    local_I = make_float3(dot(X, wi), dot(Y, wi), cos_NI);
+    local_I = make_float3(dot(X, wi_in), dot(Y, wi_in), cos_NI);
     if (m_type == MicrofacetType::GGX) {
       local_H = microfacet_ggx_sample_vndf(local_I, alpha_x, alpha_y, make_float2(rand));
     }
@@ -917,20 +918,45 @@ ccl_device int bsdf_microfacet_sample(KernelGlobals kg,
 
     H = to_global(local_H, X, Y, N);
   }
-  const float cos_HI = dot(H, wi);
 
+  float cos_HI = dot(H, wi_in);
   /* The angle between the half vector and the refracted ray. Not used when sampling reflection. */
   float cos_HO;
   /* Compute Fresnel coefficients. */
-  const FresnelCoeff coeff = microfacet_fresnel(kg, bsdf, cos_HI, &cos_HO);
+  FresnelCoeff coeff = microfacet_fresnel(kg, bsdf, cos_HI, &cos_HO);
 
   if (iszero(coeff)) {
     return LABEL_NONE;
   }
 
-  /* Decide between refraction and reflection based on the energy. */
   const float pdf_reflect = average(coeff.reflectance) / average(coeff.sum());
   const bool do_refract = (rand.z >= pdf_reflect);
+
+  /* For retroreflection, recompute H, cos_HI and coeff with flipped wi. */
+  /* This is done here to avoid affecting refraction rays. */
+  float3 wi = wi_in;
+  if (!do_refract && bsdf->retroreflectivity) {
+    wi = reflect(-wi_in, N);
+    /* cos_NI is preserved by the flip, no need to recompute it. */
+    if (!m_singular) {
+      local_I = make_float3(dot(X, wi), dot(Y, wi), cos_NI);
+      if (m_type == MicrofacetType::GGX) {
+        local_H = microfacet_ggx_sample_vndf(local_I, alpha_x, alpha_y, make_float2(rand));
+      }
+      else {
+        local_H = microfacet_beckmann_sample_vndf(local_I, alpha_x, alpha_y, make_float2(rand));
+      }
+      H = to_global(local_H, X, Y, N);
+    }
+    /* If singular, H still equals N. */
+    cos_HI = dot(H, wi);
+
+    coeff = microfacet_fresnel(kg, bsdf, cos_HI, &cos_HO);
+
+    if (iszero(coeff)) {
+      return LABEL_NONE;
+    }
+  }
 
   /* Compute actual reflected or refracted direction. */
   *wo = do_refract ? refract_angle(wi, H, cos_HO, m_inv_eta) : 2.0f * cos_HI * H - wi;
