@@ -5339,6 +5339,15 @@ static void rna_def_modifier_bevel(BlenderRNA *brna)
   RNA_def_property_ui_text(prop, "Mark Sharp", "Mark beveled edges as sharp");
   RNA_def_property_update(prop, 0, "rna_Modifier_update");
 
+  prop = RNA_def_property(srna, "preserve_edge_data", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, nullptr, "edge_flags", MOD_BEVEL_PRESERVE_EDGE_DATA);
+  RNA_def_property_ui_text(
+      prop,
+      "Preserve Edge Data",
+      "Copy seam, sharp, crease, bevel weight and custom edge attributes from each beveled "
+      "edge onto the center loop of its bevel (requires an even number of segments)");
+  RNA_def_property_update(prop, 0, "rna_Modifier_update");
+
   prop = RNA_def_property(srna, "harden_normals", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, nullptr, "flags", MOD_BEVEL_HARDEN_NORMALS);
   RNA_def_property_ui_text(prop, "Harden Normals", "Match normals of new faces to adjacent faces");

@@ -974,6 +974,10 @@ class _defs_edit_mesh:
 
                 col = layout.column()
                 col.active = edge_bevel
+                col.prop(props, "preserve_edge_data")
+
+                col = layout.column()
+                col.active = edge_bevel
                 col.prop(props, "miter_outer", text="Miter Outer")
                 col.prop(props, "miter_inner", text="Inner")
                 if props.miter_inner == 'ARC':

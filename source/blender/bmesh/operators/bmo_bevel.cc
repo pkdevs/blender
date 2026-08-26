@@ -31,6 +31,7 @@ void bmo_bevel_exec(BMesh *bm, BMOperator *op)
   const bool loop_slide = BMO_slot_bool_get(op->slots_in, "loop_slide");
   const bool mark_seam = BMO_slot_bool_get(op->slots_in, "mark_seam");
   const bool mark_sharp = BMO_slot_bool_get(op->slots_in, "mark_sharp");
+  const bool preserve_edge_data = BMO_slot_bool_get(op->slots_in, "preserve_edge_data");
   const bool harden_normals = BMO_slot_bool_get(op->slots_in, "harden_normals");
   const int face_strength_mode = BMO_slot_int_get(op->slots_in, "face_strength_mode");
   const int miter_outer = BMO_slot_int_get(op->slots_in, "miter_outer");
@@ -77,6 +78,7 @@ void bmo_bevel_exec(BMesh *bm, BMOperator *op)
                   loop_slide,
                   mark_seam,
                   mark_sharp,
+                  preserve_edge_data,
                   harden_normals,
                   face_strength_mode,
                   miter_outer,

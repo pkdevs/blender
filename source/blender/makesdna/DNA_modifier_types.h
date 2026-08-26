@@ -546,6 +546,7 @@ enum BevelModifierProfileType : short {
 enum BevelModifierEdgeFlag : short {
   MOD_BEVEL_MARK_SEAM = (1 << 0),
   MOD_BEVEL_MARK_SHARP = (1 << 1),
+  MOD_BEVEL_PRESERVE_EDGE_DATA = (1 << 2),
 };
 ENUM_OPERATORS(BevelModifierEdgeFlag);
 

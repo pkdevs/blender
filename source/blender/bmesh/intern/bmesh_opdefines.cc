@@ -2482,6 +2482,8 @@ static BMOpDefine bmo_bevel_def = {
         {"mark_seam", BMO_OP_SLOT_BOOL},
         /* Extend edge data to allow sharp edges to run across bevels. */
         {"mark_sharp", BMO_OP_SLOT_BOOL},
+        /* Copy edge data of beveled edges onto the bevel center loop. */
+        {"preserve_edge_data", BMO_OP_SLOT_BOOL},
         /* Harden normals. */
         {"harden_normals", BMO_OP_SLOT_BOOL},
         /* Whether to set face strength, and which faces to set if so. */

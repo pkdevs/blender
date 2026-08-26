@@ -342,6 +342,7 @@ static bool edbm_bevel_calc(wmOperator *op)
   const bool loop_slide = RNA_boolean_get(op->ptr, "loop_slide");
   const bool mark_seam = RNA_boolean_get(op->ptr, "mark_seam");
   const bool mark_sharp = RNA_boolean_get(op->ptr, "mark_sharp");
+  const bool preserve_edge_data = RNA_boolean_get(op->ptr, "preserve_edge_data");
   const bool harden_normals = RNA_boolean_get(op->ptr, "harden_normals");
   const int face_strength_mode = RNA_enum_get(op->ptr, "face_strength_mode");
   const int miter_outer = RNA_enum_get(op->ptr, "miter_outer");
@@ -365,7 +366,8 @@ static bool edbm_bevel_calc(wmOperator *op)
                  op,
                  "bevel geom=%hev offset=%f segments=%i affect=%i offset_type=%i "
                  "profile_type=%i profile=%f clamp_overlap=%b material=%i loop_slide=%b "
-                 "mark_seam=%b mark_sharp=%b harden_normals=%b face_strength_mode=%i "
+                 "mark_seam=%b mark_sharp=%b preserve_edge_data=%b harden_normals=%b "
+                 "face_strength_mode=%i "
                  "miter_outer=%i miter_inner=%i spread=%f custom_profile=%p "
                  "vmesh_method=%i",
                  BM_ELEM_SELECT,
@@ -380,6 +382,7 @@ static bool edbm_bevel_calc(wmOperator *op)
                  loop_slide,
                  mark_seam,
                  mark_sharp,
+                 preserve_edge_data,
                  harden_normals,
                  face_strength_mode,
                  miter_outer,
@@ -1021,6 +1024,10 @@ static void edbm_bevel_ui(bContext *C, wmOperator *op)
   col->prop(op->ptr, "mark_seam", UI_ITEM_NONE, IFACE_("Seams"), ICON_NONE);
   col->prop(op->ptr, "mark_sharp", UI_ITEM_NONE, IFACE_("Sharp"), ICON_NONE);
 
+  col = &layout.column(false);
+  col->active_set(affect_type == BEVEL_AFFECT_EDGES);
+  col->prop(op->ptr, "preserve_edge_data", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+
   layout.separator();
 
   col = &layout.column(false);
@@ -1207,6 +1214,13 @@ void MESH_OT_bevel(wmOperatorType *ot)
       ot->srna, "mark_seam", false, "Mark Seams", "Preserve seams along beveled edges");
   RNA_def_boolean(
       ot->srna, "mark_sharp", false, "Mark Sharp", "Preserve sharp edges along beveled edges");
+
+  RNA_def_boolean(ot->srna,
+                  "preserve_edge_data",
+                  false,
+                  "Preserve Edge Data",
+                  "Copy edge data of beveled edges onto the bevel center loop "
+                  "(even segment counts only)");
 
   RNA_def_int(ot->srna,
               "material",

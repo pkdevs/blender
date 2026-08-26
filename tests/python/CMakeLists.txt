@@ -553,6 +553,11 @@ if(TEST_SRC_DIR_EXISTS)
   )
 
   add_blender_test(
+    bevel_preserve_edge_data
+    --python ${TEST_PYTHON_DIR}/bevel_preserve_edge_data.py
+  )
+
+  add_blender_test(
     mesh_join
     --python ${TEST_PYTHON_DIR}/mesh_join.py
   )

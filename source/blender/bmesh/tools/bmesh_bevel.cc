@@ -403,7 +403,8 @@ struct BevelParams {
   bool mark_sharp;
   /** Should we harden normals? */
   bool harden_normals;
-  char _pad[1];
+  /** Should we copy edge data of beveled edges onto the bevel center loop? */
+  bool preserve_edge_data;
   /** The struct used to store the custom profile input. */
   const CurveProfile *custom_profile;
   /** Vertex group array, maybe set if vertex only. */
@@ -2965,6 +2966,49 @@ static void bevel_extend_edge_data(BevVert *bv)
 
   bevel_extend_edge_data_ex(bv, BM_ELEM_SEAM);
   bevel_extend_edge_data_ex(bv, BM_ELEM_SMOOTH);
+}
+
+/**
+ * Copy edge data of each beveled original edge onto the "spoke" edges that
+ * continue its band's center line through the corner vertex mesh, so that
+ * seam/sharp chains and edge attributes connect across corners
+ * (see #bevel_build_edge_polygons for the band center edge itself).
+ * Only grid-structured (#M_ADJ) vertex meshes with an even number of
+ * segments have these spokes; everything else is left unchanged.
+ */
+static void bevel_preserve_edge_data_spokes(BevelParams *bp, BevVert *bv)
+{
+  VMesh *vm = bv->vmesh;
+  if (vm->mesh_kind != M_ADJ || bv->selcount < 2) {
+    return;
+  }
+  const int ns = vm->seg;
+  if (ns % 2 != 0) {
+    return;
+  }
+  const int ns2 = ns / 2;
+  for (int i = 0; i < bv->edgecount; i++) {
+    EdgeHalf *eh = &bv->edges[i];
+    if (!eh->is_bev) {
+      continue;
+    }
+    const int bndv = eh->leftv->index;
+    for (int j = 0; j < ns2; j++) {
+      BMVert *v1 = mesh_vert(vm, bndv, j, ns2)->v;
+      BMVert *v2 = mesh_vert(vm, bndv, j + 1, ns2)->v;
+      if (!v1 || !v2 || v1 == v2) {
+        continue;
+      }
+      BMEdge *bme = BM_edge_exists(v1, v2);
+      if (bme) {
+        /* Keep the spoke's own tag so the copy doesn't add it to the
+         * operator's tag-based output flushing. */
+        const bool was_tagged = BM_elem_flag_test_bool(bme, BM_ELEM_TAG);
+        BM_elem_attrs_copy(bp->bm, eh->e, bme);
+        BM_elem_flag_set(bme, BM_ELEM_TAG, was_tagged);
+      }
+    }
+  }
 }
 
 /* Mark edges as sharp if they are between a smooth reconstructed face and a new face. */
@@ -7265,19 +7309,29 @@ static bool bev_rebuild_polygon(BMesh *bm,
       BMEdge *bme_new = BM_edge_exists(vv[k], vv[(k + 1) % n]);
       BLI_assert(ee[k] && bme_new);
       if (ee[k] != bme_new) {
-        BM_elem_attrs_copy(bm, ee[k], bme_new);
+        /* With the preserve_edge_data option, the data of a beveled (tagged) edge is
+         * copied onto the center loop of its bevel instead of onto the boundary
+         * edges replacing it (see #bevel_build_edge_polygons). */
+        const bool skip_copy = bp->preserve_edge_data && bp->seg % 2 == 0 &&
+                               BM_elem_flag_test(ee[k], BM_ELEM_TAG);
+        if (!skip_copy) {
+          BM_elem_attrs_copy(bm, ee[k], bme_new);
+        }
         /* Want to undo seam and smooth for corner segments
          * if those attrs aren't contiguous around face. */
         if (k < n - 1 && ee[k] == ee[k + 1]) {
-          if (BM_elem_flag_test(ee[k], BM_ELEM_SEAM) && !BM_elem_flag_test(bme_prev, BM_ELEM_SEAM))
-          {
-            BM_elem_flag_disable(bme_new, BM_ELEM_SEAM);
-          }
-          /* Actually want "sharp" to be contiguous, so reverse the test. */
-          if (!BM_elem_flag_test(ee[k], BM_ELEM_SMOOTH) &&
-              BM_elem_flag_test(bme_prev, BM_ELEM_SMOOTH))
-          {
-            BM_elem_flag_enable(bme_new, BM_ELEM_SMOOTH);
+          if (!skip_copy) {
+            if (BM_elem_flag_test(ee[k], BM_ELEM_SEAM) &&
+                !BM_elem_flag_test(bme_prev, BM_ELEM_SEAM))
+            {
+              BM_elem_flag_disable(bme_new, BM_ELEM_SEAM);
+            }
+            /* Actually want "sharp" to be contiguous, so reverse the test. */
+            if (!BM_elem_flag_test(ee[k], BM_ELEM_SMOOTH) &&
+                BM_elem_flag_test(bme_prev, BM_ELEM_SMOOTH))
+            {
+              BM_elem_flag_enable(bme_new, BM_ELEM_SMOOTH);
+            }
           }
         }
         else {
@@ -7604,12 +7658,31 @@ static void bevel_build_edge_polygons(BMesh *bm, BevelParams *bp, BMEdge *bme)
     verts[1] = verts[2];
   }
 
-  /* Copy edge data to first and last edge. */
-  BMEdge *bme1 = BM_edge_exists(bmv1, bmv2);
-  BMEdge *bme2 = BM_edge_exists(bmv3, bmv4);
-  BLI_assert(bme1 && bme2);
-  BM_elem_attrs_copy(bm, bme, bme1);
-  BM_elem_attrs_copy(bm, bme, bme2);
+  /* Copy edge data to first and last edge, or, if requested and there is a center
+   * row (even number of segments), to the center rung edge instead, making the
+   * bevel's center loop carry the original seam/sharp state and edge attributes. */
+  if (bp->preserve_edge_data && !odd) {
+    BMVert *v_mid1 = mesh_vert(vm1, i1, 0, mid)->v;
+    BMVert *v_mid2 = mesh_vert(vm2, i2, 0, nseg - mid)->v;
+    if (v_mid1 && v_mid2 && v_mid1 != v_mid2) {
+      BMEdge *bme_mid = BM_edge_exists(v_mid1, v_mid2);
+      if (bme_mid) {
+        /* Don't let the copy tag the rung: this function is called from a loop
+         * iterating tagged edges, and the rung is already manifold, so a copied
+         * tag would make the loop re-enter here for an edge with no #BevVert. */
+        const bool was_tagged = BM_elem_flag_test_bool(bme_mid, BM_ELEM_TAG);
+        BM_elem_attrs_copy(bm, bme, bme_mid);
+        BM_elem_flag_set(bme_mid, BM_ELEM_TAG, was_tagged);
+      }
+    }
+  }
+  else {
+    BMEdge *bme1 = BM_edge_exists(bmv1, bmv2);
+    BMEdge *bme2 = BM_edge_exists(bmv3, bmv4);
+    BLI_assert(bme1 && bme2);
+    BM_elem_attrs_copy(bm, bme, bme1);
+    BM_elem_attrs_copy(bm, bme, bme2);
+  }
 
   /* If either end is a "weld cross", want continuity of edge attributes across end edge(s). */
   if (bevvert_is_weld_cross(bv1)) {
@@ -8251,6 +8324,7 @@ void BM_mesh_bevel(BMesh *bm,
                    const bool loop_slide,
                    const bool mark_seam,
                    const bool mark_sharp,
+                   const bool preserve_edge_data,
                    const bool harden_normals,
                    const int face_strength_mode,
                    const int miter_outer,
@@ -8288,6 +8362,7 @@ void BM_mesh_bevel(BMesh *bm,
   bp.mat_nr = mat;
   bp.mark_seam = mark_seam;
   bp.mark_sharp = mark_sharp;
+  bp.preserve_edge_data = preserve_edge_data;
   bp.harden_normals = harden_normals;
   bp.face_strength_mode = face_strength_mode;
   bp.miter_outer = miter_outer;
@@ -8414,6 +8489,9 @@ void BM_mesh_bevel(BMesh *bm,
       bv = find_bevvert(&bp, v);
       if (bv) {
         bevel_extend_edge_data(bv);
+        if (bp.preserve_edge_data) {
+          bevel_preserve_edge_data_spokes(&bp, bv);
+        }
       }
     }
   }

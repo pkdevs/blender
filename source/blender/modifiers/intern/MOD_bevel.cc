@@ -135,6 +135,7 @@ static Mesh *modify_mesh(ModifierData *md, const ModifierEvalContext *ctx, Mesh 
   const bool loop_slide = (bmd->flags & MOD_BEVEL_EVEN_WIDTHS) == 0;
   const bool mark_seam = (bmd->edge_flags & MOD_BEVEL_MARK_SEAM);
   const bool mark_sharp = (bmd->edge_flags & MOD_BEVEL_MARK_SHARP);
+  const bool preserve_edge_data = (bmd->edge_flags & MOD_BEVEL_PRESERVE_EDGE_DATA);
   bool harden_normals = (bmd->flags & MOD_BEVEL_HARDEN_NORMALS);
   const int face_strength_mode = bmd->face_str_mode;
   const int miter_outer = bmd->miter_outer;
@@ -250,6 +251,7 @@ static Mesh *modify_mesh(ModifierData *md, const ModifierEvalContext *ctx, Mesh 
                 loop_slide,
                 mark_seam,
                 mark_sharp,
+                preserve_edge_data,
                 harden_normals,
                 face_strength_mode,
                 miter_outer,
@@ -435,6 +437,10 @@ static void shading_panel_draw(const bContext * /*C*/, Panel *panel)
   col.active_set(edge_bevel);
   col.prop(ptr, "mark_seam", UI_ITEM_NONE, IFACE_("Seam"), ICON_NONE);
   col.prop(ptr, "mark_sharp", UI_ITEM_NONE, IFACE_("Sharp"), ICON_NONE);
+
+  ui::Layout &row = layout.row(false);
+  row.active_set(edge_bevel);
+  row.prop(ptr, "preserve_edge_data", UI_ITEM_NONE, std::nullopt, ICON_NONE);
 
   layout.prop(ptr, "material", UI_ITEM_NONE, std::nullopt, ICON_NONE);
   layout.prop(ptr, "face_strength_mode", UI_ITEM_NONE, std::nullopt, ICON_NONE);
