@@ -34,8 +34,13 @@ ccl_device_inline float3 gsplat_radiance(KernelGlobals kg, const ccl_private Sha
                                                  radiance_base_offset + sd.prim);
 
   /* Transform incident direction into the local pointcloud object.
-   * This is easier than transforming spherical harmonics into the world space. */
-  float3 direction = -sd.wi;
+   * This is easier than transforming spherical harmonics into the world space.
+   *
+   * Note that the wi is not guaranteed to be normalized, but the spherical harmonic evaluation
+   * requires direction to be normalized.
+   *
+   * Use safe_normalize() to avoid possible NaN values appearing in color channels. */
+  float3 direction = safe_normalize(-sd.wi);
   object_inverse_dir_transform(kg, &sd, &direction);
   kernel_assert((kernel_data_fetch(object_flag, sd.object) & SD_OBJECT_TRANSFORM_APPLIED) == 0);
 
