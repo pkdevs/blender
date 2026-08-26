@@ -231,15 +231,9 @@ static Vector<MeshToBMeshLayerInfo> mesh_to_bm_copy_info_calc(const Mesh &mesh,
       switch (attr->storage_type()) {
         case bke::AttrStorageType::Array: {
           const auto &array_data = std::get<bke::Attribute::ArrayData>(attr->data());
-          if (array_data.size == mesh.attributes().domain_size(domain)) {
-            info.mesh_data = array_data.data;
-            info.mesh_stride = bke::attribute_type_to_cpp_type(attr->data_type()).size;
-          }
-          else {
-            info.mesh_data = nullptr;
-            info.mesh_stride = 0;
-            BLI_assert_msg(0, "Attribute array size does not match domain size");
-          }
+          BLI_assert(array_data.size == mesh.attributes().domain_size(domain));
+          info.mesh_data = array_data.data;
+          info.mesh_stride = bke::attribute_type_to_cpp_type(attr->data_type()).size;
           break;
         }
         case bke::AttrStorageType::Single: {
