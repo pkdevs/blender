@@ -806,37 +806,21 @@ void wm_jobs_handle_finished(const bContext *C)
   wm_jobs_update_progress_bars(wm);
 }
 
-bool WM_jobs_has_running(const wmWindowManager *wm)
-{
-  for (const wmJob &wm_job : wm->runtime->jobs) {
-    if (wm_job.running) {
-      return true;
-    }
-  }
-
-  return false;
-}
-
-bool WM_jobs_has_running_type(const wmWindowManager *wm, int job_type)
-{
-  for (wmJob &wm_job : wm->runtime->jobs) {
-    if (wm_job.running && wm_job.job_type == job_type) {
-      return true;
-    }
-  }
-  return false;
-}
-
 bool WM_jobs_has_running(const wmWindowManager *window_manager,
                          const void *owner,
-                         const eWM_JobType type)
+                         const eWM_JobType type,
+                         const eWM_JobFlag exclude_flags)
 {
   for (const wmJob &job : window_manager->runtime->jobs) {
-    if (job.owner != owner) {
+    if (owner && job.owner != owner) {
       continue;
     }
 
     if (!ELEM(type, WM_JOB_TYPE_ANY, job.job_type)) {
+      continue;
+    }
+
+    if (job.flag & exclude_flags) {
       continue;
     }
 

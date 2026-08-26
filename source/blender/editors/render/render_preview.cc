@@ -1788,7 +1788,7 @@ Set<std::string> &PreviewLoadJob::known_downloaded_previews()
 PreviewLoadJob &PreviewLoadJob::ensure_job(wmWindowManager *wm, wmWindow *win)
 {
   wmJob *wm_job = WM_jobs_get(
-      wm, win, nullptr, "Loading previews...", eWM_JobFlag{}, WM_JOB_TYPE_LOAD_PREVIEW);
+      wm, win, nullptr, "Loading previews...", WM_JOB_BACKGROUND, WM_JOB_TYPE_LOAD_PREVIEW);
 
   if (!WM_jobs_is_running(wm_job)) {
     PreviewLoadJob *job_data = MEM_new<PreviewLoadJob>("PreviewLoadJobData");
@@ -2282,7 +2282,7 @@ void ED_preview_icon_job(
                               CTX_wm_window(C),
                               prv_img,
                               "Generating icon preview...",
-                              WM_JOB_EXCL_RENDER,
+                              WM_JOB_EXCL_RENDER | WM_JOB_BACKGROUND,
                               WM_JOB_TYPE_RENDER_PREVIEW);
 
   ip = MEM_new_zeroed<IconPreview>("icon preview");
@@ -2360,7 +2360,7 @@ void ED_preview_shader_job(const bContext *C,
                        CTX_wm_window(C),
                        owner,
                        "Generating shader preview...",
-                       WM_JOB_EXCL_RENDER,
+                       WM_JOB_EXCL_RENDER | WM_JOB_BACKGROUND,
                        WM_JOB_TYPE_RENDER_PREVIEW);
   sp = MEM_new_zeroed<ShaderPreview>("shader preview");
 

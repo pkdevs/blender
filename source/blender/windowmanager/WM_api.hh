@@ -1964,7 +1964,10 @@ enum eWM_JobFlag {
    * wait on previous ones to finish then.
    */
   WM_JOB_EXCL_RENDER = (1 << 1),
+  /* The job reports a progress. */
   WM_JOB_PROGRESS = (1 << 2),
+  /* The job runs in the background and does not block operators undo/redo. */
+  WM_JOB_BACKGROUND = (1 << 3),
 };
 ENUM_OPERATORS(eWM_JobFlag);
 
@@ -2123,11 +2126,15 @@ void WM_jobs_kill_type(wmWindowManager *wm, const void *owner, int job_type);
  */
 void WM_jobs_kill_all_from_owner(wmWindowManager *wm, const void *owner) ATTR_NONNULL();
 
-bool WM_jobs_has_running(const wmWindowManager *wm);
-bool WM_jobs_has_running_type(const wmWindowManager *wm, int job_type);
+/**
+ * Checks if the given window manager has any running or suspended jobs of the given type and
+ * owner. If the given owner is nullptr, any owner can be matched. Additionally, jobs with a flag
+ * in the given exclude_flags will be ignored.
+ */
 bool WM_jobs_has_running(const wmWindowManager *window_manager,
                          const void *owner,
-                         const eWM_JobType type);
+                         const eWM_JobType type,
+                         const eWM_JobFlag exclude_flags = {});
 
 void WM_job_main_thread_lock_acquire(wmJob *wm_job);
 void WM_job_main_thread_lock_release(wmJob *wm_job);
