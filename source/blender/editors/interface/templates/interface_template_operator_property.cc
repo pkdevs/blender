@@ -357,7 +357,6 @@ static void draw_import_properties(bContext *C,
 
   col.separator();
   col.use_property_decorate_set(false);
-  col.use_property_split_set(true);
 
   /* Note this property is used as an alternative to the `filepath` property of `op->ptr`.
    * This property is a wrapper to access that property, see the `CollectionExport::filepath`
@@ -376,7 +375,7 @@ static void draw_import_properties(bContext *C,
            RNA_NO_INDEX,
            0,
            UI_ITEM_NONE,
-           std::nullopt,
+           "",
            ICON_NONE,
            IFACE_("Select a file..."));
 
