@@ -1561,8 +1561,9 @@ ccl_device Spectrum bsdf_coat_setup(KernelGlobals kg,
       bsdf->T = zero_float3();
       bsdf->ior = coat.ior;
       bsdf->alpha_x = bsdf->alpha_y = sqr(coat.roughness);
+      bsdf->retroreflectivity = 0.0f;
 
-      const int runtime_flag = bsdf_microfacet_ggx_setup(bsdf);
+      const int runtime_flag = bsdf_microfacet_ggx_setup(bsdf, sd);
       if (bsdf != &coat_bsdf) {
         /* Add flag only if the closure is actually allocated in `sd->closure`. */
         sd->runtime_flag |= runtime_flag;
