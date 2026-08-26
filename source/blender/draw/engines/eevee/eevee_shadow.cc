@@ -415,8 +415,7 @@ IndexRange ShadowDirectional::clipmap_level_range(const Camera &cam)
   /* Covers the closest points of the view. */
   /* Levels narrower than the camera clip near are never useful, so drop them. */
   /* The level may still be negative for small scenes. */
-  const CameraData &cam_data = cam.data_get();
-  int min_level = ceil(log2(max_ff(cam_data.clip_near, 1e-8f)));
+  int min_level = ceil(log2(max_ff(cam.data_get().clip_near, 1e-8f)));
   /* Covers the farthest points of the view. */
   int max_level = ceil(log2(cam.bound_radius() + distance(cam.bound_center(), cam.position())));
   /* We actually need to cover a bit more because of clipmap origin snapping. */
